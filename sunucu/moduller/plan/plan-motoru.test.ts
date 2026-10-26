@@ -95,8 +95,11 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
     const b1 = await metin(j1!), b2 = await metin(j2!), b3 = await metin(j3!);
     let p: PlanCevabi = await taslaktaOner();
     const taslakId = p.taslak!.id;
-    // Kilitli iş motorun etrafına dizdiği yerdir.
-    await vt().tx((db) => db.sorgu('UPDATE plan_senaryo_yerlesimi SET kilitli = true WHERE senaryo_id = $1 AND is_emri_id = $2', [taslakId, j2]));
+    // Kilitli iş motorun etrafına dizdiği yerdir. Sahte motor sabit işe bakmaz: kilitli iş kuyruğun saatlerinin ötesine konur, yoksa
+    // önündeki iş arkasına geçer ve canlıya alma durur (737 a).
+    const kilitYeri = saat(40);
+    await vt().tx((db) => db.sorgu('UPDATE plan_senaryo_yerlesimi SET kilitli = true, baslangic = $3, bitis = $4 WHERE senaryo_id = $1 AND is_emri_id = $2',
+      [taslakId, j2, kilitYeri.baslangic, kilitYeri.bitis]));
     p = await planOku(taslakId);
     const onizleme = (id: number) => ({ baslangic: new Date(yer(p, id).baslangic).toISOString(), bitis: new Date(yer(p, id).bitis).toISOString() });
     kur();

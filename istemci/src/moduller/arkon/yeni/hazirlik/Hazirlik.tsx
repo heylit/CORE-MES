@@ -75,11 +75,17 @@ const oturum = {
 };
 
 const tonBildirimi = (ton: Ton): BildirimTonu => (ton === 'stop' ? 'hata' : ton === 'run' ? 'tamam' : 'bilgi');
-// 3B model yayında bir kez işlenir, sonuç pakete konur (eski hazirlik.ts yayını): terminal geometri çekirdeğini yüklemez, model hemen
-// açılır. Anahtar terminalin aradığıyla aynıdır (dosya özeti + model ayarı imzası, model.ts). Okunamayan model atlanır.
-async function modelHazirVerisi(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unknown>> {
-  const [m, k] = await Promise.all([import('../../../../ortak/cizim/model.ts'), import('../../../../ortak/cizim/kurallar.ts')]);
+// 3B model ve PDF sayfası yayında bir kez işlenir, sonuç pakete konur (eski hazirlik.ts yayını; PDF 731): terminal geometri çekirdeğini
+// yüklemez, sayfayı yeniden okumaz. Anahtar terminalin aradığıyla aynıdır (model.ts, pdf-hazir.ts). Okunamayan dosya atlanır.
+async function hazirVeri(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unknown>> {
+  const [m, k, pd] = await Promise.all([
+    import('../../../../ortak/cizim/model.ts'), import('../../../../ortak/cizim/kurallar.ts'), import('../../../../ortak/cizim/pdf-hazir.ts'),
+  ]);
   const cfg = k.ayarDuzelt(n.readCfg), imza = k.ayarImzasi(cfg, k.MODEL_ANAHTARLARI), hazir: Record<string, unknown> = {};
+  for (const f of await depo.coz(n.files.filter((x) => x.kind === 'pdf'))) {
+    // Görüntüleyici paketi ilk sayfadan açar.
+    if (baytiVar(f.bytes)) Object.assign(hazir, await pd.pdfHazirla(f.bytes, 1, cfg));
+  }
   for (const f of await depo.coz(n.files.filter((x) => x.kind === 'model'))) {
     if (!baytiVar(f.bytes)) continue;
     try {
@@ -307,7 +313,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       const n: Pkg = { ...p, status: p.status === 'draft' ? 'published' : p.status, version: (p.version || 0) + 1, dirty: false, publishedAt: Date.now(), updatedAt: Date.now(), apReq: null };
       // Okuma ayarı pakete sabitlenir (eskisi gibi): terminal aynı ayarla açar, hazır verinin anahtarı tutar.
       n.readCfg = (await import('../../../../ortak/cizim/kurallar.ts')).ayarDuzelt(p.readCfg);
-      if (n.files.some((f) => f.kind === 'model')) { soyle('3B model operatör için hazırlanıyor…', 'done'); n.derived = await modelHazirVerisi(depo, n); }
+      if (n.files.some((f) => f.kind === 'model' || f.kind === 'pdf')) { soyle('Resim ve 3B model operatör için hazırlanıyor…', 'done'); n.derived = await hazirVeri(depo, n); }
       // Ara onay (Terminal kural 1/5): sonraki değişiklik bu yayına göre bulunur.
       n.yayinImza = paketImzasi(n);
       n.history = [...(p.history || []), { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: p.approval && p.approval.ok ? p.approval.by : null, st: n.machine }].slice(-60);

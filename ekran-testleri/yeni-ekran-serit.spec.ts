@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/recete-rota/planlama-yeni', '/finans/yeni',
+  '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -20,23 +20,24 @@ for (const yol of YENI_EKRANLAR) {
   });
 }
 
-test('Planlama yeni ekranında seçili olan yalnız ekranın kendi görünümüdür', async ({ page, ac }) => {
-  await ac('/recete-rota/planlama-yeni/plan');
-  await expect(page.getByRole('tablist', { name: 'Planlama görünümleri' }).getByRole('tab', { name: 'Planlama motoru', selected: true }))
-    .toBeVisible();
-  await expect(page.locator('.tc-ikinci-madde-etkin')).toHaveCount(0);
+// Planlama ayrı sayfadır (658 b): şeridi kabuğun Planlama menüsüdür; ekran kendi sekmesini çizmez, tek şerit vardır.
+test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görünümdür', async ({ page, ac }) => {
+  await ac('/plan/terminler');
+  const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
+  await expect(menu.locator('[aria-current="page"]')).toHaveText(/^Terminler/);
+  await expect(page.locator('.tc-ikinci')).toHaveCount(1);
 });
 
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
   await ac('/ik');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
-  await ac('/recete-rota/plan');
-  const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+  await ac('/plan/eski/studio');
+  const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[aria-current="page"]')).toContainText('Planlama motoru');
+  await expect(menu.locator('[aria-current="page"]')).toContainText('Planlama atölyesi');
 });
 
-// Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a): Planlama sayfalarına yol kalır.
+// Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a).
 for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota/res', 'Kaynaklar'], ['/recete-rota/eski/res', 'Kaynaklar']] as const) {
   test(`${yol}: Reçete ve Rota yeni ekranında kabuğun şeridi durur, tek şerit vardır`, async ({ page, ac }) => {
     await ac(yol);

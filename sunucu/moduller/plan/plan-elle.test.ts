@@ -1,8 +1,9 @@
-import { before, describe, mock, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CanliYerlesimCevabi, OnizlemeCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { KomutCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { canliOzeti, canliSira } from './disari.ts';
+import { gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
@@ -235,34 +236,32 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
   });
 
   test('elle bölme sonra hurda (671 a): önceki adım daha az sağlamla bitince bölünmüş iş sabit kalır; parçaların süresi ve yazılı adetleri değişmez', async () => {
-    const merkez = { id: await tamGunMerkezi('RT-BU', 'Deneme bölme uzlaşma merkezi') };
-    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BU', ad: 'Deneme bölme uzlaşma', isMerkeziId: merkez.id })).id;
-    const u1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU1', ad: 'Deneme RT-BU1', istasyonId: ist })).id;
-    const u2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU2', ad: 'Deneme RT-BU2', istasyonId: ist })).id;
-    const [op10, op20] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: u1 } }), yeniAdim({ kaynak: { tur: 'makine', id: u1 } })], 10);
-    const canli = await planOku();
-    const y = canli.yerlesimler.find((x) => x.isEmriId === op20) ?? canli.yerlesmemis.find((x) => x.isEmriId === op20)!;
-    const baslangic = new Date(Date.now() + 3600_000).toISOString();
-    // Canlıya alma OP10'u motorla şimdiden yeniden dizer (motor dakikayı aşağı yuvarlar), bölünmüş OP20 sabit kalır: yazım ile canlıya
-    // alma arasında dakika dönerse OP10 OP20'den sonra biter ve sıraya aykırı diye reddedilir (kart 733). Bu test hurdayı sınar: an sabitlenir.
-    mock.timers.enable({ apis: ['Date'], now: Date.now() });
-    try {
+    await gunduzde(async () => {
+      const merkez = { id: await tamGunMerkezi('RT-BU', 'Deneme bölme uzlaşma merkezi') };
+      const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BU', ad: 'Deneme bölme uzlaşma', isMerkeziId: merkez.id })).id;
+      const u1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU1', ad: 'Deneme RT-BU1', istasyonId: ist })).id;
+      const u2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU2', ad: 'Deneme RT-BU2', istasyonId: ist })).id;
+      const [op10, op20] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: u1 } }), yeniAdim({ kaynak: { tur: 'makine', id: u1 } })], 10);
+      const canli = await planOku();
+      const y = canli.yerlesimler.find((x) => x.isEmriId === op20) ?? canli.yerlesmemis.find((x) => x.isEmriId === op20)!;
+      const baslangic = new Date(Date.now() + 3600_000).toISOString();
+      // Saat sabit (kart 733): canlıya alma OP10'u motorla şimdiden yeniden dizer (motor dakikayı aşağı yuvarlar), bölünmüş OP20 sabit
+      // kalır; yazım ile canlıya alma arasında dakika dönerse OP10 OP20'den sonra biter ve sıraya aykırı diye reddedilirdi.
       const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [
         { kaynak: { tur: 'makine', id: u1 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 1, adet: 4 } }] },
         { kaynak: { tur: 'makine', id: u2 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 2, adet: 6 } }] },
       ] });
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${yazildi.taslak}/canliya-al`, { surum: await gonder(yazildi.taslak, (await planOku(yazildi.taslak)).taslak!.surum), cakismalariKabul: false });
-    } finally {
-      mock.timers.reset();
-    }
-    // OP10 10 adetten 8 sağlamla bitti; bölme 10 adetle yazılmıştı.
-    await vt().tx((db) => db.sorgu(
-      "UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now() - interval '1 hour', bitis = now(), saglam_adet = 8 WHERE id = $1", [op10]));
-    const p = await taslaktaOner();
-    const sure = (x: { baslangic: string; bitis: string }) => (Date.parse(x.bitis) - Date.parse(x.baslangic)) / 60_000;
-    // Ayar 30 + adet x 2 dk. Bölünmüş iş ortak motora sabit gider (671 a, kural 2): Planı kur parça süresini adım adedine (8/10) göre
-    // kısaltmaz (Motor A 36,4 ve 39,6 dk verirdi); parçalar yazıldıkları süre ve adetle kalır (FARK.md).
-    assert.deepEqual(yer(p, op20!).parcalar!.map((x) => [x.no, x.adet, Math.round(sure(x) * 10) / 10]), [[1, 4, 38], [2, 6, 42]]);
+      // OP10 10 adetten 8 sağlamla bitti; bölme 10 adetle yazılmıştı.
+      await vt().tx((db) => db.sorgu(
+        "UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = $2, bitis = $3, saglam_adet = 8 WHERE id = $1",
+        [op10, new Date(Date.now() - 3600_000), new Date()]));
+      const p = await taslaktaOner();
+      const sure = (x: { baslangic: string; bitis: string }) => (Date.parse(x.bitis) - Date.parse(x.baslangic)) / 60_000;
+      // Ayar 30 + adet x 2 dk. Bölünmüş iş ortak motora sabit gider (671 a, kural 2): Planı kur parça süresini adım adedine (8/10) göre
+      // kısaltmaz (Motor A 36,4 ve 39,6 dk verirdi); parçalar yazıldıkları süre ve adetle kalır (FARK.md).
+      assert.deepEqual(yer(p, op20!).parcalar!.map((x) => [x.no, x.adet, Math.round(sure(x) * 10) / 10]), [[1, 4, 38], [2, 6, 42]]);
+    });
   });
 
   test('elle sıra rota değişince (kullanıcı kararı): aynı istasyonda makine değişirse kalır; istasyon değişir ya da adım kalkarsa düşer ve uyarılır', async () => {

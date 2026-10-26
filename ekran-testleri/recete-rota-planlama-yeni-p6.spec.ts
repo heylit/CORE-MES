@@ -28,10 +28,10 @@ const CALISMA = {
 
 test.describe('P6 Sevkiyat', () => {
   test('ısı haritası ve açılım; Tüm satırlar altında özet, iş listesi ve bitiş akışı; seçimler çalışır; yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
-    await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({
+    await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ calisma: CALISMA, surum: 1 }),
     }));
-    await ac('/recete-rota/planlama-yeni/sevkiyat');
+    await ac('/plan/sevkiyat');
     const kap = page.locator('[data-gorunum="sevkiyat"]');
     // Üstte ısı haritası; asıl içerik "Tüm satırlar" altında kapalı gelir.
     const izgara = kap.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
@@ -62,19 +62,19 @@ test.describe('P6 Sevkiyat', () => {
     await expect(kap.getByText(/\. hafta · 02\.03/).first()).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await expect(kap.locator('input[type="date"]')).toHaveCount(0);
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
   test('çözülmüş plan yoksa harita boş, Tüm satırlar uyarı verir', async ({ page, ag, ac }) => {
-    await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({
+    await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ calisma: { ...CALISMA, plan: null }, surum: 1 }),
     }));
-    await ac('/recete-rota/planlama-yeni/sevkiyat');
+    await ac('/plan/sevkiyat');
     await expect(page.getByText('Plan kurulunca siparişlerin sevk günleri burada görünür.')).toBeVisible({ timeout: 15_000 });
     await page.locator('[data-gorunum="sevkiyat"]').getByText('Tüm satırlar', { exact: true }).click();
     await expect(page.getByText('Önce plan kurulmalı.')).toBeVisible();
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });

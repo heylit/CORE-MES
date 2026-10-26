@@ -116,8 +116,8 @@ const ANA_SAYFA_BASLIGI = 'Ana sayfa';
 const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim', simge: 'user' };
 
 // Ana sayfa bağlantısı yalnız kendi yolunda seçili görünür: rolün panosu bir modül sayfasıysa alt yollarda modülün maddesi seçilidir.
-// Yeni ekran adresinde (`/recete-rota/planlama-yeni`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
-// (`/recete-rota`) seçili görünmez.
+// Yeni ekran adresinde (`/ik-islemlerim/yeni`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
+// (`/ik`) seçili görünmez.
 function Baglanti({ sayfa, kapat, tam = sayfa.yol === '/' }: { sayfa: BaglantiSayfasi; kapat?: () => void; tam?: boolean }) {
   const yeni = yeniEkranEslesmesi(useLocation().pathname);
   const yalnizKendiYolu = tam || (yeni !== null && sayfa.yol !== yeni.yol);
@@ -171,7 +171,7 @@ export function Kabuk({
   const konum = useLocation();
   const gezin = useNavigate();
   // Eski ve yeni görünüm arasındaki geçiş yalnız yöneticidedir (681 a); eski adresin kapısı App.tsx'tedir.
-  const gecis = islemler.includes(YENI_EKRAN_ISLEMI) ? gorunumGecisi(konum.pathname) : null;
+  const gecis = islemler.includes(YENI_EKRAN_ISLEMI) ? gorunumGecisi(konum.pathname, islemler) : null;
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);

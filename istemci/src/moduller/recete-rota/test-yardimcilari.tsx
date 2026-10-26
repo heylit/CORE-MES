@@ -7,15 +7,18 @@ import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { eskiAdresi } from './eski-adres.ts';
+import { PLANLAMA_ANAHTARLARI, PLANLAMA_ESKI_KOK } from './planlama-menusu.ts';
+import { ReceteRotaCercevesi } from './ReceteRotaCercevesi.tsx';
 import { rotalar } from './rotalar.tsx';
 import { SEKMELER } from './yeni/sekmeler.ts';
 
 // Kişi adları uydurmadır.
-export const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'plan.oku', 'recete-rota.planlama-oku'] };
+export const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'plan.oku', 'plan.planlama-oku'] };
 export const YETKISIZ: Kullanici = { id: 6, ad: 'Deneme Yetkisiz', islemler: ['sayfa.ayarlar'] };
 // Kart #1372: rotanın ilk adımına giren zorunludur; prototip örneklerinin ilk adımı bu hammaddeyi tüketir (stoğu yeter, maliyeti var: uyarı vermez).
 export const HAM = { id: 'h0', code: 'HM-000', name: 'Deneme hammadde', type: 'ham', unit: 'kg', cost: 1, stock: 100000, min: 0 };
 export const HAM_GIRDISI = { id: 'g0', itemId: 'h0', qty: 0.1, scrap: 0, status: '' };
+const PLANLAMA = /^recete-rota-motoru-v1:planlama(?:[-:]|$)/;
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitlar'] = [], yazabilir = true): string[] {
@@ -26,7 +29,9 @@ export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitl
     istekler.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir } satisfies BenCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar } satisfies KayitlarCevabi);
+    // Planlama anahtarları plan modülünün kaydındadır (658 b); çerçeve iki listeyi birlikte okur.
+    if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: kayitlar.filter((k) => !PLANLAMA.test(k.anahtar)) } satisfies KayitlarCevabi);
+    if (yontem === 'GET' && yol === '/plan/planlama-kayitlari') return json(200, { kayitlar: kayitlar.filter((k) => PLANLAMA.test(k.anahtar)) } satisfies KayitlarCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
@@ -35,9 +40,14 @@ export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitl
 const Konum = () => <output data-testid="konum">{useLocation().pathname}</output>;
 
 // Bu yardımcı eski çerçevenin testlerinindir: Reçete ve Rota maddesinin adresi yeni ekrana geçtiği için (541) çerçeve o bölümün eski
-// adresinde açılır. Planlama adresleri olduğu gibi kalır.
+// adresinde açılır. Planlama adresleri eski planlama çerçevesinin adresine (`/plan/eski`, 659 a) çevrilir.
 const cerceveAdresi = (adres: string): string => {
   const [yol = '', ara] = adres.split('?');
+  const planlama = /^\/recete-rota\/([a-z]+)(\/.*)?$/.exec(yol);
+  if (planlama !== null && PLANLAMA_ANAHTARLARI.includes(planlama[1] ?? '')) {
+    const eski = `${PLANLAMA_ESKI_KOK}/${planlama[1] ?? ''}${planlama[2] ?? ''}`;
+    return ara === undefined ? eski : `${eski}?${ara}`;
+  }
   if (!SEKMELER.some((s) => s.yol === yol)) return adres;
   return ara === undefined ? eskiAdresi(yol) : `${eskiAdresi(yol)}?${ara}`;
 };
@@ -49,6 +59,9 @@ export function ac(adres: string) {
       <Konum />
       <Routes>
         {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
+        {/* Eski planlama çerçevesinin plan modülündeki adresi (659 a; kapı plan/rotalar.tsx'te). */}
+        <Route path={PLANLAMA_ESKI_KOK} element={<ReceteRotaCercevesi />} />
+        <Route path={`${PLANLAMA_ESKI_KOK}/:gorunum/*`} element={<ReceteRotaCercevesi />} />
         <Route path="*" element={<p>Başka sayfa</p>} />
       </Routes>
     </MemoryRouter></BildirimSaglayici></QueryClientProvider>,

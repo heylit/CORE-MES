@@ -1,4 +1,4 @@
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, Girdi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
 import {

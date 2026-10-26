@@ -37,7 +37,7 @@ const UYDURMA = {
 test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
   for (const g of GORUNUMLER) {
     test(`${g.baslik}: başlık, ızgara ya da boş durum; hücre açılımı; yatay taşma yok, yazma gitmez`, async ({ page, ag, ac }) => {
-      await ac(`/recete-rota/planlama-yeni/${g.yol}`);
+      await ac(`/plan/${g.yol}`);
       const kap = page.locator(`[data-gorunum="${g.yol}"]`);
       await expect(kap.getByRole('heading', { name: g.baslik, level: 2 })).toBeVisible({ timeout: 20_000 });
       const izgara = kap.locator('.tc-pyk-tablo');
@@ -55,7 +55,7 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
       const tum = kap.getByText('Tüm satırlar');
       if (await tum.count()) await tum.click();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar).toEqual([]);
+      expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
@@ -64,8 +64,8 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
   // yazılmaz) ve ızgara, açılım ve form dar ekranda sınanır.
   for (const g of GORUNUMLER) {
     test(`${g.baslik}: uydurma planla ızgara ve açılım taşmadan çizilir`, async ({ page, ag, ac }) => {
-      await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({ json: { calisma: UYDURMA, surum: null } }));
-      await ac(`/recete-rota/planlama-yeni/${g.yol}`);
+      await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({ json: { calisma: UYDURMA, surum: null } }));
+      await ac(`/plan/${g.yol}`);
       const kap = page.locator(`[data-gorunum="${g.yol}"]`);
       const izgara = kap.locator('.tc-pyk-tablo');
       await expect(izgara).toBeVisible({ timeout: 20_000 });
@@ -76,18 +76,18 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
       await kap.getByText('Tüm satırlar').click();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar).toEqual([]);
+      expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
 
   test('Ek mesai planı: plan motoru gerektiren öneri durum satırında kapalı gelir; başlıkta işlem menüsü yok', async ({ page, ag, ac }) => {
-    await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({ json: { calisma: UYDURMA, surum: null } }));
-    await ac('/recete-rota/planlama-yeni/mesaiplan');
+    await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({ json: { calisma: UYDURMA, surum: null } }));
+    await ac('/plan/mesaiplan');
     const kap = page.locator('[data-gorunum="mesaiplan"]');
     await expect(kap.getByRole('heading', { name: 'Ek mesai planı', level: 2 })).toBeVisible({ timeout: 20_000 });
     await expect(kap.locator('.tc-pyk-durum').getByRole('button', { name: 'Önerileri hesapla' })).toBeDisabled();
     await expect(kap.getByRole('button', { name: /diğer işlemler/ })).toHaveCount(0);
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });

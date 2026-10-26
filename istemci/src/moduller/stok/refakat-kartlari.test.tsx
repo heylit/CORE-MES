@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { KartAkisiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { RefakatKartlariSatiri, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
+import { sureMetni } from './RefakatKartlari.tsx';
 import { ac, json, OKUYUCU, sunucuKur } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -49,5 +51,56 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     ac('/stok/refakat-kartlari');
     expect(await screen.findByText(/Yalnız en yeni kartlar gösteriliyor/)).toBeTruthy();
     expect(screen.getByText('Kart yok.')).toBeTruthy();
+  });
+
+  it('Akış Süresi okuyan kartın akışını görür: özet, anlar arası süre ve gün başlığı, tablo; kart penceresi akıştan açılır', async () => {
+    const t = (dk: number) => new Date(Date.UTC(2026, 9, 22, 7, 0) + dk * 60_000).toISOString();
+    const olcu = (dk: number | null, acik = false) => ({ dk, acik });
+    const AKIS: KartAkisiCevabi = {
+      emir: { id: 1, emirNo: 'UE-000001', adet: 10, durum: 'calisiyor', teslim: null },
+      simdi: t(2000),
+      damgalar: { malKabul: t(0), uretimBasladi: t(90), uretimBitti: null, sevkeHazir: null, sevk: null },
+      olculer: { uctanUca: olcu(2000, true), hammaddeBekleme: olcu(90), uretimAkis: olcu(1910, true), sevkBekleme: olcu(null), islemeToplamDk: 50, akisVerimi: 0.026 },
+      seritler: [],
+      adimlar: [{
+        isEmriId: 7, opNo: 10, istasyon: 'Torna 1', fason: false, beklemeDk: null, hazirlikDk: 12, islemeDk: 50, duraklamaDk: 0, durusDk: 0, fasonDk: null,
+        saglamAdet: 8, cevrimBirimDk: 6.25, standartBirimDk: 5, standartHazirlikDk: 10, terminGun: null,
+      }],
+      statuler: [], hammadde: [],
+      kart: { id: 12, etiket: 'UE-000001-P1', durum: 'acik', lotNo: 'LT-000040', acilis: t(30) },
+      olaylarEmrin: true,
+      anlar: [
+        { zaman: t(0), tur: 'mal_kabul', isEmriId: null, opNo: null, yer: 'LT-000040', miktar: null },
+        { zaman: t(30), tur: 'kart_acildi', isEmriId: null, opNo: null, yer: null, miktar: null },
+        { zaman: t(90), tur: 'baslat', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: null },
+        { zaman: t(1530), tur: 'saglam', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: '8' },
+      ],
+    };
+    sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),
+      'GET /akis/refakat-kartlari/12': () => json(200, AKIS),
+      'GET /stok/refakat-partileri/12/kart': () => json(200, { refakat: KART, kart: BAS }),
+      'GET /stok/refakat-partileri/12/iz': () => json(200, { refakat: KART, ustler: [], altlar: [], birlesenler: [], ayniLot: [], ciktilar: [], sevkler: [] }),
+    });
+    ac('/stok/refakat-kartlari');
+    fireEvent.click(await screen.findByRole('button', { name: 'UE-000001-P1' }));
+    const akis = await screen.findByRole('list', { name: 'Kartın akışı' });
+    const anlar = within(akis).getAllByRole('listitem');
+    expect(anlar.map((a) => a.querySelector('strong')?.textContent)).toEqual(['Hammadde kabul edildi', 'Kart açıldı, lot yüklendi', 'OP10 · Üretim başladı', 'OP10 · Sağlam sayıldı']);
+    expect(anlar.map((a) => a.querySelector('.tc-stok-akis-fark')?.textContent)).toEqual(['', '+30 dk', '+1 sa 0 dk', '+1 g 0 sa 0 dk']);
+    expect(anlar[3]?.querySelector('.tc-stok-akis-gun')).toBeTruthy();
+    expect(screen.getByText('1 g 7 sa 50 dk (sürüyor)')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tablo' }));
+    const adimlar = await screen.findByRole('table', { name: 'Adımlar: gerçek ve plan' });
+    expect(within(adimlar).getByText('6,25 dk (5 dk) (+25%)')).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'Anlar' })).getByText('+1 g 0 sa 0 dk')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kart penceresi' }));
+    expect(await screen.findByRole('dialog', { name: 'Refakat kartı UE-000001-P1' })).toBeTruthy();
+  });
+
+  it('süre metni gün, saat ve dakikadır; ölçülemeyen süre tire', () => {
+    expect([sureMetni(null), sureMetni(0), sureMetni(59.6), sureMetni(61), sureMetni(1500)]).toEqual(['—', '0 dk', '1 sa 0 dk', '1 sa 1 dk', '1 g 1 sa 0 dk']);
   });
 });

@@ -4,7 +4,7 @@ import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { SurumluIsMerkezi, SurumluIstasyon, SurumluMakine } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { KisiOzeti } from '#paylasilan/sozlesme/kisiler.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
@@ -84,7 +84,7 @@ function sahipCevabi(s: Sahip, yontem: string, yol: string, govde: Record<string
       case '/vardiya-takvimi':
         if (s.yetkisiz.takvim) return json(500, { kod: 'SUNUCU', mesaj: 'Hata.' });
         return liste({ vardiyalar: s.vardiyalar, matris: s.matris, gunler: [], isMerkezleri: [], kisiVardiyalari: s.kisiVardiyalari, bugun: '2030-01-01' });
-      case '/recete-rota/durum': return json(200, durumKur(s));
+      case '/plan/planlama-kaynagi': return json(200, durumKur(s));
       default: return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
     }
   }

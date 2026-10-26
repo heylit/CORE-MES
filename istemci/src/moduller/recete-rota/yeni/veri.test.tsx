@@ -67,7 +67,7 @@ describe('veri katmanı', () => {
     });
     const y = kur();
     await waitFor(() => expect(y.veri?.data).toBeDefined());
-    const once = istekler.filter((i) => i.yol === '/recete-rota/durum').length;
+    const once = istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length;
     let hata: unknown = null;
     await act(async () => {
       await y.komut!.mutateAsync({ ad: 'statu-tanimi-sil', govde: { id: 'kalite', beklenenSurum: 3 } }).catch((h: unknown) => { hata = h; });
@@ -76,7 +76,7 @@ describe('veri katmanı', () => {
     expect((hata as RrHatasi).durum).toBe(409);
     expect((hata as RrHatasi).message).toBe('Kayıt başka biri tarafından değiştirildi.');
     expect((hata as RrHatasi).eskiSurum).toBe(true);
-    await waitFor(() => expect(istekler.filter((i) => i.yol === '/recete-rota/durum').length).toBeGreaterThan(once));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length).toBeGreaterThan(once));
   });
 
   it('kayıt belgesindeki eski kalemler yalnız okunur: ana belge bulunur, yazma gitmez', async () => {

@@ -78,3 +78,14 @@ export async function taslakYerlesimleriOku(db: Db, k: Kullanici, id: number, su
   if (surum !== undefined && t.surum !== surum) throw eskiSurum();
   return t;
 }
+
+// Planlama ve ortak plan motoru bu modüldedir (658 b, ADR 0018). Planlama çalışmasının anahtarı ve haftalık ek mesai bütçesi (525 2 b).
+export { ekMesaiButcesi, PLANLAMA_ANAHTARI } from './planlama-servis.ts';
+export { motorYukle, planCoz, SUNUCU_KIPLERI } from './plan-motoru.ts';
+export type { Motor, MotorDurumu, MotorPlani, MotorYerlesimi, PlanIstegi, SunucuKipi } from './plan-motoru.ts';
+// planMotoruCozucusu kaydının karşılığı; bağ sunucu/kablolama.ts'te kurulur.
+export { sunucuPlanCozucusu } from './plan-cozucusu.ts';
+
+// Satış teklifi denemesi (Y4): siparişlerin teklif çözücüsü kaydının karşılığı; bağ sunucu/kablolama.ts'te kurulur.
+export { teklifDene } from './planlama-servis.ts';
+export type { SatisTaslagiGirdisi, TeklifDenemeGirdisi, TeklifDenemeSonucu, TeklifIslemi, TeklifKalemiGirdisi, TeklifKalemiSonucu } from './planlama-servis.ts';

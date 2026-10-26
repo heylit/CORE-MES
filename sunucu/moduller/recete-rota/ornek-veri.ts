@@ -6,8 +6,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ANAHTAR_ONEKI } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { ANAHTAR_ONEKI, type ReceteRotaDurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
 import { kayitGetir } from './sorgular.ts';
@@ -19,7 +18,7 @@ const KAYDEDEN = 'ornek.planlama';
 const OKUMA: readonly Islem[] = ['sayfa.malzemeler', 'sayfa.istasyonlar', 'kisiler.oku', 'sayfa.rota', 'sayfa.stok', ...ADIMLI_OKUMA_ISLEMLERI];
 
 // Kayıt, ekranın sahiplerinden okuyup yazacağı hâldir: ürünler, operasyon tanımları, yürürlükteki rotalar ve revizyonlar, emirler.
-export function ornekBelge(d: DurumCevabi, gun: string, an: Date): Record<string, unknown> {
+export function ornekBelge(d: ReceteRotaDurumCevabi, gun: string, an: Date): Record<string, unknown> {
   const items = d.items ?? [];
   const mamul = items.find((m) => m.type === 'mamul' && d.routes?.[m.id] !== undefined);
   return {
