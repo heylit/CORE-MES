@@ -727,11 +727,12 @@ export const refakatCiktiPartiIdleri = async (db: Db, id: number): Promise<numbe
   (await db.sorgu<{ id: number }>('SELECT id::int FROM stok_parti WHERE refakat_partisi_id = $1 ORDER BY id', [id])).map((x) => x.id);
 export interface KartTeslimi {
   id: number; no: string; durum: 'yolda' | 'teslim' | 'red' | 'iptal'; partiId: number; malzemeId: number; miktar: string; alinan: string | null;
-  gonderim: string; kapanis: string | null; kaynak: string; hedef: string;
+  gonderim: string; kapanis: string | null; kaynak: string; hedef: string; gonderenKisiId: number; kapatanKisiId: number | null;
 }
 export const kartTeslimleri = (db: Db, uretimEmriId: number, partiIdler: readonly number[]): Promise<KartTeslimi[]> => db.sorgu(
   `SELECT t.id, t.no, t.durum, t.parti_id::int AS "partiId", t.malzeme_id AS "malzemeId", t.miktar::text AS miktar, t.alinan::text AS alinan,
-     ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis, COALESCE(kk.ad, kk.kod) AS kaynak, COALESCE(hk.ad, hk.kod) AS hedef
+     ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis, COALESCE(kk.ad, kk.kod) AS kaynak, COALESCE(hk.ad, hk.kod) AS hedef,
+     t.gonderen_kisi_id AS "gonderenKisiId", t.kapatan_kisi_id AS "kapatanKisiId"
    FROM stok_teslim t JOIN stok_konum kk ON kk.id = t.kaynak_konum_id JOIN stok_konum hk ON hk.id = t.hedef_konum_id
    WHERE t.uretim_emri_id = $1 AND t.parti_id = ANY($2::bigint[]) ORDER BY t.gonderim, t.id`, [uretimEmriId, partiIdler]);
 // Partinin en eski mal kabul zamanı; mal kabulle girmemiş parti (üretim partisi) null taşır.
