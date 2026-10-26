@@ -399,33 +399,17 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     return { id: uretimEmriId, emirNo: emir.emirNo, malzemeNo: kart!.no };
   }
 
-  test('EM-U13: refakat kartı etiketi üretim emrinin refakat kartından çıkar; olmayan emir eksikte kalır, iptal emir basılmaz; basılan deftere bağlanır', async () => {
+  test('EM-U13 (Soru 587 a): emirden lotsuz refakat kartı basılmaz; tur=refakat önizlemede ve indirmede reddedilir, deftere yazılmaz', async () => {
     const e = await emirAc();
-    const adres = (id: string) => `/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&tur=refakat&id=${id}`;
-    const r = await al(yonetici, adres(`${e.id},2147483004`));
-    assert.equal(r.statusCode, 200, r.body);
-    const rc = r.json() as KayitCiktiCevabi;
-    assert.deepEqual(rc.kayitlar, [{ id: e.id, baslik: e.emirNo }]);
-    assert.deepEqual(rc.eksikler, [2147483004]);
-    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `UE:${e.id}`);
-    assert.match(rc.komut, /Adet 12 · Termin 02\.11\.2026/);
-    assert.match(rc.komut, /10 Torna/);
-    assert.equal((await al(yonetici, adres('2147483004'))).statusCode, 404);
-
+    const r = await al(yonetici, `/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&tur=refakat&id=${e.id}`);
+    assert.equal(r.statusCode, 400, r.body);
     const yazicilarim = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar;
     const dosya = yazicilarim.find((x) => x.ad === DOSYA.ad);
     assert.ok(dosya);
+    const once = await ortam!.vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM etiket_merkezi_baski_kaydi');
     const c = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'refakat', idler: [e.id] } });
-    assert.equal(c.statusCode, 200, c.body);
-    const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
-      'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
-    );
-    assert.deepEqual(kayitlar, [{ kaynak_tur: 'refakat', kaynak_id: e.id }]);
-
-    const surum = ((await al(yonetici, `/adimli-emirler/${e.id}`)).json() as { emir: { surum: number } }).emir.surum;
-    assert.equal((await yaz(yonetici, `/adimli-emirler/${e.id}/iptal`, { surum })).statusCode, 200);
-    const iptal = await al(yonetici, adres(String(e.id)));
-    assert.equal(iptal.statusCode, 409, iptal.body);
+    assert.equal(c.statusCode, 400, c.body);
+    assert.deepEqual(await ortam!.vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM etiket_merkezi_baski_kaydi'), once);
   });
 
   test('EM-U16 (kart #127): refakat partisinin kartı emrin kartı, partinin QR ve etiketi, lot satırıyla basılır; iptal kart eksikte kalır; deftere emrin kartı yazılır', async () => {

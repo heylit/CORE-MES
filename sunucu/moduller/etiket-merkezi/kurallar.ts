@@ -230,7 +230,7 @@ export function istasyonDegerleri(kod: string, ad: string | null): AlanDegerleri
 
 const gunAyYil = (gun: string): string => gun.split('-').reverse().join('.');
 
-// EM-17: refakat kartı etiketi üretim emrinin refakat kartıyla aynı satırları basar (uretim-emirleri/refakat.ts); işlem tablosu tek metinde sıralanır.
+// EM-17: refakat kartı etiketi stoktaki refakat kartıyla aynı satırları basar (stok/RefakatKarti.tsx); işlem tablosu tek metinde sıralanır.
 export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerleri {
   const { ustEmirNo, bolunmeSira } = k.parti;
   const parti = ustEmirNo === null ? 'Ana emir' : `${bolunmeSira === null ? 'Alt parti' : `Alt parti ${bolunmeSira}`} · üst ${ustEmirNo}`;

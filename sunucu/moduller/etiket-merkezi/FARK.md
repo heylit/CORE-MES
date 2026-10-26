@@ -61,3 +61,8 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Refakat şablonuna `lot` alanı (lot no, parti, döküm, sertifika); hazır `refakat-100x150` şablonunda parti satırının altında. Emirden basılan kartta (`tur=refakat`) lot satırı boştur.
 - İptal ve olmayan kart eksikte kalır. Defterde (`etiket_merkezi_baski_kaydi`) kartın emri `refakat` olarak yazılır; göç yok.
 - Stok refakat kartı penceresinde "Etiket Merkezi'nde bas" (yalnız `sayfa.etiket-merkezi` olan görür); stoğun kendi yazdır tuşu kalır.
+
+## Emirden lotsuz refakat kartı kalkar (kart #589, Soru 587 a)
+- Kayıt türü `refakat` (üretim emri kimliği, lotsuz kart, QR `UE:`) sözleşmeden (`KAYIT_TURLERI`), sunucudan ve ekrandan çıktı; `?tur=refakat&id=…` adresi seçim sayılmaz, uç 400 verir. Refakat kartı yalnız `refakat-partisi` (stoktaki lotlu kart, QR `RP:`) olarak basılır; ekranda başlığı "Refakat kartları".
+- Değişmeyen: şablon türü `refakat` ve hazır `refakat-100x150` şablonu; defterde kartın emri `kaynak_tur = 'refakat'` olarak yazılır (eski satırlar da). Göç yok. Emir satırları yine Üretim Emirleri `refakatKarti`'ndan okunur.
+- Sıra: kart #588 (emir ayrıntısındaki eski "Etiket Merkezi'nde bas" düğmesi kalkar) ile aynı turda ya da ondan sonra girer.

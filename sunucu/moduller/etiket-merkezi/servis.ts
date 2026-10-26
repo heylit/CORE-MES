@@ -18,7 +18,7 @@ import { refakatKarti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -99,15 +99,6 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
   }
   // Lot, mal kabul ve refakat kartı tek kayıt okur; sorgular sırayla gider (aynı istemciye eşzamanlı sorgu verilmez).
   const sonuc = new Map<number, KayitDegeri[]>();
-  if (k.tur === 'refakat') {
-    // İptal emrin kartı basılmaz: emrin kendi kuralı (409) bütün baskıyı durdurur; olmayan emir eksik sayılır.
-    const basim = new Date();
-    for (const id of k.idler) {
-      const kart = await refakatKarti(db, id).catch((h: unknown) => { if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') return null; throw h; });
-      if (kart) sonuc.set(id, [{ id, baslik: kart.emirNo, degerler: refakatDegerleri(kart, basim) }]);
-    }
-    return sonuc;
-  }
   if (k.tur === 'refakat-partisi') {
     // İptal kart ve olmayan kart basılmaz (eksik); kartın emri iptalse emrin kuralı (409) bütün baskıyı durdurur. Deftere emrin
     // refakat kartı yazılır: `id` kartın emri, başlık partinin etiketi (emir no-P sıra).
