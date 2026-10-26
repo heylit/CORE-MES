@@ -1,9 +1,10 @@
-import type { KmBalon, KmNumune, KmNumuneKurali, KmOlcum, KmOlcumGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmBalon, KmBalonlarGovdesi, KmNumune, KmNumuneKurali, KmOlcum, KmOlcumGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
 import type { YaziKutusu } from '../../../ortak/cizim/okuma.ts';
 
 // Stüdyonun saf kuralları: ortak çizim parçasına çeviri, son ölçüm, emir kimliği ve numune planı metni.
 type KmOlcumGirdisi = KmOlcumGovdesi['olcumler'][number];
+type KmPlanGirdisi = KmBalonlarGovdesi['balonlar'][number];
 
 // Ortak çizim parçası Arkon'un balon ve ölçüm biçimini konuşur (616 b); Kalite Merkezi kaydı ona çevrilir. Parçada balonun kimliği ekrandaki
 // numarasıdır (`no`). Sınırı olmayan balon geçer/geçmez mastarıdır (sunucudaki olcumSonucu ile aynı ayrım).
@@ -18,6 +19,28 @@ export function cizimBalonu(b: KmBalon): Balon {
     ...(b.siklik !== null ? { freq: b.siklik } : {}),
     ...(b.tur !== null ? { l: b.tur } : {}),
   };
+}
+
+// Sınır sunucuya en çok altı ondalıklı metin gider; sonlu olmayan sınır yoktur (balon mastar sayılır).
+const sinirMetni = (n: number): string => String(Number(n.toFixed(6)));
+
+// Parçanın düzenlediği plan sunucuya bütün gider (603 a): numarası eski balonla aynı olan satır o balonun kimliğini taşır, öteki yeni balondur.
+// Parçanın tutmadığı alanlar (ölçü aleti zorunluluğu, sayfa) eski balondan korunur.
+export function planGirdileri(eski: readonly KmBalon[], balonlar: readonly Balon[]): KmPlanGirdisi[] {
+  const noIle = new Map(eski.map((b) => [b.no, b]));
+  return balonlar.map((b) => {
+    const k = noIle.get(b.id);
+    const sinirli = !b.gauge && Number.isFinite(b.min) && Number.isFinite(b.max);
+    return {
+      ...(k ? { id: k.id } : {}),
+      no: b.id, nominal: b.nom, tolerans: b.tol ?? null,
+      alt: sinirli ? sinirMetni(b.min) : null, ust: sinirli ? sinirMetni(b.max) : null,
+      alet: b.tool ?? null, siklik: b.freq ?? null, kritik: b.crit === true,
+      yontem: b.m === 'cmm' ? 'cmm' : b.m === 'man' ? 'elle' : null,
+      olcuAletiGerekir: k?.olcuAletiGerekir ?? false, tur: b.l ?? null, sayfa: k?.sayfa ?? null,
+      x: b.x, y: b.y, yaziKutusu: b.ar ?? null,
+    };
+  });
 }
 
 // Son ölçümler balon numarasına göre; değer sayı, mastar sonucu Arkon'daki gibi "Geçer" ya da "Geçmez".
