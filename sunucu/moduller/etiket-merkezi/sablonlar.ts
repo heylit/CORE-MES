@@ -1,6 +1,6 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import type { Sablon, SablonTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import type { AlanDegerleri } from './kurallar.ts';
+import { SATIR_BASI, type AlanDegerleri } from './kurallar.ts';
 
 // Hazır şablonlar kodda durur: kullanıcı şablonu gelince bunlar kopyalanıp değiştirilecek. Ölçüler mm.
 // Alan "=" ile başlarsa sabit metindir. Konum kodu 20 karaktere kadar kesilmeden sığar (stok_konum_kod_bicimi, EM-13). Raf etiketi Fabrika Haritası rafından (#116). Bugünkü baskılarla aynı içerik: konum ve malzeme (stok/Etiketler.tsx),
@@ -17,7 +17,7 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
   refakat: [
     { anahtar: 'qr', ad: 'QR (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' },
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
-    { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
+    { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   deneme: [{ anahtar: 'qr', ad: 'QR' }, { anahtar: 'yazici', ad: 'Dil ve çözünürlük' }],
@@ -48,10 +48,16 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     qr(2, 4, 42), metin(46, 3, 52, 9, 7, 'lotNo', true), metin(46, 13, 52, 8, 3, 'malzeme'), metin(46, 22, 52, 4, 3, 'kart'),
     metin(46, 27, 52, 8, 3, 'parti'), metin(46, 36, 52, 8, 3, 'giris'),
   ] },
+  // Kart #707, düzen B: rota yukarıdan aşağı, lottan mamul deposuna; QR sağ sütunda. QR'ın çevresinde motorun iki modülüne ek
+  // en az üç mm boş alan bırakılır, sessiz bölge dört modülü geçer (ortak QR ayarı değişmeden).
   { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [
-    qr(4, 4, 40), metin(46, 4, 50, 4, 2.8, '=REFAKAT KARTI'), metin(46, 9, 50, 14, 6, 'emirNo', true), metin(46, 24, 50, 9, 3.5, 'urunAd', true),
-    metin(46, 34, 50, 4, 2.8, 'urunKod'), metin(46, 39, 50, 4, 2.8, 'adetTermin'), metin(4, 46, 92, 4, 2.8, 'parti'), metin(4, 51, 92, 4, 2.8, 'lot', true),
-    kutu(4, 57, 92, 0.3), metin(4, 59, 92, 81, 3, 'adimlar'), metin(4, 142, 46, 4, 2.5, 'basim'), metin(50, 142, 46, 4, 2.5, 'emirNo'),
+    metin(4, 4, 92, 3.5, 2.6, '=REFAKAT KARTI', true), metin(4, 8, 92, 9, 7.5, 'emirNo', true), metin(4, 18, 92, 5.5, 4.2, 'urunAd', true),
+    metin(4, 24, 92, 4, 2.8, 'urunKod'), metin(4, 28.5, 92, 4, 2.8, 'adetTermin'), kutu(4, 33.5, 92, 0.8, 0.8),
+    kutu(4, 37, 4, 4, 0.5), metin(10, 36.5, 52, 10, 2.8, 'lot', true), kutu(5.6, 41, 0.8, 96, 0.8),
+    metin(10, 48, 52, 87, 3.2, 'rota'),
+    kutu(4, 137, 4, 4, 2), metin(10, 137.2, 54, 4, 2.8, '=Mamul deposu / sevk', true),
+    qr(67, 37.5, 29), metin(67, 69.5, 29, 3, 2.2, '=Her işlemde okutun'),
+    kutu(67, 124, 29, 22, 0.3), metin(68.5, 125.5, 26, 10, 2.4, 'parti'), metin(68.5, 137, 26, 7.5, 2.4, 'basim'),
   ] },
   { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
     qr(2, 2, 46), metin(50, 4, 48, 18, 7, 'kod', true), metin(50, 26, 48, 20, 5, 'ad'),
@@ -78,7 +84,8 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
   refakat: {
     qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01',
     adetTermin: 'Adet 40 · Termin 30.10.2026', parti: 'Parti: Ana emir', basim: 'Basım 18.10.2026',
-    adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol', lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
+    adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
+    rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
   },
   istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
   deneme: { qr: `${KOD_ONEKI.konum}:DENEME`, yazici: null },

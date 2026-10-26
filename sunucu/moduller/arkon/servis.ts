@@ -61,6 +61,7 @@ import {
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
   donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
   emekVerimi, mesaiSaniyesi,
+  DOSYA_IMZA_BAYTI, dosyaTuruBul,
 } from './kurallar.ts';
 import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
 import type { ArkonDurumu, BelgeEylemi, DurusKimlikleri, DurusKodlari, GunlukSatiri, KatilimDurumu, KatilimYolu, KayitSutunlari, Konum, KonumKimlikleri, NumuneTeslimGirdisi, StokIstegiGirdisi, TmiAyari, YansimaKarari } from './kurallar.ts';
@@ -1874,7 +1875,8 @@ export async function dosya(db: Db, kullanici: Kullanici, ozet: string): Promise
   await rolGerekli(db, kullanici);
   const bilgi = await sorgular.dosyaBilgisi(db, ozet);
   if (bilgi === null || !(await dosyayiOkuyabilir(db, kullanici, ozet, bilgi.yukleyenId))) throw bulunamadi(ILETILER.dosyaYok);
-  return { tur: 'application/octet-stream', ad: ozet, boyut: bilgi.boyut, akis: (vt) => dosyaDilimleri(vt, ozet, bilgi.boyut) };
+  const ilk = await sorgular.dosyaDilimi(db, ozet, 0, DOSYA_IMZA_BAYTI);
+  return { tur: dosyaTuruBul(ilk ?? Buffer.alloc(0)), ad: ozet, boyut: bilgi.boyut, akis: (vt) => dosyaDilimleri(vt, ozet, bilgi.boyut) };
 }
 
 async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string, yukleyenId: number): Promise<boolean> {

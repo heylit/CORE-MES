@@ -5,6 +5,7 @@ import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from '../proje
 import { karRiskiOraniGun, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, tahminiMaliyetCozucusu } from './disari.ts';
 import { PERSONEL_TANIMSIZ } from './kurallar.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
@@ -142,41 +143,43 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   });
 
   test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); öner aynı yerleri yazar', async () => {
-    const [a1, a2] = await isEmirleriAc([yeniAdim(), yeniAdim()], 10, '2030-05-10');
-    const surum = (await istek(c.kalite, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu;
-    const m = await tamam<MotorYerlesimiCevabi>(c.kalite, 'GET', '/plan/motor-yerlesimi');
-    assert.equal((await istek(c.kalite, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu, surum, 'okumak canlıyı değiştirmez');
-    const satir = (id: number | undefined) => m.yerlesimler.find((y) => y.isEmriId === id)!;
-    assert.equal(satir(a1).sabit, false);
-    assert.ok(Date.parse(satir(a1).bitis) <= Date.parse(satir(a2).baslangic), 'rota sırası');
-    assert.equal(typeof satir(a1).emirNo, 'string');
-    assert.deepEqual(m.ekranYerlesimi[`${satir(a1).emirNo}|${String(satir(a1).opNo)}`], [{ makineId: satir(a1).kaynak.id, baslangic: satir(a1).baslangic }], 'ekran anahtarı canlı kuyruktaki gibi');
-    const p = await taslaktaOner();
-    try {
-      // Motor "şimdi"den sayar: iki çağrı arasındaki saniyeler dışında aynı yer ve kaynak.
-      for (const id of [a1, a2]) {
-        assert.deepEqual(yer(p, id!).kaynak, satir(id).kaynak);
-        assert.ok(Math.abs(Date.parse(yer(p, id!).baslangic) - Date.parse(satir(id).baslangic)) < 60_000, 'öner motorun yerini yazar');
+    await gunduzde(async () => {
+      const [a1, a2] = await isEmirleriAc([yeniAdim(), yeniAdim()], 10, '2030-05-10');
+      const surum = (await istek(c.kalite, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu;
+      const m = await tamam<MotorYerlesimiCevabi>(c.kalite, 'GET', '/plan/motor-yerlesimi');
+      assert.equal((await istek(c.kalite, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu, surum, 'okumak canlıyı değiştirmez');
+      const satir = (id: number | undefined) => m.yerlesimler.find((y) => y.isEmriId === id)!;
+      assert.equal(satir(a1).sabit, false);
+      assert.ok(Date.parse(satir(a1).bitis) <= Date.parse(satir(a2).baslangic), 'rota sırası');
+      assert.equal(typeof satir(a1).emirNo, 'string');
+      assert.deepEqual(m.ekranYerlesimi[`${satir(a1).emirNo}|${String(satir(a1).opNo)}`], [{ makineId: satir(a1).kaynak.id, baslangic: satir(a1).baslangic }], 'ekran anahtarı canlı kuyruktaki gibi');
+      const p = await taslaktaOner();
+      try {
+        // Motor "şimdi"den sayar: iki çağrı arasındaki saniyeler dışında aynı yer ve kaynak.
+        for (const id of [a1, a2]) {
+          assert.deepEqual(yer(p, id!).kaynak, satir(id).kaynak);
+          assert.ok(Math.abs(Date.parse(yer(p, id!).baslangic) - Date.parse(satir(id).baslangic)) < 60_000, 'öner motorun yerini yazar');
+        }
+      } finally {
+        await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
       }
-    } finally {
-      await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
-    }
-    assert.deepEqual(m.uyarilar, [], 'kısıt kapalıyken uyarı yok');
-    assert.deepEqual((await tamam<MotorUyarilariCevabi>(c.kalite, 'GET', '/plan/motor-uyarilari')).uyarilar, [], 'motorsuz okuma da aynı');
-    // 307 a: kısıt açıkken personel verisi olan iş merkezi yoksa motor sınırlamaz; ekran bunu uyarıdan bilir.
-    const q = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: null, ayar: { ...p.ayar, personelKisiti: true } });
-    try {
-      const mk = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', `/plan/motor-yerlesimi?taslak=${String(q.taslak!.id)}`);
-      assert.deepEqual(mk.uyarilar, q.personelYuku.length === 0 ? [PERSONEL_TANIMSIZ] : []);
-      const mu = await tamam<MotorUyarilariCevabi>(c.planlama, 'GET', `/plan/motor-uyarilari?taslak=${String(q.taslak!.id)}`);
-      assert.deepEqual(mu.uyarilar, mk.uyarilar, 'motorsuz okuma motorun uyarısını verir');
-    } finally {
-      await tamam(c.planlama, 'POST', `/plan/senaryolar/${q.taslak!.id}/vazgec`, { surum: q.taslak!.surum });
-    }
-    assert.equal((await istek(c.kalite, 'GET', '/plan/motor-yerlesimi?taslak=999999')).statusCode, 404);
-    assert.equal((await istek(c.operator, 'GET', '/plan/motor-yerlesimi')).statusCode, 403, 'plan ekranını açamayan okuyamaz');
-    assert.equal((await istek(c.kalite, 'GET', '/plan/motor-uyarilari?taslak=999999')).statusCode, 404);
-    assert.equal((await istek(c.operator, 'GET', '/plan/motor-uyarilari')).statusCode, 403, 'plan ekranını açamayan uyarıyı da okuyamaz');
+      assert.deepEqual(m.uyarilar, [], 'kısıt kapalıyken uyarı yok');
+      assert.deepEqual((await tamam<MotorUyarilariCevabi>(c.kalite, 'GET', '/plan/motor-uyarilari')).uyarilar, [], 'motorsuz okuma da aynı');
+      // 307 a: kısıt açıkken personel verisi olan iş merkezi yoksa motor sınırlamaz; ekran bunu uyarıdan bilir.
+      const q = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: null, ayar: { ...p.ayar, personelKisiti: true } });
+      try {
+        const mk = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', `/plan/motor-yerlesimi?taslak=${String(q.taslak!.id)}`);
+        assert.deepEqual(mk.uyarilar, q.personelYuku.length === 0 ? [PERSONEL_TANIMSIZ] : []);
+        const mu = await tamam<MotorUyarilariCevabi>(c.planlama, 'GET', `/plan/motor-uyarilari?taslak=${String(q.taslak!.id)}`);
+        assert.deepEqual(mu.uyarilar, mk.uyarilar, 'motorsuz okuma motorun uyarısını verir');
+      } finally {
+        await tamam(c.planlama, 'POST', `/plan/senaryolar/${q.taslak!.id}/vazgec`, { surum: q.taslak!.surum });
+      }
+      assert.equal((await istek(c.kalite, 'GET', '/plan/motor-yerlesimi?taslak=999999')).statusCode, 404);
+      assert.equal((await istek(c.operator, 'GET', '/plan/motor-yerlesimi')).statusCode, 403, 'plan ekranını açamayan okuyamaz');
+      assert.equal((await istek(c.kalite, 'GET', '/plan/motor-uyarilari?taslak=999999')).statusCode, 404);
+      assert.equal((await istek(c.operator, 'GET', '/plan/motor-uyarilari')).statusCode, 403, 'plan ekranını açamayan uyarıyı da okuyamaz');
+    });
   });
 
   test('6c: planın TL toplamını yalnız fiyatı gören görür (180); finansman oranı toplamı artırır; karşılaştırma her kuralın toplamını verir', async () => {

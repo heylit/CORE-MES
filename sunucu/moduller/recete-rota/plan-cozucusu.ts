@@ -4,7 +4,7 @@ import { cakisma } from '#cekirdek/hata.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import type { PlanMotoruCozucusu, PlanMotoruIstegi } from '../plan/disari.ts';
 import { planAni } from './kurallar.ts';
-import { cozumGirdisi } from './plan-girdisi.ts';
+import { cozumGirdisi, type EkAdim } from './plan-girdisi.ts';
 import { motorKodu, planCoz, type MotorDurumu } from './plan-motoru.ts';
 import { planCozumKaynagi } from './servis.ts';
 
@@ -18,9 +18,10 @@ export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: Plan
   return coz(kaynak, istek);
 };
 
+// 686 a: ek adım alanı plan modülünün isteğine ayrıca girer; çözücü alanı olan ve olmayan isteği aynı okur.
 export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
-  istek: PlanMotoruIstegi,
+  istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] },
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[] }> {
   const g = cozumGirdisi({
     ...kaynak,
@@ -29,6 +30,7 @@ export async function coz(
       calisanlar: istek.calisanlar.map((c) => ({ anahtar: c.anahtar, makineId: c.makineId, baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk })),
       ...(istek.ekMesai ? { ekMesai: istek.ekMesai.map((e) => ({ makineId: e.makineId, gun: e.gun, vardiyaId: e.vardiyaId })) } : {}),
       ...(istek.baglar ? { baglar: istek.baglar.map((x) => ({ anahtar: x.anahtar, oncul: x.oncul })) } : {}),
+      ...(istek.ekAdimlar ? { ekAdimlar: istek.ekAdimlar.map((e) => ({ ...e })) } : {}),
     },
   });
   if (g === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');

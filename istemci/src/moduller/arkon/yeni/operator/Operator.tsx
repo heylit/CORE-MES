@@ -67,6 +67,7 @@ import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
 import { UzakMod } from './UzakMod.tsx';
+import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
 
@@ -78,7 +79,7 @@ const AletSecici = lazy(async () => {
 });
 // Baytı gelmemiş dosya kaydı resimde açılamaz; görüntüleyici onu atlar.
 const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikResimKontrolu['dosyalar'] =>
-  l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
+  l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => baytiVar(f.bytes));
 
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
@@ -237,6 +238,13 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   const loadRef = useRef(loadPkgs);
   loadRef.current = loadPkgs;
+  // Bu istasyonun işlerinin dosyaları arka planda cihaza iner (karar 726 a): açık iş önce, sonra kuyruk. Öteki istasyonların paketi
+  // indirilmez: cihaz sınırı aşılınca silinip yeniden inmesin.
+  const indirmeAnahtari = ai + '|' + isler.map((x) => (x.pkg ? x.pkg.id + ':' + x.pkg.version : '')).join(',');
+  useEffect(() => {
+    if (pv) return;
+    depo.dosyalariIndir([isler[ai], ...isler.filter((_, i) => i !== ai)].flatMap((x) => (x && x.pkg ? [x.pkg] : [])));
+  }, [indirmeAnahtari]);
 
   useEffect(() => {
     void (async () => {
@@ -594,8 +602,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     say('Not hazırlığa gönderildi', 'flag', 'hazard');
   };
   const aletler = ayarlar.olcuAletleri;
+  // Paket listesi dosyasız gelir (kart #731): açık işin dosyaları ve hazır verisi burada baytlanır; gelene kadar resim boş açılır.
+  const pkgAnahtari = o.pkg ? o.pkg.id + ':' + o.pkg.version : '';
+  const acikDosyalar = useCozulmus(depo, o.pkg ? { files: o.pkg.files, derived: o.pkg.derived } : null, pkgAnahtari);
   const resimKontrolu = useMemo((): TeknikResimKontrolu => (o.pkg ? {
-    anahtar: o.pkg.id + ':' + o.pkg.version, dosyalar: baytli(o.pkg.files), anaResim: o.pkg.primary, hazirVeri: o.pkg.derived ?? null, ayar: o.pkg.readCfg,
+    anahtar: pkgAnahtari + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: o.pkg.primary,
+    hazirVeri: acikDosyalar?.derived ?? null, ayar: o.pkg.readCfg,
     balonlar: o.pkg.plan as TeknikResimKontrolu['balonlar'], balonlarYaz: () => undefined, saltOkunur: true, eskiCizim: cizimEski, olcumYok: true,
     aletZorunlu: !pv, aletSecimi: (tool) => <Suspense fallback={null}><AletSecici aletler={aletler} tool={tool} /></Suspense>,
     operatorOlcer: opIds, odakKipi: odakKipiYaz, olcumler: (o.meas || {}) as unknown as TeknikResimKontrolu['olcumler'],
@@ -603,7 +615,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), olcumBildir, notBirak: pv ? undefined : notBirak,
   } : {
     anahtar: 'bos:' + o.no, dosyalar: [], anaResim: null, balonlar: [], balonlarYaz: () => undefined, olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: true,
-  }), [o.pkg?.id, o.pkg?.version, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);
+  }), [o.pkg?.id, o.pkg?.version, acikDosyalar, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);
   const task0 = siradakiGorev(o, D, nextOrder, ilk, simdi);
   const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi) : task0;
   const eskiG = eskiCizimGorevi(ertelenmis, cizimEski);
