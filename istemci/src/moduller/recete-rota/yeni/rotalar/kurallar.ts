@@ -118,6 +118,17 @@ export function kartBasligi(m: Malzeme | undefined, adim: Adim | null, opAdi: (o
   return `${m ? turKisa(m.type) : ''} OP ${String(statuNo(adim))} ${opAdi(adim.opId) ?? 'Adım'}`.trim();
 }
 
+// Ara kart (statülü kart) emrin adediyle sayılır, birimi adettir; son adımın çıktısı (adım yok) malzemenin kendi birimini korur.
+export const kartBirimi = (m: Malzeme | undefined, adim: Adim | null): string => (adim ? 'adet' : m?.unit ?? '');
+
+// Bir adımda aynı malzeme iki kez giren olamaz (rota modülü de reddeder, RT-55); ekran eklemeden önce engeller. Değiştirilen girenin kendi
+// sırası (haric) sayılmaz: gireni kendi malzemesiyle değiştirmek serbesttir. Dönen, var olan girenin sırasıdır.
+export function girenTekrari(a: Pick<Adim, 'ins'>, malzemeId: string, haric: number | null = null): number | null {
+  const i = a.ins.findIndex((g, j) => j !== haric && g.itemId === malzemeId);
+  return i < 0 ? null : i;
+}
+export const girenTekrarIletisi = (kod: string): string => `${kod} bu adımda zaten giren; var olan giren seçildi. Miktarı onun üzerinden değiştir.`;
+
 export interface RotaEksigi { adimId: string; metin: string }
 // Terminal adımda neyi tüketip neyi üreteceğini rotadan okur: ilk adımda ve bağımsız adımda en az bir giren zorunludur. Eksik rota onaya
 // gidemez, onaylanamaz, yürürlüğe alınamaz; taslak kaydı sürer.

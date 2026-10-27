@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, sirali, sonrakiBagimlilik, statuNo,
+  adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
@@ -27,9 +27,9 @@ export function surukleCoz(v: string): { tur: 'adim'; urunId: string; adimId: st
   return null;
 }
 
-function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, arahal, ek }: {
+function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, arahal, ek, birim }: {
   m: Malzeme; tur: 'giren' | 'onceki' | 'sonraki' | 'ana' | 'yan'; baslik: string; alt: string; miktar: number; rozet: ReactNode;
-  secili: boolean; besler?: string | undefined; cikan?: string | undefined; sec: () => void; arahal?: boolean; ek?: ReactNode;
+  secili: boolean; besler?: string | undefined; cikan?: string | undefined; sec: () => void; arahal?: boolean; ek?: ReactNode; birim?: string;
 }) {
   const dusuk = (m.min ?? 0) > 0 && m.stock !== null && m.stock < (m.min ?? 0);
   return (
@@ -47,7 +47,7 @@ function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, a
           </span>
         )}
         <span className="tc-rr1-ci"><b>{baslik}</b><small>{alt}</small>{rozet}{arahal && <span className="tc-rr1-kb tc-rr1-kb-st">statülü kart</span>}</span>
-        <span className="tc-rr1-cq">{sayi(miktar)}<small>{m.unit ?? ''}</small></span>
+        <span className="tc-rr1-cq">{sayi(miktar)}<small>{birim ?? m.unit ?? ''}</small></span>
       </button>
       {ek}
     </span>
@@ -171,7 +171,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                 const k = akisKarti(d.id, liste, liste.indexOf(p), r.duzen.malzemeVar);
                 const km = h.malzeme.get(k.itemId);
                 return km ? (
-                  <Cip key={`f${p.id}`} m={km} tur="onceki" arahal baslik={kartBasligi(km, k.adim, r.duzen.opAdi)} alt={`${km.code} ${km.name}`} miktar={sn.miktar}
+                  <Cip key={`f${p.id}`} m={km} tur="onceki" arahal birim={kartBirimi(km, k.adim)} baslik={kartBasligi(km, k.adim, r.duzen.opAdi)} alt={`${km.code} ${km.name}`} miktar={sn.miktar}
                     rozet={<span className="tc-rr1-kb tc-rr1-kb-in">önceki adımdan, tüketilir</span>} besler={anahtar} secili={false}
                     sec={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: p.id, seq: p.seq, miktar: sn.miktar }); }} />
                 ) : null;
@@ -233,7 +233,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
               {son ? anaCip(ust ?? undefined, anahtar) : (() => {
                 const km = kart ? h.malzeme.get(kart.itemId) : undefined;
                 return km && kart ? (
-                  <Cip m={km} tur="sonraki" arahal baslik={kartBasligi(km, kart.adim, r.duzen.opAdi)} alt={`${km.code} ${km.name}`}
+                  <Cip m={km} tur="sonraki" arahal birim={kartBirimi(km, kart.adim)} baslik={kartBasligi(km, kart.adim, r.duzen.opAdi)} alt={`${km.code} ${km.name}`}
                     miktar={sn.miktar * (1 - Math.min(0.95, a.rejectPct / 100))} cikan={anahtar} secili={false}
                     rozet={<span className="tc-rr1-kb tc-rr1-kb-ana">sonraki adıma</span>}
                     sec={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: a.id, seq: a.seq, miktar: sn.miktar }); }} />
