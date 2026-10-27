@@ -1,7 +1,7 @@
 // Arkon MES değiştirilmeden TMI içinde çalışır. Arkon kendi sunucusuyla konuştuğunu sanır: istekleri sanal bir sunucu
 // adresine gider, bu katman onları TMI'nin /api/arkon uçlarına çevirir. Oturum TMI'nindir (çerez); Arkon'a ayrı giriş yoktur.
 import type {
-  AnomaliCevabi, AnomaliIstatistikCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
+  AnomaliCevabi, AnomaliIstatistikCevabi, AnomaliOlaylariCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
   EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
   RefakatKartlariCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
@@ -238,6 +238,7 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   // 298: çağrı bandının alıcısı TMI bildirim yönlendirmesindedir; yalnız oturumdaki kişinin ekipleri döner.
   if (ilk === 'cagri-ekiplerim' && g.yontem === 'GET') return tamam(await istemci.get<CagriEkiplerimCevabi>('/bildirimler/cagri-yonlendirme/benim'));
   if (ilk === 'anomaliler' && g.yontem === 'GET') return tamam(await istemci.get<AnomaliCevabi>('/arkon/anomaliler'));
+  if (ilk === 'anomali-olaylari' && g.yontem === 'GET') return tamam(await istemci.get<AnomaliOlaylariCevabi>('/arkon/anomali-olaylari'));
   if (ilk === 'anomali-istatistik' && g.yontem === 'GET') {
     // Yalnız dönem ve tarih geçer; doğrulamayı TMI ucu yapar.
     const q = new URLSearchParams({ donem: g.sorgu.get('donem') ?? '', tarih: g.sorgu.get('tarih') ?? '' });

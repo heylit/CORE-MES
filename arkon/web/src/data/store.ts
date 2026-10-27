@@ -1,5 +1,5 @@
 import type { BusMsg, HealthRes, PkgFile, Role, Session, User } from '@shared/model';
-import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from './anomali';
+import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler } from './anomali';
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
@@ -535,6 +535,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     },
     /** üretim anomalisi (kart #1149): TMI'de hesaplanır; yetkisi olmayan kişide sunucu 403 verir */
     async anomaliler(): Promise<Anomaliler> { return api('GET', '/anomaliler'); },
+    /** zaman olayları (kart 764): geç giriş, geç teslim, sonraki işe etki, teslim riski */
+    async anomaliOlaylari(): Promise<AnomaliOlaylari> { return api('GET', '/anomali-olaylari'); },
     /** gün, hafta, ay istatistiği (kart #1306): TMI'nin kaydettiği günlerden */
     async anomaliIstatistigi(donem: AnomaliDonemi, tarih: string): Promise<AnomaliIstatistigi> {
       return api('GET', '/anomali-istatistik?donem=' + encodeURIComponent(donem) + '&tarih=' + encodeURIComponent(tarih));

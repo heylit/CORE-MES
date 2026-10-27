@@ -87,3 +87,39 @@ export function gunCubugu(gun: { beklenen: number | null; uretilen: number | nul
 
 /** Tarih kısa: '2026-10-14' -> '14.10'. */
 export const kisaTarih = (t: string): string => t.slice(8, 10) + '.' + t.slice(5, 7);
+
+/* Zaman olayları (kart 764): geç giriş, girdinin geç gelmesi, sonraki işe etki, teslim riski (GET /arkon/anomali-olaylari). Dakika net aktif
+   dakikadır; plan anı olayın açıldığı andaki canlı plandan donmuştur. Eşik boşsa o kural kapalıdır. */
+export type AnomaliOlayTuru = 'gec-giris' | 'gec-teslim' | 'ardil-etkisi' | 'teslim-riski' | 'toplu-tutarsiz' | 'bitis-kaymasi' | 'sure-asimi';
+export interface AnomaliOlayi {
+  id: number; tur: AnomaliOlayTuru; isEmriId: number; uretimEmriId: number | null; emirNo: string | null; opNo: number | null;
+  istasyon: { id: number; ad: string } | null; kaynak: { tur: 'makine' | 'kisi'; id: number; ad: string | null } | null;
+  planAni: string | null; tabanAni: string | null; tabanDakika: number | null; gercekAni: string | null; dakika: number; kokOlayId: number | null;
+  acilis: string; kapanis: string | null;
+}
+export interface AnomaliOlaylari {
+  hesaplama: string;
+  esikler: { gecGirisDk: number | null; gecTeslimDk: number | null; bitisKaymaDk: number | null; sureAsimYuzde: number | null };
+  ozet: { acik: number; aksatilanIs: number; toplamEtkiDk: number; riskliEmir: number };
+  olaylar: AnomaliOlayi[];
+}
+
+export const ANOMALI_OLAY_ETIKETI: Record<AnomaliOlayTuru, string> = {
+  'gec-giris': 'Geç giriş', 'gec-teslim': 'Girdi gecikti', 'ardil-etkisi': 'Sonraki işe etki', 'teslim-riski': 'Teslim riski',
+  'toplu-tutarsiz': 'Toplu giriş tutarsız', 'bitis-kaymasi': 'Bitiş kayması', 'sure-asimi': 'Süre aşımı',
+};
+
+/** Dakika okunur süre: 45 dk, 2 sa 10 dk, 1 g 3 sa. */
+export function sureMetni(dk: number): string {
+  const d = Math.round(dk);
+  if (d < 60) return d + ' dk';
+  const sa = Math.floor(d / 60);
+  if (sa < 24) return sa + ' sa' + (d % 60 ? ' ' + (d % 60) + ' dk' : '');
+  return Math.floor(sa / 24) + ' g' + (sa % 24 ? ' ' + (sa % 24) + ' sa' : '');
+}
+
+/** Zaman kurallarından kapalı olanlar (eşiği boş). */
+export function kapaliZamanKurallari(e: AnomaliOlaylari['esikler']): string[] {
+  return [e.gecGirisDk === null ? 'Geç giriş' : null, e.gecTeslimDk === null ? 'Girdi gecikmesi' : null, e.bitisKaymaDk === null ? 'Bitiş kayması' : null,
+    e.sureAsimYuzde === null ? 'Süre aşımı' : null].filter((x): x is string => x !== null);
+}

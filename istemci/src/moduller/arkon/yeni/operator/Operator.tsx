@@ -748,10 +748,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       state: o.state, ...sayimKartAlani(o.kart),
     };
     const cyc = cycRef.current.last ? Math.round(cycRef.current.last) : null;
+    // 784 a: toplu giriş işaretlenir; sunucu adedin son girişten beri geçen net süreye sığıp sığmadığını denetler (yalnız anomali sayfası).
+    const isaret = toplu ? { toplu: true } : {};
     if (autoRef.current.cnt) { autoRef.current.cnt = false; return; } // makine verisinden gelen sayım sunucuda zaten kayıtlı
-    if (o.good !== p.good) void depo.Log.add('counts', { kind: 'good', delta: o.good - p.good, cycleMs: o.good > p.good && !toplu ? cyc : null, ...base });
+    if (o.good !== p.good) void depo.Log.add('counts', { kind: 'good', delta: o.good - p.good, cycleMs: o.good > p.good && !toplu ? cyc : null, ...isaret, ...base });
     if (o.scrap !== p.scrap) {
-      void depo.Log.add('counts', { kind: 'scrap', delta: o.scrap - p.scrap, cycleMs: o.scrap > p.scrap && !toplu ? cyc : null, reason: o.scrap > p.scrap ? scrapWhy.current : null, ...base });
+      void depo.Log.add('counts', { kind: 'scrap', delta: o.scrap - p.scrap, cycleMs: o.scrap > p.scrap && !toplu ? cyc : null, reason: o.scrap > p.scrap ? scrapWhy.current : null, ...isaret, ...base });
       scrapWhy.current = null;
     }
   }, [o.good, o.scrap, o.no]);

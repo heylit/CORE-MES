@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
-  ANOMALI_DONEM_ETIKETI, ANOMALI_DURUM_ETIKETI, ANOMALI_DURUM_RENGI, anomaliAdedi, anomaliOrani, gunCubugu, isaretliSayisi, istasyonIsareti,
-  istasyonlariSirala, kapaliKurallar, kisaTarih, oranRengi, type AnomaliDonemi, type AnomaliDurumu, type AnomaliIstasyonu, type AnomaliIstatistigi, type Anomaliler,
+  ANOMALI_DONEM_ETIKETI, ANOMALI_DURUM_ETIKETI, ANOMALI_DURUM_RENGI, ANOMALI_OLAY_ETIKETI, anomaliAdedi, anomaliOrani, gunCubugu, isaretliSayisi, istasyonIsareti,
+  istasyonlariSirala, kapaliKurallar, kapaliZamanKurallari, kisaTarih, oranRengi, sureMetni, type AnomaliDonemi, type AnomaliDurumu, type AnomaliIstasyonu,
+  type AnomaliIstatistigi, type AnomaliOlayi, type AnomaliOlaylari, type Anomaliler,
 } from '../../../../../../arkon/web/src/data/anomali.ts';
 import { Dugme, Girdi, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
@@ -10,7 +11,7 @@ import { useArkon } from '../veri/baglam.ts';
 import type { Renk } from './kurallar.ts';
 import { Cip, SayfaCercevesi, Secmeli } from './ortak.tsx';
 
-// Üretim anomalisi (anomali.ts AnomaliApp): hesap TMI sunucusundadır (GET /arkon/anomaliler, /arkon/anomali-istatistik), sayfa yalnız
+// Üretim anomalisi (anomali.ts AnomaliApp): hesap TMI sunucusundadır (GET /arkon/anomaliler, /arkon/anomali-olaylari, /arkon/anomali-istatistik), sayfa yalnız
 // gösterir. Bilinmeyen değer "–" yazılır, sıfır uydurulmaz.
 const YENILEME_MS = 60000;
 
@@ -46,6 +47,39 @@ const emek = (e: number | null | undefined) => (e != null ? <small title="Standa
 const hurda = (h: number | null) => (h ? <small>{anomaliAdedi(h)} hurda</small> : null);
 const planDisi = (p: number | null | undefined) => (p ? <small title="Plana girmemiş işin sağlamı; orana girmez">{anomaliAdedi(p)} plan dışı</small> : null);
 
+// Zaman olayı (kart 764): açık olay türünün rengiyle, kapanan "kapandı" ile; dakika net aktif dakikadır.
+const saatMetni = (t: string | null): string => { if (t === null) return '–'; const d = new Date(t); return `${iki(d.getHours())}:${iki(d.getMinutes())}`; };
+const OLAY_RENGI: Record<AnomaliOlayi['tur'], Renk> = {
+  'gec-giris': 'stop', 'gec-teslim': 'hazard', 'ardil-etkisi': 'hold', 'teslim-riski': 'stop', 'toplu-tutarsiz': 'hazard', 'bitis-kaymasi': 'hold', 'sure-asimi': 'hold',
+};
+function OlaySatiri({ o }: { o: AnomaliOlayi }) {
+  const yer = [o.istasyon?.ad, o.kaynak?.ad].filter((x): x is string => !!x).join(' · ');
+  return (
+    <div className="tc-ay3-anom-satir">
+      <div><b>{o.emirNo ?? `İş ${o.isEmriId}`}{o.opNo !== null ? ` · OP ${o.opNo}` : ''}</b>{yer ? <small className="tc-ay3-not"> {yer}</small> : null}</div>
+      <div className="mono" title={o.tur === 'teslim-riski' ? 'Teslim gününün sonundan sonra (takvim)' : 'Net aktif süre'}>{sureMetni(o.dakika)}</div>
+      <div className="tc-ay3-anom-sag">
+        <Cip renk={o.kapanis === null ? OLAY_RENGI[o.tur] : 'done'} simge={o.kapanis === null ? 'clock' : 'check'}>{ANOMALI_OLAY_ETIKETI[o.tur]}{o.kapanis === null ? '' : ' · kapandı'}</Cip>
+        {o.planAni !== null && <small title="Olay açıldığındaki plan">plan {saatMetni(o.planAni)}</small>}
+        {o.gercekAni !== null && <small>gerçekleşen {saatMetni(o.gercekAni)}</small>}
+        {o.tabanDakika !== null && <small title="Sabit taban plana göre; yalnız bilgi">tabana göre {sureMetni(Math.max(0, o.tabanDakika))}</small>}
+      </div>
+    </div>
+  );
+}
+function ZamanOzeti({ z }: { z: AnomaliOlaylari }) {
+  const kutu = (deger: string, etiket: string, simge: SimgeAdi) => (
+    <div className="tc-ay3-anom-ozet-kutu"><Simge ad={simge} /><b className="mono">{deger}</b><small>{etiket}</small></div>
+  );
+  return (
+    <div className="tc-ay3-anom-ozet" aria-label="Zaman özeti">
+      {kutu(String(z.ozet.aksatilanIs), 'aksatılan iş', 'route')}
+      {kutu(sureMetni(z.ozet.toplamEtkiDk), 'toplam etki', 'clock')}
+      {kutu(String(z.ozet.riskliEmir), 'teslimi riskte emir', 'truck')}
+    </div>
+  );
+}
+
 type Sekme = 'bugun' | AnomaliDonemi;
 
 export function AnomaliSayfasi() {
@@ -63,11 +97,17 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
   const { depo, git } = useArkon();
   const bagli = depo.status().mode === 'server';
   const [a, aYaz] = useState<Anomaliler | null>(null);
+  const [z, zYaz] = useState<AnomaliOlaylari | null>(null);
+  const [zHata, zHataYaz] = useState(false);
   const [hata, hataYaz] = useState(false);
   const [yasak, yasakYaz] = useState(false);
   const [mesgul, mesgulYaz] = useState(false);
   const sor = useCallback((canli: () => boolean = () => true) => {
     mesgulYaz(true);
+    // Zaman olayları ayrı okunur: alınamaması adet panosunu gizlemez.
+    void depo.Server.anomaliOlaylari()
+      .then((d) => { if (canli()) { zYaz(d); zHataYaz(false); } })
+      .catch(() => { if (canli()) zHataYaz(true); });
     return depo.Server.anomaliler()
       .then((d) => { if (canli()) { aYaz(d); hataYaz(false); } })
       .catch((e: unknown) => { if (!canli()) return; if (yasakMi(e)) yasakYaz(true); else hataYaz(true); })
@@ -83,7 +123,7 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
 
   const sayi = a ? isaretliSayisi(a.istasyonlar) : null;
   const ek = sayi !== null ? <Cip renk={sayi ? 'stop' : 'run'}>{sayi ? `${sayi} istasyon eksik` : 'Eksik yok'}</Cip> : null;
-  const kapali = a ? kapaliKurallar(a.esikler) : [];
+  const kapali = [...(a ? kapaliKurallar(a.esikler) : []), ...(z ? kapaliZamanKurallari(z.esikler) : [])];
   return (
     <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi" renk="stop" ek={ek}>
       <div className="tc-ay3-arac">
@@ -126,6 +166,13 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
                   ))}
                 </Bolum>
               )}
+            </div>
+            {z && <ZamanOzeti z={z} />}
+            <div className="tc-ay3-anom">
+              <Bolum baslik="Zaman" simge="clock" adet={z?.olaylar.length ?? 0}
+                bos={zHata ? 'Zaman olayları şu an alınamadı' : !z ? 'Okunuyor…' : 'Geç giriş, girdi gecikmesi ya da teslim riski yok'}>
+                {(z?.olaylar ?? []).map((o) => <OlaySatiri key={`o${o.id}`} o={o} />)}
+              </Bolum>
             </div>
             {hata && <small className="tc-ay3-not">Son yenileme alınamadı; gösterilen veri önceki okumadır.</small>}
             {kapali.length > 0 && <small className="tc-ay3-not">Kapalı kural: {kapali.join(', ')} (Ayarlar)</small>}
