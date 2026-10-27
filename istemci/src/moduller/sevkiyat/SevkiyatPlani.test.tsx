@@ -51,7 +51,13 @@ describe('SevkiyatPlani', () => {
     expect(duraklar[0]!.getAttribute('aria-label')).toBe(`1. al Örnek Fason B ${saatMetni(hesap.duraklar[0]!.baslama)}`);
     fireEvent.click(within(kamyon).getByRole('button', { name: 'Sürücüye gönder' }));
     const pencere = screen.getByRole('dialog', { name: 'Kamyonet 1 · sürücüye gönder' });
-    expect(within(pencere).getAllByRole('link', { name: "Google Haritalar'da aç" })[0]!.getAttribute('href')).toBe(hesap.seferler[0]!.google);
+    expect(within(pencere).queryByRole('link', { name: /Haritalar'da aç|Yandex'te aç/ })).toBeNull();
+    const yaz = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: yaz }, configurable: true });
+    fireEvent.click(within(pencere).getAllByRole('button', { name: 'Google bağlantısını kopyala' })[0]!);
+    expect(yaz).toHaveBeenCalledWith(hesap.seferler[0]!.google);
+    await within(pencere).findByRole('button', { name: 'Kopyalandı' });
+    Reflect.deleteProperty(navigator, 'clipboard');
     fireEvent.keyDown(pencere, { key: 'Escape' });
     const bekleyen = screen.getByRole('region', { name: 'Sevkiyat havuzu' });
     expect(within(bekleyen).getByText('Hiçbir aracın kapasitesi yetmiyor')).toBeTruthy();
