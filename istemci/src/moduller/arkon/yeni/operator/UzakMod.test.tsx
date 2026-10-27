@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { uzakBasliklari } from './UzakMod.tsx';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { ArkonBaglamiKaynagi, type ArkonBaglami } from '../veri/baglam.ts';
+import { bosIs } from './kurallar.ts';
+import type { Is } from './tipler.ts';
+import { UzakMod, uzakBasliklari } from './UzakMod.tsx';
+
+afterEach(() => { cleanup(); });
 
 // Uzak mod başlıkları: kullanıcının verdiği sıra ve adlar; boş alan yazılmaz. Değerler uydurmadır.
 describe('uzakBasliklari', () => {
@@ -18,5 +24,47 @@ describe('uzakBasliklari', () => {
 
   it('boş, yer tutucu ya da paketsiz alanları atlar', () => {
     expect(uzakBasliklari({ no: '—', op: ' ', part: 'Deneme parça' })).toEqual([['Parça adı', 'Deneme parça']]);
+  });
+});
+
+// 804: uzak mod düzeni. Paket dosyasız: 3B model yüklenmez, bağlamdan yalnız depo istenir.
+describe('UzakMod düzeni', () => {
+  const pkg = { id: 'pk-deneme', partNo: 'DN-1', rev: 'A', proje: 'Deneme proje', files: [], primary: '' } as unknown as Is['pkg'];
+  const is: Is = { ...bosIs({ l: 'Deneme' }), empty: false, no: 'UE-DENEME-1', op: 'Op 10 · Torna', part: 'Deneme parça', state: 'running', good: 7, target: 25, scrap: 2, pkg };
+  const ac = (ek: Partial<Is> = {}, uyan = () => {}) => render(
+    <ArkonBaglamiKaynagi.Provider value={{ depo: {} } as unknown as ArkonBaglami}>
+      <UzakMod is={{ ...is, ...ek }} gorev={null} D={{ due: [], next: null, who: {}, why: {} }} since={null} istasyon="IST-DENEME" uyan={uyan} />
+    </ArkonBaglamiKaynagi.Provider>,
+  );
+
+  it('iş bilgisi tek kartta: emir ayrı, öteki alanlar sırasıyla etiket ve değer çifti', () => {
+    ac();
+    const bilgi = screen.getByRole('region', { name: 'İş bilgisi' });
+    const terimler = within(bilgi).getAllByRole('term').map((x) => x.textContent);
+    expect(terimler).toEqual(['Üretim emri', 'Proje', 'Op', 'Parça no', 'Parça adı', 'Rev']);
+    expect(within(bilgi).getAllByRole('definition').map((x) => x.textContent)).toEqual(['UE-DENEME-1', 'Deneme proje', 'Op 10 · Torna', 'DN-1', 'Deneme parça', 'A']);
+  });
+
+  it('sayaç kartı üretileni, hedefi, yüzdeyi ve kalanı yazar; hedef yoksa yüzde ve kalan yazılmaz', () => {
+    ac();
+    const sayac = screen.getByRole('region', { name: 'Sayaç' });
+    expect(sayac.textContent).toContain('7');
+    expect(sayac.textContent).toContain('/ 25');
+    expect(sayac.textContent).toContain('%28');
+    expect(sayac.textContent).toContain('18 kaldı');
+    cleanup();
+    ac({ target: 0 });
+    expect(screen.getByRole('region', { name: 'Sayaç' }).textContent).not.toContain('kaldı');
+  });
+
+  it('üst şeritte durum, istasyon; altta hurda ve sıradaki kontrol; dokunuş normal ekrana döner', () => {
+    const uyan = vi.fn();
+    ac({}, uyan);
+    expect(screen.getAllByRole('status')[0]!.textContent).toContain('Çalışıyor');
+    expect(screen.getByText('IST-DENEME')).toBeTruthy();
+    expect(screen.getByText('Hurda').nextSibling?.textContent).toBe('2');
+    expect(screen.getByText('Sıradaki kontrol').nextSibling?.textContent).toBe('—');
+    fireEvent.click(screen.getByRole('dialog', { name: 'Uzak mod' }));
+    expect(uyan).toHaveBeenCalledTimes(1);
   });
 });
