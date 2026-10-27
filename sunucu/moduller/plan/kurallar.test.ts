@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   araliklaraEkle, araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
-  adetPayi, bedelCarpani, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
+  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirliGunSayisi, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
 
@@ -196,37 +196,11 @@ describe('plan kuralları', () => {
     assert.deepEqual(y.map((x) => [x.isEmriId, x.baslangic]).sort((a, b) => a[0]! - b[0]!), [[1, 480], [2, 600]]);
   });
 
-  test('196 a: gecikme bedeli tutar x günlük ceza / 24, en az taban; elle öncelik çarpandır; tutarsız, cezasız, satırsız ve TL dışı satır taban alır', () => {
-    const satir = (tutar: string, cezaOraniGun: string | null, paraBirimi = 'TRY') => ({ tutar, paraBirimi, cezaOraniGun });
-    assert.equal(gecikmeBedeli(satir('2400000', '1'), 3), 1000);
-    assert.equal(gecikmeBedeli(satir('2400000', '1'), 1), 2000);
-    assert.equal(gecikmeBedeli(satir('2400000', '1'), 4), 500);
-    assert.equal(gecikmeBedeli(satir('2400000', '1', 'EUR'), 3), TABAN_BEDEL_SAAT);
-    assert.equal(gecikmeBedeli(satir('2400000', null), 3), TABAN_BEDEL_SAAT);
-    assert.equal(gecikmeBedeli(satir('1000', '1'), 3), TABAN_BEDEL_SAAT, 'küçük ceza tabanın altına inmez');
-    assert.equal(gecikmeBedeli(null, 2), 2 * TABAN_BEDEL_SAAT);
-    assert.equal(gecikmeBedeli(null, null), TABAN_BEDEL_SAAT);
-  });
-
-  test('201 a: fiyatsız sipariş satırı (tutar boş) 0 değil taban bedel alır; elle öncelik çarpanı yine uygulanır', () => {
-    assert.equal(gecikmeBedeli({ tutar: null, paraBirimi: 'TRY', cezaOraniGun: '1' }, 3), TABAN_BEDEL_SAAT);
-    assert.equal(gecikmeBedeli({ tutar: null, paraBirimi: 'TRY', cezaOraniGun: '1' }, 1), 2 * TABAN_BEDEL_SAAT);
-  });
-
-  test('6a: elle çarpan varsa öncelik çarpanının yerine geçer; sınır plan.yaz için 2, siparisler.onayla için 3', () => {
-    const satir = { tutar: '2400000', paraBirimi: 'TRY', cezaOraniGun: '1' };
-    assert.equal(gecikmeBedeli(satir, 4, 3), 3000);
-    assert.equal(gecikmeBedeli(null, 1, 0.5), 0.5 * TABAN_BEDEL_SAAT);
-    assert.equal(gecikmeBedeli(null, 1, null), 2 * TABAN_BEDEL_SAAT);
-    assert.equal(elleCarpanSiniri(false), 2);
-    assert.equal(elleCarpanSiniri(true), 3);
-  });
-
-  test('6b: taban ve sınıf eşikleri ayardan verilir; verilmezse bugünkü değerler', () => {
-    assert.equal(gecikmeBedeli(null, 3, null, 200), 200);
-    assert.equal(gecikmeBedeli({ tutar: '2400000', paraBirimi: 'TRY', cezaOraniGun: '1' }, 3, null, 2000), 2000, 'taban bedelden büyükse taban');
-    const bedeller = new Map([[1, 100], [2, 150], [3, 200], [4, 60], [5, 90]]);
-    assert.deepEqual([...oncelikSiniflari(bedeller, { yuksek: 2, dusuk: 0.5 })], [[1, 2], [2, 2], [3, 1], [4, 2], [5, 2]]);
+  test('815 (699/3 a): emrin önceliği motor sınıfına ve gecikme çarpanına çevrilir (195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük); önceliksiz emir sınıfsız', () => {
+    assert.deepEqual([1, 2, 3, 4, null, 7].map((o) => oncelikSinifi(o)), [1, 1, 2, 3, null, null]);
+    assert.deepEqual([1, 2, 3, 4, null].map((o) => oncelikCarpani(o)), [2, 2, 1, 0.5, 1], 'varsayılan bugünkü sabitler');
+    const c = { yuksekCarpani: 3, normalCarpani: 1.2, dusukCarpani: 0.4 };
+    assert.deepEqual([1, 2, 3, 4, null].map((o) => oncelikCarpani(o, c)), [3, 3, 1.2, 0.4, 1.2], 'denetim #21: çarpanlar bedel ayarından');
   });
 
   test('6c: maliyet = çarpan × (en az(taban × gecikme, ceza + kâr riski × gecikme) + finansman × bitiş ya da termine kadar saat); vade terminde başlar (3b), ceza tavandan sonra son oranla sürer (2b)', () => {
@@ -235,7 +209,7 @@ describe('plan kuralları', () => {
     // Saatlik: ceza 2.400.000 × %1 / 24 = 1.000; finansman 2.400.000 × %0,12 / 24 = 120; kâr riski 480.000 × %0,3 / 24 = 60.
     // Teslimden 10 saat geç, şimdiden 50 saat sonra biten emir: gecikme 10 × 1.060, finansman 50 × 120.
     assert.equal(gecikmeMaliyeti(satir(), 1, { bitisSaat: 50, teslimSaat: 40 }, ayar), 10600 + 6000);
-    assert.equal(gecikmeMaliyeti(satir(), 2, { bitisSaat: 50, teslimSaat: 40 }, ayar), 2 * 16600, 'elle çarpan bütün maliyeti çarpar');
+    assert.equal(gecikmeMaliyeti(satir(), 2, { bitisSaat: 50, teslimSaat: 40 }, ayar), 2 * 16600, 'öncelik çarpanı bütün maliyeti çarpar');
     assert.equal(gecikmeMaliyeti(satir(), 1, { bitisSaat: 30, teslimSaat: 40 }, ayar), 4800, '3b: erken bitiş tahsilatı öne çekmez; mamul termine kadar bekler, finansman termine kadar');
     assert.equal(gecikmeMaliyeti(satir(), 1, { bitisSaat: 30, teslimSaat: null }, ayar), 3600, 'teslimsiz emir gecikmez');
     assert.equal(gecikmeMaliyeti(satir(), 1, { bitisSaat: -2, teslimSaat: -5 }, ayar), 0 + 3 * 1060, 'geçmişte biten emre finansman yazılmaz');
@@ -263,29 +237,17 @@ describe('plan kuralları', () => {
     assert.equal(gecikmeMaliyeti(cezali, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar, 0.5), 5000);
   });
 
-  test('6c: planın TL toplamı yerleşen emirlerin maliyet toplamıdır; yerleşmemiş emrin bitişi bilinmez, toplama girmez; çarpan elle yoksa öncelikten', () => {
+  test('6c: planın TL toplamı yerleşen emirlerin maliyet toplamıdır; yerleşmemiş emrin bitişi bilinmez, toplama girmez; çarpan emrin önceliğinden', () => {
     const ayar = { tabanSaat: 150, finansmanOraniGun: 0.12, karRiskiOraniGun: 0.3 };
     const satir: MaliyetSatiri = { tutar: '2400000', paraBirimi: 'TRY', cezaOraniGun: '1', cezaTavaniOrani: null, katkiPayi: null };
     // 1. emir teslimden 10 saat geç, şimdiden 50 saat sonra biter: 10 × 1.000 + 50 × 120. 2. emir satırsız, 2 saat geç, öncelik 1 (çarpan 2).
     const emirler = [
-      { bitDk: 50 * 60, teslimDk: 40 * 60, satir, carpan: bedelCarpani(3, null) },
-      { bitDk: 5 * 60, teslimDk: 3 * 60, satir: null, carpan: bedelCarpani(1, null) },
+      { bitDk: 50 * 60, teslimDk: 40 * 60, satir, carpan: oncelikCarpani(3) },
+      { bitDk: 5 * 60, teslimDk: 3 * 60, satir: null, carpan: oncelikCarpani(1) },
     ];
     assert.equal(planMaliyeti(emirler, ayar), 10000 + 6000 + 2 * 150 * 2);
     assert.equal(planMaliyeti([...emirler, { bitDk: null, teslimDk: 0, satir, carpan: 1 }], ayar), 10000 + 6000 + 2 * 150 * 2);
     assert.equal(planMaliyeti([], ayar), 0);
-    assert.equal(bedelCarpani(4, 2.5), 2.5, 'elle çarpan önceliğin yerine geçer');
-    assert.equal(bedelCarpani(null, null), 1);
-  });
-
-  test('denetim #21, 265 a: öncelik ve müşteri sınıfı çarpanı ayardan; sınıf elle çarpanla da çarpılır; sınıfı boş müşteri 1', () => {
-    const c = { yuksekCarpani: 3, normalCarpani: 1.2, dusukCarpani: 0.4, sinifACarpani: 2, sinifBCarpani: 1, sinifCCarpani: 0.5 };
-    assert.deepEqual([1, 2, 3, 4, null].map((o) => bedelCarpani(o, null, null, c)), [3, 3, 1.2, 0.4, 1.2]);
-    assert.deepEqual([1, 2, 3, 4, null].map((o) => bedelCarpani(o, null)), [2, 2, 1, 0.5, 1], 'varsayılan bugünkü sabitler (195 a)');
-    assert.deepEqual((['A', 'B', 'C', null] as const).map((x) => bedelCarpani(3, null, x, c)), [2.4, 1.2, 0.6, 1.2]);
-    assert.deepEqual((['A', 'B', 'C'] as const).map((x) => bedelCarpani(3, null, x)), [1.5, 1, 0.7], 'varsayılan A 1,5, B 1, C 0,7');
-    assert.equal(bedelCarpani(4, 2.5, 'A', c), 5, 'elle çarpan önceliğin yerine geçer, sınıfla çarpılır');
-    assert.equal(gecikmeBedeli(null, 1, null, 100, 'C', c), 150);
   });
 
   test('denetim #21, 203 a: TL amacı kural planından başlar, kaynağı paylaşan ardışık emirleri değiştirip TL toplamı düşerse tutar; elle sıralı emir yerinde kalır; koşu sınırlı', () => {
@@ -332,13 +294,6 @@ describe('plan kuralları', () => {
     assert.deepEqual([...katkiPaylari(emirler, isler, maliyet, malzeme)], [[1, '40000'], [2, null], [3, null], [4, null], [5, null]]);
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 99, uretimEmriId: 1 }], maliyet, malzeme)], [[1, null]], 'haritada olmayan iş emri bilinmez');
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 11, uretimEmriId: 1 }], maliyet, new Map())], [[1, null]], 'malzeme maliyeti bilinmeyen emirde katkı bilinmez');
-  });
-
-  test('195 a: öncelik sınıfı ortanca bedelden: 1,5 katı ve üstü Yüksek, 0,6 katı ve altı Düşük, arası Normal; veri yokken elle öncelik sınıfı korur', () => {
-    const s = oncelikSiniflari(new Map([[1, 100], [2, 150], [3, 200], [4, 60], [5, 90]]));
-    assert.deepEqual([...s], [[1, 2], [2, 1], [3, 1], [4, 3], [5, 2]]);
-    assert.deepEqual([...oncelikSiniflari(new Map([[1, 150], [2, 300], [3, 75], [4, 150]]))], [[1, 2], [2, 1], [3, 3], [4, 2]], 'çift sayıda ortanca iki ortanın ortalaması');
-    assert.deepEqual([...oncelikSiniflari(new Map())], []);
   });
 
   test('PL-07: FIFO en eski açılan emri önce alır; eşitlikte emir numarası, elle sıra yine önde', () => {
@@ -569,15 +524,7 @@ describe('motor uyarıları (307 a)', () => {
   });
 });
 
-describe('öncelik bandı sınırları (306 a)', () => {
-  test('sınırlar ortanca bedelin eşik katlarıdır; sınıflar aynı sınırlardan çıkar', () => {
-    const bedeller = new Map([[1, 150], [2, 150], [3, 450], [4, 100]]);
-    const s = bantSinirlari(bedeller, { yuksek: 1.5, dusuk: 0.6 });
-    assert.deepEqual(s, { yuksek: 225, dusuk: 90 });
-    assert.deepEqual([...oncelikSiniflari(bedeller, { yuksek: 1.5, dusuk: 0.6 })], [[1, 2], [2, 2], [3, 1], [4, 2]]);
-    assert.deepEqual(bantSinirlari(new Map(), { yuksek: 1.5, dusuk: 0.6 }), { yuksek: 0, dusuk: 0 });
-  });
-
+describe('plan onayı (146)', () => {
   test('PL-ONAY (146): sahip açık taslağı gönderir ve onaydakini çeker; onaylayan onaydakini alır ya da geri gönderir; dört göz gönderenin onayını keser', () => {
     const b = { durum: 'acik' as const, sahipMi: true, gonderenMi: false, studyo: true, canliyaAlir: true, dortGozAcik: false };
     assert.deepEqual(onayGecisleri(b), { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false });

@@ -61,9 +61,9 @@ describe('P3 malzemenin hazır olması (matAlloc kopyası)', () => {
     expect(h).toEqual({ S1: 7, S2: 56 });
   });
 
-  it('bedel kipinde öncelik metin anahtardır; sıra terminle kurulur', () => {
+  it('815: kayıtta kalan bedel kipi de öncelikle sıralar', () => {
     const h = malzemeHazir(ornekCalisma({ D: D('bedel') }), 7);
-    expect(h).toEqual({ S1: 56, S2: 7 });
+    expect(h).toEqual({ S1: 7, S2: 56 });
   });
 
   it('malzeme gecikmesi olayı satın almayı öteler; karşılanmayan ihtiyaç hazır olmaz', () => {

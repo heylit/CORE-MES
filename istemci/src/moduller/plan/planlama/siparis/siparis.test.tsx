@@ -216,17 +216,17 @@ describe('P2 Terminler', () => {
 });
 
 describe('P2 Termin ve kâr', () => {
-  it('yönetici plan dengesini değiştirir (izinli)', async () => {
+  it('815: plan dengesi çubuğu yöneticide de pasif; plana yalnız emrin önceliği girer', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(YONETICI, KAYIT, { govdeler });
     ac('/plan/denge');
     await parca('denge');
     const cubuk = screen.getByRole('slider', { name: /Plan dengesi/ });
-    expect((cubuk as HTMLInputElement).disabled).toBe(false);
+    expect((cubuk as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/Çubuk etkisizdir: plan sırasına ve ağırlığına yalnız üretim emrinin önceliği girer/)).toBeTruthy();
     fireEvent.change(cubuk, { target: { value: '75' } });
     fireEvent.blur(cubuk);
-    await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
-    expect(govdeler[0]).toMatchObject({ deger: { D: { planDenge: 75 } } });
+    expect(govdeler).toEqual([]);
   }, 20000);
 
   it('kâr sütunu ve uzatma araçları yerinde pasif; termin uzatma formu Üretim emirlerine yönlendirir', async () => {

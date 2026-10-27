@@ -7,8 +7,10 @@
 function cerceveS() { return typeof S !== 'undefined' && S ? S : null; }
 const cerceveD = () => { const s = cerceveS(); return s ? s.D : null; };
 
-/* ---- gecikmenin bedeli (zr-agirlik) ---- */
-const AG0 = { kip: 'bedel', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 }, esik: { y: 1.5, d: 0.6 } };
+/* ---- gecikmenin bedeli (zr-agirlik) ----
+   815 (699/3 a): plana yalnız emrin önceliği girer. Kip her zaman 'oncelik'tir (kayıttaki eski 'bedel' de): sıra ve ağırlık siparişin
+   önceliğinden (girdi.betik oncSinifi), tutar, ceza, müşteri sınıfı ve elle çarpan sıraya girmez; bedel hesabı yalnız gösterimdedir. */
+const AG0 = { kip: 'oncelik', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 }, esik: { y: 1.5, d: 0.6 } };
 const ELLE_ONC = { 1: 2, 2: 1, 3: 0.5 };
 const AG_MUSTERI0 = [
   { id: 'MU-1', ad: 'Müşteri 1', sinif: 'A', cezaOran: 0.3, cezaTavan: 10 },
@@ -40,7 +42,7 @@ function agHazirla(D) {
   }
   agOncYaz(D);
 }
-function agAyar(D = cerceveD()) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
+function agAyar(D = cerceveD()) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, kip: AG0.kip, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
 function agElle(s) { return s.elle != null ? +s.elle : 1; }
 /* katkı payı = tutar − malzeme − işleme − ayar − fason. İşleme ve ayar son plandaki tezgâh seçimiyle, saat ücretinden hesaplanır
    (operatör payı yok sayılır); fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur.

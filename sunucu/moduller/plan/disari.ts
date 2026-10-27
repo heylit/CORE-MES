@@ -7,7 +7,7 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { kuyrukYazGovdesi, senaryoGovdesi, type PlanAyari } from '#paylasilan/sozlesme/plan.ts';
 import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, canliYerlesimleri, senaryo, senaryoAc as taslakAc, tabanOku, type TabanSatiri } from './sorgular.ts';
 import {
-  malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
+  malzemeMaliyetiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
   kuyruklariYazIc, taslakYerlesimleri,
 } from './servis.ts';
@@ -32,9 +32,6 @@ export type { TahminiMaliyetCozucusu };
 export const malzemeMaliyetiCozucusu = (cozucu: MalzemeMaliyetiCozucusu | null): void => malzemeMaliyetiCozucusuKaydet(cozucu);
 export type { MalzemeMaliyetiCozucusu };
 
-// 265 a: müşteri sınıfı okuyucusu (musteri-tedarikci); kayıtsızken bütün müşteriler sınıfsızdır (çarpan 1).
-export const musteriSinifiCozucusu = (cozucu: MusteriSinifiCozucusu | null): void => musteriSinifiCozucusuKaydet(cozucu);
-export type { MusteriSinifiCozucusu };
 
 // 227 a: kâr riski oranının tek kaynağı plan bedel ayarıdır (müdür, 210 a); Proje maliyet buradan okur.
 export const karRiskiOraniGun = async (db: Db): Promise<number> => (await bedelAyariOku(db)).karRiskiOraniGun;

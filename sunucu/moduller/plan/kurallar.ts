@@ -1,6 +1,6 @@
 // Plan kuralları (saf). Zaman ekseni dakikadır (0 = şimdi); takvim verilmezse sürekli çalışma (UYUM-BORCU: vardiya gelince takvim).
 
-import { ELLE_CARPAN, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
+import { PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanOnayKomutu, SenaryoDurumu, SenaryoYapabilir } from '#paylasilan/sozlesme/plan.ts';
 
 export interface Kaynak { tur: 'makine' | 'kisi'; id: number }
@@ -240,40 +240,22 @@ export function takvimliBosluk(dolu: readonly Aralik[], takvim: Takvim, enErken:
   return null;
 }
 
-// 196 a ara adım (öncelik ağırlığı, kurgu §2 ve §7.2): emrin 1 saat gecikmesinin bedeli (TL/saat) sipariş satırının tutarı ve günlük ceza
-// oranından, en az taban. Tutar (201 a: fiyatsız satır), ceza ya da TL olmayınca taban kullanılır: kur verisi yok, yabancı para TL sayılırsa ağırlık yanlış olur.
-// Siparişin gerekçeli elle çarpanı varsa o, yoksa emrin elle önceliği çarpandır (195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük).
-// Finansman ve müşteri sınıfı plan ayarıyla girer (6b); kâr riski 6c'de (194 a).
-export const TABAN_BEDEL_SAAT = 150;
-// Öncelik ve müşteri sınıfı çarpanları müdürün bedel ayarındadır (denetim #21, 265 a); bunlar ayar satırının varsayılanlarıdır.
-// Bedel = (...) × müşteri sınıfı × (elle çarpan, yoksa öncelik çarpanı); sınıfı boş müşteri 1,0 sayılır.
-export type MusteriSinifi = 'A' | 'B' | 'C';
-export interface Carpanlar {
-  yuksekCarpani: number; normalCarpani: number; dusukCarpani: number; sinifACarpani: number; sinifBCarpani: number; sinifCCarpani: number;
-}
-export const VARSAYILAN_CARPANLAR: Carpanlar = { yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7 };
+// 815 (699/3 a): plana yalnız emrin önceliği girer. Emrin önceliği (1-4; 195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük) motorun sınıfına (1-3)
+// ve gecikme maliyetinin çarpanına çevrilir; siparişin elle çarpanı, tutarı ve müşteri sınıfı sıraya girmez. Çarpanlar müdürün bedel
+// ayarındadır (denetim #21); bunlar ayar satırının varsayılanlarıdır.
+export interface BedelSatiri { tutar: string | null; paraBirimi: string; cezaOraniGun: string | null }
+export interface Carpanlar { yuksekCarpani: number; normalCarpani: number; dusukCarpani: number }
+export const VARSAYILAN_CARPANLAR: Carpanlar = { yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 };
 export function oncelikCarpani(oncelik: number | null, c: Carpanlar = VARSAYILAN_CARPANLAR): number {
   if (oncelik === 1 || oncelik === 2) return c.yuksekCarpani;
   return oncelik === 4 ? c.dusukCarpani : c.normalCarpani;
 }
-export function sinifCarpani(sinif: MusteriSinifi | null, c: Carpanlar = VARSAYILAN_CARPANLAR): number {
-  return sinif === null ? 1 : { A: c.sinifACarpani, B: c.sinifBCarpani, C: c.sinifCCarpani }[sinif];
+// Önceliği olmayan emir sınıfsızdır (null): motor onu önceliği en düşük sayar.
+export function oncelikSinifi(oncelik: number | null): 1 | 2 | 3 | null {
+  if (oncelik === 1 || oncelik === 2) return 1;
+  if (oncelik === 3) return 2;
+  return oncelik === 4 ? 3 : null;
 }
-export interface BedelSatiri { tutar: string | null; paraBirimi: string; cezaOraniGun: string | null }
-export const bedelCarpani = (
-  oncelik: number | null, elleCarpan: number | null, sinif: MusteriSinifi | null = null, c: Carpanlar = VARSAYILAN_CARPANLAR,
-): number => sinifCarpani(sinif, c) * (elleCarpan ?? oncelikCarpani(oncelik, c));
-export function gecikmeBedeli(
-  satir: BedelSatiri | null, oncelik: number | null, elleCarpan: number | null = null, taban: number = TABAN_BEDEL_SAAT,
-  sinif: MusteriSinifi | null = null, c: Carpanlar = VARSAYILAN_CARPANLAR,
-): number {
-  const tutar = satir && satir.tutar != null && satir.paraBirimi === 'TRY' ? Number(satir.tutar) : 0;
-  const oran = satir?.cezaOraniGun == null ? 0 : Number(satir.cezaOraniGun);
-  return Math.max(taban, (tutar * oran) / 100 / 24) * bedelCarpani(oncelik, elleCarpan, sinif, c);
-}
-
-// Elle çarpanın üst sınırı (kurgu §7): plan.yaz 2'ye, siparişi onaylayabilen (müdür) 3'e kadar verir; alt sınır her ikisinde 0,5.
-export const elleCarpanSiniri = (genis: boolean): number => (genis ? ELLE_CARPAN.enCok : ELLE_CARPAN.planlama);
 
 // 6c, planın TL amacı (203 a, kurgu §2 ve §7): emrin maliyeti = çarpan × (en az(taban × gecikme, ceza + kâr riski × gecikme)
 // + finansman × şimdiden bitişe ya da termine (hangisi sonraysa) kadar saat). Ödeme vadesi terminde başlar (3b): erken biten mamul
@@ -341,23 +323,6 @@ export function planMaliyeti(
     toplam += gecikmeMaliyeti(e.satir, e.carpan, { bitisSaat: e.bitDk / 60, teslimSaat: e.teslimDk === null ? null : e.teslimDk / 60 }, ayar, e.pay);
   }
   return Math.round(toplam);
-}
-
-// Öncelik sınıfı bedelden çıkar (195 a): ortanca bedelin yüksek eşik katı ve üstü Yüksek (1), düşük eşik katı ve altı Düşük (3), arası
-// Normal (2). Eşikler plan ayarındadır (209 a); varsayılan 1,5 ve 0,6.
-export const SINIF_ESIGI = { yuksek: 1.5, dusuk: 0.6 } as const;
-export function oncelikSiniflari(
-  bedeller: ReadonlyMap<number, number>, esik: { yuksek: number; dusuk: number } = SINIF_ESIGI,
-): Map<number, 1 | 2 | 3> {
-  const s = bantSinirlari(bedeller, esik);
-  return new Map([...bedeller].map(([id, b]) => [id, b >= s.yuksek ? 1 : b <= s.dusuk ? 3 : 2]));
-}
-
-// Sınıf sınırları TL olarak (306 a): bedel yuksek ve üstü Yüksek, dusuk ve altı Düşük. Sipariş ekranı çarpanın düştüğü bandı gösterir.
-export function bantSinirlari(bedeller: ReadonlyMap<number, number>, esik: { yuksek: number; dusuk: number } = SINIF_ESIGI): { yuksek: number; dusuk: number } {
-  const l = [...bedeller.values()].sort((a, b) => a - b);
-  const orta = l.length === 0 ? 0 : l.length % 2 ? l[(l.length - 1) / 2]! : (l[l.length / 2 - 1]! + l[l.length / 2]!) / 2;
-  return { yuksek: orta * esik.yuksek, dusuk: orta * esik.dusuk };
 }
 
 // PL-07: emir sırası. Elle sırası olan emir önce (KY-03); sonra kural: öncelik (teslim, öncelik; karar: elle > teslim > öncelik), EDD (en erken teslim), CR (teslime

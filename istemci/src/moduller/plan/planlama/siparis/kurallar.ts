@@ -182,10 +182,11 @@ export function siparisAcilimi(D: PlanVerisi, r: SiparisSatiri) {
 }
 
 // ---- gecikme bedeli (durum.betik AG0, agAyar) ----
+// 815 (699/3 a): kip her zaman 'oncelik': plana yalnız emrin önceliği girer.
 export interface AgirlikAyari { kip: string; fin: number }
 export function agirlikAyari(D: PlanVerisi): AgirlikAyari {
   const a = nesne(D.planAgirlik) ? D.planAgirlik : {};
-  return { kip: typeof a.kip === 'string' ? a.kip : 'bedel', fin: sonlu(a.fin) ? a.fin : 0.13 };
+  return { kip: 'oncelik', fin: sonlu(a.fin) ? a.fin : 0.13 };
 }
 // Plan TL ayarı (durum.betik YM0, ymAyar): yalnız amaç.
 export const planAmaci = (D: PlanVerisi): string => (nesne(D.planTL) && typeof D.planTL.amac === 'string' ? D.planTL.amac : 'tl');

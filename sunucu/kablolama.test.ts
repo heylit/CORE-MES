@@ -55,8 +55,8 @@ test('plan, kâr riski için üretim emrinin malzeme maliyetini proje maliyetten
   assert.ok(sunucununBaglari().some((b) => b.ad === 'üretim emri malzeme maliyeti -> plan'));
 });
 
-test('plan, bedel çarpanı için müşteri sınıfını müşteri kartından alır (265 a)', () => {
-  assert.ok(sunucununBaglari().some((b) => b.ad === 'müşteri sınıfı -> plan'));
+test('815: müşteri sınıfı plana girmez; plan müşteri kartından sınıf okumaz', () => {
+  assert.ok(!sunucununBaglari().some((b) => b.ad === 'müşteri sınıfı -> plan'));
 });
 
 test('bir bağ eksikse kablola hata atar ve hiçbir bağı kurmaz', () => {

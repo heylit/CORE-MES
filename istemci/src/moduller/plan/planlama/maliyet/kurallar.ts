@@ -100,10 +100,11 @@ interface AgAyari {
   kip: string; taban: number; fin: number; tavan: number; kar: number;
   sinif: Record<string, number>; bil: Record<string, number>;
 }
-const AG0: AgAyari = { kip: 'bedel', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 } };
+// 815 (699/3 a): kip her zaman 'oncelik' (durum.betik agAyar): plana yalnız emrin önceliği girer.
+const AG0: AgAyari = { kip: 'oncelik', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 } };
 export function agAyar(D: PlanVerisi): AgAyari {
   const a = nesneMi(D.planAgirlik) ? D.planAgirlik : {};
-  return { ...AG0, ...a, sinif: { ...AG0.sinif, ...(nesneMi(a.sinif) ? a.sinif : {}) }, bil: { ...AG0.bil, ...(nesneMi(a.bil) ? a.bil : {}) } } as AgAyari;
+  return { ...AG0, ...a, kip: AG0.kip, sinif: { ...AG0.sinif, ...(nesneMi(a.sinif) ? a.sinif : {}) }, bil: { ...AG0.bil, ...(nesneMi(a.bil) ? a.bil : {}) } } as AgAyari;
 }
 export interface TerminAyari { katMal: number; katFas: number; ekMal: number; ekFas: number; esik: number }
 const TM0: TerminAyari = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik: 7 };
@@ -672,8 +673,7 @@ export function gecikmeTutari(x: GecikmeBedeli, T: number): number {
 
 // ---------- malzemenin hazır olması ----------
 // Sunucu motorunun kopyası (sunucu/moduller/plan/motor: girdi.betik stKur olayları, durum.betik ymUygula fire payı ve tmUygula
-// tahmini geliş, engine.betik matAlloc); istemci motoru ithal edemez. Sıra matAlloc'unkidir: öncelik, sonra termin. Bedel kipinde öncelik
-// metin anahtardır ('b:<id>'), fark sayı olmaz ve sıra yalnız terminle kurulur.
+// tahmini geliş, engine.betik matAlloc); istemci motoru ithal edemez. Sıra matAlloc'unkidir: öncelik, sonra termin.
 const dakikaya = (t: number): number => Math.floor(t * 60 + 1e-9) / 60;
 export function malzemeHazir(c: PlanlamaCalismasi, now: number): Record<string, number> {
   const D = c.D;
@@ -735,8 +735,7 @@ export function malzemeHazir(c: PlanlamaCalismasi, now: number): Record<string, 
     sup.set(p.kod, l);
   }
   for (const l of sup.values()) l.sort((a, b) => a.t - b.t);
-  const bedel = agAyar(D).kip === 'bedel';
-  const onc = (j: (typeof sip)[number]): number => (bedel ? NaN : Number(j.oncelik));
+  const onc = (j: (typeof sip)[number]): number => Number(j.oncelik);
   const sira = [...sip].sort((a, b) => (onc(a) - onc(b)) || ((a.due ?? 1e9) - (b.due ?? 1e9)));
   const res: Record<string, number> = {};
   for (const j of sira) {

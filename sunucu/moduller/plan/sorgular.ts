@@ -291,8 +291,6 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
                   SELECT $2, tur, ozet, is_emri_idleri, veri, yazan_kisi_id FROM plan_senaryo_degisikligi WHERE senaryo_id = $1 AND kaldirma IS NULL ORDER BY id`,
   [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $2, ${BEDEL_SUTUN} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
-  await db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, ${CARPAN_SUTUN}) SELECT $2, ${CARPAN_SUTUN} FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1`,
-    [kaynakId, id]);
   // Çoğaltılan taslak kaynağın motor ayarı sürümünde ve kuralında kalır (774 a, 830 a); açılış anından çözülmesin diye bağ yazılır (varsayılandaysa boş).
   await db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kural, kisi_id)
     SELECT $2, ${SENARYO_MOTOR_SURUMU}, (SELECT kural FROM plan_senaryo_motor_ayari WHERE senaryo_id = $1), $3`, [kaynakId, id, kisiId]);
@@ -454,33 +452,9 @@ export const carpanGecmisi = (db: Db, siparisId: number) =>
     `SELECT carpan, gerekce, kisi_id AS "kisiId", to_json(zaman) #>> '{}' AS zaman FROM plan_siparis_carpani WHERE siparis_id = $1 ORDER BY id DESC`,
     [siparisId],
   );
-// Siparişlerin geçerli (son) çarpanı; kaydı olmayan sipariş haritada yok.
-export async function gecerliCarpanlar(db: Db, siparisIdler: number[]): Promise<Map<number, number>> {
-  if (siparisIdler.length === 0) return new Map();
-  const r = await db.sorgu<{ siparisId: number; carpan: string }>(
-    `SELECT DISTINCT ON (siparis_id) siparis_id AS "siparisId", carpan FROM plan_siparis_carpani
-      WHERE siparis_id = ANY($1::int[]) ORDER BY siparis_id, id DESC`,
-    [[...new Set(siparisIdler)]],
-  );
-  return new Map(r.map((x) => [x.siparisId, Number(x.carpan)]));
-}
-
-// 148 a: taslaktaki çarpan, sipariş başına son yazılan. Canlıya alınınca yazanı ve gerekçesiyle geçmişe eklenir.
-const CARPAN_SUTUN = 'siparis_id, carpan, gerekce, kisi_id, zaman';
-export const carpanTaslagaYaz = (db: Db, senaryoId: number, siparisId: number, carpan: number, gerekce: string, kisiId: number) =>
-  db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, siparis_id, carpan, gerekce, kisi_id) VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (senaryo_id, siparis_id) DO UPDATE SET carpan = EXCLUDED.carpan, gerekce = EXCLUDED.gerekce, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
-  [senaryoId, siparisId, carpan, gerekce, kisiId]);
+// 815 (699/3 a): çarpan artık yazılmaz; taslak silinirken ya da eski değişiklik kaldırılırken taslağın eski satırı silinir.
 export const carpanTaslaktanSil = (db: Db, senaryoId: number, siparisId: number | null) =>
   db.sorgu('DELETE FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1 AND ($2::int IS NULL OR siparis_id = $2)', [senaryoId, siparisId]);
-export async function taslakCarpanlari(db: Db, senaryoId: number): Promise<Map<number, number>> {
-  const r = await db.sorgu<{ siparisId: number; carpan: string }>(
-    'SELECT siparis_id AS "siparisId", carpan FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1', [senaryoId]);
-  return new Map(r.map((x) => [x.siparisId, Number(x.carpan)]));
-}
-export const carpanlariCanliyaYaz = (db: Db, senaryoId: number) =>
-  db.sorgu(`INSERT INTO plan_siparis_carpani (siparis_id, carpan, gerekce, kisi_id)
-            SELECT siparis_id, carpan, gerekce, kisi_id FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1 ORDER BY siparis_id`, [senaryoId]);
 
 /* ---------------- ek mesai (507 2 a, 508 1 a) ---------------- */
 
