@@ -12,12 +12,6 @@ export const CEK_DURUM_ADI: Record<string, string> = {
   portfoy: 'Portföyde', tahsilde: 'Bankada tahsilde', ciro: 'Ciro edildi', tahsil: 'Tahsil edildi', karsiliksiz: 'Karşılıksız',
   bekliyor: 'Ödenecek', odendi: 'Ödendi',
 };
-// Yöne göre durum seçenekleri (prototipte CHQ_ST), tablodaki ve düzenleme penceresindeki seçim kutusu için.
-export const YONE_DURUMLAR: Record<'alinan' | 'verilen', readonly string[]> = {
-  alinan: ['portfoy', 'tahsilde', 'ciro', 'tahsil', 'karsiliksiz'], verilen: ['bekliyor', 'odendi'],
-};
-// Tam kipte tablodaki durum seçimi kaydetmez; prototipteki ileti.
-export const DURUM_SECIMI_ILETISI = 'Çek durumunu "Çekin durumu değişti" ile değiştirin.';
 const KAPANAN = ['tahsil', 'odendi', 'ciro'];
 const SONUCLANAN = [...KAPANAN, 'karsiliksiz'];
 
@@ -81,11 +75,8 @@ export function vadeTakvimi(motor: FinansMotoru, siparisHaftalari: readonly { tu
 }
 
 /* ---------- Düzeltme ve iptal (prototipte chqForm ve iptal düğmesi; tam kipte yalnız banka, seri no ve vade gönderilir) ---------- */
-// Formun öbür alanları prototipteki gibi görünür ve değişebilir, gönderilmez.
-export interface CekDuzeltDegerleri { yon: string; tur: string; cari: string; banka: string; seriNo: string; vade: string; tutar: string; durum: string }
-export const duzeltIlk = (c: SunucuCeki, cari: string): CekDuzeltDegerleri => ({
-  yon: c.yon, tur: c.tur === 'senet' ? 'Senet' : 'Çek', cari, banka: c.banka ?? '', seriNo: c.seriNo ?? '', vade: c.vade, tutar: String(c.tutar), durum: c.durum,
-});
+export interface CekDuzeltDegerleri { banka: string; seriNo: string; vade: string }
+export const duzeltIlk = (c: SunucuCeki): CekDuzeltDegerleri => ({ banka: c.banka ?? '', seriNo: c.seriNo ?? '', vade: c.vade });
 export function cekDuzeltKomutu(c: SunucuCeki, d: CekDuzeltDegerleri): Komut {
   return {
     uc: 'POST /finans/cekler/:id/duzelt', parametre: { id: c.id }, tekrar: false, basari: 'Çek düzeltildi.',

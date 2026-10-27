@@ -42,11 +42,11 @@ describe('çek ve senet: saf hesaplar', () => {
     expect(vadeTakvimi(motor, []).siparisVar).toBe(false);
   });
 
-  it('düzeltme ve iptal komutu: sürümle, boş banka null; formun öbür alanları gönderilmez (tam kipteki gibi)', () => {
+  it('düzeltme ve iptal komutu: sürümle, boş banka null; yalnız banka, seri no ve vade gider', () => {
     const c = V.cekById.get(2)!;
-    const ilk = duzeltIlk(c, 'Firma');
-    expect(ilk).toMatchObject({ banka: '', seriNo: '', vade: '2026-10-20', cari: 'Firma', yon: c.yon, durum: c.durum });
-    const k = cekDuzeltKomutu(c, { ...ilk, banka: ' ', seriNo: 'A1', vade: '2026-10-25', tutar: '1', yon: 'verilen', durum: 'odendi' });
+    const ilk = duzeltIlk(c);
+    expect(ilk).toEqual({ banka: '', seriNo: '', vade: '2026-10-20' });
+    const k = cekDuzeltKomutu(c, { banka: ' ', seriNo: 'A1', vade: '2026-10-25' });
     expect(k).toMatchObject({ uc: 'POST /finans/cekler/:id/duzelt', parametre: { id: 2 } });
     expect(k.govde).toEqual({ surum: 1, banka: null, seriNo: 'A1', vade: '2026-10-25' });
     expect(cekIptalKomutu(c)).toMatchObject({ uc: 'POST /finans/cekler/:id/iptal', parametre: { id: 2 }, govde: { surum: 1 } });

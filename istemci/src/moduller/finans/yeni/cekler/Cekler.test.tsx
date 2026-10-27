@@ -34,15 +34,11 @@ describe('Çek ve senet ekranı', () => {
     expect(screen.queryByRole('button', { name: /çekini düzenle/ })).toBeNull();
   });
 
-  it('tablodaki durum seçimi kaydetmez, "Durum güncelle"ye yönlendirir (tam kipteki gibi)', async () => {
-    const istekler = sunucuKur(YAZAN);
+  it('durum tabloda rozet olarak görünür; tabloda seçim kutusu yok', () => {
     ekranAc(Cekler, YAZAR);
-    const secim = within(within(takip()).getAllByRole('row')[1]!).getByRole('combobox', { name: 'Durum' }) as HTMLSelectElement;
-    const once = secim.value;
-    fireEvent.change(secim, { target: { value: 'odendi' } });
-    await screen.findByText('Çek durumunu "Çekin durumu değişti" ile değiştirin.');
-    expect(secim.value).toBe(once);
-    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    const satir = within(takip()).getAllByRole('row')[1]!;
+    expect(within(satir).queryByRole('combobox')).toBeNull();
+    expect(within(satir).getByText('Ödenecek')).toBeTruthy();
   });
 
   it('izinli: düğmeler olay çekmecesini açar (cekal, cekver, cekdurum)', () => {
@@ -53,12 +49,13 @@ describe('Çek ve senet ekranı', () => {
     expect(kayitGir.mock.calls.map((c) => c[0])).toEqual(['cekal', 'cekver', 'cekdurum']);
   });
 
-  it('düzenle: banka, seri no ve vade cek-duzelt ucuna sürümle gider; iptal yalnız yöneticide', async () => {
+  it('düzenle: yön, tür, cari, tutar ve durum salt okunur; banka, seri no ve vade cek-duzelt ucuna sürümle gider; iptal yalnız yöneticide', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/cekler/2/duzelt': () => json(200, { cek: {} }) });
     ekranAc(Cekler, YAZAR);
     fireEvent.click(within(takip()).getAllByRole('button', { name: /çekini düzenle/ })[0]!);
     const pencere = await screen.findByRole('dialog', { name: 'Çek / senedi düzenle' });
     expect(within(pencere).queryByRole('button', { name: 'İptal et' })).toBeNull();
+    for (const ad of ['Yön', 'Tür', 'Cari / keşideci', 'Tutar', 'Durum']) expect((within(pencere).getByLabelText(ad) as HTMLInputElement).readOnly).toBe(true);
     fireEvent.change(within(pencere).getByLabelText('Seri / numara'), { target: { value: 'B-7' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toEqual({
