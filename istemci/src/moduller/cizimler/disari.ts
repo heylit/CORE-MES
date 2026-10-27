@@ -6,3 +6,5 @@ export { KucukResimKutusu, kucukResimAdresi, useKucukResimler, type KucukResimBo
 // Revizyonun önizleme karesi (küçük resim) elde olan dosyadan üretilir; CNC eşleştirmesi modeli yayına alınca çağırır (780 a).
 export { onizlemeGonder } from './onizleme-akisi.ts';
 export { ResimPaneli, malzemeBelgesiYukle, useMalzemeResimYetkisi, type MalzemeBelgesiGirdisi } from './ResimPaneli.tsx';
+// Markalama yer seçiminde aynı model okuyucuyu kullanır (kart 806): STEP, IGES, STL ve glTF tek yoldan sahneye girer.
+export { birak, modelOku, type ModelBicimi } from './goruntu/model.ts';
