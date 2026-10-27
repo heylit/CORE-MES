@@ -227,6 +227,7 @@ interface YazGirdisi { tur: IkTuru; kimlik: string; govde: Govde; surum: number 
 
 const KISITLAR = {
   ik_personel_sicil_no_tek: { ileti: 'Bu sicil no başka bir personelde kayıtlı.', alan: 'govde.sicilNo' },
+  ik_personel_tckn_tek: { ileti: 'Bu kimlik numarası başka bir personelde kayıtlı.', alan: 'govde.tckn' },
   ik_personel_kisi_id_tek: { ileti: 'Bu TMI kullanıcısı başka bir personele bağlı.', alan: 'govde.kisiId' },
   ik_personel_kisi_id_fkey: { ileti: 'TMI kullanıcısı bulunamadı.', alan: 'govde.kisiId' },
   ik_personel_is_merkezi_id_fkey: { ileti: 'İş merkezi bulunamadı.', alan: 'govde.isMerkeziId' },

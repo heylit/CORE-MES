@@ -13,6 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { acikZimmetCozucusu } from './disari.ts';
+import { ornekTckn } from './ornek-veri.ts';
 import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 
@@ -515,6 +516,24 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     surumler.set('emp_k2', (await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri')).kayitlar.find((k) => k.kimlik === 'emp_k2')!.surum);
     await kaydet(c.uzm, 'personel', personel('emp_k2', { tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01', telefon: '0500 000 00 80' }));
     await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/personel/emp_k2/kaydet', kaydetGovdesi(personel('emp_k2', { tckn: '10000000136', iban: 'TR00 0000 0000 0000 0000 0000 01' })));
+  });
+
+  test('IK-83: T.C. kimlik no iptal edilmemiş personelde tekil; tek kayıt, toplu aktarım ve veritabanı aynı kısıta girer, iptal edilen kaydın numarası serbest', async () => {
+    const [t1, t2] = [ornekTckn(83), ornekTckn(84)];
+    const a = await kaydet(c.uzm, 'personel', personel('emp_t1', { tckn: t1 }));
+    await kaydet(c.uzm, 'personel', personel('emp_t1', { tckn: t1, telefon: '0500 000 00 83' }));
+    const cakisma = async (yol: string, govde: unknown) => {
+      const r = await istek(c.uzm, 'POST', yol, govde);
+      const { kod, alan } = r.json() as { kod?: string; alan?: string };
+      assert.deepEqual({ durum: r.statusCode, kod, alan }, { durum: 409, kod: 'CAKISMA', alan: 'govde.tckn' }, `${yol}: ${r.body}`);
+    };
+    await cakisma('/ik/personel/emp_t2/kaydet', { govde: personel('emp_t2', { tckn: t1 }), surum: null });
+    await cakisma('/ik/personel/toplu-kaydet', { kayitlar: [{ kimlik: 'emp_t3', govde: personel('emp_t3', { tckn: t1 }), surum: null }] });
+    await cakisma('/ik/personel/toplu-kaydet', { kayitlar: ['emp_t4', 'emp_t5'].map((kimlik) => ({ kimlik, govde: personel(kimlik, { tckn: t2 }), surum: null })) });
+    assert.equal(await vt().tek("SELECT 1 FROM ik_personel WHERE kimlik IN ('emp_t2', 'emp_t3', 'emp_t4', 'emp_t5')"), null, 'reddedilen kayıt yazılmaz');
+    await assert.rejects(vt().sorgu("UPDATE ik_personel SET tckn = $1, surum = surum + 1 WHERE kimlik = 'emp_a'", [t1]), /ik_personel_tckn_tek/);
+    await tamam<IkYazCevabi>(c.uzm, 'POST', '/ik/personel/emp_t1/iptal', { surum: surumler.get('emp_t1') ?? a.kayit.surum });
+    await kaydet(c.uzm, 'personel', personel('emp_t2', { tckn: t1 }));
   });
 
   test('rol x işlem göçü: onaylı dağılım; İK sayfası yalnız İK uzmanında, herkes İK İşlemlerim ile izin talep eder ve bordrosunu onaylar; muhasebe İK kayıtlarını okumaz', () => {
