@@ -74,6 +74,13 @@ describe('plan: amaç motor ayarından motora (771 a)', () => {
     };
     assert.deepEqual([tlAcik('sirali'), tlAcik('tl')], [false, true]);
   });
+  test('840 a: bitiş amaç vektöründe boşta kalmadan sonraki yerdedir', () => {
+    const g = planGirdisi({ calisma: calismayaMotorAyari(calismaKur(), MOTOR_AYARI_VARSAYILAN), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
+    assert.ok(g);
+    const m = motorYukle(); const st = m.stHazirla(g.st);
+    const e = m.evaluate(m.schedule(st, 'dagit', null), st, null, false) as { lex: number[]; Cmax: number; idle: number };
+    assert.deepEqual([e.lex.length, e.lex[5], e.lex[6]], [7, e.idle, e.Cmax]);
+  });
 });
 
 describe('plan: sıralama kuralı motor ayarından motora (776 b)', () => {

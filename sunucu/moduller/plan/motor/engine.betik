@@ -459,16 +459,17 @@ function evaluate(plan,st,ref,fast){
   // sıralı amaç (771 a, 831 a): 1 ağırlıklı gecikme, 2 değişiklik, 3 ayar süresi sonra boşta kalma, 4 bilinen TL maliyet
   // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir. Boşta kalma lex[5]'tir: lex[4] TL'dir ve kancalar onu okur;
   // karşılaştırma sırası LEX_SIRA'dadır. Hızlı değerlendirmede boşta kalma hesaplanmaz (0), orada karar ayar süresinde biter.
-  const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl,idle];Z=-wT;
+  // Bitiş (840 a) boşta kalmadan sonra, TL'den önce son eşitlik ölçütüdür: boşta kalma tezgâh sonundaki süreyi saymaz.
+  const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl,idle,Cmax];Z=-wT;
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
 
-const LEX_EPS=[.5,.5,0,.25,1,.25];
-const LEX_SIRA=[0,1,2,3,5,4];
-const LEX_AD=['ağırlıklı gecikme','tampon ihlali','değişiklik sayısı','ayar süresi','bilinen maliyet','boşta kalma'];
+const LEX_EPS=[.5,.5,0,.25,1,.25,.1];
+const LEX_SIRA=[0,1,2,3,5,6,4];
+const LEX_AD=['ağırlıklı gecikme','tampon ihlali','değişiklik sayısı','ayar süresi','bilinen maliyet','boşta kalma','bitiş'];
 function cmpEv(a,b){for(const i of LEX_SIRA){const d=(b.lex[i]||0)-(a.lex[i]||0);if(Math.abs(d)>LEX_EPS[i])return d>0?1:-1;}return 0;}
 function lexWhy(a,b){for(const i of LEX_SIRA){const d=(b.lex[i]||0)-(a.lex[i]||0);if(Math.abs(d)>LEX_EPS[i])return i;}return -1;}
 /* ---- alt sınır: kapasite yokken en erken bitiş (takvim, taşıma, fason çıkış günleri ve süresiyle) ---- */
