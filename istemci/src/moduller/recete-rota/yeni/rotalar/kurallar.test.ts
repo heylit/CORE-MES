@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   acikRevizyon, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
-  degisimOrani, fasonaCevir, girdiOlur, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
+  degisimOrani, fasonaCevir, girdiOlur, girenTekrari, kartBirimi, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
@@ -215,5 +215,24 @@ describe('R1 gün saati', () => {
     expect(ortalamaGunSaati({ 1: ['s1', 's2'], 2: ['s1'], 0: [] }, dk)).toBeCloseTo((14.5 + 7.5) / 2);
     expect(ortalamaGunSaati(undefined, dk)).toBe(8);
     expect(ortalamaGunSaati({ 1: [] }, dk)).toBe(8);
+  });
+});
+
+describe('823: giren tekrarı ve ara kart birimi', () => {
+  const ins = [{ itemId: '12', qty: 2, scrap: 0 }, { itemId: '13', qty: 1, scrap: 0 }];
+  it('aynı malzeme ikinci kez giren olamaz; var olanın sırası döner', () => {
+    expect(girenTekrari({ ins }, '12')).toBe(0);
+    expect(girenTekrari({ ins }, '14')).toBeNull();
+  });
+  it('değiştirmede kendi sırası sayılmaz; başka girenin malzemesine değiştirmek engellenir', () => {
+    expect(girenTekrari({ ins }, '12', 0)).toBeNull();
+    expect(girenTekrari({ ins }, '12', 1)).toBe(0);
+  });
+  it('ara kart adettir; son adımın çıktısı malzemenin birimini korur', () => {
+    const ham = malzeme('12', 'ham', { unit: 'kg' });
+    const a = { id: 'o10', seq: 10, opNo: 10 } as Adim;
+    expect(kartBirimi(ham, a)).toBe('adet');
+    expect(kartBirimi(ham, null)).toBe('kg');
+    expect(kartBirimi(undefined, null)).toBe('');
   });
 });

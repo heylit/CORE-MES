@@ -5,7 +5,7 @@ import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import { useRrKomutu } from '../veri.ts';
 import {
   adimEkle, adimGuncelle, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, cevrimToplami, degisimOrani, fasonaCevir, fasonMu,
-  istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
+  girenTekrarIletisi, girenTekrari, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
   type Adim, type Malzeme, type Operasyon,
 } from './kurallar.ts';
@@ -144,6 +144,7 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
 
 function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: 'adim' }>; kapat: () => void }) {
   const { duzen: dz } = r;
+  const { bildir } = useBildirim();
   const { h } = dz;
   const liste = sirali(dz.adimlar(s.urunId));
   const a = liste.find((x) => x.id === s.adimId) ?? liste.find((x) => x.seq === s.seq && x.id.startsWith('o'));
@@ -164,7 +165,15 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const onceki = tuketilenAdimlar(liste, idx);
   const kart = son ? null : akisKarti(sahip.id, liste, idx, dz.malzemeVar);
   const opSecenek = [...h.op.values()].filter((o) => o.aktif || o.id === a.opId).map((o) => ({ deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}` }));
-  const girenEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, ins: [...x.ins, { itemId: m.id, qty: n, scrap: 0 }] }), `${m.code} giren eklendi`); };
+  const girenEkle = (m: Malzeme, n: number) => {
+    const varOlan = girenTekrari(a, m.id);
+    if (varOlan !== null) {
+      bildir('hata', girenTekrarIletisi(m.code));
+      r.sec({ tur: 'giren', urunId: s.urunId, adimId: a.id, sira: varOlan, nid: '', miktar: s.miktar * (a.ins[varOlan]?.qty ?? 0) });
+      return;
+    }
+    yaz((x) => ({ ...x, ins: [...x.ins, { itemId: m.id, qty: n, scrap: 0 }] }), `${m.code} giren eklendi`);
+  };
   const yanEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, outs: [...x.outs, { itemId: m.id, qty: n, kind: 'yan' as const }] }), `${m.code} yan ürün eklendi`); };
   return (
     <>
@@ -446,12 +455,19 @@ function KalemPaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: 
 
 function SecmeliPanel({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: 'girenEkle' | 'yanEkle' }>; kapat: () => void }) {
   const { duzen: dz } = r;
+  const { bildir } = useBildirim();
   const a = dz.adimlar(s.urunId).find((x) => x.id === s.adimId);
   const sahip = dz.h.malzeme.get(s.urunId);
   if (!a || !sahip) return <BosPanel r={r} />;
   const giren = s.tur === 'girenEkle';
   const op = dz.h.op.get(a.opId);
   const sec = (m: Malzeme) => {
+    const varOlan = giren ? girenTekrari(a, m.id, s.yerine) : null;
+    if (varOlan !== null) {
+      bildir('hata', girenTekrarIletisi(m.code));
+      r.sec({ tur: 'giren', urunId: s.urunId, adimId: a.id, sira: varOlan, nid: '', miktar: a.ins[varOlan]?.qty ?? 0 });
+      return;
+    }
     let sira = s.yerine;
     const ok = dz.degistir(s.urunId, (l) => adimGuncelle(l, a.id, (x) => {
       if (giren) {
