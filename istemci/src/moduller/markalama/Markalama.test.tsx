@@ -124,6 +124,30 @@ describe('Markalama istasyonu', () => {
   });
 });
 
+describe('Hatalı markalama', () => {
+  it('onay sormadan numara yakmaz; Vazgeç istek göndermez, onayla hatalı sonuçla gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Istasyon />);
+    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
+    const emir = await screen.findByLabelText('Üretim emri');
+    await screen.findByRole('option', { name: /UE-DNM-1/ });
+    fireEvent.change(emir, { target: { value: '5' } });
+    await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
+    const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
+    fireEvent.click(screen.getByRole('button', { name: /Hatalı markalama/ }));
+    const pencere = await screen.findByRole('dialog');
+    expect(markalar()).toHaveLength(0);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(markalar()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: /Hatalı markalama/ }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Numarayı yak/ }));
+    await waitFor(() => expect(markalar()).toHaveLength(1));
+    expect(markalar()[0]!.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: null, sonuc: 'hatali' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
 describe('Seri izleme', () => {
   it('birim seçilince geçmiş görünür; hurda nedensiz gönderilemez, nedenle sürümüyle gider', async () => {
     const cagrilar = sunucuKur(YONETICI);

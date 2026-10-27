@@ -4,7 +4,7 @@ import type {
   BirimlerCevabi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  Dugme, DurumKutusu, Kart, KodOkuyucu, Qr, Rozet, Secim, Tablo, useBildirim, type Sutun,
+  Dugme, DurumKutusu, Kart, KodOkuyucu, OnayPenceresi, Qr, Rozet, Secim, Tablo, useBildirim, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
@@ -28,6 +28,8 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [son, sonYaz] = useState<MarkalamaBirimi | null>(null);
+  // Hatalı markalama numarayı geri dönüşsüz yakar; tek dokunuşla gitmesin diye onay sorulur.
+  const [hataliOnayi, hataliOnayiYaz] = useState(false);
   const onizleme = useQuery({
     queryKey: anahtarlar.onizleme(tanim.id, emirId),
     queryFn: () => api.get<OnizlemeCevabi>(`/markalama/tanimlar/${tanim.id}/onizleme?emirId=${emirId}`),
@@ -45,6 +47,7 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
       const govde: MarkalaGovdesi = { tanimId: tanim.id, uretimEmriId: emirId, istasyonId: null, sonuc };
       return tekrarKorumaliGonder((deneme) => api.post<MarkalamaBirimi>('/markalama/birimler/markala', govde, deneme));
     },
+    onSettled: () => hataliOnayiYaz(false),
     onSuccess: async (b) => {
       sonYaz(b);
       bildir(b.durum === 'hurda' ? 'bilgi' : 'tamam', b.durum === 'hurda' ? `${b.seriNo} hatalı, hurdaya ayrıldı` : `${b.seriNo} markalandı`);
@@ -91,11 +94,18 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
             <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={markala.isPending && markala.variables === 'iyi'} disabled={markala.isPending} onClick={() => markala.mutate('iyi')}>
               Markalandı
             </Dugme>
-            <Dugme tur="tehlike" boyut="ana" simge="alert" yukleniyor={markala.isPending && markala.variables === 'hatali'} disabled={markala.isPending} onClick={() => markala.mutate('hatali')}>
+            <Dugme tur="tehlike" boyut="ana" simge="alert" yukleniyor={markala.isPending && markala.variables === 'hatali'} disabled={markala.isPending} onClick={() => hataliOnayiYaz(true)}>
               Hatalı markalama
             </Dugme>
           </div>
         ) : <p className="tc-mrk-ipucu">Seri vermek için markalama yetkisi gerekir.</p>}
+        <OnayPenceresi
+          acik={hataliOnayi} baslik="Hatalı markalama" onayMetni="Numarayı yak" tehlikeli
+          yukleniyor={markala.isPending && markala.variables === 'hatali'}
+          onayla={() => markala.mutate('hatali')} vazgec={() => hataliOnayiYaz(false)}
+        >
+          <p>Sıradaki numara yanar ve birim hurdaya ayrılır. Bu numara yeniden verilmez.</p>
+        </OnayPenceresi>
         {markala.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(markala.error, 'Seri verilemedi')}</p>}
         {yazabilir && tanim.dogrulama && (
           <div className="tc-mrk-dogrula">
