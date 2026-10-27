@@ -190,6 +190,81 @@ describe('A2 Hazırlık ekranı', () => {
     expect(istekler.filter((i) => i.yol === MERKEZ_EKLE).length).toBe(1);
   }, 40000);
 
+  // 789, 795 a: TMI emrinin paketinde resim ve balonlar Kalite Merkezi'nden salt okunur gelir; plan maddesi balon kimliğini taşır.
+  // Resim, balon ve ölçüler uydurmadır.
+  const KM_PAKETI = { ...PAKET, id: 'tmi-ue-9', no: 'IE-DENEME-3', from: 'tmi', malzemeNo: 901 };
+  const KM_BALONU = {
+    id: 55, no: 1, nominal: 'Ø30', tolerans: '±0.05', alt: '29.95', ust: '30.05', alet: 'Mikrometre', siklik: null, kritik: true, yontem: 'elle',
+    olcuAletiGerekir: false, tur: null, sayfa: 1, x: 10, y: 20, yaziKutusu: null, surum: 1,
+  };
+  const KM_RESMI = {
+    id: 12, malzemeNo: 901, tur: 'resim', merkezBelgeId: 3, ozet: 'd'.repeat(64), ad: 'Deneme flans', revizyon: 'B', aktif: true, surum: 4,
+    eklendi: '2026-01-01T00:00:00Z', balonlar: [KM_BALONU],
+  };
+  const kmSunucusu = () => ({ belgeler: { pkgs: [{ kimlik: KM_PAKETI.id, surum: 1, govde: KM_PAKETI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+  function kmKur(resimler: unknown[]) {
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
+      if (yol === '/kalite-merkezi/studyo/parcalar/901') return jsonCevap({ resimler, numunePlanlari: [] });
+      return asil(adres, ayar);
+    }));
+  }
+  const kmPaketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${KM_PAKETI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+
+  it('TMI paketinde Dokümanlar parçanın Kalite Merkezi resmini listeler; Pakete al dosyayı ve balonları kimlikleriyle getirir, plan salt okunur', async () => {
+    const istekler = sunucuKur(YONETICI, kmSunucusu());
+    merkezKur(istekler);
+    kmKur([KM_RESMI, { ...KM_RESMI, id: 13, ad: 'Kaldırılmış resim', aktif: false }]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    expect(await within(km).findByText('Deneme flans', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(km).queryByText('Kaldırılmış resim')).toBeNull();
+    expect(within(d).queryByRole('region', { name: 'Çizim stüdyosundan' })).toBeNull();
+    fireEvent.click(within(km).getByRole('button', { name: /Pakete al/ }));
+    await waitFor(() => {
+      const p = kmPaketYazimi(istekler).at(-1);
+      expect(p?.primary).toBe('deneme-b.pdf');
+      expect(p?.kmResim).toEqual({ id: 12, surum: 4 });
+      expect(p?.plan).toMatchObject([{ id: 1, nom: 'Ø30', min: 29.95, max: 30.05, crit: true, m: 'man', kmBalon: 55 }]);
+    }, { timeout: 10000 });
+    expect(await within(km).findByText('Pakette', undefined, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
+    expect(await within(d).findByText(/Balonlar Kalite Merkezi’nde düzenlenir/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect((within(d).getByRole('button', { name: 'Ø30 sil' }) as HTMLButtonElement).disabled).toBe(true);
+  }, 40000);
+
+  it('Kalite Merkezi resmi değişince paket "değişti" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {
+    // Önceki denemenin cihazda kalan paketiyle karışmasın diye ayrı kimlik.
+    const BAGLI = { ...KM_PAKETI, id: 'tmi-ue-10', no: 'IE-DENEME-4', kmResim: { id: 12, surum: 3 } };
+    const istekler = sunucuKur(HAZIRLIKCI, {
+      belgeler: { pkgs: [{ kimlik: BAGLI.id, surum: 1, govde: BAGLI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, { kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }] },
+    });
+    merkezKur(istekler);
+    kmKur([KM_RESMI]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    expect(await within(km).findByText('Kalite Merkezi’nde değişti', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(km).queryByRole('button', { name: /Güncelle|Pakete al/ })).toBeNull();
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('malzemesi olmayan eski pakette Kalite Merkezi okunmaz ve plan düzenlenir', async () => {
+    const istekler = sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    await within(d).findByRole('region', { name: 'Teknik resim' }, { timeout: 10000 });
+    expect(within(d).queryByRole('region', { name: 'Kalite Merkezi’nden' })).toBeNull();
+    expect(istekler.some((i) => i.yol.startsWith('/kalite-merkezi/'))).toBe(false);
+    fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
+    expect((await within(d).findByRole('button', { name: 'Ø20 sil' }, { timeout: 10000 }) as HTMLButtonElement).disabled).toBe(false);
+  }, 40000);
+
   it('düzenleme yetkisi olmayan kişide malzeme çizimi kendiliğinden alınmaz (reddedilen)', async () => {
     const istekler = sunucuKur(HAZIRLIKCI, tmiSunucusu([{ kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }]));
     merkezKur(istekler);
