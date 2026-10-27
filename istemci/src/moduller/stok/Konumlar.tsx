@@ -9,6 +9,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, KONUM_TURLERI, zamanMetni } from './gorunum.ts';
 import { HaritaEsleDugmesi } from './HaritaBagi.tsx';
 import { SayfaBasi, hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
+import { EtiketPenceresi } from './Etiketler.tsx';
 import { ZeminIzgarasi } from './ZeminIzgarasi.tsx';
 import './stok.css';
 
@@ -61,6 +62,10 @@ export function Konumlar() {
   const [gorunum, setGorunum] = useState<'zemin' | 'fason' | 'liste'>('zemin');
   const liste = useListeDurumu({ suzgecler: { tur: '' as '' | (typeof KONUM_TURLERI)[number] }, suzgecDegerleri: { tur: KONUM_TURLERI }, siralamaAlanlari: ['kod', 'tur'], adres: true });
   const l = useQuery({ queryKey: anahtarlar.liste('konumlar', liste.sorgu), queryFn: () => api.get<KonumlarCevabi>(`/stok/konumlar${sorguMetni(liste.sorgu)}`) });
+  const [etiket, setEtiket] = useState<Konum[] | null>(null);
+  const sutunlar: Sutun<Konum>[] = [...SUTUNLAR, {
+    anahtar: 'etiket', baslik: '', hucre: (k) => <Dugme simge="scan" aria-label={`${k.kod} etiketi`} onClick={(e) => { e.stopPropagation(); setEtiket([k]); }}>Etiket</Dugme>,
+  }];
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
     <section className="tc-stok">
@@ -69,14 +74,16 @@ export function Konumlar() {
       {gorunum === 'zemin' && <ZeminIzgarasi />}
       {gorunum === 'fason' && <FasonKutulari ac={tanimlar ? () => setAc('fason') : null} />}
       {gorunum === 'liste' && <>
-      <Kart sag={<Secim etiket="Tür" value={liste.suzgecler.tur} onChange={(e) => liste.suzgecDegistir({ tur: e.target.value as '' })} secenekler={KONUM_TURLERI.map((t) => ({ deger: t, baslik: KONUM_ETIKETI[t] }))} bosSecenek="Hepsi" />}>
+      <Kart sag={<><Dugme simge="scan" disabled={!l.data?.satirlar.length} onClick={() => setEtiket(l.data?.satirlar ?? [])}>Sayfanın etiketleri</Dugme><Secim etiket="Tür" value={liste.suzgecler.tur} onChange={(e) => liste.suzgecDegistir({ tur: e.target.value as '' })} secenekler={KONUM_TURLERI.map((t) => ({ deger: t, baslik: KONUM_ETIKETI[t] }))} bosSecenek="Hepsi" /></>}>
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket="Konumlar" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id} mesgul={l.isPending}
+          <Tablo etiket="Konumlar" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id} mesgul={l.isPending}
             satirSec={(k) => { void yonlendir(`/stok/konumlar/${k.id}`); }} siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir} bosMesaj="Konum yok."
             {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
         )}
       </Kart>
       </>}
+      {etiket && <EtiketPenceresi baslik={etiket.length === 1 ? 'Konum etiketi' : 'Konum etiketleri'} kapat={() => setEtiket(null)}
+        ogeler={etiket.map((k) => ({ tur: 'konum', kod: k.kod, katNo: k.katNo, alt: k.ad ?? KONUM_ETIKETI[k.tur] }))} />}
       {ac && <KonumAcPenceresi kapat={() => setAc(false)} ilkTur={ac} />}
     </section>
   );

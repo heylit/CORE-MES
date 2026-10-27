@@ -101,7 +101,6 @@ export function IsKutusu() {
         baslik="İş kutusu"
         alt={s.data ? `${bugunMetni()}. ${l.length ? `Sizi bekleyen ${l.length} iş var.` : 'Bekleyen iş yok.'}` : bugunMetni()}
         sag={<>
-          <Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'okut' })}>Okut</Dugme>
           {malKabulYetkisi && <Link to="/stok/mal-kabul"><Dugme simge="truck">Mal kabul</Dugme></Link>}
           {cikisYetkisi && <Dugme simge="truck" onClick={() => paneliAc({ sekme: 'okut' })}>Sevk çıkışı</Dugme>}
           <Link to="/malzemeler"><Dugme simge="layers">Malzeme kartları</Dugme></Link>
