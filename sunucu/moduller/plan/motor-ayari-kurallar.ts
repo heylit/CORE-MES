@@ -23,8 +23,9 @@ export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
   (Object.keys(a) as (keyof MotorAyarlari)[]).every((k) => a[k] === b[k]);
 
 // Motor ayarı planlama çalışmasının üstüne yazılır (771 a, 776 b): TL amacını kayıttaki D.planTL.amac açar ('tl'; durum.betik ymUygula),
-// sıralı ayarda kayıt ne derse desin kapalıdır; sıralama kuralı w.rule'dur (girdi.betik stKur). Okunan kopya değişir; sayfa kaydederse kayıt
-// da bunları taşır, motor yine ayarı okur.
+// sıralı ayarda kayıt ne derse desin kapalıdır; sıralama kuralı w.rule'dur (girdi.betik stKur). Girdi birleşmesi D'yi Reçete ve Rota kaydından
+// yeniden kurunca planTL düşebilir: amaç w.amac ile de gider, motor onu kayıttakinin önüne koyar (durum.betik ymUygula). Okunan kopya değişir;
+// sayfa kaydederse kayıt da bunları taşır, motor yine ayarı okur.
 export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
@@ -32,5 +33,5 @@ export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari): unkn
   const D = c.D as { planTL?: unknown };
   const planTL = D.planTL !== null && typeof D.planTL === 'object' ? D.planTL : {};
   const w = (c as { w?: unknown }).w;
-  return { ...c, D: { ...D, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } }, w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural } };
+  return { ...c, D: { ...D, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } }, w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac } };
 }

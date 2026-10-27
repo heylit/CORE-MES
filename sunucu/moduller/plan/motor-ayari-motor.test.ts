@@ -18,7 +18,7 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
     const kayit = { surum: 2, D: { planTL: { amac: 'tl', risk: 0.5 }, siparisler: [] }, w: { famK: 0.3 } };
     const sirali = calismayaMotorAyari(kayit, MOTOR_AYARI_VARSAYILAN) as typeof kayit;
     assert.deepEqual(sirali.D.planTL, { amac: 'sira', risk: 0.5 });
-    assert.deepEqual([sirali.w, sirali.D.siparisler, kayit.D.planTL.amac], [{ ...kayit.w, rule: 'atcs' }, kayit.D.siparisler, 'tl']);
+    assert.deepEqual([sirali.w, sirali.D.siparisler, kayit.D.planTL.amac], [{ ...kayit.w, rule: 'atcs', amac: 'sirali' }, kayit.D.siparisler, 'tl']);
     const tl = calismayaMotorAyari({ D: {} }, { ...MOTOR_AYARI_VARSAYILAN, amac: 'tl' }) as { D: { planTL: unknown } };
     assert.deepEqual(tl.D.planTL, { amac: 'tl' });
     assert.equal(calismayaMotorAyari(null, MOTOR_AYARI_VARSAYILAN), null);
@@ -62,6 +62,19 @@ const ilkSiparis = (kural: MotorAyarlari['kural'] | null): { rule: string; ilk: 
   const ilk = Object.entries(p.ops).sort(([, a], [, b]) => a.S - b.S)[0]![0].split('.')[0]!;
   return { rule: (g.st as { w: { rule: string } }).w.rule, ilk };
 };
+
+describe('plan: amaç motor ayarından motora (771 a)', () => {
+  test('sıralı ayarda TL amacı kapalı, TL ayarında açık; kayıttaki amaç geçmez', () => {
+    const tlAcik = (amac: MotorAyarlari['amac']): unknown => {
+      const k = calismaKur();
+      const calisma = calismayaMotorAyari({ ...k, D: { ...(k.D as object), planTL: { amac: amac === 'tl' ? 'sira' : 'tl' } } }, { ...MOTOR_AYARI_VARSAYILAN, amac });
+      const g = planGirdisi({ calisma, kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
+      assert.ok(g);
+      return (g.st as { tlAmac: { ac: boolean } }).tlAmac.ac;
+    };
+    assert.deepEqual([tlAcik('sirali'), tlAcik('tl')], [false, true]);
+  });
+});
 
 describe('plan: sıralama kuralı motor ayarından motora (776 b)', () => {
   test('her kural motora geçer; tanınmayan kayıt değeri ATCS olur', () => {

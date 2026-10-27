@@ -117,7 +117,9 @@ function ymUygula(st, S) {
   for (const f of D.fasoncular || []) if (f.tasima > 0 && f.fiyat != null) f.fiyat = +f.fiyat + +f.tasima;
   { const w = wipAyar(S.D); st.wipP = { ...w, fin: agAyar(S.D).fin }; }
   st.PWek = {}; for (const s of D.siparisler) if (PW[s.oncelik] != null) st.PWek[s.oncelik] = PW[s.oncelik];
-  st.tlAmac = { ac: Y.amac === 'tl' && agAyar(S.D).kip === 'bedel', birim: AG_BIRIM, risk: +Y.risk || 0 };
+  // Amaç motor ayarından w.amac ile gelir (kart 811); D.planTL.amac girdi birleşmesinde düştüğü için kaydınkine bakılmaz.
+  const amac = S.w && (S.w.amac === 'tl' || S.w.amac === 'sirali') ? S.w.amac : null;
+  st.tlAmac = { ac: (amac === null ? Y.amac === 'tl' : amac === 'tl') && agAyar(S.D).kip === 'bedel', birim: AG_BIRIM, risk: +Y.risk || 0 };
   Object.assign(TL_AMAC, st.tlAmac);
   return st;
 }
