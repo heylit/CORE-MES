@@ -19,6 +19,8 @@ import { hazirlikMetni } from './kurallar.ts';
 export { MALZEME_TESLIM_AC } from '../stok/disari.ts';
 // Terminalin malzeme çipi (618): işin malzeme durumu ve paneli işle açma stok modülündedir.
 export { durumMetni, isMalzemesiniAc, useIsMalzemeDurumu } from '../stok/disari.ts';
+// Terminalin iki sepeti (745, 758 a): gelen ve çıkan, seçili emir için; okuma ve düğmeler stok modülündedir.
+export { IstasyonSepetleri, useIstasyonSepetiSayilari } from '../stok/disari.ts';
 
 // Arkon'un "sunucu adresi"; gerçek bir yol değildir, yalnız bu katman tanır.
 export const SANAL_SUNUCU = '/arkon-tmi';
