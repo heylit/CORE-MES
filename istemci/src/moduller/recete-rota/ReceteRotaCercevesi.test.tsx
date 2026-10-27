@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { BildirimSaglayici, Kabuk } from '../../ortak/arayuz/index.ts';
 import { IKINCI_MENU_TANIMLARI, etkinMadde, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
-import { CIHAZ_ANAHTARLARI, ESKI_MENULER, ONEK, PLANLAMA_POLITIKASI, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
+import { CIHAZ_ANAHTARLARI, ESKI_MENULER, ONEK, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
 import { CIHAZ_ONEKI, cihazDegerleriOku, kopruKur } from './kopru.ts';
 import { rotalar } from './rotalar.tsx';
 import { YAZAR, YETKISIZ, ac, bekle, prototipiCalistir, sayacIletileri, sunucuKur, yazilan, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -75,10 +75,8 @@ describe('ReceteRotaCercevesi', () => {
     const eski = ESKI_MENULER.find((m) => m.kok === '/recete-rota');
     expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski')?.anahtar).toBe('orders');
     expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski/stock')?.anahtar).toBe('stock');
-    // Planlama menüsünün maddeleri eski çerçevede /plan/eski altındadır (659 a).
-    const planlama = ESKI_MENULER.find((m) => m.kok === '/plan');
-    expect(etkinMadde(menuMaddeleri(planlama!), '/plan/eski')?.anahtar).toBe('plan');
-    expect(etkinMadde(menuMaddeleri(planlama!), '/plan/eski/terminler')?.anahtar).toBe('terminler');
+    // Planlama'nın eski çerçevesi yoktur (805): Planlama menüsü yeni ekranın adreslerinde kalır.
+    expect(ESKI_MENULER.find((m) => m.kok === '/plan')).toEqual(IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/plan'));
   }, 30000);
 
   it('prototipin betiği derlenir; açılan sayfada üst şerit, yan menü ve sekme şeridi yoktur, kayıt yazısı gizlidir', async () => {
@@ -159,12 +157,8 @@ describe('ReceteRotaCercevesi', () => {
     expect(sayfa).toContain('<body>$& $1</body>');
   });
 
-  it('WebAssembly izni yalnız planlama çerçevesinin politikasındadır (361 b); öteki yönergeler aynıdır', () => {
-    const rr = sayfaKur('<html><head></head></html>', '', '');
-    const pl = sayfaKur('<html><head></head></html>', '', '', '', PLANLAMA_POLITIKASI);
-    expect(rr).not.toContain('wasm-unsafe-eval');
-    expect(pl).toContain("script-src 'unsafe-inline' 'wasm-unsafe-eval';");
-    expect(pl.replace(" 'wasm-unsafe-eval'", '')).toBe(rr);
+  it('politika WebAssembly izni vermez (361 b yalnız planlama çerçevesinindi, o çerçeve 805 ile kalktı)', () => {
+    expect(sayfaKur('<html><head></head></html>', '', '')).not.toContain('wasm-unsafe-eval');
   });
 
   it('kayıtlar prototipin metnine döner: json yeniden metne, metin olduğu gibi; önek dışı ve bozuk kayıt atlanır', () => {
