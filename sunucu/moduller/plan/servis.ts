@@ -25,11 +25,11 @@ import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, dortSaatIhlalleri, korunanIsler, yeniDortSaatIhlali, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
-import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, Kural, MotorIsi, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
@@ -1027,6 +1027,18 @@ interface Kayit { tur: string; ozet: string; isEmriIdleri: readonly number[]; ve
 // Yalnız yerleşim yazan işlem (baglamDegisir false) cevabı aynı bağlamla kurar; bağlamdan yalnız defter ve bölme parçaları değişir, onlar
 // yeniden okunur. Ayar ya da deneme yazan işlemde bağlam baştan kurulur.
 const BASKASININ_TASLAGI = 'Bu senaryo başka bir planlamacının taslağı.';
+
+// 248 a: korunan iş canlı plandaki yerinden, durumu bağlamdan okunur; karşılaştırılan hedefin (taslak ya da canlıya alınacak plan) yerleri.
+const planYerleri = (b: Baglam, l: readonly YerlesimSatiri[]): PlanYeri[] => l.map((y) => ({ isEmriId: y.isEmriId, kaynak: y.kaynak, baslangic: dk(b, y.baslangic) }));
+const planliMi = (b: Baglam) => (isEmriId: number) => b.isler.get(isEmriId)?.durum === 'planli';
+const canliPlanYerleri = async (db: Db, b: Baglam) => planYerleri(b, await s.yerlesimler(db, null));
+const taslakDortSaat = async (db: Db, b: Baglam, canli: readonly PlanYeri[], id: number) =>
+  dortSaatIhlalleri(canli, planYerleri(b, await s.yerlesimler(db, id)), planliMi(b));
+const DORT_SAAT_NEDENI: Record<DortSaatNedeni, string> = {
+  kaldirildi: 'plandan kaldırılamaz', kaynak: 'başka makine ya da kişiye alınamaz', 'onune-is': 'önüne iş konamaz',
+};
+const dortSaatReddi = (b: Baglam, i: { isEmriId: number; neden: DortSaatNedeni }) =>
+  cakisma(`${isMetni(b, i.isEmriId)} 4 saatten kısa sürede başlayacak; ${DORT_SAAT_NEDENI[i.neden]}.`);
 const ONAYDA = 'Taslak onayda; değiştirmek için önce onaydan çek.';
 
 async function taslagaYaz(
@@ -1046,7 +1058,11 @@ async function taslagaYaz(
     id = x.id;
   }
   const b = await baglamKur(db, k, id);
+  const canli = await canliPlanYerleri(db, b);
+  const once = await taslakDortSaat(db, b, canli, id);
   const kayit = await islem(b, id);
+  const ihlal = yeniDortSaatIhlali(once, await taslakDortSaat(db, b, canli, id));
+  if (ihlal) throw dortSaatReddi(b, ihlal);
   await s.degisiklikEkle(db, id, kayit, k.id);
   await s.senaryoSurumArtir(db, id);
   const sonra = baglamDegisir ? await baglamKur(db, k, id) : { ...b, defter: await s.degisiklikler(db, [id]), yersiz: await s.yersizBolmeler(db, id) };
@@ -1514,7 +1530,7 @@ function partiBaglari(isler: readonly Is[]): Map<number, number[]> {
 // Motor girdisi: sabitler (kilitli, dondurulmuş, başlamış, bitmiş ya da kullanıcının kapsamı dışındaki kaynakta) yerinde kalır. Rotada
 // süresi olmayan, süresi elle girilerek yerleştirilmiş iş de yerinde kalır: motor süresini bilmez, öneride plandan düşerdi.
 // 815 (699/3 a): motor emrin kendi önceliğinin sınıfını sıralar (oncelikSinifi); bedel bandı sıraya girmez.
-function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[]) {
+function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[], korunan: ReadonlySet<number> = new Set()) {
   const yerler = satirListesi.map((y) => yerOf(b, y));
   const satirlar = new Map(satirListesi.map((y) => [y.isEmriId, y]));
   const sabitler: Sabit[] = [];
@@ -1532,7 +1548,7 @@ function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[]) {
     const tutulur = (kk: Kaynak) => { const v = b.kaynaklar.get(kaynakAnahtari(kk)); return !!v?.aktif && izinliMi(b, v) && istasyonDegisti(b, y) === null; };
     if (y.elleKaynak && tutulur(y.kaynak)) elleKaynak.set(y.isEmriId, y.kaynak);
     const parcaKaynagiDisarida = (y.parcalar ?? []).some((p) => !izinliMi(b, b.kaynaklar.get(kaynakAnahtari(p.kaynak)) ?? null));
-    if (y.kilitli || y.dondurulmus || is.durum !== 'planli' || is.sureDk === null || !izinliMi(b, k) || parcaKaynagiDisarida || (k !== null && !k.aktif && is.durum !== 'planli')) {
+    if (y.kilitli || y.dondurulmus || korunan.has(y.isEmriId) || is.durum !== 'planli' || is.sureDk === null || !izinliMi(b, k) || parcaKaynagiDisarida || (k !== null && !k.aktif && is.durum !== 'planli')) {
       for (const x of isgal([y])) sabitler.push({ ...x, uretimEmriId: is.uretimEmriId, sira: is.sira });
     } else {
       serbest.add(y.isEmriId);
@@ -1620,9 +1636,11 @@ function motorKos(b: Baglam, isler: readonly MotorIsi[], sabitler: readonly Sabi
     tlKosuSiniri(isler.length));
 }
 
+// 248 a: 4 saat içindeki korunan işler motor önerisinde sabittir; motor onları yerinden oynatıp öneriyi reddettirmez.
 async function onerUygula(db: Db, b: Baglam, id: number): Promise<number[]> {
   const satirlar = await s.yerlesimler(db, id);
-  const { sabitler, serbest, isler } = motorGirdisi(b, satirlar);
+  const korunan = new Set(korunanIsler(await canliPlanYerleri(db, b), planliMi(b)).map((p) => p.isEmriId));
+  const { sabitler, serbest, isler } = motorGirdisi(b, satirlar, korunan);
   const sonuc = motorKos(b, isler, sabitler);
   // Elle sıra istasyonuyla birlikte kalır: istasyonu değişmiş adımın elle sırası motorda sayılmaz, uyarısı planlamacı yeniden sıralayana dek görünür.
   // Bölünmüş işin parçaları adetini, elle sırasını ve elle kaynağını korur.
@@ -1968,12 +1986,17 @@ export async function hizliDene(db: Db, k: Kullanici, id: number, g: { tur: Hizl
     if (e) d = { tur: 'oncelik', ozet: `${e.emirNo} acile çekildi`, isEmriIdleri: [], veri: { emirId: e.uretimEmriId, oncelik: 1 } };
   }
   if (!d) throw dogrulama('Bu deneme için uygun kayıt yok (emir, darboğaz makinesi ya da çalışma günü).', 'tur');
+  // 248 a, 954 b: arıza denemesi 4 saat kuralının dışındadır (yalnız deneme); canlıya alınırken yine denetlenir.
+  const canli = d.tur === 'makine_ariza' ? null : await canliPlanYerleri(db, b);
+  const once = canli ? await taslakDortSaat(db, b, canli, id) : [];
   // Deneme etkilediği işleri motor yeniden yerleştirsin diye onların kilitsiz yerleşimi kalkar; sonra motor önerir.
   const serbest = (await s.yerlesimler(db, id)).filter((y) => d.isEmriIdleri.includes(y.isEmriId) && !y.kilitli && !y.dondurulmus).map((y) => y.isEmriId);
   await s.yerlesimleriSil(db, id, serbest);
   await s.degisiklikEkle(db, id, d, k.id);
   const yeni = await baglamKur(db, k, id);
   const idler = await onerUygula(db, yeni, id);
+  const ihlal = canli ? yeniDortSaatIhlali(once, await taslakDortSaat(db, b, canli, id)) : null;
+  if (ihlal) throw dortSaatReddi(b, ihlal);
   await s.degisiklikEkle(db, id, { tur: 'oner', ozet: `Motor önerdi (${KURAL_ADI[yeni.ayar.kural]}, ${idler.length} iş)`, isEmriIdleri: idler.filter((x) => x > 0) }, k.id);
   await s.senaryoSurumArtir(db, id);
   return senaryolar(db, k);
@@ -2044,6 +2067,10 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   // Yersiz bölme de canlıya geçer (taslakta ya da canlıda yalnız bölmesi olan iş).
   const yersizler = [...b.yersiz.keys(), ...(await s.yersizBolmeler(db, null)).keys()];
   const idler = [...new Set([...canli.map((y) => y.isEmriId), ...taslak.map((y) => y.isEmriId), ...yersizler])].filter((x) => degisebilir(x) && !vardiyasiz.has(x));
+  // 248 a: canlıya geçecek plan, taslağın getirdiği bütün ihlallerle denetlenir (taslak önceden açılmış olsa da).
+  const gecen = new Set(idler);
+  const dortSaat = dortSaatIhlalleri(planYerleri(b, canli), planYerleri(b, [...canli.filter((y) => !gecen.has(y.isEmriId)), ...taslak.filter((y) => gecen.has(y.isEmriId))]), planliMi(b));
+  if (dortSaat.length > 0) throw dortSaatReddi(b, dortSaat[0]!);
   await s.canliyaYaz(db, id, idler, k.id);
   for (const y of taslak) {
     const is = b.isler.get(y.isEmriId);
