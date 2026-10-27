@@ -15,7 +15,7 @@ export interface PlanlamaYetkisi {
   bedelAyari: boolean;
   // Sunucunun kayıt yazma izni (ben.yazabilir, recete-rota.yaz).
   kayitYazabilir: boolean;
-  // Çalışmayı (tercih, ağırlık, karar, sayfa içi kilit) değiştirebilir: ortak plan.yaz ve kayıt yazma izni birlikte.
+  // Çalışmayı (tercih, ağırlık, karar, sayfa içi kilit) değiştirebilir: yalnız ortak plan.yaz (925 a).
   calismaYazabilir: boolean;
 }
 
@@ -30,6 +30,6 @@ export function yetkiKur(islemler: readonly string[], ben: Pick<BenCevabi, 'yaza
     planCanliyaAl: var_('plan.canliya-al'),
     bedelAyari: var_('plan.bedel-ayari'),
     kayitYazabilir: ben.yazabilir,
-    calismaYazabilir: var_('plan.yaz') && ben.yazabilir,
+    calismaYazabilir: var_('plan.yaz'),
   };
 }

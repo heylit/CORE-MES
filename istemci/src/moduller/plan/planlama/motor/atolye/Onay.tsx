@@ -423,7 +423,7 @@ function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, e
   const g = s.gostergeler; const r = canli;
   const [dad, dton] = PA_DURUM[s.durum];
   const y = s.yapabilir;
-  // Çalışmaya açmak çalışmaya yazar: eskisi gibi plan yazan görür; izin uçta (recete-rota.yaz ve plan.yaz).
+  // Çalışmaya açmak çalışmaya yazar: plan yazan görür; izin uçta (plan.yaz, 925 a).
   const acabilir = o.yetki.planYaz && o.komut !== null;
   const em = sunucuEkMesai(pa), emc = sunucuEkMesai(pc);
   const emf = pa ? ekMesaiFarki(pa, pc) : [];

@@ -89,8 +89,8 @@ describe('P3 Maliyetler', () => {
     expect(govdeler).toEqual([]);
   }, 30000);
 
-  it('kayıt yazma izni yoksa harita görünür, form yerine yetki iletisi çıkar, yazma gitmez (reddedilen)', async () => {
-    const istekler = sunucuKur(YONETICI, kayit(), { yazabilir: false });
+  it('plan.yaz yoksa harita görünür, form yerine yetki iletisi çıkar, yazma gitmez (reddedilen; 925 a)', async () => {
+    const istekler = sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'plan.yaz') }, kayit());
     ac('/plan/maliyet');
     fireEvent.click(await screen.findByRole('button', { name: /^S1, Tezgâh: / }, BEKLE));
     expect(screen.getByText(/Bunu değiştirme yetkiniz yok/)).toBeTruthy();

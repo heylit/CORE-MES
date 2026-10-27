@@ -32,6 +32,8 @@ const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
 // Reçete ve Rota ekranı da birleşik durumu buradan okur.
 const KAYNAK_OKUR = { biri: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'] } as const;
 const PLANLAMA_OKUR = 'plan.planlama-oku';
+// Planlama kayıtlarına yazma (925 a): çalışma anahtarı plan.yaz, öteki anahtarlar recete-rota.yaz ister; ayrımı servis yapar.
+const KAYIT_YAZAR = { biri: ['recete-rota.yaz', 'plan.yaz'] } as const;
 
 export const uclar = [
   uc({ yontem: 'GET', yol: '/plan', yetki: PLAN_OKUR, sorgu: planSorgusu, cevap: planCevabi,
@@ -146,19 +148,19 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/planlama-kapasitesi', yetki: KAYNAK_OKUR, cevap: kapasiteCevabi, isle: ({ db, kullanici }) => planlama.kapasite(db, kullanici) }),
   // 525 1 a, 533 a: planın satın alma eki (açık sipariş gelişi, tedarik termini); çerçevenin kaynak okuması ister.
   uc({ yontem: 'GET', yol: '/plan/satin-alma-eki', yetki: KAYNAK_OKUR, cevap: satinAlmaEkiCevabi, isle: ({ db, kullanici }) => planlama.satinAlmaEki(db, kullanici) }),
-  // Planlama çalışması ve sayfa tercihleri (662 a). Yazma taşımadan önceki gibi recete-rota.yaz ister, çalışmanın kendisi ayrıca plan.yaz
-  // (planlamaYazmaDenetimi). Gövde deftere girmez (yüzlerce KB olabilir): anahtar ve beklenen sürüm girer.
+  // Planlama çalışması ve sayfa tercihleri (662 a). Çalışma yalnız plan.yaz, öteki anahtarlar recete-rota.yaz ister (925 a,
+  // planlamaYazmaDenetimi). Gövde deftere girmez (yüzlerce KB olabilir): anahtar ve beklenen sürüm girer.
   uc({ yontem: 'GET', yol: '/plan/planlama-kayitlari', yetki: KAYNAK_OKUR, cevap: kayitlarCevabi, isle: ({ db }) => planlama.planlamaKayitlari(db) }),
-  uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/yaz', yetki: 'recete-rota.yaz', denetim: 'govdesiz',
+  uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/yaz', yetki: KAYIT_YAZAR, denetim: 'govdesiz',
     denetimOzeti: (g) => ({ anahtar: g.anahtar, bicim: g.bicim, beklenenSurum: g.beklenenSurum }), govde: planlamaYazGovdesi, cevap: yazCevabi,
     isle: ({ db, kullanici, govde }) => planlama.planlamaYaz(db, kullanici, govde) }),
-  uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/sil', yetki: 'recete-rota.yaz', govde: planlamaSilGovdesi, cevap: silCevabi,
+  uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/sil', yetki: KAYIT_YAZAR, govde: planlamaSilGovdesi, cevap: silCevabi,
     isle: ({ db, kullanici, govde }) => planlama.planlamaSil(db, kullanici, govde) }),
   // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi', yetki: PLANLAMA_OKUR, cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlama.planlamaCalismasi(db, kullanici) }),
-  // 657 a: kayıt yoksa sayfa boş çalışmayı açar; kaydı yazmak gibi recete-rota.yaz ve plan.yaz ister. Kayıt varsa dokunulmaz, var olan döner.
-  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olustur', yetki: 'recete-rota.yaz', tekrarKorumali: true, cevap: planlamaCalismasiCevabi,
+  // 657 a: kayıt yoksa sayfa boş çalışmayı açar; kaydı yazmak gibi yalnız plan.yaz ister (925 a). Kayıt varsa dokunulmaz, var olan döner.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olustur', yetki: 'plan.yaz', tekrarKorumali: true, cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlama.planlamaCalismasiOlustur(db, kullanici) }),
   // 542 a, 546 a, 549 a: Satın Alma menüsünün malzeme ve fason planı; daraltılmış çalışma (müşteri, fiyat, maliyet, tezgâh, personel yok).
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/satin-alma', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', PLANLAMA_OKUR] }, cevap: planlamaCalismasiCevabi,

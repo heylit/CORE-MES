@@ -43,8 +43,8 @@ describe('Planlama çalışmasının kaydı', () => {
     expect(screen.getByTestId('surum').textContent).toBe('1');
   }, 20000);
 
-  it('sunucu kayıt yazmayı vermiyorsa (ben.yazabilir false) komut yoktur', async () => {
-    sunucuKur(YONETICI, KAYIT, { yazabilir: false });
+  it('plan.yaz yoksa komut yoktur (925 a; Reçete ve Rota kayıt izni olsa da)', async () => {
+    sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'plan.yaz') }, KAYIT);
     ac('/plan');
     expect((await screen.findByTestId('komut', {}, { timeout: 10000 })).textContent).toBe('yok');
   }, 20000);
