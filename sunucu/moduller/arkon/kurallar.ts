@@ -204,7 +204,8 @@ export function tesisKur(merkezler: readonly IsMerkezi[], istasyonlar: readonly 
     wcs: merkezler.map((m) => ({ id: m.kod, name: m.ad, note: m.aciklama ?? '', active: m.aktif })),
     sts: istasyonlar.flatMap((i) => {
       const wc = merkezKodu.get(i.isMerkeziId);
-      return wc === undefined ? [] : [{ id: i.kod, name: i.ad, wc, t: TIP[i.tip], active: i.aktif }];
+      // tmi: TMI istasyon kimliği; pano küçük resmi Çizim Merkezi'nden bu kimlikle okunur (777).
+      return wc === undefined ? [] : [{ id: i.kod, name: i.ad, wc, t: TIP[i.tip], active: i.aktif, tmi: i.id }];
     }),
     mcs: makineler.flatMap((m) => {
       const st = m.istasyonId === null ? undefined : istasyonKodu.get(m.istasyonId);
