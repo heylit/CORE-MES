@@ -9,8 +9,8 @@ describe('yetkiKur ve gorunumAcik', () => {
     expect(y).toMatchObject({ planlamaOku: true, maliyetOku: false, planYaz: true, planCanliyaAl: false, kayitYazabilir: true, calismaYazabilir: true });
   });
 
-  it('çalışma yazma plan.yaz ve sunucunun kayıt iznini birlikte ister (223 a; izinli ve reddedilen)', () => {
-    expect(yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: false }).calismaYazabilir).toBe(false);
+  it('çalışma yazma yalnız plan.yaz ister, Reçete ve Rota kayıt izni aranmaz (925 a; izinli ve reddedilen)', () => {
+    expect(yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: false }).calismaYazabilir).toBe(true);
     expect(yetkiKur([PLANLAMA_ISLEMI, 'plan.kilitle'], { yazabilir: true }).calismaYazabilir).toBe(false);
   });
 
