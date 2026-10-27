@@ -15,7 +15,7 @@ const veriKur = (ek: Partial<KmVerisi> = {}): KmVerisi => ({
   ayarlar: {}, kisi: 'Deneme Kişi', ...ek,
 });
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
-const BEKLEYEN: KmIlkParcaBekleyenCevabi = { emirler: [{ uretimEmriId: 7, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili', adet: 20, kararBekleyenAdet: 1 }] };
+const BEKLEYEN: KmIlkParcaBekleyenCevabi = { emirler: [{ uretimEmriId: 7, isEmriId: 70, opNo: 20, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili', adet: 20, kararBekleyenAdet: 1 }] };
 
 // Ortak sahte sunucunun üstüne ilk parça uçları: bekleyen liste ve karar (geçen adet döner).
 function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkParcaBekleyenCevabi = { emirler: [] }) {
@@ -149,9 +149,9 @@ describe('İlk parça kararı', () => {
   it('onaylayabilen görür ve onaylar', async () => {
     const s = ac(MUHENDIS, {}, BEKLEYEN);
     const bolum = await screen.findByRole('region', { name: 'İlk parça kararı' });
-    expect(within(bolum).getByText('UE-0007 | DNM-01')).toBeTruthy();
+    expect(within(bolum).getByText('UE-0007 | Op 20 | DNM-01')).toBeTruthy();
     fireEvent.click(within(bolum).getByRole('button', { name: 'Onayla' }));
-    await waitFor(() => { expect(s.yazmalar).toContainEqual({ yol: '/kalite-merkezi/ilk-parca/7/karar', govde: { karar: 'onay' } }); });
+    await waitFor(() => { expect(s.yazmalar).toContainEqual({ yol: '/kalite-merkezi/ilk-parca/7/karar', govde: { karar: 'onay', isEmriId: 70 } }); });
     expect(await screen.findByText('İlk parça onaylandı: 1 adet')).toBeTruthy();
     // Karar tekrar korumalıdır: istek kimliğiyle gider.
     const karar = s.fetch.mock.calls.find(([adres]) => String(adres).endsWith('/ilk-parca/7/karar'));
@@ -162,11 +162,12 @@ describe('İlk parça kararı', () => {
     const s = ac(YONETICI, {}, BEKLEYEN);
     const bolum = await screen.findByRole('region', { name: 'İlk parça kararı' });
     fireEvent.click(within(bolum).getByRole('button', { name: 'Reddet' }));
+    expect(screen.getByRole('dialog', { name: 'İlk parça reddi' }).textContent).toContain('UE-0007 emrinin Op 20 adımında karar bekleyen 1 adedi');
     fireEvent.click(within(screen.getByRole('dialog', { name: 'İlk parça reddi' })).getByRole('button', { name: 'Vazgeç' }));
     expect(s.yazmalar).toEqual([]);
     fireEvent.click(within(bolum).getByRole('button', { name: 'Reddet' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'İlk parça reddi' })).getByRole('button', { name: 'Reddet' }));
-    await waitFor(() => { expect(s.yazmalar).toContainEqual({ yol: '/kalite-merkezi/ilk-parca/7/karar', govde: { karar: 'ret' } }); });
+    await waitFor(() => { expect(s.yazmalar).toContainEqual({ yol: '/kalite-merkezi/ilk-parca/7/karar', govde: { karar: 'ret', isEmriId: 70 } }); });
   });
 
   it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {

@@ -11,8 +11,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirBaslat, emirNolari, emirSayim, kararSayaclari, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { ilkParcaKarari, ilkParcaKararlari, kalibrasyonHazirlikDurumlari } from './disari.ts';
+import { adimKararSayaclari, adimliEmirAyrintisi, emirBaslat, emirBitir, emirNolari, emirSayim, kararSayaclari, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimIlkParcaKararlari, ilkParcaKarari, ilkParcaKararlari, kalibrasyonHazirlikDurumlari } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
 // 229 a: ilk parça kararı Kalite Merkezi'nden çıkar; emrin karar bekleyen sayımı onayda sağlama, retde redde geçer.
@@ -45,7 +45,7 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     return k!;
   }
 
-  async function baslamisEmir(): Promise<number> {
+  async function baslamisEmir(ikinciAdim = false): Promise<number> {
     sayac += 1;
     const im = await o().sahip.tek<{ id: number }>('INSERT INTO is_merkezi (kod, ad) VALUES ($1, $2) RETURNING id', [`KMF${sayac}`, 'Deneme Merkezi']);
     const ist = await o().sahip.tek<{ id: number }>(
@@ -55,10 +55,10 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     const m = await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`KMFM${sayac}`, 'Tezgah', ist?.id]);
     const { uretimEmriId } = await o().vt.tx((db) => uretimEmriAc(db, planlama, {
       projeId: denemeProjeId, malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: revizyonId,
-      isEmirleri: [{
-        sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tipId, kaynak: { tur: 'makine', id: m!.id }, ayarSuresiDk: '10', birimSureDk: '1',
-        terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
-      }],
+      isEmirleri: [1, ...(ikinciAdim ? [2] : [])].map((sira) => ({
+        sira, opNo: sira * 10, ad: `Adım ${sira}`, operasyonTipiId: tipId, kaynak: { tur: 'makine' as const, id: m!.id }, ayarSuresiDk: '10', birimSureDk: '1',
+        terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+      })),
     }));
     await o().vt.tx((db) => emirBaslat(db, operator, uretimEmriId));
     return uretimEmriId;
@@ -201,6 +201,50 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     const sonra = (await bekleyenler(kalite)).json() as { emirler: { uretimEmriId: number }[] };
     assert.ok(!sonra.emirler.some((e) => e.uretimEmriId === bekleyen), 'karar verilen emir listeden düştü');
     assert.equal(sonra.emirler.length, onceki);
+  });
+
+  // 744 a, 756 a: karar adımındır. Op10'un kararı Op20'nin bekleyenini kapatmaz ve Op20'ye sayılmaz; başka emrin adımı reddedilir.
+  test('KM-K744 adım başına karar: karar yalnız kendi adımının bekleyenini kapatır, adıma yazılır; bekleyenler OP ile gelir; başka emrin adımı 400', async () => {
+    const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'kaliteci', parola: 'dogru-parola-1' } });
+    assert.equal(giris.statusCode, 200, giris.body);
+    const kalite = String(giris.headers['set-cookie']).split(';')[0] ?? '';
+    const emir = await baslamisEmir(true);
+    const baska = await baslamisEmir();
+    const adimlar = async (id: number) => (await o().vt.tx((db) => adimliEmirAyrintisi(db, id)))!.isEmirleri.map((i) => i.id);
+    const [op10, op20] = await adimlar(emir) as [number, number];
+    const [baskaOp10] = await adimlar(baska) as [number];
+    const say = (adet: number) => o().vt.tx((db) => emirSayim(db, operator, emir, { tur: 'saglam', adet }, { ilkParca: 'gerekli' }));
+    const karar = (govde: unknown) => app.inject({
+      method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${emir}/karar`, headers: { cookie: kalite, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, payload: govde as object,
+    });
+    const bekleyen = async () => (await o().vt.tx((db) => adimKararSayaclari(db, [emir]))).get(emir)?.map((x) => [x.opNo, x.kararBekliyor]);
+
+    await say(2);
+    const r10 = await karar({ karar: 'onay', isEmriId: op10 });
+    assert.deepEqual([r10.statusCode, r10.json()], [200, { adet: 2 }]);
+    await o().vt.tx((db) => emirBitir(db, operator, emir, undefined, undefined, op10));
+    await o().vt.tx((db) => emirBaslat(db, operator, emir, undefined, undefined, op20));
+    await say(3);
+    assert.deepEqual(await bekleyen(), [[10, 0], [20, 3]], 'Op20 kendi kararını bekler');
+    const liste = (await app.inject({ method: 'GET', url: '/api/kalite-merkezi/ilk-parca/bekleyenler', headers: { cookie: kalite } })).json() as {
+      emirler: { uretimEmriId: number; isEmriId: number | null; opNo: number | null; kararBekleyenAdet: number }[];
+    };
+    assert.deepEqual(liste.emirler.filter((e) => e.uretimEmriId === emir).map((e) => [e.isEmriId, e.opNo, e.kararBekleyenAdet]), [[op20, 20, 3]]);
+    assert.deepEqual((await o().vt.tx((db) => adimIlkParcaKararlari(db, [op10, op20]))).get(op20), undefined, 'Op10 onayı Op20 kararı değildir');
+    assert.equal((await karar({ karar: 'onay', isEmriId: baskaOp10 })).statusCode, 400, 'başka emrin adımı');
+    assert.equal((await karar({ karar: 'onay', isEmriId: 0 })).statusCode, 400);
+    assert.deepEqual(await bekleyen(), [[10, 0], [20, 3]], 'reddedilen karar sayımı değiştirmez');
+    const r20 = await karar({ karar: 'ret', isEmriId: op20 });
+    assert.deepEqual([r20.statusCode, r20.json()], [200, { adet: 3 }]);
+    const kararlar = await o().vt.tx((db) => adimIlkParcaKararlari(db, [op10, op20, op10]));
+    assert.deepEqual([...kararlar].map(([id, k]) => [id, k.karar, k.kisiId !== null]).sort(), [[op10, 'onay', true], [op20, 'ret', true]].sort());
+    assert.equal((await o().vt.tx((db) => adimIlkParcaKararlari(db, []))).size, 0);
+    // 756 a: iş emirsiz (eski) karar hiçbir adıma sayılmaz.
+    await o().vt.tx((db) => ilkParcaKarari(db, yoneticiId, baska, 'onay'));
+    assert.equal((await o().vt.tx((db) => adimIlkParcaKararlari(db, [baskaOp10]))).size, 0);
+    assert.deepEqual(await o().vt.sorgu<{ isEmriId: number | null; karar: string }>(
+      'SELECT is_emri_id AS "isEmriId", karar FROM kalite_merkezi_ilk_parca_karari WHERE uretim_emri_id = $1 ORDER BY id', [emir]),
+    [{ isEmriId: op10, karar: 'onay' }, { isEmriId: op20, karar: 'ret' }]);
   });
 
   // 262 a: Üretim emirlerinin hazırlık kapısı kalibrasyonu emir başına buradan okur; emrin cihazları emrin muayenelerindedir.

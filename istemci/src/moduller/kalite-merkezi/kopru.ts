@@ -189,14 +189,15 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => 
     if (ilk === 'karantina-partileri' && ikinci !== undefined && p.length === 3 && g.yontem === 'GET') {
       return tamam(await istemci.get<KmKarantinaPartileriCevabi>(`/kalite-merkezi/ncr/${parca(ikinci)}/karantina-partileri`));
     }
-    // İlk parça kararı (325 a; ILK_PARCA_BETIGI): karar bekleyen emirlerin listesi ve emir başına onay ya da ret.
+    // İlk parça kararı (325 a; ILK_PARCA_BETIGI): karar bekleyen adımların listesi ve adım başına (744 a) onay ya da ret.
     if (ilk === 'ilk-parca' && ikinci === 'bekleyenler' && p.length === 3 && g.yontem === 'GET') {
       return tamam(await istemci.get<KmIlkParcaBekleyenCevabi>('/kalite-merkezi/ilk-parca/bekleyenler'));
     }
     if (ilk === 'ilk-parca' && ikinci !== undefined && ucuncu === 'karar' && p.length === 4 && g.yontem === 'POST') {
       if (!/^[1-9]\d{0,9}$/.test(ikinci)) return ret(400, 'Üretim emri kimliği geçersiz.');
       const govde = (typeof g.govde === 'string' ? JSON.parse(g.govde) : g.govde) as Partial<KmIlkParcaGovdesi> | null;
-      const cevap = await tekrarKorumaliGonder((d) => istemci.post<KmIlkParcaCevabi>(`/kalite-merkezi/ilk-parca/${ikinci}/karar`, { karar: govde?.karar },
+      const cevap = await tekrarKorumaliGonder((d) => istemci.post<KmIlkParcaCevabi>(`/kalite-merkezi/ilk-parca/${ikinci}/karar`,
+        { karar: govde?.karar, ...(typeof govde?.isEmriId === 'number' ? { isEmriId: govde.isEmriId } : {}) },
         { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }));
       return tamam(cevap);
     }

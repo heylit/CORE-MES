@@ -149,8 +149,21 @@ export async function karantinaYaz(db: Db, ncrKimlik: string, stokHareketiId: nu
   await db.sorgu('INSERT INTO kalite_merkezi_karantina (ncr_kimlik, stok_hareketi_id, kisi_id) VALUES ($1, $2, $3)', [ncrKimlik, stokHareketiId, kisiId]);
 }
 
-export async function ilkParcaKarariYaz(db: Db, uretimEmriId: number, karar: 'onay' | 'ret', adet: number, kisiId: number): Promise<void> {
-  await db.sorgu('INSERT INTO kalite_merkezi_ilk_parca_karari (uretim_emri_id, karar, adet, kisi_id) VALUES ($1, $2, $3, $4)', [uretimEmriId, karar, adet, kisiId]);
+// isEmriId: kararın ait olduğu adım (744 a); iş emirsiz emirde boş.
+export async function ilkParcaKarariYaz(db: Db, uretimEmriId: number, karar: 'onay' | 'ret', adet: number, kisiId: number, isEmriId: number | null): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO kalite_merkezi_ilk_parca_karari (uretim_emri_id, karar, adet, kisi_id, is_emri_id) VALUES ($1, $2, $3, $4, $5)',
+    [uretimEmriId, karar, adet, kisiId, isEmriId],
+  );
+}
+
+// 744 a: adım başına son karar; iş emirsiz eski karar hiçbir adıma sayılmaz (756 a).
+export function adimIlkParcaSonKararlari(db: Db, isEmriIdler: readonly number[]): Promise<{ isEmriId: number; karar: 'onay' | 'ret'; zaman: string; kisiId: number | null }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT ON (is_emri_id) is_emri_id AS "isEmriId", karar, to_json(zaman) #>> '{}' AS zaman, kisi_id AS "kisiId"
+     FROM kalite_merkezi_ilk_parca_karari WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, zaman DESC, id DESC`,
+    [[...isEmriIdler]],
+  );
 }
 
 // Emir başına son karar; aynı anda verilen iki kararda sonra yazılan kazanır.

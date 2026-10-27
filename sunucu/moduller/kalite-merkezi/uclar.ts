@@ -145,7 +145,7 @@ export const uclar: Uc[] = [
     parametre: kmIlkParcaParametresi,
     govde: kmIlkParcaGovdesi,
     cevap: kmIlkParcaCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => servis.ilkParcaKarari(db, kullanici.id, parametre.uretimEmriId, govde.karar),
+    isle: ({ db, kullanici, parametre, govde }) => servis.ilkParcaKarari(db, kullanici.id, parametre.uretimEmriId, govde.karar, govde.isEmriId ?? null),
   }),
   uc({
     yontem: 'POST',

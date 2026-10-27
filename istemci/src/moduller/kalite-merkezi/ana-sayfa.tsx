@@ -26,8 +26,10 @@ function IlkParcaBekleyen() {
   const o = useQuery({ queryKey: ['kalite-merkezi', 'ilk-parca', 'bekleyenler'], queryFn: () => api.get<KmIlkParcaBekleyenCevabi>('/kalite-merkezi/ilk-parca/bekleyenler') });
   const emirler = o.data?.emirler;
   const adet = emirler?.reduce((t, e) => t + e.kararBekleyenAdet, 0);
+  // Satır adım başınadır (744 a); kart emir sayar.
+  const emirSayisi = emirler === undefined ? undefined : new Set(emirler.map((e) => e.uretimEmriId)).size;
   return (
-    <SayiKarti baslik="İlk parça kararı bekleyen emir" simge="check" ton="uyari" sayi={emirler?.length}
+    <SayiKarti baslik="İlk parça kararı bekleyen emir" simge="check" ton="uyari" sayi={emirSayisi}
       altMetin={adet === undefined ? undefined : `${adet.toLocaleString('tr-TR')} adet karar bekliyor`} yol="/kalite-merkezi" hata={o.isError} />
   );
 }

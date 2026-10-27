@@ -178,15 +178,18 @@ describe('Kalite Merkezi kuralları', () => {
     assert.deepEqual(dofDurumu('k', { no: 'D1', durum: 'Açık', kapanis: '2026-10-23' }), { kimlik: 'k', no: 'D1', durum: 'Açık', kapanis: null });
   });
 
-  test('KM-K325 ilk parça bekleyenleri: yalnız karar bekleyen adedi sıfırdan büyük emirler, emir sırasıyla; sayacı olmayan emir yok sayılır', () => {
+  test('KM-K325, 744 a ilk parça bekleyenleri: adım başına yalnız karar bekleyen adedi sıfırdan büyük satırlar, emir ve OP sırasıyla; sayacı olmayan emir yok sayılır', () => {
     const emir = (id: number, adet = 10) => ({ id, emirNo: `E-${id}`, parcaNo: `P-${id}`, parcaAd: `Parça ${id}`, adet });
-    const sayac = (kararBekliyor: number) => ({ kararBekliyor, red: 0 });
+    const adim = (isEmriId: number | null, opNo: number | null, kararBekliyor: number) => ({ isEmriId, opNo, kararBekliyor });
     assert.deepEqual(ilkParcaBekleyenleri([], new Map()), []);
     assert.deepEqual(ilkParcaBekleyenleri([emir(1)], new Map()), [], 'sayacı yok');
-    assert.deepEqual(ilkParcaBekleyenleri([emir(1)], new Map([[1, sayac(0)]])), [], 'bekleyen yok');
-    assert.deepEqual(ilkParcaBekleyenleri([emir(3, 5), emir(1), emir(2)], new Map([[1, sayac(2)], [2, sayac(0)], [3, sayac(5)]])), [
-      { uretimEmriId: 1, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça 1', adet: 10, kararBekleyenAdet: 2 },
-      { uretimEmriId: 3, emirNo: 'E-3', parcaNo: 'P-3', parcaAd: 'Parça 3', adet: 5, kararBekleyenAdet: 5 },
+    assert.deepEqual(ilkParcaBekleyenleri([emir(1)], new Map([[1, [adim(11, 10, 0)]]])), [], 'bekleyen yok');
+    assert.deepEqual(ilkParcaBekleyenleri([emir(3, 5), emir(1), emir(2)], new Map([
+      [1, [adim(12, 20, 3), adim(11, 10, 2)]], [2, [adim(21, 10, 0)]], [3, [adim(null, null, 5)]],
+    ])), [
+      { uretimEmriId: 1, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça 1', isEmriId: 11, opNo: 10, adet: 10, kararBekleyenAdet: 2 },
+      { uretimEmriId: 1, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça 1', isEmriId: 12, opNo: 20, adet: 10, kararBekleyenAdet: 3 },
+      { uretimEmriId: 3, emirNo: 'E-3', parcaNo: 'P-3', parcaAd: 'Parça 3', isEmriId: null, opNo: null, adet: 5, kararBekleyenAdet: 5 },
     ]);
   });
 
