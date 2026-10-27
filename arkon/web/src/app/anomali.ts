@@ -1,6 +1,6 @@
 import { AKStore } from '../data/store';
 import { ANOMALI_DONEM_ETIKETI, ANOMALI_DURUM_ETIKETI, ANOMALI_DURUM_RENGI, anomaliAdedi, anomaliOrani, gunCubugu, isaretliSayisi, istasyonIsareti, istasyonlariSirala, kapaliKurallar, kisaTarih, oranRengi } from '../data/anomali';
-import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from '../data/anomali';
+import type { AnomaliDonemi, AnomaliDurumu, AnomaliIstasyonu, AnomaliIstatistigi, Anomaliler } from '../data/anomali';
 import { merkezVar } from './cizim-merkezi';
 import { PageShell } from './pano-planlama';
 import { I, html, pad, pl, useCallback, useEffect, useState } from './temel';
@@ -10,10 +10,10 @@ import { I, html, pad, pl, useCallback, useEffect, useState } from './temel';
    Beklenen: plandaki sıraya göre şu ana kadarki net aktif süreye düşen adet; bilinmeyen değer "–" gösterilir. */
 const ANOMALI_YENILEME_MS = 60000;
 
-const durumChip = d => html`<span className="chip" style=${{ '--c': ANOMALI_DURUM_RENGI[d] }}><i></i>${ANOMALI_DURUM_ETIKETI[d]}</span>`;
-const istasyonChip = i => { const h = istasyonIsareti(i); return h === true ? html`<span className="chip" style=${{ '--c': 'var(--stop)' }}><i></i>${i.girisYok ? 'Giriş yok' : 'Eksik adet'}</span>` : durumChip(h === false ? 'normal' : 'bilinmiyor'); };
-const satir = (key, ad, alt, beklenen, uretilen, sag) => html`<div key=${key} className="anomr"><div><b>${ad}</b>${alt ? html`<small>${alt}</small>` : null}</div><div className="anomn" title="Beklenen / üretilen">${anomaliAdedi(beklenen)} / ${anomaliAdedi(uretilen)}</div>${sag}</div>`;
-const bolum = (baslik, simge, adet, satirlar, bos) => html`<section className="anom glass" aria-label=${baslik}>
+const durumChip = (d: AnomaliDurumu) => html`<span className="chip" style=${{ '--c': ANOMALI_DURUM_RENGI[d] }}><i></i>${ANOMALI_DURUM_ETIKETI[d]}</span>`;
+const istasyonChip = (i: AnomaliIstasyonu) => { const h = istasyonIsareti(i); return h === true ? html`<span className="chip" style=${{ '--c': 'var(--stop)' }}><i></i>${i.girisYok ? 'Giriş yok' : 'Eksik adet'}</span>` : durumChip(h === false ? 'normal' : 'bilinmiyor'); };
+const satir = (key: string, ad: string, alt: string, beklenen: number | null, uretilen: number | null, sag: unknown) => html`<div key=${key} className="anomr"><div><b>${ad}</b>${alt ? html`<small>${alt}</small>` : null}</div><div className="anomn" title="Beklenen / üretilen">${anomaliAdedi(beklenen)} / ${anomaliAdedi(uretilen)}</div>${sag}</div>`;
+const bolum = (baslik: string, simge: string, adet: number, satirlar: unknown[], bos: string) => html`<section className="anom glass" aria-label=${baslik}>
   <div className="anomh"><${I} n=${simge} s=${18} /><b>${baslik}</b><span className="sp"></span><span className="over">${adet}</span></div>
   <div className="anomb">${satirlar.length ? satirlar : html`<small className="anoms">${bos}</small>`}</div>
 </section>`;
@@ -23,7 +23,7 @@ const emekMetni = (e: number | null | undefined) => e != null ? html`<small clas
 const hurdaMetni = (h: number | null) => h ? html`<small className="anoms">${anomaliAdedi(h)} hurda</small>` : null;
 const planDisiMetni = (p: number | null | undefined) => p ? html`<small className="anoms" title="Plana girmemiş işin sağlamı; orana girmez">${anomaliAdedi(p)} plan dışı</small>` : null;
 
-function Bugun({ sekme }) {
+function Bugun({ sekme }: { sekme: unknown }) {
   const bagli = merkezVar();
   const [a, setA] = useState<Anomaliler | null>(null), [hata, setHata] = useState(false), [yasak, setYasak] = useState(false), [mesgul, setMesgul] = useState(false);
   const sor = useCallback((canli: () => boolean = () => true) => {
@@ -66,6 +66,8 @@ function Bugun({ sekme }) {
 const yerelGun = (): string => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
 /* Gün, hafta, ay (kart #1306): TMI'nin kaydettiği günlerden. Oran Σ üretilen / Σ beklenen, performans standart süre / çalışılan süre. */
+// Dönem sayfasındaki istasyon, makine ve kişi kırılımlarının ortak alanları; plan dışı yalnız istasyonda, emek verimi yalnız kişide gelir.
+type Kirilim = { beklenen: number; uretilen: number; hurda: number; oran: number | null; performans: number | null; isaretliGun: number; gun: number; planDisi?: number; emekVerimi?: number | null };
 function Donem({ sekme, donem, tarih, setTarih }: { sekme: unknown; donem: AnomaliDonemi; tarih: string; setTarih: (t: string) => void }) {
   const [v, setV] = useState<AnomaliIstatistigi | null>(null), [hata, setHata] = useState(false), [yasak, setYasak] = useState(false);
   useEffect(() => {
@@ -76,11 +78,11 @@ function Donem({ sekme, donem, tarih, setTarih }: { sekme: unknown; donem: Anoma
       .catch(e => { if (!canli) return; if (e && e.status === 403) setYasak(true); else setHata(true); });
     return () => { canli = false; };
   }, [donem, tarih]);
-  const ust = html`<div className="plantop">${sekme}<label className="fld anomtarih"><span className="over">Tarih</span><input type="date" value=${tarih} max=${yerelGun()} onChange=${e => e.target.value && setTarih(e.target.value)} /></label></div>`;
+  const ust = html`<div className="plantop">${sekme}<label className="fld anomtarih"><span className="over">Tarih</span><input type="date" value=${tarih} max=${yerelGun()} onChange=${(e: { target: HTMLInputElement }) => e.target.value && setTarih(e.target.value)} /></label></div>`;
   if (yasak) return html`${ust}<p className="muted">Üretim anomalisini görme yetkiniz yok.</p>`;
   if (!v) return html`${ust}<p className="muted">${hata ? 'İstatistik şu an alınamadı' : 'Yükleniyor…'}</p>`;
   const enBuyuk = Math.max(0, ...v.gunler.map(g => Math.max(g.beklenen ?? 0, g.uretilen ?? 0)));
-  const kirilim = (r, key, ad, alt) => satir(key, ad, alt, r.beklenen, r.uretilen, html`<div className="anomc"><span className="chip" style=${{ '--c': oranRengi(r.oran) }}><i></i>${anomaliOrani(r.oran)}</span>${hurdaMetni(r.hurda)}${planDisiMetni(r.planDisi)}${r.performans !== null ? html`<small className="anoms">performans ${anomaliOrani(r.performans)}</small>` : null}${emekMetni(r.emekVerimi)}<small className="anoms">${r.isaretliGun ? r.isaretliGun + ' / ' + r.gun + ' gün eksik' : r.gun + ' gün'}</small></div>`);
+  const kirilim = (r: Kirilim, key: string, ad: string, alt: string) => satir(key, ad, alt, r.beklenen, r.uretilen, html`<div className="anomc"><span className="chip" style=${{ '--c': oranRengi(r.oran) }}><i></i>${anomaliOrani(r.oran)}</span>${hurdaMetni(r.hurda)}${planDisiMetni(r.planDisi)}${r.performans !== null ? html`<small className="anoms">performans ${anomaliOrani(r.performans)}</small>` : null}${emekMetni(r.emekVerimi)}<small className="anoms">${r.isaretliGun ? r.isaretliGun + ' / ' + r.gun + ' gün eksik' : r.gun + ' gün'}</small></div>`);
   return html`${ust}
     <div className="anomozet">
       <div><small className="over">Plan uyumu</small><b style=${{ color: oranRengi(v.toplam.oran) }}>${anomaliOrani(v.toplam.oran)}</b><small className="muted">${anomaliAdedi(v.toplam.uretilen)} / ${anomaliAdedi(v.toplam.beklenen)}</small></div>

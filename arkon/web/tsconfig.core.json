@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "strict": true, "noImplicitAny": true },
-  "include": ["src/data", "src/globals.d.ts", "../shared", "../../istemci/src/ortak/cizim/cekirdek"]
+  "include": ["src/data", "src/globals.d.ts", "../shared", "../../istemci/src/ortak/cizim/cekirdek",
+    "src/app/temel.ts", "src/app/balon-yerlesimi.ts", "src/app/yukleyici.ts", "src/app/cizim-merkezi.ts"]
 }

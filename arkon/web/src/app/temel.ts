@@ -4,19 +4,19 @@ import htm from 'htm';
 
 /* ── ölçüm: window.__arkonPerf ── */
 export const PERF = window.__arkonPerf = window.__arkonPerf || [];
-export const perf = (l, t0) => { const ms = Math.round(performance.now() - t0); PERF.push([l, ms]); return ms; };
+export const perf = (l: string, t0: number) => { const ms = Math.round(performance.now() - t0); PERF.push([l, ms]); return ms; };
 export const T0 = performance.now();
 export const { useState, useEffect, useRef, useMemo, useCallback, Fragment } = React;
 export const html = htm.bind(React.createElement);
-export const pad = n => (n < 10 ? '0' : '') + n;
-export const dur = s => { s = Math.max(0, Math.floor(s)); return pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60); };
+export const pad = (n: number) => (n < 10 ? '0' : '') + n;
+export const dur = (s: number) => { s = Math.max(0, Math.floor(s)); return pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60); };
 export const IN_APP = (() => { try { return window.self !== window.top || !!window.ArkonAndroid; } catch (e) { return true; } })();
 /** sayfa bağlantısı: masaüstü dosyada yeni sekme, gömülü/uygulama içinde aynı pencere */
-export const pl = (h, same?) => true ? { href: '#' + h, onClick: e => { e.preventDefault(); location.hash = h; } } : { href: location.href.split('#')[0] + (h ? '#' + h : ''), target: '_blank', rel: 'noopener' };
-export const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export const pl = (h: string, same?: boolean) => true ? { href: '#' + h, onClick: (e: Event) => { e.preventDefault(); location.hash = h; } } : { href: location.href.split('#')[0] + (h ? '#' + h : ''), target: '_blank', rel: 'noopener' };
+export const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 /* ── icons ── */
-export const P = {
+export const P: Record<string, string> = {
   chev: 'M9 6l6 6-6 6', chevd: 'M6 9l6 6 6-6', chevu: 'M6 15l6-6 6 6',
   play: 'M7 4.5v15l12-7.5z', pause: 'M7 4h3.5v16H7zM13.5 4H17v16h-3.5z', stop: 'M5.5 5.5h13v13h-13z', check: 'M4.5 12.5l5 5L19.5 7',
   flag: 'M5 21V4m0 0h11l-2 4 2 4H5', alert: 'M12 3l10 18H2zM12 10v5m0 3v.01', clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3.5 2',
@@ -39,14 +39,14 @@ export const P = {
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 1v4M12 19v4M1 12h4M19 12h4', eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   dash: 'M3 12h3M10 12h4M18 12h3M3 6h18M3 18h18', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4', cube: 'M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5zM12 12l8.5-4.75M12 12v9.5M12 12L3.5 7.25', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5'
 };
-export const FILLED = { play: 1, pause: 1, stop: 1, bolt: 1, next: 1 };
-export const I = ({ n, s = 24, w = 2 }) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" aria-hidden="true" fill=${FILLED[n] ? 'currentColor' : 'none'} stroke=${FILLED[n] ? 'none' : 'currentColor'} strokeWidth=${w} strokeLinecap="round" strokeLinejoin="round"><path d=${P[n]} /></svg>`;
+export const FILLED: Record<string, number> = { play: 1, pause: 1, stop: 1, bolt: 1, next: 1 };
+export const I = ({ n, s = 24, w = 2 }: { n: string; s?: number; w?: number }) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" aria-hidden="true" fill=${FILLED[n] ? 'currentColor' : 'none'} stroke=${FILLED[n] ? 'none' : 'currentColor'} strokeWidth=${w} strokeLinecap="round" strokeLinejoin="round"><path d=${P[n]} /></svg>`;
 
-export const ST = {
+export const ST: Record<string, { l: string; c: string }> = {
   queued: { l: 'Sırada', c: 'var(--idle)' }, setup: { l: 'Hazırlık', c: 'var(--hazard)' }, running: { l: 'Çalışıyor', c: 'var(--run)' },
   paused: { l: 'Duraklatıldı', c: 'var(--hold)' }, stopped: { l: 'Durduruldu', c: 'var(--stop)' }, done: { l: 'Tamamlandı', c: 'var(--done)' }
 };
-export const Chip = ({ s }) => html`<span className="chip" style=${{ '--c': ST[s].c }}><i></i>${ST[s].l}</span>`;
+export const Chip = ({ s }: { s: string }) => html`<span className="chip" style=${{ '--c': ST[s].c }}><i></i>${ST[s].l}</span>`;
 
 /* ── data ── */
 export const ORDERS: Order[] = [
@@ -65,14 +65,14 @@ export const REASONS0: Reason[] = [
   { code: 'D-09', l: 'Toplantı / eğitim', i: 'user', cat: 'p' }, { code: 'D-10', l: 'İş emri yok (plan yok)', i: 'list', cat: 'p' }, { code: 'D-12', l: 'Deneme / numune üretimi', i: 'flag', cat: 'p' }
 ];
 export let REASONS: Reason[] = REASONS0;
-export const reasonColor = r => r.cat === 'p' ? 'var(--done)' : (r.team === 'bakim' ? 'var(--stop)' : 'var(--hold)');
+export const reasonColor = (r: Reason) => r.cat === 'p' ? 'var(--done)' : (r.team === 'bakim' ? 'var(--stop)' : 'var(--hold)');
 REASONS0.forEach(r => { r.c = reasonColor(r); });
-export const reasonOf = code => REASONS.find(r => r.code === code) || null;
-export const isPlannedReason = code => { const r = reasonOf(code); return !!(r && r.cat === 'p'); };
+export const reasonOf = (code: string) => REASONS.find(r => r.code === code) || null;
+export const isPlannedReason = (code: string) => { const r = reasonOf(code); return !!(r && r.cat === 'p'); };
 /* Hurda nedenleri */
 export const SCRAPS0: ScrapReason[] = [{ code: 'H-01', l: 'Ölçü dışı' }, { code: 'H-02', l: 'Yüzey hatası / çizik' }, { code: 'H-03', l: 'Malzeme hatası' }, { code: 'H-04', l: 'Hazırlık parçası' }, { code: 'H-05', l: 'Takım kırılması' }, { code: 'H-06', l: 'Çapak / şekil bozukluğu' }, { code: 'H-09', l: 'Diğer' }];
 export let SCRAPS: ScrapReason[] = SCRAPS0;
-export const scrapOf = code => SCRAPS.find(r => r.code === code) || null;
+export const scrapOf = (code: string) => SCRAPS.find(r => r.code === code) || null;
 export const CALLS = [
   { k: 'bakim', l: 'Bakım', d: 'Mekanik / elektrik destek', i: 'wrench', c: 'var(--stop)', eta: 4 },
   { k: 'kalite', l: 'Kalite', d: 'Ölçüm onayı, ilk parça', i: 'search', c: 'var(--done)', eta: 6 },
@@ -95,10 +95,10 @@ export const BALLS = [
   { id: 5, x: 650, y: 528, l: 'Toplam boy', nom: '42', tol: '±0.10', min: 41.9, max: 42.1, tool: 'Kumpas' }
 ];
 
-export function alpha(c, a) { const m = c.match(/rgba?\(([^)]+)\)/); if (m) { const p = m[1].split(/[ ,\/]+/).filter(Boolean); return 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + a + ')'; } if (c[0] === '#' && c.length === 7) return 'rgba(' + parseInt(c.slice(1, 3), 16) + ',' + parseInt(c.slice(3, 5), 16) + ',' + parseInt(c.slice(5, 7), 16) + ',' + a + ')'; return c; }
+export function alpha(c: string, a: number) { const m = c.match(/rgba?\(([^)]+)\)/); if (m) { const p = m[1].split(/[ ,\/]+/).filter(Boolean); return 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + a + ')'; } if (c[0] === '#' && c.length === 7) return 'rgba(' + parseInt(c.slice(1, 3), 16) + ',' + parseInt(c.slice(3, 5), 16) + ',' + parseInt(c.slice(5, 7), 16) + ',' + a + ')'; return c; }
 export function useNow(ms = 1000) { const [n, s] = useState(Date.now()); useEffect(() => { const i = setInterval(() => s(Date.now()), ms); return () => clearInterval(i); }, [ms]); return n; }
 
 
 /* başka modüllerden değiştirilen paylaşılan durum */
-export function setREASONS(v: any) { REASONS = v; return v; }
-export function setSCRAPS(v: any) { SCRAPS = v; return v; }
+export function setREASONS(v: Reason[]) { REASONS = v; return v; }
+export function setSCRAPS(v: ScrapReason[]) { SCRAPS = v; return v; }
