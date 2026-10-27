@@ -198,11 +198,11 @@ export const uclar = [
     cevap: teklifAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.iskontoOnayla(db, kullanici, parametre.id, govde)),
   }),
-  // 63 b: istenen termini başka siparişi geciktiren satış taslağını plancı onaylar.
+  // 63 b: istenen termini başka siparişi geciktiren satış taslağını onaylar; 237 ve 871: plan.yaz değil, kendi işlemi.
   uc({
     yontem: 'POST',
     yol: '/siparisler/teklifler/:id/termin-onayla',
-    yetki: 'plan.yaz',
+    yetki: 'siparisler.termin-onayla',
     parametre: idParametresi,
     govde: terminOnayGovdesi,
     cevap: teklifAyrintiCevabi,

@@ -80,7 +80,7 @@ const CARPAN_KAYDI = { carpan: 1.5, gerekce: 'Deneme gerekce', kisiId: 4, kisiAd
 const CARPAN_VAR = {
   siparisId: 5, gecerli: CARPAN_KAYDI, gecmis: [CARPAN_KAYDI, { ...CARPAN_KAYDI, carpan: 1.2, gerekce: 'Ilk deneme', zaman: '2026-10-02T09:00:00+03:00' }],
 } satisfies SiparisCarpaniCevabi;
-const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz'] };
+const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz', 'siparisler.termin-onayla'] };
 
 // 148 a: çarpan plan taslağına yazılır; cevap planın kendisidir, burada yalnız taslak kimliği okunur.
 const TASLAGA_YAZILDI = { taslak: { id: 9, surum: 1 } };

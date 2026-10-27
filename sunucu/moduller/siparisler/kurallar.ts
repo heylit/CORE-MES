@@ -116,9 +116,9 @@ export function surumHedefi(iskontoOrani: string, terminOnayiBekler = false): Te
 export const ONAYLANACAK_ISKONTO_YOK = 'Onaylanacak iskonto yok.';
 export const ONAYLANACAK_TERMIN_YOK = 'Plancı onayı bekleyen satış taslağı yok.';
 
-// 293: ayar açıkken sürümü veren kişi kendi iskontosunu onaylayamaz; kapalıyken onay yetkisi yeter.
-export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number): string | null {
-  return acik && surumuVeren === onaylayan ? 'Dört göz kuralı açık: kendi verdiğiniz sürümün iskontosunu başka bir yetkili onaylamalı.' : null;
+// 293 ve 273: ayar açıkken sürümü veren kişi kendi iskontosunu ya da terminini onaylayamaz; kapalıyken onay yetkisi yeter.
+export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number, konu: 'iskonto' | 'termin' = 'iskonto'): string | null {
+  return acik && surumuVeren === onaylayan ? `Dört göz kuralı açık: kendi verdiğiniz sürümün ${konu === 'iskonto' ? 'iskontosunu' : 'terminini'} başka bir yetkili onaylamalı.` : null;
 }
 
 export function teklifGecisReddi(durum: TeklifDurumu, komut: TeklifKomutu): string | null {
