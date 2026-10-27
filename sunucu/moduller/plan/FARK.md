@@ -187,6 +187,7 @@ Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı k
 Testler: plan-cozucusu 741 a (gece 00:30'da iş şimdiden başlar, vardiya bitince akşamı bekler, gece vardiyasız tezgâh sabahı bekler); istemci motor 741 a.
 
 ## Canlıya alma yeniden dizmez (762 b, 2026-10-27)
+- Kullanıcı onayı: mesaj cmsg_019jymdq1CtoFcRqjZv7Ln6X44fgfvedVKYaZkeSDxyvPZ (2026-10-27 06:11:31Z): "762: b, ADR ve davranış değiştiren düzeltme onaylı".
 - Canlıya alma sunucu motorunu çağırmaz; onaylanan taslağın saatleri aynen canlıya geçer. Taslak yazıldıktan sonra zaman geçse de kuyruk
   yeniden dizilmez, 737 a kayma reddi (`geriKayan`) ve "Planı kur'u yeniden çalıştırıp" 409'ları kalktı. Geçmişte kalan başlangıç terminalde
   gerçek saatle kaydedilir. Canlıya alma cevabında `motorFarki` artık dönmez (alan isteğe bağlı kaldı; kuyruk yaz döndürmeye devam eder).
