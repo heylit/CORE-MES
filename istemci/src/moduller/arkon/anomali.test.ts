@@ -70,8 +70,8 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     expect(sureMetni(130)).toBe('2 sa 10 dk');
     expect(sureMetni(120)).toBe('2 sa');
     expect(sureMetni(1620)).toBe('1 g 3 sa');
-    expect(kapaliZamanKurallari({ gecGirisDk: 30, gecTeslimDk: 0, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual([]);
-    expect(kapaliZamanKurallari({ gecGirisDk: null, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual(['Geç giriş', 'Girdi gecikmesi']);
+    expect(kapaliZamanKurallari({ gecGirisDk: 30, gecTeslimDk: 0, bitisKaymaDk: 60, sureAsimYuzde: 20 })).toEqual([]);
+    expect(kapaliZamanKurallari({ gecGirisDk: null, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual(['Geç giriş', 'Girdi gecikmesi', 'Bitiş kayması', 'Süre aşımı']);
   });
 
   it('köprü: Arkon /anomali-olaylari isteği TMI /arkon/anomali-olaylari ucuna gider; sözleşme tipiyle uyumlu; yazma eşlenmez', async () => {

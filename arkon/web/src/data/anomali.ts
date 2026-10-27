@@ -118,7 +118,8 @@ export function sureMetni(dk: number): string {
   return Math.floor(sa / 24) + ' g' + (sa % 24 ? ' ' + (sa % 24) + ' sa' : '');
 }
 
-/** Zaman kurallarından kapalı olanlar; plan sapması eşikleri bu sürümde olay üretmez, listede yoktur. */
+/** Zaman kurallarından kapalı olanlar (eşiği boş). */
 export function kapaliZamanKurallari(e: AnomaliOlaylari['esikler']): string[] {
-  return [e.gecGirisDk === null ? 'Geç giriş' : null, e.gecTeslimDk === null ? 'Girdi gecikmesi' : null].filter((x): x is string => x !== null);
+  return [e.gecGirisDk === null ? 'Geç giriş' : null, e.gecTeslimDk === null ? 'Girdi gecikmesi' : null, e.bitisKaymaDk === null ? 'Bitiş kayması' : null,
+    e.sureAsimYuzde === null ? 'Süre aşımı' : null].filter((x): x is string => x !== null);
 }

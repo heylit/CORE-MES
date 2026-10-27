@@ -7,13 +7,13 @@ import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { istasyonlar, kisininIzinliIsMerkezleri, makineler } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { canliSira, tabanPlani } from '../plan/disari.ts';
+import { canliSira, planSapmalari, tabanPlani } from '../plan/disari.ts';
 import type { Kaynak } from '../plan/disari.ts';
 import { isEmriTeslimleri } from '../stok/disari.ts';
-import { isEmriPlanBilgileri, isEmriZamanlari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { bitenIsEmirleri, isEmriPlanBilgileri, isEmriZamanlari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri } from '../vardiya/disari.ts';
 import {
-  araliklariBirlestir, ardilEtkisiDk, durusAraliklari, gecikmeHukmu, girdiAni, girisAni, gunEkle, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk, topluAsimDk,
+  araliklariBirlestir, ardilEtkisiDk, durusAraliklari, esikHukmu, gecikmeHukmu, girdiAni, girisAni, gunEkle, netFarkDk, netIleri, olayEylemi, sureAsimDk, tahminiBitis, teslimRiskiDk, topluAsimDk,
 } from './kurallar.ts';
 import type { ArdilGirdisi, GecikmeHukmu, NetAralik } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -30,6 +30,8 @@ const OLAY_SINIRI = 500;
 const KISI_KIRILIMI = 'arkon.anomali-kisi' as const;
 // Toplu girişler bu kadar geriye bakılarak bir kez değerlendirilir.
 const TOPLU_PENCERE_MS = 2 * 24 * 3_600_000;
+// Plan sapmasında bu kadar önce biten işlere de bakılır (biten iş plan listesinden düşer, süre oranı yalnız bitmiş işte vardır).
+const SAPMA_PENCERE_MS = 24 * 3_600_000;
 
 export interface ZamanEsikleri {
   gecGirisDk: number | null;
@@ -217,6 +219,23 @@ export async function zamanOlaylariniYenile(db: Db, simdi: number = Date.now()):
     });
   }
 
+  // 781 a: plan sapması plan modülündedir (planSapmalari); Arkon bitiş kaymasını eşikle olaya çevirir. Biten iş aşağıda ayrıca işlenir.
+  const acikKayma = mevcut.filter((o) => o.tur === 'bitis-kaymasi' && o.kapanis === null).map((o) => o.isEmriId);
+  const sapmaAcik = esik.bitisKaymaDk !== null || esik.sureAsimYuzde !== null || acikKayma.length > 0;
+  const biten = sapmaAcik ? (await bitenIsEmirleri(db, iso(simdi - SAPMA_PENCERE_MS), iso(simdi))).filter((b) => !idKumesi.has(b.isEmriId)) : [];
+  // Biten işin önceki turda yazılmış olayları da okunur: kapalı olay ikinci kez açılmaz.
+  if (biten.length > 0) for (const o of await sorgular.anomaliOlaylariYenilenecek(db, biten.map((x) => x.isEmriId))) if (o.kayitId === null) olaylar.set(olayAnahtari(o.tur, o.isEmriId), o);
+  const sapmaIdleri = [...new Set([...idler, ...biten.map((b) => b.isEmriId), ...acikKayma])];
+  const sapmalar = sapmaAcik && sapmaIdleri.length > 0 ? await planSapmalari(db, { isEmriIdleri: sapmaIdleri, simdi }) : new Map<number, never>();
+  const kaymalar: Hukum[] = [];
+  for (const d of durumlar.values()) {
+    const sp = sapmalar.get(d.is.id);
+    if (sp === undefined || sp.canli === null) continue;
+    const o = olaylar.get(olayAnahtari('bitis-kaymasi', d.is.id));
+    const hukum = esikHukmu({ deger: sp.bitisKaymasiDk, esik: esik.bitisKaymaDk, acik: acikMi('bitis-kaymasi', d.is.id), sonDeger: o?.dakika ?? 0, bitti: sp.gercekBitis !== null });
+    kaymalar.push({ tur: 'bitis-kaymasi', d, hukum, planAni: Date.parse(sp.canli.bitis), gercek: anOku(sp.gercekBitis), tabanDakika: sp.tabanBitisKaymasiDk, kok: null });
+  }
+
   const kimlikler = new Map<string, number>([...olaylar].map(([k, o]) => [k, o.id]));
   const islenen = new Set<string>();
   const uygula = async (h: Hukum): Promise<void> => {
@@ -245,7 +264,43 @@ export async function zamanOlaylariniYenile(db: Db, simdi: number = Date.now()):
       });
     }
   };
-  for (const h of [...kokler, ...ardillar, ...riskler]) await uygula(h);
+  for (const h of [...kokler, ...ardillar, ...riskler, ...kaymalar]) await uygula(h);
+
+  // Biten iş: açık bitiş kayması son değeriyle kapanır; eşiği aşan kayma ve süre aşımı kapalı olay olarak bir kez yazılır.
+  if (biten.length > 0) {
+    const bilgi = await isEmriPlanBilgileri(db, biten.map((b) => b.isEmriId));
+    const bitenKaynaklar = [...new Map(biten.flatMap((b) => { const k = sapmalar.get(b.isEmriId)?.canli?.kaynak; return k ? [[kaynakAnahtari(k), k] as const] : []; })).values()];
+    const bitenTakvim = await netAraliklar(db, bitenKaynaklar, simdi);
+    const emirNolari = new Map<number, string | null>();
+    const emirNo = async (id: number): Promise<string | null> => {
+      if (!emirNolari.has(id)) emirNolari.set(id, (await uretimEmriOzeti(db, id))?.emirNo ?? null);
+      return emirNolari.get(id) ?? null;
+    };
+    for (const b of biten) {
+      const sp = sapmalar.get(b.isEmriId);
+      if (sp === undefined || sp.canli === null) continue;
+      const kaynak = sp.canli.kaynak;
+      const ac = async (tur: AnomaliOlayTuru, dakika: number, tabanDakika: number | null) => sorgular.anomaliOlayiAc(db, {
+        tur, isEmriId: b.isEmriId, uretimEmriId: b.uretimEmriId, emirNo: await emirNo(b.uretimEmriId), opNo: bilgi.get(b.isEmriId)?.opNo ?? null,
+        istasyonId: b.istasyonId ?? bilgi.get(b.isEmriId)?.istasyonId ?? null, kaynakTur: kaynak.tur, kaynakId: kaynak.id, kayitId: null, planSurumu: sp.planSurumu,
+        planAni: sp.canli!.bitis, tabanAni: sp.taban?.bitis ?? null, tabanDakika, gercekAni: sp.gercekBitis, dakika, kokOlayId: null, acilis: iso(simdi), kapanis: iso(simdi),
+      });
+      const kAnahtar = olayAnahtari('bitis-kaymasi', b.isEmriId);
+      const ko = olaylar.get(kAnahtar);
+      if (ko !== undefined && ko.kapanis === null) {
+        islenen.add(kAnahtar);
+        await sorgular.anomaliOlayiGuncelle(db, ko.id, {
+          dakika: Math.max(0, sp.bitisKaymasiDk ?? ko.dakika), tabanDakika: sp.tabanBitisKaymasiDk, gercekAni: sp.gercekBitis, kokOlayId: null, guncelleme: iso(simdi), kapanis: iso(simdi),
+        });
+      } else if (ko === undefined && esik.bitisKaymaDk !== null && sp.bitisKaymasiDk !== null && sp.bitisKaymasiDk > esik.bitisKaymaDk) {
+        await ac('bitis-kaymasi', sp.bitisKaymasiDk, sp.tabanBitisKaymasiDk);
+      }
+      const ar = bitenTakvim.get(kaynakAnahtari(kaynak)) ?? null;
+      const planliDk = ar === null ? null : netFarkDk(ar, Date.parse(sp.canli.baslangic), Date.parse(sp.canli.bitis));
+      const asim = sureAsimDk({ oran: sp.sureOrani, planliDk, esikYuzde: esik.sureAsimYuzde });
+      if (asim !== null && asim > 0 && !olaylar.has(olayAnahtari('sure-asimi', b.isEmriId))) await ac('sure-asimi', asim, null);
+    }
+  }
 
   // Plandan düşen (biten, iptal edilen) ya da artık hesaba girmeyen işin açık olayı kapanır; giriş olayında gerçekleşen an giriştir.
   for (const [anahtar, o] of olaylar) {

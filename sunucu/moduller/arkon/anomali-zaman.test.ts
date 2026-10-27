@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ardilEtkisiDk, durusAraliklari, gecikmeHukmu, girdiAni, girisAni, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk, topluAsimDk } from './kurallar.ts';
+import { ardilEtkisiDk, durusAraliklari, esikHukmu, gecikmeHukmu, girdiAni, girisAni, netFarkDk, netIleri, olayEylemi, sureAsimDk, tahminiBitis, teslimRiskiDk, topluAsimDk } from './kurallar.ts';
 
 const DK = 60_000;
 const saat = (h: number): number => Date.UTC(2026, 9, 27) + h * 3_600_000;
@@ -95,4 +95,23 @@ test('AR-AN-18 toplu giriş (784 a): adet x birim süre, mola ve kayıtlı duru�
   assert.equal(topluAsimDk({ ...g, birimSureDk: null }), null);
   assert.equal(topluAsimDk({ ...g, bas: null }), null, 'önceki giriş bilinmiyor');
   assert.equal(topluAsimDk({ ...g, bas: saat(11) }), 120, 'aynı anda iki giriş: net süre 0');
+});
+
+test('plan sapması (781 a): bitiş kayması eşiği aşınca olay; eşik boşsa kapalı; okunamayan değerde açık olay son değerini korur', () => {
+  const g = { deger: 90, esik: 60, acik: false, sonDeger: 0, bitti: false };
+  assert.deepEqual(esikHukmu(g), { dakika: 90, bitti: false });
+  assert.equal(esikHukmu({ ...g, deger: 60 }), null);
+  assert.equal(esikHukmu({ ...g, esik: null }), null);
+  assert.deepEqual(esikHukmu({ ...g, esik: null, acik: true, deger: 30 }), { dakika: 30, bitti: false });
+  assert.deepEqual(esikHukmu({ ...g, acik: true, deger: null, sonDeger: 75, bitti: true }), { dakika: 75, bitti: true });
+  assert.equal(esikHukmu({ ...g, deger: null }), null);
+  assert.deepEqual(esikHukmu({ ...g, acik: true, deger: -20 }), { dakika: 0, bitti: false }, 'öne geçen iş eksi dakika yazmaz');
+});
+
+test('süre aşımı: oran eşik yüzdesini aşarsa planlı süre x (oran - 1) dakika; eşik boş ya da biri bilinmiyorsa null', () => {
+  assert.equal(sureAsimDk({ oran: 1.5, planliDk: 120, esikYuzde: 20 }), 60);
+  assert.equal(sureAsimDk({ oran: 1.2, planliDk: 120, esikYuzde: 20 }), null, 'eşiğe eşit');
+  assert.equal(sureAsimDk({ oran: 1.5, planliDk: 120, esikYuzde: null }), null);
+  assert.equal(sureAsimDk({ oran: null, planliDk: 120, esikYuzde: 20 }), null);
+  assert.equal(sureAsimDk({ oran: 1.5, planliDk: 0, esikYuzde: 20 }), null);
 });

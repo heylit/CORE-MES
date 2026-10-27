@@ -245,6 +245,21 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
     assert.equal(toplu[0]!.emirNo, 'ANZ-B');
   });
 
+  test('plan sapması (781 a): geç biten işte bitiş kayması ve süre aşımı kapalı olay olarak bir kez yazılır', async () => {
+    assert.equal((await ayarYaz('arkon.anomali-bitis-kayma-dk', 30)).durum, 200);
+    assert.equal((await ayarYaz('arkon.anomali-sure-asim-yuzde', 20)).durum, 200);
+    // B 10-12 planlı; 10:00'da başlayıp 13:00'te bitti: 60 dk kayma, süre oranı 1,5 (120 dk planın 60 dk fazlası).
+    await o().sahip.sorgu(
+      "UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 10 WHERE id = $1",
+      [b10, anMetni(10), anMetni(13)]);
+    await yenile(13.5);
+    await yenile(13.75);
+    const satirlar = await o().sahip.sorgu<{ tur: string; dakika: number; kapanis: string | null; emirNo: string | null }>(
+      `SELECT tur, dakika::float8 AS dakika, kapanis::text AS kapanis, emir_no AS "emirNo" FROM arkon_anomali_olayi
+        WHERE is_emri_id = $1 AND tur IN ('bitis-kaymasi', 'sure-asimi') ORDER BY tur`, [b10]);
+    assert.deepEqual(satirlar.map((x) => [x.tur, Math.round(x.dakika), x.kapanis !== null, x.emirNo !== null]), [['bitis-kaymasi', 60, true, true], ['sure-asimi', 60, true, true]]);
+  });
+
   test('veri kapsamı: başka iş merkezine kısıtlı kişi olayları görmez; kısıtsız kişi görür', async () => {
     const baska = await istek<{ id: number }>(yonetici, 'POST', '/is-merkezleri', { kod: 'ZM2', ad: 'Başka merkez' });
     const kisitli = await kisiKur('kapsamli1', ['arkon.hazirlik', 'sayfa.arkon']);

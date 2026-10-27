@@ -2502,6 +2502,22 @@ export function olayEylemi(mevcut: { kapali: boolean } | null, hukum: GecikmeHuk
   return { tur: 'guncelle', ...hukum };
 }
 
+// Plan sapması (781 a): bitiş kayması plan modülünden gelir, Arkon eşikle olaya çevirir. Eşik boşsa kural kapalı; açık olay eşikten bağımsız
+// izlenir; değer okunamayan turda açık olay son değerini korur.
+export function esikHukmu(g: { deger: number | null; esik: number | null; acik: boolean; sonDeger: number; bitti: boolean }): GecikmeHukmu | null {
+  if (g.esik === null && !g.acik) return null;
+  if (g.deger === null) return g.acik ? { dakika: g.sonDeger, bitti: g.bitti } : null;
+  if (!g.acik && !(g.deger > (g.esik as number))) return null;
+  return { dakika: Math.max(0, g.deger), bitti: g.bitti };
+}
+
+// Süre aşımı: biten işin gerçek net süresi / planlı net süresi eşik yüzdesini aşıyorsa aşan dakika (planlı süre x (oran - 1)); aşmıyorsa,
+// eşik boşsa ya da biri bilinmiyorsa null.
+export function sureAsimDk(g: { oran: number | null; planliDk: number | null; esikYuzde: number | null }): number | null {
+  if (g.esikYuzde === null || g.oran === null || g.planliDk === null || !(g.planliDk > 0)) return null;
+  return (g.oran - 1) * 100 > g.esikYuzde ? (g.oran - 1) * g.planliDk : null;
+}
+
 // Terminal durum kayıtlarından duruş aralıkları: duraklatma ve durma, sonraki başka durum kaydına (yoksa `bit`e) kadar.
 export function durusAraliklari(kayitlar: readonly { zaman: number; durum: string | null }[], bit: number): NetAralik[] {
   const sirali = [...kayitlar].sort((a, b) => a.zaman - b.zaman);

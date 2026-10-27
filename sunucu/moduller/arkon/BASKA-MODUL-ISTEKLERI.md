@@ -79,10 +79,10 @@ imzayı ya da davranışı değiştirirse bu test kırmızı olur ve kırılan m
     `makineAyrimlari(db, emirId, makineIdleri)` başlatma ve devam denetimiyle aynı `atanan` ve aynı ayrım kuralını verir; Arkon `GET /arkon/makine-ayrimlari` bunu çağırır,
     kural kopyalanmaz.
 
-16. **Plan sapması okuması (kart 764, 781 a), plan'dan. Bekliyor (782 B):**
+16. **Plan sapması okuması (kart 764, 781 a), plan'dan. KARŞILANDI (782 B):**
     `planSapmalari(db, { isEmriIdleri, simdi? })` iş emri başına tahmini bitiş, bitiş kayması, süre oranı, tezgah ve sıra uyumunu verir; Arkon bunu
-    `arkon.anomali-bitis-kayma-dk` ve `arkon.anomali-sure-asim-yuzde` eşikleriyle `bitis-kaymasi` ve `sure-asimi` olayına çevirir. Gelene kadar iki eşik
-    ayarda görünür ama olay üretmez; tahmini bitiş Arkon'da plandaki net süreden kurulur (`tahminiBitis`).
+    `arkon.anomali-bitis-kayma-dk` ve `arkon.anomali-sure-asim-yuzde` eşikleriyle `bitis-kaymasi` ve `sure-asimi` olayına çevirir. Ardıl etkisinin
+    tahmini bitişi hâlâ Arkon'da plandaki net süreden kurulur (`tahminiBitis`); plandakine geçmek ayrı karardır. Tezgah ve sıra uyumu olaya çevrilmez.
 17. **Zaman olayları için bildirim türleri (kart 764, 769 a), paylasilan/sozlesme/bildirim.ts'ten:** `arkon.gec-giris`, `arkon.gec-teslim`,
     `arkon.ardil-etkisi`, `arkon.teslim-riski`; olay başına bir kez (`kaynakKimlik` = tür + iş emri). Ayrı küçük yamayla gelir; `bildirim` sütunu o zamana kadar boştur.
 
