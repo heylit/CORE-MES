@@ -8,7 +8,6 @@ import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type Pake
 import {
   SUZGEC_ALANLARI, paketleriSuz, suzgecOku, suzgecSayisi, suzgecSecenekleri, type PaketSuzgeci, type SuzgecAlani,
 } from '../../../../../../arkon/web/src/data/paket-suzgec.ts';
-import { STUDYO_KAPALI, studyoAcilir } from '../../../../../../arkon/web/src/data/studyo-yonu.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, planEtiketi, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { sablonUygula, tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
@@ -16,6 +15,7 @@ import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul, istasyonListesi, makineBul } from '../cekirdek/tesis.ts';
 import { yerel } from '../cekirdek/yerel.ts';
+import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/baglam.ts';
@@ -25,6 +25,8 @@ import { Bolmeli, Cip } from './denetimler.tsx';
 import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
+import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
+import { kmPlani, kmSahibi } from './km-cizim.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
@@ -55,7 +57,6 @@ const MerkezDurumu = lazy(async () => {
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
 
 type Sekme = 'info' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
-interface Cizim { id: string; name: string; files: PkgFile[]; primary: string | null; bal?: PlanItem[]; cfg?: unknown; updatedAt: number }
 
 // Ağ klasörü (store.ts Folder): A0'ın depo yüzünde yok, aynı nesneden tipli okunur (A0'a istek: yüze eklensin).
 interface KlasorTutamaci { name: string }
@@ -116,7 +117,7 @@ const HAZIRLIK_KISAYOLLARI = [
 ] as const;
 
 export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
-  const { depo, ayarlar, yetkiVar, sayfaGorunur, git, tmiyeGit, onizle: onizlemeAc } = useArkon();
+  const { depo, ayarlar, yetkiVar, tmiyeGit, onizle: onizlemeAc } = useArkon();
   const durum = useArkonDurumu();
   const { bildir } = useBildirim();
   const tesis = ayarlar.tesis;
@@ -140,7 +141,6 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [kapali, kapaliYaz] = useState<string[]>([]);
   const [suzAcik, suzAcikYaz] = useState(() => yerel.oku('prepSuzAcik') === true);
   const suzAc = (v: boolean) => { suzAcikYaz(v); yerel.yaz('prepSuzAcik', v); };
-  const [cizimler, cizimlerYaz] = useState<Cizim[]>([]);
   const [sonuclar, sonuclarYaz] = useState<Record<string, Result>>({});
   const [istekler, isteklerYaz] = useState<SampleRequest[]>([]);
   const [klasor, klasorYaz] = useState<KlasorTutamaci | null>(null);
@@ -157,11 +157,6 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const seciliRef = useRef<Pkg | null>(null);
   seciliRef.current = secili;
   const Folder = klasorOf(depo);
-
-  useEffect(() => {
-    if (sekme !== 'docs') return;
-    depo.DB.all('draws').then((d) => cizimlerYaz((d as Cizim[]).sort((a, b) => b.updatedAt - a.updatedAt)), () => undefined);
-  }, [sekme, depo]);
 
   const yenile = useCallback(async (): Promise<Pkg[]> => {
     const hepsi = ((await depo.DB.all('pkgs')) as Pkg[]).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -254,11 +249,18 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     await depo.DB.del('pkgs', p.id); depo.Bus.send({ type: 'pkg-removed', id: p.id });
     const hepsi = await yenile(); seciliYaz(hepsi[0] || null); soyle('Paket silindi', 'stop');
   };
-  const cizimiAl = (d: Cizim) => {
+  // 789, 795 a: Kalite Merkezi resmi belge merkezindeki dosyasıyla pakete gelir ve ana resim olur; plan onun balonlarıdır, her madde
+  // Kalite Merkezi balon kimliğini taşır.
+  const kmdenAl = async (r: KmResim) => {
     if (!p) return;
-    const plan = d.bal && d.bal.length ? d.bal.map((b) => ({ freq: 'İlk parça', crit: false, ...b })) : (d.primary !== p.primary ? [] : p.plan);
-    yama({ files: d.files.map((f) => ({ ...f })), primary: d.primary, readCfg: d.cfg, plan, partNo: p.partNo || d.name });
-    soyle('“' + d.name + '” pakete eklendi' + (d.bal && d.bal.length ? ' · ' + d.bal.length + ' kontrol noktası' : ''), 'run');
+    if (!duzenler) { yetkisiz(); return; }
+    merkezMesgulYaz(true);
+    try {
+      const f = await depo.Server.merkezdenAl(r.merkezBelgeId), k = merkezDosyasiniKoy(p, f);
+      yama({ files: k.files, primary: f.name, plan: kmPlani(r), kmResim: { id: r.id, surum: r.surum }, partNo: p.partNo || r.ad });
+      soyle('“' + r.ad + '” Kalite Merkezi’nden alındı · ' + r.balonlar.length + ' kontrol noktası', 'run');
+    } catch (e) { soyle('Kalite Merkezi resmi alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
+    merkezMesgulYaz(false);
   };
   // Çizim Merkezi (kart #800): seçilen yayındaki dosya pakete kopyalanır; aynı belge varsa yerine geçer.
   const merkezdenAl = async (belgeId: number, guncelleme: boolean) => {
@@ -267,7 +269,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     merkezMesgulYaz(true);
     try {
       const f = await depo.Server.merkezdenAl(belgeId), r = merkezDosyasiniKoy(p, f);
-      yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
+      yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, ...(r.planSifirla ? { kmResim: null } : {}), partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
       soyle(f.name + (guncelleme ? ' güncellendi' : ' Çizim Merkezi’nden eklendi'), 'run');
       merkezSecYaz(false);
     } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
@@ -291,21 +293,17 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       const ilk = paket.files[0];
       if (ilk) {
         seciliYaz((o) => (o && o.id === p.id ? { ...o, malzemeCizimleri: undefined } : o));
-        yama({ files: paket.files, primary: paket.primary, plan: [], partNo: p.partNo || ilk.name.replace(/\.[^.]+$/, '') });
+        yama({ files: paket.files, primary: paket.primary, plan: [], kmResim: null, partNo: p.partNo || ilk.name.replace(/\.[^.]+$/, '') });
       }
       if (alinamayan.length) soyle('Çizim Merkezi’nden alınamadı: ' + alinamayan.join(', '), 'stop');
       else if (ilk) soyle(paket.files.length + ' malzeme çizimi Çizim Merkezi’nden eklendi', 'run');
     })();
   }, [p?.id]); // paket başına bir kez; seçim değişince bakılır
-  const studyodaAc = async () => {
-    if (!studyoAcilir(sayfaGorunur)) { soyle(STUDYO_KAPALI, 'hold'); return; }
-    await bekleyeniYaz(); if (p) yerel.yaz('labOpen', { pkg: p.id }); git('cizim');
-  };
   const dosyaKaldir = (tur: string) => {
     if (!p) return;
     const files = p.files.filter((x) => x.kind !== tur);
     const primary = files.some((x) => x.name === p.primary) ? p.primary : (files[0] && files[0].name) || null;
-    yama({ files, primary, plan: primary !== p.primary ? [] : p.plan });
+    yama({ files, primary, ...(primary !== p.primary ? { plan: [], kmResim: null } : {}) });
   };
   const klasorSec = async () => {
     if (!Folder || !Folder.supported) { soyle('Bu tarayıcı klasör erişimini desteklemiyor · paket dosyası kullan', 'hold'); return; }
@@ -440,9 +438,9 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     anahtar: p.id + ':' + p.primary + ':' + p.files.length + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: p.primary,
     hazirVeri: acikDosyalar?.derived ?? null, ayar: p.readCfg, balonlar: p.plan as TeknikResimKontrolu['balonlar'],
     balonlarYaz: (nb) => yama({ plan: nb.map((b) => ({ freq: 'İlk parça', crit: false, ...b }) as PlanItem) }),
-    olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: !duzenler,
+    olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: !duzenler || kmSahibi(p),
     notlar: (res?.pins || []) as unknown as ResimNotu[], notCoz: (id) => { void notuCoz(String(id)); },
-  } : null), [p?.id, p?.primary, p?.files.length, p?.plan, res, duzenler, acikDosyalar]);
+  } : null), [p?.id, p?.primary, p?.files.length, p?.plan, p?.malzemeNo, res, duzenler, acikDosyalar]);
   // Ara onay yalnız bir kez çalışmış işte sorulur: ilk çalışmada ilk parça kapısı zaten vardır.
   const calisti = !!(res && res.state && res.state !== 'queued');
   const araOnay = p && ayarlar.kurallar.fpRestart !== false && calisti ? araOnayNedenleri(p, istekler) : null;
@@ -454,6 +452,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const kilitIpucu = tmiKilit ? TMI_KILIT : undefined;
   const istasyon = p ? istasyonBul(tesis, p.machine) : null;
   const sunucuda = durum.mode === 'server';
+  // 789: TMI emrinin paketinde balon tanımı Kalite Merkezi'nindir; plan burada salt okunur.
+  const kmPaket = !!p && kmSahibi(p);
 
   const turDegistir = (t: OpType) => {
     if (!p || !istasyon) return;
@@ -616,30 +616,9 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               ) : null}
               {sekme === 'docs' ? (
                 <div className="tc-ay2-kurallar">
-                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Çizim stüdyosundan">
-                    <div className="tc-ay2-kb">
-                      <span className="tc-ay2-kb-simge" data-ton="done"><Simge ad="lab" /></span>
-                      <div><b>Çizim stüdyosundan</b><small>Stüdyoda hazırlanan çizimler · PDF + 3B model, balonlar ve okuma ayarı birlikte gelir</small></div>
-                      <Dugme tur="ikincil" simge="lab" onClick={() => { void studyodaAc(); }}>Bu paketi stüdyoda aç</Dugme>
-                    </div>
-                    {cizimler.length ? (
-                      <div className="tc-ay2-cizimler">
-                        {cizimler.map((d) => {
-                          const on = !!p.files.length && d.files.every((f) => p.files.some((x) => x.name === f.name && dosyaBoyu(x) === dosyaBoyu(f)));
-                          return (
-                            <div key={d.id} className="tc-ay2-cizim" data-acik={on ? '' : undefined}>
-                              <div className="tc-ay2-cizim-tur">{d.files.map((f) => <span key={f.name} data-tur={f.kind === 'pdf' ? 'pdf' : 'model'}>{f.kind === 'pdf' ? 'PDF' : '3B'}</span>)}</div>
-                              <div>
-                                <b>{d.name}</b>
-                                <span>{d.files.map((f) => f.name).join(' + ')}{d.bal && d.bal.length ? ' · ' + d.bal.length + ' balon' : ''} · {new Date(d.updatedAt).toLocaleDateString('tr-TR')}</span>
-                              </div>
-                              {on ? <Cip ton="run">Pakette</Cip> : <Dugme simge="plus" onClick={() => cizimiAl(d)}>Pakete ekle</Dugme>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : <p className="tc-ay2-soluk">Henüz kayıtlı çizim yok. Çizim stüdyosunda PDF'i ve 3B modeli ekleyip <b>Kaydet</b> de; burada listelenir.</p>}
-                  </section>
+                  {kmPaket && typeof p.malzemeNo === 'number' ? (
+                    <KaliteMerkeziCizimleri p={p} malzemeNo={p.malzemeNo} duzenler={duzenler} mesgul={merkezMesgul} al={(r) => { void kmdenAl(r); }} />
+                  ) : null}
                   {sunucuda ? (
                     <section className="tc-ay2-kart tc-ay2-genis" aria-label="Çizim Merkezi’nden">
                       <div className="tc-ay2-kb">
@@ -667,7 +646,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     {p.files.length ? (
                       <Bolmeli
                         etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
-                        degistir={(ad) => yama({ primary: ad, plan: ad !== p.primary ? [] : p.plan })}
+                        degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null } : {}) })}
                       />
                     ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
                     <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p>
@@ -720,11 +699,12 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                             <span data-yontem="cmm"><i aria-hidden="true" /><b>{nc}</b> CMM</span>
                           </span>
                           <span className="tc-ay2-soluk">Tümü:</span>
-                          <Dugme tur="ikincil" onClick={() => hepsiYontem('man')}>Elle</Dugme>
-                          <Dugme tur="ikincil" simge="cube" onClick={() => hepsiYontem('cmm')}>CMM</Dugme>
+                          <Dugme tur="ikincil" disabled={kmPaket} onClick={() => hepsiYontem('man')}>Elle</Dugme>
+                          <Dugme tur="ikincil" simge="cube" disabled={kmPaket} onClick={() => hepsiYontem('cmm')}>CMM</Dugme>
                         </div>
                       );
-                    })() : <p className="tc-ay2-soluk">Resimdeki önerileri onayla veya <b>◎</b> ile ölçünün yanına dokunarak nokta ekle.</p>}
+                    })() : kmPaket ? null : <p className="tc-ay2-soluk">Resimdeki önerileri onayla veya <b>◎</b> ile ölçünün yanına dokunarak nokta ekle.</p>}
+                    {kmPaket ? <p className="tc-ay2-soluk">Balonlar Kalite Merkezi’nde düzenlenir; burada salt okunur. Resmi <b>Dokümanlar</b> sekmesinden Kalite Merkezi’nden al.</p> : null}
                     <div className="tc-ay2-olculer">
                       {p.plan.map((b) => {
                         const cmm = olcumYontemi(b) === 'cmm';
@@ -732,7 +712,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                         return (
                           <div key={b.id} className="tc-ay2-plan-satir">
                             <label className="tc-ay2-plan-sec" title="Toplu silmek için seç">
-                              <input type="checkbox" checked={olcuSec.includes(b.id)} aria-label={b.nom + ' seç'} onChange={(e) => olcuSecYaz((l) => (e.target.checked ? [...l, b.id] : l.filter((x) => x !== b.id)))} />
+                              <input type="checkbox" disabled={kmPaket} checked={olcuSec.includes(b.id)} aria-label={b.nom + ' seç'} onChange={(e) => olcuSecYaz((l) => (e.target.checked ? [...l, b.id] : l.filter((x) => x !== b.id)))} />
                               <span className="tc-ay2-balon" data-cmm={cmm ? '' : undefined}>{b.id}</span>
                             </label>
                             <div><b className="tc-ay2-mono">{b.nom}</b><span>{b.tol} · {b.tool}</span></div>
@@ -750,17 +730,17 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                                   <option value="tab">Numune sekmesinde düzenle</option>
                                 </select>
                               ) : (
-                                <select value={b.freq || 'İlk parça'} aria-label={b.nom + ' sıklığı'} onChange={(e) => { if (e.target.value === 'n') nSorYaz(b.id); else satirYaz({ freq: e.target.value }); }}>
+                                <select value={b.freq || 'İlk parça'} disabled={kmPaket} aria-label={b.nom + ' sıklığı'} onChange={(e) => { if (e.target.value === 'n') nSorYaz(b.id); else satirYaz({ freq: e.target.value }); }}>
                                   {SIKLIKLAR.map((f) => <option key={f}>{f}</option>)}
                                   {tur === 'cnc' ? <option value="n">Her N parçada bir…</option> : null}
                                 </select>
                               )}
-                              <button type="button" className="tc-ay2-yontem" data-yontem={cmm ? 'cmm' : 'man'} title="Ölçüm yöntemi: elle / CMM" onClick={() => satirYaz({ m: cmm ? 'man' : 'cmm' })}>
+                              <button type="button" className="tc-ay2-yontem" disabled={kmPaket} data-yontem={cmm ? 'cmm' : 'man'} title="Ölçüm yöntemi: elle / CMM" onClick={() => satirYaz({ m: cmm ? 'man' : 'cmm' })}>
                                 {cmm ? <><Simge ad="cube" boyut="k" />CMM</> : 'ELLE'}
                               </button>
-                              <button type="button" className="tc-ay2-arac" title="Ölçülmeyecek: kontrol planından sil" aria-label={b.nom + ' sil'} onClick={() => olcuSil([b.id])}><Simge ad="trash" /></button>
+                              <button type="button" className="tc-ay2-arac" disabled={kmPaket} title="Ölçülmeyecek: kontrol planından sil" aria-label={b.nom + ' sil'} onClick={() => olcuSil([b.id])}><Simge ad="trash" /></button>
                             </div>
-                            <button type="button" className="tc-ay2-onay" aria-pressed={!!b.crit} title="Kritik karakteristik" onClick={() => satirYaz({ crit: !b.crit })}>KK</button>
+                            <button type="button" className="tc-ay2-onay" disabled={kmPaket} aria-pressed={!!b.crit} title="Kritik karakteristik" onClick={() => satirYaz({ crit: !b.crit })}>KK</button>
                           </div>
                         );
                       })}
