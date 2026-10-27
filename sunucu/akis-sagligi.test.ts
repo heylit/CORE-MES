@@ -29,6 +29,7 @@ interface AdimliEmir { emir: { emirNo: string; durum: string; projeId: number | 
 interface Parti { id: number; lotNo: string; tedarikciPartiNo: string | null; eldeki: string; uretimEmriId: number | null }
 interface Hareket {
   tur: string; malzemeId: number; miktar: string; partiEtiketi: string | null; girisKaynagi: string | null; kaynakKonumKod: string | null; hedefKonumKod: string | null;
+  kaynakKaliteDurumu?: string | null; hedefKaliteDurumu?: string | null;
 }
 interface Bakiye { konumId: number; konumKod: string; miktar: string; kaliteDurumu?: string }
 interface MalzemeAyrintisi { satir: { toplam: string }; bakiyeler: Bakiye[] }
@@ -398,14 +399,16 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       const satirlar: [string, Record<string, unknown>][] = [
         ['events', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, state: 'running', machine }],
         ['counts', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, kind: 'good', delta: MAMUL_ADET, machine }],
-        ['events', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, state: 'done', machine }],
       ];
       for (const [tur, s] of satirlar) {
         const c = tamam(await ekle(tur, s));
         assert.deepEqual(c.reddedilen, [], `${tur} ${String(s['cid'])}`);
       }
-      // İlk parça onayına kadar sağlam kararda bekler ve sonraki adıma geçmez (327 a); onayı kalite verir.
-      if (i === 0) tamam(await yaz('kalite', `/kalite-merkezi/ilk-parca/${S.emir}/karar`, { karar: 'onay' }));
+      // İlk parça onayına kadar sağlam kararda bekler ve sonraki adıma geçmez (327 a); onayı kalite verir. Karar adım başınadır (744 a):
+      // talaşlı her adımın ilk parçası kendi onayını ister, onay adım bitmeden gelir.
+      tamam(await yaz('kalite', `/kalite-merkezi/ilk-parca/${S.emir}/karar`, { karar: 'onay', isEmriId: ie }));
+      const bitti = `deneme-${(n += 1)}`;
+      assert.deepEqual(tamam(await ekle('events', { cid: bitti, pkgId: `tmi-ie-${ie}`, state: 'done', machine })).reddedilen, [], bitti);
     }
     assert.deepEqual((await sorunlular()).map((y) => y.kayit.cid), ['deneme-0']);
 
@@ -422,7 +425,9 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.deepEqual(dolu.map((b) => Number(b.miktar)), [MAMUL_ADET]);
     S.mmKonum = dolu[0]?.konumId ?? 0;
     const h = tamam(await oku<Liste<Hareket>>('depo', `/stok/hareketler?uretimEmriId=${S.emir}`)).satirlar;
-    assert.deepEqual(h.filter((x) => x.malzemeId === S.mm).map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim']]);
+    // 744 a: son adımın sağlamı kendi ilk parça onayını bekleyerek girer; onay aynı konumda karar bekleyeni serbeste çevirir.
+    assert.deepEqual(h.filter((x) => x.malzemeId === S.mm).map((x) => [x.tur, Number(x.miktar), x.girisKaynagi, x.kaynakKaliteDurumu ?? null, x.hedefKaliteDurumu ?? null]),
+      [['transfer', MAMUL_ADET, null, 'karar_bekliyor', 'serbest'], ['giris', MAMUL_ADET, 'uretim', null, 'karar_bekliyor']]);
     // Elle sarf edilen hammaddeyi sayım bir kez daha düşmez (bulgu 1).
     assert.deepEqual(h.filter((x) => x.malzemeId === S.hm && x.tur === 'cikis').map((x) => Number(x.miktar)), [10]);
   });
@@ -461,8 +466,9 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     // 235 a: planlandıdan doğrudan teslim iki adımdır: istasyondan müşterinin Yolda konumuna taşıma, oradan sevk çıkışı.
     assert.equal(await toplam(S.mm), 0);
     const h = tamam(await oku<Liste<Hareket>>('depo', `/stok/hareketler?uretimEmriId=${S.emir}`)).satirlar.filter((x) => x.malzemeId === S.mm);
-    assert.deepEqual(h.map((x) => [x.tur, Number(x.miktar)]).sort(), [['cikis', MAMUL_ADET], ['giris', MAMUL_ADET], ['transfer', MAMUL_ADET]]);
-    const tasima = h.find((x) => x.tur === 'transfer');
+    // Transferlerden biri ilk parça onayının kalite çevirmesidir (744 a, 9'da); taşıma öteki.
+    assert.deepEqual(h.map((x) => [x.tur, Number(x.miktar)]).sort(), [['cikis', MAMUL_ADET], ['giris', MAMUL_ADET], ['transfer', MAMUL_ADET], ['transfer', MAMUL_ADET]]);
+    const tasima = h.find((x) => x.tur === 'transfer' && x.kaynakKaliteDurumu !== 'karar_bekliyor');
     const yolda = tamam(await oku<Liste<{ kod: string; firmaId?: number | null }>>('depo', '/stok/konumlar?tur=yolda&sayfaBoyu=100')).satirlar;
     assert.deepEqual(yolda.map((k) => k.kod), [tasima?.hedefKonumKod]);
     assert.equal(h.find((x) => x.tur === 'cikis')?.kaynakKonumKod, tasima?.hedefKonumKod);
@@ -500,7 +506,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     type Iz = { parti: Parti; emirler: number[]; hareketler: Hareket[]; sevkler: { emirId: number; isId: number; firmaId: number | null }[] };
     const mamul = tamam(await oku<Iz>('depo', `/stok/partiler/${S.mmParti}/iz`));
     assert.deepEqual(mamul.emirler, [S.emir]);
-    assert.deepEqual(mamul.hareketler.map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim'], ['transfer', MAMUL_ADET, null], ['cikis', MAMUL_ADET, null]]);
+    assert.deepEqual(mamul.hareketler.map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim'], ['transfer', MAMUL_ADET, null], ['transfer', MAMUL_ADET, null], ['cikis', MAMUL_ADET, null]]);
     assert.deepEqual(Object.keys(mamul).sort(), ['ciktilar', 'emirler', 'hareketler', 'kartlar', 'parti', 'sevkCikislari', 'sevkler']);
     assert.deepEqual(mamul.sevkler.map((x) => [x.emirId, x.isId, x.firmaId]), [[S.emir, S.sevkIs, S.musteri]]);
     const ham = tamam(await oku<Iz>('depo', `/stok/partiler/${S.hmParti}/iz`));

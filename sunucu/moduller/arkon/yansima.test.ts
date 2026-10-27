@@ -1714,7 +1714,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   // Varsayılan: emrin bütün iş emirleri kendi makinelerinde canlı plana yerleşmiş (`plansiz` ile yerleşmez).
   // Sunucu plan motoru (ADR 0018) emrin adımlarını ürünün yürürlükteki rotasından tanır; adımsız ya da girdisiz rota plana girmez. Kartın
   // A revizyonuna ilk emrin adımları (aynı makine ve süreyle) yazılır, ilk adıma bir hammadde girer ve revizyon yürürlüğe alınır.
-  async function rotaAdimlariniYaz(kart: number, uretimEmriId: number): Promise<void> {
+  async function rotaAdimlariniYaz(kart: number, uretimEmriId: number, ilkParcasizOp: number | null = null): Promise<void> {
     const sahip = ortam!.sahip;
     const rev = (await sahip.tek<{ id: number; durum: string }>("SELECT id, durum FROM rota_revizyonu WHERE malzeme_id = $1 AND harf = 'A'", [kart]))!;
     if (rev.durum !== 'taslak') return;
@@ -1722,9 +1722,10 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) SELECT $1, op_no, $2 FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3
        ON CONFLICT DO NOTHING`, [kart, rev.id, uretimEmriId]);
     await sahip.sorgu(
-      `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, birim_sure_dk, bagimlilik)
-       SELECT $1, $2, op_no, row_number() OVER (ORDER BY op_no), operasyon_tipi_id, ad, makine_id, 10, 1, 'bekleyen'
-       FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3`, [rev.id, kart, uretimEmriId]);
+      `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, birim_sure_dk, bagimlilik, ilk_parca)
+       SELECT $1, $2, op_no, row_number() OVER (ORDER BY op_no), operasyon_tipi_id, ad, makine_id, 10, 1, 'bekleyen',
+              CASE WHEN op_no = $4 THEN 'yok' ELSE 'her_kurulum' END
+       FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3`, [rev.id, kart, uretimEmriId, ilkParcasizOp]);
     const girdi = (await sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
        VALUES ($1, 'hammadde', 'YNS-', $2, 'aktif', $3, $4, $4) RETURNING no`,
@@ -1737,7 +1738,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
        yururluge_alma = now() WHERE id = $1`, [rev.id, yoneticiId]);
   }
 
-  async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean } = {}): Promise<{
+  async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean; ilkParcasizOp?: number } = {}): Promise<{
     emirId: number; ilk: string; ikinci: string; ilkId: number; ikinciId: number; kart: number; ilkMerkez: number; ikinciMerkez: number; makineKodlari: string[];
   }> {
     const sahip = ortam!.sahip;
@@ -1770,7 +1771,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const { uretimEmriId } = await vt().tx(async (db) => uretimEmriAc(db, (await kullaniciYukle(db, yoneticiId))!, {
       projeId: denemeProjeId, malzemeNo: kart, adet: 20, teslim: null, kaynakRotaRevizyonId: revizyon, isEmirleri: [adim(1, m1), adim(2, m2), ...(secenek.ucuncuIlkte ? [adim(3, m1)] : [])],
     }));
-    await rotaAdimlariniYaz(kart, uretimEmriId);
+    await rotaAdimlariniYaz(kart, uretimEmriId, secenek.ilkParcasizOp ?? null);
     if (!secenek.plansiz) {
       const isEmirleri = await sahip.sorgu<{ id: number; makineId: number; opNo: number }>(
         'SELECT id, makine_id AS "makineId", op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [uretimEmriId]);
@@ -1887,17 +1888,22 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   const ieOlay = (isEmriId: number, state: string, ek: Record<string, unknown> = {}) => ({ cid: cid(), pkgId: ieKimligi(isEmriId), state, ...ek });
   const ieSayim = (isEmriId: number, kind: string, delta: number, ek: Record<string, unknown> = {}) => ({ cid: cid(), pkgId: ieKimligi(isEmriId), kind, delta, ...ek });
 
-  test('denetim #12: iş emri paketinin tmi.ilkParca alanı emrin Kalite Merkezi\'ndeki son ilk parça kararıdır; karar yoksa alan yok', async () => {
+  test('denetim #12, 744 a, 756 a: iş emri paketinin tmi.ilkParca alanı adımın Kalite Merkezi\'ndeki son ilk parça kararıdır; adımsız (eski) karar hiçbir adımın değildir', async () => {
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const ilkParca = async (id: number) => ((await paketler()).get(ieKimligi(id))?.govde['tmi'] as Record<string, unknown> | undefined)?.['ilkParca'];
     assert.equal(await ilkParca(ie1!), undefined);
-    const karar = async (k: 'onay' | 'ret') => assert.equal((await istek(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: k })).durum, 200);
-    await karar('ret');
-    assert.equal((await ilkParca(ie1!) as { karar?: string } | undefined)?.karar, 'ret');
+    const karar = async (k: 'onay' | 'ret', isEmriId?: number) => assert.equal(
+      (await istek(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: k, ...(isEmriId === undefined ? {} : { isEmriId }) })).durum, 200);
     await karar('onay');
-    for (const id of [ie1!, ie2!]) assert.equal((await ilkParca(id) as { karar?: string } | undefined)?.karar, 'onay');
+    for (const id of [ie1!, ie2!]) assert.equal(await ilkParca(id), undefined, 'adımsız karar adımın kararı değildir');
+    await karar('ret', ie1!);
+    assert.equal((await ilkParca(ie1!) as { karar?: string } | undefined)?.karar, 'ret');
+    await karar('onay', ie1!);
+    assert.equal((await ilkParca(ie1!) as { karar?: string } | undefined)?.karar, 'onay');
+    assert.equal(await ilkParca(ie2!), undefined, 'Op 10 kararı Op 20\'nin değildir');
     const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
+    assert.equal(taslak['rules'], undefined, 'her kurulumda seçimi taslağa kural yazmaz (tablet varsayılanı açık)');
     const yaz = await paketYaz(ieKimligi(ie1!), null, { ...taslak, status: 'published', steps: [{ id: 's1' }], tmi: { ...(taslak['tmi'] as object), ilkParca: { karar: 'ret', zaman: 'sahte' } } });
     assert.equal(yaz.durum, 200, JSON.stringify(yaz.govde));
     assert.equal((((await paketOku(ieKimligi(ie1!)))?.govde['tmi'] as Record<string, unknown>)['ilkParca'] as { karar?: string }).karar, 'onay', 'kayıtlı pakette de sunucunun yazdığıdır; istemcinin alanı sayılmaz');
@@ -3011,6 +3017,55 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const ikinci = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
     assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
     assert.equal(ikinci.govde.adet, 0, 'karar Arkon onayıyla verildi, bekleyen kalmadı');
+  });
+
+  // 744 a: uçtan uca denemedeki hata: Op 20, Op 10'un onayıyla ölçümsüz üretiyordu. Kilit ve karar adım başınadır; rotada "yok" seçilen adım beklemez.
+  test('744 a: Op 10 onaylı emirde Op 20 sağlamı kendi ilk parça kararını bekler; karar o adıma gider; rotada ilk parçası "yok" adımda kapı ve kilit yoktur', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1, ie2] = await isEmriIdleri(r.emirId);
+    const bekleyen = async () => (await kararSayaclari(vt(), [r.emirId])).get(r.emirId)?.kararBekliyor ?? 0;
+    const yaz = async (makine: string, tur: string, satir: Record<string, unknown>) => {
+      const c = await ekle(operator, tur, { ...satir, machine: makine });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      assert.equal((await yansima(String(satir['cid'])))?.sonuc, 'yazildi', JSON.stringify(await yansima(String(satir['cid']))));
+    };
+    for (const id of [ie1!, ie2!]) {
+      const t = (await paketler()).get(ieKimligi(id))!.govde;
+      assert.equal((await paketYaz(ieKimligi(id), null, { ...t, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] })).durum, 200);
+    }
+    await yaz(r.ilk, 'events', ieOlay(ie1!, 'running'));
+    await yaz(r.ilk, 'counts', ieSayim(ie1!, 'good', 5));
+    assert.equal(await bekleyen(), 5);
+    const op10 = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay', isEmriId: ie1 });
+    assert.equal(op10.govde.adet, 5, JSON.stringify(op10.govde));
+    await yaz(r.ilk, 'counts', ieSayim(ie1!, 'good', 5));
+    assert.equal(await bekleyen(), 0, 'onaylı adımın sağlamı beklemez');
+    await yaz(r.ilk, 'events', ieOlay(ie1!, 'done'));
+    await yaz(r.ikinci, 'events', ieOlay(ie2!, 'running'));
+    await yaz(r.ikinci, 'counts', ieSayim(ie2!, 'good', 1));
+    await yaz(r.ikinci, 'counts', ieSayim(ie2!, 'good', 3));
+    assert.equal(await bekleyen(), 4, 'Op 20 Op 10\'un onayıyla sayılmaz');
+    const kayit = await ortam!.sahip.tek<{ isEmriId: number | null }>(
+      'SELECT is_emri_id AS "isEmriId" FROM kalite_merkezi_ilk_parca_karari WHERE uretim_emri_id = $1 ORDER BY id DESC LIMIT 1', [r.emirId]);
+    assert.equal(kayit?.isEmriId, ie1, 'Op 10 kararı adımıyla yazıldı');
+    const op20 = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay', isEmriId: ie2 });
+    assert.equal(op20.govde.adet, 4, JSON.stringify(op20.govde));
+    assert.equal(await bekleyen(), 0);
+
+    // Rotada Op 10'un ilk parçası "yok": taslak ilk parça kuralını kapatır; ölçülü kayıtlı pakette de sağlam beklemez (Arkon kapısı ve TMI kilidi yok).
+    const y = await rotaliEmirKur({ ilkParcasizOp: 10 });
+    const [y1, y2] = await isEmriIdleri(y.emirId);
+    const liste = await paketler();
+    assert.deepEqual(liste.get(ieKimligi(y1!))!.govde['rules'], { q: { firstPiece: false } });
+    assert.equal(liste.get(ieKimligi(y2!))!.govde['rules'], undefined);
+    const t1 = liste.get(ieKimligi(y1!))!.govde;
+    assert.equal((await paketYaz(ieKimligi(y1!), null, { ...t1, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }], rules: {} })).durum, 200);
+    await yaz(y.ilk, 'events', ieOlay(y1!, 'running'));
+    await yaz(y.ilk, 'counts', ieSayim(y1!, 'good', 1));
+    await yaz(y.ilk, 'counts', ieSayim(y1!, 'good', 6));
+    assert.equal((await kararSayaclari(vt(), [y.emirId])).get(y.emirId)?.kararBekliyor ?? 0, 0);
+    assert.deepEqual(await ortam!.sahip.sorgu<{ tur: string; adet: number }>(
+      "SELECT tur, sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 GROUP BY tur ORDER BY tur", [y.emirId]), [{ tur: 'saglam', adet: 7 }]);
   });
 
   // 564 1 b, 6 a, 600 a: numune emrin sonraki kalite istasyonuna gider (istek o istasyonla işaretlenir); kalite istasyonu terminalindeki lot
