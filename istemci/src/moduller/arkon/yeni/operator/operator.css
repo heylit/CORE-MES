@@ -536,6 +536,10 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 
 @keyframes tc-ay1-zipla { 30% { transform: scale(1.06); } }
 @keyframes tc-ay1-nabiz { 50% { opacity: var(--saydam-28); } }
+@keyframes tc-ay1-tus-hale {
+  0% { opacity: .7; inset: 0; border-radius: var(--yari-3); }
+  100% { opacity: 0; inset: calc(var(--b-3) * -1); border-radius: calc(var(--yari-3) + var(--b-3)); }
+}
 @keyframes tc-ay1-nabiz-kenar { 50% { box-shadow: 0 0 0 var(--b-1) color-mix(in srgb, var(--sig) 35%, transparent); } }
 
 @media (min-width: 1280px) {
@@ -591,7 +595,7 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .tc-ay1-tarama, .tc-ay1-konfeti { display: none; }
   .tc-ay1-cevrim-yay, .tc-ay1-cevrim-nokta { animation: none; }
-  .tc-ay1-zipla, .tc-ay1-gorev-nabiz, .tc-ay1-cagri-cip > i { animation: none; }
+  .tc-ay1-zipla, .tc-ay1-gorev-nabiz, .tc-ay1-cagri-cip > i, .tc-ay1-genis .tc-ay1-sahne .tc-orb-ana::after { animation: none; }
   .tc-ay1-cizgi, .tc-ay1-kadran-yay, .tc-ay1-halka-yay, .tc-ay1-oee-yay, .tc-ay1-is { transition: none; }
 }
 
@@ -660,6 +664,16 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   box-shadow: 0 var(--b-3) var(--b-6) calc(var(--b-3) * -1) color-mix(in srgb, var(--c) 80%, transparent);
 }
 .tc-ay1-genis .tc-ay1-sahne .tc-orb-ana :is(.tc-orb-etiket, .tc-orb-ipucu) { color: var(--on-sig); }
+/* 808: geniş sahnede ana tuş dikdörtgendir; ortak orb'un simge çevresindeki dairesel halesi ve halkası yerine tuşun kendi köşesinde
+   dışa genişleyip sönen çerçeve yanıp söner. */
+.tc-ay1-genis .tc-ay1-sahne .tc-orb-ana { position: relative; }
+.tc-ay1-genis .tc-ay1-sahne .tc-orb-ana .tc-orb-yuz { box-shadow: none; }
+.tc-ay1-genis .tc-ay1-sahne .tc-orb-ana .tc-orb-yuz::after { content: none; }
+.tc-ay1-genis .tc-ay1-sahne .tc-orb-ana::after {
+  content: ''; position: absolute; inset: 0; border: var(--cizgi) solid var(--c); border-radius: var(--yari-3); opacity: 0; pointer-events: none;
+  animation: tc-ay1-tus-hale 2.2s ease-out infinite;
+}
+.tc-ay1-genis .tc-ay1-sahne .tc-orb-ana:disabled::after { animation: none; }
 .tc-ay1-isler-dugme { display: contents; }
 @container terminal (max-width: 1499px) {
   .tc-ay1-genis .tc-ay1-ust { flex-wrap: nowrap; }
