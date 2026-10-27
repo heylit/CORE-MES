@@ -35,7 +35,7 @@ export function SiparisKarti({ siparis: o, kisa }: { siparis: SiparisOzeti; kisa
         <button type="button" className="tc-mi-siparis-no" onClick={(e) => { e.stopPropagation(); ayrintiAc({ tur: 'siparis', id: o.id }); }}>
           #{o.no}
         </button>
-        <DurumRozeti tur="siparis" durum={o.durum} />
+        {o.durum ? <DurumRozeti tur="siparis" durum={o.durum} /> : <span>–</span>}
       </div>
       <div className="tc-mi-siparis-musteri">{o.musteri}</div>
       {!kisa && o.urun && <div className="tc-mi-siparis-urun">{o.urun}</div>}

@@ -3,7 +3,8 @@ import { useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { baslamaMetni } from '../kurallar.ts';
 import { useMesaj, type MesajBaglami } from '../durum.tsx';
 import type { Zamanli } from '../tipler.ts';
-import { anahtarParcasi, kisiselKok } from '../veri.ts';
+import { gorulenKanalYazarlari } from '../sohbet/ortak.ts';
+import { anahtarParcasi, kisiselKok, useOda } from '../veri.ts';
 import {
   TUR_BASINA_UYARI, bilinenKisiler, ekranBildirimleri, gonderimSonrasi, hatirlatmalar, tetikAnahtari, uyarilariHesapla, vaktiGelenler,
   type EkranBildirimi, type Hatirlatma,
@@ -59,7 +60,7 @@ async function zamanlayiciTuru(m: MesajBaglami, mesgul: Set<string>): Promise<vo
   }
 }
 
-async function uyariTuru(m: MesajBaglami, tetiklenen: Set<string>): Promise<void> {
+async function uyariTuru(m: MesajBaglami, tetiklenen: Set<string>, cevrimici: readonly string[]): Promise<void> {
   const uyarilar = uyarilariHesapla({
     kurallar: m.veri.kurallar,
     kanallar: m.veri.kanallar,
@@ -67,7 +68,9 @@ async function uyariTuru(m: MesajBaglami, tetiklenen: Set<string>): Promise<void
     gorevler: m.veri.gorevler,
     onaylar: m.veri.onaylar,
     duyurular: m.veri.duyurular,
-    bilinenKisiler: bilinenKisiler({ gorevler: m.veri.gorevler, onaylar: m.veri.onaylar, duyurular: m.veri.duyurular }, m.ben.id),
+    bilinenKisiler: bilinenKisiler(
+      { gorevler: m.veri.gorevler, onaylar: m.veri.onaylar, duyurular: m.veri.duyurular }, m.ben.id, [...cevrimici, ...gorulenKanalYazarlari()],
+    ),
     ad: m.ad,
     simdi: Date.now(),
   });
@@ -107,6 +110,10 @@ export function useOtomasyon(): void {
   const gorulen = useRef(new Set<string>());
   const hatirlatilan = useRef(new Set<string>());
   const acilis = useRef(Date.now());
+  // Çevrimiçiler (prototipte S.online, açılıştan beri izlenir).
+  const { esler } = useOda(true);
+  const cevrimici = useRef<string[]>([]);
+  cevrimici.current = esler.map((e) => e.kisi);
 
   const tur = useRef(async () => {
     const g = son.current;
@@ -114,7 +121,7 @@ export function useOtomasyon(): void {
     await zamanlayiciTuru(g, mesgul.current);
     if (uyariKosuyor.current) return;
     uyariKosuyor.current = true;
-    try { await uyariTuru(son.current, tetiklenen.current); } catch { /* sonraki tur */ } finally { uyariKosuyor.current = false; }
+    try { await uyariTuru(son.current, tetiklenen.current, cevrimici.current); } catch { /* sonraki tur */ } finally { uyariKosuyor.current = false; }
   });
 
   useEffect(() => {

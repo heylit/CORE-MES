@@ -8,7 +8,7 @@ import type { Ileti as IletiTipi, Kanal, Kayit } from '../tipler.ts';
 import { Ileti, type IletiOlaylari } from './Ileti.tsx';
 import { IletiBilgisi } from './IletiBilgisi.tsx';
 import { IletiIslemleri } from './IletiIslemleri.tsx';
-import { bilinenAdlar, SohbetOdasiBaglami } from './ortak.ts';
+import { bilinenAdlar, kanalYazarlariniEkle, SohbetOdasiBaglami } from './ortak.ts';
 import { YazmaAlani, type Yanit } from './YazmaAlani.tsx';
 import { ZamanliListesi } from './ZamanliListesi.tsx';
 import {
@@ -45,6 +45,8 @@ export function KanalGorunumu({ kanal, hedefIleti }: { kanal: Kayit<Kanal>; hede
     yanitYaz(null); duyuruKipiYaz(false); duzenlenenYaz(null);
     ilkAcilis.current = true;
   }, [kanal.id]);
+
+  useEffect(() => { if (iletiler) kanalYazarlariniEkle(iletiler); }, [iletiler]);
 
   useEffect(() => {
     const z = window.setInterval(() => { simdiYaz(Date.now()); }, YAZIYOR_YENILEME_MS);

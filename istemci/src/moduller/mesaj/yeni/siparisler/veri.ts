@@ -21,8 +21,8 @@ export type SiparisKaynakDurumu = 'yukleniyor' | 'izin-yok' | 'hata' | 'hazir';
 
 const sayi = (m: string) => Number(m);
 
-// Sipariş satırının üretim durumu, satıra bağlı yaprak emirlerden (bölünmüş emrin parçaları; birleşip kapanan iptal sayılmaz).
-// Emir okunamıyorsa (izin yok) durum "Sırada", üretilen bilinmez.
+// Durum Siparişler'in kendi durumudur (837/2 a): kapanmış sipariş "Sevk edildi", açık siparişte Aşama 2'de bağlanana kadar
+// bilinmez (null). Üretilen, satıra bağlı yaprak emirlerden (bölünmüş emrin parçaları; birleşip kapanan iptal sayılmaz).
 export function siparisOzeti(s: Siparis, ayrinti: SiparisAyrintisi | null, emirler: readonly AdimliEmirOzeti[] | null): SiparisOzeti {
   const satirlar = ayrinti?.satirlar ?? [];
   const birimler = [...new Set(satirlar.map((x) => x.birim))];
@@ -38,12 +38,7 @@ export function siparisOzeti(s: Siparis, ayrinti: SiparisAyrintisi | null, emirl
     : emirler.filter((e) => e.siparisSatiriId != null && satirKimlikleri.has(e.siparisSatiriId)
       && e.durum !== 'iptal' && (e.parti?.altEmirIdleri.length ?? 0) === 0);
 
-  let durum: SiparisOzeti['durum'] = 'sirada';
-  if (s.durum === 'kapandi') durum = 'sevk';
-  else if (bagli && bagli.length > 0) {
-    if (bagli.every((e) => e.durum === 'bitti')) durum = 'hazir';
-    else if (bagli.some((e) => e.durum === 'basladi' || e.durum === 'bitti')) durum = 'uretimde';
-  }
+  const durum: SiparisOzeti['durum'] = s.durum === 'kapandi' ? 'sevk' : null;
   const uretilen = bagli !== null && hedef !== null
     ? bagli.filter((e) => e.durum === 'bitti').reduce((t, e) => t + e.adet, 0)
     : null;

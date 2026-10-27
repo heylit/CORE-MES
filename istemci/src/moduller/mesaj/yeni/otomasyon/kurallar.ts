@@ -19,9 +19,12 @@ export interface KuralTanimi {
   aciklama: string;
   parametreler: Readonly<Record<string, Parametre>>;
   simge: SimgeAdi;
-  // Sipariş özeti (212 a) oluşma ve son değişiklik zamanı, üretim notu taşımaz; bu türler değerlendirilemez.
+  // Sipariş özeti (212 a) oluşma ve son değişiklik zamanı, üretim notu taşımaz; bu türler kurulur ama Siparişler'den
+  // bu alanlar gelene kadar değerlendirilmez (838 a).
   calisir: boolean;
 }
+
+export const BEKLEYEN_TUR = 'Siparişler verisi gelince çalışır';
 
 export const KURAL_TURLERI: Readonly<Record<KuralTuru, KuralTanimi>> = {
   order_risk: {
@@ -199,9 +202,9 @@ export const TUR_BASINA_UYARI = 5;
 // Tetik kaydı yolu belge yolu kuralına uyar (prototipteki karakter kümesi ve uzunluk).
 export const tetikAnahtari = (anahtar: string): string => anahtar.replace(/[^A-Za-z0-9_\-.~:@+]/g, '_').slice(0, 190);
 
-// Duyuruyu okumayanların arandığı kişiler: veride geçen herkes (prototipte çevrimiçiler ve açık kanalın yazarları da).
-export function bilinenKisiler(g: Pick<UyariGirdisi, 'gorevler' | 'onaylar' | 'duyurular'>, ben: string): string[] {
-  const s = new Set<string>([ben]);
+// Duyuruyu okumayanların arandığı kişiler (knownPeople): çevrimiçiler, açılan kanalların yazarları ve veride geçen herkes.
+export function bilinenKisiler(g: Pick<UyariGirdisi, 'gorevler' | 'onaylar' | 'duyurular'>, ben: string, ek: readonly string[] = []): string[] {
+  const s = new Set<string>([ben, ...ek]);
   for (const t of g.gorevler) { if (t.to) s.add(t.to); if (t.by) s.add(t.by); }
   for (const a of g.onaylar) { s.add(a.by); for (const x of a.approvers || []) s.add(x); }
   for (const a of g.duyurular) { s.add(a.by); for (const x of Object.values(a.ack || {})) if (x) s.add(x); }

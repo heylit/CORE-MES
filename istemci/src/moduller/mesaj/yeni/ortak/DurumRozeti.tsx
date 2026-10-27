@@ -7,7 +7,7 @@ export const GOREV_DURUMLARI: Record<GorevDurumu, { t: string; ton: RozetTonu }>
   doing: { t: 'Yapılıyor', ton: 'bilgi' },
   done: { t: 'Bitti', ton: 'tamam' },
 };
-export const SIPARIS_DURUMLARI: Record<SiparisOzeti['durum'], { t: string; ton: RozetTonu }> = {
+export const SIPARIS_DURUMLARI: Record<NonNullable<SiparisOzeti['durum']>, { t: string; ton: RozetTonu }> = {
   sirada: { t: 'Sırada', ton: 'pasif' },
   uretimde: { t: 'Üretimde', ton: 'uyari' },
   hazir: { t: 'Hazır', ton: 'bilgi' },
@@ -26,7 +26,7 @@ export const TOPLANTI_YANITLARI: Record<ToplantiYaniti, { t: string; ton: RozetT
 
 type Ozellikler =
   | { tur: 'gorev'; durum: GorevDurumu }
-  | { tur: 'siparis'; durum: SiparisOzeti['durum'] }
+  | { tur: 'siparis'; durum: NonNullable<SiparisOzeti['durum']> }
   | { tur: 'onay'; durum: 'wait' | 'ok' | 'no' }
   | { tur: 'toplanti'; durum: ToplantiYaniti };
 

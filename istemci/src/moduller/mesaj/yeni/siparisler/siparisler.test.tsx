@@ -19,24 +19,24 @@ const emir = (id: number, siparisSatiriId: number, durum: string, adet = 10, alt
   ({ id, siparisSatiriId, durum, adet, parti: { ustEmirId: null, bolunmeSira: null, altEmirIdleri, birlestigiEmirId: null } }) as unknown as AdimliEmirOzeti;
 
 describe('M2 Siparişler: siparisOzeti', () => {
-  it('yaprak emirlerin hepsi bitince "Hazır"; iptal ve bölünmüş üst emir sayılmaz; üretilen biten adetlerin toplamı', () => {
+  it('üretilen biten yaprak emirlerin toplamı; iptal ve bölünmüş üst emir sayılmaz; açık siparişte durum bilinmez (837/2 a)', () => {
     const s = siparis(1);
     const a = ayrinti(s, [satir(101, '10'), satir(102, '5')]);
     const o = siparisOzeti(s, a, [emir(1, 101, 'bitti', 10), emir(2, 102, 'bitti', 5), emir(3, 102, 'iptal'), emir(4, 101, 'acik', 10, [1])]);
-    expect(o).toMatchObject({ id: '1', no: 'S-1', musteri: 'Örnek Firma', urun: 'Örnek parça 101 +1 kalem', hedef: 15, birim: 'adet', durum: 'hazir', uretilen: 15 });
+    expect(o).toMatchObject({ id: '1', no: 'S-1', musteri: 'Örnek Firma', urun: 'Örnek parça 101 +1 kalem', hedef: 15, birim: 'adet', durum: null, uretilen: 15 });
   });
 
-  it('başlamış emir varsa "Üretimde"; hiçbiri başlamadıysa "Sırada"; kapanan sipariş "Sevk edildi"', () => {
+  it('durum Siparişler\'in kendi durumundan: kapanan "Sevk edildi", açık sipariş emirden türetilmez', () => {
     const s = siparis(1);
     const a = ayrinti(s, [satir(101, '10')]);
-    expect(siparisOzeti(s, a, [emir(1, 101, 'basladi')]).durum).toBe('uretimde');
-    expect(siparisOzeti(s, a, [emir(1, 101, 'acik')]).durum).toBe('sirada');
+    expect(siparisOzeti(s, a, [emir(1, 101, 'basladi')]).durum).toBeNull();
+    expect(siparisOzeti(s, a, [emir(1, 101, 'bitti')]).durum).toBeNull();
     expect(siparisOzeti(siparis(1, { durum: 'kapandi' }), a, [emir(1, 101, 'acik')]).durum).toBe('sevk');
   });
 
   it('veri yoksa sıfır uydurulmaz: emir okunamazsa üretilen, birimler karışıksa hedef null', () => {
     const s = siparis(1);
-    expect(siparisOzeti(s, ayrinti(s, [satir(101, '10')]), null)).toMatchObject({ durum: 'sirada', uretilen: null, hedef: 10 });
+    expect(siparisOzeti(s, ayrinti(s, [satir(101, '10')]), null)).toMatchObject({ durum: null, uretilen: null, hedef: 10 });
     expect(siparisOzeti(s, ayrinti(s, [satir(101, '10'), satir(102, '2', 'kg')]), [])).toMatchObject({ hedef: null, uretilen: null, birim: '' });
     expect(siparisOzeti(s, null, null)).toMatchObject({ urun: '', hedef: null, uretilen: null });
   });

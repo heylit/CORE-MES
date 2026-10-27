@@ -4,7 +4,7 @@ import { useForm } from '../../../../ortak/veri/form.ts';
 import { useMesaj, type FormOzellikleri } from '../durum.tsx';
 import type { Kayit, Kanal, Kural } from '../tipler.ts';
 import {
-  KURAL_TURLERI, kuralParametresi, kuralTuruMu, parametreleriAyikla, type KuralTuru,
+  BEKLEYEN_TUR, KURAL_TURLERI, kuralParametresi, kuralTuruMu, parametreleriAyikla, type KuralTuru,
 } from '../otomasyon/kurallar.ts';
 
 // Prototip `openRuleForm`: yeni uyarıda önce tür seçilir, sonra kanal ve türün parametreleri.
@@ -17,8 +17,8 @@ export function KuralFormu({ istek, kapat }: FormOzellikleri<'kural'>) {
     return <Pencere acik kapat={kapat} baslik="Otomatik uyarı"><p>Bu uyarı artık yok.</p></Pencere>;
   }
   if (tur === null) {
-    // Sipariş özeti oluşma zamanı ve üretim notu taşımadığı için değerlendirilemeyen türler yeni uyarıda sunulmaz.
-    const turler = (Object.entries(KURAL_TURLERI) as [KuralTuru, (typeof KURAL_TURLERI)[KuralTuru]][]).filter(([, t]) => t.calisir);
+    // Bütün türler kurulur (838 a); sipariş verisi gelene kadar değerlendirilemeyenler not taşır, tetiklenmez.
+    const turler = Object.entries(KURAL_TURLERI) as [KuralTuru, (typeof KURAL_TURLERI)[KuralTuru]][];
     return (
       <Pencere acik kapat={kapat} baslik="Otomatik uyarı ekle" tur="yan">
         <p className="tc-mb-ipucu">Bir olay gerçekleşince Mesai seçtiğin kanala kendiliğinden mesaj atar.</p>
@@ -30,6 +30,7 @@ export function KuralFormu({ istek, kapat }: FormOzellikleri<'kural'>) {
                 <span className="tc-mb-oge-govde">
                   <span className="tc-mb-ad">{t.baslik}</span>
                   <span className="tc-mb-ipucu">{t.aciklama}</span>
+                  {!t.calisir && <span className="tc-mb-gec">{BEKLEYEN_TUR}</span>}
                 </span>
               </button>
             </li>

@@ -78,10 +78,15 @@ describe('M3 Ayarlar ve otomasyon', () => {
     await waitFor(() => { expect(s.belgeler.has('kurallar/r2')).toBe(false); });
   });
 
-  it('sipariş özetinin desteklemediği uyarı işaretlenir', async () => {
+  it('sipariş verisi bekleyen uyarı işaretlenir; yeni uyarıda bütün türler kurulabilir (838 a)', async () => {
     ac();
     const satir = await screen.findByText('Yeni sipariş açılınca bildir').then((e) => e.closest('li') as HTMLElement);
-    expect(within(satir).getByText('Sipariş verisi bu uyarıyı desteklemiyor')).toBeTruthy();
+    expect(within(satir).getByText('Siparişler verisi gelince çalışır')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Uyarı ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Otomatik uyarı ekle' });
+    for (const t of ['Sipariş hazır olunca haber ver', 'Yeni sipariş açılınca bildir', 'Üretim notunda uyarı kelimesi']) {
+      expect(within(pencere).getByText(t)).toBeTruthy();
+    }
   });
 
   it('salt okur kişide yazma düğmeleri yoktur (reddedilen)', async () => {
@@ -92,11 +97,11 @@ describe('M3 Ayarlar ve otomasyon', () => {
     expect(screen.queryByRole('button', { name: 'Sil' })).toBeNull();
   });
 
-  it('yeni uyarı: önce tür seçilir (desteklenmeyen türler yok), sonra kanal ve parametreyle kaydedilir', async () => {
+  it('yeni uyarı: önce tür seçilir (bütün türler, 838/1 a), sonra kanal ve parametreyle kaydedilir', async () => {
     const s = ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Uyarı ekle' }));
     const secici = await screen.findByRole('dialog', { name: 'Otomatik uyarı ekle' });
-    expect(within(secici).queryByText('Yeni sipariş açılınca bildir')).toBeNull();
+    expect(within(secici).getByText('Yeni sipariş açılınca bildir')).toBeTruthy();
     fireEvent.click(within(secici).getByText('Teslim riskteyse uyar'));
     const form = await screen.findByRole('dialog', { name: 'Teslim riskteyse uyar' });
     expect((within(form).getByLabelText('Hangi kanala?') as HTMLSelectElement).value).toBe('uretim');
@@ -152,5 +157,12 @@ describe('takvim dosyası', () => {
     expect(metin).toContain('TRIGGER:-PT10M');
     expect(metin).toContain('UID:tt1@mesai');
     expect(takvimimMetni({ ben: BEN, ad: () => '', simdi, toplantilar: [], gorevler: [] })).toBeNull();
+  });
+});
+
+describe('eski CSV biçimi (838/4 a)', () => {
+  it('noktalı virgül, BOM, yalnız gerekince tırnak; sayı olduğu gibi; boş değer boş', async () => {
+    const { eskiCsv } = await import('./csv.ts');
+    expect(eskiCsv(['A', 'B'], [['x;y', 2.5], [null, 'a"b']])).toBe('﻿A;B\r\n"x;y";2.5\r\n;"a""b"');
   });
 });

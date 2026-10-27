@@ -22,6 +22,13 @@ export interface SohbetOdasi { cevrimici: readonly string[]; iletiler: readonly 
 export const SohbetOdasiBaglami = createContext<SohbetOdasi>({ cevrimici: [], iletiler: [] });
 export const useSohbetOdasi = (): SohbetOdasi => useContext(SohbetOdasiBaglami);
 
+// Bu oturumda açılan kanalların ileti yazarları (prototipte S.msgs): okunmayan duyuru uyarısı bunları da etiketler (838/3 a).
+const kanalYazarlari = new Set<string>();
+export function kanalYazarlariniEkle(iletiler: readonly Ileti[]): void {
+  for (const m of iletiler) if (m.by && !m.by.startsWith('__')) kanalYazarlari.add(m.by);
+}
+export const gorulenKanalYazarlari = (): string[] => [...kanalYazarlari];
+
 // Prototipteki "Ara" düğmesi: arama kabuğun Ctrl K kutusunda (M0); düğme aynı tuşu gönderir, kabuk kutuyu açar.
 export function aramaAc(): void {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));

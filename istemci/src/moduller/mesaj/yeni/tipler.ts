@@ -158,7 +158,7 @@ export interface SiparisOzeti {
   hedef: number | null;
   birim: string;
   teslim: number | null;
-  durum: 'sirada' | 'uretimde' | 'hazir' | 'sevk';
+  durum: 'sirada' | 'uretimde' | 'hazir' | 'sevk' | null;
   uretilen: number | null;
 }
 

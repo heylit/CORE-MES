@@ -24,7 +24,7 @@ export function SiparisAyrinti({ id }: { id: string }) {
     <div className="tc-mi-sayfa">
       <Baslik simge="box" baslik={<h3 className="tc-mi-sayfa-baslik">#{o.no} {o.musteri}</h3>} alt={o.urun || undefined} />
       <dl className="tc-mi-ozellikler">
-        <Ozellik simge="check" ad="Durum"><DurumRozeti tur="siparis" durum={o.durum} /></Ozellik>
+        <Ozellik simge="check" ad="Durum">{o.durum ? <DurumRozeti tur="siparis" durum={o.durum} /> : '–'}</Ozellik>
         <Ozellik simge="clock" ad="Teslim">
           {o.teslim
             ? <span className="tc-mi-ust">{gunEtiketi(o.teslim)}{o.durum !== 'sevk' && <TeslimEtiketi etiket={teslimEtiketi(o.teslim)} />}</span>

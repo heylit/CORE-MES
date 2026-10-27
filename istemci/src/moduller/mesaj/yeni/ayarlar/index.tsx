@@ -2,13 +2,13 @@ import { useState } from 'react';
 import {
   Dugme, IsaretKutusu, Kart, OnayPenceresi, Rozet, SayfaBasligi, Secim, Simge, useBildirim,
 } from '../../../../ortak/arayuz/index.ts';
-import { csvIndir } from '../../../../ortak/veri/csv.ts';
 import { M, gunEtiketi, isoGun, saatDakika } from '../bicim.ts';
 import { useMesaj } from '../durum.tsx';
 import { IletiMetni } from '../sohbet/IletiMetni.tsx';
 import type { Kayit, Kural, Zamanli } from '../tipler.ts';
 import { duzenleyebilir } from '../yetki.ts';
-import { KURAL_TURLERI, TEKRARLAR, kuralParametresi, kuralTuruMu } from '../otomasyon/kurallar.ts';
+import { BEKLEYEN_TUR, KURAL_TURLERI, TEKRARLAR, kuralParametresi, kuralTuruMu } from '../otomasyon/kurallar.ts';
+import { KISISIZ, eskiCsv } from './csv.ts';
 import { dosyaIndir, takvimimMetni } from './takvim-dosyasi.ts';
 import './ayarlar.css';
 
@@ -45,16 +45,16 @@ export function Ayarlar() {
   };
 
   const siparisleriAktar = () => {
-    csvIndir('siparisler', ['Sipariş no', 'Müşteri', 'Ürün', 'Miktar', 'Üretilen', 'Birim', 'Teslim', 'Durum'], (m.siparisler ?? []).map((o) => [
-      o.no, o.musteri, o.urun, o.hedef, o.uretilen, o.birim, o.teslim ? isoGun(o.teslim) : '', SIPARIS_DURUMU[o.durum],
-    ]));
+    dosyaIndir(`siparisler-${isoGun(Date.now())}.csv`, eskiCsv(['Sipariş no', 'Müşteri', 'Ürün', 'Miktar', 'Üretilen', 'Birim', 'Teslim', 'Durum'], (m.siparisler ?? []).map((o) => [
+      o.no, o.musteri, o.urun, o.hedef, o.uretilen, o.birim, o.teslim ? isoGun(o.teslim) : '', o.durum ? SIPARIS_DURUMU[o.durum] : '',
+    ])), 'text/csv;charset=utf-8');
   };
 
   const gorevleriAktar = () => {
-    csvIndir('gorevler', ['Görev', 'Kime', 'Veren', 'Durum', 'Ne zamana', 'Sipariş', 'Açıldı'], m.veri.gorevler.map((t) => [
-      t.title, t.to ? m.ad(t.to) : '', m.ad(t.by), GOREV_DURUMU[t.status], t.due ? isoGun(t.due) : '',
+    dosyaIndir(`gorevler-${isoGun(Date.now())}.csv`, eskiCsv(['Görev', 'Kime', 'Veren', 'Durum', 'Ne zamana', 'Sipariş', 'Açıldı'], m.veri.gorevler.map((t) => [
+      t.title, t.to ? m.ad(t.to) : KISISIZ, t.by ? m.ad(t.by) : KISISIZ, GOREV_DURUMU[t.status], t.due ? isoGun(t.due) : '',
       (m.siparisler ?? []).find((o) => o.id === t.orderId)?.no ?? '', isoGun(t.createdAt || Date.now()),
-    ]));
+    ])), 'text/csv;charset=utf-8');
   };
 
   const sil = async () => {
@@ -202,7 +202,7 @@ function KuralSatiri({ r, kanal, sil }: { r: Kayit<Kural>; kanal: string | undef
         <p className="tc-mb-bilgi">
           <span>{kanal !== undefined ? `#${kanal} kanalına` : 'Kanal silinmiş'}</span>
           {parametreler.map(([ad, p]) => <span key={ad}>{p.etiket}: <b>{String(kuralParametresi(r, ad))}</b></span>)}
-          {!tanim.calisir && <span className="tc-mb-gec">Sipariş verisi bu uyarıyı desteklemiyor</span>}
+          {!tanim.calisir && <span className="tc-mb-gec">{BEKLEYEN_TUR}</span>}
         </p>
         {degisir && (
           <div className="tc-mb-eylemler">

@@ -100,6 +100,10 @@ describe('otomatik uyarılar', () => {
     const t = k<Gorev>('t1', { title: 'G', to: KISI_B, by: KISI_A, status: 'todo', due: null, createdAt: 0 });
     expect(bilinenKisiler({ gorevler: [t], onaylar: [], duyurular: [] }, BEN).sort()).toEqual([BEN, KISI_A, KISI_B].sort());
   });
+
+  it('bilinen kişilere çevrimiçiler ve açılan kanalların yazarları da girer (838/3 a)', () => {
+    expect(bilinenKisiler({ gorevler: [], onaylar: [], duyurular: [] }, BEN, ['u_cevrimici', 'u_yazar', BEN]).sort()).toEqual([BEN, 'u_cevrimici', 'u_yazar'].sort());
+  });
 });
 
 describe('zamanlanmış iletiler', () => {
