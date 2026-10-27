@@ -390,16 +390,16 @@ export const degisiklikParametresi = z.object({ id: z.coerce.number().int().posi
 
 // Bedel ayarı (209 a): gecikme bedelinin tabanı (TL/saat), finansman ve kâr riski oranları (%/gün, finansman boşsa bedele girmez) ve öncelik
 // sınıfı eşikleri (ortanca bedelin katı).
-// Öncelik çarpanları (195 a: Yüksek, Normal, Düşük) ve müşteri sınıfı çarpanları (265 a: A, B, C) da buradadır (denetim #21). Yazarken
+// Öncelik çarpanları (195 a: Yüksek, Normal, Düşük) da buradadır (denetim #21); müşteri sınıfı çarpanları 955 b ile kalktı. Yazarken
 // verilmeyen çarpan değişmez: çarpanları göstermeyen ekran eski gövdeyle yazabilsin.
 const carpan = z.number().gt(0).max(5);
 export const bedelAyari = z.object({
   tabanBedelSaat: z.number().positive(), finansmanOraniGun: z.number().min(0).max(5).nullable(), karRiskiOraniGun: z.number().min(0).max(5),
   yuksekEsigi: z.number().gt(1), dusukEsigi: z.number().gt(0).lt(1),
-  yuksekCarpani: carpan, normalCarpani: carpan, dusukCarpani: carpan, sinifACarpani: carpan, sinifBCarpani: carpan, sinifCCarpani: carpan,
+  yuksekCarpani: carpan, normalCarpani: carpan, dusukCarpani: carpan,
 });
 export const bedelAyariGovdesi = bedelAyari.partial({
-  yuksekCarpani: true, normalCarpani: true, dusukCarpani: true, sinifACarpani: true, sinifBCarpani: true, sinifCCarpani: true,
+  yuksekCarpani: true, normalCarpani: true, dusukCarpani: true,
 });
 
 // Plan motoru ayarları (kart 811; 771 a, 772 a, 776 b): amaç (sıralı ya da TL), stoku bilinmeyen malzemede davranış (dur ya da varsay) ve

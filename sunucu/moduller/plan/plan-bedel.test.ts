@@ -68,7 +68,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   test('6b: bedel ayarı plan ayarında; varsayılanlar kodun değerleri; 237 a: yalnız planı yazan, ayarı yapan ya da fiyat gören okur', async () => {
     for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', '/plan/bedel-ayari')).statusCode, 403);
     assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'),
-      { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7 });
+      { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 });
   });
 
   test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); öner aynı yerleri yazar', async () => {
@@ -243,18 +243,18 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   });
 
   test('210 a, denetim #21: bedel ayarını yalnız plan.bedel-ayari değiştirir (müdür); planlama değiştiremez; değerler sınırlıdır; çarpansız gövde çarpanları korur', async () => {
-    const varsayilan = { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7 };
+    const varsayilan = { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 };
     const yeni = { tabanBedelSaat: 200, finansmanOraniGun: 0.14, karRiskiOraniGun: 0.25, yuksekEsigi: 1.8, dusukEsigi: 0.5 };
-    const carpanlar = { yuksekCarpani: 3, normalCarpani: 1.2, dusukCarpani: 0.4, sinifACarpani: 2, sinifBCarpani: 1.1, sinifCCarpani: 0.6 };
+    const carpanlar = { yuksekCarpani: 3, normalCarpani: 1.2, dusukCarpani: 0.4 };
     const taslak = null;
     assert.equal((await istek(c.planlama, 'POST', '/plan/bedel-ayari', { ...yeni, taslak })).statusCode, 403);
     assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, dusukEsigi: 1.2, taslak })).statusCode, 400);
     assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, tabanBedelSaat: 0, taslak })).statusCode, 400);
-    assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, sinifCCarpani: 0, taslak })).statusCode, 400);
+    assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, dusukCarpani: 0, taslak })).statusCode, 400);
     assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, yuksekCarpani: 6, taslak })).statusCode, 400);
     try {
-      // 148 a: yazma taslağa gider; canlı onaya kadar değişmez, taslağın okuması yeni değeri verir.
-      const t = await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, ...carpanlar, taslak });
+      // 148 a: yazma taslağa gider; canlı onaya kadar değişmez, taslağın okuması yeni değeri verir. 955 b: sınıf çarpanı artık alan değildir.
+      const t = await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, ...carpanlar, sinifACarpani: 2, taslak });
       assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), varsayilan, 'canlı onaya kadar değişmez');
       assert.deepEqual(await tamam(c.cam, 'GET', `/plan/bedel-ayari?taslak=${t.taslak!.id}`), { ...yeni, ...carpanlar });
       await canliyaGecir(c.mudur, t);
