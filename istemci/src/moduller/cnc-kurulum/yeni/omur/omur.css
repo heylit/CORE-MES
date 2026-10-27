@@ -1,4 +1,4 @@
-/* Takım Ömrü (P5): sahne solda, panel sağda; 768 altında panel prototipteki gibi alttan açılan çekmece. Yalnız tasarım değişkenleri. */
+/* Takım Ömrü (P5): sahne solda, panel sağda; 860 ve altında panel prototipteki gibi alttan açılan çekmece. Yalnız tasarım değişkenleri. */
 .tc-co { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--pencere-genis) * .75); gap: var(--b-3); min-height: var(--ekran-boy-70); }
 .tc-co-sahne { position: relative; min-height: var(--ekran-boy-60); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); overflow: hidden; background: var(--sahne-arka); }
 .tc-co-sahne-alan { position: absolute; inset: 0; touch-action: none; cursor: grab; }
@@ -171,9 +171,9 @@
 .tc-co-yntablo small { grid-column: 3; color: var(--muted); }
 .tc-co-yntablo .tc-co-st-over b, .tc-co-yntablo .tc-co-st-crit b { color: var(--stop); }
 
-/* 768 altında panel alttan çekmece; grafikler tek sütun ve kaydırılır. */
-@media (max-width: 767px) {
-  .tc-co { grid-template-columns: minmax(0, 1fr); }
+/* 860 ve altında (prototipin kırılması) panel alttan çekmece; grafikler tek sütun ve kaydırılır. */
+@media (max-width: 860px) {
+  .tc-co { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
   .tc-co-sahne { min-height: var(--ekran-boy-70); }
   .tc-co-yan {
     position: absolute; left: 0; right: 0; bottom: 0; height: var(--ekran-boy-62); gap: 0; background: var(--panel);

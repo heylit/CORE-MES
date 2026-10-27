@@ -211,7 +211,7 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
 test.describe('P5 Takım Ömrü', () => {
   test('Takım Ömrü: üç kip açılır, bakmak yazmaz, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/takim-omru');
-    // 768 altında panel alttan çekmecedir (prototipteki gibi); kip sekmeleri çekmece açılınca erişilir.
+    // 860 ve altında panel alttan çekmecedir (prototipteki gibi); kip sekmeleri çekmece açılınca erişilir.
     const cekmece = page.locator('.tc-co-cekmece');
     if (await cekmece.isVisible()) await cekmece.click();
     const kipler = page.getByRole('tablist', { name: 'Takım ömrü' });
@@ -231,7 +231,7 @@ test.describe('P5 Takım Ömrü', () => {
     for (const genislik of [360, 768, 1280]) {
       await page.setViewportSize({ width: genislik, height: 800 });
       await expect(kipler).toBeVisible();
-      if (genislik < 768) await expect(page.locator('.tc-co-cekmece')).toBeVisible();
+      if (genislik <= 860) await expect(page.locator('.tc-co-cekmece')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     }
     expect(ag.hatalar).toEqual([]);
