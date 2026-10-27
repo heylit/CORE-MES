@@ -40,7 +40,10 @@ describe('Nakit planı', () => {
     fireEvent.change(screen.getByRole('slider', { name: /Gecikmiş alacakların tahsili/ }), { target: { value: '0' } });
     expect(within(ozet).getByText('13 hafta giriş').parentElement!.textContent).not.toBe(once);
     fireEvent.click(within(tablo).getAllByRole('row')[1]!);
-    expect(screen.getByRole('region', { name: '1. hafta kalemleri' })).toBeTruthy();
+    // Kalemler prototipteki gibi satırın altında açılır; ikinci tık kapatır.
+    expect(screen.getByRole('list', { name: '1. hafta kalemleri' })).toBeTruthy();
+    fireEvent.click(within(tablo).getAllByRole('row')[1]!);
+    expect(screen.queryByRole('list', { name: '1. hafta kalemleri' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Varsayılana dön' }));
     expect(within(ozet).getByText('13 hafta giriş').parentElement!.textContent).toBe(once);
   });

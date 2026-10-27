@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { ChartConfiguration } from 'chart.js';
-import { DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import '../../../../ortak/arayuz/tablo.css';
 import { kisaTarih, paraMetni, sayiMetni, tarih, tl, YOK } from '../bicim.ts';
 import { sayi, type BeklenenOdeme } from '../donustur.ts';
 import { yelpaze } from '../gorunum.ts';
-import { addDays, fmtK, pct, sum, type FinansMotoru, type Hafta, type Senaryo } from '../motor.ts';
-import type { EkranOzellikleri } from '../sekmeler.ts';
+import { addDays, fmtK, pct, sum, type FinansMotoru, type Senaryo } from '../motor.ts';
+import { yeniYol, type EkranOzellikleri } from '../sekmeler.ts';
 import type { FinansVerisi } from '../veri.ts';
 import { Grafik, saydam, temelAyar, type Renkler } from './grafik.tsx';
 import { OzetSeridi, SecimSeridi } from './parcalar.tsx';
@@ -59,7 +61,8 @@ function GenelGorunum({ finans }: { finans: FinansVerisi }) {
         <YelpazeGrafigi motor={motor} />
         <p className="tc-fy-not">
           Her simülasyonda müşterilerin ödeme günleri kendi geçmiş gecikmelerinden, yeni satışlar geçmiş oynaklıktan, çeklerin karşılıksız çıkması
-          ayarlardaki olasılıktan rastgele çekilir. Sabit ödemeler, açık borçlar ve tahmini KDV her senaryoda aynıdır. Yöntemin ayrıntısı Tahminler ve doğruluk bölümündedir.
+          ayarlardaki olasılıktan rastgele çekilir. Sabit ödemeler, açık borçlar ve tahmini KDV her senaryoda aynıdır.{' '}
+          <Link to={`${yeniYol('tahminler')}#m-mc`}>Yöntemin ayrıntısı</Link>
         </p>
       </Kart>
       <NakitKoprusu motor={motor} />
@@ -94,12 +97,12 @@ function YelpazeGrafigi({ motor }: { motor: FinansMotoru }) {
   return <Grafik etiket="Olası nakit seyri: 13 haftalık olasılık yelpazesi" boy="uzun" kur={kur} />;
 }
 
-// Grup adı 16 harflik satırlara bölünür; dar ekranda eksen yazısı kırpılmaz.
+// Grup adı 14 harflik satırlara bölünür (prototipteki eksen yazısı).
 function satiraBol(ad: string): string | string[] {
-  if (ad.length <= 16) return ad;
+  if (ad.length <= 14) return ad;
   return ad.split(' ').reduce<string[]>((acc, w) => {
     const son = acc[acc.length - 1];
-    if (son !== undefined && `${son} ${w}`.length <= 16) acc[acc.length - 1] = `${son} ${w}`; else acc.push(w);
+    if (son !== undefined && `${son} ${w}`.length <= 14) acc[acc.length - 1] = `${son} ${w}`; else acc.push(w);
     return acc;
   }, []);
 }
@@ -126,9 +129,10 @@ function NakitKoprusu({ motor }: { motor: FinansMotoru }) {
             },
           },
         },
-        // Yatay çizilir: sekiz grup adı 360 genişlikte yatay eksende üst üste biniyordu.
-        indexAxis: 'y',
-        scales: { y: { grid: { display: false }, ticks: { color: r.soluk, autoSkip: false, callback: (_v, i) => satiraBol(cubuk[i]?.etiket ?? '') } }, x: { grid: { color: r.izgara }, ticks: { color: r.soluk, callback: (v) => fmtK(Number(v)) } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: r.soluk, maxRotation: 0, autoSkip: false, callback: (_v, i) => satiraBol(cubuk[i]?.etiket ?? '') } },
+          y: { grid: { color: r.izgara }, ticks: { color: r.soluk, callback: (v) => fmtK(Number(v)) } },
+        },
       }),
     };
   }, [k]);
@@ -168,28 +172,15 @@ function HaftaHafta({ finans }: { finans: FinansVerisi }) {
     + (sp.gecikmis ? ` Vadesi geçmiş ${sp.gecikmis} kalem katılmadı; listede kontrol edin.` : '')
     + ' Firmaya ödenmiş avans düşülür. Fatura gelince açık borç olarak plana zaten girer ve bu satırdan düşer.';
 
-  const sutunlar: Sutun<Hafta>[] = [
-    { anahtar: 'hafta', baslik: 'Hafta', kirilmaz: true, hucre: (w) => <span className="tc-fc-yigin"><span>{w.i + 1}. hafta</span><small className="tc-fy-not">{kisaTarih(w.start)}–{kisaTarih(w.end)}</small></span>, csv: (w) => `${w.i + 1}. hafta` },
-    { anahtar: 'acilis', baslik: 'Açılış', hizala: 'sag', mono: true, hucre: (w) => tl(w.open) },
-    { anahtar: 'giris', baslik: 'Giriş', hizala: 'sag', mono: true, hucre: (w) => <span className="tc-fc-arti">{tl(w.inflow)}</span>, csv: (w) => w.inflow },
-    { anahtar: 'cikis', baslik: 'Çıkış', hizala: 'sag', mono: true, hucre: (w) => <span className="tc-fc-eksi">{tl(w.outflow)}</span>, csv: (w) => w.outflow },
-    { anahtar: 'net', baslik: 'Net', hizala: 'sag', mono: true, hucre: (w) => tl(w.net) },
-    {
-      anahtar: 'kapanis', baslik: 'Kapanış', hizala: 'sag', mono: true,
-      hucre: (w) => <b className={w.close < 0 ? 'tc-fc-eksi' : w.close < th ? 'tc-fc-uyari' : ''}>{tl(w.close)}</b>, csv: (w) => w.close,
-    },
-    ...(spVar ? [{
-      anahtar: 'siparis', baslik: 'Siparişten (tahmin)', hizala: 'sag' as const, mono: true,
-      hucre: (w: Hafta) => (sp.weeks[w.i]!.tutar ? <span className="tc-fc-eksi">{tl(-sp.weeks[w.i]!.tutar)}</span> : YOK), csv: (w: Hafta) => -sp.weeks[w.i]!.tutar,
-    }] : []),
-    { anahtar: 'esik', baslik: 'Eşik', hucre: (w) => (w.close < th ? <Rozet ton={w.close < 0 ? 'hata' : 'uyari'}>Eşik altı</Rozet> : null), csv: false },
-  ];
-  const secili = acikHafta === null ? null : f.weeks[acikHafta] ?? null;
-  const seciliKalemler = secili ? [...secili.items, ...sp.weeks[secili.i]!.items].sort((a, b) => a.amt - b.amt) : [];
+  const kolon = spVar ? 8 : 7;
+  const ac = (i: number) => acikHaftaYaz((o) => (o === i ? null : i));
 
   return (
     <>
-      <Kart baslik="Varsayımlar">
+      <Kart
+        baslik="Varsayımlar"
+        sag={<Dugme onClick={() => senaryoYaz({ ...motor.emptyState().scen })}>Varsayılana dön</Dugme>}
+      >
         <div className="tc-fc-varsayim">
           {KAYDIRICILAR.map((s) => (
             <label key={s.k} className="tc-fc-kaydirici">
@@ -206,7 +197,6 @@ function HaftaHafta({ finans }: { finans: FinansVerisi }) {
             <span>Yeni satış ve alımları da kat<small className="tc-fy-not">Kapalıyken yalnızca kayıtlı faturalar ve sabit ödemeler hesaplanır</small></span>
           </label>
         </div>
-        <div className="tc-fy-dugmeler"><button type="button" className="tc-fc-serit-dugme" onClick={() => senaryoYaz({ ...motor.emptyState().scen })}>Varsayılana dön</button></div>
       </Kart>
       <OzetSeridi etiket="13 haftalık plan" hucreler={[
         { etiket: 'Bugünkü nakit', deger: tl(f.open) },
@@ -221,24 +211,54 @@ function HaftaHafta({ finans }: { finans: FinansVerisi }) {
       <Kart baslik="Haftalık plan" baslikEki={<span className="tc-fy-not">Çubuklar giriş ve çıkış, çizgi hafta sonu bakiyesi</span>}>
         <HaftalikGrafik motor={motor} f={f} spK={spK} siparisVar={sp.toplam > 0} th={th} />
       </Kart>
-      <Kart baslik="Hafta hafta" baslikEki={<span className="tc-fy-not">Satıra dokunarak kalemleri görün</span>}>
-        <Tablo<Hafta>
-          etiket="Hafta hafta nakit planı" sutunlar={sutunlar} satirlar={f.weeks} satirAnahtari={(w) => w.i}
-          satirSec={(w) => acikHaftaYaz((o) => (o === w.i ? null : w.i))}
-          arac={{ csv: { ad: 'nakit-plani' } }}
-        />
-        {secili && (
-          <section className="tc-fc-kalemler" aria-label={`${secili.i + 1}. hafta kalemleri`}>
-            <h3 className="tc-fy-alt-baslik">{secili.i + 1}. hafta kalemleri ({kisaTarih(secili.start)}–{kisaTarih(secili.end)})</h3>
-            {seciliKalemler.length ? (
-              <ul className="tc-fc-satirlar">
-                {seciliKalemler.map((x, i) => (
-                  <li key={i} className="tc-fc-satir"><span>{kisaTarih(x.date)} · {x.label}</span><b className={`tc-fc-tutar ${x.amt < 0 ? 'tc-fc-eksi' : 'tc-fc-arti'}`}>{tl(x.amt)}</b></li>
-                ))}
-              </ul>
-            ) : <p className="tc-fy-not">Kalem yok</p>}
-          </section>
-        )}
+      <Kart baslik="Hafta hafta" baslikEki={<span className="tc-fy-not">Satıra tıklayarak kalemleri görün</span>}>
+        <div className="tc-tablo-kap">
+          <table className="tc-tablo" aria-label="Hafta hafta nakit planı">
+            <thead>
+              <tr>
+                <th scope="col">Hafta</th><th scope="col" className="tc-tablo-sag">Açılış</th><th scope="col" className="tc-tablo-sag">Giriş</th>
+                <th scope="col" className="tc-tablo-sag">Çıkış</th><th scope="col" className="tc-tablo-sag">Net</th><th scope="col" className="tc-tablo-sag">Kapanış</th>
+                {spVar && <th scope="col" className="tc-tablo-sag">Siparişten (tahmin)</th>}
+                <th scope="col"><span className="tc-fc-gizli">Eşik</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {f.weeks.map((w) => {
+                const kalemler = [...w.items, ...sp.weeks[w.i]!.items].sort((a, b) => a.amt - b.amt);
+                return (
+                  <Fragment key={w.i}>
+                    <tr
+                      className="tc-tablo-secilir" tabIndex={0} aria-expanded={acikHafta === w.i} onClick={() => ac(w.i)}
+                      onKeyDown={(o) => { if (o.target === o.currentTarget && (o.key === 'Enter' || o.key === ' ')) { o.preventDefault(); ac(w.i); } }}
+                    >
+                      <td className="tc-tablo-kirilmaz">{w.i + 1}. hafta <small className="tc-fy-not">{kisaTarih(w.start)}–{kisaTarih(w.end)}</small></td>
+                      <td className="tc-tablo-sag mono">{tl(w.open)}</td>
+                      <td className="tc-tablo-sag mono"><span className="tc-fc-arti">{tl(w.inflow)}</span></td>
+                      <td className="tc-tablo-sag mono"><span className="tc-fc-eksi">{tl(w.outflow)}</span></td>
+                      <td className="tc-tablo-sag mono">{tl(w.net)}</td>
+                      <td className="tc-tablo-sag mono"><b className={w.close < 0 ? 'tc-fc-eksi' : w.close < th ? 'tc-fc-uyari' : ''}>{tl(w.close)}</b></td>
+                      {spVar && <td className="tc-tablo-sag mono">{sp.weeks[w.i]!.tutar ? <span className="tc-fc-eksi">{tl(-sp.weeks[w.i]!.tutar)}</span> : YOK}</td>}
+                      <td>{w.close < th && <Rozet ton={w.close < 0 ? 'hata' : 'uyari'}>Eşik altı</Rozet>}</td>
+                    </tr>
+                    {acikHafta === w.i && (
+                      <tr className="tc-fc-kalemler">
+                        <td colSpan={kolon}>
+                          {kalemler.length ? (
+                            <ul className="tc-fc-satirlar" aria-label={`${w.i + 1}. hafta kalemleri`}>
+                              {kalemler.map((x, i) => (
+                                <li key={i} className="tc-fc-satir"><span>{kisaTarih(x.date)} · {x.label}</span><b className={`tc-fc-tutar ${x.amt < 0 ? 'tc-fc-eksi' : 'tc-fc-arti'}`}>{tl(x.amt)}</b></li>
+                              ))}
+                            </ul>
+                          ) : 'Kalem yok'}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Kart>
     </>
   );

@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { ComponentType } from 'react';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
@@ -25,11 +26,13 @@ export function ekranAc(Ekran: ComponentType<EkranOzellikleri>, yetki: FinansYet
   const kayitGir = vi.fn();
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
-    <QueryClientProvider client={istemci}>
-      <BildirimSaglayici>
-        <Ekran finans={finans} yetki={yetki} kayitGir={kayitGir} />
-      </BildirimSaglayici>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={istemci}>
+        <BildirimSaglayici>
+          <Ekran finans={finans} yetki={yetki} kayitGir={kayitGir} />
+        </BildirimSaglayici>
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   return { kayitGir, finans };
 }

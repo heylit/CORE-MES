@@ -42,12 +42,13 @@ describe('çek ve senet: saf hesaplar', () => {
     expect(vadeTakvimi(motor, []).siparisVar).toBe(false);
   });
 
-  it('düzeltme ve iptal komutu: sürümle, boş banka null', () => {
+  it('düzeltme ve iptal komutu: sürümle, boş banka null; formun öbür alanları gönderilmez (tam kipteki gibi)', () => {
     const c = V.cekById.get(2)!;
-    expect(duzeltIlk(c)).toEqual({ banka: '', seriNo: '', vade: '2026-10-20' });
-    expect(cekDuzeltKomutu(c, { banka: ' ', seriNo: 'A1', vade: '2026-10-25' })).toMatchObject({
-      uc: 'POST /finans/cekler/:id/duzelt', parametre: { id: 2 }, govde: { surum: 1, banka: null, seriNo: 'A1', vade: '2026-10-25' },
-    });
+    const ilk = duzeltIlk(c, 'Firma');
+    expect(ilk).toMatchObject({ banka: '', seriNo: '', vade: '2026-10-20', cari: 'Firma', yon: c.yon, durum: c.durum });
+    const k = cekDuzeltKomutu(c, { ...ilk, banka: ' ', seriNo: 'A1', vade: '2026-10-25', tutar: '1', yon: 'verilen', durum: 'odendi' });
+    expect(k).toMatchObject({ uc: 'POST /finans/cekler/:id/duzelt', parametre: { id: 2 } });
+    expect(k.govde).toEqual({ surum: 1, banka: null, seriNo: 'A1', vade: '2026-10-25' });
     expect(cekIptalKomutu(c)).toMatchObject({ uc: 'POST /finans/cekler/:id/iptal', parametre: { id: 2 }, govde: { surum: 1 } });
     const q = motor.durum.cheques.find((x) => x._cekId === 2)!;
     expect(sunucuCeki(V, q)).toBe(c);

@@ -55,10 +55,10 @@
 .tc-fc-onay { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); }
 .tc-fc-onay input { width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); flex: none; }
 .tc-fc-onay span { display: flex; flex-direction: column; min-width: 0; }
-.tc-fc-kalemler { margin-top: var(--b-4); }
+.tc-fc-kalemler td { white-space: normal; background: var(--panel2); }
+.tc-fc-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Bütçe: tablodaki tutar girdisi ve satış hedefi satırı. */
 .tc-fc-butce-girdi { width: calc(var(--dokunma) * 3); max-width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
-.tc-fc-hedef { display: grid; grid-template-columns: max-content 1fr; align-items: center; gap: var(--b-2) var(--b-4); margin: var(--b-4) 0 var(--b-3); }
-.tc-fc-hedef dt { color: var(--muted); }
-.tc-fc-hedef dd { margin: 0; text-align: right; }
+.tc-fc-takvim { justify-content: flex-start; }
+.tc-fc-takvim > .tc-fc-yigin { flex: 1 1 auto; }

@@ -34,6 +34,17 @@ describe('Çek ve senet ekranı', () => {
     expect(screen.queryByRole('button', { name: /çekini düzenle/ })).toBeNull();
   });
 
+  it('tablodaki durum seçimi kaydetmez, "Durum güncelle"ye yönlendirir (tam kipteki gibi)', async () => {
+    const istekler = sunucuKur(YAZAN);
+    ekranAc(Cekler, YAZAR);
+    const secim = within(within(takip()).getAllByRole('row')[1]!).getByRole('combobox', { name: 'Durum' }) as HTMLSelectElement;
+    const once = secim.value;
+    fireEvent.change(secim, { target: { value: 'odendi' } });
+    await screen.findByText('Çek durumunu "Çekin durumu değişti" ile değiştirin.');
+    expect(secim.value).toBe(once);
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
   it('izinli: düğmeler olay çekmecesini açar (cekal, cekver, cekdurum)', () => {
     const { kayitGir } = ekranAc(Cekler, YAZAR);
     fireEvent.click(screen.getByRole('button', { name: 'Çek aldım' }));
@@ -55,15 +66,14 @@ describe('Çek ve senet ekranı', () => {
     }));
   });
 
-  it('iptal: yönetici onaylayınca cek iptal ucuna gider', async () => {
+  it('iptal: yönetici satır içi onaylayınca cek iptal ucuna gider', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/cekler/2/iptal': () => json(200, { cek: {} }) });
     ekranAc(Cekler, YONETICI);
     fireEvent.click(within(takip()).getAllByRole('button', { name: /çekini düzenle/ })[0]!);
     const pencere = await screen.findByRole('dialog', { name: 'Çek / senedi düzenle' });
     fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
-    const onay = await screen.findByRole('dialog', { name: 'Çeki iptal et' });
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
-    fireEvent.click(within(onay).getByRole('button', { name: 'İptali onayla' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'İptali onayla' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toEqual({ yontem: 'POST', yol: '/finans/cekler/2/iptal', govde: { surum: 1 } }));
   });
 });

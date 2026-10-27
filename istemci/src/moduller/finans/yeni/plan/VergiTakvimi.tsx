@@ -39,12 +39,13 @@ export function VergiTakvimi({ finans }: EkranOzellikleri) {
             {v.takvim.map((e) => {
               const g = kalanGun(e.date, motor.bugun);
               return (
-                <li key={`${e.date}-${e.name}`} className="tc-fc-satir">
+                <li key={`${e.date}-${e.name}`} className="tc-fc-satir tc-fc-takvim">
+                  <Rozet ton={kalanGunTonu(g)}>{g}</Rozet>
                   <span className="tc-fc-yigin">
                     <b>{e.name}</b>
                     <small className="tc-fy-not">{tarih(e.date)} · Dönem: {e.per}{e.amount ? ` · Tahmini ${tl(e.amount)}` : ''}</small>
                   </span>
-                  <Rozet ton={kalanGunTonu(g)}>{g} gün kaldı</Rozet>
+                  <small className="tc-fy-not">gün kaldı</small>
                 </li>
               );
             })}
@@ -56,7 +57,7 @@ export function VergiTakvimi({ finans }: EkranOzellikleri) {
         </Kart>
       </div>
       <Kart baslik="KDV dönem tablosu" baslikEki={<span className="tc-fy-not">Devreden KDV sonraki aya aktarılır</span>}>
-        <Tablo<KdvAyi> etiket="KDV dönem tablosu" sutunlar={sutunlar} satirlar={v.aylar.slice().reverse()} satirAnahtari={(m) => m.ym} arac={{ csv: { ad: 'kdv-donemleri' } }} />
+        <Tablo<KdvAyi> etiket="KDV dönem tablosu" sutunlar={sutunlar} satirlar={v.aylar.slice().reverse()} satirAnahtari={(m) => m.ym} />
       </Kart>
     </div>
   );

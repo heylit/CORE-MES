@@ -37,14 +37,24 @@ export function Butce({ finans, yetki }: EkranOzellikleri) {
     return <ButceGirdisi key={deger} etiket={etiket} deger={deger} adim={adim} kaydet={(v) => gonder([butceKomutu(kalem, motor.bugun, v)])} />;
   };
 
-  const sutunlar: Sutun<ButceSatiri>[] = [
-    { anahtar: 'kalem', baslik: 'Kalem', hucre: (s) => s.kalem },
-    { anahtar: 'butce', baslik: 'Aylık bütçe', hizala: 'sag', mono: true, hucre: (s) => tutarGirdisi(`${s.kalem} bütçesi`, s.butce, butceKalemi(s.kalem), 1000), csv: (s) => s.butce },
-    { anahtar: 'gercek', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, hucre: (s) => tl(s.gercek), csv: (s) => s.gercek },
-    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', mono: true, hucre: (s) => <span className={s.kalan < 0 ? 'tc-fc-eksi' : ''}>{tl(s.kalan)}</span>, csv: (s) => s.kalan },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={DURUM_TONU[s.durum]}>{BUTCE_DURUM_ADI[s.durum]}</Rozet>, csv: (s) => BUTCE_DURUM_ADI[s.durum] },
-    { anahtar: 'yil', baslik: 'Yıl ort.', hizala: 'sag', mono: true, hucre: (s) => <span className="tc-fy-not">{tl(s.yilOrt)}</span>, csv: (s) => s.yilOrt },
+  // Satış hedefi tablonun son satırıdır (prototipteki gibi): durum ve yıl ortalaması boş kalır.
+  type Satir = ButceSatiri | { hedef: true };
+  const hedefMi = (s: Satir): s is { hedef: true } => 'hedef' in s;
+  const sutunlar: Sutun<Satir>[] = [
+    { anahtar: 'kalem', baslik: 'Kalem', hucre: (s) => (hedefMi(s) ? <b>Aylık satış hedefi</b> : s.kalem) },
+    {
+      anahtar: 'butce', baslik: 'Aylık bütçe', hizala: 'sag', mono: true,
+      hucre: (s) => (hedefMi(s) ? tutarGirdisi('Satış hedefi', T.hedef, 'satis_hedefi', 10000) : tutarGirdisi(`${s.kalem} bütçesi`, s.butce, butceKalemi(s.kalem), 1000)),
+    },
+    { anahtar: 'gercek', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, hucre: (s) => tl(hedefMi(s) ? T.satis : s.gercek) },
+    {
+      anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', mono: true,
+      hucre: (s) => (hedefMi(s) ? tl(T.hedef - T.satis) : <span className={s.kalan < 0 ? 'tc-fc-eksi' : ''}>{tl(s.kalan)}</span>),
+    },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => (hedefMi(s) ? ' ' : <Rozet ton={DURUM_TONU[s.durum]}>{BUTCE_DURUM_ADI[s.durum]}</Rozet>) },
+    { anahtar: 'yil', baslik: 'Yıl ort.', hizala: 'sag', mono: true, hucre: (s) => (hedefMi(s) ? ' ' : <span className="tc-fy-not">{tl(s.yilOrt)}</span>) },
   ];
+  const satirlar: Satir[] = [...T.satirlar, { hedef: true }];
 
   return (
     <div className="tc-fy-bolum tc-fc">
@@ -55,25 +65,21 @@ export function Butce({ finans, yetki }: EkranOzellikleri) {
         { etiket: 'Satış hedefi', deger: tl(T.hedef), alt: A.hf ? `Model tahmini: ${tl(A.hf.fc[0]!.v)}` : '' },
         { etiket: 'Satış (KDV hariç)', deger: tl(T.satis), alt: T.hedef ? `Hedefin ${pct(T.satis / T.hedef, 0)}'i` : 'Hedef girilmedi', ton: T.hedef && T.satis >= T.hedef * T.ayOrani ? 'arti' : 'uyari' },
       ]} />
-      <div className="tc-fc-iki">
-        <Kart baslik={`Bütçe ve gerçekleşen: ${ymLong(ay)}`}>
+      <Kart
+        baslik={`Bütçe ve gerçekleşen: ${ymLong(ay)}`}
+        sag={(
           <div className="tc-fc-arac">
-            <SecimSeridi etiket="Ay" secenekler={butceAylari(motor.bugun).map((m) => [m, ymLabel(m)] as const)} secili={ay} sec={ayYaz} />
             {yetki.yonet && <Dugme simge="rotate" yukleniyor={komut.isPending} onClick={() => gonder(altiAyKomutlari(motor))}>Son 6 ay ortalamasıyla doldur</Dugme>}
+            <SecimSeridi etiket="Ay" secenekler={butceAylari(motor.bugun).map((m) => [m, ymLabel(m)] as const)} secili={ay} sec={ayYaz} />
           </div>
-          <Tablo<ButceSatiri> etiket={`Bütçe ve gerçekleşen: ${ymLong(ay)}`} sutunlar={sutunlar} satirlar={T.satirlar} satirAnahtari={(s) => s.kalem} arac={{ csv: { ad: `butce-${ay}` } }} />
-          <dl className="tc-fc-hedef">
-            <dt>Aylık satış hedefi</dt>
-            <dd>{tutarGirdisi('Satış hedefi', T.hedef, 'satis_hedefi', 10000)}</dd>
-            <dt>Gerçekleşen</dt><dd className="tc-fc-tutar">{tl(T.satis)}</dd>
-            <dt>Kalan</dt><dd className="tc-fc-tutar">{tl(T.hedef - T.satis)}</dd>
-          </dl>
-          <p className="tc-fy-not">"Hızlı gidiyor": harcama oranı ayın geçen kısmından belirgin yüksek. Maaş ve kira gibi ay başında ödenen kalemlerde bu normaldir.</p>
-        </Kart>
-        <Kart baslik="Görsel karşılaştırma" baslikEki={<span className="tc-fy-not">{ymLong(ay)}</span>}>
-          <ButceGrafigi motor={motor} ay={ay} />
-        </Kart>
-      </div>
+        )}
+      >
+        <Tablo<Satir> etiket={`Bütçe ve gerçekleşen: ${ymLong(ay)}`} sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => (hedefMi(s) ? 'hedef' : s.kalem)} />
+        <p className="tc-fy-not">"Hızlı gidiyor": harcama oranı ayın geçen kısmından belirgin yüksek. Maaş ve kira gibi ay başında ödenen kalemlerde bu normaldir.</p>
+      </Kart>
+      <Kart baslik="Görsel karşılaştırma" baslikEki={<span className="tc-fy-not">{ymLong(ay)}</span>}>
+        <ButceGrafigi motor={motor} ay={ay} />
+      </Kart>
     </div>
   );
 }
