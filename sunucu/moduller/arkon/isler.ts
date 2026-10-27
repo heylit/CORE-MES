@@ -1,6 +1,6 @@
 import { isTanimi } from '#cekirdek/zamanlayici.ts';
 import { zamanOlaylariniYenile } from './anomali-zaman.ts';
-import { anomaliGunuKaydet, bekleyenleriYinele } from './servis.ts';
+import { anomaliGunuKaydet, bekleyenleriYinele, kmKararlariniAynala } from './servis.ts';
 import { eskiIletileriSil } from './sorgular.ts';
 
 // Bekleyen TMI yansımaları yeni Arkon kaydı gelmese de yeniden denenir (UYUM-BORCU sınır f). Satır başına aralık ve sıra kuralları
@@ -15,4 +15,6 @@ export const isler = [
   isTanimi({ ad: 'arkon-anomali-olaylari', aralikMs: 15 * 60_000, calis: (db) => zamanOlaylariniYenile(db) }),
   // 15 dakikadan eski cihaz iletileri dakikada bir silinir; kaçıran cihaz imleçten anlar ve yeniden yükler (servis.ts iletiler).
   isTanimi({ ad: 'arkon-ileti-budama', aralikMs: 60_000, calis: eskiIletileriSil }),
+  // 798: Kalite Merkezi'nde verilen numune ve ilk parça kararı açık Arkon numune isteğine aynalanır; iz isteğin belgesindedir (degisti).
+  isTanimi({ ad: 'arkon-km-karar-aynasi', aralikMs: 15_000, calis: (db) => kmKararlariniAynala(db) }),
 ];

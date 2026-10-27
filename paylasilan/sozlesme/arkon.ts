@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { kmOlcumGovdesi } from './kalite-merkezi-studyo.ts';
 import { makineDoluAyrintisi } from './uretim-emirleri.ts';
 
 // Arkon MES, TMI içinde değiştirilmeden çalışır; kendi sunucu sözleşmesini istemcideki bağlantı katmanı bu uçlara çevirir.
@@ -41,6 +42,10 @@ export const arkonKisilerCevabi = z.object({ kisiler: z.array(arkonKisiSemasi) }
 
 export const depoParametresi = z.object({ depo: arkonDeposu });
 export const belgeParametresi = z.object({ depo: arkonDeposu, kimlik: belgeKimligi });
+// 798: terminalin ortak kalite formu numunenin ölçüsünü yazar; üretim emri ve numune istekten çözülür, istemciden alınmaz.
+export const numuneParametresi = z.object({ kimlik: belgeKimligi });
+export const numuneOlcumuGovdesi = z.object({ olcumler: kmOlcumGovdesi.shape.olcumler, parcaSayisi: kmOlcumGovdesi.shape.parcaSayisi, kaynak });
+export type NumuneOlcumuGovdesi = z.input<typeof numuneOlcumuGovdesi>;
 
 const belgeSemasi = z.object({ kimlik: z.string(), surum: z.number().int(), govde: z.unknown() });
 export const belgelerCevabi = z.object({ belgeler: z.array(belgeSemasi) });

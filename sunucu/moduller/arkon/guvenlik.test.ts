@@ -248,7 +248,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('B-006, 129, 131 b, 564 5 a, denetim #12: Başlat ilk parça onayını beklemez; ilk sağlam sayılır, sonrakiler Kalite Merkezi kararına kadar karar bekleyen yazılır; operatör ölçümü karar değildir; Kalite Merkezi\'ne yazılamayan Arkon kararı numuneyi de yazmaz', async () => {
+  test('B-006, 129, 131 b, 798, denetim #12: Başlat ilk parça onayını beklemez; ilk sağlam sayılır, sonrakiler Kalite Merkezi kararına kadar karar bekleyen yazılır; operatör ölçümü karar değildir; ilk parça numunesinin Arkon kararı reddedilir', async () => {
     // Emir paketi: kapı paketin emrinin Kalite Merkezi kararını okur; bu emrin kararı yok (uçtan uca karar yansima.test.ts "denetim #12").
     const paket = 'tmi-ue-990006';
     let n = 0;
@@ -272,8 +272,8 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     assert.equal((await say()).govde.eklenen, 1);
     assert.equal(await bekleyen(), 1, 'sonuç belgesindeki operatör ölçümü karar değildir');
     assert.equal((await yaz('operator', 'requests', 'rq-b006-op', 0, { id: 'rq-b006-op', pkgId: paket, items: [1], status: 'approved', results: {} })).durum, 403);
-    // Bu paketin emri TMI'de yok: kalitenin Kabulü Kalite Merkezi'ne yazılamaz, numune kararı da yazılmaz (uçtan uca: yansima.test.ts "564 5 a").
-    assert.equal((await yaz('quality', 'requests', 'rq-b006', 0, { id: 'rq-b006', pkgId: paket, items: [1], status: 'approved', decidedAt: 1, results: { 1: { ok: true } } })).durum, 404);
+    // 798: ilk parça kararı yalnız Kalite Merkezi'ndedir; kalitenin Arkon Kabulü yazılmaz (uçtan uca: yansima.test.ts "K1, T1").
+    assert.equal((await yaz('quality', 'requests', 'rq-b006', 0, { id: 'rq-b006', pkgId: paket, items: [1], status: 'approved', decidedAt: 1, results: { 1: { ok: true } } })).durum, 403);
     assert.equal((await oku('admin', 'requests', 'rq-b006')).govde.belge, null);
     assert.equal((await say()).govde.eklenen, 1);
     assert.equal(await bekleyen(), 1, 'karar yazılmadı');
@@ -285,8 +285,9 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     const olay = (cid: string) => istek<{ eklenen: number }>(cerezler.operator, 'POST', '/arkon/kayitlar/events/ekle', {
       satirlar: [{ cid, machine: 'M-IPY', pkgId: paket, orderNo: 'E-IPY', state: 'running', reason: null }], kaynak: 'g1',
     });
-    assert.equal((await yaz('admin', 'pkgs', paket, 0, { id: paket, rev: 'A', plan: [{ id: 1 }] })).durum, 200);
-    assert.equal((await yaz('quality', 'requests', 'rq-ipy-0', 0, { id: 'rq-ipy-0', pkgId: paket, rev: 'A', items: [1], status: 'approved', decidedAt: 1, results: { 1: { ok: true } } })).durum, 200);
+    // Kararlı numune periyodik ölçüdür: ilk parça numunesinin kararı Arkon'da yazılmaz (798).
+    assert.equal((await yaz('admin', 'pkgs', paket, 0, { id: paket, rev: 'A', plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] })).durum, 200);
+    assert.equal((await yaz('quality', 'requests', 'rq-ipy-0', 0, { id: 'rq-ipy-0', pkgId: paket, rev: 'A', items: [2], status: 'approved', decidedAt: 1, results: { 2: { ok: true } } })).durum, 200);
     assert.equal((await olay('ipy-0-1')).govde.eklenen, 1);
     const b = (await oku('admin', 'pkgs', paket)).govde.belge;
     assert.equal((await yaz('admin', 'pkgs', paket, b?.surum ?? 0, { ...(b?.govde as object), rev: 'B' })).durum, 200);
@@ -307,8 +308,9 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     };
     const karar = (rol: ArkonRolu, fpRe: Record<string, unknown> | null) => degistir(rol, { fpRe });
     const numune = (kimlik: string, rev: string, status: string) =>
-      yaz('quality', 'requests', kimlik, 0, { id: kimlik, pkgId: paket, rev, items: [1], status, decidedAt: 1, note: 'not', results: { 1: { ok: status !== 'rejected', v: 1 } } });
-    assert.equal((await yaz('admin', 'pkgs', paket, 0, { id: paket, rev: 'A', plan: [{ id: 1 }] })).durum, 200);
+      yaz('quality', 'requests', kimlik, 0, { id: kimlik, pkgId: paket, rev, items: [2], status, decidedAt: 1, note: 'not', results: { 2: { ok: status !== 'rejected', v: 1 } } });
+    // Kararlı numuneler periyodik ölçüdür (798: ilk parça numunesinin kararı Arkon'da yazılmaz).
+    assert.equal((await yaz('admin', 'pkgs', paket, 0, { id: paket, rev: 'A', plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] })).durum, 200);
     assert.equal((await numune('rq-ipy-1a', 'A', 'approved')).durum, 200);
     for (let i = 0; i < 3; i += 1) assert.equal((await say()).govde.eklenen, 1);
     assert.equal((await numune('rq-ipy-1b', 'A', 'rejected')).durum, 200);
@@ -350,7 +352,8 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
   });
 
   test('kritik ölçüde ikinci kontrol kuralı olan pakette kalite onayı ikinci kontrol işareti olmadan 400 alır; işaretle, kuralsız pakette ve kritiksiz istekte geçer (B-006)', async () => {
-    const plan = [{ id: 1, crit: true }, { id: 2 }];
+    // Periyodik ölçüler: ilk parça numunesinin kararı Arkon'da yazılmaz (798).
+    const plan = [{ id: 1, crit: true, freq: 'Her 10 parça' }, { id: 2, freq: 'Her 10 parça' }];
     assert.equal((await yaz('admin', 'pkgs', 'b006-kk', 0, { id: 'b006-kk', plan, rules: { q: { critTwice: true } } })).durum, 200);
     assert.equal((await yaz('admin', 'pkgs', 'b006-kk-yok', 0, { id: 'b006-kk-yok', plan })).durum, 200);
     const istek_ = (kimlik: string, paket: string, items: number[], ek: Record<string, unknown> = {}) =>
