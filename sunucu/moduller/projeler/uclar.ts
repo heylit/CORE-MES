@@ -2,12 +2,16 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, idParametresi, projeGuncelleGovdesi, projeListesiCevabi, projeListesiSorgusu,
-  projeOlusturGovdesi, projeSemasi, siparisParametresi, siparisProjeleriCevabi, siparisSecenekleriCevabi, siparisSecenekleriSorgusu,
-  siparistenProjeGovdesi,
+  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, idParametresi,
+  kilometreTasiEkleGovdesi, kilometreTasiGuncelleGovdesi, kilometreTasiParametresi, kisiSecenekleriCevabi, projeGuncelleGovdesi,
+  projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
+  siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
+  statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import {
-  firmaSecenekleri, projeAc, projeAyrintisi, projeDuzenle, projeListesi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc,
+  firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
+  projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
+  statuListesi, statuYaz, tabanYenile,
 } from './servis.ts';
 
 // Sayfası olan rol okur; `projeler.oku` sayfasız okuma için ayrı verilebilir (başka modülün ekranı proje seçerken).
@@ -50,6 +54,76 @@ export const uclar = [
     cevap: siparisProjeleriCevabi,
     isle: async ({ db, kullanici, parametre }) => ({ projeler: await siparisProjeleri(db, parametre.siparisId, maliyetGorur(kullanici)) }),
   }),
+  // 890 c: statü listesi okunur (liste süzgeci, pencere); değiştirmek yalnız `projeler.statu-ayar`.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/statuler',
+    yetki: OKUMA,
+    cevap: statuListesiCevabi,
+    isle: ({ db }) => statuListesi(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/statuler',
+    yetki: 'projeler.statu-ayar',
+    govde: statuEkleGovdesi,
+    cevap: statuListesiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, govde }) => statuEkle(db, kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/statuler/:id/guncelle',
+    yetki: 'projeler.statu-ayar',
+    parametre: idParametresi,
+    govde: statuGuncelleGovdesi,
+    cevap: statuListesiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => statuDuzenle(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/statu-ayari/guncelle',
+    yetki: 'projeler.statu-ayar',
+    govde: statuAyariGovdesi,
+    cevap: statuListesiCevabi,
+    isle: ({ db, kullanici, govde }) => statuAyariDuzenle(db, kullanici.id, govde),
+  }),
+  // Görev sorumlusu seçicisi yalnız görev yazana açılır.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/sorumlu-secenekleri',
+    yetki: 'projeler.gorev-yaz',
+    cevap: kisiSecenekleriCevabi,
+    isle: async ({ db }) => ({ kisiler: await sorumluSecenekleri(db) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/kilometre-taslari/:tasId/guncelle',
+    yetki: 'projeler.gorev-yaz',
+    parametre: kilometreTasiParametresi,
+    govde: kilometreTasiGuncelleGovdesi,
+    cevap: projeYonetimiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kilometreTasiDuzenle(db, kullanici.id, parametre.tasId, govde),
+  }),
+  // PRJ-13: taban tarih yalnız bu komutla, gerekçeyle değişir; eski değer geçmişte kalır.
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/kilometre-taslari/:tasId/taban-yenile',
+    yetki: 'projeler.gorev-yaz',
+    parametre: kilometreTasiParametresi,
+    govde: tabanYenileGovdesi,
+    cevap: projeYonetimiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => tabanYenile(db, kullanici.id, parametre.tasId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/:gorevId/guncelle',
+    yetki: 'projeler.gorev-yaz',
+    parametre: gorevParametresi,
+    govde: gorevGuncelleGovdesi,
+    cevap: projeYonetimiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => gorevDuzenle(db, kullanici.id, parametre.gorevId, govde),
+  }),
   uc({
     yontem: 'GET',
     yol: '/projeler/:id',
@@ -84,5 +158,44 @@ export const uclar = [
     govde: projeGuncelleGovdesi,
     cevap: projeSemasi,
     isle: ({ db, kullanici, parametre, govde }) => projeDuzenle(db, kullanici.id, parametre.id, govde, maliyetGorur(kullanici)),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/:id/yonetim',
+    yetki: OKUMA,
+    parametre: idParametresi,
+    cevap: projeYonetimiCevabi,
+    isle: ({ db, parametre }) => projeYonetimi(db, parametre.id),
+  }),
+  // PRJ-11: statü kaydı yalnız eklenir; kişi ve zaman sunucudan.
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/statu',
+    yetki: 'projeler.statu-yaz',
+    parametre: idParametresi,
+    govde: statuYazGovdesi,
+    cevap: projeYonetimiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => statuYaz(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/kilometre-taslari',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    govde: kilometreTasiEkleGovdesi,
+    cevap: projeYonetimiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => kilometreTasiEkle(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/gorevler',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    govde: gorevEkleGovdesi,
+    cevap: projeYonetimiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => gorevEkle(db, kullanici.id, parametre.id, govde),
   }),
 ];

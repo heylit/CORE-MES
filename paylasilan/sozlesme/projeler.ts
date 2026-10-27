@@ -74,6 +74,7 @@ export const projeListesiSorgusu = z.object({
   ...listeSorguAlanlari(['kod', 'ad', 'baslangic']),
   ara: z.string().trim().max(80).optional(),
   durum: projeDurumuSemasi.optional(),
+  statuId: z.coerce.number().int().positive().max(2147483647).optional(),
 });
 
 export const projeSemasi = z.object({
@@ -96,6 +97,10 @@ export const projeSemasi = z.object({
   olusturma: zamanSemasi,
   guncelleme: zamanSemasi.nullable(),
   surum: surumSemasi,
+  // 890 c: projenin son statü kaydı; hiç yazılmadıysa null.
+  statu: z.lazy(() => guncelStatuSemasi).nullable(),
+  // PRJ-14: iptal dışındaki görevlerin plan süresiyle ağırlıklı ilerlemesi, yüzde; görev yoksa null (sıfır uydurulmaz).
+  ilerleme: z.number().int().min(0).max(100).nullable(),
 });
 
 export const projeListesiCevabi = listeCevapSemasi(projeSemasi);
@@ -111,6 +116,172 @@ export const firmaSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80)
 export const firmaSecenekleriCevabi = z.object({
   firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })),
 });
+
+// --- Proje yönetimi (890 c): statü, kilometre taşı, görev. Görev tutar taşımaz (911 b); plan ve gerçekleşen zaman çizelgesi planlamadadır (908). ---
+
+// Statü rengi ortak rozet tonlarıdır; sabit renk tutulmaz.
+export const STATU_TONLARI = ['tamam', 'uyari', 'hata', 'pasif', 'bilgi', 'vurgu'] as const;
+export const statuTonuSemasi = z.enum(STATU_TONLARI);
+export const STATU_AD_EN_COK = 80;
+const zorunluMetin = (azami: number, ileti: string) => z.string().trim().min(1, ileti).max(azami, `En çok ${azami} karakter.`);
+
+export const statuSemasi = z.object({
+  id: z.number().int(),
+  ad: z.string(),
+  ton: statuTonuSemasi,
+  sira: z.number().int(),
+  etkin: z.boolean(),
+  surum: surumSemasi,
+});
+export const statuListesiCevabi = z.object({
+  statuler: z.array(statuSemasi),
+  // Listede olmayan statünün elle yazılmasına izin (Projeler ayarı).
+  serbestStatu: z.boolean(),
+  ayarSurum: surumSemasi,
+});
+export const statuEkleGovdesi = z.object({
+  ad: zorunluMetin(STATU_AD_EN_COK, 'Statü adı zorunlu.'),
+  ton: statuTonuSemasi,
+  sira: z.number().int().min(0).max(10000),
+});
+export const statuGuncelleGovdesi = statuEkleGovdesi.extend({ etkin: z.boolean(), ...beklenenSurum });
+export const statuAyariGovdesi = z.object({ serbestStatu: z.boolean(), ...beklenenSurum });
+
+// PRJ-11: statü ya listeden seçilir ya da (izin açıksa) elle yazılır; ikisi birden olmaz.
+export const statuYazGovdesi = z
+  .object({
+    statuId: z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null),
+    metin: istege(STATU_AD_EN_COK),
+    not: istege(500),
+  })
+  .refine((g) => (g.statuId === null) !== (g.metin === null), { message: 'Listeden bir statü seçin ya da statüyü yazın.', path: ['statuId'] });
+
+// Güncel statü ve geçmiş satırı. Serbest yazılmış statünün tonu yoktur (ekranda gri ve kesik çerçeve).
+export const guncelStatuSemasi = z.object({
+  statuId: z.number().int().nullable(),
+  ad: z.string(),
+  ton: statuTonuSemasi.nullable(),
+  serbest: z.boolean(),
+  an: zamanSemasi,
+});
+export const statuKaydiSemasi = guncelStatuSemasi.extend({
+  id: z.number().int(),
+  not: z.string().nullable(),
+  kisiAd: z.string().nullable(),
+});
+
+export const kilometreTasiParametresi = z.object({ tasId: z.coerce.number().int().positive().max(2147483647) });
+export const kilometreTasiEkleGovdesi = z.object({
+  ad: zorunluMetin(200, 'Kilometre taşı adı zorunlu.'),
+  sira: z.number().int().min(0).max(10000),
+  tabanTarih: tarihSemasi,
+});
+export const kilometreTasiGuncelleGovdesi = z.object({
+  ad: zorunluMetin(200, 'Kilometre taşı adı zorunlu.'),
+  sira: z.number().int().min(0).max(10000),
+  gercekTarih: tarihSemasi.nullish().transform((t) => t ?? null),
+  etkin: z.boolean(),
+  ...beklenenSurum,
+});
+// PRJ-13: taban tarih yalnız gerekçeyle yenilenir; eski değer geçmişte kalır.
+export const tabanYenileGovdesi = z.object({
+  yeniTarih: tarihSemasi,
+  gerekce: zorunluMetin(500, 'Taban tarihi neden değişiyor? Gerekçe zorunlu.'),
+  ...beklenenSurum,
+});
+export const tabanKaydiSemasi = z.object({
+  eskiTarih: tarihSemasi, yeniTarih: tarihSemasi, gerekce: z.string(), kisiAd: z.string().nullable(), an: zamanSemasi,
+});
+export const kilometreTasiSemasi = z.object({
+  id: z.number().int(),
+  ad: z.string(),
+  sira: z.number().int(),
+  tabanTarih: tarihSemasi,
+  gercekTarih: tarihSemasi.nullable(),
+  etkin: z.boolean(),
+  tabanGecmisi: z.array(tabanKaydiSemasi),
+  surum: surumSemasi,
+});
+
+export const GOREV_DURUMLARI = ['yapilacak', 'suruyor', 'bekliyor', 'bitti', 'iptal'] as const;
+export const gorevDurumuSemasi = z.enum(GOREV_DURUMLARI);
+export const gorevParametresi = z.object({ gorevId: z.coerce.number().int().positive().max(2147483647) });
+const kimlikYaDaYok = z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null);
+const gorevPlanAlanlari = {
+  kilometreTasiId: kimlikYaDaYok,
+  ad: zorunluMetin(200, 'Görev adı zorunlu.'),
+  aciklama: istege(1000),
+  sorumluKisiId: kimlikYaDaYok,
+  planBaslangic: tarihSemasi,
+  planBitis: tarihSemasi,
+  oncekiGorevId: kimlikYaDaYok,
+};
+const planSirasi = (g: { planBaslangic: string; planBitis: string }) => g.planBitis >= g.planBaslangic;
+const PLAN_SIRASI = { message: 'Plan bitişi başlangıçtan önce olamaz.', path: ['planBitis'] };
+export const gorevEkleGovdesi = z.object(gorevPlanAlanlari).refine(planSirasi, PLAN_SIRASI);
+export const gorevGuncelleGovdesi = z
+  .object({
+    ...gorevPlanAlanlari,
+    gercekBaslangic: tarihSemasi.nullish().transform((t) => t ?? null),
+    gercekBitis: tarihSemasi.nullish().transform((t) => t ?? null),
+    ilerleme: z.number().int().min(0).max(100),
+    durum: gorevDurumuSemasi,
+    ...beklenenSurum,
+  })
+  .refine(planSirasi, PLAN_SIRASI);
+export const gorevSemasi = z.object({
+  id: z.number().int(),
+  kilometreTasiId: z.number().int().nullable(),
+  ad: z.string(),
+  aciklama: z.string().nullable(),
+  sorumluKisiId: z.number().int().nullable(),
+  sorumluAd: z.string().nullable(),
+  planBaslangic: tarihSemasi,
+  planBitis: tarihSemasi,
+  gercekBaslangic: tarihSemasi.nullable(),
+  gercekBitis: tarihSemasi.nullable(),
+  ilerleme: z.number().int(),
+  durum: gorevDurumuSemasi,
+  oncekiGorevId: z.number().int().nullable(),
+  surum: surumSemasi,
+});
+
+// Proje ayrıntısının yönetim bölümleri tek okumada: güncel statü, geçmiş, kilometre taşları, görevler ve statü seçenekleri.
+export const projeYonetimiCevabi = z.object({
+  statu: guncelStatuSemasi.nullable(),
+  statuGecmisi: z.array(statuKaydiSemasi),
+  kilometreTaslari: z.array(kilometreTasiSemasi),
+  gorevler: z.array(gorevSemasi),
+  ilerleme: z.number().int().nullable(),
+  // Statü penceresi için: yalnız etkin statüler ve serbest yazı izni.
+  statuler: z.array(statuSemasi),
+  serbestStatu: z.boolean(),
+});
+export const kisiSecenekleriCevabi = z.object({ kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
+
+export type StatuTonu = z.output<typeof statuTonuSemasi>;
+export type Statu = z.output<typeof statuSemasi>;
+export type StatuListesiCevabi = z.output<typeof statuListesiCevabi>;
+export type StatuEkleGovdesi = z.input<typeof statuEkleGovdesi>;
+export type StatuGuncelleGovdesi = z.input<typeof statuGuncelleGovdesi>;
+export type StatuAyariGovdesi = z.input<typeof statuAyariGovdesi>;
+export type StatuYazGovdesi = z.input<typeof statuYazGovdesi>;
+export type StatuYazVerisi = z.output<typeof statuYazGovdesi>;
+export type GuncelStatu = z.output<typeof guncelStatuSemasi>;
+export type StatuKaydi = z.output<typeof statuKaydiSemasi>;
+export type KilometreTasi = z.output<typeof kilometreTasiSemasi>;
+export type KilometreTasiEkleGovdesi = z.input<typeof kilometreTasiEkleGovdesi>;
+export type KilometreTasiGuncelleGovdesi = z.input<typeof kilometreTasiGuncelleGovdesi>;
+export type KilometreTasiGuncelleVerisi = z.output<typeof kilometreTasiGuncelleGovdesi>;
+export type TabanYenileGovdesi = z.input<typeof tabanYenileGovdesi>;
+export type GorevDurumu = z.output<typeof gorevDurumuSemasi>;
+export type Gorev = z.output<typeof gorevSemasi>;
+export type GorevEkleGovdesi = z.input<typeof gorevEkleGovdesi>;
+export type GorevEkleVerisi = z.output<typeof gorevEkleGovdesi>;
+export type GorevGuncelleGovdesi = z.input<typeof gorevGuncelleGovdesi>;
+export type GorevGuncelleVerisi = z.output<typeof gorevGuncelleGovdesi>;
+export type ProjeYonetimiCevabi = z.output<typeof projeYonetimiCevabi>;
+export type KisiSecenekleriCevabi = z.output<typeof kisiSecenekleriCevabi>;
 
 export type ProjeDurumu = z.output<typeof projeDurumuSemasi>;
 export type ProjeOlusturGovdesi = z.input<typeof projeOlusturGovdesi>;

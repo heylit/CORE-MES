@@ -7,4 +7,7 @@ export const anahtarlar = {
   emirler: (projeId: number) => ['projeler', 'emirler', projeId] as const,
   firmalar: (ara: string) => ['projeler', 'firmalar', ara] as const,
   siparisler: (ara: string) => ['projeler', 'siparisler', ara] as const,
+  yonetim: (id: number) => ['projeler', 'yonetim', id] as const,
+  statuler: ['projeler', 'statuler'] as const,
+  sorumlular: ['projeler', 'sorumlular'] as const,
 };

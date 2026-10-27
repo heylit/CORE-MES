@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { FirmaSecenekleriCevabi, Proje, ProjeListesiCevabi, SiparisSecenekleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type {
+  FirmaSecenekleriCevabi, Proje, ProjeListesiCevabi, ProjeYonetimiCevabi, SiparisSecenekleriCevabi, StatuListesiCevabi,
+} from '#paylasilan/sozlesme/projeler.ts';
 import type { AdimliEmirOzeti, AdimliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { ProjeAyrinti } from './ProjeAyrinti.tsx';
@@ -15,7 +17,7 @@ const OKUR: Kullanici = { id: 2, ad: 'Deneme Müdür', islemler: ['sayfa.projele
 
 const proje = (ek: Partial<Proje> & Pick<Proje, 'id' | 'kod' | 'ad'>): Proje => ({
   durum: 'aktif', firmaId: null, firmaAd: null, siparisId: null, baslangic: null, bitis: null, aciklama: null,
-  olusturma: '2026-10-12T09:00:00+03:00', guncelleme: null, surum: 1, ...ek,
+  olusturma: '2026-10-12T09:00:00+03:00', guncelleme: null, surum: 1, statu: null, ilerleme: null, ...ek,
 });
 const P1 = proje({ id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', firmaId: 7, firmaAd: 'Deneme Müşteri', baslangic: '2026-10-01', bitis: '2026-12-31', surum: 3 });
 const P2 = proje({ id: 2, kod: 'PRJ.02', ad: 'İkinci proje' });
@@ -31,6 +33,9 @@ const EMIRLER = { emirler: [emir(11, 'EMR-11', 1), emir(12, 'EMR-12', 2), emir(1
 const FIRMALAR = { firmalar: [{ id: 8, ad: 'Başka Müşteri', kod: 'BM' }] } satisfies FirmaSecenekleriCevabi;
 const SIPARISLER = { siparisler: [{ id: 21, no: 'SIP-2026-0021', firmaAd: 'Deneme Müşteri', termin: '2026-11-15' }] } satisfies SiparisSecenekleriCevabi;
 
+const YONETIM = { statu: null, statuGecmisi: [], kilometreTaslari: [], gorevler: [], ilerleme: null, statuler: [], serbestStatu: true } satisfies ProjeYonetimiCevabi;
+const STATULER = { statuler: [], serbestStatu: true, ayarSurum: 1 } satisfies StatuListesiCevabi;
+
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Cagri { yontem: string; yol: string; govde: unknown }
 
@@ -44,6 +49,8 @@ function sunucuKur(kullanici: Kullanici, yazmaCevabi: () => Response = () => jso
     if (yontem === 'GET' && yol.startsWith('/projeler/firma-secenekleri')) return json(200, FIRMALAR);
     if (yontem === 'GET' && yol.startsWith('/projeler/siparis-secenekleri')) return json(200, SIPARISLER);
     if (yontem === 'GET' && yol === '/projeler/1') return json(200, P1);
+    if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
+    if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
     if (yontem === 'GET' && yol === '/adimli-emirler?projeId=1') return json(200, EMIRLER);
     if (yontem === 'GET' && yol.startsWith('/projeler')) return json(200, LISTE);
     if (yontem === 'POST') return yazmaCevabi();
@@ -136,7 +143,7 @@ describe('Projeler', () => {
     await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
     expect(screen.queryByRole('table', { name: 'Projenin üretim emirleri' })).toBeNull();
     expect(okurCagrilari.some((c) => c.yol.startsWith('/adimli-emirler'))).toBe(false);
-    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('tab', { name: /Üretim emirleri/ })).toBeNull();
   });
 
   it('Maliyet sekmesi yalnız maliyet okuyana görünür; açılınca projenin maliyeti istenir', async () => {
@@ -157,7 +164,8 @@ describe('Projeler', () => {
   it('bütçe yalnız maliyet görene görünür; girilen tutar virgülle yazılsa da noktayla gider, para birimi büyük harfle', async () => {
     const yazarCagrilari = sunucuKur(YAZAR);
     ac('/projeler/1');
-    await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
+    fireEvent.click(await screen.findByRole('tab', { name: /Genel/ }));
+    await screen.findByText('Proje bilgisi');
     expect(screen.queryByText('Bütçe')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Düzenle/ }));
     const yazarPenceresi = await screen.findByRole('dialog');
@@ -168,6 +176,7 @@ describe('Projeler', () => {
     cleanup();
     const cagrilar = sunucuKur(MALIYETCI);
     ac('/projeler/1');
+    fireEvent.click(await screen.findByRole('tab', { name: /Genel/ }));
     expect(await screen.findByText('Girilmedi (hedef plan maliyeti)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Düzenle/ }));
     const pencere = await screen.findByRole('dialog');
