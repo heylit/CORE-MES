@@ -151,7 +151,7 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
         {d.tur !== 'tedarikci' && (
           <Secim
             etiket="Müşteri sınıfı"
-            ipucu="Plan bedeli sınıfın çarpanıyla çarpılır; sınıfsız müşteri 1 sayılır."
+            ipucu="Plan sırasını etkilemez; plana yalnız üretim emrinin önceliği girer."
             secenekler={SINIF_SECENEKLERI}
             bosSecenek="Sınıfsız"
             value={d.musteriSinifi}

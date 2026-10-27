@@ -21,26 +21,12 @@ export const useFiyatGorur = (): boolean => useIslemVar('siparisler.fiyat-oku');
 export const useTerminDener = (): boolean => useIslemVar('siparisler.termin-dene');
 export const useMaliyetOkur = (): boolean => useIslemVar('siparisler.maliyet-oku');
 export const useTerminOnaylar = (): boolean => useIslemVar('siparisler.termin-onayla');
-// 195 a: elle çarpanı plan.yaz 2'ye, siparisler.onayla 3'e kadar verir; sınırı sunucu denetler, ekran yalnız uyarır.
-// Değerler Plan sözleşmesindeki ELLE_CARPAN'dır (istemci sözleşmeden değer ithal etmez).
-export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;
-// 237 a: çarpanı okuma ucu bu işlemlerden birini ister; hiçbiri olmayana kart çizilmez (403 kutusu çıkmaz).
+// 237 a: çarpan geçmişini okuma ucu bu işlemlerden birini ister; hiçbiri olmayana kart çizilmez (403 kutusu çıkmaz).
 const CARPAN_OKUMA: readonly Islem[] = ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku', 'siparisler.onayla'];
 export const useCarpanGorur = (): boolean => {
   const islemler = useOturum().data?.islemler ?? [];
   return CARPAN_OKUMA.some((i) => islemler.includes(i));
 };
-// 306 a: bant ucu (GET /plan/siparisler/:id/bant) bu işlemlerden birini ister.
-const BANT_OKUMA: readonly Islem[] = ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku'];
-export const useBantGorur = (): boolean => {
-  const islemler = useOturum().data?.islemler ?? [];
-  return BANT_OKUMA.some((i) => islemler.includes(i));
-};
-export function useCarpanSiniri(): number | null {
-  const genis = useIslemVar('siparisler.onayla');
-  const planlama = useIslemVar('plan.yaz');
-  return genis ? ELLE_CARPAN.enCok : planlama ? ELLE_CARPAN.planlama : null;
-}
 
 export const surumCakismasiMi = (hata: unknown): boolean => hata instanceof ApiHatasi && eskiSurumMu(hata.govde);
 

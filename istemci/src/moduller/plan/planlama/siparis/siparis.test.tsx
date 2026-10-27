@@ -21,50 +21,35 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const parca = async (ad: string) => { await waitFor(() => { expect(document.querySelector(`[data-parca="${ad}"]`)).toBeTruthy(); }, BEKLE); };
 const s1Ac = () => { fireEvent.click(screen.getAllByRole('button', { name: /^S1, / })[0]!); };
-const ONEM = 'Siparişi öne al ya da geri bırak';
 const dugme = (ad: string | RegExp) => screen.getByRole('button', { name: ad }) as HTMLButtonElement;
+const acilimAl = () => document.querySelector<HTMLElement>('.tc-pys-ac')!;
 const tumAc = () => { fireEvent.click(screen.getByText('Tüm satırlar')); };
 
 describe('P2 Siparişler', () => {
-  it('yönetici geç siparişi açar, sihirbazla fiyatı yazar; yazma sürüm denetimiyle yalnız planlama anahtarına gider (izinli)', async () => {
+  // 815 (699/3 a): plana yalnız emrin önceliği girer; siparişin elle çarpanı ve tutarı Planlama'da yazılmaz.
+  it('yönetici siparişi açar; elle çarpan ve tutar formu yoktur, termin yerinde pasif, kayda yazma gitmez (reddedilen)', async () => {
     const govdeler: unknown[] = [];
     const istekler = sunucuKur(YONETICI, KAYIT, { govdeler });
     ac('/plan/ysiparis');
     await parca('ysiparis');
     s1Ac();
-    // İlk izinli form sipariş dolu, ikinci adımdan açılır; Geri başlangıç adımının altına inmez.
-    const onem = screen.getByRole('form', { name: ONEM });
-    expect(within(onem).getByLabelText(/^Önemi/)).toBeTruthy();
-    expect(within(onem).queryByRole('button', { name: 'Geri' })).toBeNull();
+    const acilim = acilimAl();
+    expect(within(acilim).queryByRole('form')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Öne al ya da geri bırak/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Fiyat ve ödeme vadesi/ })).toBeNull();
+    expect(screen.queryByLabelText(/^Tutar \(TL\)/)).toBeNull();
     // Termin sahibinindir (222 a): yerinde, pasif (Soru 466/1 a).
     expect(dugme(/Termini değiştir/).disabled).toBe(true);
-    fireEvent.click(dugme(/Fiyat ve ödeme vadesi/));
-    const form = screen.getByRole('form', { name: 'Fiyat ve ödeme vadesi' });
-    fireEvent.change(within(form).getByLabelText(/^Tutar \(TL\)/), { target: { value: '1500' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'İleri' }));
-    expect(within(form).getByText(/Kontrol edin\. Kaydet dediğinizde/)).toBeTruthy();
-    fireEvent.submit(form);
-    expect(await screen.findByText('Sipariş fiyatı değişti. Plan yeniden çözülünce güncellenir.')).toBeTruthy();
-    expect(screen.getByText('S1 fiyatı kaydedildi')).toBeTruthy();
-    // Kayıt kartı ortak sade kabuğunun (eski sdSonKart): plan veri değişikliğini içermiyor, eski not ve pasif "Plan iyileştirme ara".
-    expect(screen.getByText(/Plan bu değişikliği henüz içermiyor/)).toBeTruthy();
-    expect((within(document.querySelector<HTMLElement>('.tc-sade-son')!).getByRole('button', { name: 'Plan iyileştirme ara' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(dugme('Yeniden düzenle')).toBeTruthy();
-    await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
-    expect(govdeler[0]).toMatchObject({ anahtar: PLANLAMA_ANAHTARI, beklenenSurum: 9 });
-    const g = govdeler[0] as { deger: typeof CALISMA_DEGERI };
-    expect(g.deger.D.siparisler[0]).toMatchObject({ id: 'S1', gelir: 1500, termin: '2026-10-21 17:00', adet: 10 });
-    expect(istekler.filter((i) => i.includes('planlama-degerlendirmesi'))).toEqual([]);
+    expect(govdeler).toEqual([]);
+    expect(istekler.filter((i) => i.includes('/carpan'))).toEqual([]);
   }, 20000);
 
-  it('açılımda odak formun ilk alanına gider, adım şeridi gizli sınıfla gelir; Esc açılımı kapatır, odak hücreye döner', async () => {
+  it('Esc açılımı kapatır, odak hücreye döner', async () => {
     sunucuKur(YONETICI, KAYIT);
     ac('/plan/ysiparis');
     await parca('ysiparis');
     const hucre = screen.getAllByRole('button', { name: /^S1, / })[0]!;
     fireEvent.click(hucre);
-    const form = screen.getByRole('form', { name: ONEM });
-    await waitFor(() => { expect(document.activeElement).toBe(within(form).getByLabelText(/^Önemi/)); });
     expect(screen.getByRole('region', { name: /^S1 · / }).querySelector('.tc-pys-ac-ust svg')).not.toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.querySelector('.tc-pys-ac')).toBeNull();
@@ -82,21 +67,6 @@ describe('P2 Siparişler', () => {
     fireEvent.click(kapat);
     expect(document.querySelector('.tc-pys-ac')).toBeNull();
     await waitFor(() => { expect(document.activeElement).toBe(hucre); });
-  }, 20000);
-
-  it('maliyet okumayan planlamacı önemi en çok ×2 seçer, gerekçesiz kaydedemez, fiyat formunu görmez', async () => {
-    const govdeler: unknown[] = [];
-    sunucuKur(PLANLAMACI, KAYIT, { govdeler });
-    ac('/plan/ysiparis');
-    await parca('ysiparis');
-    s1Ac();
-    const form = screen.getByRole('form', { name: ONEM });
-    const degerler = [...within(form).getByRole('combobox').querySelectorAll('option')].map((o) => o.value).filter(Boolean);
-    expect(degerler).toEqual(['0.5', '1', '1.5', '2']);
-    fireEvent.click(within(form).getByRole('button', { name: 'İleri' }));
-    expect(within(form).getByRole('alert').textContent).toContain('Gerekçe boş olamaz.');
-    expect(govdeler).toEqual([]);
-    expect(screen.queryByRole('button', { name: /Fiyat ve ödeme vadesi/ })).toBeNull();
   }, 20000);
 
   it('plan yazmayan kişi form açamaz: termin yerinde pasif, çizelgede seçeneği motoru açar; kâr kartı kilitli (reddedilen)', async () => {
@@ -119,8 +89,7 @@ describe('P2 Siparişler', () => {
     ac('/plan/ysiparis');
     await parca('ysiparis');
     s1Ac();
-    expect(screen.queryByRole('form', { name: ONEM })).toBeNull();
-    expect(screen.queryByRole('form', { name: 'Fiyat ve ödeme vadesi' })).toBeNull();
+    expect(within(acilimAl()).queryByRole('form')).toBeNull();
   }, 20000);
 
   it('motor gereken araçlar yerinde pasif, değerlendirme düğmeyle istenir (açılışta istek gitmez); kâr tablosunda tutar yazılır, Uygula pasif', async () => {
@@ -247,17 +216,17 @@ describe('P2 Terminler', () => {
 });
 
 describe('P2 Termin ve kâr', () => {
-  it('yönetici plan dengesini değiştirir (izinli)', async () => {
+  it('815: plan dengesi çubuğu yöneticide de pasif; plana yalnız emrin önceliği girer', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(YONETICI, KAYIT, { govdeler });
     ac('/plan/denge');
     await parca('denge');
     const cubuk = screen.getByRole('slider', { name: /Plan dengesi/ });
-    expect((cubuk as HTMLInputElement).disabled).toBe(false);
+    expect((cubuk as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/Çubuk etkisizdir: plan sırasına ve ağırlığına yalnız üretim emrinin önceliği girer/)).toBeTruthy();
     fireEvent.change(cubuk, { target: { value: '75' } });
     fireEvent.blur(cubuk);
-    await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
-    expect(govdeler[0]).toMatchObject({ deger: { D: { planDenge: 75 } } });
+    expect(govdeler).toEqual([]);
   }, 20000);
 
   it('kâr sütunu ve uzatma araçları yerinde pasif; termin uzatma formu Üretim emirlerine yönlendirir', async () => {

@@ -7,7 +7,7 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
@@ -82,13 +82,6 @@ const CARPAN_VAR = {
 } satisfies SiparisCarpaniCevabi;
 const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz', 'siparisler.termin-onayla'] };
 
-// 148 a: çarpan plan taslağına yazılır; cevap planın kendisidir, burada yalnız taslak kimliği okunur.
-const TASLAGA_YAZILDI = { taslak: { id: 9, surum: 1 } };
-// 306 a: bant Plan ucundadır; örnekte eşik 337,5, 225 ve 315 ikisi de Normal.
-const bantVerisi = (bedel: number, sinif: 'yuksek' | 'normal' | 'dusuk') => ({
-  siparisId: 5, bant: { yuksekSiniri: 337.5, dusukSiniri: 100, emirler: [{ uretimEmriId: 9, emirNo: 'UE-DNM-9', bedel, sinif }] },
-}) satisfies SiparisBandiCevabi;
-
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const hata = (durum: number, govde: HataGovdesi) => json(durum, govde);
 
@@ -114,7 +107,6 @@ function sunucuKur(kullanici: Kullanici, ozel: Ozel = () => undefined) {
       if (yol.startsWith('/musteri-tedarikci/firmalar/secim')) return json(200, FIRMALAR);
       if (yol.startsWith('/siparisler/malzeme-secenekleri')) return json(200, MALZEMELER);
       if (/^\/plan\/siparisler\/\d+\/carpan$/.test(yol)) return json(200, CARPAN_YOK);
-      if (/^\/plan\/siparisler\/\d+\/bant$/.test(yol)) return json(200, bantVerisi(225, 'normal'));
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
@@ -351,19 +343,25 @@ describe('Sipariş ayrıntısında projeler (176 a)', () => {
   });
 });
 
-describe('Sipariş ayrıntısında elle çarpan (195 a)', () => {
+// 815 (699/3 a): plana yalnız emrin önceliği girer; çarpan verilmez, eski kayıtlar yalnız geçmiş olarak okunur.
+describe('Sipariş ayrıntısında çarpan geçmişi (815)', () => {
   const carpanVar: Ozel = (yontem, yol) => (yontem === 'GET' && yol === '/plan/siparisler/5/carpan' ? json(200, CARPAN_VAR) : undefined);
 
-  it('geçerli çarpan ve geçmiş gerekçe ve kişiyle görünür; fiyatı gören ama çarpan veremeyen değiştirme düğmesi görmez', async () => {
-    const istekler = sunucuKur(FIYAT_OKUYUCU, carpanVar);
-    ac('/siparisler/5');
-    const kart = (await screen.findByRole('heading', { name: 'Öncelik çarpanı' })).closest('section')!;
-    expect(await within(kart).findByText('Ilk deneme')).toBeTruthy();
-    expect(within(kart).getAllByText('Deneme gerekce').length).toBeGreaterThan(0);
-    expect(within(kart).getByText('×1,5', { selector: 'strong' })).toBeTruthy();
-    expect(within(kart).getByText('×1,2')).toBeTruthy();
-    await oturumCozuldu(istekler);
-    expect(within(kart).queryByRole('button', { name: 'Çarpan ver' })).toBeNull();
+  it('geçmiş gerekçe ve kişiyle salt okunur görünür; planlamacı da müdür de çarpan veremez, yazma ve bant isteği gitmez', async () => {
+    for (const kisi of [PLANLAMACI, YONETICI]) {
+      const istekler = sunucuKur(kisi, carpanVar);
+      ac('/siparisler/5');
+      const kart = (await screen.findByRole('heading', { name: 'Öncelik çarpanı geçmişi' })).closest('section')!;
+      expect(await within(kart).findByText('Ilk deneme')).toBeTruthy();
+      expect(within(kart).getByText('Deneme gerekce')).toBeTruthy();
+      expect(within(kart).getByText('×1,2')).toBeTruthy();
+      expect(within(kart).getByText(/yalnız üretim emrinin önceliği girer/)).toBeTruthy();
+      await oturumCozuldu(istekler);
+      expect(screen.queryByRole('button', { name: 'Çarpan ver' })).toBeNull();
+      expect(yazmalar(istekler)).toHaveLength(0);
+      expect(istekler.some((i) => i.yol.includes('/bant'))).toBe(false);
+      cleanup();
+    }
   });
 
   it('çarpan okuma yetkisi olmayana kart çizilmez, istek gitmez (237 a)', async () => {
@@ -371,94 +369,16 @@ describe('Sipariş ayrıntısında elle çarpan (195 a)', () => {
     ac('/siparisler/5');
     await screen.findByText('Deneme Braket');
     await oturumCozuldu(istekler);
-    expect(screen.queryByRole('heading', { name: 'Öncelik çarpanı' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Öncelik çarpanı geçmişi' })).toBeNull();
     expect(istekler.some((i) => i.yol.startsWith('/plan/'))).toBe(false);
   });
 
-  it('kayıt yoksa çarpanın 1 sayıldığı yazılır', async () => {
-    sunucuKur(FIYAT_OKUYUCU);
+  it('geçmişi olmayan siparişte kart çizilmez', async () => {
+    const istekler = sunucuKur(FIYAT_OKUYUCU);
     ac('/siparisler/5');
-    expect(await screen.findByText('Elle çarpan verilmedi; plan çarpanı 1 sayar.')).toBeTruthy();
-  });
-
-  it('planlamacı 2 üstünde uyarı görür; gerekçesiz istek gitmez; çarpan ve gerekçe yeni plan taslağına gider (148 a)', async () => {
-    const istekler = sunucuKur(PLANLAMACI, (yontem, yol) => (yontem === 'POST' && yol === '/plan/siparisler/5/carpan' ? json(200, TASLAGA_YAZILDI) : undefined));
-    ac('/siparisler/5');
-    fireEvent.click(await screen.findByRole('button', { name: 'Çarpan ver' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Öncelik çarpanı ver' });
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '2,5' } });
-    expect(within(pencere).getByText('Planlama en çok 2 verebilir; üstü müdür onayıyla girer.')).toBeTruthy();
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '1,5' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    expect(await within(pencere).findByText('Gerekçe yaz.')).toBeTruthy();
-    expect(yazmalar(istekler)).toHaveLength(0);
-    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/plan/siparisler/5/carpan', govde: { carpan: 1.5, gerekce: 'Deneme gerekce', taslak: null } });
-    expect(yazmalar(istekler)[0]!.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(await screen.findByText(/Yeni çarpan plan taslağında; taslak onaylanıp canlıya alınınca geçerli olur\./)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Plan stüdyosu' }).getAttribute('href')).toBe('/recete-rota/studio');
-    expect(screen.getByText('Elle çarpan verilmedi; plan çarpanı 1 sayar.')).toBeTruthy();
-  });
-
-  it('306 a: bant görünür; kayıttan sonra canlı bant taslağınkiyle karşılaştırılır: aşmazsa "değişmez" ve eşik, aşarsa değişim yazılır', async () => {
-    const kaydet = async (taslakBandi: SiparisBandiCevabi) => {
-      sunucuKur(PLANLAMACI, (yontem, yol) => {
-        if (yontem === 'POST' && yol === '/plan/siparisler/5/carpan') return json(200, TASLAGA_YAZILDI);
-        if (yontem === 'GET' && yol === '/plan/siparisler/5/bant?taslak=9') return json(200, taslakBandi);
-        return undefined;
-      });
-      ac('/siparisler/5');
-      expect(await screen.findByText('Bant: UE-DNM-9 Normal (225 TL/saat).')).toBeTruthy();
-      fireEvent.click(await screen.findByRole('button', { name: 'Çarpan ver' }));
-      const pencere = await screen.findByRole('dialog', { name: 'Öncelik çarpanı ver' });
-      fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '1,4' } });
-      fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
-      fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    };
-    await kaydet(bantVerisi(315, 'normal'));
-    expect(await screen.findByText('Taslakta bant değişmez: UE-DNM-9 Normal (315 TL/saat). Yüksek için bedel 337,5 TL/saat ve üstü, Düşük için 100 TL/saat ve altı olmalı.')).toBeTruthy();
-    cleanup();
-    await kaydet(bantVerisi(450, 'yuksek'));
-    expect(await screen.findByText('Taslakta bant değişir: UE-DNM-9 Normal → Yüksek.')).toBeTruthy();
-  });
-
-  it('planda emri olmayan siparişte bant hesaplanmadığı yazılır', async () => {
-    sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/plan/siparisler/5/bant' ? json(200, { siparisId: 5, bant: null }) : undefined));
-    ac('/siparisler/5');
-    expect(await screen.findByText('Planda bu siparişin emri yok; bant hesaplanmadı.')).toBeTruthy();
-  });
-
-  it('sunucunun yetki reddi pencerede yazılır', async () => {
-    sunucuKur(PLANLAMACI, (yontem, yol) => (yontem === 'POST' && yol === '/plan/siparisler/5/carpan'
-      ? hata(403, { kod: 'YETKI_YOK', mesaj: 'Çarpanı en çok 2 verebilirsiniz; üstü müdür onayıyla girer.' })
-      : undefined));
-    ac('/siparisler/5');
-    fireEvent.click(await screen.findByRole('button', { name: 'Çarpan ver' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Öncelik çarpanı ver' });
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '2,5' } });
-    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    expect((await within(pencere).findByRole('alert', {}, { timeout: 3000 })).textContent).toBe('Çarpanı en çok 2 verebilirsiniz; üstü müdür onayıyla girer.');
-  });
-
-  it('müdür 3e kadar uyarısız girer; 3 üstü ve üç ondalık reddedilir', async () => {
-    const istekler = sunucuKur(YONETICI);
-    ac('/siparisler/5');
-    fireEvent.click(await screen.findByRole('button', { name: 'Çarpan ver' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Öncelik çarpanı ver' });
-    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '2,5' } });
-    expect(within(pencere).queryByText(/müdür onayıyla/)).toBeNull();
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '3,5' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    expect(await within(pencere).findByText('Çarpan 0,5-3 olmalı.')).toBeTruthy();
-    fireEvent.change(within(pencere).getByLabelText(/Çarpan/), { target: { value: '1,255' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
-    expect(await within(pencere).findByText('Çarpan en çok iki ondalık olmalı.')).toBeTruthy();
-    expect(yazmalar(istekler)).toHaveLength(0);
+    await screen.findByText('Deneme Braket');
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/plan/siparisler/5/carpan')).toBe(true));
+    expect(screen.queryByRole('heading', { name: 'Öncelik çarpanı geçmişi' })).toBeNull();
   });
 });
 

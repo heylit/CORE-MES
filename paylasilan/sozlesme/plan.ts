@@ -233,7 +233,7 @@ export type SenaryoDurumu = (typeof SENARYO_DURUMLARI)[number];
 export const PLAN_ONAY_SECIMLERI: Readonly<{ arkonSirasiOnayaGider: boolean; bedelTaslagaGirer: boolean }> = {
   // 147 a: Arkon kuyruk sırası taslağa düşer, onayla canlıya geçer.
   arkonSirasiOnayaGider: true,
-  // 148 a: bedel ayarı ve sipariş elle çarpanı taslağa girer (bedelAyariTaslakGovdesi, siparisCarpaniTaslakGovdesi).
+  // 148 a: bedel ayarı taslağa girer (bedelAyariTaslakGovdesi).
   bedelTaslagaGirer: true,
 };
 
@@ -406,32 +406,15 @@ export const motorAyarlariCevabi = z.object({
 // 776 b, 830 a: Planlama atölyesinde taslağa özel kural; boş verilirse motor ayarı sürümündeki kurala döner.
 export const motorKuraliGovdesi = z.object({ surum: KIMLIK, kural: z.enum(MOTOR_KURALLARI).nullable() });
 
-// Elle çarpan (195 a): siparişin gecikme bedelini gerekçeyle çarpar; 0,5-2 plan.yaz, 3'e kadar siparisler.onayla (sunucu denetler).
-export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;
 export const siparisParametresi = z.object({ id: z.coerce.number().int().positive().max(2_147_483_647) });
-export const siparisCarpaniGovdesi = z.object({
-  carpan: z.number().min(ELLE_CARPAN.enAz, 'Çarpan 0,5-3 olmalı.').max(ELLE_CARPAN.enCok, 'Çarpan 0,5-3 olmalı.')
-    .refine((v) => Math.round(v * 100) === v * 100, 'Çarpan en çok iki ondalık olmalı.'),
-  gerekce: z.string().trim().min(1, 'Gerekçe yaz.').max(500),
-});
-// 148 a: bedel ayarı ve elle çarpan da taslağa yazılır; taslak null ise kişiye yeni taslak açılır (taslakGovdesi gibi). Alanı göndermeyen
+// 148 a: bedel ayarı taslağa yazılır; taslak null ise kişiye yeni taslak açılır (taslakGovdesi gibi). Alanı göndermeyen
 // eski ekran 400 almasın diye isteğe bağlıdır; gönderilmeyen alanın nereye yazılacağını sunucu belirler.
 export const bedelAyariTaslakGovdesi = bedelAyariGovdesi.extend({ taslak: taslakGirdisi.optional() });
-export const siparisCarpaniTaslakGovdesi = siparisCarpaniGovdesi.extend({ taslak: taslakGirdisi.optional() });
 const siparisCarpani = z.object({ carpan: z.number(), gerekce: z.string(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), zaman });
-// Geçmiş yeniden eskiye; geçerli çarpan ilk satırdır, kayıt yoksa null.
+// Elle çarpan geçmişi (195 a), yeniden eskiye; geçerli çarpan ilk satırdır, kayıt yoksa null. 815 (699/3 a): çarpan artık verilmez ve
+// plana girmez; eski kayıtlar yalnız okunur.
 export const siparisCarpaniCevabi = z.object({ siparisId: KIMLIK, gecerli: siparisCarpani.nullable(), gecmis: z.array(siparisCarpani) });
-// 306 a: siparişin plandaki emirlerinin gecikme bedeli (TL/saat) ve öncelik bandı; sınırlar bütün plan emirlerinin ortancasından: bedel
-// yuksekSiniri ve üstü Yüksek, dusukSiniri ve altı Düşük. Planda emri olmayan siparişte bant null.
-export const siparisBandiCevabi = z.object({
-  siparisId: KIMLIK,
-  bant: z.object({
-    yuksekSiniri: z.number(), dusukSiniri: z.number(),
-    emirler: z.array(z.object({ uretimEmriId: KIMLIK, emirNo: z.string(), bedel: z.number(), sinif: z.enum(['yuksek', 'normal', 'dusuk']) })),
-  }).nullable(),
-});
 
-export type SiparisBandiCevabi = z.output<typeof siparisBandiCevabi>;
 export type PlanCanliOzeti = z.output<typeof planCanliOzeti>;
 export type PlanSurumCevabi = z.output<typeof planSurumCevabi>;
 export type KuyrukYazGovdesi = z.output<typeof kuyrukYazGovdesi>;

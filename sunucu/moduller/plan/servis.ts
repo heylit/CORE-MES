@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
@@ -18,18 +18,18 @@ import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { siparisinProjeleri, siparistenProjeAc } from '../projeler/disari.ts';
 import { acikRevizyonSayisi, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
-import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
+import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import { FASON_VARSAYILAN_GUN, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, bantSinirlari, bedelCarpani, emirTutari, katkiPaylari, calisilanParcalar, elleCarpanSiniri, gecikmeBedeli, oncelikSiniflari, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
-import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
@@ -75,10 +75,6 @@ interface Baglam {
   // Emrin katkı payı (kâr riskinin tabanı, 227 a), üretim emri kimliğiyle; çözücüler kayıtsızken boş. Fiyatı görmeyen kişide de okunur:
   // TL amacı (denetim #21) motorun sırasını değiştirir, plan bakanın yetkisine göre değişmemeli; tutarı yalnız fiyatı gören görür.
   katkilar: Map<number, string | null>;
-  // Siparişin geçerli elle çarpanı (195 a); kaydı olmayan sipariş yok.
-  carpanlar: Map<number, number>;
-  // Siparişin müşteri sınıfı (265 a), sipariş kimliğiyle; sınıfı boş müşterinin siparişi yok.
-  siniflar: Map<number, MusteriSinifi>;
   // Bedel ayarı (209 a) taslakta da canlı plan ayarından okunur: senaryo bedeli değiştirmez.
   bedelAyari: BedelAyari;
   defter: DegisiklikSatiri[];
@@ -337,21 +333,9 @@ function emirSatiri(b: Pick<Baglam, 'siparisSatirlari'>, i: Pick<Is, 'siparisSat
   return satir && { ...satir, tutar: emirTutari(satir, i.adet) };
 }
 
-// Emrin bedel çarpanı (denetim #21): müşteri sınıfı × (siparişin elle çarpanı, yoksa emrin öncelik çarpanı), çarpanlar bedel ayarından.
-function emirCarpani(b: Pick<Baglam, 'carpanlar' | 'siniflar' | 'bedelAyari'>, i: Pick<Is, 'oncelik'>, satir: { siparisId: number } | null): number {
-  const elle = satir ? b.carpanlar.get(satir.siparisId) ?? null : null;
-  return bedelCarpani(i.oncelik, elle, satir ? b.siniflar.get(satir.siparisId) ?? null : null, b.bedelAyari);
-}
-
-// 265 a: müşteri sınıfı müşteri kartındadır (musteri-tedarikci); okuyucusu kablolama.ts'te bağlanır. Bağlı değilken müşteriler sınıfsızdır (1,0).
-export type MusteriSinifiCozucusu = (db: Db, firmaIdleri: readonly number[]) => Promise<Map<number, MusteriSinifi | null>>;
-let musteriSinifi: MusteriSinifiCozucusu | null = null;
-export function musteriSinifiCozucusuKaydet(cozucu: MusteriSinifiCozucusu | null): void { musteriSinifi = cozucu; }
-async function siparisSiniflari(db: Db, satirlar: readonly { siparisId: number; firmaId: number }[]): Promise<Map<number, MusteriSinifi>> {
-  if (!musteriSinifi || satirlar.length === 0) return new Map();
-  const siniflar = await musteriSinifi(db, [...new Set(satirlar.map((x) => x.firmaId))]);
-  return new Map(satirlar.flatMap((x) => { const c = siniflar.get(x.firmaId); return c ? [[x.siparisId, c] as const] : []; }));
-}
+// 815 (699/3 a): plana yalnız emrin önceliği girer; gecikme bedelinin çarpanı da emrin öncelik çarpanıdır. Siparişin elle çarpanı ve
+// müşteri sınıfı girmez.
+const emirCarpani = (b: Pick<Baglam, 'bedelAyari'>, i: Pick<Is, 'oncelik'> | null): number => oncelikCarpani(i?.oncelik ?? null, b.bedelAyari);
 
 async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Promise<Baglam> {
   const simdi = Date.now();
@@ -365,10 +349,6 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
   const acik = await planlanacakIsEmirleri(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: (q) => fasonSuresiTahminleri(db, q) });
   const eksikRevizyon = await girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId));
   const siparisSatirlari = await siparisSatiriOzetleri(db, acik.flatMap((i) => (i.siparisSatiriId == null ? [] : [i.siparisSatiriId])));
-  const carpanlar = await s.gecerliCarpanlar(db, [...siparisSatirlari.values()].map((x) => x.siparisId));
-  // 148 a: taslaktaki elle çarpan canlınınkinin yerine geçer.
-  if (hedef !== null) for (const [siparisId, c] of await s.taslakCarpanlari(db, hedef)) carpanlar.set(siparisId, c);
-  const siniflar = await siparisSiniflari(db, [...siparisSatirlari.values()]);
   // Kaynaklar ve ürün adları işlerden önce tek turda okunur: iş başına okuma olmasın.
   const istasyonMakineleri: IstasyonMakineleri = new Map();
   const kaynaklar = await kaynaklariOku(db, istasyonMakineleri);
@@ -381,7 +361,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri));
   }
   const b: Baglam = {
-    simdi, gun0, hedef, ayar, isler, rotaEksik, kaynaklar, defter, kapaliGunler: [], siparisSatirlari, carpanlar, siniflar, bedelAyari: await s.bedelAyariOku(db, hedef), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
+    simdi, gun0, hedef, ayar, isler, rotaEksik, kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await ekMesaiTakvimde(db, hedef, simdi, await vardiyaOku(db, simdi, kaynaklar)),
     izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
@@ -712,7 +692,7 @@ function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number |
     // 284 a: ceza ve vade müşteriyle anlaşılan terminden işler (satırın, yoksa siparişin); emrin teslimi yalnız sıralamadadır.
     return {
       bitDk: e.bit, teslimDk: satir ? teslimDk(b, satir.termin) : e.teslimDk, satir: satir && { ...satir, katkiPayi: b.katkilar.get(e.id) ?? null },
-      carpan: i ? emirCarpani(b, i, satir) : bedelCarpani(null, null, null, b.bedelAyari), pay: i ? adetPayi(ham, i.adet) : 1,
+      carpan: emirCarpani(b, i ?? null), pay: i ? adetPayi(ham, i.adet) : 1,
     };
   }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.bedelAyari.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
 }
@@ -1004,25 +984,13 @@ export async function motorKuraliYaz(db: Db, k: Kullanici, id: number, g: MotorK
   return planOku(db, k, await baglamKur(db, k, id));
 }
 
-// Elle çarpan (195 a): siparişin çarpan geçmişi, yeniden eskiye; geçerli çarpan ilkidir.
+// Elle çarpan (195 a): siparişin çarpan geçmişi, yeniden eskiye; geçerli çarpan ilkidir. 815: çarpan artık verilmez ve plana girmez,
+// eski kayıtlar yalnız okunur.
 export async function siparisCarpani(db: Db, siparisId: number): Promise<SiparisCarpaniCevabi> {
   const gecmis = await s.carpanGecmisi(db, siparisId);
   const adlar = await kisiAdlari(db, gecmis.map((x) => x.kisiId));
   const satirlar = gecmis.map((x) => ({ ...x, carpan: Number(x.carpan), kisiAdi: adlar.get(x.kisiId) ?? null }));
   return { siparisId, gecerli: satirlar[0] ?? null, gecmis: satirlar };
-}
-
-// Gerekçe zorunlu. Sipariş yoksa 404; satırı yazma bitene kadar kilitlidir. 2'nin üstü siparisler.onayla ister. 148 a: çarpan taslağa
-// yazılır, canlıya alınınca yazanı ve gerekçesiyle geçmişe eklenir (geçmiş yalnız eklenir). Defter çarpanı ve gerekçeyi taşımaz (237 a).
-export async function siparisCarpaniYaz(db: Db, k: Kullanici, siparisId: number, t: TaslakGirdisi, g: { carpan: number; gerekce: string }) {
-  const genis = islemVarMi(k, 'siparisler.onayla');
-  if (!genis && !islemVarMi(k, 'plan.yaz')) throw yetkiYok();
-  if (g.carpan > elleCarpanSiniri(genis)) throw yetkiYok(`Çarpanı en çok ${elleCarpanSiniri(genis)} verebilirsiniz; üstü müdür onayıyla girer.`);
-  const sp = await siparisKilitliAyrinti(db, siparisId);
-  return taslagaYaz(db, k, t, async (_b, id) => {
-    await s.carpanTaslagaYaz(db, id, siparisId, g.carpan, g.gerekce, k.id);
-    return { tur: 'siparis_carpani', ozet: `${sp.no} siparişinin elle çarpanı`, isEmriIdleri: [], veri: { siparisId } };
-  });
 }
 
 // Açık plan ekranlarının "plan değişti" uyarısı için hafif okuma: canlı plan sürümü ve son canlıya alma.
@@ -1539,41 +1507,7 @@ function partiBaglari(isler: readonly Is[]): Map<number, number[]> {
 
 // Motor girdisi: sabitler (kilitli, dondurulmuş, başlamış, bitmiş ya da kullanıcının kapsamı dışındaki kaynakta) yerinde kalır. Rotada
 // süresi olmayan, süresi elle girilerek yerleştirilmiş iş de yerinde kalır: motor süresini bilmez, öneride plandan düşerdi.
-// 196 a: motor emrin elle önceliğini değil, gecikme bedelinden çıkan sınıfı sıralar; bedel emir başına bir kez, plandaki bütün emirlerle.
-function emirBedelleri(b: Baglam): Map<number, number> {
-  const bedel = new Map<number, number>();
-  for (const i of b.isler.values()) {
-    if (bedel.has(i.uretimEmriId)) continue;
-    const satir = emirSatiri(b, i);
-    bedel.set(i.uretimEmriId, gecikmeBedeli(satir, null, emirCarpani(b, i, satir), b.bedelAyari.tabanBedelSaat));
-  }
-  return bedel;
-}
-const sinifEsigi = (b: Baglam) => ({ yuksek: b.bedelAyari.yuksekEsigi, dusuk: b.bedelAyari.dusukEsigi });
-const emirSiniflari = (b: Baglam): Map<number, 1 | 2 | 3> => oncelikSiniflari(emirBedelleri(b), sinifEsigi(b));
-
-// 306 a: siparişin plandaki emirlerinin bedeli ve bandı; bant sınırları bütün plan emirleriyle. Planda emri yoksa bant null. Sipariş
-// yoksa 404. taslak verilirse taslaktaki çarpan ve bedel ayarıyla (148 a: çarpan önce taslağa yazılır).
-export async function siparisBandi(db: Db, k: Kullanici, siparisId: number, taslak: number | null = null): Promise<SiparisBandiCevabi> {
-  await siparisAyrintisi(db, siparisId);
-  await hedefDenetle(db, taslak);
-  const b = await baglamKur(db, k, taslak);
-  const bedel = emirBedelleri(b);
-  const sinif = oncelikSiniflari(bedel, sinifEsigi(b));
-  const emirler = new Map<number, string>();
-  for (const i of b.isler.values()) if (i.siparisSatiriId != null && b.siparisSatirlari.get(i.siparisSatiriId)?.siparisId === siparisId) emirler.set(i.uretimEmriId, i.emirNo);
-  if (emirler.size === 0) return { siparisId, bant: null };
-  const s = bantSinirlari(bedel, sinifEsigi(b));
-  const ad = { 1: 'yuksek', 2: 'normal', 3: 'dusuk' } as const;
-  return {
-    siparisId,
-    bant: {
-      yuksekSiniri: s.yuksek, dusukSiniri: s.dusuk,
-      emirler: [...emirler].sort(([x], [y]) => x - y).map(([id, emirNo]) => ({ uretimEmriId: id, emirNo, bedel: bedel.get(id)!, sinif: ad[sinif.get(id)!] })),
-    },
-  };
-}
-
+// 815 (699/3 a): motor emrin kendi önceliğinin sınıfını sıralar (oncelikSinifi); bedel bandı sıraya girmez.
 function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[]) {
   const yerler = satirListesi.map((y) => yerOf(b, y));
   const satirlar = new Map(satirListesi.map((y) => [y.isEmriId, y]));
@@ -1612,11 +1546,10 @@ function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[]) {
   const sabitIdler = new Set(sabitler.map((x) => x.isEmriId));
   const uygun = (kk: Kaynak) => { const v = b.kaynaklar.get(kaynakAnahtari(kk)); return !!v && v.aktif && izinliMi(b, v); };
   const bagli = partiBaglari([...b.isler.values()]);
-  const sinif = emirSiniflari(b);
   const isler: MotorIsi[] = [...b.isler.values()].filter((i) => i.durum === 'planli' && !sabitIdler.has(i.id)).map((i) => ({
     bagli: bagli.get(i.id) ?? [], id: i.id, uretimEmriId: i.uretimEmriId, sira: i.sira, teslimDk: teslimDk(b, i.teslim), sureDk: i.sureDk, ayarDk: i.ayarDk,
     ...(elleKaynak.has(i.id) ? { kaynak: elleKaynak.get(i.id)!, adaylar: [] } : { kaynak: i.kaynak && uygun(i.kaynak) ? i.kaynak : null, adaylar: i.rotaKaynaklari.filter(uygun) }), bagimlilik: i.bagimlilik, devirDk: i.devirDk, devirAyarDk: i.devirAyarDk,
-    devirSonDk: i.devirSonDk, oncelik: sinif.get(i.uretimEmriId) ?? null, acilmaDk: dk(b, new Date(i.acilma)), emirBaslangicDk: i.baslangic ? (tesisGunBasi(i.baslangic) - b.simdi) / DK : null, elleSira: elle.get(i.id) ?? null,
+    devirSonDk: i.devirSonDk, oncelik: oncelikSinifi(i.oncelik), acilmaDk: dk(b, new Date(i.acilma)), emirBaslangicDk: i.baslangic ? (tesisGunBasi(i.baslangic) - b.simdi) / DK : null, elleSira: elle.get(i.id) ?? null,
     fasonBekleDk: (i.fasonBekleGun ?? 0) * GUN_DK,
     ...(parcalar.has(i.id) ? { parcalar: parcalar.get(i.id)! }
       : b.yersiz.has(i.id) ? { parcalar: uzlasikParcalar(i, b.yersiz.get(i.id)!).map((p) => ({ no: p.no, sureDk: parcaSuresi(i, p.adet), kaynak: null })) } : {}),
@@ -2132,7 +2065,6 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     await s.degisiklikVerisiYaz(db, d.id, { ...v, siparisId: sp.id });
   }
   await s.ayariCanliyaYaz(db, id, k.id);
-  await s.carpanlariCanliyaYaz(db, id);
   await s.ekMesaiCanliyaYaz(db, id);
   await s.planSurumuArtir(db);
   // 33 a: taban, yeni canlı sürümle yazılır; tabanı olan adım atlanır.

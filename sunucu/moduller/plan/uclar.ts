@@ -3,7 +3,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
-  senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
+  senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, veriSagligiCevabi,
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
@@ -98,15 +98,9 @@ export const uclar = [
   // 830 a: taslağa özel kural; taslağın sahibi yazar (motor-ayari-guncelle gibi plan.yaz).
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/motor-kurali', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi,
     govde: motorKuraliGovdesi, cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.motorKuraliYaz(db, kullanici, parametre.id, govde) }),
-  // Elle çarpan (195 a): plan.yaz 2'ye, siparisler.onayla 3'e kadar; sınırı servis denetler. 148 a: taslağa yazılır, onayla siparişe geçer.
+  // Elle çarpan geçmişi (195 a). 815 (699/3 a): çarpan artık verilmez ve plana girmez; yazma ve bant uçları kalktı, eski kayıtlar okunur.
   uc({ yontem: 'GET', yol: '/plan/siparisler/:id/carpan', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, cevap: siparisCarpaniCevabi,
     isle: ({ db, parametre }) => servis.siparisCarpani(db, parametre.id) }),
-  // 306 a: çarpanın düştüğü bant; bedel TL olduğundan çarpanla aynı okurlar.
-  uc({ yontem: 'GET', yol: '/plan/siparisler/:id/bant', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, sorgu: planSorgusu,
-    cevap: siparisBandiCevabi, isle: ({ db, kullanici, parametre, sorgu }) => servis.siparisBandi(db, kullanici, parametre.id, sorgu.taslak ?? null) }),
-  uc({ yontem: 'POST', yol: '/plan/siparisler/:id/carpan', yetki: { biri: ['plan.yaz', 'siparisler.onayla'] }, tekrarKorumali: true, parametre: siparisParametresi,
-    govde: siparisCarpaniTaslakGovdesi, cevap: planCevabi,
-    isle: ({ db, kullanici, parametre, govde: { taslak, ...g } }) => servis.siparisCarpaniYaz(db, kullanici, parametre.id, taslak ?? null, g) }),
   // Reçete ve Rota motorunun hesapladığı kuyruklar (kart #1186): ayar ve kuyruklar tek komutla taslağa, istenirse canlıya.
   uc({ yontem: 'POST', yol: '/plan/kuyruklari-yaz', yetki: 'plan.yaz', tekrarKorumali: true, govde: kuyrukYazGovdesi, cevap: kuyrukYazCevabi,
     isle: ({ db, kullanici, govde }) => servis.kuyruklariYaz(db, kullanici, govde) }),

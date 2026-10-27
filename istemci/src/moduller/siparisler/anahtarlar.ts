@@ -20,7 +20,6 @@ export const anahtarlar = {
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
   // Plan modülünün elle çarpanı (195 a); sipariş ayrıntısında okunur ve yazılır.
   siparisCarpani: (id: number) => ['siparisler', 'siparis', 'carpan', id] as const,
-  siparisBandi: (id: number) => ['siparisler', 'siparis', 'bant', id] as const,
   firmaSecimi: (ara: string) => ['siparisler', 'firma-secimi', ara] as const,
   malzemeArama: (metin: string) => ['siparisler', 'malzeme-arama', metin] as const,
 };

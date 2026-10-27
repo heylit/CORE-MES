@@ -43,6 +43,8 @@ function rrKur(asil, yeni) {
   for (const k of Object.keys(yeni)) if (!(k in o) && yeni[k] !== undefined && !(asil && k in asil)) o[k] = yeni[k];
   return o;
 }
+/* 815 (699/3 a): emrin önceliği (1-4; 195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük) motorun sınıfına (1-3) çevrilir; önceliği olmayan 0. */
+function oncSinifi(p) { p = +p; return p === 1 || p === 2 ? 1 : p === 3 ? 2 : p === 4 ? 3 : 0; }
 function rrCevir(st) {
   const P = rrKopya(st.plan || {});
   const items = st.items || [], item = id => items.find(x => x.id === id);
@@ -148,7 +150,7 @@ function rrCevir(st) {
     if (!a || (rrTarih(a.termin) || null) !== due) y.termin = due ? due + ' ' + (rrSaat(a && a.termin) || '17:00') : null;
     if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (o.serbestSaat || rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
     else if (o.serbestSaat && a.serbest && rrSaat(a.serbest) !== o.serbestSaat) y.serbest = o.start !== bas ? o.start + ' ' + o.serbestSaat : null;
-    if (!a || a.oncelik !== o.priority) y.oncelik = +o.priority || 0;
+    if (!a || a.oncelik !== oncSinifi(o.priority)) y.oncelik = oncSinifi(o.priority);
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
     if (!a || (a.ad || '') !== (o.note || '')) y.ad = o.note || o.no || o.id;
     if (!a) { const r = st.routes && st.routes[o.itemId]; const s0 = r && (r.steps || []).slice().sort((p, q) => p.seq - q.seq)[0];

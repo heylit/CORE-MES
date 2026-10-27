@@ -48,7 +48,7 @@ function DengeCubugu({ c, komut, yazabilir }: { c: PlanlamaCalismasi; komut: Cal
         Gösterilen tutarlar her zaman gerçek TL'dir.
       </p>
       {!etkin && (
-        <p className="tc-pys-kucuk"><b>Çubuk yalnız plan amacı "Tek TL toplamı" ve ağırlık kipi "bedel" iken etkilidir</b> (Maliyetler ve Öncelik ve ağırlık sayfaları).</p>
+        <p className="tc-pys-kucuk"><b>Çubuk etkisizdir: plan sırasına ve ağırlığına yalnız üretim emrinin önceliği girer.</b> Gecikme bedeli amaçta sayılmaz.</p>
       )}
       {!yazabilir && <p className="tc-pys-kucuk"><Simge ad="lock" boyut="k" /> Plan dengesini müdür ve yönetici ayarlar.</p>}
       {c.plan !== null && !planGuncel(c) && <p className="tc-pys-kucuk">Denge plandan sonra değişti; plan yeniden çözülünce uygulanır.</p>}

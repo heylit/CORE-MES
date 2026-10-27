@@ -21,7 +21,8 @@ Test: U = `sunucu/moduller/plan/plan-*.test.ts` (gerçek PostgreSQL; ortak kurul
 | POST /plan/senaryolar/:id/geri-gonder | plan.canliya-al | PL-ONAY: yalnız onaydaki taslak; neden zorunlu (boş 400, kısıt `plan_senaryo_onay_kaydi_neden`); dört göz açıkken son gönderen geri gönderemez; taslak açık olur, canlı değişmez | U PL-ONAY | U PL-ONAY (boş neden 400); U PL-ONAY ret (açık 409, operatör 403); U 146 (403) |
 | POST /plan/bedel-ayari | plan.bedel-ayari | 148 a: taslağa yazılır (taslak verilmezse kişiye açılır; verilirse açık, kişinin, okunan sürümde); değerler sınırlı; defter değer taşımaz (237 a); canlıya onayla geçer | U 210 a; U 148 a | U 210 a (planlama 403, sınır dışı 400) |
 | GET /plan/bedel-ayari | plan.yaz, plan.bedel-ayari ya da siparisler.fiyat-oku | Taslak verilirse taslağın bedeli (taslak yoksa 404) | U 210 a, 148 a | U 6b (kalite, operatör 403) |
-| POST /plan/siparisler/:id/carpan | plan.yaz ya da siparisler.onayla | 148 a: taslağa yazılır; plan.yaz 2'ye, siparisler.onayla 3'e kadar; gerekçe zorunlu; sipariş yoksa 404; canlıya onayla, yazanı ve gerekçesiyle yalnız eklenen geçmişe; defter çarpanı ve gerekçeyi taşımaz | U 6a | U 6a (planlama 2,5 403, kalite 403, sınır ve gerekçe 400, yok 404) |
+
+815: `POST /plan/siparisler/:id/carpan` ve `GET /plan/siparisler/:id/bant` kalktı (U 815: 404). `GET /plan/siparisler/:id/carpan` yalnız geçmişi okur; okuma yetkisi aynı (U 815: kalite, operatör 403).
 
 Kullanıcı metni (senaryo adı, iş adı) React metni olarak basılır; HTML/SVG yorumlanmaz (çizelgede SVG yalnız sayılarla çizilir).
 

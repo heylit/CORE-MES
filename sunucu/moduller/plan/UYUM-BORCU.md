@@ -58,7 +58,10 @@
 - Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, P-B27 ve P-B28 (627), ekranı olmayan uçlar.
 
 ## Planlamanın plan modülüne taşınması (658 c, 26.10.2026)
-- P-B29 (674 b, kullanıcı: "şimdilik kalsın, taşıma aşamasındayız"): emir önceliği ile sipariş tutarı ve müşteri sınıfı plan motoruna girmiyor. Taşıma bitince kullanıcıya yeniden sorulur.
+- P-B29 kapandı (815, 699/3 a): plan sırasına yalnız üretim emrinin önceliği girer (1-2 Yüksek, 3 Normal, 4 Düşük); sipariş tutarı, gecikme cezası,
+  müşteri sınıfı ve elle çarpan sıraya ve atölye motorunun ağırlığına girmez. Kalan ölü parçalar (plan-olu-kod işine): bedel ayarındaki sınıf
+  çarpanları ve yüksek/düşük eşikleri okunur ama kullanılmaz; atölye motorundaki bedel kipi kodu (agOncHesap, agOncYaz, ELLE_ONC) ve
+  istemcideki `dengeEtkin`, `agBedel` çağrılmaz olur; musteri-tedarikci `gorunum.ts` sınıf yorumu eski. Sipariş çarpanı tabloları silinmedi, yazılmaz.
 - P-B35: `planMotoruCozucusu` kaydı ve kablolama bağı ADR 0020'den sonra aynı modülün iki ucunu bağlar (çözücü de plan modülünde); kayıt
   kalkıp plan servisi `sunucuPlanCozucusu`'nu doğrudan çağırabilir. 625n'in davranışına dokunulmadı.
 - P-B30: planlama kaydını yazmak hem `recete-rota.yaz` hem `plan.yaz` ister (taşımadan önceki çift denetim aynen); bağlamada tek işleme iner.

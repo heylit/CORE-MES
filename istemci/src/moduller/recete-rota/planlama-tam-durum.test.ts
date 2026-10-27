@@ -70,22 +70,21 @@ describe('tam st (stTamKur)', () => {
     expect(yeni).toEqual(kopya(st));
   });
 
-  it('ağırlık siparişin bedelinden gelir; plan TL ayarı, denge, karma malzeme, erken sevk ve ayar önde st\'ye girer', () => {
+  it('815: ağırlık emrin önceliğinden gelir, kayıttaki bedel kipi de; TL amacı kapalı; denge, karma malzeme, erken sevk ve ayar önde st\'ye girer', () => {
     const { m, S } = kur();
-    S.D['planTL'] = { operatorUcret: 100, amac: 'tl', risk: 0.5 }; S.D['planDenge'] = 0;
+    S.D['planTL'] = { operatorUcret: 100, amac: 'tl', risk: 0.5 }; S.D['planDenge'] = 0; S.D['planAgirlik'] = { kip: 'bedel' };
     (S.D['siparisler'] as Nesne[])[0]!['erkenSevk'] = 1;
     S['param'] = { ...(S['param'] as Nesne), ayariOneAl: 'acik' };
     const st = m.stTamKur(S);
+    expect(st.D.siparisler.length).toBeGreaterThan(0);
     for (const s of st.D.siparisler) {
-      expect(s.oncelik).toBe('b:' + s.id);
-      expect(m.PW['b:' + s.id]).toBeGreaterThan(0);
-      expect(s.cezaGun).toBeCloseTo(m.PW['b:' + s.id]! * m.AG_BIRIM * 24, 6);
-      expect(s.pay).toBe(1);
+      expect([1, 2, 3]).toContain(s.oncelik);
+      expect(m.PW[String(s.oncelik)]).toBeGreaterThan(0);
     }
     expect(st.D.tezgahlar[0]!.ucret).toBe(850);
     // 590: personel kısıtı kapalıyken oran kapasiteden düşer, operatör ücreti TL amacında kalır
     expect(m.stTamKur({ ...S, kapali: ['personel'] }).D.tezgahlar[0]!.ucret).toBe(850);
-    expect(st.tlAmac).toMatchObject({ ac: true, birim: m.AG_BIRIM, risk: 0.5, kT: 100, chgTL: 0 });
+    expect(st.tlAmac).toMatchObject({ ac: false, birim: m.AG_BIRIM, risk: 0.5, kT: 100, chgTL: 0 });
     expect(st.w).toMatchObject({ mat: 'sert', matKarma: true });
     expect(st.wipP.erken).toEqual({ [st.D.siparisler[0]!.id]: 1 });
     expect(st.ayariOneAl).toBe(true);

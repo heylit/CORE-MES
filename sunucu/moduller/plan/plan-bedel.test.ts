@@ -1,8 +1,8 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi, PlanCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi, PlanCevabi, SenaryolarCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from '../proje-maliyet/disari.ts';
-import { karRiskiOraniGun, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, tahminiMaliyetCozucusu } from './disari.ts';
+import { karRiskiOraniGun, malzemeMaliyetiCozucusu, tahminiMaliyetCozucusu } from './disari.ts';
 import { PERSONEL_TANIMSIZ } from './kurallar.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { gunduzde } from './plan-saat.test.ts';
@@ -10,136 +10,65 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   const { c, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
-  // 148 a: bedel ayarı ve elle çarpan taslağa yazılır; yazan taslağı onaya gönderir, müdür canlıya alır.
+  // 148 a: bedel ayarı taslağa yazılır; yazan taslağı onaya gönderir, müdür canlıya alır.
   const canliyaGecir = async (yazan: string, p: PlanCevabi) => {
     const s = (await tamam<SenaryolarCevabi>(yazan, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
       .senaryolar.find((x) => x.id === p.taslak!.id)!;
     return tamam<SenaryolarCevabi>(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
   };
   const bedelYaz = async (govde: Partial<BedelAyari>) => canliyaGecir(c.mudur, await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...govde, taslak: null }));
-  const carpanYaz = async (yazan: string, siparisId: number, carpan: number, gerekce: string) =>
-    canliyaGecir(yazan, await tamam<PlanCevabi>(yazan, 'POST', `/plan/siparisler/${siparisId}/carpan`, { carpan, gerekce, taslak: null }));
   let ortam: TestVeritabani | undefined;
   let yoneticiId = 0;
   before(() => { ({ ortam, yoneticiId } = durum()); });
 
-  // 687 a: sıra sayfanındır; bedel bant ve TL toplamında sınanır.
-  test('196 a: öncelik siparişin gecikme bedelinden çıkar: cezalı büyük siparişin emri Yüksek bantta', async () => {
-    const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
-    await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
-    // b'nin emri günlük %1 cezalı 2.400.000 TL'lik satıra bağlanır: 1 saat gecikme 1.000 TL, taban 150 TL. Bağın kuralı uretim-emirleri'nde sınanır.
-    const sp196 = await ortam!.sahip.tx(async (db) => {
-      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 196', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
-      const sp = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani, gecikme_ceza_orani)
-        VALUES ('SS-2030-196', 'onayli', $1, current_date, current_date + 30, 20, $2, $2, now(), 1) RETURNING id`, [firma, yoneticiId]))!.id;
-      const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [b!]))!.malzeme_no;
-      const satir = (await db.tek<{ id: number }>('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 10, 240000) RETURNING id', [sp, malzeme]))!.id;
-      await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, b]);
-      return sp;
+  // 815 (699/3 a): plan sırasına yalnız üretim emrinin önceliği girer; sipariş bedeli, müşteri sınıfı ve elle çarpan girmez.
+  test('815: motor aynı makinede, aynı teslimde emrin önceliğine göre sıralar; öncelik değişince sıra değişir', async () => {
+    await gunduzde(async () => {
+      const [a] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
+      const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
+      const oncelikVer = (id: number, oncelik: number) => ortam!.sahip.tx((db) => db.sorgu(
+        'UPDATE uretim_emri SET oncelik = $2 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1)', [id, oncelik]));
+      const once = async (ilk: number, sonra: number) => {
+        const m = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', '/plan/motor-yerlesimi');
+        const y = (id: number) => m.yerlesimler.find((x) => x.isEmriId === id)!;
+        assert.ok(Date.parse(y(ilk).bitis) <= Date.parse(y(sonra).baslangic), JSON.stringify([y(ilk), y(sonra)]));
+      };
+      await oncelikVer(a!, 4); await oncelikVer(b!, 1);
+      await once(b!, a!);
+      await oncelikVer(a!, 1); await oncelikVer(b!, 4);
+      await once(a!, b!);
     });
-    const p = await taslaktaOner();
-    assert.equal(p.ayar.kural, 'oncelik');
-    const { bant } = await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${sp196}/bant`);
-    assert.deepEqual(bant && [bant.emirler.length, bant.emirler[0]!.sinif], [1, 'yuksek'], JSON.stringify(bant));
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
-  test('265 a: müşteri sınıfı çözücüden okunur; çözücü kayıtsızken sınıf yok', async () => {
-    const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-02-10');
-    const firma = await ortam!.sahip.tx(async (db) => {
-      const f = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 265', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
-      const sp = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
-        VALUES ('SS-2030-265', 'onayli', $1, current_date, current_date + 30, 20, $2, $2, now()) RETURNING id`, [f, yoneticiId]))!.id;
-      const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [b!]))!.malzeme_no;
-      const satir = (await db.tek<{ id: number }>('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar) VALUES ($1, 1, $2, 10) RETURNING id', [sp, malzeme]))!.id;
-      await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, b]);
-      return f;
-    });
-    let istenen: number[] = [];
-    musteriSinifiCozucusu(async (_db, idler) => { istenen = [...idler]; return new Map(idler.map((id) => [id, id === firma ? 'A' as const : null])); });
-    try {
-      const p = await taslaktaOner();
-      assert.ok(istenen.includes(firma));
-      await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
-    } finally {
-      musteriSinifiCozucusu(null);
-    }
-  });
-
-  test('6a: elle çarpan siparişe gerekçeyle yazılır; plan.yaz 0,5-2, siparisler.onayla 3e kadar; çarpan öncelik çarpanının yerine bedele girer', async () => {
+  test('815: çarpan yazma ve bant uçları yok; çarpan geçmişi okunur, tabloya yazılmaz', async () => {
     const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-02-10');
     const sp = await ortam!.sahip.tx(async (db) => {
-      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 6a', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
+      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 815', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
       const id = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
-        VALUES ('SS-2030-601', 'onayli', $1, current_date, current_date + 30, 20, $2, $2, now()) RETURNING id`, [firma, yoneticiId]))!.id;
+        VALUES ('SS-2030-815', 'onayli', $1, current_date, current_date + 30, 20, $2, $2, now()) RETURNING id`, [firma, yoneticiId]))!.id;
       const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [b!]))!.malzeme_no;
       const satir = (await db.tek<{ id: number }>('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 10, 1) RETURNING id', [id, malzeme]))!.id;
       await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, b]);
       return id;
     });
     const yol = `/plan/siparisler/${sp}/carpan`;
-    const taslak = null;
-    assert.equal((await istek(c.planlama, 'POST', yol, { carpan: 2.5, gerekce: 'Müşteri hattı durdu', taslak })).statusCode, 403, 'planlama 2nin üstüne çıkamaz');
-    assert.equal((await istek(c.planlama, 'POST', yol, { carpan: 1.5, gerekce: '  ', taslak })).statusCode, 400, 'gerekçe zorunlu');
-    assert.equal((await istek(c.planlama, 'POST', yol, { carpan: 0.4, gerekce: 'Düşük', taslak })).statusCode, 400);
-    assert.equal((await istek(c.mudur, 'POST', yol, { carpan: 3.5, gerekce: 'Çok acil', taslak })).statusCode, 400);
-    assert.equal((await istek(c.kalite, 'POST', yol, { carpan: 1, gerekce: 'Deneme', taslak })).statusCode, 403);
-    assert.equal((await istek(c.planlama, 'POST', '/plan/siparisler/999999/carpan', { carpan: 1, gerekce: 'Deneme', taslak })).statusCode, 404);
-    // 148 a: çarpan önce taslaktadır; taslakta bedele girer, canlı geçmiş onaya kadar boştur.
-    const t = await tamam<PlanCevabi>(c.planlama, 'POST', yol, { carpan: 2, gerekce: 'Teslim öne alındı', taslak });
-    assert.equal((await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol)).gecerli, null, 'taslaktaki çarpan canlıda yok');
-    const bedelOf = async (sorgu: string) => (await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${sp}/bant${sorgu}`)).bant?.emirler[0]?.bedel;
-    assert.deepEqual([await bedelOf(''), await bedelOf(`?taslak=${t.taslak!.id}`)], [150, 300], 'bant taslakta taslağın çarpanıyla, canlıda canlıyla');
-    assert.equal((await istek(c.planlama, 'GET', `/plan/siparisler/${sp}/bant?taslak=999999`)).statusCode, 404);
-    await canliyaGecir(c.planlama, t);
-    await carpanYaz(c.mudur, sp, 3, 'Müşteri hattı durdu');
-    const son = await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol);
-    assert.deepEqual(son.gecerli && { carpan: son.gecerli.carpan, gerekce: son.gecerli.gerekce }, { carpan: 3, gerekce: 'Müşteri hattı durdu' });
-    assert.deepEqual(son.gecmis.map((x) => x.carpan), [3, 2], 'geçmiş yeniden eskiye, silinmez');
-    const okunan = await tamam<typeof son>(c.mudur, 'GET', yol);
-    assert.equal((await tamam<typeof son>(c.planlama, 'GET', yol)).gecmis.length, 2);
-    for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 403, '237 a: gerekçe ticari bilgi, yalnız planı yazan, ayarı yapan ya da fiyat gören okur');
-    assert.deepEqual(okunan.gecmis.map((x) => x.gerekce), ['Müşteri hattı durdu', 'Teslim öne alındı']);
-    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_siparis_carpani SET carpan = 1')), /yalnız ekleme/);
-    assert.equal(await bedelOf(''), 450, 'çarpan 3 canlıda bedele girer');
+    const sayi = async () => Number((await ortam!.sahip.tek<{ n: string }>('SELECT (SELECT count(*) FROM plan_siparis_carpani) + (SELECT count(*) FROM plan_senaryo_siparis_carpani) AS n'))!.n);
+    const once = await sayi();
+    assert.equal((await istek(c.mudur, 'POST', yol, { carpan: 2, gerekce: 'Deneme', taslak: null })).statusCode, 404, 'çarpan yazılmaz');
+    assert.equal((await istek(c.planlama, 'GET', `/plan/siparisler/${sp}/bant`)).statusCode, 404, 'bant ucu yok');
+    const p = await taslaktaOner();
+    await canliyaGecir(c.planlama, p);
+    assert.equal(await sayi(), once, 'öner ve canlıya alma çarpan tablolarına yazmaz');
+    const okunan = await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol);
+    assert.deepEqual([okunan.gecerli, okunan.gecmis], [null, []]);
+    assert.equal((await tamam<SiparisCarpaniCevabi>(c.planlama, 'GET', yol)).gecerli, null);
+    for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 403, '237 a: gerekçe ticari bilgi');
   });
 
-  test('6b: bedel ayarı plan ayarında; varsayılanlar kodun değerleri, sınıf eşikleri ayardan; 237 a: yalnız planı yazan, ayarı yapan ya da fiyat gören okur', async () => {
+  test('6b: bedel ayarı plan ayarında; varsayılanlar kodun değerleri; 237 a: yalnız planı yazan, ayarı yapan ya da fiyat gören okur', async () => {
     for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', '/plan/bedel-ayari')).statusCode, 403);
     assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'),
       { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7 });
-    await isEmirleriAc([yeniAdim()], 10, '2030-03-10');
-    const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-03-10');
-    const sp = await ortam!.sahip.tx(async (db) => {
-      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 6b', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
-      const id = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
-        VALUES ('SS-2030-602', 'onayli', $1, current_date, current_date + 30, 20, $2, $2, now()) RETURNING id`, [firma, yoneticiId]))!.id;
-      const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [b!]))!.malzeme_no;
-      const satir = (await db.tek<{ id: number }>('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 10, 1) RETURNING id', [id, malzeme]))!.id;
-      await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, b]);
-      return id;
-    });
-    await carpanYaz(c.mudur, sp, 3, 'Eşik denemesi');
-    // 306 a: çarpan kartı siparişin emirlerinin bedelini, bandını ve bant sınırlarını (TL) gösterir.
-    const { bant } = await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${sp}/bant`);
-    assert.ok(bant);
-    assert.equal(bant.emirler.length, 1);
-    assert.deepEqual([bant.emirler[0]!.bedel, bant.emirler[0]!.sinif], [450, 'yuksek']);
-    assert.ok(Math.abs(bant.yuksekSiniri / bant.dusukSiniri - 1.5 / 0.6) < 1e-9, JSON.stringify(bant));
-    assert.ok(bant.emirler[0]!.bedel >= bant.yuksekSiniri);
-    const satirsiz = (await ortam!.sahip.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id)
-      SELECT 'SS-2030-699', 'taslak', firma_id, current_date, current_date + 30, 20, olusturan_id FROM siparisler_siparis WHERE id = $1 RETURNING id`, [sp]))!.id;
-    assert.equal((await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${satirsiz}/bant`)).bant, null, 'planda emri olmayan siparişte bant yok');
-    for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', `/plan/siparisler/${sp}/bant`)).statusCode, 403, 'bedel TL, çarpanı okuyan okur');
-    assert.equal((await istek(c.planlama, 'GET', '/plan/siparisler/999999/bant')).statusCode, 404);
-    // Çarpanlı emrin bedeli 450, diğer emirler tabanda (150, ortanca): eşikler 4 ve 0,4 olunca Normal.
-    await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_ayari SET yuksek_esigi = 4, dusuk_esigi = 0.4'));
-    try {
-      const sonra = (await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${sp}/bant`)).bant;
-      assert.equal(sonra?.emirler[0]?.sinif, 'normal', 'eşikler ayardan okunur');
-    } finally {
-      await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_ayari SET yuksek_esigi = 1.5, dusuk_esigi = 0.6'));
-    }
   });
 
   test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); öner aynı yerleri yazar', async () => {

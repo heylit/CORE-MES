@@ -522,7 +522,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     bilinenKusur(40, [], sv.sonuclar);
   });
 
-  test('14 geciken sipariş: plan bedeli sipariş termininden işler, emrin teslimi ertelese de; müşteri sınıfı çarpanı bedele girer', async () => {
+  test('14 geciken sipariş: plan bedeli sipariş termininden işler, emrin teslimi ertelese de; müşteri sınıfı bedele girmez (815)', async () => {
     // Akışın parasal ucu (değerlendirme süreç 2): sipariş satırı bağı yoksa plan bedeli hiç çalışmaz. Emir teslimi 30 gün ileride, sipariş
     // termini bugün; plan yarından başladığı için emir siparişe göre gecikir ve bedel yalnız siparişten gelebilir (284 a).
     const f = tamam(await yaz<{ firma: { id: number; surum: number } }>('planlama', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Gec Musteri AS', tur: 'musteri' }));
@@ -549,12 +549,10 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       const maliyet = async (): Promise<number | null> => tamam(await oku<PlanCevabi>('mudur', `/plan?taslak=${o.taslak.id}`)).gostergeler.maliyetTl;
       const sinifsiz = await maliyet();
       assert.ok(sinifsiz !== null && sinifsiz > 0, `geciken siparişin plan bedeli ${String(sinifsiz)}`);
-      // 265 a: A sınıfı müşteri çarpanı 1,5 (göçün varsayılanı); sınıfı Müşteri-Tedarikçi yazar, plan kablolamadan okur (#2036).
+      // 815 (699/3 a): plana yalnız emrin önceliği girer; müşteri sınıfı A olunca bedel değişmez.
       tamam(await yaz('planlama', `/musteri-tedarikci/firmalar/${f.firma.id}/guncelle`,
         { ad: 'Deneme Gec Musteri AS', tur: 'musteri', musteriSinifi: 'A', surum: f.firma.surum }));
-      const aSinifi = await maliyet();
-      assert.ok(aSinifi !== null);
-      assert.ok(Math.abs(aSinifi - sinifsiz * 1.5) <= 0.01 * sinifsiz, `A sınıfı bedel ${aSinifi}, sınıfsız ${sinifsiz}`);
+      assert.equal(await maliyet(), sinifsiz, 'müşteri sınıfı plan bedeline girmez');
     } finally { mock.timers.reset(); }
   });
 });

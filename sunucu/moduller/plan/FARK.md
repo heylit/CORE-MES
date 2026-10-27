@@ -208,3 +208,12 @@ Testler: plan-motoru canlıya al (motor çağrılmaz, saatler taslağınki; 168 
 - Bu özellikten önce bayatlamış planın kaydı olmayan değişiklikleri tek satırda gelir ve yalnız uygulanır (787 a).
 - "Planı iyileştir" düğmeleri "Plan iyileştirme ara" oldu (pasif kaldı); bayat plan metinleri Plan atölyesine yönlendirir.
 Testler: degerlendirme.test PD-20 (yalnız etkilenen sipariş oynar), istemci kayit, coz ve Atolye bekleyen değişiklik testleri.
+
+## Emir önceliği (815, 699/3 a; 2026-10-27)
+- Plan sırasına yalnız üretim emrinin önceliği girer: sunucu motoruna sınıf `oncelikSinifi` ile (1-2 → 1, 3 → 2, 4 → 3); atölye motoru kayıttaki
+  'bedel' kipini de 'oncelik' sayar, sipariş önceliği emrinkinden (girdi.betik `oncSinifi`). Gecikme bedeli bandı, müşteri sınıfı ve elle çarpan sıraya girmez.
+- Kalkan uçlar: `POST /plan/siparisler/:id/carpan`, `GET /plan/siparisler/:id/bant`; kablolamadaki müşteri sınıfı bağı ve `musteriSinifiCozucusu`.
+  `GET /plan/siparisler/:id/carpan` geçmişi okur. Çarpan tabloları silinmedi; taslak kopyası ve canlıya alma artık yazmaz. Göç yok.
+- Planın TL toplamında gecikme çarpanı yalnız öncelik çarpanıdır (bedel ayarının yüksek/normal/düşük çarpanları).
+- Atölye motorunda "Tek TL toplamı" amacı ve Plan dengesi çubuğu bedel kipine bağlıydı; etkisiz kalır (899 a; TL amacı 832 a gereği pasif). Çubuk görünür, pasif.
+Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlama-tam-durum, yazmalar, siparis 815.

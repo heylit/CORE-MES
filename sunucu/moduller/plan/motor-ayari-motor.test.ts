@@ -64,7 +64,7 @@ const ilkSiparis = (kural: MotorAyarlari['kural'] | null): { rule: string; ilk: 
 };
 
 describe('plan: amaç motor ayarından motora (771 a)', () => {
-  test('sıralı ayarda TL amacı kapalı, TL ayarında açık; kayıttaki amaç geçmez', () => {
+  test('899 a (832 a): TL amacı her iki ayarda kapalı; bedel kipi kalktı, kayıttaki amaç geçmez', () => {
     const tlAcik = (amac: MotorAyarlari['amac']): unknown => {
       const k = calismaKur();
       const calisma = calismayaMotorAyari({ ...k, D: { ...(k.D as object), planTL: { amac: amac === 'tl' ? 'sira' : 'tl' } } }, { ...MOTOR_AYARI_VARSAYILAN, amac });
@@ -72,7 +72,7 @@ describe('plan: amaç motor ayarından motora (771 a)', () => {
       assert.ok(g);
       return (g.st as { tlAmac: { ac: boolean } }).tlAmac.ac;
     };
-    assert.deepEqual([tlAcik('sirali'), tlAcik('tl')], [false, true]);
+    assert.deepEqual([tlAcik('sirali'), tlAcik('tl')], [false, false]);
   });
   test('840 a: bitiş amaç vektöründe boşta kalmadan sonraki yerdedir', () => {
     const g = planGirdisi({ calisma: calismayaMotorAyari(calismaKur(), MOTOR_AYARI_VARSAYILAN), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
