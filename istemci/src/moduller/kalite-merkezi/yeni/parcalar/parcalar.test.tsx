@@ -107,11 +107,11 @@ describe('Parça sayfası', () => {
     await waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/lot-kabul'); });
   });
 
-  it('muayene satırı kendi görünümünü açar; yarım ölçüm Resim ve modeller stüdyosuna gider (597 a)', async () => {
+  it('muayene satırı kendi görünümünü açar; yarım ölçüm Resim ve modeller listesine gider (597 a, 799)', async () => {
     await parcayiAc(MUAYENECI);
     fireEvent.click(screen.getByRole('tab', { name: 'Muayeneler 3' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ölçüme devam' }));
-    expect(await screen.findByRole('region', { name: 'Teknik resim' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Resim ve modeller' })).toBeTruthy();
   });
 
   it('satırdaki Rapor ve FAI paketi önizlemeyi açar (Soru 275: bugünkü gibi)', async () => {

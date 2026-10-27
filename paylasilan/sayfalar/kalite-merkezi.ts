@@ -19,7 +19,6 @@ export const KALITE_MERKEZI_IKINCI_MENU = {
     ] },
     { baslik: 'Resim ve modeller', maddeler: [
       { anahtar: 'draw', baslik: 'Resim ve modeller', yol: '/kalite-merkezi/resimler', simge: 'cube', islem: 'kalite-merkezi.oku' },
-      { anahtar: 'analiz', baslik: 'Analiz', yol: '/kalite-merkezi/analiz', simge: 'zin', islem: 'kalite-merkezi.oku' },
       { anahtar: 'kutup', baslik: 'Teknik kütüphane', yol: '/kalite-merkezi/kutuphane', simge: 'layers', islem: 'kalite-merkezi.oku' },
     ] },
     { baslik: 'Muayene', maddeler: [

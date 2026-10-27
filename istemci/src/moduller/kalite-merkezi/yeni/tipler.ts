@@ -122,7 +122,7 @@ export interface KmKoleksiyonTipleri {
 
 // Görünüm anahtarı eski ikinci menü yolunun son parçasıdır (paylasilan/sayfalar/kalite-merkezi.ts); Bugün köktür.
 export const KM_GORUNUMLERI = [
-  'bugun', 'parcalar', 'resimler', 'analiz', 'kutuphane', 'muayeneler', 'lot-kabul', 'is-emirleri', 'olcum-analizi', 'uygunsuzluklar', 'dof',
+  'bugun', 'parcalar', 'resimler', 'kutuphane', 'muayeneler', 'lot-kabul', 'is-emirleri', 'olcum-analizi', 'uygunsuzluklar', 'dof',
   'cihazlar', 'tedarikciler', 'belgeler', 'formlar', 'kullanicilar', 'terimler', 'gostergeler', 'degisiklik-izi', 'arsiv', 'ayarlar',
 ] as const;
 export type KmGorunum = (typeof KM_GORUNUMLERI)[number];

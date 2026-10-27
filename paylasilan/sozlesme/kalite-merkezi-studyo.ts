@@ -68,6 +68,15 @@ export const kmNumuneKurali = z.object({
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
 export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani) });
+// Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı.
+export const kmStudyoOzeti = z.object({
+  malzemeNo: z.number().int(),
+  resim: z.number().int().nonnegative(),
+  model: z.number().int().nonnegative(),
+  balon: z.number().int().nonnegative(),
+  numunePlani: z.number().int().nonnegative(),
+});
+export const kmStudyoOzetleriCevabi = z.object({ parcalar: z.array(kmStudyoOzeti) });
 export const kmNumunePlaniCevabi = z.object({ plan: kmNumunePlani });
 
 // Belge merkezindeki yayındaki resim ya da model parçaya alınır; aynı belgenin aynı dosyası ikinci kez alınmaz (var olan döner).
@@ -177,6 +186,8 @@ export type KmResim = z.output<typeof kmResim>;
 export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
+export type KmStudyoOzeti = z.output<typeof kmStudyoOzeti>;
+export type KmStudyoOzetleriCevabi = z.output<typeof kmStudyoOzetleriCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;
 export type KmMerkezBelgesi = z.output<typeof kmMerkezBelgesi>;
 export type KmMerkezBelgeleriCevabi = z.output<typeof kmMerkezBelgeleriCevabi>;

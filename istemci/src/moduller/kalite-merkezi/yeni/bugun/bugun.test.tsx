@@ -131,10 +131,10 @@ describe('Bugün ekranı', () => {
     expect(screen.queryByRole('region', { name: 'Hızlı işler' })).toBeNull();
   });
 
-  it('ölçüm kısayolu Resim ve modeller stüdyosuna gider (597 a)', async () => {
+  it('ölçüm kısayolu Resim ve modeller listesine gider (597 a, 799)', async () => {
     ac(MUAYENECI);
     fireEvent.click(await screen.findByRole('button', { name: /^Ölçüm yap/ }));
-    expect(await screen.findByRole('region', { name: 'Teknik resim' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Resim ve modeller' })).toBeTruthy();
   });
 
   it('kabuktaki atölye modu özet şeridini gizler', async () => {

@@ -45,15 +45,15 @@ export const kisayolIstegiMi = (m: Istek | null): boolean => m !== null && m.kan
 
 // Kalite Merkezi değiştirilmeden yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); menü kabuktadır
 // (ikinci menü). Uygulamanın yerel sunucuya attığı istekler köprüyle TMI uçlarına gider.
-// eski: çerçeve eski görünümdür (ESKI_KOK); değilse yalnız yeni ekranın eski çerçevede bıraktığı stüdyo sayfalarını açar (217 b).
-export function KaliteMerkeziCercevesi({ eski = false }: { eski?: boolean }) {
+// Çerçeve yalnız eski görünümdür (ESKI_KOK).
+export function KaliteMerkeziCercevesi() {
   const oturum = useOturum();
   const { bildir } = useBildirim();
   const [paket, setPaket] = useState<{ paket: string; kitapliklar: Kitapliklar } | null>(null);
   const [kimlik, setKimlik] = useState<KmKimlikCevabi | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const okur = oturum.data?.islemler.includes('kalite-merkezi.oku') === true;
-  const gorunumIletisi = useYalitilmisGorunum(KOK, eski ? ESKI_MENULER : IKINCI_MENU_TANIMLARI);
+  const gorunumIletisi = useYalitilmisGorunum(KOK, ESKI_MENULER);
   const gezin = useNavigate();
 
   useEffect(() => {
