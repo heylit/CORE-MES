@@ -37,22 +37,81 @@
 .tc-ay3-cubuk { width: 100%; height: 6px; accent-color: var(--run); }
 .tc-ay3-mono { font-family: var(--font-mono); }
 
-/* Pano: özet kutuları, istasyon karoları, yan liste */
+/* Pano: özet kutuları ve istasyon kartları (A4 ve kalite de .tc-ay3-ozet-kutu kullanır; pano görünümü .tc-ay3-pano-ozet altında).
+   Düzen CNC Kurulum ana sayfasınındır (778 a): sol renk şeritli özet, üst renk şeritli resimli istasyon kartı, halkalı kartlar. */
 .tc-ay3-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--damga-dar)), 1fr)); gap: var(--b-3); }
 .tc-ay3-ozet-kutu { display: grid; gap: var(--b-1); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel); }
 .tc-ay3-ozet-kutu b { font-size: var(--yazi-2xl); color: var(--c, var(--ink)); }
 .tc-ay3-ozet-kutu small { color: var(--muted); }
-.tc-ay3-pano { display: grid; grid-template-columns: minmax(0, 1fr) var(--kuyruk-genis); gap: var(--b-4); align-items: start; }
-.tc-ay3-grup { display: grid; gap: var(--b-2); margin-bottom: var(--b-4); }
-.tc-ay3-karolar { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--pano-kart-enaz), 1fr)); gap: var(--b-3); }
-.tc-ay3-karo { border-left: var(--cizgi-kalin) solid var(--sig); }
-.tc-ay3-karo[data-plansiz] { background: color-mix(in srgb, var(--stop) 8%, var(--panel)); }
-.tc-ay3-karo-ust { display: flex; justify-content: space-between; gap: var(--b-2); align-items: center; }
-.tc-ay3-karo-durum { display: inline-flex; align-items: center; gap: var(--b-1); margin-left: auto; color: var(--sig-yazi); font-size: var(--yazi-xs); font-weight: 700; text-align: right; }
+.tc-ay3-pano-ozet { gap: var(--b-2); }
+.tc-ay3-pano-ozet .tc-ay3-ozet-kutu {
+  align-content: start; gap: var(--pay-ince); padding: var(--b-3) var(--b-3) var(--b-3) var(--b-4); border-radius: var(--yari-2);
+  border-left: var(--b-1) solid var(--c, var(--edge2)); background: linear-gradient(var(--panel-solid), var(--bg2));
+}
+.tc-ay3-ozet-ust { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; text-overflow: ellipsis; }
+.tc-ay3-pano-ozet .tc-ay3-ozet-kutu b { font-size: var(--yazi-baslik); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tc-ay3-pano-ozet .tc-ay3-ozet-kutu small { font-size: var(--yazi-xs); }
+
+.tc-ay3-grup, .tc-ay3-gkart {
+  display: grid; gap: var(--b-3); align-content: start; min-width: 0; padding: var(--b-3) var(--b-4); border: 1px solid var(--edge);
+  border-radius: var(--yari-2); background: linear-gradient(var(--panel-solid), var(--bg2));
+}
+.tc-ay3-gkart-bas { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--b-2); }
+.tc-ay3-gkart-bas h3 { margin: 0; font-size: var(--yazi-m); }
+.tc-ay3-gkart-bas span { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay3-karolar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); gap: var(--b-2); }
+.tc-ay3-karo {
+  display: grid; gap: var(--b-2); align-content: start; min-width: 0; padding: var(--b-2) var(--b-3) var(--b-3); border: 1px solid var(--edge);
+  border-top: var(--b-1) solid var(--sig); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink);
+}
+.tc-ay3-karo[data-plansiz] { background: color-mix(in srgb, var(--stop) 8%, var(--panel-solid)); }
+.tc-ay3-karo-ust { display: flex; gap: var(--b-3); align-items: center; min-width: 0; }
+.tc-ay3-karo-ust .tc-cz-kr { flex: none; border-radius: var(--yari-1); background: radial-gradient(var(--panel2), var(--bg)); }
+.tc-ay3-karo-ad { display: grid; gap: var(--pay-ince); min-width: 0; }
+.tc-ay3-karo-ad > b, .tc-ay3-karo-ad > small { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tc-ay3-karo-ad > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay3-karo-durum {
+  display: inline-flex; align-items: center; justify-self: start; gap: var(--b-1); max-width: 100%; padding: var(--pay-ince) var(--b-2);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); color: var(--sig-yazi);
+  font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .tc-ay3-karo-durum > i { flex: none; width: var(--nokta); height: var(--nokta); border-radius: 50%; background: var(--sig); }
-.tc-ay3-karo-alt, .tc-ay3-bayraklar { display: flex; flex-wrap: wrap; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay3-karo-cubuk { display: block; width: 100%; height: var(--b-2); overflow: hidden; border-radius: var(--yari-1); background: var(--edge2); }
+.tc-ay3-karo-cubuk rect { fill: var(--c); }
+.tc-ay3-karo-satir { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-1) var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay3-karo-satir b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.tc-ay3-karo-is { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; text-overflow: ellipsis; }
+.tc-ay3-karo-is b { color: var(--ink); font-weight: 600; }
+.tc-ay3-bayrak {
+  display: flex; align-items: center; gap: var(--b-1); min-width: 0; padding: var(--b-1) var(--b-2); border-radius: var(--yari-1);
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); font-size: var(--yazi-xs); font-weight: 700;
+}
 .tc-ay3-uyari { color: var(--hold); font-weight: 700; }
-.tc-ay3-yan { display: grid; gap: var(--b-3); }
+
+/* Pano grafikleri: halka (çevresi 100 olan çember), gösterge ve kısa liste */
+.tc-ay3-grafikler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--kuyruk-genis)), 1fr)); gap: var(--b-3); }
+.tc-ay3-halka-kap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-ay3-halka { position: relative; flex: none; width: calc(var(--b-6) * 3); height: calc(var(--b-6) * 3); }
+.tc-ay3-halka svg { display: block; width: 100%; height: 100%; }
+.tc-ay3-halka circle { fill: none; stroke: var(--c); stroke-width: 5; }
+.tc-ay3-halka .tc-ay3-halka-zemin { stroke: var(--edge2); }
+.tc-ay3-halka-orta { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; }
+.tc-ay3-halka-orta b { font-size: var(--yazi-l); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tc-ay3-halka-orta small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay3-lejant { display: grid; flex: 1 1 var(--damga-dar); gap: var(--b-1); min-width: 0; margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); }
+.tc-ay3-lejant li { display: flex; align-items: center; gap: var(--b-2); }
+.tc-ay3-lejant i { flex: none; width: var(--b-2); height: var(--b-2); border-radius: var(--pay-ince); background: var(--c, var(--edge2)); }
+.tc-ay3-lejant b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.tc-ay3-kliste { display: grid; gap: var(--b-1); }
+.tc-ay3-ksatir {
+  display: grid; grid-template-columns: var(--orb-2) minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: var(--pay-ince) var(--b-2);
+  align-items: center; padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2);
+}
+.tc-ay3-ksatir-sol { display: grid; grid-row: 1 / 3; min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; text-overflow: ellipsis; }
+.tc-ay3-ksatir-sol em { overflow: hidden; color: var(--hazard-ink); font-family: var(--font-mono); font-style: normal; font-weight: 700; text-overflow: ellipsis; }
+.tc-ay3-ksatir > b { min-width: 0; overflow: hidden; font-size: var(--yazi-s); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.tc-ay3-ksatir-deger { color: var(--c, var(--ink)); font-family: var(--font-mono); font-weight: 800; text-align: right; white-space: nowrap; }
+.tc-ay3-ksatir > small { grid-column: 2 / 4; min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; text-overflow: ellipsis; }
 .tc-ay3-satir { display: grid; gap: var(--b-1); padding: var(--b-2) 0; border-top: 1px solid var(--edge); }
 .tc-ay3-satir small { color: var(--muted); }
 .tc-ay3-satir[data-renk] b { color: var(--c); }
@@ -108,12 +167,9 @@
 .tc-ay3-gun .tc-ay3-uretilen { fill: var(--c, var(--run)); }
 
 /* TV modu: pano yazıları büyür (eski html.tv) */
-html.tc-ay-tv .tc-ay3-karo b { font-size: var(--yazi-m); }
-html.tc-ay-tv .tc-ay3-karo .tc-ay3-karo-ust b { font-size: var(--yazi-xl); }
-html.tc-ay-tv .tc-ay3-karo-durum { font-size: var(--yazi-s); }
-html.tc-ay-tv .tc-ay3-karo-ust { flex-wrap: wrap; }
-html.tc-ay-tv .tc-ay3-karo-ust b { white-space: nowrap; }
-html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
+html.tc-ay-tv .tc-ay3-karo-ad > b { font-size: var(--yazi-l); }
+html.tc-ay-tv .tc-ay3-karo-durum, html.tc-ay-tv .tc-ay3-karo-satir, html.tc-ay-tv .tc-ay3-karo-is { font-size: var(--yazi-s); }
+html.tc-ay-tv .tc-ay3-pano-ozet .tc-ay3-ozet-kutu b { font-size: var(--yazi-2xl); }
 
 /* Plan kuyruğu (eski QueueView): şerit başında istasyon kodu kendi satırında, ad ve grup altta tek satır; boş şeritte kesik çizgili kutu;
    iş merkezi süzgeci ayrı çipler. */
@@ -125,9 +181,6 @@ html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
 .tc-ay3-kuyruk-arac .tc-ay3-secmeli button { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel); white-space: nowrap; }
 .tc-ay3-kuyruk-arac .tc-ay3-secmeli button[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: transparent; box-shadow: none; }
 
-@media (max-width: 1023px) {
-  .tc-ay3-pano { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 767px) {
   /* Telefonda şeritler yana kaymaz, alt alta durur: işler aranmadan sırayla okunur. */
   .tc-ay3-seritler { flex-direction: column; align-items: stretch; overflow-x: visible; }
