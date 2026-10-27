@@ -906,7 +906,7 @@ Bu tur şunları varsaydı:
   (`arkon_dosya_parcasi`), kotalar ve uç sözleşmeleri değişmedi; depo toplamı ortak depo ile açık Arkon parçalarının toplamıdır.
 - Okuma kuralı aynı: yükleyen ya da dosyayı anan belgeyi okuyabilen. Yükleyen bilgisi `dosya_yukleyeni`'den.
 - Çizim Merkezi'nden alma içeriği kopyalamaz: Çizimler'de bağlı dosyayı `kaynaktanBagla` ile Arkon deposuna bağlar (DSb istisnası, ADR 0009 ek).
-- Göç `20261027060100_arkon_dosya_ortak_depo.sql`: `arkon_dosya` satırları `dosya`, `dosya_icerigi` (512 KB parça), `dosya_yukleyeni` ve
+- Göç `20261027062500_arkon_dosya_ortak_depo.sql`: `arkon_dosya` satırları `dosya`, `dosya_icerigi` (512 KB parça), `dosya_yukleyeni` ve
   `dosya_bagi`'na taşınır; tür ilk baytlardan, tanınmayan `ikili`. `arkon_dosya` bu göçte düşürülmez (UYUM-BORCU).
 - Kayıtsız TMI taslağı (`tmi-ue-`, `tmi-ie-`) dosyasızsa malzemenin Çizimler'de yayında revizyonu olan PDF ve 3B model belgelerini
   `malzemeCizimleri` alanında önerir (`kurallar.ts malzemeCizimleri`; önce teknik resim). Okuma ucu yazmaz; bağ Hazırlık'ın merkezden alma
