@@ -59,7 +59,8 @@ export interface HurdaSayimOlayi {
   refakatPartisiId: number | null;
 }
 
-export type HurdaSayimDinleyicisi = (db: Db, olay: HurdaSayimOlayi) => Promise<void>;
+// Dinleyici sağlamdaki gibi operatöre gidecek uyarı dönebilir (601 a: önceki adımın parçası istasyonda yoksa eksiye düşüldüğü).
+export type HurdaSayimDinleyicisi = (db: Db, olay: HurdaSayimOlayi) => Promise<{ uyari: string | null } | void>;
 
 const hurdaDinleyicileri: HurdaSayimDinleyicisi[] = [];
 
@@ -71,9 +72,14 @@ export function hurdaSayimDinle(dinleyici: HurdaSayimDinleyicisi): () => void {
   };
 }
 
-export async function hurdaSayimiBildir(db: Db, olay: Omit<HurdaSayimOlayi, 'fark'> & { fark: number }): Promise<void> {
-  if (olay.fark === 0) return;
-  for (const d of [...hurdaDinleyicileri]) await d(db, { ...olay, fark: String(olay.fark) });
+export async function hurdaSayimiBildir(db: Db, olay: Omit<HurdaSayimOlayi, 'fark'> & { fark: number }): Promise<string | null> {
+  if (olay.fark === 0) return null;
+  const uyarilar: string[] = [];
+  for (const d of [...hurdaDinleyicileri]) {
+    const sonuc = await d(db, { ...olay, fark: String(olay.fark) });
+    if (sonuc?.uyari) uyarilar.push(sonuc.uyari);
+  }
+  return uyarilar.length === 0 ? null : uyarilar.join(' ');
 }
 
 // Karar bekleyen sayımın kalite kararı: emrin o ana kadar karar bekleyen adedi onayda sağlama, retde redde geçer. Stok aynı

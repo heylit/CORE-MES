@@ -44,7 +44,7 @@ export function sunucununBaglari(): Bag[] {
   return [
     bag('emir açıldı -> stok', uretimEmirleri.emirAcildiDinle, stok.emirAcildiYansit),
     bag('sağlam sayım -> stok', uretimEmirleri.saglamSayimDinle, stok.uretimSayimiYansitUyarili),
-    bag('hurda sayım -> stok', uretimEmirleri.hurdaSayimDinle, stok.hurdaSayimiYansit),
+    bag('hurda sayım -> stok', uretimEmirleri.hurdaSayimDinle, stok.hurdaSayimiYansitUyarili),
     bag('sağlam sayım -> takım ömrü', uretimEmirleri.saglamSayimDinle, cncKurulum.takimSayimiYansit),
     bag('hurda sayım -> takım ömrü', uretimEmirleri.hurdaSayimDinle, cncKurulum.takimSayimiYansit),
     bag('kalite kararı -> stok', uretimEmirleri.kaliteKarariDinle, stok.kaliteKarariYansit),
