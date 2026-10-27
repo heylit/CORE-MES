@@ -10,6 +10,14 @@ export const ayniKaynak = (a: Kaynak, b: Kaynak): boolean => a.tur === b.tur && 
 export interface Aralik { baslangic: number; bitis: number }
 export const cakisirMi = (a: Aralik, b: Aralik): boolean => a.baslangic < b.bitis && b.baslangic < a.bitis;
 
+// 879 a: aynı kaynakta kilitli iki iş üst üste binemez; motor kilidi yerinden oynatmadığı için ikisini aynı anda çalıştırırdı.
+// Bölünmüş işin her parçası ayrı aralıktır. Dönen: çakıştığı ilk kilitli işin kimliği, yoksa null.
+export interface KaynakAraligi extends Aralik { kaynak: Kaynak }
+export function kilitCakisani(yeni: readonly KaynakAraligi[], kilitliler: readonly { isEmriId: number; araliklar: readonly KaynakAraligi[] }[]): number | null {
+  for (const k of kilitliler) if (k.araliklar.some((x) => yeni.some((y) => ayniKaynak(x.kaynak, y.kaynak) && cakisirMi(x, y)))) return k.isEmriId;
+  return null;
+}
+
 // İşin süresi: ayar + adet x birim süre (dakika). Süresi bilinmeyen iş motorca yerleşmez.
 export function isSuresi(ayarDk: number | null, birimDk: number | null, adet: number): number | null {
   if (birimDk === null) return null;

@@ -25,7 +25,7 @@ import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
@@ -1193,7 +1193,13 @@ export function kaldir(db: Db, k: Kullanici, isEmriId: number, t: TaslakGirdisi)
 
 export function kilit(db: Db, k: Kullanici, isEmriId: number, t: TaslakGirdisi, kilitli: boolean) {
   return taslagaYaz(db, k, t, async (b, id) => {
-    await taslakYeri(db, b, id, isEmriId);
+    const y = await taslakYeri(db, b, id, isEmriId);
+    if (kilitli && !y.kilitli) {
+      const araliklar = (x: YerlesimSatiri) => (x.parcalar?.length ? x.parcalar : [x]).map((p) => ({ kaynak: p.kaynak, baslangic: p.baslangic.getTime(), bitis: p.bitis.getTime() }));
+      const diger = (await s.yerlesimler(db, id)).filter((x) => x.kilitli && x.isEmriId !== isEmriId).map((x) => ({ isEmriId: x.isEmriId, araliklar: araliklar(x) }));
+      const engel = kilitCakisani(araliklar(y), diger);
+      if (engel !== null) throw cakisma(`${isMetni(b, engel)} aynı kaynakta bu saatlerde kilitli; önce birinin yerini değiştirin ya da kilidini açın.`);
+    }
     await s.isaretYaz(db, id, [isEmriId], { kilitli });
     return { tur: kilitli ? 'kilitle' : 'kilidi_ac', ozet: `${isMetni(b, isEmriId)} ${kilitli ? 'kilitlendi' : 'kilidi açıldı'}`, isEmriIdleri: [isEmriId] };
   });

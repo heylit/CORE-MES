@@ -471,6 +471,9 @@ function calisanBirlestir(S, y, cx) {
   for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
   for (const [id, a] of Object.entries(y)) {
     const r = S.plan && S.plan.ops[id]; const m = a.m && cx && cx.M[a.m] ? a.m : r ? r.m : a.m;
+    /* 878 a: makinesi planda olmayan (pasif, kapsam dışı ya da tanımsız) çalışan adım plana girmez; motor onu tezgâhsız yerleştiremez.
+       Ekran onu "çalışıyor, planda yok" diye gösterir (487/2 b). */
+    if (cx && !cx.M[m]) { if (g[id]) { delete g[id]; degisti = true; } continue; }
     const yeni = { ...a, m, sunucu: 1, planC: g[id] && g[id].planC != null ? g[id].planC : r ? r.C : null };
     if (rrEsit(g[id], yeni)) continue;
     g[id] = yeni; degisti = true;
