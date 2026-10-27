@@ -122,3 +122,29 @@
 .tc-mi-madde { padding-left: var(--b-4); text-indent: calc(var(--b-4) * -1); }
 .tc-mi-madde::before { content: '• '; }
 .tc-mi-bahis { font-weight: 600; }
+
+/* Kutlamalar (prototipteki finishing, stamp, konfeti); hareket azaltmada oynamaz. */
+.tc-mi-bitiyor { animation: tc-mi-gider calc(var(--hareket-sure) * 3) calc(var(--hareket-sure) * 0.9) ease forwards; }
+.tc-mi-bitiyor .tc-mi-baslik { color: var(--faint); text-decoration: line-through; }
+@keyframes tc-mi-gider { to { opacity: .35; transform: translateX(var(--b-4)); } }
+.tc-mi-onay { position: relative; }
+.tc-mi-damga {
+  position: absolute; right: var(--b-4); bottom: var(--b-3); z-index: 1; pointer-events: none;
+  padding: var(--pay-ince) var(--b-2); border: var(--cizgi-kalin) solid currentColor; border-radius: var(--yari-1);
+  color: var(--run); font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-10);
+  transform: rotate(-9deg); opacity: .8;
+}
+.tc-mi-damga-red { color: var(--stop); }
+.tc-mi-damga-buyuk {
+  right: 50%; bottom: 50%; z-index: 3; padding: var(--b-1) var(--b-4); border-width: var(--b-1);
+  font-size: var(--yazi-2xl); opacity: .95; background: color-mix(in srgb, var(--panel-solid) 70%, transparent);
+  transform: translate(50%, 50%) rotate(-12deg);
+  animation: tc-mi-damga-in calc(var(--hareket-sure) * 3) cubic-bezier(.2, 1.5, .4, 1) both;
+}
+@keyframes tc-mi-damga-in {
+  0% { transform: translate(50%, 50%) scale(2.6) rotate(-24deg); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: translate(50%, 50%) scale(1) rotate(-12deg); }
+}
+.tc-mk-konfeti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: var(--z-bildirim); }
+@media (prefers-reduced-motion: reduce) { .tc-mi-bitiyor, .tc-mi-damga-buyuk { animation: none; } }

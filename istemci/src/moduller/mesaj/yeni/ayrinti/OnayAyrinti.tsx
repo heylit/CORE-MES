@@ -4,6 +4,7 @@ import { tamTarih } from '../bicim.ts';
 import { useMesaj } from '../durum.tsx';
 import { bendenOnayBekliyor, onayDurumu } from '../kurallar.ts';
 import { useIsEylemleri } from '../kartlar/eylemler.ts';
+import { DAMGA_MS, hareketAzaltildi, kutlamaIste } from '../kartlar/kutlama.ts';
 import { KisiIsareti } from '../kartlar/parcalar.tsx';
 import { ReddetPenceresi } from '../kartlar/ReddetPenceresi.tsx';
 import { ZenginMetin } from '../kartlar/ZenginMetin.tsx';
@@ -19,12 +20,20 @@ export function OnayAyrinti({ id, kapat }: { id: string; kapat: () => void }) {
   const { bildir } = useBildirim();
   const [reddet, reddetYaz] = useState(false);
   const [silinsin, silinsinYaz] = useState(false);
+  const [damga, damgaYaz] = useState(false);
   const a = veri.onaylar.find((o) => o.id === id);
   if (!a) return <p className="tc-mi-bos-kucuk">Bu istek silinmiş.</p>;
   const st = onayDurumu(a);
+  const onayla = () => {
+    kutlamaIste();
+    if (hareketAzaltildi()) { oyVer(a.id, 'ok'); return; }
+    damgaYaz(true);
+    window.setTimeout(() => { oyVer(a.id, 'ok'); }, DAMGA_MS);
+  };
   const siparis = a.orderId ? siparisler?.find((o) => o.id === a.orderId) : undefined;
   return (
-    <div className="tc-mi-sayfa">
+    <div className="tc-mi-sayfa tc-mi-onay">
+      {damga && <span className="tc-mi-damga tc-mi-damga-buyuk" aria-hidden="true">ONAYLANDI</span>}
       <Baslik simge="clipboard-check" baslik={<h3 className="tc-mi-sayfa-baslik">{a.title}</h3>} alt={<DurumRozeti tur="onay" durum={st.s} />} />
       <dl className="tc-mi-ozellikler">
         <Ozellik simge="user" ad="İsteyen"><span className="tc-mi-ust"><KisiRozeti id={a.by} boyut="s" />{ad(a.by)}</span></Ozellik>
@@ -50,7 +59,7 @@ export function OnayAyrinti({ id, kapat }: { id: string; kapat: () => void }) {
       {st.ds.filter((x) => x.v?.note).map((x) => <p key={x.id} className="tc-mi-oy-notu"><b>{ad(x.id)}:</b> {x.v?.note}</p>)}
       {yetki.yaz && bendenOnayBekliyor(a, ben.id) && (
         <div className="tc-mi-eylemler">
-          <Dugme tur="birincil" simge="check" onClick={() => oyVer(a.id, 'ok')}>Onayla</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={damga} onClick={onayla}>Onayla</Dugme>
           <Dugme onClick={() => reddetYaz(true)}>Reddet</Dugme>
         </div>
       )}

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { useMesaj } from '../durum.tsx';
 import { teslimEtiketi } from '../kurallar.ts';
 import { DurumRozeti, KisiRozeti } from '../ortak/index.ts';
 import type { Gorev, Kayit } from '../tipler.ts';
 import { durumDegistirebilir, useIsEylemleri } from './eylemler.ts';
+import { BITIS_MS, hareketAzaltildi, kutlamaIste } from './kutlama.ts';
 import { SiparisCipi, TeslimEtiketi } from './parcalar.tsx';
 import './kartlar.css';
 
@@ -16,12 +18,21 @@ export function GorevSatiri({ gorev: t, siparissiz }: { gorev: Kayit<Gorev>; sip
   const kim = benim ? (t.by && t.by !== ben.id ? `Veren: ${ilkAd(t.by)}` : 'Kendine') : (t.to ? ilkAd(t.to) : 'Atanmamış');
   const isaretleyebilir = durumDegistirebilir(t, yetki, ben.id);
   const ac = () => ayrintiAc({ tur: 'gorev', id: t.id });
+  const [bitiyor, bitiyorYaz] = useState(false);
+  // Bitirince satır önce işaretlenip kayarak gider, sonra yazılır (t-done).
+  const tikla = () => {
+    if (bitti) { gorevDurumu(t.id, 'todo'); return; }
+    kutlamaIste();
+    if (hareketAzaltildi()) { gorevDurumu(t.id, 'done'); return; }
+    bitiyorYaz(true);
+    window.setTimeout(() => { gorevDurumu(t.id, 'done'); }, BITIS_MS);
+  };
   return (
-    <div className={`tc-mi-satir${bitti ? ' tc-mi-bitti' : ''}`} onClick={ac}>
+    <div className={`tc-mi-satir${bitti ? ' tc-mi-bitti' : ''}${bitiyor ? ' tc-mi-bitiyor' : ''}`} onClick={ac}>
       <button
-        type="button" className="tc-mi-tik" aria-pressed={bitti} disabled={!isaretleyebilir}
+        type="button" className="tc-mi-tik" aria-pressed={bitti || bitiyor} disabled={!isaretleyebilir || bitiyor}
         aria-label={bitti ? 'Tamamlanmadı yap' : 'Bitti olarak işaretle'}
-        onClick={(o) => { o.stopPropagation(); gorevDurumu(t.id, bitti ? 'todo' : 'done'); }}
+        onClick={(o) => { o.stopPropagation(); tikla(); }}
       >
         <Simge ad="check" />
       </button>

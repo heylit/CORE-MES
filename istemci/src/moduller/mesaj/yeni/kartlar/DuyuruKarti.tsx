@@ -7,6 +7,7 @@ import type { Duyuru, Kayit } from '../tipler.ts';
 import { IletiMetni } from '../sohbet/IletiMetni.tsx';
 import { OkuyanlarPenceresi } from '../sohbet/OkuyanlarPenceresi.tsx';
 import { duyuruOkuyanlari, ilkAd } from '../sohbet/yardimci.ts';
+import { kutlamaIste } from './kutlama.ts';
 import '../sohbet/sohbet.css';
 
 // "Okudum, anladım" yazma işidir; duyurunun sahibi okumaz, okuyan sayısı ve okumayanlar listesi herkese açıktır.
@@ -19,6 +20,7 @@ export function OkunduSatiri({ duyuru }: { duyuru: Kayit<Duyuru> }) {
 
   const okudum = async () => {
     try {
+      kutlamaIste();
       await yaz.guncelle(`duyurular/${duyuru.id}`, { ack: { [kisiAnahtari(ben.id)]: ben.id } });
       bildir('tamam', 'Okundu olarak işaretlendi.');
     } catch { /* ileti veri katmanında gösterildi */ }

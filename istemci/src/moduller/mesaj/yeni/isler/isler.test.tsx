@@ -62,6 +62,9 @@ describe('M2 İşler', () => {
     const s = sunucuKur({ ben: YAZAN, belgeler: ornekBelgeler() });
     await islerAc();
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    // Önce damga basılır, oy damga oturunca yazılır (prototipteki ap-ok).
+    expect(screen.getByText('ONAYLANDI')).toBeTruthy();
+    expect(yazilan(s, 'approvals/a1')).toHaveLength(0);
     await waitFor(() => { expect(yazilan(s, 'approvals/a1')).toHaveLength(1); });
     expect(yazilan(s, 'approvals/a1')[0]?.govde['veri']).toMatchObject({ votes: { [BEN]: { u: BEN, d: 'ok', r: 1 } }, last: { t: 'onayladı' } });
   });
@@ -155,5 +158,31 @@ describe('M2 İşler', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Herkes' }));
     const satir = (await screen.findByText('Başkalarının görevi')).closest('.tc-mi-satir') as HTMLElement;
     expect((within(satir).getByRole('button', { name: 'Bitti olarak işaretle' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe('M2 İşler: prototip düzeni (TASARIM KORUMA)', () => {
+  it('sonuçlanan onayda ONAYLI ya da RED damgası', async () => {
+    sunucuKur({
+      ben: YAZAN,
+      belgeler: {
+        ...ornekBelgeler(),
+        'approvals/a9': { title: 'Sonuçlanan', by: BEN, approvers: [KISI_A], round: 1, votes: { [KISI_A]: { u: KISI_A, d: 'ok', ts: 1, r: 1 } }, createdAt: 1 },
+      },
+    });
+    await islerAc();
+    fireEvent.click(screen.getByRole('button', { name: /^Benden/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Bitenleri göster/ }));
+    const kart = (await screen.findByText('Sonuçlanan')).closest('.tc-mi-onay') as HTMLElement;
+    expect(within(kart).getByText('ONAYLI')).toBeTruthy();
+  });
+
+  it('görevi bitiren satır önce kayarak gider, sonra yazılır', async () => {
+    const s = sunucuKur({ ben: YAZAN, belgeler: ornekBelgeler() });
+    await islerAc();
+    const daire = (await screen.findAllByRole('button', { name: 'Bitti olarak işaretle' }))[0]!;
+    fireEvent.click(daire);
+    expect(daire.closest('.tc-mi-satir')?.classList.contains('tc-mi-bitiyor')).toBe(true);
+    await waitFor(() => { expect(s.yazmalar.some((y) => String(y.govde['yol']).startsWith('tasks/'))).toBe(true); });
   });
 });

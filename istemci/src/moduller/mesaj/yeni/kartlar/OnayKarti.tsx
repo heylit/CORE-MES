@@ -6,6 +6,7 @@ import { DurumRozeti } from '../ortak/index.ts';
 import type { Kayit, Onay } from '../tipler.ts';
 import { duzenleyebilir } from '../yetki.ts';
 import { useIsEylemleri } from './eylemler.ts';
+import { DAMGA_MS, hareketAzaltildi, kutlamaIste } from './kutlama.ts';
 import { KisiIsareti, SiparisCipi } from './parcalar.tsx';
 import { ReddetPenceresi } from './ReddetPenceresi.tsx';
 import { ZenginMetin } from './ZenginMetin.tsx';
@@ -16,10 +17,21 @@ export function OnayKarti({ onay: a, iletide, tam }: { onay: Kayit<Onay>; iletid
   const { ben, ad, ilkAd, yetki, ayrintiAc, formAc } = useMesaj();
   const { oyVer } = useIsEylemleri();
   const [reddet, reddetYaz] = useState(false);
+  const [damga, damgaYaz] = useState(false);
+  // Onaylayınca karta büyük "ONAYLANDI" damgası basılır, oy damga oturunca yazılır (ap-ok).
+  const onayla = () => {
+    kutlamaIste();
+    if (hareketAzaltildi()) { oyVer(a.id, 'ok'); return; }
+    damgaYaz(true);
+    window.setTimeout(() => { oyVer(a.id, 'ok'); }, DAMGA_MS);
+  };
   const st = onayDurumu(a);
   const notlar = st.ds.filter((x) => x.v?.note);
   return (
     <div className={`tc-mi-satir tc-mi-onay tc-mi-onay-${st.s}${iletide ? ' tc-mi-iletide' : ''}`}>
+      {st.s === 'ok' && <span className="tc-mi-damga" aria-hidden="true">ONAYLI</span>}
+      {st.s === 'no' && <span className="tc-mi-damga tc-mi-damga-red" aria-hidden="true">RED</span>}
+      {damga && <span className="tc-mi-damga tc-mi-damga-buyuk" aria-hidden="true">ONAYLANDI</span>}
       <span className="tc-mi-simge" aria-hidden="true"><Simge ad="clipboard-check" /></span>
       <div className="tc-mi-govde">
         <button type="button" className="tc-mi-baslik" onClick={() => ayrintiAc({ tur: 'onay', id: a.id })}>{a.title}</button>
@@ -40,7 +52,7 @@ export function OnayKarti({ onay: a, iletide, tam }: { onay: Kayit<Onay>; iletid
         {notlar.map((x) => <p key={x.id} className="tc-mi-oy-notu"><b>{ilkAd(x.id)}:</b> {x.v?.note}</p>)}
         {yetki.yaz && bendenOnayBekliyor(a, ben.id) && (
           <div className="tc-mi-eylemler">
-            <Dugme tur="birincil" simge="check" onClick={() => oyVer(a.id, 'ok')}>Onayla</Dugme>
+            <Dugme tur="birincil" simge="check" disabled={damga} onClick={onayla}>Onayla</Dugme>
             <Dugme onClick={() => reddetYaz(true)}>Reddet</Dugme>
           </div>
         )}
