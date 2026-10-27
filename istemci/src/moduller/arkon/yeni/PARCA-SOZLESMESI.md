@@ -32,7 +32,7 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
 - A5: `TeknikResim` (Blueprint, BlueprintM), `Model3B` (Step3D), `MerkezRozeti`, `MerkezSecici`. Kullanan: A1, A2, A4, A6.
 
 ## A0'in sabit imzalari (parcalar kullanir, degistirmez)
-- `veri/baglam.ts`: `useArkon(): ArkonBaglami { depo, kisi, ayarlar, ayarlariYenile, yetkiVar(k), sayfaGorunur(s), git(sayfa, kimlik?), tmiyeGit(hedef), saltOkunur }`;
+- `veri/baglam.ts`: `useArkon(): ArkonBaglami { depo, kisi, ayarlar, ayarlariYenile, yetkiVar(k), sayfaGorunur(s), acilabilir(s), git(sayfa, kimlik?), tmiyeGit(hedef), saltOkunur }`;
   `useArkonDurumu()`, `useIleti(f)` (anlik iletiler), `useBelgeler<T>(depoAdi, ekDinle?) -> { liste, yenile, hazir }`, `belgeYaz(depo, depoAdi, belge, ileti?)`,
   `belgeSil(depo, depoAdi, kimlik)`, `useSimdi(ms?)`; `onizle(paketId)` "Operator gozuyle" penceresini acar (salt okunur). Eski modul degiskenleri (PLANT, SHIFTS, POLICY, REASONS, SCRAPS, GAUGES) `ayarlar` icindedir.
 - `veri/depo.ts`: `ArkonDeposu` (eski AKStore'un ekranda kullanilan yuzu, tipli: DB, Bus, Log, Auth, Server, Plan, Cache, Pkg, status, onStatus).

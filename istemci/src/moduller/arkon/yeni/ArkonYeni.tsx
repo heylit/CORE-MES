@@ -172,11 +172,12 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
       depo, kisi, ayarlar, ayarlariYenile, saltOkunur,
       yetkiVar: (k: Perm) => yetkiVar(kisi, ayarlar.yetkiler, k),
       sayfaGorunur: (s: string) => sayfaGorunur(s, kisi, ayarlar.yetkiler),
+      acilabilir: (s: string) => sayfaAcilabilir(s, maddeler, islemler, (x) => sayfaGorunur(x, kisi, ayarlar.yetkiler)),
       git: (s: string, k?: string) => { void gezin(sayfaAdresi(s, k)); },
       tmiyeGit: (h: TmiHedefi) => { const yol = TMI_HEDEFLERI[h]; if (yol !== undefined) void gezin(yol); },
       onizle: (paketId: string) => onizlemeYaz(paketId),
     };
-  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz]);
+  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz, maddeler, islemler]);
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
   // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur. Dar düzeni de
   // pencere genişliğine bakar (705 b): 1024 tablette menü açıkken alan 900'ün altına düşse de geniş düzen kalır.
@@ -201,13 +202,8 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     maddeGorunurMu(m, islemler) && (Object.hasOwn(SAYFA_DISI, m.anahtar) || baglam.sayfaGorunur(m.anahtar));
   const sekmeler = maddeler.filter(gorunur);
 
-  // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; TMI'deki kendi menü satırının işlemi ve Arkon sayfa yetkisiyle açılır.
-  // Kuyruk salt okunurdur ve eskisi Arkon sayfa yetkisi istemiyordu (pano-planlama.ts KuyrukApp): Plan Kuyruğu yetkisi olmayan
-  // operatör de görür, TMI işlemi yeter.
-  const ayriAcik = (s: ArkonSayfasi): boolean => {
-    const t: SayfaTanimi = SAYFALAR[s];
-    return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && (s === 'kuyruk' || baglam.sayfaGorunur(s));
-  };
+  // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; kuralı sayfaAcilabilir'dedir.
+  const ayriAcik = (s: ArkonSayfasi): boolean => (SAYFALAR[s] as SayfaTanimi).ayri === true && baglam.acilabilir(s);
 
   // Rolün giriş sayfası: yalın adres ve göremediği sayfa buraya gider (eskisi göremediği sayfadan ilk açık sayfaya geçerdi: baslat.ts firstPage).
   const girisHedefi = (): string | null => {
@@ -371,3 +367,15 @@ function OnizlemePenceresi({ paketId, baglam, kapat }: { paketId: string; baglam
   );
 }
 
+
+// Sayfanın adresle açılıp açılmadığı, açılışın kuralıyla aynı: ayrı sayfa (Üretim Terminali, Kuyruk) kendi TMI işlemiyle, sekmedeki
+// sayfa menü maddesinin işlemiyle; ikisi de Arkon sayfa yetkisi ister. Kuyruk salt okunurdur ve eskisi Arkon sayfa yetkisi istemiyordu
+// (pano-planlama.ts KuyrukApp): Plan Kuyruğu yetkisi olmayan operatör de görür, TMI işlemi yeter.
+export function sayfaAcilabilir(s: string, maddeler: readonly SekmeMaddesi[], islemler: readonly string[], arkonGorur: (s: string) => boolean): boolean {
+  if (!sayfaMi(s)) return false;
+  const t: SayfaTanimi = SAYFALAR[s];
+  if (t.ayri === true) return t.islem !== undefined && islemler.includes(t.islem) && (s === 'kuyruk' || arkonGorur(s));
+  const sekme = t.ust ?? s;
+  const madde = maddeler.find((m) => m.anahtar === sekme);
+  return madde !== undefined && maddeGorunurMu(madde, islemler) && arkonGorur(sekme) && arkonGorur(s);
+}

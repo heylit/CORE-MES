@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NumunePenceresi } from './Pencereler.tsx';
+import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { arkonAc, OPERATOR, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
 // Üretim Terminali: açılışta yazma yok; üretim yetkisi olan başlatır; yetkisi olmayan yalnız görür; önizleme hiç yazmaz.
@@ -114,6 +115,24 @@ describe('A1 Üretim Terminali', () => {
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
+
+  it('820 b, 848 a: genişte Menü düğmesi yalnız geçiş varsa; yönetici Çizim\'e geçer', async () => {
+    sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    fireEvent.click(screen.getByRole('button', { name: 'Menü' }));
+    const menu = await screen.findByRole('dialog', { name: 'Menü' });
+    expect(within(menu).queryByRole('button', { name: /Vardiya özeti/ })).toBeNull();
+    fireEvent.click(within(menu).getByRole('button', { name: /^Çizim/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/cizim'); });
+  }, 40000);
+
+  it('820 b, 848 a: geçişi olmayan operatörde genişte Menü düğmesi yok (reddedilen)', async () => {
+    sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    expect(screen.queryByRole('button', { name: 'Menü' })).toBeNull();
+  }, 40000);
 });
 
 describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
@@ -170,6 +189,45 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: /İstasyonlar ·/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bu istasyona geç' })).toBeNull();
+  }, 40000);
+
+  // 820 b: Menü'den öteki Arkon sayfalarına geçiş; satır yalnız sayfayı açabilene görünür (yetki genişlemez).
+  const menuAc = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Menü' }, { timeout: 10000 }));
+    return screen.findByRole('dialog', { name: 'Menü' });
+  };
+  const GECIS_ADLARI = [/Kalite istasyonu/, /Üretim Terminali Hazırlık/, /^Çizim/, /^Kuyruk/];
+
+  it('820 b: yönetici Menü\'den Kalite, Hazırlık, Çizim ve Kuyruk\'a geçer', async () => {
+    telefon();
+    sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
+    arkonAc('/uretim-terminali');
+    const menu = await menuAc();
+    for (const ad of GECIS_ADLARI) expect(within(menu).getByRole('button', { name: ad })).toBeTruthy();
+    fireEvent.click(within(menu).getByRole('button', { name: /Kalite istasyonu/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/kalite'); });
+  }, 40000);
+
+  it('820 b: amir yalnız açabildiği Kalite ve Kuyruk\'u görür; Hazırlık ve Çizim yok (reddedilen)', async () => {
+    telefon();
+    sunucuKur({ rol: 'lead', istasyon: 'IST-1', kullanici: { id: 6, ad: 'Deneme Amir', islemler: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'arkon.amir', YENI_EKRAN_ISLEMI] } }, sunucu());
+    arkonAc('/uretim-terminali');
+    const menu = await menuAc();
+    expect(within(menu).getByRole('button', { name: /Kalite istasyonu/ })).toBeTruthy();
+    expect(within(menu).queryByRole('button', { name: /Üretim Terminali Hazırlık/ })).toBeNull();
+    expect(within(menu).queryByRole('button', { name: /^Çizim/ })).toBeNull();
+    fireEvent.click(within(menu).getByRole('button', { name: /^Kuyruk/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/kuyruk'); });
+  }, 40000);
+
+  it('820 b: operatörde geçiş satırı yok; TMI işlemi olmayan sayfa Arkon yetkisi olsa da gösterilmez (reddedilen)', async () => {
+    telefon();
+    // Arkon yetkisi Kalite'yi açsa da TMI menü işlemi (arkon.kalite) yok: satır çıkmaz.
+    sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op', 'page.quality', 'prod.run'] } } }]));
+    arkonAc('/uretim-terminali');
+    const menu = await menuAc();
+    expect(within(menu).getByRole('button', { name: /Vardiya özeti/ })).toBeTruthy();
+    for (const ad of GECIS_ADLARI) expect(within(menu).queryByRole('button', { name: ad })).toBeNull();
   }, 40000);
 
   it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {
