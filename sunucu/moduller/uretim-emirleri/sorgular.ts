@@ -1115,6 +1115,7 @@ export function fasonHareketleriGetir(db: Db, isEmriIdleri: readonly number[]): 
 export function fasonIsEmirleri(db: Db): Promise<FasonIsEmri[]> {
   return db.sorgu<FasonIsEmri>(
     `SELECT i.id AS "isEmriId", e.id AS "uretimEmriId", e.emir_no AS "emirNo", e.parca_ad AS urun, i.op_no AS "opNo", i.ad AS adim, i.fason_firma_id AS "firmaId",
+       e.adet, e.malzeme_no AS "malzemeNo", i.termin_gun AS "terminGun", to_char(e.teslim, 'YYYY-MM-DD') AS teslim,
        NULL::text AS "planlananGidis", ${NULLU_ISO('h.ilk_gidis')} AS "ilkGidis",
        CASE WHEN h.ilk_gidis IS NULL OR i.termin_gun IS NULL THEN NULL ELSE to_char(h.ilk_gidis::date + i.termin_gun, 'YYYY-MM-DD') END AS termin,
        ${NULLU_ISO('h.ilk_donus')} AS "ilkDonus", ${NULLU_ISO('h.son_donus')} AS "sonDonus", h.gonderilen, h.donen, h.hurda
@@ -1140,6 +1141,11 @@ export interface FasonIsEmri {
   opNo: number;
   adim: string | null;
   firmaId: number | null;
+  // Satın almanın fason ön talebi (898 a): emrin adedi, parçanın kartı, adımın fason günü ve emrin teslim günü.
+  adet: number;
+  malzemeNo: number | null;
+  terminGun: number | null;
+  teslim: string | null;
   planlananGidis: string | null;
   ilkGidis: string | null;
   termin: string | null;
