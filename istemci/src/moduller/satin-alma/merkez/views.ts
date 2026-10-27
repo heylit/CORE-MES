@@ -63,7 +63,7 @@ export function renderMarket(): void {
   const set = settings(), c = set.currencies, t = todayStr();
   const age = set.ratesDate ? dayDiff(set.ratesDate, t) : null;
   const stale = age === null || age > 0;
-  const row = `<button class="mk-row ${stale ? "stale" : ""}" data-act="mk-open" aria-expanded="${MK.open}" title="${age === null ? "Finansta kur yok" : age > 0 ? `Finanstaki son kur ${age} gün önceki` : "Finanstaki kur bugünkü"}; faizi değiştirmek için tıklayın">
+  const row = `<button class="mk-row ${stale ? "stale" : ""}" data-act="mk-open" aria-expanded="${MK.open}" title="${age === null ? "Finansta kur yok" : age > 0 ? `Finanstaki son kur ${age} gün önceki` : "Finanstaki kur bugünkü"}; ayrıntı için tıklayın">
     ${FX.filter(k => k !== "GBP").map(k => `<span class="mk-item"><span class="mk-lbl">${k}</span><b>${isNum(c[k].rate) ? nfx.format(c[k].rate!) : "yok"}</b></span>`).join("")}
     <span class="mk-item"><span class="mk-lbl">TL faiz</span><b>%${nf1.format(annualOf(c.TRY.monthly))}</b></span>
     ${stale ? `<span class="mk-dot" aria-hidden="true"></span><span class="mk-stale">${age === null ? "finansta kur yok" : `${age} gün önce`}</span>` : ""}
@@ -72,10 +72,10 @@ export function renderMarket(): void {
     <div class="mk-grid">
       ${FX.map(k => `<label>${k}/TRY kuru<span class="mk-conv">${isNum(c[k].rate) ? nfx.format(c[k].rate!) : "finansta kur yok"}</span></label>`).join("")}
       <label>Kur tarihi<span class="mk-conv">${set.ratesDate ? fmtDate(set.ratesDate) : "–"}</span></label>
-      ${(["TRY", ...FX] as Currency[]).map(k => `<label>${k} yıllık faiz / fırsat maliyeti %<input type="text" inputmode="decimal" data-mk-ann="${k}" data-orig="${nf1.format(annualOf(c[k].monthly)).replace(/\./g, "")}" value="${nf1.format(annualOf(c[k].monthly)).replace(/\./g, "")}"><span class="mk-conv" data-mk-conv="${k}">aylık %${nf2.format(parseNum(c[k].monthly) || 0)}</span></label>`).join("")}
+      ${(["TRY", ...FX] as Currency[]).map(k => `<label>${k} yıllık faiz / fırsat maliyeti<span class="mk-conv">%${nf1.format(annualOf(c[k].monthly))} (aylık %${nf2.format(parseNum(c[k].monthly) || 0)})</span></label>`).join("")}
     </div>
-    <div class="row" data-sa-y="34"><button class="mk-btn prim" data-act="mk-save">Faizi kaydet ve yeniden hesapla</button><button class="mk-btn" data-act="mk-close">Vazgeç</button></div>
-    <p class="mk-hint">Kurlar finansın kur tablosundan gelir; burada değiştirilmez. Açık taleplerdeki tüm karşılaştırmalar bu kurlarla ve faizle hesaplanır. Sipariş verildiğinde o günün kurları karara sabitlenir; geçmiş alımlar değişmez. Faiz olarak şirketinizin kredi faizini ya da mevduat getirisini girin; vadeli ödemeler bununla bugüne indirgenir.</p>
+    <div class="row" data-sa-y="34"><button class="mk-btn" data-act="mk-close">Kapat</button></div>
+    <p class="mk-hint">Kur ve faiz finansın tablolarından gelir; burada değiştirilmez, ana sayfadaki kur ve faiz şeridinden girilir. Finansta faiz yoksa sıfır sayılır. Açık taleplerdeki tüm karşılaştırmalar bu kurlarla ve faizle hesaplanır. Sipariş verildiğinde o günün kurları karara sabitlenir; geçmiş alımlar değişmez. Faiz olarak şirketinizin kredi faizini ya da mevduat getirisini girin; vadeli ödemeler bununla bugüne indirgenir.</p>
   </div>` : "";
   el.innerHTML = row + edit;
 }

@@ -575,7 +575,7 @@ export function katalogSil(db: Db, id: string, surum: number): Promise<{ id: str
 
 // ---- Ayarlar
 // Kur bu tabloda değil, finanstadır (SA3 a); servis ekler.
-export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi']; aylikFaizYuzdesi: string }[] };
+export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
 export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string }[]> {
   return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye FROM satin_alma_onay_limiti ORDER BY sira');
 }
@@ -586,22 +586,22 @@ export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
   return {
     sirket: a.sirket, agirliklar: { maliyet: a.m, termin: a.t, tedarikci: a.td, garanti: a.g }, gecerlilikGun: a.gecerlilikGun,
     enAzTeklif: a.enAzTeklif, fiyatUyariYuzdesi: a.fiyatUyariYuzdesi, surum: a.surum,
-    kurlar: await db.sorgu('SELECT para_birimi AS "paraBirimi", aylik_faiz_yuzdesi AS "aylikFaizYuzdesi" FROM satin_alma_kur ORDER BY sira, para_birimi'),
+    kurlar: await db.sorgu('SELECT para_birimi AS "paraBirimi" FROM satin_alma_kur ORDER BY sira, para_birimi'),
     kategoriler: (await db.sorgu<{ ad: string }>('SELECT ad FROM satin_alma_kategori ORDER BY sira, ad')).map((k) => k.ad),
     birimler: await db.sorgu('SELECT ad, yillik_butce AS "yillikButce" FROM satin_alma_birim ORDER BY sira, ad'),
     onayLimitleri: await onayLimitleri(db),
   };
 }
 // Teklif ve sabit kur satin_alma_kur'a bağlıdır: ayarları hiç kaydetmemiş kurulumda döviz teklifi yabancı anahtara takılmasın diye yazmadan
-// önce eksik para birimi satırı eklenir (faiz verilen varsayılan, sıra sona). Finansın kur tablosuna yazılmaz.
-export async function paraBirimleriniEkle(db: Db, satirlar: readonly { paraBirimi: string; aylikFaizYuzdesi: string }[]): Promise<void> {
-  if (satirlar.length === 0) return;
+// önce eksik para birimi satırı eklenir (sıra sona). Finansın kur tablosuna yazılmaz. Faiz bu tablodan okunmaz, finanstandır (937 b).
+export async function paraBirimleriniEkle(db: Db, paraBirimleri: readonly string[]): Promise<void> {
+  if (paraBirimleri.length === 0) return;
   await db.sorgu(
-    `INSERT INTO satin_alma_kur (para_birimi, aylik_faiz_yuzdesi, sira)
-     SELECT k.kod, k.faiz, (SELECT COALESCE(max(sira), 0) FROM satin_alma_kur) + k.n
-       FROM unnest($1::char(3)[], $2::numeric[]) WITH ORDINALITY AS k(kod, faiz, n)
+    `INSERT INTO satin_alma_kur (para_birimi, sira)
+     SELECT k.kod, (SELECT COALESCE(max(sira), 0) FROM satin_alma_kur) + k.n
+       FROM unnest($1::char(3)[]) WITH ORDINALITY AS k(kod, n)
      ON CONFLICT (para_birimi) DO NOTHING`,
-    [satirlar.map((x) => x.paraBirimi), satirlar.map((x) => x.aylikFaizYuzdesi)],
+    [paraBirimleri],
   );
 }
 export async function sirketAdiOku(db: Db): Promise<string> {
@@ -619,8 +619,8 @@ export async function ayarListeleriniYaz(db: Db, a: AyarlarKaydetYazimi): Promis
   const kodlar = a.kurlar.map((k) => k.paraBirimi);
   await db.sorgu("DELETE FROM satin_alma_kur WHERE para_birimi <> 'TRY' AND NOT (para_birimi = ANY($1::char(3)[]))", [kodlar]);
   for (const [i, k] of a.kurlar.entries()) {
-    await db.sorgu(`INSERT INTO satin_alma_kur (para_birimi, aylik_faiz_yuzdesi, sira) VALUES ($1, $2, $3)
-      ON CONFLICT (para_birimi) DO UPDATE SET aylik_faiz_yuzdesi = EXCLUDED.aylik_faiz_yuzdesi, sira = EXCLUDED.sira`, [k.paraBirimi, k.aylikFaizYuzdesi, i]);
+    await db.sorgu(`INSERT INTO satin_alma_kur (para_birimi, sira) VALUES ($1, $2)
+      ON CONFLICT (para_birimi) DO UPDATE SET sira = EXCLUDED.sira`, [k.paraBirimi, i]);
   }
   await db.sorgu('DELETE FROM satin_alma_kategori');
   for (const [i, ad] of [...new Set(a.kategoriler)].entries()) await db.sorgu('INSERT INTO satin_alma_kategori (ad, sira) VALUES ($1, $2)', [ad, i]);

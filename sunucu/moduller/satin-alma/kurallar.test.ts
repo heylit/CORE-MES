@@ -278,8 +278,8 @@ test('#375: hızlı kalem kart ya da ad ister, kartsızda birim zorunlu; talepte
   assert.deepEqual([hizliBaslik(['Rulman']), hizliBaslik(['Rulman', 'Gres', 'Bez'])], ['Rulman', 'Rulman ve 2 kalem daha']);
 });
 
-test('SA3 a: finansta kuru olan ama listede olmayan para birimi ekranın varsayılan faiziyle eklenir; finansta kuru olmayan ve listede olan eklenmez', () => {
-  assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['TRY', 'USD', 'JPY'])), [{ paraBirimi: 'USD', aylikFaizYuzdesi: '0.4' }]);
+test('SA3 a: finansta kuru olan ama listede olmayan para birimi eklenir; finansta kuru olmayan ve listede olan eklenmez', () => {
+  assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['TRY', 'USD', 'JPY'])), [{ paraBirimi: 'USD' }]);
   assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['TRY', 'GBP', 'EUR'])).map((k) => k.paraBirimi), ['EUR', 'GBP']);
   assert.deepEqual(finanstanEklenenKurlar(['TRY', 'USD'], new Set(['TRY', 'USD'])), []);
   assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['TRY'])), []);
