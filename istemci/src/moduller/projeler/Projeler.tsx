@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu } from '#paylasilan/sozlesme/projeler.ts';
+import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -9,6 +9,8 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUMLAR, DURUM_METNI, DURUM_TONU, tarihMetni } from './gosterim.ts';
 import { ProjeFormu } from './ProjeFormu.tsx';
+import { Ilerleme } from './ProjeGorevleri.tsx';
+import { StatuCipi } from './StatuPenceresi.tsx';
 import './projeler.css';
 
 const SUTUNLAR: Sutun<Proje>[] = [
@@ -17,6 +19,8 @@ const SUTUNLAR: Sutun<Proje>[] = [
   { anahtar: 'firma', baslik: 'Müşteri', hucre: (p) => p.firmaAd ?? '—' },
   { anahtar: 'baslangic', baslik: 'Başlangıç', sirala: true, mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.baslangic) },
   { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.bitis) },
+  { anahtar: 'statu', baslik: 'Statü', hucre: (p) => <StatuCipi statu={p.statu} />, csv: (p) => p.statu?.ad ?? '' },
+  { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (p) => <Ilerleme deger={p.ilerleme} />, csv: (p) => p.ilerleme },
   { anahtar: 'durum', baslik: 'Durum', hucre: (p) => <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet> },
 ];
 
@@ -28,20 +32,23 @@ export function Projeler() {
   const yonlendir = useNavigate();
   const [yeni, yeniYaz] = useState(false);
   const liste = useListeDurumu({
-    suzgecler: { ara: '', durum: 'aktif' as ProjeDurumu | '' },
+    suzgecler: { ara: '', durum: 'aktif' as ProjeDurumu | '', statuId: '' as number | '' },
+    suzgecTurleri: { statuId: 'sayi' },
     suzgecDegerleri: { durum: DURUMLAR },
     siralamaAlanlari: ['kod', 'ad', 'baslangic'],
     sayfaBoyu: 50,
     adres: true,
   });
   const sorgu: ProjeListesiSorgusu = liste.sorgu;
+  const statuler = useQuery({ queryKey: anahtarlar.statuler, queryFn: () => api.get<StatuListesiCevabi>('/projeler/statuler') });
+  const statuSecenekleri = (statuler.data?.statuler ?? []).map((s) => ({ deger: String(s.id), baslik: s.etkin ? s.ad : `${s.ad} (kapalı)` }));
   const l = useQuery({
     queryKey: anahtarlar.liste(sorgu),
     queryFn: () => api.get<ProjeListesiCevabi>(`/projeler${sorguMetni(sorgu)}`),
     placeholderData: keepPreviousData,
   });
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
-  const suzulu = liste.suzgecler.ara.trim() !== '' || liste.suzgecler.durum !== '';
+  const suzulu = liste.suzgecler.ara.trim() !== '' || liste.suzgecler.durum !== '' || liste.suzgecler.statuId !== '';
 
   return (
     <Kart
@@ -57,6 +64,10 @@ export function Projeler() {
           <Secim
             etiket="Durum" value={liste.suzgecler.durum} bosSecenek="Tümü" secenekler={DURUM_SECENEKLERI}
             onChange={(e) => { liste.suzgecDegistir({ durum: e.target.value as ProjeDurumu | '' }); }}
+          />
+          <Secim
+            etiket="Statü" value={String(liste.suzgecler.statuId)} bosSecenek="Tümü" secenekler={statuSecenekleri}
+            onChange={(e) => { liste.suzgecDegistir({ statuId: e.target.value === '' ? '' : Number(e.target.value) }); }}
           />
         </div>
         {l.isError

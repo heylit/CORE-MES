@@ -11,3 +11,36 @@
 }
 .tc-prj-bilgi dt { color: var(--muted); }
 .tc-prj-bilgi dd { margin: 0; overflow-wrap: anywhere; }
+/* Statü çipi: rengi tondan gelir; elle yazılmış statü gri ve kesik çerçevelidir (listede değildir). */
+.tc-prj-statu {
+  --c: var(--idle);
+  display: inline-flex; align-items: center; gap: var(--b-2); max-width: 100%;
+  padding: var(--b-1) var(--b-3); border: 1px solid var(--c); border-radius: var(--yari-tam);
+  font-size: var(--yazi-s); font-weight: 700; color: var(--c);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  overflow-wrap: anywhere;
+}
+.tc-prj-statu[data-ton="tamam"] { --c: var(--run); }
+.tc-prj-statu[data-ton="uyari"] { --c: var(--hold); }
+.tc-prj-statu[data-ton="hata"] { --c: var(--stop); }
+.tc-prj-statu[data-ton="bilgi"] { --c: var(--done); }
+.tc-prj-statu[data-ton="vurgu"] { --c: var(--hazard-ink); }
+.tc-prj-statu[data-serbest="true"] { border-style: dashed; }
+button.tc-prj-statu { cursor: pointer; font: inherit; font-size: var(--yazi-s); font-weight: 700; min-height: var(--dokunma-yogun); }
+.tc-prj-ilerleme { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-prj-ilerleme progress { width: 6em; max-width: 100%; accent-color: var(--hazard); }
+.tc-prj-gec { color: var(--stop); font-weight: 700; }
+.tc-prj-ozet { display: grid; gap: var(--b-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.tc-prj-liste { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-prj-liste li { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: baseline; overflow-wrap: anywhere; }
+.tc-prj-soluk { color: var(--muted); }
+.tc-prj-gorunum { display: flex; gap: var(--b-2); flex-wrap: wrap; }
+.tc-prj-pano { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.tc-prj-pano-sutun { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-prj-pano-sutun h3 { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-prj-pano-kart {
+  display: flex; flex-direction: column; gap: var(--b-1); text-align: left; font: inherit; color: inherit;
+  padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: none;
+  min-width: 0; overflow-wrap: anywhere;
+}
+button.tc-prj-pano-kart { cursor: pointer; }

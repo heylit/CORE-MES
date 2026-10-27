@@ -303,6 +303,7 @@ describe('Sipariş ayrıntısında projeler (176 a)', () => {
   const PROJE = {
     id: 90, kod: 'PRJ.90', ad: 'Deneme proje', durum: 'aktif', firmaId: 7, firmaAd: 'Deneme Musteri A', siparisId: 5,
     baslangic: null, bitis: '2026-10-30', aciklama: null, olusturma: '2026-10-03T09:00:00+03:00', guncelleme: null, surum: 1,
+    statu: null, ilerleme: null,
   } satisfies Proje;
   const projeler = (yontem: string, yol: string) => {
     // AYRINTI_ONAYLI taslağın kimliğini (5) taşır; /siparisler/6 onu döndürür.
