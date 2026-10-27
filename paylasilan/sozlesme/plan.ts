@@ -392,7 +392,7 @@ export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'dur', kural: 'atcs' };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' };
 // Yazarken verilmeyen alan güncel sürümdekinden kalır.
 export const motorAyariGovdesi = motorAyarlari.partial();
 // Sürüm kimliği boşsa koddaki varsayılandır (henüz sürüm yazılmamış).

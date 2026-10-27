@@ -95,12 +95,11 @@ describe('plan: veri sağlığı kuralı', () => {
 });
 
 describe('plan (gerçek PostgreSQL): veri sağlığı ucu', () => {
-  const { c, istek, tamam, mamulAc, hammaddeAc, yeniAdim, yururlugeAlinmisRota } = planTestOrtami();
+  const { c, istek, tamam, mamulAc, yeniAdim, yururlugeAlinmisRota } = planTestOrtami();
   const yol = '/plan/veri-sagligi';
 
   test('782: rapor yalnız okur; stoku olmayan hammadde ve plan ayarı olmayan istasyon görünür; yetkisiz 403, oturumsuz 401', async () => {
-    // Ortak hammaddenin stoku bilinir (plan-ortak); bu adım stok kaydı olmayan yeni hammaddeyi tüketir.
-    await yururlugeAlinmisRota(await mamulAc(), [yeniAdim({ bilesenler: [{ malzemeId: await hammaddeAc(), miktar: 1, fireYuzde: 0 }] })]);
+    await yururlugeAlinmisRota(await mamulAc(), [yeniAdim()]);
     const r = await tamam<VeriSagligiCevabi>(c.planlama, 'GET', yol);
     assert.ok((bul(r, 'stok-bos').sayi ?? 0) >= 1, 'örnek adımın hammaddesinin stoku yok');
     assert.equal(bul(r, 'sure-bos').sayi, 0, 'onaylı rotada süre zorunlu');

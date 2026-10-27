@@ -12,11 +12,11 @@ describe('plan: motor ayarı kuralı', () => {
   test('sürüm değerleri çözülür: eksik anahtar ve tanınmayan değer varsayılana düşer, fazla anahtar atılır', () => {
     assert.deepEqual(motorAyariCoz(null), MOTOR_AYARI_VARSAYILAN);
     assert.deepEqual(motorAyariCoz({ kural: 'edd', amac: 'yok', eski: 1 }), { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd' });
-    assert.deepEqual(motorAyariCoz({ kural: 'kar', eksikStok: 'varsay' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'varsay' });
+    assert.deepEqual(motorAyariCoz({ kural: 'kar', eksikStok: 'dur' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'dur' });
   });
 
   test('birleştirme: verilen alan güncelin üstüne yazılır; değişen yoksa boş', () => {
-    assert.deepEqual(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { eksikStok: 'varsay' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'varsay' });
+    assert.deepEqual(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { eksikStok: 'dur' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'dur' });
     assert.equal(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { kural: 'atcs' }), null);
     assert.equal(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, {}), null);
   });
@@ -80,10 +80,10 @@ describe('plan (gerçek PostgreSQL): motor ayarı', () => {
 
     const kopya = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${t.id}/cogalt`)).senaryolar.find((x) => x.ad === 'Motor kuralı (kopya)')!;
     assert.equal(await kural(kopya.id), 'spt');
-    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${t.id}/motor-ayari-guncelle`, { surum: t.surum + 1 });
-    assert.deepEqual([(await oku(t.id)).taslak!.surum.degerler.eksikStok, await kural(t.id)], ['varsay', 'spt']);
     await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${t.id}/motor-ayari-guncelle`, { surum: t.surum + 1 });
+    assert.deepEqual([(await oku(t.id)).taslak!.surum.degerler.eksikStok, await kural(t.id)], ['dur', 'spt']);
+    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
 
     await tamam(c.planlama, 'POST', yol, { surum: t.surum + 2, kural: null });
     assert.deepEqual([(await oku(t.id)).taslak!.kural, await kural(t.id)], [null, (await oku(t.id)).taslak!.surum.degerler.kural]);
@@ -94,8 +94,8 @@ describe('plan (gerçek PostgreSQL): motor ayarı', () => {
     assert.equal((await istek(c.operator, 'GET', '/plan/motor-ayarlari')).statusCode, 403);
     assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'yok' })).statusCode, 400);
     assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { amac: 'tl' })).statusCode, 400, '832 a: TL ayarda kapalı');
-    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
-    assert.equal((await oku()).guncel.degerler.eksikStok, 'varsay');
+    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
+    assert.equal((await oku()).guncel.degerler.eksikStok, 'dur');
     await assert.rejects(ortam!.sahip.sorgu("UPDATE plan_motor_ayar_surumu SET degerler = '{}'"));
     await assert.rejects(ortam!.sahip.sorgu('DELETE FROM plan_motor_ayar_surumu'));
   });

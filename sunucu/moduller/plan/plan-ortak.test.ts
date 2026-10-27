@@ -217,8 +217,6 @@ export function planTestOrtami() {
       },
     });
     ortakHammadde = await hammaddeAc();
-    // Stoku bilinen kart (stok ayarı satırı): motor ayarı varsayılanı "dur" ile stoku bilinmeyen malzeme canlıya almayı durdurur (772 a).
-    await ortam.sahip.sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id) VALUES ($1)', [ortakHammadde]);
   });
 
   after(async () => { await ortam?.kaldir(); });

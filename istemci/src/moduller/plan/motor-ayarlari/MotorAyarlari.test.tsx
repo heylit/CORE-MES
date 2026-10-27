@@ -11,7 +11,7 @@ import { MotorAyarlari } from './MotorAyarlari.tsx';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811: uydurma sürümler.
-const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'dur', kural: 'atcs' };
+const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' };
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
 const yetki = (islemler: string[]) => vi.spyOn(oturum, 'useOturum').mockReturnValue({ data: { islemler } } as unknown as ReturnType<typeof oturum.useOturum>);
 const ciz = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><MotorAyarlari /></BildirimSaglayici></QueryClientProvider>);

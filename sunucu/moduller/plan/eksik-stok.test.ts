@@ -42,7 +42,19 @@ describe('plan (gerçek PostgreSQL): stoku bilinmeyen malzeme ile canlıya alma'
     (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum })).senaryolar.find((x) => x.id === p.taslak!.id)!.surum;
   const canliyaAl = async (id: number, surum: number) => istek(c.mudur, 'POST', `/plan/senaryolar/${id}/canliya-al`, { surum, cakismalariKabul: true });
 
+  test('865 b: varsayılan "varsay"dır; stoksuz hammaddeli iş canlıya geçer', async () => {
+    const stoksuz = await kartAc('hammadde');
+    const [is] = await isEmirleriAc([yeniAdim({ bilesenler: [{ malzemeId: stoksuz, miktar: 1, fireYuzde: 0 }] })]);
+    const p = await taslaktaOner();
+    assert.ok(p.yerlesimler.some((y) => y.isEmriId === is));
+    const r = await canliyaAl(p.taslak!.id, await gonder(p));
+    assert.equal(r.statusCode, 200, r.body);
+  });
+
   test('"dur" taslağın kendi ayar sürümüdür: stoksuz hammaddeli iş reddedilir, güncel "varsay" sürümüne bağlanınca geçer; stok kaydı da açar', async () => {
+    // Ortak kurulumun kartlarına stok kaydı açılır; "dur" yalnız bu testin stoksuz kartında durdurur.
+    await ortam!.sahip.sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id) SELECT k.no FROM malzeme_katalog_karti k WHERE NOT EXISTS (SELECT 1 FROM stok_malzeme_ayari a WHERE a.malzeme_id = k.no)');
+    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
     const stoksuz = await kartAc('hammadde');
     const kod = (await ortam!.sahip.tek<{ kod: string }>('SELECT stok_kodu AS kod FROM malzeme_katalog_karti WHERE no = $1', [stoksuz]))!.kod;
     const [is] = await isEmirleriAc([yeniAdim({ bilesenler: [{ malzemeId: stoksuz, miktar: 1, fireYuzde: 0 }] })]);

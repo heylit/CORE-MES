@@ -9,8 +9,8 @@ export const AYAR_SECENEKLERI: { [K in keyof MotorAyarlari]: { baslik: string; i
   },
   eksikStok: {
     baslik: 'Stoku bilinmeyen malzeme',
-    ipucu: 'Dur: plan kurulur ama canlıya alınamaz. Varsay: stok var sayılır; yalnız geçiş döneminde.',
-    secenekler: [{ deger: 'dur', baslik: 'Dur' }, { deger: 'varsay', baslik: 'Varsay' }],
+    ipucu: 'Varsay: stok var sayılır. Dur: plan kurulur ama stoku bilinmeyen malzeme varken canlıya alınamaz.',
+    secenekler: [{ deger: 'varsay', baslik: 'Varsay' }, { deger: 'dur', baslik: 'Dur' }],
   },
   kural: {
     baslik: 'Sıralama kuralı',
