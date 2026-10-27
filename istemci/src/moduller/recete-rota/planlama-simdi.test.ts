@@ -49,10 +49,10 @@ describe('sayfanın şimdisi (31 a)', () => {
     expect(d.bildirimler).toEqual([]);
   });
 
-  it('gerçek saat 07:00 öncesiyse ya da yetki yoksa şimdi değişmez', () => {
-    const e = duzenek('2026-10-21', an('2026-10-21', 6));
+  it('741 a: gerçek saat 07:00 öncesiyse de şimdi odur (gece vardiyası); yetki yoksa şimdi değişmez', () => {
+    const e = duzenek('2026-10-21', an('2026-10-21', 0, 30));
     e.coz('sifir');
-    expect(e.st().now).toBe(7);
+    expect(e.st().now).toBe(0.5);
     const y = duzenek('2026-10-19', an('2026-10-21', 10), false);
     y.coz('sifir');
     expect(y.st().now).toBe(7);
