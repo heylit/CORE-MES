@@ -67,7 +67,6 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
 // Parça yazarları kendi bölümlerini doldurur (PARCA-SOZLESMESI); bölüm boşken atlanır.
 for (const [parca, gorunumler] of [
   ['P4 Oto-CAM', 'Oto-CAM'],
-  ['P5 Takım Ömrü', 'Takım Ömrü'],
 ] as const) {
   test.describe(parca, () => {
     test(`${gorunumler}: bugünkü davranış`, () => {
@@ -192,4 +191,28 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
       }
     });
   }
+});
+
+test.describe('P5 Takım Ömrü', () => {
+  test('Takım Ömrü: üç kip açılır, bakmak yazmaz, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
+    await ac('/cnc-kurulum/yeni/takim-omru');
+    const kipler = page.getByRole('tablist', { name: 'Takım ömrü' });
+    await expect(kipler.getByRole('tab')).toHaveText(['Magazin takibi', 'Takım analizi', 'Ömür yenileme']);
+    await expect(page.getByText('Tüm tezgâhlar')).toBeVisible();
+    // Örnek veri kendiliğinden yazılmaz (210.1); yalnız bakmak sunucuya yazmaz.
+    expect(ag.yazmalar).toEqual([]);
+    await kipler.getByRole('tab', { name: 'Takım analizi' }).click();
+    await expect(page.getByRole('button', { name: 'Magazin takibine dön' })).toBeVisible();
+    await expect(page.getByText('Gerçek ömürle kalibre et')).toBeVisible();
+    await page.getByRole('button', { name: 'Magazin takibine dön' }).click();
+    await expect(kipler.getByRole('tab', { name: 'Magazin takibi' })).toHaveAttribute('aria-selected', 'true');
+    await kipler.getByRole('tab', { name: 'Ömür yenileme' }).click();
+    await expect(page.getByText('Takım ömrü yenileme')).toBeVisible();
+    for (const genislik of [360, 768, 1280]) {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      await expect(kipler).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+    expect(ag.hatalar).toEqual([]);
+  });
 });
