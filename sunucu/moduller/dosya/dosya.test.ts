@@ -13,7 +13,7 @@ import { DOSYA_PARCASI, dosyaParametresi } from '#paylasilan/sozlesme/dosya.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { denetimSatiri, dosyaTutamagi } from './disari.ts';
+import { denetimSatiri, dosyaTutamagi, modulDeposuTutamagi } from './disari.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import { DOSYA_SINIRI, ILETILER, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU } from './kurallar.ts';
 import type { DosyaSiniri } from './kurallar.ts';
@@ -293,6 +293,51 @@ describe('dosya saklama (gerçek PostgreSQL, gerçek giriş)', () => {
     for (const ad of ['olmayan-modul', '', '../dosya', 'dosya/', 'Kisiler', 'kisiler ', '.']) {
       assert.throws(() => dosyaTutamagi(ad), /modül klasörü yok/, ad);
     }
+  });
+
+  test('modül şeridinden içerik (kart #732): özet doğrulanır, tür içerikten bulunur, 1 MB altı parçalarla yazılır, kişi yükleyen olur', async () => {
+    const arkon = modulDeposuTutamagi('arkon');
+    const icerik = pdf(DOSYA_PARCASI * 2 + 10);
+    const ozet = ozetOf(icerik);
+    await assert.rejects(vt().tx((db) => arkon.icerikYaz(db, a.id, ozetOf(Buffer.from('baska')), icerik)), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA' && h.alan === 'ozet');
+    assert.equal(await dosyaSayisi(ozet), 0);
+    assert.equal(await vt().tx((db) => arkon.icerikYaz(db, a.id, ozet, icerik)), 'pdf');
+    assert.equal(await sayi('SELECT count(*)::int AS n FROM dosya_icerigi WHERE ozet = $1', [ozet]), 3);
+    assert.equal(await sayi('SELECT boyut::int AS n FROM dosya WHERE ozet = $1', [ozet]), icerik.length);
+    // İkinci kez yazan yalnız yükleyen olur; içerik yeniden yazılmaz.
+    assert.equal(await vt().tx((db) => arkon.icerikYaz(db, b.id, ozet, icerik)), 'pdf');
+    assert.equal(await sayi('SELECT count(*)::int AS n FROM dosya_yukleyeni WHERE ozet = $1', [ozet]), 2);
+    // Yükleyen olduğu için kişi bağlayabilir (DSb korunur).
+    await vt().tx((db) => arkon.dosyaBagla(db, kullanici(b), { ozet, kayit: 'depo', ad: 'a.pdf', belgeTuru: null }, { turler: ['pdf'], azamiBayt: 1e9 }));
+    assert.deepEqual(await vt().tx((db) => arkon.bagliOlanlar(db, 'depo', [ozet, ozetOf(Buffer.from('yok'))])), [ozet]);
+    // İmzasız içerik ikili türüyle girer (karar 743 a); kişinin yükleme ucu aynı içeriği reddeder (DSK-05).
+    const imzasiz = randomBytes(3000);
+    assert.equal(await vt().tx((db) => arkon.icerikYaz(db, a.id, ozetOf(imzasiz), imzasiz)), 'ikili');
+    assert.equal(await sayi("SELECT count(*)::int AS n FROM dosya WHERE ozet = $1 AND tur = 'ikili'", [ozetOf(imzasiz)]), 1);
+  });
+
+  test('kaynaktan bağlama (karar 732 a): başka modülde bağlı dosyayı sunucu kişisiz bağlar; bağsız ya da yalnız kendi modülünde bağlı dosyada ret', async () => {
+    const arkon = modulDeposuTutamagi('arkon');
+    const cizimler = dosyaTutamagi('cizimler');
+    const sinir = { turler: ['pdf'] as const, azamiBayt: 1e9 };
+    const icerik = pdf(2200);
+    const ozet = ozetOf(icerik);
+    assert.equal((await yukle(a, icerik)).statusCode, 200);
+    const kaynaktan = (kayit: string) => vt().tx((db) => arkon.kaynaktanBagla(db, { ozet, kayit, ad: ' Resim.pdf ', belgeTuru: null }, b.id, sinir));
+    await assert.rejects(kaynaktan('paket-1'), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA' && h.alan === 'ozet', 'bağsız dosya');
+    await assert.rejects(
+      vt().tx((db) => arkon.kaynaktanBagla(db, { ozet: ozetOf(Buffer.from('yok')), kayit: 'p', ad: 'a', belgeTuru: null }, b.id, sinir)),
+      (h: UygulamaHatasi) => h.kod === 'DOGRULAMA');
+    await vt().tx((db) => cizimler.dosyaBagla(db, kullanici(a), { ozet, kayit: 'revizyon-1', ad: 'r.pdf', belgeTuru: null }, sinir));
+    await assert.rejects(
+      vt().tx((db) => arkon.kaynaktanBagla(db, { ozet, kayit: 'p', ad: 'a', belgeTuru: null }, b.id, { turler: ['png'], azamiBayt: 1e9 })),
+      (h: UygulamaHatasi) => h.kod === 'DOGRULAMA', 'modülün tür sınırı geçerli');
+    const bag = await kaynaktan('paket-1');
+    assert.deepEqual({ ozet: bag.ozet, ad: bag.ad, ekleyenId: bag.ekleyenId }, { ozet, ad: 'Resim.pdf', ekleyenId: b.id });
+    assert.notEqual(await vt().tx((db) => arkon.dosyaAkisi(db, 'paket-1', ozet)), null);
+    // Kaynak bağ kalkınca yalnız kendi modülünde bağlı dosya yeni kayda kaynaktan bağlanamaz.
+    await vt().tx((db) => cizimler.bagKaldir(db, 'revizyon-1', ozet));
+    await assert.rejects(kaynaktan('paket-2'), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA');
   });
 
   test('DSK-11 bağlamayı yalnız içeriği kendisi gönderen yapar: özeti bilen ret alır, yanlış içerikle de kazanamaz; doğru içeriği gönderince bağlar', async () => {

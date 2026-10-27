@@ -31,3 +31,12 @@ kurması aynı kotayı, temizliği ve yetki açığını çoğaltırdı.
 - Temizlik zamanlanmış iş gelene kadar yüklemede fırsatla koşar (UYUM-BORCU).
 - Sınırlar ortam değişkeni değil sabittir: modüller ayarı almaz; değiştirmek kod ve karar ister.
 - Malzemeler (#300), kalibrasyon (#301) ve Arkon (#302) kendi kartlarıyla bağlanır; Arkon'un eski tabloları ayrı göçle düşer (DS7).
+
+## Ek: kart #732 (kullanıcı kararları 732 a ve 743 a, 27.10.2026)
+
+- **Kaynaktan bağlama (DSb a'ya istisna).** Sunucu kodu, başka bir modülün kaydına zaten bağlı dosyayı kişisiz bağlayabilir
+  (`kaynaktanBagla`). İlk kullanım: TMI emrinden açılan Arkon paketine malzemenin Çizimler'de yayındaki PDF ve STEP'i. Özet kişiden gelmez;
+  kişinin özetle bağlaması kuralı (DSb a) aynen sürer.
+- **Modül deposu ve `ikili` türü.** Kendi yükleme şeridi olan modül (Arkon) tamamladığı içeriği ortak depoya yazar; imzasız içerik
+  (3B ağ dizileri gibi) `ikili` türüyle girer. Kişinin yükleme ucu bu türü üretmez.
+- **Arkon deposunun taşınması (DS7).** `arkon_dosya` içeriği ortak depoya göçle taşınır; eski tablo ayrı göçle düşer.

@@ -20,3 +20,14 @@
 - Temizlik yüklemede değil zamanlanmış işte (`isler.ts`, `dosya-temizlik`, saatte bir) koşar (#142, UYUM-BORCU madde 1). Süreler ve
   sorgu başına sınır aynı; bir tur her silme sorgusunu en çok `TEMIZLIK_TUR_SORGUSU` kez yineler.
 - UYUM-BORCU madde 4 kullanıcının DSb a kararıyla verdiği borç satırıdır (b seçeneği ve Arkon deposunun taşınması).
+
+## Kart #732 (kararlar 732 a, 743 a)
+- `modulDeposuTutamagi`: kendi yükleme şeridi olan modül (Arkon) tamamlanan içeriği ortak depoya yazar (`icerikYaz`, 512 KB parçalar); kişi yükleyen olur.
+- `ikili` türü (göç `20261027060000_dosya_ikili_turu.sql`): imzasız içerik yalnız modül şeridinden girer. Sözleşmedeki `DosyaTuru` değişmedi;
+  sunucuda `SaklananTur` ve `SaklananDosya`.
+- `kaynaktanBagla`: başka modülde bağlı dosyanın sunucu kodunca kişisiz bağlanması (DSb a'ya karar 732 a istisnası, ADR 0009).
+- `bagliOlanlar`: verilen özetlerden kayda bağlı olanlar.
+
+Bu tur şunları varsaydı:
+1. Kaynak bağının bütün modüllerde geçerli olması yeterli sayıldı (kaynak modül adı sınırlanmadı); Arkon yalnız Cizimler'den çağırır.
+2. Modül şeridinden gelen içerik kişinin bağsız dosya kotasına sayılmaz (kota modülün şeridindedir).
