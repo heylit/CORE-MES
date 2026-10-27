@@ -39,7 +39,7 @@ export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
       <Not>
         {Y.amac === 'tl'
           ? `Plan tek bir TL toplamını en aza indirir: gecikme saati × siparişin 1 saatlik gecikme bedeli, tampon ihlali × bedel × risk katsayısı, işleme, ayar, fason ve ek mesai TL. ${wipAyar(D).ac ? ' Yarı mamul ve mamul bekleme maliyeti de toplama girer.' : ''} Ek mesai ve fason ancak önlediği gecikme bedelinden ucuzsa plana girer. Eşit TL'de az değişiklik, sonra az ayar seçilir.`
-          : 'Plan önce ağırlıklı gecikme saatine bakar, maliyete yalnız gecikme eşitse bakar (karar 203 öncesi düzen; kıyas için).'}
+          : 'Plan önce ağırlıklı gecikme saatine, sonra tampon ihlaline, değişiklik sayısına ve ayar süresine bakar; TL maliyete yalnız bunlar eşitse bakar.'}
         {bedelDegil && <b> Ağırlık şimdi öncelik sınıfından geliyor; tek TL toplamı yalnız gecikme bedeli kipinde çalışır (Öncelik ve ağırlık).</b>}
       </Not>
     </AsilKart>

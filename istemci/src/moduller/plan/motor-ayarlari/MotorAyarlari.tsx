@@ -6,7 +6,7 @@ import { Dugme, DurumKutusu, Kart, Secim, useBildirim } from '../../../ortak/ara
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
-import { AYAR_SECENEKLERI, degerAdi, surumMetni } from './kurallar.ts';
+import { AYAR_SECENEKLERI, degerAdi, secilebilir, surumMetni } from './kurallar.ts';
 
 // Plan motoru ayarları (kart 811): planlama sayfalarını gören okur, plan.motor-ayari değiştirir (775 b). Kayıt yeni sürümdür; açık
 // taslaklar açıldıkları sürümde kalır (774 a).
@@ -50,7 +50,7 @@ function AyarFormu({ degerler }: { degerler: Ayarlar }) {
     <form onSubmit={gonder} aria-label="Motor ayarlarını değiştir">
       {ANAHTARLAR.map((k) => (
         <Secim key={k} etiket={AYAR_SECENEKLERI[k].baslik} ipucu={AYAR_SECENEKLERI[k].ipucu} value={f[k]}
-          onChange={(e) => setF({ ...f, [k]: e.target.value })} secenekler={AYAR_SECENEKLERI[k].secenekler} />
+          onChange={(e) => setF({ ...f, [k]: e.target.value })} secenekler={secilebilir(k, degerler[k])} />
       ))}
       <Dugme type="submit" simge="check" disabled={!degisti} yukleniyor={yaz.isPending}>Kaydet</Dugme>
     </form>

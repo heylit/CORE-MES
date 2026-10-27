@@ -5,7 +5,7 @@ import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import * as oturum from '../../../ortak/veri/oturum.ts';
-import { surumMetni } from './kurallar.ts';
+import { secilebilir, surumMetni } from './kurallar.ts';
 import { MotorAyarlari } from './MotorAyarlari.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -20,6 +20,12 @@ describe('motor ayarları', () => {
   it('sürüm metni: sürüm yoksa varsayılan, varsa yazan kişi', () => {
     expect(surumMetni(BOS.guncel)).toBe('Varsayılan ayarlar; henüz değiştirilmedi.');
     expect(surumMetni({ ...BOS.guncel, surumId: 3, yazan: 'Deneme Kişi', zaman: null })).toBe('Sürüm 3: Deneme Kişi.');
+  });
+
+  it('832 a: TL amacı seçilemez; yalnız kayıtlı değerse listede kalır', () => {
+    expect(secilebilir('amac', 'sirali').map((s) => s.deger)).toEqual(['sirali']);
+    expect(secilebilir('amac', 'tl').map((s) => s.deger)).toEqual(['sirali', 'tl']);
+    expect(secilebilir('kural', 'atcs')).toHaveLength(6);
   });
 
   it('yetkisi olmayan ayarları yalnız görür', async () => {

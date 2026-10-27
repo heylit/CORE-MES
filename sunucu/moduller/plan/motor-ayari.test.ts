@@ -3,6 +3,7 @@ import { before, describe, test } from 'node:test';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { MOTOR_AYARI_VARSAYILAN, type MotorAyarlariCevabi, type PlanCevabi, type SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { motorAyariBirlestir, motorAyariCoz } from './motor-ayari-kurallar.ts';
+import { hedefMotorAyari } from './motor-ayari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // Kart 811 (773 a, 774 a, 775 b): plan motoru ayarları sürümlüdür, taslak kendi sürümünde kalır. Veriler uydurmadır.
@@ -63,10 +64,36 @@ describe('plan (gerçek PostgreSQL): motor ayarı', () => {
     assert.equal((await istek(c.planlama, 'POST', `/plan/senaryolar/${a.id}/motor-ayari-guncelle`, { surum: a.surum })).statusCode, 409, 'eski sürüm');
   });
 
+  test('830 a: taslağa özel kural boş olabilir; boşsa sürümdeki kural geçer; çoğaltılan ve güncel ayara geçen taslak kuralını korur', async () => {
+    const t = await taslakAc('Motor kuralı');
+    const kural = (id: number) => ortam!.vt.tx((db) => hedefMotorAyari(db, id)).then((x) => x.degerler.kural);
+    const surumdeki = (await oku(t.id)).taslak!.surum.degerler.kural;
+    assert.deepEqual([(await oku(t.id)).taslak!.kural, await kural(t.id)], [null, surumdeki]);
+
+    const yol = `/plan/senaryolar/${t.id}/motor-kurali`;
+    assert.equal((await istek(c.mudur, 'POST', yol, { surum: t.surum, kural: 'spt' })).statusCode, 403, 'başkasının taslağı');
+    assert.equal((await istek(c.planlama, 'POST', yol, { surum: t.surum, kural: 'kar' })).statusCode, 400, 'onaylı listede yok');
+    assert.equal((await tamam<PlanCevabi>(c.planlama, 'POST', yol, { surum: t.surum, kural: 'spt' })).taslak!.surum, t.surum + 1);
+    assert.deepEqual([(await oku(t.id)).taslak!.kural, await kural(t.id), (await oku()).guncel.degerler.kural === 'spt'], ['spt', 'spt', false]);
+    assert.equal((await tamam<PlanCevabi>(c.planlama, 'POST', yol, { surum: t.surum + 1, kural: 'spt' })).taslak!.surum, t.surum + 1, 'aynı kural sürüm artırmaz');
+    assert.equal((await istek(c.planlama, 'POST', yol, { surum: t.surum, kural: 'fifo' })).statusCode, 409, 'eski sürüm');
+
+    const kopya = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${t.id}/cogalt`)).senaryolar.find((x) => x.ad === 'Motor kuralı (kopya)')!;
+    assert.equal(await kural(kopya.id), 'spt');
+    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${t.id}/motor-ayari-guncelle`, { surum: t.surum + 1 });
+    assert.deepEqual([(await oku(t.id)).taslak!.surum.degerler.eksikStok, await kural(t.id)], ['varsay', 'spt']);
+    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
+
+    await tamam(c.planlama, 'POST', yol, { surum: t.surum + 2, kural: null });
+    assert.deepEqual([(await oku(t.id)).taslak!.kural, await kural(t.id)], [null, (await oku(t.id)).taslak!.surum.degerler.kural]);
+  });
+
   test('775 b: değiştirmek plan.motor-ayari ister (yönetici, müdür, planlama); planı görmeyen okuyamaz; sürüm satırı değiştirilemez', async () => {
     assert.equal((await istek(c.kalite, 'POST', '/plan/motor-ayarlari', { kural: 'cr' })).statusCode, 403);
     assert.equal((await istek(c.operator, 'GET', '/plan/motor-ayarlari')).statusCode, 403);
     assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'yok' })).statusCode, 400);
+    assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { amac: 'tl' })).statusCode, 400, '832 a: TL ayarda kapalı');
     await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
     assert.equal((await oku()).guncel.degerler.eksikStok, 'varsay');
     await assert.rejects(ortam!.sahip.sorgu("UPDATE plan_motor_ayar_surumu SET degerler = '{}'"));

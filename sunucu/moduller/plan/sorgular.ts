@@ -293,8 +293,9 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
   await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $2, ${BEDEL_SUTUN} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, ${CARPAN_SUTUN}) SELECT $2, ${CARPAN_SUTUN} FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1`,
     [kaynakId, id]);
-  // Çoğaltılan taslak kaynağın motor ayarı sürümünde kalır (774 a); açılış anından çözülmesin diye bağ yazılır (varsayılandaysa boş).
-  await db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kisi_id) SELECT $2, ${SENARYO_MOTOR_SURUMU}, $3`, [kaynakId, id, kisiId]);
+  // Çoğaltılan taslak kaynağın motor ayarı sürümünde ve kuralında kalır (774 a, 830 a); açılış anından çözülmesin diye bağ yazılır (varsayılandaysa boş).
+  await db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kural, kisi_id)
+    SELECT $2, ${SENARYO_MOTOR_SURUMU}, (SELECT kural FROM plan_senaryo_motor_ayari WHERE senaryo_id = $1), $3`, [kaynakId, id, kisiId]);
   await ekMesaiKopyala(db, kaynakId, id);
   return id;
 }
@@ -438,6 +439,12 @@ export const motorAyarSurumuYaz = async (db: Db, degerler: Record<string, unknow
 export const motorAyarSenaryoyaBagla = (db: Db, senaryoId: number, surumId: number, kisiId: number) =>
   db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kisi_id) VALUES ($1, $2, $3)
             ON CONFLICT (senaryo_id) DO UPDATE SET surum_id = EXCLUDED.surum_id, kisi_id = EXCLUDED.kisi_id, zaman = now()`, [senaryoId, surumId, kisiId]);
+// 830 a: taslağa özel kural; bağ satırı yoksa taslağın bugünkü sürümüyle açılır (sürüm değişmez).
+export const motorSenaryoKurali = async (db: Db, senaryoId: number): Promise<string | null> =>
+  (await db.tek<{ kural: string | null }>('SELECT kural FROM plan_senaryo_motor_ayari WHERE senaryo_id = $1', [senaryoId]))?.kural ?? null;
+export const motorSenaryoKuraliYaz = (db: Db, senaryoId: number, kural: string | null, kisiId: number) =>
+  db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kural, kisi_id) SELECT $1, ${SENARYO_MOTOR_SURUMU}, $2, $3
+            ON CONFLICT (senaryo_id) DO UPDATE SET kural = EXCLUDED.kural, kisi_id = EXCLUDED.kisi_id, zaman = now()`, [senaryoId, kural, kisiId]);
 
 /* ---------------- elle çarpan (195 a) ---------------- */
 

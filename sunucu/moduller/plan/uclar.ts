@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
-  motorAyariGovdesi, motorAyarlariCevabi, planCevabi, planSorgusu, planSurumCevabi,
+  motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, veriSagligiCevabi,
   yerlestirGovdesi,
@@ -95,6 +95,9 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => motorAyariYaz(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/motor-ayari-guncelle', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi,
     govde: senaryoSurumGovdesi, cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.motorAyariGuncelle(db, kullanici, parametre.id, govde.surum) }),
+  // 830 a: taslağa özel kural; taslağın sahibi yazar (motor-ayari-guncelle gibi plan.yaz).
+  uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/motor-kurali', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi,
+    govde: motorKuraliGovdesi, cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.motorKuraliYaz(db, kullanici, parametre.id, govde) }),
   // Elle çarpan (195 a): plan.yaz 2'ye, siparisler.onayla 3'e kadar; sınırı servis denetler. 148 a: taslağa yazılır, onayla siparişe geçer.
   uc({ yontem: 'GET', yol: '/plan/siparisler/:id/carpan', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, cevap: siparisCarpaniCevabi,
     isle: ({ db, parametre }) => servis.siparisCarpani(db, parametre.id) }),

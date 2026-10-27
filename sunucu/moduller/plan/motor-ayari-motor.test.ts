@@ -95,9 +95,11 @@ describe('plan (gerçek PostgreSQL): sayfa ve "Planı kur" güncel motor ayarıy
       return [amacOku(giden!.calisma), amacOku(okunan.calisma)];
     };
     assert.deepEqual(await amaclar(), ['sira', 'sira']);
-    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { amac: 'tl' });
+    // 832 a: TL ayarda kapalı (uç reddeder); motorun TL yolu sürüm satırıyla denenir.
+    const surumYaz = (amac: string) => ortam!.sahip.sorgu('INSERT INTO plan_motor_ayar_surumu (degerler, yazan_kisi_id) VALUES ($1, $2)', [JSON.stringify({ amac }), yonetici]);
+    await surumYaz('tl');
     assert.deepEqual(await amaclar(), ['tl', 'tl']);
-    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { amac: 'sirali' });
+    await surumYaz('sirali');
     assert.equal(await kayitAmaci(), once);
   });
 });

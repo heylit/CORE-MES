@@ -16,10 +16,12 @@ CREATE TRIGGER plan_motor_ayar_surumu_bosaltilmaz BEFORE TRUNCATE ON plan_motor_
   FOR EACH STATEMENT EXECUTE FUNCTION yalniz_ekleme();
 
 -- Taslağın açılıştaki sürümden başka bir sürüme bağlanması. Kapanmış senaryonun bağı değişmez (servis reddeder). Sürüm boşsa taslak koddaki
--- varsayılandadır: sürüm yazılmadan açılmış taslak çoğaltılınca kopya da varsayılanda kalsın.
+-- varsayılandadır: sürüm yazılmadan açılmış taslak çoğaltılınca kopya da varsayılanda kalsın. Kural taslağa özel sıralama kuralıdır
+-- (776 b, 830 a: Planlama atölyesinde senaryo başına); boşsa sürümdeki kural geçer.
 CREATE TABLE plan_senaryo_motor_ayari (
   senaryo_id int CONSTRAINT plan_senaryo_motor_ayari_tekil PRIMARY KEY CONSTRAINT plan_senaryo_motor_ayari_senaryo REFERENCES plan_senaryosu (id),
   surum_id int CONSTRAINT plan_senaryo_motor_ayari_surum REFERENCES plan_motor_ayar_surumu (id),
+  kural text CONSTRAINT plan_senaryo_motor_ayari_kural CHECK (kural IN ('atcs', 'oncelik', 'edd', 'cr', 'spt', 'fifo')),
   kisi_id int NOT NULL CONSTRAINT plan_senaryo_motor_ayari_kisi REFERENCES kisi (id),
   zaman timestamptz NOT NULL DEFAULT now()
 );

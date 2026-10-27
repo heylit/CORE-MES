@@ -4,7 +4,7 @@ import type { MotorAyarlari, MotorAyarlariCevabi } from '#paylasilan/sozlesme/pl
 export const AYAR_SECENEKLERI: { [K in keyof MotorAyarlari]: { baslik: string; ipucu: string; secenekler: readonly { deger: MotorAyarlari[K]; baslik: string }[] } } = {
   amac: {
     baslik: 'Plan amacı',
-    ipucu: 'Sıralı: önce zamanında teslim, sonra ayar ve düzen. TL: gecikme bedelinin toplamı en aza iner.',
+    ipucu: 'Sıralı: önce zamanında teslim, sonra değişiklik, ayar ve boşta kalma, en son maliyet. TL seçeneği para verisi dolunca açılır.',
     secenekler: [{ deger: 'sirali', baslik: 'Sıralı' }, { deger: 'tl', baslik: 'TL (gecikme bedeli)' }],
   },
   eksikStok: {
@@ -22,6 +22,13 @@ export const AYAR_SECENEKLERI: { [K in keyof MotorAyarlari]: { baslik: string; i
     ],
   },
 };
+
+// 771 a, 832 a: TL amacı ayarda kapalıdır; seçim listesinde yalnız şu an kayıtlıysa görünür (sunucu da yazmayı reddeder).
+export const KAPALI_SECENEKLER: { [K in keyof MotorAyarlari]?: readonly MotorAyarlari[K][] } = { amac: ['tl'] };
+export function secilebilir<K extends keyof MotorAyarlari>(anahtar: K, simdiki: MotorAyarlari[K]) {
+  const kapali = (KAPALI_SECENEKLER[anahtar] ?? []) as readonly string[];
+  return AYAR_SECENEKLERI[anahtar].secenekler.filter((s) => !kapali.includes(s.deger) || s.deger === simdiki);
+}
 
 export function degerAdi<K extends keyof MotorAyarlari>(anahtar: K, deger: MotorAyarlari[K]): string {
   return AYAR_SECENEKLERI[anahtar].secenekler.find((s) => s.deger === deger)?.baslik ?? deger;

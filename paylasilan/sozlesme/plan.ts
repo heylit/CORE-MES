@@ -400,8 +400,11 @@ const motorAyarSurumu = z.object({ surumId: KIMLIK.nullable(), degerler: motorAy
 // Taslak verilirse taslağın sürümü ve güncelden farklı mı; verilmezse taslak boş.
 export const motorAyarlariCevabi = z.object({
   guncel: motorAyarSurumu,
-  taslak: z.object({ id: KIMLIK, surum: motorAyarSurumu, farkli: z.boolean() }).nullable(),
+  // kural: taslağa özel sıralama kuralı (830 a); boşsa sürümdeki geçer.
+  taslak: z.object({ id: KIMLIK, surum: motorAyarSurumu, farkli: z.boolean(), kural: z.enum(MOTOR_KURALLARI).nullable() }).nullable(),
 });
+// 776 b, 830 a: Planlama atölyesinde taslağa özel kural; boş verilirse motor ayarı sürümündeki kurala döner.
+export const motorKuraliGovdesi = z.object({ surum: KIMLIK, kural: z.enum(MOTOR_KURALLARI).nullable() });
 
 // Elle çarpan (195 a): siparişin gecikme bedelini gerekçeyle çarpar; 0,5-2 plan.yaz, 3'e kadar siparisler.onayla (sunucu denetler).
 export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;
@@ -459,6 +462,7 @@ export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
 export type MotorAyarlari = z.output<typeof motorAyarlari>;
 export type MotorAyariGovdesi = z.output<typeof motorAyariGovdesi>;
 export type MotorAyarlariCevabi = z.output<typeof motorAyarlariCevabi>;
+export type MotorKuraliGovdesi = z.output<typeof motorKuraliGovdesi>;
 export type SiparisCarpaniCevabi = z.output<typeof siparisCarpaniCevabi>;
 export type HizliDeneme = (typeof HIZLI_DENEMELER)[number];
 export type SenaryoOnayi = z.output<typeof senaryoOnayi>;
