@@ -19,7 +19,8 @@ vi.mock('../../ortak/arayuz/YalitilmisCerceve.tsx', () => ({
   },
 }));
 vi.mock('./prototip.ts', () => ({ prototipYukle: async () => '<!doctype html><html><head><title>P</title></head><body></body></html>' }));
-vi.mock('../cizimler/disari.ts', () => ({ dosyaYukle: vi.fn(async () => 'a'.repeat(64)) }));
+const cizimler = vi.hoisted(() => ({ onizlemeGonder: vi.fn(async (_r: unknown, _g: unknown) => {}) }));
+vi.mock('../cizimler/disari.ts', () => ({ dosyaYukle: vi.fn(async () => 'a'.repeat(64)), onizlemeGonder: cizimler.onizlemeGonder }));
 
 // Kişi ve makine adları uydurmadır.
 const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.cnc-kurulum', 'cizimler.yaz', 'cizimler.yayinla'] };
@@ -38,7 +39,7 @@ interface MevcutBelge { id: number; ad: string; yayinda: boolean; istasyonId: nu
 
 function sunucuKur(kullanici: Kullanici, gruplar: IstasyonSecimiCevabi['gruplar'] = GRUPLAR, mevcut: MevcutBelge[] = []): Istek[] {
   const istekler: Istek[] = [];
-  let belge = { id: 12, surum: 1, revizyonlar: [{ id: 30, ozet: OZET, durum: 'taslak' }], baglar: [] as { hedefModul: string; hedefId: number }[] };
+  let belge = { id: 12, surum: 1, revizyonlar: [{ id: 30, ozet: OZET, durum: 'taslak', onizlemeKareSayisi: 0 }], baglar: [] as { hedefModul: string; hedefId: number }[] };
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = secenek?.method ?? 'GET';
@@ -58,7 +59,7 @@ function sunucuKur(kullanici: Kullanici, gruplar: IstasyonSecimiCevabi['gruplar'
     const varolan = mevcut.find((b) => yontem === 'GET' && yol === `/cizimler/${b.id}`);
     if (varolan) return json(200, { id: varolan.id, surum: 1, revizyonlar: [], baglar: varolan.istasyonId === null ? [] : [{ hedefModul: 'istasyonlar', hedefId: varolan.istasyonId }] });
     if (yontem === 'POST' && yol === '/cizimler') return json(200, { id: 12 });
-    if (yontem === 'POST' && yol === '/cizimler/12/revizyonlar/30/yayinla') belge = { ...belge, surum: 2, revizyonlar: [{ id: 30, ozet: OZET, durum: 'yayinda' }] };
+    if (yontem === 'POST' && yol === '/cizimler/12/revizyonlar/30/yayinla') belge = { ...belge, surum: 2, revizyonlar: [{ id: 30, ozet: OZET, durum: 'yayinda', onizlemeKareSayisi: 0 }] };
     if (yontem === 'POST' && yol === '/cizimler/12/bag-ekle') belge = { ...belge, surum: 3, baglar: [{ hedefModul: 'istasyonlar', hedefId: 5 }] };
     if (yol.startsWith('/cizimler/12')) return json(200, belge);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -75,7 +76,7 @@ function ac(yol = '/cizimler/cnc-makineleri') {
   );
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); cerceve.ilet = null; });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); cerceve.ilet = null; cizimler.onizlemeGonder.mockReset(); });
 
 describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () => {
   it('TA-01: makine numarası istasyon koduyla eşleşirse o istasyon önerilir', () => {
@@ -105,7 +106,11 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     fireEvent.click(screen.getByRole('button', { name: '1 makineyi eşleştir' }));
     await waitFor(() => { expect(komutlar).toContainEqual({ kanal: 'cnc-kurulum', yon: 'komut', tip: 'model-uret', makineId: 'f5a' }); });
     cerceve.ilet?.({ kanal: 'cnc-kurulum', yon: 'istek', id: 2, tip: 'model-aktar', veri: { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen', glb: new Uint8Array([1]) } }, yanitla);
-    expect(await within(satir).findByText('Yeni belge, eşleşti, haritanın Ekle listesinde.')).toBeTruthy();
+    expect(await within(satir).findByText('Yeni belge, eşleşti, haritanın Ekle listesinde; küçük resim hazır.')).toBeTruthy();
+    // 780 a: küçük resim yayındaki revizyonun önizlemesidir; kareler elde olan GLB'den üretilir, dosya yeniden indirilmez.
+    expect(cizimler.onizlemeGonder).toHaveBeenCalledTimes(1);
+    expect(cizimler.onizlemeGonder.mock.calls[0]?.[0]).toMatchObject({ id: 30, durum: 'yayinda' });
+    expect(cizimler.onizlemeGonder.mock.calls[0]?.[1]).toEqual({ dosyaYolu: '/cizimler/12/revizyonlar/30/dosya', yazmaYolu: '/cizimler/12/revizyonlar/30/onizleme', veri: new Uint8Array([1]) });
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([
       ['/cizimler', { ad: 'F-01 · Beş eksen', tur: '3b-model', aciklama: 'CNC Kurulum Motoru makine modeli (glTF, metre, Y yukarı).', ozet: OZET, dosyaAdi: 'cnc-f5a.glb' }],
       ['/cizimler/12/revizyonlar/30/yayinla', { surum: 1 }],
@@ -193,5 +198,36 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     await screen.findByTitle('CNC Kurulum Motoru (model üretimi)');
     cerceve.ilet?.({ kanal: 'cnc-kurulum', yon: 'istek', id: 1, tip: 'makine-listesi', veri: { makineler: [{ makineId: 'f5a', no: 'F-01', ad: 'Beş eksen' }] } }, vi.fn());
     await waitFor(() => { expect((screen.getByRole('checkbox', { name: 'F-01 · Beş eksen' }) as HTMLInputElement).checked).toBe(true); });
+  });
+
+  // 780 a: küçük resim eşleşmenin parçası değildir; üretilemezse bağ ve yayın kalır, neden satırda yazar.
+  const eslestir = async () => {
+    await screen.findByTitle('CNC Kurulum Motoru (model üretimi)');
+    const yanitla = vi.fn();
+    cerceve.ilet?.({ kanal: 'cnc-kurulum', yon: 'istek', id: 1, tip: 'makine-listesi', veri: { makineler: [{ makineId: 'f5a', no: 'F-01', ad: 'Beş eksen' }] } }, yanitla);
+    const satir = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
+    await waitFor(() => { expect((within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('5'); });
+    fireEvent.click(within(satir).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: '1 makineyi eşleştir' }));
+    await waitFor(() => { expect(yanitla).toHaveBeenCalled(); });
+    cerceve.ilet?.({ kanal: 'cnc-kurulum', yon: 'istek', id: 2, tip: 'model-aktar', veri: { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen', glb: new Uint8Array([1]) } }, yanitla);
+    return satir;
+  };
+
+  it('TA-09: küçük resim üretilemezse eşleşme ve yayın geri alınmaz, neden satırda yazar', async () => {
+    cizimler.onizlemeGonder.mockRejectedValueOnce(new Error('Bu cihazda üç boyutlu çizim yok; önizleme üretilmedi.'));
+    const istekler = sunucuKur(YAZAR);
+    ac();
+    const satir = await eslestir();
+    expect(await within(satir).findByText('Yeni belge, eşleşti, haritanın Ekle listesinde; küçük resim üretilemedi (Bu cihazda üç boyutlu çizim yok; önizleme üretilmedi.).')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/cizimler/12/bag-ekle')).toBe(true);
+  });
+
+  it('TA-10: yayınlama yetkisi yoksa revizyon taslak kalır ve küçük resim üretilmez (reddedilen)', async () => {
+    sunucuKur({ ...YAZAR, islemler: ['sayfa.cnc-kurulum', 'cizimler.yaz'] });
+    ac();
+    const satir = await eslestir();
+    expect(await within(satir).findByText('Yeni belge, eşleşti; çizim yayınlanınca haritaya eklenir.')).toBeTruthy();
+    expect(cizimler.onizlemeGonder).not.toHaveBeenCalled();
   });
 });

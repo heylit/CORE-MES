@@ -3,4 +3,6 @@ export { DosyaHatasi, dosyaYukle } from './dosya-aktarimi.ts';
 // Malzeme küçük resmi (kart #688): listeler `useKucukResimler` ile tek istekte okur, `KucukResimKutusu` çizer; malzeme kartı
 // `ResimPaneli`ni gömer. Kartın açılışında seçilen dosyalar kart ilk kaydedilince `malzemeBelgesiYukle` ile gönderilir.
 export { KucukResimKutusu, kucukResimAdresi, useKucukResimler, type KucukResimBoyu } from './KucukResim.tsx';
+// Revizyonun önizleme karesi (küçük resim) elde olan dosyadan üretilir; CNC eşleştirmesi modeli yayına alınca çağırır (780 a).
+export { onizlemeGonder } from './onizleme-akisi.ts';
 export { ResimPaneli, malzemeBelgesiYukle, useMalzemeResimYetkisi, type MalzemeBelgesiGirdisi } from './ResimPaneli.tsx';

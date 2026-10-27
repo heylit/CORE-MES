@@ -1,7 +1,7 @@
 import type { BagGovdesi, BelgeAyrintisi, BelgeListesiCevabi, BelgeOlusturGovdesi, RevizyonEkleGovdesi, SurumGovdesi } from '#paylasilan/sozlesme/cizimler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
-import { dosyaYukle } from '../cizimler/disari.ts';
+import { dosyaYukle, onizlemeGonder } from '../cizimler/disari.ts';
 
 // Seçili makinenin modeli Çizimler'e 3B model belgesi olarak gider (taslak; yayın Çizimler ekranından). Aynı makine ikinci kez
 // aktarılınca yeni belge açılmaz: adıyla bulunan belgeye revizyon eklenir, dosya aynıysa hiçbir şey yazılmaz. İstasyona bağ
@@ -49,6 +49,18 @@ export async function yayinlaVeEslestir(a: Pick<AktarimSonucu, 'belgeId' | 'ozet
     belge = await api.post<BelgeAyrintisi>(`/cizimler/${a.belgeId}/bag-ekle`, { hedefModul: 'istasyonlar', hedefId: istasyonId, surum: belge.surum } satisfies BagGovdesi);
   }
   return { yayinda: belge.revizyonlar.some((x) => x.ozet === a.ozet && x.durum === 'yayinda') };
+}
+
+// 780 a: istasyonun küçük resmi yayındaki model revizyonunun önizlemesidir; eşleşen model yayına girince kareler elde olan GLB'den
+// üretilir. Taslağın önizlemesi yazılmaz (Çizimler reddeder), kareleri olan revizyon yeniden üretilmez.
+export type KucukResimSonucu = 'uretildi' | 'vardi' | 'taslak';
+export async function kucukResimUret(a: Pick<AktarimSonucu, 'belgeId' | 'ozet'>, glb: Uint8Array): Promise<KucukResimSonucu> {
+  const belge = await api.get<BelgeAyrintisi>(`/cizimler/${a.belgeId}`);
+  const r = belge.revizyonlar.find((x) => x.ozet === a.ozet);
+  if (!r || r.durum !== 'yayinda') return 'taslak';
+  if (r.onizlemeKareSayisi > 0) return 'vardi';
+  await onizlemeGonder(r, { dosyaYolu: `/cizimler/${a.belgeId}/revizyonlar/${r.id}/dosya`, yazmaYolu: `/cizimler/${a.belgeId}/revizyonlar/${r.id}/onizleme`, veri: glb });
+  return 'uretildi';
 }
 
 // Makinenin Çizim Merkezi'ndeki durumu: aynı adlı etkin 3B model belgesi ve bağlı olduğu istasyon. Belgesi olmayan makine
