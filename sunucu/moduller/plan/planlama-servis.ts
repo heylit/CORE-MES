@@ -206,6 +206,11 @@ const kayitDegeri = (k: { bicim: string; deger?: unknown } | null): unknown => {
   try { return JSON.parse(k.deger) as unknown; } catch { return null; }
 };
 
+// Planlama çalışmasının kayıtlı hâli (birleştirilmeden); kayıt yoksa null. Veri sağlığı raporu çalışmadaki elle değerleri buradan sayar.
+export async function planlamaCalismaKaydi(db: Db): Promise<unknown> {
+  return kayitDegeri(await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI));
+}
+
 // ADR 0018: sunucu plan motoru bir kullanıcı adına değil sunucunun içinde okur (Soru 150 a): aynı girdi her kullanıcıda aynı planı verir.
 // Okunan veri kimseye dönmez; çözücü yalnız saat verir. Yazma işlemi taşımaz.
 const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
