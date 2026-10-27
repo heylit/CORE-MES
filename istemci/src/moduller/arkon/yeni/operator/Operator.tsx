@@ -74,6 +74,7 @@ import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
+import { Sepetler, cikanSepetiniAc } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
@@ -850,7 +851,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'prepnext') { ovYaz('prepnext'); return; }
     if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
     if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
-    if (a === 'finish') { sonBildirim.current++; go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
+    if (a === 'finish') { sonBildirim.current++; cikanSepetiniAc(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
     if (a === 'next') {
       const n = isler.findIndex((x, i) => i !== ai && x.state === 'queued');
       ovYaz(null);
@@ -1257,6 +1258,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               {kaliteGorunumu ?? sayac}
               <IsEtiketleri is={o} />
               {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
+              {pv ? null : <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               <EtkinKart is={o} kartlar={kartlar} />
               {notlar}
               {durumDugmeleri(true)}
@@ -1327,6 +1329,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               <IsAlanlari is={o} baslik />
               <IsEtiketleri is={o} />
               {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
+              {pv ? null : <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               {notlar}
             </div>
             <div className="tc-ay1-olgular">
