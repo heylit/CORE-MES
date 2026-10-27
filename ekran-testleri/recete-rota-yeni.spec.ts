@@ -173,7 +173,7 @@ test.describe('R2 kaynaklar', () => {
     await pencere.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(pencere).toBeHidden();
     await alt.getByRole('tab', { name: 'Vardiyalar' }).click();
-    await kaynaklar.getByRole('button', { name: "Vardiya'da düzenle" }).click();
+    await kaynaklar.getByRole('button', { name: 'Bu düzeni diğerlerine kopyala' }).first().click();
     await expect(page).toHaveURL(/\/vardiya$/);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
     expect(ag.hatalar).toEqual([]);

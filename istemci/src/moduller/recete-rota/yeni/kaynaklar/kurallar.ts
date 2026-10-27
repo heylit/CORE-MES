@@ -1,5 +1,6 @@
 // R2 parçasının saf hesapları (Süreler, Malzemeler, Kaynaklar). Ekran çizmez, istek atmaz; birim testlidir. Veri yoksa null döner,
 // sıfır uydurulmaz.
+import { sirali, statuNo, tasinanMalzeme, TUR_KISA, type Adim } from '../rotalar/kurallar.ts';
 
 /* ---------------- sayı girişi ---------------- */
 
@@ -69,6 +70,69 @@ export function eskiKalemler(belge: unknown, kartKimlikleri: ReadonlySet<string>
 // ekranın rengi değildir; liste bugünkü ekranın sırasıdır.
 export const STATU_TURLERI = [['uretim', 'Üretim aşaması'], ['kalite', 'Kalite'], ['ret', 'Ret / hurda'], ['giris', 'Giriş']] as const;
 export const STATU_RENKLERI = ['#2F6FEB', '#0E7F81', '#C96A00', '#8A4FD3', '#C8102E', '#3E8E2E', '#9A7400', '#C2408A', '#4B5D7A', '#1F9E6A'] as const;
+
+// Statülü kart satırı (eski ekranın "Statülü kartlar" satırı). Kart üçlüdür: bu malzeme, hangi ürünün rotasında, hangi OP. Statü yalnız
+// rota tanımından gelir (256 a): rotanın son adımı dışındaki her adım taşıdığı malzemenin kartını kendiliğinden açar. Stokta bakiyesi olan
+// statü de karttır (bakiye Stok'tadır). Miktar yalnız stok okunduysa vardır; okunamadıysa null (sıfır yazılmaz). Ara kart adetle sayılır (520 1 a).
+export interface StatuluKart {
+  anahtar: string; urunId: string | null; urunKodu: string | null; opNo: number | null; baslik: string; miktar: number | null; birim: string; rotaAdimi: boolean;
+}
+interface KartMalzemesi { id: string; code: string; type: string; unit: string | null }
+interface KartStatusu { id: number; malzemeNo: string; kaynakAdim: string; ad: string; urunKodu?: string | null }
+interface KartKirilimi { statuId: number | null; miktar: string | number }
+export interface StatuluKartGirdisi {
+  malzemeler: readonly KartMalzemesi[];
+  rotalar: Readonly<Record<string, { steps: readonly Adim[] }>> | null;
+  opAdi: (opId: string) => string | null;
+  statuler: readonly KartStatusu[] | null;
+  // Malzemenin statü kırılımı; stok okunmadıysa undefined ya da null.
+  kirilim: (malzemeId: string) => readonly KartKirilimi[] | null | undefined;
+}
+export function statuluKartlar(m: KartMalzemesi, g: StatuluKartGirdisi): StatuluKart[] {
+  const var_ = new Set(g.malzemeler.map((x) => x.id));
+  const malzemeVar = (id: string) => var_.has(id);
+  const kirilim = g.kirilim(m.id) ?? null;
+  const miktar = (statuId: number): number | null => {
+    if (kirilim === null) return null;
+    return kirilim.filter((k) => k.statuId === statuId).reduce((t, k) => t + (Number(k.miktar) || 0), 0);
+  };
+  // Aynı malzeme farklı ürünlerde ayrı statüdür: ürün kodu biliniyorsa o da tutmalı.
+  const statuBul = (adimId: string, urunKodu: string) => g.statuler?.find((x) => x.malzemeNo === m.code && x.kaynakAdim === adimId
+    && (x.urunKodu === undefined || x.urunKodu === null || x.urunKodu === urunKodu)) ?? null;
+  const out: StatuluKart[] = [];
+  const gorulen = new Set<string>();
+  const kullanilan = new Set<number>();
+  for (const [rid, r] of Object.entries(g.rotalar ?? {})) {
+    const sahip = g.malzemeler.find((x) => x.id === rid);
+    if (!sahip || sahip.type === 'ham') continue;
+    const ss = sirali(r.steps);
+    ss.slice(0, -1).forEach((a, i) => {
+      if (tasinanMalzeme(rid, ss, i, malzemeVar) !== m.id) return;
+      const anahtar = `${rid}|${a.id}`;
+      if (gorulen.has(anahtar)) return;
+      gorulen.add(anahtar);
+      const st = statuBul(a.id, sahip.code);
+      if (st) kullanilan.add(st.id);
+      out.push({
+        anahtar, urunId: rid, urunKodu: rid === m.id ? null : sahip.code, opNo: statuNo(a),
+        baslik: `${TUR_KISA[m.type] ?? ''} OP ${String(statuNo(a))} ${g.opAdi(a.opId) ?? 'Adım'}`.trim(),
+        miktar: st ? miktar(st.id) : (kirilim === null ? null : 0), birim: 'adet', rotaAdimi: true,
+      });
+    });
+  }
+  // Rotada karşılığı kalmamış ama bakiyesi olan statü.
+  for (const k of kirilim ?? []) {
+    if (k.statuId === null || kullanilan.has(k.statuId) || !(Number(k.miktar) > 0)) continue;
+    const st = g.statuler?.find((x) => x.id === k.statuId) ?? null;
+    const anahtar = `statu|${String(k.statuId)}`;
+    if (gorulen.has(anahtar)) continue;
+    gorulen.add(anahtar);
+    out.push({
+      anahtar, urunId: null, urunKodu: null, opNo: null, baslik: st ? st.ad : `Statü ${String(k.statuId)}`, miktar: miktar(k.statuId), birim: 'adet', rotaAdimi: false,
+    });
+  }
+  return out;
+}
 
 /* ---------------- Kaynaklar ---------------- */
 

@@ -56,11 +56,14 @@ describe('R2 Süreler', () => {
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
     const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık dakika, MM-0001 OP 10' });
-    const kart = within(bolge).getByRole('article', { name: 'MM-0001 OP 10 süreleri' });
-    expect(within(kart).getByText('Revizyon').nextElementSibling?.textContent).toBe('A');
-    // Eski düzen: kaynak istasyon koduyla, altında istasyon adı ve makine kodu; operasyon yalnız adıyla.
-    expect(within(kart).getByText('Kaynak').nextElementSibling?.textContent).toBe('IST-1Torna istasyonu · M-1');
-    expect(within(kart).getByText('Operasyon').nextElementSibling?.textContent).toBe('Tornalama');
+    // Eski düzen: tek tablo, grup başlıkları; kaynak istasyon koduyla, altında istasyon adı ve makine kodu; operasyon yalnız adıyla.
+    const tablo = within(bolge).getByRole('table', { name: 'Süreler' });
+    expect(within(tablo).getByRole('columnheader', { name: 'Teorik (dk)' })).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: 'Gerçekleşen (dk)' })).toBeTruthy();
+    const satir = within(tablo).getByRole('row', { name: 'MM-0001 OP 10 süreleri' });
+    const hucre = within(satir).getAllByRole('cell').map((h) => h.textContent);
+    expect(hucre.slice(1, 5)).toEqual(['A', '10', 'Tornalama', 'IST-1Torna istasyonu · M-1']);
+    expect(hucre.slice(5, 9)).toEqual(['30', '5', '1', '%20']);
     yaz(hazirlik, '3,5');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure', govde: { tur: 'hazirlik', sureDk: 3.5, makineId: null, okunanId: null } });
@@ -111,6 +114,12 @@ function statuluDurum(): DurumCevabi {
 }
 const BELGE = [{ anahtar: 'recete-rota-motoru-v1', bicim: 'json' as const, deger: { items: [{ id: 'i9', code: 'ESK-9', name: 'Eski kalem', type: 'ham' }] }, surum: 1 }];
 
+const ADIM = {
+  id: 'o10', seq: 10, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+  proc: null, chg: null, cycle: 2, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+  digerAdaylar: [], ins: [] as { itemId: string; qty: number; scrap: number }[], outs: [],
+};
+
 describe('R2 Malzemeler', () => {
   it('kartlar türüne göre gruplanır; eski kalemler belgeden yalnız okunur, belgeye yazılmaz', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: statuluDurum(), kayitlar: BELGE });
@@ -142,6 +151,21 @@ describe('R2 Malzemeler', () => {
     yaz(within(bolge).getByRole('textbox', { name: 'MM-0001 birim maliyet' }), '12,5');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
     expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/finans/maliyetler/malzeme/yaz', govde: { anahtar: 11, birimMaliyet: 12.5, paraBirimi: 'TRY', surum: null } });
+  });
+
+  it('statülü kartlar ana kartın altında yalnız okunur satırdır; stok okunamazsa miktar boş', async () => {
+    const d = statuluDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'kg', cost: null, stock: 10, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    d.routes = { 11: { base: null, steps: [
+      { ...ADIM, id: 'o10', seq: 10, opNo: 10, ins: [{ itemId: '12', qty: 1, scrap: 0 }] }, { ...ADIM, id: 'o20', seq: 20, opNo: 20, ins: [] },
+    ] } } as unknown as typeof d.routes;
+    const istekler = sunucuKur(OKUYAN, { durum: d });
+    rrAc('/recete-rota/items');
+    const bolge = await bolumAc('Malzemeler');
+    const liste = await within(bolge).findByRole('list', { name: 'HM-0001 statülü kartları' });
+    expect(within(liste).getByRole('listitem').textContent).toBe('OP 10HM OP 10 Tornalama(MM-0001)—rota adımı');
+    expect(yazmalar(istekler)).toEqual([]);
   });
 
   it('reddedilen: yazma işlemi olmayan statü ve maliyet girdisi görmez; kart okuma yetkisi yoksa bölüm boştur', async () => {
@@ -235,7 +259,10 @@ describe('R2 Kaynaklar', () => {
     expect(within(matris).getByLabelText('IM1 Salı 1. vardiya: kapalı').textContent).toBe('');
     expect(within(bolge).getByText('29.10.2026')).toBeTruthy();
     expect(window.localStorage.getItem('tmi.recete-rota.yeni.kaynak-sekmesi')).toBe('shifts');
-    fireEvent.click(within(bolge).getAllByRole('button', { name: "Vardiya'da düzenle" })[0]!);
+    // Eski düzen: iş merkezi başlığında hazır düzen ve kopyala; hafta düzeni Vardiya'da yazılır, ikisi de oraya götürür, istek gitmez.
+    expect(within(matris).getByRole('button', { name: 'Bu düzeni diğerlerine kopyala' })).toBeTruthy();
+    expect(within(bolge).getByRole('tablist', { name: 'Kaynak türü' }).closest('.tc-rr2-bolmeli')).not.toBeNull();
+    fireEvent.change(within(matris).getByRole('combobox', { name: 'IM1 hazır vardiya düzeni' }), { target: { value: '5x2' } });
     await screen.findByText('Başka sayfa');
     cleanup();
 

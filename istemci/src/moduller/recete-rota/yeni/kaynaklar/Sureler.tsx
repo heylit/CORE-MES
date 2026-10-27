@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { DurumKutusu, Dugme, Rozet, Sayfalama, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { sayi, YOK } from '../bicim.ts';
@@ -11,7 +11,7 @@ import { SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 // Süreler (envanter 2.5): her ürünün yürürlükteki rotasının adımları; teorik süre, bekleyen ölçüm ve planın kullandığı süre rota
 // modülünün süre görünümündendir (169 c, 171 a). Elle giriş ölçüm yazar, kabul ölçümü ürünün rota taslağına teorik süre olarak
 // yazar; ikisi de rota.yaz ister. Plan tabanı yalnız gösterilir (Soru 468/4, öneri a): plan teorik süreyi kullanır.
-// Düzen eski ekranınkidir: her adım bir kart, alanlar etiketli ızgarada; ürün ve revizyon kartın içinde yazılır.
+// Düzen eski ekranınkidir: tek tablo, grup başlıklı sütunlar (Adım, Teorik, Gerçekleşen, Plan); her ürün kendi satır grubudur.
 type SureAdimi = SurelerCevabi['adimlar'][number];
 
 // Eski ekrandaki gibi kaynak istasyonuyla yazılır: istasyon kodu, altında istasyon adı ve makine kodu; istasyonu olmayan kaynak kendi kodu ve adıyla.
@@ -26,6 +26,7 @@ const TURLER = [['hazirlik', 'Hazırlık'], ['islem', 'İşlem'], ['degisim', 'D
 type Tur = (typeof TURLER)[number][0];
 const KAYNAK_ADI = { elle: 'Elle', terminal: 'Terminal' } as const;
 const URUN_SAYFASI = 10;
+const SUTUN_SAYISI = 13;
 
 export const SURELER_ACIKLAMASI = 'Her rota adımının teorik süresi ve gerçekleşen ölçümü. Çevrim = işlem + değişim; Değişim % = değişim ÷ işlem × 100 '
   + '(işlem boş ya da 0 ise boş). Plan teorik süreyle hesaplanır. Gerçekleşen değer elle girilir ya da terminalden gelir ve ölçüm olarak bekler; '
@@ -59,7 +60,6 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
 
   return (
     <div className="tc-rr2" data-parca="R2">
-      <p className="tc-rr2-not">{SURELER_ACIKLAMASI}</p>
       <div className="tc-rr2-arac">
         <input
           className="tc-alan-kutu tc-rr2-arama" type="search" value={arama} placeholder="Ürün kodu ya da adı ara…" aria-label="Ürün ara"
@@ -72,9 +72,30 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
         <DurumKutusu durum="bos" mesaj="Rotası olan ürün yok. Ürün ve rotalar bölümünde rota oluşturunca adımlar burada görünür." />
       )}
       {urunler.length > 0 && suzulen.length === 0 && <DurumKutusu durum="bos" mesaj="Aramaya uyan ürün yok." />}
-      {gorunen.map(({ urun, rev }) => (
-        <UrunSureleri key={urun.id} kod={urun.code} ad={urun.name} revizyonId={rev ? Number(rev.id) : null} revNo={rev?.no ?? null} yetki={yetki} />
-      ))}
+      {gorunen.length > 0 && (
+        <div className="tc-rr2-kaydir tc-rr2-kutu">
+          <table className="tc-tablo tc-rr2-tablo tc-rr2-sure-tablo" aria-label="Süreler">
+            <thead>
+              <tr className="tc-rr2-tablo-grup">
+                <th scope="colgroup" colSpan={5}>Adım</th>
+                <th scope="colgroup" colSpan={4}>Teorik (dk)</th>
+                <th scope="colgroup" colSpan={3}>Gerçekleşen (dk)</th>
+                <th scope="colgroup">Plan</th>
+              </tr>
+              <tr>
+                <th scope="col">Ürün</th><th scope="col">Rev</th><th scope="col" className="tc-tablo-sag">Op no</th><th scope="col">Operasyon</th><th scope="col">Kaynak</th>
+                {TURLER.map(([t, e]) => <th key={`t-${t}`} scope="col" className="tc-tablo-sag">{e}</th>)}
+                <th scope="col" className="tc-tablo-sag">Değişim %</th>
+                {TURLER.map(([t, e]) => <th key={`g-${t}`} scope="col" className="tc-tablo-sag">{e}</th>)}
+                <th scope="col">Taban</th>
+              </tr>
+            </thead>
+            {gorunen.map(({ urun, rev }) => (
+              <UrunSureleri key={urun.id} kod={urun.code} ad={urun.name} revizyonId={rev ? Number(rev.id) : null} revNo={rev?.no ?? null} yetki={yetki} />
+            ))}
+          </table>
+        </div>
+      )}
       <Sayfalama sayfa={sayfa} sayfaBoyu={URUN_SAYFASI} toplam={suzulen.length} degistir={sayfaYaz} etiket="Ürün sayfaları" />
     </div>
   );
@@ -119,36 +140,34 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
       </span>
     );
   };
-  const alan = (etiket: string, icerik: React.ReactNode, sinif?: string) => (
-    <div className={sinif ? `tc-rr2-sure-alan ${sinif}` : 'tc-rr2-sure-alan'}><span>{etiket}</span><div>{icerik}</div></div>
-  );
+  const bilgi = (icerik: React.ReactNode) => <tr><td colSpan={SUTUN_SAYISI}>{icerik}</td></tr>;
 
   return (
-    <section className="tc-rr2-sureler" aria-label={baslik}>
-      {revizyonId === null && <p className="tc-rr2-not">{baslik}: yürürlükteki rota revizyonu yok; süreler revizyon yürürlüğe girince görünür.</p>}
-      {sureler.isPending && revizyonId !== null && <DurumKutusu durum="yukleniyor" />}
-      {sureler.isError && (
-        <DurumKutusu durum="hata" mesaj={sureler.error.message || 'Süreler okunamadı.'} yenile={() => { void sureler.refetch(); }} />
+    <tbody aria-label={baslik}>
+      {revizyonId === null && bilgi(<p className="tc-rr2-not">{baslik}: yürürlükteki rota revizyonu yok; süreler revizyon yürürlüğe girince görünür.</p>)}
+      {sureler.isPending && revizyonId !== null && bilgi(<DurumKutusu durum="yukleniyor" />)}
+      {sureler.isError && bilgi(
+        <DurumKutusu durum="hata" mesaj={sureler.error.message || 'Süreler okunamadı.'} yenile={() => { void sureler.refetch(); }} />,
       )}
-      {sureler.data && sureler.data.adimlar.length === 0 && <p className="tc-rr2-not">Bu revizyonda adım yok.</p>}
+      {sureler.data && sureler.data.adimlar.length === 0 && bilgi(<p className="tc-rr2-not">{baslik}: bu revizyonda adım yok.</p>)}
       {sureler.data?.adimlar.map((a) => (
-        <article key={a.adimId} className="tc-rr2-sure" aria-label={`${kod} OP ${String(a.opNo)} süreleri`}>
-          {alan('Ürün', <><b>{kod}</b><small>{ad}</small></>, 'tc-rr2-sure-urun')}
-          {alan('Revizyon', <b>{revNo ?? YOK}</b>)}
-          {alan('Op no', <b>{String(a.opNo)}</b>)}
-          {alan('Operasyon', <small>{a.operasyonTipi.ad}</small>, 'tc-rr2-sure-genis')}
-          {alan('Kaynak', a.fason ? 'Fason' : kaynakMetni(a.kaynak), 'tc-rr2-sure-genis')}
-          {TURLER.map(([t, e]) => <Fragment key={`t-${t}`}>{alan(`Teorik ${e.toLocaleLowerCase('tr-TR')} dk`, <b>{sayi(ondalik(a.teorik[`${t}Dk`]))}</b>)}</Fragment>)}
-          {alan('Değişim %', <b>{oranMetni(ondalik(a.teorik.degisimOraniYuzde))}</b>)}
-          {TURLER.map(([t, e]) => <Fragment key={`g-${t}`}>{alan(`Gerçekleşen ${e.toLocaleLowerCase('tr-TR')} dk`, gerceklesen(a, t, e))}</Fragment>)}
-          {alan('Plan tabanı', (
-            <>
+        <tr key={a.adimId} aria-label={`${kod} OP ${String(a.opNo)} süreleri`}>
+          <td><span className="tc-rr2-iki"><b>{kod}</b><small>{ad}</small></span></td>
+          <td><b>{revNo ?? YOK}</b></td>
+          <td className="tc-tablo-sag"><b>{String(a.opNo)}</b></td>
+          <td><small>{a.operasyonTipi.ad}</small></td>
+          <td><span className="tc-rr2-iki">{a.fason ? 'Fason' : kaynakMetni(a.kaynak)}</span></td>
+          {TURLER.map(([t]) => <td key={`t-${t}`} className="tc-tablo-sag"><b>{sayi(ondalik(a.teorik[`${t}Dk`]))}</b></td>)}
+          <td className="tc-tablo-sag">{oranMetni(ondalik(a.teorik.degisimOraniYuzde))}</td>
+          {TURLER.map(([t, e]) => <td key={`g-${t}`} className="tc-tablo-sag">{gerceklesen(a, t, e)}</td>)}
+          <td>
+            <span className="tc-rr2-iki">
               <b>Teorik</b>
               <small>Planda: hazırlık {sayi(ondalik(a.etkin.hazirlikDk))}, işlem {sayi(ondalik(a.etkin.islemDk))}, değişim {sayi(ondalik(a.etkin.degisimDk))} dk</small>
-            </>
-          ), 'tc-rr2-sure-plan')}
-        </article>
+            </span>
+          </td>
+        </tr>
       ))}
-    </section>
+    </tbody>
   );
 }
