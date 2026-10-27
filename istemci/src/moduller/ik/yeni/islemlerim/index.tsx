@@ -6,5 +6,4 @@ export { Mesailerim } from './mesailerim.tsx';
 export { Onaylar } from './onaylar.tsx';
 export { Ekip, EkipUyesi } from './ekip.tsx';
 export { EkipTakvimi } from './ekip-takvimi.tsx';
-export { OnizlemeSecimi } from './onizleme-secimi.tsx';
 export { BordroPusulasi, CalismaBelgesi } from './belgeler.tsx';

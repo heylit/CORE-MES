@@ -411,12 +411,12 @@ export const IK_YARDIM: readonly YardimKonusu[] = [
   },
   {
     kimlik: 'portallar', kategori: 'Personel', baslik: 'Çalışan ve yönetici ekranları', gorunum: 'pano',
-    sozcukler: 'çalışan ekranı self servis portal yönetici onay ekip izin talep et bordro pusulası rol yetki görünüm önizleme',
+    sozcukler: 'çalışan ekranı self servis portal yönetici onay ekip izin talep et bordro pusulası rol yetki',
     ilgili: ['izin-talebi', 'degisiklik-gunlugu'],
     ozet: 'Çalışan kendi izin ve bordrosunu, yönetici ekibini ve onaylarını görür; İK her şeyi.',
     sekil: ['svg', { className: 'tc-ikr-sekil', viewBox: '0 0 660 208', role: 'img', 'aria-label': 'Çalışan, Yönetici, İK' }, ['defs', null, ['marker', { id: 'tc-ikr-ok-ha', viewBox: '0 0 10 10', refX: '8', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto' }, ['path', { d: 'M0 0L10 5L0 10z', className: 'tc-ikr-g-arrowhead' }]]], ['rect', { x: '4', y: '4', width: '652', height: '52', rx: '10', className: 'tc-ikr-g-box' }], ['circle', { cx: '34', cy: '30', r: '15', className: 'tc-ikr-g-p' }], ['text', { x: '34', y: '36', textAnchor: 'middle', className: 'tc-ikr-g-t1 tc-ikr-g-inv' }, '1'], ['text', { x: '64', y: '36', className: 'tc-ikr-g-t1' }, 'Çalışan'], ['text', { x: '638', y: '36', textAnchor: 'end', className: 'tc-ikr-g-t2' }, 'izin talebi, bordro, bilgiler'], ['path', { d: 'M34 58 v14', className: 'tc-ikr-g-arrow', markerEnd: 'url(#tc-ikr-ok-ha)' }], ['rect', { x: '4', y: '78', width: '652', height: '52', rx: '10', className: 'tc-ikr-g-hi' }], ['circle', { cx: '34', cy: '104', r: '15', className: 'tc-ikr-g-p' }], ['text', { x: '34', y: '110', textAnchor: 'middle', className: 'tc-ikr-g-t1 tc-ikr-g-inv' }, '2'], ['text', { x: '64', y: '110', className: 'tc-ikr-g-t1' }, 'Yönetici'], ['text', { x: '638', y: '110', textAnchor: 'end', className: 'tc-ikr-g-t2' }, 'ekibi, onaylar, takvim'], ['path', { d: 'M34 132 v14', className: 'tc-ikr-g-arrow', markerEnd: 'url(#tc-ikr-ok-ha)' }], ['rect', { x: '4', y: '152', width: '652', height: '52', rx: '10', className: 'tc-ikr-g-box' }], ['circle', { cx: '34', cy: '178', r: '15', className: 'tc-ikr-g-p' }], ['text', { x: '34', y: '184', textAnchor: 'middle', className: 'tc-ikr-g-t1 tc-ikr-g-inv' }, '3'], ['text', { x: '64', y: '184', className: 'tc-ikr-g-t1' }, 'İK'], ['text', { x: '638', y: '184', textAnchor: 'end', className: 'tc-ikr-g-t2' }, 'tüm modül']],
     govde: [
-      ['p', null, 'Modül üç rolle çalışır. Rol, bağlandığı uygulamanın oturumundan gelir; İK ekranındaki ', ['b', null, 'Görünüm'], ' düğmesiyle diğer rolleri önizleyebilirsiniz.'],
+      ['p', null, 'Modül üç rolle çalışır. Rol, bağlandığı uygulamanın oturumundan gelir.'],
       ['h4', null, 'Çalışan'],
       ['ul', null, ['li', null, ['b', null, 'Benim sayfam:'], ' izin bakiyesi, son talepler, son bordro, zimmetler, eğitimler, iletişim bilgileri ve çalışma belgesi.'], ['li', null, ['b', null, 'İzinlerim:'], ' izin talebi oluşturma (iş günü, işe dönüş ve kalan bakiye anında hesaplanır, çakışan tarih engellenir), bekleyen talebi geri çekme.'], ['li', null, ['b', null, 'Bordrolarım:'], ' yalnızca kesinleşmiş aylar, yıllık toplamlar ve yazdırılabilir pusula.']],
       ['h4', null, 'Yönetici'],
@@ -435,7 +435,7 @@ export const IK_YARDIM: readonly YardimKonusu[] = [
       ['p', null, 'Analiz > ', ['b', null, 'Değişiklik günlüğü'], ' her ekleme, güncelleme, silme ve ayar değişikliğini kişi ve saatle kaydeder. Güncellemelerde alan alan önceki ve sonraki değer görünür.'],
       ['ul', null, ['li', null, ['b', null, 'Geri al:'], ' bir güncellemenin ayrıntısında “Bu değişikliği geri al” kaydı önceki değerlere döndürür. Kayıt sonradan yeniden değişmişse uyarır.'], ['li', null, ['b', null, 'Geri getir:'], ' silinen kayıtların tam kopyası saklanır; “Silinen kaydı geri getir” ile geri gelir.'], ['li', null, ['b', null, 'Toplu işlemler'], ' (örnek veri, bordro kesinleştirme, Excel aktarımı) tek satır olarak yazılır.']],
       ['div', { className: 'tc-ikr-ornek' }, ['b', null, 'Örnek'], ['span', null, 'Personel kartında'], ['p', null, 'Zaman çizelgesi sekmesinde “Kayıt değişiklikleri” filtresi, o çalışanın kartında yapılan tüm güncellemeleri ve kimin yaptığını gösterir.']],
-      ['div', { className: 'tc-ikr-ipucu' }, ['b', null, 'İpucu'], 'Önizleme sırasında yapılan işlemler “İK adı (önizleme: çalışan adı)” olarak yazılır. Günlüğü CSV olarak indirip arşivleyebilirsiniz.'],
+      ['div', { className: 'tc-ikr-ipucu' }, ['b', null, 'İpucu'], 'Günlüğü CSV olarak indirip arşivleyebilirsiniz.'],
     ],
   },
   {

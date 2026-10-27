@@ -8,7 +8,6 @@ import { ekipKimlikleri } from '../rol.ts';
 import { CalismaBelgesi, BordroPusulasi } from './belgeler.tsx';
 import { IletisimPenceresi } from './iletisim.tsx';
 import { IzinTalebi } from './izin-talebi.tsx';
-import { OnizlemeSecimi } from './onizleme-secimi.tsx';
 import {
   izinGunuMetni,
   bekleyenTalepler, bordroAlani, bugunIzinde, calisiyorMu, gunMetni, kesinBordrolar, kisininEgitimleri, kisininIzinleri, sayi, sayiMetni,
@@ -17,28 +16,18 @@ import {
   BagliDegil, BilgiListesi, Bos, bugun, BuyukSayi, izinBakiyesi, KartAlti, KisaListe, KisiBasligi, useEkipAcik,
 } from './parcalar.tsx';
 
-type Pencere = 'izin' | 'iletisim' | 'belge' | 'pusula' | 'onizleme' | null;
+type Pencere = 'izin' | 'iletisim' | 'belge' | 'pusula' | null;
 
 // Benim sayfam (app.js viewMe): kişinin özeti; yöneticide ekibin durumu. Zimmet kutusu Soru 244 a ile kalktı.
 export function BenimSayfam(o: IkEkranOzellikleri) {
   const [pencere, pencereYaz] = useState<Pencere>(null);
   const e = o.ben;
-  const yonetici = useEkipAcik(o) && o.rol === 'yonetici';
-  // "Başka bir gözle görüntüle" İK'nındır; bugünkü ekrandaki gibi "Görünüm" düğmesiyle açılır, önizleme bu sayfanın (İK İşlemlerim) içindedir.
-  const onizletebilir = o.yetki.oku && o.onizleme === null;
+  const yonetici = useEkipAcik() && o.rol === 'yonetici';
   useSayfaKomutlari('ik-benim', e ? [
     ...(o.yetki.izinTalep ? [{ anahtar: 'izin', baslik: 'İzin talep et', simge: 'plus' as const, aciklama: null, sozcukler: ['izin', 'talep'], calistir: () => { pencereYaz('izin'); } }] : []),
     { anahtar: 'belge', baslik: 'Çalışma belgesi', simge: 'printer' as const, aciklama: null, sozcukler: ['belge', 'yazdır'], calistir: () => { pencereYaz('belge'); } },
   ] : null);
-  const onizlemePenceresi = onizletebilir && pencere === 'onizleme' && (
-    <OnizlemeSecimi acik kapat={() => { pencereYaz(null); }} depo={o.depo} ac={(x) => { o.onizlemeAc(x); o.git('benim'); }} />
-  );
-  const onizlemeDugmesi = onizletebilir && (
-    <div className="tc-ikm-arac tc-ikm-arac-sag">
-      <Dugme simge="eye" onClick={() => { pencereYaz('onizleme'); }}>Görünüm</Dugme>
-    </div>
-  );
-  if (!e) return <>{onizlemeDugmesi}<BagliDegil baslik="Benim sayfam" simge="user" />{onizlemePenceresi}</>;
+  if (!e) return <BagliDegil baslik="Benim sayfam" simge="user" />;
 
   const t = bugun();
   const personeller = o.depo.tur('emp');
@@ -55,7 +44,6 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
 
   return (
     <>
-      {onizlemeDugmesi}
       <KisiBasligi personel={e} baslik={`Merhaba, ${e.ad ?? ''}`} personeller={personeller} departmanlar={departmanlar} />
       <div className="tc-ikm-izgara">
         {yonetici && (
@@ -127,7 +115,6 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
       </div>
       {o.yetki.izinTalep && pencere === 'izin' && <IzinTalebi acik kapat={() => { pencereYaz(null); }} personel={e} kendiIzinleri={kendi} motor={o.motor} />}
       {yazabilir && pencere === 'iletisim' && <IletisimPenceresi acik kapat={() => { pencereYaz(null); }} personel={e} />}
-      {onizlemePenceresi}
       {pencere === 'belge' && <CalismaBelgesi personel={e} departmanlar={departmanlar} kapat={() => { pencereYaz(null); }} />}
       {pencere === 'pusula' && sonBordro && (
         <BordroPusulasi personel={e} bordro={sonBordro} departmanlar={departmanlar} kapat={() => { pencereYaz(null); }} />

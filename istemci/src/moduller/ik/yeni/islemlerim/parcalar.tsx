@@ -31,10 +31,9 @@ export function isGunuSay(motor: IkMotoru, a: Date, b: Date): number {
 }
 
 // Ekip maddeleri (Onaylar, Ekip, İzin takvimi) ve Benim sayfam'daki "Ekibim" kartı aynı kurala bağlıdır (214 a): gerçek kişide
-// `ik.izin-onay`, önizlemede önizlenen rol. Kabuktaki menü süzgeciyle aynıdır (IkYeni.tsx).
-export function useEkipAcik(o: Pick<IkEkranOzellikleri, 'onizleme'>): boolean {
-  const genel = useYetki();
-  return o.onizleme ? o.onizleme.rol === 'yonetici' : genel.var('ik.izin-onay');
+// `ik.izin-onay`. Kabuktaki menü süzgeciyle aynıdır (IkYeni.tsx).
+export function useEkipAcik(): boolean {
+  return useYetki().var('ik.izin-onay');
 }
 
 // Yazma komutunu çalıştırır: başarıda ileti, hatada sunucunun iletisi. Eski sürüm iletisini komut zaten verir (veri.ts).
@@ -54,7 +53,7 @@ export function useYaz(): Yazici {
   }, [bildir]);
 }
 
-// Hesabı bir personel kaydına bağlı olmayan kişi (onizlemede seçilen kişi her zaman bağlıdır).
+// Hesabı bir personel kaydına bağlı olmayan kişi.
 export function BagliDegil({ baslik, simge }: { baslik: string; simge: SimgeAdi }) {
   return (
     <>

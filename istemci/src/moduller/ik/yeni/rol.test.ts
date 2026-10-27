@@ -27,19 +27,17 @@ describe('İK yeni ekran: ekip ve görünürlük', () => {
 describe('İK yeni ekran: yetki', () => {
   const hepsi = { var: () => true };
   it('izinli kişide yazmalar açık', () => {
-    const y = ikYetkisiKur(hepsi, { saltOkunur: false, onizleme: null });
+    const y = ikYetkisiKur(hepsi, { saltOkunur: false });
     expect(y.personelYaz && y.izinOnay && y.ayarYaz && y.herhangiYazma).toBe(true);
   });
-  it('önizleme ve salt okunur oturum hiçbir yazmayı açmaz, okuma kalır (210.6)', () => {
-    for (const kosul of [{ saltOkunur: false, onizleme: { rol: 'calisan' as const, personel: 'emp_b' } }, { saltOkunur: true, onizleme: null }]) {
-      const y = ikYetkisiKur(hepsi, kosul);
-      expect(y.herhangiYazma).toBe(false);
-      expect(y.izinTalep).toBe(false);
-      expect(y.oku).toBe(true);
-    }
+  it('salt okunur oturum hiçbir yazmayı açmaz, okuma kalır', () => {
+    const y = ikYetkisiKur(hepsi, { saltOkunur: true });
+    expect(y.herhangiYazma).toBe(false);
+    expect(y.izinTalep).toBe(false);
+    expect(y.oku).toBe(true);
   });
   it('işlemi olmayan kişide kapalı', () => {
-    const y = ikYetkisiKur({ var: (i) => i === 'ik.izin-talep' }, { saltOkunur: false, onizleme: null });
+    const y = ikYetkisiKur({ var: (i) => i === 'ik.izin-talep' }, { saltOkunur: false });
     expect(y.izinTalep).toBe(true);
     expect(y.izinOnay || y.oku).toBe(false);
   });

@@ -18,7 +18,6 @@
 @media (min-width: 1024px) { .tc-ikm-izgara { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .tc-ikm-sayilar { display: grid; gap: var(--b-3); margin-bottom: var(--b-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--acilir-enaz)), 1fr)); }
 .tc-ikm-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); margin-bottom: var(--b-4); }
-.tc-ikm-arac-sag { justify-content: flex-end; }
 .tc-ikm-ay { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-ikm-ay .tc-alan-etiket { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 

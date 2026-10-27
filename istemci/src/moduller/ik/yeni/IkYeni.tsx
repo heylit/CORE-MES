@@ -1,15 +1,14 @@
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
-import { DurumKutusu, Dugme, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { GORUNUMLER, adrestenGorunum, gorunumAdresi, type IkGorunum, type IkKoku } from './gorunumler.ts';
 import { motorKur } from './motor.ts';
-import { ONIZLEME_ILETISI, type IkOnizleme } from './onizleme.ts';
 import { gorunumAcik } from './rol.ts';
 import type { Personel } from './tipler.ts';
 import { useIkDeposu } from './veri.ts';
@@ -39,13 +38,12 @@ function IkEkrani({ kok }: { kok: IkKoku }) {
   const git = useNavigate();
   const genel = useYetki();
   const depo = useIkDeposu();
-  const [onizleme, onizlemeAc] = useState<IkOnizleme | null>(null);
-  const yetki = useIkYetkisi({ saltOkunur: depo.data?.ben.saltOkunur ?? true, onizleme });
+  const yetki = useIkYetkisi({ saltOkunur: depo.data?.ben.saltOkunur ?? true });
   const motor = useMemo(() => (depo.data ? motorKur([...depo.data.kayitlar.values()], depo.data.ayarlar) : null), [depo.data]);
   const gorunum = adrestenGorunum(kok, adres);
   const gezin = useCallback((g: IkGorunum, k?: string) => { void git(gorunumAdresi(g, k)); }, [git]);
 
-  const izinOnayVar = onizleme ? onizleme.rol === 'yonetici' : genel.var('ik.izin-onay');
+  const izinOnayVar = genel.var('ik.izin-onay');
   const acik = (anahtar: string): boolean => gorunumAcik(anahtar, { oku: yetki.oku, izinOnayVar });
   const sekmeler: Sekme<string>[] = menuMaddeleri(kok)
     .filter((m) => (Object.hasOwn(SAYFA_DISI, m.anahtar) ? genel.var(m.islem) : acik(m.anahtar)))
@@ -56,9 +54,8 @@ function IkEkrani({ kok }: { kok: IkKoku }) {
   if (gorunum === null || !acik(gorunum)) return <DurumKutusu durum="bos" mesaj="Bu görünüm bulunamadı ya da size açık değil." />;
 
   const d = depo.data;
-  const benKimligi = onizleme ? onizleme.personel : d.ben.personelKimlik;
-  const ben = (d.al(benKimligi)?.kind === 'emp' ? d.al(benKimligi) : null) as Personel | null;
-  const rol = onizleme ? onizleme.rol : d.ben.rol;
+  const ben = (d.al(d.ben.personelKimlik)?.kind === 'emp' ? d.al(d.ben.personelKimlik) : null) as Personel | null;
+  const rol = d.ben.rol;
   const tanim = GORUNUMLER[gorunum];
   const Ekran = tanim.ekran;
   const secili = tanim.ust ?? gorunum;
@@ -71,15 +68,9 @@ function IkEkrani({ kok }: { kok: IkKoku }) {
   return (
     <div className="tc-ik-yeni">
       <Sekmeler etiket={kok === '/ik' ? 'İnsan Kaynakları' : 'İK İşlemlerim'} sekmeler={sekmeler} secili={secili} sec={sec} />
-      {onizleme && (
-        <div className="tc-ik-serit" role="status">
-          <span>{ONIZLEME_ILETISI}</span>
-          <Dugme simge="x" onClick={() => { onizlemeAc(null); }}>Önizlemeden çık</Dugme>
-        </div>
-      )}
-      {!onizleme && d.ben.saltOkunur && <div className="tc-ik-serit" role="status">Bu kayıtları yalnızca görüntüleyebilirsiniz.</div>}
+      {d.ben.saltOkunur && <div className="tc-ik-serit" role="status">Bu kayıtları yalnızca görüntüleyebilirsiniz.</div>}
       <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-        <Ekran depo={d} yetki={yetki} rol={rol} ben={ben} kimlik={kimlik ?? null} git={gezin} motor={motor} onizleme={onizleme} onizlemeAc={onizlemeAc} />
+        <Ekran depo={d} yetki={yetki} rol={rol} ben={ben} kimlik={kimlik ?? null} git={gezin} motor={motor} />
       </Suspense>
     </div>
   );

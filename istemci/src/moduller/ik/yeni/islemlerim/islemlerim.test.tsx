@@ -60,15 +60,11 @@ describe('P6 Benim sayfam', () => {
     expect(yazmalar[0]?.govde).toMatchObject({ alanlar: { telefon: '0000 000 00 00' }, surum: 1 });
   });
 
-  it('İK başka bir gözle görüntüler; önizlemede yazma düğmesi yok (210.6)', async () => {
+  it('İK için de başka bir gözle görüntüleme yok (Soru 856)', async () => {
     ikAc('/ik-islemlerim/yeni', { kullanici: IK_YONETICI });
-    fireEvent.click(await screen.findByRole('button', { name: 'Görünüm' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Başka bir gözle görüntüle' });
-    fireEvent.change(within(pencere).getByLabelText('Kişi'), { target: { value: 'emp_b' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Önizle' }));
-    expect(await screen.findByRole('heading', { name: 'Merhaba, Mehmet' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'İzin talep et' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Güncelle' })).toBeNull();
+    expect(await screen.findByRole('tab', { name: 'Benim sayfam', selected: true })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Görünüm' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Önizlemeden çık' })).toBeNull();
   });
 });
 

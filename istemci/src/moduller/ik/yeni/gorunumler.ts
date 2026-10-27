@@ -1,6 +1,5 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { IkMotoru } from './motor.ts';
-import type { IkOnizleme } from './onizleme.ts';
 import type { IkEkranRolu } from './rol.ts';
 import type { Personel } from './tipler.ts';
 import type { IkDeposu } from './veri.ts';
@@ -20,14 +19,12 @@ export interface IkEkranOzellikleri {
   depo: IkDeposu;
   yetki: IkYetkisi;
   rol: IkEkranRolu;
-  // Ekranın "ben"i: kişinin personel kaydı; önizlemede önizlenen kişi.
+  // Ekranın "ben"i: kişinin personel kaydı.
   ben: Personel | null;
   // Ayrıntı sayfasının kaydı (calisan, aday, pozisyon, uye).
   kimlik: string | null;
   git: (gorunum: IkGorunum, kimlik?: string) => void;
   motor: IkMotoru | null;
-  onizleme: IkOnizleme | null;
-  onizlemeAc: (o: IkOnizleme | null) => void;
 }
 export type IkEkrani = ComponentType<IkEkranOzellikleri>;
 
