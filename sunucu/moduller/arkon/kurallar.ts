@@ -1963,7 +1963,7 @@ export function istekKarari(istek: unknown, onceki: unknown): 'onay' | 'ret' | '
 export const acikIstekMi = (istek: unknown): boolean => ACIK_ISTEK_DURUMLARI.has(alanOku(istek, 'status'));
 
 // Kalite Merkezi'nde verilen karar Arkon isteğine aynalanır: terminal bekleyen numunesini kapatır, operatöre sonuç gider. İlk parça
-// numunesinde karar Kalite Merkezi'nin ilk parça kararıdır (kapının kaynağı), istekten sonra verilmiş olmalı; numunenin kendi kararı da sayılır.
+// numunesinde karar Kalite Merkezi'nin ilk parça kararıdır, istekten sonra verilmiş olmalı.
 // Ölçülen balon sayısı (`kmOlculen`) Kalite Merkezi'nde girilen ölçüyle de güncellenir.
 export interface KmAynaGirdisi {
   numune: { karar: { karar: 'onay' | 'ret' | 'sapma'; not: string | null; kisi: string | null; zaman: string } | null; olculen: number } | null;
@@ -1972,8 +1972,10 @@ export interface KmAynaGirdisi {
 export function kmKarariniAynala(istek: unknown, g: KmAynaGirdisi): Record<string, unknown> | null {
   if (!kayitMi(istek) || !acikIstekMi(istek)) return null;
   const istendi = typeof istek['at'] === 'number' ? istek['at'] : 0;
-  const fai = istek['ilkParca'] === true && g.ilkParcaKarari !== null && Date.parse(g.ilkParcaKarari.zaman) >= istendi ? g.ilkParcaKarari : null;
-  const karar = g.numune?.karar ?? (fai === null ? null : { karar: fai.karar, not: null, kisi: null, zaman: fai.zaman });
+  // 810 a: ilk parça isteği yalnız Bugün > İlk parça kararından kapanır (kapının kaynağı); numune kararı kapıyı açmadığı için sayılmaz.
+  const ilkParca = istek['ilkParca'] === true;
+  const fai = ilkParca && g.ilkParcaKarari !== null && Date.parse(g.ilkParcaKarari.zaman) >= istendi ? g.ilkParcaKarari : null;
+  const karar = ilkParca ? (fai === null ? null : { karar: fai.karar, not: null, kisi: null, zaman: fai.zaman }) : (g.numune?.karar ?? null);
   const olculen = g.numune?.olculen;
   const yeniOlculen = olculen !== undefined && olculen !== istek['kmOlculen'];
   if (karar === null) {

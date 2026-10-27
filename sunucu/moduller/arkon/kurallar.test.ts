@@ -281,6 +281,8 @@ test('798: istek kararı durum karara girince ya da değişince doğar; Kalite M
   assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: null, ilkParcaKarari: fai('2026-10-27T09:00:00Z') })?.['status'], 'approved', 'ilk parça kararı');
   assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: null, ilkParcaKarari: fai('2026-10-27T07:00:00Z') }), null, 'istekten önceki karar');
   assert.equal(kmKarariniAynala(istek('waiting'), { numune: null, ilkParcaKarari: fai('2026-10-27T09:00:00Z') }), null, 'periyodik numune ilk parça kararıyla kapanmaz');
+  assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: { karar, olculen: 2 }, ilkParcaKarari: null })?.['status'], 'measuring', '810 a: ilk parça isteği numune kararıyla kapanmaz, yalnız ölçülen sayısı gelir');
+  assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: { karar, olculen: 2 }, ilkParcaKarari: fai('2026-10-27T09:00:00Z') })?.['status'], 'approved', '810 a: ilk parça kararı geçerli');
 });
 
 test('798, 796 a: tezgah ölçümünün yalnız değişen ve balona bağlı ölçüsü Kalite Merkezi\'ne gider; mastar geçer/geçmez, sayı metin', () => {
