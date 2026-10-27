@@ -4,6 +4,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { planSapmalari } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
+import { takvimPenceresi } from './sapma.ts';
 import { sapmaOlcusu, type SapmaGirdisi } from './sapma-kurallar.ts';
 
 // 781 a, 782: plandan sapma plan modülünde hesaplanır. Kural saf; okuma gerçek PostgreSQL'de. Veriler uydurmadır.
@@ -53,6 +54,21 @@ describe('plan: sapma kuralı', () => {
     assert.equal(sapmaOlcusu(girdi({ oncekiler: [] })).siraUyumu, true);
     assert.equal(sapmaOlcusu(girdi({ giris: null, bitis: null, durum: 'bekliyor' })).siraUyumu, null);
     assert.equal(sapmaOlcusu(girdi({ oncekiler: undefined })).siraUyumu, null);
+  });
+});
+
+describe('plan: sapma takvim penceresi tesis gününe göre', () => {
+  const dk = (s: string) => Date.parse(s) / 60_000;
+  test('tesiste gece yarısından sonraki ilk saatlerde başlayan iş pencerede kalır; pencere tesisin gece yarısında açılır', () => {
+    // Tesiste 28 Ekim 01:30 = 27 Ekim 22:30 UTC.
+    const p = takvimPenceresi(dk('2026-10-27T22:30:00Z'), dk('2026-10-28T08:00:00Z'));
+    assert.deepEqual([p.baslangicGunu, p.bitisGunu, p.pencereBasi], ['2026-10-27', '2026-11-27', dk('2026-10-27T21:00:00Z')]);
+    assert.ok(dk('2026-10-27T22:30:00Z') >= p.pencereBasi);
+  });
+  test('öğle saatinde aynı gün; çok eski iş takvim sınırında kesilir ve pencere dışında kalır', () => {
+    assert.equal(takvimPenceresi(dk('2026-10-28T09:00:00Z'), dk('2026-10-28T09:00:00Z')).pencereBasi, dk('2026-10-27T21:00:00Z'));
+    const eski = takvimPenceresi(dk('2024-01-01T09:00:00Z'), dk('2026-10-28T09:00:00Z'));
+    assert.deepEqual([eski.baslangicGunu, eski.pencereBasi > dk('2024-01-01T09:00:00Z')], ['2025-12-02', true]);
   });
 });
 
