@@ -28,11 +28,12 @@ describe('Kayıtlar', () => {
     await screen.findByText('Bu filtrede kayıt yok.');
   });
 
-  it('yazma yetkisi olmayan aynı formu açar (prototipteki gibi; uç reddeder), iptal göremez', async () => {
+  it('yazma yetkisi olmayan satırı açar ama düzeltemez, iptal göremez', async () => {
     const istekler = sunucuKur(OKUYAN);
     finansAc(ADRES);
     fireEvent.click(await hammaddeSatiri());
-    const pencere = await screen.findByRole('dialog', { name: 'Kaydı düzenle' });
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText(/Düzeltme yetkiniz yok/)).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: /İptal et/ })).toBeNull();
     expect(istekler.some(kayitYazmasi)).toBe(false);
   });

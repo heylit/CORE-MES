@@ -1,35 +1,40 @@
 import { firmaCoz } from '../akislar.ts';
 import type { Komut } from '../akislar.ts';
-import { KAT_KOD, sayi, yuvarla, type Belge, type HazirVeri, type Odeme } from '../donustur.ts';
-import { addDays, CATS, fmt, nf, sum, type FinansMotoru, type Islem, type IslemDurumu, type IslemTuru } from '../motor.ts';
+import { KAT, KAT_KOD, firmaEtiketi, sayi, yuvarla, type Belge, type HazirVeri, type KategoriKodu, type Odeme } from '../donustur.ts';
+import { addDays, CATS, fmt, nf, sum, type FinansMotoru, type Islem } from '../motor.ts';
 
 // Belge düzeltme ve iptal (prototipte tam kipin txForm ve İptal et yakalayıcıları). Saf: komutu kurar, göndermez.
 
-// Form prototipteki gibi satırın kendi değerleriyle açılır; tür, ödeme durumu ve ödeme tarihi gönderilmez (tam kipte de gitmiyordu).
-export interface DuzeltDegerleri {
-  type: IslemTuru; date: string; cat: string; party: string; desc: string; amount: string; kdv: string; status: IslemDurumu; due: string; paidDate: string;
-}
+// Form belgenin kayıtlı değerleriyle açılır (Soru 844/1); yalnız uca giden alanlar formdadır (844/2).
+export interface DuzeltDegerleri { date: string; cat: string; party: string; desc: string; amount: string; kdv: string; due: string }
 
 export const KDV_SECENEKLERI = [20, 10, 1, 0] as const;
 
-// Döviz belgesinde tutar, tevkifatlı belgede KDV oranı gönderilmez; belgenin kendi değeri gider (tam kipteki gibi).
+// Döviz belgesinde tutar, tevkifatlı belgede KDV oranı formda değişmez (gönderimde belgenin kendi değeri gider).
 export const tutarKilitli = (b: Belge): boolean => b.paraBirimi !== 'TRY';
 export const kdvKilitli = (b: Belge): boolean => b.tevkifatPay !== null;
 
-// Listede olmayan oran (kısmi satırın hesaplanmış oranı) prototipteki seçim kutusu gibi ilk seçeneğe düşer.
-const kdvSecimi = (k: number): string => String((KDV_SECENEKLERI as readonly number[]).includes(k) ? k : KDV_SECENEKLERI[0]);
-
-export function duzeltIlkDegerleri(t: Islem): DuzeltDegerleri {
+export function duzeltIlkDegerleri(V: HazirVeri, b: Belge): DuzeltDegerleri {
   return {
-    type: t.type, date: t.date, cat: t.cat, party: t.party, desc: t.desc ?? '', amount: String(t.amount), kdv: kdvSecimi(t.kdv ?? 0),
-    status: t.status, due: t.due || t.date, paidDate: t.paidDate || t.date,
+    date: b.belgeTarihi, cat: KAT[b.kategori as KategoriKodu] ?? '', party: firmaEtiketi(V, b.firmaId) ?? '', desc: b.aciklama ?? '',
+    amount: String(sayi(b.tutar)), kdv: String(sayi(b.kdvOrani)), due: b.vade,
   };
 }
 
-// Kategori ve cari önerileri seçili türe göredir (prototipte tür düğmesi ikisini de yeniler).
-export const kategoriSecenekleri = (tur: IslemTuru): string[] => CATS[tur].map((c) => c.k);
-export const cariOnerileri = (tx: readonly Islem[], tur: IslemTuru): string[] =>
-  [...new Set(tx.filter((x) => x.type === tur).map((x) => x.party))].sort();
+export const kategoriSecenekleri = (b: Belge): string[] => {
+  const liste = CATS[b.yon].map((c) => c.k);
+  const simdiki = KAT[b.kategori as KategoriKodu];
+  return simdiki && !liste.includes(simdiki) ? [simdiki, ...liste] : liste;
+};
+
+export const kdvSecenekleri = (b: Belge): number[] => {
+  const o = sayi(b.kdvOrani);
+  return (KDV_SECENEKLERI as readonly number[]).includes(o) ? [...KDV_SECENEKLERI] : [o, ...KDV_SECENEKLERI];
+};
+
+// Cari önerileri prototipteki gibi geçmiş kayıtlardaki adlardan gelir (844/3); uç yalnız etkin ve eşleşen firmayı kabul eder.
+export const cariOnerileri = (tx: readonly Islem[], yon: 'gelir' | 'gider'): string[] =>
+  [...new Set(tx.filter((x) => x.type === yon).map((x) => x.party))].sort();
 
 export function duzeltKomutu(V: HazirVeri, b: Belge, d: DuzeltDegerleri): { komut: Komut } | { alan: keyof DuzeltDegerleri; hata: string } {
   let firmaId: number | null = null;

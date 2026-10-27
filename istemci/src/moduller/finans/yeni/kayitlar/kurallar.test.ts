@@ -63,14 +63,11 @@ describe('Kayıtlar: süzgeç, arama, sıra', () => {
 });
 
 describe('Kayıtlar: düzeltme ve iptal komutu', () => {
-  // Form prototipteki gibi tıklanan satırın değerleriyle açılır.
-  const satiri = (motor: ReturnType<typeof kur>['motor'], belgeId: number) => motor.durum.tx.find((t) => t._belgeId === belgeId)!;
-
-  it('belge düzeltme satırın değerleriyle başlar, tek uca gider', () => {
-    const { V, motor } = kur();
+  it('belge düzeltme belgenin kendi tutarı ve açıklamasıyla başlar, tek uca gider', () => {
+    const { V } = kur();
     const b = V.belgeById.get(2)!;
-    const ilk = duzeltIlkDegerleri(satiri(motor, 2));
-    expect(ilk).toMatchObject({ type: 'gider', amount: '295.83', desc: 'Hammadde (siparişe bağlı)', kdv: '20', due: '2026-09-05', cat: 'Mal / hammadde alımı', party: 'Deneme Tedarik' });
+    const ilk = duzeltIlkDegerleri(V, b);
+    expect(ilk).toMatchObject({ amount: '1000', desc: 'Hammadde', kdv: '20', due: '2026-09-05', cat: 'Mal / hammadde alımı', party: 'Deneme Tedarik' });
     const s = duzeltKomutu(V, b, { ...ilk, desc: 'Yeni not', amount: '1500.255' });
     expect('komut' in s && s.komut).toMatchObject({
       uc: 'POST /finans/belgeler/:id/duzelt', parametre: { id: 2 }, tekrar: false,
@@ -79,22 +76,22 @@ describe('Kayıtlar: düzeltme ve iptal komutu', () => {
   });
 
   it('döviz belgesinde tutar, tevkifatlı belgede KDV oranı belgeden gider', () => {
-    const { V, motor } = kur();
+    const { V } = kur();
     const eur = V.belgeById.get(3)!;
-    const s1 = duzeltKomutu(V, eur, { ...duzeltIlkDegerleri(satiri(motor, 3)), amount: '999' });
+    const s1 = duzeltKomutu(V, eur, { ...duzeltIlkDegerleri(V, eur), amount: '999' });
     expect('komut' in s1 && s1.komut.govde).toMatchObject({ tutar: 100, paraBirimi: 'EUR', kur: 35.5 });
     const tevk = V.belgeById.get(8)!;
-    const s2 = duzeltKomutu(V, tevk, { ...duzeltIlkDegerleri(satiri(motor, 8)), kdv: '0' });
+    const s2 = duzeltKomutu(V, tevk, { ...duzeltIlkDegerleri(V, tevk), kdv: '0' });
     expect('komut' in s2 && s2.komut.govde).toMatchObject({ kdvOrani: 20, tevkifatPay: 5, tevkifatPayda: 10 });
   });
 
   it('firması olan belgede listede olmayan firma ve sıfır tutar reddedilir; firmasız belge firmasız kalır', () => {
-    const { V, motor } = kur();
+    const { V } = kur();
     const b = V.belgeById.get(1)!;
-    expect(duzeltKomutu(V, b, { ...duzeltIlkDegerleri(satiri(motor, 1)), party: 'Yok Boyle' })).toMatchObject({ alan: 'party' });
-    expect(duzeltKomutu(V, b, { ...duzeltIlkDegerleri(satiri(motor, 1)), amount: '0' })).toMatchObject({ alan: 'amount' });
+    expect(duzeltKomutu(V, b, { ...duzeltIlkDegerleri(V, b), party: 'Yok Boyle' })).toMatchObject({ alan: 'party' });
+    expect(duzeltKomutu(V, b, { ...duzeltIlkDegerleri(V, b), amount: '0' })).toMatchObject({ alan: 'amount' });
     const firmasiz = V.belgeById.get(7)!;
-    const s = duzeltKomutu(V, firmasiz, duzeltIlkDegerleri(satiri(motor, 7)));
+    const s = duzeltKomutu(V, firmasiz, duzeltIlkDegerleri(V, firmasiz));
     expect('komut' in s && s.komut.govde).toMatchObject({ firmaId: null });
   });
 
