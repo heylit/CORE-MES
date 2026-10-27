@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { kuyrukKaynagi } from '../../../../ortak/veri/baglanti.ts';
 import { useArkonDurumu } from '../veri/baglam.ts';
 import type { ArkonDurumu } from '../veri/depo.ts';
 
@@ -21,7 +23,21 @@ export function baglantiOzeti(d: Pick<ArkonDurumu, 'memory' | 'mode' | 'online' 
   return { ton: 'tamam', metin: 'Bağlı', aciklama: 'Sunucuya bağlı' };
 }
 
+// Kabuk şeridi Arkon'un bekleyen kaydını buradan öğrenir: köprü kuyruklu yazmayı "sonucu bilinmeyen" saymaz (baglanti.ts).
+function useKuyruguBildir(d: Pick<ArkonDurumu, 'mode' | 'pending'>): void {
+  const kaynak = useRef<ReturnType<typeof kuyrukKaynagi> | null>(null);
+  useEffect(() => {
+    const k = kuyrukKaynagi('arkon');
+    kaynak.current = k;
+    return () => { k.birak(); kaynak.current = null; };
+  }, []);
+  const bekleyen = d.mode === 'server' ? d.pending || 0 : 0;
+  useEffect(() => { kaynak.current?.bildir(bekleyen); }, [bekleyen]);
+}
+
 export function BaglantiDurumu() {
-  const o = baglantiOzeti(useArkonDurumu());
+  const d = useArkonDurumu();
+  useKuyruguBildir(d);
+  const o = baglantiOzeti(d);
   return <span className="tc-ay-baglanti" title={o.aciklama} role="status" aria-label={o.aciklama}><Rozet ton={o.ton}>{o.metin}</Rozet></span>;
 }

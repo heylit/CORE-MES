@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
-import { ApiHatasi } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api } from '../../ortak/veri/api.ts';
+import { baglantiDurumu, baglantiSifirla } from '../../ortak/veri/baglanti.ts';
 import { BASKA_SUNUCU, BEN_TAZE_MS, benOnbellekli, ONIZLEME_SALT_OKUR, PARCA, SANAL_SUNUCU, TMI_HEDEFLERI, anlikIletimKur, bagla, base64Oku, base64Yaz, cevapla, ikiliOku, listeKesildi, makineDoluRetleri, reddiBildirimi, temayiUygula, tekrarSuzgeci, tmiReddiBildirimleri, tmiUyarilari, tohumla } from './baglanti.ts';
 import type { MakineDoluRedi } from './baglanti.ts';
 import type { Istemci, IstekGirdisi } from './baglanti.ts';
@@ -55,6 +56,40 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect(giden[0]!.govde).toEqual({ ileti, kaynak: 'c1' });
     expect([giden[0]!.kimlik, giden[1]!.kimlik]).toEqual([mid, mid]);
     expect(giden[2]!.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('kuyruklu yazma (belge, kayıt) ve ileti sonucu bilinmeyen sayılmaz; öteki yazma sayılır', async () => {
+    const secenekler: Record<string, unknown> = {};
+    const istemci = {
+      get: async () => { throw new Error('beklenmeyen okuma'); },
+      post: async (yol: string, _g?: unknown, secenek?: unknown) => {
+        secenekler[yol] = secenek ?? {};
+        return yol.endsWith('/yaz') ? { sonuc: 'yazildi', surum: 1 } : yol.includes('/kayitlar/') ? { eklenen: 1 } : { tamam: true };
+      },
+    } as unknown as Istemci;
+    await cevapla(istemci, istek('PUT', '/doc/results/r1', 'base=0', JSON.stringify({ a: 1 })));
+    await cevapla(istemci, istek('DELETE', '/doc/results/r1', 'base=1'));
+    await cevapla(istemci, istek('POST', '/log/counts', '', JSON.stringify([{ cid: 'c1' }])));
+    await cevapla(istemci, istek('POST', '/bus', '', JSON.stringify({ msg: { type: 'progress' } })));
+    await cevapla(istemci, istek('POST', '/plan-sira', '', JSON.stringify({ kaynak: { tur: 'x', id: 1 }, onceki: [], yeni: [], planSurumu: 1 })));
+    for (const yol of ['/arkon/belgeler/results/r1/yaz', '/arkon/belgeler/results/r1/sil', '/arkon/kayitlar/counts/ekle', '/arkon/iletiler']) {
+      expect(secenekler[yol], yol).toMatchObject({ arkaPlan: true });
+    }
+    expect((secenekler['/arkon/plan-sira/sirala'] as { arkaPlan?: boolean } | undefined)?.arkaPlan).toBeUndefined();
+  });
+
+  it('kopukken kuyruğun her yeniden denemesi şeritteki belirsiz sayıyı artırmaz', async () => {
+    baglantiSifirla();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    try {
+      for (let i = 0; i < 5; i++) {
+        await cevapla(api, istek('POST', '/log/counts', '', JSON.stringify([{ cid: 'c1' }]))).catch(() => undefined);
+      }
+      expect(baglantiDurumu()).toMatchObject({ kopuk: true, bilinmeyenYazma: 0 });
+    } finally {
+      vi.unstubAllGlobals();
+      baglantiSifirla();
+    }
   });
 
   it('plan sırası: Arkon Planlama\'nın sıralaması TMI plan sıralama komutuna gider (A4)', async () => {

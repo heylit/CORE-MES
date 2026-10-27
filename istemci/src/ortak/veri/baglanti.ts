@@ -10,20 +10,35 @@ export interface BaglantiDurumu {
   // Kopukken gönderilmiş, sunucuya ulaşıp ulaşmadığı bilinmeyen yazma sayısı. Aynı istek kimliğiyle yeniden gönderilip
   // cevap alan yazma sayıdan düşer; kimliksiz yazma kullanıcı kapatana kadar sayılır (sunucuda olup olmadığı bilinmez).
   bilinmeyenYazma: number;
+  // Kendi gönderim kuyruğu olan modülün (Arkon) bu cihazda bekleyen kaydı: sonucu bilinmeyen değildir, kuyruk bağlantı
+  // gelince aynı kimlikle gönderir. Bu kayıtlar yazma isteğinde sayılmaz (`arkaPlan`), modül sayıyı buraya bildirir.
+  kuyrukta: number;
+  // Kuyruktan çıkıp sunucuya ulaşan kayıt; şerit kapanınca sıfırlanır.
+  ulasan: number;
   // Kopukluk bitti ve henüz kapatılmadı.
   geriGeldi: boolean;
 }
 
-const BASLANGIC: BaglantiDurumu = { kopuk: false, bilinmeyenYazma: 0, geriGeldi: false };
+const BASLANGIC: BaglantiDurumu = { kopuk: false, bilinmeyenYazma: 0, kuyrukta: 0, ulasan: 0, geriGeldi: false };
 
 let durum: BaglantiDurumu = BASLANGIC;
 const bilinmeyenler = new Set<string>();
 const dinleyiciler = new Set<() => void>();
 let kimliksizSayac = 0;
+// Kaynak adı -> o kaynağı bildiren her bağlantının sayısı. Aynı modülün kuyruğunu ekranda birden çok parça bildirebilir;
+// kuyruk tektir, kaynak başına en büyüğü alınır.
+const kuyruklar = new Map<string, Map<number, number>>();
+let kuyrukSayac = 0;
+
+function kuyruktaSay(): number {
+  let toplam = 0;
+  for (const bildirenler of kuyruklar.values()) toplam += Math.max(0, ...bildirenler.values());
+  return toplam;
+}
 
 function yaz(yeni: Partial<BaglantiDurumu>): void {
-  const sonraki = { ...durum, ...yeni, bilinmeyenYazma: bilinmeyenler.size };
-  if (sonraki.kopuk === durum.kopuk && sonraki.bilinmeyenYazma === durum.bilinmeyenYazma && sonraki.geriGeldi === durum.geriGeldi) return;
+  const sonraki = { ...durum, ...yeni, bilinmeyenYazma: bilinmeyenler.size, kuyrukta: kuyruktaSay() };
+  if ((Object.keys(sonraki) as (keyof BaglantiDurumu)[]).every((k) => sonraki[k] === durum[k])) return;
   durum = sonraki;
   for (const d of dinleyiciler) d();
 }
@@ -46,10 +61,32 @@ export function yazmaBelirsiz(istekKimligi?: string): void {
   yaz({});
 }
 
+// Modülün gönderim kuyruğu. `bildir` bekleyen sayısını verir; sayı düşerse düşen kayıt sunucuya ulaşmıştır (kuyruk
+// kaydı ancak sunucu cevap verince bırakır; reddedileni modül ayrıca bildirir). `birak` ekran kapanınca çağrılır.
+export function kuyrukKaynagi(kaynak: string): { bildir(bekleyen: number): void; birak(): void } {
+  const anahtar = ++kuyrukSayac;
+  return {
+    bildir(bekleyen) {
+      const onceki = durum.kuyrukta;
+      const bildirenler = kuyruklar.get(kaynak) ?? new Map<number, number>();
+      bildirenler.set(anahtar, Math.max(0, bekleyen));
+      kuyruklar.set(kaynak, bildirenler);
+      const simdi = kuyruktaSay();
+      yaz(simdi < onceki ? { ulasan: durum.ulasan + onceki - simdi } : {});
+    },
+    birak() {
+      const bildirenler = kuyruklar.get(kaynak);
+      bildirenler?.delete(anahtar);
+      if (bildirenler?.size === 0) kuyruklar.delete(kaynak);
+      yaz({});
+    },
+  };
+}
+
 // Kullanıcı şeridi kapattı: bilinmeyenleri kendisi denetleyecek.
 export function bildirimiKapat(): void {
   bilinmeyenler.clear();
-  yaz({ geriGeldi: false });
+  yaz({ geriGeldi: false, ulasan: 0 });
 }
 
 // Bağlantı dönünce çağrılır: kopukken ekranda kalan veri bayattır, uygulama açık sorguları yeniden okutur.
@@ -68,6 +105,7 @@ export function baglantiDurumu(): BaglantiDurumu {
 // Yalnız testler içindir.
 export function baglantiSifirla(): void {
   bilinmeyenler.clear();
+  kuyruklar.clear();
   durum = BASLANGIC;
   for (const d of dinleyiciler) d();
 }

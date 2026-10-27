@@ -11,33 +11,42 @@ const sayiMetni = (n: number): string => `${String(n)} kaydın`;
 // üstünde, sayfanın akışındadır: menüyü aşağı iter, üstüne binmez; ekranı kapatmaz. Belirsiz kayıt varken kendiliğinden
 // kapanmaz: okunmadan kaybolan uyarı aynı kaydın ikinci kez girilmesine yol açar.
 export function BaglantiSeridi() {
-  const { kopuk, bilinmeyenYazma, geriGeldi } = useBaglanti();
+  const { kopuk, bilinmeyenYazma, kuyrukta, ulasan, geriGeldi } = useBaglanti();
+  const bekleyenVar = bilinmeyenYazma > 0 || kuyrukta > 0;
 
   useEffect(() => {
-    if (!geriGeldi || bilinmeyenYazma > 0) return undefined;
+    if (kopuk || bekleyenVar || (!geriGeldi && ulasan === 0)) return undefined;
     const zamanlayici = setTimeout(bildirimiKapat, GERI_GELDI_SURESI_MS);
     return () => { clearTimeout(zamanlayici); };
-  }, [geriGeldi, bilinmeyenYazma]);
+  }, [kopuk, bekleyenVar, geriGeldi, ulasan]);
 
-  if (!kopuk && !geriGeldi && bilinmeyenYazma === 0) return null;
+  if (!kopuk && !geriGeldi && !bekleyenVar && ulasan === 0) return null;
 
+  // Kuyruktaki kayıt sonucu bilinmeyen değildir: kendiliğinden gider. Kullanıcıya söylenen, yeniden girmemesidir.
+  const kuyrukMetni = kuyrukta > 0 ? ` ${String(kuyrukta)} kayıt bu cihazda bekliyor; bağlantı gelince kendiliğinden gönderilir, yeniden girmeyin.` : '';
   let mesaj: string;
   if (kopuk) {
     mesaj = bilinmeyenYazma > 0
-      ? `Sunucuya ulaşılamıyor, yeniden deneniyor. ${sayiMetni(bilinmeyenYazma)} sunucuya ulaşıp ulaşmadığı bilinmiyor.`
-      : 'Sunucuya ulaşılamıyor (güncelleme ya da bağlantı kesintisi). Yeniden deneniyor; çalışmaya devam edebilirsiniz.';
+      ? `Sunucuya ulaşılamıyor, yeniden deneniyor. ${sayiMetni(bilinmeyenYazma)} sunucuya ulaşıp ulaşmadığı bilinmiyor.${kuyrukMetni}`
+      : kuyrukta > 0
+        ? `Sunucuya ulaşılamıyor, yeniden deneniyor.${kuyrukMetni}`
+        : 'Sunucuya ulaşılamıyor (güncelleme ya da bağlantı kesintisi). Yeniden deneniyor; çalışmaya devam edebilirsiniz.';
   } else if (bilinmeyenYazma > 0) {
-    mesaj = `Bağlantı geri geldi. Kopukken gönderilen ${sayiMetni(bilinmeyenYazma)} durumunu yeniden girmeden önce ekranda denetleyin.`;
+    mesaj = `Bağlantı geri geldi. Kopukken gönderilen ${sayiMetni(bilinmeyenYazma)} durumunu yeniden girmeden önce ekranda denetleyin.${kuyrukMetni}`;
+  } else if (kuyrukta > 0) {
+    mesaj = `Bağlantı geri geldi. Bekleyen ${String(kuyrukta)} kayıt gönderiliyor; yeniden girmeyin.`;
+  } else if (ulasan > 0) {
+    mesaj = `Bağlantı geri geldi. Kopukken bekleyen ${String(ulasan)} kayıt sunucuya ulaştı; reddedilen olursa ayrıca bildirilir.`;
   } else {
     mesaj = 'Bağlantı geri geldi. Ekrandaki bilgiler yenilendi.';
   }
-  const ton = kopuk ? 'kopuk' : bilinmeyenYazma > 0 ? 'belirsiz' : 'tamam';
+  const ton = kopuk ? 'kopuk' : bekleyenVar ? 'belirsiz' : 'tamam';
 
   return (
     <div className={`tc-baglanti-seridi tc-baglanti-seridi-${ton}`} role={kopuk ? 'alert' : 'status'}>
       <Simge ad={ton === 'tamam' ? 'check' : 'alert'} />
       <p className="tc-baglanti-seridi-mesaj">{mesaj}</p>
-      {!kopuk && (
+      {!kopuk && kuyrukta === 0 && (
         <button type="button" className="tc-baglanti-seridi-kapat" onClick={bildirimiKapat} aria-label="Bağlantı uyarısını kapat">
           <Simge ad="x" boyut="k" />
         </button>
