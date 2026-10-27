@@ -91,6 +91,29 @@ describe('A1 Üretim Terminali', () => {
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
+
+  it('790: çark başka işe yalnız bakar; resim ve adımlar önizlenir; geçiş "Bu işe geç" ile, yazma yok', async () => {
+    const ikinci = { ...PAKET, id: 'pk-deneme-cark', no: 'IE-DENEME-3', part: 'Deneme ikinci parça' };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
+    expect(within(cark).getByText(/Ekranda · sayaç/)).toBeTruthy();
+    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
+    expect(within(cark).getByText(/Önizleme · ekrandaki iş değişmez/)).toBeTruthy();
+    expect(screen.getByText(/Önizleme · IE-DENEME-(1|3) · teknik resim ve adımlar salt okunur/)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Aktif iş emri' })).toBeNull();
+    fireEvent.click(within(cark).getByRole('button', { name: 'Ekrandakine dön' }));
+    expect(await screen.findByRole('region', { name: 'Aktif iş emri' })).toBeTruthy();
+    expect(screen.queryByText(/teknik resim ve adımlar salt okunur/)).toBeNull();
+    const ilk = within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent;
+    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
+    fireEvent.click(within(cark).getByRole('button', { name: 'Bu işe geç' }));
+    const yeni = await screen.findByRole('region', { name: 'Aktif iş emri' });
+    expect(within(yeni).getByRole('heading').textContent).not.toBe(ilk);
+    await new Promise((r) => setTimeout(r, 700));
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
 });
 
 describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
