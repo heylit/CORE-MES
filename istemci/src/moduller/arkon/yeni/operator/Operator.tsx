@@ -21,7 +21,7 @@ import {
   ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kaliteMerkeziNumuneYamasi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
 } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 import { gecisteDuraklatilacaklar, oneAlinanSuruyor, siraAnahtari, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
-import { ilkAcilis } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
+import { ilkAcilis, secilebilirIstasyonlar } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
 import { elleNumuneOlculeri } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import {
@@ -40,6 +40,7 @@ import { CAGRI_EKIPLERI, YETKI_ADLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis.ts';
 import type { Perm } from '../cekirdek/tipler.ts';
+import { isMerkezinde } from '../cekirdek/yetki.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
@@ -64,7 +65,9 @@ import {
   CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
-import { IsEylemi, IsOnizKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi } from './Cark.tsx';
+import {
+  IsEylemi, IsOnizKarti, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi,
+} from './Cark.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, GecisPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
@@ -136,6 +139,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // 790: çarkta bakılan iş (önizleme). Yalnız ekranı gösterir; sayaç, eylem ve kayıt ekrandaki işe (o) yazılır.
   const [bakilan, bakilanYaz] = useState<string | null>(null);
   const [makBak, makBakYaz] = useState(0);
+  const [istBak, istBakYaz] = useState<number | null>(null);
   useEffect(() => { bakilanYaz(null); }, [ai, MACHINE]);
   const bi = bakilan === null ? -1 : isler.findIndex((x) => siraAnahtari(x) === bakilan);
   const b: Is | null = bi >= 0 && bi !== ai ? isler[bi]! : null;
@@ -809,7 +813,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (Date.now() - retZamani.current > 1500) { retZamani.current = Date.now(); bip('nok'); say(`Yetkin yok: ${YETKI_ADLARI[k] || k}`, 'lock', 'stop'); }
     return false;
   };
-  const istasyonAc = () => { if (pv || yetkiVar('prod.station') || (kisi?.sts || []).length > 0 || ok('prod.station')) ovYaz('station'); };
   const kapaliNedeni = sayimKapaliNedeni(o);
   const kapali = kapaliNedeni !== null;
   const iyiKapaliNedeni = sayimKapaliNedeni(o, 'good');
@@ -1126,8 +1129,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // 790: tek çark, iki şerit. İş şeridinde ekrandaki iş kendi kartıyla ortadadır; başka işe bakmak önizlemedir, geçiş "Bu işe geç" ile
   // ve bugünkü geçiş sorusuyla olur. Geçiş işi başlatmaz. İstasyon çarkta değil, üst çubuktaki seçicidedir.
   const siradakiAnahtar = nextOrder ? siraAnahtari(nextOrder) : undefined;
+  // 793 b: istasyon da çarktadır; liste ve geçiş istasyon seçicininkidir (yetkili istasyonlar, cihaz kaydı, ekran baştan kurulur).
+  const carkIstasyonlari = secilebilirIstasyonlar(istasyonListesi(tesis).filter((m) => isMerkezinde(kisi, m.wc)), yetkiVar('prod.station'), kisi && kisi.sts);
+  const istSira = carkIstasyonlari.findIndex((m) => m.id === MACHINE);
+  const istasyonaGec = (id: string) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); };
   const carki = (ekranda: ReactNode) => {
-    if (isler.length < 2 && !makineler.length) return ekranda;
+    if (isler.length < 2 && !makineler.length && carkIstasyonlari.length < 2) return ekranda;
     const isSeridi: CarkSeridi = {
       anahtar: 'is', ad: 'İşler', simge: 'list', sayi: Math.max(isler.length, 1), etkin: ai, bak: b ? bi : ai, bakYaz,
       ciz: (i, merkez) => {
@@ -1145,6 +1152,14 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           const m = carkMakinesi(makineler[i]!);
           return <MakineEylemi makine={m} engel={makEngel} ozet={secimOzeti(seciliMak, atananMak)} degistir={() => mcSelYaz(secimiDegistir(seciliMak, m.id))} />;
         },
+      });
+    }
+    if (carkIstasyonlari.length >= 2) {
+      seritler.push({
+        anahtar: 'ist', ad: 'İstasyonlar', simge: 'layers', sayi: carkIstasyonlari.length, etkin: istSira,
+        bak: Math.min(istBak ?? Math.max(istSira, 0), carkIstasyonlari.length - 1), bakYaz: istBakYaz,
+        ciz: (i) => { const m = carkIstasyonlari[i]!; return <IstasyonKarti istasyon={{ id: m.id, ad: m.name, merkez: m.wcName, bu: m.id === MACHINE }} />; },
+        eylem: (i) => { const m = carkIstasyonlari[i]!; return <IstasyonEylemi bu={m.id === MACHINE} gec={() => istasyonaGec(m.id)} />; },
       });
     }
     return <TerminalCarki seritler={seritler} />;
@@ -1212,7 +1227,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return (
       <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>
         <header className="tc-ay1-mobil-ust">
-          <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
+          <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></span>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
           {/* Darda saat yok; kopukluk ve kayıt riski operatörden saklanmasın diye durum üst çubukta kalır. */}
           <BaglantiDurumu />
@@ -1255,7 +1270,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         {ov === 'menu' ? (
           <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
             <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
-            <MenuSatiri simge="cpu" baslik="İstasyonu değiştir" alt={`Şu an ${MACHINE} · başka tezgahın işleri`} tikla={() => { ovYaz(null); istasyonAc(); }} />
             <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
             <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
             <MenuSatiri simge="ruler" baslik="Teknik resim · 3B" alt="Odak modu resim panelinde" tikla={() => { ovYaz(null); mvYaz('draw'); }} />
@@ -1272,9 +1286,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   return (
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cark="">
       <header className="tc-ay1-ust">
-        <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir">
+        <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
-        </button>
+        </span>
         <DurumLambasi durum={o.state} since={since} />
         {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}
         <span className="tc-ay1-bosluk" />

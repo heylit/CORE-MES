@@ -96,7 +96,6 @@ describe('A1 Üretim Terminali', () => {
     const ikinci = { ...PAKET, id: 'pk-deneme-cark', no: 'IE-DENEME-3', part: 'Deneme ikinci parça' };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     arkonAc('/uretim-terminali');
-    await ekran();
     const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
     expect(within(cark).getByText(/Ekranda · sayaç/)).toBeTruthy();
     fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
@@ -147,14 +146,29 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     expect(within(screen.getByRole('dialog', { name: 'Neden durdu?' })).queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
   }, 40000);
 
-  it('menüde istasyon değiştirme var; istasyon penceresi açılır', async () => {
+  it('793 b: istasyon çarkın İstasyonlar şeridinden değişir; geçiş cihazın istasyonunu yazar, üst çubuk yalnız adı gösterir', async () => {
+    const ikiIstasyon = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
+    sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 7, govde: { v: ikiIstasyon } }] } });
+    window.localStorage.setItem('arkon:station', JSON.stringify('IST-1'));
+    arkonAc('/uretim-terminali');
+    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
+    expect(screen.queryByRole('button', { name: /İstasyonu değiştir/ })).toBeNull();
+    fireEvent.click(within(cark).getByRole('button', { name: /İstasyonlar · 2/ }));
+    expect(within(cark).getByText(/Bu cihazın istasyonu/)).toBeTruthy();
+    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: istasyonlar' }));
+    fireEvent.click(within(cark).getByRole('button', { name: 'Bu istasyona geç' }));
+    expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('IST-2');
+    await waitFor(() => { expect(screen.getAllByText('IST-2').length).toBeGreaterThan(0); }, { timeout: 10000 });
+  }, 40000);
+
+  it('793 b: yalnız kendi istasyonu olan operatörde İstasyonlar şeridi yok (reddedilen)', async () => {
     telefon();
-    sunucuKur(ISTASYONLU, sunucu());
+    const ikiIstasyon = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 7, govde: { v: ikiIstasyon } }] } });
     arkonAc('/uretim-terminali');
     await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
-    fireEvent.click(screen.getByRole('button', { name: 'Menü' }));
-    fireEvent.click(await screen.findByRole('button', { name: /İstasyonu değiştir/ }));
-    expect(await screen.findByRole('dialog', { name: /Hangi istasyonda/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /İstasyonlar ·/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bu istasyona geç' })).toBeNull();
   }, 40000);
 
   it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {
