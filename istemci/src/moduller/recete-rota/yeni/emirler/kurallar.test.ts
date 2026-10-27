@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
+import { planMetni } from './gorunum.ts';
 import {
   adimCarpanlari, adimDurumu, araStokHavuzu, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,
   miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
@@ -88,7 +89,7 @@ describe('adımlar, ilerleme ve plan', () => {
     const o = emir('1');
     const d = durum([o]);
     expect(planOzeti(d, null, o)).toEqual({ tur: 'motor-yok' });
-    expect(planOzeti(d, {}, o)).toEqual({ tur: 'yerlesmedi', acikAdim: 3 });
+    expect(planOzeti(d, {}, o)).toEqual({ tur: 'yerlesmedi', acikAdim: 3, calisanPlanDisi: [] });
     expect(planOzeti(d, {}, emir('1', { status: 'taslak' }))).toEqual({ tur: 'plan-disi' });
     const y = {
       'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-04T10:00:00.000Z' }],
@@ -120,11 +121,37 @@ describe('adımlar, ilerleme ve plan', () => {
     const o = emir('1');
     const y = { 'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-04T10:00:00.000Z' }] };
     expect(planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|30': 'Makine yok.', 'UE-9|10': 'Başka emir.' } }, y, o))
-      .toEqual({ tur: 'planlanamiyor', adimlar: [{ opNo: 30, neden: 'Makine yok.' }] });
+      .toEqual({ tur: 'planlanamiyor', adimlar: [{ opNo: 30, neden: 'Makine yok.' }], kok: [{ opNo: 30, neden: 'Makine yok.' }] });
     expect(planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-9|10': 'Başka emir.' } }, y, o)).toMatchObject({ tur: 'plan', bitis: '2026-11-04T10:00:00.000Z', gecikiyor: false });
     // Biten adım listede olsa da emri planlanamaz yapmaz.
     const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|3': 'tamam' }, opProg: {} } });
     expect(planOzeti({ ...d, planYerlesmeyen: { 'UE-1|30': 'Makine yok.' } }, y, o)).toMatchObject({ tur: 'plan' });
+  });
+
+  it('487/1 c: Planlanamıyor altında yalnız kök neden; ardıl adımlar sayılmaz, yalnız ardıl varsa onlar yazılır', () => {
+    const o = emir('1');
+    const ardilli = planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|10': 'Süre bilinmiyor.', 'UE-1|20': 'Önceki iş emri yerleşmedi.', 'UE-1|30': 'Önceki iş emri yerleşmedi.' } }, {}, o);
+    expect(ardilli).toMatchObject({ tur: 'planlanamiyor', kok: [{ opNo: 10, neden: 'Süre bilinmiyor.' }] });
+    expect(ardilli.tur === 'planlanamiyor' && ardilli.adimlar).toHaveLength(3);
+    expect(planMetni(ardilli)).toEqual({ metin: 'Planlanamıyor', ton: 'hata', alt: 'OP 10: Süre bilinmiyor.', altTon: null });
+    const iki = planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|10': 'Makine ya da kişi atanmamış, aday da yok.', 'UE-1|20': 'Süre bilinmiyor.', 'UE-1|30': 'Önceki iş emri yerleşmedi.' } }, {}, o);
+    expect(planMetni(iki).alt).toBe('2 adım planlanamadı: Makine ya da kişi atanmamış, aday da yok.');
+    const bagli = planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|10': 'Bağlı parti yerleşmedi.', 'UE-1|20': 'Önceki iş emri yerleşmedi.' } }, {}, o);
+    expect(planMetni(bagli).alt).toBe('2 adım planlanamadı: Bağlı parti yerleşmedi.');
+  });
+
+  it('487/2 b: plana girmeyen çalışan adım işaretlenir; tarih ve gecikme değişmez', () => {
+    const o = emir('1');
+    const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|1': 'calisiyor' }, opProg: {} } });
+    const y = { 'UE-1|20': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-04T10:00:00.000Z' }], 'UE-1|30': [{ makineId: 51, baslangic: '2026-11-04T10:00:00.000Z', bitis: '2026-11-05T10:00:00.000Z' }] };
+    const p = planOzeti(d, y, o);
+    expect(p).toMatchObject({ tur: 'plan', bitis: '2026-11-05T10:00:00.000Z', gecikiyor: false, calisanPlanDisi: [10] });
+    expect(planMetni(p)).toMatchObject({ ton: 'tamam', alt: 'OP 10 çalışıyor, planda yok', altTon: 'uyari' });
+    // Plandaki çalışan adım işaretlenmez.
+    expect(planOzeti(d, { ...y, 'UE-1|10': [{ makineId: 52, baslangic: '2026-11-02T08:00:00.000Z', bitis: '2026-11-03T08:00:00.000Z' }] }, o)).toMatchObject({ calisanPlanDisi: [] });
+    // Yalnız çalışan adım açıksa ve planda değilse emir yerleşmemiştir; alt satır nedenini söyler.
+    const tek = durum([o], { emirler: { orders: [o], opStatus: { '1|root|1': 'calisiyor', '1|root|2': 'tamam', '1|root|3': 'tamam' }, opProg: {} } });
+    expect(planMetni(planOzeti(tek, {}, o))).toEqual({ metin: 'Yerleşmedi', ton: 'hata', alt: 'OP 10 çalışıyor, planda yok', altTon: 'uyari' });
   });
 
   it('emir şeridi eski ekranın sırasıyla: ardışık on emir on ayrı renk alır', () => {

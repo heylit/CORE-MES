@@ -15,18 +15,27 @@ export function tamponRozeti(p: PlanOzeti): TamponRozeti | null {
   const gun = gunBicimi.format(p.bolluk);
   return { tur: p.tampon, metin: `${TAMPON_ADI[p.tampon]}, ${p.bolluk >= 0 ? '+' : ''}${gun} g`, ton: TAMPON_TONU[p.tampon], ipucu: `Teslime kalan bolluk ${gun} gün` };
 }
-export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null; alt: string | null } {
+// Plan dışı çalışan adım (487/2 b): tarih aynı kalır, alt satır uyarı tonunda yazılır.
+const calisanMetni = (op: number[]): string =>
+  op.length === 1 ? `OP ${String(op[0])} çalışıyor, planda yok` : `${String(op.length)} çalışan adım planda yok`;
+export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null; alt: string | null; altTon: RozetTonu | null } {
   switch (p.tur) {
-    case 'tamam': return { metin: 'Tamamlandı', ton: null, alt: null };
-    case 'plan-disi': return { metin: 'Plan dışı', ton: null, alt: null };
-    case 'motor-yok': return { metin: '—', ton: null, alt: null };
-    case 'planlanamiyor': return {
-      metin: 'Planlanamıyor', ton: 'hata', alt: p.adimlar.length === 1 ? p.adimlar[0]?.neden ?? null : `${String(p.adimlar.length)} adım planlanamadı`,
-    };
-    case 'yerlesmedi': return { metin: 'Yerleşmedi', ton: 'hata', alt: `${String(p.acikAdim)} açık adım planda yok` };
+    case 'tamam': return { metin: 'Tamamlandı', ton: null, alt: null, altTon: null };
+    case 'plan-disi': return { metin: 'Plan dışı', ton: null, alt: null, altTon: null };
+    case 'motor-yok': return { metin: '—', ton: null, alt: null, altTon: null };
+    case 'planlanamiyor': {
+      const ilk = p.kok[0];
+      return {
+        metin: 'Planlanamıyor', ton: 'hata', altTon: null,
+        alt: ilk === undefined ? null : p.kok.length === 1 ? `OP ${String(ilk.opNo)}: ${ilk.neden}` : `${String(p.kok.length)} adım planlanamadı: ${ilk.neden}`,
+      };
+    }
+    case 'yerlesmedi': return p.calisanPlanDisi.length === p.acikAdim
+      ? { metin: 'Yerleşmedi', ton: 'hata', alt: calisanMetni(p.calisanPlanDisi), altTon: 'uyari' }
+      : { metin: 'Yerleşmedi', ton: 'hata', alt: `${String(p.acikAdim)} açık adım planda yok`, altTon: null };
     case 'plan': return {
       metin: tarih(p.bitis), ton: p.bitis === null ? null : p.gecikiyor ? 'hata' : 'tamam',
-      alt: null,
+      alt: p.calisanPlanDisi.length ? calisanMetni(p.calisanPlanDisi) : null, altTon: p.calisanPlanDisi.length ? 'uyari' : null,
     };
   }
 }

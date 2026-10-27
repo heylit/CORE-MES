@@ -128,10 +128,14 @@ const teslimGunuSonu = (due: string): number => { const t = new Date(`${due}T00:
 // yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz. Motorun yerleştiremediği açık adım varsa emir eski ekrandaki gibi
 // planlanamaz ve geç sayılır; yerleşimde de listede de olmayan açık adımı (çalışan, fason) motor hesaba katmıştır. Bolluk ve tampon
 // yalnız bitiş ve teslim biliniyorsa vardır (teslimsiz emre tarih uydurulmaz, 468/1 a).
+// 487/1 c: `kok` motorun asıl nedeniyle bırakılan adımlardır; önceki adım ya da bağlı parti yerleşmediği için bırakılan ardıllar sayılmaz.
+// 487/2 b: `calisanPlanDisi` plana girmemiş çalışan adımlardır (makinesi bilinmiyor ya da plan kapsamı dışında); tarih ve gecikme değişmez.
 export type PlanOzeti =
-  | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number }
-  | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[] }
-  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null };
+  | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number; calisanPlanDisi: number[] }
+  | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[]; kok: { opNo: number; neden: string }[] }
+  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null; calisanPlanDisi: number[] };
+// Plan motorunun ardıl nedenleri (`sunucu/moduller/plan/kurallar.ts`): kök adım yerleşmeyince arkasındakiler bunlarla bırakılır.
+const ARDIL_NEDENLERI: ReadonlySet<string> = new Set(['Önceki iş emri yerleşmedi.', 'Bağlı parti yerleşmedi.']);
 export function planOzeti(
   d: Durum & Pick<DurumCevabi, 'settings'> & { planYerlesmeyen?: Record<string, string> }, yerlesim: EkranYerlesimi | null, o: Emir,
 ): PlanOzeti {
@@ -141,18 +145,24 @@ export function planOzeti(
   const adimlar = emirAdimlari(d, o);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
-  const acik = adimlar.filter((a) => a.sira >= ilk && a.sira <= son && (a.durum ?? adimDurumu(o, a.sira, opStatus)) !== 'tamam');
+  const durumu = (a: EmirAdimi) => a.durum ?? adimDurumu(o, a.sira, opStatus);
+  const acik = adimlar.filter((a) => a.sira >= ilk && a.sira <= son && durumu(a) !== 'tamam');
   const yerlesmeyen = acik.flatMap((a) => { const neden = d.planYerlesmeyen?.[`${o.no}|${String(a.opNo)}`]; return neden === undefined ? [] : [{ opNo: a.opNo, neden }]; });
-  if (yerlesmeyen.length > 0) return { tur: 'planlanamiyor', adimlar: yerlesmeyen };
+  if (yerlesmeyen.length > 0) {
+    // Kök adım başka emirdeyse (bağlı parti) bu emirde yalnız ardıl kalır; o zaman ardıllar gösterilir, boş neden yazılmaz.
+    const kok = yerlesmeyen.filter((y) => !ARDIL_NEDENLERI.has(y.neden));
+    return { tur: 'planlanamiyor', adimlar: yerlesmeyen, kok: kok.length > 0 ? kok : yerlesmeyen };
+  }
+  const calisanPlanDisi = acik.filter((a) => durumu(a) === 'calisiyor' && adimPlani(yerlesim, o.no, a.opNo) === null).map((a) => a.opNo);
   const planlar = acik.map((a) => adimPlani(yerlesim, o.no, a.opNo)).filter((p): p is AdimPlani => p !== null);
-  if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length };
+  if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length, calisanPlanDisi };
   const bitisler = planlar.map((p) => p.bitis);
   const bitis = bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string;
   // Teslim günü sonuna (yerel saat; teslim yerel tarihtir) kadar biten emir geç sayılmaz.
   const bolluk = o.due !== null && bitis !== null ? (teslimGunuSonu(o.due) - Date.parse(bitis)) / GUN_MS : null;
   const tampon = bolluk === null ? null : tamponDurumu(bolluk, d.settings.buffer);
   return {
-    tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', bolluk, tampon,
+    tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', bolluk, tampon, calisanPlanDisi,
   };
 }
 
