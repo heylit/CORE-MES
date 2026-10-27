@@ -24,6 +24,16 @@ describe('planlama motoru hesapları', () => {
     expect(veriDenetimi(c, cx)).toHaveLength(10);
   });
 
+  it('741 a: başlangıç gününden önceki gecenin vardiyası gece yarısından sonra da çalışma saatidir', () => {
+    const { c, p } = kur();
+    const gunler = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
+    c.D.vardiyalar = [{ id: 'G', bas: '22:00', bit: '06:00' }];
+    c.D.calismaGunleri = Object.fromEntries(gunler.map((g) => [g, ['G']]));
+    c.D.tezgahlar = c.D.tezgahlar.map((m) => ({ ...m, vardiyalar: [] }));
+    const sw = Object.values(derle(girdiKur(c, plandanBitenler(c, p))).M)[0]!.sw;
+    expect(sw.slice(0, 2)).toEqual([[0, 6], [22, 30]]);
+  });
+
   it('nabız bu haftayı ölçer ve önceki sürümle karşılaştırır', () => {
     const { c, p, cx } = kur();
     const n = nabizDurumu(c, p, cx, 'hafta', 0);

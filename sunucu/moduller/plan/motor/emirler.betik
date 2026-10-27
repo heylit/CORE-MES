@@ -50,7 +50,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const g = girdiKur(S0, k, { durum: Object.assign({}, durum, { calisanAdimlar: calisanlar }), ek: kaynak ? kaynak.ek : null }, bugun);
   if (!g) return null;
   const st = g.st, D = g.S.D;
-  st.now = Math.max(st.now, tmiSaat(D, istek.simdi));
+  const simdi = tmiSaat(D, istek.simdi);
+  if (simdi != null && simdi >= 0) st.now = simdi;
   const opOf = tmiIslemler(k, D);
   for (const c of istek.calisanlar) {
     const id = opOf[c.anahtar], o = okunan.get(c.anahtar) || {};

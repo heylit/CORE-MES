@@ -261,9 +261,9 @@ export const IKI_HAFTA = 14 * 24;
 // Termine bu kadar saatten çok payı olan, gecikmeyen ve sevk edilmemiş satır "bakılması gerekmeyen"dir (gizli).
 export const GENIS_PAY = 72;
 
-// Sayfanın şimdisi (girdi.betik stKur now 7, simdiUygula): çalışmanın kaydettiği şimdi daha ilerideyse o.
+// Sayfanın şimdisi (girdi.betik stKur now 7, simdiUygula): çalışmanın kaydettiği şimdi varsa o (741 a: 07:00'den önce de olur).
 export function simdi(c: PlanlamaCalismasi): number {
-  return sayiMi(c.simdi) && c.simdi > 7 ? c.simdi : 7;
+  return sayiMi(c.simdi) && c.simdi >= 0 ? c.simdi : 7;
 }
 
 export const gunYaz = (taban: number, t: number | null): string => (t === null ? '—' : tarihSaatYaz(taban, t).slice(0, 9));

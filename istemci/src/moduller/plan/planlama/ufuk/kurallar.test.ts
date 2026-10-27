@@ -73,6 +73,7 @@ describe('zaman ve takvim', () => {
     expect(zamanKur(calisma({ meta: {} }).D)).toBeNull();
     expect(simdiOku(c)).toBe(7);
     expect(simdiOku(calisma({}, { simdi: 50 }))).toBe(50);
+    expect(simdiOku(calisma({}, { simdi: 0.5 }))).toBe(0.5);
   });
 
   it('açık pencereler motorla aynı kuralda: mola düşer, tatil kapalı, ek mesai eklenir, arıza düşer, ışıksız tezgâh bütün gün', () => {

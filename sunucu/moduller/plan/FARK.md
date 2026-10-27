@@ -178,3 +178,10 @@ Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı k
   canlıya alma yanlışlıkla duruyordu (DOĞRULANDI: deneyde plan-oner A4, #23, PL-07, P4/P6 ve plan-canli bu yüzden düşüyordu).
 - Sabit işin önüne sıkı dizilmiş iş, dakika dönünce sabit işin arkasına geçer; canlıya alma 737 a gereği durur (değişmedi). Bunu sınamayan
   plan-canli #1186 ve plan-gecmisi testleri saati gerçek anda sabitler (`plan-saat.test.ts` `anSabit`).
+## Gece vardiyası (741 a, 2026-10-27)
+- Motorun "şimdi"si gerçek saattir; başlangıç günü 07:00'ye çekilmez (`girdi.betik` `simdiUygula`, `emirler.betik`, `degerlendir.betik`; sayfada
+  `zz31-tmi.betik`). Gerçek saat yoksa 07:00 kalır. Yeni plan istemcisinin altı kopyası (`istemci/src/moduller/plan/planlama/*/kurallar.ts`) aynı kuralla.
+- Başlangıç gününden önceki günün gece vardiyası gece yarısından sonra da çalışma saatidir (`engine.betik` compile: tezgâh, personel ve genel
+  pencere d=-1'den; pencere 0'da kesilir). İstemci `derle` aynı. Işıksız tezgâhın tam günü değişmedi. Sunucu takvimi (vardiya modülü) önceki günü
+  zaten okur; `servis.ts` değişmedi.
+Testler: plan-cozucusu 741 a (gece 00:30'da iş şimdiden başlar, vardiya bitince akşamı bekler, gece vardiyasız tezgâh sabahı bekler); istemci motor 741 a.

@@ -18,7 +18,7 @@ describe('plan (gerçek PostgreSQL): taslaktan sonra zaman geçince canlıya alm
   };
   // İki test baştan sona aynı sabit anda koşar: kurulum süresi saati kaydırmaz, birinin canlıya bıraktığı sıkı kuyruk ötekinde geçmiş
   // zamanda kalmaz. An dakikanın ortasıdır: bir dakika ileri alınınca motorun aşağı yuvarladığı "şimdi" tam bir dakika kayar. Gece
-  // an tesisin öğlesidir (742): motor 07:00'den önce başlatmaz, kayma olmazdı.
+  // an tesisin öğlesidir (742): gündüz vardiyası sabahı beklerdi, kayma olmazdı.
   let an = 0;
   const sabitle = () => {
     if (an === 0) an = Math.floor(gunduzAni() / 60_000) * 60_000 + 30_000;

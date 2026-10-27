@@ -568,11 +568,11 @@ function terminKatsayisi(m: Malzeme | undefined, k: 'terminKat' | 'terminEk', ge
   return typeof n === 'number' && Number.isFinite(n) ? n : genel;
 }
 
-// Sayfanın şimdisi (girdi.betik simdiUygula): çalışmanın kaydettiği şimdi başlangıç günü 07:00'den ilerideyse o, değilse 07:00. Bütün
+// Sayfanın şimdisi (girdi.betik simdiUygula): çalışmanın kaydettiği şimdi, yoksa başlangıç günü 07:00 (741 a: 07:00'den önce de olur). Bütün
 // planlama görünümleri aynı şimdiyi kullanır; ortak yeri iskelettir (oraya taşınacak).
 export function calismaSimdisi(c: PlanlamaCalismasi): number {
   const s = Number(c.simdi);
-  return Number.isFinite(s) && s > MOTOR_ILK_SIMDI ? s : MOTOR_ILK_SIMDI;
+  return c.simdi != null && Number.isFinite(s) && s >= 0 ? s : MOTOR_ILK_SIMDI;
 }
 
 // Biten iş (girdi.betik tmiBitenler): iş emri tamam ya da iptal, ya da rotasının bütün adımları tamam olan sipariş; yalnız bazı adımları
