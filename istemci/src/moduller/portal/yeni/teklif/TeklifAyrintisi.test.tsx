@@ -4,9 +4,10 @@ import { SIMDI } from '../ornek-veri.ts';
 import { ac, json, sunucuKur, type Istek } from '../test-ortak.tsx';
 import { CATISMA_ILETISI } from '../veri.ts';
 import { siparisKur, surumOku, type SurumGirdisi } from './TeklifAyrintisi.tsx';
+import { taslaklariSil } from './ortak.tsx';
 import { SATICI_KISI, talepKur, teklifDeposu, yazmaCevabi } from './test-verisi.ts';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); taslaklariSil(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 interface Yazma { yol: string; veri: Record<string, unknown>; beklenenSurum?: number | null }
 const yazmalar = (istekler: readonly Istek[]): Yazma[] =>
@@ -17,6 +18,25 @@ const girdi = (k: Partial<SurumGirdisi> = {}): SurumGirdisi => ({
 });
 
 describe('TeklifAyrintisi', () => {
+  it('teklif görseline yalnız resim eklenir; resim olmayan dosya yüklenmez', async () => {
+    const istekler = sunucuKur(SATICI_KISI, teklifDeposu(), yazmaCevabi);
+    ac('/portal/yeni/sale?id=q1');
+    const secici = (await screen.findByText('Resim ekle', {}, { timeout: 5000 })).closest('label')?.querySelector('input[type="file"]');
+    expect(secici?.getAttribute('accept')).toBe('image/*');
+    fireEvent.change(secici as HTMLInputElement, { target: { files: [new File(['%PDF'], 'cizim.pdf', { type: 'application/pdf' })] } });
+    expect(await screen.findByText('Yalnızca resim dosyaları eklenebilir (JPG, PNG, WEBP).')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.startsWith('/portal/ek'))).toBe(false);
+  });
+
+  it('yarım kalan teklif formu sayfadan çıkıp dönünce korunur', async () => {
+    sunucuKur(SATICI_KISI, teklifDeposu(), yazmaCevabi);
+    ac('/portal/yeni/sale?id=q1');
+    fireEvent.change(await screen.findByLabelText('Müşteriye not', { exact: false }, { timeout: 5000 }), { target: { value: 'Kaplama dahil' } });
+    cleanup();
+    ac('/portal/yeni/sale?id=q1');
+    expect(((await screen.findByLabelText('Müşteriye not', { exact: false }, { timeout: 5000 })) as HTMLTextAreaElement).value).toBe('Kaplama dahil');
+  });
+
   it('müşteride olan teklifte kabulü sorup okunan sürümle yazar', async () => {
     vi.useFakeTimers({ now: SIMDI, toFake: ['Date'] });
     const istekler = sunucuKur(SATICI_KISI, teklifDeposu(), yazmaCevabi);
@@ -87,9 +107,29 @@ describe('TeklifAyrintisi', () => {
     sunucuKur(SATICI_KISI, { ...d, requests: { ...d.requests, q7: q } as typeof d.requests }, yazmaCevabi);
     ac('/portal/yeni/sale?id=q7');
     expect(await screen.findByText(/onayı bekleniyor/, {}, { timeout: 5000 })).toBeTruthy();
-    expect(screen.getByRole('link', { name: "Onaylarım'da aç" }).getAttribute('href')).toBe('/portal/yeni/approvals?id=a1');
+    expect(screen.queryByRole('link', { name: 'Eski portal ekranında karar verin' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Teklifi gönder' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Onayla' })).toBeNull();
+  });
+
+  it('sırası gelen onaycıya karar düğmeleri görünür ama pasiftir; karar eski ekranda (853 a)', async () => {
+    vi.useFakeTimers({ now: SIMDI, toFake: ['Date'] });
+    const d = teklifDeposu();
+    const a1 = d.approvals['a1'];
+    const q = talepKur({ id: 'q7', status: 'new', pendingApproval: 'a1' });
+    const istekler = sunucuKur(SATICI_KISI, {
+      ...d,
+      requests: { ...d.requests, q7: q } as typeof d.requests,
+      approvals: { ...d.approvals, a1: { ...a1, kind: 'discount', steps: [{ role: 'Satış', status: 'pending' }] } } as typeof d.approvals,
+    }, yazmaCevabi);
+    ac('/portal/yeni/sale?id=q7');
+    expect(await screen.findByText(/onayı bekleniyor/, {}, { timeout: 5000 })).toBeTruthy();
+    const onayla = screen.getByRole('button', { name: 'Onayla' }) as HTMLButtonElement;
+    expect(onayla.disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Reddet' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('link', { name: 'Eski portal ekranında karar verin' }).getAttribute('href')).toBe('/portal');
+    fireEvent.click(onayla);
+    expect(istekler.some((i) => i.yol.includes('/karar'))).toBe(false);
   });
 
   it('araya giren değişiklikte çatışma iletisi verir', async () => {

@@ -3,7 +3,7 @@ import { Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { kalanGun, para, sayi, sureMetni, tarih, tarihSaat, YOK } from '../bicim.ts';
 import { talepDurumu, teklifTutari, type Ton } from '../kurallar.ts';
 import type { Depo, Firma, Gecmis, Kalem, ParaBirimi, TeklifSurumu, TeklifTalebi } from '../tipler.ts';
-import { kaydet, useEk } from '../veri.ts';
+import { kaydet } from '../veri.ts';
 
 // Müşteri teklifleri parçasının ortak parçaları: kaydın ekranın okuduğu alanları, durum adları, kalem ve teklif tabloları.
 
@@ -140,21 +140,12 @@ export function TeklifSayfasi({ q, v, onceki, simdi }: { q: Talep; v: Surum; onc
   );
 }
 
-// Eklerin küçük resimleri. İçerik sunucudan base64 gelir (portal/ekler/:id).
-export function EkResmi({ id }: { id: string }) {
-  const ek = useEk(id);
-  if (!ek.data) return <span className="tc-pt-teklif-ek" aria-busy="true" />;
-  return (
-    <a className="tc-pt-teklif-ek" href={`data:${ek.data.tur};base64,${ek.data.veri}`} target="_blank" rel="noreferrer" aria-label={`${ek.data.ad} büyüt`}>
-      {ek.data.tur.startsWith('image/') ? <img src={`data:${ek.data.tur};base64,${ek.data.veri}`} alt={ek.data.ad} loading="lazy" /> : <span>{ek.data.ad}</span>}
-    </a>
-  );
-}
-
-export function Galeri({ ekler }: { ekler: readonly string[] | undefined }) {
-  if (!ekler || ekler.length === 0) return null;
-  return <div className="tc-pt-teklif-ekler">{ekler.map((id) => <EkResmi key={id} id={id} />)}</div>;
-}
+// Yarım kalan form, oturum boyunca görünümler arası korunur (prototip drafts); gönderilince silinir.
+const taslaklar = new Map<string, unknown>();
+export const taslakOku = <T,>(anahtar: string): T | undefined => taslaklar.get(anahtar) as T | undefined;
+export const taslakYaz = (anahtar: string, deger: unknown): void => { taslaklar.set(anahtar, deger); };
+export const taslakSil = (anahtar: string): void => { taslaklar.delete(anahtar); };
+export const taslaklariSil = (): void => { taslaklar.clear(); };
 
 // İşlem geçmişi (prototip timeline): yeniden eskiye, yapan kişi ve firma.
 export function IslemGecmisi({ gecmis, yapan }: { gecmis: readonly Gecmis[] | undefined; yapan: (h: Gecmis) => string }) {

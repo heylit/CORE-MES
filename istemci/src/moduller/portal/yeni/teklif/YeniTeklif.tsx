@@ -1,18 +1,20 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { CokSatir, Dugme, DurumKutusu, Girdi, SayfaBasligi, Secim } from '../../../../ortak/arayuz/index.ts';
 import { gunEkle, isoGun, sayiOku } from '../bicim.ts';
 import type { GorunumOzellikleri } from '../sekmeler.ts';
 import type { Kalem, KoleksiyonAdi } from '../tipler.ts';
 import { belgeNoAl, hataMetni, usePortal, usePortalDeposu, yeniKimlik } from '../veri.ts';
-import { BIRIMLER, musteriler, talepYaz, type Talep } from './ortak.tsx';
+import { BIRIMLER, musteriler, taslakOku, taslakSil, taslakYaz, talepYaz, type Talep } from './ortak.tsx';
 import './teklif.css';
 
 // Yeni teklif (prototip newSale): satış ekibi müşteri adına talep açar; açılınca teklif hazırlama ekranına geçilir.
 
 const KOLEKSIYONLAR: readonly KoleksiyonAdi[] = ['parties'];
 const ISTENEN_GUN = 30;
+const TASLAK = 'newsale';
 
 export interface Satir { ad: string; miktar: string; birim: string }
+interface YeniTeklifTaslagi { musteri: string; konu: string; istenen: string; not: string; satirlar: Satir[] }
 const bosSatir = (): Satir => ({ ad: '', miktar: '', birim: BIRIMLER[0] });
 
 // Prototip readRows: tamamen boş satır atlanır; dolu satırda ad ve sıfırdan büyük miktar gerekir.
@@ -32,11 +34,13 @@ export function YeniTeklif(_: GorunumOzellikleri) {
   const p = usePortal();
   const { depo, yukleniyor, hata: okumaHatasi, yenile } = usePortalDeposu(KOLEKSIYONLAR);
   const liste = musteriler(depo);
-  const [musteri, setMusteri] = useState('');
-  const [konu, setKonu] = useState('');
-  const [istenen, setIstenen] = useState(() => gunEkle(p.simdi, ISTENEN_GUN));
-  const [not, setNot] = useState('');
-  const [satirlar, setSatirlar] = useState<Satir[]>([bosSatir()]);
+  const taslak = taslakOku<YeniTeklifTaslagi>(TASLAK);
+  const [musteri, setMusteri] = useState(taslak?.musteri ?? '');
+  const [konu, setKonu] = useState(taslak?.konu ?? '');
+  const [istenen, setIstenen] = useState(() => taslak?.istenen ?? gunEkle(p.simdi, ISTENEN_GUN));
+  const [not, setNot] = useState(taslak?.not ?? '');
+  const [satirlar, setSatirlar] = useState<Satir[]>(() => taslak?.satirlar ?? [bosSatir()]);
+  useEffect(() => { taslakYaz(TASLAK, { musteri, konu, istenen, not, satirlar }); }, [musteri, konu, istenen, not, satirlar]);
   const [hata, setHata] = useState<string | null>(null);
   const [gonderiliyor, setGonderiliyor] = useState(false);
 
@@ -66,6 +70,7 @@ export function YeniTeklif(_: GorunumOzellikleri) {
         history: [{ at: an, by: 'firm', u: p.kisiKimligi, text: 'Teklif talebi satış ekibince müşteri adına açıldı' }],
       };
       await talepYaz(q);
+      taslakSil(TASLAK);
       p.git('sale', q.id);
     } catch (e) {
       setHata(hataMetni(e, 'Talep açılamadı.'));

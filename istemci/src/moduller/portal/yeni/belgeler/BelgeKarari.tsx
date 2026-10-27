@@ -81,7 +81,7 @@ export function Gorseller({ idler }: { idler: readonly string[] }) {
 // Eski kayıtta resim adresi belgede durur; yalnız gömülü resim kabul edilir (dış adres açılmaz).
 const gomuluResim = (url: string | undefined): string | null => (url && /^data:image\/[a-z+.-]+;base64,/.test(url) ? url : null);
 
-function Resim({ dosya }: { dosya: Dosya }) {
+export function Resim({ dosya }: { dosya: Dosya }) {
   const ek = useEk(dosya.assetId ?? null);
   const adres = dosya.assetId ? (ek.data ? `data:${ek.data.tur};base64,${ek.data.veri}` : null) : gomuluResim(dosya.url);
   if (dosya.assetId && ek.isError) return <DurumKutusu durum="hata" mesaj="Görüntü okunamadı." />;

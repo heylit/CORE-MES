@@ -3,9 +3,10 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { SIMDI } from '../ornek-veri.ts';
 import { ac, sunucuKur, type Istek } from '../test-ortak.tsx';
 import { KALITECI_KISI, SATICI_KISI, teklifDeposu, yazmaCevabi } from './test-verisi.ts';
+import { taslaklariSil } from './ortak.tsx';
 import { satirlariOku } from './YeniTeklif.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); taslaklariSil(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const yazmalar = (istekler: readonly Istek[]) =>
   istekler.filter((i) => i.yontem === 'POST' && i.yol === '/portal/belge/yaz').map((i) => i.govde as { yol: string; veri: Record<string, unknown>; beklenenSurum: number | null });
@@ -31,6 +32,17 @@ describe('YeniTeklif', () => {
     // Numara okunan taleplerin en büyük sırasından (TKL-2026-q6) bir sonraki.
     expect(y?.veri).toMatchObject({ no: 'TKL-2026-007', customerId: 'c1', title: 'Deneme yıllık ihtiyaç', status: 'new', items: [{ name: 'Deneme mil', qty: 12 }] });
     expect(await screen.findByText('Bu kayıt bulunamadı veya bu hesapla erişiminiz yok.')).toBeTruthy();
+  });
+
+  it('yarım kalan form sayfadan çıkıp dönünce korunur', async () => {
+    sunucuKur(SATICI_KISI, teklifDeposu(), yazmaCevabi);
+    ac('/portal/yeni/newsale');
+    fireEvent.change(await screen.findByLabelText(/^Konu/, {}, { timeout: 5000 }), { target: { value: 'Yarım talep' } });
+    fireEvent.change(screen.getByLabelText('Kalem 1 adı'), { target: { value: 'Deneme mil' } });
+    cleanup();
+    ac('/portal/yeni/newsale');
+    expect(((await screen.findByLabelText(/^Konu/, {}, { timeout: 5000 })) as HTMLInputElement).value).toBe('Yarım talep');
+    expect((screen.getByLabelText('Kalem 1 adı') as HTMLInputElement).value).toBe('Deneme mil');
   });
 
   it('satış izni olmayan kişiye formu açmaz', async () => {

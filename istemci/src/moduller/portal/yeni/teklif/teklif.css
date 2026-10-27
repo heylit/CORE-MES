@@ -18,6 +18,7 @@
 .tc-pt-teklif-eylemler { display: flex; flex-wrap: wrap; gap: var(--b-2); margin-top: var(--b-2); }
 /* Uzun eylem adı 360 genişlikte bant içinde kesilmesin. */
 .tc-pt-teklif-eylemler > .tc-dugme { max-inline-size: 100%; white-space: normal; text-align: start; }
+.tc-pt-teklif-eski { align-self: center; }
 .tc-pt-teklif-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: var(--b-2) 0; padding: 0; list-style: none; }
 .tc-pt-teklif-adimlar li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-pt-teklif-adimlar small { color: var(--muted); font-size: var(--yazi-xs); }

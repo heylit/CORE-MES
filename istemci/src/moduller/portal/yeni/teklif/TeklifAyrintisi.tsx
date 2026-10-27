@@ -1,20 +1,22 @@
-import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CokSatir, Dugme, DurumKutusu, Girdi, OnayPenceresi, Rozet, SayfaBasligi, Secim, Simge,
 } from '../../../../ortak/arayuz/index.ts';
 import { gunEkle, isoGun, kalanGun, para, sayi, sayiOku, tarih, tarihSaat, YOK } from '../bicim.ts';
 import {
-  adimAtla, KDV, ONAY_TURLERI, onayAdimlari, onayKurallari, gecmisEkle, siradakiAdim, talepDurumu, teklifTutari, yuvarla,
+  adimAtla, KDV, ONAY_TURLERI, onayAdimlari, onaylayabilirMi, onayKurallari, gecmisEkle, siradakiAdim, talepDurumu, teklifTutari, yuvarla,
 } from '../kurallar.ts';
+import { Gorseller, Resim } from '../belgeler/BelgeKarari.tsx';
+import { EN_COK_GORSEL, gorselMi, gorselYukle, useDosyalar } from '../belgeler/gorseller.ts';
 import { sahibi } from '../sahibinde.tsx';
 import type { GorunumOzellikleri } from '../sekmeler.ts';
 import type { Depo, Gecmis, KoleksiyonAdi, Onay, Siparis, TeklifTalebi } from '../tipler.ts';
 import {
-  belgeNoAl, ekYukle, hataMetni, kaydet, usePortal, usePortalDeposu, usePortalKomutu, yeniKimlik,
+  belgeNoAl, hataMetni, kaydet, usePortal, usePortalDeposu, usePortalKomutu, yeniKimlik,
 } from '../veri.ts';
 import {
-  DurumRozeti, EkResmi, Galeri, GECERLILIK_GUNU, IslemGecmisi, KalemTablosu, ODEME_KOSULLARI, sonSurumu, talep, talepYaz, TESLIM_GUNU, TeklifSayfasi, tutar,
+  DurumRozeti, GECERLILIK_GUNU, IslemGecmisi, KalemTablosu, ODEME_KOSULLARI, sonSurumu, talep, talepYaz, TESLIM_GUNU, TeklifSayfasi, taslakOku, taslakSil, taslakYaz, tutar,
   VARSAYILAN_VADE, type Surum, type Talep,
 } from './ortak.tsx';
 import './teklif.css';
@@ -113,7 +115,7 @@ export function TeklifAyrintisi({ id }: GorunumOzellikleri) {
           )}
         </Bant>
       )}
-      {onay && <OnayBandi a={onay} yapan={(uid) => depo.users[uid]?.name ?? uid} yol={p.yol('approvals', onay.id)} />}
+      {onay && <OnayBandi a={onay} yapan={(uid) => depo.users[uid]?.name ?? uid} verebilir={onaylayabilirMi(onay, p.onaylayan)} />}
 
       <div className="tc-pt-izgara">
         <div className="tc-pt-yan">
@@ -124,7 +126,7 @@ export function TeklifAyrintisi({ id }: GorunumOzellikleri) {
             </header>
             <KalemTablosu kalemler={q.items} birim={q.currency} />
             {q.note && <p className="tc-pt-teklif-not">{q.note}</p>}
-            <Galeri ekler={q.photos} />
+            {q.photos && q.photos.length > 0 && <Gorseller idler={q.photos} />}
           </section>
           {gosterilen && <TeklifSayfasi q={q} v={gosterilen} onceki={oncekiSurum} simdi={simdi} />}
           {hazirlanabilir && <SurumFormu key={`${q.id}-${String(q.surum)}`} q={q} depo={depo} />}
@@ -178,8 +180,9 @@ function Bant({ ton, baslik, children }: { ton: keyof typeof BANT_TONU; baslik: 
   );
 }
 
-// Teklife bağlı onay (prototip apBanner). Karar Onaylarım'da verilir; burada durum ve adımlar görünür.
-function OnayBandi({ a, yapan, yol }: { a: Onay; yapan: (uid: string) => string; yol: string }) {
+// Teklife bağlı onay (prototip apBanner). Teklifteki onay iskonto onayıdır; kararı Siparişler'in iskonto ucuna bağlanana kadar
+// (H2) burada verilemez: düğmeler sırası gelen onaycıya görünür ama pasiftir, karar eski portal ekranında verilir (853 a).
+function OnayBandi({ a, yapan, verebilir }: { a: Onay; yapan: (uid: string) => string; verebilir: boolean }) {
   if (a.status === 'approved') return null;
   if (a.status === 'rejected') {
     return <Bant ton="hata" baslik={`${ONAY_TURLERI[a.kind]} onayı reddedildi (${a.no})`}>{a.steps.find((s) => s.status === 'rejected')?.note ?? ''}</Bant>;
@@ -199,7 +202,13 @@ function OnayBandi({ a, yapan, yol }: { a: Onay; yapan: (uid: string) => string;
           </li>
         ))}
       </ul>
-      <Link to={yol}>Onaylarım'da aç</Link>
+      {verebilir && (
+        <div className="tc-pt-teklif-eylemler">
+          <Dugme simge="check" disabled title="İskonto kararı şimdilik eski portal ekranında verilir">Onayla</Dugme>
+          <Dugme simge="x" tur="tehlike" disabled title="İskonto kararı şimdilik eski portal ekranında verilir">Reddet</Dugme>
+          <Link className="tc-pt-teklif-eski" to={sahibi('approvals').yol}>Eski portal ekranında karar verin</Link>
+        </div>
+      )}
     </Bant>
   );
 }
@@ -232,7 +241,9 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
   const birim = q.currency;
   const vade = `${String(VARSAYILAN_VADE)} gün vadeli`;
   const gecerliMi = v ? (kalanGun(v.validUntil, p.simdi) ?? -1) >= 0 : false;
-  const [g, setG] = useState<SurumGirdisi>(() => ({
+  const taslakAdi = `quote-${q.id}`;
+  const taslak = taslakOku<{ g: SurumGirdisi; ekler: string[] }>(taslakAdi);
+  const [g, setG] = useState<SurumGirdisi>(() => taslak?.g ?? ({
     fiyatlar: q.items.map((_, i) => girdiMetni(v?.prices[i])),
     iskonto: girdiMetni(v?.discount ?? 0),
     teslim: v?.deliveryDays === undefined ? '' : String(v.deliveryDays),
@@ -240,8 +251,9 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
     gecerlilik: v && gecerliMi ? v.validUntil : gunEkle(p.simdi, GECERLILIK_GUNU),
     not: v?.note ?? '',
   }));
-  const [ekler, setEkler] = useState<string[]>([]);
-  const [yukleniyor, setYukleniyor] = useState(false);
+  const [ekler, setEkler] = useState<string[]>(() => taslak?.ekler ?? []);
+  const [yukleniyor, setYukleniyor] = useState(0);
+  useEffect(() => { taslakYaz(taslakAdi, { g, ekler }); }, [taslakAdi, g, ekler]);
   const [hata, setHata] = useState<string | null>(null);
 
   const gonder = usePortalKomutu(async (s: Surum) => {
@@ -249,6 +261,7 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
       ...q, status: 'quoted', photos: [...(q.photos ?? []), ...ekler], versions: [...(q.versions ?? []), s],
       history: gecmisEkle(q, `Sürüm ${String(s.v)} gönderildi`, p.kisiKimligi, Date.now()),
     });
+    taslakSil(taslakAdi);
     window.scrollTo?.(0, 0);
   }, v ? `Sürüm ${String(v.v + 1)} müşteriye gönderildi` : 'Sürüm 1 müşteriye gönderildi');
 
@@ -273,21 +286,22 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
     gonder.mutate(okunan.surum);
   };
 
-  const dosyaSec = async (o: ChangeEvent<HTMLInputElement>) => {
-    const dosyalar = [...(o.target.files ?? [])];
+  // Prototip handleFiles: yalnız resim, bir seçimde en çok altı; her resim küçültülüp yüklenir.
+  const dosyaSec = (o: ChangeEvent<HTMLInputElement>) => {
+    const secilen = [...(o.target.files ?? [])];
     o.target.value = '';
-    if (dosyalar.length === 0) return;
-    setYukleniyor(true);
-    try {
-      for (const d of dosyalar) {
-        const veri = await base64(d);
-        const c = await ekYukle(d.name, d.type || 'application/octet-stream', veri);
-        setEkler((x) => [...x, c.id]);
-      }
-    } catch (e) {
-      setHata(hataMetni(e, 'Dosya yüklenemedi.'));
-    } finally {
-      setYukleniyor(false);
+    const resimler = secilen.filter(gorselMi).slice(0, EN_COK_GORSEL);
+    if (resimler.length === 0) {
+      if (secilen.length > 0) setHata('Yalnızca resim dosyaları eklenebilir (JPG, PNG, WEBP).');
+      return;
+    }
+    setHata(null);
+    for (const d of resimler) {
+      setYukleniyor((n) => n + 1);
+      gorselYukle(d, p.kisiKimligi).then(
+        (id) => { setEkler((x) => [...x, id]); },
+        (e: unknown) => { setHata(`Resim yüklenemedi: ${hataMetni(e, e instanceof Error ? e.message : 'bilinmeyen hata')}`); },
+      ).finally(() => { setYukleniyor((n) => n - 1); });
     }
   };
 
@@ -333,16 +347,11 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
         <div className="tc-pt-teklif-yukle-alan">
           <span className="tc-pt-teklif-yukle-etiket">Görsel (numune fotoğrafı, çizim)</span>
           <div className="tc-pt-teklif-yukle">
-            {ekler.map((id) => (
-              <span className="tc-pt-teklif-yuklenen" key={id}>
-                <EkResmi id={id} />
-                <Dugme simge="x" aria-label="Kaldır" onClick={() => setEkler((x) => x.filter((e) => e !== id))} />
-              </span>
-            ))}
+            <YuklenenResimler idler={ekler} kaldir={(id) => setEkler((x) => x.filter((e) => e !== id))} />
             <label className="tc-dugme tc-dugme-ikincil tc-dugme-normal">
               <Simge ad="camera" />
               <span>Resim ekle</span>
-              <input type="file" accept="image/*,application/pdf" multiple disabled={yukleniyor} onChange={(o) => { void dosyaSec(o); }} />
+              <input type="file" accept="image/*" multiple onChange={dosyaSec} />
             </label>
           </div>
         </div>
@@ -352,7 +361,7 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
             KDV hariç toplam <b>{para(canli.net, birim)}</b>
             <span className="tc-pt-teklif-ipucu">{`KDV dahil ${para(canli.grand, birim)}`}</span>
           </div>
-          <Dugme tur="birincil" type="submit" yukleniyor={gonder.isPending || yukleniyor}>{v ? `Sürüm ${String(v.v + 1)} olarak gönder` : 'Teklifi gönder'}</Dugme>
+          <Dugme tur="birincil" type="submit" yukleniyor={gonder.isPending || yukleniyor > 0}>{v ? `Sürüm ${String(v.v + 1)} olarak gönder` : 'Teklifi gönder'}</Dugme>
         </div>
       </form>
     </section>
@@ -363,13 +372,22 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
 const odemeSecenekleri = (secili: string) =>
   [...ODEME_KOSULLARI, ...(ODEME_KOSULLARI.includes(secili as (typeof ODEME_KOSULLARI)[number]) ? [] : [secili])].map((x) => ({ deger: x, baslik: x }));
 
-function base64(d: Blob): Promise<string> {
-  return new Promise((coz, reddet) => {
-    const r = new FileReader();
-    r.onload = () => { coz(String(r.result).replace(/^data:[^,]*,/, '')); };
-    r.onerror = () => { reddet(r.error ?? new Error('Dosya okunamadı.')); };
-    r.readAsDataURL(d);
-  });
+// Yüklenen resimler küçük resim ve kaldır düğmesiyle (prototip uploader).
+function YuklenenResimler({ idler, kaldir }: { idler: readonly string[]; kaldir: (id: string) => void }) {
+  const dosyalar = useDosyalar(idler);
+  return (
+    <>
+      {idler.map((id, i) => {
+        const d = dosyalar[i]?.data;
+        return (
+          <span className="tc-pt-teklif-yuklenen" key={id}>
+            <span className="tc-pt-teklif-ek" aria-busy={d ? undefined : true}>{d && <Resim dosya={d} />}</span>
+            <Dugme simge="x" aria-label={`${d?.name || 'Resim'} kaldır`} onClick={() => kaldir(id)} />
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 function SurumGecmisi({ q }: { q: Talep }) {
