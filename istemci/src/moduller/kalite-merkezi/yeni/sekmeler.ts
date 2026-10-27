@@ -16,7 +16,8 @@ import { LotKabul, LotKabulSayaci } from './lot/index.tsx';
 import { Muayeneler, MuayenelerSayaci } from './muayene/index.tsx';
 import { Uygunsuzluklar, UygunsuzluklarSayaci } from './ncr/index.tsx';
 import { Parcalar, ParcalarSayaci } from './parcalar/index.tsx';
-import { ResimVeModeller, ResimVeModellerSayaci } from '../studyo/index.tsx';
+import { ResimVeModellerSayaci } from '../studyo/index.tsx';
+import { ResimVeModellerSayfasi } from '../studyo/ResimListesi.tsx';
 import { OlcumAnalizi, OlcumAnaliziSayaci } from './spc/index.tsx';
 import { Tedarikciler, TedarikcilerSayaci } from './tedarikciler/index.tsx';
 import { Terimler, TerimlerSayaci } from './terimler/index.tsx';
@@ -46,8 +47,7 @@ export interface KmGorunumTanimi {
   anahtar: KmGorunum;
   baslik: string;
   bolum: KmBolumu;
-  // null: eski çerçevede kalan görünüm (Analiz, 597 a ile TS'e geçene dek); yeni ekranda eski yola gider.
-  ekran: ComponentType<EkranOzellikleri> | null;
+  ekran: ComponentType<EkranOzellikleri>;
   sayac: KmSayaci;
 }
 
@@ -65,8 +65,7 @@ export const BOLUMLER: readonly { anahtar: KmBolumu; baslik: string; simge: Simg
 export const GORUNUMLER: readonly KmGorunumTanimi[] = [
   { anahtar: 'bugun', baslik: 'Bugün', bolum: 'bugun', ekran: Bugun, sayac: BugunSayaci },
   { anahtar: 'parcalar', baslik: 'Parçalar', bolum: 'parca', ekran: Parcalar, sayac: ParcalarSayaci },
-  { anahtar: 'resimler', baslik: 'Resim ve modeller', bolum: 'resim', ekran: ResimVeModeller, sayac: ResimVeModellerSayaci },
-  { anahtar: 'analiz', baslik: 'Analiz', bolum: 'resim', ekran: null, sayac: null },
+  { anahtar: 'resimler', baslik: 'Resim ve modeller', bolum: 'resim', ekran: ResimVeModellerSayfasi, sayac: ResimVeModellerSayaci },
   { anahtar: 'kutuphane', baslik: 'Teknik kütüphane', bolum: 'resim', ekran: TeknikKutuphane, sayac: TeknikKutuphaneSayaci },
   { anahtar: 'muayeneler', baslik: 'Muayeneler', bolum: 'muayene', ekran: Muayeneler, sayac: MuayenelerSayaci },
   { anahtar: 'lot-kabul', baslik: 'Lot kabul (AQL)', bolum: 'muayene', ekran: LotKabul, sayac: LotKabulSayaci },
@@ -87,9 +86,8 @@ export const GORUNUMLER: readonly KmGorunumTanimi[] = [
 ];
 
 export const KOK_YOL = '/kalite-merkezi';
-// Ekranı null görünümün adresinde çerçeve açılır (rotalar.tsx). Resim ve modeller 597 a ile yeni stüdyodadır. Cihaz kaydı Kalibrasyondadır.
+// Resim ve modeller 597 a ile yeni stüdyodadır. Cihaz kaydı Kalibrasyondadır.
 export const gorunumYolu = (g: KmGorunum): string => (g === 'bugun' ? KOK_YOL : `${KOK_YOL}/${g}`);
-export const STUDYO_YOLLARI: readonly string[] = GORUNUMLER.filter((g) => g.ekran === null).map((g) => gorunumYolu(g.anahtar));
 export const STUDYO_YOLU = gorunumYolu('resimler');
 export const KALIBRASYON_YOLU = '/kalibrasyon';
 export const gorunumTanimi = (g: string | undefined): KmGorunumTanimi | undefined => GORUNUMLER.find((x) => x.anahtar === (g ?? 'bugun'));

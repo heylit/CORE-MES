@@ -7,10 +7,9 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   KmDegisiklikCevabi, KmEmirKaynagi, KmEmirKaynaklariCevabi, KmKimlikCevabi, KmOlcuAletleriCevabi, KmParcaKaynagi, KmParcaKaynaklariCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmNumune, KmOlcum, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmNumune, KmOlcum, KmStudyoOzeti, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/Bildirim.tsx';
 import { KaliteMerkeziYeni } from './KaliteMerkeziYeni.tsx';
-import { STUDYO_YOLLARI } from './sekmeler.ts';
 import type { KmKoleksiyonu } from './tipler.ts';
 
 // Testlerin ortak kurulumu: sahte sunucu (oturum, kimlik, akış, ölçü aletleri, yazma uçları) ve yeni ekranın açılışı. Veri uydurmadır.
@@ -31,8 +30,8 @@ export type TestKayitlari = Partial<Record<KmKoleksiyonu | 'settings', Record<st
 export interface Yazma { yol: string; govde: unknown }
 
 // `emirler` sahiplerden gelen iş emri ve siparişler (null: uç hata verir), `parcalar` Malzemeler kartları (592); `ret` verilen yol 403 döner (izinsiz deneme).
-// `studyo`: Resim ve modeller uçları; parça malzeme kartı numarasıyla, ölçüm ve numune üretim emri kimliğiyle.
-export interface StudyoVerisi { parcalar?: Record<number, KmStudyoParcaCevabi>; olcumler?: Record<number, KmOlcum[]>; numuneler?: Record<number, KmNumune[]> }
+// `studyo`: Resim ve modeller uçları; parça malzeme kartı numarasıyla, ölçüm ve numune üretim emri kimliğiyle; `ozetler` parça listesi.
+export interface StudyoVerisi { ozetler?: KmStudyoOzeti[]; parcalar?: Record<number, KmStudyoParcaCevabi>; olcumler?: Record<number, KmOlcum[]>; numuneler?: Record<number, KmNumune[]> }
 export interface SunucuSecenegi { ret?: (yol: string) => boolean; emirler?: KmEmirKaynagi[] | null; parcalar?: KmParcaKaynagi[]; studyo?: StudyoVerisi }
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -78,6 +77,7 @@ export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, sece
       const parcalar = (secenek.parcalar ?? []).filter((p) => (idler ? idler.includes(p.malzemeNo) : `${p.kod} ${p.ad ?? ''}`.toLocaleLowerCase('tr').includes(ara)));
       return json(200, { parcalar } satisfies KmParcaKaynaklariCevabi);
     }
+    if (yol === '/kalite-merkezi/studyo/parcalar') return json(200, { parcalar: secenek.studyo?.ozetler ?? [] });
     const st = /^\/kalite-merkezi\/studyo\/(parcalar|emirler)\/(\d+)(?:\/(olcumler|numuneler))?$/.exec(yol);
     if (st) {
       const n = Number(st[2]);
@@ -103,7 +103,7 @@ export function kmGit(gorunum: string): void {
   act(() => { void gezgin?.(gorunum ? `/kalite-merkezi/${gorunum}` : '/kalite-merkezi'); });
 }
 
-// Yeni ekranı verilen görünümde açar (`/kalite-merkezi/<gorunum>`; Bugün için boş; sorgu eki olabilir). Analiz çerçevededir.
+// Yeni ekranı verilen görünümde açar (`/kalite-merkezi/<gorunum>`; Bugün için boş; sorgu eki olabilir).
 export function kmAc(gorunum: string, k: TestKullanicisi = YONETICI, kayitlar: TestKayitlari = {}, secenek: SunucuSecenegi = {}) {
   const sunucu = sunucuKur(k, kayitlar, secenek);
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -115,7 +115,6 @@ export function kmAc(gorunum: string, k: TestKullanicisi = YONETICI, kayitlar: T
           <Adres />
           <Routes>
             <Route path="/kalite-merkezi" element={<KaliteMerkeziYeni />} />
-            {STUDYO_YOLLARI.map((y) => <Route key={y} path={y} element={<p>eski ekran</p>} />)}
             <Route path="/kalite-merkezi/:gorunum" element={<KaliteMerkeziYeni />} />
             <Route path="*" element={<p>eski ekran</p>} />
           </Routes>

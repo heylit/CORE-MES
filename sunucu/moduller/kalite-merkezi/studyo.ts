@@ -4,7 +4,7 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmBalonGirdisi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -42,6 +42,10 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
   // Plan yalnız Kalite Merkezi'nin kuralıyla yazılır; okunamayan plan sessizce boş sayılmaz (hata olarak görünür).
   const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo)).map((p) => ({ opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }));
   return { resimler, numunePlanlari };
+}
+
+export async function studyoOzetleri(db: Db): Promise<KmStudyoOzeti[]> {
+  return sorgular.studyoOzetleri(db);
 }
 
 // Alınabilecek belgeler: yalnız yayındaki PDF ve 3B model (alma kuralıyla aynı süzgeç); sayı sınırı belge merkezinin seçici sınırıdır.

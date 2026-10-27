@@ -35,8 +35,8 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
   { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
   { yol: '/malzemeler', eski: '/malzemeler/eski', serit: true, haric: ['/malzemeler/logo'] },
-  // Resim ve modeller ile Analiz (217 b) yalnız çerçevededir: eskisi ve yenisi yoktur.
-  { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler', '/kalite-merkezi/analiz'] },
+  // Resim ve modellerin (597 a) eski görünümde karşılığı yoktur.
+  { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler'] },
   ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
     yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
   })),

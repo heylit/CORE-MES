@@ -8,7 +8,7 @@ import {
 import * as servis from './servis.ts';
 import {
   kmBalonlarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
-  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoParcaCevabi,
+  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi,
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
@@ -203,6 +203,13 @@ export const uclar: Uc[] = [
   }),
   // Stüdyo (595 1 b, 597 a, 600 a): resim, balon ve numune planı okunur; numune ve ölçüm Kalite Merkezi'nde yazılır. Resim alma,
   // kontrol planı ve numune planı kalite onayıdır (603 a: kalite-merkezi.onayla).
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/parcalar',
+    yetki: 'kalite-merkezi.oku',
+    cevap: kmStudyoOzetleriCevabi,
+    isle: async ({ db }) => ({ parcalar: await studyo.studyoOzetleri(db) }),
+  }),
   uc({
     yontem: 'GET',
     yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo',

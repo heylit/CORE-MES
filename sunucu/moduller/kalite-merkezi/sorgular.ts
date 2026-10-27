@@ -320,6 +320,20 @@ export function etkinBalonlar(db: Db, idler: readonly number[]): Promise<BalonSa
   );
 }
 
+// Resmi, modeli ya da numune planı olan her parça; kaldırılmış resim ve balon sayılmaz, kuralı boş plan plan sayılmaz.
+export function studyoOzetleri(db: Db): Promise<{ malzemeNo: number; resim: number; model: number; balon: number; numunePlani: number }[]> {
+  return db.sorgu(
+    `WITH r AS (SELECT id, malzeme_no, tur FROM kalite_merkezi_resim WHERE aktif),
+          n AS (SELECT malzeme_no FROM kalite_merkezi_numune_plani WHERE jsonb_array_length(kurallar) > 0)
+     SELECT p.malzeme_no AS "malzemeNo",
+       (SELECT count(*)::int FROM r WHERE r.malzeme_no = p.malzeme_no AND r.tur = 'resim') AS resim,
+       (SELECT count(*)::int FROM r WHERE r.malzeme_no = p.malzeme_no AND r.tur = 'model') AS model,
+       (SELECT count(*)::int FROM kalite_merkezi_balon b JOIN r ON r.id = b.resim_id WHERE r.malzeme_no = p.malzeme_no AND b.aktif) AS balon,
+       (SELECT count(*)::int FROM n WHERE n.malzeme_no = p.malzeme_no) AS "numunePlani"
+     FROM (SELECT malzeme_no FROM r UNION SELECT malzeme_no FROM n) p ORDER BY p.malzeme_no`,
+  );
+}
+
 export function numunePlanlari(db: Db, malzemeNo: number): Promise<{ opNo: number; kurallar: unknown; surum: number }[]> {
   return db.sorgu(
     'SELECT op_no AS "opNo", kurallar, surum FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 ORDER BY op_no', [malzemeNo],

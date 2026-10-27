@@ -40,7 +40,6 @@ function Icerik() {
   const [atolye, atolyeYaz] = useState(() => kmTercihi().shop === true);
   const tanim = gorunumTanimi(gorunum);
 
-  // Ekranı olmayan görünümün (stüdyo, 217 b) adresi çerçeveyi açar (rotalar.tsx).
   const git = (g: KmGorunum, gecis?: KmGecis) => { void gitAdres(gorunumYolu(g), { state: gecis ?? null }); };
   const gecis = (konum.state as KmGecis | null) ?? null;
   const gecisTamam = () => { void gitAdres(konum.pathname, { replace: true, state: null }); };
@@ -77,9 +76,7 @@ function Icerik() {
         </div>
       </div>
       <div className="tc-km-govde">
-        {Ekran
-          ? <Ekran key={tanim.anahtar} veri={veri} yetki={yetki} gecis={gecis} gecisTamam={gecisTamam} git={git} atolye={atolye} />
-          : <DurumKutusu durum="bos" mesaj="Bu görünüm stüdyoda açılır." />}
+        <Ekran key={tanim.anahtar} veri={veri} yetki={yetki} gecis={gecis} gecisTamam={gecisTamam} git={git} atolye={atolye} />
       </div>
       <TerimIsaretleri kapali={veri.ayarlar.terimKapali === true} />
     </div>

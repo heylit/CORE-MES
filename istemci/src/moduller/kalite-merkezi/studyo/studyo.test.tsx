@@ -29,13 +29,14 @@ const SECENEK: SunucuSecenegi = {
 };
 
 describe('Resim ve modeller stüdyosu (597 a)', () => {
-  it('parça seçilmeden boş durum ve parça seçici gösterir', async () => {
-    kmAc('resimler', OKUYAN, {}, SECENEK);
+  it('parça seçilmeden liste gelir (799); satır stüdyoyu açar, parça seçici stüdyoda kalır', async () => {
+    kmAc('resimler', OKUYAN, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, ozetler: [{ malzemeNo: 7, resim: 1, model: 1, balon: 0, numunePlani: 1 }] } });
+    const tablo = await screen.findByRole('table', { name: 'Resim ve modeller' });
+    fireEvent.click(await within(tablo).findByText('DNM-07'));
     expect(await screen.findByRole('region', { name: 'Teknik resim' })).toBeTruthy();
-    expect(screen.getAllByText('Parça seçin').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Parça seç' }));
-    fireEvent.click(await screen.findByText('DNM-07'));
     expect(await screen.findByText('Deneme gövde')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Parça değiştir' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
   it('parçanın etkin resim ve modelleri, numune planı ve açık iş emrinin numuneleri listelenir; sipariş satırı emir değildir', async () => {

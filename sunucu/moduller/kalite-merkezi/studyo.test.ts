@@ -9,7 +9,9 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type {
+  KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoOzetleriCevabi, KmStudyoParcaCevabi,
+} from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -199,6 +201,21 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(null, `/kalite-merkezi/studyo/parcalar/${flans}`)).statusCode, 401);
     // Arkon aynı okumayı disari.ts ile yapar.
     assert.deepEqual((await o().vt.tx((db) => studyoParcasi(db, flans))).resimler.map((x) => x.id), [resimId]);
+  });
+
+  test('KM-S24 resim listesi (799): parça başına resim, model, balon ve kuralı olan numune planı sayılır; operatör 403, oturumsuz 401', async () => {
+    // Kuralı boş plan plan sayılmaz.
+    await o().sahip.sorgu('INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, 99, $2, $3)', [mil, '[]', yonId]);
+    const r = await oku(kalite, '/kalite-merkezi/studyo/parcalar');
+    assert.equal(r.statusCode, 200, r.body);
+    const { parcalar } = r.json() as KmStudyoOzetleriCevabi;
+    assert.deepEqual(parcalar.filter((p) => p.malzemeNo === flans || p.malzemeNo === mil), [
+      { malzemeNo: flans, resim: 1, model: 0, balon: 2, numunePlani: 0 },
+      { malzemeNo: mil, resim: 1, model: 0, balon: 1, numunePlani: 0 }].sort((a, b) => a.malzemeNo - b.malzemeNo));
+    assert.equal((await oku(yazar, '/kalite-merkezi/studyo/parcalar')).statusCode, 200);
+    assert.equal((await oku(operator, '/kalite-merkezi/studyo/parcalar')).statusCode, 403);
+    assert.equal((await oku(null, '/kalite-merkezi/studyo/parcalar')).statusCode, 401);
+    await o().sahip.sorgu('DELETE FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 AND op_no = 99', [mil]);
   });
 
   test('KM-S11 resim dosyası belge merkezinden akar; belge yeni revizyona geçince alınan revizyon 409 olur; yetkisiz 403', async () => {
