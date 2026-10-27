@@ -21,6 +21,13 @@ const DURUM_TONU = { yok: 'pasif', taslak: 'uyari', yayin: 'tamam' } as const;
 export function DokumanUretici() {
   const d = useDenetim();
   const [gecis, gecisYaz] = useKysGecisi();
+  // Başka görünümden gelen doküman (git kys dokuman, prototip docOpen): bir kez açılır, ekran durumundan silinir.
+  const disaridan = d.ekran.kys.dok;
+  useEffect(() => {
+    if (!disaridan) return;
+    gecisYaz({ dokuman: disaridan });
+    d.ekranDegistir((e) => { delete e.kys.dok; });
+  }, [disaridan]);
   const acik = gecis.dokuman ? dokumanBul(d.profil.kys, gecis.dokuman) : undefined;
   return acik
     ? <Duzenleyici key={acik.id} dok={acik} kapat={() => { gecisYaz({ dokuman: '' }); }} />
@@ -206,7 +213,7 @@ function Kutuphane({ ac }: { ac: (id: string) => void }) {
     const fr = new FileReader();
     fr.onload = () => {
       const v = typeof fr.result === 'string' ? fr.result : '';
-      if (/^data:image\//.test(v)) d.degistir('Logo eklendi', (t) => { t.kys.logo = v; });
+      if (/^data:image\//.test(v)) d.degistir('Logo', (t) => { t.kys.logo = v; }, { bildirim: 'Logo eklendi' });
     };
     fr.readAsDataURL(f);
   };
@@ -234,7 +241,7 @@ function Kutuphane({ ac }: { ac: (id: string) => void }) {
             <div className="tc-dhk-arac">
               {K.logo && <img src={K.logo} alt="Logo" className="tc-dhk-logo" />}
               {yaz && (K.logo
-                ? <Dugme onClick={() => { d.degistir('Logo kaldırıldı', (t) => { t.kys.logo = ''; }); }}>Kaldır</Dugme>
+                ? <Dugme onClick={() => { d.degistir('Logo', (t) => { t.kys.logo = ''; }, { bildirim: 'Logo kaldırıldı' }); }}>Kaldır</Dugme>
                 : <Dugme simge="upload" onClick={() => { if (logoGirdisi.current) { logoGirdisi.current.value = ''; logoGirdisi.current.click(); } }}>Logo yükle</Dugme>)}
               {!K.logo && !yaz && <span className="tc-dhk-soluk">Logo yok</span>}
               <input ref={logoGirdisi} type="file" hidden aria-label="Logo dosyası" accept="image/png,image/jpeg,image/svg+xml,image/webp"
@@ -347,7 +354,7 @@ function Duzenleyici({ dok, kapat }: { dok: DokumanSablonu; kapat: () => void })
         <div className="tc-dhk-arac">
           {yaz && g.st !== 'yayin' && (
             <Dugme tur="birincil" simge="check" onClick={() => {
-              d.degistir(`${g.code} yürürlüğe alındı; ana listeye işlendi`, (t) => { yayinla(t.kys, dok, ''); });
+              d.degistir('Yürürlüğe alma', (t) => { yayinla(t.kys, dok, ''); }, { bildirim: `${g.code} yürürlüğe alındı; ana listeye işlendi` });
             }}>Yürürlüğe al</Dugme>
           )}
           {yaz && g.st === 'yayin' && (rev === null
@@ -356,7 +363,7 @@ function Duzenleyici({ dok, kapat }: { dok: DokumanSablonu; kapat: () => void })
               <form className="tc-dhk-arac" aria-label="Revizyon" onSubmit={(e) => {
                 e.preventDefault();
                 const not = rev.trim() || 'Revizyon';
-                d.degistir(`Rev. ${sonrakiRev()} yayınlandı`, (t) => { yayinla(t.kys, dok, not); });
+                d.degistir('Revizyon', (t) => { yayinla(t.kys, dok, not); }, { bildirim: `Rev. ${sonrakiRev()} yayınlandı` });
                 revYaz(null);
               }}>
                 <Girdi etiket="Revizyon açıklaması" placeholder="Ne değişti?" value={rev} autoFocus onChange={(e) => { revYaz(e.target.value); }} />
@@ -367,7 +374,7 @@ function Duzenleyici({ dok, kapat }: { dok: DokumanSablonu; kapat: () => void })
           {yaz && Object.keys(g.secs).length > 0 && (
             <Dugme onClick={() => {
               bolumYaz('');
-              d.degistir('Tüm bölümler varsayılana döndü', (t) => { uretilen(t.kys, dok.id).secs = {}; });
+              d.degistir('Doküman varsayılana', (t) => { uretilen(t.kys, dok.id).secs = {}; }, { bildirim: 'Tüm bölümler varsayılana döndü' });
             }}>Tüm bölümleri varsayılana döndür</Dugme>
           )}
           {dok.dyn ? <span className="tc-dhk-soluk">{`Bu doküman ${surecAdi} verilerinden otomatik üretilir; içeriği oradan güncelleyin.`}</span> : null}
@@ -379,7 +386,7 @@ function Duzenleyici({ dok, kapat }: { dok: DokumanSablonu; kapat: () => void })
             acik: bolum,
             ac: bolumYaz,
             yaz: (k, v) => { d.degistir(null, (t) => { uretilen(t.kys, dok.id).secs[k] = v; }); },
-            sifirla: (k) => { bolumYaz(''); d.degistir('Bölüm varsayılana döndü', (t) => { delete uretilen(t.kys, dok.id).secs[k]; }); },
+            sifirla: (k) => { bolumYaz(''); d.degistir('Bölüm varsayılana', (t) => { delete uretilen(t.kys, dok.id).secs[k]; }, { bildirim: 'Bölüm varsayılana döndü' }); },
           } : null} />
         </div>
       </div>

@@ -31,7 +31,7 @@ export function Dosyalama() {
   const ekle = () => {
     if (!ek.name.trim()) { d.bildir('Doküman adını girin', { ton: 'hata' }); adaOdaklan(); return; }
     const kod = (ek.code.trim() || elleDokumanKodu(K, ek.type)).slice(0, 40);
-    d.degistir(`${kod} eklendi`, (t) => { elleDokumanEkle(t.kys, { ...ek, code: kod }); });
+    d.degistir('Doküman ekleme', (t) => { elleDokumanEkle(t.kys, { ...ek, code: kod }); }, { bildirim: `${kod} eklendi` });
     ekYaz({ ...BOS_EK, type: ek.type });
     adaOdaklan();
   };
@@ -49,7 +49,7 @@ export function Dosyalama() {
         ? <Dugme simge="chev-right" aria-label="Doküman üreticide aç" title="Doküman üreticide aç"
           onClick={() => { gecisYaz({ dokuman: s.gen ?? '' }); d.ekranDegistir((e) => { e.kys.tab = 'uret'; }); }} />
         : s.src === 'el'
-          ? (yaz ? <Dugme simge="x" aria-label="Sil" onClick={() => { d.degistir('Doküman silindi', (t) => { t.kys.docs = t.kys.docs.filter((x) => x.id !== s.id); }); }} /> : null)
+          ? (yaz ? <Dugme simge="x" aria-label="Sil" onClick={() => { d.degistir('Doküman silme', (t) => { t.kys.docs = t.kys.docs.filter((x) => x.id !== s.id); }, { bildirim: 'Doküman silindi' }); }} /> : null)
           : <Dugme simge="chev-right" aria-label="Yapı taşında düzenle" title="Yapı taşında düzenle" onClick={() => { tasaGit(s.bid ?? ''); }} />),
     },
   ];

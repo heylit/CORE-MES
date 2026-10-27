@@ -342,6 +342,18 @@
 .tc-dhk-sutun { width: 100%; max-width: var(--b-6); height: 110px; border-radius: var(--b-1); overflow: hidden; }
 .tc-dhk-sutunlar span { font-size: var(--yazi-xs); color: var(--faint); }
 .tc-dhk-sutunlar b { min-height: var(--b-3); font-size: var(--yazi-xs); }
+/* Prototipteki #tip balonu: ay sütununun üstünde, koyu zemin. */
+.tc-dhk-sutunlar li { position: relative; }
+.tc-dhk-sutunlar .tc-dhk-balon {
+  position: absolute; bottom: calc(100% + var(--b-1)); left: 50%; transform: translateX(-50%); z-index: 2;
+  inline-size: max-content; max-inline-size: min(280px, 70vw); padding: var(--b-2) var(--b-3); border-radius: var(--b-2);
+  background: var(--ink); color: var(--bg); font-size: var(--yazi-s); line-height: 1.4; text-align: start;
+  pointer-events: none; opacity: 0; transition: opacity .12s;
+}
+.tc-dhk-sutunlar .tc-dhk-balon b { display: block; min-height: 0; font-size: inherit; }
+.tc-dhk-sutunlar li:first-child .tc-dhk-balon { left: 0; transform: none; }
+.tc-dhk-sutunlar li:last-child .tc-dhk-balon { left: auto; right: 0; transform: none; }
+.tc-dhk-sutunlar li:hover .tc-dhk-balon { opacity: 1; }
 
 /* Basım (yazdir): kâğıt, filigran, diyagram sayfası. */
 .tc-dhk-baski { color: var(--ink); background: var(--parlak); }
@@ -350,8 +362,17 @@
 .tc-dhk-pdiyagram-ust span { font-weight: 700; font-size: var(--yazi-m); }
 .tc-dhk-pdiyagram-govde .tc-dhk-sema { width: 100%; height: auto; }
 .tc-dhk-gorev-baski .tc-dhk-rol { margin-bottom: var(--b-4); break-inside: avoid; }
-@page yatay { size: A4 landscape; }
+/* Prototip basımı: A4, kenar boşluğu ve "Sayfa x / y" altlığı; adlı sayfa, genel @page'e dokunmaz. */
+@page tc-dhk-a4 {
+  size: A4; margin: 12mm 13mm 14mm;
+  @bottom-right { content: "Sayfa " counter(page) " / " counter(pages); font-size: 8pt; color: var(--faint); }
+}
+@page yatay {
+  size: A4 landscape; margin: 12mm 13mm 14mm;
+  @bottom-right { content: "Sayfa " counter(page) " / " counter(pages); font-size: 8pt; color: var(--faint); }
+}
 @media print {
+  .tc-dhk-baski { page: tc-dhk-a4; }
   .tc-dhk-baski .tc-dhk-pdok { break-after: page; position: relative; z-index: 1; }
   .tc-dhk-baski .tc-dhk-pdok:last-child { break-after: auto; }
   .tc-dhk-baski .tc-dhk-pdok[data-yatay] { page: yatay; }
@@ -365,3 +386,6 @@
     color: color-mix(in srgb, var(--stop) 12%, transparent);
   }
 }
+.tc-dhk-dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-dhk-hedef { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); align-items: end; }
+.tc-dhk-aylar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); gap: var(--b-2); border: 0; padding: 0; margin: 0; }

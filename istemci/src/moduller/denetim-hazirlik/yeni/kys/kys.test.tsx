@@ -38,7 +38,29 @@ describe('KYS (yazabilen)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tipik üretim süreçlerini ekle' }));
     expect(await screen.findByText('Süreç göstergeleri')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Süreç ekle' }));
-    expect(await screen.findByRole('dialog')).toBeTruthy();
+    // Prototipteki gibi haritanın altında satır içi kart; pencere açılmaz.
+    expect(await screen.findByText('Yeni süreç')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Süreç adı/), { target: { value: 'Deneme süreci' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    expect(await screen.findByText('Süreç kaydedildi')).toBeTruthy();
+  });
+
+  it('başka görünümden verilen doküman doğrudan açılır', async () => {
+    sahteSunucu({ depo: ornekDepo() });
+    const { useDenetim } = await import('../baglam.tsx');
+    const Gec = () => { const d = useDenetim(); return <button type="button" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'f_dof' }); }}>DÖF aç</button>; };
+    await baglamlaAc(<><Gec /><Kys /></>, 'kys');
+    fireEvent.click(await screen.findByRole('button', { name: 'DÖF aç' }));
+    expect(await screen.findByRole('button', { name: 'Kütüphane' })).toBeTruthy();
+  });
+
+  it('12 aylık yükte ay balonu metni taşır', async () => {
+    await ac();
+    sekme('Şemalar ve grafikler');
+    const balonlar = await screen.findAllByRole('tooltip');
+    expect(balonlar).toHaveLength(12);
+    expect(balonlar[0]?.querySelector('b')?.textContent).toBeTruthy();
   });
 
   it('doküman üretici: kod verilir, açılan doküman yürürlüğe alınır ve revizyon yapılır; yazdırma alanı dolar', async () => {

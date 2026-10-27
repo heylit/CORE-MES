@@ -115,7 +115,7 @@ function Tas({ b, acik, ac }: { b: YapiTasi; acik: boolean; ac: () => void }) {
                         t.kys.items[b.id] = x;
                         x.st = i as 0 | 1 | 2;
                         if (x.st === 2 && !x.date) x.date = bugunTarihi();
-                      });
+                      }, { sessiz: true });
                     }}>{n}</button>
                 ))}
               </div>
@@ -136,12 +136,12 @@ function Tas({ b, acik, ac }: { b: YapiTasi; acik: boolean; ac: () => void }) {
           {yaz && (
             <div className="tc-dhk-arac">
               <Dugme simge="check" onClick={() => {
-                d.degistir('Gözden geçirme kaydedildi', (t) => {
+                d.degistir('Gözden geçirme', (t) => {
                   const x = t.kys.items[b.id] ?? { ...BOS_KYS_MADDESI };
                   t.kys.items[b.id] = x;
                   x.date = bugunTarihi();
                   if (x.st < 2) x.st = 2;
-                });
+                }, { bildirim: 'Gözden geçirme kaydedildi' });
               }}>Bugün gözden geçirildi</Dugme>
             </div>
           )}

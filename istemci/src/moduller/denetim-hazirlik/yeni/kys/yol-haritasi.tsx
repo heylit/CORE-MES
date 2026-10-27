@@ -57,7 +57,7 @@ export function YolHaritasi() {
                             <input type="checkbox" className="tc-dhk-adim-kutu" checked={v === 2} disabled={!d.yetki.yazabilir} aria-label={`${s.t}: tamamlandı`}
                               onChange={(e) => {
                                 const isaret = e.target.checked;
-                                d.degistir('Yol haritası', (t) => { if (isaret) t.kys.road[s.id] = true; else delete t.kys.road[s.id]; });
+                                d.degistir('Yol haritası', (t) => { if (isaret) t.kys.road[s.id] = true; else delete t.kys.road[s.id]; }, { sessiz: true });
                               }} />
                           )}
                         <div className="tc-dhk-adim-metin">

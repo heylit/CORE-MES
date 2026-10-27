@@ -355,7 +355,8 @@ function PanoIcerik({ profil, program, surecBaglantisi = null }: { profil: Profi
           {yuk.aylar.map((m) => {
             const c = (m.c / mxv) * 100, gec = (m.late / mxv) * 100;
             return (
-              <li key={m.k} title={`${m.n}: ${m.items.length ? m.items.join(', ') : 'Gözden geçirme yok'}`}>
+              <li key={m.k}>
+                <span className="tc-dhk-balon" role="tooltip"><b>{m.n}</b>{m.items.length ? m.items.join(', ') : 'Gözden geçirme yok'}</span>
                 <svg className="tc-dhk-sutun" viewBox="0 0 10 100" preserveAspectRatio="none" aria-hidden="true">
                   <rect className="tc-dhk-sutun-yol" x="0" y="0" width="10" height="100" />
                   {c > 0 && <rect className="tc-dhk-cubuk-vurgu" x="0" y={100 - c} width="10" height={c} />}

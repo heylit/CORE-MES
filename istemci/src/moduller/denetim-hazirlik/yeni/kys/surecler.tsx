@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CokSatir, Dugme, FormPenceresi, Girdi, OnayPenceresi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
 import { useDenetim } from '../baglam.tsx';
 import { PROC_TPL } from '../icerik/kys-yapi.ts';
@@ -8,7 +8,8 @@ import { gostergeAylari, gostergeSon, gostergeTuttu } from '../kurallar/kys.ts';
 import { kysNormalize, yeniKimlik } from '../normalize.ts';
 import type { Surec, SurecTuru } from '../tipler.ts';
 import { ayAdi, hedefMetni, sayiMetni } from './dokuman-metni.ts';
-import { Bolum, KISI_LISTESI, useKysGecisi } from './ortak.tsx';
+import { SatirOnayi } from '../program/ortak.tsx';
+import { Bolum, kaydir, KISI_LISTESI, useKysGecisi } from './ortak.tsx';
 
 // Süreçler (prototip kysSurec, procForm): süreç haritası, süreç kartı formu, aylık gösterge ve son 6 ay eğrisi.
 
@@ -76,14 +77,14 @@ export function Surecler() {
   // Yalnız sekmeye gelişte bir kez.
   }, []);
   const sablonEkle = () => {
-    d.degistir(`${String(PROC_TPL.length)} süreç eklendi; sahiplerini ve hedeflerini düzenleyin`, (t) => {
+    d.degistir('Süreç şablonu', (t) => {
       for (const s of PROC_TPL) {
         t.kys.procs.push({
           id: `s${yeniKimlik()}`, type: s[0] as SurecTuru, name: s[1], owner: s[2], inputs: s[3], outputs: s[4], kpi: s[5], unit: s[6], target: s[7], dir: s[8],
           res: s[9], who: s[10], how: s[11], risk: s[12], vals: {},
         });
       }
-    });
+    }, { bildirim: `${String(PROC_TPL.length)} süreç eklendi; sahiplerini ve hedeflerini düzenleyin` });
   };
   return (
     <>
@@ -126,6 +127,7 @@ export function Surecler() {
           </div>
         )}
       </Bolum>
+      {acik && <SurecFormuKarti key={acik.id} surec={acik} yeni={!P.some((x) => x.id === acik.id)} kapat={() => { acikYaz(null); }} />}
       {P.length > 0 && (
         <Bolum baslik="Süreç göstergeleri" simge="chart" sag={<span className="tc-dhk-soluk">Son 6 ay · kesikli çizgi hedef</span>}>
           <div className="tc-dhk-surec-kartlari">
@@ -152,12 +154,12 @@ export function Surecler() {
           </div>
         </Bolum>
       )}
-      {acik && <SurecPenceresi surec={acik} yeni={!P.some((x) => x.id === acik.id)} kapat={() => { acikYaz(null); }} />}
     </>
   );
 }
 
-function SurecPenceresi({ surec, yeni, kapat }: { surec: Surec; yeni: boolean; kapat: () => void }) {
+// Süreç formu (prototip procForm): haritanın altında satır içi kart; silme aynı satırda sorulur.
+function SurecFormuKarti({ surec, yeni, kapat }: { surec: Surec; yeni: boolean; kapat: () => void }) {
   const d = useDenetim();
   const [siliyor, siliyorYaz] = useState(false);
   const ms = gostergeAylari(6);
@@ -168,18 +170,19 @@ function SurecPenceresi({ surec, yeni, kapat }: { surec: Surec; yeni: boolean; k
     kaydet: async (v) => {
       const nv = kysNormalize({ procs: [{ ...v, vals: v.vals }] }).procs[0];
       if (!nv) return;
-      d.degistir('Süreç kaydedildi', (t) => {
+      d.degistir('Süreç kaydı', (t) => {
         const i = t.kys.procs.findIndex((x) => x.id === nv.id);
         if (i >= 0) t.kys.procs[i] = nv; else t.kys.procs.push(nv);
-      });
+      }, { bildirim: 'Süreç kaydedildi' });
       await Promise.resolve();
     },
     basarili: kapat,
   });
   const v = form.degerler;
+  useEffect(() => { kaydir('tc-dhk-surec-formu'); }, []);
   return (
-    <>
-      <FormPenceresi acik kapat={kapat} baslik={yeni ? 'Yeni süreç' : 'Süreci düzenle'} form={form}>
+    <Bolum baslik={yeni ? 'Yeni süreç' : 'Süreci düzenle'} simge="rotate" sinif="tc-dhk-surec-formu">
+      <form id="tc-dhk-surec-formu" className="tc-dhk-form" onSubmit={form.gonder} noValidate>
         <Girdi etiket="Süreç adı" placeholder="Örn. Üretim" required {...form.alan('name')} />
         <Secim etiket="Türü" value={v.type} onChange={(e) => { form.degistir({ type: e.target.value as SurecTuru }); }}
           secenekler={TURLER.map((k) => ({ deger: k, baslik: `${PTYPE[k]} süreç` }))} />
@@ -190,14 +193,14 @@ function SurecPenceresi({ surec, yeni, kapat }: { surec: Surec; yeni: boolean; k
         <Girdi etiket="Kim ile? Yetkinlik, rol" placeholder="CNC operatörü (seviye 2), kalite teknisyeni" {...form.alan('who')} />
         <Girdi etiket="Nasıl? Prosedür, talimat" placeholder="Doküman kodları, virgülle ayırın" {...form.alan('how')} />
         <Girdi etiket="Başlıca risk" placeholder="Örn. kalibrasyonsuz cihazla ölçüm" {...form.alan('risk')} />
-        <CokSatir etiket="Çıktılar" rows={2} {...form.alan('outputs')} />
+        <Girdi etiket="Çıktılar" {...form.alan('outputs')} />
         <div className="tc-dhk-hedef">
           <Secim etiket="Yön" value={v.dir} onChange={(e) => { form.degistir({ dir: e.target.value === 'le' ? 'le' : 'ge' }); }}
             secenekler={[{ deger: 'ge', baslik: '≥ en az' }, { deger: 'le', baslik: '≤ en fazla' }]} />
           <Girdi etiket="Hedef" type="number" step="any" inputMode="decimal" {...form.alan('target')} />
           <Girdi etiket="Birim" placeholder="birim" {...form.alan('unit')} />
         </div>
-        <fieldset className="tc-dhk-aylar">
+        <fieldset className="tc-dhk-aylar tc-dhk-genis">
           <legend>Aylık değerler</legend>
           {ms.map((m) => (
             <Girdi key={m} etiket={ayAdi(m)} type="number" step="any" inputMode="decimal" value={v.vals[m] ?? ''}
@@ -208,16 +211,22 @@ function SurecPenceresi({ surec, yeni, kapat }: { surec: Surec; yeni: boolean; k
               }} />
           ))}
         </fieldset>
-        {!yeni && <Dugme tur="tehlike" simge="trash" onClick={() => { siliyorYaz(true); }}>Sil</Dugme>}
-      </FormPenceresi>
-      <OnayPenceresi acik={siliyor} baslik="Süreç silinsin mi?" onayMetni="Sil" tehlikeli vazgec={() => { siliyorYaz(false); }}
-        onayla={() => {
-          siliyorYaz(false);
-          d.degistir('Süreç silindi', (t) => { t.kys.procs = t.kys.procs.filter((x) => x.id !== surec.id); });
-          kapat();
-        }}>
-        <p>{surec.name || 'Bu süreç'} kalıcı olarak silinir; &quot;Geri al&quot; ile dönülebilir.</p>
-      </OnayPenceresi>
-    </>
+        {form.genelHata && <p className="tc-dhk-genis tc-dhy-ton-kotu" role="alert">{form.genelHata}</p>}
+        <div className="tc-dhk-dugmeler tc-dhk-genis">
+          <Dugme type="submit" tur="birincil" simge="check" yukleniyor={form.gonderiliyor}>Kaydet</Dugme>
+          <button type="button" className="tc-dhp-baglanti" onClick={kapat}>Vazgeç</button>
+          {!yeni && (siliyor
+            ? (
+              <SatirOnayi metin="Süreç silinsin mi?" evet="Sil" vazgec={() => { siliyorYaz(false); }}
+                onayla={() => {
+                  siliyorYaz(false);
+                  d.degistir('Süreç silme', (t) => { t.kys.procs = t.kys.procs.filter((x) => x.id !== surec.id); }, { bildirim: 'Süreç silindi' });
+                  kapat();
+                }} />
+            )
+            : <Dugme simge="trash" onClick={() => { siliyorYaz(true); }}>Sil</Dugme>)}
+        </div>
+      </form>
+    </Bolum>
   );
 }
