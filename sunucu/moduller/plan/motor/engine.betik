@@ -94,9 +94,9 @@ function compile(st){
   const ops=[],jobs={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
   const bitti=st.bitti||{};
-  for(const j of D.siparisler){const u=urun[j.urun];if(!u)continue;
+  for(const [sira,j] of D.siparisler.entries()){const u=urun[j.urun];if(!u)continue;
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
-    jobs[j.id]={...j,due,rel,ops:[]};
+    jobs[j.id]={...j,due,rel,gelisSira:sira,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
       /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
       if(bitti[id])continue;
@@ -295,6 +295,12 @@ function prio(r,cx,ctx,opt){
   if(w.rule==='edd')v=1e4-(due||0)/10;
   else if(w.rule==='kar'){const g=j.gelir==null?1e5:j.gelir;v=(g/1e5)*pw/Math.max(1,remH(cx,ctx,j));}
   else if(w.rule==='cr'){const rem=remH(cx,ctx,j);v=1e3/Math.max(.05,((due||1e4)-r.S)/Math.max(1,rem)+1);}
+  /* 776 b: önce iş ağırlığı (öncelik sınıfı ya da bedel kipinde bedel ağırlığı), eşitte erken teslim; terminsiz en sonda.
+     Değer 1e5'in altında kalır: boost onu geçer */
+  else if(w.rule==='oncelik')v=Math.min(8,pw)*1e4+1e4-Math.min(1e4,due==null?1e4:Math.max(0,due));
+  else if(w.rule==='spt')v=1e3/p;
+  /* ilk gelen: serbest bırakılma anı, yoksa siparişin sırası (kayıttaki ekleniş) */
+  else if(w.rule==='fifo')v=1e4/(1+Math.max(0,j.rel==null?0:j.rel)+(j.gelisSira||0)*1e-3);
   else{const rem=remH(cx,ctx,j);const sl=Math.max(0,(due||1e4)-rem-r.S);const g=1;
     v=(g*pw/p)*Math.exp(-sl/(w.k1*ctx.pbar))*Math.exp(-r.su/(w.k2*ctx.sbar));}
   if(opt.noise)v*=Math.exp(opt.noise*ctx.rnd.n());

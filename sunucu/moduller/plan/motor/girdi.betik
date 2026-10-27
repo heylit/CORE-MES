@@ -510,6 +510,8 @@ function kapaliKisitlar(S) {
   const k = Array.isArray(S.kapali) ? S.kapali : [];
   return (+S.kisitSurum || 0) >= KISIT_SURUM || k.includes('personel') ? k.slice() : [...k, 'personel'];
 }
+/* 776 b: kural motor ayarındandır (sunucu çalışmaya yazar, motor-ayari-kurallar.ts); tanınmayan ya da eski kayıttaki değer ATCS'ye düşer */
+const MOTOR_KURALI = new Set(['atcs', 'oncelik', 'edd', 'cr', 'spt', 'fifo']);
 function stKur(S, ek = [], gevset = true) {
   const D = clone(S.D);
   D.ayarlar = D.ayarlar || {};
@@ -518,7 +520,7 @@ function stKur(S, ek = [], gevset = true) {
   const st = {
     D, now: 7, down: S.down.map((d, i) => ({ ...d, id: 'd' + i })), ekMesai: clone(S.ekMesai), eksik: [],
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
-    w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
+    w: { ...clone(W0), rule: MOTOR_KURALI.has(S.w.rule) ? S.w.rule : W0.rule, famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
   };
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
