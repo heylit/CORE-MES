@@ -221,6 +221,7 @@ export async function isKutusu(db: Db, islemler: readonly string[], kisiId: numb
     // Akış A provası D1: teslimi bekleyen istek depo işidir; yolda teslimi olan istek bekleyen sayılmaz.
     teslimBekleyenIstek: islemler.includes('stok.transfer')
       ? await sorgular.teslimBekleyenIstekSayisi(db, await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId))) : null,
+    depoyaGelenTeslim: islemler.includes('stok.transfer') ? await sorgular.depoyaGelenTeslimSayisi(db) : null,
   };
 }
 // Fason firmasında parçası kalan emirlerden kapanmış olanlar; açık emrin parçası firmada beklenen yerdedir.
@@ -303,7 +304,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
   const k = await isKutusu(db, islemler, kisiId);
   const kapsamliIstasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
   // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı).
-  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0].filter((n) => n > 0).length;
+  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0].filter((n) => n > 0).length;
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,
     'mal-kabul': islemler.includes('stok.giris') ? k.logoFarki : null,

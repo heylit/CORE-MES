@@ -7,6 +7,7 @@ import { VARSAYILAN_TAZELIK_MS } from '../../ortak/veri/sorgu-istemcisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.ts';
 import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
+import { KartRotasi } from './KartRotasi.tsx';
 import { RefakatAcPenceresi, RefakatKartPenceresi, refakatLotSatiri, refakatMalzemeSatiri } from './RefakatKarti.tsx';
 import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';
 import { PartiIziPenceresi } from './PartiIzi.tsx';
@@ -146,7 +147,8 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
         {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
         {refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
-        {refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Nereye: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
+        {refakat && anaEylem !== 'isi-ac' && refakat.durum !== 'iptal' && <KartRotasi r={refakat} />}
+        {refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Başka yere: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
         {refakat && malzeme?.kartSatirlari && (!tekKart || baskaAcik) && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">

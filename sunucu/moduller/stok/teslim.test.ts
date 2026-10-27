@@ -457,6 +457,29 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(kaliteKutusu.govde.teslimBekleyenIstek, null);
   });
 
+  test('753 b iş kutusu: depoya gelen onay bekleyen teslimi (istasyondan iade) depo işlemi olana sayar; alınınca düşer; depo işlemi olmayana null', async () => {
+    const h = await kart('hammadde');
+    await malKabul(h, '2');
+    const a = await istasyon();
+    const kabul = await kabulKonumu();
+    const g = await gonder('depo', { malzemeId: h, miktar: '2', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    assert.equal((await istek('operator', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '2' })).durum, 200);
+    const sayi = () => o().vt.tx((db) => sorgular.depoyaGelenTeslimSayisi(db));
+    const once = await sayi();
+    const iade = await gonder('operator', { malzemeId: h, miktar: '1', kaynak: { istasyonId: a.id }, hedef: { konumId: kabul } });
+    assert.equal(iade.durum, 200, JSON.stringify(iade.govde));
+    // Depoya giden teslimler başka testlerle eşzamanlı değişebilir; bu teslim en az bir artıştır.
+    assert.ok((await sayi()) >= once + 1);
+    const depoKutusu = await istek<{ depoyaGelenTeslim: number | null }>('depo', 'GET', '/stok/is-kutusu');
+    assert.equal(typeof depoKutusu.govde.depoyaGelenTeslim, 'number');
+    assert.ok(depoKutusu.govde.depoyaGelenTeslim! >= 1);
+    const ara = await sayi();
+    assert.equal((await istek('depo', 'POST', `/stok/teslimler/${iade.govde.teslim.id}/teslim-al`, { surum: iade.govde.teslim.surum, alinan: '1' })).durum, 200);
+    assert.ok((await sayi()) <= ara - 1, 'alınan teslim sayılmaz');
+    assert.equal((await istek<{ depoyaGelenTeslim: number | null }>('kalite', 'GET', '/stok/is-kutusu')).govde.depoyaGelenTeslim, null);
+  });
+
   test('STK-T5 isteğe bağlı teslim: depo isteğin istasyonuna gönderir; teslim alınınca istek alınan miktarla kapanır', async () => {
     const h = await kart('hammadde');
     const baska = await kart('hammadde');

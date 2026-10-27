@@ -11,13 +11,22 @@ import './stok.css';
 // üretilen; sonraki istasyona gönderilir). Düğmeler Malzeme · Teslim panelinin satırlarıdır; bir komut bütün stok okumalarını yeniler.
 export const istasyonSepetleriAnahtari = (istasyonId: number, uretimEmriId: number) => [...TESLIM_KUTUSU, 'istasyon-sepetleri', istasyonId, uretimEmriId] as const;
 
+const useIstasyonSepetleri = (istasyonId: number | null, uretimEmriId: number | null) => useQuery({
+  queryKey: istasyonSepetleriAnahtari(istasyonId ?? 0, uretimEmriId ?? 0),
+  queryFn: () => api.get<IstasyonSepetleriCevabi>(`/stok/teslim-kutusu/istasyon-sepetleri?istasyonId=${istasyonId}&uretimEmriId=${uretimEmriId}`),
+  enabled: istasyonId !== null && uretimEmriId !== null,
+  refetchInterval: 60_000,
+  retry: false,
+});
+
+// Terminal çipi için iki sepetin sayısı (aynı okuma, aynı önbellek); okunamadıysa null.
+export function useIstasyonSepetiSayilari(istasyonId: number | null, uretimEmriId: number | null): { gelen: number; cikan: number } | null {
+  const s = useIstasyonSepetleri(istasyonId, uretimEmriId);
+  return s.data ? { gelen: s.data.gelen.bekleyen.length + s.data.gelen.yolda.length, cikan: s.data.cikan.length } : null;
+}
+
 export function IstasyonSepetleri({ istasyonId, uretimEmriId }: { istasyonId: number; uretimEmriId: number }) {
-  const s = useQuery({
-    queryKey: istasyonSepetleriAnahtari(istasyonId, uretimEmriId),
-    queryFn: () => api.get<IstasyonSepetleriCevabi>(`/stok/teslim-kutusu/istasyon-sepetleri?istasyonId=${istasyonId}&uretimEmriId=${uretimEmriId}`),
-    refetchInterval: 60_000,
-    retry: false,
-  });
+  const s = useIstasyonSepetleri(istasyonId, uretimEmriId);
   if (s.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (s.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => { void s.refetch(); }} />;
   const { gelen, cikan } = s.data;

@@ -61,7 +61,7 @@ test('Malzeme ve teslim paneli: sekmelerin hepsi görünür ve açılır', async
   const [k, s] = [await kod.boundingBox(), await serit.boundingBox()];
   expect(k !== null && s !== null && k.y < s.y, 'okuyucu sekmelerin üstünde').toBe(true);
   await sekmelerTam(page, serit);
-  for (const ad of ['Teslim et', 'Malzeme iste']) {
+  for (const ad of ['Gönder', 'İste']) {
     await serit.getByRole('tab', { name: ad }).click();
     await expect(serit.getByRole('tab', { name: ad })).toHaveAttribute('aria-selected', 'true');
   }

@@ -5,7 +5,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { IstasyonSepetiSatiri, IstasyonSepetleriCevabi, Teslim } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
-import { IstasyonSepetleri } from './disari.ts';
+import { IstasyonSepetleri, useIstasyonSepetiSayilari } from './disari.ts';
 
 // Terminalin iki sepeti (745): gelen önceki istasyonun parçasını ve yoldaki teslimi, çıkan burada duran parçayı sonraki istasyonla gösterir.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -62,6 +62,19 @@ describe('iki sepet (745)', () => {
     const gelen = screen.getByRole('list', { name: 'Gelen' });
     fireEvent.click(within(gelen).getByRole('button', { name: 'Teslim al' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/teslim-kutusu/sepet/cek')?.govde).toMatchObject({ istasyonId: 2, kaynakIstasyonId: 1, malzemeId: 901, statuId: 7 }));
+  });
+
+  it('terminal çipinin sayısı aynı okumadan: gelen yoldaki ve bekleyen, çıkan duran satır; emir yoksa okunmaz', async () => {
+    const istekler = sunucuKur(OPERATOR, { 'GET /stok/teslim-kutusu/istasyon-sepetleri': () => json(200, CEVAP) });
+    function Sayi({ emir }: { emir: number | null }) {
+      const s = useIstasyonSepetiSayilari(2, emir);
+      return <p>{s === null ? 'yok' : `gelen ${s.gelen} cikan ${s.cikan}`}</p>;
+    }
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={istemci}><Sayi emir={30} /><Sayi emir={null} /></QueryClientProvider>);
+    expect(await screen.findByText('gelen 2 cikan 1')).toBeTruthy();
+    expect(screen.getByText('yok')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/teslim-kutusu/istasyon-sepetleri'))).toHaveLength(1);
   });
 
   it('iki sepet boşsa ikisi de boş durumunu söyler', async () => {

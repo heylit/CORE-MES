@@ -180,6 +180,8 @@ export const isKutusuCevabi = z.object({
   fasonEksikGonderimi: z.number().int(),
   // Teslimi bekleyen malzeme isteği (açık ya da stok yok, yolda teslimi yok); depo işlemi olmayana null.
   teslimBekleyenIstek: z.number().int().nullable().optional(),
+  // Depoya gelen, onay bekleyen teslim (iade dahil, 753 b); depo işlemi olmayana null.
+  depoyaGelenTeslim: z.number().int().nullable().optional(),
 });
 export type IsKutusuCevabi = z.output<typeof isKutusuCevabi>;
 // Rol panosu kartları: her sayı kendi işlemiyle görünür; yetkisi olmayana null (kart çizilmez).
