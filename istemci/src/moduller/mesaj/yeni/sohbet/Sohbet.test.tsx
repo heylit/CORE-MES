@@ -49,6 +49,20 @@ describe('M1 sohbet: kanal listesi ve akış', () => {
 });
 
 describe('M1 sohbet: yazma (izinli ve reddedilen)', () => {
+  it('yazma alanından çıkınca kurulan öneri zamanlayıcısı ekran kapanınca temizlenir (kapanmış ortamda document aranmaz)', async () => {
+    sunucuKur({ ben: YAZAN, belgeler: belgeler() });
+    await kanalAc();
+    const alan = await screen.findByRole('textbox', { name: 'Mesaj yaz' });
+    const kur = vi.spyOn(window, 'setTimeout');
+    const temizle = vi.spyOn(window, 'clearTimeout');
+    fireEvent.blur(alan);
+    const id = kur.mock.results.at(-1)?.value as number;
+    cleanup();
+    expect(temizle).toHaveBeenCalledWith(id);
+    kur.mockRestore();
+    temizle.mockRestore();
+  });
+
   it('yazabilen kişi Enter ile gönderir: ileti ve kanal özeti yazılır', async () => {
     const s = sunucuKur({ ben: YAZAN, belgeler: belgeler() });
     await kanalAc();
