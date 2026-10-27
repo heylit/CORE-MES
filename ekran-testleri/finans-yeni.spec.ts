@@ -128,6 +128,8 @@ test.describe('F3 raporlar', () => {
     await ac('/finans/yeni/karar-araclari');
     const sabit = page.getByLabel('Aylık sabit gider');
     await sabit.fill('840000');
+    // Sonuç prototipteki gibi değer kesinleşince yenilenir.
+    await sabit.press('Enter');
     await expect(page.getByText('2.000 adet')).toBeVisible();
 
     await ac('/finans/yeni/durum');

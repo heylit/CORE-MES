@@ -5,6 +5,7 @@
 .tc-fr-iki > *, .tc-fr-iki-genis > *, .tc-fr-ikili > *, .tc-fr-uclu > * { min-width: 0; }
 .tc-fr-araclar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .tc-fr-araclar-sol { min-width: 0; }
+.tc-fr-araclar > .tc-fr-dugmeler { margin-left: auto; }
 .tc-fr-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-fr-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); margin-bottom: var(--b-2); }
 .tc-fr-baslik { margin: 0; font-size: var(--yazi-l); }
@@ -129,3 +130,13 @@
 @media print {
   .tc-fr-araclar, .tc-fr-dugmeler { display: none; }
 }
+.tc-fr-gosterge-yay { display: block; width: 100%; max-width: calc(var(--b-6) * 7.5); }
+.tc-fr-yay-yol, .tc-fr-yay-dolu { fill: none; stroke-width: 16; stroke-linecap: round; }
+.tc-fr-yay-yol { stroke: var(--panel2); }
+.tc-fr-yay-dolu { stroke: var(--grafik); }
+.tc-fr-gosterge-yay[data-durum] .tc-fr-yay-dolu { stroke: var(--sig); }
+.tc-fr-yay-sayi { fill: var(--ink); font-family: var(--font-ana); }
+.tc-fr-yay-alt { fill: var(--muted); font-family: var(--font-ana); }
+.tc-fr-dilim-stok { fill: var(--bp); }
+.tc-fr-dilim-tahsil { fill: var(--grafik); }
+.tc-fr-dilim-tedarik { fill: var(--hold); }

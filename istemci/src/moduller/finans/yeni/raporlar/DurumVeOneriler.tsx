@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dugme, Girdi, Kadran, Kart, Rozet, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Kart, Rozet, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import type { Komut } from '../akislar.ts';
 import { recoState } from '../gorunum.ts';
@@ -12,7 +12,7 @@ import {
   oneriGovdesi, onemAdi, onemTonu, skorDurumu, type OneriSuzgeci,
 } from './hesap.ts';
 import { Grafik, ortakSecenekler, saydam } from './Grafik.tsx';
-import { Cubuk, Not, Serit } from './parcalar.tsx';
+import { Cubuk, DilimliCubuk, Not, Serit, SkorGostergesi } from './parcalar.tsx';
 import { RaporAraclari } from './RaporAraclari.tsx';
 import './raporlar.css';
 
@@ -47,7 +47,7 @@ function SkorOzeti({ motor, A }: { motor: FinansMotoru; A: Analiz }) {
     <Kart>
       <div className="tc-fr-skor">
         <div className="tc-fr-skor-kadran">
-          <Kadran deger={A.score} hedef={100} etiket="Sağlık skoru" birim="puan" durum={skorDurumu(A.score)} />
+          <SkorGostergesi skor={A.score} durum={skorDurumu(A.score)} />
           {A.yetersiz && <span title={`Puan ön bilgidir: ${A.yetersizNeden}`}><Rozet ton="uyari">Yetersiz veri</Rozet></span>}
         </div>
         <div className="tc-fr-skor-metin">
@@ -163,14 +163,20 @@ function Gostergeler({ finans, A, yetki }: { finans: FinansVerisi; A: Analiz; ye
   );
 }
 
-// Nakit dönüşüm süresi (prototip .ccc): stok + tahsil süresi ile tedarikçi vadesi aynı ölçekte.
+// Nakit dönüşüm süresi (prototip .ccc): iki satır; stok + tahsil süresi tek çubukta yan yana, tedarikçi vadesi aynı ölçekte.
 function DonusumSuresi({ dio, dso, dpo }: { dio: number; dso: number; dpo: number }) {
   const toplam = Math.max(dio + dso, dpo, 1);
   return (
     <div className="tc-fr-ccc">
-      <span>Stok süresi</span><Cubuk oran={dio / toplam} etiket={`Stok süresi ${nf(dio)} gün`} /><b>{nf(dio)} g</b>
-      <span>Tahsil süresi</span><Cubuk oran={dso / toplam} etiket={`Tahsil süresi ${nf(dso)} gün`} /><b>{nf(dso)} g</b>
-      <span>Tedarikçi vadesi</span><Cubuk oran={dpo / toplam} etiket={`Tedarikçi vadesi ${nf(dpo)} gün`} /><b>{nf(dpo)} g</b>
+      <span>Stok + tahsil</span>
+      <DilimliCubuk
+        etiket={`Stok ${nf(dio)} gün, tahsil ${nf(dso)} gün`}
+        dilimler={[{ oran: dio / toplam, sinif: 'tc-fr-dilim-stok' }, { oran: dso / toplam, sinif: 'tc-fr-dilim-tahsil' }]}
+      />
+      <b>{nf(dio)} g + {nf(dso)} g</b>
+      <span>Tedarikçi vadesi</span>
+      <DilimliCubuk etiket={`Tedarikçi vadesi ${nf(dpo)} gün`} dilimler={[{ oran: dpo / toplam, sinif: 'tc-fr-dilim-tedarik' }]} />
+      <b>{nf(dpo)} g</b>
     </div>
   );
 }

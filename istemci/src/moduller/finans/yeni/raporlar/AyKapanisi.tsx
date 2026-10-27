@@ -24,7 +24,9 @@ export function AyKapanisi({ finans, yetki, kayitGir }: EkranOzellikleri) {
   };
   return (
     <div className="tc-fr">
-      <RaporAraclari sol={<Serit<string> etiket="Kapanış ayı" secenekler={kapanisAylari(finans.motor.bugun).map((x) => ({ deger: x, baslik: ymLabel(x) }))} secili={ay} sec={setAy} />} />
+      <RaporAraclari>
+        <Serit<string> etiket="Kapanış ayı" secenekler={kapanisAylari(finans.motor.bugun).map((x) => ({ deger: x, baslik: ymLabel(x) }))} secili={ay} sec={setAy} />
+      </RaporAraclari>
       <Not>Her ay sonunda yapılması gereken kontroller. İşaretledikçe ilerleme kaydedilir.</Not>
       <Kart baslik={`${ymLong(ay)} kapanışı`} sag={<small className="tc-fr-soluk">{n} / {toplam} tamamlandı</small>}>
         <Cubuk oran={n / toplam} durum={n === toplam ? 'calisiyor' : undefined} etiket={`${n} / ${toplam} tamamlandı`} />

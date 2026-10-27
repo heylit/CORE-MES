@@ -28,7 +28,8 @@ export function GelirTablosu({ finans }: EkranOzellikleri) {
   const anahtar = `${n}|${T.aylar.join(',')}|${T.net.aylar.join(',')}`;
   return (
     <div className="tc-fr">
-      <RaporAraclari sol={<Serit<6 | 12> etiket="Dönem" secenekler={[{ deger: 6, baslik: '6 ay' }, { deger: 12, baslik: '12 ay' }]} secili={n} sec={setN} />}>
+      <RaporAraclari>
+        <Serit<6 | 12> etiket="Dönem" secenekler={[{ deger: 6, baslik: '6 ay' }, { deger: 12, baslik: '12 ay' }]} secili={n} sec={setN} />
         <Dugme tur="ikincil" simge="download" onClick={csv}>Excel&apos;e aktar</Dugme>
       </RaporAraclari>
       <Not>Tamamlanmış aylar, KDV hariç, fatura tarihine göre. Açılış bakiyeleri, avanslar, KDV ödemeleri ve kredi anaparası dahil değildir.</Not>

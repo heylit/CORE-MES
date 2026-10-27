@@ -17,8 +17,13 @@ export function KararAraclari({ finans }: EkranOzellikleri) {
   if (!finans || !T) return null;
   const degistir = <G extends Grup>(g: G, k: keyof Araclar[G], v: string) =>
     setT((o) => (o ? { ...o, [g]: { ...o[g], [k]: Number(v) || 0 } } : o));
+  // Sonuç prototipteki gibi değer kesinleşince (alan bırakılınca ya da Enter) yenilenir, her tuşta değil.
   const alan = <G extends Grup>(g: G, k: keyof Araclar[G] & string, ad: string, adim = 1) => (
-    <Girdi etiket={ad} type="number" step={adim} inputMode="decimal" value={String(T[g][k])} onChange={(e) => degistir(g, k, e.currentTarget.value)} />
+    <Girdi
+      etiket={ad} type="number" step={adim} inputMode="decimal" defaultValue={String(T[g][k])}
+      onBlur={(e) => degistir(g, k, e.currentTarget.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') degistir(g, k, e.currentTarget.value); }}
+    />
   );
 
   const be = basabas(T.be), egri = basabasEgrisi(T.be);

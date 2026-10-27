@@ -52,3 +52,32 @@ export const Not = ({ children }: { children: ReactNode }) => <p className="tc-f
 
 // Kazanç ve kayıp tonu (prototip .pos / .neg / .warn).
 export const isaretTonu = (v: number | null): MakineDurumu | undefined => (v === null ? undefined : v < 0 ? 'durdu' : undefined);
+
+// Sağlık skoru göstergesi (prototip gauge): yarım daire yay, ortada skor. Prototipin kendi çizimidir; ortak Kadran'a çevrilmez.
+export function SkorGostergesi({ skor, durum }: { skor: number | null; durum?: MakineDurumu | undefined }) {
+  const s = skor ?? 0, a = Math.PI * (1 - s / 100), r = 80, cx = 100, cy = 100;
+  const x = cx + r * Math.cos(a), y = cy - r * Math.sin(a);
+  return (
+    <svg className="tc-fr-gosterge-yay" viewBox="0 0 200 118" role="img" aria-label={`Finansal sağlık skoru ${skor ?? 'yok'} / 100`} data-durum={durum}>
+      <path className="tc-fr-yay-yol" d="M20 100 A80 80 0 0 1 180 100" />
+      {skor !== null && <path className="tc-fr-yay-dolu" d={`M20 100 A80 80 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}`} />}
+      <text className="tc-fr-yay-sayi" x={100} y={88} textAnchor="middle" fontSize={40} fontWeight={800}>{skor ?? '—'}</text>
+      <text className="tc-fr-yay-alt" x={100} y={110} textAnchor="middle" fontSize={12}>100 üzerinden</text>
+    </svg>
+  );
+}
+
+// Yan yana dilimli çubuk (prototip .ccc-track): dilimler aynı ölçekte, toplam 0..1 arası.
+export function DilimliCubuk({ dilimler, etiket }: { dilimler: readonly { oran: number; sinif: string }[]; etiket: string }) {
+  let bas = 0;
+  return (
+    <svg className="tc-fr-cubuk tc-fr-dilimli" viewBox="0 0 100 8" preserveAspectRatio="none" role="img" aria-label={etiket}>
+      <rect className="tc-fr-cubuk-yol" x={0} y={0} width={100} height={8} rx={4} />
+      {dilimler.map((d, i) => {
+        const g = Math.max(0, Math.min(1, d.oran)) * 100;
+        const x = bas; bas += g;
+        return g > 0 ? <rect key={i} className={d.sinif} x={x} y={0} width={g} height={8} /> : null;
+      })}
+    </svg>
+  );
+}

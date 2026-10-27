@@ -24,7 +24,7 @@ describe('F3 Durum ve öneriler', () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/oneriler/durum': tamam });
     finansAc('/finans/yeni/durum');
     const oneriler = await screen.findByRole('region', { name: 'Öneriler' });
-    expect(screen.getByText('Sağlık skoru')).toBeTruthy();
+    expect(screen.getByRole('img', { name: /^Finansal sağlık skoru / })).toBeTruthy();
     expect(screen.getByText('Temel göstergeler')).toBeTruthy();
     fireEvent.click(within(oneriler).getAllByRole('button', { name: 'Uyguluyorum' })[0]!);
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
@@ -90,12 +90,14 @@ describe('F3 Gelir tablosu', () => {
 });
 
 describe('F3 Karar araçları', () => {
-  it('girdi değişince başabaş yeniden hesaplanır, uca istek gitmez', async () => {
+  it('girdi kesinleşince (alan bırakılınca) başabaş yeniden hesaplanır, uca istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN);
     finansAc('/finans/yeni/karar-araclari');
     const sabit = await screen.findByLabelText('Aylık sabit gider');
     expect(screen.getByText('1.072 adet')).toBeTruthy();
     fireEvent.change(sabit, { target: { value: '840000' } });
+    expect(screen.getByText('1.072 adet')).toBeTruthy();
+    fireEvent.blur(sabit);
     expect(screen.getByText('2.000 adet')).toBeTruthy();
     expect(yazmalar(istekler)).toHaveLength(0);
   });
