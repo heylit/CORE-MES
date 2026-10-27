@@ -186,7 +186,7 @@ describe('Okutma sonucu', () => {
     expect(within(sonuc).queryByRole('button', { name: 'Depo sepetine ekle' })).toBeNull();
     expect(istekler.filter((i) => i.yol.startsWith('/stok/kod-coz')).map((i) => i.yol)).toEqual([]);
     fireEvent.click(within(sonuc).getByRole('button', { name: 'Okutarak al' }));
-    expect(within(panel).getByRole('tab', { name: 'İste' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('dialog', { name: 'Malzeme iste' })).toBeTruthy();
     const okutulanlar = within(panel).getByRole('list', { name: 'Okutulanlar' });
     expect(within(okutulanlar).getByText('MLZ:901')).toBeTruthy();
     fireEvent.click(within(okutulanlar).getByRole('button', { name: 'Yeri okut' }));
@@ -304,7 +304,7 @@ const SEPET: IstasyonSepetiCevabi = {
   ],
 };
 
-describe('Teslim et: istasyonumdan istenenler ve okutarak alınanlar (soru 96)', () => {
+describe('Benden istenenler: istasyonumdan istenenler ve okutarak alınanlar (soru 96)', () => {
   it('istenen kaynak istasyonun sepetindeki partiyle kabul edilir; red nedensiz gönderilmez', async () => {
     const istekler = ciz(OPERATOR, {
       'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET),
@@ -312,7 +312,7 @@ describe('Teslim et: istasyonumdan istenenler ve okutarak alınanlar (soru 96)',
       'POST /stok/malzeme-istekleri/3/reddet': () => json(200, { istek: istek() }),
     }, { ...KUTU, bendenIstenenler: [istek()] });
     const panel = await panelAc();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'Gönder' }));
+    fireEvent.click(await within(panel).findByRole('button', { name: /^Benden istenenler/ }));
     const satir = within(await within(panel).findByRole('list', { name: 'Benden istenenler' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/Freze 2 → Torna 1 · Deneme İsteyen/)).toBeTruthy();
     fireEvent.change(await within(satir).findByLabelText('Gönderilen miktar'), { target: { value: '3' } });
@@ -336,7 +336,7 @@ describe('Teslim et: istasyonumdan istenenler ve okutarak alınanlar (soru 96)',
       ...KUTU, okutarakAlinanlar: [t, { ...t, id: 52, no: 'TS-000052', itiraz: { neden: 'Habersiz', kisiAd: 'Deneme Usta', zaman: '2026-10-14T09:00:00+03:00', iadeTeslimId: 60 } }],
     });
     const panel = await panelAc();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'Gönder' }));
+    fireEvent.click(await within(panel).findByRole('button', { name: /^Benden istenenler/ }));
     const [acik, itirazli] = within(await within(panel).findByRole('list', { name: 'Okutarak alınanlar' })).getAllByRole('listitem');
     expect(within(itirazli!).getByText(/İtiraz: Habersiz · Deneme Usta · iade teslimi açıldı/)).toBeTruthy();
     expect(within(itirazli!).queryByRole('button', { name: 'İtiraz et' })).toBeNull();
@@ -351,7 +351,7 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
   it('Üretilen ve Teslim alınan satırın kökenine göre süzer; depo sepeti stok taşıma yetkisi olmayana görünmez', async () => {
     const istekler = ciz(OPERATOR, { 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) });
     const panel = await panelAc();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'Gönder' }));
+    fireEvent.click(await within(panel).findByRole('button', { name: /^Elimdekiler/ }));
     const liste = await within(panel).findByRole('list', { name: 'Freze 2 sepeti' });
     expect(within(liste).getAllByRole('listitem')).toHaveLength(2);
     fireEvent.click(within(panel).getByRole('button', { name: 'Üretilen' }));
@@ -371,8 +371,8 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     }, KUTU, '/stok/okut?mod=sepet');
     const panel = await screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
     expect(await screen.findByText('Sayfa')).toBeTruthy();
-    expect(within(panel).getByRole('tab', { name: 'Gönder' }).getAttribute('aria-selected')).toBe('true');
-    // Sepet sekmesi "Sayfa" yazısından sonra yüklenebilir (CI'da bir kez düştü); düğme beklenir.
+    // Depo sepeti isteği kamerayla açılır; Elimdekiler depo sepetiyle açılır. Kutucuk "Sayfa" yazısından sonra yüklenebilir; düğme beklenir.
+    fireEvent.click(await within(panel).findByRole('button', { name: /^Elimdekiler/ }));
     expect((await within(panel).findByRole('button', { name: 'Sepetim' })).getAttribute('aria-pressed')).toBe('true');
     const satir = within(await within(panel).findByRole('list', { name: 'Sepetim' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/A-01-02 · TP-1/)).toBeTruthy();
@@ -392,7 +392,7 @@ describe('Malzeme iste: kaynak (soru 96 a)', () => {
       'POST /stok/malzeme-istekleri/ac': () => json(200, {}),
     }, { ...KUTU, buradakiIstasyonId: null });
     const panel = await panelAc();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'İste' }));
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Malzeme iste' }));
     fireEvent.change(within(panel).getByLabelText('Malzeme ara'), { target: { value: 'eld' } });
     fireEvent.click(await within(panel).findByRole('button', { name: /Eldiven/ }));
     const nereden = await within(panel).findByLabelText(/^Nereden/);

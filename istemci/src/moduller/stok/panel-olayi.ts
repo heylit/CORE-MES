@@ -1,6 +1,7 @@
-// Okut sayfası kalktı (soru 90 a): eski adresler ve Stok Merkezi düğmeleri Malzeme · Teslim panelini istenen sekmede açar.
+// Okut sayfası kalktı (soru 90 a): eski adresler ve Stok Merkezi düğmeleri Malzeme · Teslim panelini istenen bölümde açar; `okut`
+// kameralı açılış ekranıdır.
 // İstek bir kez bekletilir: panel düğmesi sayfayla aynı anda kuruluyorsa olayı kaçırmaz, kurulunca alır.
-export type PanelSekmesi = 'al' | 'sepet' | 'et' | 'iste';
+export type PanelSekmesi = 'okut' | 'al' | 'sepet' | 'et' | 'iste';
 export interface PanelIstegi { sekme: PanelSekmesi; depoSepeti?: boolean }
 export const MALZEME_PANELI_AC = 'tmi:malzeme-paneli-ac';
 

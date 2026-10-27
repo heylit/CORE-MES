@@ -467,3 +467,18 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-refakat-an-fark { padding-inline-start: 0; }
   .tc-refakat-an-satir { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
+
+/* Malzeme · Teslim kamera önce (809): açılışta büyük kamera, altında iki büyük kutucuk; alt ekranlarda üstte "Kameraya dön". Bilgisayarda
+   (ince işaretçi) kamera küçük kalır, el okuyucu alanı öne çıkar. */
+.tc-stok-teslim-panel .tc-kod-okuyucu-kamera { min-block-size: var(--ekran-boy-40); }
+@media (pointer: fine) { .tc-stok-teslim-panel .tc-kod-okuyucu-kamera:not([data-acik]) { min-block-size: calc(var(--dokunma-ana) * 2); } }
+.tc-stok-teslim-ana { display: grid; gap: var(--b-3); }
+.tc-stok-kutucuklar { display: grid; gap: var(--b-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tc-stok-kutucuk { display: grid; gap: var(--b-1); justify-items: start; min-block-size: calc(var(--dokunma-ana) * 2); padding: var(--b-4); border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.tc-stok-kutucuk strong { font-size: var(--yazi-2xl); line-height: 1; min-block-size: 1em; }
+.tc-stok-kutucuk span { font-weight: 700; }
+.tc-stok-kutucuk[data-vurgu] { border-color: var(--hazard); }
+.tc-stok-kutucuk:focus-visible { outline: var(--cizgi-kalin) solid var(--done); outline-offset: var(--cizgi); }
+.tc-stok-teslim-ana > .tc-dugme { min-block-size: var(--dokunma-ana); }
+.tc-stok-teslim-geri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
