@@ -26,7 +26,7 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
 // tam: yalnız bu adres (alt yolu değil); Reçete ve Rota'nın kök adresinin altında eski kalan Planlama sayfaları ve bölümlerin eski adresi vardır.
 // haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar, Logo gönderimi).
-// yalnizYonetici: eski ekran yalnız yöneticide açılır ve geçiş yalnız ona görünür (659 a: Planlama'nın eski çerçevesi).
+// yalnizYonetici: eski ekran yalnız yöneticide açılır ve geçiş yalnız ona görünür.
 // serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
 // (Reçete ve Rota'dan Planlama'ya) yol kalmaz. Tek maddelik menü de eski sayfadaki gibi şerit çizer (Kuyruk, Üretim Terminali).
 interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; tam?: true; serit?: true; haric?: readonly string[]; yalnizYonetici?: true }
@@ -40,7 +40,6 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
     yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
   })),
-  { yol: '/plan', eski: '/plan/eski', serit: true, yalnizYonetici: true },
 ];
 
 const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);

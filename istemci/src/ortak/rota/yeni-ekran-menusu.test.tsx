@@ -95,10 +95,10 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     adreste('/ik');
     expect(serit('İnsan Kaynakları')).not.toBeNull();
     cleanup();
-    adreste('/plan/eski/terminler');
-    const menu = serit('Planlama');
+    adreste('/recete-rota/eski/res');
+    const menu = serit('Reçete ve Rota');
     expect(menu).not.toBeNull();
-    expect(within(menu as HTMLElement).getByRole('link', { name: /^Terminler/ }).getAttribute('aria-current')).toBe('page');
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Kaynaklar/ }).getAttribute('aria-current')).toBe('page');
   });
 });
 
@@ -122,20 +122,13 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     }
   });
 
-  it('Planlama (659 a): eski çerçeve /plan/eski altındadır; geçiş yalnız yöneticide görünür', () => {
+  it('Planlama: eski çerçeve kalktı (805); geçiş yoktur', () => {
     const yonetici = [YENI_EKRAN_ISLEMI];
-    expect(gorunumGecisi('/plan', yonetici)).toEqual({ baslik: 'Eski görünüm', yol: '/plan/eski' });
-    expect(gorunumGecisi('/plan/terminler', yonetici)).toEqual({ baslik: 'Eski görünüm', yol: '/plan/eski/terminler' });
-    expect(gorunumGecisi('/plan/eski/terminler', yonetici)).toEqual({ baslik: 'Yeni görünüm', yol: '/plan/terminler' });
-    expect(gorunumGecisi('/plan/terminler', ['plan.planlama-oku'])).toBeNull();
-    expect(gorunumGecisi('/plan/eski', ['plan.planlama-oku'])).toBeNull();
-    expect(gorunumGecisi('/planx', yonetici)).toBeNull();
-    expect(seritAdresi('/plan/eski/denge')).toBe('/plan/denge');
-    adreste('/plan/sevkiyat', ['sayfa.plan', 'plan.planlama-oku']);
-    expect(hesapMaddeleri()).not.toContain('Eski görünüm');
-    cleanup();
+    expect(gorunumGecisi('/plan', yonetici)).toBeNull();
+    expect(gorunumGecisi('/plan/terminler', yonetici)).toBeNull();
+    expect(seritAdresi('/plan/denge')).toBe('/plan/denge');
     adreste('/plan/sevkiyat', ['sayfa.plan', 'plan.planlama-oku', YENI_EKRAN_ISLEMI]);
-    expect(hesapMaddeleri()).toContain('Eski görünüm');
+    expect(hesapMaddeleri()).not.toContain('Eski görünüm');
   });
 
   it('kabuğun şeridi yeni ekranda da eski adreste de durur (553 1 a; eski sayfa tek maddelik şeridi de çizer)', () => {

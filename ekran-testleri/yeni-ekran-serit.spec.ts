@@ -31,10 +31,10 @@ test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görün
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
   await ac('/ik');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
-  await ac('/plan/eski/studio');
-  const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
+  await ac('/recete-rota/eski/res');
+  const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[aria-current="page"]')).toContainText('Planlama atölyesi');
+  await expect(menu.locator('[aria-current="page"]')).toContainText('Kaynaklar');
 });
 
 // Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a).
