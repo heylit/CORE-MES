@@ -1120,12 +1120,19 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       if (reddet) throw dogrulama('Hurdanın girdisi düşülemedi', 'adet');
       gelen.push({ ...olay, fark: `${olay.fark}/${hurda?.s ?? 0}` });
     });
+    // 601 a: dinleyicinin uyarısı hurda cevabına gelir; void dinleyici uyarı vermez.
+    let hurdaUyarisi: string | null = null;
+    const birakUyaran = hurdaSayimDinle(async () => ({ uyari: hurdaUyarisi }));
     const hurdaToplami = async () => (await vt().tek<{ s: number | null }>(
       "SELECT sum(adet)::int AS s FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'hurda'", [emir.id]))?.s ?? null;
     try {
-      assert.equal((await sayimYap(emir.id, 3)).durum, 200, 'sağlam hurda olayı değildir');
-      assert.equal((await hurdaYap(emir.id, 2, hurdaId)).durum, 200);
-      assert.equal((await hurdaYap(emir.id, -1, hurdaId)).durum, 200);
+      assert.equal((await sayimYap(emir.id, 3)).govde.uyari, null, 'sağlam hurda olayı değildir');
+      const uyarisiz = await hurdaYap(emir.id, 2, hurdaId);
+      assert.deepEqual([uyarisiz.durum, uyarisiz.govde.uyari], [200, null], 'uyarısız ve void dinleyicide null');
+      hurdaUyarisi = 'Önceki adımın parçası bu istasyonda yok; 2 eksiye düşüldü.';
+      const uyarili = await hurdaYap(emir.id, -1, hurdaId);
+      assert.deepEqual([uyarili.durum, uyarili.govde.uyari], [200, 'Önceki adımın parçası bu istasyonda yok; 2 eksiye düşüldü.'], 'stok uyarısı hurda cevabına gelir');
+      hurdaUyarisi = null;
       const kisiId = gelen[0]?.kisiId;
       assert.deepEqual(gelen, ['2/2', '-1/1'].map((fark) => ({ uretimEmriId: emir.id, isEmriId: null, istasyonId, kisiId, hurdaNedeniId: hurdaId, fark, refakatPartisiId: null })),
         'dinleyici yeni satırı görür');
@@ -1135,6 +1142,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       assert.equal(await hurdaToplami(), 1, 'ret hurdayı geri alır');
     } finally {
       birak();
+      birakUyaran();
     }
   });
 

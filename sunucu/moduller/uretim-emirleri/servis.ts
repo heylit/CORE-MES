@@ -738,7 +738,7 @@ export async function emirSayim(
     const { isEmriId } = await sorgular.sayimEkle(db, {
       emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId, isEmriId: adimId,
     });
-    await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
+    uyari = await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }
   return { ...(await emirdenCevap(db, id)), uyari: uyarilariBirlestir(asimUyarisi, uyari) };
 }
