@@ -193,9 +193,10 @@ export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: num
 }
 
 // 327 a: emirde hiç sağlam satırı yoksa ilk parça onaylanmamıştır; ret sonrası sayılan da yeniden karar bekler (136 a).
-export async function ilkParcaOnaysiz(db: Db, emirId: number): Promise<boolean> {
+// 744 a: iş emri verilince bakılan o adımın sağlamıdır (ilk parça adım başınadır); verilmezse emrin.
+export async function ilkParcaOnaysiz(db: Db, emirId: number, isEmriId: number | null = null): Promise<boolean> {
   const satir = await db.tek<{ yok: boolean }>(
-    `SELECT NOT EXISTS (SELECT 1 FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'saglam') AS yok`, [emirId],
+    `SELECT NOT EXISTS (SELECT 1 FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'saglam' AND ($2::int IS NULL OR is_emri_id = $2)) AS yok`, [emirId, isEmriId],
   );
   return satir?.yok ?? false;
 }
@@ -206,13 +207,14 @@ export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiI
 export interface KararBekleyenSatir extends KararGrubu { zaman: string; adet: number }
 
 // Grubun henüz karara bağlanmamış satırları, yazılış sırasıyla: her karar grubu sıfırlar, bu yüzden bekleyen, grubun kümülatif
-// toplamının son sıfır olduğu satırdan sonrakilerdir (düzeltmeler dahil). Toplamı sıfır olan grup gelmez.
-export function kararBekleyenSatirlari(db: Db, emirId: number): Promise<KararBekleyenSatir[]> {
+// toplamının son sıfır olduğu satırdan sonrakilerdir (düzeltmeler dahil). Toplamı sıfır olan grup gelmez. İş emri verilince yalnız o
+// adımın satırları gelir (744 a: ilk parça kararı adım başınadır).
+export function kararBekleyenSatirlari(db: Db, emirId: number, isEmriId: number | null = null): Promise<KararBekleyenSatir[]> {
   return db.sorgu<KararBekleyenSatir>(
     `WITH s AS (
        SELECT id, is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, zaman, adet,
               sum(adet) OVER (PARTITION BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id ORDER BY id) AS kumulatif
-         FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'karar_bekliyor'),
+         FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'karar_bekliyor' AND ($2::int IS NULL OR is_emri_id = $2)),
      g AS (
        SELECT is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, COALESCE(max(id) FILTER (WHERE kumulatif = 0), 0) AS sifir
          FROM s GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id)
@@ -222,7 +224,7 @@ export function kararBekleyenSatirlari(db: Db, emirId: number): Promise<KararBek
                     AND g.refakat_partisi_id IS NOT DISTINCT FROM s.refakat_partisi_id
       WHERE s.id > g.sifir
       ORDER BY s.id`,
-    [emirId],
+    [emirId, isEmriId],
   );
 }
 
@@ -260,6 +262,21 @@ export function kararSayaclariGetir(db: Db, emirIdleri: readonly number[]): Prom
     `SELECT emir_id AS "emirId", COALESCE(sum(adet) FILTER (WHERE tur = 'karar_bekliyor'), 0)::int AS "kararBekliyor",
             COALESCE(sum(adet) FILTER (WHERE tur = 'red'), 0)::int AS red
        FROM uretim_sayimi WHERE emir_id = ANY($1::int[]) AND tur IN ('karar_bekliyor', 'red') GROUP BY emir_id`,
+    [[...emirIdleri]],
+  );
+}
+
+// 744 a: karar bekleyen ve redde kalan adet iş emri (adım) başına; iş emirsiz eski satırda iş emri ve OP boştur.
+export function adimKararSayaclariGetir(
+  db: Db, emirIdleri: readonly number[],
+): Promise<{ emirId: number; isEmriId: number | null; opNo: number | null; kararBekliyor: number; red: number }[]> {
+  return db.sorgu(
+    `SELECT s.emir_id AS "emirId", s.is_emri_id AS "isEmriId", i.op_no AS "opNo",
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'karar_bekliyor'), 0)::int AS "kararBekliyor",
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'red'), 0)::int AS red
+       FROM uretim_sayimi s LEFT JOIN uretim_emirleri_is_emri i ON i.id = s.is_emri_id
+      WHERE s.emir_id = ANY($1::int[]) AND s.tur IN ('karar_bekliyor', 'red')
+      GROUP BY s.emir_id, s.is_emri_id, i.op_no ORDER BY s.emir_id, i.op_no NULLS FIRST`,
     [[...emirIdleri]],
   );
 }

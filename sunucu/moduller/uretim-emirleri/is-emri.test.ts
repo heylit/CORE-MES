@@ -18,7 +18,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  acikEmir, acikEmirler, aralikAdetleri, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
+  acikEmir, acikEmirler, adimKararSayaclari, aralikAdetleri, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
@@ -392,6 +392,38 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(akis.fason.map((x) => [x.isEmriId, x.yon, x.adet, x.hurdaAdet]),
       [[ie2, 'gidis', 5, null], [ie2, 'gidis', 4, null], [ie2, 'donus', 4, 1], [ie2, 'donus', 4, 0]]);
     assert.equal(await emirAkisKaydi(o().vt, 2147483647), null);
+  });
+
+  test('744 a: ilk parça adım başınadır; Op10 onayı Op20 sayımını açmaz, karar yalnız kendi adımının bekleyenini kapatır; gerekmeyen adım kilitsizdir', async () => {
+    const m1 = await makineKur(await istasyonKur());
+    const m2 = await makineKur(await istasyonKur());
+    const { uretimEmriId: id, isEmriIdleri } = await ac([adim(1, { tur: 'makine', id: m1 }), adim(2, { tur: 'makine', id: m2 })], { adet: 10 });
+    const [ie1, ie2] = isEmriIdleri as [number, number];
+    const say = (adet: number, ilkParca?: 'gerekli' | 'gerekmez') =>
+      o().vt.tx((db) => emirSayim(db, kim('operator'), id, { tur: 'saglam', adet }, ilkParca === undefined ? {} : { ilkParca }));
+    const bekleyen = async () => (await o().vt.tx((db) => adimKararSayaclari(db, [id]))).get(id)?.map((x) => [x.isEmriId, x.opNo, x.kararBekliyor]);
+    const karar = (isEmriId: number) => o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay', isEmriId));
+
+    assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    await say(3, 'gerekli');
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 3]], 'Op10 ilk parçası kararı bekler');
+    assert.equal((await karar(ie1)).adet, 3);
+    await say(1, 'gerekli');
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0]], 'onaylı adımda sayım sağlamdır');
+    assert.equal((await terminal(`/${id}/bitir`, {})).durum, 200);
+
+    assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    await say(2, 'gerekli');
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 2]], 'Op20 kendi ilk parça kararını bekler: Op10 onayı açmaz');
+    assert.equal((await karar(ie1)).adet, 0, 'Op10 kararı Op20 bekleyenine dokunmaz');
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 2]]);
+    await say(1, 'gerekmez');
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 2]], 'ilk parça gerekmeyen adımda sayım sağlamdır');
+    await say(1);
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 2]], 'gereksinim verilmezse eski davranış: emrin sağlamı varsa sağlamdır');
+    assert.equal((await karar(ie2)).adet, 2);
+    assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 0]]);
+    assert.equal((await o().vt.tx((db) => adimKararSayaclari(db, []))).size, 0);
   });
 
   test('ayar ve süre özeti: ayar planlı işte bir kez yazılır, başlatma kapatır; özet hazırlık, birim süre ve 1\'er dizisini verir', async () => {
