@@ -20,7 +20,6 @@ interface Sayfa {
 }
 
 const RECETE_ROTA = /^\/recete-rota(\/[a-z]+)?$/;
-const RECETE_ROTA_ESKI = /^\/recete-rota\/eski(\/[a-z]+)?$/;
 const RECETE_ROTA_BOLUMLERI = ['schema', 'plan', 'kanban', 'items', 'ops', 'res', 'stock', 'studio', 'sureler'] as const;
 // Planlama plan modülünün sayfasıdır (658 b): bu eski adresler Planlama'ya yönlenir. Planlamacının reddi recete-rota.spec.ts'te sınanır.
 const PLANLAMA_BOLUMLERI: readonly string[] = ['plan', 'kanban', 'studio'];
@@ -48,9 +47,8 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri?gorunum=bitenler', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri/2', hesap: 'ornek.planlama', baslik: 'Üretim emri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri', hesap: 'ornek.mudur', baslik: 'Üretim Emirleri' },
-  // Reçete ve Rota bölümleri yeni ekrandadır (541); eski çerçeve /recete-rota/eski altında, planlama bölümleri kendi adresinde çerçevededir.
+  // Reçete ve Rota bölümleri yeni ekrandadır (541; eski çerçeve 805 ile kalktı); planlama bölümleri Planlama'ya yönlenir.
   { modul: 'recete-rota', yol: '/recete-rota', varis: RECETE_ROTA, hesap: 'ornek.yonetici', baslik: 'Üretim emirleri' },
-  { modul: 'recete-rota', yol: '/recete-rota/eski', varis: RECETE_ROTA_ESKI, hesap: 'ornek.yonetici', baslik: 'Reçete ve Rota', cerceve: true },
   ...RECETE_ROTA_BOLUMLERI.map((b): Sayfa => ({
     modul: 'recete-rota', yol: `/recete-rota/${b}`, ...(PLANLAMA_BOLUMLERI.includes(b)
       ? { varis: PLANLAMA, hesap: 'ornek.yonetici', baslik: 'Planlama' }

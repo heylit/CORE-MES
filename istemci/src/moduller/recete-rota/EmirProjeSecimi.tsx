@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, Pencere } from '../../ortak/arayuz/index.ts';
 import type { EmirSecimi } from './kopru.ts';
+import './recete-rota.css';
 
 interface Ozellikler { secenekler: AcilisSecenekleri; bitir: (secim: EmirSecimi | null) => void }
 

@@ -56,7 +56,7 @@ test('uzun katalogda tekerlek yeni ekranı kaydırır', async ({ page, ac }) => 
 });
 
 test('eski çerçeveli sayfada içerik alanı taşmaz, kaydırma çerçevededir', async ({ page, ac }) => {
-  for (const yol of ['/malzemeler/eski', '/recete-rota/eski', '/ik']) {
+  for (const yol of ['/malzemeler/eski', '/ik']) {
     await ac(yol);
     await expect(page.locator('main.tc-kabuk-icerik iframe').first()).toBeVisible();
     const fark = await page.locator('main.tc-kabuk-icerik').evaluate((e) => e.scrollHeight - e.clientHeight);
