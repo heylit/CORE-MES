@@ -1,11 +1,11 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import type { SaklananTur } from './kurallar.ts';
 
 export interface DosyaSatiri {
   ozet: string;
   boyut: number;
-  tur: DosyaTuru;
+  tur: SaklananTur;
   ilk_yukleyen_id: number;
 }
 
@@ -13,7 +13,7 @@ export interface BagSatiri {
   ozet: string;
   ad: string;
   boyut: number;
-  tur: DosyaTuru;
+  tur: SaklananTur;
   belge_turu: string | null;
   ekleyen_id: number;
   zaman: string;
@@ -124,7 +124,7 @@ export async function yuklemeyiAt(db: Db, ozet: string, kisiId: number): Promise
 
 // Şerit parçaları dosya içeriğine olduğu gibi geçer: 200 MB'lık dosya uygulama belleğinden geçmez. Kopyalanan parça sayısı
 // döner: özet denetiminden sonra şerit eksilmişse çağıran işlemi geri alır.
-export async function dosyaEkle(db: Db, ozet: string, kisiId: number, boyut: number, tur: DosyaTuru): Promise<number> {
+export async function dosyaEkle(db: Db, ozet: string, kisiId: number, boyut: number, tur: SaklananTur): Promise<number> {
   await db.sorgu('INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, $3, $4)', [ozet, boyut, tur, kisiId]);
   await db.sorgu('INSERT INTO dosya_yukleyeni (ozet, kisi_id) VALUES ($1, $2)', [ozet, kisiId]);
   const satir = await db.tek<{ adet: number }>(
@@ -241,4 +241,25 @@ export async function bagSil(db: Db, modul: string, kayit: string, ozet: string 
     );
   }
   return silinen;
+}
+
+// Modülün kendi yükleme şeridinde tamamlanıp özeti doğrulanan içerik (kart #732): parçalar en çok DOSYA_PARCASI boyunda yazılır.
+export async function icerikliDosyaEkle(db: Db, ozet: string, kisiId: number, tur: SaklananTur, parcalar: readonly Buffer[]): Promise<void> {
+  const boyut = parcalar.reduce((t, p) => t + p.length, 0);
+  await db.sorgu('INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, $3, $4)', [ozet, boyut, tur, kisiId]);
+  await db.sorgu('INSERT INTO dosya_yukleyeni (ozet, kisi_id) VALUES ($1, $2)', [ozet, kisiId]);
+  for (let sira = 0; sira < parcalar.length; sira += 1) {
+    await db.sorgu('INSERT INTO dosya_icerigi (ozet, sira, icerik) VALUES ($1, $2, $3)', [ozet, sira, parcalar[sira]]);
+  }
+}
+
+// Dosya başka bir modülün kaydına bağlı mı (kaynaktan bağlamanın ön koşulu).
+export async function baskaModuldeBagli(db: Db, ozet: string, modul: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM dosya_bagi WHERE ozet = $1 AND modul <> $2 LIMIT 1', [ozet, modul])) !== null;
+}
+
+export async function kayittaBagliOlanlar(db: Db, modul: string, kayit: string, ozetler: readonly string[]): Promise<string[]> {
+  const satirlar = await db.sorgu<{ ozet: string }>(
+    'SELECT ozet FROM dosya_bagi WHERE modul = $1 AND kayit = $2 AND ozet = ANY($3)', [modul, kayit, ozetler]);
+  return satirlar.map((x) => x.ozet);
 }

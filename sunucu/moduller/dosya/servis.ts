@@ -5,12 +5,13 @@ import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi, bulunamadi, cokBuyuk, cokIstek, dogrulama } from '#cekirdek/hata.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { BagliDosya, DosyaParcasiGovdesi } from '#paylasilan/sozlesme/dosya.ts';
+import { DOSYA_PARCASI } from '#paylasilan/sozlesme/dosya.ts';
+import type { BagliDosya, DosyaParcasiGovdesi, DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import {
-  BAYAT_SERIT_GUN, DOSYA_MIME, DOSYA_SINIRI, ILETILER, SAHIPSIZ_GUN, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU, bagReddi, kotaHatasi,
+  BAYAT_SERIT_GUN, DOSYA_MIME, IKILI, DOSYA_SINIRI, ILETILER, SAHIPSIZ_GUN, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU, bagReddi, kotaHatasi,
   modulAdiBicimli, turBul,
 } from './kurallar.ts';
-import type { BagSiniri, DosyaSiniri } from './kurallar.ts';
+import type { BagSiniri, DosyaSiniri, SaklananTur } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { BagSatiri, DosyaSatiri } from './sorgular.ts';
 
@@ -25,6 +26,11 @@ export async function eksikDosyalar(db: Db, kullanici: Kullanici, ozetler: reado
 async function yuklemeyiReddet(db: Db, ozet: string, kisiId: number, hata: UygulamaHatasi): Promise<never> {
   await sorgular.yuklemeyiAt(db, ozet, kisiId);
   throw new UygulamaHatasi(hata.kod, hata.message, { ...(hata.alan === undefined ? {} : { alan: hata.alan }), yazilarKalir: true });
+}
+
+// Ortak deponun doluluğu (tamamlanan dosyalar ve açık parçalar): kendi şeridi olan modül depo sınırını bununla denetler.
+export function depoDolulugu(db: Db): Promise<number> {
+  return sorgular.depoBayti(db);
 }
 
 // Zamanlanmış işin turu (isler.ts); yükleme temizlik yapmaz. Sınırı dolduran silme sorgusu tur sınırına kadar yinelenir.
@@ -128,9 +134,17 @@ export async function kendiDosyam(db: Db, kullanici: Kullanici, ozet: string): P
   return ikili(dosya, `${ozet.slice(0, 12)}.${dosya.tur}`);
 }
 
-const bagliDosya = (s: BagSatiri): BagliDosya => ({
+// Sözleşmedeki BagliDosya kişinin yükleyebildiği türleri taşır. İkili türü yalnız modül deposu tutamağının bağında olur (bağ sınırı
+// tutamağın türüyle sınırlıdır); öteki tutamakların bağında görünürse veri bozuktur.
+export type SaklananDosya = Omit<BagliDosya, 'tur'> & { tur: SaklananTur };
+
+const bagliDosya = (s: BagSatiri): SaklananDosya => ({
   ozet: s.ozet, ad: s.ad, boyut: s.boyut, tur: s.tur, belgeTuru: s.belge_turu, ekleyenId: s.ekleyen_id, zaman: s.zaman,
 });
+function sozlesmeDosyasi(d: SaklananDosya): BagliDosya {
+  if (d.tur === IKILI) throw new Error(`İkili dosya ikili izni olmayan modülün bağında: ${d.ozet}`);
+  return { ...d, tur: d.tur };
+}
 
 export interface BagGirdisi {
   ozet: string;
@@ -141,7 +155,7 @@ export interface BagGirdisi {
 
 // Bağlayan, içeriği kendisi göndermiş olmalıdır (kullanıcı kararı: bağlama yetkisi a). Özeti bilmek yetmez: yoksa başka bir kayıtta
 // gördüğü dosyayı yazabildiği bir kayda bağlayıp o kaydın okuyanlarına açabilirdi. Bilinmeyen dosya ile aynı ret: özet yoklanamaz.
-async function dosyaBagla(db: Db, kullanici: Kullanici, modul: string, g: BagGirdisi, sinir: BagSiniri): Promise<BagliDosya> {
+async function dosyaBagla(db: Db, kullanici: Kullanici, modul: string, g: BagGirdisi, sinir: BagSiniri): Promise<SaklananDosya> {
   if (!(await sorgular.yukleyenMi(db, g.ozet, kullanici.id))) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
   const dosya = await sorgular.bagIcinAyir(db, g.ozet);
   if (dosya === null) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
@@ -154,14 +168,57 @@ async function dosyaBagla(db: Db, kullanici: Kullanici, modul: string, g: BagGir
   return bagliDosya(satir);
 }
 
+// Kart #732 (karar 732 a): sunucu kodu, başka bir modülün kaydına zaten bağlı olan dosyayı kişisiz bağlar. DSb'nin korumak istediği
+// şey (özeti bilen kişinin dosyayı kendi kaydına bağlayıp açması) burada yoktur: özet kişiden gelmez, kaynak modülün sunucu kodundan
+// gelir ve kaynakta bağ vardır. Kişiden gelen özetle çağrılmaz.
+async function kaynaktanBagla(db: Db, modul: string, g: BagGirdisi, ekleyenId: number, sinir: BagSiniri): Promise<SaklananDosya> {
+  if (!(await sorgular.baskaModuldeBagli(db, g.ozet, modul))) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
+  const dosya = await sorgular.bagIcinAyir(db, g.ozet);
+  if (dosya === null) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
+  const ret = bagReddi(dosya, sinir);
+  if (ret === 'turIzinsiz') throw dogrulama(ILETILER.turIzinsiz, 'ozet');
+  if (ret === 'dosyaBuyuk') throw cokBuyuk(ILETILER.dosyaBuyuk);
+  await sorgular.bagYaz(db, { ...g, modul, ad: g.ad.trim(), ekleyenId });
+  const satir = await sorgular.bag(db, modul, g.kayit, g.ozet);
+  if (satir === null) throw new Error(`Yazılan bağ okunamadı: ${modul} ${g.kayit} ${g.ozet}`);
+  return bagliDosya(satir);
+}
+
+// Kendi yükleme şeridi olan modül (Arkon, kart #732) tamamladığı ve özetini doğruladığı içeriği ortak depoya yazar; kişi yükleyen
+// olur (DSb korunur). Tür içerikten bulunur; bulunamazsa ikilidir (karar 743 a). Dosya zaten varsa yalnız yükleyen eklenir. Sınır ve
+// kota modülün şeridindedir.
+async function icerikYaz(db: Db, kisiId: number, ozet: string, icerik: Buffer): Promise<SaklananTur> {
+  if (createHash('sha256').update(icerik).digest('hex') !== ozet) throw dogrulama(ILETILER.ozetTutmuyor, 'ozet');
+  await sorgular.ozetKilitle(db, ozet);
+  const var_ = await sorgular.dosyaBul(db, ozet);
+  if (var_ !== null) {
+    await sorgular.yukleyenEkle(db, ozet, kisiId);
+    return var_.tur;
+  }
+  if (icerik.length === 0) throw dogrulama('Parça boş olamaz.', 'veri');
+  const tur = turBul(icerik, icerik.length) ?? IKILI;
+  const parcalar: Buffer[] = [];
+  for (let bas = 0; bas < icerik.length; bas += DOSYA_PARCASI) parcalar.push(icerik.subarray(bas, bas + DOSYA_PARCASI));
+  await sorgular.icerikliDosyaEkle(db, ozet, kisiId, tur, parcalar);
+  return tur;
+}
+
 // Modül adı tutamakta sabittir: işlevler modül almaz, bir modülün tutamağı başka modülün bağını göremez ve kaldıramaz.
-export interface DosyaTutamagi {
+export interface DosyaTutamagi<D = BagliDosya, T extends SaklananTur = DosyaTuru> {
   readonly modul: string;
-  dosyaBagla(db: Db, kullanici: Kullanici, g: BagGirdisi, sinir: BagSiniri): Promise<BagliDosya>;
-  bagKaldir(db: Db, kayit: string, ozet: string | null): Promise<BagliDosya[]>;
-  bagliDosyalar(db: Db, kayit: string): Promise<BagliDosya[]>;
+  dosyaBagla(db: Db, kullanici: Kullanici, g: BagGirdisi, sinir: BagSiniri<T>): Promise<D>;
+  bagKaldir(db: Db, kayit: string, ozet: string | null): Promise<D[]>;
+  bagliDosyalar(db: Db, kayit: string): Promise<D[]>;
   // Yalnız verilen kayda bağlı dosya akar: modül başka kaydın dosyasını kendi ucundan veremez.
   dosyaAkisi(db: Db, kayit: string, ozet: string): Promise<IkiliCevap | null>;
+  // Verilenlerden bu kayda bağlı olan özetler.
+  bagliOlanlar(db: Db, kayit: string, ozetler: readonly string[]): Promise<string[]>;
+  kaynaktanBagla(db: Db, g: BagGirdisi, ekleyenId: number, sinir: BagSiniri<T>): Promise<D>;
+}
+
+// Kendi yükleme şeridi olan modülün (Arkon) tutamağı: içeriği ortak depoya yazar, ikili türünü bağlayabilir.
+export interface ModulDeposuTutamagi extends DosyaTutamagi<SaklananDosya, SaklananTur> {
+  icerikYaz(db: Db, kisiId: number, ozet: string, icerik: Buffer): Promise<SaklananTur>;
 }
 
 const MODUL_KLASORU = join(import.meta.dirname, '..');
@@ -174,22 +231,33 @@ function modulKlasoruMu(ad: string): boolean {
   }
 }
 
-// Kullanan modül tutamağı yüklenirken alır: adı modül klasörü olmayan tutamak sunucu açılırken hata verir.
-export function dosyaTutamagi(modul: string): DosyaTutamagi {
+function tutamakKur<D>(modul: string, donustur: (d: SaklananDosya) => D): DosyaTutamagi<D, SaklananTur> {
   if (!modulAdiBicimli(modul) || !modulKlasoruMu(modul)) throw new Error(`Dosya tutamağı için modül klasörü yok: ${JSON.stringify(modul)}`);
-  return Object.freeze({
+  return {
     modul,
-    dosyaBagla: (db: Db, kullanici: Kullanici, g: BagGirdisi, sinir: BagSiniri) => dosyaBagla(db, kullanici, modul, g, sinir),
-    bagKaldir: async (db: Db, kayit: string, ozet: string | null) => (await sorgular.bagSil(db, modul, kayit, ozet)).map(bagliDosya),
-    bagliDosyalar: async (db: Db, kayit: string) => (await sorgular.baglar(db, modul, kayit)).map(bagliDosya),
+    dosyaBagla: async (db: Db, kullanici: Kullanici, g: BagGirdisi, sinir: BagSiniri) => donustur(await dosyaBagla(db, kullanici, modul, g, sinir)),
+    bagKaldir: async (db: Db, kayit: string, ozet: string | null) => (await sorgular.bagSil(db, modul, kayit, ozet)).map(bagliDosya).map(donustur),
+    bagliDosyalar: async (db: Db, kayit: string) => (await sorgular.baglar(db, modul, kayit)).map(bagliDosya).map(donustur),
     dosyaAkisi: async (db: Db, kayit: string, ozet: string) => {
       const satir = await sorgular.bag(db, modul, kayit, ozet);
       return satir === null ? null : ikili(satir, satir.ad);
     },
-  });
+    bagliOlanlar: (db: Db, kayit: string, ozetler: readonly string[]) => sorgular.kayittaBagliOlanlar(db, modul, kayit, ozetler),
+    kaynaktanBagla: async (db: Db, g: BagGirdisi, ekleyenId: number, sinir: BagSiniri) => donustur(await kaynaktanBagla(db, modul, g, ekleyenId, sinir)),
+  };
+}
+
+// Kullanan modül tutamağı yüklenirken alır: adı modül klasörü olmayan tutamak sunucu açılırken hata verir. Bağ sınırının türleri
+// sözleşmedeki türlerdir: bu tutamakla ikili dosya bağlanamaz.
+export function dosyaTutamagi(modul: string): DosyaTutamagi {
+  return Object.freeze(tutamakKur(modul, sozlesmeDosyasi));
+}
+
+export function modulDeposuTutamagi(modul: string): ModulDeposuTutamagi {
+  return Object.freeze({ ...tutamakKur(modul, (d) => d), icerikYaz });
 }
 
 // Bağlama ve kaldırma denetim kaydına içeriksiz girer (DS9 a): bağlayan uç `denetimEki` ile kendi kaydına ekler.
-export function denetimSatiri(islem: 'bagla' | 'kaldir', d: BagliDosya): DenetimSecimi {
+export function denetimSatiri(islem: 'bagla' | 'kaldir', d: SaklananDosya): DenetimSecimi {
   return { islem, ozet: d.ozet, ad: d.ad, boyut: d.boyut, tur: d.tur };
 }

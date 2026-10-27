@@ -240,3 +240,7 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
   işaretliyordu. Sıra dışı bitişte (639 paralel adım) kuyruktaki adım bitmiş sayılıp kuyruk yazımı reddediliyordu (DOĞRULANDI, çözücü düzeyinde kırmızı deneme).
 - Şimdi kol geçerliyse (`kolCevir` boş değil) anahtar `n + sıra - önündeki ek adım` olur. Kol değilse (tam rotalı parti, katılma adımı bulunamayan) değişmez.
 - Test: `emirler.test.ts` 701; değişiklik olmadan kırılıyor (DOĞRULANDI).
+
+## Gece vardiyası (741 a, 2026-10-27)
+- Sayfanın "şimdi"si yeniden planlamada gerçek saattir, 07:00'den önce de (`zz31-tmi.betik`): gece önceki günün vardiyasının devamıdır. Motor tarafı plan
+  dalındadır (`sunucu/moduller/plan/FARK.md`, 741 a). Test: planlama-simdi.test.ts.

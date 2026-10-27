@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { tesisGunBasi } from '#paylasilan/zaman.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { gunduzde } from './plan-saat.test.ts';
+import { anSabit, gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
@@ -53,7 +53,9 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     assert.equal(k2.taslak, p.taslak!.id);
   });
 
-  test('P5 ret: çakışma, yetkisiz rol, pasif makine; izinli taşıma geçer, canlıya alınca makine iş emrine yazılır (P3)', async () => {
+  // Planı kur ilk işi dakikaya yuvarlanmış şimdiden başlatır; çakışma denemesi o ana taşır. Dakika sınırı geçerse an geçmişte kalır ve geçmiş
+  // denetimi (400) çakışmadan (409) önce döner: saat sabitlenir.
+  test('P5 ret: çakışma, yetkisiz rol, pasif makine; izinli taşıma geçer, canlıya alınca makine iş emrine yazılır (P3)', async () => anSabit(async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     const p = await taslaktaOner();
     const y = yer(p, i1!);
@@ -74,7 +76,7 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     assert.equal(s.senaryolar.find((x) => x.id === t.taslak!.id)?.durum, 'canliya_alindi');
     assert.deepEqual(yer(await planOku(), i1!).kaynak, { tur: 'makine', id: makineB });
     assert.equal(await isEmriMakinesi(i1!), makineB);
-  });
+  }));
 
   test('demo 2.16: emrin ilk adımı bitince ya da çalışırken bekleyen adımı başlamış sayılmaz, taşınır ve sıralanır; çalışan adım taşınmaz', async () => {
     const [i1, i2] = await isEmirleriAc([yeniAdim(), yeniAdim()]);

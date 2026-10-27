@@ -735,6 +735,24 @@ export const kartTeslimleri = (db: Db, uretimEmriId: number, partiIdler: readonl
      t.gonderen_kisi_id AS "gonderenKisiId", t.kapatan_kisi_id AS "kapatanKisiId"
    FROM stok_teslim t JOIN stok_konum kk ON kk.id = t.kaynak_konum_id JOIN stok_konum hk ON hk.id = t.hedef_konum_id
    WHERE t.uretim_emri_id = $1 AND t.parti_id = ANY($2::bigint[]) ORDER BY t.gonderim, t.id`, [uretimEmriId, partiIdler]);
+// Üretim anomalisi (kart 764): emre ya da iş emrine bağlı teslimler ve istekler, zamanlarıyla. İstek tablosunda kapanış sütunu yoktur;
+// istek yalnız açık durumdan güncellenir (istekGecir, istekReddet), bu yüzden kapalı istekte son güncelleme kapanış anıdır.
+export interface EmirTeslimSatiri {
+  teslimId: number; no: string; isEmriId: number | null; uretimEmriId: number | null; malzemeId: number; hedefIstasyonId: number | null;
+  durum: TeslimDurumu; gonderim: string; kapanis: string | null;
+}
+export const emirTeslimleri = (db: Db, uretimEmriIdler: readonly number[], isEmriIdler: readonly number[]): Promise<EmirTeslimSatiri[]> => db.sorgu(
+  `SELECT t.id AS "teslimId", t.no, t.is_emri_id AS "isEmriId", t.uretim_emri_id AS "uretimEmriId", t.malzeme_id AS "malzemeId",
+     hk.istasyon_id AS "hedefIstasyonId", t.durum, ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis
+   FROM stok_teslim t JOIN stok_konum hk ON hk.id = t.hedef_konum_id
+   WHERE t.uretim_emri_id = ANY($1::int[]) OR t.is_emri_id = ANY($2::int[]) ORDER BY t.gonderim, t.id`, [[...uretimEmriIdler], [...isEmriIdler]]);
+export interface EmirIstekSatiri {
+  istekId: number; no: string; uretimEmriId: number; malzemeId: number; istasyonId: number | null; durum: MalzemeIstegiDurumu; acilis: string; kapanis: string | null;
+}
+export const emirIstekleri = (db: Db, uretimEmriIdler: readonly number[]): Promise<EmirIstekSatiri[]> => db.sorgu(
+  `SELECT i.id AS "istekId", i.no, i.uretim_emri_id AS "uretimEmriId", i.malzeme_id AS "malzemeId", i.istasyon_id AS "istasyonId", i.durum,
+     ${zamanMetni('i.acilis')} AS acilis, CASE WHEN i.durum IN ('teslim', 'iptal') THEN ${zamanMetni('i.guncelleme')} END AS kapanis
+   FROM stok_malzeme_istegi i WHERE i.uretim_emri_id = ANY($1::int[]) ORDER BY i.acilis, i.id`, [[...uretimEmriIdler]]);
 // Partinin en eski mal kabul zamanı; mal kabulle girmemiş parti (üretim partisi) null taşır.
 export const partiGirisZamanlari = (db: Db, partiIdler: number[]): Promise<{ partiId: number; lotNo: string; malKabulZamani: string | null }[]> => db.sorgu(
   `SELECT p.id::int AS "partiId", p.lot_no AS "lotNo", ${zamanMetni('min(m.zaman)')} AS "malKabulZamani"

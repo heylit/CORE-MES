@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HATA_KODLARI } from '../hata.ts';
+import { ILK_PARCA_SECIMLERI } from './rota.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // Reçete ve Rota Motoru prototipi TMI içinde değiştirilmeden çalışır. Prototip durumunu tarayıcının yerel deposunda tutar (ana
@@ -183,6 +184,8 @@ export const durumRotaAdimiSemasi = z.object({
   split: z.enum(['tek', 'bol']),
   minLot: sayiAlani,
   resetup: z.boolean(),
+  // Adımın ilk parça onayı (744 a); sunucu her adımda verir, yerel taslak adım yoksa "her kurulumda" sayar.
+  ilkParca: z.enum(ILK_PARCA_SECIMLERI).optional(),
   alts: z.array(kimlikMetni),
   altTimes: z.record(z.string(), z.object({ setup: sayiAlani, cycle: sayiAlani })),
   digerAdaylar: z.array(sureAlani.extend({ tur: z.enum(['makine', 'kisi']), id: kimlikMetni })),

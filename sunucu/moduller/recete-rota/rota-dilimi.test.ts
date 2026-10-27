@@ -113,7 +113,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const k = await taslakKur(urun, [
       adim({
         ad: 'Birinci', kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 10, birimSureDk: 4, islemSuresiDk: 3, degisimSuresiDk: 1, firePayiYuzde: 2,
-        makineKullanimi: 'paralel', enKucukParca: 5, yenidenAyar: false,
+        makineKullanimi: 'paralel', enKucukParca: 5, yenidenAyar: false, ilkParca: 'yok',
         adaylar: [{ kaynak: { tur: 'istasyon', id: istB }, ayarSuresiDk: 5, birimSureDk: 6 }, { kaynak: { tur: 'makine', id: makineB }, ayarSuresiDk: null, birimSureDk: 7 }],
         bilesenler: [{ malzemeId: hammadde, miktar: 2, fireYuzde: 5 }], yanUrunler: [{ malzemeId: yanUrun, miktar: 0.5 }],
       }),
@@ -137,7 +137,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [s1, s2, s3] = rev.data.steps;
     assert.deepEqual(s1, {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, terminGun: null,
-      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false,
+      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, ilkParca: 'yok',
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
       digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: null, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
@@ -148,8 +148,8 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
       { id: `${String(urun)}-o20`, stationId: String(istC), machineId: null, setup: 0, proc: 8, chg: null, dep: 'ortulu', depQty: 10 },
     );
     assert.deepEqual(
-      { stationId: s3?.stationId, setup: s3?.setup, proc: s3?.proc, cycle: s3?.cycle, dep: s3?.dep, split: s3?.split, minLot: s3?.minLot },
-      { stationId: null, setup: 1, proc: 2, cycle: 2, dep: 'bagimsiz', split: 'tek', minLot: null },
+      { stationId: s3?.stationId, setup: s3?.setup, proc: s3?.proc, cycle: s3?.cycle, dep: s3?.dep, split: s3?.split, minLot: s3?.minLot, ilkParca: s3?.ilkParca },
+      { stationId: null, setup: 1, proc: 2, cycle: 2, dep: 'bagimsiz', split: 'tek', minLot: null, ilkParca: 'her_kurulum' },
     );
     // Kabul: aynı rota rota modülünün kendi ucundan aynı adımlarla (istasyon dahil) döner.
     const liste = await tamamIstek<UrunRevizyonlariCevabi>(tam, 'GET', `/rota/urunler/${String(urun)}`);

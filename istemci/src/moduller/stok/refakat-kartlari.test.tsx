@@ -74,7 +74,7 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     const ayrinti = await screen.findByRole('article', { name: 'Kart ayrıntısı' });
     expect(within(ayrinti).getByRole('heading', { name: 'UE-000001-P1' })).toBeTruthy();
     expect(await within(ayrinti).findByText('8 sa 08 dk (sürüyor)')).toBeTruthy();
-    expect(within(ayrinti).getByText('işlem planı 5 sa 16 dk · +54%')).toBeTruthy();
+    expect(within(ayrinti).getByText('plan 1 g 8 sa · 1 g 0 sa kaldı')).toBeTruthy();
     expect(within(ayrinti).getByRole('img', { name: /Lead time dağılımı/ })).toBeTruthy();
     expect(within(ayrinti).getByText('OP10 süre özeti · üretim emrinden')).toBeTruthy();
     expect(within(ayrinti).getByRole('img', { name: 'Parça başına cycle süreleri' })).toBeTruthy();
@@ -85,6 +85,12 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     expect(within(asamalar[2]!).getByText('Takım değişimi')).toBeTruthy();
     expect(within(asamalar[3]!).getByText('Torna 2 → Freze 1')).toBeTruthy();
     expect(within(akis).getByText('Çarşamba 21.10.2026')).toBeTruthy();
+    expect(within(asamalar[1]!).getByText('30 dk geç başladı')).toBeTruthy();
+    expect(within(asamalar[2]!).getByText('bitiş 54 dk geç')).toBeTruthy();
+    expect(within(asamalar[2]!).getByText(/^taban /)).toBeTruthy();
+    expect(within(asamalar[4]!).getByText('plana göre 56 dk gecikmede')).toBeTruthy();
+    expect(within(asamalar[7]!).getByText('termin 30.10.2026')).toBeTruthy();
+    expect(within(asamalar[5]!).getByText(/^Pazar 25\.10\.2026 · plan$/)).toBeTruthy();
 
     fireEvent.click(within(ayrinti).getByRole('tab', { name: 'Tablo' }));
     const adimlar = await within(ayrinti).findByRole('table', { name: 'Adımlar: plan ve gerçek' });
