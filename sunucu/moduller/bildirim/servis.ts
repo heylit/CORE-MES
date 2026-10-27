@@ -6,12 +6,12 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
-  BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
+  ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
-import { kisiAdlari, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanRoller, tekilAnahtar, yolTureUyar,
+  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, yolTureUyar,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -32,12 +32,21 @@ export interface BildirimOlayi {
 }
 
 // Çağıranın transaction'ında yazar (ADR 0006): olayı doğuran yazma geri alınırsa bildirim de kalmaz. Yazılan alıcı sayısını döner.
+// BIL-10: türde alıcı seçimi varsa seçilen rollerdeki etkin girişli kişiler ve seçilen kişiler; seçim yoksa null (işlem kuralı).
+async function ayarliAlicilar(db: Db, tur: BildirimTuru): Promise<number[] | null> {
+  const ayar = await s.turAyari(db, tur);
+  if (ayar === null) return null;
+  return [...await rollerdekiKisiler(db, ayar.rolIdleri), ...ayar.kisiIdleri];
+}
+
 export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<number> {
   const tanim = BILDIRIM_TURLERI[olay.tur];
   if (olay.yol !== undefined && olay.yol !== null && !kayitYoluMu(olay.yol)) throw new Error(`Bildirim yolu geçersiz: ${olay.yol}`);
   if (!yolTureUyar(olay.tur, olay.yol)) throw new Error(`Bildirim yolu türün ekranında değil: ${olay.tur} ${olay.yol}`);
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
-  const alicilar = alicilariSec(olay.tur, await kisilerinIslemleri(db), { kisiler: olay.kisiler, haric: olay.haric });
+  const alicilar = alicilariSec(olay.tur, await kisilerinIslemleri(db), {
+    kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur),
+  });
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
   for (const kisiId of alicilar) {
     await s.bildirimYaz(db, {
@@ -76,12 +85,17 @@ export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise
   return b;
 }
 
-// Kişi yalnız alabileceği olayları görür (olay türünün işlemlerinden birini taşıyorsa); seçmediği olayda varsayılan geçer.
+// Kişi yalnız alabileceği olayları görür: türde alıcı seçimi varsa seçilmişse, yoksa türün işlemlerinden birini taşıyorsa.
+// Seçmediği olayda varsayılan geçer.
 export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimTercihleriCevabi> {
   const kayitli = new Map((await s.kisininTercihleri(db, kullanici.id)).map((t) => [t.tur, t]));
   const eposta = epostaSecilebilir(kullanici.islemler);
+  const ayarli = new Map<string, boolean>();
+  for (const a of await s.turAyarlari(db)) {
+    ayarli.set(a.tur, a.kisiIdleri.includes(kullanici.id) || (await rollerdekiKisiler(db, a.rolIdleri)).includes(kullanici.id));
+  }
   const satirlar = BILDIRIM_TUR_ANAHTARLARI
-    .filter((tur) => BILDIRIM_TURLERI[tur].alanIslemler.some((i) => kullanici.islemler.includes(i)))
+    .filter((tur) => ayarli.get(tur) ?? BILDIRIM_TURLERI[tur].alanIslemler.some((i) => kullanici.islemler.includes(i)))
     .map((tur) => {
       const t = BILDIRIM_TURLERI[tur];
       const k = kayitli.get(tur);
@@ -118,10 +132,46 @@ export async function cagriYonlendirmesi(db: Db): Promise<CagriYonlendirmeCevabi
 export async function cagriYonlendirmesiYaz(
   db: Db, kullanici: Kullanici, ekip: CagriEkibi, govde: CagriYonlendirmeDegistirGovdesi,
 ): Promise<CagriYonlendirmeCevabi> {
-  const olmayan = olmayanRoller(govde.rolIdleri, (await rolSecenekleri(db)).map((r) => r.id));
+  const olmayan = olmayanKimlikler(govde.rolIdleri, (await rolSecenekleri(db)).map((r) => r.id));
   if (olmayan.length > 0) throw dogrulama(`Rol bulunamadı: ${olmayan.join(', ')}`, 'rolIdleri');
   if (!(await s.cagriEkibiYaz(db, ekip, govde.rolIdleri, govde.surum, kullanici.id))) throw eskiSurum();
   return cagriYonlendirmesi(db);
+}
+
+// Bildirim alıcıları (760 c, 761 b). Seçilebilir kişi etkin ve girişli olandır: bildirim yalnız onlara yazılır.
+async function secilebilirKisiler(db: Db): Promise<{ id: number; ad: string }[]> {
+  const girisli = await kisilerinIslemleri(db);
+  return (await kisiSecenekleri(db)).filter((k) => girisli.has(k.id)).map(({ id, ad }) => ({ id, ad }));
+}
+
+export async function bildirimAlicilari(db: Db): Promise<BildirimAlicilariCevabi> {
+  const ayarlar = new Map((await s.turAyarlari(db)).map((a) => [a.tur, a]));
+  const adlar = await kisiAdlari(db, [...ayarlar.values()].flatMap((a) => (a.degistirenKisiId === null ? [] : [a.degistirenKisiId])));
+  return {
+    satirlar: ALICI_AYARLI_TURLER.map((tur) => {
+      const t = BILDIRIM_TURLERI[tur];
+      const a = ayarlar.get(tur);
+      return {
+        tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur), varsayilanIslemler: [...t.alanIslemler],
+        rolIdleri: a?.rolIdleri ?? [], kisiIdleri: a?.kisiIdleri ?? [], surum: a?.surum ?? null,
+        degistiren: a === undefined || a.degistirenKisiId === null ? null : { id: a.degistirenKisiId, ad: adlar.get(a.degistirenKisiId) ?? null },
+        degistirildi: a?.degistirildi ?? null,
+      };
+    }),
+    roller: await rolSecenekleri(db),
+    kisiler: await secilebilirKisiler(db),
+  };
+}
+
+export async function bildirimAlicilariYaz(
+  db: Db, kullanici: Kullanici, tur: BildirimTuru, govde: BildirimAliciDegistirGovdesi,
+): Promise<BildirimAlicilariCevabi> {
+  const olmayanRol = olmayanKimlikler(govde.rolIdleri, (await rolSecenekleri(db)).map((r) => r.id));
+  if (olmayanRol.length > 0) throw dogrulama(`Rol bulunamadı: ${olmayanRol.join(', ')}`, 'rolIdleri');
+  const olmayanKisi = olmayanKimlikler(govde.kisiIdleri, (await secilebilirKisiler(db)).map((k) => k.id));
+  if (olmayanKisi.length > 0) throw dogrulama(`Kişi bulunamadı ya da girişi yok: ${olmayanKisi.join(', ')}`, 'kisiIdleri');
+  if (!(await s.turAyariYaz(db, tur, govde, kullanici.id))) throw eskiSurum();
+  return bildirimAlicilari(db);
 }
 
 // Kişinin alıcısı olduğu ekipler: çağrı gidecek kişiler ekipCagrisiBildir ile aynı yoldan seçilir, iki kaynak oluşmaz.

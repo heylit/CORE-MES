@@ -128,3 +128,55 @@ export async function cagriEkibiYaz(db: Db, ekip: string, rolIdleri: readonly nu
   await db.sorgu('INSERT INTO bildirim_cagri_alicisi (ekip, rol_id) SELECT $1, unnest($2::int[])', [ekip, rolIdleri]);
   return true;
 }
+
+export interface TurAyariSatiri {
+  tur: string; rolIdleri: number[]; kisiIdleri: number[]; surum: number; degistirenKisiId: number | null; degistirildi: string;
+}
+
+export function turAyarlari(db: Db): Promise<TurAyariSatiri[]> {
+  return db.sorgu<TurAyariSatiri>(
+    `SELECT a.tur,
+            COALESCE((SELECT array_agg(r.rol_id ORDER BY r.rol_id) FROM bildirim_tur_rolu r WHERE r.tur = a.tur), '{}') AS "rolIdleri",
+            COALESCE((SELECT array_agg(k.kisi_id ORDER BY k.kisi_id) FROM bildirim_tur_kisisi k WHERE k.tur = a.tur), '{}') AS "kisiIdleri",
+            a.surum, a.degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('a.degistirildi')} AS degistirildi
+       FROM bildirim_tur_ayari a ORDER BY a.tur`,
+  );
+}
+
+export function turAyari(db: Db, tur: string): Promise<{ rolIdleri: number[]; kisiIdleri: number[] } | null> {
+  return db.tek(
+    `SELECT COALESCE((SELECT array_agg(r.rol_id ORDER BY r.rol_id) FROM bildirim_tur_rolu r WHERE r.tur = a.tur), '{}') AS "rolIdleri",
+            COALESCE((SELECT array_agg(k.kisi_id ORDER BY k.kisi_id) FROM bildirim_tur_kisisi k WHERE k.tur = a.tur), '{}') AS "kisiIdleri"
+       FROM bildirim_tur_ayari a WHERE a.tur = $1`,
+    [tur],
+  );
+}
+
+// Sürüm tutmazsa false: alıcılar değişmez. Sürümsüz yazım yalnız ayarlanmamış türü açar; tür bu arada açıldıysa eski sürümdür.
+// İkisi de boşsa satır silinir (alıcılar da cascade ile): tür işlem kuralına döner.
+export async function turAyariYaz(
+  db: Db, tur: string, a: { rolIdleri: readonly number[]; kisiIdleri: readonly number[]; surum: number | null }, kisiId: number,
+): Promise<boolean> {
+  const bos = a.rolIdleri.length === 0 && a.kisiIdleri.length === 0;
+  if (a.surum === null) {
+    if (bos) return (await db.tek('SELECT 1 FROM bildirim_tur_ayari WHERE tur = $1', [tur])) === null;
+    const acildi = await db.tek(
+      'INSERT INTO bildirim_tur_ayari (tur, degistiren_kisi_id) VALUES ($1, $2) ON CONFLICT (tur) DO NOTHING RETURNING 1', [tur, kisiId],
+    );
+    if (acildi === null) return false;
+  } else if (bos) {
+    return (await db.tek('DELETE FROM bildirim_tur_ayari WHERE tur = $1 AND surum = $2 RETURNING 1', [tur, a.surum])) !== null;
+  } else {
+    const satir = await db.tek(
+      `UPDATE bildirim_tur_ayari SET surum = surum + 1, degistiren_kisi_id = $3, degistirildi = now()
+        WHERE tur = $1 AND surum = $2 RETURNING 1`,
+      [tur, a.surum, kisiId],
+    );
+    if (satir === null) return false;
+    await db.sorgu('DELETE FROM bildirim_tur_rolu WHERE tur = $1', [tur]);
+    await db.sorgu('DELETE FROM bildirim_tur_kisisi WHERE tur = $1', [tur]);
+  }
+  await db.sorgu('INSERT INTO bildirim_tur_rolu (tur, rol_id) SELECT $1, unnest($2::int[])', [tur, a.rolIdleri]);
+  await db.sorgu('INSERT INTO bildirim_tur_kisisi (tur, kisi_id) SELECT $1, unnest($2::int[])', [tur, a.kisiIdleri]);
+  return true;
+}

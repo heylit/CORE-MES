@@ -39,3 +39,17 @@ Bütün uçlar `oturum` ile herkese açıktır (222 a, yetki genişletme onaylı
 | `GET /bildirimler/cagri-yonlendirme/benim` | `oturum` | yalnız oturumdaki kişi; eşlemenin rol listesini ve başka kişiyi göstermez; alıcı seçimi çağrıyla aynı | rolü yönlendirilen kişi ekiplerini görür; eşleme değişince liste değişir | oturumsuz 401; yönlendirilmeyen rol boş liste; adresteki `kisiId` kişi seçtirmez |
 
 - VARSAYIM: yetki genişletme sayılmadı; kişi yalnız kendi alacağı çağrı ekiplerini görür, bu bilgi ona zaten bildirimle gelir. Geri alma: uç kaldırılır, düşük.
+
+## Bildirim alıcıları (760 c, 761 b; yetki modeli değişikliği onaylı)
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| `GET /bildirimler/alicilar` | `ayarlar.yaz` | ekip çağrısı dışındaki türler, seçenek roller ve etkin girişli kişiler | yönetici 200, bütün türler | oturumsuz 401; bakım 403 |
+| `POST /bildirimler/alicilar/:tur/degistir` | `ayarlar.yaz` | tür sözleşme listesinden (ekip çağrısı yok); gövde katı; rol var olmalı, kişi etkin ve girişli; tekil (en çok 20 rol, 50 kişi); sürüm denetimi, ilk yazım sürümsüz; ikisi boşsa seçim kalkar; değiştiren ve zaman sunucudan | seçim yazılır, sürüm ve değiştiren dolar | oturumsuz 401; bakım 403; ekip çağrısı ve bilinmeyen tür 400; fazla alan 400; olmayan rol ve kişi, yinelenen rol 400; eski sürüm ve ayarlı türe sürümsüz yazım 409, alıcılar değişmez |
+
+- Yetki modeli değişikliği (760 c, 761 b): seçim yapılmış türde alıcı işlemden değil seçilen rol ve kişiden gelir; yönetici her işlemi taşısa da seçilmediyse almaz.
+  Seçimsiz türde bugünkü işlem kuralı aynen geçer; göç tabloları boş açar, kurulu sistemde alıcı değişmez.
+- Rol ya da kişi seçmek yetki vermez: bildirimin açtığı ekran kendi yetkisini sorar. Seçilen rol türün ekranını açamıyorsa kişi bildirimi görür ama ekranı açamaz (UYUM-BORCU 9).
+- Yeni işlem ve rol satırı yok: ekran ve uçlar Sistem Ayarları'nın `ayarlar.yaz` işlemini kullanır.
+- Kayda bağlı alıcı (talebi açan, istasyona atanmış kişi) çağıran modülden gelir, seçimden bağımsızdır.
+- Yalnız ekranda kalan kural: yok.

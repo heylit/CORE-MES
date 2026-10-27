@@ -24,17 +24,21 @@ export const epostaSecilebilir = (islemler: readonly string[]): boolean =>
 // BIL-3: alıcı, olay türünün işlemlerinden birini taşıyan ya da çağıranın adıyla verdiği etkin girişli kişidir; tetikleyen
 // kişi (talebi kendisi onaylayacak olan da) kendi eylemi için bildirim almaz. Gönderim anında yeniden sınanır: pasif ya da
 // girişsiz kişi haritada yoktur, düşer.
+// BIL-10 (760 c, 761 b): türde alıcı seçimi varsa (`ayarli` null değil) işlem kuralı yerine seçilen kişiler geçer; yönetici her
+// işlemi taşısa da seçilmediyse almaz. Adıyla verilen kayda bağlı kişi iki durumda da alır.
 export function alicilariSec(
   tur: BildirimTuru,
   kisiIslemleri: ReadonlyMap<number, readonly Islem[]>,
-  ek: { kisiler?: readonly number[] | undefined; haric?: number | null | undefined },
+  ek: { kisiler?: readonly number[] | undefined; haric?: number | null | undefined; ayarli?: readonly number[] | null | undefined },
 ): number[] {
   const islemler: readonly Islem[] = BILDIRIM_TURLERI[tur].alanIslemler;
+  const ayarli = ek.ayarli === null || ek.ayarli === undefined ? null : new Set(ek.ayarli);
   const adlilar = new Set(ek.kisiler ?? []);
   const secilen: number[] = [];
   for (const [kisiId, sahip] of kisiIslemleri) {
     if (kisiId === ek.haric) continue;
-    if (adlilar.has(kisiId) || sahip.some((i) => islemler.includes(i))) secilen.push(kisiId);
+    const turAlir = ayarli === null ? sahip.some((i) => islemler.includes(i)) : ayarli.has(kisiId);
+    if (adlilar.has(kisiId) || turAlir) secilen.push(kisiId);
   }
   return secilen.sort((a, b) => a - b);
 }
@@ -55,8 +59,9 @@ export function metniHazirla(baslik: string, metin: string | null | undefined): 
   };
 }
 
-// BIL-8: yönlendirmeye yalnız var olan rol yazılır; olmayan kimlik sessizce düşürülmez, reddedilir.
-export const olmayanRoller = (secilen: readonly number[], varOlan: readonly number[]): number[] => {
+// BIL-8: yönlendirmeye ve alıcı ayarına yalnız var olan rol ya da etkin girişli kişi yazılır; olmayan kimlik sessizce
+// düşürülmez, reddedilir.
+export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly number[]): number[] => {
   const kume = new Set(varOlan);
   return secilen.filter((r) => !kume.has(r));
 };
