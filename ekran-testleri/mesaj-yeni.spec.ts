@@ -82,7 +82,7 @@ test.describe('M3 Bugün ve Ayarlar', () => {
     test(`Ayarlar ${genislik} genişlikte bölümleriyle taşmadan açılır`, async ({ page, ac }) => {
       await page.setViewportSize({ width: genislik, height: 800 });
       await ac('/mesaj/yeni/ayarlar');
-      for (const ad of ['Bildirim ve hatırlatmalar', 'Zamanlanmış mesajlar', 'Otomatik uyarılar', 'Dışa aktar']) {
+      for (const ad of ['Bildirim ve hatırlatmalar', 'Zamanlanmış mesajlar', 'Otomatik uyarılar', 'ERP ve MES bağlantısı']) {
         await expect(page.getByRole('heading', { name: ad })).toBeVisible();
       }
       await expect(page.getByRole('button', { name: 'Uyarı ekle' })).toBeVisible();
