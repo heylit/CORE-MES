@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { Kart, Rozet, SayfaBasligi } from '../../../../ortak/arayuz/index.ts';
 import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
-import { AySecici } from '../ortak/AySecici.tsx';
 import { ekipKimlikleri } from '../rol.ts';
 import {
   ayinGunleri, calisiyorMu, enFazlaAyniGun, IZIN_BEKLIYOR, metindenGun, RAPOR_IZNI, takvimIzni,
 } from './kurallar.ts';
 import {
-  BagliDegil, bugun, isGunuMu,
+  AyYilSecici, BagliDegil, bugun, isGunuMu,
 } from './parcalar.tsx';
 
 const GUN_KISA = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct'];
@@ -34,7 +33,7 @@ export function EkipTakvimi(o: IkEkranOzellikleri) {
     <>
       <SayfaBasligi baslik="İzin takvimi" simge="clock" alt="Ekibinizin onaylı ve bekleyen izinleri. Aynı güne yığılan izinleri onay vermeden önce görün." />
       <div className="tc-ikm-arac">
-        <AySecici ay={ay} degistir={ayYaz} />
+        <AyYilSecici ay={ay} degistir={ayYaz} />
         {enFazla > 1 && <Rozet ton="uyari">Bu ay aynı gün en fazla {enFazla} kişi izinde</Rozet>}
       </div>
       <Kart>

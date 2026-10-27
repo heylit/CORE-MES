@@ -97,7 +97,7 @@ test.describe('P6 islemlerim', () => {
   test('yedi görünüm sekmeden açılır, önizleme seçimi açılıp kapanır, yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
     await ac('/ik-islemlerim/yeni');
     await expect(page.getByRole('tab', { name: 'Benim sayfam', selected: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Başka bir gözle görüntüle' }).click();
+    await page.getByRole('button', { name: 'Görünüm', exact: true }).click();
     const pencere = page.getByRole('dialog', { name: 'Başka bir gözle görüntüle' });
     await expect(pencere.getByLabel('Görünüm')).toBeVisible();
     await pencere.getByRole('button', { name: 'Vazgeç' }).click();

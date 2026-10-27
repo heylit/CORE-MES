@@ -1,13 +1,13 @@
 import { useCallback, type ReactNode } from 'react';
 import { eskiSurumMu } from '#paylasilan/hata.ts';
-import { DurumKutusu, SayfaBasligi, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, SayfaBasligi, Secim, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { ApiHatasi, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
-import { adSoyad, YOK } from '../bicim.ts';
+import { adSoyad, basHarfler, YOK } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import type { IkMotoru, IzinBakiyesi } from '../motor.ts';
-import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
+import { ayKaydir } from '../ortak/AySecici.tsx';
 import type { Departman, Personel } from '../tipler.ts';
 import { gunMetni, sureMetni } from './kurallar.ts';
 import './islemlerim.css';
@@ -76,7 +76,7 @@ export function KisiBasligi({ personel, baslik, personeller, departmanlar }: {
   const alt = [personel.pozisyon, dep, yonetici ? `Yönetici: ${adSoyad(yonetici)}` : null, kidem ? `${kidem} kıdem` : null].filter(Boolean).join(' · ');
   return (
     <header className="tc-ikm-kisi">
-      <KisiHucresi personel={personel} />
+      <span className="tc-ikm-avatar" aria-hidden="true">{basHarfler(personel)}</span>
       <div className="tc-ikm-kisi-govde">
         <h2 className="tc-ikm-kisi-ad">{baslik}</h2>
         {alt && <p className="tc-ikm-soluk">{alt}</p>}
@@ -134,5 +134,24 @@ export function KisaListe({ satirlar }: { satirlar: readonly { anahtar: string; 
         </li>
       ))}
     </ul>
+  );
+}
+
+const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'] as const;
+
+// Bugünkü ekrandaki ay seçimi: önceki ve sonraki ay düğmeleri arasında ay ve yıl listeleri.
+export function AyYilSecici({ ay, degistir }: { ay: string; degistir: (ay: string) => void }) {
+  const yil = Number(ay.slice(0, 4));
+  const buYil = Number(bugun().slice(0, 4));
+  const yillar = Array.from(new Set([...Array.from({ length: 7 }, (_, i) => buYil - 5 + i), yil])).sort((a, b) => a - b);
+  return (
+    <span className="tc-ikm-ay" role="group" aria-label="Ay">
+      <Dugme simge="chev-left" aria-label="Önceki ay" onClick={() => { degistir(ayKaydir(ay, -1)); }} />
+      <Secim etiket="Ay" secenekler={AYLAR.map((a, i) => ({ deger: String(i + 1).padStart(2, '0'), baslik: a }))} value={ay.slice(5, 7)}
+        onChange={(e) => { degistir(`${ay.slice(0, 4)}-${e.target.value}`); }} />
+      <Secim etiket="Yıl" secenekler={yillar.map((y) => ({ deger: String(y), baslik: String(y) }))} value={String(yil)}
+        onChange={(e) => { degistir(`${e.target.value}-${ay.slice(5, 7)}`); }} />
+      <Dugme simge="chev-right" aria-label="Sonraki ay" onClick={() => { degistir(ayKaydir(ay, 1)); }} />
+    </span>
   );
 }

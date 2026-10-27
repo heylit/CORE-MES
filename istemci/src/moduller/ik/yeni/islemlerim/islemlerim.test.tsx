@@ -36,7 +36,7 @@ describe('P6 Benim sayfam', () => {
     expect(screen.getByRole('button', { name: 'İzin talep et' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Güncelle' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Ekibim' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Başka bir gözle görüntüle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Görünüm' })).toBeNull();
   });
 
   it('personel kaydına bağlı olmayan hesap uyarı görür', async () => {
@@ -62,7 +62,7 @@ describe('P6 Benim sayfam', () => {
 
   it('İK başka bir gözle görüntüler; önizlemede yazma düğmesi yok (210.6)', async () => {
     ikAc('/ik-islemlerim/yeni', { kullanici: IK_YONETICI });
-    fireEvent.click(await screen.findByRole('button', { name: 'Başka bir gözle görüntüle' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Görünüm' }));
     const pencere = await screen.findByRole('dialog', { name: 'Başka bir gözle görüntüle' });
     fireEvent.change(within(pencere).getByLabelText('Kişi'), { target: { value: 'emp_b' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Önizle' }));

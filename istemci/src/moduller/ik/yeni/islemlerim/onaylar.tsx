@@ -2,7 +2,7 @@ import {
   DurumKutusu, Dugme, Kart, SayfaBasligi, Simge,
 } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
-import { adSoyad, kisaTarih, tarih } from '../bicim.ts';
+import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
 import { IzinCipi } from '../ortak/DurumCipi.tsx';
@@ -29,7 +29,7 @@ export function Onaylar(o: IkEkranOzellikleri) {
   const bekleyen = bekleyenTalepler(izinler, ekip);
   const ad = (id: string | undefined) => adSoyad(personeller.find((p) => p.id === id));
   useSayfaKomutlari('ik-onay', me ? bekleyen.map((l) => ({
-    anahtar: l.id, baslik: `${ad(l.empId)}: ${l.tur}`, simge: 'check' as const, aciklama: `${kisaTarih(l.baslangic)} – ${kisaTarih(l.bitis)}`,
+    anahtar: l.id, baslik: `${ad(l.empId)}: ${l.tur}`, simge: 'check' as const, aciklama: `${tarih(l.baslangic)} – ${tarih(l.bitis)}`,
     sozcukler: ['onay', 'izin', ad(l.empId)], calistir: () => { document.getElementById(`tc-ikm-talep-${l.id}`)?.focus(); },
   })) : null);
   if (!me) return <BagliDegil baslik="Onaylar" simge="check" />;
@@ -61,7 +61,7 @@ export function Onaylar(o: IkEkranOzellikleri) {
             const alt = [
               bakiye ? `Onaylanırsa kalan yıllık izin ${sayiMetni(bakiye.kalan - (l.durum === IZIN_BEKLIYOR ? sayi(l.gun) : 0))} gün.` : null,
               l.aciklama ? `Açıklama: ${l.aciklama}.` : null,
-              l.talepTarihi ? `Talep ${kisaTarih(l.talepTarihi)}.` : null,
+              l.talepTarihi ? `Talep ${tarih(l.talepTarihi)}.` : null,
             ].filter(Boolean).join(' ');
             return (
               <li key={l.id} id={`tc-ikm-talep-${l.id}`} tabIndex={-1} className="tc-ikm-talep" data-gecikti={(l.baslangic ?? '') < t ? '' : undefined}>
@@ -91,8 +91,8 @@ export function Onaylar(o: IkEkranOzellikleri) {
       {kararlar.length > 0 && (
         <Kart baslik="Son kararlarınız">
           <KisaListe satirlar={kararlar.map((l) => ({
-            anahtar: l.id, baslik: `${ad(l.empId)}: ${l.tur}, ${kisaTarih(l.baslangic)} – ${kisaTarih(l.bitis)}`,
-            sag: <span className="tc-ikm-sag"><IzinCipi durum={l.durum} /><small className="tc-ikm-soluk">{kisaTarih(l.karar)}</small></span>,
+            anahtar: l.id, baslik: `${ad(l.empId)}: ${l.tur}, ${tarih(l.baslangic)} – ${tarih(l.bitis)}`,
+            sag: <span className="tc-ikm-sag"><IzinCipi durum={l.durum} /><small className="tc-ikm-soluk">{tarih(l.karar)}</small></span>,
           }))} />
         </Kart>
       )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DurumKutusu, Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
-import { adSoyad, ayAdi, kisaTarih, paraKisa } from '../bicim.ts';
+import { adSoyad, ayAdi, paraKisa, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { IzinCipi } from '../ortak/DurumCipi.tsx';
 import { ekipKimlikleri } from '../rol.ts';
@@ -24,7 +24,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
   const [pencere, pencereYaz] = useState<Pencere>(null);
   const e = o.ben;
   const yonetici = useEkipAcik(o) && o.rol === 'yonetici';
-  // "Başka bir gözle görüntüle" İK'nındır; önizleme bu sayfanın (İK İşlemlerim) içinde açılır.
+  // "Başka bir gözle görüntüle" İK'nındır; bugünkü ekrandaki gibi "Görünüm" düğmesiyle açılır, önizleme bu sayfanın (İK İşlemlerim) içindedir.
   const onizletebilir = o.yetki.oku && o.onizleme === null;
   useSayfaKomutlari('ik-benim', e ? [
     ...(o.yetki.izinTalep ? [{ anahtar: 'izin', baslik: 'İzin talep et', simge: 'plus' as const, aciklama: null, sozcukler: ['izin', 'talep'], calistir: () => { pencereYaz('izin'); } }] : []),
@@ -35,7 +35,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
   );
   const onizlemeDugmesi = onizletebilir && (
     <div className="tc-ikm-arac tc-ikm-arac-sag">
-      <Dugme simge="eye" onClick={() => { pencereYaz('onizleme'); }}>Başka bir gözle görüntüle</Dugme>
+      <Dugme simge="eye" onClick={() => { pencereYaz('onizleme'); }}>Görünüm</Dugme>
     </div>
   );
   if (!e) return <>{onizlemeDugmesi}<BagliDegil baslik="Benim sayfam" simge="user" />{onizlemePenceresi}</>;
@@ -76,7 +76,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
               <BuyukSayi deger={sayiMetni(bakiye.kalan)} birim="gün kaldı" ton={bakiye.kalan < 0 ? 'hata' : undefined} />
               <BilgiListesi satirlar={[
                 ['Hak edilen', sayiMetni(bakiye.hak)], ['Kullanılan', sayiMetni(bakiye.used + bakiye.onceki)], ['Onay bekleyen', sayiMetni(bakiye.pending)],
-                bakiye.next ? ['Sonraki hak ediş', `${kisaTarih(gunMetni(bakiye.next))}: ${bakiye.nextDays} gün`] : null,
+                bakiye.next ? ['Sonraki hak ediş', `${tarih(gunMetni(bakiye.next))}: ${bakiye.nextDays} gün`] : null,
               ]} />
             </>
           )}
@@ -88,7 +88,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
         <Kart baslik="Son taleplerim">
           {kendi.length ? (
             <KisaListe satirlar={kendi.slice(0, 4).map((l) => ({
-              anahtar: l.id, baslik: l.tur, alt: `${kisaTarih(l.baslangic)} – ${kisaTarih(l.bitis)}, ${izinGunuMetni(l.gun)}`,
+              anahtar: l.id, baslik: l.tur, alt: `${tarih(l.baslangic)} – ${tarih(l.bitis)}, ${izinGunuMetni(l.gun)}`,
               sag: <IzinCipi durum={l.durum} />,
             }))} />
           ) : <Bos>Henüz izin talebiniz yok.</Bos>}
@@ -108,7 +108,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
         <Kart baslik="Eğitimlerim">
           {egitimler.length ? (
             <KisaListe satirlar={egitimler.slice(0, 4).map((x) => ({
-              anahtar: x.id, baslik: x.ad, alt: `${kisaTarih(x.tarih)}${x.sure ? `, ${sayiMetni(sayi(x.sure))} saat` : ''}`,
+              anahtar: x.id, baslik: x.ad, alt: `${tarih(x.tarih)}${x.sure ? `, ${sayiMetni(sayi(x.sure))} saat` : ''}`,
               sag: x.durum === 'Tamamlandı' ? <Rozet ton="tamam">Tamamlandı</Rozet> : <Rozet ton="bilgi">{x.durum || 'Planlandı'}</Rozet>,
             }))} />
           ) : <Bos>Kayıtlı eğitiminiz yok.</Bos>}

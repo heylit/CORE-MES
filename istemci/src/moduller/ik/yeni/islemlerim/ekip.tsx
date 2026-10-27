@@ -3,7 +3,7 @@ import {
   Dugme, Kart, Rozet, SayfaBasligi, SayiKarti, Tablo, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
-import { adSoyad, kisaTarih, tarih } from '../bicim.ts';
+import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
 import { IzinCipi } from '../ortak/DurumCipi.tsx';
@@ -45,8 +45,8 @@ export function Ekip(o: IkEkranOzellikleri) {
       anahtar: 'bugun', baslik: 'Bugün', csv: false,
       hucre: (p) => {
         const iz = bugunIzinde(izinler, p.id, t);
-        if (iz) return <Rozet ton="uyari">İzinde, {kisaTarih(iz.bitis)} dönüş</Rozet>;
-        if (denemede(p, t)) return <Rozet ton="bilgi">Deneme süresi {kisaTarih(p.denemeBitis)}</Rozet>;
+        if (iz) return <Rozet ton="uyari">İzinde, {tarih(iz.bitis)} dönüş</Rozet>;
+        if (denemede(p, t)) return <Rozet ton="bilgi">Deneme süresi {tarih(p.denemeBitis)}</Rozet>;
         return <Rozet ton="tamam">Çalışıyor</Rozet>;
       },
     },
@@ -56,9 +56,9 @@ export function Ekip(o: IkEkranOzellikleri) {
     },
     {
       anahtar: 'sonraki', baslik: 'Sonraki izin',
-      hucre: (p) => { const s = sonrakiIzin(izinler, p.id, t); return s ? `${kisaTarih(s.baslangic)} (${s.tur})` : '—'; },
+      hucre: (p) => { const s = sonrakiIzin(izinler, p.id, t); return s ? `${tarih(s.baslangic)} (${s.tur})` : '—'; },
     },
-    { anahtar: 'giris', baslik: 'İşe giriş', hucre: (p) => kisaTarih(p.iseGiris), kirilmaz: true },
+    { anahtar: 'giris', baslik: 'İşe giriş', hucre: (p) => tarih(p.iseGiris), kirilmaz: true },
   ];
   return (
     <>
@@ -127,7 +127,7 @@ export function EkipUyesi(o: IkEkranOzellikleri) {
         <Kart baslik="İzin geçmişi">
           {izinler.length ? (
             <KisaListe satirlar={izinler.map((l) => ({
-              anahtar: l.id, baslik: l.tur, alt: `${kisaTarih(l.baslangic)} – ${kisaTarih(l.bitis)}, ${izinGunuMetni(l.gun)}`,
+              anahtar: l.id, baslik: l.tur, alt: `${tarih(l.baslangic)} – ${tarih(l.bitis)}, ${izinGunuMetni(l.gun)}`,
               sag: <IzinCipi durum={l.durum} />,
             }))} />
           ) : <Bos>İzin kaydı yok.</Bos>}
@@ -135,7 +135,7 @@ export function EkipUyesi(o: IkEkranOzellikleri) {
         <Kart baslik="Eğitimler">
           {egitimler.length ? (
             <KisaListe satirlar={egitimler.map((x) => ({
-              anahtar: x.id, baslik: x.ad, sag: <small className="tc-ikm-soluk">{kisaTarih(x.tarih)}</small>,
+              anahtar: x.id, baslik: x.ad, sag: <small className="tc-ikm-soluk">{tarih(x.tarih)}</small>,
             }))} />
           ) : <Bos>Eğitim kaydı yok.</Bos>}
         </Kart>

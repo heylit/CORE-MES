@@ -1,7 +1,7 @@
 import { CokSatir, DurumKutusu, Girdi, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { FormPenceresi } from '../../../../ortak/arayuz/FormPenceresi.tsx';
 import { useForm } from '../../../../ortak/veri/form.ts';
-import { kisaTarih } from '../bicim.ts';
+import { tarih } from '../bicim.ts';
 import type { IkMotoru } from '../motor.ts';
 import { MOTOR_HAZIRLANIYOR, ikSabitleri } from '../motor.ts';
 import type { Izin, Personel } from '../tipler.ts';
@@ -82,7 +82,7 @@ export function IzinTalebi({ acik, kapat, personel, kendiIzinleri, motor }: {
             {denetim.ters ? <Rozet ton="hata">Bitiş tarihi başlangıçtan önce olamaz.</Rozet> : (
               <dl className="tc-ikm-ozet">
                 <div><dt>Süre</dt><dd className="mono">{gun === null ? '…' : `${gun} ${isGunuIzni ? 'iş günü' : 'gün'}`}</dd></div>
-                {donus && <div><dt>İşe dönüş</dt><dd className="mono">{kisaTarih(donus)}</dd></div>}
+                {donus && <div><dt>İşe dönüş</dt><dd className="mono">{tarih(donus)}</dd></div>}
                 {bakiye && gun !== null && (
                   <div><dt>Kalan izin sonrası</dt><dd className="mono" data-ton={bakiye.kalan - gun < 0 ? 'hata' : undefined}>{sayiMetni(bakiye.kalan - gun)} gün</dd></div>
                 )}
@@ -91,7 +91,7 @@ export function IzinTalebi({ acik, kapat, personel, kendiIzinleri, motor }: {
             {denetim.cakisan.length > 0 && (
               <p className="tc-ikm-uyari" role="status">
                 <Simge ad="lock" boyut="k" />
-                <span>Bu tarihlerde başka bir izin kaydınız var ({denetim.cakisan[0]?.tur}, {kisaTarih(denetim.cakisan[0]?.baslangic)}).</span>
+                <span>Bu tarihlerde başka bir izin kaydınız var ({denetim.cakisan[0]?.tur}, {tarih(denetim.cakisan[0]?.baslangic)}).</span>
               </p>
             )}
           </div>

@@ -4,7 +4,6 @@ import {
 } from '../../../../ortak/arayuz/index.ts';
 import { tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
-import { AySecici } from '../ortak/AySecici.tsx';
 import type { Devam, Izin, Personel } from '../tipler.ts';
 import { useIkPuantaj } from '../veri.ts';
 import type { IkMotoru } from '../motor.ts';
@@ -12,7 +11,7 @@ import {
   aydaCalisiyor, ayinGunleri, DEVAM_KISA, dakikaSaat, IZIN_BEKLIYOR, mesaiOzeti, metindenGun, PUANTAJ_DURUM_ADI, puantajHucresi, puantajToplami, saatVar, sayi, sayiMetni,
 } from './kurallar.ts';
 import {
-  BagliDegil, bugun, isGunuMu, Not,
+  AyYilSecici, BagliDegil, bugun, isGunuMu, Not,
 } from './parcalar.tsx';
 
 const GUN_ADLARI = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
@@ -98,7 +97,7 @@ export function Mesailerim(o: IkEkranOzellikleri) {
         baslik="Mesailerim" simge="clock"
         alt="Devam ve fazla mesai kayıtlarınız. Kayıtları insan kaynakları girer; bir yanlışlık görürseniz İK birimine bildirin."
       />
-      <div className="tc-ikm-arac"><AySecici ay={ay} degistir={ayYaz} /></div>
+      <div className="tc-ikm-arac"><AyYilSecici ay={ay} degistir={ayYaz} /></div>
       <div className="tc-ikm-sayilar">
         <SayiKarti baslik="Fazla mesai (saat)" simge="clock" sayi={oz.fazla} />
         <SayiKarti baslik="Resmî tatil çalışması (saat)" simge="flag" sayi={oz.resmiTatil} />
