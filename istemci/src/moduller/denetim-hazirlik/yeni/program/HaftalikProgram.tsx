@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dugme, Girdi, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi } from '../gorunumler.ts';
@@ -91,7 +91,14 @@ function Haftalar() {
   const gelecek = B.weeks.filter((x) => !x.past);
   const buHafta = B.weeks.find((x) => x.cur) ?? gelecek[0];
   const varsayilanAcik = (x: Hafta) => x.cur || (!x.past && gelecek[1] === x);
-  const acikMi = (x: Hafta) => acik[x.m] ?? varsayilanAcik(x);
+  // Yazdırmada bütün haftalar açık basılır (prototip wkPrint); sayfanın kendisi basılır.
+  const [baski, baskiYaz] = useState(false);
+  useEffect(() => {
+    if (!baski) return;
+    window.print();
+    baskiYaz(false);
+  }, [baski]);
+  const acikMi = (x: Hafta) => baski || (acik[x.m] ?? varsayilanAcik(x));
   const tema = WKT[d.program];
 
   const icsIndir = () => {
@@ -99,12 +106,6 @@ function Haftalar() {
     if (!s) { d.bildir('Önümüzdeki hafta yok', { ton: 'bilgi' }); return; }
     indir(`${guvenliAd(`haftalik-program-${kb.pg.s}-${kb.profil.profile.firma || 'firma'}`)}.ics`, `${s.satirlar.map(icsKatla).join('\r\n')}\r\n`, 'text/calendar');
     d.bildir(`${String(s.adet)} haftalık toplantı takvim dosyasına eklendi`);
-  };
-  // Yazdırmada bütün haftalar açık basılır (prototip wkPrint).
-  const yazdirHaftalar = () => {
-    const govde = B.weeks.map((x) => `<h3>${htmlKacis(`${String(x.n)}. hafta · ${haftaAraligi(x.m)} · ${tema[x.ph] ?? ''}`)}</h3><ul>${
-      x.items.map((it) => `<li>${it.done ? '[x]' : '[ ]'} ${htmlKacis(it.t)}${it.sub ? ` (${htmlKacis(it.sub)})` : ''}</li>`).join('')}</ul>`).join('');
-    yazdir(`<h2>${htmlKacis(`${PROGRAMLAR[d.program].n} · Haftalık program`)}</h2>${govde}`, `Haftalık program · ${kb.pg.s}`);
   };
   const ekle = (m: string, girdi: HTMLInputElement | null) => {
     const v = girdi?.value.trim();
@@ -118,7 +119,7 @@ function Haftalar() {
   return (
     <Kart
       simge={prototipSimgesi('cal')} baslik="Haftalık program"
-      sag={<><Dugme simge="download" onClick={icsIndir}>Haftalık toplantıları takvime ekle</Dugme><Dugme simge="printer" onClick={yazdirHaftalar}>Yazdır</Dugme></>}
+      sag={<><Dugme simge="download" onClick={icsIndir}>Haftalık toplantıları takvime ekle</Dugme><Dugme simge="printer" onClick={() => { baskiYaz(true); }}>Yazdır</Dugme></>}
     >
       <p className="tc-dhy-ton-soluk">
         {`${PROGRAMLAR[d.program].n} · ${B.na.type || 'Denetim'} · `}<b>{tarihMetni(B.na.date)}</b>

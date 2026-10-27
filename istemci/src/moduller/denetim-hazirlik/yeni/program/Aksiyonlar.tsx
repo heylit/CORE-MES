@@ -62,7 +62,8 @@ export function Aksiyonlar() {
     const t = metin();
     navigator.clipboard.writeText(t).then(() => { yedekYaz(null); d.bildir('Rapor panoya kopyalandı'); }, () => { yedekYaz(t); });
   };
-  const yazdirRapor = () => { yazdir(`<pre class="tc-dhy-yazdirma-metin">${htmlKacis(metin())}</pre>`, `${pg.s} hazırlık raporu`); };
+  // Prototipteki gibi sayfanın kendisi basılır (data-act print).
+  const yazdirRapor = () => { window.print(); };
   const f = (e.filter || 'risk') as Suzgec;
   const liste = r.risks.filter((x) => f === 'all' || (f === 'risk' ? x.lvl !== 'obs' : x.lvl === f));
   const kapanan = r.risks.filter((x) => dm[x.q.id]).length;

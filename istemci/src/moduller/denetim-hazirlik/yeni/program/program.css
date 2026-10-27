@@ -434,3 +434,7 @@ i.tc-dhp-isi-hucre { cursor: default; inline-size: var(--b-3); block-size: var(-
 span.tc-dhp-lejant { display: inline-flex; flex-wrap: wrap; gap: var(--b-2) var(--b-3); }
 span.tc-dhp-lejant > span { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-dhp-rapor-ust > .tc-dhp-kadran { inline-size: calc(var(--kadran-enaz) * 1.1); max-inline-size: 100%; }
+/* Prototip baskısı (window.print): düğmeler ve satır içi onaylar basılmaz. */
+@media print {
+  .tc-dhp .tc-dugme, .tc-dhp .tc-dhp-onay, .tc-dhp .tc-dhp-baglanti { display: none; }
+}

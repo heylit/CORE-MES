@@ -192,4 +192,15 @@ describe('P1 prototip düzeni', () => {
     expect(await screen.findByText('Açık tur iptal edildi')).toBeTruthy();
     await waitFor(() => { expect(aktif(sonYazilan(s))?.pw.iso9001.oz.cur).toBeNull(); }, { timeout: 3000 });
   });
+
+  it('Aksiyonlar: rapor baskısı sayfanın kendisini basar (862: 2 a)', async () => {
+    const yazdir = vi.fn();
+    vi.stubGlobal('print', yazdir);
+    sahteSunucu();
+    await baglamlaAc(<Aksiyonlar />, 'rapor');
+    fireEvent.click(await screen.findByRole('button', { name: 'Örnek bir raporu göster' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yazdır / PDF' }));
+    expect(yazdir).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.tc-dhy-yazdirma-alani')).toBeNull();
+  });
 });
