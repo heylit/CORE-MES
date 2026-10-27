@@ -136,7 +136,7 @@ Paket dosyası (`uygulama/paket.ts`) değişmedi; her şey köprü (`kopru.ts`) 
 - VARSAYIM (603a-ek, geri alma ucuz): kontrol planı resim başına bütün yazılır ve resmin sürümü planın sürümüdür; kaldırılan balon pasif kalır
   (ölçümleri durur), numarası yeni balona verilebilir. Kararsız numunede istenen balon kaldırılmaz. Numune kuralındaki balon numarası parçanın
   herhangi bir etkin resmindeki numaradır (resim ayrımı yok). Sınır değiştiren düzenleme eski ölçümün uygunluğunu yeniden hesaplamaz.
-- Bağlamada kapanacak: Arkon `plan`, `files`, `requests`, `results`, `logMeas` ve Kalite Merkezi `cizim` kayıtlarının yeni tablolara taşınması ayrı göç ve ayrı onaydır (595 3 c). Arkon henüz yeni tabloları okumuyor.
+- KAPANDI (884, 27.10.2026, kullanıcı: "884 yok"): Arkon `plan`, `files`, `requests`, `results`, `logMeas` ve Kalite Merkezi `cizim` kayıtlarının yeni tablolara taşınması yapılmaz; taşınacak eski veri yok kabul edildi, taşıma göçü yazılmaz (595 3 c). Arkon henüz yeni tabloları okumuyor.
 - Bağlamada kapanacak: eski revizyonun dosyası belge merkezinden alınamıyor (BASKA-MODUL-ISTEKLERI, cizimler).
 - VARSAYIM (geri alma ucuz): stüdyo yalnız PDF resim ile STEP, STL, IGES model alır (Arkon'un belge merkezinden aldığı türler).
 - VARSAYIM (geri alma ucuz): onay bütün balonların son ölçüsü uygunken, sapma uygunsuz ölçü varken verilir (Arkon kalite istasyonunun düğme kuralı sunucuya alındı); sapmada gerekçe zorunlu değil.
