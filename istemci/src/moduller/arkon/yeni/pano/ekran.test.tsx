@@ -34,7 +34,24 @@ describe('A3 sayfaları', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 20000);
 
-  it('Plan Kuyruğu: yönetici sıra değiştirir ve planlı duruş ekler; hazırlık rolü yalnız görür', async () => {
+  // Hata (kart 777): TV modu belgenin tamamını tam ekrana alıyor, kabuk görünür kalıyordu; artık yalnız pano katmanı ekranı kaplar.
+  it('TV modu yalnız pano katmanını açar; Escape ile kapanır', async () => {
+    sunucuKur(YONETICI, { belgeler });
+    arkonAc('/arkon/pano');
+    const b = await bolum('Pano');
+    await within(b).findByText('Torna', { exact: false }, { timeout: 10000 });
+    const kap = b.querySelector('.tc-ay-tv-kap');
+    expect(kap?.hasAttribute('data-tv')).toBe(false);
+    fireEvent.click(within(b).getByRole('button', { name: 'TV modu' }));
+    expect(kap?.hasAttribute('data-tv')).toBe(true);
+    expect(document.documentElement.classList.contains('tc-ay-tv')).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => { expect(kap?.hasAttribute('data-tv')).toBe(false); });
+    expect(within(b).getByRole('button', { name: 'TV modu' })).toBeTruthy();
+    expect(document.documentElement.classList.contains('tc-ay-tv')).toBe(false);
+  }, 20000);
+
+  it('Plan Kuyruğu:yönetici sıra değiştirir ve planlı duruş ekler; hazırlık rolü yalnız görür', async () => {
     let istekler = sunucuKur(YONETICI, { belgeler });
     arkonAc('/arkon/planlama');
     let b = await bolum('Plan Kuyruğu');
