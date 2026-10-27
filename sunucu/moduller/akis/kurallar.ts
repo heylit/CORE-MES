@@ -477,7 +477,9 @@ export function kartPenceresi(
 export function kartKonumu(
   kart: { durum: string; acilis: string },
   anlar: readonly KartAni[],
-  adimlar: readonly { id: number; opNo: number; baslama: string | null; bitis: string | null }[],
+  adimlar: readonly {
+    id: number; opNo: number; baslama: string | null; bitis: string | null; plan?: KartRotasi[number]['plan']; taban?: KartRotasi[number]['taban'];
+  }[],
   simdi: string,
 ): { konum: KartKonumu; rota: KartRotasi; lead: Olcu; sonAn: KartAni | null } {
   const yerAnlari = anlar.filter((a) => a.tur !== 'saglam' && a.tur !== 'hurda');
@@ -499,7 +501,7 @@ export function kartKonumu(
   const anliAdimlar = new Set(anlar.map((a) => a.isEmriId).filter((x): x is number => x !== null));
   const rota: KartRotasi = adimlar.map((a) => ({
     isEmriId: a.id, opNo: a.opNo, durum: a.bitis !== null ? 'gecti' : anliAdimlar.has(a.id) ? 'simdi' : 'sirada',
-    baslama: a.baslama, bitis: a.bitis,
+    baslama: a.baslama, bitis: a.bitis, plan: a.plan ?? null, taban: a.taban ?? null,
     hurdaAdet: Math.max(0, anlar.filter((x) => x.isEmriId === a.id && x.tur === 'hurda').reduce((t, x) => t + Number(x.miktar ?? 0), 0)),
   }));
   const sevk = anlar.find((a) => a.tur === 'sevk')?.zaman ?? null;

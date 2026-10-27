@@ -5,7 +5,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { kuyrukYazGovdesi, senaryoGovdesi, type PlanAyari } from '#paylasilan/sozlesme/plan.ts';
-import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, senaryo, senaryoAc as taslakAc, tabanOku, type TabanSatiri } from './sorgular.ts';
+import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, canliYerlesimleri, senaryo, senaryoAc as taslakAc, tabanOku, type TabanSatiri } from './sorgular.ts';
 import {
   malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
@@ -45,6 +45,12 @@ export { acilSiparisOnaylandi } from './servis.ts';
 export const tabanPlani = (db: Db, g: { uretimEmriIdleri?: readonly number[]; isEmriIdleri?: readonly number[] }): Promise<TabanSatiri[]> =>
   tabanOku(db, g);
 export type { TabanSatiri };
+
+// 750 a: adımın güncel canlı plandaki yeri; refakat kartı plan saatini ve gecikmeyi buradan gösterir. Canlıda olmayan adım listede yoktur;
+// boş girdi sorgu atmaz.
+export const canliPlan = async (db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; baslangic: string; bitis: string }[]> =>
+  (isEmriIdleri.length === 0 ? [] : (await canliYerlesimleri(db, isEmriIdleri))
+    .map((y) => ({ isEmriId: y.isEmriId, baslangic: y.baslangic.toISOString(), bitis: y.bitis.toISOString() })));
 
 // 147 a: Arkon'un kuyruk sırası taslağa düşer ve onayla canlıya geçer. İş emrini içeren, kaldırılmamış sıralama değişikliği olan açık ya da
 // onaydaki taslaklar; Arkon operatöre "sıra onay bekliyor" gösterir. Yalnız tabanı güncel canlı sürüm olan taslak sayılır: başka bir taslak

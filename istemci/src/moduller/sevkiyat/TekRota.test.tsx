@@ -47,7 +47,13 @@ describe('TekRota', () => {
     // çıkış + duraklar + dönüş
     expect(satirlar).toHaveLength(TEK_ROTA.plan.duraklar.length + 2);
     expect(satirlar[1]!.textContent).toContain(`${saatMetni(TEK_ROTA.plan.duraklar[0]!.varis)}${TEK_ROTA.plan.duraklar[0]!.ad}`);
-    expect(screen.getByRole('link', { name: "Google Haritalar'da aç" }).getAttribute('href')).toBe(TEK_ROTA.plan.google);
+    expect(screen.queryByRole('link', { name: /Haritalar'da aç|Yandex'te aç/ })).toBeNull();
+    const yaz = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: yaz }, configurable: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Yandex bağlantısını kopyala' }));
+    expect(yaz).toHaveBeenCalledWith(TEK_ROTA.plan.yandex);
+    await screen.findByRole('button', { name: 'Kopyalandı' });
+    Reflect.deleteProperty(navigator, 'clipboard');
   });
 
   it('180, 200 a: maliyet gelmezse Maliyet göstergesi ve öncelik farkındaki tutar çıkmaz; 0 TL yazılmaz', async () => {

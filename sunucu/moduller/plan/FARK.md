@@ -171,3 +171,10 @@ Kalan Motor A kullanımları (ayrı kart, 625m): 220 a motor yerleşimi, emir ö
 - Parti kolu bağı (B7, `partiBaglari`) ortak motora öncül olarak gider (`PlanMotoruIstegi.baglar`, 690 b): kolun ilk adımı üstün bölünme öncesi
   adımını, üstün birleşme adımı kolun son adımını (ek adım da olabilir) bekler.
 Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı kur testlerde `taslaktaOner` yardımcısıdır (plan-ortak.test.ts); ortak kurulum merkeze tam gün (iki yarım vardiya) ve boş planlama kaydı verir.
+
+## Canlıya almada dakika kayması (759, 2026-10-27)
+- 737 a denetimi (`geriKayan`) yalnız motorun yerinde tuttuğu işi (planın iş emri, yeniden dizilmeyen: kilitli, dondurulmuş, bölünmüş, çalışan)
+  geçilmiş sayar. Önce planın iş emri olmayan satır da (biten ya da planlanmayan iş) sayılıyordu; motor onu engel saymadığı için dakika dönünce
+  canlıya alma yanlışlıkla duruyordu (DOĞRULANDI: deneyde plan-oner A4, #23, PL-07, P4/P6 ve plan-canli bu yüzden düşüyordu).
+- Sabit işin önüne sıkı dizilmiş iş, dakika dönünce sabit işin arkasına geçer; canlıya alma 737 a gereği durur (değişmedi). Bunu sınamayan
+  plan-canli #1186 ve plan-gecmisi testleri saati gerçek anda sabitler (`plan-saat.test.ts` `anSabit`).
