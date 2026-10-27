@@ -17,6 +17,20 @@ test.describe('iskelet', () => {
     await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/takim-omru$/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
+
+  // Görünüm alanı kendi kaydırıcısıyla kaydığı için belge taşmaz; kabuğun ve görünüm alanının ayrıca kendi eninde kaldığı ölçülür.
+  test('kabuk ve görünüm alanı ekran eninde kalır', async ({ page, ac }) => {
+    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+      await ac(`/cnc-kurulum/yeni/${yol}`);
+      await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
+      const olcu = await page.evaluate(() => {
+        const kabuk = document.querySelector('.tc-cy'), alan = document.querySelector('.tc-cy-gorunum');
+        if (kabuk === null || alan === null) return null;
+        return { kabuk: kabuk.scrollWidth - kabuk.clientWidth, alan: alan.scrollWidth - alan.clientWidth };
+      });
+      expect(olcu, yol).toEqual({ kabuk: 0, alan: 0 });
+    }
+  });
 });
 
 test.describe('P1 Kurulum ve Hazırlık', () => {
@@ -57,7 +71,8 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
       for (const yol of ['kurulum', 'hazirlik']) {
         await ac(`/cnc-kurulum/yeni/${yol}`);
         await expect(page.locator('.tc-ck-yan')).toBeAttached();
-        if (genislik < 768) await expect(page.locator('.tc-ck-cekmece')).toBeVisible();
+        // Çekmece prototipteki gibi 860 ve altında; 768 penceresinde de panel alttan açılır.
+        if (genislik <= 860) await expect(page.locator('.tc-ck-cekmece')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       }
     });

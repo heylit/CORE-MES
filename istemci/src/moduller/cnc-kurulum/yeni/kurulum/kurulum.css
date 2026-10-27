@@ -1,4 +1,4 @@
-/* CNC Kurulum: Kurulum ve Hazırlık görünümleri (tc-ck-). Düzen prototipinkidir: solda sahne, sağda panel; 768 altında panel
+/* CNC Kurulum: Kurulum ve Hazırlık görünümleri (tc-ck-). Düzen prototipinkidir: solda sahne, sağda panel; 860 ve altında (prototipin kırılması) panel
    alttan açılan çekmecedir. Renk, ölçü ve boşluk yalnız tasarım değişkeninden. */
 
 .tc-ck-kurulum, .tc-ck-hz {
@@ -370,8 +370,8 @@
 .tc-ck-hs-nc { font-family: var(--font-mono); font-weight: 800; fill: var(--hold); }
 .tc-ck-hs-satir { fill: var(--muted); }
 
-/* ----- 768 altı: panel alttan çekmece ----- */
-@media (max-width: 767px) {
+/* ----- 860 ve altı: panel alttan çekmece (prototip); 768 penceresinde sahneye yalnız menü dışı alan kalır ----- */
+@media (max-width: 860px) {
   .tc-ck-hz, .tc-ck-govde { grid-template-columns: minmax(0, 1fr); }
   .tc-ck-yan {
     position: absolute; left: 0; right: 0; bottom: 0; height: var(--ekran-boy-62); border-left: 0; border-top: var(--cizgi-ince) solid var(--edge); box-shadow: var(--shadow);
@@ -403,7 +403,7 @@
   .tc-ck-hz-ilerleme { order: 5; flex-basis: 100%; }
   .tc-ck-hz-hiz select { display: none; }
 }
-@media (max-width: 1100px) and (min-width: 768px) {
+@media (max-width: 1100px) and (min-width: 861px) {
   .tc-ck-hz-deneme { flex-wrap: wrap; }
   .tc-ck-hz-ilerleme { order: 5; flex-basis: 100%; }
 }
