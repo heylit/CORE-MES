@@ -23786,7 +23786,7 @@ if (TMI_ICINDE) {
   /* 533 a: Satın Alma'ya yazan komuttan (tedarik termini) sonra kaynak yeniden okunur; terminler kaynak ekindedir */
   TMI_KAYNAK.yenile = kaynakAl;
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
-     yazılmaz; st'ye stTamKur'da girer (motor/durum.betik, simdiUygula). Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
+     yazılmaz; st'ye stTamKur'da girer (motor/durum.betik, simdiUygula). 741 a: gerçek saat 07:00'den önce de geçerlidir (gece vardiyası). */
   const coz0 = coz;
   coz = function () {
     if (S && S.D && yetkili('plan.yaz') && !calisan) {
@@ -23799,7 +23799,7 @@ if (TMI_ICINDE) {
         S.dataVer++; if (guncel) S.plan.dataVer = S.dataVer;
         iz('Planın başlangıç günü kaydı', `${eski} -> ${S.D.meta.baslangic} (${g} gün)`);
       }
-      const n = tmiSaat(S.D, Date.now()); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
+      const n = tmiSaat(S.D, Date.now()); if (n != null && n >= 0) S.simdi = Math.floor(n * 4) / 4;
     }
     return coz0.apply(this, arguments);
   };
