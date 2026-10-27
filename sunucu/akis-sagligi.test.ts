@@ -363,8 +363,8 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.equal(pl.yerlesimler.filter((x) => x.uretimEmriId === S.emir).length, 2);
     const pm = tamam(await oku<PlanCevabi>('mudur', `/plan?taslak=${o.taslak.id}`));
     assert.ok(pm.emirler.some((x) => x.uretimEmriId === S.emir));
-    // Denetim bölüm 2, adım 8: maliyet göstergesi planlamacıda null, müdürde 0 (iki rol aynı planı farklı anlatıyor).
-    bilinenKusur('adim-8', { planlama: null, mudur: 0 }, { planlama: pl.gostergeler.maliyetTl, mudur: pm.gostergeler.maliyetTl });
+    // Maliyet göstergesi planın gecikme bedelidir: fiyat yetkisi olmayan planlamacıda gizli (null), müdürde emir zamanında bittiği için 0.
+    assert.deepEqual({ planlama: pl.gostergeler.maliyetTl, mudur: pm.gostergeler.maliyetTl }, { planlama: null, mudur: 0 });
     tamam(await oku('planlama', '/plan'));
     const car = tamam(await oku<{ siparisId: number }>('planlama', `/plan/siparisler/${S.sip}/carpan`));
     assert.equal(car.siparisId, S.sip);
@@ -450,7 +450,8 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       .bekleyenler.find((x) => x.uretimEmriId === S.emir);
     assert.ok(bek, 'emir için bekleyen yok');
     assert.equal(Number(bek.adet), MAMUL_ADET);
-    bilinenKusur(3, null, bek.firmaId, S.musteri);
+    // 261 a: ürün kaydının müşterisi sevk anında bırakış noktasından yazılır; işe çevrilmeden önce boştur.
+    assert.equal(bek.firmaId, null);
     const n = tamam(await yaz<{ nokta: { id: number; firmaId: number | null } }>('sevkiyat', '/sevkiyat/noktalar/ekle',
       { ad: 'Deneme Musteri AS', tur: 'musteri', enlem: 40.9, boylam: 29.2, adres: null, durakSuresiDakika: 15, firmaId: S.musteri }));
     assert.equal(n.nokta.firmaId, S.musteri);
