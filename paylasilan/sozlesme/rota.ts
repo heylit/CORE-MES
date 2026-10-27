@@ -8,6 +8,9 @@ export const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
 export const MAKINE_KULLANIMLARI = ['tek', 'paralel'] as const;
 export const REVIZYON_KOMUTLARI = ['kaydet', 'onaya-gonder', 'iptal', 'geri-gonder', 'onayla', 'yururluge-al', 'kopyala'] as const;
 export const TASLAK_KAYNAKLARI = ['revizyon', 'standart', 'bos'] as const;
+// İlk parça onayı adım başına (744 a): Arkon'un ilk parça kapısı ve paket kuralının varsayılanı bu seçimdir.
+export const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
+export type IlkParcaSecimi = (typeof ILK_PARCA_SECIMLERI)[number];
 
 // Gövde sınırları: "kaydet" bütün taslağı taşır ve denetim kaydına yazılır; dizi üst sınırları gövdeyi sınırlar.
 export const AZAMI_ADIM = 60;
@@ -104,6 +107,8 @@ export const adimGirdisi = z.object({
   makineKullanimi,
   enKucukParca: z.number().int().positive().max(TAM_SAYI_UST).nullable(),
   yenidenAyar: z.boolean(),
+  // Gelmeyen seçim (alanı bilmeyen eski görünüm) adımın kayıtlı seçimini korur; yeni adımda "her kurulumda".
+  ilkParca: z.enum(ILK_PARCA_SECIMLERI).optional(),
   adaylar: z.array(adayGirdisi).max(AZAMI_ADAY),
   bilesenler: z.array(bilesenGirdisi).max(AZAMI_BILESEN),
   yanUrunler: z.array(yanUrunGirdisi).max(AZAMI_YAN_URUN),
@@ -194,6 +199,7 @@ export const adimSemasi = z.object({
   makineKullanimi,
   enKucukParca: z.number().int().nullable(),
   yenidenAyar: z.boolean(),
+  ilkParca: z.enum(ILK_PARCA_SECIMLERI),
   adaylar: z.array(z.object({
     kaynak: kaynakOzeti, ayarSuresiDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
     islemSuresiDk: ondalikMetinSemasi.nullable(), degisimSuresiDk: ondalikMetinSemasi.nullable(),

@@ -43,7 +43,7 @@ export function girdiye(a: Adim): AdimGirdisi {
     opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak ? { tur: a.kaynak.tur, id: a.kaynak.id } : null,
     ayarSuresiDk: sayi(a.ayarSuresiDk), birimSureDk: sayi(a.birimSureDk), islemSuresiDk: sayi(a.islemSuresiDk), degisimSuresiDk: sayi(a.degisimSuresiDk),
     terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
-    firePayiYuzde: Number(a.firePayiYuzde), makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+    firePayiYuzde: Number(a.firePayiYuzde), makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
     adaylar: a.adaylar.map((x) => ({
       kaynak: { tur: x.kaynak.tur, id: x.kaynak.id }, ayarSuresiDk: sayi(x.ayarSuresiDk), birimSureDk: sayi(x.birimSureDk),
       islemSuresiDk: sayi(x.islemSuresiDk), degisimSuresiDk: sayi(x.degisimSuresiDk),
