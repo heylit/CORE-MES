@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, describe, test } from 'node:test';
+import { afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
@@ -18,6 +18,10 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   let makineA = 0;
   let makineB = 0;
   before(() => { ({ ortam, makineA, makineB } = durum()); });
+  // Testler aynı canlı planı paylaşır; kilitli işin önüne sıkı dizilmiş iş, dakika dönünce canlıya almayı 737 a gereği durdurur. Saat her testte
+  // gerçek anda sabitlenir (759).
+  beforeEach(() => { mock.timers.enable({ apis: ['Date'], now: Date.now() }); });
+  afterEach(() => { mock.timers.reset(); });
 
   const sahip = () => ortam!.sahip;
   const gecmis = (isEmriId: number) => sahip().sorgu<{ tablo: string; islem: string; planSurumu: number; satir: Record<string, unknown> }>(
