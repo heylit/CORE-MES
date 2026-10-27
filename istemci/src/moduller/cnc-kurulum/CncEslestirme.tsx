@@ -12,7 +12,7 @@ import { cerceveBetigi } from './cerceve-kopru.ts';
 import type { MakineOzeti } from './cerceve-kopru.ts';
 import { ONEK, sayfaKur, yerelDegerler } from './CncKurulumCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
-import { belgeAdi, mevcutEslesmeler, modeliCizimlereAktar, yayinlaVeEslestir } from './model-aktarimi.ts';
+import { belgeAdi, kucukResimUret, mevcutEslesmeler, modeliCizimlereAktar, yayinlaVeEslestir } from './model-aktarimi.ts';
 import type { AktarilacakModel, MevcutEslesme } from './model-aktarimi.ts';
 import { prototipYukle } from './prototip.ts';
 import './cnc-kurulum.css';
@@ -189,11 +189,18 @@ export function CncEslestirme() {
         const model = await modelIste(m.makineId);
         const a = await modeliCizimlereAktar(model);
         let yayinda = a.yayinda;
-        if (s.istasyonId !== null) yayinda = (await yayinlaVeEslestir(a, s.istasyonId, yayinlayabilir)).yayinda;
+        let resim = '';
+        if (s.istasyonId !== null) {
+          yayinda = (await yayinlaVeEslestir(a, s.istasyonId, yayinlayabilir)).yayinda;
+          // Küçük resim eşleşmenin parçası değildir: üretilemezse bağ ve yayın geri alınmaz, yalnız satıra yazılır.
+          try {
+            if (yayinda && await kucukResimUret(a, model.glb) === 'uretildi') resim = '; küçük resim hazır';
+          } catch (h) { resim = `; küçük resim üretilemedi (${h instanceof Error ? h.message : 'bilinmeyen hata'})`; }
+        }
         const ilk = a.sonuc === 'yeni' ? 'Yeni belge' : a.sonuc === 'revizyon' ? 'Yeni revizyon' : 'Zaten güncel';
         const son = s.istasyonId === null
           ? 'sistemdeki makineyle eşleşmedi, haritaya eklenemez'
-          : yayinda ? 'eşleşti, haritanın Ekle listesinde' : 'eşleşti; çizim yayınlanınca haritaya eklenir';
+          : (yayinda ? 'eşleşti, haritanın Ekle listesinde' : 'eşleşti; çizim yayınlanınca haritaya eklenir') + resim;
         const ad = belgeAdi(m);
         setMevcut((once) => new Map(once ?? []).set(ad, { belgeId: a.belgeId, yayinda, istasyonId: s.istasyonId ?? once?.get(ad)?.istasyonId ?? null }));
         satirYaz(m.makineId, { secili: false, sonuc: { ton: 'tamam', metin: `${ilk}, ${son}.` } });
