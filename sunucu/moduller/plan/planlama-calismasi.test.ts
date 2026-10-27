@@ -159,10 +159,14 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     assert.equal((ikinci.json() as PlanlamaCalismasiCevabi).surum, c.surum, 'var olan kayda yazılmaz');
   });
 
-  test('PC-06: boş çalışmayı kurmak kaydı yazmak gibidir: plan.yaz ya da recete-rota.yaz eksikse 403 ve kayıt açılmaz', async () => {
+  test('PC-06: boş çalışmayı kurmak kaydı yazmak gibidir: plan.yaz eksikse 403 ve kayıt açılmaz; yalnız plan.yaz yeter (925 a)', async () => {
     await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
     assert.equal((await olustur(yalnizYazar)).statusCode, 403);
     assert.equal((await olustur(planlamaci)).statusCode, 403);
+    assert.equal(await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)), null);
+    const yalnizPlanci = await islemliKisi('yalniz_planci', ['plan.yaz', 'plan.planlama-oku']);
+    assert.equal((await olustur(yalnizPlanci)).statusCode, 200);
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
     assert.equal(await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)), null);
   });
 });

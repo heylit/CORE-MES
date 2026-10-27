@@ -12,7 +12,7 @@ import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
-// 287 a: planlama çalışmasının kaydı (`:planlama`) yalnız plan.yaz taşıyana yazılır ve silinir; öteki anahtarlar recete-rota.yaz ile kalır.
+// 287 a, 925 a: planlama çalışmasının kaydı (`:planlama`) yalnız plan.yaz ister; öteki anahtarlar recete-rota.yaz ile kalır.
 // Müdür rolü 524/3 b ile plan.yaz da taşır; planlamayı okuyup plan.yaz taşımayan rol çalışmayı değiştiremez. 658 b: planlama anahtarları plan
 // modülünün uçlarına yazılır, Reçete ve Rota'nın kayıt uçları onları reddeder. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -23,6 +23,7 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
   let yoneticiId = 0;
   let planci = '';
   let yalnizYazar = '';
+  let yalnizPlanci = '';
   let mudurBenzeri = '';
   let mudur = '';
   const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
@@ -64,6 +65,7 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     planci = await islemliKisi('planci', ['recete-rota.yaz', 'plan.yaz']);
     yalnizYazar = await islemliKisi('yazar', ['recete-rota.yaz']);
+    yalnizPlanci = await islemliKisi('yalniz_planci', ['plan.yaz']);
     mudurBenzeri = await islemliKisi('mudur_benzeri', ['plan.planlama-oku', 'recete-rota.yaz']);
     const mudurRolu = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'mudur'");
     assert.ok(mudurRolu, 'müdür rolü göçlerde yok');
@@ -128,6 +130,18 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
       const surum = (yazma.json() as { kayit: { surum: number } }).kayit.surum;
       assert.equal((await sil(yalnizYazar, anahtar, surum)).statusCode, 200);
     }
+  });
+
+  test('PY-05b (925 a): yalnız plan.yaz taşıyan çalışmayı yazar ve siler; öteki anahtarlara yazamaz', async () => {
+    const surum = await calismaKur({ surum: 2, v: 1 });
+    const yazma = await yaz(yalnizPlanci, PLANLAMA_ANAHTARI, { surum: 2, v: 7 }, surum);
+    assert.equal(yazma.statusCode, 200, yazma.body);
+    const yeni = (yazma.json() as { kayit: { surum: number } }).kayit.surum;
+    assert.equal((await sil(yalnizPlanci, PLANLAMA_ANAHTARI, yeni)).statusCode, 200);
+    assert.equal(await kayit(PLANLAMA_ANAHTARI), null);
+    const ui = await yaz(yalnizPlanci, `${PLANLAMA_ANAHTARI}-ui4`, { v: 1 }, null);
+    assert.equal(ui.statusCode, 403, ui.body);
+    assert.equal(await kayit(`${PLANLAMA_ANAHTARI}-ui4`), null);
   });
 
   test('PY-06: Reçete ve Rota kayıt uçları planlama anahtarlarını reddeder; planlama ucu öteki anahtarları reddeder', async () => {

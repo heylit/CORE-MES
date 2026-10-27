@@ -37,12 +37,14 @@ export const PLANLAMA_ANAHTARI = `${DURUM_ANAHTARI}:planlama`;
 const CAKISMA_ILETISI = 'Planlama kaydı siz açtıktan sonra başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 const BUYUK_ILETISI = 'Planlama kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
 const PLANLAMA_YETKI_ILETISI = 'Planlama çalışmasını değiştirme yetkiniz yok.';
+const KAYIT_YETKI_ILETISI = 'Reçete ve Rota kaydını değiştirme yetkiniz yok.';
 
-// Planlama çalışması (tercih, ağırlık, karar, sayfa içi kilit) yalnız planı yazabilene açıktır (287 a): yazma ve silme ucu recete-rota.yaz
-// ister (taşımadan önceki gibi, yetki genişlemez), bu anahtar ayrıca plan.yaz ister. Planlama sayfasını okuyup plan.yaz taşımayan rol
-// çalışmayı değiştiremez; sayfa tercihleri (`:planlama-ui4` ...) yalnız uçtaki yetkiyi ister.
+// Planlama çalışması (tercih, ağırlık, karar, sayfa içi kilit) yalnız plan.yaz ister (287 a, 925 a); öteki anahtarlar (Reçete ve Rota'nın
+// ana kaydı, sayfa tercihleri `:planlama-ui4` ...) recete-rota.yaz ister. Uç ikisinden birini ister; hangisinin gerektiği anahtardan belli olur.
 export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): void {
-  if (anahtar === PLANLAMA_ANAHTARI && !islemVarMi(kullanici, 'plan.yaz')) throw yetkiYok(PLANLAMA_YETKI_ILETISI);
+  if (anahtar === PLANLAMA_ANAHTARI) {
+    if (!islemVarMi(kullanici, 'plan.yaz')) throw yetkiYok(PLANLAMA_YETKI_ILETISI);
+  } else if (!islemVarMi(kullanici, 'recete-rota.yaz')) throw yetkiYok(KAYIT_YETKI_ILETISI);
 }
 
 export async function planlamaKayitlari(db: Db): Promise<KayitlarCevabi> {
