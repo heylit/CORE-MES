@@ -7,7 +7,6 @@ import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
 import type { PlanSenaryoKomutu } from './plan-senaryo-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
-import { highsYukle } from './highs.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
 import type { SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
@@ -248,7 +247,8 @@ const ekOzeti = (anlik: KaynakAnlik, takvim: TakvimEki | null, kapasite: Kapasit
 // Stok sekmesinin okuması (kart #1169): statü tanımları Reçete ve Rota'dan, statü kırılımı ve bakiye satırları stoktan. Çerçeve yalnız
 // gösterdiği kartların kimliklerini verir. Okuma yetkisi olmayan dilim null'dır (sıfır uydurulmaz); bir kartın okunamaması ötekileri
 // etkilemez.
-export interface StokStatusu { id: number; malzemeNo: string; kaynakAdim: string; ad: string }
+// urunKodu: statünün kaynak adımının mamul kodu; aynı malzeme farklı mamullerde ayrı statüdür. Eski biçimli adımda null.
+export interface StokStatusu { id: number; malzemeNo: string; urunKodu: string | null; kaynakAdim: string; ad: string }
 export interface StokBakiyesi { konumId: number; konumKod: string; partiId: number | null; partiEtiketi: string | null; statuId: number | null; miktar: string }
 export interface StokMalzemesi { kirilim: Array<{ statuId: number | null; miktar: string }>; bakiyeler: StokBakiyesi[] }
 export interface StokOkumasi { statuler: StokStatusu[] | null; malzemeler: Record<string, StokMalzemesi | null> | null }
@@ -265,7 +265,7 @@ async function stokOku(girdi: Nesne, islemler: IslemListesi): Promise<StokOkumas
   if (!Array.isArray(kimlikler) || kimlikler.length > AZAMI_STOK_KARTI) throw new Error('Geçersiz malzeme listesi.');
   const idler = [...new Set(kimlikler.map((k) => pozitifTamSayi(k, 'malzeme')))];
   const statuler = await api.get<{ statuler: StokStatusu[] }>('/recete-rota/statuler')
-    .then((c) => c.statuler.map((x) => ({ id: x.id, malzemeNo: x.malzemeNo, kaynakAdim: x.kaynakAdim, ad: x.ad })), () => null);
+    .then((c) => c.statuler.map((x) => ({ id: x.id, malzemeNo: x.malzemeNo, urunKodu: x.urunKodu, kaynakAdim: x.kaynakAdim, ad: x.ad })), () => null);
   if (!okuyabilir(STOK_OKUMA_ISLEMLERI, islemler)) return { statuler, malzemeler: null };
   let yetkiYok = false;
   const okunan = await Promise.all(idler.map(async (id) => {
@@ -335,14 +335,13 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
 // motorDurumu: motor yerleşimi okunamaz olunca true, yeniden okununca false (yalnız değişince). Okunamazken ekran kendi sırasıyla
 // çizer (öncelik teslimden önce) ve sunucunun sırasından ayrılabilir; kabuk bunu kullanıcıya söyler.
 // motorUyarilari: motorun uygulayamadığı kısıtlar (307 a), her okunan yerleşimde; liste değişince çağrılır. Okunamayan yerleşimde dokunulmaz.
-// highsVerilir: açık çerçeve HiGHS alabilir mi (yalnız planlama çerçevesi, 361 b); verilmezse istek reddedilir.
 // yerlesimCizilmez: açık çerçeve motorun yerleşimini çizmez (planlama çerçevesi): yerleşim hiç istenmez, çünkü sunucu onu her okumada
 // bütün planı yeniden hesaplayarak kurar; yalnız uyarılar motorsuz okunur. Yerleşim okunmadığı için motorDurumu çağrılmaz.
 export function kopruKur(
   cihazAnahtarlari: readonly string[] = [],
   secenek: {
     kartTaslakAcabilir?: boolean; bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
-    motorUyarilari?: (uyarilar: readonly string[]) => void; highsVerilir?: () => boolean; yerlesimCizilmez?: () => boolean;
+    motorUyarilari?: (uyarilar: readonly string[]) => void; yerlesimCizilmez?: () => boolean;
     islemler?: readonly string[];
   } = {},
 ): KopruIsleyici {
@@ -448,11 +447,6 @@ export function kopruKur(
       // Plan öncelik ayarları (taban bedel, oranlar, eşikler): plan sayfasını gören herkes okur.
       case 'bedel-ayari-oku':
         return { ayar: await api.get<BedelAyari>('/plan/bedel-ayari'), yazabilir: secenek.bedelAyariYazabilir === true };
-      // Termini girilmemiş fason adımın süre tahmini (satın almanın geçmiş teslimatı); cevap sorgularla aynı sırada gün ya da null.
-      // HiGHS betiği ve wasm ikilisi (361 b): uç değil, uygulamanın kendi dosyası; yalnız planlama çerçevesine.
-      case 'highs-oku':
-        if (secenek.highsVerilir?.() !== true) throw new Error('Geçersiz istek: HiGHS bu çerçevede açık değil.');
-        return highsYukle();
       // Süreler bölümü (169 c): revizyonun teorik süresi, plan için etkin süresi ve tür başına bekleyen ölçümü; makine verilirse o makinenin
       // görünümü. Sahibi rota modülüdür; ekran adımı OP numarasıyla eşler.
       case 'sure-oku': {
@@ -461,6 +455,7 @@ export function kopruKur(
         if (makine !== null && makine !== undefined && !tamSayi(makine)) throw new Error('Geçersiz makine.');
         return api.get<SurelerCevabi>(`/rota/revizyonlar/${String(v['revizyonId'])}/sureler${tamSayi(makine) ? `?makineId=${String(makine)}` : ''}`);
       }
+      // Termini girilmemiş fason adımın süre tahmini (satın almanın geçmiş teslimatı); cevap sorgularla aynı sırada gün ya da null.
       case 'fason-tahmin':
         return api.get<unknown>(`/recete-rota/fason-tahminleri?s=${fasonTahminSorgusu(v['sorgular'])}`);
       // Bağlı durum ve sürümler: sürümler durumdan ÖNCE okunur; arada biri yazarsa sürüm eski, durum yeni kalır ve güncelleme

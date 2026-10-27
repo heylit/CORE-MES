@@ -14,8 +14,6 @@ import { ApiHatasi } from '../../ortak/veri/api.ts';
 afterEach(() => { vi.unstubAllGlobals(); });
 
 // HiGHS paketinin yüklenmesi tarayıcıya özgüdür (wasm adresi); köprü testinde yerine sahte kaynak konur.
-const HIGHS = { betik: 'async function Module() {}', wasm: new ArrayBuffer(8) };
-vi.mock('./highs.ts', () => ({ highsYukle: () => Promise.resolve(HIGHS) }));
 
 // Sahiplerin gerçek istek şemaları: köprünün kurduğu gövde bunlarla sınanır (uygulama kodu şemayı değer olarak ithal etmez, test eder).
 
@@ -95,13 +93,18 @@ describe('köprü komutları', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('KOM-02d: HiGHS yalnız açık çerçeve planlamayken verilir (361 b); sunucuya istek gitmez', async () => {
-    const istekler = sunucuKur(() => json(500, {}));
-    expect(await kopruKur([], { highsVerilir: () => true })('highs-oku', {})).toBe(HIGHS);
-    for (const isle of [kopruKur(), kopruKur([], { highsVerilir: () => false })]) {
-      expect(await isle('highs-oku', {}).then(() => null, (e: unknown) => kopruHatasi(e))).toEqual({ hata: 'Geçersiz istek: HiGHS bu çerçevede açık değil.', durum: 400 });
-    }
-    expect(istekler).toEqual([]);
+  it('KOM-02d (871-5): stok okumasında statü, ürün koduyla gelir; aynı malzeme farklı mamullerde ayrı statüdür', async () => {
+    sunucuKur(() => json(200, { statuler: [
+      { id: 7, malzemeNo: 'HM-1', ad: 'OP 10', kaynakAdim: 'o10', urunKodu: 'MM-1', revizyon: 'A' },
+      { id: 8, malzemeNo: 'HM-1', ad: 'OP 10', kaynakAdim: 'o10', urunKodu: 'MM-2', revizyon: null },
+      { id: 9, malzemeNo: 'HM-2', ad: 'OP 20', kaynakAdim: '20', urunKodu: null, revizyon: null },
+    ] }));
+    const okuma = await kopruKur([], { islemler: ['sayfa.recete-rota'] })('stok-oku', { malzemeIdler: [] });
+    expect(okuma).toEqual({ statuler: [
+      { id: 7, malzemeNo: 'HM-1', urunKodu: 'MM-1', kaynakAdim: 'o10', ad: 'OP 10' },
+      { id: 8, malzemeNo: 'HM-1', urunKodu: 'MM-2', kaynakAdim: 'o10', ad: 'OP 10' },
+      { id: 9, malzemeNo: 'HM-2', urunKodu: null, kaynakAdim: '20', ad: 'OP 20' },
+    ], malzemeler: null });
   });
 
   it('KOM-02c: plan öncelik ayarları plan modülünden okunur; düzenleme yalnız oturumda plan.bedel-ayari varsa açılır', async () => {
