@@ -166,6 +166,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
       },
     });
     ortakHammadde = await kartAc('hammadde');
+    // Stoku bilinen kart (stok ayarı satırı): motor ayarı varsayılanı "dur" ile stoku bilinmeyen malzeme canlıya almayı durdurur (772 a).
+    await ortam.sahip.sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id) VALUES ($1)', [ortakHammadde]);
     fasoncu = (await tamam<{ firma: { id: number } }>(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme fasoncu', tur: 'tedarikci', fason: true })).firma.id;
   });
 

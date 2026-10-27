@@ -30,6 +30,7 @@ import {
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import { eksikStokDenetle } from './eksik-stok.ts';
 import { taslagiGuncelSurumeBagla } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
@@ -2089,6 +2090,11 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     && (b.isler.get(y.isEmriId)?.durum === 'planli' || siralanmisCalisan.has(y.isEmriId)) && !y.kilitli && !y.dondurulmus && !bolunmus(y)
     && (b.takvimler.get(kaynakAnahtari(y.kaynak)) ?? null) === null).map((y) => y.isEmriId));
   taslak = taslak.filter((y) => !vardiyasiz.has(y.isEmriId));
+  // 772 a: yalnız taslakta yeri değişen gerçek işlere bakılır (308 b gibi); denemeden doğan iş emrinin malzemesi canlıda yoktur.
+  await eksikStokDenetle(db, id, degisen.filter((y) => y.isEmriId >= 0 && !vardiyasiz.has(y.isEmriId)).flatMap((y) => {
+    const is = b.isler.get(y.isEmriId);
+    return is ? [{ uretimEmriId: is.uretimEmriId, emirNo: is.emirNo, opNo: is.opNo }] : [];
+  }));
   // Yersiz bölme de canlıya geçer (taslakta ya da canlıda yalnız bölmesi olan iş).
   const yersizler = [...b.yersiz.keys(), ...(await s.yersizBolmeler(db, null)).keys()];
   const idler = [...new Set([...canli.map((y) => y.isEmriId), ...taslak.map((y) => y.isEmriId), ...yersizler])].filter((x) => degisebilir(x) && !vardiyasiz.has(x));
