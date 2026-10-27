@@ -3,7 +3,7 @@
 ## Bağlamada kapanacak
 - Teklif iskonto onayı (Portal'da `discMgr` eşiği ve onay akışı): taşınmadı; bağlamada sorulacak.
 - Logo'ya satış siparişi gönderimi bugün `portal_logo_gonderim`'de; bağlamada sipariş kaydına taşınır.
-- Sevk satırının sipariş satırına bağı (Sevkiyat, 261 a).
+- KAPANDI (bağlama C, 27.10.2026): sevk satırının sipariş satırına bağı ayrı sütun istemiyor. Sevk edilen her ürün bir üretim emrinden gelir (sevkiyat bekleyen kaynakları `urun`, `fason`, `alim`) ve bağ emrin `siparis_satiri_id`'sinden okunur: `sevkiyat/servis.ts` `sevkIsiOzeti` (260 a, fatura) ve `siparisinSevkleri` (302 a). 261 a kısmi sevki ve sevk anının müşterisini getirdi (`sevkiyat/bekleyen.test.ts` "261 a"). VARSAYIM: emirsiz ürün sevki (stoktan ticari mal satışı) yok; gelirse doğrudan bağ yeniden açılır.
 
 ## Kapandı
 - Rol x işlem (`siparisler.oku`, `.yaz`, `.onayla`) ve `sayfa.siparisler`: `20261019083500_kisiler_rol_matrisi_139.sql`.
