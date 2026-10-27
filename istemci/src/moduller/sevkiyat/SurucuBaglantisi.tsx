@@ -26,9 +26,7 @@ export function BaglantiKutusu({ google, yandex, etiket }: { google: string; yan
   };
   return (
     <div className="tc-sevkiyat-baglanti" role="group" aria-label={etiket}>
-      {/* Bağlantı düğme değildir (yeni sekmede açılır); ortak düğmenin görünüşünü modül sınıfı verir. */}
-      <a className="tc-sevkiyat-bag" data-ana="" href={google} target="_blank" rel="noopener noreferrer">Google Haritalar'da aç</a>
-      <a className="tc-sevkiyat-bag" href={yandex} target="_blank" rel="noopener noreferrer">Yandex'te aç</a>
+      {/* Harita bu ekrandan açılmaz: tarayıcı dış servise gitmez; bağlantı yalnız kopyalanıp sürücüye iletilir. */}
       <Dugme onClick={() => kopyala('google')}>{kopyalanan === 'google' ? 'Kopyalandı' : 'Google bağlantısını kopyala'}</Dugme>
       <Dugme onClick={() => kopyala('yandex')}>{kopyalanan === 'yandex' ? 'Kopyalandı' : 'Yandex bağlantısını kopyala'}</Dugme>
       {kopyalanan === 'elle' && <input className="tc-sevkiyat-kutu" readOnly value={google} aria-label="Bağlantı (elle kopyalayın)" onFocus={(e) => e.target.select()} />}
