@@ -220,6 +220,31 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
     assert.notEqual(kapali?.kapanis, null);
   });
 
+  test('AR-AN-18 (784 a): toplu sağlam girişi önceki girişten bu yana net süreye sığmıyorsa kapalı uyarı olayı; sığan giriş ve ikinci tur olay açmaz', async () => {
+    const kayit = (tur: 'counts' | 'events', saat: number, govde: Record<string, unknown>) => o().sahip.sorgu(
+      'INSERT INTO arkon_kayit (tur, cid, zaman, makine, paket_id, emir_no, govde, kisi_id) VALUES ($1, $2, $3::timestamptz, $4, $5, $6, $7, $8)',
+      [tur, `anz-${(sayac += 1)}`, anMetni(saat), 'ZK1', `tmi-ie-${b10}`, 'ANZ-B', JSON.stringify(govde), yoneticiId]);
+    await kayit('counts', 11, { kind: 'good', delta: 1 });
+    await kayit('events', 11.1, { state: 'stopped' });
+    await kayit('events', 11.3, { state: 'running' });
+    // 11:00-11:30 arası 30 dk, 12 dk duruş: 18 dk net; 50 adet x 1 dk = 50 dk: 32 dk aşım. Aynı anda gelen hurda satırı aynı giriştir.
+    await kayit('counts', 11.5, { kind: 'good', delta: 45, toplu: true });
+    await kayit('counts', 11.5, { kind: 'scrap', delta: 5, toplu: true });
+    // 11:30-11:45: 15 dk; 5 adet sığar.
+    await kayit('counts', 11.75, { kind: 'good', delta: 5, toplu: true });
+    await yenile(12);
+    await yenile(12.25);
+    const toplu = await o().sahip.sorgu<{ dakika: number; plan: string; gercek: string; kapanis: string | null; emirNo: string }>(
+      `SELECT dakika::float8 AS dakika, plan_ani::text AS plan, gercek_ani::text AS gercek, kapanis::text AS kapanis, emir_no AS "emirNo"
+         FROM arkon_anomali_olayi WHERE tur = 'toplu-tutarsiz' AND is_emri_id = $1`, [b10]);
+    assert.equal(toplu.length, 1, JSON.stringify(toplu));
+    assert.ok(Math.abs(toplu[0]!.dakika - 32) < 0.01, String(toplu[0]!.dakika));
+    assert.equal(Date.parse(toplu[0]!.plan), an(11));
+    assert.equal(Date.parse(toplu[0]!.gercek), an(11.5));
+    assert.notEqual(toplu[0]!.kapanis, null);
+    assert.equal(toplu[0]!.emirNo, 'ANZ-B');
+  });
+
   test('veri kapsamı: başka iş merkezine kısıtlı kişi olayları görmez; kısıtsız kişi görür', async () => {
     const baska = await istek<{ id: number }>(yonetici, 'POST', '/is-merkezleri', { kod: 'ZM2', ad: 'Başka merkez' });
     const kisitli = await kisiKur('kapsamli1', ['arkon.hazirlik', 'sayfa.arkon']);

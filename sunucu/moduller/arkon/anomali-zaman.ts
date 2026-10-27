@@ -10,9 +10,11 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { canliSira, tabanPlani } from '../plan/disari.ts';
 import type { Kaynak } from '../plan/disari.ts';
 import { isEmriTeslimleri } from '../stok/disari.ts';
-import { isEmriZamanlari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { isEmriPlanBilgileri, isEmriZamanlari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri } from '../vardiya/disari.ts';
-import { araliklariBirlestir, ardilEtkisiDk, gecikmeHukmu, girdiAni, girisAni, gunEkle, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk } from './kurallar.ts';
+import {
+  araliklariBirlestir, ardilEtkisiDk, durusAraliklari, gecikmeHukmu, girdiAni, girisAni, gunEkle, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk, topluAsimDk,
+} from './kurallar.ts';
 import type { ArdilGirdisi, GecikmeHukmu, NetAralik } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -26,6 +28,8 @@ const ILERI_GUN = 21;
 // Sayfaya gelen olay sınırı.
 const OLAY_SINIRI = 500;
 const KISI_KIRILIMI = 'arkon.anomali-kisi' as const;
+// Toplu girişler bu kadar geriye bakılarak bir kez değerlendirilir.
+const TOPLU_PENCERE_MS = 2 * 24 * 3_600_000;
 
 export interface ZamanEsikleri {
   gecGirisDk: number | null;
@@ -251,6 +255,41 @@ export async function zamanOlaylariniYenile(db: Db, simdi: number = Date.now()):
     await sorgular.anomaliOlayiGuncelle(db, o.id, {
       dakika: o.dakika, tabanDakika: o.tabanDakika, kokOlayId: o.kokOlayId, guncelleme: iso(simdi), kapanis: iso(simdi),
       gercekAni: o.gercekAni ?? ((o.tur === 'gec-giris' || o.tur === 'ardil-etkisi') && giris !== null ? iso(giris) : null),
+    });
+  }
+  await topluGirisleriDenetle(db, simdi);
+}
+
+// AR-AN-18 (784 a): terminalin toplu işaretli sağlam girişi, önceki girişten bu yana geçen net süreye sığmıyorsa uyarı. Olay gerçekleşmiş bir
+// bulgudur: açılırken kapanır, plan anı önceki giriştir (yoksa işin girişi). Ekranda uyarı yalnız anomali sayfasındadır (785 a).
+async function topluGirisleriDenetle(db: Db, simdi: number): Promise<void> {
+  const toplular = await sorgular.topluSayimlar(db, iso(simdi - TOPLU_PENCERE_MS));
+  if (toplular.length === 0) return;
+  const idler = [...new Set(toplular.map((t) => t.isEmriId))];
+  const bilgi = await isEmriPlanBilgileri(db, idler);
+  const zaman = await isEmriZamanlari(db, idler);
+  const kaynakOf = (id: number): Kaynak | null => { const k = bilgi.get(id)?.kaynak; return k === undefined || k === null || k.tur === 'fason' ? null : { tur: k.tur, id: k.id }; };
+  const kaynaklar = [...new Map(idler.flatMap((id) => { const k = kaynakOf(id); return k === null ? [] : [[kaynakAnahtari(k), k] as const]; })).values()];
+  const takvim = await netAraliklar(db, kaynaklar, simdi);
+  for (const t of toplular) {
+    const b = bilgi.get(t.isEmriId);
+    const kaynak = kaynakOf(t.isEmriId);
+    const ar = kaynak === null ? null : takvim.get(kaynakAnahtari(kaynak)) ?? null;
+    if (b === undefined || kaynak === null || ar === null) continue;
+    const z = zaman.get(t.isEmriId);
+    const bas = anOku(t.onceki) ?? (z === undefined ? null : girisAni(z));
+    const bit = Date.parse(t.zaman);
+    if (bas === null) continue;
+    const kayitlar = await sorgular.isEmriDurumKayitlari(db, t.isEmriId, iso(bas), t.zaman);
+    const asim = topluAsimDk({
+      adet: t.adet, birimSureDk: b.birimSureDk === null ? null : Number(b.birimSureDk), bas, bit, araliklar: ar,
+      duruslar: durusAraliklari(kayitlar.map((k) => ({ zaman: Date.parse(k.zaman), durum: k.durum })), bit),
+    });
+    if (asim === null || !(asim > 0)) continue;
+    await sorgular.anomaliOlayiAc(db, {
+      tur: 'toplu-tutarsiz', isEmriId: t.isEmriId, uretimEmriId: b.uretimEmriId, emirNo: t.emirNo, opNo: b.opNo, istasyonId: b.istasyonId,
+      kaynakTur: kaynak.tur, kaynakId: kaynak.id, kayitId: t.kayitId, planSurumu: null, planAni: iso(bas), tabanAni: null, tabanDakika: null,
+      gercekAni: t.zaman, dakika: asim, kokOlayId: null, acilis: iso(simdi), kapanis: iso(simdi),
     });
   }
 }

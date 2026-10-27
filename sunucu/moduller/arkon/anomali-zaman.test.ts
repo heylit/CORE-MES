@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ardilEtkisiDk, gecikmeHukmu, girdiAni, girisAni, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk } from './kurallar.ts';
+import { ardilEtkisiDk, durusAraliklari, gecikmeHukmu, girdiAni, girisAni, netFarkDk, netIleri, olayEylemi, tahminiBitis, teslimRiskiDk, topluAsimDk } from './kurallar.ts';
 
 const DK = 60_000;
 const saat = (h: number): number => Date.UTC(2026, 9, 27) + h * 3_600_000;
@@ -76,4 +76,23 @@ test('AR-AN-17 olay eylemi: bir kez açılır, sürerken güncellenir, hüküm k
   assert.deepEqual(olayEylemi({ kapali: false }, { dakika: 55, bitti: false }), { tur: 'guncelle', dakika: 55, bitti: false });
   assert.deepEqual(olayEylemi({ kapali: false }, null), { tur: 'kapat' });
   assert.deepEqual(olayEylemi({ kapali: true }, { dakika: 90, bitti: false }), { tur: 'yok' });
+});
+
+test('duruş aralıkları: durma ve duraklatma sonraki başka durum kaydına, yoksa sona kadar; çalışma duruş değildir', () => {
+  const k = [{ zaman: saat(9), durum: 'running' }, { zaman: saat(9.5), durum: 'stopped' }, { zaman: saat(10), durum: 'running' }, { zaman: saat(11), durum: 'paused' }];
+  assert.deepEqual(durusAraliklari(k, saat(11.5)), [{ bas: saat(9.5), bit: saat(10) }, { bas: saat(11), bit: saat(11.5) }]);
+  assert.deepEqual(durusAraliklari([], saat(11)), []);
+});
+
+test('AR-AN-18 toplu giriş (784 a): adet x birim süre, mola ve kayıtlı duruş düşülmüş net süreyi aşarsa aşan dakika', () => {
+  const g = { adet: 60, birimSureDk: 2, bas: saat(10), bit: saat(11), araliklar: ARALIK, duruslar: [] };
+  assert.equal(topluAsimDk(g), 60, '120 dk iş, 60 dk süre');
+  assert.equal(topluAsimDk({ ...g, adet: 30 }), 0, 'sığıyor');
+  assert.equal(topluAsimDk({ ...g, bit: saat(14), adet: 90 }), 0, '10-14 arası mola düşülünce 180 dk: 180 dk iş sığar');
+  assert.equal(topluAsimDk({ ...g, bit: saat(14), adet: 91 }), 2);
+  assert.equal(topluAsimDk({ ...g, adet: 30, duruslar: [{ bas: saat(10.25), bit: saat(10.75) }] }), 30, 'kayıtlı 30 dk duruş düşülür');
+  assert.equal(topluAsimDk({ ...g, adet: 30, duruslar: [{ bas: saat(11.5), bit: saat(12.5) }] }), 0, 'aralık dışı duruş sayılmaz');
+  assert.equal(topluAsimDk({ ...g, birimSureDk: null }), null);
+  assert.equal(topluAsimDk({ ...g, bas: null }), null, 'önceki giriş bilinmiyor');
+  assert.equal(topluAsimDk({ ...g, bas: saat(11) }), 120, 'aynı anda iki giriş: net süre 0');
 });

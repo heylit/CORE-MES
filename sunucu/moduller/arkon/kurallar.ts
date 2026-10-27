@@ -2502,6 +2502,28 @@ export function olayEylemi(mevcut: { kapali: boolean } | null, hukum: GecikmeHuk
   return { tur: 'guncelle', ...hukum };
 }
 
+// Terminal durum kayıtlarından duruş aralıkları: duraklatma ve durma, sonraki başka durum kaydına (yoksa `bit`e) kadar.
+export function durusAraliklari(kayitlar: readonly { zaman: number; durum: string | null }[], bit: number): NetAralik[] {
+  const sirali = [...kayitlar].sort((a, b) => a.zaman - b.zaman);
+  const sonuc: NetAralik[] = [];
+  sirali.forEach((k, n) => {
+    if (k.durum !== 'stopped' && k.durum !== 'paused') return;
+    const son = sirali[n + 1]?.zaman ?? bit;
+    if (son > k.zaman) sonuc.push({ bas: k.zaman, bit: son });
+  });
+  return araliklariBirlestir(sonuc);
+}
+
+// AR-AN-18 (784 a): toplu girişte adet x birim süre, önceki girişten bu girişe kadarki net süreyi (vardiya; mola, planlı ve kayıtlı duruş
+// düşülmüş) aşıyorsa aşan dakika; aşmıyorsa 0. Birim süre ya da önceki giriş bilinmiyorsa null: hüküm verilmez.
+export function topluAsimDk(g: { adet: number; birimSureDk: number | null; bas: number | null; bit: number; araliklar: readonly NetAralik[]; duruslar: readonly NetAralik[] }): number | null {
+  if (g.birimSureDk === null || !(g.birimSureDk > 0) || g.bas === null || g.bit < g.bas) return null;
+  const bas = g.bas;
+  const durus = araliklariBirlestir([...g.duruslar]).reduce((t, d) => t + kesisimDakika(g.araliklar, Math.max(d.bas, bas), Math.min(d.bit, g.bit)), 0);
+  const net = Math.max(0, kesisimDakika(g.araliklar, bas, g.bit) - durus);
+  return Math.max(0, g.adet * g.birimSureDk - net);
+}
+
 /* ---------------- Anomali gün kaydı ve dönem istatistiği (kart #1306, AR-AN-5..8) ---------------- */
 
 export type AnomaliDonemi = (typeof ANOMALI_DONEM_ADLARI)[number];

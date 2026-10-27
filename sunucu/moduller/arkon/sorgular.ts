@@ -623,6 +623,38 @@ export async function anomaliOlayiGuncelle(
   );
 }
 
+// 784 a: henüz olayı olmayan toplu sağlam girişleri. Aynı iş emrinin 5 saniye içindeki toplu satırları (sağlam ve hurda) tek giriştir; önceki
+// giriş bundan önceki son sayımdır (3 günle sınırlı; yoksa null). Paket kimliği iş emri ya da parçasınındır (tmi-ie-<id>[-p<no>]).
+export interface TopluSayimSatiri { kayitId: number; zaman: string; isEmriId: number; emirNo: string | null; adet: number; onceki: string | null }
+const IS_EMRI_PAKETI = "substring(k.paket_id from '^tmi-ie-([0-9]+)(-p[0-9]+)?$')";
+const AYNI_IS_EMRI = (t: string) => `${t}.paket_id ~ ('^tmi-ie-' || ${IS_EMRI_PAKETI} || '(-p[0-9]+)?$')`;
+const OLUMLU_DELTA = (t: string) => `jsonb_typeof(${t}.govde->'delta') = 'number' AND (${t}.govde->>'delta')::numeric > 0`;
+export function topluSayimlar(db: Db, sonra: string): Promise<TopluSayimSatiri[]> {
+  return db.sorgu<TopluSayimSatiri>(
+    `SELECT k.id::float8 AS "kayitId", ${zamanMetni('k.zaman')} AS zaman, ${IS_EMRI_PAKETI}::int AS "isEmriId", k.emir_no AS "emirNo",
+            (SELECT sum((e.govde->>'delta')::numeric)::float8 FROM arkon_kayit e
+              WHERE e.tur = 'counts' AND e.zaman BETWEEN k.zaman - interval '5 seconds' AND k.zaman + interval '5 seconds'
+                AND e.govde->>'toplu' = 'true' AND ${OLUMLU_DELTA('e')} AND ${AYNI_IS_EMRI('e')}) AS adet,
+            (SELECT ${zamanMetni('max(o.zaman)')} FROM arkon_kayit o
+              WHERE o.tur = 'counts' AND o.zaman >= k.zaman - interval '3 days' AND o.zaman < k.zaman - interval '5 seconds' AND ${AYNI_IS_EMRI('o')}) AS onceki
+       FROM arkon_kayit k
+      WHERE k.tur = 'counts' AND k.zaman >= $1::timestamptz AND k.govde->>'toplu' = 'true' AND k.govde->>'kind' = 'good' AND ${OLUMLU_DELTA('k')}
+        AND ${IS_EMRI_PAKETI} IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM arkon_anomali_olayi a WHERE a.tur = 'toplu-tutarsiz' AND a.kayit_id = k.id)
+      ORDER BY k.zaman, k.id`, [sonra]);
+}
+
+// İş emrinin terminal durum kayıtları (çalışıyor, duraklatıldı, durdu...) aralıkta, aralık başındaki durumu veren son kayıt dahil.
+export function isEmriDurumKayitlari(db: Db, isEmriId: number, bas: string, bit: string): Promise<{ zaman: string; durum: string | null }[]> {
+  const ayni = "paket_id ~ ('^tmi-ie-' || $1::text || '(-p[0-9]+)?$')";
+  return db.sorgu(
+    `(SELECT ${zamanMetni('zaman')} AS zaman, govde->>'state' AS durum, zaman AS z FROM arkon_kayit
+       WHERE tur = 'events' AND ${ayni} AND zaman <= $2::timestamptz AND zaman >= $2::timestamptz - interval '3 days' ORDER BY zaman DESC LIMIT 1)
+     UNION ALL
+     (SELECT ${zamanMetni('zaman')}, govde->>'state', zaman FROM arkon_kayit WHERE tur = 'events' AND ${ayni} AND zaman > $2::timestamptz AND zaman < $3::timestamptz)
+     ORDER BY z`, [isEmriId, bas, bit]);
+}
+
 // Üretim Hazırlık kuyruk sırası (kart 527). Tablo küçüktür (açık işler kadar): paket okuması bütün satırları tek sorguda alır.
 export interface KuyrukSirasiSatiri {
   isEmriId: number; parcaNo: number; istasyonId: number; sira: number; kisi: string; zaman: string;
