@@ -273,10 +273,11 @@ describe('motorun girdisi (stTamKur)', () => {
     expect(sart(5.5 * G, ['C.OP10']).alim).toMatchObject({ gerekli: 9 * G });
   });
 
-  it('sayfanın şimdisi çalışmanın kaydettiği şimdidir; 07:00 altı 07:00', () => {
+  it('sayfanın şimdisi çalışmanın kaydettiği şimdidir; gece vardiyasında 07:00 altı da olur (741 a), yoksa 07:00', () => {
     const c = (simdi: unknown): Parameters<typeof calismaSimdisi>[0] => ({ simdi } as never);
     expect(calismaSimdisi(c(8.25))).toBe(8.25);
-    expect(calismaSimdisi(c(3))).toBe(7);
+    expect(calismaSimdisi(c(3))).toBe(3);
+    expect(calismaSimdisi(c(null))).toBe(7);
     expect(calismaSimdisi(c(undefined))).toBe(7);
   });
 });

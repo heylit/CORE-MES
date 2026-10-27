@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  adimSatirlari, anSatirlari, asamalar, cycleSatirlari, islemPlaniDk, kartAdedi, leadDagilimi, miniRota, odakAdimi, ozetKutulari, sonAnMetni, sureMetni,
-  sureOzetiSatirlari, tekliCubuklar,
+  adimSatirlari, anSatirlari, asamalar, cycleSatirlari, islemPlaniDk, kartAdedi, leadDagilimi, miniRota, odakAdimi, ozetKutulari, planLeadDk, saat, sonAnMetni,
+  sureMetni, sureOzetiSatirlari, tarihSaat, tekliCubuklar,
 } from './refakat-akisi.ts';
 import { ORNEK_AKIS, ORNEK_OZET, t } from './test-refakat.ts';
 
@@ -45,6 +45,29 @@ describe('refakat kartının rotası (kart #708)', () => {
     expect([op20!.alt, op20!.sureDk, op20!.planli, op20!.giren[0]?.miktar]).toEqual(['plan: ayar 25 dk, cycle 3,6 dk', 25 + 3.6 * 50, true, '50']);
   });
 
+  it('plan saatleri (750 a): adımın önünde planlanan başlangıç ve başlama farkı, biten adımda bitiş farkı ve taban, sıradakinde gecikme, kapanışta termin', () => {
+    const z = (dk: number) => Date.parse(t(dk));
+    const l = asamalar(ORNEK_AKIS, B);
+    expect(l.map((s) => (s.plan ? [s.plan.metin, s.plan.fark, s.plan.farkTon, s.plan.taban] : null))).toEqual([
+      null,
+      [`${saat(z(4228))} başlangıç`, '30 dk geç başladı', 'bekle', ''],
+      [`${saat(z(4228))} → ${saat(z(4550))}`, 'bitiş 54 dk geç', 'bekle', `taban ${saat(z(4200))} → ${saat(z(4500))}`],
+      null,
+      [`${tarihSaat(z(4620))} → ${saat(z(4826))}`, 'plana göre 56 dk gecikmede', 'stop', ''],
+      [`${tarihSaat(z(6000))} → ${saat(z(6100))}`, '', 'soluk', ''],
+      [`${tarihSaat(z(6120))} → ${saat(z(6145))}`, '', 'soluk', ''],
+      ['termin 30.10.2026', '', 'soluk', ''],
+    ]);
+    expect(planLeadDk(ORNEK_AKIS)).toBe(6145 - 4188);
+    const planSiz = { ...ORNEK_AKIS, rota: ORNEK_AKIS.rota.map((r) => ({ ...r, plan: null, taban: null })) };
+    expect(asamalar(planSiz, B).filter((s) => s.tur !== 'son').every((s) => s.plan === undefined)).toBe(true);
+    expect(planLeadDk(planSiz)).toBeNull();
+    expect(ozetKutulari(planSiz, leadDagilimi(planSiz))[0]!.fark).toBe('işlem planı 5 sa 16 dk · +54%');
+    const erken = { ...ORNEK_AKIS, rota: ORNEK_AKIS.rota.map((r) => (r.opNo === 10 ? { ...r, plan: { baslangic: t(4268), bitis: t(4604) } } : r)) };
+    expect(asamalar(erken, B)[1]!.plan?.fark).toBe('10 dk erken başladı');
+    expect(asamalar(erken, B)[2]!.plan?.fark).toBe('');
+  });
+
   it('lead dağılımı karta yüklemeden şimdiye; operasyon parçası önce, yol sonra, kalan stokta bekleme', () => {
     const d = leadDagilimi(ORNEK_AKIS)!;
     expect([d.bas, d.bit]).toEqual([Date.parse(t(4188)), Date.parse(t(4676))]);
@@ -57,7 +80,7 @@ describe('refakat kartının rotası (kart #708)', () => {
     expect(kartAdedi(ORNEK_AKIS)).toBe(52);
     expect(islemPlaniDk(ORNEK_AKIS)).toBe(316);
     expect(ozetKutulari(ORNEK_AKIS, leadDagilimi(ORNEK_AKIS)).map((k) => [k.ad, k.deger, k.fark])).toEqual([
-      ['Lead time · gerçek', '8 sa 08 dk (sürüyor)', 'işlem planı 5 sa 16 dk · +54%'],
+      ['Lead time · gerçek', '8 sa 08 dk (sürüyor)', 'plan 1 g 8 sa · 1 g 0 sa kaldı'],
       ['Operasyonda / lead', '%71', '5 sa 46 dk / 8 sa 08 dk'],
       ['OP10 cycle · gerçek', '5,8 dk', 'plan 5,5 · emir 5,6 · +5%'],
       ['Hammadde yaşı', '2 g 21 sa', 'mal kabulden karta yüklemeye'],

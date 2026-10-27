@@ -250,6 +250,25 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(r, 'E-1|10')!.baslangic, '2026-10-19T23:00:00.000Z');
   });
 
+  test('741 a: gece yarısından sonra önceki günün gece vardiyası sürer; iş 07:00\'yi değil şimdiyi bekler', async () => {
+    const gunler = (id: string) => Object.fromEntries(['pzt', 'sal', 'car', 'per', 'cum'].map((g) => [g, [id]]));
+    const gece = { ...KAYNAK,
+      calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, meta: { ad: 'Ornek', baslangic: '2026-10-20' }, vardiyalar: [{ id: '4', bas: '22:00', bit: '06:00' }], calismaGunleri: gunler('4') } },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, cal: { shifts: [{ id: '4', name: 'Gece', start: '22:00', end: '06:00', breaks: [] }], holidays: [] } } } };
+    // Çalışma bugün (salı 20.10) başlar; tesiste 00:30 (19.10 21:30Z), pazartesi 22:00'de başlayan vardiyanın içi.
+    const simdi = new Date('2026-10-19T21:30:00Z');
+    const r = await coz(gece, istek({ simdi, kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }] }));
+    assert.deepEqual([yer(r, 'E-1|10')!.baslangic, yer(r, 'E-1|10')!.bitis], ['2026-10-19T21:30:00.000Z', '2026-10-19T22:30:00.000Z']);
+    assert.equal(yer(r, 'E-2|10')!.baslangic, '2026-10-19T22:30:00.000Z');
+    // Vardiya 06:00'da biter: 06:30'da verilen iş o gecenin 22:00'sini bekler.
+    const sabah = await coz(gece, istek({ simdi: new Date('2026-10-20T03:30:00Z'), kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.equal(yer(sabah, 'E-1|10')!.baslangic, '2026-10-20T19:00:00.000Z');
+    // Gece vardiyası olmayan tezgâh ilk vardiyasını bekler.
+    const gunduz = { ...KAYNAK, calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, meta: { ad: 'Ornek', baslangic: '2026-10-20' } } } };
+    const g = await coz(gunduz, istek({ simdi, kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.equal(yer(g, 'E-1|10')!.baslangic, '2026-10-20T05:00:00.000Z');
+  });
+
   test('168 b: vardiyası tanımsız tezgâhın işi vardiyasiz\'dadır, ötekiler dizilir', async () => {
     const k = { ...KAYNAK, calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, calismaGunleri: {} } } };
     const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));

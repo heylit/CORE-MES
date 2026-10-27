@@ -203,7 +203,10 @@ function AsamaSatiri({ s, gun }: { s: Asama; gun: string | null }) {
         <div className="tc-refakat-asama-govde">
           <div className="tc-refakat-asama-bas"><b>{s.baslik}</b><span className="tc-refakat-soluk">{s.alt}</span></div>
           <div className="tc-refakat-asama-tarih mono">
-            {s.tur === 'son' ? (s.bit !== null ? tarihSaat(s.bit) : 'kapanmadı') : aralikMetni(s.bas, s.bit, s.acik)}
+            <span>{s.tur === 'son' ? (s.bit !== null ? tarihSaat(s.bit) : 'kapanmadı') : aralikMetni(s.bas, s.bit, s.acik)}</span>
+            {s.plan && <span className="tc-refakat-soluk">{s.tur === 'son' ? s.plan.metin : `plan ${s.plan.metin}`}</span>}
+            {s.plan?.fark && <span className={tonSinifi(s.plan.farkTon)}>{s.plan.fark}</span>}
+            {s.plan?.taban && <span className="tc-refakat-soluk">{s.plan.taban}</span>}
           </div>
           {(s.giren.length > 0 || s.cikan.length > 0) && (
             <div className="tc-refakat-gc">
@@ -244,8 +247,9 @@ function AkisGorunumu({ liste }: { liste: Asama[] }) {
     <ol className="tc-refakat-akis" aria-label="Kartın rotası ve anları">
       {liste.map((s) => {
         const zaman = s.bas ?? s.bit;
-        const gun = zaman === null ? null : gunBasligi(zaman);
-        const yeni = gun !== null && gun !== onceki ? gun : null;
+        const planGunu = zaman === null && s.plan?.bas != null ? s.plan.bas : null;
+        const gun = zaman !== null ? gunBasligi(zaman) : planGunu !== null ? gunBasligi(planGunu) : null;
+        const yeni = gun !== null && gun !== onceki ? (zaman === null ? `${gun} · plan` : gun) : null;
         if (gun !== null) onceki = gun;
         return <AsamaSatiri key={s.anahtar} s={s} gun={yeni} />;
       })}
@@ -340,7 +344,7 @@ export function KartAkisi({ k, pencereAc }: { k: RefakatKartlariSatiri; pencereA
           </div>
           <div className="tc-refakat-icerik">
             {gorunum === 'akis' ? <AkisGorunumu liste={liste} /> : <TabloGorunumu d={d} liste={liste} urun={k.urun.ad} />}
-            <p className="tc-refakat-soluk tc-refakat-kucuk">Süreler Akış Süresi hesabıdır, takvim saatiyle. Kartla sayılanlar ve kartın lotu esas alınır; adım olayları emrindir, emrin başka kartı varsa onun işi de görünebilir. Plan tarihleri bu sayfada yok; plan süresi rotanın ayar ve birim süresidir.</p>
+            <p className="tc-refakat-soluk tc-refakat-kucuk">Süreler Akış Süresi hesabıdır, takvim saatiyle. Kartla sayılanlar ve kartın lotu esas alınır; adım olayları emrindir, emrin başka kartı varsa onun işi de görünebilir. Plan saatleri güncel canlı plandandır; taban, adımın ilk canlıya alındığı yerdir. Plan lead time, karta yüklemeden rotadaki son plan bitişinedir.</p>
           </div>
         </>
       )}

@@ -35,8 +35,13 @@ function compile(st){
   const D=st.D,A=D.ayarlar;
   const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit),mol:(v.molalar||[]).map(x=>[hm(x.bas),hm(x.bit)])}]));
   const tatil=new Set((D.tatiller||[]).map(s=>Math.floor(parseT(D,s)/24)));
-  const days=[];for(let d=0;d<HDAYS;d++){const wd=wdOf(D,d);days.push({wd,tatil:tatil.has(d),vard:tatil.has(d)?[]:(D.calismaGunleri[wd]||[])});}
-  const inst=(d,sid)=>{const v=vs[sid];if(!v)return null;const a=d*24+v.bas;let b=d*24+v.bit;if(b<=a)b+=24;return [a,b];};
+  const gunBilgi=d=>{const wd=wdOf(D,d);return {wd,tatil:tatil.has(d),vard:tatil.has(d)?[]:(D.calismaGunleri[wd]||[])};};
+  const days=[];for(let d=0;d<HDAYS;d++)days.push(gunBilgi(d));
+  /* 741 a: başlangıç gününden önceki günün gece vardiyası gece yarısını aşar; 0'dan sonraki kısmı da çalışma saatidir (gece önceki günün
+     vardiyasının devamıdır). d=-1 yalnız bu kuyruk için sayılır, pencere 0'da kesilir. */
+  const dun=gunBilgi(-1),gun=d=>d<0?dun:days[d];
+  const kes=w=>w&&w[1]>1e-9?[Math.max(0,w[0]),w[1]]:null;
+  const inst=(d,sid)=>{const v=vs[sid];if(!v)return null;const a=d*24+v.bas;let b=d*24+v.bit;if(b<=a)b+=24;return kes([a,b]);};
   /* 168 b: vardiyanın molaları; gece vardiyasında vardiya başından önceki saat ertesi güne düşer. Mola yalnız kendi vardiyasından düşülür:
      aynı saatte açık başka vardiya tezgâhı çalıştırır. Işıksız tezgâh molada da işler (rw). */
   const molalar=(d,sid)=>{const v=vs[sid];if(!v||!v.mol.length)return [];return v.mol.map(([x,y])=>{let a=d*24+x;if(a<d*24+v.bas)a+=24;let b=d*24+y;if(b<=a)b+=24;return [a,b];});};
@@ -45,8 +50,8 @@ function compile(st){
   for(const m of D.tezgahlar){
     const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
     /* 650 a: haftası olan tezgâh kendi iş merkezinin gün vardiyalarıyla çalışır; tatil yine kapalıdır */
-    const gunu=d=>m.hafta?(days[d].tatil?[]:(m.hafta[days[d].wd]||[])):days[d].vard;
-    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    const gunu=d=>m.hafta?(gun(d).tatil?[]:(m.hafta[gun(d).wd]||[])):gun(d).vard;
+    let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     let rw=sw;
@@ -61,8 +66,8 @@ function compile(st){
   const devam=new Set((D.devamsizlik||[]).map(x=>x.personel+'@'+Math.floor(parseT(D,x.gun)/24)));
   const addW=(arr,w,n)=>{const k0=Math.max(0,Math.ceil(w[0]/SL-1e-9)),k1=Math.min(NS,Math.floor(w[1]/SL+1e-9));for(let k=k0;k<k1;k++)arr[k]+=n;};
   for(const p of D.personel){
-    for(let d=0;d<HDAYS;d++){
-      const works=days[d].vard.includes(p.vardiya);
+    for(let d=-1;d<HDAYS;d++){
+      const works=gun(d).vard.includes(p.vardiya);
       if(!works||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(!w)continue;
       const gs=(p.gruplar||[]).filter(g=>capG[g]);
       if(gs.length){addW(capTot,w,1);for(const g of gs)addW(capG[g],w,1);}
@@ -74,14 +79,14 @@ function compile(st){
      kişilere dağıtılır (kisiDagit). Ek mesai o tezgâha sanal bir kişi ekler. Kaydı olmayan tezgâh grup ve toplam kapasiteyle hesaplanır. */
   const PK=[];
   for(const p of D.personel){const ms=(p.makineler||[]).filter(id=>M[id]);if(!ms.length)continue;const av=new Float32Array(NS);
-    for(let d=0;d<HDAYS;d++){if(!days[d].vard.includes(p.vardiya)||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(w)addW(av,w,1);}
+    for(let d=-1;d<HDAYS;d++){if(!gun(d).vard.includes(p.vardiya)||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(w)addW(av,w,1);}
     PK.push({id:p.id,mk:new Set(ms),enCok:+p.enCok>0?+p.enCok:Infinity,av});}
   if(PK.length)for(const e of ek){if(!M[e.m])continue;const w=inst(e.gun,e.vardiya);if(!w)continue;const av=new Float32Array(NS);addW(av,w,1);PK.push({id:'~ek',mk:new Set([e.m]),enCok:Infinity,av,ek:1});}
   for(const id in M){if(!PK.some(p=>p.mk.has(id)&&!p.ek))continue;
     M[id].kisiler=PK.map((p,i)=>p.mk.has(id)?i:-1).filter(i=>i>=0);const kav=new Uint8Array(NS);for(const i of M[id].kisiler)for(let k=0;k<NS;k++)if(PK[i].av[k]>0)kav[k]=1;M[id].kav=kav;}
   for(const c of st.eksik||[]){const w=inst(c.gun,c.vardiya);if(!w)continue;
     if(c.grup==='ayar')addW(capAyar,w,-c.n);else{addW(capTot,w,-c.n);if(capG[c.grup])addW(capG[c.grup],w,-c.n);}}
-  const genW=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard){const w=inst(d,sid);if(w)genW.push(w);}
+  const genW=[];for(let d=-1;d<HDAYS;d++)for(const sid of gun(d).vard){const w=inst(d,sid);if(w)genW.push(w);}
   const gen=merge(genW);
   const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
   const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));

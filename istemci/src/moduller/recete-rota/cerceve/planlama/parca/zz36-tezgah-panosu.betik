@@ -45,6 +45,9 @@ const TP = (function (dis) {
   /* S panonun görünümüdür: D, arızalar, kilitler ve gerçekleşen çalışmadakilerin aynısıdır; plan, motorun kod çözücüsünün sabit noktasıdır ki boş hamle sıfır etki göstersin */
   const S = { D: null, down: [], locks: {}, sira: [], ekMesai: [], olaylar: [], plan: null, e: null, canli: null, canliE: null, geri: [], ileri: [], gercek: {}, kaynak: null, dv: -1, durum: 'taslak' };
   Object.defineProperty(S, 'frz', { get: () => +dis.G().w.dondurma || 0 });
+  /* panonun "şimdi"si sayfanınkidir (girdi.betik simdiUygula): kaydedilen gerçek saat, yoksa başlangıç günü 07:00. 741 a: gece vardiyasında
+     07:00'den önce de olur; donuk bölge ve sürükleme alt sınırı ondan sayılır. */
+  Object.defineProperty(S, 'now', { get: () => { const n = dis.G().simdi; return n != null && isFinite(+n) && +n >= 0 ? +n : 7; } });
   const OLCEK = [[24, 'Gün'], [72, '3 gün'], [168, 'Hafta'], [720, 'Ay'], [8760, 'Yıl']];
   const U = { suz: null, zoom: innerWidth < 768 ? 24 : 72, secOp: null, secJob: null, kart: null, ara: '', surukle: null, onizleme: null, rayAcik: false };
   const yazar = () => dis.yetki() && !dis.calisan();
@@ -453,7 +456,7 @@ const TP = (function (dis) {
         <div class="tp-m ${darb ? 'darbogaz' : ''}" data-a="tezgah" data-m="${esc(R.m)}" title="${esc(R.ad)} · görünen sürede doluluk %${Math.round(oran * 100)}${darb ? ' · darboğaz' : ''}"><b>${esc(R.m[0] === '@' ? R.m.slice(1) : R.m)}${M ? `<span class="yuzde">${darb ? ic('fire') : ''}%${Math.round(oran * 100)}</span>` : ''}</b><small>${esc(R.ad)}</small>${M ? `<span class="yuk"><i style="width:${oran * 100}%"></i></span>` : ''}</div>
         <div class="tp-zaman" style="width:${W}px">${kap}${ar}${eski}${cub}${dnk[R.m] || ''}</div></div>`;
     }).join('');
-    const now = 7, frz = now + S.frz, sol = `calc(${etiketGen()}px + `;
+    const now = S.now, frz = now + S.frz, sol = `calc(${etiketGen()}px + `;
     return `<div class="tp-ic-alan" style="width:${W + etiketGen()}px">
       <div class="tp-olcek"><div class="tp-olcek-bos"><button class="tp-tus kucuk yalin" data-a="dondurma" title="İlk saatler donuk: bu bölgedeki işler taşınmaz">${ic('lock')} ${S.frz} sa</button></div><div class="tp-olcek-zaman" style="width:${W}px">${gunler.join('')}</div></div>
       ${sat}
@@ -465,7 +468,7 @@ const TP = (function (dis) {
   }
   function cizCubuk(r, k, b, P) {
     const w = Math.max(3, (r.C - r.S) * k), x = r.S * k;
-    const sabit = r.done || r.act || r.S < 7 + S.frz - 1e-6;
+    const sabit = r.done || r.act || r.S < S.now + S.frz - 1e-6;
     const sec = U.secOp === r.id, vur = U.secJob && U.secJob === r.job;
     const sol = (U.secJob && !vur && !(U.surukle && U.surukle.id === r.id)) || (U.suz && !suzUyar(r));
     const durum = b ? b.durum : 'iyi';
@@ -505,7 +508,7 @@ const TP = (function (dis) {
   /* plan ve gerceklesen: donuk bolgedeki is icin baslama ve sayim girisi (atolyeden gelecek verinin yerine); sapma 30 dk'yi gecerse uyari */
   function cizGercek(id, r, o) {
     const g = S.gercek[id]; if (r.fas || r.done) return '';
-    if (!g) { if (r.S > 7 + S.frz + 1e-6) return '';
+    if (!g) { if (r.S > S.now + S.frz + 1e-6) return '';
       return `<label>Atölyeden (deneme): gerçek başlama</label><div class="tp-cipler">${[[0, 'Planlı saatte'], [0.5, '+30 dk'], [1, '+1 sa'], [2, '+2 sa']].map(([v, a]) => `<button class="tp-cip" data-a="basladi" data-id="${esc(id)}" data-v="${v}">${a}</button>`).join('')}</div>`; }
     const sap = g.S - (g.plan ?? g.S);
     return `<div class="satir"><span>Gerçek başlama</span><b class="${sap > 0.5 ? 'rozet risk' : ''}">${tz(g.S)}${Math.abs(sap) >= 0.25 ? ` (${sap > 0 ? '+' : '−'}${Math.round(Math.abs(sap) * 60)} dk)` : ''}</b></div>
@@ -519,7 +522,7 @@ const TP = (function (dis) {
       const r = S.plan.ops[id]; if (!r) return '';
       const o = S.plan.cx.byId[id], b = sipBilgi(r.job);
       const ok = S.locks[id] && S.locks[id].kim ? S.locks[id] : null;
-      const sabit = r.done || r.act || r.S < 7 + S.frz - 1e-6 || !!ok;
+      const sabit = r.done || r.act || r.S < S.now + S.frz - 1e-6 || !!ok;
       const alt = U.alt && U.alt.id === id ? U.alt.L : [];
       const neden = r.why && NEDEN[r.why.t] ? NEDEN[r.why.t] + (r.why.t === 'tezgah' && r.why.r ? ` (${r.why.r} bitişini bekliyor)` : '') : '—';
       return `<h3>${ic('cube')} ${esc(r.job)} · ${esc(o.k)}<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
@@ -668,7 +671,7 @@ const TP = (function (dis) {
     const D = S.D, t = D.tezgahlar.find(x => x.id === m); if (!t || !(t.vardiyalar || []).length) return [];
     const L = [];
     for (let g = g0; g < g0 + 5 && L.length < n; g++) for (const v of D.vardiyalar)
-      if (L.length < n && !t.vardiyalar.includes(v.id) && g * 24 + hmx(v.bas) >= 7 + S.frz && !em.some(e => e.m === m && e.gun === g && e.vardiya === v.id)) L.push({ m, gun: g, vardiya: v.id });
+      if (L.length < n && !t.vardiyalar.includes(v.id) && g * 24 + hmx(v.bas) >= S.now + S.frz && !em.some(e => e.m === m && e.gun === g && e.vardiya === v.id)) L.push({ m, gun: g, vardiya: v.id });
     return L;
   }
   function yukSirasi(p, grup) {
@@ -992,7 +995,7 @@ Bilgilerinize sunarız.` };
   function atolyeKapat() { U.atolye = false; clearInterval(U.atolyeZ); const a = $('#tp-atolye'); if (a) a.remove(); }
   function cizAtolye() {
     let el = $('#tp-atolye'); if (el) el.remove(); if (!U.atolye) return;
-    const now = 7, cx = S.plan.cx, G = dis.G();
+    const now = S.now, cx = S.plan.cx, G = dis.G();
     const govde = !S.canli ? `<p class="tp-not" style="padding:var(--b-4)">${ic('alert')} Henüz canlı plan yok. Atölye ekranı yalnız onaylanmış planı gösterir; Onay ve canlı sekmesinden canlıya alın.</p>` : (() => {
       const ops = Object.values(S.canli.ops), e = S.canliE, dn = S.canli.down || [];
       const kart = S.D.tezgahlar.map(t => {
@@ -1042,7 +1045,7 @@ Bilgilerinize sunarız.` };
   }
   function ekipBasla() {
     ekipDur(); const L = siparisler().filter(x => x.durum !== 'iyi' && x.id !== U.secJob), sec = [];
-    for (const x of L) { if (sec.length >= 2) break; for (const r of x.ops) { const o = S.plan.cx.byId[r.id]; if (r.fas || r.done || r.act || r.S < 7 + S.frz + 2 || S.locks[r.id]) continue;
+    for (const x of L) { if (sec.length >= 2) break; for (const r of x.ops) { const o = S.plan.cx.byId[r.id]; if (r.fas || r.done || r.act || r.S < S.now + S.frz + 2 || S.locks[r.id]) continue;
       const al = (o.c || []).filter(c => !c.fas && c.m !== r.m); if (al.length) { sec.push({ j: x.id, op: r.id, m2: al[0].m, S2: r.S, m3: (al[1] || al[0]).m }); break; } } }
     if (sec.length < 2) { bildir('Taklit için yeterli iş bulunamadı'); return; }
     if (!ekipKur()) return;
@@ -1114,7 +1117,7 @@ Bilgilerinize sunarız.` };
     }
     for (const r of Object.values(S.plan.ops)) {
       if (!isFinite(r.C) || r.done) continue;
-      const o = S.plan.cx.byId[r.id] || {}, sabit = r.act || r.S < 7 + S.frz - 1e-6 || r.fas || (S.locks[r.id] && S.locks[r.id].kim);
+      const o = S.plan.cx.byId[r.id] || {}, sabit = r.act || r.S < S.now + S.frz - 1e-6 || r.fas || (S.locks[r.id] && S.locks[r.id].kim);
       const s = { alias: { 0: [r.id.replace(/^\D+-?/, '')] }, w: 0.5, alt: `${o.ad || ''} · ${r.m[0] === '@' ? 'fason' : r.m} · ${tz(r.S)}` };
       ekle([r.id, 'aç'], { ...s, ik: 'box', run: () => opGit(r.id) });
       if (!yaz) continue;
@@ -1123,7 +1126,7 @@ Bilgilerinize sunarız.` };
       if (!sabit && !S.locks[r.id]) ekle([r.id, 'kilitle'], { ...s, ik: 'lock', on: () => { const lk = { ...S.locks, [r.id]: { m: r.m, S: r.S } }; return { z: coz([[r.id, r.m, r.S]], { locks: lk }), ek: { locks: lk } }; } });
       if (S.locks[r.id] && !S.locks[r.id].kim) ekle([r.id, 'kilidi', 'aç'], { ...s, ik: 'lock', on: () => { const lk = { ...S.locks }; delete lk[r.id]; return { z: coz([], { locks: lk }), ek: { locks: lk } }; } });
       if (dn) continue;
-      if (!r.fas && r.S <= 7 + S.frz + 1e-6 && !S.gercek[r.id]) ekle([r.id, 'başladı', { n: 0 }, 'dk', 'geç'], { ...s, ik: 'play', on: v => { const gs2 = r.S + (v[2] || 0) / 60, g = { ...S.gercek, [r.id]: { m: r.m, S: gs2, plan: r.S } }; return { z: coz([], { gercek: g }), ek: { gercek: g } }; } });
+      if (!r.fas && r.S <= S.now + S.frz + 1e-6 && !S.gercek[r.id]) ekle([r.id, 'başladı', { n: 0 }, 'dk', 'geç'], { ...s, ik: 'play', on: v => { const gs2 = r.S + (v[2] || 0) / 60, g = { ...S.gercek, [r.id]: { m: r.m, S: gs2, plan: r.S } }; return { z: coz([], { gercek: g }), ek: { gercek: g } }; } });
       if (S.gercek[r.id]) ekle([r.id, 'sayım', { n: 0 }, 'adet'], { ...s, ik: 'check', on: v => { const n = Math.max(0, Math.min(o.adet, Math.round(v[2] || 0))), c = (o.c || []).find(q => q.m === r.m), g0 = S.gercek[r.id];
         const g = { ...S.gercek, [r.id]: { ...g0, n, kalan: c && c.cyc ? (o.adet - n) * c.cyc : null, sayim: Math.max(g0.S, 7) } }; return { z: coz([], { gercek: g }), ek: { gercek: g } }; } });
     }
@@ -1286,7 +1289,7 @@ Bilgilerinize sunarız.` };
   /* ---------- eylemler ---------- */
   function opSec(id, ank) {
     U.secOp = id; const r = S.plan.ops[id]; U.secJob = r.job; U.alt = null;
-    const o = S.plan.cx.byId[id]; const sabit = r.done || r.act || r.S < 7 + S.frz - 1e-6 || !!(S.locks[id] && S.locks[id].kim);
+    const o = S.plan.cx.byId[id]; const sabit = r.done || r.act || r.S < S.now + S.frz - 1e-6 || !!(S.locks[id] && S.locks[id].kim);
     if (!sabit && !r.fas) {
       const L = []; for (const c of o.c) { if (c.fas || c.m === r.m) continue;
         const lk = { ...S.locks }; delete lk[id]; const z = coz([[id, c.m, r.S]], { locks: lk });
@@ -1317,7 +1320,7 @@ Bilgilerinize sunarız.` };
   }
   /* siparisi one almanin iki yolu: ayni tezgahlarda sirada one, ya da en hizli tezgahlarda one. Sonuc hesaplanmis olarak gosterilir. */
   function oneAlMods(jid, hizli, sira, p = S.plan) {
-    const cx = p.cx, frz = 7 + S.frz, tas = +cx.A.tasimaSaat || 0;
+    const cx = p.cx, frz = S.now + S.frz, tas = +cx.A.tasimaSaat || 0;
     return cx.jobs[jid].ops.map(o => {
       const r = p.ops[o.id]; if (!r || r.done || r.act || r.fas || r.S < frz || (S.locks[o.id] && S.locks[o.id].kim)) return null;
       let m = r.m; if (hizli) { const ms = o.c.filter(c => !c.fas && !c.opt); if (ms.length) m = ms.reduce((a, b) => (b.run + b.su < a.run + a.su ? b : a)).m; }
@@ -1345,7 +1348,7 @@ Bilgilerinize sunarız.` };
     }
     if (L.length === 2 && Math.abs(L[0].x.dW - L[1].x.dW) < 0.1 && Math.abs(L[0].x.L.length - L[1].x.L.length) < 1) L.pop();
     /* tek adimi baska tezgaha vermek: siparisin bitisini en cok kisaltan ilk iki tasima */
-    const cx = S.plan.cx, frz = 7 + S.frz, tek = [];
+    const cx = S.plan.cx, frz = S.now + S.frz, tek = [];
     for (const o of cx.jobs[jid].ops) { const r = S.plan.ops[o.id]; if (!r || r.done || r.act || r.fas || r.S < frz || !krit.has(o.id)) continue;
       for (const c of o.c) { if (c.fas || c.m === r.m) continue; const lk = { ...S.locks }; delete lk[o.id];
         const z = coz([[o.id, c.m, r.S - 1e-3]], { locks: lk }); yield; const x = etki(S.e, z.e); const h = x.L.find(q => q.j === jid);
@@ -1376,7 +1379,7 @@ Bilgilerinize sunarız.` };
     D.siparisler.push({ id, ad: u.ad, urun: v.urun, adet: Math.max(1, +v.adet || 1), termin: tIso(7 + v.gun * 24 + 10), oncelik: 1, gelir: null, cezaGun: null, serbest: null, malzeme: [] });
     /* iki yerlesim hesaplanir: herkesin onune gecer (acil) ya da siradaki bos yerlere girer; secim planlamacinindir */
     /* yeni siparisin islemleri kod cozucunun sirasina anahtarla girer: acilde donuk bolgenin hemen ardina, digerinde termine gore geriden */
-    const cxY = compile(stKur({ D })), ops = cxY.jobs[id].ops, frz = 7 + S.frz;
+    const cxY = compile(stKur({ D })), ops = cxY.jobs[id].ops, frz = S.now + S.frz;
     const sure1 = o => { const c = o.c.filter(q => !q.fas); return c.length ? Math.min(...c.map(q => q.su + q.run)) : 48; };
     const mOf = o => { const c = o.c.filter(q => !q.fas); return c.length ? c.reduce((x, y) => (y.su + y.run < x.su + x.run ? y : x)).m : o.c[0].m; };
     const toplam = ops.reduce((t, o) => t + sure1(o), 0), due = cxY.jobs[id].due;
@@ -1400,7 +1403,7 @@ Bilgilerinize sunarız.` };
     const cx = S.plan.cx, mods = [], tz0 = {};
     for (const o of cx.jobs[j.id].ops) { const r = S.plan.ops[o.id]; if (!r) continue;
       const al = r.fas ? [] : o.c.filter(c => !c.fas && c.m !== r.m).sort((x, y) => (x.run + x.su) - (y.run + y.su)).map(c => c.m);
-      P.forEach((q, i) => { const m = i === 0 || !al.length ? r.m : al[(i - 1) % al.length]; mods.push([q.id + '.' + o.k, m, Math.max(7 + S.frz, r.S) + i * 1e-3]); if (!tz0[q.id]) tz0[q.id] = new Set(); tz0[q.id].add(r.fas ? 'fason' : m); }); }
+      P.forEach((q, i) => { const m = i === 0 || !al.length ? r.m : al[(i - 1) % al.length]; mods.push([q.id + '.' + o.k, m, Math.max(S.now + S.frz, r.S) + i * 1e-3]); if (!tz0[q.id]) tz0[q.id] = new Set(); tz0[q.id].add(r.fas ? 'fason' : m); }); }
     const z = coz(mods, { D });
     const b0 = sipBilgi(j.id), B = P.map(q => ({ ...q, b: sipBilgi(q.id, z.p, z.e), m: [...tz0[q.id]].join(', ') }));
     U.onizleme = { tur: 'bol', j: j.id, P: B, z, D, b0, x: etki(S.e, z.e) }; U.secJob = B[0].id;
@@ -1426,7 +1429,7 @@ Bilgilerinize sunarız.` };
   }
   function surukleBasla(ev, id) {
     const r = S.plan.ops[id]; if (!r || S.durum === 'onayda') return;
-    const sabit = r.done || r.act || r.S < 7 + S.frz - 1e-6 || r.fas || !!(S.locks[id] && S.locks[id].kim);
+    const sabit = r.done || r.act || r.S < S.now + S.frz - 1e-6 || r.fas || !!(S.locks[id] && S.locks[id].kim);
     if (S.locks[id] && S.locks[id].kim) bildir(`${S.locks[id].kim} (taklit) ${S.locks[id].tur === 'onay' ? 'onay bekliyor' : 'onaylandı'}: bu iş kilitli`);
     else { const T = U.ekip ? U.ekip.L.filter(k => k.faz === 'calisiyor' && k.op === id) : []; if (T.length) bildir(`${T.map(k => k.bh).join(', ')} (taklit) bu işte çalışıyor; değiştirirsen çakışma olabilir`); }
     const k0 = panoKonum(ev);
@@ -1436,13 +1439,13 @@ Bilgilerinize sunarız.` };
     const s = U.surukle; if (!s) return;
     if (!s.basladi) { if (Math.hypot(ev.clientX - s.x0, ev.clientY - s.y0) < 6) return; if (s.sabit) { bildir('Bu iş donuk bölgede, başlamış ya da fason; taşınmaz.'); U.surukle = null; return; } s.basladi = true; kartKapat(); U.secOp = s.id; U.secJob = S.plan.ops[s.id].job; }
     ev.preventDefault();
-    const k = panoKonum(ev); const m = k.m || s.m; let t = Math.max(7 + S.frz, k.t - s.ofs);
+    const k = panoKonum(ev); const m = k.m || s.m; let t = Math.max(S.now + S.frz, k.t - s.ofs);
     /* miknatis: hedef satirdaki onceki isin bitisine ve vardiya basina 12 px icinde yapisir; Alt basiliyken kapali */
     s.hiza = null;
     if (!ev.altKey) { const esik = 12 / pph(), M = S.plan.cx.M[m]; const aday = [];
       for (const r of Object.values(S.plan.ops)) if (r.m === m && r.id !== s.id && isFinite(r.C)) aday.push([r.C, 'bitiş ' + r.job]);
       if (M) for (const [a] of M.rw) { if (a > t + 48) break; aday.push([a, 'vardiya başı']); }
-      let en = null; for (const [x, ad] of aday) { const d = Math.abs(x - t); if (d <= esik && x >= 7 + S.frz - 1e-9 && (!en || d < en.d)) en = { x, ad, d }; }
+      let en = null; for (const [x, ad] of aday) { const d = Math.abs(x - t); if (d <= esik && x >= S.now + S.frz - 1e-9 && (!en || d < en.d)) en = { x, ad, d }; }
       if (en) { t = en.x; s.hiza = en; } }
     s.ev = { x: ev.clientX, y: ev.clientY }; kenarKaydir();
     if (s.son && s.son.m === m && Math.abs(s.son.t - t) < 1e-6) { bilgiCiz(); return; }

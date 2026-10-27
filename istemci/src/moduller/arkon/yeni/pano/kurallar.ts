@@ -76,7 +76,7 @@ export const oeeOrtami = (a: TakvimAyarlari & Pick<ArkonAyarlari, 'durusNedenler
 export const anlikVardiyasi = (a: Pick<ArkonAyarlari, 'vardiyalar' | 'tatiller'>, t: number): AnlikVardiya => anlikVardiya(t, a.vardiyalar, a.tatiller);
 
 const ariza = (m: Maint): m is Extract<Maint, { type: 'ariza' }> => m.type === 'ariza';
-const durusPlanli = (k: PanoKarosu): boolean => k.look.etiket === 'Planlı duruş';
+const durusPlanli = (k: Pick<PanoKarosu, 'look'>): boolean => k.look.etiket === 'Planlı duruş';
 
 // BoardApp'in karo ve özet hesabı: iş merkezi süzgeci uygulanmış istasyonlar, vardiya OEE'si, çağrı ve arıza bayrakları.
 export function panoOzeti(d: PanoVerisi, simdi: number, a: TakvimAyarlari & Pick<ArkonAyarlari, 'durusNedenleri'>, wc: string): PanoOzeti {
@@ -134,6 +134,50 @@ export function panoOzeti(d: PanoVerisi, simdi: number, a: TakvimAyarlari & Pick
     yaklasanDuruslar: yaklasan.slice(0, 8),
   };
 }
+
+// ---- Pano grafikleri ---------------------------------------------------------------------------------------------------
+// İstasyon durumu halkası her istasyonu tek sınıfa koyar; toplam istasyon sayısını verir. Özet kartlarındaki sayılar ayrı
+// kalır (planlı duruş penceresindeki çalışan istasyon orada planlı da sayılır).
+export type KaroSinifi = 'calisiyor' | 'plansiz' | 'planli' | 'diger';
+export function karoSinifi(k: Pick<PanoKarosu, 'state' | 'dn' | 'look'>): KaroSinifi {
+  if (k.state === 'running') return 'calisiyor';
+  if (k.state === 'stopped' && !durusPlanli(k)) return 'plansiz';
+  if (k.dn || durusPlanli(k)) return 'planli';
+  return 'diger';
+}
+export function karoSiniflari(karolar: readonly Pick<PanoKarosu, 'state' | 'dn' | 'look'>[]): Record<KaroSinifi, number> {
+  const s: Record<KaroSinifi, number> = { calisiyor: 0, plansiz: 0, planli: 0, diger: 0 };
+  for (const k of karolar) s[karoSinifi(k)] += 1;
+  return s;
+}
+
+// Halka: çevresi 100 olan çemberde (r = 100 / 2π) her dilim yüzdesi kadar yay; dilimler arasında ince boşluk kalır.
+// Toplam sıfırsa yay çizilmez (boş halka), sıfır olan dilim atlanır. Ölçek verilirse (OEE için 1) dilimler ona göre çizilir,
+// kalan yer boş kalır.
+export const HALKA_YARICAP = 100 / (2 * Math.PI);
+const DILIM_ARASI = 0.6;
+export interface HalkaYayi { renk: Renk; dizi: string; kayma: string }
+export function halkaYaylari(dilimler: readonly { deger: number; renk: Renk }[], olcek?: number): HalkaYayi[] {
+  const toplam = olcek ?? dilimler.reduce((t, d) => t + Math.max(0, d.deger), 0);
+  if (!(toplam > 0)) return [];
+  const tekDilim = dilimler.filter((d) => d.deger > 0).length === 1;
+  let kayma = 25;
+  const yaylar: HalkaYayi[] = [];
+  for (const d of dilimler) {
+    if (!(d.deger > 0)) continue;
+    const pay = Math.min(100, (d.deger / toplam) * 100);
+    const yay = tekDilim ? pay : Math.max(0, pay - DILIM_ARASI);
+    yaylar.push({ renk: d.renk, dizi: `${yay.toFixed(2)} ${(100 - yay).toFixed(2)}`, kayma: kayma.toFixed(2) });
+    kayma -= pay;
+  }
+  return yaylar;
+}
+
+// Grafik kartlarının kısa listeleri: OEE'si en düşük ve vardiyada en çok iyi parça çıkaran istasyonlar (verisi olanlar).
+export const enDusukOee = (karolar: readonly PanoKarosu[], adet = 3): PanoKarosu[] =>
+  karolar.filter((k) => k.c.oee != null).sort((a, b) => (a.c.oee ?? 0) - (b.c.oee ?? 0)).slice(0, adet);
+export const enCokUretim = (karolar: readonly PanoKarosu[], adet = 3): PanoKarosu[] =>
+  karolar.filter((k) => k.c.good > 0).sort((a, b) => b.c.good - a.c.good).slice(0, adet);
 
 // Kapsam metni: Pano yaklaşan listesi ("bütün tesis", iş merkezi adı ya da istasyon kodu).
 export const kapsamKisa = (d: PlannedDown, a: Pick<ArkonAyarlari, 'tesis'>): string =>
