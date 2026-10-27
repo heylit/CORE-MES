@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
-import { BUYUK, CATISMA, CalismaYazici, IZ_SINIRI, OTURUM, PLAN_YETKI, RET, type YaziciAyari } from './kayit.ts';
+import { BUYUK, CATISMA, CalismaYazici, ESKI_DEGISIKLIK, IZ_SINIRI, OTURUM, PLAN_YETKI, RET, bekleyenListesi, bekleyenler, type YaziciAyari } from './kayit.ts';
 import type { PlanlamaCalismasi } from './tipler.ts';
 import { ONEK, PLANLAMA_ANAHTARI } from './veri.ts';
 
@@ -240,5 +240,81 @@ describe('CalismaYazici', () => {
     y.degistir('a', (t) => { t.pref.a = 1; });
     expect(await y.kaydet()).toBeNull();
     expect(uyarilar).toEqual([RET]);
+  });
+});
+
+describe('bekleyen değişiklikler (755 a)', () => {
+  const veri = { siparisler: [{ id: 'S1', urun: 'U1', adet: 4, termin: null }, { id: 'S2', urun: 'U2', adet: 2, termin: null }], tezgahlar: [{ id: 'T1' }, { id: 'T2' }], urunler: [{ id: 'U1' }, { id: 'U2' }] };
+  const plan = { dataVer: 3, ops: { 'S1.10': { id: 'S1.10', job: 'S1', m: 'T1', S: 10 }, 'S2.10': { id: 'S2.10', job: 'S2', m: 'T2', S: 12 } } };
+  const kurP = (ek: Record<string, unknown> = {}) => kur({ calisma: calisma({ D: veri, plan, ...ek }) });
+
+  it('plan varken değişiklik bekleyene ne, kim, zaman ve etkilediği siparişle girer; planKoru ve plansız değişiklik girmez', () => {
+    const { y } = kurP();
+    y.degistir('Adet değişti', (t) => { t.D.siparisler[0]!.adet = 6; }, { ayrinti: 'S1 4 -> 6' });
+    y.degistir('Rota değişti', (t) => { (t.D.urunler[1] as Record<string, unknown>).rota = []; });
+    y.degistir('Arıza', (t) => { t.down.push({ id: 'a1', m: 'T1', from: 20, to: 30 }); });
+    y.degistir('Kilit', (t) => { t.locks['S2.10'] = { m: 'T2', S: 12 }; });
+    y.degistir('Ağırlık', (t) => { t.w.famK = 0.5; });
+    y.degistir('Tercih', (t) => { t.pref.a = 1; }, { planKoru: true });
+    expect(bekleyenler(y.calisma).map((e) => [e.ne, e.kim, e.t, e.isler])).toEqual([
+      ['Adet değişti', 'Deneme Planlamaci', 1000, ['S1']], ['Rota değişti', 'Deneme Planlamaci', 1000, ['S2']], ['Arıza', 'Deneme Planlamaci', 1000, ['S1']],
+      ['Kilit', 'Deneme Planlamaci', 1000, ['S2']], ['Ağırlık', 'Deneme Planlamaci', 1000, ['*']],
+    ]);
+    expect(bekleyenler(y.calisma)[0]?.ayrinti).toBe('S1 4 -> 6');
+    const p = kur({ calisma: calisma({ D: veri, plan: null }) }).y;
+    p.degistir('Adet', (t) => { t.D.siparisler[0]!.adet = 6; });
+    expect(p.calisma.bekleyen).toBeUndefined();
+  });
+
+  it('geri dönüş yol bazlı farktır: verinin tam kopyası tutulmaz', () => {
+    const { y } = kurP();
+    y.degistir('Adet değişti', (t) => { t.D.siparisler[0]!.adet = 6; });
+    expect(bekleyenler(y.calisma)[0]?.geri).toEqual([{ yol: ['D', 'siparisler'], id: 'S1', once: { id: 'S1', urun: 'U1', adet: 4, termin: null } }]);
+  });
+
+  it('ret geri dönüş farkını uygular; ortadaki satır sonraki aynı veriye dokunuyorsa reddedilmez; hepsi reddedilince plan güncel', () => {
+    const { y, uyarilar } = kurP();
+    y.degistir('Adet', (t) => { t.D.siparisler[0]!.adet = 6; });
+    y.degistir('Adet yine', (t) => { t.D.siparisler[0]!.adet = 8; });
+    y.degistir('Yeni sipariş', (t) => { t.D.siparisler.push({ id: 'S3', urun: 'U1', adet: 1, termin: null }); });
+    const [a, b, c] = bekleyenler(y.calisma);
+    expect(y.bekleyeniReddet([a!.id])).toMatch(/sonraki "Adet yine" aynı veriye dokunuyor/);
+    expect(uyarilar.at(-1)).toMatch(/Önce onu reddedin/);
+    expect(y.bekleyeniReddet([c!.id])).toBeNull();
+    expect(y.calisma.D.siparisler.map((x) => x.id)).toEqual(['S1', 'S2']);
+    expect(y.calisma.plan?.dataVer).not.toBe(y.calisma.dataVer);
+    expect(y.bekleyeniReddet([a!.id, b!.id])).toBeNull();
+    expect(y.calisma.D.siparisler[0]?.adet).toBe(4);
+    expect(y.calisma.bekleyen).toBeUndefined();
+    expect(y.calisma.plan?.dataVer).toBe(y.calisma.dataVer);
+  });
+
+  it('kilit ve ağırlık reddi: eklenen kilit silinir, ağırlık eski değerine döner', () => {
+    const { y } = kurP();
+    y.degistir('Kilit', (t) => { t.locks['S2.10'] = { m: 'T2', S: 12 }; });
+    y.degistir('Ağırlık', (t) => { t.w.famK = 0.5; });
+    const famK = calisma({ D: veri, plan }).w.famK;
+    expect(y.bekleyeniReddet(bekleyenler(y.calisma).map((e) => e.id))).toBeNull();
+    expect(y.calisma.locks).toEqual({});
+    expect(y.calisma.w.famK).toBe(famK);
+  });
+
+  it('geri al bekleyeni de geri alır', () => {
+    const { y } = kurP();
+    y.degistir('Adet', (t) => { t.D.siparisler[0]!.adet = 6; });
+    y.degistir('Ağırlık', (t) => { t.w.famK = 0.5; });
+    y.geriAl();
+    expect(bekleyenler(y.calisma).map((e) => e.ne)).toEqual(['Adet']);
+  });
+
+  it('787 a: plan bu özellikten önce bayatladıysa yalnız uygulanabilen satır görünür ve reddedilemez; yeni değişiklik onun ardına girer', () => {
+    const { y } = kurP({ dataVer: 5 });
+    expect(bekleyenListesi(y.calisma).map((e) => [e.id, e.geri, e.isler])).toEqual([[ESKI_DEGISIKLIK, null, ['*']]]);
+    y.degistir('Adet', (t) => { t.D.siparisler[0]!.adet = 6; });
+    expect(bekleyenler(y.calisma).map((e) => e.id)).toEqual([ESKI_DEGISIKLIK, expect.any(String)]);
+    expect(y.bekleyeniReddet([ESKI_DEGISIKLIK])).toMatch(/yalnız uygulanabilir/);
+    expect(y.bekleyeniReddet([bekleyenler(y.calisma)[1]!.id])).toBeNull();
+    expect(bekleyenler(y.calisma).map((e) => e.id)).toEqual([ESKI_DEGISIKLIK]);
+    expect(y.calisma.plan?.dataVer).not.toBe(y.calisma.dataVer);
   });
 });

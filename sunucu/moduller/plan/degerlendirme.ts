@@ -165,6 +165,7 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
       return s.sonuc === null ? s : { ...s, sonuc: { ...s.sonuc, tl: null } };
     case 'malzeme-terminleri':
     case 'plan-kur':
+    case 'plan-uygula':
       return s;
     case 'siparis-kari':
       throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');

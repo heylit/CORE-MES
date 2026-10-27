@@ -127,19 +127,19 @@ describe('Sade kabuk', () => {
     expect(document.activeElement).toBe(screen.getByLabelText(/Oran/));
   });
 
-  it('plan eskiyse kayıt kartı eski notu yazar; yetkiliye Planı iyileştir pasif görünür (357 b), yetkisize görünmez', () => {
+  it('plan eskiyse kayıt kartı eski notu yazar; yetkiliye Plan iyileştirme ara pasif görünür (357 b), yetkisize görünmez', () => {
     const t = { ...sayfa([{ ...form(), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }) }]), planEski: true };
     const kaydet = (): void => { fireEvent.click(dugme('Gir')); fireEvent.click(dugme('İleri')); fireEvent.click(dugme('İleri')); fireEvent.click(dugme('Kaydet')); };
     const { unmount } = render(<SadeSayfa tanim={{ ...t, iyilestirYetkisi: true }} />);
     kaydet();
     expect(screen.getByRole('status').textContent).toContain('Plan bu değişikliği henüz içermiyor.');
-    expect((dugme('Planı iyileştir') as HTMLButtonElement).disabled).toBe(true);
+    expect((dugme('Plan iyileştirme ara') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Plan motoru bu ekrana bağlanınca açılır.')).toBeTruthy();
     unmount();
     render(<SadeSayfa tanim={t} />);
     kaydet();
     expect(screen.getByRole('status').textContent).toContain('Plan bu değişikliği henüz içermiyor.');
-    expect(screen.queryByRole('button', { name: 'Planı iyileştir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Plan iyileştirme ara' })).toBeNull();
   });
 
   it('kayıtta ek kontrol iletisi kaydı durdurur', () => {

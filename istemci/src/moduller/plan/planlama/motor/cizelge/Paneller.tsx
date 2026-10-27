@@ -124,11 +124,11 @@ type Gorev = [SimgeAdi, string, string, (() => void) | null, string];
 function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }: SagOzellikleri) {
   const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !s.havuz).length; const g = gec[0];
   const durum: [SimgeAdi, string, string, string][] = [];
-  if (!guncel) durum.push(['rotate', 'uyari', 'Veri plandan sonra değişti.', 'Gösterilen saatler eski. Planı iyileştir ile yenileyin.']);
+  if (!guncel) durum.push(['rotate', 'uyari', 'Veri plandan sonra değişti.', 'Gösterilen saatler eski. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.']);
   if (!g) durum.push(['check', 'tamam', `${top} siparişin hepsi zamanında bitiyor.`, '']);
   else durum.push(['clock', 'hata', `${top} siparişten ${gec.length} tanesi geç bitiyor.`, `En çok geciken ${g.s.id}: ${g.T == null ? 'planlanamadı' : `${saatYazi(g.T)} geç`} (termin ${terminYaz(c, g.s.termin)}).`]);
   const gorevler: Gorev[] = [];
-  if (yaz) gorevler.push(['play', 'Planı iyileştir', 'Motor gecikmeyi azaltmaya çalışır; sonucu görüp siz kabul edersiniz.', null, MOTOR_NOTU]);
+  if (yaz) gorevler.push(['play', 'Plan iyileştirme ara', 'Motor gecikmeyi azaltmaya çalışır; sonucu görüp siz kabul edersiniz.', null, MOTOR_NOTU]);
   if (g) gorevler.push(['search', `${g.s.id} siparişine bak`, 'Tahtada bu siparişin işleri seçili gelir; tezgâh ya da sıra değiştirebilirsiniz.', () => sipSec(g.s.id), '']);
   if (yaz) {
     gorevler.push(['plus', 'Acil sipariş ekle', 'Yeni siparişi plana sokar ve neyin kaydığını gösterir.', null, MOTOR_NOTU]);
@@ -212,7 +212,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
         {adim(4, 'play', 'Motor', `gecikme ${saatYazi(p.ozet.wT)} · ${p.ozet.late}/${p.ozet.n} geciken`, p.ozet.late ? 'uyari' : 'tamam', <>
           <p className="tc-pym-kucuk-yazi">Motor planı kuran tek parçadır. Önce kural tabanlı ilk planı dizer, sonra yerel aramayla (LNS) bir bölgeyi söküp yeniden kurar, iyiyse alır. Amaç sırası: ağırlıklı gecikme (öncelik 1 dört, 2 iki kat), tampon ihlali, önceki plana göre değişiklik, ayar süresi, bilinen maliyet. Önceki eşitse sonrakine bakılır.</p>
           <p className="tc-pym-kucuk-yazi"><b>{DENGE[dg].ad}:</b> {DENGE[dg].m}</p>
-          {yaz && <div className="tc-pym-dugmeler"><Dg ad="Planı iyileştir" simge="play" birincil /><Dg ad="Sıfırdan kur" simge="rotate" /></div>}
+          {yaz && <div className="tc-pym-dugmeler"><Dg ad="Plan iyileştirme ara" simge="play" birincil /><Dg ad="Sıfırdan kur" simge="rotate" /></div>}
         </>, true)}
         {adim(5, 'gauge', 'HiGHS · ölçüm', 'alt sınır hesaplanmadı', '', <>
           <p className="tc-pym-kucuk-yazi">HiGHS planı kurmaz, ölçer. Atölyeyi saat dilimli tamsayılı modele çevirip gevşetir; bulduğu değer alt sınırdır: hiçbir plan bundan iyi olamaz. Ayrıca hangi grupta hangi vardiyaya ek mesainin gecikmeyi en çok azalttığını bulur; her aday motorda gerçek plana çevrilip ölçülür.</p>
@@ -280,7 +280,7 @@ function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapa
         <div className="tc-pym-bolum">
           <h3>Ne yapabilirsiniz</h3>
           <div className="tc-pym-hizli">
-            {([['play', 'Planı iyileştir', 'Motor ve HiGHS birlikte çözer; sonucu önizlersiniz.', null], ['alert', 'Olay ekle', 'Arıza, acil sipariş, malzeme ya da personel; etkisi önce gösterilir.', null],
+            {([['play', 'Plan iyileştirme ara', 'Motor ve HiGHS birlikte çözer; sonucu önizlersiniz.', null], ['alert', 'Olay ekle', 'Arıza, acil sipariş, malzeme ya da personel; etkisi önce gösterilir.', null],
               ['sort', 'Sırayı elle değiştir', 'Kuyrukta kartı sürükleyin; motor bedelini ölçer.', () => mercekSec('kuyruk')]] as [SimgeAdi, string, string, (() => void) | null][]).map(([sm, b, m, yap]) => (
               <button key={b} type="button" className="tc-pym-hizli-d" aria-disabled={yap ? undefined : 'true'} title={yap ? undefined : `${b}: ${MOTOR_NOTU}`} onClick={yap ?? undefined}>
                 <Simge ad={sm} boyut="k" /><span><b>{b}</b><small>{m}</small></span>

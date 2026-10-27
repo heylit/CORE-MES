@@ -64,10 +64,10 @@ function FormKarti({ f, ac }: { f: SihirbazTanimi; ac: () => void }) {
   );
 }
 
-export const PLAN_ESKI_NOTU = 'Plan bu değişikliği henüz içermiyor. Planı iyileştir deyince yeni plan kurulur; Planlama stüdyosunda inceleyip onaya gönderirsiniz.';
+export const PLAN_ESKI_NOTU = 'Plan bu değişikliği henüz içermiyor. Değişiklik Plan atölyesinde bekler; orada uygulayıp onaya gönderirsiniz ya da reddedersiniz.';
 export const MOTOR_KAPALI_NOTU = 'Plan motoru bu ekrana bağlanınca açılır.';
 
-// Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır. Plan eskiyse eski not ve yetkiliye "Planı iyileştir":
+// Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır. Plan eskiyse eski not ve yetkiliye "Plan iyileştirme ara":
 // motor isteyen düğme yerinde görünür ama pasiftir (357 b).
 export function SonKart({ metin, kapat, planEski = false, iyilestirYetkisi = false }: {
   metin: string; kapat: () => void; planEski?: boolean; iyilestirYetkisi?: boolean;
@@ -78,7 +78,7 @@ export function SonKart({ metin, kapat, planEski = false, iyilestirYetkisi = fal
       <span className="tc-sade-is-sm"><Simge ad="check" boyut="k" /></span>
       <span className="tc-sade-is-m"><b>{metin}</b><small>{planEski ? PLAN_ESKI_NOTU : 'Kaydedildi.'}</small>{dugme && <small>{MOTOR_KAPALI_NOTU}</small>}</span>
       <span className="tc-sade-son-dugmeler">
-        {dugme && <Dugme tur="birincil" simge="play" disabled title={MOTOR_KAPALI_NOTU}>Planı iyileştir</Dugme>}
+        {dugme && <Dugme tur="birincil" simge="play" disabled title={MOTOR_KAPALI_NOTU}>Plan iyileştirme ara</Dugme>}
         <Dugme simge="x" onClick={kapat} aria-label="Kapat" />
       </span>
     </div>

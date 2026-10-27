@@ -559,10 +559,12 @@ export function ekMesaiFarki(a: PlanCevabi, b: PlanCevabi | null): ['clock' | 'm
   ];
 }
 
-// Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
-export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean): KontrolMaddesi[] {
+// Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); bekleyen değişiklik uygulanmalı ya da reddedilmeli (755 a).
+// Yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
+export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0): KontrolMaddesi[] {
   const K: KontrolMaddesi[] = [
-    guncel ? ['ok', 'Plan güncel veriyle çözülmüş'] : ['red', 'Veri plandan sonra değişti; önce planı yeniden çözün'],
+    guncel ? ['ok', 'Plan güncel veriyle çözülmüş']
+      : ['red', bekleyen > 0 ? `${String(bekleyen)} bekleyen değişiklik var; aşağıda uygulayın ya da reddedin` : 'Veri plandan sonra değişti; önce planı yeniden çözün'],
     yerlesmeyen ? ['uyari', `${yerlesmeyen} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
   ];
   if (!farkli) K.push(['uyari', 'Canlı plandan farkı yok']);

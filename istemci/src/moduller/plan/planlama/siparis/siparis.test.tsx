@@ -46,9 +46,9 @@ describe('P2 Siparişler', () => {
     fireEvent.submit(form);
     expect(await screen.findByText('Sipariş fiyatı değişti. Plan yeniden çözülünce güncellenir.')).toBeTruthy();
     expect(screen.getByText('S1 fiyatı kaydedildi')).toBeTruthy();
-    // Kayıt kartı ortak sade kabuğunun (eski sdSonKart): plan veri değişikliğini içermiyor, eski not ve pasif "Planı iyileştir".
+    // Kayıt kartı ortak sade kabuğunun (eski sdSonKart): plan veri değişikliğini içermiyor, eski not ve pasif "Plan iyileştirme ara".
     expect(screen.getByText(/Plan bu değişikliği henüz içermiyor/)).toBeTruthy();
-    expect((within(document.querySelector<HTMLElement>('.tc-sade-son')!).getByRole('button', { name: 'Planı iyileştir' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(document.querySelector<HTMLElement>('.tc-sade-son')!).getByRole('button', { name: 'Plan iyileştirme ara' }) as HTMLButtonElement).disabled).toBe(true);
     expect(dugme('Yeniden düzenle')).toBeTruthy();
     await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
     expect(govdeler[0]).toMatchObject({ anahtar: PLANLAMA_ANAHTARI, beklenenSurum: 9 });

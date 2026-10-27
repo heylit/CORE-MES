@@ -32,6 +32,9 @@ kalanını sunucu adetten hesaplar, motor kullanır), 396 a, 397 a, 338 a (tek p
    planı verir. Önizlemeyle sunucu sonucu farklıysa cevap farkı döner. Canlıya alma motoru koşmaz (762 b): onaylanan taslağın saatleri
    aynen yayınlanır; taslak yazıldıktan sonra zaman geçse de yeniden dizilmez. Geçmişte kalan başlangıç terminalde gerçek saatle kaydedilir.
    Vardiyası tanımsız tezgâhtaki taslak yeri (168 b) canlıya geçmez; sunucu bunu tezgâhın takviminden okur.
+   Plan varken planın girdisini değiştiren değişiklik çalışmada bekler (755 a); atölyede uygulanınca sunucu motoru kayıtlı planı taban
+   alıp yalnız o değişikliğin etkilediği işleri yeniden dizer (`plan-uygula`), kilitli ve donuk işler yerinde kalır. Bekleyen varken onaya
+   gönderilmez. Plan iyileştirme ("Plan iyileştirme ara") ayrı ve pasiftir.
 4. **Kalan tek kaynak (391 a).** Çalışan adımın kalanını yalnız plan modülü hesaplar (396 a standart birim süre, 397 a hurda adım bitince).
    Motorun gerçekleşen kaydı `{ m, S, kalan, sayim }` taşır: `kalan` verimli çalışma saati, `sayim` son sayım anı (yoksa başlama). `kalan`
    varsa motor bitişi `sayim`dan takvimle `kalan` kadar ilerletir; yoksa bugünkü yol sürer (elle giriş, deneme).

@@ -191,7 +191,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       <button type="button" className="tc-dugme" aria-disabled="true" aria-label="Olay: arıza, acil sipariş, malzeme, personel ya da fason" title={`Olay: arıza, acil sipariş, malzeme, personel ya da fason. ${MOTOR_NOTU}`}>
         <Simge ad="plus" boyut="k" /><span data-ikincil="" data-metin="">Olay</span>
       </button>
-      <button type="button" className="tc-dugme" aria-disabled="true" aria-label="İyileştir" title={`Motor planı kısa sürede iyileştirir. ${MOTOR_NOTU}`}>
+      <button type="button" className="tc-dugme" aria-disabled="true" aria-label="İyileştirme ara" title={`Motor daha iyi bir plan arar; bulursa önizlersiniz. ${MOTOR_NOTU}`}>
         <Simge ad="bolt" boyut="k" /><span data-ikincil="" data-metin="">İyileştir</span>
       </button>
       {farkli && yaz && yetki.planStudyo && (

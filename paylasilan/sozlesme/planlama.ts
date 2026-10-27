@@ -138,7 +138,7 @@ export const satinAlmaEkiCevabi = z.object({
 // görene (finans.maliyet-oku) döner, göremeyende null'dır (`maliyetGorunur`). `plan` çalışmanın plan kaydı biçimindedir (S.plan,
 // dataVer çalışmanınki); ekran seçeneği alırsa kendi yazma yoluyla yazar.
 export const DEGERLENDIRME_TURLERI = [
-  'plan-kur', 'plan-secenekleri', 'termin-secenekleri', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari',
+  'plan-kur', 'plan-uygula', 'plan-secenekleri', 'termin-secenekleri', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari',
 ] as const;
 export const TERMIN_UZATMA_GUNLERI = [1, 2, 3, 5] as const;
 export const PARTI_SAYISI_EN_COK = 20;
@@ -146,6 +146,9 @@ const planSiparisi = z.string().min(1).max(80);
 export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
   // Planı kur (576): kuraldan sıfırdan kurar; kayıtlı plan kullanılmaz.
   z.object({ tur: z.literal('plan-kur') }).strict(),
+  // Bekleyen değişikliği uygula (755 a): kayıtlı plan taban alınır, yalnız verilen siparişlerin işleri yeniden dizilir; '*' bütün işler.
+  // Kilitli ve donuk bölgedeki işler yerinde kalır.
+  z.object({ tur: z.literal('plan-uygula'), isler: z.array(z.union([planSiparisi, z.literal('*')])).min(1).max(5000) }).strict(),
   z.object({ tur: z.literal('plan-secenekleri') }).strict(),
   z.object({ tur: z.literal('termin-secenekleri'), siparisId: planSiparisi }).strict(),
   z.object({ tur: z.literal('termin-uzatma'), gun: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(5)]) }).strict(),
@@ -169,6 +172,7 @@ const planTermini = z.string();
 const planKaydiSemasi = z.record(z.string(), z.unknown());
 const ekMesaiSemasi = z.object({ makineId: z.string(), gun: z.number().int(), vardiya: z.string(), tl });
 const planKur = z.object({ tur: z.literal('plan-kur'), plan: planKaydiSemasi });
+const planUygula = z.object({ tur: z.literal('plan-uygula'), plan: planKaydiSemasi });
 const planSecenekleri = z.object({
   tur: z.literal('plan-secenekleri'),
   secenekler: z.array(z.object({
@@ -247,7 +251,7 @@ const siparisKari = z.object({
   bekleme: z.object({ tl, fin: tl, saat: saatDegeri }),
 });
 export const degerlendirmeSonucu = z.discriminatedUnion('tur', [
-  planKur, planSecenekleri, terminSecenekleri, terminUzatma, malzemeTerminleri, malzemeOneCekme, partiBolme, siparisKari,
+  planKur, planUygula, planSecenekleri, terminSecenekleri, terminUzatma, malzemeTerminleri, malzemeOneCekme, partiBolme, siparisKari,
 ]);
 export const degerlendirmeCevabi = z.object({
   calismaSurumu: z.number().int(),

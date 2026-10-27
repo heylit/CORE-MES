@@ -379,10 +379,27 @@ function planKur() {
   return { plan: { ...planKaydi(cur, st, null), lb: lbx.wT, lbC, ilk, dataVer: S.dataVer } };
 }
 
+/* Bekleyen değişikliği uygula (755 a; sayfanın eski 'onar' kipi): kayıtlı plan taban ve başvurudur. Etkilenmeyen siparişin işleri o
+   plandaki yerinde geçici kilitlenir; yalnız etkilenen siparişlerin işleri yeniden dizilir ('*': hepsi). Kilitli ve donuk işler yerinde. */
+function planUygula(isler) {
+  const hepsi = isler.includes('*'), etk = new Set(isler);
+  const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
+  if (!hepsi) for (const r of Object.values(S.plan.ops)) if (!etk.has(r.job) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && isFinite(r.S)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
+  const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
+  let cur = lnsDecode(st, { ops: S.plan.ops, fail: [] }, [], cx, false); slack(cur, cx);
+  let E = evaluate(cur, st, ref, true); const ilk = E.wT;
+  let seed = 17, durgun = 0;
+  while (Date.now() - t0 < ms && durgun < 4) {
+    const L = lns(st, cur, ref, { ms: Math.max(250, Math.min(1500, ms - (Date.now() - t0))), seed: seed++, free: false });
+    if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++;
+  }
+  return { plan: { ...planKaydi(cur, st, ref), ilk, dataVer: S.dataVer } };
+}
+
 /* ---------- giriş ----------
    calisma, kayit ve kaynak planlama çalışması ucunun birleştirdiği girdidir (288 a); an: sunucunun şimdisi (ms); istek: sözleşmedeki tur ve alanları.
    Hata { hata: 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi' }: çağıran uygun koda çevirir. */
-const DG_PLANLI = new Set(['termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari']);
+const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   S = null; U = {}; DG_CX = null; msOn = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
@@ -398,6 +415,7 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
       if (istek.adetler && (istek.adetler.reduce((a, x) => a + x, 0) !== s.adet || istek.adetler.some(x => !(x >= 1)))) return { hata: 'adet' };
     } }
   if (istek.tur === 'plan-kur') return zarf(planKur());
+  if (istek.tur === 'plan-uygula') return zarf(planUygula(istek.isler));
   if (istek.tur === 'plan-secenekleri') return zarf(pdSecenekler(istek.sira));
   if (istek.tur === 'termin-secenekleri') return zarf(pdTeklif(istek.siparisId));
   if (istek.tur === 'termin-uzatma') return zarf(pdUzatma(istek.gun));
