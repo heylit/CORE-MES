@@ -102,9 +102,7 @@ export function SemalarSekmesi() {
     icerik = (
       <>
         <Bolum baslik="KYS panosu" simge="chart" sag={(
-          <Dugme simge="printer" onClick={() => {
-            yazdir(htmlUret(basimBasligi('KYS panosu', false, <PanoIcerik profil={d.profil} program={d.program} />)), 'KYS panosu');
-          }}>Yazdır</Dugme>
+          <Dugme simge="printer" onClick={() => { window.print(); }}>Yazdır</Dugme>
         )}>
           <p className="tc-dhk-not">{`${firma || 'Firma'} · ${tarihMetni(bugunTarihi())}`}</p>
         </Bolum>

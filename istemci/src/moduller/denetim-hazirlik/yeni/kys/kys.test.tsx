@@ -55,6 +55,15 @@ describe('KYS (yazabilen)', () => {
     expect(await screen.findByRole('button', { name: 'Kütüphane' })).toBeTruthy();
   });
 
+  it('görev tanımları "Yazdır" sayfanın kendisini basar (863: 2 a)', async () => {
+    const bas = vi.spyOn(window, 'print');
+    await ac();
+    sekme('Görev tanımları');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yazdır' }));
+    expect(bas).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.tc-dhy-yazdirma-alani')).toBeNull();
+  });
+
   it('12 aylık yükte ay balonu metni taşır', async () => {
     await ac();
     sekme('Şemalar ve grafikler');

@@ -361,7 +361,6 @@
 .tc-dhk-pdiyagram-ust { display: flex; justify-content: space-between; align-items: baseline; gap: var(--b-3); padding-bottom: var(--b-1); margin-bottom: var(--b-2); border-bottom: var(--cizgi-ince) solid var(--faint); }
 .tc-dhk-pdiyagram-ust span { font-weight: 700; font-size: var(--yazi-m); }
 .tc-dhk-pdiyagram-govde .tc-dhk-sema { width: 100%; height: auto; }
-.tc-dhk-gorev-baski .tc-dhk-rol { margin-bottom: var(--b-4); break-inside: avoid; }
 /* Prototip basımı: A4, kenar boşluğu ve "Sayfa x / y" altlığı; adlı sayfa, genel @page'e dokunmaz. */
 @page tc-dhk-a4 {
   size: A4; margin: 12mm 13mm 14mm;
@@ -372,6 +371,9 @@
   @bottom-right { content: "Sayfa " counter(page) " / " counter(pages); font-size: 8pt; color: var(--faint); }
 }
 @media print {
+  /* Sayfa baskısı (pano, görev tanımları): prototipteki gibi düğmeler basılmaz. */
+  .tc-dhk .tc-dugme, .tc-dhk .tc-dhp-onay, .tc-dhk .tc-dhp-baglanti { display: none; }
+  .tc-dhk .tc-dhk-rol { break-inside: avoid; }
   .tc-dhk-baski { page: tc-dhk-a4; }
   .tc-dhk-baski .tc-dhk-pdok { break-after: page; position: relative; z-index: 1; }
   .tc-dhk-baski .tc-dhk-pdok:last-child { break-after: auto; }

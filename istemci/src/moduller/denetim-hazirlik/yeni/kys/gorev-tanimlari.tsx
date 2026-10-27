@@ -1,12 +1,10 @@
 import { Dugme, Girdi, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
-import { yazdir } from '../disa-aktar.ts';
 import { ROLES, type RolTanimi } from '../icerik/kys-yapi.ts';
-import type { Kys } from '../tipler.ts';
 import { gorevMetni } from './dokuman-metni.ts';
-import { Bolum, htmlUret, KISI_LISTESI, useKopyala } from './ortak.tsx';
+import { Bolum, KISI_LISTESI, useKopyala } from './ortak.tsx';
 
-// Görev tanımları (prototip kysGorev): KYS rolleri, görevli ve vekil ataması, metni kopyalama ve basım.
+// Görev tanımları (prototip kysGorev): KYS rolleri, görevli ve vekil ataması, metni kopyalama ve basım (sayfanın kendisi basılır).
 
 function RolGovdesi({ r }: { r: RolTanimi }) {
   return (
@@ -28,26 +26,6 @@ function RolGovdesi({ r }: { r: RolTanimi }) {
   );
 }
 
-function baskiHtml(K: Kys, firma: string): string {
-  return htmlUret(
-    <div className="tc-dhk-baski" data-theme="light">
-      <div className="tc-dhk-pdok tc-dhk-gorev-baski">
-        <h2>{`KYS görev tanımları${firma ? ` · ${firma}` : ''}`}</h2>
-        {ROLES.map((r) => {
-          const a = K.roles[r.k];
-          return (
-            <section key={r.k} className="tc-dhk-rol">
-              <h3>{r.n}</h3>
-              <small>{`Bağlı olduğu: ${r.b}`}{a?.kisi ? ` · Görevli: ${a.kisi}` : ''}{a?.vekil ? ` · Vekili: ${a.vekil}` : ''}</small>
-              <RolGovdesi r={r} />
-            </section>
-          );
-        })}
-      </div>
-    </div>,
-  );
-}
-
 export function GorevTanimlari() {
   const d = useDenetim();
   const K = d.profil.kys;
@@ -59,7 +37,7 @@ export function GorevTanimlari() {
   };
   return (
     <>
-      <Bolum baslik="KYS görev tanımları" simge="users" sag={<Dugme simge="printer" onClick={() => { yazdir(baskiHtml(K, firma), 'KYS görev tanımları'); }}>Yazdır</Dugme>}>
+      <Bolum baslik="KYS görev tanımları" simge="users" sag={<Dugme simge="printer" onClick={() => { window.print(); }}>Yazdır</Dugme>}>
         <p className="tc-dhk-not">
           Aşağıdaki tanımlar KYS ile ilgili sorumlulukları kapsar; firmanızın genel görev tanımlarına eklenebilir. Kişileri ve vekilleri atayın;
           &quot;Kopyala&quot; ile metni Word veya e-postaya aktarın.
