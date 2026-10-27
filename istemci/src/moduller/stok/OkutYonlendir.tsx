@@ -6,8 +6,8 @@ import { SayfaBasi } from './ortak.tsx';
 import { paneliAc, type PanelIstegi } from './panel-olayi.ts';
 
 // Okut sayfası kalktı (soru 90 a): eski adres ve menü maddesi Malzeme · Teslim panelini açar, sayfa İş kutusuna döner.
-// Eski kipler: kabul Teslim al'a (mal kabul), sevkiyat Teslim et'e (sevk), sepet depo sepetine.
-const KIPLER: Record<string, PanelIstegi> = { kabul: { sekme: 'al' }, sevkiyat: { sekme: 'et' }, sepet: { sekme: 'sepet', depoSepeti: true } };
+// Eski kipler okutmayla başlar (mal kabul, sevk ve depo sepeti okutulan kodun sonucundan seçilir).
+const KIPLER: Record<string, PanelIstegi> = { kabul: { sekme: 'okut' }, sevkiyat: { sekme: 'okut' }, sepet: { sekme: 'sepet', depoSepeti: true } };
 
 export function OkutYonlendir() {
   const [adres] = useSearchParams();
@@ -17,7 +17,7 @@ export function OkutYonlendir() {
   const kip = adres.get('mod') ?? '';
   useEffect(() => {
     if (!panelVar) return;
-    paneliAc(KIPLER[kip] ?? { sekme: 'al' });
+    paneliAc(KIPLER[kip] ?? { sekme: 'okut' });
     void git('/stok', { replace: true });
   }, [panelVar, kip, git]);
   if (oturum.isPending || panelVar) return <DurumKutusu durum="yukleniyor" />;

@@ -18,10 +18,11 @@ const hedefMetni = (h: OkutHedefi): string => (kisiHedefiMi(h) ? `${h.alici.ad ?
 const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.istasyon.ad : h.ad ?? h.kod);
 
 // Malzeme penceresinin üstündeki okuyucu (372 a; eski ayrı QR tuşu, karar 91 a): pencere açılınca hazır bekler. Okutma yoksa altındaki
-// sekmeler görünür; okutulan kod akışı başlatınca sekmelerin yerini "ne, nereye, onay" alır. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
+// bölüm görünür; okutulan kod akışı başlatınca onun yerini "ne, nereye, onay" alır. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
 // Soru 89: ilk okutmanın sonucu (`sonuc`) okuyucunun altında durur; oradan seçilen iş `sifir`ı artırıp akışı başa alır.
-export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, children }: {
-  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; children: ReactNode;
+// `kamerali` (809): kamera açılışta kendiliğinden başlar, görüntü büyük durur; dokunmatikte kod alanı odak almaz ki ekran klavyesi kamerayı örtmesin.
+export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, children }: {
+  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; kamerali?: boolean; children: ReactNode;
 }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
@@ -44,13 +45,15 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
   const basaDon = (metin: string | null) => { setDurum(OKUT_BASI); setSonuc(metin); setRaf(null); };
   // Tek kart (614 1a): okutmanın sonuç kartı varken "nereye" adımı ayrı adım şeridi açmaz; sonraki okutma nereyedir.
   const tekKart = sonucKarti != null && durum.adim === 'nereye';
-  const ipucu = durum.adim === 'ne' ? 'Malzeme, lot, raf ya da kişinin kodunu okut; okutmadan aşağıdaki sekmelerle de çalışılır.'
+  const ipucu = durum.adim === 'ne' ? 'Kartı, malzemeyi, rafı ya da kişinin kodunu kameraya tut ya da el okuyucuyla okut.'
     : durum.adim === 'kaynak-sec' ? 'Ne: malzeme, lot ya da alacağın yerin etiketi.' : 'Nereye: istasyon, raf, harita kutusu ya da alacak kişinin kodu.';
   return (
     <>
       <div className="tc-stok-okut-ust">
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
-        {durum.adim !== 'onay' && <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
+        {durum.adim !== 'onay' && (kamerali
+          ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />
+          : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />)}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {raf && raf.gozler.length > 0 && (
@@ -70,7 +73,7 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
           {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sec={(kaynak) => setDurum({ adim: 'nereye', kaynak, ileti: null })} />}
           {(durum.adim === 'nereye' || durum.adim === 'onay') && <KaynakOzeti kaynak={durum.kaynak} />}
           {durum.adim === 'onay' && <Onay kaynak={durum.kaynak} hedef={durum.hedef} geri={() => setDurum({ adim: 'nereye', kaynak: durum.kaynak, ileti: null })} bitti={basaDon} />}
-          <div className="tc-stok-eylem"><Dugme simge="x" onClick={() => basaDon(null)}>Vazgeç, sekmelere dön</Dugme></div>
+          <div className="tc-stok-eylem"><Dugme simge="x" onClick={() => basaDon(null)}>Vazgeç</Dugme></div>
         </div>
       )}
     </>

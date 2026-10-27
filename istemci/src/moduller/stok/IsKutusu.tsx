@@ -80,7 +80,7 @@ function DepocuAcilis() {
       <button type="button" className="tc-stok-depocu-kutu tc-stok-depocu-ana" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}><strong>Okut</strong><span>Ürün ya da raf kodunu okut</span></button>
       {sepetYetki && <Link to="/stok/sepet" className="tc-stok-depocu-kutu"><strong>Sepet</strong><span>{sepet.data ? `${sepet.data.satirlar.length} kalem` : '—'}</span></Link>}
       {toplamaYetki && <Link to={toplama.data?.satirlar[0] ? `/stok/hazirlik/${toplama.data.satirlar[0].id}` : '/stok/hazirlik'} className="tc-stok-depocu-kutu"><strong>Toplama</strong><span>{toplama.data ? `${toplama.data.toplam ?? toplama.data.satirlar.length} açık liste` : '—'}</span></Link>}
-      {girisYetki && <button type="button" className="tc-stok-depocu-kutu" onClick={() => paneliAc({ sekme: 'al' })}><strong>Mal kabul</strong><span>Okutarak teslim al</span></button>}
+      {girisYetki && <button type="button" className="tc-stok-depocu-kutu" onClick={() => paneliAc({ sekme: 'okut' })}><strong>Mal kabul</strong><span>Okutarak teslim al</span></button>}
     </div>
   );
 }
@@ -101,9 +101,9 @@ export function IsKutusu() {
         baslik="İş kutusu"
         alt={s.data ? `${bugunMetni()}. ${l.length ? `Sizi bekleyen ${l.length} iş var.` : 'Bekleyen iş yok.'}` : bugunMetni()}
         sag={<>
-          <Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'al' })}>Okut</Dugme>
+          <Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'okut' })}>Okut</Dugme>
           {malKabulYetkisi && <Link to="/stok/mal-kabul"><Dugme simge="truck">Mal kabul</Dugme></Link>}
-          {cikisYetkisi && <Dugme simge="truck" onClick={() => paneliAc({ sekme: 'et' })}>Sevk çıkışı</Dugme>}
+          {cikisYetkisi && <Dugme simge="truck" onClick={() => paneliAc({ sekme: 'okut' })}>Sevk çıkışı</Dugme>}
           <Link to="/malzemeler"><Dugme simge="layers">Malzeme kartları</Dugme></Link>
         </>}
       />

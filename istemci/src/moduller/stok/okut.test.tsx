@@ -77,13 +77,13 @@ async function pencereAc(): Promise<HTMLElement> {
 }
 
 describe('Malzeme penceresinin okuyucusu (372 a)', () => {
-  it('ayrı QR tuşu yok; okuyucu pencere açılınca sekmelerin üstünde hazır', async () => {
+  it('ayrı QR tuşu yok; okuyucu pencere açılınca kutucukların üstünde hazır', async () => {
     expect(ustEylemler.some((e) => e.anahtar === 'qr-okut')).toBe(false);
     ciz(OPERATOR);
     expect(screen.queryByRole('button', { name: 'QR okut' })).toBeNull();
     const pencere = await pencereAc();
     const kod = within(pencere).getByRole('textbox', { name: /Kod/ });
-    const serit = within(pencere).getByRole('tablist', { name: 'Malzeme ve teslim' });
+    const serit = await within(pencere).findByRole('button', { name: /^Bana gelen/ });
     expect(kod.compareDocumentPosition(serit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -108,17 +108,17 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     expect(postlar).toHaveLength(2);
     expect(postlar[0]).toMatchObject({ malzemeId: 901, miktar: '2', partiId: 4, statuId: null, kaynak: { istasyonId: 1 }, hedef: { istasyonId: 2 } });
     expect(postlar[1]!.kaynakKimligi).toBe(postlar[0]!.kaynakKimligi);
-    expect(await within(pencere).findByRole('tablist', { name: 'Malzeme ve teslim' })).toBeTruthy();
+    expect(await within(pencere).findByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
   });
 
-  it('akış başlayınca sekmeler gizlenir; vazgeçince geri gelir', async () => {
+  it('akış başlayınca kutucuklar gizlenir; vazgeçince geri gelir', async () => {
     ciz(OPERATOR);
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
     await within(pencere).findByText(/Torna 1 \(T1\) · İstasyon/);
-    expect(within(pencere).queryByRole('tablist', { name: 'Malzeme ve teslim' })).toBeNull();
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç, sekmelere dön' }));
-    expect(await within(pencere).findByRole('tablist', { name: 'Malzeme ve teslim' })).toBeTruthy();
+    expect(within(pencere).queryByRole('button', { name: /^Bana gelen/ })).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    expect(await within(pencere).findByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
   });
 
   it('DEP-64: katalog etiketi (MK) okutulunca malzeme akışı açılır', async () => {
@@ -142,13 +142,14 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     expect(await within(pencere).findByText('TS-000002: Deneme Alıcı kişisine elden teslim edildi.')).toBeTruthy();
   });
 
-  it('ilk okutulan kişi kodu Teslim et\'i o kişiye hedefli açar; gönderilemeyecek istasyondaki kişi hedef olmaz', async () => {
+  it('ilk okutulan kişi kodu Elimdekiler\'i o kişiye hedefli açar; gönderilemeyecek istasyondaki kişi hedef olmaz', async () => {
     ciz(OPERATOR);
     const pencere = await pencereAc();
     await okut(pencere, 'KSI-7');
     expect(await within(pencere).findByText('Alıcı: Deneme Alıcı. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.')).toBeTruthy();
-    expect(within(pencere).getByRole('tab', { name: 'Gönder' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('dialog', { name: 'Elimdekiler' })).toBeTruthy();
     expect((within(pencere).getByLabelText(/Nereye/) as HTMLSelectElement).value).toBe('i:2');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kameraya dön' }));
     await okut(pencere, 'KSI-8');
     expect(await within(pencere).findByText(/Uzak Alıcı buradan teslim edilebilecek bir istasyonda değil/)).toBeTruthy();
     expect(within(pencere).queryByText(/Teslim edince hemen kapanır/)).toBeNull();

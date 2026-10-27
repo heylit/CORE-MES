@@ -48,22 +48,22 @@ test('Malzemeler: Durum sekmelerinin hepsi görünür', async ({ page, ag, ac })
   expect(ag.hatalar).toEqual([]);
 });
 
-test('Malzeme ve teslim paneli: sekmelerin hepsi görünür ve açılır', async ({ page, ag, ac }) => {
+test('Malzeme ve teslim paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', async ({ page, ag, ac }) => {
   await ac('/stok');
   await page.getByRole('button', { name: /^Malzeme ve teslim/ }).filter({ visible: true }).first().click();
   const panel = page.getByRole('dialog', { name: 'Malzeme · Teslim' });
   await expect(panel).toBeVisible();
-  // 372 a: ayrı QR tuşu yok; okuyucu pencerenin üstünde, sekmelerden önce görünür.
+  // 372 a, 809: ayrı QR tuşu yok; okuyucu pencerenin üstünde, kutucuklardan önce görünür.
   await expect(page.getByRole('button', { name: 'QR okut', exact: true })).toHaveCount(0);
   const kod = panel.getByRole('textbox', { name: /Kod/ }).first();
   await expect(kod).toBeVisible();
-  const serit = panel.getByRole('tablist', { name: 'Malzeme ve teslim' });
-  const [k, s] = [await kod.boundingBox(), await serit.boundingBox()];
-  expect(k !== null && s !== null && k.y < s.y, 'okuyucu sekmelerin üstünde').toBe(true);
-  await sekmelerTam(page, serit);
-  for (const ad of ['Gönder', 'İste']) {
-    await serit.getByRole('tab', { name: ad }).click();
-    await expect(serit.getByRole('tab', { name: ad })).toHaveAttribute('aria-selected', 'true');
+  const gelen = panel.getByRole('button', { name: /^Bana gelen/ });
+  const [k, s] = [await kod.boundingBox(), await gelen.boundingBox()];
+  expect(k !== null && s !== null && k.y < s.y, 'okuyucu kutucukların üstünde').toBe(true);
+  for (const [ad, baslik] of [[/^Bana gelen/, 'Bana gelen'], [/^Elimdekiler/, 'Elimdekiler'], [/^Malzeme iste/, 'Malzeme iste']] as const) {
+    await panel.getByRole('button', { name: ad }).click();
+    await expect(page.getByRole('dialog', { name: baslik })).toBeVisible();
+    await page.getByRole('button', { name: 'Kameraya dön' }).click();
   }
   // Depocunun recete-rota statü okuması 403 alıyor; degisecek.spec.ts'te ayrıca izlenir.
   expect(ag.hatalar.filter((h) => !h.includes('/api/recete-rota/statuler') && !h.includes('status of 403'))).toEqual([]);
