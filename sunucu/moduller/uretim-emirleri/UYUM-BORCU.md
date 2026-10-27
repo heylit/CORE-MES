@@ -16,5 +16,11 @@
 | UE-B12 | Onaylı kapanış (K1): dış maddeler (ölçüm, izlenebilirlik, fason, stok, sevkiyat, NCR) çözücü bağlanana kadar `bilinmiyor`; kapanış ekranı ve etiket K7'de; rol satırları K2'de. Kapanış okumaları açık kapanışları bellekte süzer (VARSAYIM: yüzlerle sınırlı) | Evet (K7) | K2, K3, K4, K7 |
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
-- Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `POST /uretim-emirleri/:id/{katil, duraklat, katilim/duraklat, katilim/ayril}`, `GET /uretim-emirleri/:id/katilimlar`, `POST /adimli-emirler/:id/{ek-adim, ek-adim-kaldir, hazirlik-muafiyeti}`, `POST /adimli-emirler/:id/is-emirleri/:isEmriId/fason-tamamla`, `GET /adimli-emirler/:id/is-emirleri/:isEmriId/sure-ozeti`. Arkon aynı işleri `disari.ts` ile yapıyor; eski terminal adresi Üretim Terminali'ne yönleniyor.
+- KAPANDI (881 a, 27.10.2026; ölçüm `origin/main` db65d16, istemci ve Arkon aramasında şablon dizgileri dahil): bu uçlar kalır, işlerini başka yol yapar.
+  `POST /uretim-emirleri/:id/{katil, duraklat, katilim/duraklat, katilim/ayril}` ve `GET /uretim-emirleri/:id/katilimlar`: Arkon aynı komutları
+  `disari.ts` ile verir (`arkon/servis.ts` katılım yolu). `POST /adimli-emirler/:id/{ek-adim, ek-adim-kaldir}`: ek adım Reçete ve Rota'da bölmeyle girer
+  (`emir-bol` `ekAdimlar`). `GET .../is-emirleri/:isEmriId/sure-ozeti`: rota sunucusu `isEmriSureOzeti` ile okur. `POST .../fason-tamamla` aslında
+  çağrılıyor (Satın Alma dış operasyonlar, `DisOperasyonlar.tsx`).
+- `POST /adimli-emirler/:id/hazirlik-muafiyeti` ve `GET /adimli-emirler/:id/hazirlik`: ekrana bağlanmaz (882 c: CNC kurulum hazır değil, kural şimdilik
+  eklenmez). Uç ve müdür işlemi sunucuda kalır. Açık: CNC Kurulum'da kaydı açılıp son onaya gelmeyen iş emri başlamaz ve ekrandan muaf tutulamaz (soru 889).
 - Kaldırıldı (238 H3, 266 a): `POST /uretim-emirleri`, `/:id/{iptal, baslat, bitir, sayim, devam, durdur, sayim-ayarla}`. Terminal bu komutları Arkon üzerinden `disari.ts` ile yapar. `POST /uretim-emirleri/:id/{ayar, makine-devral}` de istemcide ve Arkon web'de çağrılmıyor (DOĞRULANDI, `istemci/src` ve `arkon/web/src` araması, 23.10.2026); kaldırma kararı sorulmadı.
