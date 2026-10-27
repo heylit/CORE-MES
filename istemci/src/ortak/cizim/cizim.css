@@ -67,6 +67,14 @@
 .tc-ay5-oneri.tc-ay5-low { --r: var(--stop); }
 .tc-ay5-oneri rect { fill: color-mix(in srgb, var(--r) 10%, transparent); stroke: var(--r); stroke-dasharray: 6 5; opacity: .55; }
 .tc-ay5-oneri.tc-ay5-on rect { stroke-dasharray: none; opacity: 1; fill: color-mix(in srgb, var(--r) 18%, transparent); }
+/* Elle balonlama (967 a): kılavuz ucu, numara önizlemesi, öneri kuyruğunda sıradaki. */
+.tc-ay5-uc { fill: var(--bp-bg); stroke: var(--hazard); stroke-width: calc(2px * var(--bs, 1)); cursor: grab; touch-action: none; }
+.tc-ay5-uc:hover { fill: var(--hazard); }
+.tc-ay5-uc-cizgi { stroke: var(--hazard); stroke-width: calc(1.6px * var(--bs, 1)); stroke-dasharray: 6 4; }
+.tc-ay5-balon text.tc-ay5-onizleme { fill: var(--run); }
+.tc-ay5-oneri.tc-ay5-aktif rect { opacity: 1; stroke-width: calc(3px * var(--u, 1)); stroke-dasharray: none; }
+.tc-ay5-olcum.tc-ay5-aktif { border-color: var(--hazard); background: var(--panel2); }
+.tc-ay5-sahne:focus, .tc-ay5-cekmece:focus { outline: none; }
 .tc-ay5-cerceve { fill: color-mix(in srgb, var(--hazard) 14%, transparent); stroke: var(--hazard); stroke-dasharray: 10 6; stroke-width: calc(2px * var(--u, 1)); }
 .tc-ay5-yeni { fill: none; stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 4 3; }
 
@@ -217,6 +225,13 @@
 .tc-ay5-oneri-kutu div { display: grid; gap: var(--b-1); }
 .tc-ay5-olc { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
 .tc-ay5-olc > :first-child { flex: 1; min-inline-size: 0; }
+.tc-ay5-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 4)), 1fr)); gap: var(--b-2); }
+.tc-ay5-kaynak-kutu { align-items: center; flex-wrap: wrap; }
+.tc-ay5-kaynak-kutu > span { flex: 1; min-inline-size: 0; }
+.tc-ay5-satir-duzen { cursor: default; }
+.tc-ay5-satir-duzen .tc-alan-kutu { inline-size: 100%; min-inline-size: 0; }
+.tc-ay5-no-dugme { display: grid; place-items: center; min-inline-size: var(--dokunma); min-block-size: var(--dokunma); border: 0; padding: 0; background: none; cursor: pointer; }
+.tc-ay5-kisayol kbd { font-family: var(--font-mono); font-size: var(--yazi-xs); padding: 0 var(--b-1); border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge2); }
 .tc-ay5-hizli { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-ay5-not-metni { font-size: var(--yazi-m); line-height: 1.4; }
 
