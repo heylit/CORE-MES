@@ -4,11 +4,12 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { OnTalepleriCevabi, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { FasonOnTalep, OnTalepleriCevabi, PlanOnTalep, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { planIhtiyaclariniYaz } from './disari.ts';
 import { ILETILER } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -50,11 +51,16 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' ? { 'istek-kimligi': crypto.randomUUID() } : {}) },
     ...(govde === undefined ? {} : { payload: govde }),
   });
-  const onTalepler = async (cerez = cerezTalep): Promise<OnTalepleriCevabi> => {
+  const tumu = async (cerez = cerezTalep): Promise<OnTalepleriCevabi> => {
     const r = await istek(cerez, 'GET', '/satin-alma-on-talepleri');
     assert.equal(r.statusCode, 200, r.body);
     return r.json();
   };
+  const onTalepler = async (cerez = cerezTalep) => {
+    const c = await tumu(cerez);
+    return { ...c, onTalepler: c.onTalepler.filter((x): x is FasonOnTalep => x.kaynak === 'fason') };
+  };
+  const planlar = async () => (await tumu()).onTalepler.filter((x): x is PlanOnTalep => x.kaynak === 'plan');
   const hizmetTalebi = (kalemler: object[], uretimEmriId: number | null = null) => ({
     id: crypto.randomUUID(), tur: 'hizmet', ihtiyacTarihi: null, aciklama: '', uretimEmriId, kalemler,
   });
@@ -173,5 +179,43 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     assert.equal(elle.statusCode, 200, elle.body);
     const t = elle.json() as Talebim;
     assert.deepEqual([t.kaynak, t.kalemler[0]!.uygulanan, t.kalemler[0]!.fasonAdim], ['elle', 'HM-SAT-00001 · Deneme mil', null]);
+  });
+  test('Dal 2: plan ihtiyacından açık talep ve yoksayılan düşer; artan ihtiyaç yeniden düşer; tam liste eskiyi siler', async () => {
+    const yaz = (miktar: number) => ortam!.vt.tx((db) => planIhtiyaclariniYaz(db, [{ malzemeNo: parcaNo, miktar, gerekenTarih: '2026-11-10', emirler: ['E-1'], stokBilinmiyor: true }]));
+    await yaz(10);
+    let p = await planlar();
+    assert.deepEqual(p.map((x) => [x.malzeme.kod, x.miktar, x.birim, x.gerekenTarih, x.emirler, x.stokBilinmiyor, x.hesap]),
+      [['HM-SAT-00001', 10, 'adet', '2026-11-10', ['E-1'], true, { eksik: 10, siparis: 0, talep: 0, yoksayilan: 0 }]]);
+    const tekrar = await ortam!.vt.tx(async (db) => {
+      try { await planIhtiyaclariniYaz(db, [{ malzemeNo: parcaNo, miktar: 1, gerekenTarih: '2026-11-10', emirler: ['E-1'], stokBilinmiyor: false }, { malzemeNo: parcaNo, miktar: 1, gerekenTarih: '2026-11-10', emirler: ['E-1'], stokBilinmiyor: false }]); return null; } catch (h) { return (h as Error).message; }
+    });
+    assert.equal(tekrar, ILETILER.planIhtiyaciTekrar);
+
+    const talep = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac', {
+      id: crypto.randomUUID(), tur: 'malzeme', ihtiyacTarihi: '2026-11-10', aciklama: '', uretimEmriId: null,
+      kalemler: [{ ad: 'Deneme mil', birim: 'adet', miktar: '4', malzemeNo: parcaNo, uygulananMalzemeNo: null, isEmriId: null }],
+    });
+    assert.equal(talep.statusCode, 200, talep.body);
+    p = await planlar();
+    assert.deepEqual(p.map((x) => [x.miktar, x.hesap.talep]), [[6, 4]], 'açık talep düşer');
+
+    const bos = await istek(cerezTalep, 'POST', '/satin-alma-on-talepleri/yoksay', { kaynak: 'plan', malzemeNo: parcaNo, neden: ' ' });
+    assert.equal(bos.statusCode, 400);
+    const yok = await istek(cerezTalep, 'POST', '/satin-alma-on-talepleri/yoksay', { kaynak: 'plan', malzemeNo: 2147483647, neden: 'Stoktan' });
+    assert.equal((yok.json() as { mesaj: string }).mesaj, ILETILER.planOnTalepYok);
+    assert.equal((await istek(cerezTalep, 'POST', '/satin-alma-on-talepleri/yoksay', { kaynak: 'plan', malzemeNo: parcaNo, neden: 'Stoktan karşılanacak' })).statusCode, 200);
+    assert.deepEqual(await planlar(), []);
+    const y = (await tumu()).yoksayilanlar.find((x) => x.kaynak === 'plan');
+    assert.deepEqual(y && [y.baslik, y.neden, y.kisiAdi], ['HM-SAT-00001 Deneme mil', 'Stoktan karşılanacak', 'Deneme talep']);
+
+    await yaz(16);
+    p = await planlar();
+    assert.deepEqual(p.map((x) => [x.miktar, x.hesap.yoksayilan]), [[6, 6]], 'ihtiyaç artınca yalnız artan kısım düşer');
+    assert.equal((await istek(cerezTalep, 'POST', '/satin-alma-on-talepleri/geri-al', { id: y!.id })).statusCode, 200);
+    assert.deepEqual((await planlar()).map((x) => x.miktar), [12]);
+
+    await ortam!.vt.tx((db) => planIhtiyaclariniYaz(db, []));
+    assert.deepEqual(await planlar(), []);
+    assert.equal((await tumu()).yoksayilanlar.some((x) => x.kaynak === 'plan'), false);
   });
 });

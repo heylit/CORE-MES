@@ -170,6 +170,9 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
   Basamak adları satın almada yalnız bilgidir; onayı `satin-alma.onayla` verir. Portalda rol eşlemesi ayrıdır (50 bin üstü Satın alma müdürü, 250 bin üstü ayrıca Genel müdür).
 45. Kart 898 a, Dal 1 (ön talep, fason): açık kalanlar.
     - Plan malzeme ihtiyacı ön talebi (Dal 2): satın almaya yazan çağrıyı 898 Dal 3 ekler. Yoksayma tablosu `malzeme_no` ve `miktar` sütunlarını bunun için taşır.
+    - Dal 2 (plan ihtiyacı): plan canlıya alınınca (902 a) malzeme eksiği `satin_alma_plan_ihtiyaci`'na tam liste yazılır (`disari.ts` `planIhtiyaclariniYaz`); okurken açık sipariş kalanı ve sipariş verilmemiş açık talep (kartın stok biriminde olanlar) düşülür. Canlıya alma çağrısı plan servis sırasına bağlı; çağrı girene kadar tablo boş kalır.
+    - VARSAYIM (Dal 2): eksik canlı plandaki açık emirlerin hammadde ve ticari mal ihtiyacıdır (brüt eksi verilmiş net sarf); serbest stok en erken başlayan adıma düşer, gereken gün stoğun karşılamadığı ilk adımın günüdür. Muayene günü düşülmez (kartta alan yok). Başka birimdeki sipariş ya da talep satırı çevrilmeden düşülmez. Geri alma ucuz.
+    - VARSAYIM (Dal 2): plan yoksayması o anki kalanı saklar; kalan onu aşarsa fark yeniden düşer. Talebe çevirme kartlı malzeme kalemidir, bağ sütunu yok: açılan talep miktarıyla düşer.
     - VARSAYIM: fason ön talebin gereken tarihi emrin teslim günüdür; plan tarihi satın almaya gelmez (bağımlılık yönü plan -> satın alma). Dal 2'de plan bildirimiyle iyileşir. Geri alma ucuz.
     - VARSAYIM: firmaya gönderilmiş (gidişi olan) fason adım ön talep değildir. Taslak emir ön talep vermez.
     - VARSAYIM: talebe çevrilen kalem serbest adla gelir ve "kart bekler"; hizmet kartı talep eden ya da satın alma seçer. Operasyon tipinden hizmet kartı önerisi yok.

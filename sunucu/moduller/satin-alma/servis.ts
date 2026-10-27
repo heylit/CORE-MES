@@ -23,7 +23,7 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
-  fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi, type KalemBagi,
+  fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
@@ -381,34 +381,77 @@ async function acikFasonlar(db: Db) {
 }
 
 // 898 a: fason ön talepler (açık, bağsız, yoksayılmamış, gönderilmemiş) ve hâlâ açık adımların yoksayma kararları. Talep açabilen herkes
-// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir.
+// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir. Dal 2: plan ihtiyacı fason adımların ardından gelir.
 export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
   const adaylar = await acikFasonlar(db);
   const acik = new Map(adaylar.map((x) => [x.isEmriId, x]));
   const bagli = await s.fasonBagliIsEmirleri(db, [...acik.keys()]);
   const yoksaylar = (await s.fasonYoksaylari(db)).filter((y) => acik.has(y.isEmriId));
   const liste = fasonOnTalepAdaylari(adaylar, bagli, new Set(yoksaylar.map((y) => y.isEmriId)));
-  const kartlar = await malzemeOzetleri(db, liste.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])));
+  const plan = await planOnTalepleri(db);
+  const kartlar = await malzemeOzetleri(db, [...liste.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])), ...plan.yoksaylar.map((y) => y.malzemeNo)]);
   const firmalar = await firmaOzetleri(db, [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
-  const kisiler = await kisiAdlari(db, yoksaylar.map((y) => y.kisiId));
+  const kisiler = await kisiAdlari(db, [...yoksaylar, ...plan.yoksaylar].map((y) => y.kisiId));
   const ad = (x: { emirNo: string; opNo: number; adim: string | null }) => `${x.emirNo} · Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`;
+  const kartAdi = (no: number) => { const k = kartlar.get(no); return k ? `${k.kod}${k.ad ? ` ${k.ad}` : ''}` : String(no); };
   return {
-    onTalepler: liste.map((x) => {
-      const kart = x.malzemeNo === null ? undefined : kartlar.get(x.malzemeNo);
-      return {
-        kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
-        parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
-        miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
-        firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
-      };
-    }),
-    yoksayilanlar: yoksaylar.map((y) => ({
-      id: y.id, kaynak: 'fason' as const, baslik: ad(acik.get(y.isEmriId)!), neden: y.neden, kisiAdi: kisiler.get(y.kisiId) ?? null, zaman: y.zaman,
-    })),
+    onTalepler: [
+      ...liste.map((x) => {
+        const kart = x.malzemeNo === null ? undefined : kartlar.get(x.malzemeNo);
+        return {
+          kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
+          parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
+          miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
+          firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+        };
+      }),
+      ...plan.onTalepler,
+    ],
+    yoksayilanlar: [
+      ...yoksaylar.map((y) => ({
+        id: y.id, kaynak: 'fason' as const, baslik: ad(acik.get(y.isEmriId)!), neden: y.neden, kisiAdi: kisiler.get(y.kisiId) ?? null, zaman: y.zaman,
+      })),
+      ...plan.yoksaylar.map((y) => ({
+        id: y.id, kaynak: 'plan' as const, baslik: kartAdi(y.malzemeNo), neden: y.neden, kisiAdi: kisiler.get(y.kisiId) ?? null, zaman: y.zaman,
+      })),
+    ],
   };
 }
-// Yalnız açık fason adım yoksayılır; ikinci kez yoksaymak ilk kararı bozmaz.
+// Plan ihtiyacının ön talepleri ve hâlâ ihtiyaçta olan malzemelerin yoksayma kararları.
+async function planOnTalepleri(db: Db) {
+  const ihtiyaclar = await s.planIhtiyaclariOku(db);
+  const nolar = ihtiyaclar.map((i) => i.malzemeNo);
+  const kartlar = await malzemeOzetleri(db, nolar);
+  const yoksaylar = (await s.planYoksaylari(db)).filter((y) => nolar.includes(y.malzemeNo));
+  const adaylar = planOnTalepAdaylari({
+    ihtiyaclar,
+    birimler: new Map(nolar.map((n) => [n, kartlar.get(n)?.birim ?? null])),
+    siparisler: await s.malzemeGelisleriOku(db, nolar),
+    talepler: await s.acikTalepMiktarlari(db, nolar),
+    yoksaylar: new Map(yoksaylar.map((y) => [y.malzemeNo, y.miktar])),
+  });
+  return {
+    adaylar,
+    yoksaylar,
+    onTalepler: adaylar.flatMap((a) => {
+      const k = kartlar.get(a.malzemeNo);
+      if (!k) return [];
+      return [{
+        kaynak: 'plan' as const, malzeme: { no: a.malzemeNo, kod: k.kod, ad: k.ad ?? '' }, miktar: a.miktar, birim: k.birim ?? '',
+        gerekenTarih: a.gerekenTarih, emirler: a.emirler, stokBilinmiyor: a.stokBilinmiyor, hesap: a.hesap,
+      }];
+    }),
+  };
+}
+// Yalnız açık fason adım ya da gösterilen plan ihtiyacı yoksayılır. Fasonda ikinci kez yoksaymak ilk kararı bozmaz; planda karar o anki
+// kalanla yenilenir.
 export async function onTalepYoksay(db: Db, k: Kullanici, g: OnTalepYoksayYazimi): Promise<{ tamam: true }> {
+  if (g.kaynak === 'plan') {
+    const a = (await planOnTalepleri(db)).adaylar.find((x) => x.malzemeNo === g.malzemeNo);
+    if (!a) throw dogrulama(ILETILER.planOnTalepYok, 'malzemeNo');
+    await s.planYoksayYaz(db, { malzemeNo: g.malzemeNo, miktar: a.kalan, neden: g.neden, kisiId: k.id });
+    return { tamam: true };
+  }
   if (!(await acikFasonlar(db)).some((x) => x.isEmriId === g.isEmriId)) throw dogrulama(ILETILER.fasonOnTalepYok, 'isEmriId');
   await s.fasonYoksayEkle(db, { isEmriId: g.isEmriId, neden: g.neden, kisiId: k.id });
   return { tamam: true };
@@ -1302,6 +1345,17 @@ export async function tedarikTerminleri(db: Db, malzemeNolar: readonly number[])
 }
 // Plan "olması gereken" tarihi tam liste olarak bildirir; listede olmayanın gereken tarihi boşalır, termin kalır. Bilinmeyen
 // malzeme ya da aynı malzemenin iki kez gelmesi çağıranın hatasıdır, yazılmaz.
+// 898 a, 902 a: plan canlıya alınınca malzeme eksiği tam liste olarak yazılır. Bilinmeyen malzeme reddedilir (plan katalogda olanı yollar).
+export async function planIhtiyaclariniYaz(
+  db: Db, l: readonly { malzemeNo: number; miktar: number; gerekenTarih: string; emirler: readonly string[]; stokBilinmiyor: boolean }[],
+): Promise<void> {
+  const nolar = l.map((i) => i.malzemeNo);
+  if (new Set(nolar).size !== nolar.length) throw gecersiz(ILETILER.planIhtiyaciTekrar);
+  const kartlar = await malzemeOzetleri(db, nolar);
+  const yok = nolar.filter((n) => !kartlar.has(n));
+  if (yok.length > 0) throw gecersiz(`${ILETILER.terminMalzemesiYok} (${yok.join(', ')})`);
+  await s.planIhtiyaclariYaz(db, l);
+}
 export async function tedarikIhtiyaclariniYaz(db: Db, ihtiyaclar: readonly { malzemeNo: number; gerekenTarih: string }[]): Promise<void> {
   const nolar = ihtiyaclar.map((i) => i.malzemeNo);
   if (new Set(nolar).size !== nolar.length) throw gecersiz('Aynı malzeme ihtiyaç listesinde iki kez var.');

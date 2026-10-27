@@ -1006,3 +1006,50 @@ export function kartKopyalariOku(db: Db, talepId: string): Promise<KartKopyasiSa
        FROM satin_alma_siparis_kart_kopyasi kk JOIN satin_alma_siparis_satiri ss ON ss.id = kk.siparis_satiri_id
       WHERE ss.talep_id = $1 ORDER BY ss.id`, [talepId]);
 }
+// 898 a, Dal 2: planın malzeme eksiği. Plan canlıya alınınca tam liste yazılır; listede olmayan satır silinir, aynı satır yeniden yazılmaz.
+export interface PlanIhtiyaciSatiri { malzemeNo: number; miktar: string; gerekenTarih: string; emirler: string[]; stokBilinmiyor: boolean }
+export async function planIhtiyaclariYaz(db: Db, l: readonly { malzemeNo: number; miktar: number; gerekenTarih: string; emirler: readonly string[]; stokBilinmiyor: boolean }[]): Promise<void> {
+  const nolar = l.map((x) => x.malzemeNo);
+  await db.sorgu('DELETE FROM satin_alma_plan_ihtiyaci WHERE malzeme_no <> ALL($1::int[])', [nolar]);
+  if (l.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO satin_alma_plan_ihtiyaci AS p (malzeme_no, miktar, gereken_tarih, emirler, stok_bilinmiyor)
+     SELECT n, m, g, ARRAY(SELECT jsonb_array_elements_text(e)), b FROM unnest($1::int[], $2::numeric[], $3::date[], $4::jsonb[], $5::bool[]) AS x(n, m, g, e, b)
+     ON CONFLICT (malzeme_no) DO UPDATE SET miktar = EXCLUDED.miktar, gereken_tarih = EXCLUDED.gereken_tarih, emirler = EXCLUDED.emirler,
+       stok_bilinmiyor = EXCLUDED.stok_bilinmiyor, zaman = now()
+     WHERE (p.miktar, p.gereken_tarih, p.emirler, p.stok_bilinmiyor) IS DISTINCT FROM (EXCLUDED.miktar, EXCLUDED.gereken_tarih, EXCLUDED.emirler, EXCLUDED.stok_bilinmiyor)`,
+    [nolar, l.map((x) => x.miktar), l.map((x) => x.gerekenTarih), l.map((x) => JSON.stringify(x.emirler)), l.map((x) => x.stokBilinmiyor)],
+  );
+}
+export function planIhtiyaclariOku(db: Db): Promise<PlanIhtiyaciSatiri[]> {
+  return db.sorgu<PlanIhtiyaciSatiri>(
+    `SELECT malzeme_no AS "malzemeNo", miktar::text AS miktar, to_char(gereken_tarih, 'YYYY-MM-DD') AS "gerekenTarih", emirler, stok_bilinmiyor AS "stokBilinmiyor"
+       FROM satin_alma_plan_ihtiyaci ORDER BY gereken_tarih, malzeme_no`,
+  );
+}
+// Sipariş verilmemiş açık talepteki miktar, malzeme ve birim başına (siparişe geçen talep sipariş satırıyla sayılır).
+export function acikTalepMiktarlari(db: Db, malzemeNolar: readonly number[]): Promise<{ malzemeNo: number; birim: string; miktar: string }[]> {
+  if (malzemeNolar.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
+       FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL AND t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+      GROUP BY c.malzeme_no, k.birim`,
+    [[...malzemeNolar]],
+  );
+}
+export interface PlanYoksaySatiri { id: number; malzemeNo: number; miktar: string; neden: string; kisiId: number; zaman: string }
+export function planYoksaylari(db: Db): Promise<PlanYoksaySatiri[]> {
+  return db.sorgu<PlanYoksaySatiri>(
+    `SELECT id, malzeme_no AS "malzemeNo", miktar::text AS miktar, neden, kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+       FROM satin_alma_on_talep_yoksay WHERE kaynak = 'plan' ORDER BY zaman DESC, id DESC`,
+  );
+}
+// Malzeme yeniden yoksayılırsa (ihtiyaç arttı) karar o anki miktarla yenilenir.
+export async function planYoksayYaz(db: Db, g: { malzemeNo: number; miktar: number; neden: string; kisiId: number }): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_on_talep_yoksay (kaynak, malzeme_no, miktar, neden, kisi_id) VALUES ('plan', $1, $2, $3, $4)
+     ON CONFLICT (malzeme_no) DO UPDATE SET miktar = EXCLUDED.miktar, neden = EXCLUDED.neden, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [g.malzemeNo, g.miktar, g.neden, g.kisiId],
+  );
+}

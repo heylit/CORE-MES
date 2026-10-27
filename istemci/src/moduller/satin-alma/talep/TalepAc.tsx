@@ -21,11 +21,17 @@ const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet
 const bosKalem = (): KalemTaslagi => ({
   anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null,
 });
-// Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi.
-const ontalepKalemi = (o: OnTalep): KalemTaslagi => ({
-  ...bosKalem(), serbest: true, ad: o.adim ?? `Op ${o.opNo}`, birim: o.birim, miktar: String(o.miktar), uygulanan: o.parca, isEmriId: o.isEmriId,
-  kaynak: `${o.emirNo} · Op ${o.opNo}`,
-});
+// Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi. Plan ihtiyacında kalem
+// malzeme kartıdır, miktar kalan eksik.
+const ontalepKalemi = (o: OnTalep): KalemTaslagi => (o.kaynak === 'plan'
+  ? {
+    ...bosKalem(), kart: { no: o.malzeme.no, kod: o.malzeme.kod, ad: o.malzeme.ad, birim: o.birim, kategori: null, katalogId: null },
+    miktar: String(o.miktar).replace('.', ','), kaynak: `${o.emirler.slice(0, 3).join(', ')}${o.emirler.length > 3 ? ` +${o.emirler.length - 3}` : ''}`,
+  }
+  : {
+    ...bosKalem(), serbest: true, ad: o.adim ?? `Op ${o.opNo}`, birim: o.birim, miktar: String(o.miktar), uygulanan: o.parca, isEmriId: o.isEmriId,
+    kaynak: `${o.emirNo} · Op ${o.opNo}`,
+  });
 
 // Denetim #37: miktar ortak ayrıştırıcıdan okunur ("12.5" = "12,5", virgül varsa nokta binliktir). Virgülsüz "1.250" belirsizdir,
 // okunamayan miktar gibi gönderilmez (Y2: noktayı binlik sayıp silmek "12.5"i 125 yapıyordu).
@@ -107,8 +113,8 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
       <legend className="sa-talep-gizli">Kalem</legend>
       {k.kaynak && (
         <p className="sa-talep-kaynak">
-          <Rozet ton="uyari" gorunum="cizgi">Fason adım</Rozet> Ön talepten: <span className="sa-talep-no">{k.kaynak}</span>
-          <span className="sa-talep-not">Bağ talebe taşınır; talep açılınca ön talep listeden düşer.</span>
+          <Rozet ton="uyari" gorunum="cizgi">{k.isEmriId !== null ? 'Fason adım' : 'Plan ihtiyacı'}</Rozet> Ön talepten: <span className="sa-talep-no">{k.kaynak}</span>
+          <span className="sa-talep-not">{k.isEmriId !== null ? 'Bağ talebe taşınır; talep açılınca ön talep listeden düşer.' : 'Talep açılınca miktarı ön talepten düşer; plan değişirse kalan yeniden hesaplanır.'}</span>
         </p>
       )}
       {k.kart !== null ? (
@@ -160,14 +166,14 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
   // Komutun kimliği başarıya ya da formun değişmesine kadar korunur: ağ kopup elle yeniden gönderilen talep ikinci kez açılmaz (KD-010).
   const [kimlik, kimlikYaz] = useState(yeniIstekKimligi);
   useEffect(() => { kimlikYaz(yeniIstekKimligi()); }, [tur, kalemler, tarih, aciklama, emirId]);
-  // Ön talepten gelince form dolar: hizmet, en erken gereken gün, emir tekse o emir.
+  // Ön talepten gelince form dolar: fasonda hizmet ve emir tekse o emir, planda malzeme; en erken gereken gün.
   useEffect(() => {
     if (taslak === null || taslak.length === 0) return;
-    const emirler = [...new Set(taslak.map((o) => o.uretimEmriId))];
-    turYaz('hizmet');
+    const emirler = [...new Set(taslak.map((o) => (o.kaynak === 'fason' ? o.uretimEmriId : null)))];
+    turYaz(taslak.every((o) => o.kaynak === 'plan') ? 'malzeme' : 'hizmet');
     kalemlerYaz(taslak.map(ontalepKalemi));
     tarihYaz(taslak.flatMap((o) => (o.gerekenTarih === null ? [] : [o.gerekenTarih])).sort()[0] ?? '');
-    emirIdYaz(emirler.length === 1 ? String(emirler[0]) : '');
+    emirIdYaz(emirler.length === 1 && emirler[0] !== null ? String(emirler[0]) : '');
     hataYaz(null);
   }, [taslak]);
   const bagli = kalemler.some((k) => k.isEmriId !== null);

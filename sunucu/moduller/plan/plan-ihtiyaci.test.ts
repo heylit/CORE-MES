@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { canliPlanIhtiyaclari } from './plan-ihtiyaci.ts';
+import { canliPlanIhtiyaclari, planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { planIhtiyaclari, type IhtiyacGirdisi } from './plan-ihtiyaci-kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
@@ -46,7 +46,7 @@ describe('plan: malzeme ihtiyacı kuralı', () => {
 });
 
 describe('plan (gerçek PostgreSQL): canlı planın malzeme ihtiyacı', () => {
-  const { c, vt, istek, tamam, kartAc, yeniAdim, isEmirleriAc, taslaktaOner } = planTestOrtami();
+  const { c, vt, istek, tamam, kartAc, yeniAdim, isEmirleriAc, taslaktaOner, durum } = planTestOrtami();
   const canliyaAl = async (p: PlanCevabi) => {
     const surum = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
       .senaryolar.find((x) => x.id === p.taslak!.id)!.surum;
@@ -65,5 +65,9 @@ describe('plan (gerçek PostgreSQL): canlı planın malzeme ihtiyacı', () => {
     assert.equal(l.length, 1);
     assert.deepEqual([l[0]!.miktar, l[0]!.stokBilinmiyor, l[0]!.emirler.length], [10, true, 1]);
     assert.match(l[0]!.gerekenTarih, /^\d{4}-\d{2}-\d{2}$/);
+    await vt().tx((db) => planIhtiyaclariniBildir(db));
+    const { ortam } = durum();
+    const satir = await ortam!.sahip.tek<{ miktar: string; stok: boolean }>('SELECT miktar::text AS miktar, stok_bilinmiyor AS stok FROM satin_alma_plan_ihtiyaci WHERE malzeme_no = $1', [ham]);
+    assert.deepEqual(satir, { miktar: '10.0000', stok: true }, 'satın almaya tam liste yazılır');
   });
 });

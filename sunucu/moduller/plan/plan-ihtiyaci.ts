@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { planIhtiyaclariniYaz } from '../satin-alma/disari.ts';
 import { emirlerinNetSarfi, malzemeStokDurumlari } from '../stok/disari.ts';
 import { emirDurumlari, emirlerinMalzemeIhtiyaci, emirNolari, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { planIhtiyaclari, type PlanIhtiyaci } from './plan-ihtiyaci-kurallar.ts';
@@ -33,5 +34,9 @@ export async function canliPlanIhtiyaclari(db: Db): Promise<PlanIhtiyaci[]> {
     kartlar: await malzemeOzetleri(db, malzemeler),
     serbest: new Map([...stok].map(([no, s]) => [no, s.serbest])),
   });
+}
+// Canlıya almanın sonunda, aynı işlemde: liste her seferinde tamdır, plan artık istemiyorsa satın almadaki satır silinir.
+export async function planIhtiyaclariniBildir(db: Db): Promise<void> {
+  await planIhtiyaclariniYaz(db, await canliPlanIhtiyaclari(db));
 }
 export type { PlanIhtiyaci };
