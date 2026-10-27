@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
-  planCevabi, planSorgusu, planSurumCevabi,
+  motorAyariGovdesi, motorAyarlariCevabi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, veriSagligiCevabi,
   yerlestirGovdesi,
@@ -15,6 +15,7 @@ import {
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
+import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import * as planlama from './planlama-servis.ts';
 import * as servis from './servis.ts';
 import { veriSagligi } from './veri-sagligi.ts';
@@ -86,6 +87,14 @@ export const uclar = [
     isle: ({ db, sorgu }) => servis.bedelAyari(db, sorgu.taslak) }),
   uc({ yontem: 'POST', yol: '/plan/bedel-ayari', yetki: 'plan.bedel-ayari', tekrarKorumali: true, govde: bedelAyariTaslakGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, govde: { taslak, ...ayar } }) => servis.bedelAyariYaz(db, kullanici, taslak ?? null, ayar) }),
+  // Plan motoru ayarları (kart 811): planı ya da planlama sayfalarını gören okur; değiştirmek plan.motor-ayari (775 b). Yazma yeni sürümdür,
+  // açık taslak eski sürümde kalır; taslak "güncel ayarları uygula" ile geçer (774 a).
+  uc({ yontem: 'GET', yol: '/plan/motor-ayarlari', yetki: { biri: ['plan.oku', 'plan.yaz', 'plan.planlama-oku', 'plan.motor-ayari'] }, sorgu: planSorgusu,
+    cevap: motorAyarlariCevabi, isle: ({ db, sorgu }) => motorAyarlari(db, sorgu.taslak) }),
+  uc({ yontem: 'POST', yol: '/plan/motor-ayarlari', yetki: 'plan.motor-ayari', tekrarKorumali: true, govde: motorAyariGovdesi, cevap: motorAyarlariCevabi,
+    isle: ({ db, kullanici, govde }) => motorAyariYaz(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/motor-ayari-guncelle', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi,
+    govde: senaryoSurumGovdesi, cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.motorAyariGuncelle(db, kullanici, parametre.id, govde.surum) }),
   // Elle çarpan (195 a): plan.yaz 2'ye, siparisler.onayla 3'e kadar; sınırı servis denetler. 148 a: taslağa yazılır, onayla siparişe geçer.
   uc({ yontem: 'GET', yol: '/plan/siparisler/:id/carpan', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, cevap: siparisCarpaniCevabi,
     isle: ({ db, parametre }) => servis.siparisCarpani(db, parametre.id) }),

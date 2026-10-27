@@ -227,6 +227,11 @@ export interface SenaryoSatiri {
   acanKisiId: number; acilma: string;
 }
 const SENARYO = `id, ad, aciklama, durum, taban_plan_surumu AS "tabanPlanSurumu", surum, acan_kisi_id AS "acanKisiId", to_json(acilma) #>> '{}' AS acilma`;
+// Taslağın sürümü: bağ satırı varsa onunki (boşsa varsayılan), yoksa taslak açıldığı anda güncel olan sürüm (bağ satırı her taslakta
+// yazılmasın diye açılış anından çözülür). Boş: koddaki varsayılan.
+const SENARYO_MOTOR_SURUMU = `(CASE WHEN EXISTS (SELECT 1 FROM plan_senaryo_motor_ayari WHERE senaryo_id = $1)
+  THEN (SELECT surum_id FROM plan_senaryo_motor_ayari WHERE senaryo_id = $1)
+  ELSE (SELECT v.id FROM plan_motor_ayar_surumu v, plan_senaryosu s WHERE s.id = $1 AND v.zaman <= s.acilma ORDER BY v.zaman DESC, v.id DESC LIMIT 1) END)`;
 export const senaryolar = (db: Db): Promise<SenaryoSatiri[]> =>
   db.sorgu(`SELECT ${SENARYO} FROM plan_senaryosu ORDER BY (durum IN ('acik', 'onayda')) DESC, id DESC LIMIT 20`);
 export const senaryo = (db: Db, id: number, kilit = false): Promise<SenaryoSatiri | null> =>
@@ -288,6 +293,8 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
   await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $2, ${BEDEL_SUTUN} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, ${CARPAN_SUTUN}) SELECT $2, ${CARPAN_SUTUN} FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1`,
     [kaynakId, id]);
+  // Çoğaltılan taslak kaynağın motor ayarı sürümünde kalır (774 a); açılış anından çözülmesin diye bağ yazılır (varsayılandaysa boş).
+  await db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kisi_id) SELECT $2, ${SENARYO_MOTOR_SURUMU}, $3`, [kaynakId, id, kisiId]);
   await ekMesaiKopyala(db, kaynakId, id);
   return id;
 }
@@ -413,6 +420,24 @@ export async function bedelTaslagaYaz(db: Db, senaryoId: number, a: BedelAyariGo
   );
 }
 export const bedelTaslaktanSil = (db: Db, senaryoId: number) => db.sorgu('DELETE FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1', [senaryoId]);
+
+/* ---------------- motor ayarı (kart 811; 773 a, 774 a) ---------------- */
+
+export interface MotorAyarSurumSatiri { id: number; degerler: Record<string, unknown>; yazanKisiId: number; zaman: string }
+const MOTOR_SURUM = `id, degerler, yazan_kisi_id AS "yazanKisiId", to_json(zaman) #>> '{}' AS zaman`;
+
+export const motorAyarGuncelSurumu = (db: Db): Promise<MotorAyarSurumSatiri | null> =>
+  db.tek(`SELECT ${MOTOR_SURUM} FROM plan_motor_ayar_surumu ORDER BY zaman DESC, id DESC LIMIT 1`);
+export const motorAyarSenaryoSurumu = (db: Db, senaryoId: number): Promise<MotorAyarSurumSatiri | null> =>
+  db.tek(`SELECT ${MOTOR_SURUM} FROM plan_motor_ayar_surumu WHERE id = ${SENARYO_MOTOR_SURUMU}`, [senaryoId]);
+// Aynı anda iki yazma güncel sürümü aynı okuyup iki satır yazmasın: karşılaştırma ve yazma bu kilitle sıralanır.
+export const motorAyarYazmaKilidi = (db: Db) => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('plan_motor_ayari'))");
+export const motorAyarSurumuYaz = async (db: Db, degerler: Record<string, unknown>, kisiId: number): Promise<MotorAyarSurumSatiri> =>
+  (await db.tek<MotorAyarSurumSatiri>(`INSERT INTO plan_motor_ayar_surumu (degerler, yazan_kisi_id) VALUES ($1, $2) RETURNING ${MOTOR_SURUM}`,
+    [JSON.stringify(degerler), kisiId]))!;
+export const motorAyarSenaryoyaBagla = (db: Db, senaryoId: number, surumId: number, kisiId: number) =>
+  db.sorgu(`INSERT INTO plan_senaryo_motor_ayari (senaryo_id, surum_id, kisi_id) VALUES ($1, $2, $3)
+            ON CONFLICT (senaryo_id) DO UPDATE SET surum_id = EXCLUDED.surum_id, kisi_id = EXCLUDED.kisi_id, zaman = now()`, [senaryoId, surumId, kisiId]);
 
 /* ---------------- elle çarpan (195 a) ---------------- */
 
