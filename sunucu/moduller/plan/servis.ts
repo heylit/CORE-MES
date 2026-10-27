@@ -677,8 +677,10 @@ function makineSiralari(l: readonly YerlesimSatiri[]): Map<number, { isEmriId: n
   for (const x of satirlar.sort((p, q) => p.an - q.an || p.isEmriId - q.isEmriId)) m.set(x.makineId, [...(m.get(x.makineId) ?? []), x]);
   return m;
 }
-// Geç başlayan iş, önündeyken arkasına geçtiği işle döner. Öne alınan iş (boşluğa sığan) sırayı bozmuş sayılmaz.
-function geriKayan(once: readonly YerlesimSatiri[], sonra: readonly YerlesimSatiri[]): { makineId: number; isEmriId: number; onundeydi: number } | null {
+// Geç başlayan iş, önündeyken arkasına geçtiği sabit işle döner. Öne alınan iş (boşluğa sığan) sırayı bozmuş sayılmaz. Yalnız motorun yerinde
+// tuttuğu iş (sabit) geçilmiş sayılır: motorun tanımadığı satır (planın iş emri olmayan) motorda engel değildir, onunla sıra karşılaştırması
+// dakika kaymasında yanlış ret verirdi (759).
+function geriKayan(once: readonly YerlesimSatiri[], sonra: readonly YerlesimSatiri[], sabit: (isEmriId: number) => boolean): { makineId: number; isEmriId: number; onundeydi: number } | null {
   const sonraki = makineSiralari(sonra);
   for (const [makineId, l] of makineSiralari(once)) {
     const yeni = sonraki.get(makineId) ?? [];
@@ -686,7 +688,7 @@ function geriKayan(once: readonly YerlesimSatiri[], sonra: readonly YerlesimSati
     for (const [n, a] of l.entries()) {
       const k = ilk(yeni, a.isEmriId);
       if (k < 0 || yeni[k]!.an <= a.an) continue;
-      const gecilen = l.slice(n + 1).find((f) => f.isEmriId !== a.isEmriId && ilk(yeni, f.isEmriId) >= 0 && ilk(yeni, f.isEmriId) < k);
+      const gecilen = l.slice(n + 1).find((f) => f.isEmriId !== a.isEmriId && sabit(f.isEmriId) && ilk(yeni, f.isEmriId) >= 0 && ilk(yeni, f.isEmriId) < k);
       if (gecilen) return { makineId, isEmriId: a.isEmriId, onundeydi: gecilen.isEmriId };
     }
   }
@@ -2124,7 +2126,8 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     taslak = (await s.yerlesimler(db, id)).filter((y) => !vardiyasiz.has(y.isEmriId));
     // 737 a: zaman geçince kilitli, dondurulmuş ya da bölünmüş işin önüne sığmayan iş arkasına geçerdi; canlı onaylanan taslaktan habersiz
     // farklı olmasın diye canlıya alma durur.
-    const kayan = geriKayan(onceki, taslak);
+    const yenidenDizilen = new Set([...kuyruk.values()].flat().map((y) => y.isEmriId));
+    const kayan = geriKayan(onceki, taslak, (x) => b.isler.has(x) && !yenidenDizilen.has(x));
     if (kayan !== null) {
       throw cakisma(`Taslak yazıldıktan sonra zaman geçti; ${kaynakMetni(b, { tur: 'makine', id: kayan.makineId })} kuyruğunda ${isMetni(b, kayan.isEmriId)}, `
         + `${isMetni(b, kayan.onundeydi)} işinin önüne artık sığmıyor. ${PLANI_YENIDEN_KUR}`);

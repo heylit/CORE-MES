@@ -17,3 +17,14 @@ export async function gunduzde<T>(govde: () => Promise<T>): Promise<T> {
     mock.timers.reset();
   }
 }
+
+// Taslak yazımı ile canlıya alma arasında dakika dönerse motor kuyruğu şimdiden yeniden dizer; sabit işin önüne sıkı dizilmiş iş artık
+// sığmaz ve canlıya alma 737 a gereği durur. Bunu sınamayan test saati gerçek anda sabitler: koşu süresi ve yük sonucu değiştirmez (759).
+export async function anSabit<T>(govde: () => Promise<T>): Promise<T> {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  try {
+    return await govde();
+  } finally {
+    mock.timers.reset();
+  }
+}
