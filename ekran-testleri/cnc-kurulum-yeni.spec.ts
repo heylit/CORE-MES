@@ -127,7 +127,7 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
     await expect(page.getByRole('heading', { name: ad })).toBeVisible();
     await expect(page.getByLabel('Toplam adet')).toHaveValue('4');
 
-    await page.getByRole('button', { name: 'Artır' }).click();
+    await page.getByRole('button', { name: 'Artır', exact: true }).click();
     await expect(page.getByLabel('Toplam adet')).toHaveValue('5');
 
     await page.getByRole('searchbox', { name: 'Kütüphanede ara' }).fill(ad);
@@ -196,8 +196,13 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
 test.describe('P5 Takım Ömrü', () => {
   test('Takım Ömrü: üç kip açılır, bakmak yazmaz, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/takim-omru');
+    // 768 altında panel alttan çekmecedir (prototipteki gibi); kip sekmeleri çekmece açılınca erişilir.
+    const cekmece = page.locator('.tc-co-cekmece');
+    if (await cekmece.isVisible()) await cekmece.click();
     const kipler = page.getByRole('tablist', { name: 'Takım ömrü' });
     await expect(kipler.getByRole('tab')).toHaveText(['Magazin takibi', 'Takım analizi', 'Ömür yenileme']);
+    // Kip ortak kayda yazılır; başka genişlikteki koşu son kipi bırakmış olabilir.
+    await kipler.getByRole('tab', { name: 'Magazin takibi' }).click();
     await expect(page.getByText('Tüm tezgâhlar')).toBeVisible();
     // Örnek veri kendiliğinden yazılmaz (210.1); yalnız bakmak sunucuya yazmaz.
     expect(ag.yazmalar).toEqual([]);
@@ -211,6 +216,7 @@ test.describe('P5 Takım Ömrü', () => {
     for (const genislik of [360, 768, 1280]) {
       await page.setViewportSize({ width: genislik, height: 800 });
       await expect(kipler).toBeVisible();
+      if (genislik < 768) await expect(page.locator('.tc-co-cekmece')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     }
     expect(ag.hatalar).toEqual([]);
