@@ -62,12 +62,13 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import {
   IsEylemi, IsOnizKarti, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi,
 } from './Cark.tsx';
+import { DurumSuresi } from './DurumSuresi.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, GecisPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
@@ -146,7 +147,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const bakYaz = (i: number) => { const x = isler[i]; bakilanYaz(!x || i === ai ? null : siraAnahtari(x)); };
   const curMc = () => (o.pkg && o.pkg.mc) || (ist.mcs.length === 1 ? ist.mcs[0]!.id : null);
   const [mcSel, mcSelYaz] = useState<string[]>([]);
-  const [since, sinceYaz] = useState(() => { const l = yerel.oku<{ at?: number }>(`lastState:${MACHINE}`); return l && l.at ? l.at : Date.now(); });
+  // Bu durumda geçen sürenin başlangıcı; null: bilinmiyor ("—"). Yereldeki kayıt yalnız aynı işin aynı durumu içinse ön değerdir.
+  const [since, sinceYaz] = useState<number | null>(() => {
+    const l = yerel.oku<{ no?: string; anahtar?: string; state?: string; at?: number | null }>(`lastState:${MACHINE}`);
+    return l && typeof l.at === 'number' && (l.anahtar ?? l.no) === siraAnahtari(o) && l.state === o.state ? l.at : null;
+  });
   const [tab, tabYaz] = useState<Gorunum>('draw');
   const [odak, odakYaz] = useState<{ id: number; n: number } | null>(null);
   const [odakKipi, odakKipiYaz] = useState(false);
@@ -168,7 +173,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const ceyrek = Math.floor(simdi / 15000);
   // eslint olmayan bağımlılık: hesap 15 saniyede bir tazelenir (eski ekran gibi).
   const SC = useMemo(() => vardiyaHesabi(SL, Date.now(), ortam), [SL, ortam, ceyrek]);
-  const shiftNow = Math.min(480, 312 + (simdi - since) / 60000);
+  const shiftNow = Math.min(480, 312 + (simdi - (since ?? simdi)) / 60000);
   const vardiya = anlikVardiya(simdi, ayarlar.vardiyalar, ayarlar.tatiller);
 
   /* bildirimler: tek bildirim düzeninde en son bildirimin "Geri al"ı geçerlidir (eskisi gibi yeni ileti eskisinin yerini alır) */
@@ -384,13 +389,13 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const isGecIste = (i: number, sonra?: () => void) => {
     if (i === ai) { sonra?.(); return; }
     if (!pv && gecisteDuraklatilacaklar(isler, i).length) { gecisYaz({ i, ...(sonra ? { sonra } : {}) }); ovYaz('gecis'); return; }
-    isGec(i); sinceYaz(Date.now()); sonra?.();
+    isGec(i); sinceYaz(null); sonra?.();
   };
   const gecisiBitir = (duraklatilsin: boolean) => {
     const g = gecis;
     ovYaz(null); gecisYaz(null);
     if (!g) return;
-    isGec(g.i, duraklatilsin); sinceYaz(Date.now()); g.sonra?.();
+    isGec(g.i, duraklatilsin); sinceYaz(null); g.sonra?.();
   };
 
   // Ctrl K'den gelen emir listede varsa seçilir; çalışan başka iş varsa seçim yapılmaz ve operatöre söylenir.
@@ -434,18 +439,20 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return () => window.removeEventListener(EMIR_SEC_OLAYI, al);
   }, []);
   useEffect(() => { emirSecRef.current(); }, [isler]);
-  // Etkin iş ya da durumu değişince süre işin sunucudaki son durum kaydından düzeltilir; yoksa yereldeki an kalır.
+  // Etkin iş ya da durumu değişince süre işin sunucudaki son durum kaydından (sunucu saati) okunur; önizleme de okur. Paketi olmayan iş
+  // emir numarasıyla aranır. Kayıt bugünkü durumu tutmuyorsa elde olan kalır: bu cihazdaki durum değişikliği ya da "bilinmiyor".
   const pkgId = o.pkg ? o.pkg.id : null;
+  const etkinAnahtar = siraAnahtari(o);
   useEffect(() => {
-    if (pv || o.empty || !pkgId) return;
+    if (o.empty || (!pkgId && !o.no)) return;
     let bitti = false;
     const durum = o.state;
-    depo.Log.query('events', { pkg: pkgId, limit: 200 }).then((k) => {
+    depo.Log.query('events', { ...(pkgId ? { pkg: pkgId } : { order: o.no }), limit: 200 }).then((k) => {
       const at = durumBaslangici(k, durum);
       if (!bitti && at !== null) sinceYaz(at);
     }, () => undefined);
     return () => { bitti = true; };
-  }, [o.no, o.state, pkgId, pv, depo]);
+  }, [etkinAnahtar, o.state, pkgId, depo]);
 
   /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
   const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
@@ -493,7 +500,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const bes = Math.floor(simdi / 5000);
   useEffect(() => {
     if (pv || warnShow || ov) return;
-    const due = zamaniGelenUyarilar(RL.warns, o, Date.now(), since, vardiya.s);
+    // Süre bilinmiyorsa süreye bağlı uyarı gelmez (geçen süre sıfır sayılır), sayıya ve vardiyaya bağlı olanlar gelir.
+    const due = zamaniGelenUyarilar(RL.warns, o, Date.now(), since ?? Date.now(), vardiya.s);
     if (!due.length) return;
     const loud = due.filter((w) => w.ack || w.lvl === 'crit');
     const quiet = due.filter((w) => !(w.ack || w.lvl === 'crit'));
@@ -514,7 +522,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const pauseSeen = useRef(0);
   const on = Math.floor(simdi / 10000);
   useEffect(() => {
-    if (pv || !RL.prod.maxPauseMin || !(o.state === 'paused' || o.state === 'stopped')) return;
+    if (pv || since === null || !RL.prod.maxPauseMin || !(o.state === 'paused' || o.state === 'stopped')) return;
     if (Date.now() - since >= RL.prod.maxPauseMin * 60000 && pauseSeen.current !== since) {
       pauseSeen.current = since;
       bip('nok');
@@ -691,7 +699,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const ilkGorus = !gorulenIs.current.has(anahtar);
     gorulenIs.current.add(anahtar);
     if (l && l.no === anahtar && l.state === o.state) return;
-    yerel.yaz(k, { no: o.no, anahtar, state: o.state, at: Date.now() });
+    // İlk görüşte durum bu cihazda değişmedi: başlangıç anı bilinmez, kayda uydurulmaz.
+    yerel.yaz(k, { no: o.no, anahtar, state: o.state, at: ilkGorus ? null : Date.now() });
     if (ilkGorus) { autoRef.current.state = false; lastNoteRef.current = null; return; }
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
     if (!autoRef.current.state && durumKaydiGerekir(l, { no: anahtar, state: o.state })) {
@@ -1227,7 +1236,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return (
       <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>
         <header className="tc-ay1-mobil-ust">
-          <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></span>
+          <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir"><b>{MACHINE}</b><DurumSuresi durum={o.state} since={since} /></span>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
           {/* Darda saat yok; kopukluk ve kayıt riski operatörden saklanmasın diye durum üst çubukta kalır. */}
           <BaglantiDurumu />
@@ -1289,7 +1298,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
         </span>
-        <DurumLambasi durum={o.state} since={since} />
+        <DurumSuresi durum={o.state} since={since} />
         {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}
         <span className="tc-ay1-bosluk" />
         <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />

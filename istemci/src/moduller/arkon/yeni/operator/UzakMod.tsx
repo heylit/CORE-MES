@@ -3,16 +3,17 @@ import { createPortal } from 'react-dom';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { modelDosyasi, saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import type { Gorunum3B } from '../../../../ortak/cizim/model.ts';
-import { sayi, sure } from '../cekirdek/bicim.ts';
+import { sayi } from '../cekirdek/bicim.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
 import { tonDurumu } from './kurallar.ts';
 import { durumAdi, durumRengi } from './Parcalar.tsx';
+import { GecenSure } from './DurumSuresi.tsx';
 import type { Gorev, Is, KontrolTakvimi } from './tipler.ts';
 
 // Uzak mod (operator-parcalar.ts AwayView): uzaktan okunur dev sayaç. Dokunuş ya da tuş normal ekrana döndürür.
-export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev: Gorev | null; D: KontrolTakvimi; since: number; istasyon: string; uyan: () => void }) {
+export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev: Gorev | null; D: KontrolTakvimi; since: number | null; istasyon: string; uyan: () => void }) {
   const simdi = useSimdi(1000);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
@@ -23,7 +24,7 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
     <div ref={ref} className="tc-ay1-uzak" data-durum={durumRengi(is.state)} role="dialog" aria-label="Uzak mod" tabIndex={0}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); uyan(); }} onKeyDown={uyan}>
       <div className="tc-ay1-uzak-ust">
-        <span className="tc-ay1-durum-adi"><i aria-hidden="true" />{durumAdi(is.state)}<span className="tc-ay1-mono" title="Bu durumda geçen süre">{sure((simdi - since) / 1000)}</span></span>
+        <span className="tc-ay1-durum-adi"><i aria-hidden="true" />{durumAdi(is.state)}<GecenSure since={since} /></span>
         <span className="tc-ay1-uzak-saat tc-ay1-mono">{saatMetni(simdi)}</span>
         <span className="tc-ay1-uzak-istasyon tc-ay1-mono">{istasyon}</span>
       </div>

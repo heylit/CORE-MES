@@ -198,3 +198,41 @@ describe('A1 Kaliteye numune penceresi (A4 NumunePenceresi)', () => {
     expect(gonder).toHaveBeenCalledTimes(1);
   });
 });
+
+// 797: "bu durumda geçen süre" sunucudaki son durum kaydından (sunucu saati) gelir; bilinmiyorsa "—" yazılır, sıfırdan sayılmaz.
+describe('797 durum süresi', () => {
+  const sureler = () => screen.findAllByTitle(/Bu durumda geçen süre|Süre bilinmiyor/, undefined, { timeout: 10000 });
+  const birSaatOnce = () => ({ events: [{ pkgId: PAKET.id, orderNo: PAKET.no, state: 'queued', at: Date.now() - 3_600_000 }] });
+
+  it('kayıt yoksa süre bilinmez: "—", 00:00:00 değil', async () => {
+    sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const [s] = await sureler();
+    expect(s!.textContent).toBe('—');
+    expect(s!.getAttribute('title')).toMatch(/Süre bilinmiyor/);
+  }, 40000);
+
+  it('son kayıt bugünkü durumsa süre o kayıttan sayılır', async () => {
+    sunucuKur(ISTASYONLU, { ...sunucu(), kayitlar: birSaatOnce() });
+    arkonAc('/uretim-terminali');
+    await ekran();
+    await waitFor(async () => { expect((await sureler())[0]!.textContent).toMatch(/^01:00:0\d$/); }, { timeout: 10000 });
+  }, 40000);
+
+  it('son kayıt başka durumdaysa süre bilinmez', async () => {
+    sunucuKur(ISTASYONLU, { ...sunucu(), kayitlar: { events: [{ pkgId: PAKET.id, state: 'running', at: Date.now() - 3_600_000 }] } });
+    arkonAc('/uretim-terminali');
+    await ekran();
+    await new Promise((r) => setTimeout(r, 700));
+    expect((await sureler())[0]!.textContent).toBe('—');
+  }, 40000);
+
+  it('önizleme de sunucudaki kaydı okur', async () => {
+    const istekler = sunucuKur(YONETICI, { ...sunucu(), kayitlar: birSaatOnce() });
+    arkonAc(`/arkon/onizle/${PAKET.id}`);
+    await ekran();
+    await waitFor(async () => { expect((await sureler())[0]!.textContent).toMatch(/^01:00:0\d$/); }, { timeout: 10000 });
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+});
