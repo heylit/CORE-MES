@@ -9,7 +9,7 @@ import * as servis from './servis.ts';
 import {
   kmBalonlarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
   kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi,
-  kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi,
+  kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi, kmBalonCevabi, kmBalonYeriGovdesi, kmStudyoBalonParametresi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
 
@@ -295,6 +295,17 @@ export const uclar: Uc[] = [
     cevap: kmResimCevabi,
     isle: async ({ db, kullanici, parametre, govde }) =>
       ({ resim: await studyo.balonPlaniYaz(db, kullanici.id, parametre.resimId, govde.surum, govde.balonlar) }),
+  }),
+  // Balonun yeri planı yeniden yazmadan değişir (913 a); planı yazan işlemle aynı yetki.
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/balonlar/:balonId/yer',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoBalonParametresi,
+    govde: kmBalonYeriGovdesi,
+    cevap: kmBalonCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ balon: await studyo.balonYeriYaz(db, kullanici.id, parametre.balonId, govde) }),
   }),
   uc({
     yontem: 'POST',

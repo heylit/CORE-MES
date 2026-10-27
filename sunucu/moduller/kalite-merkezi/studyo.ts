@@ -4,14 +4,14 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmBalonGirdisi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmBalonYerKipi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  STUDYO_ILETILER, balonPlaniReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
+  STUDYO_ILETILER, balonPlaniReddi, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
 } from './kurallar.ts';
 import type { StudyoIletisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -28,7 +28,8 @@ const ret = (anahtar: StudyoIletisi, alan?: string) => dogrulama(STUDYO_ILETILER
 function balonCevabi(b: sorgular.BalonSatiri): KmBalon {
   return {
     id: b.id, no: b.no, nominal: b.nominal, tolerans: b.tolerans, alt: b.alt, ust: b.ust, alet: b.alet, siklik: b.siklik, kritik: b.kritik,
-    yontem: b.yontem, olcuAletiGerekir: b.olcuAletiGerekir, tur: b.tur, sayfa: b.sayfa, x: b.x, y: b.y, yaziKutusu: b.yaziKutusu, surum: b.surum,
+    yontem: b.yontem, olcuAletiGerekir: b.olcuAletiGerekir, tur: b.tur, sayfa: b.sayfa, x: b.x, y: b.y, yaziKutusu: b.yaziKutusu, yer: b.yer, yerKipi: b.yerKipi,
+    surum: b.surum,
   };
 }
 
@@ -91,7 +92,7 @@ export async function resimKaldir(db: Db, kisiId: number, resimId: number, surum
 const balonYazimi = (b: KmBalonGirdisi): sorgular.BalonYazimi => ({
   no: b.no, nominal: b.nominal, tolerans: b.tolerans ?? null, alt: b.alt ?? null, ust: b.ust ?? null, alet: b.alet ?? null, siklik: b.siklik ?? null,
   kritik: b.kritik, yontem: b.yontem ?? null, olcuAletiGerekir: b.olcuAletiGerekir, tur: b.tur ?? null, sayfa: b.sayfa ?? null, x: b.x ?? null, y: b.y ?? null,
-  yaziKutusu: b.yaziKutusu ?? null,
+  yaziKutusu: b.yaziKutusu ?? null, yer: b.yer ?? null, yerKipi: b.yerKipi ?? null,
 });
 
 // Kontrol planı resim başına bütün yazılır (603 a): resmin sürümü planın sürümüdür; önce o artırılır (satır kilitlenir), sonra
@@ -112,6 +113,19 @@ export async function balonPlaniYaz(db: Db, kisiId: number, resimId: number, sur
     else await sorgular.balonGuncelle(db, g.id, balonYazimi(g), kisiId);
   }
   return resimOku(db, resimId);
+}
+
+// Tek balonun yeri (894 a, 913 a): plan ve resmin sürümü değişmez, numune ve ölçüm etkilenmez. Kaldırılmış resmin ya da balonun yeri yazılmaz.
+export async function balonYeriYaz(
+  db: Db, kisiId: number, balonId: number, g: { surum: number; yer: readonly [number, number] | null; yerKipi: KmBalonYerKipi | null },
+): Promise<KmBalon> {
+  const red = balonYeriReddi(g);
+  if (red !== null) throw ret(red, 'yer');
+  const [b] = await sorgular.etkinBalonlar(db, [balonId]);
+  if (!b) throw bulunamadi(STUDYO_ILETILER.balonYok);
+  if (!(await sorgular.balonYeriYaz(db, balonId, g.surum, g.yer, g.yerKipi, kisiId))) throw cakisma(STUDYO_ILETILER.surumDegisti);
+  const [yeni] = await sorgular.etkinBalonlar(db, [balonId]);
+  return balonCevabi(yeni!);
 }
 
 // Numune planı parça ve operasyon başınadır; kuraldaki balon numaraları parçanın etkin resimlerinde olmalıdır.

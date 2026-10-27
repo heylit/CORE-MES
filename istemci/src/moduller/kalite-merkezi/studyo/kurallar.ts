@@ -18,6 +18,8 @@ export function cizimBalonu(b: KmBalon): Balon {
     ...(b.yontem !== null ? { m: b.yontem === 'cmm' ? 'cmm' as const : 'man' as const } : {}),
     ...(b.siklik !== null ? { freq: b.siklik } : {}),
     ...(b.tur !== null ? { l: b.tur } : {}),
+    ...(b.yer ? { yer: [b.yer[0], b.yer[1]] as [number, number] } : {}),
+    ...(b.yerKipi ? { yerKipi: b.yerKipi } : {}),
   };
 }
 
@@ -38,7 +40,7 @@ export function planGirdileri(eski: readonly KmBalon[], balonlar: readonly Balon
       alet: b.tool ?? null, siklik: b.freq ?? null, kritik: b.crit === true,
       yontem: b.m === 'cmm' ? 'cmm' : b.m === 'man' ? 'elle' : null,
       olcuAletiGerekir: k?.olcuAletiGerekir ?? false, tur: b.l ?? null, sayfa: k?.sayfa ?? null,
-      x: b.x, y: b.y, yaziKutusu: b.ar ?? null,
+      x: b.x, y: b.y, yaziKutusu: b.ar ?? null, yer: b.yer ?? null, yerKipi: b.yerKipi ?? null,
     };
   });
 }

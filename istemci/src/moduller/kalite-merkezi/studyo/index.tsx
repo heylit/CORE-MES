@@ -178,7 +178,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           </div>
         ) : null}
         {resim ? (
-          <Resim resim={resim} kontrol={{
+          <Resim resim={resim} yerYaz={duzenler && taslak === null} kontrol={{
             balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !duzenler,
           }} />
         ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
-  KmBalonlarGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
+  KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
   KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../../ortak/veri/api.ts';
@@ -103,6 +103,24 @@ export function useBalonPlaniYaz(malzemeNo: number | null) {
     onSuccess: ({ resim }) => {
       if (malzemeNo === null) return;
       istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(malzemeNo), (o) => o && { ...o, resimler: o.resimler.map((r) => (r.id === resim.id ? resim : r)) });
+    },
+    onError: () => { if (malzemeNo !== null) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) }); },
+  });
+}
+
+// Balon yeri (913 a) plan sürümünü değiştirmez; balonun kendi sürümüyle yazılır, cevaptaki balon parçanın önbelleğindeki resme konur.
+export function useBalonYeriYaz(malzemeNo: number | null) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ balon, yer, yerKipi }: { balon: KmBalon } & Omit<KmBalonYeriGovdesi, 'surum'>) => tekrarKorumaliGonder((d) => api.post<{ balon: KmBalon }>(
+      `/kalite-merkezi/studyo/balonlar/${String(balon.id)}/yer`, { surum: balon.surum, yer, yerKipi } satisfies KmBalonYeriGovdesi,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ balon }) => {
+      if (malzemeNo === null) return;
+      istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(malzemeNo), (o) => o && {
+        ...o, resimler: o.resimler.map((r) => (r.balonlar.some((b) => b.id === balon.id) ? { ...r, balonlar: r.balonlar.map((b) => (b.id === balon.id ? balon : b)) } : r)),
+      });
     },
     onError: () => { if (malzemeNo !== null) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) }); },
   });
