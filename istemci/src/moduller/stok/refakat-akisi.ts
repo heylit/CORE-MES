@@ -45,6 +45,11 @@ export function aralikMetni(bas: number | null, bit: number | null, acik: boolea
   if (bit === null || bit === bas) return tarihSaat(bas);
   return `${tarihSaat(bas)} → ${ayniGun(bas, bit) ? saat(bit) : tarihSaat(bit)}`;
 }
+// Plan aralığı: gerçek başlangıçla aynı gündeyse yalnız saat, değilse tarihle.
+export function planAraligi(bas: number, bit: number, gercek: number | null): string {
+  const b = gercek !== null && ayniGun(gercek, bas) ? saat(bas) : tarihSaat(bas);
+  return `${b} → ${ayniGun(bas, bit) ? saat(bit) : tarihSaat(bit)}`;
+}
 
 export const KONUM: Record<KartKonumuTuru, { metin: string; ton: Ton }> = {
   depoda: { metin: 'Stokta · depo', ton: 'stok' },
@@ -130,17 +135,21 @@ export interface Asama {
   adim: KartAdimi | null;
   // Teslim yolunda geçen dakika (stok aşamasında).
   yoldaDk: number;
+  // Plan saati ve plana göre fark (750 a: güncel canlı plan); taban, adımın ilk canlıya alınan yeri.
+  plan?: PlanBilgisi;
 }
+export interface PlanBilgisi { metin: string; fark: string; farkTon: Ton; taban: string; bas: number | null }
 
 export interface KartBaglami {
   urun: string | null;
 }
 
 // Adım ölçüsü, kartın rotasındaki başlama, bitiş ve kartla sayılan hurdayla.
-export type KartAdimi = AdimOlcusu & { baslama: string | null; bitis: string | null; hurdaAdet: number };
+type PlanAraligi = KartAkisiCevabi['rota'][number]['plan'];
+export type KartAdimi = AdimOlcusu & { baslama: string | null; bitis: string | null; hurdaAdet: number; plan: PlanAraligi; taban: PlanAraligi };
 export const kartAdimlari = (d: KartAkisiCevabi): KartAdimi[] => d.adimlar.map((a) => {
   const r = d.rota.find((x) => x.isEmriId === a.isEmriId);
-  return { ...a, baslama: r?.baslama ?? null, bitis: r?.bitis ?? null, hurdaAdet: r?.hurdaAdet ?? 0 };
+  return { ...a, baslama: r?.baslama ?? null, bitis: r?.bitis ?? null, hurdaAdet: r?.hurdaAdet ?? 0, plan: r?.plan ?? null, taban: r?.taban ?? null };
 });
 
 // Kartın parça sayısı: ilk adımda kartla sayılan sağlam ve hurda; sayım yoksa null.
@@ -386,6 +395,8 @@ export function asamalar(d: KartAkisiCevabi, b: KartBaglami): Asama[] {
     giren: [], cikan: [], anlar: asamaAnlari(sonAnlari, () => []), adim: null, yoldaDk: 0,
   });
 
+  planiIsle(sonuc, simdi, d.emir.teslim);
+
   // Fark: görünen anların zaman sırasında bir öncekine uzaklığı.
   let onceki: number | null = null;
   for (const a of sonuc.flatMap((x) => x.anlar).sort((p, q) => p.zaman - q.zaman)) {
@@ -393,6 +404,58 @@ export function asamalar(d: KartAkisiCevabi, b: KartBaglami): Asama[] {
     onceki = a.zaman;
   }
   return sonuc;
+}
+
+// Plan saatleri (750 a): adım aşamasında canlı plan aralığı; biten adımda bitiş farkı, süren ya da sıradaki adımda plan bitişi ya da
+// başlangıcı geçtiyse gecikme. Başlamış adımın önündeki stok aşaması planlanan başlangıcı ve başlama farkını taşır; önünde stok aşaması
+// yoksa başlama farkı adımdadır. Bir dakikadan küçük fark yazılmaz. Kapanış aşaması emrin terminini taşır.
+function planiIsle(liste: Asama[], simdi: number, termin: string | null): void {
+  type Fark = { metin: string; ton: Ton };
+  // İşaretli fark (gerçek eksi plan); geç bekle tonunda, erken soluk.
+  const fark = (ms: number, metin: (sure: string, yon: string) => string): Fark | null => {
+    const dk = Math.round(ms / DK);
+    return Math.abs(dk) < 1 ? null : { metin: metin(sureMetni(Math.abs(dk)), dk > 0 ? 'geç' : 'erken'), ton: dk > 0 ? 'bekle' : 'soluk' };
+  };
+  const ton = (l: readonly Fark[]): Ton => l.find((f) => f.ton === 'stop')?.ton ?? l.find((f) => f.ton === 'bekle')?.ton ?? 'soluk';
+  liste.forEach((s, i) => {
+    if (s.tur === 'son') {
+      if (termin !== null) s.plan = { metin: `termin ${termin.split('-').reverse().join('.')}`, fark: '', farkTon: 'soluk', taban: '', bas: null };
+      return;
+    }
+    const a = s.adim;
+    if (s.tur !== 'op' || a === null || a.plan === null) return;
+    const pb = an(a.plan.baslangic);
+    const pt = an(a.plan.bitis);
+    const farklar: Fark[] = [];
+    const baslama = s.bas === null ? null : fark(s.bas - pb, (sure, yon) => `${sure} ${yon} başladı`);
+    const once = liste[i - 1];
+    if (once?.tur === 'stok' && once.durum === 'gecti' && s.bas !== null) {
+      once.plan = {
+        metin: `${once.bas !== null && ayniGun(once.bas, pb) ? saat(pb) : tarihSaat(pb)} başlangıç`,
+        fark: baslama?.metin ?? '', farkTon: baslama?.ton ?? 'soluk', taban: '', bas: null,
+      };
+    } else if (baslama !== null) farklar.push(baslama);
+    if (s.durum === 'gecti' && s.bit !== null) {
+      const f = fark(s.bit - pt, (sure, yon) => `bitiş ${sure} ${yon}`);
+      if (f !== null) farklar.push(f);
+    } else if (s.durum === 'simdi' && simdi - pt >= DK) farklar.push({ metin: `plan bitişi ${sureMetni(dakika(simdi - pt))} geçti`, ton: 'stop' });
+    else if (s.durum === 'sirada' && simdi - pb >= DK) farklar.push({ metin: `plana göre ${sureMetni(dakika(simdi - pb))} gecikmede`, ton: 'stop' });
+    const t = a.taban;
+    s.plan = {
+      metin: planAraligi(pb, pt, s.bas),
+      fark: farklar.map((f) => f.metin).join(' · '),
+      farkTon: ton(farklar),
+      taban: t === null || (an(t.baslangic) === pb && an(t.bitis) === pt) ? '' : `taban ${planAraligi(an(t.baslangic), an(t.bitis), s.bas ?? pb)}`,
+      bas: pb,
+    };
+  });
+}
+
+// Planlanan lead: gerçek lead gibi karta yüklemeden, rotadaki son plan bitişine; plan yoksa ya da bitiş yüklemeden önceyse null.
+export function planLeadDk(d: KartAkisiCevabi): number | null {
+  const bitisler = d.rota.flatMap((r) => (r.plan === null ? [] : [an(r.plan.bitis)]));
+  const ms = Math.max(...bitisler) - an(d.kart.acilis);
+  return bitisler.length === 0 || ms <= 0 ? null : dakika(ms);
 }
 
 // Lead dağılımı: karta yüklemeden lead sonuna; her an önce adımın bölümüne (duruş, ayar, üretim, fason), değilse teslim yoluna,
@@ -462,7 +525,8 @@ export function islemPlaniDk(d: KartAkisiCevabi): number | null {
 
 export interface OzetKutusu { ad: string; deger: string; fark: string; ton: Ton }
 export function ozetKutulari(d: KartAkisiCevabi, dagilim: LeadDagilimi | null): OzetKutusu[] {
-  const plan = islemPlaniDk(d);
+  const planLead = planLeadDk(d);
+  const plan = planLead ?? islemPlaniDk(d);
   const leadFark = yuzdeFark(d.lead.dk, plan);
   const t = dagilim?.toplamlar;
   const operasyonda = t === undefined ? null : t.ayar + t.uretim + t.durus + t.fason;
@@ -473,7 +537,9 @@ export function ozetKutulari(d: KartAkisiCevabi, dagilim: LeadDagilimi | null): 
   return [
     {
       ad: 'Lead time · gerçek', deger: `${sureMetni(d.lead.dk)}${d.lead.acik ? ' (sürüyor)' : ''}`,
-      fark: plan === null ? 'işlem planı yok' : `işlem planı ${sureMetni(plan)}${leadFark === null ? '' : ` · ${farkMetni(leadFark)}`}`,
+      // Açık kartın lead'i plana henüz ulaşmadıysa eksi yüzde yerine kalan süre: yüzde ancak lead kapanınca ya da planı aşınca anlamlıdır.
+      fark: plan === null ? 'plan yok' : `${planLead === null ? 'işlem planı' : 'plan'} ${sureMetni(plan)}${leadFark === null ? ''
+        : d.lead.acik && leadFark < 0 && d.lead.dk !== null ? ` · ${sureMetni(plan - d.lead.dk)} kaldı` : ` · ${farkMetni(leadFark)}`}`,
       ton: leadFark !== null && leadFark > 0 ? 'bekle' : 'soluk',
     },
     {
