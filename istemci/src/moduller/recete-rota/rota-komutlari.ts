@@ -39,6 +39,7 @@ const KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon'] as const;
 const ADIM_KAYNAK_TURLERI = [...KAYNAK_TURLERI, 'fason'] as const;
 const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
 const KULLANIMLAR = ['tek', 'paralel'] as const;
+const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
 const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
 const SURE_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
 
@@ -67,6 +68,8 @@ function adim(a: Nesne): Nesne {
     makineKullanimi: secenek(a['makineKullanimi'], KULLANIMLAR, 'makine kullanımı'),
     enKucukParca: tamSayiVeyaBos(a['enKucukParca'], 'en küçük parça'),
     yenidenAyar: a['yenidenAyar'] === true,
+    // Seçimi taşımayan (eski görünüm) adımda alan gönderilmez: sunucu kayıtlı seçimi korur.
+    ...(a['ilkParca'] === undefined ? {} : { ilkParca: secenek(a['ilkParca'], ILK_PARCA_SECIMLERI, 'ilk parça onayı') }),
     adaylar: dizi(a['adaylar'], 'adaylar', 10).map((x) => {
       const k = kaynak(x['kaynak'], KAYNAK_TURLERI, 'aday kaynak');
       if (k === null) throw gecersiz('aday kaynak');

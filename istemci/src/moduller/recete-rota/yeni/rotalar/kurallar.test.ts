@@ -143,6 +143,14 @@ describe('kaydet gövdesi', () => {
     expect(g[1]).toMatchObject({ opNo: null, kaynak: { tur: 'makine', id: 51 }, bagimlilik: 'akisli', devirAdedi: 3 });
   });
 
+  it('744 a: ilk parça seçimi gider; seçimi bilinmeyen adımda alan gitmez (sunucu kayıtlıyı korur); yeni adım her kurulumda başlar', () => {
+    const { ilkParca: _yok, ...bilinmeyen } = adim('b', 20);
+    const g = kaydetGovdesi([adim('a', 10, { ilkParca: 'yok' }), bilinmeyen], [10, 20], opBul);
+    expect(g[0]).toMatchObject({ ilkParca: 'yok' });
+    expect(g[1]).not.toHaveProperty('ilkParca');
+    expect(yeniAdim(op('21'), 'x').ilkParca).toBe('her_kurulum');
+  });
+
   it('fason adımda süre gitmez, termin gider; işlem süresi yoksa değişim de gitmez', () => {
     const f = adim('a', 10, { stationId: null, fasonId: '7', terminGun: 5 });
     expect(kaydetGovdesi([f], [], opBul)[0]).toMatchObject({ kaynak: { tur: 'fason', id: 7 }, ayarSuresiDk: null, islemSuresiDk: null, terminGun: 5 });
