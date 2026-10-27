@@ -8,7 +8,7 @@ import type { Is } from './tipler.ts';
 afterEach(() => { cleanup(); });
 
 const is = (no: string, state: Is['state'], ek: Partial<Is> = {}): Is => ({ ...bosIs({ l: 'Deneme' }), empty: false, no, part: `Parça ${no}`, op: 'Op 20', state, target: 10, good: 2, ...ek });
-const ISLER = [is('UE-1', 'running'), is('UE-2', 'queued'), is('UE-3', 'paused', { urgent: true })];
+const ISLER = [is('UE-1', 'running', { due: '27 Eki' }), is('UE-2', 'queued'), is('UE-3', 'paused', { urgent: true })];
 const MAKINELER: CarkMakinesi[] = [
   { id: 'M-1', ad: 'Makine 1', secili: true, plan: true, kilit: null },
   { id: 'M-2', ad: 'Makine 2', secili: false, plan: false, kilit: null },
@@ -22,7 +22,7 @@ function Deneme({ gecilen, secilen, engel = null }: { gecilen: number[]; secilen
   const seritler: CarkSeridi[] = [
     {
       anahtar: 'is', ad: 'İşler', simge: 'list', sayi: ISLER.length, etkin: 0, bak, bakYaz,
-      ciz: (i, merkez) => (merkez && i === 0 ? <p>Ekrandaki iş kartı</p> : <IsOnizKarti is={ISLER[i]!} siradaki={i === 1} />),
+      ciz: (i) => <IsOnizKarti is={ISLER[i]!} siradaki={i === 1} ekranda={i === 0} makine={i === 0 ? 'M-1' : null} />,
       eylem: (i) => <IsEylemi ekranda={i === 0} don={() => bakYaz(0)} gec={() => gecilen.push(i)} />,
     },
     {
@@ -39,7 +39,7 @@ describe('790: iş ve makine çarkı', () => {
     const gecilen: number[] = [];
     const { getByRole, queryByRole, getByText, container } = render(<Deneme gecilen={gecilen} secilen={[]} />);
     const sahne = getByRole('group', { name: 'İşler' });
-    expect(getByText('Ekrandaki iş kartı')).toBeTruthy();
+    expect(getByText('Ekranda')).toBeTruthy();
     expect(getByText(/Ekranda · sayaç ve eylemler bu işe yazılır/)).toBeTruthy();
     expect(queryByRole('button', { name: 'Bu işe geç' })).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Sonraki: işler' }));
@@ -81,6 +81,17 @@ describe('790: iş ve makine çarkı', () => {
     expect(orta.textContent).toContain('Sıradaki');
     fireEvent.click(getByRole('button', { name: 'Sonraki: işler' }));
     expect(container.querySelector('[data-fark="0"]')!.textContent).toContain('Acil');
+  });
+
+  it('828 a: ekrandaki iş kısa kartla ortada; komşular arkada üst üste çizilir, ötesi çizilmez', () => {
+    const { container, getByText } = render(<Deneme gecilen={[]} secilen={[]} />);
+    const orta = container.querySelector('[data-fark="0"]')!;
+    expect(orta.textContent).toContain('Ekranda');
+    expect(orta.textContent).toContain('2 / 10 adet · Termin 27 Eki');
+    expect(orta.textContent).toContain('Makine: M-1');
+    expect(orta.querySelector('progress')!.getAttribute('value')).toBe('0.2');
+    expect([...container.querySelectorAll('.tc-ay1-tcark-oge')].map((x) => x.getAttribute('data-fark'))).toEqual(['0', '1', '2']);
+    expect(getByText(/yalnız bakar/, { selector: '.tc-ay1-tcark-ipucu' })).toBeTruthy();
   });
 
   it('makine şeridi: seçim düğmesi, kilitli makine seçilemez', () => {

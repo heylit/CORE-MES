@@ -1138,8 +1138,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const sr = kaliteGorunumu ? null : serit;
     return task || sr ? <div className="tc-ay1-simdi">{task ? gorev(mobil, sr) : sr}</div> : null;
   };
-  // 790: tek çark, iki şerit. İş şeridinde ekrandaki iş kendi kartıyla ortadadır; başka işe bakmak önizlemedir, geçiş "Bu işe geç" ile
-  // ve bugünkü geçiş sorusuyla olur. Geçiş işi başlatmaz. İstasyon çarkta değil, üst çubuktaki seçicidedir.
+  // 790: tek çark, iki şerit. Çarkta her iş kısa kartladır; ekrandaki işin tam kartı çarkın altındadır (828 a, prototip). Başka işe
+  // bakmak önizlemedir, geçiş "Bu işe geç" ile ve bugünkü geçiş sorusuyla olur. Geçiş işi başlatmaz.
   const siradakiAnahtar = nextOrder ? siraAnahtari(nextOrder) : undefined;
   // 793 b: istasyon da çarktadır; liste ve geçiş istasyon seçicininkidir (yetkili istasyonlar, cihaz kaydı, ekran baştan kurulur).
   const carkIstasyonlari = secilebilirIstasyonlar(istasyonListesi(tesis).filter((m) => isMerkezinde(kisi, m.wc)), yetkiVar('prod.station'), kisi && kisi.sts);
@@ -1149,9 +1149,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (isler.length < 2 && !makineler.length && carkIstasyonlari.length < 2) return ekranda;
     const isSeridi: CarkSeridi = {
       anahtar: 'is', ad: 'İşler', simge: 'list', sayi: Math.max(isler.length, 1), etkin: ai, bak: b ? bi : ai, bakYaz,
-      ciz: (i, merkez) => {
-        const x = isler[i];
-        return !x || (merkez && i === ai) ? ekranda : <IsOnizKarti is={x} siradaki={siraAnahtari(x) === siradakiAnahtar} />;
+      ciz: (i) => {
+        const x = isler[i] ?? o;
+        return <IsOnizKarti is={x} siradaki={siraAnahtari(x) === siradakiAnahtar} ekranda={i === ai} makine={i === ai ? curMc() : (x.pkg && x.pkg.mc) || null} />;
       },
       eylem: (i) => <IsEylemi ekranda={i === ai || !isler[i]} don={() => bakilanYaz(null)} gec={() => isSec(i)} />,
     };
@@ -1174,7 +1174,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         eylem: (i) => { const m = carkIstasyonlari[i]!; return <IstasyonEylemi bu={m.id === MACHINE} gec={() => istasyonaGec(m.id)} />; },
       });
     }
-    return <TerminalCarki seritler={seritler} />;
+    return <><TerminalCarki seritler={seritler} />{ekranda}</>;
   };
   const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradaki={nextOrder ? siraAnahtari(nextOrder) : undefined} onde={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => { bakYaz(i); if (dar) mvYaz('prod'); }} />;
   const uyariCipi = (dur: boolean) => (uyarili ? (

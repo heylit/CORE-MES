@@ -98,14 +98,15 @@ describe('A1 Üretim Terminali', () => {
     arkonAc('/uretim-terminali');
     const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
     expect(within(cark).getByText(/Ekranda · sayaç/)).toBeTruthy();
+    expect(within(cark).getByText('Ekranda')).toBeTruthy();
+    // 828 a: ekrandaki işin tam kartı çarkın altındadır; çevirmek onu değiştirmez.
+    const ilk = within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent;
     fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
     expect(within(cark).getByText(/Önizleme · ekrandaki iş değişmez/)).toBeTruthy();
     expect(screen.getByText(/Önizleme · IE-DENEME-(1|3) · teknik resim ve adımlar salt okunur/)).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Aktif iş emri' })).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent).toBe(ilk);
     fireEvent.click(within(cark).getByRole('button', { name: 'Ekrandakine dön' }));
-    expect(await screen.findByRole('region', { name: 'Aktif iş emri' })).toBeTruthy();
     expect(screen.queryByText(/teknik resim ve adımlar salt okunur/)).toBeNull();
-    const ilk = within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent;
     fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
     fireEvent.click(within(cark).getByRole('button', { name: 'Bu işe geç' }));
     const yeni = await screen.findByRole('region', { name: 'Aktif iş emri' });
