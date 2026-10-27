@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { Dugme, Kart, OnayPenceresi, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { useEffect, useState } from 'react';
+import { Dugme, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi as ps } from '../gorunumler.ts';
+import { SatirOnayi } from '../program/ortak.tsx';
 import { guvenliAd, icsDosyasi, indir } from '../disa-aktar.ts';
 import { OZF, PROGRAMLAR, PROGRAM_SIRASI } from '../icerik/programlar.ts';
 import {
@@ -37,9 +39,13 @@ const icsIndir = (ad: string, liste: readonly TakvimSatiri[]) => {
   indir(`${guvenliAd(ad)}.ics`, icsDosyasi(liste.map((o) => ({ a: o.a, profil: o.st }))), 'text/calendar');
 };
 
-interface SatirOzellikleri { o: TakvimSatiri; formAc: (f: FormAcilisi) => void; oneri: (pid: string, id: string) => void; sil: (o: TakvimSatiri) => void }
+interface SatirOzellikleri {
+  o: TakvimSatiri; formAc: (f: FormAcilisi) => void; oneri: (pid: string, id: string) => void;
+  siliniyor: boolean; silSor: (o: TakvimSatiri | null) => void; sil: (o: TakvimSatiri) => void;
+}
 
-function DenetimSatiri({ o, formAc, oneri, sil }: SatirOzellikleri) {
+// Silme prototipteki gibi satırın eylem alanında sorulur (armed adel).
+function DenetimSatiri({ o, formAc, oneri, siliniyor, silSor, sil }: SatirOzellikleri) {
   const d = useDenetim();
   const a = o.a;
   const sonGun = a.kind === 'deadline';
@@ -58,6 +64,11 @@ function DenetimSatiri({ o, formAc, oneri, sil }: SatirOzellikleri) {
         <small>{[profilAdi(o.st), a.end ? `${tarihMetni(a.date)} – ${tarihMetni(a.end)}` : '', a.cb, a.note].filter(Boolean).join(' · ')}</small>
       </span>
       <span className={sicak ? 'tc-dhy-ton-kotu tc-dhd-tne' : a.status === 'plan' && gecti && !sonGun ? 'tc-dhy-ton-uyari tc-dhd-tne' : 'tc-dhd-tne'}>{ne}</span>
+      {siliniyor ? (
+        <span className="tc-dhd-teylem">
+          <SatirOnayi metin="Silinsin mi?" evet="Sil" vazgec={() => { silSor(null); }} onayla={() => { sil(o); }} />
+        </span>
+      ) : (
       <span className="tc-dhd-teylem">
         {yaz && !sonGun && a.status === 'plan' && dd <= 0 && <Dugme tur="birincil" simge="check" onClick={() => { ac('done'); }}>Sonucu gir</Dugme>}
         {yaz && !sonGun && a.status === 'done' && !devamiVar(o) && <Dugme tur="birincil" simge="rotate" onClick={() => { oneri(o.pid, a.id); }}>Sonrakini planla</Dugme>}
@@ -78,8 +89,9 @@ function DenetimSatiri({ o, formAc, oneri, sil }: SatirOzellikleri) {
         {o.pid === d.depo.active && !sonGun && a.prog !== d.program && (
           <Dugme onClick={() => { d.programSec(a.prog); }}>{`${PROGRAMLAR[a.prog].s} çalışmasını aç`}</Dugme>
         )}
-        {yaz && <Dugme simge="trash" aria-label={`${denetimBasligi(a, o.st)} sil`} onClick={() => { sil(o); }} />}
+        {yaz && <Dugme simge="trash" aria-label={`${denetimBasligi(a, o.st)} sil`} onClick={() => { silSor(o); }} />}
       </span>
+      )}
     </li>
   );
 }
@@ -91,6 +103,13 @@ export function Takvim() {
   const [form, formYaz] = useState<(FormAcilisi & { anahtar: number }) | null>(null);
   const [oneri, oneriYaz] = useState<{ pid: string; id: string } | null>(null);
   const [silinecek, silinecekYaz] = useState<TakvimSatiri | null>(null);
+  const sil = (o: TakvimSatiri) => {
+    silinecekYaz(null);
+    const aktifte = o.pid === d.depo.active;
+    profilDegistir(o.pid, aktifte ? 'Denetim silme' : null, (p) => { p.audits = p.audits.filter((x) => x.id !== o.a.id && x.parent !== o.a.id); }, aktifte ? 'Silindi' : undefined);
+    if (oneri?.id === o.a.id) oneriYaz(null);
+    if (!aktifte) d.bildir('Silindi');
+  };
   const yaz = d.yetki.yazabilir;
   const t = bugunTarihi();
   const L = butunDenetimler(d.depo, kapsam);
@@ -104,6 +123,13 @@ export function Takvim() {
     const pg = d.pg;
     formAc({ mode: 'new', pid: d.depo.active, id: '', prog: d.program, type: d.program === 'eydep' ? undefined : pg.types[2], cb: d.program === 'eydep' ? '' : d.profil.profile.kurulus });
   };
+  // Başka bölümden "Denetim ekle" ile gelindi: form bir kez açılır, alan kapanır.
+  const yeniIstendi = !!d.ekran.takvim?.yeniDenetim;
+  useEffect(() => {
+    if (!yeniIstendi) return;
+    if (yaz) yeni();
+    d.ekranDegistir((e) => { delete e.takvim; });
+  }, [yeniIstendi]);
 
   const yakin = L.filter((o) => o.a.status === 'plan' && (o.a.end || o.a.date) >= t).sort((x, y) => tariheGore(x.a, y.a));
   const bekleyen = L.filter((o) => o.a.kind === 'audit' && o.a.status === 'plan' && (o.a.end || o.a.date) < t).sort((x, y) => tariheGore(y.a, x.a));
@@ -111,7 +137,10 @@ export function Takvim() {
   const aylarListesi = aylar(12, true);
 
   const satir = (o: TakvimSatiri) => (
-    <DenetimSatiri key={`${o.pid}-${o.a.id}`} o={o} formAc={formAc} oneri={(pid, id) => { formYaz(null); oneriYaz({ pid, id }); window.scrollTo?.({ top: 0 }); }} sil={silinecekYaz} />
+    <DenetimSatiri
+      key={`${o.pid}-${o.a.id}`} o={o} formAc={formAc} oneri={(pid, id) => { formYaz(null); oneriYaz({ pid, id }); window.scrollTo?.({ top: 0 }); }}
+      siliniyor={silinecek?.pid === o.pid && silinecek.a.id === o.a.id} silSor={silinecekYaz} sil={sil}
+    />
   );
 
   const ozler: { pid: string; k: ProgramKodu; due: string; acik: boolean; son: string; ad: string; freq: string }[] = [];
@@ -145,7 +174,7 @@ export function Takvim() {
       </div>
 
       {oneriSatiri && yaz && (
-        <Kart baslik="Sonraki denetim önerisi" baslikEki={<span className="tc-dhd-soluk">{profilAdi(oneriSatiri.st)}</span>}>
+        <Kart baslik="Sonraki denetim önerisi" simge={ps('repeat')} baslikEki={<span className="tc-dhd-soluk">{profilAdi(oneriSatiri.st)}</span>}>
           <p className="tc-dhd-oneri"><b>{`${PROGRAMLAR[oneriSatiri.a.prog].s} · ${oneriSatiri.sg.type}`}</b>{` · ${tarihMetni(oneriSatiri.sg.date)}`}</p>
           <p className="tc-dhd-aciklama">{`${oneriSatiri.sg.why}.`}</p>
           <div className="tc-dhd-dugmeler tc-dhd-sola">
@@ -174,8 +203,10 @@ export function Takvim() {
         </Kart>
       )}
 
+      {form && <DenetimFormu key={form.anahtar} acilis={form} kapat={() => { formYaz(null); }} kaydedildi={kaydedildi} />}
+
       <Kart
-        baslik="Önümüzdeki 12 ay"
+        baslik="Önümüzdeki 12 ay" simge={ps('cal')}
         sag={(
           <span className="tc-dhd-lejant">
             {PROGRAM_SIRASI.map((k) => <span key={k}><i className={`tc-dhd-nokta tc-dhd-p-${k}`} />{PROGRAMLAR[k].s}</span>)}
@@ -206,7 +237,7 @@ export function Takvim() {
       </Kart>
 
       <Kart
-        baslik="Yaklaşan"
+        baslik="Yaklaşan" simge="clock"
         sag={(
           <span className="tc-dhd-dugmeler">
             {yakin.length > 0 && (
@@ -228,15 +259,15 @@ export function Takvim() {
       </Kart>
 
       {bekleyen.length > 0 && (
-        <Kart baslik="Sonucu girilmemiş denetimler">
+        <Kart baslik="Sonucu girilmemiş denetimler" simge="flag">
           {d.ekran.ux !== 'uzman' && <p className="tc-dhd-aciklama">Sonucu girin; sistem bir sonraki denetim için tarih önersin.</p>}
           <ul className="tc-dhd-tliste">{bekleyen.map(satir)}</ul>
         </Kart>
       )}
-      {gecmis.length > 0 && <Kart baslik="Geçmiş"><ul className="tc-dhd-tliste">{gecmis.slice(0, 12).map(satir)}</ul></Kart>}
+      {gecmis.length > 0 && <Kart baslik="Geçmiş" simge={ps('award')}><ul className="tc-dhd-tliste">{gecmis.slice(0, 12).map(satir)}</ul></Kart>}
 
       {ozler.length > 0 && (
-        <Kart baslik="Öz değerlendirme turları">
+        <Kart baslik="Öz değerlendirme turları" simge={ps('repeat')}>
           <ul className="tc-dhd-tliste">
             {ozler.map((x) => {
               const dd = x.due ? gunFarki(x.due) : null;
@@ -261,7 +292,7 @@ export function Takvim() {
       )}
 
       {kalib.length > 0 && (
-        <Kart baslik="Kalibrasyon: gecikmiş ve 30 gün içinde" sag={<Dugme simge="chev-right" onClick={() => { d.git('kalib'); }}>Kalibrasyon sayfası</Dugme>}>
+        <Kart baslik="Kalibrasyon: gecikmiş ve 30 gün içinde" simge="ruler" sag={<Dugme simge="chev-right" onClick={() => { d.git('kalib'); }}>Kalibrasyon sayfası</Dugme>}>
           <ul className="tc-dhd-tliste">
             {kalib.slice(0, 10).map((x) => {
               const st = cihazDurumu(x);
@@ -286,20 +317,6 @@ export function Takvim() {
         </p>
       )}
 
-      {form && <DenetimFormu key={form.anahtar} acilis={form} kapat={() => { formYaz(null); }} kaydedildi={kaydedildi} />}
-      <OnayPenceresi
-        acik={silinecek !== null} baslik="Silinsin mi?" onayMetni="Sil" tehlikeli vazgec={() => { silinecekYaz(null); }}
-        onayla={() => {
-          const o = silinecek;
-          silinecekYaz(null);
-          if (!o) return;
-          profilDegistir(o.pid, o.pid === d.depo.active ? 'Denetim silme' : null, (p) => { p.audits = p.audits.filter((x) => x.id !== o.a.id && x.parent !== o.a.id); });
-          if (oneri?.id === o.a.id) oneriYaz(null);
-          if (o.pid !== d.depo.active) d.bildir('Silindi');
-        }}
-      >
-        {silinecek && <p>{`${denetimBasligi(silinecek.a, silinecek.st)} ve ona bağlı son günler silinir.`}</p>}
-      </OnayPenceresi>
     </div>
   );
 }

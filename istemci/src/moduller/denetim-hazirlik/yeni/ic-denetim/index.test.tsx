@@ -26,7 +26,7 @@ describe('İç denetim (izinli)', () => {
     expect(screen.queryAllByRole('button', { name: /: planlandı$/ })).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Otomatik planla' }));
     expect(screen.getAllByRole('button', { name: /: (planlandı|gecikti)$/ }).length).toBeGreaterThan(0);
-    expect(screen.getByText('İç denetim planı')).toBeTruthy();
+    expect(screen.getByText('Plan oluşturuldu: ana süreçler yılda iki, diğerleri bir kez')).toBeTruthy();
   });
 
   it('plansız denetim yürütülür; bütün maddeler cevaplanınca tamamlanır', async () => {

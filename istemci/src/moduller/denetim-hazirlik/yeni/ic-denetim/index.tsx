@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { Dugme, Kart, OnayPenceresi, Rozet, Sekmeler, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Kart, Rozet, Sekmeler, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { SatirOnayi } from '../program/ortak.tsx';
 import { useDenetim } from '../baglam.tsx';
 import { ICR } from '../icerik/ic-denetim.ts';
 import { PROC_TPL } from '../icerik/kys-yapi.ts';
@@ -82,7 +83,7 @@ function Plan({ ac }: { ac: (id: string, s: Sekme) => void }) {
   const yaz = d.yetki.yazabilir;
   const baslat = (pid: string) => {
     let id: string | null = null;
-    d.degistir('İç denetim', (t) => { id = icBaslat(t, pid); });
+    d.degistir('İç denetim', (t) => { id = icBaslat(t, pid); }, { sessiz: true });
     if (id) ac(id, 'yurut');
   };
 
@@ -95,7 +96,7 @@ function Plan({ ac }: { ac: (id: string, s: Sekme) => void }) {
           <p>İç denetim planı süreç bazında yapılır. KYS · Süreçler bölümünde süreçlerinizi tanımlayın ya da tipik bir üretim firmasının süreçleriyle başlayın.</p>
           <div className="tc-dhd-dugmeler">
             {yaz && (
-              <Dugme tur="birincil" simge="plus" onClick={() => { d.degistir('Süreç şablonu', tipikSurecleriEkle); }}>Tipik süreçleri ekle</Dugme>
+              <Dugme tur="birincil" simge="plus" onClick={() => { d.degistir('Süreç şablonu', tipikSurecleriEkle, { bildirim: `${String(PROC_TPL.length)} süreç eklendi; sahiplerini ve hedeflerini düzenleyin` }); }}>Tipik süreçleri ekle</Dugme>
             )}
             <Dugme onClick={() => { d.git('kys', { kys: 'surec' }); }}>Süreçlere git</Dugme>
           </div>
@@ -155,7 +156,7 @@ function Plan({ ac }: { ac: (id: string, s: Sekme) => void }) {
         sag={yaz ? (
           <Dugme
             simge="bolt"
-            onClick={() => { d.degistir('İç denetim planı', icOtomatikPlan); }}
+            onClick={() => { d.degistir('İç denetim planı', icOtomatikPlan, { bildirim: 'Plan oluşturuldu: ana süreçler yılda iki, diğerleri bir kez' }); }}
           >
             Otomatik planla
           </Dugme>
@@ -249,7 +250,7 @@ function Liste({ ac }: { ac: (id: string, s: Sekme) => void }) {
                   const pid = e.target.value;
                   if (!pid) return;
                   let id: string | null = null;
-                  d.degistir('İç denetim', (t) => { id = icBaslat(t, pid); });
+                  d.degistir('İç denetim', (t) => { id = icBaslat(t, pid); }, { sessiz: true });
                   if (id) ac(id, 'yurut');
                 }}
               >
@@ -363,11 +364,20 @@ function Yurut({ r, kapat }: { r: IcYurutme; kapat: () => void }) {
               <span className="tc-dhd-soluk">{c.x ? `${String(c.x)} madde cevaplanmadı.` : 'Tüm maddeler cevaplandı.'}</span>
               {d.yetki.yazabilir && (
                 <span className="tc-dhd-dugmeler">
-                  <Dugme simge="trash" onClick={() => { silSorYaz(true); }}>Sil</Dugme>
+                  {silSor ? (
+                    <SatirOnayi
+                      metin="Denetim silinsin mi?" evet="Sil" vazgec={() => { silSorYaz(false); }}
+                      onayla={() => {
+                        silSorYaz(false);
+                        d.degistir('İç denetim silme', (t) => { t.ic.runs = t.ic.runs.filter((x) => x.id !== r.id); t.ic.cur = ''; }, { bildirim: 'Denetim silindi' });
+                        kapat();
+                      }}
+                    />
+                  ) : <Dugme simge="trash" onClick={() => { silSorYaz(true); }}>Sil</Dugme>}
                   <Dugme
                     tur="birincil" simge="check" disabled={c.x > 0}
                     onClick={() => {
-                      d.degistir('İç denetim kaydı', (t) => { const x = t.ic.runs.find((y) => y.id === r.id); if (x && !x.done && !icSayilari(x).x) icBitir(t, x); });
+                      d.degistir('İç denetim kaydı', (t) => { const x = t.ic.runs.find((y) => y.id === r.id); if (x && !x.done && !icSayilari(x).x) icBitir(t, x); }, { bildirim: 'İç denetim tamamlandı; bulgular takvime ve Performans\'a işlendi' });
                       window.scrollTo?.({ top: 0 });
                     }}
                   >
@@ -379,16 +389,6 @@ function Yurut({ r, kapat }: { r: IcYurutme; kapat: () => void }) {
           )}
         </div>
       </Kart>
-      <OnayPenceresi
-        acik={silSor} baslik="Denetim silinsin mi?" onayMetni="Sil" tehlikeli vazgec={() => { silSorYaz(false); }}
-        onayla={() => {
-          silSorYaz(false);
-          d.degistir('İç denetim silme', (t) => { t.ic.runs = t.ic.runs.filter((x) => x.id !== r.id); t.ic.cur = ''; });
-          kapat();
-        }}
-      >
-        <p>{`${r.pname} denetimi ve cevapları silinir.`}</p>
-      </OnayPenceresi>
     </>
   );
 }
@@ -453,7 +453,7 @@ function SahaKontrolleri({ ac }: { ac: (id: string, s: Sekme) => void }) {
                   {yaz && (
                     <Dugme
                       onClick={() => {
-                        d.degistir('Saha düzeltme', (tt) => { const s = tt.ic.saha.find((y) => y.id === x.run.id); const m = s?.items[x.k]; if (m) m.fix = true; });
+                        d.degistir('Saha düzeltme', (tt) => { const s = tt.ic.saha.find((y) => y.id === x.run.id); const m = s?.items[x.k]; if (m) m.fix = true; }, { bildirim: 'Düzeltildi olarak işaretlendi' });
                       }}
                     >
                       Düzeltildi
@@ -465,7 +465,7 @@ function SahaKontrolleri({ ac }: { ac: (id: string, s: Sekme) => void }) {
           </ul>
           <p className="tc-dhd-not">
             Tekrar eden ya da ciddi uygunsuzluklar için DÖF açın.{' '}
-            <button type="button" className="tc-dhd-baglanti" onClick={() => { d.git('kys', { kys: 'uret' }); }}>Uygunsuzluk ve DÖF formu</button>
+            <button type="button" className="tc-dhd-baglanti" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'f_dof' }); }}>Uygunsuzluk ve DÖF formu</button>
           </p>
         </Kart>
       )}
@@ -562,11 +562,12 @@ function SahaYurut({ tur, kapat }: { tur: SahaTuru; kapat: () => void }) {
             <Dugme
               tur="birincil" simge="check" disabled={k < tur.items.length}
               onClick={() => {
+                const no = tur.items.filter((i) => i.r === 'no').length;
                 d.degistir('Saha turu', (tt) => {
                   const x = tt.ic.saha.find((y) => y.id === tur.id);
                   if (x) { x.done = true; x.date = bugunTarihi(); }
                   tt.ic.cur = '';
-                });
+                }, { bildirim: no ? `${String(no)} uygunsuzluk kaydedildi` : 'Tur kaydedildi: tümü uygun' });
                 kapat();
               }}
             >

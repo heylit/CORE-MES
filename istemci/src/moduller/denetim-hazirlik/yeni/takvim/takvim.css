@@ -44,3 +44,9 @@
 .tc-dhd-alanlar legend, .tc-dhd-bulgular legend { padding: 0 var(--b-1); font-weight: 700; font-size: var(--yazi-s); }
 .tc-dhd-bulgu { display: flex; flex-direction: column; gap: var(--b-2); padding-block-end: var(--b-3); border-block-end: var(--cizgi-ince) solid var(--edge); }
 .tc-dhd-bulgu > .tc-dugme { align-self: flex-end; }
+/* Prototip aform: sayfa içi kart; alanlar ızgarada, liste ve notlar tam genişlik, bulgu satırı geniş ekranda tek sıra. */
+.tc-dhd-dform { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--b-3); align-items: end; }
+.tc-dhd-dform > fieldset, .tc-dhd-dform > p, .tc-dhd-dform > .tc-dhd-genis { grid-column: 1 / -1; }
+@media (min-width: 701px) {
+  .tc-dhd-bulgu { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, .8fr) minmax(0, 2.4fr) auto; align-items: end; }
+}

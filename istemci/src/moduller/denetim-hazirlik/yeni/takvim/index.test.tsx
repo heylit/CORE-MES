@@ -29,13 +29,13 @@ describe('Takvim (izinli)', () => {
     expect(screen.getByRole('heading', { name: 'Öz değerlendirme turları' })).toBeTruthy();
     expect(screen.getAllByText('2. gözetim').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Yeni denetim' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await screen.findByRole('form');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     expect(await within(pencere).findByText('Tarih girin')).toBeTruthy();
     fireEvent.change(within(pencere).getByLabelText(/Başlangıç tarihi/), { target: { value: gunEkle(bugunTarihi(), 200) } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     expect(await screen.findByText('Takvime kaydedildi')).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('form')).toBeNull();
     expect(yakin).toBeTruthy();
   });
 
@@ -54,8 +54,12 @@ describe('Takvim (izinli)', () => {
     expect(await screen.findByText('Sonraki denetim takvime eklendi')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Takvime ekle' }).length).toBe(oncekiSayi + 1);
     fireEvent.click(screen.getAllByRole('button', { name: /sil$/ })[0] as HTMLElement);
-    const onay = await screen.findByRole('dialog', { name: 'Silinsin mi?' });
+    // Prototipteki gibi satırda sorulur; pencere açılmaz.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const onay = screen.getByRole('alert');
+    expect(onay.textContent).toContain('Silinsin mi?');
     fireEvent.click(within(onay).getByRole('button', { name: 'Sil' }));
+    expect(await screen.findByText('Silindi')).toBeTruthy();
     expect(screen.queryAllByRole('button', { name: 'Takvime ekle' }).length).toBe(oncekiSayi);
   });
 
@@ -70,7 +74,7 @@ describe('Takvim (izinli)', () => {
     sahteSunucu({ depo });
     await baglamlaAc(<Takvim />, 'takvim');
     fireEvent.click(await screen.findByRole('button', { name: 'Sonucu gir' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await screen.findByRole('form');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Bulgu ekle' }));
     fireEvent.change(within(pencere).getByLabelText('Bulgunun kısa tanımı'), { target: { value: 'Etiketsiz ürün' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));

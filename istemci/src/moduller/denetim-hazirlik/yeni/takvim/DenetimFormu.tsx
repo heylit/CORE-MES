@@ -1,6 +1,8 @@
-import { CokSatir, Dugme, FormPenceresi, Girdi, Secim } from '../../../../ortak/arayuz/index.ts';
+import { useEffect } from 'react';
+import { Dugme, Girdi, Kart, Secim } from '../../../../ortak/arayuz/index.ts';
 import { useForm, type AlanHatalari } from '../../../../ortak/veri/form.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { CL_EY, EY_KEYS } from '../icerik/eydep.ts';
 import { TYPES_EY } from '../icerik/iso9001.ts';
 import { PROGRAMLAR, PROGRAM_SIRASI, eyGrade } from '../icerik/programlar.ts';
@@ -10,7 +12,7 @@ import { yeniDenetim } from '../normalize.ts';
 import { ISO_TARIH, bugunTarihi } from '../tarih.ts';
 import type { Bulgu, Denetim, Profil, ProgramKodu, Seviye } from '../tipler.ts';
 
-// Takvim kaydı formu (prototip aform): yeni denetim, düzenleme ve sonuç girişi. Takvim ve Performans aynı formu açar.
+// Takvim kaydı formu (prototip aform): yeni denetim, düzenleme ve sonuç girişi; sayfa içinde kart olarak açılır. Takvim ve Performans aynı formu açar.
 // Kayıt başka bir profildeyse (takvim bütün profilleri gösterir) bütün kayıt değişir; geri alma yalnız açık profilde vardır.
 
 export type FormKipi = 'new' | 'edit' | 'done';
@@ -41,8 +43,8 @@ const sinirli = (v: string): number | null => (v === '' || Number.isNaN(Number(v
 // Kaydı değiştirecek profil: açık profilse geri alınabilir değişiklik, değilse bütün kayıt.
 export function useProfilDegistir() {
   const d = useDenetim();
-  return (pid: string, etiket: string | null, f: (p: Profil) => void) => {
-    if (pid === d.depo.active) { d.degistir(etiket, f); return; }
+  return (pid: string, etiket: string | null, f: (p: Profil) => void, bildirim?: string) => {
+    if (pid === d.depo.active) { d.degistir(etiket, f, bildirim ? { bildirim } : undefined); return; }
     d.depoDegistir(etiket, (t) => { const p = t.data[pid]; if (p) f(p); });
   };
 }
@@ -154,78 +156,92 @@ export function DenetimFormu({ acilis, kapat, kaydedildi }: { acilis: FormAcilis
   const turler = pg.types.includes(v.type) || !v.type ? pg.types : [...pg.types, v.type];
   const bulguDegistir = (i: number, yama: Partial<Bulgu>) => { form.degistir({ items: v.items.map((x, j) => (j === i ? { ...x, ...yama } : x)) }); };
 
+  // Prototip scrollToForm: kart görünür alana gelir, ilk açık alan odaklanır.
+  useEffect(() => {
+    const k = document.getElementById('tc-dhd-denetim-formu');
+    if (k && 'scrollIntoView' in k) k.scrollIntoView({ block: 'start' });
+    k?.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled])')?.focus({ preventScroll: true });
+  }, []);
+
   return (
-    <FormPenceresi acik kapat={kapat} baslik={`${baslik} · ${profilAdi(st)}`} form={form}>
-      {sonuc ? (
-        <>
-          {v.prog === 'eydep' && (
-            <>
-              <Girdi etiket="EYDEP puanı (0–100)" type="number" min={0} max={100} inputMode="numeric" {...form.alan('score')} />
-              <div className="tc-dhd-seviye"><span>Sertifika seviyesi</span><SeviyeKutusu puan={v.score} /></div>
-              <fieldset className="tc-dhd-alanlar">
-                <legend>Alan puanları (raporda varsa, isteğe bağlı)</legend>
-                {EY_KEYS.map((k) => (
-                  <Girdi
-                    key={k} etiket={CL_EY[k]?.s ?? k} type="number" min={0} max={100} inputMode="numeric" value={v.areas[k] ?? ''}
-                    onChange={(e) => { form.degistir({ areas: { ...v.areas, [k]: e.target.value } }); }}
+    <Kart baslik={baslik} simge={prototipSimgesi(sonuc ? 'award' : 'cal')} sag={<span className="tc-dhd-soluk">{profilAdi(st)}</span>}>
+      <form id="tc-dhd-denetim-formu" className="tc-dhd-dform" aria-label={baslik} onSubmit={form.gonder} noValidate>
+        {sonuc ? (
+          <>
+            {v.prog === 'eydep' && (
+              <>
+                <Girdi etiket="EYDEP puanı (0–100)" type="number" min={0} max={100} inputMode="numeric" {...form.alan('score')} />
+                <div className="tc-dhd-seviye"><span>Sertifika seviyesi</span><SeviyeKutusu puan={v.score} /></div>
+                <fieldset className="tc-dhd-alanlar">
+                  <legend>Alan puanları (raporda varsa, isteğe bağlı)</legend>
+                  {EY_KEYS.map((k) => (
+                    <Girdi
+                      key={k} etiket={CL_EY[k]?.s ?? k} type="number" min={0} max={100} inputMode="numeric" value={v.areas[k] ?? ''}
+                      onChange={(e) => { form.degistir({ areas: { ...v.areas, [k]: e.target.value } }); }}
+                    />
+                  ))}
+                </fieldset>
+              </>
+            )}
+            <fieldset className="tc-dhd-bulgular">
+              <legend>{v.prog === 'eydep' ? 'Gelişim alanları / bulgular' : 'Bulgular'}</legend>
+              <p className="tc-dhd-not">Madde belirtirseniz ortak grafikte madde bazında karşılaştırılır.</p>
+              {v.items.map((it, i) => (
+                <div key={String(i)} className="tc-dhd-bulgu">
+                  <Secim etiket="Seviye" secenekler={SEVIYELER} value={it.lvl} onChange={(e) => { bulguDegistir(i, { lvl: e.target.value as Seviye }); }} />
+                  <Secim
+                    etiket={pg.unit} bosSecenek={`${pg.unit}…`} value={it.g} onChange={(e) => { bulguDegistir(i, { g: e.target.value }); }}
+                    secenekler={gruplar.map((g) => ({ deger: g, baslik: `${v.prog === 'eydep' ? '' : `${g} `}${pg.CL[g]?.s ?? g}` }))}
                   />
-                ))}
-              </fieldset>
-            </>
-          )}
-          <fieldset className="tc-dhd-bulgular">
-            <legend>{v.prog === 'eydep' ? 'Gelişim alanları / bulgular' : 'Bulgular'}</legend>
-            <p className="tc-dhd-not">Madde belirtirseniz ortak grafikte madde bazında karşılaştırılır.</p>
-            {v.items.map((it, i) => (
-              <div key={String(i)} className="tc-dhd-bulgu">
-                <Secim etiket="Seviye" secenekler={SEVIYELER} value={it.lvl} onChange={(e) => { bulguDegistir(i, { lvl: e.target.value as Seviye }); }} />
-                <Secim
-                  etiket={pg.unit} bosSecenek={`${pg.unit}…`} value={it.g} onChange={(e) => { bulguDegistir(i, { g: e.target.value }); }}
-                  secenekler={gruplar.map((g) => ({ deger: g, baslik: `${v.prog === 'eydep' ? '' : `${g} `}${pg.CL[g]?.s ?? g}` }))}
-                />
-                <Girdi etiket="Madde no" value={it.c} maxLength={20} onChange={(e) => { bulguDegistir(i, { c: e.target.value }); }} />
-                <Girdi etiket="Bulgunun kısa tanımı" value={it.t} maxLength={400} onChange={(e) => { bulguDegistir(i, { t: e.target.value }); }} />
-                <Dugme simge="x" aria-label={`${String(i + 1)}. bulguyu sil`} onClick={() => { form.degistir({ items: v.items.filter((_, j) => j !== i) }); }} />
-              </div>
-            ))}
-            <Dugme simge="plus" onClick={() => { form.degistir({ items: [...v.items, { lvl: 'minor', g: '', c: '', t: '' }] }); }}>Bulgu ekle</Dugme>
-          </fieldset>
-          {v.prog !== 'eydep' && v.items.length > 0 && <p className="tc-dhd-not">Sayılar bulgu listesinden hesaplanır.</p>}
-          {v.prog !== 'eydep' && v.items.length === 0 && (
-            <>
-              <Girdi etiket="Majör bulgu" type="number" min={0} inputMode="numeric" {...form.alan('major')} />
-              <Girdi etiket="Minör bulgu" type="number" min={0} inputMode="numeric" {...form.alan('minor')} />
-              <Girdi etiket="Gözlem / iyileştirme fırsatı" type="number" min={0} inputMode="numeric" {...form.alan('obs')} />
-            </>
-          )}
-          <Girdi etiket="Not" placeholder="Örn. Baş denetçi, kapanış toplantısı notu" {...form.alan('note')} />
-        </>
-      ) : (
-        <>
-          <Secim
-            etiket="Program" disabled={kip !== 'new'} value={v.prog} secenekler={PROGRAM_SIRASI.map((k) => ({ deger: k, baslik: PROGRAMLAR[k].n }))}
-            onChange={(e) => {
-              const p = e.target.value as ProgramKodu;
-              const t = PROGRAMLAR[p].types;
-              form.degistir({ prog: p, type: t.includes(v.type) ? v.type : (p === 'eydep' ? TYPES_EY[1] : t[2]) ?? '', cb: p === 'eydep' ? '' : v.cb || st.profile.kurulus });
-            }}
-          />
-          {sonGun
-            ? <Girdi etiket="Başlık" {...form.alan('type')} />
-            : <Secim etiket="Denetim türü" secenekler={turler.map((t) => ({ deger: t, baslik: t }))} {...form.alan('type')} />}
-          <Girdi etiket={sonGun ? 'Tarih' : 'Başlangıç tarihi'} type="date" required {...form.alan('date')} />
-          {!sonGun && (
-            <>
-              <Girdi etiket="Bitiş tarihi (birden çok gün sürüyorsa)" type="date" {...form.alan('end')} />
-              <Girdi etiket={v.prog === 'eydep' ? 'Değerlendiren' : 'Belgelendirme kuruluşu'} placeholder={v.prog === 'eydep' ? 'SSB değerlendirme heyeti' : 'Örn. TSE, TÜV, BV'} {...form.alan('cb')} />
-            </>
-          )}
-          <CokSatir etiket="Not" rows={2} placeholder="Örn. Denetim planı geldi, baş denetçi" {...form.alan('note')} />
-          {v.prog === 'eydep' && !sonGun && v.type !== TYPES_EY[0] && (
-            <p className="tc-dhd-not">Kaydedince belgelerin SSB&apos;ye son teslim günü (15 gün önce) takvime otomatik eklenir.</p>
-          )}
-        </>
-      )}
-    </FormPenceresi>
+                  <Girdi etiket="Madde no" value={it.c} maxLength={20} onChange={(e) => { bulguDegistir(i, { c: e.target.value }); }} />
+                  <Girdi etiket="Bulgunun kısa tanımı" value={it.t} maxLength={400} onChange={(e) => { bulguDegistir(i, { t: e.target.value }); }} />
+                  <Dugme simge="x" aria-label={`${String(i + 1)}. bulguyu sil`} onClick={() => { form.degistir({ items: v.items.filter((_, j) => j !== i) }); }} />
+                </div>
+              ))}
+              <Dugme simge="plus" onClick={() => { form.degistir({ items: [...v.items, { lvl: 'minor', g: '', c: '', t: '' }] }); }}>Bulgu ekle</Dugme>
+            </fieldset>
+            {v.prog !== 'eydep' && v.items.length > 0 && <p className="tc-dhd-not">Sayılar bulgu listesinden hesaplanır.</p>}
+            {v.prog !== 'eydep' && v.items.length === 0 && (
+              <>
+                <Girdi etiket="Majör bulgu" type="number" min={0} inputMode="numeric" {...form.alan('major')} />
+                <Girdi etiket="Minör bulgu" type="number" min={0} inputMode="numeric" {...form.alan('minor')} />
+                <Girdi etiket="Gözlem / iyileştirme fırsatı" type="number" min={0} inputMode="numeric" {...form.alan('obs')} />
+              </>
+            )}
+            <Girdi etiket="Not" placeholder="Örn. Baş denetçi, kapanış toplantısı notu" {...form.alan('note')} />
+          </>
+        ) : (
+          <>
+            <Secim
+              etiket="Program" disabled={kip !== 'new'} value={v.prog} secenekler={PROGRAM_SIRASI.map((k) => ({ deger: k, baslik: PROGRAMLAR[k].n }))}
+              onChange={(e) => {
+                const p = e.target.value as ProgramKodu;
+                const t = PROGRAMLAR[p].types;
+                form.degistir({ prog: p, type: t.includes(v.type) ? v.type : (p === 'eydep' ? TYPES_EY[1] : t[2]) ?? '', cb: p === 'eydep' ? '' : v.cb || st.profile.kurulus });
+              }}
+            />
+            {sonGun
+              ? <Girdi etiket="Başlık" {...form.alan('type')} />
+              : <Secim etiket="Denetim türü" secenekler={turler.map((t) => ({ deger: t, baslik: t }))} {...form.alan('type')} />}
+            <Girdi etiket={sonGun ? 'Tarih' : 'Başlangıç tarihi'} type="date" required {...form.alan('date')} />
+            {!sonGun && (
+              <>
+                <Girdi etiket="Bitiş tarihi (birden çok gün sürüyorsa)" type="date" {...form.alan('end')} />
+                <Girdi etiket={v.prog === 'eydep' ? 'Değerlendiren' : 'Belgelendirme kuruluşu'} placeholder={v.prog === 'eydep' ? 'SSB değerlendirme heyeti' : 'Örn. TSE, TÜV, BV'} {...form.alan('cb')} />
+              </>
+            )}
+            <Girdi etiket="Not" placeholder="Örn. Denetim planı geldi, baş denetçi" {...form.alan('note')} />
+            {v.prog === 'eydep' && !sonGun && v.type !== TYPES_EY[0] && (
+              <p className="tc-dhd-not">Kaydedince belgelerin SSB&apos;ye son teslim günü (15 gün önce) takvime otomatik eklenir.</p>
+            )}
+          </>
+        )}
+        {form.genelHata && <p className="tc-dhd-genis tc-dhy-ton-kotu" role="alert">{form.genelHata}</p>}
+        <div className="tc-dhd-dugmeler tc-dhd-sola tc-dhd-genis">
+          <Dugme type="submit" tur="birincil" simge="check" yukleniyor={form.gonderiliyor}>Kaydet</Dugme>
+          <Dugme onClick={kapat} disabled={form.gonderiliyor}>Vazgeç</Dugme>
+        </div>
+      </form>
+    </Kart>
   );
 }

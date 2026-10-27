@@ -19,7 +19,7 @@ describe('Performans', () => {
     await baglamlaAc(<Performans />, 'perf');
     expect(await screen.findByText('Henüz karşılaştırılacak değerlendirme yok')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'İç denetim kaydı ekle' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await screen.findByRole('form');
     expect((within(pencere).getByLabelText(/Denetim türü/) as HTMLSelectElement).value).toMatch(/İç denetim/);
     cleanup();
     sahteSunucu({ depo: ornekDepo(), yazabilir: false, yonetici: false });

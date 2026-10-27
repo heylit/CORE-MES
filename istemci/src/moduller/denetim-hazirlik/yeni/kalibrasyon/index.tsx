@@ -4,7 +4,7 @@ import { Dugme, Kart, Rozet, Sekmeler, Simge, Tablo, type RozetTonu, type Sutun 
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
 import { useDenetim } from '../baglam.tsx';
-import { csvMetni, guvenliAd, htmlKacis, icsKatla, indir, yazdir } from '../disa-aktar.ts';
+import { csvMetni, guvenliAd, icsKatla, indir, yazdir } from '../disa-aktar.ts';
 import { KDUR, KSON, KTUR } from '../icerik/kalibrasyon.ts';
 import {
   cihazCevrimi, cihazDurumu, cihazListesi, cihazVadesi, kalibrasyonIstatistigi, type CihazDurumu,
@@ -12,6 +12,9 @@ import {
 import { profilAdi } from '../kurallar/profil.ts';
 import { aylar, bugunTarihi, gunEkle, isoTarih, pazartesi, tarihMetni } from '../tarih.ts';
 import type { Cihaz } from '../tipler.ts';
+import { basimHtml } from '../kys/dokuman-uretici.tsx';
+import { dokumanBul } from '../kys/dokuman-metni.ts';
+import '../kys/kys.css';
 import '../ic-denetim/p3-ortak.css';
 import './kalibrasyon.css';
 
@@ -79,20 +82,6 @@ function icsMetni(liste: readonly Cihaz[], firma: string, profilId: string): { m
   return { metin: `${L.map(icsKatla).join('\r\n')}\r\n`, n };
 }
 
-// Kalibrasyon listesi baskısı: prototipin "Kalibrasyon planı ve kayıt listesi" tablosuyla aynı sütunlar.
-function yazdirmaHtml(liste: readonly Cihaz[], firma: string): string {
-  const satirlar = liste.filter((d) => d.st !== 'hurda').sort((a, b) => (a.no < b.no ? -1 : 1)).map((d) => {
-    const st = cihazDurumu(d);
-    const n = cihazVadesi(d);
-    const durum = st.k === 'pasif' ? KDUR[d.st] : `${d.res ? `${KSON[d.res]} · ` : ''}${st.t}`;
-    return `<tr>${[d.no, d.ad + (d.marka ? ` (${d.marka})` : ''), d.aralik, d.coz, d.yer, `${String(d.per)} ay`, d.last ? tarihMetni(d.last) : '', n ? tarihMetni(n) : '', durum]
-      .map((c) => `<td>${htmlKacis(c)}</td>`).join('')}</tr>`;
-  }).join('');
-  const bas = ['Cihaz no', 'Cihaz adı / tip', 'Ölçüm aralığı', 'Çözünürlük', 'Yeri', 'Periyot', 'Son kalibrasyon', 'Sonraki', 'Durum'].map((b) => `<th>${b}</th>`).join('');
-  return `<h1>Kalibrasyon planı ve kayıt listesi</h1>${firma ? `<p>${htmlKacis(firma)}</p>` : ''}<p>${htmlKacis(tarihMetni(bugunTarihi()))}</p>`
-    + `<table><thead><tr>${bas}</tr></thead><tbody>${satirlar}</tbody></table>`;
-}
-
 interface SayiOzellikleri { simge: SimgeAdi; deger: string; baslik: string; alt: string; ton: string; suzgec: string }
 
 function SayiDugmesi({ simge, deger, baslik, alt, ton, suzgec }: SayiOzellikleri) {
@@ -138,7 +127,16 @@ export function Kalibrasyon() {
       >
         Takvime ekle
       </Dugme>
-      <Dugme simge="printer" onClick={() => { yazdir(yazdirmaHtml(d.cihazlar, firma), `Kalibrasyon · ${profilAdi(d.profil)}`); }}>Yazdır</Dugme>
+      <Dugme
+        simge="printer"
+        onClick={() => {
+          // Prototip kprint: KYS'deki "Ölçüm cihazları ve kalibrasyon takip listesi" formu (f_kal) yazdırılır.
+          const dok = dokumanBul(d.profil.kys, 'f_kal');
+          if (dok) yazdir(basimHtml([dok], d.profil, d.cihazlar), dok.name);
+        }}
+      >
+        Yazdır
+      </Dugme>
     </div>
   );
 

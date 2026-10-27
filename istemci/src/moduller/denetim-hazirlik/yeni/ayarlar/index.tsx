@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
-import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, OnayPenceresi, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi as ps } from '../gorunumler.ts';
+import { SatirOnayi } from '../program/ortak.tsx';
 import { indir } from '../disa-aktar.ts';
 import { PROGRAMLAR, PROGRAM_SIRASI } from '../icerik/programlar.ts';
 import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
@@ -26,7 +28,8 @@ const bas = (n: string): string => {
 const puanMetni = (k: ProgramKodu, p: number | null): string => (p == null ? '–' : k === 'eydep' ? `${String(p)} p` : `%${String(p)}`);
 const puanSinifi = (p: number | null): string => (p == null ? 'tc-dhd-soluk' : p >= 85 ? 'tc-dhy-ton-iyi' : p >= 70 ? 'tc-dhy-ton-bilgi' : p >= 50 ? 'tc-dhy-ton-uyari' : 'tc-dhy-ton-kotu');
 
-type Soru = { tur: 'sil'; id: string; ad: string } | { tur: 'sifirla' } | { tur: 'hepsi' } | null;
+// Onaylar prototipteki gibi ilgili satırda sorulur (armed del, sel, all).
+type Soru = { tur: 'sil'; id: string } | { tur: 'sifirla' } | { tur: 'hepsi' } | null;
 
 export function Ayarlar() {
   const d = useDenetim();
@@ -68,12 +71,26 @@ export function Ayarlar() {
   // Saat okuma çizimde yapılır; yedek uyarısı yalnız bilgidir, ekran açıkken eskimesi önemsizdir.
   const eski = !sonYedek || Date.now() - sonYedek > YEDEK_UYARI_MS;
   const secilen = SIFIRLAMA_ALANLARI.filter(([k]) => secim.has(k)).length;
+  const sifirlaOnayla = () => {
+    soruYaz(null);
+    const program = d.program;
+    d.degistir('Sıfırlama', (t) => { sifirla(t, program, secim); }, { bildirim: 'Seçilen alanlar sıfırlandı' });
+    d.ekranDegistir((e) => {
+      const w = e.pw[program];
+      if (secim.has('sim')) { w.cur = 0; w.mode = 'full'; }
+      if (secim.has('prep')) w.phase = -1;
+      if (secim.has('trace')) w.chainSel = 't1';
+      if (secim.has('cards')) { w.card = 0; w.flipped = false; }
+      if (secim.has('docs')) w.docq = '';
+    });
+    secimYaz(new Set());
+  };
 
   return (
     <div className="tc-dhd">
       {d.ekran.ux !== 'uzman' && <p className="tc-dhd-aciklama">Firma bilgileri, her firma veya saha için ayrı profil, yedekleme ve sıfırlama.</p>}
 
-      <Kart baslik="Firma ve denetim bilgileri" baslikEki={yaz ? <span className="tc-dhd-soluk">Yazdıkça kaydedilir</span> : undefined}>
+      <Kart baslik="Firma ve denetim bilgileri" simge={ps('brief')} baslikEki={yaz ? <span className="tc-dhd-soluk">Yazdıkça kaydedilir</span> : undefined}>
         {d.kurumAdi && <p className="tc-dhd-not">{`Ekran başlığındaki kurum adı TMI ayarlarından gelir: ${d.kurumAdi}.`}</p>}
         <div className="tc-dhd-form">
           <Girdi etiket="Firma adı" placeholder="Örn. firma unvanı" {...alan('firma')} />
@@ -85,7 +102,7 @@ export function Ayarlar() {
         </div>
       </Kart>
 
-      <Kart baslik="Bu firmanın programları" sag={<Dugme simge="clock" onClick={() => { d.git('takvim'); }}>Takvimi aç</Dugme>}>
+      <Kart baslik="Bu firmanın programları" simge="layers" sag={<Dugme simge="clock" onClick={() => { d.git('takvim'); }}>Takvimi aç</Dugme>}>
         {d.ekran.ux !== 'uzman' && (
           <p className="tc-dhd-aciklama">Her programın cevapları, hazırlık görevleri ve raporu ayrı tutulur. Program değiştirdiğinizde kaldığınız yerden devam edersiniz.</p>
         )}
@@ -112,7 +129,7 @@ export function Ayarlar() {
       </Kart>
 
       <Kart
-        baslik="Profiller"
+        baslik="Profiller" simge="users"
         sag={yaz ? (
           <span className="tc-dhd-dugmeler">
             <Dugme simge="file" onClick={() => { d.depoDegistir(null, (t) => { profilKopyala(t); }); d.bildir('Profil kopyalandı'); }}>Bu profili kopyala</Dugme>
@@ -141,16 +158,21 @@ export function Ayarlar() {
                 {acik ? <Rozet ton="tamam">Açık</Rozet> : yaz && (
                   <Dugme onClick={() => { d.depoDegistir(null, (t) => { t.active = id; }); d.bildir(`${nm} açıldı`); }}>Aç</Dugme>
                 )}
-                {yonetici && depo.order.length > 1 && (
-                  <Dugme simge="trash" aria-label={`${nm} profilini sil`} title="Profili sil" onClick={() => { soruYaz({ tur: 'sil', id, ad: nm }); }} />
-                )}
+                {yonetici && depo.order.length > 1 && (soru?.tur === 'sil' && soru.id === id
+                  ? (
+                    <SatirOnayi
+                      metin="Silinsin mi?" evet="Sil" vazgec={() => { soruYaz(null); }}
+                      onayla={() => { soruYaz(null); d.depoDegistir(null, (t) => { profilSil(t, id); }); d.bildir(`${nm} silindi`); }}
+                    />
+                  )
+                  : <Dugme simge="trash" aria-label={`${nm} profilini sil`} title="Profili sil" onClick={() => { soruYaz({ tur: 'sil', id }); }} />)}
               </li>
             );
           })}
         </ul>
       </Kart>
 
-      <Kart baslik="Veriler nerede saklanıyor?">
+      <Kart baslik="Veriler nerede saklanıyor?" simge={ps('shield')}>
         <p className="tc-dhd-aciklama">Bütün bilgiler TMI sunucusunda, kurum içindeki ortak kayıtta tutulur; internete gönderilmez. Aynı kaydı yetkili herkes görür; başka bir bilgisayardan girildiğinde de kayıtlar oradadır.</p>
         <p className="tc-dhd-aciklama">Yedek dosyası (.json) bu kayıtların taşınabilir kopyasıdır; bir profili başka bir kuruluşa ya da başka bir kurulumda devam etmek için taşır.</p>
         <p className={`tc-dhd-durum ${eski ? 'tc-dhy-ton-uyari' : 'tc-dhy-ton-iyi'}`}>
@@ -170,7 +192,7 @@ export function Ayarlar() {
       </Kart>
 
       {yonetici && (
-        <Kart baslik="Sıfırlama">
+        <Kart baslik="Sıfırlama" simge={ps('reset')}>
           <p className="tc-dhd-aciklama">
             {`Yalnızca açık firma (${profilAdi(d.profil)}) ve açık program (${d.pg.n}) etkilenir; takvim ve firma bilgileri seçerseniz silinir. Sıfırlamadan önce yedek almanız önerilir.`}
           </p>
@@ -182,54 +204,34 @@ export function Ayarlar() {
               />
             ))}
           </div>
-          <div className="tc-dhd-dugmeler tc-dhd-sola">
-            <Dugme onClick={() => { secimYaz(secilen === SIFIRLAMA_ALANLARI.length ? new Set() : new Set(SIFIRLAMA_ALANLARI.map(([k]) => k))); }}>
-              {secilen === SIFIRLAMA_ALANLARI.length ? 'Seçimi kaldır' : 'Tümünü seç'}
-            </Dugme>
-            <Dugme tur="tehlike" simge="rotate" disabled={!secilen} onClick={() => { soruYaz({ tur: 'sifirla' }); }}>Seçilenleri sıfırla</Dugme>
-          </div>
+          {soru?.tur === 'sifirla' ? (
+            <div className="tc-dhd-sola">
+              <SatirOnayi
+                metin={`${String(secilen)} alan silinecek; Geri al ile hemen geri alınabilir, sayfa kapanınca geri alınamaz.`} evet="Sıfırla"
+                vazgec={() => { soruYaz(null); }} onayla={sifirlaOnayla}
+              />
+            </div>
+          ) : (
+            <div className="tc-dhd-dugmeler tc-dhd-sola">
+              <Dugme onClick={() => { soruYaz(null); secimYaz(secilen === SIFIRLAMA_ALANLARI.length ? new Set() : new Set(SIFIRLAMA_ALANLARI.map(([k]) => k))); }}>
+                {secilen === SIFIRLAMA_ALANLARI.length ? 'Seçimi kaldır' : 'Tümünü seç'}
+              </Dugme>
+              <Dugme tur="tehlike" simge="rotate" disabled={!secilen} onClick={() => { soruYaz({ tur: 'sifirla' }); }}>Seçilenleri sıfırla</Dugme>
+            </div>
+          )}
           <div className="tc-dhd-tehlike">
             <span className="tc-dhd-iki"><b>Bütün profilleri sil</b><small>Ortak kayıttaki bütün profiller temizlenir, araç ilk açıldığı hale döner.</small></span>
-            <Dugme tur="tehlike" simge="trash" onClick={() => { soruYaz({ tur: 'hepsi' }); }}>Tümünü sil</Dugme>
+            {soru?.tur === 'hepsi'
+              ? (
+                <SatirOnayi
+                  metin="Tüm profiller silinecek." evet="Hepsini sil" vazgec={() => { soruYaz(null); }}
+                  onayla={() => { soruYaz(null); d.depoDegistir(null, hepsiniSil); secimYaz(new Set()); d.bildir('Tüm profiller silindi'); d.git('dash'); }}
+                />
+              )
+              : <Dugme tur="tehlike" simge="trash" onClick={() => { soruYaz({ tur: 'hepsi' }); }}>Tümünü sil</Dugme>}
           </div>
         </Kart>
       )}
-
-      <OnayPenceresi
-        acik={soru !== null} tehlikeli vazgec={() => { soruYaz(null); }}
-        baslik={soru?.tur === 'sil' ? 'Profil silinsin mi?' : soru?.tur === 'sifirla' ? 'Seçilenler sıfırlansın mı?' : 'Bütün profiller silinsin mi?'}
-        onayMetni={soru?.tur === 'sifirla' ? 'Sıfırla' : soru?.tur === 'hepsi' ? 'Hepsini sil' : 'Sil'}
-        onayla={() => {
-          const s = soru;
-          soruYaz(null);
-          if (!s) return;
-          if (s.tur === 'sil') { d.depoDegistir(null, (t) => { profilSil(t, s.id); }); d.bildir(`${s.ad} silindi`); return; }
-          if (s.tur === 'sifirla') {
-            const program = d.program;
-            d.degistir('Sıfırlama', (t) => { sifirla(t, program, secim); });
-            d.ekranDegistir((e) => {
-              const w = e.pw[program];
-              if (secim.has('sim')) { w.cur = 0; w.mode = 'full'; }
-              if (secim.has('prep')) w.phase = -1;
-              if (secim.has('trace')) w.chainSel = 't1';
-              if (secim.has('cards')) { w.card = 0; w.flipped = false; }
-              if (secim.has('docs')) w.docq = '';
-            });
-            secimYaz(new Set());
-            return;
-          }
-          d.depoDegistir(null, hepsiniSil);
-          secimYaz(new Set());
-          d.bildir('Tüm profiller silindi');
-          d.git('dash');
-        }}
-      >
-        <p>
-          {soru?.tur === 'sil' ? `${soru.ad} profili ve bütün kayıtları silinir.`
-            : soru?.tur === 'sifirla' ? `${String(secilen)} alan silinecek. Geri al ile hemen geri alınabilir; sayfa kapanınca geri alınamaz.`
-              : 'Ortak kayıttaki bütün profiller silinir, geri alınamaz.'}
-        </p>
-      </OnayPenceresi>
     </div>
   );
 }

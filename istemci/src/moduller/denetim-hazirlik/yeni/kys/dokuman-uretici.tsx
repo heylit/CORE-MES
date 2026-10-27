@@ -164,7 +164,7 @@ export function Kagit({ dok, g, profil, cihazlar, word = false, duzen = null }: 
 }
 
 // printDocs: seçilen dokümanlar açık temada, damga filigranıyla yazdırma alanına çizilir.
-function basimHtml(dokumanlar: readonly DokumanSablonu[], profil: Profil, cihazlar: readonly Cihaz[]): string {
+export function basimHtml(dokumanlar: readonly DokumanSablonu[], profil: Profil, cihazlar: readonly Cihaz[]): string {
   const K = profil.kys;
   return htmlUret(
     <div className="tc-dhk-baski" data-theme="light">

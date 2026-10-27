@@ -264,7 +264,7 @@ export function Performans() {
       </div>
 
       <Kart
-        baslik="Ortak zaman grafiği"
+        baslik="Ortak zaman grafiği" simge="chart"
         sag={(
           <span className="tc-dhd-lejant">
             <span><i className="tc-dhd-nokta" />Öz değerlendirme (program rengi)</span>
@@ -279,7 +279,7 @@ export function Performans() {
       </Kart>
 
       <Kart
-        baslik="Madde bazında karşılaştırma"
+        baslik="Madde bazında karşılaştırma" simge="layers"
         sag={(
           <span className="tc-dhd-cipler" role="group" aria-label="Matris">
             <Dugme aria-pressed={!ey} onClick={() => { mxYaz('iso'); }}>ISO 9001 + AS9100</Dugme>
@@ -325,7 +325,7 @@ export function Performans() {
         </p>
       </Kart>
 
-      <Kart baslik="Tüm değerlendirmeler" sag={yaz ? <Dugme tur="birincil" simge="plus" onClick={icDenetimEkle}>İç denetim kaydı ekle</Dugme> : undefined}>
+      <Kart baslik="Tüm değerlendirmeler" simge="list" sag={yaz ? <Dugme tur="birincil" simge="plus" onClick={icDenetimEkle}>İç denetim kaydı ekle</Dugme> : undefined}>
         <ul className="tc-dhd-tliste">
           {ev.slice().reverse().map((e) => (
             <li key={e.t === 'oz' ? `oz-${e.k}-${e.r.id}` : `a-${e.a.id}`} className={`tc-dhd-pd tc-dhd-p-${e.k}`}>

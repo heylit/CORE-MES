@@ -30,7 +30,10 @@ describe('Ayarlar (izinli: yönetici)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aç' }));
     expect(await screen.findByText('Deneme Firma açıldı')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Adsız profil profilini sil' }));
-    const onay = await screen.findByRole('dialog', { name: 'Profil silinsin mi?' });
+    // Prototipteki gibi satırda sorulur; pencere açılmaz.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const onay = screen.getByRole('alert');
+    expect(onay.textContent).toContain('Silinsin mi?');
     fireEvent.click(within(onay).getByRole('button', { name: 'Sil' }));
     expect(screen.queryByText('Adsız profil')).toBeNull();
     expect(screen.queryByRole('button', { name: /profilini sil$/ })).toBeNull();
@@ -43,8 +46,10 @@ describe('Ayarlar (izinli: yönetici)', () => {
     expect((screen.getByRole('button', { name: 'Seçilenleri sıfırla' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('Firma bilgileri'));
     fireEvent.click(screen.getByRole('button', { name: 'Seçilenleri sıfırla' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Sıfırla' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Sıfırla' }));
     expect((screen.getByLabelText('Firma adı') as HTMLInputElement).value).toBe('');
+    expect(await screen.findByText('Seçilen alanlar sıfırlandı')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
     expect((screen.getByLabelText('Firma adı') as HTMLInputElement).value).not.toBe('');
   });
