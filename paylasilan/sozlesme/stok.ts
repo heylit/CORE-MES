@@ -1273,6 +1273,15 @@ export const gelecekSepetCevabi = z.object({
   satirlar: z.array(istasyonSepetiCevabi.shape.satirlar.element.extend({ kaynak: istasyonSepetiCevabi.shape.istasyon })),
 });
 export type GelecekSepetCevabi = z.output<typeof gelecekSepetCevabi>;
+// Terminalin iki sepeti (745, kullanıcı kararı 758 a): seçili emir için gelen (önceki adımlarda üretilip buraya gelmemiş parça ve bu
+// istasyona yoldaki teslim; çekme) ve çıkan (burada duran parça ve rotadaki sonraki istasyon; itme). Satırlar var olan iki okumanın aynısıdır.
+export const istasyonSepetleriSorgusu = z.object({ istasyonId: kimlik, uretimEmriId: kimlik });
+export const istasyonSepetleriCevabi = z.object({
+  istasyon: istasyonSepetiCevabi.shape.istasyon,
+  gelen: z.object({ bekleyen: gelecekSepetCevabi.shape.satirlar, yolda: z.array(teslim) }),
+  cikan: istasyonSepetiCevabi.shape.satirlar,
+});
+export type IstasyonSepetleriCevabi = z.output<typeof istasyonSepetleriCevabi>;
 export const sepettenCekGovdesi = z.object({
   istasyonId: kimlik, kaynakIstasyonId: kimlik, malzemeId: kimlik, partiId: buyukKimlik.nullable(), statuId: kimlik.nullable(), miktar: miktarSemasi,
   kaynakKimligi: z.string().trim().min(3).max(120),

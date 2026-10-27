@@ -25,7 +25,7 @@ import type {
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
   LotEtiketi, LotEtiketleriCevabi, IstekAcGovdesi, IstekMalzemeleriCevabi, Teslim, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi,
-  TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
+  TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IstasyonSepetleriCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { malzemeIstegiAcGirdisi, REFAKAT_KARTLARI_SINIRI, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -2525,6 +2525,17 @@ export async function gelecekSepet(db: Db, k: Kullanici, istasyonId: number): Pr
     for (const x of sepet.satirlar) if (x.sonraki?.istasyonId === ist.id && binde(x.miktar) > 0n) satirlar.push({ ...x, kaynak: sepet.istasyon });
   }
   return { satirlar };
+}
+// İki sepet (745): emre süzülmüş gelecek sepet ve yoldaki teslimler gelendir, istasyonun kendi sepeti çıkandır. Düğmeler var olan
+// uçlardır (sepetten çek, teslim al, teslim gönder); bu okuma yeni işlem açmaz.
+export async function istasyonSepetleri(db: Db, k: Kullanici, istasyonId: number, uretimEmriId: number): Promise<IstasyonSepetleriCevabi> {
+  const ist = await istasyonGetir(db, istasyonId);
+  if (!ist) throw bulunamadi('İstasyon bulunamadı.');
+  kapsamDisiysaReddet(await kapsamOku(db, k.id), ist.isMerkeziId);
+  const bekleyen = (await gelecekSepet(db, k, istasyonId)).satirlar.filter((x) => x.uretimEmriId === uretimEmriId);
+  const yolda = (await sorgular.yoldakiGelenler(db, [istasyonId], false)).filter((t) => t.uretimEmriId === uretimEmriId);
+  const sepet = await sepetiOku(db, ist);
+  return { istasyon: sepet.istasyon, gelen: { bekleyen, yolda: await teslimleriAdlandir(db, yolda) }, cikan: sepet.satirlar.filter((x) => x.uretimEmriId === uretimEmriId) };
 }
 // Teslim al ile çekme: çeken hem gönderen hem alan olur; teslim açılır ve aynı anda kapanır (kayıt ve hareket teslim etle aynıdır).
 export async function sepettenCek(db: Db, k: Kullanici, g: SepettenCekGovdesi): Promise<TeslimCevabi> {
