@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { KurFaizSeridi } from '../finans/disari.ts';
 import { StokYokKarti } from './StokYokKarti.tsx';
 import { merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
 import type { Role } from './merkez/roles.ts';
@@ -23,10 +22,8 @@ export function IsKutusuSayfasi() {
     if (var_('satin-alma.onayla')) return <Navigate to="/satin-alma/onaylar" replace />;
     if (var_('satin-alma.oku')) return <Navigate to="/satin-alma/talepler" replace />;
   }
-  // Kur ve faiz şeridi (kart #953): ana sayfanın en üstünde; finansın bileşeni kendi verisini okur, işlemi olmayana çizmez.
   return (
     <>
-      <KurFaizSeridi />
       <StokYokKarti />
       <Merkez rol="buyer" sayfa="dash" yol="/satin-alma" />
     </>

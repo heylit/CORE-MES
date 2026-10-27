@@ -271,16 +271,25 @@ export const sonGenelGiderOrani = (db: Db, gun: string) =>
     `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil"
        FROM finans_genel_gider_orani WHERE gecerlilik_baslangic <= $1::date ORDER BY gecerlilik_baslangic DESC, id DESC LIMIT 1`, [gun]);
 // Kur ve faiz şeridi: o güne kadar geçerli son kur ve faiz, son yazanı ve zamanıyla (düzeltme de giriş sayılır).
-export interface KurOzetiSatiri { paraBirimi: string; tarih: string; kur: string; girenId: number; giris: string }
+export interface KurOzetiSatiri { paraBirimi: string; tarih: string; kur: string; girenId: number; giris: string; surum: number }
 export const kurOzeti = (db: Db, tarih: string) => db.sorgu<KurOzetiSatiri>(
   `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, kur::text AS kur,
-          coalesce(guncelleyen_id, olusturan_id) AS "girenId", ${zamanMetni('coalesce(guncelleme, olusturma)')} AS giris
+          coalesce(guncelleyen_id, olusturan_id) AS "girenId", ${zamanMetni('coalesce(guncelleme, olusturma)')} AS giris, surum
      FROM finans_kur WHERE tarih <= $1::date ORDER BY para_birimi, tarih DESC`, [tarih]);
 export interface FaizOzetiSatiri { paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string; girenId: number; giris: string }
 export const faizOzeti = (db: Db, tarih: string) => db.sorgu<FaizOzetiSatiri>(
   `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic",
           aylik_yuzde::text AS "aylikYuzde", olusturan_id AS "girenId", ${zamanMetni('olusturma')} AS giris
      FROM finans_faiz WHERE gecerlilik_baslangic <= $1::date ORDER BY para_birimi, gecerlilik_baslangic DESC, id DESC`, [tarih]);
+// Şeridin son girişleri (939): kur satırı son yazılış anıyla (düzeltilmişse düzeltme), faiz satırı eklenişiyle; ileri tarihli dahil.
+// Düzeltilen kurun önceki değeri tutulmaz; satır bugünkü değerini gösterir.
+export interface KurFaizGecmisSatiri { tur: 'kur' | 'faiz'; paraBirimi: string; deger: string; tarih: string; duzeltme: boolean; girenId: number; giris: string }
+export const kurFaizGecmisi = (db: Db, sinir: number) => db.sorgu<KurFaizGecmisSatiri>(
+  `SELECT tur, "paraBirimi", deger, ${tarihMetni('gun')} AS tarih, duzeltme, "girenId", ${zamanMetni('an')} AS giris FROM (
+     SELECT 'kur' AS tur, rtrim(para_birimi) AS "paraBirimi", kur::text AS deger, tarih AS gun, guncelleme IS NOT NULL AS duzeltme,
+            coalesce(guncelleyen_id, olusturan_id) AS "girenId", coalesce(guncelleme, olusturma) AS an, 0 AS id FROM finans_kur
+     UNION ALL SELECT 'faiz', rtrim(para_birimi), aylik_yuzde::text, gecerlilik_baslangic, false, olusturan_id, olusturma, id FROM finans_faiz) g
+   ORDER BY an DESC, id DESC LIMIT $1`, [sinir]);
 // İleri tarihli giriş dahil en son yazılan kur ya da faiz.
 export const sonKurFaizGirisi = (db: Db) => db.tek<{ girenId: number; giris: string; tur: 'kur' | 'faiz' }>(
   `SELECT "girenId", ${zamanMetni('an')} AS giris, tur FROM (

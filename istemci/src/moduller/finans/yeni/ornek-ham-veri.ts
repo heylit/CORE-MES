@@ -93,7 +93,7 @@ export function ornekHamVeri(): FinansHamVerisi {
       kurulumTamam: true, caprazKurPayi: '2', surum: 3,
     },
     amortisman: [{ ay: '2026-09', tutarTl: '1500.00' }],
-    kurOzeti: { bugun: '2026-10-15', kurlar: [], faizler: [], sonGiris: null },
+    kurOzeti: { bugun: '2026-10-15', kurlar: [], faizler: [], sonGiris: null, gecmis: [] },
     beklenenOdemeler: [],
     sirketAdi: 'Deneme Sirketi',
   };

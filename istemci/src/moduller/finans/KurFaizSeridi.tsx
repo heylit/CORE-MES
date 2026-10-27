@@ -2,18 +2,27 @@ import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KurFaizOzeti } from '#paylasilan/sozlesme/finans.ts';
-import { Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import './finans.css';
+import './kur-faiz-seridi.css';
 
 const TESIS_TZ = 'Europe/Istanbul';
-const KUR_BIRIMLERI = ['USD', 'EUR', 'GBP'];
-const FAIZ_BIRIMLERI = ['TRY', 'USD', 'EUR'];
+const KUR_BIRIMLERI = ['USD', 'EUR', 'GBP'] as const;
+const FAIZ_BIRIMLERI = ['TRY', 'USD', 'EUR'] as const;
+const OZET_ANAHTARI = ['finans', 'kur-ozeti'] as const;
 
 const sayi = (deger: string, basamak: number): string => Number(deger).toLocaleString('tr-TR', { maximumFractionDigits: basamak });
-const gunMetni = (tarih: string, bugun: string): string => (tarih === bugun ? 'bugün' : tarih.split('-').reverse().join('.'));
+const girdiSayisi = (metin: string): number | null => {
+  const t = metin.trim().replace(/\s/g, '').replace(',', '.');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+// Aylık bileşik faizin yıllık karşılığı; girişin yanında gösterilir, kaydedilen aylıktır.
+export const yillikFaiz = (aylik: number): number => (Math.pow(1 + aylik / 100, 12) - 1) * 100;
+const gunMetni = (tarih: string, bugun: string): string => (tarih === bugun ? 'bugün' : tarih.split('-').reverse().slice(0, 2).join('.'));
 // Giriş anı tesis saatiyle; bugünse "bugün 09:44".
 function girisMetni(iso: string, bugun: string): string {
   const an = new Date(iso);
@@ -21,92 +30,215 @@ function girisMetni(iso: string, bugun: string): string {
   return `${gunMetni(gun, bugun)} ${an.toLocaleTimeString('tr-TR', { timeZone: TESIS_TZ, hour: '2-digit', minute: '2-digit' })}`;
 }
 
-// Günlük kur ve faiz şeridi (kart #953): finans ve satın alma ekranının en üstünde durur. Değerleri finans.oku ya da
-// finans.kur-yaz okur; girişi yalnız finans.kur-yaz yapar. Finans rakamı göstermez.
+// Ortak kur ve faiz şeridi (939, 952 a, 953 a): her sayfanın en üstünde durur; giriş yapan herkes okur, finans.kur-yaz taşıyan bugünün
+// kurlarını ve bugünden geçerli faizi girer. Değerler finansın tablolarındadır; her giriş kişi ve saatle kaydedilir.
 export function KurFaizSeridi() {
   const islemler = useOturum().data?.islemler ?? [];
   const yazabilir = islemler.includes('finans.kur-yaz');
-  const okuyabilir = yazabilir || islemler.includes('finans.oku');
-  const ozet = useQuery({ queryKey: ['finans', 'kur-ozeti'], queryFn: () => api.get<KurFaizOzeti>('/finans/kur-ozeti'), enabled: okuyabilir });
-  if (!okuyabilir) return null;
+  const [acik, acikYaz] = useState(false);
+  const ozet = useQuery({ queryKey: OZET_ANAHTARI, queryFn: () => api.get<KurFaizOzeti>('/finans/kur-ozeti') });
+  // Okunamayan ya da henüz gelmeyen özet şerit çizmez: her sayfanın üstünde boş ya da hatalı bir şerit durmasın.
   const o = ozet.data;
-  const bugun = o?.bugun ?? '';
+  if (!o) return null;
+  const kur = (p: string) => o.kurlar.find((k) => k.paraBirimi === p);
+  const faiz = (p: string) => o.faizler.find((f) => f.paraBirimi === p);
+  const bugunEksik = KUR_BIRIMLERI.some((p) => kur(p)?.tarih !== o.bugun);
   return (
-    <Kart baslik="Günlük kur ve faiz">
-      <div className="tc-kf">
-        {ozet.isError && <p className="tc-kf-not" role="alert">Kur ve faiz okunamadı.</p>}
-        {o && (
-          <>
-            <p className="tc-kf-son" data-son-giris>
-              {o.sonGiris
-                ? <>Son giriş: <b>{girisMetni(o.sonGiris.giris, bugun)}</b>, <b>{o.sonGiris.girenAd ?? 'bilinmiyor'}</b> ({o.sonGiris.tur})</>
-                : 'Henüz kur ya da faiz girilmedi.'}
-            </p>
-            <div className="tc-kf-degerler">
-              {o.kurlar.length === 0 && <Rozet ton="uyari">Kur girilmedi</Rozet>}
-              {o.kurlar.map((k) => (
-                <span key={`k-${k.paraBirimi}`} title={`Giriş: ${girisMetni(k.giris, bugun)}`}>
-                  <Rozet ton={k.tarih === bugun ? 'tamam' : 'uyari'}>{k.paraBirimi} {sayi(k.kur, 4)} · {gunMetni(k.tarih, bugun)} · {k.girenAd ?? 'bilinmiyor'}</Rozet>
-                </span>
-              ))}
-              {o.faizler.map((f) => (
-                <span key={`f-${f.paraBirimi}`} title={`Giriş: ${girisMetni(f.giris, bugun)}`}>
-                  <Rozet ton="bilgi">{f.paraBirimi} faiz %{sayi(f.aylikYuzde, 2)}/ay · {gunMetni(f.gecerlilikBaslangic, bugun)} · {f.girenAd ?? 'bilinmiyor'}</Rozet>
-                </span>
-              ))}
-            </div>
-          </>
+    <section className="tc-kfs" aria-label="Kur ve faiz">
+      <div className="tc-kfs-satir">
+        <button type="button" className="tc-kfs-ozet" aria-expanded={acik} onClick={() => acikYaz((a) => !a)} title="Kur ve faiz ayrıntısı">
+          <Simge ad="rotate" boyut="k" />
+          {KUR_BIRIMLERI.map((p) => {
+            const k = kur(p);
+            return (
+              <span key={p} className="tc-kfs-kalem" data-kfs={`kur-${p}`}>
+                <span className="tc-kfs-ad">{p}</span>
+                <b className="mono">{k ? sayi(k.kur, 4) : 'yok'}</b>
+                {k && k.tarih !== o.bugun && <span className="tc-kfs-eski">{gunMetni(k.tarih, o.bugun)}</span>}
+              </span>
+            );
+          })}
+          <span className="tc-kfs-ayrac" aria-hidden="true" />
+          {FAIZ_BIRIMLERI.map((p) => {
+            const f = faiz(p);
+            return (
+              <span key={p} className="tc-kfs-kalem" data-kfs={`faiz-${p}`}>
+                <span className="tc-kfs-ad">{p} faiz</span>
+                <b className="mono">{f ? `%${sayi(f.aylikYuzde, 2)}` : 'yok'}</b>
+                <span className="tc-kfs-ad">/ay</span>
+              </span>
+            );
+          })}
+          {yazabilir && bugunEksik && <span className="tc-kfs-uyari"><span className="tc-kfs-isaret" aria-hidden="true" />Bugün girilmedi</span>}
+          <span className="tc-kfs-son">
+            {o.sonGiris ? `Son giriş: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}` : 'Henüz kur ya da faiz girilmedi'}
+          </span>
+        </button>
+        {yazabilir && (
+          <button type="button" className="tc-kfs-guncelle" onClick={() => acikYaz(true)} aria-label="Kur ve faizi güncelle">
+            <Simge ad="edit" boyut="k" /><span className="tc-kfs-guncelle-ad">Güncelle</span>
+          </button>
         )}
-        {yazabilir && bugun && <Formlar bugun={bugun} />}
-        <p className="tc-kf-not">Yeni kur ve faiz girildiği tarihten sonrasını etkiler; önceki kayıtlar kendi kurunu saklar.</p>
       </div>
-    </Kart>
+      {acik && <Panel o={o} yazabilir={yazabilir} kapat={() => acikYaz(false)} />}
+    </section>
   );
 }
 
-function Formlar({ bugun }: { bugun: string }) {
+function Panel({ o, yazabilir, kapat }: { o: KurFaizOzeti; yazabilir: boolean; kapat: () => void }) {
+  return (
+    <div className="tc-kfs-panel" role="region" aria-label="Kur ve faiz ayrıntısı">
+      {yazabilir ? <KurFormu o={o} kapat={kapat} /> : (
+        <div className="tc-kfs-blok">
+          <h2 className="tc-kfs-baslik"><Simge ad="rotate" boyut="k" />Kur (TRY)</h2>
+          <p className="tc-kfs-not">{KUR_BIRIMLERI.map((p) => { const k = o.kurlar.find((x) => x.paraBirimi === p); return `${p} ${k ? sayi(k.kur, 4) : 'yok'}`; }).join(' · ')}</p>
+          <p className="tc-kfs-not">Kur ve faiz girişi finans ve satın almadadır.</p>
+        </div>
+      )}
+      {yazabilir ? <FaizFormu o={o} kapat={kapat} /> : (
+        <div className="tc-kfs-blok">
+          <h2 className="tc-kfs-baslik"><Simge ad="chart" boyut="k" />Aylık faiz</h2>
+          <p className="tc-kfs-not">{FAIZ_BIRIMLERI.map((p) => { const f = o.faizler.find((x) => x.paraBirimi === p); return `${p} ${f ? `%${sayi(f.aylikYuzde, 2)}` : 'yok'}`; }).join(' · ')}</p>
+        </div>
+      )}
+      <div className="tc-kfs-blok tc-kfs-gecmis-blok">
+        <h2 className="tc-kfs-baslik"><Simge ad="clock" boyut="k" />Son girişler</h2>
+        {o.gecmis.length === 0 ? <p className="tc-kfs-not">Henüz giriş yok.</p> : (
+          <ul className="tc-kfs-gecmis">
+            {o.gecmis.map((g) => (
+              <li key={`${g.tur}-${g.paraBirimi}-${g.tarih}-${g.giris}`}>
+                <span className="tc-kfs-tur" data-tur={g.tur}>{g.tur}</span>
+                <span className="tc-kfs-ne">
+                  <span className="mono">{g.paraBirimi} {g.tur === 'kur' ? sayi(g.deger, 4) : `aylık %${sayi(g.deger, 2)}`}</span>
+                  {g.duzeltme && <span className="tc-kfs-not"> düzeltme</span>}
+                  <br /><span className="tc-kfs-not">{g.girenAd ?? 'bilinmiyor'}</span>
+                </span>
+                <span className="tc-kfs-not mono">{girisMetni(g.giris, o.bugun)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Bugünün üç kuru birlikte girilir (953 a); bugün girilmiş kur düzeltilir (sürümüyle), girilmemiş olana yeni satır açılır.
+// Boş bırakılan ya da değişmeyen para birimi gönderilmez. Geçmiş tarihli kur finansın Kurlar ekranındadır.
+function KurFormu({ o, kapat }: { o: KurFaizOzeti; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [kur, setKur] = useState({ paraBirimi: 'USD', tarih: bugun, deger: '' });
-  const [faiz, setFaiz] = useState({ paraBirimi: 'TRY', baslangic: bugun, deger: '' });
-  const sonra = async (ileti: string) => { bildir('tamam', ileti); await istemci.invalidateQueries({ queryKey: ['finans'] }); };
-  const kurYaz = useMutation({
-    mutationFn: () => api.post('/finans/kurlar/ekle', { paraBirimi: kur.paraBirimi, tarih: kur.tarih, kur: Number(kur.deger.replace(',', '.')) }),
-    onSuccess: async () => { setKur((k) => ({ ...k, deger: '' })); await sonra('Kur kaydedildi.'); },
-    onError: (h) => bildir('hata', hataIletisi(h, 'Kur kaydedilemedi.')),
-  });
-  // Sonucu bilinmeyen gönderimden sonra yeniden kaydet aynı kimlikle gider (faiz ikinci kez yazılmaz); kayıt ya da sunucunun reddi
-  // yeni girişe yeni kimlik açar.
-  const faizKimligi = useRef(yeniIstekKimligi());
-  const faizYaz = useMutation({
-    mutationFn: () => {
-      const govde = { paraBirimi: faiz.paraBirimi, gecerlilikBaslangic: faiz.baslangic, aylikYuzde: Number(faiz.deger.replace(',', '.')) };
-      return tekrarKorumaliGonder(
-        (d) => api.post('/finans/faizler/ekle', govde, { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
-        { istekKimligi: faizKimligi.current },
-      );
+  const bugunku = (p: string) => o.kurlar.find((k) => k.paraBirimi === p && k.tarih === o.bugun);
+  const [degerler, degerlerYaz] = useState<Record<string, string>>(() => Object.fromEntries(KUR_BIRIMLERI.map((p) => {
+    const k = bugunku(p);
+    return [p, k ? sayi(k.kur, 6).replace(/\./g, '') : ''];
+  })));
+  const [hata, hataYaz] = useState<string | null>(null);
+  const yaz = useMutation({
+    mutationFn: async (gidecek: { paraBirimi: string; kur: number }[]) => {
+      for (const g of gidecek) {
+        const k = bugunku(g.paraBirimi);
+        if (k) await api.post('/finans/kurlar/guncelle', { paraBirimi: g.paraBirimi, tarih: o.bugun, kur: g.kur, surum: k.surum });
+        else await api.post('/finans/kurlar/ekle', { paraBirimi: g.paraBirimi, tarih: o.bugun, kur: g.kur });
+      }
     },
-    onSuccess: async () => { faizKimligi.current = yeniIstekKimligi(); setFaiz((f) => ({ ...f, deger: '' })); await sonra('Faiz kaydedildi.'); },
-    onError: (h) => {
-      if (!yenidenDenenebilirMi(h)) faizKimligi.current = yeniIstekKimligi();
-      bildir('hata', hataIletisi(h, 'Faiz kaydedilemedi.'));
-    },
+    onSuccess: async () => { bildir('tamam', 'Kurlar kaydedildi.'); kapat(); await istemci.invalidateQueries(); },
+    onError: async (h) => { bildir('hata', hataIletisi(h, 'Kur kaydedilemedi.')); await istemci.invalidateQueries({ queryKey: OZET_ANAHTARI }); },
   });
-  const gonder = (yaz: { mutate: () => void }) => (e: FormEvent) => { e.preventDefault(); yaz.mutate(); };
+  const gonder = (e: FormEvent) => {
+    e.preventDefault();
+    const gidecek: { paraBirimi: string; kur: number }[] = [];
+    for (const p of KUR_BIRIMLERI) {
+      const metin = degerler[p] ?? '';
+      if (metin.trim() === '') continue;
+      const n = girdiSayisi(metin);
+      if (n === null || n <= 0) { hataYaz(`${p} kuru sıfırdan büyük bir sayı olmalı.`); return; }
+      const k = bugunku(p);
+      if (k && Number(k.kur) === n) continue;
+      gidecek.push({ paraBirimi: p, kur: n });
+    }
+    hataYaz(null);
+    if (gidecek.length === 0) { kapat(); return; }
+    yaz.mutate(gidecek);
+  };
+  const herhangiBugun = KUR_BIRIMLERI.some((p) => bugunku(p));
   return (
-    <div className="tc-kf-formlar">
-      <form className="tc-kf-form" onSubmit={gonder(kurYaz)} aria-label="Kur gir">
-        <Secim etiket="Para birimi" value={kur.paraBirimi} onChange={(e) => setKur({ ...kur, paraBirimi: e.target.value })} secenekler={KUR_BIRIMLERI.map((p) => ({ deger: p, baslik: p }))} />
-        <Girdi etiket="Tarih" type="date" required value={kur.tarih} onChange={(e) => setKur({ ...kur, tarih: e.target.value })} />
-        <Girdi etiket="Kur (TRY)" inputMode="decimal" required value={kur.deger} onChange={(e) => setKur({ ...kur, deger: e.target.value })} />
-        <Dugme type="submit" simge="check" yukleniyor={kurYaz.isPending}>Kuru kaydet</Dugme>
-      </form>
-      <form className="tc-kf-form" onSubmit={gonder(faizYaz)} aria-label="Faiz gir">
-        <Secim etiket="Para birimi" value={faiz.paraBirimi} onChange={(e) => setFaiz({ ...faiz, paraBirimi: e.target.value })} secenekler={FAIZ_BIRIMLERI.map((p) => ({ deger: p, baslik: p }))} />
-        <Girdi etiket="Geçerlilik başlangıcı" type="date" required value={faiz.baslangic} onChange={(e) => setFaiz({ ...faiz, baslangic: e.target.value })} />
-        <Girdi etiket="Aylık faiz (%)" inputMode="decimal" required value={faiz.deger} onChange={(e) => setFaiz({ ...faiz, deger: e.target.value })} />
-        <Dugme type="submit" simge="check" yukleniyor={faizYaz.isPending}>Faizi kaydet</Dugme>
-      </form>
-    </div>
+    <form className="tc-kfs-blok" onSubmit={gonder} aria-label="Bugünün kuru">
+      <h2 className="tc-kfs-baslik"><Simge ad="rotate" boyut="k" />Bugünün kuru (TRY)</h2>
+      {KUR_BIRIMLERI.map((p) => (
+        <Girdi key={p} etiket={`${p} kuru`} inputMode="decimal" className="mono" value={degerler[p] ?? ''}
+          placeholder={(() => { const k = o.kurlar.find((x) => x.paraBirimi === p); return k ? sayi(k.kur, 4) : ''; })()}
+          ipucu={bugunku(p) ? 'bugün girildi; değiştirirseniz düzeltilir' : 'bugün girilmedi'}
+          onChange={(e) => degerlerYaz((d) => ({ ...d, [p]: e.target.value }))} />
+      ))}
+      {hata && <p className="tc-kfs-hata" role="alert">{hata}</p>}
+      <div className="tc-kfs-eylem"><Dugme type="submit" tur="birincil" simge="check" yukleniyor={yaz.isPending}>Kurları kaydet</Dugme></div>
+      <p className="tc-kfs-not">{herhangiBugun ? 'Bugün girilmiş kur düzeltilir; düzelten kişi ve saat kaydedilir.' : 'Bugün için yeni kur satırı açılır.'} Geçmiş tarih finansın Kurlar ekranından girilir.</p>
+    </form>
+  );
+}
+
+// Faiz para birimi başına aylık yüzdedir ve bugünden geçerli yeni satır olarak eklenir; eski oranlar silinmez. Değişmeyen gönderilmez.
+// Sonucu bilinmeyen gönderimden sonra yeniden kaydet aynı kimlikle gider (faiz ikinci kez yazılmaz).
+function FaizFormu({ o, kapat }: { o: KurFaizOzeti; kapat: () => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const mevcut = (p: string) => o.faizler.find((f) => f.paraBirimi === p);
+  const [degerler, degerlerYaz] = useState<Record<string, string>>(() => Object.fromEntries(FAIZ_BIRIMLERI.map((p) => {
+    const f = mevcut(p);
+    return [p, f ? sayi(f.aylikYuzde, 4) : ''];
+  })));
+  const [hata, hataYaz] = useState<string | null>(null);
+  const kimlikler = useRef<Record<string, string>>({});
+  const kimlik = (p: string): string => (kimlikler.current[p] ??= yeniIstekKimligi());
+  const yaz = useMutation({
+    mutationFn: async (gidecek: { paraBirimi: string; aylikYuzde: number }[]) => {
+      for (const g of gidecek) {
+        const govde = { paraBirimi: g.paraBirimi, gecerlilikBaslangic: o.bugun, aylikYuzde: g.aylikYuzde };
+        await tekrarKorumaliGonder(
+          (d) => api.post('/finans/faizler/ekle', govde, { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
+          { istekKimligi: kimlik(g.paraBirimi) },
+        );
+        delete kimlikler.current[g.paraBirimi];
+      }
+    },
+    onSuccess: async () => { bildir('tamam', 'Faiz kaydedildi.'); kapat(); await istemci.invalidateQueries(); },
+    onError: async (h) => {
+      if (!yenidenDenenebilirMi(h)) kimlikler.current = {};
+      bildir('hata', hataIletisi(h, 'Faiz kaydedilemedi.'));
+      await istemci.invalidateQueries({ queryKey: OZET_ANAHTARI });
+    },
+  });
+  const gonder = (e: FormEvent) => {
+    e.preventDefault();
+    const gidecek: { paraBirimi: string; aylikYuzde: number }[] = [];
+    for (const p of FAIZ_BIRIMLERI) {
+      const metin = degerler[p] ?? '';
+      if (metin.trim() === '') continue;
+      const n = girdiSayisi(metin);
+      if (n === null || n < 0 || n > 100) { hataYaz(`${p} faizi 0 ile 100 arasında olmalı.`); return; }
+      const f = mevcut(p);
+      if (f && Number(f.aylikYuzde) === n) continue;
+      gidecek.push({ paraBirimi: p, aylikYuzde: n });
+    }
+    hataYaz(null);
+    if (gidecek.length === 0) { kapat(); return; }
+    yaz.mutate(gidecek);
+  };
+  return (
+    <form className="tc-kfs-blok" onSubmit={gonder} aria-label="Aylık faiz">
+      <h2 className="tc-kfs-baslik"><Simge ad="chart" boyut="k" />Aylık faiz, bugünden geçerli</h2>
+      {FAIZ_BIRIMLERI.map((p) => {
+        const n = girdiSayisi(degerler[p] ?? '');
+        return (
+          <Girdi key={p} etiket={`${p} aylık faiz (%)`} inputMode="decimal" className="mono" value={degerler[p] ?? ''}
+            ipucu={n === null ? 'finansta faiz yok' : `yıllık %${sayi(yillikFaiz(n).toFixed(1), 1)}`}
+            onChange={(e) => degerlerYaz((d) => ({ ...d, [p]: e.target.value }))} />
+        );
+      })}
+      {hata && <p className="tc-kfs-hata" role="alert">{hata}</p>}
+      <div className="tc-kfs-eylem"><Dugme type="submit" tur="birincil" simge="check" yukleniyor={yaz.isPending}>Faizi kaydet</Dugme></div>
+      <p className="tc-kfs-not">Yalnız değişen para birimi yazılır. Eski oranlar silinmez; teklif karşılaştırmaları yeni oranla hesaplanır.</p>
+    </form>
   );
 }
