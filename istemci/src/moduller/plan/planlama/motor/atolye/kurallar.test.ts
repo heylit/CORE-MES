@@ -4,7 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, type SunucuSenaryosu,
 } from './kurallar.ts';
 
@@ -244,5 +244,12 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     expect(sunucuEkMesai(null)).toBeNull();
     expect(ekMesaiFarki(a, b)).toEqual([['clock', 'Ek mesai: M1, 26.10 Pzt, vardiya 3'], ['minus', 'Kaldırılan ek mesai: M1, 27.10 Sal, vardiya 3']]);
     expect(tarihGunYaz('2026-11-01')).toBe('01.11 Paz');
+  });
+});
+
+describe('donuk bölge seçenekleri (248 a)', () => {
+  it('4 saatten kısa donuk bölge seçilemez', () => {
+    expect(DONUK_SECENEKLERI).toEqual([4, 8, 16, 24]);
+    expect(Math.min(...DONUK_SECENEKLERI)).toBe(4);
   });
 });
