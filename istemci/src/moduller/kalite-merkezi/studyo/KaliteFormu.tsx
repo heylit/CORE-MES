@@ -2,11 +2,11 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { useQueryClient } from '@tanstack/react-query';
 import type { KmOlcumGovdesi, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { DurumKutusu, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
-import type { Olcum } from '../../../ortak/cizim/kurallar.ts';
+import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
 import type { TeknikResimKontrolu } from '../../../ortak/cizim/TeknikResim.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { cizimBalonu, cizimOlcumleri, sonOlcumler, yeniOlcumler } from './kurallar.ts';
-import { studyoAnahtari, useEmirOlcumleri, useResimDosyasi, useStudyoParcasi } from './veri.ts';
+import { studyoAnahtari, useBalonYeriYaz, useEmirOlcumleri, useResimDosyasi, useStudyoParcasi } from './veri.ts';
 
 // Kalite formu (798): parçanın teknik resmi, balonları ve emrin ölçümleri tek kayıttır (kalite_merkezi_olcum). Aynı form Kalite Merkezi
 // stüdyosunda ve Arkon terminalinde ("Ölç") açılır; iki yerden girilen ölçü aynı kayda düşer. Yazımı form yapmaz, açan verir: stüdyo
@@ -18,14 +18,36 @@ const BOS_SATIR: readonly never[] = [];
 export type OlcumYazimi = KmOlcumGovdesi;
 export type OlcumYazici = (g: OlcumYazimi) => Promise<unknown>;
 
+type BalonYeri = Pick<Balon, 'yer' | 'yerKipi'>;
+
 // Resmin dosyası gelince ortak parçaya verilir; parça dosyayı adının uzantısından (PDF, STEP, IGES, STL) tanır.
-export function Resim({ resim, kontrol }: { resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim'> }) {
+// `yerYaz` verilince taşınan balonun yeri (913 a) hemen kendi ucuna yazılır; verilmezse yer, açanın balonlarYaz'ına (plan taslağına) gider.
+// Yazılan yer cevap gelene dek ekranda tutulur: yoksa balon bir an eski yerine sıçrar.
+export function Resim({ resim, kontrol, yerYaz = false }: { resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim'>; yerYaz?: boolean }) {
   const dosya = useResimDosyasi(resim);
+  const { bildir } = useBildirim();
+  const yeriYaz = useBalonYeriYaz(resim.malzemeNo);
+  const [bekleyen, bekleyenYaz] = useState<Record<number, BalonYeri>>({});
+  const balonlar = useMemo(() => (kontrol.balonlar ?? []).map((b) => {
+    const y = bekleyen[b.id];
+    return y ? { ...b, yer: y.yer ?? null, yerKipi: y.yerKipi ?? null } : b;
+  }), [kontrol.balonlar, bekleyen]);
+  const balonYeriYaz = useCallback((no: number, yer: Balon['yer'], yerKipi: Balon['yerKipi']) => {
+    const balon = resim.balonlar.find((b) => b.no === no);
+    if (!balon) return;
+    bekleyenYaz((o) => ({ ...o, [no]: { yer: yer ?? null, yerKipi: yerKipi ?? null } }));
+    const birak = () => { bekleyenYaz((o) => Object.fromEntries(Object.entries(o).filter(([k]) => Number(k) !== no))); };
+    yeriYaz.mutate({ balon, yer: yer ?? null, yerKipi: yerKipi ?? null }, {
+      onSuccess: birak,
+      onError: (h) => { birak(); bildir('hata', hataIletisi(h, 'Balon yeri kaydedilemedi.')); },
+    });
+  }, [resim.balonlar, yeriYaz, bildir]);
   if (dosya.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(dosya.error, 'Resim dosyası alınamadı')} yenile={() => { void dosya.refetch(); }} />;
   if (!dosya.data) return <DurumKutusu durum="yukleniyor" />;
   const ad = dosya.data.ad ?? resim.ad;
   const tam: TeknikResimKontrolu = {
     ...kontrol,
+    ...(yerYaz ? { balonlar, balonYeriYaz } : {}),
     anahtar: `km-resim-${String(resim.id)}-${resim.ozet}`,
     dosyalar: [{ kind: resim.tur === 'resim' ? 'pdf' : 'model', name: ad, bytes: dosya.data.bayt, merkez: resim.merkezBelgeId, merkezOzet: resim.ozet }],
     anaResim: ad,

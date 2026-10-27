@@ -46,10 +46,19 @@ describe('stüdyo kuralları', () => {
     ]);
     expect(geri).toEqual([
       { id: 7, no: 3, nominal: 'Ø10', tolerans: '±0,1', alt: '9.95', ust: '10.05', alet: 'Kumpas', siklik: null, kritik: false, yontem: 'elle',
-        olcuAletiGerekir: true, tur: 'Çap', sayfa: 2, x: 40, y: 10, yaziKutusu: null },
+        olcuAletiGerekir: true, tur: 'Çap', sayfa: 2, x: 40, y: 10, yaziKutusu: null, yer: null, yerKipi: null },
       { no: 4, nominal: 'M6', tolerans: null, alt: null, ust: null, alet: null, siklik: null, kritik: false, yontem: 'elle',
-        olcuAletiGerekir: false, tur: null, sayfa: null, x: 1, y: 2, yaziKutusu: null },
+        olcuAletiGerekir: false, tur: null, sayfa: null, x: 1, y: 2, yaziKutusu: null, yer: null, yerKipi: null },
     ]);
+  });
+
+  it('balon yeri (913 a): sabit yer ve tek balon yerleşimi çizime geçer, plan geri çevirisi taşır; yoksa boş gider', () => {
+    const sabit = cizimBalonu(balon({ yer: [40, 50], yerKipi: null }));
+    expect([sabit.yer, sabit.yerKipi]).toEqual([[40, 50], undefined]);
+    expect(cizimBalonu(balon({ yer: null, yerKipi: 'serit' })).yerKipi).toBe('serit');
+    expect('yer' in cizimBalonu(balon())).toBe(false);
+    const [a, b] = planGirdileri([balon()], [{ ...cizimBalonu(balon()), yer: [1, 2] }, { ...cizimBalonu(balon({ no: 2 })), id: 2 }]);
+    expect([a?.yer, a?.yerKipi, b?.yer, b?.yerKipi]).toEqual([[1, 2], null, null, null]);
   });
 
   it('balon başına son ölçüm: düzeltme yeni kayıttır, aynı anda büyük kimlik sonradır', () => {

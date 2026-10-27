@@ -298,10 +298,12 @@ export async function resimEkle(
 export interface BalonSatiri {
   id: number; resimId: number; malzemeNo: number; no: number; nominal: string; tolerans: string | null; alt: string | null; ust: string | null;
   alet: string | null; siklik: string | null; kritik: boolean; yontem: 'cmm' | 'elle' | null; olcuAletiGerekir: boolean; tur: string | null;
-  sayfa: number | null; x: number | null; y: number | null; yaziKutusu: number[] | null; surum: number;
+  sayfa: number | null; x: number | null; y: number | null; yaziKutusu: number[] | null; yer: [number, number] | null; yerKipi: 'yakin' | 'serit' | null;
+  surum: number;
 }
 const BALON_SUTUNLARI = `b.id, b.resim_id AS "resimId", r.malzeme_no AS "malzemeNo", b.no, b.nominal, b.tolerans, b.alt::text AS alt, b.ust::text AS ust,
-  b.alet, b.siklik, b.kritik, b.yontem, b.olcu_aleti_gerekir AS "olcuAletiGerekir", b.tur, b.sayfa, b.x, b.y, b.yazi_kutusu AS "yaziKutusu", b.surum`;
+  b.alet, b.siklik, b.kritik, b.yontem, b.olcu_aleti_gerekir AS "olcuAletiGerekir", b.tur, b.sayfa, b.x, b.y, b.yazi_kutusu AS "yaziKutusu",
+  CASE WHEN b.yer_x IS NULL THEN NULL ELSE ARRAY[b.yer_x, b.yer_y] END AS yer, b.yer_kipi AS "yerKipi", b.surum`;
 
 export function resimBalonlari(db: Db, resimIdler: readonly number[]): Promise<BalonSatiri[]> {
   return db.sorgu(
@@ -460,10 +462,11 @@ export async function acikNumuneBalonlari(db: Db, resimId: number): Promise<numb
 export interface BalonYazimi {
   no: number; nominal: string; tolerans: string | null; alt: string | null; ust: string | null; alet: string | null; siklik: string | null;
   kritik: boolean; yontem: 'cmm' | 'elle' | null; olcuAletiGerekir: boolean; tur: string | null; sayfa: number | null; x: number | null; y: number | null;
-  yaziKutusu: number[] | null;
+  yaziKutusu: number[] | null; yer: readonly [number, number] | null; yerKipi: 'yakin' | 'serit' | null;
 }
 const balonDegerleri = (b: BalonYazimi) => [
   b.no, b.nominal, b.tolerans, b.alt, b.ust, b.alet, b.siklik, b.kritik, b.yontem, b.olcuAletiGerekir, b.tur, b.sayfa, b.x, b.y, b.yaziKutusu,
+  b.yer?.[0] ?? null, b.yer?.[1] ?? null, b.yerKipi,
 ];
 
 export async function balonlariKaldir(db: Db, idler: readonly number[], kisiId: number): Promise<void> {
@@ -479,9 +482,11 @@ export async function balonGuncelle(db: Db, id: number, b: BalonYazimi, kisiId: 
   await db.sorgu(
     `UPDATE kalite_merkezi_balon SET no = $2, nominal = $3, tolerans = $4, alt = $5::numeric, ust = $6::numeric, alet = $7, siklik = $8, kritik = $9,
         yontem = $10, olcu_aleti_gerekir = $11, tur = $12, sayfa = $13, x = $14, y = $15, yazi_kutusu = $16::double precision[],
-        surum = surum + 1, guncelleyen_id = $17, guncellendi = now()
-      WHERE id = $1 AND aktif AND (no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y, yazi_kutusu)
-        IS DISTINCT FROM ($2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[])`,
+        yer_x = $17::double precision, yer_y = $18::double precision, yer_kipi = $19, surum = surum + 1, guncelleyen_id = $20, guncellendi = now()
+      WHERE id = $1 AND aktif AND (no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y, yazi_kutusu,
+          yer_x, yer_y, yer_kipi)
+        IS DISTINCT FROM ($2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[],
+          $17::double precision, $18::double precision, $19)`,
     [id, ...balonDegerleri(b), kisiId],
   );
 }
@@ -489,10 +494,24 @@ export async function balonGuncelle(db: Db, id: number, b: BalonYazimi, kisiId: 
 export async function balonEkle(db: Db, resimId: number, b: BalonYazimi, kisiId: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y,
-        yazi_kutusu, guncelleyen_id)
-     VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[], $17)`,
+        yazi_kutusu, yer_x, yer_y, yer_kipi, guncelleyen_id)
+     VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[], $17::double precision,
+        $18::double precision, $19, $20)`,
     [resimId, ...balonDegerleri(b), kisiId],
   );
+}
+
+// Yalnız balonun yeri değişir (913 a); sürüm tutmazsa (başkası değiştirdi) satır döner.
+export async function balonYeriYaz(
+  db: Db, id: number, surum: number, yer: readonly [number, number] | null, yerKipi: 'yakin' | 'serit' | null, kisiId: number,
+): Promise<boolean> {
+  const r = await db.sorgu<{ id: number }>(
+    `UPDATE kalite_merkezi_balon SET yer_x = $3::double precision, yer_y = $4::double precision, yer_kipi = $5, surum = surum + 1,
+        guncelleyen_id = $6, guncellendi = now()
+      WHERE id = $1 AND surum = $2 AND aktif RETURNING id`,
+    [id, surum, yer?.[0] ?? null, yer?.[1] ?? null, yerKipi, kisiId],
+  );
+  return r.length === 1;
 }
 
 // Parçanın etkin resimlerindeki etkin balon numaraları (numune kuralı bunlara bakar).

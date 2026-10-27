@@ -731,6 +731,7 @@ export const STUDYO_ILETILER = {
   belgeYok: 'Belge merkezinde yayında revizyonu olan belge bulunamadı.',
   belgeTuru: 'Stüdyo yalnız PDF resim ile STEP, STL ve IGES model açar.',
   resimYok: 'Resim bulunamadı.',
+  balonYok: 'Balon bulunamadı ya da resmi kaldırılmış.',
   revizyonDegisti: 'Belge merkezinde bu resmin yeni revizyonu yayında; alınan revizyon artık verilemiyor. Yeni revizyonu parçaya alın.',
   emirYok: 'Üretim emri bulunamadı.',
   numuneYok: 'Numune bulunamadı.',
@@ -756,6 +757,7 @@ export const STUDYO_ILETILER = {
   balonSinirTers: 'Alt sınır üst sınırdan büyük olamaz.',
   balonKonumEksik: 'Balon konumu x ve y ile birlikte verilir.',
   balonAcikNumunede: 'Kararı verilmemiş numunede istenen balon kaldırılamaz.',
+  balonYerIkisi: 'Elle konan balon yeri ile istenen yerleşim birlikte verilmez.',
   kuralKimlikTekrar: 'Numune planında aynı kural kimliği bir kez kullanılır.',
   kuralBalonYok: 'Numune kuralındaki balon numarası parçanın etkin resimlerinde yok.',
 } as const;
@@ -856,7 +858,10 @@ export function numuneKarariReddi(
 // Kontrol planı resim başına bütün yazılır (603 a). Kimlikli balon resmin etkin balonudur; listede olmayan etkin balon kaldırılır,
 // ama kararsız numunede istenen balon kaldırılmaz (ölçülemez kalır, numune karara bağlanamaz).
 export function balonPlaniReddi(i: {
-  girdiler: readonly { id?: number | undefined; no: number; alt?: string | null | undefined; ust?: string | null | undefined; x?: number | null | undefined; y?: number | null | undefined }[];
+  girdiler: readonly {
+    id?: number | undefined; no: number; alt?: string | null | undefined; ust?: string | null | undefined; x?: number | null | undefined; y?: number | null | undefined;
+    yer?: readonly [number, number] | null | undefined; yerKipi?: string | null | undefined;
+  }[];
   etkinler: readonly number[]; acikNumunedekiler: ReadonlySet<number>;
 }): StudyoIletisi | null {
   const nolar = i.girdiler.map((g) => g.no);
@@ -868,9 +873,16 @@ export function balonPlaniReddi(i: {
     if ((g.alt == null) !== (g.ust == null)) return 'balonSinirEksik';
     if (g.alt != null && g.ust != null && ondalikKarsilastir(g.alt, g.ust) > 0) return 'balonSinirTers';
     if ((g.x == null) !== (g.y == null)) return 'balonKonumEksik';
+    const yer = balonYeriReddi(g);
+    if (yer !== null) return yer;
   }
   const kalan = new Set(idler);
   return i.etkinler.some((id) => !kalan.has(id) && i.acikNumunedekiler.has(id)) ? 'balonAcikNumunede' : null;
+}
+
+// Balon yeri (894 a, 913 a): elle konan yer sabittir ve yerleşim isteğini anlamsız kılar; ikisi birlikte verilmez.
+export function balonYeriReddi(g: { yer?: readonly [number, number] | null | undefined; yerKipi?: string | null | undefined }): StudyoIletisi | null {
+  return g.yer != null && g.yerKipi != null ? 'balonYerIkisi' : null;
 }
 
 // Numune kuralındaki balon numaraları parçanın etkin resimlerindeki numaralardır; kural kimliği planda tekildir.

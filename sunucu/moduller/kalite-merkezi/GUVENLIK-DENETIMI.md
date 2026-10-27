@@ -13,6 +13,7 @@ sunucudan yazılır. İşlemler hiçbir role verilmedi (Aşama 1): yalnız yöne
 | `POST /kalite-merkezi/dosyalar/:kimlik/bagla` | `kalite-merkezi.yaz` | ortak dosya deposu türleri ve 50 MB sınırı; eski bağ kaldırılır, denetim satırı yazılır | "dosya: ..." | "dosya: ... " (tür sınırı `kurallar.test.ts`) |
 | `GET /kalite-merkezi/dosyalar/:kimlik` | `kalite-merkezi.oku` | yalnız bu modülün bağı | "dosya: ... ikili döner" | "dosya: ... silinince 404" |
 | `POST /kalite-merkezi/dosyalar/:kimlik/sil` | `kalite-merkezi.yaz` | yalnız bu modülün bağı kaldırılır | "dosya: ... silinince 404" | "yetki: ..." |
+| `POST /kalite-merkezi/studyo/balonlar/:balonId/yer` | `kalite-merkezi.onayla` · tekrar korumalı (913 a) | yalnız etkin resmin etkin balonu (404); balonun sürümü zorunlu, arada değişen 409; yer ile tek balon yerleşimi birlikte 400; yer sayfa içi sonlu sayı (şema + tablo kısıtı); plan sürümü artmaz | "KM-S31 ...", "KM-S33 ..." (`balon-yeri.test.ts`) | "KM-S31 ... yazar ve operatör 403, oturumsuz 401", "KM-S32 ..." |
 
 ## Sunucuda olmayan, yalnız ekranda kalan kurallar
 - Kayıt içeriği yorumlanmaz: zorunlu alan, durum geçişi, NCR/DÖF/muayene kuralları uygulamadadır (Arkon kalıbı).

@@ -1,3 +1,11 @@
+# FARK: balon yeri kalıcı (894 a, 913 a)
+
+- Göç `20261027082000_kalite_merkezi_balon_yeri.sql`: `kalite_merkezi_balon`a boş olabilen `yer_x`, `yer_y`, `yer_kipi` ve kısıtları. Dolu satırlar değişmez; yeri olmayan balon ekranda kendiliğinden dizilir.
+- Sözleşme: `kmBalon` ve `kmBalonGirdisi` `yer`, `yerKipi` taşır; yeni `kmBalonYeriGovdesi`, `kmBalonCevabi`.
+- Yeni uç `POST /kalite-merkezi/studyo/balonlar/:balonId/yer` (`kalite-merkezi.onayla`, yeni işlem yok): balonun kendi sürümüyle yazılır, plan sürümü artmaz. Kontrol planı yazımı da yeri taşır; verilmeyen yer boşalır.
+- Ekran: plan taslağı yokken taşınan balon yeni uca, taslak açıkken taslağa gider (`Resim` `yerYaz`). Arkon Hazırlık görünümü yeri `cizimBalonu` ile kendiliğinden gösterir.
+- Testler: `balon-yeri.test.ts` (KM-S30..S33), `studyo/kurallar.test.ts`.
+
 # FARK: Kalite Merkezi'nde ayrı PIN girişi yok, giriş TMI oturumu (kullanıcının yazılı onayı, 2026-10-16 06:37 UTC)
 
 - Sunucu (`kurallar.ts`, `servis.ts`): "kullanici" ve "settings" kayıtlarını yalnız yönetici yazar ve siler (`kisiBayrakliMi`); öteki yazma yetkilisi 403 alır. "kullanici" kaydının `pin` alanı yazmada ve geri yüklemede saklanmaz. Yeni işlem ya da rol yok.
