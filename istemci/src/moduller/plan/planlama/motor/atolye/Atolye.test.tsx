@@ -145,7 +145,8 @@ describe('PlanlamaAtolyesi', () => {
       emirler: [{ emirNo: 'E-1', teslim: '2026-10-30', bitis }],
       gostergeler: { ...GOSTERGE, ayarSaat: kaynak === 1 ? 2 : 3.5, agirlikliGecikmeSaat: kaynak === 1 ? 4 : 6 },
     });
-    const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve(yol === '/plan' ? plan(1, '2026-10-21T08:00:00Z') : plan(2, '2026-10-21T11:00:00Z')) as never);
+    const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => (yol.startsWith('/plan/motor-ayarlari') ? Promise.reject(new Error('yok'))
+      : Promise.resolve(yol === '/plan' ? plan(1, '2026-10-21T08:00:00Z') : plan(2, '2026-10-21T11:00:00Z'))) as never);
     ac();
     fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     expect(screen.getByText(/Çalışma planını canlıyla karşılaştırın/)).toBeTruthy();

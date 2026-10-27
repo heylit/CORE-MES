@@ -141,6 +141,8 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'siparisler.termin-onayla',
     // Ortak yetki matrisinin planlama işlemi, planlama plan modülüne geçince yeni adıyla (658 b, 663 a) ve plan sayfası.
     'plan.planlama-oku', 'sayfa.plan',
+    // Plan motoru ayarları göçü (kullanıcı kararı 775 b, 27.10.2026).
+    'plan.motor-ayari',
   ].sort();
   const OPERATOR_SONUNDA = [
     'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',

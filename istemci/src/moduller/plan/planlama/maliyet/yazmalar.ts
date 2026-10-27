@@ -37,9 +37,6 @@ export function tezUcretYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number): boo
     x.D = { ...x.D, tezgahlar: x.D.tezgahlar.map((z) => (z.id === id ? { ...z, ucret: v } : z)) };
   });
 }
-export function planAmacYaz(yaz: Yaz, v: 'tl' | 'sira'): boolean {
-  return yaz('Plan amacı değişti', v === 'tl' ? 'Tek TL toplamı' : 'Önce gecikme', (x) => { dYaz(x, { planTL: { ...planTL(x.D), amac: v } }); });
-}
 // Boş bırakılabilen yalnız operatör ücreti ve tek oran genel giderdir (ym-ayar).
 export function maliyetAyariYaz(yaz: Yaz, D: PlanVerisi, k: keyof MaliyetAyari, v: number | null): boolean {
   if (v === null && k !== 'operatorUcret' && k !== 'genelGider') return false;

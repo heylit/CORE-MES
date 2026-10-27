@@ -383,6 +383,29 @@ export const bedelAyariGovdesi = bedelAyari.partial({
   yuksekCarpani: true, normalCarpani: true, dusukCarpani: true, sinifACarpani: true, sinifBCarpani: true, sinifCCarpani: true,
 });
 
+// Plan motoru ayarları (kart 811; 771 a, 772 a, 776 b): amaç (sıralı ya da TL), stoku bilinmeyen malzemede davranış (dur ya da varsay) ve
+// sıralama kuralı (776 b: ATCS ve plan ayarındaki kurallar; varsayılan ATCS). Her değişiklik yeni sürümdür; taslak kendi sürümünde kalır (774 a). Değiştirmek
+// plan.motor-ayari (775 b).
+export const MOTOR_AMACLARI = ['sirali', 'tl'] as const;
+export const EKSIK_STOK_DAVRANISLARI = ['dur', 'varsay'] as const;
+export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
+export const motorAyarlari = z.object({
+  amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI),
+});
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' };
+// Yazarken verilmeyen alan güncel sürümdekinden kalır.
+export const motorAyariGovdesi = motorAyarlari.partial();
+// Sürüm kimliği boşsa koddaki varsayılandır (henüz sürüm yazılmamış).
+const motorAyarSurumu = z.object({ surumId: KIMLIK.nullable(), degerler: motorAyarlari, yazan: z.string().nullable(), zaman: zaman.nullable() });
+// Taslak verilirse taslağın sürümü ve güncelden farklı mı; verilmezse taslak boş.
+export const motorAyarlariCevabi = z.object({
+  guncel: motorAyarSurumu,
+  // kural: taslağa özel sıralama kuralı (830 a); boşsa sürümdeki geçer.
+  taslak: z.object({ id: KIMLIK, surum: motorAyarSurumu, farkli: z.boolean(), kural: z.enum(MOTOR_KURALLARI).nullable() }).nullable(),
+});
+// 776 b, 830 a: Planlama atölyesinde taslağa özel kural; boş verilirse motor ayarı sürümündeki kurala döner.
+export const motorKuraliGovdesi = z.object({ surum: KIMLIK, kural: z.enum(MOTOR_KURALLARI).nullable() });
+
 // Elle çarpan (195 a): siparişin gecikme bedelini gerekçeyle çarpar; 0,5-2 plan.yaz, 3'e kadar siparisler.onayla (sunucu denetler).
 export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;
 export const siparisParametresi = z.object({ id: z.coerce.number().int().positive().max(2_147_483_647) });
@@ -436,6 +459,10 @@ export type OnizleSorgusu = z.input<typeof onizleSorgusu>;
 export type CanliYerlesimCevabi = z.output<typeof canliYerlesimCevabi>;
 export type BedelAyari = z.output<typeof bedelAyari>;
 export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
+export type MotorAyarlari = z.output<typeof motorAyarlari>;
+export type MotorAyariGovdesi = z.output<typeof motorAyariGovdesi>;
+export type MotorAyarlariCevabi = z.output<typeof motorAyarlariCevabi>;
+export type MotorKuraliGovdesi = z.output<typeof motorKuraliGovdesi>;
 export type SiparisCarpaniCevabi = z.output<typeof siparisCarpaniCevabi>;
 export type HizliDeneme = (typeof HIZLI_DENEMELER)[number];
 export type SenaryoOnayi = z.output<typeof senaryoOnayi>;

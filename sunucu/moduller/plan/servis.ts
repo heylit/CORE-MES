@@ -3,7 +3,7 @@ import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiY
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
   CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
-  EkMesaiGovdesi, GeriGonderGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
+  EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
@@ -30,6 +30,8 @@ import {
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import { eksikStokDenetle } from './eksik-stok.ts';
+import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
 
@@ -985,6 +987,21 @@ export function bedelAyariYaz(db: Db, k: Kullanici, t: TaslakGirdisi, a: BedelAy
     const fark = (Object.keys(a) as (keyof BedelAyariGovdesi)[]).filter((x) => a[x] !== undefined && a[x] !== b.bedelAyari[x]);
     return { tur: 'bedel_ayari', ozet: `Bedel ayarı: ${fark.length ? fark.join(', ') : 'değişiklik yok'}`, isEmriIdleri: [] };
   });
+}
+
+// 774 a: taslak açıldığı andaki motor ayarı sürümünde kalır; planlamacı isterse güncel sürüme geçirir. Defter kaydı düşmez (defterin
+// tür listesi dolu tabloda kısıttır); sürüm artar, açık ekran yenilenir. Zaten güncel sürümdeyse hiçbir şey yazılmaz.
+export async function motorAyariGuncelle(db: Db, k: Kullanici, id: number, surum: number): Promise<PlanCevabi> {
+  await acikTaslak(db, k, id, surum);
+  if (await taslagiGuncelSurumeBagla(db, k, id)) await s.senaryoSurumArtir(db, id);
+  return planOku(db, k, await baglamKur(db, k, id));
+}
+
+// 776 b, 830 a: Planlama atölyesinde taslağa özel sıralama kuralı; boş, motor ayarı sürümündeki kurala döner. Kural değişmediyse sürüm artmaz.
+export async function motorKuraliYaz(db: Db, k: Kullanici, id: number, g: MotorKuraliGovdesi): Promise<PlanCevabi> {
+  await acikTaslak(db, k, id, g.surum);
+  if (await taslakKuraliYaz(db, k, id, g.kural)) await s.senaryoSurumArtir(db, id);
+  return planOku(db, k, await baglamKur(db, k, id));
 }
 
 // Elle çarpan (195 a): siparişin çarpan geçmişi, yeniden eskiye; geçerli çarpan ilkidir.
@@ -2080,6 +2097,11 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     && (b.isler.get(y.isEmriId)?.durum === 'planli' || siralanmisCalisan.has(y.isEmriId)) && !y.kilitli && !y.dondurulmus && !bolunmus(y)
     && (b.takvimler.get(kaynakAnahtari(y.kaynak)) ?? null) === null).map((y) => y.isEmriId));
   taslak = taslak.filter((y) => !vardiyasiz.has(y.isEmriId));
+  // 772 a: yalnız taslakta yeri değişen gerçek işlere bakılır (308 b gibi); denemeden doğan iş emrinin malzemesi canlıda yoktur.
+  await eksikStokDenetle(db, id, degisen.filter((y) => y.isEmriId >= 0 && !vardiyasiz.has(y.isEmriId)).flatMap((y) => {
+    const is = b.isler.get(y.isEmriId);
+    return is ? [{ uretimEmriId: is.uretimEmriId, emirNo: is.emirNo, opNo: is.opNo }] : [];
+  }));
   // Yersiz bölme de canlıya geçer (taslakta ya da canlıda yalnız bölmesi olan iş).
   const yersizler = [...b.yersiz.keys(), ...(await s.yersizBolmeler(db, null)).keys()];
   const idler = [...new Set([...canli.map((y) => y.isEmriId), ...taslak.map((y) => y.isEmriId), ...yersizler])].filter((x) => degisebilir(x) && !vardiyasiz.has(x));

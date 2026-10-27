@@ -2,6 +2,8 @@ import vm from 'node:vm';
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
+import { hedefMotorAyari } from './motor-ayari.ts';
+import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import { cozumGirdisi, type EkAdim } from './plan-girdisi.ts';
 import { motorKodu, planCoz, type MotorDurumu } from './plan-motoru.ts';
@@ -15,7 +17,9 @@ import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: PlanMotoruIstegi) => {
   const kaynak = await planCozumKaynagi(db);
   if (kaynak === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');
-  return coz(kaynak, istek);
+  // Girdi güncel motor ayarıyla gelir; taslak kendi sürümüyle dizilir (774 a).
+  const { degerler } = await hedefMotorAyari(db, istek.taslakId);
+  return coz({ ...kaynak, calisma: calismayaMotorAyari(kaynak.calisma, degerler) }, istek);
 };
 
 // 686 a: ek adım alanı plan modülünün isteğine ayrıca girer; çözücü alanı olan ve olmayan isteği aynı okur.

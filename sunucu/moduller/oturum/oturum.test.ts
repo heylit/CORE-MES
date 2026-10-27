@@ -414,6 +414,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.satis?.push(...PORTAL, 'portal.satis', 'projeler.oku', 'sevkiyat.oku', 'siparisler.termin-onayla');
   MATRIS.mudur?.push('rota.emre-kopyala', 'siparisler.termin-onayla');
   MATRIS.planlama_proje?.push('siparisler.termin-onayla');
+  // Plan motoru ayarları (775 b, 27.10.2026).
+  for (const rol of ['mudur', 'planlama_proje']) MATRIS[rol]?.push('plan.motor-ayari');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 
