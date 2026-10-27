@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Dugme, Girdi, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { guvenliAd, htmlKacis, icsKatla, indir, yazdir } from '../disa-aktar.ts';
 import { PROGRAMLAR } from '../icerik/programlar.ts';
 import { denetimTarihiAyarla, kalanGun, onerilenAsama } from '../kurallar/denetim-takvimi.ts';
@@ -36,10 +37,10 @@ export function HaftalikProgram() {
       {haftalik ? <Haftalar /> : <Asamalar />}
       <IzSurme />
       <div className="tc-dhp-iki">
-        <Kart baslik="Denetim günü: yapın">
+        <Kart simge={prototipSimgesi('check')} baslik="Denetim günü: yapın">
           <ul className="tc-dhp-madde-liste">{YAPIN.map((x) => <li key={x}><span className="tc-dhy-ton-iyi"><PSimge ad="check" /></span>{x}</li>)}</ul>
         </Kart>
-        <Kart baslik="Denetim günü: yapmayın">
+        <Kart simge={prototipSimgesi('x')} baslik="Denetim günü: yapmayın">
           <ul className="tc-dhp-madde-liste">{YAPMAYIN.map((x) => <li key={x}><span className="tc-dhy-ton-kotu"><PSimge ad="x" /></span>{x}</li>)}</ul>
         </Kart>
       </div>
@@ -73,9 +74,13 @@ function Haftalar() {
   const [acik, acikYaz] = useState<Record<string, boolean>>({});
   if (!B) {
     return (
-      <Kart baslik="Haftalık program için denetim tarihi gerekli">
-        <p>{`${kb.pg.s} denetim tarihini girin; araç bugünden denetime kadar her haftaya görev, kapatılacak açık, öz değerlendirme turu ve soru kartı dağıtsın.`}</p>
-        <TarihGirisi etiket="Denetim tarihi" />
+      <Kart>
+        <div className="tc-dhp-bos-durum">
+          <span className="tc-dhp-bos-simge"><PSimge ad="cal" /></span>
+          <h2>Haftalık program için denetim tarihi gerekli</h2>
+          <p>{`${kb.pg.s} denetim tarihini girin; araç bugünden denetime kadar her haftaya görev, kapatılacak açık, öz değerlendirme turu ve soru kartı dağıtsın.`}</p>
+          <TarihGirisi etiket="Denetim tarihi" />
+        </div>
       </Kart>
     );
   }
@@ -112,7 +117,7 @@ function Haftalar() {
 
   return (
     <Kart
-      baslik="Haftalık program"
+      simge={prototipSimgesi('cal')} baslik="Haftalık program"
       sag={<><Dugme simge="download" onClick={icsIndir}>Haftalık toplantıları takvime ekle</Dugme><Dugme simge="printer" onClick={yazdirHaftalar}>Yazdır</Dugme></>}
     >
       <p className="tc-dhy-ton-soluk">
@@ -180,7 +185,7 @@ function Asamalar() {
   const st = ps.per[sel];
   if (!p || !st) return null;
   return (
-    <Kart baslik="Hazırlık takvimi" sag={<small className="tc-dhy-ton-soluk">{`${String(ps.done)}/${String(ps.tot)} görev tamamlandı`}</small>}>
+    <Kart simge={prototipSimgesi('calcheck')} baslik="Hazırlık takvimi" sag={<small className="tc-dhy-ton-soluk">{`${String(ps.done)}/${String(ps.tot)} görev tamamlandı`}</small>}>
       <div className="tc-dhp-asamalar" role="group" aria-label="Hazırlık aşamaları">
         {kb.pg.PREP.map((x, i) => {
           const s = ps.per[i] ?? { k: 0, n: 0 };
@@ -235,7 +240,7 @@ function IzSurme() {
     });
   };
   return (
-    <Kart baslik="Uçtan uca iz sürme tatbikatı" sag={yaz ? <Dugme simge="rotate" onClick={() => { d.degistir('İz sürme sıfırlama', (t) => { t.pw[d.program].trace = {}; }); }}>Sıfırla</Dugme> : undefined}>
+    <Kart simge={prototipSimgesi('link')} baslik="Uçtan uca iz sürme tatbikatı" sag={yaz ? <Dugme simge="rotate" onClick={() => { d.degistir('İz sürme sıfırlama', (t) => { t.pw[d.program].trace = {}; }, { bildirim: 'İz sürme tatbikatı sıfırlandı' }); }}>Sıfırla</Dugme> : undefined}>
       <p className="tc-dhy-ton-soluk">
         {d.program === 'eydep' ? 'Son dönemde teslim ettiğiniz bir işi seçin ve her halkayı sistemden gösterin.' : 'Son 3 ayın siparişlerinden rastgele birini seçin ve her halkayı kayıtla gösterin.'}
         {' Halkaya tıklayın: bir kez '}<b className="tc-dhy-ton-iyi">gösterebildik</b>{', iki kez '}<b className="tc-dhy-ton-kotu">kopuk</b>{'. Kopan halka, denetçinin bulacağı yerdir.'}

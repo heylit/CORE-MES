@@ -1,7 +1,7 @@
 import type { ProgramTanimi } from '../icerik/programlar.ts';
 import { grupYuzdesi, type PuanSonucu } from '../kurallar/puan.ts';
 import { tarihMetni } from '../tarih.ts';
-import { notTonu, puanTonu, type Ton } from './hesaplar.ts';
+import { kararTonu, notTonu, puanTonu, type Ton } from './hesaplar.ts';
 
 // Ortak bileşeni olmayan çizimler (T12): radar, dağılım halkası, madde çarkı, öz değerlendirme eğilimi. Renk yalnız ton sınıflarından
 // (program.css, tasarım değişkenleri); ölçüler SVG kutusunun içindedir.
@@ -160,6 +160,36 @@ export function OzEgri({ turlar }: { turlar: { date: string; pct: number | null;
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+// Hazırlık kadranı (prototip gauge): yarım yay, 25'lik çentikler ve hedef (%85) işareti. Ortak Kadran makine sayacıdır; bu çizim
+// prototipin kendi tasarımıyla taşınır.
+export function HazirlikKadrani({ pct, karar, pg }: { pct: number | null; karar?: 'ok' | 'warn' | 'bad'; pg: ProgramTanimi }) {
+  const cx = 130, cy = 120, r = 100, uzunluk = Math.PI * r;
+  const th = Math.PI * (1 - 0.85);
+  const h1 = [cx + (r - 16) * Math.cos(th), cy - (r - 16) * Math.sin(th)] as const;
+  const h2 = [cx + (r + 14) * Math.cos(th), cy - (r + 14) * Math.sin(th)] as const;
+  const yay = `M ${String(cx - r)} ${String(cy)} A ${String(r)} ${String(r)} 0 0 1 ${String(cx + r)} ${String(cy)}`;
+  const kalan = pct == null ? uzunluk : uzunluk * (1 - pct / 100);
+  const deger = pct == null ? '–' : pg.k === 'eydep' ? String(pct) : `%${String(pct)}`;
+  return (
+    <svg className="tc-dhp-kadran" viewBox="-8 0 276 150" role="img" aria-label={`Hazırlık puanı ${pct == null ? 'yok' : `%${String(pct)}`}`}>
+      <path d={yay} className="tc-dhp-kadran-yol" fill="none" />
+      {pct != null && (
+        <path d={yay} className={`tc-dhp-kadran-deger ${ton(kararTonu(karar))}`} fill="none" strokeDasharray={uzunluk.toFixed(1)} strokeDashoffset={kalan.toFixed(1)} />
+      )}
+      {[0, 25, 50, 75, 100].map((t) => {
+        const a = Math.PI * (1 - t / 100);
+        return <line key={t} className="tc-dhp-kadran-centik" x1={(cx + (r - 26) * Math.cos(a)).toFixed(1)} y1={(cy - (r - 26) * Math.sin(a)).toFixed(1)} x2={(cx + (r - 20) * Math.cos(a)).toFixed(1)} y2={(cy - (r - 20) * Math.sin(a)).toFixed(1)} />;
+      })}
+      <line className="tc-dhp-kadran-hedef" x1={h1[0].toFixed(1)} y1={h1[1].toFixed(1)} x2={h2[0].toFixed(1)} y2={h2[1].toFixed(1)} />
+      <text className="tc-dhp-kadran-hedef-yazi" x={(h2[0] + 4).toFixed(1)} y={(h2[1] - 2).toFixed(1)}>
+        {pg.targetLabel}<tspan x={(h2[0] + 4).toFixed(1)} dy="12">%85</tspan>
+      </text>
+      <text className="tc-dhp-kadran-sayi" x={cx} y={cy - 14} textAnchor="middle">{deger}</text>
+      <text className="tc-dhp-kadran-etiket" x={cx} y={cy + 10} textAnchor="middle">HAZIRLIK PUANI</text>
     </svg>
   );
 }

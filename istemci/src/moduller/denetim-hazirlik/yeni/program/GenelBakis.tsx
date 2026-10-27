@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
-import { Dugme, Girdi, Kadran, Kart, type MakineDurumu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { seviyeAdi } from '../icerik/programlar.ts';
 import { denetimTarihiAyarla, siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
 import { haftalariKur } from '../kurallar/hafta.ts';
 import { aktifSorular, dokumanIstatistigi, gecerliCevaplar, hazirlikIstatistigi, kapananlar, puanHesapla } from '../kurallar/puan.ts';
 import { ISO_TARIH, haftaAraligi } from '../tarih.ts';
+import { HazirlikKadrani } from './grafikler.tsx';
 import { siradakiAdimlar } from './hesaplar.ts';
 import { Halka, OrnekBandi, ProgramBandi, PSimge } from './ortak.tsx';
 import { HaftaMaddesiSatiri, useHizliTur } from './paylasilan.tsx';
-
-const KADRAN: Record<'ok' | 'warn' | 'bad', MakineDurumu> = { ok: 'calisiyor', warn: 'durakli', bad: 'durdu' };
 
 export function GenelBakis() {
   const d = useDenetim();
@@ -63,10 +63,7 @@ export function GenelBakis() {
               {d.yetki.yazabilir && <Dugme simge="bolt" onClick={hizliTur}>10 soruluk hızlı tur</Dugme>}
             </div>
           </div>
-          <div className="tc-dhp-hero-kadran">
-            <Kadran deger={r.pct} hedef={100} etiket="Hazırlık puanı" birim="puan" durum={v ? KADRAN[v.k] : 'sirada'} />
-            <small className="tc-dhy-ton-soluk">{`Hedef ${kb.program === 'eydep' ? 'A eşiği 85' : '%85'}`}</small>
-          </div>
+          <HazirlikKadrani pct={r.pct} karar={v?.k} pg={kb.pg} />
         </div>
       </Kart>
 
@@ -84,9 +81,9 @@ export function GenelBakis() {
           <span>
             <small><PSimge ad="alert" /> Açık riskler</small>
             <b className="tc-dhp-riskler">
-              <span className="tc-dhy-ton-kotu" title={lv('major')}>{`${lv('major')} ${String(r.major)}`}</span>
-              <span className="tc-dhy-ton-uyari" title={lv('minor')}>{`${lv('minor')} ${String(r.minor)}`}</span>
-              <span className="tc-dhy-ton-bilgi" title={lv('obs')}>{`${lv('obs')} ${String(r.obs)}`}</span>
+              <span title={lv('major')}><i className="tc-dhp-risk-nokta tc-dhy-ton-kotu" aria-hidden="true" />{String(r.major)}<span className="tc-dhp-gizli">{` ${lv('major')}`}</span></span>
+              <span title={lv('minor')}><i className="tc-dhp-risk-nokta tc-dhy-ton-uyari" aria-hidden="true" />{String(r.minor)}<span className="tc-dhp-gizli">{` ${lv('minor')}`}</span></span>
+              <span title={lv('obs')}><i className="tc-dhp-risk-nokta tc-dhy-ton-bilgi" aria-hidden="true" />{String(r.obs)}<span className="tc-dhp-gizli">{` ${lv('obs')}`}</span></span>
             </b>
             <small>{r.risks.length ? `%${String(kapali)} kapatıldı` : `${lv('major')} · ${lv('minor')} · ${lv('obs')}`}</small>
           </span>
@@ -98,7 +95,7 @@ export function GenelBakis() {
       </div>
 
       <div className={buHafta ? 'tc-dhp-iki' : undefined}>
-        <Kart baslik="Sıradaki adımlar" sag={r.risks.length ? <Dugme simge="next" onClick={() => { d.git('rapor'); }}>Tüm açıklar</Dugme> : undefined}>
+        <Kart simge={prototipSimgesi('flag')} baslik="Sıradaki adımlar" sag={r.risks.length ? <Dugme simge="next" onClick={() => { d.git('rapor'); }}>Tüm açıklar</Dugme> : undefined}>
           {adimlar.length ? (
             <ul className="tc-dhp-adimlar">
               {adimlar.map((s, i) => (
@@ -106,6 +103,7 @@ export function GenelBakis() {
                   <button type="button" className={`tc-dhp-adim${s.risk ? ' tc-dhp-adim-risk' : ''}`} onClick={() => { if (s.go === 'hazirlik') hazirligaGit(s.ph); else d.git(s.go); }}>
                     <span className="tc-dhp-adim-simge"><PSimge ad={s.ic} /></span>
                     <span><b>{s.t}</b><small>{s.s}</small></span>
+                    <PSimge ad="chev" />
                   </button>
                 </li>
               ))}
@@ -113,7 +111,7 @@ export function GenelBakis() {
           ) : <p className="tc-dhy-ton-soluk">Açık adım yok. Simülasyonu cevapladıkça kapatmanız gereken açıklar buraya gelir.</p>}
         </Kart>
         {buHafta && (
-          <Kart baslik={`Bu hafta · ${haftaAraligi(buHafta.m)}`} sag={<Dugme simge="next" onClick={() => { programEkrani((e) => { e.pw[d.program].prepView = 'week'; }); d.git('hazirlik'); }}>Program</Dugme>}>
+          <Kart simge={prototipSimgesi('cal')} baslik={`Bu hafta · ${haftaAraligi(buHafta.m)}`} sag={<Dugme simge="next" onClick={() => { programEkrani((e) => { e.pw[d.program].prepView = 'week'; }); d.git('hazirlik'); }}>Program</Dugme>}>
             <p className="tc-dhy-ton-soluk">
               {`${buHafta.ph === 4 ? (d.program === 'eydep' ? 'Değerlendirme haftası' : 'Denetim haftası') : buHafta.ph === 5 ? 'Denetim sonrası' : `Denetime ${String(buHafta.wBefore)} hafta`} · ${String(buHafta.k)}/${String(buHafta.tot)} tamamlandı`}
             </p>

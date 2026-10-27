@@ -13,7 +13,7 @@ export function useHizliTur(): () => void {
   const { degistir, ekranDegistir, git, kb, program } = d;
   return useCallback(() => {
     const ids = hizliTurSec(kb);
-    degistir(kb.calisma.quick.length ? 'Hızlı tur' : null, (t) => { t.pw[program].quick = ids; });
+    degistir(kb.calisma.quick.length ? 'Hızlı tur' : null, (t) => { t.pw[program].quick = ids; }, { sessiz: true });
     ekranDegistir((e) => { const p = e.pw[program]; p.mode = 'quick'; p.cur = 0; p.curQ = 0; });
     git('sim');
   }, [degistir, ekranDegistir, git, kb, program]);
@@ -84,7 +84,7 @@ export function HaftaMaddesiSatiri({ it }: { it: HaftaMaddesi }) {
       {it.k === 'risk' && <button type="button" className="tc-dhp-baglanti" onClick={() => { soruyaGit(it.id); }}>Soru</button>}
       {it.k === 'custom' && yaz && (
         <button type="button" className="tc-dhp-baglanti" aria-label="Görevi sil" title="Görevi sil" onClick={() => {
-          d.degistir('Görev silme', (t) => { t.pw[d.program].wkx = t.pw[d.program].wkx.filter((x) => x.id !== it.id); });
+          d.degistir('Görev silme', (t) => { t.pw[d.program].wkx = t.pw[d.program].wkx.filter((x) => x.id !== it.id); }, { bildirim: 'Görev silindi' });
         }}><PSimge ad="x" /></button>
       )}
     </li>

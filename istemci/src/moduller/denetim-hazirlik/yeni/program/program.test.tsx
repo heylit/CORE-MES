@@ -39,7 +39,8 @@ describe('P1 program görünümleri: yazma yetkisi', () => {
     fireEvent.click(uc);
     await waitFor(() => { expect(s.yazilanlar.length).toBeGreaterThan(0); }, { timeout: 3000 });
     expect(Object.values(aktif(sonYazilan(s))?.pw.iso9001.ans ?? {})).toContain('3');
-    expect(screen.getByRole('button', { name: /Simülasyonu sıfırla/ })).toBeTruthy();
+    // Prototipteki gibi iki yerde: harita altında ve soru çubuğunda.
+    expect(screen.getAllByRole('button', { name: /Simülasyonu sıfırla/ })).toHaveLength(2);
     cleanup();
     sahteSunucu(OKUR);
     await baglamlaAc(<Simulasyon />, 'sim');
@@ -151,3 +152,44 @@ describe('P1 program saf hesapları', () => {
   });
 });
 
+
+// TASARIM KORUMA (817 c): prototipe geri alınan davranışlar.
+describe('P1 prototip düzeni', () => {
+  it('Simülasyon: puan bildirimsiz yazılır; sıfırlama satır içi sorulur, pencere açılmaz', async () => {
+    const s = sahteSunucu();
+    await baglamlaAc(<Simulasyon />, 'sim');
+    const olcek = await screen.findByRole('group', { name: 'Puan' });
+    const iki = within(olcek).getAllByRole('button')[2];
+    if (!iki) throw new Error('ölçek yok');
+    fireEvent.click(iki);
+    await waitFor(() => { expect(s.yazilanlar.length).toBeGreaterThan(0); }, { timeout: 3000 });
+    expect(screen.queryByText(/^Puan$/)).toBeNull();
+    const [ilk] = screen.getAllByRole('button', { name: /Simülasyonu sıfırla/ });
+    if (!ilk) throw new Error('sıfırla yok');
+    fireEvent.click(ilk);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const evet = screen.getAllByRole('button', { name: 'Evet, sıfırla' })[0];
+    if (!evet) throw new Error('onay yok');
+    fireEvent.click(evet);
+    expect(await screen.findByText('Simülasyon sıfırlandı')).toBeTruthy();
+  });
+
+  it('Genel bakış: hazırlık kadranında %85 hedef işareti var', async () => {
+    sahteSunucu();
+    await baglamlaAc(<GenelBakis />, 'dash');
+    const kadran = await screen.findByRole('img', { name: /Hazırlık puanı/ });
+    expect(kadran.textContent).toContain('%85');
+    expect(kadran.textContent).toContain('HAZIRLIK PUANI');
+  });
+
+  it('Öz değerlendirme: turu iptal satır içi sorulur ve prototip bildirimiyle geri alınabilir', async () => {
+    const s = sahteSunucu();
+    await baglamlaAc(<OzDegerlendirme />, 'kontrol');
+    fireEvent.click(await screen.findByRole('button', { name: /Turu başlat/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'İptal' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
+    expect(await screen.findByText('Açık tur iptal edildi')).toBeTruthy();
+    await waitFor(() => { expect(aktif(sonYazilan(s))?.pw.iso9001.oz.cur).toBeNull(); }, { timeout: 3000 });
+  });
+});

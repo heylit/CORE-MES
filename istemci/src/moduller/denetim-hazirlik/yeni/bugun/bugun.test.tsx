@@ -101,3 +101,12 @@ describe('P1 Bugün saf hesapları', () => {
     expect(ok).toEqual(['profil', 'takvim']);
   });
 });
+
+describe('P1 Bugün prototip düzeni', () => {
+  it('program kartlarında %85 hedef işareti ve program rengi var', async () => {
+    sahteSunucu();
+    await baglamlaAc(<Bugun />, 'home');
+    expect((await screen.findAllByTitle('Hedef %85')).length).toBe(3);
+    expect(document.querySelectorAll('.tc-dhb-program.tc-dhp-renk-iso9001, .tc-dhb-program.tc-dhp-renk-as9100, .tc-dhb-program.tc-dhp-renk-eydep')).toHaveLength(3);
+  });
+});

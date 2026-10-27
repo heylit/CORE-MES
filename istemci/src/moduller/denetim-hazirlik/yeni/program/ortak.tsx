@@ -1,6 +1,5 @@
 import { useCallback, type ReactNode } from 'react';
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
-import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi } from '../gorunumler.ts';
 import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
@@ -24,11 +23,8 @@ export const tonSinifi = (t: Ton): string => `tc-dhy-ton-${t}`;
 const ROZET: Record<Ton, RozetTonu> = { iyi: 'tamam', uyari: 'uyari', kotu: 'hata', bilgi: 'bilgi', soluk: 'pasif' };
 export const rozetTonu = (t: Ton): RozetTonu => ROZET[t];
 
-// Kabuğun eşlemesinde olmayan prototip adları (gorunumler.ts Y0'ındır; eklenmesi istek olarak yazıldı).
-const EK_SIMGE: Readonly<Record<string, SimgeAdi>> = { zap: 'bolt', undo: 'rotate', flip: 'rotate', chev: 'chev-right', right: 'chev-right', left: 'chev-left', copy: 'file' };
-
 export function PSimge({ ad }: { ad: string }) {
-  return <Simge ad={EK_SIMGE[ad] ?? prototipSimgesi(ad)} boyut="k" />;
+  return <Simge ad={prototipSimgesi(ad)} boyut="k" />;
 }
 
 // Karar rozeti (prototip verdictPill): cevap yoksa "Başlanmadı".
@@ -87,4 +83,17 @@ export function OrnekBandi() {
 
 export function IpucuKutusu({ simge = 'help', children }: { simge?: string; children: ReactNode }) {
   return <div className="tc-dhp-ipucu"><PSimge ad={simge} /><span>{children}</span></div>;
+}
+
+// Satır içi onay (prototip "confirm" + armed): soru, düğmenin olduğu yerde açılır; ikinci tık "evet"tir. Pencere açılmaz.
+export function SatirOnayi({ metin, evet, onayla, vazgec, tur = 'tehlike' }: {
+  metin: ReactNode; evet: string; onayla: () => void; vazgec: () => void; tur?: 'tehlike' | 'birincil';
+}) {
+  return (
+    <span className="tc-dhp-onay" role="alert">
+      <span>{metin}</span>
+      <Dugme tur={tur} onClick={onayla}>{evet}</Dugme>
+      <button type="button" className="tc-dhp-baglanti" onClick={vazgec}>Vazgeç</button>
+    </span>
+  );
 }

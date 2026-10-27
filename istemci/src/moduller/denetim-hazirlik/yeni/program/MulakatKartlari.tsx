@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Dugme, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { aktifSorular, puanHesapla } from '../kurallar/puan.ts';
 import { Halka, IpucuKutusu, ProgramBandi, PSimge, useProgramEkrani } from './ortak.tsx';
 
@@ -75,19 +76,18 @@ export function MulakatKartlari() {
             id="tc-dhp-kart" type="button" className={`tc-dhp-kart${e.flipped ? ' tc-dhp-kart-cevrik' : ''}`} aria-label={e.flipped ? 'Kartı soruya çevir' : 'Kartı cevaba çevir'}
             aria-pressed={e.flipped} onClick={cevir}
           >
-            {e.flipped ? (
-              <span className="tc-dhp-kart-yuz">
-                <span className="tc-dhp-ust-etiket"><PSimge ad="bulb" /> İyi cevap nasıl olmalı</span>
-                <span className="tc-dhp-kart-metin">{it[1]}</span>
-                <small className="tc-dhy-ton-soluk">{it[0]}</small>
-              </span>
-            ) : (
-              <span className="tc-dhp-kart-yuz">
-                <span className="tc-dhp-ust-etiket"><PSimge ad="user" /> {`${d.program === 'eydep' ? 'Heyet sorar' : 'Denetçi sorar'} · ${dept.n}`}</span>
+            <span className="tc-dhp-kart-ic">
+              <span className="tc-dhp-kart-yuz tc-dhp-kart-on" aria-hidden={e.flipped}>
+                <span className="tc-dhp-kart-kim"><span className="tc-dhp-kart-avatar"><PSimge ad="user" /></span><span className="tc-dhp-ust-etiket">{`${d.program === 'eydep' ? 'Heyet sorar' : 'Denetçi sorar'} · ${dept.n}`}</span></span>
                 <q className="tc-dhp-kart-metin">{it[0]}</q>
-                <small className="tc-dhy-ton-soluk">{`${String(kartNo + 1)} / ${String(dept.items.length)} · Cevap için çevirin`}</small>
+                <span className="tc-dhp-kart-alt"><span>{`${String(kartNo + 1)} / ${String(dept.items.length)}`}</span><span><PSimge ad="flip" /> Cevap için çevirin</span></span>
               </span>
-            )}
+              <span className="tc-dhp-kart-yuz tc-dhp-kart-arka" aria-hidden={!e.flipped}>
+                <span className="tc-dhp-kart-kim"><span className="tc-dhp-kart-avatar"><PSimge ad="bulb" /></span><span className="tc-dhp-ust-etiket">İyi cevap nasıl olmalı</span></span>
+                <span className="tc-dhp-kart-cevap">{it[1]}</span>
+                <span className="tc-dhp-kart-alt"><span className="tc-dhy-ton-soluk">{it[0]}</span></span>
+              </span>
+            </span>
           </button>
           <div className="tc-dhp-alt">
             <Dugme simge="chev-left" disabled={kartNo === 0} onClick={() => { kartaGit(kartNo - 1); }}>Önceki</Dugme>
@@ -108,7 +108,7 @@ export function MulakatKartlari() {
           )}
         </div>
         <div className="tc-dhp-yan">
-          <Kart baslik="İlerleme">
+          <Kart simge={prototipSimgesi('chart')} baslik="İlerleme">
             <div className="tc-dhp-sim-puan">
               <Halka yuzde={top ? (hazir / top) * 100 : 0} ton="iyi" boyut="b" />
               <span><b>{`${String(hazir)}/${String(top)}`}</b><small>soruya hazır</small></span>
@@ -118,7 +118,7 @@ export function MulakatKartlari() {
               <div><dt>Hiç bakılmamış</dt><dd>{top - hazir - tekrar}</dd></div>
             </dl>
           </Kart>
-          <Kart baslik="Kısayollar"><p className="tc-dhy-ton-soluk">Boşluk çevir · ← → gezin · H hazırım</p></Kart>
+          <Kart><span className="tc-dhp-ust-etiket">Kısayollar</span><p className="tc-dhy-ton-soluk"><kbd>Boşluk</kbd> çevir <kbd>←</kbd><kbd>→</kbd> gezin <kbd>H</kbd> hazırım</p></Kart>
           <IpucuKutusu simge="bulb">Kartları süreç sahipleriyle birlikte çalışın; biri denetçi olsun, diğeri cevaplasın.</IpucuKutusu>
         </div>
       </div>

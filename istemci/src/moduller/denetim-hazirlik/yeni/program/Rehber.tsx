@@ -1,5 +1,6 @@
 import { Dugme, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { aktifSorular, dokumanIstatistigi, puanHesapla } from '../kurallar/puan.ts';
 import { useNavigate } from 'react-router-dom';
 import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
@@ -8,7 +9,18 @@ import { Halka, IpucuKutusu, ProgramBandi, PSimge, useProgramEkrani } from './or
 import { useIsaret } from './paylasilan.tsx';
 import { AS9100_GUN_NOTU, BULGU_ORNEGI, DENETIM_GUNU, EYDEP_GUNU } from './rehber-metni.ts';
 
-const SEVIYE_TONU: Record<string, string> = { major: 'tc-dhy-ton-kotu', minor: 'tc-dhy-ton-uyari', obs: 'tc-dhy-ton-bilgi', good: 'tc-dhy-ton-iyi' };
+
+// Zaman çizelgesinde "Bugün" işareti (prototip todayMark): iki olay arasındaki yer, olay hücresi içinde onda bir adımla.
+function bugunKonumu(ds: readonly number[], t: number): { i: number; k: number } | null {
+  const n = ds.length;
+  const ilk = ds[0], son = ds[n - 1];
+  if (ilk === undefined || son === undefined || t < ilk || t > son) return null;
+  for (let i = 0; i < n - 1; i++) {
+    const a = ds[i] ?? 0, b = ds[i + 1] ?? 0;
+    if (t <= b) return { i, k: Math.round(((t - a) / Math.max(1, b - a)) * 10) };
+  }
+  return null;
+}
 
 // Denetim rehberi (prototip vRehber + rehberExtra): aşamalar, madde çarkı, bulgu seviyeleri, zorunlu dokümanlar, zaman çizelgesi, denetim günü.
 export function Rehber() {
@@ -28,9 +40,8 @@ export function Rehber() {
   const ara = e.docq.toLocaleLowerCase('tr');
   const dokumanlar = pg.DOCS.filter((x) => !ara || `${x[1]} ${x[2]}`.toLocaleLowerCase('tr').includes(ara));
   const I = pg.info;
-  const bugun = Date.now();
   const olaylar = I.ev ?? [];
-  const bugunSirasi = olaylar.length ? olaylar.findIndex((x) => Date.parse(`${x[3]}T00:00:00`) >= bugun) : -1;
+  const bugunIsareti = bugunKonumu(olaylar.map((x) => Date.parse(`${x[3]}T00:00:00`)), Date.now());
   const gun = ey ? EYDEP_GUNU : DENETIM_GUNU;
 
   const maddeSorulari = () => {
@@ -44,7 +55,7 @@ export function Rehber() {
       <ProgramBandi r={r} />
       <p className="tc-dhy-ton-soluk">{pg.rehberSub}</p>
       {asama && (
-        <Kart baslik={pg.stageTitle} sag={<small className="tc-dhy-ton-soluk">Bir aşamaya tıklayın</small>}>
+        <Kart simge={prototipSimgesi('award')} baslik={pg.stageTitle} sag={<small className="tc-dhy-ton-soluk">Bir aşamaya tıklayın</small>}>
           <div className="tc-dhp-yolculuk" role="group" aria-label={pg.stageTitle}>
             {pg.STAGES.map((s, i) => (
               <button key={s.n} type="button" aria-pressed={s === asama} onClick={() => { ekranYaz((p) => { p.stage = i; }); }}>
@@ -67,7 +78,7 @@ export function Rehber() {
         </Kart>
       )}
 
-      <Kart baslik={pg.wheelTitle} sag={<ul className="tc-dhp-lejant">{pg.PHASES.map((p) => <li key={p.n}><i className={`tc-dhp-lejant-renk tc-dhp-cizim-${p.ton}`} />{p.n}</li>)}</ul>}>
+      <Kart simge={prototipSimgesi('repeat')} baslik={pg.wheelTitle} sag={<ul className="tc-dhp-lejant">{pg.PHASES.map((p) => <li key={p.n}><i className={`tc-dhp-lejant-renk tc-dhp-cizim-${p.ton}`} />{p.n}</li>)}</ul>}>
         <div className="tc-dhp-cark-alan">
           <Cark pg={pg} secili={maddeKodu} sec={(k) => { ekranYaz((p) => { p.clause = k; }); }} />
           {madde && (
@@ -94,19 +105,21 @@ export function Rehber() {
         <h2 className="tc-dhp-bolum-baslik">{pg.sevTitle}</h2>
         <div className="tc-dhp-seviyeler">
           {pg.sev.map((s) => (
-            <Kart key={s.k} baslik={s.n}>
-              <p className={SEVIYE_TONU[s.k] ?? ''}>{s.d}</p>
-              <span className="tc-dhp-ust-etiket">{ey ? 'Anlamı' : 'Örnekler'}</span>
-              <ul className="tc-dhp-madde-liste">{s.ex.map((x) => <li key={x}>{x}</li>)}</ul>
-              <p className="tc-dhy-ton-soluk">{s.cons}</p>
-            </Kart>
+            <div key={s.k} className={`tc-dhp-seviye tc-dhp-seviye-${s.k}`}>
+              <Kart baslik={s.n} sag={s.k === 'good' ? undefined : <span className={`tc-dhp-olcer tc-dhp-olcer-${s.k}`} aria-hidden="true"><i /><i /><i /></span>}>
+                <p className="tc-dhy-ton-soluk">{s.d}</p>
+                <span className="tc-dhp-ust-etiket">{ey ? 'Anlamı' : 'Örnekler'}</span>
+                <ul className="tc-dhp-madde-liste">{s.ex.map((x) => <li key={x}>{x}</li>)}</ul>
+                <p className="tc-dhp-sonuc">{s.cons}</p>
+              </Kart>
+            </div>
           ))}
         </div>
       </section>
 
       <div id="tc-dhp-dokumanlar">
         <Kart
-          baslik={pg.docsTitle}
+          simge={prototipSimgesi('file')} baslik={pg.docsTitle}
           sag={(
             <>
               <input type="search" className="tc-dhp-ara" aria-label="Doküman ara" placeholder={ey ? 'Ara: finans, makine…' : 'Ara: kalibrasyon, 8.7…'} value={e.docq}
@@ -133,12 +146,12 @@ export function Rehber() {
         </Kart>
       </div>
 
-      <Kart baslik={I.t}>
+      <Kart simge={prototipSimgesi('info')} baslik={I.t}>
         {olaylar.length > 0 && (
           <ol className="tc-dhp-zaman">
             {olaylar.map((x, i) => (
               <li key={x[3]} className={x[2] ? 'tc-dhp-zaman-onemli' : undefined}>
-                {i === bugunSirasi && i > 0 && <span className="tc-dhp-etiket">Bugün</span>}
+                {bugunIsareti?.i === i && <span className={`tc-dhp-bugun tc-dhp-bugun-${String(bugunIsareti.k)}`}>Bugün</span>}
                 <b>{x[0]}</b><span>{x[1]}</span>
               </li>
             ))}
@@ -147,7 +160,7 @@ export function Rehber() {
         <p className="tc-dhy-ton-soluk">{I.p}</p>
       </Kart>
 
-      <Kart baslik={ey ? 'Bir EYDEP değerlendirme günü nasıl geçer?' : 'Bir denetim günü nasıl geçer?'} sag={<small className="tc-dhy-ton-soluk">Tipik bir gün; saatler örnektir</small>}>
+      <Kart simge={prototipSimgesi('clock')} baslik={ey ? 'Bir EYDEP değerlendirme günü nasıl geçer?' : 'Bir denetim günü nasıl geçer?'} sag={<small className="tc-dhy-ton-soluk">Tipik bir gün; saatler örnektir</small>}>
         <ol className="tc-dhp-gun">
           {gun.map(([saat, baslik, metin, ipucu]) => (
             <li key={saat}>
@@ -159,7 +172,7 @@ export function Rehber() {
         {d.program === 'as9100' && <p className="tc-dhy-ton-soluk">{AS9100_GUN_NOTU}</p>}
       </Kart>
 
-      <Kart baslik="Bulgu nasıl yazılır, nasıl cevaplanır? Örnekle">
+      <Kart simge={prototipSimgesi('alert')} baslik="Bulgu nasıl yazılır, nasıl cevaplanır? Örnekle">
         <p className="tc-dhy-ton-soluk">Denetçi bir bulguyu üç parçayla yazar: şart, kanıt ve uygunsuzluk ifadesi. Sizden beklenen yalnızca hatayı düzeltmek değil, neden olduğunu bulup tekrarını önlemektir.</p>
         <div className="tc-dhp-bulgu">
           <div className="tc-dhp-balon-kim"><b className="tc-dhy-ton-uyari">{BULGU_ORNEGI.seviye}</b><span>{BULGU_ORNEGI.madde}</span></div>
@@ -180,7 +193,7 @@ export function Rehber() {
         <p className="tc-dhy-ton-soluk">{BULGU_ORNEGI.son}</p>
         <div className="tc-dhp-dugmeler">
           <Dugme simge="ruler" onClick={() => { void gezin(OLCU_ALETI_YOLU); }}>Kalibrasyon sayfası</Dugme>
-          <Dugme simge="file" onClick={() => { d.git('kys', { kys: 'uret' }); }}>Uygunsuzluk ve DÖF formu</Dugme>
+          <Dugme simge="file" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'f_dof' }); }}>Uygunsuzluk ve DÖF formu</Dugme>
         </div>
       </Kart>
     </div>

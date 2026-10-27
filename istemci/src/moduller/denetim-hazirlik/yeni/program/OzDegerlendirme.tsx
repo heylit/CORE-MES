@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { Dugme, Girdi, Kart, OnayPenceresi, Rozet } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { indir, guvenliAd, icsKatla } from '../disa-aktar.ts';
 import { CRIT, SCALE } from '../icerik/iso9001.ts';
 import { OZF, OZV } from '../icerik/programlar.ts';
 import { ozKapsama, ozNotu, ozSonrakiVade, ozTurAdi, ozTurBaslat, ozTurBitir, turDegisimi, turPuani } from '../kurallar/oz.ts';
 import { aktifSorular, grupYuzdesi, kuralBaglami, puanHesapla } from '../kurallar/puan.ts';
 import { gunFarki, tarihMetni } from '../tarih.ts';
+
 import type { Cevap, OzSikligi } from '../tipler.ts';
 import { notTonu, ozIcsSatirlari, PUANLAMA_KURALI, puanTonu } from './hesaplar.ts';
 import { OzEgri } from './grafikler.tsx';
-import { IpucuKutusu, ProgramBandi, PSimge, rozetTonu, tonSinifi } from './ortak.tsx';
+import { ProgramBandi, PSimge, rozetTonu, SatirOnayi, tonSinifi } from './ortak.tsx';
 import { useSoruyaGit } from './paylasilan.tsx';
 
+const kisaTarih = (iso: string): string => { const t = new Date(`${iso}T00:00:00`); return `${String(t.getDate())} ${t.toLocaleDateString('tr-TR', { month: 'short' })}`; };
 const BUYUKLUKLER = [5, 10, 15, 20] as const;
 const PUANLAR: readonly Cevap[] = ['0', '1', '2', '3', 'na'];
 type Onay = 'bastan' | 'iptal' | 'bitir' | { sil: string } | null;
@@ -47,25 +50,38 @@ export function OzDegerlendirme() {
   const turKur = (tur: 'full' | 'group' | 'rot', grup = '') => {
     const degisim = !!o.cur;
     let dusen = 0;
-    d.degistir(degisim ? 'Tur değişikliği' : null, (t) => { dusen = ozTurBaslat(kuralBaglami(t, d.program), tur, grup); });
-    // Değişiklik bildirimi geri almayla birlikte `degistir`den gelir; yalnız düşen puan ayrıca söylenir.
-    if (degisim && dusen) d.bildir(`${String(dusen)} puan yeni turun dışında kaldı`, { ton: 'bilgi' });
+    onayYaz(null);
+    if (!degisim) d.degistir(null, (t) => { dusen = ozTurBaslat(kuralBaglami(t, d.program), tur, grup); });
+    else {
+      // Bildirim metni yazmadan sonra belli olur (düşen puan); geri al etiketi prototipteki gibi "Tur değişikliği".
+      d.degistir('Tur değişikliği', (t) => { dusen = ozTurBaslat(kuralBaglami(t, d.program), tur, grup); }, { sessiz: true });
+      const metin = dusen ? `${String(dusen)} puan yeni turun dışında kaldı`
+        : tur === 'full' ? 'Tam tura geçildi, puanlar korundu' : tur === 'rot' ? `${String(o.size)} soruluk tura geçildi, puanlar korundu` : 'Tur değiştirildi, puanlar korundu';
+      d.bildir(metin, { geriAl: true });
+    }
     document.getElementById('tc-dhp-acik-tur')?.scrollIntoView({ block: 'start' });
   };
   const bitir = () => {
     onayYaz(null);
     let tamam = false;
-    d.degistir('Tur kaydı', (t) => { tamam = ozTurBitir(kuralBaglami(t, d.program)); });
+    let pct: number | null = null;
+    d.degistir('Tur kaydı', (t) => {
+      const oz = t.pw[d.program].oz;
+      tamam = ozTurBitir(kuralBaglami(t, d.program));
+      const r = oz.rounds[oz.rounds.length - 1];
+      if (tamam && r) pct = turPuani(r, pg).pct;
+    }, { sessiz: true });
     if (!tamam) { d.bildir('Puanlanmış soru yok', { ton: 'bilgi' }); return; }
     window.scrollTo({ top: 0 });
+    d.bildir(`Tur kaydedildi: %${pct == null ? '–' : String(pct)} · ${ozNotu(pct)}`, { geriAl: true });
   };
   const onayla = () => {
     const o2 = onay;
     onayYaz(null);
-    if (o2 === 'bastan') d.degistir('Baştan başlatma', (t) => { const cur = t.pw[d.program].oz.cur; if (cur) cur.items = {}; });
-    else if (o2 === 'iptal') d.degistir('Tur iptali', (t) => { t.pw[d.program].oz.cur = null; });
+    if (o2 === 'bastan') d.degistir('Baştan başlatma', (t) => { const cur = t.pw[d.program].oz.cur; if (cur) cur.items = {}; }, { bildirim: 'Turun puanları silindi' });
+    else if (o2 === 'iptal') { d.degistir('Tur iptali', (t) => { t.pw[d.program].oz.cur = null; }, { bildirim: 'Açık tur iptal edildi' }); window.scrollTo({ top: 0 }); }
     else if (o2 === 'bitir') bitir();
-    else if (o2 && typeof o2 === 'object') d.degistir('Tur silme', (t) => { const oz = t.pw[d.program].oz; oz.rounds = oz.rounds.filter((r) => r.id !== o2.sil); });
+    else if (o2 && typeof o2 === 'object') d.degistir('Tur silme', (t) => { const oz = t.pw[d.program].oz; oz.rounds = oz.rounds.filter((r) => r.id !== o2.sil); }, { bildirim: 'Tur silindi' });
   };
   const ayar = (f: (oz: typeof o) => void) => { d.degistir(null, (t) => { f(t.pw[d.program].oz); }); };
   const icsIndir = () => {
@@ -157,17 +173,22 @@ export function OzDegerlendirme() {
 
       {c && (
         <div id="tc-dhp-acik-tur">
-          <Kart baslik={`Açık tur · ${tarihMetni(c.date)} · ${ozTurAdi(c.kind, pg)}`} sag={<small className="tc-dhy-ton-soluk">{`${String(puanli)}/${String(c.qids.length)} puanlandı`}</small>}>
+          <Kart simge={prototipSimgesi('clip')} baslik={`Açık tur · ${tarihMetni(c.date)} · ${ozTurAdi(c.kind, pg)}`} sag={<small className="tc-dhy-ton-soluk">{`${String(puanli)}/${String(c.qids.length)} puanlandı`}</small>}>
             {yaz && (
-              <div className="tc-dhp-cubuk">
+              <div className="tc-dhp-cubuk tc-dhp-yapiskan">
+                <span className="tc-dhp-cubuk-yazi">{`${String(puanli)}/${String(c.qids.length)} puanlandı`}</span>
                 <div className="tc-dhp-segment" role="group" aria-label="Tur türü">
                   <button type="button" aria-pressed={c.kind === 'rot'} onClick={() => { turKur('rot'); }}>{`${String(o.size)} soru`}</button>
                   <button type="button" aria-pressed={c.kind === 'full'} onClick={() => { turKur('full'); }}>Tam tur</button>
                 </div>
                 {grupSecimi(c.kind.startsWith('group:') ? ozTurAdi(c.kind, pg) : `${pg.unit}…`)}
                 <Dugme simge="rotate" disabled={!d.geriAlinabilir} title="Son işlemi geri al (Ctrl Z)" onClick={d.geriAl}>Geri al</Dugme>
-                <Dugme simge="rotate" disabled={!puanli} onClick={() => { onayYaz('bastan'); }}>Baştan başlat</Dugme>
-                <Dugme simge="x" onClick={() => { onayYaz('iptal'); }}>İptal</Dugme>
+                {onay === 'bastan'
+                  ? <SatirOnayi metin={`${String(puanli)} puan silinsin mi?`} evet="Baştan başlat" onayla={onayla} vazgec={() => { onayYaz(null); }} />
+                  : <Dugme simge="rotate" disabled={!puanli} onClick={() => { onayYaz('bastan'); }}>Baştan başlat</Dugme>}
+                {onay === 'iptal'
+                  ? <SatirOnayi metin="Tur iptal edilsin mi?" evet="İptal et" onayla={onayla} vazgec={() => { onayYaz(null); }} />
+                  : <Dugme simge="x" onClick={() => { onayYaz('iptal'); }}>İptal</Dugme>}
               </div>
             )}
             <progress className="tc-dhp-ilerleme" aria-label="Puanlanan" max={Math.max(1, c.qids.length)} value={puanli} />
@@ -198,7 +219,7 @@ export function OzDegerlendirme() {
                         <button
                           key={v} type="button" aria-pressed={it.v === v} disabled={!yaz} title={SCALE.find((s) => s.v === v)?.t}
                           className={`tc-dhp-p${v}`}
-                          onClick={() => { d.degistir('Puan', (t) => { const cur = t.pw[d.program].oz.cur; if (!cur) return; const m = cur.items[id] ?? (cur.items[id] = { v: '', n: '' }); m.v = m.v === v ? '' : v; }); }}
+                          onClick={() => { onayYaz(null); d.degistir('Puan', (t) => { const cur = t.pw[d.program].oz.cur; if (!cur) return; const m = cur.items[id] ?? (cur.items[id] = { v: '', n: '' }); m.v = m.v === v ? '' : v; }, { sessiz: true }); }}
                         >{v === 'na' ? 'N/A' : v}</button>
                       ))}
                     </div>
@@ -210,30 +231,35 @@ export function OzDegerlendirme() {
                 );
               })}
             </ol>
-            {yaz && (
+            {yaz && (onay === 'bitir' ? (
+              <SatirOnayi
+                tur="birincil" metin={`${String(c.qids.length - puanli)} soru puanlanmadı; bunlar tura dahil edilmeyecek.`} evet="Yine de tamamla"
+                onayla={onayla} vazgec={() => { onayYaz(null); }}
+              />
+            ) : (
               <div className="tc-dhp-dugmeler">
                 <Dugme tur="birincil" simge="check" disabled={!puanli} onClick={() => { if (puanli < c.qids.length) onayYaz('bitir'); else bitir(); }}>Turu tamamla ve not ver</Dugme>
                 <Dugme onClick={() => { onayYaz('iptal'); }}>Turu iptal et</Dugme>
               </div>
-            )}
+            ))}
           </Kart>
         </div>
       )}
 
       {turlar.length > 0 && (
         <>
-          <Kart baslik="Not eğilimi" sag={<small className="tc-dhy-ton-soluk">Her nokta bir tur</small>}>
+          <Kart simge={prototipSimgesi('chart')} baslik="Not eğilimi" sag={<small className="tc-dhy-ton-soluk">Her nokta bir tur</small>}>
             <OzEgri turlar={turlar.slice(-24).map((t) => ({ date: t.r.date, pct: t.pct, g: t.g, n: t.n, tur: ozTurAdi(t.r.kind, pg) }))} />
           </Kart>
-          <Kart baslik={`${pg.unit} bazında son turlar`}>
+          <Kart simge={prototipSimgesi('layers')} baslik={`${pg.unit} bazında son turlar`}>
             <div className="tc-dhp-tablo-kap">
               <table className="tc-dhp-tablo">
-                <thead><tr><th scope="col"><span className="tc-gizli-etiket">{pg.unit}</span></th>{turlar.slice(-6).map((t) => <th key={t.r.id} scope="col">{tarihMetni(t.r.date)}</th>)}</tr></thead>
+                <thead><tr><th scope="col"><span className="tc-gizli-etiket">{pg.unit}</span></th>{turlar.slice(-6).map((t) => <th key={t.r.id} scope="col">{kisaTarih(t.r.date)}</th>)}</tr></thead>
                 <tbody>
                   {gruplar.map((g) => (
                     <tr key={g}>
                       <th scope="row">{pg.CL[g]?.s ?? g}</th>
-                      {turlar.slice(-6).map((t) => { const p = grupYuzdesi(turPuani(t.r, pg).groups[g]); return <td key={t.r.id} className={tonSinifi(puanTonu(p))}>{p == null ? '–' : p}</td>; })}
+                      {turlar.slice(-6).map((t) => { const p = grupYuzdesi(turPuani(t.r, pg).groups[g]); return <td key={t.r.id}><span className={`tc-dhp-oz-hucre ${p == null ? 'tc-dhp-oz-hucre-bos' : tonSinifi(puanTonu(p))}`}>{p == null ? '–' : p}</span></td>; })}
                     </tr>
                   ))}
                 </tbody>
@@ -245,13 +271,14 @@ export function OzDegerlendirme() {
               .filter((g) => g.x && g.it.pv !== '' && g.it.pv !== 'na' && g.it.v !== 'na' && Number(g.it.v) < Number(g.it.pv));
             if (!gerileyen.length) return null;
             return (
-              <Kart baslik="Son turda gerileyenler">
+              <Kart simge={prototipSimgesi('alert')} baslik="Son turda gerileyenler">
                 <ul className="tc-dhp-adimlar">
                   {gerileyen.map(({ x, it }) => x && (
                     <li key={x.id}>
                       <button type="button" className="tc-dhp-adim tc-dhp-adim-risk" onClick={() => { soruyaGit(x.id); }}>
                         <span className="tc-dhp-adim-simge"><PSimge ad="alert" /></span>
                         <span><b>{x.q}</b><small>{`${x.c} · ${it.pv} → ${it.v}${it.n ? ` · ${it.n}` : ''}`}</small></span>
+                        <PSimge ad="chev" />
                       </button>
                     </li>
                   ))}
@@ -259,7 +286,7 @@ export function OzDegerlendirme() {
               </Kart>
             );
           })()}
-          <Kart baslik="Tur geçmişi">
+          <Kart simge={prototipSimgesi('list')} baslik="Tur geçmişi">
             <ul className="tc-dhp-gecmis">
               {turlar.slice().reverse().map((t) => {
                 const dl = turDegisimi(t.r, pg);
@@ -270,7 +297,9 @@ export function OzDegerlendirme() {
                     <b>{`%${t.pct == null ? '–' : String(t.pct)}`}</b>
                     <NotRozeti g={t.g} />
                     <span className={tonSinifi(dl == null ? 'soluk' : dl > 0 ? 'iyi' : dl < 0 ? 'kotu' : 'soluk')}>{dl == null ? 'ilk' : `${dl > 0 ? '+' : ''}${String(dl)}`}</span>
-                    {yaz && <button type="button" className="tc-dhp-baglanti" aria-label="Turu sil" title="Turu sil" onClick={() => { onayYaz({ sil: t.r.id }); }}><PSimge ad="trash" /></button>}
+                    {yaz && (typeof onay === 'object' && onay?.sil === t.r.id
+                      ? <SatirOnayi metin="Silinsin mi?" evet="Sil" onayla={onayla} vazgec={() => { onayYaz(null); }} />
+                      : <button type="button" className="tc-dhp-baglanti" aria-label="Turu sil" title="Turu sil" onClick={() => { onayYaz({ sil: t.r.id }); }}><PSimge ad="trash" /></button>)}
                   </li>
                 );
               })}
@@ -280,19 +309,15 @@ export function OzDegerlendirme() {
         </>
       )}
       {!turlar.length && !c && (
-        <Kart baslik="Nasıl çalışır?">
-          <IpucuKutusu simge="repeat">{`${OZF[o.freq].n} kısa bir tur yapın. Araç en uzun süredir bakılmayan, kritik ve zayıf soruları seçer; siz dürüstçe puanlarsınız. Her turun notu kaydedilir, eğilim grafiği ve gerileyen sorular burada görünür. Cevaplar genel hazırlık puanınızı da günceller.`}</IpucuKutusu>
+        <Kart>
+          <div className="tc-dhp-bos-durum">
+            <span className="tc-dhp-bos-simge"><PSimge ad="repeat" /></span>
+            <h2>Nasıl çalışır?</h2>
+            <p>{`${OZF[o.freq].n} kısa bir tur yapın. Araç en uzun süredir bakılmayan, kritik ve zayıf soruları seçer; siz dürüstçe puanlarsınız. Her turun notu kaydedilir, eğilim grafiği ve gerileyen sorular burada görünür. Cevaplar genel hazırlık puanınızı da günceller.`}</p>
+          </div>
         </Kart>
       )}
 
-      <OnayPenceresi
-        acik={onay !== null} tehlikeli={onay !== 'bitir'}
-        baslik={onay === 'bastan' ? `${String(puanli)} puan silinsin mi?` : onay === 'iptal' ? 'Tur iptal edilsin mi?' : onay === 'bitir' ? 'Tur tamamlansın mı?' : 'Tur silinsin mi?'}
-        onayMetni={onay === 'bastan' ? 'Baştan başlat' : onay === 'iptal' ? 'İptal et' : onay === 'bitir' ? 'Yine de tamamla' : 'Sil'}
-        onayla={onayla} vazgec={() => { onayYaz(null); }}
-      >
-        {onay === 'bitir' && c && <p>{`${String(c.qids.length - puanli)} soru puanlanmadı; bunlar tura dahil edilmeyecek.`}</p>}
-      </OnayPenceresi>
     </div>
   );
 }

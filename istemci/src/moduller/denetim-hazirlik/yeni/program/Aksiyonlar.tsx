@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
+import { prototipSimgesi } from '../gorunumler.ts';
 import { htmlKacis, yazdir } from '../disa-aktar.ts';
 import { CRIT } from '../icerik/iso9001.ts';
 import { seviyeAdi } from '../icerik/programlar.ts';
@@ -8,8 +9,8 @@ import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
 import { aktifSorular, gecerliCevaplar, grupYuzdesi, kapananlar, puanHesapla } from '../kurallar/puan.ts';
 import { tarihMetni } from '../tarih.ts';
 import type { Seviye } from '../tipler.ts';
-import { kararTonu, puanTonu, puanYazisi, raporMetni } from './hesaplar.ts';
-import { Dagilim, Radar } from './grafikler.tsx';
+import { kararTonu, puanTonu, raporMetni } from './hesaplar.ts';
+import { Dagilim, HazirlikKadrani, Radar } from './grafikler.tsx';
 import { Halka, OrnekBandi, ProgramBandi, PSimge, rozetTonu, tonSinifi, useProgramEkrani } from './ortak.tsx';
 import { useIsaret, useSoruyaGit } from './paylasilan.tsx';
 
@@ -39,11 +40,15 @@ export function Aksiyonlar() {
     return (
       <div className="tc-dhp">
         <ProgramBandi r={r} ek={perfDugmesi} />
-        <Kart baslik="Rapor, simülasyonu cevapladıkça oluşur">
+        <Kart>
+          <div className="tc-dhp-bos-durum">
+          <span className="tc-dhp-bos-simge"><PSimge ad="chart" /></span>
+          <h2>Rapor, simülasyonu cevapladıkça oluşur</h2>
           <p>Genel puan, madde bazında radar ve ısı haritası, majör ve minör bulgu riskleri ve her açık için denetimden önce yapılacak aksiyon listesi.</p>
-          <div className="tc-dhp-dugmeler">
+          <div className="tc-dhp-dugmeler tc-dhp-orta">
             <Dugme tur="birincil" simge="play" onClick={() => { d.git('sim'); }}>Simülasyona başla</Dugme>
             {yaz && <Dugme simge="eye" onClick={() => { d.degistir(null, (t) => { t.pw[d.program].example = true; t.pw[d.program].exDone = {}; }); }}>Örnek bir raporu göster</Dugme>}
+          </div>
           </div>
         </Kart>
       </div>
@@ -69,7 +74,7 @@ export function Aksiyonlar() {
       <OrnekBandi />
       <Kart>
         <div className="tc-dhp-rapor-ust">
-          <Halka yuzde={r.pct} etiket={puanYazisi(d, r.pct)} ton={kararTonu(v?.k)} boyut="b" />
+          <HazirlikKadrani pct={r.pct} karar={v?.k} pg={pg} />
           <div className="tc-dhp-hero-metin">
             {v && <Rozet ton={rozetTonu(kararTonu(v.k))}>{v.t}</Rozet>}
             {meta.length > 0 && <small className="tc-dhy-ton-soluk">{meta.join(' · ')}</small>}
@@ -93,10 +98,10 @@ export function Aksiyonlar() {
         </Kart>
       )}
       <div className="tc-dhp-iki">
-        <Kart baslik={`${pg.unit} bazında puan`} sag={<small className="tc-dhy-ton-soluk">{`Puanınız · ${d.program === 'eydep' ? 'A eşiği (85)' : 'Hedef %85'}`}</small>}>
+        <Kart simge={prototipSimgesi('target')} baslik={`${pg.unit} bazında puan`} sag={<span className="tc-dhp-lejant"><span><i className="tc-dhp-lejant-cizgi" />Puanınız</span><span><i className="tc-dhp-lejant-cizgi tc-dhp-lejant-kesik" />{d.program === 'eydep' ? 'A eşiği (85)' : 'Hedef %85'}</span></span>}>
           <Radar r={r} pg={pg} def={w.def} />
         </Kart>
-        <Kart baslik="Soru ısı haritası" sag={<small className="tc-dhy-ton-soluk">Hücreye tıklayın</small>}>
+        <Kart simge={prototipSimgesi('layers')} baslik="Soru ısı haritası" sag={<small className="tc-dhy-ton-soluk">Hücreye tıklayın</small>}>
           <div className="tc-dhp-isi">
             {pg.GORDER.filter((g) => r.groups[g]).map((g) => {
               const p = grupYuzdesi(r.groups[g]);
@@ -121,12 +126,12 @@ export function Aksiyonlar() {
         </Kart>
       </div>
       <Kart
-        baslik="Aksiyon planı"
+        simge={prototipSimgesi('flag')} baslik="Aksiyon planı"
         sag={(
           <>
             <div className="tc-dhp-segment" role="group" aria-label="Süzgeç">
               {suzgecler.map(([k, ad, n]) => (
-                <button key={k} type="button" aria-pressed={f === k} onClick={() => { ekranYaz((p) => { p.filter = k; }); }}>{`${ad} `}<b>{n}</b></button>
+                <button key={k} type="button" aria-pressed={f === k} onClick={() => { ekranYaz((p) => { p.filter = k; }); }}>{k !== 'all' && k !== 'risk' && <i className={`tc-dhp-risk-nokta ${tonSinifi(SEVIYE_TONU[k])}`} aria-hidden="true" />}{`${ad} `}<b>{n}</b></button>
               ))}
             </div>
             <Halka yuzde={r.risks.length ? (kapanan / r.risks.length) * 100 : 0} ton="iyi" boyut="k" />

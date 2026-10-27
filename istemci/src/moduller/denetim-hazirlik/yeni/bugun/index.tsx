@@ -2,10 +2,10 @@ import { useNavigate } from 'react-router-dom';
 import { Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
 import { useDenetim } from '../baglam.tsx';
-import { PROGRAMLAR, PROGRAM_SIRASI } from '../icerik/programlar.ts';
+import { PROGRAMLAR, PROGRAM_SIRASI, eyGrade } from '../icerik/programlar.ts';
 import { bugunListesi, type BugunGrubu, type BugunMaddesi } from '../kurallar/bugun.ts';
 import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
-import { icBaslat } from '../kurallar/ic-denetim.ts';
+import { icBaslat, sahaBaslat } from '../kurallar/ic-denetim.ts';
 import { kysMaddesi } from '../kurallar/kys.ts';
 import { ornekMi, ornekProfil, profilEkle } from '../kurallar/profil.ts';
 import { programPuani } from '../kurallar/puan.ts';
@@ -56,8 +56,13 @@ export function Bugun() {
         }}>Başlat</Dugme>
       );
     }
-    // Saha turunu başlatan saf kural yok (Y0'a istek); satır saha sekmesini açar.
-    return <Dugme simge="play" onClick={() => { d.ekranDegistir((s) => { s.ic.tab = 'saha'; }); d.git('icd'); }}>Başlat</Dugme>;
+    return (
+      <Dugme simge="play" onClick={() => {
+        d.degistir(null, (t) => { sahaBaslat(t, e.id); });
+        d.ekranDegistir((s) => { s.ic.tab = 'saha'; });
+        d.git('icd');
+      }}>Başlat</Dugme>
+    );
   };
 
   const ornegeGec = () => {
@@ -90,16 +95,20 @@ export function Bugun() {
           const dd = na ? gunFarki(na.date) : null;
           const ey = k === 'eydep';
           return (
-            <button key={k} type="button" className="tc-dhb-program" onClick={() => { d.git('dash', { program: k }); }}>
+            <button key={k} type="button" className={`tc-dhb-program tc-dhp-renk-${k}`} onClick={() => { d.git('dash', { program: k }); }}>
               <span className="tc-dhb-program-ust">
+                <i className="tc-dhb-nokta" aria-hidden="true" />
                 <b>{P.n}</b>
                 <Rozet ton={r.verdict ? rozetTonu(kararTonu(r.verdict.k)) : 'pasif'}>{r.verdict?.t ?? 'Başlanmadı'}</Rozet>
               </span>
               <span className="tc-dhb-program-puan">
                 <span className="tc-dhb-buyuk">{puanYazisi({ program: k }, r.pct)}</span>
-                <small className="tc-dhy-ton-soluk">{r.pct == null ? 'henüz ölçülmedi' : ey ? 'puan' : 'hazırlık puanı'}</small>
+                <small className="tc-dhy-ton-soluk">{r.pct == null ? 'henüz ölçülmedi' : ey ? `puan · ${eyGrade(r.pct) ? `${eyGrade(r.pct)} seviyesi` : 'eşik altı'}` : 'hazırlık puanı'}</small>
               </span>
-              <progress className="tc-dhb-cubuk" max={100} value={r.pct ?? 0} aria-label={`${P.s} hazırlık puanı`} />
+              <span className="tc-dhb-cubuk-kap">
+                <progress className="tc-dhb-cubuk" max={100} value={r.pct ?? 0} aria-label={`${P.s} hazırlık puanı`} />
+                <span className="tc-dhb-hedef" title="Hedef %85" />
+              </span>
               <span className="tc-dhb-program-alt">
                 <span>{na ? `${na.type || 'Denetim'} · ${tarihMetni(na.date)}` : 'Denetim tarihi yok'}</span>
                 {dd != null && dd >= 0 && <b>{`${String(dd)} gün`}</b>}
@@ -142,7 +151,7 @@ export function Bugun() {
                       <span className="tc-dhb-is-simge"><PSimge ad={x.ic} /></span>
                       <div className="tc-dhb-is-metin">
                         <b>{x.t}</b>
-                        <small><span className="tc-dhb-kaynak">{x.src}</span>{x.s}</small>
+                        <small><span className={x.prog ? `tc-dhb-kaynak tc-dhp-renk-${x.prog}` : 'tc-dhb-kaynak'}>{x.src}</span>{x.s}</small>
                       </div>
                       <div className="tc-dhb-is-eylem">
                         {eylem(x)}
@@ -167,7 +176,7 @@ export function Bugun() {
                   const t = new Date(`${a.date}T00:00:00`);
                   return (
                     <li key={a.id}>
-                      <span className="tc-dhb-gun"><b>{t.getDate()}</b><small>{t.toLocaleDateString('tr-TR', { month: 'short' })}</small></span>
+                      <span className={`tc-dhb-gun tc-dhp-renk-${a.prog}`}><b>{t.getDate()}</b><small>{t.toLocaleDateString('tr-TR', { month: 'short' })}</small></span>
                       <span className="tc-dhb-is-metin"><b>{PROGRAMLAR[a.prog].s}</b><small>{a.type || 'Denetim'}</small></span>
                       <span className="tc-dhy-ton-soluk">{`${String(gunFarki(a.date))} gün`}</span>
                     </li>
@@ -177,7 +186,7 @@ export function Bugun() {
             ) : (
               <>
                 <p className="tc-dhy-ton-soluk">Planlanmış denetim yok.</p>
-                {yaz && <Dugme simge="plus" onClick={() => { d.git('takvim'); }}>Denetim ekle</Dugme>}
+                {yaz && <Dugme simge="plus" onClick={() => { d.git('takvim', { yeniDenetim: true }); }}>Denetim ekle</Dugme>}
               </>
             )}
           </Kart>
@@ -200,7 +209,7 @@ export function Bugun() {
           <Kart baslik="Hızlı işlemler">
             <div className="tc-dhb-hizli">
               {yaz && <button type="button" onClick={hizliTur}><PSimge ad="zap" /><b>Hızlı tur</b><small>10 soruluk ölçüm</small></button>}
-              {yaz && <button type="button" onClick={() => { d.git('takvim'); }}><PSimge ad="cal" /><b>Denetim ekle</b><small>Takvime</small></button>}
+              {yaz && <button type="button" onClick={() => { d.git('takvim', { yeniDenetim: true }); }}><PSimge ad="cal" /><b>Denetim ekle</b><small>Takvime</small></button>}
               <button type="button" onClick={kalibrasyon}><PSimge ad="ruler" /><b>Cihaz ekle</b><small>Kalibrasyon</small></button>
               {yaz && <button type="button" onClick={() => { d.git('kys', { kys: 'uret' }); }}><PSimge ad="file" /><b>Doküman üret</b><small>KYS</small></button>}
             </div>
@@ -215,7 +224,7 @@ export function Bugun() {
                 {d.yetki.yonetici && <Dugme simge="layers" onClick={ornegeGec}>Örnek firmayı gez</Dugme>}
                 <button type="button" className="tc-dhb-baglanti" onClick={() => {
                   d.ekranDegistir((s) => { s.onbHide = true; });
-                  d.bildir('Başlarken rehberi gizlendi; Ayarlar sayfasından yeniden açabilirsiniz');
+                  d.bildir('Başlarken rehberi gizlendi; Yardım panelinden yeniden açabilirsiniz');
                 }}>Gizle</button>
               </div>
             </Kart>

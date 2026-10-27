@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { CokSatir, Dugme, IsaretKutusu, Kart, OnayPenceresi } from '../../../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, IsaretKutusu, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
 import { CRIT, SCALE } from '../icerik/iso9001.ts';
 import { aktifSorular, puanHesapla, puanOner } from '../kurallar/puan.ts';
 import type { Cevap } from '../tipler.ts';
 import { PUANLAMA_KURALI, puanlamaRehberi, puanTonu, simListesi } from './hesaplar.ts';
-import { Halka, IpucuKutusu, ProgramBandi, PSimge, useProgramEkrani } from './ortak.tsx';
+import { Halka, IpucuKutusu, ProgramBandi, PSimge, SatirOnayi, useProgramEkrani } from './ortak.tsx';
 import { useHizliTur } from './paylasilan.tsx';
 
 const ONERI: Record<string, string> = { '3': '3 · Tam uygun', '2': '2 · Uygun', '1': '1 · Kısmen', '0': '0 · Kanıt yok' };
@@ -35,7 +35,7 @@ export function Simulasyon() {
       const tw = t.pw[d.program];
       if (tw.ans[qx.id] === v) delete tw.ans[qx.id]; else tw.ans[qx.id] = v;
       tw.example = false;
-    });
+    }, { sessiz: true });
   };
   const gez = (yon: number) => {
     if (yon > 0 && cur === liste.length - 1) { d.git('rapor'); return; }
@@ -57,9 +57,12 @@ export function Simulasyon() {
       if (hizli) for (const x of liste) { delete tw.ans[x.id]; delete tw.ev[x.id]; }
       else { tw.ans = {}; tw.ev = {}; tw.done = {}; tw.exDone = {}; }
       tw.example = false;
-    });
+    }, { bildirim: hizli ? 'Bu turun cevapları silindi' : 'Simülasyon sıfırlandı' });
     ekranYaz((p) => { p.cur = 0; });
   };
+  const sifirlaSor = (metin: string) => (
+    <SatirOnayi metin={metin} evet="Evet, sıfırla" onayla={sifirla} vazgec={() => { sifirlaYaz(false); }} />
+  );
 
   // Klavye (prototip): 0-3 puan, N uygulanmaz, oklar gezinme. Yazı alanında çalışmaz.
   const tusRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
@@ -142,7 +145,9 @@ export function Simulasyon() {
               <small className="tc-dhy-ton-soluk">AS9100 / AQAP 2110 · ISO puanına katılmaz</small>
             </div>
           )}
-          {yaz && <Dugme simge="rotate" onClick={() => { sifirlaYaz(true); }}>{hizli ? 'Turu sıfırla' : 'Simülasyonu sıfırla'}</Dugme>}
+          {yaz && (sifirlaAcik
+            ? sifirlaSor(hizli ? 'Bu turun cevapları silinsin mi?' : 'Tüm simülasyon cevapları silinsin mi?')
+            : <Dugme simge="rotate" title="Cevapları silip baştan başlar; geri alınabilir" onClick={() => { sifirlaYaz(true); }}>{hizli ? 'Turu sıfırla' : 'Simülasyonu sıfırla'}</Dugme>)}
         </aside>
 
         <div className="tc-dhp-sim-ana">
@@ -151,6 +156,9 @@ export function Simulasyon() {
             {yaz && (
               <div className="tc-dhp-dugmeler">
                 <Dugme simge="rotate" disabled={!d.geriAlinabilir} title="Son işlemi geri al (Ctrl Z)" onClick={d.geriAl}>Geri al</Dugme>
+                {sifirlaAcik
+                  ? sifirlaSor(hizli ? `Bu turdaki ${String(lr.answered)} cevap silinsin mi?` : 'Tüm simülasyon cevapları silinsin mi?')
+                  : <Dugme simge="rotate" title="Cevapları silip baştan başlar; geri alınabilir" onClick={() => { sifirlaYaz(true); }}>{hizli ? 'Turu sıfırla' : 'Simülasyonu sıfırla'}</Dugme>}
                 {hizli
                   ? <><Dugme simge="bolt" onClick={hizliTur}>Yeni tur</Dugme><Dugme simge="x" onClick={() => { kipSec('full'); }}>Hızlı turdan çık</Dugme></>
                   : <Dugme simge="bolt" onClick={() => { kipSec('quick'); }}>Hızlı tura geç</Dugme>}
@@ -162,7 +170,10 @@ export function Simulasyon() {
             <div className="tc-dhp-bitti" role="status">
               <PSimge ad="check" />
               <span><b>{hizli ? 'Hızlı tur tamamlandı' : 'Tüm sorular cevaplandı'}</b><small>{`${lr.pct != null ? `Bu turdaki puanınız %${String(lr.pct)}. ` : ''}Açıkları ve aksiyon planını raporda görün.`}</small></span>
-              <Dugme tur="birincil" simge="chart" onClick={() => { d.git('rapor'); }}>Raporu aç</Dugme>
+              <div className="tc-dhp-dugmeler">
+                {yaz && <Dugme simge="rotate" onClick={() => { sifirlaYaz(true); }}>Yeniden başla</Dugme>}
+                <Dugme tur="birincil" simge="chart" onClick={() => { d.git('rapor'); }}>Raporu aç</Dugme>
+              </div>
             </div>
           )}
           <div className="tc-dhp-balon">
@@ -218,7 +229,7 @@ export function Simulasyon() {
             />
           </Kart>
           <div className="tc-dhp-alt">
-            <small className="tc-dhy-ton-soluk">0–3 puan · N uygulanmaz · ← → gezin</small>
+            <small className="tc-dhy-ton-soluk"><kbd>0</kbd>–<kbd>3</kbd> puan <kbd>N</kbd> uygulanmaz <kbd>←</kbd><kbd>→</kbd> gezin</small>
             <div className="tc-dhp-dugmeler">
               <Dugme simge="chev-left" disabled={cur === 0} onClick={() => { gez(-1); }}>Önceki</Dugme>
               <Dugme tur="birincil" simge="chev-right" onClick={() => { gez(1); }}>{cur === liste.length - 1 ? 'Raporu gör' : 'Sonraki'}</Dugme>
@@ -226,12 +237,6 @@ export function Simulasyon() {
           </div>
         </div>
       </div>
-      <OnayPenceresi
-        acik={sifirlaAcik} baslik={hizli ? 'Bu turun cevapları silinsin mi?' : 'Tüm simülasyon cevapları silinsin mi?'} onayMetni="Evet, sıfırla" tehlikeli
-        onayla={sifirla} vazgec={() => { sifirlaYaz(false); }}
-      >
-        <p>{hizli ? `Bu turdaki ${String(lr.answered)} cevap silinir.` : 'Cevaplar, kanıt işaretleri ve aksiyon durumları silinir.'} Geri alınabilir.</p>
-      </OnayPenceresi>
     </div>
   );
 }
