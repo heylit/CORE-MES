@@ -1,17 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
-import { MOTOR_OKUNAMADI } from './ReceteRotaYeni.tsx';
+import { BOLUM_ACIKLAMALARI, menuSayaclari, MOTOR_OKUNAMADI } from './ReceteRotaYeni.tsx';
 import { EKRANLAR, SEKMELER, sekmeBul } from './sekmeler.ts';
-import { json, KAPISIZ, OKUYAN, rrAc, SAYFASIZ, sunucuKur, YONETICI, type Istek } from './test-ortak.tsx';
+import { json, KAPISIZ, OKUYAN, ornekDurum, rrAc, SAYFASIZ, sunucuKur, YONETICI, type Istek } from './test-ortak.tsx';
 
+// Kabuk testte yoktur: ekranın kabuğa yazdığı sekme sayıları burada yakalanır.
+const sayacYazici = vi.hoisted(() => ({ yaz: vi.fn() }));
+vi.mock('../../../ortak/rota/cerceve-sayaclari.ts', () => ({ useCerceveSayacYazici: () => sayacYazici.yaz }));
+
+beforeEach(() => { sayacYazici.yaz.mockReset(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // Bölüm içerikleri parçalarca doldurulur: testler yer tutucu metnine değil, seçili sekmeye, bölgenin adına ve parçanın işaretine bakar.
+// Ürün ve rotalar'da eski ekranda olduğu gibi başlık yoktur.
 const acikBolum = async (ad: string) => {
   const bolge = await screen.findByRole('region', { name: ad });
-  expect(screen.getByRole('heading', { name: ad, level: 2 })).toBeTruthy();
+  if (ad === 'Ürün ve rotalar') expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+  else expect(screen.getByRole('heading', { name: ad, level: 2 })).toBeTruthy();
   return bolge;
 };
 const seritteSec = (ad: string) => { fireEvent.click(within(screen.getByRole('navigation', { name: 'Deneme şeridi' })).getByRole('link', { name: ad })); };
@@ -111,5 +118,53 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     rrAc();
     await parcaCizildi(await acikBolum('Üretim emirleri'), 'R3');
     await screen.findByText(MOTOR_OKUNAMADI);
+  });
+});
+
+describe('yeni Reçete ve Rota ekranı: bölüm başı ve sekme sayıları (805 R1)', () => {
+  it('bölüm başı eski ekrandaki gibidir: başlık simgesiz, açıklama kısa durur ve dokununca açılır', async () => {
+    sunucuKur(OKUYAN);
+    rrAc('/recete-rota/stock');
+    await acikBolum('Stok');
+    const baslik = screen.getByRole('heading', { name: 'Stok', level: 2 });
+    expect(baslik.querySelector('svg')).toBeNull();
+    const aciklama = screen.getByRole('button', { name: BOLUM_ACIKLAMALARI.stock ?? '' });
+    expect(aciklama.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(aciklama);
+    expect(aciklama.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('Ürün ve rotalar başlıksız, Kaynaklar açıklamasız açılır', async () => {
+    sunucuKur(OKUYAN);
+    rrAc('/recete-rota/schema');
+    await acikBolum('Ürün ve rotalar');
+    expect(screen.queryByRole('button', { expanded: false })).toBeNull();
+    cleanup();
+    sunucuKur(OKUYAN);
+    rrAc('/recete-rota/res');
+    const bolge = await acikBolum('Kaynaklar');
+    expect(bolge.closest('.tc-rry-govde')?.querySelector('.tc-rry-ipucu')).toBeNull();
+  });
+
+  it('veri gelince sekme sayıları kabuğa yazılır', async () => {
+    const istekler = sunucuKur(OKUYAN);
+    rrAc();
+    await durumOkundu(istekler);
+    await waitFor(() => expect(sayacYazici.yaz).toHaveBeenCalledWith({ orders: 0, stock: 0, schema: 0, ops: 1, items: 1 }));
+  });
+
+  it('sayılar eski ekranın kuralıyladır; okunamayan dilimin sayısı null, boş stok ya da minimum sayılmaz', () => {
+    const d = ornekDurum();
+    const kalem = d.items![0]!;
+    const emir = d.emirler!.orders[0]!;
+    const rev = (status: 'taslak' | 'onay' | 'onayli') => ({ id: status, itemId: '11', no: 'A', status }) as unknown as NonNullable<typeof d.routeRevs>[number];
+    expect(menuSayaclari({
+      ...d,
+      items: [{ ...kalem, stock: 1, min: 5 }, { ...kalem, id: '12', stock: null, min: 5 }, { ...kalem, id: '13', stock: 9, min: 5 }, { ...kalem, id: '14', stock: 0, min: null }],
+      emirler: { ...d.emirler!, orders: [emir, { ...emir, id: '62', status: 'serbest' }, { ...emir, id: '63', status: 'uretimde' }, { ...emir, id: '64', status: 'tamam' }] },
+      routeRevs: [rev('taslak'), rev('taslak'), rev('onayli')],
+    })).toEqual({ orders: 2, stock: 1, schema: 2, ops: 1, items: 4 });
+    expect(menuSayaclari({ ...d, routeRevs: [rev('taslak'), rev('onay')] }).schema).toBe(1);
+    expect(menuSayaclari({ ...d, items: null, opdefs: null, routeRevs: null, emirler: null })).toEqual({ orders: null, stock: null, schema: null, ops: null, items: null });
   });
 });
