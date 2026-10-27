@@ -75,6 +75,18 @@ export async function canliYerlesimleri(db: Db, isEmriIdleri: readonly number[])
   return parcalariEkle(r.map(coz), p);
 }
 
+// Plan sapmasının sıra uyumu (782): makinelerin canlı plandaki işleri, başlangıç sırasıyla. Bölünmüş işin parçası kendi makinesinde sayılır.
+export async function makinelerinCanliIsleri(db: Db, makineIdleri: readonly number[]): Promise<{ isEmriId: number; makineId: number; baslangic: Date }[]> {
+  if (makineIdleri.length === 0) return [];
+  return db.sorgu(
+    `SELECT is_emri_id AS "isEmriId", makine_id AS "makineId", baslangic FROM plan_yerlesimi WHERE makine_id = ANY($1::int[])
+      UNION
+     SELECT is_emri_id, makine_id, min(baslangic) FROM plan_yerlesim_parcasi WHERE makine_id = ANY($1::int[]) AND baslangic IS NOT NULL GROUP BY is_emri_id, makine_id
+      ORDER BY 3, 1`,
+    [makineIdleri],
+  );
+}
+
 // Yersiz bölmeler: motorun yerleştiremediği bölünmüş işin parçaları (no, adet); bölme planlamacı kaldırana dek kalır.
 export interface BolmeParcasi { no: number; adet: number }
 export async function yersizBolmeler(db: Db, hedef: Hedef): Promise<Map<number, BolmeParcasi[]>> {

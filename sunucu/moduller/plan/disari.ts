@@ -46,6 +46,10 @@ export const tabanPlani = (db: Db, g: { uretimEmriIdleri?: readonly number[]; is
   tabanOku(db, g);
 export type { TabanSatiri };
 
+// 781 a: plandan sapma plan modülünde hesaplanır (ADR 0006: plan Arkon'u okumaz); Arkon okur, kendi eşiğiyle olaya çevirir.
+export { planSapmalari } from './sapma.ts';
+export type { PlanSapmasi } from './sapma.ts';
+
 // 750 a: adımın güncel canlı plandaki yeri; refakat kartı plan saatini ve gecikmeyi buradan gösterir. Canlıda olmayan adım listede yoktur;
 // boş girdi sorgu atmaz.
 export const canliPlan = async (db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; baslangic: string; bitis: string }[]> =>
