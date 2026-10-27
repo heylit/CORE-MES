@@ -112,7 +112,7 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 }
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
-  const { depo, kisi, ayarlar, yetkiVar, git, sayfaGorunur } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, git } = useArkon();
   const { tema, degistir: temaDegistir } = useTema();
   const { bildir } = useBildirim();
   const dar = useDarEkran();
@@ -1295,7 +1295,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const saat = new Date(simdi);
   const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   return (
-    <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cark="">
+    <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
       <header className="tc-ay1-ust">
         <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
@@ -1304,8 +1304,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}
         <span className="tc-ay1-bosluk" />
         <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
-        {!pv && sayfaGorunur('hazirlik') ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => git('hazirlik')} title="Üretim Terminali Hazırlık" aria-label="Üretim Terminali Hazırlık"><Simge ad="layers" /></button> : null}
-        {!pv && sayfaGorunur('kalite') ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => git('kalite')} title="Kalite ölçüm istasyonu" aria-label="Kalite ölçüm istasyonu"><Simge ad="target" /></button> : null}
         {ozetVar ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('ozetim')} title="Özetim" aria-label="Özetim"><Simge ad="user" /></button> : null}
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
         <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>
@@ -1319,7 +1317,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         </button>
       </header>
       {/* 791 b: iki sütun (üretim, ayrıntı); iş listesi "İşler" düğmesinden açılır. Sütunlar ekran yüksekliğine sığar, taşan sütun kendi içinde kayar. */}
-      <div className="tc-ay1-izgara" data-cark="">
+      <div className="tc-ay1-izgara">
         <div className="tc-ay1-orta tc-ay1-sutun">
           {bantlar}
           {carki(

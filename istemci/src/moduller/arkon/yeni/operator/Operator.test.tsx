@@ -236,3 +236,14 @@ describe('797 durum süresi', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 });
+
+// 807: terminalin üst çubuğunda Hazırlık ve Kalite kısayolu yok; sayfalar Arkon sekmelerinden açılır, ölçü girişi resim sekmesindedir.
+describe('807 üst çubuk kısayolları', () => {
+  it('yöneticide de Hazırlık ve Kalite tuşu çıkmaz', async () => {
+    sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    expect(screen.queryByRole('button', { name: 'Üretim Terminali Hazırlık' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kalite ölçüm istasyonu' })).toBeNull();
+  }, 40000);
+});
