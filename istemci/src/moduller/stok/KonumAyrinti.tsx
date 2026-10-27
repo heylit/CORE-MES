@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import type { BakiyeSatiri, ElleKonumTuru, Konum, KonumAyrintiCevabi, KonumDuzenleGovdesi, SayimCevabi, SayimGovdesi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
@@ -28,6 +28,17 @@ function TurPenceresi({ konum, kapat }: { konum: Konum & { tur: ElleKonumTuru };
   );
 }
 
+// 139 a: haritaya bağlı olmayan elle konum burada pasife alınır (raf ve gözü Fabrika Haritası'ndan kalkar). Ekrandan geri açılmaz; onay istenir.
+function PasifePencere({ konum, kapat }: { konum: Konum; kapat: () => void }) {
+  const { komut } = useStokKomutu((g: { surum: number }) => api.post(`/stok/konumlar/${konum.id}/pasif-yap`, g), 'Konum pasife alındı.', kapat);
+  return (
+    <OnayPenceresi acik tehlikeli baslik={`${konum.kod} pasife alınsın mı?`} onayMetni="Pasife al" yukleniyor={komut.isPending}
+      onayla={() => komut.mutate({ surum: konum.surum })} vazgec={kapat}>
+      <p>Pasif konuma mal kabul, transfer ve yerleştirme yapılamaz. Bu ekrandan yeniden açılmaz.</p>
+    </OnayPenceresi>
+  );
+}
+
 // Sayım: her satırın sistem miktarı beklenen olarak gider; arada stok değiştiyse sunucu 409 verir (DEP-16).
 export function KonumAyrinti() {
   const id = Number(useParams().id);
@@ -38,6 +49,7 @@ export function KonumAyrinti() {
   const tasiyabilir = useIslem('stok.transfer');
   const tanimlar = useIslem('stok.tanim');
   const [turAc, setTurAc] = useState(false);
+  const [pasifAc, setPasifAc] = useState(false);
   const k = useQuery({ queryKey: anahtarlar.ayrinti('konum', id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${id}`) });
   const { komut } = useStokKomutu((g: SayimGovdesi) => korumaliPost<SayimCevabi>('/stok/sayim', g), 'Sayım kaydedildi.', () => setSayilan({}));
   if (k.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -60,13 +72,14 @@ export function KonumAyrinti() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik={konum.kod} alt={`${KONUM_ETIKETI[konum.tur]}${konum.ad ? ` · ${konum.ad}` : ''} · ${konum.depoKod} · son sayım ${zamanMetni(konum.sonSayim)} · ${haritaYeri ? `haritada ${haritaYeri}` : 'haritada yok'}${zemin ? ` · zemin ${zemin}` : ''}`}
-        sag={<>{tanimlar && elleTurMu(konum) && <Dugme simge="tool" onClick={() => setTurAc(true)}>Türü değiştir</Dugme>}<Dugme simge="scan" onClick={() => setEtiket(true)}>Etiket</Dugme>{konum.rafId !== null && <Link to={`/stok/raflar/${konum.rafId}`}><Dugme simge="grid">Raf matrisi</Dugme></Link>}{haritaYeri !== null && <Link to="/atolye"><Dugme simge="layers">Haritada gör</Dugme></Link>}</>} />
+        sag={<>{!konum.aktif && <Rozet ton="pasif">Pasif</Rozet>}{tanimlar && elleTurMu(konum) && <Dugme simge="tool" onClick={() => setTurAc(true)}>Türü değiştir</Dugme>}{tanimlar && konum.aktif && elleTurMu(konum) && <Dugme simge="x" onClick={() => setPasifAc(true)}>Pasife al</Dugme>}<Dugme simge="scan" onClick={() => setEtiket(true)}>Etiket</Dugme>{konum.rafId !== null && <Link to={`/stok/raflar/${konum.rafId}`}><Dugme simge="grid">Raf matrisi</Dugme></Link>}{haritaYeri !== null && <Link to="/atolye"><Dugme simge="layers">Haritada gör</Dugme></Link>}</>} />
       {etiket && <EtiketPenceresi baslik="Konum etiketi" kapat={() => setEtiket(false)} ogeler={[{ tur: 'konum', kod: konum.kod, katNo: konum.katNo, alt: konum.ad ?? KONUM_ETIKETI[konum.tur] }]} />}
       <Kart baslik="Gözdeki stok" sag={sayabilir && bakiyeler.length > 0 && <Dugme tur="birincil" yukleniyor={komut.isPending} onClick={gonder}>Sayımı kaydet</Dugme>}>
         <Tablo etiket="Gözdeki stok" sutunlar={sutunlar} satirlar={bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş." />
       </Kart>
       <Link to={`/stok/hareketler?konumId=${id}`}>Bu konumun hareketleri</Link>
       {turAc && elleTurMu(konum) && <TurPenceresi konum={konum} kapat={() => setTurAc(false)} />}
+      {pasifAc && <PasifePencere konum={konum} kapat={() => setPasifAc(false)} />}
       {yerlestir && <RafaYerlestirPenceresi b={yerlestir} kapat={() => setYerlestir(null)} />}
     </section>
   );
