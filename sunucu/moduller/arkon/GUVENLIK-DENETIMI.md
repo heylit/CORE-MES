@@ -58,3 +58,10 @@ rolü değildir), serviste Arkon rolü ve istasyonun iş merkezi kapsamı. Kişi
 Plan yazılmaz. İzinli: yansima.test.ts "kuyruk sırası: Hazırlık istasyon kuyruğunu sıralar..." (işlemi olan hazırlıkçı 200). Ret: aynı test (Arkon operatörü 403,
 işlemi olmayan planlamacı 403, kapsam dışı istasyon 403, yinelenen ve TMI dışı paket 400, eski ekran 409, kilitli iş 409, bilinmeyen istasyon 404);
 arkon.test.ts "her uç" (oturumsuz 401, rolsüz 403), "uç tanımı" (yetki ayrı işlem).
+
+Ortak dosya deposu (kart #732, 743 a): `/arkon/dosyalar/*` uçlarında yetki değişmedi. Tamamlanan dosya `dosya` modülünün modül şeridinden yazılır
+(özet sunucuda doğrulanır) ve Arkon'un 'depo' kaydına bağlanır; yükleyen `dosya_yukleyeni`'ne girer. Okuma kuralı aynı (yükleyen ya da anan belgeyi
+okuyabilen). Çizim Merkezi'nden alma (`POST /arkon/cizim-merkezi/belgeler/:id/ekle`, paket yazanlar) dosyayı yüklemeden bağlar: `kaynaktanBagla` yalnız
+başka modülde bağlı içeriği kabul eder (DSb istisnası, ADR 0009 ek). Taslağın `malzemeCizimleri` önerisi okuma ucunda yazma yapmaz. İzinli:
+yansima.test.ts "732 a"; Hazirlik.test.tsx "bir kez pakete gelir". Ret: guvenlik "dosya yalnız onu anan belgeyi okuyabilene" (bağsız ve kapsam dışı 404),
+Hazirlik.test.tsx "yetkisi olmayan kişide ... alınmaz", arkon.test.ts merkez testleri (operatör 403, taslak ve arşiv 404, resim 422).

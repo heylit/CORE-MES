@@ -37,7 +37,9 @@ import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTak
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { ekipCagrisiBildir } from '../bildirim/disari.ts';
-import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { depoDolulugu, eksikDosyalar as kisininEksikDosyalari, modulDeposuTutamagi } from '../dosya/disari.ts';
+import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
@@ -56,7 +58,7 @@ import {
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
-  cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
+  cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
   adetEksikMi, araliklariBirlestir, araliklariKes, beklenenTopla, bitenIsBeklenen, girisYokAktifDakika, girisYokMu, isEmriBeklenenAdet, kaynakKarsilastir, kesinBeklenen, kisiBeklenen, makineIzinliMi, toplamOran, uretimOrani,
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
@@ -306,7 +308,10 @@ async function isEmriTaslaklari(
   // 744 a: ilk parça kararı ve seçimi adım başınadır; rotada bulunmayan adım (rotasız emir, ek adım) her kurulumda sorar.
   const ilkParcalar = await adimIlkParcaKararlari(db, girdiler.map((g) => g.isEmri.id));
   const ilkParcaSecimleri = await adimIlkParcaSecimleri(db, girdiler.flatMap((g) => (g.isEmri.kaynakRotaRevizyonId == null ? [] : [g.isEmri.kaynakRotaRevizyonId])));
-  const girenler = await adimGirenleri(db, girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id))));
+  const kayitsizlar = girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id)));
+  const girenler = await adimGirenleri(db, kayitsizlar);
+  // Karar 732 a: kayıtsız taslak malzemenin Çizimler'de yayındaki PDF ve 3B modelini önerir; Hazırlık açınca merkezden alır (bağ yazma ucundadır).
+  const malzemeBelgeleri = await kayitlaraBagliBelgeler(db, 'malzemeler', [...new Set(kayitsizlar.map((g) => g.isEmri.malzemeNo))]);
   // 564 2 a: kalite istasyonunun lot planı; parti paketin hedef adedidir (bölünmüş işte parçanınki), aynı parça ve adet bir kez hesaplanır.
   const aqlPlanlari = new Map<string, ReturnType<typeof tmiAqlPlani>>();
   for (const g of girdiler) {
@@ -321,8 +326,10 @@ async function isEmriTaslaklari(
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
       ilkParcaSecimi: g.isEmri.kaynakRotaRevizyonId == null ? undefined : ilkParcaSecimleri.get(`${g.isEmri.kaynakRotaRevizyonId}:${g.isEmri.opNo}`), girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
-    const govde = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
-    const kimlik = String(govde['id']);
+    const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
+    const kimlik = String(yayinli['id']);
+    const oneri = kayitliKimlik.has(kimlik) ? [] : malzemeCizimleri(yayinli['files'], malzemeBelgeleri.get(g.isEmri.malzemeNo) ?? []);
+    const govde = oneri.length > 0 ? { ...yayinli, malzemeCizimleri: oneri } : yayinli;
     // Hazırlık sırası işin bugünkü istasyonundaysa geçerlidir: plan işi başka istasyona aldıysa iş orada sırasız (plan sırasıyla) durur.
     const sira = kuyruk.get(kimlik);
     const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;
@@ -1847,9 +1854,20 @@ export async function kayitlar(db: Db, kullanici: Kullanici, tur: ArkonKayitTuru
   return satirlar.map((s) => ({ ...s.govde, at: s.zaman.getTime() }));
 }
 
+// Arkon dosyaları ortak depodadır (kart #732, ADR 0009): Arkon'un bütün dosyaları tek kayda ('depo') bağlıdır; okuma kuralı Arkon'un
+// kendisidir (aşağıda `dosya`). Yükleme şeridi ve kotası Arkon'da kalır; tamamlanan içerik ortak depoya yazılır.
+const DOSYALAR = modulDeposuTutamagi('arkon');
+const DEPO_KAYDI = 'depo';
+const DEPO_SINIRI: BagSiniri<SaklananTur> = {
+  turler: ['pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf', 'dxf', 'ikili'], azamiBayt: AZAMI_DOSYA,
+};
+const depodaOlanlar = (db: Db, ozetler: readonly string[]): Promise<string[]> => DOSYALAR.bagliOlanlar(db, DEPO_KAYDI, ozetler);
+const depodaMi = async (db: Db, ozet: string): Promise<boolean> => (await depodaOlanlar(db, [ozet])).length > 0;
+const depoBayti = async (db: Db): Promise<number> => (await depoDolulugu(db)) + (await sorgular.acikParcaBayti(db));
+
 export async function eksikDosyalar(db: Db, kullanici: Kullanici, ozetler: readonly string[]): Promise<string[]> {
   await rolGerekli(db, kullanici);
-  const olan = new Set(await sorgular.olanDosyalar(db, ozetler));
+  const olan = new Set(await depodaOlanlar(db, ozetler));
   return [...new Set(ozetler)].filter((o) => !olan.has(o));
 }
 
@@ -1869,7 +1887,7 @@ export async function dosyaParcasi(
   await rolGerekli(db, kullanici);
   // Kilit sırası tek yönlüdür: önce kişi (şerit ve kota), depo yalnız toplam okunurken, özet kilidi yalnız tamamlama anında. Kişi başka kişinin satırını silmez.
   await sorgular.kisiKilitle(db, kullanici.id);
-  if (await sorgular.dosyaVarMi(db, ozet)) {
+  if (await depodaMi(db, ozet)) {
     await sorgular.yuklemeyiAt(db, ozet, kullanici.id);
     return true;
   }
@@ -1880,7 +1898,7 @@ export async function dosyaParcasi(
   // Sınır aşılınca yeni parça açık bir hatayla (429) reddedilir; hiçbir yükleme kendiliğinden silinmez.
   const acik = await sorgular.kisiAcikYuklemeleri(db, kullanici.id);
   await sorgular.depoKilitle(db);
-  const kota = yuklemeKotasiHatasi({ kisiAdet: seritVar ? 0 : acik.adet, kisiBayt: acik.bayt, depoBayt: await sorgular.depoBayti(db), yeniBayt: ekleyecegi }, sinir);
+  const kota = yuklemeKotasiHatasi({ kisiAdet: seritVar ? 0 : acik.adet, kisiBayt: acik.bayt, depoBayt: await depoBayti(db), yeniBayt: ekleyecegi }, sinir);
   if (kota !== null) throw cokIstek(ILETILER[kota]);
   await sorgular.parcaYaz(db, ozet, g.sira, g.toplam, parca, kullanici.id);
   const parcalar = await sorgular.parcalar(db, ozet, kullanici.id);
@@ -1888,9 +1906,10 @@ export async function dosyaParcasi(
   if (parcalar.length < g.toplam) return false;
   const icerik = Buffer.concat(parcalar.map((p) => p.icerik));
   if (createHash('sha256').update(icerik).digest('hex') !== ozet) return yuklemeyiReddet(db, ozet, kullanici.id, ILETILER.ozetTutmuyor, 'ozet');
-  // Tamamlama: aynı özeti iki kişi birden tamamlarsa özet kilidi sıraya koyar; ikincisi dosyayı hazır bulur.
-  await sorgular.ozetKilitle(db, ozet);
-  if (!(await sorgular.dosyaVarMi(db, ozet))) await sorgular.dosyaEkle(db, ozet, icerik, kullanici.id);
+  // Tamamlama: ortak depo özet kilidiyle sıraya koyar; ikinci tamamlayan dosyayı hazır bulur ve yalnız yükleyen olur. Kişi yükleyen
+  // olduğu için kendi adıyla bağlar (DSb a).
+  await DOSYALAR.icerikYaz(db, kullanici.id, ozet, icerik);
+  await DOSYALAR.dosyaBagla(db, kullanici, { ozet, kayit: DEPO_KAYDI, ad: ozet, belgeTuru: null }, DEPO_SINIRI);
   await sorgular.yuklemeyiAt(db, ozet, kullanici.id);
   return true;
 }
@@ -1900,14 +1919,13 @@ export async function dosyaParcasi(
 // dosyanın yazana geri okunabilmesi içindir.
 export async function dosya(db: Db, kullanici: Kullanici, ozet: string): Promise<IkiliCevap> {
   await rolGerekli(db, kullanici);
-  const bilgi = await sorgular.dosyaBilgisi(db, ozet);
-  if (bilgi === null || !(await dosyayiOkuyabilir(db, kullanici, ozet, bilgi.yukleyenId))) throw bulunamadi(ILETILER.dosyaYok);
-  const ilk = await sorgular.dosyaDilimi(db, ozet, 0, DOSYA_IMZA_BAYTI);
-  return { tur: dosyaTuruBul(ilk ?? Buffer.alloc(0)), ad: ozet, boyut: bilgi.boyut, akis: (vt) => dosyaDilimleri(vt, ozet, bilgi.boyut) };
+  const cevap = await DOSYALAR.dosyaAkisi(db, DEPO_KAYDI, ozet);
+  if (cevap === null || !(await dosyayiOkuyabilir(db, kullanici, ozet))) throw bulunamadi(ILETILER.dosyaYok);
+  return cevap;
 }
 
-async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string, yukleyenId: number): Promise<boolean> {
-  if (yukleyenId === kullanici.id) return true;
+async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string): Promise<boolean> {
+  if ((await kisininEksikDosyalari(db, kullanici, [ozet])).length === 0) return true;
   for (const { depo, kimlik } of await sorgular.dosyayiAnanBelgeler(db, ozet)) {
     try {
       if ((await belge(db, kullanici, depo, kimlik)) !== null) return true;
@@ -1916,16 +1934,6 @@ async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string, yuk
     }
   }
   return false;
-}
-
-// Okuma transaction'ının dışında koşar (ikili cevap). Dosya özetle adreslenir ve değişmez; okunurken silinirse akış kısa kalır ve uç
-// katmanı bağlantıyı keser.
-async function* dosyaDilimleri(db: Db, ozet: string, boyut: number): AsyncGenerator<Buffer> {
-  for (let bas = 0; bas < boyut; bas += DOSYA_PARCASI) {
-    const dilim = await sorgular.dosyaDilimi(db, ozet, bas, DOSYA_PARCASI);
-    if (dilim === null) return;
-    yield dilim;
-  }
 }
 
 async function merkezRoluGerekli(db: Db, kullanici: Kullanici): Promise<void> {
@@ -1945,8 +1953,8 @@ export async function merkezBelgeleri(db: Db, kullanici: Kullanici, ara: string 
   };
 }
 
-// Merkezdeki yayındaki dosya Arkon'un kendi dosya deposuna girer (yerel yüklemenin vardığı yer: arkon_dosya, özetle tekil). Dosya
-// merkeze geri gitmez. Aynı özet zaten varsa yeniden yazılmaz; paketin dosya kaydını ekran bu cevapla kurar.
+// Merkezdeki yayındaki dosya Arkon deposuna bağlanır; içerik ortak depoda zaten vardır, kopyalanmaz (kart #732). Özet kişiden değil
+// merkezin sunucu kodundan gelir: kişisiz bağlama budur (karar 732 a, DSb istisnası). Paketin dosya kaydını ekran bu cevapla kurar.
 export async function merkezdenDosyaEkle(db: Db, kullanici: Kullanici, belgeId: number): Promise<MerkezEkleCevabi> {
   await merkezRoluGerekli(db, kullanici);
   const kaynak = await yayindakiBelgeDosyasi(db, belgeId);
@@ -1954,21 +1962,10 @@ export async function merkezdenDosyaEkle(db: Db, kullanici: Kullanici, belgeId: 
   const tip = merkezDosyaTipi(kaynak.dosyaTuru);
   if (tip === null || !merkezTuruMu(kaynak.dosyaTuru)) throw gecersiz(ILETILER.merkezTur);
   if (kaynak.dosya.boyut > AZAMI_DOSYA) throw gecersiz(ILETILER.merkezBuyuk);
-  const parcalar: Buffer[] = [];
-  for await (const parca of kaynak.dosya.akis(db)) parcalar.push(parca);
-  const icerik = Buffer.concat(parcalar);
-  if (createHash('sha256').update(icerik).digest('hex') !== kaynak.ozet) throw gecersiz(ILETILER.merkezOzet);
-  // Kilit sırası parça yüklemesiyle aynı: depo, sonra özet.
-  await sorgular.depoKilitle(db);
-  await sorgular.ozetKilitle(db, kaynak.ozet);
-  if (!(await sorgular.dosyaVarMi(db, kaynak.ozet))) {
-    const kota = yuklemeKotasiHatasi({ kisiAdet: 0, kisiBayt: 0, depoBayt: await sorgular.depoBayti(db), yeniBayt: icerik.length });
-    if (kota === 'kotaDepo') throw cokIstek(ILETILER.kotaDepo);
-    await sorgular.dosyaEkle(db, kaynak.ozet, icerik, kullanici.id);
-  }
+  const bag = await DOSYALAR.kaynaktanBagla(db, { ozet: kaynak.ozet, kayit: DEPO_KAYDI, ad: kaynak.ozet, belgeTuru: null }, kullanici.id, DEPO_SINIRI);
   return {
     ozet: kaynak.ozet,
-    boyut: icerik.length,
+    boyut: bag.boyut,
     kayit: { kind: tip, name: merkezDosyaAdi(kaynak.ad, kaynak.dosyaTuru), merkez: belgeId, merkezOzet: kaynak.ozet },
   };
 }

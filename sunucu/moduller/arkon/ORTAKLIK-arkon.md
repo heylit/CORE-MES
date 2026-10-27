@@ -6,7 +6,7 @@ Kaynak: göçler `sunucu/gocler/*arkon*`, `arkon/shared/model.ts`, `sunucu/modul
 ## Tablolar
 - `arkon_belge`: `depo` (pkgs, results, requests, draws, downs, maint, gauges, logi, kv), `kimlik`, `govde` (jsonb), `surum`, `degistiren_id`, `degisti`.
 - `arkon_kayit` (yalnız eklenir): `tur` (events, counts, meas, calls, audit), `cid`, `zaman`, `makine`, `is_merkezi`, `emir_no`, `paket_id`, `madde_id`, `govde`, `kisi_id`.
-- `arkon_dosya` (`ozet`, `icerik`, `boyut`, `yukleyen_id`), `arkon_dosya_parcasi` (geçici), `arkon_ileti` (geçici).
+- `arkon_dosya_parcasi` (geçici), `arkon_ileti` (geçici). Dosya içeriği ortak `dosya` deposunda (`dosya_bagi` modul 'arkon', kayıt 'depo'; kart #732); `arkon_dosya` göçten sonra kullanılmaz.
 - `arkon_tmi_yansima`: `kayit_id`, `emir_id` (yabancı anahtarsız), `kisi_id`, `sonuc` (bekliyor, yazildi, reddedildi, eslenemedi, hatali), `neden`, `deneme`, `son_hata`, `son_deneme`, `zaman`.
 - `arkon_kuyruk_sirasi` (kart 527): `is_emri_id` (yabancı anahtarsız), `parca_no`, `istasyon_id`, `sira`, `surum`, `kisi_id`, `zaman`. İş sırası kavramı: canlı plan sırası plan modülünün, istasyon kuyruğu sırası Arkon'un.
 
@@ -31,7 +31,7 @@ Kaynak: göçler `sunucu/gocler/*arkon*`, `arkon/shared/model.ts`, `sunucu/modul
 | Ölçü aleti, kalibrasyon | no, tür, ad, aralık, yer, periyot, son tarih, durum, kalibrasyon kayıtları | `gauges` (okuma) | kalibrasyon modülünden okunur (`kalibrasyon/disari.ts` `aletlerVeKayitlari`, A7 #518); Arkon'dan yazılmaz, kayıtlı `gauges` satırları okunmaz |
 | Bakım | arıza (durum, neden, yapılan iş), periyodik plan, yapılan bakım | `arkon_belge` depo `maint` | kendi belgesi; TMI'de karşılığı yok |
 | Malzeme lojistiği | istek ve çıkış: kalem, miktar, durum | `arkon_belge` depo `logi` | kendi belgesi; kalem ve miktar metin |
-| Çizim, dosya | çizim belgesi; dosya içeriği | `arkon_belge` depo `draws`; `arkon_dosya` | kendi belgesi ve kendi dosya deposu |
+| Çizim, dosya | çizim belgesi; dosya içeriği | `arkon_belge` depo `draws`; ortak `dosya` | kendi belgesi; dosya ortak depoda |
 | Çağrı | ekip, aşama, not | `arkon_kayit` tur `calls` | kendi kaydı |
 | Denetim günlüğü | alan, eylem, hedef, ayrıntı | `arkon_kayit` tur `audit` (sunucu üretir) | kendi kaydı; çekirdek `denetim_kaydi` ayrı |
 | Belge no | paket no ve sıra; markalama seri sayacı | `pkgs.govde.no`, `.seq`; `results.govde.sr` | belge alanı; sunucuda sayaç yok |

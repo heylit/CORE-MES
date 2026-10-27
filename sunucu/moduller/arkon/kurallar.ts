@@ -653,6 +653,22 @@ const MERKEZ_DOSYA_UZANTISI = { pdf: 'pdf', step: 'step', stl: 'stl', iges: 'igs
 export type MerkezDosyaTuru = keyof typeof MERKEZ_DOSYA_UZANTISI;
 export const merkezTuruMu = (tur: string): tur is MerkezDosyaTuru => Object.hasOwn(MERKEZ_DOSYA_UZANTISI, tur);
 
+// Karar 732 a: dosyasız taslak, malzemeye bağlı ve yayında revizyonu olan, Arkon'un açabildiği belgeleri önerir (PDF teknik resim,
+// 3B model); önce teknik resimler. Dosyası olan taslak (şablondan gelmiş) öneri almaz. Hazırlık öneriyi merkezden alarak pakete koyar.
+export interface MalzemeCizimi { belgeId: number; ad: string; tip: 'pdf' | 'model' }
+export function malzemeCizimleri(
+  dosyalar: unknown, belgeler: readonly { id: number; ad: string; revizyonId: number | null; dosyaTuru: string | null; ozet: string | null }[],
+): MalzemeCizimi[] {
+  if (Array.isArray(dosyalar) && dosyalar.length > 0) return [];
+  const sonuc: MalzemeCizimi[] = [];
+  for (const b of belgeler) {
+    if (b.revizyonId === null || b.ozet === null || b.dosyaTuru === null) continue;
+    const tip = merkezDosyaTipi(b.dosyaTuru);
+    if (tip !== null) sonuc.push({ belgeId: b.id, ad: b.ad, tip });
+  }
+  return sonuc.sort((x, y) => (x.tip === y.tip ? x.belgeId - y.belgeId : x.tip === 'pdf' ? -1 : 1));
+}
+
 // Arkon dosyayı türüne göre ayırır: PDF teknik resim, öteki 3B model. Resim biçimleri Arkon'da paket dosyası değildir.
 export function merkezDosyaTipi(dosyaTuru: string): 'pdf' | 'model' | null {
   if (!merkezTuruMu(dosyaTuru)) return null;
