@@ -1015,7 +1015,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       assert.equal(await parcaSayisi(d.ozet), 1, 'kalitecinin şeridi temizlendi, amirinki duruyor');
       assert.deepEqual((await gonder('lead', d.ozet, 1, d.p1)).govde, { tamam: true });
       assert.equal(await parcaSayisi(d.ozet), 0);
-      const kimYazdi = await vt().tek<{ yukleyen_id: number }>('SELECT yukleyen_id FROM arkon_dosya WHERE ozet = $1', [d.ozet]);
+      const kimYazdi = await vt().tek<{ yukleyen_id: number }>('SELECT ilk_yukleyen_id AS yukleyen_id FROM dosya WHERE ozet = $1', [d.ozet]);
       assert.equal(kimYazdi?.yukleyen_id, kisiIdleri.quality);
       // Dosya hazırken yeni parça gönderen şeridini açmaz.
       assert.deepEqual((await gonder('prep', d.ozet, 0, d.p0)).govde, { tamam: true });
@@ -1051,7 +1051,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const ozetAl = () => yeni().ozet;
       const genis = { kisiAcikYukleme: 50, kisiAcikBayt: 1e12, depoBayt: 1e12 };
       const simdiki = async (): Promise<number> => (await vt().tek<{ b: number }>(
-        'SELECT (SELECT coalesce(sum(boyut), 0) FROM arkon_dosya)::float8 + (SELECT coalesce(sum(length(icerik)), 0) FROM arkon_dosya_parcasi)::float8 AS b'))?.b ?? 0;
+        'SELECT (SELECT coalesce(sum(boyut), 0) FROM dosya)::float8 + (SELECT coalesce(sum(length(icerik)), 0) FROM arkon_dosya_parcasi)::float8 AS b'))?.b ?? 0;
       // Temiz başlangıç: bu testin kullanacağı kişilerin açık yüklemeleri
       await vt().sorgu('DELETE FROM arkon_dosya_parcasi WHERE yukleyen_id = ANY($1)', [[kisiIdleri.plan, kisiIdleri.prep, kisiIdleri.maint]]);
       // DEPO: başkasının ve kendi eski yüklemesi varken depo dolu
@@ -1091,7 +1091,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const roller: ArkonRolu[] = ['plan', 'prep', 'maint', 'lead', 'quality'];
       const kisi = (rol: ArkonRolu) => ({ id: kisiIdleri[rol], ad: `Deneme k_${rol}`, islemler: [ROL_ISLEMI[rol]] as never });
       const simdiki = async (): Promise<number> => (await vt().tek<{ b: number }>(
-        'SELECT (SELECT coalesce(sum(boyut), 0) FROM arkon_dosya)::float8 + (SELECT coalesce(sum(length(icerik)), 0) FROM arkon_dosya_parcasi)::float8 AS b'))?.b ?? 0;
+        'SELECT (SELECT coalesce(sum(boyut), 0) FROM dosya)::float8 + (SELECT coalesce(sum(length(icerik)), 0) FROM arkon_dosya_parcasi)::float8 AS b'))?.b ?? 0;
       for (let tur = 0; tur < 5; tur += 1) {
         await vt().sorgu('DELETE FROM arkon_dosya_parcasi WHERE yukleyen_id = ANY($1)', [roller.map((r) => kisiIdleri[r])]);
         const taban = await simdiki();
@@ -1887,7 +1887,10 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const dosyaKoy = async (metin: string): Promise<{ ozet: string; icerik: Buffer }> => {
         const icerik = Buffer.from(metin.repeat(50));
         const ozet = createHash('sha256').update(icerik).digest('hex');
-        await vt().sorgu('INSERT INTO arkon_dosya (ozet, icerik, boyut, yukleyen_id) VALUES ($1, $2, $3, $4)', [ozet, icerik, icerik.length, kisiIdleri.admin]);
+        await vt().sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id, bagsiz_zaman) VALUES ($1, $2, 'ikili', $3, NULL)", [ozet, icerik.length, kisiIdleri.admin]);
+        await vt().sorgu('INSERT INTO dosya_icerigi (ozet, sira, icerik) VALUES ($1, 0, $2)', [ozet, icerik]);
+        await vt().sorgu('INSERT INTO dosya_yukleyeni (ozet, kisi_id) VALUES ($1, $2)', [ozet, kisiIdleri.admin]);
+        await vt().sorgu("INSERT INTO dosya_bagi (ozet, modul, kayit, ad, ekleyen_id) VALUES ($1, 'arkon', 'depo', $1, $2)", [ozet, kisiIdleri.admin]);
         return { ozet, icerik };
       };
       const indir = async (cerez: string, ozet: string) => {

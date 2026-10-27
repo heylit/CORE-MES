@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaNumuneKarari, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -1056,4 +1056,17 @@ test('dosya türü ilk baytlardan bulunur; tanınmayan, kısa ve boş içerik t�
   assert.equal(dosyaTuruBul(b('glTF\x02\x00\x00\x00')), 'model/gltf-binary');
   assert.equal(dosyaTuruBul(b('ISO-10303-21;\nHEADER;')), 'model/step');
   for (const m of ['', '%PD', 'RIFF\x00\x00\x00\x00WAVE', 'solid parca', 'S      1', ' %PDF-1.7']) assert.equal(dosyaTuruBul(b(m)), 'application/octet-stream', JSON.stringify(m));
+});
+
+test('karar 732 a: dosyasız taslak malzemenin yayında, Arkon\'un açtığı belgelerini önerir; önce teknik resim', () => {
+  const belge = (id: number, dosyaTuru: string | null, ek: { revizyonId?: number | null; ozet?: string | null } = {}) => ({
+    id, ad: `Belge ${String(id)}`, revizyonId: ek.revizyonId === undefined ? id * 10 : ek.revizyonId, dosyaTuru, ozet: ek.ozet === undefined ? 'a'.repeat(64) : ek.ozet,
+  });
+  const belgeler = [belge(4, 'step'), belge(2, 'pdf'), belge(3, 'png'), belge(5, 'pdf', { revizyonId: null }), belge(6, 'stl', { ozet: null }), belge(7, null), belge(1, 'pdf')];
+  assert.deepEqual(malzemeCizimleri([], belgeler), [
+    { belgeId: 1, ad: 'Belge 1', tip: 'pdf' }, { belgeId: 2, ad: 'Belge 2', tip: 'pdf' }, { belgeId: 4, ad: 'Belge 4', tip: 'model' },
+  ]);
+  assert.deepEqual(malzemeCizimleri(undefined, belgeler).length, 3, 'dosya alanı olmayan taslak da öneri alır');
+  assert.deepEqual(malzemeCizimleri([{ kind: 'pdf', name: 'x.pdf' }], belgeler), [], 'dosyası olan taslak öneri almaz');
+  assert.deepEqual(malzemeCizimleri([], []), []);
 });

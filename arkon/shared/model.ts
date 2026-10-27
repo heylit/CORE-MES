@@ -63,6 +63,8 @@ export interface Pkg {
   /** rotalı TMI emrinin iş emri paketinde bağ (sunucu yazar) */ tmi?: { emirId: number; isEmriId: number; opNo: number; /** kol adımı: rework, tamir ya da ek (rota adımında yok) */ tur?: string; ekAciklama?: string; plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: { tur: 'makine' | 'kisi'; id: number } | null } };
   /** ara onay kararı (Terminal kural 1/5); by, at ve once sunucudan */ fpRe?: { on: boolean; key: string; why: 'red' | 'revizyon' | 'degisiklik'; by?: string; at?: Ms; once?: string[] } | null;
   /** son yayındaki içerik imzası (arkon/web/src/data/ara-onay.ts) */ yayinImza?: Record<string, string> | null;
+  /** karar 732 a: kayıtsız TMI taslağına malzemenin Çizimler'deki yayında belgeleri (sunucu önerir, Hazırlık merkezden alır) */
+  malzemeCizimleri?: { belgeId: number; ad: string; tip: 'pdf' | 'model' }[];
   imported?: Ms; from?: string; [k: string]: unknown;
 }
 

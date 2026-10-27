@@ -679,7 +679,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       assert.equal((await indir(yonetici, sha(yayinda))).icerik.equals(yayinda), true, 'Arkon deposundaki içerik merkezdekiyle aynı');
       // Aynı dosya ikinci kez alınınca depoda tek kayıt kalır.
       assert.equal((await istek(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${pdfId}/ekle`)).durum, 200);
-      assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_dosya WHERE ozet = $1', [sha(yayinda)]))?.n, 1);
+      assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM dosya_bagi WHERE modul = 'arkon' AND kayit = 'depo' AND ozet = $1", [sha(yayinda)]))?.n, 1);
       const modelEkle = await istek<MerkezEkleCevabi>(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${modelId}/ekle`);
       assert.equal(modelEkle.govde.kayit.kind, 'model');
       // Arkon'dan yüklenen dosya merkeze gitmez: merkez belge listesi değişmez.
@@ -702,14 +702,14 @@ describe('arkon (gerçek PostgreSQL)', () => {
       }
       const r = await istek(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${resim}/ekle`);
       assert.equal(r.durum, 422, JSON.stringify(r.govde));
-      assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_dosya WHERE ozet = $1', [sha(png('resim-b'))]))?.n, 0);
+      assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM dosya_bagi WHERE modul = 'arkon' AND kayit = 'depo' AND ozet = $1", [sha(png('resim-b'))]))?.n, 0);
 
       const acik = await belgeAc('Rol Denemesi', pdf('rol'), 'rol.pdf', true);
       // Operatör Arkon rolüdür ama paket düzenlemez; rolsüz kişi Arkon'a hiç giremez.
       assert.equal((await istek(operator, 'GET', '/arkon/cizim-merkezi/belgeler')).durum, 403);
       assert.equal((await istek(operator, 'POST', `/arkon/cizim-merkezi/belgeler/${acik}/ekle`)).durum, 403);
       assert.equal((await istek(rolsuz, 'GET', '/arkon/cizim-merkezi/belgeler')).durum, 403);
-      assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_dosya WHERE ozet = $1', [sha(pdf('rol'))]))?.n, 0);
+      assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM dosya_bagi WHERE modul = 'arkon' AND kayit = 'depo' AND ozet = $1", [sha(pdf('rol'))]))?.n, 0);
     });
 
     test('merkezde yeni revizyon yayınlanınca kontrol "yeni-revizyon" der; yeniden alınca aynı kayıt güncel olur; yayından kalkan belge ayrı bildirilir', async () => {

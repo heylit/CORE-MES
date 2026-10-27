@@ -899,3 +899,22 @@ Bu tur şunları varsaydı:
 1. Sunucuya ulaşılamayan açılışta son bilinen kip geçerlidir: ortak terminal ağ kesintisinde dosyalarını silmez; iptal edilen ortak cihaz sunucuya ilk ulaştığında siler.
 2. Açık sekmede kişisel cihaz sonradan ortak yapılırsa sayfa yenilenene kadar bellekte kalır (güvenli yön).
 3. Ekran önbelleği (`cache`: PDF görüntüsü, 3B ağı) dosyadan türediği için kişiye ait sayılmadı ve ortak cihazda kalır.
+
+## Arkon dosyaları ortak depoda; malzeme çizimi pakete kendiliğinden (kart #732; kararlar 732 a, 740 a, 743 a)
+- Dosya deposu ortak `dosya` modülüdür (`dosya/disari.ts modulDeposuTutamagi('arkon')`). Tamamlanan yükleme `icerikYaz` ile yazılır ve
+  `dosya_bagi('arkon', 'depo')` ile bağlanır; imzası olmayan Arkon blobu (ör. 3B ağ dizisi) `ikili` türüyle saklanır. Yükleme şeridi
+  (`arkon_dosya_parcasi`), kotalar ve uç sözleşmeleri değişmedi; depo toplamı ortak depo ile açık Arkon parçalarının toplamıdır.
+- Okuma kuralı aynı: yükleyen ya da dosyayı anan belgeyi okuyabilen. Yükleyen bilgisi `dosya_yukleyeni`'den.
+- Çizim Merkezi'nden alma içeriği kopyalamaz: Çizimler'de bağlı dosyayı `kaynaktanBagla` ile Arkon deposuna bağlar (DSb istisnası, ADR 0009 ek).
+- Göç `20261027060100_arkon_dosya_ortak_depo.sql`: `arkon_dosya` satırları `dosya`, `dosya_icerigi` (512 KB parça), `dosya_yukleyeni` ve
+  `dosya_bagi`'na taşınır; tür ilk baytlardan, tanınmayan `ikili`. `arkon_dosya` bu göçte düşürülmez (UYUM-BORCU).
+- Kayıtsız TMI taslağı (`tmi-ue-`, `tmi-ie-`) dosyasızsa malzemenin Çizimler'de yayında revizyonu olan PDF ve 3B model belgelerini
+  `malzemeCizimleri` alanında önerir (`kurallar.ts malzemeCizimleri`; önce teknik resim). Okuma ucu yazmaz; bağ Hazırlık'ın merkezden alma
+  çağrısıyla kurulur. Hazırlık dosyasız TMI taslağını açınca öneriyi bir kez, düzenleme yetkisi varsa kendiliğinden alır; öneri pakete yazılmaz.
+- Testler: `ortak-depo-goc.test.ts` (üç), `kurallar.test.ts` (bir), `yansima.test.ts` "732 a", `Hazirlik.test.tsx` (iki); `arkon.test.ts` ve
+  `guvenlik.test.ts` depo sorguları ortak tablolara çevrildi.
+
+Bu tur şunları varsaydı:
+1. Bütün Arkon dosyaları tek kayda ('depo') bağlanır; belge başına bağ yoktur, okuma kuralı belge taramasıyla kalır.
+2. Öneri yalnız dosyası olmayan kayıtsız taslağa gelir; şablondan dosya almış ya da kaydedilmiş paket değişmez.
+3. Kendiliğinden alma yalnız `pkg.edit` yetkisi olan kişide çalışır; yetkisizde istek gitmez.
