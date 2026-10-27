@@ -125,6 +125,25 @@ describe('Okutma sonucu', () => {
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')?.govde).toMatchObject({ malzemeId: 901, kaynakKonumId: 3, partiId: 4 }));
   });
 
+  it('897 b: kabul alanındaki lot okutulunca "Kabulde" ve rafa kaldırılmamış miktar görünür; raftaki lotta görünmez', async () => {
+    const kabul = { konumId: 5, kod: 'KABUL', ad: 'Mal kabul', tur: 'kabul', istasyonId: null, partiId: 4, partiEtiketi: 'LT-000123', statuId: null, miktar: '3.000' } as const;
+    const raf = { ...kabul, konumId: 3, kod: 'A-01-02', ad: null, tur: 'raf_gozu' } as const;
+    const lot = (yer: typeof kabul | typeof raf) => PANEL_MLZ('hammadde', { parti: { id: 4, etiket: 'LT-000123', uretimEmriId: null }, yerler: [yer], stok: stokCozumu(LOT) });
+    ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'LOT:LT-000123': lot(kabul) }) });
+    const panel = await panelAc();
+    await okut(panel, 'LOT:LT-000123');
+    const sonuc = await within(panel).findByRole('region', { name: 'Okutma sonucu' });
+    expect(await within(sonuc).findByText('Kabulde')).toBeTruthy();
+    expect(within(sonuc).getByText(/Rafa kaldırılmadı: Mal kabul 3\. Rafa kaldırmak için depo sepetine ekle\./)).toBeTruthy();
+    cleanup();
+    ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'LOT:LT-000124': lot(raf) }) });
+    const ikinci = await panelAc();
+    await okut(ikinci, 'LOT:LT-000124');
+    const rafta = await within(ikinci).findByRole('region', { name: 'Okutma sonucu' });
+    expect(within(rafta).queryByText('Kabulde')).toBeNull();
+    expect(within(rafta).queryByText(/Rafa kaldırılmadı/)).toBeNull();
+  });
+
   it('614 1a tek kart: refakat kartında ana eylem tek düğmedir, akış başlamaz; öteki işler Başka işlem altındadır', async () => {
     const refakat = {
       id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'SR-001', malzemeAd: 'Eldiven', birim: 'adet',

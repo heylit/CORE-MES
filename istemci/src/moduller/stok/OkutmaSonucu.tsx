@@ -135,6 +135,9 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
   // Tek kart (614 1a): refakat kartında ana eylem tek düğmedir; öteki işler ve kartın satırları "Başka işlem" altında kalır.
   const anaEylem = refakat ? malzeme?.anaEylem ?? null : null;
   const tekKart = anaEylem !== null;
+  // Lot etiketi tektir ve "kabulde" basılmaz; rafa kalkınca yanlış kalırdı (897 b). Kabul alanındaki miktar okutunca görünür.
+  const parti = malzeme?.parti ?? null;
+  const kabulde = malzeme && parti ? malzeme.yerler.filter((y) => y.tur === 'kabul' && y.partiId === parti.id) : [];
   return (
     <section className="tc-stok-is tc-stok-okut-sonuc" aria-label="Okutma sonucu">
       <div className="tc-stok-form">
@@ -142,8 +145,14 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           <Rozet ton={malzeme ? 'tamam' : 'bilgi'}>{malzeme ? (refakat ? 'Refakat kartı' : malzeme.parti ? 'Lot' : 'Malzeme') : KONUM_ETIKETI[c.tur === 'yer' ? c.yer.tur : 'raf_gozu']}</Rozet>
           <strong>{baslik}</strong>
           {malzeme?.parti && <span className="tc-stok-mono">{malzeme.parti.etiket}</span>}
+          {kabulde.length > 0 && <Rozet ton="uyari">Kabulde</Rozet>}
           <Dugme simge="x" aria-label="Okutma sonucunu kapat" onClick={kapat} />
         </div>
+        {kabulde.length > 0 && (
+          <p className="tc-stok-bilgi tc-stok-bilgi-uyari">
+            Rafa kaldırılmadı: {kabulde.map((y) => `${y.ad ?? y.kod} ${miktarMetni(y.miktar)}`).join(', ')}.{depocu && stokCevabi ? ' Rafa kaldırmak için depo sepetine ekle.' : ''}
+          </p>
+        )}
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
         {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
         {refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
