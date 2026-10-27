@@ -43,6 +43,9 @@ export const ILETILER = {
   lotKarariTutmadi: 'Bulunan kusurlu sayıları AQL planına göre başka karar veriyor; sayıları ya da kararı düzeltin.',
   lotPaketi: 'Lot kararı yalnız kalite istasyonundaki TMI iş emri paketinde verilir.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
+  ilkParcaKmde: 'İlk parça kararı Kalite Merkezi\'nde verilir.',
+  kmNumuneYok: 'Bu numune Kalite Merkezi\'ne bağlı değil: ölçüm buradan girilmez.',
+  numuneYok: 'Numune isteği bulunamadı.',
   kayitRolYetmez: 'Rolünüz bu kayıt türünü ya da kaynağı yazamaz.',
   olcumKaynagi: 'Ölçüm kaynağı tanınmıyor.',
   isEmriYok: 'Bu paketin TMI iş emri açık değil.',
@@ -848,9 +851,11 @@ export function belgeBicimiHatasi(depo: ArkonDeposu, govde: unknown, kimlik = ''
 // İlk parça reddi makineyi durdurur ve operatöre gerekçesiyle gösterilir: ölçüsüz ve gerekçesiz ret kabul edilmez (ekran: arkon/web/src/data/numune.ts).
 export const NUMUNE_REDDI_OLCUSUZ = 'Numune reddi için en az bir ölçü girilmeli.';
 export const NUMUNE_REDDI_GEREKCESIZ = 'Numune reddi için gerekçe yazılmalı.';
+// 798: Kalite Merkezi numunesinin ölçüsü oradadır; ölçüsüz reddi Kalite Merkezi'nin kararı reddeder.
 function numuneReddiEksigi(govde: Readonly<Record<string, unknown>>): BicimHatasi | null {
   const sonuclar = govde['results'];
-  if (!kayitMi(sonuclar) || Object.keys(sonuclar).length === 0) return { ileti: NUMUNE_REDDI_OLCUSUZ, alan: 'govde.results' };
+  const kmde = typeof govde['kmNumune'] === 'number';
+  if (!kmde && (!kayitMi(sonuclar) || Object.keys(sonuclar).length === 0)) return { ileti: NUMUNE_REDDI_OLCUSUZ, alan: 'govde.results' };
   const not = govde['note'];
   return typeof not === 'string' && not.trim() !== '' ? null : { ileti: NUMUNE_REDDI_GEREKCESIZ, alan: 'govde.note' };
 }
@@ -1185,7 +1190,7 @@ export function kisiAlanlariniDoldur(depo: ArkonDeposu, kimlik: string, onceki: 
 export interface GunlukSatiri { area: string; action: string; target: string; detail: string | null }
 
 const gunlukMetin = (d: unknown): string => (typeof d === 'string' || typeof d === 'number' ? String(d) : '');
-const alanOku = (govde: unknown, ad: string): unknown => (kayitMi(govde) ? govde[ad] : undefined);
+export const alanOku = (govde: unknown, ad: string): unknown => (kayitMi(govde) ? govde[ad] : undefined);
 const iceri = (govde: unknown, ad: string, alt: string): unknown => alanOku(alanOku(govde, ad), alt);
 const bos = (s: string): string | null => (s === '' ? null : s);
 // jsonb anahtar sırasını değiştirir: karşılaştırma anahtar sırasından bağımsız olmalı.
@@ -1906,17 +1911,114 @@ export function ilkParcaOlculeri(paket: unknown): IlkParcaOlcusu[] {
 }
 
 const KARAR_DURUMLARI: ReadonlySet<unknown> = new Set(['approved', 'deviation', 'rejected']);
+const ACIK_ISTEK_DURUMLARI: ReadonlySet<unknown> = new Set(['waiting', 'measuring']);
+const KM_KARARLARI = { approved: 'onay', rejected: 'ret', deviation: 'sapma' } as const;
+const ARKON_DURUMLARI = { onay: 'approved', ret: 'rejected', sapma: 'deviation' } as const;
+const KM_NEDEN_UZUNLUGU = 80;
 
-// 564 5 a: kalitenin terminaldeki (ya da Arkon Kalite sayfasındaki) Kabul/Red'i, istek ilk parça kapısındaki kalite ölçüsünü taşıyorsa
-// Kalite Merkezi'nin ilk parça kararıdır; ayrıca Kalite Merkezi'nde karar verilmez. Sapma izniyle onay da onaydır. Yalnız durum
-// değişince karar doğar: aynı kararın yeniden yazılması ikinci karar değildir, kararın değişmesi (ret sonra onay) yeni karardır.
-export function ilkParcaNumuneKarari(istek: unknown, onceki: unknown, paket: unknown): 'onay' | 'ret' | null {
+// 798: numune isteği Kalite Merkezi'nin numunesidir (tek kayıt). İstenen ölçünün plan maddesi Kalite Merkezi balonuna bağlıysa (795 a,
+// `kmBalon`) numune o balonlarla açılır; bağsız madde Arkon'da kalır (796 a: istek yine yazılır, `uyari` döner). Planında hiç bağ olmayan
+// (Kalite Merkezi'nden alınmamış) pakette numune açılmaz ve uyarı yoktur. İstek ilk parça kapısındaki kalite ölçüsünü taşıyorsa ilk parça
+// numunesidir: kararı yalnız Kalite Merkezi'ndedir (789-2a), terminal Kabul/Red göstermez.
+export interface KmNumuneGirdisi { opNo: number; balonlar: number[]; neden: string; parcaSayisi: number | null }
+export interface IstekKmPlani { ilkParca: boolean; km: KmNumuneGirdisi | null; uyari: string | null }
+
+export function istekKmPlani(istek: unknown, paket: unknown): IstekKmPlani {
+  const olculer = alanOku(istek, 'items');
+  const istenen = new Set(Array.isArray(olculer) ? olculer.map(String) : []);
+  const kapi = ilkParcaOlculeri(paket).filter((o) => o.olcen === 'q').map((o) => o.id);
+  const ilkParca = kapi.some((id) => istenen.has(id));
+  const plan = kayitMi(paket) && Array.isArray(paket['plan']) ? paket['plan'].filter(kayitMi) : [];
+  const bagli = plan.filter((b) => pozitifTamSayi(b['kmBalon']));
+  if (bagli.length === 0) return { ilkParca, km: null, uyari: null };
+  const balonlar = [...new Set(bagli.filter((b) => istenen.has(String(b['id']))).map((b) => b['kmBalon'] as number))];
+  const opNo = alanOku(alanOku(paket, 'tmi'), 'opNo');
+  const bagsiz = plan.filter((b) => istenen.has(String(b['id'])) && !pozitifTamSayi(b['kmBalon'])).length;
+  if (!pozitifTamSayi(opNo) || balonlar.length === 0) return { ilkParca, km: null, uyari: KM_UYARILARI.numuneAcilmadi };
+  const neden = typeof alanOku(istek, 'reason') === 'string' && (alanOku(istek, 'reason') as string).trim() !== '' ? (alanOku(istek, 'reason') as string).trim() : 'Numune';
+  const sayim = alanOku(istek, 'cnt');
+  return {
+    ilkParca,
+    km: { opNo, balonlar, neden: neden.slice(0, KM_NEDEN_UZUNLUGU), parcaSayisi: typeof sayim === 'number' && Number.isSafeInteger(sayim) && sayim >= 0 ? sayim : null },
+    uyari: bagsiz > 0 ? KM_UYARILARI.bagsizOlcu(bagsiz) : null,
+  };
+}
+
+const pozitifTamSayi = (d: unknown): d is number => typeof d === 'number' && Number.isSafeInteger(d) && d > 0;
+
+export const KM_UYARILARI = {
+  numuneAcilmadi: 'Numune Kalite Merkezi\'ne açılamadı: ölçüler Arkon\'da kaldı.',
+  bagsizOlcu: (n: number) => `${String(n)} ölçünün Kalite Merkezi balonu yok: Arkon'da kaldı.`,
+  olcumYazilmadi: (neden: string) => `Ölçüm Kalite Merkezi'ne yazılamadı (${neden}): Arkon'da kaldı.`,
+} as const;
+
+// İsteğin kararı: durum karara girince ya da kararın kendisi değişince (ret sonra onay) doğar; aynı kararın yeniden yazılması karar değildir.
+// Kalite Merkezi numunesi olan istekte ikinci karar Kalite Merkezi'nin "karar var" reddiyle döner (ilk gelen geçerli).
+export function istekKarari(istek: unknown, onceki: unknown): 'onay' | 'ret' | 'sapma' | null {
   const durum = alanOku(istek, 'status');
   if (!KARAR_DURUMLARI.has(durum) || durum === alanOku(onceki, 'status')) return null;
-  const kapi = new Set(ilkParcaOlculeri(paket).filter((o) => o.olcen === 'q').map((o) => o.id));
-  const olculer = alanOku(istek, 'items');
-  if (!Array.isArray(olculer) || !olculer.some((id) => kapi.has(String(id)))) return null;
-  return durum === 'rejected' ? 'ret' : 'onay';
+  return KM_KARARLARI[durum as keyof typeof KM_KARARLARI];
+}
+
+export const acikIstekMi = (istek: unknown): boolean => ACIK_ISTEK_DURUMLARI.has(alanOku(istek, 'status'));
+
+// Kalite Merkezi'nde verilen karar Arkon isteğine aynalanır: terminal bekleyen numunesini kapatır, operatöre sonuç gider. İlk parça
+// numunesinde karar Kalite Merkezi'nin ilk parça kararıdır (kapının kaynağı), istekten sonra verilmiş olmalı; numunenin kendi kararı da sayılır.
+// Ölçülen balon sayısı (`kmOlculen`) Kalite Merkezi'nde girilen ölçüyle de güncellenir.
+export interface KmAynaGirdisi {
+  numune: { karar: { karar: 'onay' | 'ret' | 'sapma'; not: string | null; kisi: string | null; zaman: string } | null; olculen: number } | null;
+  ilkParcaKarari: { karar: 'onay' | 'ret'; zaman: string } | null;
+}
+export function kmKarariniAynala(istek: unknown, g: KmAynaGirdisi): Record<string, unknown> | null {
+  if (!kayitMi(istek) || !acikIstekMi(istek)) return null;
+  const istendi = typeof istek['at'] === 'number' ? istek['at'] : 0;
+  const fai = istek['ilkParca'] === true && g.ilkParcaKarari !== null && Date.parse(g.ilkParcaKarari.zaman) >= istendi ? g.ilkParcaKarari : null;
+  const karar = g.numune?.karar ?? (fai === null ? null : { karar: fai.karar, not: null, kisi: null, zaman: fai.zaman });
+  const olculen = g.numune?.olculen;
+  const yeniOlculen = olculen !== undefined && olculen !== istek['kmOlculen'];
+  if (karar === null) {
+    if (!yeniOlculen) return null;
+    return { ...istek, kmOlculen: olculen, ...(olculen > 0 && istek['status'] === 'waiting' ? { status: 'measuring' } : {}) };
+  }
+  return {
+    ...istek, ...(olculen === undefined ? {} : { kmOlculen: olculen }),
+    status: ARKON_DURUMLARI[karar.karar], decidedAt: Date.parse(karar.zaman), decidedBy: karar.kisi ?? '', note: karar.not ?? '',
+  };
+}
+
+// 798, 796 a: tezgah ölçümü (sonuç belgesi `meas`) Kalite Merkezi'nin ölçüm kaydına da yazılır. Yalnız değişen ölçü gider; plan maddesi
+// balona bağlı olmalı (`kmBalon`). Mastar maddesi (`gauge`) geçer/geçmez, öteki sayı gider; sayı olmayan değer bağsız sayılır. Aynı
+// parça sayımındaki ölçüler bir yazımdır.
+export interface KmOlcumGrubu { parcaSayisi: number | null; olcumler: ({ balonId: number; deger: string } | { balonId: number; nitel: 'gecer' | 'gecmez' })[] }
+export function kmOlcumGruplari(paket: unknown, olculer: unknown, onceki: unknown): { gruplar: KmOlcumGrubu[]; bagsiz: number } {
+  const plan = kayitMi(paket) && Array.isArray(paket['plan']) ? paket['plan'].filter(kayitMi) : [];
+  if (!plan.some((b) => pozitifTamSayi(b['kmBalon'])) || !kayitMi(olculer)) return { gruplar: [], bagsiz: 0 };
+  const maddeler = new Map(plan.map((b) => [String(b['id']), b]));
+  const gruplar = new Map<number | null, KmOlcumGrubu>();
+  let bagsiz = 0;
+  for (const [id, m] of Object.entries(olculer)) {
+    if (!kayitMi(m) || kanonik(disindaKalanlar(m, ['by'])) === kanonik(disindaKalanlar(alanOku(onceki, id), ['by']))) continue;
+    const madde = maddeler.get(id);
+    const balonId = madde?.['kmBalon'];
+    const v = m['v'];
+    const satir = !pozitifTamSayi(balonId) ? null
+      : madde?.['gauge'] === true ? { balonId, nitel: m['ok'] === true ? 'gecer' as const : 'gecmez' as const }
+        : typeof v === 'number' && Number.isFinite(v) ? { balonId, deger: String(Number(v.toFixed(6))) } : null;
+    if (satir === null) { if (v !== undefined && v !== null && v !== '') bagsiz++; continue; }
+    const cnt = typeof m['cnt'] === 'number' && Number.isSafeInteger(m['cnt']) && m['cnt'] >= 0 ? m['cnt'] : null;
+    const grup = gruplar.get(cnt) ?? { parcaSayisi: cnt, olcumler: [] };
+    grup.olcumler.push(satir);
+    gruplar.set(cnt, grup);
+  }
+  return { gruplar: [...gruplar.values()], bagsiz };
+}
+
+// Uyarı yalnız sunucudandır: bu yazımda Kalite Merkezi'ne gidilmediyse (`undefined`) kayıtlı uyarı kalır, gidildiyse yenisi yazılır ya da kalkar.
+export function kmUyarisiniYaz(govde: unknown, onceki: unknown, uyari: string | null | undefined): unknown {
+  if (!kayitMi(govde)) return govde;
+  const gerisi = disindaKalanlar(govde, ['kmUyari']) as Record<string, unknown>;
+  const son = uyari === undefined ? alanOku(onceki, 'kmUyari') : uyari;
+  return typeof son === 'string' ? { ...gerisi, kmUyari: son } : gerisi;
 }
 
 // Terminal kural 1/5 (kullanıcı kararı): son numune RED, revizyon ya da paket içeriği (plan, adım, doküman, süre) değiştiyse yeniden başlatmada
@@ -2033,12 +2135,13 @@ export function numuneTeslimGirdisi(kimlik: string, govde: unknown, onceki: unkn
 
 // Teslim bağını yalnız sunucu yazar: istemcinin gönderdiği `numuneTeslim` yok sayılır, kayıtlı bağ sonraki yazımlarda (kalite kararı) korunur.
 // 564 1 b: numunenin gönderildiği kalite istasyonu (`kaliteIstasyonu`, kod) da yalnız sunucudandır; kalite istasyonu terminali bununla listeler.
+// 798: Kalite Merkezi bağı (`kmNumune`, `ilkParca`, `kmOlculen`, `kmUyari`) da yalnız sunucudandır.
+const ISTEGIN_SUNUCU_ALANLARI = ['numuneTeslim', 'kaliteIstasyonu', 'kmNumune', 'ilkParca', 'kmOlculen', 'kmUyari'] as const;
 export function numuneTesliminiKoru(govde: unknown, onceki: unknown): unknown {
   if (!kayitMi(govde)) return govde;
-  const { numuneTeslim: _istemcinin, kaliteIstasyonu: _istemcininIstasyonu, ...gerisi } = govde;
-  const kayitli = alanOku(onceki, 'numuneTeslim');
-  const istasyon = alanOku(onceki, 'kaliteIstasyonu');
-  return { ...gerisi, ...(kayitli === undefined ? {} : { numuneTeslim: kayitli }), ...(istasyon === undefined ? {} : { kaliteIstasyonu: istasyon }) };
+  const gerisi = disindaKalanlar(govde, ISTEGIN_SUNUCU_ALANLARI) as Record<string, unknown>;
+  const kayitli = Object.fromEntries(ISTEGIN_SUNUCU_ALANLARI.flatMap((a) => (alanOku(onceki, a) === undefined ? [] : [[a, alanOku(onceki, a)]])));
+  return { ...gerisi, ...kayitli };
 }
 
 // 564 1 b: numunenin gideceği kalite istasyonu, emrin bu adımdan sonraki ilk kalite tipli adımının istasyonudur; yoksa null.

@@ -22,7 +22,8 @@ import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
-import { adimIlkParcaKararlari, ilkParcaKarari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner } from '../kalite-merkezi/disari.ts';
+import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, numuneIste, numuneKarari, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
+import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
@@ -56,7 +57,7 @@ import {
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
-  icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
@@ -736,7 +737,8 @@ export async function belgeYaz(
     if (teslim.teslim !== null) govde = { ...(govde as object), numuneTeslim: teslim.teslim };
   }
   if (depo === 'results') govde = await lotKarariniYaz(db, kullanici, rol, kimlik, govde, guncel?.govde);
-  if (depo === 'requests') await ilkParcaKarariniYaz(db, kullanici, govde, guncel?.govde);
+  if (depo === 'results') govde = await tezgahOlcumunuKmyeYaz(db, kullanici, rol, kimlik, govde, guncel?.govde);
+  if (depo === 'requests') govde = await istegiKmyeBagla(db, kullanici, govde, guncel?.govde);
   await sorgular.belgeYaz(db, depo, kimlik, govde, surum, kullanici.id);
   await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: depo, id: kimlik });
   await arizayiMakineyeYansit(db, kullanici, depo, kimlik, govde, guncel?.govde);
@@ -1605,15 +1607,115 @@ async function istekPaketi(db: Db, istek: unknown): Promise<unknown> {
   return typeof paketId === 'string' && paketId !== '' ? (await belgeBul(db, 'pkgs', paketId))?.govde : undefined;
 }
 
-// 564 5 a: ilk parça numunesinin Kabul/Red'i Kalite Merkezi'nin ilk parça kararı olarak aynı işlemde yazılır; kapı (ilkParcaKapisi) ve
-// karar bekleyen sayım oradan kapanır. Emri olmayan paketin kararı olamaz. Kararı vereni belgeRoluReddi kalite ve yöneticiyle sınırlar.
-async function ilkParcaKarariniYaz(db: Db, kullanici: Kullanici, istek: unknown, onceki: unknown): Promise<void> {
-  const karar = ilkParcaNumuneKarari(istek, onceki, await istekPaketi(db, istek));
-  if (karar === null) return;
-  const paketId = (istek as Record<string, unknown>)['pkgId'];
-  const emirId = await paketinUretimEmri(db, paketId);
-  // 744 a: iş emri paketinin kararı o adımındır.
-  if (emirId !== null) await ilkParcaKarari(db, kullanici.id, emirId, karar, paketIsEmri(paketId));
+// 798: numune isteği Kalite Merkezi'nin numunesidir. Yeni (açık) istekte numune aynı işlemde açılır, bağı (`kmNumune`) ve ilk parça damgası
+// isteğe yazılır; açılamazsa (bağsız plan, emir yok, Kalite Merkezi reddi) istek yine yazılır, nedeni `kmUyari`'dadır (796 a). Karar:
+// ilk parça numunesinde Arkon kararı reddedilir (789-2a, karar Kalite Merkezi'nin ilk parça kararıdır); öteki numunede karar Kalite
+// Merkezi'ne yazılır, onun reddi (ikinci karar, ölçümsüz ret) yazımı durdurur. Kararı vereni belgeRoluReddi kalite ve yöneticiyle sınırlar.
+async function istegiKmyeBagla(db: Db, kullanici: Kullanici, istek: unknown, onceki: unknown): Promise<unknown> {
+  if (onceki === undefined) {
+    const plan = istekKmPlani(istek, await istekPaketi(db, istek));
+    if (plan.ilkParca && istekKarari(istek, undefined) !== null) throw yetkiYok(ILETILER.ilkParcaKmde);
+    let govde: unknown = plan.ilkParca ? { ...(istek as object), ilkParca: true } : istek;
+    // Kararlı açılan istek (eski kayıt biçimi) Kalite Merkezi numunesi açmaz.
+    if (plan.km === null || !acikIstekMi(istek)) return kmUyarisiniYaz(govde, onceki, plan.km === null ? plan.uyari : null);
+    const emirId = await paketinUretimEmri(db, (istek as Record<string, unknown>)['pkgId']);
+    if (emirId === null) return kmUyarisiniYaz(govde, onceki, KM_UYARILARI.numuneAcilmadi);
+    const km = plan.km;
+    const acilan = await kayitNoktasi(db, () => numuneIste(db, kullanici.id, {
+      uretimEmriId: emirId, opNo: km.opNo, balonlar: km.balonlar, neden: km.neden, ...(km.parcaSayisi === null ? {} : { parcaSayisi: km.parcaSayisi }),
+    }));
+    if (!acilan.tamam) return kmUyarisiniYaz(govde, onceki, `${KM_UYARILARI.numuneAcilmadi} ${acilan.hata.message}`);
+    govde = { ...(govde as object), kmNumune: acilan.deger.id, kmOlculen: 0 };
+    return kmUyarisiniYaz(govde, onceki, plan.uyari);
+  }
+  const karar = istekKarari(istek, onceki);
+  if (karar === null) return istek;
+  if (alanOku(onceki, 'ilkParca') === true) throw yetkiYok(ILETILER.ilkParcaKmde);
+  const kmNumune = alanOku(onceki, 'kmNumune');
+  if (typeof kmNumune !== 'number') return istek;
+  const not = alanOku(istek, 'note');
+  await numuneKarari(db, kullanici.id, kmNumune, karar, typeof not === 'string' && not.trim() !== '' ? not.trim() : null);
+  return istek;
+}
+
+// 798, 796 a: tezgah ölçümü Kalite Merkezi'nin ölçüm kaydına operatörün (kalite ve yöneticide kalitenin) ölçümü olarak yazılır. Bağsız
+// ölçü ya da Kalite Merkezi reddi sonucu durdurmaz: ölçü Arkon'da kalır, nedeni `kmUyari`'dadır.
+async function tezgahOlcumunuKmyeYaz(db: Db, kullanici: Kullanici, rol: ArkonRolu, kimlik: string, govde: unknown, onceki: unknown): Promise<unknown> {
+  const paket = await belgeBul(db, 'pkgs', kimlik);
+  const { gruplar, bagsiz } = kmOlcumGruplari(paket?.govde, alanOku(govde, 'meas'), alanOku(onceki, 'meas'));
+  if (gruplar.length === 0 && bagsiz === 0) return kmUyarisiniYaz(govde, onceki, undefined);
+  const emirId = gruplar.length === 0 ? null : await paketinUretimEmri(db, kimlik);
+  if (gruplar.length > 0 && emirId === null) return kmUyarisiniYaz(govde, onceki, KM_UYARILARI.olcumYazilmadi('üretim emri yok'));
+  const kaynak = olcumKaynagi(rol);
+  for (const grup of gruplar) {
+    const yazilan = await kayitNoktasi(db, () => olcumYaz(db, kullanici.id, kaynak, {
+      uretimEmriId: emirId!, olcumler: grup.olcumler, ...(grup.parcaSayisi === null ? {} : { parcaSayisi: grup.parcaSayisi }),
+    }));
+    if (!yazilan.tamam) return kmUyarisiniYaz(govde, onceki, KM_UYARILARI.olcumYazilmadi(yazilan.hata.message));
+  }
+  return kmUyarisiniYaz(govde, onceki, bagsiz > 0 ? KM_UYARILARI.bagsizOlcu(bagsiz) : null);
+}
+
+const olcumKaynagi = (rol: ArkonRolu): KmOlcumKaynagi => (KALITE_KARARI_ROLLERI.includes(rol) ? 'kalite' : 'operator');
+
+// 798: terminalin ortak kalite formu numunenin ölçüsünü buradan yazar; ölçüm Kalite Merkezi'nin kaydıdır (olcumYaz, numuneyle).
+// Yazabilen, numune isteğini yazabilen roldür (operatör de ölçer; kaynak rolden). İstek ölçülüyor olur ve ölçülen balon sayısını taşır.
+export async function numuneOlcumuYaz(
+  db: Db, kullanici: Kullanici, kimlik: string, g: { olcumler: KmOlcumVerisi['olcumler']; parcaSayisi?: number | undefined; kaynak: string },
+): Promise<{ tamam: true }> {
+  const rol = await rolGerekli(db, kullanici);
+  yazabilirMi('requests', kimlik, rol, 'yaz');
+  const mevcut = await sorgular.surumKilitle(db, 'requests', kimlik);
+  const guncel = mevcut === null ? null : await sorgular.belge(db, 'requests', kimlik);
+  if (guncel === null) throw bulunamadi(ILETILER.numuneYok);
+  await kapsaminda(db, kullanici, 'requests', kimlik, undefined);
+  const kmNumune = alanOku(guncel.govde, 'kmNumune');
+  if (typeof kmNumune !== 'number') throw dogrulama(ILETILER.kmNumuneYok, 'kimlik');
+  const emirId = await paketinUretimEmri(db, alanOku(guncel.govde, 'pkgId'));
+  if (emirId === null) throw dogrulama(ILETILER.kmNumuneYok, 'kimlik');
+  await olcumYaz(db, kullanici.id, olcumKaynagi(rol), {
+    uretimEmriId: emirId, numuneId: kmNumune, olcumler: g.olcumler, ...(g.parcaSayisi === undefined ? {} : { parcaSayisi: g.parcaSayisi }),
+  });
+  const numune = await numuneOku(db, kmNumune);
+  const govde = kmKarariniAynala(guncel.govde, { numune: { karar: null, olculen: new Set(numune.olcumler.map((o) => o.balonId)).size }, ilkParcaKarari: null });
+  if (govde === null) return { tamam: true };
+  await sorgular.belgeYaz(db, 'requests', kimlik, govde, yeniSurum(mevcut, Date.now()), kullanici.id);
+  await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: 'requests', id: kimlik });
+  await gunlugeYaz(db, kullanici, g.kaynak, gunlukSatirlari('requests', kimlik, guncel.govde, govde, true, false));
+  return { tamam: true };
+}
+
+// 798: Kalite Merkezi'nde verilen karar (numune kararı; ilk parça numunesinde ilk parça kararı) ve orada girilen ölçü açık Arkon isteğine
+// aynalanır; terminal bekleyen numunesini kapatır ve operatöre sonuç gider ('sample-result'). Kayıt, kararı yazan kişi bilinmediği için
+// isteği son değiştirenle yazılır; kararı vereni `decidedBy` taşır.
+const AYNA_SINIRI = 100;
+export async function kmKararlariniAynala(db: Db): Promise<void> {
+  const adaylar = await sorgular.kmAcikIstekler(db, AYNA_SINIRI);
+  if (adaylar.length === 0) return;
+  const isEmirleri = adaylar.flatMap((a) => (alanOku(a.govde, 'ilkParca') === true ? [paketIsEmri(alanOku(a.govde, 'pkgId'))] : [])).filter((id): id is number => id !== null);
+  const emirler = adaylar.flatMap((a) => (alanOku(a.govde, 'ilkParca') === true && paketIsEmri(alanOku(a.govde, 'pkgId')) === null ? [paketEmri(alanOku(a.govde, 'pkgId'))] : [])).filter((id): id is number => id !== null);
+  const adimKararlari = await adimIlkParcaKararlari(db, isEmirleri);
+  const emirKararlari = await ilkParcaKararlari(db, emirler);
+  for (const aday of adaylar) {
+    const guncel = aday;
+    const kmNumune = alanOku(guncel.govde, 'kmNumune');
+    const okunan = typeof kmNumune === 'number' ? await kayitNoktasi(db, () => numuneOku(db, kmNumune)) : null;
+    const numune = okunan?.tamam === true ? okunan.deger : null;
+    const paketId = alanOku(guncel.govde, 'pkgId');
+    const isEmriId = paketIsEmri(paketId);
+    const emirId = paketEmri(paketId);
+    const fai = isEmriId !== null ? adimKararlari.get(isEmriId) : emirId !== null ? emirKararlari.get(emirId) : undefined;
+    const govde = kmKarariniAynala(guncel.govde, {
+      numune: numune === null ? null : { karar: numune.karar, olculen: new Set(numune.olcumler.map((o) => o.balonId)).size },
+      ilkParcaKarari: fai === undefined || (fai.karar !== 'onay' && fai.karar !== 'ret') ? null : { karar: fai.karar, zaman: fai.zaman },
+    });
+    if (govde === null) continue;
+    await sorgular.belgeYaz(db, 'requests', aday.kimlik, govde, yeniSurum(aday.surum, Date.now()), aday.degistirenId);
+    await sorgular.iletiEkle(db, SUNUCU_KAYNAGI, { type: '$db', store: 'requests', id: aday.kimlik });
+    if (!acikIstekMi(govde)) {
+      await sorgular.iletiEkle(db, SUNUCU_KAYNAGI, { type: 'sample-result', reqId: aday.kimlik, id: paketId, no: govde['no'], status: govde['status'], machine: govde['machine'] });
+    }
+  }
 }
 
 async function paketinUretimEmri(db: Db, paketId: unknown): Promise<number | null> {

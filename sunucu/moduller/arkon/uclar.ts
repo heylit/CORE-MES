@@ -5,7 +5,7 @@ import {
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
-  merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
+  numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { anomaliOlaylari } from './anomali-zaman.ts';
 import * as servis from './servis.ts';
@@ -93,6 +93,15 @@ export const uclar = [
     govde: belgeYazGovdesi,
     cevap: belgeYazCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.belgeYaz(db, kullanici, parametre.depo, parametre.kimlik, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/numuneler/:kimlik/olcum',
+    yetki: ARKON_SAYFASI,
+    parametre: numuneParametresi,
+    govde: numuneOlcumuGovdesi,
+    cevap: tamamCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.numuneOlcumuYaz(db, kullanici, parametre.kimlik, govde),
   }),
   uc({
     yontem: 'POST',

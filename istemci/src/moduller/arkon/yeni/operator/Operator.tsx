@@ -1111,7 +1111,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       kaydet={(g) => { const tamam = topluKaydet(g); if (tamam) ovYaz(null); return tamam; }} />
   ) : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
-    <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olc={() => git('kalite')} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
+    <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olcebilir={yetkiVar('q.meas')} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
   ) : null;
   const gorev = (mobil: boolean, ek?: ReactNode) => (
     <GorevKarti gorev={task} izinli={izinli} ertele={ertele} ek={ek}

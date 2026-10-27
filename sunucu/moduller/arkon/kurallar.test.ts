@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaGereksinimi, ilkParcaNumuneKarari, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -251,19 +251,50 @@ test('564 6 a, 600 a: kalite istasyonu lot kararı; Red ölçü ve gerekçe iste
   assert.equal(lotPaketi(undefined), null);
 });
 
-test('564 5 a: ilk parça numunesinin Kabul/Red\'i Kalite Merkezi kararıdır; durum değişmezse, kapı dışı ölçüde ve operatör ölçüsünde karar yok', () => {
-  const paket = { plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] };
-  const istek = (status: string, items: unknown = [1]) => ({ pkgId: 'p', status, items });
-  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('waiting'), paket), 'onay');
-  assert.equal(ilkParcaNumuneKarari(istek('deviation'), undefined, paket), 'onay', 'sapma izniyle onay');
-  assert.equal(ilkParcaNumuneKarari(istek('rejected'), istek('measuring'), paket), 'ret');
-  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('rejected'), paket), 'onay', 'retten sonra onay yeni karardır');
-  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('approved'), paket), null, 'aynı kararın yeniden yazılması');
-  assert.equal(ilkParcaNumuneKarari(istek('measuring'), istek('waiting'), paket), null);
-  assert.equal(ilkParcaNumuneKarari(istek('approved', [2]), istek('waiting', [2]), paket), null, 'kapı dışı ölçü');
-  assert.equal(ilkParcaNumuneKarari(istek('approved', 'x'), undefined, paket), null);
-  assert.equal(ilkParcaNumuneKarari(istek('approved'), undefined, { ...paket, rules: { q: { who: 'operator' } } }), null, 'operatörün ölçtüğü kapı');
-  assert.equal(ilkParcaNumuneKarari(istek('approved'), undefined, { ...paket, opType: 'kalite' }), null, 'talaşlı olmayan iş');
+test('798: numune isteği bağlı balonlarla Kalite Merkezi numunesi olur; kapıdaki kalite ölçüsü ilk parça numunesidir; bağsız plan numune açmaz', () => {
+  const paket = { tmi: { opNo: 20 }, plan: [{ id: 1, kmBalon: 71 }, { id: 2, freq: 'Her 10 parça', kmBalon: 72 }, { id: 3, freq: 'Her 10 parça' }] };
+  const istek = (items: unknown, ek: object = {}) => ({ pkgId: 'p', status: 'waiting', reason: 'İlk parça', cnt: 1, items, ...ek });
+  assert.deepEqual(istekKmPlani(istek([1, 2]), paket), { ilkParca: true, km: { opNo: 20, balonlar: [71, 72], neden: 'İlk parça', parcaSayisi: 1 }, uyari: null });
+  assert.deepEqual(istekKmPlani(istek([2, 3]), paket), { ilkParca: false, km: { opNo: 20, balonlar: [72], neden: 'İlk parça', parcaSayisi: 1 }, uyari: KM_UYARILARI.bagsizOlcu(1) }, '796 a: bağsız ölçü Arkon\'da kalır');
+  assert.deepEqual(istekKmPlani(istek([3]), paket), { ilkParca: false, km: null, uyari: KM_UYARILARI.numuneAcilmadi });
+  assert.deepEqual(istekKmPlani(istek([1]), { ...paket, tmi: {} }), { ilkParca: true, km: null, uyari: KM_UYARILARI.numuneAcilmadi }, 'adımsız paket');
+  assert.deepEqual(istekKmPlani(istek([1]), { plan: [{ id: 1 }] }), { ilkParca: true, km: null, uyari: null }, 'Kalite Merkezi\'nden alınmamış plan');
+  assert.equal(istekKmPlani(istek([1]), { ...paket, rules: { q: { who: 'operator' } } }).ilkParca, false, 'operatörün ölçtüğü kapı');
+  assert.equal(istekKmPlani(istek([1], { reason: 'x'.repeat(90) }), paket).km?.neden.length, 80);
+});
+
+test('798: istek kararı durum karara girince ya da değişince doğar; Kalite Merkezi kararı açık isteğe aynalanır', () => {
+  const istek = (status: string) => ({ pkgId: 'p', status, items: [1], at: Date.parse('2026-10-27T08:00:00Z') });
+  assert.equal(istekKarari(istek('approved'), istek('waiting')), 'onay');
+  assert.equal(istekKarari(istek('deviation'), istek('measuring')), 'sapma');
+  assert.equal(istekKarari(istek('rejected'), undefined), 'ret');
+  assert.equal(istekKarari(istek('approved'), istek('rejected')), 'onay', 'kararın değişmesi yeni karardır');
+  assert.equal(istekKarari(istek('approved'), istek('approved')), null);
+  assert.equal(istekKarari(istek('measuring'), istek('waiting')), null);
+  const karar = { karar: 'ret' as const, not: 'çapak', kisi: 'Kalite', zaman: '2026-10-27T09:00:00.000Z' };
+  assert.deepEqual(kmKarariniAynala(istek('measuring'), { numune: { karar, olculen: 2 }, ilkParcaKarari: null }),
+    { ...istek('measuring'), kmOlculen: 2, status: 'rejected', decidedAt: Date.parse(karar.zaman), decidedBy: 'Kalite', note: 'çapak' });
+  assert.deepEqual(kmKarariniAynala(istek('waiting'), { numune: { karar: null, olculen: 1 }, ilkParcaKarari: null }), { ...istek('waiting'), kmOlculen: 1, status: 'measuring' });
+  assert.equal(kmKarariniAynala({ ...istek('measuring'), kmOlculen: 1 }, { numune: { karar: null, olculen: 1 }, ilkParcaKarari: null }), null, 'değişiklik yok');
+  assert.equal(kmKarariniAynala(istek('approved'), { numune: { karar, olculen: 2 }, ilkParcaKarari: null }), null, 'kapanmış istek');
+  const fai = (zaman: string) => ({ karar: 'onay' as const, zaman });
+  assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: null, ilkParcaKarari: fai('2026-10-27T09:00:00Z') })?.['status'], 'approved', 'ilk parça kararı');
+  assert.equal(kmKarariniAynala({ ...istek('waiting'), ilkParca: true }, { numune: null, ilkParcaKarari: fai('2026-10-27T07:00:00Z') }), null, 'istekten önceki karar');
+  assert.equal(kmKarariniAynala(istek('waiting'), { numune: null, ilkParcaKarari: fai('2026-10-27T09:00:00Z') }), null, 'periyodik numune ilk parça kararıyla kapanmaz');
+});
+
+test('798, 796 a: tezgah ölçümünün yalnız değişen ve balona bağlı ölçüsü Kalite Merkezi\'ne gider; mastar geçer/geçmez, sayı metin', () => {
+  const paket = { plan: [{ id: 1, kmBalon: 71 }, { id: 2, kmBalon: 72, gauge: true }, { id: 3 }] };
+  const eski = { 1: { v: 10, ok: true, by: 'A' } };
+  assert.deepEqual(kmOlcumGruplari(paket, { 1: { v: 10, ok: true, by: 'B' }, 2: { v: 'Geçmez', ok: false, cnt: 4 }, 3: { v: 5, ok: true } }, eski), {
+    gruplar: [{ parcaSayisi: 4, olcumler: [{ balonId: 72, nitel: 'gecmez' }] }], bagsiz: 1,
+  });
+  assert.deepEqual(kmOlcumGruplari(paket, { 1: { v: 10.0000004, ok: true, cnt: 4 } }, eski).gruplar, [{ parcaSayisi: 4, olcumler: [{ balonId: 71, deger: '10' }] }]);
+  assert.deepEqual(kmOlcumGruplari(paket, { 1: { v: 'abc', ok: true } }, undefined), { gruplar: [], bagsiz: 1 }, 'sayı olmayan değer');
+  assert.deepEqual(kmOlcumGruplari({ plan: [{ id: 1 }] }, { 1: { v: 1, ok: true } }, undefined), { gruplar: [], bagsiz: 0 }, 'bağsız plan');
+  assert.deepEqual(kmUyarisiniYaz({ meas: {}, kmUyari: 'sahte' }, { kmUyari: 'eski' }, undefined), { meas: {}, kmUyari: 'eski' });
+  assert.deepEqual(kmUyarisiniYaz({ meas: {} }, { kmUyari: 'eski' }, null), { meas: {} });
+  assert.deepEqual(kmUyarisiniYaz({ meas: {} }, undefined, 'yeni'), { meas: {}, kmUyari: 'yeni' });
 });
 
 test('denetim #12: yeniden ilk parça kararın anından sonraki Kalite Merkezi onayıyla kapanır; ret, eski onay ve damgasız karar kapatmaz', () => {
@@ -539,6 +570,7 @@ test('numune teslimi (115 a, 125 a): yalnız yeni bekleyen numune isteği teslim
   assert.deepEqual(numuneTesliminiKoru({ ...istek, numuneTeslim: { id: 99 } }, undefined), istek, 'istemcinin bağı atılır');
   assert.deepEqual(numuneTesliminiKoru({ ...istek, status: 'approved' }, { ...istek, numuneTeslim: bag }), { ...istek, status: 'approved', numuneTeslim: bag });
   assert.deepEqual(numuneTesliminiKoru({ ...istek, kaliteIstasyonu: 'SAHTE' }, { ...istek, kaliteIstasyonu: 'KAL' }), { ...istek, kaliteIstasyonu: 'KAL' }, '564 1 b: kalite istasyonu yalnız sunucudan');
+  assert.deepEqual(numuneTesliminiKoru({ ...istek, kmNumune: 9, ilkParca: false, kmOlculen: 5 }, { ...istek, kmNumune: 3, ilkParca: true }), { ...istek, kmNumune: 3, ilkParca: true }, '798: Kalite Merkezi bağı yalnız sunucudan');
 });
 
 test('131 b: kapı açıkken ilk sağlamdan sonrası karar bekler; düzeltme ve hurda beklemez; yansıma yalnız sunucunun alanını okur', () => {

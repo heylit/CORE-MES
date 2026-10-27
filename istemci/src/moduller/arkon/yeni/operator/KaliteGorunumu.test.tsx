@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { ArkonBaglamiKaynagi, type ArkonBaglami } from '../veri/baglam.ts';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
+import { numuneOlcumYazici } from './NumuneOlcumu.tsx';
 import type { Is } from './tipler.ts';
 
 // 600 a: kalite istasyonu terminalinin numune ve lot kararı. Değerler uydurmadır; karar sunucuda Kalite Merkezi'ne yazılır (sunucu testleri).
@@ -26,21 +29,46 @@ function kur(g: { istekler?: unknown[]; sonuc?: unknown; izinli?: boolean; o?: I
     Bus: { on: () => () => {}, send },
   };
   const baglam = { depo, kisi: { name: 'Kalite K' } } as unknown as ArkonBaglami;
-  const sar = ({ children }: { children: ReactNode }) => <ArkonBaglamiKaynagi.Provider value={baglam}>{children}</ArkonBaglamiKaynagi.Provider>;
-  const olc = vi.fn();
-  render(<KaliteGorunumu istasyon="KAL" is={g.o ?? is()} izinli={g.izinli ?? true} olc={olc} soyle={() => {}} />, { wrapper: sar });
-  return { put, send, olc };
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const sar = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={istemci}><MemoryRouter><ArkonBaglamiKaynagi.Provider value={baglam}>{children}</ArkonBaglamiKaynagi.Provider></MemoryRouter></QueryClientProvider>
+  );
+  render(<KaliteGorunumu istasyon="KAL" is={g.o ?? is()} izinli={g.izinli ?? true} olcebilir soyle={() => {}} />, { wrapper: sar });
+  return { put, send };
 }
 
 describe('600 a: kalite istasyonu görünümü', () => {
-  it('yalnız bu istasyona gelen numuneyi listeler; Kabul isteği onaylar, Ölç Kalite sayfasını açar', async () => {
-    const { put, send, olc } = kur({ istekler: [numune('n1'), numune('n2', { kaliteIstasyonu: 'BASKA' })] });
+  it('yalnız bu istasyona gelen numuneyi listeler; Kabul isteği onaylar, Ölç ortak kalite formunu açar (798)', async () => {
+    const { put, send } = kur({ istekler: [numune('n1', { kmNumune: 5 }), numune('n2', { kaliteIstasyonu: 'BASKA' })] });
     expect(await screen.findByText('1 numune bekliyor')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Ölç/ }));
-    expect(olc).toHaveBeenCalled();
+    const pencere = await screen.findByRole('dialog', { name: 'Ölç · IE-1' });
+    expect(await within(pencere).findByText('Bu numunenin parçası Kalite Merkezi\'ne bağlı değil.')).toBeTruthy();
+    fireEvent.keyDown(pencere, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getAllByRole('button', { name: /^Kabul$/ })[0]!);
     await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', status: 'approved', decidedBy: 'Kalite K' })));
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'sample-result', reqId: 'n1', status: 'approved' }));
+  });
+
+  // 789-2a, 798: ilk parça numunesinin kararı yalnız Kalite Merkezi'nde; ölçü sayısı Kalite Merkezi kaydından (sunucu yazar).
+  it('ilk parça numunesinde Kabul/Red yok, kararın Kalite Merkezi\'nde olduğu yazar; Ölç yerinde (reddedilen)', async () => {
+    const { put } = kur({ istekler: [numune('n1', { ilkParca: true, kmOlculen: 2, kmNumune: 5 })] });
+    expect(await screen.findByText(/2 ölçü/)).toBeTruthy();
+    const gelen = screen.getByRole('region', { name: 'Gelen numuneler' });
+    expect(within(gelen).getByRole('note').textContent).toContain('İlk parça kararı Kalite Merkezi\'nde');
+    expect(within(gelen).queryByRole('button', { name: /^(Kabul|Red)$/ })).toBeNull();
+    expect(within(gelen).getByRole('button', { name: /Ölç/ })).toBeTruthy();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('periyodik numunenin Red ölçüsü Kalite Merkezi kaydındaki sayıdan okunur', async () => {
+    const { put } = kur({ istekler: [numune('n1', { reason: 'Her 10 parça', kmOlculen: 1 })] });
+    await screen.findByText('1 numune bekliyor');
+    fireEvent.click(within(screen.getByRole('region', { name: 'Gelen numuneler' })).getByRole('button', { name: /^Red$/ }));
+    fireEvent.change(screen.getByLabelText('Red gerekçesi'), { target: { value: 'çap büyük' } });
+    fireEvent.click(screen.getByRole('button', { name: /Reddet/ }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ status: 'rejected', note: 'çap büyük' })));
   });
 
   it('numune Red ölçü ve gerekçe ister', async () => {
@@ -79,5 +107,27 @@ describe('600 a: kalite istasyonu görünümü', () => {
     kur({ izinli: false, istekler: [numune('n1')] });
     expect(await screen.findByText('Bu rol lot kararı veremez')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Kabul$/ })).toBeNull();
+  });
+});
+
+describe('798: terminal ölçüsü', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('Kalite Merkezi numunesi olmayan (eski) istekte Ölç yok', async () => {
+    kur({ istekler: [numune('n1')] });
+    expect(await screen.findByText('1 numune bekliyor')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ölç/ })).toBeNull();
+  });
+
+  it('formun yazıcısı ölçüyü numuneyle Arkon ucuna gönderir; emir ve numune istemciden gitmez', async () => {
+    const giden: { adres: string; govde: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      giden.push({ adres, govde: JSON.parse(String(secenek?.body)) });
+      return new Response(JSON.stringify({ tamam: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    await numuneOlcumYazici('rq 1')({ uretimEmriId: 6, numuneId: 9, parcaSayisi: 4, olcumler: [{ balonId: 7, deger: '10.02' }] });
+    expect(giden).toHaveLength(1);
+    expect(giden[0]!.adres).toMatch(/\/arkon\/numuneler\/rq%201\/olcum$/);
+    expect(giden[0]!.govde).toEqual({ olcumler: [{ balonId: 7, deger: '10.02' }], parcaSayisi: 4, kaynak: 'kalite-formu' });
   });
 });

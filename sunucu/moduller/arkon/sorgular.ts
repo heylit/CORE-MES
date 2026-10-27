@@ -452,6 +452,15 @@ export async function kardesParcaDurumlari(db: Db, onek: string, haric: string):
 
 export const PAKET_ISTEKLERI_SQL = "SELECT govde FROM arkon_belge WHERE depo = 'requests' AND govde->>'pkgId' = $1";
 
+// 798: Kalite Merkezi kararı beklenen açık numune istekleri (KM numunesi ya da ilk parça damgası olan). Satır kilitlenir; terminalin o an
+// yazdığı istek atlanır, sonraki turda gelir. Dizin açık isteklerle sınırlıdır (göç 20261027065000).
+export const KM_ACIK_ISTEKLER_SQL = `SELECT kimlik, govde, surum::float8 AS surum, degistiren_id AS "degistirenId" FROM arkon_belge
+  WHERE depo = 'requests' AND govde->>'status' IN ('waiting', 'measuring') AND (govde ? 'kmNumune' OR govde->>'ilkParca' = 'true')
+  ORDER BY degisti LIMIT $1 FOR UPDATE SKIP LOCKED`;
+export function kmAcikIstekler(db: Db, sinir: number): Promise<{ kimlik: string; govde: Record<string, unknown>; surum: number; degistirenId: number }[]> {
+  return db.sorgu(KM_ACIK_ISTEKLER_SQL, [sinir]);
+}
+
 export async function paketIstekleri(db: Db, paketId: string): Promise<unknown[]> {
   const satirlar = await db.sorgu<{ govde: unknown }>(PAKET_ISTEKLERI_SQL, [paketId]);
   return satirlar.map((s) => s.govde);
