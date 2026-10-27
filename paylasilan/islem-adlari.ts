@@ -90,6 +90,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'plan.studyo': 'Plan stüdyosu',
   'plan.canliya-al': 'Planı canlıya alma',
   'plan.bedel-ayari': 'Plan öncelik ayarlarını (taban bedel, oranlar, eşikler) değiştirme',
+  'plan.motor-ayari': 'Plan motoru ayarlarını (amaç, eksik stok, sıralama kuralı) değiştirme',
   'projeler.oku': 'Projeleri görme',
   'projeler.yaz': 'Proje açma ve düzenleme',
   'rota.yaz': 'Rota yazma',
