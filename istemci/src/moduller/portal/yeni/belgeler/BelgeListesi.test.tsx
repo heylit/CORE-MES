@@ -22,8 +22,8 @@ describe('BelgeListesi', () => {
     ]);
     // Dolmuş ve 60 gün içinde dolacak onaylı belge ile onay bekleyen; süresi en yakın olan başta.
     expect(satirlar().map((s) => within(s).getAllByRole('cell')[1]?.textContent)).toEqual(['Vergi levhasıno B-d4', 'ISO 9001no B-d2', 'İmza sirkülerino B-d3']);
-    const eksik = screen.getByRole('region', { name: 'Eksik zorunlu belgeler' });
-    expect(within(eksik).getAllByRole('listitem')).toHaveLength(3);
+    const eksik = screen.getByRole('table', { name: 'Eksik zorunlu belgeler' });
+    expect(within(eksik).getAllByRole('row').slice(1)).toHaveLength(3);
     // Firma kartı taşınmadı; bağlantı firma görünümüne gider, kabuk sahibinde açar.
     expect(within(eksik).getAllByRole('link', { name: 'Deneme Tedarikçi' })[0]?.getAttribute('href')).toBe('/portal/yeni/party?id=p1');
     fireEvent.click(within(suzgec).getByRole('tab', { name: 'Süresi dolmuş (1)' }));

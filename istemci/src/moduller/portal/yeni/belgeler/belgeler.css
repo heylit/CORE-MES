@@ -5,19 +5,6 @@
 .tc-pt-belgeler-iki small[data-gecti] { color: var(--stop); }
 .tc-pt-belgeler-eylem { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
 
-.tc-pt-belgeler-eksik { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
-.tc-pt-belgeler-eksik li {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); align-items: center; min-height: var(--dokunma);
-}
-.tc-pt-belgeler-eksik a { color: var(--ink); overflow-wrap: anywhere; }
-.tc-pt-belgeler-eksik span { grid-column: 1; color: var(--muted); font-size: var(--yazi-s); }
-.tc-pt-belgeler-eksik .tc-rozet { grid-column: 2; grid-row: 1 / span 2; }
-@media (min-width: 768px) {
-  .tc-pt-belgeler-eksik li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-  .tc-pt-belgeler-eksik span { grid-column: auto; }
-  .tc-pt-belgeler-eksik .tc-rozet { grid-column: auto; grid-row: auto; }
-}
-
 .tc-pt-belgeler-satir { display: grid; gap: var(--b-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--acilir-enaz)), 1fr)); }
 .tc-pt-belgeler-yukle { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; margin: 0; padding: 0; border: 0; }
 .tc-pt-belgeler-yukle legend { margin-bottom: var(--b-2); padding: 0; font-size: var(--yazi-s); color: var(--muted); }

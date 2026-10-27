@@ -76,7 +76,7 @@ export function belgeSayilari(d: Depo, simdi: number) {
 interface Karar { belge: BelgeKaydi; onay: boolean }
 
 export function BelgeListesi(_: GorunumOzellikleri) {
-  const { izin, simdi, yol } = usePortal();
+  const { izin, simdi, yol, git } = usePortal();
   const { depo, yukleniyor, hata, yenile } = usePortalDeposu(KOLEKSIYONLAR);
   const [suzgec, suzgecYaz] = useState<BelgeSuzgeci>('attention');
   const [yukle, yukleYaz] = useState(false);
@@ -124,6 +124,13 @@ export function BelgeListesi(_: GorunumOzellikleri) {
     },
   ];
 
+  // Prototipte satır firma kartına gider; firma kartı taşınmadı, kabuk onu sahibinde açar.
+  const eksikSutunlari: Sutun<EksikBelge>[] = [
+    { anahtar: 'firma', baslik: 'Firma', hucre: (x) => <Link to={yol('party', x.firmaId)}>{x.firma}</Link>, csv: (x) => x.firma },
+    { anahtar: 'tur', baslik: 'Belge', hucre: (x) => x.tur },
+    { anahtar: 'durum', baslik: 'Durum', hucre: () => <Rozet ton="hata">Eksik</Rozet>, csv: false },
+  ];
+
   const baslik = (
     <SayfaBasligi
       baslik="Belge takibi" simge="file"
@@ -151,16 +158,11 @@ export function BelgeListesi(_: GorunumOzellikleri) {
       </div>
       {eksikler.length > 0 && (
         <section className="tc-pt-pano" aria-labelledby="tc-pt-belgeler-eksik">
-          <div className="tc-pt-pano-bas"><h2 id="tc-pt-belgeler-eksik">Eksik zorunlu belgeler</h2></div>
-          <ul className="tc-pt-belgeler-eksik">
-            {eksikler.map((x) => (
-              <li key={`${x.firmaId}:${x.tur}`}>
-                <Link to={yol('party', x.firmaId)}>{x.firma}</Link>
-                <span>{x.tur}</span>
-                <Rozet ton="hata">Eksik</Rozet>
-              </li>
-            ))}
-          </ul>
+          <div className="tc-pt-pano-bas"><h3 id="tc-pt-belgeler-eksik">Eksik zorunlu belgeler</h3></div>
+          <Tablo
+            etiket="Eksik zorunlu belgeler" sutunlar={eksikSutunlari} satirlar={eksikler} satirAnahtari={(x) => `${x.firmaId}:${x.tur}`}
+            satirSec={(x) => { git('party', x.firmaId); }}
+          />
         </section>
       )}
       <Sekmeler
