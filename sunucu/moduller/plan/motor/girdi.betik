@@ -531,8 +531,9 @@ function ayarciYok(D) {
   const v = new Set((D.vardiyalar || []).map(x => x.id));
   return !(D.personel || []).some(p => p.ayar && v.has(p.vardiya));
 }
-/* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi); başlangıç günü 07:00'den önce değildir. */
-function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; }
+/* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi). Gerçek saat yoksa başlangıç günü 07:00'dir; 741 a: gerçek
+   saat 07:00'den önce de geçerlidir (gece önceki günün vardiyasının devamıdır, iş takvimdeki vardiyayla yerleşir). */
+function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi >= 0) st.now = +S.simdi; return st; }
 /* 36 a: motorun ufku başlangıçtan HDAYS gündür; başlangıç sabit kalırsa ufuk biter. Kayıtlı bütün plan saatleri başlangıç günü 00:00'dan
    sayıdır: başlangıç g gün ileri alınınca her saat 24g, her gün sırası g azalır. Tarih metinleri (termin, tatil) ve gerçek anlar (canlı
    yerleşim) olduğu gibi kalır. Geçmişte kalan plan işi düşmez (taban planda olmayan iş yeniden yerleşirdi), eksi saatte tamamlanmış sayılır;

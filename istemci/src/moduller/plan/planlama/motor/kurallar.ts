@@ -125,11 +125,12 @@ export function sayiEki(x: number, tur: 'i' | 'inde'): string {
   return "'" + (tur === 'inde' ? `${ek}nd${ikili}` : ek);
 }
 
-// Planın "şimdi"si (girdi.betik stKur + simdiUygula): başlangıç günü 07:00, kaydın `simdi`'si daha ilerideyse o.
+// Planın "şimdi"si (girdi.betik stKur + simdiUygula): kaydın `simdi`'si, yoksa başlangıç günü 07:00. Gece vardiyası sürerken 07:00'den önce
+// de olabilir (741 a).
 export const BASLANGIC_SAATI = 7;
 export function simdiSaati(c: PlanlamaCalismasi): number {
   const s = sayi((c as ExtraAlanlar).simdi);
-  return s !== null && s > BASLANGIC_SAATI ? s : BASLANGIC_SAATI;
+  return s !== null && s >= 0 ? s : BASLANGIC_SAATI;
 }
 
 // --- pencereler (engine.betik merge, subtract, wi, workIn) ---
@@ -288,13 +289,17 @@ export function derle(g: Girdi): Derleme {
     vs[id] = { bas: hm(v.bas), bit: hm(v.bit), mol };
   }
   const tatil = new Set((D.tatiller ?? []).map((s) => Math.floor((saatOku(D, s) ?? Number.NaN) / 24)));
-  const gunler = Array.from({ length: UFUK_GUN }, (_, d) => {
+  const gunVardiyalari = (d: number): string[] => {
     const wd = gunKodu(D, d); const v = D.calismaGunleri?.[wd];
     return tatil.has(d) ? [] : Array.isArray(v) ? v.map(String) : [];
-  });
+  };
+  const gunler = Array.from({ length: UFUK_GUN }, (_, d) => gunVardiyalari(d));
+  // Başlangıç gününden önceki günün gece vardiyası gece yarısını aşar; 0'dan sonraki kısmı da çalışma saatidir (engine.betik, 741 a).
+  const dun = gunVardiyalari(-1);
+  const gunu = (d: number): string[] => (d < 0 ? dun : gunler[d] ?? []);
   const an = (d: number, sid: string): Pencere | null => {
     const v = vs[sid]; if (!v) return null;
-    const a = d * 24 + v.bas; let b = d * 24 + v.bit; if (b <= a) b += 24; return [a, b];
+    const a = d * 24 + v.bas; let b = d * 24 + v.bit; if (b <= a) b += 24; return b > 1e-9 ? [Math.max(0, a), b] : null;
   };
   // Mola yalnız kendi vardiyasından düşer; gece vardiyasında vardiya başından önceki mola ertesi güne düşer.
   const molalar = (d: number, sid: string): Pencere[] => {
@@ -306,7 +311,7 @@ export function derle(g: Girdi): Derleme {
   for (const m of D.tezgahlar) {
     const kendi = Array.isArray(m.vardiyalar) && m.vardiyalar.length ? new Set(m.vardiyalar) : null;
     let sw: Pencere[] = [];
-    for (let d = 0; d < UFUK_GUN; d++) for (const sid of gunler[d] ?? []) if (!kendi || kendi.has(sid)) { const w = an(d, sid); if (w) sw.push(...cikar([w], molalar(d, sid))); }
+    for (let d = -1; d < UFUK_GUN; d++) for (const sid of gunu(d)) if (!kendi || kendi.has(sid)) { const w = an(d, sid); if (w) sw.push(...cikar([w], molalar(d, sid))); }
     for (const e of ek) if (e.m === m.id) { const w = an(e.gun, e.vardiya); if (w) sw.push(...cikar([w], molalar(e.gun, e.vardiya))); }
     sw = birlestir(sw);
     let rw = sw;

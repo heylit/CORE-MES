@@ -178,3 +178,20 @@ Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı k
   canlıya alma yanlışlıkla duruyordu (DOĞRULANDI: deneyde plan-oner A4, #23, PL-07, P4/P6 ve plan-canli bu yüzden düşüyordu).
 - Sabit işin önüne sıkı dizilmiş iş, dakika dönünce sabit işin arkasına geçer; canlıya alma 737 a gereği durur (değişmedi). Bunu sınamayan
   plan-canli #1186 ve plan-gecmisi testleri saati gerçek anda sabitler (`plan-saat.test.ts` `anSabit`).
+## Gece vardiyası (741 a, 2026-10-27)
+- Motorun "şimdi"si gerçek saattir; başlangıç günü 07:00'ye çekilmez (`girdi.betik` `simdiUygula`, `emirler.betik`, `degerlendir.betik`; sayfada
+  `zz31-tmi.betik`). Gerçek saat yoksa 07:00 kalır. Yeni plan istemcisinin altı kopyası (`istemci/src/moduller/plan/planlama/*/kurallar.ts`) aynı kuralla.
+- Başlangıç gününden önceki günün gece vardiyası gece yarısından sonra da çalışma saatidir (`engine.betik` compile: tezgâh, personel ve genel
+  pencere d=-1'den; pencere 0'da kesilir). İstemci `derle` aynı. Işıksız tezgâhın tam günü değişmedi. Sunucu takvimi (vardiya modülü) önceki günü
+  zaten okur; `servis.ts` değişmedi.
+Testler: plan-cozucusu 741 a (gece 00:30'da iş şimdiden başlar, vardiya bitince akşamı bekler, gece vardiyasız tezgâh sabahı bekler); istemci motor 741 a.
+
+## Canlıya alma yeniden dizmez (762 b, 2026-10-27)
+- Kullanıcı onayı: mesaj cmsg_019jymdq1CtoFcRqjZv7Ln6X44fgfvedVKYaZkeSDxyvPZ (2026-10-27 06:11:31Z): "762: b, ADR ve davranış değiştiren düzeltme onaylı".
+- Canlıya alma sunucu motorunu çağırmaz; onaylanan taslağın saatleri aynen canlıya geçer. Taslak yazıldıktan sonra zaman geçse de kuyruk
+  yeniden dizilmez, 737 a kayma reddi (`geriKayan`) ve "Planı kur'u yeniden çalıştırıp" 409'ları kalktı. Geçmişte kalan başlangıç terminalde
+  gerçek saatle kaydedilir. Canlıya alma cevabında `motorFarki` artık dönmez (alan isteğe bağlı kaldı; kuyruk yaz döndürmeye devam eder).
+- Sıra denetimi (308 b, 671 a) taslağın kendisine bir kez yapılır.
+- 168 b korunur: vardiyası tanımsız tezgâhtaki taslak yeri canlıya geçmez. Önce motorun `vardiyasiz` listesinden gelirdi; şimdi sunucu aynı iş
+  kümesinde (planlı ya da sıralanmış çalışan, kilitsiz, dondurulmamış, bölünmemiş makine işi) tezgâhın takvimine (`b.takvimler` null) bakar.
+Testler: plan-motoru canlıya al (motor çağrılmaz, saatler taslağınki; 168 b her iki iş canlıya geçmez), plan-canliya-al-kayma (zaman geçince 200, canlı taslağın saati).

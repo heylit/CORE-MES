@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Pkg, PlannedDown } from '../../../../../../arkon/shared/model.ts';
 import { ILK_AYARLAR } from '../cekirdek/ayarlar.ts';
-import { csvDosyaAdi, csvMetni, durusHatasi, kartDurumu, onayBekliyor, seritKonumu, tasimaPlani, yeniDurus } from './kurallar.ts';
+import {
+  csvDosyaAdi, csvMetni, durusHatasi, enCokUretim, enDusukOee, halkaYaylari, kartDurumu, karoSinifi, karoSiniflari, onayBekliyor, seritKonumu,
+  tasimaPlani, yeniDurus, type PanoKarosu,
+} from './kurallar.ts';
 
 // A3 kuralları: eskisinde ayrı işlev olmayan, ekran içinden çıkarılmış hesaplar. Adlar uydurmadır.
 
@@ -50,5 +53,30 @@ describe('A3 kuralları', () => {
     expect(y.to - y.from).toBe(2 * 3600e3);
     expect(seritKonumu(-1, 0)).toBe(0);
     expect(seritKonumu(7 * 864e5 * 2, 0)).toBe(100);
+  });
+
+  it('halka: dilimler yüzdeyle, aralarında boşlukla; ölçekte kalan boş, toplam sıfırsa yay yok', () => {
+    expect(halkaYaylari([{ deger: 3, renk: 'run' }, { deger: 1, renk: 'stop' }])).toEqual([
+      { renk: 'run', dizi: '74.40 25.60', kayma: '25.00' },
+      { renk: 'stop', dizi: '24.40 75.60', kayma: '-50.00' },
+    ]);
+    expect(halkaYaylari([{ deger: 5, renk: 'run' }, { deger: 0, renk: 'stop' }])).toEqual([{ renk: 'run', dizi: '100.00 0.00', kayma: '25.00' }]);
+    expect(halkaYaylari([{ deger: 0.68, renk: 'hazard' }], 1)).toEqual([{ renk: 'hazard', dizi: '68.00 32.00', kayma: '25.00' }]);
+    expect(halkaYaylari([{ deger: 0, renk: 'run' }])).toEqual([]);
+    expect(halkaYaylari([], 1)).toEqual([]);
+  });
+
+  it('istasyon sınıfı tek ve kesin: çalışan, plansız, planlı (pencere ya da planlı neden), diğer', () => {
+    const k = (state: string, etiket: string, dn = false) => ({ state, look: { durum: 'sirada', etiket }, dn: dn ? {} : null }) as unknown as PanoKarosu;
+    const liste = [k('running', 'Çalışıyor', true), k('stopped', 'Durdu'), k('stopped', 'Planlı duruş'), k('none', 'Veri yok', true), k('setup', 'Ayar')];
+    expect(liste.map(karoSinifi)).toEqual(['calisiyor', 'plansiz', 'planli', 'planli', 'diger']);
+    expect(karoSiniflari(liste)).toEqual({ calisiyor: 1, plansiz: 1, planli: 2, diger: 1 });
+  });
+
+  it('kısa listeler: verisi olmayan istasyon girmez, sıra ve adet', () => {
+    const k = (id: string, oee: number | null, good: number) => ({ s: { id }, c: { oee, good } }) as unknown as PanoKarosu;
+    const liste = [k('a', 0.8, 10), k('b', null, 0), k('c', 0.4, 30), k('d', 0.6, 20), k('e', 0.9, 5)];
+    expect(enDusukOee(liste).map((x) => x.s.id)).toEqual(['c', 'd', 'a']);
+    expect(enCokUretim(liste, 2).map((x) => x.s.id)).toEqual(['c', 'd']);
   });
 });

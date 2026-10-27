@@ -151,5 +151,6 @@ describe('ısı haritası (zz30-isi ISI.sevkiyat)', () => {
   it('şimdi en az 7; çalışmanın kaydettiği şimdi ileriyse o', () => {
     expect(simdi(ornekCalisma())).toBe(7);
     expect(simdi(ornekCalisma({ simdi: 30 }))).toBe(30);
+    expect(simdi(ornekCalisma({ simdi: 0.5 }))).toBe(0.5);
   });
 });

@@ -72,6 +72,20 @@ export async function refakatKartiKapsami(db: Db, id: number): Promise<RefakatKa
   const partiIdler = [...(refakat.partiId === null ? [] : [refakat.partiId]), ...await sorgular.refakatCiktiPartiIdleri(db, id)];
   return { refakat, partiIdler, teslimler: partiIdler.length === 0 ? [] : await sorgular.kartTeslimleri(db, refakat.uretimEmriId, partiIdler) };
 }
+// Üretim anomalisi (kart 764, geç teslim): emirlere ya da iş emirlerine bağlı teslimler ve emirlere bağlı istekler, zamanlarıyla.
+// İstekte iş emri bağı yoktur, yalnız emir. Bağı boş teslim ve istek gelmez. Kapanmamış kayıtta kapanış null. Okuma yetkisini çağıran korur.
+export type { EmirIstekSatiri as EmirIstegi, EmirTeslimSatiri as IsEmriTeslimi } from './sorgular.ts';
+export async function isEmriTeslimleri(
+  db: Db, g: { isEmriIdleri?: readonly number[]; uretimEmriIdleri?: readonly number[] },
+): Promise<{ teslimler: sorgular.EmirTeslimSatiri[]; istekler: sorgular.EmirIstekSatiri[] }> {
+  const isEmirleri = [...new Set(g.isEmriIdleri ?? [])];
+  const emirler = [...new Set(g.uretimEmriIdleri ?? [])];
+  if (isEmirleri.length === 0 && emirler.length === 0) return { teslimler: [], istekler: [] };
+  return {
+    teslimler: await sorgular.emirTeslimleri(db, emirler, isEmirleri),
+    istekler: emirler.length === 0 ? [] : await sorgular.emirIstekleri(db, emirler),
+  };
+}
 // Partinin lot numarası ve ilk mal kabul zamanı (mal kabulle girmediyse null). Olmayan parti haritada yoktur.
 export async function partiGirisZamanlari(db: Db, partiIdler: number[]): Promise<Map<number, { lotNo: string; malKabulZamani: string | null }>> {
   if (partiIdler.length === 0) return new Map();

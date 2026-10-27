@@ -67,7 +67,12 @@
   .tc-ay-bant-araclar button[aria-label]::after { content: attr(aria-label); min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 }
 
-/* TV modu (eski html.tv): Arkon'un gezinmesi (eski ray, bağlantı durumu dahil) ve çağrı bandı gizlenir, pano tam ekranda kalır. */
+/* TV modu (eski html.tv): pano kabuğun ve Arkon gezinmesinin üstünde bütün ekranı kaplar; bildirim katmanı üstte kalır.
+   Arkon'un gezinmesi ve çağrı bandı ayrıca gizlenir ki altta odak ve ekran okuyucu dolaşmasın. */
+.tc-ay-tv-kap { min-width: 0; }
+.tc-ay-tv-kap[data-tv] {
+  position: fixed; inset: 0; z-index: var(--z-sahne-ust); overflow: auto; padding: var(--b-4); background: var(--bg); color: var(--ink);
+}
 html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-baglanti, html.tc-ay-tv .tc-ay6-bant { display: none; }
 
 /* "Operatör gözüyle" önizleme penceresi: 1600x900 cihaz alanı pencereye sığacak ölçekte. */

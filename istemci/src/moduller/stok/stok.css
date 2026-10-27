@@ -440,7 +440,7 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-refakat-asama-bas { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-2); align-items: baseline; }
 .tc-refakat-asama-bas b { font-size: var(--yazi-m); }
 .tc-refakat-asama-bas .tc-refakat-soluk { font-size: var(--yazi-xs); }
-.tc-refakat-asama-tarih { margin-block-start: var(--b-1); font-size: var(--yazi-xs); }
+.tc-refakat-asama-tarih { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); margin-block-start: var(--b-1); font-size: var(--yazi-xs); }
 .tc-refakat-asama[data-durum="sirada"] .tc-refakat-asama-tarih { color: var(--muted); }
 .tc-refakat-gc { display: grid; grid-template-columns: minmax(0, 1fr) var(--b-5) minmax(0, 1fr); gap: var(--b-2); align-items: center; margin-block-start: var(--b-2); color: var(--muted); }
 .tc-refakat-gc-kutu { align-self: stretch; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge2); background: var(--bg2); font-size: var(--yazi-s); color: var(--ink); overflow-wrap: anywhere; }

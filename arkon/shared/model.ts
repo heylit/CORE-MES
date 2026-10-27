@@ -24,7 +24,8 @@ export interface Session { token?: string; user: User; srv?: string }
 export type OpType = 'cnc' | 'kalite' | 'depo' | 'mark' | 'boya' | 'montaj';
 export type MachineConn = '' | 'focas' | 'opcua' | 'mtc' | 'modbus' | 'io';
 export interface WorkCenter { id: Id; name: string; note?: string; active?: boolean }
-export interface Station { id: Id; name: string; wc: Id; t: OpType; active?: boolean }
+/** tmi: TMI'deki sayısal istasyon kimliği (sunucu kipinde; 3B model küçük resmi bununla okunur) */
+export interface Station { id: Id; name: string; wc: Id; t: OpType; active?: boolean; tmi?: number }
 export interface Machine { id: Id; name: string; kind?: string; make?: string; serial?: string; st: Id; conn?: MachineConn; addr?: string; active?: boolean }
 export interface Plant { wcs: WorkCenter[]; sts: Station[]; mcs: Machine[] }
 

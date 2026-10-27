@@ -19,6 +19,8 @@ const OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz'] } as const;
 const LISTE_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.recete-rota'] } as const;
 // Fabrika Haritası makine durumunu çizer (195 a).
 const DURUM_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.atolye'] } as const;
+// Rota > Kaynaklar istasyonun verim ve operatör ayarını gösterir: sayfayı açan rol okur (kart #746, 757 a; 195 a'nın bu uç için yerine).
+const PLAN_AYARI_OKUMA = { biri: [...OKUMA.biri, 'sayfa.rota'] } as const;
 // Ana sayfa kartı yalnız sayı alır (#483); operatör terminalden, vardiya ve personel sayfası olan da görür.
 // Duran makine bakımın işidir; Arkon bakım işlemiyle de okunur.
 const MAKINE_DURUMU = { biri: MAKINE_DURUMU_ISLEMLERI } as const;
@@ -344,7 +346,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/istasyon-plan-ayarlari',
-    yetki: OKUMA,
+    yetki: PLAN_AYARI_OKUMA,
     cevap: planAyarlariCevabi,
     isle: async ({ db }) => ({ ayarlar: await servis.planAyarlari(db) }),
   }),

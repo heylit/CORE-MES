@@ -1,8 +1,8 @@
 import { mock } from 'node:test';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 
-// Motor tesiste 07:00'den önce başlatmaz (planlama sayfasının başlangıç günü kuralı). Gece yarısından sonra koşan test, işin "şimdi"den
-// başladığını sınayamaz: an tesisin öğlesine alınır. Gündüz an gerçek saattir; veritabanının now()'ı ile arada fark açılmaz.
+// Testlerin takvimi gündüz vardiyasıdır; gece yarısından sonra koşan test işin "şimdi"den başladığını sınayamaz (iş sabahki vardiyayı
+// bekler): an tesisin öğlesine alınır. Gündüz an gerçek saattir; veritabanının now()'ı ile arada fark açılmaz.
 export function gunduzAni(an = Date.now()): number {
   const gunBasi = tesisGunBasi(tesisGunu(an));
   return an - gunBasi < 8 * 3600_000 ? gunBasi + 12 * 3600_000 : an;

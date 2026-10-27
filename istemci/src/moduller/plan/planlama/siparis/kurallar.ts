@@ -71,10 +71,10 @@ export function tarihGirdisi(D: PlanVerisi, t: number | null | undefined): strin
   return t == null || !Number.isFinite(t) || b === null ? '' : new Date(b + t * 3600000).toISOString().slice(0, 10);
 }
 
-// Sayfanın şimdisi (girdi.betik stKur now: 7, simdiUygula): çalışmanın kaydettiği şimdi daha ilerideyse o.
+// Sayfanın şimdisi (girdi.betik stKur now: 7, simdiUygula): çalışmanın kaydettiği şimdi varsa o (741 a: 07:00'den önce de olur).
 export function simdi(c: PlanlamaCalismasi): number {
   const s = c.simdi;
-  return sonlu(s) && s > 7 ? s : 7;
+  return sonlu(s) && s >= 0 ? s : 7;
 }
 
 // ---- sayı (00-baslangic.betik sayi, saat; zr-agirlik agTL) ----

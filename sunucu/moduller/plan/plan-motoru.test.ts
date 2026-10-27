@@ -6,7 +6,7 @@ import type { PlanMotoruIstegi } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // ADR 0018: ortak motor Reçete ve Rota'nındır; burada çözücü testte elle kurulur (öteki plan testleri kablolamadaki gerçek çözücüyle koşar).
-// Kayıtlıyken kuyruk yaz ve canlıya al saatleri çözücüden yazar, Motor A önermez.
+// Kayıtlıyken kuyruk yaz saatleri çözücüden yazar, Motor A önermez; canlıya alma motoru çağırmaz (762 b).
 describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
@@ -86,46 +86,27 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
     }
   });
 
-  test('canlıya al: taslağın kuyrukları sabit kipte yeniden dizilir, canlıya sunucu saatleri geçer; kilitli iş sabittir; yerleşmeyen iş 409 ve taslak açık kalır', async () => {
+  test('canlıya al (762 b): motor çağrılmaz, onaylanan taslağın saatleri aynen canlıya geçer; kilitli iş yerinde; motor hatası canlıya almayı durdurmaz', async () => {
     const kaynak = { tur: 'makine' as const, id: makineB };
     const [j1] = await isEmirleriAc([yeniAdim({ kaynak })]);
     const [j2] = await isEmirleriAc([yeniAdim({ kaynak })]);
     const [j3] = await isEmirleriAc([yeniAdim({ kaynak })]);
-    const metin = async (id: number) => { const a = await anahtar(id); return `${a.emirNo}|${a.opNo}`; };
-    const b1 = await metin(j1!), b2 = await metin(j2!), b3 = await metin(j3!);
     let p: PlanCevabi = await taslaktaOner();
     const taslakId = p.taslak!.id;
-    // Kilitli iş motorun etrafına dizdiği yerdir. Sahte motor sabit işe bakmaz: kilitli iş kuyruğun saatlerinin ötesine konur, yoksa
-    // önündeki iş arkasına geçer ve canlıya alma durur (737 a).
     const kilitYeri = saat(40);
     await vt().tx((db) => db.sorgu('UPDATE plan_senaryo_yerlesimi SET kilitli = true, baslangic = $3, bitis = $4 WHERE senaryo_id = $1 AND is_emri_id = $2',
       [taslakId, j2, kilitYeri.baslangic, kilitYeri.bitis]));
     p = await planOku(taslakId);
-    const onizleme = (id: number) => ({ baslangic: new Date(yer(p, id).baslangic).toISOString(), bitis: new Date(yer(p, id).bitis).toISOString() });
     kur();
     try {
+      // Kayıtlı motor her işi reddetse de canlıya alma onu çağırmaz.
       kip = 'yerlesmeyen';
-      const red = await istek(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: await gonder(taslakId, p.taslak!.surum), cakismalariKabul: true });
-      assert.equal(red.statusCode, 409, red.body);
-      assert.equal((await planOku(taslakId)).taslak?.id, taslakId, 'taslak açık kalır');
-
-      kip = 'tamam';
       istekler.length = 0;
-      const r = await tamam<CanliyaAlCevabi>(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: await gonder(taslakId, (await planOku(taslakId)).taslak!.surum), cakismalariKabul: true });
-      const ist = istekler.at(-1)!;
-      const kuyruk = ist.kuyruklar.find((q) => q.makineId === makineB)!;
-      assert.ok(kuyruk.anahtarlar.includes(b1) && kuyruk.anahtarlar.includes(b3));
-      assert.ok(!kuyruk.anahtarlar.includes(b2), 'kilitli iş yeniden dizilmez');
-      assert.ok(ist.sabitler.some((x) => x.anahtar === b2 && x.baslangic === onizleme(j2!).baslangic), 'kilitli iş sabitlerde');
-      assert.ok(!ist.sabitler.some((x) => x.anahtar === b1 || x.anahtar === b3), 'yeniden dizilen iş sabit değil');
+      const r = await tamam<CanliyaAlCevabi>(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: await gonder(taslakId, p.taslak!.surum), cakismalariKabul: true });
+      assert.equal(istekler.length, 0, 'canlıya alma yeniden dizmez');
+      assert.equal(r.motorFarki, undefined);
       const canli = await planOku();
-      for (const [id, a] of [[j1!, b1], [j3!, b3]] as const) {
-        const n = kuyruk.anahtarlar.indexOf(a);
-        assert.deepEqual([yer(canli, id).baslangic, yer(canli, id).bitis], [saat(n).baslangic, saat(n).bitis], 'canlıda sunucu saati');
-        const f = r.motorFarki?.find((x) => x.anahtar === a);
-        if (onizleme(id).baslangic !== saat(n).baslangic) assert.deepEqual(f, { anahtar: a, onizleme: onizleme(id), sunucu: saat(n) });
-      }
-      assert.equal(yer(canli, j2!).baslangic, yer(p, j2!).baslangic, 'kilitli iş yerinde');
+      for (const id of [j1!, j2!, j3!]) assert.deepEqual([yer(canli, id).baslangic, yer(canli, id).bitis], [yer(p, id).baslangic, yer(p, id).bitis], 'canlıda taslağın saati');
     } finally {
       kip = 'tamam';
       planMotoruCozucusu(null);
@@ -158,17 +139,16 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
       assert.equal(p.yerlesmemis.find((x) => x.isEmriId === k2)?.neden, 'Tezgâhın vardiyası tanımsız.');
       assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; işleri yerleşmedi/.test(u)), JSON.stringify(p.uyarilar));
 
-      // Canlıya alma: taslakta yeri kalmış vardiyasız iş (motor yine ayırır) canlıya geçmez; canlıdaki hâli kalır.
+      // Canlıya alma: taslakta yeri kalmış vardiyasız iş canlıya geçmez; canlıdaki hâli kalır. Motor çağrılmaz (762 b): sunucu tezgâhın
+      // takvimine bakar, gerçek motor gibi o tezgâhtaki her işi vardiyasız sayar (sahte motorun k1'i yerleştirmesi gerçekte olmaz).
       await vt().tx((db) => db.sorgu(
         `INSERT INTO plan_senaryo_yerlesimi (senaryo_id, is_emri_id, makine_id, baslangic, bitis, kilitli, dondurulmus, elle_kaynak)
          VALUES ($1, $2, $3, $4, $5, false, false, false)`, [r.taslak, k2, makineB, saat(4).baslangic, saat(4).bitis]));
       istekler.length = 0;
       await tamam(c.mudur, 'POST', `/plan/senaryolar/${r.taslak}/canliya-al`, { surum: await gonder(r.taslak, (await planOku(r.taslak)).taslak!.surum), cakismalariKabul: true });
-      const sira = istekler.at(-1)!.kuyruklar.find((q) => q.makineId === makineB)!.anahtarlar.filter((x) => !vardiyasizlar.includes(x));
-      assert.ok(istekler.at(-1)!.kuyruklar.some((q) => q.anahtarlar.includes(vardiyasizlar[0]!)), 'vardiyasız iş motora gider');
+      assert.equal(istekler.length, 0, 'canlıya alma motoru çağırmaz');
       const canli = await planOku();
-      assert.equal(yer(canli, k1!).baslangic, saat(sira.indexOf(`${a1.emirNo}|${a1.opNo}`)).baslangic, 'yerleşen iş canlıda');
-      assert.equal(yer(canli, k2!)?.baslangic, yer(canliOnce, k2!)?.baslangic, 'vardiyasız işin canlısı değişmez');
+      for (const id of [k1!, k2!]) assert.equal(yer(canli, id)?.baslangic, yer(canliOnce, id)?.baslangic, 'vardiyasız tezgâhtaki işin canlısı değişmez');
     } finally {
       kip = 'tamam';
       vardiyasizlar = [];
