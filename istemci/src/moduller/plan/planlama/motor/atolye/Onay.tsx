@@ -14,6 +14,7 @@ import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
 import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
+import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
   agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
@@ -269,7 +270,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
           )}
           {secS && (
             <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} K={paKontrol(secS, canli, canliSurum, planK(secS.id))} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
-              gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); }, ac: async (s) => { acIste(s); } }} />
+              gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); }, ac: async (s) => { acIste(s); } }}
+              motorDegisti={() => { api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined); }} />
           )}
           <Karsilastir l={l} canli={canli} canliSurum={canliSurum} kars={kars} temizle={() => setKars([])} planlar={planlar} farkAl={farkAl} />
         </div>
@@ -413,9 +415,9 @@ function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: Bekley
 }
 
 interface SeciliEylemi { ac: (s: SunucuSenaryosu) => Promise<void>; onaya: (s: SunucuSenaryosu) => Promise<void>; cek: (s: SunucuSenaryosu) => Promise<void>; geri: (s: SunucuSenaryosu) => Promise<void>; vazgec: (s: SunucuSenaryosu) => Promise<void>; canli: (s: SunucuSenaryosu) => Promise<void> }
-function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, eylem }: {
+function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, eylem, motorDegisti }: {
   s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; pa: PlanCevabi | null; pc: PlanCevabi | null; f: PlanFarki | null; K: KontrolMaddesi[];
-  o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi;
+  o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi; motorDegisti: () => void;
 }) {
   const red = paRedVar(K);
   const g = s.gostergeler; const r = canli;
@@ -495,6 +497,7 @@ function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, e
             ) : <p className="tc-pym-pa-kucuk">Tezgâh değişikliği yok.</p>}
           </section>
         </div>
+        <MotorKurali s={s} yazabilir={s.benim && o.yetki.planYaz} degisti={motorDegisti} />
         <section className="tc-pym-pa-bolum">
           <h3><Simge ad="clock" boyut="k" /> Bitişi değişen siparişler</h3>
           {sip.length ? (
