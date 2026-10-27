@@ -30,6 +30,7 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
   let projeId = 0;
   let yonetici = '';
   let hazirlik = '';
+  let hazirlikId = 0;
   let operator = '';
   let sayac = 0;
   let gunBasi = 0;
@@ -116,7 +117,7 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     projeId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('ARKON.AZ', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
     yonetici = await girisCerezi('yonetici');
-    hazirlik = (await kisiKur('hz1', ['arkon.hazirlik', 'sayfa.arkon'])).cerez;
+    ({ cerez: hazirlik, id: hazirlikId } = await kisiKur('hz1', ['arkon.hazirlik', 'sayfa.arkon']));
     operator = (await kisiKur('op1', ['arkon.operator', 'sayfa.arkon', 'terminal.uret'])).cerez;
     gunBasi = tesisGunBasi(tesisGunu(Date.now()));
     const merkez = await istek<{ id: number }>(yonetici, 'POST', '/is-merkezleri', { kod: 'ZM1', ad: 'Zaman merkezi' });
@@ -169,6 +170,21 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
     assert.deepEqual(cevap.govde.ozet, { acik: 5, aksatilanIs: 2, toplamEtkiDk: 240, riskliEmir: 1 });
     const ilk = cevap.govde.olaylar.find((x: AnomaliOlayiSatiri) => x.tur === 'gec-giris' && x.isEmriId === a10)!;
     assert.deepEqual([ilk.istasyon?.id, ilk.kaynak, ilk.opNo, ilk.uretimEmriId], [istasyonId, { tur: 'makine', id: makineId, ad: 'Tezgah Z' }, 10, emirA]);
+  });
+
+  test('769 a: açılan olay iş emri ve tür başına bir bildirim olur; alıcı türün işlemidir; ikinci tur yeni bildirim açmaz', async () => {
+    const bildirimler = (kisiId: number) => o().sahip.sorgu<{ tur: string; anahtar: string; yol: string | null }>(
+      'SELECT tur, tekil_anahtar AS anahtar, yol FROM bildirim_kaydi WHERE kisi_id = $1 ORDER BY tur, tekil_anahtar', [kisiId]);
+    await yenile(9.25);
+    const hz = await bildirimler(hazirlikId);
+    // Hazırlık geç girişi alır; sonraki işe etki ve teslim riski planlama ile yöneticinindir.
+    assert.deepEqual(hz.map((b) => b.tur).sort(), ['arkon.gec-giris', 'arkon.gec-giris']);
+    assert.ok(hz.every((b) => b.yol === '/arkon/anomali'));
+    const yon = (await bildirimler(yoneticiId)).map((b) => b.tur);
+    assert.equal(yon.filter((t) => t === 'arkon.teslim-riski').length, 1);
+    assert.equal(yon.filter((t) => t === 'arkon.ardil-etkisi').length, 2);
+    const isaretsiz = await o().sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM arkon_anomali_olayi WHERE bildirim IS NULL AND kapanis IS NULL");
+    assert.equal(isaretsiz?.n, 0, 'açık her olayın bildirim anı yazılı');
   });
 
   test('AR-AN-17: giriş gelince geç giriş kapanır; yeniden plan donmuş plan anını değiştirmez; etki yeni sıraya göre güncellenir', async () => {
@@ -243,6 +259,8 @@ describe('arkon üretim anomalisi zaman olayları (gerçek PostgreSQL)', () => {
     assert.equal(Date.parse(toplu[0]!.gercek), an(11.5));
     assert.notEqual(toplu[0]!.kapanis, null);
     assert.equal(toplu[0]!.emirNo, 'ANZ-B');
+    const uyari = await o().sahip.sorgu('SELECT 1 FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = $2', [hazirlikId, 'arkon.toplu-tutarsiz']);
+    assert.equal(uyari.length, 1, '785 a: toplu uyarısı bildirimdedir');
   });
 
   test('plan sapması (781 a): geç biten işte bitiş kayması ve süre aşımı kapalı olay olarak bir kez yazılır', async () => {

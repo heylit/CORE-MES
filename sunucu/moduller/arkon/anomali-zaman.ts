@@ -3,8 +3,10 @@ import { kapsamdaMi, kisininKapsami } from '#cekirdek/kapsam.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { AnomaliOlaylariCevabi, AnomaliOlayTuru } from '#paylasilan/sozlesme/arkon.ts';
+import type { BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { bildirimGonder } from '../bildirim/disari.ts';
 import { istasyonlar, kisininIzinliIsMerkezleri, makineler } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { canliSira, planSapmalari, tabanPlani } from '../plan/disari.ts';
@@ -48,6 +50,32 @@ export const zamanEsikleri = async (db: Db): Promise<ZamanEsikleri> => ({
 });
 
 const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
+
+// 769 a: olay açılınca iş emri ve tür başına bir bildirim (okunmamışken yinelenen olay yeni satır açmaz). Gerçekleşmiş halde açılan gecikme
+// (iş zaten girdi, girdi geldi, iş bitti) bildirilmez; toplu giriş ve süre aşımı bulgudur, bildirilir.
+const BILDIRIM_TURU = {
+  'gec-giris': 'arkon.gec-giris', 'gec-teslim': 'arkon.gec-teslim', 'ardil-etkisi': 'arkon.ardil-etkisi', 'teslim-riski': 'arkon.teslim-riski',
+  'bitis-kaymasi': 'arkon.plan-sapmasi', 'sure-asimi': 'arkon.plan-sapmasi', 'toplu-tutarsiz': 'arkon.toplu-tutarsiz',
+} as const satisfies Record<AnomaliOlayTuru, BildirimTuru>;
+const BULGU_TURLERI: ReadonlySet<AnomaliOlayTuru> = new Set(['toplu-tutarsiz', 'sure-asimi']);
+const OLAY_ADI: Record<AnomaliOlayTuru, string> = {
+  'gec-giris': 'Geç giriş', 'gec-teslim': 'Girdi gecikti', 'ardil-etkisi': 'Sonraki işe etki', 'teslim-riski': 'Teslim riski',
+  'bitis-kaymasi': 'Bitiş kayması', 'sure-asimi': 'Süre aşımı', 'toplu-tutarsiz': 'Toplu giriş süreye sığmıyor',
+};
+export const bildirilirMi = (tur: AnomaliOlayTuru, kapali: boolean): boolean => BULGU_TURLERI.has(tur) || !kapali;
+
+async function olayAc(db: Db, simdi: number, o: sorgular.YeniAnomaliOlayi): Promise<number> {
+  const id = await sorgular.anomaliOlayiAc(db, o);
+  if (!bildirilirMi(o.tur, o.kapanis !== null)) return id;
+  const is = `${o.emirNo ?? `İş ${o.isEmriId}`}${o.opNo === null ? '' : ` · OP ${o.opNo}`}`;
+  const birim = o.tur === 'teslim-riski' ? ' (teslim gününden sonra)' : '';
+  await bildirimGonder(db, {
+    tur: BILDIRIM_TURU[o.tur], baslik: `${OLAY_ADI[o.tur]}: ${is}`, metin: `${Math.round(o.dakika)} dk${birim}`, yol: '/arkon/anomali',
+    kaynakKimlik: `${o.tur}:${o.isEmriId}${o.kayitId === null ? '' : `:${o.kayitId}`}`,
+  });
+  await sorgular.anomaliOlayiBildirildi(db, id, iso(simdi));
+  return id;
+}
 const iso = (t: number): string => new Date(t).toISOString();
 const anOku = (t: string | null | undefined): number | null => (t === null || t === undefined ? null : Date.parse(t));
 
@@ -245,7 +273,7 @@ export async function zamanOlaylariniYenile(db: Db, simdi: number = Date.now()):
     const eylem = olayEylemi(o === null ? null : { kapali: o.kapanis !== null }, h.hukum);
     const kokId = h.kok === null ? null : kimlikler.get(h.kok) ?? null;
     if (eylem.tur === 'ac') {
-      const id = await sorgular.anomaliOlayiAc(db, {
+      const id = await olayAc(db, simdi, {
         tur: h.tur, isEmriId: h.d.is.id, uretimEmriId: h.d.is.uretimEmriId, emirNo: h.d.is.emirNo, opNo: h.d.is.opNo, istasyonId: h.d.is.istasyonId ?? null,
         kaynakTur: h.d.kaynak.tur, kaynakId: h.d.kaynak.id, kayitId: null, planSurumu, planAni: iso(h.planAni), tabanAni: h.d.tabanBas === null ? null : iso(h.d.tabanBas),
         tabanDakika: h.tabanDakika, gercekAni: eylem.bitti && h.gercek !== null ? iso(h.gercek) : null, dakika: eylem.dakika, kokOlayId: kokId,
@@ -280,7 +308,7 @@ export async function zamanOlaylariniYenile(db: Db, simdi: number = Date.now()):
       const sp = sapmalar.get(b.isEmriId);
       if (sp === undefined || sp.canli === null) continue;
       const kaynak = sp.canli.kaynak;
-      const ac = async (tur: AnomaliOlayTuru, dakika: number, tabanDakika: number | null) => sorgular.anomaliOlayiAc(db, {
+      const ac = async (tur: AnomaliOlayTuru, dakika: number, tabanDakika: number | null) => olayAc(db, simdi, {
         tur, isEmriId: b.isEmriId, uretimEmriId: b.uretimEmriId, emirNo: await emirNo(b.uretimEmriId), opNo: bilgi.get(b.isEmriId)?.opNo ?? null,
         istasyonId: b.istasyonId ?? bilgi.get(b.isEmriId)?.istasyonId ?? null, kaynakTur: kaynak.tur, kaynakId: kaynak.id, kayitId: null, planSurumu: sp.planSurumu,
         planAni: sp.canli!.bitis, tabanAni: sp.taban?.bitis ?? null, tabanDakika, gercekAni: sp.gercekBitis, dakika, kokOlayId: null, acilis: iso(simdi), kapanis: iso(simdi),
@@ -341,7 +369,7 @@ async function topluGirisleriDenetle(db: Db, simdi: number): Promise<void> {
       duruslar: durusAraliklari(kayitlar.map((k) => ({ zaman: Date.parse(k.zaman), durum: k.durum })), bit),
     });
     if (asim === null || !(asim > 0)) continue;
-    await sorgular.anomaliOlayiAc(db, {
+    await olayAc(db, simdi, {
       tur: 'toplu-tutarsiz', isEmriId: t.isEmriId, uretimEmriId: b.uretimEmriId, emirNo: t.emirNo, opNo: b.opNo, istasyonId: b.istasyonId,
       kaynakTur: kaynak.tur, kaynakId: kaynak.id, kayitId: t.kayitId, planSurumu: null, planAni: iso(bas), tabanAni: null, tabanDakika: null,
       gercekAni: t.zaman, dakika: asim, kokOlayId: null, acilis: iso(simdi), kapanis: iso(simdi),

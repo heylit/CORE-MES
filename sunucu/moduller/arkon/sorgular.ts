@@ -620,6 +620,11 @@ export async function anomaliOlayiAc(db: Db, o: YeniAnomaliOlayi): Promise<numbe
   return satir!.id;
 }
 
+// Bildirimin gittiği an bir kez yazılır.
+export async function anomaliOlayiBildirildi(db: Db, id: number, an: string): Promise<void> {
+  await db.sorgu('UPDATE arkon_anomali_olayi SET bildirim = $2::timestamptz WHERE id = $1 AND bildirim IS NULL', [id, an]);
+}
+
 // Yalnız açık olay güncellenir: kapanan olay bir daha değişmez. Plan anı ve açılış donmuştur, burada yazılmaz.
 export async function anomaliOlayiGuncelle(
   db: Db, id: number, g: { dakika: number; tabanDakika: number | null; gercekAni: string | null; kokOlayId: number | null; guncelleme: string; kapanis: string | null },

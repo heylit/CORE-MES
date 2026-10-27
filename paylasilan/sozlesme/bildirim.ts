@@ -70,6 +70,27 @@ export const BILDIRIM_TURLERI = {
   'stok.teslim-suresi-doldu': {
     baslik: 'Teslimin yolda süresi doldu', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
+  // Kart 764 (769 a): üretim anomalisinin zaman olayları, iş emri ve tür başına bir kez; alıcı bugünkü işlemlerdir, Bildirim yönetimi'nden
+  // role ya da kişiye yönlendirilebilir (760 c). Gerçekleşmiş halde açılan gecikme sayfada kalır, bildirilmez.
+  'arkon.gec-giris': {
+    baslik: 'İş üretime geç girdi', onem: 'uyari', alanIslemler: ['arkon.planlama', 'arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.gec-teslim': {
+    baslik: 'İşin girdisi gecikti', onem: 'uyari', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.ardil-etkisi': {
+    baslik: 'Gecikme sonraki işi aksatıyor', onem: 'uyari', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.teslim-riski': {
+    baslik: 'Emrin teslim tarihi riskte', onem: 'acil', alanIslemler: ['arkon.planlama', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: true },
+  },
+  'arkon.plan-sapmasi': {
+    baslik: 'İş plandan saptı', onem: 'bilgi', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 785 a: toplu giriş uyarısı terminalde değil, anomali sayfası ve bildirimdedir.
+  'arkon.toplu-tutarsiz': {
+    baslik: 'Toplu giriş süreye sığmıyor', onem: 'uyari', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;

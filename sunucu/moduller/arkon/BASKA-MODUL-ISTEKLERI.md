@@ -84,5 +84,5 @@ imzayı ya da davranışı değiştirirse bu test kırmızı olur ve kırılan m
     `arkon.anomali-bitis-kayma-dk` ve `arkon.anomali-sure-asim-yuzde` eşikleriyle `bitis-kaymasi` ve `sure-asimi` olayına çevirir. Ardıl etkisinin
     tahmini bitişi hâlâ Arkon'da plandaki net süreden kurulur (`tahminiBitis`); plandakine geçmek ayrı karardır. Tezgah ve sıra uyumu olaya çevrilmez.
 17. **Zaman olayları için bildirim türleri (kart 764, 769 a), paylasilan/sozlesme/bildirim.ts'ten:** `arkon.gec-giris`, `arkon.gec-teslim`,
-    `arkon.ardil-etkisi`, `arkon.teslim-riski`; olay başına bir kez (`kaynakKimlik` = tür + iş emri). Ayrı küçük yamayla gelir; `bildirim` sütunu o zamana kadar boştur.
+    `arkon.ardil-etkisi`, `arkon.teslim-riski`; olay başına bir kez (`kaynakKimlik` = tür + iş emri). KARŞILANDI (bu yama): ek olarak `arkon.plan-sapmasi` ve `arkon.toplu-tutarsiz`; gidiş anı `bildirim` sütununa yazılır.
 
