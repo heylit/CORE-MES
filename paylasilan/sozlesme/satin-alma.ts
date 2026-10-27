@@ -424,6 +424,9 @@ export const hizliKalemSemasi = z.object({
   birim: z.string().trim().max(20).default(''),
   miktar: ondalikMetinSemasi.refine((d) => !d.startsWith('-') && Number(d) > 0, 'Miktar sıfırdan büyük olur.'),
   aciklama: metin(500),
+  // 898 a: hizmet kalemi hangi parça ya da malzeme üzerinde yapılacak; fason ön talepten gelen kalem iş emrini taşır. İkisi yalnız hizmette.
+  uygulananMalzemeNo: z.number().int().positive().max(2147483647).nullable().default(null),
+  isEmriId: z.number().int().positive().max(2147483647).nullable().default(null),
 });
 export const hizliAcGovdesi = z.object({
   id: uuid,
@@ -442,10 +445,46 @@ export const talebimSemasi = z.object({
   ihtiyacTarihi: z.string().nullable(),
   olusturma: z.string(),
   uretimEmriNo: z.string().nullable(),
-  kalemler: z.array(z.object({ ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean() })),
+  // 898 a: fason ön talepten açılan talep "fason", gerisi "elle". Kalemde uygulanan parça ("kod · ad") ve fason adım ("emir no · Op n").
+  kaynak: z.enum(['elle', 'fason']),
+  kalemler: z.array(z.object({
+    ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
+  })),
 });
 export const taleplerimSorgusu = z.object({ sinir: z.coerce.number().int().min(1).max(500).default(10) });
 export const taleplerimCevabi = z.object({ talepler: z.array(talebimSemasi), toplam: z.number().int() });
+
+// 898 a: ön talep. Fason: açık emrin, siparişe ve açık talebe bağlanmamış, yoksayılmamış fason iş emri. Gereken tarih emrin teslim günüdür
+// (plan tarihi satın almaya gelmez); yoksa null. Firma rotadaki fason firmadır. Miktar emrin adedi, birim adet.
+export const onTalepSemasi = z.object({
+  kaynak: z.literal('fason'),
+  isEmriId: z.number().int(),
+  uretimEmriId: z.number().int(),
+  emirNo: z.string(),
+  opNo: z.number().int(),
+  adim: z.string().nullable(),
+  parca: z.object({ no: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  urun: z.string().nullable(),
+  miktar: z.number().int(),
+  birim: z.string(),
+  gerekenTarih: z.string().nullable(),
+  terminGun: z.number().int().nullable(),
+  firmaAdi: z.string().nullable(),
+});
+export const yoksayilanOnTalepSemasi = z.object({
+  id: z.number().int(), kaynak: z.literal('fason'), baslik: z.string(), neden: z.string(), kisiAdi: z.string().nullable(), zaman: z.string(),
+});
+export const onTalepleriCevabi = z.object({ onTalepler: z.array(onTalepSemasi), yoksayilanlar: z.array(yoksayilanOnTalepSemasi) });
+export const onTalepYoksayGovdesi = z.object({
+  kaynak: z.literal('fason'),
+  isEmriId: z.number().int().positive().max(2147483647),
+  neden: z.string().trim().min(1, 'Nedeni yazın.').max(200),
+});
+export const onTalepGeriAlGovdesi = z.object({ id: z.number().int().positive().max(2147483647) });
+export type OnTalep = z.output<typeof onTalepSemasi>;
+export type YoksayilanOnTalep = z.output<typeof yoksayilanOnTalepSemasi>;
+export type OnTalepleriCevabi = z.output<typeof onTalepleriCevabi>;
+export type OnTalepYoksayYazimi = z.output<typeof onTalepYoksayGovdesi>;
 
 export const talepParametresi = z.object({ id: uuid });
 export const firmaParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
@@ -497,6 +536,9 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
   'GET /satin-alma-taleplerim': { sorgu: z.input<typeof taleplerimSorgusu>; cevap: TaleplerimCevabi };
   'POST /satin-alma-talepleri/hizli-ac': { govde: z.input<typeof hizliAcGovdesi>; cevap: Talebim };
+  'GET /satin-alma-on-talepleri': { cevap: OnTalepleriCevabi };
+  'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };
+  'POST /satin-alma-on-talepleri/geri-al': { govde: z.input<typeof onTalepGeriAlGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/kaydet': { govde: z.input<typeof talepKaydetGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/sil': { govde: z.input<typeof talepSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };

@@ -285,6 +285,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(`/${id}/baslat`)).govde.mesaj, ISTASYONSUZ_ADIM, 'sıradaki fason: terminal başlatamaz');
     const hareketsiz = (await fasonIsEmirleri(o().vt)).find((x) => x.isEmriId === ie2);
     assert.deepEqual(hareketsiz && [hareketsiz.ilkGidis, hareketsiz.termin, hareketsiz.gonderilen, hareketsiz.donen, hareketsiz.hurda], [null, null, null, null, null]);
+    assert.deepEqual(hareketsiz && [hareketsiz.adet, hareketsiz.terminGun, hareketsiz.teslim, typeof hareketsiz.malzemeNo], [10, 5, null, 'number'], 'ön talep için emir adedi ve fason günü');
 
     // Fason: kısmi gidiş ve dönüş ayrı satırlardır; toplamlar aşılamaz. Depo kaydeder; operatör kaydedemez.
     const fasonKisi = (kisi: string, yol: string, govde?: unknown, ik = randomUUID()) =>

@@ -7,6 +7,7 @@ import {
   ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
+import { fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
   id: '00000000-0000-4000-8000-000000000001', baslik: 'Deneme', birim: null, talepEdenKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null, notlar: '',
@@ -386,4 +387,29 @@ test('SAT-77: stok tutarı miktar x TL birim fiyat toplamıdır, kuruşa yuvarla
   // Hiç fiyatlı stok yoksa tutar boş (sıfır uydurulmaz).
   assert.deepEqual(stokTutari([{ miktar: '3', tryBirimFiyati: null }]), { tutar: null, fiyatsizKalem: 1 });
   assert.deepEqual(stokTutari([]), { tutar: null, fiyatsizKalem: 0 });
+});
+
+test('898 a: fason ön talep bağlı, yoksayılmış ve gönderilmiş adımı almaz; en erken teslim üstte, tarihsiz sonda', () => {
+  const f = (isEmriId: number, teslim: string | null, gonderilen: number | null = null) => ({
+    isEmriId, uretimEmriId: 1, emirNo: `E${isEmriId}`, urun: null, opNo: 10, adim: null, firmaId: 1, adet: 5, malzemeNo: null, terminGun: 3, teslim,
+    planlananGidis: null, ilkGidis: null, termin: null, ilkDonus: null, sonDonus: null, gonderilen, donen: null, hurda: null,
+  });
+  const l = fasonOnTalepAdaylari([f(1, null), f(2, '2026-11-05'), f(3, '2026-11-01'), f(4, '2026-10-30'), f(5, '2026-10-29'), f(6, '2026-10-28', 2)], new Set([4]), new Set([5]));
+  assert.deepEqual(l.map((x) => x.isEmriId), [3, 2, 1]);
+});
+
+test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açık, bağsız, tekil ve seçilen emrin olmalı', () => {
+  const k = (uygulananMalzemeNo: number | null, isEmriId: number | null) => ({ malzemeNo: null, ad: 'Isıl işlem', birim: 'adet', miktar: '1', aciklama: '', uygulananMalzemeNo, isEmriId });
+  const emir = (i: number) => (i === 7 ? 100 : undefined);
+  assert.equal(hizliBagReddi('malzeme', [k(3, null)], null, emir), ILETILER.bagYalnizHizmette);
+  assert.equal(hizliBagReddi('malzeme', [k(null, 7)], null, emir), ILETILER.bagYalnizHizmette);
+  assert.equal(hizliBagReddi('malzeme', [k(null, null)], null, emir), null);
+  assert.equal(hizliBagReddi('hizmet', [k(3, 7)], null, emir), null);
+  assert.equal(hizliBagReddi('hizmet', [k(null, 7)], 100, emir), null);
+  assert.equal(hizliBagReddi('hizmet', [k(null, 7)], 200, emir), ILETILER.fasonEmirFarkli);
+  assert.equal(hizliBagReddi('hizmet', [k(null, 8)], null, emir), ILETILER.fasonOnTalepYok);
+  assert.equal(hizliBagReddi('hizmet', [k(null, 7), k(null, 7)], null, emir), ILETILER.fasonTekrar);
+  assert.equal(uygulananKartReddi(undefined), ILETILER.uygulananKartYok);
+  assert.equal(uygulananKartReddi({ tur: 'hizmet' }), ILETILER.uygulananHizmet);
+  assert.equal(uygulananKartReddi({ tur: 'mamul' }), null);
 });

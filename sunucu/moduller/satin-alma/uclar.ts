@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, sirketAdiCevabi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi,
+  acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, sirketAdiCevabi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   satinAlmaOzetiCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
@@ -50,6 +50,16 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/hizli-ac', yetki: 'satin-alma.talep-ac', govde: hizliAcGovdesi, cevap: talebimSemasi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, govde, denetimEki }) => servis.hizliAc(db, kullanici, govde, denetimEki),
+  }),
+  // 898 a, 903 a: ön talepler talep açabilen herkese açıktır (yeni işlem yok); yoksayma ve geri alma ayrı komuttur.
+  uc({ yontem: 'GET', yol: '/satin-alma-on-talepleri', yetki: 'satin-alma.talep-ac', cevap: onTalepleriCevabi, isle: ({ db }) => servis.onTalepleri(db) }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-on-talepleri/yoksay', yetki: 'satin-alma.talep-ac', govde: onTalepYoksayGovdesi, cevap: tamamCevabi,
+    isle: ({ db, kullanici, govde }) => servis.onTalepYoksay(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-on-talepleri/geri-al', yetki: 'satin-alma.talep-ac', govde: onTalepGeriAlGovdesi, cevap: tamamCevabi,
+    isle: ({ db, govde }) => servis.onTalepGeriAl(db, govde.id),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/ac', yetki: 'satin-alma.talep-ac', govde: talepGovdesi, cevap: talepSemasi,

@@ -2,6 +2,7 @@
 import { PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { HizliKalem, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
@@ -83,6 +84,13 @@ export const ILETILER = {
   kapatmaVar: 'Siparişin kalanı zaten kapatıldı ya da sipariş iptal edildi.',
   kapatmaKalanYok: 'Siparişin bütün satırları teslim alındı; kapatılacak kalan yok.',
   numaraUzun: 'Numara kuralı çok uzun numara üretti; Sistem ayarlarındaki numara kuralını kısaltın.',
+  bagYalnizHizmette: 'Uygulanan parça ve fason adım yalnız hizmet talebinde yazılır.',
+  uygulananKartYok: 'Uygulanan parça ya da malzeme kartı bulunamadı.',
+  uygulananHizmet: 'Uygulanan kart bir parça ya da malzeme olmalı; hizmet kartı seçilemez.',
+  fasonOnTalepYok: 'Bu fason adım için ön talep yok: emir kapandı, adım bitti ya da talebi zaten açıldı. Sayfayı yenileyin.',
+  fasonEmirFarkli: 'Fason adım seçilen üretim emrinin değil.',
+  fasonTekrar: 'Aynı fason adım talepte iki kez var.',
+  onTalepYoksayYok: 'Yoksayma kaydı bulunamadı; sayfayı yenileyin.',
 } as const;
 
 // SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yanlış iptal elle önceki duruma çevrilir (SAT-68).
@@ -346,7 +354,7 @@ export function satinAlinabilirKartReddi(kart: Parameters<typeof talepKartiReddi
 }
 // #1192: kartsız kalemin kategorisi talep türünden gelir; kartlıda kategori karttandır.
 export const KARTSIZ_KATEGORI: Record<TalepTuru, string> = { malzeme: '', hizmet: 'Hizmet' };
-export function hizliKalemReddi(k: HizliKalem): string | null {
+export function hizliKalemReddi(k: Pick<HizliKalem, 'malzemeNo' | 'ad' | 'birim'>): string | null {
   if (k.malzemeNo !== null) return null;
   if (k.ad === '') return ILETILER.hizliKalemBos;
   return k.birim === '' ? ILETILER.hizliKalemBirimsiz : null;
@@ -589,12 +597,45 @@ export function fasonTerminUyumu(gecmis: readonly FasonGecmisiSatiri[]): FasonTe
     .sort((a, b) => b.ortalamaFarkGun - a.ortalamaFarkGun || a.firmaId - b.firmaId);
 }
 
-export function talebim(t: Talep): Talebim {
+// 898 a: kalemin bağları (uygulanan parça ve fason adım) ayrı okunur; tam talep görünümüne girmez. Bağı olmayan kalemde ikisi de null.
+export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null }
+export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map()): Talebim {
+  const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
     uretimEmriNo: t.uretimEmriNo,
-    kalemler: t.kalemler.map((k) => ({ ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null })),
+    kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
+    kalemler: t.kalemler.map((k) => ({ ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id) })),
   };
+}
+
+// 898 a: fason ön talep. Bitmemiş fason iş emirlerinden siparişe ya da açık talebe bağlanmamış, yoksayılmamış ve henüz firmaya gönderilmemiş
+// olanlar (gönderilmişse iş başlamıştır, ön talep geç kalmıştır). En erken gereken üstte; tarihsiz sonda.
+export function fasonOnTalepAdaylari(
+  adaylar: readonly FasonIsEmri[], bagli: ReadonlySet<number>, yoksayilan: ReadonlySet<number>,
+): FasonIsEmri[] {
+  return adaylar
+    .filter((x) => !bagli.has(x.isEmriId) && !yoksayilan.has(x.isEmriId) && (x.gonderilen ?? 0) === 0)
+    .sort((a, b) => (a.teslim ?? '9999').localeCompare(b.teslim ?? '9999') || a.emirNo.localeCompare(b.emirNo) || a.opNo - b.opNo);
+}
+// Uygulanan parça ve fason adım yalnız hizmet talebindedir; bir fason adım bir talepte bir kez geçer ve talebin emri seçiliyse o emrindir.
+export function hizliBagReddi(
+  tur: TalepTuru, kalemler: readonly HizliKalem[], emirId: number | null, fasonEmri: (isEmriId: number) => number | undefined,
+): string | null {
+  const bagli = kalemler.filter((k) => k.uygulananMalzemeNo !== null || k.isEmriId !== null);
+  if (bagli.length > 0 && tur !== 'hizmet') return ILETILER.bagYalnizHizmette;
+  const isler = kalemler.flatMap((k) => (k.isEmriId === null ? [] : [k.isEmriId]));
+  if (new Set(isler).size !== isler.length) return ILETILER.fasonTekrar;
+  for (const i of isler) {
+    const emir = fasonEmri(i);
+    if (emir === undefined) return ILETILER.fasonOnTalepYok;
+    if (emirId !== null && emir !== emirId) return ILETILER.fasonEmirFarkli;
+  }
+  return null;
+}
+export function uygulananKartReddi(kart: { tur: string } | undefined): string | null {
+  if (kart === undefined) return ILETILER.uygulananKartYok;
+  return (TALEPTE_SECILEN_TURLER as readonly string[]).includes(kart.tur) ? null : ILETILER.uygulananHizmet;
 }
 
 // 257 a: kartlı kalem kartın birimiyle girilir, birim dönüşümü yoktur. Birimsiz kart ve kartsız kalem serbesttir; kartı ve birimi

@@ -7,7 +7,7 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  AcikEmirlerCevabi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  AcikEmirlerCevabi, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -17,12 +17,13 @@ import { alisBelgeleri, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOde
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../cizimler/disari.ts';
-import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
   ILETILER, ISLEM, emirAcikMi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, VARSAYILAN_AYLIK_FAIZ, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
+  fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
@@ -316,7 +317,88 @@ const gorunen = (k: Kullanici, t: Talep): Talep => (tamGorurMu(k.islemler) ? t :
 export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<TaleplerimCevabi> {
   const satirlar = await s.talepSatirlariOku(db, k.id);
   const talepler = await talepleriKur(db, satirlar.slice(0, sinir));
-  return { talepler: talepler.map(talebim), toplam: satirlar.length };
+  const baglar = await kalemBagGorunumu(db, talepler.map((t) => t.id));
+  return { talepler: talepler.map((t) => talebim(t, baglar)), toplam: satirlar.length };
+}
+
+// 898 a: kalem bağlarının görünen hâli; adlar sahiplerinden (malzeme kartı, iş emri). Silinmiş kart ya da iş emri numarayla yazılır.
+async function kalemBagGorunumu(db: Db, talepIdleri: readonly string[]): Promise<Map<string, KalemBagi>> {
+  const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
+  const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
+  const isler = new Map<number, string>();
+  for (const id of new Set(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])))) {
+    const o = await isEmriOzeti(db, id);
+    isler.set(id, o === null ? `#${id}` : `${o.emirNo} · Op ${o.opNo}`);
+  }
+  return new Map(satirlar.map((r) => {
+    const kart = r.uygulananMalzemeNo === null ? undefined : kartlar.get(r.uygulananMalzemeNo);
+    return [r.kalemId, {
+      uygulanan: r.uygulananMalzemeNo === null ? null : kart ? `${kart.kod} · ${kart.ad ?? ''}`.trim() : `#${r.uygulananMalzemeNo}`,
+      fasonAdim: r.isEmriId === null ? null : isler.get(r.isEmriId)!,
+    }];
+  }));
+}
+
+// 898 a: ön talep yalnız planlı ya da başlamış emrin fason adımıdır; taslak emir henüz yayımlanmamıştır.
+async function acikFasonlar(db: Db) {
+  const l = await fasonIsEmirleri(db);
+  const durumlar = await emirDurumlari(db, l.map((x) => x.uretimEmriId));
+  return l.filter((x) => emirAcikMi(durumlar.get(x.uretimEmriId)));
+}
+
+// 898 a: fason ön talepler (açık, bağsız, yoksayılmamış, gönderilmemiş) ve hâlâ açık adımların yoksayma kararları. Talep açabilen herkes
+// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir.
+export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
+  const adaylar = await acikFasonlar(db);
+  const acik = new Map(adaylar.map((x) => [x.isEmriId, x]));
+  const bagli = await s.fasonBagliIsEmirleri(db, [...acik.keys()]);
+  const yoksaylar = (await s.fasonYoksaylari(db)).filter((y) => acik.has(y.isEmriId));
+  const liste = fasonOnTalepAdaylari(adaylar, bagli, new Set(yoksaylar.map((y) => y.isEmriId)));
+  const kartlar = await malzemeOzetleri(db, liste.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])));
+  const firmalar = await firmaOzetleri(db, [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
+  const kisiler = await kisiAdlari(db, yoksaylar.map((y) => y.kisiId));
+  const ad = (x: { emirNo: string; opNo: number; adim: string | null }) => `${x.emirNo} · Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`;
+  return {
+    onTalepler: liste.map((x) => {
+      const kart = x.malzemeNo === null ? undefined : kartlar.get(x.malzemeNo);
+      return {
+        kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
+        parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
+        miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
+        firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+      };
+    }),
+    yoksayilanlar: yoksaylar.map((y) => ({
+      id: y.id, kaynak: 'fason' as const, baslik: ad(acik.get(y.isEmriId)!), neden: y.neden, kisiAdi: kisiler.get(y.kisiId) ?? null, zaman: y.zaman,
+    })),
+  };
+}
+// Yalnız açık fason adım yoksayılır; ikinci kez yoksaymak ilk kararı bozmaz.
+export async function onTalepYoksay(db: Db, k: Kullanici, g: OnTalepYoksayYazimi): Promise<{ tamam: true }> {
+  if (!(await acikFasonlar(db)).some((x) => x.isEmriId === g.isEmriId)) throw dogrulama(ILETILER.fasonOnTalepYok, 'isEmriId');
+  await s.fasonYoksayEkle(db, { isEmriId: g.isEmriId, neden: g.neden, kisiId: k.id });
+  return { tamam: true };
+}
+export async function onTalepGeriAl(db: Db, id: number): Promise<{ tamam: true }> {
+  if (!(await s.onTalepYoksaySil(db, id))) throw bulunamadi(ILETILER.onTalepYoksayYok);
+  return { tamam: true };
+}
+
+// 898 a: talebe çevrilen fason adım açık, bağsız olmalı; denetim ile yazma arası iş emri başına kilitlidir. Uygulanan kart fiziksel karttır.
+async function hizliBaglariDenetle(db: Db, g: HizliAcYazimi): Promise<void> {
+  const isler = g.kalemler.flatMap((x) => (x.isEmriId === null ? [] : [x.isEmriId]));
+  await s.fasonBagKilidi(db, isler);
+  const acik = isler.length === 0 ? new Map<number, number>()
+    : new Map((await acikFasonlar(db)).map((x) => [x.isEmriId, x.uretimEmriId]));
+  const bagli = await s.fasonBagliIsEmirleri(db, isler);
+  const red = hizliBagReddi(g.tur, g.kalemler, g.uretimEmriId, (i) => (bagli.has(i) ? undefined : acik.get(i)));
+  if (red !== null) throw dogrulama(red, 'kalemler');
+  const uygulananlar = [...new Set(g.kalemler.flatMap((x) => (x.uygulananMalzemeNo === null ? [] : [x.uygulananMalzemeNo])))];
+  const kartlar = await malzemeOzetleri(db, uygulananlar);
+  for (const no of uygulananlar) {
+    const kartRed = uygulananKartReddi(kartlar.get(no));
+    if (kartRed !== null) throw dogrulama(kartRed, 'kalemler');
+  }
 }
 
 // #375: ana sayfadan talep. Kişi her zaman oturumdaki kişidir; kart seçilen kalem kataloğa bağlanır (katalogda yoksa karttan açılır),
@@ -336,6 +418,7 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
     const red = hizliKalemReddi(x);
     if (red !== null) throw dogrulama(red, `kalemler.${i}`);
   });
+  await hizliBaglariDenetle(db, g);
   const nolar = [...new Set(g.kalemler.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))];
   const kartlar = await malzemeOzetleri(db, nolar);
   for (const no of nolar) {
@@ -361,7 +444,10 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
     notlar: g.aciklama, durum: 'taslak', iptalNedeni: '', agirliklar: null, kalemler, teklifIstekleri: [], teklifler: [], karar: null,
     onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: g.uretimEmriId,
   };
-  return talebim(await talepAc(db, k, t, izYaz));
+  const acilan = await talepAc(db, k, t, izYaz);
+  await s.kalemBaglariYaz(db, t.id, g.kalemler.flatMap((x, i) => (x.uygulananMalzemeNo === null && x.isEmriId === null ? []
+    : [{ kalemId: kalemler[i]!.id, uygulananMalzemeNo: x.uygulananMalzemeNo, isEmriId: x.isEmriId }])));
+  return talebim(acilan, await kalemBagGorunumu(db, [t.id]));
 }
 
 // E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; tedarikçi onay durumunu sunucu açılışında kablolama kaydeder (ADR 0006).

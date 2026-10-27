@@ -429,7 +429,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   test('KD-012: aynı yeni kart iki hızlı talepte aynı anda: ikisi de açılır, kart tek katalog kalemine bağlanır', async () => {
     const no5 = await kartNo('HM-SAT-00005');
     const talepEden: Kullanici = { id: kisi.talep!, ad: 'Deneme talep', islemler: ['satin-alma.talep-ac'] };
-    const govde = () => ({ id: randomUUID(), tur: 'malzeme' as const, ihtiyacTarihi: null, aciklama: '', uretimEmriId: null, kalemler: [{ malzemeNo: no5, ad: '', birim: '', miktar: '1', aciklama: '' }] });
+    const govde = () => ({ id: randomUUID(), tur: 'malzeme' as const, ihtiyacTarihi: null, aciklama: '', uretimEmriId: null, kalemler: [{ malzemeNo: no5, ad: '', birim: '', miktar: '1', aciklama: '', uygulananMalzemeNo: null, isEmriId: null }] });
     // İlk talep kartın katalog kalemini açar ve işlemi açık tutar; ikinci istek bu sırada gelir.
     let ikinci: ReturnType<typeof istek> | null = null;
     await ortam!.vt.tx(async (db) => {
