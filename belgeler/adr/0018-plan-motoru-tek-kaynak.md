@@ -27,9 +27,11 @@ kalanını sunucu adetten hesaplar, motor kullanır), 396 a, 397 a, 338 a (tek p
    çevirici de aynı yere taşınır (sonraki iş).
 2. **Sunucuda çalışma.** `plan-motoru.ts`: motor `node:worker_threads` iş parçacığında, boş `vm` bağlamında koşar; olay döngüsünü tutmaz.
    Aynı anda tek çözüm, süre sınırı (`COZUM_SURESI_MS`), süre aşılınca ya da iş parçacığı çökünce ret. Dış çağrı ve yeni paket yok.
-3. **Son söz sunucuda.** Tarayıcı önizler (deneme, stüdyo, senaryo; aramalı). Asıl plana yazan komutta (kuyruk yaz, canlıya al) sunucu
-   motoru aramasız kipte (`sabit`: tabandaki tezgâh sırası korunur; `yeni`: kuraldan) yeniden koşar ve kendi sonucunu yazar. Aynı girdi her
-   koşuda aynı planı verir. Önizlemeyle sunucu sonucu farklıysa cevap farkı döner.
+3. **Son söz sunucuda.** Tarayıcı önizler (deneme, stüdyo, senaryo; aramalı). Taslağa yazan komutta (kuyruk yaz) sunucu motoru aramasız
+   kipte (`sabit`: tabandaki tezgâh sırası korunur; `yeni`: kuraldan) yeniden koşar ve kendi sonucunu yazar. Aynı girdi her koşuda aynı
+   planı verir. Önizlemeyle sunucu sonucu farklıysa cevap farkı döner. Canlıya alma motoru koşmaz (762 b): onaylanan taslağın saatleri
+   aynen yayınlanır; taslak yazıldıktan sonra zaman geçse de yeniden dizilmez. Geçmişte kalan başlangıç terminalde gerçek saatle kaydedilir.
+   Vardiyası tanımsız tezgâhtaki taslak yeri (168 b) canlıya geçmez; sunucu bunu tezgâhın takviminden okur.
 4. **Kalan tek kaynak (391 a).** Çalışan adımın kalanını yalnız plan modülü hesaplar (396 a standart birim süre, 397 a hurda adım bitince).
    Motorun gerçekleşen kaydı `{ m, S, kalan, sayim }` taşır: `kalan` verimli çalışma saati, `sayim` son sayım anı (yoksa başlama). `kalan`
    varsa motor bitişi `sayim`dan takvimle `kalan` kadar ilerletir; yoksa bugünkü yol sürer (elle giriş, deneme).
