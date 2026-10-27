@@ -24,12 +24,11 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör
 // yalnız yeni ekranı görür; başkası eski adreste "yetkiniz yok" görür (App.tsx).
 // Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
-// tam: yalnız bu adres (alt yolu değil); Reçete ve Rota'nın kök adresinin altında eski kalan Planlama sayfaları ve bölümlerin eski adresi vardır.
 // haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar, Logo gönderimi).
 // yalnizYonetici: eski ekran yalnız yöneticide açılır ve geçiş yalnız ona görünür.
 // serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
 // (Reçete ve Rota'dan Planlama'ya) yol kalmaz. Tek maddelik menü de eski sayfadaki gibi şerit çizer (Kuyruk, Üretim Terminali).
-interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; tam?: true; serit?: true; haric?: readonly string[]; yalnizYonetici?: true }
+interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; serit?: true; haric?: readonly string[]; yalnizYonetici?: true }
 export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/kuyruk', eski: '/kuyruk/eski', serit: true },
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
@@ -37,16 +36,12 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/malzemeler', eski: '/malzemeler/eski', serit: true, haric: ['/malzemeler/logo'] },
   // Resim ve modellerin (597 a) eski görünümde karşılığı yoktur.
   { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler'] },
-  ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
-    yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
-  })),
 ];
 
 const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);
-const yeniMi = (adres: string, t: TasinanEkran): boolean => (t.tam
-  ? adres === t.yol
-  : altYolMu(adres, t.yol) && !altYolMu(adres, t.eski) && !(t.haric ?? []).some((h) => altYolMu(adres, h)));
-const eskiMi = (adres: string, t: TasinanEkran): boolean => (t.tam ? adres === t.eski : altYolMu(adres, t.eski));
+const yeniMi = (adres: string, t: TasinanEkran): boolean =>
+  altYolMu(adres, t.yol) && !altYolMu(adres, t.eski) && !(t.haric ?? []).some((h) => altYolMu(adres, h));
+const eskiMi = (adres: string, t: TasinanEkran): boolean => altYolMu(adres, t.eski);
 const yenisi = (adres: string, t: TasinanEkran): string => t.yol + adres.slice(t.eski.length);
 const eskisi = (adres: string, t: TasinanEkran): string => t.eski + adres.slice(t.yol.length);
 // Sondaki `/` aynı adrestir (yönlendirici de öyle eşler).
@@ -60,7 +55,7 @@ export function yeniEkranAdresiMi(adres: string): boolean {
     || TASINAN_EKRANLAR.some((t) => !t.serit && yeniMi(temiz(adres), t));
 }
 
-// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/recete-rota/eski/stock` -> Stok, kök madde değil).
+// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/malzemeler/eski/ayarlar` -> Malzeme ayarları, kök madde değil).
 export function seritAdresi(adres: string): string {
   const a = temiz(adres);
   const t = TASINAN_EKRANLAR.find((e) => e.serit && eskiMi(a, e));

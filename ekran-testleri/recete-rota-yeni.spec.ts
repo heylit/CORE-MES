@@ -44,10 +44,9 @@ test.describe('R0 iskelet', () => {
   });
 
   test.describe('eski adres (541)', () => {
-    // Planlama rolü sayfayı görür, yeni ekran kapısı yoktur: eski adres ona da yeni ekranı açar. Eski görünüm yalnız yöneticidedir
-    // (681 a): planlamacının kişi menüsünde geçiş yoktur, eski çerçevenin adresi ona kapalıdır.
+    // Planlama rolü sayfayı görür: kişi menüsünde görünüm geçişi yoktur. Eski çerçeve kalktı (805): eski adres sayfa bulunamadı der.
     test.use({ hesap: 'ornek.planlama' });
-    test("Reçete ve Rota'yı gören açar; eski görünüm geçişi yoktur, eski adres kapalıdır", async ({ page, ag, ac }) => {
+    test("Reçete ve Rota'yı gören açar; eski görünüm geçişi yoktur, eski adres yoktur", async ({ page, ag, ac }) => {
       const bolum = page.locator('.tc-rry-icerik[data-bolum="stock"]');
       await ac('/recete-rota/stock');
       await expect(bolum.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
@@ -58,7 +57,7 @@ test.describe('R0 iskelet', () => {
       await page.keyboard.press('Escape');
       expect(ag.hatalar).toEqual([]);
       await ac('/recete-rota/eski/stock');
-      await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Sayfa bulunamadı' })).toBeVisible();
       await expect(page.locator('main iframe')).toHaveCount(0);
     });
   });

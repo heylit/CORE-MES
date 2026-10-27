@@ -31,14 +31,14 @@ test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görün
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
   await ac('/ik');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
-  await ac('/recete-rota/eski/res');
-  const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+  await ac('/malzemeler/eski/ayarlar');
+  const menu = page.getByRole('navigation', { name: 'Malzemeler ve Hizmetler menüsü' });
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[aria-current="page"]')).toContainText('Kaynaklar');
+  await expect(menu.locator('[aria-current="page"]')).toContainText('Malzeme ayarları');
 });
 
 // Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a).
-for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota/res', 'Kaynaklar'], ['/recete-rota/eski/res', 'Kaynaklar']] as const) {
+for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota/res', 'Kaynaklar']] as const) {
   test(`${yol}: Reçete ve Rota yeni ekranında kabuğun şeridi durur, tek şerit vardır`, async ({ page, ac }) => {
     await ac(yol);
     const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });

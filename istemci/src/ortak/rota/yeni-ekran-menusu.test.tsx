@@ -95,10 +95,10 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     adreste('/ik');
     expect(serit('İnsan Kaynakları')).not.toBeNull();
     cleanup();
-    adreste('/recete-rota/eski/res');
-    const menu = serit('Reçete ve Rota');
+    adreste('/malzemeler/eski/ayarlar');
+    const menu = serit('Malzemeler ve Hizmetler');
     expect(menu).not.toBeNull();
-    expect(within(menu as HTMLElement).getByRole('link', { name: /^Kaynaklar/ }).getAttribute('aria-current')).toBe('page');
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Malzeme ayarları/ }).getAttribute('aria-current')).toBe('page');
   });
 });
 
@@ -118,7 +118,7 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
   it('yeni ve eski adres kayıtlı modül rotasıdır; eski adres sayfanın alt yoludur', () => {
     for (const t of TASINAN_EKRANLAR) {
       for (const yol of [t.yol, t.eski]) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
-      expect(t.eski.startsWith(`${t.yol}/`) || t.eski.startsWith('/recete-rota/eski')).toBe(true);
+      expect(t.eski.startsWith(`${t.yol}/`)).toBe(true);
     }
   });
 
@@ -201,13 +201,13 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
       expect(eskiGorunumAdresiMi(t.yol), t.yol).toBe(false);
     }
     expect(eskiGorunumAdresiMi('/arkon/eski/pano/5')).toBe(true);
-    expect(eskiGorunumAdresiMi('/recete-rota/eski/plan')).toBe(false);
+    expect(eskiGorunumAdresiMi('/recete-rota/eski')).toBe(false);
     expect(eskiGorunumAdresiMi('/kuyruk/eskisi')).toBe(false);
     expect(eskiGorunumAdresiMi('/ik')).toBe(false);
   });
 });
 
-describe('Reçete ve Rota eski adresinde yeni ekran (541b, 553 1 a)', () => {
+describe('Reçete ve Rota yeni ekranı; eski çerçeve kalktı (805)', () => {
   const adreste = (adres: string) => render(
     <MemoryRouter initialEntries={[adres]}>
       <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={ISLEMLER}><p>icerik</p></Kabuk>
@@ -216,22 +216,16 @@ describe('Reçete ve Rota eski adresinde yeni ekran (541b, 553 1 a)', () => {
   const serit = () => screen.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   const secili = () => within(serit()).getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent);
 
-  it('yalnız yedi bölüm adresi taşınmıştır; eski planlama adresleri Planlama sayfasına yönlenir', () => {
-    expect(gorunumGecisi('/recete-rota')).toEqual({ baslik: 'Eski görünüm', yol: '/recete-rota/eski' });
-    expect(gorunumGecisi('/recete-rota/stock/')).toEqual({ baslik: 'Eski görünüm', yol: '/recete-rota/eski/stock' });
-    expect(gorunumGecisi('/recete-rota/eski/res')).toEqual({ baslik: 'Yeni görünüm', yol: '/recete-rota/res' });
-    expect(gorunumGecisi('/recete-rota/plan')).toBeNull();
-    expect(gorunumGecisi('/recete-rota/stockx')).toBeNull();
+  it('eski görünüm geçişi yoktur', () => {
+    expect(gorunumGecisi('/recete-rota', ISLEMLER)).toBeNull();
+    expect(gorunumGecisi('/recete-rota/stock/', ISLEMLER)).toBeNull();
+    expect(seritAdresi('/recete-rota/eski/stock')).toBe('/recete-rota/eski/stock');
   });
 
-  it('kabuk şeridi yeni ekranda durur; eski görünümde bölümün maddesi seçili görünür', () => {
+  it('kabuk şeridi yeni ekranda durur, bölümün maddesi seçili görünür', () => {
     expect(yeniEkranAdresiMi('/recete-rota')).toBe(false);
-    expect(seritAdresi('/recete-rota/eski/stock')).toBe('/recete-rota/stock');
     adreste('/recete-rota/schema');
     expect(secili()).toEqual(['Ürün ve rotalar']);
     expect(within(serit()).queryByRole('link', { name: /^Planlama motoru/ })).toBeNull();
-    cleanup();
-    adreste('/recete-rota/eski/stock');
-    expect(secili()).toEqual(['Stok']);
   });
 });
