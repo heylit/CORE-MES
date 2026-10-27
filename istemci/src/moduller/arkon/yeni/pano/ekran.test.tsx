@@ -13,7 +13,7 @@ const bolum = async (ad: string) => screen.findByRole('region', { name: ad }, { 
 const yazmalar = (l: Istek[]) => l.filter((i) => i.yontem === 'POST' && /\/(yaz|sil)$/.test(i.yol));
 const bekle = () => new Promise((r) => { setTimeout(r, 400); });
 
-const TESIS = { wcs: [{ id: 'W1', name: 'Talaşlı' }], sts: [{ id: 'S1', name: 'Torna', wc: 'W1', t: 'cnc' }, { id: 'S2', name: 'Freze', wc: 'W1', t: 'cnc' }], mcs: [] };
+const TESIS = { wcs: [{ id: 'W1', name: 'Talaşlı' }], sts: [{ id: 'S1', name: 'Torna', wc: 'W1', t: 'cnc', tmi: 7 }, { id: 'S2', name: 'Freze', wc: 'W1', t: 'cnc', tmi: 8 }], mcs: [] };
 const VARDIYA = [{ name: 'A', start: '00:00', end: '23:59', breaks: [] }];
 // kv belgeleri depoda { v } sarmalıyla durur (store.ts).
 const belgeler = {
@@ -31,6 +31,21 @@ describe('A3 sayfaları', () => {
     const b = await bolum('Pano');
     expect(await within(b).findByText('Torna', { exact: false }, { timeout: 10000 })).toBeTruthy();
     await bekle();
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 20000);
+
+  // 778 a: CNC ana sayfa düzeni. Grafik kartları çizilir; istasyon resimleri (TMI kimliğiyle) tek istekle Çizim Merkezi'nden okunur.
+  // Deneme tesisinin istasyonları sunucu kipindeki gibi TMI kimliklidir.
+  it('Pano grafik kartlarını çizer, istasyon resimlerini tek istekle okur ve kayıt yazmaz', async () => {
+    const istekler = sunucuKur(YONETICI, { belgeler });
+    arkonAc('/arkon/pano');
+    const b = await bolum('Pano');
+    await within(b).findByText('Torna', { exact: false }, { timeout: 10000 });
+    for (const ad of ['Vardiya OEE', 'İstasyon durumu', 'Vardiya üretimi', 'Açık çağrılar', 'Açık arızalar', 'Planlı duruşlar']) {
+      expect(within(b).getByRole('region', { name: ad })).toBeTruthy();
+    }
+    expect(within(b).getByRole('img', { name: /0 çalışıyor, 0 plansız duruş, 0 planlı duruş, 2 diğer/ })).toBeTruthy();
+    await waitFor(() => { expect(istekler.filter((i) => i.yol === '/cizimler/kucuk-resimler')).toHaveLength(1); }, { timeout: 5000 });
     expect(yazmalar(istekler)).toEqual([]);
   }, 20000);
 
