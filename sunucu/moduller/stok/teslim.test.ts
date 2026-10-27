@@ -10,7 +10,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { gelecekSepetCevabi, isMalzemeleriCevabi, kodCozCevabi, lotBekleyenKartlarCevabi, refakatIziCevabi, refakatLotaBaglaCevabi, refakatKartSatirlariCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, sepetTeslimEtCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { gelecekSepetCevabi, istasyonSepetleriCevabi, isMalzemeleriCevabi, kodCozCevabi, lotBekleyenKartlarCevabi, refakatIziCevabi, refakatLotaBaglaCevabi, refakatKartSatirlariCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, sepetTeslimEtCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SepetTeslimEtCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, KodCozCevabi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi, IstekMalzemeleriCevabi, MalzemeIstegiCevabi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutCozCevabi, TeslimCevabi, TeslimKutusuCevabi, ToplamaAyrintiCevabi, UretimHazirligiCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -1385,6 +1385,61 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const tekrar = teslimCevabi.parse((await cek('operator', {})).govde).teslim;
     assert.equal(tekrar.id, t.id, 'aynı kimlik ikinci kez taşımaz');
     assert.deepEqual([await bakiye(ym, (await istasyonKonumu(a.id))!, s10), await bakiye(ym, (await istasyonKonumu(b.id))!, s10)], ['1.000', '3.000']);
+    adimStatusuCozucusuKaydet(async () => null);
+  });
+
+  test('745 iki sepet: önceki istasyonun parçası gelende, burada duran çıkanda; yoldaki teslim gelende; başka emir ve kapsam dışı görünmez', async () => {
+    const ym = await kart('yarimamul');
+    const [a, b] = [await istasyon(), await istasyon()];
+    const tip = await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TS-${sira}`]);
+    const e = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id) VALUES ($1, $2, 10, $3, $4, $5, $6) RETURNING id',
+      [`P-S${sira}`, 'Deneme', a.id, kisiler.get('yonetici'), ym, await revizyon(ym)]))!.id;
+    const adim = async (opNo: number, istasyonId: number): Promise<number> => (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [e, opNo / 10, opNo, tip!.id, `OP ${opNo}`, istasyonId]))!.id;
+    await adim(10, a.id);
+    const op20 = await adim(20, b.id);
+    const s10 = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('M-S', 'OP 10', $1, '#2F6FDE', 'YM') RETURNING id", [`adim-${randomBytes(4).toString('hex')}`]))!.id;
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym ? s10 : null));
+    await o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId: op20, istasyonId: a.id, kisiId: kisiler.get('operator')!, fark: '4' }));
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e]);
+
+    const sepetler = async (istasyonId: number, emirId = e, kim = 'operator') => {
+      const c = await istek(kim, 'GET', `/stok/teslim-kutusu/istasyon-sepetleri?istasyonId=${istasyonId}&uretimEmriId=${emirId}`);
+      return c.durum === 200 ? istasyonSepetleriCevabi.parse(c.govde) : c.durum;
+    };
+    const bde = await sepetler(b.id);
+    assert.ok(typeof bde !== 'number');
+    assert.deepEqual(bde.gelen.bekleyen.map((x) => [x.kaynak.id, x.malzemeId, x.statuId, x.miktar]), [[a.id, ym, s10, '4.000']], 'önceki istasyonda üretilen gelende');
+    assert.deepEqual([bde.gelen.yolda, bde.cikan], [[], []]);
+    const ade = await sepetler(a.id);
+    assert.ok(typeof ade !== 'number');
+    assert.deepEqual(ade.cikan.map((x) => [x.malzemeId, x.miktar, x.sonraki?.istasyonId]), [[ym, '4.000', b.id]], 'burada duran parça sonraki istasyonuyla çıkanda');
+    assert.deepEqual(ade.gelen.bekleyen, [], 'kendi sepeti gelende görünmez');
+
+    const g = await istek<TeslimCevabi>('operator', 'POST', '/stok/teslimler/gonder', {
+      statuId: s10, not: null, kaynakKimligi: randomUUID(), malzemeId: ym, miktar: '3', partiId: ade.cikan[0]!.partiId, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id }, uretimEmriId: e, kartOnayi: true,
+    });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    const sonra = await sepetler(b.id);
+    assert.ok(typeof sonra !== 'number');
+    assert.deepEqual(sonra.gelen.yolda.map((t) => [t.id, t.miktar, t.statuId]), [[g.govde.teslim.id, '3.000', s10]], 'gönderilen yolda gelende');
+    assert.deepEqual(sonra.gelen.bekleyen.map((x) => x.miktar), ['1.000'], 'yoldaki ayrılmıştır, bekleyende kalan görünür');
+
+    const baska = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no) VALUES ($1, $2, 1, $3, $4, $5) RETURNING id',
+      [`P-S2${sira}`, 'Deneme', a.id, kisiler.get('yonetici'), ym]))!.id;
+    const bos = await sepetler(b.id, baska);
+    assert.ok(typeof bos !== 'number');
+    assert.deepEqual([bos.gelen.bekleyen, bos.gelen.yolda, bos.cikan], [[], [], []], 'başka emrin parçası görünmez');
+    await kisiEkle('operator_iki_sepet', 'operator');
+    const disarida = await istasyon();
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisiler.get('operator_iki_sepet'), disarida.isMerkeziId]);
+    assert.equal(await sepetler(b.id, e, 'operator_iki_sepet'), 403, 'kapsam dışı istasyon');
+    assert.equal(await sepetler(999999), 404);
     adimStatusuCozucusuKaydet(async () => null);
   });
 
