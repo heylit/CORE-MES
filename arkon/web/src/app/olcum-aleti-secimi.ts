@@ -17,7 +17,7 @@ export function AletSecimi({ aletler, tool, onSec }: { aletler: readonly OlcumAl
   const secenek = secilebilirAletler(aletler, tool, now), secili = seciliAlet(aletler, tool, LS.get(aletSecimAnahtari(tool)), now);
   if (!secenek.length) return html`<span className="nok">${ALET_YOK_ILETISI}</span>`;
   return html`<select className="rsel" aria-label=${'Ölçü aleti: ' + String(tool || '')} value=${secili ? secili.id : ''}
-    onChange=${e => { LS.set(aletSecimAnahtari(tool), e.target.value || null); yenile(n => n + 1); onSec && onSec(); }}>
+    onChange=${(e: { target: HTMLSelectElement }) => { LS.set(aletSecimAnahtari(tool), e.target.value || null); yenile(n => n + 1); onSec && onSec(); }}>
     <option value="">${String(tool || 'Ölçü aleti')} · seçin</option>
     ${secenek.map(g => html`<option key=${g.id} value=${g.id}>${g.no}${g.type ? ' · ' + g.type : ''}</option>`)}
   </select>`;

@@ -1,0 +1,52 @@
+/* Denetim Hazırlığı P3: iç denetim bölümü. Yalnız tasarım değişkenleri. */
+.tc-dhd-secim select {
+  min-height: var(--dokunma); inline-size: 100%; max-inline-size: calc(var(--b-6) * 12); padding: 0 var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); font: inherit;
+}
+.tc-dhd-plan { border-collapse: collapse; inline-size: 100%; font-size: var(--yazi-s); }
+.tc-dhd-plan th, .tc-dhd-plan td { padding: var(--b-1) var(--b-2); border-block-end: var(--cizgi-ince) solid var(--edge); text-align: center; vertical-align: middle; }
+.tc-dhd-plan th[scope='row'], .tc-dhd-plan thead th:first-child { text-align: start; min-inline-size: calc(var(--b-6) * 5); }
+.tc-dhd-plan td:nth-child(2) { min-inline-size: calc(var(--b-6) * 5); text-align: start; }
+.tc-dhd-plan thead th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.tc-dhd-buay { background: var(--panel2); }
+.tc-dhd-hucre {
+  display: inline-flex; align-items: center; justify-content: center; inline-size: var(--dokunma); block-size: var(--dokunma);
+  border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--yari-1); background: none; color: var(--done); font: inherit; font-style: normal; cursor: pointer;
+}
+.tc-dhd-hucre:disabled { cursor: default; }
+.tc-dhd-hucre-planli { border-style: solid; }
+.tc-dhd-hucre-yapildi { border-style: solid; color: var(--run); }
+.tc-dhd-hucre-gecikti { border-style: solid; color: var(--stop); }
+
+.tc-dhd-meta { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: flex-end; }
+.tc-dhd-alan { display: flex; flex-direction: column; gap: var(--b-1); flex: 1 1 calc(var(--b-6) * 6); min-width: 0; font-size: var(--yazi-s); }
+.tc-dhd-alan > span { color: var(--muted); font-weight: 600; }
+.tc-dhd-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-dhd-ilerleme { inline-size: 100%; block-size: var(--b-2); margin-top: var(--b-3); accent-color: var(--done); }
+.tc-dhd-maddeler { list-style: none; display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-dhd-madde {
+  display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3) var(--b-4); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-inline-start: var(--cizgi-kalin) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-dhd-madde-u, .tc-dhd-saha-ok { border-inline-start-color: var(--run); }
+.tc-dhd-madde-g { border-inline-start-color: var(--done); }
+.tc-dhd-madde-m { border-inline-start-color: var(--hold); }
+.tc-dhd-madde-M, .tc-dhd-saha-no { border-inline-start-color: var(--stop); }
+.tc-dhd-madde-na, .tc-dhd-saha-na { border-inline-start-color: var(--muted); }
+.tc-dhd-madde-bas { display: flex; gap: var(--b-2); align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.tc-dhd-madde-bas .tc-dhd-mono { color: var(--muted); font-size: var(--yazi-xs); flex: none; }
+.tc-dhd-secenekler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-dhd-sec {
+  min-height: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam);
+  background: none; color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-dhd-sec:disabled { cursor: default; opacity: .7; }
+.tc-dhd-sec[aria-pressed='true'] { background: var(--panel2); font-weight: 700; opacity: 1; }
+.tc-dhd-sec-tamam[aria-pressed='true'] { border-color: var(--run); color: var(--run); }
+.tc-dhd-sec-bilgi[aria-pressed='true'] { border-color: var(--done); color: var(--done); }
+.tc-dhd-sec-uyari[aria-pressed='true'] { border-color: var(--hold); color: var(--hold); }
+.tc-dhd-sec-hata[aria-pressed='true'] { border-color: var(--stop); color: var(--stop); }
+.tc-dhd-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 9)), 1fr)); gap: var(--b-3); }
+.tc-dhd-sablon { display: flex; flex-direction: column; gap: var(--b-2); align-items: flex-start; }
+.tc-dhd-sablon-durum { display: flex; flex-wrap: wrap; gap: var(--b-3); font-size: var(--yazi-s); }
+.tc-dhd-baglanti { background: none; border: none; padding: 0; color: var(--done); font: inherit; text-decoration: underline; cursor: pointer; min-height: var(--dokunma); }

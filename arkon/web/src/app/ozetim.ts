@@ -1,6 +1,6 @@
 import { AKStore } from '../data/store';
 import { OZET_DONEM_ADI, OZET_IS_DURUMU, fazlaMesaiDolulugu, ornekOzet, ozetAdet, ozetGrafikUstu, ozetGunEtiketi, ozetSaat, ozetSayi, ozetSure, ozetTarih, ozetYuzde } from '../data/ozetim';
-import type { OperatorOzeti, OzetDonemi } from '../data/ozetim';
+import type { OperatorOzeti, OzetDonemi, OzetGunu } from '../data/ozetim';
 import { APPMODE, MEU, initials } from './ortak-ayarlar';
 import { Fragment, I, html, useEffect, useState } from './temel';
 
@@ -12,9 +12,9 @@ const OZET_YENILEME_MS = 120000;
 const DONEMLER: OzetDonemi[] = ['gun', 'hafta', 'ay'];
 
 // Sekmeyi Arkon operatörü ve amiri görür; sunucu da yalnız bu iki işlemi kabul eder.
-export const ozetimGorunur = (): boolean => APPMODE.demo || ['operator', 'lead'].includes((MEU() || {}).role);
+export const ozetimGorunur = (): boolean => APPMODE.demo || ['operator', 'lead'].includes(MEU()?.role ?? '');
 
-function Grafik({ gunler, bugun }) {
+function Grafik({ gunler, bugun }: { gunler: readonly OzetGunu[]; bugun: string }) {
   const ust = ozetGrafikUstu(gunler);
   // Dar ekranda yazılar küçülmesin diye çizim alanı da daralır.
   const dar = window.innerWidth < 600;
@@ -22,7 +22,7 @@ function Grafik({ gunler, bugun }) {
   const y = (v: number) => y0 - (ust ? (v / ust) * h : 0);
   return html`<svg viewBox=${'0 0 ' + gen + ' 190'} className="ozgrafik" role="img" aria-label="Son yedi günün sağlam ve hurda adedi">
     ${ust ? [0, ust / 2, ust].map(v => html`<g key=${'c' + v}><line x1=${x0} x2=${gen - 8} y1=${y(v)} y2=${y(v)} stroke="var(--edge)" /><text x=${x0 - 8} y=${y(v) + 4} textAnchor="end">${ozetAdet(v)}</text></g>`) : null}
-    ${gunler.map((g, i) => {
+    ${gunler.map((g: OzetGunu, i: number) => {
       const cx = x0 + adim * i + adim / 2, kayitsiz = g.saglam == null && g.hurda == null;
       const sg = Math.max(0, g.saglam ?? 0), hr = Math.max(0, g.hurda ?? 0);
       return html`<g key=${g.tarih}>
@@ -61,7 +61,7 @@ export function Ozetim() {
   return html`<div className="ozetim">
     <div className="glass ozust">
       <div className="ozkisi"><span className="av">${initials(o.kisi.ad)}</span><div><b>${o.kisi.ad}</b><small>${kendi ? 'Kendi özetin' : 'Salt okunur · ekibinden'}</small></div></div>
-      ${ekip.length ? html`<label className="ozsec"><${I} n="user" s=${16} /><select value=${kisiId || ''} onChange=${e => setKisiId(Number(e.target.value) || null)} aria-label="Kişi seç">
+      ${ekip.length ? html`<label className="ozsec"><${I} n="user" s=${16} /><select value=${kisiId || ''} onChange=${(e: { target: HTMLSelectElement }) => setKisiId(Number(e.target.value) || null)} aria-label="Kişi seç">
         <option value="">Ben</option>${ekip.map(k => html`<option key=${k.id} value=${k.id}>${k.ad}</option>`)}</select></label>` : null}
       <div className="ozdonem" role="group" aria-label="Dönem">${DONEMLER.map(d => html`<button key=${d} type="button" aria-pressed=${donem === d} onClick=${() => setDonem(d)}>${OZET_DONEM_ADI[d]}</button>`)}</div>
     </div>
