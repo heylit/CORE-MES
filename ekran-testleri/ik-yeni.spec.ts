@@ -51,7 +51,61 @@ test.describe('P1 personel', () => {
   });
 });
 // P2 izin-devam
+test.describe('P2 izin ve devam', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('İzinler, Devam ve mesai ve Puantaj açılır; okumada yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni/izinler');
+    await expect(page.getByRole('heading', { name: 'İzinler' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Talepler', selected: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Takvim' }).click();
+    await expect(page.getByRole('group', { name: 'Ay' })).toBeVisible();
+    await ac('/ik/yeni/devam');
+    await expect(page.getByRole('heading', { name: 'Devam ve mesai' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Puantaj' }).click();
+    await expect(page.getByRole('tab', { name: 'Puantaj', selected: true })).toBeVisible();
+    await expect(page.getByText('Puantaj yükleniyor')).toHaveCount(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P3 bordro
 // P4 isealim
 // P5 analiz
+test.describe('P5 analiz', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('Pano, Yapılacaklar, Raporlar ve Değişiklik günlüğü açılır; okurken yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni');
+    await expect(page.getByRole('heading', { name: 'Pano' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Yapılacaklar' }).click();
+    await expect(page.getByRole('heading', { name: 'Yapılacaklar' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Raporlar' }).click();
+    await expect(page.getByRole('heading', { name: 'Raporlar' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Değişiklik günlüğü' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/gunluk$/);
+    await page.getByRole('searchbox', { name: 'Günlükte ara' }).fill('bu metin hiçbir kayıtta yok');
+    await expect(page.getByText(/Bu ölçütlerde değişiklik yok/)).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P6 islemlerim
+test.describe('P6 islemlerim', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('yedi görünüm sekmeden açılır, yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/ik-islemlerim/yeni');
+    await expect(page.getByRole('tab', { name: 'Benim sayfam', selected: true })).toBeVisible();
+    for (const [sekme, adres, baslik] of [
+      ['İzinlerim', 'izinlerim', 'İzinlerim'], ['Bordrolarım', 'bordrolarim', 'Bordrolarım'], ['Mesailerim', 'mesailerim', 'Mesailerim'],
+      ['Onaylar', 'onaylar', 'Onaylar'], ['Ekip', 'ekip', 'Ekip'], ['İzin takvimi', 'ekip-takvimi', 'İzin takvimi'],
+    ] as const) {
+      await page.getByRole('tab', { name: sekme }).click();
+      await expect(page).toHaveURL(new RegExp(`/ik-islemlerim/yeni/${adres}$`));
+      await expect(page.getByRole('heading', { name: baslik, level: 2, exact: true })).toBeVisible();
+    }
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});

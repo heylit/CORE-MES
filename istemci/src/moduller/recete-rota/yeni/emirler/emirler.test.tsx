@@ -122,9 +122,35 @@ describe('R3 Üretim emirleri: planlanamayan emir', () => {
     const b = await bolum('Üretim emirleri');
     const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
     await waitFor(() => { expect(within(satir).getByText('Planlanamıyor')).toBeTruthy(); });
-    expect(within(satir).getByText('Uygun makine yok.')).toBeTruthy();
+    expect(within(satir).getByText('OP 10: Uygun makine yok.')).toBeTruthy();
     expect(within(satir).queryByText(/Tampon|Gecikiyor/)).toBeNull();
     expect(satir.hasAttribute('data-gec')).toBe(true);
+  });
+});
+
+describe('R3 Üretim emirleri: plana girmeyen çalışan adım (487/2 b)', () => {
+  it('tarih kalır, altında uyarı tonunda "OP 10 çalışıyor, planda yok"; emir gecikmiş sayılmaz', async () => {
+    const d = ornekDurum();
+    const adim = (id: string, seq: number, opNo: number) => ({
+      id, seq, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { '11': { base: null, steps: [adim('s1', 1, 10), adim('s2', 2, 20)] } } as unknown as typeof d.routes;
+    const o = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const, due: '2026-11-05' })), opStatus: { [`${o.id}|root|1`]: 'calisiyor' } };
+    sunucuKur(OKUYAN, { durum: d, motorYerlesimi: {
+      ekranYerlesimi: { 'UE-0001|20': [{ makineId: 51, baslangic: '2026-11-02T06:00:00.000Z' }] },
+      yerlesimler: [{ isEmriId: 2, uretimEmriId: 61, emirNo: 'UE-0001', opNo: 20, kaynak: { tur: 'makine', id: 51 }, kaynakAdi: null,
+        baslangic: '2026-11-02T06:00:00.000Z', bitis: '2026-11-03T09:00:00.000Z', sabit: false }],
+    } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
+    await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
+    const alt = within(satir).getByText('OP 10 çalışıyor, planda yok');
+    expect(alt.getAttribute('data-ton')).toBe('uyari');
+    expect(satir.hasAttribute('data-gec')).toBe(false);
   });
 });
 

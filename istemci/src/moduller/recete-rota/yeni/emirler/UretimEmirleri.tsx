@@ -148,7 +148,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
         <span data-baslik="Teslim">{tarih(o.due)}</span>
         <span data-baslik="Plan bitiş">
           <PlanHucresi plan={plan} tampon={tampon} />
-          {plan.alt && <small>{plan.alt}</small>}
+          {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined}>{plan.alt}</small>}
         </span>
         <span className="tc-rr3-ilerleme" data-baslik="İlerleme">
           <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />

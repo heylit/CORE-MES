@@ -1,11 +1,14 @@
 /* G-Kod Sim. (tc-ch-): yerlesim ham.css'tedir; burada adim kartlari, kod listesi, oynatma cubugu ve takim renkleri. */
 .tc-ch-adim { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); border-radius: var(--yari-3); border: var(--cizgi-ince) solid var(--edge); background: var(--panel2); }
 .tc-ch-adim-ust { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
-.tc-ch-adim-ust i {
+.tc-ch-adim-ust > i {
   display: inline-grid; place-items: center; flex: none; width: var(--b-5); height: var(--b-5); border-radius: var(--yari-tam);
   background: var(--hazard); color: var(--on-hazard); font-style: normal; font-weight: 700; font-size: var(--yazi-xs);
 }
 .tc-ch-adim-ust b { flex: 1 1 auto; min-width: 0; }
+/* Durum cipi prototipteki gibi en cok %62 genisliktedir, uzun metin uc noktayla kisalir (dar ekranda adim kartini tasirmaz). */
+.tc-ch-adim-ust .tc-rozet { display: block; flex: 0 1 auto; max-width: 62%; overflow: hidden; text-overflow: ellipsis; }
+.tc-ch-adim-ust .tc-rozet i { display: inline-block; margin-right: var(--b-2); vertical-align: middle; }
 .tc-ch-pad { font-weight: 700; overflow-wrap: anywhere; }
 .tc-ch-soluk { color: var(--muted); font-size: var(--yazi-s); }
 .tc-ch-bag { padding: 0; border: 0; background: none; color: var(--done); text-decoration: underline; cursor: pointer; font: inherit; }

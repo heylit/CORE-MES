@@ -72,7 +72,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
         <div className="tc-rr3-oc-kpi">
           <small>Plan bitiş</small>
           <span><PlanHucresi plan={pm} tampon={tampon} /></span>
-          {pm.alt && <small>{pm.alt}</small>}
+          {pm.alt && <small className="tc-rr3-plan-alt" data-ton={pm.altTon ?? undefined}>{pm.alt}</small>}
         </div>
         <div className="tc-rr3-oc-kpi tc-rr3-ilerleme">
           <small>İlerleme</small>
@@ -419,6 +419,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
     ...(plan.tur === 'plan' && plan.gecikiyor ? [`Plan bitişi teslimden sonra (${tarih(plan.bitis)}, teslim ${tarih(o.due)}).`] : []),
     ...(plan.tur === 'planlanamiyor' ? plan.adimlar.map((a) => `OP ${String(a.opNo)} planlanamadı: ${a.neden}`) : []),
     ...(plan.tur === 'yerlesmedi' ? ['Emrin açık adımları plan motorunun yerleşiminde yok: rota, istasyon ya da vardiya eksik olabilir.'] : []),
+    ...((plan.tur === 'plan' || plan.tur === 'yerlesmedi') ? plan.calisanPlanDisi.map((op) => `OP ${String(op)} çalışıyor, planda yok: makinesi bilinmiyor ya da plan kapsamı dışında.`) : []),
     ...(R && R.eksikler.length ? [`${String(R.eksikler.length)} kalem malzeme stokta yetersiz.`] : []),
     ...(R?.uyarilar ?? []),
   ];

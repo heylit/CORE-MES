@@ -16,6 +16,9 @@ export interface ArkonBaglami {
   ayarlariYenile(): void;
   yetkiVar(k: Perm): boolean;
   sayfaGorunur(sayfa: string): boolean;
+  // Sayfa adresle açılır mı: TMI menü işlemi ve Arkon sayfa yetkisi birlikte (yeni ekranın açılış kuralı). Başka sayfaya bağlantı buna bakar;
+  // yalnız sayfaGorunur'a bakan bağlantı TMI işlemi olmayanı giriş sayfasına geri gönderirdi.
+  acilabilir(sayfa: string): boolean;
   // Yeni ekranın sayfaları arasında (adres /arkon/<sayfa>[/<kimlik>]; Üretim Terminali ve Kuyruk kendi adresinde).
   git(sayfa: string, kimlik?: string): void;
   // TMI'nin öteki sayfaları; yalnız bu listedeki hedef açılır (baglanti.ts TMI_HEDEFLERI).

@@ -27,8 +27,8 @@ Baska parca yalniz bu adlari ithal eder (`../personel/index.tsx`, `../isealim/in
 
 ## Y0'in sabit imzalari (parcalar kullanir, degistirmez)
 - `gorunumler.ts`: `IkEkranOzellikleri { depo: IkDeposu; yetki: IkYetkisi; rol: IkEkranRolu; ben: Personel | null; kimlik: string | null;
-  git(gorunum: IkGorunum, kimlik?: string): void; motor: IkMotoru | null; onizleme: IkOnizleme | null; onizlemeAc(o: IkOnizleme | null): void }`.
-  `ben` ekranin "ben"idir (onizlemede onizlenen kisi). `kimlik` ayrinti sayfasinin kaydidir.
+  git(gorunum: IkGorunum, kimlik?: string): void; motor: IkMotoru | null }`.
+  `ben` ekranin "ben"idir (kisinin personel kaydi). `kimlik` ayrinti sayfasinin kaydidir.
 - `veri.ts`:
   - `useIkDeposu()`: `GET /ik/veri` tek okuma; `IkDeposu { ben: IkBen; kayitlar; surumler; ayarlar; ayarSurumu; gecmis; tur(t); al(id) }`.
   - `useIkKomutu()`: `{ kaydet(kayit), topluKaydet(kayitlar), iptal(id), ayarKaydet(ayarlar), bordroKesinlestir(bordrolar), bordroGordum(id), puantajYaz(gunler), calisiyor }`.
@@ -39,11 +39,10 @@ Baska parca yalniz bu adlari ithal eder (`../personel/index.tsx`, `../isealim/in
 - `tipler.ts`: kayit turleri `Personel`, `Departman`, `Izin`, `Devam`, `Bordro`, `Performans`, `Egitim`, `Pozisyon`, `Aday`, `Gorusme`, `IkAyarlar`;
   `KayitTurleri` (tur -> tip). Alanlar ik-modulu `docs/VERI-MODELI.md`; hepsi istege baglidir (sunucu govdeyi oldugu gibi saklar).
 - `yetki.ts`: `IkYetkisi { oku, personelYaz, ucretYaz, izinYaz, izinTalep, izinOnay, devamYaz, devamOnay, bordroKesinlestir, bordroKilitAc,
-  bordroGordum, performansYaz, egitimYaz, iseAlimYaz, pozisyonOnay, ayarYaz, ozelVeriOku, herhangiYazma }`. Onizlemede ve `ben.saltOkunur`'da
-  butun yazmalar false (210.6). Ekran yalniz gizler; denetim uctadir.
+  bordroGordum, performansYaz, egitimYaz, iseAlimYaz, pozisyonOnay, ayarYaz, ozelVeriOku, herhangiYazma }`. `ben.saltOkunur`'da
+  butun yazmalar false. Ekran yalniz gizler; denetim uctadir.
 - `rol.ts`: `IkEkranRolu = 'ik' | 'yonetici' | 'calisan'` (sunucudaki `ikRolu`); `ekipKimlikleri(personeller, departmanlar, yonetici)` (IK-24, sunucuyla ayni kural);
   `gorunumAcik(anahtar, yetki)` (214 a: onay, ekip, uye, ekiptakvim yalniz `ik.izin-onay` ile).
-- `onizleme.ts`: `IkOnizleme { rol: 'calisan' | 'yonetici'; personel: string }`. Onizleme salt okunurdur (210.6). Secim penceresini P6 yazar.
 - `motor.ts`: motoru ithal eden tek yer (211 a cevabina gore yolu tek satirda degisir). `IkMotoru` (motorun ekranda kullanilan yuzu, tipli),
   `motorKur(kayitlar, ayarlar): IkMotoru | null`. M0 gelene kadar null doner: hesap gereken yer `DurumKutusu durum="yukleniyor" mesaj="Hesap motoru hazirlaniyor"` gosterir.
   Sabit listeler (izin turleri, asamalar vb.) M0 ile `motor.ts`'ten `ikSabitleri()` olarak gelir; parca kendi kopyasini yazmaz.
@@ -76,4 +75,4 @@ Baska parca yalniz bu adlari ithal eder (`../personel/index.tsx`, `../isealim/in
 Kabul (parca basina): envanter satiri tam; yazma dugmeleri yetkiye gore gizli, izinli ve reddedilen test; 360/768/1280 olcumu; ekran testi blogu; `kontrol` yesil.
 
 ## Iskelet dosyalari (Y0'in; parcalar dokunmaz)
-`IkYeni.tsx`, `gorunumler.ts`, `veri.ts`, `tipler.ts`, `yetki.ts`, `rol.ts`, `onizleme.ts`, `motor.ts`, `bicim.ts`, `ik-yeni.css`, `ortak/*`, `test-ortak.tsx`, testleri; `../rotalar.tsx`.
+`IkYeni.tsx`, `gorunumler.ts`, `veri.ts`, `tipler.ts`, `yetki.ts`, `rol.ts`, `motor.ts`, `bicim.ts`, `ik-yeni.css`, `ortak/*`, `test-ortak.tsx`, testleri; `../rotalar.tsx`.

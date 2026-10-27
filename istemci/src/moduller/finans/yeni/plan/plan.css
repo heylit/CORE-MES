@@ -1,0 +1,64 @@
+/* F2 (çek ve senet, nakit planı, bütçe, vergi) ortak görünümü: yalnız tasarım değişkenleri. Önek tc-fc-. */
+.tc-fc { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fc-arac { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); min-width: 0; }
+.tc-fc-arac > .tc-fy-not { flex: 1 1 calc(var(--dokunma) * 6); min-width: 0; }
+
+/* Özet şeridi (prototipte ledger): sığdığı kadar sütun, dar ekranda iki sütun. */
+.tc-fc-ozet {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3.6), 1fr)); gap: var(--b-3);
+  margin: 0; min-width: 0;
+}
+.tc-fc-ozet-hucre {
+  display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; padding: var(--b-3) var(--b-4);
+  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
+}
+.tc-fc-ozet-etiket { color: var(--muted); font-size: var(--yazi-s); display: flex; align-items: center; gap: var(--b-1); }
+.tc-fc-ozet-deger { margin: 0; font-size: var(--yazi-xl); font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tc-fc-ozet-alt { margin: 0; color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-fc-arti { color: var(--run); }
+.tc-fc-eksi { color: var(--stop); }
+.tc-fc-uyari { color: var(--hold); }
+
+/* Tek seçimli şerit (prototipte .seg). */
+.tc-fc-serit { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-fc-serit-dugme {
+  min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.tc-fc-serit-dugme[aria-pressed="true"] { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); font-weight: 700; }
+.tc-fc-serit-dugme:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+/* Grafik kabı: chart.js kabın boyuna uyar (maintainAspectRatio kapalı). */
+.tc-fc-grafik { position: relative; min-width: 0; }
+.tc-fc-grafik-kisa { height: calc(var(--dokunma) * 4.8); }
+.tc-fc-grafik-orta { height: calc(var(--dokunma) * 5.9); }
+.tc-fc-grafik-uzun { height: calc(var(--dokunma) * 7.3); }
+
+.tc-fc-yigin { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.tc-fc-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--dokunma) * 8)), 1fr)); gap: var(--b-4); min-width: 0; }
+.tc-fc-kapanan { margin-top: var(--b-4); }
+.tc-fc-kapanan > summary { cursor: pointer; font-weight: 600; min-height: var(--dokunma); display: flex; align-items: center; }
+.tc-fc-satirlar { display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.tc-fc-satir {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  min-height: var(--dokunma); padding: var(--b-1) 0; border-bottom: 1px solid var(--edge);
+}
+.tc-fc-satir > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.tc-fc-tutar { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-fc-cumle { margin: 0 0 var(--b-3); }
+
+/* Nakit planı: varsayım kaydırıcıları ve seçili haftanın kalemleri. */
+.tc-fc-varsayim { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--dokunma) * 5)), 1fr)); gap: var(--b-4); margin-bottom: var(--b-3); }
+.tc-fc-kaydirici { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-fc-kaydirici input { width: 100%; min-height: var(--dokunma); accent-color: var(--hazard); }
+.tc-fc-onay { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); }
+.tc-fc-onay input { width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); flex: none; }
+.tc-fc-onay span { display: flex; flex-direction: column; min-width: 0; }
+.tc-fc-kalemler td { white-space: normal; background: var(--panel2); }
+.tc-fc-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Bütçe: tablodaki tutar girdisi ve satış hedefi satırı. */
+.tc-fc-butce-girdi { width: calc(var(--dokunma) * 3); max-width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
+.tc-fc-takvim { justify-content: flex-start; }
+.tc-fc-takvim > .tc-fc-yigin { flex: 1 1 auto; }

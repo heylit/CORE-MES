@@ -1,0 +1,18 @@
+/* Firma kartı ve cari hesap: yalnız tasarım değişkenleri. Ortak F1 sınıfları kayitlar/kayitlar.css'te. */
+.tc-fk-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--acilir-encok)), 1fr)); gap: var(--b-4); min-width: 0; }
+.tc-fk-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); gap: var(--b-3); min-width: 0; }
+.tc-fk-alan {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); min-width: 0;
+}
+.tc-fk-alan > b { text-align: end; overflow-wrap: anywhere; min-width: 0; }
+.tc-fk-cekler { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tc-fk-cek {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); min-width: 0;
+}
+.tc-fk-cek > span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-fk-cek > b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-fk-iz { color: var(--muted); font-size: var(--yazi-s); }
+.tc-fk-baglanti { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-decoration: underline; }
+.tc-fk-bolum { margin: var(--b-5) 0 0; font-size: var(--yazi-l); }

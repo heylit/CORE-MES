@@ -101,6 +101,7 @@
 .tc-rr3-plan-t[data-ton="tamam"] { color: var(--run); }
 .tc-rr3-plan-t[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-plan-t[data-ton="hata"] { color: var(--stop); }
+small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-tampon { border: 0; border-radius: var(--yari-tam); }
 .tc-rr3-tampon[data-tampon="yesil"] { background: color-mix(in srgb, var(--run) 22%, var(--panel)); color: var(--run); }
 .tc-rr3-tampon[data-tampon="sari"] { background: color-mix(in srgb, var(--hazard) 35%, var(--panel)); color: var(--on-hazard); }

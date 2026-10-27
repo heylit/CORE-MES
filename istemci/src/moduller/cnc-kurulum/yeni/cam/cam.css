@@ -1,0 +1,35 @@
+/* Oto-CAM (P4, tc-cc-). Renk, ölçü ve boşluk yalnız tasarım değişkenleriyle. */
+.tc-cc-sup { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-cc-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-cc-not b { color: var(--ink); }
+.tc-cc-ayrinti { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-cc-ayrinti summary { padding: var(--b-2) var(--b-3); cursor: pointer; font-weight: 700; font-size: var(--yazi-s); }
+.tc-cc-kaynak { padding: 0 var(--b-3) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-cc-kaynak b { color: var(--ink); }
+.tc-cc-tablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-xs); }
+.tc-cc-tablo th {
+  text-align: left; vertical-align: bottom; color: var(--muted); font-weight: 600;
+  padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge2);
+}
+.tc-cc-tablo th small { display: block; font-weight: 400; color: var(--faint); }
+.tc-cc-tablo td { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); vertical-align: top; }
+.tc-cc-tablo td small { display: block; color: var(--muted); }
+.tc-cc-tablo th.tc-cc-grup { text-align: center; }
+.tc-cc-tablo .tc-cc-iyi { color: var(--run); }
+.tc-cc-tablo .tc-cc-kotu { color: var(--stop); }
+.tc-cc-ptab { overflow-x: auto; min-width: 0; }
+.tc-cc-ptab input, .tc-cc-ptab select {
+  width: calc(var(--b-6) * 2); padding: var(--b-1); font: inherit; color: var(--ink);
+  background: var(--bg2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
+}
+.tc-cc-ptab input.tc-cc-kendi { border-color: var(--done); color: var(--done); }
+.tc-cc-ptab input::placeholder { color: var(--faint); }
+.tc-cc-tablo tr.tc-cc-bant-satir td { padding: 0 var(--b-2) var(--b-2); }
+.tc-cc-bant { display: block; width: 100%; height: var(--b-2); background: var(--hi); border-radius: var(--yari-1); }
+.tc-cc-bant-b { fill: var(--hold); fill-opacity: .35; }
+.tc-cc-bant-a { fill: var(--done); fill-opacity: .6; }
+.tc-cc-bant-ort { stroke: var(--ink); stroke-width: var(--cizgi); vector-effect: non-scaling-stroke; }
+.tc-cc-bant-yeni { stroke: var(--hold); }
+.tc-cc-ornek { display: inline-block; width: var(--b-4); height: var(--b-2); border-radius: var(--yari-1); vertical-align: middle; }
+.tc-cc-ornek-a { background: var(--done); }
+.tc-cc-ornek-b { background: var(--hold); }

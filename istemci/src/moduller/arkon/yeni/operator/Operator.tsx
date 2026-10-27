@@ -45,7 +45,7 @@ import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../c
 import { yerel } from '../cekirdek/yerel.ts';
 import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
 import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
-import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
+import type { ArkonEkranOzellikleri, ArkonSayfasi } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import type { Ileti } from '../veri/depo.ts';
 import {
@@ -113,7 +113,7 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 }
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
-  const { depo, kisi, ayarlar, yetkiVar, git } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, git, acilabilir } = useArkon();
   const { tema, degistir: temaDegistir } = useTema();
   const { bildir } = useBildirim();
   const dar = useDarEkran();
@@ -1230,6 +1230,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </>
   );
 
+  const gecisSatirlari = pv ? [] : GECISLER.filter((g) => acilabilir(g.sayfa)).map((g) => (
+    <MenuSatiri key={g.sayfa} simge={g.simge} baslik={g.baslik} alt={g.alt} tikla={() => { ovYaz(null); git(g.sayfa); }} />
+  ));
+
   if (dar) {
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
@@ -1286,6 +1290,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
             <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
             <MenuSatiri simge="ruler" baslik="Teknik resim · 3B" alt="Odak modu resim panelinde" tikla={() => { ovYaz(null); mvYaz('draw'); }} />
+            {gecisSatirlari}
           </Pencere>
         ) : null}
         {pencereler}
@@ -1313,6 +1318,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <BaglantiDurumu />
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
         <button type="button" className="tc-ay1-simge-dugme" onClick={temaDegistir} title="Tema değiştir" aria-label="Tema değiştir"><Simge ad={tema === 'dark' ? 'sun' : 'moon'} /></button>
+        {/* 848 a: genişte Menü yalnız geçiş varsa; öteki satırlar (vardiya özeti, uzak mod, resim) başlıkta zaten var. */}
+        {gecisSatirlari.length > 0 ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} title="Menü" aria-label="Menü"><Simge ad="list" /></button> : null}
         <button type="button" className="tc-ay1-kisi" onClick={() => ovYaz('shift')} title="Vardiya özeti ve devir">
           <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
           <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
@@ -1356,12 +1363,27 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           </div>
         </div>
       </div>
+      {ov === 'menu' ? (
+        <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
+          <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
+          {gecisSatirlari}
+        </Pencere>
+      ) : null}
       {pencereler}
     </div>
   );
 }
 
 const IS_DURUM_RENGI = (s: string) => ({ queued: 'sirada', setup: 'ayar', running: 'calisiyor', paused: 'durakli', stopped: 'durdu', done: 'bitti' } as const)[s as 'queued'] ?? 'sirada';
+
+// Terminalden öteki Arkon sayfalarına geçiş (820 b); her satır yalnız o sayfayı açabilene görünür, yetki genişlemez. İlk ikisi eski
+// menünün satırlarıdır.
+const GECISLER: readonly { sayfa: ArkonSayfasi; simge: SimgeAdi; baslik: string; alt: string }[] = [
+  { sayfa: 'kalite', simge: 'target', baslik: 'Kalite istasyonu', alt: 'Numune ölçümü' },
+  { sayfa: 'hazirlik', simge: 'layers', baslik: 'Üretim Terminali Hazırlık', alt: 'İş paketi hazırla' },
+  { sayfa: 'cizim', simge: 'lab', baslik: 'Çizim', alt: 'PDF ve 3B okuma ayarları' },
+  { sayfa: 'kuyruk', simge: 'list', baslik: 'Kuyruk', alt: 'Plan kuyruğu, salt okunur' },
+];
 
 function MenuSatiri({ simge, baslik, alt, tikla }: { simge: SimgeAdi; baslik: string; alt: string; tikla: () => void }): ReactNode {
   return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;

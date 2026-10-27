@@ -1,6 +1,5 @@
 import type { Islem } from '#paylasilan/islemler.ts';
 import { useYetki, type Yetki } from '../../../ortak/veri/yetki.ts';
-import type { IkOnizleme } from './onizleme.ts';
 
 // Ekranın sorduğu İK yetkileri. Ekran yalnız gizler; her yazmayı kendi ucu ayrıca denetler.
 export interface IkYetkisi {
@@ -32,9 +31,9 @@ const YAZMALAR = {
 } as const satisfies Record<string, Islem>;
 type YazmaAdi = keyof typeof YAZMALAR;
 
-// Önizleme (210.6) ve salt okunur oturum hiçbir yazma düğmesi göstermez; okuma yetkileri değişmez.
-export function ikYetkisiKur(yetki: Pick<Yetki, 'var'>, kosul: { saltOkunur: boolean; onizleme: IkOnizleme | null }): IkYetkisi {
-  const yazabilir = !kosul.saltOkunur && kosul.onizleme === null;
+// Salt okunur oturum hiçbir yazma düğmesi göstermez; okuma yetkileri değişmez.
+export function ikYetkisiKur(yetki: Pick<Yetki, 'var'>, kosul: { saltOkunur: boolean }): IkYetkisi {
+  const yazabilir = !kosul.saltOkunur;
   const yazmalar = Object.fromEntries(
     (Object.keys(YAZMALAR) as YazmaAdi[]).map((ad) => [ad, yazabilir && yetki.var(YAZMALAR[ad])]),
   ) as Record<YazmaAdi, boolean>;
@@ -46,11 +45,11 @@ export function ikYetkisiKur(yetki: Pick<Yetki, 'var'>, kosul: { saltOkunur: boo
   };
 }
 
-export function useIkYetkisi(kosul: { saltOkunur: boolean; onizleme: IkOnizleme | null }): IkYetkisi {
+export function useIkYetkisi(kosul: { saltOkunur: boolean }): IkYetkisi {
   return ikYetkisiKur(useYetki(), kosul);
 }
 
-// Yazma ucunun seçimi önizlemeye bakmaz, kişinin gerçek işlemlerine bakar (bugünkü köprü kuralı).
+// Yazma ucunun seçimi kişinin gerçek işlemlerine bakar (bugünkü köprü kuralı).
 export interface YazmaYetkisi { izinYaz: boolean; devamYaz: boolean; iseAlimYaz: boolean; personelYaz: boolean }
 export const yazmaYetkisiKur = (yetki: Pick<Yetki, 'var'>): YazmaYetkisi => ({
   izinYaz: yetki.var('ik.izin-yaz'), devamYaz: yetki.var('ik.devam-yaz'), iseAlimYaz: yetki.var('ik.ise-alim-yaz'), personelYaz: yetki.var('ik.personel-yaz'),
