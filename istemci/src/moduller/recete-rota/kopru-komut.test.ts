@@ -93,7 +93,7 @@ describe('köprü komutları', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('KOM-02d (871-5): stok okumasında statü, ürün koduyla gelir; aynı malzeme farklı mamullerde ayrı statüdür', async () => {
+  it('KOM-02e (871-5): stok okumasında statü, ürün koduyla gelir; aynı malzeme farklı mamullerde ayrı statüdür', async () => {
     sunucuKur(() => json(200, { statuler: [
       { id: 7, malzemeNo: 'HM-1', ad: 'OP 10', kaynakAdim: 'o10', urunKodu: 'MM-1', revizyon: 'A' },
       { id: 8, malzemeNo: 'HM-1', ad: 'OP 10', kaynakAdim: 'o10', urunKodu: 'MM-2', revizyon: null },
@@ -115,13 +115,13 @@ describe('köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/bedel-ayari', 'GET /plan/bedel-ayari']);
   });
 
-  it('KOM-02d (265 a, 148 a): öncelik ve müşteri sınıfı çarpanları öncelik ayarlarıyla plan modülüne, yeni taslağa gider; bilinmeyen alan gitmez', async () => {
+  it('KOM-02d (195 a, 148 a, 955 b): öncelik çarpanları öncelik ayarlarıyla plan modülüne, yeni taslağa gider; bilinmeyen alan gitmez', async () => {
     const istekler = sunucuKur((_y, _yol, govde) => json(200, govde));
     const ayar = {
       tabanBedelSaat: 250, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6,
-      yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7,
+      yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5,
     };
-    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, fazla: 1, taslak: { id: 3, surum: 1 } } });
+    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, sinifACarpani: 1.5, fazla: 1, taslak: { id: 3, surum: 1 } } });
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', { ...ayar, taslak: null }]]);
   });
 
