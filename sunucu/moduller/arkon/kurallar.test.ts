@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaGereksinimi, ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -392,6 +392,20 @@ const girdi = (ek: Partial<Parameters<typeof isEmrindenTaslakPaket>[0]> = {}): P
   isEmri: { id: 41, uretimEmriId: 7, emirNo: 'UE-7', malzemeNo: 900, adet: 50, teslim: '2026-11-02', oncelik: 1, opNo: 20, ad: 'Frezeleme', ayarSuresiDk: '15', birimSureDk: '1.25' },
   emir: { parcaNo: 'P-1', parcaAd: 'Parça', acan: { id: 1, ad: 'Planlamacı' }, acilma: '2026-10-01T08:00:00Z' },
   istasyon: ISTASYON, makineKodu: 'M-5', revizyon: 'C', talimat: 'Pensi kontrol et\r\n\r\n  Ofseti doğrula ', sablon: null, plan: PLANSIZ, ...ek,
+});
+
+// 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
+// yalnız "her kurulumda" ve talaşlı (ya da istasyonsuz) adımdadır.
+test('744 a: adımın ilk parça seçimi taslak kuralına ve TMI kilidine', () => {
+  assert.equal(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'her_kurulum' }))['rules'], undefined);
+  assert.equal(isEmrindenTaslakPaket(girdi())['rules'], undefined);
+  assert.deepEqual(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'yok' }))['rules'], { q: { firstPiece: false } });
+  const sablon = { rules: { warns: ['w'], q: { who: 'operator', firstPiece: true }, prod: { scrapPct: 5 } } };
+  assert.deepEqual(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'yok', sablon }))['rules'], { warns: ['w'], q: { who: 'operator', firstPiece: false }, prod: { scrapPct: 5 } });
+  assert.equal(ilkParcaGereksinimi('her_kurulum', 'talasli'), 'gerekli');
+  assert.equal(ilkParcaGereksinimi('her_kurulum', null), 'gerekli');
+  assert.equal(ilkParcaGereksinimi('yok', 'talasli'), 'gerekmez');
+  for (const tip of ['kalite', 'depo', 'markalama', 'boya', 'montaj'] as const) assert.equal(ilkParcaGereksinimi('her_kurulum', tip), 'gerekmez');
 });
 
 // 664: terminal başlığında Proje; paket emrin proje adını taşır, projesizde boş. TMI alanıdır: kayıtlı pakette de her okumada yazılır.

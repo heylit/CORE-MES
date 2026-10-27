@@ -3,6 +3,7 @@ import type { ANOMALI_DONEM_ADLARI, ArkonDeposu, ArkonKayitTuru, ArkonRolu, Merk
 import type { CagriEkibi, DurusNedeni, HurdaNedeni } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import { CAGRI_EKIPLERI } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { IsMerkezi, Istasyon, Makine } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { planliDurusGovdesi } from '#paylasilan/sozlesme/vardiya.ts';
@@ -259,6 +260,8 @@ export interface IsEmriPaketGirdisi {
     opNo: number; ad: string; ayarSuresiDk: string | null; birimSureDk: string | null; tur?: string | undefined;
     // Bu adımın işleyeceği adet: önceki biten adımın hurdası düşülmüş (uretim-emirleri adimAdedi); yoksa emir adedi.
     adimAdedi?: number | undefined;
+    // Adımın ilk parça seçimi bu revizyonun aynı OP'li adımındadır (744 a); rotasız emirde yok.
+    kaynakRotaRevizyonId?: number | null | undefined;
   };
   ekAciklama?: string | null | undefined;
   emir: Pick<Emir, 'parcaNo' | 'parcaAd' | 'acan' | 'acilma'>;
@@ -276,8 +279,10 @@ export interface IsEmriPaketGirdisi {
   rotaEksik?: string | null | undefined;
   // Talaşlı istasyondaki emrin CNC kurulum hazırlığı tamamlanmadıysa (kullanıcı kararı 16.10: kilit yok, yalnız uyarı).
   hazirlik?: HazirlikEksigi | null | undefined;
-  // Emrin Kalite Merkezi'ndeki son ilk parça kararı (denetim #12): tablet ilk parça kapısını buradan okur, sunucu kapısıyla aynı kaynak.
+  // Adımın Kalite Merkezi'ndeki son ilk parça kararı (denetim #12, 744 a): tablet ilk parça kapısını buradan okur, sunucu kapısıyla aynı kaynak.
   ilkParca?: { karar: 'onay' | 'ret'; zaman: string } | null | undefined;
+  // Adımın rotadaki ilk parça seçimi (744 a): "yok" taslağın ilk parça kuralını kapatır; kayıtlı paketin kuralı paketindir.
+  ilkParcaSecimi?: IlkParcaSecimi | undefined;
   // Kalite istasyonunun AQL lot planı (564 2 a): Kalite Merkezi'nin hesabı; sıkılık durdurulmuşsa `durduruldu`.
   aql?: TmiAqlPlani | null | undefined;
   // Adımın rotadaki girenleri (521 3 a): kayıtsız taslağın Malzeme alanına yazılır (`girenMetni`); kayıtlı paket ve dolu şablon değişmez.
@@ -341,10 +346,24 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
+    ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
     tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.aql ? { aql: g.aql } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
+}
+
+// Tablet eksik kuralı varsayılanla tamamlar (arkon/web kurallar.ts `RULES0`): şablonun öteki kuralları korunur, yalnız ilk parça kapanır.
+function ilkParcasizKural(kural: unknown): Record<string, unknown> {
+  const k = kayitMi(kural) ? kural : {};
+  return { ...k, q: { ...(kayitMi(k['q']) ? k['q'] : {}), firstPiece: false } };
+}
+
+// 744 a: TMI'de adımın sağlamı ilk parça kararını bekler mi. Rota seçimi "her kurulumda" ve iş talaşlıysa bekler (tanınmayan, istasyonsuz iş
+// talaşlı sayılır, `ilkParcaOlculeri` gibi). Talaşlı olmayan adımda (kalite, depo, boya, montaj) Arkon kapısı ilk parça ölçüsü istemez; orada
+// kilit, kararı tabletten hiç sorulmayan bir bekleyiş olurdu (VARSAYIM).
+export function ilkParcaGereksinimi(secim: IlkParcaSecimi, istasyonTipi: Istasyon['tip'] | null): 'gerekli' | 'gerekmez' {
+  return secim === 'her_kurulum' && (istasyonTipi === null || istasyonTipi === 'talasli') ? 'gerekli' : 'gerekmez';
 }
 
 // Bölünmüş işin kayıtlı bütün paketi parçalara şablondur; yayındaysa parça da onun yayınıyla açılır (parça planın kararıdır, Hazırlık'ı
