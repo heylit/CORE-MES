@@ -72,6 +72,13 @@ function Haftalar() {
   const B = useMemo(() => haftalariKur(kb), [kb]);
   // Açık hafta yalnız bu oturumda kalır (prototip wkOpen).
   const [acik, acikYaz] = useState<Record<string, boolean>>({});
+  // Yazdırmada bütün haftalar açık basılır (prototip wkPrint); sayfanın kendisi basılır.
+  const [baski, baskiYaz] = useState(false);
+  useEffect(() => {
+    if (!baski) return;
+    window.print();
+    baskiYaz(false);
+  }, [baski]);
   if (!B) {
     return (
       <Kart>
@@ -91,13 +98,6 @@ function Haftalar() {
   const gelecek = B.weeks.filter((x) => !x.past);
   const buHafta = B.weeks.find((x) => x.cur) ?? gelecek[0];
   const varsayilanAcik = (x: Hafta) => x.cur || (!x.past && gelecek[1] === x);
-  // Yazdırmada bütün haftalar açık basılır (prototip wkPrint); sayfanın kendisi basılır.
-  const [baski, baskiYaz] = useState(false);
-  useEffect(() => {
-    if (!baski) return;
-    window.print();
-    baskiYaz(false);
-  }, [baski]);
   const acikMi = (x: Hafta) => baski || (acik[x.m] ?? varsayilanAcik(x));
   const tema = WKT[d.program];
 

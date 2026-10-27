@@ -70,6 +70,8 @@ describe('P1 program görünümleri: yazma yetkisi', () => {
     fireEvent.change(girdi, { target: { value: '2099-06-15' } });
     await waitFor(() => { expect(s.yazilanlar.length).toBeGreaterThan(0); }, { timeout: 3000 });
     expect(aktif(sonYazilan(s))?.audits.some((a) => a.date === '2099-06-15')).toBe(true);
+    // Tarih girilince aynı bileşen hafta görünümüne geçer; kanca sırası bozulmamalı.
+    expect(await screen.findByRole('button', { name: 'Yazdır' })).toBeTruthy();
     cleanup();
     sahteSunucu(OKUR);
     await baglamlaAc(<HaftalikProgram />, 'hazirlik');
