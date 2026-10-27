@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './api.ts';
-import { baglantiDonusunuDinle, baglantiDurumu, baglantiSifirla, bildirimiKapat } from './baglanti.ts';
+import { baglantiDonusunuDinle, baglantiDurumu, baglantiSifirla, bildirimiKapat, kuyrukKaynagi } from './baglanti.ts';
 
 const KIMLIK = '0b8e4a3c-6f1d-4c2a-9e7b-3d5f1a2b4c6d';
 
@@ -14,7 +14,7 @@ describe('baglanti durumu', () => {
   it('ulasilamayan okuma kopuk yapar ama belirsiz yazma saymaz', async () => {
     agKopuk();
     await api.get('/x').catch(() => undefined);
-    expect(baglantiDurumu()).toEqual({ kopuk: true, bilinmeyenYazma: 0, geriGeldi: false });
+    expect(baglantiDurumu()).toEqual({ kopuk: true, bilinmeyenYazma: 0, kuyrukta: 0, ulasan: 0, geriGeldi: false });
   });
 
   it('ulasilamayan yazma sonucu bilinmeyen sayilir', async () => {
@@ -37,7 +37,7 @@ describe('baglanti durumu', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })));
     await api.get('/x').catch(() => undefined);
     await api.post('/x', {}).catch(() => undefined);
-    expect(baglantiDurumu()).toEqual({ kopuk: true, bilinmeyenYazma: 1, geriGeldi: false });
+    expect(baglantiDurumu()).toEqual({ kopuk: true, bilinmeyenYazma: 1, kuyrukta: 0, ulasan: 0, geriGeldi: false });
   });
 
   it('ayni kimlikle yeniden gonderilip cevap alan yazma belirsizlikten duser', async () => {
@@ -56,7 +56,7 @@ describe('baglanti durumu', () => {
     await api.post('/x', {});
     expect(baglantiDurumu().bilinmeyenYazma).toBe(1);
     bildirimiKapat();
-    expect(baglantiDurumu()).toEqual({ kopuk: false, bilinmeyenYazma: 0, geriGeldi: false });
+    expect(baglantiDurumu()).toEqual({ kopuk: false, bilinmeyenYazma: 0, kuyrukta: 0, ulasan: 0, geriGeldi: false });
   });
 
   it('suresi dolan yazma belirsizdir, baglantiyi kopuk saymaz; cagiranin iptali saymaz', async () => {
@@ -89,5 +89,34 @@ describe('baglanti durumu', () => {
     await api.get('/x');
     expect(donunce).toHaveBeenCalledTimes(1);
     birak();
+  });
+
+  it('arka plan yazmasi ulasilamazsa kopuk yapar ama belirsiz saymaz; her yeniden deneme de saymaz', async () => {
+    agKopuk();
+    for (let i = 0; i < 3; i++) await api.post('/x', {}, { arkaPlan: true }).catch(() => undefined);
+    expect(baglantiDurumu()).toMatchObject({ kopuk: true, bilinmeyenYazma: 0 });
+  });
+
+  it('modul kuyrugu bekleyeni sayar, dusen bekleyen ulasan olur, kapatinca sifirlanir', () => {
+    const k = kuyrukKaynagi('arkon');
+    k.bildir(3);
+    expect(baglantiDurumu()).toMatchObject({ kuyrukta: 3, ulasan: 0 });
+    k.bildir(1);
+    k.bildir(0);
+    expect(baglantiDurumu()).toMatchObject({ kuyrukta: 0, ulasan: 3 });
+    bildirimiKapat();
+    expect(baglantiDurumu().ulasan).toBe(0);
+  });
+
+  it('ayni kaynagi bildiren iki parca kuyrugu iki kez saymaz; birakmak ulasan sayilmaz', () => {
+    const a = kuyrukKaynagi('arkon');
+    const b = kuyrukKaynagi('arkon');
+    a.bildir(2);
+    b.bildir(2);
+    expect(baglantiDurumu().kuyrukta).toBe(2);
+    a.birak();
+    expect(baglantiDurumu().kuyrukta).toBe(2);
+    b.birak();
+    expect(baglantiDurumu()).toMatchObject({ kuyrukta: 0, ulasan: 0 });
   });
 });

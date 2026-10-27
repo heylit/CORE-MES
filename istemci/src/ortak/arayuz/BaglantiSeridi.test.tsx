@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { baglantiDurumu, baglantiSifirla, cevapGeldi, ulasilamadi, YOKLAMA_ARALIGI_MS } from '../veri/baglanti.ts';
+import { baglantiDurumu, baglantiSifirla, cevapGeldi, kuyrukKaynagi, ulasilamadi, YOKLAMA_ARALIGI_MS } from '../veri/baglanti.ts';
 import { BaglantiSeridi, GERI_GELDI_SURESI_MS } from './BaglantiSeridi.tsx';
 
 beforeEach(() => { baglantiSifirla(); });
@@ -60,5 +60,29 @@ describe('BaglantiSeridi', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(YOKLAMA_ARALIGI_MS); });
     expect(getir).toHaveBeenCalledWith('/api/saglik', expect.objectContaining({ cache: 'no-store' }));
     expect(baglantiDurumu().kopuk).toBe(false);
+  });
+
+  it('kopukken kuyrukta bekleyen kaydi yeniden girmemesini soyler', () => {
+    render(<BaglantiSeridi />);
+    act(() => { ulasilamadi(null); kuyrukKaynagi('arkon').bildir(2); });
+    const metin = screen.getByRole('alert').textContent;
+    expect(metin).toContain('2 kayıt bu cihazda bekliyor');
+    expect(metin).toContain('yeniden girmeyin');
+    expect(metin).not.toContain('bilinmiyor');
+  });
+
+  it('kuyruk bosalmadan kapanmaz; bosalinca ulasan sayiyi soyler ve kendiliginden kapanir', () => {
+    vi.useFakeTimers();
+    render(<BaglantiSeridi />);
+    const k = kuyrukKaynagi('arkon');
+    act(() => { ulasilamadi(null); k.bildir(1); });
+    act(() => { cevapGeldi(); });
+    act(() => { vi.advanceTimersByTime(GERI_GELDI_SURESI_MS * 2); });
+    expect(screen.getByRole('status').textContent).toContain('Bekleyen 1 kayıt gönderiliyor');
+    expect(screen.queryByRole('button', { name: 'Bağlantı uyarısını kapat' })).toBeNull();
+    act(() => { k.bildir(0); });
+    expect(screen.getByRole('status').textContent).toContain('1 kayıt sunucuya ulaştı');
+    act(() => { vi.advanceTimersByTime(GERI_GELDI_SURESI_MS); });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

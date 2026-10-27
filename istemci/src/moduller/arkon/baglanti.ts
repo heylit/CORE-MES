@@ -103,6 +103,12 @@ async function dosyaYukle(istemci: Istemci, ozet: string, veri: Uint8Array): Pro
   }
 }
 
+// Belge ve kayıt yazımı Arkon'un gönderim kuyruğundan gider: ulaşılamazsa kayıt cihazda kalır, aynı kimlikle (belge sürümü, kayıt
+// cid'i) yeniden gönderilir, sunucu tekrarı tek yazar. Bu yazma "sonucu bilinmeyen" sayılmaz; kuyruk her yeniden denemede yeni
+// bir belirsiz kayıt sayılırdı. Bekleyen sayıyı kabuk şeridine Arkon'un bağlantı rozeti bildirir (yeni/ortak/BaglantiDurumu.tsx).
+// İleti (bus) de sayılmaz: kuyruğa girmez, kayıt değildir, kalıcı karşılığı (çağrı, sonuç) kayıt ya da belge olarak ayrıca gider.
+const BELIRSIZ_SAYILMAZ = { arkaPlan: true } as const;
+
 export interface IstekGirdisi {
   yontem: string;
   // '/api' sonrası yol: '/doc/pkgs/x'
@@ -153,14 +159,14 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
       const taban = g.sorgu.get('base');
       const sonuc = await istemci.post<BelgeYazCevabi>(`${yol}/yaz`, {
         taban: taban === null ? null : Number(taban), govde: govdeyiOku(g.govde), kaynak,
-      });
+      }, BELIRSIZ_SAYILMAZ);
       if (sonuc.sonuc === 'yazildi') return tamam({ ok: true, u: sonuc.surum });
       return { durum: 409, govde: { error: 'Kayıt başka bir cihazda değişti', cur: { u: sonuc.guncel.surum, d: sonuc.guncel.govde } } };
     }
     // Silme de son bilinen sürümle gider; sürümü bilinmeyen silme sunucuda reddedilir (taban yok).
     if (g.yontem === 'DELETE') {
       const taban = g.sorgu.get('base');
-      await istemci.post(`${yol}/sil`, { kaynak, ...(taban === null ? {} : { taban: Number(taban) }) });
+      await istemci.post(`${yol}/sil`, { kaynak, ...(taban === null ? {} : { taban: Number(taban) }) }, BELIRSIZ_SAYILMAZ);
       return tamam({ ok: true });
     }
   }
@@ -204,7 +210,7 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     const uyarilar: KayitEkleCevabi['uyarilar'] = [];
     for (let i = 0; i < satirlar.length; i += AZAMI_SATIR) {
       const dilim = satirlar.slice(i, i + AZAMI_SATIR);
-      const cevap = await istemci.post<Pick<KayitEkleCevabi, 'eklenen'> & Partial<KayitEkleCevabi>>(`/arkon/kayitlar/${yolParcasi(ikinci)}/ekle`, { satirlar: dilim, kaynak });
+      const cevap = await istemci.post<Pick<KayitEkleCevabi, 'eklenen'> & Partial<KayitEkleCevabi>>(`/arkon/kayitlar/${yolParcasi(ikinci)}/ekle`, { satirlar: dilim, kaynak }, BELIRSIZ_SAYILMAZ);
       n += cevap.eklenen;
       reddedilen.push(...(cevap.reddedilen ?? []));
       uyarilar.push(...(cevap.uyarilar ?? []));
@@ -224,7 +230,7 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     const istekKimligi = istekKimligiMi(mid) ? mid : yeniIstekKimligi();
     const yuk = { ileti: govde?.msg, kaynak: typeof govde?.c === 'string' ? govde.c : kaynak };
     await tekrarKorumaliGonder(
-      (d) => istemci.post('/arkon/iletiler', yuk, { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
+      (d) => istemci.post('/arkon/iletiler', yuk, { ...BELIRSIZ_SAYILMAZ, istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
       { istekKimligi },
     );
     return tamam({ ok: true });
