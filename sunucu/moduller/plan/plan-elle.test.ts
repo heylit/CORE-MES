@@ -270,6 +270,10 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     const ilkRota = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim(), yeniAdim()]);
     const ac = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${ilkRota}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: null });
     const [s1, s2, s3] = ac.isEmriIdleri;
+    // 248 a: önceki testlerin canlı işleri 4 saatin dışına alınır; kuyruk onların önüne yazılır.
+    await vt().tx(async (db) => {
+      for (const t of ['plan_yerlesimi', 'plan_yerlesim_parcasi']) await db.sorgu(`UPDATE ${t} SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day'`);
+    });
     const canli = await planOku();
     const isi = (id: number) => {
       const y = canli.yerlesimler.find((x) => x.isEmriId === id) ?? canli.yerlesmemis.find((x) => x.isEmriId === id)!;

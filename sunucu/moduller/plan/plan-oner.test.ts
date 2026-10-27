@@ -82,6 +82,8 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     const [i1, i2] = await isEmirleriAc([yeniAdim(), yeniAdim()]);
     let p = await taslaktaOner();
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+    // 248 a: bekleyen adım 4 saatin dışına alınır; yakın planlı iş ertelenip önüne iş konamaz.
+    await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = $1", [i2]));
     await isEmriDurumu(i1!, 'calisiyor');
     p = await planOku();
     assert.equal(yer(p, i1!).durum, 'basladi', 'çalışan adım');

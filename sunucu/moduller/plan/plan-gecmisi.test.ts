@@ -36,9 +36,11 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   test('1: canlıya alma eski canlı yeri plan sürümüyle geçmişe yazar; geçmiş değişmez ve silinmez, canlı plan boşaltılmaz', async () => {
     const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
     await canliyaAl(await taslaktaOner());
-    const ilk = yer(await planOku(), ie!);
     const surum = (await sahip().tek<{ surum: number }>('SELECT surum FROM plan_durumu'))!.surum;
     assert.deepEqual(await gecmis(ie!), [], 'ilk canlıya almada önceki yer yok');
+    // 248 a: canlıdaki iş 4 saatin dışına alınır (geçmişe bir değişme yazar); yakın iş başka makineye alınamaz.
+    await sahip().sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = $1", [ie]);
+    const ilk = yer(await planOku(), ie!);
 
     let p = await taslaktaOner();
     p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, {
@@ -47,10 +49,10 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     await canliyaAl(p);
     assert.equal(yer(await planOku(), ie!).kaynak.id, makineB);
     const g = await gecmis(ie!);
-    assert.equal(g.length, 1);
-    assert.deepEqual([g[0]!.tablo, g[0]!.islem, g[0]!.planSurumu], ['yerlesim', 'silme', surum]);
-    assert.equal(g[0]!.satir['makine_id'], makineA);
-    assert.equal(Date.parse(String(g[0]!.satir['baslangic'])), Date.parse(ilk.baslangic));
+    assert.deepEqual(g.map((x) => x.islem), ['degisme', 'silme']);
+    assert.deepEqual([g[1]!.tablo, g[1]!.islem, g[1]!.planSurumu], ['yerlesim', 'silme', surum]);
+    assert.equal(g[1]!.satir['makine_id'], makineA);
+    assert.equal(Date.parse(String(g[1]!.satir['baslangic'])), Date.parse(ilk.baslangic));
 
     await reddedilir('UPDATE plan_canli_gecmisi SET plan_surumu = 1 WHERE is_emri_id = $1', [ie]);
     await reddedilir('DELETE FROM plan_canli_gecmisi WHERE is_emri_id = $1', [ie]);

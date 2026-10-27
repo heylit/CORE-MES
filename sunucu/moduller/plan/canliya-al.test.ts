@@ -277,6 +277,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.equal(ozet.sonCanliyaAlma?.kisi, 'Deneme planlama');
 
     // Yeniden sıralayıp canlıya almak önceki canlı sırayı değiştirir.
+    // 248 a: canlıdaki işler 4 saatin dışına alınır; yakın iş yeniden sıralanamaz.
+    await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [idler]));
     const yine = await kuyrukYaz([i1, j1, i3, j3], true);
     assert.equal(yine.statusCode, 200, yine.body);
     assert.deepEqual((await ozetKuyrugu(anahtar)), await anahtarlar([i1, j1, i3, j3]));

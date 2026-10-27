@@ -151,6 +151,10 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     assert.equal((await canliyaAl(c.planlama, o.s)).statusCode, 200);
     assert.equal(await oncelik(), 1);
 
+    // 248 a: canlıdaki işler 4 saatin dışına alınır; arızalı makinenin yakın işi canlıya alırken ayrıca sınanır (dort-saat.test.ts).
+    await vt().tx(async (db) => {
+      for (const t of ['plan_yerlesimi', 'plan_yerlesim_parcasi']) await db.sorgu(`UPDATE ${t} SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day'`);
+    });
     const a = await dene('Arıza 281', 'ariza');
     const { makineId } = await veri(a.d.id);
     const durum = async () => (await ortam!.sahip.tek<{ durum: string } | null>(
