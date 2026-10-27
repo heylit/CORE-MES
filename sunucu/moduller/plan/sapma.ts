@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { KaynakTakvimi } from '#paylasilan/sozlesme/vardiya.ts';
-import { tesisGunu } from '#paylasilan/zaman.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import { makineler, planAyarlari } from '../istasyonlar/disari.ts';
 import { aralikAdetleri, isEmriPlanBilgileri, isEmriZamanlari } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
@@ -43,6 +43,14 @@ const iso = (dk: number) => new Date(dk * DK).toISOString();
 const gunEkle = (tarih: string, gun: number) => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * 86_400_000).toISOString().slice(0, 10);
 const kaynakAnahtari = (k: Kaynak) => `${k.tur}:${k.id}`;
 
+// Okunacak takvim günleri (tesis günü) ve net ölçünün güvenilir olduğu ilk dakika: okumanın ilk günü yalnız önceki günden taşan vardiya
+// içindir, pencere ikinci günün tesisteki gece yarısında açılır. UTC gece yarısı alınırsa tesiste günün ilk saatleri dışarıda kalır.
+export function takvimPenceresi(enErken: number, simdi: number): { baslangicGunu: string; bitisGunu: string; pencereBasi: number } {
+  const bitisGunu = gunEkle(tesisGunu(simdi * DK), TAHMIN_UFUK_GUN);
+  const baslangicGunu = [gunEkle(tesisGunu(enErken * DK), -1), gunEkle(bitisGunu, -TAKVIM_EN_COK_GUN)].sort().at(-1)!;
+  return { baslangicGunu, bitisGunu, pencereBasi: tesisGunBasi(gunEkle(baslangicGunu, 1)) / DK };
+}
+
 // Plandan sapma (781 a, 782): istekte hesaplanır, günlük toplu hesap ve tablo yok. Plan Arkon'u okumaz (ADR 0006); Arkon bunu okuyup kendi
 // eşiğiyle olaya çevirir. Bilinmeyen kimlik haritada yoktur.
 export async function planSapmalari(db: Db, g: { isEmriIdleri: readonly number[]; simdi?: number }): Promise<Map<number, PlanSapmasi>> {
@@ -82,9 +90,7 @@ export async function planSapmalari(db: Db, g: { isEmriIdleri: readonly number[]
     const z = zamanlar.get(id)!;
     return [canli.get(id)?.baslangic, taban.get(id)?.baslangic, girisOf(z) ?? undefined].filter((x): x is number => x !== undefined);
   }));
-  const bitisGunu = gunEkle(tesisGunu(simdiMs), TAHMIN_UFUK_GUN);
-  const baslangicGunu = [gunEkle(tesisGunu(enErken * DK), -1), gunEkle(bitisGunu, -TAKVIM_EN_COK_GUN)].sort().at(-1)!;
-  const pencereBasi = Date.parse(`${baslangicGunu}T00:00:00Z`) / DK + 24 * 60;
+  const { baslangicGunu, bitisGunu, pencereBasi } = takvimPenceresi(enErken, simdi);
   const tekilKaynak = [...new Map([...kaynagi.values()].map((k) => [kaynakAnahtari(k), k])).values()];
   const okunan = tekilKaynak.length === 0 ? new Map<string, KaynakTakvimi | null>() : await calismaTakvimleri(db, tekilKaynak, { baslangic: baslangicGunu, bitis: bitisGunu });
   const takvimler = new Map<string, Aralik[] | undefined>();
