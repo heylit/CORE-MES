@@ -7,7 +7,7 @@ import './cark.css';
 
 /* 790: iş ve makine çarkı (CNC Kurulum'un kart dizisi gibi). Tek çark, şerit başına bir liste. Çevirmek yalnız bakar: düğme, yana
    kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandaki işi değiştirmez; geçiş ve seçim şeridin kendi eylemidir. Ekrandaki öğe
-   verilen içerikle (iş kartı) çizilir; yandakiler kenardan görünür. Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir. */
+   de kısa kartla çizilir; komşular arkada üst üste görünür (prototip, 828 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir. */
 
 export interface CarkSeridi {
   anahtar: string;
@@ -64,6 +64,7 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
           </div>
         ) : <span className="tc-ay1-ust-yazi">{s.ad}</span>}
         <span className="tc-ay1-bosluk" />
+        {n > 1 ? <span className="tc-ay1-tcark-ipucu">Kaydır, dokun ya da ←/→ · yalnız bakar</span> : null}
         <b className="tc-ay1-mono tc-ay1-tcark-konum">{n ? `${bak + 1} / ${n}` : '0'}</b>
       </div>
       <div
@@ -85,9 +86,11 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
         })}
       </div>
       <div className="tc-ay1-tcark-alt">
-        <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
+        <span className="tc-ay1-tcark-oklar">
+          <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
+          <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
+        </span>
         <div className="tc-ay1-tcark-eylem" aria-live="polite">{n ? s.eylem(bak) : null}</div>
-        <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
       </div>
     </section>
   );
@@ -96,19 +99,27 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
 const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada';
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
 
-// Çarkta ekranda olmayan iş: önizleme kartı. Ekrandaki işin kartı terminalin kendi iş kartıdır.
-export function IsOnizKarti({ is, siradaki }: { is: Is; siradaki: boolean }) {
+// Çarktaki iş kartı (prototip): ekrandaki iş de çarkta bu kısa kartla durur; tam iş kartı çarkın altındadır.
+export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { is: Is; siradaki: boolean; ekranda?: boolean; makine?: string | null }) {
+  const oran = is.target > 0 ? Math.min(1, Math.max(0, is.good / is.target)) : 0;
   return (
-    <article className="tc-ay1-tcark-kart" data-durum={durumRengi(is.state)}>
+    <article className="tc-ay1-tcark-kart" data-durum={durumRengi(is.state)} data-ekranda={ekranda || undefined}>
       <span className="tc-ay1-tcark-etiketler">
         <span className="tc-ay1-cip" data-durum={durumRengi(is.state)}><i aria-hidden="true" />{durumAdi(is.state)}</span>
+        {ekranda ? <span className="tc-ay1-etiket tc-ay1-tcark-ekranda">Ekranda</span> : null}
         {siradaki ? <span className="tc-ay1-etiket">Sıradaki</span> : null}
         {is.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}
       </span>
       <b className="tc-ay1-mono">{is.no}</b>
       <span className="tc-ay1-tcark-ad">{is.part || '—'}</span>
       <small>{[is.op, is.pkg?.partNo].filter(Boolean).join(' · ')}</small>
-      {is.empty ? null : <small className="tc-ay1-mono">{is.good} / {is.target} adet</small>}
+      {is.empty ? null : (
+        <>
+          <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />
+          <small className="tc-ay1-mono">{[`${is.good} / ${is.target} adet`, is.due ? `Termin ${is.due}` : null].filter(Boolean).join(' · ')}</small>
+        </>
+      )}
+      {makine ? <small>Makine: {makine}</small> : null}
     </article>
   );
 }

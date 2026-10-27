@@ -1,4 +1,4 @@
-/* 790: iş ve makine çarkı. Öğeler sahnede üst üste durur; ortadaki ön planda, komşular kenardan dönerek görünür (CNC Kurulum kart
+/* 790: iş ve makine çarkı. Öğeler sahnede üst üste durur; ortadaki ön planda, komşular arkasında görünür (CNC Kurulum kart
    dizisi gibi). Yana kaydırma çarkındır, dikey kaydırma sayfanın. Ölçü ve renk tasarım değişkenindendir. */
 .tc-ay1-tcark {
   display: grid; gap: var(--b-2); padding: var(--b-2); min-width: 0; container-type: inline-size;
@@ -15,31 +15,46 @@
 .tc-ay1-tcark-serit > button[aria-pressed="true"] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); }
 .tc-ay1-tcark-serit > button:focus-visible, .tc-ay1-tcark-sahne:focus-visible { outline: var(--cizgi) solid var(--hazard-ink); outline-offset: var(--cizgi-ince); }
 
+.tc-ay1-tcark-ipucu { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* Prototip (828 a): kısa kart ortada, komşular arkasında küçülerek üst üste durur; ötesi görünmez. */
 .tc-ay1-tcark-sahne {
-  display: grid; padding-inline: var(--b-6); overflow: hidden; perspective: calc(var(--b-6) * 30);
+  display: grid; justify-items: center; padding: var(--b-3) var(--b-4); overflow: hidden; border-radius: var(--yari-2); background: var(--panel2);
   touch-action: pan-y; user-select: none; min-width: 0;
 }
 .tc-ay1-tcark-oge {
-  grid-area: 1 / 1; min-width: 0; display: grid;
+  grid-area: 1 / 1; inline-size: 44%; min-width: 0; display: grid;
   transition: transform var(--hareket-sure) var(--hareket-egri), opacity var(--hareket-sure) var(--hareket-egri);
 }
-.tc-ay1-tcark-oge[data-fark="0"] { z-index: 2; }
-.tc-ay1-tcark-oge[data-fark="1"] { transform-origin: left center; transform: translateX(calc(100% + var(--b-2))) rotateY(-40deg); opacity: var(--saydam-70); cursor: pointer; }
-.tc-ay1-tcark-oge[data-fark="-1"] { transform-origin: right center; transform: translateX(calc(-100% - var(--b-2))) rotateY(40deg); opacity: var(--saydam-70); cursor: pointer; }
-.tc-ay1-tcark-oge[data-fark="2"] { transform: translateX(calc(200% + var(--b-4))); opacity: 0; visibility: hidden; }
-.tc-ay1-tcark-oge[data-fark="-2"] { transform: translateX(calc(-200% - var(--b-4))); opacity: 0; visibility: hidden; }
-/* Ekrandaki iş kartı çarkın içinde kendi çerçevesiyle durur; önizleme kartı onunla aynı yüzeydedir. */
-.tc-ay1-tcark-oge > :is(.tc-ay1-aktif, .tc-ay1-is-ozet) { margin: 0; }
+.tc-ay1-tcark-oge[data-fark="0"] { z-index: 3; }
+.tc-ay1-tcark-oge:is([data-fark="1"], [data-fark="-1"]) { z-index: 2; cursor: pointer; }
+.tc-ay1-tcark-oge:is([data-fark="2"], [data-fark="-2"]) { z-index: 1; cursor: pointer; }
+/* Komşu kartın yüzeyi saydam değildir (arkadaki kart içinden görünmesin); yalnız içeriği solar. */
+.tc-ay1-tcark-oge:is([data-fark="1"], [data-fark="-1"]) .tc-ay1-tcark-kart > * { opacity: var(--saydam-70); }
+.tc-ay1-tcark-oge:is([data-fark="2"], [data-fark="-2"]) .tc-ay1-tcark-kart > * { opacity: var(--saydam-45); }
+.tc-ay1-tcark-oge[data-fark="1"] { transform: translateX(55%) scale(0.88); }
+.tc-ay1-tcark-oge[data-fark="-1"] { transform: translateX(-55%) scale(0.88); }
+.tc-ay1-tcark-oge[data-fark="2"] { transform: translateX(95%) scale(0.76); }
+.tc-ay1-tcark-oge[data-fark="-2"] { transform: translateX(-95%) scale(0.76); }
+.tc-ay1-tcark-oge:not([data-fark="0"]) .tc-ay1-tcark-kart { box-shadow: none; }
 .tc-ay1-tcark-kart {
   display: grid; align-content: start; gap: var(--b-1); padding: var(--b-4); min-width: 0;
-  border: var(--cizgi-ince) solid var(--sig, var(--edge)); border-radius: var(--yari-3); background: var(--panel-solid);
+  border: var(--cizgi-ince) solid var(--sig, var(--edge)); border-radius: var(--yari-3); background: var(--panel-solid); box-shadow: var(--shadow);
 }
+.tc-ay1-tcark-ekranda { background: var(--hazard); color: var(--ink); }
+.tc-ay1-tcark-ilerleme {
+  appearance: none; inline-size: 100%; block-size: var(--b-1); border: 0; border-radius: var(--yari-tam); overflow: hidden; background: var(--edge);
+}
+.tc-ay1-tcark-ilerleme::-webkit-progress-bar { background: var(--edge); }
+.tc-ay1-tcark-ilerleme::-webkit-progress-value { background: var(--run); }
+.tc-ay1-tcark-ilerleme::-moz-progress-bar { background: var(--run); }
 .tc-ay1-tcark-kart > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-tcark-kart > small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-ay1-tcark-ad { font-size: var(--yazi-l); font-weight: 700; overflow-wrap: anywhere; }
 .tc-ay1-tcark-etiketler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-ay1-tcark-etiketler .tc-ay1-etiket { margin-inline-start: 0; }
 
+.tc-ay1-tcark-oklar { display: inline-flex; gap: var(--b-2); flex: none; }
 .tc-ay1-tcark-alt { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
 .tc-ay1-tcark-eylem { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
 .tc-ay1-tcark-not { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 600; min-width: 0; }
@@ -54,7 +69,8 @@
 .tc-ay1-onizleme-bandi > span { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 
 @container (max-width: 480px) {
-  .tc-ay1-tcark-sahne { padding-inline: var(--b-5); }
+  .tc-ay1-tcark-oge { inline-size: 70%; }
+  .tc-ay1-tcark-ipucu { display: none; }
   .tc-ay1-tcark-dugmeler { flex: 1 0 100%; }
   .tc-ay1-tcark-dugmeler > .tc-dugme { flex: 1 1 0; }
 }
