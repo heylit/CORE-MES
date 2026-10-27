@@ -1,0 +1,72 @@
+/* 790: iş ve makine çarkı. Öğeler sahnede üst üste durur; ortadaki ön planda, komşular kenardan dönerek görünür (CNC Kurulum kart
+   dizisi gibi). Yana kaydırma çarkındır, dikey kaydırma sayfanın. Ölçü ve renk tasarım değişkenindendir. */
+.tc-ay1-tcark {
+  display: grid; gap: var(--b-2); padding: var(--b-2); min-width: 0; container-type: inline-size;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
+}
+.tc-ay1-tcark[data-baska] { border-color: var(--hazard); }
+.tc-ay1-tcark-ust { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-tcark-konum { font-size: var(--yazi-s); }
+.tc-ay1-tcark-serit { display: inline-flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-ay1-tcark-serit > button {
+  display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma-yogun); padding: 0 var(--b-3);
+  border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tc-ay1-tcark-serit > button[aria-pressed="true"] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); }
+.tc-ay1-tcark-serit > button:focus-visible, .tc-ay1-tcark-sahne:focus-visible { outline: var(--cizgi) solid var(--hazard-ink); outline-offset: var(--cizgi-ince); }
+
+.tc-ay1-tcark-sahne {
+  display: grid; padding-inline: var(--b-6); overflow: hidden; perspective: calc(var(--b-6) * 30);
+  touch-action: pan-y; user-select: none; min-width: 0;
+}
+.tc-ay1-tcark-oge {
+  grid-area: 1 / 1; min-width: 0; display: grid;
+  transition: transform var(--hareket-sure) var(--hareket-egri), opacity var(--hareket-sure) var(--hareket-egri);
+}
+.tc-ay1-tcark-oge[data-fark="0"] { z-index: 2; }
+.tc-ay1-tcark-oge[data-fark="1"] { transform-origin: left center; transform: translateX(calc(100% + var(--b-2))) rotateY(-40deg); opacity: var(--saydam-70); cursor: pointer; }
+.tc-ay1-tcark-oge[data-fark="-1"] { transform-origin: right center; transform: translateX(calc(-100% - var(--b-2))) rotateY(40deg); opacity: var(--saydam-70); cursor: pointer; }
+.tc-ay1-tcark-oge[data-fark="2"] { transform: translateX(calc(200% + var(--b-4))); opacity: 0; visibility: hidden; }
+.tc-ay1-tcark-oge[data-fark="-2"] { transform: translateX(calc(-200% - var(--b-4))); opacity: 0; visibility: hidden; }
+/* Ekrandaki iş kartı çarkın içinde kendi çerçevesiyle durur; önizleme kartı onunla aynı yüzeydedir. */
+.tc-ay1-tcark-oge > :is(.tc-ay1-aktif, .tc-ay1-is-ozet) { margin: 0; }
+.tc-ay1-tcark-kart {
+  display: grid; align-content: start; gap: var(--b-1); padding: var(--b-4); min-width: 0;
+  border: var(--cizgi-ince) solid var(--sig, var(--edge)); border-radius: var(--yari-3); background: var(--panel-solid);
+}
+.tc-ay1-tcark-kart > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-tcark-kart > small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-ay1-tcark-ad { font-size: var(--yazi-l); font-weight: 700; overflow-wrap: anywhere; }
+.tc-ay1-tcark-etiketler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-ay1-tcark-etiketler .tc-ay1-etiket { margin-inline-start: 0; }
+
+.tc-ay1-tcark-alt { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-tcark-eylem { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-ay1-tcark-not { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 600; min-width: 0; }
+.tc-ay1-tcark-nokta { flex: none; inline-size: var(--nokta); block-size: var(--nokta); border-radius: var(--yari-tam); background: var(--hazard); }
+.tc-ay1-tcark-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+/* Önizleme bandı: sağ panel ve telefondaki resim ile adımlar bakılan işi salt okunur gösterir. */
+.tc-ay1-onizleme-bandi {
+  display: flex; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  border: var(--cizgi-ince) solid var(--hazard); background: color-mix(in srgb, var(--hazard) 18%, var(--panel-solid)); color: var(--ink);
+}
+.tc-ay1-onizleme-bandi > span { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* 791 b: geniş düzende sol iş listesi yoktur; iki sütun her genişlikte, liste "İşler" düğmesinden açılır. operator.css'teki üç sütun
+   kuralı o dosyaya dokunulabilene dek burada ezilir (seçici bu yüzden ağırdır). */
+.tc-ay1-genis .tc-ay1-izgara[data-cark] { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+.tc-ay1-genis .tc-ay1-izgara[data-cark] > .tc-ay1-orta.tc-ay1-sutun { display: flex; }
+.tc-ay1-genis[data-cark] .tc-ay1-isler-dugme { display: contents; }
+@container terminal (max-width: 999px) {
+  .tc-ay1-genis .tc-ay1-izgara[data-cark] { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+}
+
+@container (max-width: 480px) {
+  .tc-ay1-tcark-sahne { padding-inline: var(--b-5); }
+  .tc-ay1-tcark-dugmeler { flex: 1 0 100%; }
+  .tc-ay1-tcark-dugmeler > .tc-dugme { flex: 1 1 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ay1-tcark-oge { transition: none; }
+}
