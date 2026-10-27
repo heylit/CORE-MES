@@ -702,6 +702,16 @@ export function belgeSiparisBagla(db: Db, kisiId: number, g: { belgeId: number; 
 export interface AlisBelgesi { id: number; belgeNo: string | null; belgeTarihi: string; aciklama: string | null; durum: string; satinAlmaSiparisi: SiparisAnahtari | null }
 export const alisBelgeleri = (db: Db, firmaId: number): Promise<AlisBelgesi[]> => sorgular.alisBelgeleri<AlisBelgesi>(db, firmaId);
 
+// 911 b, 940 c: proje maliyetinin üretim dışı masraf belgeleri. Tutar finans rakamıdır (260 a kalıbı): okuma yetkisi çağıranın ucundadır.
+// Bulunmayan ya da gider olmayan belge haritada yoktur.
+export type GiderBelgesi = sorgular.GiderBelgesiSatiri;
+export async function giderBelgeleri(db: Db, idler: readonly number[]): Promise<Map<number, GiderBelgesi>> {
+  if (idler.length === 0) return new Map();
+  return new Map((await sorgular.giderBelgeleriOku(db, idler)).map((b) => [b.id, b]));
+}
+export const giderBelgesiSecenekleri = (db: Db, kalip: string | null, kategoriler: readonly string[]): Promise<GiderBelgesi[]> =>
+  sorgular.giderBelgesiSecenekleriOku(db, kalip, kategoriler);
+
 // Kart #1124 (FNS-63, FNS-64): siparişin ödeme planı finansa beklenen ödeme olarak yazılır. Satın almanın ucu çağırır; firmayı ve para
 // birimini siparişten verir, finans siparişi okumaz. Plan bütün olarak yenilenir; faturası bağlanmış siparişin planı değişmez.
 export interface SiparisOdemesi { tur: 'avans' | 'vade'; vade: string; yontem: SiparisOdemeYontemi; tutar: string }

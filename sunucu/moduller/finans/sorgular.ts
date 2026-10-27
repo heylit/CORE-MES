@@ -472,6 +472,21 @@ export const alisBelgeleri = <T>(db: Db, firmaId: number) => db.sorgu<T>(
           ELSE json_build_object('talepId', b.satin_alma_talep_id, 'teklifId', b.satin_alma_teklif_id) END AS "satinAlmaSiparisi"
    FROM finans_belge b WHERE b.firma_id = $1 AND b.yon = 'gider' AND b.durum <> 'iptal' ORDER BY b.belge_tarihi DESC, b.id DESC LIMIT 200`, [firmaId]);
 
+// 911 b, 940 c: proje maliyetine bağlanan üretim dışı gider belgeleri. Tutar KDV hariç TL'dir (tutar x belge kuru); KDV maliyet değildir.
+export interface GiderBelgesiSatiri {
+  id: number; belgeNo: string | null; belgeTarihi: string; kategori: string; aciklama: string | null; durum: string; tutarTl: string; satinAlmaBagli: boolean;
+}
+const GIDER_BELGESI = `b.id, b.belge_no AS "belgeNo", ${tarihMetni('b.belge_tarihi')} AS "belgeTarihi", b.kategori, b.aciklama, b.durum,
+  round(b.tutar * b.kur, 2)::text AS "tutarTl", (b.satin_alma_talep_id IS NOT NULL) AS "satinAlmaBagli"`;
+export const giderBelgeleriOku = (db: Db, idler: readonly number[]) => db.sorgu<GiderBelgesiSatiri>(
+  `SELECT ${GIDER_BELGESI} FROM finans_belge b WHERE b.id = ANY($1::int[]) AND b.yon = 'gider'`, [idler]);
+// Seçici: iptal edilmemiş gider belgeleri, verilen kategorilerde; kalıp belge no ve açıklamada aranır. Yeniden eskiye, en çok 20.
+export const giderBelgesiSecenekleriOku = (db: Db, kalip: string | null, kategoriler: readonly string[]) => db.sorgu<GiderBelgesiSatiri>(
+  `SELECT ${GIDER_BELGESI} FROM finans_belge b
+    WHERE b.yon = 'gider' AND b.durum <> 'iptal' AND b.kategori = ANY($2::text[])
+      AND ($1::text IS NULL OR b.belge_no ILIKE $1 OR b.aciklama ILIKE $1)
+    ORDER BY b.belge_tarihi DESC, b.id DESC LIMIT 20`, [kalip, kategoriler]);
+
 // ---- Birim maliyetleri (kart #1187) ----
 const maliyetSecimi = (t: MaliyetTuru) => {
   const m = MALIYET_TABLOLARI[t];

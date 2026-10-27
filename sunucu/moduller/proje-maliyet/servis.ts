@@ -1,10 +1,15 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
+import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
-import type { EksikVeri, ProjeMaliyetCevabi } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
+import { MALIYET_KALEMLERI, PROJE_MASRAF_KATEGORILERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import type {
+  EksikVeri, MaliyetKalemi, MaliyetOzeti, MasrafSecenekleriCevabi, ProjeMaliyetCevabi, Taban,
+} from '#paylasilan/sozlesme/proje-maliyet.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { birimMaliyetleri, faizGetir, genelGiderOrani, kurGetir } from '../finans/disari.ts';
+import { birimMaliyetleri, faizGetir, genelGiderOrani, giderBelgeleri, giderBelgesiSecenekleri, kurGetir } from '../finans/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
@@ -15,9 +20,11 @@ import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts
 import { emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
 import { defterdekiIsEmirleri, defterOku, defterYaz } from './sorgular.ts';
+import * as sorgular from './sorgular.ts';
 import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
+import { MASRAF_YOK, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
 import type { GelirPayi, MalzemeBileseni, MaliyetKaydi, TalasAdedi } from './kurallar.ts';
 
 // Sipariş tutarı ve kâr için ayrıca bu işlem gerekir (180 cevabı: yalnız yönetici ve müdür). İşlem Çekirdek'in göçüyle gelir;
@@ -195,8 +202,15 @@ async function gelirHesapla(db: Db, isler: readonly ProjeIsEmri[], bugun: string
   return projeGeliri(paylar);
 }
 
+type Hesap = Omit<ProjeMaliyetCevabi, 'ozet'> & { isEmriSayisi: number };
+
 // Projenin maliyet özeti (197 a): salt okuma; hesap kurallar.ts'tedir. Gelir sipariş para biriminden bugünün kuruyla TRY'ye çevrilir.
 export async function projeMaliyeti(db: Db, kullanici: Kullanici, projeId: number, simdi = Date.now()): Promise<ProjeMaliyetCevabi> {
+  const { isEmriSayisi: _sayi, ...h } = await hesapla(db, kullanici, projeId, simdi);
+  return { ...h, ozet: await maliyetOzeti(db, projeId, h) };
+}
+
+async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: number): Promise<Hesap> {
   const proje = await projeGetir(db, projeId);
   if (proje === null) throw bulunamadi('Proje bulunamadı.');
   const fiyatGorunur = (kullanici.islemler as readonly string[]).includes(FIYAT_ISLEMI);
@@ -263,6 +277,7 @@ export async function projeMaliyeti(db: Db, kullanici: Kullanici, projeId: numbe
     sapanIsEmirleri: fiyatGorunur ? sapanIsEmirleri(kayitlar, dahil) : [],
     eksikKalemler: eksik,
     eksikler,
+    isEmriSayisi: isler.length,
   };
 }
 
@@ -319,3 +334,84 @@ export async function isEmriTahminiMaliyetleri(db: Db, isEmriIdleri: readonly nu
   }
   return sonuc;
 }
+
+// --- Taban fotoğrafı (934, 936 a) ve üretim dışı masraf (911 b, 940 c) ---
+
+async function maliyetOzeti(db: Db, projeId: number, h: Pick<Hesap, 'gerceklesen' | 'kalanPlan'>): Promise<MaliyetOzeti> {
+  const tabanSatirlari = await sorgular.tabanlar(db, projeId);
+  const baglar = await sorgular.masrafBaglari(db, projeId);
+  const belgeler = await giderBelgeleri(db, baglar.map((b) => b.belgeId));
+  const adlar = await kisiAdlari(db, [...tabanSatirlari.map((t) => t.kisiId), ...baglar.map((b) => b.kisiId)]);
+  const tabanlar: Taban[] = tabanSatirlari.map((t) => ({
+    sira: t.sira,
+    plan: t.plan === null ? null : Number(t.plan),
+    kalemler: MALIYET_KALEMLERI.map((kalem) => ({ kalem, plan: t.kalemler[kalem] ?? null })),
+    eksikKalemler: t.eksikKalemler as MaliyetKalemi[],
+    isEmriSayisi: t.isEmriSayisi,
+    gerekce: t.gerekce,
+    kisiAd: adlar.get(t.kisiId) ?? null,
+    an: t.an,
+  }));
+  // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42).
+  const masraflar = baglar.flatMap((b) => {
+    const d = belgeler.get(b.belgeId);
+    if (d === undefined) return [];
+    return [{
+      id: b.id, belgeId: b.belgeId, belgeNo: d.belgeNo, belgeTarihi: d.belgeTarihi, kategori: d.kategori, aciklama: d.aciklama,
+      tutarTl: Number(d.tutarTl), iptal: d.durum === 'iptal', gorevId: b.gorevId, kisiAd: adlar.get(b.kisiId) ?? null, an: b.an,
+    }];
+  });
+  const [taban = null, ...tabanGecmisi] = tabanlar;
+  return { taban, tabanGecmisi, masraflar, ...maliyetFarki(taban?.plan ?? null, h.gerceklesen, h.kalanPlan, masraflar) };
+}
+
+const TABAN_KISITLARI = { proje_maliyet_taban_sira_tekil: 'Taban aynı anda başka biri tarafından alındı; sayfayı yenileyin.' };
+const MASRAF_KISITLARI = {
+  proje_maliyet_masraf_belge_tekil: { ileti: 'Bu belge zaten bir projeye bağlı.', alan: 'belgeId' },
+  proje_maliyet_masraf_gorev: { ileti: 'Görev bu projede yok.', alan: 'gorevId' },
+};
+
+// PM-40: taban o anki plan maliyetidir (bugünün ücret ve kuruyla, bitmiş iş emri defterden); kişi ve zaman sunucudan.
+export async function tabanAl(db: Db, kullanici: Kullanici, projeId: number, gerekce: string | null, simdi = Date.now()): Promise<{ tamam: true }> {
+  const h = await hesapla(db, kullanici, projeId, simdi);
+  const karar = tabanKarari((await sorgular.tabanlar(db, projeId)).length, h.isEmriSayisi, gerekce);
+  if ('ret' in karar) throw gecersiz(karar.ret);
+  await kisitKorumali(TABAN_KISITLARI, () => sorgular.tabanEkle(db, projeId, {
+    sira: karar.sira,
+    plan: h.plan,
+    kalemler: Object.fromEntries(h.kalemler.map((k) => [k.kalem, k.plan])),
+    eksikKalemler: h.eksikKalemler,
+    isEmriSayisi: h.isEmriSayisi,
+    gerekce: karar.gerekce,
+  }, kullanici.id));
+  return { tamam: true };
+}
+
+// PM-41: bağ kişiyle ve zamanla yazılır; bir belge tek projeye bağlanır, görev aynı projeden olmalıdır.
+export async function masrafBagla(db: Db, kullanici: Kullanici, projeId: number, g: { belgeId: number; gorevId: number | null }): Promise<{ tamam: true }> {
+  if ((await projeGetir(db, projeId)) === null) throw bulunamadi('Proje bulunamadı.');
+  const belge = (await giderBelgeleri(db, [g.belgeId])).get(g.belgeId);
+  const ret = masrafReddi(belge, PROJE_MASRAF_KATEGORILERI);
+  if (ret === MASRAF_YOK) throw bulunamadi(ret);
+  if (ret !== null) throw gecersiz(ret);
+  await kisitKorumali(MASRAF_KISITLARI, () => sorgular.masrafBagla(db, projeId, g.belgeId, g.gorevId, kullanici.id));
+  return { tamam: true };
+}
+
+export async function masrafBagiKaldir(db: Db, bagId: number): Promise<{ tamam: true }> {
+  if (!(await sorgular.masrafBagiKaldir(db, bagId))) throw bulunamadi('Masraf bağı bulunamadı.');
+  return { tamam: true };
+}
+
+// Seçici: bağlanabilecek belgeler (bağlı ve satın almaya bağlı olanlar düşer). Tutar finans rakamıdır, yalnız maliyet okuyana gider.
+export async function masrafSecenekleri(db: Db, kullanici: Kullanici, ara: string): Promise<MasrafSecenekleriCevabi> {
+  const adaylar = await giderBelgesiSecenekleri(db, aramaKalibi(ara), PROJE_MASRAF_KATEGORILERI);
+  const bagli = await sorgular.bagliBelgeler(db, adaylar.map((b) => b.id));
+  const gorur = islemVarMi(kullanici, 'finans.maliyet-oku');
+  return {
+    belgeler: adaylar.filter((b) => !b.satinAlmaBagli && !bagli.has(b.id)).map((b) => ({
+      id: b.id, belgeNo: b.belgeNo, belgeTarihi: b.belgeTarihi, kategori: b.kategori, aciklama: b.aciklama, tutarTl: gorur ? Number(b.tutarTl) : null,
+    })),
+  };
+}
+

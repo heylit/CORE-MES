@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { EksikVeri, KalemSatiri, MaliyetKalemi, ProjeMaliyetCevabi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import type { EksikVeri, KalemSatiri, ProjeMaliyetCevabi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import { DurumKutusu, IkiSeriKarti, Kart, Rozet, SayiKarti, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { KALEM_ADI, MaliyetTabani, tl } from './MaliyetTabani.tsx';
+import { MasrafBelgeleri } from './MasrafBelgeleri.tsx';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import './proje-maliyet.css';
 
 // Sekmeyi açan uç bu işlemi ister; Projeler sekmeyi yalnız buna sahip olana gösterir.
 export const MALIYET_OKUMA_ISLEMI = 'finans.maliyet-oku';
 
-const KALEM_ADI: Record<MaliyetKalemi, string> = {
-  malzeme: 'Malzeme', isleme: 'İşleme', ayar: 'Ayar', fason: 'Fason', iscilik: 'İşçilik ve mesai', genel_gider: 'Genel gider', finansman: 'Bekleme finansmanı',
-};
 
 const EKSIK_METNI: Record<EksikVeri, string> = {
   siparis_yok: 'Proje bir siparişe bağlı değil; termin, vade ve gecikme cezası bilinmez.',
@@ -27,7 +27,6 @@ const EKSIK_METNI: Record<EksikVeri, string> = {
   satirsiz_emir: 'Bazı üretim emirleri sipariş satırına bağlı değil; bu emirlerin geliri hesaba girmez.',
 };
 
-const tl = (x: number | null): string => (x === null ? '—' : `${x.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TL`);
 const yuzde = (x: number | null): string => (x === null ? '—' : `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
 const isaretliYuzde = (x: number | null): string => (x === null ? '—' : `${x > 0 ? '+' : ''}${yuzde(x)}`);
 const gunAy = (tarih: string): string => `${tarih.slice(8, 10)}.${tarih.slice(5, 7)}`;
@@ -82,7 +81,11 @@ function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
   );
 }
 
+// 940 c: taban alma ve masraf bağı proje yazma işlemiyle.
+const YAZMA_ISLEMI = 'projeler.yaz';
+
 export function ProjeMaliyeti({ projeId }: { projeId: number }) {
+  const yazabilir = useOturum().data?.islemler.includes(YAZMA_ISLEMI) === true;
   const sorgu = useQuery({
     queryKey: anahtarlar.maliyet(projeId),
     // 236 a: ekran yalnız okur; bitmiş iş emirlerini deftere sunucu işi yazar.
@@ -124,6 +127,7 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
             altMetin={`Bugüne kadarki plan ${tl(m.bugunePlan)}`} ton={m.sapma !== null && m.sapma > 0 ? 'uyari' : 'bilgi'} />
         )}
       </div>
+      <MaliyetTabani projeId={projeId} ozet={m.ozet} kalemler={m.kalemler} yazabilir={yazabilir} />
       <KarRiskiSeridi m={m} />
       <div className="tc-pm-grafikler">
         <IkiSeriKarti baslik="Birikimli maliyet (haftalık)" simge="chart" seriAdlari={['Plan', 'Gerçekleşen']} birim="TL"
@@ -134,6 +138,7 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
       <Kart baslik="Kalemler">
         <Tablo etiket="Maliyet kalemleri" sutunlar={KALEM_SUTUNLARI} satirlar={m.kalemler} satirAnahtari={(k) => k.kalem} />
       </Kart>
+      <MasrafBelgeleri projeId={projeId} ozet={m.ozet} yazabilir={yazabilir} />
       {m.fiyatGorunur && (
         <Kart baslik="En çok sapan iş emirleri">
           <Tablo etiket="En çok sapan iş emirleri" sutunlar={IS_EMRI_SUTUNLARI} satirlar={m.sapanIsEmirleri} satirAnahtari={(s) => s.isEmriId}

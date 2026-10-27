@@ -10,7 +10,7 @@
 6. KAPANDI (224, 19.10.2026): proje açılırken sipariş `siparisKilitliAyrinti` ile kilitli okunur. Eski metin: siparişten proje açılırken sipariş kilitlenmez / `siparisler/disari.ts`'te kilitli okuma yok / onaylı sipariş yalnız kapanır ya da iptal olur; aynı anda iptal edilen siparişe proje açılabilir. Siparişler kilitli okuma verirse ona geçilir.
 7. Kilometre taşının üretim emrine, siparişe ya da satın almaya bağı ve tahmini tarihi yok (890 c, ilk sürüm) / `projeler` plan ve üretim emirlerini okuyamaz (ADR 0006) / bağ ve tahmin üst katmanda (proje-maliyet ya da plan) kurulur; o zamana kadar gerçekleşen tarih elle girilir.
 8. Plan ve gerçekleşen zaman çizelgesi Projeler'de hesaplanmaz (908) / plan modülü proje süzgeçli salt okunur uç verir (933 a, 815 sonrası, ayrı dal) / Projeler'e salt okunur sekme API ile eklenir (madde 4 kalıbı).
-9. Görev maliyeti görevde tutulmaz (911 b) / üretim dışı masrafın projeye bağı ve taban maliyet fotoğrafı ayrı dalda (934 sorusu açık) / Maliyet sekmesi o dalda genişler.
+9. KAPANDI (940 c, 936 a): görev maliyeti görevde tutulmaz (911 b); üretim dışı masraf belgesi projeye ve görevine proje-maliyet'teki `proje_maliyet_masraf` ile bağlanır, taban fotoğrafı `proje_maliyet_taban`'dadır; Maliyet sekmesinde görünür.
 10. Statü penceresinde kapatılmış güncel statü seçili görünmez (liste yalnız etkin statüleri verir) / yalnız görünüm; geçmişte adıyla kalır.
 
 ## Sonra

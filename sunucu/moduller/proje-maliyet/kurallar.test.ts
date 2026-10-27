@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
-  projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani,
+  projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
 import { beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
@@ -290,4 +290,35 @@ describe('proje-maliyet kuralları', () => {
     // Bitti, 3 sağlam 1 hurda: 20 kg - 9 kg = 11 kg x 5 = 55.
     assert.deepEqual(malzemePlani([kutuk], 4, 3, gercekTalasAdedi(true, 4, 4, 3)), { tutar: 445, talas: 55 });
   });
+});
+
+test('PM-40 taban kararı: emirsiz projede ret; ilk taban gerekçesiz (verilen yok sayılır); yenileme gerekçe ister', () => {
+  assert.deepEqual(tabanKarari(0, 0, null), { ret: TABAN_EMIRSIZ });
+  assert.deepEqual(tabanKarari(0, 2, 'ilk'), { sira: 1, gerekce: null });
+  assert.deepEqual(tabanKarari(1, 2, null), { ret: TABAN_GEREKCE });
+  assert.deepEqual(tabanKarari(1, 2, '   '), { ret: TABAN_GEREKCE });
+  assert.deepEqual(tabanKarari(2, 2, ' Adet arttı '), { sira: 3, gerekce: 'Adet arttı' });
+});
+
+test('PM-41 masraf reddi: yok, iptal, satın almaya bağlı ve proje masrafı olmayan tür reddedilir', () => {
+  const tur = ['personel', 'lojistik'];
+  const b = { durum: 'acik', kategori: 'personel', satinAlmaBagli: false };
+  assert.equal(masrafReddi(undefined, tur), MASRAF_YOK);
+  assert.equal(masrafReddi({ ...b, durum: 'iptal' }, tur), MASRAF_IPTAL);
+  assert.equal(masrafReddi({ ...b, satinAlmaBagli: true }, tur), MASRAF_SATIN_ALMA);
+  assert.equal(masrafReddi({ ...b, kategori: 'faiz' }, tur), MASRAF_KATEGORI);
+  assert.equal(masrafReddi({ ...b, durum: 'kapandi' }, tur), null);
+});
+
+test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son + kalan plan; taban ya da bilinmeyen taraf yoksa null', () => {
+  const m = [{ tutarTl: 100, iptal: false }, { tutarTl: 50, iptal: true }];
+  assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
+  assert.deepEqual(maliyetFarki(null, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: null });
+  assert.deepEqual(maliyetFarki(1000, null, 700, m), { masrafToplami: 100, sonGerceklesen: null, tahminiSon: null, fark: null });
+  assert.deepEqual(maliyetFarki(1000, 400, null, []), { masrafToplami: 0, sonGerceklesen: 400, tahminiSon: null, fark: null });
+});
+
+test('seçici araması: joker kaçırılır, boş arama süzmez', () => {
+  assert.equal(aramaKalibi('  '), null);
+  assert.equal(aramaKalibi('%5_a'), '%\\%5\\_a%');
 });
