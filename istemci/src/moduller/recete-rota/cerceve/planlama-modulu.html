@@ -4367,13 +4367,17 @@ function schedule(st,mode,base,opt={}){
       if(r)commit(cx,ctx,r);else ctx.fail.push(o.id);U.delete(o.id);q.splice(bi,1);}
   }
   let guard=0;
-  const evalOp=(o,fast)=>{let best=null;const alts=[];
+  /* 763: adaylardan birinin bedeli bilinmiyorsa (saat ücreti ya da fason fiyatı boş) o adımda bedel kıyaslanmaz; boş bedel 0 sayılsaydı
+     ücretsiz tezgâh en ucuz görünür ve hep o seçilirdi. Seçim yalnız bitişle yapılır. */
+  const evalOp=(o,fast)=>{const rs=[];
     for(const c of candM(o,st,opt,base)){let r;
       if(fast&&!c.fas){const key=o.id+'|'+c.m,ce=ctx.cache[key];if(ce&&ce.v===(ctx.ver[c.m]||0))r=ce.r;else{r=timing(o,c,cx,ctx,true);ctx.cache[key]={v:ctx.ver[c.m]||0,r};}}
       else r=timing(o,c,cx,ctx,false);
-      if(!r)continue;
+      if(r)rs.push([c,r]);}
+    const bedelli=rs.every(([,r])=>r.cost!=null);let best=null;const alts=[];
+    for(const [c,r] of rs){
       const chg=base&&base.ops[o.id]&&base.ops[o.id].m!==c.m?st.w.lam:0;
-      const J=(1-st.w.alpha)*r.C*1000+st.w.alpha*(r.cost==null?0:r.cost)+chg;alts.push({m:c.m,S:r.S,C:r.C,cost:r.cost,J});
+      const J=(1-st.w.alpha)*r.C*1000+(bedelli?st.w.alpha*r.cost:0)+chg;alts.push({m:c.m,S:r.S,C:r.C,cost:r.cost,J});
       if(!best||J<best.J)best={...r,J};}
     if(best)best.alts=alts;return best;};
   while(U.size&&guard++<20000){

@@ -223,3 +223,23 @@ describe('ortak plan motoru, kişi ataması (563 c, 563 2 a)', () => {
     assert.deepEqual(ozet(plan(D)), ozet(plan({ ...D, personel: D.personel.map((p) => ({ ...(p as object), makineler: [] })) })));
   });
 });
+
+describe('ortak plan motoru, bedeli bilinmeyen tezgâh (763)', () => {
+  // T1'in saat ücreti boş, T2'ninki 100 TL ve dakikası daha kısa. Boş ücret 0 sayılsaydı T1 bedava görünür ve seçilirdi.
+  const D = {
+    ...veri(), tezgahlar: [{ id: 'T1', grup: 'G', ucret: null }, { id: 'T2', grup: 'G', ucret: 100 }],
+    personel: [{ id: 'P1', vardiya: 'V', gruplar: ['G'] }, { id: 'P2', vardiya: 'V', gruplar: ['G'] }],
+    urunler: [{ id: 'U', rota: [{ k: 10, ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 61, ayar: 0 }, { id: 'T2', cevrim: 60, ayar: 0 }] }] }],
+  };
+
+  test('adaylardan birinin ücreti boşsa bedel kıyaslanmaz; erken biten tezgâh seçilir', () => {
+    const m = motorYukle();
+    assert.equal(m.schedule(durum(m, {}, 0, D), 'yeni', null).ops['S1.10']?.m, 'T2');
+  });
+
+  test('ücretlerin hepsi biliniyorsa bedel kıyaslanır', () => {
+    const m = motorYukle();
+    const bilinen = { ...D, tezgahlar: [{ id: 'T1', grup: 'G', ucret: 1 }, { id: 'T2', grup: 'G', ucret: 100 }] };
+    assert.equal(m.schedule(durum(m, {}, 0, bilinen), 'yeni', null).ops['S1.10']?.m, 'T1');
+  });
+});
