@@ -2,14 +2,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { IkPuantajCevabi, IkPuantajGunuGirdisi, PuantajDurumu } from '#paylasilan/sozlesme/ik.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, SayfaBasligi, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { adSoyad, kisaTarih, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
-import { AySecici } from '../ortak/AySecici.tsx';
 import type { Devam, Personel } from '../tipler.ts';
 import { ikAnahtarlari, useIkKomutu, useIkPuantaj, yeniKimlik } from '../veri.ts';
 import { isGunuMu } from './hesap.ts';
+import { AyYilSecici, Baslik } from './parcalar.tsx';
 import {
   aktarimKaydi, ayindaCalisiyor, dakikaSaat, devamKisa, gunDenetle, gunTemizle, gunYazimi, haftaGunu, PUANTAJ_DURUM_ADI, PUANTAJ_GUN_ADI, puHucre, puKayit, puKisi, puKisileri,
   puOneriler, puPlan, puToplam, sayi, sayiYaz, topluDenetle, topluGunler, type GunGirdisi, type PuantajHucresi,
@@ -126,14 +126,14 @@ export function Puantaj({ o, ay, ayYaz, bugun, sekmeler }: { o: IkEkranOzellikle
 
   return (
     <section className="tc-iki">
-      <SayfaBasligi
+      <Baslik
         baslik="Devam ve mesai" simge="clock" alt="Günlük giriş-çıkış saatleri. Kişi sayfasındaki takvim aynı kaydı gösterir; fazla mesai öneri olarak gelir, devam kaydına siz aktarırsınız."
-        birincil={yaz ? { etiket: 'Toplu giriş', simge: 'plus', yap: () => { topluYaz(true); }, pasif: !veri } : undefined}
+        dugmeler={yaz ? [{ anahtar: 'toplu', etiket: 'Toplu giriş', simge: 'plus', birincil: true, yap: () => { topluYaz(true); }, pasif: !veri }] : []}
       />
-      {sekmeler}
-      <div className="tc-iki-arac">
-        <AySecici ay={ay} degistir={ayYaz} />
-        <Girdi etiket="Çalışan ara" type="search" placeholder="Çalışan ara" value={ara} onChange={(e) => { araYaz(e.target.value); }} />
+      <div className="tc-iki-arac tc-iki-arac-satir">
+        {sekmeler}
+        <AyYilSecici ay={ay} degistir={ayYaz} bugun={bugun} />
+        <Girdi etiket="Çalışan ara" type="search" placeholder="Çalışan ara" className="tc-iki-ara" value={ara} onChange={(e) => { araYaz(e.target.value); }} />
         <Secim etiket="Departman" bosSecenek="Tüm departmanlar" secenekler={departmanlar} value={departman} onChange={(e) => { departmanYaz(e.target.value); }} />
       </div>
       {govde}

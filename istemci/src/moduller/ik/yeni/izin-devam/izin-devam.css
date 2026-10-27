@@ -6,6 +6,32 @@
 .tc-iki-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-iki-gizli { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-iki-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--pano-kart-enaz) * .75), 1fr)); gap: var(--b-3); }
+
+/* Sayfa basligi bugunku gibi: ad ve aciklama solda, butun dugmeler sagda gorunur; aciklama satira sigmazsa kirilir. */
+.tc-iki-baslik { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); min-width: 0; }
+.tc-iki-baslik-bas { display: grid; gap: var(--b-1); flex: 1 1 calc(var(--arama-genis) * 1.2); min-width: 0; }
+.tc-iki-baslik-ad { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); font-weight: 700; }
+.tc-iki-baslik-ad .tc-simge { flex: none; color: var(--muted); }
+.tc-iki-baslik-alt { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-iki-baslik-eylem { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
+
+/* Arac satiri bugunku gibi tek satir: gorunum sekmeleri, ay secimi, arama ve suzgec; liste etiketleri yalniz ekran okuyucuya. */
+.tc-iki-arac-satir { align-items: center; }
+.tc-iki-arac-satir > .tc-sekmeler { flex: none; }
+.tc-iki-arac-satir > .tc-alan:has(.tc-iki-ara) { flex: 1 1 calc(var(--arama-genis) * .6); }
+.tc-iki-ay { display: inline-flex; align-items: center; gap: var(--b-2); }
+:is(.tc-iki-arac-satir, .tc-iki-ay, .tc-iki-suzgecler) .tc-alan-etiket { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-iki-sayilar[data-adet="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Devam kayitlari: kart icinde tablo; dar alanda yatay kayar, karta donmez. */
+.tc-iki-liste { min-width: 0; overflow-x: auto; padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
+.tc-iki-tablo { width: max-content; min-width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-iki-tablo th { padding: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 500; text-align: left; white-space: nowrap; }
+.tc-iki-tablo td { padding: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge); vertical-align: middle; }
+.tc-iki-tablo [data-sag] { text-align: right; font-variant-numeric: tabular-nums; }
+.tc-iki-tablo tr[data-secilir] { cursor: pointer; }
+.tc-iki-tablo tr[data-secilir]:hover, .tc-iki-tablo tr[data-secilir]:focus-visible { background: var(--panel2); outline: none; }
+.tc-iki-kirilmaz, .tc-iki-tablo .tc-ik-kisi-ad { white-space: nowrap; }
 .tc-iki-ikili { display: grid; gap: var(--b-4); min-width: 0; }
 .tc-iki-kutu { display: grid; gap: var(--b-3); min-width: 0; padding: var(--b-4); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-iki-kutu h3 { margin: 0; font-size: var(--yazi-m); }
@@ -25,6 +51,8 @@
 .tc-iki-gunad { display: block; font-size: var(--yazi-xs); }
 .tc-iki-top { min-width: calc(var(--dokunma) * 1.2); padding: 0 var(--b-2); font-weight: 600; }
 .tc-iki-hucre-dugme { display: block; width: 100%; height: 100%; min-height: calc(var(--dokunma) * .75); padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.tc-iki-dar :is(th, td) { min-width: calc(var(--dokunma) * .55); }
+.tc-iki-dar .tc-iki-gunad { font-size: calc(var(--yazi-xs) * .85); }
 .tc-iki-hucre-dugme:focus-visible, .tc-iki-hucre-dugme:hover { outline: var(--cizgi) solid var(--done); outline-offset: calc(var(--cizgi) * -1); }
 
 :is(.tc-iki-matris, .tc-iki-takvim, .tc-iki-lejant) [data-kapali] { background: var(--panel2); }
@@ -64,8 +92,11 @@
 .tc-iki-imza { padding-bottom: var(--b-6); border-bottom: var(--cizgi-ince) solid var(--edge2); font-size: var(--yazi-s); }
 .tc-iki-belge-dip { margin-top: var(--b-5); color: var(--muted); font-size: var(--yazi-xs); }
 
-@media (min-width: 1280px) {
-  .tc-iki-ikili { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+@media (min-width: 768px) {
+  .tc-iki-sayilar[data-adet="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .tc-iki-ikili { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
 }
 @media (max-width: 767px) {
   .tc-iki-belge-dl, .tc-iki-imzalar { grid-template-columns: 1fr; }

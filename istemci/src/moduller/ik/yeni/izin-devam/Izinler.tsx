@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { DurumKutusu, Rozet, SayfaBasligi, Secim, Sekmeler, Tablo, type MenuOgesi, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Rozet, Secim, Sekmeler, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari, type SayfaKomutu } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { csvIndir } from '../../../../ortak/veri/csv.ts';
-import { adSoyad, kisaTarih, tarih } from '../bicim.ts';
+import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { MOTOR_HAZIRLANIYOR } from '../motor.ts';
-import { AySecici } from '../ortak/AySecici.tsx';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
 import type { Izin, Personel } from '../tipler.ts';
 import { aktifPersonel, bakiye, isGunuMu, listeler, type IzinBakiyesi } from './hesap.ts';
 import { IzinFormu } from './IzinFormu.tsx';
 import { IzinTablosu } from './IzinTablosu.tsx';
+import { AyYilSecici, Baslik, type BaslikDugmesi } from './parcalar.tsx';
 import {
   ayGunleri, haftaGunu, izinleriSuz, izinYillari, onaylananGun, PUANTAJ_GUN_ADI, sayi, sayiYaz, takvimHucresi, takvimSatirlari, TUM_YILLAR,
 } from './kurallar.ts';
@@ -41,20 +41,21 @@ export function Izinler(o: IkEkranOzellikleri) {
   const kayitlariIndir = () => {
     const satirlar = [...izinler].sort((a, b) => (b.baslangic ?? '').localeCompare(a.baslangic ?? '')).map((l) => {
       const p = personeller.find((x) => x.id === l.empId);
-      return [ad(l.empId), departman(p?.departmanId), l.tur ?? '', kisaTarih(l.baslangic), kisaTarih(l.bitis), sayi(l.gun), l.durum ?? '', l.aciklama ?? ''];
+      return [ad(l.empId), departman(p?.departmanId), l.tur ?? '', tarih(l.baslangic), tarih(l.bitis), sayi(l.gun), l.durum ?? '', l.aciklama ?? ''];
     });
     csvIndir('izin-kayitlari', ['Çalışan', 'Departman', 'İzin türü', 'Başlangıç', 'Bitiş', 'Gün', 'Durum', 'Açıklama'], satirlar);
   };
   const bakiyeleriIndir = () => {
     if (!bakiyeler) return;
     csvIndir('izin-bakiyeleri', ['Çalışan', 'Departman', 'İşe giriş', 'Hak edilen', 'Sistem öncesi kullanılan', 'Kullanılan (sistemde)', 'Bekleyen', 'Kalan', 'Sonraki hak ediş'],
-      bakiyeler.map(({ p, b }) => [adSoyad(p), departman(p.departmanId), kisaTarih(p.iseGiris), b.hak, b.onceki, b.kullanilan, b.bekleyen, b.kalan, b.sonraki ? kisaTarih(b.sonraki) : '']));
+      bakiyeler.map(({ p, b }) => [adSoyad(p), departman(p.departmanId), tarih(p.iseGiris), b.hak, b.onceki, b.kullanilan, b.bekleyen, b.kalan, b.sonraki ? tarih(b.sonraki) : '']));
   };
 
-  const eylemler: MenuOgesi[] = [
-    ...(sekme === 'talepler' ? [{ anahtar: 'indir', baslik: 'Kayıtları indir', simge: 'download' as const, sec: kayitlariIndir }] : []),
-    ...(sekme === 'bakiye' ? [{ anahtar: 'indir', baslik: 'Bakiyeleri indir', simge: 'download' as const, sec: bakiyeleriIndir, pasif: !bakiyeler }] : []),
-    { anahtar: 'hesap', baslik: 'Hak ediş hesapla', simge: 'chart', sec: () => { o.git('hesap'); } },
+  const dugmeler: BaslikDugmesi[] = [
+    ...(sekme === 'talepler' ? [{ anahtar: 'indir', etiket: 'Kayıtları indir', simge: 'download' as const, yap: kayitlariIndir }] : []),
+    ...(sekme === 'bakiye' ? [{ anahtar: 'indir', etiket: 'Bakiyeleri indir', simge: 'download' as const, yap: bakiyeleriIndir, pasif: !bakiyeler }] : []),
+    { anahtar: 'hesap', etiket: 'Hak ediş hesapla', simge: 'ruler', yap: () => { o.git('hesap'); } },
+    ...(o.yetki.izinYaz ? [{ anahtar: 'yeni', etiket: 'İzin talebi', simge: 'plus' as const, birincil: true, yap: () => { yeniYaz(true); } }] : []),
   ];
 
   const komutlar: SayfaKomutu[] = [
@@ -69,11 +70,7 @@ export function Izinler(o: IkEkranOzellikleri) {
 
   return (
     <section className="tc-iki">
-      <SayfaBasligi
-        baslik="İzinler" simge="flag" alt="İzin talepleri, onaylar, kanuni yıllık izin bakiyeleri ve aylık izin takvimi."
-        birincil={o.yetki.izinYaz ? { etiket: 'İzin talebi', simge: 'plus', yap: () => { yeniYaz(true); } } : undefined}
-        eylemler={eylemler}
-      />
+      <Baslik baslik="İzinler" simge="flag" alt="İzin talepleri, onaylar, kanuni yıllık izin bakiyeleri ve aylık izin takvimi." dugmeler={dugmeler} />
       <Sekmeler etiket="Görünüm" sekmeler={SEKMELER} secili={sekme} sec={sekmeYaz} />
       {sekme === 'talepler' && (
         <>
@@ -105,14 +102,14 @@ function Bakiyeler({ o, satirlar }: { o: IkEkranOzellikleri; satirlar: { p: Pers
   type Satir = { p: Personel; b: IzinBakiyesi };
   const sutunlar: Sutun<Satir>[] = [
     { anahtar: 'kisi', baslik: 'Çalışan', hucre: ({ p }) => <KisiHucresi personel={p} alt={p.pozisyon} />, csv: ({ p }) => adSoyad(p) },
-    { anahtar: 'giris', baslik: 'İşe giriş', kirilmaz: true, hucre: ({ p }) => kisaTarih(p.iseGiris) },
+    { anahtar: 'giris', baslik: 'İşe giriş', kirilmaz: true, hucre: ({ p }) => tarih(p.iseGiris) },
     { anahtar: 'yil', baslik: 'Hizmet yılı', hizala: 'sag', hucre: ({ b }) => b.hizmetYili },
     { anahtar: 'hak', baslik: 'Hak edilen', hizala: 'sag', hucre: ({ b }) => b.hak },
     { anahtar: 'onceki', baslik: 'Sistem öncesi kullanılan', hizala: 'sag', hucre: ({ b }) => sayiYaz(b.onceki) },
     { anahtar: 'kullanilan', baslik: 'Kullanılan', hizala: 'sag', hucre: ({ b }) => sayiYaz(b.kullanilan) },
     { anahtar: 'bekleyen', baslik: 'Bekleyen', hizala: 'sag', hucre: ({ b }) => sayiYaz(b.bekleyen) },
     { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: ({ b }) => (b.kalan < 0 ? <Rozet ton="hata">{sayiYaz(b.kalan)}</Rozet> : <strong>{sayiYaz(b.kalan)}</strong>) },
-    { anahtar: 'sonraki', baslik: 'Sonraki hak ediş', kirilmaz: true, hucre: ({ b }) => (b.sonraki ? `${kisaTarih(b.sonraki)} +${b.sonrakiGun}` : '—') },
+    { anahtar: 'sonraki', baslik: 'Sonraki hak ediş', kirilmaz: true, hucre: ({ b }) => (b.sonraki ? <>{tarih(b.sonraki)} <small className="tc-iki-soluk">{`+${b.sonrakiGun}`}</small></> : '—'), csv: ({ b }) => (b.sonraki ? `${tarih(b.sonraki)} +${b.sonrakiGun}` : '') },
   ];
   return (
     <>
@@ -133,11 +130,11 @@ function IzinTakvimi({ o, ay, ayYaz, bugun, izinler, ad, duzenle }: {
   const isGunu = o.motor ? isGunuMu(o.motor) : () => true;
   return (
     <>
-      <div className="tc-iki-arac"><AySecici ay={ay} degistir={ayYaz} /></div>
+      <div className="tc-iki-arac"><AyYilSecici ay={ay} degistir={ayYaz} bugun={bugun} /></div>
       {satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu ay izin yok. Seçilen ayda onaylı veya bekleyen izin bulunmuyor." /> : (
         <>
           <div className="tc-iki-matris-kap">
-            <table className="tc-iki-matris">
+            <table className="tc-iki-matris tc-iki-dar">
               <caption className="tc-iki-gizli">{`${ay} izin takvimi`}</caption>
               <thead>
                 <tr>

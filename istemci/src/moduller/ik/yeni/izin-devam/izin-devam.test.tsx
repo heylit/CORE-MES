@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IkPuantajCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { IK_OKUYAN, IK_YONETICI, ikAc, ornekVeri, type Yazma } from '../test-ortak.tsx';
+import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -53,6 +54,13 @@ describe('P2 izinler', () => {
     fireEvent.click(satir);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(yazmalar).toEqual([]);
+  });
+
+  it('onay yetkisi olmayan izin yazan Onayla ve Reddet görmez (Soru 854 b)', async () => {
+    ikAc('/ik/yeni/izinler', { kullanici: { id: 5, ad: 'Deneme Yazan', islemler: ['ik.oku', 'ik.izin-yaz', 'sayfa.ik', YENI_EKRAN_ISLEMI] } });
+    const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
+    expect(within(satir).queryByRole('button', { name: 'Onayla' })).toBeNull();
+    expect(within(satir).queryByRole('button', { name: 'Reddet' })).toBeNull();
   });
 
   it('salt okunur oturumda yazma düğmesi yoktur (210.6)', async () => {

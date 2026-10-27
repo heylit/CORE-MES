@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Dugme, Tablo, useBildirim, type Sutun, type TabloAraci } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
-import { adSoyad, kisaTarih } from '../bicim.ts';
+import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { IzinCipi } from '../ortak/DurumCipi.tsx';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
@@ -37,10 +37,10 @@ export function IzinTablosu({ o, izinler, kisiSutunu, arac }: IzinTablosuOzellik
       csv: (l: Izin) => { const p = personel(l.empId); return p ? adSoyad(p) : ''; },
     }] : []),
     { anahtar: 'tur', baslik: 'İzin türü', hucre: (l) => l.tur ?? '—' },
-    { anahtar: 'tarihler', baslik: 'Tarihler', kirilmaz: true, hucre: (l) => `${kisaTarih(l.baslangic)} – ${kisaTarih(l.bitis)}` },
+    { anahtar: 'tarihler', baslik: 'Tarihler', kirilmaz: true, hucre: (l) => `${tarih(l.baslangic)} – ${tarih(l.bitis)}` },
     { anahtar: 'gun', baslik: 'Gün', hizala: 'sag', hucre: (l) => sayiYaz(sayi(l.gun)), csv: (l) => sayi(l.gun) },
     { anahtar: 'durum', baslik: 'Durum', hucre: (l) => <IzinCipi durum={l.durum} />, csv: (l) => l.durum ?? '' },
-    { anahtar: 'talep', baslik: 'Talep', kirilmaz: true, hucre: (l) => (l.talepTarihi ? kisaTarih(l.talepTarihi) : '') },
+    { anahtar: 'talep', baslik: 'Talep', kirilmaz: true, hucre: (l) => (l.talepTarihi ? tarih(l.talepTarihi) : '') },
     {
       anahtar: 'eylem', baslik: 'İşlem', hizala: 'sag', csv: false,
       hucre: (l) => (
