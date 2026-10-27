@@ -94,7 +94,8 @@ test.describe('A1 Operatör', () => {
   test('Operatör: terminal açılır, açılışta yazma yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
     await ac('/uretim-terminali');
     await expect(page.getByRole('region', { name: 'Aktif iş emri' }).or(page.getByRole('navigation', { name: 'Terminal görünümleri' })).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'İstasyonu değiştir' }).or(page.getByTitle('İstasyonu değiştir')).first()).toBeVisible();
+    // 793 b: üst çubuk yalnız istasyon adını gösterir; istasyon çarkın İstasyonlar şeridinden değişir.
+    await expect(page.getByTitle('İstasyon · çarkın İstasyonlar şeridinden değişir').first()).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
     expect(ag.hatalar).toEqual([]);

@@ -160,3 +160,30 @@ export function MakineEylemi({ makine, engel, ozet, degistir }: { makine: CarkMa
     </>
   );
 }
+
+export interface CarkIstasyonu { id: string; ad: string; merkez: string; bu: boolean }
+
+export function IstasyonKarti({ istasyon }: { istasyon: CarkIstasyonu }) {
+  return (
+    <article className="tc-ay1-tcark-kart" data-durum={istasyon.bu ? 'calisiyor' : 'sirada'}>
+      <span className="tc-ay1-tcark-etiketler">
+        {istasyon.bu ? <span className="tc-ay1-cip" data-durum="calisiyor"><i aria-hidden="true" />Bu cihaz</span> : <span className="tc-ay1-cip" data-durum="sirada"><i aria-hidden="true" />Yetkili</span>}
+      </span>
+      <b className="tc-ay1-mono">{istasyon.id}</b>
+      <span className="tc-ay1-tcark-ad">{istasyon.ad || istasyon.id}</span>
+      {istasyon.merkez ? <small>{istasyon.merkez}</small> : null}
+    </article>
+  );
+}
+
+// İstasyon şeridinin eylemi: geçiş istasyon seçicinin işini yapar (cihazın istasyonu değişir, ekran baştan kurulur). Öteki istasyonun
+// işleri önizlenmez: dosyaları bu cihaza inmez (726 a).
+export function IstasyonEylemi({ bu, gec }: { bu: boolean; gec: () => void }) {
+  if (bu) return <span className="tc-ay1-tcark-not"><i className="tc-ay1-tcark-nokta" aria-hidden="true" />Bu cihazın istasyonu · kayıtlar buraya yazılır</span>;
+  return (
+    <>
+      <span className="tc-ay1-tcark-not">Geçince cihazın istasyonu değişir; kayıtlar o istasyona yazılır</span>
+      <span className="tc-ay1-tcark-dugmeler"><Dugme tur="birincil" simge="next" onClick={gec}>Bu istasyona geç</Dugme></span>
+    </>
+  );
+}
