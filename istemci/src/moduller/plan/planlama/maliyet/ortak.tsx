@@ -59,7 +59,7 @@ function sihirbazTanimi(t: FormTanimi, sonuc: { tamam: boolean }): SihirbazTanim
   };
 }
 
-// Kayıttan sonraki kart ortak son karttır (sdSonKart; plan eskiyse eski not ve pasif "Planı iyileştir"); altında "Yeniden düzenle".
+// Kayıttan sonraki kart ortak son karttır (sdSonKart; plan eskiyse eski not ve pasif "Plan iyileştirme ara"); altında "Yeniden düzenle".
 interface SonDurum { planEski: boolean; iyilestir: boolean }
 function FormAc({ cagri, vazgec, geriYok, son, yeniden }: {
   cagri: FormCagrisi; vazgec: () => void; geriYok: boolean; son: SonDurum; yeniden: () => void;

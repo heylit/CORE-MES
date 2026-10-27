@@ -77,7 +77,7 @@ const sonuc = (r: Awaited<ReturnType<typeof dene>>): DegerlendirmeSonucu => dege
 describe('planlama değerlendirmesi: hesap', () => {
   test('PD-01: her tur sözleşmenin biçiminde döner; şimdi sunucunun anından (09:00), aynı girdi aynı sonucu verir', async () => {
     const istekler: DegerlendirmeIstegi[] = [
-      { tur: 'plan-kur' }, { tur: 'plan-secenekleri' }, { tur: 'termin-secenekleri', siparisId: 'O2' }, { tur: 'termin-uzatma', gun: 2 }, { tur: 'malzeme-terminleri' },
+      { tur: 'plan-kur' }, { tur: 'plan-uygula', isler: ['O1'] }, { tur: 'plan-secenekleri' }, { tur: 'termin-secenekleri', siparisId: 'O2' }, { tur: 'termin-uzatma', gun: 2 }, { tur: 'malzeme-terminleri' },
       { tur: 'malzeme-one-cekme' }, { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }, { tur: 'siparis-kari' },
     ];
     for (const istek of istekler) {
@@ -188,6 +188,9 @@ describe('planlama değerlendirmesi: hesap', () => {
     const q = (istek: unknown) => degerlendirmeGovdesi.safeParse({ surum: 3, istek }).success;
     assert.equal(q({ tur: 'plan-kur' }), true);
     assert.equal(q({ tur: 'plan-kur', kip: 'iyilestir' }), false);
+    assert.equal(q({ tur: 'plan-uygula', isler: ['O1', '*'] }), true);
+    assert.equal(q({ tur: 'plan-uygula', isler: [] }), false);
+    assert.equal(q({ tur: 'plan-uygula' }), false);
   });
 
   test('PD-09: gövde: tur dışı alan, bilinmeyen tur, 20 üstü parti ve gövde dışı alan reddedilir', () => {
@@ -232,6 +235,23 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     const s = sonuc(a); if (s.tur !== 'plan-secenekleri') return assert.fail(s.tur);
     for (const x of s.secenekler) assert.ok(x.gecikmeSaat < kuralGecikme, `${String(x.gecikmeSaat)} < ${String(kuralGecikme)}`);
     assert.deepEqual(await dene2(), a);
+  });
+
+  test('PD-20: bekleyen değişikliği uygula (755 a): yalnız verilen siparişin işleri oynar, ötekiler kayıtlı plandaki yerinde; plan yoksa ret', async () => {
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, { job: string; m: string; S: number }> }).ops;
+    const uygula = (isler: string[], c: unknown = calisma) => degerlendirmeYap({ calisma: c, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler } }, AN);
+    const a = await uygula(['O3']);
+    const s = sonuc(a); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, { job: string; m: string; S: number }>;
+    const oteki = Object.keys(eski).filter((id) => eski[id]?.job !== 'O3');
+    assert.ok(oteki.length > 0);
+    for (const id of oteki) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]?.m, eski[id]?.S], id);
+    assert.deepEqual(Object.keys(yeni).sort(), Object.keys(eski).sort(), 'işler düşmez');
+    assert.deepEqual(await uygula(['O3']), a, 'aynı girdi aynı sonuç');
+    const h = sonuc(await uygula(['*'])); if (h.tur !== 'plan-uygula') return assert.fail(h.tur);
+    assert.ok((h.plan['ozet'] as { wT: number }).wT <= (h.plan['ilk'] as number) + 1e-9, 'hepsi: kayıtlı plandan kötü olmaz');
+    assert.deepEqual(await uygula(['O3'], { ...calisma, plan: null }), { hata: 'plan-yok' });
   });
 
   test('PD-15: süre kuyruğa girişten sayılır: süre biterse iş parçacığı durdurulur, sırası gelene süre kalmadıysa koşmadan reddedilir (ikisi de meşgul)', async () => {

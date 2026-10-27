@@ -195,3 +195,14 @@ Testler: plan-cozucusu 741 a (gece 00:30'da iş şimdiden başlar, vardiya bitin
 - 168 b korunur: vardiyası tanımsız tezgâhtaki taslak yeri canlıya geçmez. Önce motorun `vardiyasiz` listesinden gelirdi; şimdi sunucu aynı iş
   kümesinde (planlı ya da sıralanmış çalışan, kilitsiz, dondurulmamış, bölünmemiş makine işi) tezgâhın takvimine (`b.takvimler` null) bakar.
 Testler: plan-motoru canlıya al (motor çağrılmaz, saatler taslağınki; 168 b her iki iş canlıya geçmez), plan-canliya-al-kayma (zaman geçince 200, canlı taslağın saati).
+
+## Bekleyen değişiklikler atölyede (749, 755 a, 787 a; 2026-10-27)
+- Plan varken planın girdisini değiştiren her değişiklik çalışmanın `bekleyen` listesine girer: ne, kim, ne zaman, etkilenen siparişler
+  ve reddin geri dönüş farkı. Plan atölyesinin Onay sekmesinde çalışma planının kontrolüne "Bekleyen değişiklikler" bölümü eklendi;
+  her satır ya da hepsi uygulanır ya da reddedilir. Bekleyen varken onaya gönderilmez (kırmızı kontrol). Ekran düzeni değişmedi.
+- Uygula: değerlendirme ucunun yeni `plan-uygula` türü (sözleşmeye eklendi, mevcut türler değişmedi). Motor kayıtlı planı taban ve
+  başvuru alır, etkilenmeyen siparişlerin işlerini o plandaki yerinde geçici kilitler (eski sayfanın 'onar' kipi); '*' bütün işler.
+- Reddet: geri dönüş farkı uygulanır; sonraki bekleyen aynı veriye dokunuyorsa önce o reddedilmeli. Hepsi reddedilince plan yeniden güncel.
+- Bu özellikten önce bayatlamış planın kaydı olmayan değişiklikleri tek satırda gelir ve yalnız uygulanır (787 a).
+- "Planı iyileştir" düğmeleri "Plan iyileştirme ara" oldu (pasif kaldı); bayat plan metinleri Plan atölyesine yönlendirir.
+Testler: degerlendirme.test PD-20 (yalnız etkilenen sipariş oynar), istemci kayit, coz ve Atolye bekleyen değişiklik testleri.

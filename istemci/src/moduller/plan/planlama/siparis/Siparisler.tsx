@@ -73,7 +73,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
     <div className="tc-pys" data-parca="ysiparis">
       <GorunumBasligi
         simge="list" baslik="Siparişler" alt="Sipariş × hafta, termin riski" ust={V.ust}
-        eylem={!planGuncel(c) && yetki.planYaz ? <Dugme tur="birincil" simge="play" onClick={() => { git('plan'); }}>Planı iyileştir</Dugme> : undefined}
+        eylem={!planGuncel(c) && yetki.planYaz ? <Dugme tur="birincil" simge="play" onClick={() => { git('plan'); }}>Plan iyileştirme ara</Dugme> : undefined}
       />
       <section className="tc-pys-ana" aria-label="Isı haritası">
         <Lejant ogeler={[

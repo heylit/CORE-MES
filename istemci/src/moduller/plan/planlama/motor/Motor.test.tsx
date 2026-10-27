@@ -93,7 +93,7 @@ describe('PlanlamaMotoru', () => {
     expect(ozet.textContent).toContain('Son işin bitişi: 27.10 Sal 17:55.');
     expect(within(screen.getByRole('group', { name: /^Plan nabzı/ })).getByRole('button', { name: /geciken · bu hafta/ })).toBeTruthy();
     // Motor isteyen düğme yerinde ve pasif (357 b).
-    const iyi = screen.getByRole('button', { name: 'Planı iyileştir' });
+    const iyi = screen.getByRole('button', { name: 'Plan iyileştirme ara' });
     expect(iyi.getAttribute('aria-disabled')).toBe('true');
     expect(iyi.getAttribute('title')).toContain(MOTOR_NOTU);
   });
@@ -180,7 +180,7 @@ describe('PlanlamaMotoru', () => {
     ac({ c, komut });
     fireEvent.click(screen.getByRole('button', { name: /Yapılacaklar/ }));
     const yp = screen.getByRole('dialog', { name: 'Yapılacaklar' });
-    expect(within(yp).getByRole('button', { name: 'Planı iyileştir' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(within(yp).getByRole('button', { name: 'Plan iyileştirme ara' }).getAttribute('title')).toContain(MOTOR_NOTU);
     expect(within(yp).getAllByRole('button', { name: 'Veri denetimi' })[0]?.getAttribute('title')).toContain(YOK_NOTU);
     fireEvent.click(within(yp).getByRole('button', { name: 'Hepsini aç' }));
     expect(komut.degistir).toHaveBeenCalledWith('Bütün kısıtlar açıldı', expect.any(Function), { ayrinti: '' });
@@ -191,7 +191,7 @@ describe('PlanlamaMotoru', () => {
   it('plan yazma yetkisi yoksa Yapılacaklar ve eylem düğmeleri yok, nabız referansı değiştirilemez', () => {
     ac({ yaz: false });
     expect(screen.queryByRole('button', { name: /Yapılacaklar/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Planı iyileştir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Plan iyileştirme ara' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /geciken · bu hafta/ }));
     expect((screen.getByRole('combobox', { name: 'Referans' }) as HTMLSelectElement).disabled).toBe(true);
   });

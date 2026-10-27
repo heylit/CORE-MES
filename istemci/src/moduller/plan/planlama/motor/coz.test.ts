@@ -4,7 +4,8 @@ import { ApiHatasi } from '../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { degerlendirmeIste, type DegerlendirmeUcu } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { KAYDEDILEMEDI, kurulanPlaniAl, planKur, planKurSifirla, VERI_DEGISTI } from './coz.ts';
+import { KAYDEDILEMEDI, kurulanPlaniAl, planKur, planKurSifirla, planUygula, UYGULANACAK_YOK, VERI_DEGISTI } from './coz.ts';
+import type { BekleyenDegisiklik } from '../tipler.ts';
 import { ornekCalisma } from './ornek.ts';
 
 afterEach(planKurSifirla);
@@ -66,6 +67,42 @@ describe('planı kur (576)', () => {
     const t = { ...ornekCalisma(), dataVer: 4 } as PlanlamaCalismasi; const once = t.plan;
     expect(kurulanPlaniAl(t, PLAN, 3, 'x', 1)).toBe(false);
     expect(t.plan).toBe(once);
+  });
+});
+
+describe('bekleyen değişikliği uygula (755 a)', () => {
+  const e = (id: string, isler: string[]): BekleyenDegisiklik => ({ id, ne: id, ayrinti: '', kim: 'x', t: 1, isler, geri: [] });
+  const uyg = (dataVer: number): DegerlendirmeCevabi => ({ ...cevap(dataVer), sonuc: { tur: 'plan-uygula', plan: PLAN } });
+  const bayat = (bekleyen: BekleyenDegisiklik[]) => ({ ...ornekCalisma(), dataVer: 6, plan: { ...ornekCalisma().plan, dataVer: 4 }, bekleyen }) as PlanlamaCalismasi;
+
+  it('seçilenlerin etkilediği siparişler sunucuya gider; uygulananlar düşer, kalan varsa plan bayat kalır', async () => {
+    const liste = [e('a', ['S1']), e('b', ['S2', 'S1']), e('c', ['S3'])];
+    const { komut, durum } = komutKur(bayat(liste));
+    const iste = vi.fn(async () => uyg(6));
+    expect(await planUygula({ komut, kim: 'Deneme Kisi', iste, simdi: () => 1000, liste, idler: ['a', 'b'] })).toBeNull();
+    expect(iste).toHaveBeenCalledWith(7, { tur: 'plan-uygula', isler: ['S1', 'S2'] });
+    expect(durum.ne).toEqual(['2 bekleyen değişiklik uygulandı']);
+    expect(durum.c.bekleyen?.map((x) => x.id)).toEqual(['c']);
+    expect(durum.c.plan).toMatchObject({ ops: PLAN.ops, dataVer: 4, kim: 'Deneme Kisi', kaynak: 'uygula' });
+  });
+
+  it('son bekleyen uygulanınca plan güncel; genel değişiklik bütün işleri ister', async () => {
+    const liste = [e('a', ['S1']), e('b', ['*'])];
+    const { komut, durum } = komutKur(bayat(liste));
+    const iste = vi.fn(async () => uyg(6));
+    expect(await planUygula({ komut, kim: 'x', iste, liste, idler: ['a', 'b'] })).toBeNull();
+    expect(iste).toHaveBeenCalledWith(7, { tur: 'plan-uygula', isler: ['*'] });
+    expect(durum.c.bekleyen).toEqual([]);
+    expect(durum.c.plan?.dataVer).toBe(durum.c.dataVer);
+  });
+
+  it('seçim yoksa gitmez; veri sürümü tutmazsa plan alınmaz', async () => {
+    const liste = [e('a', ['S1'])];
+    const k = komutKur(bayat(liste)); const iste = vi.fn(async () => uyg(5));
+    expect(await planUygula({ komut: k.komut, kim: 'x', iste, liste, idler: ['z'] })).toBe(UYGULANACAK_YOK);
+    expect(iste).not.toHaveBeenCalled();
+    expect(await planUygula({ komut: k.komut, kim: 'x', iste, liste, idler: ['a'] })).toBe(VERI_DEGISTI);
+    expect(k.durum.c.bekleyen?.map((x) => x.id)).toEqual(['a']);
   });
 });
 

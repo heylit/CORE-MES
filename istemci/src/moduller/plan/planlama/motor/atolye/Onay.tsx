@@ -8,9 +8,10 @@ import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts
 import { IKINCI_MENU_TANIMLARI } from '../../../../../ortak/rota/ikinci-menu.ts';
 import { ONERILEN_IKINCI_MENU } from '../../../planlama-menusu.ts';
 import { planGuncel } from '../../durum.ts';
+import { bekleyenListesi } from '../../kayit.ts';
 import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } from '../../gorunumler.ts';
-import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { KURULUYOR, usePlanKur } from '../coz.ts';
+import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
+import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
@@ -78,7 +79,9 @@ export interface OnayOzellikleri {
 
 export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }: OnayOzellikleri) {
   const { bildir } = useBildirim();
-  const planKur = usePlanKur(o, useCallback((ileti: string) => bildir('hata', ileti), [bildir]));
+  const hataBildir = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
+  const planKur = usePlanKur(o, hataBildir);
+  const karar = useBekleyenKarari(o, hataBildir);
   const [secim, setSecim] = useState<Secim>(null);
   const [kars, setKars] = useState<number[]>([]);
   const [notlar, setNotlar] = useState<Record<string, string>>({});
@@ -193,7 +196,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const adim = paAdim(!!p, onayda.length, farkli, typeof sec === 'number');
   const sira = PA_ADIM.map((x) => x[0]);
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
-  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
+  const bekleyen = c ? bekleyenListesi(c) : [];
+  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli, bekleyen.length), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
   const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, planK(sor.id)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">
@@ -201,7 +205,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         <div><p>Yeni plan, değişiklik ve denemeler burada canlıyla karşılaştırılır, kontrol edilir ve onaylanır. Canlı plan yalnız burada onaylanınca değişir; o zamana kadar tezgâh kuyrukları ve operatör ekranı eski planı gösterir.</p></div>
         <div className="tc-pym-pa-dugmeler">
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={planSekmesi}><Simge ad="layers" boyut="k" />Planı düzenle</button>
-          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" disabled title="Motor bağlanınca"><Simge ad="play" boyut="k" />Planı iyileştir</button>}
+          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" disabled title="Motor bağlanınca"><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
         </div>
       </header>
       <div className="tc-pym-pa-durum">
@@ -260,7 +264,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
             <Adaylar l={l} c={c} p={p} cf={cf} canli={canli} sec={sec} secSec={setSecim} kars={kars} karsYaz={setKars} />
           </Kart>
           {sec === 'calisma' && c && p && (
-            <CalismaSecili K={calK} o={o} not={notlar.calisma ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, calisma: v }))} gidiyor={gidiyor}
+            <CalismaSecili K={calK} c={c} bekleyen={bekleyen} karar={karar} o={o} not={notlar.calisma ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, calisma: v }))} gidiyor={gidiyor}
               gonder={(h) => { if (h === 'canli') setCalSor(true); else void calGonder(h); }} />
           )}
           {secS && (
@@ -341,8 +345,9 @@ function Kontrol({ K }: { K: KontrolMaddesi[] }) {
 
 // Çalışma (sayfanın kaydı) sunucu senaryosu değildir: gönderilince plan modülünde taslak olur. Düğmeler eski sayfadaki gibidir (plan.yaz: Onaya
 // gönder, Deneme olarak kaydet; plan.canliya-al: Onayla ve canlıya al); ekran yalnız gizler, ret sunucudan gelir ve iletisi gösterilir.
-function CalismaSecili({ K, o, not, notYaz, gidiyor, gonder }: {
-  K: KontrolMaddesi[]; o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; gonder: (h: GonderHedefi) => void;
+function CalismaSecili({ K, c, bekleyen, karar, o, not, notYaz, gidiyor, gonder }: {
+  K: KontrolMaddesi[]; c: PlanlamaCalismasi; bekleyen: BekleyenDegisiklik[]; karar: BekleyenKarari | null; o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void;
+  gidiyor: boolean; gonder: (h: GonderHedefi) => void;
 }) {
   const red = paRedVar(K);
   const yazP = o.yetki.planYaz && o.komut !== null, yazC = o.yetki.planCanliyaAl && o.komut !== null;
@@ -350,6 +355,7 @@ function CalismaSecili({ K, o, not, notYaz, gidiyor, gonder }: {
     <Kart baslik="Çalışma planı" simge="eye" sag={<Rozet ton="bilgi">Çalışma</Rozet>}>
       <div className="tc-pym-pa-secili">
         <section className="tc-pym-pa-bolum"><h3><Simge ad="target" boyut="k" /> Kontrol</h3><Kontrol K={K} /></section>
+        {bekleyen.length > 0 && <Bekleyenler c={c} l={bekleyen} karar={karar} gidiyor={gidiyor} />}
         {(yazP || yazC) && (
           <section className="tc-pym-pa-karar">
             <h3><Simge ad="flag" boyut="k" /> Karar</h3>
@@ -366,6 +372,43 @@ function CalismaSecili({ K, o, not, notYaz, gidiyor, gonder }: {
         )}
       </div>
     </Kart>
+  );
+}
+
+// Bekleyen değişiklikler (755 a): plan bayatlatan her değişiklik burada uygulanır ya da reddedilir; bekleyen kalmayınca gönderme açılır.
+// Uygula yalnız etkilediği işleri yeniden dizer (kilitli ve donuk işler yerinde); reddet değişikliği geri alır. Kaydı olmayan önceki
+// değişiklik yalnız uygulanır (787 a).
+function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: BekleyenDegisiklik[]; karar: BekleyenKarari | null; gidiyor: boolean }) {
+  const ad = (id: string) => c.D.siparisler.find((x) => x.id === id)?.ad ?? id;
+  const isler = (e: BekleyenDegisiklik) => (e.isler.includes('*') ? 'Bütün işler' : e.isler.map(ad).join(', ') || '—');
+  const kapali = gidiyor || !karar || karar.suruyor;
+  const reddedilir = l.filter((e) => e.geri !== null).map((e) => e.id);
+  return (
+    <section className="tc-pym-pa-bolum">
+      <h3><Simge ad="rotate" boyut="k" /> Bekleyen değişiklikler ({l.length})</h3>
+      <ul className="tc-pym-pa-kontrol">
+        {l.map((e) => (
+          <li key={e.id} data-d="uyari">
+            <Simge ad="alert" boyut="k" />
+            <span>{e.ne}{e.ayrinti ? ` (${e.ayrinti})` : ''} · {e.kim || '—'} · {e.t ? zamanYaz(new Date(e.t).toISOString()) : '—'} · Etkilenen: {isler(e)}</span>
+            {karar && (
+              <span className="tc-pym-pa-dugmeler">
+                <button type="button" className="tc-dugme tc-pym-kucuk" disabled={kapali} onClick={() => karar.uygula(l, [e.id])}><Simge ad="play" boyut="k" />Uygula</button>
+                <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" disabled={kapali || e.geri === null} title={e.geri === null ? 'Ayrıntısı tutulmadı; yalnız uygulanabilir.' : undefined}
+                  onClick={() => karar.reddet([e.id])}><Simge ad="x" boyut="k" />Reddet</button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {karar && l.length > 1 && (
+        <div className="tc-pym-pa-dugmeler">
+          <button type="button" className="tc-dugme tc-pym-kucuk" disabled={kapali} onClick={() => karar.uygula(l, l.map((e) => e.id))}><Simge ad="play" boyut="k" />Hepsini uygula</button>
+          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" disabled={kapali || reddedilir.length === 0} onClick={() => karar.reddet(reddedilir)}><Simge ad="x" boyut="k" />Hepsini reddet</button>
+        </div>
+      )}
+      {karar?.suruyor && <p className="tc-pym-pa-kucuk">{KURULUYOR}</p>}
+    </section>
   );
 }
 

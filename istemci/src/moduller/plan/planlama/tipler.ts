@@ -86,6 +86,11 @@ export interface CalismaSenaryosu extends ExtraAlanlar { id: string; ad?: string
 // Değişiklik izinin satırı (a-durum.betik iz): zaman, kişi, rol, sayfa, ne, ayrıntı.
 export interface IzSatiri { t: number; kim: string; rol: string; sayfa: string; ne: string; ayrinti: string }
 
+// Bekleyen değişiklik (755 a): plan varken planın girdisini değiştiren değişiklik atölyede uygulanana ya da reddedilene kadar burada bekler.
+// `isler` etkilediği siparişlerdir ('*': bütün işler); `geri` reddin yol bazlı geri dönüş farkıdır, null ise yalnız uygulanır (787 a).
+export interface GeriYama { yol: string[]; id?: string; once: unknown }
+export interface BekleyenDegisiklik { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null }
+
 export interface PlanAgirliklari extends ExtraAlanlar { dondurma: number; famK: number; mat: string; sure: number }
 
 export interface PlanParametreleri extends ExtraAlanlar {
@@ -116,4 +121,5 @@ export interface PlanlamaCalismasi extends ExtraAlanlar {
   canliSurum: number;
   tabanSurum: number;
   iz: IzSatiri[];
+  bekleyen?: BekleyenDegisiklik[];
 }

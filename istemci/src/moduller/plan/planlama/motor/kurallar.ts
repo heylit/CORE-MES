@@ -648,7 +648,7 @@ export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, gunce
     const l = eylemler.map(([ad, tur, v = '', birincil = false]) => ({ ad, tur, v, birincil }));
     if (l[0]) out.push({ ton, simge, baslik, metin, eylem: l[0], eylemler: l, job });
   };
-  if (!guncel) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', ['Plan kurulduktan sonra veri, kısıt ya da olay değişti. Gösterilen saatler gerçeği yansıtmayabilir.'], [['Planı iyileştir', 'ekip', '', true]]);
+  if (!guncel) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', ['Plan kurulduktan sonra veri, kısıt ya da olay değişti. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.'], [['Plan iyileştirme ara', 'ekip', '', true]]);
   if (c.kapali.length) ekle('hata', 'alert', `${c.kapali.length} kısıt kapalı`, [`${c.kapali.map(kisitAdi).join(', ')}. Motor bunları saymadan çözer; plan atölyede uygulanamayabilir.`], [['Hepsini aç', 'kisit-hepsi', '', true], ['Kısıtlar', 'git', 'kisitlar']]);
   if (p.fail.length) ekle('hata', 'alert', `${p.fail.length} işlem planlanamadı`, [`${p.fail.slice(0, 3).join(', ')}${p.fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`], [['Veri denetimi', 'git', 'denetim']]);
   const kay = gecikmeKaynaklari(c, p, cx);

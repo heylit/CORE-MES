@@ -6,7 +6,7 @@ import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../../gorunumler.ts';
-import type { CalismaKomutu } from '../../kayit.ts';
+import { ESKI_DEGISIKLIK, type CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
@@ -176,7 +176,7 @@ describe('PlanlamaAtolyesi', () => {
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
-    for (const ad of ['Şu olursa: denemeler', 'İyileştir']) expect(within(ust).getByRole('button', { name: ad }).getAttribute('title')).toContain(MOTOR_NOTU);
+    for (const ad of ['Şu olursa: denemeler', 'İyileştirme ara']) expect(within(ust).getByRole('button', { name: ad }).getAttribute('title')).toContain(MOTOR_NOTU);
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
     fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).getByText('1 → 1')).toBeTruthy();
@@ -235,6 +235,39 @@ describe('PlanlamaAtolyesi', () => {
     expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.')).toBeTruthy();
     post.mockRestore();
+  });
+
+  it('Onay sekmesi, bekleyen değişiklikler (755 a): kontrolde kırmızı, satırda kim ve etkilenen iş; reddet çalışmada, uygula sunucuda; kayıtsız eski değişiklik reddedilmez', async () => {
+    const c = ornekCalisma(); const s1 = c.D.siparisler[0]!;
+    c.dataVer = (c.plan?.dataVer ?? 0) + 2;
+    c.bekleyen = [
+      { id: ESKI_DEGISIKLIK, ne: 'Kaydı olmayan önceki değişiklikler', ayrinti: '', kim: '', t: 0, isler: ['*'], geri: null },
+      { id: 'b1', ne: 'Adet değişti', ayrinti: '', kim: 'Deneme Planlamaci', t: Date.parse('2026-10-20T08:00:00Z'), isler: [s1.id], geri: [{ yol: ['D', 'siparisler'], id: s1.id, once: s1 }] },
+    ];
+    const { komut } = komutKur(c);
+    const reddet = vi.fn(() => null);
+    ac({ c, komut: { ...komut, bekleyeniReddet: reddet } as CalismaKomutu });
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
+    const post = vi.spyOn(api, 'post').mockImplementation((() => Promise.reject(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'x' }))) as never);
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    expect(screen.getByText('2 bekleyen değişiklik var; aşağıda uygulayın ya da reddedin')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Onaya gönder' }) as HTMLButtonElement).disabled).toBe(true);
+    const bolum = screen.getByRole('heading', { name: /Bekleyen değişiklikler \(2\)/ }).closest('section') as HTMLElement;
+    const [eski, yeni] = within(bolum).getAllByRole('listitem');
+    expect(yeni!.textContent).toContain('Deneme Planlamaci');
+    expect(yeni!.textContent).toContain(`Etkilenen: ${s1.ad ?? s1.id}`);
+    expect(eski!.textContent).toContain('Etkilenen: Bütün işler');
+    expect((within(eski!).getByRole('button', { name: 'Reddet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(yeni!).getByRole('button', { name: 'Reddet' }));
+    expect(reddet).toHaveBeenCalledWith(['b1']);
+    fireEvent.click(within(yeni!).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/plan/planlama-degerlendirmesi', { surum: 8, istek: { tur: 'plan-uygula', isler: [s1.id] } }]));
+    await waitFor(() => expect((within(bolum).getByRole('button', { name: 'Hepsini reddet' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Hepsini reddet' }));
+    expect(reddet).toHaveBeenLastCalledWith(['b1']);
+    post.mockRestore();
+    get.mockRestore();
   });
 
   it('Onay sekmesi, çalışma: notla onaya gönderir; Onayla ve canlıya al ayrı düğmedir, ret sunucunun iletisiyle gösterilir ve plan onayda kalır', async () => {

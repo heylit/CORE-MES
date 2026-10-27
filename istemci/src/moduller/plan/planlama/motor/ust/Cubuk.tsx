@@ -69,8 +69,8 @@ export function Cubuk(o: Ozellikler) {
             </button>
           ) : (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
-              title={`${o.plan ? 'Planı iyileştir' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Planı iyileştir' : 'Planı kur'}>
-              <Simge ad="play" boyut="k" /><span>{o.plan ? 'Planı iyileştir' : 'Planı kur'}</span>
+              title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
+              <Simge ad="play" boyut="k" /><span>{o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}</span>
             </button>
           ))}
         </span>

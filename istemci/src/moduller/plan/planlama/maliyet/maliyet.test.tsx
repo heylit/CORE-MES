@@ -46,7 +46,7 @@ describe('P3 Maliyetler', () => {
     expect(within(screen.getByRole('region', { name: 'S1 · Genel gider' })).getByText(/S1 genel gider bilinmiyor/)).toBeTruthy();
   }, 30000);
 
-  it('hücre seçilince odak formun ilk alanına gider; kayıttan sonra plan eski notu, pasif "Planı iyileştir" ve "Yeniden düzenle"; Esc açılımı kapatır, odak hücreye döner', async () => {
+  it('hücre seçilince odak formun ilk alanına gider; kayıttan sonra plan eski notu, pasif "Plan iyileştirme ara" ve "Yeniden düzenle"; Esc açılımı kapatır, odak hücreye döner', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(YONETICI, kayit(), { govdeler });
     ac('/plan/maliyet');
@@ -60,7 +60,7 @@ describe('P3 Maliyetler', () => {
     fireEvent.click(within(ac_).getByRole('button', { name: 'Kaydet' }));
     expect(await screen.findByText('T1 saat ücreti 125 TL/sa oldu')).toBeTruthy();
     expect(screen.getByText(/Plan bu değişikliği henüz içermiyor/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Planı iyileştir' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Plan iyileştirme ara' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Yeniden düzenle' }));
     expect((within(screen.getByRole('region', { name: 'S1 · Tezgâh' })).getByLabelText(/Saat ücreti/) as HTMLInputElement).value).toBe('125');
     fireEvent.keyDown(document.body, { key: 'Escape' });
