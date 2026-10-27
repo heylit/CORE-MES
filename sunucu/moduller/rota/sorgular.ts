@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, MakineKullanimi, RevizyonDurumu, RevizyonOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, RevizyonDurumu, RevizyonOzeti } from '#paylasilan/sozlesme/rota.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -267,6 +267,7 @@ export interface AdimSatiri {
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
   yenidenAyar: boolean;
+  ilkParca: IlkParcaSecimi;
 }
 
 export interface AdaySatiri {
@@ -294,7 +295,7 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
             islem_suresi_dk AS "islemSuresiDk", degisim_suresi_dk AS "degisimSuresiDk",
             bagimlilik, devir_adedi AS "devirAdedi",
             fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
-            yeniden_ayar AS "yenidenAyar"
+            yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca"
        FROM rota_adimi WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
     [revizyonIdleri],
   );
@@ -328,6 +329,14 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
   return sonuc;
 }
 
+// Adımların ilk parça seçimi revizyon ve OP numarası başına (744 a): Arkon'un kapısı emrin rota revizyonundan okur.
+export function adimIlkParcaSecimleri(db: Db, revizyonIdleri: readonly number[]): Promise<{ revizyonId: number; opNo: number; ilkParca: IlkParcaSecimi }[]> {
+  return db.sorgu(
+    'SELECT revizyon_id AS "revizyonId", op_no AS "opNo", ilk_parca AS "ilkParca" FROM rota_adimi WHERE revizyon_id = ANY($1::int[])',
+    [[...revizyonIdleri]],
+  );
+}
+
 // Taslağın içeriği bütün olarak yeniden yazılır; önce bağlı satırlar, sonra adımlar silinir (tetikleyici taslağı denetler).
 export async function icerikSil(db: Db, revizyonId: number): Promise<void> {
   const adim = 'SELECT id FROM rota_adimi WHERE revizyon_id = $1';
@@ -354,6 +363,7 @@ export interface AdimYazimi {
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
   yenidenAyar: boolean;
+  ilkParca: IlkParcaSecimi;
   adaylar: readonly {
     kaynak: Kaynak; ayarSuresiDk: number | string | null; birimSureDk: number | string | null; islemSuresiDk: number | string | null;
     degisimSuresiDk: number | string | null;
@@ -366,11 +376,11 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, ayar_suresi_dk,
                              birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-                             islem_suresi_dk, degisim_suresi_dk, istasyon_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING id`,
+                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
     [revizyonId, malzemeId, a.opNo, a.sira, a.operasyonTipiId, a.ad, makineSutunu(a.kaynak), kisiSutunu(a.kaynak), fasonSutunu(a.kaynak),
       a.ayarSuresiDk, a.birimSureDk, a.terminGun, a.bagimlilik, a.devirAdedi, a.firePayiYuzde, a.makineKullanimi, a.enKucukParca, a.yenidenAyar,
-      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak)],
+      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca],
   );
   const adimId = satir!.id;
   if (a.adaylar.length) {
