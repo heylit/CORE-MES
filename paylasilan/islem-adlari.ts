@@ -161,6 +161,9 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'portal.finans': 'Portalda finans',
   'portal.kalite': 'Portalda kalite',
   'profil.geri-bildirim-oku': 'Şikayet, istek ve önerileri okuma',
+  'markalama.tanim-yaz': 'Markalama tanımını düzenleme',
+  'markalama.seri-ver': 'Seri no verme ve markayı doğrulama',
+  'markalama.durum-yaz': 'Markalı birime red, rework, kabul ve hurda girme',
 };
 
 // Grup modül önekidir; sayfanın görme işlemi o modülün grubunda durur.
@@ -184,6 +187,7 @@ export const MODUL_ADLARI: Readonly<Record<string, string>> = {
   kisiler: 'Personel',
   logo: 'Logo',
   malzemeler: 'Malzemeler ve hizmetler',
+  markalama: 'Markalama',
   mesaj: 'Mesaj',
   'musteri-tedarikci': 'Müşteriler ve tedarikçiler',
   oturum: 'Oturum ve cihazlar',
