@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { DurumKutusu, Dugme, OnayPenceresi, Rozet, useBildirim, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
-import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { csvIndir } from '../../../../ortak/veri/csv.ts';
 import type { IkEkranOzellikleri, IkGorunum } from '../gorunumler.ts';
 import type { Kayit } from '../tipler.ts';
 import { useIkKomutu } from '../veri.ts';
 import { ALAN_ADLARI } from './alanlar.ts';
+import { Baslik } from './Baslik.tsx';
 import { bugunGece, gunlukSatirlari } from './baglam.ts';
 import {
   alanAdi, buyukDeger, degisiklikOzeti, geriAlinabilir, geriAlmaKaydi, geriGetirilebilir, GUNLUK_SAYFASI, gunlukCsv, gunlukDegeri, gunlukGruplari,
@@ -14,6 +14,10 @@ import {
 } from './kurallar.ts';
 import { useYazma } from './yaz.ts';
 import './analiz.css';
+
+// Bugünkü ekran gibi süzgeç oturum boyunca kalır: görünümden çıkıp dönünce aynı süzgeçle açılır.
+let sonSuzgec: GunlukSuzgeci = {};
+export function gunlukSuzgeciniSifirla(): void { sonSuzgec = {}; }
 
 const DONEMLER: readonly (readonly [string, string])[] = [['7', 'Son 7 gün'], ['30', 'Son 30 gün'], ['90', 'Son 90 gün'], ['365', 'Son 1 yıl'], ['tum', 'Tümü']];
 const TONLAR: Readonly<Record<string, RozetTonu>> = { ok: 'tamam', info: 'bilgi', bad: 'hata', warn: 'uyari', '': 'pasif' };
@@ -29,7 +33,8 @@ export function Gunluk(o: IkEkranOzellikleri) {
   const komut = useIkKomutu();
   const yaz = useYazma();
   const { bildir } = useBildirim();
-  const [suz, setSuz] = useState<GunlukSuzgeci>({});
+  const [suz, suzYaz] = useState<GunlukSuzgeci>(sonSuzgec);
+  const setSuz = (s: GunlukSuzgeci) => { sonSuzgec = s; suzYaz(s); };
   const [sinir, setSinir] = useState(GUNLUK_SAYFASI);
   const [cakisma, setCakisma] = useState<{ yeni: Kayit; alanlar: readonly string[] } | null>(null);
 
@@ -123,10 +128,10 @@ export function Gunluk(o: IkEkranOzellikleri) {
 
   return (
     <div className="tc-ikr">
-      <SayfaBasligi
+      <Baslik
         baslik="Değişiklik günlüğü" simge="eye"
         alt="Kim, neyi, ne zaman değiştirdi. Güncellemeleri tek tıkla geri alabilir, silinen kayıtları geri getirebilirsiniz."
-        eylemler={[{ anahtar: 'indir', baslik: 'İndir', simge: 'download', sec: indir }]}
+        dugmeler={[{ anahtar: 'indir', etiket: 'İndir', simge: 'download', yap: indir }]}
       />
       <div className="tc-ikr-arac tc-ikr-suzgec">
         <input

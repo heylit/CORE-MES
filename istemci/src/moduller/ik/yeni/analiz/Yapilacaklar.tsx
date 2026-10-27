@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { DurumKutusu, Dugme, Rozet, SayiKarti } from '../../../../ortak/arayuz/index.ts';
-import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri, IkGorunum } from '../gorunumler.ts';
@@ -8,6 +7,7 @@ import { ikSabitleri, MOTOR_HAZIRLANIYOR } from '../motor.ts';
 import type { Izin } from '../tipler.ts';
 import { useIkKomutu } from '../veri.ts';
 import { analizMotoru, analizVerisi, bugunGece } from './baglam.ts';
+import { Baslik } from './Baslik.tsx';
 import {
   GOREV_KATEGORILERI, gorevDurumuDegistir, gorevler, gunMetni, sonGunMetni, type Gorev, type GorevDugmesi, type GorevKovasi,
 } from './kurallar.ts';
@@ -34,7 +34,7 @@ export function Yapilacaklar(o: IkEkranOzellikleri) {
     { anahtar: 'acik', baslik: 'Açık işler', simge: 'bell', aciklama: null, sozcukler: ['yapılacak', 'iş', 'görev'], calistir: () => { setKip('acik'); setKategori(''); } },
     { anahtar: 'park', baslik: 'Ertelenen ve gizlenen işler', simge: 'clock', aciklama: null, sozcukler: ['ertele', 'gizle', 'geri al'], calistir: () => { setKip('park'); setKategori(''); } },
   ]);
-  const baslik = <SayfaBasligi baslik="Yapılacaklar" simge="bell" alt="Onay, bildirim ve takip gerektiren işler kayıtlardan kendiliğinden oluşur; iş tamamlanınca listeden düşer." />;
+  const baslik = <Baslik baslik="Yapılacaklar" simge="bell" alt="Onay, bildirim ve takip gerektiren işler kayıtlardan kendiliğinden oluşur; iş tamamlanınca listeden düşer." dugmeler={[]} />;
   if (!tum) return <div className="tc-ikr">{baslik}<DurumKutusu durum="yukleniyor" mesaj={MOTOR_HAZIRLANIYOR} /></div>;
 
   const acik = tum.filter((x) => !x.gizli && !x.ertelendi);
@@ -89,13 +89,13 @@ export function Yapilacaklar(o: IkEkranOzellikleri) {
   return (
     <div className="tc-ikr">
       {baslik}
-      <div className="tc-ikr-sayilar">
+      <div className="tc-ikr-sayilar" data-adet="4">
         <SayiKarti baslik="Gecikmiş" simge="alert" sayi={acik.filter((x) => x.kova === 'late').length} ton="hata" />
         <SayiKarti baslik="Bugün" simge="clock" sayi={acik.filter((x) => x.kova === 'today').length} ton="uyari" />
         <SayiKarti baslik="Bu hafta" simge="flag" sayi={acik.filter((x) => x.kova === 'week').length} />
         <SayiKarti baslik="Açık iş" simge="bell" sayi={acik.length} />
       </div>
-      <div className="tc-ikr-arac">
+      <div className="tc-ikr-arac tc-ikr-suzgec">
         <div className="tc-ikr-secim" role="group" aria-label="Kategori">
           <button type="button" aria-pressed={!kategori} onClick={() => { setKategori(''); }}>Tümü</button>
           {kategoriler.map((c) => (

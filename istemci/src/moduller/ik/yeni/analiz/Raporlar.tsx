@@ -1,12 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { DurumKutusu, Dugme, Kart, SayiKarti } from '../../../../ortak/arayuz/index.ts';
-import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { csvIndir } from '../../../../ortak/veri/csv.ts';
 import { paraKisa, YOK } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { ikSabitleri, MOTOR_HAZIRLANIYOR } from '../motor.ts';
 import { ALAN_ADLARI, PERSONEL_SUTUNLARI } from './alanlar.ts';
+import { Baslik } from './Baslik.tsx';
 import { analizMotoru, analizVerisi, bugunGece } from './baglam.ts';
 import { Cubuklar, YakaBolunmesi, YakaGostergesi } from './grafikler.tsx';
 import { izinCsv, personelCsv, rapor, sayiYaz, sureMetni, type YakaOzeti } from './kurallar.ts';
@@ -53,12 +53,12 @@ export function Raporlar(o: IkEkranOzellikleri) {
     { anahtar: 'izin', baslik: 'İzin kayıtlarını indir', simge: 'download', aciklama: 'Bütün izin kayıtları, CSV.', sozcukler: ['izin', 'csv', 'excel'], calistir: () => { indir('izin'); } },
   ]);
   const baslik = (
-    <SayfaBasligi
+    <Baslik
       baslik="Raporlar" simge="chart"
       alt="Aktif çalışanların yaka, kademe ve pozisyon dağılımı, profil, ücret yapısı, giriş-çıkış hareketi ve izin kullanımı."
-      eylemler={[
-        { anahtar: 'personel', baslik: 'Personel listesi', simge: 'download', sec: () => { indir('personel'); }, ...(m ? {} : { pasif: true, pasifNedeni: MOTOR_HAZIRLANIYOR }) },
-        { anahtar: 'izin', baslik: 'İzin kayıtları', simge: 'download', sec: () => { indir('izin'); } },
+      dugmeler={[
+        { anahtar: 'personel', etiket: 'Personel listesi', simge: 'download', yap: () => { indir('personel'); }, pasif: !m },
+        { anahtar: 'izin', etiket: 'İzin kayıtları', simge: 'download', yap: () => { indir('izin'); } },
       ]}
     />
   );
@@ -72,7 +72,7 @@ export function Raporlar(o: IkEkranOzellikleri) {
   return (
     <div className="tc-ikr">
       {baslik}
-      <div className="tc-ikr-sayilar">
+      <div className="tc-ikr-sayilar" data-adet="6">
         <SayiKarti baslik="Aktif çalışan" simge="users" sayi={r.aktif} />
         <SayiKarti baslik="Kadın çalışan oranı" simge="user" metin={`%${r.kadinOrani}`} />
         <SayiKarti baslik="Yaş ortalaması" simge="chart" metin={r.yasOrtalamasi === null ? YOK : ondalik(r.yasOrtalamasi)} />
@@ -108,17 +108,22 @@ export function Raporlar(o: IkEkranOzellikleri) {
               <p className="tc-ikr-not">Sağdaki sayılar: beyaz / mavi</p>
             </Kart>
             <Kart baslik="Rol kademesi dağılımı">
-              <div className="tc-ikr-cubuklar">
-                {r.kademeler.map((k) => (
-                  <div key={k.ad} className="tc-ikr-cubuk-satir">
-                    <span className="tc-ikr-cubuk-ad" title={k.ad}>{k.ad}</span>
-                    <svg className="tc-ikr-cubuk" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${k.ad}: ${k.toplam} kişi`}>
-                      <rect className="tc-ikr-yaka-beyaz" x="0" y="0" width={(k.beyaz / enCokKademe) * 100} height="10" />
-                      <rect className="tc-ikr-yaka-mavi" x={(k.beyaz / enCokKademe) * 100} y="0" width={((k.toplam - k.beyaz) / enCokKademe) * 100} height="10" />
-                    </svg>
-                    <span className="tc-ikr-cubuk-deger">{k.toplam}</span>
-                  </div>
-                ))}
+              <div className="tc-ikr-cubuklar tc-ikr-kademeler">
+                {r.kademeler.map((k) => {
+                  // Bugünkü gibi piramit: çubuk ortalanır, genişliği kademedeki kişi sayısıdır.
+                  const g = (k.toplam / enCokKademe) * 100;
+                  const b = (k.beyaz / enCokKademe) * 100;
+                  return (
+                    <div key={k.ad} className="tc-ikr-cubuk-satir">
+                      <span className="tc-ikr-cubuk-ad" title={k.ad}>{k.ad}</span>
+                      <svg className="tc-ikr-cubuk" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${k.ad}: ${k.toplam} kişi`}>
+                        <rect className="tc-ikr-yaka-beyaz" x={(100 - g) / 2} y="0" width={b} height="10" />
+                        <rect className="tc-ikr-yaka-mavi" x={(100 - g) / 2 + b} y="0" width={g - b} height="10" />
+                      </svg>
+                      <span className="tc-ikr-cubuk-deger">{k.toplam}</span>
+                    </div>
+                  );
+                })}
               </div>
               <p className="tc-ikr-not">Kademeler üstten alta organizasyon hiyerarşisini gösterir; çubuk renkleri o kademedeki beyaz ve mavi yaka oranıdır.</p>
             </Kart>

@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { DurumKutusu, Dugme, Kart, Rozet, SayiKarti } from '../../../../ortak/arayuz/index.ts';
-import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { adSoyad, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri, IkGorunum } from '../gorunumler.ts';
@@ -8,6 +7,7 @@ import { ikSabitleri, MOTOR_HAZIRLANIYOR } from '../motor.ts';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
 import type { Izin } from '../tipler.ts';
 import { useIkKomutu } from '../veri.ts';
+import { Baslik, type BaslikDugmesi } from './Baslik.tsx';
 import { analizMotoru, analizVerisi, bugunGece } from './baglam.ts';
 import { Cubuklar, YakaBolunmesi, YakaGostergesi } from './grafikler.tsx';
 import { acikGorevler, gorevler, goreliGun, gunEkle, gunMetni, panoOzeti, sayiOku, sayiYaz, tarihOku, uzunTarih } from './kurallar.ts';
@@ -28,8 +28,8 @@ export function Pano(o: IkEkranOzellikleri) {
   const ozet = useMemo(() => (m ? panoOzeti(v, m, bugun) : null), [v, m, bugun]);
   const isler = useMemo(() => (m ? acikGorevler(gorevler(v, m, bugun)) : []), [v, m, bugun]);
 
-  const personelEkle = yetki.personelYaz ? { etiket: 'Personel ekle', simge: 'user-plus' as const, yap: () => { git('personel'); } } : undefined;
-  const izinGir = yetki.izinYaz ? [{ anahtar: 'izin', baslik: 'İzin talebi', simge: 'flag' as const, sec: () => { git('izin'); } }] : [];
+  const personelEkle = yetki.personelYaz ? { anahtar: 'personel', etiket: 'Personel ekle', simge: 'user-plus' as const, birincil: true, yap: () => { git('personel'); } } : undefined;
+  const izinGir: BaslikDugmesi[] = yetki.izinYaz ? [{ anahtar: 'izin', etiket: 'İzin talebi', simge: 'plus', birincil: true, yap: () => { git('izin'); } }] : [];
   // Karar yetkisi: alanı yazabilen ya da izin onaycısı (karar ucu); ekran yalnız gizler.
   const karar = yetki.izinYaz || yetki.izinOnay;
 
@@ -41,7 +41,7 @@ export function Pano(o: IkEkranOzellikleri) {
   if (!depo.tur('emp').length) {
     return (
       <div className="tc-ikr">
-        <SayfaBasligi baslik="Pano" simge="gauge" />
+        <Baslik baslik="Pano" simge="gauge" dugmeler={[]} />
         <Kart>
           <div className="tc-ikr-karsilama">
             <h3>Personel dosyalarınız burada toplanacak</h3>
@@ -65,9 +65,9 @@ export function Pano(o: IkEkranOzellikleri) {
   }
 
   const baslik = (
-    <SayfaBasligi
+    <Baslik
       baslik="Pano" simge="gauge" alt={`${uzunTarih(gunMetni(bugun))} itibarıyla şirketin insan kaynakları durumu.`}
-      {...(personelEkle ? { birincil: personelEkle } : {})} eylemler={izinGir}
+      dugmeler={[...(personelEkle ? [personelEkle] : []), ...izinGir]}
     />
   );
   if (!ozet) return <div className="tc-ikr">{baslik}<DurumKutusu durum="yukleniyor" mesaj={MOTOR_HAZIRLANIYOR} /></div>;
@@ -90,7 +90,7 @@ export function Pano(o: IkEkranOzellikleri) {
           <span className="tc-ikr-serit-git">Yapılacaklar</span>
         </button>
       )}
-      <div className="tc-ikr-sayilar">
+      <div className="tc-ikr-sayilar" data-adet="6">
         <SayiKarti baslik="Aktif çalışan" simge="users" sayi={ozet.aktif} />
         <SayiKarti baslik="Bugün izinde" simge="flag" sayi={ozet.bugunIzinde.length} />
         <SayiKarti baslik="Onay bekleyen izin" simge="clock" sayi={ozet.bekleyen.length} ton="uyari" />

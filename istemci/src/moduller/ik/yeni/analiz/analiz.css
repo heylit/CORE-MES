@@ -88,13 +88,27 @@
 /* Sayfa iskeleti */
 .tc-ikr { display: grid; gap: var(--b-4); min-width: 0; }
 .tc-ikr-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--acilir-enaz)), 1fr)); gap: var(--b-3); }
-.tc-ikr-izgara { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--b-4); align-items: start; }
+.tc-ikr-izgara { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-4); align-items: start; }
+/* Sayı şeridi bugünkü gibi tek satır (Pano ve Raporlar 6, Yapılacaklar 4); dar ekranda ikişer. */
+.tc-ikr-sayilar[data-adet] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Sayfa başlığı bugünkü gibi: ad ve açıklama solda, bütün düğmeler sağda görünür. */
+.tc-ikr-baslik { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); min-width: 0; }
+.tc-ikr-baslik-bas { display: grid; gap: var(--b-1); flex: 1 1 calc(var(--arama-genis) * 1.2); min-width: 0; }
+.tc-ikr-baslik-ad { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); font-weight: 700; }
+.tc-ikr-baslik-ad .tc-simge { flex: none; color: var(--muted); }
+.tc-ikr-baslik-alt { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-ikr-baslik-eylem { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
+
+/* Rol kademesi: ad tam okunur, çubuk ortalanmış piramittir. */
+.tc-ikr-kademeler .tc-ikr-cubuk-satir { grid-template-columns: minmax(0, 3fr) minmax(0, 3fr) auto; }
+.tc-ikr-kademeler .tc-ikr-cubuk-ad { overflow: visible; white-space: normal; }
 .tc-ikr-izgara-esit { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--kuyruk-genis)), 1fr)); }
 .tc-ikr-yigin { display: grid; gap: var(--b-4); min-width: 0; }
 .tc-ikr-arac { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .tc-ikr-suzgec { justify-content: flex-start; }
 .tc-ikr-suzgec .tc-alan-kutu { width: auto; min-height: var(--dokunma); }
-.tc-ikr-log-ara { flex: 1 1 var(--acilir-enaz); min-width: 0; }
+.tc-ikr-log-ara { flex: 1 1 100%; min-width: 0; }
 .tc-ikr-dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-ikr-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-ikr-tablo-kap { overflow-x: auto; }
@@ -175,6 +189,8 @@
 .tc-ikr-is-grubu-bugun { color: var(--hazard-ink); }
 .tc-ikr-sayi { padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--panel2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
 .tc-ikr-isler, .tc-ikr-loglar { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+/* Günlük satırları bugünkü gibi tek kartta, çizgiyle ayrılır. */
+.tc-ikr-loglar { gap: 0; overflow: hidden; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); }
 .tc-ikr-is {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); padding: var(--b-3);
   border: var(--cizgi-ince) solid var(--edge); border-left: var(--b-1) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid);
@@ -189,7 +205,8 @@
 .tc-ikr-is-son-today { color: var(--hazard-ink); font-weight: 600; }
 
 /* Değişiklik günlüğü */
-.tc-ikr-log { display: flex; gap: var(--b-3); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }
+.tc-ikr-log { display: flex; gap: var(--b-3); padding: var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-ikr-log:first-child { border-top: 0; }
 .tc-ikr-log-saat { flex: none; padding-top: var(--pay-ince); color: var(--muted); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
 .tc-ikr-log-ana { flex: 1; display: grid; gap: var(--b-1); min-width: 0; }
 .tc-ikr-log-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); overflow-wrap: anywhere; }
@@ -200,6 +217,14 @@
 .tc-ikr-log-tablo th, .tc-ikr-log-tablo td { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge2); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .tc-ikr-log-tablo th { color: var(--muted); font-weight: 500; }
 .tc-ikr-log-tablo .tc-ikr-soluk { display: inline; margin: 0; }
+
+@media (min-width: 768px) {
+  .tc-ikr-sayilar[data-adet="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tc-ikr-sayilar[data-adet="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .tc-ikr-sayilar[data-adet="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
 
 /* 768 altı tek sütun; 360'ta satır içi düğmeler alta iner. */
 @media (max-width: 1023px) {

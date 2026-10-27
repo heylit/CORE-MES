@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { IkGecmis } from '#paylasilan/sozlesme/ik.ts';
 import { IK_OKUYAN, ikAc, ornekVeri } from '../test-ortak.tsx';
 import type { Personel } from '../tipler.ts';
+import { gunlukSuzgeciniSifirla } from './Gunluk.tsx';
 
 // Motor kararı (211 a) gelene kadar motor yoktur; parçanın ekranı sahte motor ve sabitlerle sınanır.
 const durum = vi.hoisted(() => ({ motorVar: true }));
@@ -21,7 +22,7 @@ vi.mock('../motor.ts', async (asil) => {
   };
 });
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); durum.motorVar = true; });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); durum.motorVar = true; gunlukSuzgeciniSifirla(); });
 
 const dugme = (ad: string) => screen.queryByRole('button', { name: ad });
 
@@ -101,6 +102,14 @@ describe('P5 Değişiklik günlüğü', () => {
     expect(dugme('Silinen kaydı geri getir')).toBeNull();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Günlükte ara' }), { target: { value: 'olmayan şey' } });
     expect(screen.getByText(/Bu ölçütlerde değişiklik yok/)).toBeTruthy();
+  });
+
+  it('süzgeç görünümden çıkıp dönünce kalır (bugünkü gibi oturum boyunca)', async () => {
+    ikAc('/ik/yeni/gunluk', { veri: veri() });
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'Günlükte ara' }), { target: { value: 'Silinen' } });
+    cleanup();
+    ikAc('/ik/yeni/gunluk', { veri: veri() });
+    expect((await screen.findByRole('searchbox', { name: 'Günlükte ara' }) as HTMLInputElement).value).toBe('Silinen');
   });
 
   it('alan sonradan yeniden değiştiyse geri alma onay sorar', async () => {
