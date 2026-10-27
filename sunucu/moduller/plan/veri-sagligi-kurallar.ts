@@ -98,7 +98,7 @@ export function veriSagligi(g: VeriSagligiGirdisi): VeriSagligiCevabi {
       kategori('vardiyasiz-istasyon', 'Haftalık vardiyası olmayan istasyon',
         'İş merkezinin haftalık vardiyası yoksa tezgâh atölyenin bütün vardiyalarında çalışır sayılır.', vardiyasiz, istasyonlar?.length ?? null),
       kategori('istasyon-maliyet-yok', 'Saat maliyeti olmayan istasyon',
-        'Tezgâh ücreti boş kalır; makine seçiminde maliyet 0 sayılır ve tezgâh en ucuz görünür.', maliyetsiz, istasyonlar?.length ?? null),
+        'Tezgâh ücreti boş kalır; o adımın makine seçiminde maliyet kıyaslanmaz, yalnız bitişe bakılır (763); siparişin kârı hesaplanmaz.', maliyetsiz, istasyonlar?.length ?? null),
       kategori('maliyet-doviz', 'TL dışı birim maliyet', 'Yalnız TL maliyet okunur; döviz maliyet bilinmiyor sayılır.', doviz, null),
       kategori('terminsiz-emir', 'Teslimi olmayan emir', 'Gecikmesi hesaplanmaz; sıralamada en sona itilir.', terminsiz, emirler?.length ?? null),
       kategori('arizali-makine', 'Arızada ya da bakımda makine',
