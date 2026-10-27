@@ -21,3 +21,14 @@ export function motorAyariBirlestir(guncel: MotorAyarlari, g: MotorAyariGovdesi)
 
 export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
   (Object.keys(a) as (keyof MotorAyarlari)[]).every((k) => a[k] === b[k]);
+
+// Motor ayarı planlama çalışmasının üstüne yazılır (771 a): TL amacını kayıttaki D.planTL.amac açar ('tl'; durum.betik ymUygula),
+// sıralı ayarda kayıt ne derse desin kapalıdır. Okunan kopya değişir; sayfa kaydederse kayıt da bu amacı taşır, motor yine ayarı okur.
+export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const c = calisma as { D?: unknown };
+  if (c.D === null || typeof c.D !== 'object') return calisma;
+  const D = c.D as { planTL?: unknown };
+  const planTL = D.planTL !== null && typeof D.planTL === 'object' ? D.planTL : {};
+  return { ...c, D: { ...D, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } } };
+}

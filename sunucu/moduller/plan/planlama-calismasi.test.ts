@@ -7,6 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { MOTOR_AYARI_VARSAYILAN } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -15,6 +16,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
+import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { kaynakOku } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
@@ -99,7 +101,8 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     const takvim = { hafta: { [String(isMerkeziId)]: { 1: [String(vardiyaId)], 0: [String(vardiyaId)] } }, kisiVardiyasi: { [String(yoneticiId)]: String(vardiyaId) } };
     const beklenen = planGirdisi({ calisma: calisma(2), kayit, kaynak: { durum: kaynak.durum, ek: { ...(kaynak.ek as object), takvim } }, bugun: tesisGunu(Date.now()) });
     assert.ok(beklenen);
-    assert.deepEqual(c.calisma, JSON.parse(JSON.stringify(beklenen.S)));
+    // Plan amacı motor ayarındandır (kart 811, 771 a); ayar yazılmamışsa varsayılan.
+    assert.deepEqual(c.calisma, JSON.parse(JSON.stringify(calismayaMotorAyari(beklenen.S, MOTOR_AYARI_VARSAYILAN))));
     // Takvim eki girdiye girer: eksiz birleşme başka çalışma verir.
     const eksiz = planGirdisi({ calisma: calisma(2), kayit, kaynak, bugun: tesisGunu(Date.now()) });
     assert.notDeepEqual(c.calisma, JSON.parse(JSON.stringify(eksiz?.S)));

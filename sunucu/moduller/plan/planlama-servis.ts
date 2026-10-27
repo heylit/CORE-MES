@@ -16,6 +16,8 @@ import {
 } from '../recete-rota/disari.ts';
 import { malzemeGelisTarihleri, tedarikIhtiyaclariniYaz, tedarikTerminleri } from '../satin-alma/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { hedefMotorAyari } from './motor-ayari.ts';
+import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
@@ -231,7 +233,9 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const k = await planlamaGirdisi(db, kullanici);
   if (k.girdi === null) return { calisma: null, surum: k.surum };
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
-  return { calisma: g === null ? null : g.S, surum: k.surum };
+  if (g === null) return { calisma: null, surum: k.surum };
+  // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
+  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
@@ -261,6 +265,7 @@ export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now())
 
 // Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki
 // dahil). Değerlendirme ucu (Soru 357 a) aynı girdiyle hesaplar. Çalışma yoksa (ya da kaydın biçimi eskiyse) girdi null; sürüm kaydınındır.
+// Plan amacı kayıttan değil güncel motor ayarından gelir (kart 811, 771 a): sayfa, değerlendirme ve sunucu motoru aynı amaçla hesaplar.
 export async function planlamaGirdisi(db: Db, kullanici: Kullanici): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null }> {
   const satir = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   const calisma = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
@@ -269,7 +274,8 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici): Promise<{ s
   const kayit = kayitDegeri(await receteRotaDurumu(db));
   const kaynak = await kaynakOku(db, kullanici);
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
-  return { surum, girdi: { calisma, kayit, kaynak: { durum: kaynak.durum, ek } } };
+  const { degerler } = await hedefMotorAyari(db, null);
+  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler), kayit, kaynak: { durum: kaynak.durum, ek } } };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

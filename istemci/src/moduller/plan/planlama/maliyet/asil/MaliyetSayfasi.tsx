@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Dugme, Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../../durum.ts';
 import type { PlanlamaGorunumu } from '../../gorunumler.ts';
@@ -8,7 +9,7 @@ import {
   norm, planMaliyeti, sayi, sayiGirdisi, takvimKur, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type MaliyetBaglami,
 } from '../kurallar.ts';
 import {
-  ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, planAmacYaz, talasYaz,
+  ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, talasYaz,
   tezUcretYaz, ucretYaz, vadeBasYaz, type Yaz,
 } from '../yazmalar.ts';
 import { Alan, AltNot, AsilKart, Kilit, Not, SayiGir, Segment } from './girdi.tsx';
@@ -25,10 +26,12 @@ export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
   const kapali = !yaz || !para;
   const y = (f: (z: Yaz) => boolean): boolean => (yaz ? f(yaz) : false);
   const bedelDegil = agAyar(D).kip !== 'bedel';
+  // Plan amacı motor ayarıdır (771 a, 773 a); sunucu çalışmaya güncel ayarı yazar, burada yalnız gösterilir.
   const amac = (
     <AsilKart simge="target" baslik="Plan neyi en aza indirir">
       <div className="tc-pyk-sira">
-        <Segment ad="Plan amacı" secenek={[['tl', 'Tek TL toplamı'], ['sira', 'Önce gecikme (eski sıra)']]} deger={Y.amac} kapali={kapali} sec={(v) => { y((z) => planAmacYaz(z, v === 'sira' ? 'sira' : 'tl')); }} />
+        <Segment ad="Plan amacı" secenek={[['tl', 'Tek TL toplamı'], ['sira', 'Önce gecikme (sıralı)']]} deger={Y.amac} kapali sec={() => undefined} />
+        <Link to="/plan/motor-ayarlari">Motor ayarlarında değiştir</Link>
         <Alan ad="Tampon riski katsayısı">
           {para ? <SayiGir deger={Y.risk} ad="Tampon riski katsayısı" max={1} bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'risk', v))} /> : <b className="tc-pyk-mono">{sayi(Y.risk, 2)}</b>}
         </Alan>
