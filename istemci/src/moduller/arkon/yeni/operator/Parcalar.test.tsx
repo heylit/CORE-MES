@@ -93,14 +93,15 @@ describe('Numune planı şeridi (566)', () => {
 });
 
 describe('664: sayaç kadranı, numune çizgisi ve iş başlığı', () => {
-  it('kadranda "Kalan süre", "Son çevrim" ve planlı "Çevrim" yok; süre aşılınca yalnız gecikme yazar', () => {
+  it('kadranda "Kalan süre", "Son çevrim", planlı "Çevrim" ve gecikme sayacı yok; süre aşılınca yalnız halka renk alır', () => {
     const { container } = render(<SayacKadrani is={is({ state: 'running' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={{ ...olcer(5000), son: () => 28000 }} />);
     expect(container.textContent).not.toContain('Kalan süre');
     expect(container.textContent).not.toContain('Son çevrim');
     expect(container.textContent).not.toMatch(/Çevrim\d|Çevrim$|\/ 30 sn/);
     cleanup();
     const gec = render(<SayacKadrani is={is({ state: 'running' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(40000)} />);
-    expect(gec.container.textContent).toContain('Gecikme+10 sn');
+    expect(gec.container.textContent).not.toMatch(/Gecikme|\+10 sn/);
+    expect(gec.container.querySelector('.tc-ay1-cevrim-yay')?.hasAttribute('data-gec')).toBe(true);
   });
   it('aralıklı kuralda çizgi sıradaki numuneye yaklaşmayı gösterir; son onda birde yakın, zamanı gelince dolu', () => {
     const kural = (gecen: number) => ({ id: 'her', etiket: 'Her 50 parça', olcen: 'Kalite', ilk: false, olculer: [3], aralik: { n: 50, birim: 'parça' as const, gecen, hedef: 50 } });

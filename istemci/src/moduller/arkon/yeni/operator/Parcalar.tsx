@@ -350,22 +350,6 @@ const CIZGILER = Array.from({ length: 120 }, (_, i) => {
   return { i, buyuk, x1: 220 + r1 * Math.cos(a), y1: 220 + r1 * Math.sin(a), x2: 220 + 214 * Math.cos(a), y2: 220 + 214 * Math.sin(a) };
 });
 
-// Bir tur = bir parçanın planlı çevrim süresi (iyi parça ya da hurda eklenince baştan sayar). 664: çevrim, son çevrim ve kalan süre
-// yazılmaz; yalnız süre aşılınca gecikme uyarısı çıkar.
-function GecikmeEtiketi({ is, cevrim }: { is: Is; cevrim: CevrimOlcer }) {
-  useSimdi(500);
-  if (!(is.cycle > 0)) return null;
-  const e = cevrim.gecen();
-  const T = is.cycle * 1000;
-  const gec = is.state === 'running' && e > T * 1.08;
-  if (!gec) return null;
-  return (
-    <span className="tc-ay1-kadran-etiket" data-durum="durakli" title="Planlı çevrim süresi aşıldı · iyi parça ya da hurda eklenince baştan başlar">
-      Gecikme<b>{`+${Math.round((e - T) / 1000)} sn`}</b>
-    </span>
-  );
-}
-
 // Dönen çevrim ışığı (bilesenler.ts CycAnim, CycRing): bir tur bir parçanın planlı çevrim süresidir; parça sayılınca baştan,
 // duraklayınca durur, süre aşılınca gecikme rengine döner. Süre ve başlangıç CSS değişkeniyle verilir (animasyon kaymasın diye
 // başlangıç yalnız ilk çizimde okunur).
@@ -453,9 +437,6 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
         : <div className="tc-ay1-kadran-cekirdek">{ic}</div>}
       <div className="tc-ay1-kadran-yan tc-ay1-kadran-sol">
         <span className="tc-ay1-kadran-etiket" data-durum="durdu">Hurda<b>{is.scrap}</b></span>
-      </div>
-      <div className="tc-ay1-kadran-yan tc-ay1-kadran-sag">
-        <GecikmeEtiketi is={is} cevrim={cevrim} />
       </div>
     </div>
   );
