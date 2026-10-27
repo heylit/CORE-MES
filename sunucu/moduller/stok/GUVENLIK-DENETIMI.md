@@ -17,14 +17,14 @@ Veri kapsamı (DEP-36): üretime sarf (`/stok/cikis` emirli, `/stok/sepet/stokta
 | `GET /stok/depolar` | — | YOK | YOK |
 | `GET /stok/konumlar`, `/:id` | sayfalı liste | DEP-09/13 | YOK |
 | `GET /stok/raflar`, `/:id` | sayfalı liste; matris | DEP-14/12/13 | YOK |
-| `GET /stok/malzemeler`, `/:id`, `/:id/ozet` | ad malzemeler `disari.ts`'ten; stoksuz malzeme uydurulmaz | DEP-28 | YOK |
+| `GET /stok/malzemeler`, `/:id`, `/:id/ozet` | ad malzemeler `disari.ts`'ten; stoksuz malzeme uydurulmaz; liste stok okumasına ek `sayfa.rota` ile de açılır (Rota > Stok, 746, 3 a), `/:id` ve `/:id/ozet` açılmaz | DEP-28, "yetki (746, 3 a)" | "yetki (746, 3 a)": yalnız `sayfa.rota` olan `/:id` 403, mal kabul 403 |
 | `GET /stok/malzemeler/:id/cikis-onerisi` | en eski giriş; bakiye yoksa veri yetersiz (DEP-05, DEP-08) | DEP-05/08 | DEP-05/08 (bakiyesiz: veri yetersiz) |
 | `GET /stok/malzemeler/:id/goz-onerisi` | DEP-34 | panel, DEP-34 | YOK |
 | `GET /stok/partiler`, `/:id/iz` | parti izi emirden partiye (DEP-25) | DEP-47/48/25 | YOK |
 | `GET /stok/mal-kabuller`, `/:id` | saf hizmet satırında konum ve hareket boş; fason satırında giden kart, kutu ve siparişin hizmet kartı | DEP-53, DEP-58 | YOK |
 | `GET /stok/uretim-emirleri/:id/tamamlama` | olmayan emir 404, ürün kartsız eski emir 422; miktarlar stoktan ve emrin ihtiyacından, uydurulmaz | emir tamamlama | emir tamamlama (olmayan emir 404) |
-| `GET /stok/acik-siparis-satirlari` | satın almanın açık satırları; kartın türü (`malzemeTur`) malzemelerden, kartsız kalemde null | ST2, DEP-58 | ST2 (kalite 403) |
-| `GET /stok/hareketler` | süzgeçsiz istekte toplam null | hareket listesi sayfalı | yetki (K3) girişsiz 401 |
+| `GET /stok/acik-siparis-satirlari` (`stok.giris` ya da `plan.planlama-oku`) | satın almanın açık satırları; kartın türü (`malzemeTur`) malzemelerden, kartsız kalemde null; fiyat taşımaz; Planlama malzeme planı ve terminler okur (746, 3 a) | ST2, DEP-58, "yetki (746, 3 a)" | ST2 (kalite 403); "yetki (746, 3 a)": girişsiz 401, yalnız `plan.planlama-oku` olan stok listesi 403 ve mal kabul 403 |
+| `GET /stok/hareketler` (stok okuma ya da `sayfa.rota`) | süzgeçsiz istekte toplam null; Rota > Stok son hareketleri okur (746, 3 a) | hareket listesi sayfalı, "yetki (746, 3 a)" | yetki (K3) girişsiz 401; "yetki (746, 3 a)": yalnız `sayfa.rota` olan yazamaz |
 | `GET /stok/kod-coz` | bilinmeyen kod uydurulmaz (DEP-55) | DEP-55 | DEP-55 (bilinmeyen kod) |
 | `GET /stok/fisler`, `/:id` | fiş değişmez | DEP-54/40/41 | YOK |
 | `GET /stok/toplamalar`, `/:id` | kapsam: teslim yeri kapsam dışı istasyon olan liste listede yok, tekil 403; teslim yeri istasyon olmayan süzülmez | DEP-42/56, STK-K3 | STK-K3 (kapsam dışı 403, sınırsız hepsi) |

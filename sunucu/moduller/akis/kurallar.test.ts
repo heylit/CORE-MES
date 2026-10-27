@@ -298,6 +298,10 @@ describe('AKS-10 kartın yeri, rotası ve lead', () => {
     assert.deepEqual(r.rota.map((x) => [x.baslama, x.bitis]), [[z(5), z(50)], [z(60), null], [null, null]]);
     const h = kartKonumu({ durum: 'acik', acilis: z(0) }, [{ ...an(10, 'hurda', 1), miktar: '2' }, { ...an(11, 'hurda', 1), miktar: '1' }], adimlar, z(100));
     assert.deepEqual(h.rota.map((x) => x.hurdaAdet), [3, 0, 0], 'kartın hurda anları adımına toplanır');
+    assert.deepEqual(r.rota.map((x) => [x.plan, x.taban]), [[null, null], [null, null], [null, null]], 'plan verilmezse yok');
+    const plan = { baslangic: z(0), bitis: z(40) };
+    const p = kartKonumu({ durum: 'acik', acilis: z(0) }, [], [{ ...adimlar[0]!, plan, taban: { baslangic: z(-30), bitis: z(10) } }], z(100));
+    assert.deepEqual([p.rota[0]?.plan, p.rota[0]?.taban], [plan, { baslangic: z(-30), bitis: z(10) }], 'adımın canlı ve taban planı rotaya geçer (750 a)');
     assert.deepEqual(r.lead, { dk: 100, acik: true });
     assert.equal(r.sonAn?.tur, 'saglam');
   });

@@ -236,7 +236,13 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     assert.equal(k.anlar.find((a) => a.tur === 'baslat')?.kim, ad('operator'), 'olayı yazan kişi');
     assert.deepEqual([k.konum.durum, k.konum.opNo], ['uretimde', 10]);
     assert.deepEqual(k.rota.map((r) => [r.opNo, r.durum]), [[10, 'simdi']]);
+    assert.deepEqual([k.rota[0]?.plan, k.rota[0]?.taban], [null, null], 'planda olmayan adımın plan saati yok');
     assert.equal(k.lead.acik, true);
+    // 750 a: plan saati adımın güncel canlı yeridir.
+    await o().sahip.sorgu("INSERT INTO plan_yerlesimi (is_emri_id, makine_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, '2026-10-21T06:00:00Z', '2026-10-21T07:30:00Z', $3)",
+      [k.rota[0]!.isEmriId, m1, yoneticiId]);
+    const kp = kartAkisiCevabi.parse((await istek('yonetici', 'GET', `/akis/refakat-kartlari/${kart.id}`)).govde);
+    assert.deepEqual([kp.rota[0]?.plan, kp.rota[0]?.taban], [{ baslangic: '2026-10-21T06:00:00.000Z', bitis: '2026-10-21T07:30:00.000Z' }, null]);
     assert.deepEqual([k.kart.verilen, k.kart.malzeme?.includes('Deneme hammadde')], ['10', true]);
     const so = k.sureOzetleri[0]!;
     assert.deepEqual([so.kart.saglam, so.emir.saglam], [3, 5], 'kart sütunu kartın sayımları, emir sütunu hepsi');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { before, describe, test } from 'node:test';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { tabanPlani } from './disari.ts';
+import { canliPlan, tabanPlani } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 33 a (kullanıcı kararı, 2026-10-21): taban plan, adımın ilk canlıya alınan yeri; canlıya almayla aynı işlemde yazılır, hiç değişmez.
@@ -51,6 +51,25 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
     const emirle = await ortam!.vt.tx((db) => tabanPlani(db, { uretimEmriIdleri: [t[0]!.uretimEmriId] }));
     assert.deepEqual(emirle.map((x) => x.isEmriId).sort(), [ie1!, ie2!].sort());
     assert.deepEqual(await ortam!.vt.tx((db) => tabanPlani(db, {})), [], 'süzgeçsiz okuma boş döner');
+  });
+
+  test('750-1: güncel canlı yer iş emriyle okunur, taşıyınca değişir; canlıda olmayan adım ve boş girdi boş döner', async () => {
+    const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
+    const canli = (ids: number[]) => ortam!.vt.tx((db) => canliPlan(db, ids));
+    assert.deepEqual(await canli([ie!]), [], 'canlıya almadan yok');
+    await canliyaAl(await taslaktaOner());
+    const ilk = await canli([ie!]);
+    assert.equal(ilk.length, 1);
+    assert.equal(Date.parse(ilk[0]!.baslangic), Date.parse(yer(await planOku(), ie!).baslangic));
+    let p = await taslaktaOner();
+    const yeniBaslangic = new Date(Date.parse(yer(p, ie!).baslangic) + 24 * 3600_000).toISOString();
+    p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, { taslak: tg(p), kaynak: { tur: 'makine', id: makineB }, baslangic: yeniBaslangic });
+    await canliyaAl(p);
+    const sonra = await canli([ie!]);
+    assert.equal(Date.parse(sonra[0]!.baslangic), Date.parse(yer(await planOku(), ie!).baslangic));
+    assert.notEqual(sonra[0]!.baslangic, ilk[0]!.baslangic, 'canlı değişti, taban değil');
+    assert.deepEqual((await canli([ie!, ie! + 100_000])).map((x) => x.isEmriId), [ie!], 'canlıda olmayan adım yok');
+    assert.deepEqual(await canli([]), []);
   });
 
   test('33-2: sonraki canlıya alma yeri değiştirse de taban değişmez; sonradan plana giren adım kendi ilk yerini alır', async () => {
