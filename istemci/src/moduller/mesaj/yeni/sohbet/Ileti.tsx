@@ -5,7 +5,7 @@ import { useMesaj } from '../durum.tsx';
 import { GorevSatiri, OnayKarti, ToplantiKarti } from '../kartlar/index.ts';
 import { OkunduSatiri } from '../kartlar/DuyuruKarti.tsx';
 import { duzMetin, yalnizEmoji } from '../kurallar.ts';
-import { KisiRozeti } from '../ortak/index.ts';
+import { KisiRozeti, kisiRengi } from '../ortak/index.ts';
 import { useEkAdresi } from '../veri.ts';
 import type { EkBilgisi, Ileti as IletiTipi, Kayit } from '../tipler.ts';
 import { IletiMetni } from './IletiMetni.tsx';
@@ -14,7 +14,7 @@ import { KURAL_ADLARI, okuyanlar, tepkiOzetleri } from './yardimci.ts';
 export interface IletiOlaylari {
   tepki: (ileti: Kayit<IletiTipi>, anahtar: string) => void;
   yanitla: (ileti: Kayit<IletiTipi>) => void;
-  menu: (ileti: Kayit<IletiTipi>) => void;
+  menu: (ileti: Kayit<IletiTipi>, capa: Element | null) => void;
   bilgi: (ileti: Kayit<IletiTipi>) => void;
   git: (iletiId: string) => void;
   duzenlemeKaydet: (metin: string) => void;
@@ -31,6 +31,10 @@ interface Ozellikler {
 
 const UZUN_BASMA_MS = 450;
 const KAYMA_ESIGI = 55;
+const KAYMA_EN_COK = 80;
+
+// Yazar adı ve alıntıdaki ad kişi rengiyle (prototipte P[by].color); otomatik uyarı ayrı tonla.
+const adRengi = (by: string | null | undefined) => (by === '__bot' ? 'tc-ms-ad-bot' : by ? `tc-ms-ad tc-my-renk-${kisiRengi(by)}` : '');
 
 function Ek({ ek }: { ek: EkBilgisi }) {
   const adres = useEkAdresi(ek);
@@ -86,27 +90,40 @@ export function Ileti({ ileti: m, kanal, devam, duzenleniyor, olaylar }: Ozellik
   if (duyuru && !m.deleted) sinif.push('tc-ms-ileti-duyuru');
   if (sistem) sinif.push('tc-ms-ileti-sistem');
   if (bahis) sinif.push('tc-ms-ileti-bahis');
+  // Kendi yeni iletim ilk çizimde uçarak gelir (prototipteki "fresh").
+  const [taze] = useState(() => benim && Date.now() - m.ts < 4000);
+  if (taze) sinif.push('tc-ms-ileti-taze');
   if (kartli) sinif.push('tc-ms-ileti-kartli');
 
-  const basma = useRef<{ zamanlayici: number; x: number; y: number } | null>(null);
+  const basma = useRef<{ zamanlayici: number; x: number; y: number; kayma: number | null } | null>(null);
+  const kap = useRef<HTMLDivElement>(null);
   const [kayiyor, kayiyorYaz] = useState(false);
   const etkilesimDisi = (o: { target: EventTarget }) => (o.target as Element).closest('button,a,textarea,input,select') !== null;
   const bas = (o: PointerEvent) => {
     if (o.pointerType === 'mouse' || etkilesimDisi(o)) return;
-    const zamanlayici = window.setTimeout(() => { basma.current = null; olaylar.menu(m); }, UZUN_BASMA_MS);
-    basma.current = { zamanlayici, x: o.clientX, y: o.clientY };
+    const hedef = o.currentTarget;
+    const zamanlayici = window.setTimeout(() => { basma.current = null; olaylar.menu(m, hedef); }, UZUN_BASMA_MS);
+    basma.current = { zamanlayici, x: o.clientX, y: o.clientY, kayma: null };
   };
+  // Kaydırırken baloncuk parmağı izler (en çok 80 px); eşik geçilince bırakınca yanıt açılır.
+  const kaymaYaz = (x: number) => { kap.current?.style.setProperty('--tc-ms-kayma', `${String(x)}px`); };
   const kay = (o: PointerEvent) => {
     const b = basma.current;
     if (!b) return;
     const dx = o.clientX - b.x;
-    if (Math.hypot(dx, o.clientY - b.y) > 10) window.clearTimeout(b.zamanlayici);
-    kayiyorYaz(dx > KAYMA_ESIGI && Math.abs(o.clientY - b.y) < 20);
+    const dy = Math.abs(o.clientY - b.y);
+    if (Math.hypot(dx, dy) > 10) window.clearTimeout(b.zamanlayici);
+    if (b.kayma === null && dx > 12 && dy < 20) b.kayma = 0;
+    if (b.kayma === null) return;
+    b.kayma = Math.max(0, Math.min(KAYMA_EN_COK, dx));
+    kaymaYaz(b.kayma);
+    kayiyorYaz(b.kayma > KAYMA_ESIGI);
   };
   const birak = () => {
     const b = basma.current;
     if (b) window.clearTimeout(b.zamanlayici);
     basma.current = null;
+    kaymaYaz(0);
     if (kayiyor && yetki.yaz) olaylar.yanitla(m);
     kayiyorYaz(false);
   };
@@ -130,7 +147,7 @@ export function Ileti({ ileti: m, kanal, devam, duzenleniyor, olaylar }: Ozellik
       <>
         {m.replyTo && (
           <button type="button" className="tc-ms-alinti" onClick={() => { olaylar.git(m.replyTo!.id); }}>
-            <b>{m.replyTo.by === ben.id ? 'Sen' : ad(m.replyTo.by)}</b>
+            <b className={adRengi(m.replyTo.by)}>{m.replyTo.by === ben.id ? 'Sen' : ad(m.replyTo.by)}</b>
             <span>{duzMetin(m.replyTo.text || '', ad).replace(/\*\*/g, '').slice(0, 140)}</span>
           </button>
         )}
@@ -152,16 +169,16 @@ export function Ileti({ ileti: m, kanal, devam, duzenleniyor, olaylar }: Ozellik
     <article
       className={sinif.join(' ')} id={`ileti-${m.id}`} data-ileti={m.id}
       onPointerDown={bas} onPointerMove={kay} onPointerUp={birak} onPointerCancel={birak} onPointerLeave={birak}
-      onContextMenu={(o) => { if ((o.target as Element).closest('a,textarea')) return; o.preventDefault(); olaylar.menu(m); }}
+      onContextMenu={(o) => { if ((o.target as Element).closest('a,textarea')) return; o.preventDefault(); olaylar.menu(m, o.currentTarget); }}
     >
       {!benim && (
         <div className="tc-ms-oluk">
           {devam ? null : sistem ? <span className="tc-ms-sistem-simge"><Simge ad="home" /></span> : <KisiRozeti id={m.by} />}
         </div>
       )}
-      <div className={`tc-ms-baloncuk-kabi${kayiyor ? ' tc-ms-kayiyor' : ''}`}>
+      <div ref={kap} className={`tc-ms-baloncuk-kabi${kayiyor ? ' tc-ms-kayiyor' : ''}`}>
         <div className="tc-ms-baloncuk">
-          {!devam && !benim && <div className="tc-ms-yazar"><span>{sistem ? 'Mesaj' : ad(m.by)}</span>{etiketler}</div>}
+          {!devam && !benim && <div className="tc-ms-yazar"><span className={sistem ? undefined : adRengi(m.by)}>{sistem ? 'Mesaj' : ad(m.by)}</span>{etiketler}</div>}
           {(devam || benim) && etiketVar && <div className="tc-ms-yazar">{etiketler}</div>}
           {govde}
           <span className="tc-ms-zaman-bilgisi">
@@ -201,7 +218,7 @@ export function Ileti({ ileti: m, kanal, devam, duzenleniyor, olaylar }: Ozellik
         <div className="tc-ms-araclar">
           {yetki.yaz && <button type="button" className="tc-ms-arac" title="Tamam" aria-label="Tamam tepkisi" onClick={() => { olaylar.tepki(m, 'c_tamam'); }}>✅</button>}
           {yetki.yaz && <button type="button" className="tc-ms-arac" title="Yanıtla" aria-label="Yanıtla" onClick={() => { olaylar.yanitla(m); }}><Simge ad="chev-left" /></button>}
-          <button type="button" className="tc-ms-arac" title="Diğer" aria-label="Diğer işlemler" onClick={() => { olaylar.menu(m); }}><Simge ad="more" /></button>
+          <button type="button" className="tc-ms-arac" title="Diğer" aria-label="Diğer işlemler" onClick={(o) => { olaylar.menu(m, o.currentTarget); }}><Simge ad="more" /></button>
         </div>
       )}
     </article>

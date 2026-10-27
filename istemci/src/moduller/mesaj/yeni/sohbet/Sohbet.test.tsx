@@ -241,3 +241,44 @@ describe('M1 sohbet: kanal ve duyuru formları', () => {
     });
   });
 });
+
+describe('M1 sohbet: prototip düzeni (TASARIM KORUMA)', () => {
+  const genisEkran = () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: !q.includes('max-width') && !q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {} }));
+  };
+
+  it('genişte ileti menüsü açan düğmeye çapalı açılır kutudur; Esc kapatır', async () => {
+    genisEkran();
+    sunucuKur({ ben: YAZAN, belgeler: belgeler() });
+    await kanalAc();
+    const dugme = within(await iletiKutusu('Günaydın')).getByRole('button', { name: 'Diğer işlemler' });
+    fireEvent.click(dugme);
+    const menu = await screen.findByRole('dialog', { name: 'Mesaj işlemleri' });
+    expect(menu.classList.contains('tc-ms-acilir')).toBe(true);
+    expect(dugme.classList.contains('tc-ms-menu-capa')).toBe(true);
+    expect(within(menu).getByRole('group', { name: 'Tepki ver' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Mesaj işlemleri' })).toBeNull(); });
+    expect(dugme.classList.contains('tc-ms-menu-capa')).toBe(false);
+  });
+
+  it('yazar adı kişi rengiyle çizilir', async () => {
+    sunucuKur({ ben: YAZAN, belgeler: belgeler() });
+    await kanalAc();
+    const ad = (await iletiKutusu('Örnek duyuru')).querySelector('.tc-ms-yazar > span');
+    expect(ad?.className).toMatch(/^tc-ms-ad tc-my-renk-\d$/);
+  });
+
+  it('kanal listesindeki Ara düğmesi kabuğun aramasını (Ctrl K) açar; salt okurda da vardır', async () => {
+    sunucuKur({ ben: OKUYAN, belgeler: belgeler() });
+    mesajAc('/mesaj/yeni/sohbet');
+    const liste = await screen.findByRole('navigation', { name: 'Kanallar' });
+    const tuslar: KeyboardEvent[] = [];
+    const dinle = (o: KeyboardEvent) => { tuslar.push(o); };
+    window.addEventListener('keydown', dinle);
+    fireEvent.click(within(liste).getByRole('button', { name: 'Ara' }));
+    window.removeEventListener('keydown', dinle);
+    expect(tuslar.some((o) => o.ctrlKey && o.key === 'k')).toBe(true);
+    expect(within(liste).queryByRole('button', { name: 'Kanal' })).toBeNull();
+  });
+});

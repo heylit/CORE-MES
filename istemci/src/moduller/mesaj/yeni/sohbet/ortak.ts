@@ -21,3 +21,8 @@ export function bilinenAdlar(kisiler: ReadonlyMap<string, string>, ek?: Readonly
 export interface SohbetOdasi { cevrimici: readonly string[]; iletiler: readonly Ileti[] }
 export const SohbetOdasiBaglami = createContext<SohbetOdasi>({ cevrimici: [], iletiler: [] });
 export const useSohbetOdasi = (): SohbetOdasi => useContext(SohbetOdasiBaglami);
+
+// Prototipteki "Ara" düğmesi: arama kabuğun Ctrl K kutusunda (M0); düğme aynı tuşu gönderir, kabuk kutuyu açar.
+export function aramaAc(): void {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+}

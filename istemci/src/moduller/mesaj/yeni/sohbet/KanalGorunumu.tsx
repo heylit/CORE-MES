@@ -31,7 +31,7 @@ export function KanalGorunumu({ kanal, hedefIleti }: { kanal: Kayit<Kanal>; hede
   const [yanit, yanitYaz] = useState<Yanit | null>(null);
   const [duyuruKipi, duyuruKipiYaz] = useState(false);
   const [duzenlenen, duzenlenenYaz] = useState<{ id: string; eslesme: ReadonlyMap<string, string> } | null>(null);
-  const [menu, menuYaz] = useState<Kayit<IletiTipi> | null>(null);
+  const [menu, menuYaz] = useState<{ ileti: Kayit<IletiTipi>; capa: Element | null } | null>(null);
   const [bilgi, bilgiYaz] = useState<Kayit<IletiTipi> | null>(null);
   const [silinecek, silinecekYaz] = useState<Kayit<IletiTipi> | null>(null);
   const [zamanliAcik, zamanliAcikYaz] = useState(false);
@@ -112,7 +112,7 @@ export function KanalGorunumu({ kanal, hedefIleti }: { kanal: Kayit<Kanal>; hede
   const olaylar: IletiOlaylari = {
     tepki: (m, k) => { if (yetki.yaz && k) sakla(yaz.guncelle(yol(m), tepkiYamasi(m, k, ben.id))); },
     yanitla,
-    menu: menuYaz,
+    menu: (ileti, capa) => { menuYaz({ ileti, capa }); },
     bilgi: bilgiYaz,
     git: iletiyeGit,
     duzenlemeKaydet,
@@ -190,8 +190,8 @@ export function KanalGorunumu({ kanal, hedefIleti }: { kanal: Kayit<Kanal>; hede
       />
       {menu && (
         <IletiIslemleri
-          islemler={iletiIslemleri(menu, ben.id, yetki.yaz)} tepkiVar={yetki.yaz}
-          tepkiSec={(k) => { olaylar.tepki(menu, k); }} sec={(i) => { islemSec(menu, i); }} kapat={() => { menuYaz(null); }}
+          capa={menu.capa} islemler={iletiIslemleri(menu.ileti, ben.id, yetki.yaz)} tepkiVar={yetki.yaz}
+          tepkiSec={(k) => { olaylar.tepki(menu.ileti, k); }} sec={(i) => { islemSec(menu.ileti, i); }} kapat={() => { menuYaz(null); }}
         />
       )}
       {bilgi && <IletiBilgisi ileti={bilgi} kanal={kanal.id} kapat={() => { bilgiYaz(null); }} />}

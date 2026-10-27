@@ -2,6 +2,7 @@ import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { kisaZaman } from '../bicim.ts';
 import { useMesaj } from '../durum.tsx';
 import { bahsedildi, okunmamis } from '../kurallar.ts';
+import { aramaAc } from './ortak.ts';
 import { kanalOnizlemesi, kanalSirasi } from './yardimci.ts';
 
 // Kanal listesi (viewChannels ve yan menüdeki kanallar): son yazışmaya göre sıralı; okunmamış nokta, bahis "@".
@@ -12,7 +13,10 @@ export function KanalListesi({ acik }: { acik: string | null }) {
     <nav className="tc-ms-kanallar" aria-label="Kanallar">
       <div className="tc-ms-kanallar-ust">
         <h2 className="tc-ms-kanallar-baslik">Kanallar</h2>
-        {yetki.yaz && <Dugme simge="plus" onClick={() => { formAc({ tur: 'kanal' }); }}>Kanal</Dugme>}
+        <span className="tc-ms-kanallar-eylem">
+          <Dugme simge="search" className="tc-ms-simge-dugme" aria-label="Ara" title="Ara (Ctrl+K)" onClick={aramaAc} />
+          {yetki.yaz && <Dugme simge="plus" onClick={() => { formAc({ tur: 'kanal' }); }}>Kanal</Dugme>}
+        </span>
       </div>
       {kanallar.length === 0 && <p className="tc-ms-bos">Henüz kanal yok.</p>}
       <ul className="tc-ms-kanal-listesi">
