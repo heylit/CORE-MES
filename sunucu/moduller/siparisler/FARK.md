@@ -26,6 +26,7 @@ VARSAYIM: üst sınır 365 gün; müşterinin varsayılan vadesi (`vadeGunu`) fo
 5. parça (elle çarpan ekranı, 195 a): sipariş ayrıntısında "Öncelik çarpanı" kartı; veri Plan uçlarındadır (`GET/POST /plan/siparisler/:id/carpan`), sunucu tarafı değişmez.
 Kartı `plan.yaz`, `plan.bedel-ayari`, `siparisler.fiyat-oku` ya da `siparisler.onayla` olan görür (237 a); "Çarpan ver" yalnız `plan.yaz` ya da `siparisler.onayla` olana. Sınırı sunucu denetler, ekran planlamaya 2 üstünde yalnız uyarır.
 VARSAYIM: düğme yalnız açık (taslak, onaylı) siparişte; kayıt yoksa "çarpan 1" yazılır.
+815 (699/3 a): plana yalnız emrin önceliği girer. Kart "Öncelik çarpanı geçmişi" oldu: yalnız eski kayıtları okur, geçmişi yoksa çizilmez; "Çarpan ver" ve bant kalktı. Tablo silinmez.
 
 6. parça (emir sipariş satırı bağı, 224, 225): `disari.ts` `siparisinSatirOzetleri(db, siparisId)` siparişin satırlarını sıra ile verir; `SiparisSatiriOzeti` `birimFiyat` taşır.
 Emir payı birim fiyat × emir adedidir (225); hesap emri tutan modüldedir. Sipariş ayrıntısında satır numarası ("No") görünür.
