@@ -5,7 +5,7 @@ import {
 import { csvIndir } from '../../../../ortak/veri/csv.ts';
 import { M, gunEtiketi, isoGun, saatDakika } from '../bicim.ts';
 import { useMesaj } from '../durum.tsx';
-import { duzMetin } from '../kurallar.ts';
+import { IletiMetni } from '../sohbet/IletiMetni.tsx';
 import type { Kayit, Kural, Zamanli } from '../tipler.ts';
 import { duzenleyebilir } from '../yetki.ts';
 import { KURAL_TURLERI, TEKRARLAR, kuralParametresi, kuralTuruMu } from '../otomasyon/kurallar.ts';
@@ -76,7 +76,7 @@ export function Ayarlar() {
 
   return (
     <div className="tc-mb-ayarlar">
-      <SayfaBasligi baslik="Ayarlar ve otomasyon" simge="gear" alt="Bildirimler, takvim, otomatik uyarılar, dışa aktarma" />
+      <SayfaBasligi baslik="Ayarlar ve otomasyon" simge="gear" alt="Bildirimler, takvim, otomatik uyarılar, ERP" />
 
       <Kart baslik="Bildirim ve hatırlatmalar">
         <div className="tc-mb-satirlar">
@@ -128,7 +128,7 @@ export function Ayarlar() {
         {yaz && <div className="tc-mb-alt"><Dugme simge="plus" onClick={() => m.formAc({ tur: 'kural' })}>Uyarı ekle</Dugme></div>}
       </Kart>
 
-      <Kart baslik="Dışa aktar">
+      <Kart baslik="ERP ve MES bağlantısı">
         <div className="tc-mb-aktar">
           <button type="button" className="tc-mb-aktar-dugme" onClick={siparisleriAktar}>
             <Simge ad="download" />
@@ -166,10 +166,10 @@ function ZamanliSatiri({ z, kanal, iptal }: { z: Kayit<Zamanli>; kanal: string |
     <li className="tc-mb-oge">
       <span className="tc-mb-oge-simge"><Simge ad="clock" /></span>
       <div className="tc-mb-oge-govde">
-        <p className="tc-mb-metin">
+        <div className="tc-mb-metin">
           {z.ann && <Rozet ton="uyari">Duyuru</Rozet>}
-          {duzMetin(z.text, m.ad).replace(/\*\*/g, '')}
-        </p>
+          <IletiMetni metin={z.text} />
+        </div>
         <p className="tc-mb-bilgi">
           <b>{gunEtiketi(z.sendAt, simdi)} {saatDakika(z.sendAt)}</b>
           {kanal !== undefined && <span>#{kanal}</span>}

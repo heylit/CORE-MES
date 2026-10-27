@@ -28,7 +28,7 @@ describe('M3 Ayarlar ve otomasyon', () => {
   it('bölümler gelir; e-posta, cihaz bildirimi ve içe aktarma yoktur (208 a, 212 a)', async () => {
     ac();
     expect(await screen.findByRole('heading', { name: 'Bildirim ve hatırlatmalar' })).toBeTruthy();
-    for (const b of ['Telefon ve takvim senkronu', 'Zamanlanmış mesajlar', 'Otomatik uyarılar', 'Dışa aktar']) expect(screen.getByRole('heading', { name: b })).toBeTruthy();
+    for (const b of ['Telefon ve takvim senkronu', 'Zamanlanmış mesajlar', 'Otomatik uyarılar', 'ERP ve MES bağlantısı']) expect(screen.getByRole('heading', { name: b })).toBeTruthy();
     expect(screen.queryByText(/E-posta/)).toBeNull();
     expect(screen.queryByText(/Cihaz bildirimleri/)).toBeNull();
     expect(screen.queryByText(/içe aktar/i)).toBeNull();

@@ -134,9 +134,13 @@ export function useOtomasyon(): void {
   useEffect(() => {
     const goster = (h: Hatirlatma) => {
       const g = son.current;
+      // Ortak bildirim tek eylem taşır: prototipteki kartın ilk eylemi (toplantıda bağlantı varsa Katıl, yoksa Aç).
+      const baglanti = h.tur === 'toplanti' ? g.veri.toplantilar.find((t) => t.id === h.id)?.link : undefined;
       bildirRef.current('bilgi', `${h.baslik}: ${h.metin}`, {
         eylem: h.tur === 'toplanti'
-          ? { etiket: 'Aç', yap: () => g.ayrintiAc({ tur: 'toplanti', id: h.id }) }
+          ? (baglanti && /^https?:\/\//i.test(baglanti)
+            ? { etiket: 'Katıl', yap: () => { window.open(baglanti, '_blank', 'noopener'); } }
+            : { etiket: 'Aç', yap: () => g.ayrintiAc({ tur: 'toplanti', id: h.id }) })
           : { etiket: 'Görevi aç', yap: () => g.ayrintiAc({ tur: 'gorev', id: h.id }) },
       });
       if (g.tercihler.notif.sound) sesCal();

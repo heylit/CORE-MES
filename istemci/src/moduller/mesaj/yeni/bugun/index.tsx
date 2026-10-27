@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DurumKutusu, Dugme, Kart, SayfaBasligi, Simge } from '../../../../ortak/arayuz/index.ts';
 import { gunAdi, saatDakika } from '../bicim.ts';
 import { useMesaj } from '../durum.tsx';
 import { DuyuruKarti, GorevSatiri, OnayKarti, SiparisKarti, ToplantiSatiri } from '../kartlar/index.ts';
+import { konfeti, kutlamaAl } from '../kartlar/kutlama.ts';
+import { Fincan, Gokyuzu } from './Gokyuzu.tsx';
 import { baslamaMetni, toplantiBitisi } from '../kurallar.ts';
 import { GunSeridi } from './GunSeridi.tsx';
 import { SIRADAKI_SICAK_MS, bugunOzeti, gunSeridi, ozetCumlesi, selam, type SeritOgesi } from './kurallar.ts';
@@ -15,8 +17,8 @@ function Bolum({ baslik, sag, children }: { baslik: string; sag?: ReactNode; chi
   return <Kart baslik={baslik} sag={sag}><div className="tc-mb-bolum">{children}</div></Kart>;
 }
 
-// Prototip `viewToday`: selam ve özet, günün şeridi, sıradaki toplantı ve seni bekleyenler. Süs öğeleri (gökyüzü
-// çizimi, fincan, konfeti) yok (203 a, T8).
+// Prototip `viewToday`: gökyüzünde selam ve özet, günün şeridi, sıradaki toplantı ve seni bekleyenler; bekleyen iş
+// kullanıcının kendi eylemiyle sıfıra inince konfeti.
 // Saat, iğne ve "n dk sonra" metinleri dakikada bir tazelenir (prototip 60 sn).
 export const TAZELEME_MS = 60_000;
 function useDakika(): number {
@@ -26,6 +28,17 @@ function useDakika(): number {
     return () => clearInterval(z);
   }, []);
   return simdi;
+}
+
+// Bekleyen iş kullanıcının eylemiyle (bitirme, onay, okudum) sıfıra inince konfeti (prototip renderToday).
+function Kutlama({ bekleyen }: { bekleyen: number }) {
+  const onceki = useRef(bekleyen);
+  useEffect(() => {
+    const iste = kutlamaAl();
+    if (onceki.current > 0 && bekleyen === 0 && iste) window.setTimeout(konfeti, 150);
+    onceki.current = bekleyen;
+  }, [bekleyen]);
+  return null;
 }
 
 export function Bugun() {
@@ -41,6 +54,7 @@ export function Bugun() {
     ben, simdi, toplantilar: m.veri.toplantilar, gorevler: m.veri.gorevler, siparisler: m.siparisler ?? [], zamanli: m.veri.zamanli, ad: m.ad,
   });
   const sira = o.siradaki;
+  const saat = new Date(simdi).getHours() + new Date(simdi).getMinutes() / 60;
 
   const seritAc = (oge: SeritOgesi) => {
     if (oge.tur === 'zamanli') m.git({ gorunum: 'ayarlar' });
@@ -49,11 +63,14 @@ export function Bugun() {
 
   return (
     <div className="tc-mb-bugun">
+      <Kutlama bekleyen={o.bekleyen} />
       <SayfaBasligi baslik="Bugün" simge="home" alt={gunAdi(simdi)} />
 
       <section className="tc-mb-selam" aria-label="Günün özeti">
-        <h3 className="tc-mb-selam-baslik">{selam(new Date(simdi).getHours() + new Date(simdi).getMinutes() / 60)}, {m.ilkAd(ben)}</h3>
-        <p className="tc-mb-selam-ozet">{ozetCumlesi(o, simdi, (ts) => baslamaMetni(ts, simdi))}</p>
+        <Gokyuzu saat={saat}>
+          <h3 className="tc-mb-selam-baslik">{selam(saat)}, {m.ilkAd(ben)}</h3>
+          <p className="tc-mb-selam-ozet">{ozetCumlesi(o, simdi, (ts) => baslamaMetni(ts, simdi))}</p>
+        </Gokyuzu>
         <GunSeridi serit={serit} simdi={simdi} ac={seritAc} />
       </section>
 
@@ -77,9 +94,10 @@ export function Bugun() {
       )}
 
       {!o.bekleyen && !o.davetler.length && (
-        <DurumKutusu durum="bos" mesaj="Masan tertemiz">
-          <p>Bekleyen görev, onay ya da duyuru yok. Yeni bir şey geldiğinde burada göreceksin.</p>
-        </DurumKutusu>
+        <div className="tc-mb-temiz">
+          <Fincan />
+          <div><b>Masan tertemiz</b><span>Bekleyen görev, onay ya da duyuru yok. Yeni bir şey geldiğinde burada göreceksin.</span></div>
+        </div>
       )}
       {o.davetler.length > 0 && (
         <Bolum baslik="Yanıt bekleyen davetler">{o.davetler.map((t) => <ToplantiSatiri key={t.id} toplanti={t} />)}</Bolum>

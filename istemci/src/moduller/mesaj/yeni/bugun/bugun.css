@@ -1,12 +1,55 @@
 /* M3 Bugün: yalnız tasarım değişkenleri. Şerit kendi içinde yatay kayar; sayfa kaymaz. */
 .tc-mb-bugun { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
 .tc-mb-selam {
-  display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-4);
-  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3);
+  display: grid; min-width: 0; overflow: hidden;
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-5);
 }
-.tc-mb-selam-baslik { font-size: var(--yazi-xl); font-weight: 800; overflow-wrap: anywhere; }
-.tc-mb-selam-ozet { color: var(--muted); }
-.tc-mb-serit { overflow-x: auto; overscroll-behavior-x: contain; min-width: 0; margin-top: var(--b-2); }
+/* Gökyüzü (prototipin hero'su): evreye göre iki tonlu gradyan, güneş ya da ay, fabrika silüeti. Gece dışındaki
+   evrelerde zemin açık olduğundan yazı koyu sabit tondadır (temadan bağımsız). */
+.tc-mb-gok {
+  --gok-1: color-mix(in srgb, var(--done) 40%, var(--parlak)); --gok-2: color-mix(in srgb, var(--done) 10%, var(--parlak));
+  --fabrika: color-mix(in srgb, var(--on-hazard) 13%, transparent); --pencere: transparent; --gok-yazi: var(--on-hazard);
+  position: relative; height: calc(var(--b-6) * 7); overflow: hidden; background: linear-gradient(180deg, var(--gok-1), var(--gok-2));
+}
+.tc-mb-gok-dawn { --gok-1: color-mix(in srgb, var(--hold) 50%, var(--parlak)); --gok-2: color-mix(in srgb, var(--hazard) 30%, var(--parlak)); }
+.tc-mb-gok-dusk {
+  --gok-1: color-mix(in srgb, var(--grafik-2) 45%, var(--parlak)); --gok-2: color-mix(in srgb, var(--hold) 35%, var(--parlak));
+  --pencere: color-mix(in srgb, var(--parlak) 50%, transparent);
+}
+.tc-mb-gok-night {
+  --gok-1: color-mix(in srgb, var(--grafik) 35%, var(--on-hazard)); --gok-2: color-mix(in srgb, var(--grafik-2) 30%, var(--on-hazard));
+  --fabrika: var(--on-hazard); --pencere: var(--hazard); --gok-yazi: var(--parlak);
+}
+.tc-mb-gok-cizim { position: absolute; inset: 0; }
+.tc-mb-gunes circle { fill: var(--hazard); }
+.tc-mb-gunes .tc-mb-hale { opacity: .22; }
+.tc-mb-gunes .tc-mb-hale-2 { opacity: .12; }
+.tc-mb-ay circle { fill: var(--parlak); }
+.tc-mb-ay .tc-mb-ay-golge { fill: color-mix(in srgb, var(--grafik) 25%, var(--parlak)); }
+.tc-mb-yuksel { animation: tc-mb-yuksel calc(var(--hareket-sure) * 9) cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes tc-mb-yuksel { from { transform: translateY(calc(var(--b-6) * 4)) scale(.9); opacity: 0; } }
+.tc-mb-fabrika { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: calc(var(--b-6) * 3); }
+.tc-mb-fabrika path, .tc-mb-duman { fill: var(--fabrika); }
+.tc-mb-duman { opacity: .7; }
+.tc-mb-pencere { fill: transparent; }
+.tc-mb-pencere-acik { fill: var(--pencere); }
+.tc-mb-gok-metin { position: absolute; top: var(--b-5); left: var(--b-6); right: var(--b-6); display: grid; gap: var(--b-2); }
+.tc-mb-selam-baslik { font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.05; letter-spacing: -.03em; color: var(--gok-yazi); overflow-wrap: anywhere; }
+.tc-mb-selam-ozet { max-width: 46ch; font-weight: 500; color: color-mix(in srgb, var(--gok-yazi) 78%, transparent); }
+.tc-mb-serit { overflow-x: auto; overscroll-behavior-x: contain; min-width: 0; padding: var(--b-3) var(--b-4) var(--b-4); }
+.tc-mb-temiz {
+  display: flex; align-items: center; gap: var(--b-4); padding: var(--b-4) var(--b-5);
+  border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--yari-4); background: var(--panel);
+}
+.tc-mb-temiz > div { display: grid; gap: var(--b-1); }
+.tc-mb-temiz b { font-size: var(--yazi-l); }
+.tc-mb-temiz span { color: var(--muted); font-size: var(--yazi-s); }
+.tc-mb-fincan { flex: none; }
+.tc-mb-fincan-golge { fill: var(--edge); }
+.tc-mb-fincan-govde { fill: var(--hazard); }
+.tc-mb-fincan-kulp { fill: none; stroke: var(--hazard); stroke-width: 6; }
+.tc-mb-fincan-buhar { fill: none; stroke: var(--faint); stroke-width: 3; stroke-linecap: round; }
+@media (prefers-reduced-motion: reduce) { .tc-mb-yuksel { animation: none; } }
 .tc-mb-serit-cizim { display: block; }
 .tc-mb-saat line { stroke: var(--edge); stroke-width: var(--cizgi-ince); }
 .tc-mb-saat text { fill: var(--faint); font-size: var(--yazi-xs); font-family: var(--font-mono); }
@@ -48,6 +91,10 @@
 .tc-mb-bahis-govde { display: grid; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
 .tc-mb-bahis-govde span { color: var(--muted); font-size: var(--yazi-s); }
 @media (max-width: 767px) {
+  .tc-mb-gok { height: calc(var(--b-6) * 6); }
+  .tc-mb-gok-metin { top: var(--b-4); left: var(--b-4); right: var(--b-4); }
+  .tc-mb-selam-baslik { font-size: var(--yazi-baslik); }
+  .tc-mb-temiz { flex-direction: column; text-align: center; }
   .tc-mb-siradaki { grid-template-columns: auto minmax(0, 1fr); }
   .tc-mb-siradaki-eylem { grid-column: 1 / -1; justify-content: flex-start; }
 }

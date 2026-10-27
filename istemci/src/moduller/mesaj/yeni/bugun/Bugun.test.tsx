@@ -82,7 +82,8 @@ describe('M3 Bugün', () => {
   it('bekleyen bir şey yoksa masan tertemiz der', async () => {
     sunucuKur({ ben: OKUYAN, belgeler: { 'channels/genel': { name: 'genel', createdAt: 0, createdBy: KISI_B } } });
     mesajAc();
-    expect(await screen.findByText('Masan tertemiz')).toBeTruthy();
+    const temiz = await screen.findByText('Masan tertemiz');
+    expect(temiz.closest('.tc-mb-temiz')?.querySelector('svg.tc-mb-fincan')).toBeTruthy();
     expect(screen.getByText(/^Bekleyen işin yok\. Bugün toplantın yok\.$/)).toBeTruthy();
   });
 
@@ -100,5 +101,22 @@ describe('M3 Bugün', () => {
     expect(within(kart).queryByText('Katıl')).toBeNull();
     fireEvent.click(within(kart).getByRole('button', { name: 'Aç' }));
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+});
+
+describe('M3 Bugün: prototip düzeni (TASARIM KORUMA)', () => {
+  it('selam gökyüzünde, güneş ya da ay ve fabrika silüetiyle', async () => {
+    sunucuKur({ ben: YAZAN, belgeler: ornekBelgeler() });
+    mesajAc();
+    const selamYazi = await screen.findByText(/, Deneme$/);
+    const gok = selamYazi.closest('.tc-mb-gok') as HTMLElement;
+    expect(gok).toBeTruthy();
+    expect(gok.querySelector('svg.tc-mb-fabrika path')).toBeTruthy();
+    expect(gok.querySelector('.tc-mb-gunes, .tc-mb-ay')).toBeTruthy();
+  });
+
+  it('gökyüzü evresi saate göre', async () => {
+    const { evre } = await import('./Gokyuzu.tsx');
+    expect([3, 6, 12, 19, 22].map(evre)).toEqual(['night', 'dawn', 'day', 'dusk', 'night']);
   });
 });
