@@ -335,7 +335,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const plant = await istek<BelgeCevabi>(operator, 'GET', '/arkon/belgeler/kv/plant');
     const tesis = (plant.govde.belge?.govde as { v: { wcs: { id: string }[]; sts: unknown[]; mcs: unknown[] } }).v;
     assert.ok(tesis.wcs.some((w) => w.id === t.merkez));
-    assert.ok(tesis.sts.some((s) => JSON.stringify(s) === JSON.stringify({ id: t.istasyon, name: 'Arkon İstasyonu', wc: t.merkez, t: 'kalite', active: true })));
+    assert.ok(tesis.sts.some((s) => JSON.stringify(s) === JSON.stringify({ id: t.istasyon, name: 'Arkon İstasyonu', wc: t.merkez, t: 'kalite', active: true, tmi: t.istasyonId })));
     assert.ok(tesis.mcs.some((m) => (m as { id: string; st: string; conn: string }).id === t.makine && (m as { st: string }).st === t.istasyon && (m as { conn: string }).conn === 'mtc'));
     // Aynı içerik aynı sürümü verir: istemci gereksiz yere yeniden çizmez.
     assert.equal((await istek<BelgeCevabi>(operator, 'GET', '/arkon/belgeler/kv/plant')).govde.belge?.surum, plant.govde.belge?.surum);

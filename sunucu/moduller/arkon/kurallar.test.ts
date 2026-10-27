@@ -77,7 +77,7 @@ test('sürüm kuralı: var olan belgeye bildiği sürümsüz yazılmaz; olmayan 
   assert.equal(silmeCakisiyorMu(null, 4), false);
 });
 
-test('tesis kodlarla kurulur; iş merkezi ya da istasyonu bilinmeyen kayıt atlanır', () => {
+test('tesis kodlarla kurulur, istasyon TMI kimliğini taşır; iş merkezi ya da istasyonu bilinmeyen kayıt atlanır', () => {
   const tesis = tesisKur(
     [{ id: 1, kod: 'TAL', ad: 'Talaşlı', aciklama: null, aktif: true }],
     [
@@ -89,7 +89,7 @@ test('tesis kodlarla kurulur; iş merkezi ya da istasyonu bilinmeyen kayıt atla
       { id: 2, kod: 'M2', ad: 'Boşta', tur: null, markaModel: null, seriNo: null, istasyonId: null, baglantiTuru: null, baglantiAdresi: null, aktif: true },
     ],
   );
-  assert.deepEqual(tesis.sts, [{ id: 'TZG-04', name: 'Torna', wc: 'TAL', t: 'mark', active: true }]);
+  assert.deepEqual(tesis.sts, [{ id: 'TZG-04', name: 'Torna', wc: 'TAL', t: 'mark', active: true, tmi: 5 }]);
   assert.deepEqual(tesis.mcs.map((m) => [m.id, m.st, m.conn]), [['M1', 'TZG-04', 'io']]);
 });
 
