@@ -15,43 +15,49 @@ import './uzak.css';
 import type { Gorev, Is, KontrolTakvimi } from './tipler.ts';
 
 // Uzak mod (operator-parcalar.ts AwayView): uzaktan okunur dev sayaç. Dokunuş ya da tuş normal ekrana döndürür.
-// 804: üst şerit üç çerçeveli çip; iş bilgisi tek çerçevede ikonlu alanlar, etiket üstte değer altta; sayaç kendi çerçevesinde.
+// 895 a (961 a prototipi): sayı ekranın büyük kısmı, iş bilgisi tek satır, 3B büyük. Üst şeritte durum, proje, saat, istasyon
+// kutuları satırı doldurur; proje iş satırında değil üst şeritte durur ki uzun emir numarasıyla iş satırı kesilmesin.
 export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev: Gorev | null; D: KontrolTakvimi; since: number | null; istasyon: string; uyan: () => void }) {
   const simdi = useSimdi(1000);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
   const oran = is.target > 0 ? Math.min(1, is.good / is.target) : 0;
   const basliklar = uzakBasliklari(is);
-  const emir = basliklar.find(([etiket]) => etiket === 'Üretim emri');
-  const alanlar = basliklar.filter(([etiket]) => etiket !== 'Üretim emri');
+  const proje = basliklar.find(([etiket]) => etiket === 'Proje');
+  const alanlar = basliklar.filter(([etiket]) => etiket !== 'Proje');
+  const sayiMetni = sayi(is.good);
   const siradaki = D.due.length ? `ŞİMDİ · ${D.due[0]!.nom}` : D.next ? (D.next.v === 0 ? 'Üretime dönünce' : `${D.next.v} ${D.next.u}`) : '—';
+  const gorevVar = gorev !== null && !gorev.quiet;
   return createPortal(
     <div ref={ref} className="tc-ay1-uzak" data-durum={durumRengi(is.state)} role="dialog" aria-label="Uzak mod" tabIndex={0}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); uyan(); }} onKeyDown={uyan}>
       <div className="tc-ay1-uzak-ust">
         <span className="tc-ay1-uzak-durum" role="status"><i aria-hidden="true" /><b>{durumAdi(is.state)}</b><Simge ad="clock" /><GecenSure since={since} /></span>
+        {proje ? <span className="tc-ay1-uzak-cip tc-ay1-uzak-proje" title={proje[1]}><Simge ad={ALAN_SIMGESI.Proje!} /><span className="tc-gizli-etiket">Proje</span><b>{proje[1]}</b></span> : null}
         <span className="tc-ay1-uzak-cip tc-ay1-uzak-saat tc-ay1-mono">{saatMetni(simdi)}</span>
-        <span className="tc-ay1-uzak-cip tc-ay1-uzak-istasyon"><Simge ad="cpu" /><span><small className="tc-ay1-ust-yazi">İstasyon</small><b className="tc-ay1-mono">{istasyon}</b></span></span>
-      </div>
-      <div className="tc-ay1-uzak-govde">
-        {basliklar.length ? (
-          <section className="tc-ay1-uzak-kart tc-ay1-uzak-bilgi" aria-label="İş bilgisi">
-            {emir ? <dl className="tc-ay1-uzak-emir"><UzakAlan etiket={emir[0]} deger={emir[1]} /></dl> : null}
-            {alanlar.length ? <dl className="tc-ay1-uzak-alanlar">{alanlar.map(([etiket, deger]) => <UzakAlan key={etiket} etiket={etiket} deger={deger} />)}</dl> : null}
+        <span className="tc-ay1-uzak-cip tc-ay1-uzak-istasyon"><Simge ad="cpu" /><span className="tc-gizli-etiket">İstasyon</span><b className="tc-ay1-mono">{istasyon}</b></span>
+        {alanlar.length ? (
+          <section className="tc-ay1-uzak-cip tc-ay1-uzak-is" aria-label="İş bilgisi">
+            <dl>{alanlar.map(([etiket, deger]) => <UzakAlan key={etiket} etiket={etiket} deger={deger} />)}</dl>
           </section>
         ) : null}
+      </div>
+      <div className="tc-ay1-uzak-govde">
+        <UzakModel pkg={is.pkg} />
         <section className="tc-ay1-uzak-kart tc-ay1-uzak-sayac" aria-label="Sayaç">
-          <span className="tc-ay1-uzak-etiket"><Simge ad="check" boyut="k" /><span className="tc-ay1-ust-yazi">Üretilen / hedef</span></span>
-          <div className="tc-ay1-uzak-orta">
-            <UzakModel pkg={is.pkg} />
-            <span className="tc-ay1-uzak-oran"><span className="tc-ay1-uzak-sayi">{sayi(is.good)}</span><small className="tc-ay1-uzak-hedef">/ {sayi(is.target)}</small></span>
+          <div className="tc-ay1-uzak-sayac-ust">
+            <span className="tc-ay1-uzak-etiket"><Simge ad="check" boyut="k" /><span className="tc-ay1-ust-yazi">Üretilen</span></span>
+            {is.target > 0 ? <span className="tc-ay1-uzak-hedef">Hedef <b className="tc-ay1-mono">{sayi(is.target)}</b></span> : null}
           </div>
-          <Cubuk yuzde={oran * 100} ton="run" etiket="İlerleme" />
-          {is.target > 0 ? <span className="tc-ay1-uzak-ilerleme"><span>%{Math.round(oran * 100)}</span><span>{sayi(Math.max(0, is.target - is.good))} kaldı</span></span> : null}
+          <div className="tc-ay1-uzak-orta"><span className="tc-ay1-uzak-sayi" data-hane={Math.min(9, sayiMetni.length)}>{sayiMetni}</span></div>
+          <div className="tc-ay1-uzak-ilerleme">
+            <Cubuk yuzde={oran * 100} ton="run" etiket="İlerleme" />
+            {is.target > 0 ? <span className="tc-ay1-uzak-ilerleme-yazi"><b>%{Math.round(oran * 100)}</b><span><b>{sayi(Math.max(0, is.target - is.good))}</b> kaldı</span></span> : null}
+          </div>
         </section>
       </div>
-      {gorev && !gorev.quiet ? <div className="tc-ay1-uzak-gorev" data-durum={tonDurumu(gorev.tone)}><Simge ad={gorev.icon} boyut="b" />{gorev.t}</div> : null}
-      <div className="tc-ay1-uzak-alt">
+      <div className="tc-ay1-uzak-alt" data-gorev={gorevVar ? 'var' : 'yok'}>
+        {gorev && gorevVar ? <div className="tc-ay1-uzak-gorev" data-durum={tonDurumu(gorev.tone)}><Simge ad={gorev.icon} boyut="b" /><span>{gorev.t}</span></div> : null}
         <div className="tc-ay1-uzak-kart" data-durum="durdu"><span className="tc-ay1-uzak-simge"><Simge ad="trash" /></span><span><span className="tc-ay1-ust-yazi">Hurda</span><b>{is.scrap}</b></span></div>
         <div className="tc-ay1-uzak-kart" data-durum="bitti"><span className="tc-ay1-uzak-simge"><Simge ad="ruler" /></span><span><span className="tc-ay1-ust-yazi">Sıradaki kontrol</span><b>{siradaki}</b></span></div>
       </div>
@@ -65,12 +71,12 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
 const ALAN_SIMGESI: Record<string, SimgeAdi> = { 'Üretim emri': 'file', Proje: 'gantt', Op: 'route', 'Parça no': 'tag', 'Parça adı': 'cube', Rev: 'layers' };
 const ESARALIKLI = new Set(['Üretim emri', 'Parça no']);
 
-// dl içinde: simge ve etiket dt'de (ızgarada dt kutusuz), değer dd'de; simge iki satır boyu solda durur.
+// Tek satırda simge ve değer; etiket ekran okuyucuya kalır (dt). Revizyon değerin önünde "Rev" diye okunur.
 function UzakAlan({ etiket, deger }: { etiket: string; deger: string }) {
   return (
     <div className="tc-ay1-uzak-alan" data-alan={etiket}>
-      <dt><span className="tc-ay1-uzak-simge"><Simge ad={ALAN_SIMGESI[etiket] ?? 'tag'} /></span><span className="tc-ay1-ust-yazi">{etiket}</span></dt>
-      <dd className={ESARALIKLI.has(etiket) ? 'tc-ay1-mono' : undefined} title={deger}>{deger}</dd>
+      <dt><Simge ad={ALAN_SIMGESI[etiket] ?? 'tag'} /><span className="tc-gizli-etiket">{etiket}</span></dt>
+      <dd className={ESARALIKLI.has(etiket) ? 'tc-ay1-mono' : undefined} title={deger}>{etiket === 'Rev' ? `Rev ${deger}` : deger}</dd>
     </div>
   );
 }
@@ -108,5 +114,10 @@ function UzakModel({ pkg }: { pkg: Is['pkg'] }) {
     // Paket sürümü ve dosya değişince yeniden okunur (eskisi gibi); dosya çözülünce de.
   }, [pkg?.id, pkg?.version, dosya0?.name, cozuk]);
   if (gorunum === null) return null;
-  return <div className="tc-ay1-uzak-3b"><Suspense fallback={null}><Model3B data={gorunum.data} fa={gorunum.fa} sade /></Suspense></div>;
+  return (
+    <section className="tc-ay1-uzak-kart tc-ay1-uzak-3b" aria-label="3B model">
+      <Suspense fallback={null}><Model3B data={gorunum.data} fa={gorunum.fa} sade /></Suspense>
+      <span className="tc-ay1-uzak-3b-not tc-ay1-ust-yazi"><Simge ad="cube" boyut="k" />3B model</span>
+    </section>
+  );
 }

@@ -1,100 +1,128 @@
-/* 804: uzak mod. Uzaktan okunur: üst şerit çerçeveli çipler; iş bilgisi ve sayaç ayrı kartlarda; alanlar ikonlu, etiket üstte değer
-   altta, sola hizalı. Düzen uzak modun kendi genişliğine bakar: dar ekranda tek sütun ve sayaç önde, tablette bilgi üstte, geniş
-   ekranda bilgi ile sayaç yan yana. */
+/* 895 a (961 a prototipi): uzak mod. Sayı ekranın büyük kısmı, iş bilgisi tek satır, 3B büyük. Kap tam ekrandır ve taşmaz:
+   üst şerit (durum, proje, saat, istasyon; altında iş satırı), gövde (3B ve sayaç), alt sıra (görev, hurda, sıradaki kontrol).
+   Ölçüler kabın payıdır (cq); dar ekranda 3B gizlenir, iş satırı kırılır, kap gerekirse kayar. */
 .tc-ay1-uzak {
-  position: fixed; inset: 0; z-index: var(--z-katman); container: uzak / inline-size;
-  display: flex; flex-direction: column; gap: var(--b-3); padding: var(--b-3);
+  position: fixed; inset: 0; z-index: var(--z-katman); container: uzak / size;
+  display: grid; grid-template-rows: auto minmax(var(--ekran-boy-40), 1fr) auto; gap: var(--b-2); padding: var(--b-3) var(--b-3) var(--b-5);
   background: radial-gradient(70% 70% at 50% 55%, color-mix(in srgb, var(--sig, var(--muted)) 14%, var(--bg)), var(--bg)); color: var(--ink); cursor: pointer; overflow-y: auto;
 }
 .tc-ay1-uzak:focus { outline: none; }
-.tc-ay1-uzak .tc-ay1-ust-yazi { color: var(--muted); font-size: clamp(var(--yazi-xs), 1vw, var(--yazi-s)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tc-ay1-uzak .tc-ay1-ust-yazi { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-10); text-transform: uppercase; }
+.tc-ay1-uzak .tc-simge { flex: none; inline-size: 1em; block-size: 1em; }
 .tc-ay1-uzak-kart, .tc-ay1-uzak-cip { border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-3); background: var(--panel-solid); min-width: 0; }
 .tc-ay1-uzak-simge {
   display: grid; place-items: center; flex: none; inline-size: var(--dokunma); block-size: var(--dokunma);
-  border-radius: var(--yari-2); background: var(--panel2); color: var(--muted);
+  border-radius: var(--yari-2); background: color-mix(in srgb, var(--sig) 14%, var(--panel-solid)); color: var(--sig-yazi); font-size: var(--yazi-xl);
 }
 
-/* Üst şerit: durum ve süre tam satır; altında istasyon ve saat. */
-.tc-ay1-uzak-ust { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); }
-.tc-ay1-uzak-durum, .tc-ay1-uzak-cip { display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-4); box-sizing: border-box; }
-.tc-ay1-uzak-durum {
-  grid-column: 1 / -1; border: var(--cizgi) solid var(--sig); border-radius: var(--yari-3); background: color-mix(in srgb, var(--sig) 12%, var(--panel-solid));
-  color: var(--sig-yazi); font-size: clamp(var(--yazi-l), 2vw, var(--yazi-baslik));
+/* Üst şerit: kutular satırı doldurur (proje en geniş, saat içeriği kadar); iş satırı tam genişlikte altta. */
+.tc-ay1-uzak-ust {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "durum durum" "istasyon saat" "proje proje" "is is"; gap: var(--b-2);
 }
-.tc-ay1-uzak-durum > i { flex: none; inline-size: .6em; block-size: .6em; border-radius: var(--yari-tam); background: var(--sig); }
-.tc-ay1-uzak-durum > b { font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.tc-ay1-uzak-durum, .tc-ay1-uzak-cip {
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: var(--b-1) var(--b-3); box-sizing: border-box; font-size: var(--yazi-m);
+}
+.tc-ay1-uzak-durum {
+  grid-area: durum; min-width: 0; border: var(--cizgi) solid var(--sig); border-radius: var(--yari-3); background: color-mix(in srgb, var(--sig) 12%, var(--panel-solid));
+  color: var(--sig-yazi); font-size: var(--yazi-l);
+}
+.tc-ay1-uzak-durum > i { flex: none; inline-size: .55em; block-size: .55em; border-radius: var(--yari-tam); background: var(--sig); }
+.tc-ay1-uzak-durum > b { font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
 .tc-ay1-uzak-durum > .tc-simge { margin-inline-start: auto; }
 .tc-ay1-uzak-durum > .tc-ay1-mono { font-weight: 600; }
-.tc-ay1-uzak-ust .tc-simge { flex: none; inline-size: 1em; block-size: 1em; }
-.tc-ay1-uzak-saat { grid-row: 2; grid-column: 2; justify-content: center; font-size: clamp(var(--yazi-l), 2.2vw, var(--yazi-2xl)); font-weight: 600; }
-.tc-ay1-uzak-istasyon { grid-row: 2; grid-column: 1; font-size: clamp(var(--yazi-m), 1.8vw, var(--yazi-baslik)); }
-.tc-ay1-uzak-istasyon > .tc-simge { color: var(--muted); }
-.tc-ay1-uzak-istasyon > span { display: grid; min-width: 0; line-height: 1.15; }
-.tc-ay1-uzak-istasyon small { display: none; }
-.tc-ay1-uzak-istasyon b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-uzak-proje { grid-area: proje; white-space: nowrap; }
+.tc-ay1-uzak-proje b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.tc-ay1-uzak-proje > .tc-simge, .tc-ay1-uzak-istasyon > .tc-simge, .tc-ay1-uzak-alan .tc-simge { color: var(--muted); }
+.tc-ay1-uzak-saat { grid-area: saat; justify-content: center; font-weight: 600; }
+.tc-ay1-uzak-istasyon { grid-area: istasyon; white-space: nowrap; }
+.tc-ay1-uzak-istasyon b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 
-/* İş bilgisi ve sayaç */
-.tc-ay1-uzak-govde { display: flex; flex-direction: column; gap: var(--b-3); flex: 1 0 auto; min-width: 0; }
-.tc-ay1-uzak-bilgi { display: grid; align-content: start; gap: var(--b-3); padding: var(--b-3) var(--b-4); }
-.tc-ay1-uzak-bilgi dl { margin: 0; }
-.tc-ay1-uzak-emir { padding-block-end: var(--b-3); border-block-end: var(--cizgi-ince) solid var(--edge); }
-.tc-ay1-uzak-alanlar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-2) var(--b-4); }
-.tc-ay1-uzak-alan { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-3); min-width: 0; }
-.tc-ay1-uzak-alan > dt { display: contents; }
-.tc-ay1-uzak-alan .tc-ay1-uzak-simge { grid-row: 1 / span 2; align-self: center; }
-.tc-ay1-uzak-alan .tc-ay1-ust-yazi { grid-column: 2; align-self: end; }
-.tc-ay1-uzak-alan > dd { grid-column: 2; margin: 0; font-size: clamp(var(--yazi-m), 1.6vw, var(--yazi-xl)); font-weight: 700; overflow-wrap: anywhere; }
-.tc-ay1-uzak-emir dd { font-size: clamp(var(--yazi-l), 2vw, var(--yazi-baslik)); }
-.tc-ay1-uzak-emir .tc-ay1-uzak-simge { background: color-mix(in srgb, var(--sig) 14%, var(--panel-solid)); color: var(--sig-yazi); }
+/* İş satırı: alanlar simge ve değer, aralarında ince çizgi. Emir ve parça no kısalmaz; parça adı en son kısalır. */
+.tc-ay1-uzak-is { grid-area: is; }
+.tc-ay1-uzak-is > dl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) 0; margin: 0; min-width: 0; }
+.tc-ay1-uzak-alan { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-uzak-alan + .tc-ay1-uzak-alan::before { content: ""; flex: none; inline-size: var(--cizgi-ince); block-size: 1.1em; margin-inline: var(--b-3); background: var(--edge2); }
+.tc-ay1-uzak-alan > dt { display: flex; }
+.tc-ay1-uzak-alan > dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.tc-ay1-uzak-alan[data-alan="Üretim emri"] > dd { color: var(--sig-yazi); }
 
-.tc-ay1-uzak-sayac { order: -1; flex: 1 0 auto; display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3) var(--b-4); }
+/* Gövde: 3B (kare, boyca sığar) ve sayaç. 3B hazır değilse sayaç bütün genişliği alır. */
+.tc-ay1-uzak-govde { display: flex; gap: var(--b-3); min-block-size: 0; }
+.tc-ay1-uzak-3b { display: none; position: relative; flex: none; block-size: 100%; aspect-ratio: 1; max-inline-size: 34cqw; overflow: hidden; pointer-events: none; }
+.tc-ay1-uzak-3b > .tc-ay5-3b-sahne { position: absolute; inset: 0; }
+.tc-ay1-uzak-3b-not { position: absolute; inset-block-end: var(--b-3); inset-inline-start: var(--b-4); display: flex; align-items: center; gap: var(--b-2); }
+.tc-ay1-uzak-sayac { flex: 1 1 auto; container: uzak-sayac / size; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--b-2); padding: var(--b-3) var(--b-4); }
+.tc-ay1-uzak-sayac-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
 .tc-ay1-uzak-etiket { display: flex; align-items: center; gap: var(--b-2); color: var(--muted); }
-.tc-ay1-uzak-orta { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: var(--b-3); min-width: 0; }
-.tc-ay1-uzak-oran { display: flex; align-items: baseline; gap: var(--b-3); }
-.tc-ay1-uzak-3b { display: none; position: relative; overflow: hidden; inline-size: min(30vh, 100%); aspect-ratio: 1; border-radius: var(--yari-2); pointer-events: none; }
-.tc-ay1-uzak-sayi { color: var(--sig-yazi); font-size: min(28vw, 20vh); font-weight: 800; line-height: .9; font-variant-numeric: tabular-nums; }
-.tc-ay1-uzak-hedef { font-size: clamp(var(--yazi-xl), 4vw, var(--yazi-3xl)); font-weight: 600; color: var(--muted); }
-.tc-ay1-uzak-sayac > .tc-ay2-cubuk { block-size: var(--b-3); }
-.tc-ay1-uzak-ilerleme { display: flex; justify-content: space-between; gap: var(--b-3); font-size: clamp(var(--yazi-m), 1.4vw, var(--yazi-l)); font-weight: 700; color: var(--muted); }
-
-/* Görev şeridi ve alt kutular */
-.tc-ay1-uzak-gorev {
-  display: flex; align-items: center; gap: var(--b-3); padding: var(--b-3) var(--b-4); border: var(--cizgi) solid var(--sig); border-radius: var(--yari-3);
-  background: color-mix(in srgb, var(--sig) 12%, var(--panel-solid)); font-size: var(--yazi-xl); font-weight: 700;
+.tc-ay1-uzak-hedef { color: var(--muted); font-size: var(--yazi-xl); font-weight: 700; }
+.tc-ay1-uzak-hedef b { color: var(--ink); }
+.tc-ay1-uzak-orta { display: grid; place-items: center; min-block-size: 0; }
+/* Sayı kabın boyuna ve enine göre büyür; enine pay karakter sayısına (data-hane, nokta dahil) bölünür. Dar kesim (genişlik ekseni
+   %75) rakamı uzaktan okunacak kadar uzun tutar. */
+.tc-ay1-uzak-sayi {
+  --hane: 5; color: var(--sig-yazi); font-size: min(80cqh, calc(94cqw / (var(--hane) * .46))); font-stretch: 75%; font-weight: 800; line-height: .82;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap;
 }
-.tc-ay1-uzak-alt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3); }
+.tc-ay1-uzak-sayi[data-hane="1"] { --hane: 1; }
+.tc-ay1-uzak-sayi[data-hane="2"] { --hane: 2; }
+.tc-ay1-uzak-sayi[data-hane="3"] { --hane: 3; }
+.tc-ay1-uzak-sayi[data-hane="4"] { --hane: 4; }
+.tc-ay1-uzak-sayi[data-hane="6"] { --hane: 6; }
+.tc-ay1-uzak-sayi[data-hane="7"] { --hane: 7; }
+.tc-ay1-uzak-sayi[data-hane="8"] { --hane: 8; }
+.tc-ay1-uzak-sayi[data-hane="9"] { --hane: 9; }
+.tc-ay1-uzak-ilerleme { display: grid; gap: var(--b-2); }
+.tc-ay1-uzak-ilerleme > .tc-ay2-cubuk { block-size: var(--b-3); }
+.tc-ay1-uzak-ilerleme-yazi { display: flex; justify-content: space-between; gap: var(--b-3); font-size: var(--yazi-l); font-weight: 700; color: var(--muted); }
+.tc-ay1-uzak-ilerleme-yazi b { color: var(--ink); }
+
+/* Alt sıra: görev şeridi satırın yarısı, hurda ve sıradaki kontrol kalan yarıyı paylaşır (961 a). */
+.tc-ay1-uzak-alt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-ay1-uzak-gorev {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: var(--b-3); min-width: 0; padding: var(--b-2) var(--b-4); border: var(--cizgi) solid var(--sig); border-radius: var(--yari-3);
+  background: color-mix(in srgb, var(--sig) 12%, var(--panel-solid)); font-size: var(--yazi-l); font-weight: 700;
+}
+.tc-ay1-uzak-gorev > .tc-simge { inline-size: var(--yazi-baslik); block-size: var(--yazi-baslik); color: var(--sig-yazi); }
+.tc-ay1-uzak-gorev > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-uzak-alt > .tc-ay1-uzak-kart { display: flex; align-items: center; gap: var(--b-3); padding: var(--b-2) var(--b-3); }
 .tc-ay1-uzak-alt > .tc-ay1-uzak-kart > span:last-child { display: grid; min-width: 0; }
-.tc-ay1-uzak-alt .tc-ay1-uzak-simge { background: color-mix(in srgb, var(--sig) 14%, var(--panel-solid)); color: var(--sig-yazi); }
-.tc-ay1-uzak-alt b { font-size: clamp(var(--yazi-l), 3vw, var(--yazi-3xl)); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tc-ay1-uzak-alt b { font-size: var(--yazi-xl); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tc-ay1-uzak-alt [data-durum="durdu"] b { color: var(--sig-yazi); }
-.tc-ay1-uzak > .tc-ay1-soluk { display: flex; align-items: center; justify-content: center; gap: var(--b-2); font-size: var(--yazi-s); }
-/* Dar ekranda alan simgeleri küçük: bütün ekran kaydırmadan sığar. */
-.tc-ay1-uzak-alan .tc-ay1-uzak-simge { inline-size: var(--dokunma-yogun); block-size: var(--dokunma-yogun); }
-
-@container uzak (min-width: 768px) {
-  .tc-ay1-uzak { gap: var(--b-4); padding: var(--b-4) var(--b-5); }
-  .tc-ay1-uzak-ust { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-  .tc-ay1-uzak-durum { grid-column: 1; justify-self: start; }
-  .tc-ay1-uzak-durum > .tc-simge { margin-inline-start: var(--b-3); }
-  .tc-ay1-uzak-saat { grid-row: 1; grid-column: 2; }
-  .tc-ay1-uzak-istasyon { grid-row: 1; grid-column: 3; justify-self: end; max-inline-size: 100%; }
-  .tc-ay1-uzak-istasyon small { display: block; }
-  .tc-ay1-uzak-sayac { order: 0; }
-  .tc-ay1-uzak-alan .tc-ay1-uzak-simge { inline-size: var(--dokunma); block-size: var(--dokunma); }
-  .tc-ay1-uzak-alanlar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .tc-ay1-uzak-alan[data-alan="Parça adı"] { grid-column: span 2; }
-  .tc-ay1-uzak-orta { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
-  .tc-ay1-uzak-orta > .tc-ay1-uzak-3b { display: block; grid-column: 1; justify-self: end; }
-  .tc-ay1-uzak-oran { grid-column: 2; }
+.tc-ay1-uzak > .tc-ay1-soluk {
+  display: flex; align-items: center; justify-content: center; gap: var(--b-2);
+  color: var(--faint); font-size: var(--yazi-xs); pointer-events: none;
 }
-@container uzak (min-width: 1280px) {
-  .tc-ay1-uzak-govde { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
-  .tc-ay1-uzak-bilgi { gap: var(--b-4); padding: var(--b-4) var(--b-5); }
-  .tc-ay1-uzak-alanlar { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--b-5); }
-  .tc-ay1-uzak-alan[data-alan="Proje"] { grid-column: 1 / -1; }
-  .tc-ay1-uzak-alan[data-alan="Parça adı"] { grid-column: auto; }
-  .tc-ay1-uzak-simge, .tc-ay1-uzak-alan .tc-ay1-uzak-simge { inline-size: var(--dokunma-ana); block-size: var(--dokunma-ana); }
+
+/* Kabın kendisi kendi sorgusuna bakamaz; kap tam ekran olduğu için kabın ölçüsü ekran sorgusuyla alınır. Kap sorgusu iç
+   genişliğe (dolgusuz) bakar: 768 genişlikte iç genişlik 720'nin üstündedir. */
+@media (min-width: 768px) {
+  .tc-ay1-uzak { grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--b-3); padding: var(--b-4) var(--b-5) var(--b-5); overflow: hidden; }
+  .tc-ay1-uzak > .tc-ay1-soluk { position: absolute; inset-block-end: var(--b-1); inset-inline: 0; }
+}
+@container uzak (min-width: 720px) {
+  .tc-ay1-uzak-ust { grid-template-columns: auto minmax(0, 1.6fr) auto minmax(0, 1fr); grid-template-areas: "durum proje saat istasyon" "is is is is"; }
+  .tc-ay1-uzak-durum, .tc-ay1-uzak-cip { min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-4); }
+  .tc-ay1-uzak-durum > .tc-simge { margin-inline-start: var(--b-3); }
+  .tc-ay1-uzak-saat { font-size: var(--yazi-xl); }
+  .tc-ay1-uzak-3b { display: block; }
   .tc-ay1-uzak-sayac { padding: var(--b-4) var(--b-5); }
-  .tc-ay1-uzak-sayi { font-size: min(18vw, 32vh); }
+  .tc-ay1-uzak-ilerleme > .tc-ay2-cubuk { block-size: var(--b-4); }
+  .tc-ay1-uzak-alt[data-gorev="var"] { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .tc-ay1-uzak-gorev { grid-column: auto; }
+}
+/* İş satırı 1280 ve üstünde tek satır; tablette iki satıra kırılır (uzun emir numarası sığmaz). */
+@container uzak (min-width: 1200px) {
+  .tc-ay1-uzak-is > dl { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+  .tc-ay1-uzak-alan { flex: none; }
+  .tc-ay1-uzak-alan[data-alan="Parça adı"] { flex: 0 1 auto; overflow: hidden; }
+  .tc-ay1-uzak-alan > dd { overflow-wrap: normal; }
+  .tc-ay1-uzak-alan[data-alan="Parça adı"] > dd { overflow: hidden; text-overflow: ellipsis; }
+}
+@container uzak (min-width: 1400px) {
+  .tc-ay1-uzak-durum, .tc-ay1-uzak-proje, .tc-ay1-uzak-istasyon, .tc-ay1-uzak-is { font-size: var(--yazi-xl); }
+  .tc-ay1-uzak-saat { font-size: var(--yazi-2xl); }
+  .tc-ay1-uzak-alan + .tc-ay1-uzak-alan::before { margin-inline: var(--b-4); }
+  .tc-ay1-uzak-3b { max-inline-size: 40cqw; }
+  .tc-ay1-uzak-hedef, .tc-ay1-uzak-alt b { font-size: var(--yazi-2xl); }
+  .tc-ay1-uzak-gorev, .tc-ay1-uzak-ilerleme-yazi { font-size: var(--yazi-xl); }
 }
