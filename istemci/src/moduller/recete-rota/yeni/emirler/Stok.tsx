@@ -40,8 +40,8 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
   const suzulen = satirlar.filter((s) => (!k || `${s.malzeme.code} ${s.malzeme.name}`.toLocaleLowerCase('tr-TR').includes(k)) && (!minimumAlti || s.minimumAlti));
 
   const sutunlar: Sutun<StokSatiri>[] = [
-    { anahtar: 'kalem', baslik: 'Kalem', hucre: (s) => <><b className="mono">{s.malzeme.code}</b> <small>{s.malzeme.name}</small></> },
-    { anahtar: 'tur', baslik: 'Tür', hucre: (s) => TUR_ADI[s.malzeme.type] },
+    { anahtar: 'kalem', baslik: 'Kalem', hucre: (s) => <><b>{s.malzeme.code}</b> <small>{s.malzeme.name}</small></> },
+    { anahtar: 'tur', baslik: 'Tür', hucre: (s) => <span className="tc-rr3-etiket" data-tur={s.malzeme.type}>{TUR_ADI[s.malzeme.type]}</span> },
     { anahtar: 'eldeki', baslik: 'Eldeki', hizala: 'sag', hucre: (s) => sayi(s.serbest) },
     { anahtar: 'minimum', baslik: 'Minimum', hizala: 'sag', hucre: (s) => sayi(s.malzeme.min) },
     { anahtar: 'birim', baslik: 'Birim', hucre: (s) => s.malzeme.unit },
@@ -55,7 +55,6 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
 
   return (
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
-      <p className="tc-rr3-ipucu">Eldeki serbest stoktur; statülü miktar üretimdeki yarı parçadır ve aşağıda ayrıca görünür. Stok hareketleri Stok sayfasıyla ortaktır.</p>
       <div className="tc-rr3-kpi">
         {yetki.maliyetOku && <SayiKarti baslik="Stok değeri" simge="lira" metin={toplamDeger === null ? 'Veri yok' : para(toplamDeger)} altMetin={`${String(kalemler.length)} kalem`} />}
         <SayiKarti
@@ -65,13 +64,14 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
         <SayiKarti baslik="Hareket" simge="list" sayi={d.moves === null ? null : d.moves.length} altMetin="son stok hareketi" />
       </div>
       {d.malzemeKesildi && <p className="tc-rr3-ipucu" role="status">Malzeme listesi üst sınırda kesildi; kalan kartlar okunmadı.</p>}
-      <Tablo
-        etiket="Stok" sutunlar={sutunlar} satirlar={suzulen} satirAnahtari={(s) => s.malzeme.id} bosMesaj={kalemler.length ? 'Bu aramada kalem yok.' : 'Malzeme yok.'}
-        arac={{
-          arama: { deger: arama, degistir: setArama, etiket: 'Stokta ara', yerTutucu: 'Kod ya da ad ara…' },
-          sag: <IsaretKutusu etiket="Yalnız minimumun altındakiler" checked={minimumAlti} onChange={(o) => { setMinimumAlti(o.target.checked); }} />,
-        }}
-      />
+      {/* Eski ekranın düzeni: arama kutusu dar, yanında süzgeç; tablo çerçeveli kartta (805 R4). */}
+      <div className="tc-rr3-stok-arac">
+        <Girdi etiket="Stokta ara" type="search" placeholder="Kod ya da ad ara…" value={arama} onChange={(o) => { setArama(o.target.value); }} />
+        <IsaretKutusu etiket="Yalnız minimumun altındakiler" checked={minimumAlti} onChange={(o) => { setMinimumAlti(o.target.checked); }} />
+      </div>
+      <div className="tc-rr3-cerceve">
+        <Tablo etiket="Stok" sutunlar={sutunlar} satirlar={suzulen} satirAnahtari={(s) => s.malzeme.id} bosMesaj={kalemler.length ? 'Bu aramada kalem yok.' : 'Malzeme yok.'} />
+      </div>
       <StatuluStok durum={d} yetki={yetki} idler={idler} okuma={okuma} />
       <SurectekiMalzeme durum={d} />
       <Hareketler durum={d} />
