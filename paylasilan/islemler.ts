@@ -18,6 +18,7 @@ import { KALITE_MERKEZI_ISLEMLERI } from './islemler/kalite-merkezi.ts';
 import { KISILER_ISLEMLERI } from './islemler/kisiler.ts';
 import { LOGO_ISLEMLERI } from './islemler/logo.ts';
 import { MALZEMELER_ISLEMLERI } from './islemler/malzemeler.ts';
+import { MARKALAMA_ISLEMLERI } from './islemler/markalama.ts';
 import { MESAJ_ISLEMLERI } from './islemler/mesaj.ts';
 import { MUSTERI_TEDARIKCI_ISLEMLERI } from './islemler/musteri-tedarikci.ts';
 import { NIZAMIYE_ISLEMLERI } from './islemler/nizamiye.ts';
@@ -65,6 +66,7 @@ export const VERI_ISLEMLERI = [
   ...KISILER_ISLEMLERI,
   ...LOGO_ISLEMLERI,
   ...MALZEMELER_ISLEMLERI,
+  ...MARKALAMA_ISLEMLERI,
   ...MESAJ_ISLEMLERI,
   ...MUSTERI_TEDARIKCI_ISLEMLERI,
   ...NIZAMIYE_ISLEMLERI,
