@@ -686,19 +686,25 @@ async function saglamYaz(
   });
 }
 
+export type IlkParcaGereksinimi = 'gerekli' | 'gerekmez';
+
 // kararBekliyor: ilk parça kararı beklenirken sağlam sayım karar bekleyen sayılır (131 b); türü çağıran modül seçer, terminal
 // gövdesi seçemez. Eksi düzeltme karar bekleyen toplamı sıfırın altına indiremez.
 // duzeltebilir verilirse (dışarıdan gelen komut) eksi sayım başkasının sayımını düşürebileceği için kişinin çalışan adıma başlamış
 // ya da katılmış olmasını, değilse düzeltme işlemini ister (185 a). Artı sayım Arkon'un kendi cihaz ve ekibinden gelir.
+// ilkParca (744 a): adımın ilk parça isteyip istemediğini çağıran bilir (rota seçimi, iş türü). "gerekli" adımın ilk parçası o
+// adımın sağlamıyla, "gerekmez" adım kilitsiz sayılır; verilmezse eski davranış: emrin ilk sağlamı.
 export async function emirSayim(
-  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean; isEmriId?: number } = {},
+  db: Db, kisiId: number, id: number, govde: SayimKaydi,
+  secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean; isEmriId?: number; ilkParca?: IlkParcaGereksinimi } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId);
   const adimId = adim?.id ?? null;
-  // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
-  // Onaysız emirde sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
+  // 327 a: ilk parçası onaylanmamış emirde (744 a: adımda) sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
+  // Onaysız adımda sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
   const kararBekliyor = govde.tur === 'saglam'
-    && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
+    && (secenek.kararBekliyor === true
+      || (secenek.ilkParca !== 'gerekmez' && (await sorgular.ilkParcaOnaysiz(db, id, secenek.ilkParca === 'gerekli' ? adimId : null))));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir, adimId);
@@ -740,13 +746,14 @@ export async function emirSayim(
 // Emrin karar bekleyen sayımı kalite kararıyla kapanır: onayda sağlama, retde redde geçer; her iş emrinde iki düzeltme satırı yazılır
 // (-n karar bekliyor, +n sağlam ya da red), parçanın üretildiği her an için ayrı (645 a). Ret sonrası sayılan yeniden karar bekler ve bir sonraki kararla kapanır (136 a).
 // Emir bitmiş ya da durmuş olabilir; kapsam ve kalite yetkisini çağıran denetler (Arkon numune kararı).
+// isEmriId verilirse yalnız o adımın bekleyeni kapanır (744 a: ilk parça kararı adım başınadır).
 export async function kararliSayimiSonuclandir(
-  db: Db, kisiId: number, id: number, karar: KaliteKarari,
+  db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId: number | null = null,
 ): Promise<{ emir: Emir; adet: number }> {
   await kilitliEmir(db, id);
   const an = await sorgular.anAl(db);
   const gruplar = new Map<string, { grup: KararGrubu; satirlar: { zaman: string; adet: number }[] }>();
-  for (const { zaman, adet, ...grup } of await sorgular.kararBekleyenSatirlari(db, id)) {
+  for (const { zaman, adet, ...grup } of await sorgular.kararBekleyenSatirlari(db, id, isEmriId)) {
     const anahtar = `${String(grup.isEmriId)}/${grup.istasyonId}/${grup.kisiId}/${String(grup.refakatPartisiId)}`;
     const g = gruplar.get(anahtar) ?? { grup, satirlar: [] };
     g.satirlar.push({ zaman, adet });
@@ -778,6 +785,14 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
   const sonuc = new Map(idler.map((id) => [id, { kararBekliyor: 0, red: 0 }]));
   if (idler.length === 0) return sonuc;
   for (const { emirId, ...s } of await sorgular.kararSayaclariGetir(db, idler)) sonuc.set(emirId, s);
+  return sonuc;
+}
+
+export interface AdimKararSayaci { isEmriId: number | null; opNo: number | null; kararBekliyor: number; red: number }
+export async function adimKararSayaclari(db: Db, idler: readonly number[]): Promise<Map<number, AdimKararSayaci[]>> {
+  const sonuc = new Map<number, AdimKararSayaci[]>(idler.map((id) => [id, []]));
+  if (idler.length === 0) return sonuc;
+  for (const { emirId, ...s } of await sorgular.adimKararSayaclariGetir(db, idler)) sonuc.get(emirId)?.push(s);
   return sonuc;
 }
 

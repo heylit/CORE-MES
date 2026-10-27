@@ -71,15 +71,22 @@ export const emirBitir = (
   servis.kayitAniyla(db, an, () => servis.emirBitir(db, uretenKisi(kullanici), id, saglamAdet, null, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI), isEmriId));
 // kararBekliyor: ilk parça kararı beklenirken sayılan parça sağlama katılmaz (131 b); türü çağıran seçer.
 // Eksi sayım (düzeltme) işe katılmamış kişide düzeltme işlemi ister (185 a). Adıma girenden fazla sayım reddedilmez, uyarı döner (647 a).
+// ilkParca (744 a): adımın ilk parça isteyip istemediği; çağıran rota seçiminden ve iş türünden bilir (verilmezse emir başına, 327 a).
+export type { IlkParcaGereksinimi } from './servis.ts';
 export const emirSayim = (
-  db: Db, kullanici: Kullanici, id: number, govde: SayimKaydi, secenek?: { kararBekliyor?: boolean; an?: string; isEmriId?: number },
+  db: Db, kullanici: Kullanici, id: number, govde: SayimKaydi,
+  secenek?: { kararBekliyor?: boolean; an?: string; isEmriId?: number; ilkParca?: servis.IlkParcaGereksinimi },
 ): Promise<{ emir: Emir; uyari: string | null }> => servis.kayitAniyla(db, secenek?.an, () => servis.emirSayim(
   db, uretenKisi(kullanici), id, govde,
-  { kararBekliyor: secenek?.kararBekliyor, duzeltebilir: islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI), isEmriId: secenek?.isEmriId },
+  { kararBekliyor: secenek?.kararBekliyor, duzeltebilir: islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI), isEmriId: secenek?.isEmriId, ilkParca: secenek?.ilkParca },
 ));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
-export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari): Promise<{ emir: Emir; adet: number }> =>
-  servis.kararliSayimiSonuclandir(db, kisiId, id, karar);
+// isEmriId verilirse yalnız o adımın bekleyeni kapanır (744 a).
+export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId?: number | null): Promise<{ emir: Emir; adet: number }> =>
+  servis.kararliSayimiSonuclandir(db, kisiId, id, karar, isEmriId ?? null);
+// Adım (iş emri) başına karar bekleyen ve redde kalan adet (744 a); karar satırı olmayan adım gelmez.
+export type { AdimKararSayaci } from './servis.ts';
+export const adimKararSayaclari = (db: Db, idler: readonly number[]): Promise<Map<number, servis.AdimKararSayaci[]>> => servis.adimKararSayaclari(db, idler);
 // Emir düzeyinde karar bekleyen ve redde kalan adet; sayımı olmayan emir sıfırla gelir.
 export const kararSayaclari = (db: Db, idler: readonly number[]): Promise<Map<number, { kararBekliyor: number; red: number }>> =>
   servis.kararSayaclari(db, idler);
