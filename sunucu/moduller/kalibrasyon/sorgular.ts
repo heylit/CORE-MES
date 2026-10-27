@@ -20,6 +20,7 @@ export interface AletSatiri {
 export interface AletSuzgeci {
   id?: number;
   turId?: number;
+  no?: string;
 }
 
 export function aletleriGetir(db: Db, suzgec: AletSuzgeci = {}): Promise<AletSatiri[]> {
@@ -29,8 +30,9 @@ export function aletleriGetir(db: Db, suzgec: AletSuzgeci = {}): Promise<AletSat
             (SELECT max(k.tarih) FROM kalibrasyon_kaydi k WHERE k.alet_id = a.id AND k.sonuc = 'uygun')::text AS son_uygun,
             current_date::text AS bugun
        FROM olcu_aleti a JOIN olcu_aleti_turu t ON t.id = a.tur_id
-      WHERE ($1::int IS NULL OR a.id = $1) AND ($2::int IS NULL OR a.tur_id = $2)`,
-    [suzgec.id ?? null, suzgec.turId ?? null],
+      WHERE ($1::int IS NULL OR a.id = $1) AND ($2::int IS NULL OR a.tur_id = $2)
+        AND ($3::text IS NULL OR a.no = $3)`,
+    [suzgec.id ?? null, suzgec.turId ?? null, suzgec.no ?? null],
   );
 }
 
