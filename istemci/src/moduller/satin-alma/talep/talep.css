@@ -33,3 +33,53 @@
   .sa-talep-miktar { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
   .sa-talep-alt { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 }
+
+/* 898 a: Taleplerim sayfası, ön talepler, ilerleme */
+.sa-talep-ozet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
+.sa-talep-ozet-kutu {
+  display: grid; gap: var(--b-1); text-align: left; min-height: var(--dokunma); padding: var(--b-2) var(--b-3); cursor: pointer;
+  color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: var(--yari-2); font: inherit;
+}
+.sa-talep-ozet-kutu b { font-family: var(--font-mono); font-size: var(--yazi-l); }
+.sa-talep-ozet-kutu span { color: var(--muted); font-size: var(--yazi-s); }
+.sa-talep-ozet-kutu:first-child { border-color: var(--hazard); }
+.sa-ot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-2) var(--b-3); align-items: start; padding: var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; overflow-wrap: anywhere; }
+.sa-ot-secili { border-color: var(--hazard); }
+.sa-ot-govde { display: grid; gap: var(--b-1); min-width: 0; }
+.sa-ot-bilgi { display: flex; flex-wrap: wrap; gap: var(--pay-ince) var(--b-3); color: var(--muted); font-size: var(--yazi-s); }
+.sa-ot-bilgi > span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.sa-ot-eylem { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; }
+.sa-ot-grup { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: var(--b-3) 0 var(--b-2); font-size: var(--yazi-m); }
+.sa-ot-serit {
+  position: sticky; bottom: var(--b-3); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2);
+  margin-top: var(--b-3); padding: var(--b-2) var(--b-3); background: var(--panel-solid); border: 1px solid var(--hazard); border-radius: var(--yari-2); box-shadow: var(--shadow);
+}
+.sa-ot-yoksay { margin-top: var(--b-4); }
+.sa-ot-yoksay > summary { cursor: pointer; color: var(--muted); font-size: var(--yazi-s); min-height: var(--dokunma); display: flex; align-items: center; }
+.sa-ot-yoksay .sa-ot { grid-template-columns: minmax(0, 1fr); }
+.sa-talep-kaynak { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3);
+  background: var(--panel2); border-left: 3px solid var(--hazard); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.sa-talep-uygulanan { display: grid; gap: var(--b-2); min-width: 0; }
+.sa-talep-gonder { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.sa-talep-suzgec { display: grid; gap: var(--b-3); margin-bottom: var(--b-3); }
+.sa-talep-ac { all: unset; box-sizing: border-box; display: grid; gap: var(--b-1); width: 100%; cursor: pointer; min-width: 0; }
+.sa-talep-ac:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; border-radius: var(--yari-1); }
+.sa-talep-ok { margin-left: auto; color: var(--muted); display: inline-flex; }
+.sa-talep-adimlar { list-style: none; margin: var(--b-1) 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-1); }
+.sa-talep-adimlar > li { display: grid; gap: var(--b-1); color: var(--faint); font-size: var(--yazi-s); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-talep-adimlar > li::before { content: ''; display: block; height: 4px; border-radius: 2px; background: var(--edge2); }
+.sa-talep-adimlar > li[data-durum="bitti"] { color: var(--muted); }
+.sa-talep-adimlar > li[data-durum="bitti"]::before { background: var(--run); }
+.sa-talep-adimlar > li[data-durum="simdi"] { color: var(--ink); font-weight: 600; }
+.sa-talep-adimlar > li[data-durum="simdi"]::before { background: var(--hazard); }
+.sa-talep-kalemler { list-style: none; margin: var(--b-2) 0 0; padding: 0; display: grid; gap: var(--b-2); }
+.sa-talep-kalemler > li { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+@media (min-width: 600px) {
+  .sa-talep-ozet { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 900px) {
+  .sa-ot { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+  .sa-ot-eylem { grid-column: auto; flex-wrap: nowrap; }
+  .sa-ot-yoksay .sa-ot { grid-template-columns: minmax(0, 1fr) auto; }
+}

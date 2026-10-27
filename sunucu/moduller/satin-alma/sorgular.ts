@@ -920,3 +920,52 @@ export async function gerekenTarihleriYaz(db: Db, ihtiyaclar: readonly { malzeme
      ON CONFLICT (malzeme_no) DO UPDATE SET gereken_tarih = EXCLUDED.gereken_tarih WHERE t.gereken_tarih IS DISTINCT FROM EXCLUDED.gereken_tarih`,
     [nolar, ihtiyaclar.map((i) => i.gerekenTarih)]);
 }
+
+// 898 a: fason ön talep. Bağlı iş emri: siparişi verilmiş ya da iptal olmayan bir talebin kaleminde olan.
+export async function fasonBagliIsEmirleri(db: Db, isEmriIdleri: readonly number[]): Promise<Set<number>> {
+  if (isEmriIdleri.length === 0) return new Set();
+  const satirlar = await db.sorgu<{ id: number }>(
+    `SELECT k.is_emri_id AS id FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id
+      WHERE k.is_emri_id = ANY($1::int[]) AND t.durum <> 'iptal'
+     UNION SELECT s.is_emri_id FROM satin_alma_siparis_satiri s WHERE s.is_emri_id = ANY($1::int[])`,
+    [isEmriIdleri],
+  );
+  return new Set(satirlar.map((r) => r.id));
+}
+// Aynı fason adımı iki talep aynı anda bağlamasın: bağ denetimi ile yazma arası iş emri başına sıralanır.
+export async function fasonBagKilidi(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
+  for (const id of [...new Set(isEmriIdleri)].sort((a, b) => a - b)) await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('satin-alma-fason-bag'), $1)", [id]);
+}
+export interface OnTalepYoksaySatiri { id: number; isEmriId: number; neden: string; kisiId: number; zaman: string }
+export function fasonYoksaylari(db: Db): Promise<OnTalepYoksaySatiri[]> {
+  return db.sorgu<OnTalepYoksaySatiri>(
+    `SELECT id, is_emri_id AS "isEmriId", neden, kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+       FROM satin_alma_on_talep_yoksay WHERE kaynak = 'fason' ORDER BY zaman DESC, id DESC`,
+  );
+}
+// Aynı iş emri ikinci kez yoksayılırsa ilk karar kalır.
+export async function fasonYoksayEkle(db: Db, g: { isEmriId: number; neden: string; kisiId: number }): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_on_talep_yoksay (kaynak, is_emri_id, neden, kisi_id) VALUES ('fason', $1, $2, $3) ON CONFLICT (is_emri_id) DO NOTHING`,
+    [g.isEmriId, g.neden, g.kisiId],
+  );
+}
+export async function onTalepYoksaySil(db: Db, id: number): Promise<boolean> {
+  return (await db.tek('DELETE FROM satin_alma_on_talep_yoksay WHERE id = $1 RETURNING id', [id])) !== null;
+}
+export interface KalemBagSatiri { kalemId: string; uygulananMalzemeNo: number | null; isEmriId: number | null }
+export async function kalemBaglariYaz(db: Db, talepId: string, baglar: readonly KalemBagSatiri[]): Promise<void> {
+  if (baglar.length === 0) return;
+  await db.sorgu(
+    `UPDATE satin_alma_talep_kalemi k SET uygulanan_malzeme_no = b.uygulanan, is_emri_id = b.is_emri
+       FROM unnest($2::uuid[], $3::int[], $4::int[]) AS b(id, uygulanan, is_emri) WHERE k.talep_id = $1 AND k.id = b.id`,
+    [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId)],
+  );
+}
+export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
+  return db.sorgu(
+    `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId"
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL)`,
+    [talepIdleri],
+  );
+}

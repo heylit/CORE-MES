@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcYazimi, MalzemeSecenekleriCevabi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcYazimi, MalzemeSecenekleriCevabi, OnTalep, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
@@ -11,9 +11,21 @@ import './talep.css';
 type KartSecenegi = MalzemeSecenekleriCevabi['malzemeler'][number];
 
 // Kalem ya kartlıdır (malzeme kartından seçilir) ya da adıyla yazılır ve "kart bekler"; kart bağlanmadan sipariş verilmez.
-interface KalemTaslagi { anahtar: string; kart: KartSecenegi | null; serbest: boolean; ad: string; birim: string; miktar: string; aciklama: string }
+// 898 a: hizmet kalemi uygulanacak parçayı taşır; ön talepten gelen kalem fason iş emrini ve kaynağının adını taşır.
+interface Uygulanan { no: number; kod: string; ad: string }
+interface KalemTaslagi {
+  anahtar: string; kart: KartSecenegi | null; serbest: boolean; ad: string; birim: string; miktar: string; aciklama: string;
+  uygulanan: Uygulanan | null; isEmriId: number | null; kaynak: string | null;
+}
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet' };
-const bosKalem = (): KalemTaslagi => ({ anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '' });
+const bosKalem = (): KalemTaslagi => ({
+  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null,
+});
+// Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi.
+const ontalepKalemi = (o: OnTalep): KalemTaslagi => ({
+  ...bosKalem(), serbest: true, ad: o.adim ?? `Op ${o.opNo}`, birim: o.birim, miktar: String(o.miktar), uygulanan: o.parca, isEmriId: o.isEmriId,
+  kaynak: `${o.emirNo} · Op ${o.opNo}`,
+});
 
 // Denetim #37: miktar ortak ayrıştırıcıdan okunur ("12.5" = "12,5", virgül varsa nokta binliktir). Virgülsüz "1.250" belirsizdir,
 // okunamayan miktar gibi gönderilmez (Y2: noktayı binlik sayıp silmek "12.5"i 125 yapıyordu).
@@ -23,7 +35,9 @@ const miktarOku = (m: string): string | null => {
 };
 
 // #1192: açılır, aranabilir liste. Odaklanınca türün ilk kartları açılır; yazdıkça kod, ad ya da kart no'suyla daralır.
-function KartArama({ tur, sec, serbesteGec }: { tur: TalepTuru; sec: (k: KartSecenegi) => void; serbesteGec: () => void }) {
+function KartArama({ tur, sec, serbesteGec, etiket, ipucu }: {
+  tur: TalepTuru; sec: (k: KartSecenegi) => void; serbesteGec?: () => void; etiket?: string; ipucu?: string;
+}) {
   const [metin, metinYaz] = useState('');
   const [ara, araYaz] = useState('');
   const [acik, acikYaz] = useState(false);
@@ -54,7 +68,7 @@ function KartArama({ tur, sec, serbesteGec }: { tur: TalepTuru; sec: (k: KartSec
       sec(kartlar[sira]);
     }
   };
-  const ad = TUR_ADI[tur];
+  const ad = etiket ?? TUR_ADI[tur];
   return (
     <div className="sa-talep-ara" ref={kap} onBlur={(o) => { if (!kap.current?.contains(o.relatedTarget as Node | null)) kapat(); }}>
       <div className="sa-talep-acilir">
@@ -77,10 +91,12 @@ function KartArama({ tur, sec, serbesteGec }: { tur: TalepTuru; sec: (k: KartSec
                 )))}
         </div>
       </div>
-      <p className="sa-talep-not">
-        Listede yok mu? <button type="button" className="sa-talep-bag" onClick={serbesteGec}>Adıyla yazın</button>; talep ilerler, kalem kart bekler.
-        Yeni kart <a href={KART_SAYFASI.yol} target="_blank" rel="noopener">{KART_SAYFASI.baslik}</a> sayfasında istenir; yeni sekmede açılır, bu form açık kalır.
-      </p>
+      {serbesteGec ? (
+        <p className="sa-talep-not">
+          Listede yok mu? <button type="button" className="sa-talep-bag" onClick={serbesteGec}>Adıyla yazın</button>; talep ilerler, kalem kart bekler.
+          Yeni kart <a href={KART_SAYFASI.yol} target="_blank" rel="noopener">{KART_SAYFASI.baslik}</a> sayfasında istenir; yeni sekmede açılır, bu form açık kalır.
+        </p>
+      ) : ipucu && <p className="sa-talep-not">{ipucu}</p>}
     </div>
   );
 }
@@ -89,6 +105,12 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
   return (
     <fieldset className="sa-talep-kalem">
       <legend className="sa-talep-gizli">Kalem</legend>
+      {k.kaynak && (
+        <p className="sa-talep-kaynak">
+          <Rozet ton="uyari" gorunum="cizgi">Fason adım</Rozet> Ön talepten: <span className="sa-talep-no">{k.kaynak}</span>
+          <span className="sa-talep-not">Bağ talebe taşınır; talep açılınca ön talep listeden düşer.</span>
+        </p>
+      )}
       {k.kart !== null ? (
         <div className="sa-talep-secili">
           <span><b>{k.kart.ad}</b> <span className="sa-talep-not">{k.kart.kod}</span></span>
@@ -103,6 +125,19 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
       ) : (
         <KartArama tur={tur} sec={(kart) => degistir({ kart })} serbesteGec={() => degistir({ serbest: true })} />
       )}
+      {tur === 'hizmet' && (
+        <div className="sa-talep-uygulanan">
+          {k.uygulanan !== null ? (
+            <div className="sa-talep-secili">
+              <span><span className="sa-talep-not">Uygulanacak malzeme / parça</span><br /><b>{k.uygulanan.ad}</b> <span className="sa-talep-not">{k.uygulanan.kod}</span></span>
+              <Dugme simge="edit" onClick={() => degistir({ uygulanan: null })}>Değiştir</Dugme>
+            </div>
+          ) : (
+            <KartArama tur="malzeme" etiket="Uygulanacak malzeme / parça" sec={(x) => degistir({ uygulanan: { no: x.no, kod: x.kod, ad: x.ad } })}
+              ipucu="İsteğe bağlı. Hizmet hangi parça ya da malzeme üzerinde yapılacak; satın alma teklif isterken bu bilgiyle gider." />
+          )}
+        </div>
+      )}
       <div className="sa-talep-miktar">
         <Girdi etiket={`Miktar${k.kart?.birim ? ` (${k.kart.birim})` : ''}`} inputMode="decimal" placeholder="Ondalık için virgül: 2,5" value={k.miktar} onChange={(e) => degistir({ miktar: e.target.value })} required />
         <Girdi etiket="Açıklama" value={k.aciklama} onChange={(e) => degistir({ aciklama: e.target.value })} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" />
@@ -113,7 +148,7 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
 }
 
 // Ana sayfadan satın alma talebi (kart #375): talep oturumdaki kişi adına açılır; fiyat, teklif ve tedarikçi burada yoktur.
-export function TalepAc() {
+export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTalep[] | null; taslakBitti?: (gonderildi: boolean) => void } = {}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [tur, turYaz] = useState<TalepTuru>('malzeme');
@@ -125,6 +160,17 @@ export function TalepAc() {
   // Komutun kimliği başarıya ya da formun değişmesine kadar korunur: ağ kopup elle yeniden gönderilen talep ikinci kez açılmaz (KD-010).
   const [kimlik, kimlikYaz] = useState(yeniIstekKimligi);
   useEffect(() => { kimlikYaz(yeniIstekKimligi()); }, [tur, kalemler, tarih, aciklama, emirId]);
+  // Ön talepten gelince form dolar: hizmet, en erken gereken gün, emir tekse o emir.
+  useEffect(() => {
+    if (taslak === null || taslak.length === 0) return;
+    const emirler = [...new Set(taslak.map((o) => o.uretimEmriId))];
+    turYaz('hizmet');
+    kalemlerYaz(taslak.map(ontalepKalemi));
+    tarihYaz(taslak.flatMap((o) => (o.gerekenTarih === null ? [] : [o.gerekenTarih])).sort()[0] ?? '');
+    emirIdYaz(emirler.length === 1 ? String(emirler[0]) : '');
+    hataYaz(null);
+  }, [taslak]);
+  const bagli = kalemler.some((k) => k.isEmriId !== null);
   const emirler = useQuery({ queryKey: anahtarlar.acikEmirler, queryFn: () => cagri.get('/satin-alma-acik-emirler', SURE) });
   const gonder = useMutation({
     mutationFn: (govde: HizliAcYazimi) =>
@@ -134,6 +180,8 @@ export function TalepAc() {
       kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null);
       void istemci.invalidateQueries({ queryKey: anahtarlar.taleplerimHepsi });
       void istemci.invalidateQueries({ queryKey: anahtarlar.ozet });
+      void istemci.invalidateQueries({ queryKey: anahtarlar.onTalepler });
+      taslakBitti?.(true);
     },
     onError: (h) => hataYaz(h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Talep gönderilemedi; yeniden deneyin.'),
   });
@@ -152,6 +200,7 @@ export function TalepAc() {
       id: kimlik, tur, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(), uretimEmriId: emirId === '' ? null : Number(emirId),
       kalemler: kalemler.map((k) => ({
         malzemeNo: k.kart?.no ?? null, ad: k.kart ? '' : k.ad.trim(), birim: k.kart ? '' : k.birim.trim(), miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(),
+        uygulananMalzemeNo: tur === 'hizmet' ? (k.uygulanan?.no ?? null) : null, isEmriId: tur === 'hizmet' ? k.isEmriId : null,
       })),
     });
   };
@@ -162,7 +211,7 @@ export function TalepAc() {
         <p className="sa-talep-not">İhtiyacınızı yazın; satın alma teklif toplar ve size durumunu bildirir.</p>
         <div className="sa-talep-tur" role="group" aria-label="Talep türü">
           {(['malzeme', 'hizmet'] as const).map((t) => (
-            <Dugme key={t} simge={t === 'malzeme' ? 'box' : 'wrench'} tur={tur === t ? 'birincil' : 'ikincil'} aria-pressed={tur === t}
+            <Dugme key={t} simge={t === 'malzeme' ? 'box' : 'wrench'} tur={tur === t ? 'birincil' : 'ikincil'} aria-pressed={tur === t} disabled={bagli && t !== tur}
               onClick={() => { if (t !== tur) { turYaz(t); kalemlerYaz([bosKalem()]); } }}>{TUR_ADI[t]}</Dugme>
           ))}
         </div>
@@ -179,7 +228,12 @@ export function TalepAc() {
           secenekler={(emirler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.parcaNo} ${e.parcaAd}` }))}
           ipucu={emirler.isError ? 'Açık emirler okunamadı; emre bağlamadan gönderebilirsiniz.' : 'Malzeme bir emir için alınıyorsa seçin; yalnız planlı ve başlamış emirler listelenir.'} />
         {hata && <p className="sa-talep-hata" role="alert">{hata}</p>}
-        <div><Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending}>Talebi gönder</Dugme></div>
+        <div className="sa-talep-gonder">
+          {bagli && (
+            <Dugme onClick={() => { kalemlerYaz([bosKalem()]); tarihYaz(''); emirIdYaz(''); hataYaz(null); taslakBitti?.(false); }}>Vazgeç</Dugme>
+          )}
+          <Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending}>Talebi gönder</Dugme>
+        </div>
       </form>
     </Kart>
   );
