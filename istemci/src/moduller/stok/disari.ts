@@ -7,4 +7,4 @@ export function isMalzemesiniAc(odak: MalzemeTeslimOdagi): void {
   window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: odak }));
 }
 export { durumMetni, useIsMalzemeDurumu, type IsMalzemeDurumu } from './is-malzeme-durumu.ts';
-export { IstasyonSepetleri } from './IstasyonSepetleri.tsx';
+export { IstasyonSepetleri, useIstasyonSepetiSayilari } from './IstasyonSepetleri.tsx';

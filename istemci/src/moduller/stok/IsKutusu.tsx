@@ -7,14 +7,18 @@ import { anahtarlar } from './anahtarlar.ts';
 import { HAREKET_ETIKETI, bugunMetni, hareketIsareti, miktarMetni, paraMetni } from './gorunum.ts';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
-import { paneliAc } from './panel-olayi.ts';
+import { paneliAc, type PanelIstegi } from './panel-olayi.ts';
 
-interface Is { ton: 'bilgi' | 'uyari' | 'hata' | 'notr'; baslik: string; alt: string; yol: string; eylem: string }
+// panel: iş sayfada değil Malzeme · Teslim panelindedir; düğme paneli o bölümde açar.
+interface Is { ton: 'bilgi' | 'uyari' | 'hata' | 'notr'; baslik: string; alt: string; yol: string; eylem: string; panel?: PanelIstegi }
+// Tek sıralı liste (753 b): önce düzeltilecek (hata), sonra dikkat (uyarı), sonra sıradaki iş; aynı tondakiler eklendiği sırada kalır.
+const TON_SIRASI: Record<Is['ton'], number> = { hata: 0, uyari: 1, bilgi: 2, notr: 3 };
 
 // Önizlemedeki "Bekleyen işler": veri olan iş satır olur; sayım süresi tanımlı değilse uydurulmaz, söylenir (DEP-15).
 export function isler(k: IsKutusuCevabi, eslenmemis = 0): Is[] {
   const l: Is[] = [];
   if ((k.teslimBekleyenIstek ?? 0) > 0) l.push({ ton: 'bilgi', baslik: `${k.teslimBekleyenIstek} malzeme isteği teslim bekliyor`, alt: 'İstenen malzeme hazırlanıp teslim edilmeli.', yol: '/stok/hazirlik', eylem: 'İstekler' });
+  if ((k.depoyaGelenTeslim ?? 0) > 0) l.push({ ton: 'bilgi', baslik: `${k.depoyaGelenTeslim} teslim depoya geliyor`, alt: 'İstasyondan iade ya da geri gönderilen malzeme; teslim alınınca stok depoya geçer.', yol: '/stok', eylem: 'Teslim al', panel: { sekme: 'al' } });
   if (k.kabuldeBekleyen > 0) l.push({ ton: 'bilgi', baslik: `${k.kabuldeBekleyen} malzeme mal kabul alanında bekliyor`, alt: 'Rafa yerleştirilmeleri gerekiyor.', yol: '/stok/malzemeler?durum=kabulde', eylem: 'Listele' });
   if (k.eksiBakiye > 0) l.push({ ton: 'hata', baslik: `${k.eksiBakiye} bakiye satırı eksiye düştü`, alt: 'Onaylı eksi çıkışlar; sayım ya da düzeltme bekliyor.', yol: '/stok/malzemeler?durum=eksi', eylem: 'Listele' });
   if (k.kritik > 0) l.push({ ton: 'uyari', baslik: `${k.kritik} malzeme kritik seviyede`, alt: 'Serbest stok tanımlı kritik seviyeye indi.', yol: '/stok/malzemeler?durum=kritik', eylem: 'Listele' });
@@ -24,7 +28,7 @@ export function isler(k: IsKutusuCevabi, eslenmemis = 0): Is[] {
   if (k.fasonEksikGonderimi > 0) l.push({ ton: 'uyari', baslik: `${k.fasonEksikGonderimi} fason gönderiminde parça eksik gitti`, alt: 'İstasyonda yeterli parça yoktu; olan kadar gönderildi.', yol: '/stok/hareketler', eylem: 'Hareketler' });
   if (k.logoHatasi > 0) l.push({ ton: 'hata', baslik: `${k.logoHatasi} hareket Logo'ya gönderilemedi`, alt: 'Gönderim hata verdi.', yol: '/stok/hareketler', eylem: 'Hareketler' });
   if (eslenmemis > 0) l.push({ ton: 'bilgi', baslik: `${eslenmemis} harita yeri stok konumu değil`, alt: 'Fabrika Haritası\'nda açılan raf gözü ya da alan; Konumlar\'da "Haritadan eşle" ile eşlenir.', yol: '/stok/konumlar', eylem: 'Konumlar' });
-  return l;
+  return l.sort((a, b) => TON_SIRASI[a.ton] - TON_SIRASI[b.ton]);
 }
 
 // Güncel değerin dışında, kendi satırında değerlenen konumlar (228 a).
@@ -125,7 +129,7 @@ export function IsKutusu() {
             {l.map((i) => (
               <div key={i.baslik} className={`tc-stok-is tc-stok-is-${i.ton}`}>
                 <div><strong>{i.baslik}</strong><span>{i.alt}</span></div>
-                <Link to={i.yol}><Dugme>{i.eylem}</Dugme></Link>
+                {i.panel ? <Dugme onClick={() => { if (i.panel) paneliAc(i.panel); }}>{i.eylem}</Dugme> : <Link to={i.yol}><Dugme>{i.eylem}</Dugme></Link>}
               </div>
             ))}
           </div>

@@ -31,7 +31,7 @@ test.describe('Stok', () => {
     await ac('/stok/hareketler');
     await page.getByRole('button', { name: /^Malzeme ve teslim/ }).filter({ visible: true }).first().click();
     const panel = page.getByRole('dialog', { name: 'Malzeme · Teslim' });
-    for (const ad of ['Teslim al', 'Sepet', 'Teslim et', 'Malzeme iste']) await panel.getByRole('tab', { name: ad }).click();
+    for (const ad of ['Bana gelen', 'Gönder', 'İste']) await panel.getByRole('tab', { name: ad }).click();
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => { /* yoklama */ });
     expect(ag.hatalar).toEqual([]);
   });

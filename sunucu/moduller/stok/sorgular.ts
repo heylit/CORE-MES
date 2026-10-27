@@ -948,6 +948,9 @@ export const acikIstekSayisi = async (db: Db, istasyonlar: number[] | null = nul
 export const teslimBekleyenIstekSayisi = async (db: Db, istasyonlar: number[] | null): Promise<number> =>
   (await db.tek<{ n: number }>(`SELECT count(*)::int AS n FROM stok_malzeme_istegi i WHERE i.durum IN ('acik', 'stok_yok') AND ${ISTEK_KAPSAMI(1)}
     AND NOT EXISTS (SELECT 1 FROM stok_teslim t WHERE t.istek_id = i.id AND t.durum = 'yolda')`, [istasyonlar]))?.n ?? 0;
+// Depoya gelen, onay bekleyen teslimler (iade ve istasyondan geri gönderilen dahil); Teslim al'daki depo satırlarıyla aynı koşul.
+export const depoyaGelenTeslimSayisi = async (db: Db): Promise<number> =>
+  (await db.tek<{ n: number }>(`SELECT count(*)::int AS n FROM stok_teslim t JOIN stok_konum h ON h.id = t.hedef_konum_id WHERE t.durum = 'yolda' AND h.istasyon_id IS NULL`))?.n ?? 0;
 // Stokta karşılanamayan açık istekler, en eski önce (satın alma okur).
 export interface StokYokIstegiHam { id: number; no: string; malzemeId: number; miktar: string; uretimEmriId: number | null; istasyonId: number | null; acilis: string; guncelleme: string }
 export const stokYokIstekleri = (db: Db, sinir: number): Promise<StokYokIstegiHam[]> =>

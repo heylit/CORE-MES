@@ -67,7 +67,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('545 T2 ve T4: sekme bekleyen sayisini tasir; tek dokunus gonderilen miktari alir', async () => {
     const istekler = ciz({ 'POST /stok/teslimler/41/teslim-al': () => json(200, { teslim: { ...GELEN, durum: 'teslim' } }) });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    expect(await screen.findByRole('tab', { name: 'Teslim al (1)' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Bana gelen (1)' })).toBeTruthy();
     const satir = (await screen.findByText(/Deneme mil/)).closest('li')!;
     fireEvent.click(within(satir).getByRole('button', { name: 'Teslim al, 3' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ surum: 1, alinan: '3.000' }));
@@ -94,7 +94,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const liste = await screen.findByRole('list', { name: 'Elden alınanlar' });
     expect(within(liste).getByRole('button', { name: 'İtiraz et' })).toBeTruthy();
     expect(screen.queryByText(/Deneme flanş/)).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Gönder' }));
     expect(within(await screen.findByRole('list', { name: 'Gönderdiklerim' })).getByText(/Deneme flanş/)).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Okutarak alınanlar' })).toBeNull();
   });
@@ -107,7 +107,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN }),
     });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     // Depo konumu yalnız stok.transfer olana kaynaktır; operatöre yalnız kendi istasyonu.
     const nereden = await screen.findByLabelText(/Nereden/);
     expect(within(nereden).queryByText(/Depo/)).toBeNull();
@@ -133,7 +133,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     };
     ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, yerdeki), 'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN }) }, { ...KUTU, buradakiIstasyonId: 2, zemin });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.change(await screen.findByRole('combobox', { name: /^Malzeme/ }), { target: { value: '0' } });
     // Başka bölümdeki konuma yol çizilmez.
     fireEvent.change(screen.getByLabelText(/Nereye/), { target: { value: 'k:5' } });
@@ -151,7 +151,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const yerdeki: IstasyonSepetiCevabi = { istasyon: { id: 2, kod: 'F2', ad: 'Freze 2' }, emirler: [], satirlar: [] };
     ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, yerdeki) }, { ...KUTU, istasyonlar: [{ id: 2, kod: 'F2', ad: 'Freze 2' }, { id: 3, kod: 'T3', ad: 'Torna 3' }], buradakiIstasyonId: 3 });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     expect((await screen.findByLabelText(/Nereden/) as HTMLSelectElement).value).toBe('i:3');
   });
 
@@ -169,7 +169,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('545 T9: teslim et rotadaki sonraki istasyonu one cikarir; hedef degisince tek dokunusla geri alinir', async () => {
     ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.change(await screen.findByRole('combobox', { name: /^Malzeme/ }), { target: { value: '0' } });
     expect(screen.getByText(/Rotada sonraki: Torna 1 \(OP 30\)/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Hedef yap' })).toBeNull();
@@ -181,7 +181,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('sepet: istasyondaki malzeme getirenle gorunur; sonraki istasyona tek dokunusla gider', async () => {
     const istekler = ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET), 'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN }) }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Sepet' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     const liste = await screen.findByRole('list', { name: 'Freze 2 sepeti' });
     expect(within(liste).getByText(/Deneme Usta/)).toBeTruthy();
     expect(within(liste).getByText(/Deneme Depocu/)).toBeTruthy();
@@ -200,7 +200,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'POST /stok/teslim-kutusu/sepet/cek': () => json(200, { teslim: { ...GELEN, durum: 'teslim' } }),
     }, { ...KUTU_ISTASYONLU, gelenler: [] });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    const liste = await screen.findByRole('list', { name: 'Önceki istasyonda bekleyenler' });
+    const liste = await screen.findByRole('list', { name: 'Bana gelenler' });
     expect(within(liste).getByText(/Torna 1 \(T1\)/)).toBeTruthy();
     fireEvent.change(within(liste).getByLabelText('Alınan miktar'), { target: { value: '3' } });
     fireEvent.click(within(liste).getByRole('button', { name: 'Teslim al' }));
@@ -265,8 +265,8 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('sepet: uretimde kullan secilen emre miktarla sarf yazar', async () => {
     const istekler = ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET), 'POST /stok/teslim-kutusu/sepet/kullan': () => json(200, { hareketIdler: [5], onayliEksi: false }) }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Sepet' }));
-    const satir = (await screen.findByText(/Deneme cubuk/)).closest('li')!;
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
+    const satir = within(await screen.findByRole('list', { name: /sepeti$/ })).getByText(/Deneme cubuk/).closest('li')!;
     fireEvent.click(within(satir).getByRole('button', { name: 'Üretimde kullan' }));
     fireEvent.change(within(satir).getByLabelText('Kullanılan miktar'), { target: { value: '2,5' } });
     fireEvent.click(within(satir).getByRole('button', { name: 'Kullan' }));
@@ -279,7 +279,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const harita = { bina: { x0: 0, x1: 20, z0: 0, z1: 10 }, kareBoyu: 10 };
     ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) }, { ...KUTU_ISTASYONLU, depoKonumlari: [{ id: 5, kod: 'KABUL', ad: 'Mal kabul' }, { id: 6, kod: 'D-B1', ad: null }], harita });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.change(await screen.findByRole('combobox', { name: /^Malzeme/ }), { target: { value: '0' } });
     expect((screen.getByLabelText(/Nereye/) as HTMLSelectElement).value).toBe('i:1');
     expect(screen.getByText('Rotada sonraki: Torna 1 (OP 30)')).toBeTruthy();
@@ -295,7 +295,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'GET /stok/teslim-kutusu/kod-coz': () => json(200, { tur: 'yer', yer: { konumId: 20, kod: 'IST-1', ad: 'Torna 1', tur: 'istasyon', istasyonId: 1 }, satirlar: [] }),
     }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nereye: QR okut' }));
     const pencere = await screen.findByRole('dialog', { name: 'Nereye: QR okut' });
     fireEvent.change(within(pencere).getByLabelText(/Kod/), { target: { value: 'LOC-IST-1' } });
@@ -311,7 +311,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'GET /stok/teslim-kutusu/kod-coz': () => json(200, { tur: 'yer', yer: { konumId: 77, kod: 'R-9', ad: null, tur: 'raf_gozu', istasyonId: null }, satirlar: null }),
     }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nereye: QR okut' }));
     const pencere = await screen.findByRole('dialog', { name: 'Nereye: QR okut' });
     fireEvent.change(within(pencere).getByLabelText(/Kod/), { target: { value: 'LOC-R-9' } });
@@ -364,7 +364,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     fireEvent.click(within(gelenler).getByRole('button', { name: 'Teslim al, 3' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.yol).toBe('/stok/teslimler/51/teslim-al'));
     fireEvent.click(within(buIs).getByRole('button', { name: 'Parçayı gönder' }));
-    expect((await screen.findByRole('tab', { name: 'Sepet' })).getAttribute('aria-selected')).toBe('true');
+    expect((await screen.findByRole('tab', { name: 'Gönder' })).getAttribute('aria-selected')).toBe('true');
   });
 
   it('teslim al (537 a): istasyonda olmayan kisiye QR yerine etiket okutma yolu gosterilir, kod istenmez', async () => {
@@ -382,7 +382,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN }),
     }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Teslim et' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Gönder' }));
     fireEvent.change(await screen.findByRole('combobox', { name: /^Malzeme/ }), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText(/Miktar/), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Nereye: QR okut' }));
@@ -404,7 +404,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     ] };
     ciz({ 'GET /stok/istek-malzemeleri': () => json(200, malzemeler) });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Malzeme iste' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'İste' }));
     fireEvent.change(screen.getByLabelText('Malzeme ara'), { target: { value: 'deneme' } });
     fireEvent.click(await screen.findByRole('button', { name: /Deneme sac/ }));
     expect(screen.queryByRole('button', { name: /Deneme cubuk/ })).toBeNull();
@@ -421,7 +421,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       'POST /stok/malzeme-istekleri/ac': () => json(200, {}),
     });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Malzeme iste' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'İste' }));
     fireEvent.change(screen.getByLabelText('Malzeme ara'), { target: { value: 'sac' } });
     fireEvent.click(await screen.findByRole('button', { name: /Deneme sac/ }));
     expect(screen.getAllByText('Stokta yok').length).toBeGreaterThan(0);
@@ -440,7 +440,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       ...KUTU, isteklerim: [istek(1, 'teslim', '12.000'), istek(2, 'acik', null), { ...istek(3, 'acik', null), yoldaTeslim: { id: 9, no: 'TS-000009' } }],
     });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Malzeme iste' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'İste' }));
     expect(await screen.findByText('Deneme sac · 12 / 30 teslim')).toBeTruthy();
     expect(screen.getAllByText('Deneme sac · 30')).toHaveLength(2);
     expect(screen.getByText('Yolda · TS-000009')).toBeTruthy();

@@ -35,14 +35,15 @@ import './stok.css';
 const KUTU = TESLIM_KUTUSU;
 const yeniKimlik = yeniIstekKimligi;
 
-type SekmeAnahtari = PanelSekmesi;
-// Teslim al sekmesi bekleyen gelen sayısını taşır (545 T2): panel açılınca nereye bakılacağı görünür.
+// Okut-önce, üç düğme (751 b): okuyucu üstte; Bana gelen, Gönder, İste. İstasyon sepeti Gönder'in "Elimdekiler" bölümüdür; eski
+// "sepet" isteği Gönder'i açar. Bana gelen bekleyen gelen sayısını taşır (545 T2).
+type SekmeAnahtari = Exclude<PanelSekmesi, 'sepet'>;
 const sekmeler = (gelen: number): readonly Sekme<SekmeAnahtari>[] => [
-  { anahtar: 'al', baslik: 'Teslim al', simge: 'download', sayi: gelen },
-  { anahtar: 'sepet', baslik: 'Sepet', simge: 'box' },
-  { anahtar: 'et', baslik: 'Teslim et', simge: 'upload' },
-  { anahtar: 'iste', baslik: 'Malzeme iste', simge: 'plus' },
+  { anahtar: 'al', baslik: 'Bana gelen', simge: 'download', sayi: gelen },
+  { anahtar: 'et', baslik: 'Gönder', simge: 'upload' },
+  { anahtar: 'iste', baslik: 'İste', simge: 'plus' },
 ];
+const panelSekmesi = (s: PanelSekmesi | undefined): SekmeAnahtari => (s === undefined ? 'al' : s === 'sepet' ? 'et' : s);
 
 // Seçim değeri "i:<id>" istasyon, "k:<id>" stok konumu.
 const yerDegeri = (y: TeslimYeri): string => ('istasyonId' in y ? `i:${y.istasyonId}` : `k:${y.konumId}`);
@@ -64,7 +65,7 @@ function TeslimDugmesi() {
   const [acik, setAcik] = useState(false);
   const [odak, setOdak] = useState<MalzemeTeslimOdagi | null>(null);
   const [istek, setIstek] = useState<PanelIstegi | null>(null);
-  // Terminal başlatırken girdi eksikse panel Teslim al'da o malzemeyle açılır (kart #1289).
+  // Terminal başlatırken girdi eksikse panel Bana gelen'de o malzemeyle açılır (kart #1289).
   useEffect(() => {
     const ac = (o: Event) => { setOdak((o as CustomEvent<MalzemeTeslimOdagi>).detail); setIstek(null); setAcik(true); };
     // Eski Okut adresleri ve Stok Merkezi düğmeleri (soru 90 a): bekleyen istek kurulurken de alınır.
@@ -96,7 +97,7 @@ function TeslimDugmesi() {
 const SONUC_SEKMESI: Record<SonucEylemi, SekmeAnahtari> = { kabul: 'al', sevk: 'et', 'okutarak-al': 'iste' };
 
 function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null; istek: PanelIstegi | null; kapat: () => void }) {
-  const [sekme, setSekme] = useState<SekmeAnahtari>(istek?.sekme ?? 'al');
+  const [sekme, setSekme] = useState<SekmeAnahtari>(panelSekmesi(istek?.sekme));
   // Okuyucuda ilk okutulan kişi kodu Teslim et'i o kişiye hedefli açar; her okutma formu yeniden kurar.
   const [kisiHedefi, setKisiHedefi] = useState<{ hedef: OkutulanHedef; sira: number } | null>(null);
   // Soru 89: okutulan malzeme ya da yer; sonuç kartı ve sekmelerin ilgili bölümleri bunu okur. Sorgula sekmesi yoktur.
@@ -116,9 +117,8 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
           <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Malzeme ve teslim" sekmeler={sekmeler(kutu.data?.gelenler.length ?? 0)} secili={sekme} sec={(s) => { setSekme(s); setKisiHedefi(null); }} /></div>
           {kutu.isPending ? <DurumKutusu durum="yukleniyor" />
             : kutu.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(kutu.error)} yenile={() => { void kutu.refetch(); }} />
-            : sekme === 'al' ? <TeslimAl kutu={kutu.data} odak={odak} okunan={okunan} sepeteGec={() => setSekme('sepet')} />
-            : sekme === 'sepet' ? <Sepet kutu={kutu.data} depoSepeti={istek?.depoSepeti ?? false} />
-            : sekme === 'et' ? <TeslimEt key={kisiHedefi?.sira ?? 0} kutu={kutu.data} baslangic={kisiHedefi?.hedef ?? null} okunan={okunan} />
+            : sekme === 'al' ? <TeslimAl kutu={kutu.data} odak={odak} okunan={okunan} sepeteGec={() => setSekme('et')} />
+            : sekme === 'et' ? <TeslimEt key={kisiHedefi?.sira ?? 0} kutu={kutu.data} baslangic={kisiHedefi?.hedef ?? null} okunan={okunan} odak={odak} depoSepeti={istek?.depoSepeti ?? false} />
             : <MalzemeIste key={okunan?.sira ?? 0} kutu={kutu.data} okunan={okunan} />}
         </OkutAlani>
       </div>
@@ -160,12 +160,7 @@ function TeslimAl({ kutu, odak, okunan, sepeteGec }: { kutu: TeslimKutusuCevabi;
     <>
       {giris && okunan?.cevap.tur === 'malzeme' && <PanelMalKabul key={okunan.kod} kod={okunan.kod} />}
       {buIs && <BuIs odak={buIs} gelenler={buIsinGelenleri} sepeteGec={sepeteGec} />}
-      <div className="tc-stok-bolum-bas">
-        <h3 className="tc-stok-teslim-baslik">Bana gelenler</h3>
-        {gelenler.length > 1 && <HepsiniAl gelenler={gelenler} />}
-      </div>
-      {gelenler.length === 0 ? <DurumKutusu durum="bos" mesaj={buIs ? 'Başka teslim almanızı bekleyen malzeme yok' : 'Teslim almanızı bekleyen malzeme yok'} />
-        : <ul className="tc-stok-isler tc-stok-teslim-liste">{gelenler.map((t) => <GelenTeslim key={t.id} t={t} />)}</ul>}
+      <BanaGelenler gelenler={gelenler} istasyonId={istasyonId} buIs={buIs !== null} />
       {eldenAlinanlar.length > 0 && (
         <>
           <div className="tc-stok-bolum-bas">
@@ -180,7 +175,6 @@ function TeslimAl({ kutu, odak, okunan, sepeteGec }: { kutu: TeslimKutusuCevabi;
           onChange={(o) => istasyonSec(o.target.value)} />
       )}
       {istasyonId > 0 && <IsMalzemeleri istasyonId={istasyonId} odak={odak?.istasyonId === istasyonId ? odak : null} haric={buIs?.uretimEmriId ?? null} />}
-      {istasyonId > 0 && <OncekiSepetler istasyonId={istasyonId} />}
       <KisiKodum buradakiIstasyonId={kutu.buradakiIstasyonId} istasyonAdi={kutu.istasyonlar.find((i) => i.id === kutu.buradakiIstasyonId)?.ad ?? null} />
     </>
   );
@@ -219,7 +213,7 @@ function BuIs({ odak, gelenler, sepeteGec }: { odak: MalzemeTeslimOdagi; gelenle
   );
 }
 
-// 545 T5: elden ve bırakılarak gelen (hedefi kapsamımdaki istasyon) Teslim al'da itiraz edilir; okutarak alınana kaynak taraf Teslim et'te itiraz eder.
+// 545 T5: elden ve bırakılarak gelen (hedefi kapsamımdaki istasyon) Bana gelen'de itiraz edilir; okutarak alınana kaynak taraf Gönder'de itiraz eder.
 const hedefTarafi = (kutu: TeslimKutusuCevabi, t: Teslim): boolean => t.hedef.istasyonId !== null && kutu.istasyonlar.some((i) => i.id === t.hedef.istasyonId);
 
 // 545 T4: bekleyen her teslim gönderilen miktarla, sırayla ve ayrı kayıt olarak alınır; biri reddedilirse ötekiler alınmış kalır ve söylenir.
@@ -366,30 +360,44 @@ function IsMalzemesiIste({ istasyonId, is, m }: { istasyonId: number; is: IsMalz
   );
 }
 
-// Teslim edilmeyen parça (kart #1289): rotada sonraki adımı bu istasyon olan, önceki istasyonun sepetinde bekleyen satırlar; "Teslim al" çeker.
-function OncekiSepetler({ istasyonId }: { istasyonId: number }) {
+// Bana gelenler tek liste (752 b): onay bekleyen gelen teslimler ve rotada sonraki adımı bu istasyon olan, önceki istasyonun sepetinde
+// bekleyen parça (kart #1289; "Teslim al" çeker, hemen geçer). İkisi de aynı yerde alınır.
+function BanaGelenler({ gelenler, istasyonId, buIs }: { gelenler: Teslim[]; istasyonId: number; buIs: boolean }) {
   const gelecek = useQuery({
     queryKey: [...KUTU, 'gelecek', istasyonId],
     queryFn: () => api.get<GelecekSepetCevabi>(`/stok/teslim-kutusu/sepet/gelecek?istasyonId=${istasyonId}`),
+    enabled: istasyonId > 0,
   });
-  if (!gelecek.data || gelecek.data.satirlar.length === 0) return null;
+  const onceki = istasyonId > 0 ? gelecek.data?.satirlar ?? [] : [];
   return (
     <>
-      <h3 className="tc-stok-teslim-baslik">Önceki istasyonda bekleyenler</h3>
-      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Önceki istasyonda bekleyenler">
-        {gelecek.data.satirlar.map((x) => <OncekiSepetSatiri key={`${x.kaynak.id}-${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} />)}
-      </ul>
+      <div className="tc-stok-bolum-bas">
+        <h3 className="tc-stok-teslim-baslik">Bana gelenler</h3>
+        {gelenler.length > 1 && <HepsiniAl gelenler={gelenler} />}
+      </div>
+      {gelenler.length + onceki.length === 0 ? <DurumKutusu durum="bos" mesaj={buIs ? 'Başka teslim almanızı bekleyen malzeme yok' : 'Teslim almanızı bekleyen malzeme yok'} />
+        : (
+          <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Bana gelenler">
+            {gelenler.map((t) => <GelenTeslim key={t.id} t={t} />)}
+            {onceki.map((x) => <OncekiSepetSatiri key={`${x.kaynak.id}-${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} />)}
+          </ul>
+        )}
     </>
   );
 }
 
-function TeslimEt(o: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null; okunan: Okunan | null }) {
+// Gönder (751 b): önce istenenler, sonra elimdekiler (istasyon sepeti; "Sonraki istasyona" burada, 752 b), sonra serbest teslim formu.
+// Terminalden açılınca istasyon terminalinkidir (#24).
+function TeslimEt(o: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null; okunan: Okunan | null; odak: MalzemeTeslimOdagi | null; depoSepeti: boolean }) {
+  const buradaki = o.odak?.istasyonId ?? o.kutu.buradakiIstasyonId;
   return (
     <>
       <IstasyonIstekleri istenenler={o.kutu.bendenIstenenler ?? []} alinanlar={(o.kutu.okutarakAlinanlar ?? []).filter((t) => !hedefTarafi(o.kutu, t))} />
       {o.okunan?.cevap.tur === 'malzeme' && <PanelSevk key={o.okunan.kod} okunan={o.okunan} />}
-      <h3 className="tc-stok-teslim-baslik">Malzeme teslim et</h3>
-      <MalzemeTeslimEt kutu={o.kutu} baslangic={o.baslangic} />
+      <h3 className="tc-stok-teslim-baslik">Elimdekiler</h3>
+      <Sepet kutu={o.kutu} depoSepeti={o.depoSepeti} buradaki={buradaki} />
+      <h3 className="tc-stok-teslim-baslik">Başka yere teslim et</h3>
+      <MalzemeTeslimEt kutu={o.kutu} baslangic={o.baslangic} buradaki={buradaki} />
       <h3 className="tc-stok-teslim-baslik">Gönderdiklerim</h3>
       {o.kutu.gonderdiklerim.length === 0 ? <p className="tc-stok-not">Son gönderiminiz yok.</p>
         : <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Gönderdiklerim">{o.kutu.gonderdiklerim.map((t) => <GonderilenTeslim key={t.id} t={t} />)}</ul>}
@@ -397,11 +405,11 @@ function TeslimEt(o: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null
   );
 }
 
-function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null }) {
+function MalzemeTeslimEt({ kutu, baslangic, buradaki }: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null; buradaki: number | null }) {
   const statuAdi = useStatuAdi();
   // Depodan gönderim depo işlemidir (stok.transfer); sunucu da denetler.
   const depocu = useIslem('stok.transfer');
-  const [kaynak, setKaynak] = useState(() => { const b = kutu.buradakiIstasyonId; return b === null ? '' : yerDegeri({ istasyonId: b }); });
+  const [kaynak, setKaynak] = useState(() => (buradaki === null ? '' : yerDegeri({ istasyonId: buradaki })));
   const [hedef, setHedef] = useState(() => (baslangic === null ? '' : yerDegeri(baslangic.yer)));
   const [satir, setSatir] = useState('');
   const [miktar, setMiktar] = useState('');
@@ -459,7 +467,7 @@ function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslan
     });
   };
   if (kaynaklar.length === 0) {
-    return <DurumKutusu durum="bos" mesaj="Gönderebileceğiniz istasyon yok. Depodan malzeme için Malzeme iste sekmesini kullanın." />;
+    return <DurumKutusu durum="bos" mesaj="Gönderebileceğiniz istasyon yok. Depodan malzeme için İste'yi kullanın." />;
   }
   return (
     <form className="tc-stok-form" onSubmit={gonderiliyor}>
@@ -534,10 +542,10 @@ type SepetSuzgeci = 'hepsi' | 'uretim' | 'teslim' | 'depo';
 const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
   { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Sepetim' },
 ];
-function Sepet({ kutu, depoSepeti }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean }) {
+function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean; buradaki: number | null }) {
   const depocu = useIslem('stok.transfer');
   const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
-  const [istasyon, setIstasyon] = useState(() => String(kutu.buradakiIstasyonId ?? kutu.istasyonlar[0]?.id ?? ''));
+  const [istasyon, setIstasyon] = useState(() => String(buradaki ?? kutu.istasyonlar[0]?.id ?? ''));
   const istasyonId = Number(istasyon);
   const sepet = useQuery({
     queryKey: sepetAnahtari(istasyonId),

@@ -147,7 +147,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const pencere = await pencereAc();
     await okut(pencere, 'KSI-7');
     expect(await within(pencere).findByText('Alıcı: Deneme Alıcı. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.')).toBeTruthy();
-    expect(within(pencere).getByRole('tab', { name: 'Teslim et' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(pencere).getByRole('tab', { name: 'Gönder' }).getAttribute('aria-selected')).toBe('true');
     expect((within(pencere).getByLabelText(/Nereye/) as HTMLSelectElement).value).toBe('i:2');
     await okut(pencere, 'KSI-8');
     expect(await within(pencere).findByText(/Uzak Alıcı buradan teslim edilebilecek bir istasyonda değil/)).toBeTruthy();
