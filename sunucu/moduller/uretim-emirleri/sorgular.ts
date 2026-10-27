@@ -1811,6 +1811,27 @@ export function isEmriPlanBilgileriGetir(db: Db, isEmriIdleri: readonly number[]
   );
 }
 
+// Üretim anomalisi ve plan sapması (kart 764, 782): iş emrinin gerçek zamanları ve çalıştığı makineler. Ayar başı iş emrine bağlı ilk
+// ayar olayıdır; iş emri bağı boş eski olay ve kullanım satırı sayılmaz (hangi adıma ait olduğu bilinmez).
+export interface IsEmriZamanSatiri {
+  isEmriId: number; uretimEmriId: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; ayarBasi: string | null; baslama: string | null;
+  bitis: string | null; bagimlilik: 'bagimsiz' | 'bekleyen' | 'akisli'; devirAdedi: number | null; emirTeslim: string | null;
+  makineler: { makineId: number | null; baslama: string; bitis: string | null }[];
+}
+export function isEmriZamanlariGetir(db: Db, isEmriIdleri: readonly number[]): Promise<IsEmriZamanSatiri[]> {
+  return db.sorgu(
+    `SELECT i.id AS "isEmriId", i.uretim_emri_id AS "uretimEmriId", i.op_no AS "opNo", i.durum,
+            (SELECT ${ISO('min(o.zaman)')} FROM uretim_olayi o WHERE o.is_emri_id = i.id AND o.olay = 'ayar') AS "ayarBasi",
+            ${ISO('i.baslama')} AS baslama, ${ISO('i.bitis')} AS bitis, i.bagimlilik, i.devir_adedi AS "devirAdedi", ${TARIH('e.teslim')} AS "emirTeslim",
+            COALESCE((SELECT json_agg(json_build_object('makineId', k.makine_id, 'baslama', ${ISO('k.baslama')}, 'bitis', ${ISO('k.bitis')}) ORDER BY k.baslama, k.id)
+                        FROM uretim_emirleri_makine_kullanimi k WHERE k.is_emri_id = i.id), '[]'::json) AS makineler
+       FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
+      WHERE i.id = ANY($1::int[])
+      ORDER BY i.id`,
+    [[...isEmriIdleri]],
+  );
+}
+
 // Akış süresi (kart #1338): emrin bütün zaman damgaları, yalnız okuma. Olaylar iki defterden (başlat/bitir ve duruş/ayar) zaman sırasıyla birleşir.
 export interface AkisEmirSatiri {
   id: number; emirNo: string; malzemeNo: number | null; adet: number; durum: EmirDurumu;

@@ -12,11 +12,11 @@ import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, emirBul, emirDurumlariGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, emirBul, emirDurumlariGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
-  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, KisiIsEmriSatiri, SayimKirilimi,
+  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, IsEmriZamanSatiri, KisiIsEmriSatiri, SayimKirilimi,
 } from './sorgular.ts';
 import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 
@@ -325,6 +325,15 @@ export interface IsEmriPlanBilgisi {
   birimSureDk: string | null;
   kaynak: { tur: 'makine' | 'kisi' | 'fason'; id: number } | null;
   istasyonId: number | null;
+}
+
+// Üretim anomalisi (Arkon, kart 764) ve plan sapması (plan, kart 782): iş emrinin ayar başı, başlama, bitiş, bağımlılığı, emrin teslim
+// tarihi ve çalıştığı makineler; bitmiş iş emri dahil. Bilinmeyen değer null, kullanımı yoksa makineler boş. Olmayan kimlik haritada yoktur.
+export type { IsEmriZamanSatiri as IsEmriZamani } from './sorgular.ts';
+export async function isEmriZamanlari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, IsEmriZamanSatiri>> {
+  const tekil = [...new Set(isEmriIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await isEmriZamanlariGetir(db, tekil)).map((r) => [r.isEmriId, r]));
 }
 
 // Geçmiş günün beklenen adedi için iş emrinin plan bilgisi; bitmiş iş emri dahil. Olmayan kimlik haritada yoktur.
