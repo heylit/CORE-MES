@@ -75,8 +75,8 @@ export function YeniTeklif(_: GorunumOzellikleri) {
 
   return (
     <div className="tc-pt-teklif">
-      <SayfaBasligi baslik="Yeni teklif" simge="tag" alt="Müşteri adına teklif talebi açın; ardından fiyatları girip teklifi gönderin." />
       <Dugme className="tc-pt-teklif-don" simge="chev-left" onClick={() => p.git('sales')}>Teklif taleplerine dön</Dugme>
+      <SayfaBasligi baslik="Yeni teklif" simge="tag" alt="Müşteri adına teklif talebi açın; ardından fiyatları girip teklifi gönderin." />
       <form className="tc-pt-pano tc-pt-teklif-form" aria-label="Yeni teklif" noValidate onSubmit={(o) => { void gonder(o); }}>
         <div className="tc-pt-teklif-satir">
           <Secim
@@ -87,18 +87,34 @@ export function YeniTeklif(_: GorunumOzellikleri) {
           <Girdi etiket="İstenen teslim tarihi" type="date" min={isoGun(p.simdi)} value={istenen} onChange={(o) => setIstenen(o.target.value)} />
         </div>
         <h3>Kalemler</h3>
-        <div className="tc-pt-teklif-kalemler">
-          {satirlar.map((s, i) => (
-            // Satırlar yalnız sondan eklenip silinir; sıra kimliktir (prototip itemRowsEditor).
-            <div className="tc-pt-teklif-kalem" key={i}>
-              <Girdi etiket={`Kalem ${String(i + 1)} adı`} value={s.ad} onChange={(o) => satirDegistir(i, 'ad', o.target.value)} placeholder="Ürün veya hizmet" />
-              <Girdi etiket={`Kalem ${String(i + 1)} miktar`} inputMode="decimal" value={s.miktar} onChange={(o) => satirDegistir(i, 'miktar', o.target.value)} placeholder="Miktar" />
-              <Secim
-                etiket={`Kalem ${String(i + 1)} birim`} value={s.birim} onChange={(o) => satirDegistir(i, 'birim', o.target.value)}
-                secenekler={BIRIMLER.map((b) => ({ deger: b, baslik: b }))}
-              />
-            </div>
-          ))}
+        <div className="tc-pt-teklif-kaydir">
+          <table className="tc-pt-teklif-tablo tc-pt-teklif-kalemler">
+            <thead><tr><th>Kalem</th><th>Miktar</th><th>Birim</th></tr></thead>
+            <tbody>
+              {satirlar.map((s, i) => (
+                // Satırlar yalnız sondan eklenip silinir; sıra kimliktir (prototip itemRowsEditor).
+                <tr key={i}>
+                  <td>
+                    <input
+                      className="tc-alan-kutu" type="text" aria-label={`Kalem ${String(i + 1)} adı`} placeholder="Ürün veya hizmet"
+                      value={s.ad} onChange={(o) => satirDegistir(i, 'ad', o.target.value)}
+                    />
+                  </td>
+                  <td className="tc-pt-teklif-miktar">
+                    <input
+                      className="tc-alan-kutu" type="text" inputMode="decimal" aria-label={`Kalem ${String(i + 1)} miktar`} placeholder="Miktar"
+                      value={s.miktar} onChange={(o) => satirDegistir(i, 'miktar', o.target.value)}
+                    />
+                  </td>
+                  <td className="tc-pt-teklif-birim">
+                    <select className="tc-alan-kutu" aria-label={`Kalem ${String(i + 1)} birim`} value={s.birim} onChange={(o) => satirDegistir(i, 'birim', o.target.value)}>
+                      {BIRIMLER.map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <div className="tc-pt-teklif-eylemler">
           <Dugme simge="plus" onClick={() => setSatirlar((s) => [...s, bosSatir()])}>Kalem ekle</Dugme>

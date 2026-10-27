@@ -141,7 +141,7 @@ export function TeklifSayfasi({ q, v, onceki, simdi }: { q: Talep; v: Surum; onc
 }
 
 // Eklerin küçük resimleri. İçerik sunucudan base64 gelir (portal/ekler/:id).
-function EkResmi({ id }: { id: string }) {
+export function EkResmi({ id }: { id: string }) {
   const ek = useEk(id);
   if (!ek.data) return <span className="tc-pt-teklif-ek" aria-busy="true" />;
   return (

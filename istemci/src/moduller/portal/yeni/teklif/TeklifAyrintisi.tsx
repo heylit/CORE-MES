@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  CokSatir, Dugme, DurumKutusu, Girdi, OnayPenceresi, Rozet, SayfaBasligi, Secim,
+  CokSatir, Dugme, DurumKutusu, Girdi, OnayPenceresi, Rozet, SayfaBasligi, Secim, Simge,
 } from '../../../../ortak/arayuz/index.ts';
 import { gunEkle, isoGun, kalanGun, para, sayi, sayiOku, tarih, tarihSaat, YOK } from '../bicim.ts';
 import {
@@ -14,7 +14,7 @@ import {
   belgeNoAl, ekYukle, hataMetni, kaydet, usePortal, usePortalDeposu, usePortalKomutu, yeniKimlik,
 } from '../veri.ts';
 import {
-  DurumRozeti, Galeri, GECERLILIK_GUNU, IslemGecmisi, KalemTablosu, ODEME_KOSULLARI, sonSurumu, talep, talepYaz, TESLIM_GUNU, TeklifSayfasi, tutar,
+  DurumRozeti, EkResmi, Galeri, GECERLILIK_GUNU, IslemGecmisi, KalemTablosu, ODEME_KOSULLARI, sonSurumu, talep, talepYaz, TESLIM_GUNU, TeklifSayfasi, tutar,
   VARSAYILAN_VADE, type Surum, type Talep,
 } from './ortak.tsx';
 import './teklif.css';
@@ -81,11 +81,9 @@ export function TeklifAyrintisi({ id }: GorunumOzellikleri) {
 
   return (
     <div className="tc-pt-teklif">
-      <SayfaBasligi
-        baslik={q.title} simge="tag"
-        alt={<span className="tc-pt-teklif-baslik-alt"><span className="tc-pt-teklif-no">{q.no}</span><DurumRozeti q={q} simdi={simdi} />{`${firma(q.customerId)}, ${tarih(q.createdAt)} tarihinde istendi.`}</span>}
-      />
       <Dugme className="tc-pt-teklif-don" simge="chev-left" onClick={() => p.git('sales')}>Teklif taleplerine dön</Dugme>
+      <div className="tc-pt-teklif-baslik-ust"><span className="tc-pt-teklif-no">{q.no}</span><DurumRozeti q={q} simdi={simdi} /></div>
+      <SayfaBasligi baslik={q.title} simge="tag" alt={`${firma(q.customerId)}, ${tarih(q.createdAt)} tarihinde istendi.`} />
 
       {st === 'revision' && <Bant ton="uyari" baslik="Müşteri revizyon istedi">{q.revisionNote || 'Not bırakılmadı.'}</Bant>}
       {st === 'accepted' && (
@@ -332,12 +330,21 @@ function SurumFormu({ q, depo }: { q: Talep; depo: Depo }) {
           <Girdi etiket="Geçerlilik tarihi" type="date" required min={isoGun(p.simdi)} value={g.gecerlilik} onChange={alan('gecerlilik')} />
         </div>
         <CokSatir etiket="Müşteriye not" value={g.not} onChange={alan('not')} placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." />
-        <div className="tc-pt-teklif-yukle">
-          <label className="tc-dugme tc-dugme-ikincil tc-dugme-normal">
-            <span>Görsel (numune fotoğrafı, çizim)</span>
-            <input type="file" accept="image/*,application/pdf" multiple disabled={yukleniyor} onChange={(o) => { void dosyaSec(o); }} />
-          </label>
-          {ekler.length > 0 && <span className="tc-pt-teklif-ipucu">{`${String(ekler.length)} dosya eklendi`}</span>}
+        <div className="tc-pt-teklif-yukle-alan">
+          <span className="tc-pt-teklif-yukle-etiket">Görsel (numune fotoğrafı, çizim)</span>
+          <div className="tc-pt-teklif-yukle">
+            {ekler.map((id) => (
+              <span className="tc-pt-teklif-yuklenen" key={id}>
+                <EkResmi id={id} />
+                <Dugme simge="x" aria-label="Kaldır" onClick={() => setEkler((x) => x.filter((e) => e !== id))} />
+              </span>
+            ))}
+            <label className="tc-dugme tc-dugme-ikincil tc-dugme-normal">
+              <Simge ad="camera" />
+              <span>Resim ekle</span>
+              <input type="file" accept="image/*,application/pdf" multiple disabled={yukleniyor} onChange={(o) => { void dosyaSec(o); }} />
+            </label>
+          </div>
         </div>
         {hata && <p className="tc-pt-teklif-hata" role="alert">{hata}</p>}
         <div className="tc-pt-teklif-alt">
