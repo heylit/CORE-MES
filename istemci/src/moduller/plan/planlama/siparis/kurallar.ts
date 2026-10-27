@@ -181,30 +181,14 @@ export function siparisAcilimi(D: PlanVerisi, r: SiparisSatiri) {
   return { baslik: `${s.id} · ${urunAdi(D, s.urun)}`, neden, bilgi };
 }
 
-// ---- gecikme bedeli ve elle çarpan (durum.betik AG0, agAyar, agElle; zr-agirlik agElleSinir) ----
+// ---- gecikme bedeli (durum.betik AG0, agAyar) ----
 export interface AgirlikAyari { kip: string; fin: number }
 export function agirlikAyari(D: PlanVerisi): AgirlikAyari {
   const a = nesne(D.planAgirlik) ? D.planAgirlik : {};
   return { kip: typeof a.kip === 'string' ? a.kip : 'bedel', fin: sonlu(a.fin) ? a.fin : 0.13 };
 }
-export const elleCarpan = (s: Siparis): number => (s.elle != null && Number.isFinite(+(s.elle as number)) ? +(s.elle as number) : 1);
-// Elle çarpanın üst sınırı: eski rol modelinde planlamacı 2, müdür ve yönetici 3. 223 a eşlemesiyle maliyet okuyan (müdür, yönetici) 3,
-// plan yazan 2 [VARSAYIM; SORU.md fark 6].
-export const elleSinir = (y: { maliyetOku: boolean; planYaz: boolean }): number => (y.maliyetOku ? 3 : y.planYaz ? 2 : 0);
-export const CARPANLAR: readonly [number, string][] = [[0.5, '×0,5 · daha az önemli'], [1, '×1 · normal'], [1.5, '×1,5 · önemli'], [2, '×2 · çok önemli'], [3, '×3 · en önemli (müdür)']];
-
 // Plan TL ayarı (durum.betik YM0, ymAyar): yalnız amaç.
 export const planAmaci = (D: PlanVerisi): string => (nesne(D.planTL) && typeof D.planTL.amac === 'string' ? D.planTL.amac : 'tl');
-
-// Fiyat formunun denetimi (zz24-sade fiyat): tutar zorunlu ve eksi olmaz, vade boş ya da 0-365 tam gün.
-export function fiyatDenetle(gelir: string, vade: string): { gelir: number; vade: number | null } | string {
-  const g = gelir.trim() === '' ? NaN : Number(gelir);
-  if (!Number.isFinite(g) || g < 0) return 'Tutar sıfır ya da daha büyük bir sayı olmalı.';
-  if (vade.trim() === '') return { gelir: g, vade: null };
-  const v = Number(vade);
-  if (!Number.isInteger(v) || v < 0 || v > 365) return 'Ödeme vadesi 0 ile 365 arasında tam gün olmalı.';
-  return { gelir: g, vade: v };
-}
 
 // ---- malzeme ve fason terminleri (durum.betik TM0, tmAyar, tmKat; zv-termin tmSureFas, tmFason, tmFasonDurum) ----
 export interface TerminAyari { katMal: number; katFas: number; ekMal: number; ekFas: number; esik: number }

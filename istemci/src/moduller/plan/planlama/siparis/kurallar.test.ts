@@ -3,7 +3,7 @@ import { ApiHatasi } from '../../../../ortak/veri/api.ts';
 import { degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
 import {
   darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
-  dengeIsisi, dengeKatsayisi, elleSinir, fasonDurumu, fasonSatirlari, fasonTerminiYaz, fiyatDenetle, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
+  dengeIsisi, dengeKatsayisi, fasonDurumu, fasonSatirlari, fasonTerminiYaz, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
   fasonKalemleri, malzemeKalemleri, ortusmeAdaylari, siparisIsisi, siparisMaliyetleri, terminIsisi, tl,
 } from './kurallar.ts';
 import { kaynakKur } from '../malzeme/kaynak.ts';
@@ -128,19 +128,6 @@ describe('P2 saf hesapları', () => {
     const V = terminIsisi(c, malzemeKalemleri(c.D, alimPlani(g, taban), calismaSimdisi(c)));
     expect(V.satirlar[0]!.h['g0']).toMatchObject({ sm: 'box', iyi: true, bayrak: true });
     expect(V.ust.metin).toMatch(/ 0 kalemin geliş tarihi yok; 0 kalem işi kaydırıyor\.$/);
-  });
-
-  it('elle çarpan sınırı: maliyet okuyan 3, plan yazan 2, ikisi de yoksa 0', () => {
-    expect(elleSinir({ maliyetOku: true, planYaz: true })).toBe(3);
-    expect(elleSinir({ maliyetOku: false, planYaz: true })).toBe(2);
-    expect(elleSinir({ maliyetOku: false, planYaz: false })).toBe(0);
-  });
-
-  it('fiyat denetimi: eksi tutar ve 365 günden uzun vade reddedilir, boş vade peşindir', () => {
-    expect(typeof fiyatDenetle('-1', '')).toBe('string');
-    expect(typeof fiyatDenetle('100', '400')).toBe('string');
-    expect(fiyatDenetle('100', '')).toEqual({ gelir: 100, vade: null });
-    expect(fiyatDenetle('100', '30')).toEqual({ gelir: 100, vade: 30 });
   });
 });
 
