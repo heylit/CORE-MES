@@ -344,6 +344,10 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                 <IsaretKutusu etiket="Yarıda kalıp dönülünce hazırlık yeniden eklensin" checked={a.resetup} disabled={!duzen}
                   onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, resetup: v }), 'Yeniden hazırlık değişti'); }} />
               </span>
+              <span className="tc-rr1-genis">
+                <IsaretKutusu etiket="Her kurulumda ilk parça onayı istensin" checked={a.ilkParca !== 'yok'} disabled={!duzen}
+                  onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, ilkParca: v ? 'her_kurulum' : 'yok' }), 'İlk parça onayı değişti'); }} />
+              </span>
             </>
           )}
         </div>

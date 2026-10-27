@@ -765,6 +765,7 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     split: KULLANIM_PROTOTIP[a.makineKullanimi],
     minLot: a.enKucukParca,
     resetup: a.yenidenAyar,
+    ilkParca: a.ilkParca,
     alts: aday.map((x) => String(x.kaynak.id)),
     altTimes: Object.fromEntries(aday.map((x) => [String(x.kaynak.id), { setup: metindenSayi(x.ayarSuresiDk), cycle: metindenSayi(x.birimSureDk) }])),
     digerAdaylar: a.adaylar.filter((x) => x.kaynak.tur !== 'istasyon').map((x) => ({
