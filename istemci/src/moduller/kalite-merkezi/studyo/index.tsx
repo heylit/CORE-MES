@@ -1,22 +1,18 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KmParcaKaynagi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmMerkezBelgesi, KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { DurumKutusu, Dugme, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
-import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
-import type { TeknikResimKontrolu } from '../../../ortak/cizim/TeknikResim.tsx';
+import type { Balon } from '../../../ortak/cizim/kurallar.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { tarihSaatMetni } from '../../../ortak/veri/zaman-metni.ts';
 import { useParcaKaynaklari } from '../yeni/parcalar/kaynak.ts';
 import { MalzemeSecici } from '../yeni/parcalar/MalzemeSecici.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../yeni/sekmeler.ts';
-import {
-  cizimBalonu, cizimOlcumleri, NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, sonOlcumler, uretimEmriKimligi, yeniOlcumler,
-} from './kurallar.ts';
+import { Resim, useKaliteFormu, type OlcumYazici } from './KaliteFormu.tsx';
+import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } from './kurallar.ts';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
-import {
-  useBalonPlaniYaz, useEmirNumuneleri, useEmirOlcumleri, useOlcumYaz, useResimAl, useResimDosyasi, useResimKaldir, useStudyoParcasi,
-} from './veri.ts';
+import { useBalonPlaniYaz, useEmirNumuneleri, useOlcumYaz, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
 // Resim ve modeller (597 a): Arkon çizim stüdyosunun düzeni; solda parça, resimler ve üretim emri, ortada Arkon'la ortak teknik resim
@@ -24,24 +20,6 @@ import './studyo.css';
 // yazma yetkisiyle yazılır (603 a).
 // Telefonda üç sütun sekmeyle değişir.
 type MobilGorunum = 'dosya' | 'resim' | 'plan';
-
-const TeknikResim = lazy(async () => ({ default: (await import('../../../ortak/cizim/TeknikResim.tsx')).TeknikResim }));
-const BOS_SATIR: readonly never[] = [];
-
-// Resmin dosyası gelince ortak parçaya verilir; parça dosyayı adının uzantısından (PDF, STEP, IGES, STL) tanır.
-function Resim({ resim, kontrol }: { resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim'> }) {
-  const dosya = useResimDosyasi(resim);
-  if (dosya.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(dosya.error, 'Resim dosyası alınamadı')} yenile={() => { void dosya.refetch(); }} />;
-  if (!dosya.data) return <DurumKutusu durum="yukleniyor" />;
-  const ad = dosya.data.ad ?? resim.ad;
-  const tam: TeknikResimKontrolu = {
-    ...kontrol,
-    anahtar: `km-resim-${String(resim.id)}-${resim.ozet}`,
-    dosyalar: [{ kind: resim.tur === 'resim' ? 'pdf' : 'model', name: ad, bytes: dosya.data.bayt, merkez: resim.merkezBelgeId, merkezOzet: resim.ozet }],
-    anaResim: ad,
-  };
-  return <Suspense fallback={<DurumKutusu durum="yukleniyor" />}><TeknikResim kontrol={tam} /></Suspense>;
-}
 
 function NumuneSatiri({ n }: { n: KmNumune }) {
   const d = NUMUNE_DURUMU[n.durum];
@@ -92,15 +70,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   );
   const emir = emirler.find((e) => e._id === emirKimligi) ?? emirler.find((e) => e.durum === 'Açık') ?? emirler[0] ?? null;
   const uretimEmriId = emir ? uretimEmriKimligi(emir._id) : null;
-  const olcumler = useEmirOlcumleri(uretimEmriId);
   const numuneler = useEmirNumuneleri(uretimEmriId);
-  const sonlar = useMemo(() => sonOlcumler(olcumler.data?.olcumler ?? []), [olcumler.data]);
-  const kmBalonlari = resim?.balonlar ?? BOS_SATIR;
-  const balonlar = useMemo(() => kmBalonlari.map(cizimBalonu), [kmBalonlari]);
-  const kayitli = useMemo(() => cizimOlcumleri(kmBalonlari, sonlar), [kmBalonlari, sonlar]);
-  // Gönderilen ölçüm sunucu cevabına dek ekranda kalır; ret gelirse geri alınır.
-  const [bekleyen, bekleyenYaz] = useState<Record<number, Olcum>>({});
-  const gosterilen = useMemo(() => ({ ...kayitli, ...bekleyen }), [kayitli, bekleyen]);
   const { bildir } = useBildirim();
 
   // Görüntüleyicideki plan değişikliği kaydedilene dek taslaktır; resim ya da sürümü değişince düşer.
@@ -110,7 +80,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const planYaz = useBalonPlaniYaz(malzemeNo);
   const planKaydet = () => {
     if (!resim || !taslak) return;
-    planYaz.mutate({ resim, balonlar: planGirdileri(kmBalonlari, taslak) }, {
+    planYaz.mutate({ resim, balonlar: planGirdileri(resim.balonlar, taslak) }, {
       onSuccess: () => { taslakYaz(null); bildir('tamam', 'Kontrol planı kaydedildi.'); },
       onError: (h) => { bildir('hata', hataIletisi(h, 'Kontrol planı kaydedilemedi.')); },
     });
@@ -136,22 +106,11 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
     });
   };
 
+  // Ölçüm kalite formunun kaydıdır (798); stüdyo Kalite Merkezi ucuna yazar.
   const olcumYaz = useOlcumYaz();
-  const olcumlerYaz = useCallback((yeni: Record<number, Olcum>) => {
-    if (taslak !== null) { bildir('bilgi', 'Ölçümden önce kontrol planını kaydedin.'); return; }
-    if (uretimEmriId === null) { bildir('bilgi', 'Ölçüm yazmak için üretim emri seçin.'); return; }
-    if (!yetki.yaz) { bildir('bilgi', 'Ölçüm yazma yetkiniz yok.'); return; }
-    const satirlar = yeniOlcumler(kmBalonlari, gosterilen, yeni);
-    if (!satirlar.length) return;
-    const nolar = Object.keys(yeni).map(Number).filter((no) => yeni[no] !== gosterilen[no]);
-    bekleyenYaz((o) => ({ ...o, ...Object.fromEntries(nolar.map((no) => [no, yeni[no]])) }));
-    const birak = () => { bekleyenYaz((o) => Object.fromEntries(Object.entries(o).filter(([no]) => !nolar.includes(Number(no))))); };
-    olcumYaz.mutate({ uretimEmriId, olcumler: satirlar }, {
-      onSuccess: birak,
-      onError: (h) => { birak(); bildir('hata', hataIletisi(h, 'Ölçüm kaydedilemedi.')); },
-    });
-  }, [taslak, uretimEmriId, yetki.yaz, kmBalonlari, gosterilen, olcumYaz, bildir]);
-  useEffect(() => { bekleyenYaz({}); }, [resim?.id, uretimEmriId]);
+  const yaz: OlcumYazici = useCallback((g) => olcumYaz.mutateAsync(g), [olcumYaz.mutateAsync]);
+  const engel = useCallback(() => (taslak !== null ? 'Ölçümden önce kontrol planını kaydedin.' : yetki.yaz ? null : 'Ölçüm yazma yetkiniz yok.'), [taslak, yetki.yaz]);
+  const { olcumler, balonlar, gosterilen, olcumlerYaz } = useKaliteFormu({ resim, uretimEmriId, yaz, engel });
 
   const emirSec = (kimlik: string) => {
     const y = new URLSearchParams(adres);
