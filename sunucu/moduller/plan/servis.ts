@@ -30,6 +30,7 @@ import {
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import { taslagiGuncelSurumeBagla } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
 
@@ -985,6 +986,14 @@ export function bedelAyariYaz(db: Db, k: Kullanici, t: TaslakGirdisi, a: BedelAy
     const fark = (Object.keys(a) as (keyof BedelAyariGovdesi)[]).filter((x) => a[x] !== undefined && a[x] !== b.bedelAyari[x]);
     return { tur: 'bedel_ayari', ozet: `Bedel ayarı: ${fark.length ? fark.join(', ') : 'değişiklik yok'}`, isEmriIdleri: [] };
   });
+}
+
+// 774 a: taslak açıldığı andaki motor ayarı sürümünde kalır; planlamacı isterse güncel sürüme geçirir. Defter kaydı düşmez (defterin
+// tür listesi dolu tabloda kısıttır); sürüm artar, açık ekran yenilenir. Zaten güncel sürümdeyse hiçbir şey yazılmaz.
+export async function motorAyariGuncelle(db: Db, k: Kullanici, id: number, surum: number): Promise<PlanCevabi> {
+  await acikTaslak(db, k, id, surum);
+  if (await taslagiGuncelSurumeBagla(db, k, id)) await s.senaryoSurumArtir(db, id);
+  return planOku(db, k, await baglamKur(db, k, id));
 }
 
 // Elle çarpan (195 a): siparişin çarpan geçmişi, yeniden eskiye; geçerli çarpan ilkidir.
