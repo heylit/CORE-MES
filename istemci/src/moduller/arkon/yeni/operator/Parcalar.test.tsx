@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { Cark, DurumDugmeleri, GorevKarti, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { DurumDugmeleri, GorevKarti, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -149,49 +149,6 @@ describe('685: telefonda iş özeti', () => {
   it('işsiz istasyonda açılıp kapanmaz', () => {
     const { container } = render(<IsOzeti is={bosIs({ l: 'Boş' })} acik={false} degistir={() => {}} />);
     expect(container.querySelector('button')).toBeNull();
-  });
-});
-
-describe('684: çark', () => {
-  const ogeler = [{ anahtar: 'a', baslik: 'UE-1' }, { anahtar: 'b', baslik: 'UE-2', alt: 'Op 20' }, { anahtar: 'c', baslik: 'UE-3' }];
-  it('ileri geri yalnız göz atar; geçiş düğmesi bakılan öğeyi verir', () => {
-    const gecilen: number[] = [];
-    const { getByRole, queryByRole } = render(<Cark etiket="İş" ogeler={ogeler} etkin={0} gecMetni="Bu işe geç" gec={(i) => gecilen.push(i)} />);
-    const cark = getByRole('group', { name: 'İş' });
-    expect(cark.textContent).toContain('İş 1/3 · ekranda');
-    expect(queryByRole('button', { name: 'Bu işe geç' })).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Sonraki iş' }));
-    expect(cark.textContent).toContain('UE-2');
-    expect(gecilen).toEqual([]);
-    fireEvent.keyDown(cark, { key: 'ArrowRight' });
-    expect(cark.textContent).toContain('İş 3/3');
-    expect(getByRole('button', { name: 'Sonraki iş' })).toHaveProperty('disabled', true);
-    fireEvent.keyDown(cark, { key: 'Escape' });
-    expect(cark.textContent).toContain('İş 1/3 · ekranda');
-    fireEvent.keyDown(cark, { key: 'ArrowRight' });
-    fireEvent.click(getByRole('button', { name: 'Bu işe geç' }));
-    expect(gecilen).toEqual([1]);
-  });
-  it('702: ekrandaki öğede ekranın kartı çarkın ortasında; başka öğeye bakınca başlığı görünür', () => {
-    const { getByRole, getByText, queryByText } = render(
-      <Cark etiket="İş" ogeler={ogeler} etkin={0} gecMetni="Bu işe geç" gec={() => {}} ekranda={<p>İş kartı</p>} />,
-    );
-    expect(getByText('İş kartı')).toBeTruthy();
-    fireEvent.click(getByRole('button', { name: 'Sonraki iş' }));
-    expect(queryByText('İş kartı')).toBeNull();
-    expect(getByRole('group', { name: 'İş' }).textContent).toContain('UE-2');
-  });
-  it('yana kaydırma bir adım gider; tek öğede çark yok', () => {
-    // jsdom PointerEvent tanımlamaz; konumlu olay MouseEvent ile verilir.
-    if (!('PointerEvent' in window)) Object.defineProperty(window, 'PointerEvent', { value: MouseEvent, configurable: true });
-    const { getByRole } = render(<Cark etiket="İş" ogeler={ogeler} etkin={1} gecMetni="Bu işe geç" gec={() => {}} />);
-    const cark = getByRole('group', { name: 'İş' });
-    fireEvent.pointerDown(cark, { clientX: 200 });
-    fireEvent.pointerUp(cark, { clientX: 100 });
-    expect(cark.textContent).toContain('İş 3/3');
-    cleanup();
-    const tek = render(<Cark etiket="İş" ogeler={ogeler.slice(0, 1)} etkin={0} gecMetni="Bu işe geç" gec={() => {}} />);
-    expect(tek.container.firstChild).toBeNull();
   });
 });
 
