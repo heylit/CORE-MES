@@ -76,7 +76,7 @@ test('Planlama ikinci menüsünde planlama maddeleri plan.planlama-oku, maliyet 
   assert.ok(menu);
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
   assert.deepEqual(maddeler.map((m) => m.anahtar),
-    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat']);
+    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat', 'veri-sagligi']);
   const maliyet = ['maliyet', 'giderler', 'denge'];
   assert.deepEqual(maddeler.filter((m) => m.islem === 'finans.maliyet-oku').map((m) => m.anahtar), maliyet);
   assert.ok(maddeler.filter((m) => !maliyet.includes(m.anahtar)).every((m) => m.islem === 'plan.planlama-oku'));

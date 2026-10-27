@@ -179,6 +179,26 @@ export const motorYerlesimiCevabi = z.object({
 // Planlama çerçevesi motorun yerleşimini çizmez, yalnız uyarısını gösterir: motor koşulmadan aynı uyarılar (motorYerlesimiCevabi.uyarilar ile eşit).
 export const motorUyarilariCevabi = z.object({ uyarilar: z.array(z.string()) });
 
+// Veri sağlığı raporu (782): plana giden verinin kaynağında boş olan, motorun ise bir varsayımla doldurduğu yerler. Yalnız okur.
+// Sayı null: o dilim okunamadı (örn. maliyet ya da planlama çalışması yok); 0 değildir. Örnekler en çok VERI_SAGLIGI_ORNEK tanedir.
+export const VERI_SAGLIGI_ORNEK = 20;
+export const VERI_SAGLIGI_KATEGORILERI = [
+  'stok-bos', 'sure-bos', 'istasyon-plan-ayari-yok', 'vardiyasiz-istasyon', 'istasyon-maliyet-yok', 'maliyet-doviz', 'terminsiz-emir',
+  'arizali-makine', 'elle-tezgah-ucreti',
+] as const;
+export const veriSagligiCevabi = z.object({
+  calismaVar: z.boolean(),
+  malzemeKesildi: z.boolean(),
+  kategoriler: z.array(z.object({
+    anahtar: z.enum(VERI_SAGLIGI_KATEGORILERI),
+    baslik: z.string(),
+    etki: z.string(),
+    sayi: z.number().int().nonnegative().nullable(),
+    toplam: z.number().int().nonnegative().nullable(),
+    ornekler: z.array(z.object({ kod: z.string(), ad: z.string() })).max(VERI_SAGLIGI_ORNEK),
+  })),
+});
+
 
 // Emir önizlemesi (prototip previewNewOrder): yeni emir yazılmadan önce plana etkisi; hiçbir şey kaydedilmez.
 // Okuma kaynağıdır (GET): girdiler sorgu dizgesinde; boş tarih verilmez.
@@ -408,6 +428,7 @@ export type PlanGostergeleri = z.output<typeof planGostergeleri>;
 export type SenaryolarCevabi = z.output<typeof senaryolarCevabi>;
 export type MotorYerlesimiCevabi = z.output<typeof motorYerlesimiCevabi>;
 export type MotorUyarilariCevabi = z.output<typeof motorUyarilariCevabi>;
+export type VeriSagligiCevabi = z.output<typeof veriSagligiCevabi>;
 export type KaynakGirdisi = z.input<typeof kaynakGirdisi>;
 export type TaslakGirdisi = z.input<typeof taslakGirdisi>;
 export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;

@@ -75,7 +75,8 @@ describe('planlama menüsü', () => {
   it('önerilen menü çekirdekteki menüyle aynıdır; Planlama menüsünde planlama maddeleri planlama işlemini, maliyet maddeleri maliyet okumasını ister (195 a)', () => {
     expect(IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota')).toEqual(ONERILEN_IKINCI_MENU);
     const planMenusu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/plan');
-    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = planMenusu?.gruplar.flatMap((g) => [...g.maddeler]) ?? [];
+    // İlk grup eski çerçevenin görünümleridir; sonraki gruplar ayrı sayfalardır (782 veri sağlığı).
+    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = [...(planMenusu?.gruplar[0]?.maddeler ?? [])];
     expect(maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI).map((m) => m.anahtar))
       .toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
     expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(MALIYET_ANAHTARLARI);
