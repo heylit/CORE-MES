@@ -150,7 +150,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(operator, 'GET', '/istasyonlar/secim')).durum, 200);
   });
 
-  test('yetki (195 a): Reçete ve Rota iş merkezi, istasyon ve makine listesini; Fabrika Haritası makine durumunu okur; öteki tanımlar kapalı', async () => {
+  test('yetki (195 a, 757 a): Reçete ve Rota iş merkezi, istasyon ve makine listesini; Rota plan ayarını; Fabrika Haritası makine durumunu okur; öteki tanımlar kapalı', async () => {
     const rol = async (kod: string): Promise<number> => {
       const r = await vt().tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]);
       if (!r) throw new Error(`${kod} rolü yok`);
@@ -160,18 +160,22 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     await girisliKisiEkle('depo195', await rol('depo'));
     const kalite = await girisCerezi('kalite195');
     const depo = await girisCerezi('depo195');
-    for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler', '/makine-durumlari']) assert.equal((await istek(kalite, 'GET', yol)).durum, 200, yol);
+    for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler', '/makine-durumlari', '/istasyon-plan-ayarlari']) assert.equal((await istek(kalite, 'GET', yol)).durum, 200, yol);
     assert.equal((await istek(depo, 'GET', '/makine-durumlari')).durum, 200);
+    const depoAyar = await istek(depo, 'GET', '/istasyon-plan-ayarlari');
+    assert.deepEqual([depoAyar.durum, hataKodu(depoAyar)], [403, 'YETKI_YOK'], 'Rota sayfası olmayan');
     for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler']) {
       const red = await istek(depo, 'GET', yol);
       assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], yol);
     }
-    for (const yol of ['/operasyon-tipleri', '/istasyon-plan-ayarlari', '/kisi-yetkinlikleri', '/ekipler']) {
+    for (const yol of ['/operasyon-tipleri', '/kisi-yetkinlikleri', '/ekipler']) {
       const red = await istek(kalite, 'GET', yol);
       assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], yol);
     }
     const yazma = await istek(kalite, 'POST', '/is-merkezleri', { kod: yeniKod('IM'), ad: 'Yetkisiz' });
     assert.deepEqual([yazma.durum, hataKodu(yazma)], [403, 'YETKI_YOK']);
+    const ayarYazma = await istek(kalite, 'POST', '/istasyonlar/1/plan-ayari', { verimYuzde: '90', operatorIhtiyaci: '1', surum: 1 });
+    assert.deepEqual([ayarYazma.durum, hataKodu(ayarYazma)], [403, 'YETKI_YOK'], 'plan ayarı yazması kapalı kalır');
   });
 
   test('IS16: pano özeti (#483): yalnız sayı; terminal, vardiya ya da istasyonlar sayfası olan okur, olmayan 403; yalnız durumu çalışır girilen makine çalışır; personel Vardiya > Personel ile aynı kaynaktan', async () => {
