@@ -462,3 +462,50 @@ export function gercekTalasAdedi(bitti: boolean, adet: number, ilkSaglam: number
   const baslanan = ilkSaglam ?? 0;
   return { islenen: baslanan, parca: baslanan };
 }
+
+// --- Taban fotoğrafı (934, 936 a) ve üretim dışı masraf (911 b, 940 c) ---
+
+export const TABAN_EMIRSIZ = 'Projenin iş emri yok; plan maliyeti olmadan taban alınamaz.';
+export const TABAN_GEREKCE = 'Taban yenileniyor: gerekçe zorunlu.';
+export const MASRAF_YOK = 'Gider belgesi bulunamadı.';
+export const MASRAF_IPTAL = 'İptal edilmiş belge projeye bağlanamaz.';
+export const MASRAF_SATIN_ALMA = 'Satın alma siparişine bağlı belge üretim maliyetine satın almadan girer; projeye ayrıca bağlanamaz.';
+export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz (faiz, vergi, kredi, kur farkı).';
+
+// PM-40: taban yalnız iş emri olan projede alınır; ilk taban gerekçesiz, yenileme gerekçeli. İlk tabanda verilen gerekçe yazılmaz
+// (veritabanı da ilk satırı gerekçesiz ister).
+export function tabanKarari(oncekiSayisi: number, isEmriSayisi: number, gerekce: string | null): { ret: string } | { sira: number; gerekce: string | null } {
+  if (isEmriSayisi === 0) return { ret: TABAN_EMIRSIZ };
+  if (oncekiSayisi === 0) return { sira: 1, gerekce: null };
+  if (gerekce === null || gerekce.trim() === '') return { ret: TABAN_GEREKCE };
+  return { sira: oncekiSayisi + 1, gerekce: gerekce.trim() };
+}
+
+// PM-41: projeye yalnız iptal edilmemiş, satın almaya bağlı olmayan ve proje masrafı sayılan türdeki gider belgesi bağlanır.
+export function masrafReddi(
+  belge: { durum: string; kategori: string; satinAlmaBagli: boolean } | undefined, kategoriler: readonly string[],
+): string | null {
+  if (belge === undefined) return MASRAF_YOK;
+  if (belge.durum === 'iptal') return MASRAF_IPTAL;
+  if (belge.satinAlmaBagli) return MASRAF_SATIN_ALMA;
+  if (!kategoriler.includes(belge.kategori)) return MASRAF_KATEGORI;
+  return null;
+}
+
+// PM-42: son gerçekleşen = üretim gerçekleşeni + iptal edilmemiş bağlı masraf; tahmini son = son gerçekleşen + kalan plan;
+// fark = tahmini son - taban planı. Bilinmeyen taraf varsa sonuç bilinmez (sıfır uydurulmaz). Masrafın planı yoktur.
+export function maliyetFarki(
+  tabanPlan: number | null, uretimGerceklesen: number | null, kalanPlan: number | null, masraflar: readonly { tutarTl: number; iptal: boolean }[],
+): { masrafToplami: number; sonGerceklesen: number | null; tahminiSon: number | null; fark: number | null } {
+  const masrafToplami = masraflar.reduce((t, m) => (m.iptal ? t : t + m.tutarTl), 0);
+  const sonGerceklesen = uretimGerceklesen === null ? null : uretimGerceklesen + masrafToplami;
+  const tahminiSon = sonGerceklesen === null || kalanPlan === null ? null : sonGerceklesen + kalanPlan;
+  const fark = tahminiSon === null || tabanPlan === null ? null : tahminiSon - tabanPlan;
+  return { masrafToplami, sonGerceklesen, tahminiSon, fark };
+}
+
+// Seçici araması: joker karakterler kaçırılır; boş arama süzmez.
+export function aramaKalibi(ara: string): string | null {
+  const m = ara.trim();
+  return m === '' ? null : `%${m.replace(/[\\%_]/g, (k) => `\\${k}`)}%`;
+}

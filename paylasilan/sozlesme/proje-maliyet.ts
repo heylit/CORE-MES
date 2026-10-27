@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { tarihSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 export const projeMaliyetParametresi = z.object({ projeId: z.coerce.number().int().positive() });
 
@@ -86,8 +86,77 @@ export const projeMaliyetCevabi = z.object({
   // Toplamlara girmeyen kalemler (planı ya da gerçekleşeni bilinmeyen).
   eksikKalemler: z.array(z.enum(MALIYET_KALEMLERI)),
   eksikler: z.array(z.enum(EKSIK_VERILER)),
+  ozet: z.lazy(() => maliyetOzetiSemasi),
 });
 export type ProjeMaliyetCevabi = z.output<typeof projeMaliyetCevabi>;
 export type KalemSatiri = z.output<typeof kalemSatiriSemasi>;
 export type SapanIsEmri = z.output<typeof sapanIsEmriSemasi>;
 
+
+// --- Taban fotoğrafı (934, 936 a) ve üretim dışı masraf (911 b, 940 c) ---
+
+// Taban: projenin plan maliyetinin elle alınan fotoğrafı. İlk taban gerekçesiz, her yenileme gerekçeli; eskiler geçmişte kalır.
+export const tabanSemasi = z.object({
+  sira: z.number().int().positive(),
+  plan: tutar,
+  kalemler: z.array(z.object({ kalem: z.enum(MALIYET_KALEMLERI), plan: tutar })),
+  eksikKalemler: z.array(z.enum(MALIYET_KALEMLERI)),
+  isEmriSayisi: z.number().int().positive(),
+  gerekce: z.string().nullable(),
+  kisiAd: z.string().nullable(),
+  an: zamanSemasi,
+});
+// Projeye bağlanabilen gider kategorileri: üretim dışı proje masrafı. Faiz (finansman kalemi), vergi, kredi ve kur farkı girmez.
+export const PROJE_MASRAF_KATEGORILERI = ['mal_alimi', 'personel', 'kira', 'enerji', 'lojistik', 'pazarlama', 'diger_gider'] as const;
+export const masrafSatiriSemasi = z.object({
+  id: z.number().int().positive(),
+  belgeId: z.number().int().positive(),
+  belgeNo: z.string().nullable(),
+  belgeTarihi: tarihSemasi,
+  kategori: z.string(),
+  aciklama: z.string().nullable(),
+  // KDV hariç TL. İptal edilen belge toplama girmez.
+  tutarTl: z.number(),
+  iptal: z.boolean(),
+  gorevId: z.number().int().nullable(),
+  kisiAd: z.string().nullable(),
+  an: zamanSemasi,
+});
+export const maliyetOzetiSemasi = z.object({
+  taban: tabanSemasi.nullable(),
+  tabanGecmisi: z.array(tabanSemasi),
+  masraflar: z.array(masrafSatiriSemasi),
+  masrafToplami: z.number(),
+  // Son gerçekleşen: üretim gerçekleşeni + bağlı masraf. Tahmini son: son gerçekleşen + kalan plan. Fark tahmini son - taban; taban yoksa null.
+  sonGerceklesen: tutar,
+  tahminiSon: tutar,
+  fark: tutar,
+});
+
+export const tabanAlGovdesi = z.object({
+  gerekce: z.string().trim().max(500, 'En çok 500 karakter.').nullish().transform((v) => (v === '' || v === undefined ? null : v)),
+});
+export const masrafBaglaGovdesi = z.object({
+  belgeId: z.number().int().positive().max(2147483647),
+  gorevId: z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null),
+});
+export const masrafParametresi = z.object({ bagId: z.coerce.number().int().positive().max(2147483647) });
+export const masrafSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).default('') });
+export const masrafSecenegiSemasi = z.object({
+  id: z.number().int().positive(),
+  belgeNo: z.string().nullable(),
+  belgeTarihi: tarihSemasi,
+  kategori: z.string(),
+  aciklama: z.string().nullable(),
+  // Yalnız finans.maliyet-oku olana; öteki kullanıcıya null.
+  tutarTl: z.number().nullable(),
+});
+export const masrafSecenekleriCevabi = z.object({ belgeler: z.array(masrafSecenegiSemasi) });
+export const yazmaCevabi = z.object({ tamam: z.literal(true) });
+
+export type Taban = z.output<typeof tabanSemasi>;
+export type MasrafSatiri = z.output<typeof masrafSatiriSemasi>;
+export type MaliyetOzeti = z.output<typeof maliyetOzetiSemasi>;
+export type TabanAlGovdesi = z.input<typeof tabanAlGovdesi>;
+export type MasrafBaglaGovdesi = z.input<typeof masrafBaglaGovdesi>;
+export type MasrafSecenekleriCevabi = z.output<typeof masrafSecenekleriCevabi>;

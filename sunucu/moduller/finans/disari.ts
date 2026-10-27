@@ -7,12 +7,14 @@ export {
 } from './servis.ts';
 // 260 a: satış siparişinin faturaları ve iadeleri (tutar finans rakamıdır; FNS-48 yetkisi çağıranın ucundadır).
 export { siparisFaturalari } from './servis.ts';
+// 911 b, 940 c: projeye bağlanan gider belgeleri ve seçicisi (tutar KDV hariç TL; FNS-48 yetkisi çağıranın ucundadır).
+export { giderBelgeleri, giderBelgesiSecenekleri } from './servis.ts';
 export type { SatisSevkleriCozucusu, SatisSiparisleriCozucusu, SevkIsiOzetiCozucusu, SiparisFaturasi, SiparisOzetiCozucusu } from './servis.ts';
 // Siparişin durumu ve müşterisi kablolamadan gelir (siparişler -> malzemeler -> finans döngüsü).
 export const siparisOzetiCozucusu = (cozucu: SiparisOzetiCozucusu | null): void => siparisOzetiCozucusuKaydet(cozucu);
 export const satisSiparisleriCozucusu = (cozucu: SatisSiparisleriCozucusu | null): void => satisSiparisleriCozucusuKaydet(cozucu);
 export const sevkIsiOzetiCozucusu = (cozucu: SevkIsiOzetiCozucusu | null): void => sevkIsiOzetiCozucusuKaydet(cozucu);
 export const satisSevkleriCozucusu = (cozucu: SatisSevkleriCozucusu | null): void => satisSevkleriCozucusuKaydet(cozucu);
-export type { BirimMaliyeti, GenelGiderOrani, AlisBelgesi, GecerliFaiz, GecerliKur, SiparisAnahtari, SiparisOdemesi, SiparisPlani } from './servis.ts';
+export type { BirimMaliyeti, GenelGiderOrani, AlisBelgesi, GiderBelgesi, GecerliFaiz, GecerliKur, SiparisAnahtari, SiparisOdemesi, SiparisPlani } from './servis.ts';
 export type { MaliyetTuru } from './kurallar.ts';
 export { tedarikciOlabilirMi } from './kurallar.ts';
