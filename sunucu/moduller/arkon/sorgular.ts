@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { ArkonDeposu, ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
+import type { AnomaliOlayTuru, ArkonDeposu, ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
 import type { IletiAraligi, KayitSutunlari, KonumKimlikleri } from './kurallar.ts';
 
 export interface BelgeSatiri {
@@ -549,6 +549,78 @@ export async function anomaliSatirlariYenile(db: Db, tarih: string, satirlar: re
 
 export async function anomaliGunuKesinlestir(db: Db, tarih: string): Promise<void> {
   await db.sorgu("UPDATE arkon_anomali_gunu SET durum = 'kesin', kapanis = now() WHERE tarih = $1::date AND durum = 'acik'", [tarih]);
+}
+
+/* ---------------- Üretim anomalisi zaman olayları (kart 764) ---------------- */
+
+export interface AnomaliOlayiSatiri {
+  id: number;
+  tur: AnomaliOlayTuru;
+  isEmriId: number;
+  uretimEmriId: number | null;
+  emirNo: string | null;
+  opNo: number | null;
+  istasyonId: number | null;
+  kaynakTur: 'makine' | 'kisi' | null;
+  kaynakId: number | null;
+  kayitId: number | null;
+  planSurumu: number | null;
+  planAni: string | null;
+  tabanAni: string | null;
+  tabanDakika: number | null;
+  gercekAni: string | null;
+  dakika: number;
+  kokOlayId: number | null;
+  acilis: string;
+  guncelleme: string;
+  kapanis: string | null;
+  bildirim: string | null;
+}
+
+const OLAY_SUTUNLARI = `id::float8 AS id, tur, is_emri_id AS "isEmriId", uretim_emri_id AS "uretimEmriId", emir_no AS "emirNo", op_no AS "opNo",
+  istasyon_id AS "istasyonId", kaynak_tur AS "kaynakTur", kaynak_id AS "kaynakId", kayit_id::float8 AS "kayitId", plan_surumu AS "planSurumu",
+  ${zamanMetni('plan_ani')} AS "planAni", ${zamanMetni('taban_ani')} AS "tabanAni", taban_dakika::float8 AS "tabanDakika", ${zamanMetni('gercek_ani')} AS "gercekAni",
+  dakika::float8 AS dakika, kok_olay_id::float8 AS "kokOlayId", ${zamanMetni('acilis')} AS acilis, ${zamanMetni('guncelleme')} AS guncelleme,
+  ${zamanMetni('kapanis')} AS kapanis, ${zamanMetni('bildirim')} AS bildirim`;
+
+// Yenileme için: verilen iş emirlerinin bütün olayları ve iş emri listede olmasa da açık olan her olay.
+export function anomaliOlaylariYenilenecek(db: Db, isEmriIdleri: readonly number[]): Promise<AnomaliOlayiSatiri[]> {
+  return db.sorgu<AnomaliOlayiSatiri>(
+    `SELECT ${OLAY_SUTUNLARI} FROM arkon_anomali_olayi WHERE is_emri_id = ANY($1::int[]) OR kapanis IS NULL ORDER BY id`, [[...isEmriIdleri]]);
+}
+
+// Sayfa için: açık olaylar ve verilen andan sonra açılan ya da kapanan olaylar, yeniden eskiye; sınırlı.
+export function anomaliOlaylariGoster(db: Db, sonra: string, sinir: number): Promise<AnomaliOlayiSatiri[]> {
+  return db.sorgu<AnomaliOlayiSatiri>(
+    `SELECT ${OLAY_SUTUNLARI} FROM arkon_anomali_olayi
+      WHERE kapanis IS NULL OR kapanis >= $1::timestamptz OR acilis >= $1::timestamptz
+      ORDER BY (kapanis IS NULL) DESC, dakika DESC, id DESC LIMIT $2`, [sonra, sinir]);
+}
+
+export type YeniAnomaliOlayi = Omit<AnomaliOlayiSatiri, 'id' | 'guncelleme' | 'bildirim'>;
+
+export async function anomaliOlayiAc(db: Db, o: YeniAnomaliOlayi): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO arkon_anomali_olayi (tur, is_emri_id, uretim_emri_id, emir_no, op_no, istasyon_id, kaynak_tur, kaynak_id, kayit_id, plan_surumu,
+       plan_ani, taban_ani, taban_dakika, gercek_ani, dakika, kok_olay_id, acilis, guncelleme, kapanis)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12::timestamptz, $13, $14::timestamptz, $15, $16, $17::timestamptz, $17::timestamptz, $18::timestamptz)
+     RETURNING id::float8 AS id`,
+    [o.tur, o.isEmriId, o.uretimEmriId, o.emirNo, o.opNo, o.istasyonId, o.kaynakTur, o.kaynakId, o.kayitId, o.planSurumu,
+      o.planAni, o.tabanAni, o.tabanDakika, o.gercekAni, o.dakika, o.kokOlayId, o.acilis, o.kapanis],
+  );
+  return satir!.id;
+}
+
+// Yalnız açık olay güncellenir: kapanan olay bir daha değişmez. Plan anı ve açılış donmuştur, burada yazılmaz.
+export async function anomaliOlayiGuncelle(
+  db: Db, id: number, g: { dakika: number; tabanDakika: number | null; gercekAni: string | null; kokOlayId: number | null; guncelleme: string; kapanis: string | null },
+): Promise<void> {
+  await db.sorgu(
+    `UPDATE arkon_anomali_olayi SET dakika = $2, taban_dakika = $3, gercek_ani = $4::timestamptz, kok_olay_id = $5, guncelleme = $6::timestamptz,
+       kapanis = $7::timestamptz
+      WHERE id = $1 AND kapanis IS NULL`,
+    [id, g.dakika, g.tabanDakika, g.gercekAni, g.kokOlayId, g.guncelleme, g.kapanis],
+  );
 }
 
 // Üretim Hazırlık kuyruk sırası (kart 527). Tablo küçüktür (açık işler kadar): paket okuması bütün satırları tek sorguda alır.

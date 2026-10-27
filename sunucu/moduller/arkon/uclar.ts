@@ -1,12 +1,13 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  anomaliCevabi, anomaliIstatistikCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
+  anomaliCevabi, anomaliIstatistikCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
   merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
+import { anomaliOlaylari } from './anomali-zaman.ts';
 import * as servis from './servis.ts';
 
 // Okuma ve yazma uçları Arkon'u açan üç sayfadan birini ister (Arkon rolü olan her TMI rolünde var; rol dağılımı testi). Yazma için
@@ -237,6 +238,14 @@ export const uclar = [
     yetki: ANOMALI_OKUMA,
     cevap: anomaliCevabi,
     isle: ({ db, kullanici }) => servis.anomaliler(db, kullanici),
+  }),
+  // Zaman olayları (kart 764): geç giriş, geç teslim, sonraki işe etki, teslim riski; 15 dakikalık işin yazdığı kayıtlardan, kapsamla süzülü.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/anomali-olaylari',
+    yetki: ANOMALI_OKUMA,
+    cevap: anomaliOlaylariCevabi,
+    isle: ({ db, kullanici }) => anomaliOlaylari(db, kullanici),
   }),
   // Gün, hafta, ay istatistiği (kart #1306): kaydedilmiş günlerden; kişi kırılımı yalnız arkon.anomali-kisi ile.
   uc({

@@ -2391,6 +2391,117 @@ export function makineIzinliMi(atananKisiler: readonly number[], izinliKisiler: 
   return atananKisiler.length > 0 && atananKisiler.every((k) => izinliKisiler.has(k));
 }
 
+/* ---------------- Anomali zaman olayları (kart 764, AR-AN-13..17) ---------------- */
+
+// İki an arasındaki net aktif dakika (vardiya dışı ve mola sayılmaz); b, a'dan önceyse eksi.
+export function netFarkDk(araliklar: readonly NetAralik[], a: number, b: number): number {
+  return b >= a ? kesisimDakika(araliklar, a, b) : -kesisimDakika(araliklar, b, a);
+}
+
+// t anından dk net aktif dakika sonraki an. Aralıklar o kadar ileri gitmiyorsa null: bilinmeyen an uydurulmaz.
+export function netIleri(araliklar: readonly NetAralik[], t: number, dk: number): number | null {
+  if (!(dk > 0)) return t;
+  let kalan = dk * DAKIKA_MS;
+  for (const a of [...araliklar].sort((x, y) => x.bas - y.bas)) {
+    if (a.bit <= t) continue;
+    const bas = Math.max(a.bas, t);
+    if (a.bit - bas >= kalan) return bas + kalan;
+    kalan -= a.bit - bas;
+  }
+  return null;
+}
+
+// 766 a: üretime giriş anı ayar başıdır (ayar planın parçasıdır); ayar olayı yoksa başlama.
+export function girisAni(z: { ayarBasi: string | null; baslama: string | null }): number | null {
+  const an = z.ayarBasi ?? z.baslama;
+  return an === null ? null : Date.parse(an);
+}
+
+export interface GecikmeGirdisi {
+  // Olayın donmuş plan anı; olay yoksa canlı plandaki an.
+  planAni: number;
+  // Gerçekleşen an (giriş, girdinin gelişi); henüz yoksa null: gecikme şimdiye kadar sürer.
+  gerceklesen: number | null;
+  simdi: number;
+  araliklar: readonly NetAralik[];
+  // Boşsa kural kapalıdır (770 b).
+  esikDk: number | null;
+  // Bu iş için açık olay var mı.
+  acik: boolean;
+}
+export interface GecikmeHukmu { dakika: number; bitti: boolean }
+
+// AR-AN-13 (geç giriş) ve AR-AN-14 (geç teslim): plan anından gerçekleşen ana, yoksa şimdiye, net dakika; eşiği aşınca olay açılır.
+// Açık olay eşik değişse ya da kapansa da ölçülmeye devam eder: plan anı donmuştur, dakika geri gitmez. Plandan önce gerçekleşen gecikme değildir.
+export function gecikmeHukmu(g: GecikmeGirdisi): GecikmeHukmu | null {
+  if (g.esikDk === null && !g.acik) return null;
+  const dakika = Math.max(0, netFarkDk(g.araliklar, g.planAni, g.gerceklesen ?? g.simdi));
+  if (!g.acik && !(dakika > (g.esikDk as number))) return null;
+  return { dakika, bitti: g.gerceklesen !== null };
+}
+
+// AR-AN-14: işin girdilerinin hepsinin geldiği an; biri gelmediyse null. Girdisi olmayan işte undefined: kural uygulanmaz.
+export function girdiAni(girdiler: readonly { geldi: number | null }[]): number | null | undefined {
+  if (girdiler.length === 0) return undefined;
+  let son = -Infinity;
+  for (const g of girdiler) {
+    if (g.geldi === null) return null;
+    son = Math.max(son, g.geldi);
+  }
+  return son;
+}
+
+// Tahmini bitiş: iş girdiği andan (girmediyse şimdi ile plandaki başlangıcın geç olanından) plandaki net süresi kadar sonra; plandaki
+// bitişten önce olamaz. Kaynağın takvimi o kadar ileri gitmiyorsa null.
+export function tahminiBitis(g: { planBas: number; planBit: number; giris: number | null; simdi: number; araliklar: readonly NetAralik[] }): number | null {
+  const sure = Math.max(0, netFarkDk(g.araliklar, g.planBas, g.planBit));
+  const bas = g.giris ?? Math.max(g.simdi, g.planBas);
+  const bitis = netIleri(g.araliklar, bas, sure);
+  return bitis === null ? null : Math.max(bitis, g.planBit);
+}
+
+export interface ArdilGirdisi {
+  // Ardılın bağlantısı: aynı emrin sonraki adımında adımın bağımlılığı, aynı tezgahtaki sonraki işte 'tezgah'.
+  bag: 'bekleyen' | 'akisli' | 'bagimsiz' | 'tezgah';
+  ardilPlanAni: number;
+  // Kök işin başlangıç kayması ve tahmini bitişi.
+  kokKaymaDk: number;
+  kokTahminiBitis: number | null;
+  // Ardılın kaynağının net aralıkları.
+  araliklar: readonly NetAralik[];
+}
+
+// AR-AN-15 (767 a, tek adım): kök işin gecikmesinin ardıla etkisi, net dakika. Bekleyen adım ve aynı tezgahtaki sonraki iş kökün bitişini
+// bekler; akışlı adım ilk devri bekler, devir kökün kaymasıyla gecikir; bağımsız adım etkilenmez. Kök bitişi bilinmiyorsa null.
+export function ardilEtkisiDk(g: ArdilGirdisi): number | null {
+  if (g.bag === 'bagimsiz' || !(g.kokKaymaDk > 0)) return 0;
+  if (g.bag === 'akisli') return g.kokKaymaDk;
+  if (g.kokTahminiBitis === null) return null;
+  return Math.max(0, netFarkDk(g.araliklar, g.ardilPlanAni, g.kokTahminiBitis));
+}
+
+// AR-AN-16: emrin son adımının tahmini bitişi teslim gününün sonunu geçiyorsa takvim dakikası olarak gecikme; geçmiyorsa ya da biri
+// bilinmiyorsa null.
+export function teslimRiskiDk(g: { tahminiBitis: number | null; teslimSonu: number | null }): number | null {
+  if (g.tahminiBitis === null || g.teslimSonu === null || !(g.tahminiBitis > g.teslimSonu)) return null;
+  return (g.tahminiBitis - g.teslimSonu) / DAKIKA_MS;
+}
+
+export type OlayEylemi =
+  | { tur: 'ac'; dakika: number; bitti: boolean }
+  | { tur: 'guncelle'; dakika: number; bitti: boolean }
+  | { tur: 'kapat' }
+  | { tur: 'yok' };
+
+// AR-AN-17: olay aynı iş ve tür için bir kez açılır, sürerken dakikası güncellenir, bitince kapanır; kapanan olay değişmez. Hüküm
+// kalmayan açık olay (iş plandan düştü, etki sıfırlandı) kapanır. Sıfır dakikalık olay açılmaz.
+export function olayEylemi(mevcut: { kapali: boolean } | null, hukum: GecikmeHukmu | null): OlayEylemi {
+  if (mevcut?.kapali) return { tur: 'yok' };
+  if (hukum === null) return mevcut === null ? { tur: 'yok' } : { tur: 'kapat' };
+  if (mevcut === null) return hukum.dakika > 0 ? { tur: 'ac', ...hukum } : { tur: 'yok' };
+  return { tur: 'guncelle', ...hukum };
+}
+
 /* ---------------- Anomali gün kaydı ve dönem istatistiği (kart #1306, AR-AN-5..8) ---------------- */
 
 export type AnomaliDonemi = (typeof ANOMALI_DONEM_ADLARI)[number];

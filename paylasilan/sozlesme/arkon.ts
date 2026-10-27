@@ -297,6 +297,54 @@ export const anomaliCevabi = z.object({
 });
 export type AnomaliCevabi = z.output<typeof anomaliCevabi>;
 
+// Üretim anomalisi zaman olayları (kart 764): geç giriş, girdinin geç gelmesi, sonraki işe etki ve teslim riski. Dakikalar net aktif dakikadır
+// (vardiya dışı ve mola sayılmaz); teslim riskinde takvim dakikası. Plan anı olayın açıldığı andaki canlı plandan donmuştur.
+export const ANOMALI_OLAY_TURLERI = ['gec-giris', 'gec-teslim', 'ardil-etkisi', 'teslim-riski', 'toplu-tutarsiz', 'bitis-kaymasi', 'sure-asimi'] as const;
+export type AnomaliOlayTuru = (typeof ANOMALI_OLAY_TURLERI)[number];
+const olayKimligi = z.number().int().positive();
+export const anomaliOlayiSatiri = z.object({
+  id: olayKimligi,
+  tur: z.enum(ANOMALI_OLAY_TURLERI),
+  isEmriId: olayKimligi,
+  uretimEmriId: olayKimligi.nullable(),
+  emirNo: z.string().nullable(),
+  opNo: z.number().int().nullable(),
+  istasyon: z.object({ id: olayKimligi, ad: z.string() }).nullable(),
+  // Kişi kaynağının adı yalnız arkon.anomali-kisi işlemiyle gelir; öbürüne null.
+  kaynak: z.object({ tur: z.enum(['makine', 'kisi']), id: olayKimligi, ad: z.string().nullable() }).nullable(),
+  planAni: zamanSemasi.nullable(),
+  // Sabit taban plana göre: yalnız bilgi; taban plandan önce girildiyse eksi.
+  tabanAni: zamanSemasi.nullable(),
+  tabanDakika: z.number().nullable(),
+  gercekAni: zamanSemasi.nullable(),
+  dakika: z.number().nonnegative(),
+  // Sonraki işe etki ve teslim riskinde etkiyi doğuran olay.
+  kokOlayId: olayKimligi.nullable(),
+  acilis: zamanSemasi,
+  kapanis: zamanSemasi.nullable(),
+});
+export type AnomaliOlayiSatiri = z.output<typeof anomaliOlayiSatiri>;
+export const anomaliOlaylariCevabi = z.object({
+  hesaplama: zamanSemasi,
+  // Boş eşik o kuralı kapatır (770 b: hepsi boş açılır).
+  esikler: z.object({
+    gecGirisDk: z.number().nonnegative().nullable(),
+    gecTeslimDk: z.number().nonnegative().nullable(),
+    bitisKaymaDk: z.number().nonnegative().nullable(),
+    sureAsimYuzde: z.number().nonnegative().nullable(),
+  }),
+  // Açık olaylardan: aksatılan iş (açık ardıl etkisi), toplam etki dakikası, teslimi riske giren emir.
+  ozet: z.object({
+    acik: z.number().int().nonnegative(),
+    aksatilanIs: z.number().int().nonnegative(),
+    toplamEtkiDk: z.number().nonnegative(),
+    riskliEmir: z.number().int().nonnegative(),
+  }),
+  // Açık olaylar ve bugün açılan ya da kapanan olaylar; önce açıklar, büyük dakika önce.
+  olaylar: z.array(anomaliOlayiSatiri),
+});
+export type AnomaliOlaylariCevabi = z.output<typeof anomaliOlaylariCevabi>;
+
 // Operatör Özetim (kart #1295): kişinin kendi üretimi uretim-emirleri sayımından okunur. Kişi verilmezse oturumdaki kişi; başkasını yalnız
 // amir, yalnız kendi iş merkezi kapsamındaki kişi için ister. Veri yoksa alan boş gelir: sıfır uydurulmaz.
 export const OZET_DONEMLERI = ['gun', 'hafta', 'ay'] as const;
