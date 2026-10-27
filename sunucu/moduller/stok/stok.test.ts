@@ -185,6 +185,37 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await istek('kalite', 'POST', '/stok/cikis', { malzemeId: k, konumId: await konumId('KABUL'), miktar: '1', cikisNedeni: 'sevk' })).durum, 403);
   });
 
+  test('yetki (746, 3 a): sayfayı açan rol sayfanın okuduğu stok verisini görür; yalnız o uçlar açılır, yazma kapalı kalır', async () => {
+    const yalniz = async (kod: string, islem: string): Promise<void> => {
+      const r = await o().sahip.tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [kod]);
+      await o().sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [r!.id, islem]);
+      await kisiEkle(kod, kod);
+    };
+    await yalniz('yalniz_rota', 'sayfa.rota');
+    await yalniz('yalniz_planlama', 'plan.planlama-oku');
+    await kisiEkle('cam', 'cam');
+    await kisiEkle('planlama_proje', 'planlama_proje');
+    const k = await kart('sarf');
+
+    // Rota > Stok bölümü: kart listesi ve son hareketler.
+    for (const kim of ['yalniz_rota', 'cam']) {
+      for (const yol of ['/stok/malzemeler', '/stok/hareketler']) assert.equal((await istek(kim, 'GET', yol)).durum, 200, `${kim} ${yol}`);
+    }
+    for (const yol of ['/stok/is-kutusu', '/stok/partiler', '/stok/mal-kabuller', `/stok/malzemeler/${k}`, '/stok/acik-siparis-satirlari']) {
+      assert.equal((await istek('yalniz_rota', 'GET', yol)).durum, 403, yol);
+    }
+    // Planlama > Malzeme planı ve Terminler: açık sipariş satırları.
+    for (const kim of ['yalniz_planlama', 'planlama_proje']) assert.equal((await istek(kim, 'GET', '/stok/acik-siparis-satirlari')).durum, 200, kim);
+    for (const yol of ['/stok/malzemeler', '/stok/hareketler', '/stok/fason-isleri']) assert.equal((await istek('yalniz_planlama', 'GET', yol)).durum, 403, yol);
+    assert.equal((await istek('kalite', 'GET', '/stok/acik-siparis-satirlari')).durum, 403, 'iki işlemi de olmayan');
+    assert.equal((await istek(null, 'GET', '/stok/acik-siparis-satirlari')).durum, 401);
+
+    for (const kim of ['yalniz_rota', 'cam', 'yalniz_planlama', 'planlama_proje']) {
+      const red = await istek<Hata>(kim, 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1' }] });
+      assert.deepEqual([red.durum, red.govde.kod], [403, 'YETKI_YOK'], kim);
+    }
+  });
+
   test('DEP-14/12/13 raf: gözler Kod-Bölme-Kat açılır; kod değişince gözün kimliği aynı kalır; stoklu göz kapatılamaz', async () => {
     const raf = await rafAc('A', 2, 2);
     const m = await mudur<{ gozler: { kod: string; konumId: number }[] }>('GET', `/stok/raflar/${raf.id}`);
