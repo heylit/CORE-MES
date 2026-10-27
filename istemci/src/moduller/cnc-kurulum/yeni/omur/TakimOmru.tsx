@@ -48,6 +48,7 @@ export function TakimOmru() {
   const koken = useRef<Koken | null>(null);
   const grafik = [useRef<HTMLCanvasElement>(null), useRef<HTMLCanvasElement>(null), useRef<HTMLCanvasElement>(null)] as const;
   const kip = kipOku();
+  const [cekmece, cekmeceYaz] = useState(false);
   const pv: OnizlemeSekmesi = state.life.pv === 'mag' ? 'mag' : 'model';
 
   const kayit = useCallback(() => { save(); }, []);
@@ -207,42 +208,45 @@ export function TakimOmru() {
           </>
         )}
       </div>
-      <aside className="tc-co-yan">
-        <Sekmeler etiket="Takım ömrü" sekmeler={SEKMELER} secili={kip} sec={kipSec} />
-        {kip !== 'anal' && (
-          <div className="tc-co-onizleme">
-            <div
-              className="tc-co-onizleme-alan"
-              onPointerDown={(e) => { onizleme.drag = e.clientX; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* yakalama yoksa da döner */ } }}
-              onPointerMove={(e) => onizleme.surukle(e.clientX)}
-              onPointerUp={() => { onizleme.drag = null; }}
-              onPointerCancel={() => { onizleme.drag = null; }}
-            >
-              <Sahne ciz={onizlemeCiz} sinif="tc-co-tuval" />
-            </div>
-            {d && !d.depot && (
-              <div className="tc-co-onizleme-sekme">
-                {(['model', 'mag'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={pv === s} onClick={() => { state.life.pv = s; kayit(); }}>{s === 'model' ? 'Tezgâh' : 'Magazin'}</button>
-                ))}
+      <aside className={`tc-co-yan${cekmece ? ' tc-co-acik' : ''}`}>
+        <button type="button" className="tc-co-cekmece" onClick={() => { cekmeceYaz(!cekmece); }}><Simge ad={cekmece ? 'down' : 'up'} boyut="k" /> Takım ömrü</button>
+        <div className="tc-co-yan-kaydir">
+          <Sekmeler etiket="Takım ömrü" sekmeler={SEKMELER} secili={kip} sec={kipSec} />
+          {kip !== 'anal' && (
+            <div className="tc-co-onizleme">
+              <div
+                className="tc-co-onizleme-alan"
+                onPointerDown={(e) => { onizleme.drag = e.clientX; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* yakalama yoksa da döner */ } }}
+                onPointerMove={(e) => onizleme.surukle(e.clientX)}
+                onPointerUp={() => { onizleme.drag = null; }}
+                onPointerCancel={() => { onizleme.drag = null; }}
+              >
+                <Sahne ciz={onizlemeCiz} sinif="tc-co-tuval" />
               </div>
-            )}
-            <div className="tc-co-onizleme-ipucu">sürükle: döndür</div>
-            {d && <div className="tc-co-onizleme-etiket">{OmurOnizlemesi.etiket(d, secili, pv)}</div>}
-          </div>
-        )}
-        {kip === 'track' && (
-          <TakipPaneli
-            defs={cark.defs} active={cark.active} secili={secili} yetki={yetki}
-            satiraGit={(i) => cark.goRow(i)}
-            tezgahaGit={(k, id) => { cark.sec(k, (y) => y.t.id === id); }}
-            analiz={analizeAc} kutuphane={() => git('lib')} degisti={kayit}
-          />
-        )}
-        {kip === 'renew' && (
-          <YenilemePaneli d={d} c={secili} takimDegistirebilir={yetki.takimDegistirebilir} kartSec={(k) => cark.setSel(k)} degisti={kayit} />
-        )}
-        {kip === 'anal' && res && <AnalizPaneli res={res} yazabilir={yetki.yazabilir} geri={() => kipSec('track')} degisti={kayit} />}
+              {d && !d.depot && (
+                <div className="tc-co-onizleme-sekme">
+                  {(['model', 'mag'] as const).map((s) => (
+                    <button key={s} type="button" aria-pressed={pv === s} onClick={() => { state.life.pv = s; kayit(); }}>{s === 'model' ? 'Tezgâh' : 'Magazin'}</button>
+                  ))}
+                </div>
+              )}
+              <div className="tc-co-onizleme-ipucu">sürükle: döndür</div>
+              {d && <div className="tc-co-onizleme-etiket">{OmurOnizlemesi.etiket(d, secili, pv)}</div>}
+            </div>
+          )}
+          {kip === 'track' && (
+            <TakipPaneli
+              defs={cark.defs} active={cark.active} secili={secili} yetki={yetki}
+              satiraGit={(i) => cark.goRow(i)}
+              tezgahaGit={(k, id) => { cark.sec(k, (y) => y.t.id === id); }}
+              analiz={analizeAc} kutuphane={() => git('lib')} degisti={kayit}
+            />
+          )}
+          {kip === 'renew' && (
+            <YenilemePaneli d={d} c={secili} takimDegistirebilir={yetki.takimDegistirebilir} kartSec={(k) => cark.setSel(k)} degisti={kayit} />
+          )}
+          {kip === 'anal' && res && <AnalizPaneli res={res} yazabilir={yetki.yazabilir} geri={() => kipSec('track')} degisti={kayit} />}
+        </div>
       </aside>
     </div>
   );
