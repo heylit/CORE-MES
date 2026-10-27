@@ -40,6 +40,15 @@ test.describe('yönetici', () => {
     expect((await tasmaOlc(page)).belge, 'sayfa yatay taşması').toBe(0);
   });
 
+  // Eski çerçevenin tam boy kuralı yeni köke uyunca üst şerit ile başlık arasında ekran boyu boşluk açılıyordu.
+  test('üst şerit ve gövde boşluğa gerilmez', async ({ page, ac }) => {
+    await ac('/kalite-merkezi/resimler');
+    await expect(page.getByRole('heading', { level: 2, name: 'Resim ve modeller' }).filter({ visible: true }).first()).toBeVisible();
+    const [ust, govde] = await Promise.all(['.tc-km-ust', '.tc-km-govde'].map((s) => page.locator(s).first().boundingBox()));
+    if (!ust || !govde) throw new Error('kabuk bulunamadı');
+    expect(govde.y - (ust.y + ust.height), 'üst şerit ile gövde arası').toBeLessThan(40);
+  });
+
   test.describe('K1 Bugün, Parçalar, Teknik kütüphane, Terimler', () => {
     // Rol ayrımı (muayeneci, mühendis, okuyan) birim testlerindedir; rol başına görünürlük aşağıdaki eşitlik testindedir.
     const K1 = [
