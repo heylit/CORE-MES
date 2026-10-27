@@ -15,7 +15,7 @@ import {
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
-import { labelTables, onAfterRender, monthlyOf, MK, PRESETS, rankHTML, readSplitAssign, render, renderMarket, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
+import { labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
@@ -1074,19 +1074,6 @@ const ACTIONS: Record<string, Action> = {
   // TMI: paylaştırma karşılaştırmanın içindedir; eski "dağıtım denemesi" bağlantıları oraya kaydırır.
   "paylastir-git": () => { document.getElementById("sa-paylastir")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
   // TMI: JSON yedek, geri yükleme, örnek veri ve TCMB kaldırıldı (kırmızı çizgi, V-30); işleyicileri de yok.
-  "mk-open": () => { MK.open = !MK.open; renderMarket(); if (MK.open) { const f = $("#mk-form input"); if (f) f.focus(); } },
-  "mk-close": () => { MK.open = false; renderMarket(); },
-  "mk-save": () => {
-    if (!canWrite()) return;
-    const s = clone(settings());
-    let bad = false;
-    $$("[data-mk-ann]").forEach(i => { if (i.value === i.dataset.orig) return; /* değiştirilmeyen alan: yuvarlama kaymasın */ const v = parseNum(i.value); const c = s.currencies[i.dataset.mkAnn as Currency]; if (v === null || v < 0 || v > 500 || !c) bad = true; else c.monthly = Math.round(monthlyOf(v) * 10000) / 10000; });
-    if (bad) { toast("Faizler 0 ile 500 arasında olmalı."); return; }
-    MK.open = false;
-    persist("settings", "main", s);
-    const n = Object.values(S.requests).filter(r => OPEN.includes(r.status) && (r.quotes || []).length).length;
-    toast(n ? `Faizler kaydedildi; ${n} açık talebin karşılaştırması yeniden hesaplandı.` : "Faizler kaydedildi.");
-  },
   "preset": (el, r) => {
     if (!r || !canWrite()) return;
     const p = PRESETS[el.dataset.k ?? ""]; if (!p) return;
@@ -1149,7 +1136,6 @@ const SEARCH_KEYS: Record<string, "q" | "mq" | "sq"> = { "req-search": "q", "mat
 document.addEventListener("input", (e) => {
   if (!kokIcinde(e)) return;
   const t = e.target as FormEl;
-  if (t.dataset.mkAnn) { const v = parseNum(t.value); const o = $<HTMLElement>(`[data-mk-conv="${t.dataset.mkAnn}"]`); if (o) o.textContent = v === null ? "geçersiz" : `aylık %${nf2.format(monthlyOf(v))}`; return; }
   if (t.id === "gsearch") { gsearch(t.value); return; }
   if (t.id === "s-firma-ara") { firmaAra(t.value); return; }
   if (t.id === "m-kart-ara") { kartAra(t.value); return; }
@@ -1458,7 +1444,7 @@ document.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
   if (BULK && t.closest?.("#bulk")) bulkNav(e);
   if (e.key === "Escape" && $$<HTMLElement>(".menu-list").some(m => !m.hidden)) { closeMenus(); return; }
-  if (e.key === "Escape") { if (BULK && !BULK.inline) bulkClose(); else if ($("#modal-root").innerHTML) closeModal(); else if (MK.open) { MK.open = false; renderMarket(); } else $("#gres").hidden = true; }
+  if (e.key === "Escape") { if (BULK && !BULK.inline) bulkClose(); else if ($("#modal-root").innerHTML) closeModal(); else $("#gres").hidden = true; }
   if (e.key === "Enter" && t.matches("li[data-act], .card[data-act]")) t.click();
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z" && UNDO.pending && !t.closest("input, textarea, select, [contenteditable]")) { e.preventDefault(); undoLast(); }
   if (e.key === "Enter" && t.id === "gsearch") { const b = $("#gres button"); if (b) b.click(); }

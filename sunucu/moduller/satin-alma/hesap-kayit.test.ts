@@ -103,15 +103,12 @@ test('SA-HESAP H1: teklif kuru [TRY, eski teklifin kuru, finanstan]', () => {
   ]);
 });
 
-test('SA-HESAP H6: finansta kuru olan ve listede olmayan para birimleri varsayılan faizle eklenir', () => {
-  assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['USD', 'EUR', 'CHF'])), [
-    { paraBirimi: 'USD', aylikFaizYuzdesi: '0.4' },
-    { paraBirimi: 'EUR', aylikFaizYuzdesi: '0.3' },
-  ]);
+test('SA-HESAP H6: finansta kuru olan ve listede olmayan para birimleri eklenir', () => {
+  assert.deepEqual(finanstanEklenenKurlar(['TRY'], new Set(['USD', 'EUR', 'CHF'])), [{ paraBirimi: 'USD' }, { paraBirimi: 'EUR' }]);
 });
 
-test('Kart 160: aylık faiz finanstan, finansta yoksa satın almanın kendi oranı', () => {
-  assert.deepEqual([aylikFaiz('1.2500', '0.4'), aylikFaiz('0.0000', '3'), aylikFaiz(undefined, '0.4')], ['1.25', '0', '0.4']);
+test('937 b: aylık faiz yalnız finanstan, finansta yoksa boş', () => {
+  assert.deepEqual([aylikFaiz('1.2500'), aylikFaiz('0.0000'), aylikFaiz(undefined)], ['1.25', '0', null]);
 });
 
 test('SA-HESAP H6: hızlı talep başlığı', () => {

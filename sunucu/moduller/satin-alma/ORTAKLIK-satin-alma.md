@@ -4,9 +4,9 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 
 ## Tablolar
 
-- `satin_alma_ayar` (tek satır): `sirket`, `agirlik_maliyet`, `agirlik_termin`, `agirlik_tedarikci`, `agirlik_garanti`, `gecerlilik_gun`, `en_az_teklif`, `fiyat_uyari_yuzdesi`, `kur_tarihi`, `surum`, `guncelleme`
+- `satin_alma_ayar` (tek satır): `sirket`, `agirlik_maliyet`, `agirlik_termin`, `agirlik_tedarikci`, `agirlik_garanti`, `gecerlilik_gun`, `en_az_teklif`, `fiyat_uyari_yuzdesi`, `surum`, `guncelleme`
   - `sirket`: şirket adının esası (A7, #514); `finans_ayar.sirket_adi` kopyadır, finans ekranı bunu gösterir.
-- `satin_alma_kur`: `para_birimi` (TRY, USD, EUR, GBP), `kur`, `aylik_faiz_yuzdesi`, `sira`
+- `satin_alma_kur`: `para_birimi` (TRY, USD, EUR, GBP), `sira` (kur ve faiz finansın `finans_kur` ve `finans_faiz` tablolarındadır, 937 b)
 - `satin_alma_kategori`: `ad`, `sira`
 - `satin_alma_birim` (departman): `ad`, `yillik_butce`, `sira`
 - `satin_alma_onay_limiti`: `sira`, `azami_tutar`, `seviye`
@@ -47,7 +47,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 | Departman (birim) | Talebi isteyen birim ve yıllık bütçesi; modülün kendi listesi | `satin_alma_birim.ad`, `.yillik_butce`, `satin_alma_talep.birim` | Yabancı anahtar (`satin_alma_birim.ad`); TMI'nin kişi/istasyon/vardiya yapısıyla bağı yok |
 | Depo / ambar | Tutulmaz (teslim alma stokta, depo yeri yok; Logo ambar kodu alanı eksik, UYUM-BORCU 14) | – | Yok |
 | Ölçü birimi | Katalogda kartın birimi; talep kalemi birimi serbest metin (en çok 20 karakter) | `satin_alma_talep_kalemi.birim` | Metin |
-| Para birimi ve kur | TRY, USD, EUR, GBP; ayarlardaki güncel kur, aylık faiz; teklif günü kuru; sipariş anındaki sabit kur | `satin_alma_kur.para_birimi/.kur/.aylik_faiz_yuzdesi`, `satin_alma_teklif.para_birimi/.kur`, `satin_alma_sabit_kur.para_birimi/.kur`, `satin_alma_ayar.kur_tarihi` | Yabancı anahtar (`satin_alma_kur`); liste kısıtla sabit (4 kod) |
+| Para birimi ve kur | TRY, USD, EUR, GBP; güncel kur ve aylık faiz finanstan; teklif günü kuru; sipariş anındaki sabit kur | `satin_alma_kur.para_birimi`, `satin_alma_teklif.para_birimi/.kur`, `satin_alma_sabit_kur.para_birimi/.kur` | Yabancı anahtar (`satin_alma_kur`); liste kısıtla sabit (4 kod) |
 | Fiyat | Teklif satırı birim fiyatı, iskonto yüzdesi (teklif düzeyi), nakliye, diğer masraf, avans yüzdesi, ilk toplam | `satin_alma_teklif_satiri.birim_fiyat`, `satin_alma_teklif.iskonto_yuzdesi/.nakliye/.diger_masraf/.avans_yuzdesi/.ilk_toplam` | Yok; fiyat listesi/katalog fiyatı tutulmaz |
 | Belge no: talep no | `ST-yıl-sıra` (999'dan sonra kesilmez), yıllık sayaç | `satin_alma_talep.yil/.sira/.no`, `satin_alma_talep_sayaci.yil/.son_sira` | Yok |
 | Belge no: sipariş no | TMI numarası `SP-yıl-sıra`, yıllık sayaç, benzersiz (#544); Logo / tedarikçi numarası serbest metin, en çok 40 karakter, benzersiz değil | `satin_alma_siparis.no`, `satin_alma_siparis_sayaci.yil/.son_sira`, `satin_alma_siparis.siparis_no` | Yok (TMI no); metin (Logo no) |

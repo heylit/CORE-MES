@@ -13,7 +13,7 @@ import { pasifeAlmaEngeli } from './kurallar.ts';
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
-import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI } from '#paylasilan/sozlesme/finans.ts';
+import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
 import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineler } from '../istasyonlar/disari.ts';
@@ -565,14 +565,18 @@ export function kurGuncelle(db: Db, k: Kullanici, g: G<typeof kurGuncelleGovdesi
 }
 // Kur ve faiz şeridi (finans ve satın alma ekranlarının üstü): giren kişinin adı kisiler'den gelir.
 export async function kurFaizOzeti(db: Db, bugun: string): Promise<KurFaizOzeti> {
-  const [kurlar, faizler, son] = await Promise.all([sorgular.kurOzeti(db, bugun), sorgular.faizOzeti(db, bugun), sorgular.sonKurFaizGirisi(db)]);
-  const adlar = await kisiAdlari(db, [...kurlar, ...faizler, ...(son ? [son] : [])].map((s) => s.girenId));
+  const kurlar = await sorgular.kurOzeti(db, bugun);
+  const faizler = await sorgular.faizOzeti(db, bugun);
+  const son = await sorgular.sonKurFaizGirisi(db);
+  const gecmis = await sorgular.kurFaizGecmisi(db, KUR_FAIZ_GECMISI_BOYU);
+  const adlar = await kisiAdlari(db, [...kurlar, ...faizler, ...gecmis, ...(son ? [son] : [])].map((s) => s.girenId));
   const ad = (id: number): string | null => adlar.get(id) ?? null;
   return {
     bugun,
     kurlar: kurlar.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
     faizler: faizler.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
     sonGiris: son ? { tur: son.tur, giris: son.giris, girenAd: ad(son.girenId) } : null,
+    gecmis: gecmis.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
   };
 }
 export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {

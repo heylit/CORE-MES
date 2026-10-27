@@ -227,11 +227,17 @@ export const sabitKiymetListesiCevabi = listeCevapSemasi(sabitKiymetSatiri);
 // Aylık toplam amortisman (TL), eskiden yeniye; gelir tablosunda nakit dışı gider satırıdır.
 export const amortismanCevabi = z.object({ aylar: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), tutarTl: numerik })) });
 // Kur ve faiz şeridi: bugüne kadar geçerli son kur ve faiz, kimin ne zaman girdiğiyle; sonGiris ileri tarihli giriş dahil en son yazılandır.
+// Ortak kur ve faiz şeridi (939, 952 a): giriş yapan herkes okur. Kur satırının sürümü aynı günün düzeltmesi içindir; geçmiş son girişlerdir
+// (düzeltme de giriş sayılır), en yeni başta.
+export const KUR_FAIZ_GECMISI_BOYU = 8;
 export const kurFaizOzetiCevabi = z.object({
   bugun: tarihSemasi,
-  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
+  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
   faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
   sonGiris: z.object({ tur: z.enum(['kur', 'faiz']), giris: zamanSemasi, girenAd: z.string().nullable() }).nullable(),
+  gecmis: z.array(z.object({
+    tur: z.enum(['kur', 'faiz']), paraBirimi: z.string(), deger: numerik, tarih: tarihSemasi, duzeltme: z.boolean(), girenAd: z.string().nullable(), giris: zamanSemasi,
+  })).max(KUR_FAIZ_GECMISI_BOYU),
 });
 export type KurFaizOzeti = z.output<typeof kurFaizOzetiCevabi>;
 export const kdvOraniKapatGovdesi = z.object({ oran: oranSemasi, gecerlilikBaslangic: tarihSemasi, gecerlilikBitis: tarihSemasi, ...beklenenSurum });

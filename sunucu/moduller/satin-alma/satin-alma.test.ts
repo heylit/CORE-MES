@@ -2113,7 +2113,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('SA3 a: ayarlar hiç kaydedilmeden finanstaki USD kuru görünür (faiz ekran varsayılanı 0,4); finansta kuru olmayan para birimi görünmez; kur sonradan girilince listeye eklenir', async () => {
+  test('SA3 a: ayarlar hiç kaydedilmeden finanstaki USD kuru görünür (finansta faiz yoksa faiz boş); finansta kuru olmayan para birimi görünmez; kur sonradan girilince listeye eklenir', async () => {
     // Yeni kurulumda satin_alma_kur'da yalnız TRY vardır; finansta henüz kur yoktur.
     const bos = await ayarlar();
     assert.deepEqual(bos.kurlar.map((k) => [k.paraBirimi, k.kur]), [['TRY', '1']]);
@@ -2125,7 +2125,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     await kurEkle('USD', '2026-01-02', 40.5);
     const dolu = await ayarlar();
     assert.deepEqual(dolu.kurlar.map((k) => [k.paraBirimi, k.kur]), [['TRY', '1'], ['USD', '40.5']]);
-    assert.equal(dolu.kurlar[1]?.aylikFaizYuzdesi, '0.4');
+    assert.equal(dolu.kurlar[1]?.aylikFaizYuzdesi, null);
     assert.equal(dolu.kurTarihi, '2026-01-02');
     // Satın almanın para birimi listesinde olmayan döviz (yen) sözleşmeyi bozmaz, listeye girmez.
     await kurEkle('JPY', '2026-01-02', 0.27);
@@ -2151,7 +2151,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     const ilk = await istek('POST', `/satin-alma-talepleri/${talep.id}/kaydet`, { ...g, durum: 'degerlendirme', teklifler: [teklifi('USD')] });
     assert.equal(ilk.statusCode, 200, ilk.body);
     assert.equal(await sayi('satin_alma_kur', "para_birimi = 'USD'"), 1);
-    // Aynı para birimiyle ikinci teklif satırı çoğaltmaz; TRY satırı korunur, USD faizi ekran varsayılanıdır (borç 38).
+    // Aynı para birimiyle ikinci teklif satırı çoğaltmaz; TRY satırı korunur; finansta faiz yokken USD faizi boştur (937 b).
     const t1 = ilk.json() as Talep;
     const { no: _n2, talepEdenAdi: _a2, acanKisiId: _k2, olusturma: _o2, guncelleme: _g2, ...g2 } = t1;
     const ikinci = await istek('POST', `/satin-alma-talepleri/${talep.id}/kaydet`, { ...g2, teklifler: [...t1.teklifler, teklifi('USD')] });
@@ -2159,7 +2159,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     assert.equal(await sayi('satin_alma_kur', "para_birimi = 'USD'"), 1);
     assert.equal(await sayi('satin_alma_kur'), 2);
     assert.equal(await sayi('finans_kur'), finansSatiri);
-    assert.equal(Number((await ayarlar()).kurlar.find((k) => k.paraBirimi === 'USD')?.aylikFaizYuzdesi), 0.4);
+    assert.equal((await ayarlar()).kurlar.find((k) => k.paraBirimi === 'USD')?.aylikFaizYuzdesi, null);
   });
 
   test('Borç 38: finansın para birimi yalnız kaydedilmemiş ayarlara önerilir; kaydedilmiş listeden kaldırılan para birimi geri gelmez', async () => {
@@ -2167,28 +2167,28 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     const once = await ayarlar();
     assert.deepEqual(once.kurlar.map((k) => k.paraBirimi), ['TRY', 'USD', 'EUR']);
     const { kurTarihi: _t, ...g } = once;
-    const kayit = await istek('POST', '/satin-alma-ayarlari/kaydet', { ...g, kurlar: once.kurlar.filter((k) => k.paraBirimi !== 'EUR').map((k) => ({ paraBirimi: k.paraBirimi, aylikFaizYuzdesi: k.aylikFaizYuzdesi })) });
+    const kayit = await istek('POST', '/satin-alma-ayarlari/kaydet', { ...g, kurlar: once.kurlar.filter((k) => k.paraBirimi !== 'EUR').map((k) => ({ paraBirimi: k.paraBirimi })) });
     assert.equal(kayit.statusCode, 200, kayit.body);
     assert.deepEqual((await ayarlar()).kurlar.map((k) => k.paraBirimi), ['TRY', 'USD']);
   });
 
-  test('Kart 160: finansta faiz yokken ayarlardaki aylık faiz aynen görünür', async () => {
+  test('937 b: ayar kaydında gelen faiz yok sayılır; finansta faiz yokken faiz boş görünür', async () => {
     const once = await ayarlar();
     const { kurTarihi: _t, ...g } = once;
     const kayit = await istek('POST', '/satin-alma-ayarlari/kaydet', { ...g, kurlar: [{ paraBirimi: 'TRY', aylikFaizYuzdesi: '3.5' }, { paraBirimi: 'USD', aylikFaizYuzdesi: '0.7' }] });
     assert.equal(kayit.statusCode, 200, kayit.body);
-    assert.deepEqual((await ayarlar()).kurlar.map((k) => [k.paraBirimi, Number(k.aylikFaizYuzdesi)]), [['TRY', 3.5], ['USD', 0.7]]);
+    assert.deepEqual((await ayarlar()).kurlar.map((k) => [k.paraBirimi, k.aylikFaizYuzdesi]), [['TRY', null], ['USD', null]]);
   });
 
-  test('Kart 160: finansta geçerli faiz varsa o görünür, yoksa satın almanın kendi faizi; gelecek tarihli finans faizi sayılmaz', async () => {
+  test('937 b: finansta geçerli faiz varsa o görünür, yoksa boş; gelecek tarihli finans faizi sayılmaz', async () => {
     const faizEkle = async (paraBirimi: string, gecerlilikBaslangic: string, aylikYuzde: number) => {
       const r = await istek('POST', '/finans/faizler/ekle', { paraBirimi, gecerlilikBaslangic, aylikYuzde });
       assert.equal(r.statusCode, 200, r.body);
     };
     await faizEkle('USD', '2026-01-01', 1.25);
     await faizEkle('TRY', '2099-01-01', 9);
-    const k = (await ayarlar()).kurlar.map((x) => [x.paraBirimi, Number(x.aylikFaizYuzdesi)]);
-    assert.deepEqual(k, [['TRY', 3.5], ['USD', 1.25]]);
+    const k = (await ayarlar()).kurlar.map((x) => [x.paraBirimi, x.aylikFaizYuzdesi]);
+    assert.deepEqual(k, [['TRY', null], ['USD', '1.25']]);
     await faizEkle('USD', '2026-02-01', 1.5);
     assert.equal(Number((await ayarlar()).kurlar.find((x) => x.paraBirimi === 'USD')?.aylikFaizYuzdesi), 1.5);
   });

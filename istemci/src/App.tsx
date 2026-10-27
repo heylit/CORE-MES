@@ -12,6 +12,7 @@ import { eskiGorunumAdresiMi } from './ortak/rota/yeni-ekran-menusu.ts';
 import { KaliciEkranlar } from './ortak/rota/kalici.tsx';
 import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
+import { ustSeritler } from './ortak/rota/ust-seritler.ts';
 import { hataIletisi } from './ortak/veri/api.ts';
 import { baglantiDonusunuDinle } from './ortak/veri/baglanti.ts';
 import { useGorunum, useHareketUygula } from './ortak/veri/gorunum.ts';
@@ -114,6 +115,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
         logo={logo.data?.logo ?? null}
         anaSayfa={acilis ?? '/'}
         ustEylemler={ustEylemler}
+        ustSeritler={ustSeritler}
         hizliIsler={hizliIsler}
         komutlar={komutlar}
         kisiId={kullanici.id}

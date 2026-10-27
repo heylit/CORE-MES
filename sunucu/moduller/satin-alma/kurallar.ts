@@ -292,17 +292,15 @@ export function gorunenDurum(kayitli: TalepDurumu, siparisDurumlari: readonly Te
 
 
 // SA3 a: ayarlar hiç kaydedilmediyse (yeni kurulumda yalnız TRY vardır) ya da finansa sonradan kur girildiyse, finansta kuru olan para birimi
-// ayar listesinde de görünür. Faiz, teslim edilen ekranın varsayılanıyla gelir (kullanıcı kararı borç 38); finansta kuru olmayan ve listede
-// olmayan para birimi eklenmez.
+// ayar listesinde de görünür; finansta kuru olmayan ve listede olmayan para birimi eklenmez.
 export type ParaBirimi = (typeof PARA_BIRIMLERI)[number];
-export const VARSAYILAN_AYLIK_FAIZ: Readonly<Record<ParaBirimi, string>> = { TRY: '3', USD: '0.4', EUR: '0.3', GBP: '0.4' };
-export function finanstanEklenenKurlar(listede: readonly string[], finanstaKuruOlan: ReadonlySet<string>): { paraBirimi: ParaBirimi; aylikFaizYuzdesi: string }[] {
-  return PARA_BIRIMLERI.filter((p) => !listede.includes(p) && finanstaKuruOlan.has(p)).map((paraBirimi) => ({ paraBirimi, aylikFaizYuzdesi: VARSAYILAN_AYLIK_FAIZ[paraBirimi] }));
+export function finanstanEklenenKurlar(listede: readonly string[], finanstaKuruOlan: ReadonlySet<string>): { paraBirimi: ParaBirimi }[] {
+  return PARA_BIRIMLERI.filter((p) => !listede.includes(p) && finanstaKuruOlan.has(p)).map((paraBirimi) => ({ paraBirimi }));
 }
 
-// Kart #160: güncel aylık faiz finanstandır; finansta o para birimi için oran yoksa satın almanın kendi kayıtlı oranı kalır.
-export function aylikFaiz(finansta: string | undefined, kendi: string): string {
-  return finansta === undefined ? kendi : sadeOndalik(finansta) ?? kendi;
+// 937 b: faizin tek kaynağı finansın faiz tablosudur; finansta o para birimi için oran yoksa boş (sıfır uydurulmaz).
+export function aylikFaiz(finansta: string | undefined): string | null {
+  return finansta === undefined ? null : sadeOndalik(finansta) ?? null;
 }
 
 // SA3 a: teklifte ve sabit kurda geçen para birimleri (yalnız satın almanın listesindekiler); satırı yoksa yazmadan önce eklenir.

@@ -20,7 +20,6 @@ import { getRole, jobCount, pendingApprovalCount, ROLES, viewApproval, viewAppro
 /* ================= render çekirdeği ================= */
 export function render(): void {
   renderNav();
-  renderMarket();
   const m = $("#main");
   const ae = document.activeElement as FormEl | null;
   const keep = ae && m.contains(ae) && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
@@ -49,35 +48,6 @@ function afterRender(): void {
   drawCharts();
   AFTER.forEach(fn => fn());
   if ($("#split-sum")) updateSplitSum();
-}
-/* ================= piyasa şeridi ================= */
-export const MK = { open: false };
-/** aylık faiz (%) → yıllık bileşik (%) */
-export const annualOf = (m: unknown): number => (Math.pow(1 + (parseNum(m) || 0) / 100, 12) - 1) * 100;
-/** yıllık faiz (%) → aylık bileşik (%) */
-export const monthlyOf = (y: unknown): number => (Math.pow(1 + (parseNum(y) || 0) / 100, 1 / 12) - 1) * 100;
-const FX: Currency[] = ["USD", "EUR", "GBP"];
-export function renderMarket(): void {
-  const el = $("#market"); if (!el) return;
-  if (MK.open && el.querySelector(".mk-edit")) return; // düzenleme sırasında girişleri silme
-  const set = settings(), c = set.currencies, t = todayStr();
-  const age = set.ratesDate ? dayDiff(set.ratesDate, t) : null;
-  const stale = age === null || age > 0;
-  const row = `<button class="mk-row ${stale ? "stale" : ""}" data-act="mk-open" aria-expanded="${MK.open}" title="${age === null ? "Finansta kur yok" : age > 0 ? `Finanstaki son kur ${age} gün önceki` : "Finanstaki kur bugünkü"}; faizi değiştirmek için tıklayın">
-    ${FX.filter(k => k !== "GBP").map(k => `<span class="mk-item"><span class="mk-lbl">${k}</span><b>${isNum(c[k].rate) ? nfx.format(c[k].rate!) : "yok"}</b></span>`).join("")}
-    <span class="mk-item"><span class="mk-lbl">TL faiz</span><b>%${nf1.format(annualOf(c.TRY.monthly))}</b></span>
-    ${stale ? `<span class="mk-dot" aria-hidden="true"></span><span class="mk-stale">${age === null ? "finansta kur yok" : `${age} gün önce`}</span>` : ""}
-  </button>`;
-  const edit = MK.open ? `<div class="mk-edit" id="mk-form">
-    <div class="mk-grid">
-      ${FX.map(k => `<label>${k}/TRY kuru<span class="mk-conv">${isNum(c[k].rate) ? nfx.format(c[k].rate!) : "finansta kur yok"}</span></label>`).join("")}
-      <label>Kur tarihi<span class="mk-conv">${set.ratesDate ? fmtDate(set.ratesDate) : "–"}</span></label>
-      ${(["TRY", ...FX] as Currency[]).map(k => `<label>${k} yıllık faiz / fırsat maliyeti %<input type="text" inputmode="decimal" data-mk-ann="${k}" data-orig="${nf1.format(annualOf(c[k].monthly)).replace(/\./g, "")}" value="${nf1.format(annualOf(c[k].monthly)).replace(/\./g, "")}"><span class="mk-conv" data-mk-conv="${k}">aylık %${nf2.format(parseNum(c[k].monthly) || 0)}</span></label>`).join("")}
-    </div>
-    <div class="row" data-sa-y="34"><button class="mk-btn prim" data-act="mk-save">Faizi kaydet ve yeniden hesapla</button><button class="mk-btn" data-act="mk-close">Vazgeç</button></div>
-    <p class="mk-hint">Kurlar finansın kur tablosundan gelir; burada değiştirilmez. Açık taleplerdeki tüm karşılaştırmalar bu kurlarla ve faizle hesaplanır. Sipariş verildiğinde o günün kurları karara sabitlenir; geçmiş alımlar değişmez. Faiz olarak şirketinizin kredi faizini ya da mevduat getirisini girin; vadeli ödemeler bununla bugüne indirgenir.</p>
-  </div>` : "";
-  el.innerHTML = row + edit;
 }
 
 // TMI: ikinci menüyü kabuk çizer (şartname: modül kendi menüsünü çizmez); prototipin menüsü çizilmez.

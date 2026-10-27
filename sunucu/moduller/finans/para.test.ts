@@ -451,7 +451,10 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const bugun = tesisGunu(new Date());
     await girisliKisi('duzelten', ['finans.kur-yaz']);
     tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: bugun, kur: 50 }));
-    type Ozet = { bugun: string; kurlar: { paraBirimi: string; kur: string; girenAd: string | null; giris: string }[]; faizler: { paraBirimi: string; girenAd: string | null }[]; sonGiris: { tur: string; girenAd: string | null } | null };
+    type Ozet = {
+      bugun: string; kurlar: { paraBirimi: string; kur: string; girenAd: string | null; giris: string; surum: number }[]; faizler: { paraBirimi: string; girenAd: string | null }[];
+      sonGiris: { tur: string; girenAd: string | null } | null; gecmis: { tur: string; paraBirimi: string; deger: string; tarih: string; duzeltme: boolean; girenAd: string | null }[];
+    };
     const oku = async (kim = 'okuyan') => tamam(await istek<Ozet>(kim, 'GET', '/finans/kur-ozeti'));
     let o = await oku();
     assert.equal(o.bugun, bugun);
@@ -464,11 +467,20 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     o = await oku();
     assert.equal(Number(gbp()?.kur), 51);
     assert.equal(gbp()?.girenAd, 'Deneme duzelten');
+    assert.equal(gbp()?.surum, 2, 'şerit aynı günün kurunu sürümüyle düzeltir (939)');
     tamam(await yaz('/finans/faizler/ekle', { paraBirimi: 'GBP', gecerlilikBaslangic: bugun, aylikYuzde: 1 }));
     o = await oku();
     assert.equal(o.faizler.find((f) => f.paraBirimi === 'GBP')?.girenAd, 'Deneme yonetim');
     assert.equal(o.sonGiris?.tur, 'faiz');
-    assert.equal((await istek('firmaci', 'GET', '/finans/kur-ozeti')).durum, 403);
+    // 939: son girişler en yeni başta; düzeltilen kur düzeltme olarak, düzeltenin adıyla.
+    assert.ok(o.gecmis.length <= 8);
+    assert.deepEqual(o.gecmis.slice(0, 2).map((g) => [g.tur, g.paraBirimi, Number(g.deger), g.tarih, g.duzeltme, g.girenAd]), [
+      ['faiz', 'GBP', 1, bugun, false, 'Deneme yonetim'],
+      ['kur', 'GBP', 51, bugun, true, 'Deneme duzelten'],
+    ]);
+    // 952 a: şerit her sayfadadır; finans işlemi olmayan kişi de okur (yalnız kur, faiz ve giren kişi).
+    assert.equal((await istek('firmaci', 'GET', '/finans/kur-ozeti')).durum, 200);
+    assert.equal((await istek('firmaci', 'GET', '/finans/kurlar')).durum, 403);
     // finans.kur-yaz yalnız kur ve faiz açar (satın alma, kart #953): rakam okumaz, belge yazmaz, finans.yonet ucuna giremez.
     assert.equal((await istek('duzelten', 'GET', '/finans/kur-ozeti')).durum, 200);
     assert.equal((await istek('duzelten', 'GET', '/finans/belgeler')).durum, 403);

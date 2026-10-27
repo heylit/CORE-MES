@@ -1,0 +1,49 @@
+/* Ortak kur ve faiz şeridi (939): kabuğun en üstünde, akışın içinde; menüyü ve içeriği aşağı iter. */
+.tc-kfs { flex: none; background: var(--panel-solid); border-bottom: 1px solid var(--edge2); font-size: var(--yazi-s); }
+.tc-kfs-satir { display: flex; align-items: center; gap: var(--b-2); padding-inline: var(--b-3); min-height: var(--dokunma-yogun); }
+.tc-kfs-ozet {
+  display: flex; flex: 1 1 auto; align-items: center; gap: var(--b-3); min-width: 0; min-height: var(--dokunma-yogun);
+  padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; overflow: hidden; text-align: start;
+}
+.tc-kfs-ozet:focus-visible, .tc-kfs-guncelle:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-kfs-kalem { display: inline-flex; align-items: baseline; gap: var(--b-1); white-space: nowrap; }
+.tc-kfs-kalem b { font-weight: 600; }
+.tc-kfs-ad { color: var(--muted); font-size: var(--yazi-xs); letter-spacing: .04em; text-transform: uppercase; }
+.tc-kfs-eski { color: var(--hazard-ink); font-size: var(--yazi-xs); }
+.tc-kfs-ayrac { flex: none; align-self: stretch; width: 1px; margin-block: var(--b-2); background: var(--edge2); }
+.tc-kfs-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; }
+.tc-kfs-isaret { width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--hazard); }
+.tc-kfs-son { margin-inline-start: auto; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tc-kfs-guncelle {
+  display: inline-flex; flex: none; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); padding-inline: var(--b-3);
+  border: 0; border-radius: var(--yari-1); background: var(--hazard); color: var(--on-hazard); font: inherit; font-weight: 600; cursor: pointer;
+}
+.tc-kfs-panel {
+  display: grid; gap: var(--b-4); grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: var(--b-4) var(--b-3); border-top: 1px solid var(--edge);
+}
+.tc-kfs-blok { display: grid; gap: var(--b-2); align-content: start; min-width: 0; }
+.tc-kfs-baslik { display: flex; align-items: center; gap: var(--b-1); margin: 0; color: var(--muted); font-size: var(--yazi-xs); letter-spacing: .04em; text-transform: uppercase; }
+.tc-kfs-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-kfs-hata { margin: 0; color: var(--stop); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-kfs-eylem { display: flex; }
+.tc-kfs-gecmis { display: grid; margin: 0; padding: 0; list-style: none; }
+.tc-kfs-gecmis li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-2); padding-block: var(--b-1); border-bottom: 1px solid var(--edge); }
+.tc-kfs-gecmis li:last-child { border-bottom: 0; }
+.tc-kfs-ne { min-width: 0; overflow-wrap: anywhere; }
+.tc-kfs-tur { align-self: start; padding-inline: var(--b-1); border: 1px solid currentColor; border-radius: var(--yari-1); font-size: var(--yazi-xs); color: var(--done); }
+.tc-kfs-tur[data-tur="faiz"] { color: var(--run); }
+
+/* Tablet: GBP kuru ve EUR faizi şeritten iner (panelde durur); panel iki sütun, geçmiş altta. */
+@media (max-width: 1279px) {
+  .tc-kfs [data-kfs="kur-GBP"], .tc-kfs [data-kfs="faiz-EUR"] { display: none; }
+  .tc-kfs-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-kfs-gecmis-blok { grid-column: 1 / -1; }
+}
+/* Telefon: USD ve EUR kuru ile TL faizi kalır; ayrıntı panelde. */
+@media (max-width: 767px) {
+  .tc-kfs [data-kfs="faiz-USD"], .tc-kfs-son, .tc-kfs-ayrac { display: none; }
+  .tc-kfs-ozet { gap: var(--b-2); }
+  .tc-kfs-guncelle-ad { display: none; }
+  .tc-kfs-panel { grid-template-columns: minmax(0, 1fr); }
+}

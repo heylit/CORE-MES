@@ -76,7 +76,8 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/sabit-kiymetler', yetki: 'finans.oku', sorgu: finansListeSorgusu, cevap: sabitKiymetListesiCevabi,
     isle: ({ db, sorgu }) => servis.sabitKiymetleriListele(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/finans/amortisman', yetki: 'finans.oku', cevap: amortismanCevabi, isle: ({ db }) => servis.amortismanAylari(db) }),
-  uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: { biri: ['finans.oku', 'finans.kur-yaz'] }, cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
+  // 952 a: ortak kur ve faiz şeridi her sayfadadır; giriş yapan herkes okur (yalnız kur, faiz ve giren kişi; finans rakamı yok).
+  uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: 'oturum', cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
   uc({ yontem: 'GET', yol: '/finans/ayar', yetki: 'finans.oku', cevap: ayarCevabi, isle: async ({ db }) => ({ ayar: await servis.ayarOku(db) as zod.output<typeof ayarCevabi>['ayar'] }) }),
   uc({ yontem: 'GET', yol: '/finans/aylik-seri', yetki: 'finans.oku', sorgu: aylikSeriSorgusu, cevap: aylikSeriCevabi,
     isle: ({ db, sorgu }) => servis.aylikSeri(db, tesisGunu(new Date()), sorgu.ay) }),

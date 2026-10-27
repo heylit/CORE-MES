@@ -4,7 +4,6 @@ import { Dugme, Kadran, Kart, Pencere, Rozet, SayiKarti, Secim, Girdi, useBildir
 import type { MakineDurumu } from '../../../../ortak/arayuz/durum.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
-import { KurFaizSeridi } from '../../KurFaizSeridi.tsx';
 import { aktifHesaplar, cekDurumKomutu, duzenliOdendiKomutu, type KomutSonucu } from '../akislar.ts';
 import { paraMetni, tl } from '../bicim.ts';
 import { firmaEtiketi, HESAP_TURU_ADI, type HazirVeri, type SunucuCeki } from '../donustur.ts';
@@ -81,8 +80,6 @@ function AnaSayfaIci({ finans, yetki, kayitGir }: { finans: FinansVerisi } & Omi
             : <span className="tc-fa-soluk">Finans yöneticisi Ayarlar'dan tamamlar.</span>}
         </div>
       )}
-
-      <KurFaizSeridi />
 
       {s.tx.length > 0 && (
         <section className="tc-fa-ozet" aria-label="Günün özeti">

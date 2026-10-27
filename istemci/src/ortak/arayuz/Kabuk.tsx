@@ -11,6 +11,7 @@ import { gorunenKomutlar, type Komut } from '../rota/komutlar.ts';
 import { rehberMaddeleri, sayfaRehberleri, type SayfaRehberi } from '../rota/rehber.ts';
 import { GENEL_KONULAR } from '../rota/rehber-genel.ts';
 import { gorunenUstEylemler, type UstEylem } from '../rota/ust-eylemler.ts';
+import { gorunenUstSeritler, type UstSerit } from '../rota/ust-seritler.ts';
 import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
@@ -80,6 +81,8 @@ interface Ozellikler {
   anaSayfa?: string;
   // Bütün sayfaların üst çubuğundaki modül düğmeleri; uygulama modüllerin bildirdiklerini verir.
   ustEylemler?: readonly UstEylem[];
+  // Bütün sayfaların en üstündeki modül şeritleri (939); uygulama modüllerin bildirdiklerini verir.
+  ustSeritler?: readonly UstSerit[];
   // "Ne oldu?" panelinin olayları; uygulama modüllerin bildirdiklerini verir. Kişiye açık olay yoksa düğme çizilmez.
   hizliIsler?: readonly HizliIs[];
   // Ctrl K paletinin genel komutları; uygulama modüllerin bildirdiklerini verir. İşlemi ve sayfası kişiye açık olan görünür.
@@ -94,6 +97,7 @@ interface Ozellikler {
 const ISLEMSIZ: readonly string[] = [];
 const KAPALISIZ: readonly string[] = [];
 const EYLEMSIZ: readonly UstEylem[] = [];
+const SERITSIZ: readonly UstSerit[] = [];
 const OLAYSIZ: readonly HizliIs[] = [];
 const GENEL_KOMUTSUZ: readonly Komut[] = [];
 const SAYFA_KOMUTSUZ: readonly SayfaKomutu[] = [];
@@ -150,7 +154,7 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
 const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/kuyruk']);
 
 export function Kabuk({
-  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, children,
+  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, ustSeritler = SERITSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, children,
 }: Ozellikler) {
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
@@ -295,10 +299,12 @@ export function Kabuk({
   }, [tamEkranAcik]);
 
   const gorunenler = gorunenUstEylemler(ustEylemler, islemler);
+  const seritler = gorunenUstSeritler(ustSeritler, islemler);
   const sonYerListesi = sonYerler(gecmis);
   const hesapMaddeleri = gorunenler.flatMap((e) => (e.hesapMaddesi === undefined ? [] : [{ anahtar: e.anahtar, hesapMaddesi: e.hesapMaddesi }]));
   return (
     <div className="tc-kabuk-cati">
+      {seritler.map((s) => <s.serit key={s.anahtar} />)}
       <BaglantiSeridi />
       <div
         ref={kok}

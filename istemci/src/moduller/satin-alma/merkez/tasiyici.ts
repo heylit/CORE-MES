@@ -14,7 +14,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi, type Dene
 import { ucCagrisi } from '../../../ortak/veri/uc-cagrisi.ts';
 import { FIRMA_KARTLARI, S, applyLocal, notify, scheduleRender, type Backend, type Coll, type Entity, type Transport } from './store.ts';
 import type {
-  AppUser, Approval, Award, AwardOrder, Currency, CurrencySetting, ExcessLine, Material, Priority, PurchaseRequest, Quality, Quote, RequestStatus, Settings, SimScenario,
+  AppUser, Approval, Award, AwardOrder, Currency, ExcessLine, Material, Priority, PurchaseRequest, Quality, Quote, RequestStatus, Settings, SimScenario,
   Supplier, SupplierStatus,
 } from './tipler.ts';
 
@@ -152,7 +152,7 @@ export function katalogSunucuya(m: Material, surum: number | null): KatalogKayde
 }
 
 function ayarEkrana(a: Ayarlar): Settings {
-  const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: Number(k.aylikFaizYuzdesi) }])) as Settings['currencies'];
+  const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: sayi(k.aylikFaizYuzdesi) ?? 0 }])) as Settings['currencies'];
   return {
     company: a.sirket, currencies,
     weights: { cost: a.agirliklar.maliyet, lead: a.agirliklar.termin, supplier: a.agirliklar.tedarikci, warranty: a.agirliklar.garanti },
@@ -284,8 +284,8 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
     const a = await uc.post('/satin-alma-ayarlari/kaydet', { govde: {
       sirket: s.company ?? '', agirliklar: { maliyet: s.weights.cost, termin: s.weights.lead, tedarikci: s.weights.supplier, garanti: s.weights.warranty },
       gecerlilikGun: s.validityDays, enAzTeklif: s.minQuotes, fiyatUyariYuzdesi: ond(s.priceAlertPct),
-      // Kur finansındır (SA3 a): yalnız para birimi listesi ve faiz gider.
-      kurlar: (Object.entries(s.currencies) as [Currency, CurrencySetting][]).map(([c, k]) => ({ paraBirimi: c, aylikFaizYuzdesi: ond(k.monthly) })),
+      // Kur ve faiz finansındır (SA3 a, 937 b): yalnız para birimi listesi gider.
+      kurlar: (Object.keys(s.currencies) as Currency[]).map((c) => ({ paraBirimi: c })),
       kategoriler: s.categories, birimler: s.departments.map((b) => ({ ad: b.name, yillikButce: ond(b.budget, 2) })),
       onayLimitleri: s.approvalLimits.map((l) => ({ azamiTutar: ondN(l.max, 2), seviye: l.role })), surum: s.version ?? 1,
     }, ...sure });

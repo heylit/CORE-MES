@@ -21,7 +21,7 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, 
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, emirAcikMi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, VARSAYILAN_AYLIK_FAIZ, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, emirAcikMi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -184,7 +184,7 @@ async function firmaKartlari(db: Db, kayitli: ReadonlySet<number>): Promise<Acil
     .slice(0, FIRMA_KARTI_SINIRI);
 }
 
-// SA3 a: güncel kur finanstan, bugünün ya da öncesinin son kuru; finansta yoksa boş (sıfır uydurulmaz).
+// SA3 a, 937 b: güncel kur ve faiz finanstan, bugünün ya da öncesinin son kaydı; finansta yoksa boş (sıfır uydurulmaz).
 async function ayarlariKur(db: Db): Promise<Ayarlar> {
   const a = await s.ayarlariOku(db);
   const bugun = await s.bugun(db);
@@ -193,7 +193,7 @@ async function ayarlariKur(db: Db): Promise<Ayarlar> {
   // Finansın para birimleri yalnız hiç kaydedilmemiş ayarlara önerilir; kaydedilmiş listeden kaldırılan para birimi geri gelmez (borç 38).
   const oneri = a.surum === 1 ? finanstanEklenenKurlar(a.kurlar.map((k) => k.paraBirimi), new Set(finans.keys())) : [];
   const listeler = [...a.kurlar, ...oneri];
-  const satirlar = listeler.map((k) => ({ ...k, aylikFaizYuzdesi: aylikFaiz(finansFaizi.get(k.paraBirimi)?.aylikYuzde, k.aylikFaizYuzdesi), kur: sade(finans.get(k.paraBirimi)?.kur ?? null) }));
+  const satirlar = listeler.map((k) => ({ ...k, aylikFaizYuzdesi: aylikFaiz(finansFaizi.get(k.paraBirimi)?.aylikYuzde), kur: sade(finans.get(k.paraBirimi)?.kur ?? null) }));
   const tarihler = listeler.filter((k) => k.paraBirimi !== 'TRY').flatMap((k) => finans.get(k.paraBirimi)?.tarih ?? []).sort();
   return { ...a, kurlar: satirlar, kurTarihi: tarihler[0] ?? null };
 }
@@ -266,7 +266,7 @@ async function sunucuAlanlari(db: Db, k: Kullanici, t: TalepYazimi, eski: Talep 
     teklifler.push({ ...q, kur: kur.kur });
   }
   // Ayarlar hiç kaydedilmemişse teklifin para birimi satırı yoktur; yazmadan önce eklenir (finansın kuruna dokunulmaz).
-  await s.paraBirimleriniEkle(db, kullanilanParaBirimleri({ teklifler, karar }).map((paraBirimi) => ({ paraBirimi, aylikFaizYuzdesi: VARSAYILAN_AYLIK_FAIZ[paraBirimi] })));
+  await s.paraBirimleriniEkle(db, kullanilanParaBirimleri({ teklifler, karar }));
   return { ...t, karar, senaryolar, teklifler };
 }
 

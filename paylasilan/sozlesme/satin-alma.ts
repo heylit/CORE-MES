@@ -334,9 +334,9 @@ export const ayarlarSemasi = z.object({
   gecerlilikGun: z.number().int(),
   enAzTeklif: z.number().int(),
   fiyatUyariYuzdesi: ondalikMetinSemasi,
-  // Güncel kur finanstan (SA3 a); finansta kuru olmayan para biriminde boş. Kur tarihi, gelen kurların en eskisinin günü.
+  // Güncel kur ve aylık faiz finanstan (SA3 a, 937 b); finansta kaydı olmayan para biriminde boş. Kur tarihi, gelen kurların en eskisinin günü.
   kurTarihi: z.string().nullable(),
-  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi })),
+  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable() })),
   kategoriler: z.array(z.string()),
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),
@@ -350,7 +350,8 @@ export const ayarlarKaydetGovdesi = z.object({
   gecerlilikGun: z.number().int().min(1).max(365),
   enAzTeklif: z.number().int().min(1).max(20),
   fiyatUyariYuzdesi: eksiOlmayan,
-  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), aylikFaizYuzdesi: eksiOlmayan })).min(1).max(4),
+  // Yalnız para birimi listesi ve sırası; kur ve faiz finansın tablosuna finans uçlarıyla yazılır (937 b).
+  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI) })).min(1).max(4),
   kategoriler: z.array(z.string().trim().min(1).max(60)).max(100),
   birimler: z.array(z.object({ ad: z.string().trim().min(1).max(60), yillikButce: eksiOlmayan })).max(100),
   onayLimitleri: z.array(z.object({ azamiTutar: eksiOlmayan.nullable(), seviye: z.string().trim().min(1).max(80) })).max(20),
