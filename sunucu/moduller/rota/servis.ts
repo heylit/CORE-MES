@@ -9,7 +9,7 @@ import { KATALOG_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KatalogMalzemeOzeti, KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
+  AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
@@ -250,7 +250,7 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
       kaynak: a.kaynak === null ? null : kaynak(a.kaynak),
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: ayrim.islem, degisimSuresiDk: ayrim.degisim,
       degisimOraniYuzde: oran === null ? null : ondalikMetin(oran, 2), terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
-      firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+      firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
       adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
         .map((x) => {
           const ayrim = teorikAyrim(x.birimSureDk, x.islemSuresiDk, x.degisimSuresiDk);
@@ -491,7 +491,7 @@ function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[] {
     opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, terminGun: a.terminGun,
     bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
-    makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+    makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
     adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
@@ -591,7 +591,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = sablon.map((st) => ({
       opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, adaylar: [], bilesenler: [], yanUrunler: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [],
     }));
   } else if (kaynak.tur === 'kart') {
     // Aktarım tek yönlüdür ve yalnız ilk rotada: kart sonradan değişse de var olan rota değişmez, kartta kopya kalır (#688).
@@ -601,7 +601,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = kart.map((a) => ({
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, adaylar: [], bilesenler: [], yanUrunler: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [],
     }));
   } else if (kaynak.tur === 'urun') {
     if ((await s.harfler(db, urunId)).length > 0) throw cakisma(ROTA_VAR);
@@ -665,8 +665,11 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
       if (k && !girdiOlabilirMi(k.tur)) throw dogrulama(`${k.stokKodu ?? k.ad}: ticari mal ve hizmet reçetede girdi olmaz.`, `adimlar.${i}.bilesenler`);
     }
   }
+  // Seçimi göndermeyen (alanı bilmeyen) ekran adımın kayıtlı seçimini silmesin; yeni adım "her kurulumda" başlar.
+  const eskiSecim = new Map(mevcut.adimlar.map((m) => [m.opNo, m.ilkParca]));
+  const secimli = adimlar.map((a) => ({ ...a, ilkParca: a.ilkParca ?? (a.opNo === null ? undefined : eskiSecim.get(a.opNo)) ?? ('her_kurulum' as const) }));
   await s.icerikSil(db, id);
-  await adimlariYaz(db, id, r.malzemeId, adimlar);
+  await adimlariYaz(db, id, r.malzemeId, secimli);
   return cevap(id, 'taslak', await s.kaydetYaz(db, id, govde.aciklama === '' ? null : govde.aciklama, kullanici.id));
 }
 
@@ -998,6 +1001,7 @@ export interface RotaAdimi {
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
   yenidenAyar: boolean;
+  ilkParca: IlkParcaSecimi;
   adaylar: { kaynak: Kaynak; ayarSuresiDk: OndalikMetin | null; birimSureDk: OndalikMetin | null }[];
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
   yanUrunler: { malzemeId: number; miktar: OndalikMetin }[];
@@ -1061,7 +1065,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
       kaynak: a.kaynak?.tur === 'fason' ? null : (a.kaynak as Kaynak | null),
       fason: a.kaynak?.tur === 'fason' ? { firmaId: a.kaynak.id, terminGun: a.terminGun } : null,
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
-      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
       adaylar: (yazim[i]?.adaylar ?? []).map(({ kaynak, ayarSuresiDk, birimSureDk }) => ({ kaynak, ayarSuresiDk, birimSureDk })) as RotaAdimi['adaylar'],
       bilesenler: (yazim[i]?.bilesenler ?? []) as RotaAdimi['bilesenler'],
       yanUrunler: (yazim[i]?.yanUrunler ?? []) as RotaAdimi['yanUrunler'],
@@ -1088,6 +1092,7 @@ export interface DurumRotaAdimi {
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
   yenidenAyar: boolean;
+  ilkParca: IlkParcaSecimi;
   adaylar: { kaynak: Kaynak; ayarSuresiDk: OndalikMetin | null; birimSureDk: OndalikMetin | null; islemSuresiDk: OndalikMetin | null; degisimSuresiDk: OndalikMetin | null }[];
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
   yanUrunler: { malzemeId: number; miktar: OndalikMetin }[];
@@ -1117,7 +1122,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
       adimlar: icerik.adimlar.map((a) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
-        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
         adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
           .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
@@ -1126,6 +1131,13 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
     });
   }
   return sonuc;
+}
+
+// Adımın ilk parça seçimi (744 a), anahtar `revizyonId:opNo`. Emrin revizyonu yayındadır ve değişmez; rotada olmayan adımı çağıran
+// varsayılanla ("her kurulumda") okur.
+export async function adimIlkParcaSecimleri(db: Db, revizyonIdleri: readonly number[]): Promise<Map<string, IlkParcaSecimi>> {
+  if (revizyonIdleri.length === 0) return new Map();
+  return new Map((await s.adimIlkParcaSecimleri(db, [...new Set(revizyonIdleri)])).map((x) => [`${x.revizyonId}:${x.opNo}`, x.ilkParca]));
 }
 
 export async function yururluktekiRevizyon(db: Db, malzemeId: number): Promise<RotaRevizyonu | null> {

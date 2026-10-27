@@ -16,7 +16,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { isler } from './isler.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -121,7 +121,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak ? { tur: a.kaynak.tur, id: a.kaynak.id } : null,
     ayarSuresiDk: a.ayarSuresiDk === null ? null : Number(a.ayarSuresiDk), birimSureDk: a.birimSureDk === null ? null : Number(a.birimSureDk),
     terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: Number(a.firePayiYuzde), makineKullanimi: a.makineKullanimi,
-    enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+    enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
     adaylar: a.adaylar.map((x) => ({ kaynak: { tur: x.kaynak.tur, id: x.kaynak.id }, ayarSuresiDk: x.ayarSuresiDk === null ? null : Number(x.ayarSuresiDk), birimSureDk: x.birimSureDk === null ? null : Number(x.birimSureDk) })),
     bilesenler: a.bilesenler.map((b) => ({ malzemeId: b.malzeme.id, miktar: Number(b.miktar), fireYuzde: Number(b.fireYuzde) })),
     yanUrunler: a.yanUrunler.map((y) => ({ malzemeId: y.malzeme.id, miktar: Number(y.miktar) })),
@@ -212,6 +212,26 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const g = await komut(id, 'onaya-gonder', { surum: k.json<KomutCevabi>().surum }, c.planlama);
     assert.equal(g.statusCode, 422);
     assert.equal(g.json<{ mesaj: string }>().mesaj, 'OP 10: giren (hammadde ya da yarı mamul) seçilmeli.');
+  });
+
+  test('RT-81: adımın ilk parça seçimi kaydedilir ve okunur; seçimi göndermeyen kayıt adımın seçimini korur, yeni adım her kurulumda başlar; geçersiz seçim reddedilir', async () => {
+    const urun = await mamulAc();
+    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
+    const k = await kaydet(id, 1, [yeniAdim(), yeniAdim({ ilkParca: 'yok' })]);
+    assert.equal(k.statusCode, 200, k.body);
+    const a = await ayrinti(id);
+    assert.deepEqual(a.adimlar.map((x) => [x.opNo, x.ilkParca]), [[10, 'her_kurulum'], [20, 'yok']]);
+    // Alanı bilmeyen eski görünüm seçimi göndermez: kayıtlı seçim kalır, yeni adım "her kurulumda" olur.
+    const { ilkParca: _a, ...op10 } = govdeye(a.adimlar[0]!);
+    const { ilkParca: _b, ...op20 } = govdeye(a.adimlar[1]!);
+    const k2 = await kaydet(id, k.json<KomutCevabi>().surum, [op10, op20, yeniAdim({ bilesenler: [] })]);
+    assert.equal(k2.statusCode, 200, k2.body);
+    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => [x.opNo, x.ilkParca]), [[10, 'her_kurulum'], [20, 'yok'], [30, 'her_kurulum']]);
+    const bozuk = await kaydet(id, k2.json<KomutCevabi>().surum, [{ ...yeniAdim(), ilkParca: 'bazen' as never }]);
+    assert.equal(bozuk.statusCode, 400);
+    const secim = await vt().tx((db) => adimIlkParcaSecimleri(db, [id]));
+    assert.deepEqual([...secim].sort(), [[`${id}:10`, 'her_kurulum'], [`${id}:20`, 'yok'], [`${id}:30`, 'her_kurulum']]);
+    assert.equal((await vt().tx((db) => adimIlkParcaSecimleri(db, []))).size, 0);
   });
 
   test('RT-07, RT-31, RT-48: standart taslak on bir adımdır, OP 10..110, tezgahsız, süresiz, yeniden ayar açık', async () => {

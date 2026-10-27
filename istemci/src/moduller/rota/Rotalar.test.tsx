@@ -44,14 +44,14 @@ const ADIMLAR: RevizyonAyrintisi['adimlar'] = [
   {
     id: 1, opNo: 10, sira: 1, operasyonTipi: { id: 1, kod: 'uretim', ad: 'Üretim', kisaltma: 'ÜRE', aktif: true }, ad: 'Tornalama', kaynak: MAKINE,
     ayarSuresiDk: '30.00', birimSureDk: '2.0000', islemSuresiDk: '2.0000', degisimSuresiDk: null, degisimOraniYuzde: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: '0.00', makineKullanimi: 'tek',
-    enKucukParca: null, yenidenAyar: true, adaylar: [],
+    enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [],
     bilesenler: [{ malzeme: HAMMADDE, miktar: '1.2500', fireYuzde: '0.00', toplamMiktar: '1.25' }], yanUrunler: [],
     akis: { tuketir: [], cikti: { tur: 'ara-hal', opNo: 10 } }, adimMiktari: '1', teorikSureDk: '32', talimat: { surum: 2, metin: 'Deneme talimat metni' },
   },
   {
     id: 2, opNo: 20, sira: 2, operasyonTipi: { id: 2, kod: 'muayene', ad: 'Muayene', kisaltma: 'MUA', aktif: true }, ad: 'Son muayene', kaynak: null,
     ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, degisimOraniYuzde: null, terminGun: null, bagimlilik: 'akisli', devirAdedi: 5, firePayiYuzde: '0.00', makineKullanimi: 'tek', enKucukParca: null,
-    yenidenAyar: true, adaylar: [], bilesenler: [], yanUrunler: [], akis: { tuketir: [10], cikti: { tur: 'urun' } }, adimMiktari: '1',
+    yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [], akis: { tuketir: [10], cikti: { tur: 'urun' } }, adimMiktari: '1',
     teorikSureDk: null, talimat: null,
   },
 ];
