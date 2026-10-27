@@ -29,17 +29,34 @@ const belgeler = {
 };
 
 describe('A4 sayfaları', () => {
-  it('Kalite: açılışta ilk numune görünür ama yazılmaz; kalite seçince "Ölçülüyor" yazar ve ölçüm girer', async () => {
+  // 789, 798: sayfa salt okunurdur; ölçüm tek kalite formudur (terminal "Ölç" ya da Kalite Merkezi), ilk parça kararı Kalite Merkezi'nde.
+  it('Kalite: sayfa salt okunur; numune seçilince ölçüm girişi ve karar düğmesi yok, hiçbir şey yazılmaz (reddedilen)', async () => {
     const istekler = sunucuKur(KALITE, { belgeler });
     arkonAc('/arkon/kalite');
     const b = await bolum('Kalite');
     const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
-    const numune = await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 });
+    fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
+    const olcum = await within(b).findByRole('region', { name: 'Ölçüm' }, { timeout: 10000 });
+    expect(await within(olcum).findByText('Ø20 h7', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(olcum).getByText('ölçülmedi')).toBeTruthy();
+    expect(within(b).queryByRole('textbox', { name: 'Ölçülen Ø20 h7' })).toBeNull();
+    expect(within(b).queryByRole('button', { name: /^(Onayla|Red|CMM dosyası)$/ })).toBeNull();
     await bekle();
     expect(yazmalar(istekler)).toEqual([]);
-    fireEvent.click(numune);
-    expect(await within(b).findByRole('textbox', { name: 'Ölçülen Ø20 h7' }, { timeout: 10000 })).toBeTruthy();
-    await vi.waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol.startsWith('/arkon/belgeler/requests/'))).toBe(true); });
+  }, 30000);
+
+  it('Kalite: eski numunenin kayıtlı ölçüsü salt okunur görünür', async () => {
+    const olculmus = { ...belgeler, // Önceki denemenin cihazda kalan numunesiyle karışmasın diye ayrı kimlik.
+    requests: [{ ...belgeler.requests[0]!, kimlik: 'r2', govde: { ...belgeler.requests[0]!.govde, id: 'r2', no: 'E-2', status: 'approved', decidedBy: 'Deneme Kalite', decidedAt: Date.now(), results: { 1: { v: 19.99, ok: true, by: 'Deneme Kalite' } } } }] };
+    sunucuKur(KALITE, { belgeler: olculmus });
+    arkonAc('/arkon/kalite');
+    const b = await bolum('Kalite');
+    const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
+    fireEvent.click(await within(sira).findByRole('button', { name: /Tamamlanan/ }, { timeout: 10000 }));
+    fireEvent.click(await within(sira).findByRole('button', { name: /E-2/ }, { timeout: 10000 }));
+    const olcum = await within(b).findByRole('region', { name: 'Ölçüm' }, { timeout: 10000 });
+    expect(await within(olcum).findByText('19.99', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(olcum).getByText(/Onaylandı|Onay/)).toBeTruthy();
   }, 30000);
 
   it('Kalite: seçilen numunenin teknik resmi orta alanda açılır (yer tutucu yok)', async () => {
@@ -52,16 +69,16 @@ describe('A4 sayfaları', () => {
     expect(within(b).queryByText('Bu bölüm hazırlanıyor')).toBeNull();
   }, 30000);
 
-  it('Kalite: ilk parça kararının Kalite Merkezi\'nde olduğu yazar; bağlantı yalnız o sayfayı görene, onay düğmesi yerinde (501 a)', async () => {
+  it('Kalite: ölçümün ve ilk parça kararının yeri yazar; bağlantı yalnız Kalite Merkezi\'ni görene (501 a)', async () => {
     sunucuKur(KALITE, { belgeler });
     arkonAc('/arkon/kalite');
     let b = await bolum('Kalite');
     let sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
     const not = await within(b).findByRole('note', {}, { timeout: 10000 });
-    expect(not.textContent).toContain('İlk parça kararı Kalite Merkezi\'nde');
+    expect(not.textContent).toContain('salt okunur');
+    expect(not.textContent).toContain('ilk parça kararı Kalite Merkezi\'nde');
     expect(within(not).queryByRole('link')).toBeNull();
-    expect(within(b).getByRole('button', { name: /^Onayla$/ })).toBeTruthy();
     cleanup();
 
     sunucuKur({ ...KALITE, kullanici: { ...KALITE.kullanici, islemler: [...KALITE.kullanici.islemler, 'sayfa.kalite-merkezi'] } }, { belgeler });
@@ -71,18 +88,6 @@ describe('A4 sayfaları', () => {
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
     const baglanti = await within(await within(b).findByRole('note', {}, { timeout: 10000 })).findByRole('link', { name: 'Kalite Merkezi\'ni aç' }, { timeout: 10000 });
     expect(baglanti.getAttribute('href')).toBe('/kalite-merkezi');
-  }, 30000);
-
-  it('Kalite: ölçme yetkisi olmayan amir ölçüm girişini ve karar düğmelerini görmez, seçince yazmaz', async () => {
-    const istekler = sunucuKur(AMIR, { belgeler });
-    arkonAc('/arkon/kalite');
-    const b = await bolum('Kalite');
-    const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
-    fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
-    await bekle();
-    expect(within(b).queryByRole('textbox', { name: 'Ölçülen Ø20 h7' })).toBeNull();
-    expect(within(b).queryByRole('button', { name: /^Onayla$/ })).toBeNull();
-    expect(yazmalar(istekler)).toEqual([]);
   }, 30000);
 
   it('Bakım: bakımcı arıza açar ve plan ekler; amir arıza açar ama plan ekleyemez; açılış yazmaz', async () => {

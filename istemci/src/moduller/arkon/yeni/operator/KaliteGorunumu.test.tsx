@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { ArkonBaglamiKaynagi, type ArkonBaglami } from '../veri/baglam.ts';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import type { Is } from './tipler.ts';
@@ -26,7 +28,10 @@ function kur(g: { istekler?: unknown[]; sonuc?: unknown; izinli?: boolean; o?: I
     Bus: { on: () => () => {}, send },
   };
   const baglam = { depo, kisi: { name: 'Kalite K' } } as unknown as ArkonBaglami;
-  const sar = ({ children }: { children: ReactNode }) => <ArkonBaglamiKaynagi.Provider value={baglam}>{children}</ArkonBaglamiKaynagi.Provider>;
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const sar = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={istemci}><MemoryRouter><ArkonBaglamiKaynagi.Provider value={baglam}>{children}</ArkonBaglamiKaynagi.Provider></MemoryRouter></QueryClientProvider>
+  );
   const olc = vi.fn();
   render(<KaliteGorunumu istasyon="KAL" is={g.o ?? is()} izinli={g.izinli ?? true} olc={olc} soyle={() => {}} />, { wrapper: sar });
   return { put, send, olc };
@@ -41,6 +46,26 @@ describe('600 a: kalite istasyonu görünümü', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^Kabul$/ })[0]!);
     await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', status: 'approved', decidedBy: 'Kalite K' })));
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'sample-result', reqId: 'n1', status: 'approved' }));
+  });
+
+  // 789-2a, 798: ilk parça numunesinin kararı yalnız Kalite Merkezi'nde; ölçü sayısı Kalite Merkezi kaydından (sunucu yazar).
+  it('ilk parça numunesinde Kabul/Red yok, kararın Kalite Merkezi\'nde olduğu yazar; Ölç yerinde (reddedilen)', async () => {
+    const { put } = kur({ istekler: [numune('n1', { ilkParca: true, kmOlculen: 2 })] });
+    expect(await screen.findByText(/2 ölçü/)).toBeTruthy();
+    const gelen = screen.getByRole('region', { name: 'Gelen numuneler' });
+    expect(within(gelen).getByRole('note').textContent).toContain('İlk parça kararı Kalite Merkezi\'nde');
+    expect(within(gelen).queryByRole('button', { name: /^(Kabul|Red)$/ })).toBeNull();
+    expect(within(gelen).getByRole('button', { name: /Ölç/ })).toBeTruthy();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('periyodik numunenin Red ölçüsü Kalite Merkezi kaydındaki sayıdan okunur', async () => {
+    const { put } = kur({ istekler: [numune('n1', { reason: 'Her 10 parça', kmOlculen: 1 })] });
+    await screen.findByText('1 numune bekliyor');
+    fireEvent.click(within(screen.getByRole('region', { name: 'Gelen numuneler' })).getByRole('button', { name: /^Red$/ }));
+    fireEvent.change(screen.getByLabelText('Red gerekçesi'), { target: { value: 'çap büyük' } });
+    fireEvent.click(screen.getByRole('button', { name: /Reddet/ }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ status: 'rejected', note: 'çap büyük' })));
   });
 
   it('numune Red ölçü ve gerekçe ister', async () => {
