@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   aralikDakika, basHarfler, eskiKalemler, etkinMakine, geceyiGecer, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, kategoriler, malzemeSuz,
-  minimumAltinda, ondalik, oranMetni, planEkleri, sayiGirdisi, sonrakiKod, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir,
+  minimumAltinda, ondalik, oranMetni, planEkleri, sayiGirdisi, sonrakiKod, statuluKartlar, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir,
 } from './kurallar.ts';
+import type { Adim } from '../rotalar/kurallar.ts';
 
 // Örnek veriler uydurmadır.
 describe('R2 saf hesapları', () => {
@@ -112,5 +113,31 @@ describe('R2 saf hesapları', () => {
     expect(gunParcalari('16:00', '00:00')).toEqual([[960, 1440]]);
     expect(gunParcalari('22:00', '06:00')).toEqual([[1320, 1440], [0, 360]]);
     expect(gunParcalari('25:00', '06:00')).toEqual([]);
+  });
+});
+
+describe('R2 statülü kart satırı', () => {
+  const adim = (id: string, seq: number, ins: string[]): Adim => ({ id, seq, opNo: seq, opId: 'op1', ins: ins.map((itemId) => ({ itemId, qty: 1, scrap: 0 })), dep: 'bagimli' } as unknown as Adim);
+  const malzemeler = [
+    { id: 'h1', code: 'HM-1', type: 'ham', unit: 'kg' }, { id: 'm1', code: 'MM-1', type: 'mamul', unit: 'adet' },
+  ];
+  const g = {
+    malzemeler,
+    rotalar: { m1: { steps: [adim('o20', 20, []), adim('o10', 10, ['h1']), adim('o30', 30, [])] } },
+    opAdi: () => 'Torna',
+    statuler: [{ id: 7, malzemeNo: 'HM-1', kaynakAdim: 'o10', ad: 'OP 10' }],
+  };
+
+  it('rotanın son adımı dışındaki adımlar taşınan malzemenin kartıdır; ürün kodu ve adet yazılır, miktar stoktan', () => {
+    const k = statuluKartlar(malzemeler[0]!, { ...g, kirilim: () => [{ statuId: 7, miktar: '3' }, { statuId: null, miktar: '50' }] });
+    expect(k.map((c) => [c.opNo, c.baslik, c.urunKodu, c.miktar, c.birim, c.rotaAdimi])).toEqual([
+      [10, 'HM OP 10 Torna', 'MM-1', 3, 'adet', true], [20, 'HM OP 20 Torna', 'MM-1', 0, 'adet', true],
+    ]);
+  });
+
+  it('stok okunamadıysa miktar null (sıfır uydurulmaz); rotada olmayan bakiyeli statü ayrıca görünür', () => {
+    expect(statuluKartlar(malzemeler[0]!, { ...g, kirilim: () => null }).map((c) => c.miktar)).toEqual([null, null]);
+    const k = statuluKartlar(malzemeler[0]!, { ...g, rotalar: {}, kirilim: () => [{ statuId: 9, miktar: '2' }, { statuId: 7, miktar: '0' }] });
+    expect(k.map((c) => [c.baslik, c.miktar, c.rotaAdimi])).toEqual([['Statü 9', 2, false]]);
   });
 });

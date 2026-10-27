@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
-import { EmirAyrintisi } from './EmirAyrintisi.tsx';
-import { DURUM_TONU, planMetni, tamponRozeti, turAdi } from './gorunum.ts';
+import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
+import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
   bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
@@ -44,10 +44,6 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
 
   return (
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
-      <p className="tc-rr3-ipucu">
-        Serbest ve üretimdeki emirler birlikte planlanır: önce öncelik, sonra teslim tarihi sırasıyla istasyonlara yerleştirilir ve stok emirler
-        arasında bu sırayla paylaştırılır. Taslak emirler plana girmez.
-      </p>
       <p className="tc-rr3-ipucu">
         Emirler Üretim Emirleri sayfasıyla ortaktır; terminalde başlatılan, sayılan ve biten iş burada ilerleme olarak görünür. Emir yürürlükteki
         rotadan açılır.
@@ -132,12 +128,12 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
     >
       <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
         <span className="tc-rr3-no">
-          <Rozet ton={o.priority === 1 ? 'hata' : o.priority === 2 ? 'uyari' : 'pasif'}>{ONCELIK_ADI[o.priority] ?? ''}</Rozet>
-          <b className="mono tc-rr3-emirno">{o.no}</b>
+          <span className="tc-rr3-oncelik" data-oncelik={String(o.priority)}>{ONCELIK_ADI[o.priority] ?? ''}</span>
+          <b className="tc-rr3-emirno">{o.no}</b>
           <span className="tc-rr3-etiketler">
-            <span className="tc-rr3-tur">{turAdi(o.tur)}</span>
+            <span className="tc-rr3-tur" data-tur={o.tur}>{turAdi(o.tur)}</span>
             {ana && <small>{o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · {ana.no}</small>}
-            {rev && <Rozet ton={revEski ? 'uyari' : 'tamam'}>Rev {rev.no} {revEski ? 'eski rota' : 'sabit'}</Rozet>}
+            {rev && <span className="tc-rr3-rev">Rev {rev.no} {revEski ? 'eski rota' : 'sabit'}</span>}
           </span>
         </span>
         <span className="tc-rr3-urun">
@@ -151,15 +147,14 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
         <span className="tc-rr3-sag" data-baslik="Miktar"><b>{sayi(o.qty)}</b> <small>{urun?.unit ?? ''}</small></span>
         <span data-baslik="Teslim">{tarih(o.due)}</span>
         <span data-baslik="Plan bitiş">
-          {plan.ton ? <Rozet ton={plan.ton}>{plan.metin}</Rozet> : plan.metin}
-          {tampon && <span title={tampon.ipucu}><Rozet ton={tampon.ton}>{tampon.metin}</Rozet></span>}
+          <PlanHucresi plan={plan} tampon={tampon} />
           {plan.alt && <small>{plan.alt}</small>}
         </span>
         <span className="tc-rr3-ilerleme" data-baslik="İlerleme">
           <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
           <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)}` : ''}</small>
         </span>
-        <span data-baslik="Durum"><Rozet ton={DURUM_TONU[o.status]}>{DURUM_ADI[o.status]}</Rozet></span>
+        <span data-baslik="Durum"><span className="tc-rr3-durum" data-durum={o.status}>{DURUM_ADI[o.status]}</span></span>
         <Simge ad={acik ? 'down' : 'chev-right'} boyut="k" />
       </button>
       {acik && <div className="tc-rr3-govde">{children}</div>}

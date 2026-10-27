@@ -7,10 +7,10 @@ import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import {
-  acikMi, adimDurumu, adimPlani, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
-  yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
+  acikMi, adimDurumu, adimPlani, DURUM_ADI, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
+  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
-import { DURUM_TONU, planMetni, tamponRozeti, turAdi } from './gorunum.ts';
+import { planMetni, tamponRozeti, type TamponRozeti } from './gorunum.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
 const TALEP_YOLU = '/satin-alma/talepler';
@@ -24,6 +24,16 @@ interface Ozellikler {
   git: EkranOzellikleri['git'];
   komut: ReturnType<typeof useEmirKomutu>;
   emirAc: (id: string) => void;
+}
+
+// Eski ekranın plan hücresi: tarih renkli kalın yazı, tampon yanında küçük hap; tarih yoksa düz metin (plan dışı, motor yok).
+export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetni>; tampon: TamponRozeti | null }) {
+  return (
+    <>
+      {plan.ton ? <b className="tc-rr3-plan-t" data-ton={plan.ton}>{plan.metin}</b> : <span className="tc-rr3-plan-t">{plan.metin}</span>}
+      {tampon && <span className="tc-rr3-tampon" data-tampon={tampon.tur} title={tampon.ipucu}>{tampon.metin}</span>}
+    </>
+  );
 }
 
 // Emir ayrıntısı: emrin alanları burada düzenlenmez (emir Üretim Emirleri'nde tutulur, ilerleme terminalden gelir); yalnız emir
@@ -42,25 +52,38 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
   const yururlukte = yururluktekiRevizyon(d, o.itemId);
   const fark = rotaFarki(d, o);
   const surum = { surum: o.surum };
+  const yuzde = il.toplam ? Math.round((il.biten / il.toplam) * 100) : o.status === 'tamam' ? 100 : 0;
 
   return (
     <div className="tc-rr3-ayrinti" aria-label={`${o.no} ayrıntısı`}>
-      <dl className="tc-rr3-alanlar">
-        <div><dt>Miktar</dt><dd>{miktar(o.qty, urun?.unit)}</dd></div>
-        <div><dt>Başlangıç</dt><dd>{tarih(o.start)}</dd></div>
-        <div><dt>Teslim</dt><dd>{tarih(o.due)}</dd></div>
-        <div><dt>Öncelik</dt><dd>{['', 'Acil', 'Yüksek', 'Normal', 'Düşük'][o.priority]}</dd></div>
-        <div><dt>Durum</dt><dd><Rozet ton={DURUM_TONU[o.status]}>{({ taslak: 'Taslak', serbest: 'Serbest', uretimde: 'Üretimde', tamam: 'Tamamlandı', iptal: 'İptal' })[o.status]}</Rozet></dd></div>
-        <div><dt>Emir türü</dt><dd>{turAdi(o.tur)}</dd></div>
-        {!o.rotasiz && (
-          <div>
-            <dt>Rota revizyonu</dt>
-            <dd>{rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'} (Rev ${rev.no})` : yururlukte ? `Yürürlükteki (Rev ${yururlukte.no})` : YOK}</dd>
-          </div>
+      {/* Eski ekranın alan satırı; alanlar salt okunurdur (812 a): eski sayfa da bağlıyken her değişikliği geri çeviriyordu. */}
+      <div className="tc-rr3-oc">
+        <Girdi etiket="Miktar" readOnly className="tc-rr3-oc-sayi" value={sayi(o.qty)} />
+        <Girdi etiket="Başlangıç" readOnly value={tarih(o.start)} />
+        <Girdi etiket="Teslim" readOnly value={tarih(o.due)} />
+        <Girdi etiket="Öncelik" readOnly value={ONCELIK_ADI[o.priority] ?? ''} />
+        <Girdi etiket="Durum" readOnly value={DURUM_ADI[o.status]} />
+        {!o.rotasiz && (rev || yururlukte) && (
+          <Girdi
+            etiket="Rota revizyonu" readOnly
+            value={rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'} (Rev ${rev.no})` : `Yürürlükteki (Rev ${yururlukte?.no ?? YOK})`}
+          />
         )}
-        <div><dt>Plan bitiş</dt><dd>{pm.metin}{tampon ? ` · ${tampon.metin}` : ''}{pm.alt ? ` (${pm.alt})` : ''}</dd></div>
-        <div><dt>İlerleme</dt><dd>{il.toplam ? `${String(il.biten)}/${String(il.toplam)} adım` : YOK}</dd></div>
-      </dl>
+        <div className="tc-rr3-oc-kpi">
+          <small>Plan bitiş</small>
+          <span><PlanHucresi plan={pm} tampon={tampon} /></span>
+          {pm.alt && <small>{pm.alt}</small>}
+        </div>
+        <div className="tc-rr3-oc-kpi tc-rr3-ilerleme">
+          <small>İlerleme</small>
+          <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
+          <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)} adım` : ''}</small>
+        </div>
+      </div>
+      <p className="tc-rr3-ipucu">
+        Emir alanları Üretim Emirleri'nde düzenlenir.{' '}
+        <button type="button" className="tc-rr3-bag" onClick={() => { void yonlen(`/uretim-emirleri/${String(o.kayitNo)}`); }}>Üretim Emirleri'nde aç</button>
+      </p>
       {o.note && <p className="tc-rr3-ipucu">{o.note}</p>}
 
       {fark && (

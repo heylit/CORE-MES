@@ -9,11 +9,11 @@ export const turAdi = (tur: string): string => (EMIR_TURU_ADLARI as Record<strin
 const TAMPON_ADI = { gec: 'Gecikiyor', kirmizi: 'Tampon kritik', sari: 'Tampon azaldı', yesil: 'Tampon yeterli' } as const;
 const TAMPON_TONU: Readonly<Record<keyof typeof TAMPON_ADI, RozetTonu>> = { gec: 'hata', kirmizi: 'hata', sari: 'uyari', yesil: 'tamam' };
 const gunBicimi = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-export interface TamponRozeti { metin: string; ton: RozetTonu; ipucu: string }
+export interface TamponRozeti { tur: keyof typeof TAMPON_ADI; metin: string; ton: RozetTonu; ipucu: string }
 export function tamponRozeti(p: PlanOzeti): TamponRozeti | null {
   if (p.tur !== 'plan' || p.tampon === null || p.bolluk === null) return null;
   const gun = gunBicimi.format(p.bolluk);
-  return { metin: `${TAMPON_ADI[p.tampon]}, ${p.bolluk >= 0 ? '+' : ''}${gun} g`, ton: TAMPON_TONU[p.tampon], ipucu: `Teslime kalan bolluk ${gun} gün` };
+  return { tur: p.tampon, metin: `${TAMPON_ADI[p.tampon]}, ${p.bolluk >= 0 ? '+' : ''}${gun} g`, ton: TAMPON_TONU[p.tampon], ipucu: `Teslime kalan bolluk ${gun} gün` };
 }
 export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null; alt: string | null } {
   switch (p.tur) {

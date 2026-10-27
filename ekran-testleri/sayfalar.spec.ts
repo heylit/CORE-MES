@@ -25,10 +25,13 @@ const RECETE_ROTA_BOLUMLERI = ['schema', 'plan', 'kanban', 'items', 'ops', 'res'
 // Planlama plan modülünün sayfasıdır (658 b): bu eski adresler Planlama'ya yönlenir. Planlamacının reddi recete-rota.spec.ts'te sınanır.
 const PLANLAMA_BOLUMLERI: readonly string[] = ['plan', 'kanban', 'studio'];
 const PLANLAMA = /^\/plan(\/[a-z]+)?$/;
-// Yeni ekranın başlığı bölümün adıdır (kabuğun başlığı dar ekranda görünmez).
+// Yeni ekranın başlığı bölümün adıdır (kabuğun başlığı dar ekranda görünmez). Ürün ve rotalar eski ekrandaki gibi başlıksızdır (805):
+// bölümü bölgesinin adıyla bulunur, sayfa başlığı kabukta.
 const YENI_BOLUM_BASLIGI: Readonly<Record<string, string>> = {
-  schema: 'Ürün ve rotalar', items: 'Malzemeler', ops: 'Operasyonlar', res: 'Kaynaklar', stock: 'Stok', sureler: 'Süreler',
+  items: 'Malzemeler', ops: 'Operasyonlar', res: 'Kaynaklar', stock: 'Stok', sureler: 'Süreler',
 };
+const yeniBolum = (b: string): Pick<Sayfa, 'baslik' | 'bolum'> =>
+  (b === 'schema' ? { baslik: 'Reçete ve Rota', bolum: 'Ürün ve rotalar' } : { baslik: YENI_BOLUM_BASLIGI[b] ?? b });
 
 // İstasyonlar ve Vardiya bölümleri (UYUM-BORCU istasyonlar 1, vardiya V-B9, V-B10, V-B14). İstasyonlar bölüm adını kartta yinelemez:
 // başlık sayfanın adıdır; Vardiya'da bölümün ilk panel başlığıdır.
@@ -51,7 +54,7 @@ const SAYFALAR: Sayfa[] = [
   ...RECETE_ROTA_BOLUMLERI.map((b): Sayfa => ({
     modul: 'recete-rota', yol: `/recete-rota/${b}`, ...(PLANLAMA_BOLUMLERI.includes(b)
       ? { varis: PLANLAMA, hesap: 'ornek.yonetici', baslik: 'Planlama' }
-      : { varis: RECETE_ROTA, hesap: 'ornek.planlama', baslik: YENI_BOLUM_BASLIGI[b] ?? b }),
+      : { varis: RECETE_ROTA, hesap: 'ornek.planlama', ...yeniBolum(b) }),
   })),
   // Üretim Terminali yeni ekrandadır (541); eski çerçeve /uretim-terminali/eski altında.
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },

@@ -2,7 +2,7 @@
 .tc-rr3 { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-rr3 h3, .tc-rr3 h4 { margin: 0; }
 .tc-rr3 h4 small { color: var(--muted); font-weight: 400; }
-.tc-rr3-ipucu { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr3-ipucu { max-width: 72ch; margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-rr3-arac, .tc-rr3-satir { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); min-width: 0; }
 .tc-rr3-secici { display: flex; flex-wrap: wrap; gap: var(--b-1); min-width: 0; }
 .tc-rr3-secici small { color: var(--muted); }
@@ -76,32 +76,84 @@
 .tc-rr3-emir > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; overflow-wrap: anywhere; }
 .tc-rr3-emir small { color: var(--muted); }
 .tc-rr3-emir > .tc-rr3-no { flex-direction: column; align-items: flex-start; }
-/* Emir no kırılmaz (eski ekranda tek satır); sütun en az onun genişliğindedir. */
-.tc-rr3-emirno { white-space: nowrap; overflow-wrap: normal; }
+/* Emir no kırılmaz (eski ekranda tek satır); sütun en az onun genişliğindedir. Eski ekran gibi kalın, düz yazı. */
+.tc-rr3-emirno { font-size: var(--yazi-m); font-weight: 700; letter-spacing: var(--harf-aralik-02); white-space: nowrap; overflow-wrap: normal; }
+/* Eski ekranın küçük etiketleri (805 R2): öncelik hap, tür ve durum kutu, revizyon hap; metin her zaman yazılır. */
+.tc-rr3-oncelik, .tc-rr3-rev, .tc-rr3-tampon, .tc-rr3-durum, .tc-rr3-etiket {
+  display: inline-block; padding: var(--cizgi-ince) var(--b-2); border: var(--cizgi-ince) solid var(--edge);
+  font-size: var(--yazi-xs); font-weight: 700; line-height: 1.4; white-space: nowrap; overflow-wrap: normal;
+}
+.tc-rr3-oncelik { border-radius: var(--yari-tam); color: var(--muted); text-transform: uppercase; letter-spacing: var(--harf-aralik-02); }
+.tc-rr3-oncelik[data-oncelik="1"] { background: var(--stop); color: var(--bg); border-color: var(--stop); }
+.tc-rr3-oncelik[data-oncelik="2"] { background: var(--hazard); color: var(--on-hazard); border-color: var(--hazard); }
+.tc-rr3-oncelik[data-oncelik="4"] { opacity: .7; }
+.tc-rr3-rev { border-radius: var(--yari-tam); border-color: var(--run); background: color-mix(in srgb, var(--run) 14%, var(--panel)); color: var(--run); }
+.tc-rr3-durum { border-radius: var(--cizgi-kalin); background: var(--panel2); }
+.tc-rr3-durum[data-durum="serbest"] { color: var(--done); border-color: var(--done); }
+.tc-rr3-durum[data-durum="uretimde"] { background: var(--run); color: var(--bg); border-color: var(--run); }
+.tc-rr3-durum[data-durum="tamam"] { color: var(--run); border-color: var(--run); }
+.tc-rr3-durum[data-durum="iptal"] { color: var(--stop); border-color: var(--stop); }
+.tc-rr3-etiket { border-radius: var(--cizgi-kalin); color: var(--muted); font-weight: 600; }
+.tc-rr3-etiket[data-tur="ham"] { border-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.tc-rr3-etiket[data-tur="yari"] { color: var(--run); border-color: var(--run); }
+.tc-rr3-etiket[data-tur="mamul"] { background: var(--hazard); color: var(--on-hazard); border-color: var(--hazard); }
+/* Plan bitiş: tarih renkli kalın yazı, tampon küçük hap (eski bufChip). */
+.tc-rr3-plan-t[data-ton="tamam"] { color: var(--run); }
+.tc-rr3-plan-t[data-ton="uyari"] { color: var(--hold); }
+.tc-rr3-plan-t[data-ton="hata"] { color: var(--stop); }
+.tc-rr3-tampon { border: 0; border-radius: var(--yari-tam); }
+.tc-rr3-tampon[data-tampon="yesil"] { background: color-mix(in srgb, var(--run) 22%, var(--panel)); color: var(--run); }
+.tc-rr3-tampon[data-tampon="sari"] { background: color-mix(in srgb, var(--hazard) 35%, var(--panel)); color: var(--on-hazard); }
+.tc-rr3-tampon[data-tampon="kirmizi"] { background: color-mix(in srgb, var(--stop) 18%, var(--panel)); color: var(--stop); }
+.tc-rr3-tampon[data-tampon="gec"] { background: var(--stop); color: var(--bg); }
 .tc-rr3-etiketler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-rr3-tur {
-  padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1);
+  padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--cizgi-kalin);
   color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; white-space: nowrap;
 }
+.tc-rr3-tur[data-tur="fai"] { color: var(--done); border-color: var(--done); }
+.tc-rr3-tur[data-tur="prototip"] { color: var(--hold); border-color: var(--hold); }
+.tc-rr3-tur[data-tur="numune"] { color: var(--run); border-color: var(--run); }
 .tc-rr3-emir > .tc-rr3-urun { flex-wrap: nowrap; }
 .tc-rr3-urun-ad { display: flex; flex-direction: column; min-width: 0; }
 .tc-rr3-slot {
-  display: grid; flex: none; place-items: center; width: var(--b-5); height: var(--b-5); border-radius: var(--yari-1);
+  display: grid; flex: none; place-items: center; width: var(--b-5); height: var(--b-5); border-radius: var(--cizgi-kalin);
   background: var(--panel2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; border: var(--cizgi) solid var(--edge);
+  white-space: nowrap; overflow-wrap: normal;
 }
 .tc-rr3-slot[data-tur="mamul"] { background: var(--hazard); color: var(--ink); border-color: var(--hazard); }
 .tc-rr3-slot[data-tur="yari"] { background: color-mix(in srgb, var(--done) 18%, var(--panel)); color: var(--done); border-color: var(--done); }
 .tc-rr3-sag { justify-content: flex-end; }
 .tc-rr3-not { flex-basis: 100%; }
-.tc-rr3-ilerleme progress { width: 100%; min-width: 0; accent-color: var(--run); }
+.tc-rr3-ilerleme { flex-direction: column; align-items: stretch; }
+/* Eski ekranın çizgili ilerleme çubuğu. */
+.tc-rr3-ilerleme progress {
+  width: 100%; min-width: 0; height: calc(var(--b-2) + var(--cizgi)); border: 0; border-radius: var(--yari-tam);
+  background: var(--panel2); overflow: hidden; appearance: none;
+}
+.tc-rr3-ilerleme progress::-webkit-progress-bar { background: var(--panel2); }
+.tc-rr3-ilerleme progress::-webkit-progress-value { background: repeating-linear-gradient(135deg, var(--run) 0 var(--b-1), color-mix(in srgb, var(--run) 80%, var(--bg)) var(--b-1) var(--b-2)); }
+.tc-rr3-ilerleme progress::-moz-progress-bar { background: repeating-linear-gradient(135deg, var(--run) 0 var(--b-1), color-mix(in srgb, var(--run) 80%, var(--bg)) var(--b-1) var(--b-2)); }
 .tc-rr3-govde { padding: var(--b-3) var(--b-4) var(--b-4); border-top: 1px solid var(--edge); }
 
 .tc-rr3-ayrinti, .tc-rr3-yapi, .tc-rr3-plan, .tc-rr3-rotasiz, .tc-rr3-bol, .tc-rr3-katil {
   display: flex; flex-direction: column; gap: var(--b-3); min-width: 0;
 }
-.tc-rr3-alanlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--menu-sabit), 1fr)); gap: var(--b-2) var(--b-4); margin: 0; }
-.tc-rr3-alanlar dt { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-rr3-alanlar dd { margin: 0; }
+/* Emir ayrıntısının alan satırı (eski .oc-grid): kutular salt okunur, plan bitiş ve ilerleme aynı satırda; darda alt satıra iner. */
+.tc-rr3-oc { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-rr3-oc > * { flex: 1 1 calc(var(--b-6) * 4); min-width: 0; }
+.tc-rr3-oc .tc-alan-kutu[readonly] { background: var(--panel2); }
+.tc-rr3-oc-sayi { text-align: right; }
+.tc-rr3-oc-kpi { display: flex; flex-direction: column; gap: var(--cizgi); }
+.tc-rr3-oc-kpi small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-rr3-oc-kpi > small:first-child { font-weight: 600; }
+.tc-rr3-oc-kpi > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+
+/* Stok tablosu (eski ekran): dar arama, yanında süzgeç; tablo çerçeveli kartta, başlık satırı koyu zeminde. */
+.tc-rr3-stok-arac { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2) var(--b-4); min-width: 0; }
+.tc-rr3-stok-arac > .tc-alan { flex: 0 1 calc(var(--b-6) * 8); min-width: 0; }
+.tc-rr3-cerceve { min-width: 0; overflow: hidden; background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-rr3-cerceve .tc-tablo th { background: var(--panel2); }
 
 /* Bölme: tür seçici, adım şeridi, önizleme tablosu. */
 .tc-rr3-bolme, .tc-rr3-ek { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }

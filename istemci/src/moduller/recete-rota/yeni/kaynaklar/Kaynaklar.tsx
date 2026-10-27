@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   DurumKutusu, Dugme, Girdi, OnayPenceresi, Pencere, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
@@ -10,7 +11,7 @@ import {
   aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi, sonrakiKod,
   geceyiGecer, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir, type Hafta,
 } from './kurallar.ts';
-import { SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
+import { SAHIP_SAYFASI, SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 
 // Kaynaklar (envanter 2.7): iş merkezi, istasyon, makine ve personel sahiplerinin kayıtlarıdır (İstasyonlar, Kişiler, Vardiya). Burada
 // yazılanlar sahibin komutlarıdır (kod, ad, kapasite kaynağı, ekleme ve silme, kişi ve yetkinlik, birim maliyet). Vardiya, mola, tatil,
@@ -119,7 +120,7 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   const silmeKomutu = { wc: ['is-merkezi-sil', 'İş merkezi silindi.'], station: ['istasyon-sil', 'İstasyon silindi.'], machine: ['makine-sil', 'Makine silindi.'] } as const;
   return (
     <div className="tc-rr2" data-parca="R2">
-      <Sekmeler<AltSekme> etiket="Kaynak türü" sekmeler={sekmeler} secili={alt} sec={sec} />
+      <div className="tc-rr2-bolmeli"><Sekmeler<AltSekme> etiket="Kaynak türü" sekmeler={sekmeler} secili={alt} sec={sec} /></div>
       <p className="tc-rr2-not">{ORTAK_KAYNAK_NOTU}</p>
       <div className="tc-rr2-govde" data-alt={alt}>{govde}</div>
       {ekleme && <EklemeFormu e={ekleme} b={bag} kapat={() => eklemeYaz(null)} />}
@@ -241,7 +242,12 @@ function VardiyaMatrisi({ b }: { b: Bag }) {
             const hafta = b.hafta(w.id);
             return [
               <tr key={`${w.id}-b`} className="tc-rr2-matris-ust" data-renk={b.renk(w.id)}>
-                <th colSpan={9} scope="rowgroup"><span className="tc-rr2-nokta" aria-hidden="true" /><b>{w.code}</b> {w.name}</th>
+                <th colSpan={9} scope="rowgroup">
+                  <span className="tc-rr2-satir">
+                    <span><span className="tc-rr2-nokta" aria-hidden="true" /><b>{w.code}</b> {w.name}</span>
+                    <HazirDuzen kod={w.code} />
+                  </span>
+                </th>
               </tr>,
               ...b.shifts.map((v) => (
                 <tr key={`${w.id}-${v.id}`} data-renk={b.renk(w.id)}>
@@ -279,12 +285,33 @@ function VardiyaMatrisi({ b }: { b: Bag }) {
   );
 }
 
+// Eski ekranın iş merkezi başlığındaki "Hazır düzen" seçicisi ve "Bu düzeni diğerlerine kopyala" bağlantısı. Hafta düzeni Vardiya'da
+// yazılır (tek düzenleme yeri); ikisi de eski ekranın bağlı hâlindeki gibi Vardiya sayfasını açar, burada yazma yoktur.
+const HAZIR_DUZENLER = [
+  ['5x1', 'Hafta içi, 1 vardiya'], ['5x2', 'Hafta içi, 2 vardiya'], ['5x3', 'Hafta içi, 3 vardiya'], ['6x1', 'Pzt–Cmt, 1 vardiya'],
+  ['6x2', 'Pzt–Cmt, 2 vardiya'], ['7x3', '7/24, 3 vardiya'], ['off', 'Kapalı'],
+] as const;
+function HazirDuzen({ kod }: { kod: string }) {
+  const git = useNavigate();
+  const { bildir } = useBildirim();
+  const vardiyaya = () => { bildir('bilgi', `Bu bilgi ${SAHIP_SAYFASI.vardiya.ad} sayfasında düzenlenir.`); void git(SAHIP_SAYFASI.vardiya.yol); };
+  return (
+    <>
+      <select className="tc-alan-kutu tc-rr2-girdi" value="" aria-label={`${kod} hazır vardiya düzeni`} onChange={(o) => { if (o.target.value) vardiyaya(); }}>
+        <option value="">Hazır düzen…</option>
+        {HAZIR_DUZENLER.map(([k, ad]) => <option key={k} value={k}>{ad}</option>)}
+      </select>
+      <button type="button" className="tc-rr2-bag" onClick={vardiyaya}>Bu düzeni diğerlerine kopyala</button>
+    </>
+  );
+}
+
 function Vardiyalar({ b }: { b: Bag }) {
   const tatiller = [...b.durum.cal.holidays].sort();
   return (
     <>
       <section className="tc-rr2-grup tc-rr2-panel" aria-label="Haftalık vardiya matrisi">
-        <h3 className="tc-rr2-grup-baslik"><span>Haftalık vardiya matrisi</span><SahibindeDuzenle sahip="vardiya" /></h3>
+        <h3 className="tc-rr2-grup-baslik"><span>Haftalık vardiya matrisi</span></h3>
         <VardiyaMatrisi b={b} />
         <p className="tc-rr2-not">
           Hücredeki sayı molalar düşülmüş net çalışma saatidir. Resmî tatil ve kapalı günler tüm iş merkezlerinde vardiyayı sıfırlar. Vardiya düzeni

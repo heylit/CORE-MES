@@ -7,7 +7,7 @@ import {
   acikRevizyon, cevrimToplami, degisimOrani, kucuk, OP_GRUPLARI, REV_DURUMU, revizyonlari, sureGirisi, sureMetni, yururlukteki,
   type Malzeme, type Operasyon, type SureAlani,
 } from './kurallar.ts';
-import { MetinAlani, SecimAlani } from './ortak.tsx';
+import { MetinAlani, renkSinifi, SecimAlani } from './ortak.tsx';
 
 type Sure = { proc: number | null; chg: number | null };
 const SURE_ALANI: Readonly<Record<'setup' | 'proc' | 'chg', SureAlani>> = { setup: 'hazirlik', proc: 'islem', chg: 'degisim' };
@@ -25,6 +25,15 @@ function SureGirdisi({ etiket, deger, kapali, yaz }: { etiket: string; deger: nu
     </label>
   );
 }
+
+// Eski sayfanın sık tablosu: başlık satırı geniş ekranda görünür; dar ekranda satır alanları kendi etiketini gösterir.
+const ODBASLIK = (
+  <div className="tc-rr1-od tc-rr1-od-bas" aria-hidden="true">
+    <span>Kısaltma</span><span>Kod</span><span>Operasyon adı</span><span>Varsayılan istasyon</span>
+    <span className="tc-rr1-od-sag">Hazırlık dk</span><span className="tc-rr1-od-sag">İşlem dk</span><span className="tc-rr1-od-sag">Değişim dk</span>
+    <span className="tc-rr1-od-sag">Değişim %</span><span>Kullanım</span>
+  </div>
+);
 
 // Operasyonlar: İstasyonlar'ın operasyon tipi kataloğu 13 grupla; ekle ve değiştir İstasyonlar kaydına yazılır (istasyonlar.yaz). Altında
 // ürünlerin rota revizyonları.
@@ -79,8 +88,10 @@ export function Operasyonlar(o: EkranOzellikleri) {
     const n = kullanim(x.id);
     return (
       <div key={x.id} className="tc-rr1-od">
-        <MetinAlani etiket="Kısaltma" deger={x.abbr ?? ''} enCok={6} kapali={!yaz}
-          yaz={(v) => { void gonder({ id: Number(x.id), kisaltma: v.toLocaleUpperCase('tr-TR').trim().slice(0, 6) || null }); }} />
+        <span className={`tc-rr1-od-kisa ${renkSinifi(x.stationId)}`}>
+          <MetinAlani etiket="Kısaltma" deger={x.abbr ?? ''} enCok={6} kapali={!yaz}
+            yaz={(v) => { void gonder({ id: Number(x.id), kisaltma: v.toLocaleUpperCase('tr-TR').trim().slice(0, 6) || null }); }} />
+        </span>
         <MetinAlani etiket="Kod" deger={x.code} kapali={!yaz} yaz={(v) => { if (v.trim()) void gonder({ id: Number(x.id), kod: v.trim() }); }} />
         <span className="tc-rr1-od-genis">
           <MetinAlani etiket="Operasyon adı" deger={x.name} kapali={!yaz} yaz={(v) => { if (v.trim()) void gonder({ id: Number(x.id), ad: v.trim() }); }} />
@@ -93,8 +104,8 @@ export function Operasyonlar(o: EkranOzellikleri) {
         <SureGirdisi etiket="Hazırlık dk" deger={x.setup} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'setup', v); }} />
         <SureGirdisi etiket="İşlem dk / birim" deger={sure.proc} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'proc', v); }} />
         <SureGirdisi etiket="Değişim dk / birim" deger={sure.chg} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'chg', v); }} />
-        <div className="tc-rr1-alan"><span>Değişim %</span><b>{oran === null ? YOK : `%${sayi(Math.round(oran * 10) / 10)}`}</b></div>
-        <div className="tc-rr1-alan"><span>Kullanım</span><span>{n} adım{!x.aktif && <span className="tc-rr1-tag">pasif</span>}</span></div>
+        <div className="tc-rr1-alan tc-rr1-od-sag"><span>Değişim %</span><b>{oran === null ? YOK : `%${sayi(Math.round(oran * 10) / 10)}`}</b></div>
+        <div className="tc-rr1-alan"><span>Kullanım</span><span className="tc-rr1-ipucu">{n} adım{!x.aktif && <span className="tc-rr1-tag">pasif</span>}</span></div>
       </div>
     );
   };
@@ -126,10 +137,6 @@ export function Operasyonlar(o: EkranOzellikleri) {
   const urunler = (d.items ?? []).filter((m) => m.type !== 'ham' && revizyonlari(d.routeRevs, m.id).length > 0);
   return (
     <div className="tc-rr1 tc-rr1-ops" data-parca="R1">
-      <p className="tc-rr1-ipucu">
-        Operasyon kataloğu İstasyonlar&apos;ın operasyon tiplerinden okunur ve 13 grupla gruplanır; ekle ve değiştir İstasyonlar kaydına yazılır.
-        Akış şemasında adım eklerken bu listeden seçersin; değerler adıma kopyalanır ve adımda ayrıca değiştirilebilir.
-      </p>
       <div className="tc-rr1-top">
         <input className="tc-rr1-metin" type="search" value={q} placeholder="Kod, kısaltma ya da ad ara…" aria-label="Operasyon ara" autoComplete="off"
           onChange={(e) => { setQ(e.target.value); }} />
@@ -176,7 +183,7 @@ export function Operasyonlar(o: EkranOzellikleri) {
           <details key={k} className="tc-rr1-opgrp" open={acik}
             onToggle={(e) => { const ac = (e.currentTarget as HTMLDetailsElement).open; if (ac !== acik) setKapali({ ...kapali, [k]: !ac }); }}>
             <summary><b>{baslik}</b> <span className="tc-rr1-count">{k} · {s && gor.length !== tum.length ? `${String(gor.length)} / ` : ''}{tum.length}</span></summary>
-            {gor.length > 0 ? <div className="tc-rr1-rows">{gor.map(satir)}</div>
+            {gor.length > 0 ? <div className="tc-rr1-rows">{ODBASLIK}{gor.map(satir)}</div>
               : <p className="tc-rr1-ipucu">{tum.length ? 'Aramaya uyan operasyon yok.' : 'Bu grupta operasyon yok.'}</p>}
           </details>
         );

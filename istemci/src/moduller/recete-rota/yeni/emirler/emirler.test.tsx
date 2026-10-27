@@ -26,6 +26,15 @@ describe('R3 Üretim emirleri: okuma', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
+  it("ayrıntı alanları eski satırda salt okunur kutudur; yöneticide de yazılamaz, Üretim Emirleri'ne bağlantı verilir (812 a)", async () => {
+    sunucuKur(YONETICI);
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    for (const ad of ['Miktar', 'Başlangıç', 'Teslim', 'Öncelik', 'Durum']) expect(within(ayrinti).getByLabelText<HTMLInputElement>(ad).readOnly).toBe(true);
+    expect(within(ayrinti).getByRole('button', { name: "Üretim Emirleri'nde aç" })).toBeTruthy();
+  });
+
   it('süzgeç sayıları ve durum süzgeci: tamamlananda taslak emir yok', async () => {
     sunucuKur(OKUYAN);
     rrAc();
