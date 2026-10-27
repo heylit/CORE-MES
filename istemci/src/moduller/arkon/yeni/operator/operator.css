@@ -634,7 +634,9 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-simdi .tc-ay1-numune-cizgi small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-sayac .tc-ay1-tus[data-tur="duz"] { background: var(--panel-solid); }
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; min-block-size: var(--dokunma); }
-.tc-ay1-genis .tc-ay1-sahne { flex: 1 1 0; min-block-size: 0; }
+/* Sahne içeriğinden kısa olamaz: sayaç en az boyuna inince kısalan içerik ortalanıp yukarı taşar ve iş kartının üstüne biniyordu
+   (888 b); yer yetmezse sütun kayar. */
+.tc-ay1-genis .tc-ay1-sahne { flex: 1 1 0; min-block-size: auto; }
 /* Geniş iş kartı: altı alan üç sütunda, her biri tek satır; uzun değerli sütunlar (proje ve parça no, emir ve parça adı) geniş,
    op ve rev dar. Çarkın "İş" etiketi başlığı söyler. */
 .tc-ay1-genis .tc-ay1-aktif > div:first-child > .tc-ay1-ust-yazi:not(:has(.tc-ay1-etiket)) { display: none; }

@@ -1148,7 +1148,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const carki = (ekranda: ReactNode) => {
     if (isler.length < 2 && !makineler.length && carkIstasyonlari.length < 2) return ekranda;
     const isSeridi: CarkSeridi = {
-      anahtar: 'is', ad: 'İşler', simge: 'list', sayi: Math.max(isler.length, 1), etkin: ai, bak: b ? bi : ai, bakYaz,
+      anahtar: 'is', ad: 'İşler', simge: 'list', sayi: isler.length, etkin: ai, bak: b ? bi : ai, bakYaz,
       ciz: (i) => {
         const x = isler[i] ?? o;
         return <IsOnizKarti is={x} siradaki={siraAnahtari(x) === siradakiAnahtar} ekranda={i === ai} makine={i === ai ? curMc() : (x.pkg && x.pkg.mc) || null} />;

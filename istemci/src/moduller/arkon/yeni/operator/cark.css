@@ -74,6 +74,16 @@
   .tc-ay1-tcark-dugmeler { flex: 1 0 100%; }
   .tc-ay1-tcark-dugmeler > .tc-dugme { flex: 1 1 0; }
 }
+/* 888 b: kısa pencerede (terminalin öteki kısa düzenleriyle aynı eşik) geniş terminalde çark kompakt kipe iner: kart ve sahne payı
+   küçülür, kısa kartta ilerleme çubuğu ve makine satırı çizilmez (sayı satırı ve tam iş kartı aynı bilgiyi taşır). Sayaç ve
+   Şimdi şeridi böylece iş kartının altında yerini bulur. */
+@media (max-height: 900px) {
+  .tc-ay1-genis .tc-ay1-tcark { gap: var(--b-1); }
+  .tc-ay1-genis .tc-ay1-tcark-sahne { padding: var(--b-2) var(--b-4); }
+  .tc-ay1-genis .tc-ay1-tcark-kart { gap: 0; padding: var(--b-2) var(--b-3); }
+  .tc-ay1-genis .tc-ay1-tcark-ad { font-size: var(--yazi-m); }
+  .tc-ay1-genis :is(.tc-ay1-tcark-ilerleme, .tc-ay1-tcark-makine) { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .tc-ay1-tcark-oge { transition: none; }
 }

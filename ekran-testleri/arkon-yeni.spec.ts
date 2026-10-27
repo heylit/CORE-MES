@@ -133,6 +133,76 @@ test.describe('A1 Operatör', () => {
     expect(yazmalar(ag.yazmalar)).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
+
+  // 888: iş çarkı tek işte dönmez gibi görünmez, kısa pencerede (900 px) üretim bölümü iş kartının üstüne binmez, fareyle sürükleme
+  // çark alanının dışında bırakılsa da sayılır. Paketler tarayıcıda uydurulur (sentetik); hiçbir yazma gitmez.
+  test.describe('888 iş çarkı', () => {
+    test.use({ hesap: 'ornek.operator1' });
+    const paket = (i: number) => ({
+      id: `ekran-cark-${String(i)}`, no: `IE-CARK-${String(i)}`, opType: 'cnc', st: {}, partNo: `EK-${String(i)}`, part: `Çark deneme ${String(i)}`, rev: 'A', op: 'Op 10',
+      machine: 'ORN-TORNA-1', target: 25, cycle: 30, due: '2026-10-28', priority: 'urgent', material: '', note: '', files: [], primary: null,
+      // Ölçü planı numune şeridini (Şimdi) getirir; binme o şeritte görünüyordu.
+      plan: [{ id: 1, nom: '20', tol: '0.1', min: 19.9, max: 20.1, tool: 'Kumpas', freq: 'Her 100 parça' }], steps: [{ id: 's1', t: 'Bağla', d: '', r: true }],
+      status: 'published', version: 1, dirty: false, createdAt: 1, updatedAt: 2, publishedAt: 2, by: 'Ekran',
+    });
+    const ac900 = async (page: Page, ac: (yol: string) => Promise<void>, n: number, boy = { width: page.viewportSize()?.width ?? 1280, height: 900 }) => {
+      await page.setViewportSize(boy);
+      await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: Array.from({ length: n }, (_, i) => ({ kimlik: paket(i).id, surum: 1, govde: paket(i) })) } }));
+      await ac('/uretim-terminali');
+      const cark = page.getByRole('region', { name: 'İş ve makine çarkı' });
+      await expect(cark).toBeVisible();
+      return cark;
+    };
+
+    // Görünen bölümler sayfa sırasıyla alt alta durur; biri öncekinin üstüne çıkmaz.
+    const altAlta = async (page: Page) => {
+      const kutular = await page.evaluate(() => ['.tc-ay1-tcark', '.tc-ay1-aktif', ':is(.tc-ay1-sahne > :first-child, .tc-ay1-simdi)', '.tc-ay1-sayac']
+        .map((s) => document.querySelector(s)?.getBoundingClientRect())
+        .filter((b): b is DOMRect => !!b && b.height > 0)
+        .map((b) => [Math.round(b.top), Math.round(b.bottom)] as const));
+      expect(kutular.length, JSON.stringify(kutular)).toBeGreaterThanOrEqual(3);
+      for (let i = 1; i < kutular.length; i++) expect(kutular[i]![0], JSON.stringify(kutular)).toBeGreaterThanOrEqual(kutular[i - 1]![1]);
+    };
+
+    // Kullanıcının bildirdiği geniş pencereler: binme 900 px'ten yüksek pencerede de oluyordu (1600x1000'de 14 px).
+    for (const boy of [{ width: 1440, height: 960 }, { width: 1600, height: 1000 }]) {
+      test(`${String(boy.width)}x${String(boy.height)} pencerede çark, iş kartı, Şimdi şeridi ve sayaç üst üste binmez`, async ({ page, ag, ac }, bilgi) => {
+        test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+        await ac900(page, ac, 3, boy);
+        await altAlta(page);
+        expect(await tasma(page)).toBeLessThanOrEqual(0);
+        expect(yazmalar(ag.yazmalar)).toEqual([]);
+        expect(ag.hatalar).toEqual([]);
+      });
+    }
+
+    test('tek işte ok, sıra ve ipucu yok; 900 px yükseklikte çark, iş kartı, Şimdi şeridi ve sayaç üst üste binmez', async ({ page, ag, ac }) => {
+      const cark = await ac900(page, ac, 1);
+      await expect(cark.getByRole('button', { name: /İşler · 1/ })).toBeVisible();
+      await expect(cark.getByRole('button', { name: 'Sonraki: işler' })).toHaveCount(0);
+      await expect(cark.getByText('1 / 1')).toHaveCount(0);
+      await altAlta(page);
+      expect(await tasma(page)).toBeLessThanOrEqual(0);
+      expect(yazmalar(ag.yazmalar)).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+
+    test('fareyle sürükleme çark alanının dışında bırakılsa da bir adım çevirir; ekrandaki iş değişmez', async ({ page, ag, ac }) => {
+      const cark = await ac900(page, ac, 4);
+      await expect(cark.getByText('1 / 4')).toBeVisible();
+      const sahne = cark.getByRole('group', { name: 'İşler' });
+      const b = (await sahne.boundingBox())!;
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2 - 30, b.y + b.height / 2, { steps: 3 });
+      await page.mouse.move(Math.max(1, b.x - 10), b.y + b.height + 120, { steps: 5 });
+      await page.mouse.up();
+      await expect(cark.getByText('2 / 4')).toBeVisible();
+      await expect(cark.getByText(/Önizleme · ekrandaki iş değişmez/)).toBeVisible();
+      expect(yazmalar(ag.yazmalar)).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+  });
 });
 
 // A3 ve A4: her sayfa üç genişlikte açılır, bölümü görünür, yatay taşmaz, açılışta belge yazmaz (eski ekran açılışta numuneyi "Ölçülüyor"
