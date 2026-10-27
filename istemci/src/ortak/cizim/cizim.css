@@ -49,6 +49,9 @@
 .tc-ay5-balon.tc-ay5-cokluda text { fill: var(--hazard-ink); }
 .tc-ay5-balon:focus-visible { outline: none; }
 .tc-ay5-balon:focus-visible .tc-ay5-dis { stroke-width: 4; }
+/* Elle konan (sabit) balonun pimi; balon sürüklenebilir. */
+.tc-ay5-balon { touch-action: none; }
+.tc-ay5-balon .tc-ay5-pim { fill: var(--hazard); stroke: var(--bp-bg); stroke-width: 1.5; }
 @keyframes tc-ay5-cik { from { opacity: 0; transform: scale(.2); } }
 
 .tc-ay5-kilavuz { --r: var(--done); }

@@ -58,7 +58,10 @@ export function dosyaBicimi(ad: string, bas: string): DosyaBicimi {
 /* ── Balon yerleşimi: üst üste binmeyi önler, boş yere kaydırır, ölçüye kılavuz çizgi çeker ── */
 export interface Balon {
   id: number; x: number; y: number; ar?: YaziKutusu; l?: string; nom: string; tol?: string; min: number; max: number; tool?: string; gauge?: boolean;
-  m?: 'cmm' | 'man'; freq?: string; crit?: boolean; [k: string]: unknown;
+  m?: 'cmm' | 'man'; freq?: string; crit?: boolean;
+  // Elle konan balon yeri (sabit) ve tek balon için istenen yerleşim (894 a); yoksa balon dizimi kendisi seçer.
+  yer?: [number, number] | null; yerKipi?: 'yakin' | 'serit' | null;
+  [k: string]: unknown;
 }
 export interface BalonKonumu { x: number; y: number; lead: [number, number, number, number] | null }
 export interface Yerlesim { s: number; pos: Record<number, BalonKonumu> }
