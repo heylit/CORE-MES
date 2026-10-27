@@ -220,7 +220,8 @@ export function gTarihler(d: TurTaslagi = D): TakvimKaydi[] {
         out.push({ ad, son: t, sonraki: n, kalanGun: _gun(n, new Date()) });
     } };
     ekle('Bakım', g.sonBakim, g.bakimAy ?? (k && k.bakim));
-    if (g.kalibrasyon === 'Gerekli')
+    // 885 a: aleti bağlı kartın vadesi Kalibrasyon'dadır; eski tarihler yalnız bağsız kartta hesaplanır.
+    if (g.kalibrasyon === 'Gerekli' && !g.aletNo)
         ekle('Kalibrasyon', g.sonKal, g.kalAy ?? 12);
     if (k && k.periyodik)
         ekle('Periyodik kontrol', g.periyodik, g.periyodikAy ?? 12);
@@ -322,8 +323,8 @@ export function gUyarilar__0(d: TurTaslagi = D): UyumSorunu[] {
             P(3, x.bitis && x.ad === 'Garanti' ? 'warn' : 'no', x.ad, `${x.ad} ${_tStr(x.sonraki)} tarihinde ${x.bitis ? 'bitti' : 'yapılmalıydı'} (${-x.kalanGun} gün geçti).`);
         else if (x.kalanGun <= 30)
             P(3, 'warn', x.ad, `${x.ad} ${_tStr(x.sonraki)} (${x.kalanGun} gün kaldı).`); });
-        if (g.kalibrasyon === 'Gerekli' && !g.sonKal)
-            P(3, 'warn', 'Kalibrasyon', 'Kalibrasyon gerekli ama son kalibrasyon tarihi girilmemiş.');
+        if (g.kalibrasyon === 'Gerekli' && !g.aletNo)
+            P(3, 'warn', 'Kalibrasyon', 'Kalibrasyon gerekli ama ölçü aleti bağlanmamış (Alet no).');
         if (['Hurdaya ayrıldı', 'Satıldı'].includes(g.durum as string))
             P(1, 'warn', 'Durum', `Demirbaş "${g.durum}" durumunda; envanterden çıkış kaydı yapılmalı.`);
     }

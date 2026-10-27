@@ -273,3 +273,9 @@ Açık:
 
 ## Yeni ekran malzeme ayarları: Roller tablosu (M3, soru 284 madde 7, 24.10.2026) - bağlamada kapanacak
 - Yeni ekranın "Roller ve yetkiler" bölümü prototipin sabit `YETKI` tablosunu gösterir; ayarı yazma yetkisi ise sunucunun `ayarYazabilir` cevabındandır (213 a). Tablo gerçek yetkiyle ayrışabilir. Kullanıcı "şimdilik kabul" dedi; bağlamada tablo ortak yetki matrisinden doldurulur.
+
+## Ölçü aleti bağı (885 a, 27.10.2026)
+- KAPANDI: demirbaş kartının kalibrasyon alanları Kalibrasyon'a bağlı değildi. Kart aleti numarasıyla anar (`kayit.g.aletNo`, sütun `olcu_aleti_id`, göç `20261027077000`); numara Kalibrasyon'da olmalı, yalnız demirbaşta; talebin önerdiği numara da denetlenir. Vade ve durum `GET /malzeme-olcu-aletleri` ile Kalibrasyon'dan okunur (malzemeler sayfası yeter, Kalibrasyon yetkisi istenmez). Test `olcu-aleti-bagi.test.ts`.
+- Eski `kalAy`, `sonKal`, `kalKurulus` salt okunurdur: sunucu gelen değeri yok sayar, kayıtlı değeri korur; ekran yalnız değeri olan kartta salt okunur gösterir; yeni kart bu alanları almaz. Aleti bağlı kartta takvim ve uyarı eski tarihten hesaplanmaz.
+- VARSAYIM (geri alma ucuz): alet silinirse kart bağsız kalır (`ON DELETE SET NULL`), karttaki numara metni durur ve ekran "Bu numarada ölçü aleti yok" der. Kullanım dışı alet bağlanabilir; kart durumunu gösterir.
+- KALAN: Excel içe aktarımı ve prototip `katalog.html` eski alanları yazmaya devam eder; sunucu yok sayar. Kart listesinde (katalog tablosu) alet vadesi gösterilmez, yalnız sihirbazın bakım adımında görünür.

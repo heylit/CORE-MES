@@ -331,6 +331,47 @@ export function kartTedarikciFirmaId(kayit: Nesne): number | null {
   const id = nesneMi(com) ? kartTedarikciKimligi(com) : null;
   return typeof id === 'number' ? id : null;
 }
+// 885 a: demirbaş kartı ölçü aletini Kalibrasyon'daki numarasıyla anar (`g.aletNo`). Kart ve bekleyen talebin önerdiği kart aynı
+// denetimden geçer (tedarikçi bağıyla aynı). Dönüş: kırpılmış numara ya da biçim hatası; boş alan yok sayılır.
+function kartAletNosu(g: unknown): string | null | 'gecersiz' {
+  if (!nesneMi(g)) return null;
+  const no = g['aletNo'];
+  if (no === undefined || no === null) return null;
+  if (typeof no !== 'string' || no.length > 100) return 'gecersiz';
+  return no.trim() === '' ? null : no.trim();
+}
+export function kartAletNolari(kayit: Nesne): (string | 'gecersiz')[] {
+  const talep = kayit['talep'];
+  const yeni = nesneMi(talep) && nesneMi(talep['yeni']) ? talep['yeni'] : null;
+  return [kayit['g'], yeni?.['g']].map(kartAletNosu).filter((n): n is string => n !== null);
+}
+export function kartAletNo(kayit: Nesne): string | null {
+  const no = kartAletNosu(kayit['g']);
+  return no === 'gecersiz' ? null : no;
+}
+// Bağlı numara Kalibrasyon'daki yazımıyla saklanır (büyük harf); karttaki yazım da ona çekilir.
+export function kartAletNoYaz(kayit: Nesne, no: string | null): Nesne {
+  const g = kayit['g'];
+  if (!nesneMi(g)) return kayit;
+  const yeni: Nesne = { ...g };
+  if (no === null) delete yeni['aletNo'];
+  else yeni['aletNo'] = no;
+  return { ...kayit, g: yeni };
+}
+// 885 a: kalibrasyon ayı, son kalibrasyon ve kuruluşu Kalibrasyon modülünündür; karttaki eski değerler salt okunurdur. Gelen değer
+// yok sayılır, kayıtlı değer korunur; yeni kartta bu alanlar boş başlar.
+export const ESKI_KALIBRASYON_ALANLARI = ['kalAy', 'sonKal', 'kalKurulus'] as const;
+export function eskiKalibrasyonAlanlariniKoru(kayit: Nesne, kayitli: Nesne | null): Nesne {
+  const g = kayit['g'];
+  if (!nesneMi(g)) return kayit;
+  const eski = kayitli !== null && nesneMi(kayitli['g']) ? kayitli['g'] : {};
+  const yeni: Nesne = { ...g };
+  for (const k of ESKI_KALIBRASYON_ALANLARI) {
+    if (eski[k] === undefined) delete yeni[k];
+    else yeni[k] = eski[k];
+  }
+  return { ...kayit, g: yeni };
+}
 export function tedarikciDegistiMi(kayitliKayit: Nesne | null, tedId: number): boolean {
   const com = kayitliKayit?.['com'];
   return !nesneMi(com) || kartTedarikciKimligi(com) !== tedId;

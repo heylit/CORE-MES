@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { zamanSemasi } from '../zaman.ts';
+import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ----------------
    KULLANICI KARARI: prototip ekranları birebir yerleşir; kart bütün olarak saklanır. Tür, onay durumu ve stok kodu karttan okunur (özet bunları taşırsa kartla aynı olmalı);
@@ -93,6 +94,13 @@ export type KatalogKartiRotasiCevabi = z.infer<typeof katalogKartiRotasiCevabi>;
 export const firmaSecenekleriSorgusu = z.object({ ara: z.string().trim().min(2).max(80) });
 export const firmaSecenekleriCevabi = z.object({ firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })) });
 export type FirmaSecenekleriCevabi = z.output<typeof firmaSecenekleriCevabi>;
+// 885 a: demirbaş kartının ölçü aleti Kalibrasyon'dan seçilir; vade ve durum oradan okunur (kart yalnız numarayı tutar).
+export const olcuAletiSecenekleriCevabi = z.object({
+  aletler: z.array(z.object({
+    no: z.string(), tur: z.string(), vade: z.string().nullable(), durum: aletDurumu,
+  })),
+});
+export type OlcuAletiSecenekleriCevabi = z.output<typeof olcuAletiSecenekleriCevabi>;
 
 // Şablon ve ayar son okunan sürümle yazılır; arada başkası yazmışsa 409 döner (kullanıcı onayı 16.10.2026). Yeni kayıt sürümsüz gelir;
 // sürümsüz istek kayıtlı satırın üstüne yazamaz, böylece eski istemci de sessizce ezemez.

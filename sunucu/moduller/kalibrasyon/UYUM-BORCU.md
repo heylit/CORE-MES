@@ -13,9 +13,9 @@ Sınıflar: TUTAN (kullanımı tutar), ETKİLEYEN (kullanımı etkiler), SONRA. 
 1. KAPANDI. Rol x işlem: `20261008082300_kisiler_kalibrasyon_istasyon_denetim.sql` kaliteye `sayfa.kalibrasyon` ve `kalibrasyon.yaz`,
    müdüre `sayfa.kalibrasyon` verir (kullanıcı kararı RM2: kalite görür ve yazar, müdür görür). `kalibrasyon.oku` hiçbir rolde değil;
    okuma uçları sayfa işlemini de kabul eder (ADR 0007). DOĞRULANDI: `kisiler/rol-dagilimi.test.ts` "kalibrasyon, istasyon yazımı...".
-2. SONRA. Ölçü aleti malzemeler demirbaşında da tutuluyor (`kayit.g.kalAy`, `kayit.g.sonKal`). Arkon `gauges` A7 (#518) ile buradan okur.
+2. KAPANDI (885 a, 27.10.2026): sahibi bu modüldür. Malzeme kartı aleti boş olabilen `olcu_aleti_id` ile anar, değerleri `aletNoIleGetir` ve `aletKimlikleri` ile buradan okur; karttaki eski alanlar salt okunur (malzemeler tarafı ayrı dalda). Önceki kayıt: Ölçü aleti malzemeler demirbaşında da tutuluyor (`kayit.g.kalAy`, `kayit.g.sonKal`). Arkon `gauges` A7 (#518) ile buradan okur.
    DOĞRULANDI: `tur1-raporlar/ortaklik-tablosu.md` satır 13. Uyum: Aşama 2'de sahiplik kullanıcıya sorulur.
-3. SONRA. `gecerliAletVarMi`, `aletGetir`, `vadesiGecenAletSayisi` `disari.ts`'te açık ama bugün çağıran modül yok; `aletlerVeKayitlari`'nı Arkon çağırır (A7, #518).
+3. SONRA. `gecerliAletVarMi`, `aletGetir`, `vadesiGecenAletSayisi` `disari.ts`'te açık ama bugün çağıran modül yok (`aletNoIleGetir` ve `aletKimlikleri`'ni malzemeler çağırır, 885 a); `aletlerVeKayitlari`'nı Arkon çağırır (A7, #518).
    Uyum: ölçüm yazan modül bağlanınca.
 
 ## Bağlamada kapanmayacak (kullanıcı kararıyla borçta)

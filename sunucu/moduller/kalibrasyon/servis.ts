@@ -189,13 +189,29 @@ export async function vadesiGecenAletSayisi(db: Db): Promise<number> {
   return (await aletOzeti(db)).vadesiGecen;
 }
 
-export async function aletGetir(db: Db, id: number): Promise<{
-  id: number; no: string; turId: number; tur: string; vade: string | null; durum: Alet['durum'];
-} | null> {
-  const [satir] = await aletleriGetir(db, { id });
-  if (satir === undefined) return null;
-  const a = aleteCevir(satir);
+export interface AletKimligi { id: number; no: string; turId: number; tur: string; vade: string | null; durum: Alet['durum'] }
+
+function kimlik(s: AletSatiri): AletKimligi {
+  const a = aleteCevir(s);
   return { id: a.id, no: a.no, turId: a.turId, tur: a.tur, vade: a.vade, durum: a.durum };
+}
+
+export async function aletGetir(db: Db, id: number): Promise<AletKimligi | null> {
+  const [satir] = await aletleriGetir(db, { id });
+  return satir === undefined ? null : kimlik(satir);
+}
+
+// Malzeme kartı aleti numarasıyla anar (885 a); numara tabloda büyük harf ve kırpılmış tutulur.
+export async function aletNoIleGetir(db: Db, no: string): Promise<AletKimligi | null> {
+  const n = no.trim().toUpperCase();
+  if (n === '') return null;
+  const [satir] = await aletleriGetir(db, { no: n });
+  return satir === undefined ? null : kimlik(satir);
+}
+
+// Malzeme kartının alet seçicisi; kullanım dışı aletler de gelir ki kart bağlı aletin durumunu göstersin.
+export async function aletKimlikleri(db: Db): Promise<AletKimligi[]> {
+  return (await aletleriGetir(db)).map(kimlik).sort((a, b) => a.no.localeCompare(b.no));
 }
 
 // KAL-A7 (#518): ölçü aletlerinin tek kaynağı bu modüldür; Arkon alet listesini ve kalibrasyon geçmişini buradan okur.
