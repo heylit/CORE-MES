@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
@@ -1931,6 +1931,39 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.deepEqual(tmiPlani(p3), { canli: true, sira: 2, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, 'aynı makinede ikinci iş');
     const tek = await paketOku(ieKimligi(ie2!));
     assert.deepEqual(tek?.govde, p2);
+  });
+
+  // Karar 732 a: kayıtsız iş emri paketi malzemenin Çizimler'deki yayında teknik resmini önerir; Hazırlık merkezden alınca dosya kopyalanmadan
+  // Arkon deposuna bağlanır. Kayıtlı pakette öneri yoktur. Dosya ve belge adları uydurmadır.
+  test('732 a: dosyasız iş emri taslağı malzemenin yayındaki çizimini önerir; merkezden alma kopyasız bağlar; kayıtlı pakette öneri yok', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const kimlik = ieKimligi(ie1!);
+    const korumali = async <T>(yol: string, govde: unknown): Promise<T> => {
+      const c = await app.inject({ method: 'POST', url: `/api${yol}`, payload: govde as object, headers: { cookie: yonetici, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } });
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json() as T;
+    };
+    assert.equal((await paketler()).get(kimlik)?.govde['malzemeCizimleri'], undefined, 'malzemede çizim yokken öneri yok');
+    const icerik = Buffer.from('%PDF-1.4\n% malzeme cizimi 732\n%%EOF\n');
+    const ozet = createHash('sha256').update(icerik).digest('hex');
+    await korumali(`/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
+    const eklenen = await korumali<{ belgeler: { id: number; ad: string }[] }>(`/cizimler/malzemeler/${r.kart}/belge-ekle`, { ad: 'Deneme 732 resmi', tur: 'teknik-resim', ozet, dosyaAdi: 'deneme-732.pdf' });
+    const belgeId = eklenen.belgeler.find((b) => b.ad === 'Deneme 732 resmi')!.id;
+    const belge = (await istek<{ surum: number; revizyonlar: { id: number }[] }>(yonetici, 'GET', `/cizimler/${belgeId}`)).govde;
+    assert.equal((await paketler()).get(kimlik)?.govde['malzemeCizimleri'], undefined, 'yayında revizyonu olmayan belge önerilmez');
+    await korumali(`/cizimler/${belgeId}/revizyonlar/${belge.revizyonlar[0]?.id}/yayinla`, { surum: belge.surum });
+    const taslak = (await paketler()).get(kimlik)!.govde;
+    assert.deepEqual(taslak['malzemeCizimleri'], [{ belgeId, ad: 'Deneme 732 resmi', tip: 'pdf' }]);
+
+    const ekle = await istek<{ kayit: Record<string, unknown> }>(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${belgeId}/ekle`);
+    assert.equal(ekle.durum, 200, JSON.stringify(ekle.govde));
+    assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM dosya_bagi WHERE modul = 'arkon' AND kayit = 'depo' AND ozet = $1", [ozet]))?.n, 1);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM dosya WHERE ozet = $1', [ozet]))?.n, 1, 'içerik tek kopya');
+    const { malzemeCizimleri: _oneri, ...govde } = taslak;
+    const yaz = await paketYaz(kimlik, null, { ...govde, files: [ekle.govde.kayit] });
+    assert.equal(yaz.durum, 200, JSON.stringify(yaz.govde));
+    assert.equal((await paketler()).get(kimlik)?.govde['malzemeCizimleri'], undefined, 'kayıtlı pakette öneri yok');
   });
 
   // 266 a: CNC hazırlığı iş emri başınadır; aynı emrin bir iş emrinin onayı ötekinin uyarısını kapatmaz.

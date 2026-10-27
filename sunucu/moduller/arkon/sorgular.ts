@@ -223,25 +223,6 @@ export function paketKonumlariNoIle(db: Db, no: string): Promise<{ machine: stri
   return db.sorgu(PAKET_KONUMLARI_NO_SQL, [no]);
 }
 
-export async function olanDosyalar(db: Db, ozetler: readonly string[]): Promise<string[]> {
-  const satirlar = await db.sorgu<{ ozet: string }>('SELECT ozet FROM arkon_dosya WHERE ozet = ANY($1)', [ozetler]);
-  return satirlar.map((s) => s.ozet);
-}
-
-export async function dosyaVarMi(db: Db, ozet: string): Promise<boolean> {
-  return (await db.tek('SELECT 1 FROM arkon_dosya WHERE ozet = $1', [ozet])) !== null;
-}
-
-export function dosyaBilgisi(db: Db, ozet: string): Promise<{ boyut: number; yukleyenId: number } | null> {
-  return db.tek('SELECT boyut, yukleyen_id AS "yukleyenId" FROM arkon_dosya WHERE ozet = $1', [ozet]);
-}
-
-// İçerik dilim dilim okunur: 200 MB'lık dosya sunucu belleğine bütün olarak girmez. `bas` sıfırdan sayılır.
-export async function dosyaDilimi(db: Db, ozet: string, bas: number, uzunluk: number): Promise<Buffer | null> {
-  return (await db.tek<{ dilim: Buffer }>(
-    'SELECT substring(icerik FROM $2::int FOR $3::int) AS dilim FROM arkon_dosya WHERE ozet = $1', [ozet, bas + 1, uzunluk]))?.dilim ?? null;
-}
-
 // Arkon büyük ikili veriyi belgede her derinlikte { "$blob": özet } diye anar (arkon/web/src/data/store.ts `toWire`).
 export function dosyayiAnanBelgeler(db: Db, ozet: string): Promise<{ depo: ArkonDeposu; kimlik: string }[]> {
   return db.sorgu(
@@ -285,12 +266,9 @@ export async function kisiAcikYuklemeleri(db: Db, kisiId: number): Promise<{ ade
   return satir ?? { adet: 0, bayt: 0 };
 }
 
-// Depo geneli: tamamlanmış dosyalar ve açık yüklemelerin parçaları.
-export async function depoBayti(db: Db): Promise<number> {
-  const satir = await db.tek<{ bayt: number }>(
-    `SELECT (SELECT coalesce(sum(boyut), 0) FROM arkon_dosya)::float8
-          + (SELECT coalesce(sum(length(icerik)), 0) FROM arkon_dosya_parcasi)::float8 AS bayt`,
-  );
+// Arkon şeridindeki açık yüklemelerin parçaları; tamamlanan dosyalar ortak depodadır (depo sınırı ikisinin toplamıdır).
+export async function acikParcaBayti(db: Db): Promise<number> {
+  const satir = await db.tek<{ bayt: number }>('SELECT coalesce(sum(length(icerik)), 0)::float8 AS bayt FROM arkon_dosya_parcasi');
   return satir?.bayt ?? 0;
 }
 
@@ -307,13 +285,6 @@ export async function yuklemeyiAt(db: Db, ozet: string, kisiId: number): Promise
 
 export function parcalar(db: Db, ozet: string, kisiId: number): Promise<{ sira: number; toplam: number; icerik: Buffer }[]> {
   return db.sorgu('SELECT sira, toplam, icerik FROM arkon_dosya_parcasi WHERE ozet = $1 AND yukleyen_id = $2 ORDER BY sira', [ozet, kisiId]);
-}
-
-export async function dosyaEkle(db: Db, ozet: string, icerik: Buffer, kisiId: number): Promise<void> {
-  await db.sorgu(
-    `INSERT INTO arkon_dosya (ozet, icerik, boyut, yukleyen_id) VALUES ($1, $2, $3, $4) ON CONFLICT (ozet) DO NOTHING`,
-    [ozet, icerik, icerik.length, kisiId],
-  );
 }
 
 // Yarım kalmış yüklemeler bir gün sonra atılır.

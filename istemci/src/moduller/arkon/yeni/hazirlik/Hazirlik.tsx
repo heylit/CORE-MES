@@ -273,6 +273,30 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
     merkezMesgulYaz(false);
   };
+  // Karar 732 a: dosyasız TMI taslağı açılınca malzemenin Çizimler'deki yayında PDF ve 3B modeli bir kez kendiliğinden pakete gelir.
+  const otomatikAlinan = useRef(new Set<string>());
+  useEffect(() => {
+    if (!p || !duzenler || p.from !== 'tmi' || p.files.length > 0 || !p.malzemeCizimleri?.length || otomatikAlinan.current.has(p.id)) return;
+    otomatikAlinan.current.add(p.id);
+    const oneriler = p.malzemeCizimleri;
+    void (async () => {
+      merkezMesgulYaz(true);
+      let paket: { files: PkgFile[]; primary: string | null } = { files: [], primary: null };
+      const alinamayan: string[] = [];
+      for (const o of oneriler) {
+        try { paket = merkezDosyasiniKoy(paket, await depo.Server.merkezdenAl(o.belgeId)); } catch { alinamayan.push(o.ad); }
+      }
+      merkezMesgulYaz(false);
+      if (seciliRef.current?.id !== p.id) { otomatikAlinan.current.delete(p.id); return; }
+      const ilk = paket.files[0];
+      if (ilk) {
+        seciliYaz((o) => (o && o.id === p.id ? { ...o, malzemeCizimleri: undefined } : o));
+        yama({ files: paket.files, primary: paket.primary, plan: [], partNo: p.partNo || ilk.name.replace(/\.[^.]+$/, '') });
+      }
+      if (alinamayan.length) soyle('Çizim Merkezi’nden alınamadı: ' + alinamayan.join(', '), 'stop');
+      else if (ilk) soyle(paket.files.length + ' malzeme çizimi Çizim Merkezi’nden eklendi', 'run');
+    })();
+  }, [p?.id]); // paket başına bir kez; seçim değişince bakılır
   const studyodaAc = async () => {
     if (!studyoAcilir(sayfaGorunur)) { soyle(STUDYO_KAPALI, 'hold'); return; }
     await bekleyeniYaz(); if (p) yerel.yaz('labOpen', { pkg: p.id }); git('cizim');

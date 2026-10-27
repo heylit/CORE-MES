@@ -173,6 +173,33 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
+  // Karar 732 a: dosyasız TMI taslağı açılınca malzemenin yayındaki çizimi kendiliğinden gelir; yetkisi olmayan için gitmez.
+  const TMI_TASLAGI = { ...PAKET, id: 'tmi-ue-8', no: 'IE-DENEME-2', from: 'tmi', files: [], primary: null, plan: [], malzemeCizimleri: [{ belgeId: 3, ad: 'Deneme flans', tip: 'pdf' }] };
+  const tmiSunucusu = (ek: { kimlik: string; surum: number; govde: unknown }[] = []) => ({
+    belgeler: { pkgs: [{ kimlik: TMI_TASLAGI.id, surum: 1, govde: TMI_TASLAGI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, ...ek] },
+  });
+  it('dosyasız TMI taslağı açılınca malzemenin Çizim Merkezi belgesi bir kez pakete gelir; öneri pakete yazılmaz', async () => {
+    const istekler = sunucuKur(YONETICI, tmiSunucusu());
+    merkezKur(istekler);
+    arkonAc('/arkon/hazirlik');
+    await ekran();
+    await waitFor(() => {
+      const yazilan = istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${TMI_TASLAGI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+      expect(yazilan.some((p) => p.primary === 'deneme-b.pdf' && p.files.some((x) => x.merkez === 3) && p.malzemeCizimleri === undefined)).toBe(true);
+    }, { timeout: 10000 });
+    expect(istekler.filter((i) => i.yol === MERKEZ_EKLE).length).toBe(1);
+  }, 40000);
+
+  it('düzenleme yetkisi olmayan kişide malzeme çizimi kendiliğinden alınmaz (reddedilen)', async () => {
+    const istekler = sunucuKur(HAZIRLIKCI, tmiSunucusu([{ kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }]));
+    merkezKur(istekler);
+    arkonAc('/arkon/hazirlik');
+    await ekran();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(false);
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
   it('silme iki basış ister; silinen paket duyurulur', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');
