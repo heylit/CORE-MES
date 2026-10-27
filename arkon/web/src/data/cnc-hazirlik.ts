@@ -3,7 +3,11 @@
 // Paket tipi `tmi.hazirlik`'ı tanımaz (eski paketlerde yok); alan okumada denetlenir.
 export interface HazirlikPaketi { tmi?: object | null }
 
-export function hazirlikUyarisi(p: HazirlikPaketi | null | undefined): string | null {
+// Kart 747: CNC hazırlığı sayfası ve kurgusu hazır olmadığından bağ pasif; açılınca uyarı aşağıdaki kuralla döner.
+export const CNC_HAZIRLIK_BAGI_ACIK = false;
+
+export function hazirlikUyarisi(p: HazirlikPaketi | null | undefined, acik: boolean = CNC_HAZIRLIK_BAGI_ACIK): string | null {
+  if (!acik) return null;
   const h = p && p.tmi && typeof p.tmi === 'object' ? (p.tmi as { hazirlik?: unknown }).hazirlik : undefined;
   if (h === 'yok') return 'CNC hazırlığı tamamlanmadı · kurulumda onay yok';
   if (h === 'suruyor') return 'CNC hazırlığı tamamlanmadı · kurulum sürüyor';
