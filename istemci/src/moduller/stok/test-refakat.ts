@@ -23,7 +23,7 @@ const ozet = (saglam: number, hurda: number, hazirlik: number | null, brut: numb
   saglam, hurda, hazirlikDk: hazirlik, brutBirimDk: brut, netBirimDk: net, tekliAraliklarDk: tekli,
   tekliOrtalamaDk: tekli.length === 0 ? null : Math.round(tekli.reduce((a, b) => a + b, 0) / tekli.length * 100) / 100,
 });
-const sira = (isEmriId: number, opNo: number) => ({ isEmriId, opNo, durum: 'sirada' as const, baslama: null, bitis: null, hurdaAdet: 0 });
+const sira = (isEmriId: number, opNo: number) => ({ isEmriId, opNo, durum: 'sirada' as const, baslama: null, bitis: null, hurdaAdet: 0, plan: null, taban: null });
 
 export const ORNEK_AKIS: KartAkisiCevabi = {
   emir: { id: 1, emirNo: 'UE-000120', adet: 120, durum: 'basladi', teslim: '2026-10-30' },
@@ -50,7 +50,7 @@ export const ORNEK_AKIS: KartAkisiCevabi = {
     tedarikciPartiNo: 'TP-1', dokumNo: 'D-1', sertifikaNo: 'S-1', verilen: '60', sarf: '52.000',
   },
   konum: { durum: 'yolda', isEmriId: null, opNo: null, yer: 'Torna 2 → Freze 1', beri: t(4638) },
-  rota: [{ isEmriId: 7, opNo: 10, durum: 'gecti', baslama: t(4286), bitis: t(4604), hurdaAdet: 2 }, sira(8, 20), sira(9, 30), sira(10, 40)],
+  rota: [{ isEmriId: 7, opNo: 10, durum: 'gecti', baslama: t(4286), bitis: t(4604), hurdaAdet: 2, plan: null, taban: null }, sira(8, 20), sira(9, 30), sira(10, 40)],
   lead: olcu(488, true),
   teslimler: [
     { durum: 'teslim', gonderim: t(4190), kapanis: t(4193), kaynak: 'Depo A', hedef: 'Torna 2', miktar: '60.000', alinan: '60.000', gonderen: 'Depocu A', kapatan: 'Operatör A' },

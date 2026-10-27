@@ -8,6 +8,7 @@ import { canliOzeti, canliSira, kuyruguSirala } from './disari.ts';
 import { menuSayaclari } from './servis.ts';
 import type { FastifyInstance } from 'fastify';
 import { planTestOrtami } from './plan-ortak.test.ts';
+import { anSabit } from './plan-saat.test.ts';
 
 describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
   const { c, vt, istek, tamam, yeniAdim, ayrinti, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
@@ -124,7 +125,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     }
   });
 
-  test('Reçete ve Rota kuyrukları (#1186): sıra ve atama taslağa yazılır, taslak canlıya alınınca canliSira aynı sırayı verir; yetki, sabit iş ve ret', async () => {
+  test('Reçete ve Rota kuyrukları (#1186): sıra ve atama taslağa yazılır, taslak canlıya alınınca canliSira aynı sırayı verir; yetki, sabit iş ve ret', async () => anSabit(async () => {
     // Kuyruğun makinesi rotadaki istasyonda: elle seçilen makine yalnız rota istasyonunda tutulur (276 a, yazımdan sonra motor önerir).
     const b = (): AdimGirdisi => yeniAdim({ kaynak: { tur: 'makine', id: makineB } });
     const [i1] = await isEmirleriAc([b()]);
@@ -245,7 +246,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     assert.equal((await yaz(c.planlama, { kuyruklar: [kuyruk([i2!]), kuyruk([i3!])] })).statusCode, 400);
     assert.equal((await yaz(c.planlama, { kuyruklar: [kuyruk([i2!], { tur: 'makine', id: 2_000_000_000 })] })).statusCode, 400);
     assert.deepEqual((await sira()).map((y) => y.isEmriId), sonra.map((y) => y.isEmriId), 'reddedilen istek planı değiştirmez');
-  });
+  }));
 
   test('kuyruk yazımı verilen taslağa: stüdyo aynı taslakta kalır; eski sürüm ve başkasının taslağı reddedilir', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);

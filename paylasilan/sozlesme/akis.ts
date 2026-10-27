@@ -153,9 +153,12 @@ export const kartKonumuSemasi = z.object({
 // Rotada kartın adımları: geçti (adım bitti), şimdi (adımda anı var, bitmedi), sırada (anı yok); adımın başlama ve bitişi
 // (emrin) ve kartla sayılan hurda.
 export const ROTA_DURUMLARI = ['gecti', 'simdi', 'sirada'] as const;
+const planAraligiSemasi = z.object({ baslangic: zamanSemasi, bitis: zamanSemasi });
 export const kartRotasiSemasi = z.array(z.object({
   isEmriId: KIMLIK, opNo: z.number().int(), durum: z.enum(ROTA_DURUMLARI),
   baslama: zamanSemasi.nullable(), bitis: zamanSemasi.nullable(), hurdaAdet: z.number().int().nonnegative(),
+  // 750 a: adımın güncel canlı plandaki yeri ve taban planı (ilk canlıya alınan yer); planda olmayan adımda null.
+  plan: planAraligiSemasi.nullable(), taban: planAraligiSemasi.nullable(),
 }));
 
 // Üretim emirlerindeki iş emri süre özetiyle aynı ölçüler; dakika, ölçülemeyen null.
