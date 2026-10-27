@@ -76,6 +76,11 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
     await expect(sema.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     const kutu = sema.locator('.tc-rr1-opbox').first();
+    // Eski düzen (805 1 a): özet çubuğu araç çubuğunda; rota varsa yakınlaştırma araçları şemanın içinde görünür.
+    if (await kutu.count() > 0) {
+      await expect(sema.getByRole('group', { name: 'Rota özeti' })).toBeVisible();
+      await expect(sema.getByRole('button', { name: 'Yakınlaştır' })).toBeVisible();
+    }
     if (await kutu.count() > 0) {
       await kutu.click();
       await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeVisible();

@@ -2,8 +2,10 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
-  adimEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, rotaSahibiOlur, sirali, statuNo, yeniAdim, type Operasyon,
+  adimEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, islemSuresiEksik, malzemeMaliyeti, rotaEksikleri, rotaSahibiOlur,
+  sirali, statuNo, yeniAdim, type Operasyon,
 } from './kurallar.ts';
+import { sayi, YOK } from '../bicim.ts';
 import { tercihOku, tercihYaz, type RotaEkrani, type Secim } from './ortak.tsx';
 import { useRotaDuzeni, yeniKimlik } from './useRotaDuzeni.ts';
 import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
@@ -50,6 +52,22 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const agac = kokId ? agacUrunleri(kokId, duzen.adimlar, malzeme, (id) => duzen.adimlar(id).length > 0 || acikRevizyon(duzen.revler(id)) !== null) : [];
   const revId = revUrun !== null && agac.includes(revUrun) ? revUrun : kokId;
   const dugum = kokId ? agacKur(kokId, miktar, duzen.adimlar, malzeme) : null;
+  // Özet çubuğu motorsuzdur: birim malzeme maliyeti (prototipte matCost) ve şemadaki rotaların eksikleri. Bitiş ve darboğaz plan işidir.
+  const birim = (id: string): number | null => {
+    const g = duzen.durum.maliyet?.malzeme[id];
+    const n = g ? Number(g.birimMaliyet) : NaN;
+    return Number.isFinite(n) ? n : null;
+  };
+  const birimMaliyet = kokId && duzen.durum.maliyet ? malzemeMaliyeti(kokId, duzen.adimlar, malzeme, birim) : null;
+  const uyarilar = agac.flatMap((id) => {
+    const l = duzen.adimlar(id);
+    const kod = h.malzeme.get(id)?.code ?? id;
+    const sure = islemSuresiEksik(l);
+    return [
+      ...rotaEksikleri(l, duzen.malzemeVar, duzen.opAdi).map((x) => `${kod}: ${x.metin}`),
+      ...(sure ? [`${kod}: OP ${String(statuNo(sure))} işlem süresi yok`] : []),
+    ];
+  });
 
   const tercih = (k: string, v: string, yaz: (v: string) => void) => { yaz(v); tercihYaz(k, v); };
 
@@ -109,10 +127,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {urunler.map((m) => <option key={m.id} value={m.id}>{m.code} {m.name}</option>)}
           </select>
         )}
-        <Dugme tur={liste ? 'birincil' : 'ikincil'} simge="list" aria-pressed={liste} title="Bütün ürünleri ve rotalarını tabloda gör" onClick={() => { setListe(!liste); }}>Ürün listesi</Dugme>
-        {o.yetki.rotaYaz && <Dugme tur="ikincil" simge="plus" onClick={() => { setListe(false); setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
+        <Dugme className="tc-rr1-kd" tur={liste ? 'birincil' : 'ikincil'} simge="list" aria-pressed={liste} title="Bütün ürünleri ve rotalarını tabloda gör" onClick={() => { setListe(!liste); }}>Ürün listesi</Dugme>
+        {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge="plus" onClick={() => { setListe(false); setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
         {!liste && kokId && o.yetki.rotaYaz && (
-          <Dugme tur={adimPaneli ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={adimPaneli}
+          <Dugme className="tc-rr1-kd" tur={adimPaneli ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={adimPaneli}
             onClick={() => { tercih('adim-paneli', adimPaneli ? '' : '1', (v) => { setAdimPaneli(v === '1'); }); }}>Adım ekle</Dugme>
         )}
         {!liste && (
@@ -132,7 +150,17 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           </>
         )}
         <span className="tc-rr1-grow" />
-        {!liste && kokId && o.yetki.emirYaz && <Dugme tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', kokId); }}>Üretim emri oluştur</Dugme>}
+        {!liste && kokId && (o.yetki.maliyetOku || uyarilar.length > 0 || o.yetki.emirYaz) && (
+          <span className="tc-rr1-run" role="group" aria-label="Rota özeti">
+            {o.yetki.maliyetOku && (
+              <span title="Girenlerin birim maliyet toplamı; işçilik ve makine hariç">
+                Birim malzeme <b>{birimMaliyet === null ? YOK : `${sayi(Math.round(birimMaliyet * 100) / 100)} ₺`}</b>
+              </span>
+            )}
+            {uyarilar.length > 0 && <span className="tc-rr1-uyari" title={uyarilar.join('\n')}>{uyarilar.length} uyarı</span>}
+            {o.yetki.emirYaz && <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', kokId); }}>Üretim emri oluştur</Dugme>}
+          </span>
+        )}
       </div>
       {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); setSecim(null); }} /> : (
         <>

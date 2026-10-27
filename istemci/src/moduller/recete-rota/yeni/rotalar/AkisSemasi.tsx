@@ -38,11 +38,15 @@ function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, a
         type="button" className={`tc-rr1-cip tc-rr1-cip-${tur}${arahal ? ' tc-rr1-cip-arahal' : ''}${secili ? ' tc-rr1-secili' : ''}`}
         data-besler={besler} data-cikan={cikan} onClick={sec}
       >
-        <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>
-          {turKisa(m.type)}
-          {dusuk && <i className="tc-rr1-dusuk" title="Minimum stoğun altında" />}
-        </span>
-        <span className="tc-rr1-ci"><b>{baslik}</b><small>{alt}</small>{rozet}</span>
+        {arahal ? (
+          <span className="tc-rr1-slot tc-rr1-slot-statu"><em>{turKisa(m.type)}</em><i className="tc-rr1-stmark">S</i></span>
+        ) : (
+          <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>
+            {turKisa(m.type)}
+            {dusuk && <i className="tc-rr1-dusuk" title="Minimum stoğun altında" />}
+          </span>
+        )}
+        <span className="tc-rr1-ci"><b>{baslik}</b><small>{alt}</small>{rozet}{arahal && <span className="tc-rr1-kb tc-rr1-kb-st">statülü kart</span>}</span>
         <span className="tc-rr1-cq">{sayi(miktar)}<small>{m.unit ?? ''}</small></span>
       </button>
       {ek}
@@ -101,7 +105,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
           : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : 'Süre yok'}
         {a.rejectPct > 0 && `, ret %${sayi(a.rejectPct)}`}
       </span>
-      <span className="tc-rr1-ostat2">→ <b>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : ' (yarı mamul)'}</span>
+      <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : ' (statülü)'}</span>
       {a.alts.length > 0 && (
         <span className="tc-rr1-oalt">Alternatif: {[a.stationId, ...a.alts].map((x) => (x ? h.istasyon.get(x)?.code : undefined)).filter(Boolean).join(' / ')}</span>
       )}
@@ -216,7 +220,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                     <Simge ad="down" boyut="k" />
                   </button>
                   <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adimEkle', urunId: d.id, sonraId: a.id }); }}>
-                    <Simge ad="plus" boyut="k" /> Araya adım
+                    <Simge ad="plus" boyut="k" /> {son ? 'Adım ekle' : 'Araya adım'}
                   </button>
                   <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" title="Adımı sil" aria-label={`OP ${String(statuNo(a))} sil`}
                     onClick={() => { r.duzen.degistir(d.id, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`); }}>
@@ -475,7 +479,7 @@ export function AkisSemasi({ r, kok, tamEkran, tamEkranDegistir, cop }: {
       )}
       <div className="tc-rr1-cv-legend" aria-hidden="true">
         <span><i className="tc-rr1-lg tc-rr1-lg-in" />Giren</span>
-        <span><i className="tc-rr1-lg tc-rr1-lg-st" />Ara hal</span>
+        <span><i className="tc-rr1-lg tc-rr1-lg-st" />Statülü kart</span>
         <span><i className="tc-rr1-lg tc-rr1-lg-flow" />Rota akışı</span>
         <span><i className="tc-rr1-lg tc-rr1-lg-out" />Çıkan</span>
       </div>
