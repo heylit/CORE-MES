@@ -3,6 +3,7 @@ import { bulunamadi } from '#cekirdek/hata.ts';
 import type { EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, SureOzeti } from '#paylasilan/sozlesme/akis.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
+import { canliPlan, tabanPlani } from '../plan/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { receteRotaStatuleri } from '../recete-rota/disari.ts';
 import { emirlerinSevkDurumu } from '../sevkiyat/disari.ts';
@@ -107,6 +108,12 @@ async function kartAkisi(db: Db, id: number): Promise<KartAkisiCevabi | null> {
       emir: ozet(a, ayarlar, sayimlar),
     };
   });
+  // 750 a: plan saatleri adımın güncel canlı yeri; taban (ilk canlıya alınan yer) ikinci satırdır.
+  const isEmriIdleri = girdi.adimlar.map((a) => a.id);
+  const canli = new Map((await canliPlan(db, isEmriIdleri)).map((p) => [p.isEmriId, { baslangic: p.baslangic, bitis: p.bitis }]));
+  const iso = (z: string) => new Date(z).toISOString();
+  const taban = new Map((await tabanPlani(db, { isEmriIdleri })).map((p) => [p.isEmriId, { baslangic: iso(p.baslangic), bitis: iso(p.bitis) }]));
+  const planli = girdi.adimlar.map((a) => ({ ...a, plan: canli.get(a.id) ?? null, taban: taban.get(a.id) ?? null }));
   return {
     emir, ...sonuc,
     kart: {
@@ -116,7 +123,7 @@ async function kartAkisi(db: Db, id: number): Promise<KartAkisiCevabi | null> {
       verilen: r.verilen, sarf: kartSarfi(girdi.hareketler, r.partiId),
     },
     // Birleşen kolun kartı birleştiği kartla sürer: bu kart orada kapanmıştır.
-    ...(({ sonAn: _s, ...x }) => x)(kartKonumu({ durum: r.birlestigi === null ? r.durum : 'birlesti', acilis: r.kayitZamani }, anlar, girdi.adimlar, girdi.simdi)),
+    ...(({ sonAn: _s, ...x }) => x)(kartKonumu({ durum: r.birlestigi === null ? r.durum : 'birlesti', acilis: r.kayitZamani }, anlar, planli, girdi.simdi)),
     teslimler,
     sureOzetleri,
     olaylarEmrin: true,
