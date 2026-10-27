@@ -437,20 +437,6 @@ export function CagriCipi({ cagri, ac }: { cagri: Cagri | null; ac: () => void }
   );
 }
 
-// Üst şeridin durum lambaları ve geçen süre (bilesenler.ts Top).
-export function DurumLambasi({ durum, since }: { durum: string; since: number }) {
-  const simdi = useSimdi(1000);
-  const lamba = durum === 'stopped' ? 'r' : durum === 'paused' || durum === 'setup' ? 'y' : durum === 'running' ? 'g' : '';
-  return (
-    <div className="tc-ay1-lambali" data-durum={durumRengi(durum)}>
-      <span className="tc-ay1-lambalar" aria-hidden="true">
-        <i data-lamba="r" data-yanik={lamba === 'r' || undefined} /><i data-lamba="y" data-yanik={lamba === 'y' || undefined} /><i data-lamba="g" data-yanik={lamba === 'g' || undefined} />
-      </span>
-      <span className="tc-ay1-durum-adi" role="status"><i aria-hidden="true" />{durumAdi(durum)}<span className="tc-ay1-mono">{sure((simdi - since) / 1000)}</span></span>
-    </div>
-  );
-}
-
 export function Satir({ simge, baslik, alt, tikla }: { simge: 'chart' | 'user' | 'expand' | 'ruler' | 'cpu'; baslik: string; alt: string; tikla: () => void }): ReactNode {
   return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;
 }
