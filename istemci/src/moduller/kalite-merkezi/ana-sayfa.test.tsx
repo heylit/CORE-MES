@@ -31,8 +31,10 @@ const gorunen = (islemler: string[]) => gorunenKartlar(anaSayfaKartlari, islemle
 
 const BEKLEYEN: KmIlkParcaBekleyenCevabi = {
   emirler: [
-    { uretimEmriId: 1, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça', adet: 10, kararBekleyenAdet: 2 },
-    { uretimEmriId: 2, emirNo: 'E-2', parcaNo: 'P-2', parcaAd: 'Parça', adet: 5, kararBekleyenAdet: 1 },
+    // Satır adım başınadır (744 a): E-1'in iki adımı bir emir sayılır.
+    { uretimEmriId: 1, isEmriId: 11, opNo: 10, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça', adet: 10, kararBekleyenAdet: 1 },
+    { uretimEmriId: 1, isEmriId: 12, opNo: 20, emirNo: 'E-1', parcaNo: 'P-1', parcaAd: 'Parça', adet: 10, kararBekleyenAdet: 1 },
+    { uretimEmriId: 2, isEmriId: null, opNo: null, emirNo: 'E-2', parcaNo: 'P-2', parcaAd: 'Parça', adet: 5, kararBekleyenAdet: 1 },
   ],
 };
 

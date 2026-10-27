@@ -10,20 +10,20 @@ const esc = (m: unknown) => String(m ?? '').replace(/[&<>"']/g, (c) => ({ '&': '
 
 const LISTE = {
   emirler: [
-    { uretimEmriId: 7, emirNo: 'UE-7', parcaNo: 'P-7', parcaAd: 'Deneme mil', adet: 10, kararBekleyenAdet: 4 },
-    { uretimEmriId: 9, emirNo: 'UE-9', parcaNo: 'P-9', parcaAd: 'Deneme flanş', adet: 20, kararBekleyenAdet: 2 },
+    { uretimEmriId: 7, emirNo: 'UE-7', parcaNo: 'P-7', parcaAd: 'Deneme mil', isEmriId: 70, opNo: 20, adet: 10, kararBekleyenAdet: 4 },
+    { uretimEmriId: 9, emirNo: 'UE-9', parcaNo: 'P-9', parcaAd: 'Deneme flanş', isEmriId: null, opNo: null, adet: 20, kararBekleyenAdet: 2 },
   ],
 } satisfies KmIlkParcaBekleyenCevabi;
 
 // 325 a: Bugün görünümüne eklenen ilk parça bölümü; uygulamanın vToday nesnesi sahte, betik gerçektir.
 describe('Kalite Merkezi ilk parça bölümü (Bugün görünümü)', () => {
   function kur(onaylayabilir: boolean, cevaplar: (adres: string, s?: { method?: string; body?: string }) => Response) {
-    const dugmeler = new Map<string, { onclick?: () => void }>();
+    const dugmeler = new Map<string, { onclick?: () => void; nitelik: Record<string, string> }>();
     const belge = {
       querySelectorAll: (s: string) => {
         const eslesen = /\[(data-ip-(?:onay|ret))\]/.exec(s);
         if (!eslesen) return [];
-        return [...dugmeler.entries()].filter(([k]) => k.startsWith(`${eslesen[1]}=`)).map(([k, d]) => Object.assign(d, { getAttribute: () => k.split('=')[1] }));
+        return [...dugmeler.entries()].filter(([k]) => k.startsWith(`${eslesen[1]}=`)).map(([, d]) => Object.assign(d, { getAttribute: (n: string) => d.nitelik[n] ?? null }));
       },
     };
     const vToday = { html: () => '<div class="today-h"></div><section class="tiles"></section>', mount: vi.fn() };
@@ -32,7 +32,9 @@ describe('Kalite Merkezi ilk parça bölümü (Bugün görünümü)', () => {
     const render = vi.fn(() => {
       dugmeler.clear();
       const h = vToday.html();
-      for (const m of h.matchAll(/data-(ip-onay|ip-ret)="(\d+)"/g)) dugmeler.set(`data-${m[1]}=${m[2]}`, {});
+      for (const m of h.matchAll(/data-(ip-onay|ip-ret)="(\d+)"(?: data-ip-is="(\d+)")?/g)) {
+        dugmeler.set(`data-${m[1]}=${m[2]}`, { nitelik: { [`data-${m[1]}`]: m[2]!, ...(m[3] ? { 'data-ip-is': m[3] } : {}) } });
+      }
       vToday.mount();
     });
     const confirmBox = vi.fn((_b: string, _m: string, _e: string, onYes: () => void) => { onYes(); });
@@ -54,7 +56,9 @@ describe('Kalite Merkezi ilk parça bölümü (Bugün görünümü)', () => {
     await bekle(); await bekle();
     expect(k.render).toHaveBeenCalledTimes(1);
     const h = k.vToday.html();
-    expect(h).toContain('UE-7 | P-7');
+    expect(h).toContain('UE-7 | Op 20 | P-7');
+    expect(h).toContain('UE-9 | P-9');
+    expect(h).toContain('data-ip-onay="7" data-ip-is="70"');
     expect(h).toContain('emir 10 adet | karar bekleyen 4 adet');
     expect(h).toContain('data-ip-onay="9"');
     expect(h).toContain('data-ip-ret="9"');
@@ -96,7 +100,7 @@ describe('Kalite Merkezi ilk parça bölümü (Bugün görünümü)', () => {
     k.render();
     k.dugmeler.get('data-ip-onay=7')!.onclick!();
     await bekle(); await bekle();
-    expect(k.fetch).toHaveBeenCalledWith('api/ilk-parca/7/karar', { method: 'POST', body: JSON.stringify({ karar: 'onay' }) });
+    expect(k.fetch).toHaveBeenCalledWith('api/ilk-parca/7/karar', { method: 'POST', body: JSON.stringify({ karar: 'onay', isEmriId: 70 }) });
     expect(k.toast).toHaveBeenCalledWith('İlk parça onaylandı: 4 adet');
     expect(k.vToday.html()).not.toContain('data-ip-onay="7"');
     expect(k.vToday.html()).toContain('data-ip-onay="9"');
@@ -126,7 +130,7 @@ describe('Kalite Merkezi ilk parça bölümü (Bugün görünümü)', () => {
   it('(ret) emir no, parça ve ret sorusu HTML olarak değil metin olarak yazılır', async () => {
     const kotu = '<img src=x onerror=alert(1)>';
     const k = kur(true, (adres) => adres === 'api/ilk-parca/bekleyenler'
-      ? json(200, { emirler: [{ uretimEmriId: 5, emirNo: kotu, parcaNo: kotu, parcaAd: kotu, adet: 1, kararBekleyenAdet: 1 }] })
+      ? json(200, { emirler: [{ uretimEmriId: 5, emirNo: kotu, parcaNo: kotu, parcaAd: kotu, isEmriId: null, opNo: null, adet: 1, kararBekleyenAdet: 1 }] })
       : json(200, { adet: 1 }));
     k.vToday.html();
     await bekle(); await bekle();

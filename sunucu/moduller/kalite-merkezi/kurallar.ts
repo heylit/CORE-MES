@@ -20,6 +20,7 @@ export const TEDARIKCI_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'sup';
 export const TEDARIKCI_ASKIDA = 'Askıda';
 
 export const ILETILER = {
+  ilkParcaAdimi: 'İlk parça kararının adımı bu üretim emrine ait değil.',
   izDegismez: 'Değişiklik izi kayıtları değiştirilemez.',
   izSilinmez: 'Değişiklik izi kayıtları silinemez.',
   dosyaYok: 'Dosya bulunamadı.',
@@ -438,14 +439,16 @@ export function karantinaIstegi(
 
 export interface BekleyenEmir { id: number; emirNo: string; parcaNo: string; parcaAd: string; adet: number }
 
-// İlk parça kararı bekleyenler: karar bekleyen sayımı olan açık emirler, emir sırasıyla (325 a).
-export function ilkParcaBekleyenleri(emirler: readonly BekleyenEmir[], sayaclar: ReadonlyMap<number, { kararBekliyor: number }>) {
+export interface BekleyenAdim { isEmriId: number | null; opNo: number | null; kararBekliyor: number }
+
+// İlk parça kararı bekleyenler: karar bekleyen sayımı olan açık emirlerin adımları, emir ve OP sırasıyla (325 a, 744 a).
+export function ilkParcaBekleyenleri(emirler: readonly BekleyenEmir[], sayaclar: ReadonlyMap<number, readonly BekleyenAdim[]>) {
   return emirler
-    .flatMap((e) => {
-      const kararBekleyenAdet = sayaclar.get(e.id)?.kararBekliyor ?? 0;
-      return kararBekleyenAdet > 0 ? [{ uretimEmriId: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, parcaAd: e.parcaAd, adet: e.adet, kararBekleyenAdet }] : [];
-    })
-    .sort((a, b) => a.uretimEmriId - b.uretimEmriId);
+    .flatMap((e) => (sayaclar.get(e.id) ?? []).filter((a) => a.kararBekliyor > 0).map((a) => ({
+      uretimEmriId: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, parcaAd: e.parcaAd, isEmriId: a.isEmriId, opNo: a.opNo, adet: e.adet,
+      kararBekleyenAdet: a.kararBekliyor,
+    })))
+    .sort((a, b) => a.uretimEmriId - b.uretimEmriId || (a.opNo ?? 0) - (b.opNo ?? 0));
 }
 
 // T4 (155 a): DÖF'ün tek sahibi Kalite Merkezi'dir. Başka modül (denetim hazırlığı) bulgusundan DÖF'ü buradan açar ve durumunu

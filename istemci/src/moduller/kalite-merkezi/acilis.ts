@@ -359,7 +359,8 @@ export const ONAY_GERI_BETIGI = String.raw`function tmiOnayGeriAl(id) {
   if (dugme) dugme.textContent = 'Onayı geri al';
 }`;
 
-// 325 a: Bugün görünümünün başına, ilk parça kararı bekleyen emirlerin listesi (Onayla / Reddet). Liste ve karar kabuktaki köprüden
+// 325 a: Bugün görünümünün başına, ilk parça kararı bekleyen emirlerin listesi (Onayla / Reddet); 744 a ile satır adım başınadır
+// (OP numarası emir numarasının yanında, karar o adıma gider; iş emirsiz eski emirde OP yazılmaz). Liste ve karar kabuktaki köprüden
 // gider (api/ilk-parca/...); bölüm yalnız onay işlemi olana çizilir, sunucu ayrıca denetler. Boş listede bölüm görünmez. Liste en çok
 // 15 saniyede bir yenilenir (her çizim sunucuya gitmez); karardan sonra hemen yenilenir. Ret, geri alınamadığı için önce sorulur.
 export const ILK_PARCA_BETIGI = String.raw`(function () {
@@ -387,21 +388,25 @@ export const ILK_PARCA_BETIGI = String.raw`(function () {
     if (!L || L.length === 0) return '';
     return '<section class="tgroup" id="tmiIlkParca"><h2>' + sico('check') + ' İlk parça kararı <span class="muted">' + L.length + '</span></h2><ul class="tlist">' +
       L.map(function (e) {
-        return '<li class="p1"><div class="tl-t"><b>' + esc(e.emirNo) + ' | ' + esc(e.parcaNo) + '</b><small>' + esc(e.parcaAd) + ' | emir ' + e.adet +
-          ' adet | karar bekleyen ' + e.kararBekleyenAdet + ' adet</small></div><span class="tl-b"><button class="btn sm" data-ip-onay="' + e.uretimEmriId +
-          '">Onayla</button> <button class="btn gh sm" data-ip-ret="' + e.uretimEmriId + '">Reddet</button></span></li>';
+        var is = e.isEmriId ? ' data-ip-is="' + e.isEmriId + '"' : '';
+        return '<li class="p1"><div class="tl-t"><b>' + esc(e.emirNo) + (e.opNo ? ' | Op ' + e.opNo : '') + ' | ' + esc(e.parcaNo) + '</b><small>' + esc(e.parcaAd) + ' | emir ' + e.adet +
+          ' adet | karar bekleyen ' + e.kararBekleyenAdet + ' adet</small></div><span class="tl-b"><button class="btn sm" data-ip-onay="' + e.uretimEmriId + '"' + is +
+          '>Onayla</button> <button class="btn gh sm" data-ip-ret="' + e.uretimEmriId + '"' + is + '>Reddet</button></span></li>';
       }).join('') + '</ul></section>';
   }
-  function karar(id, secim) {
-    if (gonderilen[id]) return Promise.resolve();
-    gonderilen[id] = true;
-    return window.fetch('api/ilk-parca/' + id + '/karar', { method: 'POST', body: JSON.stringify({ karar: secim }) }).then(function (r) {
+  function ayni(e, id, is) { return e.uretimEmriId === id && (e.isEmriId || null) === is; }
+  function karar(id, is, secim) {
+    var anahtar = id + ':' + (is || '');
+    if (gonderilen[anahtar]) return Promise.resolve();
+    gonderilen[anahtar] = true;
+    var govde = is ? { karar: secim, isEmriId: is } : { karar: secim };
+    return window.fetch('api/ilk-parca/' + id + '/karar', { method: 'POST', body: JSON.stringify(govde) }).then(function (r) {
       return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: null }; });
     }, function () { return { ok: false, j: null }; }).then(function (s) {
-      delete gonderilen[id];
+      delete gonderilen[anahtar];
       if (!s.ok) { toast((s.j && s.j.hata) || 'Karar verilemedi.', 'bad'); return; }
       toast((secim === 'onay' ? 'İlk parça onaylandı' : 'İlk parça reddedildi') + (s.j && typeof s.j.adet === 'number' ? ': ' + s.j.adet + ' adet' : ''));
-      durum.liste = (durum.liste || []).filter(function (e) { return e.uretimEmriId !== id; });
+      durum.liste = (durum.liste || []).filter(function (e) { return !ayni(e, id, is); });
       durum.an = 0;
       if (UI.view === 'today') render();
       yukle();
@@ -417,16 +422,18 @@ export const ILK_PARCA_BETIGI = String.raw`(function () {
   };
   vToday.mount = function () {
     if (asilMount) asilMount.apply(this, arguments);
+    function adim(d) { var v = d.getAttribute('data-ip-is'); return v ? Number(v) : null; }
     document.querySelectorAll('#tmiIlkParca [data-ip-onay]').forEach(function (d) {
-      d.onclick = function () { karar(Number(d.getAttribute('data-ip-onay')), 'onay'); };
+      d.onclick = function () { karar(Number(d.getAttribute('data-ip-onay')), adim(d), 'onay'); };
     });
     document.querySelectorAll('#tmiIlkParca [data-ip-ret]').forEach(function (d) {
       d.onclick = function () {
         var id = Number(d.getAttribute('data-ip-ret'));
-        var e = (durum.liste || []).filter(function (x) { return x.uretimEmriId === id; })[0];
+        var is = adim(d);
+        var e = (durum.liste || []).filter(function (x) { return ayni(x, id, is); })[0];
         if (!e) return;
-        confirmBox('İlk parça reddi', esc(e.emirNo) + ' emrinin karar bekleyen ' + e.kararBekleyenAdet + ' adedi reddedilir ve red olarak ayrılır. Bu işlem geri alınamaz.',
-          'Reddet', function () { karar(id, 'ret'); }, true);
+        confirmBox('İlk parça reddi', esc(e.emirNo) + (e.opNo ? ' emrinin Op ' + e.opNo + ' adımında' : ' emrinin') + ' karar bekleyen ' + e.kararBekleyenAdet + ' adedi reddedilir ve red olarak ayrılır. Bu işlem geri alınamaz.',
+          'Reddet', function () { karar(id, is, 'ret'); }, true);
       };
     });
   };

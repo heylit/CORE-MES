@@ -23,7 +23,7 @@ import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
-import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuclandir, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
@@ -378,15 +378,20 @@ export async function dosyaSil(db: Db, kimlik: string, denetimEki: DenetimEki): 
 // İlk parça (FAI) kararı Kalite Merkezi'nden çıkar (229 a): emrin karar bekleyen sayımı onayda sağlama, retde redde geçer; stok
 // aynı işlemde üretim emirlerinin kalite olayıyla partinin karar bekleyen bakiyesini serbest ya da red yapar. Kalite yetkisini
 // ve emrin kapsamını çağıran denetler (Arkon numune kararı).
-export async function ilkParcaKarari(db: Db, kisiId: number, uretimEmriId: number, karar: KaliteKarari): Promise<{ adet: number }> {
-  const { adet } = await kararliSayimiSonuclandir(db, kisiId, uretimEmriId, karar);
-  await sorgular.ilkParcaKarariYaz(db, uretimEmriId, karar, adet, kisiId);
+// 744 a: karar adımındır; isEmriId verilince yalnız o adımın karar bekleyeni kapanır ve karar o adıma yazılır. Verilmezse (iş emirsiz
+// emir) emrin bütün bekleyeni kapanır, karar hiçbir adıma sayılmaz. Başka emrin iş emri reddedilir.
+export async function ilkParcaKarari(
+  db: Db, kisiId: number, uretimEmriId: number, karar: KaliteKarari, isEmriId: number | null = null,
+): Promise<{ adet: number }> {
+  if (isEmriId !== null && (await isEmriOzeti(db, isEmriId))?.uretimEmriId !== uretimEmriId) throw dogrulama(ILETILER.ilkParcaAdimi, 'isEmriId');
+  const { adet } = await kararliSayimiSonuclandir(db, kisiId, uretimEmriId, karar, isEmriId);
+  await sorgular.ilkParcaKarariYaz(db, uretimEmriId, karar, adet, kisiId, isEmriId);
   return { adet };
 }
 
 export async function ilkParcaBekleyenListesi(db: Db): Promise<KmIlkParcaBekleyenCevabi> {
   const emirler = await acikEmirler(db);
-  return { emirler: ilkParcaBekleyenleri(emirler, await kararSayaclari(db, emirler.map((e) => e.id))) };
+  return { emirler: ilkParcaBekleyenleri(emirler, await adimKararSayaclari(db, emirler.map((e) => e.id))) };
 }
 
 export async function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string): Promise<KmGecmisCevabi> {
@@ -398,6 +403,14 @@ export async function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string): 
       degistiren: s.degistirenId === null ? null : (adlar.get(s.degistirenId) ?? null), degisti: s.degisti, govde: s.govde,
     })),
   };
+}
+
+// 744 a: Arkon'un kapısı adımın son kararını okur; kararsız adım haritada yoktur.
+export async function adimIlkParcaKararlari(
+  db: Db, isEmriIdler: readonly number[],
+): Promise<Map<number, { karar: KaliteKarari; zaman: string; kisiId: number | null }>> {
+  if (isEmriIdler.length === 0) return new Map();
+  return new Map((await sorgular.adimIlkParcaSonKararlari(db, [...new Set(isEmriIdler)])).map(({ isEmriId, ...k }) => [isEmriId, k]));
 }
 
 export async function ilkParcaKararlari(

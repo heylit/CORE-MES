@@ -90,13 +90,16 @@ export const kmTedarikciFirmalariCevabi = z.object({
 
 // İlk parça (FAI) kararı (229 a): emrin karar bekleyen sayımı onayda sağlama, retde redde geçer; `adet` geçen parça sayısıdır.
 export const kmIlkParcaParametresi = z.object({ uretimEmriId: z.coerce.number().int().positive() });
-export const kmIlkParcaGovdesi = z.object({ karar: z.enum(KALITE_KARARLARI) });
+// isEmriId (744 a): kararın ait olduğu adım; iş emirsiz emirde verilmez.
+export const kmIlkParcaGovdesi = z.object({ karar: z.enum(KALITE_KARARLARI), isEmriId: z.number().int().positive().max(2147483647).nullish() });
 export const kmIlkParcaCevabi = z.object({ adet: z.number().int().nonnegative() });
 
-// 325 a: ilk parça kararı bekleyen açık emirler (karar bekleyen sayımı olanlar). Karar yukarıdaki karar ucuyla verilir.
+// 325 a: ilk parça kararı bekleyen açık emirler (karar bekleyen sayımı olanlar), 744 a ile adım başına. Karar yukarıdaki karar ucuyla verilir.
 export const kmIlkParcaBekleyenCevabi = z.object({
   emirler: z.array(z.object({
     uretimEmriId: z.number().int().positive(), emirNo: z.string(), parcaNo: z.string(), parcaAd: z.string(),
+    // 744 a: satır adım başınadır; iş emirsiz eski emirde ikisi de boş.
+    isEmriId: z.number().int().positive().nullable(), opNo: z.number().int().positive().nullable(),
     adet: z.number().int().positive(), kararBekleyenAdet: z.number().int().positive(),
   })),
 });
