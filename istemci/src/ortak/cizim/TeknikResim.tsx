@@ -16,7 +16,7 @@ import {
 import { dosyaOzeti, modelIsle, type Gorunum3B, type ModelKaydi } from './model.ts';
 import { Model3B } from './Model3B.tsx';
 import { ocrGoruntu, ocrPdfSayfasi } from './ocr.ts';
-import { bitAc, murekkep, olcuBirlestir, olcuOnerileri, tabloBul, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi, type OlcuOnerisi } from './okuma.ts';
+import { bitAc, murekkep, olcuBirlestir, olcuOnerileri, onayIster, tabloBul, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi, type OlcuOnerisi } from './okuma.ts';
 import { useCizimOrtami } from './ortam.tsx';
 import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renklendir, type PdfBelgesi } from './pdf.ts';
 import { pdfKaydiAnahtari, saklananiAc, sayfaKaydi } from './pdf-hazir.ts';
@@ -438,7 +438,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     const inside = P.items.filter((o) => o.x >= x0 - 2 && o.x <= x0 + w + 2 && o.y >= y0 - 2 && o.y <= y0 + h + o.h);
     let r: OlcuListesi = inside.length && !doc.textless ? olcuOnerileri(inside, doc.cls || 'm', { w: P.w, h: P.h, ink: P.ink, region: true }) : [];
     if (!r.length) r = await runOcr(box);
-    r.forEach((p) => { p.on = !p.ref; }); if (r.some((p) => p.lvl === 'low')) setLowOn(true);
+    r.forEach((p) => { p.on = !p.ref && !onayIster(p); }); if (r.some((p) => p.lvl === 'low')) setLowOn(true);
     if (r.length === 1 && !props) {
       const p = r[0]!;
       setEdit({ isNew: true, x: p.x, y: p.y, ar: p.ar, text: p.raw, label: p.l.replace(/ \(.*\)$/, '') }); setSel(null);

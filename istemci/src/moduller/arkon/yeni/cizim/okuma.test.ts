@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  bitAc, bitPaketle, capIsaretiMi, duzyaziMi, glifDuzelt, kelimeAyikla, kelimeKutusu, murekkep, ocrDuzelt, olcuBirlestir, olcuOnerileri, tabloBul,
+  bitAc, bitPaketle, capIsaretiMi, duzyaziMi, glifDuzelt, kelimeAyikla, kelimeKutusu, murekkep, ocrDuzelt, olcuBirlestir, olcuOnerileri, onayIster, tabloBul,
   yaziMaskele, type MetinOgesi, type OlcuListesi,
 } from '../../../../ortak/cizim/okuma.ts';
 
@@ -65,6 +65,8 @@ function sayfa(tohum: number, ocrKip: boolean) {
   return { items, W, H, ink, cls: sec(['f', 'm', 'c']), ex: r() < 0.3 ? { prose: false, notes: r() < 0.5 } : {}, auto: sec(['high', 'mid', 'low'] as const) };
 }
 const duz = (l: OlcuListesi | unknown[] & { stats?: unknown; diag?: unknown }) => JSON.parse(JSON.stringify({ l: [...l], st: l.stats, d: l.diag })) as unknown;
+// Eskiden tek fark 967 a: çizimden toleransı ya da GD&T'si okunan öneri seçilmemiş gelir.
+const onayli = (l: OlcuListesi): OlcuListesi => { for (const o of l) if (o.on && onayIster(o)) o.on = false; return l; };
 
 describe('PDF ölçü okuma (eskisiyle aynı)', () => {
   it('yüzlerce sentetik sayfada öneriler, istatistik ve tanı aynı', () => {
@@ -73,7 +75,7 @@ describe('PDF ölçü okuma (eskisiyle aynı)', () => {
       const ocrKip = tohum % 3 === 0, s = sayfa(tohum, ocrKip);
       const opt = { w: s.W, h: s.H, ink: tohum % 5 === 0 ? null : s.ink, ocr: ocrKip, ex: s.ex, auto: s.auto, diag: tohum % 2 === 0 };
       const yeni = olcuOnerileri(structuredClone(s.items), s.cls, opt);
-      const eski = cagir<OlcuListesi>(okuma, 'pdfDims', structuredClone(s.items), s.cls, opt);
+      const eski = onayli(cagir<OlcuListesi>(okuma, 'pdfDims', structuredClone(s.items), s.cls, opt));
       expect(duz(yeni), `tohum ${tohum}`).toEqual(duz(eski));
       toplam += yeni.length;
     }
@@ -81,7 +83,7 @@ describe('PDF ölçü okuma (eskisiyle aynı)', () => {
   });
   it('seçeneksiz çağrı ve boş girdi', () => {
     const s = sayfa(7, false);
-    expect(duz(olcuOnerileri(s.items, 'm'))).toEqual(duz(cagir(okuma, 'pdfDims', s.items, 'm')));
+    expect(duz(olcuOnerileri(s.items, 'm'))).toEqual(duz(onayli(cagir(okuma, 'pdfDims', s.items, 'm'))));
     expect(duz(olcuOnerileri([], 'm', { diag: true }))).toEqual(duz(cagir(okuma, 'pdfDims', [], 'm', { diag: true })));
   });
   it('glif, düz yazı, tablo ve mürekkep', () => {

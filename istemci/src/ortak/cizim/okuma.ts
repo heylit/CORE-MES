@@ -130,6 +130,10 @@ type Sayac = Required<Pick<OkumaIstatistigi, 'items' | 'rows' | 'segs' | 'table'
   & { ocr: boolean };
 
 const SEVIYE: Readonly<Record<GuvenSeviyesi, number>> = { high: 2, mid: 1, low: 0 };
+const GENEL_EK = ' (genel tol.)';
+// Çizimden okunan tolerans (±, sapma, uyum) ya da GD&T yanlış okunursa ölçüm yanlış kabul alır (967 a): böyle öneri güveni ne olursa olsun
+// seçilmemiş gelir, kullanıcı tek tek onaylar. Genel tolerans (ISO 2768) bu kurala girmez.
+export const onayIster = (o: Pick<OlcuOnerisi, 'kind' | 'l' | 'ref'>): boolean => !o.ref && (o.kind === 'gdt' || !o.l.endsWith(GENEL_EK));
 export const OLCU_TURU_ADI: Readonly<Record<string, string>> = {
   diameter: 'Çap', linear: 'Uzunluk', radius: 'Radyus', angle: 'Açı', thread: 'Diş', chamfer: 'Pah', rough: 'Yüzey pürüzlülüğü',
 };
@@ -331,12 +335,14 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
     const a = s.a, hw = (s.u1 - s.u0) / 2;
     const bx = s.cx + a.ux * s.h * 1.9 + a.dx * (hw + s.h * 0.6), by = s.cy + a.uy * s.h * 1.9 + a.dy * (hw + s.h * 0.6);
     if (out.some((o) => o.nom === p.nomText && Math.hypot(o.tx - s.cx, o.ty - s.cy) < s.h * 2)) continue;
-    out.push({
+    const o: OlcuOnerisi = {
       x: bx, y: by, tx: s.cx, ty: s.cy, ar: [s.cx, s.cy, hw, s.h * 0.62, Math.atan2(a.dy, a.dx)],
-      l: (p.label || olcuTuruAdi(p)) + (p.ref ? ' (referans)' : p.general ? ' (genel tol.)' : ''), nom: p.nomText, tol: p.tolText, min: p.min, max: p.max,
+      l: (p.label || olcuTuruAdi(p)) + (p.ref ? ' (referans)' : p.general ? GENEL_EK : ''), nom: p.nomText, tol: p.tolText, min: p.min, max: p.max,
       tool: p.tool, gauge: p.gauge, raw: s.txt, unknown: !!p.unknownFit, note: p.note || '', kind: p.kind, ref: !!p.ref, conf: +c.toFixed(2), lvl,
       why: why.join(' · '), on: SEVIYE[lvl] >= autoR && !p.ref && p.kind !== 'rough',
-    });
+    };
+    if (o.on && onayIster(o)) o.on = false;
+    out.push(o);
   }
   // Okuma sırası: yukarıdan aşağı, soldan sağa (bantlı).
   const band = Math.max(modalH * 6, H / 24);
