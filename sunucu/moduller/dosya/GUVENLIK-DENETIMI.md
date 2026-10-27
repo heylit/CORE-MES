@@ -12,3 +12,11 @@ Bütün uçlar `uclar.ts`'tedir; üçü de `oturum` ister (oturumsuz 401). Dosya
 Bağ işlevleri modül adına bağlı tutamaktadır (#144): bir modülün tutamağı başka modülün bağını göremez, akıtamaz, kaldıramaz; adı modül
 klasörü olmayan tutamak açılışta hata verir (test `tutamak: ...`). Kalan sınır: bir modül kendi adı yerine başka modülün adıyla tutamak
 alabilir; bunu yalnız inceleme yakalar (sınır kuralı yok, UYUM-BORCU madde 3).
+
+## Kart #732 (kararlar 732 a, 743 a)
+- `kaynaktanBagla` (her tutamakta): sunucu kodu, başka bir modülün kaydına zaten bağlı dosyayı kişisiz bağlar; özet kişiden gelmez, kaynak
+  modülün sunucu kodundan gelir. Bağsız, yok ya da yalnız aynı modülde bağlı dosyada ret; modülün tür ve boyut sınırı geçerli (test
+  `kaynaktan bağlama ...`). Kalan sınır: çağıranın özeti kişiden almadığını yalnız inceleme yakalar (uç değil, `disari` işlevi).
+- `modulDeposuTutamagi(modul).icerikYaz`: kendi yükleme şeridi olan modül (Arkon) tamamladığı içeriği yazar; özet sunucuda yeniden hesaplanır,
+  tutmazsa ret; kişi yükleyen olur (DSb korunur). İmzasız içerik `ikili` türüyle girer (MIME `application/octet-stream`); kişinin yükleme ucu
+  bu türü hiç üretmez (DSK-05). Olağan `dosyaTutamagi` ikili dosya bağlayamaz (bağ sınırı türü sözleşmedeki türlerdir) ve bağında ikili görürse hata verir.

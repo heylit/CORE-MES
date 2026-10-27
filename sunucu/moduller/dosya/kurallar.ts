@@ -30,7 +30,12 @@ export const TEMIZLIK_SINIRI = { dosya: 2, serit: 10 } as const;
 // Bir turda her silme sorgusu en çok bu kadar yinelenir: birikmiş temizlik turu uzatmaz, kalanı sonraki tura kalır.
 export const TEMIZLIK_TUR_SORGUSU = 10;
 
-export const DOSYA_MIME: Readonly<Record<DosyaTuru, string>> = {
+// Kart #732, karar 743 a: imzasız ikili içerik (Arkon'un 3B ağ dizileri gibi) yalnız modülün kendi şeridinden ortak depoya girer.
+// Kişinin yükleme ucu bu türü hiç üretmez (turBul tanımazsa ret); sözleşmedeki DosyaTuru bu yüzden onu içermez.
+export const IKILI = 'ikili' as const;
+export type SaklananTur = DosyaTuru | typeof IKILI;
+
+export const DOSYA_MIME: Readonly<Record<SaklananTur, string>> = {
   pdf: 'application/pdf',
   png: 'image/png',
   jpeg: 'image/jpeg',
@@ -41,6 +46,7 @@ export const DOSYA_MIME: Readonly<Record<DosyaTuru, string>> = {
   glb: 'model/gltf-binary',
   gltf: 'model/gltf+json',
   dxf: 'image/vnd.dxf',
+  ikili: 'application/octet-stream',
 };
 
 const basliyorMu = (b: Buffer, imza: readonly number[] | string, konum = 0): boolean => {
@@ -85,12 +91,12 @@ export function kotaHatasi(
 }
 
 // Bağlayan modülün sınırı: hangi türler, en çok kaç bayt.
-export interface BagSiniri {
-  turler: readonly DosyaTuru[];
+export interface BagSiniri<T extends SaklananTur = SaklananTur> {
+  turler: readonly T[];
   azamiBayt: number;
 }
 
-export function bagReddi(dosya: { tur: DosyaTuru; boyut: number }, sinir: BagSiniri): 'turIzinsiz' | 'dosyaBuyuk' | null {
+export function bagReddi(dosya: { tur: SaklananTur; boyut: number }, sinir: BagSiniri): 'turIzinsiz' | 'dosyaBuyuk' | null {
   if (!sinir.turler.includes(dosya.tur)) return 'turIzinsiz';
   if (dosya.boyut > sinir.azamiBayt) return 'dosyaBuyuk';
   return null;
