@@ -162,6 +162,15 @@ describe('Aynı emrin iki adımı kuyrukta (639f)', () => {
     expect(kartlar[0]!.textContent).not.toContain('Sıradaki');
     expect(kartlar[1]!.textContent).toContain('Sıradaki');
   });
+
+  it('639h: fazla sayan adımın kartında eksi bakiye; öteki adımda ve biten işte yok', () => {
+    const eksili = (id: string, op: string, state: string, eksi: number) => ({ ...adim(id, op, state), pkg: { id, rev: 'A', tmi: { eksi } } as never });
+    const { container } = render(<IsKuyrugu isler={[adim('tmi-ie-10', 'Op 10', 'running'), eksili('tmi-ie-20', 'Op 20', 'running', 2), eksili('tmi-ie-30', 'Op 30', 'done', 1)]}
+      aktif={0} sec={() => {}} siradaki={undefined} onde={null} kartlar={[]} kartla={null} />);
+    const kartlar = [...container.querySelectorAll('.tc-ay1-is')];
+    expect(kartlar.map((k) => k.textContent?.includes('Eksi bakiye'))).toEqual([false, true, false]);
+    expect(kartlar[1]!.textContent).toContain('Eksi bakiye · 2 fazla sayıldı');
+  });
 });
 
 describe('702: Şimdi şeridi', () => {

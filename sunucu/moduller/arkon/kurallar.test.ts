@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -1084,6 +1084,13 @@ test('plan saatleri paket kimliğiyle; kuyruk ve plan saati tmi alanına eklenir
 
 
 describe('paralel adım (kart 639)', () => {
+  test('639h: eksi eksik paketin tmi.eksi alanına fazla sayılan adet olarak yazılır; artı, sıfır ve bilinmeyen yazılmaz', () => {
+    const govde = { id: 'tmi-ie-5', tmi: { isEmriId: 5, kuyruk: { sira: 1 } } };
+    assert.deepEqual(eksiAlaniniEkle(govde, -3), { id: 'tmi-ie-5', tmi: { isEmriId: 5, kuyruk: { sira: 1 }, eksi: 3 } });
+    for (const eksik of [0, 4, null, undefined]) assert.equal(eksiAlaniniEkle(govde, eksik), govde);
+    assert.deepEqual(eksiAlaniniEkle({ id: 'tmi-ie-6' }, -1), { id: 'tmi-ie-6', tmi: { eksi: 1 } });
+  });
+
   test('adimEmirDurumu: iş emri paketinin kuralı adımın durumuyla okunur; açık olmayan emir kendi durumunu taşır', () => {
     assert.equal(adimEmirDurumu('basladi', 'bekliyor'), 'planli');
     assert.equal(adimEmirDurumu('planli', 'bekliyor'), 'planli');
