@@ -388,7 +388,7 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
   S = g.S; const k = kayit && kayit.items ? kayit : null;
   DG_BITEN = tmiBitenler((kaynak && kaynak.durum && kaynak.durum.emirler) || k, S.D);
-  const n = tmiSaat(S.D, an); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
+  const n = tmiSaat(S.D, an); if (n != null && n >= 0) S.simdi = Math.floor(n * 4) / 4;
   saatSabitle(an, cxAl().ops.length);
   const zarf = sonuc => ({ dataVer: S.dataVer, baslangic: (S.D.meta && S.D.meta.baslangic) || null, simdi: cxAl().st.now, sonuc: { tur: istek.tur, ...sonuc } });
   if (DG_PLANLI.has(istek.tur) && !(S.plan && S.plan.ops)) return { hata: 'plan-yok' };

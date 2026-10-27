@@ -54,10 +54,10 @@ export function gunAyHafta(z: Zaman, saat: number): string {
 }
 const saatDk = (s: unknown): number => { const [h, m] = String(s).split(':').map(Number); return (h ?? NaN) + (m || 0) / 60; };
 
-// Sayfanın "şimdi"si (31 a, girdi.betik simdiUygula): başlangıç günü 07:00'den önce değildir.
+// Sayfanın "şimdi"si (31 a, girdi.betik simdiUygula): kaydedilen gerçek saat, yoksa başlangıç günü 07:00 (741 a: gece 07:00'den önce de olur).
 export function simdiOku(c: PlanlamaCalismasi): number {
   const s = Number(c.simdi);
-  return Number.isFinite(s) && s > 7 ? s : 7;
+  return c.simdi != null && Number.isFinite(s) && s >= 0 ? s : 7;
 }
 
 // ---------- ayarlar (çalışmanın verisinde; yoksa varsayılan, sunucu motor/durum.betik ylAyar ile aynı) ----------
