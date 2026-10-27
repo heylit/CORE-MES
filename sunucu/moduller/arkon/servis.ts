@@ -2258,6 +2258,8 @@ async function anomaliHesapla(
   const sureler = new Map([...sureIstekleri.keys()].map((k, n) => [k, okunanSureler[n]]));
   const birimSure = (i: (typeof isEmirleri)[number], makineId: number | null): number | null =>
     sureler.get(sureAnahtari(i.kaynakRotaRevizyonId, makineId))?.get(i.opNo)?.birimSureDk ?? (i.birimSureDk === null ? null : Number(i.birimSureDk));
+  const ayarSure = (i: (typeof isEmirleri)[number], makineId: number | null): number =>
+    sureler.get(sureAnahtari(i.kaynakRotaRevizyonId, makineId))?.get(i.opNo)?.ayarSuresiDk ?? (i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk));
 
   // Sayım penceresi dün başlayan son vardiyanın bitişinden bugün başlayan son vardiyanın bitişinedir (gece vardiyası yoksa takvim günü;
   // şimdiye kadar yazılmış her sayım dahil); kaydı olmayan kimlik haritada yoktur: o gün giriş yok = 0.
@@ -2279,11 +2281,14 @@ async function anomaliHesapla(
     if (!istasyonById.has(istasyonId)) continue;
     const net = await araliklar(kaynak.tur, kaynak.id);
     const sure = birimSure(i, kaynak.tur === 'makine' ? kaynak.id : null);
+    // Kart 783: ilk ayar yalnız yerleşim bugün başladıysa ve iş emrinin önceki günlerde sağlamı yoksa düşülür; bilinmeyen ayar 0 sayılır.
+    const onceki = oncekiSaglam.get(i.id)?.saglam ?? 0;
+    const ayarKalanDk = y.baslangic.getTime() >= gunBasi && onceki === 0 ? ayarSure(i, kaynak.tur === 'makine' ? kaynak.id : null) : 0;
     hesaplanan.push({
       isEmriId: i.id, kaynak, istasyonId,
       beklenen: net === null ? null : isEmriBeklenenAdet({
-        adet: kalanAdet(i.adimAdedi ?? i.adet, oncekiSaglam.get(i.id)?.saglam ?? 0), birimSureDk: sure, verimYuzde: verim.get(istasyonId) ?? 100,
-        baslangic: y.baslangic.getTime(), bitis: y.bitis.getTime(), araliklar: net, gunBasi, simdi,
+        adet: kalanAdet(i.adimAdedi ?? i.adet, onceki), birimSureDk: sure, verimYuzde: verim.get(istasyonId) ?? 100,
+        baslangic: y.baslangic.getTime(), bitis: y.bitis.getTime(), araliklar: net, gunBasi, simdi, ayarKalanDk,
       }),
       planli: net === null ? null : araliklariKes(net, Math.max(y.baslangic.getTime(), gunBasi), Math.min(y.bitis.getTime(), simdi)),
     });

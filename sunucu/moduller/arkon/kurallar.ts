@@ -2279,13 +2279,16 @@ export interface IsEmriBeklenenGirdisi {
   araliklar: readonly NetAralik[];
   gunBasi: number;
   simdi: number;
+  // Yerleşimin başındaki ilk ayar, dakika (kart 783): yerleşim bu süreyi de kapsar, ama ayarda adet çıkmaz. Ayar geride kaldıysa ya da
+  // bilinmiyorsa 0.
+  ayarKalanDk?: number;
 }
 
-// Beklenen adet: plandaki yerleşim ile gün başından şu ana kadarki net aktif sürenin kesişimi, süre / birim süre x verim.
+// Beklenen adet: plandaki yerleşim ile gün başından şu ana kadarki net aktif sürenin kesişimi, ilk ayar düşülerek, süre / birim süre x verim.
 // Birim süresi bilinmeyen iş emrinde null.
 export function isEmriBeklenenAdet(g: IsEmriBeklenenGirdisi): number | null {
   if (g.birimSureDk === null || !(g.birimSureDk > 0)) return null;
-  const dakika = kesisimDakika(g.araliklar, Math.max(g.baslangic, g.gunBasi), Math.min(g.bitis, g.simdi));
+  const dakika = Math.max(0, kesisimDakika(g.araliklar, Math.max(g.baslangic, g.gunBasi), Math.min(g.bitis, g.simdi)) - Math.max(0, g.ayarKalanDk ?? 0));
   return Math.min(g.adet, (dakika / g.birimSureDk) * (g.verimYuzde / 100));
 }
 

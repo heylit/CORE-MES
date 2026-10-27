@@ -40,6 +40,14 @@ test('beklenen adet: yerleşim ile şu ana kadarki net sürenin kesişimi, süre
   assert.equal(isEmriBeklenenAdet(emir({ adet: 25 })), 25, 'toplam adedi aşmaz');
 });
 
+test('beklenen adet: yerleşimin başındaki ilk ayar net süreden düşülür (kart 783)', () => {
+  assert.equal(isEmriBeklenenAdet(emir({ ayarKalanDk: 30 })), 45, '120 dk - 30 dk ayar = 90 dk / 2 dk');
+  assert.equal(isEmriBeklenenAdet(emir({ ayarKalanDk: 0 })), 60);
+  assert.equal(isEmriBeklenenAdet(emir({ ayarKalanDk: 150 })), 0, 'ayar sürüyor: henüz adet beklenmez, eksiye düşmez');
+  assert.equal(isEmriBeklenenAdet(emir({ ayarKalanDk: -10 })), 60, 'eksi ayar yok sayılır');
+  assert.equal(isEmriBeklenenAdet(emir({ simdi: saat(14), ayarKalanDk: 60 })), 120, 'mola net süreden önce düşülür: 300 - 60 = 240 dk');
+});
+
 test('beklenen adet: birim süre bilinmiyorsa ya da sıfırsa null; sıfır uydurulmaz', () => {
   assert.equal(isEmriBeklenenAdet(emir({ birimSureDk: null })), null);
   assert.equal(isEmriBeklenenAdet(emir({ birimSureDk: 0 })), null);
