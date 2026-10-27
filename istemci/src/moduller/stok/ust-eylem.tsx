@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, SepettenCekGovdesi, SepettenKullanGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi,
+  GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, SepettenCekGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Simge, useBildirim, type Secenek } from '../../ortak/arayuz/index.ts';
 import type { UstEylem } from '../../ortak/rota/ust-eylemler.ts';

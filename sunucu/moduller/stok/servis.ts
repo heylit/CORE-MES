@@ -25,7 +25,7 @@ import type {
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
   LotEtiketi, LotEtiketleriCevabi, IstekAcGovdesi, IstekMalzemeleriCevabi, Teslim, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi,
-  TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IstasyonSepetleriCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
+  TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { malzemeIstegiAcGirdisi, REFAKAT_KARTLARI_SINIRI, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi, type DepoCikisCevabi, type DepoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -2486,31 +2486,6 @@ async function istasyonEmirleri(db: Db, istasyonId: number): Promise<{ id: numbe
   return (await emirDilimi(db))
     .filter((e) => e.durum !== 'bitti' && e.durum !== 'iptal' && e.durum !== 'taslak' && e.isEmirleri.some((i) => i.istasyonId === istasyonId && i.durum !== 'tamam'))
     .map((e) => ({ id: e.id, emirNo: e.emirNo }));
-}
-export async function sepettenKullan(db: Db, k: Kullanici, g: SepettenKullanGovdesi): Promise<HareketCevabi> {
-  const istasyonId = Number(g.istasyonId);
-  const ist = await istasyonGetir(db, istasyonId);
-  if (!ist || !ist.aktif) throw dogrulama('İstasyon bulunamadı ya da pasif.', 'istasyonId');
-  kapsamDisiysaReddet(await kapsamOku(db, k.id), ist.isMerkeziId);
-  const uretimEmriId = Number(g.uretimEmriId);
-  if (!(await istasyonEmirleri(db, istasyonId)).some((e) => e.id === uretimEmriId)) throw dogrulama('Bu emrin bu istasyonda bitmemiş adımı yok.', 'uretimEmriId');
-  const konumId = await sorgular.istasyonKonumu(db, istasyonId);
-  if (konumId === null) throw dogrulama('İstasyonun sepeti boş.', 'malzemeId');
-  const malzemeId = Number(g.malzemeId);
-  const partiId = g.partiId === null ? null : Number(g.partiId);
-  const statuId = g.statuId === null ? null : Number(g.statuId);
-  const miktar = bindenMetin(binde(g.miktar));
-  return korumali(async () => {
-    await serbestDenetle(db, malzemeId, konumId, partiId, statuId, miktar, 'kullanılamaz');
-    await rezerveyiAsmasin(db, malzemeId, statuId, uretimEmriId, binde(miktar));
-    const id = await sorgular.hareketYaz(db, hareket({
-      tur: 'cikis', malzemeId, miktar, kisiId: k.id, partiId, partiSecimi: partiId === null ? null : 'kisi', kaynakKonumId: konumId, kaynakStatuId: statuId,
-      cikisNedeni: 'uretime_sarf', uretimEmriId, aciklama: `Sepetten üretimde kullanıldı · ${ist.ad}`.slice(0, 200),
-    }));
-    await bakiyeDegistir(db, { malzemeId, konumId, partiId, statuId, fark: -binde(miktar) });
-    await rezerveDegistir(db, { malzemeId, statuId, uretimEmriId, fark: -binde(miktar) });
-    return { hareketIdler: [id], onayliEksi: false };
-  });
 }
 // Teslim edilmeyen parça (kart #1289): kullanacak istasyon, emirlerinin rotasındaki öteki istasyonların sepetinde sonraki adımı
 // kendisi olan satırları görür. Kaynak istasyon çekenin kapsamında olmak zorunda değildir; parça zaten ona gidecektir.

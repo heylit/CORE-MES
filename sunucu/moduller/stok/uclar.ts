@@ -14,7 +14,7 @@ import {
   araCevabi, araSorgusu, sayimBekleyenlerCevabi, yerlesimCevabi, yerlesimKaydetGovdesi, adimToplaGovdesi, toplamaAcGovdesi, toplamaAdimParametresi, toplamaAyrintiCevabi, toplamaKapatGovdesi, toplamalarCevabi, toplamalarSorgusu,
   fisAyrintiCevabi, fisCevabi, fislerCevabi, fislerSorgusu, kodCozCevabi, kodCozSorgusu, okutCozCevabi, kisiKoduCevabi, lotEtiketleriCevabi, sepetCevabi, sepetDegistirGovdesi, sepetEkleGovdesi, sepetTeslimCevabi, stoktanDusGovdesi, teslimGovdesi,
   istekTeslimGovdesi, stokOzetiCevabi, malzemeIstegiCevabi, malzemeIstekleriCevabi, malzemeIstekleriSorgusu,
-  istasyonSepetiCevabi, istasyonSepetiSorgusu, istasyonSepetleriCevabi, istasyonSepetleriSorgusu, sepettenKullanGovdesi, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
+  istasyonSepetiCevabi, istasyonSepetiSorgusu, istasyonSepetleriCevabi, istasyonSepetleriSorgusu, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { depoCikisCevabi, depoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -174,7 +174,6 @@ export const uclar = [
   // Terminalin iki sepeti (745): gelen ve çıkan, seçili emir için tek okuma.
   uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/istasyon-sepetleri', yetki: 'stok.istek', sorgu: istasyonSepetleriSorgusu, cevap: istasyonSepetleriCevabi, isle: ({ db, kullanici, sorgu }) => s.istasyonSepetleri(db, kullanici, sorgu.istasyonId, sorgu.uretimEmriId) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/teslim-kutusu/sepet/cek', yetki: 'stok.istek', govde: sepettenCekGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, govde }) => s.sepettenCek(db, kullanici, govde) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/teslim-kutusu/sepet/kullan', yetki: 'stok.istek', govde: sepettenKullanGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.sepettenKullan(db, kullanici, govde) }),
   // Terminal başlatmadan önce (kart #1289): eksik girdiye istasyon isteği açar; yetki üretim terminalininkidir. Tekrar korumasız: istek
   // adım ve malzemeyle tekildir, yinelenen çağrı ikinci istek açmaz.
   uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/uretim-hazirligi', yetki: 'terminal.uret', govde: uretimHazirligiGovdesi, cevap: uretimHazirligiCevabi, isle: ({ db, kullanici, govde }) => s.uretimHazirligi(db, kullanici, govde) }),

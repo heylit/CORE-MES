@@ -1335,23 +1335,12 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const disarida = await istasyon();
     await kisiEkle('operator_sepet', 'operator');
     await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisiler.get('operator_sepet'), disarida.isMerkeziId]);
-    // Üretimde kullan ("İstasyondakiler"): yalnız bu istasyonda bitmemiş adımı olan emre, sepette olandan fazla değil.
+    // Sarf yalnız sayımdan düşer (896 a): sepetten elle kullanma ucu yoktur, sepet olduğu gibi kalır.
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e]);
-    assert.deepEqual(istasyonSepetiCevabi.parse((await istek('operator', 'GET', `/stok/teslim-kutusu/sepet?istasyonId=${a.id}`)).govde).emirler.map((x) => x.id), [e]);
-    const kullan = (kim: string, g: Record<string, unknown>) => istek<Hata>(kim, 'POST', '/stok/teslim-kutusu/sepet/kullan',
-      { istasyonId: a.id, malzemeId: h, partiId: satir(h, null).partiId, statuId: null, miktar: '2', uretimEmriId: e, ...g });
-    assert.equal((await kullan('operator', { miktar: '9' })).durum, 400, 'sepetteki 5 adetten fazlası');
-    const baskaEmir = (await o().sahip.tek<{ id: number }>(
-      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, durum) VALUES ($1, 'Deneme', 1, $2, $3, $4, $5, 'planli') RETURNING id",
-      [`P-SB${sira}`, b.id, kisiler.get('yonetici'), ym, await revizyon(ym)]))!.id;
-    await o().sahip.sorgu('INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id) VALUES ($1, 1, 10, $2, $3, $4)', [baskaEmir, tip!.id, 'OP 10', b.id]);
-    assert.equal((await kullan('operator', { uretimEmriId: baskaEmir })).durum, 400, 'başka istasyonun emri');
-    assert.equal((await kullan('operator_sepet', {})).durum, 403, 'kapsam dışı istasyon');
-    const k = await kullan('operator', {});
-    assert.equal(k.durum, 200, JSON.stringify(k.govde));
-    assert.equal(await bakiye(h, (await istasyonKonumu(a.id))!), '3.000');
-    const sarf = await o().vt.tek<{ n: string; e: number }>("SELECT cikis_nedeni AS n, uretim_emri_id AS e FROM stok_hareketi WHERE id = $1", [(k.govde as unknown as { hareketIdler: number[] }).hareketIdler[0]]);
-    assert.deepEqual([sarf!.n, sarf!.e], ['uretime_sarf', e]);
+    const kullan = await istek<Hata>('operator', 'POST', '/stok/teslim-kutusu/sepet/kullan',
+      { istasyonId: a.id, malzemeId: h, partiId: satir(h, null).partiId, statuId: null, miktar: '2', uretimEmriId: e });
+    assert.equal(kullan.durum, 404, JSON.stringify(kullan.govde));
+    assert.equal(await bakiye(h, (await istasyonKonumu(a.id))!), '5.000');
 
     assert.equal((await istek('operator', 'GET', `/stok/teslim-kutusu/sepet?istasyonId=999999`)).durum, 404);
     assert.equal((await istek('operator_sepet', 'GET', `/stok/teslim-kutusu/sepet?istasyonId=${a.id}`)).durum, 403, 'kapsam dışı istasyonun sepeti');

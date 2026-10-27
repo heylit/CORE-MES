@@ -1287,12 +1287,6 @@ export const istasyonSepetiCevabi = z.object({
 });
 export type IstasyonSepetiCevabi = z.output<typeof istasyonSepetiCevabi>;
 export type IstasyonSepetiSatiri = IstasyonSepetiCevabi['satirlar'][number];
-// Üretimde kullan (kart #1353, kullanıcı kararı "İstasyondakiler"): malzeme isteyebilen kişi kapsamındaki istasyonun sepetinden yalnız
-// o istasyondaki emre sarf yazar. Statülü parça da kullanılabilir; eksiye düşülmez.
-export const sepettenKullanGovdesi = z.object({
-  istasyonId: kimlik, malzemeId: kimlik, partiId: buyukKimlik.nullable(), statuId: kimlik.nullable(), miktar: miktarSemasi, uretimEmriId: kimlik,
-});
-export type SepettenKullanGovdesi = z.input<typeof sepettenKullanGovdesi>;
 // Teslim edilmeyen parçayı kullanacak istasyon çeker (kart #1289): öteki istasyonların sepetinde sonraki adımı bu istasyon olan satırlar.
 export const gelecekSepetCevabi = z.object({
   satirlar: z.array(istasyonSepetiCevabi.shape.satirlar.element.extend({ kaynak: istasyonSepetiCevabi.shape.istasyon })),
