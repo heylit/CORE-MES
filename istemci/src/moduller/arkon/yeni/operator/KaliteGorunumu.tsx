@@ -7,6 +7,7 @@ import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { sayi, iki } from '../cekirdek/bicim.ts';
 import { useArkon } from '../veri/baglam.ts';
+import { NumuneOlcumu, kmNumunesi } from './NumuneOlcumu.tsx';
 import { LOT_SINIFLARI, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi } from './kurallar.ts';
 import type { Is, KaliteNumunesi, LotKarari, LotSinifi, Result } from './tipler.ts';
 
@@ -14,12 +15,13 @@ import type { Is, KaliteNumunesi, LotKarari, LotSinifi, Result } from './tipler.
 // aktif işin lotunun Kabul/Red'i. Kararın kendisi Kalite Merkezi'nindir: numune kararı ilk parça kararı olarak, lot kararı lot kaydı olarak
 // sunucuda Kalite Merkezi'ne yazılır; Arkon ayrı karar tutmaz. Red ölçü ve gerekçe ister; ölçüm kalite formundadır ("Ölç", 798).
 // İlk parça numunesinin kararı yalnız Kalite Merkezi'ndedir (789-2a): sunucu numuneyi açarken `ilkParca` damgalar, burada karar düğmesi yoktur.
-export function KaliteGorunumu({ istasyon, is: o, izinli, olc, soyle }: {
-  istasyon: string; is: Is; izinli: boolean; olc: () => void; soyle: (metin: string, ton: 'ok' | 'stop') => void;
+export function KaliteGorunumu({ istasyon, is: o, izinli, olcebilir, soyle }: {
+  istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void;
 }) {
   const { depo, kisi } = useArkon();
   const [numuneler, numunelerYaz] = useState<KaliteNumunesi[]>([]);
   const [sonuc, sonucYaz] = useState<Result | null>(null);
+  const [olculen, olculenYaz] = useState<KaliteNumunesi | null>(null);
   const pkgId = o.pkg?.id ?? null;
 
   const yenile = useCallback(async () => {
@@ -67,8 +69,9 @@ export function KaliteGorunumu({ istasyon, is: o, izinli, olc, soyle }: {
           <Simge ad="target" boyut="k" /><span className="tc-ay1-ust-yazi">Gelen numuneler</span>
           <small className="tc-ay1-soluk">{numuneler.length ? `${sayi(numuneler.length)} numune bekliyor` : 'Bekleyen numune yok'}</small>
         </div>
-        {numuneler.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} olc={olc} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
+        {numuneler.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} olc={() => olculenYaz(r)} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
       </section>
+      {olculen ? <NumuneOlcumu r={olculen} yazabilir={olcebilir} kapat={() => { olculenYaz(null); void yenile(); }} /> : null}
       {o.pkg && !o.empty ? <LotKarti is={o} sonuc={sonuc} izinli={izinli} ver={(lk) => { void lotKarariVer(lk); }} /> : null}
     </div>
   );
@@ -108,7 +111,7 @@ function NumuneSatiri({ r, izinli, olc, karar }: {
         ) : null}
       </span>
       <span className="tc-ay1-kalite-dugmeler">
-        <Dugme tur="ikincil" simge="ruler" onClick={olc}>Ölç</Dugme>
+        {kmNumunesi(r) !== null ? <Dugme tur="ikincil" simge="ruler" onClick={olc}>Ölç</Dugme> : null}
         {izinli && !red && !ilk ? <Dugme simge="check" onClick={() => karar('approved', '')}>Kabul</Dugme> : null}
         {izinli && !red && !ilk ? <Dugme tur="tehlike" simge="x" onClick={() => redYaz(true)}>Red</Dugme> : null}
         {izinli && red ? <Dugme tur="tehlike" simge="x" disabled={!!eksik} onClick={() => karar('rejected', not)}>Reddet</Dugme> : null}
