@@ -227,8 +227,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
           <span className="mono">{p.no}</span>
           {p.priority === 'urgent' && <Cip renk="stop">Acil</Cip>}
           <Cip renk={dur.renk}>{calisiyor ? 'Çalışıyor' : dur.etiket}</Cip>
-          <PlanCipi p={p} />
-          {ref && ref.tur !== 'disi' && <PlanReferansCipi r={ref} />}
+          <KuyrukPlanCipi p={p} r={ref} ayrinti={karsilastir} />
         </div>
         <b>{p.part || 'Adsız parça'}</b>
         <small className="tc-ay3-not">{p.op || ''} · Rev {p.rev}</small>
@@ -239,7 +238,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
           <span className={gec ? 'tc-ay3-gec' : undefined}>{sc?.end ? `Biter ${gunAySaat(sc.end)}` : sc ? 'Takvime sığmıyor' : ''}</span>
         </div>
         {p.due && <div className="tc-ay3-iki"><span>Termin {p.due}</span>{gec && <span className="tc-ay3-gec">Gecikecek</span>}</div>}
-        {ref?.saat && <small className="tc-ay3-not">Planda {gunAySaat(Date.parse(ref.saat.baslangic))} – {gunAySaat(Date.parse(ref.saat.bitis))}</small>}
+        {karsilastir && ref?.saat && <small className="tc-ay3-not">Planda {gunAySaat(Date.parse(ref.saat.baslangic))} – {gunAySaat(Date.parse(ref.saat.bitis))}</small>}
         {oynar && (
           <div className="tc-ay3-dugmeler">
             <button type="button" className="tc-ay3-secim" onClick={() => adim(p, st, -1)} aria-label="Yukarı"><Simge ad="up" boyut="k" /></button>
@@ -406,6 +405,15 @@ const REFERANS_RENGI: Record<PlanReferansTuru, 'idle' | 'hold' | 'stop' | 'cmm'>
 // Kuyruktaki işin canlı plandaki yeri; plan dışı iş PlanCipi'nin etiketiyle zaten görünür.
 function PlanReferansCipi({ r }: { r: PlanReferansi }) {
   return <Cip renk={REFERANS_RENGI[r.tur]} simge="gantt" baslik="Canlı plan (referans)">{r.metin}</Cip>;
+}
+
+// Kuyruk Hazırlık'ın sırasıdır (892 a): kartta plan tek çiptir ve yalnız planla fark varsa görünür; plan durumu, sıra onayı ve
+// plandaki yer "Planla karşılaştır" açıkken ayrıntıdır.
+function KuyrukPlanCipi({ p, r, ayrinti }: { p: Pkg; r: PlanReferansi | undefined; ayrinti: boolean }) {
+  if (ayrinti) return <><PlanCipi p={p} />{r && r.tur !== 'disi' && <PlanReferansCipi r={r} />}</>;
+  const e = planEtiketi(p);
+  if (e === 'planlanmadi' || e === 'kaynak-farkli') return <Cip renk={e === 'planlanmadi' ? 'idle' : 'stop'} simge="alert" baslik="Kuyruk Hazırlık'ın sırasıdır; plan referanstır">{PLAN_ETIKETI[e]}</Cip>;
+  return r && (r.tur === 'farkli' || r.tur === 'yeni') ? <PlanReferansCipi r={r} /> : null;
 }
 
 // Rotalı işin plan durumu ve taslaktaki sıra (hazirlik.ts PlanChip).

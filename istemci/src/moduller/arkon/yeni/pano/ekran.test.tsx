@@ -148,8 +148,14 @@ describe('A3 sayfaları', () => {
     const b = await bolum('Plan Kuyruğu');
     const s1 = await within(b).findByRole('region', { name: 'Şerit S1' }, { timeout: 10000 });
     expect(within(s1).queryByRole('group', { name: 'Canlı plan S1' })).toBeNull();
+    // 892 a: kapalıyken kartta yalnız planla farkı olan işin tek çipi; planla aynı iş ve plan saatleri ayrıntıdadır.
+    expect(await within(s1).findByText('Planda 2. · öne alındı')).toBeTruthy();
+    expect(within(s1).queryByText('Planla aynı · 3.')).toBeNull();
+    expect(within(s1).queryAllByText(/^Planda .* – /)).toEqual([]);
     fireEvent.click(within(b).getByRole('checkbox', { name: 'Planla karşılaştır' }));
     const plan = await within(s1).findByRole('group', { name: 'Canlı plan S1' });
+    expect(within(within(s1).getByRole('group', { name: 'Kuyruk S1' })).getByText('Planla aynı · 3.')).toBeTruthy();
+    expect(within(s1).getAllByText(/^Planda .* – /).length).toBe(3);
     const satirlar = plan.querySelectorAll('.tc-ay3-plan-satir');
     expect([...satirlar].map((x) => x.getAttribute('aria-label'))).toEqual(['E-10 Planda 1. · geri alındı', 'E-20 Planda 2. · öne alındı', 'E-30 Planla aynı · 3.']);
     expect([...satirlar].map((x) => x.getAttribute('data-fark'))).toEqual(['farkli', 'farkli', null]);
