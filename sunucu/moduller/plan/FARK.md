@@ -197,6 +197,8 @@ Testler: plan-cozucusu 741 a (gece 00:30'da iş şimdiden başlar, vardiya bitin
 Testler: plan-motoru canlıya al (motor çağrılmaz, saatler taslağınki; 168 b her iki iş canlıya geçmez), plan-canliya-al-kayma (zaman geçince 200, canlı taslağın saati).
 
 ## Bekleyen değişiklikler atölyede (749, 755 a, 787 a; 2026-10-27)
+- Kullanıcı onayı: 755 a mesajları cmsg_019jymdq1CtoFcRqjZv7Ln6XDmudnovRr3cEmBNov7VZ7n (05:42Z), cmsg_019jymdq1CtoFcRqjZv7Ln6XP32mFy1afztaLH59Sr4LPM (05:51Z),
+  teyit cmsg_019jymdq1CtoFcRqjZv7Ln6X41pRDueJDe29Ra1GvA5rgV (05:53Z); 787 a cmsg_019jymdq1CtoFcRqjZv7Ln6XHgHKMVFUdoeACGZgW5ZB3a (07:27Z).
 - Plan varken planın girdisini değiştiren her değişiklik çalışmanın `bekleyen` listesine girer: ne, kim, ne zaman, etkilenen siparişler
   ve reddin geri dönüş farkı. Plan atölyesinin Onay sekmesinde çalışma planının kontrolüne "Bekleyen değişiklikler" bölümü eklendi;
   her satır ya da hepsi uygulanır ya da reddedilir. Bekleyen varken onaya gönderilmez (kırmızı kontrol). Ekran düzeni değişmedi.
