@@ -10,6 +10,8 @@ import { ResimAlani } from '../../ortak/ResimAlani.tsx';
 import { Alanlar, Cip, CipGrubu, CokSatirAlani, MetinAlani, SecenekGrubu, Yardim } from '../parcalar.tsx';
 import { Belgeler, TedarikciAlani } from './TicariAdimi.tsx';
 import { TurKartlari } from './Baslangic.tsx';
+import { useOlcuAletleri } from '../../veri.ts';
+import type { OlcuAleti } from '../../veri.ts';
 
 // Öteki türlerin ilk adımı (prototipte `gStep0`): tür ve kategori.
 export function GenelBaslangic() {
@@ -22,7 +24,7 @@ export function GenelBaslangic() {
       if (d.tur === 'demirbas' && c) {
         Object.assign(y.g, {
           durum: 'Kullanımda', omur: c.omur, yontem: 'Normal (doğrusal)', bakimAy: c.bakim || '',
-          kalibrasyon: c.kal ? 'Gerekli' : 'Gerekli değil', kalAy: c.kal ? 12 : '',
+          kalibrasyon: c.kal ? 'Gerekli' : 'Gerekli değil',
         });
       }
     }
@@ -98,12 +100,13 @@ export function GenelSecim({ a }: { a: Alan }) {
 function GenelAlan({ a }: { a: Alan }) {
   const { taslak: d, b, degistir } = useSihirbaz();
   const v = d.g[a.k];
-  const etiket = a.ad + (K.alanZorunlu(d, a, b) ? ' *' : '');
+  const salt = ESKI_KALIBRASYON.has(a.k);
+  const etiket = salt ? <>{a.ad} <small>— eski kayıt, Kalibrasyon'dan okunur</small></> : a.ad + (K.alanZorunlu(d, a, b) ? ' *' : '');
   const yaz = (x: string | number) => { degistir((t) => { t.g[a.k] = x; }); };
   return (
     <MetinAlani
-      etiket={etiket} deger={v} sayi={a.tip === 'num'} tip={a.tip === 'tarih' ? 'date' : 'text'} birim={a.u} ipucu={a.ph} genis={!!a.genis} yaz={yaz}
-      alt={a.oneri ? (
+      etiket={etiket} deger={v} sayi={a.tip === 'num'} tip={a.tip === 'tarih' ? 'date' : 'text'} birim={a.u} ipucu={a.ph} genis={!!a.genis} yaz={yaz} saltOkunur={salt}
+      alt={a.oneri && !salt ? (
         <CipGrubu etiket={`${a.ad} önerileri`}>
           {a.oneri.map((o) => (
             <Cip
@@ -124,7 +127,8 @@ function GenelAlan({ a }: { a: Alan }) {
 // Prototipte `gAlanlarHTML`: seçimli alanlar kendi satırında, ötekiler alan ızgarasında, sıra korunur.
 export function GenelAlanlar({ alanlar }: { alanlar: readonly Alan[] }) {
   const { taslak: d, b } = useSihirbaz();
-  const gorunen = alanlar.filter((a) => K.gAlanGorunur(d, a, b));
+  // 885 a: eski kalibrasyon alanları yalnız değeri olan kartta, salt okunur görünür.
+  const gorunen = alanlar.filter((a) => K.gAlanGorunur(d, a, b) && (!ESKI_KALIBRASYON.has(a.k) || (d.g[a.k] ?? '') !== ''));
   const parcalar: (Alan | Alan[])[] = [];
   gorunen.forEach((a) => {
     if (a.tip === 'sec' || a.tip === 'coklu') parcalar.push(a);
@@ -139,6 +143,36 @@ export function GenelAlanlar({ alanlar }: { alanlar: readonly Alan[] }) {
         ? <Alanlar key={p.map((a) => a.k).join('|')}>{p.map((a) => <GenelAlan key={a.k} a={a} />)}</Alanlar>
         : <GenelSecim key={p.k} a={p} />))}
     </>
+  );
+}
+
+// 885 a: kalibrasyon ayı, son kalibrasyon ve kuruluşu Kalibrasyon modülünündür; kart aleti numarasıyla anar, sunucu eski değeri korur.
+const ESKI_KALIBRASYON = new Set(['kalAy', 'sonKal', 'kalKurulus']);
+const ALET_DURUMU: Record<OlcuAleti['durum'], string> = {
+  gecerli: 'Geçerli', yaklasan: 'Vadesi yaklaşıyor', gecmis: 'Kalibrasyonu geçmiş', 'kullanim-disi': 'Kullanım dışı', 'kayit-yok': 'Kalibrasyon kaydı yok',
+};
+
+export function OlcuAletiAlani() {
+  const { taslak: d, degistir } = useSihirbaz();
+  const aletler = useOlcuAletleri();
+  const no = String(d.g.aletNo ?? '').trim().toUpperCase();
+  const liste = aletler.data ?? [];
+  const bagli = no === '' ? null : liste.find((a) => a.no === no) ?? null;
+  const oneriler = no === '' ? [] : liste.filter((a) => a.no !== no && a.no.includes(no)).slice(0, 8);
+  const alt = aletler.isError ? <p className="tc-my-kucuk">Ölçü aletleri okunamadı; numara kayıtta denetlenir.</p>
+    : bagli ? <p className="tc-my-kucuk">{bagli.tur} · {ALET_DURUMU[bagli.durum]}{bagli.vade ? ` · vade ${bagli.vade.split('-').reverse().join('.')}` : ''}</p>
+      : no !== '' && aletler.isSuccess ? <p className="tc-my-kucuk">Bu numarada ölçü aleti yok; alet önce Kalibrasyon'da açılır.</p>
+        : undefined;
+  return (
+    <MetinAlani
+      etiket={<>Alet no <small>— Kalibrasyon'daki ölçü aleti</small></>} deger={d.g.aletNo ?? ''} ipucu="ör. KMP-01"
+      yaz={(v) => { degistir((t) => { t.g.aletNo = String(v); }); }}
+      alt={<>{alt}{oneriler.length > 0 && (
+        <CipGrubu etiket="Bulunan aletler">
+          {oneriler.map((a) => <Cip key={a.no} basili={false} tikla={() => { degistir((t) => { t.g.aletNo = a.no; }); }}>{a.no}</Cip>)}
+        </CipGrubu>
+      )}</>}
+    />
   );
 }
 
@@ -176,6 +210,7 @@ export function GenelAdim({ adim }: { adim: { ozel?: string; alanlar?: readonly 
       {adim.ozel === 'alis' && <Alanlar><TedarikciAlani /></Alanlar>}
       <GenelAlanlar alanlar={adim.alanlar ?? []} />
       {adim.alanlar?.some((a) => a.k === 'resim') && <ResimAlani tur={d.tur} no={kartlar.find((k) => k.kimlik === d.id)?.no} />}
+      {adim.ozel === 'bakim' && d.tur === 'demirbas' && d.g.kalibrasyon === 'Gerekli' && <Alanlar><OlcuAletiAlani /></Alanlar>}
       {adim.ozel === 'bakim' && <BakimTarihleri />}
     </>
   );

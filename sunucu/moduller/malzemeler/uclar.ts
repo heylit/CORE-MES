@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
-  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuBirimleriCevabi,
+  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import { aramaUclari } from './arama/uclar.ts';
@@ -64,6 +64,7 @@ export const uclar = [
     yontem: 'GET', yol: '/malzeme-firma-secenekleri', yetki: 'malzemeler.yaz', sorgu: firmaSecenekleriSorgusu, cevap: firmaSecenekleriCevabi,
     isle: async ({ db, sorgu }) => ({ firmalar: await servis.firmaSecenekleri(db, sorgu.ara) }),
   }),
+  uc({ yontem: 'GET', yol: '/malzeme-olcu-aletleri', yetki: OKUMA, cevap: olcuAletiSecenekleriCevabi, isle: ({ db }) => servis.olcuAletiSecenekleri(db) }),
   // Ölçü birimi listesi (kart #163, SH4 a); listeyi prototipin Ayarlar ekranı düzenler (ayar kaydı, ML2 b).
   uc({ yontem: 'GET', yol: '/malzeme-birimleri', yetki: OKUMA, cevap: olcuBirimleriCevabi, isle: ({ db }) => servis.olcuBirimleriniGetir(db) }),
   // Logo'ya gönderime hazırlık (kart #232): durum salt okunur; karşılığı malzeme tanımlarını yazan doldurur (yeni işlem yok, kullanıcı kararı 08.10.2026).

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
-  KatalogSurumluKayitCevabi,
+  KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -24,6 +24,7 @@ export const anahtar = {
   sablonlar: [...MALZEMELER_YENI, 'sablonlar'] as const,
   rotaSablonlari: [...MALZEMELER_YENI, 'rota-sablonlari'] as const,
   rotaliUrunler: [...MALZEMELER_YENI, 'rotali-urunler'] as const,
+  olcuAletleri: [...MALZEMELER_YENI, 'olcu-aletleri'] as const,
 };
 
 // Kimlik yolun tek parçasıdır; ".." bir üst yola çıkardı.
@@ -204,6 +205,16 @@ export async function firmaAra(ara: string): Promise<Firma[]> {
   const metin = ara.trim();
   if (metin.length < 2) return [];
   return (await api.get<FirmaSecenekleriCevabi>(`/malzeme-firma-secenekleri?${new URLSearchParams({ ara: metin }).toString()}`)).firmalar;
+}
+
+export type OlcuAleti = OlcuAletiSecenekleriCevabi['aletler'][number];
+
+// 885 a: demirbaş kartının ölçü aleti Kalibrasyon'dan seçilir; vade ve durum oradan okunur.
+export function useOlcuAletleri() {
+  return useQuery({
+    queryKey: anahtar.olcuAletleri,
+    queryFn: async (): Promise<readonly OlcuAleti[]> => (await api.get<OlcuAletiSecenekleriCevabi>('/malzeme-olcu-aletleri')).aletler,
+  });
 }
 
 // Yalnız gerçek değer geçer; sunucu ağırlıktan birim fiyatı bulur (208 a).

@@ -29,6 +29,7 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 | Durum listeleri | onay durumu; tür; demirbaş durumu | `.onay_durumu`, `.tur` (kısıtlı); `kayit.g.durum` | modül içi |
 | Sınıflama | aile, sınıf, kalite, form, tolerans, kategori | ekran sabitleri `FAMS`, `FORMS`, `STDS`, `CLS_STDS`, `TOLP`, `SARF_KAT`, `DB_KAT`, `YM_TIP` | ekran sabiti |
 | Kalite ve bakım alanları | kontrol, muayene; demirbaş bakım ve kalibrasyon tarihleri | `kayit.g.kontrol`; `kayit.g.bakimAy`, `kayit.g.kalAy`, `kayit.g.sonKal` | metin |
+| Ölçü aleti (sahibi kalibrasyon, 885 a) | demirbaş kartının bağlı aleti; vade ve durum Kalibrasyon'dan, eski kalibrasyon alanları salt okunur | `malzeme_katalog_karti.olcu_aleti_id` -> `olcu_aleti.id`; `kayit.g.aletNo` | sayı (yabancı anahtar), metin |
 | Onay ve dört göz | onay akışı ayarı; dört göz | ayar `genel.onayAkisi`; Sistem Ayarları `malzemeler.dort-goz` | `ayarlar` modülü |
 | Dosya, ek | yok (belge yükleme kapalı) | | yok |
 | ERP (Logo) | gönderim durumu, kayıt no, ad güncelleme durumu, gönderilen tür ve birim karşılığı; TMI türü ve birimi karşılığında Logo değeri; barkod alanları | `malzeme_katalog_karti.logo_*`; `malzeme_logo_karsiligi`; `kayit.g.gtin`, `kayit.g.gtip` | bağlantı modülü (`disari.ts` ile) |

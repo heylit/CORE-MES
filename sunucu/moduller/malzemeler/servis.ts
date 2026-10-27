@@ -5,6 +5,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti } from '../musteri-tedarikci/disari.ts';
+import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
@@ -12,7 +13,7 @@ import { KATALOG_TURLERI, LOGO_KART_TURLERI } from '#paylasilan/sozlesme/malzeme
 import type {
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru,
-  OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
+  OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -22,7 +23,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -413,6 +414,13 @@ export async function katalogKartiKaydet(
     if (!firma) throw gecersiz('Seçilen tedarikçi firma finansta bulunamadı.');
     if (!firma.aktif || !tedarikciOlabilirMi(firma.tur)) throw gecersiz(`${firma.ad} aktif bir tedarikçi firma değil; Müşteriler ve Tedarikçiler sayfasında tedarikçi olarak açılmış aktif firmayı seçin.`);
   }
+  // 885 a: ölçü aleti yalnız demirbaşa bağlanır ve Kalibrasyon'da kayıtlı olmalıdır (talebin önerdiği bağ da). Kullanım dışı alet de bağlanır;
+  // kart aletin durumunu gösterir.
+  for (const no of kartAletNolari(g.kayit)) {
+    if (no === 'gecersiz') throw dogrulama('Ölçü aleti numarası geçersiz.', 'kayit.g.aletNo');
+    if (tur !== 'demirbas') throw dogrulama('Ölçü aleti yalnız demirbaş kartına bağlanır.', 'kayit.g.aletNo');
+    if (!(await aletNoIleGetir(db, no))) throw dogrulama(`"${no}" numaralı ölçü aleti Kalibrasyon'da yok.`, 'kayit.g.aletNo');
+  }
   // Malzeme denetimi 1/5: yeni ya da değişen kategori listede açık olmalı; ekran bu alanla kategori açmaya yönlendirir.
   for (const kat of denetlenecekKategoriler(g.kayit, tur, kayitli)) {
     if (!(await s.kategoriAcikMi(db, tur, kat))) {
@@ -451,14 +459,16 @@ export async function katalogKartiKaydet(
   if (gecmisHatasi) throw gecmisHatasi.kod === 'YETKI_YOK' ? yetkiYok(gecmisHatasi.mesaj) : dogrulama(gecmisHatasi.mesaj, 'kayit.rev');
   const talepHatasi = katalogTalepDenetle(kayitli?.kayit ?? null, g.kayit, kullanici.id, onaylar);
   if (talepHatasi) throw yetkiYok(talepHatasi);
-  const kayit = katalogGecmisiniBas(
+  const aletNo = kartAletNo(g.kayit);
+  const alet = aletNo === null ? null : await aletNoIleGetir(db, aletNo);
+  const kayit = kartAletNoYaz(eskiKalibrasyonAlanlariniKoru(katalogGecmisiniBas(
     kayitli?.kayit ?? null,
     katalogTalebiBas(
       katalogOnayiBas({ kayit: g.kayit, kayitli: kayitli?.kayit ?? null, onceki, yeni: yeniDurum, gonderildi, talepOnaylandi, kim }),
       kayitli?.kayit ?? null, kim,
     ),
     kim,
-  );
+  ), kayitli?.kayit ?? null), alet?.no ?? null);
   const hata = katalogGecisiDenetle({
     onceki, yeni: yeniDurum, islemler: kullanici.islemler, kisiId: kullanici.id,
     acanKisiId: kayitli?.acanKisiId ?? null, gonderenKisiId: kayitli?.gonderenKisiId ?? null, dortGozAcik,
@@ -492,6 +502,7 @@ export async function katalogKartiKaydet(
     agirlik: katalogAgirlikAlanlari(tur, g.ozet),
     netAgirlikKg: katalogNetAgirlikKg(tur, kayit),
     tedarikciFirmaId: kartTedarikciFirmaId(kayit),
+    olcuAletiId: alet?.id ?? null,
     aciklamalar: katalogAciklamalari(g.ozet),
     birimDonusumu: kayitBirimDonusumu(kayit),
   };
@@ -616,3 +627,8 @@ export async function firmaSecenekleri(db: Db, ara: string): Promise<{ id: numbe
   return firmaAra(db, { metin: ara, sinir: FIRMA_SECENEK_SINIRI, yalnizAktif: true, tur: 'tedarikci' });
 }
 const FIRMA_SECENEK_SINIRI = 50;
+
+// 885 a: kart ekranı alet seçicisini ve bağlı aletin vadesini Kalibrasyon'dan bu yolla okur; kartı okuyan Kalibrasyon yetkisi istemez.
+export async function olcuAletiSecenekleri(db: Db): Promise<OlcuAletiSecenekleriCevabi> {
+  return { aletler: (await aletKimlikleri(db)).map((a) => ({ no: a.no, tur: a.tur, vade: a.vade, durum: a.durum })) };
+}
