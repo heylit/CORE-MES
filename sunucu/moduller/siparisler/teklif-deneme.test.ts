@@ -191,7 +191,7 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal(kred.json<{ mesaj: string }>().mesaj, DENENECEK_KALEM_YOK);
   });
 
-  test('TKL-09 yetki: deneme ve deneme taslağı termin-dene ister (403); plan taslaklı sürüm termin-dene ister; termin onayı plan.yaz; olmayan teklif 404', async () => {
+  test('TKL-09 yetki: deneme ve deneme taslağı termin-dene ister (403); plan taslaklı sürüm termin-dene ister; termin onayı siparisler.termin-onayla, plan.yaz yetmez; olmayan teklif 404', async () => {
     const t = await teklifAc();
     for (const cerez of [operator, planlama.cerez]) {
       assert.equal((await oku(cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).statusCode, 403);
@@ -202,6 +202,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     const r = await gonder(fiyatYazar, `/siparisler/teklifler/${t.id}/surum-ver`, { surum: t.surum, ...satisSurumu(t) });
     assert.equal(r.statusCode, 403, r.body);
     assert.equal((await gonder(fiyatYazar, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 403);
+    const planci = await rolluGiris(['siparisler.oku', 'plan.yaz']);
+    assert.equal((await gonder(planci, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 403);
     assert.equal(istekler.length, 0);
     assert.equal((await oku(yonetici, '/siparisler/teklifler/2147483000/termin-denemesi')).statusCode, 404);
     assert.equal((await oku(yonetici, '/siparisler/teklifler/2147483000/plan-taslaklari')).statusCode, 404);
@@ -282,6 +284,33 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal(u.durum, 'verildi');
   });
 
+  test('TKL-22 (273) termin dört göz açıkken sürümü veren kendi terminini onaylayamaz (422); başka yetkili onaylar; kapalıyken veren de onaylar', async () => {
+    const ayarla = async (deger: boolean) => {
+      const c = await gonder(yonetici, '/ayarlar/siparisler.termin-dort-goz/degistir', { deger });
+      assert.equal(c.statusCode, 200, c.body);
+    };
+    geciktirir = true;
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', satisSurumu(t, '2099-07-05'));
+    t = await komut(t, 'termin-onayla', {});
+    assert.equal(t.durum, 'verildi');
+
+    await ayarla(true);
+    try {
+      let u = await teklifAc();
+      u = await komut(u, 'surum-ver', satisSurumu(u, '2099-07-05'));
+      assert.equal(u.durum, 'onay-bekliyor');
+      const ret = await gonder(yonetici, `/siparisler/teklifler/${u.id}/termin-onayla`, { surum: u.surum });
+      assert.equal(ret.statusCode, 422, ret.body);
+      assert.match(ret.body, /Dört göz kuralı açık: kendi verdiğiniz sürümün terminini/);
+      assert.equal((await oku(yonetici, `/siparisler/teklifler/${u.id}`)).json<TeklifAyrintisi>().durum, 'onay-bekliyor');
+      u = await komut(u, 'termin-onayla', {}, 200, planlama.cerez);
+      assert.equal(u.durum, 'verildi');
+    } finally {
+      await ayarla(false);
+    }
+  });
+
   test('TKL-17 (49) geçerlilik geçince yer kalkar, "satış denemesi" olarak kalır; elle sürüm ve red yeri kaldırır; deneme taslağı yer tutmaz', async () => {
     let t = await teklifAc();
     t = await komut(t, 'surum-ver', satisSurumu(t));
@@ -323,7 +352,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     t = await komut(t, 'surum-ver', satisSurumu(t), 200, satis.cerez);
     assert.deepEqual([t.durum, t.surumler[0]?.toplam !== null], ['verildi', true]);
     assert.deepEqual((await taslaklar(t, satis.cerez)).map((x) => [x.gorunum, x.karOrani]), [['satis', '25.00']]);
-    assert.equal((await gonder(satis.cerez, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 403);
+    // 272 1a: satış termin onayı yetkilisidir; onay bekleyen termin yoksa ret geçiştendir (422), yetkiden değil.
+    assert.equal((await gonder(satis.cerez, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 422);
     assert.equal((await oku(satis.cerez, '/musteri-tedarikci/firmalar/secim')).statusCode, 200);
     const mudur = await girisYap('mudur');
     assert.equal((await oku(mudur.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>().kalemler[0]?.dokum?.length, 3);

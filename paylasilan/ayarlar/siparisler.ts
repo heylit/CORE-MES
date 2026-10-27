@@ -16,4 +16,9 @@ export const SIPARISLER_AYARLARI = {
     modul: 'siparisler', tur: 'boolean', varsayilan: false, baslik: 'Teklif iskontosunda dört göz',
     aciklama: 'Açıkken %10 üstü iskontolu teklif sürümünü veren kişi aynı sürümü onaylayamaz; onayı başka bir yetkili verir. Kapalıyken iskonto onayı yetkisi olan herkes onaylar.',
   },
+  // Varsayılan kapalı (273): kural Siparişler'de uygulanır; burada yalnız kayıt vardır.
+  'siparisler.termin-dort-goz': {
+    modul: 'siparisler', tur: 'boolean', varsayilan: false, baslik: 'Teklif termin onayında dört göz',
+    aciklama: 'Açıkken başka siparişi geciktiren termini içeren teklif sürümünü veren kişi aynı termini onaylayamaz; onayı başka bir yetkili verir. Kapalıyken termin onayı yetkisi olan herkes onaylar.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

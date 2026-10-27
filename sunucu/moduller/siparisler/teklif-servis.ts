@@ -188,13 +188,16 @@ export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g:
   return teklifAyrintisi(db, id);
 }
 
-// TKL-15 (63 b): istenen termin bir siparişi geciktiren satış taslağını plancı (`plan.yaz`) onaylar; onaya kadar yer tutar,
+// TKL-15 (63 b): istenen termin bir siparişi geciktiren satış taslağını `siparisler.termin-onayla` yetkilisi onaylar; onaya kadar yer tutar,
 // teklif müşteriye verilmiş sayılmaz. İskonto onayı da bekleniyorsa teklif müdürü bekler.
 export async function terminOnayla(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
   const mevcut = await kilitle(db, id);
   gecisDenetle(mevcut.durum, 'termin-onay');
   const bekleyen = await bekleyenOnaylar(db, id);
   if (!bekleyen.termin) throw gecersiz(ONAYLANACAK_TERMIN_YOK);
+  const veren = await sorgular.sonSurumuVeren(db, id);
+  const ret = veren === null ? null : dortGozReddi(await sistemAyariOku(db, 'siparisler.termin-dort-goz'), veren, kullanici.id, 'termin');
+  if (ret !== null) throw gecersiz(ret);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: onayHedefi({ ...bekleyen, termin: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));

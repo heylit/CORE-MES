@@ -86,6 +86,8 @@ describe('teklif kuralları (saf)', () => {
     assert.equal(dortGozReddi(true, 7, 7), 'Dört göz kuralı açık: kendi verdiğiniz sürümün iskontosunu başka bir yetkili onaylamalı.');
     assert.equal(dortGozReddi(true, 7, 8), null);
     assert.equal(dortGozReddi(false, 7, 7), null);
+    assert.equal(dortGozReddi(true, 7, 7, 'termin'), 'Dört göz kuralı açık: kendi verdiğiniz sürümün terminini başka bir yetkili onaylamalı.');
+    assert.equal(dortGozReddi(true, 7, 8, 'termin'), null);
   });
 
   test('TKL-06 kartsız satır siparişe dönüşmez; reddedilmiş ve dönüşmüş teklife kart bağlanmaz', () => {
