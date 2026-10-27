@@ -53,15 +53,6 @@
 }
 .tc-ay1-onizleme-bandi > span { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 
-/* 791 b: geniş düzende sol iş listesi yoktur; iki sütun her genişlikte, liste "İşler" düğmesinden açılır. operator.css'teki üç sütun
-   kuralı o dosyaya dokunulabilene dek burada ezilir (seçici bu yüzden ağırdır). */
-.tc-ay1-genis .tc-ay1-izgara[data-cark] { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
-.tc-ay1-genis .tc-ay1-izgara[data-cark] > .tc-ay1-orta.tc-ay1-sutun { display: flex; }
-.tc-ay1-genis[data-cark] .tc-ay1-isler-dugme { display: contents; }
-@container terminal (max-width: 999px) {
-  .tc-ay1-genis .tc-ay1-izgara[data-cark] { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
-}
-
 @container (max-width: 480px) {
   .tc-ay1-tcark-sahne { padding-inline: var(--b-5); }
   .tc-ay1-tcark-dugmeler { flex: 1 0 100%; }

@@ -3,11 +3,7 @@ import { createPortal } from 'react-dom';
 import { Dugme, Orb, OrbGrubu, Simge, type MakineDurumu } from '../../../../ortak/arayuz/index.ts';
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
 import { bitenleriAyir } from '../../../../../../arkon/web/src/data/biten-is.ts';
-import { saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import { siraAnahtari } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
-import {
-  ayrimAciklamasi, ayrimEtiketi, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, type MakineAyrimlari, type SecilebilirMakine,
-} from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { numuneSeridi, type SeritDurumu, type SeritGirdisi, type SeritIlerlemesi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
 import { istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
@@ -25,7 +21,7 @@ import { CAGRI_ASAMALARI, cagriTonu, durumDugmeleri, hazirlikSayisi, tonDurumu, 
 import type { Cagri, Gorev, GorevEylemi, Is } from './tipler.ts';
 
 // Operatör ekranının parçaları (bilesenler.ts Queue, EtkinKart, Dial, Orbs; operator-parcalar.ts TaskCard, PlanBanner, TopluPanel,
-// MakineSecici, CallChip). Renk durum adıyla (data-durum) seçilir; her durum metniyle de yazılır.
+// CallChip). Renk durum adıyla (data-durum) seçilir; her durum metniyle de yazılır.
 
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
 const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada';
@@ -42,67 +38,6 @@ function IsEtiketleri({ is }: { is: Is }) {
 }
 export { IsEtiketleri };
 
-/* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
-export interface CarkOgesi { anahtar: string; baslik: string; alt?: string }
-
-export const isCarkOgeleri = (isler: readonly Is[]): CarkOgesi[] =>
-  isler.map((x) => ({ anahtar: x.pkg?.id ?? x.no, baslik: x.no, alt: [x.op, x.pkg?.partNo, durumAdi(x.state)].filter(Boolean).join(' · ') }));
-
-// 684: iş ve istasyon çarkı. Yalnız göz atar: düğme, yana kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandakini değiştirmez.
-// Bakılan öğe ekrandakinden farklıysa "geç" düğmesi çıkar; geçişin sorusunu çağıran sorar. Tekerlek sayfayı kaydırmasın diye
-// dinleyici edilgen değildir.
-export function Cark({ etiket, ogeler, etkin, gec, gecMetni, ekranda }: {
-  etiket: string; ogeler: readonly CarkOgesi[]; etkin: number; gec: (i: number) => void; gecMetni: string;
-  // 702: verilirse ekrandaki öğe başlık yerine bu içerikle çizilir (iş kartı ya da iş özeti çarkın içinde durur).
-  ekranda?: ReactNode;
-}) {
-  const [bak, bakYaz] = useState(etkin);
-  useEffect(() => { bakYaz(etkin); }, [etkin]);
-  const n = ogeler.length;
-  const adim = (d: number) => bakYaz((b) => Math.min(n - 1, Math.max(0, b + d)));
-  const kok = useRef<HTMLDivElement>(null);
-  const tutus = useRef<number | null>(null);
-  useEffect(() => {
-    const el = kok.current;
-    if (!el) return;
-    let son = 0;
-    const teker = (e: WheelEvent) => {
-      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      e.preventDefault();
-      if (Math.abs(d) < 4 || e.timeStamp - son < 250) return;
-      son = e.timeStamp;
-      bakYaz((b) => Math.min(n - 1, Math.max(0, b + (d > 0 ? 1 : -1))));
-    };
-    el.addEventListener('wheel', teker, { passive: false });
-    return () => el.removeEventListener('wheel', teker);
-  }, [n]);
-  const i = Math.min(bak, n - 1);
-  const oge = ogeler[i];
-  if (n < 2 || !oge) return null;
-  return (
-    <div
-      ref={kok} className="tc-ay1-cark" role="group" aria-roledescription="çark" aria-label={etiket} tabIndex={0} data-baska={i !== etkin || undefined}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); adim(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); adim(1); } else if (e.key === 'Escape') bakYaz(etkin);
-      }}
-      onPointerDown={(e) => { tutus.current = e.clientX; }}
-      onPointerUp={(e) => { const x = tutus.current; tutus.current = null; if (x !== null && Math.abs(e.clientX - x) > 40) adim(e.clientX < x ? 1 : -1); }}
-      onPointerCancel={() => { tutus.current = null; }}
-    >
-      <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki ${etiket.toLocaleLowerCase('tr')}`} disabled={i <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
-      {i === etkin && ekranda ? <div className="tc-ay1-cark-ekranda" aria-live="polite">{ekranda}</div> : (
-        <span className="tc-ay1-cark-orta" aria-live="polite">
-          <span className="tc-ay1-ust-yazi">{etiket} {i + 1}/{n}{i === etkin ? ' · ekranda' : ''}</span>
-          <b>{oge.baslik}</b>
-          {oge.alt ? <small>{oge.alt}</small> : null}
-        </span>
-      )}
-      {i !== etkin ? <Dugme simge="next" onClick={() => gec(i)}>{gecMetni}</Dugme> : null}
-      <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki ${etiket.toLocaleLowerCase('tr')}`} disabled={i >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
-    </div>
-  );
-}
-
 // 685: telefonda iş alanları tek satır özettir (emir · op · parça no); dokununca bütün alanlar açılır, sayaç ilk ekranda kalır.
 export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degistir: () => void }) {
   const ust = <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>;
@@ -115,6 +50,7 @@ export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degisti
   );
 }
 
+/* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
 export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean }) {
   const pkg = is.pkg;
   // İşsiz istasyonda alan yok: "atanmış iş yok" ve istasyon satırı eskisi gibi düz yazılır.
@@ -238,29 +174,6 @@ export function EtkinKart({ is, kartlar }: { is: Is; kartlar: readonly RefakatKa
       {k && k.lotNo === null ? <small>Lot bekliyor</small> : null}
       {sinir ? <span className="tc-ay1-sinir">{sinir}</span> : null}
       {dolu ? <small>Kart doldu; sıradaki kartı açın</small> : null}
-    </div>
-  );
-}
-
-/* ── makine seçimi: planın makinesi "plan" etiketiyle; başka emre ayrılmış makine kilitli ── */
-export function MakineSecici({ makineler, secili, atanan, ayrim, durum, degistir }: {
-  makineler: readonly SecilebilirMakine[]; secili: readonly string[]; atanan: string | null | undefined; ayrim: MakineAyrimlari | null;
-  durum: string; degistir: (l: string[]) => void;
-}) {
-  if (!makineSecimiGorunur(makineler, durum)) return null;
-  return (
-    <div className="tc-ay1-makine" role="group" aria-label="Çalışılacak makine">
-      <span className="tc-ay1-ust-yazi">Makine</span>
-      {makineler.map((m) => {
-        const a = makineAyrimi(ayrim, m.id);
-        if (a) return <button key={m.id} type="button" className="tc-ay1-makine-cip" disabled title={ayrimAciklamasi(a, saatMetni)}><Simge ad="lock" boyut="k" />{m.id}<small>{ayrimEtiketi(a, saatMetni)}</small></button>;
-        return (
-          <button key={m.id} type="button" className="tc-ay1-makine-cip" aria-pressed={secili.includes(m.id)} title={m.name || m.id} onClick={() => degistir(secimiDegistir(secili, m.id))}>
-            {m.id}{m.id === atanan ? <span className="tc-ay1-makine-plan">plan</span> : null}
-          </button>
-        );
-      })}
-      <small className="tc-ay1-soluk">{secimOzeti(secili, atanan)}</small>
     </div>
   );
 }

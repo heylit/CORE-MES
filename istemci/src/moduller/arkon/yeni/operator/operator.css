@@ -156,17 +156,6 @@
 .tc-ay1-sahne > .tc-ay1-sayac { align-self: center; }
 .tc-ay1-izin { text-align: center; }
 
-/* makine seçimi */
-.tc-ay1-makine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
-.tc-ay1-makine-cip {
-  display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0 var(--b-3);
-  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font: inherit; font-family: var(--font-mono); font-weight: 700; cursor: pointer;
-}
-.tc-ay1-makine-cip[aria-pressed="true"] { border-color: var(--sig); background: color-mix(in srgb, var(--sig) 16%, var(--panel2)); }
-.tc-ay1-makine-cip:disabled { cursor: not-allowed; opacity: var(--saydam-70); }
-.tc-ay1-makine-cip small { font-family: var(--font-ana); font-weight: 400; color: var(--muted); font-size: var(--yazi-xs); }
-.tc-ay1-makine-plan { padding: 0 var(--b-1); border-radius: var(--yari-1); background: var(--done); color: var(--on-sig); font-family: var(--font-ana); font-size: var(--yazi-xs); }
-
 /* "Şimdi" kartı */
 .tc-ay1-gorev {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-3); min-width: 0;
@@ -555,7 +544,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-ust, .tc-ay1-aktif, .tc-ay1-sahne, .tc-ay1-is, .tc-ay1-is-ozet, .tc-ay1-mobil-ust { -webkit-backdrop-filter: var(--bulanik-kart); backdrop-filter: var(--bulanik-kart); }
 .tc-ay1-aktif, .tc-ay1-sahne { box-shadow: inset 0 var(--cizgi-ince) 0 var(--hi), var(--shadow); }
 .tc-ay1-genis { grid-template-rows: auto minmax(0, 1fr); block-size: calc(var(--tc-ay-vh, 100vh) - var(--b-4) * 2); }
-.tc-ay1-izgara { display: grid; grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr) minmax(0, 1.08fr); gap: var(--b-4); min-height: 0; }
+/* 791 b: geniş düzende iş emirleri sütunu yoktur; liste "İşler" düğmesinden açılır, ekrandaki iş çarkla değişir. */
+.tc-ay1-izgara { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: var(--b-4); min-height: 0; }
 .tc-ay1-sutun { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .tc-ay1-genis .tc-ay1-orta { overflow-y: auto; }
 .tc-ay1-genis .tc-ay1-sahne { flex: 1 0 auto; justify-content: center; gap: var(--b-3); padding: var(--b-3) var(--b-4); }
@@ -647,31 +637,11 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-cizgi, .tc-ay1-kadran-yay, .tc-ay1-halka-yay, .tc-ay1-oee-yay, .tc-ay1-is { transition: none; }
 }
 
-/* 684: iş ve istasyon çarkı. Yana kaydırma çarkındır, dikey kaydırma sayfanın. */
-.tc-ay1-cark {
-  display: flex; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-2); min-width: 0; touch-action: pan-y; user-select: none;
-  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
-}
-.tc-ay1-cark:focus-visible { outline: var(--cizgi) solid var(--sig); outline-offset: var(--cizgi-ince); }
-.tc-ay1-cark[data-baska] { border-color: var(--sig); }
-.tc-ay1-cark-orta { display: grid; flex: 1 1 auto; min-width: 0; }
-.tc-ay1-cark-orta b { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-ay1-cark-orta small { color: var(--muted); font-size: var(--yazi-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-ay1-cark > * { flex: none; }
-.tc-ay1-cark > .tc-ay1-cark-orta { flex: 1 1 auto; }
-/* Dar çarkta "geç" düğmesi ortadaki yazıyı sıkıştırıyordu: alt satıra iner. */
-.tc-ay1-cark { flex-wrap: wrap; container-type: inline-size; }
-@container (max-width: 480px) { .tc-ay1-cark > .tc-dugme { order: 1; flex: 1 0 100%; } }
-
 /* 702: orta panel ve sayfa kaymaz. İş çarkı ekrandaki işin kartını içine alır; Şimdi kartı ve numune şeridi tek şerittir;
    toplu giriş tuştan açılır; geniş ekranda eylem düğmeleri panelin altında yassı şerittir ve sayaç kalan yüksekliği alır.
-   Terminal 1500 px'ten darsa iş emirleri sütunu kalkar, liste "İşler" düğmesinden açılır; başlık tek satırdır. Eşik pencereye değil
-   terminalin kendi genişliğine bakar: menü payı düşülür, "Operatör gözüyle" önizlemesi 1600'lük cihaz alanında doğru çizilir. */
+   Terminal 1500 px'ten darsa başlık tek satırdır. Eşik pencereye değil terminalin kendi genişliğine bakar: menü payı düşülür,
+   "Operatör gözüyle" önizlemesi 1600'lük cihaz alanında doğru çizilir. */
 .tc-ay1-genis { container: terminal / inline-size; }
-.tc-ay1-cark > .tc-ay1-cark-ekranda { flex: 1 1 0; min-width: 0; }
-.tc-ay1-cark-ekranda > :is(.tc-ay1-aktif, .tc-ay1-is-ozet) {
-  inline-size: 100%; padding: var(--b-2) var(--b-1); border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
-}
 .tc-ay1-simdi {
   display: grid; gap: var(--b-1); padding: var(--b-1) var(--b-2); min-width: 0;
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
@@ -732,11 +702,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   box-shadow: 0 var(--b-3) var(--b-6) calc(var(--b-3) * -1) color-mix(in srgb, var(--c) 80%, transparent);
 }
 .tc-ay1-genis .tc-ay1-sahne .tc-orb-ana :is(.tc-orb-etiket, .tc-orb-ipucu) { color: var(--on-sig); }
-.tc-ay1-isler-dugme { display: none; }
+.tc-ay1-isler-dugme { display: contents; }
 @container terminal (max-width: 1499px) {
-  .tc-ay1-genis .tc-ay1-izgara { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
-  .tc-ay1-genis .tc-ay1-izgara > .tc-ay1-sutun:first-child { display: none; }
-  .tc-ay1-genis .tc-ay1-isler-dugme { display: contents; }
   .tc-ay1-genis .tc-ay1-ust { flex-wrap: nowrap; }
   .tc-ay1-genis .tc-ay1-ust :is(.tc-ay1-istasyon small, .tc-ay1-saat small, .tc-ay1-kisi > span:last-child) { display: none; }
 }
