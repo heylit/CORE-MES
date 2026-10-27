@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { bildirilirMi } from './anomali-zaman.ts';
 import { ardilEtkisiDk, durusAraliklari, esikHukmu, gecikmeHukmu, girdiAni, girisAni, netFarkDk, netIleri, olayEylemi, sureAsimDk, tahminiBitis, teslimRiskiDk, topluAsimDk } from './kurallar.ts';
 
 const DK = 60_000;
@@ -114,4 +115,12 @@ test('süre aşımı: oran eşik yüzdesini aşarsa planlı süre x (oran - 1) d
   assert.equal(sureAsimDk({ oran: 1.5, planliDk: 120, esikYuzde: null }), null);
   assert.equal(sureAsimDk({ oran: null, planliDk: 120, esikYuzde: 20 }), null);
   assert.equal(sureAsimDk({ oran: 1.5, planliDk: 0, esikYuzde: 20 }), null);
+});
+
+test('769 a: açık olay ve bulgu (toplu giriş, süre aşımı) bildirilir; gerçekleşmiş halde açılan gecikme bildirilmez', () => {
+  assert.equal(bildirilirMi('gec-giris', false), true);
+  assert.equal(bildirilirMi('gec-giris', true), false);
+  assert.equal(bildirilirMi('ardil-etkisi', true), false);
+  assert.equal(bildirilirMi('toplu-tutarsiz', true), true);
+  assert.equal(bildirilirMi('sure-asimi', true), true);
 });

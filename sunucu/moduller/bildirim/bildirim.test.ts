@@ -189,8 +189,9 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(t.epostaSecilebilir, true);
     assert.deepEqual(t.satirlar.map((s) => s.tur), ['istasyonlar.makine-durdu', 'cnc-kurulum.takim-omru']);
     assert.equal(t.satirlar[0]?.varsayilan, true);
-    assert.deepEqual((await tercihler('cam')).satirlar.map((s) => s.tur), ['cnc-kurulum.takim-omru']);
-    assert.equal((await tercihler('yonetici')).satirlar.length, 7);
+    // CAM rolü Arkon hazırlığını taşır: zaman anomalisinin hazırlık türleri (kart 764) de gelir.
+    assert.deepEqual((await tercihler('cam')).satirlar.map((s) => s.tur), ['cnc-kurulum.takim-omru', 'arkon.gec-giris', 'arkon.gec-teslim', 'arkon.toplu-tutarsiz']);
+    assert.equal((await tercihler('yonetici')).satirlar.length, 13);
 
     const d = await istek<BildirimTercihleriCevabi>('bakim', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: true });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
