@@ -10,4 +10,5 @@ export const anahtarlar = {
   smartesHazirlik: ['ayarlar', 'smartes-hazirlik'] as const,
   smartesKontrol: ['ayarlar', 'smartes-kontrol'] as const,
   cagriYonlendirme: ['ayarlar', 'cagri-yonlendirme'] as const,
+  bildirimAlicilari: ['ayarlar', 'bildirim-alicilari'] as const,
 };

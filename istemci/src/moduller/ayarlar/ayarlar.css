@@ -57,6 +57,8 @@
 .tc-hazirlik-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-cagri-ekibi { align-items: flex-start; }
 .tc-cagri-rolleri { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); justify-content: flex-end; min-width: 0; }
+.tc-alici-secimi { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-alici-kisiler { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; margin: 0; padding: 0; list-style: none; }
 @media (max-width: 479px) {
-  .tc-cagri-rolleri { justify-content: flex-start; }
+  .tc-cagri-rolleri, .tc-alici-kisiler { justify-content: flex-start; }
 }
