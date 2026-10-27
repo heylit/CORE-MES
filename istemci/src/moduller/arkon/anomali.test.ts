@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { AnomaliCevabi } from '#paylasilan/sozlesme/arkon.ts';
+import type { AnomaliCevabi, AnomaliOlaylariCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import {
-  anomaliAdedi, anomaliOrani, isaretliSayisi, istasyonIsareti, istasyonlariSirala, kapaliKurallar,
+  anomaliAdedi, anomaliOrani, isaretliSayisi, istasyonIsareti, istasyonlariSirala, kapaliKurallar, kapaliZamanKurallari, sureMetni,
 } from '../../../../arkon/web/src/data/anomali.ts';
-import type { AnomaliIstasyonu, Anomaliler } from '../../../../arkon/web/src/data/anomali.ts';
+import type { AnomaliIstasyonu, AnomaliOlaylari, Anomaliler } from '../../../../arkon/web/src/data/anomali.ts';
 import { cevapla } from './baglanti.ts';
 import type { Istemci } from './baglanti.ts';
 
@@ -63,5 +63,32 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     // Yazma yöntemi bu yola eşlenmez.
     const post = await cevapla(istemci, { yontem: 'POST', yol: '/anomaliler', sorgu: new URLSearchParams(''), govde: '{}' });
     expect(post.durum).toBe(404);
+  });
+
+  it('zaman olayları (kart 764): süre okunur yazılır; boş zaman eşiği kapalı kural olarak söylenir', () => {
+    expect(sureMetni(45)).toBe('45 dk');
+    expect(sureMetni(130)).toBe('2 sa 10 dk');
+    expect(sureMetni(120)).toBe('2 sa');
+    expect(sureMetni(1620)).toBe('1 g 3 sa');
+    expect(kapaliZamanKurallari({ gecGirisDk: 30, gecTeslimDk: 0, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual([]);
+    expect(kapaliZamanKurallari({ gecGirisDk: null, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual(['Geç giriş', 'Girdi gecikmesi']);
+  });
+
+  it('köprü: Arkon /anomali-olaylari isteği TMI /arkon/anomali-olaylari ucuna gider; sözleşme tipiyle uyumlu; yazma eşlenmez', async () => {
+    const cevap = {
+      hesaplama: '2026-10-27T09:00:00.000Z', esikler: { gecGirisDk: 30, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null },
+      ozet: { acik: 1, aksatilanIs: 0, toplamEtkiDk: 0, riskliEmir: 0 },
+      olaylar: [{
+        id: 1, tur: 'gec-giris', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
+        planAni: '2026-10-27T06:00:00.000Z', tabanAni: null, tabanDakika: null, gercekAni: null, dakika: 180, kokOlayId: null, acilis: '2026-10-27T09:00:00.000Z', kapanis: null,
+      }],
+    } satisfies AnomaliOlaylariCevabi;
+    const yollar: string[] = [];
+    const istemci = { get: async <T,>(yol: string) => { yollar.push(yol); return cevap as T; }, post: async () => { throw new Error('yazma yok'); } } as unknown as Istemci;
+    const c = await cevapla(istemci, { yontem: 'GET', yol: '/anomali-olaylari', sorgu: new URLSearchParams(''), govde: undefined });
+    expect(c.durum).toBe(200);
+    expect(yollar).toEqual(['/arkon/anomali-olaylari']);
+    expect((c.govde as AnomaliOlaylari).olaylar[0]?.tur).toBe('gec-giris');
+    expect((await cevapla(istemci, { yontem: 'POST', yol: '/anomali-olaylari', sorgu: new URLSearchParams(''), govde: '{}' })).durum).toBe(404);
   });
 });
