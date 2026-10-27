@@ -60,35 +60,38 @@ export function FirmaListesi({ finans, yetki, ac, yeni, s, sYaz }: Pick<EkranOze
   const veri = liste.data;
   return (
     <div className="tc-fk">
-      <Kart sag={yetki.firmaYaz ? <Dugme tur="birincil" simge="plus" onClick={yeni}>Yeni firma</Dugme> : undefined}>
+      <div className="tc-fk-bas">
         <p className="tc-fk-not">Müşteri, tedarikçi ve fason firmaların kartları. Satın alma, stok ve Logo firmayı buradan alır.</p>
-        <div className="tc-fk-arac">
-          <div className="tc-fk-cipler" role="group" aria-label="Firma türü">
-            {TUR_SUZGECI.map(([k, b]) => (
-              <Dugme key={k} aria-pressed={s.tur === k} onClick={() => sYaz((o) => ({ ...o, tur: k, sayfa: 1 }))}>{b}</Dugme>
-            ))}
-          </div>
-          <div className="tc-fk-cipler" role="group" aria-label="Firma durumu">
-            {AKTIF_SUZGECI.map(([k, b]) => (
-              <Dugme key={k} aria-pressed={s.aktif === k} onClick={() => sYaz((o) => ({ ...o, aktif: k, sayfa: 1 }))}>{b}</Dugme>
-            ))}
-          </div>
-          <div className="tc-fk-arama">
-            <Girdi etiket="Firma ara" type="search" placeholder="Ad, kod ya da vergi no ara" autoComplete="off" value={arama} onChange={(o) => aramaYaz(o.target.value)} />
-          </div>
+        {yetki.firmaYaz && <Dugme tur="birincil" simge="plus" onClick={yeni}>Yeni firma</Dugme>}
+      </div>
+      <div className="tc-fk-arac">
+        <div className="tc-fk-cipler" role="group" aria-label="Firma türü">
+          {TUR_SUZGECI.map(([k, b]) => (
+            <Dugme key={k} aria-pressed={s.tur === k} onClick={() => sYaz((o) => ({ ...o, tur: k, sayfa: 1 }))}>{b}</Dugme>
+          ))}
         </div>
-      </Kart>
+        <div className="tc-fk-arama">
+          <Girdi etiket="Firma ara" type="search" placeholder="Ad, kod ya da vergi no ara" autoComplete="off" value={arama} onChange={(o) => aramaYaz(o.target.value)} />
+        </div>
+        <div className="tc-fk-cipler" role="group" aria-label="Firma durumu">
+          {AKTIF_SUZGECI.map(([k, b]) => (
+            <Dugme key={k} aria-pressed={s.aktif === k} onClick={() => sYaz((o) => ({ ...o, aktif: k, sayfa: 1 }))}>{b}</Dugme>
+          ))}
+        </div>
+      </div>
       {liste.isError ? (
         <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Firmalar alınamadı')} yenile={() => { void liste.refetch(); }} />
       ) : (
-        <Tablo
-          etiket="Firmalar" sutunlar={sutunlar} satirlar={veri?.satirlar ?? []} satirAnahtari={(f) => f.id} satirSec={(f) => ac(f.id)}
-          mesgul={liste.isFetching}
-          bosMesaj={liste.isPending ? 'Yükleniyor…' : s.ara ? 'Aramaya uyan firma yok.' : 'Bu süzgeçte firma yok.'}
-          siralama={s.siralama}
-          siralamaDegistir={(yeniSira) => sYaz((o) => ({ ...o, siralama: yeniSira ?? { alan: 'ad', yon: 'artan' }, sayfa: 1 }))}
-          {...(veri ? { sayfalama: { sayfa: veri.sayfa ?? s.sayfa, sayfaBoyu: veri.sayfaBoyu, toplam: veri.toplam, degistir: (sayfa: number) => sYaz((o) => ({ ...o, sayfa })) } } : {})}
-        />
+        <Kart>
+          <Tablo
+            etiket="Firmalar" sutunlar={sutunlar} satirlar={veri?.satirlar ?? []} satirAnahtari={(f) => f.id} satirSec={(f) => ac(f.id)}
+            mesgul={liste.isFetching}
+            bosMesaj={liste.isPending ? 'Yükleniyor…' : s.ara ? 'Aramaya uyan firma yok.' : 'Bu süzgeçte firma yok.'}
+            siralama={s.siralama}
+            siralamaDegistir={(yeniSira) => sYaz((o) => ({ ...o, siralama: yeniSira ?? { alan: 'ad', yon: 'artan' }, sayfa: 1 }))}
+            {...(veri ? { sayfalama: { sayfa: veri.sayfa ?? s.sayfa, sayfaBoyu: veri.sayfaBoyu, toplam: veri.toplam, degistir: (sayfa: number) => sYaz((o) => ({ ...o, sayfa })) } } : {})}
+          />
+        </Kart>
       )}
     </div>
   );

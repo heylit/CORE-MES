@@ -101,7 +101,7 @@ describe('Firma kartı', () => {
     expect(istekler.some(kayitYazmasi)).toBe(false);
   });
 
-  it('kaydı olmayan firma onayla pasife alınır: finansın ucuna, sürümle', async () => {
+  it('kaydı olmayan firma satır içi onayla pasife alınır: finansın ucuna, sürümle', async () => {
     const istekler = sunucuKur(TAM, {
       'GET /musteri-tedarikci/firmalar/4': kartCevabi({ id: 4, ad: 'Bos Firma', kod: 'B1' }),
       'POST /finans/firmalar/4/pasif': () => json(200, { firma: ornekFirma({ id: 4, ad: 'Bos Firma', kod: 'B1', aktif: false, surum: 4 }) }),
@@ -109,8 +109,8 @@ describe('Firma kartı', () => {
     finansAc(`${LISTE}?firma=4`);
     await screen.findByRole('region', { name: 'Hesap' });
     fireEvent.click(screen.getByRole('button', { name: /Pasife al/ }));
-    const onay = await screen.findByRole('dialog', { name: /pasife alınsın mı/ });
-    fireEvent.click(within(onay).getByRole('button', { name: 'Pasife almayı onayla' }));
+    expect(istekler.some(kayitYazmasi)).toBe(false);
+    fireEvent.click(await screen.findByRole('button', { name: 'Pasife almayı onayla' }));
     await waitFor(() => expect(istekler.find(kayitYazmasi)?.yol).toBe('/finans/firmalar/4/pasif'));
     expect(istekler.find(kayitYazmasi)!.govde).toEqual({ surum: 3 });
     await screen.findByRole('button', { name: /Aktif yap/ });
@@ -124,7 +124,7 @@ describe('Firma kartı', () => {
     finansAc(`${LISTE}?firma=1`);
     await screen.findByRole('heading', { name: 'Deneme Musteri' });
     fireEvent.click(screen.getByRole('button', { name: /Pasife al/ }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Pasife almayı onayla' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pasife almayı onayla' }));
     await screen.findByText('Firmanın kapanmamış faturası var.');
   });
 

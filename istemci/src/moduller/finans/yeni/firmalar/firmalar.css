@@ -13,3 +13,6 @@
 }
 .tc-fk-cek > span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .tc-fk-cek > b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-fk-iz { color: var(--muted); font-size: var(--yazi-s); }
+.tc-fk-baglanti { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-decoration: underline; }
+.tc-fk-bolum { margin: var(--b-5) 0 0; font-size: var(--yazi-l); }

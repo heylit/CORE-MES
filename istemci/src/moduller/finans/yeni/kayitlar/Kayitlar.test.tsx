@@ -28,12 +28,11 @@ describe('Kayıtlar', () => {
     await screen.findByText('Bu filtrede kayıt yok.');
   });
 
-  it('yazma yetkisi olmayan satırı açar ama düzeltemez, iptal göremez', async () => {
+  it('yazma yetkisi olmayan aynı formu açar (prototipteki gibi; uç reddeder), iptal göremez', async () => {
     const istekler = sunucuKur(OKUYAN);
     finansAc(ADRES);
     fireEvent.click(await hammaddeSatiri());
-    const pencere = await screen.findByRole('dialog');
-    expect(within(pencere).getByText(/Düzeltme yetkiniz yok/)).toBeTruthy();
+    const pencere = await screen.findByRole('dialog', { name: 'Kaydı düzenle' });
     expect(within(pencere).queryByRole('button', { name: /İptal et/ })).toBeNull();
     expect(istekler.some(kayitYazmasi)).toBe(false);
   });
@@ -52,15 +51,14 @@ describe('Kayıtlar', () => {
     expect(yazma.govde).toMatchObject({ aciklama: 'Duzeltilen not', firmaId: 2, tutar: 1000, surum: 1 });
   });
 
-  it('finans.yonet olan belgeyi onayla iptal eder', async () => {
+  it('finans.yonet olan belgeyi satır içi onayla iptal eder', async () => {
     const istekler = sunucuKur(YONETEN, { 'POST /finans/belgeler/2/iptal': () => json(200, { belge: ornekHamVeri().belgeler[1] }) });
     finansAc(ADRES);
     fireEvent.click(await hammaddeSatiri());
     const pencere = await screen.findByRole('dialog', { name: 'Kaydı düzenle' });
     fireEvent.click(within(pencere).getByRole('button', { name: /İptal et/ }));
-    const onay = await screen.findByRole('dialog', { name: /iptal edilsin mi/ });
     expect(istekler.some(kayitYazmasi)).toBe(false);
-    fireEvent.click(within(onay).getByRole('button', { name: 'İptali onayla' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'İptali onayla' }));
     await waitFor(() => expect(istekler.find(kayitYazmasi)?.yol).toBe('/finans/belgeler/2/iptal'));
     expect(istekler.find(kayitYazmasi)!.govde).toEqual({ surum: 1 });
   });
@@ -72,7 +70,8 @@ describe('Kayıtlar', () => {
     finansAc(ADRES);
     const satir = await hammaddeSatiri();
     fireEvent.click(within(satir).getByRole('link', { name: 'Deneme Tedarik' }));
-    await screen.findByRole('heading', { name: 'Deneme Tedarik' });
+    // Ad iki kez başlıktır (kart ve altındaki cari hesap, prototipteki gibi).
+    expect((await screen.findAllByRole('heading', { name: 'Deneme Tedarik' })).length).toBeGreaterThan(0);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

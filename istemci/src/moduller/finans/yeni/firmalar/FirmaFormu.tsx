@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Firma, FirmaCevabi, FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { FormPenceresi, Girdi, IsaretKutusu, Secim, useBildirim } from '../../../../ortak/arayuz/index.ts';
-import { api } from '../../../../ortak/veri/api.ts';
+import { Dugme, FormPenceresi, Girdi, IsaretKutusu, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { api, ApiHatasi } from '../../../../ortak/veri/api.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
 import { FIRMA_TUR_ADI } from './kurallar.ts';
@@ -48,6 +48,8 @@ export function FirmaFormu({ firma, kapat, kaydedildi, yenile }: {
 }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
+  // Sürüm çakışmasında kart kendiliğinden yeniden okunur ve form yeni kayıtla açılır (prototipteki gibi); ileti formda kalır.
+  const [yenilendi, yenilendiYaz] = useState(false);
   // Kimlik pencere açılırken üretilir: aynı pencereden yeniden gönderim ikinci firma açmaz; reddedilen istekte de yenilenmez.
   const [istekKimligi] = useState(yeniIstekKimligi);
   const form = useForm<FirmaDegerleri, FirmaCevabi>({
@@ -66,20 +68,25 @@ export function FirmaFormu({ firma, kapat, kaydedildi, yenile }: {
       return cevap;
     },
     basarili: (c) => { bildir('tamam', firma ? 'Firma güncellendi.' : 'Firma açıldı.'); kaydedildi(c.firma); },
+    hatada: (h) => {
+      if (!(h instanceof ApiHatasi) || h.govde.kod !== 'CAKISMA' || h.govde.alan || !yenile) return;
+      void yenile().then((f) => { if (f) { form.sifirla(firmaIlkDegerleri(f)); yenilendiYaz(true); } });
+    },
   });
   const kilit = logoKilitli(firma);
   const d = form.degerler;
 
   return (
-    <FormPenceresi
-      acik kapat={kapat} baslik={firma ? 'Firmayı düzenle' : 'Yeni firma'} form={form}
-      {...(yenile ? { yenile: () => { void yenile().then((f) => { if (f) form.sifirla(firmaIlkDegerleri(f)); }); } } : {})}
-    >
+    <FormPenceresi acik kapat={kapat} baslik={firma ? 'Firmayı düzenle' : 'Yeni firma'} form={form}>
       <div className="tc-fk-form">
-        <Secim
-          etiket="Tür" secenekler={FIRMA_TURLERI.map((t) => ({ deger: t, baslik: FIRMA_TUR_ADI[t] }))} value={d.tur}
-          onChange={(o) => { const t = FIRMA_TURLERI.find((x) => x === o.target.value); if (t) form.degistir({ tur: t }); }}
-        />
+        {yenilendi && form.genelHata === null && (
+          <p className="tc-fk-not" data-ton="risk" role="alert">Bu kart siz düzenlerken başka biri tarafından değiştirildi. Kart yenilendi; değişikliğinizi yeniden girin.</p>
+        )}
+        <div className="tc-fk-cipler" role="radiogroup" aria-label="Tür">
+          {FIRMA_TURLERI.map((t) => (
+            <Dugme key={t} role="radio" aria-checked={d.tur === t} aria-pressed={d.tur === t} onClick={() => form.degistir({ tur: t })}>{FIRMA_TUR_ADI[t]}</Dugme>
+          ))}
+        </div>
         <IsaretKutusu etiket="Fason firma (dışarıda iş yaptırılan tedarikçi)" checked={d.fason} onChange={(o) => form.degistir({ fason: o.target.checked })} />
         {METIN_ALANLARI.map(([ad, etiket, uzunluk]) => (
           <Girdi

@@ -7,7 +7,8 @@ import type { EkranOzellikleri } from '../sekmeler.ts';
 import { KayitPenceresi } from '../kayitlar/BelgeDuzelt.tsx';
 import { CEK_DURUM_ADI, cariOzet, ekstre, EKSTRE_CSV_BASLIKLARI, ekstreCsvSatirlari, NOT_METNI, type EkstreSatiri } from './kurallar.ts';
 
-// Firma kartının altındaki cari hesap (prototipte tam kipte firmad + VIEWS.carid): özet, açık faturalar, çekler, ekstre.
+// Firma kartının altındaki cari hesap (prototipte tam kipte firmad + VIEWS.carid): "Hesap" başlığı, mahsup düğmeleri, cari başlığı, özet,
+// açık faturalar, çekler, ekstre.
 // Yazma düğmeleri finans.yaz ile görünür; "Tahsil edildi / Ödendi" o faturayı seçili getirerek tahsilat/ödeme formunu açar.
 
 const EKSTRE_KISA = 15;
@@ -34,8 +35,15 @@ export function CariHesap({ finans, yetki, kayitGir, party, side }: Required<Pic
 
   return (
     <section className="tc-fk" aria-label="Hesap">
+      <h2 className="tc-fk-bolum">Hesap</h2>
+      {yetki.yaz && (
+        <div className="tc-fk-dugmeler">
+          <Dugme simge="sort" onClick={() => kayitGir('mahsup', { party })}>Alacak ve borcu mahsup et</Dugme>
+          <Dugme simge="check" onClick={() => kayitGir('avans', { party })}>Avansı faturaya mahsup et</Dugme>
+        </div>
+      )}
       <Kart
-        baslik="Hesap"
+        baslik={party}
         sag={yetki.yaz ? (
           <div className="tc-fk-dugmeler">
             {isC ? (
@@ -55,12 +63,6 @@ export function CariHesap({ finans, yetki, kayitGir, party, side }: Required<Pic
         ) : undefined}
       >
         <p className="tc-fk-not">{notSatiri}</p>
-        {yetki.yaz && (
-          <div className="tc-fk-dugmeler">
-            <Dugme simge="sort" onClick={() => kayitGir('mahsup', { party })}>Alacak ve borcu mahsup et</Dugme>
-            <Dugme simge="check" onClick={() => kayitGir('avans', { party })}>Avansı faturaya mahsup et</Dugme>
-          </div>
-        )}
       </Kart>
       <div className="tc-fk-ozet">
         <SayiKarti simge="lira" baslik={isC ? 'Bize borcu' : 'Bizim borcumuz'} metin={tl(o.acikToplam)} altMetin={`${o.acik.length} açık fatura`} />

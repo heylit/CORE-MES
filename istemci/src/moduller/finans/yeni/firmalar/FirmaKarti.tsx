@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Firma, FirmaAyrintiCevabi, FirmaCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { YOK } from '../bicim.ts';
 import { firmaEtiketi } from '../donustur.ts';
@@ -36,7 +36,11 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
     onSettled: () => istemci.invalidateQueries({ queryKey: ['finans'] }),
   });
 
-  const ust = <div className="tc-fk-dugmeler"><Dugme simge="chev-left" onClick={geri}>Firmalar</Dugme></div>;
+  const ust = (
+    <nav className="tc-fk-iz" aria-label="Konum">
+      <button type="button" className="tc-fk-baglanti" onClick={geri}>Firmalar</button> / Firma kartı
+    </nav>
+  );
   if (kart.isError) return <div className="tc-fk">{ust}<DurumKutusu durum="hata" mesaj={hataIletisi(kart.error, 'Firma kartı alınamadı')} yenile={() => { void kart.refetch(); }} /></div>;
   if (!kart.data) return <div className="tc-fk">{ust}<DurumKutusu durum="yukleniyor" /></div>;
   const f = kart.data.firma;
@@ -45,6 +49,7 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
     // Kalan kayıt önceden hesaplanır; varsa onay yerine neden çıkar (rakam yetkisi olmayanda sunucu söyler).
     const on = f.aktif && finans ? pasifOnKontrol(finans.V, f.id) : null;
     if (on) { uyariYaz(on); return; }
+    uyariYaz(null);
     soruyorYaz(true);
   };
   const durumDegistir = () => {
@@ -72,11 +77,12 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
       {ust}
       <Kart
         baslik={f.ad}
-        baslikEki={f.aktif ? <Rozet ton="tamam">Aktif</Rozet> : <Rozet ton="pasif">Pasif</Rozet>}
         sag={yetki.firmaYaz ? (
           <div className="tc-fk-dugmeler">
             <Dugme simge="edit" onClick={() => duzenleYaz(true)}>Düzenle</Dugme>
-            <Dugme simge={f.aktif ? 'lock' : 'check'} onClick={durumIste}>{f.aktif ? 'Pasife al' : 'Aktif yap'}</Dugme>
+            {soruyor
+              ? <Dugme {...(f.aktif ? { tur: 'tehlike' as const } : {})} yukleniyor={durum.isPending} onClick={durumDegistir}>{f.aktif ? 'Pasife almayı onayla' : 'Aktif yapmayı onayla'}</Dugme>
+              : <Dugme simge={f.aktif ? 'lock' : 'check'} onClick={durumIste}>{f.aktif ? 'Pasife al' : 'Aktif yap'}</Dugme>}
           </div>
         ) : undefined}
       >
@@ -116,13 +122,6 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
       </div>
       <p className="tc-fk-not">Açılış {tarih(f.olusturma)}{f.guncelleme ? ` · son değişiklik ${tarih(f.guncelleme)}` : ''}</p>
       {finans && etiket && <CariHesap finans={finans} yetki={yetki} kayitGir={kayitGir} party={etiket} side={firmaTarafi(f.tur)} />}
-      <OnayPenceresi
-        acik={soruyor} baslik={f.aktif ? 'Firma pasife alınsın mı?' : 'Firma aktif yapılsın mı?'}
-        onayMetni={f.aktif ? 'Pasife almayı onayla' : 'Aktif yapmayı onayla'} tehlikeli={f.aktif} yukleniyor={durum.isPending}
-        onayla={durumDegistir} vazgec={() => soruyorYaz(false)}
-      >
-        <p>{f.aktif ? 'Pasif firmaya yeni belge, ödeme ve çek açılamaz; var olan kayıtları görünür kalır.' : 'Firma yeniden kayıtlarda seçilebilir olur.'}</p>
-      </OnayPenceresi>
       {duzenle && (
         <FirmaFormu
           firma={f} kapat={() => duzenleYaz(false)}
