@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, veriSagligiCevabi,
@@ -17,6 +17,7 @@ import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalis
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import * as planlama from './planlama-servis.ts';
+import { projePlani } from './proje-plani.ts';
 import * as servis from './servis.ts';
 import { veriSagligi } from './veri-sagligi.ts';
 import { yillikCozBaslat, yillikCozDurumu } from './yillik-cozucu.ts';
@@ -32,6 +33,8 @@ const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
 // Reçete ve Rota ekranı da birleşik durumu buradan okur.
 const KAYNAK_OKUR = { biri: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'] } as const;
 const PLANLAMA_OKUR = 'plan.planlama-oku';
+// 933 a: projenin plan ve gerçekleşenini projeyi okuyan görür (Projeler'in okuma yetkisiyle aynı); salt okunur, plan yetkisi istemez.
+const PROJEYI_OKUR = { biri: ['sayfa.projeler', 'projeler.oku'] } as const;
 // Planlama kayıtlarına yazma (925 a): çalışma anahtarı plan.yaz, öteki anahtarlar recete-rota.yaz ister; ayrımı servis yapar.
 const KAYIT_YAZAR = { biri: ['recete-rota.yaz', 'plan.yaz'] } as const;
 
@@ -170,6 +173,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/canli-farki', yetki: PLANLAMA_OKUR, cevap: canliFarkiCevabi,
     isle: ({ db, kullanici }) => canliFarki(db, kullanici) }),
   // 505 a, 506 a: taban ve son canlı plan, sayfanın anahtarlarıyla; GET /plan'ın yetkisiyle. Sayfanın kimliği yalnız çalışmayı okuyabilene çevrilir.
+  uc({ yontem: 'GET', yol: '/plan/projeler/:projeId/plan-gerceklesen', yetki: PROJEYI_OKUR, parametre: projePlaniParametresi, cevap: projePlaniCevabi,
+    isle: ({ db, parametre }) => projePlani(db, parametre.projeId) }),
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/taban-ve-canli', yetki: PLAN_OKUR, cevap: tabanVeCanliCevabi,
     isle: ({ db, kullanici }) => tabanVeCanli(db, kullanici) }),
   // 503 a: kayıtlı çalışma planı kişiye yeni plan taslağı olarak yazılır. Plan uçlarının denetim satırı bu yolda yazılmaz: açılan taslak ve

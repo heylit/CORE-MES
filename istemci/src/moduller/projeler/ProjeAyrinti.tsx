@@ -5,6 +5,7 @@ import type { Proje, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.t
 import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, type Sekme } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { ProjePlani } from '../plan/disari.ts';
 import { ProjeMaliyeti } from '../proje-maliyet/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_METNI, DURUM_TONU, MALIYET_ISLEMI, STATU_ISLEMI, butceMetni, tarihMetni } from './gosterim.ts';
@@ -18,7 +19,7 @@ import { EMIR_OKUMA_ISLEMLERI, ProjeEmirleri } from './ProjeEmirleri.tsx';
 import { ProjeFormu } from './ProjeFormu.tsx';
 import './projeler.css';
 
-type SekmeAdi = 'ozet' | 'gorevler' | 'taslar' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
+type SekmeAdi = 'ozet' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
 
 const YONETIM_SEKMELERI: ReadonlySet<SekmeAdi> = new Set(['ozet', 'gorevler', 'taslar', 'gecmis']);
 
@@ -36,6 +37,7 @@ export function ProjeAyrinti() {
     { anahtar: 'ozet', baslik: 'Özet', simge: 'chart' },
     { anahtar: 'gorevler', baslik: 'Görevler', simge: 'check' },
     { anahtar: 'taslar', baslik: 'Kilometre taşları', simge: 'flag' },
+    { anahtar: 'plan', baslik: 'Plan', simge: 'clock' },
     ...(emirleriGorur ? [{ anahtar: 'emirler', baslik: 'Üretim emirleri', simge: 'list' } as const] : []),
     ...(maliyetGorur ? [{ anahtar: 'maliyet', baslik: 'Maliyet', simge: 'lira' } as const] : []),
     { anahtar: 'gecmis', baslik: 'Statü geçmişi', simge: 'clock' },
@@ -85,6 +87,7 @@ export function ProjeAyrinti() {
           <dt>Açıklama</dt><dd>{p.aciklama ?? '—'}</dd>
         </dl>
       </Kart>}
+      {sekme === 'plan' && <ProjePlani projeId={p.id} />}
       {sekme === 'emirler' && <ProjeEmirleri projeId={p.id} />}
       {sekme === 'maliyet' && <ProjeMaliyeti projeId={p.id} />}
       {duzenle && <ProjeFormu proje={p} kapat={() => { duzenleYaz(false); }} />}
