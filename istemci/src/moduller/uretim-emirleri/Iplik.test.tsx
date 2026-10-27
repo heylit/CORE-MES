@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { useParams } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { EmirAkisiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { Emir, EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -41,6 +42,7 @@ const AKIS = {
 
 const AKISLI: Kullanici = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.akis'] };
 const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }];
+function AkisEkrani() { return <p>Akış ekranı {useParams().id}</p>; }
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const duraklar = () => within(screen.getByRole('img', { name: /izlenebilirlik ipliği/ })).getAllByRole('listitem').map((d) => d.getAttribute('aria-label'));
@@ -89,6 +91,15 @@ describe('İzlenebilirlik ipliği', () => {
     expect(ogeler.map((d) => d.classList.contains('tc-iplik-bos'))).toEqual([true, false, true, true]);
     expect(istekler.some((i) => i.yol.startsWith('/akis'))).toBe(false);
     expect(screen.getByText('Parti, rota saatleri ve sevk Akış Süresi yetkisiyle görünür.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: "Akış Süresi'nde aç" })).toBeNull();
+  });
+
+  it("Akış Süresi yetkisi olan emrin yolculuğunu Akış Süresi'nde açar", async () => {
+    sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, AKIS) });
+    ac([...ekran, { yol: '/akis/:id', ekran: AkisEkrani }], '/uretim-emirleri/5');
+    await screen.findByText('UE-000005');
+    fireEvent.click(screen.getByRole('button', { name: "Akış Süresi'nde aç" }));
+    expect(await screen.findByText('Akış ekranı 5')).toBeTruthy();
   });
 
   it('emrin işaretli adımları durak olur; işaretsiz adım "kayıt yok"', async () => {
