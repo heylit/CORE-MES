@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Islem } from '../islemler.ts';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
-import { beklenenSurum } from '../surum.ts';
+import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { kayitYoluMu } from '../sayfa-tanimi.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { CAGRI_EKIPLERI } from './durus-nedenleri.ts';
@@ -161,6 +161,42 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
   ...beklenenSurum,
 }).strict();
 
+// Bildirim alıcıları (760 c, 761 b): tür başına alıcı roller ve kişiler. Seçim yapılmış türde alıcı yalnız seçilenlerdir (yönetici
+// dahil: seçilmediyse almaz); seçimsiz türde türün işlem kuralı geçer. Kayda bağlı kişi (talebi açan, istasyona atanmış) iki
+// durumda da alır. Ekip çağrısı kendi yönlendirmesiyle seçildiği için bu ayarda yoktur. Okuma ve yazma `ayarlar.yaz` ister.
+export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => t !== 'arkon.ekip-cagrisi') as [BildirimTuru, ...BildirimTuru[]];
+export const ALICI_ROL_EN_COK = 20;
+export const ALICI_KISI_EN_COK = 50;
+
+export const bildirimAliciParametresi = z.object({ tur: z.enum(ALICI_AYARLI_TURLER) });
+export const bildirimAliciSatiri = z.object({
+  tur: z.enum(ALICI_AYARLI_TURLER),
+  baslik: z.string(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  kaynakModul: z.string(),
+  // Seçim yokken alıcıyı seçen işlemler; boşsa tür yalnız kayda bağlı kişiye gider.
+  varsayilanIslemler: z.array(z.string()),
+  rolIdleri: z.array(z.number().int()),
+  kisiIdleri: z.array(z.number().int()),
+  // Tür hiç ayarlanmadıysa null; ilk yazım sürümsüz gelir.
+  surum: z.number().int().nullable(),
+  degistiren: z.object({ id: z.number().int(), ad: z.string().nullable() }).nullable(),
+  degistirildi: zamanSemasi.nullable(),
+});
+export const bildirimAlicilariCevabi = z.object({
+  satirlar: z.array(bildirimAliciSatiri),
+  roller: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
+  // Seçilebilir kişiler: etkin ve girişli (bildirim yalnız onlara yazılır).
+  kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+});
+const benzersizMi = (l: readonly number[]): boolean => new Set(l).size === l.length;
+// İkisi de boş gelirse seçim kalkar, türün işlem kuralına dönülür. Sürüm: tür ayarlıysa okunan sürüm, değilse null.
+export const bildirimAliciDegistirGovdesi = z.object({
+  rolIdleri: z.array(KIMLIK).max(ALICI_ROL_EN_COK, `En çok ${ALICI_ROL_EN_COK} rol seçilir.`).refine(benzersizMi, 'Aynı rol iki kez seçilemez.'),
+  kisiIdleri: z.array(KIMLIK).max(ALICI_KISI_EN_COK, `En çok ${ALICI_KISI_EN_COK} kişi seçilir.`).refine(benzersizMi, 'Aynı kişi iki kez seçilemez.'),
+  surum: surumSemasi.nullable(),
+}).strict();
+
 export type Bildirim = z.output<typeof bildirimSemasi>;
 export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;
@@ -173,3 +209,6 @@ export type CagriYonlendirmeSatiri = z.output<typeof cagriYonlendirmeSatiri>;
 export type CagriYonlendirmeCevabi = z.output<typeof cagriYonlendirmeCevabi>;
 export type CagriEkiplerimCevabi = z.output<typeof cagriEkiplerimCevabi>;
 export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDegistirGovdesi>;
+export type BildirimAliciSatiri = z.output<typeof bildirimAliciSatiri>;
+export type BildirimAlicilariCevabi = z.output<typeof bildirimAlicilariCevabi>;
+export type BildirimAliciDegistirGovdesi = z.input<typeof bildirimAliciDegistirGovdesi>;

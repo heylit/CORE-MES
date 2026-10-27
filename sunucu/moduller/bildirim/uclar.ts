@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
+  bildirimAliciDegistirGovdesi, bildirimAliciParametresi, bildirimAlicilariCevabi, bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
   bildirimTercihleriCevabi, cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  arsivle, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+  arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
 } from './servis.ts';
 
 // Kişinin kendi bildirimleri (222 a): her uç yalnız oturum ister ve yalnız oturumdaki kişinin satırına dokunur; adres ya da
@@ -37,5 +37,12 @@ export const uclar = [
     yontem: 'POST', yol: '/bildirimler/cagri-yonlendirme/:ekip/degistir', yetki: 'ayarlar.yaz', parametre: cagriYonlendirmeParametresi,
     govde: cagriYonlendirmeDegistirGovdesi, cevap: cagriYonlendirmeCevabi,
     isle: ({ db, kullanici, parametre, govde }) => cagriYonlendirmesiYaz(db, kullanici, parametre.ekip, govde),
+  }),
+  // Bildirim alıcıları (760 c): Sistem Ayarları'nın işlemiyle okunur ve yazılır; rol ya da kişi seçmek yetki vermez, yalnız alıcıyı seçer.
+  uc({ yontem: 'GET', yol: '/bildirimler/alicilar', yetki: 'ayarlar.yaz', cevap: bildirimAlicilariCevabi, isle: ({ db }) => bildirimAlicilari(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/alicilar/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimAliciParametresi,
+    govde: bildirimAliciDegistirGovdesi, cevap: bildirimAlicilariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => bildirimAlicilariYaz(db, kullanici, parametre.tur, govde),
   }),
 ];

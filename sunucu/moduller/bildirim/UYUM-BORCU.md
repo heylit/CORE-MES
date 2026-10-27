@@ -13,3 +13,7 @@
 ## Ekip çağrısı (298 a)
 7. Arkon tetiği (BASKA-MODUL-ISTEKLERI 6) girene kadar `arkon.ekip-cagrisi` hiç yazılmaz; yönlendirme ekranı yalnız ayarı tutar.
 8. Yükseltme (`phase: 'esc'`, "vardiya amirine yükseltildi") Arkon istemcisinde kalır; bildirime dönüştürülmesi ayrı karar.
+
+## Bildirim alıcıları (760 c)
+9. Seçilen rolün türün ekranını açıp açamadığı ekranda uyarılmaz; `araclar/bildirim-yollari.test.ts` yalnız işlem kuralını ölçer. Seçilen rol ekranı açamıyorsa kişi bildirimi görür, ekran yetki hatası verir.
+10. `cnc-kurulum.takim-omru` türü tanımlı ama gönderen yok; tetik cnc-kurulum modülünün işi (ayrı kart).

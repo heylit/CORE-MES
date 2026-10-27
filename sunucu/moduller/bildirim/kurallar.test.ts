@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
-import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanRoller, tekilAnahtar, yolTureUyar } from './kurallar.ts';
+import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, yolTureUyar } from './kurallar.ts';
 
 describe('bildirim kuralları', () => {
   const kisiler = new Map<number, readonly Islem[]>([
@@ -24,6 +24,18 @@ describe('bildirim kuralları', () => {
   test('BIL-3: tetikleyen kişi kendi eylemi için almaz', () => {
     assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { haric: 3 }), [1]);
     assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { kisiler: [3], haric: 3 }), [1]);
+  });
+
+  test('BIL-10: seçimli türde işlem kuralı geçmez; yalnız seçilenler ve adıyla verilen alır', () => {
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [2] }), [2]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [2], kisiler: [4] }), [2, 4]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [] }), []);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: null }), [1, 3]);
+  });
+
+  test('BIL-10: seçilen kişi haritada yoksa (pasif, girişsiz) düşer; tetikleyen seçilmiş olsa da almaz', () => {
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [1, 99] }), [1]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [1, 3], haric: 3 }), [1]);
   });
 
   test('BIL-2: operatör e-posta seçemez; rol yöneten (yönetici) seçer', () => {
@@ -64,7 +76,7 @@ describe('bildirim kuralları', () => {
 
 describe('BIL-8: yönlendirmeye yalnız var olan rol yazılır', () => {
   test('olmayan kimlik döner, var olan geçer', () => {
-    assert.deepEqual(olmayanRoller([1, 2, 9], [1, 2, 3]), [9]);
-    assert.deepEqual(olmayanRoller([], [1]), []);
+    assert.deepEqual(olmayanKimlikler([1, 2, 9], [1, 2, 3]), [9]);
+    assert.deepEqual(olmayanKimlikler([], [1]), []);
   });
 });
