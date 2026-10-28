@@ -237,3 +237,48 @@ test.describe('P5 Takım Ömrü', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('3B sahne', () => {
+  // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
+  // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
+  test('Kurulum, Hazırlık, Kütüphane ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+    // Yazılım çizicisinde ilk kare saniyeler sürer.
+    test.setTimeout(180_000);
+    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'takim-omru']) {
+      await ac(`/cnc-kurulum/yeni/${yol}`);
+      const tuval = page.locator('.tc-cy-sahne-tuval').first();
+      await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
+      await expect.poll(async () => tuval.evaluate((t: HTMLCanvasElement) => {
+        // Tuvalin bağlamı görüntü aktarımıdır (bitmaprenderer); piksel, kopyası çizilen geçici tuvalden okunur.
+        if (t.width === 0 || t.height === 0) return 0;
+        const k = document.createElement('canvas'); k.width = t.width; k.height = t.height;
+        const x = k.getContext('2d');
+        if (x === null) return 0;
+        x.drawImage(t, 0, 0);
+        const d = x.getImageData(0, 0, k.width, k.height).data;
+        let dolu = 0;
+        for (let i = 3; i < d.length; i += 4 * 97) if ((d[i] ?? 0) > 0) dolu++;
+        return dolu;
+      }), { message: yol, timeout: 30_000 }).toBeGreaterThan(0);
+    }
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
+  test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
+    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'takim-omru']) {
+      await ac(`/cnc-kurulum/yeni/${yol}`);
+      await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
+      await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
+      expect(await page.locator('.tc-cy-sahne-tuval:visible').count(), yol).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), yol).toBeLessThanOrEqual(0);
+    }
+    const serit = page.getByRole('tablist', { name: 'CNC Kurulum görünümleri' });
+    await serit.getByRole('tab', { name: 'Kurulum' }).click();
+    await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/kurulum$/);
+    await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+});

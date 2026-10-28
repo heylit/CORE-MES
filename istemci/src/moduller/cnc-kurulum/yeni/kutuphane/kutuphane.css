@@ -88,6 +88,12 @@
 .tc-cl-renk-hold { --tc-cl-raf: var(--hold); }
 .tc-cl-renk-sahne3b-vurgu { --tc-cl-raf: var(--sahne3b-vurgu); }
 
+/* Prototipteki gibi sahne görünüm alanının boyundadır; kart kendi içinde kayar (uzun kart sahneyi ekran dışına uzatmasın). */
+@media (min-width: 768px) {
+  .tc-cl-kutuphane { height: 100%; grid-template-rows: minmax(0, 1fr); }
+  .tc-cl-yan { min-height: 0; overflow: auto; }
+  .tc-cl-yan > * { flex: none; }
+}
 @media (max-width: 1023px) {
   .tc-cl-kutuphane { grid-template-columns: minmax(0, 1fr) var(--kuyruk-genis); }
 }

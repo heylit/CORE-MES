@@ -1,7 +1,8 @@
-import { Suspense, useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { DurumKutusu, Dugme, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
+import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
@@ -10,6 +11,7 @@ import { durumKur } from './depo.ts';
 import { DURUM_ANAHTARI } from './durum.ts';
 import { closeDefs, gorunumAdresi, openDefs, useGorunum, useTanimlar, type Gorunum } from './gorunum.ts';
 import { KayitYazici } from './kayit.ts';
+import { sahneAlaniKur } from './sahne/Sahne.tsx';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
@@ -35,6 +37,8 @@ function CncEkrani() {
   const [acilis, setAcilis] = useState<Acilis | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
+  const ekranGorunur = useEkranGorunur();
+  const alan = useRef<HTMLDivElement>(null);
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
 
@@ -83,6 +87,14 @@ function CncEkrani() {
     return () => { window.removeEventListener('pagehide', kapaninca); kapaninca(); baglantiKur(null); };
   }, [yazici]);
 
+  // 3B görünümler tek çiziciyle çizilir (sahne/Sahne.tsx); görünüm alanı dışı kırpılır, ekran gizlenince çizim durur.
+  const hazir = acilis !== null && yazici !== null;
+  useEffect(() => {
+    if (!hazir) return undefined;
+    sahneAlaniKur(alan.current, ekranGorunur);
+    return () => { sahneAlaniKur(null, false); };
+  }, [hazir, ekranGorunur]);
+
   const eylem = (o: SyntheticEvent): void => {
     if (yazici === null) return;
     if (o.type === 'pointerdown' && o.target instanceof Element && o.target.closest(`[${SERIT}]`) !== null) return;
@@ -122,7 +134,7 @@ function CncEkrani() {
             <Dugme simge="edit" onClick={() => { openDefs(); }} title="Tezgâh ve malzeme tanımları">Tanımlar</Dugme>
           )}
         </div>
-        <div className="tc-cy-gorunum">
+        <div className="tc-cy-gorunum" ref={alan}>
           <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
             {Bilesen && <Bilesen />}
           </Suspense>
