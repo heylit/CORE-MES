@@ -94,11 +94,6 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
   it('eski ekranda şerit durur', () => {
     adreste('/ik');
     expect(serit('İnsan Kaynakları')).not.toBeNull();
-    cleanup();
-    adreste('/malzemeler/eski/ayarlar');
-    const menu = serit('Malzemeler ve Hizmetler');
-    expect(menu).not.toBeNull();
-    expect(within(menu as HTMLElement).getByRole('link', { name: /^Malzeme ayarları/ }).getAttribute('aria-current')).toBe('page');
   });
 });
 
@@ -149,13 +144,14 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     expect(seritAdresi('/arkon/eski/kalite')).toBe('/arkon/kalite');
   });
 
-  it('Malzemeler (572): bölüm eski adreste aynı alt yoldur; şerit durur; Logo gönderiminin eskisi yoktur', () => {
-    expect(gorunumGecisi('/malzemeler')).toEqual({ baslik: 'Eski görünüm', yol: '/malzemeler/eski' });
-    expect(gorunumGecisi('/malzemeler/sablonlar')).toEqual({ baslik: 'Eski görünüm', yol: '/malzemeler/eski/sablonlar' });
-    expect(gorunumGecisi('/malzemeler/eski/yeni')).toEqual({ baslik: 'Yeni görünüm', yol: '/malzemeler/yeni' });
-    expect(gorunumGecisi('/malzemeler/logo')).toBeNull();
-    expect(seritAdresi('/malzemeler/eski/ayarlar')).toBe('/malzemeler/ayarlar');
-    for (const yol of ['/malzemeler', '/malzemeler/yeni', '/malzemeler/eski']) expect(yeniEkranAdresiMi(yol), yol).toBe(false);
+  it('Malzemeler: eski görünüm kalktı (979 a); geçiş yoktur, eski adres eski görünüm sayılmaz, şerit durur', () => {
+    const yonetici = [YENI_EKRAN_ISLEMI];
+    for (const yol of ['/malzemeler', '/malzemeler/sablonlar', '/malzemeler/eski', '/malzemeler/eski/yeni']) {
+      expect(gorunumGecisi(yol, yonetici), yol).toBeNull();
+      expect(eskiGorunumAdresiMi(yol), yol).toBe(false);
+      expect(yeniEkranAdresiMi(yol), yol).toBe(false);
+    }
+    expect(seritAdresi('/malzemeler/ayarlar')).toBe('/malzemeler/ayarlar');
   });
 
   it('Kalite Merkezi: görünüm eski adreste aynı görünümdür; Resim ve modellerin eskisi yoktur', () => {

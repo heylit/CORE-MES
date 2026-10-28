@@ -34,16 +34,17 @@ describe('MalzemelerYeni', () => {
     expect(screen.queryByText('Bu bölümü görme yetkin yok.')).toBeNull();
   });
 
-  test('tanımsız bölüm köke (Katalog) döner, eski çerçevedeki gibi', async () => {
+  test('tanımsız bölüm köke (Katalog) döner', async () => {
     sunucuKur(YONETICI);
     yeniEkranAc('/malzemeler/bilinmeyen');
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler'); });
   });
 
-  test('eski görünüm /malzemeler/eski altında çerçevededir', async () => {
+  test('eski görünümün adresi (979 a) tanımsız bölümdür, köke döner', async () => {
     sunucuKur(YONETICI);
-    yeniEkranAc('/malzemeler/eski/sablonlar');
-    expect(await screen.findByTitle('Malzeme Kataloğu', {}, { timeout: 5000 })).toBeTruthy();
+    yeniEkranAc('/malzemeler/eski');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler'); });
+    expect(screen.queryByTitle('Malzeme Kataloğu')).toBeNull();
   });
 
   test('ayarlar okunamazsa hata ve yeniden dene', async () => {

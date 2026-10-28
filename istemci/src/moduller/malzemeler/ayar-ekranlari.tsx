@@ -1,13 +1,13 @@
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { LogoKarsiliklari } from './LogoGonderimi.tsx';
-import { KatalogCercevesi } from './MalzemeKatalogu.tsx';
+import { MalzemeAyarlariBolumu } from './yeni/MalzemelerYeni.tsx';
 
-// Modülün iki ayarı: prototipin "Malzeme ayarları" görünümü (kendi çerçevesiyle) ve Logo karşılıkları. İkisi de kendi sayfasındaki
-// bileşendir; değerler aynı uçlardan gelir, yazma yetkisi uçtadır (malzemeler.tanim-yaz).
+// Modülün iki ayarı: menünün "Malzeme ayarları" ekranı ve Logo karşılıkları. İkisi de kendi sayfasındaki bileşendir; değerler aynı
+// uçlardan gelir, yazma yetkisi uçtadır (malzemeler.tanim-yaz).
 function MalzemeAyarlari() {
   return (
     <>
-      <KatalogCercevesi gorunum="mayar" sinif="tc-malzeme-cerceve tc-malzeme-ayar-cerceve" />
+      <MalzemeAyarlariBolumu />
       <LogoKarsiliklari />
     </>
   );

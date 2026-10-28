@@ -51,7 +51,7 @@ export function yeniIstemci(): QueryClient {
 
 function Adres() { return <p data-testid="adres">{useLocation().pathname}</p>; }
 
-// Modülün gerçek rota listesiyle açar: eski çerçevenin `/malzemeler/eski` yolu yeni ekranın `/malzemeler/:bolum` yoluna düşmemeli.
+// Modülün gerçek rota listesiyle açar.
 export function yeniEkranAc(adres: string, istemci = yeniIstemci()) {
   render(
     <QueryClientProvider client={istemci}>

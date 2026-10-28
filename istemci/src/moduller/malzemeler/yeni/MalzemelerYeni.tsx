@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
 import { DIS_SAYFALAR, malzemeEtiketiYolu } from '../gorunumler.ts';
-import { GenelAyarPenceresi } from './ayarlar/index.tsx';
+import { GenelAyarPenceresi, MalzemeAyarlari } from './ayarlar/index.tsx';
 import { BOLUMLER, YENI_KOK, adrestekiBolum, bolumYolu, type Gezinti } from './sekmeler.ts';
 import { useBirimSistemi } from './tercihler.ts';
 import { useKatalogOrtami } from './veri.ts';
@@ -37,6 +37,23 @@ function useGezinti(): Gezinti {
   }, [yonlendir]);
 }
 
+// Sistem Ayarları'ndaki "Malzemeler ve Hizmetler" bölümü: menünün "Malzeme ayarları" ekranının kendisi. Bölüm geçişi bulunduğu sayfanın
+// sorgusunda kalır, kişi Sistem Ayarları'ndan çıkmaz; öteki geçişler (karta dön, dış sayfa) modülün adresine gider.
+export function MalzemeAyarlariBolumu() {
+  const ortam = useKatalogOrtami();
+  const yetki = useMalzemeYetkisi(ortam.data);
+  const genel = useGezinti();
+  const [, sorguYaz] = useSearchParams();
+  const git = useMemo<Gezinti>(() => ({
+    ...genel,
+    ayarlar: (bolum) => sorguYaz(bolum ? { bolum } : {}),
+  }), [genel, sorguYaz]);
+
+  if (ortam.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (ortam.isError) return <DurumKutusu durum="hata" mesaj="Malzeme ayarları okunamadı." yenile={() => void ortam.refetch()} />;
+  return <div className="tc-myeni"><MalzemeAyarlari ortam={ortam.data} yetki={yetki} git={git} /></div>;
+}
+
 function Icerik() {
   const { bolum: parca } = useParams();
   const ortam = useKatalogOrtami();
@@ -48,7 +65,7 @@ function Icerik() {
 
   if (ortam.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (ortam.isError) return <DurumKutusu durum="hata" mesaj="Malzeme ayarları okunamadı." yenile={() => void ortam.refetch()} />;
-  // Tanımsız alt adres köke döner (eski çerçevedeki gibi).
+  // Tanımsız alt adres köke döner.
   if (bolum === null) return <Navigate replace to={YENI_KOK} />;
 
   const gorunen = BOLUMLER.filter((b) => b.gorur(yetki));
