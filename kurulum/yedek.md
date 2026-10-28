@@ -52,6 +52,7 @@ bozulursa son yedek geri yüklenir; kayıp en çok bir günle sınırlı kalır.
    TMIV2_PG_DUMP=C:\Program Files\PostgreSQL\18\bin\pg_dump.exe
    ```
    Klasör ekrandan da seçilebilir (yukarıda); `.env` değeri yalnız ekranda seçim yokken kullanılır.
+   Talimat resim ve videoları için `TMIV2_MEDYA_DIZINI` de eklenir (`.env.ornek`; aşağıda "Talimat medyası aynası").
    `TMIV2_YEDEK_DIZINI` mutlak yol olmalı; yoksa ya da klasör yoksa yedek kapalıdır, sunucu yine açılır (ekranda "Yedek kapalı").
    pg_dump şu sırayla aranır; gece yedeği, `npm run yedek` ve güncelleyici aynı sırayı kullanır:
    1. `TMIV2_PG_DUMP` doluysa yalnız o tam yol.
