@@ -21,3 +21,11 @@ UYUM-BORCU.md merge=union
 # Test robotu canli paketine girmez (ADR 0019): paket `git archive` ile cikar.
 ekran-testleri/benzetim/ export-ignore
 test-robotu/ export-ignore
+
+# Sunucuda gerekmeyen gelistirme dosyalari kurulum paketine girmez (soru 1051 a); kurulum/ ve belgeler/ kalir.
+.github/ export-ignore
+.claude/ export-ignore
+CLAUDE.md export-ignore
+ekran-testleri/ export-ignore
+saat/ export-ignore
+deneme/ export-ignore
