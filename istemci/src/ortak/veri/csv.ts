@@ -6,9 +6,14 @@ export type CsvDegeri = string | number | null;
 
 // Excel, tırnak içinde de olsa = + - @ sekme ya da satır başıyla başlayan hücreyi formül sayar; dışarıdan gelen ad
 // (portal, tedarikçi) açanın bilgisayarında komut çalıştırabilir. Böyle metin ' ile başlar, gerçek sayı olduğu gibi kalır.
+// Kendi biçimiyle yazan dışa aktarmalar da metin hücresini buradan geçirir. `sayiSerbest`: metin olarak tutulan düz sayı
+// ('-0,02') formül değildir, kesme işaretsiz kalır.
 const FORMUL_BASI = /^[=+\-@\t\r]/;
+const DUZ_SAYI = /^[+-]?\d+(?:[.,]\d+)?$/;
+export const formulKoru = (metin: string, secenek?: { sayiSerbest?: boolean }): string =>
+  FORMUL_BASI.test(metin) && !(secenek?.sayiSerbest === true && DUZ_SAYI.test(metin)) ? `'${metin}` : metin;
 export const csvHucresi = (v: CsvDegeri): string => {
-  const metin = typeof v === 'number' ? String(v).replace('.', ',') : FORMUL_BASI.test(v ?? '') ? `'${v ?? ''}` : (v ?? '');
+  const metin = typeof v === 'number' ? String(v).replace('.', ',') : formulKoru(v ?? '');
   return `"${metin.replace(/"/g, '""')}"`;
 };
 
