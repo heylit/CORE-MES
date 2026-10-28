@@ -96,6 +96,8 @@ export function _tarih(s: unknown): Date | null { if (!s)
     return null; const t = new Date(s + 'T00:00:00'); return isNaN(+t) ? null : t; }
 export function _ayEkle(t: Date, ay: number): Date { const r = new Date(t); r.setMonth(r.getMonth() + ay); return r; }
 export function _tStr(t: Date | null | undefined): string { return (t ? t.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''); }
+// Takvim tarihleri yerel gece yarısıdır (_tarih); toISOString UTC gününü verir, Türkiye'de bir gün geri düşer.
+export function _isoGun(t: Date): string { return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 export function _gun(a: Date, b: Date): number { return (Math.round((+a - +b) / 86400000)); }
 export function turAdimlari(d: TurTaslagi = D): TurAdimi[] {
     const t = d.tur;
@@ -379,7 +381,7 @@ export function gStokOzeti(d: TurTaslagi): Nesne {
             rota: (d.ops || []).map((x, i) => ({ sira: i + 1, operasyon: x.ad, istasyon: x.merkez || '', sure_dk: _gnum(x.sure) })), gtin: g.gtin || null, gtip: g.gtip || null });
     if (d.tur === 'demirbas')
         Object.assign(o, { demirbas_no: d.com.kod || finalKod(d), seri_no: g.seri || '', konum: g.konum || '', zimmet: g.sorumlu || '', durum: g.durum || '', alis_tarihi: g.alis || null,
-            net_defter_degeri: am ? r4(am.net) : null, yillik_amortisman: am ? r4(am.yillik) : null, takvim: gTarihler(d).map(x => ({ ad: x.ad, tarih: x.sonraki.toISOString().slice(0, 10), kalan_gun: x.kalanGun })) });
+            net_defter_degeri: am ? r4(am.net) : null, yillik_amortisman: am ? r4(am.yillik) : null, takvim: gTarihler(d).map(x => ({ ad: x.ad, tarih: _isoGun(x.sonraki), kalan_gun: x.kalanGun })) });
     return o;
 }
 export function gSablonOzet(t: TurTaslagi): string {
