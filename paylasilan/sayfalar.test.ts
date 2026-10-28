@@ -5,7 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { islemMi, veriIslemiMi } from './islemler.ts';
 import { SAYFA_GRUPLARI, aramaUcuGecerliMi, ikinciMenulerinHatalari, sayfalariSirala } from './sayfa-tanimi.ts';
 import type { IkinciMenuTanimi, SayfaTanimi } from './sayfa-tanimi.ts';
-import { IKINCI_MENULER, SAYFALAR, SAYFA_ISLEMLERI, SAYFA_YOLLARI } from './sayfalar.ts';
+import { KAPALI_MODULLER, kapaliModulYoluMu } from './kapali-moduller.ts';
+import { IKINCI_MENULER, SAYFALAR, SAYFA_ISLEMLERI, SAYFA_YOLLARI, TUM_IKINCI_MENULER, TUM_SAYFALAR } from './sayfalar.ts';
 
 const KLASOR = fileURLToPath(new URL('./sayfalar/', import.meta.url));
 
@@ -29,7 +30,7 @@ test('her sayfanın yolu ve işlemi bir kez geçer; işlem sayfa.<yol>, grup bil
     }
   }
   assert.deepEqual(SAYFA_YOLLARI, SAYFALAR.map((s) => s.yol));
-  assert.deepEqual(SAYFA_ISLEMLERI, SAYFALAR.map((s) => s.islem));
+  assert.deepEqual(SAYFA_ISLEMLERI, TUM_SAYFALAR.map((s) => s.islem));
 });
 
 test('modül dosyasındaki her sayfa listededir; iki dosya aynı yolu veremez', async () => {
@@ -44,7 +45,7 @@ test('modül dosyasındaki her sayfa listededir; iki dosya aynı yolu veremez', 
     bulunan.push(...sayfalar);
   }
   assert.equal(new Set(bulunan.map((s) => s.yol)).size, bulunan.length);
-  assert.deepEqual(sayfalariSirala(bulunan), SAYFALAR);
+  assert.deepEqual(sayfalariSirala(bulunan), TUM_SAYFALAR);
 });
 
 test('diziliş: önce grup sırası, sonra sayfanın sırası, eşitlikte yol; verilen sıra sonucu değiştirmez', () => {
@@ -114,6 +115,18 @@ test('modül dosyasındaki her ikinci menü toplayıcıdadır ve geçerlidir: k�
     }
   }
   const kokSirali = (liste: readonly IkinciMenuTanimi[]) => [...liste].sort((a, b) => (a.kok < b.kok ? -1 : 1));
-  assert.deepEqual(kokSirali(IKINCI_MENULER), kokSirali(bulunan));
+  assert.deepEqual(kokSirali(TUM_IKINCI_MENULER), kokSirali(bulunan));
+  assert.deepEqual(ikinciMenulerinHatalari(TUM_IKINCI_MENULER, { sayfaYollari: TUM_SAYFALAR.map((s) => s.yol), islemMi }), []);
   assert.deepEqual(ikinciMenulerinHatalari(IKINCI_MENULER, { sayfaYollari: SAYFA_YOLLARI, islemMi }), []);
+});
+
+test('kapalı modülün sayfası ve ikinci menüsü listede yoktur; sayfa işlemi kalır', () => {
+  assert.equal(KAPALI_MODULLER.length > 0, true);
+  for (const ad of KAPALI_MODULLER) {
+    assert.equal(TUM_SAYFALAR.some((s) => s.yol === `/${ad}`), true, ad);
+    assert.equal(SAYFALAR.some((s) => kapaliModulYoluMu(s.yol)), false, ad);
+    assert.equal(IKINCI_MENULER.some((m) => kapaliModulYoluMu(m.kok)), false, ad);
+    assert.equal(islemMi(`sayfa.${ad}`), true, ad);
+  }
+  assert.equal(SAYFALAR.length, TUM_SAYFALAR.length - KAPALI_MODULLER.length);
 });

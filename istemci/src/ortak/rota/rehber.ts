@@ -1,5 +1,5 @@
 import { SAYFA_GRUPLARI } from '#paylasilan/sayfa-tanimi.ts';
-import { SAYFALAR } from '#paylasilan/sayfalar.ts';
+import { SAYFALAR, acikModulDosyalari } from '#paylasilan/sayfalar.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { sadelestir } from './arama-dizini.ts';
 import type { HizliIsGrubu } from './hizli-isler.ts';
@@ -159,5 +159,5 @@ export function rehberAra(
 }
 
 export const sayfaRehberleri: readonly SayfaRehberi[] = rehberleriTopla(
-  import.meta.glob('../../moduller/*/rehber.ts', { eager: true }),
+  acikModulDosyalari(import.meta.glob('../../moduller/*/rehber.ts', { eager: true })),
 );

@@ -36,7 +36,7 @@ test('360 genişlikte sayfa adı düğmelerin altında kendi satırında kesilme
   test.skip(bilgi.project.name !== 'g1280', 'genişliği test kurar');
   await page.setViewportSize({ width: 360, height: 800 });
   // Uzun adlar 360'ta tek satıra sığmaz; ad üç noktayla kesilmez, iki satıra iner (borç #322).
-  const uzun = [{ yol: '/malzemeler', baslik: 'Malzemeler ve Hizmetler' }, { yol: '/portal', baslik: 'Müşteri ve Tedarikçi Portalı' }];
+  const uzun = [{ yol: '/malzemeler', baslik: 'Malzemeler ve Hizmetler' }, { yol: '/musteri-tedarikci', baslik: 'Müşteriler ve Tedarikçiler' }];
   for (const s of [...SAYFALAR, ...uzun, { yol: '/stok', baslik: 'Stok Merkezi' }, { yol: '/uretim-terminali', baslik: 'Üretim Terminali' }]) {
     await ac(s.yol);
     const baslik = page.locator('h1.tc-kabuk-baslik');
@@ -56,12 +56,12 @@ test('360 genişlikte sayfa adı düğmelerin altında kendi satırında kesilme
 test('360 genişlikte tek satıra sığmayan sayfa adı kesilmez, alt satıra iner', async ({ page, ac }, bilgi) => {
   test.skip(bilgi.project.name !== 'g1280', 'genişliği test kurar');
   await page.setViewportSize({ width: 360, height: 800 });
-  await ac('/portal');
+  await ac('/musteri-tedarikci');
   const baslik = page.locator('h1.tc-kabuk-baslik');
-  await expect(baslik).toHaveText('Müşteri ve Tedarikçi Portalı');
+  await expect(baslik).toHaveText('Müşteriler ve Tedarikçiler');
   const olcu = await baslik.evaluate((e) => {
     const tekSatir = e.getBoundingClientRect().height;
-    e.textContent = 'Müşteri ve Tedarikçi Portalı Onay ve Belge Ayarları';
+    e.textContent = 'Müşteriler ve Tedarikçiler Onay ve Belge Ayarları';
     return { yatay: e.scrollWidth - e.clientWidth, dikey: e.scrollHeight - e.clientHeight, tekSatir, simdi: e.getBoundingClientRect().height };
   });
   expect(olcu.yatay, 'uzun ad yatayda kesiliyor').toBeLessThanOrEqual(0);

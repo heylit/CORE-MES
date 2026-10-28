@@ -1,6 +1,6 @@
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
 import { SAYFA_GRUPLARI } from '#paylasilan/sayfa-tanimi.ts';
-import { IKINCI_MENULER, SAYFALAR, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { IKINCI_MENULER, SAYFALAR, acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
 
 // "Ne oldu?" paneli (üst çubuk): kişinin günlük işini başlattığı ekrana götüren olaylar. Modül yalnız olayını bildirir
@@ -102,5 +102,5 @@ export function gorunenHizliIsler(isler: readonly HizliIs[], { sayfalar, menuler
 }
 
 export const hizliIsler: readonly HizliIs[] = hizliIsleriTopla(
-  import.meta.glob('../../moduller/*/hizli-isler.ts', { eager: true }),
+  acikModulDosyalari(import.meta.glob('../../moduller/*/hizli-isler.ts', { eager: true })),
 );

@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
-import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
 
 // Modülün kendi sayfasındaki ayar ekranı Sistem Ayarları'nda da açılır (istemci/src/moduller/<ad>/ayar-ekranlari.tsx).
@@ -62,5 +62,5 @@ export function gorunenAyarEkranlari(ekranlar: readonly AyarEkrani[], islemler: 
 }
 
 export const ayarEkranlari: readonly AyarEkrani[] = ayarEkranlariniTopla(
-  import.meta.glob('../../moduller/*/ayar-ekranlari.tsx', { eager: true }),
+  acikModulDosyalari(import.meta.glob('../../moduller/*/ayar-ekranlari.tsx', { eager: true })),
 );

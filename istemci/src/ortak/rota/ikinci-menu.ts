@@ -1,6 +1,6 @@
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { IkinciMenuMaddesi, IkinciMenuTanimi } from '#paylasilan/sayfa-tanimi.ts';
-import { IKINCI_MENULER, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { IKINCI_MENULER, TUM_IKINCI_MENULER, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 
 // Kabuğun çizdiği menü: simgesi setten. İşlem burada yalın metindir; kayıtlı olduğu aşağıdaki atamada denetlenir.
@@ -8,8 +8,10 @@ export type IkinciMenu = IkinciMenuTanimi<SimgeAdi>;
 export type MenuMaddesi = IkinciMenuMaddesi<SimgeAdi>;
 
 // Modülün bildirdiği simge sette, işlem kayıtlı değilse bu atama derlenmez.
-const DENETLENMIS: readonly IkinciMenuTanimi<SimgeAdi, Islem>[] = IKINCI_MENULER;
-export const IKINCI_MENU_TANIMLARI: readonly IkinciMenu[] = DENETLENMIS;
+// Kapalı modülün menüsü de denetlenir: modül açıldığında derlenmeyen menüyle gelmesin.
+const DENETLENMIS: readonly IkinciMenuTanimi<SimgeAdi, Islem>[] = TUM_IKINCI_MENULER;
+export const TUM_IKINCI_MENU_TANIMLARI: readonly IkinciMenu[] = DENETLENMIS;
+export const IKINCI_MENU_TANIMLARI: readonly IkinciMenu[] = IKINCI_MENULER;
 
 // Menü yalnız maddenin kendi işlemlerinden (işlemi ya da veya listesinden biri) süzülür (ana menüdeki sayfa süzgeciyle aynı kaynak: kullanıcının işlem
 // listesi; bayraklı yöneticinin listesi bütün işlemleri taşır). Maddesi kalmayan grup düşer; grubu kalmayan menü yoktur.

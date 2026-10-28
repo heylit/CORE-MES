@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { defineConfig } from '@playwright/test';
+import { KAPALI_MODULLER } from '#paylasilan/kapali-moduller.ts';
 import { CALISMA_KLASORU } from './yollar.ts';
 
 // Ekran ve davranış testleri: derlenmiş istemci (4101) ve sunucu (4100), göçleri uygulanmış boş veritabanına yüklenen örnek
@@ -10,6 +11,8 @@ const tarayici = process.env['TMIV2_EKRAN_TARAYICI']?.trim() || undefined;
 // Görüntü karşılaştırmasının temel görüntüleri depoya girmez (depoya yalnız kod girer); klasör verilmezse o testler atlanır.
 const temel = process.env['TMIV2_EKRAN_TEMEL']?.trim() || undefined;
 const ci = process.env['CI'] !== undefined;
+// Kapalı modülün sayfası uygulamada yoktur; kendi ekran testleri (`<modül>.spec.ts`, `<modül>-*.spec.ts`) modül açılınca yeniden koşar.
+const kapaliModulTestleri = KAPALI_MODULLER.map((ad) => new RegExp(`(^|[\\/])${ad}(-[^\\/]*)?\\.spec\\.ts$`));
 
 // Yükseklikler kayıttaki çekimlerle aynı (kayit/*/betik/ortak.cjs).
 const GENISLIKLER = [
@@ -22,6 +25,7 @@ export default defineConfig({
   testDir: '.',
   outputDir: join(CALISMA_KLASORU, 'sonuc'),
   snapshotPathTemplate: join(temel ?? join(CALISMA_KLASORU, 'temel'), '{arg}-{projectName}{ext}'),
+  testIgnore: kapaliModulTestleri,
   fullyParallel: true,
   forbidOnly: ci,
   retries: 0,

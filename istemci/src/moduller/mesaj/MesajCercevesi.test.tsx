@@ -6,7 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/mesaj.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
+import { TUM_IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
 import { sayfaKur, yerelDegerler, YEREL } from './MesajCercevesi.tsx';
 import { anahtarParcasi } from './cerceve-kopru.ts';
 import { rotalar } from './rotalar.tsx';
@@ -98,7 +98,7 @@ describe('MesajCercevesi', () => {
   });
 
   it('ikinci menünün her maddesinin rotası vardır', () => {
-    const menu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/mesaj');
+    const menu = TUM_IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/mesaj');
     expect(menu).toBeDefined();
     for (const madde of menuMaddeleri(menu!)) expect(rotalar.some((r) => r.yol === madde.yol)).toBe(true);
   });

@@ -1,5 +1,12 @@
 # mesaj: uyum borcu
 
+## Kapalı modül (1067 teyit, 28.10.2026)
+Modül `paylasilan/kapali-moduller.ts` listesindedir: uçları kaydedilmez; sayfası, menüsü, rehberi ve ekran testleri uygulamadan çıkar. Kod, tablolar (`mesaj_belge`, `mesaj_ek`), rol satırları ve göçler durur; birim testleri koşar.
+Listeden çıkarmadan (açmadan) önce kapanacak:
+- KD-050 ve KD-060 (`denetim/KOD.md`): belge deposunda sahiplik ve sahte zaman kanıtı.
+- 1057 a K1: ek dosyası içeriğinin tarayıcıda çalışması (XSS).
+- ADR 0021'deki dış erişim işleri bu modül açılmadan başlamaz.
+
 ## Bağlamada kapanacak
 | Kural / konu | İstisna | Nasıl uyumlanır |
 |---|---|---|
