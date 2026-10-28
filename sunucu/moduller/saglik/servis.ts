@@ -1,12 +1,13 @@
 import { execFile } from 'node:child_process';
 import { statfs } from 'node:fs/promises';
+import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 import type { Db } from '#cekirdek/db.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import type { Ayrinti } from '#paylasilan/sozlesme/saglik.ts';
-import { YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, uyarilar } from './kurallar.ts';
-import type { YedekBilgisi } from './kurallar.ts';
+import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
+import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, otomatikAcilisCoz, uyarilar } from './kurallar.ts';
+import type { GorevSorgusu, YedekBilgisi } from './kurallar.ts';
 import { sonGocAdi, veritabaniYokla, vtBaglantiSay } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 
@@ -86,6 +87,42 @@ export function olayDongusuOlceri(): OlayDongusuOlcer {
   };
 }
 
+const GOREV_SORGU_SURESI_MS = 5000;
+const OTOMATIK_ACILIS_ONBELLEK_MS = 10 * 60 * 1000;
+
+// Yalnız okur: görevi kurmak, değiştirmek ya da çalıştırmak yönetici ister ve uygulamanın işi değildir. Program PATH'ten değil
+// Windows klasöründen alınır, kabuk açılmaz, bağımsız değişkenler sabittir.
+export async function zamanlayiciGoreviSorgula(gorevAdi: string, ortam: NodeJS.ProcessEnv = process.env): Promise<GorevSorgusu> {
+  const windows = ortam['SystemRoot']?.trim() || ortam['windir']?.trim() || '';
+  if (windows === '') return { tur: 'okunamadi' };
+  try {
+    const { stdout } = await calistir(path.win32.join(windows, 'System32', 'schtasks.exe'), ['/Query', '/TN', gorevAdi, '/XML'], {
+      timeout: GOREV_SORGU_SURESI_MS, windowsHide: true, encoding: 'buffer', maxBuffer: 1024 * 1024,
+    });
+    return { tur: 'var', xml: stdout };
+  } catch (hata) {
+    // Süreç kendi çıkış koduyla bittiyse görev yok ya da görünmüyor; süre dolması ve başlatılamama bilinmiyor.
+    const kod = (hata as { code?: unknown; killed?: boolean }).code;
+    return typeof kod === 'number' && (hata as { killed?: boolean }).killed !== true ? { tur: 'yok' } : { tur: 'okunamadi' };
+  }
+}
+
+export type OtomatikAcilisOkuyucu = () => Promise<OtomatikAcilis | null>;
+
+// Ayrıntı ucu sık okunur; her istekte süreç açılmasın diye sonuç bir süre saklanır.
+export function onbellekliOtomatikAcilis(
+  sorgula: (gorevAdi: string) => Promise<GorevSorgusu>, simdi: () => number = Date.now, sureMs: number = OTOMATIK_ACILIS_ONBELLEK_MS,
+): OtomatikAcilisOkuyucu {
+  let son: { zaman: number; sonuc: Promise<OtomatikAcilis> } | null = null;
+  return () => {
+    const an = simdi();
+    if (son === null || an - son.zaman >= sureMs) {
+      son = { zaman: an, sonuc: sorgula(BEKCI_GOREV_ADI).catch((): GorevSorgusu => ({ tur: 'okunamadi' })).then((s) => otomatikAcilisCoz(s, BEKCI_GOREV_ADI)) };
+    }
+    return son.sonuc;
+  };
+}
+
 export interface DiskOlcusu { bos: number; toplam: number }
 export type DiskOkuyucu = (dizin: string) => Promise<DiskOlcusu | null>;
 export interface DiskDizinleri { yedek: string | null; veritabani: string | null }
@@ -115,6 +152,8 @@ export interface AyrintiGirdisi {
   // Verilmezse ölçülmez (null).
   olayDongusu?: OlayDongusuOlcer;
   bellekOku?: () => { rss: number; heapUsed: number };
+  // Verilmezse (Windows dışı) null.
+  otomatikAcilisOku?: OtomatikAcilisOkuyucu;
   simdi?: Date;
 }
 
@@ -158,6 +197,9 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
   const diskler = await diskleriTopla(girdi, sureSiniri);
   const { yedekOku } = girdi;
   const yedek = yedekOku === undefined ? null : await sureliGuvenli(yedekOku, sureSiniri);
+  const { otomatikAcilisOku } = girdi;
+  // Sorgunun kendi süre sınırı vardır; bu sınır yalnız asılı okuyucuya karşıdır.
+  const otomatikAcilis = otomatikAcilisOku === undefined ? null : await sureliGuvenli(otomatikAcilisOku, GOREV_SORGU_SURESI_MS + 1000);
   const simdi = girdi.simdi ?? new Date();
   return {
     veritabaniGecikmeMs, sonGoc, commit, calismaSuresiSn: girdi.calismaSuresiSn, ortam: girdi.ortam,
@@ -166,6 +208,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     bellek: { rssBayt: bellek.rss, yiginBayt: bellek.heapUsed },
     olayDongusuGecikmeMs: girdi.olayDongusu?.() ?? null,
     vtBaglantiSayisi,
+    otomatikAcilis,
     uyarilar: uyarilar({
       simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
     }),

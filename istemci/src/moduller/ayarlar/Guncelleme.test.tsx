@@ -32,7 +32,7 @@ function cevap(
   };
 }
 
-function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response = () => json(200, PAKET)) {
+function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response = () => json(200, PAKET), saglik: Record<string, unknown> = {}) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   let paketler = liste;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
@@ -42,7 +42,7 @@ function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response = () 
     if (yol === '/ayarlar') return json(200, { ayarlar: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
     if (yol === '/guncelleme/paketler') return json(200, paketler);
-    if (yol === '/saglik/ayrinti') return json(200, { sonGoc: '20261011000000_eski.sql', commit: null });
+    if (yol === '/saglik/ayrinti') return json(200, { sonGoc: '20261011000000_eski.sql', commit: null, ...saglik });
     if (/\/parca$/.test(yol)) {
       const { sira } = govde as { sira: number };
       return json(200, { alinan: sira + 1, toplam: 2 } satisfies GuncellemeParcasiCevabi);
@@ -135,6 +135,33 @@ describe('Sistem Ayarları, güncelleme', () => {
     fireEvent.click(screen.getByText('ccccccc'));
     expect(await screen.findByText('2026.10.11-1 ile gelenler')).toBeTruthy();
     expect(screen.getByText('Pakette değişiklik listesi yok.')).toBeTruthy();
+  });
+
+  it('otomatik açılış durumu salt okunur gösterilir; kurulu değilse uyarı yazar, alanı taşımayan sunucuda kart yoktur', async () => {
+    sunucuKur(cevap('acik', []), undefined, { otomatikAcilis: { durum: 'kurulu', gorevAdi: 'TMIV2 Bekci' } });
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText('Kurulu')).toBeTruthy();
+    expect(screen.getByText('Görev adı: TMIV2 Bekci')).toBeTruthy();
+    expect(screen.queryByText(/kendiliğinden açılmaz/)).toBeNull();
+    cleanup();
+    sunucuKur(cevap('acik', []), undefined, { otomatikAcilis: { durum: 'kurulu-degil', gorevAdi: 'TMIV2 Bekci' } });
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText('Kurulu değil')).toBeTruthy();
+    expect(screen.getByText(/kendiliğinden açılmaz/)).toBeTruthy();
+    cleanup();
+    sunucuKur(cevap('acik', []), undefined, { otomatikAcilis: null });
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText('Bilinmiyor')).toBeTruthy();
+    expect(screen.queryByText(/Görev adı/)).toBeNull();
+    cleanup();
+    sunucuKur(cevap('acik', []));
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    await screen.findByText('Kanal açık');
+    expect(screen.queryByText('Sunucu açılışı')).toBeNull();
   });
 
   it('yeni göç sayısı sunucunun son göçünden sonrakileri sayar', () => {

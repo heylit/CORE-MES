@@ -17,8 +17,11 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
-import { ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu } from './servis.ts';
+import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
+import type { GorevSorgusu } from './kurallar.ts';
+import {
+  ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+} from './servis.ts';
 import type { AyrintiGirdisi } from './servis.ts';
 import { saglikUclari } from './uclar.ts';
 import type { SaglikKaynagi } from './uclar.ts';
@@ -130,7 +133,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
     const { bellek, ...ayrinti } = await ayrintiTopla(vt, girdi('a'.repeat(40), null, 30));
     assert.deepEqual(ayrinti, {
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
-      uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null,
+      uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
@@ -182,6 +185,44 @@ test('git önbelleği ilk sonucu saklar: başarı da başarısızlık da yeniden
     for (let i = 0; i < 3; i += 1) assert.equal(await oku(), sonuc);
     assert.equal(cagri, 1, String(sonuc));
   }
+});
+
+const gorevXml = (govde: string): Buffer => Buffer.from(`<?xml version="1.0" encoding="UTF-16"?>\r\n<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">${govde}</Task>`, 'utf16le');
+const ACIK_AYARLAR = '<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><IdleSettings><StopOnIdleEnd>true</StopOnIdleEnd></IdleSettings><Enabled>true</Enabled></Settings>';
+const BASLANGIC = '<Triggers><BootTrigger><Enabled>true</Enabled><Delay>PT1M</Delay></BootTrigger></Triggers>';
+
+test('otomatik açılış: açık görev ve Başlangıçta tetikleyicisi kurulu; kapalı görev ya da kapalı/eksik tetikleyici kapalı', () => {
+  const coz = (sorgu: GorevSorgusu) => otomatikAcilisCoz(sorgu, BEKCI_GOREV_ADI).durum;
+  assert.equal(coz({ tur: 'var', xml: gorevXml(BASLANGIC + ACIK_AYARLAR) }), 'kurulu');
+  assert.equal(coz({ tur: 'var', xml: Buffer.from(`<Task>${BASLANGIC}<Settings></Settings></Task>`, 'latin1') }), 'kurulu');
+  assert.equal(coz({ tur: 'var', xml: gorevXml(BASLANGIC + ACIK_AYARLAR.replace('<Enabled>true', '<Enabled>false')) }), 'kapali');
+  assert.equal(coz({ tur: 'var', xml: gorevXml(BASLANGIC.replace('<Enabled>true', '<Enabled>false') + ACIK_AYARLAR) }), 'kapali');
+  assert.equal(coz({ tur: 'var', xml: gorevXml('<Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>' + ACIK_AYARLAR) }), 'kapali');
+});
+
+test('otomatik açılış: görev yok kurulu değil; okunamayan sorgu ya da görev olmayan çıktı bilinmiyor; görev adı taşınır', () => {
+  assert.deepEqual(otomatikAcilisCoz({ tur: 'yok' }, BEKCI_GOREV_ADI), { durum: 'kurulu-degil', gorevAdi: 'TMIV2 Bekci' });
+  assert.equal(otomatikAcilisCoz({ tur: 'okunamadi' }, BEKCI_GOREV_ADI).durum, 'bilinmiyor');
+  assert.equal(otomatikAcilisCoz({ tur: 'var', xml: Buffer.from('ERROR', 'latin1') }, BEKCI_GOREV_ADI).durum, 'bilinmiyor');
+});
+
+test('otomatik açılış: Windows klasörü bilinmiyorsa süreç açılmaz, bilinmiyor', async () => {
+  assert.deepEqual(await zamanlayiciGoreviSorgula(BEKCI_GOREV_ADI, {}), { tur: 'okunamadi' });
+});
+
+test('otomatik açılış: sonuç süre boyunca saklanır, süre dolunca ve hata olunca yeniden sorulur; hata bilinmiyor olur', async () => {
+  let an = 0;
+  const sorulan: string[] = [];
+  let sonraki: () => Promise<GorevSorgusu> = async () => ({ tur: 'yok' });
+  const oku = onbellekliOtomatikAcilis(async (ad) => { sorulan.push(ad); return sonraki(); }, () => an, 1000);
+  assert.equal((await oku())?.durum, 'kurulu-degil');
+  an = 999;
+  assert.equal((await oku())?.durum, 'kurulu-degil');
+  assert.deepEqual(sorulan, ['TMIV2 Bekci']);
+  an = 1000;
+  sonraki = async () => { throw new Error('beklenmeyen'); };
+  assert.equal((await oku())?.durum, 'bilinmiyor');
+  assert.equal(sorulan.length, 2);
 });
 
 describe('sağlık (gerçek PostgreSQL)', () => {
@@ -266,7 +307,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
-      'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
       'vtBaglantiSayisi', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
@@ -401,6 +442,24 @@ describe('sağlık (gerçek PostgreSQL)', () => {
       assert.equal(cevap.json().commit, 'ortamdan');
     }
     assert.equal(gitSayisi, 1);
+  });
+
+  test('/saglik/ayrinti otomatik açılış: sorgu kaynağı yoksa null; varsa durum ve görev adı, sorgu ardışık isteklerde bir kez', async () => {
+    const yok = kaynakliUygulama({ ayarOku: () => ({ commit: null, ortam: 'test' }), gitOku: async () => null });
+    assert.equal((await ayrintiIste(yok, yoneticiCerezi)).json().otomatikAcilis, null);
+    let sorgu = 0;
+    const hedef = kaynakliUygulama({
+      ayarOku: () => ({ commit: null, ortam: 'test' }),
+      gitOku: async () => null,
+      gorevSorgula: async () => { sorgu += 1; return { tur: 'var', xml: gorevXml(BASLANGIC + ACIK_AYARLAR) }; },
+    });
+    for (let i = 0; i < 2; i += 1) {
+      const cevap = await ayrintiIste(hedef, izleyenCerezi);
+      assert.equal(cevap.statusCode, 200, cevap.body);
+      assert.deepEqual(cevap.json().otomatikAcilis, { durum: 'kurulu', gorevAdi: 'TMIV2 Bekci' });
+    }
+    assert.equal(sorgu, 1);
+    assert.equal((await ayrintiIste(hedef, operatorCerezi)).statusCode, 403);
   });
 
   test('/saglik/ayrinti iş durumları: işlemi olan zamanları ISO metin olarak görür, hiç koşmamış iş null taşır; işlemsiz kullanıcı 403', async () => {

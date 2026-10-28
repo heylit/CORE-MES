@@ -7,8 +7,11 @@ import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import { ayrintiCevabi, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
 import type { YedekBilgisi } from './kurallar.ts';
-import { ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, saglikliMi, surecYedegi } from './servis.ts';
+import {
+  ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, saglikliMi, surecYedegi, zamanlayiciGoreviSorgula,
+} from './servis.ts';
 import type { DiskDizinleri, DiskOkuyucu, GitOkuyucu } from './servis.ts';
+import type { GorevSorgusu } from './kurallar.ts';
 import { yedekOrtaminiKur } from '../ayarlar/disari.ts';
 
 export interface SaglikKaynagi {
@@ -21,18 +24,24 @@ export interface SaglikKaynagi {
   diskOku?: DiskOkuyucu;
   // Verilmezse yedek klasöründeki en yeni yedek dosyası (Sistem Ayarları'ndaki yedek listesiyle aynı kaynak).
   yedekOku?: (db: Db) => Promise<YedekBilgisi>;
+  // Verilmezse otomatik açılış okunmaz (null); süreç kaynağında yalnız Windows'ta Görev Zamanlayıcı sorgulanır.
+  gorevSorgula?: (gorevAdi: string) => Promise<GorevSorgusu>;
 }
 
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
   return { yedek: (await yedekOrtaminiKur(db)).dizin, veritabani: pgVeriDiziniOku() };
 }
 
-const SUREC_KAYNAGI: SaglikKaynagi = { ayarOku, gitOku: () => gitCommitOku() };
+const SUREC_KAYNAGI: SaglikKaynagi = {
+  ayarOku, gitOku: () => gitCommitOku(),
+  ...(process.platform === 'win32' ? { gorevSorgula: (ad: string) => zamanlayiciGoreviSorgula(ad) } : {}),
+};
 
 // Süre sınırı parametredir ki test kısa bir sınırla asılı veritabanını sınayabilsin.
 export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi = SUREC_KAYNAGI) {
   const gitOkuyucu = onbellekliOkuyucu(kaynak.gitOku);
   const olayDongusu = olayDongusuOlceri();
+  const otomatikAcilisOku = kaynak.gorevSorgula === undefined ? undefined : onbellekliOtomatikAcilis(kaynak.gorevSorgula);
   // Ortam süreç ömründe değişmez. İlk istekte okunur, modül yüklenirken değil: uç listesini çıkaran
   // araç bu dosyayı ortam değişkenleri olmadan yükler.
   let ayar: Pick<Ayar, 'commit' | 'ortam'> | undefined;
@@ -68,6 +77,7 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
           ...(kaynak.diskOku === undefined ? {} : { diskOku: kaynak.diskOku }),
           yedekOku: () => (kaynak.yedekOku ?? surecYedegi)(db),
           olayDongusu,
+          ...(otomatikAcilisOku === undefined ? {} : { otomatikAcilisOku }),
         });
       },
     }),
