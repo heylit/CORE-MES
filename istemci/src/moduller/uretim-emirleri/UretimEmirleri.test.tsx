@@ -33,7 +33,7 @@ describe('UretimEmirleri liste', () => {
     const bitmis = satirlar.find((s) => within(s).queryByText('EM-3'))!;
     expect(planli.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('yok');
     expect(bitmis.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('8');
-    expect(within(bitmis).getByText('Bitti')).toBeTruthy();
+    expect(within(bitmis).getByText('Üretimi bitti')).toBeTruthy();
     expect(within(planli).getByText('DNM-001')).toBeTruthy();
   });
 

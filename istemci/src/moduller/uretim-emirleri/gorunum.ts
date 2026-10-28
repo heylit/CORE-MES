@@ -4,7 +4,7 @@ import type {
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const DURUM_ETIKETI: Record<EmirDurumu, string> = {
-  taslak: 'Taslak', planli: 'Planlı', basladi: 'Başladı', bitti: 'Bitti', iptal: 'İptal',
+  taslak: 'Taslak', planli: 'Planlı', basladi: 'Başladı', bitti: 'Üretimi bitti', iptal: 'İptal',
 };
 export const DURUM_TONU: Record<EmirDurumu, RozetTonu> = {
   taslak: 'pasif', planli: 'bilgi', basladi: 'uyari', bitti: 'tamam', iptal: 'pasif',
@@ -33,10 +33,15 @@ export function farkMetni(adet: number, saglamAdet: number | null): string | nul
 export const CALISMA_ETIKETI: Record<CalismaDurumu, string> = { calisiyor: 'Çalışıyor', durakli: 'Duraklı', durdu: 'Durdu' };
 export const CALISMA_TONU: Record<CalismaDurumu, RozetTonu> = { calisiyor: 'tamam', durakli: 'uyari', durdu: 'hata' };
 
+// Onaylı kapanışın sonucu (1082 a): son adımda emir "Üretimi bitti" olur; kalite ve müdür onayından sonra "Tamamlandı".
+export type KapanisSonucuAlani = { kapanisSonucu?: 'tamamlandi' | 'saglamsiz' | null };
+const KAPANIS_SONUC_ETIKETI = { tamamlandi: 'Tamamlandı', saglamsiz: 'Kapandı (sağlamsız)' } as const;
+
 // Başlamış emirde ayrım çalışma durumundan gelir (emir durumu `basladi` kalır); canlı bilgi yoksa nötr "Başladı".
-export function durumGosterimi(emir: Pick<Emir, 'durum' | 'canli'>): { etiket: string; ton: RozetTonu } {
+export function durumGosterimi(emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonucuAlani): { etiket: string; ton: RozetTonu } {
   const calisma = emir.durum === 'basladi' ? emir.canli?.calisma : null;
   if (calisma) return { etiket: CALISMA_ETIKETI[calisma], ton: CALISMA_TONU[calisma] };
+  if (emir.durum === 'bitti' && emir.kapanisSonucu) return { etiket: KAPANIS_SONUC_ETIKETI[emir.kapanisSonucu], ton: DURUM_TONU.bitti };
   return { etiket: DURUM_ETIKETI[emir.durum], ton: DURUM_TONU[emir.durum] };
 }
 

@@ -22,7 +22,14 @@ describe('canlı gösterim', () => {
   it('başlamış emirde ayrım çalışma durumundan gelir; canlı yoksa nötr "Başladı"', () => {
     expect(durumGosterimi({ durum: 'basladi', canli }).etiket).toBe('Duraklı');
     expect(durumGosterimi({ durum: 'basladi', canli: null }).etiket).toBe('Başladı');
-    expect(durumGosterimi({ durum: 'bitti', canli: { ...canli, calisma: null } }).etiket).toBe('Bitti');
+    expect(durumGosterimi({ durum: 'bitti', canli: { ...canli, calisma: null } }).etiket).toBe('Üretimi bitti');
+  });
+
+  it('1082 a: bitmiş emir kapanış sonucu gelmedikçe "Üretimi bitti", iki onaydan sonra "Tamamlandı" ya da "Kapandı (sağlamsız)"', () => {
+    expect(durumGosterimi({ durum: 'bitti', canli: null, kapanisSonucu: null }).etiket).toBe('Üretimi bitti');
+    expect(durumGosterimi({ durum: 'bitti', canli: null, kapanisSonucu: 'tamamlandi' }).etiket).toBe('Tamamlandı');
+    expect(durumGosterimi({ durum: 'bitti', canli: null, kapanisSonucu: 'saglamsiz' }).etiket).toBe('Kapandı (sağlamsız)');
+    expect(durumGosterimi({ durum: 'iptal', canli: null, kapanisSonucu: 'tamamlandi' }).etiket).toBe('İptal');
   });
 
   it('sağlam sayı: başlamışta sayaç, bitmişte kapanış, planlıda yok', () => {
