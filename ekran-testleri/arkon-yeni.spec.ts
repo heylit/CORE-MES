@@ -203,8 +203,8 @@ test.describe('A1 Operatör', () => {
       expect(ag.hatalar).toEqual([]);
     });
 
-    // Düzeltme yetkisi olan kişide sayaçta beş tuş (iki sıra tam, bir sıra Toplu giriş) durur; tuşlar sayacın içinde, Şimdi şeridinin
-    // altında kalır, kadran küçülüp yazıları üst üste gelmez.
+    // Düzeltme yetkisi olan kişide sayaçta beş tuş durur: üstte İyi +1 ve Hurda +1, altında düzeltme (−1) tuşları tek kısa sırada
+    // (1046 a), en altta Toplu giriş. Tuşlar sayacın içinde, Şimdi şeridinin altında kalır, kadran küçülüp yazıları üst üste gelmez.
     test.describe('düzeltme tuşlarıyla', () => {
       test.use({ hesap: 'ornek.yonetici' });
       for (const boy of [{ width: 1280, height: 900 }, { width: 1600, height: 1000 }, { width: 1920, height: 1080 }]) {
@@ -214,6 +214,19 @@ test.describe('A1 Operatör', () => {
           await ac900(page, ac, 2, boy);
           const sayac = page.locator('.tc-ay1-sahne > .tc-ay1-sayac');
           await expect(sayac.locator('.tc-ay1-tus')).toHaveCount(5);
+          const sira = await sayac.locator('.tc-ay1-tus').evaluateAll((ts) => ts.map((t) => {
+            const b = t.getBoundingClientRect();
+            return { ad: t.textContent, ust: Math.round(b.top), boy: Math.round(b.height) };
+          }));
+          const s = JSON.stringify(sira);
+          expect(sira.map((t) => t.ad), s).toEqual(['İyi +1', 'Hurda +1', 'İyi −1', 'Hurda −1', 'Toplu giriş']);
+          expect(sira[0]!.ust, s).toBe(sira[1]!.ust);
+          expect(sira[2]!.ust, s).toBe(sira[3]!.ust);
+          expect(sira[2]!.ust, s).toBeGreaterThan(sira[0]!.ust);
+          expect(sira[4]!.ust, s).toBeGreaterThan(sira[2]!.ust);
+          // Düzeltme sırası büyük sayım tuşlarından kısadır; iki tam sıra Durdur, Duraklat ve Bitir'i aşağı itiyordu.
+          expect(sira[2]!.boy, s).toBeLessThan(sira[0]!.boy);
+          expect(sira[3]!.boy, s).toBe(sira[2]!.boy);
           const o = await page.evaluate(() => {
             const k = (s: string) => { const b = document.querySelector(s)!.getBoundingClientRect(); return { ust: Math.round(b.top), alt: Math.round(b.bottom), boy: Math.round(b.height) }; };
             return { simdi: k('.tc-ay1-sahne > :first-child'), sayac: k('.tc-ay1-sahne > .tc-ay1-sayac'), tuslar: k('.tc-ay1-sahne > .tc-ay1-sayac .tc-ay1-tuslar'), kadran: k('.tc-ay1-sahne > .tc-ay1-sayac .tc-ay1-kadran') };

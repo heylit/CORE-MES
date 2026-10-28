@@ -1094,10 +1094,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return { id: m.id, ad: m.name, secili: seciliMak.includes(m.id), plan: m.id === atananMak, kilit: a ? ayrimAciklamasi(a, saatMetni) : null };
   };
   const tuslar: SayimTusu[] = [];
-  if (duzeltir) tuslar.push({ etiket: 'İyi −1', simge: 'minus', ton: 'duz', aria: 'İyi parça eksi bir', kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(`İyi parça −1 · ${sayi(o.good - 1)}`, 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
+  // 1046 a: geniş düzende sayım tuşları üstte iki büyük tuş, düzeltme (−1) tuşları altlarında tek kısa sıra; sıra bu dizinin sırasıdır.
   if (uretir) tuslar.push({ etiket: 'İyi +1', simge: 'plus', ton: 'iyi', kapali: iyiArtiKapali || o.good >= o.target, bas: () => { if (!sayimOk('prod.run', iyiArtiNedeni(1))) return; shiftRef.current.good++; undoable(`İyi parça +1 · ${sayi(o.good + 1)}`, 'plus', 'run', () => patch({ good: o.good + 1 })); } });
-  if (duzeltir) tuslar.push({ etiket: 'Hurda −1', simge: 'minus', ton: 'hurda', aria: 'Hurda eksi bir', kapali: kapali || o.scrap <= 0, bas: () => { if (sayimOk('prod.fix')) undoable(`Hurda −1 · toplam ${sayi(o.scrap - 1)}`, 'minus', 'idle', () => patch({ scrap: o.scrap - 1 })); } });
   if (uretir) tuslar.push({ etiket: 'Hurda +1', simge: 'trash', ton: 'hurda', kapali, bas: addScrap });
+  if (duzeltir) tuslar.push({ etiket: 'İyi −1', simge: 'minus', ton: 'duz', aria: 'İyi parça eksi bir', kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(`İyi parça −1 · ${sayi(o.good - 1)}`, 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
+  if (duzeltir) tuslar.push({ etiket: 'Hurda −1', simge: 'minus', ton: 'hurda', aria: 'Hurda eksi bir', kapali: kapali || o.scrap <= 0, bas: () => { if (sayimOk('prod.fix')) undoable(`Hurda −1 · toplam ${sayi(o.scrap - 1)}`, 'minus', 'idle', () => patch({ scrap: o.scrap - 1 })); } });
   // 702: toplu giriş ekranda yer kaplamasın diye tuştan açılan pencerededir.
   if (uretir) tuslar.push({ etiket: 'Toplu giriş', simge: 'layers', ton: 'duz', kapali, bas: () => ovYaz('toplu') });
   const sayac = (
