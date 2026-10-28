@@ -2,10 +2,12 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   benCevabi, emirSecCevabi, emirSecGovdesi, emirlerCevabi, hazirlikCevabi, hazirlikOnayGovdesi, kayitlarCevabi, kurulumTamamCevabi,
   kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
-  stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, yazCevabi, yazGovdesi,
+  stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, tezgahAyarCevabi, tezgahAyarGovdesi, tezgahlarCevabi, tezgahParametresi, yazCevabi,
+  yazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
-  ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, yaz,
+  ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, tezgahAyarYaz,
+  tezgahlar, yaz,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
@@ -135,5 +137,22 @@ export const uclar = [
     govde: silGovdesi,
     cevap: silCevabi,
     isle: ({ db, govde }) => sil(db, govde.anahtar, govde.beklenenSurum),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/tezgahlar',
+    yetki: OKUMA,
+    cevap: tezgahlarCevabi,
+    isle: ({ db }) => tezgahlar(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cnc-kurulum/tezgahlar/:makineId/ayar',
+    // 1136 a: tezgâh ayarını bugün Tanımlar'da yazan roller yazar; yeni işlem yok. Gövde küçüktür, deftere tam girer.
+    yetki: 'cnc-kurulum.yaz',
+    parametre: tezgahParametresi,
+    govde: tezgahAyarGovdesi,
+    cevap: tezgahAyarCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => tezgahAyarYaz(db, kullanici, parametre.makineId, govde),
   }),
 ];

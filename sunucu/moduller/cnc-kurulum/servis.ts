@@ -1,21 +1,23 @@
 import { createHash } from 'node:crypto';
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, cokBuyuk, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
   KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
-  StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi, YazGovdesi,
+  StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, TezgahAyarCevabi, TezgahAyarGovdesi, TezgahlarCevabi,
+  YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
 import { cncTakimCikisi, stokMiktarlari } from '../stok/disari.ts';
-import { istasyonAdlari } from '../istasyonlar/disari.ts';
+import { istasyonAdlari, istasyonlar, makineGetir, makineler } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
   hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
+  tezgahKaydi, tezgahListesi, tezgahOlabilirMi,
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -302,4 +304,26 @@ export async function takimOmruDurumlari(db: Db, istasyonIdler: readonly number[
       kullanilanDk: k.dk, kullanilanAdet: k.adet, kalanPay: d?.kalanPay ?? null, durum: d?.durum ?? null,
     };
   });
+}
+
+// ---- Tezgâh ayarı (1091 a, 1139 b): liste İstasyonlar'ın makine kayıtlarından okunur, kopyalanmaz; burada yalnız motorun alanları yazılır.
+async function talasliIstasyonlar(db: Db): Promise<Set<number>> {
+  return new Set((await istasyonlar(db, { pasiflerDahil: true })).filter((i) => i.tip === 'talasli').map((i) => i.id));
+}
+
+export async function tezgahlar(db: Db): Promise<TezgahlarCevabi> {
+  const liste = await makineler(db, { pasiflerDahil: true });
+  const talasli = await talasliIstasyonlar(db);
+  return { tezgahlar: tezgahListesi(liste, talasli, await sorgular.tezgahAyarlari(db)) };
+}
+
+export async function tezgahAyarYaz(db: Db, kullanici: Kullanici, makineId: number, g: TezgahAyarGovdesi): Promise<TezgahAyarCevabi> {
+  const makine = await makineGetir(db, makineId);
+  if (makine === null) throw bulunamadi('Makine bulunamadı.');
+  if (!makine.aktif) throw dogrulama('Pasif makinenin tezgâh ayarı değiştirilmez.', 'makineId');
+  if (!tezgahOlabilirMi(makine, await talasliIstasyonlar(db))) throw dogrulama('Talaşlı olmayan istasyondaki makine CNC tezgâhı olmaz.', 'makineId');
+  const { beklenenSurum, ...ayar } = g;
+  const satir = await sorgular.tezgahAyariYaz(db, makineId, ayar, beklenenSurum, kullanici.id);
+  if (satir === null) throw eskiSurum();
+  return { tezgah: tezgahKaydi(makine, satir) };
 }

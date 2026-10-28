@@ -19,4 +19,6 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Hepsi `cnc_kurulu
 
 Hazırlık onay defteri: `cnc_kurulum_hazirlik_olayi` (adim, olay, imza, `emir_id` ve `is_emri_id` uretim-emirleri, `kisi_id` kisiler); Terminal `disari.ts` `isEmriHazirlikDurumlari` (toplu) ile okur. "Kurulum tamam" aynı defterde `adim = 'kurulum'`, `olay = 'tamam'`, imza seçimlerin izidir; hazırlık durumuna sayılmaz.
 
+Tezgâh ayarı (1091 a, 1139 b): `cnc_kurulum_tezgah` (`makine_id` istasyonlar `makine`, `guncelleyen_kisi_id` kisiler). Tezgâhın kendisi (kod, ad, istasyonu, aktiflik) istasyonlardadır ve kopyalanmaz; burada yalnız motorun alanları: `tur`, `kontrol`, `konik`, `cep_sayisi`, `devir`, `is_mili_devri`, `canli_takim`, `canli_devir`, `elle`, `model_turu` (prototipin kodlarıyla).
+
 Kişi sütunu: `cnc_kurulum_kayit.guncelleyen_kisi_id` (kisi tablosuna Aşama 2'de bağlanır).
