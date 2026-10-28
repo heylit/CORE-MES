@@ -9,6 +9,7 @@ import type {
   IkAlani, IkAyarCevabi, IkBen, IkBordroGirdisi, IkGecmis, IkIzinGunuCevabi, IkKayit, IkKisiVardiyasiCevabi, IkOzetiCevabi, IkPuantajCevabi, IkPuantajGunuGirdisi, IkPuantajKaydi,
   IkPuantajPlanGunu, IkPuantajYazCevabi, IkTopluCevabi, IkTuru, IkVeriCevabi, IkYazCevabi, PuantajDurumu,
 } from '#paylasilan/sozlesme/ik.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
@@ -874,3 +875,16 @@ export async function puantajYaz(db: Db, kullanici: Kullanici, gunler: readonly 
   return { kayitlar, silinen };
 }
 
+
+// Takvim (891): aralıkta başlayan izinler başlangıç gününde, personelin adıyla. Yetki denetlemez; çağıran seçer (1191 a): ik.oku ya da
+// ik.izin-oku olana bütün personel (kisiId null), öteki kişiye yalnız kendi personel kaydının izinleri.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, kisiId: number | null = null): Promise<TakvimKaydi[]> {
+  return (await s.takvimIzinSatirlari(db, baslangic, bitis, kisiId)).map((r): TakvimKaydi => {
+    const gun = r.gun === null ? null : Number(r.gun);
+    return {
+      kaynak: 'izin', kimlik: r.kimlik, tarih: r.baslangic, no: null,
+      baslik: gun === null ? r.tur : `${r.tur} (${String(gun)} gün)`, ilgili: `${r.ad} ${r.soyad}`.trim(),
+      durum: r.durum, bitti: r.durum === 'Onaylandı' && r.gecti,
+    };
+  });
+}

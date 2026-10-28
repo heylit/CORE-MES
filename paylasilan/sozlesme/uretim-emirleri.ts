@@ -215,7 +215,7 @@ export const kayitSemasi = z.object({
   zaman,
 });
 
-// Salt okunur izleme (kart #1185): adımları henüz bir istasyona düşmemiş ya da bitmiş emir de görünür; istasyon yoksa null (uydurulmaz).
+// Salt okunur izleme (kart #1191): adımları henüz bir istasyona düşmemiş ya da bitmiş emir de görünür; istasyon yoksa null (uydurulmaz).
 export const izlemeEmirSemasi = emirSemasi.extend({ istasyon: adliKayit.nullable() });
 export const emirlerCevabi = z.object({ emirler: z.array(emirSemasi) });
 export const izlemeListeCevabi = z.object({ emirler: z.array(izlemeEmirSemasi) });

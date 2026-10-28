@@ -3,7 +3,7 @@ import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 export const ROTA_SAYFALARI = [
   // Menüdeki yerini Reçete ve Rota Motoru aldı (kullanıcı kararı, 13.10.2026): eski ekranlar adresle açılır, menüde görünmez.
   { yol: '/rota', islem: 'sayfa.rota', baslik: 'Rota', simge: 'tool', grup: 'Tanımlar', sira: 10, menudeGizli: true },
-  // Emir listesi artık Üretim Emirleri sayfasıdır (kart #1185); bu adres oraya yönlenir, menüde görünmez, işlem rol matrisinde durur.
+  // Emir listesi artık Üretim Emirleri sayfasıdır (kart #1191); bu adres oraya yönlenir, menüde görünmez, işlem rol matrisinde durur.
   { yol: '/emirler', islem: 'sayfa.emirler', baslik: 'Üretim Emirleri', simge: 'list', grup: 'Üretim', sira: 10, menudeGizli: true },
 ] as const satisfies readonly SayfaTanimi[];
 

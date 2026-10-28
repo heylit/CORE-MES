@@ -36,6 +36,8 @@ export { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from './servis
 // kisininIzinleri'nin toplu hâli (Vardiya takvimi, yük testi 2026-10-18): tek sorgu; personel kaydı olmayan kişi haritada yoktur.
 export { kisilerinIzinleri } from './servis.ts';
 export type { FazlaMesaiOzeti, KalanIzin, KisiIzni } from './servis.ts';
+// Takvim (891): aralıkta başlayan izinler, personel adıyla; reddedilen ve iptal gelmez. Yetki denetlemez; çağıran ik.oku'yu denetler.
+export { takvimKayitlari } from './servis.ts';
 
 // Profil sayfası (her çalışan, kendi kaydı): İK kartından çalışana açık alanlar; ücret, kimlik, banka ve sağlık alanı dönmez. Bağ yoksa null.
 export { kisininPersonelKarti } from './servis.ts';

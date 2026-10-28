@@ -55,6 +55,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'finans.yaz': 'Finans kaydı girme',
   'finans.yonet': 'Finans ayarları',
   'ik.oku': 'İK kayıtlarını görme',
+  'ik.izin-oku': 'Takvimde bütün izinleri görme',
   'ik.personel-yaz': 'Personel kartı düzenleme (İK)',
   'ik.ucret-yaz': 'Ücret bilgisi düzenleme',
   'ik.izin-yaz': 'İzin kaydı girme',
