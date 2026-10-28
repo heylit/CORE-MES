@@ -1,3 +1,5 @@
+import type { Tezgah, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+
 // CNC kurulum kayıt deposunun saf kuralları.
 
 // Yazma yalnız kayıt istemcinin bildiği sürümdeyse olur; null "kayıt hiç yok" demektir. Ortak kayıtta başkasının yazdığının
@@ -312,4 +314,31 @@ export function elleUretimKaydiVarMi(onceki: unknown, yeni: unknown): boolean {
   const zaman = (s: unknown): unknown => (nesneMi(s) ? s['ts'] : undefined);
   const eski = new Set(satirlar(onceki).map(zaman));
   return satirlar(yeni).some((s) => !eski.has(zaman(s)));
+}
+
+// ---- Tezgâh ayarı (1091 a, 1139 b). Liste makine kayıtlarıdır: istasyonsuz makine ya da talaşlı istasyondaki makine; pasif makine
+// yalnız ayarı varsa gelir (kurulum kaydı onu gösteriyor olabilir). Ayar satırı olmayan makinenin sürümü 0'dır.
+export interface TezgahMakinesi { id: number; kod: string; ad: string; istasyonId: number | null; aktif: boolean }
+export interface TezgahAyarSatiri extends TezgahAyari { makineId: number; surum: number }
+
+// Talaşlı olmayan istasyondaki makine (kalite, boya, ...) CNC tezgâhı değildir.
+export function tezgahOlabilirMi(m: Pick<TezgahMakinesi, 'istasyonId'>, talasliIstasyonlar: ReadonlySet<number>): boolean {
+  return m.istasyonId === null || talasliIstasyonlar.has(m.istasyonId);
+}
+
+export function tezgahKaydi(m: TezgahMakinesi, s: TezgahAyarSatiri | undefined): Tezgah {
+  const ayar: TezgahAyari | null = s ? {
+    tur: s.tur, kontrol: s.kontrol, konik: s.konik, cepSayisi: s.cepSayisi, devir: s.devir, isMiliDevri: s.isMiliDevri,
+    canliTakim: s.canliTakim, canliDevir: s.canliDevir, elle: s.elle, modelTuru: s.modelTuru,
+  } : null;
+  return { makineId: m.id, kod: m.kod, ad: m.ad, istasyonId: m.istasyonId, aktif: m.aktif, ayar, surum: s?.surum ?? 0 };
+}
+
+export function tezgahListesi(
+  makineler: readonly TezgahMakinesi[], talasliIstasyonlar: ReadonlySet<number>, ayarlar: readonly TezgahAyarSatiri[],
+): Tezgah[] {
+  const harita = new Map(ayarlar.map((a) => [a.makineId, a]));
+  return makineler
+    .filter((m) => harita.has(m.id) || (m.aktif && tezgahOlabilirMi(m, talasliIstasyonlar)))
+    .map((m) => tezgahKaydi(m, harita.get(m.id)));
 }

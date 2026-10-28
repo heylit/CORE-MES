@@ -129,6 +129,35 @@ export const stokKartlariCevabi = z.object({ kartlar: z.array(stokKartiSemasi), 
 export const stokKartiBaglaGovdesi = z.object({ kimlik: kutuphaneKimligi, malzemeId: z.number().int().positive().nullable() });
 export const stokKartiBaglaCevabi = z.object({ kart: stokKartiSemasi.nullable() });
 
+// Tezgâh ayarı (1091 a, 1139 b): tezgâh İstasyonlar'daki makine kaydıdır; motorun alanları makine başına tutulur. Kodlar prototipin
+// kodlarıdır. Boş alan bilinmiyor demektir (motor kendi varsayılanını kullanır); sıfır uydurulmaz.
+export const TEZGAH_TURLERI = ['mill', 'lathe', 'millturn'] as const;
+export const TEZGAH_KONTROLLERI = ['heid', 'iso'] as const;
+export const MODEL_TURU = /^m_[a-z0-9]{1,20}$/;
+const devir = z.number().int().min(1).max(100000).nullable();
+export const tezgahAyariSemasi = z.object({
+  tur: z.enum(TEZGAH_TURLERI).nullable(),
+  kontrol: z.enum(TEZGAH_KONTROLLERI).nullable(),
+  konik: z.string().trim().min(1).max(40).nullable(),
+  cepSayisi: z.number().int().min(1).max(999).nullable(),
+  devir,
+  isMiliDevri: devir,
+  canliTakim: z.boolean().nullable(),
+  canliDevir: devir,
+  elle: z.boolean().nullable(),
+  modelTuru: z.string().regex(MODEL_TURU, 'Geçersiz model türü.').nullable(),
+});
+// istasyonId: makinenin istasyonu (takım yükü ve iş emri istasyon başınadır), yoksa null. surum: ayar satırının sürümü; ayarı olmayan makinede 0 (ilk yazma 0 ile gelir).
+export const tezgahSemasi = z.object({
+  makineId: z.number().int(), kod: z.string(), ad: z.string(), istasyonId: z.number().int().nullable(), aktif: z.boolean(), ayar: tezgahAyariSemasi.nullable(),
+  surum: z.number().int().nonnegative(),
+});
+export const tezgahlarCevabi = z.object({ tezgahlar: z.array(tezgahSemasi) });
+export const tezgahParametresi = z.object({ makineId: z.coerce.number().int().positive().max(2147483647) });
+export const tezgahAyarGovdesi = tezgahAyariSemasi.extend({ beklenenSurum: z.number().int().min(0).max(2147483647) })
+  .refine((g) => g.canliDevir === null || g.canliTakim === true, { message: 'Canlı takım devri yalnız canlı takımlı tezgâhta girilir.', path: ['canliDevir'] });
+export const tezgahAyarCevabi = z.object({ tezgah: tezgahSemasi });
+
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
@@ -154,3 +183,8 @@ export type StokKarti = z.output<typeof stokKartiSemasi>;
 export type StokKartlariCevabi = z.output<typeof stokKartlariCevabi>;
 export type StokKartiBaglaGovdesi = z.output<typeof stokKartiBaglaGovdesi>;
 export type StokKartiBaglaCevabi = z.output<typeof stokKartiBaglaCevabi>;
+export type TezgahAyari = z.output<typeof tezgahAyariSemasi>;
+export type Tezgah = z.output<typeof tezgahSemasi>;
+export type TezgahlarCevabi = z.output<typeof tezgahlarCevabi>;
+export type TezgahAyarGovdesi = z.output<typeof tezgahAyarGovdesi>;
+export type TezgahAyarCevabi = z.output<typeof tezgahAyarCevabi>;
