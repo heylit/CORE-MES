@@ -10,7 +10,7 @@ import {
   type CalisanSurum, type UygulamaIstegi, type UygulamaSonucu,
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import { GOC_KIMLIGI, anaAgacKoku, envYolu, ortamiYukle } from './ortam.ts';
-import { binYolu } from './paket-bin.ts';
+import { binYolu, npmCliBul } from './paket-bin.ts';
 import { NPM_ONBELLEGI } from './paket.ts';
 import { tarAc } from './tar-oku.ts';
 
@@ -294,13 +294,13 @@ export class Guncelleyici {
     let paket: { yol: string; yukBasi: number } | null = null;
     let yedek: string | null = null;
     let yedekOrtami = yedekOrtamiOku();
-    const npm = process.env['npm_execpath'];
+    const npm = npmCliBul();
     return {
       dogrula: async () => {
         const d = await saklananPaketiDogrula(this.s.dizin, this.s.anahtar, istek.commit);
         const red = uygulamaReddi(d.bildirim, { ...eski.surum, gocler: await this.calisanGocler(eski.klasor) });
         if (red !== null) throw new Error(UYGULAMA_REDDI_ILETISI[red]);
-        if (npm === undefined) throw new Error('npm bulunamadı; güncelleyiciyi "npm run baslat" ile açın.');
+        if (npm === null) throw new Error('npm bulunamadı (npm-cli.js node\'un yanında da yok); güncelleyiciyi "npm run baslat" ile açın.');
         // Sistem Ayarları'nda seçilen klasör, sunucunun güncelleme klasörüne yazdığı dosyadan okunur; seçim yoksa TMIV2_YEDEK_DIZINI.
         yedekOrtami = { ...yedekOrtami, dizin: await seciliYedekDizini(this.s.dizin) };
         const yedekDizini = yedekOrtami.dizin;

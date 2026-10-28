@@ -9,9 +9,9 @@ uygulama kapalı kalır. İki parça bunu kapatır; ikisi de Windows yönetici y
 npm.cmd run bekci
 ```
 
-Bekçi `npm run baslat`'ı açar ve izler. Sunucu kapanırsa (çöküş, bellek hatası, Görev Yöneticisi'nden sonlandırma) bekler ve yeniden
-açar. Art arda çöküşte bekleme 5 sn'den başlar, her seferinde iki katına çıkar, 60 sn'de durur; sunucu 10 dakika ayakta kalınca
-yeniden 5 sn'ye döner.
+Bekçi `npm run baslat`'ın koştuğu `araclar/baslat.ts`'i (güncelleyici ve sunucu) npm'siz, doğrudan açar ve izler. Sunucu kapanırsa
+(çöküş, bellek hatası, Görev Yöneticisi'nden sonlandırma) bekler ve yeniden açar. Art arda çöküşte bekleme 5 sn'den başlar, her
+seferinde iki katına çıkar, 60 sn'de durur; sunucu 10 dakika ayakta kalınca yeniden 5 sn'ye döner.
 
 - Durdurmak: bekçi penceresinde Ctrl+C ya da pencereyi kapatın. Sunucu da kapanır, yeniden açılmaz.
 - Günlük: depo klasörünün yanındaki `TMIV2-GUNLUK\bekci.log` (ör. depo `C:\Users\<ad>\Desktop\TMICOREV2` ise

@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 // Kurulu paketlerin komutlarını kabuksuz çağrılabilir argv'ye çevirir; teslim denemesi ve modül testi ortak kullanır.
 
@@ -25,3 +25,16 @@ export const kabuksuzArgv = (sozcukler: readonly string[], agac: string, binCoz:
   const [ilk = '', ...kalan] = sozcukler.map((s) => s.replace(/^"(.*)"$/, '$1'));
   return ilk === 'node' ? [process.execPath, ...kalan] : [process.execPath, binCoz(agac, ilk), ...kalan];
 };
+
+// npm'in giriş betiği: `npm run` içinden açılan süreçte ortamda yazar. Bekçi ya da başlangıç betiği node'u doğrudan açınca
+// değişken gelmez; o zaman node'un yanında aranır (Windows kurulumu node.exe'nin yanında, Linux `<önek>/lib` altında).
+export function npmCliBul(
+  ortam: NodeJS.ProcessEnv = process.env, node: string = process.execPath, varMi: (yol: string) => boolean = existsSync,
+): string | null {
+  const adaylar = [
+    ortam['npm_execpath'] ?? '',
+    join(dirname(node), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    join(dirname(node), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+  return adaylar.find((yol) => basename(yol) === 'npm-cli.js' && varMi(yol)) ?? null;
+}
