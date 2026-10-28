@@ -1,28 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { Dugme, DurumKutusu, IsaretKutusu, Secim, Simge, YalitilmisCerceve } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, IsaretKutusu, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import type { Secenek } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { SIMGELER } from '../../ortak/tasarim/simgeler.ts';
-import { cerceveBetigi } from './cerceve-kopru.ts';
 import type { MakineOzeti } from './cerceve-kopru.ts';
-import { ONEK, sayfaKur, yerelDegerler } from './CncKurulumCercevesi.tsx';
-import { kopruHatasi, kopruKur } from './kopru.ts';
+import { ONEK, yerelDegerler } from './CncKurulumCercevesi.tsx';
 import { belgeAdi, kucukResimUret, mevcutEslesmeler, modeliCizimlereAktar, yayinlaVeEslestir } from './model-aktarimi.ts';
 import type { AktarilacakModel, MevcutEslesme } from './model-aktarimi.ts';
-import { prototipYukle } from './prototip.ts';
 import './cnc-kurulum.css';
 
-// Çizim Merkezi'nin CNC makineleri sayfası (kart #1196, #1238): prototipin makineleri Çizim Merkezi'nde listelenir, her biri sistemdeki
+// Çizim Merkezi'nin CNC makineleri sayfası (kart #1196, #1238): CNC Kurulum'un makineleri Çizim Merkezi'nde listelenir, her biri sistemdeki
 // istasyonla eşleştirilir. Eşleştirmede model 3B model belgesi olarak yazılır, yayına alınır ve istasyona bağlanır; fabrika haritasına
 // yalnız eşleşen makine eklenebilir. Satır makinenin Çizim Merkezi'ndeki son durumunu gösterir.
-// Modeli prototipin kendi kütüphanesi üretir: prototip görünmez bir çerçevede, ana sayfayla aynı içerik politikasıyla açılır
-// ve kayıt yazmaz.
-const KANAL = 'cnc-kurulum';
+// Modeli CNC Kurulum ekranının sahnesi üretir (1135 a); sayfa kayıtları yalnız okur. Sahne kodu üç boyut kütüphanesini taşıdığı
+// için sayfa açılınca ayrıca yüklenir.
+const DURUM_ANAHTARI = `${ONEK}v1`;
+const sahneYukle = () => import('./yeni/sahne/model-uret.ts');
 export const ESLESTIRME_YOLU = '/cizimler/cnc-makineleri';
 const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz'];
 const AKTARMA_ISLEMI = 'cizimler.yaz';
@@ -31,9 +28,9 @@ const YAYIN_ISLEMI = 'cizimler.yayinla';
 const ISTASYON_SAYFASI = { islem: 'sayfa.istasyonlar', yol: '/istasyonlar/is-merkezleri' } as const;
 
 interface Satir { secili: boolean; istasyonId: number | null; sonuc: { ton: 'tamam' | 'hata' | 'suruyor'; metin: string } | null }
-type Bekleyen = { coz: (m: AktarilacakModel) => void; reddet: (e: Error) => void };
+type Uretici = Awaited<ReturnType<typeof sahneYukle>>;
 
-// Çerçevenin bildirdiği model hatası; iletisi kullanıcıya olduğu gibi gösterilir (sunucu hatası değildir).
+// Sahnenin bildirdiği model hatası; iletisi kullanıcıya olduğu gibi gösterilir (sunucu hatası değildir).
 class ModelHatasi extends Error {}
 
 const kodu = (k: string): string => k.trim().toLocaleUpperCase('tr');
@@ -62,15 +59,13 @@ export function CncEslestirme() {
   // Ana sayfadaki düğme prototipte seçili tezgâhı verir; o satır işaretli gelir.
   const [arama] = useSearchParams();
   const gelenMakine = arama.get('makine');
-  const [prototip, setPrototip] = useState<string | null>(null);
   const [degerler, setDegerler] = useState<ReturnType<typeof yerelDegerler> | null>(null);
+  const [uretici, setUretici] = useState<Uretici | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [makineler, setMakineler] = useState<MakineOzeti[] | null>(null);
   const [satirlar, setSatirlar] = useState<Record<string, Satir>>({});
   const [calisiyor, setCalisiyor] = useState(false);
   const [mevcut, setMevcut] = useState<Map<string, MevcutEslesme> | null>(null);
-  const komut = useRef<((ileti: unknown) => void) | null>(null);
-  const bekleyen = useRef(new Map<string, Bekleyen>());
 
   const istasyonlar = useQuery({
     queryKey: ['cnc-kurulum', 'istasyon-secimi'],
@@ -89,14 +84,14 @@ export function CncEslestirme() {
   useEffect(() => {
     if (!aktarabilir) return;
     let bitti = false;
-    void prototipYukle().then(
-      (metin) => { if (!bitti) setPrototip(metin); },
+    void sahneYukle().then(
+      (u) => { if (!bitti) setUretici(u); },
       () => { if (!bitti) setHata('CNC Kurulum Motoru yüklenemedi. Sayfayı yenileyin.'); },
     );
     return () => { bitti = true; };
   }, [aktarabilir]);
 
-  // Elle eklenen makineler ve düzeltmeler kayıtlardadır; çerçeve onları açılışta okur.
+  // Elle eklenen makineler ve düzeltmeler kayıtlardadır; liste onlarla kurulur.
   useEffect(() => {
     if (!girebilir || !aktarabilir) return;
     let bitti = false;
@@ -111,6 +106,12 @@ export function CncEslestirme() {
     })();
     return () => { bitti = true; };
   }, [girebilir, aktarabilir]);
+
+  const kayitMetni = degerler?.[DURUM_ANAHTARI]?.deger;
+  useEffect(() => {
+    if (uretici === null || degerler === null) return;
+    setMakineler(uretici.makineListesi(kayitMetni));
+  }, [uretici, degerler, kayitMetni]);
 
   // Çizim Merkezi'ndeki durum makine listesi gelince bir kez okunur; okunamazsa satırlar durumsuz kalır, eşleştirme yine yapılır.
   useEffect(() => {
@@ -134,46 +135,12 @@ export function CncEslestirme() {
     })));
   }, [makineler, mevcut, istasyonlar.data, gelenMakine]);
 
-  const sayfa = useMemo(() => {
-    if (prototip === null || degerler === null) return null;
-    return sayfaKur(prototip, cerceveBetigi({
-      kanal: KANAL, yazabilir: false, onek: ONEK, degerler, catismaIletisi: '', buyukIletisi: '', azamiBayt: 0, beklemeMs: 800,
-      aktarabilir: true, aktarimSimgesi: SIMGELER.upload, durumAnahtari: `${ONEK}v1`, toplu: true,
-    }));
-  }, [prototip, degerler]);
-
-  const isle = useMemo(() => kopruKur({
-    listeGeldi: async (liste) => { setMakineler(liste); return { tamam: true }; },
-    modelGeldi: async (m) => {
-      const b = bekleyen.current.get(m.makineId);
-      bekleyen.current.delete(m.makineId);
-      b?.coz(m);
-      return { tamam: true };
-    },
-    modelHatasi: async (ileti, makineId) => {
-      const b = makineId === null ? undefined : bekleyen.current.get(makineId);
-      if (makineId !== null) bekleyen.current.delete(makineId);
-      b?.reddet(new ModelHatasi(ileti));
-      return { tamam: true };
-    },
-  }), []);
-
-  const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
-    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown } | null;
-    if (!m || m.kanal !== KANAL || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
-    komut.current = yanitla;
-    const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: KANAL, yon: 'yanit', id: m.id, ...govde }); };
-    isle(m.tip, m.veri).then(
-      (sonuc) => { yanit({ ok: true, veri: sonuc }); },
-      (e: unknown) => { yanit({ ok: false, ...kopruHatasi(e) }); },
-    );
+  const modelIste = async (makineId: string): Promise<AktarilacakModel> => {
+    if (uretici === null) throw new ModelHatasi('CNC Kurulum Motoru henüz hazır değil.');
+    try { return uretici.modelUret(makineId, kayitMetni); } catch (e) {
+      throw new ModelHatasi(e instanceof Error ? e.message : 'Model üretilemedi.');
+    }
   };
-
-  const modelIste = (makineId: string): Promise<AktarilacakModel> => new Promise((coz, reddet) => {
-    if (komut.current === null) { reddet(new ModelHatasi('CNC Kurulum Motoru henüz hazır değil.')); return; }
-    bekleyen.current.set(makineId, { coz, reddet });
-    komut.current({ kanal: KANAL, yon: 'komut', tip: 'model-uret', makineId });
-  });
 
   const satirYaz = (id: string, d: Partial<Satir>) => { setSatirlar((once) => ({ ...once, [id]: { ...(once[id] ?? { secili: false, istasyonId: null, sonuc: null }), ...d } })); };
 
@@ -293,9 +260,6 @@ export function CncEslestirme() {
         </p>
       )}
       {istasyonlar.isError && <p className="tc-cnc-aktarim-ipucu" role="alert">Sistemdeki makine listesi alınamadı; modeller eşleştirmesiz yazılır.</p>}
-      {sayfa !== null && (
-        <YalitilmisCerceve baslik="CNC Kurulum Motoru (model üretimi)" sinif="tc-cnc-aktarim-cerceve" sayfa={sayfa} iletiGeldi={iletiGeldi} />
-      )}
     </section>
   );
 }
