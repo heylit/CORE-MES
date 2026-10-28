@@ -72,3 +72,5 @@
 - P-B33: Reçete ve Rota ana kaydında plan ayarı alanları (settings) durur; plan bunları `planlama-kaynagi` ile okur. Ayarın sahibi bağlamada
   plan modülüne geçer.
 - P-B34: `siparisler/disari.ts` yorumu motoru hâlâ Reçete ve Rota'ya yazar; siparişler modülüne dokunulmadı, yorum o modülün sırasında düzelir.
+- P-B35: Plan ihtiyacı (898 a) yalnız canlıya almada yeniden hesaplanır; arada gelen mal kabulü, sarf ya da kapanan emir satın almadaki listeyi
+  bir sonraki canlıya almaya kadar değiştirmez (satın alma okurken açık sipariş ve talebi yine düşer). Olay anında yenileme bağlamada sorulur.

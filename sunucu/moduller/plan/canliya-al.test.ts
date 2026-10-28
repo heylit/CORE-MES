@@ -676,5 +676,21 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.equal(ileriDon.donulenSurum, w.calismaSurumu);
     assert.equal((await kayitDegeri() as { plan: { dataVer: unknown } }).plan.dataVer, null);
   });
+
+  test('CA-12 (898 a): canlıya alma, canlı planın malzeme eksiğini aynı işlemde satın almaya yazar; taslağa yazmak yazmaz', async () => {
+    const ham = await kartAc('hammadde');
+    const e = await emirAc([yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 2, fireYuzde: 0 }] })]);
+    const [i] = e.isEmriIdleri as [number];
+    const satir = () => ortam!.sahip.tek<{ miktar: string; stokBilinmiyor: boolean; emirler: string[] }>(
+      'SELECT miktar::text AS miktar, stok_bilinmiyor AS "stokBilinmiyor", emirler FROM satin_alma_plan_ihtiyaci WHERE malzeme_no = $1', [ham]);
+    const taslaga = await kuyrukYaz([i], false);
+    assert.equal(taslaga.statusCode, 200, taslaga.body);
+    assert.equal(await satir(), null, 'taslak canlı plan değildir');
+    const canliya = await kuyrukYaz([i], true);
+    assert.equal(canliya.statusCode, 200, canliya.body);
+    const s = await satir();
+    assert.ok(s !== null, 'canlıya alınan emrin hammaddesi satın almada');
+    assert.deepEqual([Number(s.miktar), s.stokBilinmiyor, s.emirler], [20, true, [(await emirOp(i)).emirNo]]);
+  });
 });
 
