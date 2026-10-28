@@ -277,14 +277,20 @@ export async function isGuncelle(db: Db, id: number, girdi: IsYazmaGirdisi & { s
   return isCevabi(cikar ? (await sorgu.isGetir(db, id))! : yeni);
 }
 export async function isIptalEt(db: Db, id: number): Promise<Is> {
-  const onceki = await sorgu.isGetir(db, id);
+  const ilk = await sorgu.isGetir(db, id);
+  if (!ilk || ilk.iptalEdildi) throw bulunamadi('İş bulunamadı ya da zaten iptal edilmiş.');
+  const plan = await sorgu.planKilitle(db, ilk.tarih);
+  // Plan kilidinden sonra iş kilitlenip yeniden okunur (kilit sırası öteki komutlarla aynı: önce plan); arada tamamlanan iş iptal edilmez.
+  const onceki = await sorgu.isKilitle(db, id);
   if (!onceki || onceki.iptalEdildi) throw bulunamadi('İş bulunamadı ya da zaten iptal edilmiş.');
+  if (onceki.tarih !== ilk.tarih) throw cakisma(ARADA_DEGISTI);
   if (!isDuzenlenebilir(onceki.durum as IsDurumu)) throw gecersiz(DUZENLENEMEZ_IS);
-  const plan = await sorgu.planKilitle(db, onceki.tarih), planda = plan !== null && isDegistirilebilir(plan.onaylandi !== null) && await sorgu.isPlandaMi(db, plan.id, id);
+  const planda = plan !== null && isDegistirilebilir(plan.onaylandi !== null) && await sorgu.isPlandaMi(db, plan.id, id);
   if (plan && planda) { await sorgu.isiPlandanCikar(db, id); await sorgu.planSurumunuArtir(db, plan.id, plan.amac); }
   await sorgu.isinBekleyenleriniCoz(db, id);
   return isCevabi((await sorgu.isIptalEt(db, id))!);
 }
+const ARADA_DEGISTI = 'İş bu sırada değişti; yeniden açıp deneyin.';
 
 // Uyarı yoksa alan hiç gönderilmez; okuma cevaplarıyla aynı biçim kalır.
 function uyarili<T extends object>(cevap: T, uyarilar: string[]): T & { uyarilar?: string[] } {
@@ -294,10 +300,16 @@ function uyarili<T extends object>(cevap: T, uyarilar: string[]): T & { uyarilar
 // Elle durum: yoldaki iş tamamlanır ya da yapılamayıp havuza döner; havuzdaki iş elle kapanır; tamamlanan yeniden açılır;
 // yanlış girilen sonuç geri alınır. Sonuç işin onaylı plandaki son durağına yazılır; o planın satırı kilitlenir.
 export async function isDurumuDegistir(db: Db, id: number, govde: IsDurumuGovdesi, kisiId: number | null = null): Promise<IsCevabi> {
-  const onceki = await sorgu.isGetir(db, id);
+  const ilk = await sorgu.isGetir(db, id);
+  if (!ilk || ilk.iptalEdildi) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+  const ilkDurak = await sorgu.isinSonOnayliDuragi(db, id);
+  if (ilkDurak) await sorgu.planKilitle(db, ilkDurak.tarih);
+  // Plandan sonra iş kilitlenir; iş ve durak kilit altında yeniden okunur. Aynı işi aynı anda tamamlayan ikinci istek "zaten tamamlandı"
+  // görür, ürün sevki stoğa ikinci kez yansımaz.
+  const onceki = await sorgu.isKilitle(db, id);
   if (!onceki || onceki.iptalEdildi) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
   const durak = await sorgu.isinSonOnayliDuragi(db, id);
-  if (durak) await sorgu.planKilitle(db, durak.tarih);
+  if (durak?.planId !== ilkDurak?.planId) throw cakisma(ARADA_DEGISTI);
   const yoldan = onceki.durum === 'yolda' && durak !== null;
   const ihlal = durumGecisiIhlali(onceki.durum as IsDurumu, govde.durum, durak?.sonuc ?? null) ?? ileriSonucIhlali(govde.durum, yoldan && durak.ileri);
   if (ihlal) throw gecersiz(ihlal);
