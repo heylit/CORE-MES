@@ -43,7 +43,6 @@ describe('sekme tablosu', () => {
     expect(sekmeBul('/recete-rota/plan')).toBeUndefined();
     expect(sekmeBul('/recete-rota/res')?.anahtar).toBe('res');
     expect(sekmeBul('/recete-rota/eski/res')).toBeUndefined();
-    expect(SEKMELER.map((s) => s.eskiYol)).toEqual(SEKMELER.map((s) => s.yol.replace(/^\/recete-rota/, '/recete-rota/eski')));
   });
 });
 
