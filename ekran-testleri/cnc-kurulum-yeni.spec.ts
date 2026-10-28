@@ -20,7 +20,7 @@ test.describe('iskelet', () => {
 
   // Görünüm alanı kendi kaydırıcısıyla kaydığı için belge taşmaz; kabuğun ve görünüm alanının ayrıca kendi eninde kaldığı ölçülür.
   test('kabuk ve görünüm alanı ekran eninde kalır', async ({ page, ac }) => {
-    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
       const olcu = await page.evaluate(() => {
@@ -79,16 +79,29 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
   }
 });
 
-// Parça yazarları kendi bölümlerini doldurur (PARCA-SOZLESMESI); bölüm boşken atlanır.
-for (const [parca, gorunumler] of [
-  ['P4 Oto-CAM', 'Oto-CAM'],
-] as const) {
-  test.describe(parca, () => {
-    test(`${gorunumler}: bugünkü davranış`, () => {
-      test.fixme(true, 'parça teslim edilince dolar');
-    });
+// P4: Oto-CAM (prototip 22798-24480). Örnek burç sentetiktir (döner profil), dosya okumaz; plan bellekte durur, sunucuya yazılmaz.
+test.describe('P4 Oto-CAM', () => {
+  test('Oto-CAM: bakmak yazmaz, örnek parçadan plan üretilir, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
+    await ac('/cnc-kurulum/yeni/oto-cam');
+    await expect(page.getByText('OTO-CAM · OTOMATİK PROGRAM')).toBeVisible();
+    expect(ag.yazmalar).toEqual([]);
+    // 860 ve altında panel alttan çekmecedir (prototipteki gibi).
+    const cekmece = page.locator('.tc-cc-cekmece');
+    if (await cekmece.isVisible()) await cekmece.click();
+    await page.getByRole('button', { name: 'Örnek burç (boru)' }).click();
+    const uret = page.getByRole('button', { name: /üret$/ });
+    await expect(uret).toBeEnabled();
+    await uret.click();
+    await expect(page.getByText('Süre kalibrasyonu')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/^3 · (Plan|Sonuç)/)).toBeVisible();
+    for (const genislik of [360, 768, 1280]) {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      if (genislik <= 860) await expect(cekmece).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+    expect(ag.hatalar).toEqual([]);
   });
-}
+});
 
 test.describe('P3 Ham Malzeme ve G-Kod', () => {
   const tasmaz = async (page: Page) => {
@@ -241,11 +254,11 @@ test.describe('P5 Takım Ömrü', () => {
 test.describe('3B sahne', () => {
   // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
   // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
-  test('Kurulum, Hazırlık, Kütüphane ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+  test('Kurulum, Hazırlık, Kütüphane, Oto-CAM ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer.
     test.setTimeout(180_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       const tuval = page.locator('.tc-cy-sahne-tuval').first();
       await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
@@ -268,7 +281,7 @@ test.describe('3B sahne', () => {
   // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
   test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
       await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
