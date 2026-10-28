@@ -225,6 +225,16 @@ export async function medyaGeriYukle(anahtar: Buffer, yedekDizini: string, medya
   return sonuc;
 }
 
+// Geri yüklemenin son denetimi: veritabanındaki disk künyelerinden medya klasöründe dosyası olmayanlar. Sıfır olmalı; olmayan
+// dosya talimatta açılmayan resimdir.
+export async function dosyasiOlmayanlar(medyaDizini: string, ozetler: readonly string[]): Promise<string[]> {
+  const eksik: string[] = [];
+  for (const ozet of ozetler) {
+    if (!(await varMi(path.join(medyaDizini, ...medyaAltYolu(ozet))))) eksik.push(ozet);
+  }
+  return eksik;
+}
+
 async function sonAynaOku(kok: string): Promise<Date | null> {
   const metin = await readFile(path.join(kok, SON_AYNA_DOSYASI), 'utf8').catch(() => null);
   if (metin === null) return null;
