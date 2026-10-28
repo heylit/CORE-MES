@@ -299,10 +299,38 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       "INSERT INTO stok_konum (depo_id, kod, tur, firma_id) SELECT id, $1, 'fason', $2 FROM stok_depo WHERE kod = 'ANA' RETURNING id", [`FSN-${String(firmaId)}`, firmaId]))!.id;
     return { siparisSatirId, kutu };
   }
-  const fasonKabulu = (siparisSatirId: number, malzemeId: number, adet: number, isEmriId: number, hurdaAdet?: number) =>
+  const fasonKabulu = (siparisSatirId: number, malzemeId: number, adet: number, isEmriId: number, hurdaAdet?: number, sevkKalemiId?: number) =>
     istek<{ kod?: string; mesaj?: string }>('depo', 'POST', '/stok/mal-kabul', {
-      tur: 'satin_alma', satirlar: [{ malzemeId, miktar: String(adet), siparisSatirId, fasonIsi: { isEmriId, ...(hurdaAdet === undefined ? {} : { hurdaAdet }) } }],
+      tur: 'satin_alma', satirlar: [{
+        malzemeId, miktar: String(adet), siparisSatirId, fasonIsi: { isEmriId, ...(hurdaAdet === undefined ? {} : { hurdaAdet }) }, ...(sevkKalemiId === undefined ? {} : { sevkKalemiId }),
+      }],
     });
+
+  // 960, 962 a: Tüm işlerden bırakılan fason adımında gidişi depo çıkışı yazar; parça istasyondan firmanın fason konumuna geçer (Yolda'da
+  // kalmaz). Dönüş kalemi gidiş çıkınca hazırdır; mal kabul satırı onu kapatır (hurda gelen sayılır).
+  test('960: depo çıkışı fason gidişini yazar, parça firmaya geçer; dönüş mal kabul satırıyla kapanır', async () => {
+    const f = await fasonFirmaKur(false);
+    const e = await fasonluEmir(f.firmaId);
+    const b = await istek<{ kalemIdleri: number[] }>('planlama_proje', 'POST', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`fason:${String(e.fasonIsEmriId)}`], tasima: 'firma' });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const gidis = b.govde.kalemIdleri[0]!;
+    const donus = (await o().sahip.tek<{ id: number }>('SELECT id FROM sevkiyat_bekleyen WHERE gidis_bekleyen_id = $1', [gidis]))!.id;
+    const cikis = await istek('depo', 'POST', `/stok/depo-sevk/${gidis}/cikis`);
+    assert.equal(cikis.durum, 200, JSON.stringify(cikis.govde));
+    assert.deepEqual([await bakiye('k.tur', 'istasyon', e.id), await bakiye('k.kod', `YLD-${String(f.firmaId)}`, e.id), await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id)], [0, 0, 9]);
+    const kayit = await o().sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM uretim_emirleri_fason_hareketi WHERE is_emri_id = $1 AND yon = 'gidis'", [e.fasonIsEmriId]);
+    assert.equal(kayit?.n, 1, 'gidiş emre bir kez yazılır');
+
+    const sip = await hizmetSiparisi(f.firmaId);
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 1, gidis)).durum, 409, 'gidiş kalemi kabul edilmez');
+    const d1 = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 1, donus);
+    assert.equal(d1.durum, 200, JSON.stringify(d1.govde));
+    const kalem = async () => o().sahip.tek<{ kabul: string | null; bitti: boolean }>('SELECT kabul_adet::text AS kabul, depo_zamani IS NOT NULL AS bitti FROM sevkiyat_bekleyen WHERE id = $1', [donus]);
+    assert.deepEqual(await kalem(), { kabul: '5.0000', bitti: false }, 'kısmi kabulde kalem açık');
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 0, donus)).durum, 200);
+    assert.deepEqual(await kalem(), { kabul: '9.0000', bitti: true });
+    assert.equal(await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id), 0);
+  });
 
   // Kart #1289: girdili emirde fasona giden, önceki adımın statüsündeki HM'dir. Dönüş yalnız mal kabulle girer (karar 15.10 B): dönüş
   // kaydı (sağlam, hurda) emre yazılır, hurda firmadan düşer, sağlam firmadan kabule gelir ve fason adımının statüsüne çevrilir.

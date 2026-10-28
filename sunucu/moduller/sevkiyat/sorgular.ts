@@ -654,6 +654,9 @@ export function depoYaz(db: Db, id: number, kisiId: number, kabulAdet: string | 
       WHERE id = $1 AND depo_zamani IS NULL`, [id, kisiId, kabulAdet, tamam],
   );
 }
+export function fasonHareketiBagla(db: Db, id: number, hareketId: number): Promise<unknown> {
+  return db.sorgu("UPDATE sevkiyat_bekleyen SET fason_hareket_id = $2 WHERE id = $1 AND kaynak = 'fason' AND fason_hareket_id IS NULL", [id, hareketId]);
+}
 export function depoGeriAl(db: Db, id: number): Promise<unknown> {
   return db.sorgu('UPDATE sevkiyat_bekleyen SET depo_zamani = NULL, depo_kisi_id = NULL WHERE id = $1', [id]);
 }

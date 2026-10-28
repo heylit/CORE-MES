@@ -612,6 +612,22 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const donus = (await satir(gidis.bagliAnahtar!))!;
     assert.deepEqual([donus.kaynak, donus.yon, donus.asama, donus.bagliAnahtar], ['fason-donus', 'gelis', 'bekliyor', gidis.anahtar]);
     assert.equal(await satir(`fason:${e.fasonIsEmriId}`), undefined);
+
+    // Depo çıkışı gidişi emre yazar ve kaleme bağlar; dönüş hazır olur. Yeni iş ya da kalem açılmaz (parçanın yeri stok testinde).
+    const g = await bugun();
+    const is = await istek<{ is: Is }>('planlama_proje', 'POST', `/sevkiyat/bekleyenler/${gidis.kalemId}/ise-cevir`, isGovdesi(g, f.noktaId!));
+    assert.equal(is.durum, 200, JSON.stringify(is.govde));
+    assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${isCevabi.parse(is.govde).is.id}/tetikle`)).durum, 200);
+    const kalemSayisi = async () => (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM sevkiyat_bekleyen WHERE uretim_emri_id = $1', [e.id]))!.n;
+    const once = await kalemSayisi();
+    const cikis = await istek('depo', 'POST', `/stok/depo-sevk/${gidis.kalemId}/cikis`);
+    assert.equal(cikis.durum, 200, JSON.stringify(cikis.govde));
+    const h = await o().sahip.tek<{ adet: number; bagli: boolean }>(
+      `SELECT h.adet, b.fason_hareket_id = h.id AS bagli FROM uretim_emirleri_fason_hareketi h JOIN sevkiyat_bekleyen b ON b.id = $1
+        WHERE h.is_emri_id = $2 AND h.yon = 'gidis'`, [gidis.kalemId, e.fasonIsEmriId]);
+    assert.deepEqual([h?.adet, h?.bagli], [9, true]);
+    assert.equal(await kalemSayisi(), once, 'olay yeni kalem açmaz');
+    assert.deepEqual([(await satir(gidis.anahtar))?.asama, (await satir(donus.anahtar))?.asama], ['tamamlandi', 'havuzda']);
   });
 
   test('960: elle dönüşlü iş; tetik depoya düşürür, depo çıkışı dönüşü hazırlar, kısmi kabul kalemi açık tutar; depo yapınca geri alınmaz', async () => {
