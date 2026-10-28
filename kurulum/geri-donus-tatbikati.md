@@ -48,6 +48,22 @@ Bu adımlar Windows'ta henüz denenmedi; komutların kendisi Linux'ta PostgreSQL
    - "Tatbikat Deneme" kişisi yok mu, stok çıkışı geri alınmış mı?
    - Giriş yapılabiliyor mu, ana sayfa açılıyor mu?
 
+## 2b. Talimat medyası (`TMIV2_MEDYA_DIZINI` tanımlıysa)
+
+1. Sunucu açıkken bir talimata deneme resmi ekleyin; talimatta açıldığını görün.
+2. Gece işini beklemeden aynayı alın (sunucu kapalı ya da açık olabilir):
+   ```
+   npm.cmd run yedek -- medya
+   ```
+   Çıktıda "kopyalanan" en az 1 olmalı.
+3. Sunucuyu durdurun. Medya klasöründe deneme resminin dosyasını bulun (en yeni değişen dosya, adı 64 haneli) ve silin.
+4. Geri yükleyin:
+   ```
+   npm.cmd run geri-yukle-medya
+   ```
+   Çıktıda "yazılan" en az 1, "açılamayan" 0 olmalı.
+5. Sunucuyu açın; deneme resmi talimatta yeniden açılıyor mu bakın. `medya\islem-kaydi.txt`'de iki satır görünmeli.
+
 ## 3. Kodla birlikte geri dönüş (bozuk güncelleme)
 
 Güncellemeden sonra uygulama açılmıyorsa ya da göç bozulduysa kod ve veri birlikte güncelleme öncesine döner. Yedek, döndüğünüz
@@ -84,6 +100,7 @@ kodla aynı anda alınmış olmalıdır: yeni şemalı yedek eski koda yüklenme
 | Malzeme miktarı | başlangıçla aynı | |
 | Açık emir sayısı | başlangıçla aynı | |
 | Deneme kaydı | yok | |
+| Talimat deneme resmi (2b) geri geldi mi, "açılamayan" | evet, 0 | |
 | Sunucu durdurulunca 4100 kapandı mı | evet (`TcpTestSucceeded : False`) | |
 | Kesinti süresi (2. bölüm) | | |
 | Bunun derleme süresi | | |

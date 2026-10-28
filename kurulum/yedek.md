@@ -172,6 +172,28 @@ yalnız künyesi (özet, ad, boyut, tür) vardır. Bu yüzden gece pg_dump yede�
 - Medya klasörü, yedek klasörü ve veritabanı ayrı disklerde olmalıdır (Kurulum 1 ile aynı gerekçe).
 - Saklayıcının geçici dosyaları (nokta ile başlar) ve kalıba uymayan dosyalar aynaya girmez.
 
+Komut satırından (1008 a; yalnız sunucu bilgisayarında, depo klasöründe; `.env`'de `TMIV2_MEDYA_DIZINI` ve `TMIV2_YEDEK_ANAHTARI` olmalı,
+anahtarsız komut çalışmaz):
+
+```
+npm.cmd run yedek -- medya
+npm.cmd run yedek -- medya --hedef E:\TMIV2-DIS-KOPYA
+npm.cmd run geri-yukle-medya
+npm.cmd run geri-yukle-medya -- --kaynak E:\TMIV2-DIS-KOPYA
+```
+
+- `yedek -- medya` aynayı hemen günceller; `--hedef` ile ikinci bir diske (haftalık dış kopya) aynı biçimde, şifreli ve yalnız yeni
+  dosyaları yazar. Tarayıcıdan "İndir" medya için uygun değildir (boyut); dış kopya bu komutla alınır.
+- `geri-yukle-medya` aynadaki (30 günlük silinenler dahil) her özetten medya klasöründe olmayanı açar, özetini doğrular ve yazar;
+  var olan dosyaya dokunmaz. Anahtar uymazsa ya da dosya bozuksa o dosyayı yazmaz, adını söyler ve hata koduyla biter.
+  `--kaynak` verilmezse yedek klasörü (`TMIV2_YEDEK_DIZINI`) kullanılır.
+- `npm run geri-yukle` veritabanını geri yükledikten sonra `TMIV2_MEDYA_DIZINI` tanımlıysa medyayı da aynı yolla geri yazar: önce
+  veritabanı, sonra eksik dosyalar.
+- Her komut çalıştırması aynanın yanındaki `medya\islem-kaydi.txt` dosyasına bir satır bırakır (zaman, Windows kullanıcısı, komut,
+  sonuç sayıları); sunucu kapalıyken veritabanı denetim kaydı yazılamadığı için.
+- Linux'ta denendi (2026-10-28, sentetik dosyalarla): ayna, ikinci çalıştırmada kopya yok, dış hedef, medya silinip geri yükleme,
+  yanlış anahtarda hiçbir dosya yazılmadı. Windows'ta denenmedi.
+
 ## Sınırlar
 
 - Yedek veritabanının o anki tutarlı kopyasıdır. Yüklenen dosyalar (çizim, belge, sertifika) veritabanında durduğu için yedeğe
