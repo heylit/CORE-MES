@@ -7,6 +7,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Sekmeler, Tablo, typ
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { stokCsvAlani } from './csv-alani.ts';
 import { CIKIS_NEDENI, HAREKET_ETIKETI, HAREKET_TONU, HAREKET_TURLERI, hareketIsareti, miktarMetni, zamanMetni } from './gorunum.ts';
 import { SayfaBasi, hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
 import { hareketStatusu, useStatuAdi } from './statu.ts';
@@ -50,7 +51,7 @@ export function HareketTablosu({ satirlar, geriAl, saatle }: { satirlar: Hareket
 
 // CSV: ekrandaki sayfanın satırları (Excel Türkçe için noktalı virgül ve BOM).
 function csvIndir(satirlar: Hareket[], statuAdi: (id: number | null) => string) {
-  const alan = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const alan = stokCsvAlani;
   const basliklar = ['Zaman', 'Tür', 'Malzeme', 'Kart no', 'Parti', 'Kaynak', 'Hedef', 'Statü', 'Miktar', 'Onaylı eksi', 'Açıklama', 'Kim'];
   const govde = satirlar.map((h) => [h.zaman, HAREKET_ETIKETI[h.tur], h.malzemeAd, h.malzemeId, h.partiEtiketi, h.kaynakKonumKod, h.hedefKonumKod, hareketStatusu(h, statuAdi), h.miktar.replace('.', ','), h.onayliEksi ? 'evet' : '', not(h), h.kisiAd].map(alan).join(';'));
   const blob = new Blob(['\ufeff' + [basliklar.map(alan).join(';'), ...govde].join('\r\n')], { type: 'text/csv;charset=utf-8' });

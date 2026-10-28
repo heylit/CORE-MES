@@ -7,6 +7,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo, type Sutun } f
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { stokCsvAlani } from './csv-alani.ts';
 import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar, miktarMetni } from './gorunum.ts';
 import { EtiketPenceresi } from './Etiketler.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
@@ -50,7 +51,7 @@ const SUTUNLAR = (sec: (m: MalzemeStokSatiri, t: HizliIslemTuru) => void): Sutun
 
 // CSV: ekrandaki sayfanın satırları (Excel Türkçe için noktalı virgül ve BOM; önizlemedeki dışa aktarım).
 function csvIndir(satirlar: MalzemeStokSatiri[]) {
-  const alan = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const alan = stokCsvAlani;
   const satir = (m: MalzemeStokSatiri) => [m.malzemeId, m.stokKodu, m.ad, m.tur ? MALZEME_TURU[m.tur] : '', m.toplam.replace('.', ','), m.serbest.replace('.', ','), m.birim, m.kritikSeviye?.replace('.', ',') ?? '', DURUM_ETIKETI[m.durum].etiket, m.konumlar.map((k) => k.kod).join(' ')].map(alan).join(';');
   const blob = new Blob(['\ufeff' + [['Kart no', 'Stok kodu', 'Ad', 'Tür', 'Toplam', 'Serbest', 'Birim', 'Kritik seviye', 'Durum', 'Konumlar'].map(alan).join(';'), ...satirlar.map(satir)].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `stok-malzemeler-${tesisGunu(Date.now())}.csv`; a.click();
