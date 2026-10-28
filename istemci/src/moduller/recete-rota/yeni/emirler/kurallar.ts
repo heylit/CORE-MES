@@ -15,8 +15,12 @@ const yuvarla6 = (x: number): number => Math.round(x * 1e6) / 1e6;
 
 export const ONCELIK_ADI: Readonly<Record<number, string>> = { 1: 'Acil', 2: 'Yüksek', 3: 'Normal', 4: 'Düşük' };
 export const DURUM_ADI: Readonly<Record<Emir['status'], string>> = {
-  taslak: 'Taslak', serbest: 'Serbest', uretimde: 'Üretimde', tamam: 'Tamamlandı', iptal: 'İptal',
+  taslak: 'Taslak', serbest: 'Serbest', uretimde: 'Üretimde', tamam: 'Üretimi bitti', iptal: 'İptal',
 };
+// 1082 a: son adımda emir "Üretimi bitti" olur; kalite ve müdür onayından sonra sahibinin kapanış sonucu yazılır.
+const KAPANIS_ADI = { tamamlandi: 'Tamamlandı', saglamsiz: 'Kapandı (sağlamsız)' } as const;
+export const durumAdi = (o: Pick<Emir, 'status' | 'kapanisSonucu'>): string =>
+  (o.status === 'tamam' && o.kapanisSonucu ? KAPANIS_ADI[o.kapanisSonucu] : DURUM_ADI[o.status]);
 const ACIK_DURUMLAR: ReadonlySet<Emir['status']> = new Set(['taslak', 'serbest', 'uretimde']);
 export const acikMi = (o: Pick<Emir, 'status'>): boolean => ACIK_DURUMLAR.has(o.status);
 // Plana giren emir: serbest ve üretimdeki (taslak plana girmez; bugünkü ekranla aynı).
@@ -25,7 +29,7 @@ export const plandaMi = (o: Pick<Emir, 'status'>): boolean => o.status === 'serb
 // Liste süzgeci: bugünkü ekranın altı düğmesi (aktif, serbest, üretimde, taslak, tamamlanan, tümü).
 export const DURUM_SUZGECLERI = [
   { deger: 'aktif', baslik: 'Aktif' }, { deger: 'serbest', baslik: 'Serbest' }, { deger: 'uretimde', baslik: 'Üretimde' },
-  { deger: 'taslak', baslik: 'Taslak' }, { deger: 'tamam', baslik: 'Tamamlanan' }, { deger: 'tum', baslik: 'Tümü' },
+  { deger: 'taslak', baslik: 'Taslak' }, { deger: 'tamam', baslik: 'Üretimi biten' }, { deger: 'tum', baslik: 'Tümü' },
 ] as const;
 export type DurumSuzgeci = (typeof DURUM_SUZGECLERI)[number]['deger'];
 export const durumUyar = (o: Emir, s: DurumSuzgeci): boolean =>
@@ -131,7 +135,7 @@ const teslimGunuSonu = (due: string): number => { const t = new Date(`${due}T00:
 // 487/1 c: `kok` motorun asıl nedeniyle bırakılan adımlardır; önceki adım ya da bağlı parti yerleşmediği için bırakılan ardıllar sayılmaz.
 // 487/2 b: `calisanPlanDisi` plana girmemiş çalışan adımlardır (makinesi bilinmiyor ya da plan kapsamı dışında); tarih ve gecikme değişmez.
 export type PlanOzeti =
-  | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number; calisanPlanDisi: number[] }
+  | { tur: 'tamam'; metin: string } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number; calisanPlanDisi: number[] }
   | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[]; kok: { opNo: number; neden: string }[] }
   | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null; calisanPlanDisi: number[] };
 // Plan motorunun ardıl nedenleri (`sunucu/moduller/plan/kurallar.ts`): kök adım yerleşmeyince arkasındakiler bunlarla bırakılır.
@@ -139,7 +143,7 @@ const ARDIL_NEDENLERI: ReadonlySet<string> = new Set(['Önceki iş emri yerleşm
 export function planOzeti(
   d: Durum & Pick<DurumCevabi, 'settings'> & { planYerlesmeyen?: Record<string, string> }, yerlesim: EkranYerlesimi | null, o: Emir,
 ): PlanOzeti {
-  if (o.status === 'tamam') return { tur: 'tamam' };
+  if (o.status === 'tamam') return { tur: 'tamam', metin: durumAdi(o) };
   if (!plandaMi(o)) return { tur: 'plan-disi' };
   if (yerlesim === null) return { tur: 'motor-yok' };
   const adimlar = emirAdimlari(d, o);

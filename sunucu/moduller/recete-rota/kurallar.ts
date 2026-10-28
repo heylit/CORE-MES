@@ -298,7 +298,8 @@ export function adimAdetleriCevir(adimlar: readonly AcikAdimKaydi[]): NonNullabl
   return y;
 }
 
-export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
+// kapanislar: sahibinin (uretim-emirleri) onaylı kapanış sonucu; haritada olmayan bitmiş emir onay bekliyordur (null).
+export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: ReadonlyMap<number, 'tamamlandi' | 'saglamsiz' | null> = new Map()): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
   const opStatus: DurumEmirleri['opStatus'] = {};
   const opProg: DurumEmirleri['opProg'] = {};
@@ -329,6 +330,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
       parentId: e.ustEmirId === null ? null : String(e.ustEmirId), kol,
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,
       ...(e.kaynakRotaRevizyonId === null ? { rotasiz: true, adimlar: rotasizAdimlariCevir(e.isEmirleri) } : {}),
+      ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
     };
   });
   return { orders, opStatus, opProg, opYer };

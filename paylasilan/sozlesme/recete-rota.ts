@@ -220,6 +220,8 @@ export const durumEmirSemasi = z.object({
   // Emrin açıldığı rota revizyonunun kimliği (sunucu kimliğinin metni); revizyonu olmayan emirde null.
   rev: kimlikMetni.nullable(),
   status: z.enum(DURUM_EMIR_DURUMLARI),
+  // Onaylı kapanışın sonucu (1082 a): yalnız kalite ve müdür onayından sonra dolu; bitmiş ama onaylanmamış emirde null ("Üretimi bitti").
+  kapanisSonucu: z.enum(['tamamlandi', 'saglamsiz']).nullable().optional(),
   // Milisaniye (epoch). doneAt: bitiş zamanı, bitmemişte null.
   created: z.number(),
   doneAt: z.number().nullable(),

@@ -12,7 +12,7 @@ import type {
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { planlamaAnahtariMi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { emirDilimi, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { emirDilimi, kapanisSonuclari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, kisiTezgahSinirlari, makineDurumlari, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
@@ -219,6 +219,7 @@ export async function durumVeEmirler(
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
   const emirDilimleri = emirOkur ? await emirDilimi(db) : null;
+  const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 
   const ayarHaritasi = new Map(ayarlar.map((a) => [a.istasyonId, a]));
@@ -250,7 +251,7 @@ export async function durumVeEmirler(
     routeRevs: rotaOkur ? rota.routeRevs : null,
     fasonFirms: fasonFirmalari === null ? null : fasonFirmalari.map((f) => ({ id: String(f.id), code: f.kod, name: f.ad })),
     cal: { shifts: vardiyalar.filter((v) => v.aktif).map(vardiyaCevir), holidays: tatilTarihleri(gunler) },
-    emirler: emirDilimleri === null ? null : emirleriCevir(emirDilimleri),
+    emirler: emirDilimleri === null ? null : emirleriCevir(emirDilimleri, kapanislar ?? undefined),
     adimAdetleri,
     maliyet,
     statuses: await sorgular.statuTanimlari(db),
