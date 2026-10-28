@@ -3,6 +3,7 @@ import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
 import { EMIR_TURLERI, EMIR_TURU_ADLARI } from './emir-turleri.ts';
 
 // Taslak planlanmamış emirdir ("Plana al" planlı yapar). Ekrandaki adlar: taslak, serbest (planlı), üretimde (başladı), tamamlanan (bitti).
@@ -662,8 +663,63 @@ export type BirlesmePlaniGovdesi = z.input<typeof birlesmePlaniGovdesi>;
 export type PlanaAlGovdesi = z.input<typeof planaAlGovdesi>;
 export type OncelikGovdesi = z.input<typeof oncelikGovdesi>;
 export type AdimKaynagiGovdesi = z.input<typeof adimKaynagiGovdesi>;
+// Hatalı parça (1033 a, 1034, 1036 a): operatör nedeni ve adedi verir, sonucu seçmez. Parça kola geçer (bölünemeyen emirde emrin kendi
+// adımlarına, 4 a); kolun ilk adımı kalite kararı, ikincisi kalite kararıyla planlamanın dolduracağı rework adımıdır.
+// Neden terminalin bildiği hurda nedeni kodudur; iş emri verilmezse emrin terminaldeki çalışan adımıdır.
+export const HATALI_KARARLARI = ['rework', 'hurda', 'red'] as const;
+export const hataliGovdesi = z.object({
+  isEmriId: KIMLIK.optional(),
+  hurdaNedeniKodu: z.string().regex(NEDEN_KODU, 'Hatalı nedeni seçin.'),
+  adet: z.number().int('Adet tam sayı olmalı.').min(1, 'Adet sıfırdan büyük olmalı.').max(AZAMI_SAYIM, `Tek seferde en çok ${AZAMI_SAYIM} adet girilir.`),
+  aciklama: z.string().trim().max(300, 'Not en çok 300 karakter olur.').nullish().transform((d) => (d ? d : null)),
+}).strict();
+// uyari: emrin kendisine adım girdiğinde hatalı adımın bitişinden gelen uyarı (adım sağlamsız biter).
+export const hataliCevabi = z.object({
+  kayitId: KIMLIK, hedefEmir: z.object({ id: KIMLIK, emirNo: z.string() }), kolAcildi: z.boolean(), uyari: z.string().nullable(),
+});
+export const hataliKaydiSemasi = z.object({
+  id: KIMLIK,
+  uretimEmri: z.object({ id: KIMLIK, emirNo: z.string(), parcaNo: z.string(), parcaAd: z.string() }),
+  isEmri: z.object({ id: KIMLIK, opNo: z.number().int(), ad: z.string() }),
+  hedefEmir: z.object({ id: KIMLIK, emirNo: z.string() }),
+  kaliteIsEmriId: KIMLIK,
+  reworkIsEmriId: KIMLIK.nullable(),
+  hurdaNedeni: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }),
+  adet: z.number().int().positive(),
+  aciklama: z.string().nullable(),
+  kisi: z.object({ id: KIMLIK, ad: z.string().nullable() }),
+  zaman,
+  karar: z.enum(HATALI_KARARLARI).nullable(),
+  kararKisi: z.object({ id: KIMLIK, ad: z.string().nullable() }).nullable(),
+  kararZamani: zaman.nullable(),
+  kararNotu: z.string().nullable(),
+  ncrKimlik: z.string().nullable(),
+});
+// Kalite "rework" dedikten sonra planlama ikinci adımı doldurur: ad, operasyon tipi, kaynak (iç ya da fason) ve süre. Fasonda süre yok,
+// termin günü vardır (tablo kısıtı); kaynak boş kalırsa adım atanmamış bekler.
+export const reworkAdimiGovdesi = z.object({
+  ad: metin(80, 'Adım adı zorunlu.'),
+  operasyonTipiId: KIMLIK,
+  kaynak: z.object({ tur: z.enum(IS_EMRI_KAYNAK_TURLERI), id: KIMLIK }).nullable(),
+  ayarSuresiDk: ondalikMetinSemasi.nullable(),
+  birimSureDk: ondalikMetinSemasi.nullable(),
+  terminGun: z.number().int().min(1).max(365).nullable(),
+  aciklama: z.string().trim().max(300).nullish().transform((d) => (d ? d : null)),
+  surum: surumSemasi,
+}).strict();
+// Açık (kararsız) kayıtlar eskiden yeniye, ötekiler yeniden eskiye; emir verilirse o emrin ve kolunun kayıtları.
+export const hataliListeSorgusu = z.object({ acik: z.enum(['0', '1']).optional(), emirId: yolKimligi.optional() }).strict();
+export const hataliListeCevabi = z.object({ kayitlar: z.array(hataliKaydiSemasi) });
+
 export type UretimYeriGovdesi = z.input<typeof uretimYeriGovdesi>;
 export type UretimYeri = (typeof URETIM_YERLERI)[number];
 export type FasonFirmalariCevabi = z.output<typeof fasonFirmalariCevabi>;
 export type FasonGidisGovdesi = z.input<typeof fasonGidisGovdesi>;
 export type SiradakiFasonCevabi = z.output<typeof siradakiFasonCevabi>;
+export type HataliGovdesi = z.input<typeof hataliGovdesi>;
+export type HataliKaydi = z.output<typeof hataliGovdesi>;
+export type HataliCevabi = z.output<typeof hataliCevabi>;
+export type HataliKarari = (typeof HATALI_KARARLARI)[number];
+export type HataliKaydiOzeti = z.output<typeof hataliKaydiSemasi>;
+export type ReworkAdimiGovdesi = z.input<typeof reworkAdimiGovdesi>;
+export type HataliListeCevabi = z.output<typeof hataliListeCevabi>;
