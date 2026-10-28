@@ -10,6 +10,8 @@ import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
+import { kapanisCozucusuKaydet } from './kapanis.ts';
+import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, emirBul, emirDurumlariGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
@@ -396,6 +398,17 @@ export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazir
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
 export const kalibrasyonHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('kalibrasyon', c); };
 export type { HazirlikCozucusu };
+// Onaylı kapanış (1072 a, 1074 a): dış maddenin sahibi durumunu verir, bağı kablolama.ts kurar. Kayıtsız ya da null dönen madde 'bilinmiyor'dur
+// ve durdurmaz; yalnız 'eksik' durdurur, müdür gerekçeyle muaf tutabilir (1076 a).
+export const olcumKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('olcum', c); };
+export const izlenebilirlikKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('izlenebilirlik', c); };
+export const fasonKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('fason', c); };
+export const stokKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('stok', c); };
+export const sevkiyatKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('sevkiyat', c); };
+export const ncrKapanisCozucusu = (c: KapanisCozucusu | null): void => { kapanisCozucusuKaydet('ncr', c); };
+export type { KapanisCozucusu };
+// Kapanış sonucu (1082 a): reçete-rota ve etiket kendi emir okumalarına buradan alır; yetki denetlemez, çağıran korur.
+export { kapanisSonuclari } from './kapanis.ts';
 // Gerçekleşen süreler (plan ve rota karşılaştırması için): brüt ve net birim süre, hazırlık, 1'er giriş dizisi.
 export const isEmriSureOzeti = (db: Db, isEmriId: number): Promise<SureOzetiCevabi> => servis.isEmriSureOzeti(db, isEmriId);
 export const partiKomutuReddi = isEmri.partiKomutuReddi;
