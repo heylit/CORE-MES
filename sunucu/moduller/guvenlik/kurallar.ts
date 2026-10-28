@@ -2,6 +2,7 @@ import { adresAraliktaMi } from '#paylasilan/ag-araligi.ts';
 import type { AgAraligi } from '#paylasilan/ag-araligi.ts';
 import type { GuncellemeKanali, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { AlarmDurumu, KorumaDurumu, Onem, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { DiskDurumu } from '#paylasilan/sozlesme/saglik.ts';
 
 // Eşikler ekrandan değişmez: kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
 export const HATALI_SERI = { pencereSn: 15 * 60, esik: 10 } as const;
@@ -223,4 +224,51 @@ export function denetimMaddesi(d: { yazilir: boolean; degismez: boolean; sonKayi
   if (!d.yazilir) return { durum: 'kapali', deger: d.sonKayit, aciklama: 'Uygulama denetim kaydına yazamıyor.' };
   if (!d.degismez) return { durum: 'uyari', deger: d.sonKayit, aciklama: 'Denetim kaydının değiştirme ve silme koruması etkin değil.' };
   return { durum: 'acik', deger: d.sonKayit, aciklama: 'Her yazma kaydedilir; kayıt değiştirilemez ve silinemez. Değer son kaydın zamanı.' };
+}
+
+// Sunucu durumu kartı (1061 a). Günlük ya da olay günlüğü bu süreçte kurulmadıysa (test ortamı) bilinmiyor.
+export function gunlukMaddesi(d: { sonYazma: Date | null; sonHata: string | null } | null, saklamaGun: number): KorumaDegeri {
+  if (d === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Günlük bu süreçte dosyaya yazılmıyor.' };
+  const deger = d.sonYazma === null ? null : d.sonYazma.toISOString();
+  if (d.sonHata !== null) return { durum: 'kapali', deger, aciklama: `Günlük dosyasına yazılamıyor: ${d.sonHata}` };
+  if (d.sonYazma === null) return { durum: 'uyari', deger: null, aciklama: 'Günlüğe henüz satır yazılmadı.' };
+  return { durum: 'acik', deger, aciklama: `Günlük her gün yeni dosyaya yazılıyor ve ${String(saklamaGun)} gün saklanıyor. Değer son satırın zamanı.` };
+}
+
+export function olayGunluguMaddesi(d: { sonYazma: Date | null; sonHata: string | null } | null, windows: boolean): KorumaDegeri {
+  if (!windows) return { durum: 'bilinmiyor', deger: null, aciklama: 'Olay günlüğüne yalnız Windows sunucuda yazılır.' };
+  if (d === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Olay günlüğü bu süreçte kurulmadı.' };
+  const deger = d.sonYazma === null ? null : d.sonYazma.toISOString();
+  if (d.sonHata !== null) {
+    return { durum: 'uyari', deger, aciklama: `Olay günlüğüne yazılamadı: ${d.sonHata}. TMIV2 kaynağı yönetici hesabıyla bir kez açılır (kurulum/gunluk.md).` };
+  }
+  if (d.sonYazma === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Henüz hata olmadı; olay günlüğü ilk hatada denenir.' };
+  return { durum: 'acik', deger, aciklama: 'Sunucu hataları Uygulama olay günlüğüne de yazılıyor (kaynak TMIV2). Değer son olayın zamanı.' };
+}
+
+const gbMetni = (bayt: number): string => `${(bayt / 1e9).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} GB`;
+
+// Eşik sağlık modülünündür (DiskDurumu.az). Okunamayan disk listede görünmez, durumu düşürmez; hiçbiri okunamazsa bilinmiyor.
+export function diskMaddesi(olculer: readonly { ad: string; disk: DiskDurumu | null }[]): KorumaDegeri {
+  const okunan = olculer.flatMap((o) => (o.disk === null ? [] : [{ ad: o.ad, disk: o.disk }]));
+  if (okunan.length === 0) return { durum: 'bilinmiyor', deger: null, aciklama: 'Disk boş yeri okunamadı.' };
+  const deger = okunan.map((o) => `${o.ad}: ${gbMetni(o.disk.bosBayt)} boş / ${gbMetni(o.disk.toplamBayt)}`).join(' · ');
+  const az = okunan.filter((o) => o.disk.az).map((o) => o.ad);
+  if (az.length > 0) return { durum: 'uyari', deger, aciklama: `Yer az: ${az.join(', ')}. Eski dosyaları temizleyin ya da diski büyütün.` };
+  return { durum: 'acik', deger, aciklama: 'Disklerde yer yeterli.' };
+}
+
+// Kapı HTTPS'i kendisi sunuyorsa onun sertifikası; vekil bitiriyorsa bilgi işlemin verdiği izlenen sertifika.
+export function sunucuSertifikaMaddesi(
+  h: HttpsBilgisi | null, izlenen: { tanimli: boolean; bitis: Date | null } | null, simdi: Date,
+): KorumaDegeri {
+  if (h?.acik === true) return sertifikaMaddesi(h, simdi);
+  if (izlenen?.tanimli === true) {
+    if (izlenen.bitis === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'İzlenen sertifika dosyası okunamadı (TMIV2_IZLENEN_SERTIFIKA).' };
+    return sertifikaMaddesi({ acik: true, sertifikaBitis: izlenen.bitis }, simdi);
+  }
+  return {
+    durum: 'bilinmiyor', deger: null,
+    aciklama: 'Sertifika bu sunucuda değil. HTTPS\'i vekil bitiriyorsa süresini izlemek için TMIV2_IZLENEN_SERTIFIKA verilir (kurulum/gunluk.md).',
+  };
 }

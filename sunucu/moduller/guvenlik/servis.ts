@@ -8,12 +8,15 @@ import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   Alarm, AlarmGorunumu, AlarmKapatGovdesi, AlarmOnaylaGovdesi, GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi,
-  OturumlarCevabi, OzetCevabi,
+  OturumlarCevabi, OzetCevabi, SunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import { SINYALLER } from '#paylasilan/sozlesme/guvenlik.ts';
-import { httpsDurumuOku } from '#cekirdek/https-durumu.ts';
+import { pgVeriDiziniOku } from '#cekirdek/ayar.ts';
+import { GUNLUK_SAKLAMA_GUN, sonHatalariOku, surecGunlukDurumu, type GunlukDurumu, type HataSatiri } from '#cekirdek/gunluk-dosyasi.ts';
+import { httpsDurumuOku, izlenenSertifikaOku } from '#cekirdek/https-durumu.ts';
+import { surecOlayDurumu, type OlayDurumu } from '#cekirdek/olay-gunlugu.ts';
 import type { GuncellemeKanali } from '#paylasilan/sozlesme/ayarlar.ts';
-import { guncellemeKanaliDurumu, sistemAyariOku } from '../ayarlar/disari.ts';
+import { guncellemeKanaliDurumu, sistemAyariOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
 import { denetimDurumu } from '../denetim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
@@ -21,11 +24,12 @@ import {
   oturumuKapat, saatlikGirisDenemeleri, sonHesapKilitleri,
 } from '../oturum/disari.ts';
 import {
-  DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, httpsMaddesi, imzaMaddesi, sertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
+  DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
+  sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
   onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
 } from './kurallar.ts';
-import { surecYedegi, yedekUyarisi, type YedekBilgisi } from '../saglik/disari.ts';
+import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
 
 export interface TaramaSonucu { yeniAlarm: number; guncellenenAlarm: number; silinen: number }
@@ -229,6 +233,76 @@ export async function koruma(db: Db, kaynak: KorumaKaynagi = SUREC_KORUMA_KAYNAG
       madde('sertifika', 'Sertifika süresi', sertifikaMaddesi(https, simdi)),
       madde('denetim', 'Denetim kaydı', denetimMaddesi(await guvenliOku(() => denetimDurumu(db)))),
     ],
+  };
+}
+
+export interface SunucuDurumuKaynagi {
+  gunluk: () => GunlukDurumu | null;
+  olay: () => OlayDurumu | null;
+  windows: boolean;
+  sonHatalar: (dizin: string) => HataSatiri[];
+  yedek: (db: Db) => Promise<YedekBilgisi>;
+  https: () => HttpsBilgisi;
+  izlenenSertifika: () => { tanimli: boolean; bitis: Date | null };
+  // Ölçülecek klasörler; tanımsız klasör (null) bilinmiyor sayılır.
+  diskDizinleri: (db: Db, gunlukDizini: string | null) => Promise<readonly { ad: string; dizin: string | null }[]>;
+  diskOku: (dizin: string) => Promise<DiskOlcusu | null>;
+}
+
+const SUREC_SUNUCU_KAYNAGI: SunucuDurumuKaynagi = {
+  gunluk: surecGunlukDurumu,
+  olay: surecOlayDurumu,
+  windows: process.platform === 'win32',
+  sonHatalar: (dizin) => sonHatalariOku(dizin, SON_HATA_SAYISI),
+  yedek: surecYedegi,
+  https: () => httpsDurumuOku(),
+  izlenenSertifika: () => izlenenSertifikaOku(),
+  diskDizinleri: async (db, gunlukDizini) => [
+    { ad: 'Yedek', dizin: (await yedekOrtaminiKur(db)).dizin },
+    { ad: 'Veritabanı', dizin: pgVeriDiziniOku() },
+    { ad: 'Günlük', dizin: gunlukDizini },
+  ],
+  diskOku,
+};
+
+export const SON_HATA_SAYISI = 10;
+// Ağ sürücüsündeki klasör kartı askıda tutmasın: süre dolarsa o disk bilinmiyor.
+const DISK_SURESI_MS = 2000;
+
+async function sureliOku<T>(oku: () => Promise<T>, sureMs: number): Promise<T | null> {
+  let zamanlayici: NodeJS.Timeout | undefined;
+  const sureDoldu = new Promise<null>((coz) => { zamanlayici = setTimeout(() => { coz(null); }, sureMs); });
+  try {
+    const is = guvenliOku(oku);
+    return await Promise.race([is, sureDoldu]);
+  } finally {
+    clearTimeout(zamanlayici);
+  }
+}
+
+// Okunamayan kaynak kartı düşürmez: o madde bilinmiyor olur (koruma ile aynı ilke).
+export async function sunucuDurumu(db: Db, kaynak: SunucuDurumuKaynagi = SUREC_SUNUCU_KAYNAGI): Promise<SunucuDurumuCevabi> {
+  const simdi = new Date(await s.veritabaniSaati(db));
+  const gunluk = await guvenliOku(kaynak.gunluk);
+  const yedek = await guvenliOku(() => kaynak.yedek(db));
+  const dizinler = (await guvenliOku(() => kaynak.diskDizinleri(db, gunluk?.dizin ?? null))) ?? [];
+  const diskler = await Promise.all(dizinler.map(async ({ ad, dizin }) => {
+    const olcu = dizin === null ? null : await sureliOku(() => kaynak.diskOku(dizin), DISK_SURESI_MS);
+    return { ad, disk: olcu === null ? null : diskDurumu(olcu.bos, olcu.toplam) };
+  }));
+  const hatalar = gunluk === null ? [] : (await guvenliOku(() => kaynak.sonHatalar(gunluk.dizin))) ?? [];
+  const madde = (anahtar: string, baslik: string, d: { durum: KorumaCevabi['maddeler'][number]['durum']; deger: string | null; aciklama: string }) =>
+    ({ anahtar, baslik, ...d });
+  return {
+    maddeler: [
+      madde('gunluk', 'Sunucu günlüğü', gunlukMaddesi(gunluk, GUNLUK_SAKLAMA_GUN)),
+      madde('olay-gunlugu', 'Windows olay günlüğü', olayGunluguMaddesi(await guvenliOku(kaynak.olay), kaynak.windows)),
+      madde('yedek', 'Son yedek', yedekMaddesi(yedek, yedek === null ? null : yedekUyarisi(yedek, simdi))),
+      madde('disk', 'Disk', diskMaddesi(diskler)),
+      madde('sertifika', 'Sertifika süresi',
+        sunucuSertifikaMaddesi(await guvenliOku(kaynak.https), await guvenliOku(kaynak.izlenenSertifika), simdi)),
+    ],
+    sonHatalar: hatalar.map((h) => ({ zaman: h.zaman.toISOString(), ileti: h.ileti, hata: h.hata, kod: h.istekKimligi })),
   };
 }
 

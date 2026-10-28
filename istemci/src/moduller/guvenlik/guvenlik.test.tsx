@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { Alarm, AlarmListeCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi, OturumlarCevabi, OzetCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import type {
+  Alarm, AlarmListeCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi, OturumlarCevabi, OzetCevabi, SunucuDurumuCevabi,
+} from '#paylasilan/sozlesme/guvenlik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import type { Kullanici } from '../../ortak/veri/oturum.ts';
@@ -88,6 +90,33 @@ describe('Güvenlik Merkezi durum ekranı', () => {
     expect(await screen.findByText('Her şey yolunda')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Alarmlara git' })).toBeNull();
     expect(screen.getByText('Henüz alarm yok')).toBeTruthy();
+  });
+
+  it('sunucu durumu kartı maddeleri durum rozetiyle, son hataları hata koduyla gösterir', async () => {
+    const durum: SunucuDurumuCevabi = {
+      maddeler: [
+        { anahtar: 'gunluk', baslik: 'Sunucu günlüğü', aciklama: 'Günlük yazılıyor.', durum: 'acik', deger: T },
+        { anahtar: 'disk', baslik: 'Disk', aciklama: 'Yer az: Yedek.', durum: 'uyari', deger: 'Yedek: 1 GB boş / 100 GB' },
+      ],
+      sonHatalar: [{ zaman: T, ileti: 'Beklenmeyen hata', hata: 'Error: deneme', kod: 'ab12cd34' }],
+    };
+    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/sunucu-durumu': () => json(200, durum) });
+    cizdir(<GuvenlikDurum />);
+    expect(await screen.findByText('Sunucu günlüğü')).toBeTruthy();
+    expect(screen.getByText('Yedek: 1 GB boş / 100 GB')).toBeTruthy();
+    expect(screen.getByText('Uyarı')).toBeTruthy();
+    expect(screen.getByText('Hata kodu: ab12cd34')).toBeTruthy();
+  });
+
+  it('sunucu durumu okunamazsa yalnız kart hata gösterir; hata yoksa boş metin', async () => {
+    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()) });
+    cizdir(<GuvenlikDurum />);
+    expect(await screen.findByText('Her şey yolunda')).toBeTruthy();
+    expect(await screen.findByText('Veri alınamadı')).toBeTruthy();
+    cleanup();
+    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }) });
+    cizdir(<GuvenlikDurum />);
+    expect(await screen.findByText('Son iki günün günlüğünde sunucu hatası yok')).toBeTruthy();
   });
 });
 

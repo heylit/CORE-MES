@@ -5,14 +5,16 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
-import { SINYALLER, alarmListeCevabi, alarmSemasi, kilitListeCevabi, korumaCevabi, kurallarCevabi, oturumlarCevabi, ozetCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
-import type { Alarm, KorumaCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import {
+  SINYALLER, alarmListeCevabi, alarmSemasi, kilitListeCevabi, korumaCevabi, kurallarCevabi, oturumlarCevabi, ozetCevabi, sunucuDurumuCevabi,
+} from '#paylasilan/sozlesme/guvenlik.ts';
+import type { Alarm, KorumaCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { HATALI_SERI, SAKLAMA_GUN } from './kurallar.ts';
-import { koruma, taramaYap } from './servis.ts';
+import { SON_HATA_SAYISI, koruma, sunucuDurumu, taramaYap, type SunucuDurumuKaynagi } from './servis.ts';
 import { taramaKilidiAl } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -100,7 +102,7 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
   });
 
   test('G-19: her uç oturumsuz 401, yönetici olmayan (müdür) 403; yönetici okur; sayaç yetkisize sayı vermez', async () => {
-    const okumalar = ['/guvenlik/ozet', '/guvenlik-alarmlari', '/guvenlik-alarmlari/1', '/guvenlik/girisler', '/guvenlik/oturumlar', '/guvenlik/kilitler', '/guvenlik/koruma', '/guvenlik/kurallar'];
+    const okumalar = ['/guvenlik/ozet', '/guvenlik-alarmlari', '/guvenlik-alarmlari/1', '/guvenlik/girisler', '/guvenlik/oturumlar', '/guvenlik/kilitler', '/guvenlik/koruma', '/guvenlik/kurallar', '/guvenlik/sunucu-durumu'];
     const yazmalar = ['/guvenlik-alarmlari/1/onayla', '/guvenlik-alarmlari/1/kapat', '/guvenlik/oturumlar/1/kapat', '/guvenlik/kilitler/1/ac'];
     for (const yol of okumalar) {
       assert.equal((await istek(null, 'GET', yol)).durum, 401, yol);
@@ -369,6 +371,46 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
       yedek: async () => ({ durum: 'acik', sonYedek: new Date() }), imza: async () => 'acik', https: () => ({ acik: true, sertifikaBitis: yarin }),
     }));
     assert.deepEqual(['yedek', 'guncelleme-imzasi', 'https', 'sertifika'].map((a) => bul(okunan, a)), ['acik', 'acik', 'acik', 'uyari']);
+  });
+
+  test('sunucu durumu: test ortamında günlük kurulmamış, madde bilinmiyor; son hata yok; cevap şemaya uyar', async () => {
+    const c = sunucuDurumuCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/sunucu-durumu')).govde);
+    assert.deepEqual(c.maddeler.map((m) => m.anahtar), ['gunluk', 'olay-gunlugu', 'yedek', 'disk', 'sertifika']);
+    assert.equal(c.maddeler.find((m) => m.anahtar === 'gunluk')?.durum, 'bilinmiyor');
+    assert.deepEqual(c.sonHatalar, []);
+  });
+
+  test('sunucu durumu: okunan kaynaklar maddeye taşınır, okunamayan bilinmiyor olur; son hatalar günlük klasöründen', async () => {
+    const bul = (c: SunucuDurumuCevabi, anahtar: string) => c.maddeler.find((m) => m.anahtar === anahtar);
+    const simdi = new Date();
+    const okunanDizinler: string[] = [];
+    const kaynak: SunucuDurumuKaynagi = {
+      gunluk: () => ({ dizin: '/gunluk', dosya: '/gunluk/sunucu.log', sonYazma: simdi, sonHata: null }),
+      olay: () => ({ sonYazma: null, sonHata: 'Erişim reddedildi' }),
+      windows: true,
+      sonHatalar: (dizin) => {
+        okunanDizinler.push(dizin);
+        return [{ zaman: simdi, ileti: 'Beklenmeyen hata', istekKimligi: 'ab12cd34', hata: 'Error: x' }];
+      },
+      yedek: async () => ({ durum: 'acik', sonYedek: simdi }),
+      https: () => ({ acik: false, sertifikaBitis: null }),
+      izlenenSertifika: () => ({ tanimli: true, bitis: new Date(simdi.getTime() + 90 * 86_400_000) }),
+      diskDizinleri: async (_db, gunlukDizini) => [{ ad: 'Yedek', dizin: '/yedek' }, { ad: 'Veritabanı', dizin: null }, { ad: 'Günlük', dizin: gunlukDizini }],
+      diskOku: async (dizin) => (dizin === '/yedek' ? { bos: 1e9, toplam: 100e9 } : null),
+    };
+    const c = await o().vt.tx((db) => sunucuDurumu(db, kaynak));
+    assert.deepEqual(c.maddeler.map((m) => m.durum), ['acik', 'uyari', 'acik', 'uyari', 'acik']);
+    assert.match(bul(c, 'disk')?.deger ?? '', /^Yedek: 1 GB boş \/ 100 GB$/);
+    assert.deepEqual(okunanDizinler, ['/gunluk']);
+    assert.deepEqual(c.sonHatalar, [{ zaman: simdi.toISOString(), ileti: 'Beklenmeyen hata', hata: 'Error: x', kod: 'ab12cd34' }]);
+    assert.equal(SON_HATA_SAYISI, 10);
+
+    const hata = (): never => { throw new Error('okunamadı'); };
+    const okunamayan = await o().vt.tx((db) => sunucuDurumu(db, {
+      ...kaynak, gunluk: hata, olay: hata, yedek: async () => hata(), https: hata, izlenenSertifika: hata, diskDizinleri: async () => hata(),
+    }));
+    assert.deepEqual(okunamayan.maddeler.map((m) => m.durum), ['bilinmiyor', 'bilinmiyor', 'bilinmiyor', 'bilinmiyor', 'bilinmiyor']);
+    assert.deepEqual(okunamayan.sonHatalar, []);
   });
 
   test('zamanlanmış iş: tarama her dakika koşan iş olarak bulunur; tek turu durum satırını yazar', async () => {

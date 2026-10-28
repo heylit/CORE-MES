@@ -7,4 +7,5 @@ export const anahtarlar = {
   kilitler: (sayfa: number) => ['guvenlik', 'kilitler', sayfa] as const,
   koruma: ['guvenlik', 'koruma'] as const,
   kurallar: ['guvenlik', 'kurallar'] as const,
+  sunucuDurumu: ['guvenlik', 'sunucu-durumu'] as const,
 };

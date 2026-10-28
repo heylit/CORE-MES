@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { OzetCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { OzetCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
 import { Dugme, DurumKutusu, IkiSeriKarti, Kart, Rozet, SayiKarti, Simge } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { DURUM_ADI, DURUM_TONU, ONEM_ADI, SINYAL_ADI, kaynakMetni, saatMetni, zamanMetni } from './gorunum.ts';
+import { DURUM_ADI, DURUM_TONU, KORUMA_ADI, KORUMA_TONU, ONEM_ADI, SINYAL_ADI, kaynakMetni, saatMetni, zamanMetni } from './gorunum.ts';
 import './guvenlik.css';
 
 // Panoya bakan elle yenilemek zorunda kalmasın; tarama dakikada bir koşar.
@@ -33,6 +33,52 @@ function altMetin(o: OzetCevabi): string {
   if (o.kilitliHesap > 0) parcalar.push(`${o.kilitliHesap} hesap kilitli.`);
   if (o.taramaDurdu) parcalar.push('Güvenlik taraması son 5 dakikada koşmadı.');
   return parcalar.length > 0 ? parcalar.join(' ') : 'Açık alarm yok; tarama çalışıyor.';
+}
+
+const ZAMAN_BICIMI = /^\d{4}-\d{2}-\d{2}T/;
+
+// Günlük, olay günlüğü, yedek, disk ve sertifika; altında günlük dosyasındaki son sunucu hataları. Okunamazsa yalnız bu kart hata gösterir.
+function SunucuDurumuKarti() {
+  const sorgu = useQuery({
+    queryKey: anahtarlar.sunucuDurumu,
+    queryFn: () => api.get<SunucuDurumuCevabi>('/guvenlik/sunucu-durumu'),
+    refetchInterval: YENILEME_MS,
+  });
+  return (
+    <Kart baslik="Sunucu durumu">
+      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+        : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
+          : (
+            <div className="tc-guvenlik-ayrinti">
+              <ul className="tc-guvenlik-olaylar">
+                {sorgu.data.maddeler.map((m) => (
+                  <li key={m.anahtar}>
+                    <Rozet ton={KORUMA_TONU[m.durum]}>{KORUMA_ADI[m.durum]}</Rozet>
+                    <span className="tc-guvenlik-olay-metin">
+                      <b>{m.baslik}</b> · {m.aciklama}
+                      {m.deger !== null && <> · <span className="mono">{ZAMAN_BICIMI.test(m.deger) ? zamanMetni(m.deger) : m.deger}</span></>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div>
+                <h3>Son sunucu hataları</h3>
+                {sorgu.data.sonHatalar.length === 0 ? <DurumKutusu durum="bos" mesaj="Son iki günün günlüğünde sunucu hatası yok" /> : (
+                  <ul className="tc-guvenlik-olaylar">
+                    {sorgu.data.sonHatalar.map((h, sira) => (
+                      <li key={`${h.zaman}-${String(sira)}`}>
+                        <time className="mono" dateTime={h.zaman}>{zamanMetni(h.zaman)}</time>
+                        <span className="tc-guvenlik-olay-metin"><b>{h.ileti}</b>{h.hata !== null && <> · {h.hata}</>}</span>
+                        {h.kod !== null && <span className="mono">Hata kodu: {h.kod}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+    </Kart>
+  );
 }
 
 export function GuvenlikDurum() {
@@ -88,6 +134,8 @@ export function GuvenlikDurum() {
           )}
         </Kart>
       </div>
+
+      <SunucuDurumuKarti />
     </div>
   );
 }
