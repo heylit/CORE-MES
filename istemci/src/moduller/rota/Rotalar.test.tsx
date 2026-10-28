@@ -70,7 +70,7 @@ const ayrinti = (r: RevizyonOzeti, komutlar: RevizyonAyrintisi['komutlar']): Rev
 
 const LISTE: RotaListesiCevabi = { rotalar: [{ urun: URUN, yururlukte: { id: 11, harf: 'A' }, acik: null, revizyonSayisi: 1 }] };
 const TALIMATLAR: TalimatlarCevabi = {
-  surumler: [{ surum: 2, metin: 'Deneme talimat metni', yazan: { id: 7, ad: 'Deneme Planlama' }, yazma: '2026-10-05T09:00:00Z' }],
+  surumler: [{ surum: 2, metin: 'Deneme talimat metni', yazan: { id: 7, ad: 'Deneme Planlama' }, yazma: '2026-10-05T09:00:00Z', adimli: false, adimlar: [] }],
 };
 const AGAC: AgacCevabi = {
   urun: URUN, miktar: '1',

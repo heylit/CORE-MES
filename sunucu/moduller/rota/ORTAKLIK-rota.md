@@ -26,3 +26,5 @@ Rota modülünün tuttuğu ya da kullandığı ve başka modülde de bulunan ya 
 | Müşteri firma | `rota_islem_sartnamesi.musteri_firma_id` | musteri-tedarikci firma | Sahibi musteri-tedarikci |
 | Emre sabitlenen şartname | `rota_is_emri_sartnamesi` (iş emri, sürüm, çözülmüş değerler) | uretim-emirleri iş emri; kalite, sevkiyat, satın alma okur | Yazan yalnız rota |
 | İstenen belge listesi | `rota_islem_sartnamesi_surumu.istenen_belgeler` (metin dizisi) | sevkiyat ve kalite belge türleri | Bağlamada ortak belge türü listesine bağlanır |
+| Talimat adımı ve kontrol noktası | `rota_talimat_adimi` (talimat sürümü, sıra, başlık, kontrol türü ve ayarı, zorunlu) | arkon terminal (cevapları kendi tutar); kalite ölçüm planı | Yazan yalnız rota; ölçüm cevabı arkon'da |
+| Talimat şablonu | `rota_talimat_sablonu`, `rota_talimat_sablon_adimi` | yok | Kopyalanır, bağlanmaz |

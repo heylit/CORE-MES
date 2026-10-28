@@ -304,8 +304,52 @@ export const seceneklerCevabi = z.object({
   fasonFirmalar: z.array(adimKaynakOzeti),
 });
 
+/* ---------------- adım adım talimat (989 a, 993 a) ---------------- */
+
+// Adımlı talimatın her adımı bir kontrol noktası taşıyabilir; zorunlu nokta geçilmeden terminal sonraki adıma geçirmez.
+export const KONTROL_TURLERI = ['yok', 'onay', 'olcum', 'foto', 'secim'] as const;
+// İş emri kontrol listesi en çok 30 maddedir; adım başlığı madde adı olur, sayılar bu yüzden ona eşit.
+export const AZAMI_TALIMAT_ADIMI = 30;
+export const AZAMI_ADIM_BASLIGI = 120;
+export const AZAMI_ADIM_METNI = 2000;
+export const AZAMI_KONTROL_SECENEGI = 10;
+const kisaMetin = (azami: number) => z.string().trim().max(azami);
+export const kontrolSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('yok') }),
+  z.object({ tur: z.literal('onay') }),
+  // Sınırlar boş olabilir: şablonda değer üründen ürüne değişir, talimatı yazan doldurur.
+  z.object({
+    tur: z.literal('olcum'), ad: metin(60, 'Ölçümün adı zorunlu.'), alt: z.number().finite().nullable(), ust: z.number().finite().nullable(), birim: kisaMetin(12),
+  }),
+  z.object({ tur: z.literal('foto'), aciklama: kisaMetin(120).nullable() }),
+  z.object({ tur: z.literal('secim'), secenekler: z.array(metin(60, 'Seçenek boş olamaz.')).min(2, 'Seçimde en az iki seçenek olur.').max(AZAMI_KONTROL_SECENEGI) }),
+]);
+// Medya (995 a): resim en çok 10 MB, video en çok 200 MB ve 3 dakika (süreyi istemci ölçer), ürünün bütün talimatlarında en çok 1 GB.
+export const MEDYA_TURLERI = ['resim', 'video'] as const;
+export const MEDYA_SINIRI = { resimBayt: 10 * 1024 ** 2, videoBayt: 200 * 1024 ** 2, videoSaniye: 180, urunBayt: 1024 ** 3 } as const;
+export const AZAMI_ADIM_MEDYASI = 5;
+export const medyaGirdisi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/, 'Geçersiz dosya özeti.'), ad: metin(120, 'Dosya adı zorunlu.') });
+const medyaSemasi = z.object({ ozet: z.string(), ad: z.string(), tur: z.enum(MEDYA_TURLERI), boyut: z.number().int().positive() });
+export const medyaParametresi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/) });
+export const talimatAdimiGirdisi = z.object({
+  baslik: metin(AZAMI_ADIM_BASLIGI, 'Adım başlığı zorunlu.'),
+  metin: kisaMetin(AZAMI_ADIM_METNI).nullable().transform((x) => (x === '' ? null : x)),
+  kontrol: kontrolSemasi,
+  zorunlu: z.boolean(),
+  medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).default([]),
+});
+const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
+// okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
+export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const talimatAdimiSemasi = z.object({
+  sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
+});
+
+// adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
 export const talimatlarCevabi = z.object({
-  surumler: z.array(z.object({ surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman })),
+  surumler: z.array(z.object({
+    surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi),
+  })),
 });
 
 export const komutCevabi = z.object({ id: KIMLIK, durum: revizyonDurumu, surum: KIMLIK });
@@ -619,3 +663,30 @@ export type StandartCevabi = z.output<typeof standartCevabi>;
 export type RevizyonSartnameleriCevabi = z.output<typeof revizyonSartnameleriCevabi>;
 export type IsEmriSartnamesi = z.output<typeof isEmriSartnamesiSemasi>;
 export type IsEmriSartnameleriCevabi = z.output<typeof isEmriSartnameleriCevabi>;
+
+/* ---------------- talimat şablonu (989 a) ---------------- */
+
+// Şablon kütüphanedir: "şablondan başla" adımları talimata kopyalar, bağ kurmaz; şablon sonra değişse ürün talimatı değişmez.
+export const talimatSablonParametresi = z.object({ id: yolKimligi });
+const talimatSablonKodu = z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9-]{1,29}$/, 'Kod 2-30 karakter: büyük harf, rakam ve tire.');
+export const talimatSablonEkleGovdesi = z.object({
+  kod: talimatSablonKodu, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari,
+});
+export const talimatSablonKaydetGovdesi = z.object({ surum: KIMLIK, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const talimatSablonDurumGovdesi = z.object({ surum: KIMLIK, aktif: z.boolean() });
+const talimatSablonOzeti = z.object({
+  id: KIMLIK, kod: z.string(), ad: z.string(), sartname: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+  aktif: z.boolean(), surum: KIMLIK, adimSayisi: z.number().int().nonnegative(),
+});
+export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
+export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });
+
+export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
+export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
+export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
+export type TalimatMedyasi = z.output<typeof medyaSemasi>;
+export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
+export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
+export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;
+export type TalimatSablonlariCevabi = z.output<typeof talimatSablonlariCevabi>;
+export type TalimatSablonuCevabi = z.output<typeof talimatSablonuCevabi>;

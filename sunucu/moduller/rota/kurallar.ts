@@ -1,4 +1,4 @@
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami } from '#paylasilan/sozlesme/rota.ts';
+import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami } from '#paylasilan/sozlesme/rota.ts';
 
 export const YAZ = 'rota.yaz';
 export const ONAYLA = 'rota.onayla';
@@ -803,4 +803,78 @@ export function sartnameOnayEngeli(durumlar: readonly AdimSartnameDurumu[]): str
     if (d.eksikler.length > 0) return `OP ${d.opNo}: ${d.kod} şartnamesinde zorunlu alan boş: ${d.eksikler.join(', ')}`;
   }
   return null;
+}
+
+/* ---------------- adım adım talimat (989 a, 993 a) ---------------- */
+
+export interface TalimatAdimiYazisi { baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: readonly { ozet: string; ad: string }[] }
+
+// Şemanın tek başına göremediği adım kuralları; hata yoksa null.
+export function talimatAdimiHatasi(a: TalimatAdimiYazisi): string | null {
+  if (a.zorunlu && a.kontrol.tur === 'yok') return `"${a.baslik}": kontrol noktası olmayan adım zorunlu olamaz.`;
+  const k = a.kontrol;
+  if (k.tur === 'olcum' && k.alt !== null && k.ust !== null && k.alt > k.ust) return `"${a.baslik}": ölçümün alt sınırı üst sınırdan büyük.`;
+  if (new Set(a.medya.map((m) => m.ozet)).size !== a.medya.length) return `"${a.baslik}": aynı dosya adımda iki kez var.`;
+  if (k.tur === 'secim' && new Set(k.secenekler.map((x) => x.toLocaleLowerCase('tr'))).size !== k.secenekler.length) {
+    return `"${a.baslik}": seçenekler birbirinden farklı olmalı.`;
+  }
+  return null;
+}
+
+// Tabloda tür ve ayar ayrı sütundur; ayar türün dışındaki alanlardır.
+export function kontrolAyrisi(k: KontrolNoktasi): { tur: KontrolNoktasi['tur']; ayar: Record<string, unknown> } {
+  const { tur, ...ayar } = k;
+  return { tur, ayar };
+}
+
+// Okunan ayar eksik ya da bozuksa nokta sınırsız sayılır; yazımda şema denetlediği için bu yalnız elle girilmiş satırı korur.
+export function kontrolKur(tur: string, ayar: Record<string, unknown>): KontrolNoktasi {
+  const sayi = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  const yazi = (x: unknown): string | null => (typeof x === 'string' && x.trim() !== '' ? x : null);
+  switch (tur) {
+    case 'onay': return { tur };
+    case 'olcum': return { tur, ad: yazi(ayar.ad) ?? 'Ölçüm', alt: sayi(ayar.alt), ust: sayi(ayar.ust), birim: yazi(ayar.birim) ?? '' };
+    case 'foto': return { tur, aciklama: yazi(ayar.aciklama) };
+    case 'secim': return { tur, secenekler: Array.isArray(ayar.secenekler) ? ayar.secenekler.filter((x): x is string => typeof x === 'string') : [] };
+    default: return { tur: 'yok' };
+  }
+}
+
+// Adımlı sürüm de rota_talimati satırıdır: metni adım başlıklarıdır, böylece emre giden kontrol listesi ve sürüm sabitleme değişmez.
+export const adimliTalimatMetni = (adimlar: readonly { baslik: string }[]): string => adimlar.map((a) => a.baslik).join('\n');
+
+export const EMIR_ACIKLAMASI_EN_COK = 300;
+
+// Adımlı sürümde kontrol listesi maddesi adımın başlığı, açıklaması adımın metnidir (emir adımı açıklaması en çok 300 karakter).
+export function adimliKontrolListesi(adimlar: readonly { baslik: string; metin: string | null }[]): { ad: string; aciklama: string | null }[] {
+  return adimlar.map((a) => ({
+    ad: a.baslik,
+    aciklama: a.metin === null || a.metin.length <= EMIR_ACIKLAMASI_EN_COK ? a.metin : `${a.metin.slice(0, EMIR_ACIKLAMASI_EN_COK - 1)}…`,
+  }));
+}
+
+// Düz metinle yazılmış eski sürüm tek adımdır: başlık ilk dolu satır, metin bütün talimat; kontrol noktası yok (993 a).
+export function eskiTalimatAdimi(metin: string): { sira: number; baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: [] } {
+  const ilk = metin.split(/\r?\n/).map((x) => x.trim()).find((x) => x !== '') ?? 'Talimat';
+  return { sira: 1, baslik: ilk.slice(0, KONTROL_SATIRI_EN_COK), metin, kontrol: { tur: 'yok' }, zorunlu: false, medya: [] };
+}
+
+// Dosya türünden medya türü; resim ve video dışı tür medya olamaz (null).
+export function medyaTuru(dosyaTuru: string): 'resim' | 'video' | null {
+  if (dosyaTuru === 'png' || dosyaTuru === 'jpeg' || dosyaTuru === 'webp') return 'resim';
+  return dosyaTuru === 'mp4' ? 'video' : null;
+}
+
+// Tek dosya sınırı türe göre; ürün sınırı ürünün bütün sürümlerindeki farklı dosyaların toplamıdır (aynı dosya bir kez sayılır).
+export function medyaSinirHatasi(
+  tur: 'resim' | 'video', boyut: number, sinir: { resimBayt: number; videoBayt: number },
+): string | null {
+  const azami = tur === 'resim' ? sinir.resimBayt : sinir.videoBayt;
+  return boyut > azami ? `${tur === 'resim' ? 'Resim' : 'Video'} en çok ${Math.round(azami / 1024 ** 2)} MB olabilir.` : null;
+}
+
+export function urunMedyaToplami(mevcut: readonly { ozet: string; boyut: number }[], yeni: readonly { ozet: string; boyut: number }[]): number {
+  const harita = new Map<string, number>();
+  for (const x of [...mevcut, ...yeni]) harita.set(x.ozet, x.boyut);
+  return [...harita.values()].reduce((t, b) => t + b, 0);
 }

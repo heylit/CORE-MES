@@ -71,3 +71,7 @@ istasyonlar `/operasyon-tipleri*`, `/istasyon-plan-ayarlari`, `/istasyonlar/:id/
 - arkon: iç adımın terminal kartı `isEmriSartnameleri(db, isEmriIdleri)` ile şartname adını, değerleri ve terminal notunu göstersin (arkon rotaya zaten bağımlı).
 - fason iş emri belgesi (sevkiyat ya da satın alma, hangisi basıyorsa): fason adımın şartnamesini, standart atıflarını ve istenen belgeleri bassın.
 - kalite-merkezi: girdi ve son kontrolde istenen belgeleri ve kabul atıflarını okusun. Yön kalite-merkezi -> rota; döngü yok (ADR 0006).
+
+## Adımlı talimat okuyucusu (989 a, bağlamada)
+
+- arkon: iş emrinin sabitlenmiş talimat sürümünü `talimatSurumuAdimlari(db, malzemeId, opNo, surum)` ile adım adım göstersin; zorunlu kontrol noktası (onay, ölçüm sınırı, fotoğraf, seçim) geçilmeden sonraki adım açılmasın; ölçüm ve seçim cevabı arkon'un kendi tablosunda tutulur.

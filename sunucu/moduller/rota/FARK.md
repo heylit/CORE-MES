@@ -354,3 +354,28 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: kullanımdan kalkan şartname açılan emre yine sabitlenir; yeni adıma seçilmez, onayda reddedilir. Geri alma: tek koşul.
 - VARSAYIM: kod ve kapsam açılıştan sonra değişmez (künye yalnız ad ve kategori); farklı kapsam için kopya açılır. Geri alma: uç genişletme.
 - VARSAYIM: ilk sürüm silinmez; şartname kullanımdan kaldırılır. Geri alma: tek koşul.
+
+## Adım adım talimat ve talimat şablonu (989 a, 992 a, 993 a)
+
+| Dosya | Ne |
+|---|---|
+| `sunucu/gocler/20261028088000_rota_adimli_talimat.sql` | `rota_talimat_adimi` (yalnız ekleme), `rota_talimat_sablonu`, `rota_talimat_sablon_adimi`; 9 şablon, 38 adım tohum |
+| `paylasilan/sozlesme/rota.ts` | `KONTROL_TURLERI`, `kontrolSemasi`, `adimliTalimatYazGovdesi`, şablon gövde ve cevapları; `talimatlarCevabi` sürümüne `adimli`, `adimlar` |
+| `kurallar.ts`, `sorgular.ts`, `servis.ts`, `uclar.ts`, `disari.ts` | `POST /rota/urunler/:urunId/talimat-adimli-yaz`, `GET/POST /rota/talimat-sablonlari…`; `disari.ts` `talimatSurumuAdimlari` |
+| `sartname.test.ts`, `kurallar.test.ts` | Akış (4) ve kural (3) testleri |
+
+- Talimat sürümü yine `rota_talimati` satırıdır (dolu tabloya dokunulmaz): adımlı sürümün metni adım başlıklarıdır; adımlar ayrı tabloda sürüme bağlıdır. Sürüm sabitleme değişmez.
+- Düz metin eski sürüm tek adım olarak okunur (`adimli: false`); göçle taşınmaz (993 a).
+- Kontrol noktası: yok, onay, ölçüm (ad, alt, üst, birim), fotoğraf (açıklama), seçim (2-10 seçenek). Zorunlu adım kontrol noktası ister (kısıt ve kural).
+- Emir açılırken adımlı sürümün kontrol listesi adımlardan kurulur: madde adı başlık, açıklaması adım metni (emir adımı açıklaması en çok 300 karakter, fazlası kısaltılır).
+- Şablon kopyalanır, bağlanmaz: "şablondan başla" istemcide şablonu okuyup adımlı yazımla kaydeder; şablon sonra değişse talimat değişmez.
+- Medya (995 a, 1004 a): adım başına en çok 5 dosya; `rota_talimat_adim_medyasi` ve `rota_talimat_sablon_adim_medyasi` (göç 089000) künyeyi tutar,
+  içerik ortak dosya deposundadır. Bağ özet başına tek kayıt (`medya:<özet>`); ilk bağlayan içeriği yüklemiş olmalı, sonra rotada
+  bağlı dosya yeniden yüklenmeden kullanılır (şablon kopyası, yeni sürüm). Okuma `GET /rota/talimat-medyasi/:ozet` (oturum).
+  Resim 10 MB, ürün başına 1 GB (aynı dosya bir kez sayılır). Video bu teslimde bağlanamaz: dosya modülünde mp4 türü ve disk deposu yok (1007).
+- VARSAYIM: adım başına en çok 5 medya. Geri alma: sabit.
+- VARSAYIM: videonun 3 dakika sınırı yalnız istemcide ölçülür (sunucu videoyu çözümlemez). Geri alma: sunucuda süre okuma yeni bağımlılık ister.
+- VARSAYIM: şablon yazma `rota.talimat-yaz` işlemiyle (yeni işlem açılmadı). Geri alma: uçlarda tek yetki adı.
+- VARSAYIM: adım sayısı en çok 30 (iş emri kontrol listesi sınırı). Geri alma: sabit, ama emir tarafı da artmalı.
+- VARSAYIM: şablon silinmez, pasife alınır. Geri alma: silme ucu eklenir (kopyalanan talimatlar bağımsız).
+- VARSAYIM: ölçüm sınırları boş bırakılabilir (şablonda ürüne göre doldurulur); terminal boş sınırı uyarısız kabul eder. Geri alma: şema `nullable` kaldırılır.
