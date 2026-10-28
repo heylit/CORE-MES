@@ -53,6 +53,9 @@ export const ILETILER = {
   acilisDurumu: 'Talep taslak, teklif istenen, değerlendirme ya da iptal durumuyla açılır.',
   onayDurumu: 'Onay ya da ret yalnız onaydaki ve kararı verilmiş talebe eklenir.',
   onaysizSiparis: 'Sipariş için kararın onaylanmış olması gerekir.',
+  kurKilidiEski: (gun: number): string => `Onay ${gun} günden eski: kur ve faiz yeniden sabitlensin diye talebi değerlendirmeye alıp yeniden onaya gönderin.`,
+  kurKaydi: (paraBirimi: string, yuzde: string): string => `${paraBirimi} kuru onaydan bu yana %${yuzde} değişti: talebi değerlendirmeye alıp yeniden onaya gönderin.`,
+  kilittenOnceOnay: 'Karar yeniden onaya gönderildi; sipariş için yeni onay gerekir.',
   askidakiTedarikci: (adlar: readonly string[]): string => `Kalite Merkezi'nde onayı Aday ya da Askıda olan tedarikçiye sipariş verilmez: ${adlar.join(', ')}. Kalite Merkezi'nde durumunu değiştirin ya da başka teklife karar verin.`,
   onayliKararDegismez: 'Onaylanmış karar değişmez; değişmesi için önce reddedilmelidir.',
   kartsizSiparis: (adlar: readonly string[]): string => `Kart bekleyen kalemle sipariş verilmez; önce kalemi malzeme kartına bağlayın: ${adlar.join(', ')}. Malzemeler bölümünde kartı "Kataloğa ekle" ile ekleyin, sonra "Kataloğa bağla" ile kalemi seçin.`,
@@ -128,11 +131,11 @@ const sirali = <T>(l: readonly T[], anahtar: (x: T) => string): T[] => [...l].so
 const satinAlmaIzi = (t: TalepYazimi): string => {
   // Karar verenin adı sunucunun çıkışa kattığı salt okunur alandır; karşılaştırmaya girerse her onay kaydı satın alma işi sayılır.
   // Öbür alanlar tek tek sayılmaz: karara sonradan eklenen alan sayılmayı unutursa yetkisiz değiştirilebilir olurdu.
-  const { kararVerenAdi: _salt, ...karar } = (t.karar ?? {}) as NonNullable<TalepYazimi['karar']> & { kararVerenAdi?: unknown };
+  // Sabit kur, faiz ve kur kilidi de sunucunundur (1096 a): istemcinin değeri yok sayılır, karşılaştırmaya girmez.
+  const { kararVerenAdi: _salt, kurKilidi: _kilit, sabitKurlar: _kur, ...karar } = (t.karar ?? {}) as NonNullable<TalepYazimi['karar']> & { kararVerenAdi?: unknown };
   const k = t.karar === null ? null : {
     ...karar,
     bolunme: sirali(karar.bolunme, (b) => b.kalemId),
-    sabitKurlar: sirali(t.karar.sabitKurlar, (s) => s.paraBirimi),
     siparisler: sirali(t.karar.siparisler.map((s) => ({ teklifId: s.teklifId, siparisNo: s.siparisNo, siparisTarihi: s.siparisTarihi, beklenenTeslim: s.beklenenTeslim })), (s) => s.teklifId),
   };
   return izi({
@@ -160,6 +163,62 @@ export function siparisReddi(eski: TalepDurumu, yeni: TalepDurumu, kararVar: boo
   const siparis = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
   if (!siparis(yeni) || siparis(eski)) return null;
   return kararVar && kararOnayliMi(onaylar) ? null : ILETILER.onaysizSiparis;
+}
+
+// 1096 a: karar onaya gönderilince kur ve faiz sabitlenir. Sipariş, kilit 7 günü geçmişse ya da bir para biriminin güncel kuru
+// sabit kurdan %3'ten fazla saptıysa verilmez; talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay).
+export const KUR_KILIDI = { gun: 7, kaymaYuzdesi: 3 } as const;
+
+// Onayın açtığı durumlar: bu durumlara karar onaydan geçmeden girilmez; dışındakilerde kilit yoktur.
+export const kilitliDurum = (d: TalepDurumu): boolean => d === 'onayda' || d === 'siparis_verildi' || d === 'teslim_alindi';
+export type KurKilidiIsi = 'kilitle' | 'sipariste-sabitle' | 'koru' | 'kaldir';
+// Kilit onaya girerken kurulur; siparişten onaya dönüş ya da iptal eski kilidi korur. Kilitsiz eski karar siparişe girerken
+// o anın kuru sabitlenir (göçten önceki akış), onay denetimi değişmez.
+export function kurKilidiIsi(eski: TalepDurumu | null, yeni: TalepDurumu, eskiKilit: string | null): KurKilidiIsi {
+  if (yeni === 'iptal') return 'koru';
+  if (!kilitliDurum(yeni)) return 'kaldir';
+  if (yeni === 'onayda' && (eski === null || (!kilitliDurum(eski) && eski !== 'iptal'))) return 'kilitle';
+  if (yeni !== 'onayda' && eski === 'onayda' && eskiKilit === null) return 'sipariste-sabitle';
+  return 'koru';
+}
+
+export function kurKilidiReddi(
+  kilit: string | null, sabit: readonly { paraBirimi: string; kur: string }[], guncel: ReadonlyMap<string, string | null>, simdiMs: number,
+): string | null {
+  if (kilit === null) return null;
+  if (simdiMs - Date.parse(kilit) > KUR_KILIDI.gun * GUN_MS) return ILETILER.kurKilidiEski(KUR_KILIDI.gun);
+  for (const s of sabit) {
+    const g = guncel.get(s.paraBirimi);
+    if (s.paraBirimi === 'TRY' || g === null || g === undefined) continue;
+    const kayma = Math.abs(Number(g) / Number(s.kur) - 1) * 100;
+    if (kayma > KUR_KILIDI.kaymaYuzdesi) return ILETILER.kurKaydi(s.paraBirimi, kayma.toFixed(1).replace('.', ','));
+  }
+  return null;
+}
+
+// Kilitten önceki onay yeni kilidi onaylamaz: siparişe kilitten sonra verilen onay (ya da bu kayıtta eklenen) gerekir.
+export function kilittenSonraOnayliMi(kilit: string | null, onaylar: readonly Pick<Onay, 'sonuc' | 'zaman'>[], yeniler: readonly Pick<Onay, 'sonuc'>[]): boolean {
+  if (kilit === null) return true;
+  const sinir = Date.parse(kilit);
+  return kararOnayliMi([...onaylar.filter((o) => Date.parse(o.zaman) >= sinir), ...yeniler]);
+}
+
+// 1099 a: satır ayrıntısını (iskonto, termin, en az miktar) bilmeyen ekran o alanları göndermez; gönderilmeyen alan saklananı korur.
+type FiyatAyrintisi = Pick<TalepYazimi['teklifler'][number]['fiyatlar'][number], 'iskontoYuzdesi' | 'terminGun' | 'enAzMiktar'>;
+export function kalemAyrintisiniKoru<T extends Pick<TalepYazimi, 'teklifler'>>(eski: Pick<TalepYazimi, 'teklifler'> | null, yeni: T): T {
+  const eskiler = new Map((eski?.teklifler ?? []).flatMap((q) => q.fiyatlar.map((f) => [`${q.id}/${f.kalemId}`, f] as const)));
+  const al = <K extends keyof FiyatAyrintisi>(gelen: FiyatAyrintisi[K], onceki: FiyatAyrintisi | undefined, k: K): NonNullable<FiyatAyrintisi[K]> | null =>
+    (gelen !== undefined ? gelen : onceki?.[k] ?? null) as NonNullable<FiyatAyrintisi[K]> | null;
+  return {
+    ...yeni,
+    teklifler: yeni.teklifler.map((q) => ({
+      ...q,
+      fiyatlar: q.fiyatlar.map((f) => {
+        const o = eskiler.get(`${q.id}/${f.kalemId}`);
+        return { ...f, iskontoYuzdesi: al(f.iskontoYuzdesi, o, 'iskontoYuzdesi'), terminGun: al(f.terminGun, o, 'terminGun'), enAzMiktar: al(f.enAzMiktar, o, 'enAzMiktar') };
+      }),
+    })),
+  };
 }
 
 export interface Degisiklik { onay: boolean; govde: boolean; satinAlma: boolean }
