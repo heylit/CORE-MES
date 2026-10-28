@@ -1,5 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, RevizyonDurumu, RevizyonOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type {
+  Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami,
+} from '#paylasilan/sozlesme/rota.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -625,3 +627,227 @@ export function adimGirenSayilari(db: Db, revizyonIdleri: readonly number[]): Pr
     [revizyonIdleri],
   );
 }
+
+/* ---------------- işlem şartnamesi (971 a) ---------------- */
+
+export interface KategoriSatiri { id: number; kod: string; ad: string; sira: number }
+export const kategoriler = (db: Db): Promise<KategoriSatiri[]> =>
+  db.sorgu<KategoriSatiri>('SELECT id, kod, ad, sira FROM rota_islem_kategorisi ORDER BY sira, id');
+
+export interface StandartSatiri { id: number; numara: string; kisaAciklama: string }
+const STANDART = 'id, numara, kisa_aciklama AS "kisaAciklama"';
+export const standartlar = (db: Db): Promise<StandartSatiri[]> =>
+  db.sorgu<StandartSatiri>(`SELECT ${STANDART} FROM rota_standart_atfi ORDER BY numara`);
+export const standartlariOku = (db: Db, idler: readonly number[]): Promise<StandartSatiri[]> =>
+  db.sorgu<StandartSatiri>(`SELECT ${STANDART} FROM rota_standart_atfi WHERE id = ANY($1::int[])`, [[...idler]]);
+export async function standartEkle(db: Db, numara: string, kisaAciklama: string): Promise<StandartSatiri> {
+  return (await db.tek<StandartSatiri>(`INSERT INTO rota_standart_atfi (numara, kisa_aciklama) VALUES ($1, $2) RETURNING ${STANDART}`, [numara, kisaAciklama]))!;
+}
+
+export interface SartnameSatiri {
+  id: number; kod: string; ad: string; kategoriId: number; kapsam: SartnameKapsami; kaynak: 'varsayilan' | 'firma' | 'musteri';
+  musteriFirmaId: number | null; musteriBelgeNo: string | null; aktif: boolean; surum: number;
+  yururlukteSurumId: number | null; yururlukteSurumNo: number | null; taslakSurumId: number | null; taslakSurumNo: number | null; kullanim: number;
+}
+const SARTNAME = `s.id, s.kod, s.ad, s.kategori_id AS "kategoriId", s.kapsam, s.kaynak, s.musteri_firma_id AS "musteriFirmaId",
+  s.musteri_belge_no AS "musteriBelgeNo", s.aktif, s.surum,
+  y.id AS "yururlukteSurumId", y.surum_no AS "yururlukteSurumNo", t.id AS "taslakSurumId", t.surum_no AS "taslakSurumNo",
+  (SELECT count(*) FROM rota_adim_sartnamesi a JOIN rota_revizyonu r ON r.id = a.revizyon_id
+    WHERE a.sartname_id = s.id AND r.durum IN ('onay_bekliyor', 'onayli', 'yururlukte'))::int AS kullanim`;
+const SARTNAME_KAYNAGI = `rota_islem_sartnamesi s
+  LEFT JOIN rota_islem_sartnamesi_surumu y ON y.sartname_id = s.id AND y.durum = 'yururlukte'
+  LEFT JOIN rota_islem_sartnamesi_surumu t ON t.sartname_id = s.id AND t.durum = 'taslak'`;
+
+// idler null: bütün kütüphane.
+export const sartnameleriOku = (db: Db, idler: readonly number[] | null): Promise<SartnameSatiri[]> =>
+  db.sorgu<SartnameSatiri>(
+    `SELECT ${SARTNAME} FROM ${SARTNAME_KAYNAGI} WHERE $1::int[] IS NULL OR s.id = ANY($1::int[]) ORDER BY s.kod`,
+    [idler === null ? null : [...idler]],
+  );
+
+// Komut şartnameyi satır kilidiyle alır: aynı şartnameye gelen iki komut (yayın, taslak kaydı) sırayla işlenir.
+export async function sartnameKilitle(db: Db, id: number): Promise<SartnameSatiri | null> {
+  if ((await db.tek('SELECT id FROM rota_islem_sartnamesi WHERE id = $1 FOR UPDATE', [id])) === null) return null;
+  return (await sartnameleriOku(db, [id]))[0] ?? null;
+}
+
+export const kategoriVarMi = async (db: Db, id: number): Promise<boolean> =>
+  (await db.tek('SELECT 1 FROM rota_islem_kategorisi WHERE id = $1', [id])) !== null;
+
+export async function sartnameEkle(db: Db, g: {
+  kod: string; kategoriId: number; ad: string; kapsam: SartnameKapsami; kaynak: 'firma' | 'musteri'; musteriFirmaId: number | null; musteriBelgeNo: string | null;
+}): Promise<number> {
+  return (await db.tek<{ id: number }>(
+    `INSERT INTO rota_islem_sartnamesi (kod, kategori_id, ad, kapsam, kaynak, musteri_firma_id, musteri_belge_no)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [g.kod, g.kategoriId, g.ad, g.kapsam, g.kaynak, g.musteriFirmaId, g.musteriBelgeNo],
+  ))!.id;
+}
+
+export async function sartnameSurumArtir(db: Db, id: number, ek = '', degerler: readonly unknown[] = []): Promise<number> {
+  return (await db.tek<{ surum: number }>(
+    `UPDATE rota_islem_sartnamesi SET surum = surum + 1${ek ? `, ${ek}` : ''} WHERE id = $1 RETURNING surum`, [id, ...degerler],
+  ))!.surum;
+}
+
+export interface SurumSatiri {
+  id: number; sartnameId: number; surumNo: number; durum: 'taslak' | 'yururlukte' | 'eski'; istenenBelgeler: string[];
+  terminalNotu: string | null; degisiklikNotu: string | null; acanKisiId: number | null; acilma: string; yayinlayanKisiId: number | null; yayin: string | null;
+}
+const SURUM = `v.id, v.sartname_id AS "sartnameId", v.surum_no AS "surumNo", v.durum, v.istenen_belgeler AS "istenenBelgeler",
+  v.terminal_notu AS "terminalNotu", v.degisiklik_notu AS "degisiklikNotu", v.acan_kisi_id AS "acanKisiId", ${ISO('v.acilma')} AS acilma,
+  v.yayinlayan_kisi_id AS "yayinlayanKisiId", ${ISO('v.yayin')} AS yayin`;
+export const sartnameSurumleri = (db: Db, sartnameId: number): Promise<SurumSatiri[]> =>
+  db.sorgu<SurumSatiri>(`SELECT ${SURUM} FROM rota_islem_sartnamesi_surumu v WHERE v.sartname_id = $1 ORDER BY v.surum_no DESC`, [sartnameId]);
+export const surumleriOku = (db: Db, idler: readonly number[]): Promise<SurumSatiri[]> =>
+  db.sorgu<SurumSatiri>(`SELECT ${SURUM} FROM rota_islem_sartnamesi_surumu v WHERE v.id = ANY($1::int[])`, [[...idler]]);
+
+export interface ParametreSatiri {
+  surumId: number; sira: number; anahtar: string; ad: string; tur: ParametreTuru; birim: string | null; secenekler: string[] | null;
+  varsayilan: ParametreDegeri; ipucu: string | null; zorunlu: boolean; adimdaDegisir: boolean;
+}
+export const surumParametreleri = (db: Db, surumIdleri: readonly number[]): Promise<ParametreSatiri[]> =>
+  db.sorgu<ParametreSatiri>(
+    `SELECT surum_id AS "surumId", sira, anahtar, ad, tur, birim, secenekler, varsayilan, ipucu, zorunlu, adimda_degisir AS "adimdaDegisir"
+       FROM rota_islem_sartnamesi_parametresi WHERE surum_id = ANY($1::int[]) ORDER BY surum_id, sira`,
+    [[...surumIdleri]],
+  );
+
+export interface AtifSatiri { surumId: number; sira: number; standartId: number; numara: string; kisaAciklama: string; rol: string; not: string | null }
+export const surumAtiflari = (db: Db, surumIdleri: readonly number[]): Promise<AtifSatiri[]> =>
+  db.sorgu<AtifSatiri>(
+    `SELECT a.surum_id AS "surumId", a.sira, a.standart_id AS "standartId", t.numara, t.kisa_aciklama AS "kisaAciklama", a.rol, a."not"
+       FROM rota_islem_sartnamesi_atfi a JOIN rota_standart_atfi t ON t.id = a.standart_id
+      WHERE a.surum_id = ANY($1::int[]) ORDER BY a.surum_id, a.sira`,
+    [[...surumIdleri]],
+  );
+
+// Yeni taslak sürüm; kaynak verilirse onun içeriği (belgeler, notlar, alanlar, atıflar) kopyalanır, değişiklik notu boş başlar.
+export async function surumEkle(db: Db, sartnameId: number, surumNo: number, kisiId: number | null, kaynakSurumId: number | null): Promise<number> {
+  const id = (await db.tek<{ id: number }>(
+    `INSERT INTO rota_islem_sartnamesi_surumu (sartname_id, surum_no, durum, istenen_belgeler, terminal_notu, acan_kisi_id)
+     SELECT $1, $2, 'taslak', COALESCE(k.istenen_belgeler, '{}'), k.terminal_notu, $3
+       FROM (SELECT 1) bir LEFT JOIN rota_islem_sartnamesi_surumu k ON k.id = $4 RETURNING id`,
+    [sartnameId, surumNo, kisiId, kaynakSurumId],
+  ))!.id;
+  if (kaynakSurumId !== null) {
+    await db.sorgu(
+      `INSERT INTO rota_islem_sartnamesi_parametresi (surum_id, sira, anahtar, ad, tur, birim, secenekler, varsayilan, ipucu, zorunlu, adimda_degisir)
+       SELECT $1, sira, anahtar, ad, tur, birim, secenekler, varsayilan, ipucu, zorunlu, adimda_degisir FROM rota_islem_sartnamesi_parametresi WHERE surum_id = $2`,
+      [id, kaynakSurumId],
+    );
+    await db.sorgu(
+      `INSERT INTO rota_islem_sartnamesi_atfi (surum_id, sira, standart_id, rol, "not")
+       SELECT $1, sira, standart_id, rol, "not" FROM rota_islem_sartnamesi_atfi WHERE surum_id = $2`,
+      [id, kaynakSurumId],
+    );
+  }
+  return id;
+}
+
+export const enBuyukSurumNo = async (db: Db, sartnameId: number): Promise<number> =>
+  (await db.tek<{ no: number }>('SELECT COALESCE(max(surum_no), 0)::int AS no FROM rota_islem_sartnamesi_surumu WHERE sartname_id = $1', [sartnameId]))!.no;
+
+// Taslağın içeriği bütün olarak yeniden yazılır (tetikleyici taslağı denetler).
+export async function taslakIcerikYaz(db: Db, surumId: number, g: {
+  parametreler: readonly Omit<ParametreSatiri, 'surumId' | 'sira'>[]; atiflar: readonly { standartId: number; rol: string; not: string | null }[];
+  istenenBelgeler: readonly string[]; terminalNotu: string | null; degisiklikNotu: string | null;
+}): Promise<void> {
+  await db.sorgu('DELETE FROM rota_islem_sartnamesi_parametresi WHERE surum_id = $1', [surumId]);
+  await db.sorgu('DELETE FROM rota_islem_sartnamesi_atfi WHERE surum_id = $1', [surumId]);
+  await db.sorgu(
+    'UPDATE rota_islem_sartnamesi_surumu SET istenen_belgeler = $2, terminal_notu = $3, degisiklik_notu = $4 WHERE id = $1',
+    [surumId, [...g.istenenBelgeler], g.terminalNotu, g.degisiklikNotu],
+  );
+  for (const [i, p] of g.parametreler.entries()) {
+    await db.sorgu(
+      `INSERT INTO rota_islem_sartnamesi_parametresi (surum_id, sira, anahtar, ad, tur, birim, secenekler, varsayilan, ipucu, zorunlu, adimda_degisir)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)`,
+      [surumId, i + 1, p.anahtar, p.ad, p.tur, p.birim, p.secenekler === null ? null : [...p.secenekler],
+        p.varsayilan === null ? null : JSON.stringify(p.varsayilan), p.ipucu, p.zorunlu, p.adimdaDegisir],
+    );
+  }
+  for (const [i, a] of g.atiflar.entries()) {
+    await db.sorgu('INSERT INTO rota_islem_sartnamesi_atfi (surum_id, sira, standart_id, rol, "not") VALUES ($1, $2, $3, $4, $5)', [surumId, i + 1, a.standartId, a.rol, a.not]);
+  }
+}
+
+export async function taslakSil(db: Db, surumId: number): Promise<void> {
+  await db.sorgu('DELETE FROM rota_islem_sartnamesi_parametresi WHERE surum_id = $1', [surumId]);
+  await db.sorgu('DELETE FROM rota_islem_sartnamesi_atfi WHERE surum_id = $1', [surumId]);
+  await db.sorgu("DELETE FROM rota_islem_sartnamesi_surumu WHERE id = $1 AND durum = 'taslak'", [surumId]);
+}
+
+// Yürürlükteki sürüm eskiye, taslak yürürlüğe geçer; tek yürürlükte dizini ikisinin sırasını gerektirir.
+export async function surumuYayinla(db: Db, sartnameId: number, surumId: number, kisiId: number): Promise<void> {
+  await db.sorgu("UPDATE rota_islem_sartnamesi_surumu SET durum = 'eski' WHERE sartname_id = $1 AND durum = 'yururlukte'", [sartnameId]);
+  await db.sorgu("UPDATE rota_islem_sartnamesi_surumu SET durum = 'yururlukte', yayinlayan_kisi_id = $2, yayin = now() WHERE id = $1 AND durum = 'taslak'", [surumId, kisiId]);
+}
+
+export interface AdimSartnameSatiri { revizyonId: number; opNo: number; sira: number; sartnameId: number; degerler: ParametreDegerleri }
+export const adimSartnameleri = (db: Db, revizyonIdleri: readonly number[]): Promise<AdimSartnameSatiri[]> =>
+  db.sorgu<AdimSartnameSatiri>(
+    `SELECT revizyon_id AS "revizyonId", op_no AS "opNo", sira, sartname_id AS "sartnameId", degerler
+       FROM rota_adim_sartnamesi WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, op_no, sira`,
+    [[...revizyonIdleri]],
+  );
+
+export async function adimSartnameleriYaz(
+  db: Db, revizyonId: number, opNo: number, sartnameler: readonly { sartnameId: number; degerler: ParametreDegerleri }[],
+): Promise<void> {
+  await db.sorgu('DELETE FROM rota_adim_sartnamesi WHERE revizyon_id = $1 AND op_no = $2', [revizyonId, opNo]);
+  for (const [i, x] of sartnameler.entries()) {
+    await db.sorgu(
+      'INSERT INTO rota_adim_sartnamesi (revizyon_id, op_no, sira, sartname_id, degerler) VALUES ($1, $2, $3, $4, $5::jsonb)',
+      [revizyonId, opNo, i + 1, x.sartnameId, JSON.stringify(x.degerler)],
+    );
+  }
+}
+
+// Taslak yeniden yazılınca çıkarılan adımın şartname bağı da gider (yabancı anahtar işlem sonunda denetlenir).
+export async function sahipsizAdimSartnameleriniSil(db: Db, revizyonId: number): Promise<void> {
+  await db.sorgu(
+    `DELETE FROM rota_adim_sartnamesi x WHERE x.revizyon_id = $1
+       AND NOT EXISTS (SELECT 1 FROM rota_adimi a WHERE a.revizyon_id = x.revizyon_id AND a.op_no = x.op_no)`,
+    [revizyonId],
+  );
+}
+
+// Aynı ürünün revizyonundan açılan taslak bağları da alır: OP numaraları korunur, hedefte olmayan adımın bağı kopyalanmaz.
+export async function adimSartnameleriniKopyala(db: Db, kaynakRevizyonId: number, hedefRevizyonId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO rota_adim_sartnamesi (revizyon_id, op_no, sira, sartname_id, degerler)
+     SELECT $2, x.op_no, x.sira, x.sartname_id, x.degerler FROM rota_adim_sartnamesi x
+      WHERE x.revizyon_id = $1 AND EXISTS (SELECT 1 FROM rota_adimi a WHERE a.revizyon_id = $2 AND a.op_no = x.op_no)`,
+    [kaynakRevizyonId, hedefRevizyonId],
+  );
+}
+
+export async function isEmriSabitle(
+  db: Db, isEmriId: number, sabitler: readonly { surumId: number; degerler: ParametreDegerleri }[], kisiId: number,
+): Promise<void> {
+  for (const [i, x] of sabitler.entries()) {
+    await db.sorgu(
+      'INSERT INTO rota_is_emri_sartnamesi (is_emri_id, sira, surum_id, degerler, sabitleyen_kisi_id) VALUES ($1, $2, $3, $4::jsonb, $5)',
+      [isEmriId, i + 1, x.surumId, JSON.stringify(x.degerler), kisiId],
+    );
+  }
+}
+
+// Yalnız başlamamış iş emri yeniden sabitlenir (yürürlükteki rotayı emre uygulama); satır değişmez, silinip yeniden yazılır.
+export async function isEmriSabitleriniSil(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
+  await db.sorgu('DELETE FROM rota_is_emri_sartnamesi WHERE is_emri_id = ANY($1::int[])', [[...isEmriIdleri]]);
+}
+
+export interface SabitSatiri {
+  isEmriId: number; sira: number; surumId: number; sartnameId: number; kod: string; ad: string; degerler: ParametreDegerleri;
+  sabitleyenKisiId: number; sabitlenme: string;
+}
+export const isEmriSabitleri = (db: Db, isEmriIdleri: readonly number[]): Promise<SabitSatiri[]> =>
+  db.sorgu<SabitSatiri>(
+    `SELECT x.is_emri_id AS "isEmriId", x.sira, x.surum_id AS "surumId", s.id AS "sartnameId", s.kod, s.ad, x.degerler,
+            x.sabitleyen_kisi_id AS "sabitleyenKisiId", ${ISO('x.sabitlenme')} AS sabitlenme
+       FROM rota_is_emri_sartnamesi x JOIN rota_islem_sartnamesi_surumu v ON v.id = x.surum_id JOIN rota_islem_sartnamesi s ON s.id = v.sartname_id
+      WHERE x.is_emri_id = ANY($1::int[]) ORDER BY x.is_emri_id, x.sira`,
+    [[...isEmriIdleri]],
+  );

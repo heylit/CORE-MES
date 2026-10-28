@@ -65,3 +65,9 @@ istasyonlar `/operasyon-tipleri*`, `/istasyon-plan-ayarlari`, `/istasyonlar/:id/
 - vardiya: takvim sorgu anahtarı (`anahtarlar.takvim`, `['vardiya', 'takvim']`) `disari.ts`'ten verilsin; rota Kaynaklar bugün aynı anahtarı elle yazıyor ki `useVardiyaYaz` cevabı ekrana düşsün (#441).
 - Karşılandı (#262, B37): plan cevabı emrin üst partisini (`ustEmirId`) taşır.
 - Karşılandı (#447): stok emir tamamlamada çıktıyı emrin sağlam adedinden hesaplar; sağlamı girilmiş emirde miktarsız komut yalnız kalan sarfı yazar (#444).
+
+## İşlem şartnamesi okuyucuları (971 a, bağlamada)
+
+- arkon: iç adımın terminal kartı `isEmriSartnameleri(db, isEmriIdleri)` ile şartname adını, değerleri ve terminal notunu göstersin (arkon rotaya zaten bağımlı).
+- fason iş emri belgesi (sevkiyat ya da satın alma, hangisi basıyorsa): fason adımın şartnamesini, standart atıflarını ve istenen belgeleri bassın.
+- kalite-merkezi: girdi ve son kontrolde istenen belgeleri ve kabul atıflarını okusun. Yön kalite-merkezi -> rota; döngü yok (ADR 0006).

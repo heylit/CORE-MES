@@ -335,3 +335,22 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
   - VARSAYIM: onaydaki revizyon varken kabul 409 döner (açık revizyon tektir, RT-02). Geri alma: tek koşul.
   - VARSAYIM: elle ölçümün kabulü kabul satırı yazmaz (tablo kabul satırını iş emrine bağlar); izi taslağın düzenleyeni ve sürüm defteridir. Geri alma: göçle sütun gevşetme.
   - VARSAYIM: öneri yalnız emir bitince yazılır (iş emri bitişinde olay yok); yazan kişi emri bitirendir. Geri alma: dinleyici.
+
+## İşlem şartnamesi kütüphanesi (971 a, 972 a, 973 a, 976 a, 977; 2026-10-28)
+
+| Dosya | Ne |
+|---|---|
+| `sunucu/gocler/20261028087000_rota_islem_sartnamesi.sql` | 8 yeni tablo, kilit tetikleyicileri, varsayılan kütüphane (14 kategori, 141 standart atfı, 53 şartname sürüm 1 yürürlükte); dolu tabloya dokunmaz |
+| `paylasilan/sozlesme/rota.ts` | Şartname, adım bağı ve emre sabitleme şemaları |
+| `paylasilan/islemler/rota.ts`, `paylasilan/islem-adlari.ts` | `rota.sartname-yaz`, `rota.sartname-yayinla` (976 a; ilk aşamada yalnız yönetici, rol satırı yok) |
+| `kurallar.ts`, `sorgular.ts`, `servis.ts`, `uclar.ts`, `disari.ts` | Kütüphane komutları, adım bağı, onay denetimi, emre sabitleme; `disari.ts` `isEmriSartnameleri` |
+| `sartname.test.ts`, `kurallar.test.ts` | Akış (12) ve kural (4) testleri |
+
+- Şartname "ne isteniyor"dur: kategori, kapsam (iç, fason, ikisi), kaynak (varsayılan, firma, müşteri; müşteride yalnız firma ve belge no), sürümlü alanlar (sayı, aralık, seçim, çoklu, metin, evet), standart atıfları, istenen belgeler, terminal notu.
+- Yayınlanan sürüm değişmez (tetikleyici); yeni sürüm yayınlanınca eskisi "eski" olur. Emir açılınca adımın şartnamesi o an yürürlükteki sürümle ve çözülmüş değerlerle iş emrine sabitlenir; "yürürlükteki rotayı uygula" başlamamış iş emrini yeniden sabitler.
+- Adım bağı (revizyon, OP no) ile tutulur, yalnız taslakta yazılır; kayıtta çıkarılan adımın bağı silinir; aynı ürünün revizyonundan açılan taslak ve aynı ürüne kopya bağı alır.
+- Onaya gönderme, onay ve yürürlüğe alma: kullanımdaki, yayınlanmış, adımın kaynağına uyan (972 a) ve zorunlu alanı dolu şartname ister.
+- VARSAYIM: emir açılırken zorunlu alanı boş (yeni sürümde eklenmiş) şartname emri durdurur (422). Geri alma: tek koşul, uyarıya çevrilebilir.
+- VARSAYIM: kullanımdan kalkan şartname açılan emre yine sabitlenir; yeni adıma seçilmez, onayda reddedilir. Geri alma: tek koşul.
+- VARSAYIM: kod ve kapsam açılıştan sonra değişmez (künye yalnız ad ve kategori); farklı kapsam için kopya açılır. Geri alma: uç genişletme.
+- VARSAYIM: ilk sürüm silinmez; şartname kullanımdan kaldırılır. Geri alma: tek koşul.

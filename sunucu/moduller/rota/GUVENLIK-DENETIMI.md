@@ -36,3 +36,13 @@ yazmasına uygulanmaz; VARSAYIM, ON-PAKET V6).
 - İlk değişiklikte taslağın kendiliğinden açılması ve geri al / yinele geçmişi (oturumluk; sunucu her kaydı ayrı komut ve sürümle alır).
 - "Taslağı ilk revizyona çevir": ekran iptal ve taslak aç komutlarını sırayla gönderir (sunucuda tek komut değil).
 - Akış şemasının çizimi, yakınlaştırma, tahta ve yüzen kart.
+
+## İşlem şartnamesi (971 a, 976 a) - test adları `sartname.test.ts`
+
+| Yol | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| GET /rota/sartnameler, /rota/sartnameler/:id, /rota/revizyonlar/:id/sartnameler, /rota/is-emri-sartnameleri | oturum | Yan etkisiz okuma; olmayan şartname 404 | varsayılan kütüphane; adım şartnamesi; 971 a | varsayılan kütüphane (404) |
+| POST /rota/sartnameler/ekle, /:id/kopyala, /:id/kunye, /:id/surum-ac, /:id/taslak-kaydet, /:id/taslak-sil, /rota/standartlar/ekle | rota.sartname-yaz | Sürüm denetimi; kod ve numara tekil; şablon biçimi; müşteri firma ve belge no birlikte; açan kişi sunucudan | 976 a; müşteri şartnamesi; taslak şablonu; standart atfı | 976 a (403, 409); müşteri (400); taslak şablonu (400, 422) |
+| POST /rota/sartnameler/:id/yayinla, /pasife-al, /etkinlestir | rota.sartname-yayinla | Sabit zorunlu alan dolu; yayınlanan sürüm değişmez (tetikleyici); yayınlayan ve zaman sunucudan | 976 a; yayınlanmış sürüm; kullanımdan kalkan | 976 a (403); taslak şablonu (422); yayınlanmış sürüm (SQL reddi) |
+| POST /rota/revizyonlar/:id/adim-sartnameleri | rota.yaz | Yalnız taslak ve okunan sürümle; adım var; kapsam adımın kaynağına uyar; yalnız adımda değişen alan ve türüne uyan değer | adım şartnamesi | adım şartnamesi (403, 400, 409); onaya giden revizyon (409) |
+| emre-kopyala, yururlukteki-rotayi-uygula (var olan uçlar) | rota.emre-kopyala | Sabitleme aynı işlemde; yayınlanmamış ya da zorunlu alanı boş şartname emri geri alır; sabitleme yalnız eklenir | 971 a; emre uygulama | emir açılırken (422, emir sayısı değişmez) |

@@ -7,7 +7,8 @@ import {
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
-import type { GerceklesenSatiri } from './kurallar.ts';
+import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
+import type { GerceklesenSatiri, SartnameAlani } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
 const adim = (p: Partial<TaslakAdimi> = {}): TaslakAdimi => ({
@@ -435,5 +436,58 @@ describe('karttan taslak (#688)', () => {
     assert.deepEqual(yinelenen.map((a) => a.opNo), [null, null]);
     assert.deepEqual(karttanAdimlar([{ no: 0, kod: 'uretim', ad: 'A' }], tipler, 1).map((a) => a.opNo), [null]);
     assert.deepEqual(karttanAdimlar([], tipler, 1), []);
+  });
+});
+
+describe('işlem şartnamesi kuralları (971 a)', () => {
+  const alan = (p: Partial<SartnameAlani> & Pick<SartnameAlani, 'anahtar' | 'tur'>): SartnameAlani => ({
+    ad: p.anahtar, secenekler: null, varsayilan: null, zorunlu: false, adimdaDegisir: true, ...p,
+  });
+  const secim = alan({ anahtar: 'sinif', tur: 'secim', secenekler: ['A', 'B'], varsayilan: 'A' });
+
+  test('değer alanın türüne uyar; null her türde geçer', () => {
+    assert.equal(degerHatasi(alan({ anahtar: 'x', tur: 'sayi' }), 3), null);
+    assert.match(degerHatasi(alan({ anahtar: 'x', tur: 'sayi' }), '3') ?? '', /sayı/);
+    assert.equal(degerHatasi(alan({ anahtar: 'x', tur: 'aralik' }), [1, 2]), null);
+    assert.match(degerHatasi(alan({ anahtar: 'x', tur: 'aralik' }), [2, 1]) ?? '', /alt değer/);
+    assert.equal(degerHatasi(secim, 'B'), null);
+    assert.match(degerHatasi(secim, 'C') ?? '', /seçenek/);
+    assert.equal(degerHatasi({ ...secim, tur: 'coklu' }, ['A', 'B']), null);
+    assert.match(degerHatasi({ ...secim, tur: 'coklu' }, ['A', 'A']) ?? '', /iki kez/);
+    assert.match(degerHatasi(alan({ anahtar: 'x', tur: 'metin' }), '  ') ?? '', /metin/);
+    assert.match(degerHatasi(alan({ anahtar: 'x', tur: 'evet' }), 1) ?? '', /evet/);
+    for (const tur of ['sayi', 'aralik', 'secim', 'coklu', 'metin', 'evet'] as const) assert.equal(degerHatasi(alan({ anahtar: 'x', tur }), null), null);
+  });
+
+  test('adım yalnız adımda değişen alana değer verir; çözülmüş değerde sabit alan şablondan, boş ya da türü tutmayan adım değeri varsayılandan gelir', () => {
+    const alanlar = [secim, alan({ anahtar: 'crvi', tur: 'evet', varsayilan: true, adimdaDegisir: false }), alan({ anahtar: 'renk', tur: 'metin', zorunlu: true })];
+    assert.match(adimDegerleriDenetle(alanlar, { crvi: false }) ?? '', /sabittir/);
+    assert.match(adimDegerleriDenetle(alanlar, { yok: 1 }) ?? '', /böyle bir alan yok/);
+    assert.equal(adimDegerleriDenetle(alanlar, { sinif: 'B', renk: null }), null);
+    assert.deepEqual(cozulmusDegerler(alanlar, { sinif: 'C', renk: 'Kırmızı', crvi: false }), { sinif: 'A', crvi: true, renk: 'Kırmızı' });
+    assert.deepEqual(eksikZorunlular(alanlar, cozulmusDegerler(alanlar, { renk: '' })), ['renk']);
+    assert.deepEqual(eksikZorunlular([alan({ anahtar: 'k', tur: 'coklu', secenekler: ['A'], varsayilan: [], zorunlu: true })], { k: [] }), ['k'], 'boş çoklu seçim değer sayılmaz');
+  });
+
+  test('şablon: seçenek yalnız seçimli türde, yinelenen anahtar ve atıf yok; sabit zorunlu alan değersizse yayın eksiği', () => {
+    const b = (p: Partial<SartnameAlani> & Pick<SartnameAlani, 'anahtar' | 'tur'>) => ({ ...alan(p), birim: null });
+    assert.equal(sartnameSablonuDenetle([b({ anahtar: 'a', tur: 'secim', secenekler: ['X'] })], [{ standartId: 1, rol: 'yontem' }, { standartId: 1, rol: 'kabul' }]), null);
+    assert.equal(sartnameSablonuDenetle([b({ anahtar: 'a', tur: 'sayi', secenekler: ['X'] })], [])?.alan, 'parametreler.0.secenekler');
+    assert.equal(sartnameSablonuDenetle([b({ anahtar: 'a', tur: 'secim', secenekler: ['X', 'X'] })], [])?.alan, 'parametreler.0.secenekler');
+    assert.equal(sartnameSablonuDenetle([b({ anahtar: 'a', tur: 'sayi' }), b({ anahtar: 'a', tur: 'sayi' })], [])?.alan, 'parametreler.1.anahtar');
+    assert.equal(sartnameSablonuDenetle([], [{ standartId: 1, rol: 'yontem' }, { standartId: 1, rol: 'yontem' }])?.alan, 'atiflar.1');
+    assert.match(yayinEksigi([alan({ anahtar: 's', tur: 'metin', zorunlu: true, adimdaDegisir: false })]) ?? '', /s$/);
+    assert.equal(yayinEksigi([alan({ anahtar: 's', tur: 'metin', zorunlu: true, adimdaDegisir: true })]), null, 'adımda değişen zorunlu alanı adım doldurur');
+  });
+
+  test('972 a: fason adım fason ya da ikisi, iç adım iç ya da ikisi kapsamlı şartname alır; onay engeli ilk sorunu adım numarasıyla söyler', () => {
+    assert.deepEqual([kapsamUyarMi('fason', true), kapsamUyarMi('ic', true), kapsamUyarMi('ikisi', true)], [true, false, true]);
+    assert.deepEqual([kapsamUyarMi('fason', false), kapsamUyarMi('ic', false), kapsamUyarMi('ikisi', false)], [false, true, true]);
+    const tamam = { opNo: 10, kod: 'X', aktif: true, yururlukteVar: true, kapsamUyar: true, eksikler: [] };
+    assert.equal(sartnameOnayEngeli([tamam]), null);
+    assert.match(sartnameOnayEngeli([tamam, { ...tamam, opNo: 20, eksikler: ['renk'] }]) ?? '', /^OP 20: X .*renk/);
+    assert.match(sartnameOnayEngeli([{ ...tamam, aktif: false }]) ?? '', /kullanımda değil/);
+    assert.match(sartnameOnayEngeli([{ ...tamam, yururlukteVar: false }]) ?? '', /yayınlanmış/);
+    assert.match(sartnameOnayEngeli([{ ...tamam, kapsamUyar: false }]) ?? '', /kaynağına uymuyor/);
   });
 });

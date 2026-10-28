@@ -100,6 +100,8 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'rota.onayla': 'Rotayı onaylama',
   'rota.talimat-yaz': 'Talimat yazma',
   'rota.emre-kopyala': 'Rotayı emre kopyalama',
+  'rota.sartname-yaz': 'İşlem şartnamesi yazma',
+  'rota.sartname-yayinla': 'İşlem şartnamesi yayınlama',
   'guvenlik.oku': 'Güvenlik alarmlarını, girişleri ve oturumları görme',
   'guvenlik.yonet': 'Güvenlik alarmını onaylama ve kapatma, oturum kapatma',
   'idari-isler.oku': 'İdari işleri ve bütün tesis taleplerini görme',
