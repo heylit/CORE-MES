@@ -44,13 +44,13 @@ for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota
   });
 }
 
-// Üretim Hazırlık, Üretim Terminali, Kuyruk, Malzemeler ve Kalite Merkezi de öyle (553 1 a, 2; 572, 582): eski görünümde de seçili madde aynıdır.
+// Üretim Hazırlık, Üretim Terminali ve Kuyruk da öyle (553 1 a, 2): eski görünümde de seçili madde aynıdır; Malzemeler ve Kalite Merkezi'nin eskisi yoktur (979 a).
 const SERITLI = [
   ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
   ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
   ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
-  ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'], ['/kalite-merkezi/eski/dof', 'Kalite Merkezi', 'DÖF'],
+  ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;
 const TEK_MADDELI = new Set<string>(['Üretim Terminali', 'Kuyruk']);
 for (const [yol, menuAdi, madde] of SERITLI) {

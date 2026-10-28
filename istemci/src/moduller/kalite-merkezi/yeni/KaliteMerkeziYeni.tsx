@@ -83,8 +83,8 @@ function Icerik() {
   );
 }
 
-// TS geçişinin Kalite Merkezi ekranı (199 b). Eski adresine geçti (582, 527 1 a): sayfayı gören herkes açar, eski çerçeve bir süre
-// /kalite-merkezi/eski altındadır. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi bölüm sekmesini çizmez (553 1 a).
+// Kalite Merkezi ekranı (199 b, 582): sayfayı gören herkes açar. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi bölüm
+// sekmesini çizmez (553 1 a).
 export function KaliteMerkeziYeni() {
   return (
     <OnizlemeSaglayici>

@@ -33,8 +33,6 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/kuyruk', eski: '/kuyruk/eski', serit: true },
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
   { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
-  // Resim ve modellerin (597 a) eski görünümde karşılığı yoktur.
-  { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler'] },
 ];
 
 const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);
@@ -54,7 +52,7 @@ export function yeniEkranAdresiMi(adres: string): boolean {
     || TASINAN_EKRANLAR.some((t) => !t.serit && yeniMi(temiz(adres), t));
 }
 
-// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/malzemeler/eski/ayarlar` -> Malzeme ayarları, kök madde değil).
+// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/arkon/eski/kalite` -> Kalite, kök madde değil).
 export function seritAdresi(adres: string): string {
   const a = temiz(adres);
   const t = TASINAN_EKRANLAR.find((e) => e.serit && eskiMi(a, e));
