@@ -219,7 +219,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(okunan.teklifler.map((q) => [q.paraBirimi, q.kur, q.fiyatlar.length]), [['USD', '41.25', 2], ['TRY', null, 1]]);
     assert.deepEqual(okunan.karar?.bolunme.length, 2);
     // 1096 a: sabit kur onaya girerken sunucuda kurulur; istemcinin gönderdiği 41.5 yok sayılır. Finansta kur yoksa teklifin kendi kuru.
-    assert.deepEqual(okunan.karar?.sabitKurlar, [{ paraBirimi: 'USD', kur: '41.25', aylikFaizYuzdesi: null }, { paraBirimi: 'TRY', kur: '1', aylikFaizYuzdesi: null }]);
+    assert.deepEqual(okunan.karar?.sabitKurlar, [{ paraBirimi: 'TRY', kur: '1', aylikFaizYuzdesi: null }, { paraBirimi: 'USD', kur: '41.25', aylikFaizYuzdesi: null }]);
     assert.equal(okunan.karar?.kurKilidi, onayda.karar?.kurKilidi);
     assert.ok(onayda.karar?.kurKilidi);
     assert.deepEqual(okunan.senaryolar[0]?.paylar.length, 2);
