@@ -10,10 +10,10 @@ import { onayLimitleri } from '../satin-alma/disari.ts';
 import { malzemeNoKoddan, malzemeOzeti } from '../malzemeler/disari.ts';
 import { kabulEt, notluGecis, siparisDonustur, siparisEkle, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle } from '../siparisler/disari.ts';
 import {
-  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
+  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, FIRMA_ICI, izleyiciGorebilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, kilitAlinirMi, rolDegisiyorMu, satinAlmaTeslimiReddi, siparisDonusumu, siparisSatirlari, siparisTeklifi, sonParca, sorgula, sozlesmeSiparisi, talepDuzenlemesi, talepTeklifi, teklifAcilisi, teklifAdimlari, ustYolu,
 } from './kurallar.ts';
-import type { DepoBelgesi, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
+import type { DepoBelgesi, Izleyici, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Akış: yetkiyi uç verir; burada kişiye özel alan, sürüm denetimi ve birleştirme uygulanır.
@@ -28,14 +28,22 @@ function erisimDenetle(kullanici: Kullanici, yol: string): void {
   if (!erisebilirMi(yol, kullanici.id)) throw yetkiYok('Bu kayıt başka bir kişiye özeldir.');
 }
 
+// Okuma uçlarının izleyicisi: dış hesap gelene kadar (soru 1021) her oturum TMI çalışanıdır, yani firma içidir. Dış izleyici
+// kişi listesini, odayı ve ekleri görmez (ekin hangi kayda bağlı olduğu tutulmuyor).
+const DIS_REDDI = 'Bu bilgi firma dışı kullanıcıya açık değildir.';
+function disaKapali(iz: Izleyici): void {
+  if (iz.tur !== 'firma') throw yetkiYok(DIS_REDDI);
+}
+
 export async function sorgu(
   db: Db, kullanici: Kullanici, k: { koleksiyon: string; filtreler?: Filtre[] | undefined; sira?: Sira | undefined; sinir?: number | undefined },
+  iz: Izleyici = FIRMA_ICI,
 ): Promise<SorguCevabi> {
   erisimDenetle(kullanici, k.koleksiyon);
   // Bölümün okuyamadığı kayıt listeden düşer; 403 dönülmez: prototip her koleksiyonu açılışta okur ve biri hata verirse açılmaz.
   const izinler = portalRolu(kullanici.islemler).tmiIzinler;
   const ham = (await teklifDurumlariniBindir(db, await sorgular.koleksiyonBelgeleri(db, k.koleksiyon)))
-    .filter((b) => bolumOkuyabilirMi(b.yol, izinler, b.veri) && islemOkuyabilirMi(b.yol, kullanici.islemler, b.veri));
+    .filter((b) => izleyiciGorebilirMi(b.yol, b.veri, iz) && bolumOkuyabilirMi(b.yol, izinler, b.veri) && islemOkuyabilirMi(b.yol, kullanici.islemler, b.veri));
   const limitler = ham.some((b) => b.yol === ONAY_AYAR_YOLU) ? await onayLimitleri(db) : [];
   // Gizleme süzgeçten önce: fiyatı görmeyen fiyata göre süzüp sıralayarak da gizli değeri çıkaramaz.
   const okunur = ham.map((b) => gizle(esikleriBindir(b, limitler), kullanici));
@@ -49,10 +57,12 @@ export async function sorgu(
 
 const gizle = (b: DepoBelgesi, kullanici: Kullanici): DepoBelgesi => ({ ...b, veri: fiyatGizle(b.yol, b.veri, kullanici.islemler) });
 
-export async function belgeOku(db: Db, kullanici: Kullanici, yol: string): Promise<BelgeCevabi> {
+export async function belgeOku(db: Db, kullanici: Kullanici, yol: string, iz: Izleyici = FIRMA_ICI): Promise<BelgeCevabi> {
   erisimDenetle(kullanici, yol);
   const ham = await sorgular.belgeGetir(db, yol);
   const belge = ham === null ? null : (await teklifDurumlariniBindir(db, [ham]))[0] ?? ham;
+  // Olmayan ve görünmeyen kayıt dış izleyiciye aynı cevabı verir: başka firmanın kaydının varlığı da çıkarılamaz.
+  if (!izleyiciGorebilirMi(yol, belge?.veri ?? null, iz)) throw yetkiYok('Bu kayıt firmanıza ait değil.');
   if (!bolumOkuyabilirMi(yol, portalRolu(kullanici.islemler).tmiIzinler, belge?.veri ?? null)) {
     throw yetkiYok('Bu portal kaydını görmek için ilgili bölüm yetkiniz yok.');
   }
@@ -257,7 +267,8 @@ export async function benHazirla(db: Db, kullanici: Kullanici): Promise<BenHazir
 }
 
 // Prototiplerin kişi seçimi ve adları için aktif kişiler; adı başka modülün (kisiler) tek kaynağından gelir.
-export async function kisiler(db: Db): Promise<{ kisiler: { id: number; ad: string }[] }> {
+export async function kisiler(db: Db, iz: Izleyici = FIRMA_ICI): Promise<{ kisiler: { id: number; ad: string }[] }> {
+  disaKapali(iz);
   return { kisiler: (await kisileriListele(db)).filter((k) => k.aktif).map(({ id, ad }) => ({ id, ad })) };
 }
 
@@ -278,7 +289,8 @@ export async function kurulum(db: Db, kullanici: Kullanici): Promise<{ kurulan: 
 // Oda kalıcı değildir: süreç belleğinde durur (TMI tek sunucudur). Okuma ucunda yazılır; veritabanına dokunmaz.
 const oda = new Map<number, OdaKaydi>();
 
-export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi = Date.now()): OdaCevabi {
+export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi = Date.now(), iz: Izleyici = FIRMA_ICI): OdaCevabi {
+  disaKapali(iz);
   const eski = oda.get(kullanici.id);
   oda.set(kullanici.id, { durum: durumYamala(eski?.durum ?? {}, yama ?? {}), guncellendi: simdi });
   for (const [kisiId, k] of oda) if (simdi - k.guncellendi > 10 * 60_000) oda.delete(kisiId);
@@ -292,7 +304,8 @@ export async function ekYukle(db: Db, kullanici: Kullanici, g: { ad: string; tur
   return sorgular.ekEkle(db, { ad: g.ad, tur: g.tur, icerik, kisiId: kullanici.id });
 }
 
-export async function ekOku(db: Db, id: string): Promise<EkIcerikCevabi> {
+export async function ekOku(db: Db, id: string, iz: Izleyici = FIRMA_ICI): Promise<EkIcerikCevabi> {
+  disaKapali(iz);
   const ek = await sorgular.ekGetir(db, id);
   if (ek === null) throw bulunamadi('Dosya bulunamadı.');
   return { id: ek.id, ad: ek.ad, tur: ek.tur, boyut: ek.boyut, veri: ek.icerik.toString('base64') };

@@ -10,7 +10,11 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { firmaOzeti, ornekFirmaNo } from '../musteri-tedarikci/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { KURULUM_ISARETI } from './kurallar.ts';
+import type { Izleyici } from './kurallar.ts';
+import { belgeOku, ekOku, kisiler, odaGuncelle, sorgu as servisSorgu } from './servis.ts';
+import { belgeYaz as hamYaz } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -574,6 +578,46 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
     const ek = { ad: 'not.txt', tur: 'text/plain', veri: Buffer.from('x').toString('base64') };
     assert.equal((await istek(okur, 'POST', '/portal/ekler/yukle', ek)).statusCode, 403);
     assert.equal((await istek(yetkisiz, 'POST', '/portal/ekler/yukle', ek)).statusCode, 403);
+  });
+  // Dış hesap henüz yok (soru 1021): dış izleyici servis katmanına doğrudan verilir; uçlar bugün her oturumu firma içi sayar.
+  test('BD-26 (1019 a): okuma firma görünürlüğüyle süzülür; dış izleyici başka firmanın kaydını, kişileri, odayı ve ekleri göremez', async () => {
+    const tam = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['portal.yonet', 'portal.oku', 'siparisler.fiyat-oku', 'finans.oku'] } as unknown as Kullanici;
+    const benim = `f${String(Date.now())}`;
+    const musteri: Izleyici = { tur: 'musteri', firma: benim };
+    const tedarikci: Izleyici = { tur: 'tedarikci', firma: benim };
+    const kayitlar: [string, Record<string, unknown>][] = [
+      [`orders/${benim}-s`, { partyId: benim, type: 'sales', no: 'S1' }],
+      [`orders/${benim}-a`, { partyId: benim, type: 'purchase', no: 'A1' }],
+      [`orders/${benim}-o`, { partyId: benim, type: 'sales', approvalState: 'pending', no: 'S2' }],
+      [`orders/${benim}-x`, { partyId: `${benim}x`, type: 'sales', no: 'S3' }],
+    ];
+    await vt().tx(async (db) => {
+      for (const [yol, veri] of kayitlar) await hamYaz(db, { yol, ust: 'orders', kimlik: yol.slice(7), veri, kisiId: yoneticiId });
+    });
+    const kimlikler = (iz: Izleyici) => vt().tx(async (db) => (await servisSorgu(db, tam, { koleksiyon: 'orders' }, iz)).belgeler
+      .map((b) => b.kimlik).filter((k) => k.startsWith(benim)).sort());
+    assert.deepEqual(await kimlikler({ tur: 'firma' }), [`${benim}-a`, `${benim}-o`, `${benim}-s`, `${benim}-x`]);
+    assert.deepEqual(await kimlikler(musteri), [`${benim}-s`]);
+    assert.deepEqual(await kimlikler(tedarikci), [`${benim}-a`]);
+    // Süzgeç koşuldan önce: başka firmanın kaydı koşulla da çıkarılamaz.
+    const sayi = await vt().tx(async (db) => (await servisSorgu(db, tam, { koleksiyon: 'orders', filtreler: [{ alan: 'no', islec: '==', deger: 'S3' }] }, musteri)).belgeler
+      .filter((b) => b.kimlik.startsWith(benim)).length);
+    assert.equal(sayi, 0);
+
+    const oku = (yol: string, iz: Izleyici) => vt().tx((db) => belgeOku(db, tam, yol, iz));
+    assert.equal((await oku(`orders/${benim}-s`, musteri)).belge?.kimlik, `${benim}-s`);
+    for (const yol of [`orders/${benim}-x`, `orders/${benim}-o`, `orders/${benim}-a`, `orders/${benim}-yok`]) {
+      await assert.rejects(oku(yol, musteri), (h: { durum?: number; statusCode?: number }) => (h.durum ?? h.statusCode) === 403, yol);
+    }
+    assert.equal((await oku(`orders/${benim}-x`, { tur: 'firma' })).belge?.kimlik, `${benim}-x`);
+
+    const ek = (await istek(yazar, 'POST', '/portal/ekler/yukle', { ad: 'not.txt', tur: 'text/plain', veri: Buffer.from('x').toString('base64') })).json() as { id: string };
+    assert.equal((await vt().tx((db) => ekOku(db, ek.id))).id, ek.id);
+    const yasak = (h: { durum?: number; statusCode?: number }) => (h.durum ?? h.statusCode) === 403;
+    await assert.rejects(vt().tx((db) => ekOku(db, ek.id, tedarikci)), yasak);
+    await assert.rejects(vt().tx((db) => kisiler(db, musteri)), yasak);
+    assert.throws(() => odaGuncelle(tam, undefined, Date.now(), musteri), yasak);
+    assert.ok((await vt().tx((db) => kisiler(db))).kisiler.length > 0);
   });
   test('BD-23 (312 b): kişi, teklif ve sipariş bağları yabancı anahtar; boş şemada doğrulanmış', async () => {
     const satirlar = await vt().sorgu<{ ad: string }>(

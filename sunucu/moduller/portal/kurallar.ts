@@ -284,6 +284,36 @@ export function bolumOkuyabilirMi(yol: string, izinler: readonly string[], veri:
   return gerekli === undefined || biri(gerekli);
 }
 
+// ---- Firma görünürlüğü (UYUM-BORCU, 1019 a): prototipin visible() kuralı (portal.html, ikinci tanım) sunucuda. Firma içi
+// izleyici her kaydı görür (üstüne bölüm ve işlem süzgeci biner); müşteri ve tedarikçi yalnız kendi firmasının kaydını görür.
+// Bugün her oturum TMI çalışanıdır ve firma içi izleyicidir; dış izleyicinin firmasını dış hesap işi verir (soru 1021).
+export type Izleyici = { tur: 'firma' } | { tur: 'musteri' | 'tedarikci'; firma: string };
+export const FIRMA_ICI: Izleyici = { tur: 'firma' };
+
+// Kurala bağlanmamış koleksiyon, alt belge ve kişiye özel alan dış izleyiciye kapalıdır (prototipte de default false).
+export function izleyiciGorebilirMi(yol: string, veri: Veri | null, iz: Izleyici): boolean {
+  if (iz.tur === 'firma') return true;
+  const p = parcalar(yol);
+  if (p.length !== 2 || veri === null) return false;
+  const musteri = iz.tur === 'musteri';
+  const kendi = veri['partyId'] === iz.firma;
+  switch (p[0]) {
+    case 'requests': return musteri && veri['customerId'] === iz.firma;
+    case 'orders': return kendi && veri['type'] === (musteri ? 'sales' : 'purchase')
+      && veri['approvalState'] !== 'pending' && veri['approvalState'] !== 'rejected';
+    case 'ncrs': return kendi && veri['kind'] === (musteri ? 'customer' : 'supplier');
+    case 'payments': return kendi && veri['direction'] === (musteri ? 'in' : 'out') && veri['status'] !== 'awaiting';
+    case 'priceReqs': return !musteri && kendi;
+    case 'catalog': return kendi;
+    case 'rfqs': return !musteri && Array.isArray(veri['invited']) && veri['invited'].includes(iz.firma);
+    case 'bids': return !musteri && veri['supplierId'] === iz.firma;
+    case 'contracts': return kendi && veri['approval'] === 'approved';
+    case 'docs': case 'recons': case 'users': return kendi;
+    case 'parties': return p[1] === iz.firma;
+    default: return false;
+  }
+}
+
 // Satın alma siparişinin sevkiyatı portalda teslim alınmaz (238, H1): portal belgesindeki "teslim alındı" stok hareketi, parti ve
 // giriş muayenesi açmaz; mal kabul Stok > Mal kabul'dedir. Tam yetki de geçemez. Önceden teslim alınmış sevkiyat olduğu gibi kalır.
 export const SATIN_ALMA_TESLIMI_REDDI = 'Satın alma teslimi portalda alınmaz; Stok > Mal kabul ekranında alın.';

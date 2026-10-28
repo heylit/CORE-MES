@@ -4,6 +4,7 @@ import {
   KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, bolumOkuyabilirMi, bolumYazabilirMi, kalemKodu, logoNiyetleri, ondalikMetni, portalRolu, portalUnvani, talepTeklifi, rolDegisiyorMu, canliEsler, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, esikleriBindir, siparisEsikleri, kilitAlinirMi, sorgula, sonParca, ustYolu, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, sonOnay,
   acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi, satinAlmaTeslimiReddi, SATIN_ALMA_TESLIMI_REDDI,
+  FIRMA_ICI, izleyiciGorebilirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -491,3 +492,68 @@ describe('Siparişler teklif durumu (254 a)', () => {
 });
 
 const dizi = (d: unknown): Record<string, unknown>[] => (Array.isArray(d) ? d as Record<string, unknown>[] : []);
+
+describe('portal firma görünürlüğü (1019 a)', () => {
+  const M = { tur: 'musteri', firma: 'p1' } as const;
+  const T = { tur: 'tedarikci', firma: 'p1' } as const;
+  const gorur = (yol: string, veri: Record<string, unknown> | null, iz: Parameters<typeof izleyiciGorebilirMi>[2]) => izleyiciGorebilirMi(yol, veri, iz);
+
+  test('BD-K39: firma içi izleyici her kaydı ve olmayan kaydı görür (üstüne bölüm süzgeci biner)', () => {
+    for (const yol of ['orders/o1', 'payments/x', 'notifs/n1', 'orders/o1/alt/z', 'data/users/7/prefs']) {
+      assert.equal(gorur(yol, { partyId: 'p2' }, FIRMA_ICI), true, yol);
+    }
+    assert.equal(gorur('orders/yok', null, FIRMA_ICI), true);
+  });
+
+  test('BD-K40: müşteri yalnız kendi firmasının satış kaydını görür; başka firma ve satın alma tarafı reddedilir', () => {
+    assert.equal(gorur('requests/r1', { customerId: 'p1' }, M), true);
+    assert.equal(gorur('requests/r1', { customerId: 'p2' }, M), false);
+    assert.equal(gorur('requests/r1', { customerId: 'p1' }, T), false);
+    assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'sales' }, M), true);
+    assert.equal(gorur('orders/o1', { partyId: 'p2', type: 'sales' }, M), false);
+    assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'purchase' }, M), false);
+    assert.equal(gorur('ncrs/n1', { partyId: 'p1', kind: 'customer' }, M), true);
+    assert.equal(gorur('ncrs/n1', { partyId: 'p1', kind: 'supplier' }, M), false);
+    assert.equal(gorur('payments/x', { partyId: 'p1', direction: 'in' }, M), true);
+    assert.equal(gorur('payments/x', { partyId: 'p1', direction: 'out' }, M), false);
+    for (const k of ['priceReqs', 'rfqs', 'bids']) assert.equal(gorur(`${k}/a`, { partyId: 'p1', invited: ['p1'], supplierId: 'p1' }, M), false, k);
+  });
+
+  test('BD-K41: tedarikçi yalnız kendi satın alma kaydını, davet edildiği talebi ve kendi teklifini görür', () => {
+    assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'purchase' }, T), true);
+    assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'sales' }, T), false);
+    assert.equal(gorur('ncrs/n1', { partyId: 'p1', kind: 'supplier' }, T), true);
+    assert.equal(gorur('ncrs/n1', { partyId: 'p1', kind: 'customer' }, T), false);
+    assert.equal(gorur('payments/x', { partyId: 'p1', direction: 'out' }, T), true);
+    assert.equal(gorur('payments/x', { partyId: 'p1', direction: 'in' }, T), false);
+    assert.equal(gorur('priceReqs/a', { partyId: 'p1' }, T), true);
+    assert.equal(gorur('priceReqs/a', { partyId: 'p2' }, T), false);
+    assert.equal(gorur('rfqs/a', { invited: ['p3', 'p1'] }, T), true);
+    assert.equal(gorur('rfqs/a', { invited: ['p3'] }, T), false);
+    assert.equal(gorur('rfqs/a', { invited: 'p1' }, T), false);
+    assert.equal(gorur('bids/a', { supplierId: 'p1' }, T), true);
+    assert.equal(gorur('bids/a', { supplierId: 'p2' }, T), false);
+  });
+
+  test('BD-K42: onay bekleyen ya da reddedilen sipariş, onay bekleyen ödeme ve onaysız sözleşme dışarıya gitmez', () => {
+    for (const approvalState of ['pending', 'rejected']) assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'sales', approvalState }, M), false);
+    assert.equal(gorur('orders/o1', { partyId: 'p1', type: 'sales', approvalState: 'approved' }, M), true);
+    assert.equal(gorur('payments/x', { partyId: 'p1', direction: 'in', status: 'awaiting' }, M), false);
+    assert.equal(gorur('contracts/c1', { partyId: 'p1', approval: 'approved' }, M), true);
+    assert.equal(gorur('contracts/c1', { partyId: 'p1', approval: 'pending' }, T), false);
+    assert.equal(gorur('contracts/c1', { partyId: 'p2', approval: 'approved' }, M), false);
+  });
+
+  test('BD-K43: katalog, belge, mutabakat, kullanıcı ve firma kartı yalnız kendi firması; öteki koleksiyon, alt belge ve olmayan kayıt reddedilir', () => {
+    for (const k of ['catalog', 'docs', 'recons', 'users']) {
+      assert.equal(gorur(`${k}/a`, { partyId: 'p1' }, M), true, k);
+      assert.equal(gorur(`${k}/a`, { partyId: 'p2' }, T), false, k);
+    }
+    assert.equal(gorur('parties/p1', { name: 'x' }, M), true);
+    assert.equal(gorur('parties/p2', { name: 'x' }, M), false);
+    for (const yol of ['notifs/n1', 'messages/m1', 'approvals/a1', 'cheques/c1', 'settings/approvals', 'data/users/7/prefs', 'orders/o1/alt/z']) {
+      assert.equal(gorur(yol, { partyId: 'p1', type: 'sales' }, M), false, yol);
+    }
+    assert.equal(gorur('orders/yok', null, M), false);
+  });
+});
