@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type {
-  AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
+  AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -10,6 +10,7 @@ import { DosyaHatasi, dosyaYukle } from '../cizimler/disari.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
+import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_TURLERI, LOGO_ESLESME_DURUMLARI, LOGO_ETIKETI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU, zamanMetni } from './gorunum.ts';
 import { LotEtiketPenceresi } from './LotEtiketi.tsx';
@@ -31,13 +32,15 @@ interface Satir {
   fasonIsEmriId: string; fasonIsEtiketi: string; fasonHurda: string;
   // Parti sertifikası (#960): dosya seçilince yüklenir; mal kabul özetiyle belgeyi açıp partiye bağlar.
   sertifikaOzet: string; sertifikaAdi: string; sertifikaYukleniyor: boolean;
+  // Sevkiyatın geliş kalemi (944, 957 a): kabul kalemi kapatır; kısmi kabulde kalem açık kalır ('' bağsız).
+  sevkKalemiId: string; sevkEtiketi: string;
 }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
   hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', fasonHurda: '',
-  sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false });
+  sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
-const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '';
+const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '' && s.sevkKalemiId === '';
 const sayi = (v: string): number => Number(miktarGirdisi(v || '0'));
 
 // Ambalaj sayısı × ambalaj içi miktar = toplam (önizlemedeki hesap); toplam elle değiştirilirse hesap durur.
@@ -195,6 +198,10 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
         <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{' '}
           <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
       )}
+      {s.sevkKalemiId && (
+        <p className="tc-stok-tam tc-stok-bilgi">Sevkiyat kalemi: <strong>{s.sevkEtiketi}</strong>{' '}
+          <Dugme tur="ikincil" onClick={() => degistir({ sevkKalemiId: '', sevkEtiketi: '' })}>Bağı kaldır</Dugme></p>
+      )}
       {s.hizmetKarti && <FasonDonusu s={s} degistir={degistir} />}
       {s.hizmetKarti && s.donus === 'hizmet' ? (
         <Girdi etiket={`Teslim alınan miktar${o.data?.ozet.birim ? ` (${o.data.ozet.birim})` : ''}`} inputMode="decimal" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required />
@@ -230,6 +237,10 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
 }
 
 export function satirGovdesi(s: Satir): MalKabulGovdesi['satirlar'][number] {
+  const sevk = s.sevkKalemiId ? { sevkKalemiId: Number(s.sevkKalemiId) } : {};
+  return { ...satirGirdisi(s), ...sevk };
+}
+function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   if (s.hizmetKarti && s.donus === 'hizmet') return { malzemeId: Number(s.hizmetKarti), miktar: miktarGirdisi(s.miktar), siparisSatirId: Number(s.siparisSatirId) };
   if (s.hizmetKarti && s.fasonIsEmriId) {
     return { malzemeId: Number(s.kart), miktar: miktarGirdisi(s.miktar), ...(s.konumId ? { konumId: Number(s.konumId) } : {}), parti: null, siparisSatirId: Number(s.siparisSatirId), fasonIsi: { isEmriId: Number(s.fasonIsEmriId), ...(s.fasonHurda ? { hurdaAdet: Number(s.fasonHurda) } : {}) }, ambalaj: null };
@@ -304,6 +315,31 @@ const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({
 export const eksikSatirlari = (c: EmirTamamlamaCevabi): Satir[] => c.bilesenler
   .filter((b) => !b.hizmet && Number(b.eksik) > 0)
   .map((b) => ({ ...bosSatir(), kart: String(b.malzemeId), miktar: miktarMetni(b.eksik).replace(/\./g, ''), elleMiktar: true }));
+// Depo sevk listesinden kabul (`?sevkKalemi=<kalem>`): kalemin malzemesi, kalan adedi ve alımda sipariş satırı bir kez doldurulur;
+// sayılan miktar depoda düzeltilir. Fason dönüşünde sarf ve üretimden giriş kalemin fason adımından yazılır.
+export function sevkSatiri(k: DepoSevkSatiri): Satir {
+  const kalan = k.adet === null ? '' : String(Math.max(0, Number(k.adet) - Number(k.kabulAdet ?? 0)));
+  const etiket = [k.emirNo, k.opNo === null ? null : `OP ${k.opNo}`, k.malzemeAd, k.firmaAd].filter(Boolean).join(' · ');
+  return {
+    ...bosSatir(), kart: k.malzemeId === null ? '' : String(k.malzemeId), miktar: kalan === '' ? '' : miktarMetni(kalan).replace(/\./g, ''), elleMiktar: true,
+    sevkKalemiId: String(k.kalemId), sevkEtiketi: etiket || `#${k.kalemId}`,
+    ...(k.kaynak === 'alim' && k.siparisSatirId !== null ? { siparisSatirId: String(k.siparisSatirId), siparisEtiketi: etiket } : {}),
+  };
+}
+function SevkKalemi({ kalemId, doldur }: { kalemId: number; doldur: (s: Satir, alim: boolean) => void }) {
+  const l = useDepoSevk();
+  const [dolduruldu, setDolduruldu] = useState(false);
+  const k = l.data?.find((x) => x.kalemId === kalemId && x.is === 'kabul');
+  useEffect(() => {
+    if (!k || dolduruldu) return;
+    setDolduruldu(true);
+    doldur(sevkSatiri(k), k.kaynak === 'alim' && k.siparisSatirId !== null);
+  }, [k]);
+  if (l.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />;
+  if (!l.data || k || dolduruldu) return null;
+  return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Sevkiyat kalemi kabul beklemiyor: kabul edilmiş ya da tetiği geri alınmış olabilir.</p>;
+}
+
 function EmirEksikleri({ emirId, doldur }: { emirId: number; doldur: (l: Satir[]) => void }) {
   const t = useQuery({ queryKey: anahtarlar.ayrinti('emir-tamamlama', emirId), queryFn: () => api.get<EmirTamamlamaCevabi>(`/stok/uretim-emirleri/${emirId}/tamamlama`) });
   const [dolduruldu, setDolduruldu] = useState(false);
@@ -332,6 +368,7 @@ export function MalKabul() {
   const [satirlar, setSatirlar] = useState<Satir[]>(() => [bosSatir()]);
   const [adres] = useSearchParams();
   const emirId = Number(adres.get('emir'));
+  const sevkKalemi = Number(adres.get('sevkKalemi'));
   // Teslim alınınca lot etiketleri önerilir; kopya sayısı satırın ambalaj sayısıdır (kullanıcı değiştirebilir).
   const [etiketAcik, setEtiketAcik] = useState(false);
   const [etiket, setEtiket] = useState<{ id: number; no: string; kopyalar: Record<number, number> } | null>(null);
@@ -352,6 +389,7 @@ export function MalKabul() {
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} />
             </div>
+            {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
             {Number.isInteger(emirId) && emirId > 0 && <EmirEksikleri emirId={emirId} doldur={(l) => setSatirlar((m) => [...m.filter((x) => !bosMu(x)), ...l])} />}
             {tur === 'satin_alma' && <AcikSiparisler sec={(x) => setSatirlar((l) => {
               const bos = l.findIndex((s) => s.kart === '' && !s.siparisSatirId);
