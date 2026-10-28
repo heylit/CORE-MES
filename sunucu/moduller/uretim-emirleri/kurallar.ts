@@ -1043,3 +1043,79 @@ export function emirEksiUyarisi(adimlar: readonly { opNo: number; eksik: number 
   if (eksi.length === 0) return null;
   return `Emir eksi bakiyeyle bitti: ${eksi.map((a) => `OP ${a.opNo}'de ${-(a.eksik ?? 0)} fazla sayıldı`).join(', ')}.`;
 }
+
+/* ---------------- hatalı parça (1033 a, 1034, 1036 a, 4 a, 7 a) ---------------- */
+
+export const HATALI_ADIMSIZ = 'Hatalı parça yalnız adımlı emirde ayrılır.';
+export const HATALI_NEDEN_YOK = 'Hatalı nedeni bulunamadı ya da pasif; aktif bir neden seçin.';
+export const HATALI_AYRILAMAZ = 'Sonraki adım başladığı için hatalı parça bu adımdan ayrılamıyor; planlamaya bildirin.';
+export const HATALI_ADET = 'Hatalı adet bu adımda henüz sayılmamış adedi aşamaz.';
+export const HATALI_ROTASIZ = 'Rotasız emirde hatalı parça yalnız adımdaki bütün parça hatalıysa ayrılır; planlamaya bildirin.';
+export const HATALI_OP_YERI = 'Kalite ve rework adımlarına op numarası açılamıyor: komşu adımların arasında boş numara yok; planlamaya bildirin.';
+export const HATALI_KALITE_TIPI_YOK = 'Kalite kararı adımı için aktif kalite (KAL) operasyon tipi yok; Operasyon Tipleri\'nden ekleyin.';
+export const HATALI_KALITE_ADIMI = 'Bu adım kalite kararıyla kapanır; kararı Kalite Merkezi\'nde verin.';
+export const HATALI_KAYIT_YOK = 'Hatalı parça kaydı bulunamadı.';
+export const HATALI_KARAR_VERILMIS = 'Bu hatalı parçanın kalite kararı verilmiş.';
+export const HATALI_KALITE_BASLAMIS = 'Kalite adımı başka yoldan başlamış ya da kalkmış; karar yazılamaz.';
+export const REWORK_KARARSIZ = 'Rework adımı yalnız kalite rework kararı verdikten sonra seçilir.';
+export const REWORK_BASLAMIS = 'Rework adımı başlamış ya da bitmiş; değiştirilemez.';
+
+// Kalite kararı adımının tipi: görsel muayene, yoksa ilk aktif kalite tipi (VARSAYIM: karar formu ölçüm değil, ayırma kararıdır).
+export const KALITE_KARARI_TIPI = 'GM';
+export function kaliteTipiSec<T extends { kod: string; grup: string; aktif: boolean }>(tipler: readonly T[]): T | null {
+  const kalite = tipler.filter((t) => t.aktif && t.grup === 'KAL');
+  return kalite.find((t) => t.kod === KALITE_KARARI_TIPI) ?? kalite[0] ?? null;
+}
+
+// Kalite adımının istasyonu: tipin varsayılan istasyonu kalite istasyonuysa o, değilse ilk aktif kalite istasyonu, o da yoksa hatanın
+// görüldüğü istasyon (karar yine Kalite Merkezi'nden yazılır; adım yalnız bir istasyonda görünür).
+export function kaliteIstasyonuSec(
+  tip: { varsayilanIstasyonId: number | null }, istasyonlar: readonly { id: number; tip: string; aktif: boolean }[], hataIstasyonu: number,
+): number {
+  const kalite = istasyonlar.filter((i) => i.aktif && i.tip === 'kalite');
+  return kalite.find((i) => i.id === tip.varsayilanIstasyonId)?.id ?? kalite[0]?.id ?? hataIstasyonu;
+}
+
+// alt ile ust arasında (ikisi hariç) art arda n op numarası; aralığın ortasından başlar (OP 20 ile 30 arasında iki adım 25, 26).
+// ust null: sondan sonra, ilk numara alt + 5. Boş numara yetmezse null.
+export function araOpNolari(alt: number, ust: number | null, n: number): number[] | null {
+  const ilk = ust === null ? alt + 5 : Math.min(alt + Math.ceil((ust - alt) / 2), ust - n);
+  if (ilk <= alt || n < 1) return null;
+  return Array.from({ length: n }, (_, i) => ilk + i);
+}
+
+export type HataliYolu = 'kol' | 'kok';
+
+// 1036 a: hatalı adet çalışan adımdan kola ayrılır, kol sonraki adımda ana partiye katılır (bölme kuralları, bolmeIhlali). Adımdaki
+// bütün parça hatalıysa (adet 1 ya da hepsi) emir bölünemez; adımlar emrin kendisine girer (4 a). Sonraki adım başlamışsa iki yol da
+// kapalıdır: parçanın yerine konacağı adım bekliyor olmalı. Hatalı parça bu adımda sayılmamış parçadır.
+export function hataliIhlali(d: BolmeDurumu, adimSira: number, adet: number, rotali: boolean): string | null {
+  const acik = acikEmirIhlali(d.durum, d.arsiv);
+  if (acik !== null) return acik;
+  const adim = d.isEmirleri.find((i) => i.sira === adimSira);
+  if (adim === undefined) return BOLME_ADIM_YOK;
+  if (adim.durum !== 'calisiyor') return ADIM_ACIK_DEGIL;
+  if (d.isEmirleri.some((i) => i.sira > adimSira && i.durum !== 'bekliyor')) return HATALI_AYRILAMAZ;
+  const elde = eldekiAdet(d, adimSira);
+  if (!Number.isInteger(adet) || adet < 1 || adet > elde - Math.max(d.bolunenIslenen ?? 0, 0)) return HATALI_ADET;
+  return adet < elde && !rotali ? HATALI_ROTASIZ : null;
+}
+
+export const hataliYolu = (d: BolmeDurumu, adimSira: number, adet: number): HataliYolu => (adet < eldekiAdet(d, adimSira) ? 'kol' : 'kok');
+
+export function hataliKarariIhlali(
+  kayit: { karar: string | null }, kaliteAdimi: { durum: IsEmriDurumu } | null, hedef: { durum: EmirDurumu; arsiv: boolean } | null,
+): string | null {
+  if (kayit.karar !== null) return HATALI_KARAR_VERILMIS;
+  if (hedef === null || kaliteAdimi === null) return HATALI_KALITE_BASLAMIS;
+  return acikEmirIhlali(hedef.durum, hedef.arsiv) ?? (kaliteAdimi.durum === 'bekliyor' ? null : HATALI_KALITE_BASLAMIS);
+}
+
+export function reworkAdimiIhlali(kayit: { karar: string | null }, adim: { durum: IsEmriDurumu } | null): string | null {
+  if (kayit.karar !== 'rework' || adim === null) return REWORK_KARARSIZ;
+  return adim.durum === 'bekliyor' ? null : REWORK_BASLAMIS;
+}
+
+// 7 a: fasonda termin girilmezse 7 gün. Fasonun süresi ve iç kaynağın termini isEmirleriIhlali ile reddedilir.
+export const reworkTermini = <T extends { kaynak: { tur: IsEmriKaynakTuru } | null; terminGun: number | null }>(g: T): T =>
+  (g.kaynak?.tur === 'fason' && g.terminGun === null ? { ...g, terminGun: FASON_VARSAYILAN_GUN } : g);
