@@ -72,15 +72,18 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       teslim_sekli AS "teslimSekli", nakliye_dahil AS "nakliyeDahil", termin_gun AS "terminGun", vade_gun AS "vadeGun",
       avans_yuzdesi AS "avansYuzdesi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon
       FROM satin_alma_teklif WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, sira, id`),
-    fiyatlar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", birim_fiyat AS "birimFiyat",
-      iskonto_yuzdesi AS "iskontoYuzdesi", termin_gun AS "terminGun", en_az_miktar AS "enAzMiktar"
-      FROM satin_alma_teklif_satiri WHERE talep_id = ANY($1::uuid[])`),
+    // Satırlar silinip yeniden yazıldığı için sıra veritabanına bırakılmaz: kalemin sırası esastır.
+    fiyatlar: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.kalem_id AS "kalemId", s.birim_fiyat AS "birimFiyat",
+      s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar"
+      FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+      WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     kararlar: await q(`SELECT talep_id AS "talepId", mod, teklif_id AS "teklifId", gerekce, karar_veren_kisi_id AS "kararVerenKisiId",
       karar_tarihi AS "kararTarihi", ogrenilenler, ${ISO('kur_kilidi')} AS "kurKilidi" FROM satin_alma_karar WHERE talep_id = ANY($1::uuid[])`),
-    bolunmeler: await q(`SELECT talep_id AS "talepId", kalem_id AS "kalemId", teklif_id AS "teklifId"
-      FROM satin_alma_karar_kalemi WHERE talep_id = ANY($1::uuid[])`),
+    bolunmeler: await q(`SELECT b.talep_id AS "talepId", b.kalem_id AS "kalemId", b.teklif_id AS "teklifId"
+      FROM satin_alma_karar_kalemi b JOIN satin_alma_talep_kalemi k ON k.talep_id = b.talep_id AND k.id = b.kalem_id
+      WHERE b.talep_id = ANY($1::uuid[]) ORDER BY b.talep_id, k.sira`),
     sabitKurlar: await q(`SELECT talep_id AS "talepId", para_birimi AS "paraBirimi", kur, aylik_faiz_yuzdesi AS "aylikFaizYuzdesi"
-      FROM satin_alma_sabit_kur WHERE talep_id = ANY($1::uuid[])`),
+      FROM satin_alma_sabit_kur WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, para_birimi`),
     siparisler: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", no, siparis_no AS "siparisNo", siparis_tarihi AS "siparisTarihi",
       beklenen_teslim AS "beklenenTeslim", logo_gonderim_durumu AS "logoDurumu", logo_kayit_no AS "logoKayitNo", logo_hata AS "logoHata",
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
