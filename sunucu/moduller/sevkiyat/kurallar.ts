@@ -1,6 +1,7 @@
 // Sevkiyat iş kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
 // Algoritma dosyaları (yol-agi.ts, cozucu.ts) kural sabitlerini buradan alır.
-import type { Arac, GunPlaniCevabi, TekRotaCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
+import type { Arac, ElleTuru, GunPlaniCevabi, KalemKaynagi, KalemYonu, Tasima, TekRotaCevabi, TumIsAsamasi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { RotaOgesi } from './cozucu.ts';
 
 export type GunTipi = 'hafta-ici' | 'cuma' | 'cumartesi' | 'pazar';
@@ -314,6 +315,101 @@ export function bolmeIhlali(kayit: { kaynak: string; adet: string | null }, parc
   if (p <= 0n) return 'Ayrılacak adet sıfırdan büyük olmalı.';
   if (p >= toplam) return 'Ayrılacak adet kayıttaki adetten az olmalı; bütünü göndermek için kaydı bölmeden işe çevirin.';
   return null;
+}
+
+// ---------- tüm işler (960) ----------
+// Kalemi sahibi modülün yazma işlemi ya da sevkiyat.is-yaz serbest bırakır (941 c). Uç bu listeden biriyle açılır, kalem başına
+// sahibin işlemi ayrıca aranır.
+export const KALEM_SAHIBI: Record<KalemKaynagi, Islem> = {
+  urun: 'uretim-emirleri.yaz', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
+};
+export const SERBEST_BIRAKMA_ISLEMLERI = ['sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] as const satisfies readonly Islem[];
+// Erken çıkışı yalnız sevkiyat sorumlusu ya da yönetici zorlar (956 b, 963 a): planı onaylayan işlem.
+export const ERKEN_CIKIS_ISLEMI = 'sevkiyat.onayla' satisfies Islem;
+export const KAYNAK_YONU: Record<Exclude<KalemKaynagi, 'elle'>, KalemYonu> = { urun: 'gidis', fason: 'gidis', 'fason-donus': 'gelis', alim: 'gelis' };
+
+// Aşamanın girdisi: kalem yoksa serbest false. erken: gerekçeyle hazır olmadan çıkabilir. depoTamam: depo son çıkışı ya da kabulü bitti.
+export interface AsamaGirdisi {
+  hazir: boolean; serbest: boolean; erken: boolean; tasima: Tasima | null; depoTamam: boolean;
+  is: { durum: IsDurumu; tetiklendi: boolean } | null;
+}
+// Hazır olmadan gerekçesiz bırakılan kalem bekler (945 a, önceden bırakma); kaynağı bitince sevkiyata düşer.
+export function tumIsAsamasi(k: AsamaGirdisi): TumIsAsamasi {
+  if (k.depoTamam) return 'tamamlandi';
+  if (!k.serbest) return k.hazir ? 'hazir' : 'hazir-degil';
+  if (!k.hazir && !k.erken) return 'bekliyor';
+  if (k.tasima === 'firma') return 'depoda';
+  if (k.is === null) return 'havuzda';
+  if (k.is.tetiklendi) return 'depoda';
+  return k.is.durum;
+}
+
+export type SerbestBirakmaIhlali = { tur: 'yetki' | 'durum'; ileti: string };
+// yetkili: kişinin işlemi var mı. Erken gerekçesi yalnız hazır olmayana yazılır; toplu seçimde hazır olan onu yok sayar.
+export function serbestBirakmaIhlali(
+  k: { kaynak: KalemKaynagi; asama: TumIsAsamasi }, erkenGerekce: string | null, yetkili: (islem: Islem) => boolean,
+): SerbestBirakmaIhlali | null {
+  if (!yetkili('sevkiyat.is-yaz') && !yetkili(KALEM_SAHIBI[k.kaynak])) return { tur: 'yetki', ileti: 'Bu kalemi serbest bırakma yetkiniz yok.' };
+  if (k.asama === 'bekliyor' && erkenGerekce !== null) {
+    return yetkili(ERKEN_CIKIS_ISLEMI) ? null : { tur: 'yetki', ileti: ERKEN_YETKISIZ };
+  }
+  if (k.asama !== 'hazir' && k.asama !== 'hazir-degil') return { tur: 'durum', ileti: 'Bu kalem zaten serbest bırakılmış.' };
+  if (k.asama === 'hazir-degil' && erkenGerekce !== null && !yetkili(ERKEN_CIKIS_ISLEMI)) return { tur: 'yetki', ileti: ERKEN_YETKISIZ };
+  return null;
+}
+const ERKEN_YETKISIZ = 'Hazır olmayan kalemi erken çıkışa yalnız sevkiyat sorumlusu ya da yönetici verir; gerekçesiz bırakırsanız hazır olunca düşer.';
+
+// Tetik (Sevk et / Al): işin bütün kalemleri çıkabilir olmalı; dönüş, gidişi depodan çıkmadan alınmaz.
+export interface TetikKalemi { hazir: boolean; erken: boolean; gidisCikti: boolean | null }
+export function tetikIhlali(is: { durum: IsDurumu; tetiklendi: boolean }, kalemler: readonly TetikKalemi[]): string | null {
+  if (is.tetiklendi) return 'Bu iş zaten tetiklendi.';
+  if (is.durum === 'tamamlandi') return 'Tamamlanmış iş tetiklenmez.';
+  if (kalemler.length === 0) return 'İşte serbest bırakılmış kalem yok; tetik yalnız Tüm işler kalemi taşıyan işte verilir.';
+  if (kalemler.some((k) => !k.hazir && !k.erken)) return 'İşte hazır olmayan kalem var; hazır olunca ya da erken çıkışla tetiklenir.';
+  if (kalemler.some((k) => k.gidisCikti === false)) return 'Gidiş henüz depodan çıkmadı; dönüş alınamaz.';
+  return null;
+}
+export const tetikGeriAlIhlali = (is: { tetiklendi: boolean }, depoYapildi: boolean): string | null =>
+  !is.tetiklendi ? 'Bu iş tetiklenmemiş.' : depoYapildi ? 'Depo çıkışı ya da kabulü yapılmış iş geri alınmaz; önce depoda geri alın.' : null;
+// Taşıma tetikten önce değişir: tetiklenmiş iş depo bekliyor, firma taşımasında bırakma tetik sayılır.
+export function tasimaIhlali(k: { asama: TumIsAsamasi; tasima: Tasima | null }, yeni: Tasima): string | null {
+  if (k.tasima === yeni) return null;
+  if (k.asama === 'tamamlandi') return 'Depo yapmış kalemin taşıması değişmez.';
+  if (k.asama === 'depoda') return 'Depoda bekleyen kalemin taşıması değişmez; önce tetiği geri alın.';
+  if (k.asama === 'hazir' || k.asama === 'hazir-degil') return 'Taşıma serbest bırakılırken seçilir.';
+  return null;
+}
+
+// Elle iş (958 a): iade dönüşsüzdür, dönüş yalnız gidişte açılır ve gidişten önce olamaz.
+export function elleKalemIhlalleri(g: { tur: ElleTuru; yon: KalemYonu; istenenTarih: string; donusTarihi: string | null }): KuralIhlali[] {
+  if (g.donusTarihi === null) return [];
+  if (g.tur === 'iade') return [{ alan: 'donusTarihi', ileti: 'İade dönüşsüzdür.' }];
+  if (g.yon === 'gelis') return [{ alan: 'donusTarihi', ileti: 'Dönüş yalnız gidişte açılır.' }];
+  if (g.donusTarihi < g.istenenTarih) return [{ alan: 'donusTarihi', ileti: 'Dönüş günü gidişten önce olamaz.' }];
+  return [];
+}
+
+// Aday (kalemi olmayan kaynak). Fason adımı sırası gelmiş ve gidecek parça varsa hazırdır; emir bitince ürün kalemi kendiliğinden açılır,
+// bitmemiş emir hazır değildir. Tarihsiz aday ve günü aralığın sonundan önce olan (gecikmiş dahil) listede kalır.
+export const fasonAdayiHazir = (g: { siradaki: boolean; gonderilebilir: number; gonderilen: number }): boolean => g.siradaki && g.gonderilebilir > g.gonderilen;
+export const adayListede = (hazirTarihi: string | null, bitis: string): boolean => hazirTarihi === null || hazirTarihi <= bitis;
+export function emirIlerlemesi(tamam: number, toplam: number, siradakiOp: number | null): string | null {
+  if (toplam === 0) return null;
+  return siradakiOp === null ? `${String(tamam)}/${String(toplam)} adım` : `${String(tamam)}/${String(toplam)} adım · OP ${String(siradakiOp)} sırada`;
+}
+
+// Depo (944, 966 b): gidiş son çıkış, geliş kabul bekler; yalnız tetiklenmiş (firma taşımasında serbest bırakılmış) kalem depodadır.
+export function depoIhlali(k: { yon: KalemYonu; asama: TumIsAsamasi }, is: 'cikis' | 'kabul'): string | null {
+  if (k.asama === 'tamamlandi') return is === 'cikis' ? 'Bu kalemin son çıkışı yapılmış.' : 'Bu kalemin kabulü tamamlanmış.';
+  if ((k.yon === 'gidis') !== (is === 'cikis')) return is === 'cikis' ? 'Geliş kalemi çıkış yapmaz; mal kabulle girer.' : 'Gidiş kalemi kabul edilmez; son çıkışı yapılır.';
+  if (k.asama !== 'depoda') return 'Kalem sevkiyatta tetiklenmedi; depo yalnız "Sevk et" ya da "Al" sonrası yapar.';
+  return null;
+}
+// Kısmi kabul (957 a): kalan firmada, kalem açık. Adedi bilinmeyen kalem ilk kabulde kapanır.
+export function kabulTamamMi(adet: string | null, onceki: string | null, gelen: string): boolean {
+  if (adet === null) return true;
+  const a = binde(adet), o = onceki === null ? 0n : binde(onceki), g = binde(gelen);
+  return a === null || o === null || g === null || o + g >= a;
 }
 
 // ---------- maliyet görünürlüğü ----------

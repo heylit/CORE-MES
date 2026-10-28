@@ -48,3 +48,10 @@ export type { SevkIsiOzeti } from './servis.ts';
 // Satış faturasına sevk seçimi (302 a, Finans): siparişin emirlerini taşıyan işler; iptal edilenler `iptal: true` ile döner.
 export { siparisinSevkleri } from './servis.ts';
 export type { SiparisSevki } from './servis.ts';
+
+// Depo son çıkışı ve kabulü (960, 962 a): stok listeyi okur, komutunu kendi işlemiyle aynı transaction'da yazar.
+export { depoBekleyenleri, depoCikisiYaz, depoKabuluYaz, depoKalemiAl } from './tum-isler.ts';
+export type { DepoKalemi } from './tum-isler.ts';
+
+// Satın almanın teslim yöntemi kalemin taşımasını yazar (959 b): yer 'satin-alma', son yazan izi kalır.
+export { tasimaDegistir } from './tum-isler.ts';

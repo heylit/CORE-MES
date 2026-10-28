@@ -106,11 +106,13 @@ const sevkUyarilari = z.array(z.string()).optional();
 export const isCevabi = z.object({ is: isSemasi, uyarilar: sevkUyarilari });
 
 // ---------- bekleme listesi (kart #1310) ----------
-// Biten ürün (urun), noktası olmadığı için işe çevrilemeyen fason gönderimi (fason) ve "malzeme alınacak" talep (alim) işe çevrilene kadar
-// burada durur; tarih, nokta ve yükü planlayıcı verir.
-export const BEKLEYEN_KAYNAGI = z.enum(['urun', 'fason', 'alim']);
+// Serbest bırakılmış, araçla taşınacak kalem işe çevrilene kadar burada durur: biten ürün, fason gidişi ve dönüşü, alım, elle iş (960);
+// tarih, nokta ve yükü planlayıcı verir. Yön işin türünü belirler: gidiş teslimat, geliş alım.
+export const KALEM_KAYNAGI = z.enum(['urun', 'fason', 'fason-donus', 'alim', 'elle']);
+export const KALEM_YONU = z.enum(['gidis', 'gelis']);
+export const BEKLEYEN_KAYNAGI = KALEM_KAYNAGI;
 export const bekleyenSemasi = z.object({
-  id: z.number().int(), kaynak: BEKLEYEN_KAYNAGI,
+  id: z.number().int(), kaynak: BEKLEYEN_KAYNAGI, yon: KALEM_YONU,
   uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(), talepId: z.string().nullable(), talepNo: z.string().nullable(),
   malzemeNo: z.number().int().nullable(), malzemeAd: z.string().nullable(),
   firmaId: z.number().int().nullable(), firmaAd: z.string().nullable(),
@@ -140,8 +142,6 @@ export const isDurumuGovdesi = z.object({ durum: z.enum(['tamamlandi', 'yapilama
 // Tablo kalemi yalnız serbest bırakır; sevkiyat "Sevk et" ya da "Al" ile tetikler; depo son çıkışı ya da kabulü yapar ve stok orada oynar.
 // Kalem: serbest bırakılmış ya da bırakılmayı bekleyen kayıt. Aday: başka modülde duran, henüz kalemi olmayan şey (bitmemiş emir,
 // sırası gelmemiş fason adımı, gelmemiş sipariş); yalnız okunur.
-export const KALEM_KAYNAGI = z.enum(['urun', 'fason', 'fason-donus', 'alim', 'elle']);
-export const KALEM_YONU = z.enum(['gidis', 'gelis']);
 // biz: sevkiyat aracı götürür ya da alır (Sevk et / Al). firma: firma kendisi alır ya da getirir; iş açılmaz, depo hareketi yine yapılır.
 export const TASIMA = z.enum(['biz', 'firma']);
 // Taşımayı son yazanın yeri (959 b): Tüm işler, satın alma siparişinin teslim yöntemi, sevkiyat ekranı; göç öncesi kayıtlar otomatik.

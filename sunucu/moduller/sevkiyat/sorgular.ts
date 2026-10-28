@@ -345,30 +345,62 @@ export async function onayKaldir(db: Db, planId: number): Promise<void> {
 
 // ---------- bekleme listesi (kart #1310) ----------
 
+export type KalemKaynagi = 'urun' | 'fason' | 'fason-donus' | 'alim' | 'elle';
+export type SonYazanYeri = 'tum-isler' | 'satin-alma' | 'sevkiyat' | 'otomatik';
 export interface BekleyenSatiri {
-  id: number; kaynak: 'urun' | 'fason' | 'alim'; uretimEmriId: number | null; fasonHareketId: number | null; talepId: string | null;
+  id: number; kaynak: KalemKaynagi; yon: 'gidis' | 'gelis'; uretimEmriId: number | null; fasonHareketId: number | null; talepId: string | null;
   firmaId: number | null; malzemeNo: number | null; adet: string | null; istenenTarih: string | null; hazirZamani: string;
   isId: number | null; kaldirildi: string | null; ustBekleyenId: number | null;
+  isEmriId: number | null; siparisSatiriId: number | null; gidisBekleyenId: number | null; elleTuru: 'numune' | 'tamir' | 'kalibrasyon' | 'iade' | 'diger' | null;
+  aciklama: string | null; serbestZamani: string | null; tasima: 'biz' | 'firma' | null;
+  sonYazanKisiId: number | null; sonYazanYer: SonYazanYeri | null; sonYazanZamani: string | null;
+  erkenZamani: string | null; erkenKisiId: number | null; erkenGerekce: string | null;
+  depoZamani: string | null; depoKisiId: number | null; kabulAdet: string | null;
 }
-const BEKLEYEN_ALANLARI = `id, kaynak, uretim_emri_id AS "uretimEmriId", fason_hareket_id AS "fasonHareketId", talep_id AS "talepId",
-  firma_id AS "firmaId", malzeme_no AS "malzemeNo", adet::text AS adet, istenen_tarih AS "istenenTarih", ${zamanMetni('hazir_zamani')} AS "hazirZamani",
-  is_id AS "isId", ${zamanMetni('kaldirildi')} AS kaldirildi, ust_bekleyen_id AS "ustBekleyenId"`;
+const bekleyenAlanlari = (t: string) => `${t}.id, ${t}.kaynak, ${t}.yon, ${t}.uretim_emri_id AS "uretimEmriId", ${t}.fason_hareket_id AS "fasonHareketId",
+  ${t}.talep_id AS "talepId", ${t}.firma_id AS "firmaId", ${t}.malzeme_no AS "malzemeNo", ${t}.adet::text AS adet, ${t}.istenen_tarih AS "istenenTarih",
+  ${zamanMetni(`${t}.hazir_zamani`)} AS "hazirZamani", ${t}.is_id AS "isId", ${zamanMetni(`${t}.kaldirildi`)} AS kaldirildi, ${t}.ust_bekleyen_id AS "ustBekleyenId",
+  ${t}.is_emri_id AS "isEmriId", ${t}.siparis_satiri_id AS "siparisSatiriId", ${t}.gidis_bekleyen_id AS "gidisBekleyenId", ${t}.elle_turu AS "elleTuru",
+  ${t}.aciklama, ${zamanMetni(`${t}.serbest_zamani`)} AS "serbestZamani", ${t}.tasima, ${t}.son_yazan_kisi_id AS "sonYazanKisiId",
+  ${t}.son_yazan_yer AS "sonYazanYer", ${zamanMetni(`${t}.son_yazan_zamani`)} AS "sonYazanZamani", ${zamanMetni(`${t}.erken_zamani`)} AS "erkenZamani",
+  ${t}.erken_kisi_id AS "erkenKisiId", ${t}.erken_gerekce AS "erkenGerekce", ${zamanMetni(`${t}.depo_zamani`)} AS "depoZamani", ${t}.depo_kisi_id AS "depoKisiId",
+  ${t}.kabul_adet::text AS "kabulAdet"`;
+const BEKLEYEN_ALANLARI = bekleyenAlanlari('sevkiyat_bekleyen');
+// Serbest bırakma (960): taşıma, yazan ve yeri; erken çıkışta kişi ve gerekçe. Boşsa kalem serbest değildir (Tüm işlerde bekler).
+export interface SerbestYazisi { tasima: 'biz' | 'firma'; yer: SonYazanYeri; kisiId: number | null; erken: { kisiId: number; gerekce: string } | null }
 export interface BekleyenYazisi {
-  kaynak: BekleyenSatiri['kaynak']; uretimEmriId: number | null; fasonHareketId: number | null; talepId: string | null;
+  kaynak: KalemKaynagi; yon: 'gidis' | 'gelis'; uretimEmriId: number | null; fasonHareketId: number | null; talepId: string | null;
   firmaId: number | null; malzemeNo: number | null; adet: string | null; istenenTarih: string | null; isId: number | null;
+  isEmriId?: number | null; siparisSatiriId?: number | null; gidisBekleyenId?: number | null; elleTuru?: BekleyenSatiri['elleTuru']; aciklama?: string | null;
+  serbest: SerbestYazisi | null;
 }
-// Aynı emrin ürünü ikinci kez düşmez (sevkiyat_bekleyen_urun_tek, kök kayıt); o durumda null döner.
+// Aynı emrin ürünü ikinci kez düşmez (sevkiyat_bekleyen_urun_tek, kök kayıt). Emir bitmeden önceden bırakılmış (adedi boş) kök kayda
+// biten emrin adedi ve günü yazılır; adedi dolu kök varsa null döner.
 export function bekleyenEkle(db: Db, b: BekleyenYazisi): Promise<BekleyenSatiri | null> {
+  const s = b.serbest;
   return db.tek<BekleyenSatiri>(
-    `INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, fason_hareket_id, talep_id, firma_id, malzeme_no, adet, istenen_tarih, is_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (uretim_emri_id) WHERE kaynak = 'urun' AND ust_bekleyen_id IS NULL DO NOTHING RETURNING ${BEKLEYEN_ALANLARI}`,
-    [b.kaynak, b.uretimEmriId, b.fasonHareketId, b.talepId, b.firmaId, b.malzemeNo, b.adet, b.istenenTarih, b.isId],
+    `INSERT INTO sevkiyat_bekleyen (kaynak, yon, uretim_emri_id, fason_hareket_id, talep_id, firma_id, malzeme_no, adet, istenen_tarih, is_id,
+       is_emri_id, siparis_satiri_id, gidis_bekleyen_id, elle_turu, aciklama, serbest_zamani, tasima, son_yazan_kisi_id, son_yazan_yer, son_yazan_zamani,
+       erken_zamani, erken_kisi_id, erken_gerekce)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CASE WHEN $16::text IS NULL THEN NULL ELSE now() END, $16, $17, $18,
+       CASE WHEN $18::text IS NULL THEN NULL ELSE now() END, CASE WHEN $19::int IS NULL THEN NULL ELSE now() END, $19, $20)
+     ON CONFLICT (uretim_emri_id) WHERE kaynak = 'urun' AND ust_bekleyen_id IS NULL
+       DO UPDATE SET adet = EXCLUDED.adet, istenen_tarih = COALESCE(sevkiyat_bekleyen.istenen_tarih, EXCLUDED.istenen_tarih), hazir_zamani = now()
+       WHERE sevkiyat_bekleyen.adet IS NULL AND EXCLUDED.adet IS NOT NULL
+     RETURNING ${BEKLEYEN_ALANLARI}`,
+    [b.kaynak, b.yon, b.uretimEmriId, b.fasonHareketId, b.talepId, b.firmaId, b.malzemeNo, b.adet, b.istenenTarih, b.isId,
+      b.isEmriId ?? null, b.siparisSatiriId ?? null, b.gidisBekleyenId ?? null, b.elleTuru ?? null, b.aciklama ?? null,
+      s?.tasima ?? null, s?.kisiId ?? null, s?.yer ?? null, s?.erken?.kisiId ?? null, s?.erken?.gerekce ?? null],
   );
 }
+// Sevkiyatın bekleme listesi: araçla taşınacak, serbest, işe çevrilmemiş ve çıkabilir kalemler. Ürün emri bitince (adet dolar), dönüş
+// gidişi depodan çıkınca çıkabilir; erken çıkış ikisini de geçer.
 export function acikBekleyenler(db: Db): Promise<BekleyenSatiri[]> {
   return db.sorgu<BekleyenSatiri>(
-    `SELECT ${BEKLEYEN_ALANLARI} FROM sevkiyat_bekleyen WHERE is_id IS NULL AND kaldirildi IS NULL ORDER BY hazir_zamani, id`,
+    `SELECT ${bekleyenAlanlari('b')} FROM sevkiyat_bekleyen b LEFT JOIN sevkiyat_bekleyen g ON g.id = b.gidis_bekleyen_id
+      WHERE b.is_id IS NULL AND b.kaldirildi IS NULL AND b.tasima = 'biz' AND b.depo_zamani IS NULL
+        AND (b.erken_zamani IS NOT NULL OR ((b.kaynak <> 'urun' OR b.adet IS NOT NULL) AND (g.id IS NULL OR g.depo_zamani IS NOT NULL)))
+      ORDER BY b.hazir_zamani, b.id`,
   );
 }
 export function bekleyenKilitle(db: Db, id: number): Promise<BekleyenSatiri | null> {
@@ -377,12 +409,14 @@ export function bekleyenKilitle(db: Db, id: number): Promise<BekleyenSatiri | nu
 export function bekleyeniIseBagla(db: Db, id: number, isId: number): Promise<unknown> {
   return db.sorgu('UPDATE sevkiyat_bekleyen SET is_id = $2 WHERE id = $1 AND is_id IS NULL AND kaldirildi IS NULL', [id, isId]);
 }
+// Bölünen ya da işi iptal edilip yeniden açılan kalem serbest bırakılışını ve erken çıkışını taşır.
+const SERBEST_SUTUNLARI = 'serbest_zamani, tasima, son_yazan_kisi_id, son_yazan_yer, son_yazan_zamani, erken_zamani, erken_kisi_id, erken_gerekce';
 // Kısmi sevk (261 a): parça yeni kayda geçer, kalan eski kayıtta durur; parça kök kaydı ve listeye düştüğü anı taşır.
 export async function bekleyeniBol(db: Db, id: number, parca: string): Promise<number> {
   return (await db.tek<{ id: number }>(
     `WITH kalan AS (UPDATE sevkiyat_bekleyen SET adet = adet - $2::numeric WHERE id = $1 RETURNING *)
-     INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, malzeme_no, adet, istenen_tarih, hazir_zamani, ust_bekleyen_id)
-     SELECT kaynak, uretim_emri_id, malzeme_no, $2::numeric, istenen_tarih, hazir_zamani, COALESCE(ust_bekleyen_id, id) FROM kalan RETURNING id`,
+     INSERT INTO sevkiyat_bekleyen (kaynak, yon, uretim_emri_id, malzeme_no, adet, istenen_tarih, hazir_zamani, ust_bekleyen_id, ${SERBEST_SUTUNLARI})
+     SELECT kaynak, yon, uretim_emri_id, malzeme_no, $2::numeric, istenen_tarih, hazir_zamani, COALESCE(ust_bekleyen_id, id), ${SERBEST_SUTUNLARI} FROM kalan RETURNING id`,
     [id, parca],
   ))!.id;
 }
@@ -396,15 +430,16 @@ export async function urunFirmalariniYaz(db: Db, isIdleri: readonly number[]): P
   );
 }
 // İptal edilen işin yükü bekleme listesine döner (17.2). Ürün ve alım kaydı iptal edilen işte kalır (sevk geçmişi, 302 a), yükü yeni açık
-// kayda geçer: ürün parçası kök kaydı gösterir, sevk anı müşterisi taşınmaz. Fason kaydı gönderim başına tektir; işten çözülür.
+// kayda geçer: ürün parçası kök kaydı gösterir, sevk anı müşterisi taşınmaz. Fason, dönüş ve elle kalem tektir (gidiş-dönüş bağı); işten çözülür.
 export async function isinBekleyenleriniCoz(db: Db, isId: number): Promise<void> {
   await db.sorgu(
-    `INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, talep_id, firma_id, malzeme_no, adet, istenen_tarih, hazir_zamani, ust_bekleyen_id)
-     SELECT kaynak, uretim_emri_id, talep_id, CASE WHEN kaynak = 'alim' THEN firma_id END, malzeme_no, adet, istenen_tarih, hazir_zamani,
-       CASE WHEN kaynak = 'urun' THEN COALESCE(ust_bekleyen_id, id) END
+    `INSERT INTO sevkiyat_bekleyen (kaynak, yon, uretim_emri_id, talep_id, firma_id, malzeme_no, adet, istenen_tarih, hazir_zamani, ust_bekleyen_id,
+       siparis_satiri_id, ${SERBEST_SUTUNLARI})
+     SELECT kaynak, yon, uretim_emri_id, talep_id, CASE WHEN kaynak = 'alim' THEN firma_id END, malzeme_no, adet, istenen_tarih, hazir_zamani,
+       CASE WHEN kaynak = 'urun' THEN COALESCE(ust_bekleyen_id, id) END, siparis_satiri_id, ${SERBEST_SUTUNLARI}
        FROM sevkiyat_bekleyen WHERE is_id = $1 AND kaynak IN ('urun', 'alim')`, [isId],
   );
-  await db.sorgu("UPDATE sevkiyat_bekleyen SET is_id = NULL WHERE is_id = $1 AND kaynak = 'fason'", [isId]);
+  await db.sorgu("UPDATE sevkiyat_bekleyen SET is_id = NULL WHERE is_id = $1 AND kaynak IN ('fason', 'fason-donus', 'elle')", [isId]);
 }
 export function bekleyeniKaldir(db: Db, id: number, kisiId: number): Promise<unknown> {
   return db.sorgu('UPDATE sevkiyat_bekleyen SET kaldirildi = now(), kaldiran_kisi_id = $2 WHERE id = $1 AND is_id IS NULL AND kaldirildi IS NULL', [id, kisiId]);
@@ -527,4 +562,111 @@ export function talebinAlimlari(db: Db, talepId: string): Promise<{ id: number; 
 }
 export function bekleyenTarihiYaz(db: Db, id: number, istenenTarih: string | null): Promise<unknown> {
   return db.sorgu('UPDATE sevkiyat_bekleyen SET istenen_tarih = $2 WHERE id = $1 AND is_id IS NULL', [id, istenenTarih]);
+}
+
+// ---------- tüm işler (960) ----------
+
+// Kalemin işi (iptal edilen işteki kalem yeni açık kayda geçmiştir, listeye girmez).
+export interface KalemSatiri extends BekleyenSatiri {
+  isTarih: string | null; isDurumu: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi' | null; isTetiklendi: string | null; isNoktaFirmaId: number | null;
+}
+const KALEM_ALANLARI = `${bekleyenAlanlari('b')}, i.tarih::text AS "isTarih", i.durum AS "isDurumu", ${zamanMetni('i.tetiklendi')} AS "isTetiklendi",
+  n.firma_id AS "isNoktaFirmaId"`;
+const KALEM_KAYNAKLARI = `sevkiyat_bekleyen b LEFT JOIN sevkiyat_isi i ON i.id = b.is_id
+  LEFT JOIN sevkiyat_noktasi n ON n.id = CASE WHEN i.tur = 'alim' THEN i.alis_noktasi_id ELSE i.birakis_noktasi_id END`;
+// Açık kalemler ve aralıkta biten kalemler (depo yaptı ya da eski akışta iş tamamlandı); gün tesis gününe göre.
+export function tumIsKalemleri(db: Db, aralik: { baslangic: string; bitis: string }): Promise<KalemSatiri[]> {
+  return db.sorgu<KalemSatiri>(
+    `SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI}
+      WHERE b.kaldirildi IS NULL AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)
+        AND (COALESCE(b.depo_zamani, CASE WHEN i.durum = 'tamamlandi' THEN i.durum_zamani END) IS NULL
+          OR (COALESCE(b.depo_zamani, i.durum_zamani) AT TIME ZONE 'Europe/Istanbul')::date BETWEEN $1::date AND $2::date)
+      ORDER BY b.id`,
+    [aralik.baslangic, aralik.bitis],
+  );
+}
+export function kalemleriKilitle(db: Db, idler: readonly number[]): Promise<KalemSatiri[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu<KalemSatiri>(`SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI} WHERE b.id = ANY($1::int[]) ORDER BY b.id FOR UPDATE OF b`, [[...new Set(idler)]]);
+}
+export function isinKalemleri(db: Db, isId: number): Promise<KalemSatiri[]> {
+  return db.sorgu<KalemSatiri>(`SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI} WHERE b.is_id = $1 ORDER BY b.id FOR UPDATE OF b`, [isId]);
+}
+// Kalemi olan aday kaynakları: ürünün emri, açık fason gidişinin adımı, açık alımın sipariş satırı.
+export async function kalemliKaynaklar(db: Db): Promise<{ urun: Set<number>; fason: Set<number>; alim: Set<number> }> {
+  const satirlar = await db.sorgu<{ kaynak: string; id: number }>(
+    `SELECT DISTINCT 'urun' AS kaynak, uretim_emri_id AS id FROM sevkiyat_bekleyen WHERE kaynak = 'urun'
+     UNION SELECT DISTINCT 'fason', is_emri_id FROM sevkiyat_bekleyen
+       WHERE kaynak = 'fason' AND is_emri_id IS NOT NULL AND depo_zamani IS NULL AND kaldirildi IS NULL AND fason_hareket_id IS NULL
+     UNION SELECT DISTINCT 'alim', siparis_satiri_id FROM sevkiyat_bekleyen WHERE kaynak = 'alim' AND siparis_satiri_id IS NOT NULL AND kaldirildi IS NULL`,
+  );
+  const sonuc = { urun: new Set<number>(), fason: new Set<number>(), alim: new Set<number>() };
+  for (const s of satirlar) sonuc[s.kaynak as keyof typeof sonuc].add(s.id);
+  return sonuc;
+}
+export function urunKokKalemi(db: Db, uretimEmriId: number): Promise<BekleyenSatiri | null> {
+  return db.tek<BekleyenSatiri>(
+    `SELECT ${BEKLEYEN_ALANLARI} FROM sevkiyat_bekleyen WHERE kaynak = 'urun' AND uretim_emri_id = $1 AND ust_bekleyen_id IS NULL FOR UPDATE`, [uretimEmriId],
+  );
+}
+// Serbest bırakma ya da erkene çevirme: serbest anı ilk bırakıştır; taşıma ve son yazan her yazımda yenilenir.
+export function serbestYaz(db: Db, id: number, s: SerbestYazisi): Promise<unknown> {
+  return db.sorgu(
+    `UPDATE sevkiyat_bekleyen SET serbest_zamani = COALESCE(serbest_zamani, now()), tasima = $2, son_yazan_kisi_id = $3, son_yazan_yer = $4, son_yazan_zamani = now(),
+       erken_zamani = CASE WHEN $5::int IS NULL THEN erken_zamani ELSE now() END, erken_kisi_id = COALESCE($5, erken_kisi_id), erken_gerekce = COALESCE($6, erken_gerekce)
+      WHERE id = $1 AND kaldirildi IS NULL AND depo_zamani IS NULL`,
+    [id, s.tasima, s.kisiId, s.yer, s.erken?.kisiId ?? null, s.erken?.gerekce ?? null],
+  );
+}
+// Firma taşımasına geçen kalem işten çözülür (iş sevkiyatın kaydıdır, kalemsiz kalırsa planlayıcı iptal eder).
+export function tasimaYaz(db: Db, id: number, tasima: 'biz' | 'firma', yer: SonYazanYeri, kisiId: number | null): Promise<unknown> {
+  return db.sorgu(
+    `UPDATE sevkiyat_bekleyen SET tasima = $2, son_yazan_kisi_id = $3, son_yazan_yer = $4, son_yazan_zamani = now(),
+       is_id = CASE WHEN $2 = 'firma' THEN NULL ELSE is_id END WHERE id = $1`, [id, tasima, kisiId, yer],
+  );
+}
+export function tetikYaz(db: Db, isId: number, kisiId: number | null): Promise<unknown> {
+  return db.sorgu(
+    'UPDATE sevkiyat_isi SET tetiklendi = CASE WHEN $2::int IS NULL THEN NULL ELSE now() END, tetikleyen_kisi_id = $2 WHERE id = $1', [isId, kisiId],
+  );
+}
+export function isTetigi(db: Db, isId: number): Promise<{ durum: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi'; tetiklendi: string | null; iptal: boolean } | null> {
+  return db.tek(`SELECT durum, ${zamanMetni('tetiklendi')} AS tetiklendi, iptal_edildi IS NOT NULL AS iptal FROM sevkiyat_isi WHERE id = $1 FOR UPDATE`, [isId]);
+}
+// Depo: son çıkış ya da kabul bekleyen kalemler. Firma taşımasında serbest bırakma, araçla taşımada işin tetiği depoya düşürür (966 b).
+export function depodakiKalemler(db: Db): Promise<KalemSatiri[]> {
+  return db.sorgu<KalemSatiri>(
+    `SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI}
+      WHERE b.serbest_zamani IS NOT NULL AND b.depo_zamani IS NULL AND b.kaldirildi IS NULL
+        AND ((b.tasima = 'firma') OR (i.tetiklendi IS NOT NULL AND i.iptal_edildi IS NULL))
+      ORDER BY COALESCE(i.tetiklendi, b.serbest_zamani), b.id`,
+  );
+}
+// Depo yaptı: gidişte son çıkış, gelişte kabulün tamamı. Kısmi kabulde yalnız kabul adedi artar.
+export function depoYaz(db: Db, id: number, kisiId: number, kabulAdet: string | null, tamam: boolean): Promise<unknown> {
+  return db.sorgu(
+    `UPDATE sevkiyat_bekleyen SET kabul_adet = CASE WHEN $3::numeric IS NULL THEN kabul_adet ELSE COALESCE(kabul_adet, 0) + $3::numeric END,
+       depo_zamani = CASE WHEN $4 THEN now() ELSE depo_zamani END, depo_kisi_id = CASE WHEN $4 THEN $2 ELSE depo_kisi_id END
+      WHERE id = $1 AND depo_zamani IS NULL`, [id, kisiId, kabulAdet, tamam],
+  );
+}
+export function depoGeriAl(db: Db, id: number): Promise<unknown> {
+  return db.sorgu('UPDATE sevkiyat_bekleyen SET depo_zamani = NULL, depo_kisi_id = NULL WHERE id = $1', [id]);
+}
+export function kalemlerGetir(db: Db, idler: readonly number[]): Promise<KalemSatiri[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu<KalemSatiri>(`SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI} WHERE b.id = ANY($1::int[]) ORDER BY b.id`, [[...new Set(idler)]]);
+}
+// Gidişlerin dönüşleri (bağlı anahtar için).
+export function donusleri(db: Db, gidisIdleri: readonly number[]): Promise<{ id: number; gidisId: number }[]> {
+  if (gidisIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu('SELECT id, gidis_bekleyen_id AS "gidisId" FROM sevkiyat_bekleyen WHERE gidis_bekleyen_id = ANY($1::int[])', [[...new Set(gidisIdleri)]]);
+}
+// Satın almanın teslim yöntemiyle açılan eski alım kalemleri (talep ve firma); aynı siparişin satırları ayrıca aday olmaz.
+export async function talepAlimlari(db: Db): Promise<Set<string>> {
+  const satirlar = await db.sorgu<{ talepId: string; firmaId: number }>(
+    `SELECT DISTINCT talep_id AS "talepId", firma_id AS "firmaId" FROM sevkiyat_bekleyen
+      WHERE kaynak = 'alim' AND siparis_satiri_id IS NULL AND kaldirildi IS NULL AND firma_id IS NOT NULL`,
+  );
+  return new Set(satirlar.map((s) => `${s.talepId}:${String(s.firmaId)}`));
 }

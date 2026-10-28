@@ -195,7 +195,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     const isId = await tek("INSERT INTO sevkiyat_isi (tarih, istenen_tarih, tur, birakis_noktasi_id, agirlik_kilogram, palet_sayisi) VALUES (current_date, current_date, 'teslimat', $1, 10, 1) RETURNING id", [nokta]);
     // Biten emir bekleme listesine düşer; satır yoksa açılır.
     const bagli = await o().sahip.sorgu('UPDATE sevkiyat_bekleyen SET is_id = $2 WHERE uretim_emri_id = $1 AND is_id IS NULL RETURNING id', [id, isId]);
-    if (bagli.length === 0) await o().sahip.sorgu("INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, adet, is_id) VALUES ('urun', $1, 4, $2)", [id, isId]);
+    if (bagli.length === 0) await o().sahip.sorgu("INSERT INTO sevkiyat_bekleyen (kaynak, yon, uretim_emri_id, adet, is_id) VALUES ('urun', 'gidis', $1, 4, $2)", [id, isId]);
     const s: UrunSevkSatiri = { isId, uretimEmriId: id, adet: '4', firmaId };
     await gecis(s, 'planlandi', 'yolda');
     await gecis(s, 'yolda', 'tamamlandi');
@@ -283,6 +283,8 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     const firmaId = await musteriKur();
     const nokta = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, firma_id) VALUES ('US Alıcı Noktası', 'musteri', 39.95, 32.75, $1) RETURNING id", [firmaId]))!.id;
+    // 960: biten emrin ürün kalemi serbest bırakılınca bekleme listesine düşer.
+    assert.equal((await istek('planlama_proje', 'POST', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`urun:${String(id)}`], tasima: 'biz' })).durum, 200);
     const liste = await istek('planlama_proje', 'GET', '/sevkiyat/bekleyenler');
     const b = bekleyenlerCevabi.parse(liste.govde).bekleyenler.find((x) => x.kaynak === 'urun' && x.uretimEmriId === id)!;
     const tarih = (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date, 'YYYY-MM-DD') AS g"))!.g;
