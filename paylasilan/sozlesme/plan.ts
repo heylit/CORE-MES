@@ -149,6 +149,25 @@ export const canliYerlesimCevabi = z.object({
   })),
 });
 
+// 933 a: projenin plan ve gerçekleşeni, salt okunur (Projeler'de sekme). Taban ilk canlıya almadaki, canlı bugünkü plandır; kaymalar
+// net çalışma dakikasıdır (artı geç). Bilinmeyen değer null; özetteki beklenen bitiş, bir işin bitişi bilinmiyorsa null.
+export const projePlaniParametresi = z.object({ projeId: z.coerce.number().int().positive() });
+const planAraligi = z.object({ baslangic: zaman, bitis: zaman }).nullable();
+export const projePlaniCevabi = z.object({
+  ozet: z.object({
+    isSayisi: z.number().int(), bitenSayisi: z.number().int(), plansizSayisi: z.number().int(),
+    tabanBitis: zaman.nullable(), canliBitis: zaman.nullable(), beklenenBitis: zaman.nullable(),
+    // Tesis günü farkı: beklenen bitiş günü - taban bitiş günü (artı geç).
+    beklenenKaymaGun: z.number().int().nullable(),
+  }),
+  isler: z.array(z.object({
+    isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), istasyonAd: z.string().nullable(),
+    durum: z.enum(['bekliyor', 'calisiyor', 'tamam']), taban: planAraligi, canli: planAraligi,
+    gercekBaslama: zaman.nullable(), gercekBitis: zaman.nullable(), tahminiBitis: zaman.nullable(),
+    bitisKaymasiDk: z.number().nullable(), tabanBitisKaymasiDk: z.number().nullable(),
+  })),
+});
+
 // 220 a: motorun yerleşimi, yazılmadan (Reçete ve Rota > Plan ekranı bunu çizer). Sabit (kilitli, dondurulmuş, başlamış) işler yerinde,
 // öteki işler motorun bugünkü ayarıyla; vardiya takvimi ve elle sıra dahil. Okuma kaynağıdır: plan sayfasını açan herkes aynı yerleşimi görür.
 export const motorYerlesimiCevabi = z.object({
@@ -440,6 +459,7 @@ export type TaslakGirdisi = z.input<typeof taslakGirdisi>;
 export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;
 export type OnizleSorgusu = z.input<typeof onizleSorgusu>;
 export type CanliYerlesimCevabi = z.output<typeof canliYerlesimCevabi>;
+export type ProjePlaniCevabi = z.output<typeof projePlaniCevabi>;
 export type BedelAyari = z.output<typeof bedelAyari>;
 export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
 export type MotorAyarlari = z.output<typeof motorAyarlari>;
