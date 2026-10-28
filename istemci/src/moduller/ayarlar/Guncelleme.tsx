@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Ayrinti } from '#paylasilan/sozlesme/saglik.ts';
+import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import type {
   GuncellemeKanali, GuncellemeKuruluSurum, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi, GuncellemeParcasiCevabi,
   GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu,
 } from '#paylasilan/sozlesme/ayarlar.ts';
-import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -43,6 +43,32 @@ export async function paketYukle(dosya: Blob, ilerle: (alinan: number, toplam: n
     ilerle(cevap.alinan, cevap.toplam);
   }
   return api.post<GuncellemePaketi>(`/guncelleme/yuklemeler/${kimlik}/bitir`, {});
+}
+
+const ACILIS: Readonly<Record<OtomatikAcilis['durum'], { ton: RozetTonu; metin: string; uyari: string | null }>> = {
+  kurulu: { ton: 'tamam', metin: 'Kurulu', uyari: null },
+  kapali: {
+    ton: 'uyari', metin: 'Kurulu, kapalı',
+    uyari: 'Görev kapalı ya da "Başlangıçta" tetikleyicisi yok; bilgisayar başlarken sunucu açılmaz. Bilgi işlem Görev Zamanlayıcı\'dan düzeltir.',
+  },
+  'kurulu-degil': {
+    ton: 'uyari', metin: 'Kurulu değil',
+    uyari: 'Görev yok ya da sunucu hesabı göremiyor. Elektrik kesintisinden sonra sunucu kendiliğinden açılmaz; görevi bilgi işlem yönetici hesabıyla kurar (kurulum belgesi: servis, 3. bölüm).',
+  },
+  bilinmiyor: { ton: 'pasif', metin: 'Bilinmiyor', uyari: 'Görev Zamanlayıcı okunamadı.' },
+};
+
+// Yalnız gösterir: görevi kurmak ve değiştirmek yönetici hesabı ister, uygulamanın işi değildir. null: sunucu Windows'ta değil.
+function SunucuAcilisi({ acilis }: { acilis: OtomatikAcilis | null }) {
+  const durum = ACILIS[acilis?.durum ?? 'bilinmiyor'];
+  const uyari = acilis === null ? 'Sunucu Windows\'ta çalışmıyor; Görev Zamanlayıcı okunmadı.' : durum.uyari;
+  return (
+    <Kart baslik="Sunucu açılışı" simge="bolt">
+      <p>Bilgisayar başlarken otomatik açılış <Rozet ton={durum.ton}>{durum.metin}</Rozet></p>
+      {acilis && <p className="tc-ayar-aciklama">Görev adı: {acilis.gorevAdi}</p>}
+      {uyari !== null && <p className="tc-ayar-aciklama"><Simge ad="alert" boyut="k" /> {uyari}</p>}
+    </Kart>
+  );
 }
 
 // Sunucuda henüz uygulanmamış göçler: adlar zaman damgasıyla başlar, sıralı karşılaştırma yeter.
@@ -278,6 +304,8 @@ export function Guncelleme() {
           />
         </Kart>
       )}
+      {/* Alanı taşımayan eski sunucuda kart çıkmaz. */}
+      {ayrinti.data?.otomatikAcilis !== undefined && <SunucuAcilisi acilis={ayrinti.data.otomatikAcilis} />}
       {silinecek && (
         <OnayPenceresi
           acik baslik={`${silinecek.ad} silinsin mi?`} onayMetni="Sil" tehlikeli yukleniyor={siliniyor}

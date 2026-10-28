@@ -83,6 +83,9 @@ Deneme:
 1. Bilgisayar yeniden başlatılır, kimse giriş yapmaz; başka bir cihazdan sunucu adresi açılır.
 2. `TMIV2-GUNLUK\bekci.log` dosyasında başlangıç satırı görülür.
 3. Görev Zamanlayıcı'da görevin "Son çalışma sonucu" `0x41301` (çalışıyor) gösterir.
+4. Sistem Ayarları > Güncelleme > "Sunucu açılışı" kartı "Kurulu" gösterir. Sunucu görevi kendi hesabıyla
+   `schtasks /Query /TN "TMIV2 Bekci" /XML` sorgusuyla yalnız okur (en çok 10 dakikada bir); "Kurulu değil" görünüyorsa görev adı
+   farklıdır ya da sunucu hesabı görevi göremiyordur.
 
 Durdurmak: Görev Zamanlayıcı'da görev "Sonlandır"; güncellemeden önce görev sonlandırılır, sonra `git pull`, `npm.cmd install`,
 `npm.cmd run yedek`, `npm.cmd run goc` ve görev yeniden "Çalıştır".

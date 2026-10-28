@@ -34,6 +34,15 @@ export const uyariSemasi = z.object({
   ileti: z.string(),
 });
 
+export const OTOMATIK_ACILIS_DURUMLARI = ['kurulu', 'kapali', 'kurulu-degil', 'bilinmiyor'] as const;
+
+// Görev Zamanlayıcı'daki bekçi görevi. "kurulu-degil": görev yok ya da sunucu hesabı göremiyor (Windows ikisini aynı çıkış koduyla verir);
+// "kapali": görev var ama kapalı ya da "Başlangıçta" tetikleyicisi yok; "bilinmiyor": sorgu süre aştı ya da çalışmadı.
+export const otomatikAcilisSemasi = z.object({
+  durum: z.enum(OTOMATIK_ACILIS_DURUMLARI),
+  gorevAdi: z.string(),
+});
+
 export const ayrintiCevabi = z.object({
   // Veritabanının durumu yalnız `/saglik` cevabındadır; yoklama başarısızsa gecikme null.
   veritabaniGecikmeMs: z.number().int().nonnegative().nullable(),
@@ -51,6 +60,8 @@ export const ayrintiCevabi = z.object({
   bellek: z.object({ rssBayt: z.number().int().nonnegative(), yiginBayt: z.number().int().nonnegative() }).optional(),
   olayDongusuGecikmeMs: z.number().nonnegative().nullable().optional(),
   vtBaglantiSayisi: z.number().int().nonnegative().nullable().optional(),
+  // Windows dışında null.
+  otomatikAcilis: otomatikAcilisSemasi.nullable().optional(),
 });
 
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
@@ -58,3 +69,4 @@ export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;
 export type IsDurumuOzeti = z.output<typeof isDurumuSemasi>;
 export type Uyari = z.output<typeof uyariSemasi>;
+export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
