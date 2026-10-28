@@ -28,6 +28,12 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     'SELECT tablo, islem, plan_surumu AS "planSurumu", satir FROM plan_canli_gecmisi WHERE is_emri_id = $1 ORDER BY id', [isEmriId]);
   const reddedilir = (sql: string, params: unknown[] = []) => assert.rejects(sahip().sorgu(sql, params), /yalnız ekleme|değişmez/);
 
+  // 248 a: önceki testlerin canlı işleri 4 saatin dışına alınır. Motor yeni işi günün saatine göre onların önüne koyabilir; o zaman canlıya
+  // alma 4 saat kuralına takılırdı. Bu dosya kuralı değil geçmişi sınar.
+  const oncekileriOtele = () => sahip().tx(async (db) => {
+    for (const t of ['plan_yerlesimi', 'plan_yerlesim_parcasi']) await db.sorgu(`UPDATE ${t} SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day'`);
+  });
+
   async function canliyaAl(p: PlanCevabi): Promise<number> {
     await tamam<SenaryolarCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     return p.taslak!.id;
@@ -62,6 +68,7 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   });
 
   test('1: canlı satır değişince önceki hâli yazılır; değişmeyen güncelleme geçmiş üretmez', async () => {
+    await oncekileriOtele();
     const [ie] = await isEmirleriAc([yeniAdim()]);
     await canliyaAl(await taslaktaOner());
     await sahip().sorgu('UPDATE plan_yerlesimi SET kilitli = kilitli WHERE is_emri_id = $1', [ie]);
@@ -72,6 +79,7 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   });
 
   test('2a: bekleyen iş emri silinince canlı yeri zincirleme silinir (279 a) ama geçmişte kalır', async () => {
+    await oncekileriOtele();
     const [ie] = await isEmirleriAc([yeniAdim()]);
     await canliyaAl(await taslaktaOner());
     await sahip().tx(async (db) => {
@@ -85,6 +93,7 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   });
 
   test('4: kapanmış senaryo silinmez ve değişmez; ad, açıklama ve sürüm ile defter verisi yazılabilir; açık taslak serbest', async () => {
+    await oncekileriOtele();
     const [ie] = await isEmirleriAc([yeniAdim()]);
     const acik = await taslaktaOner();
     // Açık taslak serbest: bugünkü kod taslağı yazar ve siler.
