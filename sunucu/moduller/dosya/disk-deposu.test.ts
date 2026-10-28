@@ -25,9 +25,9 @@ describe('MP4 türü', () => {
     assert.equal(turBul(Buffer.concat([Buffer.from([0, 0, 0, 0x14]), Buffer.from('ftypqt  ')]), 12), null);
     assert.equal(turBul(Buffer.from('ftypisom'), 8), null);
   });
-  test('disk deposu klasör mutlak yol ise açık; canlıda ayna gelene kadar kapalı', () => {
+  test('disk deposu klasör mutlak yol ise her ortamda açık', () => {
     assert.equal(diskeYazilabilir({ TMIV2_MEDYA_DIZINI: '/var/medya', TMIV2_ORTAM: 'gelistirme' }), '/var/medya');
-    assert.equal(diskeYazilabilir({ TMIV2_MEDYA_DIZINI: '/var/medya', TMIV2_ORTAM: 'canli' }), null);
+    assert.equal(diskeYazilabilir({ TMIV2_MEDYA_DIZINI: '/var/medya', TMIV2_ORTAM: 'canli' }), '/var/medya');
     assert.equal(diskeYazilabilir({ TMIV2_MEDYA_DIZINI: 'medya', TMIV2_ORTAM: 'gelistirme' }), null);
     assert.equal(diskeYazilabilir({ TMIV2_ORTAM: 'gelistirme' }), null);
   });
@@ -86,14 +86,15 @@ describe('talimat medyası disk deposu (gerçek PostgreSQL, geçici klasör)', (
     assert.equal(ozetler.length, 2);
   });
 
-  test('canlıda disk kapalı: resim veritabanında kalır, video bağlanamaz', async () => {
+  test('canlıda da disk açık (1009 a): resim ve video diske yazılır', async () => {
     process.env['TMIV2_ORTAM'] = 'canli';
     try {
-      assert.equal(medya.diskAcik(), false);
+      assert.equal(medya.diskAcik(), true);
       const r = await yukleBagla(png(), 'canli-resim');
-      assert.equal(await depo(r.ozet), 'vt');
-      assert.equal(await dosyaVar(r.ozet), false);
-      await assert.rejects(yukleBagla(mp4(), 'canli-video'), /türde/);
+      assert.equal(await depo(r.ozet), 'disk');
+      assert.equal(await dosyaVar(r.ozet), true);
+      const v = await yukleBagla(mp4(), 'canli-video');
+      assert.equal(await depo(v.ozet), 'disk');
     } finally {
       process.env['TMIV2_ORTAM'] = 'gelistirme';
     }
