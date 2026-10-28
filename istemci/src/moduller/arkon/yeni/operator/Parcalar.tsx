@@ -361,7 +361,7 @@ export function SayimTuslari({ tuslar }: { tuslar: readonly SayimTusu[] }) {
   return (
     <div className="tc-ay1-tuslar" role="group" aria-label="Sayaç">
       {tuslar.map((t) => (
-        <button key={t.etiket} type="button" className="tc-ay1-tus" data-tur={t.ton} disabled={t.kapali} onClick={t.bas} aria-label={t.aria}>
+        <button key={t.etiket} type="button" className="tc-ay1-tus" data-tur={t.ton} data-duzeltme={t.simge === 'minus' || undefined} disabled={t.kapali} onClick={t.bas} aria-label={t.aria}>
           <Simge ad={t.simge} />{t.etiket}
         </button>
       ))}

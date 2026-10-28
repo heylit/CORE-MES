@@ -653,6 +653,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(4)) { min-block-size: calc(var(--orb-2) * 2 + var(--b-2)); }
 .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(5)) { min-block-size: calc(var(--orb-2) * 2 + var(--dokunma) + var(--b-2) * 2); }
 .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(6)) { min-block-size: calc(var(--orb-2) * 3 + var(--b-2) * 2); }
+/* 1046 a: düzeltme (−1) tuşları iki büyük sayım tuşunun altında tek kısa sıradadır; iki tam sıra düzeltmeyle birlikte ~1000 px
+   pencerede Durdur, Duraklat ve Bitir'i ekranın altına itiyordu. Sayaç kadranın okunur kaldığı boydan (888) kısa olmaz. */
+.tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus[data-duzeltme] { flex-direction: row; min-block-size: var(--dokunma); }
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus[data-duzeltme]):has(.tc-ay1-tus:nth-child(5)) {
+  min-block-size: max(calc(var(--orb-2) + var(--dokunma) * 2 + var(--b-2) * 2), calc(var(--orb-3) + var(--dokunma) * 2));
+}
 .tc-ay1-genis .tc-ay1-kadran {
   inline-size: min(100cqh - var(--dokunma), 100cqw - var(--dokunma-x20) * 2 - var(--b-6) - var(--b-4), var(--kadran-encok)); margin-block-end: var(--dokunma);
 }
