@@ -10,7 +10,7 @@ import {
   MEDYA_SILINEN_SAKLAMA_GUN, YEDEK_EN_AZ_BOS_BAYT, medyaAynasiGerekliMi, medyaOzetiMi, medyaYeriEksigi, medyaYeriTutarMi,
   silinenMedyaSilinsinMi, yedekAdi, yedekAnahtariCoz,
 } from './kurallar.ts';
-import { geceMedyaTuru, medyaAynala, medyaDiziniOku, medyaGeriYukle } from './medya-yedek.ts';
+import { dosyasiOlmayanlar, geceMedyaTuru, medyaAynala, medyaDiziniOku, medyaGeriYukle } from './medya-yedek.ts';
 import type { YedekOrtami } from './yedek.ts';
 
 // Yalnız test anahtarı; gerçek anahtar bilgi işlemdedir ve depoya girmez.
@@ -236,5 +236,14 @@ describe('gece medya turu', () => {
     await writeFile(path.join(yedek, yedekAdi(VT, 'gece', new Date('2026-10-29T23:00:00Z'))), '');
     await geceMedyaTuru(db, gunluk, ortam(), new Date('2026-10-29T23:30:00Z'), { TMIV2_MEDYA_DIZINI: medya });
     assert.equal(await varMi(aynaYolu(ikinci)), true);
+  });
+});
+
+describe('künyesi olup dosyası olmayan medya', () => {
+  test('medya klasöründe dosyası olmayan özetler döner', async () => {
+    const var1 = await medyaYaz('var');
+    const yok = 'ff'.repeat(32);
+    assert.deepEqual(await dosyasiOlmayanlar(medya, [var1, yok]), [yok]);
+    assert.deepEqual(await dosyasiOlmayanlar(medya, []), []);
   });
 });

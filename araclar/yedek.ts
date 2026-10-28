@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { ayarOku, gocKimligiOku } from '#cekirdek/ayar.ts';
 import { gocBaglantisiAc } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
+import { diskKunyeOzetleri } from '../sunucu/moduller/dosya/disari.ts';
 import {
-  MEDYA_AYNA_KLASORU, medyaAynala, medyaDiziniOku, medyaGeriYukle, yedekAl, yedekOrtamiOku, yedekSifresiniCoz, type YedekOrtami,
+  MEDYA_AYNA_KLASORU, dosyasiOlmayanlar, medyaAynala, medyaDiziniOku, medyaGeriYukle, yedekAl, yedekOrtamiOku, yedekSifresiniCoz, type YedekOrtami,
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import { yedegiGeriYukle } from './guncelleyici.ts';
 
@@ -105,6 +106,26 @@ async function medyaGeriYaz(ortam: YedekOrtami, kaynak: string): Promise<void> {
   console.log(`Medya geri yüklendi: ${medya} <- ${path.join(kaynak, MEDYA_AYNA_KLASORU)}; ${ozet}.`);
   if (s.bozuk.length > 0) {
     console.error(`Açılamayan ya da özetiyle tutmayan medya (yazılmadı): ${s.bozuk.join(', ')}. Anahtarı ve aynayı denetleyin.`);
+    process.exitCode = 1;
+  }
+  await kunyeEksiginiYaz(medya, kaynak);
+}
+
+// Veritabanı okunamazsa (göç kullanıcısı yok, sunucu kapalı) sayım atlanır ve bu söylenir; medya yine yazılmıştır.
+async function kunyeEksiginiYaz(medya: string, kaynak: string): Promise<void> {
+  let ozetler: string[];
+  try {
+    const db = gocBaglantisiAc({ ...ayarOku(), goc: gocKimligiOku() });
+    try { ozetler = await db.okumaTx((d) => diskKunyeOzetleri(d)); } finally { await db.kapat(); }
+  } catch (hata) {
+    console.warn(`Künyesi olup dosyası olmayan medya sayılamadı (veritabanı okunamadı): ${hata instanceof Error ? hata.message : String(hata)}`);
+    return;
+  }
+  const eksik = await dosyasiOlmayanlar(medya, ozetler);
+  await medyaKaydiYaz(kaynak, 'medya-kunye-denetimi', `künye ${String(ozetler.length)}, dosyası olmayan ${String(eksik.length)}`);
+  console.log(`Künyesi olup dosyası olmayan medya: ${String(eksik.length)} (künye ${String(ozetler.length)}); 0 olmalı.`);
+  if (eksik.length > 0) {
+    console.error(`Dosyası olmayan özetler (ilk 10): ${eksik.slice(0, 10).join(', ')}. Daha eski bir aynayı --kaynak ile deneyin.`);
     process.exitCode = 1;
   }
 }
