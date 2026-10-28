@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -521,5 +524,28 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 200);
     await tamam(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Medyasız', sartnameId: null, adimlar: [adim()] });
     assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 404);
+  });
+  test('video yalnız disk deposu açıkken bağlanır; açıkken diske alınır ve okunur', async () => {
+    const t = await taslak();
+    const url = `/rota/urunler/${t.urun}/talimat-adimli-yaz`;
+    const video = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.from(randomUUID())]);
+    const ozet = createHash('sha256').update(video).digest('hex');
+    await tamam(c.planlama, 'POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: video.toString('base64') });
+    const eski = process.env['TMIV2_MEDYA_DIZINI'];
+    delete process.env['TMIV2_MEDYA_DIZINI'];
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'video.mp4' }] })] }, 400, /türde/);
+    const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-rota-medya-'));
+    process.env['TMIV2_MEDYA_DIZINI'] = dizin;
+    try {
+      const l = await tamam<TalimatlarCevabi>(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'video.mp4' }] })] });
+      assert.equal(l.surumler[0]?.adimlar[0]?.medya[0]?.tur, 'video');
+      const oku = await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`);
+      assert.equal(oku.statusCode, 200);
+      assert.equal(oku.headers['content-type'], 'video/mp4');
+      assert.deepEqual(oku.rawPayload, video);
+    } finally {
+      if (eski === undefined) delete process.env['TMIV2_MEDYA_DIZINI']; else process.env['TMIV2_MEDYA_DIZINI'] = eski;
+      await rm(dizin, { recursive: true, force: true });
+    }
   });
 });

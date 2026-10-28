@@ -372,7 +372,7 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Medya (995 a, 1004 a): adım başına en çok 5 dosya; `rota_talimat_adim_medyasi` ve `rota_talimat_sablon_adim_medyasi` (göç 089000) künyeyi tutar,
   içerik ortak dosya deposundadır. Bağ özet başına tek kayıt (`medya:<özet>`); ilk bağlayan içeriği yüklemiş olmalı, sonra rotada
   bağlı dosya yeniden yüklenmeden kullanılır (şablon kopyası, yeni sürüm). Okuma `GET /rota/talimat-medyasi/:ozet` (oturum).
-  Resim 10 MB, ürün başına 1 GB (aynı dosya bir kez sayılır). Video bu teslimde bağlanamaz: dosya modülünde mp4 türü ve disk deposu yok (1007).
+  Resim 10 MB, ürün başına 1 GB (aynı dosya bir kez sayılır). Video ve diskte saklama `medyaTutamagi('rota')` ile (1007 a): bağlanan resim ve video `TMIV2_MEDYA_DIZINI`'ne alınır; disk kapalıyken (klasör yok ya da canlıda ayna yok) resim veritabanında kalır, video reddedilir.
 - VARSAYIM: adım başına en çok 5 medya. Geri alma: sabit.
 - VARSAYIM: videonun 3 dakika sınırı yalnız istemcide ölçülür (sunucu videoyu çözümlemez). Geri alma: sunucuda süre okuma yeni bağımlılık ister.
 - VARSAYIM: şablon yazma `rota.talimat-yaz` işlemiyle (yeni işlem açılmadı). Geri alma: uçlarda tek yetki adı.
