@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { KurFaizOzeti } from '#paylasilan/sozlesme/finans.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -31,6 +31,7 @@ function sunucuKur(islemler: string[], faizYanit?: () => Response | Promise<Resp
     istekler.push({ yontem: secenek?.method ?? 'GET', yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) : undefined, kimlik: new Headers(secenek?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici: { id: 9, ad: 'Deneme', islemler } });
     if (yol === '/finans/kur-ozeti') return json(200, OZET);
+    if (yol.startsWith('/finans/kur-faiz-araligi')) return json(200, { kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-10', kur: '41.200000' }, { paraBirimi: 'USD', tarih: '2026-10-13', kur: '41.500000' }], faizler: [] });
     if (yol === '/finans/kurlar/ekle' || yol === '/finans/kurlar/guncelle') return json(200, {});
     if (yol === '/finans/faizler/ekle') return faizYanit ? faizYanit() : json(200, { id: 1 });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -48,6 +49,22 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
   it('giriş yapan herkese bildirilir: modül şeridi oturum işlemiyle', () => {
     expect(ustSeritler.map((s) => [s.anahtar, s.islem])).toEqual([['kur-faiz', 'oturum']]);
+  });
+
+  it('1089 a: panelde herkes kur grafiğini görür, son 90 gün okunur; toplu yükleme yalnız finans.kur-yaz olana', async () => {
+    const istekler = sunucuKur(['musteri-tedarikci.oku']);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /Son giriş/ }));
+    expect(screen.getByText('Kur ve faiz grafiği')).toBeTruthy();
+    await waitFor(() => expect(document.querySelector('.tc-kfg-ozet')?.textContent).toBe('41,5 13.10.2026en düşük 41,2 · en yüksek 41,5'));
+    expect(istekler.some((i) => i.yol === '/finans/kur-faiz-araligi?baslangic=2026-07-15&bitis=2026-10-13')).toBe(true);
+    expect(screen.queryByText('Toplu yükleme')).toBeNull();
+    cleanup();
+    sunucuKur(['finans.kur-yaz']);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
+    expect(screen.getByText('Toplu yükleme')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Şablonu indir' })).toBeTruthy();
   });
 
   it('finans işlemi olmayan kişi değerleri, eski kurun gününü ve son girişleri görür; güncelleme düğmesi ve formu yok', async () => {

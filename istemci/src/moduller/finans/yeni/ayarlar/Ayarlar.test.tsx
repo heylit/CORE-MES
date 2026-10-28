@@ -70,8 +70,9 @@ describe('F4 ayarlar', () => {
     });
   });
 
-  it('aynı günün kuru düzeltme ucuna sürümle gider', async () => {
+  it('aynı günün kuru düzeltme ucuna sürümle gider; toplu yükleme sekmede', async () => {
     const istekler = await ac(YONETICI, 'kurlar', { 'POST /finans/kurlar/guncelle': tamam({ anahtar: 'x' }) });
+    expect(screen.getByLabelText('Kur ve faiz dosyası')).toBeTruthy();
     const form = screen.getByRole('form', { name: 'Kur ekle' });
     fireEvent.change(within(form).getByLabelText(/^Tarih/), { target: { value: '2026-10-01' } });
     fireEvent.change(within(form).getByLabelText(/^Kur/), { target: { value: '36.5' } });
@@ -80,10 +81,11 @@ describe('F4 ayarlar', () => {
     expect(postlar(istekler)[0]).toMatchObject({ yol: '/finans/kurlar/guncelle', govde: { paraBirimi: 'EUR', tarih: '2026-10-01', kur: 36.5, surum: 1 } });
   });
 
-  it('finans.kur-yaz yoksa kur ve faiz girişi gizli; çapraz kur payı yönetimde kalır', async () => {
+  it('finans.kur-yaz yoksa kur ve faiz girişi ve toplu yükleme gizli; çapraz kur payı yönetimde kalır', async () => {
     await ac(KURSUZ, 'kurlar');
     expect(screen.queryByRole('form', { name: 'Kur ekle' })).toBeNull();
     expect(screen.queryByRole('form', { name: 'Faiz ekle' })).toBeNull();
+    expect(screen.queryByLabelText('Kur ve faiz dosyası')).toBeNull();
     expect(screen.getByRole('form', { name: 'Çapraz kur payı' })).toBeTruthy();
   });
 

@@ -47,3 +47,24 @@
   .tc-kfs-guncelle-ad { display: none; }
   .tc-kfs-panel { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Grafik ve toplu yükleme (1083, 1089 a): panelin bütün genişliğinde. Yükleme Finans Ayarlar'da da aynı parçadır. */
+.tc-kfs-genis { grid-column: 1 / -1; }
+.tc-kfg { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-kfg-secim { display: flex; flex-wrap: wrap; gap: var(--b-3); }
+.tc-kfg-ozet { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); }
+.tc-kfg-cizim { display: block; width: 100%; height: calc(var(--dokunma-yogun) * 3); border-bottom: 1px solid var(--edge2); }
+.tc-kfg-cizgi { fill: none; stroke: var(--done); stroke-width: 2px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.tc-kfg-cizgi[data-tur="faiz"] { stroke: var(--run); }
+.tc-kfg-eksen { display: flex; justify-content: space-between; }
+.tc-kfg-tablo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-kfy { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-kfy-eylem { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-kfy-dosya {
+  position: relative; display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); padding-inline: var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); color: var(--ink); cursor: pointer;
+}
+.tc-kfy-dosya:focus-within { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-kfy-dosya input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tc-kfy-sayilar { display: flex; flex-wrap: wrap; gap: var(--b-3); font-size: var(--yazi-s); }
+.tc-kfy-durum { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }

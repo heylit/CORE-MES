@@ -6,6 +6,7 @@ import { paraMetni, sayiMetni, tarih, tl } from '../bicim.ts';
 import { HESAP_TURU_ADI, sayi, type Faiz, type Hesap, type KdvOrani, type KurKaydi, type SabitKiymetSatiri } from '../donustur.ts';
 import type { Komut } from '../akislar.ts';
 import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
+import { KurFaizYukleme } from '../../KurFaizYukleme.tsx';
 import { useAyarGonder } from './gonder.ts';
 import {
   ayarKomutu, faizKomutu, hesapDurumKomutu, hesapKomutu, kdvKomutu, kiymetEkleKomutu, kiymetPasifKomutu, kurKomutu, type HesapDegerleri, type KiymetDegerleri,
@@ -128,6 +129,11 @@ export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
   ];
   return (
     <>
+      {yetki.kurYaz && (
+        <Kart baslik="Toplu yükleme" baslikEki={<span className="tc-fa-soluk">Şablonu dışarıda doldurun, dosyayı seçin, önizlemeyi onaylayın</span>}>
+          <KurFaizYukleme bugun={motor.bugun} />
+        </Kart>
+      )}
       <Kart baslik="Kurlar" baslikEki={<span className="tc-fa-soluk">Elle girilen günlük kur; o gün kur yoksa kaydın kendi kuru kullanılır</span>}>
         <Tablo etiket="Kurlar" sutunlar={kurSutunlari} satirlar={kurlar} satirAnahtari={(k) => `${k.paraBirimi}-${k.tarih}`} bosMesaj="Kur girilmemiş." />
         {yetki.kurYaz && (
