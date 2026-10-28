@@ -556,7 +556,8 @@ export async function siparisKalemiDegistir(db: Db, k: Kullanici, id: string, g:
   return gorunen(k, (await talepOku(db, id))!);
 }
 
-// Kart #1310: malzemeyi tedarikçi mi getirir, biz mi alırız. Siparişten önce de sonra da değişebilir; sevkiyattaki alım satırı izler.
+// Kart #1310, 959 b: malzemeyi tedarikçi mi getirir, biz mi alırız. Siparişten önce de sonra da değişebilir; sevkiyattaki alım kaleminin
+// taşıması aynı kayıttır (son yazan kalır).
 export async function teslimYontemiDegistir(db: Db, k: Kullanici, id: string, g: TeslimYontemiYazimi): Promise<Talep> {
   await surumluGuncelle({ guncelle: () => s.teslimYontemiYaz(db, id, g.teslimYontemi, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
   await alimlariBildir(db, k, id);

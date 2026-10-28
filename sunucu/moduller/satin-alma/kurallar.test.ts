@@ -338,15 +338,16 @@ test('#205 S3 b: talep fişi karar bu kayıtta onaylanınca gider; önceden onay
   assert.equal(talepFisiGiderMi([], [{ sonuc: 'onay' }], 'iptal'), false);
 });
 
-test('kart #1310: alım yalnız "biz alacağız" denen siparişli talepte; firma başına tek, en erken gün; tedarikçisiz teklif alım değildir', () => {
+test('kart #1310, 959 b: alım yöntemi seçilmiş siparişli talepte, taşıma yöntemden; firma başına tek, en erken gün; tedarikçisiz teklif alım değildir', () => {
   const sip = (teklifId: string, beklenenTeslim: string | null) => ({ teklifId, beklenenTeslim });
   const t = {
     durum: 'siparis_verildi', teslimYontemi: 'biz_alacagiz', ihtiyacTarihi: '2026-10-30',
     teklifler: [{ id: 'a', firmaId: 1 }, { id: 'b', firmaId: 1 }, { id: 'c', firmaId: 2 }, { id: 'd', firmaId: null }],
     karar: { siparisler: [sip('a', '2026-10-25'), sip('b', '2026-10-20'), sip('c', null), sip('d', '2026-10-01')] },
   } as unknown as Talep;
-  assert.deepEqual(talebinAlimlari(t), [{ firmaId: 1, istenenTarih: '2026-10-20' }, { firmaId: 2, istenenTarih: '2026-10-30' }]);
-  assert.deepEqual(talebinAlimlari({ ...t, teslimYontemi: 'firma_getirir' }), []);
+  assert.deepEqual(talebinAlimlari(t), [{ firmaId: 1, istenenTarih: '2026-10-20', tasima: 'biz' }, { firmaId: 2, istenenTarih: '2026-10-30', tasima: 'biz' }]);
+  assert.deepEqual(talebinAlimlari({ ...t, teslimYontemi: 'firma_getirir' }),
+    [{ firmaId: 1, istenenTarih: '2026-10-20', tasima: 'firma' }, { firmaId: 2, istenenTarih: '2026-10-30', tasima: 'firma' }]);
   assert.deepEqual(talebinAlimlari({ ...t, teslimYontemi: null }), []);
   assert.deepEqual(talebinAlimlari({ ...t, durum: 'teslim_alindi' }), []);
   assert.deepEqual(talebinAlimlari({ ...t, durum: 'onayda' }), []);
