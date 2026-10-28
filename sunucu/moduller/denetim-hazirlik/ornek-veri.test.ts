@@ -5,6 +5,7 @@ import { modulOrnekVerileriniKesfet, ornekVeriYukle } from '#cekirdek/ornek-veri
 import type { OrnekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import { kisiNoKullaniciAdindan } from '../kisiler/disari.ts';
+import { takvimKayitlari } from './disari.ts';
 import { ORNEK_PROFIL, ORNEK_YOL } from './ornek-veri.ts';
 
 interface Satir { veri: { deger: string }; olusturan_kisi_id: number | null }
@@ -36,6 +37,14 @@ describe('denetim-hazirlik örnek verisi', { timeout: 60_000 }, () => {
     const profil = durum.data[ORNEK_PROFIL]!;
     assert.equal(profil.profile.firma, 'TMI');
     assert.deepEqual(profil.audits.map((a) => [a.date, a.status]), [['2026-09-13', 'done'], ['2026-11-27', 'plan']]);
+  });
+
+  test('takvim örnek denetimleri dışarıdan okur (891)', async () => {
+    assert.deepEqual(await takvimKayitlari(acik(), '2026-09-01', '2026-11-30', '2026-10-13'), [
+      { kaynak: 'denetim', kimlik: `${ORNEK_PROFIL}/ornek-denetim-1`, tarih: '2026-09-13', no: null, baslik: 'ISO 9001 · İç denetim / ön denetim', ilgili: 'TMI', durum: 'Yapıldı', bitti: true },
+      { kaynak: 'denetim', kimlik: `${ORNEK_PROFIL}/ornek-denetim-2`, tarih: '2026-11-27', no: null, baslik: 'ISO 9001 · 1. gözetim', ilgili: 'TMI', durum: 'Planlı', bitti: false },
+    ]);
+    assert.deepEqual(await takvimKayitlari(acik(), '2026-10-01', '2026-10-31', '2026-10-13'), []);
   });
 
   test('ikinci koşu bir şey yazmaz', async () => {

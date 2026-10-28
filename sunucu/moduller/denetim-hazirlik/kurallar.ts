@@ -225,3 +225,46 @@ export function olcuAletleriKaydi(aletler: readonly OlcuAleti[]): OlcuAletleriCe
     };
   });
 }
+
+// Takvim (891): ortak kayıttaki (`yerel/kalite-denetim-v4`) bütün profillerin denetimleri ve son günleri, tarihi [baslangic, bitis]
+// içindekiler. İptal edilen gelmez; yapılan denetim bitti, geçmiş son gün bitti sayılır (ekrandaki takvimin "geçmiş" ayrımı).
+// Okunamayan kayıt ve alan atlanır: kayıt prototip biçimindedir, sunucu ona yazmaz.
+export const ORTAK_KAYIT_YOLU = `${ORTAK_KOK}/kalite-denetim-v4`;
+const PROGRAM_KISA_ADLARI: Readonly<Record<string, string>> = { iso9001: 'ISO 9001', as9100: 'AS9100', eydep: 'EYDEP' };
+const TARIH = /^\d{4}-\d{2}-\d{2}$/;
+const metin = (d: unknown): string => (typeof d === 'string' ? d : '');
+
+export interface TakvimDenetimi {
+  kimlik: string; tarih: string; baslik: string; profil: string; durum: 'Planlı' | 'Yapıldı' | 'Son gün' | 'Son günü geçti' | 'Sonuç girilmedi'; bitti: boolean;
+}
+
+export function takvimDenetimleri(veri: Veri | null, baslangic: string, bitis: string, bugun: string): TakvimDenetimi[] {
+  const deger = veri?.['deger'];
+  if (typeof deger !== 'string') return [];
+  let depo: unknown;
+  try { depo = JSON.parse(deger); } catch { return []; }
+  if (!duzNesneMi(depo) || !duzNesneMi(depo['data'])) return [];
+  const sonuc: TakvimDenetimi[] = [];
+  for (const [pid, p] of Object.entries(depo['data'])) {
+    if (!duzNesneMi(p) || !Array.isArray(p['audits'])) continue;
+    const bilgi = p['profile'];
+    const profil = (duzNesneMi(bilgi) ? metin(bilgi['firma']) : '') || 'Adsız profil';
+    for (const a of p['audits'] as unknown[]) {
+      if (!duzNesneMi(a)) continue;
+      const tarih = metin(a['date']);
+      const id = metin(a['id']);
+      const durum = metin(a['status']);
+      if (!TARIH.test(tarih) || id === '' || durum === 'cancel' || tarih < baslangic || tarih > bitis) continue;
+      const sonGun = a['kind'] === 'deadline';
+      const program = PROGRAM_KISA_ADLARI[metin(a['prog'])];
+      const ad = metin(a['type']) || (sonGun ? 'Son gün' : 'Denetim');
+      const bitti = sonGun ? tarih < bugun : durum === 'done';
+      sonuc.push({
+        kimlik: `${pid}/${id}`, tarih, baslik: program === undefined ? ad : `${program} · ${ad}`, profil,
+        durum: sonGun ? (bitti ? 'Son günü geçti' : 'Son gün') : durum === 'done' ? 'Yapıldı' : (metin(a['end']) || tarih) < bugun ? 'Sonuç girilmedi' : 'Planlı',
+        bitti,
+      });
+    }
+  }
+  return sonuc.sort((x, y) => (x.tarih < y.tarih ? -1 : x.tarih > y.tarih ? 1 : x.kimlik < y.kimlik ? -1 : 1));
+}

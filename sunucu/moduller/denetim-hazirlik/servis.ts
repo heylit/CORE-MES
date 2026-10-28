@@ -2,13 +2,15 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, OlcuAletleriCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
   OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
   KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
-  yonetimGerekirMi,
+  yonetimGerekirMi, ORTAK_KAYIT_YOLU, takvimDenetimleri,
 } from './kurallar.ts';
 import type { OdaKaydi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -164,4 +166,12 @@ export async function ekOku(db: Db, id: string): Promise<EkIcerikCevabi> {
   const ek = await sorgular.ekGetir(db, id);
   if (ek === null) throw bulunamadi('Dosya bulunamadı.');
   return { id: ek.id, ad: ek.ad, tur: ek.tur, boyut: ek.boyut, veri: ek.icerik.toString('base64') };
+}
+
+// Takvim (891): yetkiyi çağıran modül denetler (denetim-hazirlik.oku). Ortak kayıt okunur; kişiye özel alan okunmaz.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
+  const belge = await sorgular.belgeGetir(db, ORTAK_KAYIT_YOLU);
+  return takvimDenetimleri(belge?.veri ?? null, baslangic, bitis, bugun).map((d) => ({
+    kaynak: 'denetim', kimlik: d.kimlik, tarih: d.tarih, no: null, baslik: d.baslik, ilgili: d.profil, durum: d.durum, bitti: d.bitti,
+  }));
 }
