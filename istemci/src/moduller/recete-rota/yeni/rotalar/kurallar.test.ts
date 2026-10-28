@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  acikRevizyon, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
+  acikRevizyon, adimArkasinaTasi, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
   degisimOrani, fasonaCevir, girdiOlur, girenTekrari, kartBirimi, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
@@ -110,6 +110,11 @@ describe('düzenleme', () => {
     expect(adimTasi(l, 'b', -1).map((x) => x.id)).toEqual(['b', 'a', 'c']);
     expect(adimSurukle(l, 'a', 'c').map((x) => x.id)).toEqual(['b', 'c', 'a']);
     expect(adimSurukle(l, 'c', 'a').map((x) => x.id)).toEqual(['c', 'a', 'b']);
+    expect(adimArkasinaTasi(l, 'c', null).map((x) => x.id)).toEqual(['c', 'a', 'b']);
+    expect(adimArkasinaTasi(l, 'a', 'b').map((x) => x.id)).toEqual(['b', 'a', 'c']);
+    expect(adimArkasinaTasi(l, 'a', 'c').map((x) => x.seq)).toEqual([10, 20, 30]);
+    expect(adimArkasinaTasi(l, 'b', 'b').map((x) => x.id)).toEqual(['a', 'b', 'c']);
+    expect(adimArkasinaTasi(l, 'b', 'yok').map((x) => x.id)).toEqual(['a', 'b', 'c']);
     const s = adimSil(l, 'b');
     expect(s.map((x) => [x.id, x.seq, x.opNo])).toEqual([['a', 10, 10], ['c', 20, 30]]);
   });

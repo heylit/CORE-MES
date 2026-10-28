@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
+  adimArkasinaTasi, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
@@ -25,6 +25,33 @@ export function surukleCoz(v: string): { tur: 'adim'; urunId: string; adimId: st
   if (t === 'adim' && a && b) return { tur: 'adim', urunId: a, adimId: b };
   if (t === 'op' && a) return { tur: 'op', opId: a };
   return null;
+}
+
+// Bırakma şeridi, rota başlığı ve boş rota: operasyon `sonraId`nin ardına (null: başa) eklenir, aynı rotanın adımı oraya taşınır.
+export function yereBirak(r: RotaEkrani, urunId: string, sonraId: string | null, v: string, miktar: number): void {
+  r.surukleBitti();
+  const s = surukleCoz(v);
+  if (!s) return;
+  if (s.tur === 'adim' && s.urunId === urunId) {
+    r.duzen.degistir(urunId, (l) => adimArkasinaTasi(l, s.adimId, sonraId), 'Adım taşındı');
+  } else if (s.tur === 'op') {
+    const yeni = yeniAdim(r.duzen.h.op.get(s.opId), yeniKimlik());
+    const l2 = adimEkle(r.duzen.adimlar(urunId), sonraId, yeni);
+    if (r.duzen.degistir(urunId, () => l2, 'Adım eklendi')) {
+      r.sec({ tur: 'adim', urunId, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar });
+    }
+  }
+}
+
+function BirakSeridi({ metin, birak, ek }: { metin: string; birak: (v: string) => void; ek?: string }) {
+  const [ustunde, setUstunde] = useState(false);
+  return (
+    <div className={`tc-rr1-serit${ek ? ` ${ek}` : ''}${ustunde ? ' tc-rr1-serit-ustunde' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setUstunde(true); }} onDragLeave={() => { setUstunde(false); }}
+      onDrop={(e) => { e.preventDefault(); setUstunde(false); birak(e.dataTransfer.getData(SURUKLE_TURU)); }}>
+      <Simge ad="plus" boyut="k" /> {metin}
+    </div>
+  );
 }
 
 function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, arahal, ek, birim }: {
@@ -69,6 +96,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
   const kart = akisKarti(sahip.id, liste, i, r.duzen.malzemeVar);
   const kartAdi = kartBasligi(h.malzeme.get(kart.itemId), kart.adim, r.duzen.opAdi);
   const birak = (v: string) => {
+    r.surukleBitti();
     const s = surukleCoz(v);
     if (!s) return;
     if (s.tur === 'adim' && s.urunId === sahip.id && s.adimId !== a.id) {
@@ -87,7 +115,8 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
       className={`tc-rr1-opbox ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}${ustunde ? ' tc-rr1-birak' : ''}`}
       data-uc={uc(d.nid, a.id)} data-sonraki={sonraki ? uc(d.nid, sonraki.id) : undefined} data-bag={sonraki?.dep}
       draggable={duzen}
-      onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(sahip.id, a.id)); e.dataTransfer.effectAllowed = 'move'; }}
+      onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(sahip.id, a.id)); e.dataTransfer.effectAllowed = 'move'; r.surukleBasla(); }}
+      onDragEnd={r.surukleBitti}
       onDragOver={(e) => { if (duzen) { e.preventDefault(); setUstunde(true); } }}
       onDragLeave={() => { setUstunde(false); }}
       onDrop={(e) => { e.preventDefault(); setUstunde(false); if (duzen) birak(e.dataTransfer.getData(SURUKLE_TURU)); }}
@@ -114,6 +143,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
 }
 
 function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null; kok: boolean }) {
+  const [basUstunde, setBasUstunde] = useState(false);
   const { h } = r.duzen;
   const m = h.malzeme.get(d.id);
   if (!m) return null;
@@ -122,6 +152,8 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
   const liste = sirali(r.duzen.adimlar(d.id));
   const s = r.secim;
   const basSecili = s?.tur === 'urun' && s.nid === d.nid;
+  // Başa bırakma yalnız adımı olan düzenlenebilir rotada; boş rotanın kendi bırakma kutusu vardır.
+  const basaBirak = duzen && r.surukleniyor && liste.length > 0;
   const anaCip = (besler: string | undefined, cikan: string | undefined) => (
     <Cip m={m} tur="ana" baslik={m.code} alt={m.name} miktar={d.miktar} secili={basSecili} besler={besler} cikan={cikan}
       rozet={<span className="tc-rr1-kb tc-rr1-kb-ana">{ust ? 'Çıktı, üst akışa' : 'Ana çıktı'}</span>}
@@ -138,11 +170,14 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                 <Simge ad="chev-left" boyut="k" />
               </button>
             )}
-            <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}`} onClick={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }}>
+            <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}${basaBirak && basUstunde ? ' tc-rr1-birak' : ''}`}
+              onClick={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }}
+              onDragOver={(e) => { if (basaBirak) { e.preventDefault(); setBasUstunde(true); } }} onDragLeave={() => { setBasUstunde(false); }}
+              onDrop={(e) => { e.preventDefault(); setBasUstunde(false); if (basaBirak) yereBirak(r, d.id, null, e.dataTransfer.getData(SURUKLE_TURU), d.miktar); }}>
               <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span>
               <span className="tc-rr1-ci">
                 <b>{m.code} rotası {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}{r.duzen.taslakVar(d.id) && <span className="tc-rr1-rvchip tc-rr1-rv-taslak">kaydediliyor</span>}</b>
-                <small>{m.name}</small>
+                <small>{basaBirak ? 'Başa eklemek için buraya bırak' : m.name}</small>
               </span>
               <span className="tc-rr1-cq">{miktarMetni(d.miktar, m.unit)}</span>
             </button>
@@ -209,7 +244,10 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                 >{bagMetni(a)}</button>
               )}
               <OpKutusu r={r} a={a} d={d} sonraki={sonraki} secili={secili('adim')} duzen={duzen} sahip={m} liste={liste} i={i} />
-              {duzen && (
+              {duzen && r.surukleniyor && (
+                <BirakSeridi metin={`Bırak: OP ${String(statuNo(a))} ardına`} birak={(v) => { yereBirak(r, d.id, a.id, v, sn.miktar); }} />
+              )}
+              {duzen && !r.surukleniyor && (
                 <div className="tc-rr1-stepbar">
                   <button type="button" className="tc-rr1-ib" disabled={i === 0} title="Yukarı taşı (Alt+Shift+↑)" aria-label={`OP ${String(statuNo(a))} yukarı taşı`}
                     onClick={() => { const p = liste[i - 1]; if (p) r.duzen.degistir(d.id, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
@@ -219,7 +257,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                     onClick={() => { const n = liste[i + 1]; if (n) r.duzen.degistir(d.id, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
                     <Simge ad="down" boyut="k" />
                   </button>
-                  <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adimEkle', urunId: d.id, sonraId: a.id }); }}>
+                  <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: a.id, seq: a.seq, miktar: sn.miktar }); r.paletAc(); }}>
                     <Simge ad="plus" boyut="k" /> {son ? 'Adım ekle' : 'Araya adım'}
                   </button>
                   <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" title="Adımı sil" aria-label={`OP ${String(statuNo(a))} sil`}
@@ -259,9 +297,11 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
           <>
             <div className="tc-rr1-cin" />
             <div className="tc-rr1-cop">
-              <div className="tc-rr1-noroute">Rota yok. İlk adımı ekle.</div>
-              {duzen && (
-                <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adimEkle', urunId: d.id, sonraId: null }); }}>
+              {duzen && r.surukleniyor
+                ? <BirakSeridi ek="tc-rr1-serit-bos" metin="Operasyonu buraya bırak: ilk adım" birak={(v) => { yereBirak(r, d.id, null, v, d.miktar); }} />
+                : <div className="tc-rr1-noroute">Rota yok. İlk adımı ekle{duzen ? ': paletten sürükle ya da dokun' : ''}.</div>}
+              {duzen && !r.surukleniyor && (
+                <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adimEkle', urunId: d.id, sonraId: null }); r.paletAc(); }}>
                   <Simge ad="plus" boyut="k" /> Adım ekle
                 </button>
               )}
