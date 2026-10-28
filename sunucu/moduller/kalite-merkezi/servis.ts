@@ -6,7 +6,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
-import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
@@ -28,7 +28,7 @@ import {
 } from '../uretim-emirleri/disari.ts';
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
-  onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
+  HATALI_NCR_KAYNAGI, HATALI_NCR_TANIM_ONEKI, kaynakEmirBagi, ncrAcikMi, ncrKapanisMaddesi, olcumKapanisMaddesi, onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
@@ -111,12 +111,12 @@ export async function yaz(
 // Kapanan NCR karantinadaki partiyi serbest bırakıyorsa ve partinin karantinadan önceki konumu bilinmiyorsa hedef konum burada gelir.
 export async function onayla(
   db: Db, kullanici: Kullanici, koleksiyon: string, kimlik: string, govde: Govde, beklenen: number | null, karantinaHedefKonumId?: number | null,
-  serbestMiktarlar?: SerbestMiktarlar,
+  serbestMiktarlar?: SerbestMiktarlar, kaynakEmirId: number | null = null,
 ): Promise<KmOnaylaCevabi> {
   if (!islemVarMi(kullanici, 'kalite-merkezi.yaz')) throw yetkiYok();
   if (!onayAlaniVarMi(koleksiyon)) throw dogrulama(ILETILER.onayDegeri, 'koleksiyon');
   if (!onayDegeriGecerliMi(koleksiyon, govde)) throw dogrulama(ILETILER.onayDegeri, 'govde');
-  return kayitYaz(db, kullanici, koleksiyon, kimlik, govde, beklenen, true, karantinaHedefKonumId ?? null, serbestMiktarlar ?? []);
+  return kayitYaz(db, kullanici, koleksiyon, kimlik, govde, beklenen, true, karantinaHedefKonumId ?? null, serbestMiktarlar ?? [], kaynakEmirId);
 }
 
 const onayKisisi = (kullanici: Kullanici): { ad: string; gun: string; saat: string } => {
@@ -189,13 +189,14 @@ export async function kalibrasyonHazirlikDurumlari(db: Db, emirIdler: readonly n
 
 async function kayitYaz(
   db: Db, kullanici: Kullanici, koleksiyon: string, kimlik: string, govde: Govde, beklenen: number | null, onay: boolean,
-  karantinaHedefKonumId: number | null = null, serbestMiktarlar: SerbestMiktarlar = [],
+  karantinaHedefKonumId: number | null = null, serbestMiktarlar: SerbestMiktarlar = [], kaynakEmirId: number | null = null,
 ): Promise<KmOnaylaCevabi> {
   await yoneticiKoleksiyonunuDenetle(db, kullanici, koleksiyon);
   if (kaynakKoleksiyonuMu(koleksiyon) && !islemVarMi(kullanici, 'kalite-merkezi.onayla')) throw yetkiYok(ILETILER.kaynakOnay);
   govde = pinsiz(koleksiyon, govde);
   await sorgular.yazmaKilidi(db);
   const onceki = await sorgular.kayitGovdesi(db, koleksiyon, kimlik);
+  govde = kaynakEmirBagi(koleksiyon, onceki, govde, kaynakEmirId);
   const ret = izReddi(koleksiyon, 'yaz', onceki !== null);
   if (ret !== null) throw cakisma(ILETILER[ret]);
   if (arsivDegisiyor(onceki, govde) && !(await kisiBayrakliMi(db, kullanici.id))) throw yetkiYok(ILETILER.arsivYonetici);
@@ -393,11 +394,59 @@ export async function ilkParcaKarari(
 }
 
 // 1034, 1038 a: hatalı parçanın kalite kararı ve uygunsuzluk kaydı aynı işlemde. Karar üretim emrine döner (kalite adımı kapanır,
-// rework planlamayı bekler, hurda ve red kolu kapatır); NCR onay yoluyla yazılır (MRB kararı onay alanıdır, 195 a).
+// rework planlamayı bekler, hurda ve red kolu kapatır); NCR onay yoluyla yazılır (MRB kararı onay alanıdır, 195 a). NCR hatalı parçanın
+// emrine karantinasız bağlanır (1074 a-netleştirme).
 export async function hataliKarari(db: Db, kullanici: Kullanici, kayitId: number, g: KmHataliKararGovdesi): Promise<KmHataliKararCevabi> {
   const sonuc = await hataliKarariVer(db, kullanici, kayitId, { karar: g.karar, not: g.not ?? null, ncrKimlik: g.ncrKimlik });
   const ncr = hataliNcrGovdesi(sonuc.kayit, { karar: g.karar, ncrNo: g.ncrNo, ciddiyet: g.ciddiyet, not: g.not ?? null }, kullanici.ad, tesisGunu(Date.now()));
-  await onayla(db, kullanici, UYGUNSUZLUK_KOLEKSIYONU, g.ncrKimlik, ncr, null);
+  await onayla(db, kullanici, UYGUNSUZLUK_KOLEKSIYONU, g.ncrKimlik, ncr, null, null, [], sonuc.kayit.uretimEmri.id);
+  return sonuc;
+}
+
+// Kapanış maddeleri (1074 a): Üretim Emirleri'nin kapanış çözücüleri emir başına çağrılır; var olmayan emirde null (madde 'bilinmiyor').
+// Toplu biçim aynı kuralı birçok emre uygular. Yetki denetlemez; okuyan Üretim Emirleri'nin ucudur.
+export async function kapanisOlcumDurumu(db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> {
+  return (await kapanisOlcumDurumlari(db, [uretimEmriId])).get(uretimEmriId) ?? null;
+}
+
+export async function kapanisNcrDurumu(db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> {
+  return (await kapanisNcrDurumlari(db, [uretimEmriId])).get(uretimEmriId) ?? null;
+}
+
+export async function kapanisOlcumDurumlari(db: Db, uretimEmriIdleri: readonly number[]): Promise<Map<number, KapanisMaddeBilgisi>> {
+  const nolar = await emirNolari(db, uretimEmriIdleri);
+  const idler = [...nolar.keys()];
+  if (idler.length === 0) return new Map();
+  const sayaclar = new Map((await sorgular.emirOlcumSayaclari(db, idler)).map((r) => [r.uretimEmriId, r]));
+  // Numunesi ve ölçümü olmayan emirde parçanın numune planına bakılır; emrin parçası emrin sahibinden tek tek okunur.
+  const parcalar = new Map<number, number | null>();
+  for (const id of idler.filter((i) => !sayaclar.has(i))) parcalar.set(id, (await uretimEmriOzeti(db, id))?.malzemeNo ?? null);
+  const planli = await sorgular.numunePlaniOlanParcalar(db, [...new Set([...parcalar.values()].filter((m) => m !== null))]);
+  const bos = { numune: 0, kararsiz: 0, ret: 0, olcum: 0, uygunsuzOlcum: 0 };
+  return new Map(idler.map((id) => {
+    const m = parcalar.get(id) ?? null;
+    return [id, olcumKapanisMaddesi(sayaclar.get(id) ?? bos, m !== null && planli.has(m))];
+  }));
+}
+
+export async function kapanisNcrDurumlari(db: Db, uretimEmriIdleri: readonly number[]): Promise<Map<number, KapanisMaddeBilgisi>> {
+  const nolar = await emirNolari(db, uretimEmriIdleri);
+  if (nolar.size === 0) return new Map();
+  const idNodan = new Map([...nolar].map(([id, no]) => [no.trim(), id]));
+  const emirBasina = new Map([...nolar.keys()].map((id) => [id, { ncrler: [] as { no: string; durum: string }[], bagsizAcikEski: 0 }]));
+  const idOf = (no: string | null): number | null => (no === null ? null : (idNodan.get(no) ?? null));
+  const ncrler = await sorgular.emreBagliNcrler(db, [...nolar.keys()], [...idNodan.keys()], { kaynak: HATALI_NCR_KAYNAGI, onek: HATALI_NCR_TANIM_ONEKI });
+  for (const n of ncrler) {
+    const bagli = new Set([n.kaynakEmirId, idOf(n.emirNo)].filter((i) => i !== null));
+    for (const id of bagli) emirBasina.get(id)?.ncrler.push({ no: n.no, durum: n.durum });
+    const eski = idOf(n.eskiEmirNo);
+    if (eski !== null && !bagli.has(eski) && ncrAcikMi(n.durum)) emirBasina.get(eski)!.bagsizAcikEski += 1;
+  }
+  const sonuc = new Map<number, KapanisMaddeBilgisi>();
+  for (const [id, e] of emirBasina) {
+    const m = ncrKapanisMaddesi(e.ncrler, e.bagsizAcikEski);
+    if (m !== null) sonuc.set(id, m);
+  }
   return sonuc;
 }
 

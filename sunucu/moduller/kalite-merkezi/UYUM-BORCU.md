@@ -143,3 +143,13 @@ Paket dosyası (`uygulama/paket.ts`) değişmedi; her şey köprü (`kopru.ts`) 
 - VARSAYIM (geri alma ucuz): numune kritik bayrağı istenen balonlardan türer; ölçüm balonun son ölçüsü geçerlidir, düzeltme yeni ölçümdür.
 - VARSAYIM (geri alma ucuz): Kalite Merkezi ucundan girilen ölçümün kaynağı `kalite`; Arkon `operator` ya da `cmm` verir.
 - Listeler sınırlı: açık numune 200, emir ölçümü 2000 satır (sayfalama yok).
+
+## Emir kapanışı maddeleri (K3; 1074 a-netleştirme, 28.10.2026)
+- Yapıldı: `disari.ts` `kapanisOlcumDurumu` (ölçüm ve numune kararları) ve `kapanisNcrDurumu` (açık NCR), K1'in `KapanisCozucusu` tipinde; var olmayan emirde null.
+  Hatalı parça kararından açılan NCR'ye karantinasız `kaynakEmirId` (gövde alanı; emir ve lot boş kalır, 1043 a). Alanı yalnız sunucu yazar; genel yazma ve onay ucu getirse de yok sayılır, var olan bağ korunur.
+- Bağlamada kapanacak: çözücü bağları (`olcumKapanisCozucusu`, `ncrKapanisCozucusu`) `sunucu/kablolama.ts`'te (K6).
+- Bağlamada kapanacak: ölçüm maddesi numunesiz emirde parçayı emir başına `uretimEmriOzeti` ile okur; toplu okuma istendi (BASKA-MODUL-ISTEKLERI).
+- VARSAYIM (geri alma ucuz): karar verilmiş numune (onay, ret, sapma) maddeyi tamamlar; ret ve uygunsuz ölçüm yalnız ayrıntıda görünür, sonucu hatalı parça ve NCR maddeleri taşır.
+- VARSAYIM (geri alma ucuz): numunesi ve ölçümü olmayan emirde parçanın kuralı boş olmayan numune planı varsa eksik, yoksa gerekmez.
+- VARSAYIM (geri alma ucuz): elle açılan NCR'nin `emir` alanındaki numara emre bağdır; açıksa maddeyi durdurur. Bağı olmayan eski hatalı parça NCR'si tanımındaki emir numarasıyla tanınır; açıksa madde bilinmiyor (null) olur, kapalıysa sayılmaz.
+- VARSAYIM (geri alma ucuz): kaynak emir hatalı parçanın girildiği emirdir (kol emri değil).

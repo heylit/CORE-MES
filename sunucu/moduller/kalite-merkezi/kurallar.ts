@@ -4,7 +4,7 @@ import { KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/ka
 import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
-import type { HataliKarari, HataliKaydiOzeti } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { HataliKarari, HataliKaydiOzeti, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
 export const KM_MODULU = 'kalite-merkezi';
@@ -990,8 +990,11 @@ export function satinAlmaKaynagi(r: SatinAlmaSatiri, acik: boolean, parcalar: Re
 
 // Hatalı parça kararının uygunsuzluk kaydı (1034, 1038 a). MRB kararı kalite kararıdır: rework yeniden işle, hurda hurda; redde MRB
 // sonra verilir. Hurda NCR'yi kapatır; rework yeniden işlenip doğrulanınca, red MRB kararıyla elle kapanır (VARSAYIM). Lot ve emir alanı
-// boştur: dolu olsaydı açık NCR emrin bütün partisini karantinaya alırdı (karantinaIstegi); emir ve adım tanımdadır.
+// boştur: dolu olsaydı açık NCR emrin bütün partisini karantinaya alırdı (karantinaIstegi); emir ve adım tanımdadır. Emre bağı
+// yazma sırasında sunucu KAYNAK_EMIR_ALANI'na koyar (1074 a-netleştirme): karantina istemez, kapanışın NCR maddesi onu okur.
 export const HATALI_NCR_KAYNAGI = 'Proses muayene';
+// Tanım emir numarasıyla başlar; kaynak bağı olmayan eski hatalı parça NCR'sini kapanış bu önekten tanır.
+export const HATALI_NCR_TANIM_ONEKI = 'Hatalı parça: ';
 const HATALI_MRB: Readonly<Record<HataliKarari, string>> = { rework: 'Yeniden işle', hurda: 'Hurda', red: 'Karar bekliyor' };
 export function hataliNcrGovdesi(
   k: HataliKaydiOzeti, g: { karar: HataliKarari; ncrNo: string; ciddiyet: string; not: string | null }, sorumlu: string, gun: string,
@@ -1001,7 +1004,56 @@ export function hataliNcrGovdesi(
     no: g.ncrNo, tarih: gun, kaynak: HATALI_NCR_KAYNAGI, ciddiyet: g.ciddiyet, parcaNo: k.uretimEmri.parcaNo, parcaAdi: k.uretimEmri.parcaAd,
     rev: '', lot: '', proje: '', emir: '', miktar: k.adet, hataTipi: '', sorumlu,
     durum: g.karar === 'hurda' ? UYGUNSUZLUK_KAPALI : 'Açık',
-    tanim: `Hatalı parça: ${k.uretimEmri.emirNo} OP ${k.isEmri.opNo} ${k.isEmri.ad}, ${k.adet} adet, neden ${k.hurdaNedeni.kod} ${k.hurdaNedeni.ad}. ${k.hedefEmir.id === k.uretimEmri.id ? 'Adımlar emre eklendi' : `Kol ${k.hedefEmir.emirNo}`}.${not}`,
+    tanim: `${HATALI_NCR_TANIM_ONEKI}${k.uretimEmri.emirNo} OP ${k.isEmri.opNo} ${k.isEmri.ad}, ${k.adet} adet, neden ${k.hurdaNedeni.kod} ${k.hurdaNedeni.ad}. ${k.hedefEmir.id === k.uretimEmri.id ? 'Adımlar emre eklendi' : `Kol ${k.hedefEmir.emirNo}`}.${not}`,
     mrb: HATALI_MRB[g.karar], mrbGerekce: g.not ?? '',
   };
+}
+
+// 1074 a-netleştirme: hatalı parça kararından açılan NCR'nin kaynak üretim emri. Yalnız sunucu yazar: genel yazma ve onay ucu bu alanı
+// getirse de yok sayılır, var olan kaydın bağı her yazmada korunur (ekran alanı bilmeden kaydı geri yazsa da bağ düşmez).
+// Bağdan önce açılmış NCR'de alan yoktur; o NCR emre bağlanmaz.
+export const KAYNAK_EMIR_ALANI = 'kaynakEmirId';
+const kaynakEmri = (g: Record<string, unknown> | null): number | null => {
+  const d = g?.[KAYNAK_EMIR_ALANI];
+  return typeof d === 'number' && Number.isSafeInteger(d) && d > 0 ? d : null;
+};
+export function kaynakEmirBagi(
+  koleksiyon: string, onceki: Record<string, unknown> | null, govde: Record<string, unknown>, sunucuBagi: number | null,
+): Record<string, unknown> {
+  if (koleksiyon !== UYGUNSUZLUK_KOLEKSIYONU) return govde;
+  const { [KAYNAK_EMIR_ALANI]: _istemci, ...kalan } = govde;
+  const bag = kaynakEmri(onceki) ?? sunucuBagi;
+  return bag === null ? kalan : { ...kalan, [KAYNAK_EMIR_ALANI]: bag };
+}
+
+// Kapanış maddeleri (1074 a): emir başına Kalite Merkezi'nin verdiği durum. Üretim Emirleri çözücüyü emir başına çağırır.
+export interface EmrinNcrSatiri { no: string; durum: string }
+// Açık NCR: emre kaynak bağıyla ya da NCR'nin emir alanındaki emir numarasıyla bağlı, durumu "Kapalı" olmayan kayıt (VARSAYIM: elle
+// açılan NCR'nin emir alanı da emre aittir). Bağ yazılmadan önce açılmış hatalı parça NCR'si (tanımda emir numarası, kaynak bağı yok)
+// açıksa madde bilinmiyordur (null, 1074 a-netleştirme); bağlı açık NCR varsa eksik önce gelir. Bağlı NCR yoksa madde tamamdır.
+export function ncrKapanisMaddesi(ncrler: readonly EmrinNcrSatiri[], bagsizAcikEski: number): KapanisMaddeBilgisi | null {
+  const acik = ncrler.filter((n) => metin(n.durum) !== UYGUNSUZLUK_KAPALI).map((n) => n.no).sort((a, b) => a.localeCompare(b, 'tr'));
+  if (acik.length > 0) return { durum: 'eksik', ayrinti: `${acik.length} açık NCR: ${acik.join(', ')}` };
+  if (bagsizAcikEski > 0) return null;
+  if (ncrler.length > 0) return { durum: 'tamam', ayrinti: `${ncrler.length} NCR kapandı` };
+  return { durum: 'tamam', ayrinti: 'Emre bağlı NCR yok' };
+}
+export const ncrAcikMi = (durum: string): boolean => metin(durum) !== UYGUNSUZLUK_KAPALI;
+
+export interface EmrinOlcumSayaci { numune: number; kararsiz: number; ret: number; olcum: number; uygunsuzOlcum: number }
+// Ölçüm ve numune kararları: kararı verilmemiş numune durdurur. Karar (onay, ret, sapma) verildiyse madde tamamdır; ret ve uygunsuz
+// ölçüm ayrıntıda görünür, sonucu hatalı parça ve NCR maddeleri taşır (VARSAYIM). Numunesi ve ölçümü olmayan emirde parçanın numune
+// planı varsa eksik, yoksa gerekmez.
+export function olcumKapanisMaddesi(s: EmrinOlcumSayaci, numunePlaniVar: boolean): KapanisMaddeBilgisi {
+  if (s.kararsiz > 0) return { durum: 'eksik', ayrinti: `${s.kararsiz} numune karar bekliyor` };
+  if (s.numune === 0 && s.olcum === 0) {
+    return numunePlaniVar ? { durum: 'eksik', ayrinti: 'Numune planı var, ölçüm yok' } : { durum: 'gerekmez', ayrinti: 'Numune planı yok' };
+  }
+  const parcalar = [
+    s.numune > 0 ? `${s.numune} numune kararı verildi` : null,
+    s.ret > 0 ? `${s.ret} ret` : null,
+    s.numune === 0 ? `${s.olcum} ölçüm` : null,
+    s.uygunsuzOlcum > 0 ? `${s.uygunsuzOlcum} uygunsuz ölçüm` : null,
+  ].filter((p) => p !== null);
+  return { durum: 'tamam', ayrinti: parcalar.join(', ') };
 }

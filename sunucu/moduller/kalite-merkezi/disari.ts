@@ -1,3 +1,6 @@
+import type { KapanisCozucusu } from '../uretim-emirleri/disari.ts';
+import * as servis from './servis.ts';
+
 // Başka modüller (yönetici paneli) kalite özetini buradan alır. Çağıranın db'sini kullanır, yetki denetlemez (denetim çağıran modülün ucundadır).
 export { ozet } from './servis.ts';
 // İlk parça kararı (229 a): Arkon numune kararı buradan verir; yetkiyi Arkon'un ucu denetler.
@@ -30,3 +33,8 @@ export type { AqlSinifi, LotBulunani, LotKarariIstegi, MuayeneAqlAyari, MuayeneP
 // buraya yazar. Yetkiyi ve emrin kapsamını çağıranın ucu denetler; yazan kişi kayıtta tutulur.
 export { acikNumuneler, emirNumuneleri, emirOlcumleri, numuneIste, numuneKarari, numuneOku, olcumYaz, resimDosyasi, studyoParcasi } from './studyo.ts';
 export type { KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+// Kapanış maddeleri (1074 a): Üretim Emirleri emrin kapanışında "ölçüm ve numune kararları" ile "açık NCR" maddelerini emir başına
+// buradan okur (bağı kablolama.ts kurar). Var olmayan emirde null döner. NCR emre hatalı parça kararının kaynak bağıyla ya da emir
+// alanındaki numarayla bağlanır; bağdan önce açılmış hatalı parça NCR'si açıkken madde bilinmiyordur (null). Yetki denetlemez.
+export const kapanisNcrDurumu: KapanisCozucusu = servis.kapanisNcrDurumu;
+export const kapanisOlcumDurumu: KapanisCozucusu = servis.kapanisOlcumDurumu;
