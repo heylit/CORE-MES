@@ -36,13 +36,13 @@ export type { LogoyaGidecekKarsilama, LogoyaGidecekTalep } from './servis.ts';
 export { siparisSatiriBelgeleri } from './servis.ts';
 export type { SiparisBelgesi } from '#paylasilan/sozlesme/satin-alma.ts';
 
-// Kart #1310: "biz alacağız" denen talebin siparişleri; sevkiyat bekleme listesindeki alım satırlarını eşitler.
+// Kart #1310, 959 b: teslim yöntemi seçilmiş talebin siparişleri; sevkiyattaki alım kalemlerini ve taşımalarını eşitler.
 export { alimDinle } from './alim-olayi.ts';
 export async function talepNolari(db: Db, idler: readonly string[]): Promise<Map<string, string>> {
   if (idler.length === 0) return new Map();
   return new Map((await sorgu.talepNolari(db, [...new Set(idler)])).map((t) => [t.id, t.no]));
 }
-export type { AlimDinleyicisi, AlimOlayi } from './alim-olayi.ts';
+export type { AlimDinleyicisi, AlimOlayi, AlimTasimasi } from './alim-olayi.ts';
 // Stok mal kabulü: sipariş satırı kimliğinden talebin üretim emri; emre bağlı olmayan satır haritada yoktur (hata değil).
 export async function siparisSatirlarininEmri(db: Db, siparisSatirIdler: number[]): Promise<Map<number, number>> {
   const tekil = [...new Set(siparisSatirIdler)];

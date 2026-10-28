@@ -796,11 +796,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s.durum, 'siparis_verildi');
   });
 
-  test('kart #1310: "biz alacağız" denen siparişli talep her tedarikçi için sevkiyatta alım olarak bekler; gün siparişi izler; yöntem değişince bekleyen kalkar', async () => {
+  test('kart #1310, 959 b: yöntemi seçilmiş siparişli talep her tedarikçi için sevkiyatta alım kalemi olur; gün siparişi, taşıma yöntemi izler; yöntem silinince kalem kalkar', async () => {
     const { s, a } = await bolunmusSiparis();
-    const alimlar = async () => (await vt().tx((db) => db.sorgu<{ firma: number; gun: string | null; kaldirildi: boolean }>(
-      `SELECT firma_id AS firma, istenen_tarih::text AS gun, kaldirildi IS NOT NULL AS kaldirildi FROM sevkiyat_bekleyen
-        WHERE kaynak = 'alim' AND talep_id = $1 ORDER BY firma_id, id`, [s.id]))).filter((x) => !x.kaldirildi).map((x) => [x.firma, x.gun]);
+    const kalemler = async () => (await vt().tx((db) => db.sorgu<{ firma: number; gun: string | null; tasima: string; yer: string; kaldirildi: boolean }>(
+      `SELECT firma_id AS firma, istenen_tarih::text AS gun, tasima, son_yazan_yer AS yer, kaldirildi IS NOT NULL AS kaldirildi FROM sevkiyat_bekleyen
+        WHERE kaynak = 'alim' AND talep_id = $1 ORDER BY firma_id, id`, [s.id]))).filter((x) => !x.kaldirildi);
+    const alimlar = async () => (await kalemler()).map((x) => [x.firma, x.gun]);
     const yontem = async (teslimYontemi: string | null, cerez = c.sa, surum?: number) =>
       istek(cerez, 'POST', `/satin-alma-talepleri/${s.id}/teslim-yontemi`, { teslimYontemi, surum: surum ?? (await acilistaki(s.id)).surum });
     assert.equal(s.teslimYontemi, null);
@@ -820,7 +821,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       ({ teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.teklifId === a ? '2026-10-20' : x.beklenenTeslim })) } }));
     assert.deepEqual(await alimlar(), [[firmaA, '2026-10-20'], [firmaB, '2026-10-30']]);
 
+    assert.deepEqual((await kalemler()).map((x) => [x.tasima, x.yer]), [['biz', 'satin-alma'], ['biz', 'satin-alma']]);
+
     tamam<Talep>(await yontem('firma_getirir'));
+    assert.deepEqual((await kalemler()).map((x) => [x.firma, x.gun, x.tasima, x.yer]),
+      [[firmaA, '2026-10-20', 'firma', 'satin-alma'], [firmaB, '2026-10-30', 'firma', 'satin-alma']], 'aynı kalem, taşıması değişir');
+    tamam<Talep>(await yontem('biz_alacagiz'));
+    assert.deepEqual((await kalemler()).map((x) => [x.firma, x.tasima]), [[firmaA, 'biz'], [firmaB, 'biz']]);
+    tamam<Talep>(await yontem(null));
     assert.deepEqual(await alimlar(), []);
   });
 
