@@ -1,4 +1,2 @@
-import { YerTutucu } from '../YerTutucu.tsx';
-
-// P4 yazarı doldurur (devir-heylit/ts-cnc/PARCA-SOZLESMESI.md); bileşen adları sabittir, kabuk bunları ithal eder.
-export function OtoCam() { return <YerTutucu ad="Oto-CAM" />; }
+// Kabuk bileşen adını ithal eder (devir-heylit/ts-cnc/PARCA-SOZLESMESI.md).
+export { OtoCam } from './OtoCam.tsx';
