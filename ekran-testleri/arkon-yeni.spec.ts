@@ -202,6 +202,34 @@ test.describe('A1 Operatör', () => {
       expect(yazmalar(ag.yazmalar)).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
+
+    // Düzeltme yetkisi olan kişide sayaçta beş tuş (iki sıra tam, bir sıra Toplu giriş) durur; tuşlar sayacın içinde, Şimdi şeridinin
+    // altında kalır, kadran küçülüp yazıları üst üste gelmez.
+    test.describe('düzeltme tuşlarıyla', () => {
+      test.use({ hesap: 'ornek.yonetici' });
+      for (const boy of [{ width: 1280, height: 900 }, { width: 1600, height: 1000 }, { width: 1920, height: 1080 }]) {
+        test(`${String(boy.width)}x${String(boy.height)}: sayaç tuşları sayaçtan taşmaz, Şimdi şeridine binmez`, async ({ page, ag, ac }, bilgi) => {
+          test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+          await page.addInitScript(() => { localStorage.setItem('arkon:station', JSON.stringify('ORN-TORNA-1')); });
+          await ac900(page, ac, 2, boy);
+          const sayac = page.locator('.tc-ay1-sahne > .tc-ay1-sayac');
+          await expect(sayac.locator('.tc-ay1-tus')).toHaveCount(5);
+          const o = await page.evaluate(() => {
+            const k = (s: string) => { const b = document.querySelector(s)!.getBoundingClientRect(); return { ust: Math.round(b.top), alt: Math.round(b.bottom), boy: Math.round(b.height) }; };
+            return { simdi: k('.tc-ay1-sahne > :first-child'), sayac: k('.tc-ay1-sahne > .tc-ay1-sayac'), tuslar: k('.tc-ay1-sahne > .tc-ay1-sayac .tc-ay1-tuslar'), kadran: k('.tc-ay1-sahne > .tc-ay1-sayac .tc-ay1-kadran') };
+          });
+          const m = JSON.stringify(o);
+          expect(o.tuslar.ust, m).toBeGreaterThanOrEqual(o.sayac.ust);
+          expect(o.tuslar.alt, m).toBeLessThanOrEqual(o.sayac.alt);
+          expect(o.tuslar.ust, m).toBeGreaterThanOrEqual(o.simdi.alt);
+          // Kadran en az iki tuş sırası boyundadır; daha küçükte etiket, sayı ve hurda satırı üst üste biniyordu.
+          expect(o.kadran.boy, m).toBeGreaterThanOrEqual(150);
+          expect(await tasma(page)).toBeLessThanOrEqual(0);
+          expect(yazmalar(ag.yazmalar)).toEqual([]);
+          expect(ag.hatalar).toEqual([]);
+        });
+      }
+    });
   });
 });
 
