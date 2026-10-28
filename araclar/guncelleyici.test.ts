@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { UYGULAMA_ISTEGI_DOSYASI, UYGULANIYOR_DOSYASI } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  Guncelleyici, altSurecOrtami, npmKurulumArgumanlari, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari,
+  Guncelleyici, altSurecOrtami, derlemeOrtami, gecmisSatiri, npmKurulumArgumanlari, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari,
 } from './guncelleyici.ts';
 import { NPM_ONBELLEGI } from './paket.ts';
 
@@ -115,4 +115,24 @@ test('bağımlılıklar paketteki önbellekten, internete çıkmadan kurulur', (
 
 test('önbellek taşımayan paket kurulmaz (internetsiz kurulamaz)', () => {
   assert.throws(() => npmKurulumArgumanlari('/npm-cli.js', 'x', () => false), /npm önbelleği yok/);
+});
+
+test('derlemeye commit ve yayın adı verilir; bilinmeyen değer geçmez', () => {
+  assert.deepEqual(derlemeOrtami({ commit: 'a'.repeat(40), surum: '2026.10.28-3', tarih: null }), {
+    TMIV2_COMMIT: 'a'.repeat(40), TMIV2_SURUM: '2026.10.28-3',
+  });
+  assert.deepEqual(derlemeOrtami({ commit: null, surum: null, tarih: null }), {});
+});
+
+test('geçmiş satırı tek satırdır ve önceki sürümü yayın adıyla, yoksa kısa commit\'le yazar', () => {
+  const sonuc = {
+    commit: 'b'.repeat(40), surum: '2026.10.29-1', sonuc: 'kuruldu' as const, adim: null, hata: null,
+    baslangic: '2026-10-29T08:00:00.000Z', bitis: '2026-10-29T08:05:00.000Z',
+  };
+  const satir = gecmisSatiri(sonuc, { commit: 'a'.repeat(40), surum: '2026.10.28-3', tarih: null });
+  assert.equal(satir.endsWith('\n'), true);
+  assert.equal(satir.trimEnd().includes('\n'), false);
+  assert.deepEqual(JSON.parse(satir), { ...sonuc, onceki: '2026.10.28-3' });
+  assert.equal(JSON.parse(gecmisSatiri(sonuc, { commit: 'a'.repeat(40), surum: null, tarih: null })).onceki, 'aaaaaaa');
+  assert.equal(JSON.parse(gecmisSatiri(sonuc, { commit: null, surum: null, tarih: null })).onceki, null);
 });

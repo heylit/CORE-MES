@@ -1,13 +1,13 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, posix, win32 } from 'node:path';
 import { parseEnv } from 'node:util';
 import {
-  CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, SURUMLER_KLASORU, UYGULAMA_HATASI_EN_UZUN, UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI,
-  UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI, calisanSurumSemasi, saklananPaketiDogrula, uygulamaIstegiSemasi, uygulamaReddi, yedekAl,
-  yedekDizini as seciliYedekDizini, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz, yedekYeriniDenetle,
-  type CalisanSurum, type UygulamaIstegi, type UygulamaSonucu,
+  CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, SURUMLER_KLASORU, UYGULAMA_GECMISI_DOSYASI, UYGULAMA_HATASI_EN_UZUN, UYGULAMA_ISTEGI_DOSYASI,
+  UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI, calisanSurumSemasi, saklananPaketiDogrula, surumEtiketi,
+  uygulamaIstegiSemasi, uygulamaReddi, yedekAl, yedekDizini as seciliYedekDizini, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz,
+  yedekYeriniDenetle, type CalisanSurum, type GecmisKaydi, type UygulamaIstegi, type UygulamaSonucu,
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import { GOC_KIMLIGI, anaAgacKoku, envYolu, ortamiYukle } from './ortam.ts';
 import { binYolu, npmCliBul } from './paket-bin.ts';
@@ -168,6 +168,20 @@ function calistir(komut: string, argumanlar: readonly string[], secenek: { cwd: 
   });
 }
 
+// Ekrandaki sürüm adı derlemeye buradan girer (istemci/vite.config.ts); adsız sürümde package.json sürümü kalır.
+export function derlemeOrtami(surum: CalisanSurum): Record<string, string> {
+  return {
+    ...(surum.commit === null ? {} : { TMIV2_COMMIT: surum.commit }),
+    ...(surum.surum === null ? {} : { TMIV2_SURUM: surum.surum }),
+  };
+}
+
+// Tek satır, sonunda satır sonu: yarıda kesilen yazım yalnız kendi satırını bozar, okuyan onu atlar.
+export function gecmisSatiri(sonuc: UygulamaSonucu, eski: CalisanSurum): string {
+  const kayit: GecmisKaydi = { ...sonuc, onceki: surumEtiketi(eski) };
+  return `${JSON.stringify(kayit)}\n`;
+}
+
 async function jsonYaz(yol: string, deger: unknown): Promise<void> {
   // Önce geçici dosya, sonra taşıma: sunucu yarım dosya okumaz.
   await writeFile(`${yol}.yaziliyor`, JSON.stringify(deger));
@@ -234,9 +248,9 @@ export class Guncelleyici {
     if (kaynak !== null) copyFileSync(kaynak, join(klasor, '.env'));
   }
 
-  private async derle(klasor: string, commit: string | null): Promise<void> {
+  private async derle(klasor: string, surum: CalisanSurum): Promise<void> {
     const vite = binYolu(klasor, 'vite');
-    const ortam = altSurecOrtami(process.env, this.envVar, commit === null ? {} : { TMIV2_COMMIT: commit });
+    const ortam = altSurecOrtami(process.env, this.envVar, derlemeOrtami(surum));
     for (const ayar of ['arkon/vite.config.ts', 'istemci/vite.config.ts']) {
       await calistir(process.execPath, [vite, 'build', '--config', ayar], { cwd: klasor, env: ortam });
     }
@@ -245,7 +259,7 @@ export class Guncelleyici {
   // Süreçler kabuksuz açılır: Windows'ta kabuk ara süreci kapanınca sunucu sahipsiz kalıyordu (kurulum/devir.md).
   async ac(klasor: string, surum: CalisanSurum, derlensin: boolean): Promise<void> {
     this.envKopyala(klasor);
-    if (derlensin) await this.derle(klasor, surum.commit);
+    if (derlensin) await this.derle(klasor, surum);
     const ortam = altSurecOrtami(process.env, this.envVar);
     const sunucu = spawn(process.execPath, [...SUNUCU_ARGUMANLARI], { cwd: klasor, env: ortam, stdio: 'inherit' });
     const surecler = { sunucu };
@@ -327,7 +341,7 @@ export class Guncelleyici {
         });
         // Önbellek kurulumdan sonra gerekmez; her sürüm klasöründe yer tutmasın.
         await rm(join(yarim, NPM_ONBELLEGI), { recursive: true, force: true });
-        await this.derle(yarim, yeni.commit);
+        await this.derle(yarim, yeni);
         await rename(yarim, yeniKlasor);
         // Yedeksiz göç olmaz: yedeğe yer yoksa sunucu durdurulmadan güncelleme burada biter.
         await yedekYeriniDenetle(yedekOrtami.dizin ?? '', yedekOrtami.pg.veritabani);
@@ -388,6 +402,9 @@ export class Guncelleyici {
     try {
       sonuc = await paketiUygula(istek, this.adimlar(istek, eski));
       await jsonYaz(this.yol(UYGULAMA_SONUCU_DOSYASI), sonuc);
+      // Geçmiş yazılamazsa güncelleme bozulmuş sayılmaz: sonuç dosyası yazıldı, sürüm çalışıyor.
+      await appendFile(this.yol(UYGULAMA_GECMISI_DOSYASI), gecmisSatiri(sonuc, eski.surum))
+        .catch((hata: unknown) => { console.error(`Uygulama geçmişi yazılamadı: ${hataMetni(hata)}`); });
     } finally {
       await rm(this.yol(UYGULANIYOR_DOSYASI), { force: true });
     }

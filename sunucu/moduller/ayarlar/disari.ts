@@ -4,9 +4,9 @@ export { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, PAKET_IMLECI, paketBasliginiC
 // Güncelleyici (araclar/guncelleyici.ts) istek, sonuç ve çalışan sürüm dosyalarını ve geri gitme kuralını buradan alır (kart #1210).
 export {
   CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, SURUMLER_KLASORU, UYGULAMA_HATASI_EN_UZUN, UYGULAMA_ISTEGI_DOSYASI,
-  UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
-  calisanSurumSemasi, guncelleyiciSemasi, uygulamaIstegiSemasi, uygulamaReddi, uygulamaSonucuSemasi,
-  type CalisanSurum, type UygulamaIstegi, type UygulamaReddi, type UygulamaSonucu,
+  UYGULAMA_GECMISI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
+  calisanSurumSemasi, guncelleyiciSemasi, surumEtiketi, uygulamaIstegiSemasi, uygulamaReddi, uygulamaSonucuSemasi,
+  type CalisanSurum, type GecmisKaydi, type UygulamaIstegi, type UygulamaReddi, type UygulamaSonucu,
 } from './kurallar.ts';
 export { saklananPaketiDogrula } from './guncelleme.ts';
 // Güvenlik Merkezi koruma durumu güncelleme imzasının kurulu olup olmadığını buradan okur.

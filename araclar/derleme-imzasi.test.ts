@@ -39,6 +39,7 @@ test('kaynak değişmedikçe derleme güncel sayılır; değişen, eklenen dosya
   assert.equal(derlemeGuncelMi(kok, girdiler, cikti, {}), false);
   imzayiYaz(cikti, derlemeImzasi(kok, girdiler, {}));
   assert.equal(derlemeGuncelMi(kok, girdiler, cikti, { TMIV2_COMMIT: 'abc' }), false);
+  assert.equal(derlemeGuncelMi(kok, girdiler, cikti, { TMIV2_SURUM: '2026.10.28-3' }), false);
 
   // index.html silinmişse imza tutsa da derlenir.
   rmSync(path.join(cikti, 'index.html'));

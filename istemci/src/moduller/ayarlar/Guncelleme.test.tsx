@@ -15,10 +15,10 @@ import { SistemAyarlari } from './SistemAyarlari.tsx';
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
 const PAKET: GuncellemePaketi = {
   surum: '0.1.0', commit: 'b'.repeat(40), tarih: '2026-10-12T10:00:00.000Z', gocler: ['20261012100000_ornek.sql'], not: 'Deneme notu',
-  degisiklikler: ['#12: Deneme degisikligi'],
+  degisiklikler: ['#12: Deneme degisikligi'], oncekiYayin: null,
   boyut: PARCA_BAYT + 10, yukleyenId: 1, yuklenme: '2026-10-12T11:00:00.000Z',
 };
-const LISTEDE: GuncellemeListePaketi = { ...PAKET, uygulanamaz: null, silinemez: null };
+const LISTEDE: GuncellemeListePaketi = { ...PAKET, uygulanamaz: null, silinemez: null, atlama: null };
 const RED = { kod: 'GECERSIZ', mesaj: 'Paket imzası doğrulanamadı; paket bu kurum için imzalanmamış ya da değiştirilmiş.' } satisfies HataGovdesi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -28,7 +28,7 @@ function cevap(
 ): GuncellemePaketleriCevabi {
   return {
     kanal, paketler, guncelleyici: false, calisan: { commit: null, surum: null, tarih: null }, bekleyen: null, uygulaniyor: null, surumler: [],
-    sonUygulama: null, yedek: { dizin: 'D:\\TMIV2-YEDEK', hazir: true }, ...ek,
+    sonUygulama: null, gecmis: [], yedek: { dizin: 'D:\\TMIV2-YEDEK', hazir: true }, ...ek,
   };
 }
 
@@ -218,6 +218,26 @@ describe('Sistem Ayarları, güncelleme', () => {
     expect(screen.getByText('Geri alındı')).toBeTruthy();
     expect(screen.getByText(/goc: göç hata verdi/)).toBeTruthy();
     expect(screen.getByText('Uygulanamaz')).toBeTruthy();
+  });
+
+  it('atlanan yayın paket ayrıntısında ve onayda yazar; uygulama geçmişi önceki ve kurulan sürümle listelenir', async () => {
+    const atlama = 'Değişiklikler 2026.10.29-1 sonrasını gösterir; çalışan 2026.10.28-3. Aradaki yayınların değişiklikleri listede yok.';
+    sunucuKur(cevap('acik', [{ ...LISTEDE, oncekiYayin: '2026.10.29-1', atlama }], {
+      guncelleyici: true,
+      gecmis: [{
+        commit: 'c'.repeat(40), surum: '2026.10.28-3', sonuc: 'kuruldu', adim: null, hata: null,
+        baslangic: '2026-10-28T08:00:00.000Z', bitis: '2026-10-28T08:05:00.000Z', onceki: '2026.10.28-1',
+      }],
+    }));
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText(atlama)).toBeTruthy();
+    const gecmis = screen.getByRole('table', { name: 'Uygulama geçmişi' });
+    expect(gecmis.textContent).toContain('2026.10.28-1');
+    expect(gecmis.textContent).toContain('2026.10.28-3');
+    expect(gecmis.textContent).toContain('Kuruldu');
+    fireEvent.click(screen.getByRole('button', { name: /Uygula/ }));
+    expect((await screen.findAllByText(atlama)).length).toBe(2);
   });
 
   it('yedek klasörü seçilmemişse ya da sunucuda yoksa Uygula kapalıdır ve nereden seçileceğini yazar', async () => {

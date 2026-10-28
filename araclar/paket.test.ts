@@ -37,7 +37,7 @@ test('üretilen paket sunucunun çözücüsünden geçer; başka anahtarla geçm
   const yuk = Buffer.from('deneme yuku');
   const girdi = {
     surum: '2026.10.12-1', commit: 'a'.repeat(40), tarih: '2026-10-12T10:00:00.000Z',
-    gocler: ['20261012100000_ornek.sql'], not: null, degisiklikler: ['#1: deneme'],
+    gocler: ['20261012100000_ornek.sql'], not: null, degisiklikler: ['#1: deneme'], oncekiYayin: '2026.10.11-1',
   };
   const paket = paketKur(girdi, yuk, privateKey);
   const anahtar = ortakAnahtar(ortakAnahtarMetni(createPublicKey(privateKey)));
@@ -52,6 +52,20 @@ test('üretilen paket sunucunun çözücüsünden geçer; başka anahtarla geçm
   const baska = ortakAnahtar(ortakAnahtarMetni(createPublicKey(generateKeyPairSync('ed25519').privateKey)));
   assert.ok(baska);
   assert.deepEqual(paketBasliginiCoz(paket, baska), { red: 'imzaGecersiz' });
+});
+
+// Bildirime yeni alan eklemek eski sunucuyu kırmamalı: çözücü bilinmeyen alanı atar. Eski paketin bildiriminde oncekiYayin yoktur.
+test('bildirimde bilinmeyen alan atılır; oncekiYayin taşımayan eski paket null okunur', () => {
+  const { privateKey } = generateKeyPairSync('ed25519');
+  const anahtar = ortakAnahtar(ortakAnahtarMetni(createPublicKey(privateKey)));
+  assert.ok(anahtar);
+  const temel = { surum: '2026.10.12-1', commit: 'a'.repeat(40), tarih: '2026-10-12T10:00:00.000Z', gocler: [], not: null, degisiklikler: [] };
+  const yeni = paketBasliginiCoz(paketKur({ ...temel, oncekiYayin: null, gelecekAlan: 1 } as Parameters<typeof paketKur>[0], Buffer.from('y'), privateKey), anahtar);
+  assert.ok(!('red' in yeni));
+  assert.equal('gelecekAlan' in yeni.bildirim, false);
+  const eski = paketBasliginiCoz(paketKur(temel as unknown as Parameters<typeof paketKur>[0], Buffer.from('y'), privateKey), anahtar);
+  assert.ok(!('red' in eski));
+  assert.equal(eski.bildirim.oncekiYayin, null);
 });
 
 // Ekran testi paketi ve yalnız onun getirdikleri düşer; başkasının da kullandığı kalır (ortak), iç içe kopya da düşer.

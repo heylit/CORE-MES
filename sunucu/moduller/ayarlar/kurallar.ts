@@ -2,7 +2,9 @@ import { createPublicKey, verify, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { AYAR_TANIMLARI, varsayilanDeger } from '#paylasilan/ayarlar.ts';
 import type { AyarAnahtari, AyarDegeri } from '#paylasilan/ayarlar.ts';
-import { YEDEK_ADI, ayarDegerSemasi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, type YedekTuru } from '#paylasilan/sozlesme/ayarlar.ts';
+import {
+  YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, type YedekTuru,
+} from '#paylasilan/sozlesme/ayarlar.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { zamanSemasi } from '#paylasilan/zaman.ts';
 
@@ -60,6 +62,8 @@ const paketBildirimi = z.object({
   not: z.string().max(2000).nullable(),
   // Önceki yayından bu yana birleşenler; ilk paketlerde yoktu (kart #886).
   degisiklikler: z.array(z.string().max(AZAMI_DEGISIKLIK_METNI)).max(AZAMI_DEGISIKLIK).default([]),
+  // Değişikliklerin başladığı yayın (yayin/ öneksiz); 1065'ten önceki paketlerde yoktu.
+  oncekiYayin: z.string().min(1).max(50).nullable().default(null),
   yukBoyut: z.number().int().nonnegative(),
   yukSha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
@@ -132,6 +136,8 @@ export function parcaBoyuUyarMi(boyut: number, parca: number, sira: number, uzun
 // güncelleme klasöründeki bu dosyalarla konuşur; biçimler burada tek kaynaktır.
 export const UYGULAMA_ISTEGI_DOSYASI = 'uygula.json';
 export const UYGULAMA_SONUCU_DOSYASI = 'uygulama-sonucu.json';
+// Her sonuç satır satır eklenir, silinmez: sonuç dosyası her uygulamada üstüne yazılır, hangi gün hangi sürümün kurulduğu buradan okunur.
+export const UYGULAMA_GECMISI_DOSYASI = 'uygulama-gecmisi.jsonl';
 export const CALISAN_SURUM_DOSYASI = 'calisan.json';
 // Güncelleyicinin süreç numarası; sunucu Uygula'yı yalnız bu süreç yaşarken kabul eder.
 export const GUNCELLEYICI_DOSYASI = 'guncelleyici.json';
@@ -148,12 +154,43 @@ export const guncelleyiciSemasi = z.object({ pid: z.number().int().positive() })
 // İstek ve sonuç dosyası ekranın okuduğu biçimdedir.
 export const uygulamaIstegiSemasi = guncellemeUygulamaIstegi;
 export const uygulamaSonucuSemasi = guncellemeUygulamaSonucu;
+export const gecmisKaydiSemasi = guncellemeGecmisKaydi;
 // Sonuç dosyasındaki hata satırı bundan uzun yazılmaz.
 export const UYGULAMA_HATASI_EN_UZUN = 1000;
 
 export type UygulamaIstegi = z.output<typeof uygulamaIstegiSemasi>;
 export type CalisanSurum = z.output<typeof calisanSurumSemasi>;
 export type UygulamaSonucu = z.output<typeof uygulamaSonucuSemasi>;
+export type GecmisKaydi = z.output<typeof gecmisKaydiSemasi>;
+
+// Geçmişte sürüm adı yoksa (ilk kurulum, adsız sürüm) kısa commit yazılır; ikisi de yoksa bilinmez.
+export function surumEtiketi(s: CalisanSurum): string | null {
+  return s.surum ?? (s.commit === null ? null : s.commit.slice(0, 7));
+}
+
+// Paketin değişiklik listesi bir önceki yayından başlar (araclar/paket-yap.ts). Çalışan sürüm o yayın değilse aradaki yayınların
+// değişiklikleri listede yoktur; uygulama yine güvenlidir (paket tam kopyadır), yalnız liste eksiktir.
+export function atlamaUyarisi(paket: { oncekiYayin: string | null; commit: string }, calisan: CalisanSurum): string | null {
+  if (paket.oncekiYayin === null || paket.commit === calisan.commit || paket.oncekiYayin === calisan.surum) return null;
+  if (calisan.surum === null) {
+    return `Değişiklikler ${paket.oncekiYayin} sonrasını gösterir; çalışan sürümün yayın adı bilinmiyor, aradaki yayınlar listede olmayabilir.`;
+  }
+  return `Değişiklikler ${paket.oncekiYayin} sonrasını gösterir; çalışan ${calisan.surum}. Aradaki yayınların değişiklikleri listede yok.`;
+}
+
+// Geçmiş dosyası satır satır okunur; bozuk satır (yarım yazılmış, elle değişmiş) atlanır, gerisi gösterilir. Yeniden eskiye.
+export function gecmisiAyikla(metin: string, enCok: number): GecmisKaydi[] {
+  const kayitlar: GecmisKaydi[] = [];
+  for (const satir of metin.split(/\r?\n/).reverse()) {
+    if (kayitlar.length >= enCok) break;
+    if (satir.trim() === '') continue;
+    try {
+      const sonuc = gecmisKaydiSemasi.safeParse(JSON.parse(satir));
+      if (sonuc.success) kayitlar.push(sonuc.data);
+    } catch { /* bozuk satır */ }
+  }
+  return kayitlar;
+}
 export type UygulamaReddi = 'calisanSurum' | 'eksikGoc' | 'eskiSurum';
 
 export const UYGULAMA_REDDI_ILETISI: Readonly<Record<UygulamaReddi, string>> = {

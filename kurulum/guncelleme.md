@@ -25,6 +25,19 @@ uygulanmış göçlerin hepsini taşımayan ya da çalışandan eski derlenmiş 
 
 Aynı paket ikinci kez yüklenemez (commit bazında). Bekleyen istek varken yenisi istenemez.
 
+## Sürüm takibi ve paket atlama
+
+Ara paketler atlanabilir: paket kodun tamamını ve bütün göçleri taşır, göçler eksik olanlardan sırayla koşar. Atlamanın
+bedeli tek kesintide birikmiş göçlerin koşması ve ara paketlerin notlarındaki elle adımların (ör. yeni `.env` satırı) gözden
+kaçmasıdır; atlanan paketlerin notları ayrıca okunur.
+- Her sonuç `uygulama-gecmisi.jsonl`'e de eklenir (satır başına bir kayıt, silinmez). Güncelleme sekmesindeki "Uygulama
+  geçmişi" kartı her uygulamayı önceki ve kurulan sürümle gösterir; aradaki yayınlar atlanmıştır.
+- Paketin değişiklik listesi bir önceki yayın etiketinden başlar; paket o yayının adını taşır. Çalışan sürüm o yayın değilse
+  paket ayrıntısı ve Uygula onayı "aradaki yayınların değişiklikleri listede yok" der. Tam liste depoda:
+  `git log --first-parent --merges --oneline yayin/<çalışan>..yayin/<yeni>`.
+- Güncelleyici derlerken yayın adını verir: Kurum Ayarları ve giriş ekranındaki "Sürüm" yayın adını gösterir. Elle kurulan
+  (güncelleyicinin kurmadığı) ağaçta `package.json` sürümü kalır.
+
 ## Kurulum (sunucuda bir kez)
 
 1. `.env`'e üç değer (ilk kurulum klasöründe; ayarların tek kaynağı budur, sürüm klasörlerine her açılışta kopyalanır):

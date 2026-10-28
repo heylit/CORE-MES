@@ -45,6 +45,8 @@ export interface PaketGirdisi {
   gocler: readonly string[];
   not: string | null;
   degisiklikler: readonly string[];
+  // degisiklikler'in başladığı yayın (YAYIN_ETIKETI öneksiz); ilk yayında null. Sunucu çalışan sürümle karşılaştırıp atlanan yayını söyler.
+  oncekiYayin: string | null;
 }
 
 // İmza bildirim metninin baytları üzerindedir; doğrulayan aynı metni ayrıştırmadan önce denetler.

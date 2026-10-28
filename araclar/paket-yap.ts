@@ -147,7 +147,8 @@ function paketYap(s: PaketSecenekleri): void {
   const yuk = kurulan === null ? readFileSync(resolve(s.yuk ?? '')) : kurulan.yuk;
   const not = s.not === undefined || s.not.trim() === '' ? null : s.not.trim();
 
-  const paket = paketKur({ surum, commit, tarih, gocler, not, degisiklikler }, yuk, gizli);
+  const oncekiYayin = onceki === null ? null : onceki.slice(YAYIN_ETIKETI.length);
+  const paket = paketKur({ surum, commit, tarih, gocler, not, degisiklikler, oncekiYayin }, yuk, gizli);
   // Sunucunun okuyacağı gibi geri okunur: üretici ile doğrulayıcı ayrışırsa paket yazılmaz.
   const cozum = paketBasliginiCoz(paket, createPublicKey(gizli));
   if ('red' in cozum) dur(`Üretilen paket doğrulanmadı (${cozum.red}); paket yazılmadı.`);
