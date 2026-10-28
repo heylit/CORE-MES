@@ -1,7 +1,7 @@
-import { describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { dortSaatIhlalleri, korunanIsler, yeniDortSaatIhlali } from './kurallar.ts';
+import { DORT_SAAT_GEREKCE_EN_COK, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, yeniDortSaatIhlali } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz; korunan iş canlıdaki yerinden okunur. Veriler uydurmadır.
@@ -33,6 +33,22 @@ describe('plan: 4 saat kuralı (248 a), saf', () => {
     assert.deepEqual(dortSaatIhlalleri(gecmis, [{ ...gecmis[0]!, baslangic: 0 }, { ...gecmis[1]!, baslangic: 60 }], planli), [], 'eskimiş canlı şimdiden yeniden dizilir');
     assert.deepEqual(dortSaatIhlalleri(canli, [{ isEmriId: 7, kaynak: m(1), baslangic: -100 }, ...canli], (id) => id !== 7), [], 'önüne alınan başlamış iş sayılmaz');
   });
+  test('990 a: arızalı ya da pasif kaynaktaki işin koruması kalkar; başka makineye alınabilir, önüne iş konabilir', () => {
+    const calisir = (k: { id: number }) => k.id !== 1;
+    assert.deepEqual(korunanIsler(canli, planli, calisir), []);
+    assert.deepEqual(dortSaatIhlalleri(canli, [{ ...canli[0]!, kaynak: m(2) }, canli[1]!, canli[2]!], planli, calisir), []);
+    assert.deepEqual(dortSaatIhlalleri(canli, [canli[1]!, canli[2]!], planli, calisir), []);
+    const ikiMakine = [...canli, { isEmriId: 4, kaynak: m(2), baslangic: 60 }];
+    assert.deepEqual(dortSaatIhlalleri(ikiMakine, [{ isEmriId: 5, kaynak: m(2), baslangic: 0 }, ...ikiMakine], planli, calisir), [{ isEmriId: 4, neden: 'onune-is' }],
+      'çalışan makinedeki iş korunur');
+  });
+  test('990 a: gerekçe boşluksuz metindir, sınırda kesilir; boş ya da yok gerekçe sayılmaz', () => {
+    assert.equal(dortSaatGerekcesi('  acil sevkiyat  '), 'acil sevkiyat');
+    assert.equal(dortSaatGerekcesi('   '), null);
+    assert.equal(dortSaatGerekcesi(null), null);
+    assert.equal(dortSaatGerekcesi(undefined), null);
+    assert.equal(dortSaatGerekcesi('x'.repeat(DORT_SAAT_GEREKCE_EN_COK + 10))!.length, DORT_SAAT_GEREKCE_EN_COK);
+  });
   test('yazım yalnız kendi getirdiği ihlalle reddedilir', () => {
     const once = [{ isEmriId: 1, neden: 'kaynak' as const }];
     assert.equal(yeniDortSaatIhlali(once, once), null);
@@ -43,13 +59,16 @@ describe('plan: 4 saat kuralı (248 a), saf', () => {
 });
 
 describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
-  const { c, vt, tamam, istek, yeniAdim, isEmirleriAc, planOku, taslaktaOner, isEmriKomutu, yer, tg } = planTestOrtami();
+  const { c, vt, tamam, istek, yeniAdim, isEmirleriAc, planOku, taslaktaOner, isEmriKomutu, yer, tg, durum } = planTestOrtami();
+  let makineB = 0;
+  before(() => { ({ makineB } = durum()); });
   const gecis = async (cerez: string, id: number, ad: string, govde: Record<string, unknown>) =>
     (await tamam<SenaryolarCevabi>(cerez, 'POST', `/plan/senaryolar/${id}/${ad}`, govde)).senaryolar.find((x) => x.id === id)!;
   const canliyaAl = async (p: PlanCevabi) => {
     const s = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
     return istek(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
   };
+  const onaydakiSurum = async (id: number) => (await tamam<SenaryolarCevabi>(c.mudur, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id)!.surum;
   const yeniTaslak = async (ad: string) => planOku((await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad })).senaryolar.find((x) => x.ad === ad)!.id);
   const saatSonra = (iso: string, sa: number) => new Date(Date.parse(iso) + sa * 3600_000).toISOString();
 
@@ -81,15 +100,65 @@ describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
     p = (await isEmriKomutu(p, i2!, 'tasi', { kaynak: y1.kaynak, baslangic: ileri })).json<PlanCevabi>();
     assert.equal(Date.parse(yer(p, i2!).baslangic) >= Date.parse(ileri), true);
 
-    // 954 b: arıza denemesi kuralın dışındadır; canlıya alınırken korunan işi yerinden çıkarıyorsa reddedilir.
+    // 954 b: arıza denemesi kuralın dışındadır. 991 a: canlıya alınınca makine arızalı olur, o makinedeki işin koruması kalkar.
     const a = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: '248 a arıza' })).senaryolar.find((x) => x.ad === '248 a arıza')!;
     const r = await istek(c.planlama, 'POST', `/plan/senaryolar/${a.id}/hizli`, { tur: 'ariza', surum: a.surum });
     assert.equal(r.statusCode, 200, r.body);
     const ariza = (await planOku(a.id));
     assert.equal(ariza.yerlesimler.some((y) => y.isEmriId === i1 && Date.parse(y.baslangic) <= Date.parse(y1.baslangic) + 60_000 && y.kaynak.id === y1.kaynak.id), false,
       'arıza denemesi korunan işi makinesinden kaldırdı');
-    const al = await canliyaAl(ariza);
-    assert.equal(al.statusCode, 409, al.body);
-    assert.match(al.body, /4 saatten kısa sürede başlayacak/);
+    const makine = y1.kaynak.id;
+    try {
+      const al = await canliyaAl(ariza);
+      assert.equal(al.statusCode, 200, al.body);
+    } finally {
+      await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'calisir', aciklama: null });
+    }
+  });
+
+  test('990 a: makine arızaya alınınca üstündeki korunan iş başka makineye taşınır', async () => {
+    const [i1] = await isEmirleriAc([yeniAdim()]);
+    assert.equal((await canliyaAl(await taslaktaOner())).statusCode, 200);
+    const makine = yer(await planOku(), i1!).kaynak.id;
+    assert.notEqual(makine, makineB);
+    let p = await yeniTaslak('990 a arıza');
+    // Canlıya alma bu testte yok: önceki testlerin işleri de arızalı makinede ve canlıya almayı ayrı kural durdurur.
+    const tasi = () => isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: yer(p, i1!).baslangic });
+    assert.equal((await tasi()).statusCode, 409, 'çalışan makinede korunur');
+    await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'ariza', aciklama: null });
+    try {
+      const r = await tasi();
+      assert.equal(r.statusCode, 200, r.body);
+      p = r.json<PlanCevabi>();
+      assert.equal(yer(p, i1!).kaynak.id, makineB);
+    } finally {
+      await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'calisir', aciklama: null });
+    }
+  });
+
+  test('990 a: korunan işi yerinden çıkaran taslak gerekçesiz canlıya alınmaz; gerekçeyle alınır, aşılan iş ve gerekçe onay kaydına yazılır', async () => {
+    const [i1] = await isEmirleriAc([yeniAdim()]);
+    assert.equal((await canliyaAl(await taslaktaOner())).statusCode, 200);
+    const p = await yeniTaslak('990 a');
+    assert.notEqual(yer(p, i1!).kaynak.id, makineB);
+    // Taslak yazımı korunan işi başka makineye almayı reddeder; canlıya almanın denetimi ayrı sınanır, taslak doğrudan değiştirilir.
+    await vt().tx((db) => db.sorgu('UPDATE plan_senaryo_yerlesimi SET makine_id = $1 WHERE senaryo_id = $2 AND is_emri_id = $3', [makineB, p.taslak!.id, i1]));
+    const s = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
+    const al = (dortSaatGerekcesi: string | null) =>
+      istek(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true, dortSaatGerekcesi });
+    for (const g of [null, '   ']) {
+      const r = await al(g);
+      assert.equal(r.statusCode, 409, r.body);
+      assert.match(r.body, /başka makine ya da kişiye alınamaz\. Zorunluysa gerekçe yazarak canlıya alın\./);
+      assert.deepEqual(r.json<{ ayrinti: unknown }>().ayrinti, { neden: 'dort-saat', gerekceIle: true });
+    }
+    assert.equal(await onaydakiSurum(s.id), s.surum, 'reddedilen canlıya alma taslağı onayda bırakır');
+    const r = await al('  takım tezgâhta yok  ');
+    assert.equal(r.statusCode, 200, r.body);
+    assert.equal(yer(await planOku(), i1!).kaynak.id, makineB);
+    const kayit = await vt().tx((db) => db.tek<{ metin: string | null; kullanici: string }>(
+      "SELECT o.metin, k.kullanici_adi AS kullanici FROM plan_senaryo_onay_kaydi o JOIN kisi k ON k.id = o.kisi_id WHERE o.senaryo_id = $1 AND o.islem = 'canliya_al'", [s.id]));
+    assert.equal(kayit?.kullanici, 'mudur');
+    assert.match(kayit?.metin ?? '', /^4 saat kuralı aşıldı \(.+ OP 10\): takım tezgâhta yok$/);
   });
 });

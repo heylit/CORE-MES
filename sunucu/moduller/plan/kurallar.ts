@@ -21,21 +21,25 @@ export function kilitCakisani(yeni: readonly KaynakAraligi[], kilitliler: readon
 // 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz. Korunan iş canlıdaki yerindedir (başlangıcı geçmiş ama başlamamış iş
 // de korunur); yazımdan sonra planda ve aynı kaynakta kalır, önüne canlıda önünde olmayan iş girmez. Saat ölçüt değildir: eskimiş canlıda
 // başlangıcı geçmiş işler yeniden dizilince zorunlu olarak kayar; korunan iş boş bir yere ileri ya da geri alınabilir.
+// 990 a: arızalı ya da pasif kaynaktaki işin koruması kendiliğinden kalkar (çalışmayan makinede bekleyen iş başka yere alınabilmeli).
 // Dönen: ihlal eden korunan işin kimliği ve nedeni (kimliğe göre sıralı).
 export const DORT_SAAT_DK = 240;
 export interface PlanYeri { isEmriId: number; kaynak: Kaynak; baslangic: number }
 export type DortSaatNedeni = 'kaldirildi' | 'kaynak' | 'onune-is';
-export const korunanIsler = (canli: readonly PlanYeri[], planliMi: (isEmriId: number) => boolean, ufukDk: number = DORT_SAAT_DK): PlanYeri[] =>
-  canli.filter((p) => p.baslangic < ufukDk && planliMi(p.isEmriId));
+const hepsiCalisir = (): boolean => true;
+export const korunanIsler = (
+  canli: readonly PlanYeri[], planliMi: (isEmriId: number) => boolean, calisirMi: (k: Kaynak) => boolean = hepsiCalisir, ufukDk: number = DORT_SAAT_DK,
+): PlanYeri[] => canli.filter((p) => p.baslangic < ufukDk && planliMi(p.isEmriId) && calisirMi(p.kaynak));
 export function dortSaatIhlalleri(
-  canli: readonly PlanYeri[], sonra: readonly PlanYeri[], planliMi: (isEmriId: number) => boolean, ufukDk: number = DORT_SAAT_DK,
+  canli: readonly PlanYeri[], sonra: readonly PlanYeri[], planliMi: (isEmriId: number) => boolean, calisirMi: (k: Kaynak) => boolean = hepsiCalisir,
+  ufukDk: number = DORT_SAAT_DK,
 ): { isEmriId: number; neden: DortSaatNedeni }[] {
   const yeni = new Map(sonra.map((y) => [y.isEmriId, y]));
   // Başlamış iş önde sayılmaz: makinede zaten çalışıyordur, önüne konan iş değildir.
   const onundekiler = (l: readonly PlanYeri[], p: PlanYeri) =>
     l.filter((y) => y.isEmriId !== p.isEmriId && planliMi(y.isEmriId) && ayniKaynak(y.kaynak, p.kaynak) && y.baslangic < p.baslangic).map((y) => y.isEmriId);
   const ihlaller: { isEmriId: number; neden: DortSaatNedeni }[] = [];
-  for (const p of korunanIsler(canli, planliMi, ufukDk)) {
+  for (const p of korunanIsler(canli, planliMi, calisirMi, ufukDk)) {
     const q = yeni.get(p.isEmriId);
     const neden: DortSaatNedeni | null = !q ? 'kaldirildi' : !ayniKaynak(q.kaynak, p.kaynak) ? 'kaynak'
       : onundekiler(sonra, q).some((x) => !onundekiler(canli, p).includes(x)) ? 'onune-is' : null;
@@ -47,6 +51,13 @@ export function dortSaatIhlalleri(
 // Yazım yalnız kendi getirdiği ihlalle reddedilir: canlıdan önce açılmış taslakta zaten olan ihlal sonraki ilgisiz yazımı durdurmaz.
 export const yeniDortSaatIhlali = (once: readonly { isEmriId: number; neden: DortSaatNedeni }[], sonra: readonly { isEmriId: number; neden: DortSaatNedeni }[]) =>
   sonra.find((x) => !once.some((y) => y.isEmriId === x.isEmriId && y.neden === x.neden)) ?? null;
+
+// 990 a: canlıya alan kişi zorunlu durumda kuralı gerekçeyle aşar; boşluktan ibaret gerekçe gerekçe sayılmaz. Gerekçe ve kişi onay kaydına yazılır.
+export const DORT_SAAT_GEREKCE_EN_COK = 500;
+export const dortSaatGerekcesi = (g: string | null | undefined): string | null => {
+  const t = g?.trim() ?? '';
+  return t.length > 0 ? t.slice(0, DORT_SAAT_GEREKCE_EN_COK) : null;
+};
 
 // İşin süresi: ayar + adet x birim süre (dakika). Süresi bilinmeyen iş motorca yerleşmez.
 export function isSuresi(ayarDk: number | null, birimDk: number | null, adet: number): number | null {
