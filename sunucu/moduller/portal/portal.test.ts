@@ -11,6 +11,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { firmaOzeti, ornekFirmaNo } from '../musteri-tedarikci/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { KURULUM_ISARETI } from './kurallar.ts';
+import { belgeYaz as hamYaz } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -575,6 +576,68 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(okur, 'POST', '/portal/ekler/yukle', ek)).statusCode, 403);
     assert.equal((await istek(yetkisiz, 'POST', '/portal/ekler/yukle', ek)).statusCode, 403);
   });
+  test('BD-26 (1019 a, 1021 b): firma kişisi yalnız kendi firmasının kaydını okur ve yazamaz; atamayı yalnız portal.yonet yapar', async () => {
+    const benim = `f${String(Date.now())}`;
+    await vt().tx(async (db) => {
+      const kayitlar: [string, Record<string, unknown>][] = [
+        [`parties/${benim}m`, { type: 'customer', name: 'M' }], [`parties/${benim}t`, { type: 'supplier', name: 'T' }],
+        [`parties/${benim}x`, { type: 'customer', name: 'X' }],
+        [`orders/${benim}-s`, { partyId: `${benim}m`, type: 'sales', no: 'S1' }],
+        [`orders/${benim}-a`, { partyId: `${benim}t`, type: 'purchase', no: 'A1' }],
+        [`orders/${benim}-o`, { partyId: `${benim}m`, type: 'sales', approvalState: 'pending', no: 'S2' }],
+        [`orders/${benim}-x`, { partyId: `${benim}x`, type: 'sales', no: 'S3' }],
+      ];
+      for (const [yol, veri] of kayitlar) {
+        const [ust = '', kimlik = ''] = yol.split('/');
+        await hamYaz(db, { yol, ust, kimlik, veri, kisiId: yoneticiId });
+      }
+    });
+    const m = await islemliKisi(`${benim}m`, ['portal.oku', 'portal.yaz']);
+    const t = await islemliKisi(`${benim}t`, ['portal.oku', 'portal.yaz']);
+    const ata = (cerez: string, kisiId: number, firma: string | null) => istek(cerez, 'POST', `/portal/kisiler/${String(kisiId)}/firma`, { firma });
+
+    assert.equal((await ata(yazar, m.id, `${benim}m`)).statusCode, 403);
+    assert.equal((await ata(yonetici, m.id, `${benim}yok`)).statusCode, 400);
+    assert.equal((await ata(yonetici, m.id, 'settings')).statusCode, 400);
+    assert.equal((await ata(yonetici, yoneticiId, `${benim}m`)).statusCode, 422);
+    assert.equal((await ata(yonetici, 999_999, `${benim}m`)).statusCode, 404);
+    assert.deepEqual((await ata(yonetici, m.id, `${benim}m`)).json(), { kisiId: m.id, firma: `${benim}m` });
+    assert.equal((await ata(yonetici, t.id, `${benim}t`)).statusCode, 200);
+
+    const kimlikler = async (cerez: string, ek = '') => (await sorgu(cerez, 'orders', ek)).map((b) => b.kimlik).filter((k) => k.startsWith(benim)).sort();
+    assert.deepEqual(await kimlikler(yonetici), [`${benim}-a`, `${benim}-o`, `${benim}-s`, `${benim}-x`]);
+    assert.deepEqual(await kimlikler(m.cerez), [`${benim}-s`]);
+    assert.deepEqual(await kimlikler(t.cerez), [`${benim}-a`]);
+    // Süzgeç koşuldan önce: başka firmanın kaydı koşulla da çıkarılamaz.
+    assert.deepEqual(await kimlikler(m.cerez, `&filtreler=${encodeURIComponent(JSON.stringify([{ alan: 'no', islec: '==', deger: 'S3' }]))}`), []);
+    assert.deepEqual((await sorgu(m.cerez, 'parties')).map((b) => b.kimlik), [`${benim}m`]);
+
+    assert.equal((await istek(m.cerez, 'GET', `/portal/belge?yol=orders/${benim}-s`)).statusCode, 200);
+    for (const yol of [`orders/${benim}-x`, `orders/${benim}-o`, `orders/${benim}-a`, `orders/${benim}-yok`]) {
+      assert.equal((await istek(m.cerez, 'GET', `/portal/belge?yol=${yol}`)).statusCode, 403, yol);
+    }
+    const ek = (await istek(yazar, 'POST', '/portal/ekler/yukle', { ad: 'not.txt', tur: 'text/plain', veri: Buffer.from('x').toString('base64') })).json() as { id: string };
+    for (const url of ['/portal/kisiler', '/portal/oda', `/portal/ekler/${ek.id}`]) assert.equal((await istek(t.cerez, 'GET', url)).statusCode, 403, url);
+    assert.equal((await istek(okur, 'GET', `/portal/ekler/${ek.id}`)).statusCode, 200);
+    assert.equal(((await istek(m.cerez, 'GET', '/portal/ben')).json() as { yazabilir: boolean }).yazabilir, false);
+
+    // İlk aşama salt okunur (1013 a): yalnız kendi tercihleri yazılır; firma alanını kişi değiştiremez.
+    assert.equal((await yaz(m.cerez, { yol: `orders/${benim}-s`, kip: 'birlestir', veri: { note: 'x' } })).statusCode, 403);
+    assert.equal((await yaz(m.cerez, { yol: `notifs/${benim}`, kip: 'tam', veri: {} })).statusCode, 403);
+    assert.equal((await istek(m.cerez, 'POST', '/portal/belge/sil', { yol: `orders/${benim}-s` })).statusCode, 403);
+    assert.equal((await istek(m.cerez, 'POST', '/portal/ekler/yukle', { ad: 'a.txt', tur: 'text/plain', veri: Buffer.from('x').toString('base64') })).statusCode, 403);
+    assert.equal((await yaz(m.cerez, { yol: `data/users/${String(m.id)}/prefs`, kip: 'tam', veri: { a: 1 } })).statusCode, 200);
+    assert.equal((await yaz(m.cerez, { yol: `users/tmi-${String(m.id)}`, kip: 'birlestir', veri: { prefs: { email: false } } })).statusCode, 200);
+    assert.equal((await yaz(m.cerez, { yol: `users/tmi-${String(m.id)}`, kip: 'birlestir', veri: { partyId: 'firm' } })).statusCode, 403);
+
+    // Firma kartı giderse kişi hiçbir kaydı görmez; atama kaldırılınca firma içine döner.
+    await vt().tx((db) => db.sorgu('DELETE FROM portal_belge WHERE yol = $1', [`parties/${benim}t`]));
+    assert.deepEqual(await kimlikler(t.cerez), []);
+    assert.equal((await istek(t.cerez, 'GET', '/portal/kisiler')).statusCode, 403);
+    assert.equal((await ata(yonetici, t.id, null)).statusCode, 200);
+    assert.equal((await istek(t.cerez, 'GET', '/portal/kisiler')).statusCode, 200);
+  });
+
   test('BD-23 (312 b): kişi, teklif ve sipariş bağları yabancı anahtar; boş şemada doğrulanmış', async () => {
     const satirlar = await vt().sorgu<{ ad: string }>(
       `SELECT c.conrelid::regclass || '.' || a.attname || ' ' || c.confrelid::regclass || ' ' || c.convalidated AS ad

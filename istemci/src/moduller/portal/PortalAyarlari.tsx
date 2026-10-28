@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BelgeCevabi } from '#paylasilan/sozlesme/portal.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { Belge, BelgeCevabi, FirmaKisisiCevabi, KisilerCevabi, SorguCevabi } from '#paylasilan/sozlesme/portal.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 
@@ -133,15 +133,117 @@ export function PortalAyarlari() {
   );
 
   return (
-    <form onSubmit={(e) => { void kaydet(e); }} noValidate>
-      <Kart baslik="Onay limitleri">
-        <p>Tutar limitleri onay zincirini, fiyat toleransı üçlü eşleştirmeyi belirler. IBAN değişikliği her zaman Muhasebe ve Finans müdürü onayından geçer.</p>
-        <div className="tc-form">{ONAY_ALANLARI.map(({ k, etiket, saltOkunur }) => alan(k, etiket, true, saltOkunur === true))}</div>
-      </Kart>
-      <Kart baslik="Bildirim kuralları">
-        <div className="tc-form">{BILDIRIM_ALANLARI.map(({ k, etiket }) => alan(k, etiket, false))}</div>
-      </Kart>
-      <Dugme type="submit" tur="birincil" simge="check" yukleniyor={kaydediliyor}>Kuralları kaydet</Dugme>
-    </form>
+    <>
+      <form onSubmit={(e) => { void kaydet(e); }} noValidate>
+        <Kart baslik="Onay limitleri">
+          <p>Tutar limitleri onay zincirini, fiyat toleransı üçlü eşleştirmeyi belirler. IBAN değişikliği her zaman Muhasebe ve Finans müdürü onayından geçer.</p>
+          <div className="tc-form">{ONAY_ALANLARI.map(({ k, etiket, saltOkunur }) => alan(k, etiket, true, saltOkunur === true))}</div>
+        </Kart>
+        <Kart baslik="Bildirim kuralları">
+          <div className="tc-form">{BILDIRIM_ALANLARI.map(({ k, etiket }) => alan(k, etiket, false))}</div>
+        </Kart>
+        <Dugme type="submit" tur="birincil" simge="check" yukleniyor={kaydediliyor}>Kuralları kaydet</Dugme>
+      </form>
+      <FirmaKisileri />
+    </>
+  );
+}
+
+// Firma kişisi (1021 b): TMI kişisi portalda bir müşteri ya da tedarikçi firmasının kullanıcısı olarak açılır ve yalnız
+// o firmanın kayıtlarını okur. Atama kişinin portal kullanıcısındaki firma alanıdır; yalnız sunucu yazar.
+const FIRMA_TURU: Record<string, string> = { customer: 'Müşteri', supplier: 'Tedarikçi' };
+const TMI_KULLANICI = /^users\/tmi-(\d+)$/;
+const FIRMA_ANAHTARI = ['portal', 'ayarlar', 'firma-kisileri'] as const;
+
+export interface FirmaSecenegi { kimlik: string; ad: string; tur: string }
+export interface FirmaKisisi { kisiId: number; ad: string; firma: string; firmaAdi: string; tur: string }
+
+export function firmaSecenekleri(firmalar: readonly Belge[]): FirmaSecenegi[] {
+  return firmalar
+    .filter((b) => typeof b.veri['type'] === 'string' && b.veri['type'] in FIRMA_TURU)
+    .map((b) => ({ kimlik: b.kimlik, ad: String(b.veri['name'] ?? b.kimlik), tur: FIRMA_TURU[String(b.veri['type'])] ?? '' }))
+    .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+}
+
+// Kartı silinmiş firmaya atanan kişi de listelenir: o kişi portalda hiçbir kaydı görmez, buradan kaldırılır.
+export function firmaKisileri(kullanicilar: readonly Belge[], firmalar: readonly FirmaSecenegi[], kisiler: readonly { id: number; ad: string }[]): FirmaKisisi[] {
+  const firma = new Map(firmalar.map((f) => [f.kimlik, f]));
+  const kisi = new Map(kisiler.map((k) => [k.id, k.ad]));
+  return kullanicilar.flatMap((b) => {
+    const no = TMI_KULLANICI.exec(b.yol)?.[1];
+    const kimlik = b.veri['partyId'];
+    if (no === undefined || typeof kimlik !== 'string' || kimlik === 'firm') return [];
+    const f = firma.get(kimlik);
+    return [{ kisiId: Number(no), ad: kisi.get(Number(no)) ?? String(b.veri['name'] ?? ''), firma: kimlik, firmaAdi: f?.ad ?? 'Silinmiş firma', tur: f?.tur ?? '' }];
+  }).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+}
+
+function FirmaKisileri() {
+  const oturum = useOturum();
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const veri = useQuery({
+    queryKey: FIRMA_ANAHTARI,
+    queryFn: async () => {
+      const [kisiler, firmalar, kullanicilar] = await Promise.all([
+        api.get<KisilerCevabi>('/portal/kisiler'),
+        api.get<SorguCevabi>('/portal/sorgu?koleksiyon=parties'),
+        api.get<SorguCevabi>('/portal/sorgu?koleksiyon=users'),
+      ]);
+      const secenekler = firmaSecenekleri(firmalar.belgeler);
+      return { kisiler: kisiler.kisiler, firmalar: secenekler, atananlar: firmaKisileri(kullanicilar.belgeler, secenekler, kisiler.kisiler) };
+    },
+  });
+  const [kisiId, setKisiId] = useState('');
+  const [firma, setFirma] = useState('');
+  const [mesgul, setMesgul] = useState<number | null>(null);
+
+  const ata = async (no: number, kimlik: string | null) => {
+    setMesgul(no);
+    try {
+      await api.post<FirmaKisisiCevabi>(`/portal/kisiler/${String(no)}/firma`, { firma: kimlik });
+      bildir('tamam', kimlik === null ? 'Firma ataması kaldırıldı.' : 'Kişi firmaya atandı.');
+      if (kimlik !== null) { setKisiId(''); setFirma(''); }
+      await istemci.invalidateQueries({ queryKey: FIRMA_ANAHTARI });
+    } catch (hata) {
+      bildir('hata', hataIletisi(hata, 'Firma ataması yapılamadı.'));
+    } finally {
+      setMesgul(null);
+    }
+  };
+
+  const sutunlar: Sutun<FirmaKisisi>[] = [
+    { anahtar: 'ad', baslik: 'Kişi', hucre: (s) => s.ad },
+    { anahtar: 'firma', baslik: 'Firma', hucre: (s) => s.firmaAdi },
+    { anahtar: 'tur', baslik: 'Tür', hucre: (s) => s.tur },
+    { anahtar: 'eylem', baslik: '', hizala: 'sag', csv: false,
+      hucre: (s) => <Dugme simge="x" yukleniyor={mesgul === s.kisiId} onClick={() => { void ata(s.kisiId, null); }}>Kaldır</Dugme> },
+  ];
+
+  let icerik;
+  if (veri.isError) icerik = <DurumKutusu durum="hata" mesaj={hataIletisi(veri.error, 'Firma kişileri okunamadı.')} />;
+  else if (veri.isPending) icerik = <DurumKutusu durum="yukleniyor" mesaj="Firma kişileri okunuyor." />;
+  else {
+    const atanmis = new Set(veri.data.atananlar.map((a) => a.kisiId));
+    const kisiSecenekleri = veri.data.kisiler.filter((k) => k.id !== oturum.data?.id && !atanmis.has(k.id)).map((k) => ({ deger: String(k.id), baslik: k.ad }));
+    const firmaSecenekleriListesi = veri.data.firmalar.map((f) => ({ deger: f.kimlik, baslik: `${f.ad} (${f.tur})` }));
+    icerik = (
+      <>
+        <Tablo etiket="Firma kişileri" sutunlar={sutunlar} satirlar={veri.data.atananlar} satirAnahtari={(s) => s.kisiId} bosMesaj="Firmaya atanmış kişi yok." />
+        <div className="tc-form">
+          <Secim etiket="Kişi" name="firma-kisisi" bosSecenek="Kişi seçin" secenekler={kisiSecenekleri} value={kisiId} onChange={(e) => { setKisiId(e.currentTarget.value); }} />
+          <Secim etiket="Firma" name="firma-kimligi" bosSecenek="Firma seçin" secenekler={firmaSecenekleriListesi} value={firma} onChange={(e) => { setFirma(e.currentTarget.value); }} />
+        </div>
+        <Dugme simge="user-plus" tur="birincil" disabled={kisiId === '' || firma === ''} yukleniyor={mesgul === Number(kisiId)}
+          onClick={() => { void ata(Number(kisiId), firma); }}>Firmaya ata</Dugme>
+      </>
+    );
+  }
+
+  return (
+    <Kart baslik="Firma kişileri">
+      <p>Firmaya atanan kişi portalı o müşteri ya da tedarikçinin kullanıcısı olarak açar: yalnız o firmanın kayıtlarını görür ve portalda bir şey yazamaz.</p>
+      {icerik}
+    </Kart>
   );
 }

@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/portal.ts';
+import { AZAMI_EK_BAYT, YOL_PARCASI } from '#paylasilan/sozlesme/portal.ts';
 import { siparisDonusumGovdesi, siparisEkleGovdesi, teklifEkleGovdesi, teklifGuncelleGovdesi, teklifSurumuGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { BelgeCevabi, BenCevabi, BenHazirlaCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/portal.ts';
 import { firmaNoKoddan } from '../musteri-tedarikci/disari.ts';
@@ -10,10 +10,10 @@ import { onayLimitleri } from '../satin-alma/disari.ts';
 import { malzemeNoKoddan, malzemeOzeti } from '../malzemeler/disari.ts';
 import { kabulEt, notluGecis, siparisDonustur, siparisEkle, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle } from '../siparisler/disari.ts';
 import {
-  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
+  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, FIRMA_ICI_KIMLIGI, atanabilirFirmaMi, disYazmaReddi, izleyiciCikar, izleyiciGorebilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, kilitAlinirMi, rolDegisiyorMu, satinAlmaTeslimiReddi, siparisDonusumu, siparisSatirlari, siparisTeklifi, sonParca, sorgula, sozlesmeSiparisi, talepDuzenlemesi, talepTeklifi, teklifAcilisi, teklifAdimlari, ustYolu,
 } from './kurallar.ts';
-import type { DepoBelgesi, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
+import type { DepoBelgesi, Izleyici, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Akış: yetkiyi uç verir; burada kişiye özel alan, sürüm denetimi ve birleştirme uygulanır.
@@ -28,14 +28,38 @@ function erisimDenetle(kullanici: Kullanici, yol: string): void {
   if (!erisebilirMi(yol, kullanici.id)) throw yetkiYok('Bu kayıt başka bir kişiye özeldir.');
 }
 
+// İzleyici kişinin portal kullanıcısındaki firmadır (1021 b); atama yoksa firma içi. Dış izleyici kişi listesini, odayı ve
+// ekleri görmez (ekin hangi kayda bağlı olduğu tutulmuyor), onay vermez, ek yüklemez.
+export async function izleyiciBul(db: Db, kullanici: Kullanici): Promise<Izleyici> {
+  const kayit = (await sorgular.belgeGetir(db, portalKullaniciYolu(kullanici.id)))?.veri ?? null;
+  const firma = kayit?.['partyId'];
+  const kart = typeof firma === 'string' && firma !== FIRMA_ICI_KIMLIGI && YOL_PARCASI.test(firma) ? await sorgular.belgeGetir(db, `parties/${firma}`) : null;
+  return izleyiciCikar(kayit, kart?.veri ?? null);
+}
+
+// Bölüm firma içinin ayrımıdır: dış izleyiciyi firma görünürlüğü sınırlar. Fiyat ve finans gizlemesi (karar 180) ona da uygulanır.
+const bolumuGecer = (iz: Izleyici, yol: string, izinler: readonly string[], veri: Veri | null): boolean =>
+  iz.tur !== 'firma' || bolumOkuyabilirMi(yol, izinler, veri);
+
+const DIS_REDDI = 'Bu bilgi firma dışı kullanıcıya açık değildir.';
+export function disaKapali(iz: Izleyici): void {
+  if (iz.tur !== 'firma') throw yetkiYok(DIS_REDDI);
+}
+
+async function disYazmaDenetle(db: Db, kullanici: Kullanici, yol: string): Promise<void> {
+  const ret = disYazmaReddi(await izleyiciBul(db, kullanici), yol, kullanici.id);
+  if (ret !== null) throw yetkiYok(ret);
+}
+
 export async function sorgu(
   db: Db, kullanici: Kullanici, k: { koleksiyon: string; filtreler?: Filtre[] | undefined; sira?: Sira | undefined; sinir?: number | undefined },
 ): Promise<SorguCevabi> {
   erisimDenetle(kullanici, k.koleksiyon);
+  const iz = await izleyiciBul(db, kullanici);
   // Bölümün okuyamadığı kayıt listeden düşer; 403 dönülmez: prototip her koleksiyonu açılışta okur ve biri hata verirse açılmaz.
   const izinler = portalRolu(kullanici.islemler).tmiIzinler;
   const ham = (await teklifDurumlariniBindir(db, await sorgular.koleksiyonBelgeleri(db, k.koleksiyon)))
-    .filter((b) => bolumOkuyabilirMi(b.yol, izinler, b.veri) && islemOkuyabilirMi(b.yol, kullanici.islemler, b.veri));
+    .filter((b) => izleyiciGorebilirMi(b.yol, b.veri, iz) && bolumuGecer(iz, b.yol, izinler, b.veri) && islemOkuyabilirMi(b.yol, kullanici.islemler, b.veri));
   const limitler = ham.some((b) => b.yol === ONAY_AYAR_YOLU) ? await onayLimitleri(db) : [];
   // Gizleme süzgeçten önce: fiyatı görmeyen fiyata göre süzüp sıralayarak da gizli değeri çıkaramaz.
   const okunur = ham.map((b) => gizle(esikleriBindir(b, limitler), kullanici));
@@ -51,9 +75,12 @@ const gizle = (b: DepoBelgesi, kullanici: Kullanici): DepoBelgesi => ({ ...b, ve
 
 export async function belgeOku(db: Db, kullanici: Kullanici, yol: string): Promise<BelgeCevabi> {
   erisimDenetle(kullanici, yol);
+  const iz = await izleyiciBul(db, kullanici);
   const ham = await sorgular.belgeGetir(db, yol);
   const belge = ham === null ? null : (await teklifDurumlariniBindir(db, [ham]))[0] ?? ham;
-  if (!bolumOkuyabilirMi(yol, portalRolu(kullanici.islemler).tmiIzinler, belge?.veri ?? null)) {
+  // Olmayan ve görünmeyen kayıt dış izleyiciye aynı cevabı verir: başka firmanın kaydının varlığı da çıkarılamaz.
+  if (!izleyiciGorebilirMi(yol, belge?.veri ?? null, iz)) throw yetkiYok('Bu kayıt firmanıza ait değil.');
+  if (!bolumuGecer(iz, yol, portalRolu(kullanici.islemler).tmiIzinler, belge?.veri ?? null)) {
     throw yetkiYok('Bu portal kaydını görmek için ilgili bölüm yetkiniz yok.');
   }
   if (!islemOkuyabilirMi(yol, kullanici.islemler, belge?.veri ?? null)) throw yetkiYok('Bu kaydı görmek için fiyat ya da finans yetkiniz yok.');
@@ -136,6 +163,7 @@ function bolumDenetle(kullanici: Kullanici, yol: string, eski: Veri | null, yeni
 
 export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Promise<BelgeCevabi> {
   erisimDenetle(kullanici, g.yol);
+  await disYazmaDenetle(db, kullanici, g.yol);
   const mevcut = await sorgular.belgeKilitle(db, g.yol);
   if (g.beklenenSurum !== undefined && (mevcut?.surum ?? null) !== g.beklenenSurum) {
     throw cakisma('Kayıt siz açtıktan sonra değişti; sayfayı yenileyip yeniden deneyin.');
@@ -173,6 +201,7 @@ async function teklifDurumlariniBindir(db: Db, belgeler: DepoBelgesi[]): Promise
 
 export async function belgeSil(db: Db, kullanici: Kullanici, yol: string): Promise<{ silindi: boolean; damga: number }> {
   erisimDenetle(kullanici, yol);
+  await disYazmaDenetle(db, kullanici, yol);
   const mevcut = (await sorgular.belgeKilitle(db, yol))?.veri ?? null;
   bolumDenetle(kullanici, yol, mevcut, null);
   await onayDenetle(db, kullanici, yol, mevcut, null);
@@ -183,6 +212,7 @@ export async function belgeSil(db: Db, kullanici: Kullanici, yol: string): Promi
 // Belge yoksa boş gövdeyle açılır; kilit verisi verildiyse belgeye birleşir.
 export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sahip: string; sureMs: number; veri?: Veri | undefined }): Promise<KilitCevabi> {
   erisimDenetle(kullanici, g.yol);
+  await disYazmaDenetle(db, kullanici, g.yol);
   const mevcut = await sorgular.belgeKilitle(db, g.yol);
   bolumDenetle(kullanici, g.yol, mevcut?.veri ?? null, g.veri ?? null);
   const simdi = await sorgular.simdiMs(db);
@@ -206,6 +236,7 @@ export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sa
 // Onay kararı: kişi, zaman ve adım rolü sunucudan. Prototipin karar sonrası işleri (siparişin onay durumu gibi) genel yazmayla gelir
 // ve onayDenetle bu kayda bakar.
 export async function onayKarariVer(db: Db, kullanici: Kullanici, kimlik: string, g: { onay: boolean; not: string }): Promise<BelgeCevabi> {
+  disaKapali(await izleyiciBul(db, kullanici));
   const yol = onayYolu(kimlik);
   const mevcut = await sorgular.belgeKilitle(db, yol);
   if (mevcut === null) throw bulunamadi('Onay kaydı bulunamadı.');
@@ -227,10 +258,11 @@ export async function damga(db: Db): Promise<{ damga: number }> {
 export async function ben(db: Db, kullanici: Kullanici): Promise<BenCevabi> {
   const kurulumGerekli = KURULUM_ISARETI !== null && (await sorgular.varOlanYollar(db, [KURULUM_ISARETI])).length === 0;
   const portalKullanicisiVar = (await sorgular.varOlanYollar(db, [portalKullaniciYolu(kullanici.id)])).length > 0;
+  const icerde = (await izleyiciBul(db, kullanici)).tur === 'firma';
   return {
     kisi: { id: kullanici.id, ad: kullanici.ad },
-    yazabilir: kullanici.islemler.includes(ISLEM_YAZ),
-    yonetici: kullanici.islemler.includes(ISLEM_YONET),
+    yazabilir: icerde && kullanici.islemler.includes(ISLEM_YAZ),
+    yonetici: icerde && kullanici.islemler.includes(ISLEM_YONET),
     kurulumGerekli,
     portalKullanicisi: portalKullanicisiVar,
   };
@@ -256,13 +288,31 @@ export async function benHazirla(db: Db, kullanici: Kullanici): Promise<BenHazir
   return { kuruldu: false };
 }
 
+// Firma kişisi (1021 b): TMI kişisinin portal kullanıcısına müşteri ya da tedarikçi firması atanır, null firma içine geri alır.
+// Kişi portalı hiç açmadıysa kullanıcısı bölümsüz rolle kurulur; rolünü ilk açılışta benHazirla TMI rolünden yazar.
+export async function firmaKisisiAta(db: Db, kullanici: Kullanici, kisiId: number, firma: string | null): Promise<{ kisiId: number; firma: string | null }> {
+  if (kisiId === kullanici.id) throw gecersiz('Kendinizi firma kişisi yapamazsınız.');
+  const kisi = (await kisileriListele(db)).find((k) => k.id === kisiId && k.aktif);
+  if (kisi === undefined) throw bulunamadi('Kişi bulunamadı.');
+  if (firma !== null && !atanabilirFirmaMi((await sorgular.belgeGetir(db, `parties/${firma}`))?.veri ?? null)) {
+    throw dogrulama('Portalda böyle bir müşteri ya da tedarikçi firması yok.', 'firma');
+  }
+  const yol = portalKullaniciYolu(kisiId);
+  const mevcut = await sorgular.belgeKilitle(db, yol);
+  const temel = mevcut?.veri ?? portalKullanicisi({ id: kisi.id, ad: kisi.ad }, await sorgular.simdiMs(db), portalRolu([])).veri;
+  await sorgular.belgeYaz(db, { yol, ust: ustYolu(yol), kimlik: sonParca(yol), veri: { ...temel, partyId: firma ?? FIRMA_ICI_KIMLIGI }, kisiId: kullanici.id });
+  return { kisiId, firma };
+}
+
 // Prototiplerin kişi seçimi ve adları için aktif kişiler; adı başka modülün (kisiler) tek kaynağından gelir.
-export async function kisiler(db: Db): Promise<{ kisiler: { id: number; ad: string }[] }> {
+export async function kisiler(db: Db, kullanici: Kullanici): Promise<{ kisiler: { id: number; ad: string }[] }> {
+  disaKapali(await izleyiciBul(db, kullanici));
   return { kisiler: (await kisileriListele(db)).filter((k) => k.aktif).map(({ id, ad }) => ({ id, ad })) };
 }
 
 // Yalnız işaret belgesi yokken; var olan belge üzerine yazılmaz.
 export async function kurulum(db: Db, kullanici: Kullanici): Promise<{ kurulan: number }> {
+  disaKapali(await izleyiciBul(db, kullanici));
   if (KURULUM_ISARETI === null || (await sorgular.varOlanYollar(db, [KURULUM_ISARETI])).length > 0) return { kurulan: 0 };
   const belgeler = baslangicBelgeleri({ id: kullanici.id, ad: kullanici.ad }, await sorgular.simdiMs(db), portalRolu(kullanici.islemler));
   const varOlan = new Set(await sorgular.varOlanYollar(db, belgeler.map((b) => b.yol)));
@@ -278,7 +328,8 @@ export async function kurulum(db: Db, kullanici: Kullanici): Promise<{ kurulan: 
 // Oda kalıcı değildir: süreç belleğinde durur (TMI tek sunucudur). Okuma ucunda yazılır; veritabanına dokunmaz.
 const oda = new Map<number, OdaKaydi>();
 
-export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi = Date.now()): OdaCevabi {
+export function odaGuncelle(kullanici: Kullanici, iz: Izleyici, yama: Veri | undefined, simdi = Date.now()): OdaCevabi {
+  disaKapali(iz);
   const eski = oda.get(kullanici.id);
   oda.set(kullanici.id, { durum: durumYamala(eski?.durum ?? {}, yama ?? {}), guncellendi: simdi });
   for (const [kisiId, k] of oda) if (simdi - k.guncellendi > 10 * 60_000) oda.delete(kisiId);
@@ -286,13 +337,15 @@ export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi 
 }
 
 export async function ekYukle(db: Db, kullanici: Kullanici, g: { ad: string; tur: string; veri: string }): Promise<EkCevabi> {
+  disaKapali(await izleyiciBul(db, kullanici));
   const icerik = Buffer.from(g.veri, 'base64');
   if (icerik.length === 0) throw dogrulama('Dosya boş.', 'veri');
   if (icerik.length > AZAMI_EK_BAYT) throw dogrulama('Dosya bu modülde en çok 700 KB olabilir.', 'veri');
   return sorgular.ekEkle(db, { ad: g.ad, tur: g.tur, icerik, kisiId: kullanici.id });
 }
 
-export async function ekOku(db: Db, id: string): Promise<EkIcerikCevabi> {
+export async function ekOku(db: Db, kullanici: Kullanici, id: string): Promise<EkIcerikCevabi> {
+  disaKapali(await izleyiciBul(db, kullanici));
   const ek = await sorgular.ekGetir(db, id);
   if (ek === null) throw bulunamadi('Dosya bulunamadı.');
   return { id: ek.id, ad: ek.ad, tur: ek.tur, boyut: ek.boyut, veri: ek.icerik.toString('base64') };

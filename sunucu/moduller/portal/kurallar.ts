@@ -208,11 +208,11 @@ export function portalUnvani(gorev: string | null, rol: PortalRolu): string {
 
 const TMI_KULLANICI = /^users\/tmi-\d+$/;
 
-// TMI kişisinin portal kullanıcısında rol ve izinleri yalnız sunucu yazar (portalRolu); prototipten gelen yazı bunları
+// TMI kişisinin portal kullanıcısında rol, izinler ve firma (partyId, 1021 b) yalnız sunucu yazar (portalRolu); prototipten gelen yazı bunları
 // değiştiremez. Kişi böylece kendi rolünü düşürüp yönetim ekranlarını kaybedemez.
 export function rolDegisiyorMu(yol: string, eski: Veri | null, yeni: Veri): boolean {
   if (!TMI_KULLANICI.test(yol)) return false;
-  const alanlar = (v: Veri | null) => JSON.stringify([v?.['role'] ?? null, v?.['tmiIzinler'] ?? null, v?.['tmiRoller'] ?? null, v?.['unvan'] ?? null]);
+  const alanlar = (v: Veri | null) => JSON.stringify([v?.['role'] ?? null, v?.['tmiIzinler'] ?? null, v?.['tmiRoller'] ?? null, v?.['unvan'] ?? null, v?.['partyId'] ?? null]);
   return alanlar(eski) !== alanlar(yeni);
 }
 
@@ -282,6 +282,57 @@ export function bolumOkuyabilirMi(yol: string, izinler: readonly string[], veri:
   }
   const gerekli = p[0] === undefined ? undefined : KOLEKSIYON_OKUMA[p[0]];
   return gerekli === undefined || biri(gerekli);
+}
+
+// ---- Firma görünürlüğü (UYUM-BORCU, 1019 a): prototipin visible() kuralı (portal.html, ikinci tanım) sunucuda. Firma içi
+// izleyici her kaydı görür (üstüne bölüm ve işlem süzgeci biner); müşteri ve tedarikçi yalnız kendi firmasının kaydını görür.
+// İzleyici kişinin portal kullanıcısındaki firmadan çıkar: TMI kişisine müşteri ya da tedarikçi firması atanabilir (1021 b).
+export type Izleyici = { tur: 'firma' } | { tur: 'kapali' } | { tur: 'musteri' | 'tedarikci'; firma: string };
+export const FIRMA_ICI: Izleyici = { tur: 'firma' };
+export const FIRMA_ICI_KIMLIGI = 'firm';
+const FIRMA_TURLERI: Readonly<Record<string, 'musteri' | 'tedarikci'>> = { customer: 'musteri', supplier: 'tedarikci' };
+
+export const atanabilirFirmaMi = (firma: Veri | null): boolean => typeof firma?.['type'] === 'string' && firma['type'] in FIRMA_TURLERI;
+
+// Firma kartı silinmiş ya da türü değişmişse kişi dışarıda kalır ve hiçbir kaydı görmez: firma içine yalnız atamanın kaldırılması alır.
+export function izleyiciCikar(kullanici: Veri | null, firma: Veri | null): Izleyici {
+  const kimlik = kullanici?.['partyId'];
+  if (kimlik === undefined || kimlik === null || kimlik === FIRMA_ICI_KIMLIGI) return FIRMA_ICI;
+  const tur = typeof firma?.['type'] === 'string' ? FIRMA_TURLERI[firma['type']] : undefined;
+  return typeof kimlik === 'string' && tur !== undefined ? { tur, firma: kimlik } : { tur: 'kapali' };
+}
+
+// İlk aşama salt okunur (1013 a): firma kişisi yalnız kendi portal kullanıcısını (tercihler) ve kişiye özel alanını yazar.
+export function disYazmaReddi(iz: Izleyici, yol: string, kisiId: number): string | null {
+  if (iz.tur === 'firma') return null;
+  const p = parcalar(yol);
+  if (yol === portalKullaniciYolu(kisiId) || (p[0] === 'data' && p[1] === 'users' && p[2] === String(kisiId))) return null;
+  return 'Firma kişisi portalda yalnız okuyabilir.';
+}
+
+// Kurala bağlanmamış koleksiyon, alt belge ve kişiye özel alan dış izleyiciye kapalıdır (prototipte de default false).
+export function izleyiciGorebilirMi(yol: string, veri: Veri | null, iz: Izleyici): boolean {
+  if (iz.tur === 'firma') return true;
+  if (iz.tur === 'kapali') return false;
+  const p = parcalar(yol);
+  if (p.length !== 2 || veri === null) return false;
+  const musteri = iz.tur === 'musteri';
+  const kendi = veri['partyId'] === iz.firma;
+  switch (p[0]) {
+    case 'requests': return musteri && veri['customerId'] === iz.firma;
+    case 'orders': return kendi && veri['type'] === (musteri ? 'sales' : 'purchase')
+      && veri['approvalState'] !== 'pending' && veri['approvalState'] !== 'rejected';
+    case 'ncrs': return kendi && veri['kind'] === (musteri ? 'customer' : 'supplier');
+    case 'payments': return kendi && veri['direction'] === (musteri ? 'in' : 'out') && veri['status'] !== 'awaiting';
+    case 'priceReqs': return !musteri && kendi;
+    case 'catalog': return kendi;
+    case 'rfqs': return !musteri && Array.isArray(veri['invited']) && veri['invited'].includes(iz.firma);
+    case 'bids': return !musteri && veri['supplierId'] === iz.firma;
+    case 'contracts': return kendi && veri['approval'] === 'approved';
+    case 'docs': case 'recons': case 'users': return kendi;
+    case 'parties': return p[1] === iz.firma;
+    default: return false;
+  }
 }
 
 // Satın alma siparişinin sevkiyatı portalda teslim alınmaz (238, H1): portal belgesindeki "teslim alındı" stok hareketi, parti ve

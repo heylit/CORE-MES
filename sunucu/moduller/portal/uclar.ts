@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  belgeCevabi, belgeParametresi, benCevabi, benHazirlaCevabi, damgaCevabi, ekCevabi, ekIcerikCevabi, ekParametresi, ekYukleGovdesi, kilitCevabi, kilitGovdesi,
+  belgeCevabi, belgeParametresi, benCevabi, benHazirlaCevabi, damgaCevabi, ekCevabi, firmaKisisiCevabi, firmaKisisiGovdesi, firmaKisisiParametresi, ekIcerikCevabi, ekParametresi, ekYukleGovdesi, kilitCevabi, kilitGovdesi,
   kisilerCevabi, kurulumCevabi, odaCevabi, onayKarariGovdesi, onayParametresi, odaParametresi, silCevabi, silGovdesi, sorguCevabi, sorguParametresi, yazGovdesi,
 } from '#paylasilan/sozlesme/portal.ts';
-import { belgeOku, belgeSil, belgeYaz, ben, benHazirla, damga, ekOku, ekYukle, kilitle, kisiler, kurulum, odaGuncelle, onayKarariVer, sorgu } from './servis.ts';
+import { belgeOku, belgeSil, belgeYaz, ben, benHazirla, damga, ekOku, ekYukle, firmaKisisiAta, izleyiciBul, kilitle, kisiler, kurulum, odaGuncelle, onayKarariVer, sorgu } from './servis.ts';
 
 // Çerçevedeki prototipin depo çağrıları bu uçlara gelir (istemci/src/moduller/portal/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -89,7 +89,17 @@ export const uclar = [
     yol: '/portal/kisiler',
     yetki: OKUMA,
     cevap: kisilerCevabi,
-    isle: ({ db }) => kisiler(db),
+    isle: ({ db, kullanici }) => kisiler(db, kullanici),
+  }),
+  // Firma kişisi (1021 b): kişi portalda o firmanın müşteri ya da tedarikçi kullanıcısı olarak, yalnız okuyarak açılır.
+  uc({
+    yontem: 'POST',
+    yol: '/portal/kisiler/:kisiId/firma',
+    yetki: 'portal.yonet',
+    parametre: firmaKisisiParametresi,
+    govde: firmaKisisiGovdesi,
+    cevap: firmaKisisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => firmaKisisiAta(db, kullanici, parametre.kisiId, govde.firma),
   }),
   uc({
     yontem: 'POST',
@@ -104,7 +114,7 @@ export const uclar = [
     yetki: OKUMA,
     sorgu: odaParametresi,
     cevap: odaCevabi,
-    isle: ({ kullanici, sorgu: s }) => odaGuncelle(kullanici, s.durum),
+    isle: async ({ db, kullanici, sorgu: s }) => odaGuncelle(kullanici, await izleyiciBul(db, kullanici), s.durum),
   }),
   uc({
     yontem: 'POST',
@@ -123,6 +133,6 @@ export const uclar = [
     yetki: OKUMA,
     parametre: ekParametresi,
     cevap: ekIcerikCevabi,
-    isle: ({ db, parametre }) => ekOku(db, parametre.id),
+    isle: ({ db, kullanici, parametre }) => ekOku(db, kullanici, parametre.id),
   }),
 ];
