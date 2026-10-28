@@ -1,10 +1,12 @@
 // S4 b: dışa aktarma yalnız CSV ve yalnız liste ekranlarında. Biçim stok hareketleriyle aynı: noktalı virgül, BOM, ondalık virgül
 // (Excel Türkçe açar). Ekranda görünen satırlar aktarılır; sunucuya ayrı istek gitmez.
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { formulKoru } from '../../ortak/veri/csv.ts';
 
 export type CsvDegeri = string | number | null;
 
-const alan = (v: CsvDegeri) => `"${(typeof v === 'number' ? String(v).replace('.', ',') : (v ?? '')).replace(/"/g, '""')}"`;
+// Formül gibi başlayan metin ' ile başlar (ortak CSV ile aynı kural).
+const alan = (v: CsvDegeri) => `"${(typeof v === 'number' ? String(v).replace('.', ',') : formulKoru(v ?? '')).replace(/"/g, '""')}"`;
 
 export function csvMetni(basliklar: readonly string[], satirlar: readonly (readonly CsvDegeri[])[]): string {
   return '﻿' + [basliklar.map(alan).join(';'), ...satirlar.map((s) => s.map(alan).join(';'))].join('\r\n');

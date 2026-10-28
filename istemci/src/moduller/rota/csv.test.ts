@@ -10,5 +10,6 @@ describe('S4 b: CSV metni', () => {
 
   it('satırsız liste yalnız başlık satırıdır', () => {
     expect(csvMetni(['Kod'], []).slice(1)).toBe('"Kod"');
+    expect(csvMetni(['Kod'], [['=1+1'], [-2]]).slice(1).split('\r\n').slice(1)).toEqual([`"'=1+1"`, '"-2"']);
   });
 });
