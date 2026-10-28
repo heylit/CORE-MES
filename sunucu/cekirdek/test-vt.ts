@@ -18,12 +18,57 @@ export const TEMIZLIK_KILIDI = 7402100002;
 
 const ZAMANLI_AD = /_(\d{9,11})_[0-9a-f]{12}$/;
 
+// Sunucunun kilit tablosu bütün bağlantılarca paylaşılır (yaklaşık max_locks_per_transaction x bağlantı sayısı; varsayılanda
+// ~6400) ve transaction'ın aldığı her kilit bitene dek orada durur. Tam şemayı tek transaction'da silmek 400 tabloda ~10 bin
+// kilit (tablo başına ~26: dizinler, toast, satır tipi, kısıtlar, diziler), sıfırlamak ~1900 kilit tutuyordu; eşzamanlı
+// dosyalarla tablo doldu ve ilgisiz sorgular 53200 ile düştü. İş tablo kümelerine bölünür; transaction başına kilit tablo
+// sayısıyla değil küme boyuyla büyür.
+export const SILME_KUMESI = 10;
+export const SIFIRLAMA_KUMESI = 50;
+
+// Testin her transaction'ın kapanmadan önceki hâlini (örn. tuttuğu kilitler) ölçebilmesi için.
+export type IslemSonu = (db: Db) => Promise<void>;
+
+const tirnakla = (ad: string): string => `"${ad.replaceAll('"', '""')}"`;
+
+function kumele<T>(dizi: T[], boy: number): T[][] {
+  const kumeler: T[][] = [];
+  for (let i = 0; i < dizi.length; i += boy) kumeler.push(dizi.slice(i, i + boy));
+  return kumeler;
+}
+
 // Sıra beklemesi sorgu süre sınırına sayılmaz: bekleme, önde kaç dosyanın silme yaptığına bağlıdır ve eşzamanlılıkla büyür.
 // Silmenin kendisi oturumun sınırıyla koşar; takılan silme yine yakalanır.
 async function temizlikSirasinaGir(db: Db): Promise<void> {
   await db.sorgu('SET LOCAL statement_timeout = 0');
   await db.sorgu('SELECT pg_advisory_xact_lock($1)', [TEMIZLIK_KILIDI]);
   await db.sorgu('RESET statement_timeout');
+}
+
+// Şema önce tablo kümeleriyle, en son kalan nesneleriyle (işlevler, tipler) silinir; her küme kendi transaction'ında ve
+// temizlik sırasında. Yarıda kesilen silme şemayı eksik bırakır; şema adı yerinde kaldığı için artık temizliği onu yine bulur.
+export async function semayiSil(vt: Veritabani, sema: string, islemSonu?: IslemSonu): Promise<void> {
+  for (let bitti = false; !bitti;) {
+    bitti = await vt.tx(async (db) => {
+      await temizlikSirasinaGir(db);
+      // Önce başka tablonun başvurmadığı tablolar: çok başvurulan tablo (kişi gibi) erken silinirse CASCADE, başvuran
+      // her tablonun kısıtını da siler ve o tabloları da kilitler; tek tablo binden çok kilit tutar. Döngüde sıra yoktur,
+      // kalanlar ad sırasıyla gider. Bölüm ana tablosuyla silinir.
+      const tablolar = (await db.sorgu<{ ad: string }>(
+        `SELECT c.relname::text AS ad FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+           LEFT JOIN (SELECT DISTINCT confrelid FROM pg_constraint
+                       WHERE contype = 'f' AND confrelid <> conrelid AND connamespace = (SELECT oid FROM pg_namespace WHERE nspname = $1::text)) b
+                  ON b.confrelid = c.oid
+          WHERE n.nspname = $1::text AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+          ORDER BY b.confrelid IS NOT NULL, 1 LIMIT $2`,
+        [sema, SILME_KUMESI],
+      )).map((t) => `${tirnakla(sema)}.${tirnakla(t.ad)}`);
+      if (tablolar.length > 0) await db.sorgu(`DROP TABLE IF EXISTS ${tablolar.join(', ')} CASCADE`);
+      else await db.sorgu(`DROP SCHEMA IF EXISTS ${tirnakla(sema)} CASCADE`);
+      await islemSonu?.(db);
+      return tablolar.length === 0;
+    });
+  }
 }
 
 // Hakkı olmayan işi sunucu bu kodla reddeder; ileti dile göre değiştiği için koda bakılır.
@@ -58,17 +103,13 @@ function artikMi(ad: string, simdiSn: number): boolean {
 }
 
 // Kapanış kancası yarıda kesilen koşuda çalışmaz; artığı bir sonraki koşunun açılışı siler.
-// Her artık kendi transaction'ında silinir: silinen her tablo transaction bitene dek kilit tutar, birikmiş
-// artıkların hepsi tek transaction'da silinirse sunucunun kilit tablosu dolar ve hiçbir test şeması açılamaz.
+// Her artık ayrı silinir: birikmiş artıkların hepsi tek transaction'da silinirse sunucunun kilit tablosu dolar.
 async function artiklariTemizle(vt: Veritabani): Promise<void> {
   const semalar = await vt.sorgu<{ ad: string }>("SELECT nspname::text AS ad FROM pg_namespace WHERE left(nspname, 2) = 't_' ORDER BY 1");
   const simdiSn = Math.floor(Date.now() / 1000);
   for (const { ad } of semalar) {
     if (!artikMi(ad, simdiSn)) continue;
-    await vt.tx(async (db) => {
-      await temizlikSirasinaGir(db);
-      await db.sorgu(`DROP SCHEMA IF EXISTS "${ad.replaceAll('"', '""')}" CASCADE`);
-    });
+    await semayiSil(vt, ad);
   }
 }
 
@@ -94,10 +135,7 @@ export async function testSemasiAc(onek: string): Promise<TestVeritabani> {
     async kaldir(): Promise<void> {
       try {
         await vt.kapat();
-        await sahip.tx(async (db) => {
-          await temizlikSirasinaGir(db);
-          await db.sorgu(`DROP SCHEMA IF EXISTS ${sema} CASCADE`);
-        });
+        await semayiSil(sahip, sema);
       } finally {
         await sahip.kapat();
       }
@@ -112,8 +150,6 @@ export async function testVeritabaniKur(onek: string): Promise<TestVeritabani> {
   return ortam;
 }
 
-const tirnakla = (ad: string): string => `"${ad.replaceAll('"', '""')}"`;
-
 interface Tohum {
   tablolar: string[];
   tetikli: string[];
@@ -123,8 +159,13 @@ interface Tohum {
 
 // Göçlerin bıraktığı durum (tohum satırları ve dizi değerleri) bir kez okunur; her test başında şema ona döner.
 // Bütün göçleri yeniden uygulamaktan çok daha ucuzdur; her test yine boş, göç sonrası veritabanıyla başlar.
-// Sahip yapar: tetikler (yalnız ekleme kuralı dahil) sıfırlama süresince kapalıdır, yabancı anahtar denetimi açık kalır.
-export async function sifirlamaHazirla(ortam: Pick<TestVeritabani, 'sahip'>): Promise<() => Promise<void>> {
+// Sahip yapar: tetikler (yalnız ekleme kuralı dahil) kapalıyken silinir ve yazılır, yabancı anahtar denetimi açık kalır.
+// Kümeler sırayla ayrı transaction'lardadır: çocuk tablolar ebeveynden önceki kümelerde boşalır, ebeveynler önceki kümelerde
+// dolar; her küme tetiklerini kendi transaction'ında kapatıp açar, kapalı tetik hiçbir bağlantıya görünmez.
+export async function sifirlamaHazirla(
+  ortam: Pick<TestVeritabani, 'sahip'>,
+  islemSonu?: IslemSonu,
+): Promise<() => Promise<void>> {
   const { sahip } = ortam;
   const tablolar = (await sahip.sorgu<{ ad: string }>(
     `SELECT c.relname::text AS ad FROM pg_class c
@@ -164,22 +205,36 @@ export async function sifirlamaHazirla(ortam: Pick<TestVeritabani, 'sahip'>): Pr
     `SELECT format('%I', sequencename) AS ad, last_value::text AS deger, start_value::text AS baslangic
        FROM pg_sequences WHERE schemaname = current_schema()`,
   );
-  return async () => {
-    await sahip.tx(async (db) => {
-      for (const t of tetikli) await db.sorgu(`ALTER TABLE ${tirnakla(t)} DISABLE TRIGGER USER`);
-      // Küçük tablolarda DELETE, TRUNCATE'ten ucuzdur (TRUNCATE her tablo ve dizin için yeni dosya açar). Çocuk önce silinir.
-      for (const tablo of [...silinecek].reverse()) await db.sorgu(`DELETE FROM ${tirnakla(tablo)}`);
-      for (const { tablo, sutunlar, json } of satirlar) {
-        await db.sorgu(
-          `INSERT INTO ${tirnakla(tablo)} (${sutunlar}) OVERRIDING SYSTEM VALUE
-             SELECT ${sutunlar} FROM json_populate_recordset(null::${tirnakla(tablo)}, $1::json)`,
-          [json],
-        );
-      }
-      for (const d of diziler) {
-        await db.sorgu('SELECT setval($1::regclass, $2::bigint, $3)', [d.ad, d.deger ?? d.baslangic, d.deger !== null]);
-      }
-      for (const t of tetikli) await db.sorgu(`ALTER TABLE ${tirnakla(t)} ENABLE TRIGGER USER`);
+  const kume = (tablolar: string[], is: (db: Db) => Promise<void>): Promise<void> =>
+    sahip.tx(async (db) => {
+      const kapanacak = tablolar.filter((t) => tetikli.includes(t));
+      for (const t of kapanacak) await db.sorgu(`ALTER TABLE ${tirnakla(t)} DISABLE TRIGGER USER`);
+      await is(db);
+      for (const t of kapanacak) await db.sorgu(`ALTER TABLE ${tirnakla(t)} ENABLE TRIGGER USER`);
+      await islemSonu?.(db);
     });
+  return async () => {
+    // Küçük tablolarda DELETE, TRUNCATE'ten ucuzdur (TRUNCATE her tablo ve dizin için yeni dosya açar). Çocuk önce silinir.
+    for (const k of kumele([...silinecek].reverse(), SIFIRLAMA_KUMESI)) {
+      await kume(k, async (db) => {
+        for (const tablo of k) await db.sorgu(`DELETE FROM ${tirnakla(tablo)}`);
+      });
+    }
+    for (const k of kumele(satirlar, SIFIRLAMA_KUMESI)) {
+      await kume(k.map((s) => s.tablo), async (db) => {
+        for (const { tablo, sutunlar, json } of k) {
+          await db.sorgu(
+            `INSERT INTO ${tirnakla(tablo)} (${sutunlar}) OVERRIDING SYSTEM VALUE
+               SELECT ${sutunlar} FROM json_populate_recordset(null::${tirnakla(tablo)}, $1::json)`,
+            [json],
+          );
+        }
+      });
+    }
+    for (const k of kumele(diziler, SIFIRLAMA_KUMESI)) {
+      await kume([], async (db) => {
+        for (const d of k) await db.sorgu('SELECT setval($1::regclass, $2::bigint, $3)', [d.ad, d.deger ?? d.baslangic, d.deger !== null]);
+      });
+    }
   };
 }
