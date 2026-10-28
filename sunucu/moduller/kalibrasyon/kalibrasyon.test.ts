@@ -12,7 +12,9 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { aletGetir, aletKimlikleri, aletNoIleGetir, aletTurleri, gecerliAletVarMi, olcumAletiGecerliMi, vadesiGecenAletSayisi } from './disari.ts';
+import {
+  aletGetir, aletKimlikleri, aletNoIleGetir, aletTurleri, gecerliAletVarMi, olcumAletiGecerliMi, takvimKayitlari, vadesiGecenAletSayisi,
+} from './disari.ts';
 import { gunEkle } from './kurallar.ts';
 import { aletOlustur, kalibrasyonKaydet } from './servis.ts';
 
@@ -686,5 +688,22 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     assert.equal(cevap.statusCode, 200, cevap.body);
     assert.deepEqual(cevap.json(), liste.ozet);
     assert.equal(liste.ozet.vadesiGecen > 0 && liste.ozet.yaklasan > 0, true);
+  });
+
+  test('takvim (891): vadesi aralıktaki kullanımdaki alet adıyla gelir; kullanım dışı, kayıtsız ve aralık dışı gelmez', async () => {
+    const vadeli = await aletAc({ ad: 'Takvim kumpası', periyotGun: 30, ilkKalibrasyon: { tarih: '2026-01-01', sonuc: 'uygun' } });
+    const disi = await aletAc({ periyotGun: 30, ilkKalibrasyon: { tarih: '2026-01-05', sonuc: 'uygun' } });
+    const birak = await cagir(yonetici, 'POST', `/olcu-aletleri/${disi.id}/kullanim-disi`, { neden: 'Kırık' });
+    assert.equal(birak.statusCode, 200, birak.body);
+    const kayitsiz = await aletAc({ periyotGun: 30 });
+    const sonra = await aletAc({ periyotGun: 30, ilkKalibrasyon: { tarih: '2026-03-01', sonuc: 'uygun' } });
+
+    const bizim = new Set([vadeli.id, disi.id, kayitsiz.id, sonra.id].map(String));
+    const kayitlar = (await vt().tx((db) => takvimKayitlari(db, '2026-01-01', '2026-02-28'))).filter((k) => bizim.has(k.kimlik));
+    assert.deepEqual(kayitlar, [{
+      kaynak: 'kalibrasyon', kimlik: String(vadeli.id), tarih: vadeli.vade, no: vadeli.no, baslik: `Kalibrasyon ${vadeli.no}`,
+      ilgili: 'Takvim kumpası', durum: 'Vadesi geçti', bitti: false,
+    }]);
+    assert.equal(vadeli.vade, '2026-01-31');
   });
 });

@@ -95,3 +95,13 @@ export function turdeGecerliAletVarMi(durumlar: readonly Durum[]): boolean | nul
   if (kullanimda.length === 0) return null;
   return kullanimda.some(olcumdeKullanilabilirMi);
 }
+
+// Takvimde vadenin durum adı (891). Vadesi bilinmeyen (kayıt yok) ve kullanım dışı alet takvime gelmez.
+export const TAKVIM_ALET_DURUMU: Readonly<Record<Exclude<Durum, 'kullanim-disi' | 'kayit-yok'>, string>> = {
+  gecmis: 'Vadesi geçti',
+  yaklasan: 'Yaklaşıyor',
+  gecerli: 'Geçerli',
+};
+
+export const takvimdeMi = (a: Pick<Alet, 'durum' | 'vade'>, baslangic: string, bitis: string): boolean =>
+  a.durum !== 'kullanim-disi' && a.durum !== 'kayit-yok' && a.vade !== null && a.vade >= baslangic && a.vade <= bitis;

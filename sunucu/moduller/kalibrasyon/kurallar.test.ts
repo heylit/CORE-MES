@@ -3,8 +3,9 @@ import { describe, test } from 'node:test';
 import { kalibrasyonDurumu } from '#paylasilan/sozlesme/kalibrasyon-kurali.ts';
 import {
   UYGUNSUZ_NEDENI, aramayaUyar, belirleyenKayit, gelecekTarihMi, gunEkle, gunFarki, kalibrasyonEtkisi, ozetSay,
-  olcumdeKullanilabilirMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
+  olcumdeKullanilabilirMi, takvimdeMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
 } from './kurallar.ts';
+import type { Alet } from '#paylasilan/sozlesme/kalibrasyon.ts';
 
 const BUGUN = '2026-03-01';
 const girdi = (sonUygunTarih: string | null, ek: { kullanimDisi?: boolean; periyotGun?: number } = {}) => ({
@@ -122,4 +123,13 @@ describe('türde geçerli alet var mı', () => {
   test('KLB-17 ölçümde kullanılabilir: geçerli ve yaklaşan evet; geçmiş, kayıt yok ve kullanım dışı hayır', () => {
     assert.deepEqual((['gecerli', 'yaklasan', 'gecmis', 'kayit-yok', 'kullanim-disi'] as const).map(olcumdeKullanilabilirMi), [true, true, false, false, false]);
   });
+});
+
+test('takvim (891): yalnız vadesi bilinen ve kullanımdaki alet, aralığın iki ucu dahil takvime girer', () => {
+  const a = (durum: Alet['durum'], vade: string | null) => ({ durum, vade });
+  assert.equal(takvimdeMi(a('gecerli', '2026-03-01'), '2026-03-01', '2026-03-31'), true);
+  assert.equal(takvimdeMi(a('gecmis', '2026-03-31'), '2026-03-01', '2026-03-31'), true);
+  assert.equal(takvimdeMi(a('yaklasan', '2026-04-01'), '2026-03-01', '2026-03-31'), false);
+  assert.equal(takvimdeMi(a('kullanim-disi', '2026-03-10'), '2026-03-01', '2026-03-31'), false);
+  assert.equal(takvimdeMi(a('kayit-yok', null), '2026-03-01', '2026-03-31'), false);
 });

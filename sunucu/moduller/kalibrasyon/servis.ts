@@ -5,10 +5,11 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   Alet, AletAyrintiCevabi, AletGuncelleGovdesi, AletOlusturGovdesi, KalibrasyonGovdesi, ListeCevabi, OzetCevabi, Sonuc, Tur,
 } from '#paylasilan/sozlesme/kalibrasyon.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import {
-  SON_KAYIT_SAYISI, VARSAYILAN_PERIYOT_GUN, aramayaUyar, belirleyenKayit, gelecekTarihMi, kalibrasyonEtkisi, ozetSay,
-  olcumdeKullanilabilirMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
+  SON_KAYIT_SAYISI, TAKVIM_ALET_DURUMU, VARSAYILAN_PERIYOT_GUN, aramayaUyar, belirleyenKayit, gelecekTarihMi, kalibrasyonEtkisi, ozetSay,
+  olcumdeKullanilabilirMi, takvimdeMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
 } from './kurallar.ts';
 import {
   aktifTurleriGetir, aletEkle, aletGuncelle, aletSil, aletVarMi, aletiKilitle, aletinTuru, aletleriGetir, bugunuGetir, kayitEkle,
@@ -229,4 +230,16 @@ export async function aletlerVeKayitlari(db: Db, kayitAdedi: number): Promise<(A
       tarih: k.tarih, sonuc: k.sonuc, sertifikaNo: k.sertifika_no, aciklama: k.aciklama, kisiAd: adlar.get(k.kisi_id) ?? null,
     })),
   }));
+}
+
+// Takvim (891): vadesi [baslangic, bitis] içindeki kullanımdaki aletler. Yetki denetlemez; çağıran kalibrasyon.oku'yu denetler.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  return vadeyeGoreSirala((await aletleriGetir(db)).map(aleteCevir).filter((a) => takvimdeMi(a, baslangic, bitis)))
+    .flatMap((a): TakvimKaydi[] => {
+      if (a.vade === null || a.durum === 'kullanim-disi' || a.durum === 'kayit-yok') return [];
+      return [{
+        kaynak: 'kalibrasyon', kimlik: String(a.id), tarih: a.vade, no: a.no, baslik: `Kalibrasyon ${a.no}`,
+        ilgili: a.ad ?? a.tur, durum: TAKVIM_ALET_DURUMU[a.durum], bitti: false,
+      }];
+    });
 }
