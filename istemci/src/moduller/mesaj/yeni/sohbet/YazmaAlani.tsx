@@ -43,6 +43,7 @@ export function YazmaAlani({ kanal, kanalAdi, yanit, yanitYaz, duyuruKipi, duyur
   const dosya = useRef<HTMLInputElement>(null);
   const yaziyor = useRef<{ acik: boolean; zamanlayici: number }>({ acik: false, zamanlayici: 0 });
   const taslakZamanlayici = useRef(0);
+  const oneriZamanlayici = useRef(0);
   const taslakGuncel = useRef(taslaklar);
   taslakGuncel.current = taslaklar;
 
@@ -73,7 +74,8 @@ export function YazmaAlani({ kanal, kanalAdi, yanit, yanitYaz, duyuruKipi, duyur
     return () => { window.removeEventListener(TASLAK_TEMIZLE, temizle); };
   }, [kanal]);
 
-  useEffect(() => () => { window.clearTimeout(taslakZamanlayici.current); }, []);
+  // Bileşen kapanınca bekleyen zamanlayıcı çalışmaz: öneri kapatma `document`'e bakar, sayfa ya da test ortamı o sırada gitmiş olabilir.
+  useEffect(() => () => { window.clearTimeout(taslakZamanlayici.current); window.clearTimeout(oneriZamanlayici.current); }, []);
 
   if (!yetki.yaz) return <div className="tc-ms-salt-okur">Bu çalışma alanında yalnızca okuma iznin var.</div>;
 
@@ -216,7 +218,10 @@ export function YazmaAlani({ kanal, kanalAdi, yanit, yanitYaz, duyuruKipi, duyur
           placeholder={duyuruKipi ? 'Duyuru metnini yaz… (herkes okundu onayı verecek)' : `#${kanalAdi} kanalına yaz…`}
           onChange={(o) => { degisti(o.target.value, o.target.selectionStart); }}
           onKeyDown={tus}
-          onBlur={() => { window.setTimeout(() => { if (document.activeElement !== alan.current) oneriYaz(null); }, 160); }}
+          onBlur={() => {
+            window.clearTimeout(oneriZamanlayici.current);
+            oneriZamanlayici.current = window.setTimeout(() => { if (document.activeElement !== alan.current) oneriYaz(null); }, 160);
+          }}
         />
         <button type="button" className="tc-ms-arac" aria-label="Emoji" aria-expanded={emoji} onClick={() => { emojiYaz(!emoji); }}>😊</button>
         <button type="button" className="tc-ms-gonder" aria-label="Gönder" disabled={!metin.trim() || yukleniyor} onClick={() => { void gonderMetni(); }}>
