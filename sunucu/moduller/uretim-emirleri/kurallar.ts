@@ -1053,6 +1053,23 @@ export const HATALI_ADET = 'Hatalı adet bu adımda henüz sayılmamış adedi a
 export const HATALI_ROTASIZ = 'Rotasız emirde hatalı parça yalnız adımdaki bütün parça hatalıysa ayrılır; planlamaya bildirin.';
 export const HATALI_OP_YERI = 'Kalite ve rework adımlarına op numarası açılamıyor: komşu adımların arasında boş numara yok; planlamaya bildirin.';
 export const HATALI_KALITE_TIPI_YOK = 'Kalite kararı adımı için aktif kalite (KAL) operasyon tipi yok; Operasyon Tipleri\'nden ekleyin.';
+// 1045 b: emrin kendisinde (4 a) bütün parça hurda ya da red olduysa emir durur. Ayrı durum yoktur: bekleyen adımın önceki adımı bu
+// kararın sağlamsız kalite adımıdır. adimId verilirse yalnız o adımın başlaması sorulur.
+export function hataliDurduMu(
+  adimlar: readonly { id: number; sira: number; durum: string; saglamAdet: number | null }[],
+  kayitlar: readonly { uretimEmriId: number; hedefEmirId: number; kaliteIsEmriId: number; karar: string | null }[],
+  adimId?: number,
+): boolean {
+  const kok = new Set(kayitlar.filter((k) => k.hedefEmirId === k.uretimEmriId && (k.karar === 'hurda' || k.karar === 'red')).map((k) => k.kaliteIsEmriId));
+  if (kok.size === 0) return false;
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  return sirali.some((a, i) => {
+    if (a.durum !== 'bekliyor' || (adimId !== undefined && a.id !== adimId)) return false;
+    const onceki = sirali[i - 1];
+    return onceki !== undefined && onceki.durum === 'tamam' && (onceki.saglamAdet ?? 0) === 0 && kok.has(onceki.id);
+  });
+}
+export const HATALI_EMIR_DURDU = 'Emir durdu: bütün parça hurda ya da red oldu. Planlama yeniden başlatır ya da kapatır.';
 export const HATALI_KALITE_ADIMI = 'Bu adım kalite kararıyla kapanır; kararı Kalite Merkezi\'nde verin.';
 export const HATALI_KAYIT_YOK = 'Hatalı parça kaydı bulunamadı.';
 export const HATALI_KARAR_VERILMIS = 'Bu hatalı parçanın kalite kararı verilmiş.';

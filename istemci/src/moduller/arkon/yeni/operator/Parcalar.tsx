@@ -370,8 +370,10 @@ export function SayimTuslari({ tuslar }: { tuslar: readonly SayimTusu[] }) {
 }
 
 /* ── toplu giriş: sağlam ve hurda adedi bir seferde; hurda varsa nedeni seçilir; ekranda hep açıktır ── */
-export function TopluGiris({ kalan, kapali, kaydet, nedenler }: {
+// 1044 a: TMI işinde ikinci alan "Hatalı"dır (parça kaliteye ayrılır, hurdayı kalite yazar); öteki işte "Hurda".
+export function TopluGiris({ kalan, kapali, kaydet, nedenler, hurdaEtiketi = 'Hurda' }: {
   kalan: number; kapali: boolean; kaydet: (g: { saglam: number; hurda: number; neden: string | null }) => boolean; nedenler: readonly ScrapReason[];
+  hurdaEtiketi?: 'Hurda' | 'Hatalı';
 }) {
   const [sg, sgYaz] = useState('');
   const [hr, hrYaz] = useState('');
@@ -397,11 +399,11 @@ export function TopluGiris({ kalan, kapali, kaydet, nedenler }: {
     <div className="tc-ay1-toplu" role="group" aria-label="Toplu giriş">
       <div className="tc-ay1-toplu-ust"><Simge ad="layers" boyut="k" /><span className="tc-ay1-ust-yazi">Toplu giriş</span><small className="tc-ay1-soluk">Sağlam en çok {sayi(Math.max(0, kalan))}</small></div>
       <div className="tc-ay1-toplu-satir">
-        {alan('Sağlam', sg, sgYaz, 'iyi')}{alan('Hurda', hr, hrYaz, 'hurda')}
+        {alan('Sağlam', sg, sgYaz, 'iyi')}{alan(hurdaEtiketi, hr, hrYaz, 'hurda')}
         <Dugme simge="check" disabled={kapali || bos || !!hata} onClick={kaydi}>Kaydet</Dugme>
       </div>
       {hurdali ? (
-        <div ref={nedenRef} className="tc-ay1-nedenler tc-ay1-nedenler-kucuk" role="radiogroup" aria-label="Hurda nedeni">
+        <div ref={nedenRef} className="tc-ay1-nedenler tc-ay1-nedenler-kucuk" role="radiogroup" aria-label={`${hurdaEtiketi} nedeni`}>
           {L.map((r) => (
             <button key={r.code} type="button" role="radio" aria-checked={neden === r.code} className="tc-ay1-neden" data-durum="durdu" onClick={() => nedenYaz(r.code)}>
               <span className="tc-ay1-neden-simge"><Simge ad="trash" boyut="k" /></span><b>{r.l}</b>

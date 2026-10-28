@@ -234,3 +234,12 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Davranış: sıra dışı başlatma uyarıyla geçer (626 a); akışlı ya da bekleyen adım önceki adım bitmeden bitmez (649 a); adıma girenden fazla sayım reddedilmez, uyarır ve iz bırakır (647 a, denetim #31'in sert sınırı kalktı); eksi bakiyeyle bitiş uyarır (654 a). Bir adım bitince başka adım çalışıyorsa emir başlamış kalır, istasyonu öncü adıma geçer; emrin sağlamı en büyük sıralı adımındır. Kullanım, katılım ve olay adım başına yazılır ve kapanır; aynı emrin öteki adımı makineyi doldurur.
 - Okumalar: `Emir.acikAdimlar`, `Emir.baslatilabilirAdimlar`, ayrıntıda `isEmirleri[].eksik`. `adimaGiren` önceki adım bitmemişse o anki sağlamını kullanır.
 - Göç yok (639b'de geldi); işlem ve rol değişmedi. Arkon terminali adım göndermediği için sıralı kalır (636 a; 639e, 639f).
+
+## Hatalı parça: kol ya da emre adım, kalite kararı, rework adımı (1033 a, 1034, 1036 a, 4 a, 7 a, 1038 a; dal 1034-hatali-parca)
+
+- Göç `20261028092000`: yeni boş tablo `uretim_emirleri_hatali_kaydi` (emir, adım, hedef emir, kalite, rework ve tekrar adımı, hurda nedeni, adet, not, kişi, zaman; kararı bir kez). Dolu tabloya dokunulmadı.
+- Yeni uçlar: `POST /uretim-emirleri/:id/hatali` (`terminal.uret`, istek kimliği zorunlu), `GET /hatali-parcalar` (emri okuyan ya da `kalite-merkezi.oku`), `POST /adimli-emirler/:id/is-emirleri/:isEmriId/rework-adimi` (`uretim-emirleri.yaz`).
+- `disari.ts`: `hataliKayitlari`, `hataliKaydi`, `hataliKarariVer` (Kalite Merkezi'nin karar formu; `kalite-merkezi.onayla` burada da aranır).
+- Davranış: hatalı parça hatalı adımda sayılmaz. Kalite kararı adımı başlatma denetimiyle terminalden başlamaz. Bölme `kilitliEmriBol` ile planlamanın bölmesiyle aynı kuraldan geçer; `partiyiBol` davranışı değişmedi.
+- 1045 b: emrin kendisinde bütün parça hurda ya da red olursa emir durur; sonraki adım başlatma denetimiyle başlamaz (ayrı durum yok, önceki adım bu kararın sağlamsız kalite adımıdır). Adımlı emir ayrıntısında `hataliDurdu` (1064: duran emir yeniden başlamaz, eksik adet için planlama yeni emir açar; kapatma akışı ayrı tasarlanacak).
+- İşlem ve rol değişmedi (operatörün kolu açması 1033 a ile verildi; uç `terminal.uret`).

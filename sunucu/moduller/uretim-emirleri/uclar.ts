@@ -7,9 +7,11 @@ import {
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
+import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import {
   adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
@@ -519,4 +521,40 @@ const adimKomutUclari = [
   }),
 ];
 
-export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari];
+// Hatalı parça (1033 a, 1034): operatör nedeni ve adedi verir, kol (ya da emre adım) aynı işlemde açılır; yinelenirse iki kol açılırdı.
+// Kayıtları emri okuyan ve Kalite Merkezi okur; rework adımını kalite kararından sonra planlama doldurur.
+const hataliUclari = [
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/hatali',
+    yetki: 'terminal.uret',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: hataliGovdesi,
+    cevap: hataliCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => hataliKaydet(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/hatali-parcalar',
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'kalite-merkezi.oku'] },
+    sorgu: hataliListeSorgusu,
+    cevap: hataliListeCevabi,
+    isle: async ({ db, sorgu }) => ({ kayitlar: await hataliKayitlari(db, { acik: sorgu.acik === '1', emirId: sorgu.emirId ?? null }) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/rework-adimi',
+    yetki: 'uretim-emirleri.yaz',
+    tekrarKorumali: true,
+    parametre: isEmriParametresi,
+    govde: reworkAdimiGovdesi,
+    cevap: adimliEmirCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await isEmri.reworkAdimiYaz(db, kullanici, parametre.id, parametre.isEmriId, govde);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+];
+
+export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari, ...hataliUclari];

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DurusNedeni } from '../cekirdek/ayarlar.ts';
-import { DurusPenceresi, VardiyaPenceresi } from './Pencereler.tsx';
+import type { ScrapReason } from '../cekirdek/tipler.ts';
+import { TopluGiris } from './Parcalar.tsx';
+import { DurusPenceresi, HataliPenceresi, VardiyaPenceresi, hataliIstegi, type HataliGirdisi } from './Pencereler.tsx';
 import type { VardiyaOzeti } from './kurallar.ts';
 
 afterEach(() => { cleanup(); });
@@ -42,5 +44,42 @@ describe('Duruş nedeni penceresi (696)', () => {
     expect(screen.queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Mola/ }));
     expect(kayit).toEqual(['P-01']);
+  });
+});
+
+describe('Hatalı parça (1034)', () => {
+  const nedenler = [{ code: 'TK', l: 'Takım kırılması' }, { code: 'OL', l: 'Ölçü dışı' }, { code: 'PS', l: 'Pasif neden', active: false }] as ScrapReason[];
+  it('neden ve adet seçilmeden gönderilmez; pasif neden listede yok; not ile gider', () => {
+    const giden: HataliGirdisi[] = [];
+    render(<HataliPenceresi nedenler={nedenler} yukleniyor={false} kapat={() => {}} kaydet={(g) => giden.push(g)} />);
+    expect(screen.queryByRole('radio', { name: /Pasif neden/ })).toBeNull();
+    const ayir = screen.getByRole('button', { name: /Kaliteye ayır/ }) as HTMLButtonElement;
+    expect(ayir.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Takım kırılması/ }));
+    fireEvent.change(screen.getByLabelText('Hatalı adet'), { target: { value: '0' } });
+    expect(ayir.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Hatalı adet'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Not'), { target: { value: ' uç kırıldı ' } });
+    fireEvent.click(ayir);
+    expect(giden).toEqual([{ kod: 'TK', adet: 3, aciklama: 'uç kırıldı' }]);
+  });
+
+  it('istek: iş emri paketinde adım paketten, emir paketinde TMI seçer; TMI dışı iş ve geçersiz adet isteksiz', () => {
+    const g = { kod: 'TK', adet: 2, aciklama: null };
+    expect(hataliIstegi({ id: 'tmi-ie-70', tmi: { emirId: 7 } }, g)).toEqual({ emirId: 7, govde: { isEmriId: 70, hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });
+    expect(hataliIstegi({ id: 'tmi-ue-7' }, g)).toEqual({ emirId: 7, govde: { hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });
+    expect(hataliIstegi({ id: 'yerel-1' }, g)).toBeNull();
+    expect(hataliIstegi({ id: 'tmi-ue-7' }, { ...g, adet: 0 })).toBeNull();
+  });
+
+  it('toplu girişte TMI işinde ikinci alan Hatalı adını taşır (1044 a); öteki işte Hurda kalır', () => {
+    const { unmount } = render(<TopluGiris kalan={10} kapali={false} nedenler={nedenler} hurdaEtiketi="Hatalı" kaydet={() => true} />);
+    expect(screen.getByLabelText('Toplu hatalı')).toBeTruthy();
+    expect(screen.queryByLabelText('Toplu hurda')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Toplu hatalı'), { target: { value: '2' } });
+    expect(screen.getByRole('radiogroup', { name: 'Hatalı nedeni' })).toBeTruthy();
+    unmount();
+    render(<TopluGiris kalan={10} kapali={false} nedenler={nedenler} kaydet={() => true} />);
+    expect(screen.getByLabelText('Toplu hurda')).toBeTruthy();
   });
 });

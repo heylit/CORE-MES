@@ -10,7 +10,7 @@ import { AZAMI_ADIM, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.t
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type {
   AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
-  RotasizAdimDuzenle, RotasizAdimEkle,
+  ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
 import { istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
@@ -20,15 +20,15 @@ import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.t
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi,
+  adimEksigi, reworkAdimiIhlali, reworkTermini,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir } from './emir-olaylari.ts';
-import type { FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
+import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
@@ -147,7 +147,7 @@ const BAGLI_IS_EMRI = {
   satin_alma_siparis_satiri_is_emri: IS_EMRI_SIPARISE_BAGLI, stok_hareketi_is_emri_id_fkey: IS_EMRI_STOK_HAREKETLI,
   proje_maliyet_defteri_is_emri: IS_EMRI_MALIYETI_DONDURULMUS,
 };
-const bekleyeniSil = async (db: Db, id: number): Promise<void> => {
+export const bekleyeniSil = async (db: Db, id: number): Promise<void> => {
   await listeIsaretsiz(db, id);
   await kisitKorumali(BAGLI_IS_EMRI, () => s.bekleyenIsEmriniSil(db, id), { BAGIMLI_KAYIT: IS_EMRI_BAGLI_KAYIT });
 };
@@ -524,9 +524,11 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     };
   });
   const altEmirIdleri = (await s.altPartilerGetir(db, [id])).filter((a) => a.ustEmirId === id && a.durum !== 'iptal').map((a) => a.id);
+  const hataliKayitlar = await s.hataliKayitlariGetir(db, { acik: false, emirId: id });
   return {
     ...ozet(e, kendi, ad, altEmirIdleri),
     isEmirleri,
+    hataliDurdu: hataliDurduMu(kendi, hataliKayitlar),
     eski: eski === null ? null : {
       durum: eski.eskiDurum, istasyon: istasyonAdi(ad, eski.istasyonId), baslama: eski.baslama, bitis: eski.bitis, saglamAdet: eski.saglamAdet,
     },
@@ -546,7 +548,7 @@ function surumDenetle(e: UstEmirSatiri, surum: number | undefined): void {
 }
 
 // Planlı ya da taslak emrin satırdaki istasyonu sıradaki iş emrinin istasyonudur (terminal oradan görür).
-async function siradakiIstasyonuYaz(db: Db, emirId: number): Promise<void> {
+export async function siradakiIstasyonuYaz(db: Db, emirId: number): Promise<void> {
   await s.emirIstasyonuYaz(db, emirId, siradakiIsEmri(await s.isEmirleriGetir(db, [emirId]))?.istasyonId ?? null);
 }
 
@@ -894,18 +896,35 @@ export async function partiyiBol(
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
-  const kendi = await s.isEmirleriGetir(db, [id]);
-  const ayniSiradanBolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [id]), id)
-    .filter((p) => p.bolunmeSira === g.adimSira).reduce((t, p) => t + p.adet, 0);
-  const bolunenAdim = kendi.find((i) => i.sira === g.adimSira);
-  const gelen = bolunenAdim === undefined ? 0 : await birlesenGelen(db, id, bolunenAdim);
+  const altEmirId = await kilitliEmriBol(db, acanId, e, g);
+  const kol = await s.ustEmirBul(db, altEmirId);
+  if (kol === null) throw bulunamadi(EMIR_YOK);
+  const tipler = await tipKimlikleri(db);
+  for (const ek of g.ekAdimlar ?? []) await ekAdimKoy(db, kol, ek, tipler);
+  await siradakiIstasyonuYaz(db, altEmirId);
+  return { altEmirId };
+}
+
+// Bölünecek adımın elde kalanı için emrin durumu (eldekiAdet): aynı sıradan bölünenler, katılan kollar ve adımda sayılan.
+export async function bolmeDurumu(db: Db, e: UstEmirSatiri, kendi: readonly IsEmriSatiri[], adimSira: number): Promise<BolmeDurumu> {
+  const ayniSiradanBolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [e.id]), e.id)
+    .filter((p) => p.bolunmeSira === adimSira).reduce((t, p) => t + p.adet, 0);
+  const bolunenAdim = kendi.find((i) => i.sira === adimSira);
+  const gelen = bolunenAdim === undefined ? 0 : await birlesenGelen(db, e.id, bolunenAdim);
   // Çalışan adımda sayılan adet üstte kalır; sayım da emri kilitler, arada sayı değişmez.
   const bolunenIslenen = bolunenAdim === undefined || bolunenAdim.durum === 'bekliyor'
     ? 0 : (await s.islenenAdetleriGetir(db, [bolunenAdim.id])).get(bolunenAdim.id)?.adet ?? 0;
+  return { durum: e.durum, arsiv: e.arsiv, adet: e.adet, isEmirleri: kendi, ayniSiradanBolunen, birlesenGelen: gelen, bolunenIslenen };
+}
+
+// Bölme (kilitli emir üzerinde, yetkisi çağıranda): planlamanın bölmesi ve terminalin hatalı parçası (1033 a) aynı kuralla böler.
+export async function kilitliEmriBol(
+  db: Db, acanId: number, e: UstEmirSatiri, g: { adimSira: number; adet: number; birlesmeOpNo?: number | null | undefined; emirTuru?: EmirTuru | undefined },
+): Promise<number> {
+  const id = e.id;
+  const kendi = await s.isEmirleriGetir(db, [id]);
   const birlesmeOpNo = g.birlesmeOpNo ?? null;
-  const ihlal = bolmeIhlali(
-    { durum: e.durum, arsiv: e.arsiv, adet: e.adet, isEmirleri: kendi, ayniSiradanBolunen, birlesenGelen: gelen, bolunenIslenen }, g.adimSira, g.adet, birlesmeOpNo,
-  );
+  const ihlal = bolmeIhlali(await bolmeDurumu(db, e, kendi, g.adimSira), g.adimSira, g.adet, birlesmeOpNo);
   if (ihlal === BOLME_ADET || ihlal === BOLME_URETILMIS) throw dogrulama(ihlal, 'adet');
   if (ihlal === BOLME_BIRLESME_ADIMI) throw dogrulama(ihlal, 'birlesmeOpNo');
   if (ihlal !== null) throw cakisma(ihlal);
@@ -918,13 +937,56 @@ export async function partiyiBol(
   }, acanId);
   const birlesmeSira = birlesmeOpNo === null ? null : kendi.find((i) => i.opNo === birlesmeOpNo)?.sira ?? null;
   await adimlariKopyala(db, altEmirId, kendi.filter((i) => i.sira >= g.adimSira && (birlesmeSira === null || i.sira < birlesmeSira)), g.adimSira);
-  const kol = await s.ustEmirBul(db, altEmirId);
-  if (kol === null) throw bulunamadi(EMIR_YOK);
-  const tipler = await tipKimlikleri(db);
-  for (const ek of g.ekAdimlar ?? []) await ekAdimKoy(db, kol, ek, tipler);
   if ((await s.adetYaz(db, id, e.adet - g.adet, e.surum)) === null) throw eskiSurum();
-  await siradakiIstasyonuYaz(db, altEmirId);
-  return { altEmirId };
+  return altEmirId;
+}
+
+// Hatalı parça (1034): kalite ve rework adımları kolun başına ya da emirde hatalı adımın arkasına, verilen sırayla girer. Yer ve op
+// numarası çağıranın kuralındadır (hataliIhlali, araOpNolari); tip ve kaynak burada olağan yazıyla çözülür.
+export interface EklenenAdim {
+  opNo: number; ad: string; operasyonTipiId: number; istasyonId: number | null; tur: 'rework' | 'ek'; ekAciklama: string | null;
+  bagimlilik: 'bekleyen' | 'bagimsiz'; kopya?: IsEmriSatiri;
+}
+export async function adimlariKoy(db: Db, emirId: number, oncekiOpNo: number | null, adimlar: readonly EklenenAdim[]): Promise<number[]> {
+  const tipler = await tipKimlikleri(db);
+  const idler: number[] = [];
+  let onceki = oncekiOpNo;
+  for (const a of adimlar) {
+    const kendi = await s.isEmirleriGetir(db, [emirId]);
+    idler.push(await adimiYerineKoy(db, emirId, kendi, onceki, async (sira) => {
+      if (a.kopya !== undefined) return { ...isEmriYazisi(a.kopya, true, sira), opNo: a.opNo, tur: a.tur, ekAciklama: a.ekAciklama };
+      const girdi: IsEmriGirdisi = {
+        sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId, kaynak: null, istasyonId: a.istasyonId, ayarSuresiDk: null, birimSureDk: null,
+        terminGun: null, bagimlilik: a.bagimlilik, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+      };
+      return { ...(await yaziyaCevir(db, girdi, sira, tipler)), tur: a.tur, ekAciklama: a.ekAciklama };
+    }));
+    onceki = a.opNo;
+  }
+  return idler;
+}
+
+// Kalite "rework" dedikten sonra planlama ikinci adımı doldurur (1034): ad, tip, kaynak ve süre ya da termin (7 a). Adım bekliyor olmalı.
+export async function reworkAdimiYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ReworkAdimiGovdesi): Promise<void> {
+  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  const e = await kilitliUstEmir(db, emirId);
+  surumDenetle(e, g.surum);
+  const acik = acikEmirIhlali(e.durum, e.arsiv);
+  if (acik !== null) throw cakisma(acik);
+  const adim = (await s.isEmirleriGetir(db, [emirId])).find((i) => i.id === isEmriId) ?? null;
+  const kayit = await s.reworkAdimiKaydi(db, isEmriId);
+  if (adim === null || kayit === null) throw bulunamadi(IS_EMRI_YOK);
+  const ihlal = reworkAdimiIhlali(kayit, adim);
+  if (ihlal !== null) throw cakisma(ihlal);
+  const r = reworkTermini(g);
+  const girdi: IsEmriGirdisi = {
+    sira: adim.sira, opNo: adim.opNo, ad: r.ad, operasyonTipiId: r.operasyonTipiId, kaynak: r.kaynak, ayarSuresiDk: r.ayarSuresiDk, birimSureDk: r.birimSureDk,
+    terminGun: r.terminGun, bagimlilik: adim.bagimlilik, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+  };
+  girdiDenetle([girdi]);
+  await bekleyeniGuncelle(db, adim.id, { ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama });
+  if ((await s.surumArtir(db, emirId, e.surum)) === null) throw eskiSurum();
+  await siradakiIstasyonuYaz(db, emirId);
 }
 
 export async function ekAdimEkle(db: Db, kullanici: Kullanici, id: number, g: EkAdim & { surum: number }): Promise<void> {

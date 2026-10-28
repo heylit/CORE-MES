@@ -551,6 +551,9 @@ export const adimliEmirAyrintisi = adimliEmirOzeti.extend({
     durum: z.string(), istasyon: kodluKayit.nullable(), baslama: zamanSemasi.nullable(), bitis: zamanSemasi.nullable(),
     saglamAdet: z.number().int().nullable(),
   }).nullable(),
+  // 1045 b, 1064: bütün parçası hurda ya da red olan emir durur, yeniden başlamaz; eksik adet için planlama yeni emir açar. Sunucu her
+  // ayrıntıda doldurur; isteğe bağlılığı yalnız bu alanı bilmeyen öteki modüllerin test verisi içindir.
+  hataliDurdu: z.boolean().optional(),
 });
 
 export const adimliListeCevabi = z.object({ emirler: z.array(adimliEmirOzeti) });

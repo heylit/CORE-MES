@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   ACIK_DEGIL, ADIM_ACIK_DEGIL, FASON_VARSAYILAN_GUN, HATALI_ADET, HATALI_AYRILAMAZ, HATALI_KALITE_BASLAMIS, HATALI_KARAR_VERILMIS, HATALI_ROTASIZ,
-  REWORK_BASLAMIS, REWORK_KARARSIZ, araOpNolari, hataliIhlali, hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, reworkAdimiIhlali,
+  REWORK_BASLAMIS, REWORK_KARARSIZ, araOpNolari, hataliDurduMu, hataliIhlali, hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, reworkAdimiIhlali,
   reworkTermini,
 } from './kurallar.ts';
 import type { BolmeDurumu } from './kurallar.ts';
@@ -79,5 +79,19 @@ describe('hatalı parça kuralları (1034, 1036 a, 4 a)', () => {
     assert.equal(reworkTermini({ kaynak: { tur: 'fason' as const }, terminGun: 3 }).terminGun, 3);
     assert.equal(reworkTermini({ kaynak: { tur: 'makine' as const }, terminGun: null }).terminGun, null);
     assert.equal(reworkTermini({ kaynak: null, terminGun: null }).terminGun, null);
+  });
+
+  test('1045 b: emir yalnız kendi kalite adımı hurda ya da redle sağlamsız kapandıysa durur', () => {
+    const adimlar = [
+      { id: 1, sira: 1, durum: 'tamam', saglamAdet: 0 }, { id: 2, sira: 2, durum: 'tamam', saglamAdet: 0 }, { id: 3, sira: 3, durum: 'bekliyor', saglamAdet: null },
+    ];
+    const kayit = (karar: string | null, hedefEmirId = 7) => ({ uretimEmriId: 7, hedefEmirId, kaliteIsEmriId: 2, karar });
+    assert.equal(hataliDurduMu(adimlar, [kayit('red')]), true);
+    assert.equal(hataliDurduMu(adimlar, [kayit('hurda')], 3), true);
+    assert.equal(hataliDurduMu(adimlar, [kayit('hurda')], 1), false);
+    assert.equal(hataliDurduMu(adimlar, [kayit('rework')]), false);
+    assert.equal(hataliDurduMu(adimlar, [kayit(null)]), false);
+    assert.equal(hataliDurduMu(adimlar, [kayit('red', 8)]), false, 'kolda karar ana emri durdurmaz');
+    assert.equal(hataliDurduMu([...adimlar.slice(0, 2), { id: 3, sira: 3, durum: 'calisiyor', saglamAdet: null }], [kayit('red')]), false);
   });
 });

@@ -32,7 +32,10 @@ import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../.
 import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
 import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
+import type { HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
+import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { durusNedeni, planliNedenMi } from '../cekirdek/ayarlar.ts';
 import { GUN_ADLARI, basHarfler, iki, sayi } from '../cekirdek/bicim.ts';
@@ -69,7 +72,10 @@ import {
   IsEylemi, IsOnizKarti, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi,
 } from './Cark.tsx';
 import { DurumSuresi } from './DurumSuresi.tsx';
-import { CagriPenceresi, CagriTakibi, DurusPenceresi, GecisPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
+import {
+  CagriPenceresi, CagriTakibi, DurusPenceresi, GecisPenceresi, HataliPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi, hataliIstegi,
+  type HataliGirdisi,
+} from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
@@ -686,6 +692,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const autoCallT = useRef<ReturnType<typeof setTimeout>>();
   const autoRef = useRef({ state: false, cnt: false });
   const scrapWhy = useRef<string | null>(null);
+  const [hataliGidiyor, hataliGidiyorYaz] = useState(false);
   const topluRef = useRef(false);
   const lastNoteRef = useRef<string | null>(null);
   const prevCnt = useRef<{ no: string; good: number; scrap: number } | null>(null);
@@ -833,8 +840,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const iyiArtiKapali = iyiArtiNedeni(1) !== null;
   const sayimOk = (k: Perm, neden: string | null = kapaliNedeni) => { if (neden !== null) { bip('nok'); say(neden, 'alert', 'idle'); return false; } return ok(k); };
   const iyiSayimOk = (k: Perm) => sayimOk(k, iyiKapaliNedeni);
+  // 1034: TMI işinde hurdayı operatör yazmaz; "Hatalı" parçayı kaliteye ayırır (kol ya da emre ek adım TMI'de açılır), sayaç değişmez.
+  const hataliTmi = !pv && tmiEmirId(o.pkg) !== null && depo.status().mode === 'server';
   const topluKaydet = (g: { saglam: number; hurda: number; neden: string | null }) => {
     if (!sayimOk('prod.run', g.saglam > 0 ? iyiArtiNedeni(g.saglam) ?? kapaliNedeni : kapaliNedeni)) return false;
+    if (hataliTmi && g.hurda > 0 && g.neden) {
+      if (g.saglam > 0) doToplu({ saglam: g.saglam, hurda: 0, neden: null });
+      hataliGonder({ kod: g.neden, adet: g.hurda, aciklama: null });
+      return true;
+    }
     doToplu(g);
     return true;
   };
@@ -919,6 +933,23 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   // Hurda yalnız nedenle yazılır (116 a).
   const addScrap = () => { if (!sayimOk('prod.run')) return; ovYaz('scrap'); };
+  // Hatalı kaydı tekrar korumalıdır: cevabı kaybolan gönderim aynı kimlikle yinelenir, ikinci kol açılmaz. Ret metni TMI'nindir.
+  const hataliGonder = (g: HataliGirdisi) => {
+    const istek = hataliIstegi(o.pkg, g);
+    if (istek === null || hataliGidiyor) return;
+    hataliGidiyorYaz(true);
+    void tekrarKorumaliGonder((d) => api.post<HataliCevabi>(`/uretim-emirleri/${String(istek.emirId)}/hatali`, istek.govde, {
+      istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}),
+    }))
+      .then((c) => {
+        ovYaz(null);
+        bip('call');
+        const yer = c.kolAcildi ? ` · kol ${c.hedefEmir.emirNo}` : ' · adımlar emre eklendi';
+        say(`Hatalı · ${sayi(g.adet)} adet kaliteye ayrıldı${yer} · karar kalitede${c.uyari ? ` · ${c.uyari}` : ''}`, 'alert', 'hold',
+          { action: { l: 'Kaliteyi çağır', fn: () => startCall(CAGRI_EKIPLERI.find((x) => x.k === 'kalite')!) } });
+      }, (h: unknown) => { bip('nok'); say(`TMI kabul etmedi · ${hataIletisi(h, 'Hatalı kaydedilemedi.')}`, 'alert', 'stop'); })
+      .finally(() => { hataliGidiyorYaz(false); });
+  };
   const doScrap = (why: string) => {
     scrapWhy.current = why || null;
     scrapLog.current = [...scrapLog.current, o.good].slice(-5);
@@ -1096,7 +1127,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const tuslar: SayimTusu[] = [];
   // 1046 a: geniş düzende sayım tuşları üstte iki büyük tuş, düzeltme (−1) tuşları altlarında tek kısa sıra; sıra bu dizinin sırasıdır.
   if (uretir) tuslar.push({ etiket: 'İyi +1', simge: 'plus', ton: 'iyi', kapali: iyiArtiKapali || o.good >= o.target, bas: () => { if (!sayimOk('prod.run', iyiArtiNedeni(1))) return; shiftRef.current.good++; undoable(`İyi parça +1 · ${sayi(o.good + 1)}`, 'plus', 'run', () => patch({ good: o.good + 1 })); } });
-  if (uretir) tuslar.push({ etiket: 'Hurda +1', simge: 'trash', ton: 'hurda', kapali, bas: addScrap });
+  if (uretir) tuslar.push(hataliTmi ? { etiket: 'Hatalı', simge: 'trash', ton: 'hurda', kapali: kapali || hataliGidiyor, bas: addScrap } : { etiket: 'Hurda +1', simge: 'trash', ton: 'hurda', kapali, bas: addScrap });
   if (duzeltir) tuslar.push({ etiket: 'İyi −1', simge: 'minus', ton: 'duz', aria: 'İyi parça eksi bir', kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(`İyi parça −1 · ${sayi(o.good - 1)}`, 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
   if (duzeltir) tuslar.push({ etiket: 'Hurda −1', simge: 'minus', ton: 'hurda', aria: 'Hurda eksi bir', kapali: kapali || o.scrap <= 0, bas: () => { if (sayimOk('prod.fix')) undoable(`Hurda −1 · toplam ${sayi(o.scrap - 1)}`, 'minus', 'idle', () => patch({ scrap: o.scrap - 1 })); } });
   // 702: toplu giriş ekranda yer kaplamasın diye tuştan açılan pencerededir.
@@ -1109,7 +1140,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </div>
   );
   const toplu = uretir ? (
-    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={ayarlar.hurdaNedenleri}
+    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={ayarlar.hurdaNedenleri} hurdaEtiketi={hataliTmi ? 'Hatalı' : 'Hurda'}
       kaydet={(g) => { const tamam = topluKaydet(g); if (tamam) ovYaz(null); return tamam; }} />
   ) : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
@@ -1202,7 +1233,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
       {warnShow ? <UyariPenceresi liste={warnShow.list} {...(warnShow.title ? { baslik: warnShow.title } : {})} okudum={() => { const w = warnShow; ackWarns(w.list); warnShowYaz(null); bip('ok'); if (w.then) setTimeout(w.then, 50); }} /> : null}
       {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} numune={{ hazir: !!o.pkg, bekliyor: !!o.pendingReq, gonder: () => { void sendSample(); } }} kapat={() => ovYaz(null)} /> : null}
-      {ov === 'scrap' ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
+      {ov === 'scrap' && hataliTmi ? <HataliPenceresi nedenler={ayarlar.hurdaNedenleri} yukleniyor={hataliGidiyor} kapat={() => ovYaz(null)} kaydet={hataliGonder} /> : null}
+      {ov === 'scrap' && !hataliTmi ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
       {ov === 'reason' ? (
         <DurusPenceresi istasyon={MACHINE} nedenler={ayarlar.durusNedenleri} oneriler={reasonSuggest()} otomatikCagri={POLICY.autoCall} kapat={() => ovYaz(null)}
           kaydet={(r) => { ovYaz(null); if (o.state === 'stopped') noteStop(r.code); else undoable(`Duruş kaydedildi · ${r.l}`, 'stop', 'stop', () => go('stopped', r.code)); }} />

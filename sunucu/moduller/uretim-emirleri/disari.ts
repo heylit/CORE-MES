@@ -515,3 +515,9 @@ export async function calismayaGecisAnlari(db: Db, emirIdleri: readonly number[]
 export const planAyrimiCozucusu = (cozucu: servis.PlanAyrimiCozucusu | null): void => servis.planAyrimiCozucusuKaydet(cozucu);
 // Arkon makine seçicisi: seçilen makinelerin başka emre ayrımları, başlatma ve devamın 409 kuralıyla aynı yoldan.
 export const makineAyrimlari = (db: Db, emirId: number, makineIdleri: readonly number[]) => servis.makineAyrimlari(db, emirId, makineIdleri);
+
+// Hatalı parça (1034, 1038 a): Kalite Merkezi açık kayıtları listeler ve kararı formundan yazar. Karar kalite adımını kapatır, rework
+// adımı planlamayı bekler; hurda ve red parçayı ayırır (kol katılır ya da sağlamsız biter). İşlem (kalite-merkezi.onayla) burada da
+// aranır; çağıranın transaction'ında yazar. Kayıt yoksa BULUNAMADI, karar verilmişse ya da kalite adımı kalkmışsa CAKISMA.
+export type { HataliKarari, HataliKaydiOzeti } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+export { hataliKarariVer, hataliKaydi, hataliKayitlari } from './hatali-parca.ts';
