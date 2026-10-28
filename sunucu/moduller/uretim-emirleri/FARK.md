@@ -243,3 +243,13 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Davranış: hatalı parça hatalı adımda sayılmaz. Kalite kararı adımı başlatma denetimiyle terminalden başlamaz. Bölme `kilitliEmriBol` ile planlamanın bölmesiyle aynı kuraldan geçer; `partiyiBol` davranışı değişmedi.
 - 1045 b: emrin kendisinde bütün parça hurda ya da red olursa emir durur; sonraki adım başlatma denetimiyle başlamaz (ayrı durum yok, önceki adım bu kararın sağlamsız kalite adımıdır). Adımlı emir ayrıntısında `hataliDurdu` (1064: duran emir yeniden başlamaz, eksik adet için planlama yeni emir açar; kapatma akışı ayrı tasarlanacak).
 - İşlem ve rol değişmedi (operatörün kolu açması 1033 a ile verildi; uç `terminal.uret`).
+
+# FARK: onaylı emir kapanışı, K1 (sorular 1072-1082, 1064)
+
+- Göç `20261028093000`: yeni boş tablolar `uretim_emirleri_kapanis` (emir başına kapanış: durum, tur, kalite ve müdür onayı, sürüm), `uretim_emirleri_kapanis_muafiyeti` ve `uretim_emirleri_kapanis_defteri` (ikisi yalnız ekleme). Dolum: bugüne kadar bitmiş iş emirli emir onaysız `tamam`, `eski` (1072 a varsayımı). Dolu tabloya dokunulmadı.
+- Emir son adımda yine `bitti` olur (1072 a); kapanış aynı işlemde `emirBittiDinle` ile açılır. İş emirsiz (istasyonlu) emir kapanışa girmez.
+- Maddeler (1074 a, 9 madde) canlı okunur, tabloda tutulmaz. Kendi maddeleri: iş emirleri ve parti kolları, ilk parça kararı, hatalı parça kararı. Dış maddeler (ölçüm, izlenebilirlik, fason, stok, sevkiyat, NCR) `disari.ts` çözücüleriyle gelir (`<madde>KapanisCozucusu`), bağı kablolama.ts kurar; kayıtsız ya da null madde `bilinmiyor`dur, durdurmaz. Gerekmeyenler: sağlamsız emirde stok ve sevk (1079 a), stok türünde sevk (1075 a), fasonsuz emirde fason.
+- Yeni uçlar: `GET /kapanislar`, `GET /adimli-emirler/:id/kapanis` (kapanis-oku, kapanis-kalite ya da kapanis-onay); `POST /adimli-emirler/:id/kapanis/{kalite-onay, kalite-ret}` (kapanis-kalite), `{mudur-onay, mudur-ret, muaf, geri-ac}` (kapanis-onay); `POST /adimli-emirler/:id/kapat` (uretim-emirleri.yaz, 1064).
+- Davranış: onay sırasız, aynı kişi iki işleme sahipse ikisini verir (1077 b); ret verilmiş onayları düşürür; eksik madde onayı durdurur, yalnız müdür gerekçeyle muaf tutar (1076 a, tura bağlı); iki onay kapanışı tamamlar ve kalite kararını kilitler, müdür gerekçeyle geri açar, yeni turda iki onay yeniden (1080 a). `/kapat` yalnız hatalı parça kararıyla duran emri kapatır: bekleyen adımlar kalkar, emir sağlamsız biter ve kapanışa düşer; sonuç "saglamsiz" (1079 a).
+- Emir okumalarına (izleme, biten, ayrıntı) isteğe bağlı `kapanisSonucu` geldi; `disari.kapanisSonuclari(db, idler)` reçete-rota ve etiket için.
+- İşlem: `uretim-emirleri.kapanis-oku`, `kapanis-kalite`, `kapanis-onay` (1078 a); rol satırları K2'de.
