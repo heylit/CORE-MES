@@ -78,6 +78,17 @@ function rrCevir(st) {
     const r = st.routes && st.routes[it.id];
     const steps = r ? (r.steps || []).slice().sort((p, q) => p.seq - q.seq) : [];
     const kHarita = {};
+    /* 982 a: bağ rotanın bağımlılık türündendir (Reçete ve Rota'nın akışıyla aynı): bekleyen öncülün bitişini, akışlı (ortulu) devrini
+       bekler, bağımsız beklemez. Bağımsız adımdan sonraki adım hem onu hem ondan önceki ana adımı bekler. Anahtar önceki adımın kayıttaki
+       k'sidir (aşağıda kHarita ile yenisine çevrilir). */
+    let onde = [];
+    const bagOf = (s, i) => {
+      const dep = i === 0 ? 'bagimli' : s.dep || 'bagimli', son = onde[onde.length - 1];
+      const bag = dep === 'bagimsiz' ? [] : onde.map(r => [r, r === son && dep === 'ortulu' ? 'o' : 'b']);
+      const ref = s.plan ? s.plan.k : String(s.seq);
+      onde = dep === 'bagimsiz' ? [...onde, ref] : [ref];
+      return bag;
+    };
     const rota = steps.map((s, i) => {
       const o0 = s.plan || null; const z = {};
       const k = o0 && rrSeq(o0, ((a && a.rota) || []).findIndex(x => x.k === o0.k)) === s.seq ? o0.k : String(s.seq);
@@ -102,9 +113,12 @@ function rrCevir(st) {
       const sFason = s.fasonId && !s.stationId ? s.fasonId : null;
       if (!o0 || (ref.fasonId || null) !== sFason) { if (sFason) z.fason = sFason; else if (o0 && 'fason' in o0) z.fason = undefined; }
       if (!o0 || ref.dep !== s.dep) { if (s.dep === 'ortulu') z.ortusebilir = true; else if (o0 && 'ortusebilir' in o0) z.ortusebilir = false; }
-      if (!o0 || ref.depQty !== s.depQty) { if (+s.depQty > 1 || (o0 && 'transfer' in o0)) z.transfer = +s.depQty; }
+      /* 982 a: akışlı adımın devir adedi rotadandır (1 de); yoksa motor adedin dörtte birini devreder */
+      if (!o0 || ref.depQty !== s.depQty || (s.dep === 'ortulu' && !('transfer' in o0))) { if (+s.depQty > 1 || s.dep === 'ortulu' || (o0 && 'transfer' in o0)) z.transfer = Math.max(1, +s.depQty || 1); }
       if (!o0 || ref.minLot !== s.minLot) { if (+s.minLot > 0 || (o0 && 'minParti' in o0)) z.minParti = +s.minLot; }
-      if (!o0) { z.bag = i ? [[String(steps[i - 1].seq), 'b']] : []; z.aile = ''; }
+      const bag = bagOf(s, i).map(([r, t]) => { const e = ((o0 && o0.bag) || []).find(([q]) => q === r); return e ? [r, t, ...e.slice(2)] : [r, t]; });
+      if (!o0 || !rrEsit(o0.bag || [], bag)) z.bag = bag;
+      if (!o0) z.aile = '';
       return rrKur(o0, z);
     });
     for (const o of rota) if (Array.isArray(o.bag)) { const yeni = o.bag.filter(([k]) => k in kHarita || rota.some(x => x.k === k)).map(([k, t, ...e]) => [kHarita[k] || k, t, ...e]); if (!rrEsit(yeni, o.bag)) o.bag = yeni; }

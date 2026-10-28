@@ -12,8 +12,8 @@ import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 
 // ADR 0018 karar 5: plan modülünün planMotoruCozucusu kaydının karşılığı. Girdiyi bu modül kurar (planlama sayfasının çalışması, Reçete ve
 // Rota kaydı ve sunucunun güncel emir, rota ve kaynakları); motor aramasız sabit kipte, kuyruktaki tezgâh sırasını koruyarak dizer.
-// Motorun yerleştiremediği iş yerlesmeyen'dedir; plan modülü o komutu reddeder (başka tezgâha konan işi de). Vardiyası tanımsız tezgâhın
-// işi vardiyasiz'dadır (168 b): plan onu uyarıyla boş bırakır, komutu durdurmaz.
+// Motorun yerleştiremediği iş yerlesmeyen'dedir, nedeni nedenler'de (981 a-1): plan onu yerleşmemiş bırakır, ötekiler yazılır. Vardiyası
+// tanımsız tezgâhın işi vardiyasiz'dadır (168 b): plan onu uyarıyla boş bırakır, komutu durdurmaz.
 export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: PlanMotoruIstegi) => {
   const kaynak = await planCozumKaynagi(db);
   if (kaynak === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');
@@ -26,7 +26,7 @@ export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: Plan
 export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
   istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] },
-): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[] }> {
+): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, string> }> {
   const g = cozumGirdisi({
     ...kaynak,
     istek: {
@@ -39,9 +39,10 @@ export async function coz(
   });
   if (g === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');
   const yerlesmeyen = [...g.yerlesmeyen];
+  const nedenler: Record<string, string> = Object.fromEntries(g.yerlesmeyen.map((a) => [a, ROTADA_YOK]));
   const vardiyasiz = [...g.vardiyasiz];
   const malzemeBekleyen: string[] = [];
-  if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen };
+  if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
   const plan = await planCoz({ durum: g.st, kip: 'sabit', taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
@@ -51,10 +52,24 @@ export async function coz(
     const anahtar = g.kimlik[id]!;
     const makineId = r === undefined ? NaN : Number(r.m);
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
-    if (r === undefined || basarisiz.has(id) || !Number.isInteger(makineId) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) { yerlesmeyen.push(anahtar); continue; }
+    if (r === undefined || basarisiz.has(id) || !Number.isInteger(makineId) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
+      yerlesmeyen.push(anahtar);
+      nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p));
+      continue;
+    }
     yerlesimler.push({ anahtar, makineId, baslangic: planAni(g.baslangic, r.S), bitis: planAni(g.baslangic, r.C) });
   }
-  return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen };
+  return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
+}
+
+// Motorda karşılığı olmayan kuyruk işi: adım ürünün yürürlükteki rotasında yok (983 b), emir ya da ürünü okunamadı.
+const ROTADA_YOK = 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.';
+// Öncülü yerleşmeyen iş bekler (981 a-1): öncül kuyrukta yerleşmedi ya da motorda tezgâhı yok (pasif makine, kişi kaynağı).
+function yerlesmemeNedeni(g: { oncul: Record<string, string[]>; kimlik: Record<string, string> }, id: string, yerlesti: (p: string) => boolean): string {
+  const p = (g.oncul[id] ?? []).find((x) => !yerlesti(x));
+  if (p === undefined) return 'Sunucu motoru yerleştiremedi.';
+  const a = g.kimlik[p];
+  return a === undefined ? 'Önceki adım yerleşmedi.' : `Önceki adım (${a.replace('|', ' OP ')}) yerleşmedi.`;
 }
 
 // 525 4 a: katı malzeme kipinde (w.mat 'sert', K3) malzemesi stok ve satın almayla ufuk içinde karşılanmayan siparişin işleri motorda

@@ -172,6 +172,25 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
+  it('Onay sekmesi, senaryo (984 a): taslaktan sonra başlayan iş canlıya almayı durdurursa sabitleme sorulur; onaylanınca sabitle ile yeniden gönderilir', async () => {
+    const get = vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const ileti = 'Taslak açıldıktan sonra başlayan iş var (E-1 OP 10); taslakta o makinede onunla çakışan iş var.';
+    const post = vi.spyOn(api, 'post')
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: ileti, ayrinti: { neden: 'sonradan-baslayan', isler: [{ emirNo: 'E-1', opNo: 10 }] } }))
+      .mockResolvedValue({ ...DEPO.senaryolar, canliSurum: 4 });
+    ac({ mudur: true });
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    const dugmeler = screen.getAllByRole('button', { name: 'Onayla ve canlıya al' });
+    fireEvent.click(dugmeler[dugmeler.length - 1]!);
+    fireEvent.click(within(kart()).getByRole('button', { name: /canlıya al$/ }));
+    await waitFor(() => expect(screen.getByText('Taslaktan sonra başlayan iş var')).toBeTruthy());
+    expect(screen.getByText(new RegExp(ileti.replace(/[()]/g, '.')))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sabitle ve canlıya al' }));
+    await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, cakismalariKabul: true, baslayanlar: 'sabitle' }, expect.anything()));
+    post.mockRestore();
+    get.mockRestore();
+  });
+
   it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif; onaya gönder kartı doğrudan gönderir ve Onay sekmesine götürür', async () => {
     ac({ c: guncel() });
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;

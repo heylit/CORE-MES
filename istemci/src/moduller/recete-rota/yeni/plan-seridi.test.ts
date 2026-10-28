@@ -69,7 +69,7 @@ describe('plan şeridi: durum', () => {
     const d = seritDurumu(c, { 'A|10': yer(1, '08:00') }, null, motor);
     expect(d).toMatchObject({ tur: 'canli', degisiklik: 0 });
     expect(d.uyarilar).toEqual([
-      '1 emir açıldığı rotada kaldı (yürürlükte yeni rota var).',
+      '1 emir eski rota revizyonundan açıldı; plan yürürlükteki rotanın süreleriyle kurulur.',
       '1 bölünmüş iş canlıya alınmaz (A OP 10): adımın adedi plandan okunamadı ya da bir parça bir tam adetten az kaldı; iş kartında parçaları birleştirip yeniden bölün.',
     ]);
   });

@@ -307,9 +307,14 @@ const ekMesaiSatirlari = z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiy
   .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.');
 export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({ satirlar: ekMesaiSatirlari });
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
+// 984 a: taslak açıldıktan sonra başlayan işle taslakta aynı makinede çakışan iş varsa canlıya alma 409 döner (ayrıntı neden
+// SONRADAN_BASLAYAN, isler). `baslayanlar: 'sabitle'`: çalışan iş şimdiye sabitlenir, o makinelerin taslak kuyruğu yeniden dizilir.
+export const SONRADAN_BASLAYAN = 'sonradan-baslayan';
+export interface SonradanBaslayanAyrintisi { neden: typeof SONRADAN_BASLAYAN; isler: { emirNo: string; opNo: number }[] }
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
   acilMusteriler: z.array(z.object({ degisiklikId: KIMLIK, firmaId: KIMLIK })).max(50).default([]),
+  baslayanlar: z.enum(['sabitle']).optional(),
 });
 export const musteriSecenekleriSorgusu = z.object({ ara: z.string().max(100).default('') });
 export const musteriSecenekleriCevabi = z.object({ firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })) });
@@ -348,6 +353,8 @@ export const kuyrukYazCevabi = z.object({
   yazilan: z.number().int(), atlanan: z.number().int(),
   // Yalnız sunucu motoru kayıtlıyken (ADR 0018).
   motorFarki: motorFarki.optional(),
+  // 981 a-1: sunucu motorunun yerleştiremediği işler, nedeniyle (öncülü yerleşmeyen ardılı dahil); öteki işler yazılmıştır. Yoksa alan yok.
+  yerlesmeyen: z.array(z.object({ emirNo: z.string(), opNo: z.number().int(), neden: z.string() })).optional(),
 });
 export const canliyaAlCevabi = senaryolarCevabi.extend({ motorFarki: motorFarki.optional() });
 // Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya

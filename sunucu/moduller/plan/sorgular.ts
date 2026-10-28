@@ -53,7 +53,8 @@ export async function yerlesimler(db: Db, hedef: Hedef): Promise<YerlesimSatiri[
   return parcalariEkle(r.map(coz), p);
 }
 
-// Verilen makinelerde şimdiden ufuk sonuna dek başlayan ve henüz bitmemiş canlı yerleşimler; bölünmüş işte parçalar (393 d).
+// Verilen makinelerde ufuk sonuna dek başlayan canlı yerleşimler; bölünmüş işte parçalar (393 d). 987 a: planlı bitişi geçmiş ama başlamamış
+// iş de makinesini korur; ayrım iş başlayınca (çağıran yalnız bekleyen işi sayar) ya da plan işi yeniden yerleştirince düşer.
 export function canliMakineAyrimlari(db: Db, makineIdleri: readonly number[], ufukDk: number): Promise<{ makineId: number; isEmriId: number; baslangic: Date }[]> {
   if (makineIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu(
@@ -62,7 +63,7 @@ export function canliMakineAyrimlari(db: Db, makineIdleri: readonly number[], uf
         WHERE NOT EXISTS (SELECT 1 FROM plan_yerlesim_parcasi p WHERE p.is_emri_id = y.is_emri_id)
        UNION ALL
        SELECT makine_id, is_emri_id, baslangic, bitis FROM plan_yerlesim_parcasi) a
-      WHERE makine_id = ANY($1::int[]) AND baslangic < now() + make_interval(mins => $2) AND bitis > now()
+      WHERE makine_id = ANY($1::int[]) AND baslangic < now() + make_interval(mins => $2)
       ORDER BY baslangic, is_emri_id`,
     [[...makineIdleri], ufukDk],
   );

@@ -71,8 +71,8 @@ export interface SeritDurumu { tur: SeritTuru; rozet: string; degisiklik: number
 // Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti", kimin ne zaman canlıya aldığıyla (Soru 491/2 a, 492/2 a).
 // Canlı plan varsa "plan canlı"dır (500 a): bu ekran plan yazmaz, motorun önerisi canlıdan farklıysa bu ayrıca "Motor önerisi canlıdan
 // N iş farklı" diye söylenir, "canlıya alınmadı" denmez. Hiç canlı plan yoksa "canlıya alınmadı" ve motor önerisinin iş sayısı; motor
-// yerleşimi okunamazsa fark bilinmez, şerit bunu söyler. Rotası değişen emir (motorun rotaEski'si) değişiklik sayılmaz, "açıldığı rotada kaldı" der (493/2 a): bu ekran emri yeni
-// rotaya taşımaz. Bölmesi yazılamayan iş (motorun bolmeYazilamaz'ı) uyarıdır.
+// yerleşimi okunamazsa fark bilinmez, şerit bunu söyler. Rotası değişen emir (motorun rotaEski'si) değişiklik sayılmaz; sunucu motoru onu
+// yürürlükteki rotanın süreleriyle dizer, şerit bunu uyarır (983 b). Bölmesi yazılamayan iş (motorun bolmeYazilamaz'ı) uyarıdır.
 export function seritDurumu(
   canli: PlanCanliOzeti, yerlesim: EkranYerlesimi | null, guncel: PlanSurumCevabi | null, motor: PlanMotoru | null = null,
 ): SeritDurumu {
@@ -95,7 +95,7 @@ export function seritDurumu(
   const rotadaKalan = (motor?.emirler ?? []).filter((e) => e.rotaEski).length;
   const bolmeYazilamaz = (motor?.emirler ?? []).flatMap((e) => e.bolmeYazilamaz.map((op) => `${e.emirNo} OP ${String(op)}`));
   const uyarilar = [
-    rotadaKalan ? `${String(rotadaKalan)} emir açıldığı rotada kaldı (yürürlükte yeni rota var).` : '',
+    rotadaKalan ? `${String(rotadaKalan)} emir eski rota revizyonundan açıldı; plan yürürlükteki rotanın süreleriyle kurulur.` : '',
     f.emirdeYok.length ? `${String(f.emirdeYok.length)} adım emirde yok, canlıya alınmaz (${ilkUc(f.emirdeYok)}): emir, adım eklenmeden önceki rotadan açıldı.` : '',
     f.makinesiz.length
       ? `${String(f.makinesiz.length)} adım makinesi olmayan istasyonda, canlıya alınmaz (${ilkUc(f.makinesiz)}): istasyona makine tanımlayın ya da rotada adımın makinesini seçin.`

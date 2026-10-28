@@ -6478,6 +6478,12 @@ function canlidaDonmus(an){
   const C = BAGLI.durum && BAGLI.durum.planCanli;
   return !!(C && Array.isArray(C.kuyruklar) && C.kuyruklar.some(q => q.isler.some(x => x.anahtar === an && x.dondurulmus)));
 }
+/* 981 a-1: sunucu motorunun yerleştiremediği iş (öncülü yerleşmeyen ardılı dahil) plan yazımını durdurmaz; nedeni burada söylenir. */
+function yerlesmeyenMetni(l){
+  if (!Array.isArray(l) || !l.length) return "";
+  const ilk = l.slice(0, 3).map(x => `${esc(x.emirNo)} OP ${esc(String(x.opNo))}: ${esc(x.neden)}`).join("; ");
+  return ` <b>${l.length} iş yerleşmedi</b> (${ilk}${l.length > 3 ? "; …" : ""}).`;
+}
 async function planYaz(opts){
   if (ui.studio) { toast("Taslak senaryodasın: önce üstteki \"Onayla ve canlıya al\" ile senaryoyu onayla ya da taslaktan çık."); return; }
   const kuyruklar = planKuyruklari(), dondurma = opts.dondurma || null;
@@ -6501,7 +6507,7 @@ async function planYaz(opts){
     PLANB.bekleyen = false; PLANB.canliKur = true;
     if (r && r.durum) baglaUygula(r.durum); else await baglaYukle();
     const ozet = dondurma ? `<b>${dondurma.ozet}</b>${donmus !== null ? ` Planda ${donmus} iş dondurulmuş.` : ""}`
-      : `<b>${c.yazilan || 0} iş plana yazıldı.</b>${c.atlanan ? ` ${c.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş).` : ""}`;
+      : `<b>${c.yazilan || 0} iş plana yazıldı.</b>${c.atlanan ? ` ${c.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş).` : ""}${yerlesmeyenMetni(c.yerlesmeyen)}`;
     toast(`${ozet} ${taslakta !== null ? `Canlıya alınamadı${taslakta ? ` (${esc(taslakta)})` : ""}: plan taslağa yazıldı, Plan sayfasından canlıya alınır.` : "Üretim Terminali bu sırayı kullanır."}`);
   } catch (h) {
     /* Başkası canlıya aldı: yazılan bir şey yok; ekrandaki değişiklik ve ayar korunur (bekleyen kalır, sunucu ayarı üstüne yazılmaz). */

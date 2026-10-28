@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PLAN_ONAY_KOMUTLARI, PlanCevabi, PlanOnayKomutu, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PLAN_ONAY_KOMUTLARI, PlanCevabi, PlanOnayKomutu, SenaryolarCevabi, SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { Kart, OnayPenceresi, Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
@@ -32,6 +32,10 @@ const ONAY_YOLLARI: { readonly [K in PlanOnayKomutu]: (typeof PLAN_ONAY_KOMUTLAR
   'geri-gonder': '/plan/senaryolar/:id/geri-gonder',
   'canliya-al': '/plan/senaryolar/:id/canliya-al',
 };
+// 984 a: taslaktan sonra başlayan iş canlıya almayı durdurur; ekran çalışan işi sabitleyip yeniden dizmeyi sorar.
+const SONRADAN_BASLAYAN: SonradanBaslayanAyrintisi['neden'] = 'sonradan-baslayan';
+const sonradanBaslayanMi = (e: unknown): e is ApiHatasi =>
+  e instanceof ApiHatasi && e.durum === 409 && (e.govde.ayrinti as { neden?: unknown } | undefined)?.neden === SONRADAN_BASLAYAN;
 const sayi = (x: number, k = 0) => x.toLocaleString('tr-TR', { maximumFractionDigits: k, minimumFractionDigits: k });
 const yuzde = (x: number | null | undefined) => (x == null ? '—' : `%${Math.round(x)}`);
 const tl = (x: number | null | undefined) => (x == null ? '—' : `${sayi(x / 1000)} bin`);
@@ -89,6 +93,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const [sor, setSor] = useState<SunucuSenaryosu | null>(null);
   const [calSor, setCalSor] = useState(false);
   const [acSor, setAcSor] = useState<SunucuSenaryosu | null>(null);
+  const [baslayanSor, setBaslayanSor] = useState<{ s: SunucuSenaryosu; ileti: string } | null>(null);
   const [gidiyor, setGidiyor] = useState(false);
   const l = useMemo(() => sen?.senaryolar ?? [], [sen]);
   const canli = sen?.canli ?? null;
@@ -130,7 +135,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
       setNotlar((n) => ({ ...n, [String(s.id)]: '' }));
       return cevap;
     } catch (e) {
-      if (e instanceof ApiHatasi && e.durum === 409) {
+      if (k === 'canliya-al' && sonradanBaslayanMi(e)) setBaslayanSor({ s, ileti: e.govde.mesaj });
+      else if (e instanceof ApiHatasi && e.durum === 409) {
         api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined);
         bildir('hata', 'Plan bu arada değişti; liste yenilendi, yeniden deneyin.');
       } else bildir('hata', hataIletisi(e, 'İşlem yapılamadı.'));
@@ -146,9 +152,10 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
       if (await gec('geri-gonder', s, { neden: not(s) })) bildir('tamam', `"${s.ad}" planlamacıya geri gönderildi.`);
     },
     vazgec: async (s: SunucuSenaryosu) => { if (await gec('vazgec', s)) bildir('tamam', `"${s.ad}" planından vazgeçildi.`); },
-    canli: async (s: SunucuSenaryosu) => {
-      const r = await gec('canliya-al', s, { cakismalariKabul: true });
+    canli: async (s: SunucuSenaryosu, ek: Record<string, unknown> = {}) => {
+      const r = await gec('canliya-al', s, { cakismalariKabul: true, ...ek });
       setSor(null);
+      if (ek['baslayanlar']) setBaslayanSor(null);
       if (r) { bildir('tamam', `Sürüm ${r.canliSurum} canlıda. Tezgâh kuyrukları ve operatör ekranı bu planı gösterir.`); setSecim(null); o.yenile(); }
     },
   };
@@ -286,6 +293,12 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         yukleniyor={gidiyor} vazgec={() => { setSor(null); setCalSor(false); }} onayla={() => { if (calSor) void calGonder('canli'); else if (sor) void eylem.canli(sor); }}
       >
         <p>{calSor ? (uyari.length ? `Çalışma planı: ${uyari.join('; ')}.` : 'Çalışma planı onaya gönderilip canlı plan olacak; tezgâh kuyrukları bu plana göre görünür.') : sor ? (uyari.length ? `${sor.ad}: ${uyari.join('; ')}.` : `"${sor.ad}" canlı plan olacak (sürüm ${(canliSurum ?? 0) + 1}); tezgâh kuyrukları bu plana göre görünür.`) : ''}</p>
+      </OnayPenceresi>
+      <OnayPenceresi
+        acik={baslayanSor !== null} baslik="Taslaktan sonra başlayan iş var" onayMetni="Sabitle ve canlıya al"
+        yukleniyor={gidiyor} vazgec={() => setBaslayanSor(null)} onayla={() => { if (baslayanSor) void eylem.canli(baslayanSor.s, { baslayanlar: 'sabitle' }); }}
+      >
+        <p>{baslayanSor ? `${baslayanSor.ileti} Onaylarsan çalışan iş şimdiye sabitlenir, makinesinin kalan işleri onun ardından yeniden dizilir ve plan canlıya alınır.` : ''}</p>
       </OnayPenceresi>
       <OnayPenceresi
         acik={acSor !== null} baslik="Çalışma değişsin mi?" onayMetni="Yükle"
