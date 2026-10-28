@@ -147,6 +147,8 @@ describe('plan (gerçek PostgreSQL): onay adımı', () => {
     let p = await taslaktaOner();
     let s = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    // 248 a: canlıdaki işler 4 saatin dışına alınır; Arkon sırası onları yeniden sıralar.
+    await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [[i1, i2]]));
     const once = await vt().tx((db) => canliSira(db, [i1!, i2!]));
     const planlamaci = (await kimlikCozucu(vt())({ headers: { cookie: c.planlama } } as never))!;
     const t = await vt().tx((db) => kuyruguSirala(db, planlamaci, { kaynak: once.yerlesimler[0]!.kaynak, isEmriIdleri: [i2!, i1!], planSurumu: once.planSurumu }));

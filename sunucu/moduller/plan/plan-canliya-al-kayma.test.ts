@@ -34,6 +34,8 @@ describe('plan (gerçek PostgreSQL): taslaktan sonra zaman geçince canlıya alm
     try {
       const p = await taslaktaOner();
       assert.equal((await canliyaAl(p.taslak!.id)).statusCode, 200);
+      // 248 a: canlıdaki işler 4 saatin dışına alınır; bu test 4 saat kuralını değil geçen zamanı sınar.
+      await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [[i1, i2]]));
       const once = await vt().tx((db) => canliSira(db, [i1!, i2!]));
       assert.deepEqual(once.yerlesimler.map((y) => y.isEmriId), [i1, i2]);
       const kaynak = once.yerlesimler[0]!.kaynak;

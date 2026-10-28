@@ -22,6 +22,12 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
   let app: FastifyInstance;
   let makineA = 0;
   let makineB = 0;
+  // 248 a: canlıdaki işler 4 saatin dışına alınır; bu testler 4 saat kuralını değil canlı sırayı sınar.
+  const canliyiOtele = (idler: number[]) =>
+    vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [idler]));
+  const hepsiniOtele = (gun = 1) => vt().tx(async (db) => {
+    for (const t of ['plan_yerlesimi', 'plan_yerlesim_parcasi']) await db.sorgu(`UPDATE ${t} SET baslangic = baslangic + make_interval(days => $1), bitis = bitis + make_interval(days => $1)`, [gun]);
+  });
   before(() => { ({ app, makineA, makineB } = durum()); });
 
   test('A4: canlı sıra iş emri kimliğiyle okunur; başlangıç sırasıyla, taslaktaki değişiklik ve yerleşmemiş iş görünmez', async () => {
@@ -29,6 +35,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i2] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+    await canliyiOtele([i1!, i2!]);
     const canli = await planOku();
     const okunan = await vt().tx((db) => canliSira(db, [i2!, i1!, 999_999]));
     assert.equal(okunan.planSurumu, canli.surum);
@@ -63,6 +70,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+    await canliyiOtele([i1!]);
     const canli = await planOku();
     const oku = () => tamam<CanliYerlesimCevabi>(c.cam, 'GET', `/plan/canli-yerlesim?isEmirleri=${i1},999999`);
     const once = await oku();
@@ -88,6 +96,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i2] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+    await canliyiOtele([i1!, i2!]);
     const once = await vt().tx((db) => canliSira(db, [i1!, i2!]));
     assert.deepEqual(once.yerlesimler.map((y) => y.isEmriId), [i1, i2]);
     const kaynak = once.yerlesimler[0]!.kaynak;
@@ -132,8 +141,11 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i2] = await isEmirleriAc([b()]);
     const [i3] = await isEmirleriAc([b()]);
     const hepsi = [i1!, i2!, i3!];
+    // Önceki testlerin canlı işleri de 4 saatin dışına: elle sıralı olanı Planı kur bu kuyruğun başına koyar.
+    await hepsiniOtele();
     const ilk = await taslaktaOner();
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${ilk.taslak!.id}/canliya-al`, { surum: await gonder(ilk.taslak!.id, ilk.taslak!.surum), cakismalariKabul: true });
+    await canliyiOtele(hepsi);
     const canli = await planOku();
     const kaynak = { tur: 'makine' as const, id: makineB };
     const ad = (id: number) => ({ emirNo: yer(canli, id).emirNo, opNo: yer(canli, id).opNo });
@@ -209,22 +221,27 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     assert.deepEqual((await sira()).map((y) => y.isEmriId), [i2, i3, i1], 'eski sürümle yazılan sıra canlıya geçmez');
     assert.equal((await istek(c.planlama, 'POST', `/plan/is-emirleri/${i1!}/tasi`, { taslak: null, kaynak, baslangic, planSurumu: eskiOkunan })).statusCode, 409);
     assert.equal((await istek(c.planlama, 'POST', '/plan/yerlestir', { taslak: null, isEmriId: i1!, kaynak, baslangic, planSurumu: eskiOkunan })).statusCode, 409);
+    await canliyiOtele(hepsi);
     const guncelYazma = await yaz(c.cam, { kuyruklar: [{ kaynak, baslangic, isler: isler([i1!, i2!, i3!]) }], planSurumu: okunan.planSurumu });
     assert.equal(guncelYazma.statusCode, 200, guncelYazma.body);
     assert.equal((await istek(c.planlama, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu, okunan.planSurumu, 'taslağa yazma sürümü artırmaz');
     // İki planlamacı aynı sürümü okuyup aynı kuyruğu canlıya yazar: önce gelen geçer, ikincisi ezmez (409), canlı sıra öncekinin kalır.
     // Taslağa yazma kişiye özeldir (öteki taslağa dokunmaz); canlı plan yalnız canlıya almada değişir ve sürüm orada artar.
+    await canliyiOtele(hepsi);
     const ilkYazan = (await canliyaYaz(c.planlama, { kuyruklar: [{ kaynak, baslangic, isler: isler([i3!, i2!, i1!]) }], planSurumu: okunan.planSurumu })).canliya;
     assert.equal(ilkYazan.statusCode, 200, ilkYazan.body);
     const ikinciYazan = (await canliyaYaz(c.yonetici, { kuyruklar: [{ kaynak, baslangic, isler: isler([i1!, i2!, i3!]) }], planSurumu: okunan.planSurumu })).canliya;
     assert.equal(ikinciYazan.statusCode, 409, ikinciYazan.body);
     assert.deepEqual((await sira()).map((y) => y.isEmriId), [i3, i2, i1], 'ikinci yazan birincinin sırasını ezmez');
     assert.equal((await istek(c.planlama, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu, okunan.planSurumu + 1);
+    await canliyiOtele(hepsi);
     assert.equal((await canliyaYaz(c.planlama, { kuyruklar: [{ kaynak, baslangic, isler: isler([i2!, i3!, i1!]) }] })).canliya.statusCode, 200);
 
     // Dondurulmuş iş yerinde kalır (atlanır), geri kalanı onun etrafından yeni sırayı alır.
+    await canliyiOtele(hepsi);
     const dondur = (await canliyaYaz(c.planlama, { kuyruklar: [{ kaynak, baslangic, isler: isler([i1!], true) }] })).canliya;
     assert.equal(dondur.statusCode, 200, dondur.body);
+    await canliyiOtele(hepsi);
     const donukYer = (await sira()).find((y) => y.isEmriId === i1)!;
     assert.equal(donukYer.dondurulmus, true);
     const yine = (await canliyaYaz(c.planlama, { kuyruklar: [{ kaynak, baslangic, isler: isler([i1!, i3!, i2!]) }] })).yazma;
@@ -281,6 +298,8 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     // Rota onayı süre ister; süresi bilinmeyen iş emri testte süresi silinerek kurulur. Motor A bu işi önermiyordu; ortak motor rotanın süresini kullanır.
     const [i1] = await isEmirleriAc([yeniAdim()]);
     await vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET ayar_suresi_dk = NULL, birim_sure_dk = NULL WHERE id = $1', [i1]));
+    // Elle yerleştirilen iş 2 gün sonradadır; önceki işler onun da ötesine alınır.
+    await hepsiniOtele(7);
     let p = await taslaktaOner();
     assert.ok(p.yerlesimler.some((x) => x.isEmriId === i1), 'rotanın süresiyle yerleşir');
     // Planlamacı kaldırıp süresini elle vererek yerleştirebilir.

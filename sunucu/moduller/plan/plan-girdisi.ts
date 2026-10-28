@@ -82,6 +82,8 @@ export interface CozumGirdisi {
   kimlik: Record<string, string>;
   // Kuyruktaki işlerin motor kimlikleri.
   sira: string[];
+  // Kuyruktaki işin öncüllerinin motor kimlikleri (rota bağı ve emirler arası öncül).
+  oncul: Record<string, string[]>;
 }
 
 // Çalışma planının çevirisi (motor/calisma.betik) de çerçeveye gömülmez.

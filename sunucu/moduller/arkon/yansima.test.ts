@@ -2197,6 +2197,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await canliyaYerlestir(ie3!, { makine: kaynak.id }, 60);
     await canliyaYerlestir(ie2!, { makine: kaynak.id }, 100);
     await ortam!.sahip.sorgu('UPDATE plan_yerlesimi SET kilitli = true WHERE is_emri_id = $1', [ie1]);
+    // 248 a: canlıdaki işler 4 saatin dışına alınır; bu test 4 saat kuralını değil Arkon sırasını sınar.
+    await ortam!.sahip.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [[ie1, ie2, ie3]]);
     const sirala = async (cerez: string, onceki: number[], yeni: number[]) => istek<{ taslakId: number; taslakAcildi: boolean }>(
       cerez, 'POST', '/arkon/plan-sira/sirala', { kaynak, onceki, yeni, planSurumu: await planSurumuOku() });
     const amir = await kisiKur(`pl${(sayac += 1)}`, ['arkon.amir', 'sayfa.arkon', 'plan.yaz']);

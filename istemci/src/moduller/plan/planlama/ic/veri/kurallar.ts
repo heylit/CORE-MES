@@ -167,7 +167,7 @@ export const KATALOG: readonly KisitGrubu[] = [
   ] },
   { grup: 'Zaman ve plan politikası', simge: 'clock', l: [
     { id: 'termin', ad: 'Termin ve öncelik ağırlığı', durum: 'tam', not: 'Amaç ağırlıklı gecikme: yüksek ×4, normal ×2, düşük ×1.', sayfa: 'siparisler' },
-    { id: 'dondurma', ad: 'Dondurulmuş bölge', durum: 'tam', not: 'Onarımda bu süre içinde başlayan işler yerinden oynamaz.', p: [sayiP('w', 'dondurma', 'Dondurma ufku', 'sa', 0, 72, 1)] },
+    { id: 'dondurma', ad: 'Dondurulmuş bölge', durum: 'tam', not: 'Onarımda bu süre içinde başlayan işler yerinden oynamaz.', p: [sayiP('w', 'dondurma', 'Dondurma ufku', 'sa', 4, 72, 1)] },
     { id: 'kilit', ad: 'Elle kilit', durum: 'tam', not: 'Plan masasında taşınan ya da kilitlenen iş.' },
     { id: 'degisim', ad: 'Değişiklik bütçesi (canlıya göre)', durum: 'tam', not: 'Onarım kipinde en çok bu kadar iş değişir. Olay toparlamasında sınır yerine her yeri değişen iş TL toplamına değişiklik bedeli ekler.', p: [sayiP('param', 'maxChg', 'Bütçe', 'iş', 0, 500, 1), sayiP('param', 'chgTL', 'Değişiklik bedeli (olayda)', 'TL/iş', 0, 5000, 10)] },
     { id: 'belge', ad: 'Belge onayı', durum: 'yaklasik', not: 'Serbest bırakma zamanıyla girilir.' },

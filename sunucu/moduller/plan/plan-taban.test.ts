@@ -58,11 +58,13 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
     const canli = (ids: number[]) => ortam!.vt.tx((db) => canliPlan(db, ids));
     assert.deepEqual(await canli([ie!]), [], 'canlıya almadan yok');
     await canliyaAl(await taslaktaOner());
+    // 248 a: canlıdaki iş 4 saatin dışına alınır; yakın iş başka makineye alınamaz.
+    await sahip().sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = $1", [ie]);
     const ilk = await canli([ie!]);
     assert.equal(ilk.length, 1);
     assert.equal(Date.parse(ilk[0]!.baslangic), Date.parse(yer(await planOku(), ie!).baslangic));
     let p = await taslaktaOner();
-    const yeniBaslangic = new Date(Date.parse(yer(p, ie!).baslangic) + 24 * 3600_000).toISOString();
+    const yeniBaslangic = new Date(Date.parse(yer(p, ie!).baslangic) + 48 * 3600_000).toISOString();
     p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, { taslak: tg(p), kaynak: { tur: 'makine', id: makineB }, baslangic: yeniBaslangic });
     await canliyaAl(p);
     const sonra = await canli([ie!]);
@@ -75,6 +77,8 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
   test('33-2: sonraki canlıya alma yeri değiştirse de taban değişmez; sonradan plana giren adım kendi ilk yerini alır', async () => {
     const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
     await canliyaAl(await taslaktaOner());
+    // 248 a: canlıdaki iş 4 saatin dışına alınır; yakın iş başka makineye alınamaz.
+    await sahip().sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = $1", [ie]);
     const once = await taban([ie!]);
     let p = await taslaktaOner();
     p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, {

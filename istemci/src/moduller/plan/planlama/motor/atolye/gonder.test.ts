@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, GonderHatasi, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -65,6 +65,17 @@ describe('calismayiGonder', () => {
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
     expect(gonderHataIletisi(h)).toBe('Plan canlıya alınamadı, onayda bekliyor: Kendi gönderdiğiniz planı canlıya alamazsınız.');
     expect(yollar(post)).not.toContain('/plan/senaryolar/12/vazgec');
+  });
+
+  it('990 a: canlıya alma 4 saat kuralına takılırsa hata gerekçe isteyen onaydaki taslağı taşır; öteki retlerde taşımaz', async () => {
+    sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'İş 4 saatten kısa sürede başlayacak.', ayrinti: { neden: 'dort-saat', gerekceIle: true } }) });
+    const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
+    expect(h).toBeInstanceOf(GonderHatasi);
+    expect((h as GonderHatasi).gerekceTaslagi).toBe(12);
+    vi.restoreAllMocks();
+    sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }) });
+    const d = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
+    expect((d as GonderHatasi).gerekceTaslagi).toBeNull();
   });
 
   it('Deneme olarak kaydet: taslak açık kalır, liste yeniden okunur', async () => {

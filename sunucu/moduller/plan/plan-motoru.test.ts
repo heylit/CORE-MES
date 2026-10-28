@@ -42,7 +42,7 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
   const anahtar = async (id: number) => (await vt().tx((db) => db.tek<{ emirNo: string; opNo: number }>(
     'SELECT e.emir_no AS "emirNo", i.op_no AS "opNo" FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = $1', [id])))!;
 
-  test('kuyruk yaz: saatler çözücüden, sıra korunur; fark yalnız önizlemesi ayrılan işte; başka makine ve yerleşmeyen iş 409', async () => {
+  test('kuyruk yaz: saatler çözücüden, sıra korunur; fark yalnız önizlemesi ayrılan işte; başka makine 409, yerleşmeyen iş nedeniyle yerleşmemiş kalır', async () => {
     const kaynak = { tur: 'makine' as const, id: makineB };
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak })]);
     const [i2] = await isEmirleriAc([yeniAdim({ kaynak })]);
@@ -71,16 +71,20 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
         'Motor A önermez; saatler sunucu motorunun');
       assert.deepEqual([i2!, i1!].map((id) => yer(p, id).elleSira), [null, 2]);
 
-      for (const k of ['baska-makine', 'yerlesmeyen'] as const) {
-        kip = k;
-        const surum = (await planOku(r.taslak)).taslak!.surum;
-        const red = await istek(c.planlama, 'POST', '/plan/kuyruklari-yaz', govde({ id: r.taslak, surum }));
-        assert.equal(red.statusCode, 409, red.body);
-        assert.match(red.body, /Plan yazılmadı/);
-        const sonra = await planOku(r.taslak);
-        assert.equal(sonra.taslak!.surum, surum, `${k}: taslak değişmez`);
-        assert.equal(yer(sonra, i1!).baslangic, saat(1).baslangic);
-      }
+      kip = 'baska-makine';
+      const surum = (await planOku(r.taslak)).taslak!.surum;
+      const red = await istek(c.planlama, 'POST', '/plan/kuyruklari-yaz', govde({ id: r.taslak, surum }));
+      assert.equal(red.statusCode, 409, red.body);
+      assert.match(red.body, /Plan yazılmadı/);
+      const sonra = await planOku(r.taslak);
+      assert.equal(sonra.taslak!.surum, surum, 'baska-makine: taslak değişmez');
+      assert.equal(yer(sonra, i1!).baslangic, saat(1).baslangic);
+      // 981 a-1: yerleşmeyen iş komutu durdurmaz; eski yeri kalkar, nedeni cevapta.
+      kip = 'yerlesmeyen';
+      const y = await tamam<KuyrukYazCevabi>(c.planlama, 'POST', '/plan/kuyruklari-yaz', govde({ id: r.taslak, surum }));
+      assert.equal(y.yazilan, 0);
+      assert.deepEqual(y.yerlesmeyen, [a2, a1].map((a) => ({ ...a, neden: 'Sunucu motoru yerleştiremedi.' })));
+      assert.deepEqual((await planOku(r.taslak)).yerlesmemis.filter((x) => x.isEmriId === i1 || x.isEmriId === i2).length, 2);
     } finally {
       kip = 'tamam';
       planMotoruCozucusu(null);

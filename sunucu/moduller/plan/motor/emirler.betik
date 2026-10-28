@@ -60,6 +60,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
   fasonlariAdimaCevir(k, st.D);
+  emirFasonlariniEkle(st.D, durum.emirler);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
   /* 690 b: emirler arası öncül (parti kolu, Motor A'nın B7 kuralı); motor öncülü yalnız rotadan, emrin içinde kurar */
@@ -108,7 +109,10 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     const c = o.c.find(x => !x.fas) || o.c[0];
     ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, fas: c.fas ? 1 : undefined };
   }
-  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, vardiyasiz, kimlik, sira: [...sira] };
+  /* 981 a-1: yerleşmeyen işin nedeni öncülünden okunur (öncül yerleşmediyse ardılı da yerleşmez) */
+  const oncul = {};
+  for (const id of sira) oncul[id] = cx.byId[id].pr.map(([p]) => p);
+  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, vardiyasiz, kimlik, sira: [...sira], oncul };
 }
 
 /* 669 a, Motor A'nın kuralı (CA-2, #1424): fason adım önceki iç adımın bitişinden rotadaki termin günü kadar sonra döner (termini girilmemiş
@@ -125,6 +129,27 @@ function fasonlariAdimaCevir(k, D) {
       D.fasoncular.push({ id, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() });
       r.fason = id;
     });
+  }
+}
+/* 988 a (983 b'nin istisnası): emirde sonradan fasona alınan adım (uretim-emirleri, emrin adım kaydı; durum.emirler.opYer, anahtar
+   "emir|root|rotadaki sıra") rotadaki fason adım gibi döner: önceki iç adımın bitişinden emrin termin günü kadar sonra (girilmemişse
+   FASON_VARSAYILAN_GUN). Emre özel ürün kopyası kurulur; adımın tezgâhı yoktur, kuyruğa girmez. */
+function emirFasonlariniEkle(D, emirler) {
+  const yer = (emirler && emirler.opYer) || {};
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  for (const [anahtar, y] of Object.entries(yer)) {
+    if (!y || y.fasonId == null) continue;
+    const [sid, , sira] = anahtar.split('|'), s = sip.get(sid), i = +sira - 1;
+    let u = s && urun.get(s.urun);
+    if (!u || !u.rota || !u.rota[i] || u.rota[i].fason) continue;
+    if (!u.emreOzel) {
+      u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
+      D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+    }
+    const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : FASON_VARSAYILAN_GUN;
+    D.fasoncular = [...(D.fasoncular || []), { id, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
+    u.rota[i] = Object.assign({}, u.rota[i], { fason: id, tezgahlar: [] });
   }
 }
 /* 671 a (Motor A, H3): planlamacı işi rota dışı makineye elle koyabilir. O makine adımın adayları arasına rotadaki ilk tezgâhın
