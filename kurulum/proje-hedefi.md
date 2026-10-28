@@ -2,14 +2,14 @@ Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 
 
 ```text
 SONUC
-TMI CORE V2 bir CNC talasli imalat atolyesinde gunluk iste kullanilabilir olsun: butun moduller depoda (heylit/core-mes), ayni duzende, birbirine akislarla bagli, yetkileri sunucuda denetlenmis ve kullanici tarafindan kabul edilmis. Disaridan verilen her yeni modul ayni duzene sokulur. Kurulum kurum ici, tek sunucu, internetsizdir.
+TMI CORE V2 bir CNC talasli imalat atolyesinde gunluk iste kullanilabilir olsun: butun moduller depoda (heylit/core-mes), ayni duzende, birbirine akislarla bagli, yetkileri sunucuda denetlenmis ve kullanici tarafindan kabul edilmis. Disaridan verilen her yeni modul ayni duzene sokulur. Kurulum kurum icidir: ic sunucu tek sunucu ve internetsizdir. Internete yalniz DMZ'deki ayri dis sunucu bakar; ona yalniz Portal (musteri, tedarikci) ve Mesaj (kisinin uye oldugu kanallar) cikar, kopruyu yalniz ic sunucu baslatir (ADR 0021).
 
 KAPSAM (parca listesi ACIKTIR; ben yeni modul verdikce buyur)
 Altyapi: sunucu cekirdegi ve paylasilan tanimlar; ortak arayuz; araclar; guvenlik merkezi.
 Bugunku moduller: malzemeler; istasyonlar ve makineler; personel, vardiya, mesai; kalite tanimlari (kalibrasyon, durus nedenleri); musteri ve tedarikciler (firma kaydi, adresler, koordinat); finans; rota; uretim emirleri ve is emirleri; Arkon (operator ekrani); Uretim Terminali; plan; stok ve depo; satin alma; siparisler ve teklifler; Fabrika Haritasi (atolye); Recete ve Rota (recete-rota, planlama dahil); Kalite Merkezi; IK; Nizamiye; Portal; Denetim Hazirligi; Mesaj; bildirim; sevkiyat; projeler; cizimler; CNC kurulum; akilli saat; Logo ve SmartES.
 Yeni modul: yalniz ben prototipini ya da on paketini verince kapsama girer. Koordinator kendi basina modul onermez, acmaz, kapsam genisletmez.
 Sahibi disarida olan modul: su an yok (uretim-emirleri 2026-10-12'de projeye alindi). Disarida yazilan yeni bir modul olursa projeden hicbir konu onun dosyalarina yazmaz, yalniz istek biriktirir ve cevresini hazirlar; ben "projeye alindi" diyene kadar boyle kalir.
-Ben acikca isteyene kadar baslanmayanlar: canli kurulum, SmartES baglanti kodu (yalniz alanlari hazirlanir), dis erisim. Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
+Ben acikca isteyene kadar baslanmayanlar: canli kurulum, SmartES baglanti kodu (yalniz alanlari hazirlanir), ADR 0021 disindaki dis erisim. Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
 Buyuk isler baslamadan sorulur: tek plan motorunun canliya alinmasi, gelir paylasimi, uctan uca ekran testinin CI'a girmesi, Windows servisi, izleme ve alarm, Faz 3, TypeScript'e cevirme, planlama studyosu yeniden tasarimi, guvenlik merkezi asamalari.
 Oncelik: hatalar once gelir; yanlis sayi ertelenmez. CI'da hiz onceliklidir.
 
