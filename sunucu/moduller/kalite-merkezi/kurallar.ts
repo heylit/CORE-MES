@@ -4,6 +4,7 @@ import { KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/ka
 import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
+import type { HataliKarari, HataliKaydiOzeti } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
 export const KM_MODULU = 'kalite-merkezi';
@@ -984,5 +985,23 @@ export function satinAlmaKaynagi(r: SatinAlmaSatiri, acik: boolean, parcalar: Re
   return {
     kimlik: emirKimligi('sa', r.id), no: r.siparisNo, tip: EMIR_TIPI.sa, acik, parcaNo: p?.kod ?? null, parcaAdi: p?.ad ?? r.kalemAdi,
     miktar: sayiMetni(r.miktar), termin: r.beklenenTeslim, firmaId: r.firmaId, firmaAd: r.tedarikciAdi,
+  };
+}
+
+// Hatalı parça kararının uygunsuzluk kaydı (1034, 1038 a). MRB kararı kalite kararıdır: rework yeniden işle, hurda hurda; redde MRB
+// sonra verilir. Hurda NCR'yi kapatır; rework yeniden işlenip doğrulanınca, red MRB kararıyla elle kapanır (VARSAYIM). Lot ve emir alanı
+// boştur: dolu olsaydı açık NCR emrin bütün partisini karantinaya alırdı (karantinaIstegi); emir ve adım tanımdadır.
+export const HATALI_NCR_KAYNAGI = 'Proses muayene';
+const HATALI_MRB: Readonly<Record<HataliKarari, string>> = { rework: 'Yeniden işle', hurda: 'Hurda', red: 'Karar bekliyor' };
+export function hataliNcrGovdesi(
+  k: HataliKaydiOzeti, g: { karar: HataliKarari; ncrNo: string; ciddiyet: string; not: string | null }, sorumlu: string, gun: string,
+): Record<string, unknown> {
+  const not = k.aciklama === null ? '' : ` Operatör notu: ${k.aciklama}`;
+  return {
+    no: g.ncrNo, tarih: gun, kaynak: HATALI_NCR_KAYNAGI, ciddiyet: g.ciddiyet, parcaNo: k.uretimEmri.parcaNo, parcaAdi: k.uretimEmri.parcaAd,
+    rev: '', lot: '', proje: '', emir: '', miktar: k.adet, hataTipi: '', sorumlu,
+    durum: g.karar === 'hurda' ? UYGUNSUZLUK_KAPALI : 'Açık',
+    tanim: `Hatalı parça: ${k.uretimEmri.emirNo} OP ${k.isEmri.opNo} ${k.isEmri.ad}, ${k.adet} adet, neden ${k.hurdaNedeni.kod} ${k.hurdaNedeni.ad}. ${k.hedefEmir.id === k.uretimEmri.id ? 'Adımlar emre eklendi' : `Kol ${k.hedefEmir.emirNo}`}.${not}`,
+    mrb: HATALI_MRB[g.karar], mrbGerekce: g.not ?? '',
   };
 }

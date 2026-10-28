@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { KmIlkParcaBekleyenCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmHataliBekleyenCevabi, KmIlkParcaBekleyenCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ayEkle, bugun, isoGun } from '../kurallar.ts';
 import { KALIBRASYON_YOLU, STUDYO_YOLU } from '../sekmeler.ts';
 import { kayitYazmalari, kmAc, kmAdresi, MUAYENECI, MUHENDIS, OKUYAN, YONETICI, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
@@ -18,12 +18,27 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 const BEKLEYEN: KmIlkParcaBekleyenCevabi = { emirler: [{ uretimEmriId: 7, isEmriId: 70, opNo: 20, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili', adet: 20, kararBekleyenAdet: 1 }] };
 
 // Ortak sahte sunucunun üstüne ilk parça uçları: bekleyen liste ve karar (geçen adet döner).
-function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkParcaBekleyenCevabi = { emirler: [] }) {
+const HATALI: KmHataliBekleyenCevabi['kayitlar'][number] = {
+  id: 5, uretimEmri: { id: 7, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili' }, isEmri: { id: 70, opNo: 20, ad: 'Tornalama' },
+  hedefEmir: { id: 8, emirNo: 'UE-0007-K1' }, kaliteIsEmriId: 80, reworkIsEmriId: 81, hurdaNedeni: { id: 3, kod: 'TK', ad: 'Takım kırılması' },
+  adet: 2, aciklama: null, kisi: { id: 9, ad: 'Deneme Operatör' }, zaman: '2026-10-28T08:00:00.000Z',
+  karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null,
+};
+
+function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkParcaBekleyenCevabi = { emirler: [] }, hatali: KmHataliBekleyenCevabi = { kayitlar: [] }) {
   const s = kmAc('', k, kayitlar);
   const asil = s.fetch.getMockImplementation();
   s.fetch.mockImplementation(async (adres: string, istek?: RequestInit) => {
     const yol = adres.replace(/^\/api/, '');
     if (yol === '/kalite-merkezi/ilk-parca/bekleyenler') return json(200, bekleyen);
+    if (yol === '/kalite-merkezi/hatali/bekleyenler') {
+      const verilen = new Set(s.yazmalar.map((y) => y.yol));
+      return json(200, { kayitlar: hatali.kayitlar.filter((h) => !verilen.has(`/kalite-merkezi/hatali/${String(h.id)}/karar`)) });
+    }
+    if (yol === '/kalite-merkezi/hatali/5/karar') {
+      s.yazmalar.push({ yol, govde: JSON.parse(String(istek?.body)) });
+      return json(200, { kayit: { ...HATALI, karar: 'hurda' }, uyari: null });
+    }
     if (yol === '/kalite-merkezi/ilk-parca/7/karar') {
       s.yazmalar.push({ yol, govde: JSON.parse(String(istek?.body)) });
       return json(200, { adet: 1 });
@@ -175,5 +190,32 @@ describe('İlk parça kararı', () => {
     await screen.findByRole('heading', { level: 2, name: 'Merhaba Deneme' });
     expect(screen.queryByRole('region', { name: 'İlk parça kararı' })).toBeNull();
     expect(s.fetch.mock.calls.some(([a]) => String(a).includes('ilk-parca'))).toBe(false);
+  });
+});
+
+describe('Hatalı parça kararı', () => {
+  it('onaylayabilen kararı pencereden verir; NCR sıradaki numarayla ve tekrar korumalı gider', async () => {
+    const s = ac(MUHENDIS, { ncr: [{ no: `NCR-${String(new Date().getFullYear())}-0004` }] }, { emirler: [] }, { kayitlar: [HATALI] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    expect(within(bolum).getByText('UE-0007 | Op 20 | DNM-01')).toBeTruthy();
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    fireEvent.change(within(pencere).getByLabelText('Karar'), { target: { value: 'hurda' } });
+    fireEvent.change(within(pencere).getByLabelText('Gerekçe'), { target: { value: 'Kurtarılamaz' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
+    const yazma = s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar');
+    expect(yazma?.govde).toMatchObject({ karar: 'hurda', ciddiyet: 'Majör', not: 'Kurtarılamaz', ncrNo: `NCR-${String(new Date().getFullYear())}-0005` });
+    expect(String((yazma?.govde as { ncrKimlik?: unknown }).ncrKimlik)).toMatch(/^ncr-/);
+    const karar = s.fetch.mock.calls.find(([adres]) => String(adres).endsWith('/hatali/5/karar'));
+    expect(new Headers((karar?.[1] as RequestInit | undefined)?.headers).get('istek-kimligi')).toMatch(/^[0-9a-f-]{36}$/);
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Hatalı parça kararı' })).toBeNull(); });
+  });
+
+  it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {
+    const s = ac(MUAYENECI, {}, { emirler: [] }, { kayitlar: [HATALI] });
+    await screen.findByRole('heading', { level: 2, name: 'Merhaba Deneme' });
+    expect(screen.queryByRole('region', { name: 'Hatalı parça kararı' })).toBeNull();
+    expect(s.fetch.mock.calls.some(([a]) => String(a).includes('/hatali/'))).toBe(false);
   });
 });

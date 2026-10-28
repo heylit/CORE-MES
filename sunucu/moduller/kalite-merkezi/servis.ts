@@ -8,7 +8,7 @@ import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -23,13 +23,16 @@ import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
-import { acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import {
+  acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
+} from '../uretim-emirleri/disari.ts';
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
+import { hataliNcrGovdesi } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
@@ -387,6 +390,19 @@ export async function ilkParcaKarari(
   const { adet } = await kararliSayimiSonuclandir(db, kisiId, uretimEmriId, karar, isEmriId);
   await sorgular.ilkParcaKarariYaz(db, uretimEmriId, karar, adet, kisiId, isEmriId);
   return { adet };
+}
+
+// 1034, 1038 a: hatalı parçanın kalite kararı ve uygunsuzluk kaydı aynı işlemde. Karar üretim emrine döner (kalite adımı kapanır,
+// rework planlamayı bekler, hurda ve red kolu kapatır); NCR onay yoluyla yazılır (MRB kararı onay alanıdır, 195 a).
+export async function hataliKarari(db: Db, kullanici: Kullanici, kayitId: number, g: KmHataliKararGovdesi): Promise<KmHataliKararCevabi> {
+  const sonuc = await hataliKarariVer(db, kullanici, kayitId, { karar: g.karar, not: g.not ?? null, ncrKimlik: g.ncrKimlik });
+  const ncr = hataliNcrGovdesi(sonuc.kayit, { karar: g.karar, ncrNo: g.ncrNo, ciddiyet: g.ciddiyet, not: g.not ?? null }, kullanici.ad, tesisGunu(Date.now()));
+  await onayla(db, kullanici, UYGUNSUZLUK_KOLEKSIYONU, g.ncrKimlik, ncr, null);
+  return sonuc;
+}
+
+export async function hataliBekleyenListesi(db: Db): Promise<KmHataliBekleyenCevabi> {
+  return { kayitlar: await hataliKayitlari(db, { acik: true, emirId: null }) };
 }
 
 export async function ilkParcaBekleyenListesi(db: Db): Promise<KmIlkParcaBekleyenCevabi> {

@@ -90,3 +90,8 @@ Yok.
 ## İlk parça kararı tekrar korumalı (551 a)
 - `POST /kalite-merkezi/ilk-parca/:uretimEmriId/karar` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen karar deftere ikinci satır yazmaz, ilk cevabı alır.
 - Bugün ekranı ve uygulama köprüsü kararı kimlikle gönderir; sonucu bilinmeyen gönderim aynı kimlikle yinelenir.
+
+## Hatalı parça kararı (1034, 1038 a)
+- Terminaldeki "Hatalı" girişi üretim emrinde kalite adımlı kol açar (uretim-emirleri). Kararı Kalite Merkezi verir: `GET /kalite-merkezi/hatali/bekleyenler`, `POST /kalite-merkezi/hatali/:kayitId/karar` (`kalite-merkezi.onayla`, tekrar korumalı).
+- Karar rework, hurda ya da red; aynı işlemde uygunsuzluk kaydı (NCR, kaynak "Proses muayene") yazılır. Kalite kararını uretim-emirleri `disari.ts` ile yazar; NCR yazılamazsa karar da geri alınır.
+- Bugün ekranında "Hatalı parça kararı" kartı (onaylayabilende): karar, ciddiyet (varsayılan Majör), gerekçe.

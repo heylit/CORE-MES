@@ -3,6 +3,7 @@ import type { Uc } from '#cekirdek/uc.ts';
 import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
   kmEmirKaynaklariCevabi, kmEslesmeSayimiCevabi, kmParcaKaynaklariCevabi, kmParcaKaynaklariSorgusu,
+  kmHataliBekleyenCevabi, kmHataliKararCevabi, kmHataliKararGovdesi, kmHataliParametresi,
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
@@ -126,6 +127,25 @@ export const uclar: Uc[] = [
     yetki: 'kalite-merkezi.onayla',
     cevap: kmIlkParcaBekleyenCevabi,
     isle: ({ db }) => servis.ilkParcaBekleyenListesi(db),
+  }),
+  // Hatalı parça (1034, 1038 a): terminalde ayrılan parçanın kararı ilk parça kararıyla aynı yetkidedir; bekleyenleri kararı veren görür.
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/hatali/bekleyenler',
+    yetki: 'kalite-merkezi.onayla',
+    cevap: kmHataliBekleyenCevabi,
+    isle: ({ db }) => servis.hataliBekleyenListesi(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/hatali/:kayitId/karar',
+    yetki: 'kalite-merkezi.onayla',
+    // Karar bir kezdir; cevabı kaybolan isteğin yinelemesi çakışma yerine ilk cevabı alsın.
+    tekrarKorumali: true,
+    parametre: kmHataliParametresi,
+    govde: kmHataliKararGovdesi,
+    cevap: kmHataliKararCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.hataliKarari(db, kullanici, parametre.kayitId, govde),
   }),
   uc({
     yontem: 'GET',

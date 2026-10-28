@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
-import { KALITE_KARARLARI } from './uretim-emirleri.ts';
+import { HATALI_KARARLARI, KALITE_KARARLARI, hataliKaydiSemasi } from './uretim-emirleri.ts';
 
 // Kalite Merkezi değiştirilmeden çerçevede çalışır; kayıtları kendi biçimindedir ve TMI'de yorumlanmaz: olduğu gibi saklanır,
 // olduğu gibi döner (Arkon kalıbı). Koleksiyon adları uygulamanındır (COLS ve ayarlar).
@@ -172,6 +172,20 @@ export type KmOzetCevabi = z.output<typeof kmOzetCevabi>;
 export type KmKimlikCevabi = z.output<typeof kmKimlikCevabi>;
 export type KmTedarikciFirmalariCevabi = z.output<typeof kmTedarikciFirmalariCevabi>;
 export type KmKarantinaKonumlariCevabi = z.output<typeof kmKarantinaKonumlariCevabi>;
+// Hatalı parça kararı (1034, 1038 a): terminalde ayrılan parçaya kalite rework, hurda ya da red der; karar aynı işlemde uygunsuzluk
+// (NCR) kaydı açar. NCR kimliği ve numarası uygulamanın biçimindedir (NCR formuyla aynı, istemci verir); ciddiyet uygulamanın listesidir.
+export const KM_CIDDIYETLER = ['Kritik', 'Majör', 'Minör'] as const;
+export const kmHataliParametresi = z.object({ kayitId: z.coerce.number().int().positive().max(2147483647) });
+export const kmHataliKararGovdesi = z.object({
+  karar: z.enum(HATALI_KARARLARI),
+  ncrKimlik: kimlik,
+  ncrNo: z.string().trim().min(1, 'NCR numarası zorunlu.').max(40),
+  ciddiyet: z.enum(KM_CIDDIYETLER),
+  not: z.string().trim().max(500, 'Gerekçe en çok 500 karakter olur.').nullish().transform((d) => (d ? d : null)),
+}).strict();
+export const kmHataliKararCevabi = z.object({ kayit: hataliKaydiSemasi, uyari: z.string().nullable() });
+export const kmHataliBekleyenCevabi = z.object({ kayitlar: z.array(hataliKaydiSemasi) });
+
 export type KmIlkParcaBekleyenCevabi = z.output<typeof kmIlkParcaBekleyenCevabi>;
 export type KmGecmisCevabi = z.output<typeof kmGecmisCevabi>;
 export type KmIlkParcaCevabi = z.output<typeof kmIlkParcaCevabi>;
@@ -182,3 +196,6 @@ export type KmEmirKaynaklariCevabi = z.output<typeof kmEmirKaynaklariCevabi>;
 export type KmParcaKaynagi = z.output<typeof kmParcaKaynagi>;
 export type KmParcaKaynaklariCevabi = z.output<typeof kmParcaKaynaklariCevabi>;
 export type KmEslesmeSayimiCevabi = z.output<typeof kmEslesmeSayimiCevabi>;
+export type KmHataliKararGovdesi = z.input<typeof kmHataliKararGovdesi>;
+export type KmHataliKararCevabi = z.output<typeof kmHataliKararCevabi>;
+export type KmHataliBekleyenCevabi = z.output<typeof kmHataliBekleyenCevabi>;
