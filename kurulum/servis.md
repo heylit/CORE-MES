@@ -18,7 +18,9 @@ seferinde iki katına çıkar, 60 sn'de durur; sunucu 10 dakika ayakta kalınca 
   `C:\Users\<ad>\Desktop\TMIV2-GUNLUK\bekci.log`). Sunucunun ekrana yazdığı her şey ve bekçinin "kapandı, yeniden açılacak" satırları
   buraya da yazılır. Dosya 10 MB'ı geçince `bekci.log.1` adını alır, yenisi başlar.
 - Güncelleme (`kurulum/guncelleme.md`) bekçiyle de aynıdır: elle güncellemede önce bekçi penceresini kapatın, sonra `git pull` ve
-  öteki adımlar, en son yeniden `npm.cmd run bekci`. Ekrandan paketle güncellemede bekçiye dokunmayın.
+  öteki adımlar, en son yeniden `npm.cmd run bekci`. Ekrandan paketle güncellemede bekçiye dokunmayın: güncelleyici işaretini
+  dakikada bir yeniler, bekçi o sürede sunucuyu kapatmaz; işaret 5 dakika yenilenmezse güncelleyici ölmüş sayılır ve yarım kalan
+  uygulamayı yeniden açılan güncelleyici kapatır (kurulum/guncelleme.md "Uygulama yarıda kesilirse").
 
 ## 2. Otomatik başlatma: oturum açılınca bekçiyi açar
 

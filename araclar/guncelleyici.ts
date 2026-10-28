@@ -1,8 +1,9 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, posix, win32 } from 'node:path';
 import { parseEnv } from 'node:util';
+import { z } from 'zod';
 import {
   CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, SURUMLER_KLASORU, UYGULAMA_GECMISI_DOSYASI, UYGULAMA_HATASI_EN_UZUN, UYGULAMA_ISTEGI_DOSYASI,
   UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI, calisanSurumSemasi, saklananPaketiDogrula, surumEtiketi,
@@ -40,26 +41,32 @@ const hataMetni = (hata: unknown): string =>
 
 // Veritabanı yalnız göç başladıktan sonra değişebilir: ondan önceki hatada geri yükleme gerekmez, eski sürüm yeniden açılır.
 // Geri yükleme de bozulursa eski sürüm açılmaz: eski kod yeni şemayla çalışmasın; elle geri yükleme gerekir (kurulum/yedek.md).
-export async function paketiUygula(istek: UygulamaIstegi, a: UygulamaAdimlari, saat: () => Date = () => new Date()): Promise<UygulamaSonucu> {
+// kaydet her adımdan önce çağrılır: güncelleyici uygulama ortasında öldürülürse açılışta hangi adımda kaldığı okunur.
+export async function paketiUygula(
+  istek: UygulamaIstegi, a: UygulamaAdimlari, saat: () => Date = () => new Date(),
+  kaydet: (adim: Adim, surum: string) => Promise<void> = async () => {},
+): Promise<UygulamaSonucu> {
   const baslangic = saat().toISOString();
   let surum = istek.commit.slice(0, 7);
   let adim: Adim = 'dogrula';
+  const gec = async (yeni: Adim): Promise<void> => { adim = yeni; await kaydet(adim, surum); };
   const sonuc = (s: UygulamaSonucu['sonuc'], hata: string | null): UygulamaSonucu => ({
     commit: istek.commit, surum, sonuc: s, adim: s === 'kuruldu' ? null : adim, hata, baslangic, bitis: saat().toISOString(),
   });
 
   try {
+    await gec('dogrula');
     surum = await a.dogrula();
-    adim = 'hazirla';
+    await gec('hazirla');
     await a.hazirla();
   } catch (hata) {
     return sonuc('basarisiz', hataMetni(hata));
   }
 
   try {
-    adim = 'durdur';
+    await gec('durdur');
     await a.durdur();
-    adim = 'yedek';
+    await gec('yedek');
     await a.yedekle();
   } catch (hata) {
     const ilk = hataMetni(hata);
@@ -72,9 +79,9 @@ export async function paketiUygula(istek: UygulamaIstegi, a: UygulamaAdimlari, s
   }
 
   try {
-    adim = 'goc';
+    await gec('goc');
     await a.gocle();
-    adim = 'acilis';
+    await gec('acilis');
     await a.yeniyiAc();
     return sonuc('kuruldu', null);
   } catch (hata) {
@@ -91,6 +98,50 @@ export async function paketiUygula(istek: UygulamaIstegi, a: UygulamaAdimlari, s
     }
     return sonuc('geri-alindi', ilk);
   }
+}
+
+// Güncelleyicinin kendi dosyası (sunucu okumaz): süren uygulamanın adımı, eski sürüm ve alınan yedek. Uygulama bitince silinir;
+// açılışta duruyorsa önceki güncelleyici uygulama ortasında öldürülmüştür (bekçi, elektrik kesintisi).
+export const UYGULAMA_DURUMU_DOSYASI = 'uygulama-durumu.json';
+const ADIMLAR = ['dogrula', 'hazirla', 'durdur', 'yedek', 'goc', 'acilis'] as const satisfies readonly Adim[];
+export const uygulamaDurumuSemasi = z.object({
+  istek: uygulamaIstegiSemasi,
+  surum: z.string(),
+  adim: z.enum(ADIMLAR),
+  eski: z.object({ klasor: z.string(), surum: calisanSurumSemasi }),
+  yedek: z.string().nullable(),
+  baslangic: z.string(),
+  // Yarım kalan uygulama geri yüklenemediyse: sunucu elle geri yükleme yapılıp bu dosya silinene kadar açılmaz.
+  elle: z.boolean().default(false),
+});
+export type UygulamaDurumu = z.output<typeof uygulamaDurumuSemasi>;
+
+// Bekçi uygulamayı bu işaretin tazeliğiyle izler (araclar/bekci.ts GUNCELLEME_PAYI_MS); uzun göç sürerken de işaret yenilenir.
+export const ISARET_YENILEME_MS = 60_000;
+
+export interface YarimKalanSonucu { sonuc: UygulamaSonucu; eskiAcilsin: boolean }
+
+// Veritabanı yalnız göç adımında değişir: ondan önce kalan uygulamada eski sürüm açılır. Göç ya da açılışta kalanda alınan yedek
+// geri yüklenir; yüklenemezse eski kod yarım şemayla çalışmasın diye sunucu kapalı kalır (paketiUygula ile aynı kural).
+export async function yarimKalaniKapat(
+  durum: UygulamaDurumu, geriYukle: (yedek: string) => Promise<void>, saat: () => Date = () => new Date(),
+): Promise<YarimKalanSonucu> {
+  const sonuc = (s: UygulamaSonucu['sonuc'], hata: string): UygulamaSonucu => ({
+    commit: durum.istek.commit, surum: durum.surum, sonuc: s, adim: durum.adim, hata, baslangic: durum.baslangic, bitis: saat().toISOString(),
+  });
+  const kesildi = 'Güncelleyici uygulama sırasında kapandı';
+  if (durum.adim !== 'goc' && durum.adim !== 'acilis') {
+    return { sonuc: sonuc('basarisiz', `${kesildi}; veritabanı değişmedi, eski sürüm açıldı.`), eskiAcilsin: true };
+  }
+  if (durum.yedek === null) {
+    return { sonuc: sonuc('basarisiz', `${kesildi}; yedek yolu bilinmiyor, sunucu kapalı bırakıldı. Elle geri yükleme gerekir.`), eskiAcilsin: false };
+  }
+  try {
+    await geriYukle(durum.yedek);
+  } catch (hata) {
+    return { sonuc: sonuc('basarisiz', `${kesildi}; yedek geri yüklenemedi, sunucu kapalı bırakıldı: ${hataMetni(hata)}`), eskiAcilsin: false };
+  }
+  return { sonuc: sonuc('geri-alindi', `${kesildi}; yedek geri yüklendi, eski sürüm açıldı.`), eskiAcilsin: true };
 }
 
 // Alt süreçler kendi `.env`'lerini okur: güncelleyicinin TMIV2_ değişkenleri geçerse dosyayla çelişki sayılıp süreç açılmaz
@@ -302,7 +353,7 @@ export class Guncelleyici {
     return (await readdir(join(klasor, 'sunucu', 'gocler'))).filter((ad) => ad.endsWith('.sql'));
   }
 
-  adimlar(istek: UygulamaIstegi, eski: { klasor: string; surum: CalisanSurum }): UygulamaAdimlari {
+  adimlar(istek: UygulamaIstegi, eski: { klasor: string; surum: CalisanSurum }, yedekAlindi: (yol: string) => void = () => {}): UygulamaAdimlari {
     const yeniKlasor = this.surumKlasoru(istek.commit);
     let yeni: CalisanSurum | null = null;
     let paket: { yol: string; yukBasi: number } | null = null;
@@ -350,6 +401,7 @@ export class Guncelleyici {
       yedekle: async () => {
         const dosya = await yedekAl(yedekOrtami, yedekOrtami.dizin ?? '', 'elle', new Date());
         yedek = join(yedekOrtami.dizin ?? '', dosya.ad);
+        yedekAlindi(yedek);
         console.log(`Güncelleme: yedek alındı: ${yedek}`);
       },
       gocle: () => calistir(process.execPath, ['--import', './araclar/ortam-yukle-goc.ts', 'sunucu/cekirdek/goc-calistir.ts'], {
@@ -395,17 +447,42 @@ export class Guncelleyici {
     return istek;
   }
 
+  private async sonucuYaz(sonuc: UygulamaSonucu, eski: CalisanSurum): Promise<void> {
+    await jsonYaz(this.yol(UYGULAMA_SONUCU_DOSYASI), sonuc);
+    // Geçmiş yazılamazsa güncelleme bozulmuş sayılmaz: sonuç dosyası yazıldı, sürüm çalışıyor.
+    await appendFile(this.yol(UYGULAMA_GECMISI_DOSYASI), gecmisSatiri(sonuc, eski))
+      .catch((hata: unknown) => { console.error(`Uygulama geçmişi yazılamadı: ${hataMetni(hata)}`); });
+  }
+
   async uygula(istek: UygulamaIstegi): Promise<void> {
     const eski = await this.aktif();
     console.log(`Güncelleme başladı: ${istek.commit}`);
+    const durum: UygulamaDurumu = {
+      istek, surum: istek.commit.slice(0, 7), adim: 'dogrula', eski, yedek: null, baslangic: new Date().toISOString(), elle: false,
+    };
+    const kaydet = (): Promise<void> => jsonYaz(this.yol(UYGULAMA_DURUMU_DOSYASI), durum);
+    // Dosyanın zamanı yenilenir, içeriği değil: bekçi yalnız zamana bakar.
+    const yenileyici = setInterval(() => {
+      const simdi = new Date();
+      void utimes(this.yol(UYGULANIYOR_DOSYASI), simdi, simdi).catch(() => undefined);
+    }, ISARET_YENILEME_MS);
     let sonuc: UygulamaSonucu;
     try {
-      sonuc = await paketiUygula(istek, this.adimlar(istek, eski));
-      await jsonYaz(this.yol(UYGULAMA_SONUCU_DOSYASI), sonuc);
-      // Geçmiş yazılamazsa güncelleme bozulmuş sayılmaz: sonuç dosyası yazıldı, sürüm çalışıyor.
-      await appendFile(this.yol(UYGULAMA_GECMISI_DOSYASI), gecmisSatiri(sonuc, eski.surum))
-        .catch((hata: unknown) => { console.error(`Uygulama geçmişi yazılamadı: ${hataMetni(hata)}`); });
+      sonuc = await paketiUygula(istek, this.adimlar(istek, eski, (yol) => { durum.yedek = yol; }), undefined, async (adim, surum) => {
+        durum.adim = adim;
+        durum.surum = surum;
+        await kaydet();
+      });
+      await this.sonucuYaz(sonuc, eski.surum);
+      if (this.surecler === null) {
+        // Geri yükleme bozuldu, sunucu kapalı: bekçinin yeniden açışı da yarım şemayla eski ya da yeni kodu açmasın.
+        await jsonYaz(this.yol(CALISAN_SURUM_DOSYASI), eski.surum);
+        await jsonYaz(this.yol(UYGULAMA_DURUMU_DOSYASI), { ...durum, elle: true });
+      } else {
+        await rm(this.yol(UYGULAMA_DURUMU_DOSYASI), { force: true });
+      }
     } finally {
+      clearInterval(yenileyici);
       await rm(this.yol(UYGULANIYOR_DOSYASI), { force: true });
     }
     console.log(`Güncelleme bitti: ${sonuc.sonuc}${sonuc.hata === null ? '' : ` (${sonuc.adim ?? ''}: ${sonuc.hata})`}`);
@@ -413,12 +490,51 @@ export class Guncelleyici {
     if (this.surecler === null) await this.kapat(1);
   }
 
+  // Önceki güncelleyici uygulama ortasında öldürüldüyse durum dosyası kalır. Dönen değer açılacak sürümdür; null ise sunucu açılmaz.
+  async yarimKalaniBitir(): Promise<{ klasor: string; surum: CalisanSurum } | null> {
+    const metin = await readFile(this.yol(UYGULAMA_DURUMU_DOSYASI), 'utf8').catch(() => null);
+    if (metin === null) return this.aktif();
+    let durum: UygulamaDurumu | null = null;
+    try {
+      const okunan = uygulamaDurumuSemasi.safeParse(JSON.parse(metin));
+      if (okunan.success) durum = okunan.data;
+    } catch { /* aşağıda */ }
+    if (durum === null) {
+      console.error(`${UYGULAMA_DURUMU_DOSYASI} okunamadı; önceki güncellemenin hangi adımda kaldığı bilinmiyor. Sunucu açılmadı: veritabanını `
+        + 'kontrol edin (gerekirse yedeği elle geri yükleyin, kurulum/yedek.md), sonra dosyayı silin.');
+      return null;
+    }
+    if (durum.elle) {
+      console.error(`Önceki güncelleme geri yüklenemedi; sunucu açılmadı. Yedek elle geri yüklenip (${durum.yedek ?? 'yedek yolu bilinmiyor'}, `
+        + `kurulum/yedek.md) ${this.yol(UYGULAMA_DURUMU_DOSYASI)} silinince açılır.`);
+      return null;
+    }
+    console.error(`Önceki güncelleme ${durum.adim} adımında kesilmiş (${durum.surum}); kapatılıyor.`);
+    const { sonuc, eskiAcilsin } = await yarimKalaniKapat(durum, (yedek) => this.geriYukle(yedekOrtamiOku(), yedek));
+    await this.sonucuYaz(sonuc, durum.eski.surum);
+    // Yeni sürüm açılışta kesildiyse çalışan sürüm dosyası onu gösterebilir; eski sürüm geri yazılır.
+    await jsonYaz(this.yol(CALISAN_SURUM_DOSYASI), durum.eski.surum);
+    if (!eskiAcilsin) {
+      await jsonYaz(this.yol(UYGULAMA_DURUMU_DOSYASI), { ...durum, elle: true });
+      console.error(sonuc.hata ?? '');
+      return null;
+    }
+    await rm(this.yol(UYGULAMA_DURUMU_DOSYASI), { force: true });
+    console.error(`Güncelleme kapatıldı: ${sonuc.sonuc}. ${sonuc.hata ?? ''}`);
+    return durum.eski;
+  }
+
   async baslat(): Promise<void> {
     await mkdir(join(this.s.dizin, SURUMLER_KLASORU), { recursive: true });
     // Önceki güncelleyici uygulama ortasında düştüyse işareti kalır; istek yeniden denenmediği için işaret de artıktır.
     await rm(this.yol(UYGULANIYOR_DOSYASI), { force: true });
+    const acilacak = await this.yarimKalaniBitir();
+    if (acilacak === null) {
+      process.exitCode = 1;
+      return;
+    }
     await jsonYaz(this.yol(GUNCELLEYICI_DOSYASI), { pid: process.pid });
-    const { klasor, surum } = await this.aktif();
+    const { klasor, surum } = acilacak;
     console.log(`Güncelleyici: ${klasor} açılıyor (${surum.commit ?? 'commit bilinmiyor'}).`);
     await this.ac(klasor, surum, true);
     for (;;) {
