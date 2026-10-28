@@ -6,7 +6,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
-  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
+  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -15,13 +15,13 @@ import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
 import { alisBelgeleri, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../cizimler/disari.ts';
 import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -565,6 +565,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') await s.siparisIptaliniLogoyaIsaretle(db, id);
   // Sipariş bilgisi (beklenen teslim, tedarikçi) ya da durum değişmiş olabilir: alım satırları her kayıtta eşitlenir.
   if (siparisteMi(yazilacak.durum) || siparisteMi(eski.durum)) await alimlariBildir(db, k, id);
+  if (siparisteMi(yazilacak.durum)) await kartKopyalariniAl(db, id);
   for (const o of yeniOnaylar) {
     // Dört göz yazılan kararın sahibine bakar (B-001): istemcinin gönderdiği ya da eski karar değil.
     const sonuc = dortGozSonucu(k.id, yazilacak.karar?.kararVerenKisiId ?? null, await sistemAyariOku(db, 'satin-alma.dort-goz'));
@@ -723,6 +724,37 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
     karar: tutar === null ? null : { tlToplam: para(tutar.tlToplam)!, bugunkuDeger: para(tutar.bugunkuDeger)!, basamak: gerekenBasamak(tutar.tlToplam, ayar.onayLimitleri) },
   };
 }
+// 1105 a: yeni sipariş satırının kalemi kartlıysa kartın o anki ayrıntısı kopyalanır; kopya bir kez alınır, değişmez.
+async function kartKopyalariniAl(db: Db, talepId: string): Promise<void> {
+  const satirlar = await s.kopyasizSiparisSatirlari(db, talepId);
+  if (satirlar.length === 0) return;
+  const kartlar = await malzemeSatinAlmaAyrintilari(db, satirlar.map((x) => x.malzemeNo));
+  await s.kartKopyalariniYaz(db, satirlar.flatMap((x) => {
+    const a = kartlar.get(x.malzemeNo);
+    return a === undefined ? [] : [{ satirId: x.satirId, malzemeNo: x.malzemeNo, kartSurumu: a.surum, ayrinti: a }];
+  }));
+}
+
+// 1104 a: kalemin kart ayrıntısı; siparişi verilmiş kalemde tedarikçiye giden alanlar siparişteki kopyadandır (1105 a).
+export async function kartAyrintilari(db: Db, talepId: string): Promise<KartAyrintilariCevabi> {
+  const t = await talepOku(db, talepId);
+  if (t === null) throw bulunamadi(ILETILER.talepYok);
+  const katalog = new Map((await katalogKur(db)).map((x) => [x.id, x.malzemeNo] as const));
+  const nolar = new Map(t.kalemler.map((x) => [x.id, x.katalogId === null ? null : katalog.get(x.katalogId) ?? null] as const));
+  const kartlar = await malzemeSatinAlmaAyrintilari(db, [...nolar.values()].filter((x): x is number => x !== null));
+  const kopyalar = await s.kartKopyalariOku(db, talepId);
+  return {
+    kalemler: t.kalemler.map((x) => {
+      const no = nolar.get(x.id) ?? null;
+      const guncel: KartAyrintisi | null = no === null ? null : kartlar.get(no) ?? null;
+      const siparisler = kopyalar.filter((c) => c.kalemId === x.id).map((c) => ({
+        teklifId: c.teklifId, kopya: c.ayrinti as KartAyrintisi, zaman: c.zaman, kartDegisti: guncel === null || guncel.surum !== c.kartSurumu,
+      }));
+      return { kalemId: x.id, malzemeNo: no, guncel, siparisler, tedarikciye: tedarikciyeGidenAyrinti(siparisler[0]?.kopya ?? guncel) };
+    }),
+  };
+}
+
 const siparisNumarasi = (x: { no?: string | null; siparisNo: string }): string => x.no ?? x.siparisNo;
 // SAT-73: talep önce kilitlenip sürümü artar (plan değişikliği talebin değişikliğidir), sonra plan finansa yazılır ve geçmişe girer.
 export async function odemePlaniYaz(db: Db, k: Kullanici, talepId: string, g: OdemePlaniYazimi): Promise<SiparisTakibiCevabi> {

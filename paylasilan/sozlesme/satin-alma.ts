@@ -557,6 +557,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };
   'GET /satin-alma-talepleri/:id/siparis-takibi': { cevap: SiparisTakibiCevabi };
   'GET /satin-alma-talepleri/:id/degerlendirme': { cevap: DegerlendirmeCevabi };
+  'GET /satin-alma-talepleri/:id/kart-ayrintilari': { cevap: KartAyrintilariCevabi };
   'POST /satin-alma-talepleri/:id/odeme-plani': { govde: z.input<typeof odemePlaniGovdesi>; cevap: SiparisTakibiCevabi };
   'GET /satin-alma-siparis-satirlari/:id/belgeler': { cevap: SiparisBelgeleriCevabi };
   'POST /satin-alma-siparis-satirlari/:id/belge-ekle': { govde: z.input<typeof siparisBelgesiGovdesi>; cevap: SiparisBelgeleriCevabi };
@@ -619,6 +620,27 @@ export const degerlendirmeCevabi = z.object({
   karar: z.object({ tlToplam: ondalikMetinSemasi, bugunkuDeger: ondalikMetinSemasi, basamak: z.string().nullable() }).nullable(),
 });
 export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
+
+// 1104 a, 1105 a: kalemin kart ayrıntısı (malzemeler kartından). Sipariş verilmiş satırda siparişteki kopya, kart sonra değiştiyse
+// `kartDegisti`. `tedarikciye` teklif isteğinde ve siparişte tedarikçiye giden alanlardır: fiyat, en az sipariş, tercih edilen tedarikçi ve kart notu gitmez.
+export const kartAyrintisiSemasi = z.object({
+  tur: z.string(), surum: z.number().int(), kaliteAdi: z.string().nullable(), formAdi: z.string().nullable(), aciklamalar: z.array(z.string()),
+  standartlar: z.array(z.string()), tolerans: z.string().nullable(), durum: z.string().nullable(), yuzey: z.string().nullable(),
+  sertifikalar: z.array(z.string()), ureticiUrunKodu: z.string().nullable(), mensei: z.string().nullable(), gtip: z.string().nullable(),
+  enAzSiparis: ondalikMetinSemasi.nullable(), tercihTedarikci: z.string().nullable(), not: z.string().nullable(),
+});
+export const kartAyrintilariCevabi = z.object({
+  kalemler: z.array(z.object({
+    kalemId: uuid,
+    malzemeNo: z.number().int().nullable(),
+    // Kartın bugünkü hâli; kartsız kalemde ya da kart iptalse boş.
+    guncel: kartAyrintisiSemasi.nullable(),
+    siparisler: z.array(z.object({ teklifId: uuid, kopya: kartAyrintisiSemasi, zaman: z.string(), kartDegisti: z.boolean() })),
+    tedarikciye: z.array(z.object({ ad: z.string(), deger: z.string() })),
+  })),
+});
+export type KartAyrintisi = z.output<typeof kartAyrintisiSemasi>;
+export type KartAyrintilariCevabi = z.output<typeof kartAyrintilariCevabi>;
 
 // Ana sayfa pano kartları (kart #489): yetkisi olmayan sayı null gelir, sıfır uydurulmaz.
 export const satinAlmaOzetiCevabi = z.object({

@@ -4,7 +4,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
-import type { HizliKalem, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
 export const ISLEM = {
@@ -758,4 +758,16 @@ export function birimFiyati(kgFiyati: string | null, stokBirimi: string | null, 
   if (kgFiyati === null) return null;
   if (stokBirimi !== null && stokBirimi.trim().toLocaleLowerCase('tr-TR') === 'kg') return kgFiyati;
   return birimKg === null || !(birimKg > 0) ? null : ondalikCarp(kgFiyati, birimKg.toFixed(OLCEK));
+}
+
+// 1104 a: teklif isteğinde ve siparişte tedarikçiye giden kart alanları, ekrandaki sırayla. Fiyat, en az sipariş, tercih edilen
+// tedarikçi ve kart notu bizimdir, gitmez. Kart yoksa liste boştur.
+export function tedarikciyeGidenAyrinti(a: KartAyrintisi | null): { ad: string; deger: string }[] {
+  if (a === null) return [];
+  const satirlar: [string, string | null][] = [
+    ['Kalite', a.kaliteAdi], ['Form', a.formAdi], ['Açıklama', a.aciklamalar.join(', ') || null], ['Standart', a.standartlar.join(', ') || null],
+    ['Tolerans', a.tolerans], ['Durum / ısıl işlem', a.durum], ['Yüzey', a.yuzey], ['Üretici ürün kodu', a.ureticiUrunKodu], ['Menşei', a.mensei],
+    ['İstenen sertifikalar', a.sertifikalar.join(', ') || null],
+  ];
+  return satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }]));
 }
