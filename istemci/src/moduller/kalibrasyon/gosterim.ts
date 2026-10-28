@@ -1,4 +1,5 @@
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import { formulKoru } from '../../ortak/veri/csv.ts';
 import type { Alet, Durum, Sonuc } from '#paylasilan/sozlesme/kalibrasyon.ts';
 
 // GGGG-AA-GG -> GG.AA.GGGG; tarih yoksa null kalır, boş metin üretilmez.
@@ -31,7 +32,8 @@ export const SONUC_METNI: Record<Sonuc, string> = { uygun: 'Uygun', uygunsuz: 'U
 
 // Excel Türkçe ayarı noktalı virgül ayırıcı bekler; BOM'suz UTF-8'de Türkçe harfler bozulur.
 export function aletlerCsv(aletler: readonly Alet[]): string {
-  const alan = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın).
+  const alan = (v: string | number | null) => `"${(typeof v === 'string' ? formulKoru(v, { sayiSerbest: true }) : String(v ?? '')).replace(/"/g, '""')}"`;
   const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum'];
   const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), tarihMetni(a.vade), durumMetni(a)]);
   return '﻿' + [baslik, ...satirlar].map((s) => s.map(alan).join(';')).join('\r\n');
