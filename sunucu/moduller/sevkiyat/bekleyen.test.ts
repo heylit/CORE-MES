@@ -122,9 +122,11 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     return bekleyenlerCevabi.parse(c.govde).bekleyenler;
   };
   // 960: biten emrin ürün kalemi serbest bırakılınca bekleme listesine düşer.
-  const bitenUrun = async (emirId: number): Promise<Bekleyen | undefined> => {
+  // eski: göçten önce düşmüş kayıt gibi (otomatik); ürün sevki olayı yalnız onda verilir, Tüm işlerden bırakılanı depo çıkışı oynatır (962 a).
+  const bitenUrun = async (emirId: number, eski = false): Promise<Bekleyen | undefined> => {
     const c = await istek('planlama_proje', 'POST', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`urun:${String(emirId)}`], tasima: 'biz' });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    if (eski) await o().sahip.sorgu("UPDATE sevkiyat_bekleyen SET son_yazan_yer = 'otomatik' WHERE kaynak = 'urun' AND uretim_emri_id = $1", [emirId]);
     return (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId);
   };
   const isGovdesi = (tarih: string, birakisNoktasiId: number) => ({
@@ -269,7 +271,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 6 })).durum, 200);
     await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
-    const b = (await bitenUrun(emirId))!;
+    const b = (await bitenUrun(emirId, true))!;
     assert.equal(b.adet, '6.0000');
 
     // Izgara içinde müşteri noktası (firmaya bağlı) ve fabrika: plan onayı rota hesaplar.
@@ -349,7 +351,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 3 })).durum, 200);
     await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
-    const b = (await bitenUrun(emirId))!;
+    const b = (await bitenUrun(emirId, true))!;
     const musteri = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam) VALUES ('Ret Noktası', 'musteri', 39.96, 32.76) RETURNING id"))!.id;
     const tarih = (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date + 3, 'YYYY-MM-DD') AS g"))!.g;
@@ -374,7 +376,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 2 })).durum, 200);
     await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
-    const b = (await bitenUrun(emirId))!;
+    const b = (await bitenUrun(emirId, true))!;
     const musteri = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam) VALUES ('Uyarı Noktası', 'musteri', 39.97, 32.77) RETURNING id"))!.id;
     const tarih = (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date + 4, 'YYYY-MM-DD') AS g"))!.g;
@@ -487,7 +489,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const talepId = randomUUID();
     await o().sahip.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, 17, 'Deneme talep', $2, $2, 'siparis_verildi')", [talepId, yoneticiId]);
     const tedarikci = await fasonFirmaKur(true);
-    const alimOlayi = { talepId, talepNo: 'T-17', alimlar: [{ firmaId: tedarikci.firmaId, istenenTarih: tarih }], kisiId: yoneticiId };
+    const alimOlayi = { talepId, talepNo: 'T-17', alimlar: [{ firmaId: tedarikci.firmaId, istenenTarih: tarih, tasima: 'biz' as const }], kisiId: yoneticiId };
     await o().vt.tx((db) => servis.alimYansit(db, alimOlayi));
     const alim = (await bekleyenler()).find((x) => x.kaynak === 'alim' && x.talepId === talepId)!;
     const alimGovdesi = { ...isGovdesi(tarih, nokta), tur: 'alim', alisNoktasiId: tedarikci.noktaId, birakisNoktasiId: null };
@@ -508,7 +510,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 5 })).durum, 200);
     await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
-    const kok = (await bitenUrun(emirId))!;
+    const kok = (await bitenUrun(emirId, true))!;
 
     for (const [adet, kod] of [['5', 'GECERSIZ'], ['0', 'GECERSIZ']] as const) {
       const c = await istek<{ kod: string }>('depo', 'POST', `/sevkiyat/bekleyenler/${kok.id}/bol`, { adet });

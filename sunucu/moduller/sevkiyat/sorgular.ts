@@ -491,18 +491,22 @@ export function emirlerinSevkleri(db: Db, emirIdleri: readonly number[]): Promis
 }
 export async function isinFasonHareketleri(db: Db, isId: number): Promise<number[]> {
   const satirlar = await db.sorgu<{ id: number }>(
-    "SELECT fason_hareket_id AS id FROM sevkiyat_bekleyen WHERE is_id = $1 AND kaynak = 'fason' AND fason_hareket_id IS NOT NULL", [isId],
+    // Tetiklenen işte parçayı depo çıkışı taşır (962 a); durum olayı yalnız tetiksiz eski yoldadır.
+    `SELECT b.fason_hareket_id AS id FROM sevkiyat_bekleyen b JOIN sevkiyat_isi i ON i.id = b.is_id
+      WHERE b.is_id = $1 AND b.kaynak = 'fason' AND b.fason_hareket_id IS NOT NULL AND i.tetiklendi IS NULL AND b.depo_zamani IS NULL`, [isId],
   );
   return satirlar.map((s) => s.id);
 }
 
 // İşlerin taşıdığı biten emir ürünleri (E-12): bekleme listesinden işe çevrilen ürün kaydı ve işin bırakış noktasının firması.
+// Yalnız göçten önce düşmüş (otomatik) ve tetiklenmemiş kayıt: Tüm işlerden bırakılan ürünü plan onayı değil depo çıkışı oynatır (962 a).
 export function islerinUrunSatirlari(db: Db, isIdleri: readonly number[]): Promise<{ isId: number; uretimEmriId: number; adet: string | null; firmaId: number | null }[]> {
   if (isIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu(
     `SELECT b.is_id AS "isId", b.uretim_emri_id AS "uretimEmriId", b.adet::text AS adet, COALESCE(b.firma_id, n.firma_id) AS "firmaId"
        FROM sevkiyat_bekleyen b JOIN sevkiyat_isi i ON i.id = b.is_id LEFT JOIN sevkiyat_noktasi n ON n.id = i.birakis_noktasi_id
-      WHERE b.is_id = ANY($1::int[]) AND b.kaynak = 'urun' ORDER BY b.is_id`, [[...isIdleri]],
+      WHERE b.is_id = ANY($1::int[]) AND b.kaynak = 'urun' AND b.son_yazan_yer = 'otomatik' AND i.tetiklendi IS NULL AND b.depo_zamani IS NULL
+      ORDER BY b.is_id`, [[...isIdleri]],
   );
 }
 
@@ -555,9 +559,9 @@ export function okutulanSevkler(db: Db, s: { uretimEmriId: number | null; malzem
 }
 
 // Talebin bekleme listesindeki alım satırları (kart #1310); listeden kaldırılanlar yok sayılır, işe çevrilenler de döner.
-export function talebinAlimlari(db: Db, talepId: string): Promise<{ id: number; firmaId: number | null; istenenTarih: string | null; isId: number | null }[]> {
+export function talebinAlimlari(db: Db, talepId: string): Promise<{ id: number; firmaId: number | null; istenenTarih: string | null; isId: number | null; tasima: 'biz' | 'firma' | null }[]> {
   return db.sorgu(
-    `SELECT id, firma_id AS "firmaId", istenen_tarih::text AS "istenenTarih", is_id AS "isId" FROM sevkiyat_bekleyen
+    `SELECT id, firma_id AS "firmaId", istenen_tarih::text AS "istenenTarih", is_id AS "isId", tasima FROM sevkiyat_bekleyen
       WHERE kaynak = 'alim' AND talep_id = $1 AND kaldirildi IS NULL ORDER BY id FOR UPDATE`, [talepId]);
 }
 export function bekleyenTarihiYaz(db: Db, id: number, istenenTarih: string | null): Promise<unknown> {

@@ -4,7 +4,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
-  OzetCevabi, RotaHesabi, TekRotaCevabi, TrafikCevabi, UrunSevki,
+  OzetCevabi, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
@@ -26,6 +26,7 @@ import {
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
 import * as sorgu from './sorgular.ts';
+import { tasimaDegistir } from './tum-isler.ts';
 import type { AracSatiri, IsSatiri, NoktaSatiri, PlanSatiri } from './sorgular.ts';
 import {
   ayakCizgisi, cikisTaramasi, googleBaglantisi, tekRotaPlani, trafikSeviyeleri, yandexBaglantisi, yolAgiKur, yolOzeti,
@@ -373,24 +374,31 @@ const FASON_ISI = {
   alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, sabitAracId: null,
 } as const;
 
-// "Biz alacağız" denen talebin siparişi firmadan alım olarak bekler (kart #1310): satırlar talebin alım listesine eşitlenir. İşe çevrilmiş
-// satıra dokunulmaz (iş sevkiyatın kaydıdır); listeden çıkan firmanın bekleyen satırı kaldırılır, günü değişenin günü yazılır.
+// Talebin siparişi firmadan alım olarak bekler (kart #1310): satırlar talebin alım listesine eşitlenir. İşe çevrilmiş satıra dokunulmaz
+// (iş sevkiyatın kaydıdır); listeden çıkan firmanın bekleyen satırı kaldırılır, günü değişenin günü yazılır. Teslim yöntemi kalemin
+// taşımasıdır (959 b): "firma getirir" kalemi kaldırmaz, taşıması firma olur; son yazan satın almadır.
+type TasimaliAlim = AlimOlayi['alimlar'][number] & { tasima?: Tasima };
 export async function alimYansit(db: Db, olay: AlimOlayi): Promise<void> {
+  const alimlar: readonly TasimaliAlim[] = olay.alimlar;
   const satirlar = await sorgu.talebinAlimlari(db, olay.talepId);
   for (const sat of satirlar) {
     if (sat.isId !== null) continue;
-    const alim = olay.alimlar.find((a) => a.firmaId === sat.firmaId);
-    if (alim === undefined) await sorgu.bekleyeniKaldir(db, sat.id, olay.kisiId);
-    else if (alim.istenenTarih !== sat.istenenTarih) await sorgu.bekleyenTarihiYaz(db, sat.id, alim.istenenTarih);
+    const alim = alimlar.find((a) => a.firmaId === sat.firmaId);
+    if (alim === undefined) {
+      await sorgu.bekleyeniKaldir(db, sat.id, olay.kisiId);
+      continue;
+    }
+    if (alim.istenenTarih !== sat.istenenTarih) await sorgu.bekleyenTarihiYaz(db, sat.id, alim.istenenTarih);
+    const tasima = alim.tasima ?? 'biz';
+    if (sat.tasima !== tasima) await tasimaDegistir(db, olay.kisiId, sat.id, tasima, 'satin-alma');
   }
-  for (const a of olay.alimlar.filter((x) => !satirlar.some((sat) => sat.firmaId === x.firmaId))) {
+  for (const a of alimlar.filter((x) => !satirlar.some((sat) => sat.firmaId === x.firmaId))) {
     await sorgu.bekleyenEkle(db, {
       kaynak: 'alim', yon: 'gelis', uretimEmriId: null, fasonHareketId: null, talepId: olay.talepId, firmaId: a.firmaId, malzemeNo: null,
-      adet: null, istenenTarih: a.istenenTarih, isId: null, serbest: { tasima: 'biz', yer: 'satin-alma', kisiId: olay.kisiId, erken: null },
+      adet: null, istenenTarih: a.istenenTarih, isId: null, serbest: { tasima: a.tasima ?? 'biz', yer: 'satin-alma', kisiId: olay.kisiId, erken: null },
     });
   }
 }
-
 
 const varolan = <T>(x: readonly (T | null)[]): T[] => x.filter((y): y is T => y !== null);
 

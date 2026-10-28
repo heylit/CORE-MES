@@ -445,7 +445,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.match(c.govde.mesaj ?? '', /Karar bekleyen/);
   });
 
-  test('11 sevkiyat: bekleyen işe çevrilir; teslimde mamul müşterinin Yolda konumundan stoktan düşer (bulgu 3)', async () => {
+  test('11 sevkiyat: bekleyen işe çevrilir, Sevk et ile depoya düşer; depo son çıkışı mamulü stoktan düşer, teslim ikinci kez düşmez (bulgu 3, 962 a)', async () => {
     // 960: biten emrin ürün kalemi Tüm işlerden serbest bırakılınca bekleme listesine düşer.
     tamam(await yaz('sevkiyat', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`urun:${String(S.emir)}`], tasima: 'biz' }));
     const bek = tamam(await oku<{ bekleyenler: { id: number; uretimEmriId: number | null; firmaId: number | null; adet: string }[] }>('sevkiyat', '/sevkiyat/bekleyenler'))
@@ -465,16 +465,17 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     }));
     assert.equal(is.is.birakisNoktasiId, n.nokta.id);
     S.sevkIs = is.is.id;
+    // 962 a: plan ve teslim stoğu oynatmaz; Sevk et kalemi depoya düşürür, depo son çıkışı sevk çıkışını yazar.
+    tamam(await yaz('sevkiyat', `/sevkiyat/isler/${is.is.id}/tetikle`, undefined));
+    assert.equal(await toplam(S.mm), MAMUL_ADET);
+    tamam(await yaz('depo', `/stok/depo-sevk/${bek.id}/cikis`, undefined));
+    assert.equal(await toplam(S.mm), 0);
     tamam(await yaz('sevkiyat', `/sevkiyat/isler/${is.is.id}/durum`, { durum: 'tamamlandi', tarih: S.bugun, not: null }));
-    // 235 a: planlandıdan doğrudan teslim iki adımdır: istasyondan müşterinin Yolda konumuna taşıma, oradan sevk çıkışı.
     assert.equal(await toplam(S.mm), 0);
     const h = tamam(await oku<Liste<Hareket>>('depo', `/stok/hareketler?uretimEmriId=${S.emir}`)).satirlar.filter((x) => x.malzemeId === S.mm);
-    // Transferlerden biri ilk parça onayının kalite çevirmesidir (744 a, 9'da); taşıma öteki.
-    assert.deepEqual(h.map((x) => [x.tur, Number(x.miktar)]).sort(), [['cikis', MAMUL_ADET], ['giris', MAMUL_ADET], ['transfer', MAMUL_ADET], ['transfer', MAMUL_ADET]]);
-    const tasima = h.find((x) => x.tur === 'transfer' && x.kaynakKaliteDurumu !== 'karar_bekliyor');
-    const yolda = tamam(await oku<Liste<{ kod: string; firmaId?: number | null }>>('depo', '/stok/konumlar?tur=yolda&sayfaBoyu=100')).satirlar;
-    assert.deepEqual(yolda.map((k) => k.kod), [tasima?.hedefKonumKod]);
-    assert.equal(h.find((x) => x.tur === 'cikis')?.kaynakKonumKod, tasima?.hedefKonumKod);
+    // Transfer ilk parça onayının kalite çevirmesidir (744 a, 9'da); Yolda adımı yoktur, çıkış parçanın durduğu yerden.
+    assert.deepEqual(h.map((x) => [x.tur, Number(x.miktar)]).sort(), [['cikis', MAMUL_ADET], ['giris', MAMUL_ADET], ['transfer', MAMUL_ADET]]);
+    assert.equal(h.find((x) => x.tur === 'cikis')?.kaynakKonumKod, h.find((x) => x.tur === 'transfer')?.hedefKonumKod);
   });
 
   test('12 finans ve proje maliyeti: fatura, maliyet rol başına, dondurma (bulgu 11)', async () => {
@@ -509,7 +510,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     type Iz = { parti: Parti; emirler: number[]; hareketler: Hareket[]; sevkler: { emirId: number; isId: number; firmaId: number | null }[] };
     const mamul = tamam(await oku<Iz>('depo', `/stok/partiler/${S.mmParti}/iz`));
     assert.deepEqual(mamul.emirler, [S.emir]);
-    assert.deepEqual(mamul.hareketler.map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim'], ['transfer', MAMUL_ADET, null], ['transfer', MAMUL_ADET, null], ['cikis', MAMUL_ADET, null]]);
+    assert.deepEqual(mamul.hareketler.map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim'], ['transfer', MAMUL_ADET, null], ['cikis', MAMUL_ADET, null]]);
     assert.deepEqual(Object.keys(mamul).sort(), ['ciktilar', 'emirler', 'hareketler', 'kartlar', 'parti', 'sevkCikislari', 'sevkler']);
     assert.deepEqual(mamul.sevkler.map((x) => [x.emirId, x.isId, x.firmaId]), [[S.emir, S.sevkIs, S.musteri]]);
     const ham = tamam(await oku<Iz>('depo', `/stok/partiler/${S.hmParti}/iz`));

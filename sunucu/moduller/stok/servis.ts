@@ -28,7 +28,7 @@ import type {
   TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IstasyonSepetleriCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { malzemeIstegiAcGirdisi, REFAKAT_KARTLARI_SINIRI, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { malzemeIstegiAcGirdisi, REFAKAT_KARTLARI_SINIRI, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi, type DepoCikisCevabi, type DepoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -46,8 +46,8 @@ import { malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, ma
 import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisFaturalari } from '../finans/disari.ts';
-import { emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
-import type { FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
+import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKalemiAl, emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
+import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
   uretimEmriOzeti, emirNolari, refakatKarti,
@@ -64,7 +64,7 @@ import {
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
 } from './kurallar.ts';
-import type { IstekGecisi, MalzemeTuru } from './kurallar.ts';
+import type { IstekGecisi, MalzemeTuru, SevkBakiyesi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
 import type { BakiyeHam, BelgeTablosu, HareketHam, HareketYeni, IstekHam, RefakatPartisiHam, TeslimHam } from './sorgular.ts';
@@ -799,6 +799,7 @@ async function malKabulSatirlariniYaz(
       if (s.sertifika) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar, partiId: null, konumId: null, hareketId: null, siparisSatirId, fasonCikisHareketId: null }));
       await teslimIsle(db, k, { siparisSatirId: siparisSatirId!, miktar, malKabulSatirId: satirId });
+      await sevkKalemiKabulu(db, kisiId, s, alan);
       continue;
     }
     if (s.fasonIsi !== undefined) {
@@ -810,6 +811,7 @@ async function malKabulSatirlariniYaz(
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar: bindenMetin(giren.miktar), partiId: null, konumId, hareketId: giren.hareketId, siparisSatirId, fasonCikisHareketId: null }));
       idler.push(giren.hareketId);
       if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar: bindenMetin(giren.miktar), malKabulSatirId: satirId });
+      await sevkKalemiKabulu(db, kisiId, s, alan);
       continue;
     }
     const fason = satirTuru.tur === 'fason' ? await fasonGideni(db, s.fason!, miktar, `${alan}.fason`) : null;
@@ -845,6 +847,7 @@ async function malKabulSatirlariniYaz(
     }
     // SH1 a: teslim satın almaya aynı işlemde yazılır; kalanı aşan miktar reddedilmez, satın almada fazla teslim görünür.
     if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar, malKabulSatirId: yazilan.satirId });
+    await sevkKalemiKabulu(db, kisiId, s, alan);
     idler.push(yazilan.id, ...(yazilan.fasonCikisHareketId === null ? [] : [yazilan.fasonCikisHareketId]));
   }
   return idler;
@@ -4504,19 +4507,22 @@ export async function fasonIsleri(db: Db, konumId: number): Promise<FasonIsleriC
 // Sevkiyat teslimi: gönderilen adet firmanın Yolda konumundan fason konumuna geçer; teslim geri alınırsa geri döner.
 export async function fasonSevkiYansit(db: Db, olay: FasonSevkiOlayi): Promise<void> {
   for (const hareketId of olay.fasonHareketIdleri) {
-    const b = await fasonBaglami(db, hareketId);
-    if (!b || b.h.yon !== 'gidis' || b.h.adet <= 0) continue;
     if (olay.kisiId === null) throw new Error('Fason teslimi kişisiz yazılamaz');
-    const yolda = await firmaKonumuBul(db, b.h.firmaId, 'yolda');
-    const fason = await firmaKonumuBul(db, b.h.firmaId, 'fason');
-    const [kaynak, hedef] = olay.teslim ? [yolda, fason] : [fason, yolda];
-    const aciklama = `Fason sevkiyatı ${olay.teslim ? 'teslim edildi' : 'teslimi geri alındı'} · emir ${b.emirNo}`;
-    const adet = BigInt(b.h.adet) * 1000n;
-    const yari = b.yari;
-    await korumali(() => (yari
-      ? yariParcayiTasi(db, olay.kisiId!, yari, { uretimEmriId: b.h.uretimEmriId, kaynaklar: [kaynak], hedef, miktar: adetMiktari(adet, yari.birim), aciklama }).then((x) => x.tasinan)
-      : emirParcasiniTasi(db, olay.kisiId!, { malzemeId: b.malzemeId, uretimEmriId: b.h.uretimEmriId, kaynak, hedef, miktar: adet, aciklama })));
+    await fasonGidisiniTasi(db, olay.kisiId, hareketId, olay.teslim, olay.teslim ? 'Fason sevkiyatı teslim edildi' : 'Fason sevkiyatı teslimi geri alındı');
   }
+}
+async function fasonGidisiniTasi(db: Db, kisiId: number, hareketId: number, fasona: boolean, neden: string): Promise<void> {
+  const b = await fasonBaglami(db, hareketId);
+  if (!b || b.h.yon !== 'gidis' || b.h.adet <= 0) return;
+  const yolda = await firmaKonumuBul(db, b.h.firmaId, 'yolda');
+  const fason = await firmaKonumuBul(db, b.h.firmaId, 'fason');
+  const [kaynak, hedef] = fasona ? [yolda, fason] : [fason, yolda];
+  const aciklama = `${neden} · emir ${b.emirNo}`;
+  const adet = BigInt(b.h.adet) * 1000n;
+  const yari = b.yari;
+  await korumali(() => (yari
+    ? yariParcayiTasi(db, kisiId, yari, { uretimEmriId: b.h.uretimEmriId, kaynaklar: [kaynak], hedef, miktar: adetMiktari(adet, yari.birim), aciklama }).then((x) => x.tasinan)
+    : emirParcasiniTasi(db, kisiId, { malzemeId: b.malzemeId, uretimEmriId: b.h.uretimEmriId, kaynak, hedef, miktar: adet, aciklama })));
 }
 
 // ---- Ürün sevki (235 a) ---------------------------------------------------------------------------------------------------------
@@ -4540,22 +4546,29 @@ async function sevkTasi(db: Db, kisiId: number, s: UrunSevkSatiri, malzemeId: nu
     const neden = engelli > 0n ? ` ${bindenMetin(engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.` : '';
     throw cakisma(`Emir ${emirNo}: sevk için ${bindenMetin(istenen)} adet gerekli, stokta ${bindenMetin(istenen - eksik)} adet var.${neden}`);
   }
-  const aciklama = sevkAciklamasi(s.isId, emirNo, adim);
+  return (await sevkSeciminiYaz(db, kisiId, secim, { malzemeId, uretimEmriId: s.uretimEmriId, hedef, aciklama: sevkAciklamasi(s.isId, emirNo, adim) })).red;
+}
+// Seçilen bakiyeler hedefe taşınır ya da (hedef yoksa) sevk çıkışıyla düşer; red parçanın açıklaması ekini taşır.
+async function sevkSeciminiYaz(
+  db: Db, kisiId: number, secim: readonly (SevkBakiyesi & { alinan: bigint })[], d: { malzemeId: number; uretimEmriId: number; hedef: number | null; aciklama: string },
+): Promise<{ red: bigint; hareketIdler: number[] }> {
+  const { malzemeId, hedef, aciklama } = d;
   let red = 0n;
+  const hareketIdler: number[] = [];
   for (const b of secim) {
     if (b.kaliteDurumu === 'red') red += b.alinan;
     const anahtar = { malzemeId, partiId: b.partiId, statuId: b.statuId, kaliteDurumu: b.kaliteDurumu };
     await siraliKilitle(db, { ...anahtar, konumId: b.konumId }, { ...anahtar, konumId: hedef });
-    await sorgular.hareketYaz(db, hareket({
+    hareketIdler.push(await sorgular.hareketYaz(db, hareket({
       tur: hedef === null ? 'cikis' : 'transfer', malzemeId, miktar: bindenMetin(b.alinan), kisiId, partiId: b.partiId, partiSecimi: 'kisi',
       kaynakKonumId: b.konumId, hedefKonumId: hedef, kaynakStatuId: b.statuId, hedefStatuId: hedef === null ? null : b.statuId,
       kaynakKaliteDurumu: b.kaliteDurumu, hedefKaliteDurumu: hedef === null ? null : b.kaliteDurumu, cikisNedeni: hedef === null ? 'sevk' : null,
-      uretimEmriId: s.uretimEmriId, aciklama: b.kaliteDurumu === 'red' ? aciklama + RED_EKI : aciklama,
-    }));
+      uretimEmriId: d.uretimEmriId, aciklama: b.kaliteDurumu === 'red' ? aciklama + RED_EKI : aciklama,
+    })));
     await bakiyeDegistir(db, { ...anahtar, konumId: b.konumId, fark: -b.alinan });
     if (hedef !== null) await bakiyeDegistir(db, { ...anahtar, konumId: hedef, fark: b.alinan, ilkGiris: new Date().toISOString() });
   }
-  return red;
+  return { red, hareketIdler };
 }
 async function sevkiGeriAl(db: Db, kisiId: number, s: UrunSevkSatiri, emirNo: string, adim: 'yola' | 'teslim'): Promise<void> {
   const aciklama = sevkAciklamasi(s.isId, emirNo, adim);
@@ -4593,6 +4606,108 @@ export async function urunSevkiYansit(db: Db, olay: UrunSevkiOlayi): Promise<str
     if (red > 0n) uyarilar.push(`Emir ${emir.emirNo}: ${bindenMetin(red)} adet red parça sevk edildi.`);
   }
   return uyarilar;
+}
+
+// ---- Depo sevk (944, 962 a, 966 b) ----------------------------------------------------------------------------------------------
+// Sevkiyatın tetiklediği kalemde stok depoda oynar: ürün sevk çıkışıyla düşer, fason gidişi parçayı firmanın fason konumuna geçirir,
+// geliş mal kabulle girer (satır kalemi taşır). Elle kalemde stok oynamaz: malzemesi ve lotu belli değildir, gerekirse elle çıkış yazılır.
+export type FasonGidisYazici = (db: Db, kisiId: number, g: { uretimEmriId: number; isEmriId: number; adet: number; sevkKalemiId: number }) => Promise<{ hareketId: number }>;
+let fasonGidisYazici: FasonGidisYazici | null = null;
+// Fason gidiş kaydı üretim emrinindir; bağ sunucu/kablolama.ts'de kurulur (bugün Dış operasyonlar yazar).
+export function fasonGidisYaziciKaydet(y: FasonGidisYazici): void { fasonGidisYazici = y; }
+const depoCikisAciklamasi = (kalemId: number, emirNo: string): string => `Depo çıkışı · kalem ${String(kalemId)} · emir ${emirNo}`;
+
+export async function depoSevkListesi(db: Db): Promise<DepoSevkCevabi> {
+  const kalemler = await depoBekleyenleri(db);
+  const emirler = await emirNolari(db, [...new Set(kalemler.flatMap((k) => (k.uretimEmriId === null ? [] : [k.uretimEmriId])))]);
+  const malzemeler = await malzemeAdlari(db, [...new Set(kalemler.flatMap((k) => (k.malzemeNo === null ? [] : [k.malzemeNo])))]);
+  const firmalar = await firmaAdlari(db, [...new Set(kalemler.flatMap((k) => (k.firmaId === null ? [] : [k.firmaId])))]);
+  const adimlar = new Map((kalemler.some((k) => k.isEmriId !== null) ? await fasonIsEmirleri(db) : []).map((f) => [f.isEmriId, f.opNo]));
+  return {
+    satirlar: kalemler.map((k) => ({
+      kalemId: k.kalemId, is: k.is, kaynak: k.kaynak, uretimEmriId: k.uretimEmriId, emirNo: k.uretimEmriId === null ? null : emirler.get(k.uretimEmriId) ?? null,
+      isEmriId: k.isEmriId, opNo: k.isEmriId === null ? null : adimlar.get(k.isEmriId) ?? null, malzemeId: k.malzemeNo,
+      malzemeAd: k.malzemeNo === null ? null : malzemeler.get(k.malzemeNo) ?? null, adet: k.adet, kabulAdet: k.kabulAdet,
+      firmaId: k.firmaId, firmaAd: k.firmaId === null ? null : firmalar.get(k.firmaId) ?? null, tasima: k.tasima, tetiklendi: k.tetiklendi, erken: k.erken,
+      siparisSatirId: k.siparisSatiriId,
+    })),
+  };
+}
+
+export async function depoCikisiYap(db: Db, kisiId: number, kalemId: number): Promise<DepoCikisCevabi> {
+  const k = await depoKalemiAl(db, kalemId, 'cikis');
+  const sonuc: { hareketIdler: number[]; uyarilar: string[] } = { hareketIdler: [], uyarilar: [] };
+  if (k.kaynak === 'urun') Object.assign(sonuc, await urunDepoCikisi(db, kisiId, k));
+  else if (k.kaynak === 'fason') {
+    let hareketId = k.fasonHareketId;
+    if (hareketId === null) {
+      if (fasonGidisYazici === null || k.uretimEmriId === null || k.isEmriId === null || k.adet === null) throw gecersiz('Fason gidişi bu kalemden yazılamıyor; Dış operasyonlardan gönderin.');
+      hareketId = (await fasonGidisYazici(db, kisiId, { uretimEmriId: k.uretimEmriId, isEmriId: k.isEmriId, adet: Number(k.adet), sevkKalemiId: k.kalemId })).hareketId;
+    }
+    await fasonGidisiniTasi(db, kisiId, hareketId, true, 'Depo çıkışı, fasona');
+  }
+  await depoCikisiYaz(db, kisiId, kalemId);
+  return { kalemId, hareketIdler: sonuc.hareketIdler, ...(sonuc.uyarilar.length ? { uyarilar: sonuc.uyarilar } : {}) };
+}
+
+// Erken çıkışta (945 a) eksik çıkışı durdurmaz: eldeki kadarı çıkar, eksik uyarıdır. Yola önceden taşınmış parça (göçten önce onaylanmış iş)
+// firmanın Yolda konumundan önce alınır.
+async function urunDepoCikisi(db: Db, kisiId: number, k: DepoKalemi): Promise<{ hareketIdler: number[]; uyarilar: string[] }> {
+  const emir = k.uretimEmriId === null ? null : await uretimEmriOzeti(db, k.uretimEmriId);
+  if (!emir || emir.malzemeNo === null) return { hareketIdler: [], uyarilar: [] };
+  const malzemeId = emir.malzemeNo;
+  const o = await malzemeOzeti(db, malzemeId);
+  if (!o || (o.tur !== 'mamul' && o.tur !== 'yarimamul')) return { hareketIdler: [], uyarilar: [] };
+  const yolda = k.firmaId === null ? null : await firmaKonumuBul(db, k.firmaId, 'yolda');
+  const yoldakiler = yolda === null ? [] : (await sorgular.istasyondakiEmirBakiyeleri(db, yolda, malzemeId, emir.id)).map((b) => ({ ...b, konumId: yolda, konumTuru: 'yolda' as const }));
+  const bakiyeler = [...yoldakiler, ...await sorgular.emrinSevkBakiyeleri(db, malzemeId, emir.id)];
+  // Bitmemiş emrin erken çıkışında adet henüz yoktur: sevk edilebilir olanın hepsi çıkar.
+  const istenen = k.adet !== null ? sevkAdediBinde(k.adet) : k.erken ? sevkKaynaklariSec(bakiyeler, 1n << 62n).secim.reduce((t, b) => t + b.alinan, 0n) : null;
+  if (istenen === null) throw gecersiz(`Emir ${emir.emirNo}: sevk adedi bilinmiyor; stok yazılamaz.`);
+  if (istenen === 0n) throw cakisma(`Emir ${emir.emirNo}: sevk edilebilir parça yok.`);
+  const { secim, eksik, engelli } = sevkKaynaklariSec(bakiyeler, istenen);
+  const uyarilar: string[] = [];
+  if (eksik > 0n) {
+    const neden = engelli > 0n ? ` ${bindenMetin(engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.` : '';
+    const ileti = `Emir ${emir.emirNo}: sevk için ${bindenMetin(istenen)} adet gerekli, stokta ${bindenMetin(istenen - eksik)} adet var.${neden}`;
+    if (!k.erken) throw cakisma(ileti);
+    uyarilar.push(`${ileti} Erken çıkış: eldeki kadarı çıktı.`);
+  }
+  const { red, hareketIdler } = await korumali(() => sevkSeciminiYaz(db, kisiId, secim, { malzemeId, uretimEmriId: emir.id, hedef: null, aciklama: depoCikisAciklamasi(k.kalemId, emir.emirNo) }));
+  if (red > 0n) uyarilar.push(`Emir ${emir.emirNo}: ${bindenMetin(red)} adet red parça sevk edildi.`);
+  return { hareketIdler, uyarilar };
+}
+
+// Depo çıkışının geri alınması (teslim geri almanın yerine): ürün hareketleri ters çevrilir, fason parçası Yolda'ya döner (gidiş kaydı
+// emirde kalır; yeniden çıkışta fasona geçer). Kalem yeniden depoda bekler.
+export async function depoCikisiniGeriAlYap(db: Db, kisiId: number, kalemId: number): Promise<DepoCikisCevabi> {
+  const k = await depoCikisiniGeriAl(db, kalemId);
+  const hareketIdler: number[] = [];
+  if (k.kaynak === 'urun' && k.uretimEmriId !== null) {
+    const emir = await uretimEmriOzeti(db, k.uretimEmriId);
+    if (emir) {
+      const geri = `Depo çıkışı geri alındı · kalem ${String(kalemId)} · emir ${emir.emirNo}`;
+      for (const id of await sorgular.geriAlinmamisSevkHareketleri(db, emir.id, depoCikisAciklamasi(kalemId, emir.emirNo), RED_EKI)) hareketIdler.push(await tersCevir(db, kisiId, id, false, geri));
+    }
+  } else if (k.kaynak === 'fason' && k.fasonHareketId !== null) {
+    await fasonGidisiniTasi(db, kisiId, k.fasonHareketId, false, 'Depo çıkışı geri alındı');
+  }
+  return { kalemId, hareketIdler };
+}
+
+// Mal kabul satırının sevkiyat kalemi (944, 957 a): yalnız geliş; fason dönüşünde aynı fason adımı, alımda aynı sipariş satırı.
+// Fason dönüşünde gelen adet sağlam ve hurdanın toplamıdır (fire firmadan gelmiş sayılır).
+async function sevkKalemiKabulu(db: Db, kisiId: number, s: MalKabulKomutu['satirlar'][number], alan: string): Promise<void> {
+  if (s.sevkKalemiId === undefined) return;
+  const k = await depoKalemiAl(db, Number(s.sevkKalemiId), 'kabul');
+  if (k.kaynak === 'fason-donus' && (s.fasonIsi === undefined || Number(s.fasonIsi.isEmriId) !== k.isEmriId)) {
+    throw dogrulama('Bu kalem bir fason dönüşüdür; satır aynı fason işine bağlanır.', `${alan}.sevkKalemiId`);
+  }
+  if (k.kaynak === 'alim' && k.siparisSatiriId !== null && (s.siparisSatirId === undefined || Number(s.siparisSatirId) !== k.siparisSatiriId)) {
+    throw dogrulama('Bu kalem başka bir sipariş satırının alımıdır.', `${alan}.sevkKalemiId`);
+  }
+  const gelen = binde(s.miktar) + (k.kaynak === 'fason-donus' ? BigInt(s.fasonIsi?.hurdaAdet ?? 0) * 1000n : 0n);
+  await depoKabuluYaz(db, kisiId, k.kalemId, bindenMetin(gelen));
 }
 
 // ---- Refakat partisi (kart #123): depo lotu okutup emre ayırınca doğar, kartı basılır; teslim kartla yapılır ------------------
