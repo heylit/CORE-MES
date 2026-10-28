@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
   asimlarCevabi, bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi, sonOlaylarCevabi,
+  DIS_KAPANIS_MADDELERI, KAPANIS_MADDELERI, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisMuafGovdesi, kapanisOnayGovdesi,
+  kapanisRetGovdesi, kapanislarSorgusu,
 } from './uretim-emirleri.ts';
 
 const GOVDE = { parcaNo: 'P-1', parcaAd: 'Deneme Parça', adet: 5, istasyonId: 3, projeId: 7 };
@@ -208,4 +210,42 @@ test('aşım şeması: aşan adet pozitif, önceki adım sağlamı sıfır olabi
   for (const bozuk of [{ adet: 0 }, { adet: -1 }, { oncekiSaglam: -1 }, { zaman: 'dun' }]) {
     assert.equal(gecer(asimlarCevabi, { asimlar: [{ ...asim, ...bozuk }] }), false, JSON.stringify(bozuk));
   }
+});
+
+const KAPANIS = {
+  uretimEmriId: 1, emirNo: 'UE-1', urun: { kod: 'M-1', ad: 'Deneme mil' }, emirTuru: 'seri', adet: 10, saglamAdet: 0,
+  bitis: '2026-10-28T08:00:00.000Z', asama: 'belge', sonuc: null, eski: false,
+  maddeler: [{ madde: 'sevkiyat', durum: 'bilinmiyor', ayrinti: null }],
+  onaylar: { kalite: null, mudur: { kisiId: 2, kisiAdi: null, zaman: '2026-10-28T09:00:00.000Z' } },
+  muafiyetler: [], defter: [], surum: 1,
+};
+
+test('kapanış: dış maddeler kapanış maddelerinin alt kümesidir; sağlamı sıfır olabilir, sonuç ve kişi adı boş olabilir; bilinmeyen aşama reddedilir', () => {
+  for (const m of DIS_KAPANIS_MADDELERI) assert.ok((KAPANIS_MADDELERI as readonly string[]).includes(m), m);
+  assert.equal(gecer(kapanisCevabi, KAPANIS), true);
+  for (const bozuk of [{ asama: 'acik' }, { saglamAdet: -1 }, { sonuc: 'iptal' }, { surum: 0 }, { maddeler: [{ madde: 'fatura', durum: 'tamam', ayrinti: null }] }]) {
+    assert.equal(gecer(kapanisCevabi, { ...KAPANIS, ...bozuk }), false, JSON.stringify(bozuk));
+  }
+});
+
+test('kapanış gövdeleri: sürüm zorunlu; ret, muafiyet ve geri açma gerekçe ister, boş not null olur; fazla alan reddedilir', () => {
+  assert.deepEqual(kapanisOnayGovdesi.parse({ surum: 1, not: '  ' }), { surum: 1, not: null });
+  assert.deepEqual(kapanisOnayGovdesi.parse({ surum: 2 }), { surum: 2, not: null });
+  assert.equal(gecer(kapanisOnayGovdesi, { not: 'x' }), false);
+  for (const g of [kapanisRetGovdesi, kapanisGeriAcGovdesi]) {
+    assert.deepEqual(g.parse({ surum: 1, gerekce: '  ölçü eksik ' }), { surum: 1, gerekce: 'ölçü eksik' });
+    for (const bozuk of [{ surum: 1 }, { surum: 1, gerekce: '   ' }, { surum: 1, gerekce: 'x'.repeat(501) }, { surum: 1, gerekce: 'x', fazla: 1 }]) {
+      assert.equal(gecer(g, bozuk), false, JSON.stringify(bozuk));
+    }
+  }
+  assert.equal(gecer(kapanisMuafGovdesi, { surum: 1, madde: 'sevkiyat', gerekce: 'Müşteri teslim aldı' }), true);
+  assert.equal(gecer(kapanisMuafGovdesi, { surum: 1, madde: 'fatura', gerekce: 'x' }), false);
+  assert.equal(gecer(emirKapatGovdesi, { surum: 3 }), true);
+  assert.equal(gecer(emirKapatGovdesi, {}), false);
+});
+
+test('kapanış listesi: aşama süzgeci isteğe bağlıdır, boş arama düşer', () => {
+  assert.equal(kapanislarSorgusu.parse({}).asama, undefined);
+  assert.equal(kapanislarSorgusu.parse({ asama: 'tamam', ara: '  ' }).ara, undefined);
+  assert.equal(gecer(kapanislarSorgusu, { asama: 'kapali' }), false);
 });
