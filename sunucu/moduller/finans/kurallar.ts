@@ -408,3 +408,45 @@ export function ileriTarihliKurSirasi(satirlar: readonly { tur: 'kur' | 'faiz'; 
   const i = satirlar.findIndex((s) => s.tur === 'kur' && s.tarih > bugun);
   return i < 0 ? null : i;
 }
+
+// Vergi takvimi (891, 1162 b): Finans ekranının vergi takvimiyle aynı genel kural (istemci finans motoru `taxDay` ve
+// `taxCalendar`; iki kopya UYUM-BORCU'dadır). Son gün ayın verilen günüdür, ay kısaysa son günü; cumartesi ve pazar
+// pazartesiye kayar. Resmî tatil ve süre uzatma sirküleri hesaba katılmaz. Dönem bir önceki aydır.
+export interface VergiGunu { tarih: string; kod: string; ad: string; donem: string }
+
+const AY_ADLARI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const ikiHane = (n: number): string => String(n).padStart(2, '0');
+
+export function vergiSonGunu(yil: number, ay: number, gun: number): string {
+  const ayinSonu = new Date(Date.UTC(yil, ay, 0)).getUTCDate();
+  const t = new Date(Date.UTC(yil, ay - 1, Math.min(gun, ayinSonu)));
+  const hg = t.getUTCDay();
+  if (hg === 6) t.setUTCDate(t.getUTCDate() + 2);
+  if (hg === 0) t.setUTCDate(t.getUTCDate() + 1);
+  return `${String(t.getUTCFullYear())}-${ikiHane(t.getUTCMonth() + 1)}-${ikiHane(t.getUTCDate())}`;
+}
+
+// [baslangic, bitis] içine düşen son günler, tarih sırasıyla. Kayma ayı aşabildiği için bir ay önceden başlanır.
+export function vergiTakvimi(baslangic: string, bitis: string): VergiGunu[] {
+  const sonuc: VergiGunu[] = [];
+  let yil = Number(baslangic.slice(0, 4));
+  let ay = Number(baslangic.slice(5, 7)) - 1;
+  if (ay === 0) { ay = 12; yil -= 1; }
+  const sonYil = Number(bitis.slice(0, 4));
+  const sonAy = Number(bitis.slice(5, 7));
+  while (yil < sonYil || (yil === sonYil && ay <= sonAy)) {
+    const onceki = ay === 1 ? { y: yil - 1, a: 12 } : { y: yil, a: ay - 1 };
+    const donem = `${AY_ADLARI[onceki.a - 1] ?? ''} ${String(onceki.y)}`;
+    const ekle = (gun: number, kod: string, ad: string, d = donem) => { sonuc.push({ tarih: vergiSonGunu(yil, ay, gun), kod, ad, donem: d }); };
+    ekle(25, 'kdv-tevkifat', "KDV tevkifatı (2 no'lu) beyanı ve ödemesi");
+    ekle(26, 'muhtasar', 'Muhtasar ve prim hizmet beyannamesi');
+    ekle(28, 'kdv', 'KDV beyannamesi ve ödemesi');
+    if ([2, 5, 8, 11].includes(ay)) ekle(17, 'gecici-vergi', 'Geçici vergi beyanı ve ödemesi', 'Önceki çeyrek');
+    if (ay === 4) ekle(30, 'kurumlar-vergisi', 'Yıllık kurumlar vergisi beyannamesi', 'Önceki yıl');
+    if (ay === 3) ekle(31, 'gelir-vergisi', 'Yıllık gelir vergisi beyannamesi', 'Önceki yıl');
+    ay += 1;
+    if (ay === 13) { ay = 1; yil += 1; }
+  }
+  return sonuc.filter((v) => v.tarih >= baslangic && v.tarih <= bitis)
+    .sort((a, b) => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : a.kod < b.kod ? -1 : 1));
+}

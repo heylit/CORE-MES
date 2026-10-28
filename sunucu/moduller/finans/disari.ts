@@ -18,3 +18,5 @@ export const satisSevkleriCozucusu = (cozucu: SatisSevkleriCozucusu | null): voi
 export type { BirimMaliyeti, GenelGiderOrani, AlisBelgesi, GiderBelgesi, GecerliFaiz, GecerliKur, SiparisAnahtari, SiparisOdemesi, SiparisPlani } from './servis.ts';
 export type { MaliyetTuru } from './kurallar.ts';
 export { tedarikciOlabilirMi } from './kurallar.ts';
+// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri (genel kural, tutarsız). Yetki denetlemez; çağıran finans.oku'yu denetler.
+export { takvimKayitlari } from './servis.ts';
