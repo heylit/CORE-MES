@@ -35,8 +35,12 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
   items: 'Kalemler Malzemeler ve Hizmetler kartlarından okunur; kod, ad, birim ve kategori orada değişir. Stok miktarı salt '
     + 'okunurdur. Birim maliyet Finans\'ta tutulur: rotası olan yarı mamul ve mamullerin malzeme maliyeti adımlara giren malzemelerden toplanır.',
   res: null,
+  sartnameler: null,
 };
-const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema']);
+// Şartname ve talimatlar kendi sayfa başlığını çizer (prototip).
+const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler']);
+// Kütüphane sayfası planla ilgisizdir: plan şeridi çizilmez (prototipte yoktur).
+const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler']);
 
 // İkinci menü sayıları, eski ekranın kuralıyla (Sayaclar.hesapla): aktif emir (serbest ve üretimde), minimumun altındaki kalem, onayda
 // (yoksa taslak) rota revizyonu, operasyon ve malzeme sayısı. Okunamayan dilimin sayısı null'dır. Eski ekran boş stoğu 0 sayardı; burada
@@ -131,11 +135,11 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
     <>
       {/* Bölümler kabuğun ikinci menü şeridindedir (553 1 a); eski ekranın sırası (497/1 a): şeridin altında kenardan kenara plan şeridi,
           sonra bölüm başı. */}
-      {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
+      {veri.data && !PLANSIZ.has(sekme.anahtar) && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <div className="tc-rry-govde">
         <BolumBasi key={sekme.anahtar} baslik={BASLIKSIZ.has(sekme.anahtar) ? null : sekme.baslik} aciklama={BOLUM_ACIKLAMALARI[sekme.anahtar]} />
-        {motorOkunamadi && <p className="tc-rry-not" role="status">{MOTOR_OKUNAMADI}</p>}
-        {planVerisiEksik && <p className="tc-rry-not" role="status">{PLAN_VERISI_EKSIK}</p>}
+        {motorOkunamadi && !PLANSIZ.has(sekme.anahtar) && <p className="tc-rry-not" role="status">{MOTOR_OKUNAMADI}</p>}
+        {planVerisiEksik && !PLANSIZ.has(sekme.anahtar) && <p className="tc-rry-not" role="status">{PLAN_VERISI_EKSIK}</p>}
         <section className="tc-rry-icerik" aria-label={sekme.baslik} data-bolum={sekme.anahtar}>
           {veri.isPending && <DurumKutusu durum="yukleniyor" />}
           {veri.isError && (

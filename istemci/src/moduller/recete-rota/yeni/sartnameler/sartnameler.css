@@ -1,0 +1,120 @@
+/* Şartname ve talimatlar: yalnız tasarım değişkenleri. Düzen prototipin (Main, Duzenleyici): liste ve ayrıntı yan yana, dar ekranda alt alta. */
+.tc-st { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-st-izgara { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-st-kutu {
+  display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; padding: var(--b-4);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
+}
+.tc-st-satir { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); min-width: 0; }
+.tc-st-sar { flex-wrap: wrap; align-items: flex-start; }
+/* Başlık metni düğmelere sıkışmaz: yer kalmazsa düğmeler alta iner. */
+.tc-st-sar > .tc-st-adim-metin { flex: 1 1 var(--menu-genis); }
+.tc-st-araclar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-st-sag { justify-content: flex-end; }
+.tc-st-liste, .tc-st-adimlar, .tc-st-onizleme { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-st-adim-metin { display: flex; flex: 1; flex-direction: column; gap: var(--b-1); min-width: 0; text-align: left; }
+.tc-st-kalin { font-weight: 600; overflow-wrap: anywhere; }
+.tc-st-soluk { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-st-kod { color: var(--muted); font-family: var(--font-mono); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-st-baslik { margin: 0; font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.tc-st-etiket { margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-02); text-transform: uppercase; }
+.tc-st-bolum { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-st-yazi { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-st-duz-liste-yazi { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding-left: var(--b-4); }
+.tc-st-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+.tc-st-eksik { margin: 0; padding-left: var(--b-4); color: var(--hold); font-size: var(--yazi-s); }
+
+/* Seçilebilir satır (şablon, şartname, talimat adımı): seçili satır vurgu tonunda. */
+.tc-st-satir-sec, .tc-st-adim-sec {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); width: 100%; min-height: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tc-st-satir-sec[aria-current], .tc-st-adim-sec[aria-current] {
+  border-color: var(--hold); background: color-mix(in srgb, var(--hold) 16%, var(--panel));
+}
+.tc-st-adim-sec { justify-content: flex-start; }
+.tc-st-adim-sec[draggable="true"] { cursor: grab; }
+/* Bırakma yeri: adım hedefin ardına girer, çizgi altta (rota şemasındaki "Bırak: ardına" gibi); başlık başa bırakır. */
+.tc-st-adimlar > li[data-birak], .tc-st-satir[data-birak] { border-radius: var(--yari-2); box-shadow: 0 var(--cizgi-kalin) 0 var(--hold); }
+.tc-st-sartname { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+.tc-st-rozetler { display: flex; align-items: center; gap: var(--b-1); }
+.tc-st-medya-sayi { display: inline-flex; flex-shrink: 0; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-st-no {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: var(--dokunma-yogun); height: var(--dokunma-yogun);
+  border-radius: var(--yari-tam); background: var(--ink); color: var(--panel); font-size: var(--yazi-s); font-weight: 700;
+}
+
+/* Süzgeç çipleri ve kontrol noktası türü: basılı olan dolu. */
+.tc-st-cipler, .tc-st-turler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-st-tur {
+  min-height: var(--dokunma-yogun); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam);
+  background: var(--panel); color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-st-tur[aria-pressed="true"], .tc-st-tur[aria-checked="true"] { border-color: var(--ink); background: var(--ink); color: var(--panel); font-weight: 600; }
+.tc-st-tur:disabled { cursor: default; opacity: .6; }
+
+/* Şablon önizlemesi: adım kartı numara, küçük görsel ve metin. */
+.tc-st-kart {
+  display: grid; grid-template-columns: auto var(--dokunma-x20) minmax(0, 1fr); gap: var(--b-3); align-items: start; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-st-kucuk {
+  position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; width: var(--dokunma-x20); height: var(--dokunma-x14);
+  border-radius: var(--yari-2); background: var(--panel2); color: var(--muted);
+}
+.tc-st-kucuk img { width: 100%; height: 100%; object-fit: cover; }
+.tc-st-kucuk-bos { display: flex; flex-direction: column; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); text-align: center; }
+.tc-st-sayi { position: absolute; right: var(--b-1); bottom: var(--b-1); padding: 0 var(--b-1); border-radius: var(--yari-1); background: var(--panel); font-size: var(--yazi-xs); }
+.tc-st-cip {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: var(--b-1); padding: var(--b-1) var(--b-2); border-radius: var(--yari-tam);
+  background: color-mix(in srgb, var(--done) 14%, var(--panel)); color: var(--done); font-size: var(--yazi-xs); font-weight: 600;
+}
+
+/* Şartname alanları: değer kutuları ızgarası. */
+.tc-st-alanlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--menu-genis), 1fr)); gap: var(--b-2); }
+.tc-st-deger { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); overflow-wrap: anywhere; }
+
+/* Adım düzenleyici (prototip Duzenleyici): 5/7 sütun. Tam pencerenin gövdesi dolgusuzdur; dolgu burada. */
+.tc-st-duz-govde { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; padding: var(--b-4); }
+.tc-st-kunye { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-3); }
+.tc-st-duz { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-st-alan { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.tc-st-alan > legend { margin-bottom: var(--b-1); font-size: var(--yazi-s); }
+.tc-st-cerceve { padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); }
+.tc-st-cerceve > legend { padding: 0 var(--b-1); }
+.tc-st-olcum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-2); align-items: end; }
+.tc-st-secenekler { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-st-secenek { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; }
+.tc-st-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-st-alt { display: flex; flex-direction: column; gap: var(--b-2); padding-top: var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-st-medyalar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-st-medya { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; margin: 0; }
+.tc-st-medya img, .tc-st-medya video { width: 100%; height: var(--dokunma-x24); border-radius: var(--yari-2); background: var(--panel2); object-fit: cover; }
+.tc-st-medya figcaption { display: flex; align-items: center; justify-content: space-between; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-st-kaldir {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; min-width: var(--dokunma-yogun); min-height: var(--dokunma-yogun);
+  border: 0; background: none; color: var(--stop); cursor: pointer;
+}
+.tc-st-yukle {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--b-1); min-height: var(--dokunma-x24); padding: var(--b-2);
+  border: var(--cizgi) dashed var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-st-yukle:disabled { cursor: progress; }
+
+@media (max-width: 1024px) {
+  .tc-st-duz { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 768px) {
+  .tc-st-kunye, .tc-st-olcum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-st-medyalar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Tablette liste ve ayrıntı yan yana kalır; telefonda alt alta. */
+@media (max-width: 640px) {
+  .tc-st-izgara { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .tc-st-kunye, .tc-st-olcum { grid-template-columns: minmax(0, 1fr); }
+  .tc-st-kart { grid-template-columns: auto minmax(0, 1fr); }
+  .tc-st-kucuk { grid-column: 2; }
+  .tc-st-sartname { grid-template-columns: minmax(0, 1fr); }
+}
