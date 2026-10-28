@@ -31,3 +31,23 @@
 Bu tur şunları varsaydı:
 1. Kaynak bağının bütün modüllerde geçerli olması yeterli sayıldı (kaynak modül adı sınırlanmadı); Arkon yalnız Cizimler'den çağırır.
 2. Modül şeridinden gelen içerik kişinin bağsız dosya kotasına sayılmaz (kota modülün şeridindedir).
+
+## Talimat medyası disk deposu (1004 a, 1005 a, 1007 a; ADR 0009 eki)
+
+| Dosya | Ne |
+|---|---|
+| `sunucu/gocler/20261028090000_dosya_disk_deposu.sql` | `dosya.depo` ('vt' varsayılan, var olan satırlar değişmez), `mp4` türü, `dosya_disk_silinecek` |
+| `disk-deposu.ts` | `TMIV2_MEDYA_DIZINI/<ab>/<cd>/<özet>`; geçici ad (`.<özet>.<rastgele>.tmp`), fsync, yeniden adlandırma; özet doğrulanır |
+| `servis.ts`, `sorgular.ts`, `disari.ts` | `medyaTutamagi(modul)` (bağlanan resim ve video diske alınır), `diskKunyeOzetleri(db)`; temizlikte 30 gün bekleme |
+| `disk-deposu.test.ts` | MP4 imzası, açık/kapalı kuralı, diske alma, canlıda kapalı, 30 gün bekleme ve yeniden bağlama |
+
+- Disk deposu `TMIV2_MEDYA_DIZINI` mutlak yolsa açıktır; canlıda (`TMIV2_ORTAM=canli`) yedek aynası gelene kadar yeni dosya diske yazılmaz (ADR eki).
+  Kapalıyken resim veritabanında kalır, video bağlanmaz. Okuma ve temizlik klasörden yapılır, canlı kuralı yalnız yazmayı kapatır.
+- Yükleme yolu değişmedi: içerik önce veritabanı şeridinden geçer, `medyaTutamagi` ile bağlanınca diske yazılır ve parçalar silinir.
+- Künyesi silinen diskteki dosya `dosya_disk_silinecek`e girer, 30 gün sonra diskten silinir; aynı içerik arada yeniden diske bağlanırsa satır kalkar.
+- `cizimler` istemcisinde iki eşleme satırına `mp4` eklendi (derleme kırığı; MP4 çizim belgesine yine izinli değildir).
+
+Bu tur şunları varsaydı:
+1. Diske alma bağlama transaction'ındadır; transaction geri dönerse diskte künyesiz dosya kalabilir (içerik doğru, ad özet; zararsız, temizlik görmez).
+2. MP4 yalnız ISO marka ailesiyle (isom, iso2-9, mp41, mp42, avc1, dash, M4V) tanınır; MOV ve 3GP reddedilir.
+3. Videonun 3 dakika sınırı sunucuda ölçülmez (çözümleyici yeni bağımlılık olurdu); yalnız boyut sınırı sunucudadır.

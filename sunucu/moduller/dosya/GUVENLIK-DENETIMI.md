@@ -20,3 +20,5 @@ alabilir; bunu yalnız inceleme yakalar (sınır kuralı yok, UYUM-BORCU madde 3
 - `modulDeposuTutamagi(modul).icerikYaz`: kendi yükleme şeridi olan modül (Arkon) tamamladığı içeriği yazar; özet sunucuda yeniden hesaplanır,
   tutmazsa ret; kişi yükleyen olur (DSb korunur). İmzasız içerik `ikili` türüyle girer (MIME `application/octet-stream`); kişinin yükleme ucu
   bu türü hiç üretmez (DSK-05). Olağan `dosyaTutamagi` ikili dosya bağlayamaz (bağ sınırı türü sözleşmedeki türlerdir) ve bağında ikili görürse hata verir.
+- Disk deposu (ADR 0009 eki): yol yalnız `TMIV2_MEDYA_DIZINI`'nden ve özetten kurulur (64 küçük hex, kişi girdisi yola girmez); diske yalnız
+  özeti doğrulanmış içerik yazılır. Okuma bağlayan modülün ucundan, bağ denetimiyle aynıdır.

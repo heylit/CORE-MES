@@ -22,7 +22,7 @@ import { firmaAdlari, firmaAra, firmaOzetleri } from '../musteri-tedarikci/disar
 import {
   aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri,
 } from '../istasyonlar/disari.ts';
-import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
+import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeAra as kartAra, malzemeOperasyonlari, malzemeOzetleri, operasyonluAktifKartlar } from '../malzemeler/disari.ts';
@@ -395,9 +395,10 @@ async function surumAdimlari(db: Db, talimatIdleri: readonly number[]): Promise<
 
 // İçerik ortak dosya deposundadır (ADR 0009); bağ özet başına tek kayıttır, böylece sürümler ve şablon kopyası dosyayı yeniden
 // yüklemeden kullanır. İlk bağlayan içeriği kendisi göndermiş olmalıdır (DSb); bağlı dosya her oturuma açıktır (talimat da öyledir).
-const medyaDeposu = dosyaTutamagi('rota');
+const medyaDeposu = medyaTutamagi('rota');
 const medyaKaydi = (ozet: string): string => `medya:${ozet}`;
-const MEDYA_DOSYA_TURLERI = ['png', 'jpeg', 'webp'] as const;
+// Video yalnız disk deposu açıkken bağlanır (tutamak kapalıyken mp4'ü sınırdan düşürür).
+const MEDYA_DOSYA_TURLERI = ['png', 'jpeg', 'webp', 'mp4'] as const;
 
 async function medyaCoz(
   db: Db, kullanici: Kullanici, m: { ozet: string; ad: string }, denetimEki: DenetimEki,
