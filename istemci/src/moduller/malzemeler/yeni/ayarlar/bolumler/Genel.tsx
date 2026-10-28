@@ -1,6 +1,7 @@
 // Genel listeler (sertifika, stok birimi, belge türü), roller ve genel ayarlar (prototipin üst baştaki "Ayarlar" penceresinin içi).
 import { useState } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Rozet, Tablo, type Sutun } from '../../../../../ortak/arayuz/index.ts';
+import { formulKoru } from '../../../../../ortak/veri/csv.ts';
 import type { Duzen } from '../duzen.ts';
 import { ROLLER, TURLER, YETKI, YETKI_AD, birlesmeListesi, mukerrerGruplari, type MukerrerGrubu } from '../kaynak.ts';
 import { ListeDuzenleyici } from '../ListeDuzenleyici.tsx';
@@ -66,7 +67,7 @@ function MukerrerTarama({ d }: { d: Duzen }) {
   const listeyiIndir = () => {
     const l = birlesmeListesi(d.b);
     if (!l.length) { d.bildir('bilgi', 'Henüz birleştirilmiş kart yok.'); return; }
-    const hucre = (x: unknown) => { const s = String(x ?? ''); return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const hucre = (x: unknown) => { const s = typeof x === 'string' ? formulKoru(x, { sayiSerbest: true }) : String(x ?? ''); return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const satirlar = [['Eski kod', 'Eski ad', 'Yeni kod', 'Tarih', 'Neden'], ...l.map((r) => [r.eski_kod, r.eski_ad, r.yeni_kod, r.tarih, r.neden])];
     dosyaIndir('birlestirme-listesi.csv', `﻿${satirlar.map((r) => r.map(hucre).join(';')).join('\r\n')}`, 'text/csv');
   };
