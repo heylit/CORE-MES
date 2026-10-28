@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
-  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
+  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi } from '#paylasilan/sozlesme/finans.ts';
@@ -2174,6 +2174,25 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([d.teklifler.length, d.kurKaynagi, d.oneri, d.karar?.tlToplam], [2, 'sabit', t.karar?.teklifId, '120.00']);
     for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`)).statusCode, 403);
     assert.equal((await istek(c.sa, 'GET', `/satin-alma-talepleri/${randomUUID()}/degerlendirme`)).statusCode, 404);
+  });
+
+  test('1104 a, 1105 a: kalemin kart ayrıntısı görünür; tedarikçiye iç alanlar gitmez; siparişte kart kopyalanır, kart değişince kopya kalır', async () => {
+    const kart = (sql: string) => ortam!.sahip.tx((db) => db.sorgu(`UPDATE malzeme_katalog_karti SET ${sql}, surum = surum + 1 WHERE kayit->'com'->>'kod' = 'HM-SAT-00004'`));
+    await kart(`kayit = kayit || '{"tol": "h9", "opts": {"durum": "Normalize"}}'::jsonb || jsonb_build_object('com', kayit->'com' || '{"sertifika": ["EN 10204 3.1"], "not": "Deneme iç not", "ted": "Deneme Tedarik A", "moq": 5}'::jsonb)`);
+    const { t, a } = await onaydaEuro();
+    const ayrinti = async () => tamam<KartAyrintilariCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${t.id}/kart-ayrintilari`)).kalemler[0]!;
+    const once = await ayrinti();
+    assert.deepEqual([once.guncel?.tolerans, once.guncel?.sertifikalar, once.guncel?.enAzSiparis, once.siparisler], ['h9', ['EN 10204 3.1'], '5', []]);
+    assert.deepEqual(once.tedarikciye.map((x) => x.ad), ['Kalite', 'Tolerans', 'Durum / ısıl işlem', 'İstenen sertifikalar']);
+    assert.doesNotMatch(JSON.stringify(once.tedarikciye), /Deneme iç not|Deneme Tedarik A/);
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [onayKaydi()] }));
+    tamam<Talep>(await siparisVer(onayli, a.id));
+    await kart(`kayit = kayit || '{"tol": "h7"}'::jsonb`);
+    const sonra = await ayrinti();
+    assert.deepEqual([sonra.guncel?.tolerans, sonra.siparisler.map((x) => [x.teklifId, x.kopya.tolerans, x.kartDegisti])], ['h7', [[a.id, 'h9', true]]]);
+    assert.equal(sonra.tedarikciye.find((x) => x.ad === 'Tolerans')?.deger, 'h9');
+    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_siparis_kart_kopyasi SET kart_surumu = 0")), /yalnız ekleme/);
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', `/satin-alma-talepleri/${t.id}/kart-ayrintilari`)).statusCode, 403);
   });
 });
 
