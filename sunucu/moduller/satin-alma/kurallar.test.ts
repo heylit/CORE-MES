@@ -8,6 +8,7 @@ import {
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi } from './kurallar.ts';
+import { KUR_KILIDI, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
   id: '00000000-0000-4000-8000-000000000001', baslik: 'Deneme', birim: null, talepEdenKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null, notlar: '',
@@ -290,12 +291,16 @@ test('SAT-64 B-001: çıkışa eklenen karar veren adı satın almanın işi say
   const okunan = { ...T, karar: { ...karar, kararVerenAdi: 'Deneme Karar Veren' } } as unknown as TalepYazimi;
   assert.deepEqual(degisiklikTuru(okunan, { ...T, karar }), { onay: false, govde: false, satinAlma: false });
   assert.equal(degisiklikTuru(okunan, { ...T, karar: { ...karar, gerekce: 'Değişti' } }).satinAlma, true);
-  // Kararın her yazılan alanı satın almanın işidir; yalnız karar verenin adı dışarıda kalır.
+  // Kararın her yazılan alanı satın almanın işidir; karar verenin adı ile sunucunun kurduğu sabit kur ve kilit (1096 a) dışarıda kalır.
   const degisik = { mod: 'bolunmus', teklifId: 'b', gerekce: 'x', kararVerenKisiId: 5, kararTarihi: '2026-10-08', ogrenilenler: 'x',
-    bolunme: [{ kalemId: 'k1', teklifId: 'a' }], sabitKurlar: [{ paraBirimi: 'USD', kur: '40' }] } as const;
+    bolunme: [{ kalemId: 'k1', teklifId: 'a' }] } as const;
   for (const [alan, deger] of Object.entries(degisik)) {
     const yeni = { ...T, karar: { ...karar, [alan]: deger } } as unknown as TalepYazimi;
     assert.equal(degisiklikTuru(okunan, yeni).satinAlma, true, alan);
+  }
+  for (const [alan, deger] of Object.entries({ sabitKurlar: [{ paraBirimi: 'USD', kur: '40' }], kurKilidi: '2026-10-08T10:00:00.000Z' })) {
+    const yeni = { ...T, karar: { ...karar, [alan]: deger } } as unknown as TalepYazimi;
+    assert.deepEqual(degisiklikTuru(okunan, yeni), { onay: false, govde: false, satinAlma: false }, alan);
   }
 });
 
@@ -413,4 +418,44 @@ test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açı
   assert.equal(uygulananKartReddi(undefined), ILETILER.uygulananKartYok);
   assert.equal(uygulananKartReddi({ tur: 'hizmet' }), ILETILER.uygulananHizmet);
   assert.equal(uygulananKartReddi({ tur: 'mamul' }), null);
+});
+
+test('1096 a: kur kilidi onaya girerken kurulur; onaydan siparişe ve iptale geçiş korur; onay dışı durum kaldırır; kilitsiz eski karar siparişte sabitlenir', () => {
+  assert.equal(kurKilidiIsi('degerlendirme', 'onayda', null), 'kilitle');
+  assert.equal(kurKilidiIsi(null, 'onayda', null), 'kilitle');
+  assert.equal(kurKilidiIsi('onayda', 'onayda', 'k'), 'koru');
+  assert.equal(kurKilidiIsi('onayda', 'siparis_verildi', 'k'), 'koru');
+  assert.equal(kurKilidiIsi('onayda', 'siparis_verildi', null), 'sipariste-sabitle');
+  assert.equal(kurKilidiIsi('siparis_verildi', 'onayda', 'k'), 'koru');
+  assert.equal(kurKilidiIsi('onayda', 'iptal', 'k'), 'koru');
+  assert.equal(kurKilidiIsi('onayda', 'degerlendirme', 'k'), 'kaldir');
+});
+
+test('1096 a: kilit 7 günü geçince ya da kur %3ten fazla sapınca sipariş durur; TRY ve finansta kuru olmayan para birimi bakılmaz', () => {
+  const kilit = '2026-10-20T09:00:00.000Z';
+  const sabit = [{ paraBirimi: 'EUR', kur: '37.2' }, { paraBirimi: 'TRY', kur: '1' }, { paraBirimi: 'USD', kur: '34' }];
+  const gun = (g: number) => Date.parse(kilit) + g * 86_400_000;
+  assert.equal(kurKilidiReddi(kilit, sabit, new Map([['EUR', '38.0'], ['USD', null]]), gun(6)), null);
+  assert.equal(kurKilidiReddi(kilit, sabit, new Map(), gun(7.5)), ILETILER.kurKilidiEski(KUR_KILIDI.gun));
+  assert.equal(kurKilidiReddi(kilit, sabit, new Map([['EUR', '38.5']]), gun(1)), ILETILER.kurKaydi('EUR', '3,5'));
+  assert.equal(kurKilidiReddi(null, sabit, new Map([['EUR', '99']]), gun(30)), null);
+});
+
+test('1096 a: kilitten önce verilen onay siparişe yetmez; kilitten sonraki ya da bu kayıtta eklenen onay yeter', () => {
+  const kilit = '2026-10-20T09:00:00.000Z';
+  const once = { sonuc: 'onay' as const, zaman: '2026-10-19T09:00:00.000Z' };
+  const sonra = { sonuc: 'onay' as const, zaman: '2026-10-21T09:00:00.000Z' };
+  assert.equal(kilittenSonraOnayliMi(kilit, [once], []), false);
+  assert.equal(kilittenSonraOnayliMi(kilit, [once, sonra], []), true);
+  assert.equal(kilittenSonraOnayliMi(kilit, [once], [{ sonuc: 'onay' }]), true);
+  assert.equal(kilittenSonraOnayliMi(null, [], []), true);
+});
+
+test('1099 a: satır ayrıntısını göndermeyen kayıt saklananı korur; boş (null) gönderilen silinir; yeni satır boş başlar', () => {
+  const fiyat = (p: object) => ({ ...T, teklifler: [{ id: 'q', fiyatlar: [{ kalemId: 'k', birimFiyat: '1', ...p }, { kalemId: 'k2', birimFiyat: '2' }] }] }) as unknown as TalepYazimi;
+  const eski = fiyat({ iskontoYuzdesi: '5', terminGun: 9, enAzMiktar: '10' });
+  const f = (t: TalepYazimi) => t.teklifler[0]!.fiyatlar.map((x) => [x.iskontoYuzdesi, x.terminGun, x.enAzMiktar]);
+  assert.deepEqual(f(kalemAyrintisiniKoru(eski, fiyat({}))), [['5', 9, '10'], [null, null, null]]);
+  assert.deepEqual(f(kalemAyrintisiniKoru(eski, fiyat({ iskontoYuzdesi: null, terminGun: 3 }))), [[null, 3, '10'], [null, null, null]]);
+  assert.deepEqual(f(kalemAyrintisiniKoru(null, fiyat({}))), [[null, null, null], [null, null, null]]);
 });

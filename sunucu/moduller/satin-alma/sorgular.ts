@@ -40,10 +40,10 @@ export interface AltKayitlar {
   kalemler: (Talep['kalemler'][number] & { talepId: string })[];
   istekler: (Talep['teklifIstekleri'][number] & { talepId: string })[];
   teklifler: (Omit<Teklif, 'fiyatlar'> & { talepId: string })[];
-  fiyatlar: { talepId: string; teklifId: string; kalemId: string; birimFiyat: string }[];
-  kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string }[];
+  fiyatlar: { talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null }[];
+  kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string; kurKilidi: string | null }[];
   bolunmeler: { talepId: string; kalemId: string; teklifId: string }[];
-  sabitKurlar: { talepId: string; paraBirimi: string; kur: string }[];
+  sabitKurlar: { talepId: string; paraBirimi: string; kur: string; aylikFaizYuzdesi: string | null }[];
   siparisler: {
     talepId: string; teklifId: string; no: string | null; siparisNo: string; siparisTarihi: string | null; beklenenTeslim: string | null;
     logoDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKayitNo: string | null; logoHata: string | null;
@@ -72,13 +72,15 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       teslim_sekli AS "teslimSekli", nakliye_dahil AS "nakliyeDahil", termin_gun AS "terminGun", vade_gun AS "vadeGun",
       avans_yuzdesi AS "avansYuzdesi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon
       FROM satin_alma_teklif WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, sira, id`),
-    fiyatlar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", birim_fiyat AS "birimFiyat"
+    fiyatlar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", birim_fiyat AS "birimFiyat",
+      iskonto_yuzdesi AS "iskontoYuzdesi", termin_gun AS "terminGun", en_az_miktar AS "enAzMiktar"
       FROM satin_alma_teklif_satiri WHERE talep_id = ANY($1::uuid[])`),
     kararlar: await q(`SELECT talep_id AS "talepId", mod, teklif_id AS "teklifId", gerekce, karar_veren_kisi_id AS "kararVerenKisiId",
-      karar_tarihi AS "kararTarihi", ogrenilenler FROM satin_alma_karar WHERE talep_id = ANY($1::uuid[])`),
+      karar_tarihi AS "kararTarihi", ogrenilenler, ${ISO('kur_kilidi')} AS "kurKilidi" FROM satin_alma_karar WHERE talep_id = ANY($1::uuid[])`),
     bolunmeler: await q(`SELECT talep_id AS "talepId", kalem_id AS "kalemId", teklif_id AS "teklifId"
       FROM satin_alma_karar_kalemi WHERE talep_id = ANY($1::uuid[])`),
-    sabitKurlar: await q(`SELECT talep_id AS "talepId", para_birimi AS "paraBirimi", kur FROM satin_alma_sabit_kur WHERE talep_id = ANY($1::uuid[])`),
+    sabitKurlar: await q(`SELECT talep_id AS "talepId", para_birimi AS "paraBirimi", kur, aylik_faiz_yuzdesi AS "aylikFaizYuzdesi"
+      FROM satin_alma_sabit_kur WHERE talep_id = ANY($1::uuid[])`),
     siparisler: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", no, siparis_no AS "siparisNo", siparis_tarihi AS "siparisTarihi",
       beklenen_teslim AS "beklenenTeslim", logo_gonderim_durumu AS "logoDurumu", logo_kayit_no AS "logoKayitNo", logo_hata AS "logoHata",
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
@@ -200,8 +202,11 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
         q.teslimSekli, q.nakliyeDahil, q.terminGun, q.vadeGun, q.avansYuzdesi, q.garantiAy, q.teknikUygun, q.notlar, q.ilkToplam, q.revizyon, sira],
     );
     await db.sorgu('DELETE FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2', [id, q.id]);
-    await db.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) SELECT $1, $2, * FROM unnest($3::uuid[], $4::numeric[])',
-      [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat)]);
+    await db.sorgu(
+      `INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat, iskonto_yuzdesi, termin_gun, en_az_miktar)
+       SELECT $1, $2, * FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[])`,
+      [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat), q.fiyatlar.map((f) => f.iskontoYuzdesi ?? null),
+        q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null)]);
     // İlk toplam bir kez yazılır; toplam 0,005'ten fazla değişirse revizyon artar (prototip kuralı).
     await db.sorgu(
       `UPDATE satin_alma_teklif SET
@@ -213,18 +218,19 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
   const k = t.karar;
   if (k !== null) {
     await db.sorgu(
-      `INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, gerekce, karar_veren_kisi_id, karar_tarihi, ogrenilenler)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, gerekce, karar_veren_kisi_id, karar_tarihi, ogrenilenler, kur_kilidi)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (talep_id) DO UPDATE SET mod = EXCLUDED.mod, teklif_id = EXCLUDED.teklif_id, gerekce = EXCLUDED.gerekce,
-         karar_veren_kisi_id = EXCLUDED.karar_veren_kisi_id, karar_tarihi = EXCLUDED.karar_tarihi, ogrenilenler = EXCLUDED.ogrenilenler`,
-      [id, k.mod, k.teklifId, k.gerekce, k.kararVerenKisiId, k.kararTarihi, k.ogrenilenler],
+         karar_veren_kisi_id = EXCLUDED.karar_veren_kisi_id, karar_tarihi = EXCLUDED.karar_tarihi, ogrenilenler = EXCLUDED.ogrenilenler,
+         kur_kilidi = EXCLUDED.kur_kilidi`,
+      [id, k.mod, k.teklifId, k.gerekce, k.kararVerenKisiId, k.kararTarihi, k.ogrenilenler, k.kurKilidi ?? null],
     );
     await db.sorgu('DELETE FROM satin_alma_karar_kalemi WHERE talep_id = $1', [id]);
     await db.sorgu('INSERT INTO satin_alma_karar_kalemi (talep_id, kalem_id, teklif_id) SELECT $1, * FROM unnest($2::uuid[], $3::uuid[])',
       [id, k.bolunme.map((b) => b.kalemId), k.bolunme.map((b) => b.teklifId)]);
     await db.sorgu('DELETE FROM satin_alma_sabit_kur WHERE talep_id = $1', [id]);
-    await db.sorgu('INSERT INTO satin_alma_sabit_kur (talep_id, para_birimi, kur) SELECT $1, * FROM unnest($2::text[], $3::numeric[])',
-      [id, k.sabitKurlar.map((s) => s.paraBirimi), k.sabitKurlar.map((s) => s.kur)]);
+    await db.sorgu('INSERT INTO satin_alma_sabit_kur (talep_id, para_birimi, kur, aylik_faiz_yuzdesi) SELECT $1, * FROM unnest($2::text[], $3::numeric[], $4::numeric[])',
+      [id, k.sabitKurlar.map((s) => s.paraBirimi), k.sabitKurlar.map((s) => s.kur), k.sabitKurlar.map((s) => s.aylikFaizYuzdesi ?? null)]);
     await db.sorgu('DELETE FROM satin_alma_siparis WHERE talep_id = $1 AND NOT (teklif_id = ANY($2::uuid[]))', [id, k.siparisler.map((s) => s.teklifId)]);
     for (const s of k.siparisler) {
       // Numara yalnız yeni siparişe verilir ve değişmez; istemci numara yazamaz. Sayaç boşa harcanmasın diye önce var mı bakılır.
@@ -242,6 +248,8 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
         ? (t.teklifler.find((x) => x.id === s.teklifId)?.fiyatlar ?? []).map((f) => f.kalemId)
         : k.bolunme.filter((b) => b.teklifId === s.teklifId).map((b) => b.kalemId);
       const kalemler = t.kalemler.filter((x) => kapsam.includes(x.id) && x.miktar !== null);
+      // 1099 a: en az miktar kalem miktarından büyükse sipariş o miktarla verilir (ödenen ve teslim beklenen miktar).
+      const enAz = new Map((t.teklifler.find((x) => x.id === s.teklifId)?.fiyatlar ?? []).map((f) => [f.kalemId, f.enAzMiktar ?? null]));
       // Logo'da numarası olan satır kaldırılınca numarası siparişte saklanır: Logo düzenlemesi silineni açık listeden alır.
       await db.sorgu(
         `WITH silinen AS (DELETE FROM satin_alma_siparis_satiri WHERE talep_id = $1 AND teklif_id = $2 AND NOT (kalem_id = ANY($3::uuid[]))
@@ -252,9 +260,9 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
         [id, s.teklifId, kalemler.map((x) => x.id)]);
       for (const x of kalemler) {
         await db.sorgu(
-          `INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, GREATEST($4::numeric, $6::numeric), $5)
            ON CONFLICT (talep_id, teklif_id, kalem_id) DO UPDATE SET miktar = EXCLUDED.miktar, birim = EXCLUDED.birim`,
-          [id, s.teklifId, x.id, x.miktar, x.birim],
+          [id, s.teklifId, x.id, x.miktar, x.birim, enAz.get(x.id) ?? null],
         );
       }
     }
@@ -339,7 +347,7 @@ export interface LogoSiparisKalemi {
 }
 export function logoSiparisKalemleriOku(db: Db, siparisIdler: readonly number[]): Promise<LogoSiparisKalemi[]> {
   return db.sorgu<LogoSiparisKalemi>(
-    `SELECT p.id AS "siparisId", s.id AS "satirId", c.malzeme_no AS "malzemeNo", s.miktar::text AS miktar, s.birim, f.birim_fiyat::text AS "birimFiyat",
+    `SELECT p.id AS "siparisId", s.id AS "satirId", c.malzeme_no AS "malzemeNo", s.miktar::text AS miktar, s.birim, round(f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100), 4)::text AS "birimFiyat",
         s.logo_satir_ref AS "logoSatirRef"
        FROM satin_alma_siparis p
        JOIN satin_alma_siparis_satiri s ON s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
@@ -728,7 +736,7 @@ export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Pr
 export interface IsEmriFasonTutari { isEmriId: number; tutar: string; paraBirimi: string }
 export function isEmriFasonTutarlari(db: Db, isEmriIdler: readonly number[]): Promise<IsEmriFasonTutari[]> {
   return db.sorgu<IsEmriFasonTutari>(
-    `SELECT s.is_emri_id AS "isEmriId", round(sum(s.miktar * f.birim_fiyat * (1 - q.iskonto_yuzdesi / 100)), 2)::text AS tutar, q.para_birimi::text AS "paraBirimi"
+    `SELECT s.is_emri_id AS "isEmriId", round(sum(s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100)), 2)::text AS tutar, q.para_birimi::text AS "paraBirimi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_talep t ON t.id = s.talep_id
        JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
@@ -799,7 +807,7 @@ export async function panoSayilari(db: Db): Promise<PanoSayilariSatiri> {
             (SELECT count(*)::int FROM bekleyen) AS "teslimBekleyenSatir",
             (SELECT count(*)::int FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) x) AS "acikSiparis",
             (SELECT CASE WHEN bool_and(kur IS NOT NULL) IS NOT FALSE THEN coalesce(round(sum(tutar * kur), 2), 0)::text END
-               FROM (SELECT (sum(f.birim_fiyat * s.miktar) * (1 - q.iskonto_yuzdesi / 100) + q.nakliye + q.diger_masraf) AS tutar,
+               FROM (SELECT (sum(f.birim_fiyat * s.miktar * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100)) * (1 - q.iskonto_yuzdesi / 100) + q.nakliye + q.diger_masraf) AS tutar,
                             coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END) AS kur
                        FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) b
                        JOIN satin_alma_siparis_satiri s ON s.talep_id = b.talep_id AND s.teklif_id = b.teklif_id
@@ -827,7 +835,7 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
   return db.sorgu<SiparisOdemeKosulu>(
     `WITH t AS (
        SELECT o.teklif_id, round(
-           COALESCE((SELECT sum(ss.miktar * ts.birim_fiyat) FROM satin_alma_siparis_satiri ss
+           COALESCE((SELECT sum(ss.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) FROM satin_alma_siparis_satiri ss
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,

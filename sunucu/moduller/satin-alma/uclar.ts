@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, sirketAdiCevabi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
-  satinAlmaOzetiCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
+  satinAlmaOzetiCevabi, degerlendirmeCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -94,6 +94,12 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-kapat', yetki: 'satin-alma.yaz', parametre: talepParametresi,
     govde: siparisKapatGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde }) => servis.siparisKapat(db, kullanici, parametre.id, govde),
+  }),
+  // 1094 b: teklif karşılaştırması ve kararın tutarı sunucuda hesaplanır; teklifleri gören görür.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/degerlendirme', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    parametre: talepParametresi, cevap: degerlendirmeCevabi,
+    isle: ({ db, parametre }) => servis.degerlendirme(db, parametre.id),
   }),
   // Kart #1124: siparişin ödeme planı, bağlı faturası ve irsaliye için satır kimlikleri; okuyan görür, planı satın almayı yazan değiştirir.
   uc({
