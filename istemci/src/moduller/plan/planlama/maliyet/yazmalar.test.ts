@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { malzemeHazir, maliyetSistemi } from './kurallar.ts';
-import { ekMesaiKaldirYaz, tezGiderYaz, tezUcretYaz, type Yaz } from './yazmalar.ts';
+import { bugunIso, ekMesaiKaldirYaz, tezGiderYaz, tezUcretYaz, type Yaz } from './yazmalar.ts';
 import { ornekCalisma } from './test-verisi.ts';
 
 // Yazmalar tek alanı tek değişiklik olarak yazar; plan korunacak yazma bunu söyler. Malzeme sırası sunucu motorunun matAlloc'una uyar.
@@ -72,5 +72,11 @@ describe('P3 malzemenin hazır olması (matAlloc kopyası)', () => {
     expect(malzemeHazir(c, 7)).toEqual({ S1: 7, S2: 80 });
     const c2 = ornekCalisma({ D: { ...D('oncelik'), satinalma: [] } });
     expect(malzemeHazir(c2, 7).S2).toBe(Infinity);
+  });
+});
+
+describe('fiyat kaydının günü', () => {
+  it('gece yarısından sonra tesis gününü yazar', () => {
+    expect(bugunIso(Date.parse('2026-10-28T22:30:00Z'))).toBe('2026-10-29');
   });
 });
