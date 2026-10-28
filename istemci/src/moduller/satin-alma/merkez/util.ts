@@ -1,3 +1,4 @@
+import { formulKoru } from "../../../ortak/veri/csv.ts";
 import { yeniIstekKimligi } from "../../../ortak/veri/istek-kimligi.ts";
 
 /** Form öğelerinin ortak alanlarına (value, checked, files, options…) tek tipte erişmek için */
@@ -74,7 +75,8 @@ export function fmtTs(ts: number | undefined): string {
 export const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 
 export function toCSV(rows: (string | number)[][]): string {
-  const cell = (v: unknown) => { const s = String(v ?? ""); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  // Formül gibi başlayan metin ' ile başlar; tedarikçi adı dışarıdan (portal) gelebilir.
+  const cell = (v: unknown) => { const s = typeof v === "string" ? formulKoru(v, { sayiSerbest: true }) : String(v ?? ""); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   return "\ufeff" + rows.map((r) => r.map(cell).join(";")).join("\r\n");
 }
 
