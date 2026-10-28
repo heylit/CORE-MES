@@ -286,6 +286,31 @@ export function katalogMaliyetSatirlari(db: Db, nolar: number[]): Promise<Katalo
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[])`, [nolar]);
 }
 
+// 1104 a: satın almanın talep, teklif ve siparişte gösterdiği kart ayrıntısı. Değerler ekranın karta yazdığı metinlerdir; boş metin ve
+// biçimi tutmayan değer null (dizi boş). İptal kart dönmez.
+export interface KatalogSatinAlmaSatiri {
+  no: number; tur: string; surum: number; kaliteAdi: string | null; formAdi: string | null; aciklamalar: string[];
+  standartlar: string[]; tolerans: string | null; durum: string | null; yuzey: string | null; sertifikalar: string[];
+  ureticiUrunKodu: string | null; mensei: string | null; gtip: string | null; enAzSiparis: string | null; tercihTedarikci: string | null; not: string | null;
+}
+const KATALOG_DIZI = (yol: string): string => `ARRAY(SELECT btrim(e) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'array'
+  THEN k.kayit #> '{${yol}}' ELSE '[]'::jsonb END) e WHERE btrim(e) <> '')`;
+export function katalogSatinAlmaSatirlari(db: Db, nolar: number[]): Promise<KatalogSatinAlmaSatiri[]> {
+  return db.sorgu<KatalogSatinAlmaSatiri>(
+    `SELECT k.no, k.tur, k.surum,
+            COALESCE(NULLIF(btrim(k.kalite_adi), ''), CASE WHEN k.tur = 'hammadde' THEN ${KATALOG_KALITE} END) AS "kaliteAdi",
+            NULLIF(btrim(k.form_adi), '') AS "formAdi",
+            ARRAY(SELECT a FROM unnest(ARRAY[k.aciklama_1, k.aciklama_2, k.aciklama_3]) a WHERE NULLIF(btrim(a), '') IS NOT NULL) AS aciklamalar,
+            ARRAY(SELECT DISTINCT x FROM unnest(${KATALOG_DIZI('stds')} || ARRAY[${KATALOG_METIN('com,std')}]) x WHERE x IS NOT NULL ORDER BY x) AS standartlar,
+            ${KATALOG_METIN('tol')} AS tolerans, ${KATALOG_METIN('opts,durum')} AS durum, ${KATALOG_METIN('opts,yuzey')} AS yuzey,
+            ${KATALOG_DIZI('com,sertifika')} AS sertifikalar,
+            ${KATALOG_METIN('g,urunKodu')} AS "ureticiUrunKodu", ${KATALOG_METIN('g,mensei')} AS mensei, ${KATALOG_METIN('g,gtip')} AS gtip,
+            CASE WHEN jsonb_typeof(k.kayit #> '{com,moq}') = 'number' AND (k.kayit #>> '{com,moq}')::numeric > 0
+                 THEN (k.kayit #>> '{com,moq}')::numeric::text END AS "enAzSiparis",
+            ${KATALOG_METIN('com,ted')} AS "tercihTedarikci", ${KATALOG_METIN('com,not')} AS not
+       FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [nolar]);
+}
+
 export interface KatalogResimSatiri { no: number; resimNo: string | null; revizyon: string | null }
 
 // Teknik resim no ve revizyon yalnız yarı mamul ve mamulde anlamlıdır; başka türde kart null'larla döner.

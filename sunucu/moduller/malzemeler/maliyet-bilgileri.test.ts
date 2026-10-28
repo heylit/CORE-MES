@@ -9,7 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kullanilanKaliteler, malzemeMaliyetBilgileri } from './disari.ts';
+import { kullanilanKaliteler, malzemeMaliyetBilgileri, malzemeSatinAlmaAyrintilari } from './disari.ts';
 import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
@@ -39,7 +39,8 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     const onek = { hammadde: 'HM-MLB', sarf: 'SF-MLB', mamul: 'MM-MLB', yarimamul: 'YM-MLB' }[tur] ?? 'HM-MLB';
     // Boy sıradan: aynı kalite ve formlu kartlar ayrı malzemedir (sunucunun benzersiz anahtarı, B11).
     const dims = ek['dims'] !== null && typeof ek['dims'] === 'object' ? { dims: { ...(ek['dims'] as object), l: 1000 + sira } } : {};
-    const kayit = { id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-0000${sira}`, birim: 'adet' }, onay: { durum }, ...ek, ...dims };
+    const { com, ...geri } = ek as { com?: object };
+    const kayit = { id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-0000${sira}`, birim: 'adet', ...com }, onay: { durum }, ...geri, ...dims };
     await tamam<KatalogKartiKaydetCevabi>('POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
       kayit, ozet: { benzersiz_anahtar: `${tur}|mb|${kimlik}`, mukerrer_gerekcesi: null, ...ozetEki }, surum: null,
     });
@@ -62,6 +63,26 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     await tamam('POST', '/malzeme-katalogu-ayarlari/genel/kaydet', { deger: { onayAkisi: false } });
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
+
+  test('1104 a: satın almanın kart ayrıntısı: kalite, standartlar, tolerans, durum, yüzey, sertifikalar, en az sipariş; boş metin null, olmayan kart yok', async () => {
+    const hm = await kaydet({
+      grade: 'S235JR', form: 'cubuk', dims: OLCU.cubuk, stds: ['EN 10025-2', ' '], tol: 'h9', opts: { durum: 'Normalize', yuzey: ' ' },
+      com: { std: 'EN 10025-2', sertifika: ['EN 10204 3.1', ''], moq: 25, ted: 'Deneme Tedarik', not: 'Deneme not' },
+    }, 'aktif', 'hammadde', { kalite_adi: 'S235JR (1.0038)', form_adi: 'Yuvarlak çubuk', aciklama_1: 'Ø50', aciklama_2: ' ' });
+    const sarf = await kaydet({ g: { urunKodu: 'DNM-123', mensei: 'TR', gtip: '8207' }, com: { moq: 0 } }, 'aktif', 'sarf');
+    const m = await vt().tx((db) => malzemeSatinAlmaAyrintilari(db, [hm, sarf, hm, 2147483000]));
+    assert.deepEqual([...m.keys()].sort((a, b) => a - b), [hm, sarf].sort((a, b) => a - b));
+    const { surum, ...a } = m.get(hm)!;
+    assert.ok(surum >= 1);
+    assert.deepEqual(a, {
+      tur: 'hammadde', kaliteAdi: 'S235JR (1.0038)', formAdi: 'Yuvarlak çubuk', aciklamalar: ['Ø50'], standartlar: ['EN 10025-2'], tolerans: 'h9',
+      durum: 'Normalize', yuzey: null, sertifikalar: ['EN 10204 3.1'], ureticiUrunKodu: null, mensei: null, gtip: null, enAzSiparis: '25',
+      tercihTedarikci: 'Deneme Tedarik', not: 'Deneme not',
+    });
+    const b = m.get(sarf)!;
+    assert.deepEqual([b.kaliteAdi, b.ureticiUrunKodu, b.mensei, b.gtip, b.enAzSiparis, b.sertifikalar, b.standartlar], [null, 'DNM-123', 'TR', '8207', null, [], []]);
+    assert.equal((await vt().tx((db) => malzemeSatinAlmaAyrintilari(db, []))).size, 0);
+  });
 
   test('kalite (hazır ya da özel), aile, form ve stok birimi karttan; hammadde dışında kalite ve form yok; birim ağırlık null; olmayan kart haritada yok', async () => {
     const hazir = await kaydet({ grade: 'S235JR', form: 'cubuk', dims: OLCU.cubuk });
