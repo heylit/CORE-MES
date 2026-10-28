@@ -384,7 +384,7 @@ export const sonOnaylar = (db: Db, senaryoIdleri: readonly number[]): Promise<On
 const BEDEL_SUTUNLARI: Record<keyof BedelAyari, string> = {
   tabanBedelSaat: 'taban_bedel_saat', finansmanOraniGun: 'finansman_orani_gun', karRiskiOraniGun: 'kar_riski_orani_gun',
   yuksekEsigi: 'yuksek_esigi', dusukEsigi: 'dusuk_esigi', yuksekCarpani: 'yuksek_carpani', normalCarpani: 'normal_carpani',
-  dusukCarpani: 'dusuk_carpani', sinifACarpani: 'sinif_a_carpani', sinifBCarpani: 'sinif_b_carpani', sinifCCarpani: 'sinif_c_carpani',
+  dusukCarpani: 'dusuk_carpani',
 };
 const BEDEL_ANAHTARLARI = Object.keys(BEDEL_SUTUNLARI) as (keyof BedelAyari)[];
 // Taslakta bedel satırı yoksa (b boş) canlı değer kalır; finansman oranı null olabildiği için COALESCE değil.
@@ -403,7 +403,6 @@ export async function bedelAyariOku(db: Db, hedef: Hedef = null): Promise<BedelA
     tabanBedelSaat: sayi('tabanBedelSaat'), finansmanOraniGun: r.finansmanOraniGun === null ? null : Number(r.finansmanOraniGun),
     karRiskiOraniGun: sayi('karRiskiOraniGun'), yuksekEsigi: sayi('yuksekEsigi'), dusukEsigi: sayi('dusukEsigi'),
     yuksekCarpani: sayi('yuksekCarpani'), normalCarpani: sayi('normalCarpani'), dusukCarpani: sayi('dusukCarpani'),
-    sinifACarpani: sayi('sinifACarpani'), sinifBCarpani: sayi('sinifBCarpani'), sinifCCarpani: sayi('sinifCCarpani'),
   };
 }
 
