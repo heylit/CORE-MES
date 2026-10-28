@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { anaAgacKoku } from './ortam.ts';
-import { binYolu, kabuksuzArgv } from './paket-bin.ts';
+import { binYolu, kabuksuzArgv, npmCliBul } from './paket-bin.ts';
 import type { BinCoz } from './paket-bin.ts';
 import { git, VARSAYILAN_TABAN } from './sinir-denetimi.ts';
 import {
@@ -168,16 +168,10 @@ export function betigiAyir(betikler: Betikler, ad: string, derinlik = 0): string
   return komutlar;
 }
 
-// npm'in giriş betiği: `npm run` içinden çağrıldıysa ortamda yazar, değilse node'un yanındadır.
-export function npmCliBul(ortam: NodeJS.ProcessEnv = process.env): string {
-  const adaylar = [
-    ortam.npm_execpath ?? '',
-    join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-    join(dirname(process.execPath), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-  ];
-  const bulunan = adaylar.find((yol) => basename(yol) === 'npm-cli.js' && existsSync(yol));
-  if (bulunan === undefined) throw new Error('npm bulunamadı (npm-cli.js); komutu `npm run teslim` ile koş');
-  return bulunan;
+function npmCliGerekli(): string {
+  const yol = npmCliBul();
+  if (yol === null) throw new Error('npm bulunamadı (npm-cli.js); komutu `npm run teslim` ile koş');
+  return yol;
 }
 
 export interface Ortam {
@@ -562,7 +556,7 @@ if (dogrudanKosuyor) {
         kos: surecKos,
         binCoz: binYolu,
         // Kod çalıştırmayan kipte npm aranmaz.
-        npmCli: komut.secenek.yalnizSinifla ? '' : npmCliBul(),
+        npmCli: komut.secenek.yalnizSinifla ? '' : npmCliGerekli(),
       };
       const { sonuc, sayfaYolu } = await teslimDene(komut.secenek, ortam);
       console.log(ozet(sonuc, sayfaYolu));

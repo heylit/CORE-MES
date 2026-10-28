@@ -40,6 +40,9 @@ Aynı paket ikinci kez yüklenemez (commit bazında). Bekleyen istek varken yeni
 2. Sunucuyu `npm run baslat` ile açın. Güncelleme klasörü ve anahtar tanımlıysa güncelleyici açılır ve şunu yazar:
    `Güncelleyici: <klasör> açılıyor (<commit>)`. Tanımlı değilse eski davranış sürer (derle, aç).
 3. Güncelleyici açıkken Güncelleme sekmesinde "Uygula" açılır. `npm run sunucu` ile açılan sunucuda "Uygula" kapalıdır.
+   Bekçiyle, başlangıç betiğiyle ya da Görev Zamanlayıcı ile açılan güncelleyici de "Uygula"yı yapar (kurulum/servis.md): npm'i
+   önce `npm run` ortamında, yoksa Node'un yanında arar (Windows: `<nodejs>\node_modules\npm`; Linux: `<önek>/lib/node_modules/npm`).
+   İkisinde de yoksa "Uygula" doğrulama adımında "npm bulunamadı" ile durur, veritabanı değişmez.
 
 ## Eski sürümler
 
