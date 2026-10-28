@@ -1,5 +1,5 @@
 import type { VeriIslemi } from './islemler.ts';
-import { SAYFALAR, type SayfaIslemi } from './sayfalar.ts';
+import { TUM_SAYFALAR, type SayfaIslemi } from './sayfalar.ts';
 
 // Yetki matrisi işlem kodunu değil ne izin verdiğini gösterir. Kayıt tamdır: yeni işlem adı yazılmadan derlenmez.
 export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
@@ -225,7 +225,7 @@ const SAYFA_GRUBU: Readonly<Record<string, string>> = {
   'sayfa.ik-islemlerim': 'ik',
 };
 
-const SAYFA_ADLARI = new Map<string, string>(SAYFALAR.map((s) => [s.islem, s.baslik]));
+const SAYFA_ADLARI = new Map<string, string>(TUM_SAYFALAR.map((s) => [s.islem, s.baslik]));
 
 export function islemGrubu(islem: string): string {
   if (islem.startsWith('sayfa.')) return SAYFA_GRUBU[islem] ?? islem.slice('sayfa.'.length);

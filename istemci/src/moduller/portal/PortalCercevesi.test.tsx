@@ -7,7 +7,7 @@ import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { KurumCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/portal.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
+import { TUM_IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
 import { guvenliKurumAdi, kurumKisaltmasi, sayfaKur, tmiOturumuyla, yerelDegerler, YEREL } from './PortalCercevesi.tsx';
 import { anahtarParcasi } from './cerceve-kopru.ts';
 import { ekBetikler } from './ek-betikler.ts';
@@ -100,7 +100,7 @@ describe('PortalCercevesi', () => {
   });
 
   it('ikinci menünün her maddesinin rotası vardır', () => {
-    const menu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/portal');
+    const menu = TUM_IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/portal');
     expect(menu).toBeDefined();
     for (const madde of menuMaddeleri(menu!)) expect(rotalar.some((r) => r.yol === madde.yol)).toBe(true);
   });

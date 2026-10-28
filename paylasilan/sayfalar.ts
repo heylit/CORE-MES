@@ -1,3 +1,4 @@
+import { kapaliModulYoluMu } from './kapali-moduller.ts';
 import { menudeGorunur, sayfalariSirala } from './sayfa-tanimi.ts';
 import type { IkinciMenuTanimi } from './sayfa-tanimi.ts';
 import { AKIS_IKINCI_MENU, AKIS_SAYFALARI } from './sayfalar/akis.ts';
@@ -45,7 +46,8 @@ import { PORTAL_IKINCI_MENU, PORTAL_SAYFALARI } from './sayfalar/portal.ts';
 // Sayfa listesi tek kaynaktır: menü buradan beslenir. Her sayfa menüde görünme işlemini kendi bildirir;
 // bu işlem yalnız görünürlüktür, veri yetkisi vermez. Modül sayfalarını `sayfalar/<modül>.ts` dosyasında bildirir;
 // buradaki satır sırası menüyü etkilemez, diziliş grup sırası ve sayfanın kendi sırasıyla kurulur.
-export const SAYFALAR = sayfalariSirala([
+// Bütün modüllerin sayfaları; kapalı modülünki de. Yalnız işlem adı ve sayfa işlemi listesi bunu kullanır.
+export const TUM_SAYFALAR = sayfalariSirala([
   ...AKIS_SAYFALARI,
   ...ARKON_SAYFALARI,
   ...ATOLYE_SAYFALARI,
@@ -89,10 +91,13 @@ export const SAYFALAR = sayfalariSirala([
   ...PORTAL_SAYFALARI,
 ]);
 
+// Kapalı modülün sayfası menüde, aramada ve rotada yoktur; tipi ve işlemi durur ki modülün kodu derlenmeye devam etsin.
+export const SAYFALAR = TUM_SAYFALAR.filter((s) => !kapaliModulYoluMu(s.yol));
+
 // İkinci menüler: modül kendi menüsünü aynı dosyada bildirir (`export const <AD>_IKINCI_MENU = {...} as const satisfies IkinciMenuTanimi`),
 // buraya adıyla eklenir. Yalın değerler korunur (`as const`): simge ve işlem adını istemci derlerken denetler.
 // Satır başına tek menü: aynı turda menü ekleyen modüllerin değişiklikleri ayrı satırlara düşer. Sıra menüyü etkilemez (kökle bulunur).
-export const IKINCI_MENULER = [
+export const TUM_IKINCI_MENULER = [
   ARKON_IKINCI_MENU,
   IK_IKINCI_MENU,
   IK_ISLEMLERIM_IKINCI_MENU,
@@ -132,15 +137,19 @@ export const IKINCI_MENULER = [
   NIZAMIYE_IKINCI_MENU,
 ] as const satisfies readonly IkinciMenuTanimi[];
 
-export type Sayfa = (typeof SAYFALAR)[number];
+export const IKINCI_MENULER = TUM_IKINCI_MENULER.filter((m) => !kapaliModulYoluMu(m.kok));
+
+export type Sayfa = (typeof TUM_SAYFALAR)[number];
 export type SayfaYolu = Sayfa['yol'];
 export type SayfaIslemi = Sayfa['islem'];
 
 export const SAYFA_YOLLARI: readonly SayfaYolu[] = SAYFALAR.map((s) => s.yol);
-export const SAYFA_ISLEMLERI: readonly SayfaIslemi[] = SAYFALAR.map((s) => s.islem);
+// Kapalı modülün sayfa işlemi de kalır: rol satırları ve yetki ekranı onu kaybetmez, modül açılınca yeniden verilmez.
+export const SAYFA_ISLEMLERI: readonly SayfaIslemi[] = TUM_SAYFALAR.map((s) => s.islem);
 
 // İstemci simge setiyle aynı doğrulamayı koşar; değer olarak yalnız bu dosyayı ithal edebilir.
 export { ikinciMenulerinHatalari, maddeGorunurMu, menudeGorunur } from './sayfa-tanimi.ts';
+export { acikModulDosyalari, kapaliModulYoluMu } from './kapali-moduller.ts';
 
 // Sistem Ayarları'ndan kapatılan sayfalar: yalnız görünürlüktür (menü, ana sayfa kartı, adresle açılış); uçlara dokunmaz.
 // Ana sayfa ve Sistem Ayarları kapatılamaz: kapatan, yeniden açmanın yolunu da kapatmasın.

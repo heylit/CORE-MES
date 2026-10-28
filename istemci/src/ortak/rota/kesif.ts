@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { Sayfa } from '#paylasilan/sayfalar.ts';
+import { acikModulDosyalari } from '#paylasilan/sayfalar.ts';
 import { rotaninSayfasi } from './sayfa.ts';
 
 export interface ModulRotasi {
@@ -59,5 +60,5 @@ export function rotaPlani(rotalar: readonly ModulRotasi[], gorunur: readonly Say
 }
 
 export const modulRotalari: readonly ModulRotasi[] = rotalariTopla(
-  import.meta.glob('../../moduller/*/rotalar.tsx', { eager: true }),
+  acikModulDosyalari(import.meta.glob('../../moduller/*/rotalar.tsx', { eager: true })),
 );

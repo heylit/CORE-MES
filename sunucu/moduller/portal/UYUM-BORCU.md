@@ -1,5 +1,9 @@
 # portal: uyum borcu
 
+## Kapalı modül (1067 teyit, 28.10.2026)
+Modül `paylasilan/kapali-moduller.ts` listesindedir: uçları kaydedilmez; sayfası, menüsü, rehberi, hızlı işi, ayar ekranı ve ekran testleri uygulamadan çıkar. Kod, tablolar (`portal_belge`, `portal_ek`, `portal_logo_gonderim`, `portal_siparis_bagi`), rol satırları ve göçler durur; birim testleri koşar.
+Listeden çıkarmadan (açmadan) önce: bu dosyadaki açık maddeler ve ADR 0021'deki dış erişim işleri gözden geçirilir.
+
 ## Bağlamada kapanacak
 | Kural / konu | İstisna | Nasıl uyumlanır |
 |---|---|---|

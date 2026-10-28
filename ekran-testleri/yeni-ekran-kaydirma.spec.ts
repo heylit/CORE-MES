@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { kapaliModulYoluMu } from '#paylasilan/kapali-moduller.ts';
 import { expect, test } from './ortak.ts';
 
 // Yeni ekran eski çerçeveyle aynı kökte açılır; kabuk o kökte içerik alanını çerçeveye bırakır. Kendi kaydırmasını kurmayan yeni ekranın
@@ -8,7 +9,7 @@ test.use({ hesap: 'ornek.yonetici' });
 const YENI_EKRANLAR = [
   '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/plan', '/malzemeler', '/kalite-merkezi',
   '/kalite-merkezi/muayeneler', '/finans/yeni', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
-];
+].filter((yol) => !kapaliModulYoluMu(yol));
 
 // İçerik alanında alanın altına taşan ve kaydırılabilen hiçbir atasının içinde olmayan görünür öğeler: bunlara ulaşılamaz.
 async function ulasilamayanlar(page: Page): Promise<string[]> {

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { gizliMi, taninmayanTurler } from '#paylasilan/gizli.ts';
+import { KAPALI_MODULLER } from '#paylasilan/kapali-moduller.ts';
 import type { Ayar } from './ayar.ts';
 import type { Veritabani } from './db.ts';
 import { ucEnvanteri } from './uc.ts';
@@ -69,6 +70,20 @@ test('test dışı ortamda uygulama eksik seçenekle kurulmaz: kimlik, denetim v
     assert.notEqual((await app.inject({ method: 'GET', url: '/api/saglik' })).statusCode, 404);
     await app.close();
   }
+});
+
+test('kapaliModuller verilen modülün uçları kaydedilmez, öteki modül etkilenmez; verilmezse her modül kaydedilir', async () => {
+  const durum = async (app: Awaited<ReturnType<typeof uygulamaKur>>, url: string) => (await app.inject({ method: 'GET', url })).statusCode;
+  const hepsi = await uygulamaKur({ vt: sahteVt, ayar: AYAR });
+  for (const ad of KAPALI_MODULLER) assert.notEqual(await durum(hepsi, `/api/${ad}/ben`), 404, ad);
+  await hepsi.close();
+  const kapali = await uygulamaKur({ vt: sahteVt, ayar: AYAR, kapaliModuller: KAPALI_MODULLER });
+  for (const ad of KAPALI_MODULLER) assert.equal(await durum(kapali, `/api/${ad}/ben`), 404, ad);
+  assert.notEqual(await durum(kapali, '/api/saglik'), 404);
+  await kapali.close();
+  const secilen = await uygulamaKur({ vt: sahteVt, ayar: AYAR, kapaliModuller: ['saglik'] });
+  assert.equal(await durum(secilen, '/api/saglik'), 404);
+  await secilen.close();
 });
 
 test('bilinmeyen /api yolu BULUNAMADI gövdesiyle 404 döner', async () => {

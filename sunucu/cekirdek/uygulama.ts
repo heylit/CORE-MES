@@ -24,6 +24,9 @@ export interface UygulamaSecenegi {
   kimlik?: Kimlik;
   denetle?: Denetle;
   tekrar?: TekrarDeposu;
+  // Uçları kaydedilmeyen modüller. Sunucunun gerçek kablolaması `KAPALI_MODULLER`'i verir; verilmezse liste boştur ki kapalı
+  // modülün kendi testleri uçlarıyla koşsun.
+  kapaliModuller?: readonly string[];
 }
 
 // İstemci sunucuya aynı makinedeki önizleme vekilinden (4101) gelir. Yalnız ondan gelen X-Forwarded-For ve X-Forwarded-Proto
@@ -208,7 +211,9 @@ export async function uygulamaKur(secenek: UygulamaSecenegi, gunlukDizini?: stri
   vekilUyarisiniKur(app, guvenilen, (ileti) => { app.log.warn(ileti); });
   hataYonetiminiKur(app);
   istekOlcumunuKur(app);
+  const kapali = secenek.kapaliModuller ?? [];
   for (const { modul, uclar } of await modulBasinaUclar()) {
+    if (kapali.includes(modul)) continue;
     uclariKaydet(app, uclar, {
       vt, kimlik, modul, guvenliCerez: ayar.ortam === 'canli', ...(denetle ? { denetle } : {}), ...(tekrar ? { tekrar } : {}),
     });

@@ -5,7 +5,8 @@ import { z } from 'zod';
 import type { Ayar } from '#cekirdek/ayar.ts';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { uc, uclariKaydet } from '#cekirdek/uc.ts';
-import { hataYonetiminiKur } from '#cekirdek/uygulama.ts';
+import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
+import { KAPALI_MODULLER } from '#paylasilan/kapali-moduller.ts';
 import { uygulamaSecenekleri } from './uygulama-secenekleri.ts';
 
 const AYAR: Ayar = {
@@ -46,4 +47,18 @@ test('sunucunun kablolaması denetimi ve tekrar deposunu verir: korumalı uç an
   assert.ok(sorgular.some((s) => s.includes('INSERT INTO istek_kimligi')), sorgular.join('\n'));
   assert.ok(sorgular.some((s) => s.includes('INSERT INTO denetim_kaydi')), sorgular.join('\n'));
   assert.equal(typeof secenek.kimlik, 'function');
+});
+
+test('sunucunun kablolaması kapalı modüllerin uçlarını kaydetmez; açık modülün ucu durur', async () => {
+  const vt: Veritabani = {
+    sorgu: async <T>(): Promise<T[]> => [], tek: async <T>(): Promise<T | null> => null,
+    tx: (is) => is(vt), okumaTx: (is) => is(vt), kapat: async () => undefined,
+  };
+  const secenek = uygulamaSecenekleri(vt, AYAR);
+  assert.deepEqual(secenek.kapaliModuller, KAPALI_MODULLER);
+  assert.equal(KAPALI_MODULLER.length > 0, true);
+  const app = await uygulamaKur(secenek);
+  for (const ad of KAPALI_MODULLER) assert.equal((await app.inject({ method: 'GET', url: `/api/${ad}/ben` })).statusCode, 404, ad);
+  assert.notEqual((await app.inject({ method: 'GET', url: '/api/saglik' })).statusCode, 404);
+  await app.close();
 });
