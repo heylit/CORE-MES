@@ -173,8 +173,9 @@ describe('uretim-emirleri onaylı kapanış (1072 a, 1074-1080, 1064; gerçek Po
       ['is-emirleri', 'tamam'], ['ilk-parca', 'tamam'], ['hatali', 'tamam'], ['olcum', 'tamam'], ['izlenebilirlik', 'tamam'],
       ['fason', 'gerekmez'], ['stok', 'tamam'], ['sevkiyat', 'tamam'], ['ncr', 'bilinmiyor'],
     ]);
-    for (const ad of ['kalite', 'mudur']) assert.equal((await istek(ad, 'GET', `/adimli-emirler/${id}/kapanis`)).durum, 200, ad);
-    for (const ad of ['operator', 'planlama']) assert.equal((await istek(ad, 'GET', `/adimli-emirler/${id}/kapanis`)).durum, 403, ad);
+    // Planlama rolü kapanışı okur (1078 a); operatör okumaz.
+    for (const ad of ['kalite', 'mudur', 'planlama']) assert.equal((await istek(ad, 'GET', `/adimli-emirler/${id}/kapanis`)).durum, 200, ad);
+    assert.equal((await istek('operator', 'GET', `/adimli-emirler/${id}/kapanis`)).durum, 403);
     const liste = await istek('okuyucu', 'GET', '/kapanislar?asama=onay');
     assert.equal(liste.durum, 200, JSON.stringify(liste.govde));
     const satir = kapanisListeCevabi.parse(liste.govde).satirlar.find((s) => s.uretimEmriId === id);
