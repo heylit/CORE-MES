@@ -40,3 +40,17 @@ kurması aynı kotayı, temizliği ve yetki açığını çoğaltırdı.
 - **Modül deposu ve `ikili` türü.** Kendi yükleme şeridi olan modül (Arkon) tamamladığı içeriği ortak depoya yazar; imzasız içerik
   (3B ağ dizileri gibi) `ikili` türüyle girer. Kişinin yükleme ucu bu türü üretmez.
 - **Arkon deposunun taşınması (DS7).** `arkon_dosya` içeriği ortak depoya göçle taşınır; eski tablo ayrı göçle düşer.
+
+## Ek: talimat medyası (kullanıcı kararları 994 a, 995 a, 1004 a, 1005 a, 28.10.2026)
+
+- **Yalnız talimat medyası diskte (1004 a, DS1'e istisna).** Rota talimatının adım resim ve videoları içerik özetiyle adlandırılmış,
+  değişmeyen dosya olarak sunucunun diskinde durur: `TMIV2_MEDYA_DIZINI/<özet[0:2]>/<özet[2:4]>/<özet>` (sha256, 64 küçük hex,
+  uzantısız). Dosya bir kez yazılır (geçici ad, sonra yeniden adlandırma), üzerine yazılmaz; aynı içerik ikinci kez saklanmaz.
+  Künye (özet, boyut, tür) ve bağ veritabanında kalır; öteki bütün dosyalar (çizim, sertifika, STEP) veritabanında kalır.
+- **Sınırlar (995 a).** Resim en çok 10 MB, video en çok 200 MB ve 3 dakika, ürünün bütün talimatlarında en çok 1 GB.
+- **Silme (1005 a).** Bağı kalmayan medyanın künyesi DS4 ile silinir; diskteki dosyası en az 30 gün bekler, sonra silinir. Böylece
+  eski bir veritabanı yedeği geri yüklendiğinde o yedekteki künyelerin dosyası bulunur.
+- **Yedek.** Medya gece veritabanı yedeğine girmez. Veritabanı yedeğinden sonra artımlı, şifreli bir ayna yalnız aynada olmayan
+  özetleri kopyalar; ayna ve geri yükleme ayrı kartla çekirdekte yazılır. Bu ayna gelmeden disk deposu canlıda açılmaz.
+- **Bağ.** Rota medyayı özet başına tek kayda bağlar (`medya:<özet>`); ilk bağlayan içeriği kendisi göndermiş olmalıdır (DSb). Bağlı
+  medya oturumla okunur, çünkü talimat da oturumla okunur.
