@@ -234,9 +234,9 @@ describe('malzeme ihtiyacı: ara adım stoğu (461 b)', () => {
   // Statü 7: ürün 1'in OP 20 adımının çıktısı (stokta hammadde kartının kırılımında). Statü 8 ürünü yazmayan eski biçim, statü 9 başka ürünün adımı.
   const okuma = (ara: string, g: Partial<StokOkumasi> = {}): StokOkumasi => ({
     statuler: [
-      { id: 7, malzemeNo: 'K-3', kaynakAdim: '1-o20', ad: 'OP 20' },
-      { id: 8, malzemeNo: 'K-3', kaynakAdim: 'o20', ad: 'OP 20' },
-      { id: 9, malzemeNo: 'K-3', kaynakAdim: '5-o20', ad: 'OP 20' },
+      { id: 7, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: '1-o20', ad: 'OP 20' },
+      { id: 8, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: 'o20', ad: 'OP 20' },
+      { id: 9, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: '5-o20', ad: 'OP 20' },
     ],
     malzemeler: { 3: { kirilim: [{ statuId: null, miktar: '30' }, { statuId: 7, miktar: ara }, { statuId: 8, miktar: '100' }, { statuId: 9, miktar: '100' }], bakiyeler: [] } },
     ...g,

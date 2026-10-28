@@ -15,12 +15,11 @@ interface Motor {
   stTamKur: (S: Nesne) => St;
   karar1650Goc: (S: Nesne) => boolean;
   agHazirla: (D: Nesne) => void;
-  uydurma: (acik: boolean) => void;
   PW: Record<string, number>;
   AG_BIRIM: number;
 }
 const motorKur = (): Motor => new Function(`${planlamaMotoru()}
-return { girdiKur, stTamKur, karar1650Goc, agHazirla, uydurma: a => { AG_UYDURMA = a; }, PW, AG_BIRIM };`)() as Motor;
+return { girdiKur, stTamKur, karar1650Goc, agHazirla, PW, AG_BIRIM };`)() as Motor;
 const kopya = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 const KAYIT = {
@@ -101,13 +100,5 @@ describe('tam st (stTamKur)', () => {
     m.agHazirla(D);
     expect(D['musteriler']).toEqual([{ id: 'MU-2', ad: 'Ornek firma', sinif: 'B', cezaOran: null, cezaTavan: null }]);
     expect((D['siparisler'] as Nesne[]).map((s) => s['musteri'])).toEqual([undefined, 'MU-2']);
-  });
-
-  it('72 a: TMI dışındaki denemede uydurma müşteri atanır ve silinmez', () => {
-    const m = motorKur(); m.uydurma(true);
-    const D: Nesne = { siparisler: [{ id: 'O1', oncelik: 2 }, { id: 'O2', oncelik: 2 }] };
-    m.agHazirla(D);
-    expect((D['musteriler'] as Nesne[]).map((x) => x['id'])).toEqual(['MU-1', 'MU-2', 'MU-3', 'MU-4']);
-    expect((D['siparisler'] as Nesne[]).map((s) => s['musteri'])).toEqual(['MU-1', 'MU-2']);
   });
 });
