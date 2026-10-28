@@ -176,6 +176,17 @@ function altSurecOrtami(parola: string): NodeJS.ProcessEnv {
   return { ...ortam, PGPASSWORD: parola };
 }
 
+// Veritabanı yedeği ve medya aynası aynı biçimi yazar: ikisi de aynı anahtar ve aynı çözücüyle açılır.
+export function sifreliYaz(anahtar: Buffer, kaynak: AsyncIterable<Buffer>, hedef: string): Promise<void> {
+  const iv = randomBytes(IV_BOYU);
+  const sifrele = createCipheriv('aes-256-gcm', anahtar, iv);
+  return pipeline(kaynak, sifrele, async function* (sifreli) {
+    yield Buffer.concat([SIFRE_IMZASI, iv]);
+    for await (const parca of sifreli) yield parca as Buffer;
+    yield sifrele.getAuthTag();
+  }, createWriteStream(hedef));
+}
+
 // pg_dump standart çıktıya yazar ve çıktı şifrelenerek dosyaya akar: düz yedek diske hiç düşmez.
 function pgDumpCalistir(komut: PgDumpKomutu, pg: PgBaglantisi, anahtar: Buffer, hedef: string): Promise<void> {
   const argumanlar = [
@@ -185,13 +196,7 @@ function pgDumpCalistir(komut: PgDumpKomutu, pg: PgBaglantisi, anahtar: Buffer, 
   const surec = spawn(komut.dosya, argumanlar, {
     env: altSurecOrtami(pg.parola), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });
-  const iv = randomBytes(IV_BOYU);
-  const sifrele = createCipheriv('aes-256-gcm', anahtar, iv);
-  const yazim = pipeline(surec.stdout, sifrele, async function* (sifreli) {
-    yield Buffer.concat([SIFRE_IMZASI, iv]);
-    for await (const parca of sifreli) yield parca as Buffer;
-    yield sifrele.getAuthTag();
-  }, createWriteStream(hedef));
+  const yazim = sifreliYaz(anahtar, surec.stdout, hedef);
   const bitis = new Promise<void>((coz, reddet) => {
     let hataMetni = '';
     surec.stderr.setEncoding('utf8');

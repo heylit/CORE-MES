@@ -149,9 +149,32 @@ Bu adımlar geliştirme ortamında PostgreSQL 16 ile denendi (2026-10-14): uygul
 malzeme ve göç kaydı sayıları kaynakla aynı çıktı, `npm run goc` "Uygulanacak göç yok" dedi ve göç kaydı yazma hakkını geri aldı,
 sunucu geri yüklenen veritabanıyla açıldı. Windows sunucuda ve PostgreSQL 18'de denenmedi.
 
+## Talimat medyası aynası (1004 a, 1005 a)
+
+Talimat resimleri ve videoları ADR 0009'un istisnasıdır: veritabanında değil, `TMIV2_MEDYA_DIZINI` klasöründe durur; veritabanında
+yalnız künyesi (özet, ad, boyut, tür) vardır. Bu yüzden gece pg_dump yedeğine girmez; ayrı ve artımlı aynalanır.
+
+- Medya dosyasının adı içeriğinin sha256 özetidir (`<ab>\<cd>\<özet>`, uzantısız); dosya bir kez yazılır, değişmez.
+- Ayna, yedek klasörünün `medya` alt klasörüdür, aynı `<ab>\<cd>\<özet>` düzeniyle. Her dosya veritabanı yedeğiyle aynı anahtar
+  (`TMIV2_YEDEK_ANAHTARI`) ve aynı biçimde (`TMIV2Y1`, AES-256-GCM) şifrelidir; anahtarsız açılmaz.
+- Ne zaman: aynı gece işinde, gece veritabanı yedeği bittikten sonra, her gece yedeğinin ardından bir kez. Sıra bilerek budur:
+  dump'taki her künyenin dosyası o anda medya klasöründedir ve aynaya girer. Son ayna zamanı `medya\.son-ayna` dosyasındadır.
+- Yalnız aynada olmayan özetler kopyalanır; ad özet olduğu için karşılaştırma yalnız "bu ad var mı" sorusudur. Günlük iş o gün
+  eklenen dosyalar kadar sürer. Ayna günlük tam kopya tutmaz: her özet bir kez durur. Yer: medya boyutu kadar, artı son 30 günde
+  silinenler.
+- Kopyalanırken her dosyanın özeti yeniden hesaplanır; adıyla tutmayan (diskte bozulmuş) dosya aynaya alınmaz, sunucu günlüğüne hata
+  olarak düşer ve sonraki gece yeniden denenir. Yarıda kalan kopya `.yarim` ekiyle durur, bir gün sonra silinir.
+- Kaynaktan silinen medya aynada `.silindi` ekiyle 30 gün daha durur, sonra silinir (1005 a): 14 günlük veritabanı yedeklerinin en
+  eskisi geri yüklenince künyelerinin dosyası bulunsun. Kaynağa geri gelen dosya işaretten çıkar, yeniden kopyalanmaz.
+- Yer denetimi: kopyalanacak dosyaların toplamı artı 1 GB boş yer yoksa o tur hiçbir dosya kopyalanmaz, hata günlüğe düşer; medya
+  diski doldurup veritabanı yedeğini düşürmesin.
+- `TMIV2_MEDYA_DIZINI` boşsa ayna koşmaz (talimat medyası yok). Yedek klasörü ya da anahtar yoksa veritabanı yedeği gibi ayna da bekler.
+- Medya klasörü, yedek klasörü ve veritabanı ayrı disklerde olmalıdır (Kurulum 1 ile aynı gerekçe).
+- Saklayıcının geçici dosyaları (nokta ile başlar) ve kalıba uymayan dosyalar aynaya girmez.
+
 ## Sınırlar
 
 - Yedek veritabanının o anki tutarlı kopyasıdır. Yüklenen dosyalar (çizim, belge, sertifika) veritabanında durduğu için yedeğe
-  girer (ADR 0009). Diskteki güncelleme paketleri (`TMIV2_GUNCELLEME_DIZINI`), harita paketi ve `.env` girmez.
+  girer (ADR 0009). Talimat medyası girmez; ayrı aynalanır (yukarıda). Diskteki güncelleme paketleri (`TMIV2_GUNCELLEME_DIZINI`), harita paketi ve `.env` girmez.
 - Bir gece yedeği iki saati aşarsa pg_dump durdurulur ve hata olarak görünür.
 - Sunucu kapanırken süren yedek yarım kalır; `.yarim` dosyası bir gün sonra silinir, yedek sonraki turda yeniden alınır.

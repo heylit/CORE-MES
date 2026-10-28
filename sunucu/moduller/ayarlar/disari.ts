@@ -19,3 +19,5 @@ export { YEDEK_DIZINI_DOSYASI, yedekDizini } from './yedek-dizini.ts';
 export { yedekOrtaminiKur } from './yedek-dizini.ts';
 // Sağlık uyarısı "yedek alınmadı"yı Sistem Ayarları'nın yedek listesiyle aynı kaynaktan okur.
 export { yedekleriListele } from './yedek.ts';
+// Komut satırı talimat medyasını aynalar ve aynadan geri yükler (1004 a, 1005 a).
+export { MEDYA_AYNA_KLASORU, medyaAynala, medyaDiziniOku, medyaGeriYukle, type MedyaAynaSonucu, type MedyaGeriYuklemeSonucu } from './medya-yedek.ts';
