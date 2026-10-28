@@ -21,3 +21,6 @@ Sahip: çekirdek konusu. Test adları dosyadaki adın başıdır; `dosya.test.ts
 | DSK-13 Bayat şerit bütün olarak silinir | `DSK-13 ...` (yeni parçası olan şerit kalır ve tamamlanır) | aynı test: bütün parçası eski şerit silinir |
 | DSK-14 Bağ kaldırılınca sayım eşzamanlı kaldırmada da başlar | `DSK-14 ...` | dosya satırı kilidi kaldırılınca aynı test kırmızı (mutasyonla denendi) |
 | Yükleme uçları oturum ve biçimli özet ister | `yükleme uçları: ...` (biçimli özet 200) | aynı test: oturumsuz 401, biçimsiz özet 400, şerit yazılmaz |
+| DSK-15 Diske alınan medya özet adlı yazılır, parçaları silinir, okunur | `disk-deposu.test.ts` `bağlanan resim ve video ...` | içerik özetle uyuşmazsa `diskeYaz` hata verir |
+| DSK-16 Canlıda disk deposu kapalı | `disk-deposu.test.ts` `canlıda disk kapalı ...` | aynı test: video bağlanmaz |
+| DSK-17 Künyesi silinen diskteki dosya 30 gün bekler | `disk-deposu.test.ts` `bağı kalkan diskteki dosya ...` | aynı test: yeniden bağlanan kalır |

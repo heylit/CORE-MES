@@ -7,8 +7,9 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { DOSYA_PARCASI } from '#paylasilan/sozlesme/dosya.ts';
 import type { BagliDosya, DosyaParcasiGovdesi, DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import { diskDizini, diskeYaz, diskeYazilabilir, disktenOku, disktenSil } from './disk-deposu.ts';
 import {
-  BAYAT_SERIT_GUN, DOSYA_MIME, IKILI, DOSYA_SINIRI, ILETILER, SAHIPSIZ_GUN, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU, bagReddi, kotaHatasi,
+  BAYAT_SERIT_GUN, DISK_BEKLEME_GUN, DOSYA_MIME, IKILI, DOSYA_SINIRI, ILETILER, SAHIPSIZ_GUN, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU, bagReddi, kotaHatasi,
   modulAdiBicimli, turBul,
 } from './kurallar.ts';
 import type { BagSiniri, DosyaSiniri, SaklananTur } from './kurallar.ts';
@@ -46,7 +47,18 @@ export async function temizle(db: Db): Promise<{ serit: number; dosya: number }>
     silinen.dosya += n;
     if (n < TEMIZLIK_SINIRI.dosya) break;
   }
+  await diskTemizle(db);
   return silinen;
+}
+
+// Bekleme süresi dolan diskteki dosya silinir. Klasör ayarlı değilse dokunulmaz: liste kalır, klasör gelince silinir.
+async function diskTemizle(db: Db): Promise<void> {
+  const dizin = diskDizini();
+  if (dizin === null) return;
+  for (const ozet of await sorgular.diskSilinecekler(db, DISK_BEKLEME_GUN, TEMIZLIK_SINIRI.diskDosyasi)) {
+    await disktenSil(dizin, ozet);
+    await sorgular.diskBeklemesiniKaldir(db, ozet);
+  }
 }
 
 // Yükleme parçaları KİŞİ BAŞINA şerittir: kimse başkasının aynı özetli yüklemesini engelleyemez ya da ona yazamaz. Tamamlanan
@@ -123,8 +135,15 @@ async function* parcalar(db: Db, ozet: string): AsyncGenerator<Buffer> {
   }
 }
 
-const ikili = (d: Pick<DosyaSatiri, 'ozet' | 'boyut' | 'tur'>, ad: string): IkiliCevap => ({
-  tur: DOSYA_MIME[d.tur], ad, boyut: d.boyut, akis: (db) => parcalar(db, d.ozet),
+// Diskteki dosya klasörden akar; klasör ayarı kaldırılmışsa akış hatayla kesilir (künye var, içerik okunamaz).
+function diskAkisi(ozet: string): AsyncGenerator<Buffer> {
+  const dizin = diskDizini();
+  if (dizin === null) throw new Error(`Diskteki dosya için TMIV2_MEDYA_DIZINI ayarlı değil: ${ozet}`);
+  return disktenOku(dizin, ozet);
+}
+
+const ikili = (d: Pick<DosyaSatiri, 'ozet' | 'boyut' | 'tur' | 'depo'>, ad: string): IkiliCevap => ({
+  tur: DOSYA_MIME[d.tur], ad, boyut: d.boyut, akis: (db) => (d.depo === 'disk' ? diskAkisi(d.ozet) : parcalar(db, d.ozet)),
 });
 
 // Bağı olmayan dosyayı yalnız onu yükleyenler okur (bağlamadan önce önizleme). Bağlanmış dosya bağlayan modülün ucundan okunur.
@@ -255,6 +274,42 @@ export function dosyaTutamagi(modul: string): DosyaTutamagi {
 
 export function modulDeposuTutamagi(modul: string): ModulDeposuTutamagi {
   return Object.freeze({ ...tutamakKur(modul, (d) => d), icerikYaz });
+}
+
+// Talimat medyası (ADR 0009 eki): bağlanan resim ve video diske alınır. Disk deposu kapalıysa (klasör yok ya da canlıda ayna yok)
+// resim veritabanında kalır; video yalnız disk açıkken bağlanır.
+export interface MedyaTutamagi extends DosyaTutamagi {
+  diskAcik(): boolean;
+}
+
+const DISKE_ALINAN: ReadonlySet<SaklananTur> = new Set(['png', 'jpeg', 'webp', 'mp4']);
+
+async function diskeAl(db: Db, ozet: string): Promise<void> {
+  const dizin = diskeYazilabilir();
+  const d = await sorgular.dosyaBul(db, ozet);
+  if (dizin === null || d === null || d.depo === 'disk' || !DISKE_ALINAN.has(d.tur)) return;
+  await sorgular.diskBeklemesiniKaldir(db, ozet);
+  await diskeYaz(dizin, ozet, parcalar(db, ozet));
+  await sorgular.diskeAlindi(db, ozet);
+}
+
+export function medyaTutamagi(modul: string): MedyaTutamagi {
+  const t = tutamakKur(modul, sozlesmeDosyasi);
+  return Object.freeze({
+    ...t,
+    dosyaBagla: async (db: Db, kullanici: Kullanici, g: BagGirdisi, sinir: BagSiniri) => {
+      if (diskeYazilabilir() === null && sinir.turler.includes('mp4')) sinir = { ...sinir, turler: sinir.turler.filter((x) => x !== 'mp4') };
+      const bag = await t.dosyaBagla(db, kullanici, g, sinir);
+      await diskeAl(db, g.ozet);
+      return bag;
+    },
+    diskAcik: () => diskeYazilabilir() !== null,
+  });
+}
+
+// Yedek aynasının geri yükleme sayımı için diskteki künyelerin özetleri.
+export function diskKunyeOzetleri(db: Db): Promise<string[]> {
+  return sorgular.diskKunyeOzetleri(db);
 }
 
 // Bağlama ve kaldırma denetim kaydına içeriksiz girer (DS9 a): bağlayan uç `denetimEki` ile kendi kaydına ekler.

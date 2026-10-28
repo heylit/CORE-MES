@@ -4,7 +4,7 @@ import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 export const ILETILER = {
   ozetTutmuyor: 'Dosya içeriği özetle uyuşmuyor; yükleme baştan yapılmalı.',
   parcaUyusmuyor: 'Parça sayısı önceki parçalarla uyuşmuyor.',
-  turYok: 'Dosya türü desteklenmiyor (PDF, PNG, JPEG, WEBP, STEP, STL, IGES, GLB, GLTF, DXF).',
+  turYok: 'Dosya türü desteklenmiyor (PDF, PNG, JPEG, WEBP, STEP, STL, IGES, GLB, GLTF, DXF, MP4).',
   dosyaBuyuk: 'Dosya boyut sınırını aşıyor.',
   kotaYukleme: 'Açık yükleme sayısı sınırına ulaşıldı; önce başlattığınız yüklemeleri tamamlayın.',
   kotaBayt: 'Açık yüklemelerinizin toplam boyutu sınırı aştı.',
@@ -25,8 +25,10 @@ export type DosyaSiniri = Readonly<Record<keyof typeof DOSYA_SINIRI, number>>;
 // Yarım yükleme 1 gün, bağı kalmamış dosya 7 gün sonra silinir (DS4 a). Temizlik zamanlanmış işte saatte bir koşar (isler.ts).
 export const BAYAT_SERIT_GUN = 1;
 export const SAHIPSIZ_GUN = 7;
+// Künyesi silinen diskteki dosya en az bu kadar bekler (1005 a): gece yedeğinin saklama süresinden (14 gün) uzun.
+export const DISK_BEKLEME_GUN = 30;
 // Tek silme sorgusu en çok bu kadar sahipsiz dosya ve bayat şerit siler: büyük dosyalarda da sorgu süre sınırına sığsın.
-export const TEMIZLIK_SINIRI = { dosya: 2, serit: 10 } as const;
+export const TEMIZLIK_SINIRI = { dosya: 2, serit: 10, diskDosyasi: 50 } as const;
 // Bir turda her silme sorgusu en çok bu kadar yinelenir: birikmiş temizlik turu uzatmaz, kalanı sonraki tura kalır.
 export const TEMIZLIK_TUR_SORGUSU = 10;
 
@@ -46,6 +48,7 @@ export const DOSYA_MIME: Readonly<Record<SaklananTur, string>> = {
   glb: 'model/gltf-binary',
   gltf: 'model/gltf+json',
   dxf: 'image/vnd.dxf',
+  mp4: 'video/mp4',
   ikili: 'application/octet-stream',
 };
 
@@ -63,6 +66,8 @@ export function turBul(ilk: Buffer, boyut: number): DosyaTuru | null {
   if (basliyorMu(ilk, [0xff, 0xd8, 0xff])) return 'jpeg';
   if (basliyorMu(ilk, 'RIFF') && basliyorMu(ilk, 'WEBP', 8)) return 'webp';
   if (basliyorMu(ilk, 'ISO-10303-21')) return 'step';
+  // ISO taban ortam dosyası: ilk kutu `ftyp`. Yalnız MP4 marka ailesi kabul edilir (MOV ve 3GP dışarıda).
+  if (basliyorMu(ilk, 'ftyp', 4) && /^(?:isom|iso[2-9]|mp41|mp42|avc1|dash|M4V )$/.test(ilk.subarray(8, 12).toString('latin1'))) return 'mp4';
   if (basliyorMu(ilk, 'glTF')) return 'glb';
   if (basliyorMu(ilk, 'AutoCAD Binary DXF\r\n\x1a\x00')) return 'dxf';
   if (ilk.length >= 84 && boyut === 84 + 50 * ilk.readUInt32LE(80)) return 'stl';

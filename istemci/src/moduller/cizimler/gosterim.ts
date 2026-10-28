@@ -48,7 +48,7 @@ export const IZINLI_DOSYA_TURLERI: Record<BelgeTuru, readonly DosyaTuru[]> = {
 
 const UZANTILAR: Record<DosyaTuru, readonly string[]> = {
   pdf: ['pdf'], png: ['png'], jpeg: ['jpg', 'jpeg'], webp: ['webp'], step: ['step', 'stp'], stl: ['stl'], iges: ['iges', 'igs'],
-  glb: ['glb'], gltf: ['gltf'], dxf: ['dxf'],
+  glb: ['glb'], gltf: ['gltf'], dxf: ['dxf'], mp4: ['mp4'],
 };
 
 export function dosyaTuruBul(ad: string): DosyaTuru | null {

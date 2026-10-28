@@ -7,6 +7,7 @@ export interface DosyaSatiri {
   boyut: number;
   tur: SaklananTur;
   ilk_yukleyen_id: number;
+  depo: 'vt' | 'disk';
 }
 
 export interface BagSatiri {
@@ -17,9 +18,10 @@ export interface BagSatiri {
   belge_turu: string | null;
   ekleyen_id: number;
   zaman: string;
+  depo: 'vt' | 'disk';
 }
 
-const BAG_ALANLARI = `b.ozet, b.ad, d.boyut, d.tur, b.belge_turu, b.ekleyen_id, ${zamanMetni('b.zaman')} AS zaman`;
+const BAG_ALANLARI = `b.ozet, b.ad, d.boyut, d.tur, b.belge_turu, b.ekleyen_id, ${zamanMetni('b.zaman')} AS zaman, d.depo`;
 
 // Kişi içeriği kendisi gönderip özetini doğrulattı mı?
 export async function yukleyenMi(db: Db, ozet: string, kisiId: number): Promise<boolean> {
@@ -48,7 +50,7 @@ export async function kisiBagsizBayti(db: Db, kisiId: number): Promise<number> {
 }
 
 export function dosyaBul(db: Db, ozet: string): Promise<DosyaSatiri | null> {
-  return db.tek('SELECT ozet, boyut, tur, ilk_yukleyen_id FROM dosya WHERE ozet = $1', [ozet]);
+  return db.tek('SELECT ozet, boyut, tur, ilk_yukleyen_id, depo FROM dosya WHERE ozet = $1', [ozet]);
 }
 
 // Kişi başına işlem kilidi: eşzamanlı ilk parçalar kişi sınırını aşmaz. Özet kilidi yalnız tamamlamada alınır (önce kişi, sonra özet).
@@ -156,18 +158,53 @@ export async function bayatSeritleriSil(db: Db, gun: number, sinir: number): Pro
 
 // Bağı kalmamış ve süresi dolmuş dosyalar. Bağlama aynı satırı önce günceller (bagsiz_zaman boşalır): silme kilidi bekleyip
 // koşulu yeniden değerlendirir, bağlanmış dosyayı silmez; yabancı anahtar da bağı olan dosyanın silinmesini reddeder.
+// Künyesi silinen diskteki dosya bekleme listesine girer (1005 a); dosyanın kendisi bekleme süresi dolunca silinir.
 export async function sahipsizleriSil(db: Db, gun: number, sinir: number): Promise<number> {
-  const silinen = await db.sorgu<{ ozet: string }>(
-    `DELETE FROM dosya WHERE ozet IN (
-       SELECT d.ozet FROM dosya d
-        WHERE d.bagsiz_zaman < now() - make_interval(days => $1)
-          AND NOT EXISTS (SELECT 1 FROM dosya_bagi b WHERE b.ozet = d.ozet)
-        ORDER BY d.bagsiz_zaman LIMIT $2
-     ) AND bagsiz_zaman < now() - make_interval(days => $1)
-     RETURNING ozet`,
+  const satir = await db.tek<{ adet: number }>(
+    `WITH silinen AS (
+       DELETE FROM dosya WHERE ozet IN (
+         SELECT d.ozet FROM dosya d
+          WHERE d.bagsiz_zaman < now() - make_interval(days => $1)
+            AND NOT EXISTS (SELECT 1 FROM dosya_bagi b WHERE b.ozet = d.ozet)
+          ORDER BY d.bagsiz_zaman LIMIT $2
+       ) AND bagsiz_zaman < now() - make_interval(days => $1)
+       RETURNING ozet, depo
+     ), bekleyen AS (
+       INSERT INTO dosya_disk_silinecek (ozet) SELECT ozet FROM silinen WHERE depo = 'disk'
+       ON CONFLICT (ozet) DO UPDATE SET zaman = now()
+     )
+     SELECT count(*)::int AS adet FROM silinen`,
     [gun, sinir],
   );
-  return silinen.length;
+  return satir?.adet ?? 0;
+}
+
+// İçerik diske yazıldıktan sonra künye diske döner ve veritabanındaki parçalar silinir.
+export async function diskeAlindi(db: Db, ozet: string): Promise<void> {
+  await db.sorgu("UPDATE dosya SET depo = 'disk' WHERE ozet = $1", [ozet]);
+  await db.sorgu('DELETE FROM dosya_icerigi WHERE ozet = $1', [ozet]);
+}
+
+// Aynı içerik yeniden diske bağlanıyor: bekleme satırı kalkar. Temizlik o satırı kilitlediyse beklenir; dosyayı sildiyse
+// çağıran dosyayı yeniden yazar (önce bu, sonra dosya).
+export async function diskBeklemesiniKaldir(db: Db, ozet: string): Promise<void> {
+  await db.sorgu('DELETE FROM dosya_disk_silinecek WHERE ozet = $1', [ozet]);
+}
+
+// Bekleme süresi dolmuş ve yeniden diske bağlanmamış dosyalar; satır kilitlenir ki aynı anda bağlanan beklesin.
+export async function diskSilinecekler(db: Db, gun: number, sinir: number): Promise<string[]> {
+  return (await db.sorgu<{ ozet: string }>(
+    `SELECT s.ozet FROM dosya_disk_silinecek s
+      WHERE s.zaman < now() - make_interval(days => $1)
+        AND NOT EXISTS (SELECT 1 FROM dosya d WHERE d.ozet = s.ozet AND d.depo = 'disk')
+      ORDER BY s.zaman LIMIT $2 FOR UPDATE SKIP LOCKED`,
+    [gun, sinir],
+  )).map((x) => x.ozet);
+}
+
+// Yedekten geri yüklemede "künyesi olup dosyası olmayan" sayımı için (yedek aynası okur).
+export async function diskKunyeOzetleri(db: Db): Promise<string[]> {
+  return (await db.sorgu<{ ozet: string }>("SELECT ozet FROM dosya WHERE depo = 'disk' ORDER BY ozet")).map((x) => x.ozet);
 }
 
 export function icerikParcasi(db: Db, ozet: string, sira: number): Promise<{ icerik: Buffer } | null> {
@@ -177,7 +214,7 @@ export function icerikParcasi(db: Db, ozet: string, sira: number): Promise<{ ice
 // Yükleyenin kendi, henüz bağlanmamış dosyası.
 export function kendiBagsizDosyasi(db: Db, ozet: string, kisiId: number): Promise<DosyaSatiri | null> {
   return db.tek(
-    `SELECT d.ozet, d.boyut, d.tur, d.ilk_yukleyen_id FROM dosya d JOIN dosya_yukleyeni y ON y.ozet = d.ozet AND y.kisi_id = $2
+    `SELECT d.ozet, d.boyut, d.tur, d.ilk_yukleyen_id, d.depo FROM dosya d JOIN dosya_yukleyeni y ON y.ozet = d.ozet AND y.kisi_id = $2
       WHERE d.ozet = $1 AND NOT EXISTS (SELECT 1 FROM dosya_bagi b WHERE b.ozet = d.ozet)`,
     [ozet, kisiId],
   );
@@ -186,7 +223,7 @@ export function kendiBagsizDosyasi(db: Db, ozet: string, kisiId: number): Promis
 // Bağlanacak dosyanın satırını kilitler ve bağsız sayımını durdurur; dosya yoksa null.
 export function bagIcinAyir(db: Db, ozet: string): Promise<DosyaSatiri | null> {
   return db.tek(
-    'UPDATE dosya SET bagsiz_zaman = NULL WHERE ozet = $1 RETURNING ozet, boyut, tur, ilk_yukleyen_id',
+    'UPDATE dosya SET bagsiz_zaman = NULL WHERE ozet = $1 RETURNING ozet, boyut, tur, ilk_yukleyen_id, depo',
     [ozet],
   );
 }

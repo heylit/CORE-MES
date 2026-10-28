@@ -23,7 +23,7 @@ type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | { sil: Reviz
 
 const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
   pdf: 'application/pdf', png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp', step: 'model/step', stl: 'model/stl', iges: 'model/iges',
-  glb: 'model/gltf-binary', gltf: 'model/gltf+json', dxf: 'image/vnd.dxf',
+  glb: 'model/gltf-binary', gltf: 'model/gltf+json', dxf: 'image/vnd.dxf', mp4: 'video/mp4',
 };
 
 interface OnayOzellikleri {
