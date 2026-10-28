@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -408,7 +408,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
 
   /* ---------------- adım adım talimat ve talimat şablonu (989 a, 993 a) ---------------- */
 
-  const adim = (p: Partial<TalimatAdimiGirdisi> = {}): TalimatAdimiGirdisi => ({ baslik: 'Parçayı bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, ...p });
+  const adim = (p: Partial<TalimatAdimiGirdisi> = {}): TalimatAdimiGirdisi => ({ baslik: 'Parçayı bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], ...p });
 
   test('varsayılan talimat şablonları göçle gelir; şablonun adımları ve şartnamesi okunur', async () => {
     const l = await tamam<TalimatSablonlariCevabi>(c.operator, 'GET', '/rota/talimat-sablonlari');
@@ -439,7 +439,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const l = cevap.json<TalimatlarCevabi>();
     assert.deepEqual(l.surumler.map((x) => [x.surum, x.adimli, x.adimlar.length]), [[2, true, 4], [1, false, 1]]);
     assert.equal(l.surumler[0]?.metin, 'Programı doğrula\nİlk parçayı ölç\nRengi karşılaştır\nKutula');
-    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false });
+    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false, medya: [] });
     assert.deepEqual(l.surumler[0]?.adimlar[1]?.kontrol, { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' });
 
     await yururlugeAl(t.id, t.surum);
@@ -482,5 +482,44 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await red(c.planlama, `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Eski', sartnameId: null, adimlar: [adim()] }, 409);
     const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
     assert.equal(p.sablon.aktif, false);
+  });
+  // Sentetik PNG: imza ve rastgele gövde (tür ilk baytlardan bulunur).
+  async function resimYukle(cerez: string, ek = randomUUID()): Promise<string> {
+    const icerik = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(ek)]);
+    const ozet = createHash('sha256').update(icerik).digest('hex');
+    await tamam(cerez, 'POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
+    return ozet;
+  }
+
+  test('adım medyası: yükleyen bağlar, bağlı dosya yeniden yüklenmeden kullanılır, oturumla okunur; yüklemeyen bağlayamaz, PDF eklenmez', async () => {
+    const t = await taslak();
+    const url = `/rota/urunler/${t.urun}/talimat-adimli-yaz`;
+    const ozet = await resimYukle(c.planlama);
+    await red(c.yonetici, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'bağlama.png' }] })] }, 400, /yüklenmemiş/i);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'a.png' }, { ozet, ad: 'b.png' }] })] }, 400, /iki kez/);
+    const l = await tamam<TalimatlarCevabi>(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'bağlama.png' }] })] });
+    assert.deepEqual(l.surumler[0]?.adimlar[0]?.medya.map((m) => [m.ozet, m.ad, m.tur]), [[ozet, 'bağlama.png', 'resim']]);
+    // Dosyayı yüklemeyen yönetici, rotada bağlı dosyayı yeni sürümde kullanabilir (şablondan kopya gibi).
+    const iki = await tamam<TalimatlarCevabi>(c.yonetici, 'POST', url, { opNo: 10, okunanSurum: 1, adimlar: [adim({ medya: [{ ozet, ad: 'yeni ad.png' }] })] });
+    assert.equal(iki.surumler[0]?.adimlar[0]?.medya[0]?.ad, 'yeni ad.png');
+    const oku = await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`);
+    assert.equal(oku.statusCode, 200);
+    assert.equal(oku.headers['content-type'], 'image/png');
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${'0'.repeat(64)}`)).statusCode, 404);
+    const pdf = Buffer.from(`%PDF-1.4 ${randomUUID()}`);
+    const pdfOzeti = createHash('sha256').update(pdf).digest('hex');
+    await tamam(c.planlama, 'POST', `/dosyalar/${pdfOzeti}/parca`, { sira: 0, toplam: 1, veri: pdf.toString('base64') });
+    await red(c.planlama, url, { opNo: 10, okunanSurum: 2, adimlar: [adim({ medya: [{ ozet: pdfOzeti, ad: 'belge.pdf' }] })] }, 400, /türde/);
+  });
+
+  test('şablon medyası kopyalanır; şablondan çıkan ve başka yerde kullanılmayan dosyanın bağı kalkar', async () => {
+    const ozet = await resimYukle(c.planlama);
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', {
+      kod: 'TS-MEDYA', ad: 'Medyalı şablon', sartnameId: null, adimlar: [adim({ baslik: 'Bak', medya: [{ ozet, ad: 'örnek.png' }] })],
+    });
+    assert.equal(e.sablon.adimlar[0]?.medya[0]?.ozet, ozet);
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 200);
+    await tamam(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Medyasız', sartnameId: null, adimlar: [adim()] });
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 404);
   });
 });

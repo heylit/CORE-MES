@@ -68,4 +68,4 @@ Yazılan: adımın kaynağı fason firma olabilir (`rota_adimi.fason_firma_id` -
 | B45 | Emre sabitlenen şartnameyi terminal (Arkon, iç adım) ve fason iş emri belgesi (fason adım) henüz göstermez; `disari.ts` `isEmriSartnameleri` ve `GET /rota/is-emri-sartnameleri` hazır | Bağlama: Arkon ve fason belgesi akışları (BASKA-MODUL-ISTEKLERI) |
 | B46 | Şartname işlemleri rol satırsız gelir (976 a, yalnız yönetici); kalite ve planlama rolleri ortak yetki matrisinden verilir | Bağlama, rol matrisi |
 | B47 | Adımlı talimat (989 a): terminal (Arkon) adımları ve kontrol noktalarını henüz göstermez, zorunlu nokta engeli terminalde yok; `disari.ts` `talimatSurumuAdimlari` hazır | Bağlama: Arkon akışı (BASKA-MODUL-ISTEKLERI) |
-| B48 | Adım medyası (resim, video) yok: 1004 (ADR 0009 istisnası) cevabı bekleniyor | 1004 cevabından sonra ayrı göç |
+| B48 | Adım medyası şimdilik ortak deponun veritabanı içeriğindedir ve yalnız resimdir; video ve diskte saklama (1004 a) dosya modülünde mp4 türü ve disk deposu ister (1007) | Dosya modülü dalı (göç 090000), sonra rota bağ sınırına mp4 eklenir |

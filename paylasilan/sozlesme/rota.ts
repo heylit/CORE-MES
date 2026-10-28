@@ -324,17 +324,25 @@ export const kontrolSemasi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('foto'), aciklama: kisaMetin(120).nullable() }),
   z.object({ tur: z.literal('secim'), secenekler: z.array(metin(60, 'Seçenek boş olamaz.')).min(2, 'Seçimde en az iki seçenek olur.').max(AZAMI_KONTROL_SECENEGI) }),
 ]);
+// Medya (995 a): resim en çok 10 MB, video en çok 200 MB ve 3 dakika (süreyi istemci ölçer), ürünün bütün talimatlarında en çok 1 GB.
+export const MEDYA_TURLERI = ['resim', 'video'] as const;
+export const MEDYA_SINIRI = { resimBayt: 10 * 1024 ** 2, videoBayt: 200 * 1024 ** 2, videoSaniye: 180, urunBayt: 1024 ** 3 } as const;
+export const AZAMI_ADIM_MEDYASI = 5;
+export const medyaGirdisi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/, 'Geçersiz dosya özeti.'), ad: metin(120, 'Dosya adı zorunlu.') });
+const medyaSemasi = z.object({ ozet: z.string(), ad: z.string(), tur: z.enum(MEDYA_TURLERI), boyut: z.number().int().positive() });
+export const medyaParametresi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/) });
 export const talimatAdimiGirdisi = z.object({
   baslik: metin(AZAMI_ADIM_BASLIGI, 'Adım başlığı zorunlu.'),
   metin: kisaMetin(AZAMI_ADIM_METNI).nullable().transform((x) => (x === '' ? null : x)),
   kontrol: kontrolSemasi,
   zorunlu: z.boolean(),
+  medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).default([]),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
 export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
 export const talimatAdimiSemasi = z.object({
-  sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(),
+  sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
 });
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
@@ -676,6 +684,7 @@ export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend
 export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
 export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
 export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
+export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
 export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
 export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;

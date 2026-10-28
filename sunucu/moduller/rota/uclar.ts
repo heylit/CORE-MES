@@ -1,8 +1,8 @@
-import { uc } from '#cekirdek/uc.ts';
+import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
-  talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, taslakAcGovdesi,
+  talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
@@ -11,7 +11,7 @@ import {
   agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
-  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
+  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
 export const uclar = [
@@ -149,7 +149,15 @@ export const uclar = [
     parametre: urunParametresi,
     govde: adimliTalimatYazGovdesi,
     cevap: talimatlarCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => adimliTalimatYaz(db, kullanici, parametre.urunId, govde),
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => adimliTalimatYaz(db, kullanici, parametre.urunId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/rota/talimat-medyasi/:ozet',
+    yetki: 'oturum',
+    parametre: medyaParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, parametre }) => talimatMedyasi(db, parametre.ozet),
   }),
   uc({
     yontem: 'GET',
@@ -173,7 +181,7 @@ export const uclar = [
     yetki: 'rota.talimat-yaz',
     govde: talimatSablonEkleGovdesi,
     cevap: talimatSablonuCevabi,
-    isle: ({ db, govde }) => talimatSablonEkle(db, govde),
+    isle: ({ db, kullanici, govde, denetimEki }) => talimatSablonEkle(db, kullanici, govde, denetimEki),
   }),
   uc({
     yontem: 'POST',
@@ -182,7 +190,7 @@ export const uclar = [
     parametre: talimatSablonParametresi,
     govde: talimatSablonKaydetGovdesi,
     cevap: talimatSablonuCevabi,
-    isle: ({ db, parametre, govde }) => talimatSablonKaydet(db, parametre.id, govde),
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => talimatSablonKaydet(db, kullanici, parametre.id, govde, denetimEki),
   }),
   uc({
     yontem: 'POST',

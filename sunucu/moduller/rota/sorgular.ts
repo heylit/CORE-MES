@@ -514,7 +514,11 @@ export async function talimatEkle(db: Db, malzemeId: number, opNo: number, surum
 }
 
 export interface TalimatAdimiSatiri { sahipId: number; sira: number; baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean }
-export interface TalimatAdimiYazisi { baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean }
+export interface MedyaYazisi { ozet: string; ad: string; tur: 'resim' | 'video'; boyut: number }
+export interface TalimatAdimiYazisi {
+  baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean; medya: readonly MedyaYazisi[];
+}
+export interface MedyaSatiri extends MedyaYazisi { sahipId: number; adimSira: number }
 
 const ADIM_SUTUNLARI = `sira, baslik, metin, kontrol_turu AS "kontrolTuru", kontrol_ayari AS "kontrolAyari", zorunlu`;
 
@@ -525,9 +529,12 @@ export function talimatAdimlari(db: Db, talimatIdleri: readonly number[]): Promi
   );
 }
 
-// Adımlar tek komutta yazılır; sıra 1'den başlar.
-async function adimlariEkle(db: Db, tablo: string, sahipSutunu: string, sahipId: number, adimlar: readonly TalimatAdimiYazisi[]): Promise<void> {
+// Adımlar ve medyaları tek komutla yazılır; sıralar 1'den başlar.
+async function adimlariEkle(
+  db: Db, t: { adim: string; medya: string; sahip: string }, sahipId: number, adimlar: readonly TalimatAdimiYazisi[],
+): Promise<void> {
   if (adimlar.length === 0) return;
+  const { adim: tablo, sahip: sahipSutunu } = t;
   await db.sorgu(
     `INSERT INTO ${tablo} (${sahipSutunu}, sira, baslik, metin, kontrol_turu, kontrol_ayari, zorunlu)
      SELECT $1, x.sira, x.baslik, x.metin, x.kontrol_turu, x.kontrol_ayari, x.zorunlu
@@ -536,10 +543,53 @@ async function adimlariEkle(db: Db, tablo: string, sahipSutunu: string, sahipId:
       sira: i + 1, baslik: a.baslik, metin: a.metin, kontrol_turu: a.kontrolTuru, kontrol_ayari: a.kontrolAyari, zorunlu: a.zorunlu,
     })))],
   );
+  const medya = adimlar.flatMap((a, i) => a.medya.map((m, j) => ({ adim_sira: i + 1, sira: j + 1, ozet: m.ozet, tur: m.tur, ad: m.ad, boyut: m.boyut })));
+  if (medya.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO ${t.medya} (${sahipSutunu}, adim_sira, sira, ozet, tur, ad, boyut)
+     SELECT $1, x.adim_sira, x.sira, x.ozet, x.tur, x.ad, x.boyut
+       FROM jsonb_to_recordset($2::jsonb) AS x (adim_sira int, sira int, ozet text, tur text, ad text, boyut bigint)`,
+    [sahipId, JSON.stringify(medya)],
+  );
+}
+
+const TALIMAT_TABLOLARI = { adim: 'rota_talimat_adimi', medya: 'rota_talimat_adim_medyasi', sahip: 'talimat_id' };
+const SABLON_TABLOLARI = { adim: 'rota_talimat_sablon_adimi', medya: 'rota_talimat_sablon_adim_medyasi', sahip: 'sablon_id' };
+
+const MEDYA_SUTUNLARI = `adim_sira AS "adimSira", ozet, tur, ad, boyut::float8 AS boyut`;
+
+export function talimatMedyalari(db: Db, talimatIdleri: readonly number[]): Promise<MedyaSatiri[]> {
+  return db.sorgu<MedyaSatiri>(
+    `SELECT talimat_id AS "sahipId", ${MEDYA_SUTUNLARI} FROM rota_talimat_adim_medyasi WHERE talimat_id = ANY($1::int[]) ORDER BY talimat_id, adim_sira, sira`,
+    [[...talimatIdleri]],
+  );
+}
+
+export function sablonMedyalari(db: Db, sablonId: number): Promise<MedyaSatiri[]> {
+  return db.sorgu<MedyaSatiri>(
+    `SELECT sablon_id AS "sahipId", ${MEDYA_SUTUNLARI} FROM rota_talimat_sablon_adim_medyasi WHERE sablon_id = $1 ORDER BY adim_sira, sira`, [sablonId],
+  );
+}
+
+// Ürün başına sınır için ürünün bütün talimat sürümlerindeki farklı dosyalar.
+export function urunMedyalari(db: Db, malzemeId: number): Promise<{ ozet: string; boyut: number }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT m.ozet, m.boyut::float8 AS boyut FROM rota_talimat_adim_medyasi m JOIN rota_talimati t ON t.id = m.talimat_id WHERE t.malzeme_id = $1`,
+    [malzemeId],
+  );
+}
+
+// Rotada hâlâ kullanılan özetler: kalanların dosya bağı kaldırılır.
+export async function kullanilanMedyalar(db: Db, ozetler: readonly string[]): Promise<string[]> {
+  return (await db.sorgu<{ ozet: string }>(
+    `SELECT ozet FROM rota_talimat_adim_medyasi WHERE ozet = ANY($1::text[])
+     UNION SELECT ozet FROM rota_talimat_sablon_adim_medyasi WHERE ozet = ANY($1::text[])`,
+    [[...ozetler]],
+  )).map((x) => x.ozet);
 }
 
 export const talimatAdimlariniEkle = (db: Db, talimatId: number, adimlar: readonly TalimatAdimiYazisi[]): Promise<void> =>
-  adimlariEkle(db, 'rota_talimat_adimi', 'talimat_id', talimatId, adimlar);
+  adimlariEkle(db, TALIMAT_TABLOLARI, talimatId, adimlar);
 
 export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: number, surum: number): Promise<{ id: number; metin: string } | null> {
   return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 AND surum = $3', [malzemeId, opNo, surum]);
@@ -589,7 +639,7 @@ export function talimatSablonAdimlari(db: Db, sablonId: number): Promise<Talimat
 // Şablon emre ya da talimata bağlanmaz (kopyalanır); adımlar kaydette bütün olarak yeniden yazılır.
 export async function talimatSablonAdimlariniYaz(db: Db, sablonId: number, adimlar: readonly TalimatAdimiYazisi[]): Promise<void> {
   await db.sorgu('DELETE FROM rota_talimat_sablon_adimi WHERE sablon_id = $1', [sablonId]);
-  await adimlariEkle(db, 'rota_talimat_sablon_adimi', 'sablon_id', sablonId, adimlar);
+  await adimlariEkle(db, SABLON_TABLOLARI, sablonId, adimlar);
 }
 
 export const sartnameVarMi = async (db: Db, id: number): Promise<boolean> =>
