@@ -22,3 +22,5 @@ export { basladigiGunTakvimi, basladigiGunTakvimleri } from './servis.ts';
 export type { BasladigiGun } from './servis.ts';
 export type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
 export type { KaynakTakvimi } from '#paylasilan/sozlesme/vardiya.ts';
+// Takvim (891): aralıkta başlayan tek seferlik planlı duruşlar; yetki denetlemez, çağıran denetler.
+export { takvimKayitlari } from './servis.ts';

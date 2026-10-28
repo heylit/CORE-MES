@@ -15,10 +15,11 @@ import type {
 } from '#paylasilan/sozlesme/vardiya.ts';
 import { AZAMI_TAKVIM_GUNU, takvimGunuGovdesi } from '#paylasilan/sozlesme/vardiya.ts';
 import type { planliDurusListeSorgusu } from '#paylasilan/sozlesme/vardiya.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { durusNedeniGetir } from '../durus-nedenleri/disari.ts';
 import { kisilerinCikisTarihleri, kisilerinIzinleri, resmiTatilGunleri } from '../ik/disari.ts';
 import {
-  aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir,
+  aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonAdlari, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir,
   makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
@@ -796,4 +797,19 @@ export async function fazlaMesaiIptal(db: Db, kullanici: Kullanici, id: number, 
     bulunamadiIletisi: FAZLA_MESAI_YOK,
   });
   return fazlaMesaiGetir(db, id);
+}
+
+// Takvim (891): aralıkta başlayan tek seferlik planlı duruşlar, kapsamın adıyla. Okuma oturumla açıktır (vardiya uçları gibi); yetkiyi çağıran denetler.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  const satirlar = await s.tekSeferlikDuruslar(db, baslangic, bitis);
+  if (satirlar.length === 0) return [];
+  const merkezler = new Map((await isMerkezleri(db, { pasiflerDahil: true })).map((m) => [m.id, m.ad]));
+  const istasyonAdi = await istasyonAdlari(db, satirlar.flatMap((d) => (d.istasyonId === null ? [] : [d.istasyonId])));
+  return satirlar.map((d): TakvimKaydi => ({
+    kaynak: 'planli-durus', kimlik: String(d.id), tarih: d.gun, no: null, baslik: d.baslik,
+    ilgili: d.kapsam === 'tesis' ? 'Bütün atölye'
+      : d.kapsam === 'is-merkezi' ? (d.isMerkeziId === null ? null : merkezler.get(d.isMerkeziId) ?? null)
+        : (d.istasyonId === null ? null : istasyonAdi.get(d.istasyonId) ?? null),
+    durum: d.gecti ? 'Geçti' : 'Planlı', bitti: d.gecti,
+  }));
 }

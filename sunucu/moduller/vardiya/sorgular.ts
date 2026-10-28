@@ -276,3 +276,19 @@ export async function fazlaMesaiKisileriniYaz(db: Db, id: number, kisiIdleri: re
     await db.sorgu('INSERT INTO vardiya_fazla_mesai_kisi (fazla_mesai_id, kisi_id) SELECT $1, k FROM unnest($2::int[]) AS x (k)', [id, kisiIdleri]);
   }
 }
+
+// Takvim (891): aralıkta başlayan, etkin, tek seferlik planlı duruşlar; gün tesis günüdür (oturum tesis saat diliminde).
+// Tekrarlı duruşlar (mola, haftalık bakım) her günü dolduracağı için takvime gelmez.
+export interface TakvimDurusSatiri {
+  id: number; baslik: string; kapsam: PlanliDurusKapsami; isMerkeziId: number | null; istasyonId: number | null;
+  gun: string; gecti: boolean;
+}
+export const tekSeferlikDuruslar = (db: Db, baslangic: string, bitis: string): Promise<TakvimDurusSatiri[]> =>
+  db.sorgu<TakvimDurusSatiri>(
+    `SELECT d.id, d.baslik, d.kapsam, d.is_merkezi_id AS "isMerkeziId", d.istasyon_id AS "istasyonId",
+            d.baslangic::date::text AS gun, d.bitis <= now() AS gecti
+       FROM vardiya_planli_durus d
+      WHERE d.aktif AND d.tekrar = 'yok' AND d.baslangic::date BETWEEN $1::date AND $2::date
+      ORDER BY d.baslangic, d.id`,
+    [baslangic, bitis],
+  );
