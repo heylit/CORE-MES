@@ -5,6 +5,7 @@ export const anahtarlar = {
   harita: ['sevkiyat', 'harita'] as const,
   ozet: ['sevkiyat', 'ozet'] as const,
   bekleyenler: ['sevkiyat', 'bekleyenler'] as const,
+  tumIsler: (baslangic: string, bitis: string) => ['sevkiyat', 'tum-isler', baslangic, bitis] as const,
   urunSevkleri: (sorgu: string) => ['sevkiyat', 'urun-sevkleri', sorgu] as const,
   trafik: (tarih: string, dakika: number) => ['sevkiyat', 'trafik', tarih, dakika] as const,
   tekRota: (sorgu: string) => ['sevkiyat', 'tek-rota', sorgu] as const,
