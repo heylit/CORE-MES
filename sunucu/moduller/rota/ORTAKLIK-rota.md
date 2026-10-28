@@ -21,3 +21,8 @@ Rota modülünün tuttuğu ya da kullandığı ve başka modülde de bulunan ya 
 | Talimat sürümü | `rota_talimati` (malzeme_id, op_no, surum) | iş emrine sabitlenir (`talimatSurumu`), metni kontrol listesi olur | |
 | Üretim emri / iş emri | yok (emre kopyalama komutu çağırır) | uretim-emirleri | Üretim emri üst kayıt, iş emri adım başına (K1) |
 | Dört göz ayarı | `rota.dort-goz` | malzemeler `genel` ayarındaki dört göz | Ayrı ayarlar |
+| İşlem şartnamesi | `rota_islem_sartnamesi` (kod, kategori, kapsam, kaynak, müşteri firma ve belge no), sürüm, alan, atıf tabloları | malzemeler hizmet kartı `HZ_KAT` "Standart / şartname" alanı; katalog `ana_standart` | Şartname hizmet kartından bağımsızdır (970); bağlamada hizmet kartındaki metin alanının akıbeti sorulur |
+| Standart atfı | `rota_standart_atfi` (numara, kısa açıklama) | kalite-merkezi ölçüm ve kabul standartları (varsa) | Metin tutulmaz, yalnız numara |
+| Müşteri firma | `rota_islem_sartnamesi.musteri_firma_id` | musteri-tedarikci firma | Sahibi musteri-tedarikci |
+| Emre sabitlenen şartname | `rota_is_emri_sartnamesi` (iş emri, sürüm, çözülmüş değerler) | uretim-emirleri iş emri; kalite, sevkiyat, satın alma okur | Yazan yalnız rota |
+| İstenen belge listesi | `rota_islem_sartnamesi_surumu.istenen_belgeler` (metin dizisi) | sevkiyat ve kalite belge türleri | Bağlamada ortak belge türü listesine bağlanır |

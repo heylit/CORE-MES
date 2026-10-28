@@ -479,3 +479,143 @@ export const malzemeAraSorgusu = z.object({
 });
 export const malzemeAraCevabi = z.object({ satirlar: z.array(urunOzeti), toplam: z.number().int(), sayfaBoyu: z.number().int() });
 export type MalzemeAraCevabi = z.output<typeof malzemeAraCevabi>;
+
+/* ---------------- işlem şartnamesi (971 a) ---------------- */
+
+// Kaplama, boya, ısıl işlem gibi işlemlerin ortak şartları: rota adımı şartname seçer, emir açılınca yürürlükteki sürüm emre sabitlenir.
+export const SARTNAME_KAPSAMLARI = ['ic', 'fason', 'ikisi'] as const;
+export const SARTNAME_KAYNAKLARI = ['varsayilan', 'firma', 'musteri'] as const;
+export const SARTNAME_SURUM_DURUMLARI = ['taslak', 'yururlukte', 'eski'] as const;
+export const PARAMETRE_TURLERI = ['sayi', 'aralik', 'secim', 'coklu', 'metin', 'evet'] as const;
+export const ATIF_ROLLERI = ['yontem', 'kabul', 'test', 'olcum', 'malzeme', 'gosterim'] as const;
+export const AZAMI_PARAMETRE = 40;
+export const AZAMI_ATIF = 30;
+export const AZAMI_SECENEK = 30;
+export const AZAMI_BELGE = 20;
+export const AZAMI_ADIM_SARTNAMESI = 5;
+export const AZAMI_METIN_DEGERI = 200;
+export const AZAMI_SAYI_DEGERI = 1_000_000_000;
+
+export type SartnameKapsami = (typeof SARTNAME_KAPSAMLARI)[number];
+export type ParametreTuru = (typeof PARAMETRE_TURLERI)[number];
+
+const sayiDegeri = z.number().finite().min(-AZAMI_SAYI_DEGERI).max(AZAMI_SAYI_DEGERI);
+// Değerin türe uyduğunu sunucu parametrenin türüne bakarak denetler; şema yalnız biçimi sınırlar. null: değer verilmedi.
+export const parametreDegeri = z.union([
+  sayiDegeri, z.tuple([sayiDegeri, sayiDegeri]), z.string().max(AZAMI_METIN_DEGERI), z.array(z.string().max(80)).max(AZAMI_SECENEK), z.boolean(),
+]).nullable();
+export type ParametreDegeri = z.output<typeof parametreDegeri>;
+export const parametreDegerleri = z.record(z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/), parametreDegeri)
+  .refine((d) => Object.keys(d).length <= AZAMI_PARAMETRE, `En çok ${AZAMI_PARAMETRE} değer.`);
+export type ParametreDegerleri = z.output<typeof parametreDegerleri>;
+
+const bosMetin = (azami: number) => z.string().trim().max(azami).nullable().transform((m) => (m === '' ? null : m));
+
+export const sartnameParametresi = z.object({ id: yolKimligi });
+export const sartnameSorgusu = z.object({
+  idler: z.string().regex(/^\d{1,10}(,\d{1,10}){0,199}$/, 'İş emri kimlikleri virgülle ayrılmış sayılar olmalı.')
+    .transform((t) => [...new Set(t.split(',').map(Number))]).pipe(z.array(KIMLIK)),
+});
+
+export const parametreGirdisi = z.object({
+  anahtar: z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/, 'Anahtar küçük harfle başlar; yalnız harf ve rakam.'),
+  ad: metin(80, 'Alan adı zorunlu.'),
+  tur: z.enum(PARAMETRE_TURLERI),
+  birim: bosMetin(20),
+  secenekler: z.array(metin(80, 'Seçenek boş olamaz.')).max(AZAMI_SECENEK).nullable(),
+  varsayilan: parametreDegeri,
+  ipucu: bosMetin(120),
+  zorunlu: z.boolean(),
+  adimdaDegisir: z.boolean(),
+});
+export const atifGirdisi = z.object({ standartId: KIMLIK, rol: z.enum(ATIF_ROLLERI), not: bosMetin(120) });
+
+export const sartnameEkleGovdesi = z.object({
+  kod: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9-]{1,29}$/, 'Kod 2-30 karakter: büyük harf, rakam ve tire.'),
+  kategoriId: KIMLIK,
+  ad: metin(120, 'Şartname adı zorunlu.'),
+  kapsam: z.enum(SARTNAME_KAPSAMLARI),
+  // Müşteri şartnamesinin karşılığı: firma ve belge numarası birlikte verilir; ikisi de boşsa atölyenin kendi şartnamesidir.
+  musteriFirmaId: KIMLIK.nullable(),
+  musteriBelgeNo: bosMetin(60),
+});
+export const sartnameKopyalaGovdesi = sartnameEkleGovdesi.omit({ kategoriId: true, kapsam: true });
+export const sartnameKunyeGovdesi = z.object({ surum: KIMLIK, ad: metin(120, 'Şartname adı zorunlu.'), kategoriId: KIMLIK });
+export const sartnameTaslakGovdesi = z.object({
+  surum: KIMLIK,
+  parametreler: z.array(parametreGirdisi).max(AZAMI_PARAMETRE),
+  atiflar: z.array(atifGirdisi).max(AZAMI_ATIF),
+  istenenBelgeler: z.array(metin(120, 'Belge adı boş olamaz.')).max(AZAMI_BELGE),
+  terminalNotu: bosMetin(1000),
+  degisiklikNotu: bosMetin(500),
+});
+export const standartEkleGovdesi = z.object({ numara: metin(60, 'Standart numarası zorunlu.'), kisaAciklama: metin(200, 'Kısa açıklama zorunlu.') });
+// Adımın şartnameleri bütün olarak yazılır; sıra dizideki sıradır. Değeri yalnız "adımda değişir" alanlar alır.
+export const adimSartnameleriGovdesi = z.object({
+  surum: KIMLIK,
+  opNo: KIMLIK,
+  sartnameler: z.array(z.object({ sartnameId: KIMLIK, degerler: parametreDegerleri })).max(AZAMI_ADIM_SARTNAMESI),
+});
+
+const parametreSemasi = parametreGirdisi.extend({ sira: KIMLIK, birim: z.string().nullable(), ipucu: z.string().nullable(), ad: z.string(), secenekler: z.array(z.string()).nullable() });
+const standartSemasi = z.object({ id: KIMLIK, numara: z.string(), kisaAciklama: z.string() });
+const atifSemasi = z.object({ sira: KIMLIK, standart: standartSemasi, rol: z.enum(ATIF_ROLLERI), not: z.string().nullable() });
+export const sartnameSurumuSemasi = z.object({
+  id: KIMLIK, surumNo: KIMLIK, durum: z.enum(SARTNAME_SURUM_DURUMLARI),
+  istenenBelgeler: z.array(z.string()), terminalNotu: z.string().nullable(), degisiklikNotu: z.string().nullable(),
+  acan: adliKayit.nullable(), acilma: zaman, yayinlayan: adliKayit.nullable(), yayin: zaman.nullable(),
+  parametreler: z.array(parametreSemasi), atiflar: z.array(atifSemasi),
+});
+export const sartnameOzeti = z.object({
+  id: KIMLIK, kod: z.string(), ad: z.string(), kategoriId: KIMLIK, kapsam: z.enum(SARTNAME_KAPSAMLARI), kaynak: z.enum(SARTNAME_KAYNAKLARI),
+  musteriFirma: adliKayit.nullable(), musteriBelgeNo: z.string().nullable(), aktif: z.boolean(), surum: KIMLIK,
+  yururlukteSurumNo: KIMLIK.nullable(), taslakSurumNo: KIMLIK.nullable(),
+  // Onaya gönderilmiş, onaylı ya da yürürlükteki revizyonlarda şartnameyi kullanan adım sayısı.
+  kullanim: z.number().int().nonnegative(),
+});
+export const kategoriSemasi = z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), sira: KIMLIK });
+export const sartnamelerCevabi = z.object({
+  kategoriler: z.array(kategoriSemasi), standartlar: z.array(standartSemasi), sartnameler: z.array(sartnameOzeti),
+});
+export const sartnameCevabi = z.object({ sartname: sartnameOzeti.extend({ surumler: z.array(sartnameSurumuSemasi) }) });
+export const standartCevabi = z.object({ standart: standartSemasi });
+
+// Revizyondaki adım şartnameleri: seçilen şartname, adımın değerleri ve yürürlükteki sürüm (yoksa null; yayınlanmamış şartname emre geçmez).
+export const revizyonSartnameleriCevabi = z.object({
+  adimlar: z.array(z.object({
+    opNo: KIMLIK,
+    sartnameler: z.array(z.object({
+      sira: KIMLIK, sartname: sartnameOzeti, degerler: parametreDegerleri, yururlukte: sartnameSurumuSemasi.nullable(),
+      // Emir açılırken boş kalacak zorunlu alanların adları ve kapsam uyuşmazlığı; onaya göndermede ve emirde reddedilir.
+      eksikler: z.array(z.string()), kapsamUyumsuz: z.boolean(),
+    })),
+  })),
+});
+
+// Emre sabitlenen şartnameler: terminal (iç adım) ve fason iş emri belgesi okur.
+export const isEmriSartnamesiSemasi = z.object({
+  sira: KIMLIK, sartname: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }), surum: sartnameSurumuSemasi, degerler: parametreDegerleri,
+  sabitleyen: adliKayit, sabitlenme: zaman,
+});
+export const isEmriSartnameleriCevabi = z.object({
+  isEmirleri: z.array(z.object({ isEmriId: KIMLIK, sartnameler: z.array(isEmriSartnamesiSemasi) })),
+});
+
+export type SartnameEkleGovdesi = z.input<typeof sartnameEkleGovdesi>;
+export type SartnameKopyalaGovdesi = z.input<typeof sartnameKopyalaGovdesi>;
+export type SartnameKunyeGovdesi = z.input<typeof sartnameKunyeGovdesi>;
+export type SartnameTaslakGovdesi = z.input<typeof sartnameTaslakGovdesi>;
+export type SartnameTaslakGovdesiCikti = z.output<typeof sartnameTaslakGovdesi>;
+export type StandartEkleGovdesi = z.input<typeof standartEkleGovdesi>;
+export type AdimSartnameleriGovdesi = z.input<typeof adimSartnameleriGovdesi>;
+export type ParametreGirdisi = z.output<typeof parametreGirdisi>;
+export type AtifGirdisi = z.output<typeof atifGirdisi>;
+export type SartnameParametresiSatiri = z.output<typeof parametreSemasi>;
+export type SartnameSurumu = z.output<typeof sartnameSurumuSemasi>;
+export type SartnameOzeti = z.output<typeof sartnameOzeti>;
+export type SartnamelerCevabi = z.output<typeof sartnamelerCevabi>;
+export type SartnameCevabi = z.output<typeof sartnameCevabi>;
+export type StandartCevabi = z.output<typeof standartCevabi>;
+export type RevizyonSartnameleriCevabi = z.output<typeof revizyonSartnameleriCevabi>;
+export type IsEmriSartnamesi = z.output<typeof isEmriSartnamesiSemasi>;
+export type IsEmriSartnameleriCevabi = z.output<typeof isEmriSartnameleriCevabi>;

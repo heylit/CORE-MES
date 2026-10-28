@@ -1,4 +1,4 @@
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, MakineKullanimi, RevizyonDurumu, RevizyonKomutu } from '#paylasilan/sozlesme/rota.ts';
+import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami } from '#paylasilan/sozlesme/rota.ts';
 
 export const YAZ = 'rota.yaz';
 export const ONAYLA = 'rota.onayla';
@@ -689,4 +689,118 @@ export function karttanAdimlar(
     const ad = o.ad?.trim() || t?.ad || o.kod.trim();
     return { opNo: numaraKorunur ? o.no : null, operasyonTipiId: t?.id ?? varsayilanTipId, ad, eslesti: t !== undefined };
   });
+}
+
+/* ---------------- işlem şartnamesi (971 a) ---------------- */
+
+export const SARTNAME_YAZ = 'rota.sartname-yaz';
+export const SARTNAME_YAYINLA = 'rota.sartname-yayinla';
+
+export interface SartnameAlani {
+  anahtar: string; ad: string; tur: ParametreTuru; secenekler: readonly string[] | null; varsayilan: ParametreDegeri; zorunlu: boolean; adimdaDegisir: boolean;
+}
+
+// Değer alanın türüne uymalıdır; null "verilmedi" demektir ve her türde geçer (zorunluluk ayrı denetlenir).
+export function degerHatasi(a: Pick<SartnameAlani, 'ad' | 'tur' | 'secenekler'>, d: ParametreDegeri): string | null {
+  if (d === null) return null;
+  const secenek = a.secenekler ?? [];
+  switch (a.tur) {
+    case 'sayi':
+      return typeof d === 'number' ? null : `${a.ad}: sayı olmalı.`;
+    case 'aralik':
+      if (!Array.isArray(d) || d.length !== 2 || d.some((x) => typeof x !== 'number')) return `${a.ad}: alt ve üst sayı olmalı.`;
+      return (d[0] as number) <= (d[1] as number) ? null : `${a.ad}: alt değer üstten büyük olamaz.`;
+    case 'secim':
+      return typeof d === 'string' && secenek.includes(d) ? null : `${a.ad}: seçeneklerden biri olmalı.`;
+    case 'coklu':
+      if (!Array.isArray(d) || d.some((x) => typeof x !== 'string' || !secenek.includes(x))) return `${a.ad}: yalnız seçenekler seçilir.`;
+      return new Set<unknown>(d).size === d.length ? null : `${a.ad}: aynı seçenek iki kez seçilmez.`;
+    case 'metin':
+      return typeof d === 'string' && d.trim() !== '' ? null : `${a.ad}: metin olmalı.`;
+    case 'evet':
+      return typeof d === 'boolean' ? null : `${a.ad}: evet ya da hayır olmalı.`;
+  }
+}
+
+// Boş dizi ve boş metin değer sayılmaz: zorunlu çoklu seçimde en az bir seçenek gerekir.
+const bosMu = (d: ParametreDegeri | undefined): boolean => d === null || d === undefined || (Array.isArray(d) && d.length === 0) || (typeof d === 'string' && d.trim() === '');
+
+export interface SablonHatasi { alan: string; ileti: string }
+
+// Taslak kaydında şablonun biçimi denetlenir; eksik değer (sabit zorunlu alanın değeri) yayında denetlenir.
+export function sartnameSablonuDenetle(
+  alanlar: readonly (SartnameAlani & { birim: string | null })[],
+  atiflar: readonly { standartId: number; rol: string }[],
+): SablonHatasi | null {
+  const anahtarlar = new Set<string>();
+  for (const [i, a] of alanlar.entries()) {
+    if (anahtarlar.has(a.anahtar)) return { alan: `parametreler.${i}.anahtar`, ileti: `${a.anahtar}: aynı anahtar iki kez kullanılmış.` };
+    anahtarlar.add(a.anahtar);
+    const secimli = a.tur === 'secim' || a.tur === 'coklu';
+    if (secimli && (a.secenekler === null || a.secenekler.length === 0)) return { alan: `parametreler.${i}.secenekler`, ileti: `${a.ad}: seçenek girilmeli.` };
+    if (!secimli && a.secenekler !== null) return { alan: `parametreler.${i}.secenekler`, ileti: `${a.ad}: bu türde seçenek olmaz.` };
+    if (a.secenekler && new Set(a.secenekler).size !== a.secenekler.length) return { alan: `parametreler.${i}.secenekler`, ileti: `${a.ad}: aynı seçenek iki kez yazılmış.` };
+    const hata = degerHatasi(a, a.varsayilan);
+    if (hata) return { alan: `parametreler.${i}.varsayilan`, ileti: hata };
+  }
+  const atif = new Set<string>();
+  for (const [i, x] of atiflar.entries()) {
+    const k = `${x.standartId}|${x.rol}`;
+    if (atif.has(k)) return { alan: `atiflar.${i}`, ileti: 'Aynı standart aynı rolde iki kez atıflanmış.' };
+    atif.add(k);
+  }
+  return null;
+}
+
+// Sabit (adımda değişmeyen) zorunlu alanın değeri şablondadır; boşsa sürüm yayınlanmaz.
+export function yayinEksigi(alanlar: readonly SartnameAlani[]): string | null {
+  const eksik = alanlar.filter((a) => a.zorunlu && !a.adimdaDegisir && bosMu(a.varsayilan)).map((a) => a.ad);
+  return eksik.length === 0 ? null : `Sabit zorunlu alanın değeri yok: ${eksik.join(', ')}`;
+}
+
+// Adım yalnız "adımda değişir" alanlara değer verir; bilinmeyen ya da sabit alan reddedilir.
+export function adimDegerleriDenetle(alanlar: readonly SartnameAlani[], degerler: Readonly<ParametreDegerleri>): string | null {
+  const harita = new Map(alanlar.map((a) => [a.anahtar, a]));
+  for (const [k, d] of Object.entries(degerler)) {
+    const a = harita.get(k);
+    if (!a) return `${k}: şartnamede böyle bir alan yok.`;
+    if (!a.adimdaDegisir) return `${a.ad}: bu alan şartnamede sabittir, adımda değişmez.`;
+    const hata = degerHatasi(a, d);
+    if (hata) return hata;
+  }
+  return null;
+}
+
+// Emre sabitlenecek değerler: adımda değişen alan adımın değerini (verilmediyse varsayılanı), sabit alan şablonun değerini alır.
+// Sürüm değişince alanı kalmayan adım değeri düşer; türü değişen alanın uymayan değeri varsayılana döner.
+export function cozulmusDegerler(alanlar: readonly SartnameAlani[], degerler: Readonly<ParametreDegerleri>): ParametreDegerleri {
+  const sonuc: ParametreDegerleri = {};
+  for (const a of alanlar) {
+    const adimdaki = degerler[a.anahtar];
+    const gecerli = a.adimdaDegisir && adimdaki !== undefined && !bosMu(adimdaki) && degerHatasi(a, adimdaki) === null;
+    sonuc[a.anahtar] = gecerli ? (adimdaki as ParametreDegeri) : a.varsayilan;
+  }
+  return sonuc;
+}
+
+export function eksikZorunlular(alanlar: readonly SartnameAlani[], cozulmus: Readonly<ParametreDegerleri>): string[] {
+  return alanlar.filter((a) => a.zorunlu && bosMu(cozulmus[a.anahtar])).map((a) => a.ad);
+}
+
+// Fason adım fason ya da ikisi kapsamlı, iç adım (makine, kişi, istasyon ya da kaynaksız) iç ya da ikisi kapsamlı şartname alır (972 a).
+export const kapsamUyarMi = (kapsam: SartnameKapsami, fason: boolean): boolean => kapsam === 'ikisi' || kapsam === (fason ? 'fason' : 'ic');
+
+export interface AdimSartnameDurumu {
+  opNo: number; kod: string; aktif: boolean; yururlukteVar: boolean; kapsamUyar: boolean; eksikler: readonly string[];
+}
+
+// Onaya gönderme ve onayda: bağlı her şartname kullanımda, yayınlanmış, adımın kaynağına uygun ve zorunlu alanları dolu olmalıdır.
+export function sartnameOnayEngeli(durumlar: readonly AdimSartnameDurumu[]): string | null {
+  for (const d of durumlar) {
+    if (!d.aktif) return `OP ${d.opNo}: ${d.kod} şartnamesi kullanımda değil.`;
+    if (!d.yururlukteVar) return `OP ${d.opNo}: ${d.kod} şartnamesinin yayınlanmış sürümü yok.`;
+    if (!d.kapsamUyar) return `OP ${d.opNo}: ${d.kod} şartnamesi adımın kaynağına uymuyor (iç ya da fason).`;
+    if (d.eksikler.length > 0) return `OP ${d.opNo}: ${d.kod} şartnamesinde zorunlu alan boş: ${d.eksikler.join(', ')}`;
+  }
+  return null;
 }

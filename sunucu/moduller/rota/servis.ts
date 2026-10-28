@@ -11,11 +11,13 @@ import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
+  IsEmriSartnamesi, IsEmriSartnameleriCevabi, ParametreDegerleri, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameKapsami, SartnameOzeti, SartnameSurumu, SartnameTaslakGovdesiCikti,
+  SartnamelerCevabi, StandartCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
+import { firmaAdlari, firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
 import {
   aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri,
 } from '../istasyonlar/disari.ts';
@@ -27,6 +29,7 @@ import {
   YAZ, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
   girdiEksigi, girdiOlabilirMi, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
+  adimDegerleriDenetle, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
 } from './kurallar.ts';
 import type { AdimSureleri, AgacRotasi, EtkinAdimSuresi, FarkAdimi, GerceklesenSatiri } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -464,6 +467,7 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
     girenSayisi: icerik.bilesenler.filter((b) => b.adimId === a.id).length,
   })));
   if (hata) throw gecersiz(hata);
+  await sartnameOnayDenetimi(db, r.id, icerik);
   const kartlar = await urunOzetleri(db, [...icerik.bilesenler.map((b) => b.malzemeId), ...icerik.yanUrunler.map((y) => y.malzemeId)]);
   for (const [, k] of kartlar) {
     if (k.onayDurumu !== 'aktif') throw gecersiz(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`);
@@ -513,6 +517,7 @@ async function adimlariYaz(db: Db, revizyonId: number, malzemeId: number, adimla
   });
   await s.opNolariKaydet(db, malzemeId, numarali.map((a) => a.opNo), revizyonId);
   for (const [i, a] of numarali.entries()) await s.adimYaz(db, revizyonId, malzemeId, { ...a, sira: i + 1 });
+  await s.sahipsizAdimSartnameleriniSil(db, revizyonId);
 }
 
 const TASLAK_ACIK = 'Bu ürünün açık bir revizyonu var; önce onu bitirin ya da iptal edin.';
@@ -611,6 +616,8 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
   }
   const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId });
   await adimlariYaz(db, id, urunId, adimlar);
+  // Şartname bağı OP numarasıyla tutulur: yalnız aynı ürünün revizyonundan açılan taslak bağları alır.
+  if (kaynak.tur === 'revizyon' && kaynakId !== null) await s.adimSartnameleriniKopyala(db, kaynakId, id);
   return cevap(id, 'taslak', 1);
 }
 
@@ -725,6 +732,7 @@ export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUru
   const adimlar = hedefUrunId === r.malzemeId ? icerikYazimlari(await s.icerikOku(db, id)) : await baskaUruneAdimlar(db, id, hedefUrunId);
   const yeni = await s.revizyonEkle(db, { malzemeId: hedefUrunId, malzemeTuru: turu(hedef), harf, acanKisiId: kullanici.id, kaynakRevizyonId: id });
   await adimlariYaz(db, yeni, hedefUrunId, adimlar);
+  if (hedefUrunId === r.malzemeId) await s.adimSartnameleriniKopyala(db, id, yeni);
   return cevap(yeni, 'taslak', 1);
 }
 
@@ -1188,10 +1196,17 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   const rota = await revizyonGetir(db, id);
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
-  return uretimEmriAc(db, kullanici, {
+  const acilan = await uretimEmriAc(db, kullanici, {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, kaynakRotaRevizyonId: r.id, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota),
   });
+  // Üretim emirleri iş emirlerini adım sırasıyla açar ve kimlikleri o sırayla döner.
+  const sirali = [...rota.adimlar].sort((a, b) => a.sira - b.sira);
+  await isEmirlerineSabitle(db, kullanici.id, r.id, acilan.isEmriIdleri.flatMap((ieId, i) => {
+    const a = sirali[i];
+    return a ? [{ id: ieId, opNo: a.opNo }] : [];
+  }));
+  return acilan;
 }
 
 // Emre kopya ve emirlere uygula aynı girdiyi kurar: her rota adımı bir iş emri, talimatın o anki metni kontrol listesi.
@@ -1224,6 +1239,13 @@ export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
   const { degisenler } = await isEmirleriniYenile(db, kullanici, emirId, { kaynakRotaRevizyonId: yid, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota) });
+  // Yenilenen (başlamamış) iş emirleri yeni revizyonun şartnamelerini alır; değiştirilmeyen parti (kaynak revizyonu eski kalır) dokunulmaz.
+  const sonra = await adimliEmirAyrintisi(db, emirId);
+  if (sonra.kaynakRotaRevizyonId === yid) {
+    const bekleyen = sonra.isEmirleri.filter((i) => i.tur === 'rota' && i.durum === 'bekliyor');
+    await s.isEmriSabitleriniSil(db, bekleyen.map((i) => i.id));
+    await isEmirlerineSabitle(db, kullanici.id, yid, bekleyen);
+  }
   return { degisenler, kaynakRevizyon: { id: r.id, harf: r.harf } };
 }
 
@@ -1319,4 +1341,301 @@ export async function sablonuSil(db: Db, id: number, surum: number): Promise<voi
   if (mevcut.surum !== surum) throw eskiSurum();
   if (mevcut.varsayilan) throw gecersiz('Varsayılan şablon silinmez; önce başka bir şablonu varsayılan yapın.');
   await s.sablonSil(db, id);
+}
+
+/* ---------------- işlem şartnamesi (971 a) ---------------- */
+
+const SARTNAME_YOK = 'İşlem şartnamesi bulunamadı.';
+
+async function surumAyrintilari(db: Db, surumIdleri: readonly number[]): Promise<Map<number, SartnameSurumu>> {
+  const tekil = [...new Set(surumIdleri)];
+  if (tekil.length === 0) return new Map();
+  const surumler = await s.surumleriOku(db, tekil);
+  const parametreler = await s.surumParametreleri(db, tekil);
+  const atiflar = await s.surumAtiflari(db, tekil);
+  const ad = await kisiAdlari(db, surumler.flatMap((v) => [v.acanKisiId, v.yayinlayanKisiId].filter((k): k is number => k !== null)));
+  const kisi = (id: number | null) => (id === null ? null : { id, ad: ad.get(id) ?? null });
+  return new Map(surumler.map((v) => [v.id, {
+    id: v.id, surumNo: v.surumNo, durum: v.durum, istenenBelgeler: v.istenenBelgeler, terminalNotu: v.terminalNotu, degisiklikNotu: v.degisiklikNotu,
+    acan: kisi(v.acanKisiId), acilma: v.acilma, yayinlayan: kisi(v.yayinlayanKisiId), yayin: v.yayin,
+    parametreler: parametreler.filter((p) => p.surumId === v.id).map(({ surumId: _, ...p }) => p),
+    atiflar: atiflar.filter((a) => a.surumId === v.id).map((a) => ({
+      sira: a.sira, standart: { id: a.standartId, numara: a.numara, kisaAciklama: a.kisaAciklama }, rol: a.rol as SartnameSurumu['atiflar'][number]['rol'], not: a.not,
+    })),
+  }]));
+}
+
+async function sartnameOzetleri(db: Db, satirlar: readonly s.SartnameSatiri[]): Promise<SartnameOzeti[]> {
+  const firmalar = await firmaAdlari(db, satirlar.flatMap((x) => (x.musteriFirmaId === null ? [] : [x.musteriFirmaId])));
+  return satirlar.map((x) => ({
+    id: x.id, kod: x.kod, ad: x.ad, kategoriId: x.kategoriId, kapsam: x.kapsam, kaynak: x.kaynak,
+    musteriFirma: x.musteriFirmaId === null ? null : { id: x.musteriFirmaId, ad: firmalar.get(x.musteriFirmaId) ?? null },
+    musteriBelgeNo: x.musteriBelgeNo, aktif: x.aktif, surum: x.surum,
+    yururlukteSurumNo: x.yururlukteSurumNo, taslakSurumNo: x.taslakSurumNo, kullanim: x.kullanim,
+  }));
+}
+
+export async function sartnameListesi(db: Db): Promise<SartnamelerCevabi> {
+  return {
+    kategoriler: await s.kategoriler(db),
+    standartlar: await s.standartlar(db),
+    sartnameler: await sartnameOzetleri(db, await s.sartnameleriOku(db, null)),
+  };
+}
+
+export async function sartnameAyrintisi(db: Db, id: number): Promise<SartnameCevabi> {
+  const x = (await s.sartnameleriOku(db, [id]))[0];
+  if (!x) throw bulunamadi(SARTNAME_YOK);
+  const surumler = await s.sartnameSurumleri(db, id);
+  const ayrinti = await surumAyrintilari(db, surumler.map((v) => v.id));
+  const [ozet] = await sartnameOzetleri(db, [x]);
+  return { sartname: { ...ozet!, surumler: surumler.flatMap((v) => ayrinti.get(v.id) ?? []) } };
+}
+
+async function sartnameKomutIcinAl(db: Db, id: number, surum: number): Promise<s.SartnameSatiri> {
+  const x = await s.sartnameKilitle(db, id);
+  if (!x) throw bulunamadi(SARTNAME_YOK);
+  if (x.surum !== surum) throw eskiSurum();
+  return x;
+}
+
+const SARTNAME_KISITLARI = { rota_islem_sartnamesi_kod_tekil: { ileti: 'Bu kod başka bir şartnamede kullanılıyor.', alan: 'kod' } };
+
+// Müşteri şartnamesinin karşılığı firma ve belge numarasıyla birlikte tutulur; firma müşteri olmalıdır.
+async function musteriDenetle(db: Db, firmaId: number | null, belgeNo: string | null): Promise<'firma' | 'musteri'> {
+  if ((firmaId === null) !== (belgeNo === null)) {
+    throw dogrulama('Müşteri şartnamesinde firma ve belge numarası birlikte girilir.', firmaId === null ? 'musteriFirmaId' : 'musteriBelgeNo');
+  }
+  if (firmaId === null) return 'firma';
+  const f = (await firmaOzetleri(db, [firmaId])).get(firmaId);
+  if (!f || f.tur === 'tedarikci') throw dogrulama('Müşteri firma bulunamadı.', 'musteriFirmaId');
+  return 'musteri';
+}
+
+export async function sartnameEkle(db: Db, kullanici: Kullanici, g: {
+  kod: string; kategoriId: number; ad: string; kapsam: SartnameKapsami; musteriFirmaId: number | null; musteriBelgeNo: string | null;
+}): Promise<SartnameCevabi> {
+  if (!(await s.kategoriVarMi(db, g.kategoriId))) throw dogrulama('Kategori bulunamadı.', 'kategoriId');
+  const kaynak = await musteriDenetle(db, g.musteriFirmaId, g.musteriBelgeNo);
+  const id = await kisitKorumali(SARTNAME_KISITLARI, () => s.sartnameEkle(db, { ...g, kaynak }));
+  await s.surumEkle(db, id, 1, kullanici.id, null);
+  return sartnameAyrintisi(db, id);
+}
+
+// Kopya yürürlükteki sürümün içeriğiyle taslak olarak başlar: varsayılan şartnameden atölyenin ya da müşterinin şartnamesi türetilir.
+export async function sartnameKopyala(db: Db, kullanici: Kullanici, id: number, g: {
+  kod: string; ad: string; musteriFirmaId: number | null; musteriBelgeNo: string | null;
+}): Promise<SartnameCevabi> {
+  const kaynak = (await s.sartnameleriOku(db, [id]))[0];
+  if (!kaynak) throw bulunamadi(SARTNAME_YOK);
+  if (kaynak.yururlukteSurumId === null) throw gecersiz('Yayınlanmamış şartname kopyalanmaz.');
+  const tur = await musteriDenetle(db, g.musteriFirmaId, g.musteriBelgeNo);
+  const yeni = await kisitKorumali(SARTNAME_KISITLARI, () => s.sartnameEkle(db, { ...g, kategoriId: kaynak.kategoriId, kapsam: kaynak.kapsam, kaynak: tur }));
+  await s.surumEkle(db, yeni, 1, kullanici.id, kaynak.yururlukteSurumId);
+  return sartnameAyrintisi(db, yeni);
+}
+
+export async function sartnameKunyeKaydet(db: Db, id: number, g: { surum: number; ad: string; kategoriId: number }): Promise<SartnameCevabi> {
+  await sartnameKomutIcinAl(db, id, g.surum);
+  if (!(await s.kategoriVarMi(db, g.kategoriId))) throw dogrulama('Kategori bulunamadı.', 'kategoriId');
+  await s.sartnameSurumArtir(db, id, 'ad = $2, kategori_id = $3', [g.ad, g.kategoriId]);
+  return sartnameAyrintisi(db, id);
+}
+
+export async function sartnameSurumAc(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<SartnameCevabi> {
+  const x = await sartnameKomutIcinAl(db, id, surum);
+  if (x.taslakSurumId !== null) throw cakisma('Bu şartnamenin açık taslağı var; önce onu yayınlayın ya da silin.');
+  if (x.yururlukteSurumId === null) throw gecersiz('Yürürlükte sürüm yok.');
+  await s.surumEkle(db, id, (await s.enBuyukSurumNo(db, id)) + 1, kullanici.id, x.yururlukteSurumId);
+  await s.sartnameSurumArtir(db, id);
+  return sartnameAyrintisi(db, id);
+}
+
+const TASLAK_YOK = 'Taslak sürüm yok; önce yeni sürüm açın.';
+
+export async function sartnameTaslakKaydet(db: Db, id: number, g: SartnameTaslakGovdesiCikti): Promise<SartnameCevabi> {
+  const x = await sartnameKomutIcinAl(db, id, g.surum);
+  if (x.taslakSurumId === null) throw gecersiz(TASLAK_YOK);
+  const hata = sartnameSablonuDenetle(g.parametreler, g.atiflar);
+  if (hata) throw dogrulama(hata.ileti, hata.alan);
+  const bilinen = new Set((await s.standartlariOku(db, g.atiflar.map((a) => a.standartId))).map((t) => t.id));
+  const eksik = g.atiflar.findIndex((a) => !bilinen.has(a.standartId));
+  if (eksik >= 0) throw dogrulama('Standart bulunamadı.', `atiflar.${eksik}.standartId`);
+  await s.taslakIcerikYaz(db, x.taslakSurumId, g);
+  await s.sartnameSurumArtir(db, id);
+  return sartnameAyrintisi(db, id);
+}
+
+// Yayınlanan sürüm değişmez; emre sabitlenmiş eski sürüm de yerinde kalır, yeni emirler yeni sürümü alır.
+export async function sartnameYayinla(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<SartnameCevabi> {
+  const x = await sartnameKomutIcinAl(db, id, surum);
+  if (x.taslakSurumId === null) throw gecersiz(TASLAK_YOK);
+  const eksik = yayinEksigi(await s.surumParametreleri(db, [x.taslakSurumId]));
+  if (eksik) throw gecersiz(eksik);
+  await s.surumuYayinla(db, id, x.taslakSurumId, kullanici.id);
+  await s.sartnameSurumArtir(db, id);
+  return sartnameAyrintisi(db, id);
+}
+
+export async function sartnameTaslakSil(db: Db, id: number, surum: number): Promise<SartnameCevabi> {
+  const x = await sartnameKomutIcinAl(db, id, surum);
+  if (x.taslakSurumId === null) throw gecersiz(TASLAK_YOK);
+  if (x.yururlukteSurumId === null) throw gecersiz('İlk sürüm silinmez; şartnameyi kullanımdan kaldırın.');
+  await s.taslakSil(db, x.taslakSurumId);
+  await s.sartnameSurumArtir(db, id);
+  return sartnameAyrintisi(db, id);
+}
+
+// Kullanımdan kalkan şartname yeni adıma seçilmez ve onayda reddedilir; emre sabitlenmiş olan yerinde kalır.
+export async function sartnameAktifYap(db: Db, id: number, surum: number, aktif: boolean): Promise<SartnameCevabi> {
+  const x = await sartnameKomutIcinAl(db, id, surum);
+  if (x.aktif === aktif) throw cakisma(aktif ? 'Şartname zaten kullanımda.' : 'Şartname zaten kullanımda değil.');
+  await s.sartnameSurumArtir(db, id, 'aktif = $2', [aktif]);
+  return sartnameAyrintisi(db, id);
+}
+
+export async function standartEkle(db: Db, g: { numara: string; kisaAciklama: string }): Promise<StandartCevabi> {
+  const standart = await kisitKorumali(
+    { rota_standart_atfi_numara_tekil: { ileti: 'Bu standart numarası kayıtlı.', alan: 'numara' } },
+    () => s.standartEkle(db, g.numara, g.kisaAciklama),
+  );
+  return { standart };
+}
+
+/* ---- adım şartnameleri ---- */
+
+const fasonAdimMi = (a: { kaynak: AdimKaynagi | null }): boolean => a.kaynak?.tur === 'fason';
+
+interface SartnameBaglami { ozet: Map<number, s.SartnameSatiri>; surum: Map<number, SartnameSurumu> }
+
+async function sartnameBaglami(db: Db, sartnameIdleri: readonly number[]): Promise<SartnameBaglami> {
+  const tekil = [...new Set(sartnameIdleri)];
+  const satirlar = tekil.length === 0 ? [] : await s.sartnameleriOku(db, tekil);
+  const surum = await surumAyrintilari(db, satirlar.flatMap((x) => (x.yururlukteSurumId === null ? [] : [x.yururlukteSurumId])));
+  return { ozet: new Map(satirlar.map((x) => [x.id, x])), surum };
+}
+
+const yururlukteSurum = (b: SartnameBaglami, sartnameId: number): SartnameSurumu | null => {
+  const id = b.ozet.get(sartnameId)?.yururlukteSurumId;
+  return id === null || id === undefined ? null : b.surum.get(id) ?? null;
+};
+
+export async function revizyonSartnameleri(db: Db, revizyonId: number): Promise<RevizyonSartnameleriCevabi> {
+  revizyonuAl(await s.revizyonOku(db, revizyonId));
+  const icerik = await s.icerikOku(db, revizyonId);
+  const baglar = await s.adimSartnameleri(db, [revizyonId]);
+  const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
+  const ozetler = new Map((await sartnameOzetleri(db, [...b.ozet.values()])).map((o) => [o.id, o]));
+  return {
+    adimlar: icerik.adimlar.flatMap((a) => {
+      const kendi = baglar.filter((x) => x.opNo === a.opNo);
+      if (kendi.length === 0) return [];
+      return [{
+        opNo: a.opNo,
+        sartnameler: kendi.flatMap((x) => {
+          const ozet = ozetler.get(x.sartnameId);
+          if (!ozet) return [];
+          const yururlukte = yururlukteSurum(b, x.sartnameId);
+          return [{
+            sira: x.sira, sartname: ozet, degerler: x.degerler, yururlukte,
+            eksikler: yururlukte ? eksikZorunlular(yururlukte.parametreler, cozulmusDegerler(yururlukte.parametreler, x.degerler)) : [],
+            kapsamUyumsuz: !kapsamUyarMi(ozet.kapsam, fasonAdimMi(a)),
+          }];
+        }),
+      }];
+    }),
+  };
+}
+
+// Adımın şartnameleri bütün olarak yazılır; yalnız taslak revizyonda (rota.yaz). Yeni bağ kullanımdaki, yayınlanmış ve adımın
+// kaynağına uyan şartnameyi alır; değerler yürürlükteki sürümün "adımda değişir" alanlarına göre denetlenir.
+export async function adimSartnameleriKaydet(db: Db, kullanici: Kullanici, revizyonId: number, g: {
+  surum: number; opNo: number; sartnameler: { sartnameId: number; degerler: ParametreDegerleri }[];
+}): Promise<KomutCevabi> {
+  await komutIcinAl(db, kullanici, revizyonId, 'kaydet', g.surum);
+  const adim = (await s.icerikOku(db, revizyonId)).adimlar.find((a) => a.opNo === g.opNo);
+  if (!adim) throw dogrulama('Adım bu revizyonda yok.', 'opNo');
+  const onceki = new Set((await s.adimSartnameleri(db, [revizyonId])).filter((x) => x.opNo === g.opNo).map((x) => x.sartnameId));
+  const b = await sartnameBaglami(db, g.sartnameler.map((x) => x.sartnameId));
+  const gorulen = new Set<number>();
+  for (const [i, x] of g.sartnameler.entries()) {
+    const alan = `sartnameler.${i}`;
+    if (gorulen.has(x.sartnameId)) throw dogrulama('Aynı şartname adıma iki kez eklenmez.', alan);
+    gorulen.add(x.sartnameId);
+    const ozet = b.ozet.get(x.sartnameId);
+    if (!ozet) throw dogrulama(SARTNAME_YOK, `${alan}.sartnameId`);
+    if (!ozet.aktif && !onceki.has(x.sartnameId)) throw dogrulama(`${ozet.kod}: şartname kullanımda değil.`, `${alan}.sartnameId`);
+    if (!kapsamUyarMi(ozet.kapsam, fasonAdimMi(adim))) {
+      throw dogrulama(`${ozet.kod}: ${ozet.kapsam === 'fason' ? 'yalnız fason adıma' : 'yalnız iç adıma'} eklenir.`, `${alan}.sartnameId`);
+    }
+    const yururlukte = yururlukteSurum(b, x.sartnameId);
+    if (!yururlukte) throw dogrulama(`${ozet.kod}: yayınlanmış sürümü olmayan şartname seçilmez.`, `${alan}.sartnameId`);
+    const hata = adimDegerleriDenetle(yururlukte.parametreler, x.degerler);
+    if (hata) throw dogrulama(hata, `${alan}.degerler`);
+  }
+  await s.adimSartnameleriYaz(db, revizyonId, g.opNo, g.sartnameler);
+  return cevap(revizyonId, 'taslak', await s.duzenlemeYaz(db, revizyonId, kullanici.id));
+}
+
+async function sartnameOnayDenetimi(db: Db, revizyonId: number, icerik: Icerik): Promise<void> {
+  const baglar = await s.adimSartnameleri(db, [revizyonId]);
+  if (baglar.length === 0) return;
+  const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
+  const adimlar = new Map(icerik.adimlar.map((a) => [a.opNo, a]));
+  const hata = sartnameOnayEngeli(baglar.flatMap((x) => {
+    const ozet = b.ozet.get(x.sartnameId);
+    const adim = adimlar.get(x.opNo);
+    if (!ozet || !adim) return [];
+    const yururlukte = yururlukteSurum(b, x.sartnameId);
+    return [{
+      opNo: x.opNo, kod: ozet.kod, aktif: ozet.aktif, yururlukteVar: yururlukte !== null, kapsamUyar: kapsamUyarMi(ozet.kapsam, fasonAdimMi(adim)),
+      eksikler: yururlukte ? eksikZorunlular(yururlukte.parametreler, cozulmusDegerler(yururlukte.parametreler, x.degerler)) : [],
+    }];
+  }));
+  if (hata) throw gecersiz(hata);
+}
+
+// Emir açılırken (ya da başlamamış iş emri yenilenirken) adımın şartnameleri o an yürürlükteki sürümle ve çözülmüş değerlerle
+// iş emrine sabitlenir. Sonradan yayınlanan sürüm sabitlenmiş iş emrini değiştirmez.
+async function isEmirlerineSabitle(db: Db, kisiId: number, revizyonId: number, isEmirleri: readonly { id: number; opNo: number }[]): Promise<void> {
+  const baglar = await s.adimSartnameleri(db, [revizyonId]);
+  if (baglar.length === 0) return;
+  const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
+  for (const ie of isEmirleri) {
+    const sabitler = baglar.filter((x) => x.opNo === ie.opNo).map((x) => {
+      const kod = b.ozet.get(x.sartnameId)?.kod ?? String(x.sartnameId);
+      const yururlukte = yururlukteSurum(b, x.sartnameId);
+      if (!yururlukte) throw gecersiz(`OP ${ie.opNo}: ${kod} şartnamesinin yayınlanmış sürümü yok; emir açılamaz.`);
+      const degerler = cozulmusDegerler(yururlukte.parametreler, x.degerler);
+      const eksik = eksikZorunlular(yururlukte.parametreler, degerler);
+      if (eksik.length > 0) throw gecersiz(`OP ${ie.opNo}: ${kod} şartnamesinde zorunlu alan boş (${eksik.join(', ')}); emir açılamaz.`);
+      return { surumId: yururlukte.id, degerler };
+    });
+    if (sabitler.length > 0) await s.isEmriSabitle(db, ie.id, sabitler, kisiId);
+  }
+}
+
+export async function isEmriSartnameleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, IsEmriSartnamesi[]>> {
+  const tekil = [...new Set(isEmriIdleri)];
+  if (tekil.length === 0) return new Map();
+  const satirlar = await s.isEmriSabitleri(db, tekil);
+  const surum = await surumAyrintilari(db, satirlar.map((x) => x.surumId));
+  const ad = await kisiAdlari(db, satirlar.map((x) => x.sabitleyenKisiId));
+  const sonuc = new Map<number, IsEmriSartnamesi[]>();
+  for (const x of satirlar) {
+    const v = surum.get(x.surumId);
+    if (!v) continue;
+    const liste = sonuc.get(x.isEmriId) ?? [];
+    liste.push({
+      sira: x.sira, sartname: { id: x.sartnameId, kod: x.kod, ad: x.ad }, surum: v, degerler: x.degerler,
+      sabitleyen: { id: x.sabitleyenKisiId, ad: ad.get(x.sabitleyenKisiId) ?? null }, sabitlenme: x.sabitlenme,
+    });
+    sonuc.set(x.isEmriId, liste);
+  }
+  return sonuc;
+}
+
+export async function isEmriSartnameleriCevabi(db: Db, isEmriIdleri: readonly number[]): Promise<IsEmriSartnameleriCevabi> {
+  const harita = await isEmriSartnameleri(db, isEmriIdleri);
+  return { isEmirleri: [...new Set(isEmriIdleri)].map((id) => ({ isEmriId: id, sartnameler: harita.get(id) ?? [] })) };
 }
