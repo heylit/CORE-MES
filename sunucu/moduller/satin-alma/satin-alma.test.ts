@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
-  AcilisCevabi, Ayarlar, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
+  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi } from '#paylasilan/sozlesme/finans.ts';
@@ -218,7 +218,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(okunan, son);
     assert.deepEqual(okunan.teklifler.map((q) => [q.paraBirimi, q.kur, q.fiyatlar.length]), [['USD', '41.25', 2], ['TRY', null, 1]]);
     assert.deepEqual(okunan.karar?.bolunme.length, 2);
-    assert.deepEqual(okunan.karar?.sabitKurlar, [{ paraBirimi: 'USD', kur: '41.5' }]);
+    // 1096 a: sabit kur onaya girerken sunucuda kurulur; istemcinin gönderdiği 41.5 yok sayılır. Finansta kur yoksa teklifin kendi kuru.
+    assert.deepEqual(okunan.karar?.sabitKurlar, [{ paraBirimi: 'USD', kur: '41.25', aylikFaizYuzdesi: null }, { paraBirimi: 'TRY', kur: '1', aylikFaizYuzdesi: null }]);
+    assert.equal(okunan.karar?.kurKilidi, onayda.karar?.kurKilidi);
+    assert.ok(onayda.karar?.kurKilidi);
     assert.deepEqual(okunan.senaryolar[0]?.paylar.length, 2);
     // Sipariş satırları kalem bazlı karardan oluşur; mal kabul gelene kadar teslim bekleniyor, kalite boş, durum değişmez.
     assert.deepEqual(okunan.karar?.siparisler.map((x) => [x.satirlar.map((r) => r.kalemId), x.teslimDurumu, x.kalite]),
@@ -2096,6 +2099,81 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(tamam<SiparisBelgeleriCevabi>(await kaldir()).belgeler, []);
     assert.equal((await kaldir()).statusCode, 404);
     assert.equal((await istek(c.mudur, 'GET', `/satin-alma-siparis-satirlari/${satirA}/belgeler/${belgeId}/dosya`)).statusCode, 404);
+  });
+
+  // 1096 a ve 1099 a: onaya giden kararın kuru sunucuda sabitlenir; kalem ayrıntısı toplamlara girer.
+  // Sonda durur: EUR teklifi ve sabit kuru, para birimini ayarlardan kaldıran önceki testleri bağlamasın.
+  async function onaydaEuro(alan: Record<string, unknown> = {}): Promise<{ t: Talep; a: ReturnType<typeof teklif> }> {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']], { paraBirimi: 'EUR', kur: '36', ...alan });
+    const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(deg), durum: 'onayda', teklifler: [a],
+      karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [{ paraBirimi: 'EUR', kur: '99' }], siparisler: [] } }));
+    return { t: ond, a };
+  }
+  const siparisVer = (t: Talep, teklifId: string) =>
+    kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [{ teklifId, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null }] } });
+
+  test('1096 a: onaya gönderilen kararın kuru ve faizi finanstan sabitlenir, istemcinin kuru yok sayılır; 7 günden eski kilitle sipariş verilmez', async () => {
+    tamam(await istek(c.yonetici, 'POST', '/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-01-03', kur: 36 }));
+    const { t, a } = await onaydaEuro();
+    assert.deepEqual(t.karar?.sabitKurlar.map((x) => [x.paraBirimi, x.kur]), [['EUR', '36']]);
+    assert.ok(t.karar?.kurKilidi);
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [onayKaydi()] }));
+    await ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_karar SET kur_kilidi = now() - interval '8 days' WHERE talep_id = $1", [t.id]));
+    // Kilit sunucunundur: gövdedeki kilit okunmaz, veritabanındaki eski kilit geçerlidir.
+    const guncel = onayli;
+    const red = await siparisVer(guncel, a.id);
+    assert.deepEqual([red.statusCode, red.json().mesaj], [422, ILETILER.kurKilidiEski(7)]);
+    // Değerlendirmeye alıp yeniden onaya gönderince yeni kilit kurulur; eski onay yetmez, yeni onayla sipariş verilir.
+    const geri = tamam<Talep>(await kaydet(c.sa, { ...govde(guncel), durum: 'degerlendirme' }));
+    assert.deepEqual([geri.karar?.kurKilidi, geri.karar?.sabitKurlar], [null, []]);
+    const yine = tamam<Talep>(await kaydet(c.sa, { ...govde(geri), durum: 'onayda' }));
+    assert.ok(Date.parse(yine.karar!.kurKilidi!) > Date.parse(onayli.onaylar[0]!.zaman));
+    const kilittenOnce = await siparisVer(yine, a.id);
+    assert.deepEqual([kilittenOnce.statusCode, kilittenOnce.json().mesaj], [422, ILETILER.kilittenOnceOnay]);
+    const yeniOnay = tamam<Talep>(await kaydet(c.mudur, { ...govde(yine), onaylar: [...yine.onaylar, onayKaydi()] }));
+    assert.equal(tamam<Talep>(await siparisVer(yeniOnay, a.id)).durum, 'siparis_verildi');
+  });
+
+  test('1096 a: onaydan sonra kur %3ten fazla kayınca sipariş verilmez; değerlendirme sabit kuru ve uyarıyı gösterir', async () => {
+    const { t, a } = await onaydaEuro();
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [onayKaydi()] }));
+    await ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_sabit_kur SET kur = 34 WHERE talep_id = $1 AND para_birimi = 'EUR'", [t.id]));
+    const d = tamam<DegerlendirmeCevabi>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`));
+    assert.deepEqual([d.kurKaynagi, d.teklifler[0]?.kur, d.kilitUyarisi], ['sabit', '34', ILETILER.kurKaydi('EUR', '5,9')]);
+    const red = await siparisVer(onayli, a.id);
+    assert.deepEqual([red.statusCode, red.json().mesaj], [422, ILETILER.kurKaydi('EUR', '5,9')]);
+  });
+
+  test('1099 a: teklif satırı iskonto, termin ve en az miktarı saklar; göndermeyen kayıt silmez; toplam ve sipariş miktarı bunlarla', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = { ...teklif(firmaA, [], { iskontoYuzdesi: '10' }), fiyatlar: [{ kalemId: k1, birimFiyat: '10', iskontoYuzdesi: '20', terminGun: 12 }, { kalemId: k2, birimFiyat: '5', enAzMiktar: '6' }] };
+    const s1 = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    // (10 × 10 × 0,8 + 5 × max(4, 6)) × 0,9 = 99
+    assert.equal(s1.teklifler[0]?.ilkToplam, '99');
+    const ayrinti = (x: Talep) => x.teklifler[0]!.fiyatlar.map((f) => [f.iskontoYuzdesi, f.terminGun, f.enAzMiktar]);
+    assert.deepEqual(ayrinti(s1), [['20', 12, null], [null, null, '6']]);
+    const bilmeyen = { ...s1.teklifler[0]!, notlar: 'Ayrıntısız ekran', fiyatlar: s1.teklifler[0]!.fiyatlar.map(({ kalemId, birimFiyat }) => ({ kalemId, birimFiyat })) };
+    const s2 = tamam<Talep>(await kaydet(c.sa, { ...govde(s1), teklifler: [bilmeyen] }));
+    assert.deepEqual(ayrinti(s2), ayrinti(s1));
+    const d = tamam<DegerlendirmeCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`));
+    assert.deepEqual(d.teklifler.map((q) => [q.toplam, q.termin, q.satirlar.map((r) => r.alinanMiktar)]), [['99.00', 12, ['10', '6']]]);
+    const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(s2), durum: 'onayda',
+      karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
+    const sip = tamam<Talep>(await siparisVer(onayli, a.id));
+    assert.deepEqual(sip.karar?.siparisler[0]?.satirlar.map((r) => [r.kalemId, Number(r.miktar)]), [[k1, 10], [k2, 6]]);
+  });
+
+  test('1094 b: değerlendirme ucu teklifleri gören rollere açıktır; talep eden ve işlemsiz 403, olmayan talep 404', async () => {
+    const t = await kararli();
+    const d = tamam<DegerlendirmeCevabi>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`));
+    assert.deepEqual([d.teklifler.length, d.kurKaynagi, d.oneri, d.karar?.tlToplam], [2, 'sabit', t.karar?.teklifId, '120.00']);
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`)).statusCode, 403);
+    assert.equal((await istek(c.sa, 'GET', `/satin-alma-talepleri/${randomUUID()}/degerlendirme`)).statusCode, 404);
   });
 });
 

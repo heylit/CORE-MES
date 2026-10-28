@@ -68,7 +68,14 @@ export const teklifSemasi = z.object({
   ilkToplam: ondalikMetinSemasi.nullable(),
   revizyon: z.number().int().min(0),
   // Boş fiyat yazılmaz: o kaleme teklif verilmemiştir.
-  fiyatlar: z.array(z.object({ kalemId: uuid, birimFiyat: eksiOlmayan })).max(500),
+  // 1099 a: satır iskontosu (genel iskontodan önce), satır termini ve en az miktar; boş olan teklifin genel değerine düşer.
+  // Gönderilmeyen alan saklanan değeri korur: bu alanları bilmeyen ekran kaydedince silinmez.
+  fiyatlar: z.array(z.object({
+    kalemId: uuid, birimFiyat: eksiOlmayan,
+    iskontoYuzdesi: yuzde.nullable().optional(),
+    terminGun: z.number().int().min(0).max(3650).nullable().optional(),
+    enAzMiktar: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'En az miktar sıfırdan büyük olur.').nullable().optional(),
+  })).max(500),
 });
 
 // İstemci yalnız satın almanın alanlarını yazar; teslim stok mal kabulünde yazılır (SAT-37, SAT-38, SH1 a); kalite GKK gelene kadar boş.
@@ -123,8 +130,10 @@ export const kararSemasi = z.object({
   kararVerenKisiId: kisiKimligi.nullable(),
   kararTarihi: tarih,
   ogrenilenler: metin(4000),
-  sabitKurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi })).max(4),
+  // 1096 a: kur ve faiz karar onaya gönderilince sunucuda sabitlenir; istemcinin gönderdiği değer yok sayılır.
+  sabitKurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi, aylikFaizYuzdesi: ondalikMetinSemasi.nullable().optional() })).max(4),
   siparisler: z.array(siparisSemasi).max(100),
+  kurKilidi: z.string().nullable().optional(),
 });
 
 // Onay ve geçmiş yalnız eklenir: kayıtta yeni kimlikler eklenir, var olanlar değişmez; kişi ve zaman sunucunundur.
@@ -227,6 +236,7 @@ export type OdemePlaniYazimi = z.output<typeof odemePlaniGovdesi>;
 export type SiparisTakibiCevabi = z.output<typeof siparisTakibiCevabi>;
 
 // Karar verenin adı yalnız çıkışta: kişi sunucunun verdiği alandır, gövdede gelmez (B-001).
+// Kur kilidinin zamanı sunucunundur (1096 a); kilitsiz kararda (eski akış) boş.
 export const kararCikisSemasi = kararSemasi.extend({ siparisler: z.array(siparisCikisSemasi), kararVerenAdi: z.string().nullable() });
 
 export const talepSemasi = z.object({
@@ -546,6 +556,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/siparis-kapat': { govde: z.input<typeof siparisKapatGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };
   'GET /satin-alma-talepleri/:id/siparis-takibi': { cevap: SiparisTakibiCevabi };
+  'GET /satin-alma-talepleri/:id/degerlendirme': { cevap: DegerlendirmeCevabi };
   'POST /satin-alma-talepleri/:id/odeme-plani': { govde: z.input<typeof odemePlaniGovdesi>; cevap: SiparisTakibiCevabi };
   'GET /satin-alma-siparis-satirlari/:id/belgeler': { cevap: SiparisBelgeleriCevabi };
   'POST /satin-alma-siparis-satirlari/:id/belge-ekle': { govde: z.input<typeof siparisBelgesiGovdesi>; cevap: SiparisBelgeleriCevabi };
@@ -567,6 +578,47 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-tedarik-terminleri': { cevap: TedarikTerminleriCevabi };
   'POST /satin-alma-tedarik-terminleri/kaydet': { govde: z.input<typeof tedarikTerminiKaydetGovdesi>; cevap: TedarikTerminiKaydetCevabi };
 }
+
+// 1094 b: teklif karşılaştırmasının sunucudaki hesabı. Tutarlar TL ve ondalık metindir (2 basamak); puanlar 0-100.
+// Karar onaydaysa ya da sipariş verildiyse sabit kur ve faizle, değilse finansın bugünkü kuru ve faiziyle hesaplanır (1096 a).
+const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number(), tedarikci: z.number(), garanti: z.number() });
+export const degerlendirmeCevabi = z.object({
+  kurKaynagi: z.enum(['sabit', 'guncel']),
+  kurKilidi: z.string().nullable(),
+  // Sabit kur 7 günü geçtiyse ya da kur %3'ten fazla saptıysa siparişi durduracak ileti; yoksa boş.
+  kilitUyarisi: z.string().nullable(),
+  agirliklar: agirliklarSemasi,
+  teklifler: z.array(z.object({
+    teklifId: uuid,
+    firmaId: firmaKimligi.nullable(),
+    disarida: z.enum(['teknik', 'kursuz', 'fiyatsiz']).nullable(),
+    kur: ondalikMetinSemasi.nullable(),
+    toplam: ondalikMetinSemasi,
+    tlToplam: ondalikMetinSemasi.nullable(),
+    bugunkuDeger: ondalikMetinSemasi.nullable(),
+    vadeKazanci: ondalikMetinSemasi.nullable(),
+    vadeHesabaKatilmadi: z.boolean(),
+    kapsanan: z.number().int(),
+    tumKalemler: z.boolean(),
+    termin: z.number().int().nullable(),
+    gecikmeGun: z.number().int().nullable(),
+    puan: z.number(),
+    kriterPuani: kriterSayilari,
+    satirlar: z.array(z.object({ kalemId: uuid, alinanMiktar: ondalikMetinSemasi, tutar: ondalikMetinSemasi, bugunkuDegerTl: ondalikMetinSemasi.nullable(), termin: z.number().int().nullable() })),
+  })),
+  sira: z.array(uuid),
+  oneri: uuid.nullable(),
+  bolme: z.object({
+    atama: z.array(z.object({ kalemId: uuid, teklifId: uuid })),
+    bugunkuDeger: ondalikMetinSemasi,
+    tekTedarikci: ondalikMetinSemasi.nullable(),
+    kazanc: ondalikMetinSemasi.nullable(),
+    onerilir: z.boolean(),
+  }).nullable(),
+  // Verilmiş kararın tutarı ve onay limitindeki basamağı (1095 b: bilgi); karar yoksa ya da tutar hesaplanamıyorsa boş.
+  karar: z.object({ tlToplam: ondalikMetinSemasi, bugunkuDeger: ondalikMetinSemasi, basamak: z.string().nullable() }).nullable(),
+});
+export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
 
 // Ana sayfa pano kartları (kart #489): yetkisi olmayan sayı null gelir, sıfır uydurulmaz.
 export const satinAlmaOzetiCevabi = z.object({

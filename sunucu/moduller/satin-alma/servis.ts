@@ -6,8 +6,8 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
-  AcilisCevabi, Ayarlar, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  AcikEmirlerCevabi, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
+  AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -21,13 +21,14 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, 
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, emirAcikMi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
+import { degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
@@ -94,13 +95,16 @@ async function talepleriKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Talep[]>
       teklifler: grup(a.teklifler, t.id).map((q) => ({
         ...at(q), kur: sade(q.kur), iskontoYuzdesi: sade(q.iskontoYuzdesi), nakliye: sade(q.nakliye), digerMasraf: sade(q.digerMasraf),
         avansYuzdesi: sade(q.avansYuzdesi), ilkToplam: sade(q.ilkToplam),
-        fiyatlar: a.fiyatlar.filter((f) => f.talepId === t.id && f.teklifId === q.id).map(({ kalemId, birimFiyat }) => ({ kalemId, birimFiyat: sade(birimFiyat) })),
+        fiyatlar: a.fiyatlar.filter((f) => f.talepId === t.id && f.teklifId === q.id).map((f) => ({
+          kalemId: f.kalemId, birimFiyat: sade(f.birimFiyat), iskontoYuzdesi: sade(f.iskontoYuzdesi), terminGun: f.terminGun, enAzMiktar: sade(f.enAzMiktar),
+        })),
       })),
       karar: k === null ? null : {
         mod: k.mod, teklifId: k.teklifId, gerekce: k.gerekce, kararVerenKisiId: k.kararVerenKisiId, kararVerenAdi: ad(kisiler, k.kararVerenKisiId), kararTarihi: k.kararTarihi, ogrenilenler: k.ogrenilenler,
         bolunme: grup(a.bolunmeler, t.id).map(at),
-        sabitKurlar: grup(a.sabitKurlar, t.id).map(({ paraBirimi, kur }) => ({ paraBirimi: paraBirimi as 'TRY', kur: sade(kur) })),
+        sabitKurlar: grup(a.sabitKurlar, t.id).map(({ paraBirimi, kur, aylikFaizYuzdesi }) => ({ paraBirimi: paraBirimi as 'TRY', kur: sade(kur), aylikFaizYuzdesi: sade(aylikFaizYuzdesi) })),
         siparisler: grup(a.siparisler, t.id).map(siparisKur),
+        kurKilidi: k.kurKilidi,
       },
       onaylar: grup(a.onaylar, t.id).map((o) => ({ ...at(o), kisiAdi: ad(kisiler, o.kisiId) })),
       hareketler: grup(a.hareketler, t.id).map((h) => ({ ...at(h), kisiAdi: ad(kisiler, h.kisiId) })),
@@ -265,9 +269,39 @@ async function sunucuAlanlari(db: Db, k: Kullanici, t: TalepYazimi, eski: Talep 
     if (kur === null) throw dogrulama(ILETILER.kurYok(kaynak.paraBirimi, kaynak.tarih), 'teklifler');
     teklifler.push({ ...q, kur: kur.kur });
   }
+  const kilitli = karar === null ? null : { ...karar, ...(await kurKilidiniKur(db, kurKilidiIsi(eski?.durum ?? null, t.durum, eskiKarar?.kurKilidi ?? null), teklifler, eskiKarar)) };
   // Ayarlar hiç kaydedilmemişse teklifin para birimi satırı yoktur; yazmadan önce eklenir (finansın kuruna dokunulmaz).
-  await s.paraBirimleriniEkle(db, kullanilanParaBirimleri({ teklifler, karar }));
-  return { ...t, karar, senaryolar, teklifler };
+  await s.paraBirimleriniEkle(db, kullanilanParaBirimleri({ teklifler, karar: kilitli }));
+  return { ...t, karar: kilitli, senaryolar, teklifler };
+}
+
+// 1096 a: sabit kur ve faiz sunucuda kurulur. Döviz teklifinin kuru finansın bugünkü kurudur, finansta yoksa o para birimindeki
+// ilk teklifin kendi günündeki kuru; TRY 1. Faiz finansın bugünkü oranıdır, yoksa boş (vade hesaba katılmaz, söylenir).
+type KurKilidi = Pick<NonNullable<TalepYazimi['karar']>, 'sabitKurlar' | 'kurKilidi'>;
+async function kurKilidiniKur(db: Db, is: KurKilidiIsi, teklifler: TalepYazimi['teklifler'], eski: Talep['karar'] | null): Promise<KurKilidi> {
+  if (is === 'kaldir') return { sabitKurlar: [], kurKilidi: null };
+  if (is === 'koru') return { sabitKurlar: eski?.sabitKurlar ?? [], kurKilidi: eski?.kurKilidi ?? null };
+  const bugun = await s.bugun(db);
+  const finans = await kurlar(db, bugun);
+  const faiz = await faizler(db, bugun);
+  const sabitKurlar: KurKilidi['sabitKurlar'] = [];
+  for (const q of teklifler) {
+    if (sabitKurlar.some((x) => x.paraBirimi === q.paraBirimi)) continue;
+    const kur = q.paraBirimi === 'TRY' ? '1' : sade(finans.get(q.paraBirimi)?.kur ?? null) ?? q.kur;
+    if (kur !== null) sabitKurlar.push({ paraBirimi: q.paraBirimi, kur, aylikFaizYuzdesi: aylikFaiz(faiz.get(q.paraBirimi)?.aylikYuzde) });
+  }
+  return { sabitKurlar, kurKilidi: is === 'kilitle' ? new Date().toISOString() : null };
+}
+
+// 1096 a: onaydan siparişe geçerken kilit 7 günü ya da kur %3 sapmayı aşmamış ve onay kilitten sonra verilmiş olmalı.
+async function kurKilidiniDenetle(db: Db, eski: Talep, yeni: TalepDurumu, yeniOnaylar: readonly Pick<Onay, 'sonuc'>[]): Promise<void> {
+  const kilit = eski.karar?.kurKilidi ?? null;
+  if (kilit === null || eski.durum !== 'onayda' || (yeni !== 'siparis_verildi' && yeni !== 'teslim_alindi')) return;
+  if (!kilittenSonraOnayliMi(kilit, eski.onaylar, yeniOnaylar)) throw gecersiz(ILETILER.kilittenOnceOnay);
+  const finans = await kurlar(db, await s.bugun(db));
+  const guncel = new Map([...finans.entries()].map(([p, k]) => [p, k.kur] as const));
+  const red = kurKilidiReddi(kilit, eski.karar?.sabitKurlar ?? [], guncel, Date.now());
+  if (red !== null) throw gecersiz(red);
 }
 
 // SAT-75: kaleme yeni bağlanan katalog kaleminin kartı satın alınabilir türde olmalı. Bağı değişmeyen kalem denetlenmez
@@ -476,7 +510,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (g.id !== id) throw dogrulama('Kimlik adresle aynı olmalı.', 'id');
   const eski = await talepOku(db, id);
   if (eski === null) throw bulunamadi(ILETILER.talepYok);
-  const { surum, ...yeni } = g;
+  const { surum, ...gelen } = g;
+  const yeni = kalemAyrintisiniKoru(eski, gelen);
   const kendiTaslagi = (eski.acanKisiId === k.id || eski.talepEdenKisiId === k.id) && talepEdenDurumu(eski.durum) && talepEdenDurumu(yeni.durum);
   // Talep eden adsız teklifleri görür; değişikliği kendi gördüğü hâlle karşılaştırılır (SAT-53).
   const kiyas = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
@@ -503,6 +538,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     ?? logoSiparisDegisikligiReddi(eski, temel)
     ?? logoIptalGeriAlmaReddi(eski, temel.durum);
   if (siparisRed !== null) throw gecersiz(siparisRed);
+  await kurKilidiniDenetle(db, eski, temel.durum, yeniOnaylar);
   await askidakiTedarikciyiDenetle(db, eski, temel);
   await kalemKartlariniDenetle(db, temel.kalemler, eski.kalemler);
   const sunucudan = await sunucuAlanlari(db, k, temel, eski);
@@ -635,6 +671,57 @@ export async function siparisTakibi(db: Db, talepId: string): Promise<SiparisTak
   const talep = await talepOku(db, talepId);
   if (talep === null) throw bulunamadi(ILETILER.talepYok);
   return takipKur(db, talep);
+}
+// 1094 b: teklif karşılaştırmasının sunucudaki hesabı (hesap-kurallar.ts). Onaydaki ya da siparişteki kararın sabit kuru ve faizi
+// kullanılır; değilse finansın bugünkü kuru (yoksa teklifin kendi günündeki kuru) ve faizi. Tedarikçi başarımı D1'de yalnız
+// satın almanın 1-5 puanıdır; zamanında teslim ve kalite oranı ayrı işte gelir.
+const para = (x: number | null): string | null => (x === null || !Number.isFinite(x) ? null : x.toFixed(2));
+const ondalik = (x: number): string => sade(x.toFixed(6));
+export async function degerlendirme(db: Db, talepId: string): Promise<DegerlendirmeCevabi> {
+  const t = await talepOku(db, talepId);
+  if (t === null) throw bulunamadi(ILETILER.talepYok);
+  const ayar = await ayarlariKur(db);
+  const sabit = t.karar !== null && kilitliDurum(t.durum) && t.karar.sabitKurlar.length > 0 ? t.karar.sabitKurlar : null;
+  const guncel = new Map<string, Ayarlar['kurlar'][number]>(ayar.kurlar.map((k) => [k.paraBirimi, k]));
+  const kur = (q: { paraBirimi: string; kur: string | null }): number | null => {
+    const d = sabit !== null ? sabit.find((x) => x.paraBirimi === q.paraBirimi)?.kur ?? null : guncel.get(q.paraBirimi)?.kur ?? null;
+    const n = Number(d ?? q.kur);
+    return (d ?? q.kur) !== null && n > 0 ? n : null;
+  };
+  const aylikFaizi = (pb: string): number | null => {
+    const d = sabit !== null ? sabit.find((x) => x.paraBirimi === pb)?.aylikFaizYuzdesi ?? null : guncel.get(pb)?.aylikFaizYuzdesi ?? null;
+    return d === null ? null : Number(d);
+  };
+  const puanlar = new Map((await s.tedarikcileriOku(db, null)).map((x) => [x.firmaId, x.puan] as const));
+  const siparisGunleri = (t.karar?.siparisler ?? []).flatMap((x) => (x.siparisTarihi === null ? [] : [x.siparisTarihi])).sort();
+  const agirliklar = t.agirliklar ?? ayar.agirliklar;
+  const ortam = {
+    kur, aylikFaiz: aylikFaizi, agirliklar, ihtiyacTarihi: t.ihtiyacTarihi, bazTarih: siparisGunleri[0] ?? (await s.bugun(db)),
+    tedarikciPuani: (firmaId: number | null) => tedarikciBasarimi(firmaId === null ? null : puanlar.get(firmaId) ?? null, null, null),
+  };
+  const d = degerlendir(t.kalemler, t.teklifler, ortam);
+  const tutar = t.karar === null ? null : kararTutari(t.karar, t.kalemler, t.teklifler.map((q) => teklifHesabi(q, t.kalemler, ortam)));
+  const kilitUyarisi = sabit === null || t.durum !== 'onayda' ? null
+    : kurKilidiReddi(t.karar?.kurKilidi ?? null, sabit, new Map(ayar.kurlar.map((k) => [k.paraBirimi, k.kur] as const)), Date.now());
+  return {
+    kurKaynagi: sabit !== null ? 'sabit' : 'guncel', kurKilidi: t.karar?.kurKilidi ?? null, kilitUyarisi, agirliklar,
+    teklifler: d.satirlar.map((x) => ({
+      teklifId: x.hesap.teklifId, firmaId: x.firmaId, disarida: x.disarida, kur: x.hesap.kur === null ? null : ondalik(x.hesap.kur),
+      toplam: para(x.hesap.toplam)!, tlToplam: para(x.hesap.tlToplam), bugunkuDeger: para(x.hesap.bugunkuDeger), vadeKazanci: para(x.hesap.vadeKazanci),
+      vadeHesabaKatilmadi: x.hesap.vadeHesabaKatilmadi, kapsanan: x.hesap.kapsanan, tumKalemler: x.tumKalemler, termin: x.hesap.termin, gecikmeGun: x.gecikme,
+      puan: Math.round(x.puan * 10) / 10,
+      kriterPuani: {
+        maliyet: Math.round(x.kriterPuani.maliyet * 10) / 10, termin: Math.round(x.kriterPuani.termin * 10) / 10,
+        tedarikci: Math.round(x.kriterPuani.tedarikci * 10) / 10, garanti: Math.round(x.kriterPuani.garanti * 10) / 10,
+      },
+      satirlar: x.hesap.satirlar.map((r) => ({ kalemId: r.kalemId, alinanMiktar: ondalik(r.alinanMiktar), tutar: para(r.tutar)!, bugunkuDegerTl: para(r.bugunkuDegerTl), termin: r.termin })),
+    })),
+    sira: d.sira, oneri: d.oneri,
+    bolme: d.bolme === null ? null : {
+      atama: d.bolme.plan.atama, bugunkuDeger: para(d.bolme.plan.toplam)!, tekTedarikci: para(d.bolme.tekToplam), kazanc: para(d.bolme.kazanc), onerilir: d.bolme.onerilir,
+    },
+    karar: tutar === null ? null : { tlToplam: para(tutar.tlToplam)!, bugunkuDeger: para(tutar.bugunkuDeger)!, basamak: gerekenBasamak(tutar.tlToplam, ayar.onayLimitleri) },
+  };
 }
 const siparisNumarasi = (x: { no?: string | null; siparisNo: string }): string => x.no ?? x.siparisNo;
 // SAT-73: talep önce kilitlenip sürümü artar (plan değişikliği talebin değişikliğidir), sonra plan finansa yazılır ve geçmişe girer.
