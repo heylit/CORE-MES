@@ -500,6 +500,21 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     assert.deepEqual((await yedekDosyalari()).filter((a) => a.endsWith('-gece.dump') && a.includes('-20261030T')), [bugunku], 'ikinci yedek alınmadı');
   });
 
+  test('gece işi yarım kalmış geri yüklemenin şifresiz dosyalarını hemen siler ve günlüğe yazar; başka veritabanınınkine dokunmaz', async () => {
+    const simdi = new Date('2026-10-30T00:00:00Z');
+    const yedek = dosya('gece', '2026-10-29T23:00:00Z').ad;
+    const baska = dosya('gece', '2026-10-29T23:00:00Z', 'baska').ad;
+    const artiklar = ['.cozulmus', '.geri.sql', '.bosalt.sql'].map((ek) => `${yedek}${ek}`);
+    for (const a of [...artiklar, `${baska}.cozulmus`, 'notlar.geri.sql']) await writeFile(path.join(dizin, a), 'duz');
+    const uyarilar: string[] = [];
+    const gunluk: Gunluk = { uyar: (m) => { uyarilar.push(m); }, hata: () => undefined };
+    await vt().tx((db) => geceYedegiTuru(db, gunluk, yedekOrtami(), simdi));
+    const kalan = await yedekDosyalari();
+    for (const a of artiklar) assert.ok(!kalan.includes(a), `${a} silinmedi`);
+    assert.ok(kalan.includes(`${baska}.cozulmus`) && kalan.includes('notlar.geri.sql'));
+    assert.equal(uyarilar.filter((u) => u.startsWith('Yarım kalmış geri yüklemenin şifresiz dosyası silindi')).length, 3);
+  });
+
   test('gece işi pg_dump sürerken transaction boşta kalmaz: veritabanının boş transaction süresi işi kesmez', async () => {
     process.env['YEDEK_SAHTE_BEKLE_MS'] = '3000';
     const simdi = new Date('2026-10-14T09:00:00Z');
