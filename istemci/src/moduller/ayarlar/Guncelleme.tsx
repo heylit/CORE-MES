@@ -2,8 +2,8 @@ import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import type {
-  GuncellemeKanali, GuncellemeKuruluSurum, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi, GuncellemeParcasiCevabi,
-  GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu,
+  GuncellemeGecmisKaydi, GuncellemeKanali, GuncellemeKuruluSurum, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi,
+  GuncellemeParcasiCevabi, GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -137,7 +137,17 @@ function surumSutunlari(
   ];
 }
 
-function PaketAyrintisi({ paket, yeniGoc }: { paket: GuncellemePaketi; yeniGoc: number | null }) {
+// Kurulumdan önce çalışan ve kurulan sürüm yan yana: hangi yayınların atlandığı buradan okunur.
+const GECMIS_SUTUNLARI: readonly Sutun<GuncellemeGecmisKaydi>[] = [
+  { anahtar: 'bitis', baslik: 'Tarih', kirilmaz: true, hucre: (k) => derlemeTarihi(k.bitis, true) },
+  { anahtar: 'onceki', baslik: 'Önceki', hucre: (k) => k.onceki ?? '?' },
+  { anahtar: 'surum', baslik: 'Kurulan', hucre: (k) => k.surum },
+  { anahtar: 'commit', baslik: 'Commit', mono: true, kirilmaz: true, hucre: (k) => kisaCommit(k.commit) },
+  { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={SONUC_ROZETI[k.sonuc].ton}>{SONUC_ROZETI[k.sonuc].metin}</Rozet> },
+  { anahtar: 'hata', baslik: 'Ayrıntı', hucre: (k) => (k.hata === null ? '' : `${k.adim ?? ''}: ${k.hata}`) },
+];
+
+function PaketAyrintisi({ paket, yeniGoc }: { paket: GuncellemeListePaketi; yeniGoc: number | null }) {
   return (
     <section className="tc-ayar-metin tc-guncelleme-ayrinti" aria-label={`${paket.surum} değişiklikleri`}>
       <p className="tc-ayar-baslik">{paket.surum} ile gelenler</p>
@@ -145,6 +155,7 @@ function PaketAyrintisi({ paket, yeniGoc }: { paket: GuncellemePaketi; yeniGoc: 
         {paket.gocler.length} göç taşır; {yeniGoc === null ? 'sunucuda kaçının yeni olduğu okunamadı' : `${yeniGoc} tanesi sunucuda henüz yok`}.
       </p>
       {paket.not !== null && <p className="tc-ayar-aciklama">{paket.not}</p>}
+      {paket.atlama !== null && <p className="tc-ayar-aciklama" role="note"><Simge ad="alert" boyut="k" /> {paket.atlama}</p>}
       {paket.degisiklikler.length === 0
         ? <p className="tc-ayar-aciklama">Pakette değişiklik listesi yok.</p>
         : <ul className="tc-guncelleme-liste">{paket.degisiklikler.map((d, i) => <li key={i}>{d}</li>)}</ul>}
@@ -223,6 +234,8 @@ export function Guncelleme() {
   const surumler = liste.data?.surumler ?? [];
   const kuruluyor = liste.data?.uygulaniyor?.commit ?? null;
   const sonUygulama = liste.data?.sonUygulama ?? null;
+  // Eski sunucu alanı taşımaz.
+  const gecmis = liste.data?.gecmis ?? [];
   const uygulamaEngeli = !liste.data || kanal !== 'acik' || !gosterilen ? 'Uygulanacak paket yok.'
     : !liste.data.guncelleyici ? 'Sunucu güncelleyiciyle açılmadı; paket uygulanamaz ("npm run baslat").'
       : kuruluyor !== null ? `${kisaCommit(kuruluyor) ?? ''} şu an kuruluyor.`
@@ -304,6 +317,17 @@ export function Guncelleme() {
           />
         </Kart>
       )}
+      {kanal === 'acik' && (
+        <Kart baslik="Uygulama geçmişi">
+          <p className="tc-ayar-aciklama">
+            Her uygulama, sonucu ne olursa olsun buraya yazılır; kayıt silinmez. Önceki ile kurulan arasındaki yayınlar atlanmıştır.
+          </p>
+          <Tablo
+            etiket="Uygulama geçmişi" satirlar={gecmis} sutunlar={GECMIS_SUTUNLARI}
+            satirAnahtari={(k) => `${k.bitis}-${k.commit}`} bosMesaj="Güncelleyici henüz paket uygulamadı."
+          />
+        </Kart>
+      )}
       {/* Alanı taşımayan eski sunucuda kart çıkmaz. */}
       {ayrinti.data?.otomatikAcilis !== undefined && <SunucuAcilisi acilis={ayrinti.data.otomatikAcilis} />}
       {silinecek && (
@@ -327,6 +351,7 @@ export function Guncelleme() {
             Sunucu durur, veritabanı yedeklenir, yeni sürüm kurulur ve {yeniGocSayisi(gosterilen.gocler, sonGoc) ?? '?'} yeni göç koşar.
             Bu sürede kimse sistemi kullanamaz. Bir adım bozulursa önceki sürüm ve yedekteki veritabanı geri gelir.
           </p>
+          {gosterilen.atlama !== null && <p><Simge ad="alert" boyut="k" /> {gosterilen.atlama}</p>}
         </OnayPenceresi>
       )}
     </>

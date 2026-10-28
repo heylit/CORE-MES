@@ -13,8 +13,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  AZAMI_DEGISIKLIK, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULAMA_ISTEGI_DOSYASI,
-  UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
+  AZAMI_DEGISIKLIK, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULAMA_GECMISI_DOSYASI,
+  UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
 } from './kurallar.ts';
 import { YEDEK_DIZINI_DOSYASI } from './yedek-dizini.ts';
 
@@ -166,8 +166,9 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     assert.equal(Math.abs(new Date(sonuc.yuklenme).getTime() - Date.now()) < 60_000, true, 'yüklenme zamanı sunucudan');
     const okunan = (await liste()).json() as GuncellemePaketleriCevabi;
     assert.deepEqual(okunan, {
-      kanal: 'acik', paketler: [{ ...sonuc, uygulanamaz: okunan.paketler[0]?.uygulanamaz ?? null, silinemez: null }], guncelleyici: false,
-      calisan: { commit: null, surum: null, tarih: null }, bekleyen: null, uygulaniyor: null, surumler: [], sonUygulama: null,
+      kanal: 'acik', paketler: [{ ...sonuc, uygulanamaz: okunan.paketler[0]?.uygulanamaz ?? null, silinemez: null, atlama: null }],
+      guncelleyici: false, calisan: { commit: null, surum: null, tarih: null }, bekleyen: null, uygulaniyor: null, surumler: [],
+      sonUygulama: null, gecmis: [],
       yedek: { dizin: path.join(dizin, 'yedek'), hazir: true },
     });
     assert.equal((await saklananPaket(COMMIT)).equals(paket), true);
@@ -261,7 +262,7 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
       kur();
       assert.deepEqual((await liste()).json(), {
         kanal, paketler: [], guncelleyici: false, calisan: { commit: null, surum: null, tarih: null }, bekleyen: null, uygulaniyor: null,
-        surumler: [], sonUygulama: null, yedek: { dizin: null, hazir: false },
+        surumler: [], sonUygulama: null, gecmis: [], yedek: { dizin: null, hazir: false },
       }, ad);
       assert.equal((await parca(randomUUID(), paket, 0)).statusCode, 422, ad);
     }
@@ -402,6 +403,44 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     const okunan = (await liste()).json() as GuncellemePaketleriCevabi;
     assert.equal(okunan.sonUygulama, null);
     assert.deepEqual(okunan.calisan, { commit: COMMIT, surum: null, tarih: null });
+  });
+
+  test('değişiklik listesi çalışan sürümden başlamıyorsa atlanan yayın söylenir; uygulanamayan pakette söylenmez', async () => {
+    await writeFile(path.join(dizin, CALISAN_SURUM_DOSYASI), JSON.stringify({ commit: yeniCommit('c'), surum: '2026.10.28-3', tarih: '2026-10-28T08:00:00.000Z' }));
+    const tam = yeniCommit('d');
+    const atlayan = yeniCommit('e');
+    const eskiBicim = yeniCommit('f');
+    const eski = yeniCommit('0');
+    await paketYukleTamam({ commit: tam, tarih: '2026-10-29T08:00:00.000Z', oncekiYayin: '2026.10.28-3' });
+    await paketYukleTamam({ commit: atlayan, tarih: '2026-10-30T08:00:00.000Z', oncekiYayin: '2026.10.29-1' });
+    await paketYukleTamam({ commit: eskiBicim, tarih: '2026-10-30T09:00:00.000Z' });
+    await paketYukleTamam({ commit: eski, tarih: '2026-10-27T08:00:00.000Z', oncekiYayin: '2026.10.26-1' });
+    assert.equal((await listePaketi(tam))?.atlama, null);
+    assert.equal((await listePaketi(atlayan))?.oncekiYayin, '2026.10.29-1');
+    assert.equal(
+      (await listePaketi(atlayan))?.atlama,
+      'Değişiklikler 2026.10.29-1 sonrasını gösterir; çalışan 2026.10.28-3. Aradaki yayınların değişiklikleri listede yok.',
+    );
+    assert.equal((await listePaketi(eskiBicim))?.atlama, null, 'önceki yayını taşımayan eski paket');
+    assert.equal((await listePaketi(eski))?.uygulanamaz, UYGULAMA_REDDI_ILETISI.eskiSurum);
+    assert.equal((await listePaketi(eski))?.atlama, null);
+
+    await writeFile(path.join(dizin, CALISAN_SURUM_DOSYASI), JSON.stringify({ commit: yeniCommit('c'), surum: null, tarih: '2026-10-28T08:00:00.000Z' }));
+    assert.match((await listePaketi(tam))?.atlama ?? '', /çalışan sürümün yayın adı bilinmiyor/);
+  });
+
+  test('uygulama geçmişi yeniden eskiye döner; bozuk satır atlanır, dosya yoksa boş', async () => {
+    assert.deepEqual(((await liste()).json() as GuncellemePaketleriCevabi).gecmis, []);
+    const kayit = (surum: string, onceki: string | null, sonuc: 'kuruldu' | 'geri-alindi') => ({
+      commit: COMMIT, surum, sonuc, adim: sonuc === 'kuruldu' ? null : 'goc', hata: sonuc === 'kuruldu' ? null : 'göç hata verdi',
+      baslangic: '2026-10-28T08:00:00.000Z', bitis: '2026-10-28T08:05:00.000Z', onceki,
+    });
+    const ilk = kayit('2026.10.28-1', null, 'kuruldu');
+    const ikinci = kayit('2026.10.28-3', '2026.10.28-1', 'geri-alindi');
+    const ucuncu = kayit('2026.10.28-3', '2026.10.28-1', 'kuruldu');
+    await writeFile(path.join(dizin, UYGULAMA_GECMISI_DOSYASI),
+      [ilk, ikinci].map((k) => JSON.stringify(k)).join('\n') + '\n{yarim\n' + JSON.stringify({ surum: 1 }) + '\n' + JSON.stringify(ucuncu) + '\n');
+    assert.deepEqual(((await liste()).json() as GuncellemePaketleriCevabi).gecmis, [ucuncu, ikinci, ilk]);
   });
 
   test('kurulu sürümler listelenir; eski paket ve sürüm silinir, çalışan, bekleyen ve kurulan silinmez; yalnız yönetici siler', async () => {

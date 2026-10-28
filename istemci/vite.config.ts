@@ -20,7 +20,9 @@ function derlemeBilgisi(): { surum: string; tarih: string; commit: string | null
       commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: kok, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
     } catch { /* git yoksa commit bilinmez */ }
   }
-  return { surum: paket.version, tarih: new Date().toISOString(), commit };
+  // Güncelleyici kurduğu yayının adını verir (araclar/guncelleyici.ts derlemeOrtami); elle kurulumda package.json sürümü kalır.
+  const surum = process.env['TMIV2_SURUM']?.trim() || paket.version;
+  return { surum, tarih: new Date().toISOString(), commit };
 }
 
 // Uygulama başka bir sitenin sayfasına gömülemez; kendi çerçeveleri (Arkon, prototip sayfaları) aynı kökendir ya da srcdoc'tur.

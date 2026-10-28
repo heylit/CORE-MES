@@ -8,8 +8,8 @@ import path from 'node:path';
 // şüphede (okunamayan imza, eksik çıktı) her zaman derlenir.
 const ATLANAN = new Set(['dist', 'node_modules', '.git']);
 const IMZA_DOSYASI = '.derleme-imzasi';
-// Derlemeye ortamdan giren değer (istemci/vite.config.ts derlemeBilgisi).
-const ORTAM_GIRDILERI = ['TMIV2_COMMIT'];
+// Derlemeye ortamdan giren değerler (istemci/vite.config.ts derlemeBilgisi).
+const ORTAM_GIRDILERI = ['TMIV2_COMMIT', 'TMIV2_SURUM'];
 
 function dosyalar(kok: string, goreli: string, cikti: string[]): void {
   const tam = path.join(kok, goreli);

@@ -176,6 +176,8 @@ export const guncellemePaketiSemasi = z.object({
   not: z.string().nullable(),
   // Kart #886'dan önceki paketlerin bildiriminde yoktur.
   degisiklikler: z.array(z.string()).default([]),
+  // degisiklikler'in başladığı yayın; ilk yayında ve 1065'ten önceki paketlerde null.
+  oncekiYayin: z.string().nullable().default(null),
   boyut: z.number().int().positive(),
   yukleyenId: z.number().int(),
   yuklenme: zamanSemasi,
@@ -184,7 +186,10 @@ export const guncellemePaketiSemasi = z.object({
 export const GUNCELLEME_KANAL_DURUMLARI = ['acik', 'dizin-yok', 'anahtar-yok', 'anahtar-gecersiz'] as const;
 // Paketi uygulama (kart #1210): uygulamayı sunucunun dışındaki güncelleyici yapar. guncelleyici false ise sunucu onunla
 // açılmamıştır, Uygula reddedilir. uygulanamaz: paketin neden uygulanamadığı (çalışan sürüm, geri gitme); null ise uygulanabilir.
-export const guncellemeListePaketi = guncellemePaketiSemasi.extend({ uygulanamaz: z.string().nullable(), silinemez: z.string().nullable() });
+// atlama: değişiklik listesi çalışan sürümden başlamıyorsa aradaki yayınların listede olmadığını söyler; null ise liste tamdır.
+export const guncellemeListePaketi = guncellemePaketiSemasi.extend({
+  uygulanamaz: z.string().nullable(), silinemez: z.string().nullable(), atlama: z.string().nullable(),
+});
 // Güncelleyicinin kurduğu sürüm klasörü. surum ve tarih, paketi hâlâ duruyorsa onun bildiriminden gelir; yoksa null.
 // silinemez: neden silinemediği (çalışan ya da kuruluyor); null ise silinebilir.
 export const guncellemeKuruluSurum = z.object({
@@ -204,6 +209,8 @@ export const guncellemeUygulamaSonucu = z.object({
   baslangic: zamanSemasi,
   bitis: zamanSemasi,
 });
+// Uygulama geçmişinin bir satırı: sonuç ve uygulamadan önce çalışan sürüm (yayın adı, yoksa commit; ilk kurulumda bilinmeyebilir).
+export const guncellemeGecmisKaydi = guncellemeUygulamaSonucu.extend({ onceki: z.string().nullable() });
 export const guncellemeUygulamaIstegi = z.object({ commit: z.string().regex(/^[0-9a-f]{40}$/), isteyenId: z.number().int(), istenme: zamanSemasi });
 export const guncellemePaketleriCevabi = z.object({
   kanal: z.enum(GUNCELLEME_KANAL_DURUMLARI),
@@ -216,6 +223,8 @@ export const guncellemePaketleriCevabi = z.object({
   uygulaniyor: guncellemeUygulamaIstegi.nullable(),
   surumler: z.array(guncellemeKuruluSurum),
   sonUygulama: guncellemeUygulamaSonucu.nullable(),
+  // Yeniden eskiye; sunucudaki dosyadaki son GUNCELLEME_GECMISI_EN_COK kayıt.
+  gecmis: z.array(guncellemeGecmisKaydi),
   // Güncelleyicinin kurmadan önce yedek alacağı klasör (seçilen, yoksa TMIV2_YEDEK_DIZINI); klasör sunucuda yoksa Uygula reddedilir.
   yedek: z.object({ dizin: z.string().nullable(), hazir: z.boolean() }),
 });
@@ -231,6 +240,8 @@ export type GuncellemeListePaketi = z.output<typeof guncellemeListePaketi>;
 export type GuncellemeKuruluSurum = z.output<typeof guncellemeKuruluSurum>;
 export type GuncellemeUygulamaIstegi = z.output<typeof guncellemeUygulamaIstegi>;
 export type GuncellemeUygulamaSonucu = z.output<typeof guncellemeUygulamaSonucu>;
+export type GuncellemeGecmisKaydi = z.output<typeof guncellemeGecmisKaydi>;
+export const GUNCELLEME_GECMISI_EN_COK = 50;
 
 // Veritabanı yedeği (kart #1205): sunucu her gece pg_dump ile dosyaya alır, ayarlardan elle de alınır ve indirilir.
 // Dosya adı veritabanı, UTC zamanı ve türü taşır; zaman adla okunur, dosya tarihine güvenilmez (kopyalanınca değişir).

@@ -6,13 +6,13 @@ import { fileURLToPath } from 'node:url';
 import type { z } from 'zod';
 import { bulunamadi, cakisma, cokIstek, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import {
-  GUNCELLEME_PARCASI, guncellemePaketiSemasi, type GuncellemeKanali, type GuncellemePaketi, type GuncellemePaketleriCevabi,
+  GUNCELLEME_GECMISI_EN_COK, GUNCELLEME_PARCASI, guncellemePaketiSemasi, type GuncellemeKanali, type GuncellemePaketi, type GuncellemePaketleriCevabi,
   type GuncellemeKuruluSurum, type GuncellemeParcasiCevabi, type GuncellemeParcasiGovdesi, type GuncellemeUygulamaIstegi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import {
   ACIK_GUNCELLEME_YUKLEMESI, AZAMI_PAKET_BASLIGI, BAYAT_GUNCELLEME_SAAT, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI,
-  PAKET_REDDI_ILETISI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULANIYOR_DOSYASI, guncelleyiciSemasi, silmeReddi,
-  UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz,
+  PAKET_REDDI_ILETISI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULANIYOR_DOSYASI, atlamaUyarisi, gecmisiAyikla, guncelleyiciSemasi,
+  silmeReddi, UYGULAMA_GECMISI_DOSYASI, UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz,
   parcaBoyuUyarMi, parcaSayisi, uygulamaIstegiSemasi, uygulamaReddi, uygulamaSonucuSemasi, yukUyuyorMu, type CalisanSurum,
   type PaketBildirimi,
 } from './kurallar.ts';
@@ -193,7 +193,7 @@ export function yuklemeyiBitir(o: GuncellemeOrtami, kisiId: number, kimlik: stri
     }
     const paket: GuncellemePaketi = {
       surum: bildirim.surum, commit: bildirim.commit, tarih: bildirim.tarih, gocler: bildirim.gocler, not: bildirim.not,
-      degisiklikler: bildirim.degisiklikler,
+      degisiklikler: bildirim.degisiklikler, oncekiYayin: bildirim.oncekiYayin,
       boyut: durum.boyut, yukleyenId: kisiId, yuklenme: simdi.toISOString(),
     };
     await rename(yol, hedef);
@@ -291,20 +291,27 @@ export async function paketleriListele(o: GuncellemeOrtami): Promise<GuncellemeP
   const dizin = k.durum === 'acik' ? k.dizin : null;
   const calisan = await calisanOku(o, dizin);
   const ortak = { guncelleyici: await guncelleyiciVarMi(dizin), calisan, yedek: await yedekDurumu(dizin) };
-  if (dizin === null) return { kanal: k.durum, paketler: [], surumler: [], bekleyen: null, uygulaniyor: null, sonUygulama: null, ...ortak };
+  if (dizin === null) {
+    return { kanal: k.durum, paketler: [], surumler: [], bekleyen: null, uygulaniyor: null, sonUygulama: null, gecmis: [], ...ortak };
+  }
   const gocler = await calisanGocler();
   const { bekleyen, uygulaniyor } = await istekler(dizin);
   const durum: SilmeDurumu = { calisan: calisan.commit, bekleyen: bekleyen?.commit ?? null, uygulaniyor: uygulaniyor?.commit ?? null };
   const bildirimListesi = await bildirimler(dizin);
   const paketler = bildirimListesi.map((p) => {
     const red = uygulamaReddi(p, { ...calisan, gocler });
-    return { ...p, uygulanamaz: red === null ? null : UYGULAMA_REDDI_ILETISI[red], silinemez: silinemez('paket', p.commit, durum) };
+    return {
+      ...p, uygulanamaz: red === null ? null : UYGULAMA_REDDI_ILETISI[red], silinemez: silinemez('paket', p.commit, durum),
+      // Uygulanamayan pakette atlanan yayın sorusu yoktur.
+      atlama: red === null ? atlamaUyarisi(p, calisan) : null,
+    };
   });
   paketler.sort((a, b) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime() || a.commit.localeCompare(b.commit));
   return {
     kanal: 'acik', paketler, ...ortak, bekleyen, uygulaniyor,
     surumler: await kuruluSurumler(dizin, bildirimListesi, durum),
     sonUygulama: await jsonOku(path.join(dizin, UYGULAMA_SONUCU_DOSYASI), uygulamaSonucuSemasi),
+    gecmis: gecmisiAyikla(await readFile(path.join(dizin, UYGULAMA_GECMISI_DOSYASI), 'utf8').catch(() => ''), GUNCELLEME_GECMISI_EN_COK),
   };
 }
 
