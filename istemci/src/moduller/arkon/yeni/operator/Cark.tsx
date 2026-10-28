@@ -7,12 +7,14 @@ import './cark.css';
 
 /* 790: iş ve makine çarkı (CNC Kurulum'un kart dizisi gibi). Tek çark, şerit başına bir liste. Çevirmek yalnız bakar: düğme, yana
    kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandaki işi değiştirmez; geçiş ve seçim şeridin kendi eylemidir. Ekrandaki öğe
-   de kısa kartla çizilir; komşular arkada üst üste görünür (prototip, 828 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir. */
+   de kısa kartla çizilir; komşular arkada üst üste görünür (prototip, 828 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir.
+   Tek öğeli şeritte çevirecek bir şey yoktur: ok, sıra ve ipucu çizilmez, kart tek başına durur (888 a). */
 
 export interface CarkSeridi {
   anahtar: string;
   ad: string;
   simge: SimgeAdi;
+  // Gerçek öğe sayısı. Boş şeritte de tek kart çizilir (ekrandaki yer tutucu), ama sayı 0 kalır.
   sayi: number;
   // Ekrandaki öğenin sırası; ekranda öğesi olmayan şeritte (makineler) -1.
   etkin: number;
@@ -24,13 +26,18 @@ export interface CarkSeridi {
 
 // Çizilen komşu sayısı: ötesi görünmez, DOM'a da girmez.
 const KOMSU = 2;
+// Sürükleme bu kadar yürüyünce işaretçi sahneye bağlanır: dışarıda bırakılan sürükleme de sayılır (888 c), ama yerinde dokunuş
+// komşu kartın tıklaması olarak kalır (yakalanan işaretçinin tıklaması sahneye gider).
+const YAKALA = 8;
+const SURUKLE = 40;
 
 export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSeridi[]; ilk?: number }) {
   const [sec, secYaz] = useState(ilk);
   const s = seritler[Math.min(sec, seritler.length - 1)];
   const kok = useRef<HTMLDivElement>(null);
-  const tutus = useRef<number | null>(null);
+  const tutus = useRef<{ x: number; id: number } | null>(null);
   const n = s ? s.sayi : 0;
+  const doner = n > 1;
   const bak = s ? Math.min(Math.max(s.bak, 0), Math.max(n - 1, 0)) : 0;
   const adim = (d: number) => { if (s && n > 0) s.bakYaz(Math.min(n - 1, Math.max(0, bak + d))); };
   const adimRef = useRef(adim);
@@ -51,7 +58,7 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
   }, []);
   if (!s) return null;
   const sira: number[] = [];
-  for (let i = Math.max(0, bak - KOMSU); i <= Math.min(n - 1, bak + KOMSU); i++) sira.push(i);
+  for (let i = Math.max(0, bak - KOMSU); i <= Math.min(Math.max(n, 1) - 1, bak + KOMSU); i++) sira.push(i);
   const baska = s.etkin >= 0 && bak !== s.etkin;
   return (
     <section className="tc-ay1-tcark" aria-label="İş ve makine çarkı" data-baska={baska || undefined}>
@@ -64,16 +71,25 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
           </div>
         ) : <span className="tc-ay1-ust-yazi">{s.ad}</span>}
         <span className="tc-ay1-bosluk" />
-        {n > 1 ? <span className="tc-ay1-tcark-ipucu">Kaydır, dokun ya da ←/→ · yalnız bakar</span> : null}
-        <b className="tc-ay1-mono tc-ay1-tcark-konum">{n ? `${bak + 1} / ${n}` : '0'}</b>
+        {doner ? <span className="tc-ay1-tcark-ipucu">Kaydır, dokun ya da ←/→ · yalnız bakar</span> : null}
+        {doner ? <b className="tc-ay1-mono tc-ay1-tcark-konum">{`${bak + 1} / ${n}`}</b> : null}
       </div>
       <div
         ref={kok} className="tc-ay1-tcark-sahne" role="group" aria-roledescription="çark" aria-label={s.ad} tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') { e.preventDefault(); adim(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); adim(1); } else if (e.key === 'Escape' && s.etkin >= 0) s.bakYaz(s.etkin);
         }}
-        onPointerDown={(e) => { tutus.current = e.clientX; }}
-        onPointerUp={(e) => { const x = tutus.current; tutus.current = null; if (x !== null && Math.abs(e.clientX - x) > 40) adim(e.clientX < x ? 1 : -1); }}
+        onPointerDown={(e) => { tutus.current = doner ? { x: e.clientX, id: e.pointerId } : null; }}
+        onPointerMove={(e) => {
+          const t = tutus.current;
+          const el = e.currentTarget;
+          if (t && t.id === e.pointerId && Math.abs(e.clientX - t.x) > YAKALA && !el.hasPointerCapture(e.pointerId)) el.setPointerCapture(e.pointerId);
+        }}
+        onPointerUp={(e) => {
+          const t = tutus.current;
+          tutus.current = null;
+          if (t && t.id === e.pointerId && Math.abs(e.clientX - t.x) > SURUKLE) adim(e.clientX < t.x ? 1 : -1);
+        }}
         onPointerCancel={() => { tutus.current = null; }}
       >
         {sira.map((i) => {
@@ -86,11 +102,13 @@ export function TerminalCarki({ seritler, ilk = 0 }: { seritler: readonly CarkSe
         })}
       </div>
       <div className="tc-ay1-tcark-alt">
-        <span className="tc-ay1-tcark-oklar">
-          <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
-          <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
-        </span>
-        <div className="tc-ay1-tcark-eylem" aria-live="polite">{n ? s.eylem(bak) : null}</div>
+        {doner ? (
+          <span className="tc-ay1-tcark-oklar">
+            <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
+            <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki: ${s.ad.toLocaleLowerCase('tr')}`} disabled={bak >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
+          </span>
+        ) : null}
+        <div className="tc-ay1-tcark-eylem" aria-live="polite">{s.eylem(bak)}</div>
       </div>
     </section>
   );
@@ -119,7 +137,7 @@ export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { 
           <small className="tc-ay1-mono">{[`${is.good} / ${is.target} adet`, is.due ? `Termin ${is.due}` : null].filter(Boolean).join(' · ')}</small>
         </>
       )}
-      {makine ? <small>Makine: {makine}</small> : null}
+      {makine ? <small className="tc-ay1-tcark-makine">Makine: {makine}</small> : null}
     </article>
   );
 }

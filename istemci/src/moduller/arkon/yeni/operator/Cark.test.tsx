@@ -16,13 +16,13 @@ const MAKINELER: CarkMakinesi[] = [
 ];
 
 // Terminalin kurduğu biçimde: bakılan iş dışarıda tutulur, geçiş ve makine seçimi yalnız eylem düğmesiyle olur.
-function Deneme({ gecilen, secilen, engel = null }: { gecilen: number[]; secilen: string[]; engel?: string | null }) {
+function Deneme({ gecilen, secilen, engel = null, isler = ISLER }: { gecilen: number[]; secilen: string[]; engel?: string | null; isler?: readonly Is[] }) {
   const [bak, bakYaz] = useState(0);
   const [mak, makYaz] = useState(0);
   const seritler: CarkSeridi[] = [
     {
-      anahtar: 'is', ad: 'İşler', simge: 'list', sayi: ISLER.length, etkin: 0, bak, bakYaz,
-      ciz: (i) => <IsOnizKarti is={ISLER[i]!} siradaki={i === 1} ekranda={i === 0} makine={i === 0 ? 'M-1' : null} />,
+      anahtar: 'is', ad: 'İşler', simge: 'list', sayi: isler.length, etkin: 0, bak, bakYaz,
+      ciz: (i) => <IsOnizKarti is={isler[i] ?? bosIs({ l: 'Deneme' })} siradaki={i === 1} ekranda={i === 0} makine={i === 0 ? 'M-1' : null} />,
       eylem: (i) => <IsEylemi ekranda={i === 0} don={() => bakYaz(0)} gec={() => gecilen.push(i)} />,
     },
     {
@@ -71,6 +71,64 @@ describe('790: iş ve makine çarkı', () => {
     fireEvent.pointerDown(sahne, { clientX: 200 });
     fireEvent.pointerUp(sahne, { clientX: 100 });
     expect(getByText(/Önizleme/)).toBeTruthy();
+  });
+
+  it('888 c: sürükleme sahnenin dışında bırakılsa da sayılır; işaretçi yürüyünce sahneye bağlanır, yerinde dokunuşta bağlanmaz', () => {
+    // jsdom'un PointerEvent'i yok; MouseEvent işaretçi kimliğini taşımaz, kimlikli küçük bir alt sınıf verilir.
+    class Isaretci extends MouseEvent {
+      readonly pointerId: number;
+      constructor(tur: string, ek: MouseEventInit & { pointerId?: number } = {}) { super(tur, ek); this.pointerId = ek.pointerId ?? 0; }
+    }
+    const eskiOlay = Object.getOwnPropertyDescriptor(window, 'PointerEvent');
+    Object.defineProperty(window, 'PointerEvent', { value: Isaretci, configurable: true });
+    const bagli = new Set<number>();
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+    const eski = { set: proto['setPointerCapture'], has: proto['hasPointerCapture'] };
+    proto['setPointerCapture'] = (id: number) => { bagli.add(id); };
+    proto['hasPointerCapture'] = (id: number) => bagli.has(id);
+    try {
+      const { getByRole, getByText, container } = render(<Deneme gecilen={[]} secilen={[]} />);
+      const sahne = getByRole('group', { name: 'İşler' });
+      fireEvent.pointerDown(sahne, { clientX: 200, pointerId: 1 });
+      fireEvent.pointerMove(sahne, { clientX: 196, pointerId: 1 });
+      expect(bagli.size).toBe(0);
+      fireEvent.pointerMove(sahne, { clientX: 150, pointerId: 1 });
+      expect(bagli.has(1)).toBe(true);
+      // Yakalanan işaretçinin bırakılışı sahnenin dışında olsa da sahneye gelir.
+      fireEvent.pointerUp(sahne, { clientX: -300, pointerId: 1 });
+      expect(getByText(/Önizleme/)).toBeTruthy();
+      expect(container.querySelector('[data-fark="0"]')!.textContent).toContain('UE-2');
+    } finally {
+      proto['setPointerCapture'] = eski.set;
+      proto['hasPointerCapture'] = eski.has;
+      if (eskiOlay) Object.defineProperty(window, 'PointerEvent', eskiOlay); else Reflect.deleteProperty(window, 'PointerEvent');
+    }
+  });
+
+  it('888 a: tek işte ok, sıra ve ipucu yok; kart tek başına durur, sürükleme bir şey yapmaz', () => {
+    if (!('PointerEvent' in window)) Object.defineProperty(window, 'PointerEvent', { value: MouseEvent, configurable: true });
+    const { getByRole, queryByRole, queryByText, getByText, container } = render(<Deneme gecilen={[]} secilen={[]} isler={[ISLER[0]!]} />);
+    expect(getByRole('button', { name: /İşler · 1/ })).toBeTruthy();
+    expect(queryByRole('button', { name: 'Sonraki: işler' })).toBeNull();
+    expect(queryByRole('button', { name: 'Önceki: işler' })).toBeNull();
+    expect(queryByText('1 / 1')).toBeNull();
+    expect(container.querySelector('.tc-ay1-tcark-ipucu')).toBeNull();
+    expect([...container.querySelectorAll('.tc-ay1-tcark-oge')].map((x) => x.getAttribute('data-fark'))).toEqual(['0']);
+    const sahne = getByRole('group', { name: 'İşler' });
+    fireEvent.pointerDown(sahne, { clientX: 200 });
+    fireEvent.pointerUp(sahne, { clientX: 100 });
+    expect(getByText(/Ekranda · sayaç/)).toBeTruthy();
+    // Makine şeridinde öğe çok: oklar orada durur.
+    fireEvent.click(getByRole('button', { name: /Makineler · 3/ }));
+    expect(getByRole('button', { name: 'Sonraki: makineler' })).toBeTruthy();
+    expect(getByText('1 / 3')).toBeTruthy();
+  });
+
+  it('888 a: iş yokken şerit 0 sayar; ekrandaki boş iş tek kart olarak durur', () => {
+    const { getByRole, queryByRole, container } = render(<Deneme gecilen={[]} secilen={[]} isler={[]} />);
+    expect(getByRole('button', { name: /İşler · 0/ })).toBeTruthy();
+    expect(queryByRole('button', { name: 'Sonraki: işler' })).toBeNull();
+    expect(container.querySelectorAll('.tc-ay1-tcark-oge')).toHaveLength(1);
   });
 
   it('önizleme kartı durum, sıradaki ve acil etiketini taşır', () => {
