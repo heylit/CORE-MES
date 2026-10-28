@@ -1440,6 +1440,26 @@ export interface FasonHareketiOzeti {
 
 export type FasonIsEmri = s.FasonIsEmri;
 export const fasonIsEmirleri = (db: Db): Promise<FasonIsEmri[]> => s.fasonIsEmirleri(db);
+
+// Sevkiyat Tüm işler (960) fason gidiş adayı: sırası gelmiş mi ve gidebilecek adet (adıma giren, ilk adımda emir adedi; gönderilen düşülmez).
+// Gidiş kaydıyla aynı hesap (fasonBaglami); kilit almaz, okuma anının değeridir.
+export interface FasonGonderimi { siradaki: boolean; gonderilebilir: number; gonderilen: number }
+export async function fasonGonderimleri(db: Db, isler: readonly { isEmriId: number; uretimEmriId: number; adet: number }[]): Promise<Map<number, FasonGonderimi>> {
+  const sonuc = new Map<number, FasonGonderimi>();
+  if (isler.length === 0) return sonuc;
+  const hepsi = await s.isEmirleriGetir(db, [...new Set(isler.map((x) => x.uretimEmriId))]);
+  const hareketler = await s.fasonHareketleriGetir(db, isler.map((x) => x.isEmriId));
+  for (const x of isler) {
+    const emrin = hepsi.filter((i) => i.uretimEmriId === x.uretimEmriId);
+    const isEmri = emrin.find((i) => i.id === x.isEmriId);
+    if (isEmri === undefined) continue;
+    const { gonderilen } = fasonOzeti(hareketler.filter((h) => h.isEmriId === x.isEmriId));
+    sonuc.set(x.isEmriId, {
+      siradaki: siradakiIsEmri(emrin)?.id === x.isEmriId, gonderilen, gonderilebilir: (await adimaGiren(db, x.uretimEmriId, emrin, isEmri)) ?? x.adet,
+    });
+  }
+  return sonuc;
+}
 export const fasonGecmisi = (db: Db, secim: { firmaId?: number; malzemeNo?: number; sonGun?: number } = {}): Promise<s.FasonGecmisSatiri[]> =>
   s.fasonGecmisiGetir(db, { firmaId: secim.firmaId ?? null, malzemeNo: secim.malzemeNo ?? null, sonGun: secim.sonGun ?? null });
 

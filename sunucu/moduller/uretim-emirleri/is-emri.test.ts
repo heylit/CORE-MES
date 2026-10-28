@@ -22,7 +22,7 @@ import {
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
-import { emirIptalDinle, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
+import { emirIptalDinle, fasonGonderimleri, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
@@ -286,6 +286,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const hareketsiz = (await fasonIsEmirleri(o().vt)).find((x) => x.isEmriId === ie2);
     assert.deepEqual(hareketsiz && [hareketsiz.ilkGidis, hareketsiz.termin, hareketsiz.gonderilen, hareketsiz.donen, hareketsiz.hurda], [null, null, null, null, null]);
     assert.deepEqual(hareketsiz && [hareketsiz.adet, hareketsiz.terminGun, hareketsiz.teslim, typeof hareketsiz.malzemeNo], [10, 5, null, 'number'], 'ön talep için emir adedi ve fason günü');
+    // Sevkiyat Tüm işler (960) fason gidiş adayı: sırası gelmiş, önceki adımın 9 sağlamı gidebilir; fason olmayan iş emri haritada sırasız.
+    const gonderim = () => o().vt.tx((db) => fasonGonderimleri(db, [{ isEmriId: ie2, uretimEmriId: id, adet: 10 }, { isEmriId: ie3, uretimEmriId: id, adet: 10 }]));
+    assert.deepEqual((await gonderim()).get(ie2), { siradaki: true, gonderilebilir: 9, gonderilen: 0 });
+    assert.equal((await gonderim()).get(ie3)?.siradaki, false);
 
     // Fason: kısmi gidiş ve dönüş ayrı satırlardır; toplamlar aşılamaz. Depo kaydeder; operatör kaydedemez.
     const fasonKisi = (kisi: string, yol: string, govde?: unknown, ik = randomUUID()) =>
@@ -310,6 +314,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(g1.durum, 200, JSON.stringify(g1.govde));
     assert.equal((await fason('fason-gidis', { adet: 5 }, tekrar)).govde.hareketId, g1.govde.hareketId, 'aynı istek kimliği ikinci kez yazmaz');
     assert.equal((await fason('fason-gidis', { adet: 4 })).durum, 200);
+    assert.deepEqual((await gonderim()).get(ie2), { siradaki: true, gonderilebilir: 9, gonderilen: 9 });
     // Dönüş yalnız mal kabulden girer (kullanıcı kararı 15.10, "Kalksın"): eski uç yoktur, kayıt stokun çağırdığı yoldan yazılır.
     assert.equal((await fason('fason-donus', { saglamAdet: 1, hurdaAdet: 0 })).durum, 404, 'Dış operasyonlardan dönüş ucu kaldırıldı');
     const donus = (saglam: number, hurda: number) => o().vt.tx((db) => fasonDonusuKaydet(db, yoneticiId, id, ie2, saglam, hurda));

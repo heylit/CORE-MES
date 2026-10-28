@@ -407,6 +407,9 @@ export const fasonDonusuKaydet = isEmri.fasonDonusuKaydet;
 // Satın alma dış operasyonlar (#542 U3); yetki denetlemez, çağıran korur.
 export const fasonIsEmirleri = isEmri.fasonIsEmirleri;
 export type { FasonIsEmri } from './is-emri-servis.ts';
+// Sevkiyat Tüm işler (960): fason adımının sırası ve gidebilecek adedi; yetki denetlemez, çağıran korur.
+export const fasonGonderimleri = isEmri.fasonGonderimleri;
+export type { FasonGonderimi } from './is-emri-servis.ts';
 // Satın almanın fason süresi tahmini (CA-2) geçmişi buradan okur; yetki denetlemez, çağıran korur. Süre = sonDonus - ilkGidis.
 export const fasonGecmisi = isEmri.fasonGecmisi;
 export type { FasonGecmisSatiri } from './sorgular.ts';

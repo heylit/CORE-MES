@@ -6,16 +6,19 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   aracCevabi, aracGovdesi, aracGuncelleGovdesi, araclarCevabi, aramaCevabi, aramaSorgusu, bekleyenBolCevabi, bekleyenBolGovdesi, bekleyenKaldirCevabi, bekleyenlerCevabi, dagitGovdesi, gunPlaniCevabi, haritaCevabi, idParametresi, isCevabi,
   isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
-  trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu,
+  trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu, elleKalemGovdesi, kalemCevabi, serbestBirakCevabi, serbestBirakGovdesi, tasimaGovdesi,
+  tumIslerCevabi, tumIslerSorgusu,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { Arac, GunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
-import { aracMaliyetsiz, gunPlaniMaliyetsiz, korunanOranlar, MALIYET_OKUMA, tekRotaMaliyetsiz } from './kurallar.ts';
+import { aracMaliyetsiz, gunPlaniMaliyetsiz, korunanOranlar, MALIYET_OKUMA, SERBEST_BIRAKMA_ISLEMLERI, tekRotaMaliyetsiz } from './kurallar.ts';
 import * as servis from './servis.ts';
 import type { HaritaKaynagi } from './servis.ts';
+import * as tumIsler from './tum-isler.ts';
 
 // Maliyet işlemi uçta değil alan düzeyinde denetlenir: ekran herkese açılır, rakam yalnız yetkiliye gider (180, 200 a).
 const maliyetGorur = (k: Kullanici): boolean => islemVarMi(k, MALIYET_OKUMA);
 const arac = (k: Kullanici, a: Arac): Arac => (maliyetGorur(k) ? a : aracMaliyetsiz(a));
+const yazan = (k: Kullanici): tumIsler.Yazan => ({ kisiId: k.id, yetkili: (islem) => islemVarMi(k, islem) });
 const plan = async (k: Kullanici, p: Promise<GunPlaniCevabi>): Promise<GunPlaniCevabi> => (maliyetGorur(k) ? p : gunPlaniMaliyetsiz(await p));
 
 // Harita kaynağı parametredir ki test küçük bir yol ağıyla, dosyasız koşsun; üretimde paket dizininden okunur.
@@ -74,6 +77,33 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
     uc({
       yontem: 'POST', yol: '/sevkiyat/bekleyenler/:id/kaldir', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, cevap: bekleyenKaldirCevabi,
       isle: ({ db, parametre, kullanici }) => servis.bekleyeniKaldir(db, parametre.id, kullanici.id),
+    }),
+
+    // ---------- Tüm işler (960) ----------
+    // Kalemi sahibi modülün yazma işlemi ya da sevkiyat serbest bırakır (941 c); uç listeyle açılır, kalem başına denetim serviste.
+    uc({
+      yontem: 'GET', yol: '/sevkiyat/tum-isler', yetki: { biri: ['sevkiyat.oku', ...SERBEST_BIRAKMA_ISLEMLERI] }, sorgu: tumIslerSorgusu, cevap: tumIslerCevabi,
+      isle: async ({ db, sorgu }) => ({ satirlar: await tumIsler.tumIsler(db, sorgu) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/tum-isler/serbest-birak', yetki: { biri: SERBEST_BIRAKMA_ISLEMLERI }, tekrarKorumali: true, govde: serbestBirakGovdesi, cevap: serbestBirakCevabi,
+      isle: async ({ db, govde, kullanici }) => ({ kalemIdleri: await tumIsler.serbestBirak(db, yazan(kullanici), govde) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/tum-isler/elle', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, govde: elleKalemGovdesi, cevap: serbestBirakCevabi,
+      isle: async ({ db, govde, kullanici }) => ({ kalemIdleri: await tumIsler.elleKalemAc(db, yazan(kullanici), govde) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/kalemler/:id/tasima', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: tasimaGovdesi, cevap: kalemCevabi,
+      isle: async ({ db, parametre, govde, kullanici }) => ({ satir: await tumIsler.tasimaDegistir(db, kullanici.id, parametre.id, govde.tasima) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/tetikle', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, cevap: tumIslerCevabi,
+      isle: async ({ db, parametre, kullanici }) => ({ satirlar: await tumIsler.isTetikle(db, kullanici.id, parametre.id) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/tetigi-geri-al', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, cevap: tumIslerCevabi,
+      isle: async ({ db, parametre }) => ({ satirlar: await tumIsler.isTetiginiGeriAl(db, parametre.id) }),
     }),
 
     // ---------- işler ----------

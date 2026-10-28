@@ -22,7 +22,7 @@ const TARIH = '2026-10-08';
 type Islem = (typeof SEVKIYAT_ISLEMLERI)[number];
 
 // Uç başına istenen işlem; ON-PAKET 3. bölümdeki tablo bununla aynıdır.
-const BEKLENEN: Record<string, Islem> = {
+const BEKLENEN: Record<string, Islem | { biri: readonly string[] }> = {
   'GET /sevkiyat/noktalar': 'sevkiyat.oku',
   'GET /sevkiyat/firmalar': 'sevkiyat.tanim-yaz',
   'GET /sevkiyat/ozet': 'sevkiyat.oku',
@@ -38,6 +38,13 @@ const BEKLENEN: Record<string, Islem> = {
   'POST /sevkiyat/bekleyenler/:id/ise-cevir': 'sevkiyat.is-yaz',
   'POST /sevkiyat/bekleyenler/:id/kaldir': 'sevkiyat.is-yaz',
   'POST /sevkiyat/bekleyenler/:id/bol': 'sevkiyat.is-yaz',
+  // Tüm işler (941 c): kalemin sahibi modülün yazma işlemi de bırakır; kalem başına denetim serviste.
+  'GET /sevkiyat/tum-isler': { biri: ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
+  'POST /sevkiyat/tum-isler/serbest-birak': { biri: ['sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
+  'POST /sevkiyat/tum-isler/elle': 'sevkiyat.is-yaz',
+  'POST /sevkiyat/kalemler/:id/tasima': 'sevkiyat.is-yaz',
+  'POST /sevkiyat/isler/:id/tetikle': 'sevkiyat.is-yaz',
+  'POST /sevkiyat/isler/:id/tetigi-geri-al': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/ekle': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/guncelle': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/iptal-et': 'sevkiyat.is-yaz',
@@ -124,7 +131,7 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
       for (const [islem, cerez] of islemCerezi) {
         const durum = (await iste(hedef, yontem, yol, cerez)).statusCode;
         // Kabul: yetki geçer; gövdesiz ya da var olmayan kayıtlı istek doğrulama ya da bulunamadı ile döner.
-        if (islem === u.yetki) assert.equal([401, 403].includes(durum), false, `${ad} ${islem} -> ${durum}`);
+        if (typeof u.yetki === 'string' ? islem === u.yetki : (u.yetki as { biri: readonly string[] }).biri.includes(islem)) assert.equal([401, 403].includes(durum), false, `${ad} ${islem} -> ${durum}`);
         else assert.equal(durum, 403, `${ad} ${islem}`);
       }
     }

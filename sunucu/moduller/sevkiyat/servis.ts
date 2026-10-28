@@ -336,21 +336,21 @@ export async function siparisinSevkleri(db: Db, siparisId: number): Promise<Sipa
 
 // ---------- bekleme listesi (kart #1310) ----------
 
-// Biten emrin ürünü listeye düşer (bütün emirler); gönderim gününü, müşteri noktasını ve yükü planlayıcı işe çevirirken verir.
-// Sağlamı olmayan emir gönderilecek bir şey taşımaz.
+// Biten emrin ürünü Tüm işlerde hazır kalem olur (960): sevkiyata serbest bırakılınca bekleme listesine düşer. Emir bitmeden önceden
+// bırakılmışsa (kalemin adedi boş) adet yazılır ve kalem kendiliğinden düşer. Sağlamı olmayan emir gönderilecek bir şey taşımaz.
 export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
   if (olay.saglamAdet <= 0) return;
   const emir = await uretimEmriOzeti(db, olay.uretimEmriId);
   if (emir === null) return;
   await sorgu.bekleyenEkle(db, {
-    kaynak: 'urun', uretimEmriId: emir.id, fasonHareketId: null, talepId: null, firmaId: null, malzemeNo: emir.malzemeNo,
-    adet: String(olay.saglamAdet), istenenTarih: emir.teslim === null ? null : emir.teslim.slice(0, 10), isId: null,
+    kaynak: 'urun', yon: 'gidis', uretimEmriId: emir.id, fasonHareketId: null, talepId: null, firmaId: null, malzemeNo: emir.malzemeNo,
+    adet: String(olay.saglamAdet), istenenTarih: emir.teslim === null ? null : emir.teslim.slice(0, 10), isId: null, serbest: null,
   });
 }
 
 // Fasona gönderim fabrikadan firmaya teslimat işi olarak gönderim gününün havuzuna düşer. Yük bilinmez: 1 palet yazılır, planlayıcı
 // düzeltir. Firmanın sevkiyat noktası yoksa iş açılmaz, gönderim bekleme listesinde durur; gönderim reddedilmez. Dönüş iş açmaz:
-// dönüş, mal geldikten sonra girilir.
+// dönüş, mal geldikten sonra girilir. Dış operasyonlardan yazılan gidiş kendiliğinden serbest bırakılmış sayılır.
 export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Promise<void> {
   const h = await fasonHareketiOzeti(db, olay.hareketId);
   if (h === null || h.yon !== 'gidis' || h.adet <= 0) return;
@@ -364,8 +364,8 @@ export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Pro
     })).id;
   }
   await sorgu.bekleyenEkle(db, {
-    kaynak: 'fason', uretimEmriId: h.uretimEmriId, fasonHareketId: h.id, talepId: null, firmaId: h.firmaId, malzemeNo: emir?.malzemeNo ?? null,
-    adet: String(h.adet), istenenTarih: null, isId,
+    kaynak: 'fason', yon: 'gidis', uretimEmriId: h.uretimEmriId, fasonHareketId: h.id, talepId: null, firmaId: h.firmaId, malzemeNo: emir?.malzemeNo ?? null,
+    adet: String(h.adet), istenenTarih: null, isId, isEmriId: h.isEmriId, serbest: { tasima: 'biz', yer: 'otomatik', kisiId: olay.kisiId, erken: null },
   });
 }
 const FASON_ISI = {
@@ -385,8 +385,8 @@ export async function alimYansit(db: Db, olay: AlimOlayi): Promise<void> {
   }
   for (const a of olay.alimlar.filter((x) => !satirlar.some((sat) => sat.firmaId === x.firmaId))) {
     await sorgu.bekleyenEkle(db, {
-      kaynak: 'alim', uretimEmriId: null, fasonHareketId: null, talepId: olay.talepId, firmaId: a.firmaId, malzemeNo: null,
-      adet: null, istenenTarih: a.istenenTarih, isId: null,
+      kaynak: 'alim', yon: 'gelis', uretimEmriId: null, fasonHareketId: null, talepId: olay.talepId, firmaId: a.firmaId, malzemeNo: null,
+      adet: null, istenenTarih: a.istenenTarih, isId: null, serbest: { tasima: 'biz', yer: 'satin-alma', kisiId: olay.kisiId, erken: null },
     });
   }
 }
@@ -403,7 +403,7 @@ export async function bekleyenleriListele(db: Db): Promise<Bekleyen[]> {
   const noktalar = await sorgu.firmaNoktalari(db, firmaIdleri);
   const talepler = await talepNolari(db, varolan(satirlar.map((b) => b.talepId)));
   return satirlar.map((b) => ({
-    id: b.id, kaynak: b.kaynak, uretimEmriId: b.uretimEmriId, emirNo: b.uretimEmriId === null ? null : emirler.get(b.uretimEmriId) ?? null,
+    id: b.id, kaynak: b.kaynak, yon: b.yon, uretimEmriId: b.uretimEmriId, emirNo: b.uretimEmriId === null ? null : emirler.get(b.uretimEmriId) ?? null,
     talepId: b.talepId, talepNo: b.talepId === null ? null : talepler.get(b.talepId) ?? null, malzemeNo: b.malzemeNo, malzemeAd: b.malzemeNo === null ? null : malzemeler.get(b.malzemeNo) ?? null,
     firmaId: b.firmaId, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
     noktaId: b.firmaId === null ? null : noktalar.get(b.firmaId) ?? null,

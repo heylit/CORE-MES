@@ -446,6 +446,8 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
   });
 
   test('11 sevkiyat: bekleyen işe çevrilir; teslimde mamul müşterinin Yolda konumundan stoktan düşer (bulgu 3)', async () => {
+    // 960: biten emrin ürün kalemi Tüm işlerden serbest bırakılınca bekleme listesine düşer.
+    tamam(await yaz('sevkiyat', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`urun:${String(S.emir)}`], tasima: 'biz' }));
     const bek = tamam(await oku<{ bekleyenler: { id: number; uretimEmriId: number | null; firmaId: number | null; adet: string }[] }>('sevkiyat', '/sevkiyat/bekleyenler'))
       .bekleyenler.find((x) => x.uretimEmriId === S.emir);
     assert.ok(bek, 'emir için bekleyen yok');
