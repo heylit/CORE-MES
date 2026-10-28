@@ -6,6 +6,7 @@ import {
   ACILIS_PAYI_MS, Bekci, GUNCELLEME_ISARETI, GUNCELLEME_PAYI_MS, KARARLI_MS, YOKLAMA_ARALIGI_MS, baslangicBetigi, baslangicKlasoru, beklemeMs, guncellemeSuruyorMu, gunlukDosyasi,
   type BekciOrtami,
 } from './bekci.ts';
+import { ISARET_YENILEME_MS } from './guncelleyici.ts';
 
 // Sahte saat ve süreç: her açılış verilen süre ayakta kalır ve verilen kodla kapanır.
 function sahte(acilislar: { sure: number; kod: number | null; sinyal?: string }[], durdurAn?: number) {
@@ -174,4 +175,6 @@ test('güncelleme işareti yoksa ya da güncelleme payından eskiyse (takılan g
   assert.equal(guncellemeSuruyorMu(simdi - 60_000, simdi), true);
   assert.equal(guncellemeSuruyorMu(simdi - GUNCELLEME_PAYI_MS - 1, simdi), false);
   assert.equal(GUNCELLEME_ISARETI, UYGULANIYOR_DOSYASI);
+  // Güncelleyici işareti bu aralıkla yeniler; bir iki yenileme kaçsa da pay dolmamalı.
+  assert.ok(GUNCELLEME_PAYI_MS >= 3 * ISARET_YENILEME_MS);
 });

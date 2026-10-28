@@ -3,9 +3,12 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { UYGULAMA_ISTEGI_DOSYASI, UYGULANIYOR_DOSYASI } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  Guncelleyici, altSurecOrtami, derlemeOrtami, gecmisSatiri, npmKurulumArgumanlari, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari,
+  CALISAN_SURUM_DOSYASI, UYGULAMA_GECMISI_DOSYASI, UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
+} from '../sunucu/moduller/ayarlar/disari.ts';
+import {
+  Guncelleyici, UYGULAMA_DURUMU_DOSYASI, altSurecOrtami, derlemeOrtami, gecmisSatiri, npmKurulumArgumanlari, yarimKalaniKapat,
+  type UygulamaDurumu, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari,
 } from './guncelleyici.ts';
 import { NPM_ONBELLEGI } from './paket.ts';
 
@@ -135,4 +138,80 @@ test('geçmiş satırı tek satırdır ve önceki sürümü yayın adıyla, yoks
   assert.deepEqual(JSON.parse(satir), { ...sonuc, onceki: '2026.10.28-3' });
   assert.equal(JSON.parse(gecmisSatiri(sonuc, { commit: 'a'.repeat(40), surum: null, tarih: null })).onceki, 'aaaaaaa');
   assert.equal(JSON.parse(gecmisSatiri(sonuc, { commit: null, surum: null, tarih: null })).onceki, null);
+});
+
+test('her adımdan önce adım ve sürüm adı kaydedilir; sürüm adı doğrulamadan sonra paketinkidir', async () => {
+  const { adimlar } = sahte(['gocle']);
+  const kayit: string[] = [];
+  await paketiUygula(ISTEK, adimlar, saat, async (adim, surum) => { kayit.push(`${adim}:${surum}`); });
+  assert.deepEqual(kayit, ['dogrula:aaaaaaa', 'hazirla:2026.10.14-1', 'durdur:2026.10.14-1', 'yedek:2026.10.14-1', 'goc:2026.10.14-1']);
+});
+
+const ESKI = { klasor: '/kurulum/surumler/eski', surum: { commit: 'e'.repeat(40), surum: '2026.10.13-1', tarih: '2026-10-13T08:00:00.000Z' } };
+const durumu = (adim: UygulamaDurumu['adim'], yedek: string | null, elle = false): UygulamaDurumu => ({
+  istek: ISTEK, surum: '2026.10.14-1', adim, eski: ESKI, yedek, baslangic: '2026-10-14T08:00:00.000Z', elle,
+});
+
+test('yarım kalan uygulama: göçten önce kaldıysa geri yükleme yok, eski sürüm açılır', async () => {
+  for (const adim of ['dogrula', 'hazirla', 'durdur', 'yedek'] as const) {
+    let yuklenen = 0;
+    const s = await yarimKalaniKapat(durumu(adim, '/y/a.dump'), async () => { yuklenen++; }, saat);
+    assert.equal(yuklenen, 0, adim);
+    assert.equal(s.eskiAcilsin, true, adim);
+    assert.equal(s.sonuc.sonuc, 'basarisiz', adim);
+    assert.equal(s.sonuc.adim, adim);
+    assert.match(s.sonuc.hata ?? '', /veritabanı değişmedi/);
+  }
+});
+
+test('yarım kalan uygulama: göçte ya da açılışta kaldıysa yedek geri yüklenir; yüklenemezse ya da yedek yoksa sunucu kapalı kalır', async () => {
+  for (const adim of ['goc', 'acilis'] as const) {
+    const yuklenen: string[] = [];
+    const tamam = await yarimKalaniKapat(durumu(adim, '/y/a.dump'), async (y) => { yuklenen.push(y); }, saat);
+    assert.deepEqual(yuklenen, ['/y/a.dump']);
+    assert.deepEqual([tamam.sonuc.sonuc, tamam.eskiAcilsin], ['geri-alindi', true], adim);
+    const bozuk = await yarimKalaniKapat(durumu(adim, '/y/a.dump'), async () => { throw new Error('psql hata verdi'); }, saat);
+    assert.deepEqual([bozuk.sonuc.sonuc, bozuk.eskiAcilsin], ['basarisiz', false], adim);
+    assert.match(bozuk.sonuc.hata ?? '', /geri yüklenemedi.*psql hata verdi/);
+    const yedeksiz = await yarimKalaniKapat(durumu(adim, null), async () => { assert.fail('yedek yokken geri yükleme denenmez'); }, saat);
+    assert.deepEqual([yedeksiz.sonuc.sonuc, yedeksiz.eskiAcilsin], ['basarisiz', false], adim);
+  }
+});
+
+test('açılışta durum dosyası: yoksa çalışan sürüm açılır; göçten önce kalmışsa eski sürüm açılır, sonuç ve geçmiş yazılır', async () => {
+  const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-guncelleyici-'));
+  try {
+    const g = new Guncelleyici({ kok: dizin, dizin, anahtar: '', port: 0 }, null);
+    assert.equal((await g.yarimKalaniBitir())?.klasor, dizin);
+    await writeFile(join(dizin, CALISAN_SURUM_DOSYASI), JSON.stringify({ commit: ISTEK.commit, surum: '2026.10.14-1', tarih: null }));
+    await writeFile(join(dizin, UYGULAMA_DURUMU_DOSYASI), JSON.stringify(durumu('hazirla', null)));
+    assert.deepEqual(await g.yarimKalaniBitir(), ESKI);
+    assert.equal((await readdir(dizin)).includes(UYGULAMA_DURUMU_DOSYASI), false);
+    assert.deepEqual(JSON.parse(await readFile(join(dizin, CALISAN_SURUM_DOSYASI), 'utf8')), ESKI.surum, 'çalışan sürüm eskiye döner');
+    assert.equal(JSON.parse(await readFile(join(dizin, UYGULAMA_SONUCU_DOSYASI), 'utf8')).sonuc, 'basarisiz');
+    const gecmis = (await readFile(join(dizin, UYGULAMA_GECMISI_DOSYASI), 'utf8')).trim().split('\n');
+    assert.equal(gecmis.length, 1);
+    assert.equal(JSON.parse(gecmis[0] ?? '').onceki, '2026.10.13-1');
+  } finally {
+    await rm(dizin, { recursive: true, force: true });
+  }
+});
+
+test('açılışta durum dosyası: geri yüklenemeyen, elle bekleyen ya da okunamayan durumda sunucu açılmaz', async () => {
+  const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-guncelleyici-'));
+  const hata = console.error;
+  console.error = () => {};
+  try {
+    const g = new Guncelleyici({ kok: dizin, dizin, anahtar: '', port: 0 }, null);
+    await writeFile(join(dizin, UYGULAMA_DURUMU_DOSYASI), JSON.stringify(durumu('goc', null)));
+    assert.equal(await g.yarimKalaniBitir(), null);
+    assert.equal(JSON.parse(await readFile(join(dizin, UYGULAMA_DURUMU_DOSYASI), 'utf8')).elle, true, 'sonraki açılış da durur');
+    assert.equal(await g.yarimKalaniBitir(), null);
+    assert.equal((await readFile(join(dizin, UYGULAMA_GECMISI_DOSYASI), 'utf8')).trim().split('\n').length, 1, 'elle bekleyen ikinci kez yazılmaz');
+    await writeFile(join(dizin, UYGULAMA_DURUMU_DOSYASI), '{bozuk');
+    assert.equal(await g.yarimKalaniBitir(), null);
+  } finally {
+    console.error = hata;
+    await rm(dizin, { recursive: true, force: true });
+  }
 });

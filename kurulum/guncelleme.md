@@ -64,6 +64,19 @@ Her kurulan sürüm `surumler/<commit>` klasöründe kalır (bağımlılıkları
 şu an uygulanan sürüm silinmez; çalışan sürümün paket dosyası silinebilir (kurulumda okunmaz). Güncelleyici isteği aldığında
 uygulama bitene kadar `uygulaniyor.json` yazar; ekran o sürede kurulan sürümü "Kuruluyor" gösterir.
 
+## Uygulama yarıda kesilirse
+
+Güncelleyici `uygulaniyor.json`'un zamanını dakikada bir yeniler; bekçi (kurulum/servis.md) işaret 5 dakikadan eskiyse
+güncelleyiciyi ölmüş sayar ve olağan yoklamaya döner. Uzun süren göç işareti eskitmez. Güncelleyici her adımdan önce adımı,
+eski sürümü ve alınan yedeğin yolunu `uygulama-durumu.json`'a yazar; uygulama bitince dosya silinir. Açılışta dosya duruyorsa
+önceki uygulama yarıda kesilmiştir (elektrik kesintisi, bekçinin kapatması):
+- Göçten önce kaldıysa veritabanı değişmemiştir: eski sürüm açılır, sonuç "Başarısız".
+- Göçte ya da yeni sürümün açılışında kaldıysa alınan yedek geri yüklenir, eski sürüm açılır, sonuç "Geri alındı".
+- Yedek geri yüklenemezse (ya da dosya okunamazsa) sunucu açılmaz; bekçi her yeniden açışta aynı iletiyi günlüğe yazar. Yedek
+  elle geri yüklenir (kurulum/yedek.md "Geri yükleme"), sonra `uygulama-durumu.json` silinir. Yeni sürüm yarım şemayla açılmasın
+  diye `calisan.json` eski sürüme döndürülmüştür.
+Sonuç Güncelleme sekmesinde "Son uygulama" ve "Uygulama geçmişi"nde görünür.
+
 ## Sınırlar
 
 - Sunucu internete çıkmaz. Paket, lock dosyasındaki bütün npm paketlerini (yalnız sunucunun işletim sistemi ve işlemcisi için)

@@ -27,11 +27,12 @@ export const YOKLAMA_ARALIGI_MS = 30_000;
 export const YOKLAMA_SURESI_MS = 5_000;
 const CEVAPSIZ_ESIK = 3;
 
-// Güncelleyici (araclar/guncelleyici.ts) uygulama boyunca bu işareti tutar; o sürede sunucu bilerek kapalıdır (yedek, göç, yeni sürümün
-// açılışı) ve ağacı kapatmak göçü yarıda keser. İşaret bu paydan eskiyse güncelleyici takılmış sayılır ve olağan yoklama işler.
+// Güncelleyici (araclar/guncelleyici.ts) uygulama boyunca bu işareti tutar ve dakikada bir zamanını yeniler; o sürede sunucu bilerek
+// kapalıdır (yedek, göç, yeni sürümün açılışı) ve ağacı kapatmak göçü yarıda keser. Uzun göç işareti eskitmez; işaret bu paydan eskiyse
+// güncelleyici ölmüş ya da takılmış sayılır ve olağan yoklama işler (açılan güncelleyici yarım kalanı kendisi kapatır).
 // Ad ayarlar modülündeki sabitle aynıdır (bekci.test.ts denetler); bekçi sunucu kodunu yüklemesin diye ithal edilmez.
 export const GUNCELLEME_ISARETI = 'uygulaniyor.json';
-export const GUNCELLEME_PAYI_MS = 60 * 60_000;
+export const GUNCELLEME_PAYI_MS = 5 * 60_000;
 
 export function guncellemeSuruyorMu(isaretZamani: number | null, simdi: number): boolean {
   return isaretZamani !== null && simdi - isaretZamani <= GUNCELLEME_PAYI_MS;
