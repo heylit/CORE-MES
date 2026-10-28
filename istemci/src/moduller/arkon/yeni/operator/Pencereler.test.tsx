@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DurusNedeni } from '../cekirdek/ayarlar.ts';
 import type { ScrapReason } from '../cekirdek/tipler.ts';
+import { TopluGiris } from './Parcalar.tsx';
 import { DurusPenceresi, HataliPenceresi, VardiyaPenceresi, hataliIstegi, type HataliGirdisi } from './Pencereler.tsx';
 import type { VardiyaOzeti } from './kurallar.ts';
 
@@ -69,5 +70,16 @@ describe('Hatalı parça (1034)', () => {
     expect(hataliIstegi({ id: 'tmi-ue-7' }, g)).toEqual({ emirId: 7, govde: { hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });
     expect(hataliIstegi({ id: 'yerel-1' }, g)).toBeNull();
     expect(hataliIstegi({ id: 'tmi-ue-7' }, { ...g, adet: 0 })).toBeNull();
+  });
+
+  it('toplu girişte TMI işinde ikinci alan Hatalı adını taşır (1044 a); öteki işte Hurda kalır', () => {
+    const { unmount } = render(<TopluGiris kalan={10} kapali={false} nedenler={nedenler} hurdaEtiketi="Hatalı" kaydet={() => true} />);
+    expect(screen.getByLabelText('Toplu hatalı')).toBeTruthy();
+    expect(screen.queryByLabelText('Toplu hurda')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Toplu hatalı'), { target: { value: '2' } });
+    expect(screen.getByRole('radiogroup', { name: 'Hatalı nedeni' })).toBeTruthy();
+    unmount();
+    render(<TopluGiris kalan={10} kapali={false} nedenler={nedenler} kaydet={() => true} />);
+    expect(screen.getByLabelText('Toplu hurda')).toBeTruthy();
   });
 });

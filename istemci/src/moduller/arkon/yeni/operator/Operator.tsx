@@ -1140,7 +1140,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </div>
   );
   const toplu = uretir ? (
-    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={ayarlar.hurdaNedenleri}
+    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={ayarlar.hurdaNedenleri} hurdaEtiketi={hataliTmi ? 'Hatalı' : 'Hurda'}
       kaydet={(g) => { const tamam = topluKaydet(g); if (tamam) ovYaz(null); return tamam; }} />
   ) : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
