@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=24.22.1"
   },
+  "allowScripts": {
+    "esbuild": true
+  },
   "imports": {
     "#paylasilan/*": "./paylasilan/*",
     "#cekirdek/*": "./sunucu/cekirdek/*"
