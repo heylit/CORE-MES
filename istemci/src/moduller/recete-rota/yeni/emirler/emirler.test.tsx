@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, YONETICI, type Istek } from '../test-ortak.tsx';
+import { durumAdi } from './kurallar.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -14,6 +15,16 @@ const emirAc = async () => {
 };
 const yazmalar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem !== 'GET');
 const kisi = (islemler: string[]): Kullanici => ({ id: 9, ad: 'Deneme 9', islemler: [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', ...islemler] as Kullanici['islemler'] });
+
+describe('R3 emir durumu adı (1082 a)', () => {
+  it('bitmiş emir onaylı kapanışa kadar "Üretimi bitti", sonra sahibinin kapanış sonucu; öbür durumlar değişmez', () => {
+    expect(durumAdi({ status: 'tamam' })).toBe('Üretimi bitti');
+    expect(durumAdi({ status: 'tamam', kapanisSonucu: null })).toBe('Üretimi bitti');
+    expect(durumAdi({ status: 'tamam', kapanisSonucu: 'tamamlandi' })).toBe('Tamamlandı');
+    expect(durumAdi({ status: 'tamam', kapanisSonucu: 'saglamsiz' })).toBe('Kapandı (sağlamsız)');
+    expect(durumAdi({ status: 'uretimde', kapanisSonucu: 'tamamlandi' })).toBe('Üretimde');
+  });
+});
 
 describe('R3 Üretim emirleri: okuma', () => {
   it('okuyan liste ve ayrıntıyı görür; yazma düğmesi yok, yazma isteği gitmez', async () => {
@@ -35,13 +46,13 @@ describe('R3 Üretim emirleri: okuma', () => {
     expect(within(ayrinti).getByRole('button', { name: "Üretim Emirleri'nde aç" })).toBeTruthy();
   });
 
-  it('süzgeç sayıları ve durum süzgeci: tamamlananda taslak emir yok', async () => {
+  it('süzgeç sayıları ve durum süzgeci: üretimi bitenlerde taslak emir yok', async () => {
     sunucuKur(OKUYAN);
     rrAc();
     const b = await bolum('Üretim emirleri');
     const durum = await within(b).findByRole('group', { name: 'Durum' });
     expect(within(durum).getByRole('button', { name: /Taslak/ }).textContent).toContain('1');
-    fireEvent.click(within(durum).getByRole('button', { name: /Tamamlanan/ }));
+    fireEvent.click(within(durum).getByRole('button', { name: /Üretimi biten/ }));
     await within(b).findByText('Bu süzgeçte emir yok.');
   });
 

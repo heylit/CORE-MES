@@ -7,7 +7,7 @@ import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import {
-  acikMi, adimDurumu, adimPlani, DURUM_ADI, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
+  acikMi, adimDurumu, adimPlani, durumAdi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
 import { planMetni, tamponRozeti, type TamponRozeti } from './gorunum.ts';
@@ -62,7 +62,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
         <Girdi etiket="Başlangıç" readOnly value={tarih(o.start)} />
         <Girdi etiket="Teslim" readOnly value={tarih(o.due)} />
         <Girdi etiket="Öncelik" readOnly value={ONCELIK_ADI[o.priority] ?? ''} />
-        <Girdi etiket="Durum" readOnly value={DURUM_ADI[o.status]} />
+        <Girdi etiket="Durum" readOnly value={durumAdi(o)} />
         {!o.rotasiz && (rev || yururlukte) && (
           <Girdi
             etiket="Rota revizyonu" readOnly
@@ -366,7 +366,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
   const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d, stok), [d, stok]);
   if (!plandaMi(o)) {
     const metin = o.status === 'taslak' ? 'Taslak emirler plana girmez. Plana alınca yerleşir.'
-      : o.status === 'tamam' ? 'Bu emir tamamlandı.' : 'Bu emir iptal edildi.';
+      : o.status === 'tamam' ? `Bu emrin durumu: ${durumAdi(o)}.` : 'Bu emir iptal edildi.';
     return <p className="tc-rr3-ipucu">{metin}</p>;
   }
   const R = ihtiyaclar.get(o.id) ?? null;

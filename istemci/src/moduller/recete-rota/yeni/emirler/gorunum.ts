@@ -20,7 +20,7 @@ const calisanMetni = (op: number[]): string =>
   op.length === 1 ? `OP ${String(op[0])} çalışıyor, planda yok` : `${String(op.length)} çalışan adım planda yok`;
 export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null; alt: string | null; altTon: RozetTonu | null } {
   switch (p.tur) {
-    case 'tamam': return { metin: 'Tamamlandı', ton: null, alt: null, altTon: null };
+    case 'tamam': return { metin: p.metin, ton: null, alt: null, altTon: null };
     case 'plan-disi': return { metin: 'Plan dışı', ton: null, alt: null, altTon: null };
     case 'motor-yok': return { metin: '—', ton: null, alt: null, altTon: null };
     case 'planlanamiyor': {

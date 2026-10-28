@@ -324,6 +324,17 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual(c.map((x) => x.start), [null, null, null, null], 'tarih yoksa null; uydurulmaz');
   });
 
+  test('1082 a: bitmiş emir sahibinin kapanış sonucunu taşır; kaydı olmayan bitmiş emir null, bitmemiş emirde alan yok', () => {
+    const temel = {
+      malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, kaynakRotaRevizyonId: 7, emirTuru: 'seri',
+      acilma: '2030-01-01T00:00:00Z', bitis: '2030-01-02T00:00:00Z', ustEmirId: null, bolunmeSira: null, birlestigiEmirId: null, birlesmeOpNo: null, surum: 1, isEmirleri: [],
+    };
+    const emir = (id: number, durum: EmirKaydi['durum']): EmirKaydi => ({ ...temel, id, emirNo: `E${String(id)}`, durum });
+    const c = emirleriCevir([emir(1, 'bitti'), emir(2, 'bitti'), emir(3, 'bitti'), emir(4, 'basladi')], new Map([[1, 'tamamlandi'], [2, 'saglamsiz']])).orders;
+    assert.deepEqual(c.map((x) => x.kapanisSonucu), ['tamamlandi', 'saglamsiz', null, undefined]);
+    assert.equal('kapanisSonucu' in (emirleriCevir([emir(4, 'basladi')]).orders[0] ?? {}), false);
+  });
+
   test('EMR-8: rotalı emrin bitmemiş adımları emirdeki iç ya da dış üretimiyle gider (UE-URY); biten adım ve rotasız emir gitmez', () => {
     const temel = {
       malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, durum: 'planli' as const, emirTuru: 'seri', acilma: '2030-01-01T00:00:00Z',

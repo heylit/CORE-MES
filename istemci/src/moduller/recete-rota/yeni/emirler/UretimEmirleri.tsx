@@ -9,7 +9,7 @@ import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
+  bugun, DURUM_SUZGECLERI, durumAdi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
@@ -154,7 +154,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
           <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
           <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)}` : ''}</small>
         </span>
-        <span data-baslik="Durum"><span className="tc-rr3-durum" data-durum={o.status}>{DURUM_ADI[o.status]}</span></span>
+        <span data-baslik="Durum"><span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span></span>
         <Simge ad={acik ? 'down' : 'chev-right'} boyut="k" />
       </button>
       {acik && <div className="tc-rr3-govde">{children}</div>}
