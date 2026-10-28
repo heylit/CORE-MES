@@ -2,33 +2,30 @@ import type { Page } from '@playwright/test';
 import { HESAPLAR, type Hesap } from './hesaplar.ts';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Kalite Merkezi'nin TS ekranı (199 b). Eski adresine geçti (582, 527 1 a): menü adresleri yeni ekranı açar, eski çerçeve bir süre
-// /kalite-merkezi/eski altındadır; Resim ve modeller yeni stüdyodadır (597 a), parça seçilmeden liste açar (799). Bölüm testleri K1-K4 parçalarıyla kendi describe
+// Kalite Merkezi'nin TS ekranı (199 b). Menü adresleri yeni ekranı açar (582, 527 1 a), eski görünümü yoktur (979 a); Resim ve
+// modeller yeni stüdyodadır (597 a), parça seçilmeden liste açar (799). Bölüm testleri K1-K4 parçalarıyla kendi describe
 // bloklarına eklenir; örnek veri değiştiren akış burada yazılmaz.
 // Ayarlar sekmesi "Ayarlar ve yedek" adını taşır ama bugünkü gibi "Ayarlar ve veri" penceresini açar; başlık pencereden aranır.
 
 test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
-  const gecis = async (page: Page, ad: 'Eski görünüm' | 'Yeni görünüm') => {
-    await page.getByRole('button', { name: 'Hesap' }).click();
-    await page.getByRole('menuitem', { name: ad }).click();
-  };
-
-  test('menü adresi yeni ekrandır, kabuğun şeridi durur; eski görünüme gidip aynı görünüme döner', async ({ page, ag, ac }) => {
+  test('menü adresi yeni ekrandır, kabuğun şeridi durur; eski görünüm yoktur', async ({ page, ag, ac }) => {
     await ac('/kalite-merkezi/dof');
     const serit = page.getByRole('navigation', { name: 'Kalite Merkezi menüsü' });
     await expect(serit).toBeVisible();
     await expect(page.locator('.tc-km-govde')).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /Kaynaklar/ })).toHaveCount(0);
-    await gecis(page, 'Eski görünüm');
-    await expect(page).toHaveURL(/\/kalite-merkezi\/eski\/dof$/);
-    await expect(page.locator('main iframe')).toHaveCount(1);
     await expect(serit.getByRole('link', { name: /DÖF/ })).toHaveAttribute('aria-current', 'page');
-    await gecis(page, 'Yeni görünüm');
-    await expect(page).toHaveURL(/\/kalite-merkezi\/dof$/);
-    await expect(page.locator('.tc-km-govde')).toBeVisible();
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Eski görünüm' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await ac('/kalite-merkezi/eski/dof');
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await ac('/kalite-merkezi/eski');
+    await expect(page.getByText('Böyle bir görünüm yok.')).toBeVisible();
+    await expect(page.locator('main iframe')).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -146,10 +143,9 @@ test.describe('yönetici', () => {
   });
 });
 
-// Her rolde görünürlük eşitliği (553 2): bir görünümü eski sayfada gören yeni ekranda da görür, görmeyen görmez. Eskide görmek çerçevenin
-// adres değişmeden açılmasıdır; yenide ekranın gövdesinin açılmasıdır. Stüdyo görünümleri (217 b) iki görünümde de çerçevedir, denenmez.
-// Ölçü tek genişlikte alınır: görünürlük genişliğe bağlı değildir. "Ayarlar" eski sayfada görünüm değil penceredir: yetkisizde pencere
-// açılmaz ama adres yerinde kalabilir, eskide ölçülemez; yetkisizde açılmadığı birim testindedir (KaliteMerkeziYeni.test.tsx).
+// Her rolde görünürlük (553 2): açmak, adres değişmeden ekranın gövdesinin açılmasıdır. Stüdyo görünümleri (217 b) çerçevedir, denenmez.
+// Ölçü tek genişlikte alınır: görünürlük genişliğe bağlı değildir. "Ayarlar" yetkisizde açılmaz ama adres yerinde kalabilir; yetkisizde
+// açılmadığı birim testindedir (KaliteMerkeziYeni.test.tsx).
 const GORUNUMLER = ['', 'parcalar', 'kutuphane', 'muayeneler', 'lot-kabul', 'is-emirleri', 'olcum-analizi', 'uygunsuzluklar', 'dof', 'cihazlar',
   'tedarikciler', 'belgeler', 'formlar', 'kullanicilar', 'terimler', 'gostergeler', 'degisiklik-izi', 'arsiv'] as const;
 const kapali = (page: Page) => page.getByRole('heading', { name: 'Yetkiniz yok' })
@@ -162,9 +158,9 @@ async function acilir(page: Page, isaret: ReturnType<Page['locator']>, adres: st
   return await isaret.count() > 0 && new URL(page.url()).pathname === adres;
 }
 
-// Eski görünüm yalnız yöneticidedir (681 a): eşitlik yöneticide ölçülür. Başka hesapta eski adres kapalıdır ve yeni ekranda açılan
-// görünümler 681 öncesi eşitlik ölçümünün listesidir (o gün eskide görülenle aynıydı); liste değişirse görünürlük değişmiştir.
-const YENIDE_ACILAN: Readonly<Record<Exclude<Hesap, 'ornek.yonetici'>, readonly string[]>> = {
+// Liste eski görünümle yapılan eşitlik ölçümünün (582, 681) sonucudur; eski görünüm kalktı (979 a), liste değişirse görünürlük değişmiştir.
+const ACILAN: Readonly<Record<Hesap, readonly string[]>> = {
+  'ornek.yonetici': GORUNUMLER,
   'ornek.mudur': GORUNUMLER,
   'ornek.planlama': [],
   'ornek.operator1': [],
@@ -177,35 +173,18 @@ const YENIDE_ACILAN: Readonly<Record<Exclude<Hesap, 'ornek.yonetici'>, readonly 
 };
 
 for (const hesap of HESAPLAR) {
-  test.describe(`582 görünürlük eşitliği · ${hesap}`, () => {
+  test.describe(`582 görünürlük · ${hesap}`, () => {
     test.use({ hesap });
-    test('eski ve yeni görünümde aynı görünümler açılır', async ({ page, ac }, bilgi) => {
+    test('rolün görünümleri açılır, başkaları açılmaz', async ({ page, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
       test.setTimeout(240_000);
-      const yeni: string[] = [];
-      if (hesap !== 'ornek.yonetici') {
-        for (const g of GORUNUMLER) {
-          const y = adresi(g, '/kalite-merkezi');
-          await ac(y);
-          if (await acilir(page, page.locator('.tc-km-govde'), y)) yeni.push(g);
-        }
-        await ac('/kalite-merkezi/eski');
-        await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
-        await expect(page.locator('main iframe')).toHaveCount(0);
-        expect(yeni, `${hesap}: yeni ekranda açılan görünümler`).toEqual(YENIDE_ACILAN[hesap]);
-        return;
-      }
-      const eski: string[] = [];
+      const acilan: string[] = [];
       for (const g of GORUNUMLER) {
-        const e = adresi(g, '/kalite-merkezi/eski');
-        await ac(e);
-        if (await acilir(page, page.locator('main iframe'), e)) eski.push(g);
         const y = adresi(g, '/kalite-merkezi');
         await ac(y);
-        if (await acilir(page, page.locator('.tc-km-govde'), y)) yeni.push(g);
+        if (await acilir(page, page.locator('.tc-km-govde'), y)) acilan.push(g);
       }
-      bilgi.annotations.push({ type: 'eskide görülen', description: eski.join(', ') });
-      expect(yeni, `${hesap}: eskide görülen görünümler`).toEqual(eski);
+      expect(acilan, `${hesap}: açılan görünümler`).toEqual(ACILAN[hesap]);
     });
   });
 }

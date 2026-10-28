@@ -127,8 +127,7 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
   });
 
   it('kabuğun şeridi yeni ekranda da eski adreste de durur (553 1 a; eski sayfa tek maddelik şeridi de çizer)', () => {
-    for (const yol of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon', '/arkon/pano', '/arkon/eski/pano',
-      '/kalite-merkezi', '/kalite-merkezi/dof', '/kalite-merkezi/eski/dof', '/kalite-merkezi/resimler']) {
+    for (const yol of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon', '/arkon/pano', '/arkon/eski/pano']) {
       expect(yeniEkranAdresiMi(yol), yol).toBe(false);
     }
   });
@@ -144,23 +143,16 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     expect(seritAdresi('/arkon/eski/kalite')).toBe('/arkon/kalite');
   });
 
-  it('Malzemeler: eski görünüm kalktı (979 a); geçiş yoktur, eski adres eski görünüm sayılmaz, şerit durur', () => {
+  it('Malzemeler ve Kalite Merkezi: eski görünüm kalktı (979 a); geçiş yoktur, eski adres eski görünüm sayılmaz, şerit durur', () => {
     const yonetici = [YENI_EKRAN_ISLEMI];
-    for (const yol of ['/malzemeler', '/malzemeler/sablonlar', '/malzemeler/eski', '/malzemeler/eski/yeni']) {
+    for (const yol of ['/malzemeler', '/malzemeler/sablonlar', '/malzemeler/eski', '/malzemeler/eski/yeni',
+      '/kalite-merkezi', '/kalite-merkezi/dof', '/kalite-merkezi/resimler', '/kalite-merkezi/eski', '/kalite-merkezi/eski/dof']) {
       expect(gorunumGecisi(yol, yonetici), yol).toBeNull();
       expect(eskiGorunumAdresiMi(yol), yol).toBe(false);
       expect(yeniEkranAdresiMi(yol), yol).toBe(false);
     }
     expect(seritAdresi('/malzemeler/ayarlar')).toBe('/malzemeler/ayarlar');
-  });
-
-  it('Kalite Merkezi: görünüm eski adreste aynı görünümdür; Resim ve modellerin eskisi yoktur', () => {
-    expect(gorunumGecisi('/kalite-merkezi')).toEqual({ baslik: 'Eski görünüm', yol: '/kalite-merkezi/eski' });
-    expect(gorunumGecisi('/kalite-merkezi/dof')).toEqual({ baslik: 'Eski görünüm', yol: '/kalite-merkezi/eski/dof' });
-    expect(gorunumGecisi('/kalite-merkezi/eski/dof')).toEqual({ baslik: 'Yeni görünüm', yol: '/kalite-merkezi/dof' });
-    expect(gorunumGecisi('/kalite-merkezi/resimler')).toBeNull();
-    expect(seritAdresi('/kalite-merkezi/eski/dof')).toBe('/kalite-merkezi/dof');
-    expect(seritAdresi('/kalite-merkezi/eski')).toBe('/kalite-merkezi');
+    expect(seritAdresi('/kalite-merkezi/dof')).toBe('/kalite-merkezi/dof');
   });
 
   it('kişi menüsü yeni ekranda eskisini, eski ekranda yenisini açar; başka sayfada madde yoktur', () => {

@@ -271,3 +271,48 @@ export function yedekAnahtariCoz(metin: string | undefined): YedekAnahtari {
   return { durum: 'tamam', anahtar: Buffer.from(temiz, 'base64') };
 }
 
+
+// Talimat medyası aynası (1004 a, 1005 a). Medya dosyasının adı içeriğinin sha256 özetidir ve `<ab>/<cd>/<özet>` altında durur;
+// dosya bir kez yazılır, değişmez. Ayna bu yüzden yalnız aynada olmayan adları kopyalar, içerik karşılaştırmaz. Kaynaktan silinen
+// dosya aynada 30 gün daha durur: 14 günlük veritabanı yedeklerinin en eskisi geri yüklenince künyesinin dosyası bulunsun.
+export const MEDYA_SILINEN_SAKLAMA_GUN = 30;
+const MEDYA_OZETI = /^[0-9a-f]{64}$/;
+const MEDYA_KLASORU = /^[0-9a-f]{2}$/;
+
+export function medyaOzetiMi(ad: string): boolean {
+  return MEDYA_OZETI.test(ad);
+}
+
+export function medyaKlasoruMu(ad: string): boolean {
+  return MEDYA_KLASORU.test(ad);
+}
+
+// Özet `ab/cd/özet` klasörlerinin yerini kendisi belirler; ilk dört hanesi klasörlerle tutmayan dosya başka bir şeydir.
+export function medyaYeriTutarMi(ab: string, cd: string, ozet: string): boolean {
+  return medyaOzetiMi(ozet) && ozet.slice(0, 2) === ab && ozet.slice(2, 4) === cd;
+}
+
+export function medyaAltYolu(ozet: string): [string, string, string] {
+  return [ozet.slice(0, 2), ozet.slice(2, 4), ozet];
+}
+
+export function silinenMedyaSilinsinMi(silinmeZamani: Date, simdi: Date): boolean {
+  return simdi.getTime() - silinmeZamani.getTime() > MEDYA_SILINEN_SAKLAMA_GUN * GUN_MS;
+}
+
+// Ayna gece yedeğinin ardından koşar (önce veritabanı): dump'taki her künyenin dosyası o anda medya klasöründe vardır, ayna onu
+// alır. Son gece yedeği aynadan yeniyse ayna gerekir; gece yedeği hiç yoksa ayna da beklenir.
+export function medyaAynasiGerekliMi(sonGeceYedegi: Date | null, sonAyna: Date | null): boolean {
+  if (sonGeceYedegi === null) return false;
+  return sonAyna === null || sonAyna.getTime() < sonGeceYedegi.getTime();
+}
+
+// Ayna, kopyalayacağı dosyaların toplamına ek olarak veritabanı yedeğinin en az boş yerini bırakır: medya diski doldurup gece
+// yedeğini düşürmesin.
+export function medyaYeriEksigi(bos: number | null, gereken: number): string | null {
+  if (bos === null) return null;
+  const toplam = gereken + YEDEK_EN_AZ_BOS_BAYT;
+  if (bos >= toplam) return null;
+  return `Yedek klasöründe medya için yer yetmiyor: boş ${gb(bos)} GB, gereken en az ${gb(toplam)} GB (yeni medya artı 1 GB). `
+    + 'Yer açın; medya aynası bu tur kopyalamadı.';
+}

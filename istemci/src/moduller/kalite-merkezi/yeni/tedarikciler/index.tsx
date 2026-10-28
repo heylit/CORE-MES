@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { OnayPenceresi } from '../../../../ortak/arayuz/OnayPenceresi.tsx';
 import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import type { Sutun } from '../../../../ortak/arayuz/Tablo.tsx';
 import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
-import { hataIletisi } from '../../../../ortak/veri/api.ts';
-import { AdimliForm, type KmAdim, type KmAlan } from '../AdimliForm.tsx';
+import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { AdimliForm, type KmAdim, type KmAlan, type KmSecenek } from '../AdimliForm.tsx';
 import { trd, YOK } from '../bicim.ts';
 import { Ekler } from '../Ekler.tsx';
 import { Damga, KayitListesi } from '../KayitListesi.tsx';
@@ -37,14 +39,44 @@ export const tedarikciAlanlari = (sayi: number): KmAlan[] => [
   { k: 'not', etiket: 'Not / şartlar (flow-down)', tur: 'cokSatir', genis: 'tam' },
 ];
 
+// 236 a: kayıt Müşteri-Tedarikçi'deki firmaya `firmaId` ile bağlanır; satın alma siparişleri bu bağla eşlenir. Listede olmayan bağ
+// (firma sonradan pasifleşmiş) seçenek olarak korunur, yoksa kaydetmek bağı sessizce koparırdı.
+export type TedarikciFirmasi = KmTedarikciFirmalariCevabi['firmalar'][number];
+export function firmaSecenekleri(firmalar: readonly TedarikciFirmasi[], mevcut: number | null | undefined): KmSecenek[] {
+  const s: KmSecenek[] = [['', 'Bağlı değil'], ...firmalar.map((f): KmSecenek => [String(f.id), f.kod ? `${f.ad} (${f.kod})` : f.ad])];
+  if (typeof mevcut === 'number' && !firmalar.some((f) => f.id === mevcut)) s.push([String(mevcut), `Firma #${mevcut} (listede yok)`]);
+  return s;
+}
+// Seçim metin olarak döner; sunucu yalnız pozitif tam sayı ya da null kabul eder.
+export function firmaKimligi(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+const FIRMA_ANAHTARI = ['kalite-merkezi', 'tedarikci-firmalari'] as const;
+
 const onayTonu = (o: string | undefined): KmTon => (o === 'Onaylı' ? 'iyi' : o === 'Askıda' ? 'kotu' : 'uyari');
 
 function TedarikciFormu({ veri, yetki, kayit, kapat }: { veri: KmVerisi; yetki: KmYetkisi; kayit: Tedarikci | null; kapat: () => void }) {
   const komut = useKmKomutu(yetki.rol);
   const { bildir } = useBildirim();
-  const alanlar = useMemo(() => tedarikciAlanlari(veri.sup.length), [veri.sup.length]);
+  // Liste onay yetkisiyle açılır (sunucu ucu öyle); açılamazsa alan hiç çıkmaz ve kayıttaki bağ olduğu gibi kalır.
+  const firmalar = useQuery({
+    queryKey: FIRMA_ANAHTARI,
+    queryFn: () => api.get<KmTedarikciFirmalariCevabi>('/kalite-merkezi/tedarikci-firmalari'),
+    enabled: yetki.onayla,
+  });
+  const firmaVar = firmalar.data !== undefined;
+  const alanlar = useMemo(() => {
+    const a = tedarikciAlanlari(veri.sup.length);
+    if (!firmalar.data) return a;
+    const firma: KmAlan = {
+      k: 'firmaId', etiket: 'Bağlı firma', tur: 'secim', secenekler: firmaSecenekleri(firmalar.data.firmalar, kayit?.firmaId),
+      ipucu: "Müşteri-Tedarikçi'deki firma; satın alma siparişleri bu bağla eşlenir.",
+    };
+    return [...a.slice(0, 2), firma, ...a.slice(2)];
+  }, [veri.sup.length, firmalar.data, kayit?.firmaId]);
   const adimlar: KmAdim[] = [
-    { baslik: 'Firma', alanlar: ['kod', 'ad', 'kategori', 'kritik', 'iletisim'] },
+    { baslik: 'Firma', alanlar: ['kod', 'ad', ...(firmaVar ? ['firmaId'] : []), 'kategori', 'kritik', 'iletisim'] },
     {
       baslik: 'Onay ve sertifikalar', alanlar: ['onay', 'yetkili', 'sertBitis', 'serts', 'sonDenetim'],
       ipucu: 'Elektronik komponent tedarikçisinde yetkili distribütör bilgisi sahte parça riskini belirler.',
@@ -68,7 +100,9 @@ function TedarikciFormu({ veri, yetki, kayit, kapat }: { veri: KmVerisi; yetki: 
       }}
       onizleme={(d) => <GenelBelge veri={veri} kod="KF-07" ad="Tedarikçi değerlendirme kartı" alanlar={alanlar} d={d} />}
       kaydet={async (d) => {
-        await komut.kaydet('sup', { ...(kayit ?? {}), ...d } as Partial<Tedarikci>);
+        const g = { ...(kayit ?? {}), ...d };
+        if (firmaVar) g.firmaId = firmaKimligi(d.firmaId);
+        await komut.kaydet('sup', g as Partial<Tedarikci>);
         bildir('tamam', kayit ? 'Tedarikçi güncellendi' : 'Tedarikçi eklendi');
         kapat();
       }}
