@@ -20,7 +20,7 @@ import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.t
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
@@ -524,9 +524,11 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     };
   });
   const altEmirIdleri = (await s.altPartilerGetir(db, [id])).filter((a) => a.ustEmirId === id && a.durum !== 'iptal').map((a) => a.id);
+  const hataliKayitlar = await s.hataliKayitlariGetir(db, { acik: false, emirId: id });
   return {
     ...ozet(e, kendi, ad, altEmirIdleri),
     isEmirleri,
+    hataliDurdu: hataliDurduMu(kendi, hataliKayitlar),
     eski: eski === null ? null : {
       durum: eski.eskiDurum, istasyon: istasyonAdi(ad, eski.istasyonId), baslama: eski.baslama, bitis: eski.bitis, saglamAdet: eski.saglamAdet,
     },

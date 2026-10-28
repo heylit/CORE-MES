@@ -14,7 +14,7 @@ import {
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
   ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
-  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliIhlali,
+  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
   hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
@@ -29,15 +29,13 @@ const REWORK_ADIMI = 'Rework (planlama seçecek)';
 baslatmaDenetle(async (db, o) => ((await s.acikKaliteAdimiMi(db, o.isEmriId)) ? { engel: HATALI_KALITE_ADIMI } : null));
 // 1045 b: emrin kendisinde (4 a) bütün parça hurda ya da red olduysa sonraki adım başlamaz; emir durur, planlama yeniden başlatır ya da
 // kapatır. Durma ayrı bir durum değildir: önceki adım bu kararın sağlamsız kalite adımıdır.
-baslatmaDenetle(async (db, o) => {
-  const adimlar = await s.isEmirleriGetir(db, [o.uretimEmriId]);
-  const adim = adimlar.find((i) => i.id === o.isEmriId);
-  const onceki = adim === undefined ? undefined : adimlar.filter((i) => i.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0];
-  if (onceki === undefined || onceki.durum !== 'tamam' || (onceki.saglamAdet ?? 0) > 0) return null;
-  const kayitlar = await s.hataliKayitlariGetir(db, { acik: false, emirId: o.uretimEmriId });
-  const durdu = kayitlar.some((k) => k.kaliteIsEmriId === onceki.id && k.hedefEmirId === k.uretimEmriId && (k.karar === 'hurda' || k.karar === 'red'));
-  return durdu ? { engel: HATALI_EMIR_DURDU } : null;
-});
+baslatmaDenetle(async (db, o) => ((await hataliDurdu(db, o.uretimEmriId, o.isEmriId)) ? { engel: HATALI_EMIR_DURDU } : null));
+
+export async function hataliDurdu(db: Db, emirId: number, adimId?: number, adimlar?: readonly IsEmriSatiri[]): Promise<boolean> {
+  const kayitlar = await s.hataliKayitlariGetir(db, { acik: false, emirId });
+  if (!kayitlar.some((k) => k.karar === 'hurda' || k.karar === 'red')) return false;
+  return hataliDurduMu(adimlar ?? (await s.isEmirleriGetir(db, [emirId])), kayitlar, adimId);
+}
 
 // Operatörün adımı: verilen, verilmezse emrin terminaldeki tek çalışan adımı (paralel adımda sorulur, servis.ts komutAdimi ile aynı).
 function hataliAdim(hepsi: readonly IsEmriSatiri[], isEmriId: number | undefined): IsEmriSatiri {

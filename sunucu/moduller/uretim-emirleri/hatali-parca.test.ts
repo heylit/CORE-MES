@@ -235,6 +235,7 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     // 1045 b: emir durur; sonraki adım terminalden başlamaz.
     const ie20 = (await adimlari(id))[2]!.id;
     await red(tx((db) => emirBaslat(db, op(), id, [b.makine], undefined, ie20)), HATALI_EMIR_DURDU);
+    assert.equal((await ayrinti(id)).hataliDurdu, true, '1064: ayrıntı durmayı gösterir');
     const red_ = await o().sahip.tek<{ adet: number }>("SELECT sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'red'", [id]);
     assert.equal(red_?.adet, 1);
   });
