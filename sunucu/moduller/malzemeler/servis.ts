@@ -64,6 +64,14 @@ export async function malzemeMaliyetBilgileri(db: Db, nolar: number[]): Promise<
   }]));
 }
 
+// 1104 a: satın almanın kart ayrıntısı. Olmayan ve iptal kart haritada yok. Yetki denetlemez; neyin tedarikçiye gideceğine satın alma karar verir.
+export type MalzemeSatinAlmaAyrintisi = Omit<s.KatalogSatinAlmaSatiri, 'no'>;
+export async function malzemeSatinAlmaAyrintilari(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeSatinAlmaAyrintisi>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogSatinAlmaSatirlari(db, benzersiz)).map(({ no, ...r }) => [no, r]));
+}
+
 // Kart #688: çizim merkezinin resim eşleşmesi. Değer kırpılır, boş metin null; olmayan kart haritada yok. Yetki denetlemez.
 export interface MalzemeResimAnahtari { resimNo: string | null; revizyon: string | null }
 export async function malzemeResimAnahtarlari(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeResimAnahtari>> {
