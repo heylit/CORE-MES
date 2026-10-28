@@ -1,5 +1,6 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
@@ -1069,4 +1070,25 @@ export function malzemeFisiGonderilebilir(logo: { durum: LogoFisDurumu; gonderim
   if (!satirVar && logo.kayitNo === null) return false;
   if (logo.durum === 'hata') return true;
   return logo.gonderimSekli === 'elle' && logo.durum === 'bekliyor';
+}
+
+// ---- Onaylı kapanış maddeleri (1074 a): stok, izlenebilirlik ve "stoğa işlendi" maddelerinin durumunu verir -------------------
+// İzlenebilirlik: emrin iptal olmayan her refakat kartında lot ve sertifika no dolu. Kartı olmayan emir stoklu malzeme istiyorsa
+// eksiktir; reçetesinde stoklu malzeme yoksa madde gerekmez.
+export function kapanisIzlenebilirligi(kartlar: readonly { lotNo: string | null; sertifikaNo: string | null }[], stokluIhtiyacVar: boolean): KapanisMaddeBilgisi {
+  if (kartlar.length === 0) return stokluIhtiyacVar ? { durum: 'eksik', ayrinti: 'Refakat kartı yok' } : { durum: 'gerekmez', ayrinti: 'Stoklu malzeme yok' };
+  const lotsuz = kartlar.filter((k) => k.lotNo === null).length;
+  const sertifikasiz = kartlar.filter((k) => k.lotNo !== null && k.sertifikaNo === null).length;
+  if (lotsuz === 0 && sertifikasiz === 0) return { durum: 'tamam', ayrinti: `${kartlar.length} refakat kartında lot ve sertifika no dolu` };
+  const eksikler = [...(lotsuz > 0 ? [`lot bekleyen kart: ${lotsuz}`] : []), ...(sertifikasiz > 0 ? [`sertifika no yok: ${sertifikasiz}`] : [])];
+  return { durum: 'eksik', ayrinti: `${eksikler.join(', ')} (toplam ${kartlar.length} kart)` };
+}
+// Stoğa işlendi: emrin ürünü sağlam adedi kadar üretim girişiyle girdi ve kalan sarf yok (stokta tamamlamanın "zaten tamamlandı"
+// hesabı). Sağlamsız emirde (1079 a) madde gerekmez. Bitmemiş emirde hedef emrin adedidir. Miktarlar binde.
+export function kapanisStoguIslendi(g: { adet: number; saglamAdet: number | null; girilen: bigint; kalanSarfKalemi: number }): KapanisMaddeBilgisi {
+  if (g.saglamAdet === 0) return { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' };
+  const hedef = BigInt(g.saglamAdet ?? g.adet) * 1000n;
+  const giris = `${bindenMetin(g.girilen)} / ${bindenMetin(hedef)} stoğa girdi`;
+  if (g.girilen >= hedef && g.kalanSarfKalemi === 0) return { durum: 'tamam', ayrinti: giris };
+  return { durum: 'eksik', ayrinti: g.kalanSarfKalemi > 0 ? `${giris}; kalan sarf: ${g.kalanSarfKalemi} malzeme` : giris };
 }
