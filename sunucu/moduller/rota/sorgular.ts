@@ -599,12 +599,16 @@ export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: numb
 
 export interface TalimatSablonSatiri {
   id: number; kod: string; ad: string; sartnameId: number | null; sartnameKodu: string | null; sartnameAdi: string | null; aktif: boolean; surum: number; adimSayisi: number;
+  kontrolSayisi: number; resimSayisi: number; videoSayisi: number;
 }
 
 export function talimatSablonlari(db: Db, idler: readonly number[] | null = null): Promise<TalimatSablonSatiri[]> {
   return db.sorgu<TalimatSablonSatiri>(
     `SELECT t.id, t.kod, t.ad, t.sartname_id AS "sartnameId", s.kod AS "sartnameKodu", s.ad AS "sartnameAdi", t.aktif, t.surum,
-            (SELECT count(*)::int FROM rota_talimat_sablon_adimi a WHERE a.sablon_id = t.id) AS "adimSayisi"
+            (SELECT count(*)::int FROM rota_talimat_sablon_adimi a WHERE a.sablon_id = t.id) AS "adimSayisi",
+            (SELECT count(*)::int FROM rota_talimat_sablon_adimi a WHERE a.sablon_id = t.id AND a.kontrol_turu <> 'yok') AS "kontrolSayisi",
+            (SELECT count(*)::int FROM rota_talimat_sablon_adim_medyasi m WHERE m.sablon_id = t.id AND m.tur = 'resim') AS "resimSayisi",
+            (SELECT count(*)::int FROM rota_talimat_sablon_adim_medyasi m WHERE m.sablon_id = t.id AND m.tur = 'video') AS "videoSayisi"
        FROM rota_talimat_sablonu t LEFT JOIN rota_islem_sartnamesi s ON s.id = t.sartname_id
       WHERE $1::int[] IS NULL OR t.id = ANY($1::int[])
       ORDER BY t.kod`,
