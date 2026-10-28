@@ -180,11 +180,9 @@ export const kurGuncelleGovdesi = kurGovdesi.extend(beklenenSurum);
 export const kurSatiri = z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, surum: surumSemasi });
 export const kdvOraniEkleGovdesi = z.object({ oran: oranSemasi, gecerlilikBaslangic: tarihSemasi });
 // Faiz para birimi başına aylık yüzdedir; yeni oran başlangıç gününden sonrasını etkiler, eskisi silinmez ve değişmez.
-export const faizEkleGovdesi = z.object({
-  paraBirimi: paraBirimiSemasi, gecerlilikBaslangic: tarihSemasi,
-  aylikYuzde: z.number().min(0, 'Faiz 0 ile 100 arasındadır.').max(100, 'Faiz 0 ile 100 arasındadır.')
-    .refine((v) => ondalik(4, '')(v) === true, 'Faiz en çok dört ondalık olabilir.').transform((v) => v.toFixed(4)),
-});
+const aylikFaizSemasi = z.number().min(0, 'Faiz 0 ile 100 arasındadır.').max(100, 'Faiz 0 ile 100 arasındadır.')
+  .refine((v) => ondalik(4, '')(v) === true, 'Faiz en çok dört ondalık olabilir.').transform((v) => v.toFixed(4));
+export const faizEkleGovdesi = z.object({ paraBirimi: paraBirimiSemasi, gecerlilikBaslangic: tarihSemasi, aylikYuzde: aylikFaizSemasi });
 export const faizSatiri = z.object({ id: z.number().int(), paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, olusturma: zamanSemasi });
 // Genel gider yük oranı (206 a, 211 a): aylık genel gider TL ve aylık makine saati; saat başı oran sunucuda hesaplanır. Yalnız eklenir.
 export const genelGiderOraniEkleGovdesi = z.object({
@@ -240,6 +238,36 @@ export const kurFaizOzetiCevabi = z.object({
   })).max(KUR_FAIZ_GECMISI_BOYU),
 });
 export type KurFaizOzeti = z.output<typeof kurFaizOzetiCevabi>;
+// Kur ve faiz toplu yükleme (1083-1087): şablondan okunan satırlar birlikte yazılır ya da hiçbiri. Kayıtlı güne farklı değer
+// atlanır, düzeltme tek tek yapılır (1085 a). Kur ileri tarihli olamaz, faiz olabilir (1086 a); bugün sunucuda bilinir.
+export const KUR_FAIZ_TOPLU_SINIRI = 400;
+export const kurFaizTopluSatiri = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('kur'), paraBirimi: paraBirimiSemasi.refine((p) => p !== 'TRY', 'TRY için kur girilmez.'), tarih: tarihSemasi, deger: kurSemasi }),
+  z.object({ tur: z.literal('faiz'), paraBirimi: paraBirimiSemasi, tarih: tarihSemasi, deger: aylikFaizSemasi }),
+]);
+export const kurFaizTopluGovdesi = z.object({
+  satirlar: z.array(kurFaizTopluSatiri).min(1, 'Dosyada satır yok.').max(KUR_FAIZ_TOPLU_SINIRI, `Tek seferde en çok ${KUR_FAIZ_TOPLU_SINIRI} satır.`),
+}).superRefine((g, c) => {
+  const gorulen = new Set<string>();
+  g.satirlar.forEach((s, i) => {
+    const anahtar = `${s.tur}|${s.paraBirimi}|${s.tarih}`;
+    if (gorulen.has(anahtar)) c.addIssue({ code: 'custom', path: ['satirlar', i], message: `${i + 1}. satır aynı tür, para birimi ve tarihle ikinci kez var.` });
+    gorulen.add(anahtar);
+  });
+});
+export const kurFaizTopluCevabi = z.object({ eklenen: z.number().int(), ayni: z.number().int(), farkli: z.number().int() });
+// Toplu yüklemenin önizlemesi ve şeridin kur grafiği (1089 a) aralıktaki kur ve faizi okur; şerit gibi giriş yapan herkes okur (952 a).
+// Faizde aralıktan önce başlamış son oran da gelir: grafik aralığın başındaki oranı bilsin.
+export const KUR_FAIZ_ARALIGI_GUN = 1830;
+const gunFarki = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000;
+export const kurFaizAraligiSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi })
+  .refine((s) => s.baslangic <= s.bitis, 'Başlangıç bitişten sonra olamaz.')
+  .refine((s) => gunFarki(s.baslangic, s.bitis) <= KUR_FAIZ_ARALIGI_GUN, `Aralık en çok ${KUR_FAIZ_ARALIGI_GUN} gün olabilir.`);
+export const kurFaizAraligiCevabi = z.object({
+  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik })),
+  faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik })),
+});
+export type KurFaizAraligi = z.output<typeof kurFaizAraligiCevabi>;
 export const kdvOraniKapatGovdesi = z.object({ oran: oranSemasi, gecerlilikBaslangic: tarihSemasi, gecerlilikBitis: tarihSemasi, ...beklenenSurum });
 export const kdvOraniSatiri = z.object({ oran: numerik, gecerlilikBaslangic: tarihSemasi, gecerlilikBitis: tarihSemasi.nullable(), surum: surumSemasi });
 export const duzenliOdemeGovdesi = z.object({

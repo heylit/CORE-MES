@@ -9,17 +9,17 @@ import type { Firma } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { pasifeAlmaEngeli } from './kurallar.ts';
+import { ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari } from './kurallar.ts';
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
 import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
-import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
+import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagitGovdesi,
-  duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurGovdesi,
+  duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
   kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, skorGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
@@ -578,6 +578,31 @@ export async function kurFaizOzeti(db: Db, bugun: string): Promise<KurFaizOzeti>
     sonGiris: son ? { tur: son.tur, giris: son.giris, girenAd: ad(son.girenId) } : null,
     gecmis: gecmis.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
   };
+}
+// Kur ve faiz toplu yükleme (1083-1087): uç tek transaction'dır, satırlar birlikte yazılır ya da hiçbiri. Kayıtlı anahtar atlanır (1085 a).
+export function kurFaizTopluYukle(db: Db, k: Kullanici, g: G<typeof kurFaizTopluGovdesi>) {
+  return korumali(async () => {
+    const ileri = ileriTarihliKurSirasi(g.satirlar, tesisGunu(new Date()));
+    if (ileri !== null) throw gecersiz(`${ileri + 1}. satır: ileri tarihli kur girilmez.`);
+    const anahtar = (pb: string, tarih: string) => `${pb}|${tarih}`;
+    const kurSatirlari = g.satirlar.filter((s) => s.tur === 'kur');
+    const faizSatirlari = g.satirlar.filter((s) => s.tur === 'faiz');
+    const kayitliKur = new Map((await sorgular.kayitliKurlar(db, kurSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.kur]));
+    const kayitliFaiz = new Map((await sorgular.kayitliFaizler(db, faizSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.aylikYuzde]));
+    const sayi = { eklenen: 0, ayni: 0, farkli: 0 };
+    for (const s of g.satirlar) {
+      const karar = topluKurFaizKarari(s.deger, (s.tur === 'kur' ? kayitliKur : kayitliFaiz).get(anahtar(s.paraBirimi, s.tarih)));
+      if (karar === 'ayni') { sayi.ayni += 1; continue; }
+      if (karar === 'farkli') { sayi.farkli += 1; continue; }
+      if (s.tur === 'kur') await sorgular.kurEkle(db, { paraBirimi: s.paraBirimi, tarih: s.tarih, kur: s.deger }, k.id);
+      else await sorgular.faizEkle(db, { paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, aylikYuzde: s.deger }, k.id);
+      sayi.eklenen += 1;
+    }
+    return sayi;
+  });
+}
+export async function kurFaizAraligi(db: Db, baslangic: string, bitis: string): Promise<KurFaizAraligi> {
+  return { kurlar: await sorgular.aralikKurlari(db, baslangic, bitis), faizler: await sorgular.aralikFaizleri(db, baslangic, bitis) };
 }
 export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {
   return korumali(async () => ({ id: (await sorgular.faizEkle(db, g, k.id))!.id }));

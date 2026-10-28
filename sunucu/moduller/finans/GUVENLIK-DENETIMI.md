@@ -15,6 +15,7 @@ Her uç `uc()` ile tanımlıdır, tek yetki ister; gövde, parametre ve sorgu zo
 | GET /finans/hesaplar | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
 | GET /finans/virmanlar | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
 | GET /finans/kurlar | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
+| GET /finans/kur-faiz-araligi | oturum | 952 a gibi yalnız kur ve faiz (rakam yok); aralık en çok 1830 gün, başlangıç bitişten sonra olamaz; faizde aralıktan önceki son oran da gelir | kur-faiz-toplu: izinli | kur-faiz-toplu: reddedilen (oturumsuz 401, ters ve uzun aralık 400) |
 | GET /finans/kdv-oranlari | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
 | GET /finans/duzenli-odemeler | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
 | GET /finans/butce | finans.oku | sayfalı (en çok 200), iptaller istenirse | para: listeler (belgeOku ve öteki) | para: yetki (firmacı 403, oturumsuz 401) |
@@ -59,6 +60,7 @@ Her uç `uc()` ile tanımlıdır, tek yetki ister; gövde, parametre ve sorgu zo
 | POST /finans/kurlar/ekle | finans.yonet | FNS-57 | para: FNS-57 | para: FNS-57 (409, 400, 403) |
 | GET /finans/faizler | finans.oku | sayfalı (en çok 200) | para: faiz | para: faiz (403) |
 | POST /finans/faizler/ekle | finans.kur-yaz · tekrar korumalı | 0-100, dört ondalık; tablo yalnız ekleme; FNS-40 | para: faiz, FNS-40 (yinelenen ekleme) | para: faiz (400, 403, UPDATE ve DELETE reddi), FNS-40 (kimliksiz 400) |
+| POST /finans/kur-faiz/toplu-yukle | finans.kur-yaz · tekrar korumalı | 1083-1087: en çok 400 satır, hepsi ya da hiçbiri; dosyada tekrar eden satır 400; ileri tarihli kur 422 (faiz ileri tarihli olabilir); kayıtlı güne aynı ya da farklı değer atlanır, kayıtlı kur değişmez; satır yükleyen kişiyle yazılır | kur-faiz-toplu: izinli, kayıtlı güne, istek kimliği | kur-faiz-toplu: hepsi ya da hiçbiri (422, 400), reddedilen (finans.oku 403, firmacı 403, oturumsuz 401) |
 | GET /finans/sabit-kiymetler | finans.oku | sayfalı (en çok 200) | para: sabit kıymet | para: sabit kıymet (403) |
 | GET /finans/amortisman | finans.oku | son 24 ay, sabit | para: sabit kıymet | para: sabit kıymet |
 | POST /finans/sabit-kiymetler/ekle | finans.yonet | tekrar korumalı; ömür 1-600, kalıntı < bedel, devir çifti ve sınırı (kısıt) | para: sabit kıymet | para: sabit kıymet (400, 403) |

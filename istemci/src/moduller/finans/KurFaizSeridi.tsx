@@ -6,6 +6,8 @@ import { Dugme, Girdi, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { KurFaizYukleme } from './KurFaizYukleme.tsx';
+import { KurGrafigi } from './KurGrafigi.tsx';
 import './kur-faiz-seridi.css';
 
 const TESIS_TZ = 'Europe/Istanbul';
@@ -119,6 +121,16 @@ function Panel({ o, yazabilir, kapat }: { o: KurFaizOzeti; yazabilir: boolean; k
           </ul>
         )}
       </div>
+      <div className="tc-kfs-blok tc-kfs-genis">
+        <h2 className="tc-kfs-baslik"><Simge ad="chart" boyut="k" />Kur ve faiz grafiği</h2>
+        <KurGrafigi bugun={o.bugun} />
+      </div>
+      {yazabilir && (
+        <div className="tc-kfs-blok tc-kfs-genis">
+          <h2 className="tc-kfs-baslik"><Simge ad="upload" boyut="k" />Toplu yükleme</h2>
+          <KurFaizYukleme bugun={o.bugun} />
+        </div>
+      )}
     </div>
   );
 }
