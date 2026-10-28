@@ -172,6 +172,12 @@
 .tc-co-yntablo .tc-co-st-over b, .tc-co-yntablo .tc-co-st-crit b { color: var(--stop); }
 
 /* 860 ve altında (prototipin kırılması) panel alttan çekmece; grafikler tek sütun ve kaydırılır. */
+/* Prototipteki gibi sahne görünüm alanının boyundadır; panel kendi içinde kayar (uzun panel sahneyi ekran dışına uzatmasın). */
+@media (min-width: 861px) {
+  .tc-co { height: 100%; grid-template-rows: minmax(0, 1fr); }
+  .tc-co-yan { min-height: 0; overflow: auto; }
+  .tc-co-yan > *, .tc-co-yan-kaydir > * { flex: none; }
+}
 @media (max-width: 860px) {
   .tc-co { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
   .tc-co-sahne { min-height: var(--ekran-boy-70); }
