@@ -22,12 +22,13 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
 - Kısa yaz, emoji yok; soruda Türkçe karakterleri düz yaz. Rapor en çok 15 satır: önce sonuç (adım başına tek satır), sonra yalnız "sorulur" kademesindeki
   sorular, en çok 10 maddelik tek listede, tam metniyle (soru, neden, seçenekler, öneri; yalnız kod ya da kart numarasıyla atıf yapılmaz). Ayrıntı, doğrulananlar ve varsayımlar karta yazılır.
 - Odak: dışarıdan gelen modül esastır; depo çekirdek ve ortak parçaları taşır. Ana oturumun işi çekirdek, ortak arayüz, paylaşılan kalıplar, araçlar ve kurulumdur.
-  Araçlara yalnız işi durduran hata için dokunulur. Askıda: ters vekil, bulut eşliği (#121-#126).
+  Araçlara yalnız işi durduran hata için dokunulur. Askıda: bulut eşliği (#121-#126). Ters vekil yalnız `kurulum/canli.md` ve ADR 0021 kapsamında.
 - Arayüzde en az dokunuş; profesyonel ve gerçekçi; ikon kullan; role göre sadelik. Eski sistemden kod, şema, test, veri taşınmaz; `kurulum/eski-kurallar/` yalnız başvurudur, onaysız eski kural girmez.
 - Süreç ağırlaştırılmaz: sahiplik defteri, ders dosyası, kanca, durum dosyası kurulmaz. Hata iki kez olursa kural yazılmaz; tip, kısıt, ortak parça ya da test eklenir.
 
 ## Kırmızı çizgiler
 - Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve dış servis çağrısı yok; yalnız kurum içi üç servis istisna: Logo yardımcısı (ADR 0017, yalnız `logo` modülü, yalnız aynı bilgisayar: 127.0.0.1), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı). Üçünde de adres yalnız `TMIV2_*` ortam değişkenindedir ve kurum içi olmalıdır (Logo için yalnız 127.0.0.1); bağlantı varsayılan olarak kapalıdır.
+  Dış sunucu istisnası (ADR 0021, kararlar 1011 b, 1012 a, 1037 a): iç sunucu internete açılmaz ve internete istek atmaz; yalnız `dis-kopru` modülü DMZ'deki dış sunucunun köprü kapısına bağlanır (adres yalnız `TMIV2_DIS_KOPRU_ADRESI`'nde, kurum içi olmalı; mTLS ve imzalı ileti; varsayılan kapalı). Dış sunucu (`dis-sunucu/`) iç sunucuya bağlanmaz; dışarı yalnız ADR 0021'deki veri çıkar. Uygulama kodu internete istek atmaz; sertifika yenilemesi DMZ'deki ACME aracınındır.
   Test robotu istisnası (ADR 0019, karar 174 c): yalnız `ekran-testleri/benzetim/model.ts` dil modeli çağırır (Claude API ya da yerel `claude -p`); yalnız canlı olmayan ortamda, boş ve sentetik veriyle; anahtar yalnız `TMIV2_ROBOT_MODEL_ANAHTARI`'nda; varsayılan kapalı; uygulama ve canlı paketi bu kodu içermez.
 - Eski sistem (`Desktop\Planlama`, veritabanı `tmi`, port 4000) ve `Desktop\TMI_YEDEK` bu deponun
   dışındadır; okunmaz, yazılmaz, bağlanılmaz. Bu sistem yalnız `TMIV2_*` ortam değişkenlerini okur.

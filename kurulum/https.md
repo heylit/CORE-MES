@@ -1,8 +1,9 @@
 # HTTPS (kart #1278)
 
 Telefonun bağlandığı kapı (4101, sunucunun arayüz kapısı; `TMIV2_ARAYUZ_PORT` ile değişir) HTTPS ile sunulunca Android Chrome TMI'yi uygulama olarak kurar ve service worker çalışır (kart #1269).
-Şirket dışından erişim VPN ile olur (2026-10-14 kullanıcı kararı): telefon VPN'e bağlanınca iç ağdaki gibi aynı adres ve aynı
-sertifikayla girer. Uygulama internete açılmaz; ters vekil ve Let's Encrypt bu notun ve kartın kapsamında değildir. VPN'in kurulumu bilgi işlemindir.
+Şirket dışından iç uygulamaya erişim VPN ile olur (2026-10-14 kullanıcı kararı): telefon VPN'e bağlanınca iç ağdaki gibi aynı adres ve aynı
+sertifikayla girer. İç uygulama internete açılmaz. Portal ve Mesaj'ın dış kullanımı ayrı dış sunucudan olur (ADR 0021); Let's Encrypt yalnız o sunucudadır.
+VPN'in kurulumu bilgi işlemindir.
 
 ## Nasıl çalışır
 
@@ -25,7 +26,7 @@ sertifikayla girer. Uygulama internete açılmaz; ters vekil ve Let's Encrypt bu
 - HTTPS değişkenleriyle birlikte telefonlar `https://<sunucu-adı-ya-da-ip>:4101` ile girer.
 - Sunucu bilgisayarında Windows güvenlik duvarı 4101'e gelen TCP bağlantısına izin vermelidir. Kuralı yönetici yetkisiyle bilgi işlem ekler;
   yalnız 4101 açılır, 4100 açılmaz. Ağ "Ortak (Public)" sayılan yerde (ör. evde) kural yoksa telefon bağlanamaz.
-- Uygulama internete açılmaz: erişimi kurum güvenlik duvarı ve VPN belirler.
+- İç uygulama internete açılmaz: erişimi kurum güvenlik duvarı ve VPN belirler. Dış sunucu için ADR 0021.
 - `.env` varsa değişkenler oraya yazılır (`.env.ornek`); yoksa süreç ortamından okunur.
 - Arkon (`/arkon-mes/`) aynı kapıdan aynı içerik ilkesiyle (CSP) sunulmaya devam eder.
 
