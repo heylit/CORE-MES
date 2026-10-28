@@ -150,6 +150,9 @@ export const acikAdimSemasi = z.object({
   eksik: z.number().int().nullable(),
 });
 
+// Onaylı kapanışın sonucu (1082 a); emir okumaları da taşıdığı için burada.
+export const KAPANIS_SONUCLARI = ['tamamlandi', 'saglamsiz'] as const;
+
 export const emirSemasi = z.object({
   id: KIMLIK,
   emirNo: z.string(),
@@ -175,6 +178,8 @@ export const emirSemasi = z.object({
   acikAdimlar: z.array(acikAdimSemasi).optional(),
   // Şu an başlatılabilecek adımlar (bekleyen adım sırası, akışlı ve bağımsız adımlar); sıra dışı olanı uyarıyla başlar (626 a).
   baslatilabilirAdimlar: z.array(KIMLIK).optional(),
+  // Kapanış iki onayla tamamlandıysa dolu; açık kapanışta ve kapanışa girmeyen emirde null. İsteğe bağlı: yalnız izleme ve biten listeleri doldurur.
+  kapanisSonucu: z.enum(KAPANIS_SONUCLARI).nullable().optional(),
 });
 
 export const adimSemasi = z.object({
@@ -726,3 +731,95 @@ export type HataliKarari = (typeof HATALI_KARARLARI)[number];
 export type HataliKaydiOzeti = z.output<typeof hataliKaydiSemasi>;
 export type ReworkAdimiGovdesi = z.input<typeof reworkAdimiGovdesi>;
 export type HataliListeCevabi = z.output<typeof hataliListeCevabi>;
+
+// Onaylı kapanış (1072 a, 1073 a, 1074 a, 1075 a, 1076 a, 1077 b, 1079 a, 1080 a, 1082 a). Emir son adımda "bitti" olur (ekranda
+// "Üretimi bitti"); kapanış bunun üstünde ayrı kayıttır. Maddeler canlı okunur: kendi maddeleri bu modülün, ötekileri sahibi modülün
+// çözücüsünden (kablolama.ts) gelir; bağlı olmayan madde 'bilinmiyor' döner ve kapanışı durdurmaz. Eksik madde durdurur; yalnız müdür
+// gerekçeyle muaf tutar. Kalite ve müdür onayı sırasızdır, ikisi de gerekir; iki rolü olan kişi ikisini de verebilir (1077 teyit).
+export const KAPANIS_MADDELERI = ['is-emirleri', 'ilk-parca', 'hatali', 'olcum', 'izlenebilirlik', 'fason', 'stok', 'sevkiyat', 'ncr'] as const;
+// Sahibi başka modül olan maddeler: olcum ve ncr Kalite Merkezi, izlenebilirlik ve stok Stok, sevkiyat Sevkiyat, fason belgesi Satın Alma.
+export const DIS_KAPANIS_MADDELERI = ['olcum', 'izlenebilirlik', 'fason', 'stok', 'sevkiyat', 'ncr'] as const satisfies readonly (typeof KAPANIS_MADDELERI)[number][];
+export const KAPANIS_MADDE_HALLERI = ['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor'] as const;
+// Görünen aşama: belge (eksik madde var), onay (eksik yok, onay bekliyor), tamam (iki onay verildi; emir kilitli).
+export const KAPANIS_ASAMALARI = ['belge', 'onay', 'tamam'] as const;
+// Sağlamsız emir (1079 a: bütün parça hurda ya da red) "Kapandı (sağlamsız)" olur; sevkiyat ve stok maddeleri aranmaz.
+export const KAPANIS_ONAYLARI = ['kalite', 'mudur'] as const;
+export const KAPANIS_OLAYLARI = ['kalite_onay', 'mudur_onay', 'kalite_ret', 'mudur_ret', 'muaf', 'tamamlandi', 'geri_acildi'] as const;
+
+export const kapanisMaddesi = z.enum(KAPANIS_MADDELERI);
+const kapanisNotu = z.string().trim().max(500, 'Not en çok 500 karakter.').nullish().transform((d) => (d ? d : null));
+const kapanisGerekcesi = metin(500, 'Gerekçe yaz.');
+// İlk kayıt emir bitince açılır (sürüm 1); her komut sürümü bir artırır.
+export const kapanisOnayGovdesi = z.object({ not: kapanisNotu, surum: surumSemasi }).strict();
+// Ret verilmiş onayları düşürür; kapanış açık kalır.
+export const kapanisRetGovdesi = z.object({ gerekce: kapanisGerekcesi, surum: surumSemasi }).strict();
+export const kapanisMuafGovdesi = z.object({ madde: kapanisMaddesi, gerekce: kapanisGerekcesi, surum: surumSemasi }).strict();
+// 1080 a: tamamlanan emri yalnız müdür gerekçeyle geri açar; iki onay yeniden gerekir.
+export const kapanisGeriAcGovdesi = z.object({ gerekce: kapanisGerekcesi, surum: surumSemasi }).strict();
+// 1064 ve 1079 a: duran (bütün parçası hurda ya da red olmuş) emrin bekleyen adımları kalkar, emir sağlamsız biter ve kapanışa düşer.
+// Sürüm emrin sürümüdür.
+export const emirKapatGovdesi = z.object({ surum: surumSemasi }).strict();
+
+const kisiZamani = z.object({ kisiId: KIMLIK, kisiAdi: z.string().nullable(), zaman: zamanSemasi });
+export const kapanisMaddeSemasi = z.object({
+  madde: kapanisMaddesi,
+  durum: z.enum(KAPANIS_MADDE_HALLERI),
+  // Sahibi modülün tek satırlık açıklaması (ör. "80 / 120 depodan çıktı"); yoksa null.
+  ayrinti: z.string().nullable(),
+});
+export const kapanisMuafiyeti = kisiZamani.extend({ madde: kapanisMaddesi, gerekce: z.string() });
+export const kapanisDefterSatiri = kisiZamani.extend({
+  olay: z.enum(KAPANIS_OLAYLARI), gerekce: z.string().nullable(), madde: kapanisMaddesi.nullable(),
+});
+export const kapanisCevabi = z.object({
+  uretimEmriId: KIMLIK,
+  emirNo: z.string(),
+  urun: z.object({ kod: z.string(), ad: z.string() }),
+  emirTuru: z.enum(EMIR_TURLERI),
+  adet: z.number().int().positive(),
+  saglamAdet: z.number().int().nonnegative(),
+  bitis: zamanSemasi,
+  asama: z.enum(KAPANIS_ASAMALARI),
+  // Yalnız tamamda dolu.
+  sonuc: z.enum(KAPANIS_SONUCLARI).nullable(),
+  // Göçten önce bitmiş emir: onaysız tamam sayıldı (1072 a varsayımı); maddeleri ve onayları yoktur.
+  eski: z.boolean(),
+  maddeler: z.array(kapanisMaddeSemasi),
+  onaylar: z.object({ kalite: kisiZamani.nullable(), mudur: kisiZamani.nullable() }),
+  muafiyetler: z.array(kapanisMuafiyeti),
+  defter: z.array(kapanisDefterSatiri),
+  surum: surumSemasi,
+});
+// Varsayılan: tamamlanmamış kapanışlar (belge ve onay), en eski biten önce. asama=tamam son tamamlananlar önce.
+export const kapanislarSorgusu = z.object({
+  ...sayfaSorguAlanlari, asama: z.enum(KAPANIS_ASAMALARI).optional(), ara: aramaMetni,
+});
+export const kapanisListeSatiri = z.object({
+  uretimEmriId: KIMLIK, emirNo: z.string(), urun: z.object({ kod: z.string(), ad: z.string() }),
+  adet: z.number().int().positive(), saglamAdet: z.number().int().nonnegative(), bitis: zamanSemasi,
+  asama: z.enum(KAPANIS_ASAMALARI), sonuc: z.enum(KAPANIS_SONUCLARI).nullable(),
+  // Onaya açık kapanışta verilmemiş onaylar; belge ve tamamda boş.
+  bekleyenOnaylar: z.array(z.enum(KAPANIS_ONAYLARI)),
+  eksikMadde: z.number().int().nonnegative(),
+});
+export const kapanisListeCevabi = listeCevapSemasi(kapanisListeSatiri);
+
+export type KapanisMaddesi = (typeof KAPANIS_MADDELERI)[number];
+export type DisKapanisMaddesi = (typeof DIS_KAPANIS_MADDELERI)[number];
+export type KapanisMaddeHali = (typeof KAPANIS_MADDE_HALLERI)[number];
+export type KapanisAsamasi = (typeof KAPANIS_ASAMALARI)[number];
+export type KapanisOnayi = (typeof KAPANIS_ONAYLARI)[number];
+export type KapanisOlayi = (typeof KAPANIS_OLAYLARI)[number];
+export type KapanisSonucu = (typeof KAPANIS_SONUCLARI)[number];
+export type KapanisOnayGovdesi = z.input<typeof kapanisOnayGovdesi>;
+export type KapanisRetGovdesi = z.input<typeof kapanisRetGovdesi>;
+export type KapanisMuafGovdesi = z.input<typeof kapanisMuafGovdesi>;
+export type KapanisGeriAcGovdesi = z.input<typeof kapanisGeriAcGovdesi>;
+export type EmirKapatGovdesi = z.input<typeof emirKapatGovdesi>;
+export type KapanisCevabi = z.output<typeof kapanisCevabi>;
+export type KapanislarSorgusu = z.output<typeof kapanislarSorgusu>;
+export type KapanisListeSatiri = z.output<typeof kapanisListeSatiri>;
+export type KapanisListeCevabi = z.output<typeof kapanisListeCevabi>;
+// Sahibi modülün çözücüsünün emir başına verdiği bilgi.
+// Sunucu imzası: (db, uretimEmriId) => Promise<KapanisMaddeBilgisi | null>; null ya da kayıtsız madde "bilinmiyor" olur ve durdurmaz.
+export interface KapanisMaddeBilgisi { durum: 'tamam' | 'eksik' | 'gerekmez'; ayrinti: string | null }
