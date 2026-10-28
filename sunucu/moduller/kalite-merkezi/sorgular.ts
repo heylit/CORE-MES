@@ -542,3 +542,52 @@ export async function numunePlaniYaz(
     [g.malzemeNo, g.opNo, metin, g.surum, g.kisiId],
   );
 }
+
+/* ---------------- kapanış maddeleri (1074 a) ---------------- */
+
+// Emir başına numune ve ölçüm sayaçları; numunesi ve ölçümü olmayan emir dönmez.
+export function emirOlcumSayaclari(
+  db: Db, uretimEmriIdleri: readonly number[],
+): Promise<{ uretimEmriId: number; numune: number; kararsiz: number; ret: number; olcum: number; uygunsuzOlcum: number }[]> {
+  return db.sorgu(
+    `WITH n AS (SELECT n.uretim_emri_id, count(*)::int AS numune, count(*) FILTER (WHERE k.numune_id IS NULL)::int AS kararsiz,
+                       count(*) FILTER (WHERE k.karar = 'ret')::int AS ret
+                  FROM kalite_merkezi_numune n LEFT JOIN kalite_merkezi_numune_karari k ON k.numune_id = n.id
+                 WHERE n.uretim_emri_id = ANY($1::int[]) GROUP BY n.uretim_emri_id),
+          o AS (SELECT uretim_emri_id, count(*)::int AS olcum, count(*) FILTER (WHERE NOT uygun)::int AS uygunsuz
+                  FROM kalite_merkezi_olcum WHERE uretim_emri_id = ANY($1::int[]) GROUP BY uretim_emri_id)
+     SELECT coalesce(n.uretim_emri_id, o.uretim_emri_id) AS "uretimEmriId", coalesce(n.numune, 0) AS numune, coalesce(n.kararsiz, 0) AS kararsiz,
+            coalesce(n.ret, 0) AS ret, coalesce(o.olcum, 0) AS olcum, coalesce(o.uygunsuz, 0) AS "uygunsuzOlcum"
+       FROM n FULL JOIN o ON o.uretim_emri_id = n.uretim_emri_id`,
+    [uretimEmriIdleri],
+  );
+}
+
+// Kuralı boş olmayan numune planı olan parçalar (boş plan plan sayılmaz).
+export async function numunePlaniOlanParcalar(db: Db, malzemeNolar: readonly number[]): Promise<Set<number>> {
+  const satirlar = await db.sorgu<{ malzemeNo: number }>(
+    `SELECT DISTINCT malzeme_no AS "malzemeNo" FROM kalite_merkezi_numune_plani
+      WHERE malzeme_no = ANY($1::int[]) AND jsonb_array_length(kurallar) > 0`,
+    [malzemeNolar],
+  );
+  return new Set(satirlar.map((s) => s.malzemeNo));
+}
+
+// Emre kaynak bağıyla ya da emir alanındaki numarayla bağlı, silinmemiş NCR'ler; ayrıca kaynak bağı olmayan ve tanımı emir numarasıyla
+// başlayan eski hatalı parça NCR'leri (eskiEmirNo dolu).
+export function emreBagliNcrler(
+  db: Db, uretimEmriIdleri: readonly number[], emirNolari: readonly string[], hatali: { kaynak: string; onek: string },
+): Promise<{ kimlik: string; no: string; durum: string; kaynakEmirId: number | null; emirNo: string | null; eskiEmirNo: string | null }[]> {
+  return db.sorgu(
+    `WITH b AS (
+       SELECT kimlik, govde, jsonb_typeof(govde->'kaynakEmirId') = 'number' AND (govde->>'kaynakEmirId')::numeric = ANY($1::numeric[]) AS bagli,
+              CASE WHEN govde->'kaynakEmirId' IS NULL AND govde->>'kaynak' = $3 AND left(govde->>'tanim', length($4)) = $4
+                   THEN split_part(substr(govde->>'tanim', length($4) + 1), ' OP ', 1) END AS eski
+         FROM kalite_merkezi_belge WHERE koleksiyon = 'ncr' AND govde IS NOT NULL)
+     SELECT kimlik, coalesce(nullif(btrim(govde->>'no'), ''), kimlik) AS no, coalesce(govde->>'durum', '') AS durum,
+            CASE WHEN bagli THEN (govde->>'kaynakEmirId')::numeric::int END AS "kaynakEmirId",
+            nullif(btrim(govde->>'emir'), '') AS "emirNo", CASE WHEN eski = ANY($2::text[]) THEN eski END AS "eskiEmirNo"
+       FROM b WHERE bagli OR btrim(govde->>'emir') = ANY($2::text[]) OR eski = ANY($2::text[])`,
+    [uretimEmriIdleri, emirNolari, hatali.kaynak, hatali.onek],
+  );
+}

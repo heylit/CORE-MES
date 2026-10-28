@@ -14,7 +14,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { HATALI_NCR_KAYNAGI } from './kurallar.ts';
+import { kapanisNcrDurumu } from './disari.ts';
+import { HATALI_NCR_KAYNAGI, KAYNAK_EMIR_ALANI } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -158,5 +159,37 @@ describe('Kalite Merkezi hatalı parça kararı (gerçek PostgreSQL)', () => {
     assert.equal(ikinci.statusCode, 409, ikinci.body);
     assert.equal(await o().vt.tx((db) => sorgular.kayitGovdesi(db, 'ncr', 'ncr-hp-4')), null);
     assert.equal((await istek('kaliteci', 'POST', '/kalite-merkezi/hatali/2147483647/karar', { ...govde, ncrKimlik: 'ncr-hp-5' })).statusCode, 404);
+  });
+  // 1074 a-netleştirme: NCR emre kaynak bağıyla bağlanır; emir ve lot alanı boş kalır, karantina istenmez (1043 a). Bağı yalnız sunucu yazar.
+  test('1074: hatalı parça NCR\'si emre karantinasız bağlanır, kapanışın NCR maddesi onu okur; genel yazma bağı değiştiremez ve düşüremez', async () => {
+    const emirId = await calisanEmir(10);
+    const kayitId = await hatali(emirId, 1);
+    const r = await istek('kaliteci', 'POST', `/kalite-merkezi/hatali/${kayitId}/karar`, { karar: 'red', ncrKimlik: 'ncr-hp-10', ncrNo: 'NCR-2026-910', ciddiyet: 'Majör' });
+    assert.equal(r.statusCode, 200, r.body);
+    const ncr = await o().vt.tx((db) => sorgular.kayitGovdesi(db, 'ncr', 'ncr-hp-10'));
+    assert.deepEqual([ncr?.[KAYNAK_EMIR_ALANI], ncr?.emir, ncr?.lot, ncr?.durum], [emirId, '', '', 'Açık']);
+    const karantina = await o().vt.tek<{ n: number }>("SELECT count(*)::int AS n FROM kalite_merkezi_karantina WHERE ncr_kimlik = 'ncr-hp-10'");
+    assert.equal(karantina?.n, 0, 'karantina istenmez');
+    assert.deepEqual(await o().vt.tx((db) => kapanisNcrDurumu(db, emirId)), { durum: 'eksik', ayrinti: '1 açık NCR: NCR-2026-910' });
+
+    const surum = async () => (await o().vt.tek<{ surum: number }>("SELECT surum::int AS surum FROM kalite_merkezi_belge WHERE koleksiyon = 'ncr' AND kimlik = 'ncr-hp-10'"))!.surum;
+    const { [KAYNAK_EMIR_ALANI]: _bag, ...bagsiz } = ncr!;
+    for (const govde of [bagsiz, { ...bagsiz, [KAYNAK_EMIR_ALANI]: emirId + 1000 }, { ...bagsiz, [KAYNAK_EMIR_ALANI]: 'x' }]) {
+      const y = await istek('kaliteci', 'POST', '/kalite-merkezi/kayitlar/ncr/ncr-hp-10/yaz', { govde: { ...govde, tanim: 'düzeltildi' }, surum: await surum() });
+      assert.equal(y.statusCode, 200, y.body);
+      assert.equal((await o().vt.tx((db) => sorgular.kayitGovdesi(db, 'ncr', 'ncr-hp-10')))?.[KAYNAK_EMIR_ALANI], emirId, JSON.stringify(govde[KAYNAK_EMIR_ALANI]));
+    }
+    const yeni = await istek('kaliteci', 'POST', '/kalite-merkezi/kayitlar/ncr/ncr-hp-11/yaz', {
+      govde: { no: 'NCR-2026-911', durum: 'Açık', [KAYNAK_EMIR_ALANI]: emirId }, surum: null,
+    });
+    assert.equal(yeni.statusCode, 200, yeni.body);
+    assert.equal(Object.hasOwn((await o().vt.tx((db) => sorgular.kayitGovdesi(db, 'ncr', 'ncr-hp-11'))) ?? {}, KAYNAK_EMIR_ALANI), false, 'elle açılan NCR bağ yazamaz');
+
+    const kapat = await istek('kaliteci', 'POST', '/kalite-merkezi/kayitlar/ncr/ncr-hp-10/onayla', {
+      govde: { ...bagsiz, durum: 'Kapalı', mrb: 'Hurda' }, surum: await surum(),
+    });
+    assert.equal(kapat.statusCode, 200, kapat.body);
+    assert.deepEqual(await o().vt.tx((db) => kapanisNcrDurumu(db, emirId)), { durum: 'tamam', ayrinti: '1 NCR kapandı' });
+    assert.equal(await o().vt.tx((db) => kapanisNcrDurumu(db, 2147483647)), null, 'tanınmayan emir');
   });
 });
