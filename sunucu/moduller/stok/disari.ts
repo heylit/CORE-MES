@@ -1,12 +1,14 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
+import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
 import { stokDurumu, type StokDurumu } from './kurallar.ts';
 import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
+import * as kapanis from './kapanis.ts';
 
 // Malzeme başına stok: toplam, kullanılabilir (raf, kabul, depo zemini) ve üretim çıkış alanında bekleyen. Miktarlar numeric metin.
 // Stoğu olmayan malzeme haritada yoktur (sıfır uydurulmaz).
@@ -220,3 +222,8 @@ export const malzemeFisiLogoCozucusu = (cozucu: malzemeFisi.MalzemeFisiLogoCozuc
 // Depo çıkışında fason gidiş kaydını üretim emri yazar; bağ sunucu/kablolama.ts'de kurulur.
 export { fasonGidisYaziciKaydet } from './servis.ts';
 export type { FasonGidisYazici } from './servis.ts';
+
+// Onaylı kapanış (1074 a): 'izlenebilirlik' ve 'stok' maddelerinin çözücüleri (sözleşmedeki KapanisMaddeBilgisi); Üretim Emirleri'ne
+// kaydı `sunucu/kablolama.ts` yapar. Tanınmayan emirde null.
+export const kapanisIzlenebilirlikDurumu = (db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> => kapanis.izlenebilirlikDurumu(db, uretimEmriId);
+export const kapanisStokDurumu = (db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> => kapanis.stokDurumu(db, uretimEmriId);
