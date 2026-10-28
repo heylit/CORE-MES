@@ -9,6 +9,7 @@ import { CIZELGE_SAYFALARI } from './sayfalar/cizelge.ts';
 import { CIZIMLER_IKINCI_MENU, CIZIMLER_SAYFALARI } from './sayfalar/cizimler.ts';
 import { CNC_KURULUM_IKINCI_MENU, CNC_KURULUM_SAYFALARI } from './sayfalar/cnc-kurulum.ts';
 import { RECETE_ROTA_IKINCI_MENU, RECETE_ROTA_SAYFALARI } from './sayfalar/recete-rota.ts';
+import { DEGISIKLIK_YONETIMI_IKINCI_MENU, DEGISIKLIK_YONETIMI_SAYFALARI } from './sayfalar/degisiklik-yonetimi.ts';
 import { DENETIM_IKINCI_MENU, DENETIM_SAYFALARI } from './sayfalar/denetim.ts';
 import { DENETIM_HAZIRLIK_IKINCI_MENU, DENETIM_HAZIRLIK_SAYFALARI } from './sayfalar/denetim-hazirlik.ts';
 import { DURUS_NEDENLERI_IKINCI_MENU, DURUS_NEDENLERI_SAYFALARI } from './sayfalar/durus-nedenleri.ts';
@@ -58,6 +59,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...CNC_KURULUM_SAYFALARI,
   ...RECETE_ROTA_SAYFALARI,
   ...PLAN_SAYFALARI,
+  ...DEGISIKLIK_YONETIMI_SAYFALARI,
   ...DENETIM_SAYFALARI,
   ...DENETIM_HAZIRLIK_SAYFALARI,
   ...DURUS_NEDENLERI_SAYFALARI,
@@ -138,6 +140,7 @@ export const TUM_IKINCI_MENULER = [
   IDARI_ISLER_IKINCI_MENU,
   NIZAMIYE_IKINCI_MENU,
   TAKVIM_IKINCI_MENU,
+  DEGISIKLIK_YONETIMI_IKINCI_MENU,
 ] as const satisfies readonly IkinciMenuTanimi[];
 
 export const IKINCI_MENULER = TUM_IKINCI_MENULER.filter((m) => !kapaliModulYoluMu(m.kok));
