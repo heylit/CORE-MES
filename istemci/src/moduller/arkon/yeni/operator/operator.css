@@ -646,6 +646,13 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-baslik { font-size: var(--yazi-l); }
 /* Halka sayacın bütün yüksekliğini alır: hurda halkanın altında tek satırlık şeritte durur. */
 .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac { min-block-size: var(--orb-3); }
+/* Sayaç boyunu içeriğinden almaz (kadran yüksekliğe göre çizilir), bu yüzden tuş ızgarasının boyu en az boya yazılır: yazılmayınca
+   iki ya da üç sıra tuş sayaçtan taşıp Şimdi şeridine biniyor, kadran küçülüp yazıları üst üste geliyordu (888). Sıra boyu: tam
+   tuş orb-2, tek kalan son tuş dokunma. */
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(3)) { min-block-size: calc(var(--orb-2) + var(--dokunma) + var(--b-2)); }
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(4)) { min-block-size: calc(var(--orb-2) * 2 + var(--b-2)); }
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(5)) { min-block-size: calc(var(--orb-2) * 2 + var(--dokunma) + var(--b-2) * 2); }
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(6)) { min-block-size: calc(var(--orb-2) * 3 + var(--b-2) * 2); }
 .tc-ay1-genis .tc-ay1-kadran {
   inline-size: min(100cqh - var(--dokunma), 100cqw - var(--dokunma-x20) * 2 - var(--b-6) - var(--b-4), var(--kadran-encok)); margin-block-end: var(--dokunma);
 }
