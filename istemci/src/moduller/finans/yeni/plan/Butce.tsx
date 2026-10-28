@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { ChartConfiguration } from 'chart.js';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, Kart, Rozet, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import type { Komut } from '../akislar.ts';
@@ -18,7 +19,7 @@ const kisaKalem = (k: string): string => k.replace(' (net maaş)', '').replace('
 
 // Bütçe (prototip VIEWS.butce). Tutar "bu aydan itibaren" geçerlidir; girişi finans.yonet yapar (uç), öteki rol yalnız okur.
 export function Butce({ finans, yetki }: EkranOzellikleri) {
-  const [ay, ayYaz] = useState<string>(() => ilkButceAyi(finans?.motor.bugun ?? new Date().toISOString().slice(0, 10)));
+  const [ay, ayYaz] = useState<string>(() => ilkButceAyi(finans?.motor.bugun ?? tesisGunu(Date.now())));
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();
   if (!finans) return null;

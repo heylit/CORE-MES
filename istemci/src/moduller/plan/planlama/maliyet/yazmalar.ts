@@ -1,3 +1,4 @@
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../tipler.ts';
 import {
   anahtarAdi, fasonTalasId, sayiOku, GUN_TURU_ADI, kgFiyatlari, maliyetSistemi, mesaiSistemi, norm, sonrakiKimlik, talasFiyatlari, tl, wipAyar, ymAyar,
@@ -11,7 +12,8 @@ import {
 export type Yaz = (ne: string, ayrinti: string, fn: (t: PlanlamaCalismasi) => boolean | void, secenek?: { planKoru?: boolean }) => boolean;
 type Nesne = Record<string, unknown>;
 export const nesneMi = (v: unknown): v is Nesne => typeof v === 'object' && v !== null && !Array.isArray(v);
-export const bugunIso = (): string => new Date().toISOString().slice(0, 10);
+// Fiyat kaydının günü tesis günüdür; UTC günü gece yarısından sonraki ilk saatlerde dünü yazar.
+export const bugunIso = (simdi = Date.now()): string => tesisGunu(simdi);
 export function dYaz(t: PlanlamaCalismasi, alanlar: Nesne): void { t.D = { ...t.D, ...alanlar }; }
 // Genel gider ve mesai sisteminin belgedeki bilinmeyen alanları korunur.
 export function msYaz(t: PlanlamaCalismasi, f: (M: MaliyetSistemi) => void): void {

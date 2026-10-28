@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KmAlan } from './AdimliForm.tsx';
-import { hizliTarihler, oneriler, otomatikMi, secimDugmeleri, sorular, soruGorunur, yanitMetni } from './tektek.ts';
+import { gunEkle, hizliTarihler, oneriler, otomatikMi, secimDugmeleri, sorular, soruGorunur, yanitMetni } from './tektek.ts';
 
 const A: KmAlan[] = [
   { k: 'no', etiket: 'No' }, { k: 'mrb', etiket: 'MRB', tur: 'secim', secenekler: ['Karar bekliyor', 'Hurda'] },
@@ -32,5 +32,14 @@ describe('tek tek sor kuralları', () => {
     expect(hizliTarihler('termin').map((t) => t.gun)).toEqual([7, 30, 91]);
     expect(hizliTarihler('tarih').map((t) => t.gun)).toEqual([0, -1]);
     expect(oneriler(['Ali', 'Ayşe', 'Veli'], 'a')).toEqual(['Ali', 'Ayşe']);
+  });
+});
+
+describe('hızlı tarih', () => {
+  it('gece yarısından sonra "Bugün" ve "Dün" tesis gününü verir', () => {
+    // Tesiste 29 Ekim 01:30; UTC'de hâlâ 28 Ekim.
+    const simdi = new Date('2026-10-28T22:30:00Z');
+    expect(gunEkle(0, simdi)).toBe('2026-10-29');
+    expect(gunEkle(-1, simdi)).toBe('2026-10-28');
   });
 });

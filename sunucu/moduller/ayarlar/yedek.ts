@@ -96,6 +96,9 @@ const EN_UZUN_MS = 2 * 60 * 60 * 1000;
 const NABIZ_MS = 1000;
 const YARIM_EKI = '.yarim';
 const YARIM_SAKLAMA_MS = 24 * 60 * 60 * 1000;
+// Geri yüklemenin (araclar/guncelleyici.ts yedegiGeriYukle) yedeğin yanına yazdığı geçici dosyalar; ikisi bütün veritabanını
+// şifresiz taşır. Süreç yarıda kesilirse (elektrik, zorla kapatma) kalırlar.
+const GERI_YUKLEME_EKLERI = ['.cozulmus', '.geri.sql', '.bosalt.sql'];
 const HATA_METNI_EN_UZUN = 300;
 
 async function acikDizin(dizin: string | null): Promise<string | null> {
@@ -276,16 +279,18 @@ export function yedekAl(ortam: YedekOrtami, dizin: string, tur: YedekTuru, simdi
   return is;
 }
 
-async function dosyalar(dizin: string, veritabani: string): Promise<{ yedekler: YedekDosyasi[]; yarimlar: string[] }> {
+async function dosyalar(dizin: string, veritabani: string): Promise<{ yedekler: YedekDosyasi[]; yarimlar: string[]; artiklar: string[] }> {
   const adlar = await readdir(dizin);
+  const bizim = (a: string, ek: string): boolean => a.endsWith(ek) && yedekAdiniCoz(a.slice(0, -ek.length))?.veritabani === veritabani;
   const yedekler = adlar.map(yedekAdiniCoz).filter((y): y is YedekDosyasi => y !== null && y.veritabani === veritabani);
-  const yarimlar = adlar.filter((a) => a.endsWith(YARIM_EKI) && yedekAdiniCoz(a.slice(0, -YARIM_EKI.length))?.veritabani === veritabani);
-  return { yedekler, yarimlar };
+  const yarimlar = adlar.filter((a) => bizim(a, YARIM_EKI));
+  const artiklar = adlar.filter((a) => GERI_YUKLEME_EKLERI.some((ek) => bizim(a, ek)));
+  return { yedekler, yarimlar, artiklar };
 }
 
 // Silme yalnız bu veritabanının adlandırılmış yedeklerine dokunur; klasördeki başka dosya kalır.
 export async function yedekleriTemizle(dizin: string, veritabani: string, simdi: Date, gunluk: Gunluk): Promise<string[]> {
-  const { yedekler, yarimlar } = await dosyalar(dizin, veritabani);
+  const { yedekler, yarimlar, artiklar } = await dosyalar(dizin, veritabani);
   const silinen: string[] = [];
   for (const y of silinecekYedekler(yedekler, simdi)) {
     try {
@@ -301,6 +306,17 @@ export async function yedekleriTemizle(dizin: string, veritabani: string, simdi:
     if (bilgi !== null && simdi.getTime() - bilgi.mtimeMs > YARIM_SAKLAMA_MS) {
       await rm(path.join(dizin, ad), { force: true });
       silinen.push(ad);
+    }
+  }
+  // Yaş beklenmez: geri yükleme sunucu kapalıyken koşar (güncelleyici önce durdurur, komut açık oturum varsa reddeder);
+  // sunucu bu turu koşuyorsa süren geri yükleme yoktur ve dosya yarım kalmış bir işten artmıştır.
+  for (const ad of artiklar) {
+    try {
+      await rm(path.join(dizin, ad), { force: true });
+      silinen.push(ad);
+      gunluk.uyar(`Yarım kalmış geri yüklemenin şifresiz dosyası silindi: ${ad}`);
+    } catch (hata) {
+      gunluk.uyar(`Yarım kalmış geri yüklemenin şifresiz dosyası silinemedi: ${ad}`, hata);
     }
   }
   return silinen;
