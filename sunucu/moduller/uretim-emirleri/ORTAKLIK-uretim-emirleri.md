@@ -16,3 +16,5 @@
 | Öncelik, başlangıç, teslim | `uretim_emri.oncelik`, `baslangic`, `teslim` | uretim-emirleri; plan yazar (P6) |
 | Duruş ve hurda nedeni | defterlerde | durus-nedenleri |
 | Refakat partisi (emir + hammadde lotu) | `uretim_sayimi.refakat_partisi_id` (FK yok, UE-B10) | stok (`stok_refakat_partisi`) |
+| Kapanış (onay, muafiyet, defter) | `uretim_emirleri_kapanis`, `_muafiyeti`, `_defteri` | uretim-emirleri (sahip, 1073 a); kalite ve müdür kişileri `kisi` |
+| Kapanış durum listeleri | aşama: belge, onay, tamam; sonuç: tamamlandi, saglamsiz; madde hâli: tamam, eksik, muaf, gerekmez, bilinmiyor | uretim-emirleri; etiket (1082 a) ve reçete-rota okur |

@@ -8,11 +8,13 @@ import {
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
+  emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
+import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
   adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
   izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
@@ -557,4 +559,93 @@ const hataliUclari = [
   }),
 ];
 
-export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari, ...hataliUclari];
+// Onaylı kapanış (1072 a, 1078 a): listeyi ve ayrıntıyı onay verenler de okur; kalite onayı ve reddi kapanis-kalite, müdürün işleri kapanis-onay.
+// Aynı kişi iki işleme sahipse iki onayı da verir (1077 b).
+const KAPANIS_OKUMA = { biri: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-onay'] } as const;
+const kapanisUclari = [
+  uc({
+    yontem: 'GET',
+    yol: '/kapanislar',
+    yetki: KAPANIS_OKUMA,
+    sorgu: kapanislarSorgusu,
+    cevap: kapanisListeCevabi,
+    isle: ({ db, sorgu }) => kapanislar(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/kapanis',
+    yetki: KAPANIS_OKUMA,
+    parametre: emirParametresi,
+    cevap: kapanisCevabi,
+    isle: ({ db, parametre }) => kapanis(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/kalite-onay',
+    yetki: 'uretim-emirleri.kapanis-kalite',
+    parametre: emirParametresi,
+    govde: kapanisOnayGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisOnayla(db, kullanici, parametre.id, 'kalite', govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/kalite-ret',
+    yetki: 'uretim-emirleri.kapanis-kalite',
+    parametre: emirParametresi,
+    govde: kapanisRetGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisReddet(db, kullanici, parametre.id, 'kalite', govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/mudur-onay',
+    yetki: 'uretim-emirleri.kapanis-onay',
+    parametre: emirParametresi,
+    govde: kapanisOnayGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisOnayla(db, kullanici, parametre.id, 'mudur', govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/mudur-ret',
+    yetki: 'uretim-emirleri.kapanis-onay',
+    parametre: emirParametresi,
+    govde: kapanisRetGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisReddet(db, kullanici, parametre.id, 'mudur', govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/muaf',
+    yetki: 'uretim-emirleri.kapanis-onay',
+    parametre: emirParametresi,
+    govde: kapanisMuafGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisMuafTut(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapanis/geri-ac',
+    yetki: 'uretim-emirleri.kapanis-onay',
+    parametre: emirParametresi,
+    govde: kapanisGeriAcGovdesi,
+    cevap: kapanisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kapanisGeriAc(db, kullanici, parametre.id, govde),
+  }),
+  // 1064: hatalı parça kararıyla duran emri planlama kapatır; emir sağlamsız biter ve kapanış onayına düşer (1079 a).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/kapat',
+    yetki: 'uretim-emirleri.yaz',
+    parametre: emirParametresi,
+    govde: emirKapatGovdesi,
+    cevap: adimliEmirCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await emirKapat(db, kullanici, parametre.id, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+];
+
+export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari, ...hataliUclari, ...kapanisUclari];

@@ -21,6 +21,7 @@ import {
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
+  KAPANIS_KILITLI, kapanisSonucu,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -183,11 +184,13 @@ async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<I
   const paralel = await paralelAlanlari(db, satirlar);
   const adimlar = new Map<number, sorgular.IsEmriSatiri[]>();
   for (const i of await sorgular.isEmirleriGetir(db, satirlar.map((s) => s.id))) adimlar.set(i.uretimEmriId, [...(adimlar.get(i.uretimEmriId) ?? []), i]);
+  const kapanislar = new Map((await sorgular.kapanisDurumlari(db, satirlar.map((s) => s.id))).map((k) => [k.uretimEmriId, kapanisSonucu(k.durum, k.saglamAdet)]));
   return satirlar.map((s) => {
     const { istasyonId, acanId, ...kalan } = s;
     return {
       ...kalan,
       ...adimlardanGorunum(s, adimlar.get(s.id) ?? []),
+      kapanisSonucu: kapanislar.get(s.id) ?? null,
       istasyon: istasyonId === null ? null : adli(adlar.istasyon, istasyonId, 'İstasyon'),
       acan: adli(adlar.kisi, acanId, 'Kişi'),
       canli: canli.get(s.id) ?? null,
@@ -751,6 +754,8 @@ export async function kararliSayimiSonuclandir(
   db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId: number | null = null,
 ): Promise<{ emir: Emir; adet: number }> {
   await kilitliEmir(db, id);
+  // 1080 a: iki onayla tamamlanan emrin sayımı değişmez; önce müdür geri açar.
+  if ((await sorgular.kapanisBul(db, id))?.durum === 'tamam') throw cakisma(KAPANIS_KILITLI);
   const an = await sorgular.anAl(db);
   const gruplar = new Map<string, { grup: KararGrubu; satirlar: { zaman: string; adet: number }[] }>();
   for (const { zaman, adet, ...grup } of await sorgular.kararBekleyenSatirlari(db, id, isEmriId)) {

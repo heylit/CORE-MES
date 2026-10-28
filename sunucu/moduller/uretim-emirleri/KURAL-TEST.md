@@ -76,4 +76,14 @@ P: `paralel-adim.test.ts` (gerçek PostgreSQL), PK: `paralel-adim-kurallar.test.
 
 HK: `hatali-kurallar.test.ts` (saf), H: `hatali-parca.test.ts` (gerçek PostgreSQL).
 
+| UE-KP1 | Madde hâli: sahibi bağlı değilse bilinmiyor (durdurmaz), eksik madde muafsa muaf | KK UE-KP1; KP "emir bitince" (NCR bilinmiyor) | yok |
+| UE-KP2 | Sağlamsız emirde stok ve sevk, stok türünde sevk, fasonsuz emirde fason gerekmez (1075 a, 1079 a) | KK UE-KP2; KP "1064 ve 1079 a" | yok |
+| UE-KP3 | Eksik madde belge aşamasında tutar; iki onayla tamam; sonuç tamamlandi ya da saglamsiz | KK UE-KP3; KP "UE-KP4", "1064 ve 1079 a" | uretim_emirleri_kapanis_tamam_kosulu |
+| UE-KP4 | Onay sırasız, aynı onay bir kez, eksik varken yok, iki rollü kişi ikisini verir; ret onayları düşürür; tamamda kalite kararı kilitli (1077 b, 1080 a) | KK UE-KP4; KP "UE-KP4", "1077 b" (müdür önce, ikinci kez, yetkisiz, eski sürüm, boş gerekçe, kilit) | uretim_emirleri_kapanis_kalite_alanlari, _mudur_alanlari |
+| UE-KP5 | Yalnız müdür, yalnız eksik maddeyi gerekçeyle muaf tutar (tura bağlı); yalnız müdür tamam kapanışı gerekçeyle geri açar (1076 a, 1080 a) | KK UE-KP5; KP "UE-KP5 ve 1076 a", "eski kapanış" | uretim_emirleri_kapanis_muafiyeti_tek, _defteri_gerekceli, _defteri_maddeli |
+| UE-KP6 | Duran emri planlama kapatır; durmayan emir kapatılmaz (1064, 1079 a) | KP "1064 ve 1079 a" (erken kapatma 409, kalite 403, eski sürüm 409) | yok |
+| UE-KP7 | Göçten önce bitmiş iş emirli emir onaysız tamam ve eski; açık, iptal, iş emirsiz emir girmez | KG | uretim_emirleri_kapanis_tamam_kosulu |
+
+KK: `kapanis-kurallar.test.ts` (saf), KP: `kapanis.test.ts` (gerçek PostgreSQL), KG: `kapanis-goc.test.ts`.
+
 Bağsız kural: yok.

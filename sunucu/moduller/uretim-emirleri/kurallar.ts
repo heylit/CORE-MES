@@ -1,6 +1,8 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { MUAF_TUTULABILEN_MADDELER } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { CalismaDurumu, EmirDurumu, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type {
+  CalismaDurumu, EmirDurumu, EmirTuru, HazirlikMaddesi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+} from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 
 export type IstasyonDurumu = 'yok' | 'pasif' | 'aktif';
@@ -1136,3 +1138,56 @@ export function reworkAdimiIhlali(kayit: { karar: string | null }, adim: { durum
 // 7 a: fasonda termin girilmezse 7 gün. Fasonun süresi ve iç kaynağın termini isEmirleriIhlali ile reddedilir.
 export const reworkTermini = <T extends { kaynak: { tur: IsEmriKaynakTuru } | null; terminGun: number | null }>(g: T): T =>
   (g.kaynak?.tur === 'fason' && g.terminGun === null ? { ...g, terminGun: FASON_VARSAYILAN_GUN } : g);
+
+// Onaylı kapanış (UE-KP, 1072 a, 1074 a, 1075 a, 1076 a, 1077 b, 1079 a, 1080 a).
+export const KAPANIS_YOK = 'Bu emrin kapanış kaydı yok: emrin üretimi bitmemiş.';
+export const KAPANIS_TAMAM = 'Kapanış tamamlandı; değişiklik için müdür gerekçeyle geri açar.';
+export const KAPANIS_TAMAM_DEGIL = 'Kapanış tamamlanmamış; geri açılacak bir şey yok.';
+export const KAPANIS_EKSIK = 'Eksik madde var: önce sahibi modülde tamamlanmalı ya da müdür gerekçeyle muaf tutmalı.';
+export const KAPANIS_ONAY_VERILMIS = 'Bu onay verilmiş.';
+export const KAPANIS_MUAF_EKSIK_DEGIL = 'Yalnız eksik madde muaf tutulur.';
+export const KAPANIS_KILITLI = 'Emrin kapanışı tamamlandı; kayıtları değişmez. Müdür gerekçeyle geri açabilir.';
+export const KAPAT_DURMADI = 'Yalnız bütün parçası hurda ya da red olup duran emir kapatılır.';
+
+// UE-KP1: madde hâli. Sahibi bağlı değilse ya da emri tanımıyorsa 'bilinmiyor' (durdurmaz); eksik madde muafsa 'muaf'.
+export function kapanisMaddeHali(bilgi: KapanisMaddeBilgisi | undefined, muaf: boolean): KapanisMaddeHali {
+  if (bilgi === undefined) return 'bilinmiyor';
+  if (bilgi.durum === 'eksik') return muaf ? 'muaf' : 'eksik';
+  return bilgi.durum;
+}
+
+// UE-KP2: sağlamsız emirde (1079 a) sevk ve stok, stok türündeki emirde (1075 a) sevk aranmaz; fason adımı olmayan emirde fason aranmaz.
+export function gerekmeyenKapanisMaddeleri(e: { saglamAdet: number; emirTuru: EmirTuru; fasonVar: boolean }): ReadonlySet<KapanisMaddesi> {
+  const l = new Set<KapanisMaddesi>();
+  if (e.saglamAdet === 0) { l.add('sevkiyat'); l.add('stok'); }
+  if (e.emirTuru === 'stok') l.add('sevkiyat');
+  if (!e.fasonVar) l.add('fason');
+  return l;
+}
+
+// UE-KP3: görünen aşama. Eksik madde varsa belge, yoksa onay; iki onay verilince tamam.
+export function kapanisAsamasi(durum: 'acik' | 'tamam', maddeler: readonly { durum: KapanisMaddeHali }[]): KapanisAsamasi {
+  if (durum === 'tamam') return 'tamam';
+  return maddeler.some((m) => m.durum === 'eksik') ? 'belge' : 'onay';
+}
+
+export const kapanisSonucu = (durum: 'acik' | 'tamam', saglamAdet: number): 'tamamlandi' | 'saglamsiz' | null =>
+  (durum !== 'tamam' ? null : saglamAdet === 0 ? 'saglamsiz' : 'tamamlandi');
+
+// UE-KP4: onay sırasızdır (1077 b); kapanış açık ve eksiksiz olmalı, aynı onay ikinci kez verilmez. İki rolü olan kişi ikisini de verebilir.
+export function kapanisOnayIhlali(
+  k: { durum: 'acik' | 'tamam'; kaliteKisiId: number | null; mudurKisiId: number | null }, tur: KapanisOnayi, eksikSayisi: number,
+): string | null {
+  if (k.durum === 'tamam') return KAPANIS_TAMAM;
+  if ((tur === 'kalite' ? k.kaliteKisiId : k.mudurKisiId) !== null) return KAPANIS_ONAY_VERILMIS;
+  if (eksikSayisi > 0) return KAPANIS_EKSIK;
+  return null;
+}
+
+// UE-KP5: ret ve muafiyet yalnız açık kapanışta; muafiyet yalnız eksik maddeye. Geri açma yalnız tamamda (1080 a).
+export const kapanisAcikIhlali = (durum: 'acik' | 'tamam'): string | null => (durum === 'tamam' ? KAPANIS_TAMAM : null);
+export function kapanisMuafIhlali(durum: 'acik' | 'tamam', hal: KapanisMaddeHali): string | null {
+  if (durum === 'tamam') return KAPANIS_TAMAM;
+  return hal === 'eksik' ? null : KAPANIS_MUAF_EKSIK_DEGIL;
+}
+export const kapanisGeriAcIhlali = (durum: 'acik' | 'tamam'): string | null => (durum === 'tamam' ? null : KAPANIS_TAMAM_DEGIL);
