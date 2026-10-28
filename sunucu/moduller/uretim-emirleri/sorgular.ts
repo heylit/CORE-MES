@@ -2159,3 +2159,97 @@ export function asimlarGetir(db: Db, emirId: number, isEmriId: number): Promise<
     [emirId, isEmriId],
   );
 }
+
+/* ---------------- hatalı parça (1034) ---------------- */
+
+export interface HataliKaydiSatiri {
+  id: number;
+  uretimEmriId: number;
+  emirNo: string;
+  parcaNo: string;
+  parcaAd: string;
+  isEmriId: number;
+  opNo: number;
+  isEmriAd: string;
+  hedefEmirId: number;
+  hedefEmirNo: string;
+  kaliteIsEmriId: number;
+  reworkIsEmriId: number | null;
+  tekrarIsEmriId: number | null;
+  hurdaNedeniId: number;
+  adet: number;
+  aciklama: string | null;
+  kisiId: number;
+  zaman: string;
+  karar: 'rework' | 'hurda' | 'red' | null;
+  kararKisiId: number | null;
+  kararZamani: string | null;
+  kararNotu: string | null;
+  ncrKimlik: string | null;
+}
+
+export interface HataliKaydiYazisi {
+  uretimEmriId: number; isEmriId: number; hedefEmirId: number; kaliteIsEmriId: number; reworkIsEmriId: number; tekrarIsEmriId: number | null;
+  hurdaNedeniId: number; adet: number; aciklama: string | null; kisiId: number; an: string;
+}
+
+export async function hataliKaydiEkle(db: Db, y: HataliKaydiYazisi): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO uretim_emirleri_hatali_kaydi
+       (uretim_emri_id, is_emri_id, hedef_emir_id, kalite_is_emri_id, rework_is_emri_id, tekrar_is_emri_id, hurda_nedeni_id, adet, aciklama, kisi_id, zaman)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz) RETURNING id`,
+    [y.uretimEmriId, y.isEmriId, y.hedefEmirId, y.kaliteIsEmriId, y.reworkIsEmriId, y.tekrarIsEmriId, y.hurdaNedeniId, y.adet, y.aciklama, y.kisiId, y.an],
+  );
+  if (satir === null) throw new Error('Hatalı parça kaydı eklenemedi.');
+  return satir.id;
+}
+
+const HATALI = `h.id, h.uretim_emri_id AS "uretimEmriId", e.emir_no AS "emirNo", e.parca_no AS "parcaNo", e.parca_ad AS "parcaAd",
+  h.is_emri_id AS "isEmriId", i.op_no AS "opNo", i.ad AS "isEmriAd", h.hedef_emir_id AS "hedefEmirId", he.emir_no AS "hedefEmirNo",
+  h.kalite_is_emri_id AS "kaliteIsEmriId", h.rework_is_emri_id AS "reworkIsEmriId", h.tekrar_is_emri_id AS "tekrarIsEmriId",
+  h.hurda_nedeni_id AS "hurdaNedeniId", h.adet, h.aciklama,
+  h.kisi_id AS "kisiId", ${ISO('h.zaman')} AS zaman, h.karar, h.karar_kisi_id AS "kararKisiId", ${NULLU_ISO('h.karar_zamani')} AS "kararZamani",
+  h.karar_notu AS "kararNotu", h.ncr_kimlik AS "ncrKimlik"`;
+const HATALI_KAYNAK = `uretim_emirleri_hatali_kaydi h JOIN uretim_emri e ON e.id = h.uretim_emri_id
+  JOIN uretim_emirleri_is_emri i ON i.id = h.is_emri_id JOIN uretim_emri he ON he.id = h.hedef_emir_id`;
+
+// Kilit yalnız kayıt satırını tutar (FOR UPDATE OF h): emirler karar komutunda kendi sırasıyla kilitlenir.
+export function hataliKaydiBul(db: Db, id: number, kilit = false): Promise<HataliKaydiSatiri | null> {
+  return db.tek<HataliKaydiSatiri>(`SELECT ${HATALI} FROM ${HATALI_KAYNAK} WHERE h.id = $1${kilit ? ' FOR UPDATE OF h' : ''}`, [id]);
+}
+
+export const HATALI_LISTE_SINIRI = 500;
+
+// Açık kayıtlar (kararsız) eskiden yeniye; bütün kayıtlar yeniden eskiye, sınırlı. Emir verilirse o emrin ya da onu taşıyan kolun kaydı.
+export function hataliKayitlariGetir(db: Db, s: { acik: boolean; emirId: number | null }): Promise<HataliKaydiSatiri[]> {
+  return db.sorgu<HataliKaydiSatiri>(
+    `SELECT ${HATALI} FROM ${HATALI_KAYNAK}
+      WHERE (NOT $1::boolean OR h.karar IS NULL) AND ($2::int IS NULL OR h.uretim_emri_id = $2 OR h.hedef_emir_id = $2)
+      ORDER BY CASE WHEN $1::boolean THEN h.zaman END, CASE WHEN NOT $1::boolean THEN h.zaman END DESC, h.id
+      LIMIT ${HATALI_LISTE_SINIRI}`,
+    [s.acik, s.emirId],
+  );
+}
+
+export function hataliKarariYaz(
+  db: Db, id: number, k: { karar: 'rework' | 'hurda' | 'red'; kisiId: number; an: string; not: string | null; ncrKimlik: string | null },
+): Promise<unknown> {
+  return db.sorgu(
+    `UPDATE uretim_emirleri_hatali_kaydi
+        SET karar = $2, karar_kisi_id = $3, karar_zamani = $4::timestamptz, karar_notu = $5, ncr_kimlik = $6,
+            rework_is_emri_id = CASE WHEN $2 = 'rework' THEN rework_is_emri_id END, tekrar_is_emri_id = CASE WHEN $2 = 'rework' THEN tekrar_is_emri_id END
+      WHERE id = $1 AND karar IS NULL`,
+    [id, k.karar, k.kisiId, k.an, k.not, k.ncrKimlik],
+  );
+}
+
+// Kararı bekleyen kalite adımı terminalden başlatılmaz (başlatma denetimi).
+export async function acikKaliteAdimiMi(db: Db, isEmriId: number): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM uretim_emirleri_hatali_kaydi WHERE kalite_is_emri_id = $1 AND karar IS NULL) AS var', [isEmriId],
+  ))!.var;
+}
+
+export function reworkAdimiKaydi(db: Db, isEmriId: number): Promise<{ id: number; karar: 'rework' | 'hurda' | 'red' | null } | null> {
+  return db.tek('SELECT id, karar FROM uretim_emirleri_hatali_kaydi WHERE rework_is_emri_id = $1', [isEmriId]);
+}
