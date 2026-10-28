@@ -419,6 +419,10 @@ describe('oturum (gerçek PostgreSQL)', () => {
   // Proje yönetimi (910 a, 27.10.2026).
   for (const rol of ['mudur', 'planlama_proje']) MATRIS[rol]?.push('projeler.gorev-yaz', 'projeler.statu-yaz');
   MATRIS.mudur?.push('projeler.statu-ayar');
+  // Emir kapanışı (1078 a, 28.10.2026): kalite onayı kalitede, müdür onayı müdürde, Kapanış onayları sayfası ikisinde ve planlamada.
+  MATRIS.kalite?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-kalite');
+  MATRIS.mudur?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay');
+  MATRIS.planlama_proje?.push('uretim-emirleri.kapanis-oku');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 

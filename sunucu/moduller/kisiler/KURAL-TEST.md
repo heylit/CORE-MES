@@ -2,6 +2,15 @@
 
 Test adları dosyalardan okundu; uç başına ayrıntı `GUVENLIK-DENETIMI.md`.
 
+## Emir kapanışı rol yetkileri (kart #1078)
+
+| Kural | İzinli test | Reddedilen test |
+|---|---|---|
+| KS-5 Kapanışta kalite onayı kalitede, müdür onayı müdürde; Kapanış onayları sayfası ikisinde ve planlamada; yönetici hepsini taşır (1078 a) | kapanis-yetkileri.test.ts "kalite kalite onayını, müdür müdür onayını alır; ..." (girişteki işlem kümesi) | aynı test: öteki bütün roller üç işlemden hiçbirini almaz; "kalite ve müdür rolü olan kişi ...": kalite müdür onayını, müdür kalite onayını almaz |
+| KS-5 İki rolü olan kişi iki onayı da taşır (1077 b) | kapanis-yetkileri.test.ts "kalite ve müdür rolü olan kişi iki onayı da taşır ..." | - |
+
+Mutasyon (DOĞRULANDI, yerelde `node --test kapanis-yetkileri.test.ts`): göç dosyası kaldırılınca 2 test kırmızı.
+
 ## Kişiye ek işlem (kart #1233)
 
 | Kural | İzinli test | Reddedilen test |
