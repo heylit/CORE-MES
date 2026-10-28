@@ -404,12 +404,17 @@ export const emirHurdalari = isEmri.emirHurdalari;
 export type { EmirHurdasi } from './is-emri-servis.ts';
 export const fasonHareketiOzeti = isEmri.fasonHareketiOzeti;
 export const fasonDonusuKaydet = isEmri.fasonDonusuKaydet;
+// Sevkiyat Tüm işler (960): depo çıkışı fason gidişini emre yazar (aynı transaction); yetki denetlemez, çağıran korur.
+export const fasonGidisYaz = isEmri.fasonGidisYaz;
 // Satın alma dış operasyonlar (#542 U3); yetki denetlemez, çağıran korur.
 export const fasonIsEmirleri = isEmri.fasonIsEmirleri;
 export type { FasonIsEmri } from './is-emri-servis.ts';
 // Sevkiyat Tüm işler (960): fason adımının sırası ve gidebilecek adedi; yetki denetlemez, çağıran korur.
 export const fasonGonderimleri = isEmri.fasonGonderimleri;
 export type { FasonGonderimi } from './is-emri-servis.ts';
+// Fason iş emri belgesi (FİE): stok depo çıkışında basar; yetki denetlemez, çağıran korur. Fason olmayan adımda null, iptal emirde CAKISMA.
+export const fasonIsEmriBelgesi = isEmri.fasonIsEmriBelgesi;
+export type { FasonIsEmriBelgesi } from './is-emri-servis.ts';
 // Satın almanın fason süresi tahmini (CA-2) geçmişi buradan okur; yetki denetlemez, çağıran korur. Süre = sonDonus - ilkGidis.
 export const fasonGecmisi = isEmri.fasonGecmisi;
 export type { FasonGecmisSatiri } from './sorgular.ts';
