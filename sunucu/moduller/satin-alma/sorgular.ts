@@ -980,3 +980,29 @@ export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise
     [talepIdleri],
   );
 }
+
+// 1105 a: kart kopyası henüz alınmamış sipariş satırları (kartlı kalemler); kopyası olan ve kartsız kalem dönmez.
+export function kopyasizSiparisSatirlari(db: Db, talepId: string): Promise<{ satirId: number; malzemeNo: number }[]> {
+  return db.sorgu(
+    `SELECT ss.id AS "satirId", c.malzeme_no AS "malzemeNo"
+       FROM satin_alma_siparis_satiri ss
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = ss.talep_id AND k.id = ss.kalem_id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN satin_alma_siparis_kart_kopyasi kk ON kk.siparis_satiri_id = ss.id
+      WHERE ss.talep_id = $1 AND kk.siparis_satiri_id IS NULL`, [talepId]);
+}
+export async function kartKopyalariniYaz(db: Db, satirlar: readonly { satirId: number; malzemeNo: number; kartSurumu: number; ayrinti: object }[]): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO satin_alma_siparis_kart_kopyasi (siparis_satiri_id, malzeme_no, kart_surumu, ayrinti)
+     SELECT * FROM unnest($1::int[], $2::int[], $3::int[], $4::jsonb[]) ON CONFLICT (siparis_satiri_id) DO NOTHING`,
+    [satirlar.map((x) => x.satirId), satirlar.map((x) => x.malzemeNo), satirlar.map((x) => x.kartSurumu), satirlar.map((x) => JSON.stringify(x.ayrinti))]);
+}
+export interface KartKopyasiSatiri { kalemId: string; teklifId: string; malzemeNo: number; kartSurumu: number; ayrinti: Record<string, unknown>; zaman: string }
+export function kartKopyalariOku(db: Db, talepId: string): Promise<KartKopyasiSatiri[]> {
+  return db.sorgu(
+    `SELECT ss.kalem_id AS "kalemId", ss.teklif_id AS "teklifId", kk.malzeme_no AS "malzemeNo", kk.kart_surumu AS "kartSurumu", kk.ayrinti,
+            ${ISO('kk.zaman')} AS zaman
+       FROM satin_alma_siparis_kart_kopyasi kk JOIN satin_alma_siparis_satiri ss ON ss.id = kk.siparis_satiri_id
+      WHERE ss.talep_id = $1 ORDER BY ss.id`, [talepId]);
+}

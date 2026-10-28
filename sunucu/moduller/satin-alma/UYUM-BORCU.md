@@ -169,7 +169,7 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
   Portal `disari.ts` `onayLimitleri` ile okur; tablo boşsa `kurallar.ts` `VARSAYILAN_ONAY_LIMITLERI` (ekranın `merkez/constants.ts` varsayılanıyla aynı tutulmalı; SAT-70 ve SA-HESAP H1 iki tarafı ayrı sabitler).
   Basamak adları satın almada yalnız bilgidir; onayı `satin-alma.onayla` verir. Portalda rol eşlemesi ayrıdır (50 bin üstü Satın alma müdürü, 250 bin üstü ayrıca Genel müdür).
 45. Kart 898 a, Dal 1 (ön talep, fason): açık kalanlar.
-    - Plan malzeme ihtiyacı ön talebi (Dal 2) yazılmadı: 811 ve 815 B sonrası; plan canlıya alınınca düşer (902 a). Yoksayma tablosu `malzeme_no` ve `miktar` sütunlarını bunun için taşır.
+    - Plan malzeme ihtiyacı ön talebi (Dal 2): satın almaya yazan çağrıyı 898 Dal 3 ekler. Yoksayma tablosu `malzeme_no` ve `miktar` sütunlarını bunun için taşır.
     - VARSAYIM: fason ön talebin gereken tarihi emrin teslim günüdür; plan tarihi satın almaya gelmez (bağımlılık yönü plan -> satın alma). Dal 2'de plan bildirimiyle iyileşir. Geri alma ucuz.
     - VARSAYIM: firmaya gönderilmiş (gidişi olan) fason adım ön talep değildir. Taslak emir ön talep vermez.
     - VARSAYIM: talebe çevrilen kalem serbest adla gelir ve "kart bekler"; hizmet kartı talep eden ya da satın alma seçer. Operasyon tipinden hizmet kartı önerisi yok.

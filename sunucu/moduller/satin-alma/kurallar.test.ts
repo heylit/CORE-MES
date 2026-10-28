@@ -8,7 +8,7 @@ import {
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi } from './kurallar.ts';
-import { KUR_KILIDI, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
+import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
   id: '00000000-0000-4000-8000-000000000001', baslik: 'Deneme', birim: null, talepEdenKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null, notlar: '',
@@ -458,4 +458,16 @@ test('1099 a: satır ayrıntısını göndermeyen kayıt saklananı korur; boş 
   assert.deepEqual(f(kalemAyrintisiniKoru(eski, fiyat({}))), [['5', 9, '10'], [null, null, null]]);
   assert.deepEqual(f(kalemAyrintisiniKoru(eski, fiyat({ iskontoYuzdesi: null, terminGun: 3 }))), [[null, 3, '10'], [null, null, null]]);
   assert.deepEqual(f(kalemAyrintisiniKoru(null, fiyat({}))), [[null, null, null], [null, null, null]]);
+});
+
+test('1104 a: tedarikçiye teknik alanlar ve istenen sertifikalar gider; en az sipariş, tercih edilen tedarikçi ve kart notu gitmez; kartsız kalemde boş', () => {
+  const a = {
+    tur: 'hammadde', surum: 3, kaliteAdi: 'S235JR', formAdi: 'Yuvarlak çubuk', aciklamalar: ['Ø50', 'L 1000'], standartlar: ['EN 10025-2'], tolerans: 'h9',
+    durum: null, yuzey: 'Taşlanmış', sertifikalar: ['EN 10204 3.1', 'RoHS'], ureticiUrunKodu: null, mensei: 'TR', gtip: '7215', enAzSiparis: '5', tercihTedarikci: 'Deneme', not: 'İç not',
+  };
+  assert.deepEqual(tedarikciyeGidenAyrinti(a), [
+    { ad: 'Kalite', deger: 'S235JR' }, { ad: 'Form', deger: 'Yuvarlak çubuk' }, { ad: 'Açıklama', deger: 'Ø50, L 1000' }, { ad: 'Standart', deger: 'EN 10025-2' },
+    { ad: 'Tolerans', deger: 'h9' }, { ad: 'Yüzey', deger: 'Taşlanmış' }, { ad: 'Menşei', deger: 'TR' }, { ad: 'İstenen sertifikalar', deger: 'EN 10204 3.1, RoHS' },
+  ]);
+  assert.deepEqual(tedarikciyeGidenAyrinti(null), []);
 });
