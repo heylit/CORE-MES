@@ -4,7 +4,7 @@ import {
   KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, bolumOkuyabilirMi, bolumYazabilirMi, kalemKodu, logoNiyetleri, ondalikMetni, portalRolu, portalUnvani, talepTeklifi, rolDegisiyorMu, canliEsler, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, esikleriBindir, siparisEsikleri, kilitAlinirMi, sorgula, sonParca, ustYolu, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, sonOnay,
   acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi, satinAlmaTeslimiReddi, SATIN_ALMA_TESLIMI_REDDI,
-  FIRMA_ICI, izleyiciGorebilirMi,
+  FIRMA_ICI, disYazmaReddi, izleyiciCikar, izleyiciGorebilirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -555,5 +555,26 @@ describe('portal firma görünürlüğü (1019 a)', () => {
       assert.equal(gorur(yol, { partyId: 'p1', type: 'sales' }, M), false, yol);
     }
     assert.equal(gorur('orders/yok', null, M), false);
+  });
+
+  test('BD-K44 (1021 b): izleyici portal kullanıcısının firmasından çıkar; atamasız ya da firm firma içi, kartı olmayan ya da türü başka firma kapalı', () => {
+    assert.deepEqual(izleyiciCikar(null, null), FIRMA_ICI);
+    assert.deepEqual(izleyiciCikar({ partyId: 'firm' }, null), FIRMA_ICI);
+    assert.deepEqual(izleyiciCikar({ partyId: 'p1' }, { type: 'customer' }), { tur: 'musteri', firma: 'p1' });
+    assert.deepEqual(izleyiciCikar({ partyId: 'p1' }, { type: 'supplier' }), { tur: 'tedarikci', firma: 'p1' });
+    assert.deepEqual(izleyiciCikar({ partyId: 'p1' }, null), { tur: 'kapali' });
+    assert.deepEqual(izleyiciCikar({ partyId: 'p1' }, { type: 'bank' }), { tur: 'kapali' });
+    assert.deepEqual(izleyiciCikar({ partyId: 7 }, { type: 'customer' }), { tur: 'kapali' });
+    for (const yol of ['orders/o1', 'parties/p1', 'users/tmi-7']) assert.equal(gorur(yol, { partyId: 'p1' }, { tur: 'kapali' }), false, yol);
+  });
+
+  test('BD-K45 (1013 a): firma kişisi yalnız kendi portal kullanıcısını ve kişiye özel alanını yazar; firma alanını değiştiremez', () => {
+    assert.equal(disYazmaReddi(FIRMA_ICI, 'orders/o1', 7), null);
+    assert.equal(disYazmaReddi(M, 'users/tmi-7', 7), null);
+    assert.equal(disYazmaReddi(M, 'data/users/7/prefs', 7), null);
+    for (const yol of ['orders/o1', 'users/tmi-8', 'data/users/8/prefs', 'notifs/n1', 'parties/p1']) assert.notEqual(disYazmaReddi(T, yol, 7), null, yol);
+    assert.notEqual(disYazmaReddi({ tur: 'kapali' }, 'orders/o1', 7), null);
+    assert.equal(rolDegisiyorMu('users/tmi-7', { partyId: 'p1', role: 'x' }, { partyId: 'firm', role: 'x' }), true);
+    assert.equal(rolDegisiyorMu('users/tmi-7', { partyId: 'p1', role: 'x' }, { partyId: 'p1', role: 'x', prefs: {} }), false);
   });
 });

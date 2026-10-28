@@ -5,7 +5,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BelgeCevabi } from '#paylasilan/sozlesme/portal.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { formDegerleri, kurallariDenetle, PortalAyarlari, sayiOku } from './PortalAyarlari.tsx';
+import { firmaKisileri, firmaSecenekleri, formDegerleri, kurallariDenetle, PortalAyarlari, sayiOku } from './PortalAyarlari.tsx';
 import { ayarEkranlari } from './ayar-ekranlari.tsx';
 
 // Kişi adı uydurmadır.
@@ -99,5 +99,44 @@ describe('PortalAyarlari', () => {
     await screen.findByText(/değişti/);
     await waitFor(() => { expect(vi.mocked(fetch).mock.calls.filter(([a]) => String(a).includes('/portal/belge?'))).toHaveLength(2); });
     expect((screen.getByLabelText('Tedarikçi ödemesi: finans müdürü onayı üstü (TL)') as HTMLInputElement).value).toBe('300.000');
+  });
+
+});
+
+// Firma ve kişi adları uydurmadır.
+describe('PortalAyarlari firma kişileri (1021 b)', () => {
+  const b = (yol: string, veri: Record<string, unknown>) => ({ yol, kimlik: yol.split('/')[1] ?? '', veri, surum: 1 });
+  const FIRMALAR = [b('parties/p2', { type: 'supplier', name: 'Beta' }), b('parties/p1', { type: 'customer', name: 'Alfa' }), b('parties/p3', { type: 'bank', name: 'Banka' })];
+  const KULLANICILAR = [b('users/tmi-7', { partyId: 'p1', name: 'x' }), b('users/tmi-8', { partyId: 'firm' }), b('users/tmi-9', { partyId: 'p9' }), b('users/u1', { partyId: 'p1' })];
+  const KISILER = [{ id: 5, ad: 'Deneme Yönetici' }, { id: 7, ad: 'Deneme Yedi' }, { id: 8, ad: 'Deneme Sekiz' }, { id: 9, ad: 'Deneme Dokuz' }];
+
+  it('yalnız müşteri ve tedarikçi firması seçilir; atama yalnız TMI kullanıcısında ve firm dışında; silinmiş firma da listelenir', () => {
+    const f = firmaSecenekleri(FIRMALAR);
+    expect(f.map((x) => [x.kimlik, x.tur])).toEqual([['p1', 'Müşteri'], ['p2', 'Tedarikçi']]);
+    expect(firmaKisileri(KULLANICILAR, f, KISILER).map((x) => [x.kisiId, x.ad, x.firmaAdi])).toEqual([[9, 'Deneme Dokuz', 'Silinmiş firma'], [7, 'Deneme Yedi', 'Alfa']]);
+  });
+
+  it('atama ve kaldırma kişinin firma ucuna gider; kişi listesinde kendisi ve atanmış kişi yok', async () => {
+    const giden: [string, unknown][] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/oturum') return json(200, { kullanici: YONETICI } satisfies OturumCevabi);
+      if (yol.startsWith('/portal/belge?')) return json(200, { belge: { yol: 'settings/main', kimlik: 'main', surum: 1, veri: {} }, damga: 1 } satisfies BelgeCevabi);
+      if (yol === '/portal/kisiler') return json(200, { kisiler: KISILER });
+      if (yol === '/portal/sorgu?koleksiyon=parties') return json(200, { belgeler: FIRMALAR, damga: 1 });
+      if (yol === '/portal/sorgu?koleksiyon=users') return json(200, { belgeler: KULLANICILAR, damga: 1 });
+      if (yol.startsWith('/portal/kisiler/')) { giden.push([yol, JSON.parse(String(secenek?.body))]); return json(200, { kisiId: 1, firma: null }); }
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    ac();
+    await screen.findByText('Alfa');
+    const kisi = screen.getByLabelText('Kişi') as HTMLSelectElement;
+    await waitFor(() => { expect([...kisi.options].map((o) => o.value)).toEqual(['', '8']); });
+    fireEvent.change(kisi, { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Firma'), { target: { value: 'p2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Firmaya ata' }));
+    await waitFor(() => { expect(giden).toEqual([['/portal/kisiler/8/firma', { firma: 'p2' }]]); });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Kaldır' })[1] as HTMLElement);
+    await waitFor(() => { expect(giden[1]).toEqual(['/portal/kisiler/7/firma', { firma: null }]); });
   });
 });

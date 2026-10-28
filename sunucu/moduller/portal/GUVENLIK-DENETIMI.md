@@ -1,7 +1,7 @@
 # portal: güvenlik denetimi
 
 Oturtmada yazıldı (kart #744); teslimde yoktu. Kaynak: `uclar.ts`, `servis.ts`, `portal.test.ts` (BD-01..BD-12), `KURAL-TEST.md`.
-Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yok (kart #745).
+Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yok. Firma kişisi (1021 b) çalışan oturumuyla girer, yalnız atandığı firmanın kayıtlarını okur ve yazamaz (KURAL-TEST BD-17, BD-18).
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
@@ -14,6 +14,7 @@ Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yo
 | POST /portal/belge/kilitle | `portal.yaz` | başkasının geçerli kilidi verilmez; kilit verisinde de başka kişi adına kimlik reddedilir; bölüm izni | BD-08 | BD-08, BD-16 |
 | GET /portal/kisiler | `portal.oku` ya da `.yaz` | yalnız etkin kişilerin no ve adı (kisiler/disari.ts); dış izleyiciye 403 | BD-21 | BD-21, BD-26 |
 | POST /portal/ben/hazirla | oturum; serviste `portal.oku` ya da `.yaz` | yalnız kişinin kendi `users/tmi-<no>` belgesi; yoksa kurulur, varsa yalnız rol ve izinleri TMI rolüne göre güncellenir, ad kullanıcıdan | BD-13, BD-15 | BD-13 (işlemsiz kişi 403) |
+| POST /portal/kisiler/:kisiId/firma | `portal.yonet` | yalnız etkin kişi (404), kendine atama 422, firma portalda müşteri ya da tedarikçi kartı olmalı (400); yalnız kişinin `users/tmi-<no>` belgesinin firma alanını yazar, belge yoksa bölümsüz rolle kurar | BD-26 | BD-26 (`portal.yaz` ile 403, olmayan firma, kendine) |
 | POST /portal/kurulum | `portal.yonet` | yalnız işaret belgesi yokken | BD-11 | BD-11 (`yaz` ile 403) |
 | GET /portal/oda | `portal.oku` ya da `.yaz` | bellekte, kişi başına; dış izleyiciye 403 | BD-12 | BD-21, BD-26 |
 | POST /portal/ekler/yukle | `portal.yaz` | en çok 700 KB (kısıt), boş dosya 400; denetim gövdesiz, ad ve tür seçilir | BD-10 | BD-21 (`portal.oku` ile ve işlemsiz 403) |

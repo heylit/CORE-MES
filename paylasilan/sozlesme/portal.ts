@@ -101,6 +101,11 @@ export const odaCevabi = z.object({ esler: z.array(esSemasi) });
 export const onayParametresi = z.object({ kimlik: z.string().regex(YOL_PARCASI, 'Geçersiz onay kimliği.') });
 export const onayKarariGovdesi = z.object({ onay: z.boolean(), not: z.string().max(2000).default('') });
 
+// Firma kişisi (1021 b): TMI kişisine portaldaki müşteri ya da tedarikçi firma kartının kimliği atanır; null firma içine alır.
+export const firmaKisisiParametresi = z.object({ kisiId: z.coerce.number().int().positive() });
+export const firmaKisisiGovdesi = z.object({ firma: z.string().regex(YOL_PARCASI, 'Geçersiz firma kimliği.').nullable() });
+export const firmaKisisiCevabi = z.object({ kisiId: z.number().int(), firma: z.string().nullable() });
+
 export const ekKimligi = z.string().regex(/^[0-9a-f]{32}$/, 'Geçersiz ek kimliği.');
 export const ekParametresi = z.object({ id: ekKimligi });
 export const ekYukleGovdesi = z.object({
@@ -124,3 +129,4 @@ export type OdaCevabi = z.output<typeof odaCevabi>;
 export type EkCevabi = z.output<typeof ekCevabi>;
 export type EkIcerikCevabi = z.output<typeof ekIcerikCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;
+export type FirmaKisisiCevabi = z.output<typeof firmaKisisiCevabi>;
