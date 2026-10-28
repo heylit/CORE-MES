@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { csvIndir, csvMetni, ondalik } from './csv.ts';
+import { csvHucresi, csvIndir, csvMetni, ondalik } from './csv.ts';
 
 describe('ortak CSV metni', () => {
   it('başlık ve satırlar noktalı virgülle, BOM ile; sayı ondalık virgülle, boş değer boş alan', () => {
@@ -12,6 +12,14 @@ describe('ortak CSV metni', () => {
   it('satırsız liste yalnız başlık satırıdır; boş ondalık boş kalır', () => {
     expect(csvMetni(['Kod'], []).slice(1)).toBe('"Kod"');
     expect(ondalik(null)).toBeNull();
+  });
+
+  it('formül gibi başlayan metin \' ile başlar; sayı, eksi sayı ve sıradan metin değişmez', () => {
+    for (const k of ['=HYPERLINK("http://x","t")', '+1', '-1+2', '@SUM(A1)', '\tx', '\rx']) expect(csvHucresi(k)).toBe(`"'${k.replace(/"/g, '""')}"`);
+    expect(csvHucresi(-2.5)).toBe('"-2,5"');
+    expect(csvHucresi('a=b')).toBe('"a=b"');
+    expect(csvHucresi(null)).toBe('""');
+    expect(csvMetni(['=Baslik'], [['=cmd|\' /C calc\'!A0']]).slice(1)).toBe(`"'=Baslik"\r\n"'=cmd|' /C calc'!A0"`);
   });
 });
 

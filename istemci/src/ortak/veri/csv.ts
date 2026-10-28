@@ -4,10 +4,16 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 
 export type CsvDegeri = string | number | null;
 
-const alan = (v: CsvDegeri) => `"${(typeof v === 'number' ? String(v).replace('.', ',') : (v ?? '')).replace(/"/g, '""')}"`;
+// Excel, tırnak içinde de olsa = + - @ sekme ya da satır başıyla başlayan hücreyi formül sayar; dışarıdan gelen ad
+// (portal, tedarikçi) açanın bilgisayarında komut çalıştırabilir. Böyle metin ' ile başlar, gerçek sayı olduğu gibi kalır.
+const FORMUL_BASI = /^[=+\-@\t\r]/;
+export const csvHucresi = (v: CsvDegeri): string => {
+  const metin = typeof v === 'number' ? String(v).replace('.', ',') : FORMUL_BASI.test(v ?? '') ? `'${v ?? ''}` : (v ?? '');
+  return `"${metin.replace(/"/g, '""')}"`;
+};
 
 export function csvMetni(basliklar: readonly string[], satirlar: readonly (readonly CsvDegeri[])[]): string {
-  return '﻿' + [basliklar.map(alan).join(';'), ...satirlar.map((s) => s.map(alan).join(';'))].join('\r\n');
+  return '﻿' + [basliklar.map(csvHucresi).join(';'), ...satirlar.map((s) => s.map(csvHucresi).join(';'))].join('\r\n');
 }
 
 // Sunucunun ondalık metni ('2.5000') sayı olarak yazılır; boş kalır.
