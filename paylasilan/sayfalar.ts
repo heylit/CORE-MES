@@ -40,7 +40,7 @@ import { SMARTES_IKINCI_MENU, SMARTES_SAYFALARI } from './sayfalar/smartes.ts';
 import { STOK_IKINCI_MENU, STOK_SAYFALARI } from './sayfalar/stok.ts';
 import { TAKVIM_IKINCI_MENU, TAKVIM_SAYFALARI } from './sayfalar/takvim.ts';
 import { TERMINAL_SAYFALARI } from './sayfalar/terminal.ts';
-import { URETIM_EMIRLERI_SAYFALARI } from './sayfalar/uretim-emirleri.ts';
+import { URETIM_EMIRLERI_IKINCI_MENU, URETIM_EMIRLERI_SAYFALARI } from './sayfalar/uretim-emirleri.ts';
 import { VARDIYA_IKINCI_MENU, VARDIYA_SAYFALARI } from './sayfalar/vardiya.ts';
 import { PLAN_IKINCI_MENU, PLAN_SAYFALARI } from './sayfalar/plan.ts';
 import { PORTAL_IKINCI_MENU, PORTAL_SAYFALARI } from './sayfalar/portal.ts';
@@ -141,6 +141,7 @@ export const TUM_IKINCI_MENULER = [
   NIZAMIYE_IKINCI_MENU,
   TAKVIM_IKINCI_MENU,
   DEGISIKLIK_YONETIMI_IKINCI_MENU,
+  URETIM_EMIRLERI_IKINCI_MENU,
 ] as const satisfies readonly IkinciMenuTanimi[];
 
 export const IKINCI_MENULER = TUM_IKINCI_MENULER.filter((m) => !kapaliModulYoluMu(m.kok));
