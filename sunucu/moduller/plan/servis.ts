@@ -26,7 +26,7 @@ import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, yeniDortSaatIhlali, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
@@ -857,12 +857,14 @@ async function planOku(db: Db, k: Kullanici | null, b: Baglam, taslakAcildi = fa
   const satirlar = await s.yerlesimler(db, b.hedef);
   const c = cevapKur(b, satirlar);
   const dusen = await elleSiraDusenleri(db, b, satirlar);
+  const dortSaat = b.hedef === null ? [] : dortSaatIhlalleri(await canliPlanYerleri(db, b), planYerleri(b, satirlar), planliMi(b), calisirMi(b))
+    .map((i) => `${dortSaatMetni(b, i)}; canlıya alırken gerekçe ister.`);
   return {
     surum: await s.planSurumu(db), simdi: new Date(b.simdi).toISOString(), ayar: b.ayar, taslak: await taslakOzeti(db, b, k), taslakAcildi,
     gunler: Array.from({ length: UFUK_GUN }, (_, i) => gunTarihi(b, i)),
     kaynaklar: [...b.kaynaklar.values()].filter((x) => x.aktif && izinliMi(b, x)).map(({ isMerkeziId, ...x }) => { void isMerkeziId; return x; }),
     yerlesimler: c.yerlesimler, yerlesmemis: c.yerlesmemis, emirler: c.emirler, istasyonYuku: c.istasyonYuku, personelYuku: c.personelYuku,
-    gostergeler: gosterge(b, c.yerler), uyarilar: [...c.uyarilar, ...dusen.map(elleSiraMetni)], elleSiraDusenler: dusen,
+    gostergeler: gosterge(b, c.yerler), uyarilar: [...dortSaat, ...c.uyarilar, ...dusen.map(elleSiraMetni)], elleSiraDusenler: dusen,
     ekMesai: await ekMesaiOku(db, b.hedef),
   };
 }
@@ -1075,15 +1077,13 @@ const planliMi = (b: Baglam) => (isEmriId: number) => b.isler.get(isEmriId)?.dur
 // 990 a, 991 a: makinenin gerçek durumu ve taslaktaki arıza denemesi bağlamdaki kaynağı kapatır; kapalı kaynaktaki işin koruması kalkar.
 const calisirMi = (b: Baglam) => (k: Kaynak) => b.kaynaklar.get(kaynakAnahtari(k))?.aktif !== false;
 const canliPlanYerleri = async (db: Db, b: Baglam) => planYerleri(b, await s.yerlesimler(db, null));
-const taslakDortSaat = async (db: Db, b: Baglam, canli: readonly PlanYeri[], id: number) =>
-  dortSaatIhlalleri(canli, planYerleri(b, await s.yerlesimler(db, id)), planliMi(b), calisirMi(b));
 const DORT_SAAT_METNI: Record<DortSaatNedeni, string> = {
   kaldirildi: 'plandan kaldırılamaz', kaynak: 'başka makine ya da kişiye alınamaz', 'onune-is': 'önüne iş konamaz',
 };
-// Ayrıntı ekrana neden kodunu verir; gerekceIle yalnız canlıya almada doğrudur (orada gerekçeyle aşılır, 990 a).
-const dortSaatReddi = (b: Baglam, i: { isEmriId: number; neden: DortSaatNedeni }, gerekceIle = false) =>
-  cakisma(`${isMetni(b, i.isEmriId)} 4 saatten kısa sürede başlayacak; ${DORT_SAAT_METNI[i.neden]}.${gerekceIle ? ' Zorunluysa gerekçe yazarak canlıya alın.' : ''}`,
-    { neden: DORT_SAAT_RED_NEDENI, gerekceIle } satisfies DortSaatAyrintisi);
+// 1002 a: taslak yazımı reddetmez, uyarır; ret ve gerekçe canlıya almadadır (990 a). Ayrıntı ekrana neden kodunu verir.
+const dortSaatMetni = (b: Baglam, i: { isEmriId: number; neden: DortSaatNedeni }) => `${isMetni(b, i.isEmriId)} 4 saatten kısa sürede başlayacak; ${DORT_SAAT_METNI[i.neden]}`;
+const dortSaatReddi = (b: Baglam, i: { isEmriId: number; neden: DortSaatNedeni }) =>
+  cakisma(`${dortSaatMetni(b, i)}. Zorunluysa gerekçe yazarak canlıya alın.`, { neden: DORT_SAAT_RED_NEDENI, gerekceIle: true } satisfies DortSaatAyrintisi);
 const ONAYDA = 'Taslak onayda; değiştirmek için önce onaydan çek.';
 
 async function taslagaYaz(
@@ -1103,11 +1103,7 @@ async function taslagaYaz(
     id = x.id;
   }
   const b = await baglamKur(db, k, id);
-  const canli = await canliPlanYerleri(db, b);
-  const once = await taslakDortSaat(db, b, canli, id);
   const kayit = await islem(b, id);
-  const ihlal = yeniDortSaatIhlali(once, await taslakDortSaat(db, b, canli, id));
-  if (ihlal) throw dortSaatReddi(b, ihlal);
   await s.degisiklikEkle(db, id, kayit, k.id);
   await s.senaryoSurumArtir(db, id);
   const sonra = baglamDegisir ? await baglamKur(db, k, id) : { ...b, defter: await s.degisiklikler(db, [id]), yersiz: await s.yersizBolmeler(db, id) };
@@ -2034,17 +2030,12 @@ export async function hizliDene(db: Db, k: Kullanici, id: number, g: { tur: Hizl
     if (e) d = { tur: 'oncelik', ozet: `${e.emirNo} acile çekildi`, isEmriIdleri: [], veri: { emirId: e.uretimEmriId, oncelik: 1 } };
   }
   if (!d) throw dogrulama('Bu deneme için uygun kayıt yok (emir, darboğaz makinesi ya da çalışma günü).', 'tur');
-  // 248 a, 954 b: arıza denemesi 4 saat kuralının dışındadır (yalnız deneme); canlıya alınırken yine denetlenir.
-  const canli = d.tur === 'makine_ariza' ? null : await canliPlanYerleri(db, b);
-  const once = canli ? await taslakDortSaat(db, b, canli, id) : [];
   // Deneme etkilediği işleri motor yeniden yerleştirsin diye onların kilitsiz yerleşimi kalkar; sonra motor önerir.
   const serbest = (await s.yerlesimler(db, id)).filter((y) => d.isEmriIdleri.includes(y.isEmriId) && !y.kilitli && !y.dondurulmus).map((y) => y.isEmriId);
   await s.yerlesimleriSil(db, id, serbest);
   await s.degisiklikEkle(db, id, d, k.id);
   const yeni = await baglamKur(db, k, id);
   const idler = await onerUygula(db, yeni, id);
-  const ihlal = canli ? yeniDortSaatIhlali(once, await taslakDortSaat(db, b, canli, id)) : null;
-  if (ihlal) throw dortSaatReddi(b, ihlal);
   await s.degisiklikEkle(db, id, { tur: 'oner', ozet: `Motor önerdi (${KURAL_ADI[yeni.ayar.kural]}, ${idler.length} iş)`, isEmriIdleri: idler.filter((x) => x > 0) }, k.id);
   await s.senaryoSurumArtir(db, id);
   return senaryolar(db, k);
@@ -2132,7 +2123,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   // 990 a: zorunlu durumda canlıya alan gerekçeyle aşar; aşılan işler ve gerekçe canlıya alma onay kaydına yazılır.
   const dortSaat = dortSaatIhlalleri(planYerleri(b, canli), planYerleri(b, [...canli.filter((y) => !gecen.has(y.isEmriId)), ...taslak.filter((y) => gecen.has(y.isEmriId))]), planliMi(b), calisirMi(b));
   const gerekce = dortSaatGerekcesi(g.dortSaatGerekcesi);
-  if (dortSaat.length > 0 && gerekce === null) throw dortSaatReddi(b, dortSaat[0]!, true);
+  if (dortSaat.length > 0 && gerekce === null) throw dortSaatReddi(b, dortSaat[0]!);
   const asmaKaydi = dortSaat.length > 0 ? `4 saat kuralı aşıldı (${dortSaat.map((i) => isMetni(b, i.isEmriId)).join(', ')}): ${gerekce!}` : null;
   await s.canliyaYaz(db, id, idler, k.id);
   for (const y of taslak) {

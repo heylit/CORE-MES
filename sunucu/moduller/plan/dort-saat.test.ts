@@ -1,7 +1,7 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { DORT_SAAT_GEREKCE_EN_COK, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, yeniDortSaatIhlali } from './kurallar.ts';
+import { DORT_SAAT_GEREKCE_EN_COK, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz; korunan iş canlıdaki yerinden okunur. Veriler uydurmadır.
@@ -49,13 +49,6 @@ describe('plan: 4 saat kuralı (248 a), saf', () => {
     assert.equal(dortSaatGerekcesi(undefined), null);
     assert.equal(dortSaatGerekcesi('x'.repeat(DORT_SAAT_GEREKCE_EN_COK + 10))!.length, DORT_SAAT_GEREKCE_EN_COK);
   });
-  test('yazım yalnız kendi getirdiği ihlalle reddedilir', () => {
-    const once = [{ isEmriId: 1, neden: 'kaynak' as const }];
-    assert.equal(yeniDortSaatIhlali(once, once), null);
-    assert.equal(yeniDortSaatIhlali(once, []), null);
-    assert.deepEqual(yeniDortSaatIhlali(once, [...once, { isEmriId: 2, neden: 'onune-is' }]), { isEmriId: 2, neden: 'onune-is' });
-    assert.deepEqual(yeniDortSaatIhlali(once, [{ isEmriId: 1, neden: 'kaldirildi' }]), { isEmriId: 1, neden: 'kaldirildi' });
-  });
 });
 
 describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
@@ -72,7 +65,7 @@ describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
   const yeniTaslak = async (ad: string) => planOku((await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad })).senaryolar.find((x) => x.ad === ad)!.id);
   const saatSonra = (iso: string, sa: number) => new Date(Date.parse(iso) + sa * 3600_000).toISOString();
 
-  test('korunan işin önüne iş, sıra değişimi, kaldırma 409 ve taslak değişmez; ufuk dışındaki iş serbest; arıza denemesi yazılır ama canlıya alınmaz', async () => {
+  test('1002 a: korunan işin önüne iş, kaldırma, sıra değişimi taslakta uyarıdır; canlıya alma gerekçesiz reddeder; ufuk dışındaki iş serbest', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     const [i2] = await isEmirleriAc([yeniAdim()]);
     const ilk = await taslaktaOner();
@@ -82,67 +75,75 @@ describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
     await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '2 days', bitis = bitis + interval '2 days' WHERE is_emri_id = $1", [i2]));
 
     let p = await yeniTaslak('248 a');
-    const surum = p.taslak!.surum;
-    const red = async (r: Awaited<ReturnType<typeof istek>>, metin: RegExp) => {
-      assert.equal(r.statusCode, 409, r.body);
-      assert.match(r.body, metin);
-      assert.equal((await planOku(p.taslak!.id)).taslak!.surum, surum, 'reddedilen yazım taslağı değiştirmez');
-    };
     const y1 = yer(p, i1!);
-    await red(await istek(c.planlama, 'POST', '/plan/kuyruk/sirala', { taslak: tg(p), kaynak: y1.kaynak, isEmriIdleri: [i2, i1] }), /önüne iş konamaz/);
-    await red(await isEmriKomutu(p, i1!, 'kaldir'), /plandan kaldırılamaz/);
-    await red(await isEmriKomutu(p, i1!, 'tasi', { kaynak: y1.kaynak, baslangic: saatSonra(yer(p, i2!).bitis, 1) }), /önüne iş konamaz/);
-
+    const uyari = (q: PlanCevabi) => q.uyarilar.filter((u) => /4 saatten kısa sürede başlayacak/.test(u));
+    assert.deepEqual(uyari(p), [], 'canlıyla aynı taslakta uyarı yok');
     // Korunan iş önü boş kaldıkça ileri alınabilir; ufuk dışındaki i2 serbestçe taşınır.
     p = (await isEmriKomutu(p, i1!, 'tasi', { kaynak: y1.kaynak, baslangic: saatSonra(y1.baslangic, 5) })).json<PlanCevabi>();
-    assert.equal(Date.parse(yer(p, i1!).baslangic) >= Date.parse(saatSonra(y1.baslangic, 5)), true);
-    const ileri = saatSonra(yer(p, i2!).baslangic, 24);
-    p = (await isEmriKomutu(p, i2!, 'tasi', { kaynak: y1.kaynak, baslangic: ileri })).json<PlanCevabi>();
-    assert.equal(Date.parse(yer(p, i2!).baslangic) >= Date.parse(ileri), true);
+    assert.deepEqual(uyari(p), []);
+    p = (await isEmriKomutu(p, i2!, 'tasi', { kaynak: y1.kaynak, baslangic: saatSonra(yer(p, i2!).baslangic, 24) })).json<PlanCevabi>();
+    assert.deepEqual(uyari(p), []);
 
-    // 954 b: arıza denemesi kuralın dışındadır. 991 a: canlıya alınınca makine arızalı olur, o makinedeki işin koruması kalkar.
-    const a = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: '248 a arıza' })).senaryolar.find((x) => x.ad === '248 a arıza')!;
+    const r = await istek(c.planlama, 'POST', '/plan/kuyruk/sirala', { taslak: tg(p), kaynak: y1.kaynak, isEmriIdleri: [i2, i1] });
+    assert.equal(r.statusCode, 200, r.body);
+    p = r.json<PlanCevabi>();
+    assert.equal(uyari(p).length, 1);
+    assert.match(uyari(p)[0]!, /önüne iş konamaz; canlıya alırken gerekçe ister\.$/);
+    p = (await isEmriKomutu(p, i1!, 'kaldir')).json<PlanCevabi>();
+    assert.match(uyari(p)[0]!, /plandan kaldırılamaz; canlıya alırken gerekçe ister\.$/);
+
+    const s = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
+    const al = await istek(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    assert.equal(al.statusCode, 409, al.body);
+    assert.match(al.body, /plandan kaldırılamaz\. Zorunluysa gerekçe yazarak canlıya alın\./);
+    assert.equal(await onaydakiSurum(s.id), s.surum, 'reddedilen canlıya alma taslağı onayda bırakır');
+    assert.ok((await planOku()).yerlesimler.some((y) => y.isEmriId === i1), 'canlı değişmez');
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${s.id}/onaydan-cek`, { surum: s.surum });
+  });
+
+  test('954 b, 991 a: arıza denemesi yazılır; canlıya alınınca makine arızalı olur ve o makinedeki işin koruması kalkar', async () => {
+    const [i1] = await isEmirleriAc([yeniAdim()]);
+    assert.equal((await canliyaAl(await taslaktaOner())).statusCode, 200);
+    const y1 = yer(await planOku(), i1!);
+    const a = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: '991 a arıza' })).senaryolar.find((x) => x.ad === '991 a arıza')!;
     const r = await istek(c.planlama, 'POST', `/plan/senaryolar/${a.id}/hizli`, { tur: 'ariza', surum: a.surum });
     assert.equal(r.statusCode, 200, r.body);
-    const ariza = (await planOku(a.id));
-    assert.equal(ariza.yerlesimler.some((y) => y.isEmriId === i1 && Date.parse(y.baslangic) <= Date.parse(y1.baslangic) + 60_000 && y.kaynak.id === y1.kaynak.id), false,
-      'arıza denemesi korunan işi makinesinden kaldırdı');
-    const makine = y1.kaynak.id;
+    const ariza = await planOku(a.id);
+    assert.equal(ariza.yerlesimler.some((y) => y.isEmriId === i1 && y.kaynak.id === y1.kaynak.id), false, 'arıza denemesi korunan işi makinesinden aldı');
     try {
       const al = await canliyaAl(ariza);
       assert.equal(al.statusCode, 200, al.body);
     } finally {
-      await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'calisir', aciklama: null });
+      await tamam(c.yonetici, 'POST', `/makineler/${y1.kaynak.id}/durum`, { durum: 'calisir', aciklama: null });
     }
   });
 
-  test('990 a: makine arızaya alınınca üstündeki korunan iş başka makineye taşınır', async () => {
+  test('990 a: korunan işi başka makineye alan taslak uyarı taşır; makine arızaya alınınca uyarı kalkar', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     assert.equal((await canliyaAl(await taslaktaOner())).statusCode, 200);
     const makine = yer(await planOku(), i1!).kaynak.id;
     assert.notEqual(makine, makineB);
     let p = await yeniTaslak('990 a arıza');
-    // Canlıya alma bu testte yok: önceki testlerin işleri de arızalı makinede ve canlıya almayı ayrı kural durdurur.
-    const tasi = () => isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: yer(p, i1!).baslangic });
-    assert.equal((await tasi()).statusCode, 409, 'çalışan makinede korunur');
+    const r = await isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: yer(p, i1!).baslangic });
+    assert.equal(r.statusCode, 200, r.body);
+    p = r.json<PlanCevabi>();
+    const uyari = (q: PlanCevabi) => q.uyarilar.filter((u) => /4 saatten kısa sürede başlayacak/.test(u));
+    assert.match(uyari(p).join('\n'), /başka makine ya da kişiye alınamaz; canlıya alırken gerekçe ister\./, 'çalışan makinede korunur');
     await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'ariza', aciklama: null });
     try {
-      const r = await tasi();
-      assert.equal(r.statusCode, 200, r.body);
-      p = r.json<PlanCevabi>();
-      assert.equal(yer(p, i1!).kaynak.id, makineB);
+      assert.deepEqual(uyari(await planOku(p.taslak!.id)), [], 'arızalı makinedeki işin koruması kalktı');
     } finally {
       await tamam(c.yonetici, 'POST', `/makineler/${makine}/durum`, { durum: 'calisir', aciklama: null });
     }
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
   test('990 a: korunan işi yerinden çıkaran taslak gerekçesiz canlıya alınmaz; gerekçeyle alınır, aşılan iş ve gerekçe onay kaydına yazılır', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     assert.equal((await canliyaAl(await taslaktaOner())).statusCode, 200);
-    const p = await yeniTaslak('990 a');
+    let p = await yeniTaslak('990 a');
     assert.notEqual(yer(p, i1!).kaynak.id, makineB);
-    // Taslak yazımı korunan işi başka makineye almayı reddeder; canlıya almanın denetimi ayrı sınanır, taslak doğrudan değiştirilir.
-    await vt().tx((db) => db.sorgu('UPDATE plan_senaryo_yerlesimi SET makine_id = $1 WHERE senaryo_id = $2 AND is_emri_id = $3', [makineB, p.taslak!.id, i1]));
+    p = (await isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: yer(p, i1!).baslangic })).json<PlanCevabi>();
     const s = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
     const al = (dortSaatGerekcesi: string | null) =>
       istek(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true, dortSaatGerekcesi });

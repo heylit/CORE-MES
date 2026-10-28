@@ -321,8 +321,6 @@ export const canliyaAlGovdesi = z.object({
 // 248 a: 4 saat kuralı reddinin ayrıntısı; gerekceIle canlıya almada gerekçeyle aşılabildiğini söyler.
 export const DORT_SAAT_RED_NEDENI = 'dort-saat';
 export interface DortSaatAyrintisi { neden: typeof DORT_SAAT_RED_NEDENI; gerekceIle: boolean }
-export const dortSaatAyrintisi = (ayrinti: unknown): DortSaatAyrintisi | null =>
-  typeof ayrinti === 'object' && ayrinti !== null && (ayrinti as { neden?: unknown }).neden === DORT_SAAT_RED_NEDENI ? ayrinti as DortSaatAyrintisi : null;
 export const musteriSecenekleriSorgusu = z.object({ ara: z.string().max(100).default('') });
 export const musteriSecenekleriCevabi = z.object({ firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })) });
 export type MusteriSecenekleriCevabi = z.output<typeof musteriSecenekleriCevabi>;

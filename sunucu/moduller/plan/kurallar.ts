@@ -48,10 +48,6 @@ export function dortSaatIhlalleri(
   return ihlaller.sort((x, y) => x.isEmriId - y.isEmriId);
 }
 
-// Yazım yalnız kendi getirdiği ihlalle reddedilir: canlıdan önce açılmış taslakta zaten olan ihlal sonraki ilgisiz yazımı durdurmaz.
-export const yeniDortSaatIhlali = (once: readonly { isEmriId: number; neden: DortSaatNedeni }[], sonra: readonly { isEmriId: number; neden: DortSaatNedeni }[]) =>
-  sonra.find((x) => !once.some((y) => y.isEmriId === x.isEmriId && y.neden === x.neden)) ?? null;
-
 // 990 a: canlıya alan kişi zorunlu durumda kuralı gerekçeyle aşar; boşluktan ibaret gerekçe gerekçe sayılmaz. Gerekçe ve kişi onay kaydına yazılır.
 export const DORT_SAAT_GEREKCE_EN_COK = 500;
 export const dortSaatGerekcesi = (g: string | null | undefined): string | null => {

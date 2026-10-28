@@ -1,6 +1,6 @@
-import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { DortSaatAyrintisi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, TaslaktanCalismayaCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import { api, hataIletisi } from '../../../../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
@@ -18,7 +18,16 @@ export interface GonderSonucu {
 }
 
 export type GonderHedefi = 'deneme' | 'onay' | 'canli';
-export class GonderHatasi extends Error {}
+// 990 a: canlıya alma 4 saat kuralına takıldıysa plan onayda kalır; ekran gerekçe sorup onaydaki taslağı (gerekceTaslagi) yeniden canlıya alır.
+export class GonderHatasi extends Error {
+  readonly gerekceTaslagi: number | null;
+  constructor(mesaj: string, gerekceTaslagi: number | null = null) { super(mesaj); this.gerekceTaslagi = gerekceTaslagi; }
+}
+const DORT_SAAT: DortSaatAyrintisi['neden'] = 'dort-saat';
+const gerekceIsterMi = (h: unknown) => {
+  const a = h instanceof ApiHatasi ? h.govde.ayrinti as Partial<DortSaatAyrintisi> | null | undefined : null;
+  return a?.neden === DORT_SAAT && a.gerekceIle === true;
+};
 
 const sebep = (h: unknown) => hataIletisi(h, 'sunucuya ulaşılamadı');
 
@@ -49,7 +58,7 @@ export async function calismayiGonder(a: {
     if (!s) throw new GonderHatasi('Plan canlıya alınamadı, onayda bekliyor: plan listede bulunamadı.');
     try {
       sen = await tekrarKorumaliGonder((d) => api.post<SenaryolarCevabi>(`/plan/senaryolar/${String(id)}/canliya-al`, { surum: s.surum, cakismalariKabul: true }, d));
-    } catch (h) { throw new GonderHatasi(`Plan canlıya alınamadı, onayda bekliyor: ${sebep(h)}`); }
+    } catch (h) { throw new GonderHatasi(`Plan canlıya alınamadı, onayda bekliyor: ${sebep(h)}`, gerekceIsterMi(h) ? id : null); }
   }
   return sonuc(sen);
 }
