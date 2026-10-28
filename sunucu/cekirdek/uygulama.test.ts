@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -48,12 +51,13 @@ test('test dışı ortamda uygulama eksik seçenekle kurulmaz: kimlik, denetim v
     denetle: async () => undefined,
     tekrar: { ayir: async () => null, sonucYaz: async () => undefined, birak: async () => undefined },
   };
+  const gunlukDizini = mkdtempSync(join(tmpdir(), 'tmiv2-gunluk-'));
   for (const ortam of ['gelistirme', 'canli'] as const) {
     const ayar: Ayar = { ...AYAR, ortam };
     for (const ad of ['kimlik', 'denetle', 'tekrar'] as const) {
       const { [ad]: _atilan, ...eksik } = tam;
       await assert.rejects(
-        uygulamaKur({ ...eksik, ayar }),
+        uygulamaKur({ ...eksik, ayar }, gunlukDizini),
         new RegExp(`eksik seçenekle kurulamaz \\(ortam: ${ortam}\\); verilmeyen: ${ad}$`),
         `${ortam} ${ad}`,
       );
@@ -61,7 +65,7 @@ test('test dışı ortamda uygulama eksik seçenekle kurulmaz: kimlik, denetim v
       await (await uygulamaKur({ ...eksik, ayar: AYAR })).close();
     }
     await assert.rejects(uygulamaKur({ vt: sahteVt, ayar }), /verilmeyen: kimlik, denetle, tekrar$/);
-    const app = await uygulamaKur({ ...tam, ayar });
+    const app = await uygulamaKur({ ...tam, ayar }, gunlukDizini);
     assert.notEqual((await app.inject({ method: 'GET', url: '/api/saglik' })).statusCode, 404);
     await app.close();
   }
@@ -83,6 +87,8 @@ test('beklenmeyen hata 500 SUNUCU döner, iç ayrıntı cevaba sızmaz', async (
   const cevap = await app.inject({ method: 'GET', url: '/patla' });
   assert.equal(cevap.statusCode, 500);
   assert.deepEqual(Object.keys(cevap.json()).sort(), ['kod', 'mesaj']);
+  // İstek kimliği başlıktadır: kullanıcı söyler, satır günlükte bulunur.
+  assert.equal(cevap.headers['x-hata-kodu'], 'req-1');
   assert.equal(cevap.json().kod, 'SUNUCU');
   assert.equal(cevap.body.includes('gizli_tablo'), false);
 });

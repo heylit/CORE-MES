@@ -24,6 +24,10 @@ export interface HataGovdesi {
   ayrinti?: unknown;
 }
 
+// 5xx cevabının başlığı: sunucu günlüğündeki istek kimliği. Kullanıcı bunu bilgi işleme söyler, satır günlükte bulunur.
+// Gövdede değil başlıktadır: hata gövdesinin biçimi değişmez.
+export const HATA_KODU_BASLIGI = 'x-hata-kodu';
+
 export const HATA_DURUMU: Record<HataKodu, number> = {
   DOGRULAMA: 400,
   OTURUM_YOK: 401,

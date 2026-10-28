@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -5,12 +6,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
-import { HATA_DURUMU } from '#paylasilan/hata.ts';
+import { HATA_DURUMU, HATA_KODU_BASLIGI } from '#paylasilan/hata.ts';
 import type { Ayar } from './ayar.ts';
 import { kisitIhlali, vtDiskDolu, vtGeciciCakisma, vtHataIzi, vtSureDoldu, vtUlasilamadi, vtVeriHatasi } from './db.ts';
 import type { KisitIhlali, Veritabani } from './db.ts';
 import { UygulamaHatasi, cokBuyuk, mesgul, veritabaniYok } from './hata.ts';
 import { istekOlcumunuKur } from './istek-olcumu.ts';
+import { surecGunlugunuKur, varsayilanGunlukDizini, type GunlukYazici } from './gunluk-dosyasi.ts';
+import { surecOlayGunlugunuKur } from './olay-gunlugu.ts';
 import type { TekrarDeposu } from './tekrar.ts';
 import { uclariKaydet } from './uc.ts';
 import type { Denetle, Kimlik, Uc } from './uc.ts';
@@ -36,6 +39,27 @@ export const GIZLI_DEGER = '[gizli]';
 
 export function gunlukSecenegi(ortam: Ayar['ortam']): false | { redact: { paths: string[]; censor: string } } {
   return ortam === 'test' ? false : { redact: { paths: GUNLUKTE_GIZLENENLER, censor: GIZLI_DEGER } };
+}
+
+// Testte günlük kapalıdır; öteki ortamlarda konsola ve günlük dosyasına yazılır, Windows'ta hata satırı olay günlüğüne de gider.
+export function gunlukKur(
+  ortam: Ayar['ortam'], dizin: string = varsayilanGunlukDizini(), platform: NodeJS.Platform = process.platform,
+): false | { redact: { paths: string[]; censor: string }; stream: GunlukYazici } {
+  const secenek = gunlukSecenegi(ortam);
+  if (secenek === false) return false;
+  const olay = platform === 'win32' ? surecOlayGunlugunuKur() : null;
+  const stream = surecGunlugunuKur({
+    dizin,
+    konsol: (satir) => { process.stdout.write(satir); },
+    ...(olay === null ? {} : { hataBildir: (h) => { olay.bildir(h); } }),
+  });
+  return { ...secenek, stream };
+}
+
+// Her istek günlükte bu kimlikle görünür; 5xx cevabı aynı kimliği başlıkta taşır ki kullanıcının söylediği kod günlükte bulunsun.
+// Kimlik başlıktan alınmaz: istemci günlüğe istediği kimliği yazamasın. Kısa tutulur, kullanıcı okuyup söyler.
+export function istekIziUret(): string {
+  return randomUUID().slice(0, 8);
 }
 
 // Güvenilmeyen eşten gelen X-Forwarded-For, önde adresi tanımlanmamış bir vekil olduğunu gösterir (TMIV2_VEKIL_ADRESI boş):
@@ -133,6 +157,7 @@ export function hataYonetiminiKur(app: FastifyInstance): void {
     if (uyari) istek.log.warn({ err: vtHataIzi(hata) ?? hata }, uyari);
     // Cevap hangi kısıt olduğunu söylemez; ön denetimden kaçan kural yalnız buradan bulunur.
     if (kisit) istek.log.info({ kisit }, 'Kısıt ihlali');
+    if (durum >= HATA_DURUMU.SUNUCU) void yanit.header(HATA_KODU_BASLIGI, istek.id);
     return yanit.code(durum).send(govde);
   });
   app.setNotFoundHandler((_istek, yanit) => {
@@ -167,7 +192,8 @@ export async function modulUclariniKesfet(klasor: string = MODUL_KLASORU): Promi
   return (await modulBasinaUclar(klasor)).flatMap((m) => m.uclar);
 }
 
-export async function uygulamaKur(secenek: UygulamaSecenegi): Promise<FastifyInstance> {
+// Günlük klasörü verilmezse depo klasörünün yanındaki TMIV2-GUNLUK; testler geçici klasör verir.
+export async function uygulamaKur(secenek: UygulamaSecenegi, gunlukDizini?: string): Promise<FastifyInstance> {
   // Eksik seçenek derlemede de testte de görünmez: kimliksiz sunucu herkesi oturumsuz sayar, denetimsiz sunucu komutu
   // uygulayıp kaydını yazmaz. Yalnız test eksik seçenekle kurabilir.
   if (secenek.ayar.ortam !== 'test') {
@@ -178,7 +204,7 @@ export async function uygulamaKur(secenek: UygulamaSecenegi): Promise<FastifyIns
   }
   const { vt, ayar, kimlik = async () => null, denetle, tekrar } = secenek;
   const guvenilen = ayar.vekilAdresi === undefined ? GUVENILEN_VEKIL : [...GUVENILEN_VEKIL, ayar.vekilAdresi];
-  const app = Fastify({ logger: gunlukSecenegi(ayar.ortam), trustProxy: guvenilen });
+  const app = Fastify({ logger: gunlukKur(ayar.ortam, gunlukDizini), trustProxy: guvenilen, genReqId: istekIziUret, requestIdHeader: false });
   vekilUyarisiniKur(app, guvenilen, (ileti) => { app.log.warn(ileti); });
   hataYonetiminiKur(app);
   istekOlcumunuKur(app);
