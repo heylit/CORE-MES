@@ -6,6 +6,9 @@ export { emirBittiYansit } from './servis.ts';
 // Emre sabitlenen işlem şartnameleri (971 a): kalite, sevkiyat ve satın alma okur; tabloya yazmaz.
 export { isEmriSartnameleri } from './servis.ts';
 export type { IsEmriSartnamesi } from '#paylasilan/sozlesme/rota.ts';
+// Emre sabitlenen talimat sürümünün adımları ve kontrol noktaları (989 a): terminal adım adım gösterir; tabloya yazmaz.
+export { talimatSurumuAdimlari } from './servis.ts';
+export type { KontrolNoktasi, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
 export { acikRevizyonSayisi, adimBilesenleri, adimIlkParcaSecimleri, adimEtkinSureleri, adimEtkinSureleriToplu, durumRevizyonlari, emreKopyala, gecerliTalimat, girdisiEksikRevizyonlar, revizyonGetir, revizyonKunyeleri, revizyonlar, urunAgaci, yururluktekiRevizyon } from './servis.ts';
 export {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, etkinSure, girdiOlabilirMi, isEmriKaynagi, kaynaktakiSure, teorikSure, yeniOpNo,

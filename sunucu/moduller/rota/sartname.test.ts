@@ -8,13 +8,14 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   AdimGirdisi, IsEmriSartnameleriCevabi, KomutCevabi, ParametreGirdisi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnamelerCevabi, SeceneklerCevabi,
+  TalimatAdimiGirdisi, TalimatlarCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
-import { isEmriSartnameleri } from './disari.ts';
+import { isEmriSartnameleri, talimatSurumuAdimlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -145,7 +146,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await ortam.vt.tx((db) => db.sorgu(
       `INSERT INTO rol_islemi (rol_id, islem)
        SELECT (SELECT id FROM rol WHERE kod = m.kod), m.islem FROM (VALUES
-         ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.emre-kopyala'), ('mudur', 'rota.onayla')) AS m (kod, islem)
+         ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.emre-kopyala'), ('planlama_proje', 'rota.talimat-yaz'), ('mudur', 'rota.onayla')) AS m (kod, islem)
        ON CONFLICT DO NOTHING`,
     ));
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kart Onaycısı', kullaniciAdi: 'kartonay', parola: PAROLA }));
@@ -403,5 +404,83 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const s = await tamam<{ standart: { id: number; numara: string } }>(c.yonetici, 'POST', '/rota/standartlar/ekle', { numara: 'DENEME 100', kisaAciklama: 'Deneme standardı' });
     assert.equal(s.standart.numara, 'DENEME 100');
     await red(c.yonetici, '/rota/standartlar/ekle', { numara: 'DENEME 100', kisaAciklama: 'Yine' }, 409);
+  });
+
+  /* ---------------- adım adım talimat ve talimat şablonu (989 a, 993 a) ---------------- */
+
+  const adim = (p: Partial<TalimatAdimiGirdisi> = {}): TalimatAdimiGirdisi => ({ baslik: 'Parçayı bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, ...p });
+
+  test('varsayılan talimat şablonları göçle gelir; şablonun adımları ve şartnamesi okunur', async () => {
+    const l = await tamam<TalimatSablonlariCevabi>(c.operator, 'GET', '/rota/talimat-sablonlari');
+    assert.deepEqual(l.sablonlar.map((x) => x.kod), ['TS-AST', 'TS-BYA', 'TS-CMM', 'TS-CNC', 'TS-FSN', 'TS-MON', 'TS-MRK', 'TS-TES', 'TS-TKR']);
+    assert.equal(l.sablonlar.reduce((t, x) => t + x.adimSayisi, 0), 38);
+    const ast = l.sablonlar.find((x) => x.kod === 'TS-AST')!;
+    assert.equal(ast.sartname?.kod, 'AST-EPX');
+    const a = await tamam<TalimatSablonuCevabi>(c.operator, 'GET', `/rota/talimat-sablonlari/${ast.id}`);
+    assert.deepEqual(a.sablon.adimlar[2]?.kontrol, { tur: 'olcum', ad: 'Ortam sıcaklığı', alt: 10, ust: 35, birim: '°C' });
+    assert.equal(a.sablon.adimlar[2]?.zorunlu, true);
+  });
+
+  test('adımlı talimat yeni sürümdür: metni başlıklardır, eski düz sürüm tek adım okunur, kontrol listesi adımlardan kurulur', async () => {
+    const t = await taslak();
+    const yaz = (cerez: string, okunanSurum: number | null, adimlar: TalimatAdimiGirdisi[], opNo = 10) =>
+      istek(cerez, 'POST', `/rota/urunler/${t.urun}/talimat-adimli-yaz`, { opNo, okunanSurum, adimlar });
+    assert.equal((await yaz(c.operator, null, [adim()])).statusCode, 403);
+    await tamam(c.planlama, 'POST', `/rota/urunler/${t.urun}/talimat-yaz`, { opNo: 10, metin: 'Eski talimat\nİkinci satır', okunanSurum: null });
+    const adimlar = [
+      adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true }),
+      adim({ baslik: 'İlk parçayı ölç', metin: 'Kritik ölçü ölçüm planından.', kontrol: { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' }, zorunlu: true }),
+      adim({ baslik: 'Rengi karşılaştır', kontrol: { tur: 'secim', secenekler: ['Uygun', 'Uygun değil'] } }),
+      adim({ baslik: 'Kutula', kontrol: { tur: 'foto', aciklama: 'Kutulanmış parça' } }),
+    ];
+    assert.equal((await yaz(c.planlama, null, adimlar)).statusCode, 409);
+    const cevap = await yaz(c.planlama, 1, adimlar);
+    assert.equal(cevap.statusCode, 200, cevap.body);
+    const l = cevap.json<TalimatlarCevabi>();
+    assert.deepEqual(l.surumler.map((x) => [x.surum, x.adimli, x.adimlar.length]), [[2, true, 4], [1, false, 1]]);
+    assert.equal(l.surumler[0]?.metin, 'Programı doğrula\nİlk parçayı ölç\nRengi karşılaştır\nKutula');
+    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false });
+    assert.deepEqual(l.surumler[0]?.adimlar[1]?.kontrol, { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' });
+
+    await yururlugeAl(t.id, t.surum);
+    const emir = await emirAc(t.id);
+    const liste = await vt().tx((db) => db.sorgu<{ ad: string; aciklama: string | null }>(
+      'SELECT ad, aciklama FROM emir_adimi WHERE is_emri_id = $1 ORDER BY sira', [emir.isEmriIdleri[0]]));
+    assert.deepEqual(liste.map((x) => [x.ad, x.aciklama]), [
+      ['Programı doğrula', null], ['İlk parçayı ölç', 'Kritik ölçü ölçüm planından.'], ['Rengi karşılaştır', null], ['Kutula', null],
+    ]);
+    const okunan = await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 2));
+    assert.equal(okunan?.[0]?.zorunlu, true);
+    assert.equal((await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 1)))?.length, 1);
+    assert.equal(await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 9)), null);
+  });
+
+  test('adımlı talimat kuralları: zorunlu adım kontrol noktası ister, ölçüm sınırı ters olamaz, seçenekler tekil, sürüm yalnız eklenir', async () => {
+    const t = await taslak();
+    const url = `/rota/urunler/${t.urun}/talimat-adimli-yaz`;
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ zorunlu: true })] }, 400, /zorunlu olamaz/);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ kontrol: { tur: 'olcum', ad: 'Çap', alt: 2, ust: 1, birim: 'mm' } })] }, 400, /alt sınırı/);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ kontrol: { tur: 'secim', secenekler: ['Var', 'var'] } })] }, 400, /farklı/);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [] }, 400);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: Array.from({ length: 31 }, () => adim()) }, 400);
+    await red(c.planlama, url, { opNo: 90, okunanSurum: null, adimlar: [adim()] }, 400, /OP 90/);
+    await tamam(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, adimlar: [adim()] });
+    await assert.rejects(vt().tx((db) => db.sorgu("UPDATE rota_talimat_adimi SET baslik = 'Değişti'")));
+  });
+
+  test('talimat şablonu yazılır, kaydedilir ve pasife alınır; kod tekil, sürüm denetlenir, operatör yazamaz', async () => {
+    const govde = { kod: 'ts-deneme', ad: 'Deneme şablon', sartnameId: null, adimlar: [adim({ baslik: 'Birinci' })] };
+    await red(c.operator, '/rota/talimat-sablonlari/ekle', govde, 403);
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', govde);
+    assert.equal(e.sablon.kod, 'TS-DENEME');
+    await red(c.planlama, '/rota/talimat-sablonlari/ekle', govde, 409, /kod/);
+    await red(c.planlama, '/rota/talimat-sablonlari/ekle', { ...govde, kod: 'TS-DENEME-2', sartnameId: 999999 }, 400, /şartname/i);
+    const k = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: e.sablon.surum, ad: 'Deneme şablon 2', sartnameId: sartname('TLS-GNL').id, adimlar: [adim({ baslik: 'Bir' }), adim({ baslik: 'İki', kontrol: { tur: 'onay' }, zorunlu: true })],
+    });
+    assert.deepEqual([k.sablon.ad, k.sablon.sartname?.kod, k.sablon.adimlar.map((x) => x.baslik)], ['Deneme şablon 2', 'TLS-GNL', ['Bir', 'İki']]);
+    await red(c.planlama, `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Eski', sartnameId: null, adimlar: [adim()] }, 409);
+    const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
+    assert.equal(p.sablon.aktif, false);
   });
 });

@@ -8,6 +8,7 @@ import {
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
+import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
 import type { GerceklesenSatiri, SartnameAlani } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
@@ -489,5 +490,29 @@ describe('işlem şartnamesi kuralları (971 a)', () => {
     assert.match(sartnameOnayEngeli([{ ...tamam, aktif: false }]) ?? '', /kullanımda değil/);
     assert.match(sartnameOnayEngeli([{ ...tamam, yururlukteVar: false }]) ?? '', /yayınlanmış/);
     assert.match(sartnameOnayEngeli([{ ...tamam, kapsamUyar: false }]) ?? '', /kaynağına uymuyor/);
+  });
+});
+
+describe('adım adım talimat (989 a, 993 a)', () => {
+  const adim = { baslik: 'Ölç', metin: null, zorunlu: false } as const;
+  test('zorunlu adım kontrol noktası ister; ölçüm sınırı ters olamaz; seçenekler büyük-küçük harf ayrımsız tekil', () => {
+    assert.match(talimatAdimiHatasi({ ...adim, zorunlu: true, kontrol: { tur: 'yok' } }) ?? '', /zorunlu olamaz/);
+    assert.match(talimatAdimiHatasi({ ...adim, kontrol: { tur: 'olcum', ad: 'Çap', alt: 5, ust: 4, birim: 'mm' } }) ?? '', /alt sınırı/);
+    assert.equal(talimatAdimiHatasi({ ...adim, kontrol: { tur: 'olcum', ad: 'Çap', alt: null, ust: 4, birim: 'mm' } }), null);
+    assert.match(talimatAdimiHatasi({ ...adim, kontrol: { tur: 'secim', secenekler: ['İyi', 'iyi'] } }) ?? '', /farklı/);
+  });
+  test('kontrol noktası tür ve ayar olarak ayrılır ve geri kurulur; bozuk ayar sınırsız okunur', () => {
+    const k = { tur: 'olcum', ad: 'Çap', alt: 1, ust: 2, birim: 'mm' } as const;
+    const { tur, ayar } = kontrolAyrisi(k);
+    assert.deepEqual(kontrolKur(tur, ayar), k);
+    assert.deepEqual(kontrolKur('olcum', { alt: 'x' }), { tur: 'olcum', ad: 'Ölçüm', alt: null, ust: null, birim: '' });
+    assert.deepEqual(kontrolKur('bilinmeyen', {}), { tur: 'yok' });
+  });
+  test('sürüm metni başlıklardır; kontrol listesi açıklaması 300 karaktere kısalır; eski düz metin tek adımdır', () => {
+    assert.equal(adimliTalimatMetni([{ baslik: 'A' }, { baslik: 'B' }]), 'A\nB');
+    const l = adimliKontrolListesi([{ baslik: 'A', metin: 'x'.repeat(301) }, { baslik: 'B', metin: null }]);
+    assert.equal(l[0]?.aciklama?.length, 300);
+    assert.equal(l[1]?.aciklama, null);
+    assert.deepEqual(eskiTalimatAdimi('\n  İlk satır \nİkinci'), { sira: 1, baslik: 'İlk satır', metin: '\n  İlk satır \nİkinci', kontrol: { tur: 'yok' }, zorunlu: false });
   });
 });

@@ -12,7 +12,7 @@ import type {
   AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
   IsEmriSartnamesi, IsEmriSartnameleriCevabi, ParametreDegerleri, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameKapsami, SartnameOzeti, SartnameSurumu, SartnameTaslakGovdesiCikti,
-  SartnamelerCevabi, StandartCevabi,
+  SartnamelerCevabi, StandartCevabi, TalimatAdimi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -30,7 +30,9 @@ import {
   girdiEksigi, girdiOlabilirMi, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
   adimDegerleriDenetle, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
+  adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi,
 } from './kurallar.ts';
+import type { TalimatAdimiYazisi } from './kurallar.ts';
 import type { AdimSureleri, AgacRotasi, EtkinAdimSuresi, FarkAdimi, GerceklesenSatiri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from './sorgular.ts';
@@ -351,9 +353,36 @@ export async function fark(db: Db, id: number): Promise<FarkCevabi> {
 export async function talimatListesi(db: Db, urunId: number, opNo: number): Promise<TalimatlarCevabi> {
   const satirlar = await s.talimatlar(db, urunId, opNo);
   const adlar = await kisiAdlari(db, satirlar.map((t) => t.yazanKisiId));
+  const adimlar = await surumAdimlari(db, satirlar.map((t) => t.id));
   return {
-    surumler: satirlar.map((t) => ({ surum: t.surum, metin: t.metin, yazan: { id: t.yazanKisiId, ad: adlar.get(t.yazanKisiId) ?? null }, yazma: t.yazma })),
+    surumler: satirlar.map((t) => {
+      const a = adimlar.get(t.id);
+      return {
+        surum: t.surum, metin: t.metin, yazan: { id: t.yazanKisiId, ad: adlar.get(t.yazanKisiId) ?? null }, yazma: t.yazma,
+        adimli: a !== undefined, adimlar: a ?? [eskiTalimatAdimi(t.metin)],
+      };
+    }),
   };
+}
+
+const adimSatiriniCevir = (x: s.TalimatAdimiSatiri): TalimatAdimi => ({
+  sira: x.sira, baslik: x.baslik, metin: x.metin, kontrol: kontrolKur(x.kontrolTuru, x.kontrolAyari), zorunlu: x.zorunlu,
+});
+
+// Talimat sürümü kimliğine göre adımlar; adımı olmayan (düz metin) sürüm haritada yoktur.
+async function surumAdimlari(db: Db, talimatIdleri: readonly number[]): Promise<Map<number, TalimatAdimi[]>> {
+  const harita = new Map<number, TalimatAdimi[]>();
+  for (const x of await s.talimatAdimlari(db, talimatIdleri)) harita.set(x.sahipId, [...(harita.get(x.sahipId) ?? []), adimSatiriniCevir(x)]);
+  return harita;
+}
+
+function adimYazilari(adimlar: readonly TalimatAdimiYazisi[]): s.TalimatAdimiYazisi[] {
+  return adimlar.map((a, i) => {
+    const hata = talimatAdimiHatasi(a);
+    if (hata) throw dogrulama(hata, `adimlar.${i}`);
+    const { tur, ayar } = kontrolAyrisi(a.kontrol);
+    return { baslik: a.baslik, metin: a.metin, kontrolTuru: tur, kontrolAyari: ayar, zorunlu: a.zorunlu };
+  });
 }
 
 /* ---------------- ürün ağacı ve döngü ---------------- */
@@ -773,6 +802,86 @@ export async function talimatYaz(
   }
   await s.talimatEkle(db, urunId, govde.opNo, (son ?? 0) + 1, govde.metin, kullanici.id);
   return talimatListesi(db, urunId, govde.opNo);
+}
+
+// Adımlı yazım da yeni talimat sürümüdür (989 a): metni adım başlıklarıdır, adımlar ayrı tabloda sürüme bağlanır.
+export async function adimliTalimatYaz(
+  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; okunanSurum: number | null; adimlar: readonly TalimatAdimiYazisi[] },
+): Promise<TalimatlarCevabi> {
+  const yazilar = adimYazilari(govde.adimlar);
+  if (!(await s.opNoAdimiVarMi(db, urunId, govde.opNo))) {
+    throw dogrulama(`OP ${govde.opNo} bu ürünün hiçbir revizyonunda yok; talimat yazılamaz.`, 'opNo');
+  }
+  const son = (await s.talimatlar(db, urunId, govde.opNo))[0]?.surum ?? null;
+  if (son !== govde.okunanSurum) throw eskiSurum();
+  const id = await s.talimatEkle(db, urunId, govde.opNo, (son ?? 0) + 1, adimliTalimatMetni(govde.adimlar), kullanici.id);
+  await s.talimatAdimlariniEkle(db, id, yazilar);
+  return talimatListesi(db, urunId, govde.opNo);
+}
+
+// Emre sabitlenen talimat sürümünün adımları (terminal okur); sürüm yoksa null, düz metin sürüm tek adımdır.
+export async function talimatSurumuAdimlari(db: Db, malzemeId: number, opNo: number, surum: number): Promise<TalimatAdimi[] | null> {
+  const t = await s.talimatSurumuKimligi(db, malzemeId, opNo, surum);
+  if (!t) return null;
+  return (await surumAdimlari(db, [t.id])).get(t.id) ?? [eskiTalimatAdimi(t.metin)];
+}
+
+/* ---------------- talimat şablonu (989 a) ---------------- */
+
+const TALIMAT_SABLONU_YOK = 'Talimat şablonu bulunamadı.';
+const TALIMAT_SABLON_KISITLARI = { rota_talimat_sablonu_kod_tekil: { ileti: 'Bu kod başka bir talimat şablonunda kullanılıyor.', alan: 'kod' } };
+
+const sablonOzeti = (x: s.TalimatSablonSatiri) => ({
+  id: x.id, kod: x.kod, ad: x.ad, aktif: x.aktif, surum: x.surum, adimSayisi: x.adimSayisi,
+  sartname: x.sartnameId === null ? null : { id: x.sartnameId, kod: x.sartnameKodu ?? '', ad: x.sartnameAdi ?? '' },
+});
+
+export async function talimatSablonlari(db: Db): Promise<TalimatSablonlariCevabi> {
+  return { sablonlar: (await s.talimatSablonlari(db)).map(sablonOzeti) };
+}
+
+export async function talimatSablonu(db: Db, id: number): Promise<TalimatSablonuCevabi> {
+  const x = (await s.talimatSablonlari(db, [id]))[0];
+  if (!x) throw bulunamadi(TALIMAT_SABLONU_YOK);
+  return { sablon: { ...sablonOzeti(x), adimlar: (await s.talimatSablonAdimlari(db, id)).map(adimSatiriniCevir) } };
+}
+
+async function sablonSartnamesiDenetle(db: Db, sartnameId: number | null): Promise<void> {
+  if (sartnameId !== null && !(await s.sartnameVarMi(db, sartnameId))) throw dogrulama(SARTNAME_YOK, 'sartnameId');
+}
+
+export async function talimatSablonEkle(
+  db: Db, g: { kod: string; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[] },
+): Promise<TalimatSablonuCevabi> {
+  const yazilar = adimYazilari(g.adimlar);
+  await sablonSartnamesiDenetle(db, g.sartnameId);
+  const id = await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonEkle(db, g));
+  await s.talimatSablonAdimlariniYaz(db, id, yazilar);
+  return talimatSablonu(db, id);
+}
+
+async function sablonKomutIcinAl(db: Db, id: number, surum: number): Promise<void> {
+  const x = await s.talimatSablonKilitle(db, id);
+  if (!x) throw bulunamadi(TALIMAT_SABLONU_YOK);
+  if (x.surum !== surum) throw eskiSurum();
+}
+
+export async function talimatSablonKaydet(
+  db: Db, id: number, g: { surum: number; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[] },
+): Promise<TalimatSablonuCevabi> {
+  const yazilar = adimYazilari(g.adimlar);
+  await sablonKomutIcinAl(db, id, g.surum);
+  await sablonSartnamesiDenetle(db, g.sartnameId);
+  await s.talimatSablonGuncelle(db, id, g);
+  await s.talimatSablonAdimlariniYaz(db, id, yazilar);
+  return talimatSablonu(db, id);
+}
+
+// Şablon silinmez, pasife alınır: kopyalanmış talimatlar şablona bağlı değildir, pasif şablon yalnız seçimden çıkar.
+export async function talimatSablonDurumuYaz(db: Db, id: number, g: { surum: number; aktif: boolean }): Promise<TalimatSablonuCevabi> {
+  await sablonKomutIcinAl(db, id, g.surum);
+  await s.talimatSablonDurumu(db, id, g.aktif);
+  return talimatSablonu(db, id);
 }
 
 /* ---------------- süreler (teorik ve gerçekleşen) ---------------- */
@@ -1211,12 +1320,18 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
 
 // Emre kopya ve emirlere uygula aynı girdiyi kurar: her rota adımı bir iş emri, talimatın o anki metni kontrol listesi.
 async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullable<Awaited<ReturnType<typeof revizyonGetir>>>) {
-  const metinler = new Map((await s.gecerliTalimatlar(db, malzemeId)).map((t) => [t.opNo, t.metin]));
+  const gecerli = await s.gecerliTalimatlar(db, malzemeId);
+  const adimlar = await surumAdimlari(db, gecerli.map((t) => t.id));
+  // Adımlı sürümde madde adımın başlığı, açıklaması adımın metnidir; düz metin sürüm satır satır bölünür.
+  const listeler = new Map(gecerli.map((t) => {
+    const a = adimlar.get(t.id);
+    return [t.opNo, a ? adimliKontrolListesi(a) : kontrolListesi(t.metin)];
+  }));
   return rota.adimlar.map((a) => ({
     sira: a.sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId,
     ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, talimatSurumu: a.talimatSurumu,
-    kontrolListesi: kontrolListesi(metinler.get(a.opNo) ?? null),
+    kontrolListesi: listeler.get(a.opNo) ?? [],
     // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
     firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
     // İş emrinin adayı makine ya da kişidir; istasyon adayı emirde karşılıksızdır, adımın istasyonu zaten başlıktır.

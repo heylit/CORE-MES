@@ -82,6 +82,8 @@ K: saf kural testi (`sunucu/moduller/rota/kurallar.test.ts`), U: akış ve uç t
 | RT-S3 | Adım bağı yalnız taslakta; kapsam adımın kaynağına uyar (972 a); adım yalnız adımda değişen alana türüne uyan değer verir. | K: 972 a, değer<br>U: adım şartnamesi | rota_adim_sartnamesi_kilitli (rota_icerik_kilitli) |
 | RT-S4 | Onaya gönderme ve onayda bağlı şartname kullanımda, yayınlanmış, kapsamı uyan ve zorunlu alanı dolu olmalı. | U: adımda zorunlu boş alan; kullanımdan kalkan şartname | - |
 | RT-S5 | Emir açılınca yürürlükteki sürüm ve çözülmüş değerler iş emrine sabitlenir; sonraki yayın eski emri değiştirmez; emre uygulama başlamamış iş emrini yeniden sabitler. | U: 971 a; aynı ürünün revizyonundan açılan taslak; emir açılırken | rota_is_emri_sartnamesi_degismez (yalniz_ekleme) |
+| RT-T1 | Adımlı talimat yeni sürümdür; metni adım başlıklarıdır; düz metin eski sürüm tek adım okunur; emir kontrol listesi adımlardan kurulur. | U: 989 a, 993 a; emir açılırken | rota_talimat_adimi_degismez (yalniz_ekleme) |
+| RT-T2 | Zorunlu adım kontrol noktası ister; ölçüm alt sınırı üstten büyük olamaz; seçenekler tekil. | U: 989 a; yazımda | rota_talimat_adimi_zorunlu_kontrollu |
 
 Bağsız kural: yok.
 
