@@ -6,7 +6,7 @@ import { zamanSemasi } from '../zaman.ts';
 import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { KATALOG_TURLERI } from './malzemeler.ts';
-import { IS_DURUMU } from './sevkiyat.ts';
+import { IS_DURUMU, KALEM_KAYNAGI, TASIMA } from './sevkiyat.ts';
 import { refakatKartiCevabi } from './uretim-emirleri.ts';
 
 // ---- Sabitler -------------------------------------------------------------------------------------------------
@@ -514,6 +514,8 @@ const malKabulSatirGirdisi = z.object({
   fasonIsi: z.object({ isEmriId: kimlik, hurdaAdet: z.coerce.number().int().min(0).max(1_000_000).optional() }).optional(),
   // Parti sertifikası (#960): dosya önce `/dosyalar` ile yüklenir; mal kabul belgeyi açar ve satırın partisine bağlar.
   sertifika: z.object({ ozet: dosyaOzeti, dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120) }).optional(),
+  // Depo kabulü (944, 957 a): satır sevkiyatın geliş kalemini (fason dönüşü, alım, elle dönüş) kapatır; kısmi kabulde kalem açık kalır.
+  sevkKalemiId: kimlik.optional(),
 });
 export type MalKabulSatirGirdisi = z.input<typeof malKabulSatirGirdisi>;
 // Mal kabulün fason kutusundaki açık fason işleri (kart #1289): rotaya göre dönecek kart; statülüyse yarı parça adımın statüsüne geçer.
@@ -535,6 +537,27 @@ export const malKabulGovdesi = z.object({
   eksiOnay: z.boolean().optional(),
 });
 export type MalKabulGovdesi = z.input<typeof malKabulGovdesi>;
+
+// ---- Depo sevk (944, 957 a, 966 b) ------------------------------------------------------------------------------------
+// Sevkiyatın tetiklediği gidişler son çıkış, gelişler kabul bekler. Kabul mal kabul belgesiyle yapılır (satır `sevkKalemiId` taşır);
+// çıkış bu listeden: ürün sevk çıkışıyla düşer, fason gidişi yarı parçayı firmanın fason konumuna taşır ve gidiş kaydını emre yazar.
+export const DEPO_SEVK_ISI = ['cikis', 'kabul'] as const;
+export const depoSevkSatiri = z.object({
+  kalemId: z.number().int(), is: z.enum(DEPO_SEVK_ISI), kaynak: KALEM_KAYNAGI,
+  uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(), isEmriId: z.number().int().nullable(), opNo: z.number().int().nullable(),
+  malzemeId: z.number().int().nullable(), malzemeAd: z.string().nullable(), adet: ondalikMetinSemasi.nullable(), kabulAdet: ondalikMetinSemasi.nullable(),
+  firmaId: z.number().int().nullable(), firmaAd: z.string().nullable(), tasima: TASIMA,
+  // Tetik zamanı; firma taşımasında serbest bırakma zamanı.
+  tetiklendi: zamanSemasi, erken: z.boolean(),
+  // Sipariş satırı (alım) ya da fason işi: mal kabul satırını önceden doldurmak için.
+  siparisSatirId: z.number().int().nullable(),
+});
+export type DepoSevkSatiri = z.output<typeof depoSevkSatiri>;
+export const depoSevkCevabi = z.object({ satirlar: z.array(depoSevkSatiri) });
+export type DepoSevkCevabi = z.output<typeof depoSevkCevabi>;
+// Erken çıkışta (945 a) stok yetmezse çıkış durmaz: eldeki kadar çıkar, eksik uyarıyla döner. Erken olmayanda eksik reddedilir.
+export const depoCikisCevabi = z.object({ kalemId: z.number().int(), hareketIdler: z.array(z.number().int()), uyarilar: z.array(z.string()).optional() });
+export type DepoCikisCevabi = z.output<typeof depoCikisCevabi>;
 // Düzeltmede sıfır miktar o kalemin gelmediğidir; satırsız ya da hepsi sıfır düzeltme belgeyi tamamen iptal eder.
 export const malKabulDuzeltGovdesi = z.object({
   satirlar: z.array(malKabulSatirGirdisi.extend({ miktar: sifirOlabilirMiktar })).max(50),
