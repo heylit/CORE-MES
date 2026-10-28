@@ -355,6 +355,11 @@ export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<voi
 export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Promise<void> {
   const h = await fasonHareketiOzeti(db, olay.hareketId);
   if (h === null || h.yon !== 'gidis' || h.adet <= 0) return;
+  // Depo çıkışının yazdığı gidiş: kalem zaten var (Tüm işlerden bırakıldı, tetiklendi); yalnız hareketi bağlanır.
+  if (olay.sevkKalemiId !== null) {
+    await sorgu.fasonHareketiBagla(db, olay.sevkKalemiId, h.id);
+    return;
+  }
   const emir = await uretimEmriOzeti(db, h.uretimEmriId);
   const noktaId = (await sorgu.firmaNoktalari(db, [h.firmaId])).get(h.firmaId) ?? null;
   let isId: number | null = null;
