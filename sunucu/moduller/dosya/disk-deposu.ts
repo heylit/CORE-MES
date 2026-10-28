@@ -14,9 +14,9 @@ export function diskDizini(env: Ortamlar = process.env): string | null {
   return d !== '' && isAbsolute(d) ? d : null;
 }
 
-// Yeni dosya diske yalnız ayna varken yazılır (ADR 0009 eki): ayna gelene kadar canlıda disk deposu kapalıdır, medya veritabanında kalır.
+// Yeni dosya diske, klasör tanımlıysa her ortamda yazılır (1009 a): gece yedeği medyayı şifreli aynaya alır (`ayarlar/medya-yedek.ts`).
 export function diskeYazilabilir(env: Ortamlar = process.env): string | null {
-  return env['TMIV2_ORTAM'] === 'canli' ? null : diskDizini(env);
+  return diskDizini(env);
 }
 
 export const diskYolu = (dizin: string, ozet: string): string => join(dizin, ozet.slice(0, 2), ozet.slice(2, 4), ozet);

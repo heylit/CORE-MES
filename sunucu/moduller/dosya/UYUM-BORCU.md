@@ -12,4 +12,4 @@ Sahip: çekirdek konusu.
 4. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kullanıcı kararı DSb a (08.10.2026); ihtiyaç doğarsa ayrı ele alınır. Bağlı bir dosyanın, yeniden yüklenmeden başka bir kayda kopyalanması (b seçeneği) ihtiyacı doğarsa ayrıca ele alınır; Arkon deposunun
    taşınması (adım 4, #302) bu kurala takılırsa o adımın listesinde sorulur. (Kullanıcı kararı DSb a, 08.10.2026.)
 | DSK-B1 | Diske alma bağlama isteğinde eşzamanlı yapılır (200 MB videoda istek uzar); arka plan işine alınması | Ölçümle, gerekirse ayrı iş |
-| DSK-B2 | Canlıda disk deposu kapalı: yedek aynası ("Talimat medyasını yedeğe ekle") birleşince `diskeYazilabilir` canlı koşulu kaldırılır | Ayna birleşince |
+| DSK-B2 | KAPANDI (1009 a): yedek aynası main'de (#920); `diskeYazilabilir` canlı koşulu kalktı, disk deposu her ortamda açık | - |

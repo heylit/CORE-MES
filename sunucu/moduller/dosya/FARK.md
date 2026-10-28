@@ -41,7 +41,7 @@ Bu tur şunları varsaydı:
 | `servis.ts`, `sorgular.ts`, `disari.ts` | `medyaTutamagi(modul)` (bağlanan resim ve video diske alınır), `diskKunyeOzetleri(db)`; temizlikte 30 gün bekleme |
 | `disk-deposu.test.ts` | MP4 imzası, açık/kapalı kuralı, diske alma, canlıda kapalı, 30 gün bekleme ve yeniden bağlama |
 
-- Disk deposu `TMIV2_MEDYA_DIZINI` mutlak yolsa açıktır; canlıda (`TMIV2_ORTAM=canli`) yedek aynası gelene kadar yeni dosya diske yazılmaz (ADR eki).
+- Disk deposu `TMIV2_MEDYA_DIZINI` mutlak yolsa her ortamda açıktır (1009 a); gece yedeği medyayı şifreli aynaya alır (`kurulum/yedek.md`).
   Kapalıyken resim veritabanında kalır, video bağlanmaz. Okuma ve temizlik klasörden yapılır, canlı kuralı yalnız yazmayı kapatır.
 - Yükleme yolu değişmedi: içerik önce veritabanı şeridinden geçer, `medyaTutamagi` ile bağlanınca diske yazılır ve parçalar silinir.
 - Künyesi silinen diskteki dosya `dosya_disk_silinecek`e girer, 30 gün sonra diskten silinir; aynı içerik arada yeniden diske bağlanırsa satır kalkar.
