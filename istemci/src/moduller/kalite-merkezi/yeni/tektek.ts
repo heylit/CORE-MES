@@ -1,4 +1,5 @@
 // Uygulamanın "Tek tek sor" odak akışı (focusify): adımlı formun alanları sırayla, birer soru olarak sorulur. Burada yalnız saf kurallar.
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { FormVerisi, KmAdim, KmAlan, KmMadde, KmSecenek } from './AdimliForm.tsx';
 
 export type KmSoru = { tur: 'alan'; alan: KmAlan; adim: number } | { tur: 'madde'; madde: KmMadde; no: number; adim: number } | { tur: 'ek'; adim: number };
@@ -74,10 +75,11 @@ export function hizliTarihler(k: string): { baslik: string; gun: number }[] {
   return ILERI_TARIH.test(k) ? [{ baslik: '+1 hafta', gun: 7 }, { baslik: '+1 ay', gun: 30 }, { baslik: '+3 ay', gun: 91 }] : [{ baslik: 'Bugün', gun: 0 }, { baslik: 'Dün', gun: -1 }];
 }
 
+// Tesis günü: UTC günü gece yarısından sonraki ilk saatlerde "Bugün"ü dün yapar.
 export function gunEkle(gun: number, simdi = new Date()): string {
   const d = new Date(simdi);
   d.setDate(d.getDate() + gun);
-  return d.toISOString().slice(0, 10);
+  return tesisGunu(d);
 }
 
 // Yazılan metne uyan en çok 6 öneri; tam eşleşen önerilmez.
