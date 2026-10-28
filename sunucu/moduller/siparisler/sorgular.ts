@@ -724,3 +724,14 @@ export async function logoHatasiYaz(db: Db, tur: 'teklif' | 'siparis', id: numbe
     [id, tur, hata],
   );
 }
+
+// Takvim (891, 1162 b): termini aralıkta olan, iptal edilmemiş siparişler.
+export interface TakvimSiparisSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; termin: string }
+export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {
+  return db.sorgu<TakvimSiparisSatiri>(
+    `SELECT s.id, s.no, s.durum, s.firma_id, s.termin FROM siparisler_siparis s
+      WHERE s.termin BETWEEN $1::date AND $2::date AND s.durum <> 'iptal'
+      ORDER BY s.termin, s.id`,
+    [baslangic, bitis],
+  );
+}

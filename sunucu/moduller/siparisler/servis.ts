@@ -6,6 +6,7 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
@@ -16,7 +17,7 @@ import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
-  malzemeReddi,
+  TAKVIM_SIPARIS_DURUMU, malzemeReddi,
 } from './kurallar.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
@@ -225,3 +226,17 @@ export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise
 }
 
 export const siparisOzeti = (db: Db): Promise<SiparisOzetiCevabi> => sorgular.siparisOzetiSay(db, YAKLASAN_TERMIN_GUN, SIPARIS_OZETI_AY);
+
+// Takvim (891): termini [baslangic, bitis] içindeki siparişler, firma adıyla. Yetki denetlemez; çağıran siparisler.oku'yu denetler.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  const satirlar = await sorgular.takvimSiparisleri(db, baslangic, bitis);
+  const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
+  return satirlar.flatMap((s): TakvimKaydi[] => {
+    if (s.durum === 'iptal') return [];
+    const d = TAKVIM_SIPARIS_DURUMU[s.durum];
+    return [{
+      kaynak: 'siparis', kimlik: String(s.id), tarih: s.termin, no: s.no, baslik: `Sipariş ${s.no}`,
+      ilgili: adlar.get(s.firma_id) ?? null, durum: d.ad, bitti: d.bitti,
+    }];
+  });
+}
