@@ -27,6 +27,7 @@ describe('dışa aktarma', () => {
 
   it('csv noktalı virgüllü, BOM ile; ayraç ve tırnak kaçırılır', () => {
     expect(csvMetni([['a', 'b;c'], ['"x"', null]])).toBe('﻿a;"b;c"\r\n"""x""";');
+    expect(csvMetni([['=1+1', '@a', '-2', -3, '+x;y']])).toBe('﻿\'=1+1;\'@a;-2;-3;"\'+x;y"');
   });
 
   it('dosya adı ve html kaçışı', () => {

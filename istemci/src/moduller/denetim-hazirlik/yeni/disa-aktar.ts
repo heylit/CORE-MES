@@ -1,3 +1,4 @@
+import { formulKoru } from '../../../ortak/veri/csv.ts';
 import { denetimAciklamasi, denetimBasligi } from './kurallar/denetim-takvimi.ts';
 import { gunEkle } from './tarih.ts';
 import type { Denetim, Profil } from './tipler.ts';
@@ -46,7 +47,8 @@ export const guvenliAd = (v: string): string => v.replace(/[\\/:*?"<>|]+/g, '-')
 // Excel'in Türkçe ayarı: noktalı virgül ayraç, BOM ile UTF-8.
 export function csvMetni(satirlar: readonly (readonly (string | number | null | undefined)[])[]): string {
   const hucre = (c: string | number | null | undefined): string => {
-    const s = c == null ? '' : String(c);
+    // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın).
+    const s = c == null ? '' : typeof c === 'string' ? formulKoru(c, { sayiSerbest: true }) : String(c);
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return `\ufeff${satirlar.map((r) => r.map(hucre).join(';')).join('\r\n')}`;
