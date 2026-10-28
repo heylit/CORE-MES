@@ -3,6 +3,7 @@ import { istasyonPaketleri, istasyonPlanOzeti, planOnce, tmiPlani, type PlanliPa
 import { anlikPencereler } from '../../../../../../arkon/web/src/data/vardiya-gunu.ts';
 import type { LogCall, LogCount, LogEvent, Maint, Pkg, PlannedDown, Result } from '../../../../../../arkon/shared/model.ts';
 import type { MakineDurumu } from '../../../../ortak/arayuz/index.ts';
+import { formulKoru } from '../../../../ortak/veri/csv.ts';
 import { planliNedenMi, type ArkonAyarlari } from '../cekirdek/ayarlar.ts';
 import { gunAySaat, saat } from '../cekirdek/bicim.ts';
 import { oeeHesapla, type OeeSonucu } from '../cekirdek/oee.ts';
@@ -339,7 +340,8 @@ export const seritKonumu = (t: number, gun0: number): number => Math.max(0, Math
 export type CsvHucresi = string | number | null | undefined;
 export function csvMetni(satirlar: readonly (readonly CsvHucresi[])[]): string {
   const kac = (v: CsvHucresi) => {
-    const s0 = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 100) / 100).replace('.', ',') : String(v);
+    // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın); düz sayı metni olduğu gibi kalır.
+    const s0 = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 100) / 100).replace('.', ',') : formulKoru(v, { sayiSerbest: true });
     return /[;"\n]/.test(s0) ? `"${s0.replace(/"/g, '""')}"` : s0;
   };
   return String.fromCharCode(0xfeff) + satirlar.map((r) => r.map(kac).join(';')).join('\r\n');
