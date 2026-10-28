@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  bitAc, bitPaketle, capIsaretiMi, duzyaziMi, glifDuzelt, kelimeAyikla, kelimeKutusu, murekkep, ocrDuzelt, olcuBirlestir, olcuOnerileri, tabloBul,
+  bitAc, bitPaketle, capIsaretiMi, duzyaziMi, glifDuzelt, kelimeAyikla, kelimeKutusu, murekkep, ocrDuzelt, olcuBirlestir, olcuOnerileri, onayIster, tabloBul,
   yaziMaskele, type MetinOgesi, type OlcuListesi,
 } from '../../../../ortak/cizim/okuma.ts';
 
@@ -65,6 +65,18 @@ function sayfa(tohum: number, ocrKip: boolean) {
   return { items, W, H, ink, cls: sec(['f', 'm', 'c']), ex: r() < 0.3 ? { prose: false, notes: r() < 0.5 } : {}, auto: sec(['high', 'mid', 'low'] as const) };
 }
 const duz = (l: OlcuListesi | unknown[] & { stats?: unknown; diag?: unknown }) => JSON.parse(JSON.stringify({ l: [...l], st: l.stats, d: l.diag })) as unknown;
+// Eskiden tek fark 967 a: çizimden toleransı ya da GD&T'si okunan öneri seçilmemiş gelir.
+const onayli = (l: OlcuListesi): OlcuListesi => { for (const o of l) if (o.on && onayIster(o)) o.on = false; return l; };
+// 967 a'da okuyucu bilerek değişti (tek sapma, IT01-IT18 dışı uyum, ondalıklı ya da küçük açılı "uzunluk × açı", ⌀'li ya da sıfır Ⓜ konum
+// çerçevesi, bilinmeyen uyum, spot face, Ø × derinlik, delik tablosu satırı). Bu yazılar karşılaştırmadan çıkar; çıkan varsa sayaçlar da
+// karşılaştırılmaz. Yeni davranışın kendisi okuma-senaryolari.test.ts'te sınanır.
+const BILEREK = /(^|[^\d.])\d*\.?\d+\s*[+-]\s*\d*\.?\d+\s*$|[A-Za-z]{1,2}\s?(?:19|[2-9]\d)\b|\d\s*[x×]\s*\d+(?:\.\d+)?°|⌀|Ⓜ|Ⓛ|⌴\s*SF|Ø\s*\d*\.?\d+\s*[x×]\s*\d/;
+const ayikla = (l: OlcuListesi) => { const k = [...l].filter((o) => !BILEREK.test(o.raw) && !/^Delik /.test(o.l) && !o.unknown); return { l: k, tam: k.length === l.length }; };
+const esit = (yeni: OlcuListesi, eski: OlcuListesi, ileti: string) => {
+  const a = ayikla(yeni), b = ayikla(eski);
+  expect(JSON.parse(JSON.stringify(a.l)), ileti).toEqual(JSON.parse(JSON.stringify(b.l)));
+  if (a.tam && b.tam) expect(duz(yeni), ileti).toEqual(duz(eski));
+};
 
 describe('PDF ölçü okuma (eskisiyle aynı)', () => {
   it('yüzlerce sentetik sayfada öneriler, istatistik ve tanı aynı', () => {
@@ -73,15 +85,15 @@ describe('PDF ölçü okuma (eskisiyle aynı)', () => {
       const ocrKip = tohum % 3 === 0, s = sayfa(tohum, ocrKip);
       const opt = { w: s.W, h: s.H, ink: tohum % 5 === 0 ? null : s.ink, ocr: ocrKip, ex: s.ex, auto: s.auto, diag: tohum % 2 === 0 };
       const yeni = olcuOnerileri(structuredClone(s.items), s.cls, opt);
-      const eski = cagir<OlcuListesi>(okuma, 'pdfDims', structuredClone(s.items), s.cls, opt);
-      expect(duz(yeni), `tohum ${tohum}`).toEqual(duz(eski));
-      toplam += yeni.length;
+      const eski = onayli(cagir<OlcuListesi>(okuma, 'pdfDims', structuredClone(s.items), s.cls, opt));
+      esit(yeni, eski, `tohum ${tohum}`);
+      toplam += ayikla(yeni).l.length;
     }
     expect(toplam).toBeGreaterThan(500);
   });
   it('seçeneksiz çağrı ve boş girdi', () => {
     const s = sayfa(7, false);
-    expect(duz(olcuOnerileri(s.items, 'm'))).toEqual(duz(cagir(okuma, 'pdfDims', s.items, 'm')));
+    expect(duz(olcuOnerileri(s.items, 'm'))).toEqual(duz(onayli(cagir(okuma, 'pdfDims', s.items, 'm'))));
     expect(duz(olcuOnerileri([], 'm', { diag: true }))).toEqual(duz(cagir(okuma, 'pdfDims', [], 'm', { diag: true })));
   });
   it('glif, düz yazı, tablo ve mürekkep', () => {

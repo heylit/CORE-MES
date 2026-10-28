@@ -58,7 +58,7 @@ export function dosyaBicimi(ad: string, bas: string): DosyaBicimi {
 /* ── Balon yerleşimi: üst üste binmeyi önler, boş yere kaydırır, ölçüye kılavuz çizgi çeker ── */
 export interface Balon {
   id: number; x: number; y: number; ar?: YaziKutusu; l?: string; nom: string; tol?: string; min: number; max: number; tool?: string; gauge?: boolean;
-  m?: 'cmm' | 'man'; freq?: string; crit?: boolean;
+  m?: 'cmm' | 'man'; freq?: string; crit?: boolean; not?: string;
   // Elle konan balon yeri (sabit) ve tek balon için istenen yerleşim (894 a); yoksa balon dizimi kendisi seçer.
   yer?: [number, number] | null; yerKipi?: 'yakin' | 'serit' | null;
   [k: string]: unknown;
@@ -186,7 +186,10 @@ export function onerileriEkle(bal: readonly Balon[], oneriler: readonly Oneri[])
 }
 // Nokta silinince kalanlar 1'den yeniden numaralanır, ölçümler yeni numarasıyla kalır.
 export function balonCikar<O>(bal: readonly Balon[], olcum: Readonly<Record<number, O>>, id: number): { bal: Balon[]; olcum: Record<number, O> } {
-  const kalan = bal.filter((x) => x.id !== id);
+  return balonlariCikar(bal, olcum, [id]);
+}
+export function balonlariCikar<O>(bal: readonly Balon[], olcum: Readonly<Record<number, O>>, ids: readonly number[]): { bal: Balon[]; olcum: Record<number, O> } {
+  const kalan = bal.filter((x) => !ids.includes(x.id));
   const yeni: Record<number, O> = {};
   kalan.forEach((x, i) => { const m = olcum[x.id]; if (m) yeni[i + 1] = m; });
   return { bal: kalan.map((x, i) => ({ ...x, id: i + 1 })), olcum: yeni };
@@ -219,6 +222,134 @@ export function olcumRaporu(bal: readonly Balon[], olcum: Readonly<Record<number
 export function toleransKonumu(b: Pick<Balon, 'gauge' | 'min' | 'max'>, v: number): number {
   const span = !b.gauge ? (b.max - b.min || 1e-6) : 1, lo = b.min - span * 0.2 / 0.7, hi = b.max + span * 0.2 / 0.7;
   return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+}
+
+/* ── Elle balonlama (967 a): numara, sıralama, ölçü yazımı, geçmiş ── */
+const siraliBalon = (l: Balon[]): Balon[] => l.sort((a, b) => a.id - b.id);
+// Numara başka balondaysa ya yer değişir ya balon araya girer ve aradakiler birer kayar. Ölçümler numaraya bağlı olduğundan ölçüm varken
+// numara değiştirilmez (kullanan engeller).
+export type NumaraYolu = 'degis' | 'araya';
+export function numaraDegistir(bal: readonly Balon[], id: number, hedef: number, yol: NumaraYolu): Balon[] {
+  const b = bal.find((x) => x.id === id);
+  const enCok = Math.max(bal.length, ...bal.map((x) => x.id));
+  const h = Math.min(Math.round(hedef), enCok);
+  if (!b || !(h >= 1) || h === id) return [...bal];
+  if (yol === 'degis' || !bal.some((x) => x.id === h)) return siraliBalon(bal.map((x) => (x.id === id ? { ...x, id: h } : x.id === h ? { ...x, id } : x)));
+  return siraliBalon(bal.map((x) => {
+    if (x.id === id) return { ...x, id: h };
+    if (id > h && x.id >= h && x.id < id) return { ...x, id: x.id + 1 };
+    if (id < h && x.id > id && x.id <= h) return { ...x, id: x.id - 1 };
+    return x;
+  }));
+}
+export type SiraYolu = 'okuma' | 'saat' | 'tur';
+export const SIRA_YOLU_ADI: Readonly<Record<SiraYolu, string>> = { okuma: 'Okuma sırası', saat: 'Saat yönü', tur: 'Türe göre' };
+const yaziMerkezi = (x: Pick<Balon, 'x' | 'y' | 'ar'>): [number, number] => (x.ar ? [x.ar[0], x.ar[1]] : [x.x, x.y]);
+const gdtMi = (nom: string): boolean => AKTol.GDT_CHARS.includes(nom.trim().charAt(0));
+// Yeni numaralar (eski numara → yeni): okuma sırası satır bandı içinde soldan sağa; saat yönü resim ortasına göre saat 12'den;
+// türe göre önce GD&T, sonra kritikler, kalanlar eski sırasıyla.
+export function numaraSirasi(bal: readonly Balon[], yol: SiraYolu, W: number, H: number): Record<number, number> {
+  const l = [...bal];
+  if (yol === 'okuma') {
+    const bant = Math.max(1, H * 0.04), sat = (x: Balon) => Math.floor(yaziMerkezi(x)[1] / bant);
+    l.sort((a, b) => sat(a) - sat(b) || yaziMerkezi(a)[0] - yaziMerkezi(b)[0] || a.id - b.id);
+  } else if (yol === 'saat') {
+    const aci = (x: Balon) => { const [px, py] = yaziMerkezi(x); return (Math.atan2(py - H / 2, px - W / 2) + 2.5 * Math.PI) % (2 * Math.PI); };
+    l.sort((a, b) => aci(a) - aci(b) || a.id - b.id);
+  } else {
+    const o = (x: Balon) => (gdtMi(x.nom) ? 0 : x.crit ? 1 : 2);
+    l.sort((a, b) => o(a) - o(b) || a.id - b.id);
+  }
+  return Object.fromEntries(l.map((x, i) => [x.id, i + 1]));
+}
+export const numaralariUygula = (bal: readonly Balon[], harita: Readonly<Record<number, number>>): Balon[] =>
+  siraliBalon(bal.map((x) => ({ ...x, id: harita[x.id] ?? x.id })));
+// Çoğaltılan balon sona eklenir ve verilen yere sabitlenir.
+export function balonCogalt(bal: readonly Balon[], id: number, yer: [number, number]): Balon[] {
+  const b = bal.find((x) => x.id === id); if (!b) return [...bal];
+  return [...bal, { ...b, id: bal.reduce((a, x) => Math.max(a, x.id), 0) + 1, yer, yerKipi: null }];
+}
+// Kılavuz ucu bırakılan yere en yakın ölçü yazısı (eşikten uzaksa yok).
+export function enYakinYazi<Y extends { ar: YaziKutusu }>(yazilar: readonly Y[], x: number, y: number, esik: number): Y | null {
+  let en: Y | null = null, ed = esik;
+  for (const d of yazilar) { const p = kutuNoktasi(d.ar, x, y), q = Math.hypot(p[0] - x, p[1] - y); if (q < ed) { ed = q; en = d; } }
+  return en;
+}
+
+// Ölçünün resimdeki yazımı parçalarına ayrılır: adet, tür öneki, sayı, tolerans ve kalan (THRU, derinlik gibi). Form tolerans ve türü
+// bu parçalarla değiştirir, sınırları yine okuyucunun ayrıştırıcısı hesaplar.
+export type TolKipi = 'genel' | 'sim' | 'sapma' | 'uyum';
+export const TOL_KIPI_ADI: Readonly<Record<TolKipi, string>> = { genel: 'Genel', sim: '±', sapma: '+ / −', uyum: 'Uyum' };
+// `bitisik`: kalan sayıya boşluksuz yazılmış (M10x1.5-6H).
+export interface OlcuYazimi { adet: string; on: string; sayi: string; kip: TolKipi; ust: string; alt: string; uyum: string; kalan: string; bitisik: boolean }
+const RE_YAZIM = /^(\d+\s*[x×]\s+)?([Ø⌀øR]|M(?=\d)|C(?=\d))?\s*(\d*\.?\d+(?:[x×]\d*\.?\d+)?°?)(\s*)(.*)$/;
+const RE_SIM = /^±\s*(\d*\.?\d+)\s*/, RE_SAPMA = /^([+\-−]\s*\d*\.?\d+|0)(?:\s*\/\s*|\s+)([+\-−]?\s*\d*\.?\d+)\s*/, RE_UYUM = /^([A-Za-z]{1,2}\d{1,2})(?![\d.])\s*/;
+export function olcuYazimi(metin: string): OlcuYazimi | null {
+  const m = RE_YAZIM.exec(metin.trim()); if (!m) return null;
+  const y: OlcuYazimi = { adet: m[1] ?? '', on: m[2] === '⌀' || m[2] === 'ø' ? 'Ø' : m[2] ?? '', sayi: m[3]!, kip: 'genel', ust: '', alt: '', uyum: '', kalan: m[5] ?? '', bitisik: !m[4] };
+  const k = y.kalan, bosluksuz = (v: string) => v.replace(/\s+/g, '').replace('−', '-');
+  let t: RegExpExecArray | null;
+  if ((t = RE_SIM.exec(k))) { y.kip = 'sim'; y.ust = t[1]!; y.alt = t[1]!; y.kalan = k.slice(t[0].length); }
+  else if ((t = RE_SAPMA.exec(k))) { y.kip = 'sapma'; y.ust = bosluksuz(t[1]!); y.alt = bosluksuz(t[2]!); y.kalan = k.slice(t[0].length); }
+  else if (y.on !== 'M' && (t = RE_UYUM.exec(k))) { y.kip = 'uyum'; y.uyum = t[1]!; y.kalan = k.slice(t[0].length); }
+  return y;
+}
+// İşaretsiz üst sapma artı, işaretsiz alt sapma (sıfır değilse) eksi sayılır.
+const isaretli = (v: string, eksi: boolean) => { const t = v.trim().replace('−', '-'); return !t || /^[+-]/.test(t) || +t === 0 ? t : (eksi ? '-' : '+') + t; };
+export function olcuYazimiMetni(y: OlcuYazimi): string {
+  const tol = y.kip === 'sim' && y.ust ? ' ±' + y.ust.trim()
+    : y.kip === 'sapma' && y.ust ? ' ' + isaretli(y.ust, false) + '/' + (isaretli(y.alt, true) || '0')
+      : y.kip === 'uyum' && y.uyum ? ' ' + y.uyum.trim() : '';
+  return (y.adet + y.on + y.sayi + tol + (y.kalan ? (y.bitisik && !tol ? '' : ' ') + y.kalan : '')).trim();
+}
+// Tolerans kipi değişince boş alanlar alışılmış değerle dolar.
+export function tolKipiSec(y: OlcuYazimi, kip: TolKipi): OlcuYazimi {
+  if (kip === 'sim') return { ...y, kip, ust: y.ust.replace(/^[+-]/, '') || '0.1', alt: '' };
+  if (kip === 'sapma') return { ...y, kip, ust: y.ust || '+0.1', alt: y.kip === 'sapma' ? y.alt : '0' };
+  if (kip === 'uyum') return { ...y, kip, uyum: y.uyum || (y.on === 'Ø' ? 'H7' : 'h7') };
+  return { ...y, kip };
+}
+// Tür çipleri: önek, açıda derece işareti. GD&T ayrı yazılır.
+export const OLCU_TURLERI = [['', 'Uzunluk'], ['Ø', 'Çap'], ['R', 'Radyus'], ['M', 'Diş'], ['C', 'Pah'], ['°', 'Açı']] as const;
+export type OlcuTuru = typeof OLCU_TURLERI[number][0];
+export const olcuTuru = (y: OlcuYazimi): OlcuTuru => (y.sayi.endsWith('°') ? '°' : (y.on as OlcuTuru));
+export function olcuTuruSec(y: OlcuYazimi, tur: OlcuTuru): OlcuYazimi {
+  const sayi = y.sayi.replace(/°$/, '');
+  if (tur === '°') return { ...y, on: '', sayi: sayi + '°', kip: y.kip === 'uyum' ? 'genel' : y.kip };
+  return { ...y, on: tur, sayi, ...(tur === 'M' && y.kip === 'uyum' ? { kip: 'genel' as const } : {}) };
+}
+// Geometrik tolerans yazımı: sembol, çap bölgesi, değer, değiştirici ve referanslar.
+export interface GdtYazimi { sembol: string; cap: boolean; deger: string; kalan: string }
+export function gdtYazimi(metin: string): GdtYazimi | null {
+  const t = metin.trim(); if (!gdtMi(t)) return null;
+  const m = /^(.)\s*\|?\s*([Ø⌀ø])?\s*(\d*\.?\d+)?\s*(.*)$/u.exec(t);
+  return m ? { sembol: m[1]!, cap: !!m[2], deger: m[3] ?? '', kalan: m[4] ?? '' } : null;
+}
+export const gdtYazimiMetni = (g: GdtYazimi): string => (g.sembol + ' ' + (g.cap ? 'Ø' : '') + g.deger + (g.kalan ? ' ' + g.kalan : '')).trim();
+export const GDT_SEMBOLLERI = ['⌖', '⏥', '⏤', '⟂', '∥', '∠', '◎', '○', '⌭', '↗', '⌰', '⌓', '⌒', '⌯'] as const;
+// Tür değişince GD&T ile ölçü arasında değer korunur.
+export function gdtyeCevir(metin: string): string {
+  const y = olcuYazimi(metin);
+  return gdtYazimiMetni({ sembol: '⌖', cap: y?.on === 'Ø', deger: y && y.kip === 'sim' ? String(Math.round(+y.ust * 2e4) / 1e4) : '0.05', kalan: '' });
+}
+export function gdtdenCevir(metin: string): string {
+  const g = gdtYazimi(metin);
+  return g ? (g.cap ? 'Ø' : '') + (g.deger || '0') : metin;
+}
+export const OLCU_ALETLERI = ['Kumpas', 'Mikrometre', 'Tampon mastar', 'Çatal mastar', 'Diş mastarı', 'Radyus mastarı', 'Pah şablonu', 'Açı ölçer',
+  'Komparatör', 'Pürüzlülük ölçer', 'Yuvarlaklık cihazı', 'CMM'] as const;
+export const KONTROL_SIKLIKLARI = ['İlk parça', 'Her parça', 'İlk parça + her 10', 'İlk parça + her 25', 'İlk ve son parça', 'Vardiya başı'] as const;
+
+// Geri al ve yinele: düzenlemeden önceki durum saklanır; yeni düzenleme ileri yığınını siler.
+export interface Gecmis<T> { geri: readonly T[]; ileri: readonly T[] }
+export const gecmisKaydet = <T>(g: Gecmis<T>, simdiki: T, sinir = 60): Gecmis<T> => ({ geri: [...g.geri, simdiki].slice(-sinir), ileri: [] });
+export function gecmisGeri<T>(g: Gecmis<T>, simdiki: T): { gecmis: Gecmis<T>; durum: T } | null {
+  const d = g.geri[g.geri.length - 1]; if (d === undefined) return null;
+  return { gecmis: { geri: g.geri.slice(0, -1), ileri: [...g.ileri, simdiki] }, durum: d };
+}
+export function gecmisIleri<T>(g: Gecmis<T>, simdiki: T): { gecmis: Gecmis<T>; durum: T } | null {
+  const d = g.ileri[g.ileri.length - 1]; if (d === undefined) return null;
+  return { gecmis: { geri: [...g.geri, simdiki], ileri: g.ileri.slice(0, -1) }, durum: d };
 }
 
 /* ── Çizim stüdyosu çalışması: PDF ve 3B model birlikte (iş paketindeki gibi), ayarlar ve balonlar ── */

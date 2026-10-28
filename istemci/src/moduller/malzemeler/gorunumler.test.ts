@@ -1,39 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { matchPath } from 'react-router-dom';
-import { GORUNUM_YOLLARI, adrestekiGorunum, disSayfaYolu, malzemeEtiketiYolu } from './gorunumler.ts';
+import { DIS_SAYFALAR, GORUNUM_YOLLARI, malzemeEtiketiYolu } from './gorunumler.ts';
 import { rotalar } from './rotalar.tsx';
 
 // Menünün geçerliliği ve maddelerin kime görünür olduğu sunucu tarafındaki `ikinci-menu.test.ts`'tedir (istemci menüyü değer olarak
 // yalnız toplayıcıdan alır); buradaki tablo menüye tiple bağlıdır.
 describe('malzemeler ikinci menü', () => {
-  it('her görünüm bir rotaya düşer ve adresi kendi görünümünü verir', () => {
-    for (const [anahtar, yol] of Object.entries(GORUNUM_YOLLARI)) {
-      expect(adrestekiGorunum(yol)).toBe(anahtar);
+  it('her görünüm bir rotaya düşer', () => {
+    for (const yol of Object.values(GORUNUM_YOLLARI)) {
       expect(rotalar.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
     }
   });
 
-  it('kök katalogdur; sondaki eğik çizgi aynı görünümdür; tanımsız alt yol görünüm değildir', () => {
-    expect(adrestekiGorunum('/malzemeler')).toBe('cat');
-    expect(adrestekiGorunum('/malzemeler/sablonlar/')).toBe('tpl');
-    expect(adrestekiGorunum('/malzemeler/bilinmeyen')).toBeNull();
-    expect(adrestekiGorunum('/malzemeler/yeni/fazla')).toBeNull();
-  });
-
-  it('eski çerçevenin adresi (572): görünüm menü yolunun eski kök altındaki aynı alt yoludur', () => {
-    expect(adrestekiGorunum('/malzemeler/eski')).toBe('cat');
-    expect(adrestekiGorunum('/malzemeler/eski/sablonlar')).toBe('tpl');
-    expect(adrestekiGorunum('/malzemeler/eski/yeni')).toBe('new');
-    expect(adrestekiGorunum('/malzemeler/eskiler')).toBeNull();
-    expect(adrestekiGorunum('/malzemeler/eski/bilinmeyen')).toBeNull();
-  });
-
-  it('operasyonlar görünümü yok (kart #544); dış sayfa yalnız bilinen anahtarla, istasyonların operasyon tiplerine', () => {
-    expect(adrestekiGorunum('/malzemeler/operasyonlar')).toBeNull();
-    expect(disSayfaYolu('operasyon-tipleri')).toBe('/istasyonlar/operasyon-tipleri');
-    expect(disSayfaYolu('rota-sablonlari')).toBe('/rota/sablonlar');
-    expect(disSayfaYolu('urun-rotalari')).toBe('/recete-rota/schema');
-    expect([disSayfaYolu('toString'), disSayfaYolu('/yonetim'), disSayfaYolu(3)]).toEqual([null, null, null]);
+  it('operasyonlar görünümü yok (kart #544); dış sayfalar sahibinin adresidir', () => {
+    expect(Object.values(GORUNUM_YOLLARI)).not.toContain('/malzemeler/operasyonlar');
+    expect(DIS_SAYFALAR).toEqual({ 'operasyon-tipleri': '/istasyonlar/operasyon-tipleri', 'rota-sablonlari': '/rota/sablonlar', 'urun-rotalari': '/recete-rota/schema' });
   });
 
   it('269 a: kartın etiketi Etiket Merkezi\'nde kart no ile açılır; geçersiz no için adres yok', () => {

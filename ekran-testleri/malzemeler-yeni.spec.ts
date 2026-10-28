@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { HESAPLAR } from './hesaplar.ts';
 import { expect, kesilenBasliklar, tasmaOlc, test } from './ortak.ts';
 
-// Malzemeler'in doğal ekranı menünün adresindedir (572, 527 1 a); eski çerçeve kişi menüsündeki "Eski görünüm" ile /malzemeler/eski altında.
+// Malzemeler'in doğal ekranı menünün adresindedir (572, 527 1 a); eski görünümü yoktur (979 a).
 // Her parça kendi `test.describe('M<n> ...')` bloğunu ekler (PARCA-SOZLESMESI.md); M0 yalnız iskeleti sınar.
 test.describe('M0 iskelet', () => {
   test('menü adresi yeni ekranı açar; bölümler kabuğun şeridindedir, ekran kendi sekmesini çizmez, sayfa yatay taşmaz', async ({ page, ac }) => {
@@ -15,20 +15,14 @@ test.describe('M0 iskelet', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 
-  test('eski görünüme gidip döner: aynı bölüm çerçevede açılır, şeritte seçili kalır', async ({ page, ag, ac }) => {
-    const gecis = async (ad: 'Eski görünüm' | 'Yeni görünüm') => {
-      await page.getByRole('button', { name: 'Hesap' }).click();
-      await page.getByRole('menuitem', { name: ad }).click();
-    };
+  test("eski görünüm yoktur: kişi menüsünde geçiş çıkmaz, eski adres Katalog'a döner", async ({ page, ag, ac }) => {
     await ac('/malzemeler/sablonlar');
     await expect(page.getByRole('region', { name: 'Hazır şablonlar' })).toBeVisible();
-    await gecis('Eski görünüm');
-    await expect(page).toHaveURL(/\/malzemeler\/eski\/sablonlar$/);
-    await expect(page.locator('main iframe')).toHaveCount(1);
-    await expect(page.getByRole('navigation', { name: 'Malzemeler ve Hizmetler menüsü' }).locator('[aria-current="page"]')).toHaveText(/^Şablonlar/);
-    await gecis('Yeni görünüm');
-    await expect(page).toHaveURL(/\/malzemeler\/sablonlar$/);
-    await expect(page.getByRole('region', { name: 'Hazır şablonlar' })).toBeVisible();
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Eski görünüm' })).toHaveCount(0);
+    await ac('/malzemeler/eski');
+    await expect(page).toHaveURL(/\/malzemeler$/);
+    await expect(page.locator('main iframe')).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });
 });
@@ -263,9 +257,8 @@ test.describe('M4 şablonlar ve kılavuz', () => {
   });
 });
 
-// Her rolde görünürlük eşitliği (572, 553 2 ile aynı ölçüt): eski görünümde şeritte görülen bölümü yeni ekran da açar, görülmeyeni açmaz.
-// Eskide görmek şeritteki maddedir (işlem); yenide görmek, adres değişmeden bölümün yetki engeli olmadan açılmasıdır. Sayfa işlemi
-// olmayan iki görünümde de "Yetkiniz yok" görür. Ölçü tek genişlikte: görünürlük genişliğe bağlı değildir.
+// Her rolde görünürlük eşitliği (572, 553 2 ile aynı ölçüt): şeritte görülen bölümü ekran açar, görülmeyeni açmaz. Şeritte görmek
+// maddedir (işlem); açmak, adres değişmeden bölümün yetki engeli olmadan açılmasıdır. Sayfa işlemi olmayan "Yetkiniz yok" görür. Ölçü tek genişlikte: görünürlük genişliğe bağlı değildir.
 const BOLUMLER = [['/malzemeler/yeni', 'Yeni kart'], ['/malzemeler', 'Katalog'], ['/malzemeler/sablonlar', 'Şablonlar'],
   ['/malzemeler/ayarlar', 'Malzeme ayarları'], ['/malzemeler/logo', 'Logo gönderimi'], ['/malzemeler/kilavuz', 'Kılavuz']] as const;
 
@@ -279,18 +272,13 @@ async function seritMaddeleri(page: Page): Promise<string[]> {
 for (const hesap of HESAPLAR) {
   test.describe(`572 görünürlük eşitliği · ${hesap}`, () => {
     test.use({ hesap });
-    test('eski ve yeni görünümde aynı bölümler açılır', async ({ page, ac }, bilgi) => {
+    test('şeritte görünen bölümler açılır, görünmeyenler açılmaz', async ({ page, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
       test.setTimeout(120_000);
-      await ac('/malzemeler/eski');
-      // Eski çerçeve yalnız yöneticidedir (681 a): başkası eski adreste yetki iletisini görür; şerit kabuğundur, ölçü ondan alınır.
-      if (hesap !== 'ornek.yonetici') {
-        await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
-        await expect(page.locator('main iframe')).toHaveCount(0);
-      }
-      const eskiSerit = new Set(await seritMaddeleri(page));
-      const eski = BOLUMLER.filter(([yol]) => eskiSerit.has(yol)).map(([, ad]) => ad);
-      const yeni: string[] = [];
+      await ac('/malzemeler');
+      const serit = new Set(await seritMaddeleri(page));
+      const beklenen = BOLUMLER.filter(([yol]) => serit.has(yol)).map(([, ad]) => ad);
+      const acilan: string[] = [];
       for (const [yol, ad] of BOLUMLER) {
         await ac(yol);
         const govde = page.locator('main .tc-myeni-govde');
@@ -298,10 +286,10 @@ for (const hesap of HESAPLAR) {
         if (await govde.count() === 0 || new URL(page.url()).pathname !== yol) continue;
         await expect(govde.locator(':scope > *').first()).toBeVisible();
         const engel = await govde.getByText('Bu bölümü görme yetkin yok.').count();
-        if (engel === 0 && (await seritMaddeleri(page)).includes(yol)) yeni.push(ad);
+        if (engel === 0 && (await seritMaddeleri(page)).includes(yol)) acilan.push(ad);
       }
-      bilgi.annotations.push({ type: 'eskide görülen', description: eski.join(', ') });
-      expect(yeni, `${hesap}: eskide görülen bölümler`).toEqual(eski);
+      bilgi.annotations.push({ type: 'şeritte görülen', description: beklenen.join(', ') });
+      expect(acilan, `${hesap}: şeritte görülen bölümler`).toEqual(beklenen);
     });
   });
 }

@@ -24,7 +24,7 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör
 // yalnız yeni ekranı görür; başkası eski adreste "yetkiniz yok" görür (App.tsx).
 // Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
-// haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar, Logo gönderimi).
+// haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar).
 // yalnizYonetici: eski ekran yalnız yöneticide açılır ve geçiş yalnız ona görünür.
 // serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
 // (Reçete ve Rota'dan Planlama'ya) yol kalmaz. Tek maddelik menü de eski sayfadaki gibi şerit çizer (Kuyruk, Üretim Terminali).
@@ -33,7 +33,6 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/kuyruk', eski: '/kuyruk/eski', serit: true },
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
   { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
-  { yol: '/malzemeler', eski: '/malzemeler/eski', serit: true, haric: ['/malzemeler/logo'] },
   // Resim ve modellerin (597 a) eski görünümde karşılığı yoktur.
   { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler'] },
 ];

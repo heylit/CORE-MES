@@ -130,6 +130,10 @@ type Sayac = Required<Pick<OkumaIstatistigi, 'items' | 'rows' | 'segs' | 'table'
   & { ocr: boolean };
 
 const SEVIYE: Readonly<Record<GuvenSeviyesi, number>> = { high: 2, mid: 1, low: 0 };
+const GENEL_EK = ' (genel tol.)';
+// Çizimden okunan tolerans (±, sapma, uyum) ya da GD&T yanlış okunursa ölçüm yanlış kabul alır (967 a): böyle öneri güveni ne olursa olsun
+// seçilmemiş gelir, kullanıcı tek tek onaylar. Genel tolerans (ISO 2768) bu kurala girmez.
+export const onayIster = (o: Pick<OlcuOnerisi, 'kind' | 'l' | 'ref'>): boolean => !o.ref && (o.kind === 'gdt' || !o.l.endsWith(GENEL_EK));
 export const OLCU_TURU_ADI: Readonly<Record<string, string>> = {
   diameter: 'Çap', linear: 'Uzunluk', radius: 'Radyus', angle: 'Açı', thread: 'Diş', chamfer: 'Pah', rough: 'Yüzey pürüzlülüğü',
 };
@@ -179,7 +183,7 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
     let cur: Parca | null = null;
     for (const o of r.parts) {
       const gap = cur ? o.u - cur.u1 : 1e9;
-      const gdtJoin = !!cur && isGd(cur.parts[0]!.s[0]) && gap < 3.4 * r.h && gap > -0.5 * r.h && o.s.length <= 9 && /^[Ø\d.A-Z|ⓂⓁⓈⓅ() -]+$/.test(o.s);
+      const gdtJoin = !!cur && isGd(cur.parts[0]!.s[0]) && gap < 3.4 * r.h && gap > -0.5 * r.h && o.s.length <= 9 && /^[Ø⌀øΦ∅\d.A-Z|ⓂⓁⓈⓅⒻⓉⓊ() -]+$/.test(o.s);
       if (cur && ((gap < 0.95 * r.h && gap > -0.5 * r.h) || gdtJoin)) {
         cur.txt += gdtJoin && gap >= 0.95 * r.h ? ' | ' : gap > 0.18 * r.h ? ' ' : '';
         cur.txt += o.s; cur.parts.push(o); cur.gaps.push(gap); cur.u1 = Math.max(cur.u1, o.u + o.w);
@@ -209,6 +213,15 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
       const up = c[0]!, lo = c[c.length - 1]!;
       L.txt += ' ' + up.txt.replace(/\s/g, '') + '/' + lo.txt.replace(/\s/g, ''); up.stack = lo.stack = true; L.u1 = Math.max(L.u1, up.u1, lo.u1);
     }
+  }
+  // Aynı taban çizgisinde küçük yazılmış iki sapma (Ø40 +0.1 -0.05): satır gruplaması boyları farklı diye ayırır, burada ölçüye eklenir.
+  const yanYana = (o: Parca, L: Parca, ref: Parca) => o !== L && !o.stack && o.ang === L.ang && Math.abs(o.v - L.v) < 0.35 * L.h && o.h < 0.95 * L.h
+    && o.u0 >= ref.u1 - 0.3 * L.h && o.u0 <= ref.u1 + 1.6 * L.h;
+  for (const L of segs) {
+    if (!/\d$/.test(L.txt) || L.stack || /\//.test(L.txt)) continue;
+    const s1 = small.find((o) => yanYana(o, L, L) && /^[+\-]/.test(o.txt.trim())); if (!s1) continue;
+    const s2 = small.find((o) => o !== s1 && yanYana(o, L, s1) && (/^[+\-]/.test(o.txt.trim()) || o.txt.trim() === '0')); if (!s2) continue;
+    L.txt += ' ' + s1.txt.replace(/\s/g, '') + '/' + s2.txt.replace(/\s/g, ''); s1.stack = s2.stack = true; L.u1 = Math.max(L.u1, s2.u1);
   }
   // 4) Dışlama bölgeleri.
   const zones: DislamaBolgesi[] = [];
@@ -265,11 +278,29 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
   // 5) Ayrıştır: bütün parça, olmazsa alt parçalar.
   const collapse = (s: string) => s.replace(/(\d)\s+(?=[\d.])/g, '$1').replace(/\.\s+(?=\d)/g, '.');
   const tryP = (s: string) => T.parse(s, { cls }) || (/\d\s+[\d.]/.test(s) ? T.parse(collapse(s), { cls }) : null);
-  const cands: { s: Parca; p: TolSonucu; txt: string }[] = [];
+  const cands: { s: Parca; p: TolSonucu; txt: string; tablo?: string }[] = [];
+  // Delik tablosu satırı (etiket, delik çağrısı, koordinatlar): delik resimde yalnız etiketle durur; satırdaki çağrı ölçülecek özelliktir.
+  // Koordinat sütunları ölçü değildir, alınmaz.
+  const DELIK = /^(?:\d{1,3}\s*[x×]\s*)?(?:[Ø⌀øΦ∅]|M\d)/;
+  const DELIK_EKI = /THRU|BOYDAN|↧|⌴|⌵|DEPTH|DER[İI]N|\d[gGhH]\b|UNC|UNF/i;
+  const delikEtiketi = (s: Parca): string | null => {
+    if (!DELIK.test(s.txt) || !DELIK_EKI.test(s.txt)) return null;
+    let en: Parca | null = null;
+    for (const q of segs) {
+      if (q === s || q.ang !== s.ang || Math.abs(q.v - s.v) > s.h * 0.6 || q.u1 > s.u0 + s.h * 0.2 || s.u0 - q.u1 > s.h * 14) continue;
+      if (/^[A-Z]{1,2}\d{1,3}$/.test(q.txt) && (!en || q.u1 > en.u1)) en = q;
+    }
+    return en ? en.txt : null;
+  };
   for (const s of segs) {
     if (s.stack) { s.tag = 'stack'; continue; }
     const z = zoneOf(s);
-    if (z) { st[z]++; s.tag = z; if (ex[z] !== false) continue; }
+    if (z) {
+      st[z]++; s.tag = z;
+      const etiket = z === 'table' ? delikEtiketi(s) : null, dp = etiket ? tryP(s.txt) : null;
+      if (etiket && dp && (dp.kind === 'diameter' || dp.kind === 'thread')) { cands.push({ s, p: dp, txt: s.txt, tablo: etiket }); continue; }
+      if (ex[z] !== false) continue;
+    }
     if (ANAHTAR_KELIME.test(katla(s.txt)) || NOT_BASLIGI.test(katla(s.txt))) { s.tag = s.tag || 'table'; continue; }
     if (opt.ocr) s.txt = s.txt.replace(/^(\S*\d)\s+\+\s?(\d*\.\d+)$/, '$1 ±$2');
     const p = tryP(s.txt);
@@ -312,8 +343,9 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
   };
   const hs = cands.map((c) => c.s.h).sort((a, b) => a - b), modalH = hs.length ? hs[hs.length >> 1]! : 0;
   const out: OlcuListesi = [];
-  for (const { s, p } of cands) {
+  for (const { s, p, tablo } of cands) {
     let c = 0.3; const why: string[] = [];
+    if (tablo) { c -= 0.1; why.push('delik tablosu ' + tablo); }
     if (p.kind === 'gdt') { c += 0.45; why.push('GD&T'); } else if (p.kind === 'rough') { c += 0.15; why.push('yüzey'); } else {
       if (!p.general) { c += 0.3; why.push(p.fit ? 'geçme' : 'toleranslı'); }
       if (/^(SØ|SR|Ø|R|M|□|C)$/.test(p.prefix) || p.kind === 'thread') { c += 0.2; why.push('sembol'); }
@@ -324,6 +356,8 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
     if (modalH && !opt.ocr) { if (Math.abs(s.h / modalH - 1) < 0.25) c += 0.05; else { c -= 0.12; why.push('farklı yazı boyu'); } }
     if (p.general && !p.prefix && p.kind === 'linear' && p.nominal < 10 && Number.isInteger(p.nominal)) { c -= 0.2; why.push('tek hane'); }
     if (p.ref) { c -= 0.25; why.push('referans'); }
+    if (p.unknownFit) { c -= 0.6; why.push('uyum tabloda yok'); }
+    if (/okunmadı/.test(p.note || '')) { c -= 0.35; why.push('sapma eksik'); }
     if (opt.ocr) { const oc = enKucuk(s.parts.map((q) => q.conf)); c -= oc < 60 ? 0.25 : oc < 80 ? 0.12 : 0.04; why.push('OCR %' + Math.round(oc)); }
     c = Math.max(0, Math.min(1, c));
     const lvl: GuvenSeviyesi = c >= 0.6 ? 'high' : c >= 0.38 ? 'mid' : 'low';
@@ -331,12 +365,15 @@ export function olcuOnerileri(items0: readonly MetinOgesi[], cls: string, secene
     const a = s.a, hw = (s.u1 - s.u0) / 2;
     const bx = s.cx + a.ux * s.h * 1.9 + a.dx * (hw + s.h * 0.6), by = s.cy + a.uy * s.h * 1.9 + a.dy * (hw + s.h * 0.6);
     if (out.some((o) => o.nom === p.nomText && Math.hypot(o.tx - s.cx, o.ty - s.cy) < s.h * 2)) continue;
-    out.push({
+    const o: OlcuOnerisi = {
       x: bx, y: by, tx: s.cx, ty: s.cy, ar: [s.cx, s.cy, hw, s.h * 0.62, Math.atan2(a.dy, a.dx)],
-      l: (p.label || olcuTuruAdi(p)) + (p.ref ? ' (referans)' : p.general ? ' (genel tol.)' : ''), nom: p.nomText, tol: p.tolText, min: p.min, max: p.max,
+      l: (tablo ? 'Delik ' + tablo + ' · ' : '') + (p.label || olcuTuruAdi(p)) + (p.ref ? ' (referans)' : p.general ? GENEL_EK : ''), nom: p.nomText, tol: p.tolText, min: p.min, max: p.max,
       tool: p.tool, gauge: p.gauge, raw: s.txt, unknown: !!p.unknownFit, note: p.note || '', kind: p.kind, ref: !!p.ref, conf: +c.toFixed(2), lvl,
       why: why.join(' · '), on: SEVIYE[lvl] >= autoR && !p.ref && p.kind !== 'rough',
-    });
+    };
+    // Delik tablosu her deliği ayrı satırda verebilir (aynı çağrı onlarca kez): satırlar seçilmemiş gelir, kullanıcı gruplar.
+    if (o.on && (onayIster(o) || tablo)) o.on = false;
+    out.push(o);
   }
   // Okuma sırası: yukarıdan aşağı, soldan sağa (bantlı).
   const band = Math.max(modalH * 6, H / 24);

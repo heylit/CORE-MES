@@ -31,10 +31,6 @@ test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görün
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
   await ac('/ik');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
-  await ac('/malzemeler/eski/ayarlar');
-  const menu = page.getByRole('navigation', { name: 'Malzemeler ve Hizmetler menüsü' });
-  await expect(menu).toBeVisible();
-  await expect(menu.locator('[aria-current="page"]')).toContainText('Malzeme ayarları');
 });
 
 // Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a).
@@ -53,7 +49,7 @@ const SERITLI = [
   ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
   ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
   ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
-  ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/eski/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
+  ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
   ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'], ['/kalite-merkezi/eski/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;
 const TEK_MADDELI = new Set<string>(['Üretim Terminali', 'Kuyruk']);

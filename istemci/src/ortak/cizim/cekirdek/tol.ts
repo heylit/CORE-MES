@@ -76,7 +76,7 @@ export interface TolResult { raw: string; count: number; prefix: string; nominal
       .replace(/[º˚]/g, '°').replace(/[’′]/g, "'").replace(/[”″]/g, '"').replace(/\+\s*\/\s*-|\+-(?=\s*[\d.])/g, '±').replace(/⊥/g, '⟂').replace(/▱/g, '⏥')
       .replace(/(\d),(\d)/g, '$1.$2').replace(/(^|[^\d.])\.(\d)/g, '$10.$2').replace(/\s+/g, ' ').trim();
   }
-  const RE = /^(?:(\d{1,3})\s*[xX]\s*)?(SØ|SR|Ø|R|M|□)?\s*(\d{1,4}(?:\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+)?))?\s*(?:([A-Za-z]{1,2})\s?(\d{1,2}))?\s*(?:±\s*(\d*\.?\d+)|([+-]\s*\d*\.?\d+|0)\s*\/?\s*([+-]?\s*\d*\.?\d+))?\s*$/;
+  const RE = /^(?:(\d{1,3})\s*[xX]\s*)?(SØ|SR|Ø|R|M|□)?\s*(\d{1,4}(?:\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+)?))?\s*(?:([A-Za-z]{1,2})\s?(1[0-8]|0?[1-9])(?!\d))?\s*(?:±\s*(\d*\.?\d+)|([+-]\s*\d*\.?\d+|0)(?:\s*\/\s*|\s+|(?=[+-]))([+-]?\s*\d*\.?\d+)|([+-]\s*\d*\.?\d+))?\s*$/;
   // GD&T: sembol → [Türkçe ad, ölçü aleti]
   const GDT: Record<string, [string, string]> = { '⌖': ['Konum', 'CMM'], '⏤': ['Doğrusallık', 'Komparatör'], '⏥': ['Düzlemsellik', 'Komparatör'], '○': ['Yuvarlaklık', 'Yuvarlaklık cihazı'], '⌭': ['Silindiriklik', 'CMM'], '⌒': ['Çizgi profili', 'CMM'], '⌓': ['Yüzey profili', 'CMM'], '⟂': ['Diklik', 'Komparatör'], '∠': ['Eğim', 'CMM'], '∥': ['Paralellik', 'Komparatör'], '⫽': ['Paralellik', 'Komparatör'], '⌯': ['Simetri', 'CMM'], '◎': ['Eş merkezlilik', 'Komparatör'], '↗': ['Salgı', 'Komparatör'], '⌰': ['Toplam salgı', 'Komparatör'] };
   const GDT_CHARS = Object.keys(GDT).join('');
@@ -94,10 +94,11 @@ export interface TolResult { raw: string; count: number; prefix: string; nominal
     // GD&T çerçevesi
     let m: RegExpExecArray | null = RE_GDT.exec(raw);
     if (m) {
-      const t = num(m[3]); if (!(t > 0) || t > 10) return null;
+      // Ⓜ ya da Ⓛ ile sıfır konum toleransı geçerlidir (bütün bölge boyuttan gelen bonustur); değiştiricisiz sıfır okuma hatasıdır.
+      const t = num(m[3]); if (!(t >= 0) || t > 10 || (t === 0 && !/Ⓜ|Ⓛ|\(M\)|\(L\)/.test(m[4] || ''))) return null;
       const g = GDT[m[1]], dat = (m[5] || '').replace(/[|\s]+/g, ' ').trim();
       const nomText = m[1] + ' ' + (m[2] || '') + fmt(t) + (m[4] ? ' ' + m[4] : '') + (dat ? ' | ' + dat.split(' ').join(' | ') : '');
-      return { raw, count: 1, prefix: m[1], nominal: t, fit: null, kind: 'gdt', up: t, lo: 0, min: 0, max: t, nomText, tolText: '≤ ' + fmt(t) + (dat ? ' · referans ' + dat.split(' ').join('|') : ''), general: false, tool: g[1], gauge: false, gdtName: g[0] };
+      return { raw, count: 1, prefix: m[1], nominal: t, fit: null, kind: 'gdt', up: t, lo: 0, min: 0, max: t, nomText, tolText: '≤ ' + fmt(t) + (/Ⓜ|Ⓛ|\(M\)|\(L\)/.test(m[4] || '') ? ' ' + m[4] + ' + bonus' : '') + (dat ? ' · referans ' + dat.split(' ').join('|') : ''), general: false, tool: g[1], gauge: false, gdtName: g[0] };
     }
     // yüzey pürüzlülüğü
     m = /^(?:√\s*)?(Ra|Rz|Rt|Rmax)\s*(\d*\.?\d+)\s*(?:µm|um|μm)?$/i.exec(raw);
@@ -127,8 +128,13 @@ export interface TolResult { raw: string; count: number; prefix: string; nominal
     // pah: C1, 1x45°, 0.5x30°
     m = /^C\s?(\d*\.?\d+)$/.exec(raw);
     if (m) { const n = num(m[1]); if (!(n > 0) || n > 50) return null; const g = general(n, opt.cls, 'chamfer'); return fin(mk(raw, count, 'C', n, null, 'chamfer', g, -g, true, opt, ''), ref, note, label); }
-    m = /^(\d*\.?\d+)\s*x\s*(\d{2})°$/.exec(raw) || /^(\d{2})°\s*x\s*(\d*\.?\d+)$/.exec(raw);
-    if (m) { let n = num(m[1]), an = +m[2]; if (/^\d{2}°/.test(raw)) { an = num(m[1]); n = num(m[2]); } if (an < 10 || an > 80 || !(n > 0)) return null; const g = general(n, opt.cls, 'chamfer'); return fin(mk(raw, count, '', n, null, 'chamfer', g, -g, true, opt, '× ' + an + '°'), ref, note, label); }
+    m = /^(\d*\.?\d+)\s*x\s*(\d{1,2}(?:\.\d+)?)°$/.exec(raw) || /^(\d{1,2}(?:\.\d+)?)°\s*x\s*(\d*\.?\d+)$/.exec(raw);
+    if (m) {
+      let n = num(m[1]), an = num(m[2]); if (/^\d{1,2}(?:\.\d+)?°/.test(raw)) { an = num(m[1]); n = num(m[2]); }
+      if (!(an >= 1) || an >= 90 || !(n > 0)) return null;
+      // Uzun kenarlı "uzunluk × açı" pah değil konik ya da eğik yüzeydir; ikisi de ölçülür, adı karışmasın.
+      const g = general(n, opt.cls, 'chamfer'); return fin(mk(raw, count, '', n, null, 'chamfer', g, -g, true, opt, ' × ' + fmt(an) + '°'), ref, note, label || (n > 10 ? 'Uzunluk × açı' : ''));
+    }
     // açı: 30°30'  ·  60° ±1°  ·  45° ±30'
     let isAngle = /°/.test(raw);
     if (isAngle) {
@@ -157,6 +163,8 @@ export interface TolResult { raw: string; count: number; prefix: string; nominal
     if (m[5] && m[6]) fitTxt = pair || (m[5] + m[6]);
     if (m[7]) { up = num(m[7]); lo = -up; }
     else if (m[8]) { const a = num(m[8]), b = num(m[9]); up = Math.max(a, b); lo = Math.min(a, b); }
+    else if (m[10]) { const a = num(m[10]); up = Math.max(a, 0); lo = Math.min(a, 0); note = (note ? note + ' · ' : '') + 'öbür sapma okunmadı, 0 alındı'; }
+    if (m[4] && prefix === 'Ø') note = (note ? note + ' · ' : '') + 'derinlik ' + fmt(num(m[4]));
     else if (fitTxt) {
       const L = m[5], f = fit(nominal, L.length === 2 ? (L === 'js' || L === 'JS' ? L : null) : L, +m[6]);
       if (!f) unknownFit = true; else { up = f.up; lo = f.lo; }
@@ -165,14 +173,14 @@ export interface TolResult { raw: string; count: number; prefix: string; nominal
       if (kind === 'angle') { up = 1; lo = -1; isGeneral = true; }
       else { if (opt.requireMarkup && !prefix && !one) return null; const g = general(nominal, opt.cls, kind); up = g; lo = -g; isGeneral = true; }
     }
-    if (unknownFit) return fin(Object.assign(mk(raw, count, prefix, nominal, fitTxt, kind, 0, 0, false, opt), { unknownFit: true }), ref, note, label);
+    if (unknownFit) return fin(Object.assign(mk(raw, count, prefix, nominal, fitTxt, kind, 0, 0, false, opt), { unknownFit: true, tolText: fitTxt + ' uyum tablosunda yok · sınırları girin' }), ref, note, label);
     if (one) { const r = mk(raw, count, prefix, nominal, null, kind, 0, 0, false, opt, ' ' + one.toUpperCase()); if (one === 'max') { r.min = 0; r.max = nominal; r.tolText = '≤ ' + fmt(nominal) + ' (üst sınır)'; } else { r.min = nominal; r.max = +fmt(nominal * 10 + 1000); r.tolText = '≥ ' + fmt(nominal) + ' (alt sınır)'; } r.general = false; return fin(r, ref, note, label); }
     const r = mk(raw, count, prefix, nominal, fitTxt, kind, up as number, lo as number, isGeneral, opt);
-    if (fitTxt && (m[7] || m[8])) r.explicitFit = true;
+    if (fitTxt && (m[7] || m[8] || m[10])) r.explicitFit = true;
     return fin(r, ref, note, label);
   }
   function fin(r: TolResult, ref: boolean, note: string, label: string): TolResult {
-    if (note) { note = note.replace(/↧/g, 'derinlik ').replace(/⌴/g, 'havşa ').replace(/⌵/g, 'konik havşa ').replace(/\s+/g, ' ').trim(); r.note = note; }
+    if (note) { note = note.replace(/⌴\s*SF\b/g, 'spot face ').replace(/↧/g, 'derinlik ').replace(/⌴/g, 'havşa ').replace(/⌵/g, 'konik havşa ').replace(/\s+/g, ' ').trim(); r.note = note; }
     if (label) r.label = label;
     if (ref) { r.ref = true; r.nomText = '(' + r.nomText + ')'; r.tolText = 'Referans ölçü · bilgi amaçlı'; }
     return r;

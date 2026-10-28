@@ -22,20 +22,8 @@ export const GORUNUM_YOLLARI = {
   kilavuz: '/malzemeler/kilavuz',
 } as const satisfies { [A in KatalogGorunumu]: Extract<Madde, { anahtar: A }>['yol'] };
 
-// Eski çerçeve (572, 527 1 a): yeni ekran menü adresindedir, çerçeve kişi menüsündeki "Eski görünüm" ile bu kökün altında açılır.
-// Görünümün eski adresi menü yolunun aynı alt yoludur (`/malzemeler/sablonlar` -> `/malzemeler/eski/sablonlar`).
-export const ESKI_KOK = '/malzemeler/eski';
-
-// Adresin görünümü (menü yolu ya da eski adresi); tanımsız alt yol null (ekran köke döner).
-export function adrestekiGorunum(adres: string): KatalogGorunumu | null {
-  const temiz = adres.length > 1 ? adres.replace(/\/+$/, '') : adres;
-  const yol = temiz === ESKI_KOK || temiz.startsWith(`${ESKI_KOK}/`) ? `/malzemeler${temiz.slice(ESKI_KOK.length)}` : temiz;
-  const bulunan = Object.entries(GORUNUM_YOLLARI).find(([, y]) => y === yol);
-  return bulunan ? (bulunan[0] as KatalogGorunumu) : null;
-}
-
-// Prototipin kabuk dışına götürdüğü sayfalar: çerçeve yalnız anahtar yollar, adres burada ve sahibinin menüsüne tiple bağlıdır.
-// Operasyon listesi istasyonlarındır; prototipin "Operasyonlar sayfasında belirlenir" bağlantısı oraya gider (kart #544).
+// Kabuk dışına götüren sayfalar: adres burada ve sahibinin menüsüne tiple bağlıdır.
+// Operasyon listesi istasyonlarındır; "Operasyonlar sayfasında belirlenir" bağlantısı oraya gider (kart #544).
 // Rota şablonları Rota'nındır; kartın Operasyonlar adımındaki "Şablonları düzenle" oraya gider (kart #688).
 // Rotası olan kartın operasyon ve reçetesi Reçete ve Rota'nın ürün ve rotalar görünümünde düzenlenir (233 a).
 type ReceteRotaMaddesi = (typeof RECETE_ROTA_IKINCI_MENU)['gruplar'][number]['maddeler'][number];
@@ -50,10 +38,6 @@ export const DIS_SAYFALAR = {
   'rota-sablonlari': Extract<RotaMaddesi, { anahtar: 'sablonlar' }>['yol'];
   'urun-rotalari': Extract<ReceteRotaMaddesi, { anahtar: 'schema' }>['yol'];
 };
-
-export function disSayfaYolu(anahtar: unknown): string | null {
-  return typeof anahtar === 'string' && Object.hasOwn(DIS_SAYFALAR, anahtar) ? DIS_SAYFALAR[anahtar as keyof typeof DIS_SAYFALAR] : null;
-}
 
 // 269 a: kartın etiketi Etiket Merkezi'nde kart no ile açılır; geçersiz no için adres kurulmaz.
 const ETIKET_MERKEZI: (typeof ETIKET_MERKEZI_SAYFALARI)[number]['yol'] = '/etiket-merkezi';
