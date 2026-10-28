@@ -136,6 +136,61 @@ export const urunSevkleriCevabi = z.object({ sevkler: z.array(urunSevkiSemasi) }
 // havuzda (tamamlanan iş yeniden açılır), yolda (yanlış girilen teslim sonucu geri alınır). tarih: ekranın günü.
 export const isDurumuGovdesi = z.object({ durum: z.enum(['tamamlandi', 'yapilamadi', 'havuzda', 'yolda']), tarih, not: bosOlabilir(400) });
 
+// ---------- tüm işler (960) ----------
+// Tablo kalemi yalnız serbest bırakır; sevkiyat "Sevk et" ya da "Al" ile tetikler; depo son çıkışı ya da kabulü yapar ve stok orada oynar.
+// Kalem: serbest bırakılmış ya da bırakılmayı bekleyen kayıt. Aday: başka modülde duran, henüz kalemi olmayan şey (bitmemiş emir,
+// sırası gelmemiş fason adımı, gelmemiş sipariş); yalnız okunur.
+export const KALEM_KAYNAGI = z.enum(['urun', 'fason', 'fason-donus', 'alim', 'elle']);
+export const KALEM_YONU = z.enum(['gidis', 'gelis']);
+// biz: sevkiyat aracı götürür ya da alır (Sevk et / Al). firma: firma kendisi alır ya da getirir; iş açılmaz, depo hareketi yine yapılır.
+export const TASIMA = z.enum(['biz', 'firma']);
+// Taşımayı son yazanın yeri (959 b): Tüm işler, satın alma siparişinin teslim yöntemi, sevkiyat ekranı; göç öncesi kayıtlar otomatik.
+export const SON_YAZAN_YERI = z.enum(['tum-isler', 'satin-alma', 'sevkiyat', 'otomatik']);
+export const ELLE_TURU = z.enum(['numune', 'tamir', 'kalibrasyon', 'iade', 'diger']);
+// hazir-degil: kaynağı bitmedi (erken serbest bırakılabilir); hazir: serbest bırakılabilir; bekliyor: önceden bırakıldı, kaynağı bitince düşer;
+// havuzda, planlandi, yolda: sevkiyat işinin durumu; depoda: tetiklendi, depo çıkış ya da kabul bekliyor; tamamlandi: depo yaptı.
+export const TUM_IS_ASAMASI = z.enum(['hazir-degil', 'hazir', 'bekliyor', 'havuzda', 'planlandi', 'yolda', 'depoda', 'tamamlandi']);
+// Kalemin anahtarı "kalem:<id>"; adayınki kaynağın kaydıdır: "urun:<emir>", "fason:<fason iş emri>", "alim:<sipariş satırı>".
+export const TUM_IS_ANAHTARI = /^(kalem|urun|fason|alim):[1-9]\d{0,9}$/;
+const anahtar = z.string().regex(TUM_IS_ANAHTARI, 'Kalem anahtarı okunamadı.');
+
+export const tumIslerSorgusu = z.object({ baslangic: tarih, bitis: tarih });
+export const tumIsSatiri = z.object({
+  anahtar: z.string(), kalemId: z.number().int().nullable(), kaynak: KALEM_KAYNAGI, yon: KALEM_YONU, asama: TUM_IS_ASAMASI,
+  // Hazır değilse kaynağın tahmini hazır günü (emrin teslim günü, fason termini, sipariş termini); bilinmiyorsa null.
+  hazirTarihi: tarih.nullable(), istenenTarih: tarih.nullable(),
+  uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(),
+  // Fason gidiş ve dönüşte rotadaki adım; ilerleme kaynağın kısa durumudur ("OP 30 bitti", "3/5 adım").
+  isEmriId: z.number().int().nullable(), opNo: z.number().int().nullable(), adim: z.string().nullable(), ilerleme: z.string().nullable(),
+  siparisNo: z.string().nullable(), malzemeNo: z.number().int().nullable(), malzemeAd: z.string().nullable(), adet: ondalikMetinSemasi.nullable(),
+  firmaId: z.number().int().nullable(), firmaAd: z.string().nullable(), noktaId: z.number().int().nullable(),
+  tasima: TASIMA.nullable(), elleTuru: ELLE_TURU.nullable(), aciklama: z.string().nullable(),
+  is: z.object({ id: z.number().int(), tarih, durum: IS_DURUMU, tetiklendi: zamanSemasi.nullable() }).nullable(),
+  // Depo son çıkışı ya da kabulü; kısmi kabulde kabulAdet gelen toplamıdır, kalem açık kalır.
+  depo: z.object({ zaman: zamanSemasi.nullable(), kisiAd: z.string().nullable(), kabulAdet: ondalikMetinSemasi.nullable() }).nullable(),
+  erken: z.object({ zaman: zamanSemasi, kisiAd: z.string().nullable(), gerekce: z.string() }).nullable(),
+  sonYazan: z.object({ zaman: zamanSemasi, kisiAd: z.string().nullable(), yer: SON_YAZAN_YERI }).nullable(),
+  // Gidişin dönüşü ya da dönüşün gidişi (fason ve dönüşlü elle iş).
+  bagliAnahtar: z.string().nullable(),
+});
+export const tumIslerCevabi = z.object({ satirlar: z.array(tumIsSatiri) });
+
+// Serbest bırakma (941 c): kalemin sahibi modülün yazma işlemi ya da sevkiyat.is-yaz. Hazır olmayanı bırakmak erken çıkıştır (945 a, 963 a):
+// sevkiyat.onayla ve gerekçe ister. firma taşımasında iş açılmaz, bırakma tetik sayılır.
+export const serbestBirakGovdesi = z.object({
+  anahtarlar: z.array(anahtar).min(1).max(200), tasima: TASIMA,
+  erkenGerekce: z.string().trim().min(10, 'Erken çıkış gerekçesi en az 10 karakterdir.').max(400).nullable().default(null),
+});
+export const serbestBirakCevabi = z.object({ kalemIdleri: z.array(z.number().int()) });
+// Elle iş (958 a): numune, tamir, kalibrasyon gibi gidişler dönüşlü açılabilir; dönüş bağlı geliş kalemidir. İade dönüşsüzdür.
+export const elleKalemGovdesi = z.object({
+  tur: ELLE_TURU, yon: KALEM_YONU, firmaId: kimlik, malzemeNo: kimlik.nullable(), adet: ondalikMetinSemasi.nullable(),
+  istenenTarih: tarih, aciklama: metinAlani(400), tasima: TASIMA, donusTarihi: tarih.nullable(),
+});
+// Sevkiyatçının taşıma değişimi (Sevk / Al ile sevk yok arası); depo yaptıktan sonra değişmez.
+export const tasimaGovdesi = z.object({ tasima: TASIMA });
+export const kalemCevabi = z.object({ satir: tumIsSatiri });
+
 // ---------- gün planı ----------
 export const rotaOgesiSemasi = z.union([
   z.object({ isId: z.number().int().positive(), alis: z.boolean() }).strict(),
@@ -285,6 +340,20 @@ export type BekleyenBolGovdesi = z.output<typeof bekleyenBolGovdesi>;
 export type BekleyenBolCevabi = z.output<typeof bekleyenBolCevabi>;
 export type IsDurumuGovdesi = z.output<typeof isDurumuGovdesi>;
 export type IsDurumu = z.output<typeof IS_DURUMU>;
+export type KalemKaynagi = z.output<typeof KALEM_KAYNAGI>;
+export type KalemYonu = z.output<typeof KALEM_YONU>;
+export type Tasima = z.output<typeof TASIMA>;
+export type SonYazanYeri = z.output<typeof SON_YAZAN_YERI>;
+export type ElleTuru = z.output<typeof ELLE_TURU>;
+export type TumIsAsamasi = z.output<typeof TUM_IS_ASAMASI>;
+export type TumIslerSorgusu = z.input<typeof tumIslerSorgusu>;
+export type TumIsSatiri = z.output<typeof tumIsSatiri>;
+export type TumIslerCevabi = z.output<typeof tumIslerCevabi>;
+export type SerbestBirakGovdesi = z.input<typeof serbestBirakGovdesi>;
+export type SerbestBirakCevabi = z.output<typeof serbestBirakCevabi>;
+export type ElleKalemGovdesi = z.input<typeof elleKalemGovdesi>;
+export type TasimaGovdesi = z.input<typeof tasimaGovdesi>;
+export type KalemCevabi = z.output<typeof kalemCevabi>;
 export type RotaOgesi = z.output<typeof rotaOgesiSemasi>;
 export type DagitGovdesi = z.input<typeof dagitGovdesi>;
 export type KaydetGovdesi = z.input<typeof kaydetGovdesi>;
