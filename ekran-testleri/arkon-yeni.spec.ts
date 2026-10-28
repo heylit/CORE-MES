@@ -243,6 +243,39 @@ test.describe('A1 Operatör', () => {
         });
       }
     });
+
+    // 1070: kabuk menüleri açıkken 900-1200 px pencerede sol sütun kaymaz; çark, iş kartı, Şimdi şeridi, sayaç ve Durdur, Duraklat,
+    // Bitir tek ekrandadır. 1063: daha kısa pencerede (800) sütun kayar, düğmeler sütunun altında görünür kalır; sütun sonuna
+    // kayınca sayacın altındaki yerine döner, sayaç tuşlarının üstüne binmez.
+    for (const hesap of ['ornek.yonetici', 'ornek.operator1'] as const) {
+      test.describe(`durum düğmeleri · ${hesap}`, () => {
+        test.use({ hesap });
+        for (const boy of [{ width: 1280, height: 800 }, { width: 1280, height: 900 }, { width: 1280, height: 1000 }, { width: 1600, height: 1000 }, { width: 1920, height: 1080 }]) {
+          test(`${String(boy.width)}x${String(boy.height)}: durum düğmeleri kaydırmadan görünür`, async ({ page, ag, ac }, bilgi) => {
+            test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+            await page.addInitScript(() => { localStorage.setItem('arkon:station', JSON.stringify('ORN-TORNA-1')); });
+            await ac900(page, ac, 2, boy);
+            const grup = page.getByRole('group', { name: 'İş durumu' });
+            await expect(grup).toBeInViewport({ ratio: 1 });
+            const olc = () => page.evaluate(() => {
+              const k = (s: string) => { const b = document.querySelector(s)!.getBoundingClientRect(); return { ust: Math.round(b.top), alt: Math.round(b.bottom) }; };
+              return { orta: k('.tc-ay1-orta'), grup: k('[role="group"][aria-label="İş durumu"]'), tuslar: k('.tc-ay1-sahne .tc-ay1-tuslar') };
+            });
+            const o = await olc();
+            expect(o.grup.alt, JSON.stringify(o)).toBeLessThanOrEqual(o.orta.alt);
+            const kayma = await page.locator('.tc-ay1-orta').evaluate((e) => e.scrollHeight - e.clientHeight);
+            if (boy.height >= 900) expect(kayma, JSON.stringify(o)).toBeLessThanOrEqual(0);
+            await page.locator('.tc-ay1-orta').evaluate((e) => { e.scrollTop = e.scrollHeight; });
+            const s = await olc();
+            expect(s.grup.ust, JSON.stringify(s)).toBeGreaterThanOrEqual(s.tuslar.alt);
+            expect(s.grup.alt, JSON.stringify(s)).toBeLessThanOrEqual(s.orta.alt);
+            expect(await tasma(page)).toBeLessThanOrEqual(0);
+            expect(yazmalar(ag.yazmalar)).toEqual([]);
+            expect(ag.hatalar).toEqual([]);
+          });
+        }
+      });
+    }
   });
 });
 

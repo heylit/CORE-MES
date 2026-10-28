@@ -720,3 +720,21 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-kadran-cekirdek > .tc-ay1-ust-yazi { font-size: var(--yazi-xs); }
 }
 .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-alan > .tc-ay1-ust-yazi { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Durdur, Duraklat ve Bitir sütun kaysa da görünür kalır (1063): pencere üretim bölümüne yetmeyince düğmeler sütunun alt kenarında
+   durur, sayaç arkalarından kayar. Yer yeterken yerleri değişmez; dolgu eksi kenar boşluğuyla karşılanır. */
+.tc-ay1-genis .tc-ay1-sahne > .tc-orblar {
+  position: sticky; inset-block-end: 0; z-index: 1; padding-block: var(--b-2); margin-block: calc(var(--b-2) * -1); background: var(--panel-solid);
+}
+/* 1070: kabuktaki 1000-1080 px pencerede sol sütun kaymadan sığar: iş kartının altı alanı tek sırada, Şimdi şeridinde görev başlığı
+   ve açıklaması üst üste, numune çizgisi yanlarında tek satırdır. */
+@media (max-height: 1199px) {
+  .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-alanlari { grid-template-columns: repeat(6, minmax(0, max-content)); justify-content: space-between; }
+  .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-baslik { font-size: var(--yazi-m); }
+  .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > b { grid-area: 1 / 2; align-self: end; }
+  .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > small { grid-area: 2 / 2; align-self: start; margin-inline-end: var(--b-2); }
+  .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > .tc-ay1-numune-serit { grid-area: 1 / 3 / span 2; margin-block-start: 0; }
+  .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev > :not(.tc-ay1-gorev-simge, .tc-ay1-gorev-metin) { grid-row: 1 / span 2; }
+  .tc-ay1-genis .tc-ay1-aktif { padding-block: var(--b-2); }
+}
+/* Kısa düzeltme tuşunda simge ve yazı tek satırdır; "Hurda −1" iki satıra kırılınca tuş sıradan uzuyordu. */
+.tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus[data-duzeltme] { gap: var(--pay-ince); white-space: nowrap; }
