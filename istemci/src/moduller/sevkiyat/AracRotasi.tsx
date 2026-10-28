@@ -1,6 +1,6 @@
 // Sevkiyat listesinde bir aracın grubu: başlıkta özet ve yük, altında sırasıyla durakları.
 // Her satırdaki "Araç" seçimi işi başka araca verir ya da atanmamışlara alır (elle dağıtma); sıra ve iş işlemleri ⋯ menüsündedir.
-import { Fragment, type DragEvent, type KeyboardEvent } from 'react';
+import { Fragment, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { Amac, Arac, Is, Nokta, PlanRotasi, RotaOgesi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, Rozet } from '../../ortak/arayuz/index.ts';
 import { ARAC_TURU_ADI, kilometreMetni, paraMetni, saatMetni, sayiMetni, tarihMetni } from './bicim.ts';
@@ -43,6 +43,8 @@ export interface AracRotasiOzellikleri {
   // Onaylı planda durakların sonucu (iş başına) ve sonucu işaretleme yetkisi; taslakta null.
   sonuclar: ReadonlyMap<number, { sonuc: 'tamamlandi' | 'yapilamadi'; not: string | null }> | null; sonucYazabilir: boolean;
   islem: AracRotasiIslemleri;
+  // Tüm işler kalemi taşıyan işin tetik düğmesi (960); iki uçlu işte bırakış satırında.
+  tetik?: (is: Is) => ReactNode;
 }
 
 const TESLIM_ADI: Record<Is['tur'], string> = { teslimat: 'Teslim edildi', alim: 'Alındı', aktarma: 'Tamamlandı' };
@@ -81,7 +83,7 @@ function DurakSonucu({ is, sonuc, yazabilir, degistir }: {
 
 const pencereMetni = (bas: string | null, son: string | null) => (bas && son ? `${bas}–${son}` : '');
 
-export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar, araclar, duzenlenebilir, isYazabilir, tarih, amac, sonuclar, sonucYazabilir, islem }: AracRotasiOzellikleri) {
+export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar, araclar, duzenlenebilir, isYazabilir, tarih, amac, sonuclar, sonucYazabilir, islem, tetik }: AracRotasiOzellikleri) {
   const ogeler = rota?.ogeler ?? [], hesap = rota?.hesap ?? null;
   // Hesap satırları işin ucuyla eşlenir; ara dönüşler sırasıyla.
   const durakBul = new Map((hesap?.duraklar ?? []).filter((d) => d.isId !== null).map((d) => [`${d.isId}:${d.alis}`, d]));
@@ -216,6 +218,7 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
                   {hesapDuragi?.uyarilar.map((u) => <strong key={u} className="tc-sevkiyat-uyari">{u}</strong>)}
                 </span>
                 <time title={onaySaati ? 'Onayda kaydedilen varış' : 'Tahmini varış'}>{onaySaati ? saatMetni(onaySaati.varis) : hesapDuragi ? saatMetni(hesapDuragi.baslama) : '--:--'}</time>
+                {(!oge.alis || is.tur === 'alim') && tetik?.(is)}
                 {duzenlenebilir && <AracSecimi isAdi={ad} aracId={arac.id} araclar={araclar} sec={(hedef) => { if (hedef !== arac.id) islem.isiTasi(is.id, hedef); }} />}
                 {duzenlenebilir && menu(sira, is, ad)}
                 {/* İki uçlu işin sonucu bırakış satırında girilir; alımın tek ucu alıştır. */}

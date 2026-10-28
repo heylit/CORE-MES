@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import {
   aracIhlalleri, araDonusleriTemizle, bolmeIhlali, durumGecisiIhlali, ileriSonucIhlali, gunTipi, isDegistirilebilir, isDuzenlenebilir, isIhlalleri, onayEngelleri, planDegistirilebilir, yeniIsDurumu,
   planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi,
+  depoGeriAlIhlali, elleKalemIhlalleri, serbestBirakmaIhlali, tasimaIhlali, tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
 } from './kurallar.ts';
-import type { AracGirdisi, IsGirdisi } from './kurallar.ts';
+import type { AracGirdisi, AsamaGirdisi, IsGirdisi } from './kurallar.ts';
 
 const IS: IsGirdisi = {
   tur: 'teslimat', alisNoktasiId: null, birakisNoktasiId: 5, agirlikKilogram: 100, paletSayisi: 1, durakSuresiDakika: null,
@@ -194,4 +195,79 @@ test('261 a: kısmi sevk yalnız adedi bilinen ürün kaydında, parça ve kalan
   assert.match(bolmeIhlali(urun, '1.23456')!, /ondalık/);
   assert.match(bolmeIhlali({ kaynak: 'urun', adet: null }, '1')!, /bilinmeyen/);
   assert.match(bolmeIhlali({ kaynak: 'fason', adet: '5' }, '1')!, /Yalnız ürün/);
+});
+
+const ASAMA: AsamaGirdisi = { hazir: true, serbest: false, erken: false, tasima: null, depoTamam: false, is: null };
+const asama = (g: Partial<AsamaGirdisi>) => tumIsAsamasi({ ...ASAMA, ...g });
+
+test('tüm işler aşaması: bırakılmamış kalem hazırlığıyla, bırakılan sevkiyat işiyle, depo yapınca tamamlandı', () => {
+  assert.equal(asama({}), 'hazir');
+  assert.equal(asama({ hazir: false }), 'hazir-degil');
+  assert.equal(asama({ hazir: false, serbest: true, tasima: 'biz' }), 'bekliyor');
+  assert.equal(asama({ hazir: false, serbest: true, erken: true, tasima: 'biz' }), 'havuzda');
+  assert.equal(asama({ serbest: true, tasima: 'biz' }), 'havuzda');
+  assert.equal(asama({ serbest: true, tasima: 'biz', is: { durum: 'planlandi', tetiklendi: false } }), 'planlandi');
+  assert.equal(asama({ serbest: true, tasima: 'biz', is: { durum: 'yolda', tetiklendi: true } }), 'depoda');
+  // Firma taşımasında iş yoktur; bırakma tetik sayılır.
+  assert.equal(asama({ serbest: true, tasima: 'firma' }), 'depoda');
+  assert.equal(asama({ hazir: false, serbest: true, tasima: 'firma' }), 'bekliyor');
+  assert.equal(asama({ serbest: true, tasima: 'biz', depoTamam: true, is: { durum: 'yolda', tetiklendi: true } }), 'tamamlandi');
+});
+
+test('serbest bırakma: sahibin işlemi ya da sevkiyat.is-yaz; erken çıkış yalnız sevkiyat.onayla ile', () => {
+  const yetki = (...islemler: string[]) => (i: string) => islemler.includes(i);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir' }, null, yetki('uretim-emirleri.yaz')), null);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('sevkiyat.is-yaz')), null);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('uretim-emirleri.yaz'))?.tur, 'yetki');
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'fason', asama: 'hazir' }, null, yetki('uretim-emirleri.fason')), null);
+  // Önceden bırakma gerekçesizdir ve onay istemez; erken çıkış ister.
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, null, yetki('sevkiyat.is-yaz')), null);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, 'Müşteri hattı duruyor', yetki('sevkiyat.is-yaz'))?.tur, 'yetki');
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, 'Müşteri hattı duruyor', yetki('sevkiyat.is-yaz', 'sevkiyat.onayla')), null);
+  // Bekleyen kalem sonradan erkene çevrilir; başka aşamada ikinci bırakma yoktur.
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'bekliyor' }, 'Müşteri hattı duruyor', yetki('sevkiyat.is-yaz', 'sevkiyat.onayla')), null);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'bekliyor' }, null, yetki('sevkiyat.is-yaz'))?.tur, 'durum');
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'havuzda' }, null, yetki('sevkiyat.is-yaz'))?.tur, 'durum');
+  // Hazır kaleme gerekçe toplu seçimde gelebilir; yok sayılır.
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir' }, 'Toplu seçim gerekçesi', yetki('sevkiyat.is-yaz')), null);
+});
+
+test('tetik: kalemler çıkabilir olmalı, dönüş gidiş çıkmadan alınmaz; depo yaptıktan sonra geri alınmaz', () => {
+  const is = { durum: 'yolda' as const, tetiklendi: false };
+  const k = { hazir: true, erken: false, gidisCikti: null };
+  assert.equal(tetikIhlali(is, [k]), null);
+  assert.match(tetikIhlali({ ...is, tetiklendi: true }, [k]) ?? '', /zaten/);
+  assert.match(tetikIhlali({ ...is, durum: 'tamamlandi' }, [k]) ?? '', /Tamamlanmış/);
+  assert.match(tetikIhlali(is, []) ?? '', /kalem yok/);
+  assert.match(tetikIhlali(is, [{ ...k, hazir: false }]) ?? '', /hazır olmayan/);
+  assert.equal(tetikIhlali(is, [{ ...k, hazir: false, erken: true }]), null);
+  assert.match(tetikIhlali(is, [{ ...k, gidisCikti: false }]) ?? '', /Gidiş henüz/);
+  assert.equal(tetikIhlali({ ...is, durum: 'havuzda' }, [{ ...k, gidisCikti: true }]), null);
+  assert.equal(tetikGeriAlIhlali({ tetiklendi: true }, false), null);
+  assert.match(tetikGeriAlIhlali({ tetiklendi: false }, false) ?? '', /tetiklenmemiş/);
+  assert.match(tetikGeriAlIhlali({ tetiklendi: true }, true) ?? '', /geri alınmaz/);
+});
+
+test('taşıma bırakıldıktan sonra tetiğe kadar değişir; elle işte iade dönüşsüzdür', () => {
+  assert.equal(tasimaIhlali({ asama: 'havuzda', tasima: 'biz', depoBasladi: false }, 'firma'), null);
+  assert.equal(tasimaIhlali({ asama: 'bekliyor', tasima: 'firma', depoBasladi: false }, 'biz'), null);
+  assert.equal(tasimaIhlali({ asama: 'depoda', tasima: 'biz', depoBasladi: false }, 'biz'), null);
+  assert.match(tasimaIhlali({ asama: 'depoda', tasima: 'biz', depoBasladi: false }, 'firma') ?? '', /tetiği geri/);
+  assert.match(tasimaIhlali({ asama: 'tamamlandi', tasima: 'biz', depoBasladi: false }, 'firma') ?? '', /değişmez/);
+  assert.match(tasimaIhlali({ asama: 'hazir', tasima: null, depoBasladi: false }, 'firma') ?? '', /serbest bırakılırken/);
+  assert.equal(tasimaIhlali({ asama: 'depoda', tasima: 'firma', depoBasladi: false }, 'biz'), null, 'firma kalemi depo başlamadan sevkiyata döner');
+  assert.match(tasimaIhlali({ asama: 'depoda', tasima: 'firma', depoBasladi: true }, 'biz') ?? '', /değişmez/, 'kısmi kabulden sonra değişmez');
+  const g = { tur: 'tamir' as const, yon: 'gidis' as const, istenenTarih: '2026-10-28', donusTarihi: '2026-11-04' };
+  assert.deepEqual(elleKalemIhlalleri(g), []);
+  assert.deepEqual(elleKalemIhlalleri({ ...g, donusTarihi: null }), []);
+  assert.deepEqual(elleKalemIhlalleri({ ...g, tur: 'iade' }).map((i) => i.alan), ['donusTarihi']);
+  assert.deepEqual(elleKalemIhlalleri({ ...g, yon: 'gelis' }).map((i) => i.alan), ['donusTarihi']);
+  assert.deepEqual(elleKalemIhlalleri({ ...g, donusTarihi: '2026-10-27' }).map((i) => i.alan), ['donusTarihi']);
+});
+
+test('depo çıkışı yalnız gidişte ve dönüşü kabul edilmeden geri alınır', () => {
+  assert.equal(depoGeriAlIhlali({ yon: 'gidis', depoTamam: true }, false), null);
+  assert.match(depoGeriAlIhlali({ yon: 'gelis', depoTamam: true }, false) ?? '', /mal kabul/);
+  assert.match(depoGeriAlIhlali({ yon: 'gidis', depoTamam: false }, false) ?? '', /yapılmamış/);
+  assert.match(depoGeriAlIhlali({ yon: 'gidis', depoTamam: true }, true) ?? '', /Dönüşü kabul/);
 });

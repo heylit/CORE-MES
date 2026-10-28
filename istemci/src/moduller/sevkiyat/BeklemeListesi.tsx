@@ -7,9 +7,9 @@ import { hataIletisi } from '../../ortak/veri/api.ts';
 import { sayiMetni, tarihMetni } from './bicim.ts';
 import { useBekleyenBol, useBekleyenKaldir } from './veri.ts';
 
-const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', fason: 'Fasona gidecek', alim: 'Alınacak malzeme' };
-const KAYNAK_TURU: Record<BekleyenKaynagi, 'teslimat' | 'alim'> = { urun: 'teslimat', fason: 'teslimat', alim: 'alim' };
-const OK: Record<BekleyenKaynagi, string> = { urun: '↓', fason: '↓', alim: '↑' };
+const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', fason: 'Fasona gidecek', 'fason-donus': 'Fasondan alınacak', alim: 'Alınacak malzeme', elle: 'Elle iş' };
+const YON_TURU = { gidis: 'teslimat', gelis: 'alim' } as const;
+const OK = { gidis: '↓', gelis: '↑' } as const;
 
 export const bekleyenBasligi = (b: Bekleyen): string => b.malzemeAd ?? (b.malzemeNo === null ? 'Malzeme' : `Malzeme ${String(b.malzemeNo)}`);
 
@@ -36,8 +36,8 @@ export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir }: { bekleye
             b.istenenTarih ? `istenen ${tarihMetni(b.istenenTarih)}` : '',
           ].filter(Boolean).join(' · ');
           return (
-            <li key={b.id} className="tc-sevkiyat-durak" data-tur={KAYNAK_TURU[b.kaynak]}>
-              <span className="tc-sevkiyat-durak-no">{OK[b.kaynak]}</span>
+            <li key={b.id} className="tc-sevkiyat-durak" data-tur={YON_TURU[b.yon]}>
+              <span className="tc-sevkiyat-durak-no">{OK[b.yon]}</span>
               <span className="tc-sevkiyat-durak-adi">
                 {bekleyenBasligi(b)}
                 <em>{ayrinti}</em>

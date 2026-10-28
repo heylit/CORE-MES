@@ -1,7 +1,7 @@
 // Sevkiyat havuzu: araca verilmemiş işler (istenen günü geçen ve yapılamayıp dönen dahil). Satırdaki "Araç" seçimi işi o araca verir;
 // "Hepsini yerleştir" havuzu elle dizilenlere dokunmadan en uygun yere koyar. Araçtan buraya sürüklenen iş havuza döner.
 // Altta o gün elle kapatılan işler durur; yeniden açılan iş havuza düşer.
-import type { DragEvent } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import type { Arac, GunPlaniCevabi, Is, IsTuru, Nokta } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, Rozet } from '../../ortak/arayuz/index.ts';
 import { IS_TURU_ADI, gunAdi, sayiMetni, tarihMetni } from './bicim.ts';
@@ -16,13 +16,15 @@ export function isBasligi(is: Is, noktalar: ReadonlyMap<number, Nokta>): string 
 
 const buyukHarfle = (metin: string) => metin.charAt(0).toLocaleUpperCase('tr') + metin.slice(1);
 
-export function BekleyenIsler({ plan, isler, noktalar, araclar, duzenlenebilir, isYazabilir, vurgulu, yerlestir, aracaEkle, bekleyeneAl, duzenle, iptalEt, durumDegistir }: {
+export function BekleyenIsler({ plan, isler, noktalar, araclar, duzenlenebilir, isYazabilir, vurgulu, yerlestir, aracaEkle, bekleyeneAl, duzenle, iptalEt, durumDegistir, tetik }: {
   plan: GunPlaniCevabi; isler: ReadonlyMap<number, Is>; noktalar: ReadonlyMap<number, Nokta>; araclar: readonly Arac[];
   duzenlenebilir: boolean; isYazabilir: boolean; vurgulu: number | null;
   // Bekleyenleri, elle dizilenlere dokunmadan en uygun yere koyar; yetki yoksa null.
   yerlestir: { kapali: boolean; calisiyor: boolean; yap: () => void } | null;
   aracaEkle: (isId: number, aracId: number) => void; bekleyeneAl: (isId: number) => void; duzenle: (is: Is) => void; iptalEt: (is: Is) => void;
   durumDegistir: (is: Is, durum: 'tamamlandi' | 'havuzda') => void;
+  // Tüm işler kalemi taşıyan işin tetik düğmesi (960).
+  tetik?: (is: Is) => ReactNode;
 }) {
   const neden = new Map([...plan.yerlesemeyen, ...plan.atanamayan].map((x) => [x.isId, x.neden]));
   const bekleyen = plan.bekleyen.map((id) => isler.get(id)).filter((x): x is Is => Boolean(x));
@@ -71,6 +73,7 @@ export function BekleyenIsler({ plan, isler, noktalar, araclar, duzenlenebilir, 
                   )}
                   {neden.has(is.id) && <strong className="tc-sevkiyat-uyari">{neden.get(is.id)}</strong>}
                 </span>
+                {tetik?.(is)}
                 {duzenlenebilir && <AracSecimi isAdi={baslik} aracId={null} araclar={araclar} sec={(aracId) => { if (aracId !== null) aracaEkle(is.id, aracId); }} />}
                 {isYazabilir && (
                   <select className="tc-sevkiyat-menu tc-sevkiyat-menu-kucuk" value="" aria-label={`${baslik} işi işlemleri`} title="Düzenle, elle kapat ya da iptal et"

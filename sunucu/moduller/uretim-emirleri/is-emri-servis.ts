@@ -755,6 +755,15 @@ export async function siradakiFason(db: Db, emirId: number): Promise<SiradakiFas
 
 export async function fasonGidis(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, adet: number): Promise<{ hareketId: number }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.fason']);
+  return fasonGidisiKaydet(db, kisiId, emirId, isEmriId, adet, null);
+}
+
+// Sevkiyat Tüm işler (960): depo çıkışı fason gidişini bu yoldan yazar; yetki çağıranın ucunda, kurallar elle gidişle aynı.
+// Olay sevk kalemini taşır: sevkiyat yeni kalem açmaz, var olan kaleme hareketi yazar.
+export const fasonGidisYaz = (db: Db, kisiId: number, g: { uretimEmriId: number; isEmriId: number; adet: number; sevkKalemiId: number }): Promise<{ hareketId: number }> =>
+  fasonGidisiKaydet(db, kisiId, g.uretimEmriId, g.isEmriId, g.adet, g.sevkKalemiId);
+
+async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriId: number, adet: number, sevkKalemiId: number | null): Promise<{ hareketId: number }> {
   const { e, isEmri, durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId);
   const ihlal = fasonGidisIhlali(durum, adet);
   if (ihlal !== null) throw cakisma(ihlal);
@@ -763,7 +772,7 @@ export async function fasonGidis(db: Db, kullanici: Kullanici, emirId: number, i
   // İlk gidiş fason iş emrini başlatır.
   if (isEmri.durum === 'bekliyor') await s.isEmriBaslat(db, isEmriId, an);
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'gidis', adet, hurdaAdet: null, kisiId, an });
-  await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId });
+  await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId, sevkKalemiId });
   return { hareketId };
 }
 
@@ -774,7 +783,7 @@ export async function fasonDonusuKaydet(db: Db, kisiId: number, emirId: number, 
   const ihlal = fasonDonusIhlali(durum, saglamAdet, hurdaAdet);
   if (ihlal !== null) throw cakisma(ihlal);
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'donus', adet: saglamAdet, hurdaAdet, kisiId, an: await s.anAl(db) });
-  await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId });
+  await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId, sevkKalemiId: null });
   return { hareketId };
 }
 
@@ -1440,6 +1449,55 @@ export interface FasonHareketiOzeti {
 
 export type FasonIsEmri = s.FasonIsEmri;
 export const fasonIsEmirleri = (db: Db): Promise<FasonIsEmri[]> => s.fasonIsEmirleri(db);
+
+// Sevkiyat Tüm işler (960) fason gidiş adayı: sırası gelmiş mi ve gidebilecek adet (adıma giren, ilk adımda emir adedi; gönderilen düşülmez).
+// Gidiş kaydıyla aynı hesap (fasonBaglami); kilit almaz, okuma anının değeridir.
+export interface FasonGonderimi { siradaki: boolean; gonderilebilir: number; gonderilen: number }
+export async function fasonGonderimleri(db: Db, isler: readonly { isEmriId: number; uretimEmriId: number; adet: number }[]): Promise<Map<number, FasonGonderimi>> {
+  const sonuc = new Map<number, FasonGonderimi>();
+  if (isler.length === 0) return sonuc;
+  const hepsi = await s.isEmirleriGetir(db, [...new Set(isler.map((x) => x.uretimEmriId))]);
+  const hareketler = await s.fasonHareketleriGetir(db, isler.map((x) => x.isEmriId));
+  for (const x of isler) {
+    const emrin = hepsi.filter((i) => i.uretimEmriId === x.uretimEmriId);
+    const isEmri = emrin.find((i) => i.id === x.isEmriId);
+    if (isEmri === undefined) continue;
+    const { gonderilen } = fasonOzeti(hareketler.filter((h) => h.isEmriId === x.isEmriId));
+    sonuc.set(x.isEmriId, {
+      siradaki: siradakiIsEmri(emrin)?.id === x.isEmriId, gonderilen, gonderilebilir: (await adimaGiren(db, x.uretimEmriId, emrin, isEmri)) ?? x.adet,
+    });
+  }
+  return sonuc;
+}
+// Fason iş emri belgesi (FİE, 960): depo çıkışında basılır, kabul penceresi aynı belgeyle açılır. Şartname kütüphanesi ve emre
+// dondurulmuş resim revizyonu henüz yok; ikisi de null gelir, sıfır ya da güncel revizyon yazılmaz. Fason olmayan adımda null.
+export interface FasonIsEmriBelgesi {
+  emir: { id: number; emirNo: string; urun: { kod: string; ad: string }; adet: number; teslim: string | null };
+  adim: { isEmriId: number; opNo: number; ad: string; terminGun: number | null };
+  firma: { id: number; kod: string | null; ad: string | null };
+  gonderilen: number; gonderilebilir: number;
+  sartnameId: null; resimRevizyonId: null;
+  qr: string;
+}
+export async function fasonIsEmriBelgesi(db: Db, isEmriId: number): Promise<FasonIsEmriBelgesi | null> {
+  const isEmri = await s.isEmriBul(db, isEmriId);
+  if (isEmri === null || isEmri.fasonFirmaId === null) return null;
+  const e = await s.ustEmirBul(db, isEmri.uretimEmriId);
+  if (e === null) return null;
+  const ihlal = refakatIhlali(e.durum);
+  if (ihlal !== null) throw cakisma(ihlal);
+  const hepsi = await s.isEmirleriGetir(db, [e.id]);
+  const firma = (await firmaOzetleri(db, [isEmri.fasonFirmaId])).get(isEmri.fasonFirmaId);
+  return {
+    emir: { id: e.id, emirNo: e.emirNo, urun: { kod: e.parcaNo, ad: e.parcaAd }, adet: e.adet, teslim: e.teslim },
+    adim: { isEmriId, opNo: isEmri.opNo, ad: isEmri.ad, terminGun: isEmri.terminGun },
+    firma: { id: isEmri.fasonFirmaId, kod: firma?.kod ?? null, ad: firma?.ad ?? null },
+    gonderilen: fasonOzeti(await s.fasonHareketleriGetir(db, [isEmriId])).gonderilen,
+    gonderilebilir: (await adimaGiren(db, e.id, hepsi, isEmri)) ?? e.adet,
+    sartnameId: null, resimRevizyonId: null,
+    qr: refakatQrMetni(e.id),
+  };
+}
 export const fasonGecmisi = (db: Db, secim: { firmaId?: number; malzemeNo?: number; sonGun?: number } = {}): Promise<s.FasonGecmisSatiri[]> =>
   s.fasonGecmisiGetir(db, { firmaId: secim.firmaId ?? null, malzemeNo: secim.malzemeNo ?? null, sonGun: secim.sonGun ?? null });
 

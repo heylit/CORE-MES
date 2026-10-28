@@ -1,9 +1,11 @@
 // Modülün sunucu çağrıları. Yazma komutu dönen gün planını önbelleğe koyar; ekran yeniden sormaz.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AracCevabi, AracGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
-  KaydetGovdesi, NoktaCevabi, NoktaGovdesi, NoktaGuncelleGovdesi, NoktalarCevabi, TekRotaCevabi, TrafikCevabi,
+  AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
+  KaydetGovdesi, KalemCevabi, NoktaCevabi, NoktaGovdesi, NoktaGuncelleGovdesi, NoktalarCevabi, SerbestBirakCevabi, SerbestBirakGovdesi, Tasima, TekRotaCevabi,
+  TrafikCevabi, TumIslerCevabi,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { DepoCikisCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -120,6 +122,47 @@ export function useBekleyenBol() {
   });
 }
 
+// Tüm işler (960): aday ve kalemler; açık kalem aralıktan bağımsız gelir, aralık bitenleri ve adayları süzer.
+export const useTumIsler = (baslangic: string, bitis: string) =>
+  useQuery({
+    queryKey: anahtarlar.tumIsler(baslangic, bitis), placeholderData: (onceki) => onceki,
+    queryFn: () => api.get<TumIslerCevabi>(`/sevkiyat/tum-isler?baslangic=${baslangic}&bitis=${bitis}`), select: (c) => c.satirlar,
+  });
+
+export type KalemKomutu =
+  | { tur: 'serbest-birak'; govde: SerbestBirakGovdesi }
+  | { tur: 'elle'; govde: ElleKalemGovdesi }
+  | { tur: 'tasima'; kalemId: number; tasima: Tasima }
+  | { tur: 'tetikle' | 'tetigi-geri-al'; isId: number };
+
+// Kalem bekleme listesine, işe ve depoya dokunur: tüm işler, bekleme listesi ve gün planları yenilenir.
+export function useKalemKomutu() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (komut: KalemKomutu): Promise<SerbestBirakCevabi | KalemCevabi | TumIslerCevabi> =>
+      komut.tur === 'serbest-birak' ? korumaliPost<SerbestBirakCevabi>('/sevkiyat/tum-isler/serbest-birak', komut.govde)
+        : komut.tur === 'elle' ? korumaliPost<SerbestBirakCevabi>('/sevkiyat/tum-isler/elle', komut.govde)
+        : komut.tur === 'tasima' ? api.post<KalemCevabi>(`/sevkiyat/kalemler/${komut.kalemId}/tasima`, { tasima: komut.tasima })
+          : korumaliPost<TumIslerCevabi>(`/sevkiyat/isler/${komut.isId}/${komut.tur}`),
+    onSuccess: () => {
+      for (const anahtar of [['sevkiyat', 'tum-isler'], anahtarlar.bekleyenler, ['sevkiyat', 'plan']]) void istemci.invalidateQueries({ queryKey: anahtar });
+    },
+  });
+}
+
+// Depo son çıkışı stok ucudur (960, 965 a); stok modülü sevkiyatı ithal ettiği için çağrı burada, döngü olmasın diye.
+// Kabul stoktaki mal kabul ekranında kalemle açılır.
+export const kabulYolu = (kalemId: number): string => `/stok/mal-kabul?sevkKalemi=${kalemId}`;
+export function useDepoCikisi() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (kalemId: number) => korumaliPost<DepoCikisCevabi>(`/stok/depo-sevk/${kalemId}/cikis`, {}),
+    onSuccess: () => {
+      for (const anahtar of [['sevkiyat', 'tum-isler'], ['stok']]) void istemci.invalidateQueries({ queryKey: anahtar });
+    },
+  });
+}
+
 export function useNoktaKomutu() {
   const istemci = useQueryClient();
   return useMutation({
@@ -153,5 +196,5 @@ function tanimDegisti(istemci: ReturnType<typeof useQueryClient>) {
 export function useYetki() {
   const islemler: readonly string[] = useOturum().data?.islemler ?? [];
   const sahip = (islem: string) => islemler.includes(islem);
-  return { tanimYaz: sahip('sevkiyat.tanim-yaz'), isYaz: sahip('sevkiyat.is-yaz'), planYaz: sahip('sevkiyat.plan-yaz'), onayla: sahip('sevkiyat.onayla') };
+  return { tanimYaz: sahip('sevkiyat.tanim-yaz'), isYaz: sahip('sevkiyat.is-yaz'), planYaz: sahip('sevkiyat.plan-yaz'), onayla: sahip('sevkiyat.onayla'), sahip };
 }

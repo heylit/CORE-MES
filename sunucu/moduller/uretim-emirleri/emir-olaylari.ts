@@ -43,6 +43,8 @@ export interface FasonHareketiOlayi {
   // Fason adımından önceki iş emri (parça onun istasyonundan gider); fason ilk adımsa null.
   oncekiIsEmriId: number | null;
   kisiId: number;
+  // Depo çıkışının yazdığı gidişte sevkiyat kalemi (960); elle gidişte ve dönüşte null.
+  sevkKalemiId: number | null;
 }
 
 type Dinleyici<T> = (db: Db, olay: T) => Promise<void>;

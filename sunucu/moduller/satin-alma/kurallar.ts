@@ -3,6 +3,7 @@ import { PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
+import type { AlimTasimasi } from './alim-olayi.ts';
 import type { HizliKalem, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
@@ -477,10 +478,14 @@ export function logoIptalGeriAlmaReddi(eski: Pick<Talep, 'durum' | 'karar'>, yen
 export function siparisDegisikligiMetni(kalem: { ad: string; miktar: string | null; birim: string }, g: { miktar: string; birim: string; gerekce: string }): string {
   return `Sipariş değişikliği: ${kalem.ad} ${kalem.miktar ?? '-'} ${kalem.birim} yerine ${g.miktar} ${g.birim}. Gerekçe: ${g.gerekce}`;
 }
-// Kart #1310: "biz alacağız" denen, siparişi verilmiş (henüz tamamı teslim alınmamış) talepte her kayıtlı tedarikçili sipariş bir alımdır;
-// istenen gün siparişin beklenen teslimi, yoksa talebin ihtiyaç günüdür. Aynı firmaya iki sipariş tek alımdır (en erken gün).
-export function talebinAlimlari(t: Pick<Talep, 'durum' | 'teslimYontemi' | 'teklifler' | 'karar' | 'ihtiyacTarihi'>): { firmaId: number; istenenTarih: string | null }[] {
-  if (t.teslimYontemi !== 'biz_alacagiz' || t.durum !== 'siparis_verildi') return [];
+// Kart #1310, 959 b: teslim yöntemi seçilmiş, siparişi verilmiş (henüz tamamı teslim alınmamış) talepte her kayıtlı tedarikçili sipariş bir
+// alımdır; taşımayı yöntem verir. İstenen gün siparişin beklenen teslimi, yoksa talebin ihtiyaç günüdür. Aynı firmaya iki sipariş tek alımdır
+// (en erken gün). Yöntemi seçilmemiş talep sevkiyata alım düşürmez.
+export function talebinAlimlari(
+  t: Pick<Talep, 'durum' | 'teslimYontemi' | 'teklifler' | 'karar' | 'ihtiyacTarihi'>,
+): { firmaId: number; istenenTarih: string | null; tasima: AlimTasimasi }[] {
+  if (t.teslimYontemi === null || t.durum !== 'siparis_verildi') return [];
+  const tasima: AlimTasimasi = t.teslimYontemi === 'biz_alacagiz' ? 'biz' : 'firma';
   const alimlar = new Map<number, string | null>();
   for (const sip of t.karar?.siparisler ?? []) {
     const firmaId = t.teklifler.find((x) => x.id === sip.teklifId)?.firmaId ?? null;
@@ -489,7 +494,7 @@ export function talebinAlimlari(t: Pick<Talep, 'durum' | 'teslimYontemi' | 'tekl
     const onceki = alimlar.get(firmaId);
     alimlar.set(firmaId, onceki === undefined || onceki === null ? gun : gun === null || onceki < gun ? onceki : gun);
   }
-  return [...alimlar].map(([firmaId, istenenTarih]) => ({ firmaId, istenenTarih }));
+  return [...alimlar].map(([firmaId, istenenTarih]) => ({ firmaId, istenenTarih, tasima }));
 }
 // D6 b: faturanın bağlanacağı siparişin tedarikçisi (finans firması). Sipariş verilmiş talepte, var olan siparişte ve kayıtlı
 // tedarikçide çalışır; ret iletisi ya da firma kimliği döner.

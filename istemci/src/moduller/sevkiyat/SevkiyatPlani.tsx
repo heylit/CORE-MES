@@ -16,7 +16,8 @@ import { OncelikSecimi } from './OncelikSecimi.tsx';
 import {
   araDonusEkle, bekleyeneAl, isiTasi, kilitDegistir, kilitsizleriBosalt, ogeyiSil, ogeyiTasi, plandakiRotalar, type Rotalar,
 } from './rota-duzeni.ts';
-import { useBekleyenler, useGunPlani, useIsKomutu, usePlanKomutu, useYetki, type PlanKomutu } from './veri.ts';
+import { TetikDugmesi, isKalemleri } from './TetikDugmesi.tsx';
+import { useBekleyenler, useGunPlani, useIsKomutu, usePlanKomutu, useTumIsler, useYetki, type PlanKomutu } from './veri.ts';
 import './sevkiyat.css';
 
 const RENK_SAYISI = 6;
@@ -35,6 +36,8 @@ export function SevkiyatPlani() {
   const plan = useGunPlani(tarih);
   const komut = usePlanKomutu(tarih);
   const isKomutu = useIsKomutu();
+  // Açık kalemler aralıktan bağımsız gelir; gün aralığı yalnız o gün kapananları ekler.
+  const kalemler = isKalemleri(useTumIsler(tarih, tarih).data);
   const yetki = useYetki();
   const [amacSecimi, setAmacSecimi] = useState<Amac | null>(null);
   const [secili, setSecili] = useState<number | null>(null);
@@ -182,6 +185,7 @@ export function SevkiyatPlani() {
     duzenle: (is: Is) => setForm({ is }), iptalEt: setIptalOnayi, sabitle,
     durumDegistir: (is: Is, durum: 'tamamlandi' | 'yapilamadi' | 'havuzda' | 'yolda') => (durum === 'yapilamadi' ? setYapilamadi({ is, not: '' }) : durumGonder(is, durum)),
   };
+  const tetik = (is: Is) => <TetikDugmesi isId={is.id} kalemler={kalemler.get(is.id)} yazabilir={yetki.isYaz} />;
   const sonucHaritasi = new Map(veri.sonuclar.map((x) => [x.isId, { sonuc: x.sonuc, not: x.not }]));
 
   return (
@@ -291,12 +295,12 @@ export function SevkiyatPlani() {
               vurgulu={vurgulu?.startsWith('bek|') ? Number(vurgulu.slice(4)) : null}
               yerlestir={yetki.planYaz && !onayli ? { kapali: !duzenlenebilir || !veri.haritaVar, calisiyor: komut.isPending && komut.variables?.tur === 'yerlestir', yap: () => dagit('yerlestir') } : null}
               aracaEkle={(isId, aracId) => isiTasiKomutu(isId, aracId)} bekleyeneAl={(isId) => isiTasiKomutu(isId, null)}
-              duzenle={islemler.duzenle} iptalEt={islemler.iptalEt} />
+              duzenle={islemler.duzenle} iptalEt={islemler.iptalEt} tetik={tetik} />
           )}
           {veri.araclar.map((a) => (
             <AracRotasi key={a.id} arac={a} renk={renkler.get(a.id) ?? 1} rota={veri.rotalar.find((r) => r.aracId === a.id)} secili={secili === a.id} vurgulu={vurgulu}
               isler={isler} noktalar={noktalar} araclar={veri.araclar} duzenlenebilir={duzenlenebilir}
-              isYazabilir={yetki.isYaz && !onayli} tarih={tarih} amac={amac} sonuclar={onayli ? sonucHaritasi : null} sonucYazabilir={yetki.isYaz && !ileriTarihli}
+              isYazabilir={yetki.isYaz && !onayli} tarih={tarih} amac={amac} sonuclar={onayli ? sonucHaritasi : null} sonucYazabilir={yetki.isYaz && !ileriTarihli} tetik={tetik}
               islem={{
                 ...islemler,
                 sec: () => setSecili(secili === a.id ? null : a.id),

@@ -17,13 +17,13 @@ const taslakOf = (is: Is | null, tarih: string): Taslak => ({
   alisEnErken: is?.alisEnErken ?? '', alisEnGec: is?.alisEnGec ?? '', birakisEnErken: is?.birakisEnErken ?? '', birakisEnGec: is?.birakisEnGec ?? '',
   belgeNo: is?.belgeNo ?? '', aciklama: is?.aciklama ?? '', sabitAracId: is?.sabitAracId?.toString() ?? '',
 });
-// Bekleme listesindeki kaydın işe çevrilirken ilk hâli: fasonda firmanın noktasına teslimat, alımda firmadan alım; üründe noktayı
+// Bekleme listesindeki kaydın işe çevrilirken ilk hâli: gidişte firmanın noktasına teslimat, gelişte firmadan alım; üründe noktayı
 // planlayıcı seçer. Yükü ve günü o verir.
 const bekleyenTaslagi = (b: Bekleyen, tarih: string): Taslak => {
   const t = taslakOf(null, b.istenenTarih !== null && b.istenenTarih > tarih ? b.istenenTarih : tarih);
   const nokta = b.noktaId?.toString() ?? '';
   const ne = [b.malzemeAd, b.adet === null ? null : `${Number(b.adet).toLocaleString('tr-TR')} adet`].filter(Boolean).join(' · ');
-  return { ...t, tur: b.kaynak === 'alim' ? 'alim' : 'teslimat', ...(b.kaynak === 'alim' ? { alisNoktasiId: nokta } : { birakisNoktasiId: nokta }), belgeNo: b.emirNo ?? b.talepNo ?? '', aciklama: ne };
+  return { ...t, tur: b.yon === 'gelis' ? 'alim' : 'teslimat', ...(b.yon === 'gelis' ? { alisNoktasiId: nokta } : { birakisNoktasiId: nokta }), belgeNo: b.emirNo ?? b.talepNo ?? '', aciklama: ne };
 };
 const sayiYaDaNull = (x: string) => (x.trim() === '' ? null : Number(x.replace(',', '.')));
 const metinYaDaNull = (x: string) => (x.trim() === '' ? null : x);

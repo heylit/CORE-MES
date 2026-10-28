@@ -4,7 +4,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
-  OzetCevabi, RotaHesabi, TekRotaCevabi, TrafikCevabi, UrunSevki,
+  OzetCevabi, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
@@ -26,6 +26,7 @@ import {
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
 import * as sorgu from './sorgular.ts';
+import { tasimaDegistir } from './tum-isler.ts';
 import type { AracSatiri, IsSatiri, NoktaSatiri, PlanSatiri } from './sorgular.ts';
 import {
   ayakCizgisi, cikisTaramasi, googleBaglantisi, tekRotaPlani, trafikSeviyeleri, yandexBaglantisi, yolAgiKur, yolOzeti,
@@ -336,24 +337,29 @@ export async function siparisinSevkleri(db: Db, siparisId: number): Promise<Sipa
 
 // ---------- bekleme listesi (kart #1310) ----------
 
-// Biten emrin ürünü listeye düşer (bütün emirler); gönderim gününü, müşteri noktasını ve yükü planlayıcı işe çevirirken verir.
-// Sağlamı olmayan emir gönderilecek bir şey taşımaz.
+// Biten emrin ürünü Tüm işlerde hazır kalem olur (960): sevkiyata serbest bırakılınca bekleme listesine düşer. Emir bitmeden önceden
+// bırakılmışsa (kalemin adedi boş) adet yazılır ve kalem kendiliğinden düşer. Sağlamı olmayan emir gönderilecek bir şey taşımaz.
 export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
   if (olay.saglamAdet <= 0) return;
   const emir = await uretimEmriOzeti(db, olay.uretimEmriId);
   if (emir === null) return;
   await sorgu.bekleyenEkle(db, {
-    kaynak: 'urun', uretimEmriId: emir.id, fasonHareketId: null, talepId: null, firmaId: null, malzemeNo: emir.malzemeNo,
-    adet: String(olay.saglamAdet), istenenTarih: emir.teslim === null ? null : emir.teslim.slice(0, 10), isId: null,
+    kaynak: 'urun', yon: 'gidis', uretimEmriId: emir.id, fasonHareketId: null, talepId: null, firmaId: null, malzemeNo: emir.malzemeNo,
+    adet: String(olay.saglamAdet), istenenTarih: emir.teslim === null ? null : emir.teslim.slice(0, 10), isId: null, serbest: null,
   });
 }
 
 // Fasona gönderim fabrikadan firmaya teslimat işi olarak gönderim gününün havuzuna düşer. Yük bilinmez: 1 palet yazılır, planlayıcı
 // düzeltir. Firmanın sevkiyat noktası yoksa iş açılmaz, gönderim bekleme listesinde durur; gönderim reddedilmez. Dönüş iş açmaz:
-// dönüş, mal geldikten sonra girilir.
+// dönüş, mal geldikten sonra girilir. Dış operasyonlardan yazılan gidiş kendiliğinden serbest bırakılmış sayılır.
 export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Promise<void> {
   const h = await fasonHareketiOzeti(db, olay.hareketId);
   if (h === null || h.yon !== 'gidis' || h.adet <= 0) return;
+  // Depo çıkışının yazdığı gidiş: kalem zaten var (Tüm işlerden bırakıldı, tetiklendi); yalnız hareketi bağlanır.
+  if (olay.sevkKalemiId !== null) {
+    await sorgu.fasonHareketiBagla(db, olay.sevkKalemiId, h.id);
+    return;
+  }
   const emir = await uretimEmriOzeti(db, h.uretimEmriId);
   const noktaId = (await sorgu.firmaNoktalari(db, [h.firmaId])).get(h.firmaId) ?? null;
   let isId: number | null = null;
@@ -364,8 +370,8 @@ export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Pro
     })).id;
   }
   await sorgu.bekleyenEkle(db, {
-    kaynak: 'fason', uretimEmriId: h.uretimEmriId, fasonHareketId: h.id, talepId: null, firmaId: h.firmaId, malzemeNo: emir?.malzemeNo ?? null,
-    adet: String(h.adet), istenenTarih: null, isId,
+    kaynak: 'fason', yon: 'gidis', uretimEmriId: h.uretimEmriId, fasonHareketId: h.id, talepId: null, firmaId: h.firmaId, malzemeNo: emir?.malzemeNo ?? null,
+    adet: String(h.adet), istenenTarih: null, isId, isEmriId: h.isEmriId, serbest: { tasima: 'biz', yer: 'otomatik', kisiId: olay.kisiId, erken: null },
   });
 }
 const FASON_ISI = {
@@ -373,24 +379,31 @@ const FASON_ISI = {
   alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, sabitAracId: null,
 } as const;
 
-// "Biz alacağız" denen talebin siparişi firmadan alım olarak bekler (kart #1310): satırlar talebin alım listesine eşitlenir. İşe çevrilmiş
-// satıra dokunulmaz (iş sevkiyatın kaydıdır); listeden çıkan firmanın bekleyen satırı kaldırılır, günü değişenin günü yazılır.
+// Talebin siparişi firmadan alım olarak bekler (kart #1310): satırlar talebin alım listesine eşitlenir. İşe çevrilmiş satıra dokunulmaz
+// (iş sevkiyatın kaydıdır); listeden çıkan firmanın bekleyen satırı kaldırılır, günü değişenin günü yazılır. Teslim yöntemi kalemin
+// taşımasıdır (959 b): "firma getirir" kalemi kaldırmaz, taşıması firma olur; son yazan satın almadır.
+type TasimaliAlim = AlimOlayi['alimlar'][number] & { tasima?: Tasima };
 export async function alimYansit(db: Db, olay: AlimOlayi): Promise<void> {
+  const alimlar: readonly TasimaliAlim[] = olay.alimlar;
   const satirlar = await sorgu.talebinAlimlari(db, olay.talepId);
   for (const sat of satirlar) {
     if (sat.isId !== null) continue;
-    const alim = olay.alimlar.find((a) => a.firmaId === sat.firmaId);
-    if (alim === undefined) await sorgu.bekleyeniKaldir(db, sat.id, olay.kisiId);
-    else if (alim.istenenTarih !== sat.istenenTarih) await sorgu.bekleyenTarihiYaz(db, sat.id, alim.istenenTarih);
+    const alim = alimlar.find((a) => a.firmaId === sat.firmaId);
+    if (alim === undefined) {
+      await sorgu.bekleyeniKaldir(db, sat.id, olay.kisiId);
+      continue;
+    }
+    if (alim.istenenTarih !== sat.istenenTarih) await sorgu.bekleyenTarihiYaz(db, sat.id, alim.istenenTarih);
+    const tasima = alim.tasima ?? 'biz';
+    if (sat.tasima !== tasima) await tasimaDegistir(db, olay.kisiId, sat.id, tasima, 'satin-alma');
   }
-  for (const a of olay.alimlar.filter((x) => !satirlar.some((sat) => sat.firmaId === x.firmaId))) {
+  for (const a of alimlar.filter((x) => !satirlar.some((sat) => sat.firmaId === x.firmaId))) {
     await sorgu.bekleyenEkle(db, {
-      kaynak: 'alim', uretimEmriId: null, fasonHareketId: null, talepId: olay.talepId, firmaId: a.firmaId, malzemeNo: null,
-      adet: null, istenenTarih: a.istenenTarih, isId: null,
+      kaynak: 'alim', yon: 'gelis', uretimEmriId: null, fasonHareketId: null, talepId: olay.talepId, firmaId: a.firmaId, malzemeNo: null,
+      adet: null, istenenTarih: a.istenenTarih, isId: null, serbest: { tasima: a.tasima ?? 'biz', yer: 'satin-alma', kisiId: olay.kisiId, erken: null },
     });
   }
 }
-
 
 const varolan = <T>(x: readonly (T | null)[]): T[] => x.filter((y): y is T => y !== null);
 
@@ -403,7 +416,7 @@ export async function bekleyenleriListele(db: Db): Promise<Bekleyen[]> {
   const noktalar = await sorgu.firmaNoktalari(db, firmaIdleri);
   const talepler = await talepNolari(db, varolan(satirlar.map((b) => b.talepId)));
   return satirlar.map((b) => ({
-    id: b.id, kaynak: b.kaynak, uretimEmriId: b.uretimEmriId, emirNo: b.uretimEmriId === null ? null : emirler.get(b.uretimEmriId) ?? null,
+    id: b.id, kaynak: b.kaynak, yon: b.yon, uretimEmriId: b.uretimEmriId, emirNo: b.uretimEmriId === null ? null : emirler.get(b.uretimEmriId) ?? null,
     talepId: b.talepId, talepNo: b.talepId === null ? null : talepler.get(b.talepId) ?? null, malzemeNo: b.malzemeNo, malzemeAd: b.malzemeNo === null ? null : malzemeler.get(b.malzemeNo) ?? null,
     firmaId: b.firmaId, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
     noktaId: b.firmaId === null ? null : noktalar.get(b.firmaId) ?? null,

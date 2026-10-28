@@ -22,8 +22,8 @@ import {
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
-import { emirIptalDinle, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
-import type { EmirIptalOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
+import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
+import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
@@ -286,6 +286,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const hareketsiz = (await fasonIsEmirleri(o().vt)).find((x) => x.isEmriId === ie2);
     assert.deepEqual(hareketsiz && [hareketsiz.ilkGidis, hareketsiz.termin, hareketsiz.gonderilen, hareketsiz.donen, hareketsiz.hurda], [null, null, null, null, null]);
     assert.deepEqual(hareketsiz && [hareketsiz.adet, hareketsiz.terminGun, hareketsiz.teslim, typeof hareketsiz.malzemeNo], [10, 5, null, 'number'], 'ön talep için emir adedi ve fason günü');
+    // Sevkiyat Tüm işler (960) fason gidiş adayı: sırası gelmiş, önceki adımın 9 sağlamı gidebilir; fason olmayan iş emri haritada sırasız.
+    const gonderim = () => o().vt.tx((db) => fasonGonderimleri(db, [{ isEmriId: ie2, uretimEmriId: id, adet: 10 }, { isEmriId: ie3, uretimEmriId: id, adet: 10 }]));
+    assert.deepEqual((await gonderim()).get(ie2), { siradaki: true, gonderilebilir: 9, gonderilen: 0 });
+    assert.equal((await gonderim()).get(ie3)?.siradaki, false);
 
     // Fason: kısmi gidiş ve dönüş ayrı satırlardır; toplamlar aşılamaz. Depo kaydeder; operatör kaydedemez.
     const fasonKisi = (kisi: string, yol: string, govde?: unknown, ik = randomUUID()) =>
@@ -305,11 +309,34 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await istek('depo', 'GET', '/adimli-emirler/2147483647/siradaki-fason')).durum, 404);
     assert.equal((await istek('depo', 'GET', `/adimli-emirler/${id}`)).durum, 200, 'depo fason için emri okur');
     assert.equal((await fason('fason-gidis', { adet: 10 })).govde.mesaj, FASON_GIDIS_ASIMI, 'önceki iş emrinden 9 sağlam çıktı');
+    const olaylar: FasonHareketiOlayi[] = [];
+    const birakFason = fasonHareketiDinle(async (_db, olay) => { olaylar.push(olay); });
     const tekrar = randomUUID();
     const g1 = await fason('fason-gidis', { adet: 5 }, tekrar);
     assert.equal(g1.durum, 200, JSON.stringify(g1.govde));
     assert.equal((await fason('fason-gidis', { adet: 5 }, tekrar)).govde.hareketId, g1.govde.hareketId, 'aynı istek kimliği ikinci kez yazmaz');
-    assert.equal((await fason('fason-gidis', { adet: 4 })).durum, 200);
+    // Sevkiyat Tüm işler (960): depo çıkışı gidişi yetkisiz iç çağrıyla yazar; kurallar elle gidişle aynı, olay sevk kalemini taşır.
+    const depoGidisi = (adet: number) => (db: Db) => fasonGidisYaz(db, yoneticiId, { uretimEmriId: id, isEmriId: ie2, adet, sevkKalemiId: 4242 });
+    await assert.rejects(o().vt.tx(depoGidisi(5)), { message: FASON_GIDIS_ASIMI }, 'elle giden 5 düşülür, 4 kaldı');
+    await assert.rejects(o().vt.tx((db) => fasonGidisYaz(db, yoneticiId, { uretimEmriId: id, isEmriId: ie3, adet: 1, sevkKalemiId: 4242 })), UygulamaHatasi, 'fason olmayan iş emri');
+    // Çağıranın transaction'ı düşerse gidiş de yazılmaz.
+    await assert.rejects(o().vt.tx(async (db) => { await depoGidisi(4)(db); throw new Error('depo çıkışı düştü'); }), { message: 'depo çıkışı düştü' });
+    assert.deepEqual((await gonderim()).get(ie2), { siradaki: true, gonderilebilir: 9, gonderilen: 5 });
+    const g2 = await o().vt.tx(depoGidisi(4));
+    birakFason();
+    // Olay çağıranın transaction'ında yayılır: düşen çıkışın hareketi de dinleyicinin yazdığı da kalmaz.
+    assert.deepEqual(olaylar.map((x) => [x.oncekiIsEmriId, x.sevkKalemiId]), [[ie1, null], [ie1, 4242], [ie1, 4242]]);
+    assert.deepEqual([olaylar[0]?.hareketId, olaylar[2]?.hareketId], [g1.govde.hareketId, g2.hareketId]);
+    assert.equal(await fasonHareketiOzeti(o().vt, olaylar[1]!.hareketId), null, 'düşen çıkışın gidişi yazılmadı');
+    const giden = await fasonHareketiOzeti(o().vt, g2.hareketId);
+    assert.deepEqual(giden && [giden.isEmriId, giden.yon, giden.adet], [ie2, 'gidis', 4]);
+    // FİE belgesi: emir, adım, firma, refakat QR'ı; şartname ve dondurulmuş resim revizyonu henüz yok (null). Fason olmayan adımda null.
+    const fie = await fasonIsEmriBelgesi(o().vt, ie2);
+    assert.deepEqual(fie && [fie.emir.id, fie.emir.emirNo, fie.adim.opNo, fie.adim.terminGun, fie.firma.id, fie.gonderilen, fie.gonderilebilir, fie.sartnameId, fie.resimRevizyonId],
+      [id, e.emirNo, 20, 5, firmaId, 9, 9, null, null]);
+    assert.equal(fie?.qr, (await refakatKarti(o().vt, id)).qr, 'refakat kartıyla aynı QR');
+    assert.equal(await fasonIsEmriBelgesi(o().vt, ie3), null);
+    assert.deepEqual((await gonderim()).get(ie2), { siradaki: true, gonderilebilir: 9, gonderilen: 9 });
     // Dönüş yalnız mal kabulden girer (kullanıcı kararı 15.10, "Kalksın"): eski uç yoktur, kayıt stokun çağırdığı yoldan yazılır.
     assert.equal((await fason('fason-donus', { saglamAdet: 1, hurdaAdet: 0 })).durum, 404, 'Dış operasyonlardan dönüş ucu kaldırıldı');
     const donus = (saglam: number, hurda: number) => o().vt.tx((db) => fasonDonusuKaydet(db, yoneticiId, id, ie2, saglam, hurda));
