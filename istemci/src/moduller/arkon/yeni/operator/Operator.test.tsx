@@ -306,3 +306,41 @@ describe('807 üst çubuk kısayolları', () => {
     expect(screen.queryByRole('button', { name: 'Kalite ölçüm istasyonu' })).toBeNull();
   }, 40000);
 });
+
+// Son blok: işin yerel kopyası (çalışıyor) sonraki testin açılışında sunucuya yazılır, öteki testlerden sonra durur.
+describe('A1 Üretim Terminali hatalı parça (1034)', () => {
+  it('TMI işinde Hurda yerine Hatalı: neden ve adetle kalite kolu açılır, hurda sayımı yazılmaz', async () => {
+    const tmi = { ...PAKET, id: 'tmi-ie-70', no: 'UE-DENEME-7', tmi: { emirId: 7 } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: {
+      pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }],
+      kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, { kimlik: 'scraps', surum: 1, govde: { v: [{ code: 'TK', l: 'Takım kırılması' }] } }],
+    } });
+    const asil = globalThis.fetch;
+    const hatali: { govde: unknown; kimlik: string | null }[] = [];
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).includes('/uretim-emirleri/7/hatali')) {
+        hatali.push({ govde: JSON.parse(String(istek?.body)), kimlik: new Headers(istek?.headers).get('istek-kimligi') });
+        return new Response(JSON.stringify({ kayitId: 1, hedefEmir: { id: 8, emirNo: 'UE-DENEME-7-K1' }, kolAcildi: true, uyari: null }), { status: 200 });
+      }
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-7/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Hurda \+1/ })).toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    fireEvent.click(screen.getByRole('button', { name: /^Hatalı$/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Hatalı parça' });
+    fireEvent.click(within(pencere).getByRole('radio', { name: /Takım kırılması/ }));
+    fireEvent.change(within(pencere).getByLabelText('Hatalı adet'), { target: { value: '2' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kaliteye ayır/ }));
+    await waitFor(() => { expect(hatali).toHaveLength(1); });
+    expect(hatali[0]?.govde).toEqual({ isEmriId: 70, hurdaNedeniKodu: 'TK', adet: 2, aciklama: null });
+    expect(hatali[0]?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await screen.findByText(/2 adet kaliteye ayrıldı · kol UE-DENEME-7-K1/)).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 700));
+    const sayimlar = istekler.filter((i) => i.yol === '/arkon/kayitlar/counts/ekle').flatMap((i) => (i.govde as { satirlar?: { kind?: string }[] }).satirlar ?? []);
+    expect(sayimlar.some((c) => c.kind === 'scrap')).toBe(false);
+  }, 40000);
+});

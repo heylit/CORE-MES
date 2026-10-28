@@ -1,7 +1,9 @@
 import { lazy, Suspense, useState } from 'react';
 import { CokSatir, Dugme, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
 import { onerileriSuz } from '../../../../../../arkon/web/src/app/neden-kaynagi.ts';
+import type { HataliGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { hurdaNedeniYokIletisi } from '../../../../../../arkon/web/src/data/hurda-nedeni.ts';
+import { tmiEmirId, type TmiPaketi } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { sure } from '../cekirdek/bicim.ts';
 import type { DurusNedeni } from '../cekirdek/ayarlar.ts';
 import { CAGRI_EKIPLERI } from '../cekirdek/sabitler.ts';
@@ -35,6 +37,70 @@ export function HurdaPenceresi({ nedenler, kapat, sec }: { nedenler: readonly Sc
           </button>
         ))}
       </div>
+    </Pencere>
+  );
+}
+
+export interface HataliGirdisi { kod: string; adet: number; aciklama: string | null }
+
+// 1034: TMI işinde "Hatalı" parçayı kaliteye ayırır; iş emri paketinde (tmi-ie-<n>) adım paketin kendisidir, emir paketinde adımı TMI
+// seçer (çalışan adım). TMI'den gelmeyen işte istek yoktur (eski hurda sayımı kalır).
+export function hataliIstegi(pkg: TmiPaketi | null | undefined, g: HataliGirdisi): { emirId: number; govde: HataliGovdesi } | null {
+  const emirId = tmiEmirId(pkg);
+  if (emirId === null || !Number.isSafeInteger(g.adet) || g.adet < 1) return null;
+  const m = typeof pkg?.id === 'string' ? /^tmi-ie-([1-9]\d*)$/.exec(pkg.id) : null;
+  const isEmriId = m ? Number(m[1]) : null;
+  const aciklama = g.aciklama?.trim() || null;
+  return {
+    emirId,
+    govde: { ...(isEmriId !== null && Number.isSafeInteger(isEmriId) ? { isEmriId } : {}), hurdaNedeniKodu: g.kod, adet: g.adet, aciklama },
+  };
+}
+
+/* ── hatalı parça (1034): operatör yalnız nedeni ve adedi seçer; rework, hurda ya da red kararını kalite verir ── */
+export function HataliPenceresi({ nedenler, yukleniyor, kapat, kaydet }: {
+  nedenler: readonly ScrapReason[]; yukleniyor: boolean; kapat: () => void; kaydet: (g: HataliGirdisi) => void;
+}) {
+  const son = yerel.oku<string>('lastScrap');
+  const L = nedenler.filter((r) => r.active !== false);
+  const bos = hurdaNedeniYokIletisi(L);
+  const [kod, kodYaz] = useState<string | null>(() => (L.some((r) => r.code === son) ? son : null));
+  const [adetMetni, adetYaz] = useState('1');
+  const [not, notYaz] = useState('');
+  const adet = /^\s*\d+\s*$/.test(adetMetni) ? Number(adetMetni) : Number.NaN;
+  const adetGecersiz = !Number.isSafeInteger(adet) || adet < 1;
+  const gonder = () => {
+    if (kod === null || adetGecersiz || yukleniyor) return;
+    yerel.yaz('lastScrap', kod);
+    kaydet({ kod, adet, aciklama: not.trim() || null });
+  };
+  return (
+    <Pencere
+      acik kapat={kapat} baslik="Hatalı parça"
+      alt={<>
+        <Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>
+        <Dugme simge="alert" disabled={kod === null || adetGecersiz || yukleniyor} onClick={gonder}>Kaliteye ayır</Dugme>
+      </>}
+    >
+      <p className="tc-ay1-soluk">Parça işten ayrılır ve kalite istasyonuna gider; rework, hurda ya da red kararını kalite verir.</p>
+      {bos ? <p className="tc-ay1-soluk">{bos}</p> : null}
+      <div className="tc-ay1-nedenler" role="radiogroup" aria-label="Hata nedeni">
+        {L.map((r) => (
+          <button key={r.code} type="button" role="radio" aria-checked={kod === r.code} className="tc-ay1-neden" data-durum="durdu"
+            data-onerilen={kod === r.code || undefined} onClick={() => kodYaz(r.code)}>
+            <span className="tc-ay1-neden-simge"><Simge ad="alert" /></span><b>{r.l}</b><code>{r.code === son ? 'son seçilen' : r.code}</code>
+          </button>
+        ))}
+      </div>
+      <div className="tc-ay1-toplu-satir">
+        <label className="tc-ay1-toplu-alan" data-tur="hurda">
+          <span className="tc-ay1-ust-yazi">Adet</span>
+          <input className="tc-ay1-mono" inputMode="numeric" pattern="[0-9]*" value={adetMetni} aria-label="Hatalı adet"
+            onChange={(e) => adetYaz(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') gonder(); }} />
+        </label>
+      </div>
+      {adetGecersiz ? <small className="tc-ay1-hata">Adet tam sayı ve en az 1 olmalı.</small> : null}
+      <CokSatir etiket="Not" value={not} maxLength={300} onChange={(e) => notYaz(e.target.value)} />
     </Pencere>
   );
 }
