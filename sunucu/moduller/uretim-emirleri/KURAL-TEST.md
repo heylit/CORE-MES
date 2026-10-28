@@ -68,4 +68,11 @@ K: `is-emri-kurallar.test.ts` (saf), U: `is-emri.test.ts` (gerçek PostgreSQL), 
 
 P: `paralel-adim.test.ts` (gerçek PostgreSQL), PK: `paralel-adim-kurallar.test.ts` (saf).
 
+| UE-H1 | 1034, 1036 a: çalışan adımın sayılmamış hatalı adedi kola ayrılır; kol kalite (KAL tipi, kalite istasyonu), rework ve adımın tekrarıyla sonraki adımda katılır; sonraki adım başlamışsa, adet sayılmamıştan fazlaysa, neden pasifse, rotasız emirde kısmi hatada reddedilir | HK hatalı kuralları; H "kol", H "reddedilen" | uretim_emirleri_hatali_kaydi_* |
+| UE-H2 | 4 a: adımdaki bütün parça hatalıysa adımlar (kalite bağımsız, rework, tekrar) emrin kendisine girer, hatalı adım sağlamsız biter | HK; H "4 a" | uretim_emirleri_hatali_kaydi_tekrar_emirde |
+| UE-H3 | 1034: kalite adımı terminalden başlamaz; karar bir kez, yalnız kalite-merkezi.onayla ile yazılır; rework parçayı sağlam geçirir, hurda ve red rework ve tekrarı kaldırır, kol katılır ya da sağlamsız biter | HK karar; H "kol", H "kol hurda", H "4 a" | uretim_emirleri_hatali_kaydi_karar_bir_kez, _kararla_bosalir |
+| UE-H4 | Rework adımını planlama yalnız rework kararından sonra doldurur; fasonda termin girilmezse 7 gün (7 a) | HK 7 a; H "kol", H "kol hurda" | yok |
+
+HK: `hatali-kurallar.test.ts` (saf), H: `hatali-parca.test.ts` (gerçek PostgreSQL).
+
 Bağsız kural: yok.
