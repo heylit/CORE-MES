@@ -241,4 +241,5 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Yeni uçlar: `POST /uretim-emirleri/:id/hatali` (`terminal.uret`, istek kimliği zorunlu), `GET /hatali-parcalar` (emri okuyan ya da `kalite-merkezi.oku`), `POST /adimli-emirler/:id/is-emirleri/:isEmriId/rework-adimi` (`uretim-emirleri.yaz`).
 - `disari.ts`: `hataliKayitlari`, `hataliKaydi`, `hataliKarariVer` (Kalite Merkezi'nin karar formu; `kalite-merkezi.onayla` burada da aranır).
 - Davranış: hatalı parça hatalı adımda sayılmaz. Kalite kararı adımı başlatma denetimiyle terminalden başlamaz. Bölme `kilitliEmriBol` ile planlamanın bölmesiyle aynı kuraldan geçer; `partiyiBol` davranışı değişmedi.
+- 1045 b: emrin kendisinde bütün parça hurda ya da red olursa emir durur; sonraki adım başlatma denetimiyle başlamaz (ayrı durum yok, önceki adım bu kararın sağlamsız kalite adımıdır).
 - İşlem ve rol değişmedi (operatörün kolu açması 1033 a ile verildi; uç `terminal.uret`).

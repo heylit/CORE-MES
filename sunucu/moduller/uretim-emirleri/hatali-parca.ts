@@ -13,7 +13,7 @@ import {
 } from './is-emri-servis.ts';
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
-  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, HATALI_ADET, HATALI_ADIMSIZ, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
+  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
   HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliIhlali,
   hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
@@ -24,10 +24,20 @@ import type { HataliKaydiSatiri, IsEmriSatiri } from './sorgular.ts';
 
 const KALITE_ADIMI = 'Kalite kararı';
 const REWORK_ADIMI = 'Rework (planlama seçecek)';
-const KALAN_YOK = 'Bu emirde sonraki adımlara geçecek parça kalmadı.';
 
 // Kararı bekleyen kalite adımı terminalden başlatılmaz: karar Kalite Merkezi'nden yazılır ve adımı kendisi kapatır.
 baslatmaDenetle(async (db, o) => ((await s.acikKaliteAdimiMi(db, o.isEmriId)) ? { engel: HATALI_KALITE_ADIMI } : null));
+// 1045 b: emrin kendisinde (4 a) bütün parça hurda ya da red olduysa sonraki adım başlamaz; emir durur, planlama yeniden başlatır ya da
+// kapatır. Durma ayrı bir durum değildir: önceki adım bu kararın sağlamsız kalite adımıdır.
+baslatmaDenetle(async (db, o) => {
+  const adimlar = await s.isEmirleriGetir(db, [o.uretimEmriId]);
+  const adim = adimlar.find((i) => i.id === o.isEmriId);
+  const onceki = adim === undefined ? undefined : adimlar.filter((i) => i.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0];
+  if (onceki === undefined || onceki.durum !== 'tamam' || (onceki.saglamAdet ?? 0) > 0) return null;
+  const kayitlar = await s.hataliKayitlariGetir(db, { acik: false, emirId: o.uretimEmriId });
+  const durdu = kayitlar.some((k) => k.kaliteIsEmriId === onceki.id && k.hedefEmirId === k.uretimEmriId && (k.karar === 'hurda' || k.karar === 'red'));
+  return durdu ? { engel: HATALI_EMIR_DURDU } : null;
+});
 
 // Operatörün adımı: verilen, verilmezse emrin terminaldeki tek çalışan adımı (paralel adımda sorulur, servis.ts komutAdimi ile aynı).
 function hataliAdim(hepsi: readonly IsEmriSatiri[], isEmriId: number | undefined): IsEmriSatiri {
@@ -163,7 +173,7 @@ async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, 
   for (const [n, i] of [...kalan].sort((a, b) => a.sira - b.sira).entries()) if (i.sira !== n + 1) await s.isEmriSirasiYaz(db, i.id, n + 1);
   if (siradakiIsEmri(kalan) !== null) {
     await siradakiIstasyonuYaz(db, hedefId);
-    return kolda ? null : KALAN_YOK;
+    return kolda ? null : HATALI_EMIR_DURDU;
   }
   const e = await s.ustEmirBul(db, hedefId);
   if (e === null) throw bulunamadi(EMIR_YOK);
@@ -171,7 +181,7 @@ async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, 
   const son = [...kalan].sort((a, b) => b.sira - a.sira)[0];
   await s.fasonlaBitir(db, hedefId, son?.saglamAdet ?? 0, an);
   await emirBittiBildir(db, { uretimEmriId: hedefId, saglamAdet: son?.saglamAdet ?? 0, kisiId });
-  return kolda ? null : KALAN_YOK;
+  return kolda ? null : HATALI_EMIR_DURDU;
 }
 
 async function ozetle(db: Db, satirlar: readonly HataliKaydiSatiri[]): Promise<HataliKaydiOzeti[]> {

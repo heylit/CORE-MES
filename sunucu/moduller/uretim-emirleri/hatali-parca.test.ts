@@ -20,7 +20,7 @@ import type { IsEmriGirdisi } from './disari.ts';
 import { hataliKarariVer } from './hatali-parca.ts';
 import { reworkAdimiYaz } from './is-emri-servis.ts';
 import {
-  ADIM_ACIK_DEGIL, HATALI_ADET, HATALI_KALITE_ADIMI, HATALI_KARAR_VERILMIS, HATALI_NEDEN_YOK, REWORK_KARARSIZ,
+  ADIM_ACIK_DEGIL, HATALI_ADET, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KARAR_VERILMIS, HATALI_NEDEN_YOK, REWORK_KARARSIZ,
 } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -230,8 +230,11 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     assert.deepEqual(emir, { durum: 'planli', ist: kaliteIst });
 
     const karar = await tx((db) => hataliKarariVer(db, yonetici, h.kayitId, { karar: 'red', not: null, ncrKimlik: null }));
-    assert.match(karar.uyari ?? '', /geçecek parça kalmadı/);
+    assert.equal(karar.uyari, HATALI_EMIR_DURDU);
     assert.deepEqual((await adimlari(id)).map((x) => [x.op, x.durum, x.saglam]), [[10, 'tamam', 0], [15, 'tamam', 0], [20, 'bekliyor', null]]);
+    // 1045 b: emir durur; sonraki adım terminalden başlamaz.
+    const ie20 = (await adimlari(id))[2]!.id;
+    await red(tx((db) => emirBaslat(db, op(), id, [b.makine], undefined, ie20)), HATALI_EMIR_DURDU);
     const red_ = await o().sahip.tek<{ adet: number }>("SELECT sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'red'", [id]);
     assert.equal(red_?.adet, 1);
   });

@@ -1053,6 +1053,7 @@ export const HATALI_ADET = 'Hatalı adet bu adımda henüz sayılmamış adedi a
 export const HATALI_ROTASIZ = 'Rotasız emirde hatalı parça yalnız adımdaki bütün parça hatalıysa ayrılır; planlamaya bildirin.';
 export const HATALI_OP_YERI = 'Kalite ve rework adımlarına op numarası açılamıyor: komşu adımların arasında boş numara yok; planlamaya bildirin.';
 export const HATALI_KALITE_TIPI_YOK = 'Kalite kararı adımı için aktif kalite (KAL) operasyon tipi yok; Operasyon Tipleri\'nden ekleyin.';
+export const HATALI_EMIR_DURDU = 'Emir durdu: bütün parça hurda ya da red oldu. Planlama yeniden başlatır ya da kapatır.';
 export const HATALI_KALITE_ADIMI = 'Bu adım kalite kararıyla kapanır; kararı Kalite Merkezi\'nde verin.';
 export const HATALI_KAYIT_YOK = 'Hatalı parça kaydı bulunamadı.';
 export const HATALI_KARAR_VERILMIS = 'Bu hatalı parçanın kalite kararı verilmiş.';
