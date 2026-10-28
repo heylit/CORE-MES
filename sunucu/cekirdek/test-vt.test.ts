@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import { ayarOku } from './ayar.ts';
-import { ARTIK_SEMA_YASI_SN, TEMIZLIK_KILIDI, sifirlamaHazirla, testSemaAdi, testSemasiAc, testVeritabaniKur } from './test-vt.ts';
+import type { Db } from './db.ts';
+import { ARTIK_SEMA_YASI_SN, TEMIZLIK_KILIDI, semayiSil, sifirlamaHazirla, testSemaAdi, testSemasiAc, testVeritabaniKur } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
 
 describe('test şeması temizliği (gerçek PostgreSQL)', () => {
@@ -190,6 +191,22 @@ describe('test şeması temizliği (gerçek PostgreSQL)', () => {
   });
 });
 
+// Kilit tablosu bütün bağlantılarca paylaşılır (varsayılanda ~6400). Sınır onun altıda biri: sıradaki tek silme, iki dosyanın
+// sıfırlaması ve öteki dosyaların olağan işleri aynı anda sığar. Tek transaction'lık silme ~10 bin, sıfırlama ~1900 tutuyordu.
+const ISLEM_KILIT_SINIRI = 1000;
+
+function kilitOlcer(): { olc: (db: Db) => Promise<void>; sonuc: { enCok: number; islem: number } } {
+  const sonuc = { enCok: 0, islem: 0 };
+  return {
+    sonuc,
+    async olc(db) {
+      const satir = await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM pg_locks WHERE pid = pg_backend_pid()');
+      sonuc.enCok = Math.max(sonuc.enCok, satir?.n ?? 0);
+      sonuc.islem += 1;
+    },
+  };
+}
+
 describe('test şemasını göç sonrası duruma döndürme (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   before(async () => { ortam = await testVeritabaniKur('sifirla'); });
@@ -245,5 +262,29 @@ describe('test şemasını göç sonrası duruma döndürme (gerçek PostgreSQL)
     await assert.rejects(sahip.sorgu('DELETE FROM kalibrasyon_kaydi'), /kalibrasyon/i);
     await assert.rejects(sahip.sorgu('TRUNCATE kalibrasyon_kaydi CASCADE'), /kalibrasyon/i);
     await sifirla();
+  });
+
+  test('sıfırlamanın hiçbir transaction\'ı tam şemanın kilitlerini birden tutmaz', async () => {
+    const olcer = kilitOlcer();
+    const sifirla = await sifirlamaHazirla(acik(), olcer.olc);
+    await sifirla();
+    assert.equal(olcer.sonuc.islem > 1, true, JSON.stringify(olcer.sonuc));
+    assert.equal(olcer.sonuc.enCok < ISLEM_KILIT_SINIRI, true, JSON.stringify(olcer.sonuc));
+  });
+
+  test('göç uygulanmış tam şemanın silinmesinde hiçbir transaction sınırdan çok kilit tutmaz; şema bütünüyle gider', { timeout: 120_000 }, async () => {
+    const silinecek = await testVeritabaniKur('silme');
+    const olcer = kilitOlcer();
+    // Yarıda kalırsa şema artık olarak kalır; sonraki açılış siler.
+    try {
+      await silinecek.vt.kapat();
+      await semayiSil(silinecek.sahip, silinecek.sema, olcer.olc);
+      const kalan = await silinecek.sahip.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = $1) AS var', [silinecek.sema]);
+      assert.equal(kalan?.var, false);
+    } finally {
+      await silinecek.sahip.kapat();
+    }
+    assert.equal(olcer.sonuc.islem > 1, true, JSON.stringify(olcer.sonuc));
+    assert.equal(olcer.sonuc.enCok < ISLEM_KILIT_SINIRI, true, JSON.stringify(olcer.sonuc));
   });
 });
