@@ -395,3 +395,16 @@ export function maliyetYazimi(mevcutSurum: number | null, istenenSurum: number |
   if (istenenSurum === null) return 'cakisma';
   return istenenSurum === mevcutSurum ? 'guncelle' : 'cakisma';
 }
+
+// Kur ve faiz toplu yükleme (1085 a): kayıtlı olmayan satır eklenir; kayıtlı günle aynı değer de farklı değer de atlanır, düzeltme
+// tek tek yapılır ki aynı günün kuru dosyayla sessizce değişmesin. Karşılaştırma sayıdır: '41.85' ile '41.850000' aynıdır.
+export type TopluKurFaizKarari = 'ekle' | 'ayni' | 'farkli';
+export function topluKurFaizKarari(deger: string, kayitli: string | undefined): TopluKurFaizKarari {
+  if (kayitli === undefined) return 'ekle';
+  return Number(kayitli) === Number(deger) ? 'ayni' : 'farkli';
+}
+// 1086 a: kur bugün ya da geçmiş günündür, faiz ileri tarihten başlayabilir. İlk ileri tarihli kur satırının sırası (0'dan), yoksa null.
+export function ileriTarihliKurSirasi(satirlar: readonly { tur: 'kur' | 'faiz'; tarih: string }[], bugun: string): number | null {
+  const i = satirlar.findIndex((s) => s.tur === 'kur' && s.tarih > bugun);
+  return i < 0 ? null : i;
+}

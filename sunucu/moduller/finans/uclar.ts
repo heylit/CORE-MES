@@ -10,7 +10,7 @@ import {
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
   aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
-  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizOzetiCevabi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
+  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi,
   skorGovdesi, skorListesiCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
@@ -78,6 +78,9 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/amortisman', yetki: 'finans.oku', cevap: amortismanCevabi, isle: ({ db }) => servis.amortismanAylari(db) }),
   // 952 a: ortak kur ve faiz şeridi her sayfadadır; giriş yapan herkes okur (yalnız kur, faiz ve giren kişi; finans rakamı yok).
   uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: 'oturum', cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
+  // 1089 a: şeridin kur grafiği ve toplu yükleme önizlemesi; şerit gibi giriş yapan herkes okur (yalnız kur ve faiz).
+  uc({ yontem: 'GET', yol: '/finans/kur-faiz-araligi', yetki: 'oturum', sorgu: kurFaizAraligiSorgusu, cevap: kurFaizAraligiCevabi,
+    isle: ({ db, sorgu }) => servis.kurFaizAraligi(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'GET', yol: '/finans/ayar', yetki: 'finans.oku', cevap: ayarCevabi, isle: async ({ db }) => ({ ayar: await servis.ayarOku(db) as zod.output<typeof ayarCevabi>['ayar'] }) }),
   uc({ yontem: 'GET', yol: '/finans/aylik-seri', yetki: 'finans.oku', sorgu: aylikSeriSorgusu, cevap: aylikSeriCevabi,
     isle: ({ db, sorgu }) => servis.aylikSeri(db, tesisGunu(new Date()), sorgu.ay) }),
@@ -155,6 +158,9 @@ export const paraUclari = [
   uc({ yontem: 'POST', yol: '/finans/kurlar/ekle', yetki: 'finans.kur-yaz', govde: kurGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kurEkle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kurlar/guncelle', yetki: 'finans.kur-yaz', govde: kurGuncelleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde, denetimEki }) => servis.kurGuncelle(db, kullanici, govde, denetimEki) }),
   uc({ yontem: 'POST', yol: '/finans/faizler/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: faizEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.faizEkle(db, kullanici, govde) }),
+  // 1087 a: toplu yükleme tek tek girişle aynı işlemdir (muhasebe ve satın alma).
+  uc({ yontem: 'POST', yol: '/finans/kur-faiz/toplu-yukle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: kurFaizTopluGovdesi, cevap: kurFaizTopluCevabi,
+    isle: ({ db, kullanici, govde }) => servis.kurFaizTopluYukle(db, kullanici, govde) }),
   // 260 a: satış formundaki sipariş seçimi; fatura yazanın yetkisiyle (sipariş no ve durumu, tutar yok).
   uc({ yontem: 'GET', yol: '/finans/satis-siparisleri', yetki: 'finans.yaz', sorgu: satisSiparisleriSorgusu, cevap: satisSiparisleriCevabi,
     isle: ({ db, sorgu }) => servis.satisSiparisleri(db, sorgu.firmaId) }),
