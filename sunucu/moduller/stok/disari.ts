@@ -216,3 +216,7 @@ export const malzemeFisiDegisiklikleri = (db: Db, a: { zaman: string | null; id:
 export const logoIcinMalzemeFisleri = (db: Db, idler: readonly number[]) => malzemeFisi.logoIcinFisler(db, idler);
 export const emirlerinMalzemeFisleri = (db: Db, emirIdler: readonly number[]) => malzemeFisi.emirlerinFisKimlikleri(db, emirIdler);
 export const malzemeFisiLogoCozucusu = (cozucu: malzemeFisi.MalzemeFisiLogoCozucusu): void => malzemeFisi.malzemeFisiLogoCozucusuKaydet(cozucu);
+
+// Depo çıkışında fason gidiş kaydını üretim emri yazar; bağ sunucu/kablolama.ts'de kurulur.
+export { fasonGidisYaziciKaydet } from './servis.ts';
+export type { FasonGidisYazici } from './servis.ts';

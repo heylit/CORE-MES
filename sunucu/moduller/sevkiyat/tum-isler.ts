@@ -13,7 +13,7 @@ import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { adimliEmirListesi, emirNolari, fasonGonderimleri, fasonIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { FasonGonderimi, FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  adayListede, depoIhlali, elleKalemIhlalleri, emirIlerlemesi, fasonAdayiHazir, kabulTamamMi, KALEM_SAHIBI, serbestBirakmaIhlali, tasimaIhlali,
+  adayListede, depoGeriAlIhlali, depoIhlali, elleKalemIhlalleri, emirIlerlemesi, fasonAdayiHazir, kabulTamamMi, KALEM_SAHIBI, serbestBirakmaIhlali, tasimaIhlali,
   tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
 } from './kurallar.ts';
 import * as sorgu from './sorgular.ts';
@@ -51,7 +51,8 @@ async function fasonGonderimiOku(db: Db, isEmriIdleri: readonly number[], hepsi?
 
 const asamaOf = (k: KalemSatiri, h: Hazirlik): TumIsAsamasi => tumIsAsamasi({
   hazir: h.hazir, serbest: k.serbestZamani !== null, erken: k.erkenZamani !== null, tasima: k.tasima,
-  depoTamam: k.depoZamani !== null || k.isDurumu === 'tamamlandi',
+  // Tetiksiz eski yolda iş teslimi kalemi bitirir; tetiklenen işte yalnız depo bitirir.
+  depoTamam: k.depoZamani !== null || (k.isDurumu === 'tamamlandi' && k.isTetiklendi === null),
   is: k.isId === null || k.isDurumu === null ? null : { durum: k.isDurumu, tetiklendi: k.isTetiklendi !== null },
 });
 
@@ -249,7 +250,7 @@ async function kilitliKalem(db: Db, id: number): Promise<{ k: KalemSatiri; asama
 // Sevkiyatçının taşıma değişimi; yazan ve yer izlenir (959 b). Satın almanın teslim yöntemi aynı kaydı `satin-alma` yeriyle yazar.
 export async function tasimaDegistir(db: Db, kisiId: number | null, id: number, tasima: Tasima, yer: SerbestYazisi['yer'] = 'sevkiyat'): Promise<TumIsSatiri> {
   const { k, asama } = await kilitliKalem(db, id);
-  const ihlal = tasimaIhlali({ asama, tasima: k.tasima }, tasima);
+  const ihlal = tasimaIhlali({ asama, tasima: k.tasima, depoBasladi: k.depoZamani !== null || k.kabulAdet !== null }, tasima);
   if (ihlal) throw gecersiz(ihlal);
   if (k.tasima !== tasima) await sorgu.tasimaYaz(db, id, tasima, yer, kisiId);
   return (await kalemSatirlari(db, await sorgu.kalemlerGetir(db, [id])))[0]!;
@@ -304,6 +305,16 @@ export async function depoKalemiAl(db: Db, id: number, is: 'cikis' | 'kabul'): P
 export async function depoCikisiYaz(db: Db, kisiId: number, id: number): Promise<void> {
   await depoKalemiAl(db, id, 'cikis');
   await sorgu.depoYaz(db, id, kisiId, null, true);
+}
+// Çıkışın geri alınması: stok hareketini geri alan çağırır, kalem yeniden depoda bekler (tetik durur).
+export async function depoCikisiniGeriAl(db: Db, id: number): Promise<DepoKalemi> {
+  const [k] = await sorgu.kalemleriKilitle(db, [id]);
+  if (k === undefined || k.kaldirildi !== null) throw bulunamadi('Kalem bulunamadı.');
+  const donus = (await sorgu.kalemlerGetir(db, (await sorgu.donusleri(db, [id])).map((d) => d.id)))[0];
+  const ihlal = depoGeriAlIhlali({ yon: k.yon, depoTamam: k.depoZamani !== null }, donus !== undefined && (donus.depoZamani !== null || donus.kabulAdet !== null));
+  if (ihlal) throw cakisma(ihlal);
+  await sorgu.depoGeriAl(db, id);
+  return depoKalemi(k);
 }
 // Kabul (mal kabul satırı): gelen adet eklenir; kalemin adedine ulaşınca kalem kapanır. Döner: kalem kapandı mı.
 export async function depoKabuluYaz(db: Db, kisiId: number, id: number, gelen: string): Promise<boolean> {

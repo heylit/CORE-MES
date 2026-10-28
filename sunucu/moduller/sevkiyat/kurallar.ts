@@ -371,11 +371,12 @@ export function tetikIhlali(is: { durum: IsDurumu; tetiklendi: boolean }, kaleml
 }
 export const tetikGeriAlIhlali = (is: { tetiklendi: boolean }, depoYapildi: boolean): string | null =>
   !is.tetiklendi ? 'Bu iş tetiklenmemiş.' : depoYapildi ? 'Depo çıkışı ya da kabulü yapılmış iş geri alınmaz; önce depoda geri alın.' : null;
-// Taşıma tetikten önce değişir: tetiklenmiş iş depo bekliyor, firma taşımasında bırakma tetik sayılır.
-export function tasimaIhlali(k: { asama: TumIsAsamasi; tasima: Tasima | null }, yeni: Tasima): string | null {
+// Taşıma depo yapmadan değişir. Tetiklenmiş işin kalemi önce tetiği geri alır; firma taşımasında bırakma tetik sayılır, depo
+// başlamadıysa (kısmi kabul yok) sevkiyata geri alınabilir.
+export function tasimaIhlali(k: { asama: TumIsAsamasi; tasima: Tasima | null; depoBasladi: boolean }, yeni: Tasima): string | null {
   if (k.tasima === yeni) return null;
-  if (k.asama === 'tamamlandi') return 'Depo yapmış kalemin taşıması değişmez.';
-  if (k.asama === 'depoda') return 'Depoda bekleyen kalemin taşıması değişmez; önce tetiği geri alın.';
+  if (k.asama === 'tamamlandi' || k.depoBasladi) return 'Depo yapmış kalemin taşıması değişmez.';
+  if (k.asama === 'depoda' && k.tasima !== 'firma') return 'Depoda bekleyen kalemin taşıması değişmez; önce tetiği geri alın.';
   if (k.asama === 'hazir' || k.asama === 'hazir-degil') return 'Taşıma serbest bırakılırken seçilir.';
   return null;
 }
@@ -403,6 +404,13 @@ export function depoIhlali(k: { yon: KalemYonu; asama: TumIsAsamasi }, is: 'ciki
   if (k.asama === 'tamamlandi') return is === 'cikis' ? 'Bu kalemin son çıkışı yapılmış.' : 'Bu kalemin kabulü tamamlanmış.';
   if ((k.yon === 'gidis') !== (is === 'cikis')) return is === 'cikis' ? 'Geliş kalemi çıkış yapmaz; mal kabulle girer.' : 'Gidiş kalemi kabul edilmez; son çıkışı yapılır.';
   if (k.asama !== 'depoda') return 'Kalem sevkiyatta tetiklenmedi; depo yalnız "Sevk et" ya da "Al" sonrası yapar.';
+  return null;
+}
+// Depo çıkışının geri alınması (943 a, teslim geri almanın yerine): yalnız gidiş; dönüşü kabul edilmişse geri alınmaz.
+export function depoGeriAlIhlali(k: { yon: KalemYonu; depoTamam: boolean }, donusKabulu: boolean): string | null {
+  if (k.yon !== 'gidis') return 'Kabul mal kabul belgesinin düzeltmesiyle geri alınır.';
+  if (!k.depoTamam) return 'Bu kalemin son çıkışı yapılmamış.';
+  if (donusKabulu) return 'Dönüşü kabul edilmiş gidişin çıkışı geri alınmaz.';
   return null;
 }
 // Kısmi kabul (957 a): kalan firmada, kalem açık. Adedi bilinmeyen kalem ilk kabulde kapanır.

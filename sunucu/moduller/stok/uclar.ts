@@ -17,6 +17,7 @@ import {
   istasyonSepetiCevabi, istasyonSepetiSorgusu, istasyonSepetleriCevabi, istasyonSepetleriSorgusu, sepettenKullanGovdesi, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
+import { depoCikisCevabi, depoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -104,6 +105,10 @@ export const uclar = [
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-kaldir', yetki: 'stok.statu-degistir', govde: rezerveKaldirGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveKaldir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/statu-degistir', yetki: 'stok.statu-degistir', govde: statuDegistirGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.statuDegistir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.cikisYap(db, kullanici.id, govde) }),
+  // Depo sevk (944, 962 a): sevkiyatın tetiklediği gidişin son çıkışı; gelişler mal kabul satırıyla (sevkKalemiId) kapanır.
+  uc({ yontem: 'GET', yol: '/stok/depo-sevk', yetki: { biri: ['stok.cikis', 'stok.giris'] }, cevap: depoSevkCevabi, isle: ({ db }) => s.depoSevkListesi(db) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/depo-sevk/:id/cikis', yetki: 'stok.cikis', parametre: kimlikParametresi, cevap: depoCikisCevabi, isle: ({ db, kullanici, parametre }) => s.depoCikisiYap(db, kullanici.id, parametre.id) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/depo-sevk/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, cevap: depoCikisCevabi, isle: ({ db, kullanici, parametre }) => s.depoCikisiniGeriAlYap(db, kullanici.id, parametre.id) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim', yetki: 'stok.sayim', govde: sayimGovdesi, cevap: sayimCevabi, isle: ({ db, kullanici, govde }) => s.sayimYap(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/hareketler/geri-al', yetki: 'stok.geri-al', govde: topluGeriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.topluGeriAl(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/hareketler/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: geriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, parametre, govde }) => s.geriAl(db, kullanici.id, parametre.id, govde) }),
