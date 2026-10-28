@@ -1,5 +1,6 @@
 import { AKTol } from './cekirdek.ts';
 import { olcuTuruAdi, type Ayiklama, type GuvenSeviyesi, type OlcuOnerisi, type YaziKutusu } from './okuma.ts';
+import { formulKoru } from '../veri/csv.ts';
 
 // Çizim stüdyosu ve teknik resim görüntüleyicisinin saf kuralları (pdf.ts okuma ayarları, balon-yerlesimi.ts, model-3b.ts, cizim-studyosu.ts,
 // teknik-resim.ts). Eşliği kurallar.test.ts eski modüllerle sınar.
@@ -211,12 +212,14 @@ export function yeniOneriler<O extends Oneri>(oneriler: readonly O[], mevcut: re
     && !bal.some((q) => q.ar && q.nom === p.nom && Math.hypot(q.ar[0] - p.tx, q.ar[1] - p.ty) < W * 0.01));
 }
 export const OLCUM_RAPORU_BASLIKLARI = ['No', 'Etiket', 'Ölçü', 'Tolerans', 'Min', 'Max', 'Ölçü aleti', 'Yöntem', 'Ölçülen', 'Sonuç', 'Zaman'];
+// Ölçülen değer metin de olabilir.
+const raporHucresi = (c: unknown): string => (typeof c === 'string' ? formulKoru(c, { sayiSerbest: true }) : String(c));
 export function olcumRaporu(bal: readonly Balon[], olcum: Readonly<Record<number, Olcum>>, zaman: (t: number) => string): string {
   const rows: unknown[][] = [OLCUM_RAPORU_BASLIKLARI, ...bal.map((x) => {
     const r = olcum[x.id];
     return [x.id, x.l, x.nom, x.tol, x.min, x.max, x.tool, YONTEM_ADI[yontem(x)], r ? r.v : '', r ? (r.ok ? 'UYGUN' : 'RED') : 'ÖLÇÜLMEDİ', r ? zaman(r.at) : ''];
   })];
-  return String.fromCharCode(0xfeff) + rows.map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  return String.fromCharCode(0xfeff) + rows.map((r) => r.map((c) => '"' + raporHucresi(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
 }
 // Tolerans çubuğu: sınırlar çubuğun yüzde 15 ve 85'inde, işaret ölçülen değerde.
 export function toleransKonumu(b: Pick<Balon, 'gauge' | 'min' | 'max'>, v: number): number {

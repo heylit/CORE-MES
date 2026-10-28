@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { csvHucresi, csvIndir, csvMetni, ondalik } from './csv.ts';
+import { csvHucresi, csvIndir, formulKoru, csvMetni, ondalik } from './csv.ts';
 
 describe('ortak CSV metni', () => {
   it('başlık ve satırlar noktalı virgülle, BOM ile; sayı ondalık virgülle, boş değer boş alan', () => {
@@ -19,6 +19,11 @@ describe('ortak CSV metni', () => {
     expect(csvHucresi(-2.5)).toBe('"-2,5"');
     expect(csvHucresi('a=b')).toBe('"a=b"');
     expect(csvHucresi(null)).toBe('""');
+    expect(formulKoru('=1+1')).toBe("'=1+1");
+    expect(formulKoru('Ali')).toBe('Ali');
+    expect(formulKoru('-0,02')).toBe("'-0,02");
+    expect(formulKoru('-0,02', { sayiSerbest: true })).toBe('-0,02');
+    expect(formulKoru('-1+2', { sayiSerbest: true })).toBe("'-1+2");
     expect(csvMetni(['=Baslik'], [['=cmd|\' /C calc\'!A0']]).slice(1)).toBe(`"'=Baslik"\r\n"'=cmd|' /C calc'!A0"`);
   });
 });
