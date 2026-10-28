@@ -4,7 +4,8 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import {
   COK_OTURUM, DURMA_ESIGI_DK, HATALI_SERI, alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari,
   hesapKilidiBulgulari, kapatilabilirMi, onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
-  SERTIFIKA_UYARI_GUN, denetimMaddesi, httpsMaddesi, imzaMaddesi, sertifikaMaddesi, yedekMaddesi,
+  SERTIFIKA_UYARI_GUN, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
+  sunucuSertifikaMaddesi, yedekMaddesi,
 } from './kurallar.ts';
 import type { Bulgu, DenemeOzeti } from './kurallar.ts';
 
@@ -147,5 +148,46 @@ describe('koruma durumu maddeleri (saf)', () => {
     assert.equal(denetimMaddesi({ yazilir: true, degismez: false, sonKayit: null }).durum, 'uyari');
     assert.equal(denetimMaddesi({ yazilir: false, degismez: true, sonKayit: son }).durum, 'kapali');
     assert.equal(denetimMaddesi(null).durum, 'bilinmiyor');
+  });
+
+  test('sunucu günlüğü: yazılıyorsa açık, yazılamıyorsa kapalı ve nedeni, hiç satır yoksa uyarı, kurulmamışsa bilinmiyor', () => {
+    const an = new Date('2026-10-28T10:00:00Z');
+    assert.deepEqual(gunlukMaddesi({ sonYazma: an, sonHata: null }, 60).durum, 'acik');
+    assert.equal(gunlukMaddesi({ sonYazma: an, sonHata: null }, 60).deger, an.toISOString());
+    assert.deepEqual(gunlukMaddesi({ sonYazma: an, sonHata: 'EACCES' }, 60),
+      { durum: 'kapali', deger: an.toISOString(), aciklama: 'Günlük dosyasına yazılamıyor: EACCES' });
+    assert.equal(gunlukMaddesi({ sonYazma: null, sonHata: null }, 60).durum, 'uyari');
+    assert.equal(gunlukMaddesi(null, 60).durum, 'bilinmiyor');
+  });
+
+  test('olay günlüğü: Windows dışında ve hiç denenmemişse bilinmiyor; hata uyarı; yazıldıysa açık', () => {
+    const an = new Date('2026-10-28T10:00:00Z');
+    assert.equal(olayGunluguMaddesi({ sonYazma: an, sonHata: null }, false).durum, 'bilinmiyor');
+    assert.equal(olayGunluguMaddesi(null, true).durum, 'bilinmiyor');
+    assert.equal(olayGunluguMaddesi({ sonYazma: null, sonHata: null }, true).durum, 'bilinmiyor');
+    assert.equal(olayGunluguMaddesi({ sonYazma: null, sonHata: 'Erişim reddedildi' }, true).durum, 'uyari');
+    assert.equal(olayGunluguMaddesi({ sonYazma: an, sonHata: null }, true).durum, 'acik');
+  });
+
+  test('disk: az yer uyarı ve adı; okunamayan disk durumu düşürmez; hiçbiri okunamazsa bilinmiyor', () => {
+    const iyi = { bosBayt: 50e9, toplamBayt: 100e9, az: false };
+    const az = { bosBayt: 1e9, toplamBayt: 100e9, az: true };
+    assert.deepEqual(diskMaddesi([{ ad: 'Yedek', disk: iyi }, { ad: 'Günlük', disk: null }]),
+      { durum: 'acik', deger: 'Yedek: 50 GB boş / 100 GB', aciklama: 'Disklerde yer yeterli.' });
+    assert.equal(diskMaddesi([{ ad: 'Yedek', disk: iyi }, { ad: 'Veritabanı', disk: az }]).durum, 'uyari');
+    assert.match(diskMaddesi([{ ad: 'Veritabanı', disk: az }]).aciklama, /Veritabanı/);
+    assert.equal(diskMaddesi([{ ad: 'Yedek', disk: null }]).durum, 'bilinmiyor');
+    assert.equal(diskMaddesi([]).durum, 'bilinmiyor');
+  });
+
+  test('sunucu sertifikası: kapının kendi sertifikası önce; vekilde izlenen dosya; ikisi de yoksa bilinmiyor (kapalı denmez)', () => {
+    const simdi = new Date('2026-10-28T10:00:00Z');
+    const uzak = new Date('2027-10-28T10:00:00Z');
+    assert.equal(sunucuSertifikaMaddesi({ acik: true, sertifikaBitis: uzak }, { tanimli: true, bitis: simdi }, simdi).durum, 'acik');
+    assert.equal(sunucuSertifikaMaddesi({ acik: false, sertifikaBitis: null }, { tanimli: true, bitis: uzak }, simdi).durum, 'acik');
+    assert.equal(sunucuSertifikaMaddesi({ acik: false, sertifikaBitis: null }, { tanimli: true, bitis: new Date('2026-10-01T00:00:00Z') }, simdi).durum, 'kapali');
+    assert.equal(sunucuSertifikaMaddesi({ acik: false, sertifikaBitis: null }, { tanimli: true, bitis: null }, simdi).durum, 'bilinmiyor');
+    assert.equal(sunucuSertifikaMaddesi({ acik: false, sertifikaBitis: null }, { tanimli: false, bitis: null }, simdi).durum, 'bilinmiyor');
+    assert.equal(sunucuSertifikaMaddesi(null, null, simdi).durum, 'bilinmiyor');
   });
 });

@@ -111,15 +111,26 @@ export const kilitListeCevabi = listeCevapSemasi(kilitSatiri);
 export const kilitAcCevabi = z.object({ acilan: z.number().int().positive() });
 export const oturumKapatCevabi = z.object({ id: z.number().int() });
 
-export const korumaCevabi = z.object({
-  maddeler: z.array(z.object({
-    anahtar: z.string(),
-    baslik: z.string(),
-    aciklama: z.string(),
-    durum: z.enum(KORUMA_DURUMLARI),
-    deger: metinVeyaYok,
-  })),
+const korumaMaddesi = z.object({
+  anahtar: z.string(),
+  baslik: z.string(),
+  aciklama: z.string(),
+  durum: z.enum(KORUMA_DURUMLARI),
+  deger: metinVeyaYok,
 });
+
+export const korumaCevabi = z.object({ maddeler: z.array(korumaMaddesi) });
+
+// Sunucu durumu kartı: günlük, olay günlüğü, yedek, disk ve sertifika maddeleri koruma maddesi biçimindedir; son sunucu hataları
+// günlük dosyasından okunur. Hata metni yalnız ileti ve hata türüdür; istek gövdesi ya da başlığı taşımaz.
+export const sunucuHatasiSemasi = z.object({
+  zaman: zamanSemasi,
+  ileti: z.string(),
+  hata: metinVeyaYok,
+  // Ekrandaki "Hata kodu" (5xx cevabının x-hata-kodu başlığı).
+  kod: metinVeyaYok,
+});
+export const sunucuDurumuCevabi = z.object({ maddeler: z.array(korumaMaddesi), sonHatalar: z.array(sunucuHatasiSemasi) });
 
 export const kurallarCevabi = z.object({
   kurallar: z.array(z.object({
@@ -148,4 +159,5 @@ export type OturumlarCevabi = z.output<typeof oturumlarCevabi>;
 export type KilitListeCevabi = z.output<typeof kilitListeCevabi>;
 export type KilitAcCevabi = z.output<typeof kilitAcCevabi>;
 export type KorumaCevabi = z.output<typeof korumaCevabi>;
+export type SunucuDurumuCevabi = z.output<typeof sunucuDurumuCevabi>;
 export type KurallarCevabi = z.output<typeof kurallarCevabi>;

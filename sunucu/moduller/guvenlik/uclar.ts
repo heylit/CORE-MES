@@ -3,7 +3,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmKapatGovdesi, alarmListeCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
   guvenlikKimligi, kilitAcCevabi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumlarCevabi,
-  ozetCevabi,
+  ozetCevabi, sunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import * as servis from './servis.ts';
 
@@ -56,5 +56,7 @@ export const uclar = [
     isle: ({ db, kullanici, parametre }) => servis.kilitAc(db, kullanici.id, parametre.id),
   }),
   uc({ yontem: 'GET', yol: '/guvenlik/koruma', yetki: 'guvenlik.oku', cevap: korumaCevabi, isle: ({ db }) => servis.koruma(db) }),
+  // Sunucu günlüğü, olay günlüğü, yedek, disk ve sertifika; son hatalar günlük dosyasından (1061 a).
+  uc({ yontem: 'GET', yol: '/guvenlik/sunucu-durumu', yetki: 'guvenlik.oku', cevap: sunucuDurumuCevabi, isle: ({ db }) => servis.sunucuDurumu(db) }),
   uc({ yontem: 'GET', yol: '/guvenlik/kurallar', yetki: 'guvenlik.oku', cevap: kurallarCevabi, isle: ({ db }) => servis.kurallar(db) }),
 ];
