@@ -1,22 +1,41 @@
 import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi.ts';
-import type { HataGovdesi } from '#paylasilan/hata.ts';
+import { HATA_KODU_BASLIGI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { cevapGeldi, ulasilamadi, yazmaBelirsiz } from './baglanti.ts';
 import { vekilCevabiMi } from './vekil.ts';
 
 const BICIMSIZ: HataGovdesi = { kod: 'SUNUCU', mesaj: 'Beklenmeyen sunucu cevabı' };
 
+const IZ_BICIMI = /^[\w-]{1,64}$/;
+
+// 5xx cevabındaki istek kimliği (başlık); kullanıcı bunu bilgi işleme söyler. Biçimsizse yok sayılır.
+function izOku(deger: string | null | undefined): string | null {
+  return typeof deger === 'string' && IZ_BICIMI.test(deger) ? deger : null;
+}
+
 export class ApiHatasi extends Error {
   readonly durum: number;
   readonly govde: HataGovdesi;
-  // Sunucunun kendi yazdığı ileti; cevap hata biçiminde değilse (gövdesiz, vekil sayfası) null.
+  // Sunucunun kendi yazdığı ileti, hata kodu varsa sonunda; cevap hata biçiminde değilse (gövdesiz, vekil sayfası) null.
   readonly sunucuIletisi: string | null;
-  constructor(durum: number, govde: HataGovdesi | null) {
+  readonly iz: string | null;
+  constructor(durum: number, govde: HataGovdesi | null, hataKodu?: string | null) {
     super((govde ?? BICIMSIZ).mesaj);
     this.name = 'ApiHatasi';
     this.durum = durum;
     this.govde = govde ?? BICIMSIZ;
-    this.sunucuIletisi = govde !== null && govde.mesaj.trim() !== '' ? govde.mesaj : null;
+    this.iz = izOku(hataKodu);
+    const ileti = govde !== null && govde.mesaj.trim() !== '' ? govde.mesaj : null;
+    this.sunucuIletisi = ileti === null || this.iz === null ? ileti : `${ileti} Hata kodu: ${this.iz}`;
   }
+}
+
+// Yükleme hatasını gösteren ekranların çoğu hata nesnesini durum kutusuna vermez; kutu son sunucu hata kodunu buradan okur.
+// Kod bu süreden eskiyse gösterilmez: başka bir ekranın eski hatası yeni hataya yapıştırılmasın.
+export const HATA_KODU_SURESI_MS = 60_000;
+let sonHata: { iz: string; zaman: number } | null = null;
+
+export function sonHataKodu(simdi: number = Date.now()): string | null {
+  return sonHata !== null && simdi - sonHata.zaman <= HATA_KODU_SURESI_MS ? sonHata.iz : null;
 }
 
 export const OTURUM_BITTI = 'oturum:bitti';
@@ -155,7 +174,9 @@ async function istek<T>(yontem: string, yol: string, govde?: unknown, secenek: Y
   }
   if (!cevap.ok) {
     if (cevap.status === 401 && secenek.oturumBitirmez !== true) window.dispatchEvent(new CustomEvent(OTURUM_BITTI));
-    throw new ApiHatasi(cevap.status, govdeyeCevir(veri));
+    const hata = new ApiHatasi(cevap.status, govdeyeCevir(veri), cevap.headers.get(HATA_KODU_BASLIGI));
+    if (hata.iz !== null) sonHata = { iz: hata.iz, zaman: Date.now() };
+    throw hata;
   }
   return veri as T;
 }

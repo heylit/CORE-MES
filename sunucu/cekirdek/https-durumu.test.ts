@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ANAHTAR_DEGISKENI, SERTIFIKA_DEGISKENI } from '../../istemci/src/ortak/pwa/https.ts';
-import { httpsDurumuOku } from './https-durumu.ts';
+import { IZLENEN_SERTIFIKA_DEGISKENI, httpsDurumuOku, izlenenSertifikaOku } from './https-durumu.ts';
 
 // Yalnız bu test için üretilmiş, kendinden imzalı sertifika; anahtarı yoktur ve hiçbir yerde kullanılmaz.
 const SERTIFIKA = `-----BEGIN CERTIFICATE-----
@@ -35,4 +35,11 @@ test('sertifikanın bitişi dosyadaki sertifikadan okunur', () => {
 test('okunamayan ya da bozuk sertifikada HTTPS açık, bitiş bilinmiyor (uydurulmaz)', () => {
   assert.deepEqual(httpsDurumuOku(IKISI, () => { throw new Error('izin yok'); }), { acik: true, sertifikaBitis: null });
   assert.deepEqual(httpsDurumuOku(IKISI, () => Buffer.from('bozuk')), { acik: true, sertifikaBitis: null });
+});
+
+test('izlenen vekil sertifikası: değişken boşsa tanımlı değil; dosyadan bitiş okunur; bozuksa bilinmiyor', () => {
+  const oku = (): Buffer => Buffer.from(SERTIFIKA);
+  assert.deepEqual(izlenenSertifikaOku({ [IZLENEN_SERTIFIKA_DEGISKENI]: ' ' }, () => { throw new Error('okunmamalı'); }), { tanimli: false, bitis: null });
+  assert.equal(izlenenSertifikaOku({ [IZLENEN_SERTIFIKA_DEGISKENI]: 'D:/vekil.cer' }, oku).bitis?.toISOString(), '2036-10-18T14:56:17.000Z');
+  assert.deepEqual(izlenenSertifikaOku({ [IZLENEN_SERTIFIKA_DEGISKENI]: 'D:/vekil.cer' }, () => Buffer.from('bozuk')), { tanimli: true, bitis: null });
 });

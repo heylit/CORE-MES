@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
-import { AgHatasi, api, ApiHatasi, hataIletisi, IstekKesildi, istekKimligiMi, OTURUM_BITTI, ULASILAMADI_ILETISI } from './api.ts';
+import {
+  AgHatasi, api, ApiHatasi, HATA_KODU_SURESI_MS, hataIletisi, IstekKesildi, istekKimligiMi, OTURUM_BITTI, sonHataKodu, ULASILAMADI_ILETISI,
+} from './api.ts';
 import { baglantiDurumu, baglantiSifirla } from './baglanti.ts';
 
 function cevapVer(durum: number, govde: unknown) {
@@ -21,6 +23,24 @@ describe('api', () => {
     expect(hata).toBeInstanceOf(ApiHatasi);
     expect((hata as ApiHatasi).durum).toBe(409);
     expect((hata as ApiHatasi).govde).toEqual({ kod: 'CAKISMA', mesaj: 'Kayit degismis', alan: 'ad' });
+  });
+
+  it('5xx basligindaki hata kodu sunucu iletisine eklenir ve son hata kodu olur; bicimsiz kod yok sayilir', async () => {
+    const sunucuHatasi = (kod: string) => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kod: 'SUNUCU', mesaj: 'Beklenmeyen bir hata oluştu.' }), {
+        status: 500, headers: { 'x-hata-kodu': kod },
+      })));
+    };
+    sunucuHatasi('0a1b2c3d');
+    const hata = (await api.get('/x').catch((e: unknown) => e)) as ApiHatasi;
+    expect(hata.iz).toBe('0a1b2c3d');
+    expect(hataIletisi(hata, 'Ekran')).toBe('Beklenmeyen bir hata oluştu. Hata kodu: 0a1b2c3d');
+    expect(sonHataKodu()).toBe('0a1b2c3d');
+    expect(sonHataKodu(Date.now() + HATA_KODU_SURESI_MS + 1)).toBeNull();
+    sunucuHatasi('<b>x</b>');
+    const bicimsiz = (await api.get('/x').catch((e: unknown) => e)) as ApiHatasi;
+    expect(bicimsiz.iz).toBeNull();
+    expect(bicimsiz.sunucuIletisi).toBe('Beklenmeyen bir hata oluştu.');
   });
 
   it('bicimsiz hata cevabini SUNUCU koduna cevirir', async () => {
