@@ -6,7 +6,10 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BelgeAyrintisi, BelgeListesiCevabi, BelgeSatiri } from '#paylasilan/sozlesme/cizimler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { gorunenKomutlar } from '../../ortak/rota/komutlar.ts';
+import { IKINCI_MENULER, SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Belgeler } from './Belgeler.tsx';
+import { komutlar } from './komutlar.ts';
 import { BelgeSayfasi } from './BelgeSayfasi.tsx';
 import { base64Yaz, dosyaYukle, PARCA_BAYT, sha256Yazilim } from './dosya-aktarimi.ts';
 import { Box3, Color, Vector3 } from 'three';
@@ -81,6 +84,7 @@ function ac(adres: string) {
             <Route path="/cizimler/arsiv" element={<Belgeler arsiv />} />
             <Route path="/cizimler/teknik-resim" element={<Belgeler tur="teknik-resim" />} />
             <Route path="/cizimler/3b-model" element={<Belgeler tur="3b-model" />} />
+            <Route path="/cizimler/sertifika" element={<Belgeler tur="sertifika" />} />
             <Route path="/cizimler/belge/:id" element={<BelgeSayfasi />} />
           </Routes>
         </MemoryRouter>
@@ -223,6 +227,34 @@ describe('cizimler ekranları', () => {
     await screen.findByText('Deneme flanş');
     expect(ikinci.some((c) => c.yol.includes('arsiv=evet'))).toBe(true);
     expect(screen.queryByRole('button', { name: /Yeni belge/ })).toBeNull();
+  });
+
+  it('Ctrl K komutu (?yeni=1) yazara yeni belge penceresini türü seçili açar; kapatınca adresten düşer', async () => {
+    sunucuKur(YAZAR);
+    ac('/cizimler/sertifika?yeni=1');
+    const pencere = await screen.findByRole('dialog');
+    expect((within(pencere).getByLabelText('Tür') as HTMLSelectElement).value).toBe('sertifika');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kapat' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+  });
+
+  it('reddedilen: okur ?yeni=1 ile gelse de pencere açılmaz; arşivde de açılmaz', async () => {
+    sunucuKur(OKUR);
+    ac('/cizimler?yeni=1');
+    await screen.findByText('Deneme flanş');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('/cizimler/arsiv?yeni=1');
+    await screen.findByText('Deneme flanş');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('komutlar yalnız cizimler.yaz taşıyana görünür', () => {
+    const gorunen = (k: Kullanici) => gorunenKomutlar(komutlar, { sayfalar: SAYFALAR, menuler: IKINCI_MENULER, islemler: k.islemler });
+    expect(gorunen(YAZAR).map((k) => k.anahtar)).toEqual(komutlar.map((k) => k.anahtar));
+    expect(komutlar.length).toBeGreaterThanOrEqual(2);
+    expect(gorunen(OKUR)).toEqual([]);
   });
 
   it('CZ-16: 3B bölümü Makineler 3B ve Malzemeler 3B sekmeleriyle açılır; sekme sorguya makine süzgecini yazar, öbür bölümlerde sekme yok', async () => {
