@@ -109,6 +109,14 @@ export const STOK_HALLERI = ['serbest', 'eski_yedek', 'hurda', 'rework'] as cons
 export const LISTE_KAPSAMLARI = ['acik', 'kapali', 'tumu'] as const;
 // Görevlerim'deki değişiklik hattı aşamaları.
 export const HAT_ASAMALARI = ['talep', 'revizyon', 'yayin', 'karar', 'fai', 'kapanis'] as const;
+// Görevlerim kapsamı (1146 b): benim, oturumdaki kişinin işlemlerine göre; ekip, bütün bekleyen işler.
+export const GOREV_KAPSAMLARI = ['benim', 'ekip'] as const;
+// Bekleyen adımı yapacak işlem; Sorumlu sütunu işlem adından yazılır. Talep açma bekleyen adım değildir.
+export const GOREV_ISLEMLERI = [
+  'degisiklik-yonetimi.siniflandir', 'degisiklik-yonetimi.ccb-karar', 'degisiklik-yonetimi.musteri-onayi', 'degisiklik-yonetimi.emir-ac',
+  'degisiklik-yonetimi.revizyon-hazirla', 'degisiklik-yonetimi.yayinla', 'degisiklik-yonetimi.karar-ver', 'degisiklik-yonetimi.mrb-karar',
+  'degisiklik-yonetimi.fai-onayla', 'degisiklik-yonetimi.kapat',
+] as const;
 
 export type Sinif = (typeof SINIFLAR)[number];
 export type Aciliyet = (typeof ACILIYETLER)[number];
@@ -131,6 +139,8 @@ export type SeriDurumu = (typeof SERI_DURUMLARI)[number];
 export type UyumHali = (typeof UYUM_HALLERI)[number];
 export type IplikHali = (typeof IPLIK_HALLERI)[number];
 export type HatAsamasi = (typeof HAT_ASAMALARI)[number];
+export type GorevKapsami = (typeof GOREV_KAPSAMLARI)[number];
+export type GorevIslemi = (typeof GOREV_ISLEMLERI)[number];
 export type ListeKapsami = (typeof LISTE_KAPSAMLARI)[number];
 export type TasarimOtoritesi = (typeof TASARIM_OTORITELERI)[number];
 export type ParcaHali = (typeof PARCA_HALLERI)[number];

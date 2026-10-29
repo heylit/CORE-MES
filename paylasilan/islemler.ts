@@ -4,6 +4,7 @@ import { AYARLAR_ISLEMLERI } from './islemler/ayarlar.ts';
 import { CIZIMLER_ISLEMLERI } from './islemler/cizimler.ts';
 import { CNC_KURULUM_ISLEMLERI } from './islemler/cnc-kurulum.ts';
 import { RECETE_ROTA_ISLEMLERI } from './islemler/recete-rota.ts';
+import { DEGISIKLIK_YONETIMI_ISLEMLERI } from './islemler/degisiklik-yonetimi.ts';
 import { DENETIM_ISLEMLERI } from './islemler/denetim.ts';
 import { DENETIM_HAZIRLIK_ISLEMLERI } from './islemler/denetim-hazirlik.ts';
 import { DURUS_NEDENLERI_ISLEMLERI } from './islemler/durus-nedenleri.ts';
@@ -52,6 +53,7 @@ export const VERI_ISLEMLERI = [
   ...CIZIMLER_ISLEMLERI,
   ...CNC_KURULUM_ISLEMLERI,
   ...RECETE_ROTA_ISLEMLERI,
+  ...DEGISIKLIK_YONETIMI_ISLEMLERI,
   ...DENETIM_ISLEMLERI,
   ...DENETIM_HAZIRLIK_ISLEMLERI,
   ...DURUS_NEDENLERI_ISLEMLERI,
