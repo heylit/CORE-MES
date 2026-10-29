@@ -101,6 +101,18 @@ describe('Noktalar', () => {
     expect(screen.queryByText(/Fabrikanın konumu Sistem Ayarları/)).toBeNull();
   });
 
+  it('fabrikada konum girilmez: konum alanları yerine Sistem Ayarları notu durur (930 a)', async () => {
+    sunucuKur(TANIMCI);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni nokta' }));
+    const form = screen.getByRole('form', { name: 'Yeni nokta' });
+    expect(within(form).getByLabelText(/^Enlem/)).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText('Tür'), { target: { value: 'fabrika' } });
+    expect(within(form).queryByLabelText(/^Enlem/)).toBeNull();
+    expect(within(form).queryByRole('button', { name: 'Haritadan seç' })).toBeNull();
+    expect(within(form).getByText(/Fabrikanın konumu Sistem Ayarları/)).toBeTruthy();
+  });
+
   it('sunucu ikinci fabrikayı reddederse iletisi yazılır, form açık kalır', async () => {
     const RET = { kod: 'CAKISMA', mesaj: 'Aktif bir fabrika noktası zaten var; önce onu pasifleştirin.' } satisfies HataGovdesi;
     sunucuKur(TANIMCI, () => json(409, RET));
@@ -108,7 +120,6 @@ describe('Noktalar', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Yeni nokta' }));
     doldur('Ad', 'İkinci Fabrika');
     fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'fabrika' } });
-    doldur('Enlem', '39.95'); doldur('Boylam', '32.81');
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     expect((await screen.findByRole('alert')).textContent).toBe(RET.mesaj);
     expect(screen.getByRole('form', { name: 'Yeni nokta' })).toBeTruthy();

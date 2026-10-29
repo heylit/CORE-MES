@@ -36,7 +36,8 @@ let fabrikaId = 0, a = 0, b = 0, c = 0, k1 = 0, k2 = 0;
 before(async () => {
   ortam = await testVeritabaniKur('sevkiyat');
   vt = ortam.vt;
-  fabrikaId = (await nokta('Deneme Fabrika', 0, 0, 'fabrika')).id;
+  // Sistem Ayarları'nda konum girilmeden önce açılmış fabrika kaydı (930 a öncesi): rota kayıttaki konumla çıkar.
+  fabrikaId = (await tx((db) => sorgu.noktaEkle(db, { ad: 'Deneme Fabrika', tur: 'fabrika', ...konum(0, 0), adres: null, durakSuresiDakika: 10, firmaId: null }))).id;
   a = (await nokta('Nokta A', 2, 9)).id; b = (await nokta('Nokta B', 9, 3)).id; c = (await nokta('Nokta C', 6, 6, 'tedarikci')).id;
   k1 = (await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Araç 1' }))).id;
   k2 = (await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Araç 2', tur: 'kamyon', kapasiteKilogram: 5000, kapasitePalet: 10 }))).id;
@@ -105,6 +106,25 @@ test('Sistem Ayarları\'nda fabrika konumu varsa (enlem ve boylam) fabrika orada
     assert.match(r.plan!.google, /origin=39\.950000%2C32\.750000/);
   } finally {
     await tx((db) => db.sorgu("DELETE FROM ayar WHERE anahtar LIKE 'sevkiyat.fabrika-%'"));
+  }
+});
+
+test('930 a: fabrika noktasına elle konum yazılmaz; ayar doluysa konum ayardan yazılır, boşsa eski kayıt konumunu korur', async () => {
+  await ileriOnaylariKaldir();
+  const kayitli = async () => (await tx((db) => sorgu.noktaGetir(db, fabrikaId)))!;
+  const guncelle = (k: { enlem: number; boylam: number }, ad = 'Deneme Fabrika') =>
+    tx(async (db) => servis.noktaGuncelle(db, fabrikaId, { surum: await surumu(db, 'sevkiyat_noktasi', fabrikaId), ad, tur: 'fabrika', ...k, adres: null, durakSuresiDakika: 10 }));
+  const ilk = await kayitli();
+  const adDegisti = await guncelle(konum(5, 5), 'Deneme Fabrika 2');
+  assert.deepEqual({ ad: adDegisti.ad, enlem: adDegisti.enlem, boylam: adDegisti.boylam }, { ad: 'Deneme Fabrika 2', enlem: Number(ilk.enlem), boylam: Number(ilk.boylam) });
+  const yonetici = await tx(async (db) => (await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Konum Ayari') RETURNING id"))!.id);
+  try {
+    await tx((db) => db.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('sevkiyat.fabrika-enlem', '39.95', $1), ('sevkiyat.fabrika-boylam', '32.75', $1)", [yonetici]));
+    await guncelle(konum(7, 7));
+    assert.deepEqual({ enlem: Number((await kayitli()).enlem), boylam: Number((await kayitli()).boylam) }, { enlem: 39.95, boylam: 32.75 });
+  } finally {
+    await tx((db) => db.sorgu("DELETE FROM ayar WHERE anahtar LIKE 'sevkiyat.fabrika-%'"));
+    await tx((db) => db.sorgu('UPDATE sevkiyat_noktasi SET ad = $2, enlem = $3, boylam = $4 WHERE id = $1', [fabrikaId, 'Deneme Fabrika', ilk.enlem, ilk.boylam]));
   }
 });
 

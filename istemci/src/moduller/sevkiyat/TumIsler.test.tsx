@@ -56,9 +56,9 @@ function sunucuKur(kullanici: Kullanici) {
   }));
   return istekler;
 }
-function ac() {
+function ac(adres = '/sevkiyat/tum-isler') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/tum-isler']}><TumIsler /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}><TumIsler /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 const satirOf = (tablo: HTMLElement, metin: string) => within(tablo).getByText(metin).closest('tr')!;
@@ -84,6 +84,16 @@ describe('Tüm işler', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Şimdi sevke çıkar' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
     expect(yazmalar(istekler)[1]!.govde).toEqual({ anahtarlar: ['fason:70'], tasima: 'biz', erkenGerekce: 'Son kontrol bitti, emir kapatılmadı' });
+  });
+
+  it('genel aramadan gelen emir no: görünüm, arama kutusu ve bütün tarihler ayarlı açılır (932 a)', async () => {
+    const istekler = sunucuKur(OKUYUCU);
+    ac('/sevkiyat/tum-isler?ara=DENEME-UE-13&gorunum=sevkiyat');
+    const tablo = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
+    expect(within(tablo).getByText('DENEME-UE-13')).toBeTruthy();
+    expect(within(tablo).queryByText('DENEME-UE-14')).toBeNull();
+    expect((screen.getByPlaceholderText('Sipariş, emir, OP, malzeme, firma') as HTMLInputElement).value).toBe('DENEME-UE-13');
+    expect(istekler.filter((i) => i.yol.startsWith('/sevkiyat/tum-isler?')).every((i) => i.yol.includes('baslangic=2000-01-01'))).toBe(true);
   });
 
   it('sahibi modül kendi kalemini bırakır; erken çıkış sevkiyat.onayla olmadan kilitlidir', async () => {

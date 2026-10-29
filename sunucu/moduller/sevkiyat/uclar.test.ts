@@ -59,6 +59,7 @@ const BEKLENEN: Record<string, Islem | { biri: readonly string[] }> = {
   'GET /sevkiyat/harita': 'sevkiyat.oku',
   'GET /sevkiyat/trafik': 'sevkiyat.oku',
   'GET /sevkiyat/arama': 'sevkiyat.oku',
+  'GET /sevkiyat/ara': { biri: ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
 };
 
 describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
@@ -139,9 +140,16 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
 
   test('uçtan uca: tanım, iş, dağıtma, onay, onaylı planda kayıt reddi ve tek rota; cevaplar sözleşmeden geçer', async () => {
     const y = (method: 'GET' | 'POST', url: string, payload?: unknown) => iste(hedef, method, url, yonetici, payload);
-    const fabrika = await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Deneme Fabrika', tur: 'fabrika', enlem: 39.9, boylam: 32.7, adres: '', durakSuresiDakika: 0 });
+    // 930 a: fabrikanın konumu Sistem Ayarları'ndadır; ayar girilmeden fabrika açılmaz, gönderilen konum yok sayılır.
+    const fabrikaGovdesi = { ad: 'Deneme Fabrika', tur: 'fabrika', enlem: 1, boylam: 1, adres: '', durakSuresiDakika: 0 };
+    const ayarsiz = await y('POST', '/sevkiyat/noktalar/ekle', fabrikaGovdesi);
+    assert.equal(ayarsiz.json().kod, 'GECERSIZ', ayarsiz.body);
+    const kisi = (await ortam.vt.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Konum Ayari') RETURNING id"))!.id;
+    await ortam.vt.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('sevkiyat.fabrika-enlem', '39.9', $1), ('sevkiyat.fabrika-boylam', '32.7', $1)", [kisi]);
+    const fabrika = await y('POST', '/sevkiyat/noktalar/ekle', fabrikaGovdesi);
     assert.equal(fabrika.statusCode, 200, fabrika.body);
     assert.equal(fabrika.json().nokta.adres, null);
+    assert.deepEqual([fabrika.json().nokta.enlem, fabrika.json().nokta.boylam], [39.9, 32.7]);
     const a = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta A', tur: 'musteri', enlem: 39.95, boylam: 32.8, adres: null, durakSuresiDakika: 10 })).json().nokta;
     const b = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta B', tur: 'musteri', enlem: 39.99, boylam: 32.73, adres: null, durakSuresiDakika: 10 })).json().nokta;
     const arac = await y('POST', '/sevkiyat/araclar/ekle', {

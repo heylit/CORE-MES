@@ -12,3 +12,4 @@
 - Gün planı okunurken her seferinde değerlendirilir (kip 'degerlendir'); saatler kaydedilmez, onayda yazılır.
 - Ekran kural hesaplamaz: taşıma yalnız listeyi değiştirir (rota-duzeni.ts), kaydı ve uyarıyı sunucu üretir.
 - Vazgeçilen: QR kod (yeni paket gerekirdi), haritadan serbest nokta ile tek rota (kayıtlı nokta zorunlu), ayrı pencerede harita.
+- Genel arama (932 a) emir numaralarını uretim-emirleri `emirNolari` ile okur ve bellekte süzer (kalemli emir sayısı kadar). Kalem sayısı çok büyürse uretim-emirleri'nden numaraya göre arayan bir `disari.ts` işlevi istenir.

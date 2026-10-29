@@ -8,9 +8,10 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    Elle girilen (bağsız) müşteri, tedarikçi ve fason noktası kalır.
 2. Belge no serbest metin (`sevkiyat_isi.belge_no`); Logo irsaliyesiyle bağ yok. Uyum: akış C bağlanırken sorulur. Stok çıkışı (E-12): ürün taşıyan işin durum değişimi
    olayla bildirilir (`urunSevkiDinle`, #1875); stok dinleyicisi kullanıcı kararı 235 a ile (yolda: Yolda konumu, teslim: çıkış) Stok şeridinde yazılır.
-3. Fabrika konumu iki yerde olabilir (kart #836 ile Sistem Ayarları'ndaki konum doluysa sevkiyat onu kullanır): sevkiyatın fabrika noktası ve atölye (Fabrika Haritası, kart #599). Sahiplik sorulur.
-   Karar (kullanıcı, proje sohbeti 17.10.2026 18:53): fabrika konumunun tek kaynağı Sistem Ayarları; sevkiyat noktasının elle konumunu kapatan kod işi dondurma sonrası.
-4. Kişi sütunu yok: onay, sonuç ve iş yazan kişi yalnız çekirdek denetim kaydında. Uyum: gerekirse `onaylayan_kisi_id`, `sonuc_kisi_id`.
+3. ~~Fabrika konumu iki yerde olabilir.~~ Kapandı (930 a): fabrikanın konumunun tek kaynağı Sistem Ayarları (`sevkiyat.fabrika-enlem`, `-boylam`).
+   Fabrika noktasına elle konum yazılmaz: ekleme ve güncelleme konumu ayardan yazar; ayar boşken yeni fabrika açılmaz, eski kayıt konumunu korur.
+   Ekranda fabrika formu konum alanı göstermez. Atölye (Fabrika Haritası, kart #599) bu kaynağı Aşama 2'de okur.
+4. Kişi sütunu yok: onay, sonuç ve iş yazan kişi yalnız çekirdek denetim kaydında. Karar 931 b: boş olabilen `onaylayan_kisi_id`, `sonuc_kisi_id` (göç okuma teyidi bekliyor).
 5. ~~Tekrar koruması yok.~~ Kapandı (kart #1323): nokta, araç ve iş açma, iş iptali ve durumu, plan onayı ve onay kaldırma, bekleme listesinde işe çevirme ve kaldırma `tekrarKorumali`; istemci aynı kimlikle yeniden dener.
    Güncelleme uçlarında sürüm denetimi de geldi (`surum` sütunu, göç `20261014203000`).
 6. ~~Harita verisi ortam değişkeninden: modül `process.env.TMIV2_HARITA_DIZINI`'yi doğrudan okur.~~ Kapandı: değişkeni çekirdek

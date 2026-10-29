@@ -154,6 +154,17 @@ export async function tumIsler(db: Db, aralik: { baslangic: string; bitis: strin
   return [...await kalemSatirlari(db, await sorgu.tumIsKalemleri(db, aralik), fasonlar), ...await adaylar(db, aralik.bitis, fasonlar)];
 }
 
+// Üst çubuktaki genel aramanın sevkiyat kaynağı (932 a): emir numarası yazınca o emrin sevk kalemleri çıkar.
+export async function emirSevkAramasi(db: Db, q: string, sinir: number): Promise<TumIsSatiri[]> {
+  const aranan = q.trim().toLocaleLowerCase('tr-TR');
+  if (aranan === '') return [];
+  const emirIdleri = await sorgu.kalemliEmirler(db);
+  const nolar = await emirNolari(db, emirIdleri);
+  const bulunan = emirIdleri.filter((id) => nolar.get(id)?.toLocaleLowerCase('tr-TR').includes(aranan) ?? false);
+  if (bulunan.length === 0) return [];
+  return kalemSatirlari(db, await sorgu.emirlerinKalemleri(db, bulunan, sinir));
+}
+
 // Komutun yetki bağlamı: kişi ve işlemi var mı (uç kullanıcıdan kurar).
 export interface Yazan { kisiId: number; yetkili: (islem: Islem) => boolean }
 

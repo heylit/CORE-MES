@@ -27,6 +27,7 @@ const FIRMALI_TURLER: readonly NoktaTuru[] = ['musteri', 'tedarikci', 'fason'];
 const firmaTuru = (f: FirmaSecenegi, simdiki: NoktaTuru): NoktaTuru =>
   f.fason ? 'fason' : f.tur === 'ikisi' ? (simdiki === 'tedarikci' ? 'tedarikci' : 'musteri') : f.tur;
 const sayi = (x: string) => Number(x.replace(',', '.'));
+const FABRIKA_KONUMU_NOTU = "Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu'ndan gelir; rotalar oradan çıkar.";
 const konumMetni = (enlem: number, boylam: number) => `${enlem.toFixed(5)}, ${boylam.toFixed(5)}`;
 const TUR_SECENEKLERI = NOKTA_TURLERI.map((t) => ({ deger: t, baslik: NOKTA_TURU_ADI[t] }));
 type Suzgec = NoktaTuru | 'hepsi';
@@ -60,7 +61,9 @@ export function Noktalar() {
 
   const kaydet = (e: FormEvent) => {
     e.preventDefault(); if (!taslak) return;
-    const govde: NoktaGovdesi = { ad: taslak.ad, tur: taslak.tur, enlem: sayi(taslak.enlem), boylam: sayi(taslak.boylam), adres: taslak.adres.trim() || null, durakSuresiDakika: sayi(taslak.durakSuresiDakika), firmaId: taslak.firmaId };
+    // Fabrikanın konumunu sunucu Sistem Ayarları'ndan yazar (930 a); gönderilen konum yok sayılır.
+    const konum = taslakKonumu ?? { enlem: 0, boylam: 0 };
+    const govde: NoktaGovdesi = { ad: taslak.ad, tur: taslak.tur, enlem: konum.enlem, boylam: konum.boylam, adres: taslak.adres.trim() || null, durakSuresiDakika: sayi(taslak.durakSuresiDakika), firmaId: taslak.firmaId };
     komut.mutate(taslak.id === null ? { tur: 'ekle', govde } : { tur: 'guncelle', id: taslak.id, govde: { ...govde, surum: taslak.surum } }, {
       onSuccess: () => { bildir('tamam', `${govde.ad} kaydedildi.`); formKapat(); },
     });
@@ -118,15 +121,19 @@ export function Noktalar() {
                   <Secim etiket="Tür" secenekler={TUR_SECENEKLERI} value={taslak.tur} onChange={(e) => turSec(e.target.value as NoktaTuru)} />
                   <Girdi etiket="Yükleme/boşaltma (dk)" type="number" required min={0} step={1} value={taslak.durakSuresiDakika} onChange={(e) => alan('durakSuresiDakika', e.target.value)} />
                 </div>
-                <AdresArama key={taslak.konumAramasi} baslangic={taslak.konumAramasi} etiket="Konum ara" sec={(s) => setTaslak((t) => (t ? {
-                  ...t, enlem: s.enlem.toFixed(6), boylam: s.boylam.toFixed(6), ad: t.ad || (s.tur === 'yer' && s.kategori !== 'Cadde' && s.kategori !== 'Semt' ? s.ad : t.ad),
-                  adres: t.adres || [s.tur === 'yer' ? s.ad : '', s.baglam ?? ''].filter(Boolean).join(', '),
-                } : t))} />
-                <div className="tc-sevkiyat-alanlar">
-                  <Girdi etiket="Enlem" required inputMode="decimal" value={taslak.enlem} onChange={(e) => alan('enlem', e.target.value)} />
-                  <Girdi etiket="Boylam" required inputMode="decimal" value={taslak.boylam} onChange={(e) => alan('boylam', e.target.value)} />
-                  <Dugme simge="target" aria-pressed={haritadanSec} onClick={() => setHaritadanSec(!haritadanSec)}>{haritadanSec ? 'Haritada tıklayın…' : 'Haritadan seç'}</Dugme>
-                </div>
+                {taslak.tur === 'fabrika'
+                  ? <p className="tc-sevkiyat-ince">{FABRIKA_KONUMU_NOTU}</p>
+                  : <>
+                    <AdresArama key={taslak.konumAramasi} baslangic={taslak.konumAramasi} etiket="Konum ara" sec={(s) => setTaslak((t) => (t ? {
+                      ...t, enlem: s.enlem.toFixed(6), boylam: s.boylam.toFixed(6), ad: t.ad || (s.tur === 'yer' && s.kategori !== 'Cadde' && s.kategori !== 'Semt' ? s.ad : t.ad),
+                      adres: t.adres || [s.tur === 'yer' ? s.ad : '', s.baglam ?? ''].filter(Boolean).join(', '),
+                    } : t))} />
+                    <div className="tc-sevkiyat-alanlar">
+                      <Girdi etiket="Enlem" required inputMode="decimal" value={taslak.enlem} onChange={(e) => alan('enlem', e.target.value)} />
+                      <Girdi etiket="Boylam" required inputMode="decimal" value={taslak.boylam} onChange={(e) => alan('boylam', e.target.value)} />
+                      <Dugme simge="target" aria-pressed={haritadanSec} onClick={() => setHaritadanSec(!haritadanSec)}>{haritadanSec ? 'Haritada tıklayın…' : 'Haritadan seç'}</Dugme>
+                    </div>
+                  </>}
                 <Girdi etiket="Açık adres / tarif" maxLength={400} value={taslak.adres} onChange={(e) => alan('adres', e.target.value)} />
                 {komut.isError && <p role="alert" className="tc-sevkiyat-hata">{hataIletisi(komut.error, 'Nokta kaydedilemedi')}</p>}
                 <div className="tc-sevkiyat-satir tc-sevkiyat-satir-sag">
@@ -137,7 +144,7 @@ export function Noktalar() {
             </Kart>
           )}
           <Kart baslik={`Noktalar · ${aktifler.length}`} sag={yetki.tanimYaz && !taslak ? <Dugme tur="birincil" simge="plus" onClick={() => formAc(bosTaslak())}>Yeni nokta</Dugme> : undefined}>
-            {fabrikaAyardan && <p className="tc-sevkiyat-ince">Fabrikanın konumu Sistem Ayarları &gt; Genel &gt; Firma konumu'ndan gelir; rotalar oradan çıkar.</p>}
+            {fabrikaAyardan && <p className="tc-sevkiyat-ince">{FABRIKA_KONUMU_NOTU}</p>}
             {!fabrika && <p role="status"><Rozet ton="uyari">Fabrika yok</Rozet> Rotalar fabrikadan çıkar; önce fabrikayı tanımlayın.</p>}
             <Sekmeler etiket="Türe göre süz" sekmeler={SUZGECLER} secili={suzgec} sec={setSuzgec} />
             <Tablo etiket="Noktalar" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(n) => n.id} bosMesaj="Bu türde nokta yok." />

@@ -197,11 +197,12 @@ export const ikinciFabrikaMi = (yeniTur: string, aktifFabrikaId: number | null, 
 export const fabrikayaCevrilemez = (oncekiTur: string, yeniTur: string, isteKullaniliyor: boolean): boolean =>
   yeniTur === 'fabrika' && oncekiTur !== 'fabrika' && isteKullaniliyor;
 // Fabrika kaldırılamaz (karar, açık soru 8): aktif fabrika pasifleştirilmez, türü değiştirilmez; fabrika taşınınca
-// noktanın konumu güncellenir. Rotalar fabrikadan çıkar; fabrikasız gün planı onaylanamaz.
+// konum Sistem Ayarları'nda güncellenir (930 a). Rotalar fabrikadan çıkar; fabrikasız gün planı onaylanamaz.
 // Firma bağı yalnız firmanın kendisi olan noktada (kargo, fabrika, diğer firmanın yeri değildir).
 export const firmaBaglanabilir = (tur: string): boolean => tur === 'musteri' || tur === 'tedarikci' || tur === 'fason';
 
-export const AKTIF_FABRIKA_KALDIRILAMAZ = 'Aktif fabrika noktası pasifleştirilemez ya da başka türe çevrilemez; fabrika taşındıysa noktanın konumunu güncelleyin.';
+export const AKTIF_FABRIKA_KALDIRILAMAZ = 'Aktif fabrika noktası pasifleştirilemez ya da başka türe çevrilemez; fabrika taşındıysa konumunu Sistem Ayarları\'nda güncelleyin.';
+export const FABRIKA_KONUMU_AYARDA = 'Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu\'nda girilir; önce orada girin.';
 export function fabrikaKaldirilir(onceki: { tur: string; aktif: boolean }, yeniTur: string | null): boolean {
   return onceki.tur === 'fabrika' && onceki.aktif && yeniTur !== 'fabrika';
 }

@@ -593,6 +593,22 @@ export function tumIsKalemleri(db: Db, aralik: { baslangic: string; bitis: strin
     [aralik.baslangic, aralik.bitis],
   );
 }
+// Genel arama (932 a): sevk kalemi olan emirler ve o emirlerin kalemleri (iptal edilen işteki kalem yeni açık kayda geçmiştir).
+export async function kalemliEmirler(db: Db): Promise<number[]> {
+  const satirlar = await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT b.uretim_emri_id AS id FROM ${KALEM_KAYNAKLARI}
+      WHERE b.uretim_emri_id IS NOT NULL AND b.kaldirildi IS NULL AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)`,
+  );
+  return satirlar.map((x) => x.id);
+}
+export function emirlerinKalemleri(db: Db, emirIdleri: readonly number[], sinir: number): Promise<KalemSatiri[]> {
+  return db.sorgu<KalemSatiri>(
+    `SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI}
+      WHERE b.uretim_emri_id = ANY($1::int[]) AND b.kaldirildi IS NULL AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)
+      ORDER BY b.id DESC LIMIT $2`,
+    [[...new Set(emirIdleri)], sinir],
+  );
+}
 export function kalemleriKilitle(db: Db, idler: readonly number[]): Promise<KalemSatiri[]> {
   if (idler.length === 0) return Promise.resolve([]);
   return db.sorgu<KalemSatiri>(`SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI} WHERE b.id = ANY($1::int[]) ORDER BY b.id FOR UPDATE OF b`, [[...new Set(idler)]]);
