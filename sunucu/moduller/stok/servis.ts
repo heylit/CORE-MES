@@ -3414,9 +3414,9 @@ export async function siparisIrsaliyeleri(db: Db, siparisSatirIdler: readonly nu
 // ---- Üretim sayımının stoğa yansıması (kart #1289) --------------------------------------------------------------------------------
 // Sağlam sayım girilince parça istasyonun konumuna girer (STK-U1); teslim edilen sayı kilitlidir (STK-U2). Adımın statüsünü Reçete ve
 // Rota çözer: stok onu ithal edemez (o stoğu ithal eder), başlangıçta çözücüsünü kaydeder. Kayıt yokken parça statüsüz girer.
-// kaliteDurumu: ilk parça kararı beklenirken sayılan parça stoğa karar bekliyor girer (131 b); yoksa serbest.
+// kaliteDurumu: ilk parça kararı beklenirken sayılan parça stoğa karar bekliyor girer (131 b); hatalı parçanın şartlı kabulü şartlı (1211); yoksa serbest.
 export interface UretimSayimiYansimasi {
-  uretimEmriId: number; isEmriId: number | null; istasyonId: number; kisiId: number; fark: string; kaliteDurumu?: 'serbest' | 'karar_bekliyor';
+  uretimEmriId: number; isEmriId: number | null; istasyonId: number; kisiId: number; fark: string; kaliteDurumu?: KaliteDurumu;
   refakatPartisiId?: number | null;
 }
 // Sayımın refakat kartı (#126): kart emre ait ve açık olmalı, yoksa sayım reddedilir (ret sayımı geri alır). Kartın lotu ve kartla
