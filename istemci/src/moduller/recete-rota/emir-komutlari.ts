@@ -84,6 +84,22 @@ function kolaEkAdimlar(v: unknown, d: AdimliEmirAyrintisi, bolunenSira: number, 
   });
 }
 
+// Hatalı parçanın rework adımı (1034): kaynak iç (makine ya da kişi) ya da fason firmadır; iç kaynakta süre, fasonda termin günü gider
+// (boş termin sahibinde 7 gündür). Kaynak seçilmezse adım atanmamış kalır.
+const KAYNAK_TURLERI = ['makine', 'kisi', 'fason'];
+function reworkKaynagi(v: unknown): { tur: string; id: number } | null {
+  if (v === null || v === undefined) return null;
+  const g = (typeof v === 'object' ? v : {}) as Nesne;
+  if (typeof g['tur'] !== 'string' || !KAYNAK_TURLERI.includes(g['tur'])) throw new Error('Geçersiz kaynak türü.');
+  return { tur: g['tur'], id: kimlik(g['id'], 'kaynak') };
+}
+const terminGunu = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'string' && /^\d{1,3}$/.test(v) ? Number(v) : v;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 365) throw hata(422, 'Termin 1-365 gün olmalı.');
+  return n;
+};
+
 const emirOku = async (id: number): Promise<AdimliEmirAyrintisi> => (await api.get<AdimliEmirCevabi>(`/adimli-emirler/${String(id)}`)).emir;
 
 export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
@@ -211,6 +227,41 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         birlesmeOpNo = adim.opNo;
       }
       return { yol: `/adimli-emirler/${String(id)}/birlesme-plani`, govde: { birlesmeOpNo, surum: ekranSurumu(girdi) }, tekrarKorumali: true };
+    },
+  },
+  // 1034: kalite "rework" dedikten sonra planlama kolun bekleyen rework adımını doldurur (Üretim Emirleri). Şartnamesi ayrı komutla
+  // sabitlenir (Rota); ekran ikisini art arda gönderir, ikincisi ilkinin döndürdüğü emir sürümüyle.
+  'emir-rework-adimi': {
+    hazirla: async (girdi) => {
+      const id = kimlik(girdi['id'], 'emir');
+      const isEmriId = kimlik(girdi['isEmriId'], 'iş emri');
+      const kaynak = reworkKaynagi(girdi['kaynak']);
+      const fason = kaynak?.tur === 'fason';
+      const aciklama = typeof girdi['aciklama'] === 'string' ? girdi['aciklama'].trim() : '';
+      return {
+        yol: `/adimli-emirler/${String(id)}/is-emirleri/${String(isEmriId)}/rework-adimi`,
+        govde: {
+          ad: adimAdi(girdi['ad']), operasyonTipiId: kimlik(girdi['operasyonTipiId'], 'operasyon'), kaynak,
+          ayarSuresiDk: fason ? null : sure(girdi['ayarSuresiDk'], 'hazırlık süresi'), birimSureDk: fason ? null : sure(girdi['birimSureDk'], 'birim süre'),
+          terminGun: fason ? terminGunu(girdi['terminGun']) : null, aciklama: aciklama === '' ? null : aciklama, surum: ekranSurumu(girdi),
+        },
+        tekrarKorumali: true,
+      };
+    },
+  },
+  'emir-rework-sartname': {
+    hazirla: async (girdi) => {
+      const id = kimlik(girdi['id'], 'emir');
+      const isEmriId = kimlik(girdi['isEmriId'], 'iş emri');
+      const liste = girdi['sartnameler'];
+      if (!Array.isArray(liste)) throw new Error('Geçersiz şartname listesi.');
+      const sartnameler = liste.map((x: unknown) => {
+        const g = (typeof x === 'object' && x !== null ? x : {}) as Nesne;
+        const degerler = g['degerler'];
+        if (typeof degerler !== 'object' || degerler === null || Array.isArray(degerler)) throw new Error('Geçersiz şartname değerleri.');
+        return { sartnameId: kimlik(g['sartnameId'], 'şartname'), degerler };
+      });
+      return { yol: `/rota/emirler/${String(id)}/is-emirleri/${String(isEmriId)}/sartnameler`, govde: { surum: ekranSurumu(girdi), sartnameler }, tekrarKorumali: true };
     },
   },
   // Alt emri ana emre geri katar: kaynak alt emir kapanır, adedi ana emre geçer. Hedefin sürümü yazmadan önce okunur: ekran ana emrin
