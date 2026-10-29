@@ -4,7 +4,7 @@ import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
-  baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
+  baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
@@ -750,4 +750,21 @@ describe('stok kuralları: emre giden malzeme kart onayı ister (615-2 a, 632 a,
       assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: null }, null, durum), null, String(durum));
     }
   });
+});
+
+test('1214 geri çevirme kalitesi: en yeni ileri çevirmeden, önceden geri çevrilen düşülerek; kayıt yetmezse varsayılan', () => {
+  const ileri = [{ miktar: 3000n, kaynakKalite: 'serbest' as const }, { miktar: 2000n, kaynakKalite: 'karar_bekliyor' as const }];
+  assert.deepEqual(geriCevirmeKaliteleri(ileri, 0n, 4000n, 'red'), [{ kalite: 'serbest', miktar: 3000n }, { kalite: 'karar_bekliyor', miktar: 1000n }]);
+  assert.deepEqual(geriCevirmeKaliteleri(ileri, 3000n, 2000n, 'red'), [{ kalite: 'karar_bekliyor', miktar: 2000n }], 'en yeni 3 önce geri çevrilmiş');
+  assert.deepEqual(geriCevirmeKaliteleri(ileri, 4000n, 3000n, 'red'), [{ kalite: 'karar_bekliyor', miktar: 1000n }, { kalite: 'red', miktar: 2000n }]);
+  assert.deepEqual(geriCevirmeKaliteleri([], 0n, 1000n, 'serbest'), [{ kalite: 'serbest', miktar: 1000n }]);
+});
+
+test('1214 eksiden çevirme uyarısı: ilk adımda hammadde, sonra önceki adımın parçası; başka emre ayrılı girdi söylenir', () => {
+  assert.equal(eksidenUyari({ ilkAdim: true, eksik: 3000n, baskaEmreAyrili: 0n, fiil: 'çevrildi' }),
+    'Hammadde bu istasyonda yok; 3 eksiden çevrildi. Hammaddeyi bu istasyona teslim ettirin.');
+  assert.equal(eksidenUyari({ ilkAdim: false, eksik: 5400n, baskaEmreAyrili: 0n, fiil: 'düşüldü' }),
+    'Önceki adımın parçası bu istasyonda yok; 5.4 eksiye düşüldü. Parçayı bu istasyona teslim ettirin.');
+  assert.equal(eksidenUyari({ ilkAdim: true, eksik: 6000n, baskaEmreAyrili: 6000n, fiil: 'çevrildi' }),
+    'Hammadde bu istasyonda başka emre ayrılı (6); 6 eksiden çevrildi. Rezerveyi müdür kaldırır ya da bu emir için hammadde teslim ettirin.');
 });

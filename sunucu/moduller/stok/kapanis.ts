@@ -28,7 +28,8 @@ export async function izlenebilirlikDurumu(db: Db, uretimEmriId: number): Promis
   return kapanisIzlenebilirligi(kartlar, ihtiyac.size > 0);
 }
 
-// Stoğa işlendi: ürün sağlam adedi kadar girdi, kalan sarf yok; sağlamsız emirde gerekmez (1079 a).
+// Stoğa işlendi: ürün sağlam adedi kadar girdi, kalan sarf yok, istasyonda emrin eksiden düştüğü açık satır yok (1214 O-5); sağlamsız
+// emirde gerekmez (1079 a).
 export async function stokDurumu(db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> {
   const emir = await uretimEmriOzeti(db, uretimEmriId);
   if (emir === null || emir.malzemeNo === null) return null;
@@ -38,6 +39,12 @@ export async function stokDurumu(db: Db, uretimEmriId: number): Promise<KapanisM
   for (const s of await sorgular.emirlerinNetSarfi(db, [uretimEmriId])) verilen.set(s.malzemeId, (verilen.get(s.malzemeId) ?? 0n) + binde(s.miktar));
   const kalanSarfKalemi = [...ihtiyac].filter(([malzemeId, brut]) => kalanSarf(brut, verilen.get(malzemeId) ?? 0n) > 0n).length;
   const girilen = emir.saglamAdet === 0 ? 0n : binde(await sorgular.emirUretimGirisi(db, uretimEmriId, emir.malzemeNo));
-  return kapanisStoguIslendi({ adet: emir.adet, saglamAdet: emir.saglamAdet, girilen, kalanSarfKalemi });
+  const eksiler = emir.saglamAdet === 0 ? [] : await sorgular.emrinIstasyonEksileri(db, uretimEmriId);
+  const kartlar = await malzemeOzetleri(db, [...new Set(eksiler.map((x) => x.malzemeId))]);
+  const istasyonEksileri = eksiler.map((x) => ({
+    malzeme: kartlar.get(x.malzemeId)?.kod ?? `#${String(x.malzemeId)}`, konum: x.konumKod, miktar: binde(x.miktar), statulu: x.statuId !== null,
+    karsiliklar: x.karsiliklar.map((k) => ({ konum: k.konumKod, miktar: binde(k.miktar) })),
+  }));
+  return kapanisStoguIslendi({ adet: emir.adet, saglamAdet: emir.saglamAdet, girilen, kalanSarfKalemi, istasyonEksileri });
 }
 
