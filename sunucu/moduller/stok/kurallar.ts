@@ -871,6 +871,10 @@ export function karantinaEngeli(kaynakTuru: KonumTuru, g: { cikisNedeni: string 
   if (kaynakTuru !== 'karantina') return null;
   return ('cikisNedeni' in g ? g.cikisNedeni === 'fire' : g.hedefTuru === 'hurda') ? null : KARANTINA_ENGELI;
 }
+// 1205, 1206: fason işinden dönen parça GKK kararına kadar karantinada karar bekliyor durur; konum seçilirse karantina türündedir.
+export const FASON_DONUS_KARANTINA = 'Fason dönüşü karantina konumuna girer; GKK kararından sonra çıkar.';
+export const KARANTINA_KONUMU_YOK = 'Karantina konumu yok; fason dönüşü için Depo haritasına karantina alanı ekleyin.';
+export const fasonDonusKonumuEngeli = (tur: KonumTuru): string | null => (tur === 'karantina' ? null : FASON_DONUS_KARANTINA);
 export function kaliteDegisimiEngeli(kaynak: KaliteDurumu, hedef: KaliteDurumu, mevcut: string, miktar: string): string | null {
   if (kaynak === hedef) return 'Kaynak ve hedef kalite durumu aynı.';
   if (binde(mevcut) < binde(miktar)) return `Bu kalite durumunda yeterli stok yok. Mevcut: ${bindenMetin(binde(mevcut))}.`;

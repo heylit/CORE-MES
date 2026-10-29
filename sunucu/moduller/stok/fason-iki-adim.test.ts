@@ -19,12 +19,13 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, fasonEksikGonderimSayisi, uretimGirisi } from './servis.ts';
+import { FASON_DONUS_KARANTINA } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
 
 // Kart #1310: biten emrin ürünü bekleme listesine düşer; fasona gönderim firmanın noktasına teslimat işi açar, noktası yoksa listede bekler.
-// Kart #1310: fasona gönderimde stok iki adımda yürür (Yolda, sonra firma); dönüşte hurda firmadan düşer.
+// Kart #1310: fasona gönderimde stok iki adımda yürür (Yolda, sonra firma). 1205: dönüş tek adetle karantinaya karar bekliyor girer.
 describe('stok fason iki adım (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -177,7 +178,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       WHERE ${kosul} = $1 AND p.uretim_emri_id = $2`, [deger, emirId]))!.m);
   const durum = (isId: number, d: string, tarih: string) => istek<{ mesaj?: string }>('depo', 'POST', `/sevkiyat/isler/${isId}/durum`, { durum: d, tarih, not: null });
 
-  test('gönderimde parça istasyondan firmanın Yolda konumuna, sevkiyat tesliminde firmaya geçer; geri alınan teslim geri döner; dönüşte hurda firmadan düşer', async () => {
+  test('gönderimde parça istasyondan firmanın Yolda konumuna, sevkiyat tesliminde firmaya geçer; geri alınan teslim geri döner; dönüş karantinaya girer', async () => {
     const f = await fasonFirmaKur(true);
     const e = await fasonluEmir(f.firmaId);
     assert.equal(await bakiye('k.tur', 'istasyon', e.id), 9, 'üretim girişi istasyonda');
@@ -198,15 +199,24 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     assert.equal((await durum(isId, 'tamamlandi', bugun)).durum, 200);
     assert.equal(await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id), 6);
 
-    // Dönüş mal kabulden: girdisiz rotada emrin ürünü döner; hurda firmadan düşer, sağlam kabule gelir, dönüş kaydı emre yazılır.
+    // Dönüş mal kabulden: girdisiz rotada emrin ürünü döner; 1205, 1207 c: hurda yazılmaz, dönen karantinaya karar bekliyor girer
+    // (kararı GKK verir), dönüş kaydı emre yazılır, kalan firmada durur.
     const sip = await hizmetSiparisi(f.firmaId);
-    const d = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 1);
+    const krn = await karantina();
+    const kabulKonumu = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    const eski = await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: urunNo, miktar: '4', siparisSatirId: sip.siparisSatirId, fasonIsi: { isEmriId: e.fasonIsEmriId, hurdaAdet: 1 } }] });
+    assert.equal(eski.durum, 400, 'mal kabul hurda almaz');
+    const kabuleRed = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, undefined, kabulKonumu);
+    assert.equal(kabuleRed.durum, 400, 'fason dönüşü kabul konumuna girmez');
+    assert.equal(kabuleRed.govde.mesaj, FASON_DONUS_KARANTINA);
+    const d = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.deepEqual([await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id), await bakiye('k.kod', 'KABUL', e.id)], [1, 4]);
+    assert.deepEqual([await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id), await bakiye('k.id', krn, e.id), await bakiye('k.kod', 'KABUL', e.id)], [2, 4, 0]);
+    assert.equal(await kaliteli(krn, e.id, 'karar_bekliyor'), 4, 'karantinada karar bekliyor');
     const kayit = (await istek<FasonIsleriCevabi>('depo', 'GET', `/stok/fason-isleri?konumId=${String(sip.kutu)}`)).govde.isler.find((x) => x.isEmriId === e.fasonIsEmriId);
-    assert.deepEqual([kayit?.donen, kayit?.hurda, kayit?.statulu], [4, 1, false]);
-    const fire = await o().sahip.tek<{ m: string }>("SELECT sum(miktar)::text AS m FROM stok_hareketi WHERE cikis_nedeni = 'fire' AND uretim_emri_id = $1", [e.id]);
-    assert.equal(Number(fire?.m), 1);
+    assert.deepEqual([kayit?.donen, kayit?.hurda, kayit?.statulu], [4, 0, false]);
+    const fire = await o().sahip.tek<{ m: string | null }>("SELECT sum(miktar)::text AS m FROM stok_hareketi WHERE cikis_nedeni = 'fire' AND uretim_emri_id = $1", [e.id]);
+    assert.equal(fire?.m ?? null, null, 'firmadan fire düşülmez');
     // Açık emrin firmadaki parçası eksik sayılmaz.
     const kutu = await istek<{ fasondaEksik: number }>('depo', 'GET', '/stok/is-kutusu');
     assert.equal(kutu.govde.fasondaEksik, 0);
@@ -299,15 +309,21 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       "INSERT INTO stok_konum (depo_id, kod, tur, firma_id) SELECT id, $1, 'fason', $2 FROM stok_depo WHERE kod = 'ANA' RETURNING id", [`FSN-${String(firmaId)}`, firmaId]))!.id;
     return { siparisSatirId, kutu };
   }
-  const fasonKabulu = (siparisSatirId: number, malzemeId: number, adet: number, isEmriId: number, hurdaAdet?: number, sevkKalemiId?: number) =>
+  const fasonKabulu = (siparisSatirId: number, malzemeId: number, adet: number, isEmriId: number, sevkKalemiId?: number, konumId?: number) =>
     istek<{ kod?: string; mesaj?: string }>('depo', 'POST', '/stok/mal-kabul', {
       tur: 'satin_alma', satirlar: [{
-        malzemeId, miktar: String(adet), siparisSatirId, fasonIsi: { isEmriId, ...(hurdaAdet === undefined ? {} : { hurdaAdet }) }, ...(sevkKalemiId === undefined ? {} : { sevkKalemiId }),
+        malzemeId, miktar: String(adet), siparisSatirId, fasonIsi: { isEmriId }, ...(sevkKalemiId === undefined ? {} : { sevkKalemiId }), ...(konumId === undefined ? {} : { konumId }),
       }],
     });
+  // Fason dönüşünün karantinası (1205): yoksa açılır; ilk karantina konumu varsayılandır.
+  const karantina = async (): Promise<number> => (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE tur = 'karantina' AND aktif ORDER BY kod, id LIMIT 1"))?.id
+    ?? (await o().sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'KRN-FSN', 'karantina' FROM stok_depo WHERE kod = 'ANA' RETURNING id"))!.id;
+  const kaliteli = async (konumId: number, emirId: number, kalite: string): Promise<number> => Number((await o().sahip.tek<{ m: string }>(
+    `SELECT COALESCE(sum(b.miktar), 0)::text AS m FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id
+      WHERE b.konum_id = $1 AND p.uretim_emri_id = $2 AND b.kalite_durumu = $3`, [konumId, emirId, kalite]))!.m);
 
   // 960, 962 a: Tüm işlerden bırakılan fason adımında gidişi depo çıkışı yazar; parça istasyondan firmanın fason konumuna geçer (Yolda'da
-  // kalmaz). Dönüş kalemi gidiş çıkınca hazırdır; mal kabul satırı onu kapatır (hurda gelen sayılır).
+  // kalmaz). Dönüş kalemi gidiş çıkınca hazırdır; mal kabul satırı onu dönen adetle kapatır.
   test('960: depo çıkışı fason gidişini yazar, parça firmaya geçer; dönüş mal kabul satırıyla kapanır', async () => {
     const f = await fasonFirmaKur(false);
     const e = await fasonluEmir(f.firmaId);
@@ -322,19 +338,20 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     assert.equal(kayit?.n, 1, 'gidiş emre bir kez yazılır');
 
     const sip = await hizmetSiparisi(f.firmaId);
-    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 1, gidis)).durum, 409, 'gidiş kalemi kabul edilmez');
-    const d1 = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 1, donus);
+    await karantina();
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, gidis)).durum, 409, 'gidiş kalemi kabul edilmez');
+    const d1 = await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, donus);
     assert.equal(d1.durum, 200, JSON.stringify(d1.govde));
     const kalem = async () => o().sahip.tek<{ kabul: string | null; bitti: boolean }>('SELECT kabul_adet::text AS kabul, depo_zamani IS NOT NULL AS bitti FROM sevkiyat_bekleyen WHERE id = $1', [donus]);
-    assert.deepEqual(await kalem(), { kabul: '5.0000', bitti: false }, 'kısmi kabulde kalem açık');
-    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 4, e.fasonIsEmriId, 0, donus)).durum, 200);
+    assert.deepEqual(await kalem(), { kabul: '4.0000', bitti: false }, 'kısmi kabulde kalem açık');
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 5, e.fasonIsEmriId, donus)).durum, 200);
     assert.deepEqual(await kalem(), { kabul: '9.0000', bitti: true });
     assert.equal(await bakiye('k.kod', `FSN-${String(f.firmaId)}`, e.id), 0);
   });
 
   // Kart #1289: girdili emirde fasona giden, önceki adımın statüsündeki HM'dir. Dönüş yalnız mal kabulle girer (karar 15.10 B): dönüş
-  // kaydı (sağlam, hurda) emre yazılır, hurda firmadan düşer, sağlam firmadan kabule gelir ve fason adımının statüsüne çevrilir.
-  test('girdili emir: statülü HM firmaya gider, mal kabulde hurdası firmadan düşer, sağlamı fason adımının statüsüyle döner ve son adımda tükenir', async () => {
+  // kaydı emre yazılır, parça firmadan karantinaya gelir ve fason adımının statüsüne karar bekliyor çevrilir (1205).
+  test('girdili emir: statülü HM firmaya gider, dönüşte fason adımının statüsüyle karantinaya karar bekliyor girer; sonraki adım karantinaya dokunmaz', async () => {
     const f = await fasonFirmaKur(false);
     const hm = (await o().sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
@@ -372,18 +389,19 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       const yolda = await yer(`YLD-${String(f.firmaId)}`);
       assert.deepEqual([await hmBakiye(k1, s10), await hmBakiye(yolda, s10)], [0, 10], 'yarı parça statüsüyle Yolda');
 
-      const kabulKonumu = await yer('KABUL');
+      const krn = await karantina();
       const sip = await hizmetSiparisi(f.firmaId);
       const isler = await istek<FasonIsleriCevabi>('depo', 'GET', `/stok/fason-isleri?konumId=${String(sip.kutu)}`);
       assert.equal(isler.durum, 200, JSON.stringify(isler.govde));
       assert.deepEqual(isler.govde.isler.map((x) => [x.isEmriId, x.donenKart.malzemeId, x.statulu, x.gonderilen]), [[isEmriIdleri[1], hm, true, 4]], 'fason kutusunda açık iş ve dönecek kart');
-      assert.equal((await fasonKabulu(sip.siparisSatirId, hm, 1, isEmriIdleri[1]!, 5)).durum, 400, 'gidenden fazla hurda dönmez');
-      const fazla = await fasonKabulu(sip.siparisSatirId, hm, 5, isEmriIdleri[1]!, 1);
+      const fazla = await fasonKabulu(sip.siparisSatirId, hm, 5, isEmriIdleri[1]!);
       assert.equal(fazla.durum, 200, JSON.stringify(fazla.govde));
-      assert.deepEqual([await hmBakiye(yolda, s10), await hmBakiye(kabulKonumu, s10), await hmBakiye(kabulKonumu, s20)], [0, 0, 7.5],
-        'hurda (2,5) firmadan düşer; firmada kalan 3 adet: 5 yazılsa da 3 adet mal kabule gelir ve OP 20 (fason) statüsüne çevrilir');
+      assert.deepEqual([await hmBakiye(yolda, s10), await hmBakiye(krn, s10), await hmBakiye(krn, s20)], [0, 0, 10],
+        'firmada 4 adet: 5 yazılsa da 4 adet karantinaya gelir ve OP 20 (fason) statüsüne çevrilir');
+      const krnKalite = await o().sahip.tek<{ k: string }>('SELECT string_agg(DISTINCT kalite_durumu, \',\') AS k FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND miktar <> 0', [hm, krn]);
+      assert.equal(krnKalite?.k, 'karar_bekliyor', 'çevrilen parça karar bekliyor');
       const kayit = (await istek<FasonIsleriCevabi>('depo', 'GET', `/stok/fason-isleri?konumId=${String(sip.kutu)}`)).govde.isler[0];
-      assert.deepEqual([kayit?.donen, kayit?.hurda], [3, 1], 'dönüş kaydı emre mal kabulden yazılır');
+      assert.deepEqual([kayit?.donen, kayit?.hurda], [4, 0], 'dönüş kaydı emre mal kabulden yazılır');
       const duzelt = await istek<{ mesaj?: string }>('depo', 'POST', `/stok/mal-kabuller/${String((fazla.govde as { belge?: { id: number } }).belge?.id)}/duzelt`, { satirlar: [] });
       assert.notEqual(duzelt.durum, 200, 'fason işinden dönen satırlı belge düzeltilmez');
 
@@ -392,18 +410,9 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       const b3 = await terminal(id, 'baslat');
       assert.equal(b3.durum, 200, JSON.stringify(b3.govde));
       assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 3 })).durum, 200);
-      // 562 1 b: fasondan dönüp kabulde bekleyen parça da teslimsiz düşülmez; son adım istasyonunda eksiye düşer, teslimle kapanır.
+      // 562 1 b: karantinadaki parça teslimsiz düşülmez; GKK kararına kadar karantinada durur, son adım istasyonunda eksiye düşer.
       const k3 = await konum(m3);
-      assert.deepEqual([await hmBakiye(kabulKonumu, s20), await hmBakiye(k3, s20)], [7.5, -7.5], 'son adım kabule dokunmaz, istasyonda eksi düşer');
-      const ist3 = (await o().sahip.tek<{ id: number }>('SELECT istasyon_id AS id FROM makine WHERE id = $1', [m3]))!.id;
-      const g = await istek<{ teslim: { id: number; surum: number } }>('depo', 'POST', '/stok/teslimler/gonder', {
-        malzemeId: hm, miktar: '7.5', statuId: s20, not: null, kaynakKimligi: randomUUID(), kaynak: { konumId: kabulKonumu }, hedef: { istasyonId: ist3 },
-      });
-      assert.equal(g.durum, 200, JSON.stringify(g.govde));
-      const al = await istek('operator', 'POST', `/stok/teslimler/${String(g.govde.teslim.id)}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '7.5' });
-      assert.equal(al.durum, 200, JSON.stringify(al.govde));
-      assert.deepEqual([await hmBakiye(kabulKonumu, s20), await hmBakiye(k3, s20)], [0, 0], 'teslim alınınca eksi kapanır: son adım fasondan dönen HM\'yi tüketmiş olur');
-      assert.equal(await bakiye('k.tur', 'istasyon', id), 3, 'ürün son adımın istasyonuna girer');
+      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(k3, s20)], [10, -7.5], 'son adım karantinaya dokunmaz, istasyonda eksi düşer');
     } finally {
       adimStatusuCozucusuKaydet(async () => null);
       adimCiktisiCozucusuKaydet(async () => null);
@@ -430,7 +439,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       await o().sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, istasyon_id)
         SELECT d.id, 'IST-' || m.istasyon_id, 'istasyon', m.istasyon_id FROM stok_depo d, makine m WHERE d.kod = 'ANA' AND m.id = $1`, [m1]);
       const k1 = (await o().sahip.tek<{ id: number }>('SELECT k.id FROM stok_konum k JOIN makine m ON m.istasyon_id = k.istasyon_id WHERE m.id = $1', [m1]))!.id;
-      const kabulKonumu = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+      const krn = await karantina();
       const miktar = async (malzemeId: number, konumId: number, st: number | null) => Number((await o().sahip.tek<{ m: string }>(
         'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND statu_id IS NOT DISTINCT FROM $3', [malzemeId, konumId, st]))!.m);
       assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: hm, miktar: '20', konumId: k1 }] })).durum, 200);
@@ -443,7 +452,8 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       assert.equal((await fasonKabulu(sip.siparisSatirId, hm, 5, isEmriIdleri[1]!)).durum, 400, 'rotada çıkan YM: HM kartıyla dönüş reddedilir');
       const d = await fasonKabulu(sip.siparisSatirId, ym, 5, isEmriIdleri[1]!);
       assert.equal(d.durum, 200, JSON.stringify(d.govde));
-      assert.deepEqual([await miktar(hm, kabulKonumu, s10), await miktar(ym, kabulKonumu, null)], [0, 5], 'giden 10 kg OP 10 HM tükenir, 5 YM girer');
+      assert.deepEqual([await miktar(hm, krn, s10), await miktar(ym, krn, null)], [0, 5], 'giden 10 kg OP 10 HM tükenir, 5 YM karantinaya girer');
+      assert.equal(await kaliteli(krn, id, 'karar_bekliyor'), 5, 'YM karar bekliyor');
       const sarf = await o().sahip.tek<{ m: string }>(
         "SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND cikis_nedeni = 'uretime_sarf'", [id, hm]);
       assert.equal(Number(sarf?.m), 10, 'HM emre sarf edilir');

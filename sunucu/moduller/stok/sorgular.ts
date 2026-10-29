@@ -1038,6 +1038,8 @@ export const teslimDepoKonumlari = (db: Db): Promise<{ id: number; kod: string; 
 // Depo dışından bırakılan malın düştüğü yer (Soru 133): ilk etkin mal kabul alanı.
 export const ilkKabulKonumu = async (db: Db): Promise<number | null> =>
   (await db.tek<{ id: number }>("SELECT id FROM stok_konum WHERE aktif AND tur = 'kabul' ORDER BY kod, id LIMIT 1"))?.id ?? null;
+export const ilkKarantinaKonumu = async (db: Db): Promise<number | null> =>
+  (await db.tek<{ id: number }>("SELECT id FROM stok_konum WHERE aktif AND tur = 'karantina' ORDER BY kod, id LIMIT 1"))?.id ?? null;
 // Yolda süresi dolan, okutarak alınmamış teslimler; çoklu çalışan iş aynı satırı iki kez iptal etmesin diye kilitli ve atlamalı.
 export const suresiDolanTeslimler = (db: Db, dakika: number): Promise<TeslimHam[]> =>
   db.sorgu(`${TESLIM_SECIMI} WHERE t.durum = 'yolda' AND NOT t.okutarak AND t.gonderim + $1 * interval '1 minute' < now()

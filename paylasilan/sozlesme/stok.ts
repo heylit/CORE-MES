@@ -510,8 +510,9 @@ const malKabulSatirGirdisi = z.object({
   fason: z.object({ malzemeId: kimlik, konumId: kimlik, partiId: buyukKimlik.nullable().optional(), miktar: miktarSemasi.optional() }).optional(),
   // Girdili emirde fason işinden dönüş (kart #1289): satırın kartı rotaya göre dönen karttır, miktarı dönen adettir; giden işin
   // yarı parçasıdır (firmadan düşer). `fason` ile birlikte verilmez.
-  // Dönüş kaydı da buradan yazılır (kullanıcı kararı 15.10 B): miktar sağlam adettir, hurda ayrıca verilir ve firmadan düşer.
-  fasonIsi: z.object({ isEmriId: kimlik, hurdaAdet: z.coerce.number().int().min(0).max(1_000_000).optional() }).optional(),
+  // Dönüş kaydı da buradan yazılır (kullanıcı kararı 15.10 B). 1205: miktar dönen adettir; sağlam ve hurda ayrılmaz, parça karantinaya
+  // karar bekliyor girer ve kararı GKK adımı verir. Konum verilirse karantina türündedir, verilmezse ilk karantina konumu.
+  fasonIsi: z.object({ isEmriId: kimlik }).strict().optional(),
   // Parti sertifikası (#960): dosya önce `/dosyalar` ile yüklenir; mal kabul belgeyi açar ve satırın partisine bağlar.
   sertifika: z.object({ ozet: dosyaOzeti, dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120) }).optional(),
   // Depo kabulü (944, 957 a): satır sevkiyatın geliş kalemini (fason dönüşü, alım, elle dönüş) kapatır; kısmi kabulde kalem açık kalır.
