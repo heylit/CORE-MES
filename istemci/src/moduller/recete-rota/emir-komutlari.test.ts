@@ -67,3 +67,34 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     await expect(hazirla('emir-birlestir', { id: 1, surum: 7 })).rejects.toThrow('Bu emir bir alt emir değil.');
   });
 });
+
+describe('Hatalı parçanın rework adımı (1034): adım Üretim Emirleri\'ne, şartnamesi Rota\'ya gider', () => {
+  const hazirla = (ad: string, girdi: Record<string, unknown>) => EMIR_KOMUTLARI[ad]!.hazirla(girdi);
+  const temel = { id: 9, isEmriId: 714, ad: ' Tekrar sökme ', operasyonTipiId: 3, surum: 5 };
+
+  it('iç kaynakta süre gider, termin gitmez; fasonda süre boş, termin gün olarak gider', async () => {
+    expect(await hazirla('emir-rework-adimi', { ...temel, kaynak: { tur: 'makine', id: 4 }, ayarSuresiDk: '10', birimSureDk: '1.5', terminGun: 9 })).toEqual({
+      yol: '/adimli-emirler/9/is-emirleri/714/rework-adimi', tekrarKorumali: true,
+      govde: { ad: 'Tekrar sökme', operasyonTipiId: 3, kaynak: { tur: 'makine', id: 4 }, ayarSuresiDk: '10', birimSureDk: '1.5', terminGun: null, aciklama: null, surum: 5 },
+    });
+    expect((await hazirla('emir-rework-adimi', { ...temel, kaynak: { tur: 'fason', id: 2 }, ayarSuresiDk: '10', terminGun: '7', aciklama: ' not ' })).govde)
+      .toMatchObject({ kaynak: { tur: 'fason', id: 2 }, ayarSuresiDk: null, birimSureDk: null, terminGun: 7, aciklama: 'not' });
+    expect((await hazirla('emir-rework-adimi', { ...temel, kaynak: { tur: 'fason', id: 2 }, terminGun: '' })).govde).toMatchObject({ terminGun: null });
+  });
+
+  it('geçersiz kaynak, termin, ad ve sürüm istek gitmeden reddedilir', async () => {
+    await expect(hazirla('emir-rework-adimi', { ...temel, kaynak: { tur: 'depo', id: 1 } })).rejects.toThrow('Geçersiz kaynak türü.');
+    await expect(hazirla('emir-rework-adimi', { ...temel, kaynak: { tur: 'fason', id: 2 }, terminGun: 400 })).rejects.toThrow('Termin 1-365 gün olmalı.');
+    await expect(hazirla('emir-rework-adimi', { ...temel, ad: ' ' })).rejects.toThrow('Adım adı zorunlu.');
+    await expect(hazirla('emir-rework-adimi', { ...temel, surum: undefined })).rejects.toThrow('sürümü bilinmiyor');
+  });
+
+  it('şartname listesi değerleriyle gider; boş liste sabitlemeyi kaldırır', async () => {
+    expect(await hazirla('emir-rework-sartname', { id: 9, isEmriId: 714, surum: 6, sartnameler: [{ sartnameId: 31, degerler: { tork: '12' } }] })).toEqual({
+      yol: '/rota/emirler/9/is-emirleri/714/sartnameler', tekrarKorumali: true, govde: { surum: 6, sartnameler: [{ sartnameId: 31, degerler: { tork: '12' } }] },
+    });
+    expect((await hazirla('emir-rework-sartname', { id: 9, isEmriId: 714, surum: 6, sartnameler: [] })).govde).toEqual({ surum: 6, sartnameler: [] });
+    await expect(hazirla('emir-rework-sartname', { id: 9, isEmriId: 714, surum: 6, sartnameler: [{ sartnameId: 31, degerler: [] }] })).rejects.toThrow('Geçersiz şartname değerleri.');
+    await expect(hazirla('emir-rework-sartname', { id: 9, isEmriId: 714, surum: 6 })).rejects.toThrow('Geçersiz şartname listesi.');
+  });
+});
