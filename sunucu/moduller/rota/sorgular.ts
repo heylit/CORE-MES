@@ -1019,6 +1019,15 @@ export async function isEmriSabitle(
   }
 }
 
+// Kopya iş emri kaynağın sabitlerini aynı sürüm ve değerlerle alır; sabitleyen kopyayı açan kişidir.
+export async function isEmriSabitiniKopyala(db: Db, kaynakIsEmriId: number, yeniIsEmriId: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO rota_is_emri_sartnamesi (is_emri_id, sira, surum_id, degerler, sabitleyen_kisi_id)
+     SELECT $2, sira, surum_id, degerler, $3 FROM rota_is_emri_sartnamesi WHERE is_emri_id = $1 ORDER BY sira`,
+    [kaynakIsEmriId, yeniIsEmriId, kisiId],
+  );
+}
+
 // Ek adımın şartnamesi silinip yeniden yazılır; aynı iş emrine gelen iki komut bu kilitle sıraya girer (satırı olmayan iş emri de).
 export async function isEmriSabitKilidi(db: Db, isEmriId: number): Promise<void> {
   await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('rota_is_emri_sartnamesi'), $1)", [isEmriId]);

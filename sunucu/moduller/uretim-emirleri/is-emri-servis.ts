@@ -28,7 +28,7 @@ import {
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini,
 } from './kurallar.ts';
-import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir } from './emir-olaylari.ts';
+import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
@@ -841,16 +841,25 @@ const isEmriYazisi = (i: IsEmriSatiri, kaynaksiz: boolean, sira = i.sira): IsEmr
 
 // Üst emrin iş emirleri (aday, bileşen ve kontrol listesiyle) kola kopyalanır. İlk kopyalananın makinesi ya da kişisi boş başlar
 // (ilk sistemde ikinci parça atamasızdır); fason firması kalır.
-async function adimlariKopyala(db: Db, kolId: number, kaynak: readonly IsEmriSatiri[], ilkSira: number): Promise<void> {
+async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: readonly IsEmriSatiri[], ilkSira: number): Promise<void> {
   const idler = kaynak.map((i) => i.id);
   const [adaylar, bilesenler, liste] = [await s.adaylariGetir(db, idler), await s.bilesenleriGetir(db, idler), await s.kontrolListesiGetir(db, idler)];
+  const kopyalar: { kaynak: IsEmriSatiri; yeniId: number }[] = [];
   for (const [n, i] of kaynak.entries()) {
     const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && i.fasonFirmaId === null, ilkSira + n));
     for (const a of adaylar.filter((x) => x.isEmriId === i.id)) await s.adayEkle(db, yeni, a);
     for (const b of bilesenler.filter((x) => x.isEmriId === i.id)) await s.bilesenEkle(db, yeni, b);
     for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni);
+    kopyalar.push({ kaynak: i, yeniId: yeni });
   }
+  await kopyalandiBildir(db, kisiId, kolId, kopyalar);
 }
+
+const kopyalandiBildir = (db: Db, kisiId: number, emirId: number, kopyalar: readonly { kaynak: IsEmriSatiri; yeniId: number }[]): Promise<void> =>
+  kopyalar.length === 0 ? Promise.resolve() : isEmriKopyalandiBildir(db, {
+    uretimEmriId: emirId, kisiId,
+    isEmirleri: kopyalar.map((k) => ({ kaynakIsEmriId: k.kaynak.id, yeniIsEmriId: k.yeniId, kaynakOpNo: k.kaynak.opNo, rotaAdimi: k.kaynak.tur === 'rota' })),
+  });
 
 const acikAltPartiVar = async (db: Db, id: number): Promise<boolean> => (await s.altPartilerGetir(db, [id])).some((a) => a.ustEmirId === id && a.durum !== 'iptal');
 
@@ -936,7 +945,7 @@ export async function kilitliEmriBol(
     siparisSatiriId: e.siparisSatiriId,
   }, acanId);
   const birlesmeSira = birlesmeOpNo === null ? null : kendi.find((i) => i.opNo === birlesmeOpNo)?.sira ?? null;
-  await adimlariKopyala(db, altEmirId, kendi.filter((i) => i.sira >= g.adimSira && (birlesmeSira === null || i.sira < birlesmeSira)), g.adimSira);
+  await adimlariKopyala(db, acanId, altEmirId, kendi.filter((i) => i.sira >= g.adimSira && (birlesmeSira === null || i.sira < birlesmeSira)), g.adimSira);
   if ((await s.adetYaz(db, id, e.adet - g.adet, e.surum)) === null) throw eskiSurum();
   return altEmirId;
 }
@@ -947,22 +956,26 @@ export interface EklenenAdim {
   opNo: number; ad: string; operasyonTipiId: number; istasyonId: number | null; tur: 'rework' | 'ek'; ekAciklama: string | null;
   bagimlilik: 'bekleyen' | 'bagimsiz'; kopya?: IsEmriSatiri;
 }
-export async function adimlariKoy(db: Db, emirId: number, oncekiOpNo: number | null, adimlar: readonly EklenenAdim[]): Promise<number[]> {
+export async function adimlariKoy(db: Db, kisiId: number, emirId: number, oncekiOpNo: number | null, adimlar: readonly EklenenAdim[]): Promise<number[]> {
   const tipler = await tipKimlikleri(db);
   const idler: number[] = [];
+  const kopyalar: { kaynak: IsEmriSatiri; yeniId: number }[] = [];
   let onceki = oncekiOpNo;
   for (const a of adimlar) {
     const kendi = await s.isEmirleriGetir(db, [emirId]);
-    idler.push(await adimiYerineKoy(db, emirId, kendi, onceki, async (sira) => {
+    const yeniId = await adimiYerineKoy(db, emirId, kendi, onceki, async (sira) => {
       if (a.kopya !== undefined) return { ...isEmriYazisi(a.kopya, true, sira), opNo: a.opNo, tur: a.tur, ekAciklama: a.ekAciklama };
       const girdi: IsEmriGirdisi = {
         sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId, kaynak: null, istasyonId: a.istasyonId, ayarSuresiDk: null, birimSureDk: null,
         terminGun: null, bagimlilik: a.bagimlilik, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
       };
       return { ...(await yaziyaCevir(db, girdi, sira, tipler)), tur: a.tur, ekAciklama: a.ekAciklama };
-    }));
+    });
+    idler.push(yeniId);
+    if (a.kopya !== undefined) kopyalar.push({ kaynak: a.kopya, yeniId });
     onceki = a.opNo;
   }
+  await kopyalandiBildir(db, kisiId, emirId, kopyalar);
   return idler;
 }
 
@@ -1126,7 +1139,7 @@ export async function rotasizAdimSil(db: Db, kullanici: Kullanici, id: number, g
 // UE-PB8: plan konunca kol birleşme adımı ve sonrasını bırakır (o adımlar üstte yapılır); plan kalkınca üstün o adımdan sonraki
 // adımlarını yeniden taşır. Kilit sırası üst, sonra kol (üst her zaman önce açılmıştır, kimliği küçüktür).
 export async function birlesmePlani(db: Db, kullanici: Kullanici, id: number, g: { birlesmeOpNo: number | null; surum: number }): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const ilk = await s.ustEmirBul(db, id);
   if (ilk === null || ilk.malzemeNo === null) throw bulunamadi(EMIR_YOK);
   const ust = ilk.ustEmirId === null ? null : await kilitliUstEmir(db, ilk.ustEmirId);
@@ -1140,7 +1153,7 @@ export async function birlesmePlani(db: Db, kullanici: Kullanici, id: number, g:
     if (ihlal !== null) throw cakisma(ihlal);
     const kesim = ustIsEmirleri.find((i) => i.opNo === kol.birlesmeOpNo)?.sira;
     const sonSira = Math.max(0, ...kendi.map((i) => i.sira));
-    if (kesim !== undefined) await adimlariKopyala(db, id, ustIsEmirleri.filter((i) => i.sira >= kesim), sonSira + 1);
+    if (kesim !== undefined) await adimlariKopyala(db, kisiId, id, ustIsEmirleri.filter((i) => i.sira >= kesim), sonSira + 1);
   } else {
     if (ust === null) throw cakisma(BIRLESME_PLANI_KOLDA);
     const ihlal = birlesmePlaniIhlali({ ...durum, bolunmeSira: kol.bolunmeSira }, { durum: ust.durum, arsiv: ust.arsiv, isEmirleri: ustIsEmirleri }, g.birlesmeOpNo);

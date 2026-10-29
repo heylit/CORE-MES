@@ -661,4 +661,62 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const bos = await tamam<IsEmriSartnameleriCevabi>(c.planlama, 'POST', yol(ek.id), govde([]));
     assert.deepEqual(bos.isEmirleri[0]!.sartnameler, []);
   });
+
+  // 1203 b: kol iş emri emrin rota revizyonundaki bağı bugünkü yürürlükteki sürümle yeniden sabitler.
+  async function surumYayinla(x: SartnameCevabi['sartname'], degistir: (p: ParametreGirdisi[]) => ParametreGirdisi[]): Promise<void> {
+    const ac = await tamam<SartnameCevabi>(c.yonetici, 'POST', `/rota/sartnameler/${x.id}/surum-ac`, { surum: x.surum });
+    const alanlar = ac.sartname.surumler[0]!.parametreler.map(({ sira: _, ...p }) => p);
+    const k = await tamam<SartnameCevabi>(c.yonetici, 'POST', `/rota/sartnameler/${x.id}/taslak-kaydet`, taslakGovdesi(ac.sartname.surum, degistir(alanlar)));
+    await tamam(c.yonetici, 'POST', `/rota/sartnameler/${x.id}/yayinla`, { surum: k.sartname.surum });
+  }
+  async function bolunmusKol(x: SartnameCevabi['sartname'], sonra: () => Promise<void>) {
+    const { id, surum } = await taslak([icAdim(), icAdim({ ad: 'Frezeleme', bilesenler: [] })]);
+    const b = await bagla(id, surum, 20, [{ sartnameId: x.id, degerler: { renk: 'Yeşil' } }]);
+    await yururlugeAl(id, b.json<KomutCevabi>().surum);
+    const { uretimEmriId } = await emirAc(id);
+    await sonra();
+    const ust = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    const bol = await tamam<{ altEmirId: number }>(c.planlama, 'POST', `/adimli-emirler/${uretimEmriId}/bol`, { adimSira: 1, adet: 1, surum: ust.surum });
+    const kol = await vt().tx((db) => adimliEmirAyrintisi(db, bol.altEmirId));
+    const op20 = (e: typeof ust) => e.isEmirleri.find((i) => i.opNo === 20)!.id;
+    const sabit = await vt().tx((db) => isEmriSartnameleri(db, [op20(ust), op20(kol)]));
+    return { ust: sabit.get(op20(ust)) ?? [], kol: sabit.get(op20(kol)) ?? [], kolOp10: (await vt().tx((db) => isEmriSartnameleri(db, [kol.isEmirleri.find((i) => i.opNo === 10)!.id]))).size };
+  }
+
+  test('1203 b: bölünen partinin kolu bağı bugünkü yürürlükteki sürümle sabitler; üst emir açıldığı sürümde kalır', async () => {
+    const x = await kendiSartnamesi();
+    const r = await bolunmusKol(x, () => surumYayinla(x, (p) => p.map((a) => (a.anahtar === 'sinif' ? { ...a, varsayilan: 'C4' } : a))));
+    assert.deepEqual(r.ust.map((y) => [y.surum.surumNo, y.degerler.renk, y.degerler.sinif]), [[1, 'Yeşil', 'C3']]);
+    assert.deepEqual(r.kol.map((y) => [y.surum.surumNo, y.degerler.renk, y.degerler.sinif, y.sabitleyen.ad]), [[2, 'Yeşil', 'C4', 'Deneme planlama']]);
+    assert.equal(r.kolOp10, 0, 'bağsız adım sabitsiz kalır');
+  });
+
+  test('1203 b: yürürlükteki sürüm sabitlenemezse (zorunlu alan boş) kol üstün sabitini alır, bölme durmaz', async () => {
+    const x = await kendiSartnamesi();
+    const r = await bolunmusKol(x, () => surumYayinla(x, (p) => [...p, alan({ anahtar: 'parti', tur: 'metin', zorunlu: true })]));
+    assert.deepEqual(r.kol.map((y) => [y.surum.surumNo, y.surum.id, y.degerler]), r.ust.map((y) => [1, y.surum.id, y.degerler]));
+    assert.equal(r.kol[0]?.sabitleyen.ad, 'Deneme planlama');
+  });
+
+  test('1203 b: ek adımın kopyası kaynağın sabitini aynen alır', async () => {
+    const { id, surum } = await taslak([icAdim(), icAdim({ ad: 'Frezeleme', bilesenler: [] })]);
+    await yururlugeAl(id, surum);
+    const { uretimEmriId } = await emirAc(id);
+    const ust = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    const rework = {
+      oncekiOpNo: null, opNo: 15, tur: 'rework', ad: 'Kırık takım sökümü', operasyonTipiId: tip('TRN'), kaynak: { tur: 'makine', id: makine },
+      ayarSuresiDk: '5', birimSureDk: '2', terminGun: null, aciklama: null,
+    };
+    const bol = await tamam<{ altEmirId: number }>(c.planlama, 'POST', `/adimli-emirler/${uretimEmriId}/bol`, { adimSira: 2, adet: 2, surum: ust.surum, ekAdimlar: [rework] });
+    const kol = await vt().tx((db) => adimliEmirAyrintisi(db, bol.altEmirId));
+    const ek = kol.isEmirleri.find((i) => i.tur === 'rework')!;
+    const degerler = { takim: 'Kılavuz', takimMalzeme: 'HSS', olcu: 'M6 kılavuz', yontem: 'Dalma erozyon (kılavuz eritme)' };
+    await tamam(c.planlama, 'POST', `/rota/emirler/${kol.id}/is-emirleri/${ek.id}/sartnameler`, { surum: kol.surum, sartnameler: [{ sartnameId: sartname('TKR-SOK').id, degerler }] });
+    const kolSonra = await vt().tx((db) => adimliEmirAyrintisi(db, kol.id));
+    const ikinci = await tamam<{ altEmirId: number }>(c.planlama, 'POST', `/adimli-emirler/${kol.id}/bol`, { adimSira: ek.sira, adet: 1, surum: kolSonra.surum });
+    const torun = await vt().tx((db) => adimliEmirAyrintisi(db, ikinci.altEmirId));
+    const kopya = torun.isEmirleri.find((i) => i.tur === 'rework')!;
+    const sabit = await vt().tx((db) => isEmriSartnameleri(db, [kopya.id]));
+    assert.deepEqual(sabit.get(kopya.id)?.map((y) => [y.sartname.kod, y.degerler.olcu]), [['TKR-SOK', 'M6 kılavuz']]);
+  });
 });

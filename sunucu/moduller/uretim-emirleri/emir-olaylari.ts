@@ -47,6 +47,15 @@ export interface FasonHareketiOlayi {
   sevkKalemiId: number | null;
 }
 
+// İş emri kopyalandı (1203 b): bölünen partinin kolu ve hatalı adımın tekrarı kaynak adımın kopyasıdır. Rota, kopyaya kaynak adımın
+// rota bağlarını bugünkü yürürlükteki şartname sürümüyle yeniden sabitler; şartname tablosu rotanındır, bu modül ona yazmaz.
+export interface IsEmriKopyalandiOlayi {
+  uretimEmriId: number;
+  kisiId: number;
+  // kaynakOpNo kaynak adımın op numarasıdır (tekrarın kendi numarası başkadır); rotaAdimi kaynak adımın rotadan gelip gelmediğidir.
+  isEmirleri: { kaynakIsEmriId: number; yeniIsEmriId: number; kaynakOpNo: number; rotaAdimi: boolean }[];
+}
+
 type Dinleyici<T> = (db: Db, olay: T) => Promise<void>;
 export type EmirBittiDinleyicisi = Dinleyici<EmirBittiOlayi>;
 export type FasonHareketiDinleyicisi = Dinleyici<FasonHareketiOlayi>;
@@ -54,6 +63,7 @@ export type EmirIptalDinleyicisi = Dinleyici<EmirIptalOlayi>;
 export type EmirAcildiDinleyicisi = Dinleyici<EmirAcildiOlayi>;
 export type EmirBirlestiDinleyicisi = Dinleyici<EmirBirlestiOlayi>;
 export type HazirlikTamamlandiDinleyicisi = Dinleyici<HazirlikTamamlandiOlayi>;
+export type IsEmriKopyalandiDinleyicisi = Dinleyici<IsEmriKopyalandiOlayi>;
 
 function kayit<T>() {
   const dinleyiciler: Dinleyici<T>[] = [];
@@ -77,6 +87,7 @@ const iptal = kayit<EmirIptalOlayi>();
 const acildi = kayit<EmirAcildiOlayi>();
 const birlesti = kayit<EmirBirlestiOlayi>();
 const hazirlik = kayit<HazirlikTamamlandiOlayi>();
+const kopyalandi = kayit<IsEmriKopyalandiOlayi>();
 
 export const emirBittiDinle = bitti.dinle;
 export const emirBittiBildir = bitti.bildir;
@@ -90,3 +101,5 @@ export const emirBirlestiDinle = birlesti.dinle;
 export const emirBirlestiBildir = birlesti.bildir;
 export const hazirlikTamamlandiDinle = hazirlik.dinle;
 export const hazirlikTamamlandiBildir = hazirlik.bildir;
+export const isEmriKopyalandiDinle = kopyalandi.dinle;
+export const isEmriKopyalandiBildir = kopyalandi.bildir;
