@@ -38,3 +38,6 @@ export type { KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi,
 // alanındaki numarayla bağlanır; bağdan önce açılmış hatalı parça NCR'si açıkken madde bilinmiyordur (null). Yetki denetlemez.
 export const kapanisNcrDurumu: KapanisCozucusu = servis.kapanisNcrDurumu;
 export const kapanisOlcumDurumu: KapanisCozucusu = servis.kapanisOlcumDurumu;
+// Açık NCR'li partiler (1222 a): stok ürün sevkinde ve depo çıkışında verilen partilerden açık NCR'nin lotuna ya da emrine uyanları
+// buradan alır ve sevk etmez (bağı kablolama.ts kurar). Salt okur, yetki denetlemez.
+export { acikNcrPartileri } from './servis.ts';
