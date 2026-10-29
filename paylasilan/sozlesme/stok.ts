@@ -1177,7 +1177,8 @@ export const teslim = z.object({
   itiraz: z.object({ neden: z.string(), kisiAd: z.string().nullable(), zaman: zamanSemasi, iadeTeslimId: z.number().int().nullable() }).nullable().optional(),
 });
 export type Teslim = z.output<typeof teslim>;
-export const teslimCevabi = z.object({ teslim });
+// 1229 a: parti seçilmeden gönderilen miktar aynı statüdeki partilere en eskiden bölünürse ilk kayıt `teslim`, kalanlar `ekTeslimler`'dedir.
+export const teslimCevabi = z.object({ teslim, ekTeslimler: z.array(teslim).optional() });
 export type TeslimCevabi = z.output<typeof teslimCevabi>;
 // Panelin tek okuması: bana gelenler (kapsamımdaki istasyonlara; depo işlemi olana depo konumlarına), gönderdiklerim ve isteklerim.
 export const teslimKutusuCevabi = z.object({
