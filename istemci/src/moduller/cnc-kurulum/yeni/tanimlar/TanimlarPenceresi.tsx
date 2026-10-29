@@ -8,6 +8,7 @@ import { machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, type TezgahSatiri } fr
 import { onbellekSil } from '../sahne/gl.ts';
 import { MB_LBL, matBeh, mbStars } from '../hesap/malzeme-davranisi.ts';
 import { AyarSuresiProfili } from '../cam/disari.tsx';
+import { ModellerSekmesi } from './ModellerSekmesi.tsx';
 import type { TanimSekmesi } from '../gorunum.ts';
 import { useCncYetkisi } from '../veri.ts';
 import {
@@ -20,6 +21,7 @@ import './tanimlar.css';
 const SEKMELER: readonly Sekme<TanimSekmesi>[] = [
   { anahtar: 'mach', baslik: 'Tezgâhlar', simge: 'cpu' },
   { anahtar: 'mat', baslik: 'İş Malzemeleri', simge: 'box' },
+  { anahtar: 'model', baslik: '3B modeller', simge: 'cube' },
   { anahtar: 'su', baslik: 'Hazırlık süreleri', simge: 'clock' },
 ];
 const secenek = (l: readonly (readonly [string, string])[]) => l.map(([deger, baslik]) => ({ deger, baslik }));
@@ -266,6 +268,7 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
             )}
           </>
         )}
+        {tab === 'model' && <ModellerSekmesi yazabilir={yaz} />}
         {tab === 'su' && <AyarSuresiProfili />}
         {tab === 'mat' && (
           <>

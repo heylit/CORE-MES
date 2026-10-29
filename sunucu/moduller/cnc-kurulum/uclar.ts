@@ -1,13 +1,13 @@
-import { uc } from '#cekirdek/uc.ts';
+import { ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
   benCevabi, emirSecCevabi, emirSecGovdesi, emirlerCevabi, hazirlikCevabi, hazirlikOnayGovdesi, kayitlarCevabi, kurulumTamamCevabi,
   kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
   stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, tezgahAyarCevabi, tezgahAyarGovdesi, tezgahlarCevabi, tezgahParametresi, yazCevabi,
-  yazGovdesi,
+  yazGovdesi, modelBaglaCevabi, modelBaglaGovdesi, modellerCevabi, modelParametresi, modelSecenekleriCevabi, modelSecenekleriSorgusu,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, tezgahAyarYaz,
-  tezgahlar, yaz,
+  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
@@ -154,5 +154,38 @@ export const uclar = [
     govde: tezgahAyarGovdesi,
     cevap: tezgahAyarCevabi,
     isle: ({ db, kullanici, parametre, govde }) => tezgahAyarYaz(db, kullanici, parametre.makineId, govde),
+  }),
+  // 3B modeller (1212 a): dosya Çizim Merkezi'ndedir; liste ve dosya sayfayı okuyana, seçici ve bağ komutu yazana açıktır.
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/modeller',
+    yetki: OKUMA,
+    cevap: modellerCevabi,
+    isle: ({ db }) => modeller(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/modeller/:id/dosya',
+    // Bağı kaldırılmış satırda gövdesiz 204: ekran çizilen gövdeyle sürer.
+    yetki: OKUMA,
+    parametre: modelParametresi,
+    cevap: ikiliCevapYaDaBos,
+    isle: ({ db, parametre }) => modelDosyasi(db, parametre.id),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/model-secenekleri',
+    yetki: 'cnc-kurulum.yaz',
+    sorgu: modelSecenekleriSorgusu,
+    cevap: modelSecenekleriCevabi,
+    isle: ({ db, sorgu }) => modelSecenekleri(db, sorgu.ara),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cnc-kurulum/modeller/bagla',
+    yetki: 'cnc-kurulum.yaz',
+    govde: modelBaglaGovdesi,
+    cevap: modelBaglaCevabi,
+    isle: ({ db, kullanici, govde }) => modelBagla(db, kullanici, govde),
   }),
 ];
