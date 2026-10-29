@@ -295,12 +295,15 @@ async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null 
   return sunucuKaynaklariyla(belge, kartlar, (await operasyonTipleri(db)).map((t) => ({ id: String(t.id), name: t.ad })));
 }
 
+const emirOzeti = async (db: Db, uretimEmriId: number | null | undefined) =>
+  (uretimEmriId === undefined || uretimEmriId === null ? null : uretimEmriOzeti(db, uretimEmriId));
+
 // Üretim sayımında stok girişinin statüsü (kart #1289): adımın statüsü, rotanın şimdiki hâlinde statü açıyorsa (son adım değilse, başka
 // karta ya da tanımlı statüye bağlı değilse) kimliği döner; yoksa null. Rotadan kalkmış adımın eski statü satırı kullanılmaz. Statü rota
 // revizyonuna aittir: emir verilirse adım ve statü emrin açıldığı revizyondandır, verilmezse (ya da emir rotasızsa) yürürlükteki revizyondan.
 // Satır henüz yoksa burada açılır (çerçevenin yazımındaki eşitlemeyle aynı).
 export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null | undefined }): Promise<number | null> {
-  const emir = g.uretimEmriId === undefined || g.uretimEmriId === null ? null : await uretimEmriOzeti(db, g.uretimEmriId);
+  const emir = await emirOzeti(db, g.uretimEmriId);
   const belge = await sayimDurumu(db, g.malzemeNo, emir?.kaynakRotaRevizyonId ?? null);
   if (belge === null) return null;
   const kimlik = adimKimligi(g.malzemeNo, g.opNo);
@@ -313,8 +316,11 @@ export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; 
   return sorgular.statuKimligi(db, kimlik, revizyon);
 }
 
-// Üretim sayımında adımın çıktı kartı (kart #1289): rotada ara adımın "çıkan" kalemi; yoksa null.
-export async function adimCiktisi(db: Db, g: { malzemeNo: number; opNo: number }): Promise<number | null> {
-  const belge = await sayimDurumu(db, g.malzemeNo);
+// Üretim sayımında adımın çıktı kartı (kart #1289): rotada ara adımın "çıkan" kalemi; yoksa null. Statüyle aynı revizyondan okunur
+// (kart #1214): emir verilirse emrin açıldığı revizyonun bağı, verilmezse (ya da emir rotasızsa) yürürlükteki; ikisi ayrı revizyondan
+// okunursa revizyon sonrası açık emirde çıktı yeni, statü eski rotadan gelir.
+export async function adimCiktisi(db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null | undefined }): Promise<number | null> {
+  const emir = await emirOzeti(db, g.uretimEmriId);
+  const belge = await sayimDurumu(db, g.malzemeNo, emir?.kaynakRotaRevizyonId ?? null);
   return belge === null ? null : adimCiktisiBul(belge, g.malzemeNo, g.opNo);
 }
