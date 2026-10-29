@@ -197,7 +197,8 @@ test('emir şeması: açık adımlar ve başlatılabilir adımlar isteğe bağl�
   assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [], baslatilabilirAdimlar: [] }), true);
   assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [adim, { ...adim, isEmriId: 12, opNo: 20, durum: 'bekliyor', calisma: null, makineId: null, istasyon: null, eksik: 5 }] }), true);
   assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [{ ...adim, eksik: -3 }] }), true);
-  for (const bozuk of [{ durum: 'bitti' }, { calisma: 'bekliyor' }, { eksik: 1.5 }, { isEmriId: 0 }]) {
+  assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [{ ...adim, hataliAdet: 0 }, { ...adim, isEmriId: 12, hataliAdet: 4 }] }), true);
+  for (const bozuk of [{ durum: 'bitti' }, { calisma: 'bekliyor' }, { eksik: 1.5 }, { isEmriId: 0 }, { hataliAdet: -1 }, { hataliAdet: 1.5 }, { hataliAdet: null }]) {
     assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [{ ...adim, ...bozuk }] }), false, JSON.stringify(bozuk));
   }
   assert.equal(gecer(emirSemasi, { ...EMIR, baslatilabilirAdimlar: [0] }), false);
