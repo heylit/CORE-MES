@@ -336,7 +336,8 @@ export const raporCevabi = z.object({
   kararDagilimi: z.array(z.object({
     emirNo: z.string(), otomatik: z.number().int().nonnegative(), onayli: z.number().int().nonnegative(), mrb: z.number().int().nonnegative(),
   })),
-  rotaOlgunlugu: z.array(z.object({ malzeme: malzemeOzeti, degisiklikSayisi: z.number().int().nonnegative(), sonDegisiklik: tarihSemasi })),
+  // Malzeme başına son 180 günde yayımlanan rota revizyonu sayısı (1176 a); rota bağlı değilse null.
+  rotaOlgunlugu: z.array(z.object({ malzeme: malzemeOzeti, rotaRevizyonu: z.number().int().nonnegative() })).nullable(),
   // ECO başına maliyet; aşağıdaki iki alan toplamdır. Stok ve finans bağlı değilse null.
   maliyetler: z.array(z.object({ emirNo: z.string(), hurda: ondalikMetinSemasi.nullable(), rework: ondalikMetinSemasi.nullable() })),
   hurdaMaliyeti: ondalikMetinSemasi.nullable(),
@@ -345,7 +346,10 @@ export const raporCevabi = z.object({
   engellenenNcDenemesi: z.number().int().nonnegative().nullable(),
 });
 
-export const olaylarSorgusu = z.object({ ...sayfaSorguAlanlari, ilgili: z.enum(OLAY_ILGILILERI).optional(), tur: z.enum(OLAY_TURLERI).optional() });
+// Arama kayıt no ve olay alanlarında (1175 a).
+export const olaylarSorgusu = z.object({
+  ...sayfaSorguAlanlari, ilgili: z.enum(OLAY_ILGILILERI).optional(), tur: z.enum(OLAY_TURLERI).optional(), ara: aramaMetni,
+});
 export const olaySatiri = z.object({
   id: KIMLIK, zaman: zamanSemasi, tur: z.enum(OLAY_TURLERI), ilgili: z.enum(OLAY_ILGILILERI).nullable(),
   kayitNo: z.string(),

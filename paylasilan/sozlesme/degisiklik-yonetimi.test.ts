@@ -5,7 +5,7 @@ import {
   KARAR_KODLARI, KARAR_KODU_ADLARI, MRB_KODLARI, SINIFLAR, SINIF_ADLARI, TALEP_DURUMLARI, TALEP_DURUM_ADLARI, EMIR_DURUMLARI, EMIR_DURUM_ADLARI,
   ccbGovdesi, emirCevabi, gecerlilikSemasi, geriGonderGovdesi, kalemKaydetGovdesi, kararGovdesi, mrbKarariMi, musteriOnayiGovdesi,
   siniflandirGovdesi, talepAcGovdesi, talepCevabi, taleplerSorgusu, yayinlaGovdesi, konfigurasyonCevabi, raporCevabi, sonUrunlerCevabi,
-  emirListeSatiri, emirlerSorgusu, onerilenSinif, izlenebilirlikCevabi, seriListeSatiri, serilerSorgusu,
+  emirListeSatiri, emirlerSorgusu, onerilenSinif, izlenebilirlikCevabi, seriListeSatiri, serilerSorgusu, olaylarSorgusu,
 } from './degisiklik-yonetimi.ts';
 
 const gecer = (s: z.ZodTypeAny, d: unknown): boolean => s.safeParse(d).success;
@@ -127,6 +127,11 @@ test('konfigürasyon ve rapor: bağlı olmayan bölümler null, açık değişik
   };
   assert.equal(gecer(raporCevabi, rapor), true);
   assert.equal(gecer(raporCevabi, { ...rapor, kararDagilimi: { otomatik: 1, onayli: 2, mrb: 0 } }), false);
+  assert.equal(gecer(raporCevabi, { ...rapor, rotaOlgunlugu: null }), true);
+  assert.equal(gecer(raporCevabi, { ...rapor, rotaOlgunlugu: [{ malzeme: urun, rotaRevizyonu: 3 }] }), true);
+  assert.equal(gecer(raporCevabi, { ...rapor, rotaOlgunlugu: [{ malzeme: urun, rotaRevizyonu: -1 }] }), false);
+  assert.equal(olaylarSorgusu.parse({ ara: '  ' }).ara, undefined);
+  assert.equal(olaylarSorgusu.parse({ ara: 'E-1' }).ara, 'E-1');
 });
 
 test('önerilen sınıf: çizim ve FFF D1/D2, proses P1, yalnız süre planlama, öteki P2; eksik cevap null', () => {
