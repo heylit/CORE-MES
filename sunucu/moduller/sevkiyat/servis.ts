@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
+import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
   OzetCevabi, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
@@ -20,7 +21,7 @@ import type { AramaDizini, AramaVerisi } from './arama.ts';
 import { filoPlani } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
-  AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
+  AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
   isNoktasiIhlali, onayEngelleri, plandanCikarilmali, surumGuncel,
   planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
 } from './kurallar.ts';
@@ -816,4 +817,12 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string):
     baslik: s.belgeNo ? `${TAKVIM_IS_TURU[s.tur]} ${s.belgeNo}` : TAKVIM_IS_TURU[s.tur],
     ilgili: (s.firmaId === null ? null : adlar.get(s.firmaId) ?? null) ?? s.noktaAdi, durum: TAKVIM_IS_DURUMU[s.durum], bitti: s.durum === 'tamamlandi',
   }));
+}
+
+// Onaylı kapanışın sevkiyat maddesi (1075 a): Üretim Emirleri bu çözücüyü kaydeder (bağ kablolama.ts'te). Bulunamayan, ürün kartı
+// olmayan ya da bitmemiş emirde null; madde orada 'bilinmiyor' olur. Salt okur, yetki denetlemez.
+export async function kapanisSevkiyatDurumu(db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> {
+  const emir = await uretimEmriOzeti(db, uretimEmriId);
+  if (emir === null || emir.malzemeNo === null || emir.saglamAdet === null) return null;
+  return kapanisSevki({ adet: emir.adet, saglamAdet: emir.saglamAdet, cikan: await sorgu.emrinCikanUrunu(db, uretimEmriId) });
 }
