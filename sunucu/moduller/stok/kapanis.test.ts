@@ -28,11 +28,18 @@ test('izlenebilirlik kuralı: her kartta lot ve sertifika no dolu tamam; lot bek
 });
 
 test('stoğa işlendi kuralı: sağlam adet girdi ve kalan sarf yoksa tamam; sağlamsız emirde gerekmez; bitmemiş emirde hedef adettir', () => {
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 0 }), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 5000n, kalanSarfKalemi: 0 }), { durum: 'eksik', ayrinti: '5 / 8 stoğa girdi' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 2 }), { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; kalan sarf: 2 malzeme' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, kalanSarfKalemi: 1 }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: null, girilen: 0n, kalanSarfKalemi: 0 }), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 5000n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '5 / 8 stoğa girdi' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 2, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; kalan sarf: 2 malzeme' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, kalanSarfKalemi: 1, istasyonEksileri: [] }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: null, girilen: 0n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi' });
+  // 1214 O-5: teslim edilmeden sayılan parçanın istasyonda bıraktığı eksi, girişi tam olan emri de eksik yapar; parçanın yeri birlikte söylenir.
+  const eksi = { malzeme: 'HM-1', konum: 'IST-2', miktar: -20000n, statulu: true, karsiliklar: [{ konum: 'IST-1', miktar: 20000n }] };
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 0, istasyonEksileri: [eksi] }),
+    { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; istasyonda eksi: IST-2 HM-1 -20 (statülü; aynı statüde IST-1: 20)' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 1, istasyonEksileri: [{ ...eksi, statulu: false, karsiliklar: [] }] }),
+    { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; kalan sarf: 1 malzeme; istasyonda eksi: IST-2 HM-1 -20' });
+  assert.equal(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, kalanSarfKalemi: 0, istasyonEksileri: [eksi] }).durum, 'gerekmez', '1079 a');
 });
 
 const PAROLA = 'dogru-parola-1';

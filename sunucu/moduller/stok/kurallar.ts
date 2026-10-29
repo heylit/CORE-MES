@@ -142,6 +142,21 @@ export function partiSec(gozdekiPartiler: readonly (number | null)[], istenen: n
   return { tur: 'secim-gerekli', partiler: farkli };
 }
 
+// 1229 a: parti seçilmeden gönderilen miktar partilere en eski girişten bölünür; serbest miktarı olmayan parti atlanır. Toplam yetmezse
+// null (bölme yapılmaz; çağıran mevcudu söyler). Miktarlar binde.
+export function teslimBolmesi(adaylar: readonly { partiId: number | null; serbest: bigint }[], istenen: bigint): { partiId: number | null; miktar: bigint }[] | null {
+  const sonuc: { partiId: number | null; miktar: bigint }[] = [];
+  let kalan = istenen;
+  for (const a of adaylar) {
+    if (kalan <= 0n) break;
+    if (a.serbest <= 0n) continue;
+    const m = a.serbest < kalan ? a.serbest : kalan;
+    sonuc.push({ partiId: a.partiId, miktar: m });
+    kalan -= m;
+  }
+  return kalan > 0n ? null : sonuc;
+}
+
 // ---- Parti zorunluluğu karttaki türe göre (DEP-20, DEP-48, DEP-49) --------------------------------------------------
 export type MalzemeTuru = KatalogTuru;
 // Hizmet stoklanmaz (kullanıcı kararı MH1 a): depoya giriş, bakiye ve parti yazılmaz.
@@ -1092,12 +1107,60 @@ export function kapanisIzlenebilirligi(kartlar: readonly { lotNo: string | null;
   const eksikler = [...(lotsuz > 0 ? [`lot bekleyen kart: ${lotsuz}`] : []), ...(sertifikasiz > 0 ? [`sertifika no yok: ${sertifikasiz}`] : [])];
   return { durum: 'eksik', ayrinti: `${eksikler.join(', ')} (toplam ${kartlar.length} kart)` };
 }
-// Stoğa işlendi: emrin ürünü sağlam adedi kadar üretim girişiyle girdi ve kalan sarf yok (stokta tamamlamanın "zaten tamamlandı"
-// hesabı). Sağlamsız emirde (1079 a) madde gerekmez. Bitmemiş emirde hedef emrin adedidir. Miktarlar binde.
-export function kapanisStoguIslendi(g: { adet: number; saglamAdet: number | null; girilen: bigint; kalanSarfKalemi: number }): KapanisMaddeBilgisi {
+// Stoğa işlendi: emrin ürünü sağlam adedi kadar üretim girişiyle girdi, kalan sarf yok (stokta tamamlamanın "zaten tamamlandı"
+// hesabı) ve emrin eksiden düştüğü istasyon satırı kapanmış (1214 O-5: teslim edilmeden sayılan parça girişi tamamlar ama istasyonda
+// eksi bırakır). Sağlamsız emirde (1079 a) madde gerekmez. Bitmemiş emirde hedef emrin adedidir. Miktarlar binde.
+export interface IstasyonEksisi { malzeme: string; konum: string; miktar: bigint; statulu: boolean; karsiliklar: readonly { konum: string; miktar: bigint }[] }
+export function kapanisStoguIslendi(g: { adet: number; saglamAdet: number | null; girilen: bigint; kalanSarfKalemi: number; istasyonEksileri: readonly IstasyonEksisi[] }): KapanisMaddeBilgisi {
   if (g.saglamAdet === 0) return { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' };
   const hedef = BigInt(g.saglamAdet ?? g.adet) * 1000n;
   const giris = `${bindenMetin(g.girilen)} / ${bindenMetin(hedef)} stoğa girdi`;
-  if (g.girilen >= hedef && g.kalanSarfKalemi === 0) return { durum: 'tamam', ayrinti: giris };
-  return { durum: 'eksik', ayrinti: g.kalanSarfKalemi > 0 ? `${giris}; kalan sarf: ${g.kalanSarfKalemi} malzeme` : giris };
+  if (g.girilen >= hedef && g.kalanSarfKalemi === 0 && g.istasyonEksileri.length === 0) return { durum: 'tamam', ayrinti: giris };
+  const eksi = (x: IstasyonEksisi): string => {
+    const yer = x.karsiliklar.length === 0 ? '' : `; aynı statüde ${x.karsiliklar.map((k) => `${k.konum}: ${bindenMetin(k.miktar)}`).join(', ')}`;
+    return `${x.konum} ${x.malzeme} ${bindenMetin(x.miktar)}${x.statulu ? ` (statülü${yer})` : ''}`;
+  };
+  return { durum: 'eksik', ayrinti: [
+    giris,
+    ...(g.kalanSarfKalemi > 0 ? [`kalan sarf: ${g.kalanSarfKalemi} malzeme`] : []),
+    ...(g.istasyonEksileri.length > 0 ? [`istasyonda eksi: ${g.istasyonEksileri.map(eksi).join(', ')}`] : []),
+  ].join('; ') };
+}
+
+// Sayım düşünce geri çevrilen parçanın kalitesi (1214 O-1): parça ileri çevrilirken sayımın kalitesini almış olabilir (138 a); geri
+// dönen, ileri çevirmenin kaynak kalitesine döner. İleri çevirmeler en yenisi önce gelir; daha önce geri çevrilen kadarı en yenilerden
+// düşülür (geri çevirme en yeniden başlar). Kaydı yetmeyen kısım (eski kayıt) varsayılan kaliteyle döner. Miktarlar binde.
+export function geriCevirmeKaliteleri(
+  ileri: readonly { miktar: bigint; kaynakKalite: KaliteDurumu }[], geriCevrilen: bigint, istenen: bigint, varsayilan: KaliteDurumu,
+): { kalite: KaliteDurumu; miktar: bigint }[] {
+  const sonuc: { kalite: KaliteDurumu; miktar: bigint }[] = [];
+  const ekle = (kalite: KaliteDurumu, miktar: bigint) => {
+    const son = sonuc.at(-1);
+    if (son?.kalite === kalite) son.miktar += miktar;
+    else sonuc.push({ kalite, miktar });
+  };
+  let atla = geriCevrilen, kalan = istenen;
+  for (const h of ileri) {
+    if (kalan <= 0n) break;
+    let m = h.miktar;
+    if (atla > 0n) { const d = atla < m ? atla : m; atla -= d; m -= d; }
+    if (m <= 0n) continue;
+    const al = m < kalan ? m : kalan;
+    ekle(h.kaynakKalite, al);
+    kalan -= al;
+  }
+  if (kalan > 0n) ekle(varsayilan, kalan);
+  return sonuc;
+}
+
+// Eksiden çevirme ve düşüm uyarısı (1214 D-1, D-7): ilk adımda eksik olan hammaddedir, sonraki adımda önceki adımın parçası. İstasyondaki
+// girdi başka emre ayrılı olduğu için kullanılamadıysa (rezerve konumdan bağımsızdır) bu söylenir; yoksa teslim istenir. Miktarlar binde.
+export function eksidenUyari(g: { ilkAdim: boolean; eksik: bigint; baskaEmreAyrili: bigint; fiil: 'çevrildi' | 'düşüldü' }): string {
+  const ne = g.ilkAdim ? 'Hammadde' : 'Önceki adımın parçası';
+  const neyi = g.ilkAdim ? 'Hammaddeyi' : 'Parçayı';
+  const eksiden = g.fiil === 'çevrildi' ? 'eksiden çevrildi' : 'eksiye düşüldü';
+  if (g.baskaEmreAyrili > 0n) {
+    return `${ne} bu istasyonda başka emre ayrılı (${bindenMetin(g.baskaEmreAyrili)}); ${bindenMetin(g.eksik)} ${eksiden}. Rezerveyi müdür kaldırır ya da bu emir için ${ne.toLocaleLowerCase('tr')} teslim ettirin.`;
+  }
+  return `${ne} bu istasyonda yok; ${bindenMetin(g.eksik)} ${eksiden}. ${neyi} bu istasyona teslim ettirin.`;
 }
