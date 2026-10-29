@@ -1,9 +1,49 @@
+import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from './ortak.ts';
 import type { Page } from '@playwright/test';
 
 // CNC Kurulum TS ekranı (soru 199 b, 209 a). Ölçüt bugünkü çerçevedir (208 a): her görünümün testi parçasıyla gelir ve
 // eski ekranda bugün çalışan davranışı yeni yolda sınar. İskelet yalnız kabuğu sınar.
 test.use({ hesap: 'ornek.yonetici' });
+
+// Kurulum kaydı atölyede tek kayıttır (kişiye bağlı değil) ve sürüm denetimlidir: açılışta okunan sürümü başka sekme eskitirse
+// yazma haklı olarak 409 alır ve durur (yeni/kayit.ts). Genişlik projeleri ve işçiler paralel koştuğu için kaydı değiştiren
+// testler süreçler arası bir kilitle sırayla koşar; kilit, sayfanın bekleyen yazması (800 ms bekleme) ve yoldaki istek bitince bırakılır.
+const KILIT = join(tmpdir(), 'tmiv2-ekran-cnc-kurulum-kaydi.kilit');
+// Çöken koşudan kalan kilit bu süreden sonra alınır.
+const ESKI_KILIT_MS = 180_000;
+const bekle = (ms: number): Promise<void> => new Promise((r) => { setTimeout(r, ms); });
+async function kilitAl(): Promise<void> {
+  for (;;) {
+    try { mkdirSync(KILIT); return; } catch (h) {
+      if ((h as NodeJS.ErrnoException).code !== 'EEXIST') throw h;
+    }
+    try { if (Date.now() - statSync(KILIT).mtimeMs > ESKI_KILIT_MS) rmSync(KILIT, { recursive: true, force: true }); } catch { /* kilit o arada bırakıldı */ }
+    await bekle(100);
+  }
+}
+const kayitYazan = test.extend<{ kayitSirasi: undefined }>({
+  kayitSirasi: [async ({ page }, kullan, bilgi) => {
+    // Sıra beklemesi testin süresine eklenir.
+    bilgi.setTimeout(bilgi.timeout + 150_000);
+    let yolda = 0;
+    const kayitMi = (u: string): boolean => u.includes('/api/cnc-kurulum/');
+    page.on('request', (r) => { if (r.method() !== 'GET' && kayitMi(r.url())) yolda++; });
+    const bitti = (r: { method: () => string; url: () => string }): void => { if (r.method() !== 'GET' && kayitMi(r.url())) yolda--; };
+    page.on('requestfinished', bitti);
+    page.on('requestfailed', bitti);
+    await kilitAl();
+    try {
+      await kullan(undefined);
+      await bekle(1000);
+      for (let i = 0; yolda > 0 && i < 100; i++) await bekle(100);
+    } finally {
+      rmSync(KILIT, { recursive: true, force: true });
+    }
+  }, { auto: true }],
+});
 
 const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Oto-CAM', 'G-Kod Sim.', 'Takım Ömrü'];
 
@@ -79,9 +119,10 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
   }
 });
 
-// P4: Oto-CAM (prototip 22798-24480). Örnek burç sentetiktir (döner profil), dosya okumaz; plan bellekte durur, sunucuya yazılmaz.
+// P4: Oto-CAM (prototip 22798-24480). Örnek burç sentetiktir (döner profil), dosya okumaz. Plan bellekte durur; örnek seçimi
+// hammadde ayarıdır ve kayda yazılır (cam/is.ts), bu yüzden test kayıt sırasında koşar.
 test.describe('P4 Oto-CAM', () => {
-  test('Oto-CAM: bakmak yazmaz, örnek parçadan plan üretilir, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
+  kayitYazan('Oto-CAM: bakmak yazmaz, örnek parçadan plan üretilir, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/oto-cam');
     await expect(page.getByText('OTO-CAM · OTOMATİK PROGRAM')).toBeVisible();
     expect(ag.yazmalar).toEqual([]);
@@ -108,7 +149,7 @@ test.describe('P3 Ham Malzeme ve G-Kod', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   };
 
-  test('Ham Malzeme: örnek parça hesaplanır, G-Kod simülasyonuna ham olarak geçer', async ({ page, ac }) => {
+  kayitYazan('Ham Malzeme: örnek parça hesaplanır, G-Kod simülasyonuna ham olarak geçer', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/hammadde');
     await expect(page.getByText('Model yok', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Örnek parça' }).click();
@@ -119,7 +160,7 @@ test.describe('P3 Ham Malzeme ve G-Kod', () => {
     await expect(page.getByRole('radio', { name: /Ham Malzeme sayfasından/ })).toBeChecked();
   });
 
-  test('G-Kod Sim.: örnek program yüklenir, takım değişimine gidilir, oynatılır', async ({ page, ac }) => {
+  kayitYazan('G-Kod Sim.: örnek program yüklenir, takım değişimine gidilir, oynatılır', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/simulasyon');
     await page.getByRole('button', { name: 'Örnek ISO' }).click();
     await expect(page.getByText('O1001 (ISO)').first()).toBeVisible();
@@ -131,7 +172,7 @@ test.describe('P3 Ham Malzeme ve G-Kod', () => {
   });
 
   // Projeler her testi 360, 768 ve 1280 genişlikte koşar.
-  test('iki görünüm de yatay taşmaz', async ({ page, ac }) => {
+  kayitYazan('iki görünüm de yatay taşmaz', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/hammadde');
     await page.getByRole('button', { name: 'Örnek parça' }).click();
     await expect(page.getByRole('button', { name: 'CSV' })).toBeVisible();
@@ -144,7 +185,7 @@ test.describe('P3 Ham Malzeme ve G-Kod', () => {
 
 // P2: kütüphane, Tanımlar ve Ana Sayfa (prototip 17883-18432, 21794-21896). Eklenen kalem ve tezgâh test sonunda silinir.
 test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
-  test('Kütüphane: yeni kalem, liste görünümünde adet, Stok CSV ve silme', async ({ page, ac }) => {
+  kayitYazan('Kütüphane: yeni kalem, liste görünümünde adet, Stok CSV ve silme', async ({ page, ac }) => {
     const ad = `Deneme kalem ${String(Date.now())}`;
     await ac('/cnc-kurulum/yeni/kutuphane');
     await expect(page.getByText('Hangi tezgâhta aktif')).toBeVisible();
@@ -220,7 +261,7 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
 });
 
 test.describe('P5 Takım Ömrü', () => {
-  test('Takım Ömrü: üç kip açılır, bakmak yazmaz, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
+  kayitYazan('Takım Ömrü: üç kip açılır, bakmak yazmaz, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/takim-omru');
     // 860 ve altında panel alttan çekmecedir (prototipteki gibi); kip sekmeleri çekmece açılınca erişilir.
     const cekmece = page.locator('.tc-co-cekmece');
