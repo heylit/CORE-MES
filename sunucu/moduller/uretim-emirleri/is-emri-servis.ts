@@ -25,7 +25,7 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, reworkAdimiIhlali, reworkTermini,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir } from './emir-olaylari.ts';
 import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
@@ -723,7 +723,7 @@ export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriS
   return oncekiSaglam + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
 }
 
-// Adım başına eksik (paralel adım 639, acikAdimSemasi.eksik ile aynı anlam): adıma giren eksi adımda sayılan (sağlam, karar bekleyen, hurda).
+// Adım başına eksik (paralel adım 639, acikAdimSemasi.eksik ile aynı anlam): adıma giren eksi adımın tükettiği (adimTuketimi).
 // Önceki adımı olmayan ya da bağımsız adımda null.
 async function adimEksikHaritasi(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[]): Promise<Map<number, number | null>> {
   const sonuc = new Map<number, number | null>();
@@ -731,8 +731,7 @@ async function adimEksikHaritasi(db: Db, emirId: number, hepsi: readonly IsEmriS
   const sayac = new Map((await s.adimSayaclariGetir(db, hepsi.map((i) => i.id))).map((x) => [x.isEmriId, x]));
   for (const i of hepsi) {
     if (i.bagimlilik === 'bagimsiz') { sonuc.set(i.id, null); continue; }
-    const x = sayac.get(i.id);
-    sonuc.set(i.id, adimEksigi(await adimaGiren(db, emirId, hepsi, i), (x?.saglam ?? 0) + (x?.kararBekliyor ?? 0) + (x?.hurda ?? 0)));
+    sonuc.set(i.id, adimEksigi(await adimaGiren(db, emirId, hepsi, i), adimTuketimi(sayac.get(i.id))));
   }
   return sonuc;
 }

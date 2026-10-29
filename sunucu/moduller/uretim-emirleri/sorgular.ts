@@ -2060,19 +2060,30 @@ export function kartSayimlariGetir(db: Db, emirId: number, kartIdleri: readonly 
 
 /* ---------------- paralel adım (kart 639) ---------------- */
 
-export interface AdimSayaci { isEmriId: number; saglam: number; hurda: number; kararBekliyor: number; red: number }
+// hatali: adımda girilmiş bütün hatalı parça kaydı; hataliEmirde: bunlardan kol açmadan emrin kendisinde kalanı (1188). Kola ayrılan adet
+// adıma girenden düşer (adimaGiren), tüketime yalnız emirde kalan girer.
+export interface AdimSayaci { isEmriId: number; saglam: number; hurda: number; kararBekliyor: number; red: number; hatali: number; hataliEmirde: number }
 
-// Adım başına net sayaç (düzeltme dahil); sayımı olmayan adım satır vermez.
+// 1188: hatalı kaydının adım başına toplamı; adimSayaclariGetir ve adimDurumlariGetir aynı tanımı kullanır.
+const HATALI_TOPLAMI = `SELECT sum(adet) AS hatali, sum(adet) FILTER (WHERE hedef_emir_id = uretim_emri_id) AS emirde
+  FROM uretim_emirleri_hatali_kaydi WHERE is_emri_id = i.id`;
+
+// Adım başına net sayaç (düzeltme dahil); sayımı ve hatalı kaydı olmayan adım satır vermez.
 export function adimSayaclariGetir(db: Db, isEmriIdleri: readonly number[]): Promise<AdimSayaci[]> {
   if (isEmriIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<AdimSayaci>(
-    `SELECT is_emri_id AS "isEmriId",
-            COALESCE(sum(adet) FILTER (WHERE tur = 'saglam'), 0)::int AS saglam,
-            COALESCE(sum(adet) FILTER (WHERE tur = 'hurda'), 0)::int AS hurda,
-            COALESCE(sum(adet) FILTER (WHERE tur = 'karar_bekliyor'), 0)::int AS "kararBekliyor",
-            COALESCE(sum(adet) FILTER (WHERE tur = 'red'), 0)::int AS red
-       FROM uretim_sayimi WHERE is_emri_id = ANY($1::int[]) GROUP BY is_emri_id`,
-    [[...isEmriIdleri]],
+    `SELECT i.id AS "isEmriId",
+            COALESCE(s.saglam, 0)::int AS saglam, COALESCE(s.hurda, 0)::int AS hurda,
+            COALESCE(s.kb, 0)::int AS "kararBekliyor", COALESCE(s.red, 0)::int AS red,
+            COALESCE(h.hatali, 0)::int AS hatali, COALESCE(h.emirde, 0)::int AS "hataliEmirde"
+       FROM unnest($1::int[]) AS i(id)
+       LEFT JOIN LATERAL (
+         SELECT count(*) AS n, sum(adet) FILTER (WHERE tur = 'saglam') AS saglam, sum(adet) FILTER (WHERE tur = 'hurda') AS hurda,
+                sum(adet) FILTER (WHERE tur = 'karar_bekliyor') AS kb, sum(adet) FILTER (WHERE tur = 'red') AS red
+           FROM uretim_sayimi WHERE is_emri_id = i.id) s ON true
+       LEFT JOIN LATERAL (${HATALI_TOPLAMI}) h ON true
+      WHERE s.n > 0 OR h.hatali IS NOT NULL`,
+    [[...new Set(isEmriIdleri)]],
   );
 }
 
@@ -2106,6 +2117,8 @@ export interface AdimDurumSatiri {
   saglam: number;
   hurda: number;
   kararBekliyor: number;
+  hatali: number;
+  hataliEmirde: number;
   sonOlay: 'duraklat' | 'durdur' | 'devam' | null;
   // Bölünmüş ya da kol emir: adıma giren parti hesabı ister, listede eksik gösterilmez.
   partili: boolean;
@@ -2118,6 +2131,7 @@ export function adimDurumlariGetir(db: Db, emirIdleri: readonly number[]): Promi
     `SELECT i.id, i.uretim_emri_id AS "emirId", i.sira, i.op_no AS "opNo", i.ad, i.istasyon_id AS "istasyonId", i.makine_id AS "makineId",
             i.fason_firma_id AS "fasonFirmaId", i.durum, i.bagimlilik, i.devir_adedi AS "devirAdedi", i.saglam_adet AS "saglamAdet",
             COALESCE(s.saglam, 0)::int AS saglam, COALESCE(s.hurda, 0)::int AS hurda, COALESCE(s.kb, 0)::int AS "kararBekliyor",
+            COALESCE(h.hatali, 0)::int AS hatali, COALESCE(h.emirde, 0)::int AS "hataliEmirde",
             (SELECT o.olay FROM uretim_olayi o WHERE o.is_emri_id = i.id AND o.olay <> 'ayar' ORDER BY o.id DESC LIMIT 1) AS "sonOlay",
             (e.ust_emir_id IS NOT NULL OR EXISTS (SELECT 1 FROM uretim_emri a WHERE a.ust_emir_id = e.id)) AS partili
        FROM uretim_emirleri_is_emri i
@@ -2126,6 +2140,7 @@ export function adimDurumlariGetir(db: Db, emirIdleri: readonly number[]): Promi
          SELECT sum(adet) FILTER (WHERE tur = 'saglam') AS saglam, sum(adet) FILTER (WHERE tur = 'hurda') AS hurda,
                 sum(adet) FILTER (WHERE tur = 'karar_bekliyor') AS kb
            FROM uretim_sayimi WHERE is_emri_id = i.id) s ON true
+       LEFT JOIN LATERAL (${HATALI_TOPLAMI}) h ON true
       WHERE i.uretim_emri_id = ANY($1::int[])
       ORDER BY i.uretim_emri_id, i.sira`,
     [[...emirIdleri]],

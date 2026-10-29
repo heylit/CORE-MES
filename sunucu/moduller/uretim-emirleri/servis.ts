@@ -19,7 +19,7 @@ import {
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
-  ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
+  ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu,
 } from './kurallar.ts';
@@ -168,6 +168,7 @@ async function paralelAlanlari(db: Db, satirlar: readonly EmirSatiri[]): Promise
       acikAdimlar: hepsi.filter((a) => a.durum === 'calisiyor').map((a) => ({
         isEmriId: a.id, opNo: a.opNo, ad: a.ad, istasyon: a.istasyonId === null ? null : adli(adlar.istasyon, a.istasyonId, 'İstasyon'),
         durum: a.durum, calisma: calismaDurumu(a.sonOlay), makineId: a.makineId, eksik: partili ? null : (eksikler.get(a.id) ?? null),
+        hataliAdet: a.hatali,
       })),
       baslatilabilirAdimlar: baslatilabilirAdimlar(hepsi, oncekiSaglam),
     });
@@ -358,8 +359,7 @@ async function adimGirdisiUyarisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEm
 async function eksiyleBitisUyarisi(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri, kapanis: number): Promise<string | null> {
   const sonraki = hepsi.find((i) => i.id !== adim.id && oncekiParalelAdim(hepsi, i)?.id === adim.id);
   if (sonraki === undefined || sonraki.durum === 'bekliyor') return null;
-  const s = await sayaclar(db, sonraki.uretimEmriId, sonraki.id);
-  return eksiyleBitirmeUyarisi(kapanis, { opNo: sonraki.opNo, sayilan: s.saglam + s.kararBekliyor + s.hurda });
+  return eksiyleBitirmeUyarisi(kapanis, { opNo: sonraki.opNo, sayilan: adimTuketimi((await sorgular.adimSayaclariGetir(db, [sonraki.id]))[0]) });
 }
 
 // Emir eksi bakiyeyle biterse uyarır (tasarım 639 §5): her adımın girdisi adimaGiren ile, sayılanı adım sayacından.
@@ -370,8 +370,7 @@ async function emirEksiBitisUyarisi(db: Db, emir: EmirSatiri): Promise<string | 
   const adimlar: { opNo: number; eksik: number | null }[] = [];
   for (const i of hepsi) {
     if (i.bagimlilik === 'bagimsiz') continue;
-    const x = sayac.get(i.id);
-    adimlar.push({ opNo: i.opNo, eksik: adimEksigi(await adimaGiren(db, emir.id, hepsi, i), (x?.saglam ?? 0) + (x?.kararBekliyor ?? 0) + (x?.hurda ?? 0)) });
+    adimlar.push({ opNo: i.opNo, eksik: adimEksigi(await adimaGiren(db, emir.id, hepsi, i), adimTuketimi(sayac.get(i.id))) });
   }
   return emirEksiUyarisi(adimlar);
 }

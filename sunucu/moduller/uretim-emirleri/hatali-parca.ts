@@ -57,7 +57,8 @@ async function kapsamDenetle(db: Db, kisiId: number, istasyonId: number): Promis
 
 // 1034, 1036 a, 4 a: operatör hatalı nedeni ve adedi verir. Adet çalışan adımdan kola ayrılır (kalite kararı, rework, adımın tekrarı;
 // kol sonraki adımda ana partiye katılır). Adımdaki bütün parça hatalıysa emir bölünemez: aynı adımlar ve tekrar hatalı adımın arkasına
-// girer, hatalı adım sağlamsız biter. Parça hatalı adımda sayılmaz; kaydı hatalı parça kaydındadır.
+// girer, hatalı adım sağlamsız biter. 1188: hatalı giriş adımda üretimdir ve adımın girdisini tüketir (adimTuketimi); sağlam sayılmaz,
+// kaydı hatalı parça kaydındadır.
 export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: HataliKaydi): Promise<HataliCevabi> {
   await ustuOnceKilitle(db, emirId);
   const e = await s.ustEmirBul(db, emirId, true);
