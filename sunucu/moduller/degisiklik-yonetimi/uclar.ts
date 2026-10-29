@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
 import {
-  ccbGovdesi, emirCevabi, emirListeCevabi, emirlerSorgusu, faiOnayGovdesi, geriGonderGovdesi, gorevlerimCevabi, idParametresi,
+  ccbGovdesi, emirCevabi, emirListeCevabi, emirlerSorgusu, faiOnayGovdesi, geriGonderGovdesi, gorevlerimCevabi, gorevlerimSorgusu, idParametresi,
   izlenebilirlikCevabi, izlenebilirlikSorgusu, kalemKaydetGovdesi, kapatGovdesi, kararGovdesi, konfigurasyonCevabi, malzemeParametresi,
   musteriOnayiGovdesi, olayListeCevabi, olaylarSorgusu, parcaAdaylariCevabi, parcaAdaylariSorgusu, raporCevabi, raporSorgusu, seriListeCevabi, serilerSorgusu, siniflandirGovdesi,
   sonUrunlerCevabi, surumGovdesi, talepAcGovdesi, talepCevabi, talepListeCevabi, taleplerSorgusu, yayinlaGovdesi,
@@ -18,7 +18,11 @@ const OKUMA = { biri: [ilk, ...diger] } as const;
 const KOK = '/degisiklik-yonetimi';
 
 export const uclar = [
-  uc({ yontem: 'GET', yol: `${KOK}/gorevlerim`, yetki: OKUMA, cevap: gorevlerimCevabi, isle: ({ db, kullanici }) => gorevlerim(db, kullanici) }),
+  uc({
+    // Ekip kapsamı aynı okuma yetkisiyle: kayıtlar talep ve emir listelerinde zaten okunur; kişi adı ve atama yok.
+    yontem: 'GET', yol: `${KOK}/gorevlerim`, yetki: OKUMA, sorgu: gorevlerimSorgusu, cevap: gorevlerimCevabi,
+    isle: ({ db, kullanici, sorgu }) => gorevlerim(db, kullanici, sorgu.kapsam),
+  }),
   uc({
     yontem: 'GET', yol: `${KOK}/talepler`, yetki: OKUMA, sorgu: taleplerSorgusu, cevap: talepListeCevabi,
     isle: ({ db, sorgu }) => talepleriListele(db, sorgu),

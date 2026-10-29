@@ -1,6 +1,6 @@
 import { HEDEF_IS_GUNU, KARAR_KODLARI, MRB_KODLARI, mrbKarariMi, onerilenSinif } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
-  Aciliyet, Cevap, EmirDurumu, HatAsamasi, EtkiAnalizi, FaiTuru, Gecerlilik, KapanisKosulu, KararHedefi, KararKodu, KararModu, KosulHali, Sinif,
+  Aciliyet, Cevap, EmirDurumu, GorevIslemi, HatAsamasi, EtkiAnalizi, FaiTuru, Gecerlilik, KapanisKosulu, KararHedefi, KararKodu, KararModu, KosulHali, Sinif,
   SiniflandirmaSorusu, TalepDurumu, UyumHali,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
@@ -251,14 +251,14 @@ export function gorevSuresi(aciliyet: Aciliyet, sonAdim: string, bugun: string):
 
 export const MRB_KODU_LISTESI: readonly KararKodu[] = MRB_KODLARI.filter((k) => (KARAR_KODLARI as readonly string[]).includes(k));
 
-export interface GorevAdimi { adim: string; islem: DegisiklikYonetimiIslemi }
+export interface GorevAdimi { adim: string; islem: GorevIslemi }
 
-// DY-19: talebin sıradaki adımı ve onu yapan işlem. Talebi açan kişiye kendi talebinin CCB görevi düşmez (DY-3).
-export function talepGorevi(durum: TalepDurumu, acanKisiId: number, kisiId: number): GorevAdimi | null {
+// DY-19: talebin sıradaki adımı ve onu yapan işlem. Ekip görünümü bütün adımları gösterir; kimin olduğunu `benimGorevimMi` söyler.
+export function talepGorevi(durum: TalepDurumu): GorevAdimi | null {
   switch (durum) {
     case 'gonderildi': return { adim: 'Talebi sınıflandır', islem: 'degisiklik-yonetimi.siniflandir' };
     case 'analizde': return { adim: 'Etki analizini çalıştır', islem: 'degisiklik-yonetimi.siniflandir' };
-    case 'ccb_bekliyor': return kendiTalebiMi(acanKisiId, kisiId) ? null : { adim: 'CCB kararı ver', islem: 'degisiklik-yonetimi.ccb-karar' };
+    case 'ccb_bekliyor': return { adim: 'CCB kararı ver', islem: 'degisiklik-yonetimi.ccb-karar' };
     case 'musteri_onayi_bekliyor': return { adim: 'Müşteri onayını kaydet', islem: 'degisiklik-yonetimi.musteri-onayi' };
     case 'onaylandi': return { adim: 'ECO aç', islem: 'degisiklik-yonetimi.emir-ac' };
     default: return null;
@@ -280,6 +280,11 @@ export function emirGorevleri(e: { durum: EmirDurumu; bekleyenKarar: number; bek
   if (e.bekleyenMrb > 0) adimlar.push({ adim: `MRB kararı ver (${e.bekleyenMrb})`, islem: 'degisiklik-yonetimi.mrb-karar' });
   if (e.bekleyenFai > 0) adimlar.push({ adim: `İlk parça kontrolünü onayla (${e.bekleyenFai})`, islem: 'degisiklik-yonetimi.fai-onayla' });
   return adimlar;
+}
+
+// DY-19: adım, işlemi olan kişinindir; talebi açana kendi talebinin CCB adımı düşmez (DY-3).
+export function benimGorevimMi(g: GorevAdimi, islemler: readonly string[], kendiTalebi: boolean): boolean {
+  return islemler.includes(g.islem) && !(kendiTalebi && g.islem === 'degisiklik-yonetimi.ccb-karar');
 }
 
 // Değişiklik hattının aşaması: açık talep, revizyon, yayın, karar, ilk parça, kapanış. Kapanmış emir ve kapanmış talep hatta yoktur.

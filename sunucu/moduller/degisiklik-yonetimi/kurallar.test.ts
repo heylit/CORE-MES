@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
+  benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
   talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
@@ -171,9 +171,16 @@ describe('degisiklik-yonetimi kuralları', () => {
   });
 
   test('DY-19: görev adımları ve hat aşaması; açan kişiye kendi CCB görevi düşmez', () => {
-    assert.equal(talepGorevi('ccb_bekliyor', 3, 3), null);
-    assert.equal(talepGorevi('ccb_bekliyor', 3, 4)?.islem, 'degisiklik-yonetimi.ccb-karar');
-    assert.equal(talepGorevi('reddedildi', 3, 4), null);
+    const ccb = talepGorevi('ccb_bekliyor');
+    assert.equal(ccb?.islem, 'degisiklik-yonetimi.ccb-karar');
+    assert.equal(talepGorevi('reddedildi'), null);
+    // Ekipte görünür, ama açana kendi talebinin CCB adımı düşmez; öteki adım işlemi olanındır.
+    const islemler = ['degisiklik-yonetimi.ccb-karar', 'degisiklik-yonetimi.siniflandir'];
+    if (ccb === null) throw new Error('CCB adımı yok');
+    assert.equal(benimGorevimMi(ccb, islemler, true), false);
+    assert.equal(benimGorevimMi(ccb, islemler, false), true);
+    assert.equal(benimGorevimMi({ adim: 'x', islem: 'degisiklik-yonetimi.kapat' }, islemler, false), false);
+    assert.equal(benimGorevimMi({ adim: 'x', islem: 'degisiklik-yonetimi.siniflandir' }, islemler, true), true);
     assert.deepEqual(emirGorevleri({ durum: 'karar', bekleyenKarar: 2, bekleyenMrb: 1, bekleyenFai: 0 }).map((g) => g.islem), [
       'degisiklik-yonetimi.karar-ver', 'degisiklik-yonetimi.mrb-karar',
     ]);

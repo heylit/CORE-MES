@@ -7,7 +7,7 @@ OKUMA = `{ biri: [on bir işlem] }`.
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
-| `GET /gorevlerim` | OKUMA | açana kendi CCB görevi düşmez (DY-19); hedef süre (DY-18) | listeler | yetki |
+| `GET /gorevlerim` | OKUMA | kapsam benim (kişinin işlemleri) ya da ekip (bütün bekleyen adımlar, 1146 b; aynı kayıtlar talep ve emir listelerinde zaten OKUMA ile okunur, kişi adı ve atama yok, koordinatör kararı 29.10); açana kendi CCB görevi düşmez (DY-19); hedef süre (DY-18) | listeler | yetki, listeler (geçersiz kapsam 400) |
 | `GET /talepler`, `GET /talepler/:id` | OKUMA | kapsam, durum, sınıf, arama (ILIKE kaçışlı) | listeler | yetki |
 | `GET /parca-adaylari` | `talep-ac` | yalnız aktif mamul ve yarı mamul, en çok 50 | listeler | yetki |
 | `POST /talepler/ac` | `talep-ac`; tekrar korumalı | parça var, aktif, mamul ya da yarı mamul (DY-20); kişi ve zaman sunucudan | DY-20 | yetki, DY-20 (400, aynı istek kimliği ikinci talep açmaz) |

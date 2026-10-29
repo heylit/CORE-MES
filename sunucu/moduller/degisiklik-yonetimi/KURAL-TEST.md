@@ -22,5 +22,5 @@ Kural, saf işlev (`kurallar.ts`), test (`kurallar.test.ts` ve `degisiklik-yonet
 | DY-16 | seri uyumu | `seriUyumu` | "DY-16: seri uyumu" | `_gecerlilik_butun` |
 | DY-17 | iş günü; çevrim müşteri onayını beklemeyi saymaz | `isGunuFarki`, `cevrimIsGunu` | "DY-17 ve DY-18", "listeler" | |
 | DY-18 | görev hedef süresi | `gorevSuresi` | "DY-17 ve DY-18", "listeler" | |
-| DY-19 | görev adımları ve hat | `talepGorevi`, `emirGorevleri`, `talepHatti`, `emirHatti` | "DY-19: görev adımları", "listeler" | |
+| DY-19 | görev adımları, kimin olduğu (benim/ekip) ve hat | `talepGorevi`, `emirGorevleri`, `benimGorevimMi`, `talepHatti`, `emirHatti` | "DY-19: görev adımları", "listeler" | |
 | DY-20 | talep yalnız aktif mamul ya da yarı mamul kartına | servis `talepParcalariniDenetle` (malzemeler `disari.ts`) | "DY-20: talep yalnız" | `_talep_kalemi_tek` |

@@ -9,3 +9,4 @@ Taban: `main` 55427f0 (S0 0001 sözleşme içinde) + S0 0002 (işlemler) + S0 00
 - S0'dan sonraki istekler: `gorevlerimCevabi.kapanan90Gun` (1149 b), çevrim iş günü müşteri onayını beklemeyi saymaz (P4), aile ipliği, seri listesi ucu, soy ağacı, sapma satırı (1142-1145 a): kaynağı bağlı olmayanlar null.
 - 1175 a: olay günlüğü `ara` ile kayıt no ve alan değerlerinde arar (joker karakter düz metin). 1176 a: `rotaOlgunlugu` null (rota bağlı değil). 1177 a: UYUM-BORCU madde 12.
 - Göç damgası 101000'den 110000'e alındı: main'e 101000'den sonra 106000 ve 107000 girdi.
+- 0002 (1146 b, S0 0004 üstüne): `GET /gorevlerim?kapsam=benim|ekip`; ekip bütün bekleyen adımlar, aynı okuma yetkisiyle; her satır adımı yapacak işlemi taşır; `benimSayisi` ve `ekipSayisi` her cevapta. Kendi talebi kuralı `talepGorevi`'nden `benimGorevimMi`'ne taşındı.

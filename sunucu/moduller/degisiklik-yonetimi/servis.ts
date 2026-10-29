@@ -7,14 +7,14 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
-  GeriGonderGovdesi, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
+  GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
   KararGovdesi, KararHedefi, KonfigurasyonCevabi, MusteriOnayiGovdesi, OlayListeCevabi, OlaylarSorgusu, ParcaAdaylariCevabi, RaporCevabi,
   RaporSorgusu, SeriListeCevabi, SerilerSorgusu, SiniflandirGovdesi, SonUrunlerCevabi, TalepAcGovdesi, TalepCevabi, TalepListeCevabi, TaleplerSorgusu, YayinlaGovdesi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  MRB_KODU_LISTESI, PARAMETRE_ILETISI, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
+  MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
   cevrimIsGunu, ilkParcaTuru, isGunuFarki, izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
@@ -512,23 +512,30 @@ export async function kapat(db: Db, kullanici: Kullanici, id: number, g: KapatGo
 
 /* ---------------- Görevlerim ---------------- */
 
-export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<GorevlerimCevabi> {
+export async function gorevlerim(db: Db, kullanici: Kullanici, kapsam: GorevKapsami): Promise<GorevlerimCevabi> {
   const bugun = await s.bugun(db);
-  const yetkili = (islem: Islem): boolean => kullanici.islemler.includes(islem);
   const talepler = await s.acikTalepGorevleri(db);
   const emirler = await s.acikEmirGorevleri(db, MRB_KODU_LISTESI);
-  const gorevler: GorevSatiri[] = [];
+  // Ekip bütün bekleyen adımlardır; benim, ekibin işlemi ve kendi talebi kuralıyla süzülmüşüdür. İki sayı da her cevapta.
+  const ekip: { satir: GorevSatiri; benim: boolean }[] = [];
   for (const t of talepler) {
-    const g = talepGorevi(t.durum, t.acanKisiId, kullanici.id);
-    if (g === null || !yetkili(g.islem)) continue;
-    gorevler.push({ tur: 'talep', id: t.id, no: t.no, baslik: t.baslik, sinif: t.sinif, aciliyet: t.aciliyet, adim: g.adim, ...gorevSuresi(t.aciliyet, t.sonAdim ?? bugun, bugun) });
+    const g = talepGorevi(t.durum);
+    if (g === null) continue;
+    ekip.push({
+      satir: { tur: 'talep', id: t.id, no: t.no, baslik: t.baslik, sinif: t.sinif, aciliyet: t.aciliyet, adim: g.adim, islem: g.islem, ...gorevSuresi(t.aciliyet, t.sonAdim ?? bugun, bugun) },
+      benim: benimGorevimMi(g, kullanici.islemler, kendiTalebiMi(t.acanKisiId, kullanici.id)),
+    });
   }
   for (const e of emirler) {
     for (const g of emirGorevleri(e)) {
-      if (!yetkili(g.islem)) continue;
-      gorevler.push({ tur: 'emir', id: e.id, no: e.no, baslik: e.baslik, sinif: e.sinif, aciliyet: e.aciliyet, adim: g.adim, ...gorevSuresi(e.aciliyet, e.sonAdim ?? bugun, bugun) });
+      ekip.push({
+        satir: { tur: 'emir', id: e.id, no: e.no, baslik: e.baslik, sinif: e.sinif, aciliyet: e.aciliyet, adim: g.adim, islem: g.islem, ...gorevSuresi(e.aciliyet, e.sonAdim ?? bugun, bugun) },
+        benim: benimGorevimMi(g, kullanici.islemler, false),
+      });
     }
   }
+  const benimSayisi = ekip.filter((g) => g.benim).length;
+  const gorevler = (kapsam === 'ekip' ? ekip : ekip.filter((g) => g.benim)).map((g) => g.satir);
   gorevler.sort((a, b) => (b.yasIsGunu - b.hedefIsGunu) - (a.yasIsGunu - a.hedefIsGunu) || a.no.localeCompare(b.no));
   const sayac = new Map<HatAsamasi, number>();
   for (const a of [...talepler.map((t) => talepHatti(t.durum)), ...emirler.map((e) => emirHatti(e.durum))]) {
@@ -539,6 +546,8 @@ export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<Gorevler
   return {
     gorevler,
     hat: (['talep', 'revizyon', 'yayin', 'karar', 'fai', 'kapanis'] as const).map((asama) => ({ asama, adet: sayac.get(asama) ?? 0 })),
+    benimSayisi,
+    ekipSayisi: ekip.length,
     kapanan90Gun: await s.kapanan90Gun(db),
     sonKayitlar: sonSatirlar.map((g, i) => {
       const ham = sonlar[i];

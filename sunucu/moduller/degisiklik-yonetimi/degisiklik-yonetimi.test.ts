@@ -434,8 +434,21 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     let c = await talepAc();
     c = await tamam(acan, 'POST', `${K}/talepler/${c.id}/siniflandir`, { sinif: 'D2', aciliyet: 'acil', cevaplar: { ...cevaplar, fff: 'hayir' }, surum: c.surum });
     c = await tamam(acan, 'POST', `${K}/talepler/${c.id}/etki-analizi`, { surum: c.surum });
-    assert.equal((await tamam<GorevlerimCevabi>(acan, 'GET', `${K}/gorevlerim`)).gorevler.some((g) => g.id === c.id && g.tur === 'talep'), false);
+    const benim = await tamam<GorevlerimCevabi>(acan, 'GET', `${K}/gorevlerim`);
+    assert.equal(benim.gorevler.some((g) => g.id === c.id && g.tur === 'talep'), false);
     assert.ok((await tamam<GorevlerimCevabi>(onaylayan, 'GET', `${K}/gorevlerim`)).gorevler.some((g) => g.id === c.id && g.adim === 'CCB kararı ver'));
+    // 1146 b: ekip bütün bekleyen adımlar, adımı yapacak işlemle; iki sayı her iki kapsamda aynı.
+    const ekip = await tamam<GorevlerimCevabi>(acan, 'GET', `${K}/gorevlerim?kapsam=ekip`);
+    assert.ok(ekip.gorevler.some((g) => g.id === c.id && g.tur === 'talep' && g.islem === 'degisiklik-yonetimi.ccb-karar'));
+    assert.deepEqual([benim.benimSayisi, benim.ekipSayisi, benim.gorevler.length], [ekip.benimSayisi, ekip.ekipSayisi, benim.benimSayisi]);
+    assert.equal(ekip.gorevler.length, ekip.ekipSayisi);
+    assert.ok(ekip.ekipSayisi > ekip.benimSayisi);
+    // İşlemi tek olan kişi ekipte hepsini, benimde yalnız kendi işleminin adımlarını görür.
+    const kapatan = tekIslemli.get('degisiklik-yonetimi.kapat') ?? '';
+    const kapatBenim = await tamam<GorevlerimCevabi>(kapatan, 'GET', `${K}/gorevlerim`);
+    assert.ok(kapatBenim.gorevler.every((g) => g.islem === 'degisiklik-yonetimi.kapat'));
+    assert.equal((await tamam<GorevlerimCevabi>(kapatan, 'GET', `${K}/gorevlerim?kapsam=ekip`)).ekipSayisi, ekip.ekipSayisi);
+    assert.equal((await cagir(acan, 'GET', `${K}/gorevlerim?kapsam=herkes`)).statusCode, 400);
 
     const adaylar = await tamam<ParcaAdaylariCevabi>(acan, 'GET', `${K}/parca-adaylari`);
     assert.ok(adaylar.parcalar.some((p) => p.malzemeId === mil));
