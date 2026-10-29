@@ -144,10 +144,14 @@ export const acikAdimSemasi = z.object({
   durum: z.lazy(() => isEmriDurumu),
   calisma: calismaDurumu.nullable(),
   makineId: KIMLIK.nullable(),
-  // Önceki adımın sağlamı eksi bu adımın sağlam, karar bekleyen ve hurda toplamı. Artı: adıma gelmiş, henüz işlenmemiş parça.
+  // Önceki adımın sağlamı eksi bu adımın sağlam, karar bekleyen, hurda ve kol açmadan girilmiş hatalı toplamı (kola ayrılan hatalı adıma
+  // girenden zaten düşer, 1188). Artı: adıma gelmiş, henüz işlenmemiş parça.
   // Eksi: bu adım önceki adımın teslim etmediği parçayı saydı (647 a); önceki adımda o kadar eksi bakiye vardır, önceki adım saydıkça kapanır.
   // Önceki adımı olmayan ya da bağımsız adımda null.
   eksik: z.number().int().nullable(),
+  // 1188: bu adımda girilmiş hatalı parça kayıtlarının adet toplamı (kol açılsa da, karar verilse de); hatalı giriş adımda üretimdir.
+  // Kaydı yoksa 0 (gerçek sıfır). İsteğe bağlı: sunucu her zaman yazar, alanı olmayan eski veride sayı bilinmiyor demektir.
+  hataliAdet: z.number().int().nonnegative().optional(),
 });
 
 // Onaylı kapanışın sonucu (1082 a); emir okumaları da taşıdığı için burada.
