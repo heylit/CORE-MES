@@ -67,6 +67,8 @@ export interface CozumIstegi {
   baglar?: { anahtar: string; oncul: string }[];
   // 686 a: rotada olmayan ek adım (emrin kendi adımı); öncül ve ardıl emrin içindeki komşu adımların anahtarı, süreler dakika.
   ekAdimlar?: EkAdim[];
+  // 1202: kuyruk işinin önündeki bitmemiş fasonun kalan süresi (gün; Üretim Emirleri'nin fasonBekleGun'u). Motor öncülü fason değilse uygular.
+  fasonBekleme?: { anahtar: string; gun: number }[];
 }
 export interface EkAdim { anahtar: string; ad: string; oncul: string | null; ardil: string | null; ayarDk: number; birimDk: number; adet: number }
 export interface CozumGirdisi {
