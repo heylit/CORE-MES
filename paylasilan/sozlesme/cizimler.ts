@@ -15,7 +15,7 @@ export type RevizyonDurumu = (typeof REVIZYON_DURUMLARI)[number];
 
 // Belgenin bağlanabildiği kayıt sahipleri; hedef kimliği o modülün sayı kimliğidir (malzemelerde kart no). Merkez bu modülleri
 // ithal etmez (onlar merkezi ithal eder, ADR 0006): kimliğin varlığı bağlamada yabancı anahtarla denetlenir (UYUM-BORCU).
-export const BAG_MODULLERI = ['malzemeler', 'istasyonlar', 'atolye', 'arkon', 'kalibrasyon', 'rota', 'uretim-emirleri', 'stok', 'satin-alma'] as const;
+export const BAG_MODULLERI = ['malzemeler', 'istasyonlar', 'atolye', 'arkon', 'kalibrasyon', 'rota', 'uretim-emirleri', 'stok', 'satin-alma', 'cnc-kurulum'] as const;
 export type BagModulu = (typeof BAG_MODULLERI)[number];
 
 const zorunluMetin = (ileti: string, azami: number) => z.string().trim().min(1, ileti).max(azami);
