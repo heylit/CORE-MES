@@ -95,6 +95,8 @@ export const ILETILER = {
   fasonEmirFarkli: 'Fason adım seçilen üretim emrinin değil.',
   fasonTekrar: 'Aynı fason adım talepte iki kez var.',
   onTalepYoksayYok: 'Yoksayma kaydı bulunamadı; sayfayı yenileyin.',
+  planOnTalepYok: 'Bu malzeme için plan ön talebi yok: ihtiyaç karşılandı ya da plan değişti. Sayfayı yenileyin.',
+  planIhtiyaciTekrar: 'Aynı malzeme plan ihtiyacı listesinde iki kez var.',
 } as const;
 
 // SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yanlış iptal elle önceki duruma çevrilir (SAT-68).
@@ -679,6 +681,41 @@ export function fasonOnTalepAdaylari(
   return adaylar
     .filter((x) => !bagli.has(x.isEmriId) && !yoksayilan.has(x.isEmriId) && (x.gonderilen ?? 0) === 0)
     .sort((a, b) => (a.teslim ?? '9999').localeCompare(b.teslim ?? '9999') || a.emirNo.localeCompare(b.emirNo) || a.opNo - b.opNo);
+}
+// 898 a, Dal 2: plan ön talebi. Planın stokla karşılanamayan eksiğinden açık siparişin kalanı ve sipariş verilmemiş açık talep (kartın stok
+// biriminde olanlar; başka birimdeki satır çevrilmeden düşülmez) çıkar; yoksayma o anki kalanı saklar, kalan onu aşarsa fark yeniden düşer.
+export interface PlanOnTalepGirdisi {
+  ihtiyaclar: readonly { malzemeNo: number; miktar: string; gerekenTarih: string; emirler: readonly string[]; stokBilinmiyor: boolean }[];
+  birimler: ReadonlyMap<number, string | null>;
+  siparisler: readonly { malzemeNo: number; birim: string; miktar: string }[];
+  talepler: readonly { malzemeNo: number; birim: string; miktar: string }[];
+  yoksaylar: ReadonlyMap<number, string>;
+}
+export interface PlanOnTalepAdayi {
+  malzemeNo: number; miktar: number; gerekenTarih: string; emirler: string[]; stokBilinmiyor: boolean;
+  // Yoksaymadan önceki kalan; yoksayma bunu saklar.
+  kalan: number;
+  hesap: { eksik: number; siparis: number; talep: number; yoksayilan: number };
+}
+const dortHane = (n: number): number => Math.round(n * 10_000) / 10_000;
+export function planOnTalepAdaylari(g: PlanOnTalepGirdisi): PlanOnTalepAdayi[] {
+  const topla = (l: PlanOnTalepGirdisi['siparisler'], no: number) => {
+    const birim = g.birimler.get(no) ?? null;
+    return l.filter((x) => x.malzemeNo === no && birim !== null && x.birim === birim).reduce((t, x) => t + (Number(x.miktar) || 0), 0);
+  };
+  return g.ihtiyaclar.flatMap((i) => {
+    const eksik = Number(i.miktar) || 0;
+    const siparis = topla(g.siparisler, i.malzemeNo);
+    const talep = topla(g.talepler, i.malzemeNo);
+    const kalan = dortHane(eksik - siparis - talep);
+    const yoksayilan = Number(g.yoksaylar.get(i.malzemeNo) ?? 0) || 0;
+    const miktar = dortHane(kalan - yoksayilan);
+    if (miktar <= 0) return [];
+    return [{
+      malzemeNo: i.malzemeNo, miktar, kalan, gerekenTarih: i.gerekenTarih, emirler: [...i.emirler], stokBilinmiyor: i.stokBilinmiyor,
+      hesap: { eksik, siparis: dortHane(siparis), talep: dortHane(talep), yoksayilan },
+    }];
+  });
 }
 // Uygulanan parça ve fason adım yalnız hizmet talebindedir; bir fason adım bir talepte bir kez geçer ve talebin emri seçiliyse o emrindir.
 export function hizliBagReddi(

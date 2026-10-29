@@ -19,6 +19,9 @@ export type { OrtalamaAlisFiyati, SonAlisFiyati } from './servis.ts';
 // bekliyor). Plan "olması gereken" tarihi tam liste olarak yazar (listede olmayanın gereken tarihi boşalır, sürüm artmaz).
 // Yetki denetlemez; çağıranın işlemini kullanır. Termin girişi uçtandır (POST /satin-alma-tedarik-terminleri/kaydet).
 export { tedarikIhtiyaclariniYaz, tedarikTerminleri } from './servis.ts';
+// 898 a, 902 a: plan canlıya alınınca malzeme eksiğini tam liste olarak yazar (listede olmayan silinir); satın alma okurken açık sipariş ve
+// açık talebi düşer, kalanı "Plan ihtiyacı" ön talebidir. Yetki denetlemez; çağıranın işlemini kullanır.
+export { planIhtiyaclariniYaz } from './servis.ts';
 export type { TedarikTermini } from '#paylasilan/sozlesme/satin-alma.ts';
 // SAT-77: malzemenin uygulanan kg fiyatı ve stok biriminin birim fiyatı (TRY karşılığıyla); fiyatı ya da birim ağırlığı olmayan değer null. Yetki denetlemez.
 export { malzemeKgFiyatlari } from './servis.ts';

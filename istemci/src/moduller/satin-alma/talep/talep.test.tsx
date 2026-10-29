@@ -26,6 +26,11 @@ const ON_TALEP: OnTalep = {
   urun: 'Deneme flanş', miktar: 12, birim: 'adet', gerekenTarih: '2026-11-03', terminGun: 4, firmaAdi: 'Deneme Fason A',
 };
 const ON_TALEPLER = { onTalepler: [ON_TALEP], yoksayilanlar: [] } satisfies OnTalepleriCevabi;
+const PLAN_TALEBI: OnTalep = {
+  kaynak: 'plan', malzeme: { no: 7, kod: 'HM-00007', ad: 'Deneme rulman' }, miktar: 6.5, birim: 'adet', gerekenTarih: '2026-11-10',
+  emirler: ['UE-000031', 'UE-000032'], stokBilinmiyor: true, hesap: { eksik: 10, siparis: 2, talep: 1.5, yoksayilan: 0 },
+};
+let onListe: OnTalepleriCevabi = ON_TALEPLER;
 
 interface Cagri { yol: string; govde: unknown; kimlik: string | undefined }
 // ag.kopuk: hızlı açma isteği cevapsız kalır (sunucuya ulaşılamaz).
@@ -36,7 +41,7 @@ function sunucuKur(ag = { kopuk: false }): Cagri[] {
     cagrilar.push({ yol, govde: istek?.body ? JSON.parse(String(istek.body)) : null, kimlik: (istek?.headers as Record<string, string> | undefined)?.['istek-kimligi'] });
     if (yol.startsWith('/satin-alma-malzeme-secenekleri?')) return json(200, yol.includes('tur=hizmet') ? HIZMETLER : KARTLAR);
     if (yol === '/satin-alma-acik-emirler') return json(200, EMIRLER);
-    if (yol === '/satin-alma-on-talepleri') return json(200, ON_TALEPLER);
+    if (yol === '/satin-alma-on-talepleri') return json(200, onListe);
     if (yol === '/satin-alma-on-talepleri/yoksay') return json(200, { tamam: true });
     if (yol === '/satin-alma-talepleri/hizli-ac') {
       if (ag.kopuk) throw new TypeError('Failed to fetch');
@@ -57,7 +62,7 @@ const sar = (cocuk: ReactNode) => render(
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici>{cocuk}</BildirimSaglayici></QueryClientProvider>,
 );
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); onListe = ON_TALEPLER; });
 
 describe('Ana sayfadan talep (#375)', () => {
   it('kartlı ve adıyla yazılan kalemle talep gönderir; gövdede kişi alanı yok, kartsız kalem kart bekler', async () => {
@@ -273,6 +278,39 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Yoksay' }));
     await screen.findByText('Ön talep yoksayıldı.');
     expect(cagrilar.find((c) => c.yol === '/satin-alma-on-talepleri/yoksay')!.govde).toEqual({ kaynak: 'fason', isEmriId: 501, neden: 'Başka talepte var: ST-2026-009' });
+  });
+
+  it('898 a Dal 2: plan ihtiyacı hesabıyla görünür; talebe çevirince malzeme kartı ve kalan miktarla dolar; yoksayma malzemeyle gider', async () => {
+    onListe = { onTalepler: [PLAN_TALEBI], yoksayilanlar: [] };
+    const cagrilar = sunucuKur();
+    sar(<TaleplerimSayfasi />);
+    expect(await screen.findByText(/Eksik 10 − açık sipariş 2 − açık talep 1,5/)).toBeTruthy();
+    expect(screen.getByText('Stok kaydı yok')).toBeTruthy();
+    expect(screen.getByText('Bekleyen fason ön talep yok.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yoksay' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Yoksay' }));
+    await screen.findByText('Ön talep yoksayıldı.');
+    expect(cagrilar.find((c) => c.yol === '/satin-alma-on-talepleri/yoksay')!.govde).toEqual({ kaynak: 'plan', malzemeNo: 7, neden: 'Stokta var, sayım güncel değil' });
+    fireEvent.click(screen.getByRole('button', { name: 'Talebe çevir' }));
+    expect(screen.getByRole('button', { name: 'Malzeme' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Plan ihtiyacı', { selector: '.sa-talep-kaynak *' })).toBeTruthy();
+    expect((screen.getByLabelText('İstenen tarih') as HTMLInputElement).value).toBe('2026-11-10');
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    const g = cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as Record<string, unknown>;
+    expect([g.tur, g.uretimEmriId, g.kalemler]).toEqual(['malzeme', null, [
+      { malzemeNo: 7, ad: '', birim: '', miktar: '6.5', aciklama: '', uygulananMalzemeNo: null, isEmriId: null },
+    ]]);
+  });
+
+  it('898 a Dal 2: fason adım ve plan ihtiyacı birlikte seçilince birleştirme kapalıdır', async () => {
+    onListe = { onTalepler: [ON_TALEP, PLAN_TALEBI], yoksayilanlar: [] };
+    sunucuKur();
+    sar(<TaleplerimSayfasi />);
+    fireEvent.click(await screen.findByLabelText('UE-000031 Op 30 Deneme ısıl işlem seç'));
+    fireEvent.click(screen.getByLabelText('HM-00007 seç'));
+    expect(screen.getByText(/fason adım ve plan ihtiyacı ayrı talep olur/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Tek talepte birleştir' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('898 a: Taleplerim bölümü durumla süzer, arar; satır açılınca uygulanan parça ve fason adım görünür', async () => {

@@ -7,7 +7,7 @@ import {
   ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
-import { fasonOnTalepAdaylari, hizliBagReddi, uygulananKartReddi } from './kurallar.ts';
+import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
@@ -470,4 +470,19 @@ test('1104 a: tedarikçiye teknik alanlar ve istenen sertifikalar gider; en az s
     { ad: 'Tolerans', deger: 'h9' }, { ad: 'Yüzey', deger: 'Taşlanmış' }, { ad: 'Menşei', deger: 'TR' }, { ad: 'İstenen sertifikalar', deger: 'EN 10204 3.1, RoHS' },
   ]);
   assert.deepEqual(tedarikciyeGidenAyrinti(null), []);
+});
+
+test('898 a Dal 2: plan ön talebi eksikten aynı birimdeki açık sipariş ve talebi, sonra yoksayılanı düşer', () => {
+  const ihtiyac = (no: number, miktar: string) => ({ malzemeNo: no, miktar, gerekenTarih: '2026-11-10', emirler: ['E-1'], stokBilinmiyor: false });
+  const l = planOnTalepAdaylari({
+    ihtiyaclar: [ihtiyac(1, '10'), ihtiyac(2, '3'), ihtiyac(3, '5.5')],
+    birimler: new Map([[1, 'kg'], [2, 'adet'], [3, null]]),
+    siparisler: [{ malzemeNo: 1, birim: 'kg', miktar: '2.25' }, { malzemeNo: 1, birim: 'adet', miktar: '100' }, { malzemeNo: 2, birim: 'adet', miktar: '3' }],
+    talepler: [{ malzemeNo: 1, birim: 'kg', miktar: '1' }, { malzemeNo: 3, birim: 'adet', miktar: '5' }],
+    yoksaylar: new Map([[1, '4']]),
+  });
+  assert.deepEqual(l.map((x) => [x.malzemeNo, x.miktar, x.kalan, x.hesap]), [
+    [1, 2.75, 6.75, { eksik: 10, siparis: 2.25, talep: 1, yoksayilan: 4 }],
+    [3, 5.5, 5.5, { eksik: 5.5, siparis: 0, talep: 0, yoksayilan: 0 }],
+  ]);
 });

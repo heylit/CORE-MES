@@ -467,7 +467,7 @@ export const taleplerimCevabi = z.object({ talepler: z.array(talebimSemasi), top
 
 // 898 a: ön talep. Fason: açık emrin, siparişe ve açık talebe bağlanmamış, yoksayılmamış fason iş emri. Gereken tarih emrin teslim günüdür
 // (plan tarihi satın almaya gelmez); yoksa null. Firma rotadaki fason firmadır. Miktar emrin adedi, birim adet.
-export const onTalepSemasi = z.object({
+const fasonOnTalepSemasi = z.object({
   kaynak: z.literal('fason'),
   isEmriId: z.number().int(),
   uretimEmriId: z.number().int(),
@@ -482,17 +482,33 @@ export const onTalepSemasi = z.object({
   terminGun: z.number().int().nullable(),
   firmaAdi: z.string().nullable(),
 });
+// Plan ihtiyacı (898 a, Dal 2): canlı planın stokla karşılanamayan malzemesinden açık sipariş, açık talep ve yoksayılan düşülmüş kalan.
+// Hesap satırı ekranda gösterilir; miktarlar kartın stok birimindedir.
+const planOnTalepSemasi = z.object({
+  kaynak: z.literal('plan'),
+  malzeme: z.object({ no: z.number().int(), kod: z.string(), ad: z.string() }),
+  miktar: z.number(),
+  birim: z.string(),
+  gerekenTarih: z.string(),
+  emirler: z.array(z.string()),
+  stokBilinmiyor: z.boolean(),
+  hesap: z.object({ eksik: z.number(), siparis: z.number(), talep: z.number(), yoksayilan: z.number() }),
+});
+export const onTalepSemasi = z.discriminatedUnion('kaynak', [fasonOnTalepSemasi, planOnTalepSemasi]);
 export const yoksayilanOnTalepSemasi = z.object({
-  id: z.number().int(), kaynak: z.literal('fason'), baslik: z.string(), neden: z.string(), kisiAdi: z.string().nullable(), zaman: z.string(),
+  id: z.number().int(), kaynak: z.enum(['fason', 'plan']), baslik: z.string(), neden: z.string(), kisiAdi: z.string().nullable(), zaman: z.string(),
 });
 export const onTalepleriCevabi = z.object({ onTalepler: z.array(onTalepSemasi), yoksayilanlar: z.array(yoksayilanOnTalepSemasi) });
-export const onTalepYoksayGovdesi = z.object({
-  kaynak: z.literal('fason'),
-  isEmriId: z.number().int().positive().max(2147483647),
-  neden: z.string().trim().min(1, 'Nedeni yazın.').max(200),
-});
+const yoksayNedeni = z.string().trim().min(1, 'Nedeni yazın.').max(200);
+// Plan ihtiyacında yoksayılan miktar sunucunun o anki hesabıdır; ihtiyaç bunu aşarsa artan kısım yeniden düşer.
+export const onTalepYoksayGovdesi = z.discriminatedUnion('kaynak', [
+  z.object({ kaynak: z.literal('fason'), isEmriId: z.number().int().positive().max(2147483647), neden: yoksayNedeni }),
+  z.object({ kaynak: z.literal('plan'), malzemeNo: z.number().int().positive().max(2147483647), neden: yoksayNedeni }),
+]);
 export const onTalepGeriAlGovdesi = z.object({ id: z.number().int().positive().max(2147483647) });
 export type OnTalep = z.output<typeof onTalepSemasi>;
+export type FasonOnTalep = z.output<typeof fasonOnTalepSemasi>;
+export type PlanOnTalep = z.output<typeof planOnTalepSemasi>;
 export type YoksayilanOnTalep = z.output<typeof yoksayilanOnTalepSemasi>;
 export type OnTalepleriCevabi = z.output<typeof onTalepleriCevabi>;
 export type OnTalepYoksayYazimi = z.output<typeof onTalepYoksayGovdesi>;
