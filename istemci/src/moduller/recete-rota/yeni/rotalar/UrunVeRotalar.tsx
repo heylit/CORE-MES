@@ -36,6 +36,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const [kapali, setKapali] = useState<ReadonlySet<string>>(new Set());
   const [tamEkran, setTamEkran] = useState(false);
   const [copUstunde, setCopUstunde] = useState(false);
+  const [surukleniyor, setSurukleniyor] = useState(false);
 
   const miktar = kip === 'baz' ? 1 : siparis;
   const gunSaati = useMemo(() => {
@@ -47,6 +48,12 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const r: RotaEkrani = {
     duzen, yetki: o.yetki, secim, sec: setSecim, git: o.git, kokSec, kapali, gunSaati,
     kapaliDegistir: (nid) => { const y = new Set(kapali); if (y.has(nid)) y.delete(nid); else y.add(nid); setKapali(y); },
+    // Açık kalma tercihi yalnız üst çubuktaki düğmeyle yazılır (1111 b); "Araya adım" paleti yalnız bu oturumda açar.
+    paletAc: () => { setAdimPaneli(true); },
+    surukleniyor,
+    // Sürükleme başlarken şema değişirse tarayıcı sürüklemeyi bırakabilir; şeritler bir sonraki turda açılır.
+    surukleBasla: () => { window.setTimeout(() => { setSurukleniyor(true); }, 0); },
+    surukleBitti: () => { setSurukleniyor(false); },
   };
   const malzeme = (id: string) => h.malzeme.get(id);
   const agac = kokId ? agacUrunleri(kokId, duzen.adimlar, malzeme, (id) => duzen.adimlar(id).length > 0 || acikRevizyon(duzen.revler(id)) !== null) : [];
@@ -71,12 +78,30 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
 
   const tercih = (k: string, v: string, yaz: (v: string) => void) => { yaz(v); tercihYaz(k, v); };
 
-  // Adım panelinden ekleme: seçili adımın ürününe, ardına; yoksa gösterilen rotanın sonuna.
-  const panelEkle = (op: Operasyon) => {
+  // Paletten ekleme yeri: seçili adımın ardı; "Adım ekle" seçiminde onun yeri (null: başa); yoksa gösterilen rotanın sonu.
+  const ekleYeri = (): { urunId: string; sonraId: string | null } | null => {
     const hedef = secim && 'urunId' in secim && duzen.duzenlenebilir(secim.urunId) ? secim.urunId : revId;
-    if (!hedef) return;
+    if (!hedef) return null;
+    if (secim?.tur === 'adimEkle' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.sonraId };
+    if (secim?.tur === 'adim' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.adimId };
+    return { urunId: hedef, sonraId: sirali(duzen.adimlar(hedef)).at(-1)?.id ?? null };
+  };
+  const yer = adimPaneli ? ekleYeri() : null;
+  const yerMetni = (() => {
+    if (!yer) return null;
+    const kod = h.malzeme.get(yer.urunId)?.code ?? '';
+    const l = sirali(duzen.adimlar(yer.urunId));
+    if (l.length === 0) return `${kod}: ilk adım`;
+    const a = yer.sonraId === null ? undefined : l.find((x) => x.id === yer.sonraId);
+    if (!a) return `${kod}: rotanın başına`;
+    return `${kod}: OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} ardına${a.id === l.at(-1)?.id ? ' (sona)' : ''}`;
+  })();
+  const panelEkle = (op: Operasyon) => {
+    const y = ekleYeri();
+    if (!y) return;
+    const hedef = y.urunId;
     const l = sirali(duzen.adimlar(hedef));
-    const sonra = secim?.tur === 'adim' && secim.urunId === hedef ? secim.adimId : l.at(-1)?.id ?? null;
+    const sonra = y.sonraId;
     const yeni = yeniAdim(op, yeniKimlik());
     const l2 = adimEkle(l, sonra, yeni);
     if (duzen.degistir(hedef, () => l2, `${op.abbr ?? op.code} adımı eklendi`)) {
@@ -131,7 +156,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge="plus" onClick={() => { setListe(false); setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
         {!liste && kokId && o.yetki.rotaYaz && (
           <Dugme className="tc-rr1-kd" tur={adimPaneli ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={adimPaneli}
-            onClick={() => { tercih('adim-paneli', adimPaneli ? '' : '1', (v) => { setAdimPaneli(v === '1'); }); }}>Adım ekle</Dugme>
+            onClick={() => { tercih('adim-paneli', adimPaneli ? '' : '1', (v) => { setAdimPaneli(v === '1'); }); }}>Operasyon paleti</Dugme>
         )}
         {!liste && (
           <>
@@ -166,7 +191,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <>
           {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} />}
           <div className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}`}>
-            {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} />}
+            {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} />}
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />

@@ -289,6 +289,17 @@ export function adimSurukle(adimlar: readonly Adim[], kaynakId: string, hedefId:
   kalan.splice(pos, 0, mv);
   return yenidenNumarala(kalan);
 }
+// Bırakma şeridi: adım `sonraId`nin ardına (null: başa) taşınır; kendi ardına bırakmak sırayı değiştirmez.
+export function adimArkasinaTasi(adimlar: readonly Adim[], kaynakId: string, sonraId: string | null): Adim[] {
+  const l = sirali(adimlar);
+  const mv = l.find((x) => x.id === kaynakId);
+  if (!mv || sonraId === kaynakId) return [...adimlar];
+  const kalan = l.filter((x) => x.id !== kaynakId);
+  const i = sonraId === null ? 0 : kalan.findIndex((x) => x.id === sonraId) + 1;
+  if (sonraId !== null && i === 0) return [...adimlar];
+  kalan.splice(i, 0, mv);
+  return yenidenNumarala(kalan);
+}
 export const adimSil = (adimlar: readonly Adim[], id: string): Adim[] => yenidenNumarala(sirali(adimlar).filter((x) => x.id !== id));
 export const adimGuncelle = (adimlar: readonly Adim[], id: string, f: (a: Adim) => Adim): Adim[] => adimlar.map((a) => (a.id === id ? f(a) : a));
 

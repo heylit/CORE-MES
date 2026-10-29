@@ -10,7 +10,6 @@ import {
   type Adim, type Malzeme, type Operasyon,
 } from './kurallar.ts';
 import { BAG_ADI, Bolme, fasonAdi, MetinAlani, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
-import { OperasyonKutuculari } from './AdimPaneli.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -84,14 +83,14 @@ function UrunPaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
               <p className="tc-rr1-ipucu">Baz miktar 1 {m.unit ?? ''}: girenler, çıkanlar ile işlem ve değişim süreleri bu kadar çıktı için girilir.</p>
               <p className="tc-rr1-ipucu">{ss.length} adım, {ss.reduce((t, x) => t + x.ins.length, 0)} giren, {ss.reduce((t, x) => t + x.outs.length, 0)} çıkan.</p>
               <div className="tc-rr1-btnrow">
-                {duzen && <Dugme tur="ikincil" simge="plus" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: ss.at(-1)?.id ?? null }); }}>Adım ekle</Dugme>}
+                {duzen && <Dugme tur="ikincil" simge="plus" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: ss.at(-1)?.id ?? null }); r.paletAc(); }}>Adım ekle</Dugme>}
                 {s.nid !== 'kok' && <Dugme tur="ikincil" onClick={() => { r.kokSec(m.id); }}>Ayrı şemada aç</Dugme>}
               </div>
             </>
           ) : (
             <>
               <p className="tc-rr1-ipucu">Bu {(TUR_ADI[m.type] ?? '').toLocaleLowerCase('tr-TR')} için rota yok; satın alınan parça gibi hesaplanır.</p>
-              {duzen && <Dugme tur="birincil" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); }}>Rota oluştur</Dugme>}
+              {duzen && <Dugme tur="birincil" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); r.paletAc(); }}>Rota oluştur</Dugme>}
             </>
           )}
         </Bolme>
@@ -379,7 +378,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
         <div className="tc-rr1-isec tc-rr1-btnrow">
           <Dugme tur="ikincil" simge="up" disabled={idx === 0} onClick={() => { const p = liste[idx - 1]; if (p) dz.degistir(s.urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>Yukarı</Dugme>
           <Dugme tur="ikincil" simge="down" disabled={son} onClick={() => { const n = liste[idx + 1]; if (n) dz.degistir(s.urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>Aşağı</Dugme>
-          <Dugme tur="ikincil" simge="plus" onClick={() => { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: a.id }); }}>Sonrasına adım</Dugme>
+          <Dugme tur="ikincil" simge="plus" onClick={() => { r.paletAc(); }}>Sonrasına adım</Dugme>
           <Dugme tur="tehlike" simge="trash" onClick={() => { if (dz.degistir(s.urunId, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`)) r.sec(null); }}>Adımı sil</Dugme>
         </div>
       )}
@@ -434,7 +433,7 @@ function KalemPaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: 
                   <Dugme tur="ikincil" onClick={() => { r.kokSec(m.id); }}>Ayrı şemada aç</Dugme>
                 </>
               ) : dz.duzenlenebilir(m.id) && (
-                <Dugme tur="birincil" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); }}>Bu yarı mamule rota oluştur</Dugme>
+                <Dugme tur="birincil" onClick={() => { r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); r.paletAc(); }}>Bu yarı mamule rota oluştur</Dugme>
               )}
             </div>
           )}
@@ -564,8 +563,8 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
   return (
     <>
       <Baslik baslik="Adım ekle" etiket={sahip.code} kapat={kapat} />
-      <p className="tc-rr1-ipucu">{sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek.` : 'Rotanın başına eklenecek.'} Operasyona dokun, istasyon ve süreler katalogdan gelir.</p>
-      <OperasyonKutuculari r={r} sec={ekle} />
+      {/* Operasyon listesi tek yerdedir: soldaki palet (1113 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
+      <p className="tc-rr1-ipucu">{sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek.` : 'Rotanın başına eklenecek.'} Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
       {r.yetki.istasyonYaz && <YeniOperasyon r={r} eklendi={ekle} />}
     </>
   );
@@ -584,7 +583,7 @@ function YeniRotaPaneli({ r, kapat }: { r: RotaEkrani; kapat: () => void }) {
       <input className="tc-rr1-metin" type="search" value={q} placeholder="Ürün ara: kod ya da ad" aria-label="Ürün ara" onChange={(e) => { setQ(e.target.value); }} />
       <div className="tc-rr1-picklist">
         {adaylar.map((m) => (
-          <button key={m.id} type="button" className="tc-rr1-pick" onClick={() => { r.kokSec(m.id); r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); }}>
+          <button key={m.id} type="button" className="tc-rr1-pick" onClick={() => { r.kokSec(m.id); r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); r.paletAc(); }}>
             <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span><span className="tc-rr1-pn"><b>{m.code}</b> {m.name}</span>
           </button>
         ))}

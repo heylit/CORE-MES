@@ -6,7 +6,7 @@ import {
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani } from './ortak.tsx';
-import { SURUKLE_TURU, surukleAdim, surukleCoz } from './AkisSemasi.tsx';
+import { SURUKLE_TURU, surukleAdim, surukleCoz, yereBirak } from './AkisSemasi.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
 // Akış tablosu (eski sayfanın düzeni): her rota ayrı bölüm, satırlar "Girenler | Rota adımları | Çıkanlar"; alt montajlar önce, kök en sonda.
@@ -71,6 +71,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
   const tuketen = s.tuketen;
   const tuketenKod = tuketen ? h.malzeme.get(tuketen.urunId)?.code ?? '?' : null;
   const birak = (hedef: Adim, v: string) => {
+    r.surukleBitti();
     const c = surukleCoz(v);
     if (!c) return;
     if (c.tur === 'adim' && c.urunId === urunId && c.adimId !== hedef.id) {
@@ -83,8 +84,12 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
       }
     }
   };
-  const adimEkleDugmesi = (sonraId: string | null, son: boolean) => duzen && (
-    <button type="button" className="tc-rr1-add tc-rr1-farada" onClick={() => { r.sec({ tur: 'adimEkle', urunId, sonraId }); }}>
+  // "Araya adım" paleti açar; eklenecek yer o adımın ardıdır ve sağ panel adımın ayrıntısında kalır (1113 a).
+  const adimEkleDugmesi = (a: Adim | null, son: boolean) => duzen && (
+    <button type="button" className="tc-rr1-add tc-rr1-farada" onClick={() => {
+      r.sec(a ? { tur: 'adim', urunId, adimId: a.id, seq: a.seq, miktar: q } : { tur: 'adimEkle', urunId, sonraId: null });
+      r.paletAc();
+    }}>
       <Simge ad="plus" boyut="k" /> {son ? 'Adım ekle' : 'Araya adım'}
     </button>
   );
@@ -151,7 +156,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
           <div className="tc-rr1-fshd">
             {duzen && (
               <span className="tc-rr1-ftutamak" draggable title="Sürükleyerek taşı"
-                onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(urunId, a.id)); e.dataTransfer.effectAllowed = 'move'; }}>
+                onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(urunId, a.id)); e.dataTransfer.effectAllowed = 'move'; r.surukleBasla(); }}
+                onDragEnd={r.surukleBitti}>
                 <Simge ad="more" boyut="k" />
               </span>
             )}
@@ -203,7 +209,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             )}
           </div>
         </div>
-        {adimEkleDugmesi(a.id, son)}
+        {adimEkleDugmesi(a, son)}
       </div>
     );
 
@@ -280,9 +286,11 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
       </div>
       <div className="tc-rr1-frow tc-rr1-fhead" aria-hidden="true"><div>Girenler</div><div>Rota adımları</div><div>Çıkanlar</div></div>
       {liste.length > 0 ? satirlar : (
-        <div className="tc-rr1-frow">
+        <div className={`tc-rr1-frow${ustunde === '' ? ' tc-rr1-birak' : ''}`}
+          onDragOver={(e) => { if (duzen) { e.preventDefault(); setUstunde(''); } }} onDragLeave={() => { setUstunde(null); }}
+          onDrop={(e) => { e.preventDefault(); setUstunde(null); if (duzen) yereBirak(r, urunId, null, e.dataTransfer.getData(SURUKLE_TURU), q); }}>
           <div />
-          <div className="tc-rr1-fcol tc-rr1-fmid"><p className="tc-rr1-ipucu">Rota yok.</p>{adimEkleDugmesi(null, true)}</div>
+          <div className="tc-rr1-fcol tc-rr1-fmid"><p className="tc-rr1-ipucu">Rota yok.{duzen ? ' Paletten operasyonu buraya sürükle ya da dokun.' : ''}</p>{adimEkleDugmesi(null, true)}</div>
           <div />
         </div>
       )}

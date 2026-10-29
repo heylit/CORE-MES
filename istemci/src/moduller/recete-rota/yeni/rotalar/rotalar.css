@@ -98,6 +98,17 @@
 .tc-rr1-insp-empty h3 { margin: 0 0 var(--b-2); font-size: var(--yazi-m); }
 .tc-rr1-isec { border-top: 1px solid var(--edge); padding-top: var(--b-3); margin-top: var(--b-3); display: flex; flex-direction: column; gap: var(--b-2); }
 .tc-rr1-isec h4 { margin: 0; font-size: var(--yazi-s); display: flex; align-items: center; gap: var(--b-1); }
+.tc-rr1-grupbas {
+  display: flex; align-items: center; gap: var(--b-1); width: 100%; min-height: var(--isaret-boy); padding: 0; font: inherit; font-weight: 700;
+  color: var(--ink); background: none; border: 0; cursor: pointer; text-align: left;
+}
+.tc-rr1-grupbas small { margin-left: auto; color: var(--muted); font-weight: 600; }
+.tc-rr1-hedef {
+  display: flex; flex-direction: column; gap: var(--kayma); margin: 0 0 var(--b-2); padding: var(--b-1) var(--b-2); font-size: var(--yazi-xs);
+  border: 1px solid var(--done); border-radius: var(--yari-1); background: color-mix(in srgb, var(--done) 8%, var(--panel-solid));
+}
+.tc-rr1-hedef b { font-size: var(--yazi-s); }
+.tc-rr1-hedef small { color: var(--muted); }
 .tc-rr1-ig { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2) var(--b-3); margin: 0; }
 .tc-rr1-ig dt { font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-ig dd { margin: 0; font-weight: 600; }
@@ -271,6 +282,13 @@
 .tc-rr1-stepbar { display: flex; gap: var(--b-1); justify-content: center; align-items: center; flex-wrap: wrap; }
 .tc-rr1-stepbar .tc-rr1-ib { min-width: var(--isaret-boy); min-height: var(--isaret-boy); background: transparent; border-color: transparent; color: var(--muted); }
 .tc-rr1-stepbar .tc-rr1-add { min-height: var(--isaret-boy); }
+/* Bırakma şeridi yalnız sürüklerken düğme satırının yerini alır; yüksekliği aynıdır, şema kaymaz (1112 a). */
+.tc-rr1-serit {
+  display: flex; align-items: center; justify-content: center; gap: var(--b-1); min-height: var(--isaret-boy); font-size: var(--yazi-xs); font-weight: 700;
+  color: var(--done); border: var(--pay-ince) dashed var(--edge2); border-radius: var(--yari-1); padding: 0 var(--b-2);
+}
+.tc-rr1-serit-ustunde { border-color: var(--done); background: color-mix(in srgb, var(--done) 12%, var(--panel-solid)); }
+.tc-rr1-serit-bos { min-height: calc(var(--dokunma) * 2); }
 .tc-rr1-cv-ctrl {
   position: absolute; right: var(--b-3); bottom: var(--b-3); z-index: 2; display: flex; flex-direction: column; gap: var(--b-1); align-items: center;
   background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-1); box-shadow: var(--shadow);

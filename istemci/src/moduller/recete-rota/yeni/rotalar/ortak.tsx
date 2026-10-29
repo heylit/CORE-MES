@@ -25,6 +25,12 @@ export interface RotaEkrani {
   kapaliDegistir: (nid: string) => void;
   // İş merkezinin ortalama günlük net saati (vardiya takviminden; okunamazsa 8).
   gunSaati: (wcId: string | null) => number;
+  // Operasyon paletini açar; eklenecek yer seçimden gelir (seçili adımın ardı ya da adimEkle seçiminin sonraId'si).
+  paletAc: () => void;
+  // Sürükleme sürerken şemada bırakma şeritleri görünür.
+  surukleniyor: boolean;
+  surukleBasla: () => void;
+  surukleBitti: () => void;
 }
 
 export const BAG_ADI: Readonly<Record<Bagimlilik, string>> = { bagimli: 'Bağımlı', ortulu: 'Örtülü', bagimsiz: 'Bağımsız' };
