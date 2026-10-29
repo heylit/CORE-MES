@@ -153,6 +153,19 @@ export function SevkiyatPlani() {
   };
   // Vurgulanan durak çizildikten sonra görünür alana kaydırılır.
   useEffect(() => { if (vurgulu) document.querySelector('[data-vurgu]')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [vurgulu]);
+  // Ctrl K komutu (`?yeni=1`) ve irsaliye araması (`?is=<id>`) formu açar; yazma yine formun ucundadır. Yazamayana, onaylı planda
+  // ya da yoldaki/tamamlanmış işte form açılmaz, gün planı görünür. Yetki oturumla gelir; o zamana kadar sorgu bekler, okununca silinir.
+  const yeniIstegi = adres.get('yeni') === '1';
+  const isIstegi = Number(adres.get('is') ?? Number.NaN);
+  useEffect(() => {
+    if (!veri || !yetki.isYaz || (!yeniIstegi && !Number.isInteger(isIstegi))) return;
+    const acilacak = veri.isler.find((i) => i.id === isIstegi);
+    if (!veri.onaylandi) {
+      if (yeniIstegi) setForm({ is: null });
+      else if (acilacak && (acilacak.durum === 'havuzda' || acilacak.durum === 'planlandi')) setForm({ is: acilacak });
+    }
+    setAdres((o) => { const s = new URLSearchParams(o); s.delete('yeni'); s.delete('is'); return s; }, { replace: true });
+  }, [veri, yeniIstegi, isIstegi, yetki.isYaz, setAdres]);
 
   if (plan.isPending) return <div className="tc-sevkiyat"><DurumKutusu durum="yukleniyor" /></div>;
   if (plan.isError || !veri) return <div className="tc-sevkiyat"><DurumKutusu durum="hata" mesaj={hataIletisi(plan.error, 'Gün planı alınamadı')} yenile={() => void plan.refetch()} /></div>;

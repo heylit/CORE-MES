@@ -1,5 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
+import { sevkAramaKaynagi } from './kayit-aramasi.ts';
 import * as sorgu from './sorgular.ts';
 
 export type EmirSevkDurumu = Omit<sorgu.SevkDurumuSatiri, 'uretimEmriId'>;
@@ -62,3 +64,6 @@ export { kapanisSevkiyatDurumu } from './servis.ts';
 
 // Takvim (891): günü aralıktaki sevkiyat işleri; yetkiyi çağıran denetler (sevkiyat.oku).
 export { takvimKayitlari } from './servis.ts';
+
+// Ctrl K tek arama ucunun sevkiyat kaynağı (1233 sözleşmesi, 1239): emir no ile sevk kalemleri, irsaliye no ile sevk işi.
+export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [sevkAramaKaynagi];

@@ -13,20 +13,20 @@ const TANIMCI: Kullanici = { id: 5, ad: 'Deneme Tanımcı', islemler: ['sayfa.se
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const ILK = ARACLAR.araclar[0]!;
 
-function sunucuKur(araclar: AraclarCevabi = ARACLAR) {
+function sunucuKur(araclar: AraclarCevabi = ARACLAR, kullanici: Kullanici = TANIMCI) {
   const yazilan: { yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
     if (ayar?.method === 'POST') { yazilan.push({ yol, govde: ayar.body ? JSON.parse(String(ayar.body)) : undefined }); return json(200, { arac: ILK }); }
-    if (yol === '/oturum') return json(200, { kullanici: TANIMCI } satisfies OturumCevabi);
+    if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/sevkiyat/araclar') return json(200, araclar);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return yazilan;
 }
-function ac() {
+function ac(adres = '/sevkiyat/araclar') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/araclar']}><Araclar /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}><Araclar /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const doldur = (yer: HTMLElement, etiket: RegExp, deger: string) => fireEvent.change(within(yer).getByLabelText(etiket), { target: { value: deger } });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -75,5 +75,20 @@ describe('Araclar', () => {
     fireEvent.click(screen.getByRole('button', { name: `${ILK.ad} aracını pasifleştir` }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Pasifleştir' }));
     await waitFor(() => expect(yazilan).toEqual([{ yol: `/sevkiyat/araclar/${ILK.id}/pasiflestir`, govde: undefined }]));
+  });
+});
+
+describe('Araclar adresten açılan form (1239)', () => {
+  it('izinli: ?yeni=1 tanım yazana boş araç penceresini açar', async () => {
+    sunucuKur();
+    ac('/sevkiyat/araclar?yeni=1');
+    expect(await screen.findByRole('dialog', { name: 'Yeni araç' })).toBeTruthy();
+  });
+
+  it('reddedilen: yalnız okuyana pencere açılmaz', async () => {
+    sunucuKur(ARACLAR, { id: 4, ad: 'Deneme Okuyucu', islemler: ['sayfa.sevkiyat', 'sevkiyat.oku'] });
+    ac('/sevkiyat/araclar?yeni=1');
+    await screen.findByRole('table', { name: 'Araçlar' });
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

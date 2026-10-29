@@ -1,7 +1,8 @@
 // Noktalar: fabrika (çıkış ve dönüş noktası), müşteri, tedarikçi, fason, kargo; konum aramayla ya da haritadan.
 // Form harita yanında açılır (pencere değil): konum haritaya tıklanarak seçilebilsin.
 // Müşteri, tedarikçi ve fason noktası finanstaki firmadan alınır: ad firmadan gelir, konum firmanın iliyle aranır.
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { FirmaSecenegi, Nokta, NoktaGovdesi, NoktaTuru } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
@@ -52,6 +53,15 @@ export function Noktalar() {
   const alan = <K extends keyof Taslak>(ad: K, deger: Taslak[K]) => setTaslak((t) => (t ? { ...t, [ad]: deger } : t));
   const konumYaz = (enlem: number, boylam: number) => setTaslak((t) => (t ? { ...t, enlem: enlem.toFixed(6), boylam: boylam.toFixed(6) } : t));
   const formAc = (yeni: Taslak) => { komut.reset(); setTaslak(yeni); };
+  // Ctrl K komutu `?yeni=1` boş formu açar, yalnız tanım yazana (oturum gelmeden yetki boştur; sorgu o zamana kadar bekler).
+  // Açılınca sorgu silinir ki geri ve yenile formu yeniden açmasın.
+  const [adres, setAdres] = useSearchParams();
+  const yeniIstegi = adres.get('yeni') === '1';
+  useEffect(() => {
+    if (!yeniIstegi || !yetki.tanimYaz) return;
+    setTaslak(bosTaslak());
+    setAdres((o) => { const s = new URLSearchParams(o); s.delete('yeni'); return s; }, { replace: true });
+  }, [yeniIstegi, yetki.tanimYaz, setAdres]);
   const formKapat = () => { setTaslak(null); setHaritadanSec(false); };
   const firmaSec = (f: FirmaSecenegi) => setTaslak((t) => (t ? {
     ...t, ad: f.ad, firmaId: f.id, tur: firmaTuru(f, t.tur),

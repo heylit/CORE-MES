@@ -725,3 +725,18 @@ export function tarihliIsler(db: Db, baslangic: string, bitis: string): Promise<
     [baslangic, bitis],
   );
 }
+
+// Ctrl K irsaliye araması (1239): sevk işinin belge numarası irsaliye numarasıdır. Desenler çekirdekten sadeleşmiş ve kaçırılmış gelir;
+// sütun aynı işlevden geçer ki Türkçe harf veritabanının dil ayarına kalmasın, ifade indeksi `%x%` aramasını taramasız karşılar.
+// Tam tutan, sonra baştan tutan önce, sonra yeni tarihli; iptal edilen iş planda olmadığı için aranmaz. Nokta, takvimdeki gibi teslimat
+// ve aktarmada bırakış, alımda alış noktasıdır.
+export interface IrsaliyeSatiri { id: number; belgeNo: string; tarih: string; tur: 'teslimat' | 'alim' | 'aktarma'; durum: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi'; noktaAdi: string | null }
+export function irsaliyeAra(db: Db, a: { sade: string; icindeDeseni: string; basDeseni: string; sinir: number }): Promise<IrsaliyeSatiri[]> {
+  return db.sorgu<IrsaliyeSatiri>(
+    `SELECT i.id, i.belge_no AS "belgeNo", i.tarih::text AS tarih, i.tur, i.durum, n.ad AS "noktaAdi"
+      FROM sevkiyat_isi i LEFT JOIN sevkiyat_noktasi n ON n.id = CASE WHEN i.tur = 'alim' THEN i.alis_noktasi_id ELSE i.birakis_noktasi_id END
+      WHERE i.iptal_edildi IS NULL AND public.arama_sade(i.belge_no) LIKE $1
+      ORDER BY (public.arama_sade(i.belge_no) = $3) DESC, (public.arama_sade(i.belge_no) LIKE $2) DESC, i.tarih DESC, i.id DESC LIMIT $4`,
+    [a.icindeDeseni, a.basDeseni, a.sade, a.sinir],
+  );
+}
