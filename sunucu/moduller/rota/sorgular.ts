@@ -571,10 +571,11 @@ export function sablonMedyalari(db: Db, sablonId: number): Promise<MedyaSatiri[]
   );
 }
 
-// Ürün başına sınır için ürünün bütün talimat sürümlerindeki farklı dosyalar.
+// Ürün başına sınır için ürünün bütün talimat sürümlerindeki ve taslaklarındaki farklı dosyalar.
 export function urunMedyalari(db: Db, malzemeId: number): Promise<{ ozet: string; boyut: number }[]> {
   return db.sorgu(
-    `SELECT DISTINCT m.ozet, m.boyut::float8 AS boyut FROM rota_talimat_adim_medyasi m JOIN rota_talimati t ON t.id = m.talimat_id WHERE t.malzeme_id = $1`,
+    `SELECT m.ozet, m.boyut::float8 AS boyut FROM rota_talimat_adim_medyasi m JOIN rota_talimati t ON t.id = m.talimat_id WHERE t.malzeme_id = $1
+     UNION SELECT m.ozet, m.boyut::float8 FROM rota_talimat_taslak_adim_medyasi m JOIN rota_talimat_taslagi t ON t.id = m.taslak_id WHERE t.malzeme_id = $1`,
     [malzemeId],
   );
 }
@@ -583,13 +584,61 @@ export function urunMedyalari(db: Db, malzemeId: number): Promise<{ ozet: string
 export async function kullanilanMedyalar(db: Db, ozetler: readonly string[]): Promise<string[]> {
   return (await db.sorgu<{ ozet: string }>(
     `SELECT ozet FROM rota_talimat_adim_medyasi WHERE ozet = ANY($1::text[])
-     UNION SELECT ozet FROM rota_talimat_sablon_adim_medyasi WHERE ozet = ANY($1::text[])`,
+     UNION SELECT ozet FROM rota_talimat_sablon_adim_medyasi WHERE ozet = ANY($1::text[])
+     UNION SELECT ozet FROM rota_talimat_taslak_adim_medyasi WHERE ozet = ANY($1::text[])`,
     [[...ozetler]],
   )).map((x) => x.ozet);
 }
 
 export const talimatAdimlariniEkle = (db: Db, talimatId: number, adimlar: readonly TalimatAdimiYazisi[]): Promise<void> =>
   adimlariEkle(db, TALIMAT_TABLOLARI, talimatId, adimlar);
+
+/* ---------------- talimat taslağı (1194 b) ---------------- */
+
+export interface TalimatTaslagiSatiri { id: number; tabanSurum: number | null; surum: number; yazanKisiId: number; yazma: string }
+const TASLAK_TABLOLARI = { adim: 'rota_talimat_taslak_adimi', medya: 'rota_talimat_taslak_adim_medyasi', sahip: 'taslak_id' };
+
+export function talimatTaslagi(db: Db, malzemeId: number, opNo: number, kilitle = false): Promise<TalimatTaslagiSatiri | null> {
+  return db.tek<TalimatTaslagiSatiri>(
+    `SELECT id, taban_surum AS "tabanSurum", surum, yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma
+       FROM rota_talimat_taslagi WHERE malzeme_id = $1 AND op_no = $2${kilitle ? ' FOR UPDATE' : ''}`,
+    [malzemeId, opNo],
+  );
+}
+
+// Taslak kaydı adımlarıyla bütün olarak yazılır: varsa adımları silinir (medya adımla birlikte), sürümü artar.
+export async function talimatTaslagiYaz(
+  db: Db, g: { malzemeId: number; opNo: number; tabanSurum: number | null; kisiId: number; adimlar: readonly TalimatAdimiYazisi[] }, mevcut: TalimatTaslagiSatiri | null,
+): Promise<void> {
+  let id: number;
+  if (mevcut) {
+    id = mevcut.id;
+    await db.sorgu('DELETE FROM rota_talimat_taslak_adimi WHERE taslak_id = $1', [id]);
+    await db.sorgu('UPDATE rota_talimat_taslagi SET taban_surum = $2, surum = surum + 1, yazan_kisi_id = $3, yazma = now() WHERE id = $1', [id, g.tabanSurum, g.kisiId]);
+  } else {
+    id = (await db.tek<{ id: number }>(
+      'INSERT INTO rota_talimat_taslagi (malzeme_id, op_no, taban_surum, yazan_kisi_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [g.malzemeId, g.opNo, g.tabanSurum, g.kisiId],
+    ))!.id;
+  }
+  await adimlariEkle(db, TASLAK_TABLOLARI, id, g.adimlar);
+}
+
+export async function talimatTaslagiSil(db: Db, id: number): Promise<void> {
+  await db.sorgu('DELETE FROM rota_talimat_taslagi WHERE id = $1', [id]);
+}
+
+export function taslakAdimlari(db: Db, taslakId: number): Promise<TalimatAdimiSatiri[]> {
+  return db.sorgu<TalimatAdimiSatiri>(
+    `SELECT taslak_id AS "sahipId", ${ADIM_SUTUNLARI} FROM rota_talimat_taslak_adimi WHERE taslak_id = $1 ORDER BY sira`, [taslakId],
+  );
+}
+
+export function taslakMedyalari(db: Db, taslakId: number): Promise<MedyaSatiri[]> {
+  return db.sorgu<MedyaSatiri>(
+    `SELECT taslak_id AS "sahipId", ${MEDYA_SUTUNLARI} FROM rota_talimat_taslak_adim_medyasi WHERE taslak_id = $1 ORDER BY adim_sira, sira`, [taslakId],
+  );
+}
 
 export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: number, surum: number): Promise<{ id: number; metin: string } | null> {
   return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 AND surum = $3', [malzemeId, opNo, surum]);

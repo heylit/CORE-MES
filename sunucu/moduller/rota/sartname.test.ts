@@ -474,6 +474,75 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().tx((db) => db.sorgu("UPDATE rota_talimat_adimi SET baslik = 'Değişti'")));
   });
 
+  /* ---------------- talimat taslağı ve yayını (1194 b) ---------------- */
+
+  const taslakUrl = (urun: number, ad: 'talimat-taslak-kaydet' | 'talimat-yayinla' | 'talimat-taslak-sil') => `/rota/urunler/${urun}/${ad}`;
+
+  test('1194 b: üç uç talimat yazma yetkisi ister; operatör reddedilir, planlama yazar', async () => {
+    const t = await taslak();
+    const kaydet = { opNo: 10, okunanSurum: null, taslakSurum: null, adimlar: [adim()] };
+    await red(c.operator, taslakUrl(t.urun, 'talimat-taslak-kaydet'), kaydet, 403);
+    await red(c.operator, taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 }, 403);
+    await red(c.operator, taslakUrl(t.urun, 'talimat-taslak-sil'), { opNo: 10, taslakSurum: 1 }, 403);
+    const k = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-kaydet'), kaydet);
+    assert.equal(k.taslak?.surum, 1);
+    const y = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 });
+    assert.deepEqual([y.surumler.length, y.taslak], [1, null]);
+    await tamam(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-kaydet'), { ...kaydet, okunanSurum: 1 });
+    const s2 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-sil'), { opNo: 10, taslakSurum: 1 });
+    assert.equal(s2.taslak, null);
+  });
+
+  test('1194 b: taslak emre geçmez; kaydı sürümle korunur, OP başına tektir; yayın yeni sürüm açar ve taslağı siler', async () => {
+    const t = await taslak();
+    const url = taslakUrl(t.urun, 'talimat-taslak-kaydet');
+    const ilk = [adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true })];
+    const a = await tamam<TalimatlarCevabi>(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, taslakSurum: null, adimlar: ilk });
+    assert.deepEqual([a.surumler.length, a.taslak?.surum, a.taslak?.tabanSurum, a.taslak?.adimlar.map((x) => x.baslik)], [0, 1, null, ['Programı doğrula']]);
+    assert.equal(await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 1)), null, 'taslak sürüm değildir');
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, taslakSurum: null, adimlar: ilk }, 409);
+    const ikinci = [...ilk, adim({ baslik: 'İlk parçayı ölç', kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true })];
+    const b = await tamam<TalimatlarCevabi>(c.yonetici, 'POST', url, { opNo: 10, okunanSurum: null, taslakSurum: 1, adimlar: ikinci });
+    assert.deepEqual([b.taslak?.surum, b.taslak?.adimlar.length], [2, 2]);
+    await red(c.planlama, url, { opNo: 10, okunanSurum: null, taslakSurum: 1, adimlar: ilk }, 409);
+    await red(c.planlama, url, { opNo: 90, okunanSurum: null, taslakSurum: null, adimlar: ilk }, 400, /OP 90/);
+    await red(c.planlama, taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 }, 409);
+    const y = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 2 });
+    assert.deepEqual([y.taslak, y.surumler.map((x) => [x.surum, x.adimli, x.metin])], [null, [[1, true, 'Programı doğrula\nİlk parçayı ölç']]]);
+    assert.deepEqual(y.surumler[0]?.adimlar[1]?.kontrol, { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' });
+    assert.equal((await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 1)))?.length, 2);
+    await red(c.planlama, taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 2 }, 404, /taslağı yok/);
+    await red(c.planlama, taslakUrl(t.urun, 'talimat-taslak-sil'), { opNo: 10, taslakSurum: 1 }, 404);
+  });
+
+  test('1194 b: taslaktan sonra başka sürüm yayınlanırsa yayın reddedilir; son sürüme göre kaydedilen taslak yayınlanır', async () => {
+    const t = await taslak();
+    await tamam(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-kaydet'), { opNo: 10, okunanSurum: null, taslakSurum: null, adimlar: [adim({ baslik: 'Taslak' })] });
+    await tamam(c.planlama, 'POST', `/rota/urunler/${t.urun}/talimat-adimli-yaz`, { opNo: 10, okunanSurum: null, adimlar: [adim({ baslik: 'Doğrudan' })] });
+    await red(c.planlama, taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 }, 409, /1\. sürümü yayınlandı/);
+    await red(c.planlama, taslakUrl(t.urun, 'talimat-taslak-kaydet'), { opNo: 10, okunanSurum: null, taslakSurum: 1, adimlar: [adim({ baslik: 'Taslak' })] }, 409);
+    const k = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-kaydet'), { opNo: 10, okunanSurum: 1, taslakSurum: 1, adimlar: [adim({ baslik: 'Taslak' })] });
+    assert.equal(k.taslak?.tabanSurum, 1);
+    const y = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 2 });
+    assert.deepEqual(y.surumler.map((x) => [x.surum, x.metin]), [[2, 'Taslak'], [1, 'Doğrudan']]);
+  });
+
+  test('1194 b: taslak medyası yayında sürüme geçer; silinen taslağın başka yerde kullanılmayan dosyasının bağı kalkar', async () => {
+    const t = await taslak();
+    const url = taslakUrl(t.urun, 'talimat-taslak-kaydet');
+    const kalan = await resimYukle(c.planlama);
+    const giden = await resimYukle(c.planlama);
+    const k = await tamam<TalimatlarCevabi>(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, taslakSurum: null, adimlar: [adim({ medya: [{ ozet: kalan, ad: 'kalan.png' }] })] });
+    assert.equal(k.taslak?.adimlar[0]?.medya[0]?.tur, 'resim');
+    const y = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 });
+    assert.deepEqual(y.surumler[0]?.adimlar[0]?.medya.map((m) => [m.ozet, m.ad]), [[kalan, 'kalan.png']]);
+    await tamam(c.planlama, 'POST', url, { opNo: 10, okunanSurum: 1, taslakSurum: null, adimlar: [adim({ medya: [{ ozet: kalan, ad: 'kalan.png' }, { ozet: giden, ad: 'giden.png' }] })] });
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 200);
+    await tamam(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-sil'), { opNo: 10, taslakSurum: 1 });
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 404, 'yalnız taslaktaki dosyanın bağı kalkar');
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${kalan}`)).statusCode, 200, 'yayındaki dosya kalır');
+  });
+
   test('talimat şablonu yazılır, kaydedilir ve pasife alınır; kod tekil, sürüm denetlenir, operatör yazamaz', async () => {
     const govde = { kod: 'ts-deneme', ad: 'Deneme şablon', sartnameId: null, adimlar: [adim({ baslik: 'Birinci' })] };
     await red(c.operator, '/rota/talimat-sablonlari/ekle', govde, 403);

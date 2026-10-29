@@ -346,11 +346,19 @@ export const talimatAdimiSemasi = z.object({
 });
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
+// taslak (1194 b): OP'nin yayınlanmamış taslağı; yoksa null. tabanSurum taslağın dayandığı son yayın sürümüdür.
 export const talimatlarCevabi = z.object({
   surumler: z.array(z.object({
     surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi),
   })),
+  taslak: z.object({
+    surum: KIMLIK, tabanSurum: KIMLIK.nullable(), yazan: adliKayit, yazma: zaman, adimlar: z.array(talimatAdimiSemasi),
+  }).nullable(),
 });
+
+// Taslak kaydı (1194 b): okunanSurum ekranın gördüğü son yayın sürümü, taslakSurum düzenlenen taslağın sürümü (yeni taslakta null).
+export const talimatTaslakKaydetGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), taslakSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const talimatTaslakKomutGovdesi = z.object({ opNo: KIMLIK, taslakSurum: KIMLIK });
 
 export const komutCevabi = z.object({ id: KIMLIK, durum: revizyonDurumu, surum: KIMLIK });
 // Karttan kendiliğinden açılan ilk rota taslaklarının sayısı (#688).
@@ -688,6 +696,8 @@ export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
 export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
 export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
+export type TalimatTaslakKaydetGovdesi = z.input<typeof talimatTaslakKaydetGovdesi>;
+export type TalimatTaslakKomutGovdesi = z.input<typeof talimatTaslakKomutGovdesi>;
 export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
 export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;
 export type TalimatSablonlariCevabi = z.output<typeof talimatSablonlariCevabi>;

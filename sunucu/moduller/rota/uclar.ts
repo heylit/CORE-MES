@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
-  revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
+  revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
   talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
@@ -11,7 +11,7 @@ import {
   agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
-  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
+  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
 export const uclar = [
@@ -150,6 +150,34 @@ export const uclar = [
     govde: adimliTalimatYazGovdesi,
     cevap: talimatlarCevabi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => adimliTalimatYaz(db, kullanici, parametre.urunId, govde, denetimEki),
+  }),
+  // Talimat taslağı ve yayını (1194 b): yazma yetkisi talimat yazmayla aynıdır.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/talimat-taslak-kaydet',
+    yetki: 'rota.talimat-yaz',
+    parametre: urunParametresi,
+    govde: talimatTaslakKaydetGovdesi,
+    cevap: talimatlarCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => talimatTaslakKaydet(db, kullanici, parametre.urunId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/talimat-yayinla',
+    yetki: 'rota.talimat-yaz',
+    parametre: urunParametresi,
+    govde: talimatTaslakKomutGovdesi,
+    cevap: talimatlarCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => talimatYayinla(db, kullanici, parametre.urunId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/talimat-taslak-sil',
+    yetki: 'rota.talimat-yaz',
+    parametre: urunParametresi,
+    govde: talimatTaslakKomutGovdesi,
+    cevap: talimatlarCevabi,
+    isle: ({ db, parametre, govde, denetimEki }) => talimatTaslakSil(db, parametre.urunId, govde, denetimEki),
   }),
   uc({
     yontem: 'GET',
