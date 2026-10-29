@@ -108,6 +108,12 @@ export function sunucununBaglari(): Bag[] {
     bag('CNC kurulumu (iş emri) -> başlatma hazırlığı', uretimEmirleri.cncHazirlikCozucusu, cncKurulum.isEmriHazirlikDurumlari),
     bag('çizim revizyonu -> başlatma hazırlığı', uretimEmirleri.cizimHazirlikCozucusu, arkon.emirCizimDurumlari),
     bag('kalibrasyon -> başlatma hazırlığı', uretimEmirleri.kalibrasyonHazirlikCozucusu, kaliteMerkezi.kalibrasyonHazirlikDurumlari),
+    // Onaylı kapanışın dış maddeleri (1074 a): sahipler üretim emirlerini okur, çözücüleri ters yönde kaydedilir.
+    bag('ölçüm -> kapanış', uretimEmirleri.olcumKapanisCozucusu, kaliteMerkezi.kapanisOlcumDurumu),
+    bag('NCR -> kapanış', uretimEmirleri.ncrKapanisCozucusu, kaliteMerkezi.kapanisNcrDurumu),
+    bag('izlenebilirlik -> kapanış', uretimEmirleri.izlenebilirlikKapanisCozucusu, stok.kapanisIzlenebilirlikDurumu),
+    bag('stok -> kapanış', uretimEmirleri.stokKapanisCozucusu, stok.kapanisStokDurumu),
+    bag('sevkiyat -> kapanış', uretimEmirleri.sevkiyatKapanisCozucusu, sevkiyat.kapanisSevkiyatDurumu),
   ];
 }
 

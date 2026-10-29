@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import type { Db } from '#cekirdek/db.ts';
+import { DIS_KAPANIS_MADDELERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { bag, kablola, sunucununBaglari } from './kablolama.ts';
 import { emirIptalBildir } from './moduller/uretim-emirleri/emir-olaylari.ts';
+import { kapanisCozucusuKaydet } from './moduller/uretim-emirleri/kapanis.ts';
 
 // Dinleyicinin koştuğu, gönderdiği sorgulardan anlaşılır: sahte bağlantı her sorguyu sayar, boş sonuç döner.
 function sayanDb(): { db: Db; sayi: () => number } {
@@ -49,6 +51,21 @@ test('kablolanmadan bütün modüller yüklenince hiçbir dinleyici kendiliğind
 
 test('sunucunun bütün bağlarının iki ucu da çalışma anında var', () => {
   assert.deepEqual(sunucununBaglari().filter((b) => b.eksik).map((b) => b.ad), []);
+});
+
+// Çözücüsü henüz yazılmamış maddeler (1214 G1 d). Çözücü gelince bağı eklenir ve buradan çıkar; çıkmazsa test kırılır.
+const KAPANIS_BEKLEYEN = ['fason'];
+
+test('kablola: çözücüsü olan her dış kapanış maddesi kayıtlı, bekleyenler kayıtsız (1214 Y-1)', () => {
+  kablola();
+  const kayitli: string[] = [];
+  for (const m of DIS_KAPANIS_MADDELERI) {
+    // Kayıt önceki çözücüyü döner; aynısı geri konur, kablolanmış durum bozulmaz.
+    const onceki = kapanisCozucusuKaydet(m, null);
+    kapanisCozucusuKaydet(m, onceki);
+    if (onceki !== null) kayitli.push(m);
+  }
+  assert.deepEqual(kayitli, DIS_KAPANIS_MADDELERI.filter((m) => !KAPANIS_BEKLEYEN.includes(m)));
 });
 
 test('plan, kâr riski için üretim emrinin malzeme maliyetini proje maliyetten alır (227 a)', () => {
