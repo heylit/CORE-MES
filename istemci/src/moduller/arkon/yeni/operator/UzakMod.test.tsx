@@ -27,7 +27,7 @@ describe('uzakBasliklari', () => {
   });
 });
 
-// 804: uzak mod düzeni. Paket dosyasız: 3B model yüklenmez, bağlamdan yalnız depo istenir.
+// 895 a: uzak mod düzeni. Paket dosyasız: 3B model yüklenmez, bağlamdan yalnız depo istenir.
 describe('UzakMod düzeni', () => {
   const pkg = { id: 'pk-deneme', partNo: 'DN-1', rev: 'A', proje: 'Deneme proje', files: [], primary: '' } as unknown as Is['pkg'];
   const is: Is = { ...bosIs({ l: 'Deneme' }), empty: false, no: 'UE-DENEME-1', op: 'Op 10 · Torna', part: 'Deneme parça', state: 'running', good: 7, target: 25, scrap: 2, pkg };
@@ -37,24 +37,32 @@ describe('UzakMod düzeni', () => {
     </ArkonBaglamiKaynagi.Provider>,
   );
 
-  it('iş bilgisi tek kartta: emir ayrı, öteki alanlar sırasıyla etiket ve değer çifti', () => {
+  it('iş bilgisi tek satırda: emir, op, parça no, parça adı ve revizyon sırasıyla; proje üst şeritte', () => {
     ac();
     const bilgi = screen.getByRole('region', { name: 'İş bilgisi' });
-    const terimler = within(bilgi).getAllByRole('term').map((x) => x.textContent);
-    expect(terimler).toEqual(['Üretim emri', 'Proje', 'Op', 'Parça no', 'Parça adı', 'Rev']);
-    expect(within(bilgi).getAllByRole('definition').map((x) => x.textContent)).toEqual(['UE-DENEME-1', 'Deneme proje', 'Op 10 · Torna', 'DN-1', 'Deneme parça', 'A']);
+    expect(within(bilgi).getAllByRole('term').map((x) => x.textContent)).toEqual(['Üretim emri', 'Op', 'Parça no', 'Parça adı', 'Rev']);
+    expect(within(bilgi).getAllByRole('definition').map((x) => x.textContent)).toEqual(['UE-DENEME-1', 'Op 10 · Torna', 'DN-1', 'Deneme parça', 'Rev A']);
+    expect(within(bilgi).queryByText('Deneme proje')).toBeNull();
+    expect(screen.getByTitle('Deneme proje').textContent).toContain('Deneme proje');
+  });
+
+  it('projesiz işte üst şeritte proje kutusu çıkmaz', () => {
+    ac({ pkg: { ...pkg, proje: '' } as Is['pkg'] });
+    expect(screen.queryByText('Proje')).toBeNull();
   });
 
   it('sayaç kartı üretileni, hedefi, yüzdeyi ve kalanı yazar; hedef yoksa yüzde ve kalan yazılmaz', () => {
     ac();
     const sayac = screen.getByRole('region', { name: 'Sayaç' });
-    expect(sayac.textContent).toContain('7');
-    expect(sayac.textContent).toContain('/ 25');
+    expect(sayac.querySelector('[data-hane]')?.textContent).toBe('7');
+    expect(sayac.querySelector('[data-hane]')?.getAttribute('data-hane')).toBe('1');
+    expect(sayac.textContent).toContain('Hedef 25');
     expect(sayac.textContent).toContain('%28');
     expect(sayac.textContent).toContain('18 kaldı');
     cleanup();
     ac({ target: 0 });
     expect(screen.getByRole('region', { name: 'Sayaç' }).textContent).not.toContain('kaldı');
+    expect(screen.getByRole('region', { name: 'Sayaç' }).textContent).not.toContain('Hedef');
   });
 
   it('üst şeritte durum, istasyon; altta hurda ve sıradaki kontrol; dokunuş normal ekrana döner', () => {
