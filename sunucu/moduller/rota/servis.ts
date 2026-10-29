@@ -27,7 +27,7 @@ import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeAra as kartAra, malzemeOperasyonlari, malzemeOzetleri, operasyonluAktifKartlar } from '../malzemeler/disari.ts';
 import { adimliEmirAyrintisi, isEmirleriniYenile, isEmriSureOzeti, uretimEmriAc, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
-import type { EmirBittiOlayi } from '../uretim-emirleri/disari.ts';
+import type { EmirBittiOlayi, IsEmriKopyalandiOlayi } from '../uretim-emirleri/disari.ts';
 import {
   YAZ, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
   girdiEksigi, girdiOlabilirMi, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
@@ -1855,21 +1855,48 @@ async function sartnameOnayDenetimi(db: Db, revizyonId: number, icerik: Icerik):
 
 // Emir açılırken (ya da başlamamış iş emri yenilenirken) adımın şartnameleri o an yürürlükteki sürümle ve çözülmüş değerlerle
 // iş emrine sabitlenir. Sonradan yayınlanan sürüm sabitlenmiş iş emrini değiştirmez.
+// Adımın bağları yürürlükteki sürümle çözülür; yayınlanmış sürümü olmayan ya da zorunlusu boş kalan bağ sabitlenemez.
+type AdimSabiti = { sabitler: { surumId: number; degerler: ParametreDegerleri }[] } | { hata: string };
+function adimSabitleri(b: Awaited<ReturnType<typeof sartnameBaglami>>, baglar: readonly s.AdimSartnameSatiri[], opNo: number): AdimSabiti {
+  const sabitler: { surumId: number; degerler: ParametreDegerleri }[] = [];
+  for (const x of baglar.filter((y) => y.opNo === opNo)) {
+    const kod = b.ozet.get(x.sartnameId)?.kod ?? String(x.sartnameId);
+    const yururlukte = yururlukteSurum(b, x.sartnameId);
+    if (!yururlukte) return { hata: `OP ${opNo}: ${kod} şartnamesinin yayınlanmış sürümü yok; emir açılamaz.` };
+    const degerler = cozulmusDegerler(yururlukte.parametreler, x.degerler);
+    const eksik = eksikZorunlular(yururlukte.parametreler, degerler);
+    if (eksik.length > 0) return { hata: `OP ${opNo}: ${kod} şartnamesinde zorunlu alan boş (${eksik.join(', ')}); emir açılamaz.` };
+    sabitler.push({ surumId: yururlukte.id, degerler });
+  }
+  return { sabitler };
+}
+
 async function isEmirlerineSabitle(db: Db, kisiId: number, revizyonId: number, isEmirleri: readonly { id: number; opNo: number }[]): Promise<void> {
   const baglar = await s.adimSartnameleri(db, [revizyonId]);
   if (baglar.length === 0) return;
   const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
   for (const ie of isEmirleri) {
-    const sabitler = baglar.filter((x) => x.opNo === ie.opNo).map((x) => {
-      const kod = b.ozet.get(x.sartnameId)?.kod ?? String(x.sartnameId);
-      const yururlukte = yururlukteSurum(b, x.sartnameId);
-      if (!yururlukte) throw gecersiz(`OP ${ie.opNo}: ${kod} şartnamesinin yayınlanmış sürümü yok; emir açılamaz.`);
-      const degerler = cozulmusDegerler(yururlukte.parametreler, x.degerler);
-      const eksik = eksikZorunlular(yururlukte.parametreler, degerler);
-      if (eksik.length > 0) throw gecersiz(`OP ${ie.opNo}: ${kod} şartnamesinde zorunlu alan boş (${eksik.join(', ')}); emir açılamaz.`);
-      return { surumId: yururlukte.id, degerler };
-    });
-    if (sabitler.length > 0) await s.isEmriSabitle(db, ie.id, sabitler, kisiId);
+    const r = adimSabitleri(b, baglar, ie.opNo);
+    if ('hata' in r) throw gecersiz(r.hata);
+    if (r.sabitler.length > 0) await s.isEmriSabitle(db, ie.id, r.sabitler, kisiId);
+  }
+}
+
+// 1203 b: bölünen partinin kolu ve hatalı adımın tekrarı kaynak adımın kopyasıdır. Rota adımının kopyası emrin rota revizyonundaki
+// bağları bugünkü yürürlükteki sürümle yeniden sabitler; sabitlenemezse kaynağın sabitini alır, çünkü bölme ve terminaldeki hatalı
+// kaydı şartname yüzünden durmamalıdır. Ek adımın (rework, tamir, ek) rotada bağı yoktur; kopyası kaynağın sabitini alır.
+export async function isEmriKopyalandiYansit(db: Db, olay: IsEmriKopyalandiOlayi): Promise<void> {
+  if (olay.isEmirleri.length === 0) return;
+  const { kaynakRotaRevizyonId } = await adimliEmirAyrintisi(db, olay.uretimEmriId);
+  const baglar = kaynakRotaRevizyonId === null ? [] : await s.adimSartnameleri(db, [kaynakRotaRevizyonId]);
+  const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
+  for (const k of olay.isEmirleri) {
+    const r = k.rotaAdimi ? adimSabitleri(b, baglar, k.kaynakOpNo) : null;
+    if (r !== null && !('hata' in r)) {
+      if (r.sabitler.length > 0) await s.isEmriSabitle(db, k.yeniIsEmriId, r.sabitler, olay.kisiId);
+    } else {
+      await s.isEmriSabitiniKopyala(db, k.kaynakIsEmriId, k.yeniIsEmriId, olay.kisiId);
+    }
   }
 }
 

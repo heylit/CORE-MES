@@ -2,7 +2,7 @@ export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } fro
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
 // Emir bitti olayının dinleyicisi (B38); bağı kablolama.ts kurar (uretim-emirleri rotayı ithal edemez).
-export { emirBittiYansit } from './servis.ts';
+export { emirBittiYansit, isEmriKopyalandiYansit } from './servis.ts';
 // Emre sabitlenen işlem şartnameleri (971 a): kalite, sevkiyat ve satın alma okur; tabloya yazmaz.
 export { isEmriSartnameleri } from './servis.ts';
 export type { IsEmriSartnamesi } from '#paylasilan/sozlesme/rota.ts';
