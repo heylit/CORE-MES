@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  acikRevizyon, adimArkasinaTasi, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
+  acikRevizyon, adimArkasinaTasi, adimSartnameKilidi, eklenebilirSartnameler, kapsamaUyar, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
   degisimOrani, fasonaCevir, girdiOlur, girenTekrari, kartBirimi, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
@@ -239,5 +239,27 @@ describe('823: giren tekrarı ve ara kart birimi', () => {
     expect(kartBirimi(ham, a)).toBe('adet');
     expect(kartBirimi(ham, null)).toBe('kg');
     expect(kartBirimi(undefined, null)).toBe('');
+  });
+});
+
+describe('adımın şartnameleri (971 a, 1193 a)', () => {
+  const sartname = (id: number, kod: string, kapsam: 'ic' | 'fason' | 'ikisi', ek: { aktif?: boolean; yururlukteSurumNo?: number | null } = {}) => ({
+    id, kod, ad: kod, kategoriId: 1, kapsam, kaynak: 'varsayilan' as const, musteriFirma: null, musteriBelgeNo: null,
+    aktif: ek.aktif ?? true, surum: 1, yururlukteSurumNo: ek.yururlukteSurumNo === undefined ? 1 : ek.yururlukteSurumNo, taslakSurumNo: null, kullanim: 0,
+  });
+  it('eklenebilen: kullanımda, yayınlanmış, kapsama uyan ve bağlı olmayan; koda göre sıralı', () => {
+    const liste = [sartname(1, 'C-FSN', 'fason'), sartname(2, 'B-IKI', 'ikisi'), sartname(3, 'A-IC', 'ic'), sartname(4, 'D-PAS', 'ic', { aktif: false }),
+      sartname(5, 'E-YOK', 'ic', { yururlukteSurumNo: null }), sartname(6, 'F-BAG', 'ic')];
+    expect(eklenebilirSartnameler(liste, new Set([6]), false).map((s) => s.kod)).toEqual(['A-IC', 'B-IKI']);
+    expect(eklenebilirSartnameler(liste, new Set(), true).map((s) => s.kod)).toEqual(['B-IKI', 'C-FSN']);
+    expect(kapsamaUyar('ikisi', true) && kapsamaUyar('ic', false) && !kapsamaUyar('fason', false)).toBe(true);
+  });
+  it('kilit: taslak, OP numarası ve bekleyen rota kaydı', () => {
+    expect(adimSartnameKilidi({ revDurumu: 'taslak', opNo: 10, kayitBekliyor: false })).toBeNull();
+    expect(adimSartnameKilidi({ revDurumu: null, opNo: 10, kayitBekliyor: false })).toMatch(/Rota kaydedilince/);
+    expect(adimSartnameKilidi({ revDurumu: 'taslak', opNo: null, kayitBekliyor: false })).toMatch(/OP numarası/);
+    expect(adimSartnameKilidi({ revDurumu: 'onay', opNo: 10, kayitBekliyor: false })).toMatch(/geri gönder/);
+    expect(adimSartnameKilidi({ revDurumu: 'yururlukte', opNo: 10, kayitBekliyor: false })).toMatch(/taslak revizyonda/);
+    expect(adimSartnameKilidi({ revDurumu: 'taslak', opNo: 10, kayitBekliyor: true })).toMatch(/kaydediliyor/);
   });
 });
