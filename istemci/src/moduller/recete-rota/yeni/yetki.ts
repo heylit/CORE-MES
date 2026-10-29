@@ -20,6 +20,10 @@ export interface RrYetkisi {
   planYaz: boolean;
   maliyetOku: boolean;
   maliyetYaz: boolean;
+  // Şartname ve talimatlar: şartname yazma ve yayın (976 a: yönetici), talimat şablonu yazma.
+  sartnameYaz: boolean;
+  sartnameYayinla: boolean;
+  talimatYaz: boolean;
   // Bayraklardan biri açık mı (ekran salt okunur değil).
   herhangiYazma: boolean;
 }
@@ -48,6 +52,10 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
     oku: y.herhangi(...OKUMA_ISLEMLERI),
     stokOku: y.herhangi(...STOK_OKUMA),
     maliyetOku: y.var('finans.maliyet-oku'),
+    // Yalnız Şartname ve talimatlar sayfasının düğmeleridir; öteki bölümlerin salt okunurluğunu (herhangiYazma) değiştirmez.
+    sartnameYaz: y.var('rota.sartname-yaz'),
+    sartnameYayinla: y.var('rota.sartname-yayinla'),
+    talimatYaz: y.var('rota.talimat-yaz'),
     ...yazmalar,
     herhangiYazma: Object.values(yazmalar).some(Boolean),
   };
