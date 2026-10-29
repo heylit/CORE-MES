@@ -32,6 +32,7 @@ import {
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, Kural, MotorIsi, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
+import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
@@ -2162,6 +2163,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   await s.onayKaydiEkle(db, id, 'canliya_al', k.id, asmaKaydi, dortGozsuz);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
   await kardesleriKapat(db, k, id, x.tabanPlanSurumu);
+  await planIhtiyaclariniBildir(db);
   return senaryolar(db, k);
 }
 
