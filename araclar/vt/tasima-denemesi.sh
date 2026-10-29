@@ -133,6 +133,13 @@ if grep -q "tamam" "$CIKTI"; then
   exit 1
 fi
 dogru_vt "$ENGELLI" "yarıda kalan taşıma veritabanına dokunmadı" "$DOKUNULMADI"
+# Uzantı istisnası yalnız izin listesindeki uzantının kendi nesnesidir: uzantı dışında başka rolün tipi ve listede olmayan
+# uzantının süper kullanıcıda kalan tipi taşımayı yine durdurur.
+super "$ENGELLI" -c "DROP TABLE baskasinin" -c "CREATE TYPE baskasinin_tipi AS ENUM ('a')" -c "ALTER TYPE baskasinin_tipi OWNER TO $UCUNCU"
+red "tasima.sql, uzantı dışında başka rolün tipi varken" "Sahibi tmiv2_goc olmayan nesne kaldı: tip baskasinin_tipi" super "$ENGELLI" -1 -f "$KOK/araclar/vt/tasima.sql"
+super "$ENGELLI" -c "DROP TYPE baskasinin_tipi" -c "CREATE EXTENSION citext"
+red "tasima.sql, izin listesinde olmayan uzantının nesnesi kalınca" "Sahibi tmiv2_goc olmayan nesne kaldı: tip citext" super "$ENGELLI" -1 -f "$KOK/araclar/vt/tasima.sql"
+dogru_vt "$ENGELLI" "reddedilen koşular veritabanına dokunmadı" "$DOKUNULMADI"
 
 echo "== Taşıma (iki kez: yeniden koşulabilir)"
 for tur in 1 2; do
@@ -143,6 +150,7 @@ dogru "bütün tabloların sahibi göç kullanıcısı" "$HEPSI_GOCUN"
 dogru "public şemasının sahibi göç kullanıcısı" "SELECT nspowner = '$TMIV2_PG_GOC_USER'::regrole FROM pg_namespace WHERE nspname = 'public'"
 dogru "artık t_ şeması kalmadı" "SELECT NOT EXISTS (SELECT FROM pg_namespace WHERE left(nspname, 2) = 't_')"
 dogru "veri yerinde" "SELECT count(*) = 1 FROM kisi WHERE ad = 'Tasima Deneme'"
+dogru "pg_trgm kurulu ve süper kullanıcıda kalan tipi taşımayı durdurmadı" "SELECT EXISTS (SELECT FROM pg_extension WHERE extname = 'pg_trgm') AND EXISTS (SELECT FROM pg_type WHERE typname = 'gtrgm' AND typowner <> '$TMIV2_PG_GOC_USER'::regrole)"
 dogru "uygulama kullanıcısı her tabloda SELECT yapar" "$(hak SELECT bool_and)"
 for h in INSERT UPDATE DELETE; do dogru "uygulama kullanıcısı göç kaydı dışında her tabloda $h yapar" "$(hak "$h" bool_and "$KAYIT_HARIC")"; done
 dogru "taşımadan sonra uygulama kullanıcısı göç kaydını okur, yazma hakkı yok" "$KAYIT_SALT_OKUNUR"

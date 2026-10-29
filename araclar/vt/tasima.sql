@@ -104,22 +104,33 @@ BEGIN
 END $$;
 
 -- Göç kullanıcısının olmayan her nesne adıyla söylenir: sessizce yarım kalan taşıma, ilk göçte patlar.
+-- Tek istisna izin listesindeki uzantının kendi nesneleridir (pg_depend 'e'): uzantıyı kuran süper kullanıcı olunca taban
+-- tipleri (pg_trgm'in gtrgm'i) onda kalır, sahibi değiştirilemez ve göç kullanıcısı onlara dokunmaz. Listeye girmeyen
+-- uzantı sessizce geçmez; yeni uzantı göçle birlikte buraya yazılır.
 DO $$
 DECLARE
   kalan text;
 BEGIN
+  WITH uzanti_nesnesi AS (
+    SELECT d.classid, d.objid FROM pg_depend d JOIN pg_extension e ON e.oid = d.refobjid
+    WHERE d.refclassid = 'pg_extension'::regclass AND d.deptype = 'e' AND e.extname = ANY (ARRAY['pg_trgm'])
+  )
   SELECT string_agg(ad, ', ' ORDER BY ad) INTO kalan FROM (
     SELECT 'şema ' || nspname AS ad FROM pg_namespace
       WHERE nspowner <> 'tmiv2_goc'::regrole AND nspname !~ '^pg_' AND nspname <> 'information_schema'
     UNION ALL
     SELECT 'ilişki ' || c.oid::regclass::text FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
       WHERE c.relowner <> 'tmiv2_goc'::regrole AND s.nspname !~ '^pg_' AND s.nspname <> 'information_schema'
+        AND NOT EXISTS (SELECT FROM uzanti_nesnesi u WHERE u.classid = 'pg_class'::regclass AND u.objid = c.oid)
     UNION ALL
     SELECT 'işlev ' || p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace
       WHERE p.proowner <> 'tmiv2_goc'::regrole AND s.nspname !~ '^pg_' AND s.nspname <> 'information_schema'
+        AND NOT EXISTS (SELECT FROM uzanti_nesnesi u WHERE u.classid = 'pg_proc'::regclass AND u.objid = p.oid)
     UNION ALL
+    -- Dizi tipi (gtrgm[]) uzantıya değil eleman tipine bağlıdır; eleman tipi uzantınınsa o da uzantınındır.
     SELECT 'tip ' || t.oid::regtype::text FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace
       WHERE t.typowner <> 'tmiv2_goc'::regrole AND s.nspname !~ '^pg_' AND s.nspname <> 'information_schema'
+        AND NOT EXISTS (SELECT FROM uzanti_nesnesi u WHERE u.classid = 'pg_type'::regclass AND u.objid IN (t.oid, t.typelem))
   ) nesneler;
   IF kalan IS NOT NULL THEN
     RAISE EXCEPTION 'Sahibi tmiv2_goc olmayan nesne kaldı: %', kalan;
