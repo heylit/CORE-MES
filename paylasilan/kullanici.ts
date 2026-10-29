@@ -10,6 +10,8 @@ export const kullaniciSemasi = z.object({
   islemler: z.array(z.string().refine((deger): deger is Islem => islemMi(deger))),
   // Girişte açılacak sayfa (rolden); null ya da yoksa ana sayfa. Yetki değildir: sayfayı görmeyen kullanıcı ana sayfada kalır.
   acilisSayfasi: z.string().nullable().optional(),
+  // Firma kişisi (1224 a): işlemlerinden bağımsız olarak yalnız portal ve oturum uçlarına girer. Yoksa iç kişidir.
+  disIzleyici: z.boolean().optional(),
 });
 
 export type Kullanici = z.output<typeof kullaniciSemasi>;
