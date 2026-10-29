@@ -55,3 +55,6 @@ export type { DepoKalemi } from './tum-isler.ts';
 
 // Satın almanın teslim yöntemi kalemin taşımasını yazar (959 b): yer 'satin-alma', son yazan izi kalır.
 export { tasimaDegistir } from './tum-isler.ts';
+
+// Takvim (891): günü aralıktaki sevkiyat işleri; yetkiyi çağıran denetler (sevkiyat.oku).
+export { takvimKayitlari } from './servis.ts';

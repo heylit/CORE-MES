@@ -697,3 +697,18 @@ export async function talepAlimlari(db: Db): Promise<Set<string>> {
   );
   return new Set(satirlar.map((s) => `${s.talepId}:${String(s.firmaId)}`));
 }
+
+// Takvim (891): günü aralıkta olan, iptal edilmemiş işler. Nokta, teslimat ve aktarmada bırakış, alımda alış noktasıdır.
+export interface TarihliIsSatiri {
+  id: number; tarih: string; tur: 'teslimat' | 'alim' | 'aktarma'; durum: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi';
+  belgeNo: string | null; noktaAdi: string | null; firmaId: number | null;
+}
+export function tarihliIsler(db: Db, baslangic: string, bitis: string): Promise<TarihliIsSatiri[]> {
+  return db.sorgu<TarihliIsSatiri>(
+    `SELECT i.id, i.tarih::text AS tarih, i.tur, i.durum, i.belge_no AS "belgeNo", n.ad AS "noktaAdi", n.firma_id AS "firmaId"
+       FROM sevkiyat_isi i LEFT JOIN sevkiyat_noktasi n ON n.id = CASE WHEN i.tur = 'alim' THEN i.alis_noktasi_id ELSE i.birakis_noktasi_id END
+      WHERE i.iptal_edildi IS NULL AND i.tarih BETWEEN $1::date AND $2::date
+      ORDER BY i.tarih, i.id`,
+    [baslangic, bitis],
+  );
+}
