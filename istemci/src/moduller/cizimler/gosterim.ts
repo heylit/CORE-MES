@@ -36,6 +36,7 @@ export const BAG_ADI: Record<BagModulu, string> = {
   'uretim-emirleri': 'Üretim emri',
   stok: 'Stok partisi',
   'satin-alma': 'Satın alma siparişi',
+  'cnc-kurulum': 'CNC Kurulum',
 };
 
 // Sunucudaki CZ-03 (kurallar.ts IZINLI_DOSYA_TURLERI) ile aynı; burada yalnız seçimi erken uyarmak içindir, karar sunucunundur.
