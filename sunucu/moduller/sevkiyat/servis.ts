@@ -19,7 +19,7 @@ import type { AramaDizini, AramaVerisi } from './arama.ts';
 import { filoPlani } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
-  AKTIF_FABRIKA_KALDIRILAMAZ, AMACLAR, bolmeIhlali, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
+  AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
   isNoktasiIhlali, onayEngelleri, plandanCikarilmali, surumGuncel,
   planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
 } from './kurallar.ts';
@@ -164,9 +164,19 @@ async function fabrikaCakismasi(db: Db, govde: NoktaGovdesi, kendiId: number | n
   const fabrika = await sorgu.aktifFabrikaGetir(db);
   if (ikinciFabrikaMi(govde.tur, fabrika?.id ?? null, kendiId)) throw cakisma('Aktif bir fabrika noktası zaten var; önce onu pasifleştirin.');
 }
-export async function noktaEkle(db: Db, govde: NoktaGovdesi & { adres: string | null }): Promise<Nokta> {
-  await fabrikaCakismasi(db, govde, null);
-  await firmaDenetle(db, govde, null);
+// 930 a: fabrikanın konumunun tek kaynağı Sistem Ayarları; fabrika noktasına elle konum yazılmaz. Kayıttaki konum ayarın son
+// yazılan kopyasıdır: ayar boşken eski fabrika kaydı konumunu korur, yeni fabrika ayar girilmeden açılmaz.
+async function fabrikaKonumuyla<T extends NoktaGovdesi>(db: Db, govde: T, onceki: NoktaSatiri | null): Promise<T> {
+  if (govde.tur !== 'fabrika') return govde;
+  const ayar = await fabrikaAyari(db);
+  if (ayar) return { ...govde, enlem: ayar.enlem, boylam: ayar.boylam };
+  if (onceki?.tur === 'fabrika') return { ...govde, enlem: Number(onceki.enlem), boylam: Number(onceki.boylam) };
+  throw gecersiz(FABRIKA_KONUMU_AYARDA);
+}
+export async function noktaEkle(db: Db, gelen: NoktaGovdesi & { adres: string | null }): Promise<Nokta> {
+  await fabrikaCakismasi(db, gelen, null);
+  await firmaDenetle(db, gelen, null);
+  const govde = await fabrikaKonumuyla(db, gelen, null);
   return noktaCevabi(await sorgu.noktaEkle(db, { ...govde, firmaId: govde.firmaId ?? null }));
 }
 // Kart #1323: güncelleme formun açıldığı sürümle gelir; arada değişen kayıt üzerine yazılmaz. Koşullu yazma, denetimle
@@ -191,7 +201,8 @@ export async function noktaGuncelle(db: Db, id: number, govde: NoktaGovdesi & { 
   }
   await fabrikaCakismasi(db, govde, id);
   await firmaDenetle(db, govde, id);
-  return noktaCevabi(surumluYazildi(await sorgu.noktaGuncelle(db, id, govde.surum, { ...govde, firmaId: govde.firmaId ?? null })));
+  const yazilan = await fabrikaKonumuyla(db, govde, onceki);
+  return noktaCevabi(surumluYazildi(await sorgu.noktaGuncelle(db, id, govde.surum, { ...yazilan, firmaId: yazilan.firmaId ?? null })));
 }
 // Açık soru 12: onaylı plandaki araç ve nokta, onay kaldırılmadan değişmez.
 async function onayliPlanDenetle(db: Db, hedef: { aracId: number } | { noktaId: number }): Promise<void> {

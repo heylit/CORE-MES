@@ -2,7 +2,7 @@
 // "Sevk et" ya da "Al" ile tetikler; depo son çıkışı ya da kabulü yapar ve stok orada oynar. Yetki ve aşama sunucudadır; düğme
 // yalnız işlemi olana görünür.
 import { Fragment, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { KalemKaynagi, SonYazanYeri, Tasima, TumIsAsamasi, TumIsSatiri } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { CokSatir, Dugme, DurumKutusu, Pencere, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import '../../ortak/arayuz/sayfa-basligi.css';
@@ -25,6 +25,12 @@ const YON_ADI: Record<Yon, { etiket: string; tetik: string; simge: 'upload' | 'd
 };
 const YER_ADI: Record<SonYazanYeri, string> = { 'tum-isler': 'Tüm işler', 'satin-alma': 'Satın alma siparişi teslim yöntemi', sevkiyat: 'Sevkiyat', otomatik: 'Otomatik (eski kayıt)' };
 const ilkHali = { hazirlik: new Set<Hazirlik>(['hazir', 'gelecek']), asamalar: new Set<TumIsAsamasi>(ASAMALAR.filter((a) => a.kod !== 'tamamlandi').map((a) => a.kod)) };
+// Genel aramadan gelen (932 a, `?ara=<emir no>&gorunum=`): o emrin bütün kalemleri görünsün diye dönem ve durum süzgeçleri açılır.
+const aramadanGelen = (p: URLSearchParams): { ara: string; gorunum: Gorunum } | null => {
+  const ara = p.get('ara')?.trim() ?? '';
+  return ara === '' ? null : { ara, gorunum: p.get('gorunum') === 'sevkiyat' ? 'sevkiyat' : 'karar' };
+};
+const butunAsamalar = (): Set<TumIsAsamasi> => new Set(ASAMALAR.map((a) => a.kod));
 const kartKipi = (): boolean => { try { return window.matchMedia('(max-width: 899px)').matches; } catch { return false; } };
 const durdur = (f: () => void) => (e: { stopPropagation: () => void }) => { e.stopPropagation(); f(); };
 const parcaAdi = (r: TumIsSatiri): string => r.malzemeAd ?? (r.malzemeNo === null ? (r.aciklama ?? '—') : `Malzeme ${r.malzemeNo}`);
@@ -54,20 +60,29 @@ export function TumIsler() {
   const { bildir } = useBildirim();
   const yonlendir = useNavigate();
   const kart = useKartKipi();
-  const [gorunum, setGorunum] = useState<Gorunum>('karar');
-  const [ara, setAra] = useState('');
+  const [parametreler] = useSearchParams();
+  const gelen = aramadanGelen(parametreler);
+  const [gorunum, setGorunum] = useState<Gorunum>(gelen?.gorunum ?? 'karar');
+  const [ara, setAra] = useState(gelen?.ara ?? '');
   const [ozet, setOzet] = useState<Ozet | null>(null);
-  const [donem, setDonem] = useState<Donem>('yakin');
+  const [donem, setDonem] = useState<Donem>(gelen === null ? 'yakin' : 'tumu');
   const [gruplama, setGruplama] = useState<Gruplama>('gun');
   const [siralama, setSiralama] = useState<{ alan: 'gun' | 'durum' | 'firma' | 'adet'; yon: 1 | -1 }>({ alan: 'gun', yon: 1 });
   const [hazirlik, setHazirlik] = useState<ReadonlySet<Hazirlik>>(ilkHali.hazirlik);
-  const [asamalar, setAsamalar] = useState<ReadonlySet<TumIsAsamasi>>(ilkHali.asamalar);
+  const [asamalar, setAsamalar] = useState<ReadonlySet<TumIsAsamasi>>(() => (gelen === null ? ilkHali.asamalar : butunAsamalar()));
   const [kaynaklar, setKaynaklar] = useState<ReadonlySet<KalemKaynagi>>(new Set(KAYNAKLAR.map((k) => k.kod)));
   const [yonler, setYonler] = useState<ReadonlySet<Yon>>(new Set<Yon>(['gidis', 'gelis']));
   const [secili, setSecili] = useState<ReadonlySet<string>>(new Set());
   const [ayrintiAnahtari, setAyrinti] = useState<string | null>(null);
   const [diger, setDiger] = useState<string | null>(null);
   const [elleAcik, setElleAcik] = useState(false);
+  // Sayfa açıkken genel aramadan yeni emir seçilirse süzgeç ona geçer.
+  const gelenAra = gelen?.ara ?? null;
+  const gelenGorunum = gelen?.gorunum ?? null;
+  useEffect(() => {
+    if (gelenAra === null || gelenGorunum === null) return;
+    setAra(gelenAra); setGorunum(gelenGorunum); setDonem('tumu'); setOzet(null); setAsamalar(butunAsamalar()); setHazirlik(ilkHali.hazirlik);
+  }, [gelenAra, gelenGorunum]);
   const aralik = donemAraligi(donem, bugun);
   const sorgu = useTumIsler(aralik[0], aralik[1]);
   const hepsi = useMemo(() => sorgu.data ?? [], [sorgu.data]);

@@ -18,7 +18,10 @@ const hata = (kod: string) => (h: unknown) => h instanceof UygulamaHatasi && h.k
 before(async () => {
   ortam = await testVeritabaniKur('sevkiyat_eszamanli');
   vt = ortam.vt;
-  await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Fabrika', tur: 'fabrika', enlem: 39.9, boylam: 32.7, adres: null, durakSuresiDakika: 10 }));
+  // Fabrikanın konumu Sistem Ayarları'ndan gelir (930 a).
+  const kisi = (await vt.tx((db) => db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Konum Ayari') RETURNING id")))!.id;
+  await vt.tx((db) => db.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('sevkiyat.fabrika-enlem', '39.9', $1), ('sevkiyat.fabrika-boylam', '32.7', $1)", [kisi]));
+  await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Fabrika', tur: 'fabrika', enlem: 0, boylam: 0, adres: null, durakSuresiDakika: 10 }));
   nokta = (await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Nokta', tur: 'musteri', enlem: 39.95, boylam: 32.75, adres: null, durakSuresiDakika: 10 }))).id;
 });
 after(() => ortam.kaldir());
