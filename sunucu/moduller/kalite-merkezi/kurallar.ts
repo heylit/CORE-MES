@@ -995,7 +995,9 @@ export function satinAlmaKaynagi(r: SatinAlmaSatiri, acik: boolean, parcalar: Re
 export const HATALI_NCR_KAYNAGI = 'Proses muayene';
 // Tanım emir numarasıyla başlar; kaynak bağı olmayan eski hatalı parça NCR'sini kapanış bu önekten tanır.
 export const HATALI_NCR_TANIM_ONEKI = 'Hatalı parça: ';
-const HATALI_MRB: Readonly<Record<HataliKarari, string>> = { rework: 'Yeniden işle', hurda: 'Hurda', red: 'Karar bekliyor' };
+const HATALI_MRB: Readonly<Record<HataliKarari, string>> = {
+  rework: 'Yeniden işle', hurda: 'Hurda', red: 'Karar bekliyor', kabul: 'Olduğu gibi kabul', sartli_kabul: 'Şartlı kabul',
+};
 export function hataliNcrGovdesi(
   k: HataliKaydiOzeti, g: { karar: HataliKarari; ncrNo: string; ciddiyet: string; not: string | null }, sorumlu: string, gun: string,
 ): Record<string, unknown> {

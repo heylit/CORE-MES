@@ -212,6 +212,22 @@ describe('Hatalı parça kararı', () => {
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Hatalı parça kararı' })).toBeNull(); });
   });
 
+  it('1211: şartlı kabulde not alanı şart olur ve zorunludur; kabul seçenekleri listededir', async () => {
+    const s = ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [HATALI] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    const secim = within(pencere).getByLabelText('Karar');
+    expect(within(secim).getByRole('option', { name: 'Kabul (olduğu gibi)' })).toBeTruthy();
+    fireEvent.change(secim, { target: { value: 'sartli_kabul' } });
+    const sart = within(pencere).getByLabelText(/Şart/);
+    expect((sart as HTMLTextAreaElement).required).toBe(true);
+    fireEvent.change(sart, { target: { value: 'Çapak alınarak kullanılır' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
+    expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'sartli_kabul', not: 'Çapak alınarak kullanılır' });
+  });
+
   it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {
     const s = ac(MUAYENECI, {}, { emirler: [] }, { kayitlar: [HATALI] });
     await screen.findByRole('heading', { level: 2, name: 'Merhaba Deneme' });

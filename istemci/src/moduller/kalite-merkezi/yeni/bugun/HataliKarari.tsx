@@ -13,15 +13,19 @@ type Ciddiyet = KmHataliKararGovdesi['ciddiyet'];
 export const HATALI_ANAHTARI = ['kalite-merkezi', 'hatali', 'bekleyenler'] as const;
 const YOKLAMA_MS = 15_000;
 const KARARLAR: { deger: Karar; baslik: string }[] = [
-  { deger: 'rework', baslik: 'Rework (yeniden işle)' }, { deger: 'hurda', baslik: 'Hurda' }, { deger: 'red', baslik: 'Red (MRB sonra)' },
+  { deger: 'rework', baslik: 'Rework (yeniden işle)' }, { deger: 'kabul', baslik: 'Kabul (olduğu gibi)' }, { deger: 'sartli_kabul', baslik: 'Şartlı kabul' },
+  { deger: 'hurda', baslik: 'Hurda' }, { deger: 'red', baslik: 'Red (MRB sonra)' },
 ];
 // Sözleşmedeki KM_CIDDIYETLER ile aynı sıra; istemci paylaşılanı yalnız tip olarak ithal eder (zod istemci paketine girmesin).
 const CIDDIYETLER: readonly Ciddiyet[] = ['Kritik', 'Majör', 'Minör'];
-const KARAR_ADI: Record<Karar, string> = { rework: 'reworke gönderildi', hurda: 'hurdaya ayrıldı', red: 'reddedildi' };
+const KARAR_ADI: Record<Karar, string> = {
+  rework: 'reworke gönderildi', kabul: 'kabul edildi', sartli_kabul: 'şartlı kabul edildi', hurda: 'hurdaya ayrıldı', red: 'reddedildi',
+};
 const saat = (zaman: string): string => new Date(zaman).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 // 1034, 1038 a: terminalde "Hatalı" ile ayrılan parça kalite kararını bekler. Karar aynı işlemde NCR açar (numarası NCR formundaki gibi
-// sıradaki numara); rework planlamaya düşer, hurda ve red kolu kapatır. Liste yalnız onaylayabilen kişide istenir ve görünür.
+// sıradaki numara); rework planlamaya düşer, hurda ve red kolu kapatır, kabul ve şartlı kabul parçayı ana partiye katar (1211; şartlı
+// kabulde şart notu zorunludur, stok şartlı olur). Liste yalnız onaylayabilen kişide istenir ve görünür.
 export function HataliKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -81,7 +85,7 @@ export function HataliKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] }
         ))}
       </ul>
       <OnayPenceresi
-        acik={secili !== null} baslik="Hatalı parça kararı" onayMetni="Kararı yaz" tehlikeli={karar !== 'rework'} yukleniyor={gonder.isPending}
+        acik={secili !== null} baslik="Hatalı parça kararı" onayMetni="Kararı yaz" tehlikeli={karar === 'hurda' || karar === 'red'} yukleniyor={gonder.isPending}
         onayla={onayla} vazgec={() => { seciliYaz(null); }}
       >
         {secili && (
@@ -92,7 +96,10 @@ export function HataliKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] }
               etiket="Ciddiyet" value={ciddiyet} onChange={(o) => { ciddiyetYaz(o.target.value as Ciddiyet); }}
               secenekler={CIDDIYETLER.map((c) => ({ deger: c, baslik: c }))}
             />
-            <CokSatir etiket="Gerekçe" value={not} maxLength={500} onChange={(o) => { notYaz(o.target.value); }} />
+            <CokSatir
+              etiket={karar === 'sartli_kabul' ? 'Şart' : 'Gerekçe'} value={not} maxLength={500} required={karar === 'sartli_kabul'}
+              onChange={(o) => { notYaz(o.target.value); }}
+            />
           </>
         )}
       </OnayPenceresi>
