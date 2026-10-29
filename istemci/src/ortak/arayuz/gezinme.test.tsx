@@ -141,12 +141,16 @@ describe('Genel arama', () => {
     expect(adres()).toBe('/recete-rota');
   });
 
-  it('reddedilen: yetkisi olmayan madde sonuçta çıkmaz; eşleşme yoksa "Sonuç yok" yazar', () => {
+  it('reddedilen: yetkisi olmayan madde sonuçta çıkmaz; eşleşme yoksa kayıt araması bitince "Sonuç yok" yazar', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ sonuclar: [], eksik: [] }), { status: 200 })));
     ciz('/', ['ornek.oku']);
     yaz('ayarlar');
     expect(sonuclar()).not.toContain('Stok Merkezi › Ayarlar');
     yaz('olmayan sey');
-    expect(screen.getByText('Sonuç yok')).toBeTruthy();
+    expect(screen.getByText('Kayıtlar aranıyor')).toBeTruthy();
+    expect(screen.queryByText('Sonuç yok')).toBeNull();
+    expect(await screen.findByText('Sonuç yok')).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 
   it('Ctrl K kutuya odaklanır; Esc kutuyu boşaltır ve listeyi kapatır', () => {

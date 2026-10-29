@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kayitCevabiniOku, kayitSorgusu } from './kayit-aramasi.ts';
+import { genelCevabiOku, kayitCevabiniOku, kayitSorgusu } from './kayit-aramasi.ts';
 
 describe('kayitCevabiniOku', () => {
   it('sözleşmedeki satırlar okunur; boş açıklama yok sayılır', () => {
@@ -20,5 +20,21 @@ describe('kayitSorgusu', () => {
     expect(kayitSorgusu(' ue ')).toBe('ue');
     expect(kayitSorgusu('u')).toBeNull();
     expect(kayitSorgusu('x'.repeat(61))).toBeNull();
+  });
+});
+
+describe('genelCevabiOku', () => {
+  it('türü bilinen satırlar okunur; eksik türler süzülür', () => {
+    expect(genelCevabiOku({
+      sonuclar: [{ tur: 'emir', anahtar: 'emir#1', baslik: 'UE-1', aciklama: null, yol: '/uretim-emirleri/1' }],
+      eksik: ['ncr', 'uydurma'],
+    })).toEqual({ sonuclar: [{ tur: 'emir', anahtar: 'emir#1', baslik: 'UE-1', aciklama: null, yol: '/uretim-emirleri/1' }], eksik: ['ncr'] });
+  });
+
+  it('reddedilen: türsüz ya da bilinmeyen türlü satır, uygulama dışı adres ve sözleşme dışı cevap; fazlası kesilir', () => {
+    const satir = (tur: unknown, yol: unknown = '/a') => ({ tur, anahtar: 'a', baslik: 'x', aciklama: null, yol });
+    expect(genelCevabiOku({ sonuclar: [satir(undefined), satir('yok'), satir('emir', '//dis.example')] }).sonuclar).toEqual([]);
+    for (const ham of [null, 3, [], { sonuclar: 'x' }]) expect(genelCevabiOku(ham)).toEqual({ sonuclar: [], eksik: [] });
+    expect(genelCevabiOku({ sonuclar: Array.from({ length: 40 }, () => satir('emir')) }).sonuclar).toHaveLength(25);
   });
 });
