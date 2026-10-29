@@ -158,6 +158,30 @@ export const tezgahAyarGovdesi = tezgahAyariSemasi.extend({ beklenenSurum: z.num
   .refine((g) => g.canliDevir === null || g.canliTakim === true, { message: 'Canlı takım devri yalnız canlı takımlı tezgâhta girilir.', path: ['canliDevir'] });
 export const tezgahAyarCevabi = z.object({ tezgah: tezgahSemasi });
 
+// 3B modeller (1212 a): dosya Çizim Merkezi'ndedir; CNC Kurulum makineye ya da bağlama aparatına yayındaki bir 3B model belgesini bağlar.
+// Aparat anahtarı ekranın kalem kimliğidir (gömülü ya da kayıttaki özel aparat). Modeli olmayan hedef ekranda çizilen gövdeyle görünür.
+export const MODEL_DOSYA_TURLERI = ['glb', 'gltf', 'step', 'iges', 'stl'] as const;
+export const APARAT_ANAHTARI = /^[A-Za-z0-9_.:-]{1,80}$/;
+export const modelHedefiSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('makine'), makineId: z.number().int().positive().max(2147483647) }),
+  z.object({ tur: z.literal('aparat'), anahtar: z.string().regex(APARAT_ANAHTARI, 'Geçersiz aparat.') }),
+]);
+export const modelBelgesiSemasi = z.object({
+  belgeId: z.number().int(), ad: z.string(), harf: z.string(), ozet: z.string(), dosyaTuru: z.enum(MODEL_DOSYA_TURLERI),
+});
+// surum: bağ satırının sürümü; hiç bağlanmamış hedefte 0 (ilk bağlama 0 ile gelir).
+export const cncModelSemasi = z.object({
+  id: z.number().int(), hedef: modelHedefiSemasi, belge: modelBelgesiSemasi.nullable(), surum: z.number().int().nonnegative(),
+});
+export const modellerCevabi = z.object({ modeller: z.array(cncModelSemasi) });
+export const modelBaglaGovdesi = z.object({
+  hedef: modelHedefiSemasi, belgeId: z.number().int().positive().max(2147483647).nullable(), beklenenSurum: z.number().int().min(0).max(2147483647),
+});
+export const modelBaglaCevabi = z.object({ model: cncModelSemasi });
+export const modelSecenekleriSorgusu = z.object({ ara: z.string().trim().max(100).optional() });
+export const modelSecenekleriCevabi = z.object({ belgeler: z.array(modelBelgesiSemasi) });
+export const modelParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
@@ -188,3 +212,10 @@ export type Tezgah = z.output<typeof tezgahSemasi>;
 export type TezgahlarCevabi = z.output<typeof tezgahlarCevabi>;
 export type TezgahAyarGovdesi = z.output<typeof tezgahAyarGovdesi>;
 export type TezgahAyarCevabi = z.output<typeof tezgahAyarCevabi>;
+export type ModelHedefi = z.output<typeof modelHedefiSemasi>;
+export type ModelBelgesi = z.output<typeof modelBelgesiSemasi>;
+export type CncModel = z.output<typeof cncModelSemasi>;
+export type ModellerCevabi = z.output<typeof modellerCevabi>;
+export type ModelBaglaGovdesi = z.output<typeof modelBaglaGovdesi>;
+export type ModelBaglaCevabi = z.output<typeof modelBaglaCevabi>;
+export type ModelSecenekleriCevabi = z.output<typeof modelSecenekleriCevabi>;

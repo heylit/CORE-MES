@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { htype, isLatheTool, isMillTool } from '../veri/takim-turu.ts';
 import type { Kalem, Tezgah } from '../veri/tipler.ts';
+import { kutuyaOturt, modelDinlemeyiBirak, modelIste, modelKopyasi, type ModelDurumu } from './glb-yukle.ts';
 import { sahneRengi3 } from './renkler.ts';
 
 // Prototipin CNC 3B model kütüphanesi (CNC3D): takım, tutucu, aparat, çene, ölçüm, sarf ve tezgâh modelleri koddan çizilir, dış
@@ -1012,6 +1013,40 @@ function emptyPocket(): THREE.Group {
   return g;
 }
 
+// 1212 a: sunucudaki tezgâha (makineId taşıyan) ya da bağlama aparatına Tanımlar'da Çizim Merkezi modeli bağlandıysa model çizilen gövdenin
+// yerini alır. Model inene kadar, yoksa ya da açılamazsa çizilen gövde durur. Yer değiştirme aynı grubun içinde olur: çağıranın ölçekleyip
+// yerleştirdiği kutu bozulmaz. Bağ değişince sahnedeki gövde de değişir.
+const APARAT_KIMLIGI = /^[A-Za-z0-9_.:-]{1,80}$/;
+function modelAnahtari(it: Kalem): string | null {
+  const makineId: unknown = (it as Kalem & { makineId?: unknown }).makineId;
+  if (it.kind.startsWith('m_')) return typeof makineId === 'number' ? `makine:${String(makineId)}` : null;
+  return it.kind.startsWith('f_') && APARAT_KIMLIGI.test(it.id) ? `aparat:${it.id}` : null;
+}
+function modelliGovde(anahtar: string, kur: () => THREE.Object3D): THREE.Group {
+  const g = G();
+  g.add(kur());
+  const hedef = new THREE.Box3().setFromObject(g);
+  let modelde = false;
+  const koy = (o: THREE.Object3D): void => {
+    const eski = [...g.children];
+    g.clear();
+    for (const c of eski) dispose(c);
+    g.add(o);
+  };
+  const uygula = (d: ModelDurumu): void => {
+    if (d.durum === 'hazir') { koy(kutuyaOturt(modelKopyasi(d.kok), hedef)); modelde = true; } else if (d.durum !== 'yukleniyor' && modelde) { koy(kur()); modelde = false; }
+  };
+  // Sahneden kalkmış gövde dinlemeyi bırakır (bırakılmış gövdeye kurulan geometri atılmazdı).
+  const dinle = (d: ModelDurumu): void => { if (sahnede(g)) uygula(d); else modelDinlemeyiBirak(anahtar, dinle); };
+  uygula(modelIste(anahtar, dinle));
+  return g;
+}
+function sahnede(o: THREE.Object3D): boolean {
+  let p: THREE.Object3D = o;
+  while (p.parent) p = p.parent;
+  return p instanceof THREE.Scene;
+}
+
 /* ---------- ANA FABRİKA ---------- */
 type Kurucu = (t: Kalem) => THREE.Group;
 const TOOL: Record<string, Kurucu> = {
@@ -1024,6 +1059,11 @@ const LATHE: Record<string, Kurucu> = {
 };
 
 export function build(it: Kalem): THREE.Object3D {
+  const anahtar = modelAnahtari(it);
+  return anahtar === null ? cizilen(it) : modelliGovde(anahtar, () => cizilen(it));
+}
+
+function cizilen(it: Kalem): THREE.Object3D {
   const k = it.kind;
   if (k === 'empty') return emptyPocket();
   const takim = TOOL[k] ?? LATHE[k];
