@@ -1,0 +1,59 @@
+/* Değişiklik yönetimi: Görevlerim, Değişiklikler ve talep detayı. Ortak parçaların (aşama şeridi, künye, imza) stili ortak/ortak.css'tedir. */
+.tc-dy { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-dy-soluk { color: var(--muted); }
+.tc-dy-kucuk { font-size: var(--yazi-s); }
+.tc-dy-mono { font-family: var(--font-mono); }
+.tc-dy-hata { margin: 0; color: var(--stop); font-weight: 700; }
+.tc-dy-metin { margin: 0; max-width: 78ch; overflow-wrap: anywhere; white-space: pre-line; }
+.tc-dy-iz a { color: inherit; }
+
+.tc-dy-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--b-3); }
+
+/* Prototipteki iki-bir sütun; dar ekranda alt alta. */
+.tc-dy-iki-bir { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--b-4); align-items: start; }
+.tc-dy-yan { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+@media (max-width: 1023px) { .tc-dy-iki-bir { grid-template-columns: minmax(0, 1fr); } }
+
+.tc-dy-hat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: var(--b-2); }
+.tc-dy-hat li {
+  display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1);
+}
+.tc-dy-hat-dolu { border-color: var(--sig); }
+.tc-dy-hat-sayi { font-size: var(--yazi-xl); font-weight: 700; font-family: var(--font-mono); }
+.tc-dy-hat-ad { font-size: var(--yazi-xs); color: var(--muted); }
+
+.tc-dy-akis { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tc-dy-akis li { border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-dy-akis-bag { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3) 0; color: inherit; text-decoration: none; }
+.tc-dy-akis-bag:hover, .tc-dy-akis-bag:focus-visible { background: var(--panel2); }
+
+.tc-dy-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-dy-satir { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: flex-end; }
+.tc-dy-satir > * { flex: 1 1 12rem; min-width: 0; }
+.tc-dy-satir > button { flex: 0 0 auto; }
+.tc-dy-satir-ic { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+.tc-dy-parcalar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); min-width: 0; }
+.tc-dy-parcalar legend { padding: 0 var(--b-1); font-weight: 700; }
+.tc-dy-secim-listesi { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow-y: auto; display: flex; flex-direction: column; gap: var(--b-1); }
+
+.tc-dy-sorular { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tc-dy-sorular li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2) var(--b-4);
+  padding: var(--b-3) 0; border-bottom: var(--cizgi-ince) solid var(--edge);
+}
+.tc-dy-evet-hayir { display: inline-flex; gap: var(--b-4); }
+.tc-dy-evet-hayir label { display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma-ana); }
+
+.tc-dy-not { margin: 0; padding: var(--b-3); border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge); }
+.tc-dy-not-tamam { border-color: var(--done); }
+.tc-dy-not-uyari { border-color: var(--hazard); }
+
+.tc-dy-dl { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: var(--b-2) var(--b-5); margin: 0; }
+.tc-dy-dl dt { color: var(--muted); }
+.tc-dy-dl dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .tc-dy-dl { grid-template-columns: minmax(0, 1fr); } .tc-dy-dl dd { margin-bottom: var(--b-2); } }
+.tc-dy-cipler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-dy-cip { padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-dy-bag-dugme { font-weight: 700; }

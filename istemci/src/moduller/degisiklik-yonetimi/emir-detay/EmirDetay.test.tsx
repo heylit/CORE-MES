@@ -101,7 +101,7 @@ describe('ECO detay', () => {
       govde: { gecerlilik: { tur: 'seri', sonUrunMalzemeId: 41, ilkSeri: 34 }, aciklama: '', surum: 4 },
     });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.getByRole('tab', { name: /Etki ve kararlar/ }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Etki ve kararlar/ }).getAttribute('aria-selected')).toBe('true'));
   });
 
   it('proses sınıfında seri geçerliliği sunulmaz', async () => {
