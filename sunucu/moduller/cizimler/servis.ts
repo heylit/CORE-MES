@@ -6,6 +6,8 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import type { KayitAramaIstegi } from '#paylasilan/kayit-aramasi.ts';
+import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import type {
   BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, MalzemeBelgeEkleGovdesi,
   MalzemeBelgeleriCevabi, MalzemeRevizyonEkleGovdesi, MalzemeSecimiCevabi, OnizlemeGovdesi, RevizyonEkleGovdesi,
@@ -556,4 +558,21 @@ export async function yayindakiOnizlemeKaresi(
   const k = await sorgular.yayindakiOnizlemeKaresi(db, hedef.hedefModul, hedef.hedefId, revizyonId, kare);
   if (k === null) return null;
   return dosyaTutamak.dosyaAkisi(db, onizlemeKaydi(k.belgeId, revizyonId), k.ozet);
+}
+
+// Arama satırının ikinci satırı; ekrandaki tür adlarıyla aynı (istemci/src/moduller/cizimler/gosterim.ts).
+const ARAMA_TUR_ADI: Record<BelgeTuru, string> = {
+  'teknik-resim': 'Teknik resim', '3b-model': '3B model', fotograf: 'Fotoğraf', makine: 'Makine dokümanı',
+  sertifika: 'Sertifika', rapor: 'Rapor', kroki: 'Kroki', diger: 'Diğer',
+};
+
+// Üst çubuktaki genel aramanın çizim kaynağı (kart 1240): yalnız yayında revizyonu olan etkin belge; arşiv ve yalnız taslak
+// bulunmaz (seçicinin kuralı). Okuma yetkisini çekirdek arama ucu kaynağın `yetki` listesiyle denetler (disari.ts).
+export async function cizimAra(db: Db, istek: KayitAramaIstegi): Promise<KayitAramaSonucu[]> {
+  return (await sorgular.aramaSatirlari(db, { sade: istek.sade, icinde: istek.icindeDeseni, bas: istek.basDeseni, sinir: istek.sinir })).map((b) => ({
+    anahtar: String(b.id),
+    baslik: b.resimNo === null ? b.ad : `${b.resimNo} ${b.ad}`,
+    aciklama: `${ARAMA_TUR_ADI[b.tur]} · Rev ${revizyonHarfi(b.yayindakiSira)}`,
+    yol: `/cizimler/belge/${b.id}` as const,
+  }));
 }

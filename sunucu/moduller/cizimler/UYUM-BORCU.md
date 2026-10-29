@@ -26,3 +26,5 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 10. KAPANDI (kart #688). Üretim emirleri liste ve ayrıntısı küçük resmi `useKucukResimler('malzemeler', malzemeNo)` ve `KucukResimKutusu` ile gösterir (dal 688-uretim-emirleri-resim).
 11. KAPANDI (kart #688). Kart resim no ve revizyonu malzemeler `disari.malzemeResimAnahtarlari` ile okunur; fonksiyon main'de.
 12. SONRA (kart #688). PDF ve foto karesi tarayıcıda üretilir; sunucu içeriğin belgeye benzediğini denetleyemez (CZ-15 ile aynı). Kare üretmeyen eski tarayıcıda belge resimsiz kalır, "Resim üret" ile yeniden denenir.
+13. KAPANDI (kart 1240). Genel arama Türkçe harfi dil ayarına bırakmaz: sütun ve sorgu `public.arama_sade` ile sadeleşir (1233 sözleşmesi);
+    İ/I, ı/i ve Ş/ş eşlemesi `arama.test.ts`'te sınanır.
