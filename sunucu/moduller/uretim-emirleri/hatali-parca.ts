@@ -97,13 +97,13 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
     const oplar = araOpNolari(onceki?.opNo ?? 0, adim.opNo, 2);
     if (oplar === null) throw cakisma(HATALI_OP_YERI);
     hedefEmirId = await kilitliEmriBol(db, kisiId, e, { adimSira: adim.sira, adet: g.adet, birlesmeOpNo: sonraki?.opNo ?? null });
-    idler = await adimlariKoy(db, hedefEmirId, null, [{ ...kalite, opNo: oplar[0]! }, { ...rework, opNo: oplar[1]! }]);
+    idler = await adimlariKoy(db, kisiId, hedefEmirId, null, [{ ...kalite, opNo: oplar[0]! }, { ...rework, opNo: oplar[1]! }]);
     await siradakiIstasyonuYaz(db, hedefEmirId);
   } else {
     const oplar = araOpNolari(adim.opNo, sonraki?.opNo ?? null, 3);
     if (oplar === null) throw cakisma(HATALI_OP_YERI);
     // Kalite adımı bağımsızdır: hatalı adım sağlamsız biter, kalite kararı ona giren adede bağlı değildir.
-    idler = await adimlariKoy(db, emirId, adim.opNo, [
+    idler = await adimlariKoy(db, kisiId, emirId, adim.opNo, [
       { ...kalite, opNo: oplar[0]!, bagimlilik: 'bagimsiz' }, { ...rework, opNo: oplar[1]! },
       { ...rework, opNo: oplar[2]!, ad: adim.ad, ekAciklama: `OP ${adim.opNo} tekrarı`, kopya: adim },
     ]);
