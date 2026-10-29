@@ -9,6 +9,8 @@ export { durumDegistir, siparisAyrintisi, siparisEkle, siparisGuncelle, siparisL
 export { siparisKilitliAyrinti } from './servis.ts';
 // Takvim (891): termini aralıktaki siparişler; yetki denetlemez, çağıran siparisler.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
+// Genel arama kaynağı (1242): çekirdek ad kuralıyla bulur, siparisler.oku olana çağırır.
+export { kayitAramaKaynaklari } from './arama.ts';
 // Plan stüdyosundan acil sipariş (287 b): yalnız müşteri, termin ve kalemle fiyatsız taslak; yetki çağıranın ucunda.
 export { taslakSiparisAc } from './servis.ts';
 export type { TaslakSiparisVerisi } from './servis.ts';

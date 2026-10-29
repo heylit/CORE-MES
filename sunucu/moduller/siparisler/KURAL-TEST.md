@@ -39,4 +39,5 @@
 | TKL-21 atölyedeki satış taslakları: yer tutan, onay bekleyen, son 30 günde süresi dolan; kalkan yok; kâr ve tutar yalnız `siparisler.fiyat-oku`; `siparisler.oku` | `teklif-deneme.test.ts` `TKL-21 ...` |
 | TKL-22 (273) `siparisler.termin-dort-goz` açıkken sürümü veren kendi terminini onaylayamaz (422), başka yetkili onaylar; kapalıyken (varsayılan) veren de onaylar | `TKL-12 ...` (kurallar.test.ts), `TKL-22 ...` (teklif-deneme.test.ts) |
 | Yetki: okuma `siparisler.oku`, taslak `siparisler.yaz`, onay/kapat/iptal `siparisler.onayla`; teklif okuma `oku`, bütün teklif yazmaları `yaz` | `siparisler.test.ts` ve `teklif.test.ts` `yetki: ...` |
+| ARA-01 (1242) genel arama kaynağı (`siparis` türü): sipariş no ya da müşteri sipariş no'sunda geçen kayıt; tam tutan, baştan eşleşen, yeniden eskiye; `%` ve `_` düz metin; fiyat dönmez; yetki liste ucuyla aynı (`siparisler.oku`, kapıyı çekirdek tutar) | `arama.test.ts` |
 | disari.ts sözleşmesi | `disari: ...` |

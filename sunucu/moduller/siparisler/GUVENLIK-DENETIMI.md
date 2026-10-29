@@ -18,5 +18,7 @@
 | `POST .../:id/satirlar/:satirId/kart-bagla` | `siparisler.yaz` | TKL-06, SIP-02, sürüm | `TKL-05 ve TKL-06` | `TKL-05 ve TKL-06` (400, 422) |
 | `POST .../:id/siparise-donustur` | `siparisler.yaz` | tekrar korumalı; TKL-05, TKL-06, TKL-07 ve sipariş kuralları; sipariş taslak açılır | `TKL-05 ve TKL-06` | `TKL-05 ve TKL-06` (422) |
 
+| Genel arama kaynağı (`disari.ts` `kayitAramaKaynaklari`, çekirdek `GET /arama`) | `siparisler.oku` (çekirdek denetler) | yalnız okuma; desen kaçırılmış, parametreli SQL; fiyat alanı yok | `arama.test.ts` `sipariş no ...` | `arama.test.ts` `tek kaynak: ...` (yetki listeyle aynı), `% ve _ ...` |
+
 Kullanıcı metni (açıklama, ödeme koşulu, iptal nedeni) ekranda React ile kaçırılarak basılacak (ekran sonraki parça). Yalnız ekranda kalan kural: yok.
 Denetim kaydı: bütün yazmalar `uc()` üzerinden, tam gövdeyle. Veri kapsamı: sipariş iş merkezine bağlı değil.
