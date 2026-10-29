@@ -98,6 +98,8 @@ describe('İş kutusu', () => {
     expect(screen.getByText(/Logo irsaliyesiyle fark var/)).toBeTruthy();
     expect(screen.getByText(/Sizi bekleyen 2 iş var/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mal kabul' })).toBeTruthy();
+    // Okutma alt şeritte ve üst çubukta var; başlıkta bir kez daha yer almaz.
+    expect(screen.getAllByRole('button', { name: 'Okut' })).toHaveLength(1);
   });
   it('Akış A provası D1: teslim bekleyen malzeme isteği iş satırıdır ve Hazırlık\'a götürür', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...BOS_KUTU, teslimBekleyenIstek: 2 } satisfies IsKutusuCevabi) });
@@ -1185,6 +1187,33 @@ describe('Zemin ızgarası (#1304)', () => {
     expect(await screen.findByText('Hurda kasası')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'ALAN-9' }).getAttribute('href')).toBe('/stok/konumlar/41');
     expect(screen.queryByLabelText('Kareye ata')).toBeNull();
+  });
+
+  it('karedeki konumun stoğu panelde listelenir; Etiket konum etiketini açar', async () => {
+    const konum = { id: 41, kod: 'ALAN-9', tur: 'hurda', ad: null, depoId: 1, depoKod: 'ANA', rafId: null, bolmeNo: null, katNo: null, sonSayim: null, aktif: true, satirSayisi: 2, haritaGozId: null, haritaAlanId: 9, surum: 1 } as const;
+    sunucuKur(OKUYUCU, {
+      ...yollar,
+      'GET /stok/konumlar/41': () => json(200, { konum, raf: null, bakiyeler: [{ ...BAKIYE, id: 1, konumId: 41, konumKod: 'ALAN-9', miktar: '4.000' }, { ...BAKIYE, id: 2, malzemeAd: 'Deneme mil', konumId: 41, konumKod: 'ALAN-9', miktar: '1.500' }], haritaYeri: 'Hurda kasası', zemin: null } satisfies KonumAyrintiCevabi),
+    });
+    ac('/stok/konumlar');
+    fireEvent.click(await screen.findByRole('button', { name: /Kare B2/ }));
+    const stok = await screen.findByRole('list', { name: 'ALAN-9 stoğu' });
+    expect(within(stok).getAllByRole('listitem').map((li) => li.textContent)).toEqual([expect.stringContaining('Deneme sac'), expect.stringContaining('Deneme mil')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Etiket' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Konum etiketi' });
+    expect(within(pencere).getByText(/1 etiket/)).toBeTruthy();
+  });
+
+  it('Bütün konumlar listesinde her satırın etiketi ve sayfanın etiketleri basılır', async () => {
+    const satir = (id: number, kod: string) => ({ id, kod, tur: 'raf_gozu', ad: null, depoId: 1, depoKod: 'ANA', rafId: 1, bolmeNo: 1, katNo: 1, sonSayim: null, aktif: true, satirSayisi: 0, haritaGozId: null, haritaAlanId: null, surum: 1 }) as const;
+    sunucuKur(OKUYUCU, { ...yollar, 'GET /stok/konumlar': () => json(200, { satirlar: [satir(1, 'A-01-01'), satir(2, 'A-01-02')], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies KonumlarCevabi) });
+    ac('/stok/konumlar');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Bütün konumlar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'A-01-02 etiketi' }));
+    expect(within(await screen.findByRole('dialog', { name: 'Konum etiketi' })).getByText(/1 etiket/)).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: /Kapat/ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Sayfanın etiketleri' }));
+    expect(within(await screen.findByRole('dialog', { name: 'Konum etiketleri' })).getByText(/2 etiket/)).toBeTruthy();
   });
 
   it('haritayı düzenleyen kareye istasyon atar; atama haritaya yazılır, stok tanımı olan kişide ardından eşleme koşar', async () => {

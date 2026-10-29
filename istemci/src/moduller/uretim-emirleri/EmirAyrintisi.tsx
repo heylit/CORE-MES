@@ -76,6 +76,9 @@ export function EmirAyrintisi() {
           {receteRotaGorur && (
             <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da aç</Dugme>
           )}
+          {emir && akisGorur && (
+            <Dugme simge="gantt" onClick={() => { void yonlendir(`/akis/${String(emirId)}`); }}>Akış Süresi'nde aç</Dugme>
+          )}
         </div>
       )}
     >

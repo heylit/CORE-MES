@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { AlanTuru, HucreAtaGovdesi } from '#paylasilan/sozlesme/atolye.ts';
-import type { ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { KonumAyrintiCevabi, ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { ALAN_TURU_ADI, ZeminSimgesi } from '../atolye/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KONUM_ETIKETI } from './gorunum.ts';
+import { EtiketPenceresi } from './Etiketler.tsx';
+import { KONUM_ETIKETI, miktarMetni } from './gorunum.ts';
 import { hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
 
@@ -110,7 +111,7 @@ function KarePaneli({ bolum, hucre, istasyonlar, atayabilir, eslesin }: {
       {konumlar.length === 0 ? <p className="tc-stok-not">Bu karede stok konumu yok.</p> : (
         <ul className="tc-stok-zemin-liste" aria-label="Karedeki stok konumları">
           {konumlar.map((k) => (
-            <li key={k.id}><Link to={`/stok/konumlar/${k.id}`} className="tc-stok-mono">{k.kod}</Link><small>{KONUM_ETIKETI[k.tur]} · {k.satirSayisi} stok satırı</small></li>
+            <KareKonumu key={k.id} konum={k} />
           ))}
         </ul>
       )}
@@ -127,5 +128,32 @@ function KarePaneli({ bolum, hucre, istasyonlar, atayabilir, eslesin }: {
         </form>
       )}
     </div>
+  );
+}
+
+// Karedeki konumun stoğu ve etiketi panelde görünür: depocu ayrıntıya gitmeden gözde ne olduğunu görür, etiketi buradan basar.
+const KAREDE_EN_COK = 5;
+function KareKonumu({ konum }: { konum: Bolum['konumlar'][number] }) {
+  const [etiket, setEtiket] = useState(false);
+  const a = useQuery({
+    queryKey: anahtarlar.ayrinti('konum', konum.id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${konum.id}`), enabled: konum.satirSayisi > 0 || etiket,
+  });
+  const bakiyeler = a.data?.bakiyeler ?? [];
+  return (
+    <li>
+      <Link to={`/stok/konumlar/${konum.id}`} className="tc-stok-mono">{konum.kod}</Link>
+      <small>{KONUM_ETIKETI[konum.tur]} · {konum.satirSayisi ? `${konum.satirSayisi} stok satırı` : 'boş'}</small>
+      <Dugme simge="scan" onClick={() => setEtiket(true)}>Etiket</Dugme>
+      {konum.satirSayisi > 0 && (a.isError ? <small>{hataMetni(a.error)}</small> : a.isPending ? <small>Stok okunuyor</small> : (
+        <ul className="tc-stok-zemin-stok" aria-label={`${konum.kod} stoğu`}>
+          {bakiyeler.slice(0, KAREDE_EN_COK).map((b) => <li key={b.id}><span>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</span><strong>{miktarMetni(b.miktar)}</strong></li>)}
+          {bakiyeler.length > KAREDE_EN_COK && <li><Link to={`/stok/konumlar/${konum.id}`}>+{bakiyeler.length - KAREDE_EN_COK} satır daha</Link></li>}
+        </ul>
+      ))}
+      {etiket && a.data && (
+        <EtiketPenceresi baslik="Konum etiketi" kapat={() => setEtiket(false)}
+          ogeler={[{ tur: 'konum', kod: a.data.konum.kod, katNo: a.data.konum.katNo, alt: a.data.konum.ad ?? KONUM_ETIKETI[a.data.konum.tur] }]} />
+      )}
+    </li>
   );
 }

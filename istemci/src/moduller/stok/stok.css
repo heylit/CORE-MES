@@ -192,7 +192,11 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-kare-simgeler { display: flex; gap: 2px; align-items: center; color: var(--muted); }
 .tc-stok-zemin-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-stok-zemin-liste li { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--b-2); align-items: center; }
+.tc-stok-zemin-liste > li { grid-template-columns: auto 1fr auto; }
 .tc-stok-zemin-liste small { grid-column: 2; color: var(--muted); }
+.tc-stok-zemin-liste > li > .tc-dugme { grid-column: 3; grid-row: 1 / span 2; }
+.tc-stok-zemin-stok { grid-column: 1 / -1; display: grid; gap: 2px; margin: 0; padding: var(--b-1) 0 0 var(--b-3); list-style: none; font-size: var(--yazi-s); }
+.tc-stok-zemin-stok li { display: flex; justify-content: space-between; gap: var(--b-2); }
 @media (max-width: 1023px) { .tc-stok-dama-duzen { grid-template-columns: 1fr; } }
 
 /* Etiketler (önizlemedeki plabel) */
