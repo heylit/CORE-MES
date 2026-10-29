@@ -220,11 +220,12 @@ export async function planlananlariEsitle(db: Db, plan?: { id: number; tarih: st
 }
 // Onayla plandaki işler yola çıkar; onay kalkınca yeniden planlanmış olur.
 // Durumu değişen işler döner.
-export async function plandakiIslerinDurumu(db: Db, planId: number, durum: 'yolda' | 'planlandi'): Promise<number[]> {
+// Onayda işe onaylayan yazılır, onay kalkınca silinir (931 b).
+export async function plandakiIslerinDurumu(db: Db, planId: number, durum: 'yolda' | 'planlandi', onaylayanKisiId: number | null): Promise<number[]> {
   const satirlar = await db.sorgu<{ id: number }>(
-    `UPDATE sevkiyat_isi SET durum = $2, durum_zamani = now(), surum = surum + 1
+    `UPDATE sevkiyat_isi SET durum = $2, durum_zamani = now(), surum = surum + 1, onaylayan_kisi_id = $3
       WHERE id IN (SELECT is_id FROM sevkiyat_plan_duragi WHERE plan_id = $1 AND is_id IS NOT NULL) RETURNING id`,
-    [planId, durum],
+    [planId, durum, durum === 'yolda' ? onaylayanKisiId : null],
   );
   return satirlar.map((s) => s.id);
 }
@@ -252,10 +253,13 @@ export async function durakSonucunuYaz(db: Db, planId: number, isId: number, son
   );
 }
 // tarih verilirse iş o güne taşınır (elle kapatılan iş kapatıldığı günün listesinde görünür).
-export function isDurumunuYaz(db: Db, id: number, durum: string, tarih: string | null): Promise<IsSatiri | null> {
+// sonucKisiId: sonucu yazan (tamamlandı ya da yapılamadı); yeniden açma ve geri almada boş. Havuza dönen iş artık onaylı planda değildir (931 b).
+export function isDurumunuYaz(db: Db, id: number, durum: string, tarih: string | null, sonucKisiId: number | null): Promise<IsSatiri | null> {
   return db.tek<IsSatiri>(
-    `UPDATE sevkiyat_isi SET durum = $2, durum_zamani = now(), tarih = COALESCE($3::date, tarih), surum = surum + 1 WHERE id = $1 AND iptal_edildi IS NULL RETURNING ${IS_ALANLARI}`,
-    [id, durum, tarih],
+    `UPDATE sevkiyat_isi SET durum = $2, durum_zamani = now(), tarih = COALESCE($3::date, tarih), surum = surum + 1, sonuc_kisi_id = $4,
+       onaylayan_kisi_id = CASE WHEN $2 = 'havuzda' THEN NULL ELSE onaylayan_kisi_id END
+      WHERE id = $1 AND iptal_edildi IS NULL RETURNING ${IS_ALANLARI}`,
+    [id, durum, tarih, sonucKisiId],
   );
 }
 export interface DurakSonucuSatiri { isId: number; sonuc: 'tamamlandi' | 'yapilamadi'; not: string | null }

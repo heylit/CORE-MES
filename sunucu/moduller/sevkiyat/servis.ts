@@ -330,7 +330,8 @@ export async function isDurumuDegistir(db: Db, id: number, govde: IsDurumuGovdes
   if ((govde.durum === 'havuzda' || govde.durum === 'yolda') && durak?.sonuc) await sorgu.durakSonucunuYaz(db, durak.planId, id, null, null);
   // Elle kapatılan iş kapatıldığı günün listesine taşınır; geri alınan iş durağın gününe döner.
   const tarih = govde.durum === 'tamamlandi' && !yoldan ? govde.tarih : govde.durum === 'yolda' ? durak!.tarih : null;
-  const yeni = (await sorgu.isDurumunuYaz(db, id, yeniIsDurumu(govde.durum), tarih))!;
+  const sonucu = govde.durum === 'tamamlandi' || govde.durum === 'yapilamadi' ? kisiId : null;
+  const yeni = (await sorgu.isDurumunuYaz(db, id, yeniIsDurumu(govde.durum), tarih, sonucu))!;
   // Fasona giden işin teslimi stoğa yansır (kart #1310); tamamlanan iş yeniden açılırsa yansıma geri alınır.
   const teslimDegisti = (yeni.durum === 'tamamlandi') !== (onceki.durum === 'tamamlandi');
   if (teslimDegisti) await fasonSevkiBildir(db, { fasonHareketIdleri: await sorgu.isinFasonHareketleri(db, id), teslim: yeni.durum === 'tamamlandi', kisiId });
@@ -703,7 +704,7 @@ export async function onayla(db: Db, tarih: string, surum: number, kaynak: Harit
   await sorgu.planRotalariniYaz(db, plan.id, tarih, v.rotalar);
   await sorgu.tahminiSaatleriYaz(db, plan.id, saatler);
   await sorgu.onayYaz(db, plan.id);
-  const yola = await sorgu.plandakiIslerinDurumu(db, plan.id, 'yolda');
+  const yola = await sorgu.plandakiIslerinDurumu(db, plan.id, 'yolda', kisiId);
   await sorgu.urunFirmalariniYaz(db, yola);
   const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, yola), onceki: 'planlandi', yeni: 'yolda', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
@@ -717,7 +718,7 @@ export async function onayiKaldir(db: Db, tarih: string, surum: number, kaynak: 
   if (await sorgu.plandaSonucVarMi(db, plan.id)) throw gecersiz('Teslim sonucu girilmiş plan onaydan çıkarılamaz; önce sonuçları geri alın.');
   await sorgu.onayKaldir(db, plan.id);
   // Sonuçlu plan onaydan çıkamadığı için bu işlerin hepsi yoldaydı.
-  const donen = await sorgu.plandakiIslerinDurumu(db, plan.id, 'planlandi');
+  const donen = await sorgu.plandakiIslerinDurumu(db, plan.id, 'planlandi', null);
   const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, donen), onceki: 'yolda', yeni: 'planlandi', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
