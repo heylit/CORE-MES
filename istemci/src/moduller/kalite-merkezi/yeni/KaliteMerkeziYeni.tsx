@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { DurumKutusu } from '../../../ortak/arayuz/DurumKutusu.tsx';
 import { Menu, type MenuOgesi } from '../../../ortak/arayuz/Menu.tsx';
@@ -6,6 +6,7 @@ import { Dugme } from '../../../ortak/arayuz/Dugme.tsx';
 import { useBildirim } from '../../../ortak/arayuz/Bildirim.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { gorunumTanimi, gorunumYolu, STUDYO_YOLU, type KmGecis, type KmGorunum } from './sekmeler.ts';
+import { YENI_KAYIT } from './tipler.ts';
 import { ArsivGorunumuSaglayici } from './ArsivGorunumu.tsx';
 import { TerimIsaretleri } from './TerimIsaretleri.tsx';
 import { OnizlemeSaglayici } from './Onizleme.tsx';
@@ -31,6 +32,18 @@ const YENI_ISLER: readonly { anahtar: string; baslik: string; gorunum: KmGorunum
   { anahtar: 'formlar', baslik: 'Diğer formlar', gorunum: 'formlar' },
 ];
 
+// Ctrl K komutu ve kayıt araması (1238, 1230 a) adresle gelir: `?ac=<kimlik>` kaydı açar, `?yeni=1` yeni kaydı açar. Ön değer yalnız
+// "Yeni" listesinin verdiği alanlardır (tur, kod); kayıt ekranda onaylanır. Görünüm geçişi işleyince adres sorgusuz kalır.
+const ADRES_ON_ALANLARI = ['tur', 'kod'] as const;
+export function adrestenGecis(sorgu: string): KmGecis | null {
+  const a = new URLSearchParams(sorgu);
+  const ac = a.get('ac');
+  if (ac) return { ac };
+  if (a.get('yeni') !== '1') return null;
+  const on = Object.fromEntries(ADRES_ON_ALANLARI.flatMap((k) => { const d = a.get(k); return d ? [[k, d]] : []; }));
+  return Object.keys(on).length > 0 ? { ac: YENI_KAYIT, on } : { ac: YENI_KAYIT };
+}
+
 function Icerik() {
   const { gorunum } = useParams<{ gorunum?: string }>();
   const konum = useLocation();
@@ -41,7 +54,7 @@ function Icerik() {
   const tanim = gorunumTanimi(gorunum);
 
   const git = (g: KmGorunum, gecis?: KmGecis) => { void gitAdres(gorunumYolu(g), { state: gecis ?? null }); };
-  const gecis = (konum.state as KmGecis | null) ?? null;
+  const gecis = useMemo(() => (konum.state as KmGecis | null) ?? adrestenGecis(konum.search), [konum.state, konum.search]);
   const gecisTamam = () => { void gitAdres(konum.pathname, { replace: true, state: null }); };
 
   // Eski sayfadaki gibi (openSettings: need('ayar')): ayar yetkisi olmayana Ayarlar açılmaz, uyarı çıkar, kişi Bugün'de kalır.

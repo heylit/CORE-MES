@@ -53,4 +53,19 @@ describe('Kalite Merkezi yeni ekran kabuğu', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Uygunsuzluk (NCR)' }));
     await vi.waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/uygunsuzluklar'); });
   });
+
+  it('Ctrl K kaydı adresle açar (1238): ?ac= NCR düzenleme penceresini açar, adres sorgusuz kalır', async () => {
+    kmAc('uygunsuzluklar?ac=n1', YONETICI, { ncr: [{ _id: 'n1', no: 'NCR-2026-0001', tarih: '2026-10-01', durum: 'Açık', parcaNo: 'P-1', mrb: 'Karar bekliyor' }] });
+    expect(await screen.findByText('NCR-2026-0001 düzenle')).toBeTruthy();
+    expect(kmAdresi()).toBe('/kalite-merkezi/uygunsuzluklar');
+  });
+
+  it('Ctrl K komutu yeni kaydı adresle açar (1230 a); yalnız okuyana pencere açılmaz', async () => {
+    kmAc('uygunsuzluklar?yeni=1', YONETICI);
+    expect(await screen.findByText('Uygunsuzluk kaydet')).toBeTruthy();
+    cleanup();
+    kmAc('uygunsuzluklar?yeni=1', OKUYAN);
+    expect(await screen.findByRole('button', { name: 'Atölye modu' })).toBeTruthy();
+    expect(screen.queryByText('Uygunsuzluk kaydet')).toBeNull();
+  });
 });

@@ -5,6 +5,8 @@ import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAl
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { HataliKarari, HataliKaydiOzeti, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
+import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
 export const KM_MODULU = 'kalite-merkezi';
@@ -1058,4 +1060,56 @@ export function olcumKapanisMaddesi(s: EmrinOlcumSayaci, numunePlaniVar: boolean
     s.uygunsuzOlcum > 0 ? `${s.uygunsuzOlcum} uygunsuz ölçüm` : null,
   ].filter((p) => p !== null);
   return { durum: 'tamam', ayrinti: parcalar.join(', ') };
+}
+
+// Ctrl K kayıt araması (1238; 1230 a, 1232 b; sözleşme paylasilan/kayit-aramasi.ts). NCR satırı sorgudan gelir; hatalı parça bekleyen
+// listeden (sahibi Üretim Emirleri) burada süzülür. Başlık kayıt kodudur (çekirdek eşleşmeyi onunla puanlar). Sonuç yalnız kaydı açar,
+// yazma ekrandadır (1230 a).
+export interface NcrAramaSatiri {
+  kimlik: string;
+  no: string | null;
+  parcaNo: string | null;
+  parcaAdi: string | null;
+  durum: string | null;
+  arsiv: boolean;
+}
+
+// KM-A1: kayıt yolu kabuğun adres denetiminden (sayfa-tanimi.ts kayitYoluMu) geçmeli; kimlikte izinli `: @ + |` kodlanır.
+export const kayitYoluParcasi = (metin: string): string =>
+  Array.from(new TextEncoder().encode(metin), (b) => {
+    const c = String.fromCharCode(b);
+    return /[A-Za-z0-9._~-]/.test(c) ? c : `%${b.toString(16).toUpperCase().padStart(2, '0')}`;
+  }).join('');
+
+const dolu = (p: string | null | undefined): p is string => typeof p === 'string' && p.trim() !== '';
+
+// KM-A2: NCR sonucu NCR'yi Uygunsuzluklar görünümünde açar; numarası yoksa kimliği başlık olur. Arşivdeki kayıt da bulunur, açıklamada belli.
+export function ncrAramaSonucu(n: NcrAramaSatiri): KayitAramaSonucu {
+  return {
+    anahtar: n.kimlik,
+    baslik: dolu(n.no) ? n.no.trim() : n.kimlik,
+    aciklama: [[n.parcaNo, n.parcaAdi].filter(dolu).join(' '), n.durum ?? '', n.arsiv ? 'Arşivde' : ''].filter(dolu).join(' · ') || null,
+    yol: `/kalite-merkezi/uygunsuzluklar?ac=${kayitYoluParcasi(n.kimlik)}`,
+  };
+}
+
+// KM-A3: karar bekleyen hatalı parça emir no'su, hedef emir no'su, parça no'su ya da parça adında geçen metinle bulunur (Türkçe harf ve
+// büyük-küçük duyarsız, SQL'deki arama_sade ile aynı eşleme); emir no'su tam tutan, sonra emir no'su metinle başlayan önce. Sonuç kararın verildiği Bugün görünümünü açar.
+export function hataliAramaSonuclari(kayitlar: readonly HataliKaydiOzeti[], metin: string, sinir: number): KayitAramaSonucu[] {
+  const aranan = aramaSade(metin.trim());
+  const puan = (k: HataliKaydiOzeti): number => {
+    const no = aramaSade(k.uretimEmri.emirNo);
+    return no === aranan ? 2 : no.startsWith(aranan) ? 1 : 0;
+  };
+  return kayitlar
+    .filter((k) => [k.uretimEmri.emirNo, k.hedefEmir.emirNo, k.uretimEmri.parcaNo, k.uretimEmri.parcaAd].some((a) => aramaSade(a).includes(aranan)))
+    .sort((a, b) => puan(b) - puan(a))
+    .slice(0, sinir)
+    .map((k) => ({
+      anahtar: String(k.id),
+      baslik: k.uretimEmri.emirNo,
+      aciklama: [`OP${k.isEmri.opNo}`, [k.uretimEmri.parcaNo, k.uretimEmri.parcaAd].filter(dolu).join(' '), `${k.adet} adet`, k.hurdaNedeni.ad, 'Karar bekliyor']
+        .filter(dolu).join(' · '),
+      yol: '/kalite-merkezi',
+    }));
 }

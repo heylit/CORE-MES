@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import type { NcrAramaSatiri } from './kurallar.ts';
 
 export interface DegisiklikSatiri {
   koleksiyon: string;
@@ -589,5 +590,25 @@ export function emreBagliNcrler(
             nullif(btrim(govde->>'emir'), '') AS "emirNo", CASE WHEN eski = ANY($2::text[]) THEN eski END AS "eskiEmirNo"
        FROM b WHERE bagli OR btrim(govde->>'emir') = ANY($2::text[]) OR eski = ANY($2::text[])`,
     [uretimEmriIdleri, emirNolari, hatali.kaynak, hatali.onek],
+  );
+}
+
+// Ctrl K NCR araması (1238). İfade göçteki kısmi trigram indeksinin ifadesiyle (20261029130000_kalite_merkezi_arama_indeksi.sql) harfi
+// harfine aynıdır; ayrışırsa sorgu indeksi kullanmaz (arama.test.ts EXPLAIN ile denetler). Türkçe harf `public.arama_sade` ile eşlenir
+// (göç 20261029125000); ILIKE ve lower veritabanının dil ayarına bağlıdır.
+export const NCR_ARAMA_METNI =
+  "public.arama_sade(coalesce(govde->>'no', '') || ' ' || coalesce(govde->>'parcaNo', '') || ' ' || coalesce(govde->>'parcaAdi', '') || ' ' || coalesce(govde->>'lot', '') || ' ' || coalesce(govde->>'emir', ''))";
+
+// Metin NCR no'sunda, parça no'sunda, parça adında, lotta ya da emir no'sunda geçer (Türkçe harf ve büyük-küçük duyarsız). No'su tam
+// tutan önce, sonra no'su metinle başlayan, sonra en son değişen. Desenler sadeleşmiş ve kaçırılmış gelir (paylasilan/kayit-aramasi.ts).
+export function ncrAra(db: Db, a: { sade: string; icindeDeseni: string; basDeseni: string; sinir: number }): Promise<NcrAramaSatiri[]> {
+  return db.sorgu<NcrAramaSatiri>(
+    `SELECT kimlik, nullif(btrim(govde->>'no'), '') AS no, nullif(btrim(govde->>'parcaNo'), '') AS "parcaNo",
+            nullif(btrim(govde->>'parcaAdi'), '') AS "parcaAdi", nullif(btrim(govde->>'durum'), '') AS durum, coalesce(govde->>'arsiv', '') = 'true' AS arsiv
+       FROM kalite_merkezi_belge
+      WHERE koleksiyon = 'ncr' AND govde IS NOT NULL AND ${NCR_ARAMA_METNI} LIKE $1
+      ORDER BY (public.arama_sade(btrim(govde->>'no')) = $2) IS TRUE DESC, (public.arama_sade(btrim(govde->>'no')) LIKE $3) IS TRUE DESC, surum DESC
+      LIMIT $4`,
+    [a.icindeDeseni, a.sade, a.basDeseni, a.sinir],
   );
 }
