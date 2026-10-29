@@ -49,7 +49,7 @@ export function gecisSecenegiAl(g: Gorunum): unknown {
 }
 
 // ----- Tanımlar penceresi (prototipin openDefs'i): hangi görünümden olursa olsun kabuk açar -----
-export type TanimSekmesi = 'mach' | 'mat' | 'su';
+export type TanimSekmesi = 'mach' | 'mat' | 'model' | 'su';
 let tanim: { acik: boolean; sekme: TanimSekmesi } = { acik: false, sekme: 'mach' };
 const tanimDinleyicileri = new Set<() => void>();
 const tanimYaz = (t: typeof tanim): void => { tanim = t; for (const d of tanimDinleyicileri) d(); };

@@ -1,3 +1,6 @@
+import { MODEL_DOSYA_TURLERI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { CncModel, ModelBelgesi, ModelHedefi, Tezgah, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+
 // CNC kurulum kayıt deposunun saf kuralları.
 
 // Yazma yalnız kayıt istemcinin bildiği sürümdeyse olur; null "kayıt hiç yok" demektir. Ortak kayıtta başkasının yazdığının
@@ -312,4 +315,57 @@ export function elleUretimKaydiVarMi(onceki: unknown, yeni: unknown): boolean {
   const zaman = (s: unknown): unknown => (nesneMi(s) ? s['ts'] : undefined);
   const eski = new Set(satirlar(onceki).map(zaman));
   return satirlar(yeni).some((s) => !eski.has(zaman(s)));
+}
+
+// ---- Tezgâh ayarı (1091 a, 1139 b). Liste makine kayıtlarıdır: istasyonsuz makine ya da talaşlı istasyondaki makine; pasif makine
+// yalnız ayarı varsa gelir (kurulum kaydı onu gösteriyor olabilir). Ayar satırı olmayan makinenin sürümü 0'dır.
+export interface TezgahMakinesi { id: number; kod: string; ad: string; istasyonId: number | null; aktif: boolean }
+export interface TezgahAyarSatiri extends TezgahAyari { makineId: number; surum: number }
+
+// Talaşlı olmayan istasyondaki makine (kalite, boya, ...) CNC tezgâhı değildir.
+export function tezgahOlabilirMi(m: Pick<TezgahMakinesi, 'istasyonId'>, talasliIstasyonlar: ReadonlySet<number>): boolean {
+  return m.istasyonId === null || talasliIstasyonlar.has(m.istasyonId);
+}
+
+export function tezgahKaydi(m: TezgahMakinesi, s: TezgahAyarSatiri | undefined): Tezgah {
+  const ayar: TezgahAyari | null = s ? {
+    tur: s.tur, kontrol: s.kontrol, konik: s.konik, cepSayisi: s.cepSayisi, devir: s.devir, isMiliDevri: s.isMiliDevri,
+    canliTakim: s.canliTakim, canliDevir: s.canliDevir, elle: s.elle, modelTuru: s.modelTuru,
+  } : null;
+  return { makineId: m.id, kod: m.kod, ad: m.ad, istasyonId: m.istasyonId, aktif: m.aktif, ayar, surum: s?.surum ?? 0 };
+}
+
+export function tezgahListesi(
+  makineler: readonly TezgahMakinesi[], talasliIstasyonlar: ReadonlySet<number>, ayarlar: readonly TezgahAyarSatiri[],
+): Tezgah[] {
+  const harita = new Map(ayarlar.map((a) => [a.makineId, a]));
+  return makineler
+    .filter((m) => harita.has(m.id) || (m.aktif && tezgahOlabilirMi(m, talasliIstasyonlar)))
+    .map((m) => tezgahKaydi(m, harita.get(m.id)));
+}
+
+// ---- 3B model bağı (1212 a).
+export interface ModelHedefSutunu { makineId: number | null; aparatAnahtari: string | null }
+export interface ModelSatiri extends ModelHedefSutunu { id: number; surum: number }
+export const hedefSutunu = (h: ModelHedefi): ModelHedefSutunu =>
+  (h.tur === 'makine' ? { makineId: h.makineId, aparatAnahtari: null } : { makineId: null, aparatAnahtari: h.anahtar });
+
+const MODEL_TURU = new Set<string>(MODEL_DOSYA_TURLERI);
+export const modelDosyasiMi = (t: string | null): t is ModelBelgesi['dosyaTuru'] => t !== null && MODEL_TURU.has(t);
+
+// Hedefe bağlı, yayındaki ve ekranın açabildiği türde 3B model belgesi. Bağ komutu tek model bırakır; başka yoldan birden çok kurulmuşsa
+// en eski belge (atölyenin istasyon modeli seçimiyle aynı). Parça çizimi ve başka belge türü sayılmaz.
+export interface ModelAdayi { id: number; ad: string; tur: string; harf: string | null; ozet: string | null; dosyaTuru: string | null }
+export function modelBelgesiSec(bagli: readonly ModelAdayi[]): ModelBelgesi | null {
+  let secilen: ModelBelgesi | null = null;
+  for (const b of bagli) {
+    if (b.tur !== '3b-model' || b.harf === null || b.ozet === null || !modelDosyasiMi(b.dosyaTuru)) continue;
+    if (secilen === null || b.id < secilen.belgeId) secilen = { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
+  }
+  return secilen;
+}
+
+export function modelKaydi(s: ModelSatiri, belge: ModelBelgesi | null): CncModel {
+  const hedef: ModelHedefi = s.makineId !== null ? { tur: 'makine', makineId: s.makineId } : { tur: 'aparat', anahtar: s.aparatAnahtari ?? '' };
+  return { id: s.id, hedef, belge, surum: s.surum };
 }

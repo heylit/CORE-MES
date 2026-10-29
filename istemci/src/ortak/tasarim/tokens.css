@@ -194,3 +194,48 @@
   --sahne3b-cizgi: #e0b11d; --sahne3b-bolge-kirmizi: #d8352a; --sahne3b-bolge-yesil: #2f9e5f; --sahne3b-bolge-mavi: #2b6a96;
   --sahne3b-tarama: #1d1d1b; --sahne3b-ok: #f4f4ee; --sahne3b-oda-yazi: #283038;
 }
+/* CNC Kurulum 3B sahnesi ve tuval dokulari: prototipin kendi koyu temasi ve fiziksel nesne renkleri, temaya gore degismez.
+   Ad, sahnenin istedigi renk adidir (--cnc3d-<ad>); m- ile baslayanlar takim, tutucu, aparat ve tezgah malzemeleridir. */
+:root {
+  --cnc3d-arka: #0b0f14; --cnc3d-onizleme-arka: #0e141b; --cnc3d-vurgu: #ff8a1f; --cnc3d-ok: #3fae5a; --cnc3d-onay: #3fae5a;
+  --cnc3d-uyari: #e8c33a; --cnc3d-hata: #ff6b6b; --cnc3d-mavi: #3d7be0; --cnc3d-acik-mavi: #38b6ff; --cnc3d-mor: #a78bfa;
+  --cnc3d-sari: #e8c33a; --cnc3d-turuncu: #e38b2c; --cnc3d-beyaz: #ffffff;
+  --cnc3d-yazi: #c9d3de; --cnc3d-yazi-parlak: #ffffff; --cnc3d-yazi-ikincil: #93a1b2; --cnc3d-yazi-soluk: #5a6878; --cnc3d-yazi-koyu: #111111;
+  --cnc3d-kart-ust: #1d2633; --cnc3d-kart-alt: #10161e; --cnc3d-kart-kenar: #2d3b4d; --cnc3d-kart-cukur-ic: #1e2a38; --cnc3d-kart-cukur-dis: #0b1016;
+  --cnc3d-kart-govde: #1b2430; --cnc3d-kart-bos: #4a5a6c; --cnc3d-kart-kod: #a9b8c8; --cnc3d-kart-etiket: #dde5ee; --cnc3d-kart-ad: #f4f7fa;
+  --cnc3d-kart-aciklama: #93a1b2; --cnc3d-numara-zemin: rgba(20,28,38,.9); --cnc3d-numara-yazi: #c9d3de; --cnc3d-numara-secili-yazi: #111111;
+  --cnc3d-etiket-zemin: rgba(12,17,24,.85); --cnc3d-disli: #2c343f;
+  --cnc3d-platform-ic: rgba(56,182,255,.35); --cnc3d-platform-orta: rgba(56,182,255,.08); --cnc3d-platform-dis: rgba(56,182,255,0);
+  --cnc3d-platform-halka: rgba(120,180,230,.35);
+  --cnc3d-grafik-baslik: #c9d3de; --cnc3d-grafik-izgara: #223041; --cnc3d-grafik-yazi: #7f8c9b;
+  --cnc3d-zemin: #10161d; --cnc3d-izgara-1: #1f2a36; --cnc3d-izgara-2: #16202a; --cnc3d-govde: #3a434e; --cnc3d-govde-acik: #dfe4e9;
+  --cnc3d-tabla: #8f989f; --cnc3d-kanal: #22282f; --cnc3d-ekran-govde: #15191e; --cnc3d-ekran-arka: #071019; --cnc3d-ekran-heid: #0b2a45;
+  --cnc3d-ekran-iso: #2a2f36; --cnc3d-ekran-yorum: #5f7d95; --cnc3d-ekran-kutu: #0f1c28;
+  --cnc3d-talas: #c9a26a; --cnc3d-kesik-ust: #e9eef3; --cnc3d-kesik-alt: #7fb2e6; --cnc3d-ham-alt: #4d5763; --cnc3d-ham: #9aa3ab;
+  --cnc3d-ham-P: #8e979f; --cnc3d-ham-M: #b9c0c6; --cnc3d-ham-K: #6f767c; --cnc3d-ham-N: #d4dae0; --cnc3d-ham-S: #a5a8ac; --cnc3d-ham-H: #7c838a;
+  --cnc3d-isik-gok: #cfe0ff; --cnc3d-isik-yer: #10141a; --cnc3d-isik-ana: #ffffff; --cnc3d-isik-dolgu: #88b8ff; --cnc3d-bos-cep: #55626f;
+  --cnc3d-m-celik: #c5cbd2; --cnc3d-m-karbur: #9ea5ad; --cnc3d-m-koyu: #2b3139; --cnc3d-m-siyah: #1a1d22; --cnc3d-m-tin: #d9ab3c;
+  --cnc3d-m-altin: #5a5466; --cnc3d-m-parlak: #e6eaee; --cnc3d-m-boya: #dde2e7; --cnc3d-m-boya-koyu: #3b434d; --cnc3d-m-vurgu: #ff8a1f;
+  --cnc3d-m-mavi: #2f6fd0; --cnc3d-m-kirmizi: #d64545; --cnc3d-m-yesil: #3fae5a; --cnc3d-m-sari: #e8c33a; --cnc3d-m-cam: #8fd0ff;
+  --cnc3d-m-alu: #cfd6dd; --cnc3d-m-yakut: #e0245e; --cnc3d-m-pirinc: #c9a14a; --cnc3d-m-kaucuk: #23272c; --cnc3d-m-ekran: #0e2233;
+  --cnc3d-m-ekran-isik: #1d5f8f; --cnc3d-m-oksit: #2a2e35; --cnc3d-m-beyaz: #f2f3f0; --cnc3d-m-kagit: #a8784a; --cnc3d-m-bez: #d9d2c0;
+  --cnc3d-m-mengene: #37587f; --cnc3d-m-camgobegi: #38b6ff; --cnc3d-m-turuncu-kaucuk: #e0702a; --cnc3d-m-kabin: #d9dde1;
+  --cnc3d-m-kabin-2: #c5cad0; --cnc3d-m-antrasit: #2c3137; --cnc3d-m-ic: #262b31; --cnc3d-m-cerceve: #15181c; --cnc3d-m-pencere: #6f93a6;
+  --cnc3d-m-ekran-2: #07111b; --cnc3d-m-ekran-2-isik: #0a1c2e; --cnc3d-m-ekran-a: #1f6fd0; --cnc3d-m-ekran-a-isik: #2a7fe0;
+  --cnc3d-m-korukluk: #585d63; --cnc3d-m-talas: #9a9fa5; --cnc3d-m-lazer: #ff2040; --cnc3d-m-filtre: #cfc6a8; --cnc3d-m-ped-1: #f4f4f0;
+  --cnc3d-m-ped-2: #e9e6dc; --cnc3d-m-firca: #9a6a3a; --cnc3d-m-sarf: #dddddd; --cnc3d-m-sogutma: #e8f0f5; --cnc3d-m-malzeme: #9aa3ad;
+  --cnc3d-m-iso: #888888; --cnc3d-m-lamba-isik: #fff6e0; --cnc3d-m-pano-alt: #22272e; --cnc3d-m-pano-ekran: #10263c;
+  --cnc3d-m-pano-ekran-isik: #12304c; --cnc3d-m-pano-tus: #163a5c; --cnc3d-m-pano-tus-isik: #1a4670; --cnc3d-m-klavye: #3a4048;
+  --cnc3d-m-isik-yesil: #2aff6a; --cnc3d-m-isik-yesil-yanar: #20d050; --cnc3d-m-isik-sari: #ffb020; --cnc3d-m-isik-sari-yanar: #402800;
+  --cnc3d-m-isik-kirmizi: #ff3030; --cnc3d-m-isik-kirmizi-yanar: #300000; --cnc3d-m-gk-cam: #9cc4d8;
+}
+/* CNC Kurulum Oto-CAM: islem turu, takim yolu, ulasilamaz bolge, torna-freze makine simulasyonu ve sure cubugu renkleri (prototipin
+   Oto-CAM degerleri). Kaba, kalan, finis ve serbest yuzey --cnc3d-vurgu, -uyari, -ok, -acik-mavi'yi kullanir. */
+:root {
+  --cnc3d-cam-alin: #9aa7b5; --cnc3d-cam-helis: #c084fc; --cnc3d-cam-delme: #ff6b9a; --cnc3d-cam-kilavuz: #2dd4bf;
+  --cnc3d-cam-hizli: #5b6673; --cnc3d-cam-ulasilamaz: #ff3b3b; --cnc3d-cam-parca: #b7c2cd;
+  --cnc3d-cam-torna-yuzey: #1550c0; --cnc3d-cam-freze-yuzey: #d85a00; --cnc3d-cam-torna-lejant: #5d9cf5; --cnc3d-cam-freze-lejant: #ffa31a;
+  --cnc3d-cam-torna-arka: #ffb35c; --cnc3d-cam-kesme: #ff5a5a; --cnc3d-cam-ayna: #2b3440;
+  --cnc3d-cam-ms-celik: #9aa4ae; --cnc3d-cam-ms-koyu: #2b333c; --cnc3d-cam-ms-kutuk: #b8c0c8; --cnc3d-cam-ms-kafa: #3a4450;
+  --cnc3d-cam-freze-cevrim: #7cc8ff; --cnc3d-cam-yukleme: #8a97a6;
+}

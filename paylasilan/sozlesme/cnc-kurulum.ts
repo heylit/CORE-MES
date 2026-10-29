@@ -129,6 +129,59 @@ export const stokKartlariCevabi = z.object({ kartlar: z.array(stokKartiSemasi), 
 export const stokKartiBaglaGovdesi = z.object({ kimlik: kutuphaneKimligi, malzemeId: z.number().int().positive().nullable() });
 export const stokKartiBaglaCevabi = z.object({ kart: stokKartiSemasi.nullable() });
 
+// Tezgâh ayarı (1091 a, 1139 b): tezgâh İstasyonlar'daki makine kaydıdır; motorun alanları makine başına tutulur. Kodlar prototipin
+// kodlarıdır. Boş alan bilinmiyor demektir (motor kendi varsayılanını kullanır); sıfır uydurulmaz.
+export const TEZGAH_TURLERI = ['mill', 'lathe', 'millturn'] as const;
+export const TEZGAH_KONTROLLERI = ['heid', 'iso'] as const;
+export const MODEL_TURU = /^m_[a-z0-9]{1,20}$/;
+const devir = z.number().int().min(1).max(100000).nullable();
+export const tezgahAyariSemasi = z.object({
+  tur: z.enum(TEZGAH_TURLERI).nullable(),
+  kontrol: z.enum(TEZGAH_KONTROLLERI).nullable(),
+  konik: z.string().trim().min(1).max(40).nullable(),
+  cepSayisi: z.number().int().min(1).max(999).nullable(),
+  devir,
+  isMiliDevri: devir,
+  canliTakim: z.boolean().nullable(),
+  canliDevir: devir,
+  elle: z.boolean().nullable(),
+  modelTuru: z.string().regex(MODEL_TURU, 'Geçersiz model türü.').nullable(),
+});
+// istasyonId: makinenin istasyonu (takım yükü ve iş emri istasyon başınadır), yoksa null. surum: ayar satırının sürümü; ayarı olmayan makinede 0 (ilk yazma 0 ile gelir).
+export const tezgahSemasi = z.object({
+  makineId: z.number().int(), kod: z.string(), ad: z.string(), istasyonId: z.number().int().nullable(), aktif: z.boolean(), ayar: tezgahAyariSemasi.nullable(),
+  surum: z.number().int().nonnegative(),
+});
+export const tezgahlarCevabi = z.object({ tezgahlar: z.array(tezgahSemasi) });
+export const tezgahParametresi = z.object({ makineId: z.coerce.number().int().positive().max(2147483647) });
+export const tezgahAyarGovdesi = tezgahAyariSemasi.extend({ beklenenSurum: z.number().int().min(0).max(2147483647) })
+  .refine((g) => g.canliDevir === null || g.canliTakim === true, { message: 'Canlı takım devri yalnız canlı takımlı tezgâhta girilir.', path: ['canliDevir'] });
+export const tezgahAyarCevabi = z.object({ tezgah: tezgahSemasi });
+
+// 3B modeller (1212 a): dosya Çizim Merkezi'ndedir; CNC Kurulum makineye ya da bağlama aparatına yayındaki bir 3B model belgesini bağlar.
+// Aparat anahtarı ekranın kalem kimliğidir (gömülü ya da kayıttaki özel aparat). Modeli olmayan hedef ekranda çizilen gövdeyle görünür.
+export const MODEL_DOSYA_TURLERI = ['glb', 'gltf', 'step', 'iges', 'stl'] as const;
+export const APARAT_ANAHTARI = /^[A-Za-z0-9_.:-]{1,80}$/;
+export const modelHedefiSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('makine'), makineId: z.number().int().positive().max(2147483647) }),
+  z.object({ tur: z.literal('aparat'), anahtar: z.string().regex(APARAT_ANAHTARI, 'Geçersiz aparat.') }),
+]);
+export const modelBelgesiSemasi = z.object({
+  belgeId: z.number().int(), ad: z.string(), harf: z.string(), ozet: z.string(), dosyaTuru: z.enum(MODEL_DOSYA_TURLERI),
+});
+// surum: bağ satırının sürümü; hiç bağlanmamış hedefte 0 (ilk bağlama 0 ile gelir).
+export const cncModelSemasi = z.object({
+  id: z.number().int(), hedef: modelHedefiSemasi, belge: modelBelgesiSemasi.nullable(), surum: z.number().int().nonnegative(),
+});
+export const modellerCevabi = z.object({ modeller: z.array(cncModelSemasi) });
+export const modelBaglaGovdesi = z.object({
+  hedef: modelHedefiSemasi, belgeId: z.number().int().positive().max(2147483647).nullable(), beklenenSurum: z.number().int().min(0).max(2147483647),
+});
+export const modelBaglaCevabi = z.object({ model: cncModelSemasi });
+export const modelSecenekleriSorgusu = z.object({ ara: z.string().trim().max(100).optional() });
+export const modelSecenekleriCevabi = z.object({ belgeler: z.array(modelBelgesiSemasi) });
+export const modelParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
@@ -154,3 +207,15 @@ export type StokKarti = z.output<typeof stokKartiSemasi>;
 export type StokKartlariCevabi = z.output<typeof stokKartlariCevabi>;
 export type StokKartiBaglaGovdesi = z.output<typeof stokKartiBaglaGovdesi>;
 export type StokKartiBaglaCevabi = z.output<typeof stokKartiBaglaCevabi>;
+export type TezgahAyari = z.output<typeof tezgahAyariSemasi>;
+export type Tezgah = z.output<typeof tezgahSemasi>;
+export type TezgahlarCevabi = z.output<typeof tezgahlarCevabi>;
+export type TezgahAyarGovdesi = z.output<typeof tezgahAyarGovdesi>;
+export type TezgahAyarCevabi = z.output<typeof tezgahAyarCevabi>;
+export type ModelHedefi = z.output<typeof modelHedefiSemasi>;
+export type ModelBelgesi = z.output<typeof modelBelgesiSemasi>;
+export type CncModel = z.output<typeof cncModelSemasi>;
+export type ModellerCevabi = z.output<typeof modellerCevabi>;
+export type ModelBaglaGovdesi = z.output<typeof modelBaglaGovdesi>;
+export type ModelBaglaCevabi = z.output<typeof modelBaglaCevabi>;
+export type ModelSecenekleriCevabi = z.output<typeof modelSecenekleriCevabi>;

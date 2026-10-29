@@ -5,6 +5,8 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);
   padding: var(--b-2) var(--b-4); border-bottom: var(--cizgi-ince) solid var(--edge); background: var(--panel);
 }
+/* Sahnenin görünen kısmı (sahne/Sahne.tsx); yer ve boy her karede ölçülür. */
+.tc-cy-sahne-tuval { position: absolute; left: var(--tc-cy-sx); top: var(--tc-cy-sy); width: var(--tc-cy-sw); height: var(--tc-cy-sh); pointer-events: none; }
 .tc-cy-serit { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
 .tc-cy-gorunum { min-height: 0; min-width: 0; overflow: auto; }
 .tc-cy-durum { padding: var(--b-5); }

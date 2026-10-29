@@ -1,21 +1,25 @@
 import { createHash } from 'node:crypto';
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, cokBuyuk, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
   KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
-  StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi, YazGovdesi,
+  StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, TezgahAyarCevabi, TezgahAyarGovdesi, TezgahlarCevabi, ModelBaglaCevabi, ModelBaglaGovdesi, ModellerCevabi, ModelSecenekleriCevabi,
+  YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
 import { cncTakimCikisi, stokMiktarlari } from '../stok/disari.ts';
-import { istasyonAdlari } from '../istasyonlar/disari.ts';
+import { kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { istasyonAdlari, istasyonlar, makineGetir, makineler } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
   hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
+  hedefSutunu, modelBelgesiSec, modelDosyasiMi, modelKaydi, tezgahKaydi, tezgahListesi, tezgahOlabilirMi,
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -302,4 +306,72 @@ export async function takimOmruDurumlari(db: Db, istasyonIdler: readonly number[
       kullanilanDk: k.dk, kullanilanAdet: k.adet, kalanPay: d?.kalanPay ?? null, durum: d?.durum ?? null,
     };
   });
+}
+
+// ---- Tezgâh ayarı (1091 a, 1139 b): liste İstasyonlar'ın makine kayıtlarından okunur, kopyalanmaz; burada yalnız motorun alanları yazılır.
+async function talasliIstasyonlar(db: Db): Promise<Set<number>> {
+  return new Set((await istasyonlar(db, { pasiflerDahil: true })).filter((i) => i.tip === 'talasli').map((i) => i.id));
+}
+
+export async function tezgahlar(db: Db): Promise<TezgahlarCevabi> {
+  const liste = await makineler(db, { pasiflerDahil: true });
+  const talasli = await talasliIstasyonlar(db);
+  return { tezgahlar: tezgahListesi(liste, talasli, await sorgular.tezgahAyarlari(db)) };
+}
+
+export async function tezgahAyarYaz(db: Db, kullanici: Kullanici, makineId: number, g: TezgahAyarGovdesi): Promise<TezgahAyarCevabi> {
+  const makine = await makineGetir(db, makineId);
+  if (makine === null) throw bulunamadi('Makine bulunamadı.');
+  if (!makine.aktif) throw dogrulama('Pasif makinenin tezgâh ayarı değiştirilmez.', 'makineId');
+  if (!tezgahOlabilirMi(makine, await talasliIstasyonlar(db))) throw dogrulama('Talaşlı olmayan istasyondaki makine CNC tezgâhı olmaz.', 'makineId');
+  const { beklenenSurum, ...ayar } = g;
+  const satir = await sorgular.tezgahAyariYaz(db, makineId, ayar, beklenenSurum, kullanici.id);
+  if (satir === null) throw eskiSurum();
+  return { tezgah: tezgahKaydi(makine, satir) };
+}
+
+// ---- 3B modeller (1212 a): dosya Çizim Merkezi'ndedir; bağ bu modülün komutuyla kurulur ve dosya bu modülün ucundan verilir (atölyenin
+// istasyon modeli ucuyla aynı: okuma yetkisi bağlayan modülündür, Çizim Merkezi yetkisi sorulmaz).
+const MODEL_HEDEFI = 'cnc-kurulum';
+
+export async function modeller(db: Db): Promise<ModellerCevabi> {
+  const satirlar = await sorgular.modelSatirlari(db);
+  const baglar = await kayitlaraBagliBelgeler(db, MODEL_HEDEFI, satirlar.map((s) => s.id));
+  return { modeller: satirlar.map((s) => modelKaydi(s, modelBelgesiSec(baglar.get(s.id) ?? []))) };
+}
+
+export async function modelSecenekleri(db: Db, ara: string | undefined): Promise<ModelSecenekleriCevabi> {
+  const belgeler = await yayindakiBelgeler(db, { tur: '3b-model', ...(ara === undefined ? {} : { ara }) });
+  return { belgeler: belgeler.flatMap((b) => (modelDosyasiMi(b.dosyaTuru) ? [{ belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru }] : [])) };
+}
+
+// Hedefe tek model: seçilen belge bağlanır, öbür 3B model bağları kaldırılır; null bağı kaldırır (ekran çizilen gövdeye döner).
+export async function modelBagla(db: Db, kullanici: Kullanici, g: ModelBaglaGovdesi): Promise<ModelBaglaCevabi> {
+  if (g.hedef.tur === 'makine') {
+    const makine = await makineGetir(db, g.hedef.makineId);
+    if (makine === null) throw bulunamadi('Makine bulunamadı.');
+    if (!makine.aktif) throw dogrulama('Pasif makineye model bağlanmaz.', 'hedef');
+    if (!tezgahOlabilirMi(makine, await talasliIstasyonlar(db))) throw dogrulama('Talaşlı olmayan istasyondaki makine CNC tezgâhı olmaz.', 'hedef');
+  }
+  if (g.belgeId !== null) {
+    const kaynak = await yayindakiBelgeDosyasi(db, g.belgeId);
+    if (kaynak === null) throw bulunamadi('Çizim Merkezi\'nde bu belgenin yayında revizyonu yok.');
+    if (kaynak.tur !== '3b-model' || !modelDosyasiMi(kaynak.dosyaTuru)) throw dogrulama('Yalnız GLB, glTF, STEP, IGES ya da STL 3B model belgesi bağlanır.', 'belgeId');
+  }
+  const hedef = hedefSutunu(g.hedef);
+  const kilitli = await sorgular.modelSatiriKilitle(db, hedef);
+  if ((kilitli?.surum ?? 0) !== g.beklenenSurum) throw eskiSurum();
+  const satir = kilitli === null ? await sorgular.modelSatiriAc(db, hedef, kullanici.id) : await sorgular.modelSurumuIlerlet(db, kilitli.id, kullanici.id);
+  if (satir === null) throw eskiSurum();
+  const bagli = (await kaydaBagliBelgeler(db, MODEL_HEDEFI, satir.id)).filter((b) => b.tur === '3b-model');
+  for (const b of bagli) if (b.id !== g.belgeId) await kayittanKaldir(db, b.id, MODEL_HEDEFI, satir.id);
+  if (g.belgeId !== null && !bagli.some((b) => b.id === g.belgeId)) await kaydaBagla(db, kullanici, g.belgeId, MODEL_HEDEFI, satir.id);
+  return { model: modelKaydi(satir, modelBelgesiSec(await kaydaBagliBelgeler(db, MODEL_HEDEFI, satir.id))) };
+}
+
+// Modeli olmayan bağ satırı hata değildir (null: gövdesiz 204).
+export async function modelDosyasi(db: Db, id: number): Promise<IkiliCevap | null> {
+  if ((await sorgular.modelSatiri(db, id)) === null) throw bulunamadi('Model bağı bulunamadı.');
+  const belge = modelBelgesiSec(await kaydaBagliBelgeler(db, MODEL_HEDEFI, id));
+  return belge === null ? null : kayittakiBelgeDosyasi(db, MODEL_HEDEFI, id, belge.belgeId);
 }

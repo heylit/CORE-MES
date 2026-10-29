@@ -148,6 +148,8 @@ export function Hazirlik() {
   useCncSurum();
   const yetki = useCncYetkisi(), { burada, git } = useGorunum(), kayit = useHazirlikKaydi();
   const dok = useRef<HTMLDivElement | null>(null), sahne = useRef<HTMLDivElement | null>(null), dosya = useRef<HTMLInputElement | null>(null);
+  // Ray etkin gruba yalnız grup değişince kayar; deneme paneli 250 ms'de bir yenilenir, her yenilemede kaydırmak rayı kilitler.
+  const rayGrubu = useRef<string | null>(null);
   const [cekmece, cekmeceYaz] = useState(false), [birak, birakYaz] = useState(false), [acikEmirler, acikEmirlerYaz] = useState<EmirSecenegi[] | null>(null);
 
   useEffect(() => {
@@ -266,7 +268,7 @@ export function Hazirlik() {
                 return (
                   <button
                     type="button" key={G.g} className={`${on ? 'on ' : ''}${hepsi ? 'dn' : d ? 'pt' : ''}`}
-                    ref={(el) => { if (on && el) try { el.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch { /* eski tarayıcı */ } }}
+                    ref={(el) => { if (on && el && rayGrubu.current !== G.g) { rayGrubu.current = G.g; try { el.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch { /* eski tarayıcı */ } } }}
                     onClick={() => { prRail(G.g); }}
                   >
                     <span className="ic"><Simge ad={hepsi ? 'check' : GRUP_SIMGESI[G.g] ?? 'check'} boyut="k" /></span>

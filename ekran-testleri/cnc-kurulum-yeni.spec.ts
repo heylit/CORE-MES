@@ -20,7 +20,7 @@ test.describe('iskelet', () => {
 
   // Görünüm alanı kendi kaydırıcısıyla kaydığı için belge taşmaz; kabuğun ve görünüm alanının ayrıca kendi eninde kaldığı ölçülür.
   test('kabuk ve görünüm alanı ekran eninde kalır', async ({ page, ac }) => {
-    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
       const olcu = await page.evaluate(() => {
@@ -79,16 +79,29 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
   }
 });
 
-// Parça yazarları kendi bölümlerini doldurur (PARCA-SOZLESMESI); bölüm boşken atlanır.
-for (const [parca, gorunumler] of [
-  ['P4 Oto-CAM', 'Oto-CAM'],
-] as const) {
-  test.describe(parca, () => {
-    test(`${gorunumler}: bugünkü davranış`, () => {
-      test.fixme(true, 'parça teslim edilince dolar');
-    });
+// P4: Oto-CAM (prototip 22798-24480). Örnek burç sentetiktir (döner profil), dosya okumaz; plan bellekte durur, sunucuya yazılmaz.
+test.describe('P4 Oto-CAM', () => {
+  test('Oto-CAM: bakmak yazmaz, örnek parçadan plan üretilir, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
+    await ac('/cnc-kurulum/yeni/oto-cam');
+    await expect(page.getByText('OTO-CAM · OTOMATİK PROGRAM')).toBeVisible();
+    expect(ag.yazmalar).toEqual([]);
+    // 860 ve altında panel alttan çekmecedir (prototipteki gibi).
+    const cekmece = page.locator('.tc-cc-cekmece');
+    if (await cekmece.isVisible()) await cekmece.click();
+    await page.getByRole('button', { name: 'Örnek burç (boru)' }).click();
+    const uret = page.getByRole('button', { name: /üret$/ });
+    await expect(uret).toBeEnabled();
+    await uret.click();
+    await expect(page.getByText('Süre kalibrasyonu')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/^3 · (Plan|Sonuç)/)).toBeVisible();
+    for (const genislik of [360, 768, 1280]) {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      if (genislik <= 860) await expect(cekmece).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+    expect(ag.hatalar).toEqual([]);
   });
-}
+});
 
 test.describe('P3 Ham Malzeme ve G-Kod', () => {
   const tasmaz = async (page: Page) => {
@@ -165,24 +178,22 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
     await expect(page.getByText('Filtreye uyan malzeme yok').first()).toBeVisible();
   });
 
-  test('Tanımlar: özel tezgâh eklenir, Kütüphane süzgecinde görünür, silinir', async ({ page, ac }) => {
-    const ad = `Deneme tezgah ${String(Date.now())}`;
+  // 1091 a, 1137 a: tezgâhlar İstasyonlar'ın makineleridir, ekleme yoktur. Örnek makinelerin ayarı yoktur: ekran gömülü listeyle
+  // sürer. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
+  test('Tanımlar: makineler İstasyonlar\'dan gelir, ayarı eksik olan işaretlenir, yeni tezgâh eklenmez', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/kutuphane');
     await page.getByRole('button', { name: 'Tanımlar' }).click();
     const pencere = page.getByRole('dialog', { name: 'Tanımlar' });
-    await pencere.getByRole('button', { name: 'Yeni tezgâh' }).click();
-    await pencere.getByLabel('Ad', { exact: true }).fill(ad);
-    await pencere.getByRole('button', { name: 'Kaydet' }).click();
-    await expect(pencere.getByText(ad)).toBeVisible();
+    await expect(pencere.getByRole('button', { name: 'Yeni tezgâh' })).toHaveCount(0);
+    const satir = pencere.locator('tr').filter({ hasText: 'ORN-CNC-T1' });
+    await expect(satir.getByText('ayarı eksik')).toBeVisible();
+    await expect(pencere.getByRole('status')).toContainText('gömülü tezgâh listesini kullanıyor');
+    await satir.getByRole('button', { name: 'Düzenle' }).click();
+    await expect(pencere.getByLabel('Ad', { exact: true })).toHaveCount(0);
+    await expect(pencere.getByLabel('Magazin cep sayısı')).toBeVisible();
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
     await pencere.getByRole('tab', { name: 'İş Malzemeleri' }).click();
     await expect(pencere.getByRole('button', { name: 'Yeni malzeme' })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('combobox', { name: 'Tezgâh' })).toContainText(ad);
-
-    await page.getByRole('button', { name: 'Tanımlar' }).click();
-    await pencere.locator('tr').filter({ hasText: ad }).getByRole('button', { name: 'Sil' }).click();
-    await page.getByRole('dialog', { name: 'Tezgâhı sil' }).getByRole('button', { name: 'Sil' }).click();
-    await expect(pencere.getByText(ad)).toHaveCount(0);
   });
 
   test('Ana Sayfa: sayı kartları, tezgâh kartları ve görünümlere geçiş', async ({ page, ac }) => {
@@ -234,6 +245,51 @@ test.describe('P5 Takım Ömrü', () => {
       if (genislik <= 860) await expect(page.locator('.tc-co-cekmece')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     }
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('3B sahne', () => {
+  // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
+  // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
+  test('Kurulum, Hazırlık, Kütüphane, Oto-CAM ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+    // Yazılım çizicisinde ilk kare saniyeler sürer.
+    test.setTimeout(180_000);
+    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
+      await ac(`/cnc-kurulum/yeni/${yol}`);
+      const tuval = page.locator('.tc-cy-sahne-tuval').first();
+      await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
+      await expect.poll(async () => tuval.evaluate((t: HTMLCanvasElement) => {
+        // Tuvalin bağlamı görüntü aktarımıdır (bitmaprenderer); piksel, kopyası çizilen geçici tuvalden okunur.
+        if (t.width === 0 || t.height === 0) return 0;
+        const k = document.createElement('canvas'); k.width = t.width; k.height = t.height;
+        const x = k.getContext('2d');
+        if (x === null) return 0;
+        x.drawImage(t, 0, 0);
+        const d = x.getImageData(0, 0, k.width, k.height).data;
+        let dolu = 0;
+        for (let i = 3; i < d.length; i += 4 * 97) if ((d[i] ?? 0) > 0) dolu++;
+        return dolu;
+      }), { message: yol, timeout: 30_000 }).toBeGreaterThan(0);
+    }
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
+  test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
+    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
+      await ac(`/cnc-kurulum/yeni/${yol}`);
+      await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
+      await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
+      expect(await page.locator('.tc-cy-sahne-tuval:visible').count(), yol).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), yol).toBeLessThanOrEqual(0);
+    }
+    const serit = page.getByRole('tablist', { name: 'CNC Kurulum görünümleri' });
+    await serit.getByRole('tab', { name: 'Kurulum' }).click();
+    await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/kurulum$/);
+    await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
     expect(ag.hatalar).toEqual([]);
   });
 });

@@ -1,7 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
-import type { Kayit } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { Kayit, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { KURULUM_ADIMI } from './kurallar.ts';
+import type { ModelHedefSutunu, ModelSatiri, TezgahAyarSatiri } from './kurallar.ts';
 
 // CNC kurulum kayıt deposunun SQL'i. Sürüm tek sayaçtan gelir.
 
@@ -179,5 +180,61 @@ export async function takimKullanimlari(db: Db, istasyonIdler: readonly number[]
       GROUP BY y.istasyon_id, y.cep
       ORDER BY y.istasyon_id, y.cep`,
     [istasyonIdler],
+  );
+}
+
+// ---- Tezgâh ayarı (1091 a, 1139 b): makine başına bir satır.
+const TEZGAH_SUTUNLARI = `makine_id AS "makineId", tur, kontrol, konik, cep_sayisi AS "cepSayisi", devir, is_mili_devri AS "isMiliDevri",
+  canli_takim AS "canliTakim", canli_devir AS "canliDevir", elle, model_turu AS "modelTuru", surum`;
+
+export async function tezgahAyarlari(db: Db): Promise<TezgahAyarSatiri[]> {
+  return db.sorgu<TezgahAyarSatiri>(`SELECT ${TEZGAH_SUTUNLARI} FROM cnc_kurulum_tezgah ORDER BY makine_id`);
+}
+
+// Sürüm 0 ayarı olmayan makineyi bekler: satır varsa yazılmaz. Öteki sürüm satırdakiyle aynı değilse yazılmaz (null döner).
+export async function tezgahAyariYaz(db: Db, makineId: number, a: TezgahAyari, beklenenSurum: number, kisiId: number): Promise<TezgahAyarSatiri | null> {
+  return db.tek<TezgahAyarSatiri>(
+    `INSERT INTO cnc_kurulum_tezgah AS t
+       (makine_id, tur, kontrol, konik, cep_sayisi, devir, is_mili_devri, canli_takim, canli_devir, elle, model_turu, guncelleyen_kisi_id)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12 WHERE $13::int = 0 OR EXISTS (SELECT 1 FROM cnc_kurulum_tezgah WHERE makine_id = $1)
+     ON CONFLICT (makine_id) DO UPDATE SET tur = EXCLUDED.tur, kontrol = EXCLUDED.kontrol, konik = EXCLUDED.konik, cep_sayisi = EXCLUDED.cep_sayisi,
+       devir = EXCLUDED.devir, is_mili_devri = EXCLUDED.is_mili_devri, canli_takim = EXCLUDED.canli_takim, canli_devir = EXCLUDED.canli_devir,
+       elle = EXCLUDED.elle, model_turu = EXCLUDED.model_turu, guncelleyen_kisi_id = EXCLUDED.guncelleyen_kisi_id, guncellendi = now(), surum = t.surum + 1
+       WHERE t.surum = $13
+     RETURNING ${TEZGAH_SUTUNLARI}`,
+    [makineId, a.tur, a.kontrol, a.konik, a.cepSayisi, a.devir, a.isMiliDevri, a.canliTakim, a.canliDevir, a.elle, a.modelTuru, kisiId, beklenenSurum],
+  );
+}
+
+// ---- 3B model bağı (1212 a): hedef (makine ya da aparat) başına bir satır; belge bağı Çizim Merkezi'ndedir (hedef kimliği satırın id'si).
+const MODEL_SUTUNLARI = `id, makine_id AS "makineId", aparat_anahtari AS "aparatAnahtari", surum`;
+const hedefKosulu = (h: ModelHedefSutunu): [string, number | string] =>
+  (h.makineId !== null ? ['makine_id = $1', h.makineId] : ['aparat_anahtari = $1', h.aparatAnahtari ?? '']);
+
+export async function modelSatirlari(db: Db): Promise<ModelSatiri[]> {
+  return db.sorgu<ModelSatiri>(`SELECT ${MODEL_SUTUNLARI} FROM cnc_kurulum_model ORDER BY id`);
+}
+
+export async function modelSatiri(db: Db, id: number): Promise<ModelSatiri | null> {
+  return db.tek<ModelSatiri>(`SELECT ${MODEL_SUTUNLARI} FROM cnc_kurulum_model WHERE id = $1`, [id]);
+}
+
+export async function modelSatiriKilitle(db: Db, h: ModelHedefSutunu): Promise<ModelSatiri | null> {
+  const [kosul, deger] = hedefKosulu(h);
+  return db.tek<ModelSatiri>(`SELECT ${MODEL_SUTUNLARI} FROM cnc_kurulum_model WHERE ${kosul} FOR UPDATE`, [deger]);
+}
+
+// Aynı anda açılan ikinci satır yazılmaz (null döner): çağıran sürüm çakışması sayar.
+export async function modelSatiriAc(db: Db, h: ModelHedefSutunu, kisiId: number): Promise<ModelSatiri | null> {
+  return db.tek<ModelSatiri>(
+    `INSERT INTO cnc_kurulum_model (makine_id, aparat_anahtari, guncelleyen_kisi_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING ${MODEL_SUTUNLARI}`,
+    [h.makineId, h.aparatAnahtari, kisiId],
+  );
+}
+
+export async function modelSurumuIlerlet(db: Db, id: number, kisiId: number): Promise<ModelSatiri | null> {
+  return db.tek<ModelSatiri>(
+    `UPDATE cnc_kurulum_model SET surum = surum + 1, guncelleyen_kisi_id = $2, guncellendi = now() WHERE id = $1 RETURNING ${MODEL_SUTUNLARI}`,
+    [id, kisiId],
   );
 }

@@ -1,7 +1,8 @@
-import { Suspense, useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import { Navigate } from 'react-router-dom';
-import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { BenCevabi, KayitlarCevabi, TezgahlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { DurumKutusu, Dugme, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
+import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
@@ -10,6 +11,8 @@ import { durumKur } from './depo.ts';
 import { DURUM_ANAHTARI } from './durum.ts';
 import { closeDefs, gorunumAdresi, openDefs, useGorunum, useTanimlar, type Gorunum } from './gorunum.ts';
 import { KayitYazici } from './kayit.ts';
+import { sahneAlaniKur } from './sahne/Sahne.tsx';
+import { tezgahlariKur } from './secici.ts';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
@@ -21,7 +24,7 @@ const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.ya
 // Görünüm şeridine dokunmak eylem sayılmaz (eski ekranda da öyle): yalnız bakan kişi kayıt yazmaz.
 const SERIT = 'data-cnc-serit';
 
-interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi }
+interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi; tezgahlar: TezgahlarCevabi['tezgahlar'] | null }
 
 export function CncYeni() {
   return <YeniEkranKapisi><CncEkrani /></YeniEkranKapisi>;
@@ -35,6 +38,8 @@ function CncEkrani() {
   const [acilis, setAcilis] = useState<Acilis | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
+  const ekranGorunur = useEkranGorunur();
+  const alan = useRef<HTMLDivElement>(null);
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
 
@@ -43,11 +48,13 @@ function CncEkrani() {
     let bitti = false;
     void (async () => {
       try {
-        const [ben, kayitlar] = await Promise.all([
+        // Tezgâh listesi okunamazsa ekran gömülü listeyle açılır (secici.ts).
+        const [ben, kayitlar, tezgahlar] = await Promise.all([
           api.get<BenCevabi>('/cnc-kurulum/ben'),
           api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar'),
+          api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar').then((c) => c.tezgahlar, () => null),
         ]);
-        if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar });
+        if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar, tezgahlar });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'CNC Kurulum Motoru açılamadı.'));
       }
@@ -71,6 +78,7 @@ function CncEkrani() {
       uyar: (ileti) => { bildir('hata', ileti); }, yazildi: kayitYazildi,
     }, degerler);
     baglantiKur({ yetki, isle, yazici: y });
+    tezgahlariKur(acilis.tezgahlar);
     durumKur(y.deger(DURUM_ANAHTARI), (anahtar, metin) => { y.degistir(anahtar, metin); });
     return y;
     // Kurulum yalnız açılış kayıtlarıyla değişir; git ve bildir her çizimde yeni olabilir.
@@ -82,6 +90,14 @@ function CncEkrani() {
     window.addEventListener('pagehide', kapaninca);
     return () => { window.removeEventListener('pagehide', kapaninca); kapaninca(); baglantiKur(null); };
   }, [yazici]);
+
+  // 3B görünümler tek çiziciyle çizilir (sahne/Sahne.tsx); görünüm alanı dışı kırpılır, ekran gizlenince çizim durur.
+  const hazir = acilis !== null && yazici !== null;
+  useEffect(() => {
+    if (!hazir) return undefined;
+    sahneAlaniKur(alan.current, ekranGorunur);
+    return () => { sahneAlaniKur(null, false); };
+  }, [hazir, ekranGorunur]);
 
   const eylem = (o: SyntheticEvent): void => {
     if (yazici === null) return;
@@ -122,7 +138,7 @@ function CncEkrani() {
             <Dugme simge="edit" onClick={() => { openDefs(); }} title="Tezgâh ve malzeme tanımları">Tanımlar</Dugme>
           )}
         </div>
-        <div className="tc-cy-gorunum">
+        <div className="tc-cy-gorunum" ref={alan}>
           <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
             {Bilesen && <Bilesen />}
           </Suspense>
