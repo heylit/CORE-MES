@@ -84,3 +84,5 @@ export const stokYokCozucusu = (cozucu: servis.StokYokCozucusu): void => servis.
 export const stokMiktariCozucusu = (cozucu: servis.StokMiktariCozucusu): void => servis.stokMiktariCozucusuKaydet(cozucu);
 // E-13, 236 a: Kalite Merkezi'nin tedarikçi onay durumu, firma kimliğiyle (kablolama kalite-merkezi/disari tedarikciOnayDurumlari ile bağlar).
 export const kaliteDurumuCozucusu = (cozucu: servis.KaliteDurumuCozucusu): void => servis.kaliteDurumuCozucusuKaydet(cozucu);
+// Takvim (891): beklenen teslim günündeki siparişler. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
+export { takvimKayitlari } from './servis.ts';

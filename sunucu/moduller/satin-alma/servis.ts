@@ -11,6 +11,9 @@ import type {
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
+import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
+import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
 import { alisBelgeleri, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
@@ -1363,4 +1366,20 @@ export async function tedarikIhtiyaclariniYaz(db: Db, ihtiyaclar: readonly { mal
   const yok = nolar.filter((n) => !kartlar.has(n));
   if (yok.length > 0) throw gecersiz(`${ILETILER.terminMalzemesiYok} (${yok.join(', ')})`);
   await s.gerekenTarihleriYaz(db, ihtiyaclar);
+}
+
+// Takvim (891): siparişin beklenen teslim günü; tedarikçi firma adıdır, firmasız teklifte yazılan ad. Teslim durumu satırlardan
+// (kapatılmış sipariş tamam) türer; tamamı teslim alınan biter. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
+const TAKVIM_TESLIM_DURUMU: Readonly<Record<TeslimDurumu, string>> = { bekleniyor: 'Bekleniyor', kismi: 'Kısmi teslim', tamam: 'Teslim alındı' };
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  const satirlar = await s.takvimSiparisleri(db, baslangic, bitis);
+  const adlar = await firmaAdlari(db, [...new Set(satirlar.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
+  return satirlar.map((x): TakvimKaydi => {
+    const durum = x.kapali ? 'tamam' : teslimDurumu(x.satirlar);
+    return {
+      kaynak: 'satin-alma', kimlik: String(x.id), tarih: x.beklenenTeslim, no: x.no,
+      baslik: x.no ? `Sipariş ${x.no}` : x.talepBasligi,
+      ilgili: (x.firmaId === null ? null : adlar.get(x.firmaId) ?? null) ?? (x.tedarikciAdi || null), durum: TAKVIM_TESLIM_DURUMU[durum], bitti: durum === 'tamam',
+    };
+  });
 }
