@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
+import { acikEmir, emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hataliKarariVer } from './hatali-parca.ts';
 import { reworkAdimiYaz } from './is-emri-servis.ts';
@@ -163,6 +163,10 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     assert.deepEqual(kolAdimlari.map((x) => [x.op, x.tur, x.durum, x.ist]), [[15, 'ek', 'bekliyor', kaliteIst], [16, 'rework', 'bekliyor', null], [20, 'rota', 'bekliyor', null]]);
     const [kalite, rw] = kolAdimlari as unknown as [{ id: number }, { id: number }];
     assert.deepEqual((await adimlari(id)).map((x) => [x.id === ie2, x.durum]), [[false, 'tamam'], [true, 'calisiyor'], [false, 'bekliyor']], 'ana partinin adımı sürer');
+    // 1188: hatalı giriş adımın sayacındadır; kola ayrılan adet adıma girenden düştüğü için eksik iki kez düşmez (10 - 2 kola - 3 sağlam).
+    assert.equal((await ayrinti(id)).isEmirleri.find((i) => i.id === ie2)?.eksik, 5);
+    const izleme = await tx((db) => acikEmir(db, id));
+    assert.deepEqual(izleme?.acikAdimlar?.map((x) => [x.isEmriId, x.hataliAdet]), [[ie2, 2]]);
 
     await red(tx((db) => emirBaslat(db, op(), h.hedefEmir.id)), HATALI_KALITE_ADIMI);
     const ilkSurum = (await ayrinti(h.hedefEmir.id)).surum;
@@ -238,6 +242,20 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     assert.equal((await ayrinti(id)).hataliDurdu, true, '1064: ayrıntı durmayı gösterir');
     const red_ = await o().sahip.tek<{ adet: number }>("SELECT sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'red'", [id]);
     assert.equal(red_?.adet, 1);
+  });
+
+  test('1188: bütün parçası hatalı adım girdisini tüketir; eksik kalmaz, hatalı kaydı kararla sürer', async () => {
+    const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
+    const { id, adimlar: [, ie2] } = await ikinciAdimda(3, [a.makine, b.makine, c.makine]);
+    assert.deepEqual((await tx((db) => acikEmir(db, id)))?.acikAdimlar?.map((x) => [x.isEmriId, x.hataliAdet, x.eksik]), [[ie2, 0, 3]], 'kaydı yoksa 0');
+    const h = hataliCevabi.parse((await hatali(id, { hurdaNedeniKodu: 'HP-TK', adet: 3 })).govde);
+    assert.equal(h.kolAcildi, false);
+    const adimlar = (await ayrinti(id)).isEmirleri;
+    assert.deepEqual(adimlar.filter((i) => i.opNo === 20).map((i) => [i.id === ie2, i.durum, i.eksik]), [[true, 'tamam', 0]], 'eksik 3 değil 0');
+    await tx((db) => hataliKarariVer(db, yonetici, h.kayitId, { karar: 'rework', not: null, ncrKimlik: null }));
+    assert.equal((await ayrinti(id)).isEmirleri.find((i) => i.id === ie2)?.eksik, 0, 'karar tüketimi değiştirmez');
+    const kayit = await o().sahip.tek<{ adet: number; karar: string }>('SELECT adet, karar FROM uretim_emirleri_hatali_kaydi WHERE id = $1', [h.kayitId]);
+    assert.deepEqual(kayit, { adet: 3, karar: 'rework' });
   });
 
   test('reddedilen: sayılmış parçadan fazlası, pasif ya da olmayan neden, çalışmayan adım, yinelenen istek', async () => {

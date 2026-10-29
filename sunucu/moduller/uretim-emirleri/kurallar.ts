@@ -1022,11 +1022,13 @@ export const uyarilariBirlestir = (...uyarilar: readonly (string | null)[]): str
   return dolu.length === 0 ? null : dolu.join(' ');
 };
 
-export interface EksikAdimi extends ParalelAdim {
+// 1188: hatalı giriş adımda üretimdir, adımın girdisini tüketir. Kola ayrılan hatalı adıma girenden zaten düşer (adimaGiren); tüketime
+// yalnız kol açmadan emirde kalan hatalı girer, yoksa iki kez düşülür.
+export interface AdimSayimi { saglam: number; kararBekliyor: number; hurda: number; hataliEmirde: number }
+export const adimTuketimi = (s: AdimSayimi | undefined): number => (s === undefined ? 0 : s.saglam + s.kararBekliyor + s.hurda + s.hataliEmirde);
+
+export interface EksikAdimi extends ParalelAdim, AdimSayimi {
   saglamAdet: number | null;
-  saglam: number;
-  hurda: number;
-  kararBekliyor: number;
 }
 
 // Adım başına eksik (adimEksigi): önceki adım bitmişse kapanışı, bitmemişse o ana kadarki sağlamı adıma girer. Kol ve bölünme hesabı
@@ -1035,7 +1037,7 @@ export function adimEksikleri(adimlar: readonly EksikAdimi[]): Map<number, numbe
   return new Map(adimlar.map((a) => {
     const onceki = oncekiParalelAdim(adimlar, a);
     const giren = onceki === null ? null : onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : onceki.saglam;
-    return [a.id, adimEksigi(giren, a.saglam + a.kararBekliyor + a.hurda)];
+    return [a.id, adimEksigi(giren, adimTuketimi(a))];
   }));
 }
 

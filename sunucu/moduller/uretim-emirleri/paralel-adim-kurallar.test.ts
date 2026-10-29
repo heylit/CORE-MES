@@ -61,12 +61,14 @@ describe('paralel adım kuralları (kart 639)', () => {
     assert.equal(adimEksigi(10, 7), 3);
     assert.equal(adimEksigi(4, 6), -2);
     assert.equal(adimEksigi(null, 6), null);
-    const e = (sira: number, ek: Partial<EksikAdimi>): EksikAdimi => ({ ...adim(sira), saglamAdet: null, saglam: 0, hurda: 0, kararBekliyor: 0, ...ek });
+    const e = (sira: number, ek: Partial<EksikAdimi>): EksikAdimi => ({ ...adim(sira), saglamAdet: null, saglam: 0, hurda: 0, kararBekliyor: 0, hataliEmirde: 0, ...ek });
     const harita = adimEksikleri([
       e(1, { durum: 'tamam', saglamAdet: 8, saglam: 9 }), e(2, { durum: 'calisiyor', saglam: 5, hurda: 1, kararBekliyor: 1 }),
       e(3, { durum: 'calisiyor', bagimlilik: 'akisli', saglam: 9 }), e(4, { bagimlilik: 'bagimsiz', saglam: 2 }),
     ]);
     assert.deepEqual([...harita.entries()], [[100, null], [200, 1], [300, -4], [400, null]], 'bitmiş adımın kapanışı, bitmemişin o anki sağlamı girer');
+    const hatali = adimEksikleri([e(1, { durum: 'tamam', saglamAdet: 8 }), e(2, { durum: 'tamam', saglamAdet: 0, saglam: 3, hataliEmirde: 5 })]);
+    assert.equal(hatali.get(200), 0, '1188: emirde kalan hatalı adımın girdisini tüketir');
   });
 
   test('647 a: sayım aşımı uyarısı; düşürme ve sınır içi uyarmaz', () => {
