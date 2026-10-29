@@ -104,21 +104,30 @@ test.describe('R3 Üretim emirleri ve Stok', () => {
     await ac('/recete-rota');
     const emirler = page.getByRole('region', { name: 'Üretim emirleri' });
     await expect(emirler.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
-    // Eski süzgeç çubuğu (497/2 a): geniş ekranda her grup tek satırlık bölümlü çubuk; emir no hiçbir genişlikte kırılmaz.
-    if ((page.viewportSize()?.width ?? 0) >= 1280) {
-      for (const ad of ['Tür', 'Durum']) {
-        const ustler = await emirler.getByRole('group', { name: ad }).locator('button').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().top)));
-        expect(new Set(ustler).size).toBeLessThanOrEqual(1);
-      }
-    }
+    // Süzgeç (1101 a): durum tek satırlık bölümlü çubuk, tür açılır liste; emir no hiçbir genişlikte kırılmaz.
+    const ustler = await emirler.getByRole('group', { name: 'Durum' }).locator('button').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().top)));
+    expect(new Set(ustler).size).toBeLessThanOrEqual(1);
+    await expect(emirler.getByRole('combobox', { name: 'Tür' })).toBeVisible();
     const satirSayilari = await emirler.locator('.tc-rr3-emirno').evaluateAll((l) => l.map((b) => {
       const r = document.createRange(); r.selectNodeContents(b); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
     }));
     expect(satirSayilari.filter((n) => n > 1)).toEqual([]);
     const ilk = emirler.locator('.tc-rr3-emir').first();
     if (await ilk.count()) {
+      // Liste ve yan panel (1100 B): dar ekranda ayrıntı listenin yerine geçer, "Emirler" ile dönülür.
       await ilk.click();
-      await expect(ilk).toHaveAttribute('aria-expanded', 'true');
+      const no = (await ilk.locator('.tc-rr3-emirno').textContent()) ?? '';
+      const panel = emirler.getByRole('region', { name: `${no} ayrıntısı` });
+      await expect(panel).toBeVisible();
+      // Dar ya da geniş, kabın genişliğine bağlıdır (kap sorgusu); geri düğmesi yalnız darda görünür.
+      const geri = panel.getByRole('button', { name: 'Emirler', exact: true });
+      if (await geri.isVisible()) {
+        await expect(ilk).toBeHidden();
+        await geri.click();
+        await expect(ilk).toBeVisible();
+      } else {
+        await expect(ilk).toHaveAttribute('aria-pressed', 'true');
+      }
     }
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await seritte(page, 'Stok').click();

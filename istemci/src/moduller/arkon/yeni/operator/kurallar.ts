@@ -414,14 +414,15 @@ export function vardiyaHesabi(d: VardiyaVerisi, simdi: number, ortam: OeeOrtami)
 }
 export const yuzde = yuzdeMetni;
 
-// Vardiya özeti penceresinin sayıları (shiftStats). Ölçüm sayıları bu açılıştaki ekrandan, gerisi vardiyanın kayıtlarındandır.
+// Vardiya özeti penceresinin sayıları (shiftStats). Ölçüm ve hatalı sayıları bu açılıştaki ekrandan, gerisi vardiyanın kayıtlarındandır.
+// 1190: TMI işinde Hatalı girişi hurda sayımına yazılmaz (1188), bu yüzden hatalı adedi ayrı gelir; TMI dışı işte alan yoktur.
 export interface VardiyaOzetGirdisi {
   kisi: string; istasyon: string; cevrim: number; olcumUygun: number; olcumRed: number;
-  cagriSureleri: readonly number[]; cagriAcik: boolean; nedenAdi: (kod: string) => string;
+  cagriSureleri: readonly number[]; cagriAcik: boolean; nedenAdi: (kod: string) => string; hatali?: number;
 }
 export interface VardiyaOzeti {
   title: string; machine: string; good: number; scrap: number; best: number | string; std: number | string; mOk: number; mNok: number;
-  stopMin: number; stops: number; topReason: string | null; calls: number; callAvg: string; goal: number; headline: string;
+  stopMin: number; stops: number; topReason: string | null; calls: number; callAvg: string; goal: number; headline: string; hatali?: number;
 }
 export function vardiyaOzeti(c: VardiyaHesabi, g: VardiyaOzetGirdisi): VardiyaOzeti {
   const good = c.good;
@@ -434,7 +435,7 @@ export function vardiyaOzeti(c: VardiyaHesabi, g: VardiyaOzetGirdisi): VardiyaOz
     title: `Vardiya özeti · ${g.kisi.split(' ')[0] ?? ''}`, machine: g.istasyon, good, scrap: c.scrap, best: c.best ? Math.round(c.best / 1000) : '—',
     std: g.cevrim || '—', mOk: g.olcumUygun, mNok: g.olcumRed, stopMin: Math.round(c.stopMs / 60000), stops: c.stops,
     topReason: c.topReason ? g.nedenAdi(c.topReason) : null, calls: g.cagriSureleri.length + (g.cagriAcik ? 1 : 0), callAvg: ort,
-    goal: c.expected || Math.max(1, good), headline,
+    goal: c.expected || Math.max(1, good), headline, ...(g.hatali === undefined ? {} : { hatali: g.hatali }),
   };
 }
 

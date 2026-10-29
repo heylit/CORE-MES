@@ -1,5 +1,6 @@
 import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
 
 // R1 saf kuralları (205 a): bugünkü ekranın tarayıcı kuralları (rotaEksikleri, islemSuresiEksik, girdiOlur, stepFactors, matCost) ve
 // rota düzenlemesi. Veri bağlı durumun biçimidir (prototipin `st` alan adları). Kural ve yetki sahibinin ucundadır; buradakiler ekranın
@@ -461,4 +462,37 @@ export function malzemeAra(liste: readonly Malzeme[], q: string, tur: string, gi
     .map((m) => ({ m, bas: s && kucuk(m.code).startsWith(s) ? 0 : 1 }))
     .sort((a, b) => a.bas - b.bas || a.m.code.localeCompare(b.m.code, 'tr'))
     .map((x) => x.m);
+}
+
+/* ---------------- adımın şartnameleri (971 a, 989 a) ---------------- */
+
+// Sözleşmedeki AZAMI_ADIM_SARTNAMESI; istemci sözleşmeden yalnız tip alır.
+export const AZAMI_ADIM_SARTNAMESI = 5;
+export type AdimSartnamesi = RevizyonSartnameleriCevabi['adimlar'][number]['sartnameler'][number];
+
+export const kapsamaUyar = (kapsam: SartnameKapsami, fason: boolean): boolean => kapsam === 'ikisi' || (kapsam === 'fason') === fason;
+
+// Eklenebilen: kullanımda, yayınlanmış sürümü olan, adımın türüne (iç ya da fason) uyan ve adımda olmayan şartname. Sunucu da aynısını reddeder.
+export function eklenebilirSartnameler(liste: readonly SartnameOzeti[], bagli: ReadonlySet<number>, fason: boolean): SartnameOzeti[] {
+  return liste
+    .filter((s) => s.aktif && s.yururlukteSurumNo !== null && !bagli.has(s.id) && kapsamaUyar(s.kapsam, fason))
+    .sort((a, b) => a.kod.localeCompare(b.kod, 'tr'));
+}
+
+// Satırın durumu: onaya göndermede ve emir açılırken reddedilecek eksikler önce gelir.
+export function adimSartnameDurumu(x: AdimSartnamesi): { tamam: boolean; metin: string } {
+  if (x.yururlukte === null) return { tamam: false, metin: 'Yayınlanmış sürümü yok' };
+  if (x.kapsamUyumsuz) return { tamam: false, metin: x.sartname.kapsam === 'fason' ? 'Yalnız fason adıma uyar' : 'Yalnız iç adıma uyar' };
+  if (x.eksikler.length > 0) return { tamam: false, metin: `Eksik: ${x.eksikler.join(', ')}` };
+  return { tamam: true, metin: 'Tam' };
+}
+
+// Şartname taslak revizyonda ve OP numarası olan adımda değişir. Rotanın kaydı beklerken yazılmaz: iki yazım aynı sürümü okur, biri reddedilir.
+export function adimSartnameKilidi(g: { revDurumu: RevDurumu | null; opNo: number | null; kayitBekliyor: boolean }): string | null {
+  if (g.revDurumu === null) return 'Rota kaydedilince şartname eklenir.';
+  if (g.opNo === null) return 'Adım kaydedilip OP numarası alınca şartname eklenir.';
+  if (g.revDurumu === 'onay') return 'Revizyon onayda; şartnameyi değiştirmek için taslağa geri gönder.';
+  if (g.revDurumu !== 'taslak') return 'Şartname taslak revizyonda değişir.';
+  if (g.kayitBekliyor) return 'Rota değişikliği kaydediliyor…';
+  return null;
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
-import { sayi, tarih } from '../bicim.ts';
+import { sayi } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
@@ -9,17 +9,17 @@ import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  bugun, DURUM_SUZGECLERI, durumAdi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
+  aramaUyar, bugun, DURUM_SUZGECLERI, durumAdi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
-const TUR_KISA: Readonly<Record<string, string>> = { ham: 'HM', yari: 'YM', mamul: 'MM' };
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   const d = veri.durum;
   const [durumSuzgeci, setDurumSuzgeci] = useState<DurumSuzgeci>('aktif');
   const [turSuzgeci, setTurSuzgeci] = useState('tum');
+  const [arama, setArama] = useState('');
   const [acik, setAcik] = useState<string | null>(kimlik);
   const komut = useEmirKomutu();
   const emirler = useMemo(() => d.emirler?.orders ?? [], [d.emirler]);
@@ -37,16 +37,22 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
     );
   }
 
+  const urunBul = (o: Emir) => d.items?.find((i) => i.id === o.itemId) ?? null;
   const turUyar = (o: Emir) => turSuzgeci === 'tum' || o.tur === turSuzgeci;
-  const turler = Object.keys(EMIR_TURU_ADLARI);
   const sira = new Map(planSirasi(d).map((o, i) => [o.id, i]));
-  const satirlar = emirAgaci(emirler, (o) => turUyar(o) && durumUyar(o, durumSuzgeci));
+  const satirlar = emirAgaci(emirler, (o) => turUyar(o) && durumUyar(o, durumSuzgeci) && aramaUyar(o, urunBul(o), arama));
+  const acikEmir = acik === null ? null : emirler.find((o) => o.id === acik) ?? null;
+  // Tür listesinde yalnız emri olan türler (ve seçili olan) çıkar; sayı açılır listenin metnindedir.
+  const turSayisi = (t: string) => emirler.filter((o) => t === 'tum' || o.tur === t).length;
+  const turSecenekleri = [
+    { deger: 'tum', baslik: `Tüm türler (${String(turSayisi('tum'))})` },
+    ...Object.keys(EMIR_TURU_ADLARI).filter((t) => turSayisi(t) > 0 || t === turSuzgeci).map((t) => ({ deger: t, baslik: `${turAdi(t)} (${String(turSayisi(t))})` })),
+  ];
 
   return (
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
-      <p className="tc-rr3-ipucu">
-        Emirler Üretim Emirleri sayfasıyla ortaktır; terminalde başlatılan, sayılan ve biten iş burada ilerleme olarak görünür. Emir yürürlükteki
-        rotadan açılır.
+      <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
+        <Simge ad="help" boyut="k" />Emirler Üretim Emirleri sayfasıyla ortaktır; terminaldeki iş burada ilerleme olarak görünür.
       </p>
       {komut.uyari && (
         <div className="tc-rr3-uyari-kutu" role="alert">
@@ -55,28 +61,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
           <Dugme onClick={komut.uyariKapat}>Tamam</Dugme>
         </div>
       )}
-      {acabilir && (
-        <div className="tc-rr3-arac">
-          <Dugme tur={yeniAcik ? 'ikincil' : 'birincil'} simge={yeniAcik ? 'x' : 'plus'} aria-expanded={yeniAcik} onClick={() => { setYeniAcik(!yeniAcik); }}>
-            {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
-          </Dugme>
-        </div>
-      )}
-      {acabilir && yeniAcik && (
-        <YeniEmirFormu
-          durum={d} yetki={yetki} komut={komut}
-          acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setAcik(id); }}
-        />
-      )}
-      {/* Eski ekranın tek satırlık bölümlü süzgeç çubuğu (497/2 a). */}
       <div className="tc-rr3-suzgec">
-        <span className="tc-rr3-seg" role="group" aria-label="Tür">
-          {['tum', ...turler].map((t) => (
-            <button key={t} type="button" aria-pressed={turSuzgeci === t} onClick={() => { setTurSuzgeci(t); }}>
-              {t === 'tum' ? 'Tüm türler' : turAdi(t)} <small>{emirler.filter((o) => t === 'tum' || o.tur === t).length}</small>
-            </button>
-          ))}
-        </span>
         <span className="tc-rr3-seg" role="group" aria-label="Durum">
           {DURUM_SUZGECLERI.map((s) => (
             <button key={s.deger} type="button" aria-pressed={durumSuzgeci === s.deger} onClick={() => { setDurumSuzgeci(s.deger); }}>
@@ -84,32 +69,48 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
             </button>
           ))}
         </span>
-      </div>
-      {satirlar.length === 0
-        ? <DurumKutusu durum="bos" mesaj="Bu süzgeçte emir yok." />
-        : (
-          <ul className="tc-rr3-liste" aria-label="Üretim emirleri">
-            <li className="tc-rr3-bas" aria-hidden="true">
-              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan bitiş</span><span>İlerleme</span><span>Durum</span>
-            </li>
-            {satirlar.map((s) => (
-              <EmirSatiri
-                key={s.emir.id} durum={d} emir={s.emir} derinlik={s.derinlik} acik={acik === s.emir.id} sira={sira.get(s.emir.id) ?? null}
-                ac={() => { setAcik(acik === s.emir.id ? null : s.emir.id); }}
-              >
-                <EmirAyrintisi durum={d} emir={s.emir} yetki={yetki} git={git} komut={komut} emirAc={setAcik} />
-              </EmirSatiri>
-            ))}
-          </ul>
+        <Secim etiket="Tür" value={turSuzgeci} secenekler={turSecenekleri} onChange={(o) => { setTurSuzgeci(o.target.value); }} />
+        <Girdi etiket="Ara" type="search" placeholder="Emir no, ürün ya da not" value={arama} onChange={(o) => { setArama(o.target.value); }} />
+        {acabilir && (
+          <Dugme tur={yeniAcik ? 'ikincil' : 'birincil'} simge={yeniAcik ? 'x' : 'plus'} aria-expanded={yeniAcik} onClick={() => { setYeniAcik(!yeniAcik); }}>
+            {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
+          </Dugme>
         )}
+      </div>
+      {acabilir && yeniAcik && (
+        <YeniEmirFormu
+          durum={d} yetki={yetki} komut={komut}
+          acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setArama(''); setAcik(id); }}
+        />
+      )}
+      {/* 1100 B: liste solda, seçili emrin ayrıntısı sağ panelde; dar alanda liste ve ayrıntı ayrı görünür (CSS kap sorgusu). */}
+      <div className="tc-rr3-cift" data-secili={acikEmir ? '' : undefined}>
+        <div className="tc-rr3-sol">
+          {satirlar.length === 0
+            ? <DurumKutusu durum="bos" mesaj="Bu süzgeçte emir yok." />
+            : (
+              <ul className="tc-rr3-liste" aria-label="Üretim emirleri">
+                {satirlar.map((s) => (
+                  <EmirSatiri
+                    key={s.emir.id} durum={d} emir={s.emir} derinlik={s.derinlik} secili={acik === s.emir.id} sira={sira.get(s.emir.id) ?? null}
+                    sec={() => { setAcik(acik === s.emir.id ? null : s.emir.id); }}
+                  />
+                ))}
+              </ul>
+            )}
+        </div>
+        {acikEmir
+          ? <EmirAyrintisi key={acikEmir.id} durum={d} emir={acikEmir} yetki={yetki} git={git} komut={komut} emirAc={setAcik} kapat={() => { setAcik(null); }} />
+          : <div className="tc-rr3-bos-panel"><DurumKutusu durum="bos" mesaj="Ayrıntı için listeden bir emir seçin." /></div>}
+      </div>
     </div>
   );
 }
 
 // Sol şerit emrin plan sırasından renk alır (plandaki emirler ayırt edilsin); plan dışı emirde şerit çizgi rengidir.
-
-function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
-  durum: RrDurumu; emir: Emir; derinlik: number; acik: boolean; sira: number | null; ac: () => void; children: React.ReactNode;
+// Satır emri seçer; ayrıntı satırın altında değil sağ paneldedir. Öncelik yalnız Acil ve Yüksek ise etiket olur (Normal varsayılandır).
+function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
+  durum: RrDurumu; emir: Emir; derinlik: number; secili: boolean; sira: number | null; sec: () => void;
 }) {
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const il = ilerleme(d, o);
@@ -119,45 +120,40 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   const gecikiyor = ozet.tur === 'planlanamiyor' || (ozet.tur === 'plan' && ozet.gecikiyor);
   const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
   const rev = o.rev === null ? null : d.routeRevs?.find((r) => r.id === o.rev) ?? null;
-  const revEski = rev !== null && rev.status !== 'yururlukte';
   const yuzde = il.toplam ? Math.round((il.biten / il.toplam) * 100) : o.status === 'tamam' ? 100 : 0;
+  const alt = [
+    ana ? `${o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · ${ana.no}` : null,
+    turAdi(o.tur),
+    rev ? `Rev ${rev.no}${rev.status === 'yururlukte' ? '' : ', eski rota'}` : null,
+  ].filter(Boolean).join(' · ');
   return (
     <li
-      className="tc-rr3-satir-kap" data-acik={acik ? '' : undefined} data-gec={gecikiyor ? '' : undefined}
+      className="tc-rr3-satir-kap" data-acik={secili ? '' : undefined} data-gec={gecikiyor ? '' : undefined}
       data-serit={sira === null ? undefined : String(seritNo(sira))} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
     >
-      <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
+      <button type="button" className="tc-rr3-emir" aria-pressed={secili} onClick={sec}>
         <span className="tc-rr3-no">
-          <span className="tc-rr3-oncelik" data-oncelik={String(o.priority)}>{ONCELIK_ADI[o.priority] ?? ''}</span>
-          <b className="tc-rr3-emirno">{o.no}</b>
           <span className="tc-rr3-etiketler">
-            <span className="tc-rr3-tur" data-tur={o.tur}>{turAdi(o.tur)}</span>
-            {ana && <small>{o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · {ana.no}</small>}
-            {rev && <span className="tc-rr3-rev">Rev {rev.no} {revEski ? 'eski rota' : 'sabit'}</span>}
+            {derinlik > 0 && <Simge ad={o.kol ? 'route' : 'layers'} boyut="k" />}
+            <b className="tc-rr3-emirno">{o.no}</b>
+            {o.priority <= 2 && <span className="tc-rr3-oncelik" data-oncelik={String(o.priority)}>{ONCELIK_ADI[o.priority] ?? ''}</span>}
           </span>
-        </span>
-        <span className="tc-rr3-urun">
-          {derinlik > 0 && <Simge ad={o.kol ? 'route' : 'layers'} boyut="k" />}
-          {urun && derinlik === 0 && <span className="tc-rr3-slot" data-tur={urun.type}>{TUR_KISA[urun.type] ?? ''}</span>}
           <span className="tc-rr3-urun-ad">
-            {urun ? <><b>{urun.code}</b> <small>{urun.name}</small></> : <small>Ürün okunamadı</small>}
-            {o.note && <small className="tc-rr3-not">{o.note}</small>}
+            {urun ? <span><b>{urun.code}</b> <small>{urun.name}</small></span> : <small>Ürün okunamadı</small>}
+            <small>{sayi(o.qty)} {urun?.unit ?? ''} · {alt}</small>
+          </span>
+          <span className="tc-rr3-ilerleme">
+            <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
+            <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)}` : ''}</small>
           </span>
         </span>
-        <span className="tc-rr3-sag" data-baslik="Miktar"><b>{sayi(o.qty)}</b> <small>{urun?.unit ?? ''}</small></span>
-        <span data-baslik="Teslim">{tarih(o.due)}</span>
-        <span data-baslik="Plan bitiş">
+        <span data-baslik="Plan bitiş" className="tc-rr3-plan-hucre">
           <PlanHucresi plan={plan} tampon={tampon} />
           {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined}>{plan.alt}</small>}
         </span>
-        <span className="tc-rr3-ilerleme" data-baslik="İlerleme">
-          <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
-          <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)}` : ''}</small>
-        </span>
-        <span data-baslik="Durum"><span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span></span>
-        <Simge ad={acik ? 'down' : 'chev-right'} boyut="k" />
+        <span className="tc-rr3-durum-hucre"><span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span></span>
+        <Simge ad="chev-right" boyut="k" />
       </button>
-      {acik && <div className="tc-rr3-govde">{children}</div>}
     </li>
   );
 }

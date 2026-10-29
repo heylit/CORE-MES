@@ -43,14 +43,15 @@
   container-type: inline-size; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-width: 0; overflow: hidden;
   background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
 }
-.tc-rr3-bas, .tc-rr3-emir {
-  display: grid; align-items: center; gap: var(--b-3);
-  grid-template-columns: minmax(min-content, 1.2fr) minmax(0, 2fr) minmax(0, .7fr) minmax(0, .8fr) minmax(0, 1.3fr) minmax(0, .9fr) minmax(min-content, .8fr) auto;
+/* Liste satırı (1100 B): solda emir no, ürün ve ilerleme; sağda durum ve plan bitişi; liste dar sütunda da iki satırda kalır. */
+.tc-rr3-emir {
+  display: grid; align-items: center; gap: var(--b-1) var(--b-3);
+  grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: auto auto;
 }
-.tc-rr3-bas {
-  padding: var(--b-2) var(--b-4); background: var(--panel2); border-bottom: var(--cizgi) solid var(--edge);
-  color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; letter-spacing: var(--harf-aralik-02);
-}
+.tc-rr3-emir > .tc-rr3-no { grid-row: 1 / span 2; }
+.tc-rr3-emir > .tc-rr3-durum-hucre { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+.tc-rr3-emir > .tc-rr3-plan-hucre { grid-column: 2; grid-row: 2; flex-direction: column; align-items: flex-end; }
+.tc-rr3-emir > svg { grid-column: 3; grid-row: 1 / span 2; }
 .tc-rr3-satir-kap { --serit: var(--edge); min-width: 0; border-bottom: var(--cizgi-ince) solid var(--edge); border-left: calc(var(--b-1) + var(--cizgi-ince)) solid var(--serit); }
 .tc-rr3-satir-kap:last-child { border-bottom: 0; }
 /* Eski ekranın 10 renklik serisi (464/1 a, --grafik-1..10); değişkenler ortak tasarıma girene kadar plan ekranıyla aynı karşılıklar. */
@@ -76,6 +77,8 @@
 .tc-rr3-emir > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; overflow-wrap: anywhere; }
 .tc-rr3-emir small { color: var(--muted); }
 .tc-rr3-emir > .tc-rr3-no { flex-direction: column; align-items: flex-start; }
+.tc-rr3-emir > .tc-rr3-no > .tc-rr3-ilerleme { display: flex; flex-direction: row; align-items: center; align-self: stretch; gap: var(--b-2); }
+.tc-rr3-emir > .tc-rr3-no > .tc-rr3-ilerleme progress { flex: 1; }
 /* Emir no kırılmaz (eski ekranda tek satır); sütun en az onun genişliğindedir. Eski ekran gibi kalın, düz yazı. */
 .tc-rr3-emirno { font-size: var(--yazi-m); font-weight: 700; letter-spacing: var(--harf-aralik-02); white-space: nowrap; overflow-wrap: normal; }
 /* Eski ekranın küçük etiketleri (805 R2): öncelik hap, tür ve durum kutu, revizyon hap; metin her zaman yazılır. */
@@ -179,13 +182,53 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-bar[data-tur="parti"] { background: color-mix(in srgb, var(--hold) 18%, transparent); }
 .tc-rr3-bar[data-tur="bos"] { background: none; color: var(--muted); }
 
-/* Eski ekran gibi liste 900 pikselden darsa satırlar alt alta iner (eski .or-main kırılımı, çerçeve genişliğine göre): ekranın değil listenin genişliği. */
-@container (max-width: 900px) {
-  .tc-rr3-bas { display: none; }
-  .tc-rr3-emir { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tc-rr3-no, .tc-rr3-urun { grid-column: 1 / -1; }
-  .tc-rr3-emir > span[data-baslik]::before { flex-basis: 100%; content: attr(data-baslik); color: var(--muted); font-size: var(--yazi-xs); }
-  .tc-rr3-sag { justify-content: flex-start; }
-  .tc-rr3-emir > svg { justify-self: end; }
-  .tc-rr3-satir-kap[data-derinlik] > .tc-rr3-emir { padding-left: calc(var(--b-3) + var(--b-2)); }
+/* 1100 B: liste ve ayrıntı yan yana; alan darsa (kabuk menüsü açık dar ekran, telefon) ya liste ya ayrıntı görünür, ayrıntıda geri düğmesi çıkar. */
+.tc-rr3-ipucu-simge { display: flex; align-items: center; gap: var(--b-2); }
+.tc-rr3-suzgec { align-items: flex-end; }
+.tc-rr3-suzgec > .tc-alan { flex: 0 1 calc(var(--b-6) * 7); min-width: 0; }
+.tc-rr3-cift { container: rr3-cift / inline-size; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--b-4); min-width: 0; }
+.tc-rr3-sol { flex: 4 1 0; min-width: 0; }
+.tc-rr3-ayrinti, .tc-rr3-bos-panel { flex: 5 1 0; min-width: 0; }
+.tc-rr3-ayrinti {
+  container: rr3-panel / inline-size; padding: var(--b-4); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-rr3-bos-panel { display: flex; align-self: stretch; }
+.tc-rr3-bos-panel > * { flex: 1; }
+.tc-rr3-pbas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-rr3-pbas h3 { flex: 1 1 auto; min-width: 0; }
+.tc-rr3-pbas .tc-rr3-geri { display: none; }
+.tc-rr3-purun { margin: 0; overflow-wrap: anywhere; }
+.tc-rr3-purun small, .tc-rr3-meta { color: var(--muted); }
+.tc-rr3-bilgi { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 4), 1fr)); gap: var(--b-3); margin: 0; }
+.tc-rr3-bilgi > div { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-rr3-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-rr3-bilgi dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; }
+.tc-rr3-uyari-kutu[data-ton="bilgi"] { border-color: var(--done); }
+.tc-rr3-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-4); margin: 0; font-size: var(--yazi-s); }
+.tc-rr3-meta b { color: var(--ink); font-weight: 600; }
+.tc-rr3-eylem { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding-top: var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-rr3-eylem > .tc-rr3-ana { margin-left: auto; }
+@container rr3-cift (max-width: 760px) {
+  .tc-rr3-sol, .tc-rr3-ayrinti, .tc-rr3-bos-panel { flex-basis: 100%; }
+  .tc-rr3-bos-panel { display: none; }
+  .tc-rr3-ayrinti ~ .tc-rr3-sol, .tc-rr3-sol:has(~ .tc-rr3-ayrinti) { display: none; }
+  .tc-rr3-pbas .tc-rr3-geri { display: inline-flex; }
+  .tc-rr3-pbas .tc-rr3-kapat { display: none; }
+}
+
+/* Yan paneldeki adım listesi (tuval 3): OP, operasyon ve yeri, sağlam, durum; dar panelde sağlam ve durum alt satıra iner. */
+.tc-rr3-adimlar { margin: 0; padding: 0; list-style: none; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); overflow: hidden; }
+.tc-rr3-adimlar > li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--b-1) var(--b-3);
+  padding: var(--b-2) var(--b-3); border-top: var(--cizgi-ince) solid var(--edge);
+}
+.tc-rr3-adimlar > li:first-child { border-top: 0; }
+.tc-rr3-adimlar .tc-rr3-op { font-family: var(--font-mono); }
+.tc-rr3-adim-ad, .tc-rr3-adim-saglam { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-rr3-adim-saglam { align-items: flex-end; }
+.tc-rr3-adimlar small { color: var(--muted); }
+.tc-rr3-adim-bos { color: var(--muted); }
+@container rr3-panel (max-width: 420px) {
+  .tc-rr3-adimlar > li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tc-rr3-adimlar .tc-rr3-adim-saglam { grid-column: 2; flex-direction: row; gap: var(--b-1); justify-self: start; }
 }

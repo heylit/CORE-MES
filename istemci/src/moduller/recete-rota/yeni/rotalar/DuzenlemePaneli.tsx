@@ -9,6 +9,8 @@ import {
   sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
   type Adim, type Malzeme, type Operasyon,
 } from './kurallar.ts';
+import { AdimSartnameleri } from './AdimSartnameleri.tsx';
+import { AdimTalimati } from './AdimTalimati.tsx';
 import { BAG_ADI, Bolme, fasonAdi, MetinAlani, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
@@ -363,6 +365,9 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
           <Dugme tur="ikincil" onClick={() => { yaz((x) => katalogaDon(x, op), 'Katalog değerlerine dönüldü'); }}>Katalog değerlerine dön ({op.abbr ?? op.code})</Dugme>
         )}
       </Bolme>
+      <AdimSartnameleri rev={dz.gorulen(s.urunId)} opNo={a.opNo} fason={fason} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul}
+        taslakAc={() => { const g = dz.gorulen(s.urunId); if (g) void dz.yeniTaslak(s.urunId, g); }} />
+      <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} />
       {ist && (
         <Bolme baslik={<><span className={`tc-rr1-nokta ${ist.id ? `tc-rr1-renk-${String(Number(ist.id) % 6)}` : ''}`} /> İstasyon {ist.code}{im ? `, ${im.name}` : ''}</>}>
           <dl className="tc-rr1-ig">

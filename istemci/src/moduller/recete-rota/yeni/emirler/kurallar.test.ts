@@ -4,7 +4,7 @@ import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
-  adimCarpanlari, adimDurumu, araStokHavuzu, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,
+  adimCarpanlari, adimDurumu, aramaUyar, araStokHavuzu, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,
   miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
 } from './kurallar.ts';
 
@@ -362,5 +362,30 @@ describe('tarih ve stok', () => {
       adimAdetleri: { 'UE-1|20': 10 },
     });
     expect(surectekiMalzeme(d).filter((x) => x.opNo === 10).map((x) => x.miktar)).toEqual([7]);
+  });
+});
+
+describe('liste süzgeci ve arama (1101 a)', () => {
+  it('durum çubuğu dört bölüm; aktif taslak, serbest ve üretimdedir; üretimi biten ve iptal aktifte yok', () => {
+    expect(DURUM_SUZGECLERI.map((x) => x.deger)).toEqual(['aktif', 'taslak', 'tamam', 'tum']);
+    expect(durumUyar(emir('1', { status: 'iptal' }), 'aktif')).toBe(false);
+    expect(durumUyar(emir('1', { status: 'tamam' }), 'aktif')).toBe(false);
+    expect(durumUyar(emir('1', { status: 'taslak' }), 'aktif')).toBe(true);
+    expect(durumUyar(emir('1', { status: 'iptal' }), 'tum')).toBe(true);
+    expect(durumUyar(emir('1', { status: 'taslak' }), 'taslak')).toBe(true);
+    expect(durumUyar(emir('1', { status: 'serbest' }), 'tamam')).toBe(false);
+  });
+
+  it('arama emir no, ürün kodu, ürün adı ve notta; harf büyüklüğü ve i/ı farkı gözetilmez', () => {
+    const o = emir('7', { note: 'Acil sevk' });
+    const urun = { code: 'MIL-01', name: 'Örnek Şaft' };
+    expect(aramaUyar(o, urun, '')).toBe(true);
+    expect(aramaUyar(o, urun, '  ')).toBe(true);
+    expect(aramaUyar(o, urun, 'ue-7')).toBe(true);
+    expect(aramaUyar(o, urun, 'mil')).toBe(true);
+    expect(aramaUyar(o, urun, 'ŞAFT')).toBe(true);
+    expect(aramaUyar(o, urun, 'ACİL')).toBe(true);
+    expect(aramaUyar(o, null, 'mil')).toBe(false);
+    expect(aramaUyar(o, urun, 'flanş')).toBe(false);
   });
 });

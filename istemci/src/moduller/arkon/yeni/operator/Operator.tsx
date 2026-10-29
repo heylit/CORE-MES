@@ -172,7 +172,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const [snooze, snoozeYaz] = useState<Record<string, number>>({});
   const [warnShow, warnShowYaz] = useState<UyariGosterimi | null>(null);
   const [scan, scanYaz] = useState<Okutma | null>(null);
-  const shiftRef = useRef({ good: 0, scrap: 0, mOk: 0, mNok: 0 });
+  const shiftRef = useRef({ good: 0, scrap: 0, mOk: 0, mNok: 0, hatali: 0 });
   const scrapLog = useRef<number[]>([]);
   const lastAct = useRef(Date.now());
   const simdi = useSimdi(1000);
@@ -952,6 +952,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         ovYaz(null);
         bip('call');
         hataliEkYaz((e) => ({ anahtar: hataliAnahtari, adet: (e.anahtar === hataliAnahtari ? e.adet : 0) + g.adet }));
+        shiftRef.current.hatali += g.adet;
         const yer = c.kolAcildi ? ` · kol ${c.hedefEmir.emirNo}` : ' · adımlar emre eklendi';
         say(`Hatalı · ${sayi(g.adet)} adet kaliteye ayrıldı${yer} · karar kalitede${c.uyari ? ` · ${c.uyari}` : ''}`, 'alert', 'hold',
           { action: { l: 'Kaliteyi çağır', fn: () => startCall(CAGRI_EKIPLERI.find((x) => x.k === 'kalite')!) } });
@@ -1076,6 +1077,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const shiftStats = () => vardiyaOzeti(vardiyaHesabi(SL, Date.now(), ortam), {
     kisi: ME, istasyon: MACHINE, cevrim: o.cycle, olcumUygun: shiftRef.current.mOk, olcumRed: shiftRef.current.mNok,
     cagriSureleri: callLog.map((x) => x.ms), cagriAcik: !!call, nedenAdi: (k) => nedenAdiYaz(k, nedenAdiOku),
+    // 1190: TMI işindeyken ya da vardiyada hatalı girildiyse kutu "hatalı" der; TMI dışı istasyonda hurda kalır.
+    ...(hataliTmi || shiftRef.current.hatali > 0 ? { hatali: shiftRef.current.hatali } : {}),
   });
   const setReady = (k: string) => islerYaz((l) => l.map((x) => (nextOrder && siraAnahtari(x) === siraAnahtari(nextOrder) ? { ...x, ready: { ...(x.ready as Record<string, boolean> | undefined), [k]: !((x.ready as Record<string, boolean> | undefined) || {})[k] } } : x)));
   const isSec = (i: number, sonra?: () => void) => isGecIste(i, () => { islerYaz((l) => l.map((x, j) => (j === i ? { ...x, fresh: false } : x))); sonra?.(); });

@@ -130,6 +130,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
   const sevkCikisi = async (emirId: number): Promise<number> => Number((await o().sahip.tek<{ m: string }>(
     `SELECT COALESCE(sum(h.miktar), 0)::text AS m FROM stok_hareketi h
       WHERE h.cikis_nedeni = 'sevk' AND h.uretim_emri_id = $1 AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)`, [emirId]))!.m);
+  const emirNumarasi = async (emirId: number): Promise<string> => (await o().sahip.tek<{ no: string }>('SELECT emir_no AS no FROM uretim_emri WHERE id = $1', [emirId]))!.no;
   const gecis = (satir: UrunSevkSatiri, onceki: SevkIsDurumu, yeni: SevkIsDurumu) =>
     o().vt.tx((db) => urunSevkiYansit(db, { satirlar: [satir], onceki, yeni, kisiId: yoneticiId }));
 
@@ -251,7 +252,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.equal(await sevkCikisi(id), 0);
   });
 
-  test('firmasız noktada Yolda adımı yok, teslim bulunduğu konumdan düşer; yetmeyen ve adedi bilinmeyen sevk reddedilir, hiçbir şey yazılmaz', async () => {
+  test('firmasız noktada Yolda adımı yok, teslim bulunduğu konumdan düşer; 1059 a: yetmeyen sevk lotu eksiye düşürür, adedi bilinmeyen ve parçasız sevk reddedilir', async () => {
     const id = await bitenEmir(3);
     const s: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '2', firmaId: null };
     await gecis(s, 'planlandi', 'yolda');
@@ -260,11 +261,44 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await sevkCikisi(id)], [1, 2]);
 
     const firmaId = await musteriKur();
-    await assert.rejects(gecis({ isId: ++isNo, uretimEmriId: id, adet: '2', firmaId }, 'planlandi', 'yolda'),
-      (h: { kod?: string; message: string }) => h.kod === 'CAKISMA' && /2 adet gerekli, stokta 1 adet var/.test(h.message));
     await assert.rejects(gecis({ isId: ++isNo, uretimEmriId: id, adet: null, firmaId }, 'planlandi', 'yolda'),
       (h: { kod?: string; message: string }) => h.kod === 'GECERSIZ' && /adedi bilinmiyor/.test(h.message));
-    assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await bakiye('k.tur', 'yolda', id)], [1, 0]);
+    assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await bakiye('k.tur', 'yolda', id)], [1, 0], 'reddedilen sevk hiçbir şey yazmaz');
+
+    const eksik: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '2', firmaId };
+    assert.deepEqual(await gecis(eksik, 'planlandi', 'yolda'), [`Emir ${await emirNumarasi(id)}: 1 adet stokta yoktu, eksiye düştü; sonraki giriş tamamlar.`]);
+    assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await bakiye('k.tur', 'yolda', id)], [-1, 2], 'başka lota geçilmez, aynı lot istasyonda eksiye düşer');
+    assert.equal((await o().sahip.tek<{ e: boolean }>(
+      "SELECT onayli_eksi AS e FROM stok_hareketi WHERE uretim_emri_id = $1 AND tur = 'transfer' ORDER BY id DESC LIMIT 1", [id]))!.e, true);
+    await assert.rejects(gecis({ isId: ++isNo, uretimEmriId: id, adet: '1', firmaId }, 'planlandi', 'yolda'),
+      (h: { kod?: string; message: string }) => h.kod === 'CAKISMA' && /Eksiye düşecek lot yok/.test(h.message));
+    await gecis(eksik, 'yolda', 'planlandi');
+    assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await bakiye('k.tur', 'yolda', id)], [1, 0], 'geri dönüş eksiyi kapatır');
+  });
+
+  test('1059 a: aynı lottan aynı anda iki sevk; ikincisi kilitte bekler, başka lota geçmez, lot eksiye düşer ve uyarı döner', async () => {
+    const id = await bitenEmir(2);
+    const ilk: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '1', firmaId: null };
+    const ikinci: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '2', firmaId: null };
+    let birak!: () => void;
+    const tutuluyor = new Promise<void>((r) => { birak = r; });
+    const ilkIs = o().vt.tx(async (db) => { await urunSevkiYansit(db, { satirlar: [ilk], onceki: 'yolda', yeni: 'tamamlandi', kisiId: yoneticiId }); await tutuluyor; });
+    await new Promise((r) => setTimeout(r, 50));
+    const ikinciIs = gecis(ikinci, 'yolda', 'tamamlandi');
+    let bekledi = false;
+    for (let i = 0; i < 100 && !bekledi; i += 1) {
+      bekledi = (await o().sahip.tek<{ n: number }>(
+        "SELECT count(*)::int AS n FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple')"))!.n > 0;
+      if (!bekledi) await new Promise((r) => setTimeout(r, 20));
+    }
+    birak();
+    await ilkIs;
+    assert.ok(bekledi, 'ikinci sevk bakiye kilidinde beklemedi');
+    assert.deepEqual(await ikinciIs, [`Emir ${await emirNumarasi(id)}: 1 adet stokta yoktu, eksiye düştü; sonraki giriş tamamlar.`]);
+    assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await sevkCikisi(id)], [-1, 3]);
+    const satirlar = await o().sahip.sorgu<{ e: boolean }>(
+      "SELECT onayli_eksi AS e FROM stok_hareketi WHERE uretim_emri_id = $1 AND cikis_nedeni = 'sevk' ORDER BY id", [id]);
+    assert.deepEqual(satirlar.map((x) => x.e), [false, true]);
   });
 
   test('147 b: karar bekleyen ve karantinadaki parça sevk edilmez; red parça çıkar, açıklaması söyler, geri alınır', async () => {

@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  SartnameCevabi, SartnameEkleGovdesi, SartnameKopyalaGovdesi, SartnameKunyeGovdesi, SartnamelerCevabi, SartnameTaslakGovdesi, StandartCevabi,
+  AdimSartnameleriGovdesi, KomutCevabi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameEkleGovdesi, SartnameKopyalaGovdesi, SartnameKunyeGovdesi, SartnamelerCevabi, SartnameTaslakGovdesi, StandartCevabi,
   StandartEkleGovdesi, TalimatSablonEkleGovdesi, TalimatSablonKaydetGovdesi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
+  TalimatlarCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
+import { anahtarlar as rrAnahtarlari, type RrVerisi } from '../veri.ts';
 
 // Şartname ve talimat sayfasının okuma ve yazmaları: rota modülünün uçları. Yetki ve sürüm denetimi uçtadır; ekran yalnız gizler.
 
@@ -14,6 +16,8 @@ export const anahtarlar = {
   sartname: (id: number) => [...KOK, 'sartname', id] as const,
   sablonlar: [...KOK, 'sablonlar'] as const,
   sablon: (id: number) => [...KOK, 'sablon', id] as const,
+  revizyon: (id: number) => [...KOK, 'revizyon', id] as const,
+  talimat: (urunId: number, opNo: number) => [...KOK, 'talimat', urunId, opNo] as const,
 };
 
 export const useSartnameler = () => useQuery({
@@ -84,3 +88,33 @@ export function useSablonKomutu() {
     },
   });
 }
+
+/* ---------------- rota adımı: şartnameler ve adımlı talimat ---------------- */
+
+export const useRevizyonSartnameleri = (id: number | null) => useQuery({
+  queryKey: anahtarlar.revizyon(id ?? 0),
+  enabled: id !== null,
+  queryFn: () => api.get<RevizyonSartnameleriCevabi>(`/rota/revizyonlar/${String(id)}/sartnameler`),
+});
+
+// Yazım revizyonun sürümünü artırır. Rota düzenleyicisi sonraki kaydında sürümü ekrandaki durumdan okur; durum yeniden okunmayı
+// beklemeden burada güncellenir, yoksa rotanın sıradaki kaydı "başka yerde değişti" diye reddedilir.
+export function useAdimSartnameleriKaydet(revizyonId: number) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (g: AdimSartnameleriGovdesi) => api.post<KomutCevabi>(`/rota/revizyonlar/${String(revizyonId)}/adim-sartnameleri`, g),
+    onSuccess: (c) => {
+      istemci.setQueryData<RrVerisi>(rrAnahtarlari.veri, (v) => (v?.durum.routeRevs ? {
+        ...v, durum: { ...v.durum, routeRevs: v.durum.routeRevs.map((r) => (r.id === String(c.id) ? { ...r, surum: c.surum } : r)) },
+      } : v));
+      void istemci.invalidateQueries({ queryKey: anahtarlar.revizyon(revizyonId) });
+      void istemci.invalidateQueries({ queryKey: anahtarlar.sartnameler });
+    },
+  });
+}
+
+export const useTalimatlar = (urunId: number, opNo: number | null) => useQuery({
+  queryKey: anahtarlar.talimat(urunId, opNo ?? 0),
+  enabled: opNo !== null,
+  queryFn: () => api.get<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}`),
+});
