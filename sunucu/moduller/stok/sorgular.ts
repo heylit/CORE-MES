@@ -908,6 +908,10 @@ export const yoldaTeslimleri = (db: Db, istekIdler: number[]): Promise<{ istekId
     : db.sorgu(`SELECT DISTINCT ON (istek_id) istek_id AS "istekId", id, no FROM stok_teslim WHERE istek_id = ANY($1::int[]) AND durum = 'yolda' ORDER BY istek_id, id`, [istekIdler]));
 export const yoldaTeslimVarMi = async (db: Db, istekId: number): Promise<boolean> =>
   (await db.tek("SELECT 1 FROM stok_teslim WHERE istek_id = $1 AND durum = 'yolda' LIMIT 1", [istekId])) !== null;
+// 1229 a: bölünen istekli teslimin parçaları: yolda kalan var mı ve alınanların toplamı.
+export const istegeTeslimler = async (db: Db, istekId: number): Promise<{ yolda: boolean; alinan: string }> =>
+  (await db.tek<{ yolda: boolean; alinan: string }>(
+    `SELECT bool_or(durum = 'yolda') IS TRUE AS yolda, COALESCE(sum(alinan) FILTER (WHERE durum = 'teslim'), 0)::text AS alinan FROM stok_teslim WHERE istek_id = $1`, [istekId]))!;
 // Aynı kaynak kimliğiyle eşzamanlı ikinci açılış ilkinin bitmesini bekler ve satır döndürmez; çağıran ilk kaydı okur.
 export const istekAc = async (db: Db, i: {
   no: string; kaynakKimligi: string; malzemeId: number; miktar: string; istasyonId: number | null; uretimEmriId: number | null; aciklama: string | null; kisiId: number;
@@ -1050,6 +1054,13 @@ export const konumdakiPartiler = async (db: Db, malzemeId: number, konumId: numb
   (await db.sorgu<{ partiId: number | null }>(
     'SELECT parti_id AS "partiId" FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND statu_id IS NOT DISTINCT FROM $3 AND kalite_durumu = $4 ORDER BY ilk_giris, id',
     [malzemeId, konumId, statuId, kalite])).map((r) => r.partiId);
+// 1229 a: konumda bir malzemenin tek statü ve kalitedeki partileri (lotsuz dahil), en eski giriş önce; yoldaki teslime ayrılan düşülür.
+export const konumdakiPartiMiktarlari = (db: Db, malzemeId: number, konumId: number, statuId: number | null, kalite: KaliteDurumu): Promise<{ partiId: number | null; serbest: string }[]> =>
+  db.sorgu(
+    `SELECT b.parti_id AS "partiId", (b.miktar - COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id
+              AND t.malzeme_id = b.malzeme_id AND t.parti_id IS NOT DISTINCT FROM b.parti_id AND t.statu_id IS NOT DISTINCT FROM b.statu_id AND t.kalite_durumu = b.kalite_durumu), 0))::text AS serbest
+       FROM stok_bakiye b WHERE b.malzeme_id = $1 AND b.konum_id = $2 AND b.statu_id IS NOT DISTINCT FROM $3 AND b.kalite_durumu = $4 AND b.miktar > 0
+      ORDER BY b.ilk_giris, b.id`, [malzemeId, konumId, statuId, kalite]);
 export const teslimVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_teslim WHERE id = $1', [id])) !== null;
 // Gelenler: yoldaki teslimler; hedefIstasyonlar null ise bütün istasyonlar, depoDahil ise istasyon olmayan hedefler de.
 export const yoldakiGelenler = (db: Db, hedefIstasyonlar: number[] | null, depoDahil: boolean): Promise<TeslimHam[]> =>
@@ -1289,6 +1300,43 @@ export const kaliteBakiyeleri = (db: Db, malzemeId: number, statuId: number | nu
       WHERE b.malzeme_id = $1 AND b.statu_id IS NOT DISTINCT FROM $2 AND b.kalite_durumu = $3 AND b.miktar > 0
       ORDER BY (p.uretim_emri_id IS NOT NULL AND p.uretim_emri_id = $4) DESC, b.ilk_giris, b.id`,
     [malzemeId, statuId, kalite, uretimEmriId]);
+// Onaylı kapanışın stok maddesi (1214 O-5): emrin onaylı eksi düşümünün yazıldığı, o malzeme ve statüde toplamı hâlâ eksi duran istasyon.
+// Toplam bütün partilerin ve kalitelerin toplamıdır: lotlu parça sonradan teslim edilince lotsuz eksi satır kalsa da toplam kapanır.
+// Statülüde aynı statünün başka istasyonlardaki artı bakiyesi (teslim edilmemiş parçanın muhtemel yeri) birlikte döner.
+export const emrinIstasyonEksileri = (db: Db, uretimEmriId: number): Promise<{ konumKod: string; malzemeId: number; statuId: number | null; miktar: string; karsiliklar: { konumKod: string; miktar: string }[] }[]> =>
+  db.sorgu(
+    `WITH yer AS (
+       SELECT DISTINCT h.kaynak_konum_id AS konum_id, h.malzeme_id, h.kaynak_statu_id AS statu_id FROM stok_hareketi h JOIN stok_konum k ON k.id = h.kaynak_konum_id
+        WHERE h.uretim_emri_id = $1 AND h.onayli_eksi AND h.parti_id IS NULL AND k.tur = 'istasyon'),
+     net AS (
+       SELECT y.konum_id, y.malzeme_id, y.statu_id, sum(b.miktar) AS miktar FROM yer y
+         JOIN stok_bakiye b ON b.konum_id = y.konum_id AND b.malzeme_id = y.malzeme_id AND b.statu_id IS NOT DISTINCT FROM y.statu_id
+        GROUP BY y.konum_id, y.malzeme_id, y.statu_id HAVING sum(b.miktar) < 0)
+     SELECT k.kod AS "konumKod", n.malzeme_id AS "malzemeId", n.statu_id AS "statuId", n.miktar::text AS miktar,
+            CASE WHEN n.statu_id IS NULL THEN '[]'::json ELSE COALESCE((
+              SELECT json_agg(json_build_object('konumKod', kk.kod, 'miktar', a.miktar::text) ORDER BY kk.kod)
+                FROM (SELECT d.konum_id, sum(d.miktar) AS miktar FROM stok_bakiye d
+                       WHERE d.malzeme_id = n.malzeme_id AND d.statu_id = n.statu_id AND d.konum_id <> n.konum_id GROUP BY d.konum_id HAVING sum(d.miktar) > 0) a
+                JOIN stok_konum kk ON kk.id = a.konum_id WHERE kk.tur = 'istasyon'), '[]'::json) END AS karsiliklar
+       FROM net n JOIN stok_konum k ON k.id = n.konum_id
+      ORDER BY k.kod, n.malzeme_id, n.statu_id`, [uretimEmriId]);
+// Sayım düşünce geri çevrilecek parçanın eski kalitesi (1214 O-1): emrin bu istasyonda kaynak statüden adım statüsüne çevirdiği hareketler
+// (en yenisi önce) ve o kaliteden geri çevrilen toplam. Geri çevirme en yenisinden düştüğü için önceki geri çevirmeler en yenilerden düşülür.
+export async function emrinStatuCevirmeleri(
+  db: Db, a: { uretimEmriId: number; malzemeId: number; konumId: number; partiId: number | null; kaynakStatuId: number | null; hedefStatuId: number | null; hedefKalite: KaliteDurumu },
+): Promise<{ ileri: { miktar: string; kaynakKalite: KaliteDurumu }[]; geriCevrilen: string }> {
+  const p = [a.uretimEmriId, a.malzemeId, a.konumId, a.partiId, a.kaynakStatuId, a.hedefStatuId, a.hedefKalite];
+  const kosul = `h.tur = 'transfer' AND h.uretim_emri_id = $1 AND h.malzeme_id = $2 AND h.kaynak_konum_id = $3 AND h.hedef_konum_id = $3
+    AND h.parti_id IS NOT DISTINCT FROM $4`;
+  const ileri = await db.sorgu<{ miktar: string; kaynakKalite: KaliteDurumu }>(
+    `SELECT h.miktar::text AS miktar, COALESCE(h.kaynak_kalite_durumu, 'serbest') AS "kaynakKalite" FROM stok_hareketi h
+      WHERE ${kosul} AND h.kaynak_statu_id IS NOT DISTINCT FROM $5::int AND h.hedef_statu_id IS NOT DISTINCT FROM $6::int AND COALESCE(h.hedef_kalite_durumu, 'serbest') = $7
+      ORDER BY h.id DESC`, p);
+  const geri = await db.tek<{ m: string }>(
+    `SELECT COALESCE(sum(h.miktar), 0)::text AS m FROM stok_hareketi h
+      WHERE ${kosul} AND h.kaynak_statu_id IS NOT DISTINCT FROM $6::int AND h.hedef_statu_id IS NOT DISTINCT FROM $5::int AND COALESCE(h.kaynak_kalite_durumu, 'serbest') = $7`, p);
+  return { ileri, geriCevrilen: geri!.m };
+}
 // Emre yazılmış, geri alınmamış üretime sarflar (en yenisi önce): sayım düşünce sarf bunlardan geri alınır.
 // Elle sarf (iş emirsiz) sayımla geri alınmaz (denetim #1): sayım onu düşmemiştir.
 export const geriAlinmamisSarflar = (db: Db, uretimEmriId: number, malzemeId: number): Promise<{ id: number; miktar: string; konumId: number; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu }[]> =>
