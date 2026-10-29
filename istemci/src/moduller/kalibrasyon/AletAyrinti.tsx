@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AletAyrintiCevabi, Tur } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import { Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet } from '../../ortak/arayuz/index.ts';
@@ -10,6 +10,8 @@ import { DURUM_TONU, SONUC_METNI, durumMetni, tarihMetni } from './gosterim.ts';
 import { useKomut } from './komut.ts';
 
 type Acik = 'kalibrasyon' | 'duzenle' | 'disi' | 'sil' | null;
+// Adresle açılabilen formlar (Ctrl K, 1230 a): form dolu açılır, kayıt yine formda onaylanır.
+export type AdresFormu = 'kalibrasyon' | 'duzenle';
 
 const YOK = 'yok';
 
@@ -23,16 +25,20 @@ function Silme({ alet, kapat, bitti }: { alet: AletAyrintiCevabi; kapat: () => v
   );
 }
 
-export function AletAyrinti({ id, yazabilir, turler, kapat }: {
-  id: number; yazabilir: boolean; turler: readonly Tur[]; kapat: () => void;
+export function AletAyrinti({ id, yazabilir, turler, kapat, form = null, formKapandi }: {
+  id: number; yazabilir: boolean; turler: readonly Tur[]; kapat: () => void; form?: AdresFormu | null; formKapandi?: () => void;
 }) {
   const [acik, acikYaz] = useState<Acik>(null);
+  useEffect(() => { if (form !== null && yazabilir) acikYaz(form); }, [form, yazabilir]);
   const sorgu = useQuery({
     queryKey: anahtarlar.ayrinti(id),
     queryFn: () => api.get<AletAyrintiCevabi>(`/olcu-aletleri/${id}`),
   });
   const alet = sorgu.data;
-  const kapatForm = () => { acikYaz(null); };
+  const kapatForm = () => {
+    acikYaz(null);
+    formKapandi?.();
+  };
 
   return (
     <>
