@@ -18,6 +18,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
+import { EK_ADIM_SARTNAME_ROTA } from './kurallar.ts';
 import { isEmriSartnameleri, talimatSurumuAdimlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -551,5 +552,44 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
       if (eski === undefined) delete process.env['TMIV2_MEDYA_DIZINI']; else process.env['TMIV2_MEDYA_DIZINI'] = eski;
       await rm(dizin, { recursive: true, force: true });
     }
+  });
+  test('1034: rework adımına şartname sabitlenir; uretim-emirleri.yaz ister, rota adımı, eski sürüm, kapsam dışı ve zorunlusu boş şartname reddedilir', async () => {
+    const { id, surum } = await taslak([icAdim(), icAdim({ ad: 'Frezeleme', bilesenler: [] })]);
+    await yururlugeAl(id, surum);
+    const { uretimEmriId } = await emirAc(id);
+    const ust = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    const rework = {
+      oncekiOpNo: null, opNo: 15, tur: 'rework', ad: 'Kırık takım sökümü', operasyonTipiId: tip('TRN'), kaynak: { tur: 'makine', id: makine },
+      ayarSuresiDk: '5', birimSureDk: '2', terminGun: null, aciklama: null,
+    };
+    const bol = await tamam<{ altEmirId: number }>(c.planlama, 'POST', `/adimli-emirler/${uretimEmriId}/bol`, { adimSira: 2, adet: 1, surum: ust.surum, ekAdimlar: [rework] });
+    const kol = await vt().tx((db) => adimliEmirAyrintisi(db, bol.altEmirId));
+    const ek = kol.isEmirleri.find((i) => i.tur === 'rework')!;
+    const rotaAdimi = kol.isEmirleri.find((i) => i.tur === 'rota')!;
+    const yol = (isEmriId: number) => `/rota/emirler/${kol.id}/is-emirleri/${isEmriId}/sartnameler`;
+    const sok = sartname('TKR-SOK');
+    const degerler = { takim: 'Kılavuz', takimMalzeme: 'HSS', olcu: 'M6 kılavuz', yontem: 'Dalma erozyon (kılavuz eritme)' };
+    const govde = (sartnameler: { sartnameId: number; degerler: Record<string, unknown> }[], s = kol.surum) => ({ surum: s, sartnameler });
+
+    await red(c.operator, yol(ek.id), govde([{ sartnameId: sok.id, degerler }]), 403);
+    await red(c.planlama, yol(rotaAdimi.id), govde([{ sartnameId: sok.id, degerler }]), 409, new RegExp(EK_ADIM_SARTNAME_ROTA.slice(0, 20)));
+    await red(c.planlama, yol(ek.id), govde([{ sartnameId: sok.id, degerler }], kol.surum + 1), 409);
+    await red(c.planlama, yol(ek.id), govde([{ sartnameId: sok.id, degerler: { takim: 'Kılavuz' } }]), 400, /zorunlu alan boş/);
+    await red(c.planlama, yol(ek.id), govde([{ sartnameId: sartname('KPL-ZN').id, degerler: {} }]), 400, /yalnız fason adıma/);
+    const ustSonra = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    await red(c.planlama, `/rota/emirler/${uretimEmriId}/is-emirleri/${ek.id}/sartnameler`, govde([], ustSonra.surum), 404);
+
+    const r = await tamam<IsEmriSartnameleriCevabi>(c.planlama, 'POST', yol(ek.id), govde([{ sartnameId: sok.id, degerler }]));
+    const [x] = r.isEmirleri[0]!.sartnameler;
+    assert.deepEqual([r.isEmirleri[0]!.isEmriId, x?.sartname.kod, x?.surum.surumNo, x?.degerler.olcu, x?.degerler.sonra], [ek.id, 'TKR-SOK', 1, 'M6 kılavuz', 'Diş mastarla kontrol']);
+    assert.equal(x?.sabitleyen.ad, 'Deneme planlama');
+    const okunan = await tamam<IsEmriSartnameleriCevabi>(c.operator, 'GET', `/rota/is-emri-sartnameleri?idler=${ek.id}`);
+    assert.equal(okunan.isEmirleri[0]!.sartnameler.length, 1, 'terminal aynı okumayla görür');
+    // Liste bütün yazılır: yeniden yazılınca tek satır kalır, boş liste sabitleri kaldırır.
+    await tamam(c.planlama, 'POST', yol(ek.id), govde([{ sartnameId: sok.id, degerler: { ...degerler, olcu: 'M8 kılavuz' } }]));
+    const ikinci = await vt().tx((db) => isEmriSartnameleri(db, [ek.id]));
+    assert.deepEqual(ikinci.get(ek.id)?.map((y) => y.degerler.olcu), ['M8 kılavuz']);
+    const bos = await tamam<IsEmriSartnameleriCevabi>(c.planlama, 'POST', yol(ek.id), govde([]));
+    assert.deepEqual(bos.isEmirleri[0]!.sartnameler, []);
   });
 });

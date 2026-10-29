@@ -692,3 +692,14 @@ export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
 export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;
 export type TalimatSablonlariCevabi = z.output<typeof talimatSablonlariCevabi>;
 export type TalimatSablonuCevabi = z.output<typeof talimatSablonuCevabi>;
+
+/* ---------------- ek adımın şartnamesi (1034) ---------------- */
+
+// Planlama hatalı parçanın rework adımını (ya da kola koyduğu tamir veya ek adımı) doldurunca şartnamesini seçer. Liste bütün olarak
+// yazılır; boş liste sabitleri kaldırır. surum emrin sürümüdür (komut emri değiştirmez).
+export const ekAdimSartnameParametresi = z.object({ emirId: yolKimligi, isEmriId: yolKimligi });
+export const ekAdimSartnameleriGovdesi = z.object({
+  surum: KIMLIK,
+  sartnameler: z.array(z.object({ sartnameId: KIMLIK, degerler: parametreDegerleri })).max(AZAMI_ADIM_SARTNAMESI),
+}).strict();
+export type EkAdimSartnameleriGovdesi = z.input<typeof ekAdimSartnameleriGovdesi>;
