@@ -13,8 +13,9 @@ import type {
   AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
   ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
-import { istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -27,6 +28,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini,
+  GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
@@ -192,6 +194,7 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
     await eklerYaz(db, id, isEmriId, ie);
     isEmriIdleri.push(isEmriId);
   }
+  await otomatikGkkKoy(db, acanId, id);
   await emirAcildiBildir(db, { uretimEmriId: id, kisiId: acanId, stoktanRezerve: g.stoktanRezerve === true });
   return { uretimEmriId: id, isEmriIdleri };
 }
@@ -285,13 +288,15 @@ export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi
 export async function isEmirleriniYenile(
   db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[] },
 ): Promise<{ degisenler: string[] }> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
   const e = await kilitliUstEmir(db, uretimEmriId);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
   girdiDenetle(g.isEmirleri);
   const tipler = await tipKimlikleri(db);
-  const mevcut = await s.isEmirleriGetir(db, [uretimEmriId]);
+  const hepsi = await s.isEmirleriGetir(db, [uretimEmriId]);
+  const bekleyenGkk = hepsi.filter((i) => otomatikGkkMi(i) && i.durum === 'bekliyor');
+  const mevcut = hepsi.filter((i) => !bekleyenGkk.includes(i));
   // Kola konmuş rework, tamir ya da ek adım rotada yoktur; güvenli kip onu "rotada yok" diye silerdi. Böyle kol olduğu gibi kalır.
   if (mevcut.some((i) => i.tur !== 'rota')) return { degisenler: ['Ek adımlı parti değiştirilmedi'] };
   // Kol rotanın yalnız bir dilimini taşır: bütün rota ona uygulanırsa bölünmeden önceki ve birleşmeden sonraki adımlar ikinci kez yapılırdı.
@@ -302,6 +307,7 @@ export async function isEmirleriniYenile(
   const plan = guvenliUygula(mevcut, g.isEmirleri);
   const onde = oneDusenYeniAdimlar(plan, g.isEmirleri);
   if (onde.length > 0) throw cakisma(yeniAdimOndeIletisi(onde));
+  for (const i of bekleyenGkk) await bekleyeniSil(db, i.id);
   const rotada = new Map(g.isEmirleri.map((i) => [i.opNo, i]));
   const kimlik = new Map(mevcut.map((i) => [i.opNo, i.id]));
   const degisenler: string[] = [];
@@ -326,6 +332,7 @@ export async function isEmirleriniYenile(
   }
   if (plan.koru.some((op) => !rotada.has(op))) degisenler.push('Başlamış ya da bitmiş iş emirleri korundu');
   await s.emirKaynakRevizyonuYaz(db, uretimEmriId, g.kaynakRotaRevizyonId);
+  await otomatikGkkKoy(db, kisiId, uretimEmriId);
   await siradakiIstasyonuYaz(db, uretimEmriId);
   return { degisenler };
 }
@@ -689,6 +696,7 @@ export async function uretimYeriDegistir(
   if ((await s.uretimYeriYaz(db, isEmri.id, yeni)) === null) throw cakisma(URETIM_YERI_BASLAMIS);
   await s.uretimYeriDegisimiEkle(db, isEmri.id, eski, { fasonFirmaId: yeni.fasonFirmaId, terminGun: yeni.terminGun }, kisiId, await s.anAl(db));
   if ((await s.surumArtir(db, id, e.surum)) === null) throw eskiSurum();
+  if (g.yer === 'fason') await otomatikGkkKoy(db, kisiId, id);
   await siradakiIstasyonuYaz(db, id);
 }
 
@@ -704,9 +712,11 @@ async function fasonBaglami(db: Db, emirId: number, isEmriId: number) {
   if (isEmri === undefined) throw bulunamadi(IS_EMRI_YOK);
   const onceki = oncekiAdim(hepsi, isEmri);
   const ozetler = fasonOzeti(await s.fasonHareketleriGetir(db, [isEmriId]));
+  const gkk = hepsi.filter((i) => i.sira > isEmri.sira).sort((a, b) => a.sira - b.sira)[0];
   const durum: FasonDurumu = {
     durum: isEmri.durum, fason: isEmri.fasonFirmaId !== null, siradaki: siradakiIsEmri(hepsi)?.id === isEmriId, ...ozetler,
     gonderilebilir: (await adimaGiren(db, emirId, hepsi, isEmri)) ?? e.adet,
+    firmadaHatali: gkk === undefined ? 0 : (await gkkHesabi(db, hepsi, gkk))?.firmadaHatali ?? 0,
   };
   return { e, isEmri, durum, oncekiIsEmriId: onceki?.id ?? null };
 }
@@ -715,11 +725,13 @@ const oncekiAdim = (hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): IsEmr
   hepsi.filter((i) => i.sira < isEmri.sira).sort((a, b) => b.sira - a.sira)[0];
 
 // Adıma giren adet: önceki adımın sağlamı, bu adımda katılan kolların sağlamı, aynı sırada bölünenler düşülür. İlk adımda null.
-// Önceki adım bitmemişse (paralel adım, 639) o ana kadarki sağlamı girer.
+// Önceki adım bitmemişse (paralel adım, 639) o ana kadarki sağlamı girer. GKK adımına fasona gönderilen girer (1207 c).
 export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): Promise<number | null> {
   const onceki = oncekiAdim(hepsi, isEmri);
   if (onceki === undefined) return null;
-  const oncekiSaglam = onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : ((await s.adimSayaclariGetir(db, [onceki.id]))[0]?.saglam ?? 0);
+  const oncekiSaglam = (await gkkFasonuBul(db, hepsi, isEmri)) !== null
+    ? fasonOzeti(await s.fasonHareketleriGetir(db, [onceki.id])).gonderilen
+    : onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : ((await s.adimSayaclariGetir(db, [onceki.id]))[0]?.saglam ?? 0);
   const bolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [emirId]), emirId).filter((p) => p.bolunmeSira === isEmri.sira).reduce((t, p) => t + p.adet, 0);
   return oncekiSaglam + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
 }
@@ -769,6 +781,8 @@ async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriI
   const { e, isEmri, durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId);
   const ihlal = fasonGidisIhlali(durum, adet);
   if (ihlal !== null) throw cakisma(ihlal);
+  // 1208: GKK'sız açılmış emir ilk gidişte otomatik GKK'sını alır (adım bitmemiş, arkası başlamamış).
+  await otomatikGkkKoy(db, kisiId, emirId);
   if (isEmri.durum === 'bekliyor') await kolAdimiBaslarMi(db, e, isEmri);
   const an = await s.anAl(db);
   // İlk gidiş fason iş emrini başlatır.
@@ -977,6 +991,44 @@ export async function adimlariKoy(db: Db, kisiId: number, emirId: number, onceki
   }
   await kopyalandiBildir(db, kisiId, emirId, kopyalar);
   return idler;
+}
+
+/* ---------------- GKK (1205: fason dönüşü GKK adımıyla karara bağlanır; 1207 c, 1208) ---------------- */
+
+// Tanıma pasif tip de girer: tip sonradan pasif yapılsa da emirdeki GKK adımı GKK kalır.
+const gkkTipiId = async (db: Db): Promise<number | null> =>
+  (await operasyonTipleri(db, { pasiflerDahil: true })).find((t) => t.kod === GKK_TIPI && t.grup === 'KAL')?.id ?? null;
+
+// Otomatik GKK kalite istasyonundadır (tipin varsayılanı ya da ilk aktif kalite istasyonu). Aktif GKK tipi ya da kalite istasyonu
+// yoksa adım girmez: istasyonsuz adım terminalden başlamaz ve emri durdururdu; eksik GKK rotada uyarı olarak kalır.
+export async function otomatikGkkKoy(db: Db, kisiId: number, emirId: number): Promise<void> {
+  const tip = gkkTipiSec(await operasyonTipleri(db));
+  if (tip === null) return;
+  const yerler = otomatikGkkYerleri(await s.isEmirleriGetir(db, [emirId]), tip.id);
+  if (yerler.length === 0) return;
+  const istasyonId = kaliteIstasyonuSec(tip, await aktifIstasyonlar(db), null);
+  if (istasyonId === null) return;
+  for (const y of yerler) {
+    await adimlariKoy(db, kisiId, emirId, y.oncekiOpNo, [
+      { opNo: y.opNo, ad: OTOMATIK_GKK_ADI, operasyonTipiId: tip.id, istasyonId, tur: 'ek', ekAciklama: OTOMATIK_GKK, bagimlilik: 'bekleyen' },
+    ]);
+  }
+}
+
+// Tip yalnız önceki adım fasonsa okunur: sayım ve stok yolunda her adımda sorgu açılmaz.
+export async function gkkFasonuBul(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<IsEmriSatiri | null> {
+  if (oncekiAdim(hepsi, adim)?.fasonFirmaId == null) return null;
+  return gkkFasonu(hepsi, adim, await gkkTipiId(db));
+}
+
+export interface GkkHesabi { fasonIsEmriId: number; gonderilen: number; donen: number; firmadaHatali: number }
+// GKK adımının hesabı: fasona gönderilen, dönen ve GKK'da Firmada hurda ya da Firmadan gelmedi sayılan. GKK adımı değilse null.
+export async function gkkHesabi(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<GkkHesabi | null> {
+  const fason = await gkkFasonuBul(db, hepsi, adim);
+  if (fason === null) return null;
+  const o = fasonOzeti(await s.fasonHareketleriGetir(db, [fason.id]));
+  const nedenler = (await hurdaNedenleriniListele(db, { yalnizAktif: false })).filter((n) => SABIT_HURDA_KODLARI.includes(n.kod)).map((n) => n.id);
+  return { fasonIsEmriId: fason.id, gonderilen: o.gonderilen, donen: o.donenSaglam + o.donenHurda, firmadaHatali: await s.adimHataliAdedi(db, adim.id, nedenler) };
 }
 
 // Kalite "rework" dedikten sonra planlama ikinci adımı doldurur (1034): ad, tip, kaynak ve süre ya da termin (7 a). Adım bekliyor olmalı.
@@ -1314,7 +1366,8 @@ export const rotasizIsEmirleri = (db: Db): Promise<RotasizIsEmri[]> => acikAdiml
 async function acikAdimlar<R extends number | null>(
   db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini,
 ): Promise<(Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: R })[]> {
-  const satirlar = await s.planlanacakIsEmirleriGetir(db, taslakDahil);
+  // 1208: otomatik GKK plana girmez (fason adımı gibi): kaynaksız ve süresizdir, girse ardılını bekletirdi; fasonun beklemesi ardıla geçer.
+  const satirlar = (await s.planlanacakIsEmirleriGetir(db, taslakDahil)).filter((i) => !otomatikGkkMi(i));
   const emirIdleri = [...new Set(satirlar.map((i) => i.emir.id))];
   const agac = await s.altPartilerGetir(db, emirIdleri);
   const butun = await s.isEmirleriGetir(db, emirIdleri);

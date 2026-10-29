@@ -3,17 +3,17 @@ import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { HataliCevabi, HataliKaydi, HataliKaydiOzeti, HataliKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
+import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aktifIstasyonlar, isMerkeziIzinliMi, istasyonGetir, kisininIzinliIsMerkezleri, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { baslatmaDenetle } from './baslatma-denetimi.ts';
 import { emirBittiBildir } from './emir-olaylari.ts';
 import {
-  adimlariKoy, bekleyeniSil, bolmeDurumu, kilitliEmriBol, kolSonuysaKatil, siradakiIstasyonuYaz, ustuOnceKilitle,
+  adimlariKoy, bekleyeniSil, bolmeDurumu, gkkHesabi, kilitliEmriBol, kolSonuysaKatil, siradakiIstasyonuYaz, ustuOnceKilitle,
 } from './is-emri-servis.ts';
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
-  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
+  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, FIRMA_HATALISI_GKK_DISI, firmaHatalisiIhlali, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
   HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
   hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
@@ -58,7 +58,7 @@ async function kapsamDenetle(db: Db, kisiId: number, istasyonId: number): Promis
 // 1034, 1036 a, 4 a: operatör hatalı nedeni ve adedi verir. Adet çalışan adımdan kola ayrılır (kalite kararı, rework, adımın tekrarı;
 // kol sonraki adımda ana partiye katılır). Adımdaki bütün parça hatalıysa emir bölünemez: aynı adımlar ve tekrar hatalı adımın arkasına
 // girer, hatalı adım sağlamsız biter. 1188: hatalı giriş adımda üretimdir ve adımın girdisini tüketir (adimTuketimi); sağlam sayılmaz,
-// kaydı hatalı parça kaydındadır.
+// kaydı hatalı parça kaydındadır. 1207 c: Firmada hurda ve Firmadan gelmedi yalnız GKK adımında, dönmeyen adet kadar girer.
 export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: HataliKaydi): Promise<HataliCevabi> {
   await ustuOnceKilitle(db, emirId);
   const e = await s.ustEmirBul(db, emirId, true);
@@ -73,6 +73,11 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
   if (calisma !== null) throw cakisma(calisma);
   const neden = (await hurdaNedenleriniListele(db, { yalnizAktif: true })).find((n) => n.kod === g.hurdaNedeniKodu) ?? null;
   if (neden === null) throw dogrulama(HATALI_NEDEN_YOK, 'hurdaNedeniKodu');
+  if (SABIT_HURDA_KODLARI.includes(neden.kod)) {
+    const firma = firmaHatalisiIhlali(await gkkHesabi(db, hepsi, adim), g.adet);
+    if (firma === FIRMA_HATALISI_GKK_DISI) throw dogrulama(firma, 'hurdaNedeniKodu');
+    if (firma !== null) throw cakisma(firma);
+  }
   const durum = await bolmeDurumu(db, e, hepsi, adim.sira);
   const ihlal = hataliIhlali(durum, adim.sira, g.adet, e.kaynakRotaRevizyonId !== null);
   if (ihlal === HATALI_ADET) throw dogrulama(ihlal, 'adet');

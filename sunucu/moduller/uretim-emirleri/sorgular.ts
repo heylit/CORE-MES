@@ -2236,6 +2236,16 @@ export function hataliKaydiBul(db: Db, id: number, kilit = false): Promise<Hatal
 export const HATALI_LISTE_SINIRI = 500;
 
 // Açık kayıtlar (kararsız) eskiden yeniye; bütün kayıtlar yeniden eskiye, sınırlı. Emir verilirse o emrin ya da onu taşıyan kolun kaydı.
+// 1207 c: GKK adımında verilen nedenlerle (Firmada hurda, Firmadan gelmedi) yazılmış hatalı adet; kararından bağımsız.
+export async function adimHataliAdedi(db: Db, isEmriId: number, nedenIdleri: readonly number[]): Promise<number> {
+  if (nedenIdleri.length === 0) return 0;
+  const satir = await db.tek<{ adet: number }>(
+    `SELECT COALESCE(sum(adet), 0)::int AS adet FROM uretim_emirleri_hatali_kaydi WHERE is_emri_id = $1 AND hurda_nedeni_id = ANY($2::int[])`,
+    [isEmriId, [...nedenIdleri]],
+  );
+  return satir?.adet ?? 0;
+}
+
 export function hataliKayitlariGetir(db: Db, s: { acik: boolean; emirId: number | null }): Promise<HataliKaydiSatiri[]> {
   return db.sorgu<HataliKaydiSatiri>(
     `SELECT ${HATALI} FROM ${HATALI_KAYNAK}
