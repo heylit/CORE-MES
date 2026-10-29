@@ -63,6 +63,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   emirFasonlariniEkle(st.D, durum.emirler);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
+  fasonBeklemeleriniEkle(st.D, istek, opOf);
   /* 690 b: emirler arası öncül (parti kolu, Motor A'nın B7 kuralı); motor öncülü yalnız rotadan, emrin içinde kurar */
   st.ekOncul = (istek.baglar || []).map(x => [opOf[x.anahtar], opOf[x.oncul]]).filter(([a, p]) => a && p && a !== p);
   const cx = compile(st);
@@ -180,6 +181,31 @@ function ekAdimlariEkle(k, D, istek, opOf) {
     const id = sid + '.' + yeni;
     opOf[e.anahtar] = id;
     if (isFinite(+e.adet) && +e.adet > 0) D.opAdet = Object.assign({}, D.opAdet, { [id]: +e.adet });
+  }
+}
+/* 1202: Üretim Emirleri fason adımı plana iş olarak vermez; sonraki adım fasonun kalan süresini (gün) taşır. Motor rotadaki ve emirdeki
+   fasonu kendisi bilir, ek adımın (rework, tamir, ek) fasonunu bilmez. Öncülü motorda fason olmayan kuyruk işinin önüne o kadar süren, hemen
+   çıkan bir fason adımı konur (emirFasonlariniEkle gibi): iş öncülünün bitişinden, öncülü yoksa şimdiden o süre sonra başlar. */
+function fasonBeklemeleriniEkle(D, istek, opOf) {
+  const bekle = istek.fasonBekleme || []; if (!bekle.length) return;
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  for (const x of bekle) {
+    const id = opOf[x.anahtar], gun = +x.gun; if (!id || !(gun > 0)) continue;
+    const n = id.lastIndexOf('.'), sid = id.slice(0, n), k = id.slice(n + 1), s = sip.get(sid);
+    let u = s && urun.get(s.urun);
+    const r = u && (u.rota || []).find(y => String(y.k) === k);
+    if (!r || r.fason) continue;
+    const fasonMu = q => !!(u.rota.find(y => String(y.k) === String(q)) || {}).fason;
+    if ((r.bag || []).some(([q]) => fasonMu(q))) continue;
+    if (!u.emreOzel) {
+      u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(y => Object.assign({}, y)) });
+      D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+    }
+    const i = u.rota.findIndex(y => String(y.k) === k), fk = 'f' + k, fid = '~' + u.id + '.' + fk;
+    D.fasoncular = [...(D.fasoncular || []), { id: fid, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
+    u.rota.splice(i, 0, { k: fk, ad: 'fason', bag: (u.rota[i].bag || []).map(b => b.slice()), aile: '', fason: fid, tezgahlar: [] });
+    u.rota[i + 1] = Object.assign({}, u.rota[i + 1], { bag: [[fk, 'b']] });
   }
 }
 function kuyrukMakineleriniEkle(k, D, istek, opOf) {

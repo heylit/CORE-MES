@@ -319,6 +319,8 @@ export interface PlanMotoruIstegi {
   baglar?: { anahtar: string; oncul: string }[];
   // 686 a: rotada olmayan ek adım; öncül ve ardıl emrin içindeki komşu adımların anahtarı, süreler dakika.
   ekAdimlar?: { anahtar: string; ad: string; oncul: string | null; ardil: string | null; ayarDk: number; birimDk: number; adet: number }[];
+  // 1202: kuyruk işinin önündeki bitmemiş fasonun kalan süresi (gün); motor rota ve emir fasonunu kendisi bilir, ek adımın fasonunu bilmez.
+  fasonBekleme?: { anahtar: string; gun: number }[];
 }
 // vardiyasiz (168 b): vardiyası tanımsız tezgâhtaki kuyruk işleri; malzemeBekleyen (525 4 a, 763): katı malzeme kipinde malzemesi ufukta
 // karşılanmayan siparişin işleri. İkisi de hata değildir, yerleşmemiş kalır. yerlesmeyen (981 a-1) de komutu durdurmaz; nedenler anahtara
@@ -530,6 +532,11 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number, kuyruklar: read
     return a === null || oncul === null ? [] : [{ anahtar: a, oncul }];
   }));
   const ekAdimlar = ekAdimlari(b, [...yeniden.keys()], anahtarOf);
+  // 1202: fason dönüşünü bekleyen adım (bağımsız değilse; motorsuz yoldaki enErken gibi).
+  const fasonBekleme = [...yeniden.keys()].flatMap((id) => {
+    const i = b.isler.get(id)!;
+    return i.bagimlilik !== 'bagimsiz' && (i.fasonBekleGun ?? 0) > 0 ? [{ id, anahtar: anahtarOf(id)!, gun: i.fasonBekleGun! }] : [];
+  });
   let malzemeBekleyen = 0;
   const ekMesai = (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId }) => ({ makineId, gun, vardiyaId }));
   // 1036 a, 1034: yerleşmeyen kol ya da ek adım öncülünü bekleyen iş (bekleyenAdimlar) bu koşuda yerleşmez; motor onlarsız yeniden koşar.
@@ -539,6 +546,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number, kuyruklar: read
     yer.clear(); yerlesmez.clear(); yerlesmeyen.length = 0;
     const sonuc = await planMotoru(db, {
       kip: 'sabit', simdi: new Date(b.simdi), sabitler, calisanlar, taslakId, ...(baglar.length > 0 ? { baglar } : {}), ...(ekAdimlar.length > 0 ? { ekAdimlar } : {}),
+      ...(fasonBekleme.length > 0 ? { fasonBekleme: fasonBekleme.filter((x) => !bekleyen.has(x.id)).map(({ anahtar, gun }) => ({ anahtar, gun })) } : {}),
       ekMesai,
       kuyruklar: kuyruklar.map((q) => ({ ...q, isler: q.isler.filter((i) => !bekleyen.has(i.isId)) })).filter((q) => q.isler.length > 0)
         .map((q) => ({ makineId: q.makineId, anahtarlar: q.isler.map((i) => anahtarOf(i.isId)!) })),

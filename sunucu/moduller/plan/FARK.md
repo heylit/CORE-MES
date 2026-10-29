@@ -229,4 +229,11 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   yerleşmedi" der. Geri alma: bekleyenAdimlar çağrısı kalkar.
 - Bulgu (DOĞRULANDI, denendi, düzeltilmedi): kola konan fason rework (ek adım) sunucu motorunda bilinmez; tekrar adımı termin günü beklemeden
   yerleşti (deneme: 7 gün termin, tekrar 0,04 gün sonra). Fason ek adım plana girmeyen iş olarak süzülür (Üretim Emirleri), motor yalnız rota ve
-  emir fasonunu tanır (emirler.betik emirFasonlariniEkle). Düzeltme motor betiğinde ek adım için fason bekleme ister; ayrı iş.
+  emir fasonunu tanır (emirler.betik emirFasonlariniEkle). Düzeltme motor betiğinde ek adım için fason bekleme ister; 1202 ile kapandı (aşağıda).
+
+## Fason rework ve ek adım fasonu sunucu motorunda (1202; 2026-10-29)
+- Hata (DOĞRULANDI, `fason-ek-adim.test.ts` yamasız düşer: tekrar 0,03 gün sonra): Üretim Emirleri fason adımı plana iş olarak vermez, sonraki
+  adıma `fasonBekleGun` yazar; sunucu motoru onu okumuyordu, yalnız rota ve emir fasonunu biliyordu. Kola konan fason rework'ten sonraki adım fasonu beklemeden yerleşiyordu.
+- Düzeltme: kuyruk işinin `fasonBekleGun`'u (bağımsız değilse) istekle gider (`fasonBekleme`); motor (emirler.betik fasonBeklemeleriniEkle) işin
+  öncülü motorda fason değilse önüne o kadar süren hemen çıkan fason adımı koyar. Rota ve emir fasonu değişmez; sayfa motoru değişmez.
+- VARSAYIM: rota fasonu ile ek adım fasonu art arda gelirse motor yalnız rota fasonunu sayar. Geri alma: `fasonBekleme` alanı kalkar.
