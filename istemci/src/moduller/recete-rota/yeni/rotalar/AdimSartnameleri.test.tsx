@@ -24,12 +24,8 @@ const LISTE: SartnamelerCevabi = {
   kategoriler: [{ id: 1, kod: 'TLS', ad: 'Talaşlı', sira: 1 }], standartlar: [],
   sartnameler: [ozet(7, 'TLS-DNM', 'ic'), ozet(8, 'KPL-DNM', 'fason')],
 };
-const TALIMAT: TalimatlarCevabi = {
-  surumler: [{
-    surum: 2, metin: 'Programı doğrula', yazan: kisi, yazma: '2026-10-28T10:00:00.000Z', adimli: true,
-    adimlar: [{ sira: 1, baslik: 'Programı doğrula', metin: null, kontrol: { tur: 'onay' }, zorunlu: true, medya: [] }],
-  }],
-};
+// Talimat bölümü AdimTalimati.test.tsx'te sınanır; burada yalnız okunur.
+const TALIMAT: TalimatlarCevabi = { surumler: [], taslak: null };
 
 function kur(baglar: RevizyonSartnameleriCevabi) {
   let bag = baglar;
@@ -62,7 +58,7 @@ const adimAc = async () => {
 };
 
 describe('Rota adımının şartnamesi ve talimatı (971 a, 989 a, 1193 a)', () => {
-  it('şartname eklenir, eksik zorunlu alan gösterilir ve değeri kaydedilir; talimat özeti salt okunurdur', async () => {
+  it('şartname eklenir, eksik zorunlu alan gösterilir ve değeri kaydedilir', async () => {
     const yazilan = kur({ adimlar: [] });
     const panel = await adimAc();
     await within(panel).findByText(/Bu adıma bağlı şartname yok/);
@@ -82,9 +78,5 @@ describe('Rota adımının şartnamesi ve talimatı (971 a, 989 a, 1193 a)', () 
     // Revizyonun sürümü ilk yazımdan dönen sürümdür: rota kaydı da aynı sürümü kullanır.
     expect(yazilan[1]).toEqual({ surum: 5, opNo: 10, sartnameler: [{ sartnameId: 7, degerler: { derinlik: 12.5 } }] });
     await within(panel).findByText('Tam');
-
-    expect(within(panel).getByText('Talimat · sürüm 2')).toBeTruthy();
-    expect(within(panel).getByText('Programı doğrula')).toBeTruthy();
-    expect(within(panel).queryByRole('button', { name: /Talimatı düzenle/ })).toBeNull();
   });
 });

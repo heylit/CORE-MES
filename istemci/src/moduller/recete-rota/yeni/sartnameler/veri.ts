@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AdimSartnameleriGovdesi, KomutCevabi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameEkleGovdesi, SartnameKopyalaGovdesi, SartnameKunyeGovdesi, SartnamelerCevabi, SartnameTaslakGovdesi, StandartCevabi,
+  AdimSartnameleriGovdesi, KomutCevabi, TalimatTaslakKaydetGovdesi, TalimatTaslakKomutGovdesi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameEkleGovdesi, SartnameKopyalaGovdesi, SartnameKunyeGovdesi, SartnamelerCevabi, SartnameTaslakGovdesi, StandartCevabi,
   StandartEkleGovdesi, TalimatSablonEkleGovdesi, TalimatSablonKaydetGovdesi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
   TalimatlarCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
@@ -118,3 +118,17 @@ export const useTalimatlar = (urunId: number, opNo: number | null) => useQuery({
   enabled: opNo !== null,
   queryFn: () => api.get<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}`),
 });
+
+// Talimat taslağı ve yayını (1194 b): cevap OP'nin talimat listesidir (sürümler ve taslak), önbelleğe yazılır.
+export type TalimatKomutu =
+  | { ad: 'talimat-taslak-kaydet'; govde: TalimatTaslakKaydetGovdesi }
+  | { ad: 'talimat-yayinla' | 'talimat-taslak-sil'; govde: TalimatTaslakKomutGovdesi };
+
+export function useTalimatKomutu(urunId: number) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (k: TalimatKomutu) => api.post<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/${k.ad}`, k.govde),
+    onSuccess: (c, k) => { istemci.setQueryData(anahtarlar.talimat(urunId, k.govde.opNo), c); },
+  });
+}
+

@@ -471,3 +471,4 @@
 .tc-rr1-ekle > :first-child { flex: 1 1 var(--menu-genis); min-width: 0; }
 .tc-rr1-talimat > li { display: flex; flex-direction: column; gap: var(--b-1); padding-left: var(--b-2); border-left: var(--cizgi-kalin) solid var(--edge); }
 .tc-rr1-talimat small { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-rr1-sablon-sec { display: flex; flex-direction: column; gap: var(--b-2); }
