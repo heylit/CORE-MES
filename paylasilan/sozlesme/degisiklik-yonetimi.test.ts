@@ -5,7 +5,7 @@ import {
   KARAR_KODLARI, KARAR_KODU_ADLARI, MRB_KODLARI, SINIFLAR, SINIF_ADLARI, TALEP_DURUMLARI, TALEP_DURUM_ADLARI, EMIR_DURUMLARI, EMIR_DURUM_ADLARI,
   ccbGovdesi, emirCevabi, gecerlilikSemasi, geriGonderGovdesi, kalemKaydetGovdesi, kararGovdesi, mrbKarariMi, musteriOnayiGovdesi,
   siniflandirGovdesi, talepAcGovdesi, talepCevabi, taleplerSorgusu, yayinlaGovdesi, konfigurasyonCevabi, raporCevabi, sonUrunlerCevabi,
-  emirListeSatiri, emirlerSorgusu, onerilenSinif, izlenebilirlikCevabi, seriListeSatiri, serilerSorgusu, olaylarSorgusu,
+  emirListeSatiri, emirlerSorgusu, onerilenSinif, izlenebilirlikCevabi, seriListeSatiri, serilerSorgusu, olaylarSorgusu, gorevlerimCevabi, gorevlerimSorgusu,
 } from './degisiklik-yonetimi.ts';
 
 const gecer = (s: z.ZodTypeAny, d: unknown): boolean => s.safeParse(d).success;
@@ -158,4 +158,17 @@ test('seri listesi ve izlenebilirlik: planlı seri ve mod null olabilir; soy ağ
   };
   assert.equal(gecer(izlenebilirlikCevabi, iz), true);
   assert.equal(gecer(izlenebilirlikCevabi, { ...iz, soyAgaci: null }), false);
+});
+
+test('görevlerim: kapsam varsayılanı benim; satır işlemi bekleyen adım işlemlerinden biridir', () => {
+  assert.equal(gorevlerimSorgusu.parse({}).kapsam, 'benim');
+  assert.equal(gecer(gorevlerimSorgusu, { kapsam: 'hepsi' }), false);
+  const satir = {
+    tur: 'talep', id: 1, no: 'T-1', baslik: 'x', sinif: null, aciliyet: 'acil', adim: 'Sınıflandırma',
+    islem: 'degisiklik-yonetimi.siniflandir', yasIsGunu: 2, hedefIsGunu: 1, gecikti: true,
+  };
+  const cevap = { gorevler: [satir], benimSayisi: 1, ekipSayisi: 3, hat: [], kapanan90Gun: 0, sonKayitlar: [] };
+  assert.equal(gecer(gorevlerimCevabi, cevap), true);
+  assert.equal(gecer(gorevlerimCevabi, { ...cevap, gorevler: [{ ...satir, islem: 'degisiklik-yonetimi.talep-ac' }] }), false);
+  assert.equal(gecer(gorevlerimCevabi, { ...cevap, ekipSayisi: undefined }), false);
 });

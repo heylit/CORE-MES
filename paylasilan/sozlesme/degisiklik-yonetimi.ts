@@ -4,7 +4,7 @@ import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import {
-  ACILIYETLER, CEVAPLAR, EMIR_DURUMLARI, FAI_DURUMLARI, FAI_TURLERI, GECMIS_OLAYLARI, HAT_ASAMALARI, IPLIK_HALLERI, IPLIK_KATMANLARI, KAPANIS_KOSULLARI,
+  ACILIYETLER, CEVAPLAR, EMIR_DURUMLARI, FAI_DURUMLARI, FAI_TURLERI, GECMIS_OLAYLARI, GOREV_ISLEMLERI, GOREV_KAPSAMLARI, HAT_ASAMALARI, IPLIK_HALLERI, IPLIK_KATMANLARI, KAPANIS_KOSULLARI,
   KARAR_HEDEFLERI, KARAR_KODLARI, KARAR_MODLARI, KOSUL_HALLERI, LISTE_KAPSAMLARI, OLAY_ILGILILERI, OLAY_TURLERI, PARCA_HALLERI, SERI_DURUMLARI,
   SINIFLAR, STOK_HALLERI, TALEP_DURUMLARI, TASARIM_OTORITELERI, UYUM_HALLERI,
 } from './degisiklik-yonetimi-sabitleri.ts';
@@ -16,7 +16,7 @@ export * from './degisiklik-yonetimi-sabitleri.ts';
 // Kararın sahadaki uygulaması (karantina, emir yenileme, hurda, rework, NCR) Aşama 2'de sahibi modülün ucuyla yapılır (1123 a).
 //
 // Uçlar (P1 yazar). Yetki sütunu `degisiklik-yonetimi.<ad>` işlemidir (1126 a); okuma `biri` ile bu işlemlerden herhangi biri ister:
-//   GET  /degisiklik-yonetimi/gorevlerim                       gorevlerimCevabi
+//   GET  /degisiklik-yonetimi/gorevlerim                       gorevlerimSorgusu -> gorevlerimCevabi
 //   GET  /degisiklik-yonetimi/talepler                         taleplerSorgusu -> talepListeCevabi
 //   GET  /degisiklik-yonetimi/talepler/:id                     talepCevabi
 //   GET  /degisiklik-yonetimi/parca-adaylari                   talep-ac         parcaAdaylariSorgusu -> parcaAdaylariCevabi
@@ -240,10 +240,15 @@ export const emirListeCevabi = listeCevapSemasi(emirListeSatiri);
 // Görevlerim: oturumdaki kişinin işlemlerine göre bekleyen işler, en çok geciken önce.
 export const gorevSatiri = z.object({
   tur: z.enum(['talep', 'emir']), id: KIMLIK, no: z.string(), baslik: z.string(), sinif: sinif.nullable(), aciliyet,
-  adim: z.string(), yasIsGunu: z.number().int().nonnegative(), hedefIsGunu: z.number().int().positive(), gecikti: z.boolean(),
+  adim: z.string(), islem: z.enum(GOREV_ISLEMLERI),
+  yasIsGunu: z.number().int().nonnegative(), hedefIsGunu: z.number().int().positive(), gecikti: z.boolean(),
 });
+export const gorevlerimSorgusu = z.object({ kapsam: z.enum(GOREV_KAPSAMLARI).default('benim') });
 export const gorevlerimCevabi = z.object({
   gorevler: z.array(gorevSatiri),
+  // Düğme etiketleri için iki kapsamın sayısı; seçili kapsamdan bağımsız.
+  benimSayisi: z.number().int().nonnegative(),
+  ekipSayisi: z.number().int().nonnegative(),
   hat: z.array(z.object({ asama: z.enum(HAT_ASAMALARI), adet: z.number().int().nonnegative() })),
   // Son 90 tesis gününde kapanan değişiklik emri sayısı (1149 b).
   kapanan90Gun: z.number().int().nonnegative(),
@@ -386,6 +391,7 @@ export type EmirlerSorgusu = z.output<typeof emirlerSorgusu>;
 export type EmirListeSatiri = z.output<typeof emirListeSatiri>;
 export type EmirListeCevabi = z.output<typeof emirListeCevabi>;
 export type GorevSatiri = z.output<typeof gorevSatiri>;
+export type GorevlerimSorgusu = z.output<typeof gorevlerimSorgusu>;
 export type GorevlerimCevabi = z.output<typeof gorevlerimCevabi>;
 export type SonUrunlerCevabi = z.output<typeof sonUrunlerCevabi>;
 export type BaselineSatiri = z.output<typeof baselineSatiri>;
