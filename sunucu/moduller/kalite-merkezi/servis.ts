@@ -239,6 +239,17 @@ async function ncrPartileri(db: Db, anahtar: { lotNo: string | null; emirNo: str
   return { partiler: await partileriBul(db, { lotNo, uretimEmriId }), uretimEmriId: uretimEmriId ?? null };
 }
 
+// 1222 a: verilen partilerden açık NCR'nin lotuna ya da emrine uyanlar; stok bunları sevk etmez (bağ kablolama.ts'de).
+// Karantinaya alma ile aynı eşleme: kapanana kadar parti, bugünkü kalitesi ne olursa olsun NCR'nin altındadır.
+export async function acikNcrPartileri(db: Db, partiIdler: readonly number[]): Promise<ReadonlySet<number>> {
+  const sorulan = new Set(partiIdler), acik = new Set<number>();
+  if (sorulan.size === 0) return acik;
+  for (const a of await sorgular.acikNcrAnahtarlari(db, '', UYGUNSUZLUK_KAPALI)) {
+    for (const p of (await ncrPartileri(db, a)).partiler) if (sorulan.has(p)) acik.add(p);
+  }
+  return acik;
+}
+
 const ncrNo = (kimlik: string, govde: Govde): string => (typeof govde.no === 'string' && govde.no.trim() !== '' ? govde.no.trim() : kimlik);
 
 // 229 a: açık NCR'nin lotu ya da emri stokta partiye uyarsa partinin bütün bakiyesi red olur, parça yerinde kalır (135); her
