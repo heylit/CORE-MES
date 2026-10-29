@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import type { FirmaListesiCevabi, FirmaSatiri } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaAyrinti } from './FirmaAyrinti.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
@@ -65,6 +66,24 @@ export function Firmalar() {
     return () => clearTimeout(sayac);
   }, [arama]);
   useEffect(() => { seciliYaz(null); }, [yol]);
+
+  // Ctrl K buraya `yeni=1` (komut: form açılır) ya da `firma=<id>` (kayıt sonucu: kart açılır) ile gelir. İstek bir kez
+  // karşılanır ve adresten düşer: geri ya da yenileme formu yeniden açmaz. Yetki oturum gelince bilinir; o zamana kadar beklenir.
+  const [adres, adresYaz] = useSearchParams();
+  const oturumHazir = useOturum().data !== undefined;
+  useEffect(() => {
+    const yeniIstegi = adres.get('yeni') === '1';
+    const firma = Number(adres.get('firma'));
+    const firmaIstegi = Number.isSafeInteger(firma) && firma > 0;
+    if (!adres.has('yeni') && !adres.has('firma')) return;
+    if (yeniIstegi && !oturumHazir) return;
+    if (yeniIstegi && yazabilir) yeniYaz(true);
+    if (firmaIstegi) seciliYaz(firma);
+    const kalan = new URLSearchParams(adres);
+    kalan.delete('yeni');
+    kalan.delete('firma');
+    adresYaz(kalan, { replace: true });
+  }, [adres, oturumHazir, yazabilir]);
 
   const sorgu = { ...liste.sorgu, ...(menu.tur ? { tur: menu.tur } : {}), ...(menu.fason ? { fason: true } : {}) };
   const firmalar = useQuery({

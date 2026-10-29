@@ -6,3 +6,4 @@
 3. Satın alma ve finans firma seçicileri ek adresleri (fatura, teslim) seçtirmez; belge yalnız firmaya bağlanır (BASKA-MODUL-ISTEKLERI 3).
 4. Ana menü simgesi geçici olarak `dash`; firma için uygun simge sette yok (CEKIRDEK-ISTEKLERI 1).
 5. Rol ve yetki: beş rol aynı hakla taşındı (S6); ortak yetki matrisinde ayrıca gözden geçirilmedi.
+6. Ctrl K firma kaynağı (kart 1235): reddedilen yol bugün kaynağın yetki bildirimiyle sınanır; çekirdek `/arama` ucu (kart 1233) girince 401/403 ve işlemsiz kişinin firma görmemesi uç üzerinden de sınanmalı.

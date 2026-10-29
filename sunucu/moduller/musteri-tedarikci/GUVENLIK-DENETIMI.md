@@ -5,7 +5,8 @@
 - Girdi: zod şemaları uzunluk sınırlı (ad 100, adres 500); koordinat aralığı hem şemada hem kısıtta; bilinmeyen tür 400.
 - Eşzamanlılık: her yazma kartı `FOR UPDATE` ile kilitleyip sürüm artırır; eski sürüm 409.
 - Tekrar: ekleme uçları `tekrarKorumali`; aynı istek kimliği ikinci kayıt açmaz.
-- SQL yalnız `sorgular.ts`'te, parametreli; arama metnindeki `%` kaçırılır.
+- SQL yalnız `sorgular.ts`'te, parametreli; arama ILIKE ile ve kaçırılmış desenle yapılır (`\`, `%`, `_` harf sayılır; test `arama.test.ts`).
+- Ctrl K kaynağı (kart 1235, sözleşme 1233): `disari.ts` `kayitAramaKaynaklari`, yetki `musteri-tedarikci.oku`; çekirdek işlemi olmayanı kaynağa sokmaz. Sonuç kod, ad, tür, fason ve pasif bilgisinden ibarettir; vergi no, adres, iletişim ve finans alanı dönmez. Komutlar (`istemci/.../komutlar.ts`) yalnız `musteri-tedarikci.yaz` olana görünür ve yalnız formu açar; kayıt formun mevcut ucundadır.
 - Finans rakamı bu modülün uçlarından ve `disari.ts`'ten dönmez (FNS-48 testi).
 - Dış çağrı, yeni paket, gerçek veri yok; örnek firmalar uydurma (ORN-).
 - Konum girişi istemcide yalnız metinden ayrıştırılır; harita servisine istek atılmaz.
