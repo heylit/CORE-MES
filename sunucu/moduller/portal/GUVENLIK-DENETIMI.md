@@ -1,7 +1,7 @@
 # portal: güvenlik denetimi
 
 Oturtmada yazıldı (kart #744); teslimde yoktu. Kaynak: `uclar.ts`, `servis.ts`, `portal.test.ts` (BD-01..BD-12), `KURAL-TEST.md`.
-Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yok. Firma kişisi (1021 b) çalışan oturumuyla girer, yalnız atandığı firmanın kayıtlarını okur ve yazamaz (KURAL-TEST BD-17, BD-18).
+Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yok. Firma kişisi (1021 b) çalışan oturumuyla girer, yalnız atandığı firmanın kayıtlarını okur ve yazamaz (KURAL-TEST BD-17, BD-18). Atanmış kişi dış izleyicidir (1224 a): portal ve oturum dışındaki bütün uçlar ona 403 döner (KURAL-TEST BD-19).
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|

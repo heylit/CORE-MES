@@ -302,6 +302,9 @@ export function izleyiciCikar(kullanici: Veri | null, firma: Veri | null): Izley
   return typeof kimlik === 'string' && tur !== undefined ? { tur, firma: kimlik } : { tur: 'kapali' };
 }
 
+// Dış izleyici (1224 a): firma içi olmayan her izleyici. Firma kartına bakılmaz; kartı silinmiş firmaya atanan kişi de dışarıdadır.
+export const disIzleyiciMi = (kullanici: Veri | null): boolean => izleyiciCikar(kullanici, null).tur !== 'firma';
+
 // İlk aşama salt okunur (1013 a): firma kişisi yalnız kendi portal kullanıcısını (tercihler) ve kişiye özel alanını yazar.
 export function disYazmaReddi(iz: Izleyici, yol: string, kisiId: number): string | null {
   if (iz.tur === 'firma') return null;
