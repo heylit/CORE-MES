@@ -31,9 +31,9 @@ describe('uzakBasliklari', () => {
 describe('UzakMod düzeni', () => {
   const pkg = { id: 'pk-deneme', partNo: 'DN-1', rev: 'A', proje: 'Deneme proje', files: [], primary: '' } as unknown as Is['pkg'];
   const is: Is = { ...bosIs({ l: 'Deneme' }), empty: false, no: 'UE-DENEME-1', op: 'Op 10 · Torna', part: 'Deneme parça', state: 'running', good: 7, target: 25, scrap: 2, pkg };
-  const ac = (ek: Partial<Is> = {}, uyan = () => {}) => render(
+  const ac = (ek: Partial<Is> = {}, uyan = () => {}, hatali?: number | null) => render(
     <ArkonBaglamiKaynagi.Provider value={{ depo: {} } as unknown as ArkonBaglami}>
-      <UzakMod is={{ ...is, ...ek }} gorev={null} D={{ due: [], next: null, who: {}, why: {} }} since={null} istasyon="IST-DENEME" uyan={uyan} />
+      <UzakMod is={{ ...is, ...ek }} gorev={null} D={{ due: [], next: null, who: {}, why: {} }} since={null} istasyon="IST-DENEME" uyan={uyan} {...(hatali === undefined ? {} : { hatali })} />
     </ArkonBaglamiKaynagi.Provider>,
   );
 
@@ -74,5 +74,14 @@ describe('UzakMod düzeni', () => {
     expect(screen.getByText('Sıradaki kontrol').nextSibling?.textContent).toBe('—');
     fireEvent.click(screen.getByRole('dialog', { name: 'Uzak mod' }));
     expect(uyan).toHaveBeenCalledTimes(1);
+  });
+
+  it('TMI işinde (1188) hurda yerine sunucunun hatalı toplamı; bilinmiyorsa tire', () => {
+    ac({}, () => {}, 3);
+    expect(screen.queryByText('Hurda')).toBeNull();
+    expect(screen.getByText('Hatalı').nextSibling?.textContent).toBe('3');
+    cleanup();
+    ac({}, () => {}, null);
+    expect(screen.getByText('Hatalı').nextSibling?.textContent).toBe('—');
   });
 });

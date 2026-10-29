@@ -55,7 +55,7 @@ import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
   adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
-  KUYRUK_ILETILERI, eksiAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
+  KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
@@ -334,8 +334,8 @@ async function isEmriTaslaklari(
     // Hazırlık sırası işin bugünkü istasyonundaysa geçerlidir: plan işi başka istasyona aldıysa iş orada sırasız (plan sırasıyla) durur.
     const sira = kuyruk.get(kimlik);
     const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;
-    const eksik = emirler.get(g.isEmri.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === g.isEmri.id)?.eksik;
-    sonuc.set(kimlik, eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), eksik));
+    const adim = emirler.get(g.isEmri.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === g.isEmri.id);
+    sonuc.set(kimlik, hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik), adim?.hataliAdet));
   }
   return sonuc;
 }

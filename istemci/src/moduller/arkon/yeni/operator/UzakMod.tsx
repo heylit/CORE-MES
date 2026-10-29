@@ -17,7 +17,10 @@ import type { Gorev, Is, KontrolTakvimi } from './tipler.ts';
 // Uzak mod (operator-parcalar.ts AwayView): uzaktan okunur dev sayaç. Dokunuş ya da tuş normal ekrana döndürür.
 // 895 a (961 a prototipi): sayı ekranın büyük kısmı, iş bilgisi tek satır, 3B büyük. Üst şeritte durum, proje, saat, istasyon
 // kutuları satırı doldurur; proje iş satırında değil üst şeritte durur ki uzun emir numarasıyla iş satırı kesilmesin.
-export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev: Gorev | null; D: KontrolTakvimi; since: number | null; istasyon: string; uyan: () => void }) {
+// 1188: TMI işinde hurda kartı "Hatalı"dır (sunucunun adım toplamı; bilinmiyorsa null, "—"); TMI dışı işte hurda.
+export function UzakMod({ is, gorev, D, since, istasyon, uyan, hatali }: {
+  is: Is; gorev: Gorev | null; D: KontrolTakvimi; since: number | null; istasyon: string; uyan: () => void; hatali?: number | null;
+}) {
   const simdi = useSimdi(1000);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
@@ -58,7 +61,7 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
       </div>
       <div className="tc-ay1-uzak-alt" data-gorev={gorevVar ? 'var' : 'yok'}>
         {gorev && gorevVar ? <div className="tc-ay1-uzak-gorev" data-durum={tonDurumu(gorev.tone)}><Simge ad={gorev.icon} boyut="b" /><span>{gorev.t}</span></div> : null}
-        <div className="tc-ay1-uzak-kart" data-durum="durdu"><span className="tc-ay1-uzak-simge"><Simge ad="trash" /></span><span><span className="tc-ay1-ust-yazi">Hurda</span><b>{is.scrap}</b></span></div>
+        <div className="tc-ay1-uzak-kart" data-durum="durdu"><span className="tc-ay1-uzak-simge"><Simge ad="trash" /></span><span><span className="tc-ay1-ust-yazi">{hatali === undefined ? 'Hurda' : 'Hatalı'}</span><b>{hatali === undefined ? is.scrap : hatali ?? '—'}</b></span></div>
         <div className="tc-ay1-uzak-kart" data-durum="bitti"><span className="tc-ay1-uzak-simge"><Simge ad="ruler" /></span><span><span className="tc-ay1-ust-yazi">Sıradaki kontrol</span><b>{siradaki}</b></span></div>
       </div>
       <span className="tc-ay1-soluk"><Simge ad="eye" boyut="k" />Dokun · normal ekrana dön</span>

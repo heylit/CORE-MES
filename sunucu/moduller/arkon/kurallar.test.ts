@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -1089,6 +1089,14 @@ describe('paralel adım (kart 639)', () => {
     assert.deepEqual(eksiAlaniniEkle(govde, -3), { id: 'tmi-ie-5', tmi: { isEmriId: 5, kuyruk: { sira: 1 }, eksi: 3 } });
     for (const eksik of [0, 4, null, undefined]) assert.equal(eksiAlaniniEkle(govde, eksik), govde);
     assert.deepEqual(eksiAlaniniEkle({ id: 'tmi-ie-6' }, -1), { id: 'tmi-ie-6', tmi: { eksi: 1 } });
+  });
+
+  test('1188: adımın hatalı toplamı tmi.hatali alanına yazılır; sıfır yazılır, bilinmeyen ve geçersiz yazılmaz', () => {
+    const govde = { id: 'tmi-ie-5', tmi: { isEmriId: 5, eksi: 2 } };
+    assert.deepEqual(hataliAlaniniEkle(govde, 3), { id: 'tmi-ie-5', tmi: { isEmriId: 5, eksi: 2, hatali: 3 } });
+    assert.deepEqual(hataliAlaniniEkle(govde, 0), { id: 'tmi-ie-5', tmi: { isEmriId: 5, eksi: 2, hatali: 0 } });
+    for (const adet of [-1, 1.5, null, undefined]) assert.equal(hataliAlaniniEkle(govde, adet), govde);
+    assert.deepEqual(hataliAlaniniEkle({ id: 'tmi-ie-6' }, 1), { id: 'tmi-ie-6', tmi: { hatali: 1 } });
   });
 
   test('adimEmirDurumu: iş emri paketinin kuralı adımın durumuyla okunur; açık olmayan emir kendi durumunu taşır', () => {

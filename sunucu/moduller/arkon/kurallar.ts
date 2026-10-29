@@ -2972,3 +2972,11 @@ export function eksiAlaniniEkle(govde: Record<string, unknown>, eksik: number | 
   const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
   return { ...govde, tmi: { ...tmi, eksi: -eksik } };
 }
+
+// 1188: adımda girilen hatalı parçaların toplamı (uretim-emirleri `hataliAdet`) paketin `tmi.hatali` alanına yazılır; terminal bunu hurda
+// yerine gösterir. Sıfır gerçek sıfırdır ve yazılır; alan gelmezse (eski veri) yazılmaz, ekran sayıyı bilmiyor sayar.
+export function hataliAlaniniEkle(govde: Record<string, unknown>, hataliAdet: number | null | undefined): Record<string, unknown> {
+  if (typeof hataliAdet !== 'number' || !Number.isSafeInteger(hataliAdet) || hataliAdet < 0) return govde;
+  const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
+  return { ...govde, tmi: { ...tmi, hatali: hataliAdet } };
+}

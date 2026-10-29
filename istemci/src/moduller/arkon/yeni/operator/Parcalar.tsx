@@ -323,8 +323,12 @@ export function Konfeti() {
   );
 }
 
-export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer }) {
-  const { iyi, hurda, hedef, kalan } = sayacGosterimi(is);
+// 1188: TMI işinde yan sayı "Hatalı"dır (sunucunun adım toplamı; bilinmiyorsa null, "—"); hatalı parça üretimdir, iyi sayısına girmez.
+export function SayacKadrani({ is, etiket, birim, duzelt, cevrim, hatali }: {
+  is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer; hatali?: number | null;
+}) {
+  const yan = hatali === undefined ? { etiket: 'Hurda', adet: is.scrap as number | null } : { etiket: 'Hatalı', adet: hatali };
+  const { iyi, hurda, hedef, kalan } = sayacGosterimi({ ...is, scrap: yan.adet ?? 0 });
   const yanan = Math.round(120 * iyi);
   const R = 180;
   const C = 2 * Math.PI * R;
@@ -345,14 +349,14 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
         {CIZGILER.map((t) => <line key={t.i} className={`tc-ay1-cizgi${t.i < yanan ? ' tc-ay1-cizgi-yanik' : ''}${t.buyuk ? ' tc-ay1-cizgi-buyuk' : ''}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
         <circle className="tc-ay1-kadran-yol" cx="220" cy="220" r={R} fill="none" strokeWidth="12" />
         <circle className="tc-ay1-kadran-yay" cx="220" cy="220" r={R} fill="none" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${C * iyi} ${C}`} transform="rotate(-90 220 220)" />
-        {is.scrap ? <circle className="tc-ay1-kadran-hurda" cx="220" cy="220" r={R} fill="none" strokeWidth="12" strokeDasharray={`0 ${C * iyi + 6} ${Math.max(4, C * hurda)} ${C}`} transform="rotate(-90 220 220)" /> : null}
+        {yan.adet ? <circle className="tc-ay1-kadran-hurda" cx="220" cy="220" r={R} fill="none" strokeWidth="12" strokeDasharray={`0 ${C * iyi + 6} ${Math.max(4, C * hurda)} ${C}`} transform="rotate(-90 220 220)" /> : null}
       </svg>
       <CevrimHalkasi is={is} cevrim={cevrim} />
       {duzelt
         ? <button type="button" className="tc-ay1-kadran-cekirdek" onClick={duzelt} title="Dokun: sayıyı düzelt" aria-label={`${etiket} ${sayi(is.good)}, sayıyı düzelt`}>{ic}</button>
         : <div className="tc-ay1-kadran-cekirdek">{ic}</div>}
       <div className="tc-ay1-kadran-yan tc-ay1-kadran-sol">
-        <span className="tc-ay1-kadran-etiket" data-durum="durdu">Hurda<b>{is.scrap}</b></span>
+        <span className="tc-ay1-kadran-etiket" data-durum="durdu">{yan.etiket}<b>{yan.adet === null ? '—' : yan.adet}</b></span>
       </div>
     </div>
   );

@@ -48,6 +48,14 @@ describe('Sayaç kadranı kalan ve boş istasyon', () => {
     const { container } = render(<SayacKadrani is={is({ empty: false, target: 40, good: 38, scrap: 2, cycle: 0 })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} />);
     expect(container.querySelector('.tc-ay1-kadran-yuzde')?.textContent).toBe('%95 · 2 kaldı');
   });
+  it('TMI işinde (1188) yan sayı Hatalı: sunucu toplamı, iyi ve kalanı değiştirmez; bilinmiyorsa tire', () => {
+    const { container } = render(<SayacKadrani is={is({ empty: false, target: 40, good: 38, scrap: 0, cycle: 0 })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} hatali={4} />);
+    expect(container.querySelector('.tc-ay1-kadran-etiket')?.textContent).toBe('Hatalı4');
+    expect(container.querySelector('.tc-ay1-kadran-yuzde')?.textContent).toBe('%95 · 2 kaldı');
+    cleanup();
+    const bos = render(<SayacKadrani is={is({ empty: false, target: 40, good: 38, scrap: 0, cycle: 0 })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} hatali={null} />);
+    expect(bos.container.querySelector('.tc-ay1-kadran-etiket')?.textContent).toBe('Hatalı—');
+  });
   it('işi olmayan istasyonda hedef ve kalan "—" görünür', () => {
     const { container } = render(<SayacKadrani is={bosIs({ l: 'Boş' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} />);
     expect(container.querySelector('.tc-ay1-kadran-hedef')?.textContent).toBe('/ — adet');
