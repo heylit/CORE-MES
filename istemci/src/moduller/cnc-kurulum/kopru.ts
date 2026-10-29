@@ -1,6 +1,6 @@
 import type {
   EmirSecCevabi, EmirlerCevabi, HazirlikCevabi, KurulumTamamCevabi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKartiBaglaCevabi,
-  StokKartlariCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi,
+  StokKartlariCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, TezgahAyarCevabi, TezgahlarCevabi, YazCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -241,6 +241,15 @@ export function kopruKur(
         return api.get<EmirlerCevabi>('/cnc-kurulum/emirler');
       case 'hazirlik':
         return api.get<HazirlikCevabi>('/cnc-kurulum/hazirlik');
+      // 1091 a: tezgâh listesi ve ayarı; yalnız yeni ekran ister.
+      case 'tezgahlar':
+        return api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar');
+      case 'tezgah-ayar': {
+        const id = v['makineId'];
+        if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) throw new Error('Geçersiz makine.');
+        const { makineId: _m, ...govde } = v;
+        return api.post<TezgahAyarCevabi>(`/cnc-kurulum/tezgahlar/${String(id)}/ayar`, govde);
+      }
       case 'model-aktar': {
         if (!model?.modelGeldi) break;
         if (!(v['glb'] instanceof Uint8Array) || v['glb'].length === 0) throw new Error('Geçersiz model.');

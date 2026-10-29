@@ -178,24 +178,22 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
     await expect(page.getByText('Filtreye uyan malzeme yok').first()).toBeVisible();
   });
 
-  test('Tanımlar: özel tezgâh eklenir, Kütüphane süzgecinde görünür, silinir', async ({ page, ac }) => {
-    const ad = `Deneme tezgah ${String(Date.now())}`;
+  // 1091 a, 1137 a: tezgâhlar İstasyonlar'ın makineleridir, ekleme yoktur. Örnek makinelerin ayarı yoktur: ekran gömülü listeyle
+  // sürer. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
+  test('Tanımlar: makineler İstasyonlar\'dan gelir, ayarı eksik olan işaretlenir, yeni tezgâh eklenmez', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/kutuphane');
     await page.getByRole('button', { name: 'Tanımlar' }).click();
     const pencere = page.getByRole('dialog', { name: 'Tanımlar' });
-    await pencere.getByRole('button', { name: 'Yeni tezgâh' }).click();
-    await pencere.getByLabel('Ad', { exact: true }).fill(ad);
-    await pencere.getByRole('button', { name: 'Kaydet' }).click();
-    await expect(pencere.getByText(ad)).toBeVisible();
+    await expect(pencere.getByRole('button', { name: 'Yeni tezgâh' })).toHaveCount(0);
+    const satir = pencere.locator('tr').filter({ hasText: 'ORN-CNC-T1' });
+    await expect(satir.getByText('ayarı eksik')).toBeVisible();
+    await expect(pencere.getByRole('status')).toContainText('gömülü tezgâh listesini kullanıyor');
+    await satir.getByRole('button', { name: 'Düzenle' }).click();
+    await expect(pencere.getByLabel('Ad', { exact: true })).toHaveCount(0);
+    await expect(pencere.getByLabel('Magazin cep sayısı')).toBeVisible();
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
     await pencere.getByRole('tab', { name: 'İş Malzemeleri' }).click();
     await expect(pencere.getByRole('button', { name: 'Yeni malzeme' })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('combobox', { name: 'Tezgâh' })).toContainText(ad);
-
-    await page.getByRole('button', { name: 'Tanımlar' }).click();
-    await pencere.locator('tr').filter({ hasText: ad }).getByRole('button', { name: 'Sil' }).click();
-    await page.getByRole('dialog', { name: 'Tezgâhı sil' }).getByRole('button', { name: 'Sil' }).click();
-    await expect(pencere.getByText(ad)).toHaveCount(0);
   });
 
   test('Ana Sayfa: sayı kartları, tezgâh kartları ve görünümlere geçiş', async ({ page, ac }) => {
