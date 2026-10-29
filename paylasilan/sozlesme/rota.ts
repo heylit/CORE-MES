@@ -677,6 +677,8 @@ export const talimatSablonDurumGovdesi = z.object({ surum: KIMLIK, aktif: z.bool
 const talimatSablonOzeti = z.object({
   id: KIMLIK, kod: z.string(), ad: z.string(), sartname: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
   aktif: z.boolean(), surum: KIMLIK, adimSayisi: z.number().int().nonnegative(),
+  // Listede gösterilir (1180 a): kontrol noktalı adım, resim ve video sayısı.
+  kontrolSayisi: z.number().int().nonnegative(), resimSayisi: z.number().int().nonnegative(), videoSayisi: z.number().int().nonnegative(),
 });
 export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
 export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });

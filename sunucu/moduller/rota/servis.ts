@@ -901,6 +901,7 @@ const TALIMAT_SABLON_KISITLARI = { rota_talimat_sablonu_kod_tekil: { ileti: 'Bu 
 
 const sablonOzeti = (x: s.TalimatSablonSatiri) => ({
   id: x.id, kod: x.kod, ad: x.ad, aktif: x.aktif, surum: x.surum, adimSayisi: x.adimSayisi,
+  kontrolSayisi: x.kontrolSayisi, resimSayisi: x.resimSayisi, videoSayisi: x.videoSayisi,
   sartname: x.sartnameId === null ? null : { id: x.sartnameId, kod: x.sartnameKodu ?? '', ad: x.sartnameAdi ?? '' },
 });
 

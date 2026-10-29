@@ -419,6 +419,8 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.equal(l.sablonlar.reduce((t, x) => t + x.adimSayisi, 0), 38);
     const ast = l.sablonlar.find((x) => x.kod === 'TS-AST')!;
     assert.equal(ast.sartname?.kod, 'AST-EPX');
+    // Tohumda medya yok; kontrol noktalı adımlar sayılır (1180 a).
+    assert.deepEqual([ast.kontrolSayisi, ast.resimSayisi, ast.videoSayisi], [3, 0, 0]);
     const a = await tamam<TalimatSablonuCevabi>(c.operator, 'GET', `/rota/talimat-sablonlari/${ast.id}`);
     assert.deepEqual(a.sablon.adimlar[2]?.kontrol, { tur: 'olcum', ad: 'Ortam sıcaklığı', alt: 10, ust: 35, birim: '°C' });
     assert.equal(a.sablon.adimlar[2]?.zorunlu, true);
@@ -522,6 +524,8 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     });
     assert.equal(e.sablon.adimlar[0]?.medya[0]?.ozet, ozet);
     assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 200);
+    const satir = (await tamam<TalimatSablonlariCevabi>(c.operator, 'GET', '/rota/talimat-sablonlari')).sablonlar.find((x) => x.id === e.sablon.id);
+    assert.deepEqual([satir?.adimSayisi, satir?.kontrolSayisi, satir?.resimSayisi, satir?.videoSayisi], [1, 0, 1, 0]);
     await tamam(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Medyasız', sartnameId: null, adimlar: [adim()] });
     assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 404);
   });
