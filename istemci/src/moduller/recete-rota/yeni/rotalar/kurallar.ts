@@ -150,6 +150,18 @@ export function rotaEksikleri(adimlar: readonly Adim[], malzemeVar: (id: string)
   return l;
 }
 
+// 1210 b: fason adımının hemen arkasında GKK kodlu adım yoksa yalnız uyarılır; onay durmaz, emir açılınca araya otomatik GKK girer (1208).
+export const GKK_KODU = 'GKK';
+export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) => string | null, opAdi: (opId: string) => string | null): RotaEksigi[] {
+  const ss = sirali(adimlar);
+  return ss.flatMap((s, i) => {
+    const sonraki = ss[i + 1];
+    if (!fasonMu(s) || (sonraki && opKodu(sonraki.opId) === GKK_KODU)) return [];
+    const ad = opAdi(s.opId);
+    return [{ adimId: s.id, metin: `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}` }];
+  });
+}
+
 // Fason olmayan her adımda işlem süresi zorunludur; hazırlık ve değişim 0 olabilir.
 export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null =>
   sirali(adimlar).find((s) => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0)) ?? null;

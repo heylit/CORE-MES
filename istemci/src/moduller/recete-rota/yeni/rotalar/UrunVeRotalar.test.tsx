@@ -63,6 +63,22 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     await screen.findByText(/Rev B onaya gönderildi/);
   });
 
+  it('1210 b: arkasında GKK olmayan fason adımı uyarılır, onaya gönderme durmaz', async () => {
+    const fasonlu = rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [
+      adimOrnegi(), adimOrnegi({ id: 'o20', seq: 20, opNo: 20, stationId: null, fasonId: '7', setup: null, proc: null, cycle: null, terminGun: 3, ins: [] }),
+    ])]);
+    const istekler = sunucuKur(YONETICI, {
+      durum: fasonlu,
+      yazmalar: { 'POST /rota/revizyonlar/72/onaya-gonder': () => json(200, { id: 72, durum: 'onay', surum: 5 }) },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    expect((await within(bolge).findByText(/Fason dönüşünde GKK yok: OP 20/)).textContent).toContain('otomatik GKK');
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder…' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/revizyonlar/72/onaya-gonder')).toBe(true); });
+  });
+
   it('giren eksik taslak onaya gönderilmez, eksik söylenir', async () => {
     const eksik = rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [adimOrnegi({ ins: [] })])]);
     const istekler = sunucuKur(YONETICI, { durum: eksik });

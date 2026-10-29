@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   acikRevizyon, adimArkasinaTasi, adimSartnameKilidi, eklenebilirSartnameler, kapsamaUyar, adimCarpanlari, adimEkle, adimSil, adimSurukle, adimTasi, agacKur, agacUrunleri, akisKarti, bagimlilikYaz, cevrimToplami,
-  degisimOrani, fasonaCevir, girdiOlur, girenTekrari, kartBirimi, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
+  degisimOrani, fasonaCevir, gkkUyarilari, girdiOlur, girenTekrari, kartBirimi, islemSuresiEksik, istasyonYaz, kaydetGovdesi, kartBasligi, katalogdanFarkli, malzemeAra, malzemeMaliyeti, ortalamaGunSaati,
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
@@ -56,6 +56,15 @@ describe('rota kuralları', () => {
     expect(e[0]?.metin).toContain('OP 10 Kesim');
     expect(e[1]?.metin).toContain('silinmiş');
     expect(rotaEksikleri([adim('a', 10, { ins: [{ itemId: '1', qty: 1, scrap: 0 }] })], var_, opAdi)).toEqual([]);
+  });
+
+  it('1210 b: arkasında GKK kodlu adım olmayan fason adımı uyarılır; son adım fasonsa da uyarılır', () => {
+    const fason = { fasonId: '7', stationId: null, machineId: null };
+    const kodu = (id: string) => (id === '41' ? 'GKK' : 'TOR');
+    const l = [adim('a', 10), adim('b', 20, fason), adim('c', 30, { opId: '41' }), adim('d', 40, fason), adim('e', 50), adim('f', 60, fason)];
+    expect(gkkUyarilari(l, kodu, opAdi).map((x) => x.adimId)).toEqual(['d', 'f']);
+    expect(gkkUyarilari(l, kodu, opAdi)[0]?.metin).toBe('OP 40 Kesim');
+    expect(gkkUyarilari([adim('a', 10), adim('b', 20)], kodu, opAdi)).toEqual([]);
   });
 
   it('fason olmayan adımda işlem süresi zorunludur; fason adım sayılmaz', () => {
