@@ -9,7 +9,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
+  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
@@ -509,6 +509,10 @@ describe('stok kuralları: parti etiketi emir numarası (borç #419)', () => {
     const e = (kaynak: 'karantina' | 'raf_gozu', g: { cikisNedeni: string } | { hedefTuru: 'hurda' | 'kabul' | 'karantina' }) => karantinaEngeli(kaynak, g) === null;
     assert.deepEqual([e('karantina', { hedefTuru: 'hurda' }), e('karantina', { cikisNedeni: 'fire' }), e('karantina', { hedefTuru: 'kabul' }), e('karantina', { cikisNedeni: 'sevk' }),
       e('raf_gozu', { hedefTuru: 'karantina' }), e('raf_gozu', { cikisNedeni: 'diger' })], [true, true, false, false, true, true]);
+  });
+  test('1205: fason dönüşü yalnız karantina konumuna girer; kabul, raf ve istasyon reddedilir', () => {
+    assert.equal(fasonDonusKonumuEngeli('karantina'), null);
+    for (const tur of ['kabul', 'raf_gozu', 'istasyon', 'depo_zemini'] as const) assert.equal(fasonDonusKonumuEngeli(tur), FASON_DONUS_KARANTINA, tur);
   });
 
   test('STK-T8 kişi kodu: biçim çözülür, büyük-küçük harf imzayı bozmaz; süre geçen ya da imzası tutmayan reddedilir', () => {

@@ -15,7 +15,7 @@ const CIKIS_YERI: Record<KalemKaynagi, string> = {
   urun: 'Stoktan sevk çıkışıyla düşer', fason: 'Yarı parça firmanın fason konumuna geçer', 'fason-donus': '', alim: '', elle: 'Parça firmanın konumuna geçer',
 };
 const KABUL_FISI: Record<KalemKaynagi, string> = {
-  urun: '', fason: '', 'fason-donus': 'Sarf, fire ve üretimden giriş', alim: 'Sipariş satırına giriş fişi', elle: 'Giriş fişi',
+  urun: '', fason: '', 'fason-donus': 'Karantinaya giriş; kararı GKK verir', alim: 'Sipariş satırına giriş fişi', elle: 'Giriş fişi',
 };
 
 function isHucresi(s: DepoSevkSatiri) {

@@ -29,7 +29,7 @@ interface Satir {
   // Kutuda giden kartın birden çok partisi varsa sunucu partiyi ister ('' seçilmedi, 'yok' partisiz bakiye).
   gidenParti: string;
   // Kutunun firmasındaki açık emrin fason işi: seçilince dönen kart rotadan gelir, giden iş parçasıdır ('' seçilmedi).
-  fasonIsEmriId: string; fasonIsEtiketi: string; fasonHurda: string;
+  fasonIsEmriId: string; fasonIsEtiketi: string;
   // Parti sertifikası (#960): dosya seçilince yüklenir; mal kabul özetiyle belgeyi açıp partiye bağlar.
   sertifikaOzet: string; sertifikaAdi: string; sertifikaYukleniyor: boolean;
   // Sevkiyatın geliş kalemi (944, 957 a): kabul kalemi kapatır; kısmi kabulde kalem açık kalır ('' bağsız).
@@ -37,7 +37,7 @@ interface Satir {
 }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
-  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', fasonHurda: '',
+  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '',
   sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
 const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '' && s.sevkKalemiId === '';
@@ -96,10 +96,20 @@ function SigmaBilgisi({ s }: { s: Satir }) {
   );
 }
 
-// Fason işi seçilince sağlam adet firmada kalanla önerilir; depocu sayınca değiştirir. Kalan yoksa öneri boştur.
+// Fason işi seçilince dönen adet firmada kalanla önerilir; depocu sayınca değiştirir. Kalan yoksa öneri boştur. Hurda eski dönüşlerdendir.
 export function fasonOnerilenAdet(x: { gonderilen: number; donen: number; hurda: number }): string {
   const kalan = x.gonderilen - x.donen - x.hurda;
   return kalan > 0 ? String(kalan) : '';
+}
+
+// 1205: fason dönüşü yalnız karantinaya girer; GKK kararına kadar karar bekliyor durur.
+function KarantinaKonumu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) => void }) {
+  const k = useQuery({ queryKey: anahtarlar.liste('karantina-konumlari', {}), queryFn: () => api.get<KonumlarCevabi>('/stok/konumlar?tur=karantina&sayfaBoyu=200') });
+  return (
+    <Secim etiket="Karantina konumu" value={s.konumId} onChange={(e) => degistir({ konumId: e.target.value })} bosSecenek="İlk karantina konumu"
+      ipucu="Parça GKK kararına kadar karantinada karar bekliyor durur."
+      secenekler={(k.data?.satirlar ?? []).map((x) => ({ deger: String(x.id), baslik: `${x.kod}${x.ad ? ` · ${x.ad}` : ''}` }))} />
+  );
 }
 
 function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) => void }) {
@@ -206,9 +216,8 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       {s.hizmetKarti && s.donus === 'hizmet' ? (
         <Girdi etiket={`Teslim alınan miktar${o.data?.ozet.birim ? ` (${o.data.ozet.birim})` : ''}`} inputMode="decimal" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required />
       ) : s.fasonIsEmriId ? <>
-      <Girdi etiket="Dönen sağlam adet" inputMode="numeric" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required ipucu="Öneri firmada kalandır (gönderilen − dönen − hurda); saydığını yaz." />
-      <Girdi etiket="Hurda adet" inputMode="numeric" value={s.fasonHurda} onChange={(e) => degistir({ fasonHurda: e.target.value })} ipucu="Firmada hurdaya ayrılan; firmadan düşer, emrin dönüş kaydına yazılır." />
-      <Secim etiket="Konum" value={s.konumId} onChange={(e) => degistir({ konumId: e.target.value })} secenekler={konumlar} bosSecenek="Mal kabul alanı (KABUL)" />
+      <Girdi etiket="Dönen adet" inputMode="numeric" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required ipucu="Öneri firmada kalandır; saydığını yaz. Sağlam ve hatalıyı GKK ayırır." />
+      <KarantinaKonumu s={s} degistir={degistir} />
       </> : <>
       <MalzemeSecici etiket={s.hizmetKarti ? 'Dönen malzeme' : 'Malzeme'} deger={s.kart} degistir={(kart) => degistir({ kart })} />
       <AmbalajSecimi s={s} degistir={degistir} />
@@ -243,7 +252,7 @@ export function satirGovdesi(s: Satir): MalKabulGovdesi['satirlar'][number] {
 function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   if (s.hizmetKarti && s.donus === 'hizmet') return { malzemeId: Number(s.hizmetKarti), miktar: miktarGirdisi(s.miktar), siparisSatirId: Number(s.siparisSatirId) };
   if (s.hizmetKarti && s.fasonIsEmriId) {
-    return { malzemeId: Number(s.kart), miktar: miktarGirdisi(s.miktar), ...(s.konumId ? { konumId: Number(s.konumId) } : {}), parti: null, siparisSatirId: Number(s.siparisSatirId), fasonIsi: { isEmriId: Number(s.fasonIsEmriId), ...(s.fasonHurda ? { hurdaAdet: Number(s.fasonHurda) } : {}) }, ambalaj: null };
+    return { malzemeId: Number(s.kart), miktar: miktarGirdisi(s.miktar), ...(s.konumId ? { konumId: Number(s.konumId) } : {}), parti: null, siparisSatirId: Number(s.siparisSatirId), fasonIsi: { isEmriId: Number(s.fasonIsEmriId) }, ambalaj: null };
   }
   const fason = s.hizmetKarti ? { fason: { malzemeId: Number(s.gidenKart), konumId: Number(s.fasonKonumId), ...(s.gidenMiktar ? { miktar: miktarGirdisi(s.gidenMiktar) } : {}),
     ...(s.gidenParti ? { partiId: s.gidenParti === 'yok' ? null : Number(s.gidenParti) } : {}) } } : {};
