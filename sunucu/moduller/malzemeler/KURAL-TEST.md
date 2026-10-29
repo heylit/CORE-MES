@@ -144,3 +144,10 @@ MKK-1..MKK-15'in testleri `katalog-onay-baglama.test.ts`, `katalog-kartlari.test
 - Ekranla karşılaştırma: sunucunun anahtarı `katalog.html` `kartAnahtari` ile 20 000 rastgele kartta karşılaştırıldı, fark yok (23.10.2026, yerelde; ekranın tablosunda olmayan kalite dışarıda: ekran o kartta anahtar kuramaz).
 - Test kartları: `test-kart.ts` (`tamGovde`) eski test gövdelerini türün zorunlu alanlarıyla tamamlar; yeni kuralların testleri gövdeyi tamamlamadan gönderir.
 - Bozma: servisten aile/kalite denetimi, zorunlu alan denetimi ya da sunucu anahtarı ayrı ayrı kaldırılınca `kart-kurallari.test.ts` 2, 2 ve 3 testle düşüyor (23.10.2026, yerelde denendi).
+
+## Genel arama ve indeks (kart #1244), `arama/arama.test.ts`, `arama-indeksi.test.ts`
+- Kaynak: `kod ya da adda geçen kart ...; başlık kod; en çok sınır kadar satır` (izin), `tam kod önce, sonra koddan başlayan, ...` (sıra),
+  `eski / ERP kodu ya da tedarikçi koduyla ...; eşleşmeyen kod ve joker boş döner` (ret), `iptal kart dönmez; kaynak malzemeler sayfasının okuma işlemini ister` (ret; yetkisiz kişinin reddi çekirdek `/arama` testinde)
+- Türkçe harf (1233): `Türkçe harf: büyük-küçük ve noktalı-noktasız fark gözetilmez` (izin; 1233'e göre ILIKE ile düşer, burada denenmedi)
+- İndeks: `kodda ya da adda geçen metin araması (liste ve sayım) trigram indeksini kullanır`, `seçici rakamlı arama kart no ile birlikte yine indekse düşer`
+- Mutasyon: göç kaldırılınca iki indeks testi düşüyor (29.10.2026, yerelde denendi).

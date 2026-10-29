@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { LOGO_TUR_KARSILIGI_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   HizmetYonu, KatalogKartDurumu, KatalogMalzemeOzeti, KatalogTuru, LogoGonderimDurumu, LogoKarsilikCesidi, LogoKarsiligi,
@@ -219,9 +220,12 @@ const OZET_SECIMI = `k.no AS id, k.kimlik, k.stok_kodu AS kod, k.tur, ${KATALOG_
   LEFT JOIN malzeme_kategorisi kt ON kt.tur = k.tur AND kt.kod = ${KATALOG_KATEGORI}`;
 // Eski / ERP kodu ve tedarikçi kodu da aranır: katalog ekranının kendi araması bu alanlara bakar, üst arama ve seçiciler aynı kartı bulmalı.
 const COM_METNI = (alan: string): string => `CASE WHEN jsonb_typeof(k.kayit -> 'com' -> '${alan}') = 'string' THEN k.kayit -> 'com' ->> '${alan}' END`;
+// Kod ve ad Türkçe harfle sadeleşerek karşılaştırılır (1233): veritabanının dil ayarı (C.UTF-8) 'I'/'ı' eşlemez. İfadeler trigram
+// indeksleriyle (göç 20261029133000) birebir aynıdır.
+const SADE = (ifade: string): string => `public.arama_sade(${ifade})`;
 const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
-        AND ($1::text IS NULL OR k.stok_kodu ILIKE $1 OR ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} ILIKE $1 OR k.no = $2::int
-             OR ${COM_METNI('eskiKod')} ILIKE $1 OR ${COM_METNI('tkod')} ILIKE $1)
+        AND ($1::text IS NULL OR ${SADE('k.stok_kodu')} LIKE $1 OR ${SADE(KATALOG_AD.replaceAll('kayit', 'k.kayit'))} LIKE $1 OR k.no = $2::int
+             OR ${SADE(COM_METNI('eskiKod'))} LIKE $1 OR ${SADE(COM_METNI('tkod'))} LIKE $1)
         AND (cardinality($3::text[]) = 0 OR k.tur = ANY($3::text[]))
         AND (NOT $4::boolean OR k.onay_durumu = 'aktif')
         AND ($5::text IS NULL OR k.hizmet_yonu = $5)`;
@@ -251,17 +255,31 @@ export async function cncKimligiYaz(db: Db, no: number, kimlik: string | null): 
   return { bagli: bag !== null, oncekiNo: once?.no ?? null };
 }
 
-// Metin stok kodunda ya da adda (büyük-küçük harf duyarsız) geçer; yalnız rakamsa kart no'su da eşleşir. Sıra: stok kodu, no.
+// Metin stok kodunda ya da adda (büyük-küçük ve Türkçe harf duyarsız) geçer; yalnız rakamsa kart no'su da eşleşir. Sıra: stok kodu, no.
 export async function katalogMalzemeAra(
   db: Db, g: { metin: string | null; turler: readonly string[]; yalnizAktif: boolean; hizmetYonu: string | null; sinir: number; atla: number },
 ): Promise<{ satirlar: KatalogMalzemeOzeti[]; toplam: number }> {
-  const desen = g.metin === null ? null : `%${g.metin.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const desen = g.metin === null ? null : icindeDeseni(g.metin);
   const no = g.metin !== null && /^\d{1,9}$/.test(g.metin) ? Number(g.metin) : null;
   const p = [desen, no, g.turler, g.yalnizAktif, g.hizmetYonu];
   const satirlar = await db.sorgu<KatalogMalzemeOzeti>(
     `SELECT ${OZET_SECIMI} WHERE ${ARAMA_KOSULU} ORDER BY k.stok_kodu, k.no LIMIT $6 OFFSET $7`, [...p, g.sinir, g.atla]);
   const sayim = await db.tek<{ toplam: string }>(`SELECT count(*) AS toplam FROM malzeme_katalog_karti k WHERE ${ARAMA_KOSULU}`, p);
   return { satirlar, toplam: Number(sayim?.toplam ?? 0) };
+}
+
+// Genel arama (1233 sözleşmesi): seçicilerle aynı koşul (trigram indeksi), sıra tam kod, kart no, koddan başlayan, yeniden eskiye.
+// Desenler çağırandan kaçırılmış gelir. Taslak ve onaydaki kart da döner; iptal dönmez.
+export function katalogKayitAra(
+  db: Db, g: { q: string; sade: string; icindeDeseni: string; basDeseni: string; sinir: number },
+): Promise<KatalogMalzemeOzeti[]> {
+  const no = /^\d{1,9}$/.test(g.q) ? Number(g.q) : null;
+  return db.sorgu<KatalogMalzemeOzeti>(
+    `SELECT ${OZET_SECIMI} WHERE ${ARAMA_KOSULU}
+      ORDER BY (${SADE('k.stok_kodu')} = $6) DESC, (k.no IS NOT DISTINCT FROM $2::int) DESC, (${SADE('k.stok_kodu')} LIKE $7) DESC,
+               k.guncelleme DESC, k.no DESC
+      LIMIT $8`,
+    [g.icindeDeseni, no, [], false, null, g.sade, g.basDeseni, g.sinir]);
 }
 
 // Kg fiyatı (satın alma) için kartın kalitesi ve formu `kayit`'tadır: hazır kalitede `grade`, özel kalitede `custom.kod` (yoksa `custom.ad`).

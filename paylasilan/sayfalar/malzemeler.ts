@@ -1,7 +1,7 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
 export const MALZEMELER_SAYFALARI = [
-  { yol: '/malzemeler', islem: 'sayfa.malzemeler', baslik: 'Malzemeler ve Hizmetler', simge: 'tag', grup: 'Stok', sira: 20, aramaUcu: '/malzemeler/ara' },
+  { yol: '/malzemeler', islem: 'sayfa.malzemeler', baslik: 'Malzemeler ve Hizmetler', simge: 'tag', grup: 'Stok', sira: 20 },
 ] as const satisfies readonly SayfaTanimi[];
 
 // Maddeler (Logo gönderimi dışında) prototipin kendi görünüm şeridindeki bölümlerdir (sıra, ad ve grup aynı); şerit çerçevede gizlenir. Anahtar prototipin görünüm adıdır

@@ -182,7 +182,8 @@ Açık:
 - ~~Kategori kart kaydında denetlenmez~~ kapandı (#1474, kullanıcı kararı "reddedilsin ve kategori açmaya yönlendirsin"): listede olmayan ya da kapalı kategori 400; kategorisi sonradan kapanan kayıtlı kart yeniden kaydedilir.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): gerçek veri yok; ilk ayar kaydı hesaplar (VARSAYIM). Ayarda gizlenen birim göç anında hesaplanmaz, ilk `malzeme` ayar kaydında hesaplanır (göç yalnız ekleneni alır; geri alma: ayarı bir kez kaydetmek).
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ucu başka ekran çağırmıyor (`istemci/src` içinde test dışı "malzeme-birimleri" yok), birim özetle gidiyor; satın alma ve depo zaten sayfa rolünde (`rol-dagilimi.test.ts`). `GET /malzeme-birimleri` malzemeler sayfasının okuma işlemini ister; satın alma ve stok ekranları birimi kendi uçlarından vermeli ya da rol satırı gerekir (rol tablosu, ST5/CK1).
-- Arama dizinsiz (`ILIKE`); katalog büyürse dizin ayrı iş (dizin şema değişikliğidir).
+- ~~Arama dizinsiz (`ILIKE`)~~ kapandı (kart #1244, 1231 a): dört `malzemeler_malzeme_katalog_karti_*_trgm` indeksi (göç `20261029133000_*`); `arama-indeksi.test.ts` planı denetler.
+- Açık (kart #1244): `ekran-testleri/benzetim/senaryolar/uretim.test.ts:35` kalkan `GET /api/malzemeler/ara` için sahte cevap veriyor; satır ölü, kırılmaz. Benzetimin sahibi genel aramaya (`/arama`) geçerken kaldırır.
 
 ## Bağlama tur 1: hizmet türü (kart #163, kullanıcı kararları MH1-MH5, 09.10.2026)
 Kapandı:
