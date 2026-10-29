@@ -37,3 +37,32 @@
 :root[data-hareket='sade'] .tc-iplik * { transition: none; }
 @media (prefers-reduced-motion: reduce) { .tc-iplik * { transition: none; } }
 .tc-emir-parca { display: inline-flex; align-items: center; gap: var(--b-2); }
+/* Kapanış onayları (1081 b): üstte kuyruk, altta seçili emrin kapanışı. Şerit dar ekranda alt alta dizilir. */
+.tc-kapanis { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-kapanis-alt {
+  display: flex; align-items: center; gap: var(--b-2); margin: var(--b-4) 0 var(--b-2);
+  font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.tc-kapanis-secili { font-weight: 700; }
+.tc-kapanis-seritler {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; margin: 0 0 var(--b-4); padding: 0;
+  border: thin solid var(--edge); border-radius: var(--yari-1); overflow: hidden;
+}
+.tc-kapanis-serit { display: grid; gap: var(--b-1); padding: var(--b-3); border-right: thin solid var(--edge); font-size: var(--yazi-s); min-width: 0; }
+.tc-kapanis-serit:last-child { border-right: 0; }
+.tc-kapanis-serit b { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-kapanis-serit small { color: var(--muted); }
+.tc-kapanis-serit-bitti { background: color-mix(in srgb, var(--run) 14%, transparent); }
+.tc-kapanis-serit-simdi { background: color-mix(in srgb, var(--done) 14%, transparent); box-shadow: inset 0 calc(-1 * var(--b-1)) 0 var(--done); }
+.tc-kapanis-iki { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-4); margin-top: var(--b-4); }
+.tc-kapanis-onay { display: grid; gap: var(--b-2); align-content: start; border: thin solid var(--edge); border-radius: var(--yari-1); padding: var(--b-3); min-width: 0; }
+.tc-kapanis-onay .tc-kapanis-alt { margin: 0; }
+.tc-kapanis-onaylandi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; }
+.tc-kapanis-onaylandi time, .tc-kapanis-defter time { font-family: var(--font-mono); color: var(--muted); margin-right: var(--b-2); }
+.tc-kapanis-defter { margin: 0; padding-left: var(--b-5); display: grid; gap: var(--b-1); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .tc-kapanis-seritler { grid-template-columns: minmax(0, 1fr); }
+  .tc-kapanis-serit { border-right: 0; border-bottom: thin solid var(--edge); }
+  .tc-kapanis-serit:last-child { border-bottom: 0; }
+  .tc-kapanis-iki { grid-template-columns: minmax(0, 1fr); }
+}

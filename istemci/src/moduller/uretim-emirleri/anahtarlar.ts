@@ -1,4 +1,4 @@
-import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { EmirDurumu, KapanisAsamasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 
 export const anahtarlar = {
   hepsi: ['uretim-emirleri'] as const,
@@ -11,4 +11,6 @@ export const anahtarlar = {
   adimli: (id: number) => ['uretim-emirleri', 'adimli', id] as const,
   fasonFirmalari: ['uretim-emirleri', 'fason-firmalari'] as const,
   siradakiFason: (id: number) => ['uretim-emirleri', 'siradaki-fason', id] as const,
+  kapanislar: (asama: KapanisAsamasi | '', ara: string, sayfa: number) => ['uretim-emirleri', 'kapanislar', asama, ara, sayfa] as const,
+  kapanis: (id: number) => ['uretim-emirleri', 'kapanis', id] as const,
 };

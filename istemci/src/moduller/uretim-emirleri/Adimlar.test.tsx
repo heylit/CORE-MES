@@ -59,7 +59,7 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
     await ayrintiAc({
       ...basladi(4, { ...CANLI, calisma: null, saglam: 12, hurda: 3 }), durum: 'bitti', bitis: '2026-10-06T11:00:00+00:00', saglamAdet: 12,
     });
-    expect(deger('Durum')).toBe('Bitti');
+    expect(deger('Durum')).toBe('Üretimi bitti');
     expect(deger('Sağlam adet')).toBe('12');
     expect(deger('Hurda')).toBe('3');
     expect(deger('Fark')).toBe('Emir adedinden 2 fazla');
@@ -140,6 +140,6 @@ describe('Liste: canlı sayaç ve çalışma rozeti', () => {
     expect(within(satir('UE-000001')).getByText('Çalışıyor')).toBeTruthy();
     expect(within(satir('UE-000002')).getByText('Duraklı')).toBeTruthy();
     expect(within(satir('UE-000003')).getByText('Durdu')).toBeTruthy();
-    expect(within(satir('UE-000004')).getByText('Bitti')).toBeTruthy();
+    expect(within(satir('UE-000004')).getByText('Üretimi bitti')).toBeTruthy();
   });
 });
