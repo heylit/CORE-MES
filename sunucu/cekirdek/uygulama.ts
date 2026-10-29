@@ -12,6 +12,7 @@ import { kisitIhlali, vtDiskDolu, vtGeciciCakisma, vtHataIzi, vtSureDoldu, vtUla
 import type { KisitIhlali, Veritabani } from './db.ts';
 import { UygulamaHatasi, cokBuyuk, mesgul, veritabaniYok } from './hata.ts';
 import { istekOlcumunuKur } from './istek-olcumu.ts';
+import { genelAramaUcu, kaynaklariKesfet } from './kayit-aramasi.ts';
 import { surecGunlugunuKur, varsayilanGunlukDizini, type GunlukYazici } from './gunluk-dosyasi.ts';
 import { surecOlayGunlugunuKur } from './olay-gunlugu.ts';
 import type { TekrarDeposu } from './tekrar.ts';
@@ -218,5 +219,9 @@ export async function uygulamaKur(secenek: UygulamaSecenegi, gunlukDizini?: stri
       vt, kimlik, modul, guvenliCerez: ayar.ortam === 'canli', ...(denetle ? { denetle } : {}), ...(tekrar ? { tekrar } : {}),
     });
   }
+  // Genel arama çekirdeğindir: modüllerin `disari.ts` kaynaklarını toplar, kapalı modülünkiler dışarıda kalır.
+  uclariKaydet(app, [genelAramaUcu(vt, await kaynaklariKesfet(MODUL_KLASORU, kapali))], {
+    vt, kimlik, modul: 'cekirdek', guvenliCerez: ayar.ortam === 'canli',
+  });
   return app;
 }
