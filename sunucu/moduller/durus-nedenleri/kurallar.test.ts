@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { cagriyiDuzenle, kodOner } from './kurallar.ts';
+import { FIRMADAN_GELMEDI_KODU, FIRMADA_HURDA_KODU, SABIT_KOD_DEGISMEZ, cagriyiDuzenle, kodOner, sabitKodEngeli } from './kurallar.ts';
 
 describe('çağrı kuralı', () => {
   test('DN-08 / DN-07: planlıya çevrilen nedenin çağrı ekibi ve gecikmesi silinir', () => {
@@ -36,5 +36,14 @@ describe('kod önerisi (DN-09)', () => {
 
   test('iki haneyi aşan sayı da büyür', () => {
     assert.equal(kodOner('D', ['D-99']), 'D-100');
+  });
+});
+
+describe('sabit hatalı türleri (1207 c)', () => {
+  test('fason türlerinin kodu değişmez; aynı kodla güncelleme ve başka nedenin kod değişimi serbest', () => {
+    assert.equal(sabitKodEngeli(FIRMADA_HURDA_KODU, 'H-09'), SABIT_KOD_DEGISMEZ);
+    assert.equal(sabitKodEngeli(FIRMADAN_GELMEDI_KODU, 'FSN-HURDA'), SABIT_KOD_DEGISMEZ);
+    assert.equal(sabitKodEngeli(FIRMADA_HURDA_KODU, FIRMADA_HURDA_KODU), null);
+    assert.equal(sabitKodEngeli('H-01', 'H-02'), null);
   });
 });

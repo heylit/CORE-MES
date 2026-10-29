@@ -6,7 +6,7 @@ import type {
   DurusNedeni, DurusNedeniGuncelleGovdesi, DurusNedeniOlusturGovdesi, DurusNedenleriCevabi,
   HurdaNedeni, HurdaNedeniGuncelleGovdesi, HurdaNedeniOlusturGovdesi, HurdaNedenleriCevabi,
 } from '#paylasilan/sozlesme/durus-nedenleri.ts';
-import { DURUS_ONEKI, HURDA_ONEKI, cagriyiDuzenle, kodOner } from './kurallar.ts';
+import { DURUS_ONEKI, HURDA_ONEKI, cagriyiDuzenle, kodOner, sabitKodEngeli } from './kurallar.ts';
 import {
   durusKodlariniOku, durusNedeniEkle, durusNedeniVarMi, durusNedeniniGuncelle, durusNedeniniOku, durusNedenleriniOku,
   hurdaKodlariniOku, hurdaNedeniEkle, hurdaNedeniVarMi, hurdaNedeniniGuncelle, hurdaNedeniniOku, hurdaNedenleriniOku,
@@ -94,7 +94,10 @@ export async function hurdaNedeniOlustur(db: Db, govde: HurdaNedeniOlusturGovdes
   return varOlan(await kodCakismasiniCevir(() => hurdaNedeniEkle(db, govde.kod, govde.ad)));
 }
 
-export function hurdaNedeniGuncelle(db: Db, id: number, govde: HurdaNedeniGuncelleGovdesi): Promise<HurdaNedeni> {
+export async function hurdaNedeniGuncelle(db: Db, id: number, govde: HurdaNedeniGuncelleGovdesi): Promise<HurdaNedeni> {
+  const eski = await hurdaNedeniniOku(db, id);
+  const engel = eski === null ? null : sabitKodEngeli(eski.kod, govde.kod);
+  if (engel !== null) throw cakisma(engel);
   return kodCakismasiniCevir(() => surumluGuncelle({
     guncelle: () => hurdaNedeniniGuncelle(db, id, govde),
     varMi: () => hurdaNedeniVarMi(db, id),
