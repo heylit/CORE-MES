@@ -570,7 +570,7 @@ export function konumKimlikleri(
 
 // Kayıt zamanı: tabletin zamanı sunucu saatinden en çok 12 saat geride ve 2 dakikadan fazla ileride değilse esastır (çevrimdışı kuyruktan
 // gelen kayıt kendi zamanını korur, geç gelen kayıtlar aynı ana yığılmaz); dışındaysa sunucu saati yazılır. `istemciZamani` her durumda
-// ayrıca saklanır. Pencere tek yerdedir; karar değişirse yalnız bu sabit değişir.
+// ayrıca saklanır; sunucunun kaydı aldığı an `arkon_kayit.varis` sütunundadır. Pencere tek yerdedir; karar değişirse yalnız bu sabit değişir.
 export const ISTEMCI_ZAMANI_PENCERESI = { geriMs: 12 * 3600e3, ileriMs: 2 * 60e3 } as const;
 export function kayitZamani(istemci: unknown, simdi: number): number {
   const icinde = typeof istemci === 'number' && Number.isFinite(istemci)
@@ -595,8 +595,9 @@ export function kayitSutunlari(satir: Readonly<Record<string, unknown>>, simdi: 
   };
 }
 
-// Kayıt zamanı ve kişi sunucudandır. İstemcinin zamanı (çevrilimdışı kuyruktan gelen kayıt dahil) yalnız istemciZamani
-// alanında saklanır ve esas sayılmaz; kişiyi anlatan her alan (userId, userName, by, who, user*, operator*, kisi*) atılır.
+// Kayıt zamanı `kayitZamani` penceresinden geçer: pencere içindeyse tabletin zamanıdır, dışındaysa sunucu saatidir. Tabletin gönderdiği
+// ham zaman her durumda istemciZamani alanında saklanır. Kişi sunucudandır: kişiyi anlatan her alan (userId, userName, by, who, user*,
+// operator*, kisi*) atılır ve oturumdaki kişi yazılır.
 const KISI_ALANI = /^(by|who|user\w*|operator\w*|kisi\w*)$/i;
 
 export function kayitGovdesi(satir: Readonly<Record<string, unknown>>, kisi: { id: number; ad: string }, simdi: number): Record<string, unknown> {

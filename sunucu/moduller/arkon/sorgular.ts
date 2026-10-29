@@ -62,8 +62,8 @@ export async function kayitEkle(
   db: Db, tur: ArkonKayitTuru, s: KayitSutunlari, govde: unknown, kisiId: number, kimlikler: KonumKimlikleri,
 ): Promise<number | null> {
   const sonuc = await db.sorgu<{ id: number }>(
-    `INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (tur, cid) DO NOTHING RETURNING id`,
+    `INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, varis)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now()) ON CONFLICT (tur, cid) DO NOTHING RETURNING id`,
     [tur, s.cid, s.zaman, s.makine, s.isMerkezi, s.emirNo, s.paketId, s.maddeId, JSON.stringify(govde), kisiId, kimlikler.istasyonId, kimlikler.isMerkeziId],
   );
   return sonuc[0]?.id ?? null;
