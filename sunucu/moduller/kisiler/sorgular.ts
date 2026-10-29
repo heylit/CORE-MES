@@ -413,3 +413,25 @@ export async function rollerdekiKisiSatirlari(db: Db, rolIdleri: readonly number
   );
   return satirlar.map((s) => s.id);
 }
+
+export interface KisiAramaSatiri {
+  id: number;
+  ad: string;
+  sicilNo: string | null;
+  gorev: string | null;
+  aktif: boolean;
+}
+
+// Genel arama (kart #1236): metin adda, sicil no'da ya da görevde geçer. Sütun ve sorgu aynı Türkçe harf sadeleştirmesinden
+// geçer (public.arama_sade, göç 20261029125000; ILIKE dil ayarına bağlıdır), ifade indeksi 20261029128000. Desenler çekirdekte
+// sadeleşmiş ve kaçırılmış gelir. Sicil no'su tam tutan önce, sonra adı metinle başlayan, sonra aktif kişi, sonra ad sırası.
+// Pasif kişi de bulunur: geçmiş kayıtlarda adı geçer.
+export function kisiAra(db: Db, sade: string, icindeDeseni: string, basDeseni: string, sinir: number): Promise<KisiAramaSatiri[]> {
+  return db.sorgu<KisiAramaSatiri>(
+    `SELECT id, ad, sicil_no AS "sicilNo", gorev, aktif FROM kisi
+      WHERE public.arama_sade(ad) LIKE $1 OR public.arama_sade(sicil_no) LIKE $1 OR public.arama_sade(gorev) LIKE $1
+      ORDER BY (public.arama_sade(sicil_no) IS NOT DISTINCT FROM $2) DESC, (public.arama_sade(ad) LIKE $3) DESC, aktif DESC, ad, id
+      LIMIT $4`,
+    [icindeDeseni, sade, basDeseni, sinir],
+  );
+}
