@@ -1,5 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import type { Kayit, Statu } from '#paylasilan/sozlesme/recete-rota.ts';
+import { rotaAra } from './arama.ts';
 import { statuListesi } from './servis.ts';
 
 // Stok üretim sayımında adımın statüsünü ve çıktı kartını bunlarla çözer; stok bu modülü ithal edemez, bağı sunucu/kablolama.ts kurar.
@@ -25,3 +27,9 @@ export async function receteRotaStatuleri(db: Db): Promise<Statu[]> {
 export { aktifMalzemeListesi, durumVeEmirler, KAYNAK_OKUMA } from './servis.ts';
 export { degerBicimeUyarMi, degerCokBuyukMu, nulKarakteriVarMi, surumUyarMi } from './kurallar.ts';
 export type { EmirKaydi } from './kurallar.ts';
+
+// Genel aramanın rota kaynağı (kart #1241). Çekirdek kaynağı yalnız Reçete ve Rota'yı okuyabilene çağırır; malzeme ve rota okuması
+// rotaAra içinde ayrıca istenir.
+export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
+  { tur: 'rota', yetki: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'], ara: rotaAra },
+];

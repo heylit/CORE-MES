@@ -43,3 +43,13 @@ kayıtlı takviminden gelir, kişinin görevi tek tek okunur.
 | kisiler | Toplu görev okuması: `kisiGorevleri(db, idler): Map<number, string \| null>` | Ayarcı görevden okunur (`gorev` "Ayarcı"); bugün kişi başına bir sorgu | `kisiGorevi(db, id)` kişi başına çağrılıyor |
 
 VARSAYIM: iki okuma da var olan sorgunun dışarı açılmasıdır, yeni hesap gerekmez (sorgular okundu, servis katmanı izlenmedi).
+
+## Genel arama (kart #1241): taslak ve onaydaki rota da bulunsun
+
+Rota kaynağı (`arama.ts` `rotaAra`) kalemi malzemelerin aramasıyla bulur, rotasını `yururluktekiRevizyonIdleri` ile okur; yalnız yürürlükte
+rotası olan kalem sonuçtur. Taslak ya da onay bekleyen rota için toplu okuma yok (`durumRevizyonlari` kalem başına içerik okur).
+
+| Sahibi | Gereken | Neden | Bugün |
+|---|---|---|---|
+| rota | `disari.ts`'ten `revizyonOzetleri(db, malzemeIdleri): Map<number, { harf, durum }[]>` (iptalsiz, tek sorgu) | Taslaktaki rotası olan kalem de aramada çıksın, açıklamada durumu görünsün | Yalnız yürürlükteki rota bulunur |
+| malzemeler | `malzeme_katalog_karti` kod ve ad trigram indeksi | Aramanın eşleşmesi malzemelerin sorgusundadır | Ayrı malzemeler dalı (göç 133000, koordinatör kararı 29.10) |

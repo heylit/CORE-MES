@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
@@ -24,7 +25,8 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   const komut = useEmirKomutu();
   const emirler = useMemo(() => d.emirler?.orders ?? [], [d.emirler]);
   const acabilir = yetki.emirYaz || yetki.rotaEmreKopyala;
-  const [yeniAcik, setYeniAcik] = useState(emirler.length === 0 && acabilir);
+  const [sorgu] = useSearchParams();
+  const [yeniAcik, setYeniAcik] = useState((emirler.length === 0 || sorgu.get('yeni') === '1') && acabilir);
 
   if (!d.emirler) {
     return (
