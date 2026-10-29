@@ -3,13 +3,13 @@ import { test } from 'node:test';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { butunIzinleriGorurMu, gorulenKaynaklar, kayitlariSirala } from './kurallar.ts';
 
-test('TK-K1: yetkisi olmayan kaynak hiç görünmez; bağlanmamış kaynak yetkisi varsa bekleyenlerde; izin herkese (kendi izni)', () => {
+test('TK-K1: yetkisi olmayan kaynak hiç görünmez; emir kaynakları emir listesi sayfasıyla açılır; izin herkese (kendi izni)', () => {
   assert.deepEqual(gorulenKaynaklar([]), { okunan: ['izin', 'planli-durus'], bekleyen: [] });
   assert.deepEqual(gorulenKaynaklar(['kalibrasyon.oku', 'plan.oku', 'sevkiyat.oku']), {
-    okunan: ['kalibrasyon', 'izin', 'planli-durus'], bekleyen: ['emir-plan', 'emir-bitis', 'sevk'],
+    okunan: ['sevk', 'kalibrasyon', 'izin', 'planli-durus'], bekleyen: [],
   });
-  assert.deepEqual(gorulenKaynaklar(['siparisler.oku', 'denetim-hazirlik.oku', 'finans.oku', 'satin-alma.oku']), {
-    okunan: ['siparis', 'denetim', 'izin', 'vergi', 'planli-durus'], bekleyen: ['satin-alma'],
+  assert.deepEqual(gorulenKaynaklar(['sayfa.uretim-emirleri', 'siparisler.oku', 'denetim-hazirlik.oku', 'finans.oku', 'satin-alma.oku']), {
+    okunan: ['siparis', 'emir-plan', 'emir-bitis', 'satin-alma', 'denetim', 'izin', 'vergi', 'planli-durus'], bekleyen: [],
   });
 });
 

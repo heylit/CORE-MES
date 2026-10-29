@@ -81,10 +81,10 @@ describe('takvim (gerçek PostgreSQL)', () => {
     assert.equal((await oku(c.yonetici, { baslangic: '2031-01-01', bitis: '2031-06-01' })).durum, 400);
   });
 
-  test('TK-02: yönetici bağlı bütün kaynakları okur; bağlanmayanlar bekleyenlerde; vergi tarihleri sıralı gelir', async () => {
+  test('TK-02: yönetici bütün kaynakları okur, bekleyen kaynak kalmadı; vergi tarihleri sıralı gelir', async () => {
     const g = (await oku(c.yonetici)).govde;
-    assert.deepEqual(g.kaynaklar, ['siparis', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus']);
-    assert.deepEqual(g.bekleyenler, ['emir-plan', 'emir-bitis', 'sevk', 'satin-alma']);
+    assert.deepEqual(g.kaynaklar, ['siparis', 'emir-plan', 'emir-bitis', 'sevk', 'satin-alma', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus']);
+    assert.deepEqual(g.bekleyenler, []);
     const vergi = g.kayitlar.filter((k) => k.kaynak === 'vergi');
     assert.deepEqual(vergi.map((k) => k.tarih), ['2031-03-25', '2031-03-26', '2031-03-28', '2031-03-31']);
     assert.ok(vergi.every((k) => !k.bitti));

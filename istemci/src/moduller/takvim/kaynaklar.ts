@@ -6,10 +6,10 @@ import { gunFarki } from './tarih.ts';
 // Renk takvim.css'te kaynağa göre verilir (data-kaynak); yol kaydın kendi ekranıdır, takvim tarihi değiştirmez (1161 a).
 export const KAYNAK_BILGISI: Readonly<Record<TakvimKaynagi, { ad: string; simge: SimgeAdi; modul: string; yol: (k: TakvimKaydi) => string }>> = {
   'siparis': { ad: 'Sipariş termini', simge: 'cart', modul: 'Siparişler', yol: (k) => `/siparisler/${k.kimlik}` },
-  'emir-plan': { ad: 'Emir plan başlangıcı', simge: 'gantt', modul: 'Plan', yol: () => '/plan' },
-  'emir-bitis': { ad: 'Emir plan bitişi', simge: 'flag', modul: 'Plan', yol: () => '/plan' },
-  'sevk': { ad: 'Sevk', simge: 'truck', modul: 'Sevkiyat', yol: () => '/sevkiyat' },
-  'satin-alma': { ad: 'Satın alma termini', simge: 'box', modul: 'Satın Alma', yol: () => '/satin-alma' },
+  'emir-plan': { ad: 'Emir başlangıcı', simge: 'gantt', modul: 'Üretim Emirleri', yol: (k) => `/uretim-emirleri/${k.kimlik}` },
+  'emir-bitis': { ad: 'Emir teslimi', simge: 'flag', modul: 'Üretim Emirleri', yol: (k) => `/uretim-emirleri/${k.kimlik}` },
+  'sevk': { ad: 'Sevk', simge: 'truck', modul: 'Sevkiyat', yol: () => '/sevkiyat/tum-isler' },
+  'satin-alma': { ad: 'Satın alma teslimi', simge: 'box', modul: 'Satın Alma', yol: () => '/satin-alma/talepler' },
   'kalibrasyon': { ad: 'Kalibrasyon vadesi', simge: 'ruler', modul: 'Ölçü Aletleri', yol: () => '/kalibrasyon' },
   'denetim': { ad: 'Denetim', simge: 'file', modul: 'Denetim Hazırlığı', yol: () => '/denetim-hazirlik' },
   'izin': { ad: 'İzin', simge: 'user', modul: 'İnsan Kaynakları', yol: () => '/ik/izinler' },
