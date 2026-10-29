@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { PersonelCevabi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
@@ -32,7 +33,7 @@ function ac(kullanici: Kullanici) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><Personel /></BildirimSaglayici>
+      <MemoryRouter><BildirimSaglayici><Personel /></BildirimSaglayici></MemoryRouter>
     </QueryClientProvider>,
   );
   return cagri;
