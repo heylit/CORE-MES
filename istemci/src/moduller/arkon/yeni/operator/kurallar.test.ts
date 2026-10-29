@@ -54,6 +54,13 @@ describe('A1 operatör kuralları', () => {
     expect(vardiyaOzeti(bos, { ...girdi, cagriSureleri: [60e3, 120e3], cagriAcik: true })).toMatchObject({ calls: 3, callAvg: '90 sn', mOk: 2, mNok: 1 });
   });
 
+  it('vardiya özeti hatalı adedini yalnız verildiğinde taşır (1190)', () => {
+    const bos = vardiyaHesabi({ ev: [], cn: [], sh: VARDIYA }, 3600e3, ortam);
+    expect('hatali' in vardiyaOzeti(bos, girdi)).toBe(false);
+    expect(vardiyaOzeti(bos, { ...girdi, hatali: 3 }).hatali).toBe(3);
+    expect(vardiyaOzeti(bos, { ...girdi, hatali: 0 }).hatali).toBe(0);
+  });
+
   it('kalan süre negatif adette sıfırdır', () => {
     expect(kalanSure(-3, 30)).toBe('00:00:00');
     expect(kalanSure(10, 30)).toBe('00:05:00');

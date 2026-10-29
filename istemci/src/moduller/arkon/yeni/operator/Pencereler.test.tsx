@@ -31,6 +31,18 @@ describe('Vardiya özeti', () => {
     expect(metin).toContain('2/2');
     expect(metin).toContain('%50');
   });
+  it('TMI işinde hurda yerine hatalı yazar; hatalı kalite oranına girer (1190)', () => {
+    const metin = ac(ozet({ good: 9, hatali: 1, goal: 18 })).baseElement.textContent ?? '';
+    expect(metin).toContain('1 hatalı');
+    expect(metin).not.toContain('hurda');
+    expect(metin).toContain('%90.0');
+    cleanup();
+    const ikisi = ac(ozet({ good: 8, scrap: 1, hatali: 1 })).baseElement.textContent ?? '';
+    expect(ikisi).toContain('1 hatalı · 1 hurda');
+    expect(ikisi).toContain('%80.0');
+    cleanup();
+    expect(ac(ozet({ good: 5, hatali: 0 })).baseElement.textContent).toContain('0 hatalı');
+  });
 });
 
 describe('Duruş nedeni penceresi (696)', () => {

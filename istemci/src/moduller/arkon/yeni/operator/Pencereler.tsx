@@ -224,7 +224,10 @@ export function VardiyaPenceresi({ ozet, vardiyaEtiketi, kapat, devret }: {
   ozet: VardiyaOzeti; vardiyaEtiketi: string; kapat: () => void; devret: (not: string) => void;
 }) {
   const [not, notYaz] = useState('');
-  const q = ozet.good + ozet.scrap ? (100 * ozet.good / (ozet.good + ozet.scrap)) : null;
+  // 1190: hatalı parça üretimdir ama iyi değildir; kalite oranına hurda gibi girer.
+  const kotu = ozet.scrap + (ozet.hatali ?? 0);
+  const q = ozet.good + kotu ? (100 * ozet.good / (ozet.good + kotu)) : null;
+  const kotuYazi = ozet.hatali === undefined ? `${ozet.scrap} hurda` : `${ozet.hatali} hatalı${ozet.scrap ? ` · ${ozet.scrap} hurda` : ''}`;
   const yuzde = ozet.goal > 0 ? Math.min(100, Math.round(ozet.good / ozet.goal * 100)) : null;
   const olcum = ozet.mOk + ozet.mNok;
   return (
@@ -235,7 +238,7 @@ export function VardiyaPenceresi({ ozet, vardiyaEtiketi, kapat, devret }: {
       <p className="tc-ay1-soluk">{vardiyaEtiketi} · {ozet.machine} · {ozet.headline}</p>
       <div className="tc-ay1-vardiya">
         <div className="tc-ay1-vardiya-kutu tc-ay1-vardiya-buyuk"><span className="tc-ay1-ust-yazi">Üretilen</span><b>{ozet.good.toLocaleString('tr-TR')}</b><small>iyi parça</small></div>
-        <div className="tc-ay1-vardiya-kutu"><span className="tc-ay1-ust-yazi">Kalite</span><b>{q === null ? '—' : `%${q.toFixed(1)}`}</b><small>{ozet.scrap} hurda</small></div>
+        <div className="tc-ay1-vardiya-kutu"><span className="tc-ay1-ust-yazi">Kalite</span><b>{q === null ? '—' : `%${q.toFixed(1)}`}</b><small>{kotuYazi}</small></div>
         <div className="tc-ay1-vardiya-kutu"><span className="tc-ay1-ust-yazi">En iyi çevrim</span><b>{typeof ozet.best === 'number' ? `${ozet.best} sn` : ozet.best}</b><small>standart {ozet.std} sn</small></div>
         <div className="tc-ay1-vardiya-kutu"><span className="tc-ay1-ust-yazi">Ölçüm</span><b>{olcum ? `${ozet.mOk}/${olcum}` : '—'}</b><small>{ozet.mNok ? `${ozet.mNok} red · kaliteye iletildi` : olcum ? 'hepsi uygun' : 'ölçüm yok'}</small></div>
         <div className="tc-ay1-vardiya-kutu"><span className="tc-ay1-ust-yazi">Duruş</span><b>{ozet.stopMin} dk</b><small>{ozet.stops} olay{ozet.topReason ? ` · en çok ${ozet.topReason}` : ''}</small></div>
