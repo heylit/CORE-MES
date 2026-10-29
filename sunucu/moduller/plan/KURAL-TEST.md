@@ -46,6 +46,7 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | 168 b | Sunucu motoru kayıtlıyken vardiyası tanımsız tezgâhın işi hata değildir: kuyruk yaz onu yazmaz (taslaktaki eski yeri kalkar), plan cevabında yerleşmemiş kalır ("Tezgâhın vardiyası tanımsız."), takvimsiz uyarısı "işleri yerleşmedi" der; canlıya al onu geçirmez | U 168 b (`plan-motoru.test.ts`) | yok |
 | TB-01 | Taban plan (33 a): canlıya almayla aynı işlemde adımın ilk canlı yeri yazılır, hiç değişmez; adım başına tek satır; eşzamanlı canlıya almada önce alınanın; yetkisiz ya da vazgeçilen taslak yazmaz | U 33-1..33-5 (`plan-taban.test.ts`) | plan_taban_is_emri_tek, plan_taban_tek_kaynak, plan_taban_sure, plan_taban_degismez, plan_taban_bosaltilmaz |
 | PI-01 | Plan ihtiyacı (898 a, 902 a): canlıya almayla aynı işlemde canlı planın malzeme eksiği satın almaya tam liste yazılır; taslağa yazmak yazmaz | U CA-12 (`canliya-al.test.ts`); `plan-ihtiyaci.test.ts` | satin_alma_plan_ihtiyaci_miktar, satin_alma_plan_ihtiyaci_emirler |
+| 1034 / 1036 a | Sunucu motoru kayıtlıyken kolun yerleşmeyen son adımı birleşme adımını, yerleşmeyen ek adım (rework, tamir, ek; süresiz ya da kaynaksız) emirde sonraki adımı bekletir: bekleyen iş ve emrinde sonraki adımlar yerleşmez ("Bağlı parti yerleşmedi.", "Önceki adım (OP n) yerleşmedi."), motor onlarsız yeniden koşar. Kalite kararı ve doldurulmamış rework adımı kendi nedeniyle yerleşmemiş görünür | U 1034 (`hatali-kol.test.ts`) | yok |
 
 Bağı ertelenen kural: PL-06 (paralel bölme, P-B18); PL-09'un motoru erteletmesi (P-B19).
 

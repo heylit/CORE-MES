@@ -459,6 +459,39 @@ export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
 const FARK_MS = 60_000;
 type MotorKuyrugu = { makineId: number; isler: { isId: number; onizleme: { baslangic: string; bitis: string } | null }[] };
 const anahtarMetni = (a: string) => a.replace('|', ' OP ');
+const BAGLI_PARTI = 'Bağlı parti yerleşmedi.';
+// Kol zinciri derinliğinden fazla tur gerekmez; sınır motorun sonsuza koşmasını önler.
+const KOL_TURU = 8;
+// Motor istekte olmayan öncülü bitmiş sayar. Yerleşen iş iki durumda beklemeye alınır (emrinde sonraki yerleşen adımlarla, nedeniyle):
+// 1036 a, birleşme adımının kol öncülü planlanacak ama yerleşmedi; 1034, emirdeki önceki adım yerleşmemiş ek adım (rework, tamir, ek:
+// süresiz ya da kaynaksız ek adım motora gitmez). Rota adımı öncülü motorun kendi bilgisidir, ona dokunulmaz. Daha önce alınanlar dönmez.
+function bekleyenAdimlar(
+  b: Baglam, yer: ReadonlyMap<number, unknown>, sabit: ReadonlySet<string>, anahtarOf: (id: number) => string | null, onceki: ReadonlyMap<number, string>,
+): Map<number, string> {
+  const yeni = new Map<number, string>();
+  const hazir = (id: number) => {
+    const x = b.isler.get(id);
+    return x === undefined || !planlanacak(x) || yer.has(id) || sabit.has(anahtarOf(id) ?? '');
+  };
+  const emri = new Map<number, Is[]>();
+  for (const i of b.isler.values()) if (planlanacak(i)) emri.set(i.uretimEmriId, [...(emri.get(i.uretimEmriId) ?? []), i]);
+  for (const l of emri.values()) l.sort((x, y) => x.sira - y.sira);
+  const bekle = (is: Is, neden: string) => {
+    if (onceki.has(is.id) || yeni.has(is.id)) return;
+    yeni.set(is.id, neden);
+    for (const x of emri.get(is.uretimEmriId) ?? []) if (x.sira > is.sira && yer.has(x.id) && !onceki.has(x.id) && !yeni.has(x.id)) yeni.set(x.id, `Önceki adım (OP ${is.opNo}) yerleşmedi.`);
+  };
+  const baglar = partiBaglariOf(b);
+  for (const l of emri.values()) {
+    for (const [n, is] of l.entries()) {
+      if (!yer.has(is.id)) continue;
+      const once = l[n - 1];
+      if (once !== undefined && (once.tur ?? 'rota') !== 'rota' && !hazir(once.id)) bekle(is, `Önceki adım (OP ${once.opNo}) yerleşmedi.`);
+      else if (!(baglar.get(is.id) ?? []).every(hazir)) bekle(is, BAGLI_PARTI);
+    }
+  }
+  return yeni;
+}
 
 // Son söz sunucuda (ADR 0018): kuyruklardaki işler sıraları korunarak sunucu motoruyla yeniden dizilir. Taslağın öteki makine yerleri
 // sabittir. Başka makineye konan, yinelenen ya da eksik iş komutu reddeder (plan yazılmaz); vardiyasız, malzeme bekleyen ve motorun
@@ -497,33 +530,46 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number, kuyruklar: read
     return a === null || oncul === null ? [] : [{ anahtar: a, oncul }];
   }));
   const ekAdimlar = ekAdimlari(b, [...yeniden.keys()], anahtarOf);
-  const sonuc = await planMotoru(db, {
-    kip: 'sabit', simdi: new Date(b.simdi), sabitler, calisanlar, taslakId, ...(baglar.length > 0 ? { baglar } : {}), ...(ekAdimlar.length > 0 ? { ekAdimlar } : {}),
-    ekMesai: (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId }) => ({ makineId, gun, vardiyaId })),
-    kuyruklar: kuyruklar.filter((q) => q.isler.length > 0).map((q) => ({ makineId: q.makineId, anahtarlar: q.isler.map((i) => anahtarOf(i.isId)!) })),
-  });
-  // 981 a-1: yerleşemeyen iş (öncülü yerleşmeyen ardılı dahil) nedeniyle yerleşmemiş kalır; öteki işler yazılır.
-  for (const a of sonuc.yerlesmeyen) {
-    const id = idOf.get(a);
-    if (id === undefined || yerlesmez.has(id)) continue;
-    yerlesmez.add(id);
-    yerlesmeyen.push({ isId: id, neden: sonuc.nedenler?.[a] ?? 'Sunucu motoru yerleştiremedi.' });
-  }
-  // 168 b: vardiyası tanımsız tezgâhın işi komutu durdurmaz; yeri yazılmaz, plan cevabında yerleşmemiş kalır.
-  for (const a of sonuc.vardiyasiz ?? []) { const id = idOf.get(a); if (id !== undefined) yerlesmez.add(id); }
-  // 763: malzemesi ufukta gelmeyen iş de komutu durdurmaz; yeri yazılmaz, komutun özetinde sayısı söylenir.
   let malzemeBekleyen = 0;
-  for (const a of sonuc.malzemeBekleyen ?? []) { const id = idOf.get(a); if (id !== undefined && !yerlesmez.has(id)) { yerlesmez.add(id); malzemeBekleyen += 1; } }
-  for (const r of sonuc.yerlesimler) {
-    const id = idOf.get(r.anahtar);
-    const baslangic = new Date(r.baslangic), bitis = new Date(r.bitis);
-    if (id === undefined || yer.has(id) || yerlesmez.has(id) || yeniden.get(id) !== r.makineId || !(bitis.getTime() >= baslangic.getTime())) {
-      throw cakisma(`Sunucu motoru ${anahtarMetni(r.anahtar)} için istenmeyen yer verdi. Plan yazılmadı.`);
+  const ekMesai = (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId }) => ({ makineId, gun, vardiyaId }));
+  // 1036 a, 1034: yerleşmeyen kol ya da ek adım öncülünü bekleyen iş (bekleyenAdimlar) bu koşuda yerleşmez; motor onlarsız yeniden koşar.
+  const sabitAnahtar = new Set([...sabitler.map((x) => x.anahtar), ...calisan]);
+  const bekleyen = new Map<number, string>();
+  for (let tur = 0; ; tur += 1) {
+    yer.clear(); yerlesmez.clear(); yerlesmeyen.length = 0;
+    const sonuc = await planMotoru(db, {
+      kip: 'sabit', simdi: new Date(b.simdi), sabitler, calisanlar, taslakId, ...(baglar.length > 0 ? { baglar } : {}), ...(ekAdimlar.length > 0 ? { ekAdimlar } : {}),
+      ekMesai,
+      kuyruklar: kuyruklar.map((q) => ({ ...q, isler: q.isler.filter((i) => !bekleyen.has(i.isId)) })).filter((q) => q.isler.length > 0)
+        .map((q) => ({ makineId: q.makineId, anahtarlar: q.isler.map((i) => anahtarOf(i.isId)!) })),
+    });
+    for (const [id, neden] of bekleyen) { yerlesmez.add(id); yerlesmeyen.push({ isId: id, neden }); }
+    // 981 a-1: yerleşemeyen iş (öncülü yerleşmeyen ardılı dahil) nedeniyle yerleşmemiş kalır; öteki işler yazılır.
+    for (const a of sonuc.yerlesmeyen) {
+      const id = idOf.get(a);
+      if (id === undefined || yerlesmez.has(id)) continue;
+      yerlesmez.add(id);
+      yerlesmeyen.push({ isId: id, neden: sonuc.nedenler?.[a] ?? 'Sunucu motoru yerleştiremedi.' });
     }
-    yer.set(id, { baslangic, bitis });
+    // 168 b: vardiyası tanımsız tezgâhın işi komutu durdurmaz; yeri yazılmaz, plan cevabında yerleşmemiş kalır.
+    for (const a of sonuc.vardiyasiz ?? []) { const id = idOf.get(a); if (id !== undefined) yerlesmez.add(id); }
+    // 763: malzemesi ufukta gelmeyen iş de komutu durdurmaz; yeri yazılmaz, komutun özetinde sayısı söylenir.
+    malzemeBekleyen = 0;
+    for (const a of sonuc.malzemeBekleyen ?? []) { const id = idOf.get(a); if (id !== undefined && !yerlesmez.has(id)) { yerlesmez.add(id); malzemeBekleyen += 1; } }
+    for (const r of sonuc.yerlesimler) {
+      const id = idOf.get(r.anahtar);
+      const baslangic = new Date(r.baslangic), bitis = new Date(r.bitis);
+      if (id === undefined || yer.has(id) || yerlesmez.has(id) || yeniden.get(id) !== r.makineId || !(bitis.getTime() >= baslangic.getTime())) {
+        throw cakisma(`Sunucu motoru ${anahtarMetni(r.anahtar)} için istenmeyen yer verdi. Plan yazılmadı.`);
+      }
+      yer.set(id, { baslangic, bitis });
+    }
+    const eksik = [...yeniden.keys()].filter((id) => !yer.has(id) && !yerlesmez.has(id));
+    if (eksik.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştirmedi: ${eksik.map((id) => anahtarMetni(anahtarOf(id)!)).join(', ')}. Plan yazılmadı.`);
+    const yeni = bekleyenAdimlar(b, yer, sabitAnahtar, anahtarOf, bekleyen);
+    if (yeni.size === 0 || tur >= KOL_TURU) break;
+    for (const [id, neden] of yeni) bekleyen.set(id, neden);
   }
-  const eksik = [...yeniden.keys()].filter((id) => !yer.has(id) && !yerlesmez.has(id));
-  if (eksik.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştirmedi: ${eksik.map((id) => anahtarMetni(anahtarOf(id)!)).join(', ')}. Plan yazılmadı.`);
   const iso = (t: string | Date) => new Date(t).toISOString();
   const fark: MotorFarki = kuyruklar.flatMap((q) => q.isler.flatMap((i) => {
     const y = yer.get(i.isId);
@@ -547,6 +593,7 @@ function yerlesmemeNedeni(b: Baglam, i: Is, yerlesmis: ReadonlySet<number>): str
   if (b.eskiRota.get(i.uretimEmriId)?.has(i.opNo) === false) return 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.';
   const once = [...b.isler.values()].filter((x) => x.uretimEmriId === i.uretimEmriId && x.sira < i.sira && planlanacak(x)).sort((x, y) => y.sira - x.sira)[0];
   if (once !== undefined && !yerlesmis.has(once.id)) return `Önceki adım (OP ${once.opNo}) yerleşmedi.`;
+  if ((partiBaglariOf(b).get(i.id) ?? []).some((o) => { const x = b.isler.get(o); return x !== undefined && planlanacak(x) && !yerlesmis.has(o); })) return BAGLI_PARTI;
   return 'Yerleştirilmedi.';
 }
 // 686 a: rotada olmayan ek adım (rework, tamir, ek) emrin kendi adımıdır; motor onu rotadan tanımaz, süresi ve emrin içindeki komşuları
@@ -717,6 +764,13 @@ function uyariListesi(b: Baglam, y: Yer, yerler: readonly Yer[]): string[] {
 }
 
 const planlanacak = (i: Is) => i.durum === 'planli' || i.durum === 'basladi';
+// 1034: hatalı parçanın kolundaki kalite kararı adımı ve planlamanın doldurmadığı rework adımı süresiz ve kaynaksızdır; plan onları dizmez.
+function ekAdimNedeni(i: Is): string | null {
+  if (i.kaynak !== null || i.rotaKaynaklari.length > 0) return null;
+  if (i.tur === 'rework') return 'Rework adımı: planlama kaynak ve süre seçmedi.';
+  if (i.tur === 'ek') return 'Süresiz ve kaynaksız ek adım plana girmez (hatalı parçada kalite kararı; karar verilince kapanır).';
+  return null;
+}
 
 // 6c: emrin satırı ve çarpanı, öncelik bedeliyle aynı kaynaktan (196 a, 195 a). Katkı payı bilinmeyen satırda kâr riski işlemez.
 function planinMaliyeti(b: Baglam, emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]): number | null {
@@ -805,7 +859,7 @@ function cevapKur(b: Baglam, satirlar: readonly YerlesimSatiri[]) {
   }));
   const yerlesmemis = [...b.isler.values()].filter((i) => !yerlesmis.has(i.id) && planlanacak(i)).map((i) => ({
     ...isOzeti(i), kaynak: i.kaynak,
-    neden: i.sureDk === null ? 'Süre bilinmiyor.' : i.kaynak === null && i.rotaKaynaklari.length === 0 ? 'Makine ya da kişi atanmamış.'
+    neden: i.sureDk === null ? ekAdimNedeni(i) ?? 'Süre bilinmiyor.' : i.kaynak === null && i.rotaKaynaklari.length === 0 ? 'Makine ya da kişi atanmamış.'
       : b.yersiz.has(i.id) ? 'Bölünmüş; parçalar yerleşmedi, bölme duruyor.' : vardiyasizTezgahta(b, i) ? VARDIYASIZ
       : yerlesmemeNedeni(b, i, yerlesmis),
     ...(b.yersiz.has(i.id) ? { bolme: b.yersiz.get(i.id)! } : {}),
@@ -1555,6 +1609,11 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
 }
 
 // Parti kolu (B7): kolun bölünme adımı üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler. Kol birleşme adımını taşımaz.
+const baglarBellegi = new WeakMap<Baglam, Map<number, number[]>>();
+const partiBaglariOf = (b: Baglam): Map<number, number[]> => {
+  if (!baglarBellegi.has(b)) baglarBellegi.set(b, partiBaglari([...b.isler.values()]));
+  return baglarBellegi.get(b)!;
+};
 function partiBaglari(isler: readonly Is[]): Map<number, number[]> {
   const bagli = new Map<number, number[]>();
   const ekle = (id: number, oncul: Is | undefined) => { if (oncul) bagli.set(id, [...(bagli.get(id) ?? []), oncul.id]); };

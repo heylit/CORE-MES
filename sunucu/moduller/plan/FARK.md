@@ -217,3 +217,16 @@ Testler: degerlendirme.test PD-20 (yalnız etkilenen sipariş oynar), istemci ka
 - Planın TL toplamında gecikme çarpanı yalnız öncelik çarpanıdır (bedel ayarının yüksek/normal/düşük çarpanları).
 - Atölye motorunda "Tek TL toplamı" amacı ve Plan dengesi çubuğu bedel kipine bağlıydı; etkisiz kalır (899 a; TL amacı 832 a gereği pasif). Çubuk görünür, pasif.
 Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlama-tam-durum, yazmalar, siparis 815.
+
+## Hatalı parça kolu planda (1034 D, 1036 a; 2026-10-29)
+- Bulgu (DOĞRULANDI, `hatali-kol.test.ts` ilk sürümü): sunucu motoru istekte olmayan öncülü bitmiş sayar (emirler.betik "istekte geçmeyen
+  adım"). Kolun kalite kararı ve doldurulmamış rework adımı süresiz ve kaynaksız olduğu için motora gitmez; kolun tekrar adımı ve ana partinin
+  birleşme adımı kol hazır değilken yerleşiyordu (1036 a'ya aykırı).
+- Düzeltme (`servis.ts` sunucuMotoru, bekleyenAdimlar): yerleşen iş, kol öncülü (parti bağı) ya da emirdeki önceki ek adım yerleşmemişse
+  emrinde sonraki adımlarla beklemeye alınır ve motor onlarsız yeniden koşar (en çok 8 tur). Rota adımı öncülüne dokunulmaz.
+- Yerleşmemiş neden: rework adımı "Rework adımı: planlama kaynak ve süre seçmedi.", süresiz ve kaynaksız ek adım kalite kararı metniyle.
+- VARSAYIM: bekletme yalnız sunucu motoru yolundadır; motor kayıtsızken kurallar.ts zaten "Önceki iş emri yerleşmedi" / "Bağlı parti
+  yerleşmedi" der. Geri alma: bekleyenAdimlar çağrısı kalkar.
+- Bulgu (DOĞRULANDI, denendi, düzeltilmedi): kola konan fason rework (ek adım) sunucu motorunda bilinmez; tekrar adımı termin günü beklemeden
+  yerleşti (deneme: 7 gün termin, tekrar 0,04 gün sonra). Fason ek adım plana girmeyen iş olarak süzülür (Üretim Emirleri), motor yalnız rota ve
+  emir fasonunu tanır (emirler.betik emirFasonlariniEkle). Düzeltme motor betiğinde ek adım için fason bekleme ister; ayrı iş.
