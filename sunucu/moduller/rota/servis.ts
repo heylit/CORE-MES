@@ -355,9 +355,14 @@ export async function fark(db: Db, id: number): Promise<FarkCevabi> {
 
 export async function talimatListesi(db: Db, urunId: number, opNo: number): Promise<TalimatlarCevabi> {
   const satirlar = await s.talimatlar(db, urunId, opNo);
-  const adlar = await kisiAdlari(db, satirlar.map((t) => t.yazanKisiId));
+  const tsl = await s.talimatTaslagi(db, urunId, opNo);
+  const adlar = await kisiAdlari(db, [...satirlar.map((t) => t.yazanKisiId), ...(tsl ? [tsl.yazanKisiId] : [])]);
   const adimlar = await surumAdimlari(db, satirlar.map((t) => t.id));
   return {
+    taslak: tsl && {
+      surum: tsl.surum, tabanSurum: tsl.tabanSurum, yazan: { id: tsl.yazanKisiId, ad: adlar.get(tsl.yazanKisiId) ?? null }, yazma: tsl.yazma,
+      adimlar: talimatAdimlariKur(await s.taslakAdimlari(db, tsl.id), await s.taslakMedyalari(db, tsl.id)).get(tsl.id) ?? [],
+    },
     surumler: satirlar.map((t) => {
       const a = adimlar.get(t.id);
       return {
@@ -882,6 +887,72 @@ export async function adimliTalimatYaz(
   if (son !== govde.okunanSurum) throw eskiSurum();
   const id = await s.talimatEkle(db, urunId, govde.opNo, (son ?? 0) + 1, adimliTalimatMetni(govde.adimlar), kullanici.id);
   await s.talimatAdimlariniEkle(db, id, yazilar);
+  return talimatListesi(db, urunId, govde.opNo);
+}
+
+/* ---------------- talimat taslağı ve yayını (1194 b) ---------------- */
+
+// Taslak OP başına tektir ve yayınlanana kadar emre geçmez. Yayın, taslağın dayandığı sürümden sonra başka sürüm yayınlanmadıysa yapılır.
+const TALIMAT_TASLAGI_KISITLARI = { rota_talimat_taslagi_op_tekil: { ileti: 'Bu OP için başka bir taslak açıldı; ekranı yenile.', alan: 'opNo' } };
+const TALIMAT_TASLAGI_YOK = 'Bu OP için talimat taslağı yok.';
+
+const sonYayin = async (db: Db, urunId: number, opNo: number): Promise<number | null> => (await s.talimatlar(db, urunId, opNo))[0]?.surum ?? null;
+
+async function taslakAl(db: Db, urunId: number, opNo: number, taslakSurum: number): Promise<s.TalimatTaslagiSatiri> {
+  const t = await s.talimatTaslagi(db, urunId, opNo, true);
+  if (!t) throw bulunamadi(TALIMAT_TASLAGI_YOK);
+  if (t.surum !== taslakSurum) throw eskiSurum();
+  return t;
+}
+
+export async function talimatTaslakKaydet(
+  db: Db, kullanici: Kullanici, urunId: number,
+  govde: { opNo: number; okunanSurum: number | null; taslakSurum: number | null; adimlar: readonly TalimatAdimiYazisi[] }, denetimEki: DenetimEki,
+): Promise<TalimatlarCevabi> {
+  if (!(await s.opNoAdimiVarMi(db, urunId, govde.opNo))) {
+    throw dogrulama(`OP ${govde.opNo} bu ürünün hiçbir revizyonunda yok; talimat yazılamaz.`, 'opNo');
+  }
+  const mevcut = await s.talimatTaslagi(db, urunId, govde.opNo, true);
+  if ((mevcut?.surum ?? null) !== govde.taslakSurum) throw eskiSurum();
+  if ((await sonYayin(db, urunId, govde.opNo)) !== govde.okunanSurum) throw eskiSurum();
+  const yazilar = await adimYazilari(db, kullanici, govde.adimlar, denetimEki);
+  const toplam = urunMedyaToplami(await s.urunMedyalari(db, urunId), yazilar.flatMap((a) => a.medya));
+  if (toplam > MEDYA_SINIRI.urunBayt) throw cokBuyuk('Ürünün talimat medyası 1 GB sınırını aşıyor.');
+  const onceki = mevcut ? (await s.taslakMedyalari(db, mevcut.id)).map((m) => m.ozet) : [];
+  await kisitKorumali(TALIMAT_TASLAGI_KISITLARI, () => s.talimatTaslagiYaz(db, {
+    malzemeId: urunId, opNo: govde.opNo, tabanSurum: govde.okunanSurum, kisiId: kullanici.id, adimlar: yazilar,
+  }, mevcut));
+  await kullanilmayanMedyayiBirak(db, onceki, denetimEki);
+  return talimatListesi(db, urunId, govde.opNo);
+}
+
+export async function talimatYayinla(
+  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; taslakSurum: number },
+): Promise<TalimatlarCevabi> {
+  const t = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum);
+  const son = await sonYayin(db, urunId, govde.opNo);
+  if (son !== t.tabanSurum) {
+    throw cakisma(`Taslak açıldıktan sonra OP ${govde.opNo} talimatının ${String(son)}. sürümü yayınlandı; taslağı son sürüme bakarak yeniden kaydet.`);
+  }
+  const satirlar = await s.taslakAdimlari(db, t.id);
+  const medyalar = await s.taslakMedyalari(db, t.id);
+  const yazilar: s.TalimatAdimiYazisi[] = satirlar.map((a) => ({
+    baslik: a.baslik, metin: a.metin, kontrolTuru: a.kontrolTuru, kontrolAyari: a.kontrolAyari, zorunlu: a.zorunlu,
+    medya: medyalar.filter((m) => m.adimSira === a.sira).map((m) => ({ ozet: m.ozet, ad: m.ad, tur: m.tur, boyut: m.boyut })),
+  }));
+  const id = await s.talimatEkle(db, urunId, govde.opNo, (son ?? 0) + 1, adimliTalimatMetni(yazilar), kullanici.id);
+  await s.talimatAdimlariniEkle(db, id, yazilar);
+  await s.talimatTaslagiSil(db, t.id);
+  return talimatListesi(db, urunId, govde.opNo);
+}
+
+export async function talimatTaslakSil(
+  db: Db, urunId: number, govde: { opNo: number; taslakSurum: number }, denetimEki: DenetimEki,
+): Promise<TalimatlarCevabi> {
+  const t = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum);
+  const ozetler = (await s.taslakMedyalari(db, t.id)).map((m) => m.ozet);
+  await s.talimatTaslagiSil(db, t.id);
+  await kullanilmayanMedyayiBirak(db, ozetler, denetimEki);
   return talimatListesi(db, urunId, govde.opNo);
 }
 
