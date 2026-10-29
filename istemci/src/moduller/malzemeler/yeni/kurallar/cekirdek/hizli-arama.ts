@@ -1,3 +1,4 @@
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { FAMS, FORMS, FORM_KELIME, KALITE_TAKMA, MA, ONAY, _hzIx, _hzIxSurum, _hzSurum, ayarla__hzIx, ayarla__hzIxSurum } from './durum.ts';
 import { _xlBos } from './excel.ts';
 import { _asc } from './kod-yapisi.ts';
@@ -311,7 +312,7 @@ export function birlestir(asil: BirlesmeKarti, digerleri: BirlesmeKarti[], neden
     });
     return [a, ...d];
 }
-export function birlesmeListesi(liste?: readonly BirlesmeKarti[] | null): BirlesmeSatiri[] { liste = liste || _katalog(); return liste.filter(x => x.yerine).map(x => ({ eski_kod: x.com?.kod, eski_ad: x.com?.ad, yeni_kod: x.yerine!.kod, tarih: x.yerine!.t ? new Date(x.yerine!.t).toISOString().slice(0, 10) : '', neden: (x.onay && x.onay.pasif && x.onay.pasif.neden) || '' })); }
+export function birlesmeListesi(liste?: readonly BirlesmeKarti[] | null): BirlesmeSatiri[] { liste = liste || _katalog(); return liste.filter(x => x.yerine).map(x => ({ eski_kod: x.com?.kod, eski_ad: x.com?.ad, yeni_kod: x.yerine!.kod, tarih: x.yerine!.t ? tesisGunu(new Date(x.yerine!.t)) : '', neden: (x.onay && x.onay.pasif && x.onay.pasif.neden) || '' })); }
 export function stokOzeti__5(x: BirlesmeKarti): Sozluk<unknown> { const o: Sozluk<unknown> = stokOzeti__4(x); o.benzersiz_anahtar = kartAnahtari(x); o.eski_kod = (x.com && x.com.eskiKod) || ''; if (x.yerine)
     o.yerine_kod = x.yerine.kod; if (x.birlesen && x.birlesen.length)
     o.birlesen_kodlar = x.birlesen.map(b => b.kod); return o; }

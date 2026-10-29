@@ -1,5 +1,6 @@
 // Katalogun CSV ve JSON dışa aktarması; sütunlar ve alanlar prototiptekiyle aynı sırada. Listede görünen (süzülmüş) kartlar aktarılır.
 // Fiyat, para birimi, fiyat esası, kg ve parça fiyatı, stok ve en az sipariş sütunları prototipte de çıkarılıyordu; burada hiç kurulmaz.
+import { formulKoru } from '../../../../ortak/veri/csv.ts';
 import { isNum, r4 } from '../bicim.ts';
 import { ONAY, PROPS, TURLER } from '../sabitler/index.ts';
 import * as K from '../kurallar/index.ts';
@@ -8,8 +9,9 @@ import type { KartKaydi } from '../tipler.ts';
 
 type Hucre = string | number | null | undefined;
 
+// Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın); düz sayı metni olduğu gibi kalır.
 const csvHucresi = (v: Hucre): string => {
-  const s = v === null || v === undefined ? '' : String(v);
+  const s = v === null || v === undefined ? '' : typeof v === 'string' ? formulKoru(v, { sayiSerbest: true }) : String(v);
   return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

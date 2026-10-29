@@ -7,6 +7,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Secim, Sekmeler, Sim
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { stokCsvAlani } from './csv-alani.ts';
 import { LISTE_FISI_ETIKETI, LISTE_FISI_SIMGESI, LISTE_FISI_TURLERI, LOGO_FIS_ETIKETI, LOGO_FIS_SUZGECLERI, LOGO_FIS_TONU, zamanMetni } from './gorunum.ts';
 import { SayfaBasi, hataMetni } from './ortak.tsx';
 import './stok.css';
@@ -38,7 +39,7 @@ export const kaynakMetni = (f: KaynakliFis) => (f.uretimEmriId !== null
 const ayrintiYolu = (f: MalzemeFisiListeSatiri) => (f.tur === 'mal_kabul' ? `/stok/mal-kabul/${f.id}` : `/stok/malzeme-fisleri/${f.id}`);
 
 function csvIndir(satirlar: MalzemeFisiListeSatiri[]) {
-  const alan = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const alan = stokCsvAlani;
   const basliklar = ['Açılış', 'Fiş no', 'Tür', 'Emir', 'Satır', 'Logo durumu', 'Logo kayıt', 'Son deneme', 'Neden'];
   const govde = satirlar.map((f) => [f.acilis, f.no, LISTE_FISI_ETIKETI[f.tur], f.emirNo, f.satirSayisi, LOGO_FIS_ETIKETI[f.logo.durum], f.logo.kayitNo, f.logo.sonDeneme, f.logo.neden].map(alan).join(';'));
   const blob = new Blob(['﻿' + [basliklar.map(alan).join(';'), ...govde].join('\r\n')], { type: 'text/csv;charset=utf-8' });
