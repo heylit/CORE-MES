@@ -146,6 +146,10 @@ export async function ozetSay(db: Db): Promise<{ bekleyen: number; gecikmis: num
 export function isGetir(db: Db, id: number): Promise<IsSatiri | null> {
   return db.tek<IsSatiri>(`SELECT ${IS_ALANLARI} FROM sevkiyat_isi WHERE id = $1`, [id]);
 }
+// Durum değişimi ve iptal işi kilitleyip yeniden okur: aynı işe aynı anda gelen ikinci komut ilkinin sonucunu görür (stok iki kez düşmez).
+export function isKilitle(db: Db, id: number): Promise<IsSatiri | null> {
+  return db.tek<IsSatiri>(`SELECT ${IS_ALANLARI} FROM sevkiyat_isi WHERE id = $1 FOR UPDATE`, [id]);
+}
 export interface IsYazisi {
   tarih: string; istenenTarih?: string; tur: string; alisNoktasiId: number | null; birakisNoktasiId: number | null; agirlikKilogram: number; paletSayisi: number;
   durakSuresiDakika: number | null; alisEnErken: string | null; alisEnGec: string | null; birakisEnErken: string | null; birakisEnGec: string | null;
