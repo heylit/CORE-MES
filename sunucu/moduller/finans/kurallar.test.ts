@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pasifeAlmaEngeli } from './kurallar.ts';
+import type { Db } from '#cekirdek/db.ts';
+import { takvimKayitlari } from './disari.ts';
+import { pasifeAlmaEngeli, vergiSonGunu, vergiTakvimi } from './kurallar.ts';
 import {
   asiyorMu, belgeDuzeltmeHatasi, cekGecisiHatasi, dagitimHesapla, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
   hesapPasifHatasi, kdvOraniGecerliMi, mahsupTutarlari,
@@ -303,4 +305,30 @@ test('FNS-67: iade ters yönde, iade kategorisinde, aynı firma ve para birimind
   assert.equal(iadeAsimi('1200.00', '600.00', '600.00'), false);
   assert.equal(iadeAsimi('1200.00', '600.00', '600.01'), true);
   assert.equal(iadeAsimi('0.30', '0.10', '0.20'), false);
+});
+
+test('vergi takvimi (891): son gün hafta sonundan pazartesiye kayar, kısa ayda ayın son günüdür; kayan gün aralığa göre süzülür', () => {
+  assert.equal(vergiSonGunu(2026, 2, 28), '2026-03-02');
+  assert.equal(vergiSonGunu(2026, 3, 28), '2026-03-30');
+  assert.equal(vergiSonGunu(2026, 2, 31), '2026-03-02');
+  assert.equal(vergiSonGunu(2026, 11, 26), '2026-11-26');
+  assert.deepEqual(vergiTakvimi('2026-03-01', '2026-03-31').map((v) => [v.tarih, v.kod, v.donem]), [
+    ['2026-03-02', 'kdv', 'Ocak 2026'],
+    ['2026-03-25', 'kdv-tevkifat', 'Şubat 2026'],
+    ['2026-03-26', 'muhtasar', 'Şubat 2026'],
+    ['2026-03-30', 'kdv', 'Şubat 2026'],
+    ['2026-03-31', 'gelir-vergisi', 'Önceki yıl'],
+  ]);
+  assert.deepEqual(vergiTakvimi('2026-11-01', '2026-11-30').map((v) => v.kod), ['gecici-vergi', 'kdv-tevkifat', 'muhtasar', 'kdv']);
+  assert.deepEqual(vergiTakvimi('2027-01-01', '2027-01-20'), [], 'aralıkta son gün yok');
+  assert.deepEqual(vergiTakvimi('2026-12-31', '2027-01-26').map((v) => [v.tarih, v.donem]), [['2027-01-25', 'Aralık 2026'], ['2027-01-26', 'Aralık 2026']]);
+});
+
+test('takvim (891): vergi son günü kayıt olarak gelir; bugünden önceki son gün kapanmış sayılır, veritabanı okunmaz', async () => {
+  const db = {} as Db;
+  assert.deepEqual(await takvimKayitlari(db, '2026-11-20', '2026-11-30', '2026-11-26'), [
+    { kaynak: 'vergi', kimlik: '2026-11-25-kdv-tevkifat', tarih: '2026-11-25', no: null, baslik: "KDV tevkifatı (2 no'lu) beyanı ve ödemesi", ilgili: 'Dönem: Ekim 2026', durum: 'Son günü geçti', bitti: true },
+    { kaynak: 'vergi', kimlik: '2026-11-26-muhtasar', tarih: '2026-11-26', no: null, baslik: 'Muhtasar ve prim hizmet beyannamesi', ilgili: 'Dönem: Ekim 2026', durum: 'Son gün', bitti: false },
+    { kaynak: 'vergi', kimlik: '2026-11-30-kdv', tarih: '2026-11-30', no: null, baslik: 'KDV beyannamesi ve ödemesi', ilgili: 'Dönem: Ekim 2026', durum: 'Son gün', bitti: false },
+  ]);
 });

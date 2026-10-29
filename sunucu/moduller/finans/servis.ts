@@ -7,9 +7,10 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Firma } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari } from './kurallar.ts';
+import { ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -929,4 +930,13 @@ export async function siparisFaturalari(db: Db, siparisIdler: readonly number[])
     sonuc.set(siparisId, liste);
   }
   return sonuc;
+}
+
+// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri. Beyanın verildiği kayıtlı değildir: geçmiş son gün kapanmış sayılır.
+// Yetki denetlemez; çağıran finans.oku'yu denetler.
+export function takvimKayitlari(_db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
+  return Promise.resolve(vergiTakvimi(baslangic, bitis).map((v): TakvimKaydi => ({
+    kaynak: 'vergi', kimlik: `${v.tarih}-${v.kod}`, tarih: v.tarih, no: null, baslik: v.ad, ilgili: `Dönem: ${v.donem}`,
+    durum: v.tarih < bugun ? 'Son günü geçti' : 'Son gün', bitti: v.tarih < bugun,
+  })));
 }

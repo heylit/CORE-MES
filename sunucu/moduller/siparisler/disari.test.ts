@@ -161,4 +161,26 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
       birakRet();
     }
   });
+
+  test('takvim (891): termini aralıktaki sipariş firma adıyla gelir; iptal gelmez, kapanan bitti sayılır, aralık dışı gelmez', async () => {
+    const ac = (termin: string) => o().vt.tx((db) => siparisler.siparisEkle(db, kisi, {
+      firmaId, musteriSiparisNo: null, siparisTarihi: '2026-10-19', termin, paraBirimi: 'TRY', kdvOrani: '20', odemeKosulu: null, aciklama: null,
+      cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null,
+      satirlar: [{ malzemeNo: mamulNo, miktar: '1', birimFiyat: '1', termin: null, aciklama: null }],
+    }));
+    const taslak = await ac('2031-03-02');
+    const kapanan = await ac('2031-03-10');
+    const k1 = await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, kapanan.id, 'onayla', { surum: kapanan.surum }));
+    await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, kapanan.id, 'kapat', { surum: k1.surum }));
+    const iptal = await ac('2031-03-05');
+    await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, iptal.id, 'iptal', { surum: iptal.surum, neden: 'Deneme' }));
+    await ac('2031-04-01');
+
+    const kayitlar = await o().vt.tx((db) => siparisler.takvimKayitlari(db, '2031-03-01', '2031-03-31'));
+    assert.deepEqual(kayitlar, [
+      { kaynak: 'siparis', kimlik: String(taslak.id), tarih: '2031-03-02', no: taslak.no, baslik: `Sipariş ${taslak.no}`, ilgili: 'Deneme Firma', durum: 'Taslak', bitti: false },
+      { kaynak: 'siparis', kimlik: String(kapanan.id), tarih: '2031-03-10', no: kapanan.no, baslik: `Sipariş ${kapanan.no}`, ilgili: 'Deneme Firma', durum: 'Kapandı', bitti: true },
+    ]);
+    assert.deepEqual(await o().vt.tx((db) => siparisler.takvimKayitlari(db, '2031-05-01', '2031-05-31')), []);
+  });
 });

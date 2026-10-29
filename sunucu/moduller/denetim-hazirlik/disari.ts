@@ -8,3 +8,6 @@ export async function denetimHazirlikKoleksiyonu(db: Db, koleksiyon: string): Pr
   if (koleksiyon.split('/')[0] === 'data') return [];
   return koleksiyonBelgeleri(db, koleksiyon);
 }
+
+// Takvim (891): denetim ve son gün tarihleri; yetkiyi çağıran denetler (denetim-hazirlik.oku).
+export { takvimKayitlari } from './servis.ts';

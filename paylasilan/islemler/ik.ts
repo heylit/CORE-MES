@@ -2,6 +2,8 @@
 // açar, olmayan kişi kendi kaydını ve (yöneticiyse) ekibini görür. Her yazma alanının kendi işlemi vardır.
 export const IK_ISLEMLERI = [
   'ik.oku',
+  // Takvimde bütün personelin izinlerini görmek (1191 a); öteki İK kayıtlarını açmaz. Yetkisi olmayan takvimde yalnız kendi iznini görür.
+  'ik.izin-oku',
   'ik.personel-yaz',
   'ik.ucret-yaz',
   'ik.izin-yaz',

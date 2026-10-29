@@ -205,7 +205,7 @@ export const durumRotaRevizyonSemasi = z.object({
   data: durumRotaSemasi,
 });
 
-// Emirler (kart #1185): sahibi uretim-emirleri. `st.orders` satırları; kimlikler dize. Emir kimliği `uretim_emri.id`nin metnidir.
+// Emirler (kart #1191): sahibi uretim-emirleri. `st.orders` satırları; kimlikler dize. Emir kimliği `uretim_emri.id`nin metnidir.
 export const DURUM_EMIR_DURUMLARI = ['taslak', 'serbest', 'uretimde', 'tamam', 'iptal'] as const;
 export const durumEmirSemasi = z.object({
   id: kimlikMetni,

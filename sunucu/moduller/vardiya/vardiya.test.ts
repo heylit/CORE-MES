@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, kisiVardiyalari, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from './disari.ts';
+import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, kisiVardiyalari, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz, takvimKayitlari } from './disari.ts';
 import type { ArkonDurusSonucu, PlanliDurusKaydi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -604,6 +604,29 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       assert.deepEqual(await vt().tx((db) => planliDurusSilArkon(db, planlama, { id: null, kaynakKimligi: 'dn-1', ...hep })), { sonuc: 'yazildi', kayit: null });
       // Kimlikle anılan silinmiş kayıt Arkon'dan yeniden açılmaz.
       await assert.rejects(vt().tx((db) => planliDurusYaz(db, planlama, { id: ilk.id, kaynakKimligi: `tmi-pd-${ilk.id}`, ...hep }, girdi)), { kod: 'BULUNAMADI' });
+    });
+
+    test('takvim (891): aralıkta başlayan tek seferlik etkin duruş istasyon adıyla gelir; tekrarlı, kaldırılmış ve aralık dışı gelmez', async () => {
+      const GUN = '2098-03-03';
+      const tek = (await ac(c.planlama, { baslik: 'Takvim bakımı', baslangic: zaman(GUN, '08:00'), bitis: zaman(GUN, '12:00') })).govde.durus;
+      const tesis = (await ac(c.planlama, {
+        baslik: 'Takvim genel bakım', kapsam: 'tesis', istasyonId: null, baslangic: zaman('2098-03-20', '08:00'), bitis: zaman('2098-03-20', '09:00'),
+      })).govde.durus;
+      const tekrarli = (await ac(c.planlama, {
+        baslik: 'Takvim molası', baslangic: zaman(GUN, '15:00'), bitis: zaman(GUN, '15:30'), tekrar: 'gunluk',
+      })).govde.durus;
+      const kaldirilan = (await ac(c.planlama, { baslik: 'Takvim iptal', baslangic: zaman(GUN, '13:00'), bitis: zaman(GUN, '14:00') })).govde.durus;
+      await kaldir(kaldirilan.id);
+      const disarida = (await ac(c.planlama, { baslik: 'Takvim nisan', baslangic: zaman('2098-04-01', '08:00'), bitis: zaman('2098-04-01', '09:00') })).govde.durus;
+
+      const bizim = new Set([tek.id, tesis.id, tekrarli.id, kaldirilan.id, disarida.id].map(String));
+      const kayitlar = (await vt().tx((db) => takvimKayitlari(db, '2098-03-01', '2098-03-31'))).filter((k) => bizim.has(k.kimlik));
+      assert.deepEqual(kayitlar, [
+        { kaynak: 'planli-durus', kimlik: String(tek.id), tarih: GUN, no: null, baslik: 'Takvim bakımı', ilgili: 'Deneme istasyon A', durum: 'Planlı', bitti: false },
+        { kaynak: 'planli-durus', kimlik: String(tesis.id), tarih: '2098-03-20', no: null, baslik: 'Takvim genel bakım', ilgili: 'Bütün atölye', durum: 'Planlı', bitti: false },
+      ]);
+      // Sonraki testlerin kapasite hesabı bu duruşları görmesin.
+      for (const d of [tek, tesis, tekrarli, disarida]) await kaldir(d.id);
     });
   });
   describe('fazla mesai planı (kart #1324)', () => {

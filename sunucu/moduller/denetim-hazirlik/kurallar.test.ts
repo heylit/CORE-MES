@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu, yonetimGerekirMi,
+  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -163,5 +163,44 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
       assert.equal(yonetimGerekirMi(ORTAK, { deger: '1' }, null), false);
       assert.equal(yonetimGerekirMi('data/users/7/yerel/anahtarlar/kalite-denetim-v4', depo({ a: dolu }), null), false);
     });
+  });
+});
+
+describe('takvim denetimleri (891)', () => {
+  const kayit = (audits: unknown[], firma = 'Profil A'): Record<string, unknown> => ({ deger: JSON.stringify({ data: { p1: { profile: { firma }, audits } } }) });
+  const BUGUN = '2031-03-15';
+
+  test('aralıktaki denetim ve son gün gelir; iptal, aralık dışı ve bozuk kayıt gelmez', () => {
+    const veri = kayit([
+      { id: 'a', prog: 'iso9001', kind: 'audit', type: '1. gözetim', date: '2031-03-20', status: 'plan' },
+      { id: 'b', prog: 'as9100', kind: 'deadline', type: 'Belge bitişi', date: '2031-03-10', status: 'plan' },
+      { id: 'c', prog: 'iso9001', kind: 'audit', type: 'İptal', date: '2031-03-12', status: 'cancel' },
+      { id: 'd', prog: 'iso9001', kind: 'audit', type: 'Dışarıda', date: '2031-05-01', status: 'plan' },
+      { id: 'e', prog: 'iso9001', kind: 'audit', date: 'yarın', status: 'plan' },
+      'bozuk',
+    ]);
+    assert.deepEqual(takvimDenetimleri(veri, '2031-03-01', '2031-03-31', BUGUN), [
+      { kimlik: 'p1/b', tarih: '2031-03-10', baslik: 'AS9100 · Belge bitişi', profil: 'Profil A', durum: 'Son günü geçti', bitti: true },
+      { kimlik: 'p1/a', tarih: '2031-03-20', baslik: 'ISO 9001 · 1. gözetim', profil: 'Profil A', durum: 'Planlı', bitti: false },
+    ]);
+  });
+
+  test('yapılan denetim biter; tarihi geçmiş sonuçsuz denetim açık kalır; adsız profil adlandırılır', () => {
+    const veri = kayit([
+      { id: 'a', prog: 'eydep', kind: 'audit', type: 'Ön denetim', date: '2031-03-02', status: 'done' },
+      { id: 'b', prog: 'bilinmeyen', kind: 'audit', date: '2031-03-03', end: '2031-03-04', status: 'plan' },
+      { id: 'c', kind: 'deadline', date: '2031-03-15', status: 'plan' },
+    ], '');
+    assert.deepEqual(takvimDenetimleri(veri, '2031-03-01', '2031-03-31', BUGUN).map((d) => [d.baslik, d.profil, d.durum, d.bitti]), [
+      ['EYDEP · Ön denetim', 'Adsız profil', 'Yapıldı', true],
+      ['Denetim', 'Adsız profil', 'Sonuç girilmedi', false],
+      ['Son gün', 'Adsız profil', 'Son gün', false],
+    ]);
+  });
+
+  test('kayıt yoksa ya da okunamıyorsa boş liste', () => {
+    assert.deepEqual(takvimDenetimleri(null, '2031-03-01', '2031-03-31', BUGUN), []);
+    assert.deepEqual(takvimDenetimleri({ deger: '{bozuk' }, '2031-03-01', '2031-03-31', BUGUN), []);
+    assert.deepEqual(takvimDenetimleri({ deger: JSON.stringify({ data: [] }) }, '2031-03-01', '2031-03-31', BUGUN), []);
   });
 });

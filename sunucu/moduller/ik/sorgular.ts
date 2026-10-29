@@ -589,3 +589,19 @@ export async function kesinlesmisPersoneller(db: Db, donem: string): Promise<Set
   );
   return new Set(satirlar.map((r) => r.kimlik));
 }
+
+// Takvim (891): başlangıcı [baslangic, bitis] içinde olan, iptal ve red edilmemiş izinler, personelin adıyla; başlangıç sırasıyla.
+// gecti: bitiş günü bugünden (tesis günü) önce.
+// kisiId verilirse yalnız o kişiye bağlı personelin izinleri (ik_personel.kisi_id).
+export function takvimIzinSatirlari(db: Db, baslangic: string, bitis: string, kisiId: number | null): Promise<{
+  kimlik: string; tur: string; baslangic: string; gun: string | null; durum: string; ad: string; soyad: string; gecti: boolean;
+}[]> {
+  return db.sorgu(
+    `SELECT i.kimlik, i.tur, i.baslangic, i.gun, i.durum, p.ad, p.soyad, i.bitis < current_date AS gecti
+       FROM ik_izin i JOIN ik_personel p ON p.no = i.personel_no
+      WHERE NOT i.iptal AND NOT p.iptal AND i.durum NOT IN ('Reddedildi', 'İptal') AND i.baslangic BETWEEN $1::date AND $2::date
+        AND ($3::int IS NULL OR p.kisi_id = $3::int)
+      ORDER BY i.baslangic, i.no`,
+    [baslangic, bitis, kisiId],
+  );
+}

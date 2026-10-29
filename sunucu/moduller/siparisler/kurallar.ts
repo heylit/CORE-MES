@@ -444,3 +444,10 @@ export function motorTaslaklari(t: readonly {
 export function yenidenYerlesirMi(mevcut: { istenenTermin: string | null; gecerli: boolean } | null, istenenTermin: string | null): boolean {
   return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin;
 }
+
+// Takvimde siparişin durum adı ve kapanmışlığı (891); iptal takvime gelmez.
+export const TAKVIM_SIPARIS_DURUMU: Readonly<Record<Exclude<SiparisDurumu, 'iptal'>, { ad: string; bitti: boolean }>> = {
+  taslak: { ad: 'Taslak', bitti: false },
+  onayli: { ad: 'Onaylı', bitti: false },
+  kapandi: { ad: 'Kapandı', bitti: true },
+};

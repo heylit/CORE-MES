@@ -87,4 +87,6 @@ export const SIMGE_ADLARI: Record<SimgeAdi, string> = {
   fire: 'Yangın',
   helmet: 'Kask',
   laptop: 'Dizüstü bilgisayar',
+  calendar: 'Takvim',
+  kanban: 'Kanban panosu',
 };

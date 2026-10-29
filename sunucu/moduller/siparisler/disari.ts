@@ -7,6 +7,8 @@ export type { SiparisSatiriOzeti } from './servis.ts';
 export { durumDegistir, siparisAyrintisi, siparisEkle, siparisGuncelle, siparisListesi } from './servis.ts';
 // Siparişe bağlı kayıt açarken (projeler): satır çağıranın işlemi boyunca FOR UPDATE ile kilitli okunur; yoksa 404.
 export { siparisKilitliAyrinti } from './servis.ts';
+// Takvim (891): termini aralıktaki siparişler; yetki denetlemez, çağıran siparisler.oku'yu denetler.
+export { takvimKayitlari } from './servis.ts';
 // Plan stüdyosundan acil sipariş (287 b): yalnız müşteri, termin ve kalemle fiyatsız taslak; yetki çağıranın ucunda.
 export { taslakSiparisAc } from './servis.ts';
 export type { TaslakSiparisVerisi } from './servis.ts';
