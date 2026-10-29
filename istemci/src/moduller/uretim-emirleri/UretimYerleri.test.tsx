@@ -60,6 +60,15 @@ describe('Emirde iç ve dış üretim', () => {
     expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({ yol: '/adimli-emirler/3/uretim-yeri', govde: { opNo: 20, yer: 'fason', firmaId: 41, terminGun: 5, surum: 4 } });
   });
 
+  it('1208: fasonun arkasına giren otomatik GKK adımı etiketiyle görünür; elle eklenen ek adım etiket almaz', async () => {
+    const gkk = adim(25, { ad: 'GKK (otomatik)', tur: 'ek', ekAciklama: 'Otomatik GKK', tip: { id: 9, ad: 'Giriş kalite kontrol', kod: 'GKK' } });
+    sunucuKur(OKUYUCU, yollar([adim(10), FASONDA, gkk, adim(30, { tur: 'ek', ekAciklama: 'Elle ek' })]));
+    ac(ekran, '/uretim-emirleri/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    expect(within(tablo).getAllByText('Otomatik GKK')).toHaveLength(1);
+    expect(within(within(tablo).getByText('Otomatik GKK').closest('tr')!).getByText('GKK (otomatik)')).toBeTruthy();
+  });
+
   it('fasondaki adım firmasıyla görünür ve içeri alınır; son değişikliği yapan kişi görünür', async () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10), { ...FASONDA, uretimYeriDegisimi: { yer: 'fason', kisi: { id: 7, ad: 'Deneme Planlamaci' }, zaman: '2026-10-07T08:00:00+00:00' } }], {
       'POST /adimli-emirler/3/uretim-yeri': () => json(200, { emir: ayrinti([adim(10), adim(20)]) }),
