@@ -13,7 +13,7 @@ export interface SaglamSayimOlayi {
   // Ondalık metin: artı giriş, eksi düzeltme. Sıfır fark olay değildir.
   fark: string;
   // karar_bekliyor: ilk parça kararı beklenirken sayılan parça; stok onu aynı partiye karar bekliyor diye yazar (131 b).
-  kaliteDurumu: 'serbest' | 'karar_bekliyor';
+  kaliteDurumu: 'serbest' | 'karar_bekliyor' | 'sartli';
   // Sayılan parçanın refakat partisi (kart #125); kartsız sayımda null. Geçerliliğini dinleyen stok denetler.
   refakatPartisiId: number | null;
 }

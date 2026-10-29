@@ -1129,6 +1129,11 @@ export const HATALI_KALITE_ADIMI = 'Bu adım kalite kararıyla kapanır; kararı
 export const HATALI_KAYIT_YOK = 'Hatalı parça kaydı bulunamadı.';
 export const HATALI_KARAR_VERILMIS = 'Bu hatalı parçanın kalite kararı verilmiş.';
 export const HATALI_KALITE_BASLAMIS = 'Kalite adımı başka yoldan başlamış ya da kalkmış; karar yazılamaz.';
+export const SARTLI_KABUL_NOTSUZ = 'Şartlı kabulde şartı not olarak yazın.';
+// 1211: kabul ve şartlı kabul parçayı olduğu gibi ana partiye katar (rework ve tekrar adımları kalkar); şartlı kabulde şart notu zorunludur.
+export const kabulKarariMi = (karar: string): boolean => karar === 'kabul' || karar === 'sartli_kabul';
+export const hataliKararNotuIhlali = (karar: string, not: string | null): string | null =>
+  karar === 'sartli_kabul' && (not === null || not.trim() === '') ? SARTLI_KABUL_NOTSUZ : null;
 export const REWORK_KARARSIZ = 'Rework adımı yalnız kalite rework kararı verdikten sonra seçilir.';
 export const REWORK_BASLAMIS = 'Rework adımı başlamış ya da bitmiş; değiştirilemez.';
 

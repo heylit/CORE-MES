@@ -678,7 +678,8 @@ export type AdimKaynagiGovdesi = z.input<typeof adimKaynagiGovdesi>;
 // Hatalı parça (1033 a, 1034, 1036 a): operatör nedeni ve adedi verir, sonucu seçmez. Parça kola geçer (bölünemeyen emirde emrin kendi
 // adımlarına, 4 a); kolun ilk adımı kalite kararı, ikincisi kalite kararıyla planlamanın dolduracağı rework adımıdır.
 // Neden terminalin bildiği hurda nedeni kodudur; iş emri verilmezse emrin terminaldeki çalışan adımıdır.
-export const HATALI_KARARLARI = ['rework', 'hurda', 'red'] as const;
+// 1211: kabul ve şartlı kabulde parça olduğu gibi ana partiye katılır; şartlı kabulde stok şartlı olur, not (şart) zorunludur.
+export const HATALI_KARARLARI = ['rework', 'hurda', 'red', 'kabul', 'sartli_kabul'] as const;
 export const hataliGovdesi = z.object({
   isEmriId: KIMLIK.optional(),
   hurdaNedeniKodu: z.string().regex(NEDEN_KODU, 'Hatalı nedeni seçin.'),

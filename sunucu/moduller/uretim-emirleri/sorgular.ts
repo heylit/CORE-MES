@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
-import type { EmirDurumu, EmirKaydi, EmirTuru, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { EmirDurumu, EmirKaydi, EmirTuru, HataliKarari, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -2257,7 +2257,7 @@ export function hataliKayitlariGetir(db: Db, s: { acik: boolean; emirId: number 
 }
 
 export function hataliKarariYaz(
-  db: Db, id: number, k: { karar: 'rework' | 'hurda' | 'red'; kisiId: number; an: string; not: string | null; ncrKimlik: string | null },
+  db: Db, id: number, k: { karar: HataliKarari; kisiId: number; an: string; not: string | null; ncrKimlik: string | null },
 ): Promise<unknown> {
   return db.sorgu(
     `UPDATE uretim_emirleri_hatali_kaydi
