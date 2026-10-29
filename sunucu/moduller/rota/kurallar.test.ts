@@ -7,6 +7,7 @@ import {
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
+import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
 import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
 import type { GerceklesenSatiri, SartnameAlani } from './kurallar.ts';
@@ -514,5 +515,18 @@ describe('adım adım talimat (989 a, 993 a)', () => {
     assert.equal(l[0]?.aciklama?.length, 300);
     assert.equal(l[1]?.aciklama, null);
     assert.deepEqual(eskiTalimatAdimi('\n  İlk satır \nİkinci'), { sira: 1, baslik: 'İlk satır', metin: '\n  İlk satır \nİkinci', kontrol: { tur: 'yok' }, zorunlu: false, medya: [] });
+  });
+});
+
+describe('ek adımın şartnamesi (1034)', () => {
+  const acik = { durum: 'basladi', arsiv: false };
+  test('yalnız bekleyen rework, tamir ya da ek adıma sabitlenir; rota adımı, başlamış adım ve kapanmış emir reddedilir', () => {
+    for (const tur of ['rework', 'tamir', 'ek']) assert.equal(ekAdimSartnameIhlali(acik, { tur, durum: 'bekliyor' }), null, tur);
+    assert.equal(ekAdimSartnameIhlali({ durum: 'taslak', arsiv: false }, { tur: 'rework', durum: 'bekliyor' }), null);
+    assert.equal(ekAdimSartnameIhlali(acik, { tur: 'rota', durum: 'bekliyor' }), EK_ADIM_SARTNAME_ROTA);
+    assert.equal(ekAdimSartnameIhlali(acik, { tur: 'rework', durum: 'calisiyor' }), EK_ADIM_SARTNAME_BASLAMIS);
+    assert.equal(ekAdimSartnameIhlali(acik, { tur: 'rework', durum: 'tamam' }), EK_ADIM_SARTNAME_BASLAMIS);
+    for (const durum of ['bitti', 'iptal']) assert.equal(ekAdimSartnameIhlali({ durum, arsiv: false }, { tur: 'rework', durum: 'bekliyor' }), EK_ADIM_SARTNAME_KAPALI);
+    assert.equal(ekAdimSartnameIhlali({ durum: 'planli', arsiv: true }, { tur: 'rework', durum: 'bekliyor' }), EK_ADIM_SARTNAME_KAPALI);
   });
 });

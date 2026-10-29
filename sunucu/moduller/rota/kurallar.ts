@@ -878,3 +878,14 @@ export function urunMedyaToplami(mevcut: readonly { ozet: string; boyut: number 
   for (const x of [...mevcut, ...yeni]) harita.set(x.ozet, x.boyut);
   return [...harita.values()].reduce((t, b) => t + b, 0);
 }
+
+// 1034: kola konan rework, tamir ya da ek adıma (hatalı parçanın rework adımı dahil) şartname buradan sabitlenir; rota adımı şartnamesini
+// rotadan alır. Sabitlenen şartname adım başlamadan değiştirilebilir; kapanmış emirde değişmez.
+export const EK_ADIM_SARTNAME_ROTA = 'Rota adımının şartnamesi rotadan gelir; burada yalnız rework, tamir ya da ek adıma şartname sabitlenir.';
+export const EK_ADIM_SARTNAME_BASLAMIS = 'Adım başladı; şartnamesi değişmez.';
+export const EK_ADIM_SARTNAME_KAPALI = 'Emir kapandı ya da iptal; şartname sabitlenmez.';
+export function ekAdimSartnameIhlali(emir: { durum: string; arsiv: boolean }, adim: { tur: string; durum: string }): string | null {
+  if (emir.arsiv || emir.durum === 'bitti' || emir.durum === 'iptal') return EK_ADIM_SARTNAME_KAPALI;
+  if (adim.tur === 'rota') return EK_ADIM_SARTNAME_ROTA;
+  return adim.durum === 'bekliyor' ? null : EK_ADIM_SARTNAME_BASLAMIS;
+}

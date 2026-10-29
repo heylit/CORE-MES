@@ -32,7 +32,7 @@ import {
   YAZ, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
   girdiEksigi, girdiOlabilirMi, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
-  adimDegerleriDenetle, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
+  adimDegerleriDenetle, cozulmusDegerler, ekAdimSartnameIhlali, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
   adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, medyaSinirHatasi, medyaTuru, talimatAdimiHatasi, urunMedyaToplami,
 } from './kurallar.ts';
 import type { TalimatAdimiYazisi } from './kurallar.ts';
@@ -1825,4 +1825,42 @@ export async function isEmriSartnameleri(db: Db, isEmriIdleri: readonly number[]
 export async function isEmriSartnameleriCevabi(db: Db, isEmriIdleri: readonly number[]): Promise<IsEmriSartnameleriCevabi> {
   const harita = await isEmriSartnameleri(db, isEmriIdleri);
   return { isEmirleri: [...new Set(isEmriIdleri)].map((id) => ({ isEmriId: id, sartnameler: harita.get(id) ?? [] })) };
+}
+
+// 1034: planlama hatalı parçanın rework adımını (ya da kola koyduğu tamir veya ek adımı) doldurunca şartnamesini burada seçer. Değerler
+// emir açılışındaki gibi yürürlükteki sürümle çözülür ve sabitlenir; liste bütün olarak yazılır (boş liste sabitleri kaldırır). Emir
+// sürümü denetlenir (bu komut emri değiştirmez, sürümü artırmaz); aynı iş emrine iki eşzamanlı komut sıraya girer.
+export async function ekAdimSartnameleriSabitle(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: {
+  surum: number; sartnameler: { sartnameId: number; degerler: ParametreDegerleri }[];
+}): Promise<IsEmriSartnameleriCevabi> {
+  await s.isEmriSabitKilidi(db, isEmriId);
+  const e = await adimliEmirAyrintisi(db, emirId);
+  if (e.surum !== g.surum) throw eskiSurum();
+  const adim = e.isEmirleri.find((i) => i.id === isEmriId);
+  if (!adim) throw bulunamadi('İş emri bu emirde yok.');
+  const ihlal = ekAdimSartnameIhlali(e, { tur: adim.tur ?? 'rota', durum: adim.durum });
+  if (ihlal) throw cakisma(ihlal);
+  const fason = adim.kaynak?.tur === 'fason';
+  const b = await sartnameBaglami(db, g.sartnameler.map((x) => x.sartnameId));
+  const gorulen = new Set<number>();
+  const sabitler = g.sartnameler.map((x, i) => {
+    const alan = `sartnameler.${i}`;
+    if (gorulen.has(x.sartnameId)) throw dogrulama('Aynı şartname adıma iki kez eklenmez.', alan);
+    gorulen.add(x.sartnameId);
+    const ozet = b.ozet.get(x.sartnameId);
+    if (!ozet) throw dogrulama(SARTNAME_YOK, `${alan}.sartnameId`);
+    if (!ozet.aktif) throw dogrulama(`${ozet.kod}: şartname kullanımda değil.`, `${alan}.sartnameId`);
+    if (!kapsamUyarMi(ozet.kapsam, fason)) throw dogrulama(`${ozet.kod}: ${ozet.kapsam === 'fason' ? 'yalnız fason adıma' : 'yalnız iç adıma'} eklenir.`, `${alan}.sartnameId`);
+    const yururlukte = yururlukteSurum(b, x.sartnameId);
+    if (!yururlukte) throw dogrulama(`${ozet.kod}: yayınlanmış sürümü olmayan şartname seçilmez.`, `${alan}.sartnameId`);
+    const hata = adimDegerleriDenetle(yururlukte.parametreler, x.degerler);
+    if (hata) throw dogrulama(hata, `${alan}.degerler`);
+    const degerler = cozulmusDegerler(yururlukte.parametreler, x.degerler);
+    const eksik = eksikZorunlular(yururlukte.parametreler, degerler);
+    if (eksik.length > 0) throw dogrulama(`${ozet.kod}: zorunlu alan boş (${eksik.join(', ')}).`, `${alan}.degerler`);
+    return { surumId: yururlukte.id, degerler };
+  });
+  await s.isEmriSabitleriniSil(db, [isEmriId]);
+  if (sabitler.length > 0) await s.isEmriSabitle(db, isEmriId, sabitler, kullanici.id);
+  return isEmriSartnameleriCevabi(db, [isEmriId]);
 }

@@ -970,6 +970,11 @@ export async function isEmriSabitle(
   }
 }
 
+// Ek adımın şartnamesi silinip yeniden yazılır; aynı iş emrine gelen iki komut bu kilitle sıraya girer (satırı olmayan iş emri de).
+export async function isEmriSabitKilidi(db: Db, isEmriId: number): Promise<void> {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('rota_is_emri_sartnamesi'), $1)", [isEmriId]);
+}
+
 // Yalnız başlamamış iş emri yeniden sabitlenir (yürürlükteki rotayı emre uygulama); satır değişmez, silinip yeniden yazılır.
 export async function isEmriSabitleriniSil(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
   await db.sorgu('DELETE FROM rota_is_emri_sartnamesi WHERE is_emri_id = ANY($1::int[])', [[...isEmriIdleri]]);

@@ -379,3 +379,13 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: adım sayısı en çok 30 (iş emri kontrol listesi sınırı). Geri alma: sabit, ama emir tarafı da artmalı.
 - VARSAYIM: şablon silinmez, pasife alınır. Geri alma: silme ucu eklenir (kopyalanan talimatlar bağımsız).
 - VARSAYIM: ölçüm sınırları boş bırakılabilir (şablonda ürüne göre doldurulur); terminal boş sınırı uyarısız kabul eder. Geri alma: şema `nullable` kaldırılır.
+
+## Hatalı parçanın rework adımına şartname (1034 C, 2026-10-29)
+- `POST /rota/emirler/:emirId/is-emirleri/:isEmriId/sartnameler`: planlama rework adımını (Üretim Emirleri `rework-adimi`) doldurduktan sonra
+  şartnamesini (örn. TKR-SOK) seçer; Reçete ve Rota ekranı iki komutu art arda çağırır. Rota Üretim Emirleri'ne bağımlıdır, tersi değil (ADR 0006).
+- VARSAYIM: yetki rework adımı komutuyla aynı (`uretim-emirleri.yaz` ya da `plan.canliya-al`); yeni işlem yok. Geri alma: uçta tek yetki adı.
+- VARSAYIM: iki komut tek işlem değildir; şartname komutu düşerse adım şartnamesiz kalır, adım başlamadan yeniden denenir. Geri alma: Üretim
+  Emirleri'ne sabitleyici kancası (kablolama) gerekir.
+- VARSAYIM: komut emrin sürümünü denetler ama artırmaz (emir değişmez); aynı iş emrine eşzamanlı iki komut danışma kilidiyle sıraya girer.
+- Bulgu (ayrı iş): bölmede kol için yeni iş emri açılır; rota şartnamesi yalnız emir açılışında ve emre uygulamada sabitlenir, kol adımları
+  (tekrar adımı dahil) şartnamesiz kalır [Muhtemel, kod okuması, denenmedi].
