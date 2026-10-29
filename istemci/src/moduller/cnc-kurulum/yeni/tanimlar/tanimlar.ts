@@ -1,9 +1,12 @@
-// Tanımlar penceresinin veri ve kural kısmı (prototip 18305-18432): tezgâh ve iş malzemesi ekleme, düzenleme, silme.
-// 207 a: tezgâh ve malzeme listesi motorun kendi listesidir (CNCDATA + Tanımlar); istasyonlara bağlama Aşama 2'de.
-import { save, state } from '../depo.ts';
+// Tanımlar penceresinin veri ve kural kısmı (prototip 18305-18432): tezgâh ayarı, iş malzemesi ekleme, düzenleme, silme.
+// 1091 a: tezgâh listesi İstasyonlar'ın makineleridir; burada yalnız motorun alanları sunucuya yazılır. 1137 a: özel tezgâh
+// eklenmez; kayıttaki özel tezgâhlar salt okunurdur. Sunucu listesi yoksa gömülü tezgâhın düzeltmesi eskisi gibi kayda gider.
+import type { Tezgah as SunucuTezgahi, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { save, state, yenile } from '../depo.ts';
 import { D, defaults } from '../durum.ts';
 import { clamp } from '../bicim.ts';
-import { allMachines, allMaterials, byId, dirtyUsage, material } from '../secici.ts';
+import { allMachines, allMaterials, byId, dirtyUsage, material, MOTOR_ALANLARI, sunucuTezgahiGuncelle, type TezgahSatiri } from '../secici.ts';
+import { tezgahAyarYaz } from '../veri.ts';
 import type { IsMalzemesi, IsoGrubu, Kontrol, Tezgah, TezgahTuru } from '../veri/tipler.ts';
 
 export const MODEL_OPTS: readonly [string, string][] = [
@@ -79,6 +82,35 @@ export function saveMachine(mode: 'new' | 'edit', m: Partial<Tezgah>, f: TezgahA
   if (spindle) mo.spindle = spindle;
   dirtyUsage(); save();
   return m.id!;
+}
+
+// Sunucudaki makinenin ayarı. Cep ve devir zorunludur (motor onlarsız çalışmaz); ana iş mili devri boşsa yazılmaz. Elle kumanda
+// ve canlı takım devri formda yoktur, var olan değer korunur. Yazılan alanların `mo` düzeltmesi düşer: ayar tek yerde kalır.
+export const AYAR_EKSIK_ILETISI = 'Cep sayısı ve en yüksek devir girilmeli.';
+export function tezgahAyari(m: Partial<Tezgah>, f: TezgahAlanlari): TezgahAyari {
+  const tam = (v: string): number | null => { const n = Math.round(sayi(v, NaN)); return Number.isFinite(n) && n > 0 ? n : null; };
+  const pockets = tam(f.pockets), rpm = tam(f.rpm);
+  if (pockets === null || rpm === null) throw new Error(AYAR_EKSIK_ILETISI);
+  const type = (f.type || m.type || 'mill') as TezgahTuru;
+  let taper = f.taper || m.taper || 'HSK-A63';
+  if (type === 'lathe' && taper !== 'Taret' && taper !== 'Capto C6') taper = 'Taret';
+  if (type !== 'lathe' && taper === 'Taret') taper = 'HSK-A63';
+  return {
+    tur: type, kontrol: (f.ctrl || m.ctrl || 'iso') as Kontrol, konik: taper, cepSayisi: clamp(pockets, 1, 120), devir: clamp(rpm, 100, 80000),
+    isMiliDevri: tam(f.spindle), canliTakim: f.live, canliDevir: f.live ? (m.liveRpm ?? null) : null, elle: m.manual ?? null,
+    modelTuru: f.kind || m.kind || (type === 'lathe' ? 'm_lathe' : type === 'millturn' ? 'm_tf' : 'm_vmc'),
+  };
+}
+
+export async function sunucuTezgahiKaydet(satir: TezgahSatiri, f: TezgahAlanlari): Promise<string> {
+  const t: SunucuTezgahi = await tezgahAyarYaz(satir.sunucu, tezgahAyari(satir.tezgah, f));
+  sunucuTezgahiGuncelle(t);
+  const id = satir.tezgah.id, mo = state.mo[id];
+  if (mo && MOTOR_ALANLARI.some((k) => k in mo)) {
+    for (const k of MOTOR_ALANLARI) delete mo[k];
+    save();
+  } else yenile();
+  return id;
 }
 
 export function deleteMachine(id: string): void {

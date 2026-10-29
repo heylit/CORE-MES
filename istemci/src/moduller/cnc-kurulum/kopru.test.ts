@@ -256,3 +256,19 @@ describe('CNC köprüsü: takım stoğu (164 b)', () => {
     } finally { vi.useRealTimers(); }
   });
 });
+
+describe('CNC köprüsü: tezgâh ayarı (1091 a)', () => {
+  it('KP-14: tezgâh listesi okunur; ayar makinenin ucuna kimliksiz gövdeyle gider; geçersiz makine istek göndermez', async () => {
+    const istekler = sunucuKur();
+    const isle = kopruKur();
+    await isle('tezgahlar', {});
+    await isle('tezgah-ayar', { makineId: 5, tur: 'mill', cepSayisi: 30, beklenenSurum: 0 });
+    const hatalar = await Promise.all([isle('tezgah-ayar', { makineId: '5' }), isle('tezgah-ayar', { makineId: 1.5 }), isle('tezgah-ayar', {})]
+      .map((p) => p.then(() => null, (e: unknown) => (e instanceof Error ? e.message : e))));
+    expect(hatalar).toEqual(['Geçersiz makine.', 'Geçersiz makine.', 'Geçersiz makine.']);
+    expect(istekler).toEqual([
+      { yol: '/cnc-kurulum/tezgahlar', govde: null },
+      { yol: '/cnc-kurulum/tezgahlar/5/ayar', govde: { tur: 'mill', cepSayisi: 30, beklenenSurum: 0 } },
+    ]);
+  });
+});

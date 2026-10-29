@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type {
   BenCevabi, EmirSecenegi, EmirlerCevabi, HazirlikCevabi, KayitlarCevabi, KurulumDurumu, KurulumTamamCevabi, StokKarti,
-  StokKartiBaglaCevabi, StokKartlariCevabi,
+  StokKartiBaglaCevabi, StokKartlariCevabi, Tezgah, TezgahAyari, TezgahAyarCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type { KopruIsleyici } from '../kopru.ts';
 import { DURUM_ANAHTARI } from './durum.ts';
@@ -154,4 +154,10 @@ export async function stokKartiBagla(kimlik: string, malzemeId: number | null): 
   const b = bag();
   await b.yazici.bosalt();
   return (await b.isle('stok-karti-bagla', { kimlik, malzemeId }) as StokKartiBaglaCevabi).kart;
+}
+
+// ----- tezgâh ayarı (1091 a, 1139 b) -----
+// Ayar makine başınadır; sürüm tutmazsa sunucu 409 döner (başkası değiştirdi), ekran iletiyi gösterir.
+export async function tezgahAyarYaz(t: Pick<Tezgah, 'makineId' | 'surum'>, ayar: TezgahAyari): Promise<Tezgah> {
+  return (await bag().isle('tezgah-ayar', { makineId: t.makineId, ...ayar, beklenenSurum: t.surum }) as TezgahAyarCevabi).tezgah;
 }

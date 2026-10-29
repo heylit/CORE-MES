@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 import {
   Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Secim, Sekmeler, Simge, Tablo, type Sekme, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
-import { useCncSurum } from '../depo.ts';
+import { state, useCncSurum } from '../depo.ts';
 import { fint, fmt } from '../bicim.ts';
-import { machNoDup } from '../secici.ts';
+import { machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, type TezgahSatiri } from '../secici.ts';
 import { onbellekSil } from '../sahne/gl.ts';
 import { MB_LBL, matBeh, mbStars } from '../hesap/malzeme-davranisi.ts';
 import { AyarSuresiProfili } from '../cam/disari.tsx';
 import type { TanimSekmesi } from '../gorunum.ts';
 import { useCncYetkisi } from '../veri.ts';
 import {
-  BEH_ANAHTARLARI, deleteMachine, deleteMat, isCustomMachine, isCustomMat, ISO_OPTS, KONTROL_OPTS, malzemeAlanlari, malzemeler, MODEL_OPTS, saveMachine,
-  saveMat, setMachineNo, TAPER_OPTS, tezgahAlanlari, tezgahlar, TIP_ADI, TIP_OPTS, YENI_TEZGAH, yeniMalzemeTaslagi,
+  BEH_ANAHTARLARI, deleteMat, isCustomMachine, isCustomMat, ISO_OPTS, KONTROL_OPTS, malzemeAlanlari, malzemeler, MODEL_OPTS, saveMachine,
+  saveMat, setMachineNo, sunucuTezgahiKaydet, TAPER_OPTS, tezgahAlanlari, tezgahlar, TIP_ADI, TIP_OPTS, yeniMalzemeTaslagi,
   type Malzeme, type MalzemeAlanlari, type Tezgah, type TezgahAlanlari,
 } from './tanimlar.ts';
 import './tanimlar.css';
@@ -24,21 +24,32 @@ const SEKMELER: readonly Sekme<TanimSekmesi>[] = [
 ];
 const secenek = (l: readonly (readonly [string, string])[]) => l.map(([deger, baslik]) => ({ deger, baslik }));
 
-type Duzen = { tur: 'mach'; mode: 'new' | 'edit'; m: Partial<Tezgah> } | { tur: 'mat'; mode: 'new' | 'edit'; m: Partial<Malzeme> };
+type Duzen =
+  | { tur: 'mach'; mode: 'new' | 'edit'; m: Partial<Tezgah> } | { tur: 'smach'; satir: TezgahSatiri } | { tur: 'mat'; mode: 'new' | 'edit'; m: Partial<Malzeme> };
 
 // Tanım değişince önbellekteki dokular bırakılır; görünümler save() ile yenilenir.
 function degisti(id: string | null): void { if (id) onbellekSil(id); }
 
-function TezgahFormu({ mode, m, kaydet, vazgec }: { mode: 'new' | 'edit'; m: Partial<Tezgah>; kaydet: (f: TezgahAlanlari) => void; vazgec: () => void }) {
-  const nw = mode === 'new', custom = nw || isCustomMachine(m.id ?? '');
+// sunucu: makine İstasyonlar'dadır; no ve ad orada değişir, burada motorun bütün alanları girilir (1091 a).
+function TezgahFormu({ mode, m, sunucu = false, kaydet, vazgec }: {
+  mode: 'new' | 'edit'; m: Partial<Tezgah>; sunucu?: boolean; kaydet: (f: TezgahAlanlari) => void | Promise<void>; vazgec: () => void;
+}) {
+  const nw = mode === 'new', custom = nw || sunucu || isCustomMachine(m.id ?? '');
   const [f, fYaz] = useState(() => tezgahAlanlari(m));
+  const [hata, hataYaz] = useState<string | null>(null);
+  const [mesgul, mesgulYaz] = useState(false);
   const d = (k: keyof TezgahAlanlari) => ({ value: f[k] as string, onChange: (o: { target: { value: string } }) => { fYaz({ ...f, [k]: o.target.value }); } });
+  const gonder = async (): Promise<void> => {
+    hataYaz(null); mesgulYaz(true);
+    try { await kaydet(f); } catch (e) { hataYaz(e instanceof Error ? e.message : 'Kaydedilemedi.'); } finally { mesgulYaz(false); }
+  };
+  const ad = m.baseName ?? m.name ?? '';
   return (
-    <form className="tc-cl-tform" aria-label={nw ? 'Yeni tezgâh' : `Düzenle: ${m.name ?? ''}`} onSubmit={(o) => { o.preventDefault(); kaydet(f); }}>
-      <div className="tc-cl-form-baslik">{nw ? 'Yeni tezgâh' : `Düzenle: ${m.name ?? ''}`}</div>
+    <form className="tc-cl-tform" aria-label={nw ? 'Yeni tezgâh' : `Düzenle: ${ad}`} onSubmit={(o) => { o.preventDefault(); void gonder(); }}>
+      <div className="tc-cl-form-baslik">{nw ? 'Yeni tezgâh' : `Düzenle: ${sunucu && m.no ? `${m.no} · ${ad}` : ad}`}</div>
       <div className="tc-cl-tizgara">
-        <Girdi etiket="Tezgâh no" placeholder="ör. T-09" {...d('no')} />
-        <Girdi etiket="Ad" autoFocus {...d('name')} />
+        {!sunucu && <Girdi etiket="Tezgâh no" placeholder="ör. T-09" {...d('no')} />}
+        {!sunucu && <Girdi etiket="Ad" autoFocus {...d('name')} />}
         {custom && <Secim etiket="Tip" secenekler={secenek(TIP_OPTS)} {...d('type')} />}
         {custom && <Secim etiket="3D görünüm" secenekler={secenek(MODEL_OPTS)} {...d('kind')} />}
         {custom && <Secim etiket="Kontrol" secenekler={secenek(KONTROL_OPTS)} {...d('ctrl')} />}
@@ -48,8 +59,10 @@ function TezgahFormu({ mode, m, kaydet, vazgec }: { mode: 'new' | 'edit'; m: Par
         {(m.type !== 'mill' || custom) && <Girdi etiket="Ana iş mili devri (torna)" type="number" min="0" step="100" placeholder="—" {...d('spindle')} />}
         {custom && <IsaretKutusu etiket="Canlı takım (torna)" checked={f.live} onChange={(o) => { fYaz({ ...f, live: o.target.checked }); }} />}
       </div>
+      {sunucu && <p className="tc-cl-not">Tezgâh no ve ad İstasyonlar'daki makine kaydındadır; orada değişir.</p>}
+      {hata !== null && <div className="tc-cl-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</div>}
       <div className="tc-cl-dugmeler">
-        <Dugme tur="birincil" type="submit" simge="check">Kaydet</Dugme>
+        <Dugme tur="birincil" type="submit" simge="check" yukleniyor={mesgul} disabled={mesgul}>Kaydet</Dugme>
         <Dugme onClick={vazgec}>Vazgeç</Dugme>
       </div>
     </form>
@@ -134,6 +147,32 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
 
   const dup = machNoDup() as Record<string, 1>;
   const yaz = yetki.yazabilir;
+  const sunucuSatirlari = sunucuTezgahSatirlari();
+  const kaynak = tezgahKaynagi();
+  const ozelTezgahlar = state.customMachines;
+  const bilinmez = (v: string | number | undefined): string | number => v ?? '—';
+  const sunucuSutunlari: Sutun<TezgahSatiri>[] = [
+    { anahtar: 'no', baslik: 'No', hucre: (x) => x.sunucu.kod },
+    {
+      anahtar: 'ad', baslik: 'Tezgâh',
+      hucre: (x) => (
+        <><b>{x.sunucu.ad}</b>{!x.tam && <span className="tc-cl-ozel">ayarı eksik</span>}{!x.sunucu.aktif && <span className="tc-cl-ozel">pasif</span>}</>
+      ),
+    },
+    { anahtar: 'tip', baslik: 'Tip', hucre: (x) => (x.tezgah.manual ? 'Üniversal torna' : x.tezgah.type ? TIP_ADI[x.tezgah.type] ?? '' : '—') },
+    { anahtar: 'kontrol', baslik: 'Kontrol', hucre: (x) => (x.tezgah.manual ? 'Elle' : x.tezgah.ctrl === 'heid' ? 'Heidenhain' : x.tezgah.ctrl ? 'ISO / G-kod' : '—') },
+    { anahtar: 'baglanti', baslik: 'Bağlantı', hucre: (x) => bilinmez(x.tezgah.taper) },
+    { anahtar: 'cep', baslik: 'Cep', hizala: 'sag', hucre: (x) => bilinmez(x.tezgah.pockets) },
+    { anahtar: 'devir', baslik: 'Maks. devir', hizala: 'sag', hucre: (x) => (x.tezgah.rpm ? fint(x.tezgah.rpm) : '—') },
+    {
+      anahtar: 'eylem', baslik: '', csv: false,
+      hucre: (x) => (yaz && x.sunucu.aktif ? (
+        <div className="tc-cl-satir-eylem">
+          <Dugme simge="edit" onClick={() => { duzenYaz({ tur: 'smach', satir: x }); }}>Düzenle</Dugme>
+        </div>
+      ) : null),
+    },
+  ];
   const tezgahSutunlari: Sutun<Tezgah>[] = [
     { anahtar: 'no', baslik: 'No', hucre: (m) => <TezgahNo m={m} dup={!!(m.no && dup[m.no])} yazabilir={yaz} /> },
     { anahtar: 'ad', baslik: 'Tezgâh', hucre: (m) => <><b>{m.baseName ?? m.name}</b>{isCustomMachine(m.id) && <span className="tc-cl-ozel">özel</span>}</> },
@@ -143,11 +182,11 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
     { anahtar: 'cep', baslik: 'Cep', hizala: 'sag', hucre: (m) => m.pockets },
     { anahtar: 'devir', baslik: 'Maks. devir', hizala: 'sag', hucre: (m) => fint(m.rpm) },
     {
+      // 1137 a: özel tezgâh salt okunurdur.
       anahtar: 'eylem', baslik: '', csv: false,
-      hucre: (m) => (yaz ? (
+      hucre: (m) => (yaz && !isCustomMachine(m.id) ? (
         <div className="tc-cl-satir-eylem">
           <Dugme simge="edit" onClick={() => { duzenYaz({ tur: 'mach', mode: 'edit', m }); }}>Düzenle</Dugme>
-          {isCustomMachine(m.id) && <Dugme tur="tehlike" simge="trash" onClick={() => { silinecekYaz({ tur: 'mach', id: m.id, ad: m.name }); }}>Sil</Dugme>}
         </div>
       ) : null),
     },
@@ -174,7 +213,7 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
 
   const sil = (): void => {
     if (!silinecek) return;
-    if (silinecek.tur === 'mach') deleteMachine(silinecek.id); else deleteMat(silinecek.id);
+    deleteMat(silinecek.id);
     silinecekYaz(null);
   };
 
@@ -184,21 +223,46 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
       <div className="tc-cl-tanim-govde">
         {tab === 'mach' && (
           <>
-            <p className="tc-cl-not">Atölyedeki tezgâhlar. Yeni tezgâh Kurulum çarkına, Kütüphanedeki tezgâh atamalarına, G-kod ve Takım Ömrü sayfalarına otomatik eklenir.</p>
+            <p className="tc-cl-not">
+              {sunucuSatirlari !== null
+                ? 'Atölyedeki tezgâhlar İstasyonlar\'daki makine kayıtlarıdır; yeni tezgâh orada makine olarak açılır. Burada motorun ayarı girilir; ayarı tamamlanan tezgâh Kurulum çarkına, Kütüphanedeki tezgâh atamalarına, G-kod ve Takım Ömrü sayfalarına otomatik eklenir.'
+                : 'Atölyedeki tezgâhlar. Yeni tezgâh İstasyonlar\'da makine olarak açılır.'}
+            </p>
+            {kaynak === 'gomulu' && (
+              <div className="tc-cl-uyari" role="status">
+                <Simge ad="alert" boyut="k" />
+                {sunucuSatirlari === null
+                  ? ' İstasyonlar\'da makine kaydı yok ya da liste alınamadı; ekran gömülü tezgâh listesini kullanıyor.'
+                  : ' Ayarı tamamlanmış makine yok; ekran gömülü tezgâh listesini kullanıyor. Makinenin ayarını girin.'}
+              </div>
+            )}
             {duzen?.tur === 'mach' && (
               <TezgahFormu
                 key={duzen.m.id ?? 'yeni'} mode={duzen.mode} m={duzen.m} vazgec={() => { duzenYaz(null); }}
                 kaydet={(f) => { degisti(saveMachine(duzen.mode, duzen.m, f)); duzenYaz(null); }}
               />
             )}
-            {Object.keys(dup).length > 0 && (
-              <div className="tc-cl-uyari"><Simge ad="alert" boyut="k" /> Aynı tezgâh numarası birden fazla tezgâhta: {Object.keys(dup).join(', ')}</div>
+            {duzen?.tur === 'smach' && (
+              <TezgahFormu
+                key={duzen.satir.tezgah.id} mode="edit" sunucu m={duzen.satir.tezgah} vazgec={() => { duzenYaz(null); }}
+                kaydet={async (f) => { degisti(await sunucuTezgahiKaydet(duzen.satir, f)); duzenYaz(null); }}
+              />
             )}
-            <Tablo etiket="Tezgâhlar" sutunlar={tezgahSutunlari} satirlar={tezgahlar()} satirAnahtari={(m) => m.id} />
-            {yaz && (
-              <div className="tc-cl-dugmeler">
-                <Dugme tur="birincil" simge="plus" onClick={() => { duzenYaz({ tur: 'mach', mode: 'new', m: { ...YENI_TEZGAH } }); }}>Yeni tezgâh</Dugme>
-              </div>
+            {sunucuSatirlari !== null
+              ? <Tablo etiket="Tezgâhlar" sutunlar={sunucuSutunlari} satirlar={sunucuSatirlari} satirAnahtari={(x) => x.tezgah.id} />
+              : (
+                <>
+                  {Object.keys(dup).length > 0 && (
+                    <div className="tc-cl-uyari"><Simge ad="alert" boyut="k" /> Aynı tezgâh numarası birden fazla tezgâhta: {Object.keys(dup).join(', ')}</div>
+                  )}
+                  <Tablo etiket="Tezgâhlar" sutunlar={tezgahSutunlari} satirlar={tezgahlar()} satirAnahtari={(m) => m.id} />
+                </>
+              )}
+            {sunucuSatirlari !== null && ozelTezgahlar.length > 0 && (
+              <p className="tc-cl-not" role="note">
+                <Simge ad="cpu" boyut="k" /> Kayıtta özel tezgâh var: {ozelTezgahlar.map((m) => (m.no ? `${m.no} · ${m.name}` : m.name)).join(', ')}. Bunlar artık listede değil ve salt okunur;
+                kullanılacaksa İstasyonlar'da makine olarak açılır.
+              </p>
             )}
           </>
         )}

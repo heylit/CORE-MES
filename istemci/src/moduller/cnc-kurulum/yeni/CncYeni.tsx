@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import { Navigate } from 'react-router-dom';
-import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { BenCevabi, KayitlarCevabi, TezgahlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { DurumKutusu, Dugme, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
@@ -12,6 +12,7 @@ import { DURUM_ANAHTARI } from './durum.ts';
 import { closeDefs, gorunumAdresi, openDefs, useGorunum, useTanimlar, type Gorunum } from './gorunum.ts';
 import { KayitYazici } from './kayit.ts';
 import { sahneAlaniKur } from './sahne/Sahne.tsx';
+import { tezgahlariKur } from './secici.ts';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
@@ -23,7 +24,7 @@ const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.ya
 // Görünüm şeridine dokunmak eylem sayılmaz (eski ekranda da öyle): yalnız bakan kişi kayıt yazmaz.
 const SERIT = 'data-cnc-serit';
 
-interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi }
+interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi; tezgahlar: TezgahlarCevabi['tezgahlar'] | null }
 
 export function CncYeni() {
   return <YeniEkranKapisi><CncEkrani /></YeniEkranKapisi>;
@@ -47,11 +48,13 @@ function CncEkrani() {
     let bitti = false;
     void (async () => {
       try {
-        const [ben, kayitlar] = await Promise.all([
+        // Tezgâh listesi okunamazsa ekran gömülü listeyle açılır (secici.ts).
+        const [ben, kayitlar, tezgahlar] = await Promise.all([
           api.get<BenCevabi>('/cnc-kurulum/ben'),
           api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar'),
+          api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar').then((c) => c.tezgahlar, () => null),
         ]);
-        if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar });
+        if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar, tezgahlar });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'CNC Kurulum Motoru açılamadı.'));
       }
@@ -75,6 +78,7 @@ function CncEkrani() {
       uyar: (ileti) => { bildir('hata', ileti); }, yazildi: kayitYazildi,
     }, degerler);
     baglantiKur({ yetki, isle, yazici: y });
+    tezgahlariKur(acilis.tezgahlar);
     durumKur(y.deger(DURUM_ANAHTARI), (anahtar, metin) => { y.degistir(anahtar, metin); });
     return y;
     // Kurulum yalnız açılış kayıtlarıyla değişir; git ve bildir her çizimde yeni olabilir.
