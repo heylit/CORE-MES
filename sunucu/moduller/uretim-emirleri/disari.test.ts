@@ -12,7 +12,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import {
-  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir,
+  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir, takvimKayitlari,
 } from './disari.ts';
 import { BASLAMAMIS_EMIR, KAPSAM_DISI } from './kurallar.ts';
 import { emirAc } from './servis.ts';
@@ -307,5 +307,31 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     } finally {
       await app.close();
     }
+  });
+
+  test('891 takvim: planlı başlangıç ve teslim aralıktaysa ayrı kayıt; taslak, iptal ve aralık dışı gelmez; başlayan emrin başlangıcı biter', async () => {
+    const tarihle = async (baslangic: string | null, teslim: string | null, durumu = 'planli') => {
+      const e = await planliEmir();
+      await sahip().sorgu(
+        `UPDATE uretim_emri SET baslangic = $2::date, teslim = $3::date, durum = $4,
+           baslama = CASE WHEN $4 = 'basladi' THEN now() END, iptal = CASE WHEN $4 = 'iptal' THEN now() END WHERE id = $1`,
+        [e.id, baslangic, teslim, durumu]);
+      return e;
+    };
+    const iki = await tarihle('2031-03-05', '2031-03-20');
+    const teslimde = await tarihle('2031-02-20', '2031-03-10', 'basladi');
+    await tarihle('2031-03-05', '2031-03-06', 'iptal');
+    await tarihle('2031-03-05', '2031-03-06', 'taslak');
+    await tarihle('2031-01-01', '2031-02-01');
+    const l = (await vt().tx((db) => takvimKayitlari(db, '2031-03-01', '2031-03-31'))).filter((k) => [String(iki.id), String(teslimde.id)].includes(k.kimlik));
+    assert.deepEqual(l.map((k) => [k.kimlik, k.kaynak, k.tarih, k.durum, k.bitti]), [
+      [String(iki.id), 'emir-plan', '2031-03-05', 'Planlı', false],
+      [String(iki.id), 'emir-bitis', '2031-03-20', 'Planlı', false],
+      [String(teslimde.id), 'emir-bitis', '2031-03-10', 'Başladı', false],
+    ]);
+    assert.equal(l[0]?.no, iki.emirNo);
+    assert.equal(l[0]?.ilgili, 'Deneme Parçası');
+    const hepsi = await vt().tx((db) => takvimKayitlari(db, '2031-03-01', '2031-03-31'));
+    assert.equal(hepsi.length, 3, 'iptal, taslak ve aralık dışı emir gelmez');
   });
 });
