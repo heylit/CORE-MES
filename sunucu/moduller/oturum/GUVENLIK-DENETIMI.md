@@ -3,6 +3,7 @@
 Zaman veritabanı saatinden (testte uç fabrikasına verilen saat). Kişi çerezdeki anahtarın özetinden çözülür; anahtar saklanmaz.
 Çerez HttpOnly. Giriş komutu denetim kaydına parolasız düşer. Veri kapsamı, sürüm ve istek kimliği bu modülde uygulanmaz
 (oturum açma her seferinde yeni kayıttır; tekrar zararsızdır).
+Dış izleyici (1224 a): portalda firmaya atanmış kişinin kimliği her istekte işaretlenir (portal/disari.ts, işaret kopyalanmaz); çekirdek ona portal ve oturum dışındaki bütün uçları 403 ile kapatır. Atama açık oturumda da bir sonraki istekte geçerlidir (`dis-izleyici.test.ts`).
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
