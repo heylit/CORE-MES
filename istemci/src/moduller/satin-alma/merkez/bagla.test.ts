@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
-import { S } from './store.ts';
-import { YENILEME_MS, merkeziBagla } from './bagla.ts';
+import { S, V } from './store.ts';
+import { YENILEME_MS, acilisOku, merkezAc, merkeziBagla } from './bagla.ts';
 
 const talep = (id: string, no: string): Talep => ({
   id, no, baslik: 'Deneme talep', birim: null, talepEdenKisiId: 5, talepEdenAdi: 'Deneme Kişi', teslimYontemi: null, uretimEmriId: null, uretimEmriNo: null, acanKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null,
@@ -96,5 +96,22 @@ describe('Merkez bağlama', () => {
     kapat();
     vi.advanceTimersByTime(YENILEME_MS * 3);
     expect(f).toHaveBeenCalledTimes(once + 1);
+  });
+
+  // 1237: Ctrl K sonucu talebi, komut yeni talep penceresini adresle açar.
+  it('açılış adresi: talep ayrıntısı bölümüyle açılır; yeni talep penceresi veri gelince açılır; bilinmeyen bölüm yok sayılır', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    expect(acilisOku(new URLSearchParams(''))).toBeNull();
+    expect(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=boyle-yok`))).toEqual({ talep: ILK, bolum: null, yeniTalep: false });
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    merkezAc(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=order`))!);
+    expect([V.page, V.id, V.tab]).toEqual(['request', ILK, 'order']);
+    await vi.waitFor(() => expect(kok.querySelector('#main')?.textContent).toContain('ST-2026-001'));
+    merkezAc(acilisOku(new URLSearchParams('yeni=talep'))!);
+    await vi.waitFor(() => expect(kok.querySelector('#modal-root')?.textContent).toContain('Yeni satın alma talebi'));
+    kapat();
   });
 });

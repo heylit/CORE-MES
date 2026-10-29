@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import type { OnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { OnTalepler } from './OnTalepler.tsx';
@@ -16,6 +17,14 @@ export function TaleplerimSayfasi() {
   const [bolum, bolumYaz] = useState<Bolum>('on');
   const [taslak, taslakYaz] = useState<readonly OnTalep[] | null>(null);
   const [suzgec, suzgecYaz] = useState<DurumSuzgeci>('acik');
+  // Ctrl K komutu ve arama sonucu (1237) bölümü adresle seçer; adres temizlenir ki geri gelince bölüm yeniden zorlanmasın.
+  const [adres, adresYaz] = useSearchParams();
+  useEffect(() => {
+    const istenen = adres.get('bolum');
+    if (istenen !== 'yeni' && istenen !== 'liste') return;
+    bolumYaz(istenen);
+    adresYaz({}, { replace: true });
+  }, [adres, adresYaz]);
   const on = useQuery({ queryKey: anahtarlar.onTalepler, queryFn: () => cagri.get('/satin-alma-on-talepleri', SURE) });
   const talepler = useQuery({ queryKey: anahtarlar.taleplerim(HEPSI), queryFn: () => cagri.get('/satin-alma-taleplerim', { sorgu: { sinir: HEPSI }, ...SURE }) });
   const say = (s: DurumSuzgeci) => talepler.data?.talepler.filter((t) => suzgeceUyar(t, s)).length;

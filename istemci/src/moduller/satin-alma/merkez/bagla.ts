@@ -6,8 +6,8 @@
 import "./styles.css";
 import "./yerlesim.css";
 import { setRole, type Role } from "./roles.ts";
-import { UNDO, V, init, yenile, setRenderer, setToaster, setUndoUI, UNDO_MS, type Page } from "./store.ts";
-import { registerUIHooks, toast } from "./ui.ts";
+import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, UNDO_MS, type Page } from "./store.ts";
+import { go, registerUIHooks, requestModal, toast } from "./ui.ts";
 import { esc } from "./util.ts";
 import { onAfterRender, render } from "./views.ts";
 
@@ -55,7 +55,7 @@ export function yenilenebilirMi(kok: HTMLElement): boolean {
 }
 
 let kancalar = false;
-let yuklendi = false;
+let ilkYukleme: Promise<void> | null = null;
 let etkin: BaglamaSecenegi | null = null;
 
 function kancalariKur(): void {
@@ -93,7 +93,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   setRole(secenek.rol);
   etkin = secenek;
   kancalariKur();
-  if (!yuklendi) { yuklendi = true; void init(); } else { render(); void yenile(); }
+  if (!ilkYukleme) ilkYukleme = init(); else { render(); void yenile(); }
   const tazele = () => { if (yenilenebilirMi(kok)) void yenile(); };
   const zamanlayici = setInterval(tazele, YENILEME_MS);
   const gorunce = () => { if (document.visibilityState === "visible") tazele(); };
@@ -103,4 +103,24 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
     document.removeEventListener("visibilitychange", gorunce);
     if (etkin === secenek) etkin = null; kok.innerHTML = ""; delete kok.dataset.saMerkez;
   };
+}
+
+// Ctrl K sonucu ya da komutu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle) ya da boş yeni talep penceresi.
+// Yazma pencerenin kendi ucundadır; açılış yetki vermez, yazamayan kişide pencere açılmaz.
+export interface MerkezAcilisi { talep: string | null; bolum: string | null; yeniTalep: boolean }
+export const ACILIS_BOLUMLERI = ["items", "quotes", "compare", "approval", "order", "delivery"] as const;
+
+export function acilisOku(adres: URLSearchParams): MerkezAcilisi | null {
+  const talep = adres.get("talep");
+  const bolum = adres.get("bolum");
+  const yeniTalep = adres.get("yeni") === "talep";
+  if (!talep && !yeniTalep) return null;
+  return { talep: talep || null, bolum: bolum && (ACILIS_BOLUMLERI as readonly string[]).includes(bolum) ? bolum : null, yeniTalep };
+}
+
+export function merkezAc(acilis: MerkezAcilisi): void {
+  const secenek = etkin;
+  if (!secenek) return;
+  if (acilis.talep) go("request", acilis.talep, acilis.bolum);
+  if (acilis.yeniTalep) void (ilkYukleme ?? Promise.resolve()).then(() => { if (etkin === secenek && canWrite()) requestModal(null); }, () => {});
 }

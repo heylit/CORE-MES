@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { AcikEmirlerCevabi, MalzemeSecenekleriCevabi, OnTalep, OnTalepleriCevabi, Talebim, TaleplerimCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { BELIRSIZ_MIKTAR } from '../../../ortak/veri/miktar.ts';
@@ -58,8 +59,10 @@ function sunucuKur(ag = { kopuk: false }): Cagri[] {
   }));
   return cagrilar;
 }
-const sar = (cocuk: ReactNode) => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici>{cocuk}</BildirimSaglayici></QueryClientProvider>,
+const sar = (cocuk: ReactNode, adres = '/taleplerim') => render(
+  <MemoryRouter initialEntries={[adres]}>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici>{cocuk}</BildirimSaglayici></QueryClientProvider>
+  </MemoryRouter>,
 );
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); onListe = ON_TALEPLER; });
@@ -244,6 +247,15 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     expect(await screen.findByText('ST-2026-001')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /^Yeni talep/ }));
     expect(screen.getByLabelText('Malzeme')).toBeTruthy();
+  });
+
+  it('1237: Ctrl K komutu adresle yeni talep bölümünü, arama sonucu talep listesini açar', async () => {
+    sunucuKur();
+    sar(<TaleplerimSayfasi />, '/taleplerim?bolum=yeni');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Yeni talep/ }).getAttribute('aria-selected')).toBe('true'));
+    cleanup();
+    sar(<TaleplerimSayfasi />, '/taleplerim?bolum=liste');
+    expect(await screen.findByText('ST-2026-001')).toBeTruthy();
   });
 
   it('898 a: ön talep "Talebe çevir" formu hizmet, emir, parça ve fason bağıyla doldurur; gönderimde bağ gövdeye girer', async () => {
