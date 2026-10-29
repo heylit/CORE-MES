@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
   OzetCevabi, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
@@ -802,3 +803,16 @@ export async function adresAra(db: Db, metin: string, kaynak: HaritaKaynagi): Pr
   return { sonuclar: ara(paket?.arama ?? null, aktif, metin, undefined, sinir), kisaBaglanti: konumCoz(metin, sinir) === 'kisa', dizinVar: Boolean(paket?.arama) };
 }
 
+
+// Takvim (891): işin günü; firma noktanın firmasıdır, yoksa nokta adı. Tamamlanan iş biter. Yetki denetlemez; çağıran sevkiyat.oku'yu denetler.
+const TAKVIM_IS_TURU: Readonly<Record<sorgu.TarihliIsSatiri['tur'], string>> = { teslimat: 'Teslimat', alim: 'Alım', aktarma: 'Aktarma' };
+const TAKVIM_IS_DURUMU: Readonly<Record<sorgu.TarihliIsSatiri['durum'], string>> = { havuzda: 'Havuzda', planlandi: 'Planlandı', yolda: 'Yolda', tamamlandi: 'Tamamlandı' };
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  const satirlar = await sorgu.tarihliIsler(db, baslangic, bitis);
+  const adlar = await firmaAdlari(db, [...new Set(satirlar.flatMap((s) => (s.firmaId === null ? [] : [s.firmaId])))]);
+  return satirlar.map((s): TakvimKaydi => ({
+    kaynak: 'sevk', kimlik: String(s.id), tarih: s.tarih, no: s.belgeNo || null,
+    baslik: s.belgeNo ? `${TAKVIM_IS_TURU[s.tur]} ${s.belgeNo}` : TAKVIM_IS_TURU[s.tur],
+    ilgili: (s.firmaId === null ? null : adlar.get(s.firmaId) ?? null) ?? s.noktaAdi, durum: TAKVIM_IS_DURUMU[s.durum], bitti: s.durum === 'tamamlandi',
+  }));
+}

@@ -2,14 +2,14 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { TAKVIM_KAYNAKLARI } from '#paylasilan/sozlesme/takvim.ts';
 import type { TakvimKaydi, TakvimKaynagi } from '#paylasilan/sozlesme/takvim.ts';
 
-// Kaynağın okuma yetkisi (1163 a): kaynağın kendi ekranını açan işlem. null: kaynak oturumla okunur (planlı duruş, vardiya takvimi gibi).
+// Kaynağın okuma yetkisi (1163 a): kaynağın kendi ekranını açan işlem; üretim emrinin okuma işlemi yoktur, emir listesi sayfasıyla okunur. null: kaynak oturumla okunur (planlı duruş, vardiya takvimi gibi).
 // bagli: false olan kaynak Aşama 1'de bağlanmadı (modülü başka işte); yetkisi olana "bağlanmadı" diye bildirilir (UYUM-BORCU).
 export const KAYNAK_YETKILERI: Readonly<Record<TakvimKaynagi, { islem: Islem | null; bagli: boolean }>> = {
   'siparis': { islem: 'siparisler.oku', bagli: true },
-  'emir-plan': { islem: 'plan.oku', bagli: false },
-  'emir-bitis': { islem: 'plan.oku', bagli: false },
-  'sevk': { islem: 'sevkiyat.oku', bagli: false },
-  'satin-alma': { islem: 'satin-alma.oku', bagli: false },
+  'emir-plan': { islem: 'sayfa.uretim-emirleri', bagli: true },
+  'emir-bitis': { islem: 'sayfa.uretim-emirleri', bagli: true },
+  'sevk': { islem: 'sevkiyat.oku', bagli: true },
+  'satin-alma': { islem: 'satin-alma.oku', bagli: true },
   'kalibrasyon': { islem: 'kalibrasyon.oku', bagli: true },
   'denetim': { islem: 'denetim-hazirlik.oku', bagli: true },
   'izin': { islem: null, bagli: true },

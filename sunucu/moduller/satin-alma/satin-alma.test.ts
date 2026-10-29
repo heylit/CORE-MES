@@ -24,6 +24,7 @@ import * as servis from './servis.ts';
 import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
 import { ILETILER } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
+import { takvimKayitlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -1216,6 +1217,21 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await kalan(), new Map([[satirA, ['4', '0']], [satirB, ['10', '7.5']]]));
     await geriAl(7651);
     assert.deepEqual((await kalan()).get(satirB), ['10', '10']);
+  });
+
+  test('891 takvim: siparişi verilmiş talebin siparişleri beklenen teslim gününde gelir; tamamı teslim alınan biter, aralık dışı gelmez', async () => {
+    const { s: ilk, a, b } = await bolunmusSiparis();
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(ilk), karar: { ...ilk.karar!, siparisler: ilk.karar!.siparisler.map((y) => ({ ...y, beklenenTeslim: y.teklifId === a ? '2031-03-10' : '2031-03-12' })) } }));
+    const noA = siparisi(s, a).no!, noB = siparisi(s, b).no!;
+    await teslimEt(siparisi(s, b).satirlar[0]!.id, '10', 8911);
+    const oku = async (bas: string, son: string) => (await vt().tx((db) => takvimKayitlari(db, bas, son))).filter((x) => x.no === noA || x.no === noB);
+    const l = await oku('2031-03-01', '2031-03-31');
+    assert.deepEqual(l.map((x) => [x.kaynak, x.tarih, x.no, x.baslik, x.durum, x.bitti]), [
+      ['satin-alma', '2031-03-10', noA, `Sipariş ${noA}`, 'Bekleniyor', false],
+      ['satin-alma', '2031-03-12', noB, `Sipariş ${noB}`, 'Teslim alındı', true],
+    ]);
+    assert.ok(l.every((x) => x.ilgili !== null));
+    assert.deepEqual((await oku('2031-03-11', '2031-03-31')).map((x) => x.no), [noB]);
   });
 
   test('#542 dış operasyonlar: liste üretim emirlerinin açık fason iş emirlerinden gelir ve hazırdır; okuyan ve yazan görür, talep eden 403; sipariş satırının iş emri bağı boş olabilir, olmayan iş emrine bağlanamaz', async () => {

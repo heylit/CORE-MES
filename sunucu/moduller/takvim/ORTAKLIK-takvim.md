@@ -11,4 +11,6 @@ Modül tablo tutmaz; bütün kayıtlar başka modülün `disari.ts` okumasıdır
 | resmi tatil | ik | `resmiTatilGunleri` |
 | vergi beyanı son günü | finans | `takvimKayitlari` |
 | tek seferlik planlı duruş, istasyon / iş merkezi adı | vardiya | `takvimKayitlari` |
-| emir plan tarihleri, sevk, satın alma termini | plan, sevkiyat, satin-alma | bağlanmadı (UYUM-BORCU.md) |
+| üretim emri başlangıç ve teslim tarihi, emir no, parça adı | uretim-emirleri | `takvimKayitlari` |
+| sevkiyat işi günü, belge no, nokta ve firma adı | sevkiyat | `takvimKayitlari` |
+| satın alma siparişi beklenen teslimi, sipariş no, tedarikçi adı | satin-alma | `takvimKayitlari` |

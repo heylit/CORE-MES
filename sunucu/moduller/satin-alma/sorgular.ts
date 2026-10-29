@@ -1053,3 +1053,23 @@ export async function planYoksayYaz(db: Db, g: { malzemeNo: number; miktar: numb
     [g.malzemeNo, g.miktar, g.neden, g.kisiId],
   );
 }
+
+// Takvim (891): beklenen teslimi aralıkta olan, siparişi verilmiş talebin siparişleri; satırlar teslim durumunu türetmek için gelir.
+export interface TakvimSiparisSatiri {
+  id: number; no: string | null; beklenenTeslim: string; firmaId: number | null; tedarikciAdi: string; talepBasligi: string; kapali: boolean;
+  satirlar: { miktar: string; teslimAlinan: string | null }[];
+}
+export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {
+  return db.sorgu<TakvimSiparisSatiri>(
+    `SELECT p.id, coalesce(p.no, nullif(p.siparis_no, '')) AS no, p.beklenen_teslim::text AS "beklenenTeslim", q.firma_id AS "firmaId",
+        q.tedarikci_adi AS "tedarikciAdi", t.baslik AS "talepBasligi", p.logo_kapatma_durumu IS NOT NULL AS kapali,
+        coalesce((SELECT json_agg(json_build_object('miktar', s.miktar::text, 'teslimAlinan', (SELECT sum(x.miktar)::text FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id)) ORDER BY s.id)
+           FROM satin_alma_siparis_satiri s WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id), '[]'::json) AS satirlar
+       FROM satin_alma_siparis p
+       JOIN satin_alma_talep t ON t.id = p.talep_id
+       JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
+      WHERE t.durum IN ('siparis_verildi', 'teslim_alindi') AND p.beklenen_teslim BETWEEN $1::date AND $2::date
+      ORDER BY p.beklenen_teslim, p.id`,
+    [baslangic, bitis],
+  );
+}

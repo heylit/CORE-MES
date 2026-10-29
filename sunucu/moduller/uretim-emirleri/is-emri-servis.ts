@@ -7,6 +7,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { AZAMI_ADIM, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type {
   AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
@@ -1616,3 +1617,21 @@ export async function isEmriSureleri(db: Db, idler: readonly number[]): Promise<
   return new Map((await s.isEmriSureleriGetir(db, idler)).map(({ isEmriId, ...x }) => [isEmriId, x]));
 }
 
+
+// Takvim (891, D-P varsayımı): emrin planlı başlangıcı (emir-plan) ve teslimi (emir-bitis) aralıktaysa ayrı kayıt olur. Planlı başlangıç
+// emir başlayınca, teslim emir bitince biter. Yetki denetlemez; çağıran sayfa.uretim-emirleri'ni denetler.
+const TAKVIM_EMIR_DURUMU: Readonly<Record<EmirDurumu, string>> = { taslak: 'Taslak', planli: 'Planlı', basladi: 'Başladı', bitti: 'Bitti', iptal: 'İptal' };
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
+  const sonuc: TakvimKaydi[] = [];
+  for (const e of await s.takvimEmirSatirlari(db, baslangic, bitis)) {
+    const durum = gorunenDurum(e.durum, e.baslamis);
+    const ortak = { kimlik: String(e.id), no: e.emirNo, ilgili: e.parcaAd || null, durum: TAKVIM_EMIR_DURUMU[durum] };
+    if (e.baslangic !== null && e.baslangic >= baslangic && e.baslangic <= bitis) {
+      sonuc.push({ ...ortak, kaynak: 'emir-plan', tarih: e.baslangic, baslik: `Emir ${e.emirNo} başlangıcı`, bitti: durum !== 'planli' });
+    }
+    if (e.teslim !== null && e.teslim >= baslangic && e.teslim <= bitis) {
+      sonuc.push({ ...ortak, kaynak: 'emir-bitis', tarih: e.teslim, baslik: `Emir ${e.emirNo} teslimi`, bitti: durum === 'bitti' });
+    }
+  }
+  return sonuc;
+}

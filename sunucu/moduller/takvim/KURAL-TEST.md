@@ -2,7 +2,7 @@
 
 | Kural | Tanım | Test |
 |---|---|---|
-| TK-K1 | Okuma işlemi olmayan kaynak görünmez; bağlanmamış kaynak yetkisi varsa `bekleyenler`'de | kurallar.test.ts "TK-K1..."; takvim.test.ts "TK-02", "TK-03" |
+| TK-K1 | Okuma işlemi olmayan kaynak görünmez; emir kaynakları `sayfa.uretim-emirleri` ile açılır; bağlanmamış kaynak (şu an yok) yetkisi varsa `bekleyenler`'de | kurallar.test.ts "TK-K1..."; takvim.test.ts "TK-02", "TK-03" |
 | TK-K2 | Kayıtlar tarih, kaynak sırası, kimlik sırasıyla gelir | kurallar.test.ts "TK-K2..."; takvim.test.ts "TK-02" |
 | TK-01 | takvim.oku yoksa 403; ters ya da 93 günden uzun aralık 400 | takvim.test.ts "TK-01" |
 | TK-03 | Kaynak yetkisi verilince kaynak eklenir (1163 a) | takvim.test.ts "TK-03" |

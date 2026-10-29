@@ -351,7 +351,7 @@ export function Takvim({ gorunum = 'takvim' }: { gorunum?: Gorunum }) {
   return (
     <Kart baslik="Takvim" simge="calendar">
       <div className="tc-takvim">
-        <p className="tc-takvim-not">Siparişlerin, ölçü aletlerinin, denetimlerin, izinlerin, vergi beyanlarının ve planlı duruşların tarihleri tek yerde. Yalnız okuma yetkiniz olan kaynaklar görünür.</p>
+        <p className="tc-takvim-not">Siparişlerin, üretim emirlerinin, sevklerin, satın alma siparişlerinin, ölçü aletlerinin, denetimlerin, izinlerin, vergi beyanlarının ve planlı duruşların tarihleri tek yerde. Yalnız okuma yetkiniz olan kaynaklar görünür.</p>
         <Ozet kayitlar={tumu} bugun={bugun} secili={ozet} sec={ozetSec} />
         <KaynakSeridi veri={veri} kapali={kapali} degistir={kaynakDegistir} />
         {gorunum !== 'tablo' && (

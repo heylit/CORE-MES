@@ -2410,3 +2410,17 @@ export function kapanisDurumlari(db: Db, idler: readonly number[]): Promise<Kapa
        FROM uretim_emirleri_kapanis k JOIN uretim_emri e ON e.id = k.uretim_emri_id WHERE k.uretim_emri_id = ANY($1::int[])`, [idler],
   );
 }
+
+// Takvim (891): planlı başlangıcı ya da teslimi [baslangic, bitis] içindeki emirler; taslak, iptal ve arşiv gelmez.
+export interface TakvimEmirSatiri { id: number; emirNo: string; parcaAd: string; baslangic: string | null; teslim: string | null; durum: EmirDurumu; baslamis: boolean }
+export function takvimEmirSatirlari(db: Db, baslangic: string, bitis: string): Promise<TakvimEmirSatiri[]> {
+  return db.sorgu<TakvimEmirSatiri>(
+    `SELECT e.id, e.emir_no AS "emirNo", e.parca_ad AS "parcaAd", ${TARIH('e.baslangic')} AS baslangic, ${TARIH('e.teslim')} AS teslim, e.durum,
+            EXISTS (SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.durum <> 'bekliyor') AS baslamis
+       FROM uretim_emri e
+      WHERE NOT e.arsiv AND e.durum NOT IN ('taslak', 'iptal')
+        AND (e.baslangic BETWEEN $1::date AND $2::date OR e.teslim BETWEEN $1::date AND $2::date)
+      ORDER BY e.id`,
+    [baslangic, bitis],
+  );
+}
