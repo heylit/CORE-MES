@@ -34,6 +34,7 @@ import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/oto
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
+import { hataliAdet } from '../../../../../../arkon/web/src/data/hatali-adet.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
@@ -693,6 +694,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const autoRef = useRef({ state: false, cnt: false });
   const scrapWhy = useRef<string | null>(null);
   const [hataliGidiyor, hataliGidiyorYaz] = useState(false);
+  const [hataliEk, hataliEkYaz] = useState({ anahtar: '', adet: 0 });
   const topluRef = useRef(false);
   const lastNoteRef = useRef<string | null>(null);
   const prevCnt = useRef<{ no: string; good: number; scrap: number } | null>(null);
@@ -842,6 +844,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const iyiSayimOk = (k: Perm) => sayimOk(k, iyiKapaliNedeni);
   // 1034: TMI işinde hurdayı operatör yazmaz; "Hatalı" parçayı kaliteye ayırır (kol ya da emre ek adım TMI'de açılır), sayaç değişmez.
   const hataliTmi = !pv && tmiEmirId(o.pkg) !== null && depo.status().mode === 'server';
+  // 1188: hatalı parça adımda üretimdir; sayısı sunucunun adım toplamıdır. Gönderilen, paket yenilenene kadar üstüne eklenir; sunucu
+  // toplamı değişince (ya da iş değişince) ek düşer. Toplam bilinmiyorsa sayı yoktur (null), ek de uydurulmaz.
+  const sunucuHatali = hataliAdet(o.pkg);
+  const hataliAnahtari = `${siraAnahtari(o)}|${String(sunucuHatali)}`;
+  const hataliSayisi = !hataliTmi ? undefined : sunucuHatali === null ? null : sunucuHatali + (hataliEk.anahtar === hataliAnahtari ? hataliEk.adet : 0);
   const topluKaydet = (g: { saglam: number; hurda: number; neden: string | null }) => {
     if (!sayimOk('prod.run', g.saglam > 0 ? iyiArtiNedeni(g.saglam) ?? kapaliNedeni : kapaliNedeni)) return false;
     if (hataliTmi && g.hurda > 0 && g.neden) {
@@ -944,6 +951,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       .then((c) => {
         ovYaz(null);
         bip('call');
+        hataliEkYaz((e) => ({ anahtar: hataliAnahtari, adet: (e.anahtar === hataliAnahtari ? e.adet : 0) + g.adet }));
         const yer = c.kolAcildi ? ` · kol ${c.hedefEmir.emirNo}` : ' · adımlar emre eklendi';
         say(`Hatalı · ${sayi(g.adet)} adet kaliteye ayrıldı${yer} · karar kalitede${c.uyari ? ` · ${c.uyari}` : ''}`, 'alert', 'hold',
           { action: { l: 'Kaliteyi çağır', fn: () => startCall(CAGRI_EKIPLERI.find((x) => x.k === 'kalite')!) } });
@@ -1134,7 +1142,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   if (uretir) tuslar.push({ etiket: 'Toplu giriş', simge: 'layers', ton: 'duz', kapali, bas: () => ovYaz('toplu') });
   const sayac = (
     <div className="tc-ay1-sayac">
-      <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
+      <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
@@ -1259,7 +1267,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
         satirlar={[{ etiket: 'İyi parça', deger: sayi(o.good) }, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }]}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
-      {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
+      {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
     </>
   );
 
