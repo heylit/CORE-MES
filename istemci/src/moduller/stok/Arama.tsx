@@ -8,7 +8,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { RAF_TURU, miktarMetni } from './gorunum.ts';
 
 // Önizlemedeki "her yerden arama" (openSearch): "/" ya da Ara düğmesiyle açılır; Enter ilk sonucu açar. Ctrl K kabuğun ortak
-// paletidir (karar 102 a); konum, raf ve parti oraya kayıt kaynağı olarak geçince bu pencere kalkar (UYUM-BORCU 46).
+// paletidir (karar 102 a); konum, raf ve parti orada da aranır (kart 1234). Pencerenin kalkması prototip değişikliğidir, sorulur (UYUM-BORCU 46).
 // Malzeme adıyla arama malzemeler modülünün arama işlevi gelince eklenir; bugün kart numarası, konum, raf ve parti no.
 const SAYFALAR = [
   ['İş kutusu', '/stok', 'panel ana'], ['Okut', '/stok/okut', 'tara qr barkod'], ['Taşı', '/stok/sepet', 'sepet teslim fiş taşı çıkış'], ['Hazırlık', '/stok/hazirlik', 'toplama sipariş rota liste istek'],

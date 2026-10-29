@@ -30,6 +30,7 @@ Veri kapsamı (DEP-36): üretime sarf (`/stok/cikis` emirli, `/stok/sepet/stokta
 | `GET /stok/toplamalar`, `/:id` | kapsam: teslim yeri kapsam dışı istasyon olan liste listede yok, tekil 403; teslim yeri istasyon olmayan süzülmez | DEP-42/56, STK-K3 | STK-K3 (kapsam dışı 403, sınırsız hepsi) |
 | `GET /stok/yerlesim` | — | DEP-57 | YOK |
 | `GET /stok/ara` | bilinmeyen sonuç uydurulmaz | stok içi arama | YOK |
+| Genel arama kaynakları `parti`, `konum` (`disari.ts` `kayitAramaKaynaklari`, kart 1234) | çekirdek `/arama` kişide `sayfa.stok` ya da bir stok işlemi yoksa kaynağı çağırmaz; yalnız okur; joker karakter kaçırılır; pasif konum ve raf gelmez | `kayit-aramasi.test.ts` (gerçek PostgreSQL) | `kayit-aramasi.test.ts`: stok işlemi olmayan (ör. yalnız `uretim-emirleri.ara-istasyon`) ve işlemsiz kişi için kaynak çağrılmaz |
 | `GET /stok/sayim-bekleyenler` | süre deponun yerleşiminden (DEP-15) | DEP-15 | YOK |
 | `GET /stok/ozet` (oturum) | her alan kendi işlemiyle; yetkisize null, hesaplanmaz | stok özeti | stok özeti (girişsiz 401, operatörde hepsi null, satın almada istek ve sayım null) |
 | `GET /stok/malzeme-istekleri`, `/:id` | karşılanan teslimden önce null; kapsam: kapsam dışı istasyonun isteği listede yok, tekil 403; istasyonsuz istek süzülmez | malzeme isteği, STK-K1 | STK-K1 (kapsam dışı 403, sınırsız hepsi, sayaç) |
