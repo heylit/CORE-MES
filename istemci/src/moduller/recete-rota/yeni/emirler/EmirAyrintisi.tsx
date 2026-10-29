@@ -6,6 +6,7 @@ import type { EkranOzellikleri } from '../sekmeler.ts';
 import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
+import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import {
   acikMi, adimDurumu, adimPlani, durumAdi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
@@ -225,6 +226,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
           {ana ? '' : ' Ana emri listede yok.'}
         </p>
       )}
+      {acik && yetki.emirYaz && <ReworkSatirlari durum={d} emir={o} komut={komut} />}
       {o.kol && acik && islem === 'katil' && yetki.emirYaz && (
         <div className="tc-rr3-katil">
           <h4>Katılma adımı</h4>

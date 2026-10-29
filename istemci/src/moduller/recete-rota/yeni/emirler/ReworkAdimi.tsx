@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { ParametreDegeri, ParametreDegerleri, SartnameParametresiSatiri } from '#paylasilan/sozlesme/rota.ts';
+import type { HataliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { sayiOku } from '../sartnameler/kurallar.ts';
 import { useSartname, useSartnameler } from '../sartnameler/veri.ts';
-import type { RrDurumu } from '../veri.ts';
+import { RR_ANAHTARI, type RrDurumu } from '../veri.ts';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 
 // Hatalı parçanın rework adımı (1034): kalite "rework" dedikten sonra planlama kolun bekleyen rework adımını doldurur. Adım Üretim
@@ -197,5 +200,29 @@ function ParametreAlani({ p, deger, yaz }: { p: SartnameParametresiSatiri; deger
   return (
     <Girdi etiket={etiket} ipucu={ipucu} required={p.zorunlu} inputMode={p.tur === 'sayi' ? 'decimal' : undefined}
       value={typeof deger === 'string' ? deger : ''} onChange={(o) => { yaz(o.target.value); }} />
+  );
+}
+
+// Emir ayrıntısındaki satır: kalitenin "rework" dediği hatalı kayıtlardan rework adımı bu emirde (kolda) olanlar. Kayıtlar Üretim
+// Emirleri'nin listesinden okunur; okunamazsa (yetki ya da hata) satır çizilmez.
+export function ReworkSatirlari({ durum, emir, komut }: { durum: RrDurumu; emir: { id: string; kayitNo: number; no: string; surum: number }; komut: Ozellikler['komut'] }) {
+  const [acik, setAcik] = useState<number | null>(null);
+  const liste = useQuery({
+    queryKey: [...RR_ANAHTARI, 'hatali', emir.kayitNo],
+    queryFn: () => api.get<HataliListeCevabi>(`/hatali-parcalar?emirId=${String(emir.kayitNo)}`),
+  });
+  const kayitlar = (liste.data?.kayitlar ?? []).filter((k) => k.karar === 'rework' && k.reworkIsEmriId !== null && k.hedefEmir.id === emir.kayitNo);
+  if (kayitlar.length === 0) return null;
+  return (
+    <div className="tc-rr3-ek" role="group" aria-label="Hatalı parça">
+      <h4>Hatalı parça</h4>
+      {kayitlar.map((k) => (
+        <div key={k.id} className="tc-rr3-satir">
+          <span className="tc-rr3-cip">OP {k.isEmri.opNo} {k.isEmri.ad}: {k.adet} adet, {k.hurdaNedeni.ad}; kalite kararı rework</span>
+          <Dugme simge="wrench" onClick={() => { setAcik(k.reworkIsEmriId); }}>Rework adımını doldur</Dugme>
+        </div>
+      ))}
+      {acik !== null && <ReworkAdimi acik kapat={() => { setAcik(null); }} durum={durum} emir={emir} isEmriId={acik} komut={komut} />}
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { json, ornekDurum } from '../test-ortak.tsx';
 import type { RrDurumu } from '../veri.ts';
 import type { KomutCevabi, useEmirKomutu } from './komut.ts';
-import { parametreDegeri, ReworkAdimi } from './ReworkAdimi.tsx';
+import { parametreDegeri, ReworkAdimi, ReworkSatirlari } from './ReworkAdimi.tsx';
 
 // Rework adımı penceresi (1034): komutların gövdesi ve sırası. Şartnameler ve kayıtlar uydurmadır.
 const durum = (): RrDurumu => ({ ...ornekDurum(), fasonFirms: [{ id: '81', code: 'F1', name: 'Deneme kaplama' }], planYerlesim: null, planMotoru: null });
@@ -96,6 +96,35 @@ describe('Rework adımı penceresi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Adımı kaydet, plana gönder' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Tork: sayı olarak girin.');
     expect(calistir).not.toHaveBeenCalled();
+  });
+});
+
+describe('Emir ayrıntısındaki hatalı parça satırı', () => {
+  const kayit = (id: number, ek: Record<string, unknown>) => ({
+    id, uretimEmri: { id: 60, emirNo: 'UE-0000', parcaNo: 'P-1', parcaAd: 'Deneme' }, isEmri: { id: 700, opNo: 20, ad: 'Frezeleme' },
+    hedefEmir: { id: 61, emirNo: 'UE-0001' }, kaliteIsEmriId: 713, reworkIsEmriId: 714, hurdaNedeni: { id: 1, kod: 'OLC', ad: 'Ölçü dışı' }, adet: 2,
+    aciklama: null, kisi: { id: 1, ad: null }, zaman: '2030-01-01T00:00:00Z', karar: 'rework', kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null, ...ek,
+  });
+  it('yalnız bu emirdeki rework kararı satır olur; düğme pencereyi o rework adımıyla açar', async () => {
+    const adresler: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      adresler.push(adres);
+      if (adres.includes('/hatali-parcalar')) {
+        return json(200, { kayitlar: [kayit(1, {}), kayit(2, { karar: null, reworkIsEmriId: null }), kayit(3, { hedefEmir: { id: 99, emirNo: 'UE-0099' } })] });
+      }
+      return json(200, { kategoriler: [], standartlar: [], sartnameler: [] });
+    }));
+    const komut = { calistir: vi.fn(), mesgul: false } as unknown as ReturnType<typeof useEmirKomutu>;
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ReworkSatirlari durum={durum()} emir={{ id: '61', kayitNo: 61, no: 'UE-0001', surum: 4 }} komut={komut} />
+      </QueryClientProvider>,
+    );
+    const dugmeler = await screen.findAllByRole('button', { name: 'Rework adımını doldur' });
+    expect(dugmeler).toHaveLength(1);
+    expect(adresler.some((a) => a.endsWith('/hatali-parcalar?emirId=61'))).toBe(true);
+    fireEvent.click(dugmeler[0]!);
+    expect(await screen.findByRole('dialog', { name: 'UE-0001 rework adımı' })).toBeTruthy();
   });
 });
 
