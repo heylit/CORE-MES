@@ -329,6 +329,38 @@ test('havuz: geciken iş bugünün listesine düşer, plana alınınca o güne t
   assert.equal(kapali.bekleyen.includes(y.id), false);
 });
 
+test('931 b: onay işe onaylayanı, sonuç sonucu yazanı yazar; onay kaldırma, geri alma ve yeniden açma kişiyi siler', async () => {
+  const T = '2026-08-12';
+  await havuzuBosalt();
+  const [onaylayan, yazan] = await tx(async (db) => [
+    (await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Onaylayan') RETURNING id"))!.id,
+    (await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Sonuç') RETURNING id"))!.id,
+  ]);
+  const kisiler = (id: number) => tx((db) => db.tek<{ o: number | null; s: number | null }>(
+    'SELECT onaylayan_kisi_id AS o, sonuc_kisi_id AS s FROM sevkiyat_isi WHERE id = $1', [id]));
+  const x = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: a }));
+  const y = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: b }));
+  const p = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: null, rotalar: [{ aracId: k1, kilitli: false, ogeler: [{ isId: x.id, alis: false }, { isId: y.id, alis: false }] }] }, kaynak));
+  assert.deepEqual(await kisiler(x.id), { o: null, s: null }, 'taslak planda kişi yok');
+
+  const onayli = await tx((db) => servis.onayla(db, T, p.surum!, kaynak, onaylayan));
+  assert.deepEqual(await kisiler(x.id), { o: onaylayan, s: null });
+  const taslak = await tx((db) => servis.onayiKaldir(db, T, onayli.surum!, kaynak, onaylayan));
+  assert.deepEqual(await kisiler(x.id), { o: null, s: null }, 'onay kalkınca onaylayan silinir');
+  await tx((db) => servis.onayla(db, T, taslak.surum!, kaynak, onaylayan));
+
+  await tx((db) => servis.isDurumuDegistir(db, x.id, { durum: 'tamamlandi', tarih: T, not: null }, yazan));
+  assert.deepEqual(await kisiler(x.id), { o: onaylayan, s: yazan });
+  await tx((db) => servis.isDurumuDegistir(db, x.id, { durum: 'yolda', tarih: T, not: null }, onaylayan));
+  assert.deepEqual(await kisiler(x.id), { o: onaylayan, s: null }, 'geri alınan sonucun yazanı silinir');
+  await tx((db) => servis.isDurumuDegistir(db, x.id, { durum: 'tamamlandi', tarih: T, not: null }, yazan));
+  await tx((db) => servis.isDurumuDegistir(db, x.id, { durum: 'havuzda', tarih: T, not: null }, onaylayan));
+  assert.deepEqual(await kisiler(x.id), { o: null, s: null }, 'yeniden açılan iş onaylı planda değildir');
+
+  await tx((db) => servis.isDurumuDegistir(db, y.id, { durum: 'yapilamadi', tarih: T, not: 'Deneme notu' }, yazan));
+  assert.deepEqual(await kisiler(y.id), { o: null, s: yazan }, 'yapılamayan iş havuza döner, sonucu yazan kalır');
+});
+
 test('onaylı planda yalnız durağın sonucu yazılır (veritabanı)', async () => {
   const durak = await tx((db) => db.tek<{ planId: number; aracId: number; sira: number }>(
     `SELECT d.plan_id AS "planId", d.arac_id AS "aracId", d.sira FROM sevkiyat_plan_duragi d JOIN sevkiyat_plani p ON p.id = d.plan_id

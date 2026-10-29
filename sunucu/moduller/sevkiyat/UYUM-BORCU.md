@@ -11,7 +11,8 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 3. ~~Fabrika konumu iki yerde olabilir.~~ Kapandı (930 a): fabrikanın konumunun tek kaynağı Sistem Ayarları (`sevkiyat.fabrika-enlem`, `-boylam`).
    Fabrika noktasına elle konum yazılmaz: ekleme ve güncelleme konumu ayardan yazar; ayar boşken yeni fabrika açılmaz, eski kayıt konumunu korur.
    Ekranda fabrika formu konum alanı göstermez. Atölye (Fabrika Haritası, kart #599) bu kaynağı Aşama 2'de okur.
-4. Kişi sütunu yok: onay, sonuç ve iş yazan kişi yalnız çekirdek denetim kaydında. Karar 931 b: boş olabilen `onaylayan_kisi_id`, `sonuc_kisi_id` (göç okuma teyidi bekliyor).
+4. ~~Kişi sütunu yok.~~ Kapandı (931 b, göç `20261029113000`): boş olabilen `sevkiyat_isi.onaylayan_kisi_id` (planı onaylayan; onay kalkınca ya da iş havuza dönünce boş) ve
+   `sonuc_kisi_id` (tamamlandı ya da yapılamadı yazan; geri alma ve yeniden açmada boş). Eski işlerde ikisi boştur. Ekranda gösterilmesi Aşama 2'de.
 5. ~~Tekrar koruması yok.~~ Kapandı (kart #1323): nokta, araç ve iş açma, iş iptali ve durumu, plan onayı ve onay kaldırma, bekleme listesinde işe çevirme ve kaldırma `tekrarKorumali`; istemci aynı kimlikle yeniden dener.
    Güncelleme uçlarında sürüm denetimi de geldi (`surum` sütunu, göç `20261014203000`).
 6. ~~Harita verisi ortam değişkeninden: modül `process.env.TMIV2_HARITA_DIZINI`'yi doğrudan okur.~~ Kapandı: değişkeni çekirdek
