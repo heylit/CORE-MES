@@ -210,6 +210,8 @@ export const FASON_DONUS_ASIMI = 'Dönen toplam, gönderilen adedi aşar.';
 export const FASON_DONUSSUZ = 'Fasondan dönüş yazılmadan iş emri tamamlanmaz.';
 export const FASON_DISARIDA = 'Fasonda parça var; hepsi dönmeden iş emri tamamlanmaz.';
 export const TERMINAL_FASON = 'Fason iş emri operatörle başlamaz; gidiş ve dönüş kaydıyla ilerler.';
+export const FIRMA_HATALISI_GKK_DISI = 'Firmada hurda ve Firmadan gelmedi yalnız fason adımının arkasındaki GKK adımında girilir.';
+export const FIRMA_HATALISI_ASIMI = 'Firmada hurda ve firmadan gelmeyen toplamı, fasona gönderilen ile dönen arasındaki farkı aşamaz.';
 
 // Sıradaki iş emri bitmemiş ilk iş emridir (sıra numarasıyla); terminal ve plan bunu işler (UE-04, karar S2).
 export function siradakiIsEmri<T extends { sira: number; durum: IsEmriDurumu }>(isEmirleri: readonly T[]): T | null {
@@ -373,6 +375,8 @@ export interface FasonDurumu {
   donenHurda: number;
   // Fasona gidebilecek en çok adet: önceki iş emrinin sağlam adedi, ilk iş emriyse emir adedi.
   gonderilebilir: number;
+  // 1207 c: arkadaki GKK adımında Firmada hurda ya da Firmadan gelmedi diye hatalı sayılan; dönmemiş ama hesabı kapanmış adet.
+  firmadaHatali?: number;
 }
 
 function fasonOrtak(f: FasonDurumu): string | null {
@@ -386,17 +390,60 @@ export function fasonGidisIhlali(f: FasonDurumu, adet: number): string | null {
   return fasonOrtak(f) ?? (f.gonderilen + adet > f.gonderilebilir ? FASON_GIDIS_ASIMI : null);
 }
 
-// Dönen (sağlam + hurda) toplam gönderileni aşamaz.
+const hesabiKapanan = (f: FasonDurumu): number => f.donenSaglam + f.donenHurda + (f.firmadaHatali ?? 0);
+
+// Dönen (sağlam + hurda) ve GKK'da firmada kalmış sayılan toplam gönderileni aşamaz.
 export function fasonDonusIhlali(f: FasonDurumu, saglam: number, hurda: number): string | null {
-  return fasonOrtak(f) ?? (f.donenSaglam + f.donenHurda + saglam + hurda > f.gonderilen ? FASON_DONUS_ASIMI : null);
+  return fasonOrtak(f) ?? (hesabiKapanan(f) + saglam + hurda > f.gonderilen ? FASON_DONUS_ASIMI : null);
 }
 
-// Fason iş emri, gönderilenin hepsi dönünce tamamlanır; sağlam adedi dönen sağlamdır.
+// Fason iş emri, gönderilenin hepsinin hesabı kapanınca tamamlanır: dönen ya da GKK'da Firmada hurda veya Firmadan gelmedi sayılan
+// (1207 c). Sağlam adedi dönen sağlamdır.
 export function fasonTamamIhlali(f: FasonDurumu): string | null {
   const ortak = fasonOrtak(f);
   if (ortak !== null) return ortak;
-  if (f.donenSaglam + f.donenHurda === 0) return FASON_DONUSSUZ;
-  return f.donenSaglam + f.donenHurda < f.gonderilen ? FASON_DISARIDA : null;
+  if (hesabiKapanan(f) === 0) return FASON_DONUSSUZ;
+  return hesabiKapanan(f) < f.gonderilen ? FASON_DISARIDA : null;
+}
+
+// 1208: fason adımının hemen arkasında GKK adımı yoksa emre otomatik GKK girer. Yalnız bitmemiş fason adımına ve arkasındaki adım
+// başlamamışsa (başlamış adımın önüne girdi konmaz); op numarası iki adımın arasından, boş numara yoksa girmez (rota uyarısı görünür kalır).
+export const GKK_TIPI = 'GKK';
+export const OTOMATIK_GKK_ADI = 'GKK (otomatik)';
+export const OTOMATIK_GKK = 'Otomatik GKK';
+// Otomatik GKK rotada yoktur; rota emre yeniden uygulanırken bekleyeni kalkar ve yeniden konur (öteki ek adımlar uygulamayı durdurur).
+export const otomatikGkkMi = (i: { tur: string; ekAciklama: string | null }): boolean => i.tur === 'ek' && i.ekAciklama === OTOMATIK_GKK;
+export function gkkTipiSec<T extends { kod: string; grup: string; aktif: boolean }>(tipler: readonly T[]): T | null {
+  return tipler.find((t) => t.aktif && t.grup === 'KAL' && t.kod === GKK_TIPI) ?? null;
+}
+export function otomatikGkkYerleri(
+  adimlar: readonly { sira: number; opNo: number; operasyonTipiId: number; fasonFirmaId: number | null; durum: IsEmriDurumu }[], gkkTipiId: number,
+): { oncekiOpNo: number; opNo: number }[] {
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  const yerler: { oncekiOpNo: number; opNo: number }[] = [];
+  for (const [n, a] of sirali.entries()) {
+    if (a.fasonFirmaId === null || a.durum === 'tamam') continue;
+    const sonraki = sirali[n + 1];
+    if (sonraki !== undefined && (sonraki.operasyonTipiId === gkkTipiId || sonraki.durum !== 'bekliyor')) continue;
+    const op = araOpNolari(a.opNo, sonraki?.opNo ?? null, 1)?.[0];
+    if (op !== undefined) yerler.push({ oncekiOpNo: a.opNo, opNo: op });
+  }
+  return yerler;
+}
+
+// GKK adımı fason adımının hemen arkasındaki GKK tipli adımdır; girdisi fasona gönderilendir, dönen değil (1207 c). Fason adımı döner.
+export function gkkFasonu<T extends { sira: number; operasyonTipiId: number; fasonFirmaId: number | null }>(
+  adimlar: readonly T[], adim: { sira: number; operasyonTipiId: number }, gkkTipiId: number | null,
+): T | null {
+  if (gkkTipiId === null || adim.operasyonTipiId !== gkkTipiId) return null;
+  const onceki = adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0];
+  return onceki !== undefined && onceki.fasonFirmaId !== null ? onceki : null;
+}
+
+// 1207 c: Firmada hurda ve Firmadan gelmedi yalnız GKK adımında, gönderilen eksi dönen kadar girilir.
+export function firmaHatalisiIhlali(gkk: { gonderilen: number; donen: number; firmadaHatali: number } | null, adet: number): string | null {
+  if (gkk === null) return FIRMA_HATALISI_GKK_DISI;
+  return gkk.firmadaHatali + adet > gkk.gonderilen - gkk.donen ? FIRMA_HATALISI_ASIMI : null;
 }
 
 export type IsEmriPlani = { koru: number[]; guncelle: number[]; sil: number[]; ekle: number[]; sira: number[] };
@@ -837,11 +884,15 @@ const GUN_MS = 24 * 60 * 60_000;
 // Sıradan geriye, ilk iç adıma kadar bitmemiş fason adımların süresi: termin, yoksa tahmin, yoksa FASON_VARSAYILAN_GUN. Gönderilmiş
 // (başlamış) fason adımda termin ilk gidişten sayılır: geçen gün düşülür, termini geçmiş adım beklemez (0). simdi verilmezse düşülmez.
 export function fasonBeklemesi(
-  emrinIsEmirleri: readonly { sira: number; fasonFirmaId: number | null; terminGun: number | null; durum: string; baslama?: string | null }[], sira: number,
+  emrinIsEmirleri: readonly {
+    sira: number; fasonFirmaId: number | null; terminGun: number | null; durum: string; baslama?: string | null; tur?: string; ekAciklama?: string | null;
+  }[], sira: number,
   tahmin: (x: { sira: number; fasonFirmaId: number }) => number | null = () => null, simdi?: number,
 ): number {
   let gun = 0;
   for (const x of [...emrinIsEmirleri].filter((y) => y.sira < sira).sort((a, b) => b.sira - a.sira)) {
+    // Otomatik GKK plana girmez (süresiz, kaynaksız): fasonun beklemesi arkasındaki adıma geçer.
+    if (x.tur !== undefined && otomatikGkkMi({ tur: x.tur, ekAciklama: x.ekAciklama ?? null })) continue;
     if (x.fasonFirmaId === null) break;
     if (x.durum === 'tamam') continue;
     const sure = x.terminGun ?? tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId }) ?? FASON_VARSAYILAN_GUN;
@@ -1078,6 +1129,11 @@ export const HATALI_KALITE_ADIMI = 'Bu adım kalite kararıyla kapanır; kararı
 export const HATALI_KAYIT_YOK = 'Hatalı parça kaydı bulunamadı.';
 export const HATALI_KARAR_VERILMIS = 'Bu hatalı parçanın kalite kararı verilmiş.';
 export const HATALI_KALITE_BASLAMIS = 'Kalite adımı başka yoldan başlamış ya da kalkmış; karar yazılamaz.';
+export const SARTLI_KABUL_NOTSUZ = 'Şartlı kabulde şartı not olarak yazın.';
+// 1211: kabul ve şartlı kabul parçayı olduğu gibi ana partiye katar (rework ve tekrar adımları kalkar); şartlı kabulde şart notu zorunludur.
+export const kabulKarariMi = (karar: string): boolean => karar === 'kabul' || karar === 'sartli_kabul';
+export const hataliKararNotuIhlali = (karar: string, not: string | null): string | null =>
+  karar === 'sartli_kabul' && (not === null || not.trim() === '') ? SARTLI_KABUL_NOTSUZ : null;
 export const REWORK_KARARSIZ = 'Rework adımı yalnız kalite rework kararı verdikten sonra seçilir.';
 export const REWORK_BASLAMIS = 'Rework adımı başlamış ya da bitmiş; değiştirilemez.';
 
@@ -1090,9 +1146,9 @@ export function kaliteTipiSec<T extends { kod: string; grup: string; aktif: bool
 
 // Kalite adımının istasyonu: tipin varsayılan istasyonu kalite istasyonuysa o, değilse ilk aktif kalite istasyonu, o da yoksa hatanın
 // görüldüğü istasyon (karar yine Kalite Merkezi'nden yazılır; adım yalnız bir istasyonda görünür).
-export function kaliteIstasyonuSec(
-  tip: { varsayilanIstasyonId: number | null }, istasyonlar: readonly { id: number; tip: string; aktif: boolean }[], hataIstasyonu: number,
-): number {
+export function kaliteIstasyonuSec<H extends number | null>(
+  tip: { varsayilanIstasyonId: number | null }, istasyonlar: readonly { id: number; tip: string; aktif: boolean }[], hataIstasyonu: H,
+): number | H {
   const kalite = istasyonlar.filter((i) => i.aktif && i.tip === 'kalite');
   return kalite.find((i) => i.id === tip.varsayilanIstasyonId)?.id ?? kalite[0]?.id ?? hataIstasyonu;
 }

@@ -3,19 +3,19 @@ import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { HataliCevabi, HataliKaydi, HataliKaydiOzeti, HataliKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
+import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aktifIstasyonlar, isMerkeziIzinliMi, istasyonGetir, kisininIzinliIsMerkezleri, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { baslatmaDenetle } from './baslatma-denetimi.ts';
 import { emirBittiBildir } from './emir-olaylari.ts';
 import {
-  adimlariKoy, bekleyeniSil, bolmeDurumu, kilitliEmriBol, kolSonuysaKatil, siradakiIstasyonuYaz, ustuOnceKilitle,
+  adimlariKoy, bekleyeniSil, bolmeDurumu, gkkHesabi, kilitliEmriBol, kolSonuysaKatil, siradakiIstasyonuYaz, ustuOnceKilitle,
 } from './is-emri-servis.ts';
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
-  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
+  ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, FIRMA_HATALISI_GKK_DISI, firmaHatalisiIhlali, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
   HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
-  hataliKarariIhlali, hataliYolu, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
+  hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { emirBitir } from './servis.ts';
@@ -58,7 +58,7 @@ async function kapsamDenetle(db: Db, kisiId: number, istasyonId: number): Promis
 // 1034, 1036 a, 4 a: operatör hatalı nedeni ve adedi verir. Adet çalışan adımdan kola ayrılır (kalite kararı, rework, adımın tekrarı;
 // kol sonraki adımda ana partiye katılır). Adımdaki bütün parça hatalıysa emir bölünemez: aynı adımlar ve tekrar hatalı adımın arkasına
 // girer, hatalı adım sağlamsız biter. 1188: hatalı giriş adımda üretimdir ve adımın girdisini tüketir (adimTuketimi); sağlam sayılmaz,
-// kaydı hatalı parça kaydındadır.
+// kaydı hatalı parça kaydındadır. 1207 c: Firmada hurda ve Firmadan gelmedi yalnız GKK adımında, dönmeyen adet kadar girer.
 export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: HataliKaydi): Promise<HataliCevabi> {
   await ustuOnceKilitle(db, emirId);
   const e = await s.ustEmirBul(db, emirId, true);
@@ -73,6 +73,11 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
   if (calisma !== null) throw cakisma(calisma);
   const neden = (await hurdaNedenleriniListele(db, { yalnizAktif: true })).find((n) => n.kod === g.hurdaNedeniKodu) ?? null;
   if (neden === null) throw dogrulama(HATALI_NEDEN_YOK, 'hurdaNedeniKodu');
+  if (SABIT_HURDA_KODLARI.includes(neden.kod)) {
+    const firma = firmaHatalisiIhlali(await gkkHesabi(db, hepsi, adim), g.adet);
+    if (firma === FIRMA_HATALISI_GKK_DISI) throw dogrulama(firma, 'hurdaNedeniKodu');
+    if (firma !== null) throw cakisma(firma);
+  }
   const durum = await bolmeDurumu(db, e, hepsi, adim.sira);
   const ihlal = hataliIhlali(durum, adim.sira, g.adet, e.kaynakRotaRevizyonId !== null);
   if (ihlal === HATALI_ADET) throw dogrulama(ihlal, 'adet');
@@ -122,6 +127,8 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
 // 1034, 1038 a: kalite kararı Kalite Merkezi'nin formundan gelir (uç orada, işlemi burada da aranır). Karar kalite adımını kapatır:
 // rework parçayı sağlam geçirir, rework adımı planlamayı bekler; hurda ve red parçayı ayırır, rework ve tekrar adımları kalkar.
 // Kol böylece adımsız kalırsa üstüne katılır (planlı birleşme) ya da sağlamsız biter. Red stok olayı vermez: parça kalite kaydında kalır.
+// 1211: kabul ve şartlı kabul parçayı sağlam geçirir ve rework ile tekrar adımlarını kaldırır: kol ana partiye katılır, emirde parça
+// sıradaki adıma girer. Şartlı kabulde sağlam stokta şartlı yazılır.
 export async function hataliKarariVer(
   db: Db, kullanici: Kullanici, kayitId: number, g: { karar: HataliKarari; not: string | null; ncrKimlik: string | null },
 ): Promise<{ kayit: HataliKaydiOzeti; uyari: string | null }> {
@@ -135,6 +142,9 @@ export async function hataliKarariVer(
   const kalite = await s.isEmriBul(db, kayit.kaliteIsEmriId);
   const ihlal = hataliKarariIhlali(kayit, kalite, hedef);
   if (ihlal !== null || kalite === null || hedef === null) throw cakisma(ihlal ?? HATALI_KAYIT_YOK);
+  const notIhlali = hataliKararNotuIhlali(g.karar, g.not);
+  if (notIhlali !== null) throw dogrulama(notIhlali, 'not');
+  const saglamGecer = g.karar === 'rework' || kabulKarariMi(g.karar);
   const istasyonId = kalite.istasyonId ?? (await s.isEmriBul(db, kayit.isEmriId))?.istasyonId;
   if (istasyonId == null) throw cakisma(ISTASYONSUZ_ADIM);
   const an = await s.anAl(db);
@@ -142,9 +152,12 @@ export async function hataliKarariVer(
   const sayim = { emirId: hedef.id, kisiId, istasyonId, adet: kayit.adet, duzeltme: false, an, refakatPartisiId: null, isEmriId: kalite.id };
   await s.isEmriBaslat(db, kalite.id, an);
   let uyari: string | null = null;
-  if (g.karar === 'rework') {
+  if (saglamGecer) {
     await s.sayimEkle(db, { ...sayim, tur: 'saglam', hurdaNedeniId: null });
-    uyari = await saglamSayimiBildir(db, { uretimEmriId: hedef.id, isEmriId: kalite.id, istasyonId, kisiId, fark: kayit.adet, refakatPartisiId: null });
+    uyari = await saglamSayimiBildir(db, {
+      uretimEmriId: hedef.id, isEmriId: kalite.id, istasyonId, kisiId, fark: kayit.adet, refakatPartisiId: null,
+      kaliteDurumu: g.karar === 'sartli_kabul' ? 'sartli' : 'serbest',
+    });
   } else if (g.karar === 'hurda') {
     await s.sayimEkle(db, { ...sayim, tur: 'hurda', hurdaNedeniId: kayit.hurdaNedeniId });
     uyari = await hurdaSayimiBildir(db, {
@@ -153,16 +166,19 @@ export async function hataliKarariVer(
   } else {
     await s.sayimEkle(db, { ...sayim, tur: 'red', hurdaNedeniId: null });
   }
-  await s.isEmriBitir(db, kalite.id, g.karar === 'rework' ? kayit.adet : 0, an);
+  await s.isEmriBitir(db, kalite.id, saglamGecer ? kayit.adet : 0, an);
   await s.hataliKarariYaz(db, kayit.id, { karar: g.karar, kisiId, an, not: g.not, ncrKimlik: g.ncrKimlik });
-  if (g.karar !== 'rework') uyari = [uyari, await ayrilaniKapat(db, kayit, hedef.id, kisiId, an)].filter((u) => u !== null).join(' ') || null;
+  if (g.karar !== 'rework') {
+    uyari = [uyari, await ayrilaniKapat(db, kayit, hedef.id, kisiId, an, !saglamGecer)].filter((u) => u !== null).join(' ') || null;
+  }
   else await siradakiIstasyonuYaz(db, hedef.id);
   const [ozet] = await ozetle(db, [(await s.hataliKaydiBul(db, kayit.id))!]);
   return { kayit: ozet!, uyari };
 }
 
-// Hurda ve red: kolda kalite adımından sonraki bekleyen adımlar, emirde rework ve tekrar adımları kalkar.
-async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, kisiId: number, an: string): Promise<string | null> {
+// Hurda, red, kabul ve şartlı kabul: kolda kalite adımından sonraki bekleyen adımlar, emirde rework ve tekrar adımları kalkar. durur:
+// parça ayrıldı (hurda, red), emir sağlamsız kalabilir; kabulde parça sağlam geçtiği için emir durmaz.
+async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, kisiId: number, an: string, durur: boolean): Promise<string | null> {
   const kolda = hedefId !== kayit.uretimEmriId;
   const kalkan = kolda
     ? (await s.isEmirleriGetir(db, [hedefId])).filter((i) => i.durum === 'bekliyor').map((i) => i.id)
@@ -172,7 +188,7 @@ async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, 
   for (const [n, i] of [...kalan].sort((a, b) => a.sira - b.sira).entries()) if (i.sira !== n + 1) await s.isEmriSirasiYaz(db, i.id, n + 1);
   if (siradakiIsEmri(kalan) !== null) {
     await siradakiIstasyonuYaz(db, hedefId);
-    return kolda ? null : HATALI_EMIR_DURDU;
+    return kolda || !durur ? null : HATALI_EMIR_DURDU;
   }
   const e = await s.ustEmirBul(db, hedefId);
   if (e === null) throw bulunamadi(EMIR_YOK);
@@ -180,7 +196,7 @@ async function ayrilaniKapat(db: Db, kayit: HataliKaydiSatiri, hedefId: number, 
   const son = [...kalan].sort((a, b) => b.sira - a.sira)[0];
   await s.fasonlaBitir(db, hedefId, son?.saglamAdet ?? 0, an);
   await emirBittiBildir(db, { uretimEmriId: hedefId, saglamAdet: son?.saglamAdet ?? 0, kisiId });
-  return kolda ? null : HATALI_EMIR_DURDU;
+  return kolda || !durur ? null : HATALI_EMIR_DURDU;
 }
 
 async function ozetle(db: Db, satirlar: readonly HataliKaydiSatiri[]): Promise<HataliKaydiOzeti[]> {

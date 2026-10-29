@@ -6,6 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { adimliAyrinti } from './is-emri-servis.ts';
+import { OTOMATIK_GKK_ADI } from './kurallar.ts';
 
 // Yalnız bu modülün gerektirdiği zincir yüklenir; başka modüllerin örnek verisi bu testin konusu değildir.
 async function zincir(modul: string): Promise<OrnekVeriTanimi[]> {
@@ -50,8 +51,9 @@ describe('uretim-emirleri: örnek veri (gerçek PostgreSQL)', () => {
     assert.deepEqual([mil.durum, mil.adet, mil.isEmirleri.map((i) => [i.durum, i.saglamAdet])], ['bitti', 20, [['tamam', 20], ['tamam', 20]]]);
     const flans = await emri('flans');
     assert.equal(flans.durum, 'basladi');
-    assert.deepEqual(flans.isEmirleri.map((i) => i.durum), ['tamam', 'calisiyor', 'bekliyor', 'bekliyor']);
+    assert.deepEqual(flans.isEmirleri.map((i) => i.durum), ['tamam', 'calisiyor', 'bekliyor', 'bekliyor', 'bekliyor']);
     assert.equal(flans.isEmirleri[2]?.fason !== null, true, 'Flanş ısıl işlem adımı fason');
+    assert.equal(flans.isEmirleri[3]?.ad, OTOMATIK_GKK_ADI, '1208: fason arkasına otomatik GKK girer (örnek veride kalite istasyonu var)');
     const burc = await emri('burc');
     assert.deepEqual([burc.durum, burc.adet, burc.isEmirleri.length], ['planli', 30, 2]);
     assert.ok([mil, flans, burc].every((e) => e.kaynakRotaRevizyonId !== null));

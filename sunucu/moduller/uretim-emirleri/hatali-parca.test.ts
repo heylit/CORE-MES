@@ -20,7 +20,7 @@ import type { IsEmriGirdisi } from './disari.ts';
 import { hataliKarariVer } from './hatali-parca.ts';
 import { reworkAdimiYaz } from './is-emri-servis.ts';
 import {
-  ADIM_ACIK_DEGIL, HATALI_ADET, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KARAR_VERILMIS, HATALI_NEDEN_YOK, REWORK_KARARSIZ,
+  ADIM_ACIK_DEGIL, HATALI_ADET, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KARAR_VERILMIS, HATALI_NEDEN_YOK, REWORK_KARARSIZ, SARTLI_KABUL_NOTSUZ,
 } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -242,6 +242,29 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     assert.equal((await ayrinti(id)).hataliDurdu, true, '1064: ayrıntı durmayı gösterir');
     const red_ = await o().sahip.tek<{ adet: number }>("SELECT sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'red'", [id]);
     assert.equal(red_?.adet, 1);
+  });
+
+  test('1211: kabul kararında kol sağlamıyla üste katılır; şartlı kabul not ister, emirde rework ve tekrar kalkar, emir durmaz', async () => {
+    const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
+    const { id } = await ikinciAdimda(10, [a.makine, b.makine, c.makine]);
+    const h = hataliCevabi.parse((await hatali(id, { hurdaNedeniKodu: 'HP-TK', adet: 2 })).govde);
+    const kabul = await tx((db) => hataliKarariVer(db, yonetici, h.kayitId, { karar: 'kabul', not: null, ncrKimlik: null }));
+    assert.equal(kabul.kayit.karar, 'kabul');
+    const kol = await o().sahip.tek<{ durum: string; birlesti: number | null }>('SELECT durum, birlestigi_emir_id AS birlesti FROM uretim_emri WHERE id = $1', [h.hedefEmir.id]);
+    assert.equal(kol?.birlesti, id);
+    assert.deepEqual((await adimlari(h.hedefEmir.id)).map((x) => [x.op, x.durum, x.saglam]), [[15, 'tamam', 2]]);
+
+    const [d, e] = [await istasyon(), await istasyon()];
+    const tek = await ac(1, [d.makine, e.makine]);
+    await tx((db) => emirBaslat(db, op(), tek.id));
+    const h2 = hataliCevabi.parse((await hatali(tek.id, { isEmriId: tek.adimlar[0], hurdaNedeniKodu: 'HP-TK', adet: 1 })).govde);
+    await red(tx((db) => hataliKarariVer(db, yonetici, h2.kayitId, { karar: 'sartli_kabul', not: null, ncrKimlik: null })), SARTLI_KABUL_NOTSUZ);
+    const sartli = await tx((db) => hataliKarariVer(db, yonetici, h2.kayitId, { karar: 'sartli_kabul', not: 'Çapak alınarak kullanılır', ncrKimlik: null }));
+    assert.equal(sartli.uyari, null);
+    assert.deepEqual((await adimlari(tek.id)).map((x) => [x.op, x.durum, x.saglam]), [[10, 'tamam', 0], [15, 'tamam', 1], [20, 'bekliyor', null]]);
+    const ie20 = (await adimlari(tek.id))[2]!.id;
+    await tx((db) => emirBaslat(db, op(), tek.id, [e.makine], undefined, ie20));
+    assert.equal((await ayrinti(tek.id)).hataliDurdu, false);
   });
 
   test('1188: bütün parçası hatalı adım girdisini tüketir; eksik kalmaz, hatalı kaydı kararla sürer', async () => {

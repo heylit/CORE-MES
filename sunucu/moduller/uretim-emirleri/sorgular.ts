@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
-import type { EmirDurumu, EmirKaydi, EmirTuru, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { EmirDurumu, EmirKaydi, EmirTuru, HataliKarari, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -2236,6 +2236,16 @@ export function hataliKaydiBul(db: Db, id: number, kilit = false): Promise<Hatal
 export const HATALI_LISTE_SINIRI = 500;
 
 // Açık kayıtlar (kararsız) eskiden yeniye; bütün kayıtlar yeniden eskiye, sınırlı. Emir verilirse o emrin ya da onu taşıyan kolun kaydı.
+// 1207 c: GKK adımında verilen nedenlerle (Firmada hurda, Firmadan gelmedi) yazılmış hatalı adet; kararından bağımsız.
+export async function adimHataliAdedi(db: Db, isEmriId: number, nedenIdleri: readonly number[]): Promise<number> {
+  if (nedenIdleri.length === 0) return 0;
+  const satir = await db.tek<{ adet: number }>(
+    `SELECT COALESCE(sum(adet), 0)::int AS adet FROM uretim_emirleri_hatali_kaydi WHERE is_emri_id = $1 AND hurda_nedeni_id = ANY($2::int[])`,
+    [isEmriId, [...nedenIdleri]],
+  );
+  return satir?.adet ?? 0;
+}
+
 export function hataliKayitlariGetir(db: Db, s: { acik: boolean; emirId: number | null }): Promise<HataliKaydiSatiri[]> {
   return db.sorgu<HataliKaydiSatiri>(
     `SELECT ${HATALI} FROM ${HATALI_KAYNAK}
@@ -2247,7 +2257,7 @@ export function hataliKayitlariGetir(db: Db, s: { acik: boolean; emirId: number 
 }
 
 export function hataliKarariYaz(
-  db: Db, id: number, k: { karar: 'rework' | 'hurda' | 'red'; kisiId: number; an: string; not: string | null; ncrKimlik: string | null },
+  db: Db, id: number, k: { karar: HataliKarari; kisiId: number; an: string; not: string | null; ncrKimlik: string | null },
 ): Promise<unknown> {
   return db.sorgu(
     `UPDATE uretim_emirleri_hatali_kaydi
