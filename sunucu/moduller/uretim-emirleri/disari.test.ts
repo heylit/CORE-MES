@@ -25,7 +25,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
   let yoneticiId = 0;
   let operator: Kullanici;
   let kisitli: Kullanici;
-  let kaliteci: Kullanici;
+  let depocu: Kullanici;
   let durusId = 0;
   let sayac = 0;
 
@@ -92,7 +92,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: 'dogru-parola-1' }));
     operator = await kisiEkle('operator', 'operator');
     kisitli = await kisiEkle('kisitli', 'operator');
-    kaliteci = await kisiEkle('kaliteci', 'kalite');
+    depocu = await kisiEkle('depocu', 'depo');
     durusId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('DT-D1', 'Deneme duruşu', 'plansiz', 901) RETURNING id",
     ))!.id;
@@ -251,8 +251,8 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     assert.deepEqual(komutUclari.map((u) => [u.yol, u.yetki]), [['/uretim-emirleri/:id/duraklat', KOMUT_ISLEMI]]);
     // Yükleyici gerçekten ayırıyor: yoksa aşağıdaki retler boş listeden doğardı.
     assert.equal(operator.islemler.includes(KOMUT_ISLEMI), true);
-    assert.equal(kaliteci.islemler.includes(KOMUT_ISLEMI), false);
-    assert.equal(kaliteci.islemler.length > 0, true);
+    assert.equal(depocu.islemler.includes(KOMUT_ISLEMI), false);
+    assert.equal(depocu.islemler.length > 0, true);
 
     const emir = await planliEmir();
     const adimlar: [string, (db: Db, kim: Kullanici) => Promise<unknown>][] = [
@@ -265,7 +265,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     ];
     for (const [ad, komut] of adimlar) {
       const once = await yazilar(emir.id);
-      const hata = await reddi(vt().tx((db) => komut(db, kaliteci)));
+      const hata = await reddi(vt().tx((db) => komut(db, depocu)));
       assert.equal(hata.kod, 'YETKI_YOK', ad);
       // Kapsam reddi değil: kişinin iş merkezi kısıtı yok, eksik olan işlemdir.
       assert.notEqual(hata.message, KAPSAM_DISI, ad);

@@ -423,6 +423,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.kalite?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-kalite');
   MATRIS.mudur?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay');
   MATRIS.planlama_proje?.push('uretim-emirleri.kapanis-oku');
+  // GKK kalite istasyonunun operasyonudur, terminalden girilir (1209 b, 29.10.2026): kalite terminalde sayar.
+  MATRIS.kalite?.push('terminal.uret');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 
@@ -520,7 +522,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       mudur: { yaz: 200, uret: 200, kopya: 200 },
       planlama_proje: { yaz: 200, uret: 403, kopya: 200 },
       operator: { yaz: 403, uret: 200, kopya: 403 },
-      kalite: { yaz: 403, uret: 403, kopya: 403 },
+      kalite: { yaz: 403, uret: 200, kopya: 403 },
       cam: { yaz: 403, uret: 403, kopya: 403 },
     };
     try {
