@@ -2964,3 +2964,11 @@ export function kuyrukAlanlariniEkle(
   const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
   return { ...govde, tmi: { ...tmi, ...(ek.kuyruk ? { kuyruk: ek.kuyruk } : {}), ...(ek.planSaati ? { planSaati: ek.planSaati } : {}) } };
 }
+
+// 639h (847 b): adım önceki adımın teslim etmediği parçayı saydıysa (uretim-emirleri `eksik` eksi, 647 a) fazla sayılan adet paketin
+// `tmi.eksi` alanına yazılır; operatör kartı bunu gösterir. Artı (henüz işlenmemiş) ya da bilinmeyen eksik alan yazmaz.
+export function eksiAlaniniEkle(govde: Record<string, unknown>, eksik: number | null | undefined): Record<string, unknown> {
+  if (typeof eksik !== 'number' || !Number.isSafeInteger(eksik) || eksik >= 0) return govde;
+  const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
+  return { ...govde, tmi: { ...tmi, eksi: -eksik } };
+}

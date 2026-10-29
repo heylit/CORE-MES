@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Dugme, Orb, OrbGrubu, Simge, type MakineDurumu } from '../../../../ortak/arayuz/index.ts';
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
 import { bitenleriAyir } from '../../../../../../arkon/web/src/data/biten-is.ts';
+import { eksiBakiye, eksiBakiyeMetni } from '../../../../../../arkon/web/src/data/eksi-bakiye.ts';
 import { siraAnahtari } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
 import { numuneSeridi, type SeritDurumu, type SeritGirdisi, type SeritIlerlemesi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
@@ -204,6 +205,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
     const liste = kartla && o.state !== 'done' ? istasyondakiKartlar(kartlar, tmiEmirId(o.pkg)) : [];
     const at = adimTuru(o.pkg);
     const pe = parcaEtiketi(o.pkg);
+    const eksi = o.state !== 'done' ? eksiBakiye(o.pkg) : null;
     const dugme = (
       <button key={siraAnahtari(o)} type="button" className="tc-ay1-is" data-durum={durumRengi(o.state)} aria-pressed={i === aktif} onClick={() => sec(i)}>
         <MiniHalka oran={o.target > 0 ? o.good / o.target : 0} />
@@ -217,6 +219,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
             <span className="tc-ay1-cip" data-durum={durumRengi(o.state)}><i aria-hidden="true" />{durumAdi(o.state)}</span>
             {siraAnahtari(o) === siradaki ? <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />Sıradaki · hazırlık {hazirlikSayisi(o)}/4</span> : null}
             {siraAnahtari(o) === onde ? <span className="tc-ay1-cip" data-durum="ayar"><i aria-hidden="true" />Öne alındı</span> : null}
+            {eksi !== null ? <span className="tc-ay1-cip" data-durum="durdu"><i aria-hidden="true" />{eksiBakiyeMetni(eksi)}</span> : null}
           </span>
         </span>
       </button>

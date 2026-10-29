@@ -2402,12 +2402,17 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(sayim.durum, 200);
     assert.equal((await yansima(erkenSayim.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(erkenSayim.cid)));
     assert.match(uyarisi(sayim, erkenSayim.cid), /2 fazla \(OP 20\)/);
+    // 639h: fazla sayan adımın paketi eksi bakiyeyi taşır; ilk adımınki taşımaz.
+    const eksi = async (ie: number) => ((await paketOku(ieKimligi(ie)))?.govde['tmi'] as { eksi?: number } | undefined)?.eksi;
+    assert.equal(await eksi(ie2!), 2);
+    assert.equal(await eksi(ie1!), undefined);
     // İlk adım kendi paketiyle başlar ve sayar; ikinci adım ilk adım bitmeden bitmez (649 a).
     for (const [tur, satir] of [['events', ieOlay(ie1!, 'running', { machine: r.ilk })], ['counts', ieSayim(ie1!, 'good', 3, { machine: r.ilk })]] as const) {
       assert.equal((await ekle(operator, tur, satir)).durum, 200);
       assert.equal((await yansima(satir.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(satir.cid)));
     }
     await ilkParcaOnay(r.emirId);
+    assert.equal(await eksi(ie2!), undefined, 'önceki adım teslim edince eksi bakiye kapanır');
     // İki açık adım: ilk adımın paketiyle duraklatma yalnız o adımı duraklatır, ikinci adım sürer; devam yine kendi adımına gider.
     const durak = ieOlay(ie1!, 'paused', { machine: r.ilk });
     assert.equal((await ekle(operator, 'events', durak)).durum, 200);

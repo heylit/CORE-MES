@@ -918,3 +918,14 @@ Bu tur şunları varsaydı:
 1. Bütün Arkon dosyaları tek kayda ('depo') bağlanır; belge başına bağ yoktur, okuma kuralı belge taramasıyla kalır.
 2. Öneri yalnız dosyası olmayan kayıtsız taslağa gelir; şablondan dosya almış ya da kaydedilmiş paket değişmez.
 3. Kendiliğinden alma yalnız `pkg.edit` yetkisi olan kişide çalışır; yetkisizde istek gitmez.
+
+## Paralel adım: operatör kartında eksi bakiye (kart 639h; kararlar 847 b, 647 a, 654 a)
+- Sunucu iş emri paketinin `tmi` alanına adımın eksi bakiyesini yazar: uretim-emirleri açık adımın `eksik` alanı eksiyse (adım önceki adımın teslim etmediği parçayı saydı) fazla sayılan adet `tmi.eksi` olur (`kurallar.ts eksiAlaniniEkle`, `servis.ts isEmriTaslaklari`). Alan TMI alanıdır, istemciden alınmaz; değişince paketin sürümü değişir ve ekran paketi yeniden alır.
+- Operatör ekranının iş kuyruğunda (`yeni/operator/Parcalar.tsx IsKuyrugu`) açık işin kartında "Eksi bakiye · N fazla sayıldı" çipi çıkar (`arkon/web/src/data/eksi-bakiye.ts`). Biten işte çıkmaz.
+- Göç, uç, işlem ve rol değişmedi. Bitişteki eksi bakiye uyarısı (654 a) aynen kalır.
+
+Bu tur şunları varsaydı:
+1. Gösterge yalnız eksi (fazla sayılan) adımda çıkar; artı (adıma gelmiş, işlenmemiş) adet gösterilmez.
+2. Gösterge fazla sayan adımın kartındadır; önceki adımın kartında ayrıca gösterilmez.
+3. Eksik yalnız çalışan (açık) adımda okunur; partili ya da kol emirde uretim-emirleri `eksik` vermediği için gösterge çıkmaz. Bölünmüş işin parçaları adımın değerini taşır.
+4. Metin bitiş uyarısının (654 a) diliyle aynıdır; renk durdu (kırmızı) tonudur.
