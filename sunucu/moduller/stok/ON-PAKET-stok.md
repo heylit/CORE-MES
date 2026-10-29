@@ -244,7 +244,7 @@ Okuma GET kaynak, yazma POST komut. Kaynak `sunucu/moduller/stok/uclar.ts` (DOĞ
 | `stok.statu-degistir` (3) | POST | `/stok/rezerve-et`, `/stok/rezerve-kaldir`, `/stok/statu-degistir` |
 | `stok.tanim` (13) | POST | `/stok/konumlar`, `/stok/konumlar/:id/duzenle`, `/stok/konumlar/:id/pasif-yap`, `/stok/konumlar/haritadan-esle`, `/stok/raflar`, `/stok/raflar/:id/duzenle`, `/stok/raflar/:id/pasif-yap`, `/stok/malzemeler/:id/ayar-duzenle`, `/stok/harita-bolumleri/:id/depo`, `/stok/depo-bolumleri/:id/raflari-kaydet`, `/stok/depo-goz-kalemleri/yaz`, `/stok/depo-goz-kalemleri/sil`, `/stok/yerlesim/kaydet` |
 | `stok.istek` (9 + 8) | GET | `/stok/teslim-kutusu`, `/stok/teslim-kutusu/sayac`, `/stok/teslim-kutusu/yerdeki-stok`, `/stok/teslim-kutusu/kod-coz`, `/stok/teslim-kutusu/kisi-kodu`, `/stok/teslim-kutusu/sepet`, `/stok/teslim-kutusu/sepet/gelecek`, `/stok/teslim-kutusu/is-malzemeleri`, `/stok/istek-malzemeleri` |
-| | POST | `/stok/teslim-kutusu/is-malzemeleri/iste`, `/stok/teslim-kutusu/sepet/cek`, `/stok/teslim-kutusu/sepet/kullan`, `/stok/malzeme-istekleri/ac`, `/stok/teslimler/gonder`, `/stok/teslimler/:id/teslim-al`, `/stok/teslimler/:id/reddet`, `/stok/teslimler/:id/iptal-et` |
+| | POST | `/stok/teslim-kutusu/is-malzemeleri/iste`, `/stok/teslim-kutusu/sepet/cek`, `/stok/malzeme-istekleri/ac`, `/stok/teslimler/gonder`, `/stok/teslimler/:id/teslim-al`, `/stok/teslimler/:id/reddet`, `/stok/teslimler/:id/iptal-et` |
 | `terminal.uret` (1) | POST | `/stok/uretim-hazirligi` |
 
 Yol önekinin `/stok/` olması VARSAYIMdır (modül adı; maliyet düşük, yalnız sözleşme metni). Kodda bulunmayan yollar: `/stok/yerlesim/duzenle` (yerine `kaydet`; `kare-adi` borç #441 ile kaldırıldı),

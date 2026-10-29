@@ -270,17 +270,13 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')[1]?.govde).toMatchObject({ malzemeId: 902, kaynakKonumId: 11 }));
   });
 
-  it('sepet: uretimde kullan secilen emre miktarla sarf yazar', async () => {
-    const istekler = ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET), 'POST /stok/teslim-kutusu/sepet/kullan': () => json(200, { hareketIdler: [5], onayliEksi: false }) }, KUTU_ISTASYONLU);
+  it('sepet: elle sarf yok, sarf yalniz sayimdan duser (896 a)', async () => {
+    ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
     fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
     const satir = within(await screen.findByRole('list', { name: /sepeti$/ })).getByText(/Deneme cubuk/).closest('li')!;
-    fireEvent.click(within(satir).getByRole('button', { name: 'Üretimde kullan' }));
-    fireEvent.change(within(satir).getByLabelText('Kullanılan miktar'), { target: { value: '2,5' } });
-    fireEvent.click(within(satir).getByRole('button', { name: 'Kullan' }));
-    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({
-      istasyonId: 2, malzemeId: 902, partiId: 8, statuId: null, miktar: '2.5', uretimEmriId: 70,
-    }));
+    expect(within(satir).queryByRole('button', { name: 'Üretimde kullan' })).toBeNull();
+    expect(within(satir).queryByLabelText('Kullanılan miktar')).toBeNull();
   });
 
   it('teslim et: satir secilince rotadaki sonraki istasyon hedefe yazilir; haritadan kare konumu secilir', async () => {

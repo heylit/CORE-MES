@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { api } from '../../ortak/veri/api.ts';
 import type {
-  GelecekSepetCevabi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, SepettenCekGovdesi, SepettenKullanGovdesi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimReddetGovdesi,
+  GelecekSepetCevabi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, SepettenCekGovdesi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimReddetGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Girdi, Secim } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi } from '../../ortak/arayuz/index.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
 import { korumaliPost, useStokKomutu } from './ortak.tsx';
@@ -77,13 +77,10 @@ export const SONRAKI_YOK: Record<NonNullable<IstasyonSepetiSatiri['sonrakiYok']>
 };
 
 // emirli: gönderim satırın emriyle yazılır (iki sepet, 745); gelen sepet yoldaki teslimi emirden bulur. Panel sepeti emirsiz gönderir.
-export function SepetSatiri({ istasyonId, x, emirler, emirli = false }: { istasyonId: number; x: IstasyonSepetiSatiri; emirler: IstasyonSepetiCevabi['emirler']; emirli?: boolean }) {
+// Sarf yalnız sayımdan düşer (896 a): sepet satırında elle kullanım yoktur.
+export function SepetSatiri({ istasyonId, x, emirli = false }: { istasyonId: number; x: IstasyonSepetiSatiri; emirler: IstasyonSepetiCevabi['emirler']; emirli?: boolean }) {
   const statuAdi = useStatuAdi();
   const [kimlik, setKimlik] = useState(yeniKimlik);
-  const [kullanAcik, setKullanAcik] = useState(false);
-  const [emir, setEmir] = useState(() => String(emirler[0]?.id ?? ''));
-  const [miktar, setMiktar] = useState(() => miktarMetni(x.miktar).replace(/\./g, ''));
-  const kullan = useStokKomutu((g: SepettenKullanGovdesi) => korumaliPost('/stok/teslim-kutusu/sepet/kullan', g), 'Üretimde kullanıldı; sepetten düşüldü.', () => setKullanAcik(false));
   const gonder = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g),
     x.sonraki ? `${x.sonraki.ad} istasyonuna gönderildi; alan taraf onaylayınca stok taşınır.` : 'Gönderildi.', () => setKimlik(yeniKimlik()));
   const not = x.sonrakiYok ? SONRAKI_YOK[x.sonrakiYok] : null;
@@ -104,23 +101,8 @@ export function SepetSatiri({ istasyonId, x, emirler, emirli = false }: { istasy
           </div>
         )}
         {not && <span className="tc-stok-not">{not}</span>}
-        {emirler.length > 0 && serbestVar && (
-          <div className="tc-stok-dugmeler">
-            <Dugme simge="wrench" onClick={() => setKullanAcik((a) => !a)} aria-expanded={kullanAcik}>Üretimde kullan</Dugme>
-          </div>
-        )}
-        {kullanAcik && (
-          <div className="tc-stok-dugmeler">
-            <Secim etiket="Emir" secenekler={emirler.map((e) => ({ deger: String(e.id), baslik: e.emirNo }))} value={emir} onChange={(o) => setEmir(o.target.value)} />
-            <Girdi etiket="Kullanılan miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} />
-            <Dugme tur="birincil" simge="check" yukleniyor={kullan.komut.isPending} disabled={emir === '' || miktar.trim() === ''} onClick={() => kullan.komut.mutate({
-              istasyonId, malzemeId: x.malzemeId, partiId: x.partiId, statuId: x.statuId, miktar: miktarGirdisi(miktar), uretimEmriId: Number(emir),
-            })}>Kullan</Dugme>
-          </div>
-        )}
       </div>
       {gonder.onayPenceresi}
-      {kullan.onayPenceresi}
     </li>
   );
 }
