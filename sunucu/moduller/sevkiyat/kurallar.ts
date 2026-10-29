@@ -1,6 +1,7 @@
 // Sevkiyat iş kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
 // Algoritma dosyaları (yol-agi.ts, cozucu.ts) kural sabitlerini buradan alır.
 import type { Islem } from '#paylasilan/islemler.ts';
+import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Arac, ElleTuru, GunPlaniCevabi, KalemKaynagi, KalemYonu, Tasima, TekRotaCevabi, TumIsAsamasi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { RotaOgesi } from './cozucu.ts';
 
@@ -445,4 +446,19 @@ export function korunanOranlar<T extends { kilometreMaliyeti: number | null; saa
 ): T {
   const sayi = (x: string | null | undefined): number | null => (x == null ? null : Number(x));
   return { ...govde, kilometreMaliyeti: sayi(onceki?.kilometreMaliyeti), saatMaliyeti: sayi(onceki?.saatMaliyeti), gunlukMaliyet: sayi(onceki?.gunlukMaliyet) };
+}
+
+// Onaylı kapanışın sevkiyat maddesi (1075 a; hedef 1228 a): emir adedi ile sağlam adedin küçüğü kadar ürün depodan çıktıysa
+// tamam; fazla sağlam stokta kalır. Sağlamsız emirde gerekmez (1079 a). Çıkan adet numeric metnidir.
+export function kapanisSevki(g: { adet: number; saglamAdet: number; cikan: string }): KapanisMaddeBilgisi {
+  if (g.saglamAdet <= 0) return { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' };
+  const hedef = Math.min(g.adet, g.saglamAdet);
+  const cikan = binde(g.cikan) ?? 0n;
+  const metin = `${adetMetni(cikan)} / ${String(hedef)} depodan çıktı`;
+  return { durum: cikan >= BigInt(hedef) * 10n ** BigInt(ADET_ONDALIK) ? 'tamam' : 'eksik', ayrinti: metin };
+}
+function adetMetni(b: bigint): string {
+  const olcek = 10n ** BigInt(ADET_ONDALIK);
+  const kesir = (b % olcek).toString().padStart(ADET_ONDALIK, '0').replace(/0+$/, '');
+  return kesir === '' ? String(b / olcek) : `${String(b / olcek)},${kesir}`;
 }

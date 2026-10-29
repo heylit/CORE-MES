@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   aracIhlalleri, araDonusleriTemizle, bolmeIhlali, durumGecisiIhlali, ileriSonucIhlali, gunTipi, isDegistirilebilir, isDuzenlenebilir, isIhlalleri, onayEngelleri, planDegistirilebilir, yeniIsDurumu,
   planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi,
-  depoGeriAlIhlali, elleKalemIhlalleri, serbestBirakmaIhlali, tasimaIhlali, tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
+  depoGeriAlIhlali, elleKalemIhlalleri, kapanisSevki, serbestBirakmaIhlali, tasimaIhlali, tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
 } from './kurallar.ts';
 import type { AracGirdisi, AsamaGirdisi, IsGirdisi } from './kurallar.ts';
 
@@ -270,4 +270,12 @@ test('depo çıkışı yalnız gidişte ve dönüşü kabul edilmeden geri alın
   assert.match(depoGeriAlIhlali({ yon: 'gelis', depoTamam: true }, false) ?? '', /mal kabul/);
   assert.match(depoGeriAlIhlali({ yon: 'gidis', depoTamam: false }, false) ?? '', /yapılmamış/);
   assert.match(depoGeriAlIhlali({ yon: 'gidis', depoTamam: true }, true) ?? '', /Dönüşü kabul/);
+});
+
+test('1075 a: kapanış sevki emir adedi ile sağlamın küçüğü kadar çıkışta tamam; fazla sağlam stokta; sağlamsızda gerekmez', () => {
+  assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 9, cikan: '9.0000' }), { durum: 'tamam', ayrinti: '9 / 9 depodan çıktı' });
+  assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 12, cikan: '10' }), { durum: 'tamam', ayrinti: '10 / 10 depodan çıktı' }, 'fazla sağlam stokta kalır');
+  assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 10, cikan: '9.5' }), { durum: 'eksik', ayrinti: '9,5 / 10 depodan çıktı' });
+  assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 10, cikan: '0' }), { durum: 'eksik', ayrinti: '0 / 10 depodan çıktı' });
+  assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 0, cikan: '0' }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
 });

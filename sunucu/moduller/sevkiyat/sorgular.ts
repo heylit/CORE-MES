@@ -613,6 +613,15 @@ export function emirlerinKalemleri(db: Db, emirIdleri: readonly number[], sinir:
     [[...new Set(emirIdleri)], sinir],
   );
 }
+// Onaylı kapanış (1075 a): emrin depodan çıkan ürün adedi. Kalem depo çıkışıyla, eski akışta işi tamamlanınca çıkmış sayılır (Tüm işler
+// kalıbı); kaldırılan ve iptal edilen işte kalan kayıt sayılmaz (yükü yeni açık kayda geçmiştir).
+export async function emrinCikanUrunu(db: Db, uretimEmriId: number): Promise<string> {
+  return (await db.tek<{ adet: string }>(
+    `SELECT COALESCE(sum(b.adet), 0)::text AS adet FROM ${KALEM_KAYNAKLARI}
+      WHERE b.kaynak = 'urun' AND b.uretim_emri_id = $1 AND b.kaldirildi IS NULL AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)
+        AND COALESCE(b.depo_zamani, CASE WHEN i.durum = 'tamamlandi' THEN i.durum_zamani END) IS NOT NULL`, [uretimEmriId],
+  ))!.adet;
+}
 export function kalemleriKilitle(db: Db, idler: readonly number[]): Promise<KalemSatiri[]> {
   if (idler.length === 0) return Promise.resolve([]);
   return db.sorgu<KalemSatiri>(`SELECT ${KALEM_ALANLARI} FROM ${KALEM_KAYNAKLARI} WHERE b.id = ANY($1::int[]) ORDER BY b.id FOR UPDATE OF b`, [[...new Set(idler)]]);

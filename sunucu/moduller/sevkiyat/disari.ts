@@ -56,5 +56,9 @@ export type { DepoKalemi } from './tum-isler.ts';
 // Satın almanın teslim yöntemi kalemin taşımasını yazar (959 b): yer 'satin-alma', son yazan izi kalır.
 export { tasimaDegistir } from './tum-isler.ts';
 
+// Onaylı kapanış (1075 a): 'sevkiyat' maddesinin çözücüsü (sözleşmedeki KapanisMaddeBilgisi); Üretim Emirleri'ne kaydı
+// `sunucu/kablolama.ts` yapar. Tanınmayan ya da bitmemiş emirde null.
+export { kapanisSevkiyatDurumu } from './servis.ts';
+
 // Takvim (891): günü aralıktaki sevkiyat işleri; yetkiyi çağıran denetler (sevkiyat.oku).
 export { takvimKayitlari } from './servis.ts';

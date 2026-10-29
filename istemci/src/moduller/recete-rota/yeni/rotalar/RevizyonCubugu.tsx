@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dugme, OnayPenceresi, Tablo } from '../../../../ortak/arayuz/index.ts';
 import { tarih } from '../bicim.ts';
 import {
-  acikRevizyon, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Revizyon,
+  acikRevizyon, gkkUyarilari, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Revizyon,
 } from './kurallar.ts';
 import type { RotaEkrani } from './ortak.tsx';
 import type { RevEylemi } from './useRotaDuzeni.ts';
@@ -45,6 +45,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
   const fark = gosterilenAcik || (V && A && V.id !== A.id) ? rotaFarki(A?.data.steps ?? [], adimlar, adlar) : [];
   const taslaklar = agac.filter((x) => acikRevizyon(duzen.revler(x)) !== null || duzen.taslakVar(x));
   const eksikler = rotaEksikleri(adimlar, duzen.malzemeVar, duzen.opAdi);
+  const gkksizler = gkkUyarilari(adimlar, (id) => h.op.get(id)?.code ?? null, duzen.opAdi);
   const ac = (p: Panel) => { setPanel(panel === p ? null : p); if (p === 'gonder') setNot(duzen.taslakNotu(urunId) ?? V?.note ?? ''); };
   const eylem = async (e: RevEylemi, rev: Revizyon | null, n?: string) => {
     if (await duzen.revEylemi(e, urunId, rev?.id ?? null, n)) setPanel(null);
@@ -115,6 +116,11 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
           Rota eksik: {eksikler.map((x) => x.metin).join('; ')}.{' '}
           {V && (V.status === 'yururlukte' || V.status === 'onayli') ? 'Bu rotanın emirleri plana alınmaz; düzeltmek için yeni taslak aç.'
             : 'Taslak kaydedilir ama onaya gönderilemez ve emri plana alınmaz.'}
+        </div>
+      )}
+      {gkksizler.length > 0 && (
+        <div className="tc-rr1-warnbox" role="status">
+          Fason dönüşünde GKK yok: {gkksizler.map((x) => x.metin).join('; ')}. Onayı durdurmaz; emir açılınca fasonun arkasına otomatik GKK eklenir.
         </div>
       )}
       {duzen.kayitHatasi(urunId) && (

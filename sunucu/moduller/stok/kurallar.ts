@@ -902,22 +902,27 @@ export function sevkAdediBinde(adet: string): bigint | null {
   return kesir.length > 3 ? null : binde(kesir === '' ? p[1]! : `${p[1]!}.${kesir}`);
 }
 
-// 147 b: karar bekleyen ve karantinadaki parça sevk edilmez; red parça uyarıyla çıkar. Bakiyeler verilen sırayla (öncelik çağıranda)
-// tüketilir; yolda teslime ayrılan dokunulmaz. Yetmezse eksik ve engellenen (kalite yüzünden alınamayan) miktar döner.
+// 147 b: karar bekleyen ve karantinadaki parça sevk edilmez; red parça uyarıyla çıkar. 1222 a: açık uygunsuzluğu (NCR) olan parti
+// sevk edilmez; red parça serbest ve şartlı bitmeden alınmaz. Bunun dışında bakiyeler verilen sırayla (öncelik çağıranda) tüketilir;
+// yolda teslime ayrılan dokunulmaz. Yetmezse eksik, kalite yüzünden ve açık NCR yüzünden alınamayan miktar döner.
 export interface SevkBakiyesi { konumId: number; konumTuru: KonumTuru; partiId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string; ayrilan: string }
-export function sevkKaynaklariSec(bakiyeler: readonly SevkBakiyesi[], istenen: bigint): { secim: (SevkBakiyesi & { alinan: bigint })[]; eksik: bigint; engelli: bigint } {
+export function sevkKaynaklariSec(
+  bakiyeler: readonly SevkBakiyesi[], istenen: bigint, acikNcrPartileri: ReadonlySet<number> = new Set(),
+): { secim: (SevkBakiyesi & { alinan: bigint })[]; eksik: bigint; engelli: bigint; ncrEngelli: bigint } {
   const secim: (SevkBakiyesi & { alinan: bigint })[] = [];
-  let kalan = istenen, engelli = 0n;
-  for (const b of bakiyeler) {
+  let kalan = istenen, engelli = 0n, ncrEngelli = 0n;
+  const sirali = [...bakiyeler.filter((b) => b.kaliteDurumu !== 'red'), ...bakiyeler.filter((b) => b.kaliteDurumu === 'red')];
+  for (const b of sirali) {
     const serbest = binde(b.miktar) - binde(b.ayrilan);
     if (serbest <= 0n) continue;
+    if (acikNcrPartileri.has(b.partiId)) { ncrEngelli += serbest; continue; }
     if (b.kaliteDurumu === 'karar_bekliyor' || b.konumTuru === 'karantina') { engelli += serbest; continue; }
     if (kalan === 0n) continue;
     const alinan = serbest < kalan ? serbest : kalan;
     secim.push({ ...b, alinan });
     kalan -= alinan;
   }
-  return { secim, eksik: kalan, engelli };
+  return { secim, eksik: kalan, engelli, ncrEngelli };
 }
 
 // ---- Kişi kodu (299 b): teslim alacak kişinin gösterdiği, sunucu anahtarıyla imzalı ve kısa süre geçerli kod ------------------

@@ -9,7 +9,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
@@ -492,6 +492,21 @@ describe('stok kuralları: parti etiketi emir numarası (borç #419)', () => {
     assert.deepEqual(urunSevkAdimlari('tamamlandi', 'havuzda'), ['teslim_geri', 'yola_geri']);
     assert.deepEqual(urunSevkAdimlari('yolda', 'planlandi'), ['yola_geri']);
     assert.deepEqual(urunSevkAdimlari('havuzda', 'planlandi'), []);
+  });
+  test('1222 a: red parça serbest ve şartlı bitmeden alınmaz; verilen sıra öbürlerinde korunur', () => {
+    const b = (partiId: number, kaliteDurumu: 'serbest' | 'sartli' | 'red', miktar: string, konumTuru: 'sevkiyat' | 'raf_gozu' = 'raf_gozu') =>
+      ({ konumId: partiId, konumTuru, partiId, statuId: null, kaliteDurumu, miktar, ayrilan: '0' });
+    const r = sevkKaynaklariSec([b(1, 'red', '5', 'sevkiyat'), b(2, 'serbest', '3'), b(3, 'sartli', '2')], 6000n);
+    assert.deepEqual(r.secim.map((s) => [s.partiId, s.alinan]), [[2, 3000n], [3, 2000n], [1, 1000n]]);
+    assert.deepEqual(sevkKaynaklariSec([b(1, 'red', '5', 'sevkiyat'), b(2, 'serbest', '3')], 2000n).secim.map((s) => s.partiId), [2]);
+  });
+  test('1222 a: açık NCR\'li parti hiç alınmaz, kalitesi ne olursa olsun; miktarı ayrıca döner', () => {
+    const b = (partiId: number, kaliteDurumu: 'serbest' | 'red' | 'karar_bekliyor', miktar: string) =>
+      ({ konumId: partiId, konumTuru: 'raf_gozu' as const, partiId, statuId: null, kaliteDurumu, miktar, ayrilan: '0' });
+    const r = sevkKaynaklariSec([b(1, 'red', '4'), b(2, 'serbest', '3'), b(3, 'serbest', '2'), b(4, 'karar_bekliyor', '1')], 9000n, new Set([1, 3]));
+    assert.deepEqual(r.secim.map((s) => s.partiId), [2]);
+    assert.deepEqual([r.eksik, r.engelli, r.ncrEngelli], [6000n, 1000n, 6000n]);
+    assert.equal(sevkKaynaklariSec([b(2, 'serbest', '3')], 1000n).ncrEngelli, 0n);
   });
   test('sevk adedi dört haneli ondalıktan binde çevrilir; binde sığmayan kesir reddedilir', () => {
     assert.deepEqual([sevkAdediBinde('6.0000'), sevkAdediBinde('2'), sevkAdediBinde('1.2500'), sevkAdediBinde('1.0005'), sevkAdediBinde('x')], [6000n, 2000n, 1250n, null, null]);

@@ -169,6 +169,8 @@ export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void =>
 export const adimCiktisiCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimCiktisiCozucusuKaydet(cozucu);
 // Reçete ve Rota statü listesini veren işlevi kaydeder; stok bunu `GET /stok/statuler` ucundan stok okuyanlara sunar.
 export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void => servis.statuListesiCozucusuKaydet(cozucu);
+// 1222 a: Kalite Merkezi verilen partilerden açık uygunsuzluğu (NCR) olanları veren işlevi kaydeder; ürün sevki ve depo çıkışı onları almaz.
+export const acikNcrPartiCozucusu = (cozucu: servis.AcikNcrPartiCozucusu): void => servis.acikNcrPartiCozucusuKaydet(cozucu);
 // Ters yöndeki haberlerin karşılığı: uretim-emirleri ve sevkiyat stoğu ithal edemez; bağı sunucu/kablolama.ts kurar. Olay komutla
 // aynı işlemde gelir; stoğun reddi komutu da geri alır.
 export { emirAcildiYansit, emirBirlestiYansit, emirBittiYansit, emirIptalYansit, fasonHareketiYansit, fasonSevkiYansit, urunSevkiYansit } from './servis.ts';

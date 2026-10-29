@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { depoBekleyenleri, depoCikisiYaz, depoKabuluYaz, emirlerinSevkDurumu, emirlerinSevkleri, sevkIsiOzeti, siparisinSevkleri, urunSevkiDinle } from './disari.ts';
+import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, emirlerinSevkDurumu, emirlerinSevkleri, kapanisSevkiyatDurumu, sevkIsiOzeti, siparisinSevkleri, urunSevkiDinle } from './disari.ts';
 import type { UrunSevkiOlayi } from './disari.ts';
 import * as servis from './servis.ts';
 import { izgaraKaynagi } from './test-agi.ts';
@@ -670,6 +670,29 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.deepEqual([(await satir(`kalem:${donusId}`))?.asama, (await satir(`kalem:${donusId}`))?.depo?.kabulAdet], ['depoda', '2.0000']);
     assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '3')), true);
     assert.equal((await satir(`kalem:${donusId}`))?.asama, 'tamamlandi');
+  });
+
+  test('1075 a: kapanışın sevkiyat maddesi sağlam adet kadar depo çıkışında tamam; kısmi çıkış ve geri alınan çıkış eksik; bitmemiş ve tanınmayan emir null', async () => {
+    const id = await tekAdimliEmir();
+    const durum = () => o().vt.tx((db) => kapanisSevkiyatDurumu(db, id));
+    assert.equal(await durum(), null, 'bitmemiş emir bilinmiyor');
+    assert.equal(await o().vt.tx((db) => kapanisSevkiyatDurumu(db, 2147483647)), null);
+    await emriBitir(id);
+    assert.deepEqual(await durum(), { durum: 'eksik', ayrinti: '0 / 9 depodan çıktı' }, 'emir 10, sağlam 9: hedef 9');
+
+    const c = await birak('planlama_proje', [`urun:${id}`], null, 'firma');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const [kokId] = serbestBirakCevabi.parse(c.govde).kalemIdleri as [number];
+    const b = await istek('depo', 'POST', `/sevkiyat/bekleyenler/${kokId}/bol`, { adet: '4' });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const { yeniId } = bekleyenBolCevabi.parse(b.govde);
+    assert.deepEqual(await durum(), { durum: 'eksik', ayrinti: '0 / 9 depodan çıktı' }, 'serbest bırakma çıkış değildir');
+    await o().vt.tx((db) => depoCikisiYaz(db, yoneticiId, yeniId));
+    assert.deepEqual(await durum(), { durum: 'eksik', ayrinti: '4 / 9 depodan çıktı' });
+    await o().vt.tx((db) => depoCikisiYaz(db, yoneticiId, kokId));
+    assert.deepEqual(await durum(), { durum: 'tamam', ayrinti: '9 / 9 depodan çıktı' });
+    await o().vt.tx((db) => depoCikisiniGeriAl(db, kokId));
+    assert.deepEqual(await durum(), { durum: 'eksik', ayrinti: '4 / 9 depodan çıktı' }, 'geri alınan çıkış sayılmaz');
   });
 
   test('kısıt: ürün kaydı emirsiz yazılamaz, aynı emrin kök kaydı iki kez yazılamaz, bölünen parça yalnız üründe', async () => {

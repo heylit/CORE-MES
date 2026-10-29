@@ -15,6 +15,9 @@ export function degisimEngeli(a: Pick<IsEmri, 'durum' | 'fason'>): string | null
   return a.fason !== null && a.fason.gonderilen > 0 ? 'Fasona gönderildi; değişmez.' : null;
 }
 
+// 1208: fasonun arkasına sunucunun koyduğu GKK ek adımı; sunucu ek açıklamayı bu metinle yazar.
+const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur === 'ek' && a.ekAciklama === 'Otomatik GKK';
+
 const yerMetni = (a: IsEmri): string => (a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim');
 
 export function UretimYerleri({ emir }: { emir: { id: number; malzemeNo?: number | null } }) {
@@ -32,7 +35,14 @@ function Adimlar({ emirId, yazar }: { emirId: number; yazar: boolean }) {
   });
   const sutunlar: Sutun<IsEmri>[] = [
     { anahtar: 'op', baslik: 'OP', hucre: (a) => a.opNo },
-    { anahtar: 'ad', baslik: 'Adım', hucre: (a) => a.ad },
+    {
+      anahtar: 'ad', baslik: 'Adım', hucre: (a) => (
+        <>
+          {a.ad}
+          {otomatikGkkMi(a) && <> <Rozet ton="bilgi">Otomatik GKK</Rozet></>}
+        </>
+      ),
+    },
     {
       anahtar: 'yer', baslik: 'Nerede yapılır', hucre: (a) => (
         <>

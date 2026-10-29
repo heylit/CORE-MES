@@ -4550,14 +4550,24 @@ async function fasonGidisiniTasi(db: Db, kisiId: number, hareketId: number, faso
 // noktada Yolda adımı yoktur: teslim parçayı bulunduğu konumdan düşer. Red parça çıkar, hareketin açıklaması bunu söyler (147 b).
 // İş kimliği açıklamadadır: geri alma aynı işin hareketlerini bulur, aynı emrin başka işine dokunmaz.
 const RED_EKI = ' · red parça';
+// 1222 a: açık uygunsuzluğu (NCR) olan partiler Kalite Merkezi'nindir; stok onu ithal edemez, bağı sunucu/kablolama.ts kurar.
+// Kayıt yokken hiçbir parti açık NCR'li sayılmaz.
+export type AcikNcrPartiCozucusu = (db: Db, partiIdler: readonly number[]) => Promise<ReadonlySet<number>>;
+let acikNcrPartiCozucu: AcikNcrPartiCozucusu | null = null;
+export function acikNcrPartiCozucusuKaydet(cozucu: AcikNcrPartiCozucusu): void { acikNcrPartiCozucu = cozucu; }
+const acikNcrPartileri = async (db: Db, bakiyeler: readonly SevkBakiyesi[]): Promise<ReadonlySet<number>> =>
+  acikNcrPartiCozucu === null || bakiyeler.length === 0 ? new Set() : acikNcrPartiCozucu(db, [...new Set(bakiyeler.map((b) => b.partiId))]);
+const ncrEngelMetni = (ncrEngelli: bigint): string => (ncrEngelli > 0n ? ` ${bindenMetin(ncrEngelli)} adet açık uygunsuzluk (NCR) kaydında; sevk edilemez.` : '');
 
 // 1059 a: yetmeyen sevk reddedilmez; eksik son seçilen lota eklenir, o lot bulunduğu konumda eksiye düşer (sonraki giriş tamamlar).
-// Kalite kararı bekleyen ya da karantinadaki parça varken, ya da emrin hiç parçası yokken (eksiye düşecek lot ve konum yok) reddedilir.
+// Kalite kararı bekleyen, karantinadaki ya da açık NCR'li parça varken, ya da emrin hiç parçası yokken (eksiye düşecek lot ve konum yok)
+// reddedilir. Eksik red olmayan son lota yazılır: eksiye düşen miktar red parça sayılmasın.
 function sevkEksiginiYukle(emirNo: string, istenen: bigint, r: ReturnType<typeof sevkKaynaklariSec>): void {
   if (r.eksik === 0n) return;
   const ileti = `Emir ${emirNo}: sevk için ${bindenMetin(istenen)} adet gerekli, stokta ${bindenMetin(istenen - r.eksik)} adet var.`;
-  if (r.engelli > 0n) throw cakisma(`${ileti} ${bindenMetin(r.engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.`);
-  const son = r.secim.at(-1);
+  const kalite = r.engelli > 0n ? ` ${bindenMetin(r.engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.` : '';
+  if (r.engelli > 0n || r.ncrEngelli > 0n) throw cakisma(`${ileti}${kalite}${ncrEngelMetni(r.ncrEngelli)}`);
+  const son = r.secim.findLast((b) => b.kaliteDurumu !== 'red') ?? r.secim.at(-1);
   if (son === undefined) throw cakisma(`${ileti} Eksiye düşecek lot yok.`);
   son.alinan += r.eksik;
 }
@@ -4571,7 +4581,7 @@ async function sevkTasi(db: Db, kisiId: number, s: UrunSevkSatiri, malzemeId: nu
   const bakiyeler = yolda === null
     ? await sorgular.emrinSevkBakiyeleri(db, malzemeId, s.uretimEmriId)
     : (await sorgular.istasyondakiEmirBakiyeleri(db, yolda, malzemeId, s.uretimEmriId)).map((b) => ({ ...b, konumId: yolda, konumTuru: 'yolda' as const }));
-  const r = sevkKaynaklariSec(bakiyeler, istenen);
+  const r = sevkKaynaklariSec(bakiyeler, istenen, await acikNcrPartileri(db, bakiyeler));
   sevkEksiginiYukle(emirNo, istenen, r);
   return sevkSeciminiYaz(db, kisiId, r.secim, { malzemeId, uretimEmriId: s.uretimEmriId, hedef, aciklama: sevkAciklamasi(s.isId, emirNo, adim) });
 }
@@ -4693,14 +4703,15 @@ async function urunDepoCikisi(db: Db, kisiId: number, k: DepoKalemi): Promise<{ 
   const yoldakiler = yolda === null ? [] : (await sorgular.istasyondakiEmirBakiyeleri(db, yolda, malzemeId, emir.id)).map((b) => ({ ...b, konumId: yolda, konumTuru: 'yolda' as const }));
   const bakiyeler = [...yoldakiler, ...await sorgular.emrinSevkBakiyeleri(db, malzemeId, emir.id)];
   // Bitmemiş emrin erken çıkışında adet henüz yoktur: sevk edilebilir olanın hepsi çıkar.
-  const istenen = k.adet !== null ? sevkAdediBinde(k.adet) : k.erken ? sevkKaynaklariSec(bakiyeler, 1n << 62n).secim.reduce((t, b) => t + b.alinan, 0n) : null;
+  const ncr = await acikNcrPartileri(db, bakiyeler);
+  const istenen = k.adet !== null ? sevkAdediBinde(k.adet) : k.erken ? sevkKaynaklariSec(bakiyeler, 1n << 62n, ncr).secim.reduce((t, b) => t + b.alinan, 0n) : null;
   if (istenen === null) throw gecersiz(`Emir ${emir.emirNo}: sevk adedi bilinmiyor; stok yazılamaz.`);
   if (istenen === 0n) throw cakisma(`Emir ${emir.emirNo}: sevk edilebilir parça yok.`);
-  const r = sevkKaynaklariSec(bakiyeler, istenen);
-  const { secim, eksik, engelli } = r;
+  const r = sevkKaynaklariSec(bakiyeler, istenen, ncr);
+  const { secim, eksik, engelli, ncrEngelli } = r;
   const uyarilar: string[] = [];
   if (eksik > 0n && k.erken) {
-    const neden = engelli > 0n ? ` ${bindenMetin(engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.` : '';
+    const neden = (engelli > 0n ? ` ${bindenMetin(engelli)} adet kalite kararı bekliyor ya da karantinada; sevk edilemez.` : '') + ncrEngelMetni(ncrEngelli);
     uyarilar.push(`Emir ${emir.emirNo}: sevk için ${bindenMetin(istenen)} adet gerekli, stokta ${bindenMetin(istenen - eksik)} adet var.${neden} Erken çıkış: eldeki kadarı çıktı.`);
   } else sevkEksiginiYukle(emir.emirNo, istenen, r);
   const { red, eksi, hareketIdler } = await korumali(() => sevkSeciminiYaz(db, kisiId, secim, { malzemeId, uretimEmriId: emir.id, hedef: null, aciklama: depoCikisAciklamasi(k.kalemId, emir.emirNo) }));

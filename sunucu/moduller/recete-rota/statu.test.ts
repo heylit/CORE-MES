@@ -349,4 +349,50 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual([satirlar.get(yururlukte)?.revizyon, satirlar.get(eski10!)?.revizyon, satirlar.get(eski20!)?.revizyon], ['B', 'A', 'A']);
     assert.equal(await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM recete_rota_statu WHERE rota_revizyonu_id = $1', [b]).then((x) => x?.n), 1, 'B\'de yalnız OP 10 ara adımdır');
   });
+  test('çıktı statüyle aynı revizyondandır (kart #1214): emir kendi revizyonunun çıkan kalemini alır (yeni revizyonda kalkmış adım dahil); emirsiz, rotasız ya da bilinmeyen emir yürürlükteki', async () => {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('RVC-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kartAc = async (sira: number, tur: string) => (await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, $2, 'RVC-', $3, 'aktif', $4, $5, $5) RETURNING no`,
+      [`rvc-${String(sira)}`, tur, sira, JSON.stringify({ id: `rvc-${String(sira)}`, com: { ad: 'Çıktı revizyon deneme' } }), yoneticiId]))!.no;
+    const kart = await kartAc(1, 'mamul');
+    const ym1 = await kartAc(2, 'yarimamul');
+    const ym2 = await kartAc(3, 'yarimamul');
+    const tip = (await vt().tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('RVC', 'Freze', 'TAL') RETURNING id"))!.id;
+    const revizyon = async (harf: string, durum: 'onayli' | 'yururlukte', oplar: number[]) => {
+      const id = (await vt().tek<{ id: number }>("INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', $2, $3) RETURNING id", [kart, harf, yoneticiId]))!.id;
+      for (const [i, op] of oplar.entries()) {
+        await vt().sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [kart, op, id]);
+        await vt().sorgu('INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, $3, $4, $5, $6)', [id, kart, op, i + 1, tip, `Adım ${String(op)}`]);
+      }
+      await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [id, yoneticiId]);
+      await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [id, yoneticiId]);
+      if (durum === 'yururlukte') await vt().sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [id, yoneticiId]);
+      return id;
+    };
+    const a = await revizyon('A', 'onayli', [10, 20, 30]);
+    const b = await revizyon('B', 'yururlukte', [10, 30]);
+    const emir = async (rev: number | null) => (await vt().tek<{ id: number }>(
+      "INSERT INTO uretim_emri (emir_no, parca_no, parca_ad, adet, acan_id, malzeme_no, kaynak_rota_revizyonu_id) VALUES ($1, 'P', 'Parca', 1, $2, $3, $4) RETURNING id",
+      [`RVC-${String(rev)}`, yoneticiId, kart, rev]))!.id;
+    const k = String(kart);
+    await kaydet({
+      items: [{ id: k, code: 'ORN-RC', type: 'mamul' }, { id: String(ym1), code: 'ORN-Y1', type: 'yari' }, { id: String(ym2), code: 'ORN-Y2', type: 'yari' }],
+      opdefs: [{ id: 'op1', name: 'Freze' }],
+      routes: {},
+      routeRevs: [
+        { id: String(a), itemId: k, status: 'onayli', data: { steps: [{ id: `${k}-o10`, opNo: 10, outItem: String(ym1) }, { id: `${k}-o20`, opNo: 20, outItem: String(ym2) }] } },
+        { id: String(b), itemId: k, status: 'yururlukte', data: { steps: [{ id: `${k}-o10`, opNo: 10, outItem: String(ym2) }] } },
+      ],
+    });
+    const cikti = (opNo: number, uretimEmriId?: number | null) => adimCiktisi(vt(), { malzemeNo: kart, opNo, uretimEmriId });
+    assert.deepEqual([await cikti(10), await cikti(20)], [ym2, null], 'emirsiz: yürürlükteki B; OP 20 B\'de yok');
+    const eskiEmir = await emir(a);
+    assert.deepEqual([await cikti(10, eskiEmir), await cikti(20, eskiEmir)], [ym1, ym2], 'A ile açılmış emir A\'nın bağını okur');
+    assert.equal(await cikti(10, await emir(b)), ym2, 'B ile açılmış emir');
+    assert.equal(await cikti(10, await emir(null)), ym2, 'rotasız emir yürürlükteki');
+    assert.equal(await cikti(10, null), ym2, 'boş emir kimliği emirsiz gibi');
+    assert.equal(await cikti(10, 2_000_000_000), ym2, 'bilinmeyen emir yürürlükteki');
+    assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20, uretimEmriId: eskiEmir }), null, 'A\'da OP 20 karta bağlı: statü açmaz, çıktıyla tutarlı');
+  });
 });
