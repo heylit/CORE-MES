@@ -26,14 +26,21 @@ export const acikMi = (o: Pick<Emir, 'status'>): boolean => ACIK_DURUMLAR.has(o.
 // Plana giren emir: serbest ve üretimdeki (taslak plana girmez; bugünkü ekranla aynı).
 export const plandaMi = (o: Pick<Emir, 'status'>): boolean => o.status === 'serbest' || o.status === 'uretimde';
 
-// Liste süzgeci: bugünkü ekranın altı düğmesi (aktif, serbest, üretimde, taslak, tamamlanan, tümü).
+// Liste süzgeci (1101 a): tek bölümlü çubuk; serbest ve üretimdeki emir satırdaki durum etiketinden okunur, süzgeçte ayrıca yoktur.
 export const DURUM_SUZGECLERI = [
-  { deger: 'aktif', baslik: 'Aktif' }, { deger: 'serbest', baslik: 'Serbest' }, { deger: 'uretimde', baslik: 'Üretimde' },
-  { deger: 'taslak', baslik: 'Taslak' }, { deger: 'tamam', baslik: 'Üretimi biten' }, { deger: 'tum', baslik: 'Tümü' },
+  { deger: 'aktif', baslik: 'Aktif' }, { deger: 'taslak', baslik: 'Taslak' }, { deger: 'tamam', baslik: 'Üretimi biten' }, { deger: 'tum', baslik: 'Tümü' },
 ] as const;
 export type DurumSuzgeci = (typeof DURUM_SUZGECLERI)[number]['deger'];
 export const durumUyar = (o: Emir, s: DurumSuzgeci): boolean =>
   (s === 'tum' ? true : s === 'aktif' ? acikMi(o) : o.status === s);
+
+// Arama: emir no, ürün kodu ve adı, not; büyük-küçük harf ve i/ı farkı gözetilmez (kodlar ASCII yazılır, "MIL" "mil" ile bulunur). Boş arama her emre uyar.
+const kucuk = (x: string): string => x.toLocaleLowerCase('tr-TR').replaceAll('ı', 'i');
+export function aramaUyar(o: Emir, urun: { code: string; name: string } | null, arama: string): boolean {
+  const a = kucuk(arama.trim());
+  if (!a) return true;
+  return [o.no, urun?.code ?? '', urun?.name ?? '', o.note ?? ''].some((x) => kucuk(x).includes(a));
+}
 
 export interface AgacSatiri { emir: Emir; derinlik: number; alt: boolean }
 

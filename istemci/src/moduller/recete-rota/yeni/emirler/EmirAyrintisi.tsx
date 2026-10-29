@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dugme, Girdi, OnayPenceresi, Rozet, SayiKarti, Secim, Simge, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type MenuOgesi, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { useStokOkumasi, type RrDurumu } from '../veri.ts';
@@ -10,7 +10,7 @@ import {
   acikMi, adimDurumu, adimPlani, durumAdi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
-import { planMetni, tamponRozeti, type TamponRozeti } from './gorunum.ts';
+import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
 const TALEP_YOLU = '/satin-alma/talepler';
@@ -24,6 +24,7 @@ interface Ozellikler {
   git: EkranOzellikleri['git'];
   komut: ReturnType<typeof useEmirKomutu>;
   emirAc: (id: string) => void;
+  kapat: () => void;
 }
 
 // Eski ekranın plan hücresi: tarih renkli kalın yazı, tampon yanında küçük hap; tarih yoksa düz metin (plan dışı, motor yok).
@@ -36,12 +37,13 @@ export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetn
   );
 }
 
-// Emir ayrıntısı: emrin alanları burada düzenlenmez (emir Üretim Emirleri'nde tutulur, ilerleme terminalden gelir); yalnız emir
-// komutları (plana al, iptal, böl, kol, rotasız adımlar, rotayı güncelle) ve stoğa tamamlama.
-export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: Ozellikler) {
+// Emir ayrıntısı (1100 B): listenin yanındaki panel. Emrin alanları burada düzenlenmez (812 a; emir Üretim Emirleri'nde tutulur, ilerleme
+// terminalden gelir). Sıra: başlık ve üç bilgi, uyarılar, adımlar ve malzeme, en altta tek eylem çubuğu. Seyrek ya da geri alınamaz işler
+// (böl, katılma, geri katma, iptal) "Diğer" menüsündedir (1102 a). Stoğa işleme Üretim Emirleri'ndedir (1106 a): bitmiş emri yalnız orası işler.
+export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, kapat }: Ozellikler) {
   const yonlen = useNavigate();
   const [iptal, setIptal] = useState(false);
-  const [tamamla, setTamamla] = useState(false);
+  const [islem, setIslem] = useState<'bol' | 'katil' | null>(null);
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const adimlar = emirAdimlari(d, o);
   const plan = planOzeti(d, d.planYerlesim, o);
@@ -53,38 +55,48 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
   const fark = rotaFarki(d, o);
   const surum = { surum: o.surum };
   const yuzde = il.toplam ? Math.round((il.biten / il.toplam) * 100) : o.status === 'tamam' ? 100 : 0;
+  const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
+  const acik = acikMi(o);
+  const sira = planSirasi(d).findIndex((x) => x.id === o.id);
+  const ueAc = () => { void yonlen(`/uretim-emirleri/${String(o.kayitNo)}`); };
+  const rotaMetni = o.rotasiz ? 'Rotasız'
+    : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
+  const diger: MenuOgesi[] = [
+    ...(acik && yetki.emirYaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
+    ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma adımını değiştir', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
+    ...(ana && acik && yetki.emirYaz ? [{
+      anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
+      sec: () => {
+        void komut.calistir('emir-birlestir', { id: o.id, surum: o.surum }, `${o.no} ${ana.no} emrine geri katıldı.`)
+          .then((c) => { if (c.tamam) emirAc(ana.id); });
+      },
+    }] : []),
+    ...(acik && yetki.emirYaz ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
+  ];
 
   return (
-    <div className="tc-rr3-ayrinti" aria-label={`${o.no} ayrıntısı`}>
-      {/* Eski ekranın alan satırı; alanlar salt okunurdur (812 a): eski sayfa da bağlıyken her değişikliği geri çeviriyordu. */}
-      <div className="tc-rr3-oc">
-        <Girdi etiket="Miktar" readOnly className="tc-rr3-oc-sayi" value={sayi(o.qty)} />
-        <Girdi etiket="Başlangıç" readOnly value={tarih(o.start)} />
-        <Girdi etiket="Teslim" readOnly value={tarih(o.due)} />
-        <Girdi etiket="Öncelik" readOnly value={ONCELIK_ADI[o.priority] ?? ''} />
-        <Girdi etiket="Durum" readOnly value={durumAdi(o)} />
-        {!o.rotasiz && (rev || yururlukte) && (
-          <Girdi
-            etiket="Rota revizyonu" readOnly
-            value={rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'} (Rev ${rev.no})` : `Yürürlükteki (Rev ${yururlukte?.no ?? YOK})`}
-          />
-        )}
-        <div className="tc-rr3-oc-kpi">
-          <small>Plan bitiş</small>
-          <span><PlanHucresi plan={pm} tampon={tampon} /></span>
-          {pm.alt && <small className="tc-rr3-plan-alt" data-ton={pm.altTon ?? undefined}>{pm.alt}</small>}
-        </div>
-        <div className="tc-rr3-oc-kpi tc-rr3-ilerleme">
-          <small>İlerleme</small>
-          <progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} />
-          <small>{il.toplam ? `${String(il.biten)}/${String(il.toplam)} adım` : ''}</small>
-        </div>
-      </div>
-      <p className="tc-rr3-ipucu">
-        Emir alanları Üretim Emirleri'nde düzenlenir.{' '}
-        <button type="button" className="tc-rr3-bag" onClick={() => { void yonlen(`/uretim-emirleri/${String(o.kayitNo)}`); }}>Üretim Emirleri'nde aç</button>
+    <section className="tc-rr3-ayrinti" aria-label={`${o.no} ayrıntısı`}>
+      <header className="tc-rr3-pbas">
+        <Dugme className="tc-rr3-geri" simge="chev-left" onClick={kapat}>Emirler</Dugme>
+        <h3 className="tc-rr3-emirno">{o.no}</h3>
+        <span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span>
+        <Dugme className="tc-rr3-kapat" simge="x" aria-label="Ayrıntıyı kapat" onClick={kapat} />
+      </header>
+      <p className="tc-rr3-purun">
+        {urun ? <><b>{urun.code}</b> {urun.name}</> : 'Ürün okunamadı'}
+        <small> · {sayi(o.qty)} {urun?.unit ?? ''} · {turAdi(o.tur)}{o.priority <= 2 ? ` · ${ONCELIK_ADI[o.priority] ?? ''}` : ''}</small>
       </p>
-      {o.note && <p className="tc-rr3-ipucu">{o.note}</p>}
+      <dl className="tc-rr3-bilgi">
+        <div><dt>Teslim</dt><dd>{tarih(o.due)}</dd></div>
+        <div>
+          <dt>Plan bitiş</dt>
+          <dd><PlanHucresi plan={pm} tampon={tampon} />{pm.alt && <small className="tc-rr3-plan-alt" data-ton={pm.altTon ?? undefined}>{pm.alt}</small>}</dd>
+        </div>
+        <div className="tc-rr3-ilerleme">
+          <dt>İlerleme {il.toplam ? `${String(il.biten)}/${String(il.toplam)}` : ''}</dt>
+          <dd><progress max={100} value={yuzde} aria-label={`İlerleme ${String(il.biten)}/${String(il.toplam)}`} /></dd>
+        </div>
+      </dl>
 
       {fark && (
         <div className="tc-rr3-uyari-kutu" role="status">
@@ -111,22 +123,37 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
           )}
         </div>
       )}
+      {o.status === 'tamam' && !o.kapanisSonucu && (
+        <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status">
+          <Simge ad="clipboard-check" />
+          <span>Stoğa işleme ve kapanış Üretim Emirleri'ndedir: emir ayrıntısında stoğa tamamlanır, kapanış onaylarıyla kapanır.</span>
+          <Dugme simge="next" onClick={ueAc}>Üretim Emirleri'nde aç</Dugme>
+        </div>
+      )}
 
-      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} emirAc={emirAc} />
+      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem} islemKapat={() => { setIslem(null); }} />
       {o.rotasiz && <RotasizAdimlar durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />}
+      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} />
 
-      <div className="tc-rr3-arac">
+      <p className="tc-rr3-meta">
+        {o.start && <span>Başlangıç <b>{tarih(o.start)}</b></span>}
+        {rotaMetni && <span>Rota <b>{rotaMetni}</b></span>}
+        {sira >= 0 && <span>Plan sırası <b>{sira + 1}</b></span>}
+        {o.note && <span>Not <b>{o.note}</b></span>}
+        <button type="button" className="tc-rr3-bag" onClick={ueAc}>Üretim Emirleri'nde aç</button>
+      </p>
+
+      <div className="tc-rr3-eylem">
+        <Dugme simge="route" onClick={() => { git('schema', o.itemId); }}>Akışta aç</Dugme>
+        {plandaMi(o) && <Dugme simge="grid" onClick={() => { void yonlen(KANBAN_YOLU); }}>Kanbanda göster</Dugme>}
+        {ana && <Dugme simge="back" onClick={() => { emirAc(ana.id); }}>Ana emir {ana.no}</Dugme>}
+        {diger.length > 0 && <Menu etiket={`${o.no} için diğer işlemler`} metin="Diğer" ogeler={diger} />}
         {o.status === 'taslak' && yetki.emirYaz && (
-          <Dugme tur="birincil" simge="play" yukleniyor={komut.mesgul} onClick={() => { void komut.calistir('emir-serbest', { id: o.id, ...surum }, 'Emir plana alındı.'); }}>
+          <Dugme tur="birincil" simge="play" className="tc-rr3-ana" yukleniyor={komut.mesgul} onClick={() => { void komut.calistir('emir-serbest', { id: o.id, ...surum }, 'Emir plana alındı.'); }}>
             Plana al
           </Dugme>
         )}
-        {plandaMi(o) && <Dugme simge="grid" onClick={() => { void yonlen(KANBAN_YOLU); }}>Kanbanda göster</Dugme>}
-        <Dugme simge="route" onClick={() => { git('schema', o.itemId); }}>Akışta aç</Dugme>
-        {acikMi(o) && yetki.emirYaz && <Dugme tur="tehlike" simge="x" onClick={() => { setIptal(true); }}>İptal et</Dugme>}
       </div>
-
-      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} tamamla={() => { setTamamla(true); }} />
 
       <OnayPenceresi
         acik={iptal} baslik={`${o.no} iptal edilsin mi?`} onayMetni="İptal et" tehlikeli yukleniyor={komut.mesgul} vazgec={() => { setIptal(false); }}
@@ -134,23 +161,15 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
       >
         <p>Emir iptal edilir; plandan ve terminalden kalkar.</p>
       </OnayPenceresi>
-      <OnayPenceresi
-        acik={tamamla} baslik={`${o.no} stoğa işlensin mi?`} onayMetni="Tamamla ve stoktan düş" yukleniyor={komut.mesgul} vazgec={() => { setTamamla(false); }}
-        onayla={() => {
-          setTamamla(false);
-          void komut.calistir('stok-emir-tamamla', { id: o.kayitNo }, `${o.no} stoğa işlendi: kalan sarf düşüldü, çıktı üretim alanına girdi.`);
-        }}
-      >
-        <p>Kalan sarf stoktan düşülür, çıktı üretim alanına girer.</p>
-      </OnayPenceresi>
-    </div>
+    </section>
   );
 }
 
-function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, emirAc }: {
-  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; emirAc: (id: string) => void;
+// Alt emir bilgisi her zaman; bölme ve katılma panelleri yalnız "Diğer" menüsünden seçilince açılır (1102 a), içerikleri değişmez.
+function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapat }: {
+  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
+  islem: 'bol' | 'katil' | null; islemKapat: () => void;
 }) {
-  const [katil, setKatil] = useState(false);
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(false));
   const emirler = d.emirler?.orders ?? [];
   const ana = o.parentId === null ? null : emirler.find((x) => x.id === o.parentId) ?? null;
@@ -181,7 +200,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, emirAc }: {
     if (bolme.tur === 'kol') {
       const c = await komut.calistir('emir-bol', { id: o.id, adet: r.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: o.surum, ekAdimlar },
         `Kol ${sayi(r.partiler[0])} adetle ${String(bolme.n)}. adımdan sonra ayrıldı, ${String(bolme.m)}. adımda ${o.no} emrine yeniden bağlanır.`);
-      if (c.tamam) setBolme(bosBolme(false));
+      if (c.tamam) { setBolme(bosBolme(false)); islemKapat(); }
       return;
     }
     if (ekAdimlar.length && r.partiler.length !== 1) { komut.bildir('hata', 'Rework, tamir ya da ek adım yalnız tek parti ayrılırken eklenir; partileri tek tek ayırın.'); return; }
@@ -192,6 +211,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, emirAc }: {
       surum = guncelSurum(c.durum, o.id);
     }
     setBolme(bosBolme(false));
+    islemKapat();
     komut.bildir('tamam', `${o.no} bölündü: ${String(r.partiler.length)} alt emir açıldı.`);
   };
 
@@ -205,56 +225,33 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, emirAc }: {
           {ana ? '' : ' Ana emri listede yok.'}
         </p>
       )}
-      {o.parentId !== null && (
-        <div className="tc-rr3-arac">
-          {ana && <Dugme simge="back" onClick={() => { emirAc(ana.id); }}>Ana emir {ana.no}</Dugme>}
-          {ana && acik && yetki.emirYaz && (
-            <Dugme
-              yukleniyor={komut.mesgul}
-              onClick={() => {
-                void komut.calistir('emir-birlestir', { id: o.id, surum: o.surum }, `${o.no} ${ana.no} emrine geri katıldı.`)
-                  .then((c) => { if (c.tamam) emirAc(ana.id); });
-              }}
-            >
-              {o.kol ? 'Kolu geri al' : 'Ana emre geri kat'}
-            </Dugme>
-          )}
-        </div>
-      )}
-      {o.kol && acik && (
+      {o.kol && acik && islem === 'katil' && yetki.emirYaz && (
         <div className="tc-rr3-katil">
           <h4>Katılma adımı</h4>
-          <p className="tc-rr3-ipucu">Bu kol ana emre {o.kol.m} {kisa(o.kol.m)} adımında katılır.</p>
-          {yetki.emirYaz && (
-            <Dugme aria-expanded={katil} onClick={() => { setKatil(!katil); }}>Katılma adımını değiştir</Dugme>
-          )}
-          {katil && yetki.emirYaz && (
-            <>
-              <p className="tc-rr3-ipucu">Kolun ana emre katılacağı yeni adımı seçin; seçim hemen uygulanır.</p>
-              <AdimSeridi
-                etiket="Katılma adımı" adimlar={adimlar} opdefs={d.opdefs} istasyonlar={d.stations}
-                durum={(j) => (j === o.kol!.n ? ['ayril', 'Kol bu adımdan sonra ayrılır'] : j === o.kol!.m ? ['birles', 'Şu an burada katılır']
-                  : j > o.kol!.n && j < o.kol!.m ? ['kol', 'Kol yapar'] : ['', ''])}
-                secili={(j) => j === o.kol!.m}
-                sec={(j) => {
-                  setKatil(false);
-                  void komut.calistir('emir-katilma', { id: o.id, m: j, surum: o.surum }, `${o.no} ${String(j)}. adımda ${ana?.no ?? 'ana emre'} bağlanır.`);
-                }}
-              />
-            </>
-          )}
+          <p className="tc-rr3-ipucu">Bu kol ana emre {o.kol.m} {kisa(o.kol.m)} adımında katılır. Yeni adımı seçin; seçim hemen uygulanır.</p>
+          <AdimSeridi
+            etiket="Katılma adımı" adimlar={adimlar} opdefs={d.opdefs} istasyonlar={d.stations}
+            durum={(j) => (j === o.kol!.n ? ['ayril', 'Kol bu adımdan sonra ayrılır'] : j === o.kol!.m ? ['birles', 'Şu an burada katılır']
+              : j > o.kol!.n && j < o.kol!.m ? ['kol', 'Kol yapar'] : ['', ''])}
+            secili={(j) => j === o.kol!.m}
+            sec={(j) => {
+              islemKapat();
+              void komut.calistir('emir-katilma', { id: o.id, m: j, surum: o.surum }, `${o.no} ${String(j)}. adımda ${ana?.no ?? 'ana emre'} bağlanır.`);
+            }}
+          />
+          <div className="tc-rr3-arac"><Dugme onClick={islemKapat}>Vazgeç</Dugme></div>
         </div>
       )}
       {altlar.length > 0 && <p className="tc-rr3-ipucu">{altlar.length} alt emir listede bu emrin altında görünür.</p>}
       {partiler.length > 0 && (
         <p className="tc-rr3-ipucu">Parti toplamı: ana emir {sayi(o.qty)} + alt emirler {sayi(toplam - o.qty)} = {sayi(toplam)}</p>
       )}
-      {acik && yetki.emirYaz && adimlar.length > 0 && (
+      {acik && islem === 'bol' && yetki.emirYaz && adimlar.length > 0 && (
         <div className="tc-rr3-bol">
           <h4>Böl</h4>
           <BolmePaneli
             yeni={false} girdi={girdi} adimlar={adimlar} baslamis={baslamis} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
-            gonder={() => { void bol(); }} vazgec={() => { setBolme(bosBolme(false)); }} mesgul={komut.mesgul}
+            gonder={() => { void bol(); }} vazgec={() => { setBolme(bosBolme(false)); islemKapat(); }} mesgul={komut.mesgul}
           />
         </div>
       )}
@@ -355,30 +352,24 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
 
 interface OpSatiri { adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null }
 
-// Plan bölümü: emir plandaysa (serbest ya da üretimde) adımların yerleşimi, malzeme ihtiyacı, yan ürün ve tamamlama.
-function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
-  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; tamamla: () => void;
+// Adımlar ve malzeme: her emirde adım tablosu; plandaki (serbest ya da üretimdeki) emirde plan yerleşimi, uyarılar, malzeme ihtiyacı ve yan ürün.
+function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
+  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki'];
 }) {
   const yonlen = useNavigate();
   // Ara adım stoğu stoktan okunur (Stok bölümüyle aynı okuma); okunamazsa yalnız serbest stokla hesaplanır.
   const stokIdleri = useMemo(() => stokKartiIdleri(d.items ?? []), [d.items]);
   const stok = useStokOkumasi(stokIdleri, yetki.stokOku).data ?? null;
   const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d, stok), [d, stok]);
-  if (!plandaMi(o)) {
-    const metin = o.status === 'taslak' ? 'Taslak emirler plana girmez. Plana alınca yerleşir.'
-      : o.status === 'tamam' ? `Bu emrin durumu: ${durumAdi(o)}.` : 'Bu emir iptal edildi.';
-    return <p className="tc-rr3-ipucu">{metin}</p>;
-  }
-  const R = ihtiyaclar.get(o.id) ?? null;
-  const sira = planSirasi(d).findIndex((x) => x.id === o.id);
+  const planda = plandaMi(o);
+  const R = planda ? ihtiyaclar.get(o.id) ?? null : null;
   const plan = planOzeti(d, d.planYerlesim, o);
-  const tampon = tamponRozeti(plan);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
   const ops: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
-    const p = adimPlani(d.planYerlesim, o.no, a.opNo);
+    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
     const k = `${o.id}|root|${String(o.kol ? a.sira - o.kol.n : a.sira)}`;
     return {
       adim: a, durum: a.durum ?? adimDurumu(o, a.sira, opStatus), baslangic: p?.baslangic ?? null,
@@ -392,16 +383,11 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
     const m = k && d.maliyet ? d.maliyet.malzeme[String(k.kayitNo)] : undefined;
     return m ? `${sayi(e.alinacak * Number(m.birimMaliyet))} ${m.paraBirimi}` : null;
   };
-  const opSutunlari: Sutun<OpSatiri>[] = [
-    { anahtar: 'sira', baslik: 'Sıra', hucre: (s) => s.adim.sira, hizala: 'sag' },
-    { anahtar: 'op', baslik: 'OP', hucre: (s) => s.adim.opNo, mono: true },
-    { anahtar: 'kisa', baslik: 'Kısaltma', hucre: (s) => d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad },
-    { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (s) => d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null },
-    { anahtar: 'baslangic', baslik: 'Plan başlangıç', hucre: (s) => (s.durum === 'tamam' ? '–' : s.baslangic ? zaman(s.baslangic) : null) },
-    { anahtar: 'makine', baslik: 'Makine', hucre: (s) => s.makine },
-    { anahtar: 'saglam', baslik: 'Sağlam', hizala: 'sag', hucre: (s) => (s.saglam === null ? null : sayi(s.saglam)) },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={ADIM_TONU[s.durum]}>{ADIM_DURUMU[s.durum]}</Rozet> },
-  ];
+  // Yan panel dardır: tablo sığmayıp karta döner; adım tek satırda (OP, operasyon ve yeri, sağlam, durum) yazılır (tuval 3).
+  // Başlamamış adımın plan başlangıcı, makinesi ve sağlam adedi "henüz yok"tur, veri eksikliği değil: çizgi yazılır.
+  const adimYeri = (s: OpSatiri): string => [
+    d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `plan ${zaman(s.baslangic)}` : null,
+  ].filter((x) => x !== null).join(' · ') || YOK;
   const hamSutunlar: Sutun<IhtiyacSatiri>[] = [
     { anahtar: 'kod', baslik: 'Kod', hucre: (e) => kart(e.malzemeId)?.code ?? e.malzemeId, mono: true },
     { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => kart(e.malzemeId)?.name ?? null },
@@ -416,63 +402,53 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(e.miktar, birim(e.malzemeId)) },
   ];
   const ipuclari = [
+    ...(o.status === 'taslak' ? ['Taslak emirler plana girmez. Plana alınca yerleşir.'] : []),
+    ...(o.status === 'iptal' ? ['Bu emir iptal edildi.'] : []),
+    ...(o.kol && planda ? ['Bu kol ana emre bağlıdır; ana emirle birlikte stoğa işlenir.'] : []),
     ...(plan.tur === 'plan' && plan.gecikiyor ? [`Plan bitişi teslimden sonra (${tarih(plan.bitis)}, teslim ${tarih(o.due)}).`] : []),
     ...(plan.tur === 'planlanamiyor' ? plan.adimlar.map((a) => `OP ${String(a.opNo)} planlanamadı: ${a.neden}`) : []),
     ...(plan.tur === 'yerlesmedi' ? ['Emrin açık adımları plan motorunun yerleşiminde yok: rota, istasyon ya da vardiya eksik olabilir.'] : []),
     ...((plan.tur === 'plan' || plan.tur === 'yerlesmedi') ? plan.calisanPlanDisi.map((op) => `OP ${String(op)} çalışıyor, planda yok: makinesi bilinmiyor ya da plan kapsamı dışında.`) : []),
-    ...(R && R.eksikler.length ? [`${String(R.eksikler.length)} kalem malzeme stokta yetersiz.`] : []),
     ...(R?.uyarilar ?? []),
   ];
+  const yanUrun = R?.yanUrun ?? [];
 
   return (
     <section className="tc-rr3-plan" aria-label={`${o.no} planı`}>
-      <div className="tc-rr3-kpi">
-        <SayiKarti baslik="Plan bitiş" simge="gantt" metin={planMetni(plan).metin} altMetin={`Teslim ${tarih(o.due)}${tampon ? ` · ${tampon.metin}` : ''}`} ton={plan.tur === 'planlanamiyor' || (plan.tur === 'plan' && plan.gecikiyor) ? 'hata' : 'bilgi'} />
-        <SayiKarti baslik="Plan sırası" simge="list" metin={sira >= 0 ? `${String(sira + 1)}. emir` : YOK} altMetin="Öncelik ve teslim tarihine göre" />
-        <SayiKarti baslik="Eksik malzeme" simge="box" sayi={R ? R.eksikler.length : null} ton="uyari" altMetin="kalem" />
-      </div>
       {ipuclari.length > 0 && <ul className="tc-rr3-mesajlar">{ipuclari.map((t) => <li key={t}>{t}</li>)}</ul>}
-      <h4>Operasyonlar</h4>
-      <Tablo etiket={`${o.no} operasyonları`} sutunlar={opSutunlari} satirlar={ops} satirAnahtari={(s) => s.adim.sira} bosMesaj="Adım yok." />
-      {!o.rotasiz && (
-        <p className="tc-rr3-ipucu">
-          Fason adımlar atölye kapasitesi kullanmaz. Bu emirde bir adımı iç üretimden fasona ya da fasondan içeri almak için{' '}
-          <button type="button" className="tc-rr3-bag" onClick={() => { void yonlen(`/uretim-emirleri/${String(o.kayitNo)}`); }}>Üretim Emirleri'nde iç ve dış üretim</button>.
-          Rota değişmez.
-        </p>
-      )}
-      <div className="tc-rr3-iki">
-        <div>
-          <h4>Malzeme ihtiyacı</h4>
-          <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => e.malzemeId} bosMesaj="Satın alınacak malzeme yok." />
-        </div>
-        <div>
-          <h4>Yan ürün ve hurda</h4>
-          <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={R?.yanUrun ?? []} satirAnahtari={(e) => e.malzemeId} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
-        </div>
-      </div>
-      <h4>Stok ve tamamlama</h4>
-      {R && R.eksikler.length > 0 ? (
-        <>
-          <p className="tc-rr3-ipucu">
+      {R && R.eksikler.length > 0 && (
+        <div className="tc-rr3-uyari-kutu" role="status">
+          <Simge ad="box" />
+          <span>
             {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kart(e.malzemeId)?.code ?? e.malzemeId} ${miktar(e.alinacak, birim(e.malzemeId))}`).join(', ')}.
             Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
-          </p>
-          <div className="tc-rr3-arac">
-            <Dugme simge="cart" onClick={() => { void yonlen(TALEP_YOLU); }}>Satın alma talebi aç</Dugme>
-          </div>
-        </>
-      ) : o.kol ? (
-        <p className="tc-rr3-ipucu">Bu kol ana emre bağlıdır; ana emir tamamlanınca birlikte tamamlanır ve girenleri stoktan düşer.</p>
-      ) : (
+          </span>
+          <Dugme simge="cart" onClick={() => { void yonlen(TALEP_YOLU); }}>Satın alma talebi aç</Dugme>
+        </div>
+      )}
+      <h4>Adımlar</h4>
+      <ol className="tc-rr3-adimlar" aria-label={`${o.no} operasyonları`}>
+        {ops.map((s) => (
+          <li key={s.adim.sira}>
+            <span className="tc-rr3-op">{s.adim.opNo}</span>
+            <span className="tc-rr3-adim-ad">
+              <span>{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
+              <small>{adimYeri(s)}</small>
+            </span>
+            <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
+            <Rozet ton={ADIM_TONU[s.durum]}>{ADIM_DURUMU[s.durum]}</Rozet>
+          </li>
+        ))}
+        {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
+      </ol>
+      {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği Üretim Emirleri'nde yapılır; rota değişmez.</p>}
+      {planda && (
         <>
-          <p className="tc-rr3-ipucu">
-            Tüm girenler stokta. Tamamladığınızda kalan sarf stoktan düşülür, {miktar(o.qty, kart(o.itemId)?.unit)} {kart(o.itemId)?.code ?? ''} üretim alanına girer.
-            {ops.filter((s) => s.durum !== 'tamam').length > 0 ? ` ${String(ops.filter((s) => s.durum !== 'tamam').length)} adım henüz bitmedi.` : ''}
-          </p>
-          {yetki.stokGiris && (
-            <div className="tc-rr3-arac"><Dugme tur="birincil" simge="check" onClick={tamamla}>Emri tamamla, stoktan düş</Dugme></div>
-          )}
+          <h4>Malzeme</h4>
+          <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => e.malzemeId} bosMesaj="Satın alınacak malzeme yok." />
+          {yanUrun.length > 0
+            ? <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={yanUrun} satirAnahtari={(e) => e.malzemeId} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
+            : <p className="tc-rr3-ipucu">Yan ürün ya da hurda çıkmıyor.</p>}
         </>
       )}
     </section>

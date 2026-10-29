@@ -37,13 +37,40 @@ describe('R3 Üretim emirleri: okuma', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
-  it("ayrıntı alanları eski satırda salt okunur kutudur; yöneticide de yazılamaz, Üretim Emirleri'ne bağlantı verilir (812 a)", async () => {
+  it("ayrıntı alan kutusu göstermez; yöneticide de yazılamaz, Üretim Emirleri'ne bağlantı verilir (812 a, 1100 B)", async () => {
     sunucuKur(YONETICI);
     rrAc();
     const b = await emirAc();
     const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
-    for (const ad of ['Miktar', 'Başlangıç', 'Teslim', 'Öncelik', 'Durum']) expect(within(ayrinti).getByLabelText<HTMLInputElement>(ad).readOnly).toBe(true);
+    expect(within(ayrinti).queryAllByRole('textbox')).toEqual([]);
     expect(within(ayrinti).getByRole('button', { name: "Üretim Emirleri'nde aç" })).toBeTruthy();
+  });
+
+  it('seçilen satır basılı görünür; kapatınca boş panel döner', async () => {
+    sunucuKur(OKUYAN);
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    const satir = await within(b).findByRole('button', { name: /UE-0001/, pressed: false });
+    expect(within(b).getByText('Ayrıntı için listeden bir emir seçin.')).toBeTruthy();
+    fireEvent.click(satir);
+    expect(satir.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(b).getByRole('button', { name: 'Ayrıntıyı kapat' }));
+    expect(within(b).queryByLabelText('UE-0001 ayrıntısı')).toBeNull();
+    expect(satir.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('arama emir no, ürün ve notta arar; tür açılır listesinde yalnız emri olan türler (1101 a)', async () => {
+    sunucuKur(OKUYAN);
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    await within(b).findByRole('button', { name: /UE-0001/ });
+    const tur = within(b).getByRole('combobox', { name: 'Tür' });
+    expect([...tur.querySelectorAll('option')].map((x) => x.textContent)).toHaveLength(2);
+    const ara = within(b).getByRole('searchbox', { name: 'Ara' });
+    fireEvent.change(ara, { target: { value: 'yok-boyle-bir-sey' } });
+    expect(within(b).queryByRole('button', { name: /UE-0001/ })).toBeNull();
+    fireEvent.change(ara, { target: { value: 'ue-0001' } });
+    expect(within(b).getByRole('button', { name: /UE-0001/ })).toBeTruthy();
   });
 
   it('süzgeç sayıları ve durum süzgeci: üretimi bitenlerde taslak emir yok', async () => {
@@ -68,8 +95,7 @@ describe('R3 Üretim emirleri: okuma', () => {
     sunucuKur(OKUYAN);
     rrAc();
     const b = await emirAc();
-    const satir = within(b).getByRole('button', { name: /UE-0001/ }).closest('li')!;
-    expect(within(satir).getByText(/Taslak emirler plana girmez/)).toBeTruthy();
+    expect(within(within(b).getByLabelText('UE-0001 ayrıntısı')).getByText(/Taslak emirler plana girmez/)).toBeTruthy();
   });
 });
 
@@ -95,7 +121,7 @@ describe('R3 Üretim emirleri: plan bitiş', () => {
     rrAc();
     const b = await bolum('Üretim emirleri');
     const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
-    expect(within(b).getByText('Plan bitiş')).toBeTruthy();
+    expect(satir.querySelector('[data-baslik="Plan bitiş"]')).not.toBeNull();
     await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
     expect(within(satir).getByText(/^Gecikiyor, -/)).toBeTruthy();
     expect(satir.hasAttribute('data-gec')).toBe(true);
@@ -192,7 +218,9 @@ describe('R3 Üretim emirleri: komutlar', () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}) } });
     rrAc();
     const b = await emirAc();
-    fireEvent.click(within(b).getByRole('button', { name: 'İptal et' }));
+    expect(within(b).queryByRole('button', { name: 'İptal et' })).toBeNull();
+    fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 için diğer işlemler' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
     const pencere = await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' });
     expect(yazmalar(istekler).some((i) => i.yol.endsWith('/iptal'))).toBe(false);
     fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
@@ -230,6 +258,45 @@ describe('R3 Üretim emirleri: komutlar', () => {
     fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
     await within(b).findByText(/Emir açmak için mamul ya da yarı mamul gerekli/);
     expect(within(b).queryByRole('button', { name: 'Emri oluştur' })).toBeNull();
+  });
+});
+
+describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => {
+  const adimli = (status: 'serbest' | 'tamam', kapanisSonucu: 'tamamlandi' | null = null) => {
+    const d = ornekDurum();
+    d.routes = { '11': { base: null, steps: [{
+      id: 's1', seq: 1, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    }] } } as unknown as typeof d.routes;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((o) => ({ ...o, status, kapanisSonucu })) };
+    return d;
+  };
+
+  it('Böl paneli kapalı gelir, Diğer menüsünden açılır', async () => {
+    sunucuKur(YONETICI, { durum: adimli('serbest') });
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    expect(within(ayrinti).queryByRole('group', { name: 'Bölme türü' })).toBeNull();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 için diğer işlemler' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    expect(within(ayrinti).getByRole('group', { name: 'Bölme türü' })).toBeTruthy();
+  });
+
+  it('hiçbir durumda stoktan düşme düğmesi yok; üretimi biten emirde Üretim Emirleri uyarısı, kapanınca yok', async () => {
+    for (const [status, kapanis, uyari] of [['serbest', null, false], ['tamam', null, true], ['tamam', 'tamamlandi', false]] as const) {
+      sunucuKur(YONETICI, { durum: adimli(status, kapanis) });
+      rrAc();
+      const b = await bolum('Üretim emirleri');
+      fireEvent.click(within(await within(b).findByRole('group', { name: 'Durum' })).getByRole('button', { name: /Tümü/ }));
+      fireEvent.click(await within(b).findByRole('button', { name: /UE-0001/ }));
+      const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+      expect(within(ayrinti).queryByRole('button', { name: /stoktan düş|Emri tamamla|Stoğa işle/ })).toBeNull();
+      expect(within(ayrinti).queryByText(/Stoğa işleme ve kapanış Üretim Emirleri'ndedir/) !== null).toBe(uyari);
+      cleanup();
+      vi.unstubAllGlobals();
+    }
   });
 });
 

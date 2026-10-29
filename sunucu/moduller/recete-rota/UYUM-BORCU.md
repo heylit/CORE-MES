@@ -84,3 +84,10 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 
 ## Bağlamada kapanacak: tezgâh takvimi ve otomatik arıza (650 a, 651 a; kart 625g)
 - Sayfada duruş satırı yalnız silinip yeniden eklenerek değişir (bitiş saati yerinde düzenlenmez). Satırın nedeni ve oto işareti sayfanın tablolarında gösterilmez.
+
+## Bağlamada kapanacak: Üretim emirleri liste ve yan panel (1100 B, 1101 a, 1106 a)
+- Durdu süzgeci ve rozeti yok: 1101 a'daki "Durdu" bölümü bu sekmeye gelmedi. Durdu bilgisi (hatalı parça yüzünden duran emir) yalnız `uretim-emirleri`
+  sözleşmesinde var; Reçete-Rota emir verisinde (`paylasilan/sozlesme/recete-rota.ts` emir, `uretim-emirleri/disari.ts` üzerinden gelen liste) alan yok.
+  Nasıl uyumlanır: ayrı dalda emir verisine durdu alanı eklenir (sahibi `uretim-emirleri`), sonra `DURUM_SUZGECLERI`ne "Durdu" bölümü ve satıra rozet girer.
+- Üretimi bitmiş emrin stoğa işlenip işlenmediği bu sekmede bilinmez: "Üretimi bitti" ve kapanış sonucu yoksa her zaman Üretim Emirleri uyarısı çıkar
+  (stoğa işlenmiş ama kapanmamış emirde de). Nasıl uyumlanır: emir verisine stok tamamlama bilgisi gelince uyarı yalnız işlenmemiş emirde çıkar.
