@@ -31,8 +31,10 @@ const sayi = (x: string) => Number(x.replace(',', '.'));
 const FABRIKA_KONUMU_NOTU = "Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu'ndan gelir; rotalar oradan çıkar.";
 const konumMetni = (enlem: number, boylam: number) => `${enlem.toFixed(5)}, ${boylam.toFixed(5)}`;
 const TUR_SECENEKLERI = NOKTA_TURLERI.map((t) => ({ deger: t, baslik: NOKTA_TURU_ADI[t] }));
-type Suzgec = NoktaTuru | 'hepsi';
-const SUZGECLER = [{ anahtar: 'hepsi' as Suzgec, baslik: 'Hepsi' }, ...NOKTA_TURLERI.map((t) => ({ anahtar: t as Suzgec, baslik: NOKTA_TURU_ADI[t] }))];
+// 1264 a: müşteri, tedarikçi ve fason noktası firmaya bağlıdır; bağsız eski noktalar ayrı süzgeçte eşlenir.
+const firmasiz = (n: Pick<Nokta, 'tur' | 'firmaId'>): boolean => FIRMALI_TURLER.includes(n.tur) && n.firmaId === null;
+type Suzgec = NoktaTuru | 'hepsi' | 'firmasiz';
+const TUR_SUZGECLERI = [{ anahtar: 'hepsi' as Suzgec, baslik: 'Hepsi' }, ...NOKTA_TURLERI.map((t) => ({ anahtar: t as Suzgec, baslik: NOKTA_TURU_ADI[t] }))];
 
 export function Noktalar() {
   const sorgu = useNoktalar();
@@ -46,7 +48,9 @@ export function Noktalar() {
   const [pasifOnayi, setPasifOnayi] = useState<Nokta | null>(null);
   const noktalar = sorgu.data ?? [];
   const aktifler = noktalar.filter((n) => n.aktif);
-  const liste = noktalar.filter((n) => suzgec === 'hepsi' || n.tur === suzgec);
+  const firmasizSayisi = aktifler.filter(firmasiz).length;
+  const suzgecler = firmasizSayisi > 0 ? [...TUR_SUZGECLERI, { anahtar: 'firmasiz' as Suzgec, baslik: `Firmasız · ${firmasizSayisi}` }] : TUR_SUZGECLERI;
+  const liste = noktalar.filter((n) => suzgec === 'hepsi' || (suzgec === 'firmasiz' ? n.aktif && firmasiz(n) : n.tur === suzgec));
   const fabrika = aktifler.find((n) => n.tur === 'fabrika') ?? null;
   const taslakKonumu = taslak && taslak.enlem !== '' && taslak.boylam !== '' && Number.isFinite(sayi(taslak.enlem)) && Number.isFinite(sayi(taslak.boylam))
     ? { enlem: sayi(taslak.enlem), boylam: sayi(taslak.boylam) } : null;
@@ -71,6 +75,7 @@ export function Noktalar() {
 
   const kaydet = (e: FormEvent) => {
     e.preventDefault(); if (!taslak) return;
+    if (firmasiz(taslak)) { bildir('hata', 'Müşteri, tedarikçi ve fason noktası bir firmaya bağlanır; firmayı seçin.'); return; }
     // Fabrikanın konumunu sunucu Sistem Ayarları'ndan yazar (930 a); gönderilen konum yok sayılır.
     const konum = taslakKonumu ?? { enlem: 0, boylam: 0 };
     const govde: NoktaGovdesi = { ad: taslak.ad, tur: taslak.tur, enlem: konum.enlem, boylam: konum.boylam, adres: taslak.adres.trim() || null, durakSuresiDakika: sayi(taslak.durakSuresiDakika), firmaId: taslak.firmaId };
@@ -94,7 +99,7 @@ export function Noktalar() {
 
   const sutunlar: Sutun<Nokta>[] = [
     { anahtar: 'tur', baslik: 'Tür', hucre: (n) => <span className="tc-sevkiyat-etiket" data-tur={n.tur}>{NOKTA_TURU_ADI[n.tur]}</span> },
-    { anahtar: 'ad', baslik: 'Ad', hucre: (n) => <>{n.ad}{n.firmaId !== null && <> <Rozet>Firma</Rozet></>}{!n.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
+    { anahtar: 'ad', baslik: 'Ad', hucre: (n) => <>{n.ad}{n.firmaId !== null && <> <Rozet>Firma</Rozet></>}{n.aktif && firmasiz(n) && <> <Rozet ton="uyari">Firmasız</Rozet></>}{!n.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
     { anahtar: 'adres', baslik: 'Adres', hucre: (n) => n.adres ?? <span className="tc-sevkiyat-ince">{konumMetni(n.enlem, n.boylam)}</span> },
     { anahtar: 'sure', baslik: 'Durak (dk)', hizala: 'sag', mono: true, hucre: (n) => String(n.durakSuresiDakika) },
     ...(yetki.tanimYaz ? [{
@@ -123,7 +128,7 @@ export function Noktalar() {
                   : (
                     <p className="tc-sevkiyat-satir">
                       <Rozet>Firma</Rozet> <span>Ad finanstaki firmadan gelir; firma adı değişince nokta adı da değişir.</span>
-                      <Dugme simge="x" onClick={() => alan('firmaId', null)}>Firma bağını kaldır</Dugme>
+                      <Dugme simge="x" onClick={() => alan('firmaId', null)}>Firmayı değiştir</Dugme>
                     </p>
                   ))}
                 <div className="tc-sevkiyat-alanlar">
@@ -156,7 +161,7 @@ export function Noktalar() {
           <Kart baslik={`Noktalar · ${aktifler.length}`} sag={yetki.tanimYaz && !taslak ? <Dugme tur="birincil" simge="plus" onClick={() => formAc(bosTaslak())}>Yeni nokta</Dugme> : undefined}>
             {fabrikaAyardan && <p className="tc-sevkiyat-ince">{FABRIKA_KONUMU_NOTU}</p>}
             {!fabrika && <p role="status"><Rozet ton="uyari">Fabrika yok</Rozet> Rotalar fabrikadan çıkar; önce fabrikayı tanımlayın.</p>}
-            <Sekmeler etiket="Türe göre süz" sekmeler={SUZGECLER} secili={suzgec} sec={setSuzgec} />
+            <Sekmeler etiket="Türe göre süz" sekmeler={suzgecler} secili={suzgec} sec={setSuzgec} />
             <Tablo etiket="Noktalar" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(n) => n.id} bosMesaj="Bu türde nokta yok." />
             <p className="tc-sevkiyat-ince">Noktalar bu sunucuda saklanır; konum yalnız sürücüye gönderilen rota bağlantısıyla telefondaki harita uygulamasına gider.</p>
           </Kart>

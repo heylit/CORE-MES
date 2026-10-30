@@ -201,6 +201,10 @@ export const fabrikayaCevrilemez = (oncekiTur: string, yeniTur: string, isteKull
 // konum Sistem Ayarları'nda güncellenir (930 a). Rotalar fabrikadan çıkar; fabrikasız gün planı onaylanamaz.
 // Firma bağı yalnız firmanın kendisi olan noktada (kargo, fabrika, diğer firmanın yeri değildir).
 export const firmaBaglanabilir = (tur: string): boolean => tur === 'musteri' || tur === 'tedarikci' || tur === 'fason';
+// 1264 a: müşteri, tedarikçi ve fason noktası firma kartına bağlı yazılır; adı karttan gelir. Bağsız eski nokta listede kalır,
+// düzeltilirken firmaya bağlanır.
+export const NOKTA_FIRMASI_GEREKIR = 'Müşteri, tedarikçi ve fason noktası bir firmaya bağlanır; firmayı seçin.';
+export const noktaFirmasizMi = (tur: string, firmaId: number | null): boolean => firmaBaglanabilir(tur) && firmaId === null;
 
 export const AKTIF_FABRIKA_KALDIRILAMAZ = 'Aktif fabrika noktası pasifleştirilemez ya da başka türe çevrilemez; fabrika taşındıysa konumunu Sistem Ayarları\'nda güncelleyin.';
 export const FABRIKA_KONUMU_AYARDA = 'Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu\'nda girilir; önce orada girin.';

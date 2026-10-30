@@ -13,7 +13,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar; Aşama 2 tablosun
 ## Kavramlar
 | Kavram | Modül ne tutuyor | Yer | Bağ |
 |---|---|---|---|
-| Firma (müşteri, tedarikçi, fason) | ad, adres, konum | `sevkiyat_noktasi` (tur musteri / tedarikci / fason) | sahibi finans; boş olabilen `sevkiyat_noktasi.firma_id` -> `finans_firma(id)` (kart #836), bağlı noktanın adı finanstan okunur; bağsız nokta ad kopyası tutar |
+| Firma (müşteri, tedarikçi, fason) | ad, adres, konum | `sevkiyat_noktasi` (tur musteri / tedarikci / fason) | sahibi musteri-tedarikci; `sevkiyat_noktasi.firma_id` -> `musteri_tedarikci_firma(id)` (kart #836, #1164), bağlı noktanın adı karttan okunur; 1264 a ile müşteri, tedarikçi ve fason noktası firmasız yazılmaz, eski bağsız nokta ad kopyası tutar ve eşlenir |
 | Fabrika konumu | tek aktif fabrika noktası | `sevkiyat_noktasi` (tur fabrika) | atölye (Fabrika Haritası) de fabrika tutar; Aşama 2'de sorulur |
 | Araç ve plaka | araç kartı, kapasite, maliyet | `sevkiyat_araci` | modül içi; başka modülde araç yok (DOĞRULANDI: `npm run harita`) |
 | Belge no (irsaliye) | serbest metin | `sevkiyat_isi.belge_no` | irsaliye ve fatura kaydı Logo'da; stok çıkışıyla bağ yok |
