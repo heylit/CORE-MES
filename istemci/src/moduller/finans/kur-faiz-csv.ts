@@ -7,6 +7,13 @@ export type TopluSatir = z.input<typeof kurFaizTopluSatiri>;
 // Sözleşmedeki KUR_FAIZ_TOPLU_SINIRI ve KUR_FAIZ_ARALIGI_GUN ile aynıdır (istemci paylaşılandan değer almaz); sunucu yeniden denetler.
 const KUR_FAIZ_TOPLU_SINIRI = 400;
 const KUR_FAIZ_ARALIGI_GUN = 1830;
+// Sözleşmedeki gunlukFaizdenAylik ile aynıdır (1350 a): günlük oran aylığa çevrilip dört ondalıkla kaydedilir; sunucu yeniden çevirir.
+export const gunlukFaizdenAylik = (gunlukYuzde: number): number => Math.round(((gunlukYuzde * 365) / 12) * 1e4) / 1e4;
+export const GUNLUK_FAIZ = 'günlük faiz';
+const turOku = (ham: string): string => {
+  const t = ham.trim().toLocaleLowerCase('tr').replace(/[\s_]+/g, ' ');
+  return t === 'gunluk faiz' ? GUNLUK_FAIZ : t;
+};
 export type SatirDurumu = 'yeni' | 'ayni' | 'farkli' | 'hata';
 export interface OnizlemeSatiri {
   no: number;
@@ -14,6 +21,8 @@ export interface OnizlemeSatiri {
   paraBirimi: string;
   tarih: string | null;
   deger: number | null;
+  // Günlük faiz satırında kaydedilecek aylık oran; kayıtlı faizle bununla karşılaştırılır.
+  aylik: number | null;
   durum: SatirDurumu;
   neden: string | null;
 }
@@ -28,10 +37,12 @@ export const SABLON_SATIRLARI: readonly (readonly string[])[] = [
   ['faiz', 'TRY', '01.11.2026', '3,2500'],
   ['faiz', 'USD', '01.11.2026', '0,6000'],
   ['faiz', 'EUR', '01.11.2026', '0,5000'],
+  [GUNLUK_FAIZ, 'TRY', '01.12.2026', '0,1050'],
 ];
 
 const ondalikSayisi = (n: number): number => { const m = String(n).split('.')[1]; return m ? m.length : 0; };
-const anahtar = (tur: string, pb: string, tarih: string) => `${tur}|${pb}|${tarih}`;
+// Günlük faiz aylık faizin başka birimle yazılışıdır: aynı para birimi ve günde ikisi aynı kayıttır.
+const anahtar = (tur: string, pb: string, tarih: string) => `${tur === GUNLUK_FAIZ ? 'faiz' : tur}|${pb}|${tarih}`;
 
 // Başlık satırı atlanır; satır numarası dosyadaki satırdır (başlık 1).
 export function sablonuOku(metin: string, bugun: string): OkunanDosya {
@@ -41,11 +52,11 @@ export function sablonuOku(metin: string, bugun: string): OkunanDosya {
   const gorulen = new Set<string>();
   const satirlar = ham.slice(1).map((h, i): OnizlemeSatiri => {
     const r: OnizlemeSatiri = {
-      no: i + 2, tur: (h[0] ?? '').trim().toLocaleLowerCase('tr'), paraBirimi: (h[1] ?? '').trim().toUpperCase(), tarih: null, deger: null, durum: 'hata', neden: null,
+      no: i + 2, tur: turOku(h[0] ?? ''), paraBirimi: (h[1] ?? '').trim().toUpperCase(), tarih: null, deger: null, aylik: null, durum: 'hata', neden: null,
     };
     const hata = (neden: string): OnizlemeSatiri => ({ ...r, neden });
     if (h.length < 4 || h.slice(4).some((x) => x.trim() !== '')) return hata('Dört sütun olmalı: Tür, Para birimi, Tarih, Değer.');
-    if (r.tur !== 'kur' && r.tur !== 'faiz') return hata('Tür "kur" ya da "faiz" olmalı.');
+    if (r.tur !== 'kur' && r.tur !== 'faiz' && r.tur !== GUNLUK_FAIZ) return hata('Tür "kur", "faiz" ya da "günlük faiz" olmalı.');
     if (!/^[A-Z]{3}$/.test(r.paraBirimi)) return hata('Para birimi üç harfli koddur (USD gibi).');
     if (r.tur === 'kur' && r.paraBirimi === 'TRY') return hata('TRY için kur girilmez.');
     const tarih = csvTarihi(h[2] ?? '');
@@ -55,10 +66,12 @@ export function sablonuOku(metin: string, bugun: string): OkunanDosya {
     if (!Number.isFinite(deger)) return { ...hata('Değer sayı olmalı.'), tarih };
     if (r.tur === 'kur' && (deger <= 0 || ondalikSayisi(deger) > 6)) return { ...hata('Kur sıfırdan büyük, en çok altı ondalık olmalı.'), tarih, deger };
     if (r.tur === 'faiz' && (deger < 0 || deger > 100 || ondalikSayisi(deger) > 4)) return { ...hata('Aylık faiz 0 ile 100 arasında, en çok dört ondalık olmalı.'), tarih, deger };
+    const aylik = r.tur === GUNLUK_FAIZ ? gunlukFaizdenAylik(deger) : null;
+    if (aylik !== null && (deger < 0 || aylik > 100 || ondalikSayisi(deger) > 6)) return { ...hata('Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'), tarih, deger };
     const a = anahtar(r.tur, r.paraBirimi, tarih);
     if (gorulen.has(a)) return { ...hata('Bu tür, para birimi ve tarih dosyada ikinci kez var.'), tarih, deger };
     gorulen.add(a);
-    return { ...r, tarih, deger, durum: 'yeni' };
+    return { ...r, tarih, deger, aylik, durum: 'yeni' };
   });
   return { satirlar, dosyaHatasi: null };
 }
@@ -82,7 +95,7 @@ export function kayitliylaKarsilastir(satirlar: readonly OnizlemeSatiri[], kayit
     if (s.durum === 'hata' || s.tarih === null || s.deger === null) return s;
     const eski = degerler.get(anahtar(s.tur, s.paraBirimi, s.tarih));
     if (eski === undefined) return s;
-    if (Number(eski) === s.deger) return { ...s, durum: 'ayni', neden: 'Kayıtlı değerle aynı; atlanır.' };
+    if (Number(eski) === (s.aylik ?? s.deger)) return { ...s, durum: 'ayni', neden: 'Kayıtlı değerle aynı; atlanır.' };
     return { ...s, durum: 'farkli', neden: `Kayıtlı: ${Number(eski).toLocaleString('tr-TR', { maximumFractionDigits: 6 })}. Atlanır; o gün elle düzeltilir.` };
   });
 }
@@ -90,6 +103,8 @@ export function kayitliylaKarsilastir(satirlar: readonly OnizlemeSatiri[], kayit
 // Sunucuya geçerli bütün satırlar gider: atlama kararını sunucu yeniden verir (önizlemeden sonra girilmiş kayıt da atlanır).
 export const gonderilecekler = (satirlar: readonly OnizlemeSatiri[]): TopluSatir[] => satirlar
   .filter((s) => s.durum !== 'hata' && s.tarih !== null && s.deger !== null)
-  .map((s): TopluSatir => (s.tur === 'kur'
-    ? { tur: 'kur', paraBirimi: s.paraBirimi, tarih: s.tarih!, deger: s.deger! }
-    : { tur: 'faiz', paraBirimi: s.paraBirimi, tarih: s.tarih!, deger: s.deger! }));
+  .map((s): TopluSatir => {
+    const g = { paraBirimi: s.paraBirimi, tarih: s.tarih!, deger: s.deger! };
+    if (s.tur === 'kur') return { tur: 'kur', ...g };
+    return s.tur === GUNLUK_FAIZ ? { tur: 'gunluk_faiz', ...g } : { tur: 'faiz', ...g };
+  });

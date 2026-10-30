@@ -241,13 +241,23 @@ export type KurFaizOzeti = z.output<typeof kurFaizOzetiCevabi>;
 // Kur ve faiz toplu yükleme (1083-1087): şablondan okunan satırlar birlikte yazılır ya da hiçbiri. Kayıtlı güne farklı değer
 // atlanır, düzeltme tek tek yapılır (1085 a). Kur ileri tarihli olamaz, faiz olabilir (1086 a); bugün sunucuda bilinir.
 export const KUR_FAIZ_TOPLU_SINIRI = 400;
+// 1350 a: faizin tek kaynağı finans_faiz'in aylık yüzdesidir. Günlük oran yıl 365 gün, ay yılın 12'de biri sayılarak ondan türer
+// (proje maliyetindeki çevirmeyle aynı); günlük girilen oran aylığa çevrilip dört ondalığa yuvarlanarak yazılır.
+export const aylikFaizdenGunluk = (aylikYuzde: number): number => (aylikYuzde * 12) / 365;
+export const gunlukFaizdenAylik = (gunlukYuzde: number): number => Math.round(((gunlukYuzde * 365) / 12) * 1e4) / 1e4;
+const gunlukFaizSemasi = z.number().min(0, 'Günlük faiz sıfırdan küçük olamaz.')
+  .refine((v) => ondalik(6, '')(v) === true, 'Günlük faiz en çok altı ondalık olabilir.')
+  .refine((v) => gunlukFaizdenAylik(v) <= 100, 'Günlük faiz aylık %100\'ü aşamaz.')
+  .transform((v) => gunlukFaizdenAylik(v).toFixed(4));
 export const kurFaizTopluSatiri = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('kur'), paraBirimi: paraBirimiSemasi.refine((p) => p !== 'TRY', 'TRY için kur girilmez.'), tarih: tarihSemasi, deger: kurSemasi }),
   z.object({ tur: z.literal('faiz'), paraBirimi: paraBirimiSemasi, tarih: tarihSemasi, deger: aylikFaizSemasi }),
+  z.object({ tur: z.literal('gunluk_faiz'), paraBirimi: paraBirimiSemasi, tarih: tarihSemasi, deger: gunlukFaizSemasi }),
 ]);
+// Günlük faiz satırı aylık faiz satırına çevrilir: aynı para birimi ve günde ikisi birden aynı oranın iki kaydıdır.
 export const kurFaizTopluGovdesi = z.object({
   satirlar: z.array(kurFaizTopluSatiri).min(1, 'Dosyada satır yok.').max(KUR_FAIZ_TOPLU_SINIRI, `Tek seferde en çok ${KUR_FAIZ_TOPLU_SINIRI} satır.`),
-}).superRefine((g, c) => {
+}).transform((g) => ({ satirlar: g.satirlar.map((s) => (s.tur === 'gunluk_faiz' ? { ...s, tur: 'faiz' as const } : s)) })).superRefine((g, c) => {
   const gorulen = new Set<string>();
   g.satirlar.forEach((s, i) => {
     const anahtar = `${s.tur}|${s.paraBirimi}|${s.tarih}`;
