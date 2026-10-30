@@ -81,7 +81,8 @@ export async function alanlariOku(db: Db, tanimIdleri: readonly number[]): Promi
   if (tanimIdleri.length === 0) return sonuc;
   const satirlar = await db.sorgu<AlanSatiri>(
     `SELECT tanim_id AS "tanimId", sira, ad, icerik, sabit_metin AS "sabitMetin", kod_turu AS "kodTuru", yontem,
-            yazi_yuksekligi_mm::float8 AS "yaziYuksekligiMm", program, yuzey,
+            yazi_yuksekligi_mm::float8 AS "yaziYuksekligiMm",
+            yazi_derinligi_mm::float8 AS "yaziDerinligiMm", yazi_tipi AS "yaziTipi", program, yuzey,
             merkez_x::float8 AS mx, merkez_y::float8 AS my, merkez_z::float8 AS mz,
             normal_x::float8 AS nx, normal_y::float8 AS ny, normal_z::float8 AS nz,
             en_mm::float8 AS en, boy_mm::float8 AS boy, aci_derece::float8 AS aci
@@ -97,7 +98,8 @@ export async function alanlariOku(db: Db, tanimIdleri: readonly number[]): Promi
     const liste = sonuc.get(s.tanimId) ?? [];
     liste.push({
       sira: s.sira, ad: s.ad, icerik: s.icerik, sabitMetin: s.sabitMetin, kodTuru: s.kodTuru, yontem: s.yontem,
-      yaziYuksekligiMm: s.yaziYuksekligiMm, program: s.program, yuzey: s.yuzey, yer,
+      yaziYuksekligiMm: s.yaziYuksekligiMm,
+      yaziDerinligiMm: s.yaziDerinligiMm, yaziTipi: s.yaziTipi, program: s.program, yuzey: s.yuzey, yer,
     });
     sonuc.set(s.tanimId, liste);
   }
@@ -110,10 +112,10 @@ export async function alanlariYaz(db: Db, tanimId: number, alanlar: readonly Ala
   for (const [i, a] of alanlar.entries()) {
     const y = a.yer;
     await db.sorgu(
-      `INSERT INTO markalama_alani (tanim_id, sira, ad, icerik, sabit_metin, kod_turu, yontem, yazi_yuksekligi_mm, program, yuzey,
-         merkez_x, merkez_y, merkez_z, normal_x, normal_y, normal_z, en_mm, boy_mm, aci_derece)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
-      [tanimId, i + 1, a.ad, a.icerik, a.sabitMetin, a.kodTuru, a.yontem, a.yaziYuksekligiMm, a.program, a.yuzey,
+      `INSERT INTO markalama_alani (tanim_id, sira, ad, icerik, sabit_metin, kod_turu, yontem, yazi_yuksekligi_mm, yazi_derinligi_mm, yazi_tipi,
+         program, yuzey, merkez_x, merkez_y, merkez_z, normal_x, normal_y, normal_z, en_mm, boy_mm, aci_derece)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+      [tanimId, i + 1, a.ad, a.icerik, a.sabitMetin, a.kodTuru, a.yontem, a.yaziYuksekligiMm, a.yaziDerinligiMm, a.yaziTipi, a.program, a.yuzey,
         y?.merkez[0] ?? null, y?.merkez[1] ?? null, y?.merkez[2] ?? null, y?.normal[0] ?? null, y?.normal[1] ?? null, y?.normal[2] ?? null,
         y?.enMm ?? null, y?.boyMm ?? null, y?.aciDerece ?? null],
     );

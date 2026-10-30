@@ -1,9 +1,12 @@
-import type { AlanGovdesi, BirimDurumu, BirimOlayi, DurumKomutu, KodTuru, SayacKapsami, Yontem } from '#paylasilan/sozlesme/markalama.ts';
+import type { AlanGovdesi, BirimDurumu, BirimOlayi, DurumKomutu, KodTuru, SayacKapsami, YaziTipi, Yontem } from '#paylasilan/sozlesme/markalama.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 
 export const YONTEM_ADLARI: Readonly<Record<Yontem, string>> = {
   lazer: 'Lazer', nokta_vurus: 'Nokta vuruş', murekkep: 'Mürekkep / boya', elektrokimyasal: 'Elektrokimyasal', etiket: 'Etiket',
+};
+export const YAZI_TIPI_ADLARI: Readonly<Record<YaziTipi, string>> = {
+  gotik: 'Gotik (tırnaksız)', iso_3098: 'ISO 3098 teknik yazı', tek_cizgi: 'Tek çizgi (gravür)', nokta_matris_5x7: 'Nokta matris 5x7', ocr_a: 'OCR-A', ocr_b: 'OCR-B', din_1451: 'DIN 1451',
 };
 export const KOD_TURU_ADLARI: Readonly<Record<KodTuru, string>> = { yok: 'Yalnız yazı', qr: 'QR', datamatrix: 'DataMatrix' };
 export const KAPSAM_ADLARI: Readonly<Record<SayacKapsami, string>> = {
@@ -32,9 +35,12 @@ const anahtarlari = <T extends string>(k: Readonly<Record<T, string>>): readonly
 export const YONTEMLER = anahtarlari(YONTEM_ADLARI);
 export const KOD_TURLERI = anahtarlari(KOD_TURU_ADLARI);
 export const SAYAC_KAPSAMLARI = anahtarlari(KAPSAM_ADLARI);
+export const YAZI_TIPLERI = anahtarlari(YAZI_TIPI_ADLARI);
 export const BIRIM_DURUMLARI = anahtarlari(DURUM_ADLARI);
 export const ICERIK_ADLARI: Readonly<Record<AlanGovdesi['icerik'], string>> = { seri: 'Seri no (birime özel)', sabit: 'Sabit metin' };
 export const ICERIKLER = anahtarlari(ICERIK_ADLARI);
 export const SABLON_PARCALARI = Object.keys(SABLON_ACIKLAMALARI);
-// Sözleşmedeki AZAMI_ALAN ile aynı; sunucu ayrıca reddeder.
+// Sözleşmedeki AZAMI_ALAN ve ölçü sınırlarıyla aynı; sunucu ayrıca reddeder.
 export const AZAMI_ALAN = 20;
+export const AZAMI_YAZI_YUKSEKLIGI_MM = 100;
+export const AZAMI_YAZI_DERINLIGI_MM = 10;

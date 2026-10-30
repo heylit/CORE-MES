@@ -12,6 +12,11 @@ export const BIRIM_OLAYLARI = ['markalandi', 'hatali_markalama', 'dogrulandi', '
 export const DURUM_KOMUTLARI = ['red', 'rework', 'kabul', 'hurda'] as const;
 export const SABLON_PARCALARI = ['{PARCA}', '{EMIR}', '{YY}', '{YYYY}', '{WW}', '{MM}', '{DD}', '{SEQ:5}'] as const;
 export const AZAMI_ALAN = 20;
+// Boş yazı tipi makinenin varsayılanıdır. Gotik (eşit kalınlıkta, tırnaksız) savunma ve havacılık çizimlerinde istenen biçimdir;
+// makinedeki yazı tipi dosyasının adı program alanındadır.
+export const YAZI_TIPLERI = ['gotik', 'iso_3098', 'tek_cizgi', 'nokta_matris_5x7', 'ocr_a', 'ocr_b', 'din_1451'] as const;
+export const AZAMI_YAZI_YUKSEKLIGI_MM = 100;
+export const AZAMI_YAZI_DERINLIGI_MM = 10;
 
 const id = z.coerce.number().int().positive().max(2147483647);
 const metin = (azami: number) => z.string().trim().min(1).max(azami);
@@ -34,7 +39,10 @@ export const alanGovdesi = z.object({
   sabitMetin: metin(40).nullable().default(null),
   kodTuru: z.enum(KOD_TURLERI).default('yok'),
   yontem: z.enum(YONTEMLER),
-  yaziYuksekligiMm: z.number().positive().max(100).nullable().default(null),
+  // Yükseklik ve derinlik ayrı ölçülerdir; ikisi de istenmeyebilir.
+  yaziYuksekligiMm: z.number().positive('Yazı yüksekliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_YUKSEKLIGI_MM).nullable().default(null),
+  yaziDerinligiMm: z.number().positive('Yazı derinliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_DERINLIGI_MM).nullable().default(null),
+  yaziTipi: z.enum(YAZI_TIPLERI).nullable().default(null),
   program: metin(40).nullable().default(null),
   yuzey: metin(120).nullable().default(null),
   yer: yerSemasi.nullable().default(null),
@@ -49,7 +57,10 @@ const tanimAlanlari = z.object({
   alanlar: z.array(alanGovdesi).min(1, 'En az bir marka gerekir.').max(AZAMI_ALAN),
 });
 
-export const tanimEkleGovdesi = tanimAlanlari.extend({ malzemeId: id, opNo: id });
+export const tanimEkleGovdesi = tanimAlanlari.extend({
+  malzemeId: id,
+  opNo: z.coerce.number().int('Rota operasyon no tam sayı olmalı.').positive('Rota operasyon no 0\'dan büyük olmalı.').max(2147483647),
+});
 export const tanimKaydetGovdesi = tanimAlanlari.extend(beklenenSurum);
 
 export const tanimSorgusu = z.object({ malzemeId: id.optional() });
@@ -62,6 +73,8 @@ export const alanSemasi = z.object({
   kodTuru: z.enum(KOD_TURLERI),
   yontem: z.enum(YONTEMLER),
   yaziYuksekligiMm: z.number().nullable(),
+  yaziDerinligiMm: z.number().nullable(),
+  yaziTipi: z.enum(YAZI_TIPLERI).nullable(),
   program: z.string().nullable(),
   yuzey: z.string().nullable(),
   yer: yerSemasi.nullable(),
@@ -150,6 +163,7 @@ export const emirOzetiCevabi = z.object({
 });
 
 export type Yontem = (typeof YONTEMLER)[number];
+export type YaziTipi = (typeof YAZI_TIPLERI)[number];
 export type KodTuru = (typeof KOD_TURLERI)[number];
 export type SayacKapsami = (typeof SAYAC_KAPSAMLARI)[number];
 export type BirimDurumu = (typeof BIRIM_DURUMLARI)[number];
