@@ -81,6 +81,7 @@ function adim(a: Nesne): Nesne {
     ...(a['ilkParca'] === undefined ? {} : { ilkParca: secenek(a['ilkParca'], ILK_PARCA_SECIMLERI, 'ilk parça onayı') }),
     ...(a['dal'] === undefined ? {} : { dal: a['dal'] === null ? null : dal(a['dal'], 'dal') }),
     ...(a['birlesen'] === undefined ? {} : { birlesen: dallar(a['birlesen']) }),
+    ...(a['adetCarpani'] === undefined ? {} : { adetCarpani: tamSayiVeyaBos(a['adetCarpani'], 'adet çarpanı') }),
     // Hazırlık bölümü (1310 a); bölümü taşımayan adımda alanlar gönderilmez, sunucu toplamdan kurar.
     ...(a['ayar'] === undefined ? {} : {
       hazirlikDk: sayiVeyaBos(a['hazirlikDk'], 'hazırlık süresi'), ayar: a['ayar'] === true, ayarDk: sayiVeyaBos(a['ayarDk'], 'ayar süresi'),

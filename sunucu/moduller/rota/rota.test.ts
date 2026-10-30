@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { adimBilesenleri, adimEtkinSureleri, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { isler } from './isler.ts';
 
@@ -910,6 +910,37 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const onculler = await vt().tx((db) => db.sorgu<{ isEmriId: number; oncul: number; tur: string }>(
       `SELECT is_emri_id AS "isEmriId", oncul_is_emri_id AS oncul, tur FROM uretim_emirleri_is_emri_onculu WHERE is_emri_id = ANY($1::int[]) ORDER BY oncul`, [[a, b, m]]));
     assert.deepEqual(onculler, [{ isEmriId: m, oncul: a, tur: 'bekleyen' }, { isEmriId: m, oncul: b, tur: 'bekleyen' }]);
+  });
+
+  test('1257 a: dal çarpanı kaydedilir ve emre kopyalanır; 1 boş yazılır; ana hatta reddedilir; teorik miktar çarpanla büyür', async () => {
+    const urun = await mamulAc();
+    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
+    const k = await kaydet(id, 1, [yeniAdim({ dal: 'A', adetCarpani: 2 }), yeniAdim({ dal: 'B', adetCarpani: 1 }), yeniAdim({ birlesen: ['A', 'B'], bilesenler: [] })]);
+    assert.equal(k.statusCode, 200, k.body);
+    const a = await ayrinti(id);
+    assert.deepEqual(a.adimlar.map((x) => x.adetCarpani), [2, null, null]);
+    assert.equal(Number(a.adimlar[0]?.adimMiktari), 2 * Number(a.adimlar[1]?.adimMiktari));
+    // Alanı bilmeyen görünüm çarpanı silmez.
+    const k2 = await kaydet(id, k.json<KomutCevabi>().surum, a.adimlar.map(govdeye));
+    assert.equal(k2.statusCode, 200, k2.body);
+    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => x.adetCarpani), [2, null, null]);
+    const ana = await kaydet(id, k2.json<KomutCevabi>().surum, [yeniAdim({ adetCarpani: 3 })]);
+    assert.equal(ana.statusCode, 400);
+    assert.match(ana.body, /yalnız dal adımında/);
+
+    const yid = await yururlugeAlinmisRota(await mamulAc(), [
+      yeniAdim({ dal: 'A', adetCarpani: 2 }), yeniAdim({ dal: 'B' }), yeniAdim({ birlesen: ['A', 'B'], bilesenler: [] }),
+    ]);
+    const e = await istek(c.planlama, 'POST', `/rota/revizyonlar/${yid}/emre-kopyala`, { projeId: denemeProjeId, adet: 3, teslim: null });
+    assert.equal(e.statusCode, 200, e.body);
+    const idler = e.json<{ isEmriIdleri: number[] }>().isEmriIdleri;
+    const carpanlar = await vt().tx((db) => db.sorgu<{ c: number | null }>(
+      `SELECT d.adet_carpani AS c FROM uretim_emirleri_is_emri i LEFT JOIN uretim_emirleri_is_emri_dali d ON d.is_emri_id = i.id
+        WHERE i.id = ANY($1::int[]) ORDER BY i.id`, [idler]));
+    assert.deepEqual(carpanlar.map((x) => x.c), [2, null, null]);
+    // Planın okuduğu adım adedi: pim dalı 3 x 2.
+    const plan = await vt().tx((db) => planlanacakIsEmirleri(db, { taslakDahil: true }));
+    assert.deepEqual(idler.map((i) => plan.find((x) => x.id === i)?.adimAdedi), [6, 3, 3]);
   });
 
   test('emre kopyada seçilen emir türü emre yazılır; verilmezse seri, geçersiz tür reddedilir (borç R13)', async () => {

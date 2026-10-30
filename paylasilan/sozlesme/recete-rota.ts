@@ -193,6 +193,8 @@ export const durumRotaAdimiSemasi = z.object({
   // Çok dallı rota (1248 a): dal (boş: ana hat) ve birleştirme adımında birleşen dallar. Yerel taslak adım taşımazsa ana hat sayılır.
   dal: z.string().nullable().optional(),
   birlesen: z.array(z.string()).optional(),
+  // Dal çarpanı (1257 a): bir mamul için bu dal adımında kaç adet; boş 1. Yalnız dal adımında dolu olur.
+  adetCarpani: z.number().int().nullable().optional(),
   // Kayıtlı rotanın türetilmiş öncülleri, sıra (seq) ile: null tek hatlı rota (dep kuralı), boş dizi hiçbir adımı beklemez.
   // Ekran kaydetmeden önce aynı kuralı paylasilan/sozlesme/rota-dal-kurali.ts ile kendisi hesaplar.
   onculler: z.array(z.object({ seq: z.number().int(), tur: z.enum(['bekleyen', 'akisli']) })).nullable().optional(),

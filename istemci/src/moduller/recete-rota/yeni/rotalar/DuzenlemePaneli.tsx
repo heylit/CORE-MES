@@ -4,7 +4,7 @@ import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayu
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import { useRrKomutu } from '../veri.ts';
 import {
-  adimBirlesen, adimDali, adimEkle, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
+  adimBirlesen, adimCarpani, adimDali, adimEkle, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz, carpanYaz,
   cevrimToplami, DAL_HARFLERI, dalYaz, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
@@ -210,6 +210,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
         <SecimAlani etiket="Bu adımın dalı" deger={adimDali(a) ?? ''} kapali={!duzen} bos="Ana hat"
           secenekler={[...new Set([...DAL_HARFLERI, ...(adimDali(a) ? [adimDali(a) ?? ''] : [])])].map((d) => ({ deger: d, baslik: `Dal ${d}` }))}
           yaz={(v) => { yaz((x) => dalYaz(x, v || null), 'Dal değişti'); }} />
+        {adimDali(a) !== null && (
+          <SayiAlani etiket="1 mamul için adet" deger={adimCarpani(a)} kapali={!duzen} birim="adet"
+            ipucu="Bu dalda bir mamul için kaç parça işlenir; adım adedi emir adedi ile çarpılır."
+            yaz={(v) => { yaz((x) => carpanYaz(x, v), 'Dal çarpanı değişti'); }} />
+        )}
         {birlesebilen.length > 0 ? (
           <div className="tc-rr1-dalsec" role="group" aria-label="Bu adımda birleşen dallar">
             <span>Bu adımda birleşen dallar</span>

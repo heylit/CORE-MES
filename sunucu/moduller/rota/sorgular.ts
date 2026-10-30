@@ -277,6 +277,8 @@ export interface AdimSatiri {
   // Çok dallı rota (1248 a): satırı olmayan adım ana hattadır (dal null) ve birleştirme yapmaz.
   dal: string | null;
   birlesen: string[];
+  // Dal çarpanı (1257 a): bir mamul için bu adımda işlenen adet; boş 1'dir.
+  adetCarpani: number | null;
 }
 
 export interface AdaySatiri {
@@ -305,7 +307,7 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
             bagimlilik, devir_adedi AS "devirAdedi",
             fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
             yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca", hazirlik_dk AS "hazirlikDk", ayar, ayar_dk AS "ayarDk",
-            d.dal, coalesce(d.birlesen, '{}') AS birlesen
+            d.dal, coalesce(d.birlesen, '{}') AS birlesen, d.adet_carpani AS "adetCarpani"
        FROM rota_adimi LEFT JOIN rota_adim_dali d ON d.adim_id = rota_adimi.id
       WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
     [revizyonIdleri],
@@ -387,6 +389,7 @@ export interface AdimYazimi {
   yanUrunler: readonly { malzemeId: number; miktar: number | string }[];
   dal: string | null;
   birlesen: readonly string[];
+  adetCarpani: number | null;
 }
 
 export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: AdimYazimi): Promise<void> {
@@ -423,7 +426,7 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
     );
   }
   if (a.dal !== null || a.birlesen.length > 0) {
-    await db.sorgu('INSERT INTO rota_adim_dali (adim_id, dal, birlesen) VALUES ($1, $2, $3::text[])', [adimId, a.dal, [...a.birlesen]]);
+    await db.sorgu('INSERT INTO rota_adim_dali (adim_id, dal, birlesen, adet_carpani) VALUES ($1, $2, $3::text[], $4)', [adimId, a.dal, [...a.birlesen], a.adetCarpani]);
   }
 }
 

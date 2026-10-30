@@ -5,7 +5,7 @@ import {
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
-import { adimOnculleri, birlesebilenDallar, birlesenYaz, dalliRota, dalYaz } from './kurallar.ts';
+import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz, dalliRota, dalYaz } from './kurallar.ts';
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 
 // Uydurma kartlar ve operasyonlar (gerçek veri değil).
@@ -304,6 +304,18 @@ describe('çok dallı rota (1248 a)', () => {
     expect(dalYaz(adim('x', 10, { birlesen: ['A', 'B'] }), 'A')).toMatchObject({ dal: 'A', birlesen: ['B'] });
     expect(birlesenYaz(adim('x', 10, { birlesen: ['B'] }), 'A', true).birlesen).toEqual(['A', 'B']);
     expect(birlesenYaz(adim('x', 10, { birlesen: ['A', 'B'] }), 'A', false).birlesen).toEqual(['B']);
+  });
+
+  it('1257 a: dal çarpanı yalnız dal adımında tutulur; 1 ve boş ana değerdir (boş saklanır); dal kalkınca çarpan da kalkar; kayıtta çarpanı bilmeyen adım alanı göndermez', () => {
+    expect(adimCarpani(adim('x', 10, { dal: 'A' }))).toBe(1);
+    expect(carpanYaz(adim('x', 10, { dal: 'A' }), 2).adetCarpani).toBe(2);
+    expect(carpanYaz(adim('x', 10, { dal: 'A', adetCarpani: 2 }), 1).adetCarpani).toBeNull();
+    expect(carpanYaz(adim('x', 10, { dal: 'A', adetCarpani: 2 }), null).adetCarpani).toBeNull();
+    expect(dalYaz(adim('x', 10, { dal: 'A', adetCarpani: 3 }), 'B').adetCarpani).toBe(3);
+    expect(dalYaz(adim('x', 10, { dal: 'A', adetCarpani: 3 }), null).adetCarpani).toBeNull();
+    const g = kaydetGovdesi([adim('a', 10, { dal: 'A', adetCarpani: 2 }), adim('b', 20)], [10, 20], (id) => (id === '21' ? op('21') : undefined));
+    expect(g[0]).toMatchObject({ dal: 'A', adetCarpani: 2 });
+    expect(g[1]).not.toHaveProperty('adetCarpani');
   });
 
   it('eksikler: dal başı girensiz olmaz; açıkta kalan dal birleştirme eksiği olarak gösterilir', () => {

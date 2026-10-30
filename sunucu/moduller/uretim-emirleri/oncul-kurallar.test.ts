@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  DAL_GECERSIZ, ONCUL_GECERSIZ, adimEksikleri, adimOnculleri, baslatilabilirAdimlar, oncekiBitmediIhlali, onculGirdisiIhlali, siraDisiBaslatmaUyarisi,
+  DAL_GECERSIZ, ONCUL_GECERSIZ, adimAdetleri, adimEksikleri, adimOnculleri, baslatilabilirAdimlar, onculdenGelen, oncekiBitmediIhlali, onculGirdisiIhlali, siraDisiBaslatmaUyarisi,
 } from './kurallar.ts';
 import type { OnculluAdim, ParalelAdim } from './kurallar.ts';
 
@@ -107,5 +107,42 @@ describe('1248 a: açılış girdisinde dal ve öncül', () => {
     assert.equal(onculGirdisiIhlali([ie(1, { dal: ' ', onculler: [] })]), DAL_GECERSIZ);
     assert.equal(onculGirdisiIhlali([ie(1, { dal: 'x'.repeat(21), onculler: [] })]), DAL_GECERSIZ);
     assert.equal(onculGirdisiIhlali([ie(1, { dal: 'A' })]), DAL_GECERSIZ);
+  });
+});
+
+describe('1257 a: dal çarpanı', () => {
+  // A dalı (pim, çarpan 2): 1 -> 2; B dalı (gövde): 3; 4 ikisini birleştirir. Emir 100 adet.
+  const dalli = (d: Partial<Record<number, { durum: string; saglamAdet: number | null }>> = {}) => [
+    { id: 10, sira: 1, onculler: [], adetCarpani: 2 }, { id: 20, sira: 2, onculler: [{ id: 10 }], adetCarpani: 2 },
+    { id: 30, sira: 3, onculler: [] }, { id: 40, sira: 4, onculler: [{ id: 20 }, { id: 30 }] },
+  ].map((a) => ({ durum: 'bekliyor', saglamAdet: null, ...a, ...d[a.sira] }));
+  const yuz = () => 100;
+
+  test('dal adımının adedi emir x çarpan; birleştirme bir mamul için', () => {
+    assert.deepEqual([...adimAdetleri(dalli(), yuz)], [[1, 200], [2, 200], [3, 100], [4, 100]]);
+  });
+
+  test('kayıp dalı içinde parça, birleştirmede mamul birimiyle; dallar birbirinin kaybını almaz; en çok kaybeden belirler', () => {
+    // Pim 200'den 197 sağlam: pim dalında 197, birleştirmede 98 (3 pim = 1,5 mamul, aşağı); gövde 96 sağlam: birleştirmede 96.
+    assert.deepEqual([...adimAdetleri(dalli({ 1: { durum: 'tamam', saglamAdet: 197 } }), yuz)], [[1, 200], [2, 197], [3, 100], [4, 98]]);
+    assert.deepEqual([...adimAdetleri(dalli({ 1: { durum: 'tamam', saglamAdet: 197 }, 3: { durum: 'tamam', saglamAdet: 96 } }), yuz)],
+      [[1, 200], [2, 197], [3, 100], [4, 96]]);
+  });
+
+  test('öncülden gelen bu adımın birimine çevrilir; çarpansız adım 1 sayılır', () => {
+    assert.equal(onculdenGelen(140, { adetCarpani: 2 }, {}), 70);
+    assert.equal(onculdenGelen(141, { adetCarpani: 2 }, { adetCarpani: null }), 70);
+    assert.equal(onculdenGelen(60, {}, { adetCarpani: 2 }), 120);
+    assert.equal(onculdenGelen(7, {}, {}), 7);
+  });
+
+  test('akışlı birleştirmede devir adedi mamul birimiyle: 9 pim (çarpan 2) 4 mamullük, devir 5 gelmemiş sayılır', () => {
+    type A = ParalelAdim & { istasyonId: number | null; fasonFirmaId: number | null };
+    const x: A[] = [
+      { id: 10, sira: 1, opNo: 10, durum: 'calisiyor', bagimlilik: 'bekleyen', devirAdedi: null, istasyonId: 1, fasonFirmaId: null, onculler: [], adetCarpani: 2 },
+      { id: 20, sira: 2, opNo: 20, durum: 'bekliyor', bagimlilik: 'akisli', devirAdedi: 5, istasyonId: 2, fasonFirmaId: null, onculler: [{ id: 10, tur: 'akisli', devirAdedi: 5 }] },
+    ];
+    assert.equal(siraDisiBaslatmaUyarisi(x, x[1]!, 9), "OP 10'den devir adedi (5) gelmeden OP 20 başlatıldı; gelen 4.");
+    assert.equal(siraDisiBaslatmaUyarisi(x, x[1]!, 10), null);
   });
 });

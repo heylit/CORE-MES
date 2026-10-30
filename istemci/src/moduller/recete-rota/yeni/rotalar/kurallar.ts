@@ -108,7 +108,12 @@ export function birlesebilenDallar(liste: readonly Adim[], i: number): string[] 
   const kendi = liste[i] ? adimDali(liste[i]) : null;
   return [...baslayan].filter((d) => d !== kendi).sort();
 }
-export const dalYaz = (a: Adim, dal: string | null): Adim => ({ ...a, dal, birlesen: adimBirlesen(a).filter((d) => d !== dal) });
+// Dal çarpanı (1257 a) yalnız dal adımında anlamlıdır; dal kalkınca çarpan da kalkar.
+export const dalYaz = (a: Adim, dal: string | null): Adim => ({
+  ...a, dal, birlesen: adimBirlesen(a).filter((d) => d !== dal), ...(dal === null && a.adetCarpani != null ? { adetCarpani: null } : {}),
+});
+export const adimCarpani = (a: Pick<Adim, 'adetCarpani'>): number => a.adetCarpani ?? 1;
+export const carpanYaz = (a: Adim, v: number | null): Adim => ({ ...a, adetCarpani: v === null || v <= 1 ? null : Math.min(1000, Math.round(v)) });
 export const birlesenYaz = (a: Adim, d: string, sec: boolean): Adim => ({
   ...a, birlesen: sec ? [...new Set([...adimBirlesen(a), d])].sort() : adimBirlesen(a).filter((x) => x !== d),
 });
@@ -511,6 +516,8 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       ...(s.ilkParca === undefined ? {} : { ilkParca: s.ilkParca }),
       dal: adimDali(s),
       birlesen: [...adimBirlesen(s)],
+      // Çarpanı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çarpanı korur.
+      ...(s.adetCarpani === undefined ? {} : { adetCarpani: adimDali(s) === null ? null : s.adetCarpani }),
       adaylar: [
         ...s.alts.map((id) => {
           const t = s.altTimes[id];

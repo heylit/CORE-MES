@@ -137,7 +137,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [s1, s2, s3] = rev.data.steps;
     assert.deepEqual(s1, {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, terminGun: null,
-      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], onculler: null,
+      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], adetCarpani: null, onculler: null,
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
       digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: null, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
@@ -217,10 +217,12 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual(sonra.map((s) => [s.id, s.seq, s.opNo, s.name]), [[o(30), 10, 30, 'Üç'], [o(20), 20, 20, 'İki'], [o(10), 30, 10, 'Bir']]);
   });
 
-  test('1248 a: adımın dalı ve birleşen dalları gelir; öncüller sıra (seq) ile, tek hatlı rotada null', async () => {
+  test('1248 a, 1257 a: adımın dalı, dal çarpanı ve birleşen dalları gelir; öncüller sıra (seq) ile, tek hatlı rotada null', async () => {
     const urun = await kart('mamul', 'RRR mamul dal');
-    const k = await taslakKur(urun, [adim({ dal: 'A' }), adim({ dal: 'B' }), adim({ birlesen: ['A', 'B'] })]);
+    const k = await taslakKur(urun, [adim({ dal: 'A', adetCarpani: 2 }), adim({ dal: 'B' }), adim({ birlesen: ['A', 'B'] })]);
     const steps = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
+    // 1257 a: dal çarpanı plana gider; 1 ve ana hat boş döner.
+    assert.deepEqual(steps.map((s) => s.adetCarpani), [2, null, null]);
     assert.deepEqual(steps.map((s) => [s.seq, s.dal, s.birlesen, s.onculler]), [
       [10, 'A', [], []], [20, 'B', [], []], [30, null, ['A', 'B'], [{ seq: 10, tur: 'bekleyen' }, { seq: 20, tur: 'bekleyen' }]],
     ]);

@@ -401,3 +401,13 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: ayar işaretliyse onaya gönderirken ayar süresi zorunlu (0 girilebilir). Geri alma: ucuz (kuralda tek satır).
 - VARSAYIM: bölümü göndermeyen istemci ya da yalnız toplamı yazan yer (akış tablosu, gerçekleşen süre kabulü): toplam aynıysa bölüm kalır;
   değiştiyse işaret korunur, fark ayara (işaret kapalıysa hazırlığa) yazılır. Geri alma: ucuz.
+
+## Dal çarpanı (1257 a, 2026-10-30)
+- Dal adımında "1 mamul için adet" (dal çarpanı) tutulur: o dalda bir mamul için kaç parça işlenir. Boş 1'dir; ana hat adımında tutulmaz (kısıt).
+  Ekran alanı yalnız dal seçili adımda görünür; dal kaldırılınca çarpan da kalkar.
+- Göç 20261029153000: `rota_adim_dali.adet_carpani` ve `uretim_emirleri_is_emri_dali.adet_carpani` (boş olabilen, 1..1000). Dolu satır değişmez.
+- Emir açılırken çarpan iş emrine kopyalanır. Adım adedi = emir adedi x çarpan, eksi öncüllerden gelen kayıp (mamul biriminde taşınır);
+  birleştirme adımı daldan gelen sağlamı çarpana böler (aşağı yuvarlar). Plan adım adedini bu kuraldan okur; plan motoru değişmez.
+- VARSAYIM: çarpan pozitif tam sayıdır (en çok 1000). Geri alma: ucuz (kısıt ve şema).
+- VARSAYIM: bileşen miktarı mamul başınadır; çarpan malzeme ihtiyacını değiştirmez. Geri alma: orta.
+- VARSAYIM: dala sonradan eklenen adım (GKK, yeniden işleme) önceki adımın çarpanını alır. Geri alma: ucuz.

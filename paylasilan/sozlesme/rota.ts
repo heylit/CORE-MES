@@ -115,6 +115,8 @@ export const adimGirdisi = z.object({
   // Gelmeyen dal ve birleşen (alanı bilmeyen eski görünüm) adımın kayıtlı değerini korur; yeni adımda ana hat, birleştirme yok.
   dal: dalAdi.nullable().optional(),
   birlesen: z.array(dalAdi).max(26).optional(),
+  // Dal çarpanı (1257 a): bir mamul için bu dal adımında kaç adet işlenir; boş ya da 1 aynıdır. Gelmeyen alan kayıtlı değeri korur.
+  adetCarpani: z.number().int().min(1, 'Adet çarpanı en az 1.').max(1000, 'Adet çarpanı en çok 1000.').nullable().optional(),
   // Hazırlık bölümü (1310 a): ayarSuresiDk = hazırlık + ayar olarak sunucuda hesaplanır. Gelmeyen bölüm (eski görünüm) yalnız toplamı yollar;
   // ayar kapalıyken gelen ayar süresi yok sayılır.
   hazirlikDk: sure(99_999).nullable().optional(),
@@ -217,6 +219,8 @@ export const adimSemasi = z.object({
   ayarDk: ondalikMetinSemasi.nullable(),
   dal: dalAdi.nullable(),
   birlesen: z.array(dalAdi),
+  // Boş: 1 (ana hat ve çarpansız dal adımı).
+  adetCarpani: z.number().int().nullable(),
   // Türetilmiş öncüller: null tek hatlı rotadır (bağımlılık kuralı), boş dizi hiçbir adımı beklemez.
   onculler: z.array(oncul).nullable(),
   adaylar: z.array(z.object({
