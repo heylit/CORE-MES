@@ -547,6 +547,25 @@ export const belgeNoVarMi = async (db: Db, tablo: BelgeTablosu, no: string): Pro
   (await db.tek(`SELECT 1 FROM ${tablo} WHERE no = $1`, [no])) !== null;
 
 // ---- Mal kabul ------------------------------------------------------------------------------------------------------------------
+// 1246: GKK satırı, giriş hareketi karantinaya karar bekliyor yazılmış satın alma satırıdır (fason dönüşü mal kabul girişi değildir).
+const GKK_SATIRI = `EXISTS (SELECT 1 FROM stok_hareketi h WHERE h.id = s.hareket_id AND h.tur = 'giris' AND h.giris_kaynagi = 'mal_kabul'
+  AND h.hedef_kalite_durumu = 'karar_bekliyor')`;
+export interface GirisKontroluHam {
+  id: number; malKabulNo: string; zaman: string; malzemeId: number; partiId: number; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null;
+  siparisSatirId: number | null; miktar: string; bekleyen: string;
+}
+// Düzeltilmemiş belgelerin GKK satırları; `bekleyen` partinin karantinadaki karar bekleyen bakiyesi. Kimlik verilmezse yalnız bekleyeni olanlar.
+export const girisKontroluSatirlari = (db: Db, idler: readonly number[] | null): Promise<GirisKontroluHam[]> => db.sorgu(
+  `SELECT s.id, m.no AS "malKabulNo", ${zamanMetni('m.zaman')} AS zaman, s.malzeme_id AS "malzemeId", s.parti_id AS "partiId", p.lot_no AS "lotNo",
+          p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", s.siparis_satir_id AS "siparisSatirId", s.sayilan_miktar::text AS miktar,
+          COALESCE((SELECT sum(b.miktar) FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+                     WHERE b.parti_id = s.parti_id AND k.tur = 'karantina' AND b.kalite_durumu = 'karar_bekliyor'), 0)::text AS bekleyen
+     FROM stok_mal_kabul_satiri s JOIN stok_mal_kabul m ON m.id = s.mal_kabul_id JOIN stok_parti p ON p.id = s.parti_id
+    WHERE ${GKK_SATIRI} AND NOT EXISTS (SELECT 1 FROM stok_mal_kabul d WHERE d.duzeltilen_id = m.id)
+      AND ($1::int[] IS NULL OR s.id = ANY($1::int[]))
+      AND ($1::int[] IS NOT NULL OR EXISTS (SELECT 1 FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+            WHERE b.parti_id = s.parti_id AND k.tur = 'karantina' AND b.kalite_durumu = 'karar_bekliyor' AND b.miktar > 0))
+    ORDER BY m.zaman, s.id`, [idler]);
 const MAL_KABUL_SECIMI = `SELECT m.id, m.no, m.tur, m.irsaliye_no AS "irsaliyeNo", ${zamanMetni('m.zaman')} AS zaman, m.kisi_id AS "kisiId",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id) AS "satirSayisi",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id AND s.logo_durumu = 'fark_var') AS "farkSayisi",
@@ -566,13 +585,13 @@ export const malKabulSatiriYaz = async (db: Db, s: {
   ))!.id;
 export interface MalKabulSatirHam {
   id: number; siparisSatirId: number | null; sira: number; malzemeId: number; sayilanMiktar: string; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null;
-  konumId: number | null; konumKod: string | null; hareketId: number | null; emirAdimi: boolean;
+  konumId: number | null; konumKod: string | null; hareketId: number | null; emirAdimi: boolean; gkk: boolean;
   fasonCikisHareketId: number | null; fasonMalzemeId: number | null; fasonMiktar: string | null; fasonKonumId: number | null; fasonKonumKod: string | null; logoDurumu: 'irsaliye_bekleniyor' | 'eslesti' | 'fark_var'; logoIrsaliyeSatirNo: number | null; logoIrsaliyeMiktari: string | null;
 }
 export const malKabulSatirlari = (db: Db, id: number): Promise<MalKabulSatirHam[]> => db.sorgu(
   `SELECT s.id, s.siparis_satir_id AS "siparisSatirId", s.sira, s.malzeme_id AS "malzemeId", s.sayilan_miktar AS "sayilanMiktar", s.parti_id AS "partiId", p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo",
      p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId", s.konum_id AS "konumId", k.kod AS "konumKod", s.hareket_id AS "hareketId",
-     EXISTS (SELECT 1 FROM stok_hareketi h WHERE h.id = s.hareket_id AND h.giris_kaynagi IS DISTINCT FROM 'mal_kabul') AS "emirAdimi",
+     EXISTS (SELECT 1 FROM stok_hareketi h WHERE h.id = s.hareket_id AND h.giris_kaynagi IS DISTINCT FROM 'mal_kabul') AS "emirAdimi", ${GKK_SATIRI} AS gkk,
      s.fason_cikis_hareket_id AS "fasonCikisHareketId", f.malzeme_id AS "fasonMalzemeId", f.miktar::text AS "fasonMiktar", f.kaynak_konum_id AS "fasonKonumId", fk.kod AS "fasonKonumKod",
      s.logo_durumu AS "logoDurumu", s.logo_irsaliye_satir_no AS "logoIrsaliyeSatirNo", s.logo_irsaliye_miktari AS "logoIrsaliyeMiktari"
    FROM stok_mal_kabul_satiri s LEFT JOIN stok_konum k ON k.id = s.konum_id LEFT JOIN stok_parti p ON p.id = s.parti_id

@@ -33,6 +33,12 @@ export const partiKaliteDurumuYap = (db: Db, kisiId: number, g: Parameters<typeo
 // 320 a: partilerin red bakiyeleri (karantinada ve yerinde), yoldaki ayrılan düşülmüş; önce karantina konumları. Salt okur.
 export const partilerinRedBakiyeleri = (db: Db, partiIdler: readonly number[]) => servis.partilerinRedBakiyeleri(db, partiIdler);
 export const karantinadanBirak = (db: Db, kisiId: number, g: Parameters<typeof servis.karantinadanBirak>[2]) => servis.karantinadanBirak(db, kisiId, g);
+// 1246 giriş kontrolü: karantinada karar bekleyen satın alma lotları (kimlik verilirse o satırlar) ve kararın stok yansıması (kabul ve
+// şartlı kabul mal kabul alanına, hatalı karantinada red, kalitenin reddi tedarikçiye iade; 1252, 1253 a). Çağıranın transaction'ında
+// yürür; yetkiyi çağıran korur.
+export const girisKontroluSatirlari = (db: Db, idler: readonly number[] | null) => servis.girisKontroluSatirlari(db, idler);
+export type { GirisKontroluSatiri } from './servis.ts';
+export const girisKontroluUygula = (db: Db, kisiId: number, g: Parameters<typeof servis.girisKontroluUygula>[2]) => servis.girisKontroluUygula(db, kisiId, g);
 // Kalite Merkezi'nin serbest bırakma seçimi için konumlar ve karantina defterindeki hareketten partiye geçiş.
 export const karantinaDisiKonumlar = (db: Db) => sorgular.karantinaDisiKonumlar(db);
 export const hareketPartileri = (db: Db, hareketIdler: readonly number[]): Promise<Map<number, number>> => sorgular.hareketPartileri(db, hareketIdler);

@@ -9,7 +9,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
@@ -767,4 +767,11 @@ test('1214 eksiden çevirme uyarısı: ilk adımda hammadde, sonra önceki adım
     'Önceki adımın parçası bu istasyonda yok; 5.4 eksiye düşüldü. Parçayı bu istasyona teslim ettirin.');
   assert.equal(eksidenUyari({ ilkAdim: true, eksik: 6000n, baskaEmreAyrili: 6000n, fiil: 'çevrildi' }),
     'Hammadde bu istasyonda başka emre ayrılı (6); 6 eksiden çevrildi. Rezerveyi müdür kaldırır ya da bu emir için hammadde teslim ettirin.');
+  test('1246 gkkGirisKonumuEngeli ve girisKontroluDuzeltmeEngeli: GKK lotu yalnız karantinaya girer; kararı verilmiş satırın belgesi düzeltilmez', () => {
+    assert.equal(gkkGirisKonumuEngeli('karantina'), null);
+    assert.equal(gkkGirisKonumuEngeli('kabul'), GKK_GIRIS_KARANTINA);
+    assert.equal(girisKontroluDuzeltmeEngeli([]), null);
+    assert.equal(girisKontroluDuzeltmeEngeli([{ miktar: '5', bekleyen: '5.000' }]), null);
+    assert.match(girisKontroluDuzeltmeEngeli([{ miktar: '5', bekleyen: '5' }, { miktar: '2', bekleyen: '0' }]) ?? '', /giriş kontrolü kararı/);
+  });
 });
