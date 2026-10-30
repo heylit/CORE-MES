@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import type { MakineDurumu } from './durum.ts';
@@ -19,12 +19,14 @@ interface Ozellikler {
   baslik: string;
   satirlar: readonly OzetSatiri[];
   birincil?: { metin: string; simge?: SimgeAdi; tikla: () => void };
+  // Satırlarla eylemler arasında sayfanın kendi içeriği (1337 a: terminalde iş bitince çıkan sepet); verilmezse yer açılmaz.
+  ek?: ReactNode;
   kapatMetni?: string;
   kapat: () => void;
 }
 
 // Odak birincil eyleme düşer: iş bitince beklenen adım sıradaki işe geçmektir.
-export function OzetKatmani({ acik, ustYazi, baslik, satirlar, birincil, kapatMetni = 'Kapat', kapat }: Ozellikler) {
+export function OzetKatmani({ acik, ustYazi, baslik, satirlar, birincil, ek, kapatMetni = 'Kapat', kapat }: Ozellikler) {
   const kutu = useKatman<HTMLDivElement>(acik, kapat);
   const baslikKimlik = useId();
   if (!acik) return null;
@@ -43,6 +45,7 @@ export function OzetKatmani({ acik, ustYazi, baslik, satirlar, birincil, kapatMe
             </div>
           ))}
         </dl>
+        {ek != null && <div className="tc-ozet-ek">{ek}</div>}
         <div className="tc-ozet-eylemler">
           <Dugme boyut="ana" onClick={kapat}>{kapatMetni}</Dugme>
           {birincil && (

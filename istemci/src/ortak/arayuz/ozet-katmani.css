@@ -25,6 +25,9 @@
   margin: 0; font-stretch: 115%; font-size: var(--yazi-xl); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums;
 }
 .tc-ozet-satirlar dd.tc-ozet-tonlu { color: var(--sig-yazi, var(--sig)); }
+.tc-ozet-ek { width: 100%; max-width: var(--pencere-genis); min-width: 0; text-align: start; }
+/* Ek içerikten açılan pencere (onay) özetten sonra eklenir ve özetin üstünde durur. */
+.tc-ozet-perde ~ .tc-perde { z-index: calc(var(--z-ozet) + 1); }
 .tc-ozet-eylemler { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--b-3); margin-top: var(--b-2); width: 100%; }
 @keyframes tc-ozet-belir { from { opacity: 0; } }
 @keyframes tc-ozet-damga { from { transform: scale(2.4) rotate(-20deg); opacity: 0; } }
