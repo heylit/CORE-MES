@@ -54,7 +54,7 @@ describe('Rol panosu kartları', () => {
     panoyuAc(YONETIM_KARTLARI);
     await screen.findByText('987.654');
     expect(kart('Stok değeri').textContent).not.toContain('1.234.568');
-    expect(kart('Stok değeri').textContent).toContain('Yalnız kullanılabilir · TL, ortalama alış fiyatıyla · 2 kartın fiyatı yok');
+    expect(kart('Stok değeri').textContent).toContain('Yalnız kullanılabilir · TL, satın alma kg fiyatıyla · 2 kartın fiyatı yok');
     expect(kart('Kritik ya da eksi stok').textContent).toContain('3');
     expect(kart('Kritik ya da eksi stok').getAttribute('href')).toBe('/stok/malzemeler?durum=kritik');
     expect(istekler.filter((i) => i.yol === '/stok/panel')).toHaveLength(1);
@@ -62,7 +62,7 @@ describe('Rol panosu kartları', () => {
     sunucuKur(DEPOCU, { 'GET /stok/panel': () => json(200, { ...PANEL, guncelDeger: null, guncelFiyatsizKart: 0 } satisfies PanelCevabi) });
     panoyuAc(YONETIM_KARTLARI);
     await vi.waitFor(() => expect(kart('Stok değeri').textContent).toContain('Veri yok'));
-    expect(kart('Stok değeri').textContent).toContain('TL, ortalama alış fiyatıyla');
+    expect(kart('Stok değeri').textContent).toContain('TL, satın alma kg fiyatıyla');
     expect(kart('Stok değeri').textContent).not.toContain('kartın fiyatı yok');
   });
 

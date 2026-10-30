@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import type { MalzemelerCevabi, MalzemeStokSatiri, PanelCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { stokCsvAlani } from './csv-alani.ts';
 import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar, miktarMetni } from './gorunum.ts';
 import { EtiketPenceresi } from './Etiketler.tsx';
+import { CSV_AZAMI_SATIR, tumSatirlar } from './Hareketler.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
@@ -49,7 +50,7 @@ const SUTUNLAR = (sec: (m: MalzemeStokSatiri, t: HizliIslemTuru) => void): Sutun
   { anahtar: 'eylem', baslik: '', hucre: (m) => <SatirEylemleri m={m} sec={(t) => sec(m, t)} /> },
 ];
 
-// CSV: ekrandaki sayfanın satırları (Excel Türkçe için noktalı virgül ve BOM; önizlemedeki dışa aktarım).
+// CSV: süzgece uyan bütün malzemeler (Excel Türkçe için noktalı virgül ve BOM; önizlemedeki dışa aktarım).
 function csvIndir(satirlar: MalzemeStokSatiri[]) {
   const alan = stokCsvAlani;
   const satir = (m: MalzemeStokSatiri) => [m.malzemeId, m.stokKodu, m.ad, m.tur ? MALZEME_TURU[m.tur] : '', m.toplam.replace('.', ','), m.serbest.replace('.', ','), m.birim, m.kritikSeviye?.replace('.', ',') ?? '', DURUM_ETIKETI[m.durum].etiket, m.konumlar.map((k) => k.kod).join(' ')].map(alan).join(';');
@@ -60,6 +61,7 @@ function csvIndir(satirlar: MalzemeStokSatiri[]) {
 
 export function Malzemeler() {
   const yonlendir = useNavigate();
+  const { bildir } = useBildirim();
   const malKabul = useIslem('stok.giris');
   const liste = useListeDurumu({ suzgecler: { durum: '' as '' | (typeof STOK_DURUMLARI)[number], metin: '', kapsam: '' as '' | 'kartlar' }, suzgecDegerleri: { durum: STOK_DURUMLARI, kapsam: ['kartlar'] as const }, siralamaAlanlari: ['malzeme', 'toplam'], adres: true });
   const [arama, setArama] = useState(liste.suzgecler.metin);
@@ -79,13 +81,27 @@ export function Malzemeler() {
     { anahtar: 'kartlar', baslik: 'Bütün kartlar' },
   ] as const;
   const kartlar = liste.suzgecler.kapsam === 'kartlar';
+  const [indiriliyor, setIndiriliyor] = useState(false);
+  const indir = async () => {
+    setIndiriliyor(true);
+    try {
+      const { sayfa: _sayfa, sayfaBoyu: _boy, ...suzgec } = liste.sorgu;
+      const t = await tumSatirlar<MalzemeStokSatiri>('/stok/malzemeler', suzgec);
+      csvIndir(t.satirlar);
+      if (t.kesik) bildir('bilgi', `CSV ilk ${CSV_AZAMI_SATIR.toLocaleString('tr-TR')} malzemeyle sınırlandı; süzgeci daraltın.`);
+    } catch (e) {
+      bildir('hata', hataMetni(e));
+    } finally {
+      setIndiriliyor(false);
+    }
+  };
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Malzemeler" alt={l.data?.toplam !== null && l.data ? (kartlar ? `${l.data.toplam} stoklanır malzeme kartı; stoğu olmayanlar 0 görünür.` : `${l.data.toplam} malzemenin stoğu ya da stok ayarı var. Stoğu olmayan kart için Bütün kartlar.`) : 'Malzeme başına stok.'}
         sag={<>
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
           <Dugme simge="scan" onClick={() => setEtiket(true)}>Etiketler</Dugme>
-          <Dugme simge="download" disabled={!l.data?.satirlar.length} onClick={() => l.data && csvIndir(l.data.satirlar)}>CSV</Dugme>
+          <Dugme simge="download" disabled={!l.data?.satirlar.length} yukleniyor={indiriliyor} onClick={() => void indir()}>CSV</Dugme>
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
       <div className="tc-stok-arac">
