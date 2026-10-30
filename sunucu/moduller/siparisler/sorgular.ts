@@ -735,3 +735,18 @@ export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Pro
     [baslangic, bitis],
   );
 }
+
+// Genel arama (1242): sütun ve sorgu aynı sadeleştirmeden geçer (Türkçe harf, dil ayarından bağımsız); desenler sadeleşmiş ve
+// kaçırılmış gelir (#paylasilan/kayit-aramasi.ts). LIKE ifade indeksine düşer (göç 134000).
+// Numarası ya da müşteri sipariş no'su tam tutan önce, sonra numarası sorguyla başlayan, sonra yeniden eskiye.
+export interface SiparisAramaSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; musteri_siparis_no: string | null }
+export function siparisAra(db: Db, sade: string, icinde: string, bas: string, sinir: number): Promise<SiparisAramaSatiri[]> {
+  return db.sorgu<SiparisAramaSatiri>(
+    `SELECT s.id, s.no, s.durum, s.firma_id, s.musteri_siparis_no FROM siparisler_siparis s
+      WHERE public.arama_sade(s.no) LIKE $2 OR public.arama_sade(s.musteri_siparis_no) LIKE $2
+      ORDER BY (public.arama_sade(s.no) = $1 OR public.arama_sade(s.musteri_siparis_no) = $1) IS TRUE DESC,
+               (public.arama_sade(s.no) LIKE $3) DESC, s.id DESC
+      LIMIT $4`,
+    [sade, icinde, bas, sinir],
+  );
+}
