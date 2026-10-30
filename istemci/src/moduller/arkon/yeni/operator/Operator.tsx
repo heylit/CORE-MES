@@ -82,7 +82,7 @@ import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
-import { Sepetler, cikanSepetiniAc } from './Sepetler.tsx';
+import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
@@ -173,6 +173,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const [snooze, snoozeYaz] = useState<Record<string, number>>({});
   const [warnShow, warnShowYaz] = useState<UyariGosterimi | null>(null);
   const [scan, scanYaz] = useState<Okutma | null>(null);
+  // 1337 a: özetin çıkan sepeti biten emrindir; terminal sıradaki işe geçse de değişmez.
+  const [bitenEmir, bitenEmirYaz] = useState<number | null>(null);
   const shiftRef = useRef({ good: 0, scrap: 0, mOk: 0, mNok: 0, hatali: 0 });
   const scrapLog = useRef<number[]>([]);
   const lastAct = useRef(Date.now());
@@ -887,7 +889,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'prepnext') { ovYaz('prepnext'); return; }
     if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
     if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
-    if (a === 'finish') { sonBildirim.current++; cikanSepetiniAc(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
+    if (a === 'finish') { sonBildirim.current++; bitenEmirYaz(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
     if (a === 'next') {
       const n = isler.findIndex((x, i) => i !== ai && x.state === 'queued');
       ovYaz(null);
@@ -1284,6 +1286,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       {ov === 'done' ? <Konfeti /> : null}
       <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
         satirlar={[{ etiket: 'İyi parça', deger: sayi(o.good) }, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }]}
+        {...(!pv && bitenEmir !== null ? { ek: <BitenSepet istasyon={MACHINE} emirId={bitenEmir} /> } : {})}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
       {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
     </>
