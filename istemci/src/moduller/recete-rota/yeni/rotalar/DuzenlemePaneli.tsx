@@ -6,7 +6,7 @@ import { useRrKomutu } from '../veri.ts';
 import {
   adimBirlesen, adimDali, adimEkle, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalYaz, degisimOrani, fasonaCevir, fasonMu,
-  girenTekrarIletisi, girenTekrari, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
+  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
   type Adim, type Malzeme, type Operasyon,
 } from './kurallar.ts';
@@ -297,7 +297,23 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                   {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
                 </small>
               </span>
-              <SayiAlani etiket="Hazırlık (dk / parti)" deger={a.setup} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'setup', v), 'Hazırlık süresi değişti'); }} />
+              {(() => {
+                // Hazırlık bölümü (1310 a): toplam hazırlık = hazırlık + ayar; ayar süresi yalnız ayar işaretliyken girilir.
+                const h = hazirlikBolumu(a);
+                return (
+                  <>
+                    <SayiAlani etiket="Hazırlık (dk / parti)" deger={h.hazirlik} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { hazirlik: v }), 'Hazırlık süresi değişti'); }} />
+                    <span className="tc-rr1-alan tc-rr1-ayarbox">
+                      <IsaretKutusu etiket="Ayar" checked={h.ayarli} disabled={!duzen}
+                        onChange={(e) => { const v = e.target.checked; yaz((x) => hazirlikYaz(x, { ayarli: v }), v ? 'Ayar eklendi' : 'Ayar kaldırıldı'); }} />
+                    </span>
+                    {h.ayarli && (
+                      <SayiAlani etiket="Ayar (dk / parti)" deger={h.ayarDk} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { ayarDk: v }), 'Ayar süresi değişti'); }} />
+                    )}
+                    <div className="tc-rr1-alan"><span>Toplam hazırlık</span><b>{a.setup === null ? YOK : `${sayi(a.setup)} dk`}</b></div>
+                  </>
+                );
+              })()}
               <SayiAlani etiket={`İşlem (dk / 1 ${birim})`} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
               <SayiAlani etiket={`Değişim (dk / 1 ${birim})`} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
               <div className="tc-rr1-alan"><span>Değişim %</span><b>{(() => { const o = degisimOrani(a.proc, a.chg); return o === null ? YOK : `%${sayi(Math.round(o * 10) / 10)}`; })()}</b></div>

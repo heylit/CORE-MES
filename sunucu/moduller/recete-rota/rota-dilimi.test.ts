@@ -137,7 +137,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [s1, s2, s3] = rev.data.steps;
     assert.deepEqual(s1, {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, terminGun: null,
-      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, ilkParca: 'yok', dal: null, birlesen: [], onculler: null,
+      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], onculler: null,
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
       digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: null, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
@@ -227,6 +227,14 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const tek = await taslakKur(await kart('mamul', 'RRR mamul tek'), [adim(), adim()]);
     const tekSteps = (await durumOku()).routeRevs?.find((r) => r.id === String(tek.id))?.data.steps ?? [];
     assert.deepEqual(tekSteps.map((s) => s.onculler), [null, null]);
+  });
+
+  test('1310 a: adımın hazırlığı, ayar işareti ve ayar süresi gelir; setup toplamdır', async () => {
+    const k = await taslakKur(await kart('mamul', 'RRR mamul ayar'), [
+      adim({ hazirlikDk: 5, ayar: true, ayarDk: 25 }), adim({ hazirlikDk: 8, ayar: false, bilesenler: [] }),
+    ]);
+    const steps = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
+    assert.deepEqual(steps.map((s) => [s.setup, s.hazirlik, s.ayarli, s.ayarDk]), [[30, 5, true, 25], [8, 8, false, null]]);
   });
 
   test('kart #1289: çerçeve son yazdığında taslak olan rota yürürlüğe girince sayım statüyü ve çıkanı rota modülünden çözer; statü satırı açılır', async () => {

@@ -81,6 +81,10 @@ function adim(a: Nesne): Nesne {
     ...(a['ilkParca'] === undefined ? {} : { ilkParca: secenek(a['ilkParca'], ILK_PARCA_SECIMLERI, 'ilk parça onayı') }),
     ...(a['dal'] === undefined ? {} : { dal: a['dal'] === null ? null : dal(a['dal'], 'dal') }),
     ...(a['birlesen'] === undefined ? {} : { birlesen: dallar(a['birlesen']) }),
+    // Hazırlık bölümü (1310 a); bölümü taşımayan adımda alanlar gönderilmez, sunucu toplamdan kurar.
+    ...(a['ayar'] === undefined ? {} : {
+      hazirlikDk: sayiVeyaBos(a['hazirlikDk'], 'hazırlık süresi'), ayar: a['ayar'] === true, ayarDk: sayiVeyaBos(a['ayarDk'], 'ayar süresi'),
+    }),
     adaylar: dizi(a['adaylar'], 'adaylar', 10).map((x) => {
       const k = kaynak(x['kaynak'], KAYNAK_TURLERI, 'aday kaynak');
       if (k === null) throw gecersiz('aday kaynak');

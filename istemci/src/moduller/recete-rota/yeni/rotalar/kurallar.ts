@@ -179,6 +179,7 @@ export function rotaEksikleri(adimlar: readonly Adim[], malzemeVar: (id: string)
     else if (o && o.length === 0 && s.ins.length === 0) m.push('hiçbir adımı beklemediği için giren seçilmeli');
     else if (!o && s.dep === 'bagimsiz' && s.ins.length === 0) m.push('önceki adımı beklemediği için giren seçilmeli');
     if (dal && dalAdimi === s) m.push(dal.ileti.replace(/\.$/, ''));
+    if (!fasonMu(s) && s.ayarli === true && s.ayarDk == null) m.push('ayar işaretli; ayar süresi girilmeli');
     if (m.length) {
       const ad = opAdi(s.opId);
       l.push({ adimId: s.id, metin: `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}: ${m.join(', ')}` });
@@ -367,12 +368,12 @@ export function istasyonYaz(a: Adim, sid: string | null): Adim {
 export function operasyonYaz(a: Adim, op: Operasyon | undefined): Adim {
   if (!op) return { ...a, opId: '' };
   const proc = sureSayisi(op.cycle);
-  const b: Adim = { ...a, opId: op.id, name: op.name, setup: op.setup, proc, chg: null, cycle: cevrimToplami(proc, null) };
+  const b: Adim = { ...a, opId: op.id, name: op.name, setup: op.setup, ...toplamdanBolum(op.setup), proc, chg: null, cycle: cevrimToplami(proc, null) };
   return fasonMu(a) ? b : istasyonYaz(b, op.stationId);
 }
 export const katalogaDon = (a: Adim, op: Operasyon): Adim => {
   const proc = sureSayisi(op.cycle);
-  return { ...istasyonYaz(a, op.stationId), setup: op.setup, proc, chg: null, cycle: cevrimToplami(proc, null) };
+  return { ...istasyonYaz(a, op.stationId), setup: op.setup, ...toplamdanBolum(op.setup), proc, chg: null, cycle: cevrimToplami(proc, null) };
 };
 export const katalogdanFarkli = (a: Adim, op: Operasyon): boolean =>
   op.stationId !== a.stationId || op.setup !== a.setup || sureSayisi(op.cycle) !== a.proc || a.chg !== null;
@@ -385,8 +386,35 @@ export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | und
   return b.stationId ? b : { ...b, stationId: op?.stationId ?? null };
 }
 export function sureYaz(a: Adim, alan: 'setup' | 'proc' | 'chg', deger: number | null): Adim {
+  if (alan === 'setup') return toplamYaz(a, deger);
   const b = { ...a, [alan]: deger };
   return { ...b, cycle: cevrimToplami(b.proc, b.chg) };
+}
+
+// Hazırlık bölümü (1310 a): setup toplamdır (hazırlık + ayar). Bölümü taşımayan adımda (eski kayıt, katalogdan gelen süre) sunucunun göç
+// kuralı geçerlidir: süre varsa ayardır.
+export interface HazirlikBolumu { hazirlik: number | null; ayarli: boolean; ayarDk: number | null }
+export function toplamdanBolum(setup: number | null): HazirlikBolumu {
+  const t = sureSayisi(setup);
+  return t !== null && t > 0 ? { hazirlik: 0, ayarli: true, ayarDk: t } : { hazirlik: t, ayarli: false, ayarDk: null };
+}
+export function hazirlikBolumu(a: Adim): HazirlikBolumu {
+  if (a.ayarli === undefined) return toplamdanBolum(a.setup);
+  return { hazirlik: a.hazirlik ?? null, ayarli: a.ayarli, ayarDk: a.ayarli ? a.ayarDk ?? null : null };
+}
+// Yalnız toplam girilen yerde (akış tablosu) sunucunun kuralı: ayar işaretliyse fark ayara, değilse hazırlığa yazılır.
+function toplamYaz(a: Adim, toplam: number | null): Adim {
+  const h = hazirlikBolumu(a);
+  if (toplam === null) return hazirlikYaz(a, { hazirlik: null, ayarDk: null });
+  if (!h.ayarli) return hazirlikYaz(a, { hazirlik: toplam });
+  const hazirlik = Math.min(h.hazirlik ?? 0, toplam);
+  return hazirlikYaz(a, { hazirlik, ayarDk: Math.round((toplam - hazirlik) * 100) / 100 });
+}
+export function hazirlikYaz(a: Adim, d: Partial<HazirlikBolumu>): Adim {
+  const b = { ...hazirlikBolumu(a), ...d };
+  const ayarDk = b.ayarli ? b.ayarDk : null;
+  const setup = b.hazirlik === null && ayarDk === null ? null : (b.hazirlik ?? 0) + (ayarDk ?? 0);
+  return { ...a, hazirlik: b.hazirlik, ayarli: b.ayarli, ayarDk, setup };
 }
 
 /* ---------------- revizyon farkı ---------------- */
@@ -464,6 +492,11 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       ad: s.name.trim() !== '' ? s.name : op.name,
       kaynak,
       ayarSuresiDk: fason ? null : sureSayisi(s.setup) ?? 0,
+      // Sunucu toplamı bölümden yeniden hesaplar; fasonda süre yoktur.
+      ...(fason ? { hazirlikDk: null, ayar: false, ayarDk: null } : (() => {
+        const h = hazirlikBolumu(s);
+        return { hazirlikDk: h.hazirlik ?? (h.ayarDk === null ? 0 : null), ayar: h.ayarli, ayarDk: h.ayarDk };
+      })()),
       islemSuresiDk: fason ? null : proc,
       degisimSuresiDk: fason ? null : chg,
       birimSureDk: null,

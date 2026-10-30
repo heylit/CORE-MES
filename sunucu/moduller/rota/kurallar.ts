@@ -247,6 +247,8 @@ export interface HazirlikAdimi {
   girenSayisi: number;
   dal?: string | null;
   birlesen?: readonly string[];
+  ayar?: boolean;
+  ayarDk?: number | null;
 }
 
 // Terminal adımda ne tüketeceğini girenden okur (#1372): ilk adım ve önceki adımı beklemeyen adım girensiz olmaz; bekleyen ya da akışlı ara adım
@@ -285,8 +287,33 @@ export function onayaHazirMi(adimlar: readonly HazirlikAdimi[]): string | null {
     if (a.fason) continue;
     if (a.birimSureDk === null) return `OP ${a.opNo}: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.`;
     if (a.ayarSuresiDk === null) return `OP ${a.opNo}: hazırlık süresi girilmeli; yoksa 0 yazın.`;
+    if (a.ayar === true && (a.ayarDk ?? null) === null) return `OP ${a.opNo}: ayar işaretli; ayar süresi girilmeli.`;
   }
   return null;
+}
+
+export interface HazirlikBolumu { hazirlikDk: number | null; ayar: boolean; ayarDk: number | null }
+
+// Hazırlık süresi (1310 a): toplam = hazırlık + (ayar işaretliyse) ayar. Plan ve iş emri toplamı okur; ayar işareti planın ayarcı arayıp
+// aramayacağını söyler. Bölümü göndermeyen eski istemci yalnız toplamı yollar: toplam aynıysa kayıtlı bölüm kalır, değiştiyse
+// kayıtlı işaret korunur ve fark ayara (işaret kapalıysa hazırlığa) yazılır; kayıt yoksa göç kuralı: süre varsa ayardır.
+export function hazirlikBol(
+  g: { ayarSuresiDk: number | null; hazirlikDk?: number | null; ayar?: boolean; ayarDk?: number | null },
+  eski: (HazirlikBolumu & { toplam: number | null }) | null,
+): HazirlikBolumu & { toplam: number | null } {
+  if (g.ayar !== undefined) {
+    const hazirlikDk = g.hazirlikDk ?? null;
+    const ayarDk = g.ayar ? (g.ayarDk ?? null) : null;
+    const toplam = hazirlikDk === null && ayarDk === null ? null : (hazirlikDk ?? 0) + (ayarDk ?? 0);
+    return { hazirlikDk, ayar: g.ayar, ayarDk, toplam };
+  }
+  const toplam = g.ayarSuresiDk;
+  if (eski !== null && eski.toplam === toplam) return eski;
+  if (toplam === null) return { hazirlikDk: null, ayar: eski?.ayar ?? false, ayarDk: null, toplam: null };
+  if (eski === null) return toplam > 0 ? { hazirlikDk: 0, ayar: true, ayarDk: toplam, toplam } : { hazirlikDk: toplam, ayar: false, ayarDk: null, toplam };
+  if (!eski.ayar) return { hazirlikDk: toplam, ayar: false, ayarDk: null, toplam };
+  const hazirlikDk = Math.min(eski.hazirlikDk ?? 0, toplam);
+  return { hazirlikDk, ayar: true, ayarDk: Math.round((toplam - hazirlikDk) * 100) / 100, toplam };
 }
 
 // Bileşen olan mamulün onay anında yürürlükte rotası olmalıdır: alt ürünü yapılamayan ürün onaylanmaz.

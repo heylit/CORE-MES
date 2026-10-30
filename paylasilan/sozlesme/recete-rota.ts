@@ -184,6 +184,10 @@ export const durumRotaAdimiSemasi = z.object({
   split: z.enum(['tek', 'bol']),
   minLot: sayiAlani,
   resetup: z.boolean(),
+  // Hazırlık bölümü (1310 a): setup = hazirlik + ayarDk. ayarli false ise plan hazırlığı sayar, ayarcı aramaz; alan yoksa ayarlı sayılır.
+  hazirlik: sayiAlani.optional(),
+  ayarli: z.boolean().optional(),
+  ayarDk: sayiAlani.optional(),
   // Adımın ilk parça onayı (744 a); sunucu her adımda verir, yerel taslak adım yoksa "her kurulumda" sayar.
   ilkParca: z.enum(ILK_PARCA_SECIMLERI).optional(),
   // Çok dallı rota (1248 a): dal (boş: ana hat) ve birleştirme adımında birleşen dallar. Yerel taslak adım taşımazsa ana hat sayılır.

@@ -275,6 +275,31 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu(`UPDATE rota_adim_dali SET dal = 'C' WHERE adim_id IN (SELECT id FROM rota_adimi WHERE revizyon_id = $1)`, [id]), /rota_icerik_kilitli|yalnız taslakta/);
   });
 
+  test('1310 a: hazırlık ve ayar ayrı kaydedilir, süre alanı toplamdır; ayar kapalıyken ayar süresi tutulmaz; alanı bilmeyen kayıt bölümü korur; ayarlı adım ayar süresiz onaya gitmez', async () => {
+    const { id } = (await taslakAc(await mamulAc())).json<KomutCevabi>();
+    const k = await kaydet(id, 1, [
+      yeniAdim({ ayarSuresiDk: null, hazirlikDk: 10, ayar: true, ayarDk: 20 }),
+      yeniAdim({ ayarSuresiDk: 99, hazirlikDk: 15, ayar: false, ayarDk: 40, bilesenler: [] }),
+    ]);
+    assert.equal(k.statusCode, 200, k.body);
+    const bolum = async () => (await ayrinti(id)).adimlar.map((x) => [x.ayarSuresiDk, x.hazirlikDk, x.ayar, x.ayarDk]);
+    assert.deepEqual(await bolum(), [['30.00', '10.00', true, '20.00'], ['15.00', '15.00', false, null]]);
+    // Alanı bilmeyen eski görünüm yalnız toplamı yollar: toplam aynıysa bölüm kalır, değiştiyse fark ayara gider.
+    const eski = (await ayrinti(id)).adimlar.map(govdeye);
+    const k2 = await kaydet(id, k.json<KomutCevabi>().surum, eski);
+    assert.equal(k2.statusCode, 200, k2.body);
+    assert.deepEqual(await bolum(), [['30.00', '10.00', true, '20.00'], ['15.00', '15.00', false, null]]);
+    const k3 = await kaydet(id, k2.json<KomutCevabi>().surum, eski.map((x, i) => (i === 0 ? { ...x, ayarSuresiDk: 45 } : x)));
+    assert.equal(k3.statusCode, 200, k3.body);
+    assert.deepEqual((await bolum())[0], ['45.00', '10.00', true, '35.00']);
+    // Ayar işaretli ama süresi boş: taslakta kalır, onaya gitmez.
+    const k4 = await kaydet(id, k3.json<KomutCevabi>().surum, [yeniAdim({ hazirlikDk: 10, ayar: true, ayarDk: null }), yeniAdim({ hazirlikDk: 0, ayar: false, bilesenler: [] })]);
+    assert.equal(k4.statusCode, 200, k4.body);
+    const red = await komut(id, 'onaya-gonder', { surum: k4.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(red.statusCode, 422);
+    assert.match(red.body, /ayar işaretli; ayar süresi girilmeli/);
+  });
+
   test('1248 a: dalın ilk adımı girensizse onaya gitmez', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();

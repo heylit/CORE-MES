@@ -117,6 +117,7 @@
 .tc-rr1-alan > span:first-child { font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-alan-ic { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-rr1-alan-ic small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-rr1-ayarbox { justify-content: flex-end; }
 .tc-rr1-depsel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-1); }
 .tc-rr1-depsel-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tc-rr1-depb {

@@ -800,6 +800,10 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     split: KULLANIM_PROTOTIP[a.makineKullanimi],
     minLot: a.enKucukParca,
     resetup: a.yenidenAyar,
+    // setup toplamdır (hazırlık + ayar); ayarlı adımda plan ayarcı arar (1310 a).
+    hazirlik: metindenSayi(a.hazirlikDk),
+    ayarli: a.ayar,
+    ayarDk: metindenSayi(a.ayarDk),
     ilkParca: a.ilkParca,
     dal: a.dal,
     birlesen: a.birlesen,
