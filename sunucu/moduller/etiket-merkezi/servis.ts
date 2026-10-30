@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type CiktiCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
+  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
@@ -22,7 +22,7 @@ import {
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  baskiEkle, sonBaskilar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  baskiEkle, etiketTurleriOku, sonBaskilar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI } from './yazici-dili.ts';
 
@@ -249,4 +249,15 @@ export async function baskilar(db: Db): Promise<BaskilarCevabi> {
   const satirlar = await sonBaskilar(db, 100);
   const adlar = await kisiAdlari(db, [...new Set(satirlar.map((s) => s.kisiId))]);
   return { baskilar: satirlar.map(({ kisiId, ...s }) => ({ ...s, kisi: adlar.get(kisiId) ?? null })) };
+}
+
+// Tür adları tablodan metin gelir; uç cevabı şemayla denetler, koddaki listelerle eşleşmeyi modül testi bekler.
+export async function etiketler(db: Db): Promise<EtiketlerCevabi> {
+  const satirlar = await etiketTurleriOku(db);
+  return {
+    etiketler: satirlar.map((s) => ({
+      ...s,
+      sablonlar: HAZIR_SABLONLAR.filter((h) => s.sablonTuru !== null && h.tur === s.sablonTuru).map((h) => ({ anahtar: h.anahtar, ad: h.ad })),
+    })) as EtiketlerCevabi['etiketler'],
+  };
 }

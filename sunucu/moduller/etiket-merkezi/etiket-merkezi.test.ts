@@ -6,7 +6,8 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { BasCevabi, BaskilarCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { KAYIT_TURLERI, SABLON_TURLERI } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, BaskilarCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -536,5 +537,25 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const sayfaci = await tekIslemliKisi('rafsayfaci', ['sayfa.etiket-merkezi']);
     assert.equal((await al(sayfaci, '/etiket-merkezi/raflar')).statusCode, 403);
     assert.equal((await al(sayfaci, adres(String(r1)))).statusCode, 403);
+  });
+
+  test('EM-U17 (kart #1292): etiket listesi sayfayı gören okur; tablo koddaki şablon ve kayıt türleriyle ayrışmaz; dışarıda basılanlar görünür', async () => {
+    const sayfaci = await tekIslemliKisi('etiketlistesi', ['sayfa.etiket-merkezi']);
+    const cevap = await al(sayfaci, '/etiket-merkezi/etiketler');
+    assert.equal(cevap.statusCode, 200);
+    const { etiketler } = cevap.json() as EtiketlerCevabi;
+    const hazir = etiketler.filter((e) => e.durum === 'hazir');
+    // Her şablon türünün ve basılabilen her kayıt türünün listede tam bir hazır satırı vardır; yeni tür eklenip listeye yazılmazsa test düşer.
+    for (const tur of SABLON_TURLERI) assert.equal(hazir.filter((e) => e.sablonTuru === tur).length, 1, tur);
+    for (const tur of KAYIT_TURLERI) assert.equal(hazir.filter((e) => e.kayitTurleri.includes(tur)).length, 1, tur);
+    for (const e of hazir) assert.equal(e.sablonlar.length > 0, true, e.kod);
+    for (const e of etiketler.filter((x) => x.durum !== 'hazir')) {
+      assert.equal(e.sablonTuru, null, e.kod);
+      assert.deepEqual(e.sablonlar, [], e.kod);
+    }
+    // 1285 a: ilk tur kalite durum, hatalı parça ve sevk koli etiketi; 1288: dışarıdaki dört baskı yolu listede.
+    assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), ['kalite-durum', 'hatali-parca', 'sevk-koli']);
+    assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['kalite-durum', 'konum', 'lot', 'malzeme', 'seri-no']);
+    assert.equal((await al(yetkisiz, '/etiket-merkezi/etiketler')).statusCode, 403);
   });
 });

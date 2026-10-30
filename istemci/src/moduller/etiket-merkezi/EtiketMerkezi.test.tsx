@@ -5,9 +5,10 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi.ts';
-import type { BaskilarCevabi, CiktiCevabi, KayitCiktiCevabi, SablonlarCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BaskilarCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
+import { Etiketler } from './Etiketler.tsx';
 import { HazirSablonlar, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
 
@@ -60,6 +61,19 @@ const BASKILAR: BaskilarCevabi = {
   ],
 };
 
+const ETIKETLER: EtiketlerCevabi = {
+  etiketler: [
+    {
+      kod: 'lot', ad: 'Lot etiketi', sahipModul: 'stok', tetik: 'Mal kabulde lot açılınca', alanlar: 'QR (LOT), lot no', sablonTuru: 'lot',
+      kayitTurleri: ['lot', 'mal-kabul'], durum: 'hazir', disaridakiYol: 'Stok Merkezi · Lot etiketi penceresi', sablonlar: [{ anahtar: 'lot-100x50', ad: 'Lot 100x50' }],
+    },
+    {
+      kod: 'sevk-koli', ad: 'Sevk koli etiketi', sahipModul: 'sevkiyat', tetik: 'Ürün sevke hazırlanınca', alanlar: 'QR, müşteri, adet', sablonTuru: null,
+      kayitTurleri: [], durum: 'ilk-tur', disaridakiYol: null, sablonlar: [],
+    },
+  ],
+};
+
 const KONUMLAR: Record<number, string> = { 11: 'R1-01-1-1', 12: 'R1-01-1-2' };
 
 interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
@@ -82,6 +96,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
     if (yol === '/etiket-merkezi/sablonlar') return json(200, SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
+    if (yol === '/etiket-merkezi/etiketler') return json(200, ETIKETLER);
     if (yol === '/etiket-merkezi/raflar') {
       return json(200, { raflar: [{ id: 21, kod: 'A1', ad: 'Palet rafı', salonKodu: 'DEPO' }, { id: 22, kod: 'A2', ad: 'A2', salonKodu: 'DEPO' }, { id: 23, kod: 'B1', ad: 'Konsol', salonKodu: 'URETIM' }] });
     }
@@ -252,6 +267,18 @@ describe('EtiketMerkezi', () => {
     expect(screen.getAllByText('Örnek Kişi')).toHaveLength(2);
     expect(screen.getByText(/Yazıcıya ulaşılamadı/)).toBeTruthy();
     expect(screen.getByText('İndirildi')).toBeTruthy();
+  });
+
+  it('etiket listesi türleri sahip modülün menü adı, durumu ve başka yerdeki baskı yeriyle gösterir', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi'] });
+    ac(<Etiketler />);
+    expect(await screen.findByText('Lot etiketi')).toBeTruthy();
+    expect(screen.getByText('Stok Merkezi')).toBeTruthy();
+    expect(screen.getByText('Sevkiyat')).toBeTruthy();
+    expect(screen.getByText('Basılıyor')).toBeTruthy();
+    expect(screen.getByText('İlk tur')).toBeTruthy();
+    expect(screen.getByText('Lot 100x50')).toBeTruthy();
+    expect(screen.getByText('Stok Merkezi · Lot etiketi penceresi')).toBeTruthy();
   });
 
   it('stoktan gelen adres seçili konumları açar: yalnız konum şablonları, kayıtlardan çıktı, bulunamayan uyarısı', async () => {
