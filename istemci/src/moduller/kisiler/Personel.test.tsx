@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
@@ -47,11 +48,11 @@ function sunucuKur({ kullanici, kisiler = [AYSE, MEHMET], yazma }: Kurulum) {
   return istekler;
 }
 
-function ac() {
+function ac(adres = '/personel') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><Personel /></BildirimSaglayici>
+      <MemoryRouter initialEntries={[adres]}><BildirimSaglayici><Personel /></BildirimSaglayici></MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -253,5 +254,53 @@ describe('Personel', () => {
     const pencere = within(await screen.findByRole('dialog'));
     fireEvent.click(await pencere.findByRole('button', { name: 'Operatör rolünü al' }));
     expect((await screen.findByRole('alert')).textContent).toBe(ULASILAMADI_ILETISI);
+  });
+
+  describe('Ctrl K isteği (kart #1236)', () => {
+    // Zorunlu alanın etiketi yıldızla biter; ad baştan eşlenir.
+    const etiketli = (ad: string) => new RegExp(`^${ad}`);
+    const YAZAR: Kullanici = { id: 3, ad: 'Deneme Yazar', islemler: ['kisiler.oku', 'kisiler.yaz', 'sayfa.personel'] };
+
+    it('?kisi=<id> yazabilene o kişinin düzenleme formunu dolu açar', async () => {
+      sunucuKur({ kullanici: YAZAR, kisiler: [{ ...AYSE, sicilNo: 'S-1', gorev: 'Tornacı' }, MEHMET] });
+      ac('/personel?kisi=10');
+      const pencere = within(await screen.findByRole('dialog', { name: 'Düzenle: Ayşe Deneme' }));
+      expect((pencere.getByLabelText(etiketli('Ad')) as HTMLInputElement).value).toBe('Ayşe Deneme');
+      expect((pencere.getByLabelText(etiketli('Sicil no')) as HTMLInputElement).value).toBe('S-1');
+      expect((pencere.getByLabelText(etiketli('Görev')) as HTMLInputElement).value).toBe('Tornacı');
+    });
+
+    it('?yeni=1 boş kişi formunu açar', async () => {
+      sunucuKur({ kullanici: YAZAR });
+      ac('/personel?yeni=1');
+      const pencere = within(await screen.findByRole('dialog', { name: 'Kişi ekle' }));
+      expect((pencere.getByLabelText(etiketli('Ad')) as HTMLInputElement).value).toBe('');
+    });
+
+    it('reddedilen: yazamayana pencere açılmaz, liste görünür', async () => {
+      sunucuKur({ kullanici: OKUYUCU });
+      ac('/personel?kisi=10');
+      await screen.findByText('Ayşe Deneme');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      cleanup();
+      sunucuKur({ kullanici: OKUYUCU });
+      ac('/personel?yeni=1');
+      await screen.findByText('Ayşe Deneme');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('bilinmeyen kişide pencere açılmaz', async () => {
+      sunucuKur({ kullanici: YAZAR });
+      ac('/personel?kisi=999');
+      await screen.findByText('Ayşe Deneme');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('?gorunum=matris yalnız rol yönetene matrisi açar', async () => {
+      sunucuKur({ kullanici: OKUYUCU });
+      ac('/personel?gorunum=matris');
+      await screen.findByText('Ayşe Deneme');
+      expect(screen.queryByRole('tab', { name: /Yetki matrisi/ })).toBeNull();
+    });
   });
 });

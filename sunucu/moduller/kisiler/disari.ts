@@ -1,8 +1,9 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import { islemleriBirlestir } from './kurallar.ts';
 import {
-  etkinKisiSecenekleri, kisiAdlariniBul, kisiGorevBul, kisiGorevleriniBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
+  etkinKisiSecenekleri, kisiAra, kisiAdlariniBul, kisiGorevBul, kisiGorevleriniBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
   rollerdekiKisiSatirlari,
 } from './sorgular.ts';
 
@@ -67,3 +68,24 @@ export async function rollerdekiKisiler(db: Db, rolIdleri: readonly number[]): P
   if (rolIdleri.length === 0) return [];
   return rollerdekiKisiSatirlari(db, rolIdleri);
 }
+
+// Genel aramanın kişi kaynağı (kart #1236). Kişi listesini okuyan (kisiler.oku) bulur; sonuç Personel ekranında o kişinin
+// düzenleme formunu açar (yazamayana liste açılır). Gösterilen yalnız listede de görünen ad, sicil no, görev ve durumdur:
+// kullanıcı adı ve özel veri (İK) girmez. Çekirdek yetkisizi çağırmaz; kaynak yine de işlemi kendi denetler.
+const KISI_ARAMA_ISLEMI = 'kisiler.oku' satisfies Islem;
+
+export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
+  {
+    tur: 'kisi',
+    yetki: [KISI_ARAMA_ISLEMI],
+    ara: async (db, istek) => {
+      if (!istek.kullanici.islemler.includes(KISI_ARAMA_ISLEMI)) return [];
+      return (await kisiAra(db, istek.sade, istek.icindeDeseni, istek.basDeseni, istek.sinir)).map((k) => ({
+        anahtar: String(k.id),
+        baslik: k.ad,
+        aciklama: [k.sicilNo, k.gorev, k.aktif ? null : 'Pasif'].filter((p) => p !== null).join(' · ') || null,
+        yol: `/personel?kisi=${k.id}`,
+      }));
+    },
+  },
+];

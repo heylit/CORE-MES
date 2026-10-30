@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   KisiOzeti, PersonelCevabi, RolGovdesi, RolOzeti, RollerCevabi, SurumGovdesi,
@@ -124,6 +125,14 @@ const GORUNUMLER: readonly Sekme<Gorunum>[] = [
 
 type Pencere = { tur: 'form' | 'hesap' | 'parola' | 'pin' | 'rol'; kisiId: number | null };
 
+// Ctrl K'den gelen istek (kart #1236): `?yeni=1` boş formu, `?kisi=<id>` o kişinin düzenleme formunu dolu açar, `?gorunum=matris`
+// yetki matrisine geçer. Yazma yine formun kendi ucundadır; yetkisi olmayana pencere açılmaz.
+const ISTEK_ANAHTARLARI = ['yeni', 'kisi', 'gorunum'] as const;
+
+// Bayrak yalnız kisiler.rol-yonet sahibine görünür; bilinmiyorsa düğme kalır, sunucu reddeder. Bayraklı kişinin kaydını
+// yalnız bayraklı kullanıcı düzenler.
+const bayrakli = (k: KisiOzeti): boolean => k.roller.some((r) => r.yonetici === true);
+
 export function Personel() {
   const oturum = useOturum();
   const istemci = useQueryClient();
@@ -137,12 +146,21 @@ export function Personel() {
   const [gorunum, gorunumYaz] = useState<Gorunum>('kisiler');
   const [pasifeAlinacak, pasifeAlinacakYaz] = useState<KisiOzeti | null>(null);
 
-  // Bayrak yalnız kisiler.rol-yonet sahibine görünür; bilinmiyorsa düğme kalır, sunucu reddeder. Bayraklı kişinin kaydını
-  // yalnız bayraklı kullanıcı düzenler.
-  const bayrakli = (k: KisiOzeti): boolean => k.roller.some((r) => r.yonetici === true);
   const benBayrakli = kisiler.data?.kisiler.some((k) => k.id === oturum.data?.id && bayrakli(k)) === true;
   const secili = acik?.kisiId == null ? null : kisiler.data?.kisiler.find((k) => k.id === acik.kisiId) ?? null;
   const kapat = () => acikYaz(null);
+
+  const [istek, istekYaz] = useSearchParams();
+  useEffect(() => {
+    if (!ISTEK_ANAHTARLARI.some((a) => istek.has(a)) || !oturum.data || !kisiler.data) return;
+    const kisiId = Number(istek.get('kisi'));
+    const hedef = Number.isInteger(kisiId) && kisiId > 0 ? kisiler.data.kisiler.find((k) => k.id === kisiId) : undefined;
+    if (istek.get('gorunum') === 'matris' && yonetebilir) gorunumYaz('matris');
+    else if (istek.get('yeni') === '1' && yazabilir) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: null }); }
+    else if (hedef !== undefined && yazabilir && (benBayrakli || !bayrakli(hedef))) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: hedef.id }); }
+    // İstek bir kez uygulanır; geri tuşu ya da yenileme pencereyi yeniden açmaz.
+    istekYaz((o) => { const y = new URLSearchParams(o); for (const a of ISTEK_ANAHTARLARI) y.delete(a); return y; }, { replace: true });
+  }, [istek, istekYaz, oturum.data, kisiler.data, yazabilir, yonetebilir, benBayrakli]);
 
   const durumDegistir = useMutation({
     mutationFn: ({ kisi, islem }: { kisi: KisiOzeti; islem: 'pasife-al' | 'aktif-yap' }) =>
