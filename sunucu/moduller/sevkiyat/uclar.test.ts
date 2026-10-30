@@ -149,8 +149,8 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
     assert.equal(fabrika.statusCode, 200, fabrika.body);
     assert.equal(fabrika.json().nokta.adres, null);
     assert.deepEqual([fabrika.json().nokta.enlem, fabrika.json().nokta.boylam], [39.9, 32.7]);
-    const a = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta A', tur: 'musteri', enlem: 39.95, boylam: 32.8, adres: null, durakSuresiDakika: 10 })).json().nokta;
-    const b = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta B', tur: 'musteri', enlem: 39.99, boylam: 32.73, adres: null, durakSuresiDakika: 10 })).json().nokta;
+    const a = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta A', tur: 'diger', enlem: 39.95, boylam: 32.8, adres: null, durakSuresiDakika: 10 })).json().nokta;
+    const b = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Nokta B', tur: 'diger', enlem: 39.99, boylam: 32.73, adres: null, durakSuresiDakika: 10 })).json().nokta;
     const arac = await y('POST', '/sevkiyat/araclar/ekle', {
       ad: 'Araç 1', tur: 'kamyonet', plaka: null, kapasiteKilogram: 1500, kapasitePalet: 4, musaitBaslangic: '08:00', musaitBitis: '18:00',
       kilometreMaliyeti: 12.5, saatMaliyeti: null, gunlukMaliyet: null,
@@ -219,8 +219,8 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
     assert.equal((await aracOf(m, plancininki.id)).arac.kilometreMaliyeti, null);
 
     const y = (method: 'GET' | 'POST', url: string, payload?: unknown) => iste(hedef, method, url, yonetici, payload);
-    const a = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Maliyet A', tur: 'musteri', enlem: 39.94, boylam: 32.78, adres: null, durakSuresiDakika: 10 })).json().nokta;
-    const b = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Maliyet B', tur: 'musteri', enlem: 39.97, boylam: 32.74, adres: null, durakSuresiDakika: 10 })).json().nokta;
+    const a = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Maliyet A', tur: 'diger', enlem: 39.94, boylam: 32.78, adres: null, durakSuresiDakika: 10 })).json().nokta;
+    const b = (await y('POST', '/sevkiyat/noktalar/ekle', { ad: 'Maliyet B', tur: 'diger', enlem: 39.97, boylam: 32.74, adres: null, durakSuresiDakika: 10 })).json().nokta;
     const is = await p('POST', '/sevkiyat/isler/ekle', {
       tarih: gun, tur: 'aktarma', alisNoktasiId: a.id, birakisNoktasiId: b.id, agirlikKilogram: 10, paletSayisi: 0, durakSuresiDakika: null,
       alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, belgeNo: null, aciklama: null, sabitAracId: null,
@@ -262,7 +262,7 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
   });
 
   test('kayıt açan uç aynı istek kimliğiyle yinelenince ikinci kayıt açmaz, ilk cevabı döner; kimliksiz yazma reddedilir', async () => {
-    const govde = { ad: 'Tekrar Noktası', tur: 'musteri', enlem: 39.93, boylam: 32.85, adres: null, durakSuresiDakika: 5 };
+    const govde = { ad: 'Tekrar Noktası', tur: 'kargo', enlem: 39.93, boylam: 32.85, adres: null, durakSuresiDakika: 5 };
     const kimlik = randomUUID();
     const ilk = await iste(hedef, 'POST', '/sevkiyat/noktalar/ekle', yonetici, govde, kimlik);
     const ikinci = await iste(hedef, 'POST', '/sevkiyat/noktalar/ekle', yonetici, govde, kimlik);

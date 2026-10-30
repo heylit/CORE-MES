@@ -22,7 +22,7 @@ before(async () => {
   const kisi = (await vt.tx((db) => db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Konum Ayari') RETURNING id")))!.id;
   await vt.tx((db) => db.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('sevkiyat.fabrika-enlem', '39.9', $1), ('sevkiyat.fabrika-boylam', '32.7', $1)", [kisi]));
   await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Fabrika', tur: 'fabrika', enlem: 0, boylam: 0, adres: null, durakSuresiDakika: 10 }));
-  nokta = (await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Nokta', tur: 'musteri', enlem: 39.95, boylam: 32.75, adres: null, durakSuresiDakika: 10 }))).id;
+  nokta = (await vt.tx((db) => servis.noktaEkle(db, { ad: 'Deneme Nokta', tur: 'diger', enlem: 39.95, boylam: 32.75, adres: null, durakSuresiDakika: 10 }))).id;
 });
 after(() => ortam.kaldir());
 

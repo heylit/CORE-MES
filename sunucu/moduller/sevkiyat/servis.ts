@@ -22,7 +22,7 @@ import { filoPlani } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
   AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
-  isNoktasiIhlali, onayEngelleri, plandanCikarilmali, surumGuncel,
+  NOKTA_FIRMASI_GEREKIR, isNoktasiIhlali, noktaFirmasizMi, onayEngelleri, plandanCikarilmali, surumGuncel,
   planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
 } from './kurallar.ts';
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
@@ -154,6 +154,7 @@ export async function firmaSecenekleri(db: Db, metin: string): Promise<FirmaSece
 }
 async function firmaDenetle(db: Db, govde: NoktaGovdesi, kendiId: number | null) {
   const firmaId = govde.firmaId ?? null;
+  if (noktaFirmasizMi(govde.tur, firmaId)) throw gecersiz(NOKTA_FIRMASI_GEREKIR);
   if (firmaId === null) return;
   if (!firmaBaglanabilir(govde.tur)) throw gecersiz('Firmaya yalnız müşteri, tedarikçi ya da fason noktası bağlanır.');
   const f = await firmaVarMi(db, firmaId);

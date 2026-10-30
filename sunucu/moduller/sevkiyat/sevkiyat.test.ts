@@ -17,8 +17,15 @@ const kaynak = izgaraKaynagi();
 const yok: HaritaKaynagi = () => Promise.resolve(null);
 const tx = <T>(is: (db: Db) => Promise<T>) => vt.tx(is);
 const konum = (satir: number, sutun: number) => ({ enlem: 39.90 + satir * 0.01, boylam: 32.70 + sutun * 0.01 });
-const nokta = (ad: string, satir: number, sutun: number, tur: 'fabrika' | 'musteri' | 'tedarikci' = 'musteri') =>
-  tx((db) => servis.noktaEkle(db, { ad, tur, ...konum(satir, sutun), adres: null, durakSuresiDakika: 10 }));
+// 1264 a: müşteri, tedarikçi ve fason noktası firmaya bağlıdır; her nokta kendi adıyla açılmış deneme firmasını alır.
+const firmaAc = (ad: string) => tx(async (db) => {
+  const kisi = await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Firma Deneme') RETURNING id");
+  return (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ($1, 'ikisi', $2) RETURNING id", [ad, kisi?.id]))!.id;
+});
+const nokta = async (ad: string, satir: number, sutun: number, tur: 'fabrika' | 'musteri' | 'tedarikci' = 'musteri') => {
+  const firmaId = tur === 'fabrika' ? null : await firmaAc(ad);
+  return tx((db) => servis.noktaEkle(db, { ad, tur, ...konum(satir, sutun), adres: null, durakSuresiDakika: 10, firmaId }));
+};
 const ARAC = { tur: 'kamyonet' as const, plaka: null, kapasiteKilogram: 1500, kapasitePalet: 4, musaitBaslangic: '08:00', musaitBitis: '18:00', kilometreMaliyeti: null, saatMaliyeti: null, gunlukMaliyet: null };
 const BOS_IS = { alisNoktasiId: null, birakisNoktasiId: null, agirlikKilogram: 100, paletSayisi: 1, durakSuresiDakika: null, alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, belgeNo: null, aciklama: null, sabitAracId: null };
 // Taslakta kaydedilmiş saat yoktur.
@@ -60,6 +67,25 @@ test('SVK-2: aktif nokta ve araç adı tektir; aktif araçta plaka tektir (büy�
   await tx((db) => servis.aracPasiflestir(db, plakali.id));
   const yeni = await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakalı 3', plaka: '06 DNM 01' }));
   await tx((db) => servis.aracPasiflestir(db, yeni.id)); // sonraki testlerin araç sayısı değişmesin
+});
+
+test('1264 a: müşteri, tedarikçi ve fason noktası firmasız yazılmaz; kargo ve diğer firmasız kalır; bağsız eski nokta düzeltilirken bağlanır', async () => {
+  for (const tur of ['musteri', 'tedarikci', 'fason'] as const) {
+    await assert.rejects(tx((db) => servis.noktaEkle(db, { ad: `Firmasız ${tur}`, tur, ...konum(5, 1), adres: null, durakSuresiDakika: 10, firmaId: null })),
+      (h: unknown) => hata('GECERSIZ')(h) && (h as Error).message.includes('firmaya bağlanır'));
+  }
+  const kargo = await tx((db) => servis.noktaEkle(db, { ad: 'Firmasız Kargo', tur: 'kargo', ...konum(5, 2), adres: null, durakSuresiDakika: 10, firmaId: null }));
+  assert.equal(kargo.firmaId, null);
+  // Kuraldan önce açılmış bağsız nokta: listede kalır, firmasız düzeltilemez, firmaya bağlanarak düzeltilir.
+  const eski = await tx((db) => sorgu.noktaEkle(db, { ad: 'Eski Müşteri', tur: 'musteri', ...konum(5, 3), adres: null, durakSuresiDakika: 10, firmaId: null }));
+  assert.equal((await tx((db) => servis.noktalariListele(db))).noktalar.find((n) => n.id === eski.id)?.firmaId, null);
+  const govde = { ad: 'Eski Müşteri', tur: 'musteri' as const, ...konum(5, 3), adres: null, durakSuresiDakika: 10 };
+  await assert.rejects(tx((db) => servis.noktaGuncelle(db, eski.id, { ...govde, firmaId: null, surum: eski.surum })), hata('GECERSIZ'));
+  assert.equal((await tx((db) => sorgu.noktaGetir(db, eski.id)))?.surum, eski.surum);
+  const firmaId = await firmaAc('Eski Müşteri Firması');
+  const bagli = await tx((db) => servis.noktaGuncelle(db, eski.id, { ...govde, firmaId, surum: eski.surum }));
+  assert.equal(bagli.firmaId, firmaId);
+  assert.equal((await tx((db) => servis.noktalariListele(db))).noktalar.find((x) => x.id === eski.id)?.ad, 'Eski Müşteri Firması');
 });
 
 test('nokta firmaya bağlanır: ad finanstan okunur, firma başına tek aktif nokta, kargo bağlanmaz (kart #836)', async () => {
@@ -152,15 +178,16 @@ test('SVK-12: iş: fabrika nokta olarak seçilmez; tür ile nokta uyumu ve yük 
 });
 
 test('sürüm (kart #1323): eski sürümle güncelleme 409 alır ve kaydı değiştirmez; her yazma sürümü artırır', async () => {
-  const nokta = await tx((db) => servis.noktaEkle(db, { ad: 'Sürüm Noktası', tur: 'musteri', ...konum(6, 2), adres: null, durakSuresiDakika: 10 }));
+  const firmaId = await firmaAc('Sürüm Noktası');
+  const nokta = await tx((db) => servis.noktaEkle(db, { ad: 'Sürüm Noktası', tur: 'musteri', ...konum(6, 2), adres: null, durakSuresiDakika: 10, firmaId }));
   assert.equal(nokta.surum, 1);
-  const girdi = { ad: 'Sürüm Noktası 2', tur: 'musteri' as const, ...konum(6, 2), adres: null, durakSuresiDakika: 15 };
+  const girdi = { ad: 'Sürüm Noktası 2', tur: 'musteri' as const, ...konum(6, 2), adres: null, durakSuresiDakika: 15, firmaId };
   const guncel = await tx((db) => servis.noktaGuncelle(db, nokta.id, { ...girdi, surum: 1 }));
   assert.equal(guncel.surum, 2);
   await assert.rejects(tx((db) => servis.noktaGuncelle(db, nokta.id, { ...girdi, ad: 'Üzerine Yazılan', surum: 1 })), (h: unknown) => hata('CAKISMA')(h) && (h as Error).message === servis.KAYIT_DEGISTI);
   assert.equal((await tx((db) => sorgu.noktaGetir(db, nokta.id)))?.ad, 'Sürüm Noktası 2');
   // Denetimle yazma arasında değişen kayıt: koşullu yazma satır döndürmez.
-  assert.equal(await tx((db) => sorgu.noktaGuncelle(db, nokta.id, 1, { ...girdi, firmaId: null })), null);
+  assert.equal(await tx((db) => sorgu.noktaGuncelle(db, nokta.id, 1, girdi)), null);
 
   const arac = await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Sürüm Aracı' }));
   await tx((db) => servis.aracGuncelle(db, arac.id, { ...ARAC, ad: 'Sürüm Aracı', kapasitePalet: 5, surum: arac.surum }));
@@ -491,14 +518,14 @@ test('noktanın durak süresi değişince plan saatleri yeni süreyle hesaplanı
   await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: null, rotalar: [{ aracId: k1, kilitli: false, ogeler: [{ isId: is.id, alis: false }] }] }, kaynak));
   const sure = async () => { const d = (await tx((db) => servis.gunPlani(db, T, kaynak))).rotalar.find((r) => r.aracId === k1)!.hesap!.duraklar[0]!; return d.ayrilis - d.baslama; };
   assert.equal(await sure(), 10);
-  await tx(async (db) => servis.noktaGuncelle(db, n.id, { surum: await surumu(db, 'sevkiyat_noktasi', n.id), ad: 'Süresi Değişen', tur: 'musteri', ...konum(7, 7), adres: null, durakSuresiDakika: 90 }));
+  await tx(async (db) => servis.noktaGuncelle(db, n.id, { surum: await surumu(db, 'sevkiyat_noktasi', n.id), ad: 'Süresi Değişen', tur: 'musteri', ...konum(7, 7), adres: null, durakSuresiDakika: 90, firmaId: n.firmaId }));
   assert.equal(await sure(), 90);
 });
 
 test('SVK-40: gece yarısını aşan elle rota uyarıyla döner; cevap sözleşmeye uyar', async () => {
   const T = '2026-10-21';
   const uzun = await nokta('Uzun Duraklı Müşteri', 8, 8);
-  await tx(async (db) => servis.noktaGuncelle(db, uzun.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun.id), ad: 'Uzun Duraklı Müşteri', tur: 'musteri', ...konum(8, 8), adres: null, durakSuresiDakika: 240 }));
+  await tx(async (db) => servis.noktaGuncelle(db, uzun.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun.id), ad: 'Uzun Duraklı Müşteri', tur: 'musteri', ...konum(8, 8), adres: null, durakSuresiDakika: 240, firmaId: uzun.firmaId }));
   const isler: { id: number }[] = [];
   for (let i = 0; i < 12; i++) isler.push(await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: uzun.id })));
   const p = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: null, rotalar: [{ aracId: k2, kilitli: false, ogeler: isler.map((i) => ({ isId: i.id, alis: false })) }] }, kaynak));
@@ -537,7 +564,7 @@ test('bugün ya da ileri tarihli onaylı plandaki araç ve nokta, onay kaldırı
   for (const komut of [
     () => tx(async (db) => servis.aracGuncelle(db, k1, { ...aracGovdesi, surum: await surumu(db, 'sevkiyat_araci', k1) })),
     () => tx((db) => servis.aracPasiflestir(db, k1)),
-    () => tx(async (db) => servis.noktaGuncelle(db, musteri.id, { surum: await surumu(db, 'sevkiyat_noktasi', musteri.id), ad: 'Onaylı Müşteri', tur: 'musteri', ...konum(4, 8), adres: null, durakSuresiDakika: 10 })),
+    () => tx(async (db) => servis.noktaGuncelle(db, musteri.id, { surum: await surumu(db, 'sevkiyat_noktasi', musteri.id), ad: 'Onaylı Müşteri', tur: 'musteri', ...konum(4, 8), adres: null, durakSuresiDakika: 10, firmaId: musteri.firmaId })),
     () => tx((db) => servis.noktaPasiflestir(db, musteri.id)),
     // Fabrika her onaylı rotanın başıdır.
     () => tx(async (db) => servis.noktaGuncelle(db, fabrikaId, { surum: await surumu(db, 'sevkiyat_noktasi', fabrikaId), ad: 'Deneme Fabrika', tur: 'fabrika', ...konum(0, 1), adres: null, durakSuresiDakika: 10 })),

@@ -83,11 +83,39 @@ describe('Noktalar', () => {
     fireEvent.focus(screen.getByLabelText('Firmadan al'));
     fireEvent.click(within(await screen.findByRole('list', { name: 'Firmalar' })).getByRole('button', { name: /Örnek Tedarikçi Firma/ }));
     fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'kargo' } });
-    expect(screen.queryByText('Firma bağını kaldır')).toBeNull();
+    expect(screen.queryByText('Firmayı değiştir')).toBeNull();
     doldur('Enlem', '39.95'); doldur('Boylam', '32.81');
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilan).toHaveLength(1));
     expect(yazilan[0]?.govde).toMatchObject({ tur: 'kargo', firmaId: null });
+  });
+
+  it('1264 a: firmasız müşteri, tedarikçi ve fason noktası rozetle ve ayrı süzgeçte görünür; firma seçilmeden kaydedilmez', async () => {
+    const yazilan = sunucuKur(TANIMCI);
+    ac();
+    const sekme = await screen.findByRole('tab', { name: 'Firmasız · 3' });
+    fireEvent.click(sekme);
+    const tablo = screen.getByRole('table', { name: 'Noktalar' });
+    expect(within(tablo).getAllByText('Firmasız')).toHaveLength(3);
+    expect(within(tablo).queryByText('Deneme Fabrika')).toBeNull();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Örnek Müşteri A noktasını düzenle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    expect(await screen.findByText(/firmaya bağlanır; firmayı seçin/)).toBeTruthy();
+    expect(yazilan).toHaveLength(0);
+    fireEvent.focus(screen.getByLabelText('Firmadan al'));
+    fireEvent.click(within(await screen.findByRole('list', { name: 'Firmalar' })).getByRole('button', { name: /Örnek Tedarikçi Firma/ }));
+    expect(screen.getByRole('button', { name: 'Firmayı değiştir' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazilan).toHaveLength(1));
+    expect(yazilan[0]).toMatchObject({ yol: '/sevkiyat/noktalar/2/guncelle', govde: { firmaId: 11, surum: 1 } });
+  });
+
+  it('bütün noktalar firmalıysa Firmasız süzgeci çıkmaz', async () => {
+    sunucuKur(OKUYUCU, undefined, { ...NOKTALAR, noktalar: NOKTALAR.noktalar.map((n, i) => (n.tur === 'fabrika' ? n : { ...n, firmaId: 20 + i })) });
+    ac();
+    await screen.findByText(NOKTALAR.noktalar[1]!.ad);
+    expect(screen.queryByRole('tab', { name: /Firmasız/ })).toBeNull();
+    expect(screen.queryByText('Firmasız')).toBeNull();
   });
 
   it('fabrika konumu ayardan geliyorsa bunu söyler', async () => {
