@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../prototip.ts';
+import { prototipYukle } from '../prototip-html.ts';
 import { acilisVarsayimlari, defaults, durumOku, DURUM_ANAHTARI } from './durum.ts';
 
 // Açılış prototiptekiyle aynı olmalı: prototipin defaults işlevi ve kayıt okuma satırı, eski ekranın yüklediği prototipten

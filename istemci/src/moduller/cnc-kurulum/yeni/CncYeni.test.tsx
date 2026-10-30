@@ -90,11 +90,23 @@ describe('CncYeni', () => {
     expect(screen.queryByRole('button', { name: /Tanımlar/ })).toBeNull();
   }, 20000);
 
-  it('kapı işlemi olmayan kişide açılmaz, uçlara gitmez', async () => {
+  it('menünün kökü yönlenmeden Ana Sayfa görünümünü açar; görünüme geçince ekran yeniden kurulmaz', async () => {
+    const istekler = sunucuKur(KULLANICI);
+    ac('/cnc-kurulum');
+    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum');
+    fireEvent.click(screen.getByRole('tab', { name: 'Takım Ömrü' }));
+    expect(await screen.findByRole('tab', { name: 'Takım Ömrü', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/takim-omru');
+    expect(istekler.filter((i) => i === 'GET /cnc-kurulum/ben')).toHaveLength(1);
+  }, 20000);
+
+  it('yeni ekran kapısı istemez: sayfa yetkisi olan yönetici olmayan kişide de açılır (1272 a)', async () => {
     const istekler = sunucuKur(KULLANICI);
     ac('/cnc-kurulum/yeni/ana-sayfa');
-    expect(await screen.findByText(YENI_EKRAN_ILETISI, {}, { timeout: 10000 })).toBeTruthy();
-    expect(istekler.some((i) => i.includes('/cnc-kurulum/'))).toBe(false);
+    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
+    expect(istekler.some((i) => i.includes('/cnc-kurulum/'))).toBe(true);
   }, 20000);
 
   it('okuma işlemi olmayan kişide yetki iletisi gösterir', async () => {

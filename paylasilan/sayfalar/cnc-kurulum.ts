@@ -1,7 +1,7 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
-// CNC Kurulum Motoru tek sayfadır; içerik prototipin kendisidir ve yalıtılmış çerçevede açılır. Prototip kendi iç gezinmesini
-// (kurulum, kütüphane, stok, takım ömrü, G-kod, hazırlık) taşır. Makinelerin çizimle eşleştirilmesi Çizim Merkezi'ndedir
+// CNC Kurulum Motoru tek sayfadır; ekran kendi sekmelerini (kurulum, hazırlık, kütüphane, ham malzeme, Oto-CAM, G-kod, takım ömrü)
+// çizer ve `/cnc-kurulum/yeni` altında açılır, kök adres oraya düşer. Makinelerin çizimle eşleştirilmesi Çizim Merkezi'ndedir
 // (paylasilan/sayfalar/cizimler.ts, "CNC makineleri").
 export const CNC_KURULUM_SAYFALARI = [
   { yol: '/cnc-kurulum', islem: 'sayfa.cnc-kurulum', baslik: 'CNC Kurulum Motoru', simge: 'rotate', grup: 'Üretim', sira: 40 },

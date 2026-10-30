@@ -3,7 +3,6 @@ import { Navigate } from 'react-router-dom';
 import type { BenCevabi, KayitlarCevabi, TezgahlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { DurumKutusu, Dugme, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { kopruKur } from '../kopru.ts';
@@ -18,19 +17,15 @@ import { TanimlarPenceresi } from './tanimlar/index.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
 import './cnc-yeni.css';
 
-// CNC Kurulum Motoru'nun TS ekranı (soru 199 b). Görünüm ve akış prototipteki gibidir; çerçeve ve köprü yoktur, veri aynı
-// uçlardan ve aynı kayıttan gelir (eski ekranla yan yana çalışır). Alıma kadar ikinci yoldadır ve yalnız yöneticide açılır.
+// CNC Kurulum Motoru'nun ekranı (soru 199 b). Görünüm ve akış prototipteki gibidir; veri modülün uçlarından ve kayıtlarından gelir.
+// Sayfa yetkisi olan her role açılır (1272 a); kök adres Ana Sayfa'ya düşer.
 const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz'];
-// Görünüm şeridine dokunmak eylem sayılmaz (eski ekranda da öyle): yalnız bakan kişi kayıt yazmaz.
+// Görünüm şeridine dokunmak eylem sayılmaz: yalnız bakan kişi kayıt yazmaz.
 const SERIT = 'data-cnc-serit';
 
 interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi; tezgahlar: TezgahlarCevabi['tezgahlar'] | null }
 
 export function CncYeni() {
-  return <YeniEkranKapisi><CncEkrani /></YeniEkranKapisi>;
-}
-
-function CncEkrani() {
   const oturum = useOturum();
   const { bildir } = useBildirim();
   const { gorunum, burada, git } = useGorunum();
@@ -71,7 +66,7 @@ function CncEkrani() {
     const yenidenKur = (hedef: Gorunum = 'setup'): void => {
       setAcilis(null); setDeneme((d) => d + 1); git(hedef);
     };
-    const isle = kopruKur({}, yetki.saltOnay, degerler[DURUM_ANAHTARI]?.deger, (g) => { yenidenKur(g === 'lib' ? 'lib' : 'setup'); },
+    const isle = kopruKur(yetki.saltOnay, degerler[DURUM_ANAHTARI]?.deger, (g) => { yenidenKur(g === 'lib' ? 'lib' : 'setup'); },
       yetki.takimDegistirebilir, yetki.stokDusebilir);
     const y = new KayitYazici({
       isle, yazabilir: yetki.yazabilir || yetki.hazirlikOnaylayabilir, onek: ONEK, emirAnahtari: EMIR,

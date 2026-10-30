@@ -1,8 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { CncEslestirme, ESLESTIRME_YOLU } from './CncEslestirme.tsx';
-import { CncKurulumCercevesi } from './CncKurulumCercevesi.tsx';
-import { prototipYukle } from './prototip.ts';
 import { CncYeni } from './yeni/CncYeni.tsx';
 import { gorunumAdresi, KOK } from './yeni/gorunum.ts';
 
@@ -12,17 +10,19 @@ function EskiAktarim() {
   return <Navigate to={`${ESLESTIRME_YOLU}${search}`} replace />;
 }
 
-// TS ekranı (soru 199 b) alıma kadar ikinci yoldadır; kökü Ana Sayfa'ya düşer.
-function YeniKok() {
+// Ekranın `/yeni` kökü Ana Sayfa'ya düşer.
+function AnaSayfaya() {
   return <Navigate to={gorunumAdresi('home')} replace />;
 }
 
-// Kök yol prototiptir (kendi iç gezinmesini taşır). Makine eşleştirme Çizim Merkezi'nin bölümüdür (adresi onun altında, ikinci
-// menüsünde); ekran modeli prototipin kütüphanesiyle ürettiği için bu modüldedir.
+// Makine eşleştirme Çizim Merkezi'nin bölümüdür (adresi onun altında, ikinci menüsünde); ekran modeli bu ekranın sahnesiyle
+// ürettiği için bu modüldedir. Menünün kökü (`/cnc-kurulum`) yönlenmeden Ana Sayfa'yı açar, görünümler `/cnc-kurulum/yeni/<görünüm>`
+// adresindedir. Ekran kalıcı rota değildir: kalıcı rota tek adres tutar, iki kalıcı rota iki ayrı ekran (iki 3B sahne) kurardı.
+// Kök ile görünümler arasında React ekranı korur (aynı bileşen, aynı yer); başka sayfadan dönünce ekran kayıtlardan yeniden kurulur.
 export const rotalar: ModulRotasi[] = [
-  { yol: '/cnc-kurulum', ekran: CncKurulumCercevesi, kalici: true, onYukle: prototipYukle },
+  { yol: '/cnc-kurulum', ekran: CncYeni },
   { yol: '/cnc-kurulum/aktar', ekran: EskiAktarim },
   { yol: ESLESTIRME_YOLU, ekran: CncEslestirme },
-  { yol: KOK, ekran: YeniKok },
-  { yol: `${KOK}/:gorunum`, ekran: CncYeni, kalici: true },
+  { yol: KOK, ekran: AnaSayfaya },
+  { yol: `${KOK}/:gorunum`, ekran: CncYeni },
 ];

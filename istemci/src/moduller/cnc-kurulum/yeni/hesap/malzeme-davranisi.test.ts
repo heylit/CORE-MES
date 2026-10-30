@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../../prototip.ts';
+import { prototipYukle } from '../../prototip-html.ts';
 import { clamp, fmtN } from '../bicim.ts';
 import { durumKur } from '../depo.ts';
 import { allMaterials, byId, material } from '../secici.ts';

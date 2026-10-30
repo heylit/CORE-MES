@@ -23,13 +23,13 @@ const DURUM = {
 describe('CNC köprüsü: hazırlık onaylayıcısı', () => {
   it('KP-01: onaylayıcı bütün durumu değil yalnız hazırlık onay alanlarını onay ucuna yollar', async () => {
     const istekler = sunucuKur();
-    await kopruKur({}, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 });
+    await kopruKur(true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 });
     expect(istekler).toEqual([{ yol: '/cnc-kurulum/hazirlik/onayla', govde: { hazirlik: { done: { machine: 'm1' }, fin: null, at: 2 }, beklenenSurum: 3 } }]);
   });
 
   it('KP-02: onaylayıcı durum anahtarı dışına ya da metin biçiminde yazamaz; istek gitmez', async () => {
     const istekler = sunucuKur();
-    const isle = kopruKur({}, true);
+    const isle = kopruKur(true);
     const emir = await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.emir', bicim: 'json', deger: { id: 1 }, beklenenSurum: 1 }).catch((e: unknown) => e);
     const metin = await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'metin', deger: 'x', beklenenSurum: 1 }).catch((e: unknown) => e);
     expect([emir, metin].map((h) => (h instanceof ApiHatasi ? h.durum : null))).toEqual([403, 403]);
@@ -39,13 +39,13 @@ describe('CNC köprüsü: hazırlık onaylayıcısı', () => {
   it('KP-03: yazabilen kişi onaylar değişmedikçe bütün durumu yalnız kayıt ucuna yazar (anahtar sırası fark etmez)', async () => {
     const istekler = sunucuKur();
     const ilk = JSON.stringify({ prep: { fin: null, done: { machine: 'm1', T1: null } } });
-    await kopruKur({}, false, ilk)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 });
+    await kopruKur(false, ilk)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 });
     expect(istekler).toEqual([{ yol: '/cnc-kurulum/kayitlar/yaz', govde: { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 } }]);
   });
 
   it('KP-04: yazabilen kişinin onayı önce onay ucuna, sonra bütün durum dönen sürümle kayıt ucuna gider; aynı onay bir daha gitmez', async () => {
     const istekler = sunucuKur();
-    const isle = kopruKur({}, false, JSON.stringify({ prep: { done: {}, fin: null } }));
+    const isle = kopruKur(false, JSON.stringify({ prep: { done: {}, fin: null } }));
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DURUM, beklenenSurum: 3 });
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { ...DURUM, machine: 'nlx' }, beklenenSurum: 4 });
     expect(istekler).toEqual([
@@ -62,7 +62,7 @@ describe('CNC köprüsü: emir başına kurulum', () => {
     try {
       const istekler = sunucuKur();
       const yenile = vi.fn();
-      const isle = kopruKur({}, false, undefined, yenile);
+      const isle = kopruKur(false, undefined, yenile);
       await isle('emir-sec', { isEmriId: 7, beklenenSurum: 3 });
       expect(yenile).not.toHaveBeenCalled();
       await vi.runAllTimersAsync();
@@ -78,10 +78,10 @@ describe('CNC köprüsü: emir başına kurulum', () => {
   it('KP-06: onaylayıcı emir seçemez, kurulumu tamamlayamaz; geçersiz emir ve sürüm istek göndermez', async () => {
     const istekler = sunucuKur();
     const yakala = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (e instanceof ApiHatasi ? e.durum : e instanceof Error ? e.message : e));
-    const onaylayici = kopruKur({}, true);
+    const onaylayici = kopruKur(true);
     expect(await yakala(onaylayici('emir-sec', { isEmriId: 7, beklenenSurum: 3 }))).toBe(403);
     expect(await yakala(onaylayici('kurulum-tamam', { beklenenSurum: 3 }))).toBe(403);
-    const yazar = kopruKur({}, false);
+    const yazar = kopruKur(false);
     expect(await yakala(yazar('emir-sec', { isEmriId: '7', beklenenSurum: 3 }))).toBe('Geçersiz iş emri.');
     expect(await yakala(yazar('kurulum-tamam', { beklenenSurum: null }))).toBe('Geçersiz sürüm.');
     expect(istekler).toEqual([]);
@@ -109,16 +109,16 @@ describe('CNC köprüsü: takım değişimi (300 a)', () => {
 
   it('KP-08: değişim durum yazıldıktan sonra takım ucuna bir kez gider; işlemi olmayanınki gitmez', async () => {
     const istekler = sunucuKur();
-    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, true);
+    const isle = kopruKur(false, JSON.stringify(ILK), undefined, true);
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 4 });
     expect(istekler.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/olaylar', '/cnc-kurulum/kayitlar/yaz']);
     expect(istekler[1]?.govde).toEqual({ olaylar: [{ tur: 'degisim', cep: 0, takimKimligi: 't-a' }] });
     const onaylayici = sunucuKur();
-    await kopruKur({}, true, JSON.stringify(ILK), undefined, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
+    await kopruKur(true, JSON.stringify(ILK), undefined, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     expect(onaylayici.map((i) => i.yol)).toEqual(['/cnc-kurulum/hazirlik/onayla', '/cnc-kurulum/takimlar/olaylar']);
     const digerleri = sunucuKur();
-    await kopruKur({}, false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
+    await kopruKur(false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz']);
   });
 
@@ -132,7 +132,7 @@ describe('CNC köprüsü: takım değişimi (300 a)', () => {
       const govde = yol.endsWith('/olaylar') ? { yazilan: 1 } : { kayit: { surum: 4 } };
       return new Response(JSON.stringify(durum === 200 ? govde : { kod: 'HATA', mesaj: 'Hata.' }), { status: durum });
     }));
-    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, true);
+    const isle = kopruKur(false, JSON.stringify(ILK), undefined, true);
     const yaz = () => isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     await expect(yaz()).rejects.toBeInstanceOf(ApiHatasi);
     await yaz();
@@ -150,7 +150,7 @@ describe('CNC köprüsü: takım değişimi (300 a)', () => {
       }
       return new Response(JSON.stringify(adres.endsWith('/olaylar') ? { yazilan: 1 } : { kayit: { surum: 4 } }), { status: 200 });
     }));
-    const ikinci = kopruKur({}, false, JSON.stringify(ILK), undefined, true);
+    const ikinci = kopruKur(false, JSON.stringify(ILK), undefined, true);
     const yaz2 = () => ikinci('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     expect(await yaz2()).toEqual({ kayit: { surum: 4 } });
     await yaz2();
@@ -186,15 +186,15 @@ describe('CNC köprüsü: takım stoğu (164 b)', () => {
       if (adres.endsWith('/stok-dus')) kimlikler.push(new Headers(secenek?.headers).get('istek-kimligi'));
       return new Response(JSON.stringify(adres.endsWith('/stok-dus') ? { hareketSayisi: 1 } : { kayit: { surum: 4 } }), { status: 200 });
     }));
-    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, false, true);
+    const isle = kopruKur(false, JSON.stringify(ILK), undefined, false, true);
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
     await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 4 });
     expect(istekler.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/stok-dus', '/cnc-kurulum/kayitlar/yaz']);
     expect(istekler[1]?.govde).toEqual({ kimlik: 'f-10', miktar: 2 });
     expect(kimlikler[0]).toMatch(/^[0-9a-f-]{36}$/);
     const digerleri = sunucuKur();
-    await kopruKur({}, false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
-    await kopruKur({}, true, JSON.stringify(ILK), undefined, false, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
+    await kopruKur(false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
+    await kopruKur(true, JSON.stringify(ILK), undefined, false, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
     expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/hazirlik/onayla']);
   });
 
@@ -211,7 +211,7 @@ describe('CNC köprüsü: takım stoğu (164 b)', () => {
       const govde = yol.endsWith('/stok-dus') ? { hareketSayisi: 1 } : { kayit: { surum: 4 } };
       return new Response(JSON.stringify(durum === 200 ? govde : { kod: 'GECERSIZ', mesaj: 'Stok yetmiyor.' }), { status: durum });
     }));
-    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, false, true);
+    const isle = kopruKur(false, JSON.stringify(ILK), undefined, false, true);
     const yaz = (deger: unknown) => isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger, beklenenSurum: 3 });
     await expect(yaz(AZALAN)).rejects.toBeInstanceOf(ApiHatasi);
     expect(await yaz(AZALAN)).toEqual({ kayit: { surum: 4 } });
@@ -235,7 +235,7 @@ describe('CNC köprüsü: takım stoğu (164 b)', () => {
         return new Response(JSON.stringify(adres.includes('/stok-kartlari') ? { kartlar: [], toplam: 0 } : { kart: null }), { status: 200 });
       }));
       const yenile = vi.fn();
-      const isle = kopruKur({}, false, undefined, yenile);
+      const isle = kopruKur(false, undefined, yenile);
       await isle('stok-kartlari', { metin: ' freze ', sayfa: 2 });
       await isle('stok-kartlari', {});
       await isle('stok-karti-bagla', { kimlik: 'f-10', malzemeId: 4 });

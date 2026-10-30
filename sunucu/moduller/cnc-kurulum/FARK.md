@@ -89,6 +89,15 @@ Doğrulama (tarayıcıda, çerçevesiz prototip):
 - CNC ikinci menüsündeki "Çizim Merkezi'ne aktar" maddesi ve çerçevenin köşe düğmesi kalktı; eski `/cnc-kurulum/aktar` adresi yeni sayfaya
   seçili makineyle yönlenir. Yeni yetki, göç ya da sunucu değişikliği yok.
 
+## Eski çerçeve sayfası kalktı (kart 1272 a, 30.10.2026)
+- `/cnc-kurulum` eski çerçeveyi değil yeni ekranı açar (yönlenmeden, Ana Sayfa görünümü); görünümler `/cnc-kurulum/yeni/<görünüm>` adresindedir.
+- Yeni ekran kapısı kalktı: ekran `sayfa.cnc-kurulum` taşıyan her role açıktır. Ana menüdeki "(yeni)" deneme satırı kalktı.
+- Silinen: `CncKurulumCercevesi.tsx`, `cerceve-kopru.ts` (+testler), köprünün eski çerçeveye ait model istekleri. Göç ve veri değişikliği yok.
+- Prototip HTML'i (`cerceve/cnc-kurulum-motoru.html`) yalnız eşlik testlerinin başvurusu olarak kalır; pakete girmez.
+- Kalıcılık kalktı: ekran artık kalıcı rota değildir (kalıcı rota tek adres tutar; iki kalıcı rota iki ekran ve iki 3B sahne kurardı).
+  Başka sayfaya gidip dönünce ekran kayıtlardan yeniden kurulur: açık 3B sahne ve kaydırma sıfırlanır, kaydedilmemiş yarım giriş kaybolabilir.
+  Kayıtlı veri kaybolmaz. Kök ile görünümler arasında geçişte ekran yeniden kurulmaz.
+
 ## Değişen onaylı karar
 - Kart #1084 "aktarım taslak açar": eşleştirilen modelde yayına alınır (kullanıcı kararı, kart #1196). Eşleştirmesiz aktarım taslak kalır.
 - Operatöre verilmedi (kart #713 kararı: operatör yalnız terminal ve kuyruğu görür).

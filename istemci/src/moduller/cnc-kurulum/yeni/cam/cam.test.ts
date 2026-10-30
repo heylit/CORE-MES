@@ -1,7 +1,7 @@
 import { ExtrudeGeometry, LatheGeometry, Path as YolSekli, Shape, Vector2, type BufferGeometry } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../../prototip.ts';
+import { prototipYukle } from '../../prototip-html.ts';
 import { clamp, fmtN, num, upTR } from '../bicim.ts';
 import { durumKur, state } from '../depo.ts';
 import { gParse } from '../hesap/gkod.ts';

@@ -14,15 +14,9 @@ vi.mock('./step-dosyasi.ts', () => ({
 afterEach(() => { vi.resetModules(); yuklemeler.sayi = 0; yuklemeler.hata = false; });
 
 describe('STEP okuyucusu isteğe bağlı yüklenir', () => {
-  it('SO-01: prototip açılışında okuyucu dosyası istenmez', async () => {
-    const { prototipYukle } = await import('./prototip.ts');
-    await prototipYukle();
-    expect(yuklemeler.sayi).toBe(0);
-  });
-
   it('SO-02: ilk STEP isteğinde bir kez yüklenir; ikinci ve eşzamanlı istek yeniden yüklemez', async () => {
     const { kopruKur } = await import('./kopru.ts');
-    const isle = kopruKur({});
+    const isle = kopruKur();
     const [a, b] = await Promise.all([isle('step-okuyucu', {}), isle('step-okuyucu', {})]);
     const c = await isle('step-okuyucu', {});
     expect([a, b, c]).toEqual(['AGFzbQ-sahte', 'AGFzbQ-sahte', 'AGFzbQ-sahte']);
@@ -32,7 +26,7 @@ describe('STEP okuyucusu isteğe bağlı yüklenir', () => {
   it('SO-03: yükleme hatası köprüde anlaşılır iletiye çevrilir (ağ hatası metni sızmaz)', async () => {
     yuklemeler.hata = true;
     const { kopruKur, kopruHatasi } = await import('./kopru.ts');
-    const hata = await kopruKur({})('step-okuyucu', {}).catch((e: unknown) => e);
+    const hata = await kopruKur()('step-okuyucu', {}).catch((e: unknown) => e);
     expect(hata).toBeInstanceOf(Error);
     expect(hata).not.toBeInstanceOf(ApiHatasi);
     expect(kopruHatasi(hata)).toEqual({ hata: 'STEP okuyucu yüklenemedi.', durum: 503 });
