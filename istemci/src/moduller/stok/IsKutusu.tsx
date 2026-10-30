@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { HaritaOzetiCevabi, IsKutusuCevabi, PanelCevabi, SayimBekleyenlerCevabi, SepetCevabi, ToplamalarCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -58,15 +59,22 @@ function Gunluk({ gunluk }: { gunluk: PanelCevabi['gunluk'] }) {
 }
 
 // Sayım bekleyen dolu gözler (DEP-15): süre yerleşimdedir (yerleşim düzenleyici, Bina).
+// `?sayim=1` (iş listesindeki "Gözler" ve ana sayfadaki kart) bu bölüme götürür.
 function SayimBekleyenler() {
   const c = useQuery({ queryKey: [...anahtarlar.hepsi, 'sayim-bekleyenler'], queryFn: () => api.get<SayimBekleyenlerCevabi>('/stok/sayim-bekleyenler') });
+  const [adres] = useSearchParams();
+  const yer = useRef<HTMLDivElement>(null);
+  const odak = adres.get('sayim') === '1';
+  useEffect(() => { if (odak && c.data) yer.current?.scrollIntoView?.({ block: 'start' }); }, [odak, c.data]);
   if (!c.data) return null;
   return (
-    <Kart baslik={`Sayım bekleyen gözler (${c.data.gun} gün)`}>
-      <div className="tc-stok-etiketler">
-        {c.data.gozler.map((g) => <Link key={g.konumId} to={`/stok/konumlar/${g.konumId}`} className="tc-stok-etiket">{g.kod}{g.sonSayim ? '' : ' · hiç'}</Link>)}
-      </div>
-    </Kart>
+    <div ref={yer} id="sayim-bekleyenler">
+      <Kart baslik={`Sayım bekleyen gözler (${c.data.gun} gün)`}>
+        <div className="tc-stok-etiketler">
+          {c.data.gozler.map((g) => <Link key={g.konumId} to={`/stok/konumlar/${g.konumId}`} className="tc-stok-etiket">{g.kod}{g.sonSayim ? '' : ' · hiç'}</Link>)}
+        </div>
+      </Kart>
+    </div>
   );
 }
 
@@ -172,7 +180,6 @@ export function IsKutusu() {
       )}
       {s.data?.sayimBekleyen === null && <p className="tc-stok-not">Sayım süresi tanımlı değil; sayım bekleyen gözler gösterilmiyor.</p>}
       {!!s.data?.sayimBekleyen && <SayimBekleyenler />}
-      <p className="tc-stok-not">Sarf düşümü ve biten mamul girişi şimdilik elle yapılır: üretim sayımı TMI üretim emrine yazılınca otomatik olur.</p>
     </section>
   );
 }

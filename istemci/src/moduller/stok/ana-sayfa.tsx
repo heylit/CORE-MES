@@ -23,7 +23,7 @@ function DusukStok() {
 }
 function SayimBekleyen() {
   const o = useOzet();
-  return <SayiKarti baslik="Sayım bekleyen göz" simge="clock" sayi={o.data?.sayimBekleyen} altMetin="Süresi dolmuş ya da hiç sayılmamış" yol="/stok" hata={o.isError} />;
+  return <SayiKarti baslik="Sayım bekleyen göz" simge="clock" sayi={o.data?.sayimBekleyen} altMetin="Süresi dolmuş ya da hiç sayılmamış" yol="/stok?sayim=1" hata={o.isError} />;
 }
 function EksikEmir() {
   const o = useOzet();
@@ -42,7 +42,7 @@ function StokDegeri() {
   const sayi = d === undefined ? undefined : d.guncelDeger === null ? null : Math.round(Number(d.guncelDeger));
   // Değer yalnız finans rakamlarını görene hesaplanır (#680); öteki okuyan "Veri yok" ile nedenini görür.
   const alt = d?.degerGorunur === false ? 'Değer finans yetkisiyle görünür'
-    : `Yalnız kullanılabilir · TL, ortalama alış fiyatıyla${d?.guncelFiyatsizKart ? ` · ${d.guncelFiyatsizKart} kartın fiyatı yok` : ''}`;
+    : `Yalnız kullanılabilir · TL, satın alma kg fiyatıyla${d?.guncelFiyatsizKart ? ` · ${d.guncelFiyatsizKart} kartın fiyatı yok` : ''}`;
   return <SayiKarti baslik="Stok değeri" simge="box" sayi={sayi} altMetin={alt} yol="/stok" hata={p.isError} />;
 }
 function KritikEksi() {
