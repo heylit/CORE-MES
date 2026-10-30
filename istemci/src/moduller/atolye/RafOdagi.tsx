@@ -25,6 +25,12 @@ interface Ozellikler {
   depodaAc: (rafId: number, bolme: number, kat: number | null, goz: number | null) => void;
 }
 
+// Değiştirici tuşlu ok tarayıcının ya da sistemin kısayoludur (Alt+Sol/Sağ geri ve ileri gider): bölme değiştirmez, yutulmaz.
+export function bolmeOku(o: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>): 'ileri' | 'geri' | null {
+  if (o.altKey || o.ctrlKey || o.metaKey) return null;
+  return o.key === 'ArrowRight' ? 'ileri' : o.key === 'ArrowLeft' ? 'geri' : null;
+}
+
 const yaziyor = (el: Element | null): boolean => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
 
 export function RafOdagi({ yerlesim: y, raf, secim, secimYaz, gozKalemleri, yazabilir, depodaAc }: Ozellikler) {
@@ -49,8 +55,8 @@ export function RafOdagi({ yerlesim: y, raf, secim, secimYaz, gozKalemleri, yaza
   useEffect(() => {
     const tus = (o: KeyboardEvent) => {
       if (yaziyor(document.activeElement) || document.querySelector('[role="dialog"]')) return;
-      if (o.key === 'ArrowRight') { o.preventDefault(); tuslar.ileri(); }
-      if (o.key === 'ArrowLeft') { o.preventDefault(); tuslar.geri(); }
+      const yon = bolmeOku(o);
+      if (yon !== null) { o.preventDefault(); tuslar[yon](); }
       if (o.key === 'Escape') tuslar.kapat();
     };
     window.addEventListener('keydown', tus);
