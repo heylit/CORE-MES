@@ -156,7 +156,9 @@ describe('A2 kurallar eski hesaplarla aynı', () => {
       }
     }
     for (const p of [paket(), paket({ machine: '' }), paket({ opType: 'depo', st: { items: [] }, plan: [], steps: [] }), paket({ files: [{ kind: 'model', name: 'm.step' }], primary: null }), paket({ tmi: { emirId: 1, isEmriId: 2, opNo: 10, rotaEksik: 'Girdi yok' } as Pkg['tmi'] })]) {
-      expect(paketDenetimi(p, TESIS)).toEqual(H.validate(p));
+      // 1307 b (kullanıcı teyidi 30.10): kontrol planı maddesinin yumuşaklığı ve açıklaması bilerek eskisinden ayrılır (kurallar.test.ts sınar).
+      const planOzu = (l: { k: string; ok: boolean; l: string }[]) => l.map((x) => (x.k === 'plan' ? { k: x.k, ok: x.ok, l: x.l } : x));
+      expect(planOzu(paketDenetimi(p, TESIS))).toEqual(planOzu(H.validate(p)));
     }
     const eskiDurum = (x: Pkg, r: Result | null) => (r && r.state === 'done' ? 'done' : r && r.state && r.state !== 'queued' && x.status !== 'draft' ? 'production' : x.status);
     for (const st of ['draft', 'published', 'review'] as const) {

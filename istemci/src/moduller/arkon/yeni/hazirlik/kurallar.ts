@@ -271,6 +271,11 @@ export function istasyonDenetimi(p: Pick<Pkg, 'st' | 'opType' | 'id' | 'target' 
   if (t === 'kalite') return [{ k: 'st', ok: c.n > 0 && c.lot >= c.n, l: 'Numune planı', d: 'Lot ' + c.lot + ' · numune ' + c.n + ' · Ac ' + c.ac }];
   return [];
 }
+// 1307 b: talaşlı işte kontrol planı eksik görevdir, gönderimi durdurmaz; gönderen uyarıyı onaylar ve onay yayın geçmişine yazılır.
+// Kalite muayenesinde plan zorunlu kalır; öteki iş türlerinde isteğe bağlıdır (uyarı sorulmaz).
+export const PLAN_YOK_UYARISI = 'Eksik · gönderirken uyarı onayı istenir';
+export const planYokUyarisiGerekir = (p: Pick<Pkg, 'opType' | 'plan'>): boolean => isTuru(p) === 'cnc' && p.plan.length === 0;
+
 export function paketDenetimi(p: Pkg, tesis: Plant): Denetim[] {
   const pdf = p.files.find((f) => f.kind === 'pdf'), mdl = p.files.find((f) => f.kind === 'model'), ty = isTuru(p), turlu = ty !== 'cnc';
   const rota = rotaEksigi(p);
@@ -285,8 +290,9 @@ export function paketDenetimi(p: Pkg, tesis: Plant): Denetim[] {
     { k: 'docs', ok: !!mdl, l: '3B model eklendi', d: mdl ? mdl.name : 'İsteğe bağlı · STEP önerilir', soft: true },
     {
       k: 'plan', ok: p.plan.length > 0, l: 'Kontrol planı hazır',
-      d: p.plan.length ? p.plan.length + ' nokta · ' + p.plan.filter((b) => b.crit).length + ' kritik' : turlu && ty !== 'kalite' ? 'İsteğe bağlı' : 'En az bir kontrol noktası',
-      soft: turlu && ty !== 'kalite',
+      d: p.plan.length ? p.plan.length + ' nokta · ' + p.plan.filter((b) => b.crit).length + ' kritik'
+        : ty === 'kalite' ? 'En az bir kontrol noktası' : ty === 'cnc' ? PLAN_YOK_UYARISI : 'İsteğe bağlı',
+      soft: ty !== 'kalite',
     },
     { k: 'steps', ok: p.steps.length > 0, l: 'Operasyon adımları', d: p.steps.length ? p.steps.length + ' adım · ' + p.steps.filter((s) => s.r).length + ' zorunlu' : 'En az bir adım' },
   ]);

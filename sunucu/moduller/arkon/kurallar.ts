@@ -2050,6 +2050,28 @@ export function yenidenKarariDamgala(
   return { ...govde, fpRe: { ...oz, at: simdi, once, cnt: sayilan } };
 }
 
+// 1307 b: kontrol planı olmayan talaşlı işi gönderen uyarıyı onaylar; onay yayın geçmişi satırında `planYok` ile durur. Onayın anı
+// (`planYokAt`) sunucudan damgalanır: yeni satıra şimdiki an, önceki belgede aynı (v, at) satırı onaylıysa onun kayıtlı anı. İstemcinin
+// gönderdiği an sayılmaz; öteki geçmiş alanlarına dokunulmaz.
+export function planYokDamgala(depo: ArkonDeposu, govde: unknown, onceki: unknown, simdi: number): unknown {
+  const gecmis = alanOku(govde, 'history');
+  if (depo !== 'pkgs' || !kayitMi(govde) || !Array.isArray(gecmis)) return govde;
+  const eskiler = alanOku(onceki, 'history');
+  const eskiListe = Array.isArray(eskiler) ? eskiler : [];
+  const ayniSatir = (a: unknown, b: unknown): boolean => kanonik(alanOku(a, 'v')) === kanonik(alanOku(b, 'v')) && kanonik(alanOku(a, 'at')) === kanonik(alanOku(b, 'at'));
+  return {
+    ...govde,
+    history: gecmis.map((satir) => {
+      if (!kayitMi(satir)) return satir;
+      const { planYokAt: _istemci, ...oz } = satir;
+      if (satir['planYok'] !== true) return _istemci === undefined ? satir : oz;
+      const eski = eskiListe.find((e) => ayniSatir(e, satir));
+      const kayitli = alanOku(eski, 'planYok') === true ? alanOku(eski, 'planYokAt') : undefined;
+      return { ...oz, planYokAt: typeof kayitli === 'number' ? kayitli : simdi };
+    }),
+  };
+}
+
 // Kararından önce damgasız kalan kararda taban bilinmez: sayılan bütün sağlam ilk parçadan sonra sayılır.
 export const yenidenIlkParcaTabani = (paket: unknown): number => {
   const cnt = alanOku(alanOku(paket, 'fpRe'), 'cnt');
