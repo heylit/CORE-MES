@@ -62,6 +62,15 @@ describe('rota köprü komutları', () => {
     });
   });
 
+  it('1248 a: dal ve birleşen dallar kaydet gövdesinde gider; gelmeyen alan gönderilmez (sahibi kayıtlıyı korur)', async () => {
+    const istekler = sunucuKur(tamam);
+    await kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, dal: 'A', birlesen: ['B'] }, { ...ADIM, dal: null }] } });
+    const adimlar = (istekler[0]?.govde as { adimlar: Record<string, unknown>[] }).adimlar;
+    expect(adimlar[0]).toMatchObject({ dal: 'A', birlesen: ['B'] });
+    expect(adimlar[1]).toMatchObject({ dal: null });
+    expect(adimlar[1]).not.toHaveProperty('birlesen');
+  });
+
   it('ROK-3: geçersiz gövde hiçbir istek atmadan 400 ile reddedilir', async () => {
     const istekler = sunucuKur(tamam);
     const isle = kopruKur();
@@ -71,6 +80,8 @@ describe('rota köprü komutları', () => {
       ['rota-kaydet', { revizyonId: 101, surum: 2, adimlar: [{ ...ADIM, kaynak: { tur: 'hepsi', id: 1 } }] }],
       ['rota-kaydet', { revizyonId: 101, surum: 2, adimlar: [{ ...ADIM, ad: '   ' }] }],
       ['rota-kaydet', { revizyonId: 101, surum: 2, adimlar: [{ ...ADIM, ayarSuresiDk: -1 }] }],
+      ['rota-kaydet', { revizyonId: 101, surum: 2, adimlar: [{ ...ADIM, dal: 'ab' }] }],
+      ['rota-kaydet', { revizyonId: 101, surum: 2, adimlar: [{ ...ADIM, birlesen: ['A', 1] }] }],
       ['rota-kaydet', { revizyonId: '../x', surum: 2, adimlar: [] }],
       ['rota-taslak-ac', { urunId: 12, kaynak: { tur: 'standart' } }],
       ['rota-taslak-ac', { urunId: 0, kaynak: { tur: 'bos' } }],

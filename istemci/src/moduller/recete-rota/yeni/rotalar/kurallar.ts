@@ -1,3 +1,4 @@
+import { dalDenetle, dalliMi, oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
@@ -83,9 +84,40 @@ export function rotaSahibiOlur(m: Malzeme, adimSayisi: number, revSayisi: number
   return m.type === 'mamul' || m.type === 'yari' || (m.type !== 'ham' && (adimSayisi > 0 || revSayisi > 0));
 }
 
-// Adımın tükettiği önceki adımlar (sunucunun akisiCikar kuralı): bağımsız ve ilk adım tüketmez; ötekiler zincirdeki bağımsız olmayan
-// önceki adımın ve aradaki bağımsız adımların çıktısını tüketir.
+/* ---------------- çok dallı rota (1248 a) ---------------- */
+
+// Ekranda seçilebilen dallar; sunucu A-Z kabul eder, sekiz dal atölyede yeter [Varsayım].
+export const DAL_HARFLERI: readonly string[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+export const adimDali = (a: Pick<Adim, 'dal'>): string | null => a.dal ?? null;
+export const adimBirlesen = (a: Pick<Adim, 'birlesen'>): readonly string[] => a.birlesen ?? [];
+const SUNUCU_BAGI = { bagimli: 'bekleyen', ortulu: 'akisli', bagimsiz: 'bagimsiz' } as const;
+
+// Öncül kuralı sunucuyla ortaktır (paylasilan): liste sıralıdır, öncüller listedeki adımlardır; tek hatlı rotada her adım için null.
+export function adimOnculleri(liste: readonly Adim[]): (Adim[] | null)[] {
+  const o = oncullerCikar(liste.map((a, i) => ({
+    opNo: i, bagimlilik: SUNUCU_BAGI[a.dep], devirAdedi: a.dep === 'ortulu' ? a.depQty : null, dal: adimDali(a), birlesen: adimBirlesen(a),
+  })));
+  return o.map((l) => (l === null ? null : l.flatMap((x) => liste[x.opNo] ?? [])));
+}
+export const dalliRota = (liste: readonly Adim[]): boolean => dalliMi(liste.map((a) => ({ dal: adimDali(a), birlesen: adimBirlesen(a) })));
+// Adımdan önce başlamış ve henüz birleşmemiş, adımın kendi dalı olmayan dallar: birleştirme adımında seçilebilenler.
+export function birlesebilenDallar(liste: readonly Adim[], i: number): string[] {
+  const once = liste.slice(0, i);
+  const baslayan = new Set(once.flatMap((a) => adimDali(a) ?? []));
+  for (const a of once) for (const d of adimBirlesen(a)) baslayan.delete(d);
+  const kendi = liste[i] ? adimDali(liste[i]) : null;
+  return [...baslayan].filter((d) => d !== kendi).sort();
+}
+export const dalYaz = (a: Adim, dal: string | null): Adim => ({ ...a, dal, birlesen: adimBirlesen(a).filter((d) => d !== dal) });
+export const birlesenYaz = (a: Adim, d: string, sec: boolean): Adim => ({
+  ...a, birlesen: sec ? [...new Set([...adimBirlesen(a), d])].sort() : adimBirlesen(a).filter((x) => x !== d),
+});
+
+// Adımın tükettiği önceki adımlar (sunucunun akisiCikar kuralı): dallı rotada öncülleri; tek hatlı rotada bağımsız ve ilk adım tüketmez,
+// ötekiler zincirdeki bağımsız olmayan önceki adımın ve aradaki bağımsız adımların çıktısını tüketir.
 export function tuketilenAdimlar(liste: readonly Adim[], i: number): Adim[] {
+  const dalli = adimOnculleri(liste)[i];
+  if (dalli) return dalli;
   const adim = liste[i];
   if (i <= 0 || !adim || adim.dep === 'bagimsiz') return [];
   const sonuc: Adim[] = [];
@@ -136,12 +168,17 @@ export interface RotaEksigi { adimId: string; metin: string }
 export function rotaEksikleri(adimlar: readonly Adim[], malzemeVar: (id: string) => boolean, opAdi: (opId: string) => string | null): RotaEksigi[] {
   const ss = sirali(adimlar);
   const l: RotaEksigi[] = [];
+  const onculler = adimOnculleri(ss);
+  const dal = dalDenetle(ss.map((a) => ({ dal: adimDali(a), birlesen: adimBirlesen(a) })));
+  const dalAdimi = dal ? ss[Number(/^adimlar\.(\d+)/.exec(dal.alan)?.[1] ?? ss.length - 1)] : undefined;
   ss.forEach((s, i) => {
     const m: string[] = [];
+    const o = onculler[i];
     if (s.ins.some((x) => !malzemeVar(x.itemId))) m.push('girenlerden biri silinmiş bir karta bağlı');
-    else if ((i === 0 || s.dep === 'bagimsiz') && s.ins.length === 0) {
-      m.push(i === 0 ? 'giren (hammadde ya da yarı mamul) seçilmeli' : 'önceki adımı beklemediği için giren seçilmeli');
-    }
+    else if (i === 0 && s.ins.length === 0) m.push('giren (hammadde ya da yarı mamul) seçilmeli');
+    else if (o && o.length === 0 && s.ins.length === 0) m.push('hiçbir adımı beklemediği için giren seçilmeli');
+    else if (!o && s.dep === 'bagimsiz' && s.ins.length === 0) m.push('önceki adımı beklemediği için giren seçilmeli');
+    if (dal && dalAdimi === s) m.push(dal.ileti.replace(/\.$/, ''));
     if (m.length) {
       const ad = opAdi(s.opId);
       l.push({ adimId: s.id, metin: `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}: ${m.join(', ')}` });
@@ -392,6 +429,8 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     });
     for (const x of o.ins) if (!s.ins.some((y) => y.itemId === x.itemId)) ch.push(`giren çıkarıldı ${ad.malzeme(x.itemId)}`);
     if (J(o.outs) !== J(s.outs)) ch.push('yan ürünler değişti');
+    if (adimDali(o) !== adimDali(s)) ch.push(`dal ${adimDali(o) ?? 'ana hat'} → ${adimDali(s) ?? 'ana hat'}`);
+    if (J(adimBirlesen(o)) !== J(adimBirlesen(s))) ch.push(`birleşen ${adimBirlesen(o).join(', ') || 'yok'} → ${adimBirlesen(s).join(', ') || 'yok'}`);
     if (ch.length) out.push(`${nm(s)}: ${ch.join('; ')}`);
   }
   return out;
@@ -437,6 +476,8 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       yenidenAyar: s.resetup !== false,
       // Seçimi bilinmeyen adımda alan gönderilmez: sunucu kayıtlı seçimi korur.
       ...(s.ilkParca === undefined ? {} : { ilkParca: s.ilkParca }),
+      dal: adimDali(s),
+      birlesen: [...adimBirlesen(s)],
       adaylar: [
         ...s.alts.map((id) => {
           const t = s.altTimes[id];

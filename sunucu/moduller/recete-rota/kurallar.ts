@@ -742,7 +742,7 @@ const zamanMs = (iso: string | null): number | null => {
 // değişmez (kullanıcı kararı 14.10.2026).
 export const adimKimligi = (malzemeId: number | string, opNo: number): string => `${String(malzemeId)}-o${String(opNo)}`;
 
-function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIstasyonu: ReadonlyMap<number, number>): DurumRotaAdimiCikti {
+function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIstasyonu: ReadonlyMap<number, number>, seqOf: ReadonlyMap<number, number>): DurumRotaAdimiCikti {
   const k = a.kaynak;
   const makine = k?.tur === 'makine' ? k.id : null;
   const istasyon = k?.tur === 'istasyon' ? k.id : makine === null ? null : makineIstasyonu.get(makine) ?? null;
@@ -769,6 +769,12 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     minLot: a.enKucukParca,
     resetup: a.yenidenAyar,
     ilkParca: a.ilkParca,
+    dal: a.dal,
+    birlesen: a.birlesen,
+    onculler: a.onculler === null ? null : a.onculler.flatMap((o) => {
+      const seq = seqOf.get(o.opNo);
+      return seq === undefined ? [] : [{ seq, tur: o.tur }];
+    }),
     alts: aday.map((x) => String(x.kaynak.id)),
     altTimes: Object.fromEntries(aday.map((x) => [String(x.kaynak.id), { setup: metindenSayi(x.ayarSuresiDk), cycle: metindenSayi(x.birimSureDk) }])),
     digerAdaylar: a.adaylar.filter((x) => x.kaynak.tur !== 'istasyon').map((x) => ({
@@ -795,7 +801,8 @@ export function rotaDilimiCevir(
   for (const r of revizyonlar) {
     const status = REVIZYON_DURUMU_PROTOTIP[r.durum];
     if (status === null) continue;
-    const data = { base: null, steps: r.adimlar.map((a, i) => adimCevir(a, i, r.malzemeId, makineIstasyonu)) };
+    const seqOf = new Map(r.adimlar.map((a, i) => [a.opNo, (i + 1) * 10]));
+    const data = { base: null, steps: r.adimlar.map((a, i) => adimCevir(a, i, r.malzemeId, makineIstasyonu, seqOf)) };
     routeRevs.push({
       id: String(r.id), itemId: String(r.malzemeId), no: r.harf, status, surum: r.surum, note: r.aciklama ?? '',
       created: zamanMs(r.acilma) ?? 0, approvedAt: zamanMs(r.yururlugeAlma ?? r.onaylama), data,

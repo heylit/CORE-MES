@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimArkasinaTasi, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
+  adimArkasinaTasi, adimBirlesen, adimDali, adimOnculleri, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
@@ -81,8 +81,10 @@ function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, a
   );
 }
 
-function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
+// Dallı rotada (1248 a) akış oku sıradaki adıma değil, adımın öncüllerinden adıma çizilir: kutu öncüllerinin uçlarını taşır.
+function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }: {
   r: RotaEkrani; a: Adim; d: Dugum; sonraki: Adim | undefined; secili: boolean; duzen: boolean; sahip: Malzeme; liste: readonly Adim[]; i: number;
+  onculler: readonly Adim[] | null;
 }) {
   const [ustunde, setUstunde] = useState(false);
   const { h } = r.duzen;
@@ -113,7 +115,8 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i }: {
     <button
       type="button"
       className={`tc-rr1-opbox ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}${ustunde ? ' tc-rr1-birak' : ''}`}
-      data-uc={uc(d.nid, a.id)} data-sonraki={sonraki ? uc(d.nid, sonraki.id) : undefined} data-bag={sonraki?.dep}
+      data-uc={uc(d.nid, a.id)} data-sonraki={onculler === null && sonraki ? uc(d.nid, sonraki.id) : undefined} data-bag={onculler === null ? sonraki?.dep : a.dep}
+      data-onculler={onculler === null ? undefined : onculler.map((o) => uc(d.nid, o.id)).join(' ')}
       draggable={duzen}
       onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(sahip.id, a.id)); e.dataTransfer.effectAllowed = 'move'; r.surukleBasla(); }}
       onDragEnd={r.surukleBitti}
@@ -150,6 +153,10 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
   const duzen = r.duzen.duzenlenebilir(d.id);
   const V = r.duzen.gorulen(d.id);
   const liste = sirali(r.duzen.adimlar(d.id));
+  const onculler = adimOnculleri(liste);
+  // Şerit: ana hat 0, dallar ilk göründükleri sırayla 1, 2...; dallı olmayan rotada şerit yoktur.
+  const dallar = [...new Set(liste.flatMap((x) => adimDali(x) ?? []))];
+  const serit = (x: Adim): number => { const dl = adimDali(x); return dl === null ? 0 : dallar.indexOf(dl) + 1; };
   const s = r.secim;
   const basSecili = s?.tur === 'urun' && s.nid === d.nid;
   // Başa bırakma yalnız adımı olan düzenlenebilir rotada; boş rotanın kendi bırakma kutusu vardır.
@@ -200,6 +207,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
           const secili = (tur: 'adim' | 'giren' | 'yan', sira?: number) => s !== null && s.tur === tur && 'adimId' in s && s.adimId === a.id && s.urunId === d.id
             && (sira === undefined || ('sira' in s && s.sira === sira));
           const onceki = tuketilenAdimlar(liste, i);
+          const oncul = onculler[liste.indexOf(a)] ?? null;
           return [
             <div key={`i${a.id}`} className="tc-rr1-cin">
               {onceki.map((p) => {
@@ -235,15 +243,22 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                 </button>
               )}
             </div>,
-            <div key={`o${a.id}`} className="tc-rr1-cop">
-              {i > 0 && (
+            <div key={`o${a.id}`} className={`tc-rr1-cop${oncul ? ` tc-rr1-dalserit tc-rr1-dalserit-${String(Math.min(serit(a), 7))}` : ''}`}>
+              {oncul && (
+                <span className="tc-rr1-daletiket">
+                  <Simge ad={adimBirlesen(a).length > 0 ? 'layers' : 'route'} boyut="k" />
+                  {adimDali(a) === null ? 'Ana hat' : `Dal ${adimDali(a) ?? ''}`}
+                  {adimBirlesen(a).length > 0 && <em> birleşir: {adimBirlesen(a).join(', ')}</em>}
+                </span>
+              )}
+              {i > 0 && oncul?.length !== 0 && (
                 <button
                   type="button" className={`tc-rr1-deppill tc-rr1-dep-${a.dep}`} disabled={!duzen}
                   title="Önceki adımla ilişki: dokununca değişir (bağımlı → örtülü → bağımsız)"
                   onClick={() => { r.duzen.degistir(d.id, (l) => l.map((x) => (x.id === a.id ? bagimlilikYaz(x, sonrakiBagimlilik(x.dep)) : x)), 'Bağlılık değişti'); }}
                 >{bagMetni(a)}</button>
               )}
-              <OpKutusu r={r} a={a} d={d} sonraki={sonraki} secili={secili('adim')} duzen={duzen} sahip={m} liste={liste} i={i} />
+              <OpKutusu r={r} a={a} d={d} sonraki={sonraki} secili={secili('adim')} duzen={duzen} sahip={m} liste={liste} i={i} onculler={oncul} />
               {duzen && r.surukleniyor && (
                 <BirakSeridi metin={`Bırak: OP ${String(statuNo(a))} ardına`} birak={(v) => { yereBirak(r, d.id, a.id, v, sn.miktar); }} />
               )}
@@ -339,6 +354,24 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
       d: `M${String(a.x + a.w / 2)},${String(a.y + a.h)} L${String(b.x + b.w / 2)},${String(b.y)}`,
       tur: bag === 'ortulu' ? 'ef-ortulu' : bag === 'bagimsiz' ? 'ef-bagimsiz' : 'ef',
     });
+  });
+  ic.querySelectorAll('[data-onculler]').forEach((el) => {
+    const b = kutu(el);
+    const bag = el.getAttribute('data-bag');
+    const idler = (el.getAttribute('data-onculler') ?? '').split(' ');
+    for (const id of idler) {
+      const kaynak = uclar.get(id);
+      if (!kaynak) continue;
+      const a = kutu(kaynak);
+      // Hemen üstteki öncül düz okla; aradaki kutuların üstünden geçmesin diye uzaktaki öncül kutuların solundan eğriyle bağlanır.
+      const bitisik = kaynak.closest('.tc-rr1-cop')?.nextElementSibling?.nextElementSibling?.nextElementSibling === el.closest('.tc-rr1-cop');
+      kenarlar.push({
+        d: bitisik
+          ? `M${String(a.x + a.w / 2)},${String(a.y + a.h)} L${String(b.x + b.w / 2)},${String(b.y)}`
+          : `M${String(a.x + a.w / 4)},${String(a.y + a.h)} C${String(a.x - 40)},${String(a.y + a.h + 60)} ${String(b.x - 40)},${String(b.y - 60)} ${String(b.x + b.w / 4)},${String(b.y)}`,
+        tur: bag === 'ortulu' ? 'ef-ortulu' : 'ef',
+      });
+    }
   });
   ic.querySelectorAll('[data-besler]').forEach((el) => {
     const op = uclar.get(el.getAttribute('data-besler') ?? '');

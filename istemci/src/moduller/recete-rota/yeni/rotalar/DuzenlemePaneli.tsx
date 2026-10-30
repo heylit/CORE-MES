@@ -4,7 +4,8 @@ import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayu
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import { useRrKomutu } from '../veri.ts';
 import {
-  adimEkle, adimGuncelle, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, cevrimToplami, degisimOrani, fasonaCevir, fasonMu,
+  adimBirlesen, adimDali, adimEkle, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
+  cevrimToplami, DAL_HARFLERI, dalYaz, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
   type Adim, type Malzeme, type Operasyon,
@@ -164,6 +165,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const istasyonlar = [...h.istasyon.values()].filter((x) => x.aktif || x.id === a.stationId);
   const makineler = h.makineler(a.stationId).filter((x) => x.status === 'aktif' || x.id === a.machineId);
   const onceki = tuketilenAdimlar(liste, idx);
+  const onculler = adimOnculleri(liste)[idx] ?? null;
+  const birlesebilen = [...new Set([...birlesebilenDallar(liste, idx), ...adimBirlesen(a)])].sort();
   const kart = son ? null : akisKarti(sahip.id, liste, idx, dz.malzemeVar);
   const opSecenek = [...h.op.values()].filter((o) => o.aktif || o.id === a.opId).map((o) => ({ deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}` }));
   const girenEkle = (m: Malzeme, n: number) => {
@@ -182,8 +185,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
       {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
       {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
       <UretimYeri r={r} s={s} a={a} duzen={duzen} />
-      <Bolme baslik={idx === 0 ? 'Önceki adımla ilişki' : `Önceki adımla ilişki (OP ${String(liste[idx - 1]?.seq ?? '')} → OP ${String(a.seq)})`} ek="tc-rr1-depbox">
-        {idx === 0 ? <p className="tc-rr1-ipucu">Bu rotanın ilk adımı; emir başlayınca ve girenleri hazır olunca başlar.</p> : (
+      <Bolme baslik={idx === 0 || onculler?.length === 0 ? 'Önceki adımla ilişki'
+        : onculler ? `Beklediği adımlarla ilişki (${onculler.map((o) => `OP ${String(o.seq)}`).join(', ')} → OP ${String(a.seq)})`
+          : `Önceki adımla ilişki (OP ${String(liste[idx - 1]?.seq ?? '')} → OP ${String(a.seq)})`} ek="tc-rr1-depbox">
+        {idx === 0 ? <p className="tc-rr1-ipucu">Bu rotanın ilk adımı; emir başlayınca ve girenleri hazır olunca başlar.</p>
+          : onculler?.length === 0 ? <p className="tc-rr1-ipucu">Dalın ilk adımı; hiçbir adımı beklemez, girenleri hazır olunca başlar.</p> : (
           <>
             <div className="tc-rr1-depsel">
               {BAGIMLILIK_SIRASI.map((k) => (
@@ -199,6 +205,20 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             )}
           </>
         )}
+      </Bolme>
+      <Bolme baslik="Dal" ek="tc-rr1-dalbox">
+        <SecimAlani etiket="Bu adımın dalı" deger={adimDali(a) ?? ''} kapali={!duzen} bos="Ana hat"
+          secenekler={[...new Set([...DAL_HARFLERI, ...(adimDali(a) ? [adimDali(a) ?? ''] : [])])].map((d) => ({ deger: d, baslik: `Dal ${d}` }))}
+          yaz={(v) => { yaz((x) => dalYaz(x, v || null), 'Dal değişti'); }} />
+        {birlesebilen.length > 0 ? (
+          <div className="tc-rr1-dalsec" role="group" aria-label="Bu adımda birleşen dallar">
+            <span>Bu adımda birleşen dallar</span>
+            {birlesebilen.map((d) => (
+              <IsaretKutusu key={d} etiket={`Dal ${d}`} checked={adimBirlesen(a).includes(d)} disabled={!duzen}
+                onChange={(e) => { yaz((x) => birlesenYaz(x, d, e.target.checked), e.target.checked ? `Dal ${d} birleşti` : `Dal ${d} birleşmesi kaldırıldı`); }} />
+            ))}
+          </div>
+        ) : <p className="tc-rr1-ipucu">Dallar paralel yürür; birleşeceği adımda burada seçilir. Aynı daldaki önceki adım kendiliğinden beklenir.</p>}
       </Bolme>
       <Bolme baslik={`Girenler (${String(a.ins.length)})`}>
         {a.ins.length > 0 ? (

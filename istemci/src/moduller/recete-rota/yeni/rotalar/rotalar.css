@@ -230,6 +230,20 @@
 .tc-rr1-renk-0 { --renk: var(--done); } .tc-rr1-renk-1 { --renk: var(--run); } .tc-rr1-renk-2 { --renk: var(--hold); }
 .tc-rr1-renk-3 { --renk: var(--stop); } .tc-rr1-renk-4 { --renk: var(--bp); } .tc-rr1-renk-5 { --renk: var(--idle); }
 .tc-rr1-renk-yok { --renk: var(--muted); }
+/* Çok dallı rota (1248 a): her dal kendi şeridinde, ana hattan içeride ve kendi renginde; ana hat (0) yerinde kalır. */
+.tc-rr1-dalserit { --serit: 0; padding-inline-start: calc(var(--b-4) * var(--serit)); }
+.tc-rr1-dalserit-1 { --serit: 1; --renk-dal: var(--run); } .tc-rr1-dalserit-2 { --serit: 2; --renk-dal: var(--hold); }
+.tc-rr1-dalserit-3 { --serit: 3; --renk-dal: var(--bp); } .tc-rr1-dalserit-4 { --serit: 4; --renk-dal: var(--stop); }
+.tc-rr1-dalserit-5 { --serit: 5; --renk-dal: var(--idle); } .tc-rr1-dalserit-6 { --serit: 6; --renk-dal: var(--done); }
+.tc-rr1-dalserit-7 { --serit: 7; --renk-dal: var(--muted); }
+.tc-rr1-dalserit:not(.tc-rr1-dalserit-0) .tc-rr1-opbox { border-inline-start: var(--cizgi-kalin) solid var(--renk-dal); }
+.tc-rr1-daletiket {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); font-weight: 700;
+  color: var(--renk-dal, var(--ink));
+}
+.tc-rr1-daletiket em { font-style: normal; font-weight: 400; color: var(--muted); }
+.tc-rr1-dalsec { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.tc-rr1-dalsec > span { flex: 1 1 100%; font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-cipw { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-rr1-cip {
   display: flex; align-items: center; gap: var(--b-2); min-width: calc(var(--b-6) * 6); max-width: var(--kuyruk-genis);
