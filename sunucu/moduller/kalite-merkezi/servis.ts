@@ -8,6 +8,7 @@ import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import type { KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -40,6 +41,7 @@ import type { AqlSiddeti, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from 
 import {
   EMIR_KOLEKSIYONU, EMIR_TIPI, PARCA_KOLEKSIYONU, satinAlmaKaynagi, PARCA_TURLERI, emirBaglari, emirKaynakSirasi, emirKimligi, eskiEmirNo, eskiEmirTipi, parcaKartiMalzemeNo, parcaKartiNo, sayiMetni,
 } from './kurallar.ts';
+import { hataliAramaSonuclari, ncrAramaSonucu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const dosyaTutamak = dosyaTutamagi(KM_MODULU);
@@ -464,6 +466,17 @@ export async function kapanisNcrDurumlari(db: Db, uretimEmriIdleri: readonly num
 export async function hataliBekleyenListesi(db: Db): Promise<KmHataliBekleyenCevabi> {
   return { kayitlar: await hataliKayitlari(db, { acik: true, emirId: null }) };
 }
+
+// Ctrl K kayıt kaynakları (1238): NCR `kalite-merkezi.oku` ile, karar bekleyen hatalı parça karar yetkisiyle (`kalite-merkezi.onayla`,
+// bekleyenler ucuyla aynı). Yetkiyi çekirdek kaynağı çağırmadan denetler (paylasilan/kayit-aramasi.ts).
+export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
+  { tur: 'ncr', yetki: ['kalite-merkezi.oku'], ara: async (db, istek) => (await sorgular.ncrAra(db, istek)).map(ncrAramaSonucu) },
+  {
+    tur: 'hatali',
+    yetki: ['kalite-merkezi.onayla'],
+    ara: async (db, istek) => hataliAramaSonuclari(await hataliKayitlari(db, { acik: true, emirId: null }), istek.q, istek.sinir),
+  },
+];
 
 export async function ilkParcaBekleyenListesi(db: Db): Promise<KmIlkParcaBekleyenCevabi> {
   const emirler = await acikEmirler(db);
