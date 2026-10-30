@@ -20,11 +20,14 @@ export interface OnizlemeSatiri {
 export interface OkunanDosya { satirlar: OnizlemeSatiri[]; dosyaHatasi: string | null }
 
 export const SABLON_BASLIKLARI = ['Tür', 'Para birimi', 'Tarih', 'Değer'] as const;
-// İndirilen şablonun örnek satırları; değerler uydurmadır.
+// İndirilen şablonun örnek satırları; şeridin tuttuğu her kur ve faiz birimi için bir satır, değerler uydurmadır.
 export const SABLON_SATIRLARI: readonly (readonly string[])[] = [
   ['kur', 'USD', '27.10.2026', '41,8520'],
   ['kur', 'EUR', '27.10.2026', '48,6130'],
+  ['kur', 'GBP', '27.10.2026', '55,9040'],
   ['faiz', 'TRY', '01.11.2026', '3,2500'],
+  ['faiz', 'USD', '01.11.2026', '0,6000'],
+  ['faiz', 'EUR', '01.11.2026', '0,5000'],
 ];
 
 const ondalikSayisi = (n: number): number => { const m = String(n).split('.')[1]; return m ? m.length : 0; };

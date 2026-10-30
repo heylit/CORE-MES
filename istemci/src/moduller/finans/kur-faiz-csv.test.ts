@@ -8,13 +8,14 @@ const BUGUN = '2026-10-28';
 const dosya = (...satirlar: string[]) => ['Tür;Para birimi;Tarih;Değer', ...satirlar].join('\r\n');
 
 describe('kur ve faiz şablonu (1083-1087)', () => {
-  it('indirilen şablon aynen okunur, üç satır da gönderilir', () => {
+  it('indirilen şablon her kur ve faiz birimini taşır, aynen okunur ve altı satır da gönderilir', () => {
     const o = sablonuOku(csvMetni(SABLON_BASLIKLARI, SABLON_SATIRLARI), BUGUN);
     expect(o.dosyaHatasi).toBeNull();
     expect(o.satirlar.map((s) => [s.no, s.tur, s.paraBirimi, s.tarih, s.deger, s.durum])).toEqual([
-      [2, 'kur', 'USD', '2026-10-27', 41.852, 'yeni'], [3, 'kur', 'EUR', '2026-10-27', 48.613, 'yeni'], [4, 'faiz', 'TRY', '2026-11-01', 3.25, 'yeni'],
+      [2, 'kur', 'USD', '2026-10-27', 41.852, 'yeni'], [3, 'kur', 'EUR', '2026-10-27', 48.613, 'yeni'], [4, 'kur', 'GBP', '2026-10-27', 55.904, 'yeni'],
+      [5, 'faiz', 'TRY', '2026-11-01', 3.25, 'yeni'], [6, 'faiz', 'USD', '2026-11-01', 0.6, 'yeni'], [7, 'faiz', 'EUR', '2026-11-01', 0.5, 'yeni'],
     ]);
-    expect(gonderilecekler(o.satirlar)).toHaveLength(3);
+    expect(gonderilecekler(o.satirlar)).toHaveLength(6);
   });
 
   it('GG.AA.YYYY ve YYYY-AA-GG, binlik nokta ve küçük harf kabul; her hata satırında nedeni yazar', () => {
