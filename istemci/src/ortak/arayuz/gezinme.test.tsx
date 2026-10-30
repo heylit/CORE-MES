@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SAYFALAR, type Sayfa } from '#paylasilan/sayfalar.ts';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 import { Kabuk } from './Kabuk.tsx';
+import { geziKisayollari } from './GeziDugmeleri.tsx';
 
 const MENU: IkinciMenu = {
   kok: '/stok',
@@ -63,6 +64,12 @@ beforeEach(() => { sessionStorage.clear(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('Geri ve İleri', () => {
+  it('ipucu kısayolu işletim sistemine göre söyler', () => {
+    expect(geziKisayollari('Win32')).toEqual({ geri: 'Alt+←', ileri: 'Alt+→' });
+    expect(geziKisayollari('Linux x86_64')).toEqual({ geri: 'Alt+←', ileri: 'Alt+→' });
+    expect(geziKisayollari('MacIntel')).toEqual({ geri: '⌘[', ileri: '⌘]' });
+  });
+
   it('ilk sayfada ikisi de pasif; uygulamanın dışına geri gidilmez', () => {
     ciz();
     expect(geri().hasAttribute('disabled')).toBe(true);
@@ -76,6 +83,7 @@ describe('Geri ve İleri', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Stok Merkezi menüsü' })).getByRole('link', { name: 'Okut' }));
     expect(adres()).toBe('/stok/okut');
     expect(geri().getAttribute('aria-label')).toBe('Geri: Stok Merkezi › İş kutusu');
+    expect(geri().getAttribute('title')).toMatch(/^Geri: Stok Merkezi › İş kutusu \((Alt\+←|⌘\[)\)$/);
     fireEvent.click(geri());
     expect(adres()).toBe('/stok');
     fireEvent.click(geri());
