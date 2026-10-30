@@ -46,6 +46,14 @@ function yetkisiVarMi(kullanici: Kullanici, yetki: Exclude<UcYetkisi, 'acik'>): 
   return islemVarMi(kullanici, yetki);
 }
 
+// Dış izleyicinin (1224 a) girebildiği modüller. Rolüne iç işlem verilmiş olsa da öteki uçlar ona kapalıdır; modülü bilinmeyen
+// kayıtta da kapalıdır.
+export const DIS_IZLEYICI_MODULLERI: readonly string[] = ['portal', 'oturum'];
+
+function disIzleyiciGirerMi(kullanici: Kullanici, modul: string | undefined): boolean {
+  return kullanici.disIzleyici !== true || (modul !== undefined && DIS_IZLEYICI_MODULLERI.includes(modul));
+}
+
 // Yazma komutunun denetim kaydındaki kapsamı; tanımda verilmezse 'tam'.
 export type DenetimKipi = 'tam' | 'govdesiz' | 'yok';
 
@@ -466,7 +474,7 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
         });
         if (tanim.yetki !== 'acik') {
           if (kullanici === null) throw oturumYok();
-          if (!yetkisiVarMi(kullanici, tanim.yetki)) throw yetkiYok();
+          if (!yetkisiVarMi(kullanici, tanim.yetki) || !disIzleyiciGirerMi(kullanici, modul)) throw yetkiYok();
         }
         // Kayıtta durulmaz: uygulama bütün modüllerin uçlarını keşfeder, bayraklı tek uç deposuz kurulan her testi
         // düşürürdü. Deposuz kurulumda uç korumasız koşmaz, açık hatayla cevap verir.
