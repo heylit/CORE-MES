@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { Alet, AletAyrintiCevabi, ListeCevabi, Tur, TurListesiCevabi } from '#paylasilan/sozlesme/kalibrasyon.ts';
@@ -73,11 +74,23 @@ function sunucuKur(kullanici: Kullanici, liste: ListeCevabi = LISTE, kayitCevabi
   return cagrilar;
 }
 
-function ac(bolum: 'aletler' | 'turler' = 'aletler') {
+// Açık pencere adreste durur (`?alet=`, `?form=`, `?yeni=1`); test adresi ekranın altına yazar.
+function Adres() {
+  const { search } = useLocation();
+  return <span data-testid="adres">{search}</span>;
+}
+
+function ac(bolum: 'aletler' | 'turler' = 'aletler', adres = '') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const ekran = bolum === 'aletler' ? <OlcuAletleri /> : <AletTurleri />;
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}</BildirimSaglayici></QueryClientProvider>);
+  const yol = `${bolum === 'aletler' ? '/kalibrasyon' : '/kalibrasyon/turler'}${adres}`;
+  render(
+    <MemoryRouter initialEntries={[yol]}>
+      <QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}<Adres /></BildirimSaglayici></QueryClientProvider>
+    </MemoryRouter>,
+  );
 }
+const adres = () => screen.getByTestId('adres').textContent;
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -278,5 +291,51 @@ describe('alet düzenleme', () => {
     const form = await screen.findByRole('dialog', { name: /Aleti düzenle/ });
     fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(cagrilar.find((c) => c.yol === '/olcu-aletleri/1/guncelle')?.govde).toMatchObject({ no: 'DNM-1', surum: 2 }));
+  });
+});
+
+describe('adresle açılan pencereler (Ctrl K, kart #1243)', () => {
+  it('alet adresi ayrıntıyı, form adresi yazabilene kalibrasyon formunu açar; form kapanınca adres yalnız aleti tutar', async () => {
+    sunucuKur(YAZAR);
+    ac('aletler', '?alet=1&form=kalibrasyon');
+    const form = await screen.findByRole('dialog', { name: 'Kalibrasyon kaydet: DNM-1' });
+    expect(screen.getByRole('dialog', { name: 'DNM-1 · Dış çap' })).toBeTruthy();
+    fireEvent.click(within(form).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Kalibrasyon kaydet: DNM-1' })).toBeNull());
+    expect(adres()).toBe('?alet=1');
+  });
+
+  it('yalnız okuyan form adresiyle formu görmez, ayrıntıyı görür', async () => {
+    sunucuKur(OKUR);
+    ac('aletler', '?alet=1&form=duzenle');
+    await screen.findByRole('dialog', { name: 'DNM-1 · Dış çap' });
+    expect(screen.queryByRole('dialog', { name: /Aleti düzenle/ })).toBeNull();
+  });
+
+  it('satır seçimi adrese yazılır; geçersiz alet adresi pencere açmaz', async () => {
+    sunucuKur(OKUR);
+    ac('aletler', '?alet=abc');
+    await listeBekle();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(within(satirlar()[2]!).getAllByRole('cell')[0]!);
+    await screen.findByRole('dialog', { name: 'DNM-2' });
+    expect(adres()).toBe('?alet=2');
+  });
+
+  it('yeni adresi yazabilene alet ve tür formunu açar, okura açmaz; kapanınca adresten düşer', async () => {
+    sunucuKur(YAZAR);
+    ac('aletler', '?yeni=1');
+    const form = await screen.findByRole('dialog', { name: 'Alet ekle' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(adres()).toBe(''));
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('turler', '?yeni=1');
+    expect(await screen.findByRole('dialog', { name: 'Tür ekle' })).toBeTruthy();
+    cleanup();
+    sunucuKur(OKUR);
+    ac('aletler', '?yeni=1');
+    await listeBekle();
+    expect(screen.queryByRole('dialog', { name: 'Alet ekle' })).toBeNull();
   });
 });

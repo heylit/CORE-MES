@@ -18,7 +18,14 @@ yetki-1 bütün uçlarda oturumsuz 401 ve işlemsiz (operatör) 403 ölçer.
 | `POST /olcu-aleti-turleri` | `kalibrasyon.yaz` | ad zorunlu ve tekil (KLB-S3) | KLB-S3 | yetki-1, yetki-2 (403), KLB-S3 (409) |
 | `POST /olcu-aleti-turleri/:id/guncelle` | `kalibrasyon.yaz` | ad tekil; pasif tür mevcut aleti bozmaz (KLB-S3) | KLB-S3 | yetki-1 (403), KLB-S3 |
 
-## Kayıt bütünlüğü
+## Genel arama kaynağı (kart #1243)
+`disari.ts` `kayitAramaKaynaklari` (tür `olcuAleti`) okuma uçlarıyla aynı işlemle (`sayfa.kalibrasyon` ya da `kalibrasyon.oku`)
+açılır; çekirdek kişide bu işlemlerden biri yoksa kaynağı çağırmaz (`paylasilan/kayit-aramasi.ts`). Kaynak yazmaz. Aletin
+kalibrasyon formunu açan satır yalnız `kalibrasyon.yaz` taşıyana ve numarası tam yazılınca gelir; kaydı form ve yazma ucu yazar
+(1230 a). Desen kaçırılmış gelir, joker karakter joker değildir. Testler `arama/arama.test.ts` (izinli: form satırı yazana;
+reddedilen: okura ve eksik numaraya form satırı yok). Oturumsuz ve işlemsiz isteğin reddi çekirdeğin `/arama` testindedir (1233).
+Ekran `?alet=`, `?form=` ve `?yeni=1` adreslerini okur; form yalnız `kalibrasyon.yaz` taşıyana açılır, yetki yine yazma ucundadır.
+
 - Kalibrasyon kaydı güncellenmez ve silinmez (uç yok; KLB-11). Kaydı giren kişinin satırı silinemez (KL1).
 - Kayıt zamanı (`olusturuldu`) veritabanından, kişi oturumdan.
 
