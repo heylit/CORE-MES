@@ -26,7 +26,7 @@ const TANIM: MarkalamaTanimi = {
   id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true,
   model: null, surum: 3, degismeZamani: '2026-10-27T08:00:00Z',
   alanlar: [{
-    sira: 1, ad: 'Seri no', icerik: 'seri', sabitMetin: null, kodTuru: 'datamatrix', yontem: 'lazer', yaziYuksekligiMm: 2, program: null, yuzey: 'Flanş yüzü', yer: null,
+    sira: 1, ad: 'Seri no', icerik: 'seri', sabitMetin: null, kodTuru: 'datamatrix', yontem: 'lazer', yaziYuksekligiMm: 2, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: 'Flanş yüzü', yer: null,
   }],
 };
 
@@ -94,6 +94,33 @@ describe('Markalama tanımları', () => {
     const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/kaydet')!.govde as { surum: number; alanlar: { icerik: string; yontem: string; sabitMetin: string | null }[] };
     expect(govde.surum).toBe(3);
     expect(govde.alanlar.map((a) => [a.icerik, a.yontem, a.sabitMetin])).toEqual([['seri', 'lazer', null], ['sabit', 'nokta_vurus', 'C']]);
+  });
+
+  it('yükseklik ve derinlik virgülle ondalık girilir, yazı tipi seçilir ve kayda gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    fireEvent.click(await screen.findByText('{PARCA}-{SEQ:5}'));
+    const yukseklik = await screen.findByLabelText(/Yazı yüksekliği/);
+    for (const v of ['0', '0,', '0,5']) fireEvent.change(yukseklik, { target: { value: v } });
+    expect((yukseklik as HTMLInputElement).value).toBe('0,5');
+    const derinlik = screen.getByLabelText(/Yazı derinliği/);
+    for (const v of ['0', '0,', '0,0', '0,05']) fireEvent.change(derinlik, { target: { value: v } });
+    expect((derinlik as HTMLInputElement).value).toBe('0,05');
+    fireEvent.change(screen.getByLabelText('Yazı tipi'), { target: { value: 'gotik' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/7/kaydet')).toBe(true));
+    const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/kaydet')!.govde as { alanlar: Record<string, unknown>[] };
+    expect(govde.alanlar[0]).toMatchObject({ yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });
+  });
+
+  it('0 yükseklik istek gönderilmeden markanın sırası ve alan adıyla söylenir', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    fireEvent.click(await screen.findByText('{PARCA}-{SEQ:5}'));
+    fireEvent.change(await screen.findByLabelText(/Yazı yüksekliği/), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    expect((await screen.findByRole('alert')).textContent).toBe('1. marka (Seri no): Yazı yüksekliği 0\'dan büyük olmalı.');
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
   });
 
   it('düzenleme yetkisi olmayan kişi tanımı görür, kaydedemez', async () => {

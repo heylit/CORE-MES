@@ -159,6 +159,27 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await kaydet(t.surum)).durum, 409, 'eski sürüm');
   });
 
+  test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m, { yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });
+    assert.deepEqual(
+      [t.alanlar[0]?.yaziYuksekligiMm, t.alanlar[0]?.yaziDerinligiMm, t.alanlar[0]?.yaziTipi], [0.5, 0.05, 'gotik'],
+    );
+    const bos = await tanimAc(await malzemeAc(), { yaziYuksekligiMm: null });
+    assert.deepEqual([bos.alanlar[0]?.yaziYuksekligiMm, bos.alanlar[0]?.yaziDerinligiMm, bos.alanlar[0]?.yaziTipi], [null, null, null]);
+    const ekle = (govde: Record<string, unknown>) => istek<{ mesaj?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 50, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani], ...govde,
+    });
+    const sifir = await ekle({ alanlar: [{ ...seriAlani, yaziDerinligiMm: 0 }] });
+    assert.equal(sifir.durum, 400);
+    assert.match(JSON.stringify(sifir.govde), /Yazı derinliği 0'dan büyük olmalı/);
+    assert.equal((await ekle({ alanlar: [{ ...seriAlani, yaziDerinligiMm: 10.5 }] })).durum, 400, 'derinlik sınırı');
+    assert.equal((await ekle({ alanlar: [{ ...seriAlani, yaziTipi: 'bilinmeyen' }] })).durum, 400, 'listede olmayan yazı tipi');
+    const op = await ekle({ opNo: 0 });
+    assert.equal(op.durum, 400);
+    assert.match(JSON.stringify(op.govde), /Rota operasyon no 0'dan büyük olmalı/);
+  });
+
   test('MRK-U3: seri sunucuda sıralı verilir; önizleme sayacı tüketmez; yinelenen istek ikinci numara yakmaz', async () => {
     const m = await malzemeAc();
     const t = await tanimAc(m);

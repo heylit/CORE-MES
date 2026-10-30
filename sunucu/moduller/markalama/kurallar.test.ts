@@ -6,7 +6,7 @@ import {
 } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
-  ad: 'Seri', icerik: 'seri', sabitMetin: null, kodTuru: 'yok', yontem: 'lazer', yaziYuksekligiMm: null, program: null, yuzey: null, yer: null, ...a,
+  ad: 'Seri', icerik: 'seri', sabitMetin: null, kodTuru: 'yok', yontem: 'lazer', yaziYuksekligiMm: null, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: null, yer: null, ...a,
 });
 
 describe('markalama kuralları', () => {

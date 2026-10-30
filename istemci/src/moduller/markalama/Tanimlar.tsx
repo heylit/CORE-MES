@@ -11,11 +11,13 @@ import {
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import {
-  AZAMI_ALAN, ICERIK_ADLARI, ICERIKLER, KAPSAM_ADLARI, KOD_TURLERI, KOD_TURU_ADLARI, SABLON_ACIKLAMALARI, SABLON_PARCALARI, SAYAC_KAPSAMLARI, YONTEM_ADLARI, YONTEMLER,
+  AZAMI_ALAN, ICERIK_ADLARI, ICERIKLER, KAPSAM_ADLARI, KOD_TURLERI, KOD_TURU_ADLARI, SABLON_ACIKLAMALARI, SABLON_PARCALARI, SAYAC_KAPSAMLARI, YAZI_TIPI_ADLARI,
+  YAZI_TIPLERI, YONTEM_ADLARI, YONTEMLER,
 } from './adlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ModelPaneli } from './ModelPaneli.tsx';
 import { yerOlustur } from './sahne.ts';
+import { olcuMetni, sayi, taslakHatasi } from './taslak.ts';
 import './markalama.css';
 
 interface Taslak {
@@ -34,7 +36,7 @@ interface Taslak {
 
 const yeniAlan = (sira: number): AlanGovdesi => ({
   ad: sira === 0 ? 'Seri no' : `Marka ${sira + 1}`, icerik: sira === 0 ? 'seri' : 'sabit', sabitMetin: null, kodTuru: 'yok', yontem: 'lazer',
-  yaziYuksekligiMm: null, program: null, yuzey: null, yer: null,
+  yaziYuksekligiMm: null, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: null, yer: null,
 });
 
 const YENI: Taslak = {
@@ -48,10 +50,6 @@ const taslakYap = (t: MarkalamaTanimi): Taslak => ({
   alanlar: t.alanlar.map(({ sira: _sira, ...a }) => a),
 });
 
-const sayi = (metin: string): number | null => {
-  const s = Number(metin.replace(',', '.'));
-  return metin.trim() === '' || !Number.isFinite(s) ? null : s;
-};
 const bosOlur = (metin: string): string | null => (metin.trim() === '' ? null : metin);
 
 const secenekler = <T extends string>(degerler: readonly T[], adlar: Readonly<Record<T, string>>) => degerler.map((deger) => ({ deger, baslik: adlar[deger] }));
@@ -90,6 +88,28 @@ function MalzemeSecici({ sec }: { sec: (id: number, kod: string) => void }) {
   );
 }
 
+// Kutu yazılan metni tutar: "0," ya da "0,0" yazılırken değer 0'dır ve metin değerden yeniden yazılsaydı ondalık girilemezdi.
+// Değer dışarıdan değişirse (yer yeniden işaretlendi) metin değerden yazılır. Boş ya da sayı olmayan metin `bos` değerini verir.
+function OlcuGirdi({ etiket, ipucu, deger, degistir, bos = null }: {
+  etiket: string; ipucu?: string; deger: number | null; degistir: (d: number | null) => void; bos?: number | null;
+}) {
+  const [durum, durumYaz] = useState({ metin: olcuMetni(deger), deger });
+  if (durum.deger !== deger) durumYaz({ metin: olcuMetni(deger), deger });
+  return (
+    <Girdi
+      etiket={etiket}
+      ipucu={ipucu}
+      inputMode="decimal"
+      value={durum.deger === deger ? durum.metin : olcuMetni(deger)}
+      onChange={(o) => {
+        const d = sayi(o.target.value) ?? bos;
+        durumYaz({ metin: o.target.value, deger: d });
+        degistir(d);
+      }}
+    />
+  );
+}
+
 function AlanFormu({ alan, degistir, yerKaldir }: { alan: AlanGovdesi; degistir: (a: Partial<AlanGovdesi>) => void; yerKaldir: () => void }) {
   const yer = alan.yer;
   return (
@@ -125,22 +145,27 @@ function AlanFormu({ alan, degistir, yerKaldir }: { alan: AlanGovdesi; degistir:
       </div>
       <div className="tc-mrk-satir">
         <Secim etiket="Kod" secenekler={secenekler(KOD_TURLERI, KOD_TURU_ADLARI)} value={alan.kodTuru} onChange={(o) => degistir({ kodTuru: o.target.value as AlanGovdesi['kodTuru'] })} />
-        <Girdi
-          etiket="Yazı yüksekliği (mm)"
-          inputMode="decimal"
-          value={alan.yaziYuksekligiMm === null ? '' : String(alan.yaziYuksekligiMm)}
-          onChange={(o) => degistir({ yaziYuksekligiMm: sayi(o.target.value) })}
+        <Secim
+          etiket="Yazı tipi"
+          secenekler={secenekler(YAZI_TIPLERI, YAZI_TIPI_ADLARI)}
+          bosSecenek="Makinenin varsayılanı"
+          value={alan.yaziTipi ?? ''}
+          onChange={(o) => degistir({ yaziTipi: o.target.value === '' ? null : o.target.value as NonNullable<AlanGovdesi['yaziTipi']> })}
         />
         <Girdi etiket="Program / şablon dosyası" value={alan.program ?? ''} maxLength={40} onChange={(o) => degistir({ program: bosOlur(o.target.value) })} />
+      </div>
+      <div className="tc-mrk-satir">
+        <OlcuGirdi etiket="Yazı yüksekliği (mm)" ipucu="Boş bırakılabilir" deger={alan.yaziYuksekligiMm} degistir={(d) => degistir({ yaziYuksekligiMm: d })} />
+        <OlcuGirdi etiket="Yazı derinliği (mm)" ipucu="Boş bırakılabilir; ör. 0,05" deger={alan.yaziDerinligiMm} degistir={(d) => degistir({ yaziDerinligiMm: d })} />
       </div>
       <Girdi etiket="Yüzey tarifi" ipucu="Operatörün okuyacağı kısa tarif" value={alan.yuzey ?? ''} maxLength={120} onChange={(o) => degistir({ yuzey: bosOlur(o.target.value) })} />
       {yer === null ? (
         <p className="tc-mrk-ipucu">Yer seçilmedi: modelin yüzeyine dokunarak işaretleyin.</p>
       ) : (
         <div className="tc-mrk-satir">
-          <Girdi etiket="En (mm)" inputMode="decimal" value={String(yer.enMm)} onChange={(o) => { const s = sayi(o.target.value); if (s !== null && s > 0) degistir({ yer: { ...yer, enMm: s } }); }} />
-          <Girdi etiket="Boy (mm)" inputMode="decimal" value={String(yer.boyMm)} onChange={(o) => { const s = sayi(o.target.value); if (s !== null && s > 0) degistir({ yer: { ...yer, boyMm: s } }); }} />
-          <Girdi etiket="Açı (°)" inputMode="decimal" value={String(yer.aciDerece)} onChange={(o) => { const s = sayi(o.target.value); if (s !== null && Math.abs(s) < 360) degistir({ yer: { ...yer, aciDerece: s } }); }} />
+          <OlcuGirdi etiket="En (mm)" bos={0} deger={yer.enMm} degistir={(d) => degistir({ yer: { ...yer, enMm: d ?? 0 } })} />
+          <OlcuGirdi etiket="Boy (mm)" bos={0} deger={yer.boyMm} degistir={(d) => degistir({ yer: { ...yer, boyMm: d ?? 0 } })} />
+          <OlcuGirdi etiket="Açı (°)" bos={0} deger={yer.aciDerece} degistir={(d) => degistir({ yer: { ...yer, aciDerece: d ?? 0 } })} />
           <Dugme simge="x" onClick={yerKaldir}>Yeri kaldır</Dugme>
         </div>
       )}
@@ -162,6 +187,7 @@ function Onizleme({ tanimId }: { tanimId: number }) {
 function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: boolean; kaydedildi: (id: number) => void }) {
   const [t, tYaz] = useState<Taslak>(ilk);
   const [secili, seciliYaz] = useState(0);
+  const [denetim, denetimYaz] = useState<string | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const degistir = (d: Partial<Taslak>) => tYaz((o) => ({ ...o, ...d }));
@@ -246,13 +272,21 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
             <Dugme simge="plus" onClick={() => { tYaz((o) => ({ ...o, alanlar: [...o.alanlar, yeniAlan(o.alanlar.length)] })); seciliYaz(t.alanlar.length); }}>Marka ekle</Dugme>
           )}
           {t.alanlar[secili] && (
-            <AlanFormu alan={t.alanlar[secili]} degistir={(d) => alanDegistir(secili, d)} yerKaldir={() => alanDegistir(secili, { yer: null })} />
+            <AlanFormu key={secili} alan={t.alanlar[secili]} degistir={(d) => alanDegistir(secili, d)} yerKaldir={() => alanDegistir(secili, { yer: null })} />
           )}
-          {kaydet.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(kaydet.error, 'Tanım kaydedilemedi')}</p>}
+          {denetim !== null && <p className="tc-mrk-hata" role="alert">{denetim}</p>}
+          {denetim === null && kaydet.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(kaydet.error, 'Tanım kaydedilemedi')}</p>}
         </fieldset>
         {yazabilir && (
           <div className="tc-mrk-arac">
-            <Dugme tur="birincil" simge="check" yukleniyor={kaydet.isPending} disabled={t.malzemeId === null} onClick={() => kaydet.mutate()}>Kaydet</Dugme>
+            <Dugme tur="birincil" simge="check" yukleniyor={kaydet.isPending} disabled={t.malzemeId === null} onClick={() => {
+              const hata = taslakHatasi({ yeni: t.id === null, opNo: t.opNo, baslangicSirasi: t.baslangicSirasi, alanlar: t.alanlar });
+              denetimYaz(hata);
+              if (hata === null) kaydet.mutate();
+            }}
+            >
+              Kaydet
+            </Dugme>
           </div>
         )}
       </Kart>

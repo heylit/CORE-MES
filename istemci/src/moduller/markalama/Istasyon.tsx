@@ -13,6 +13,7 @@ import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { BIRIM_DURUMLARI, DURUM_ADLARI, DURUM_TONLARI, YONTEM_ADLARI } from './adlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ModelPaneli } from './ModelPaneli.tsx';
+import { yaziOlculeri } from './taslak.ts';
 import './markalama.css';
 
 const SON_SERI_SAYISI = 8;
@@ -85,7 +86,7 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
             <li key={i} className="tc-mrk-marka">
               <span className="tc-mrk-sira">{i + 1}</span>
               <span>{a.ad}</span>
-              <span className="tc-mrk-ipucu">{YONTEM_ADLARI[a.yontem]}{a.program ? ` · ${a.program}` : ''}{a.yuzey ? ` · ${a.yuzey}` : ''}</span>
+              <span className="tc-mrk-ipucu">{[YONTEM_ADLARI[a.yontem], ...yaziOlculeri(a), a.program, a.yuzey].filter(Boolean).join(' · ')}</span>
             </li>
           ))}
         </ol>
