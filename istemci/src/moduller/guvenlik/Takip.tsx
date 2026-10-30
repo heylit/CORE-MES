@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, OturumlarCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, OturumlarCevabi, RetListeCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { BOS, SONUC_ADI, tarayiciOzeti, zamanMetni } from './gorunum.ts';
+import { BOS, RET_NEDENI_ADI, RET_NEDENI_TONU, SONUC_ADI, tarayiciOzeti, zamanMetni } from './gorunum.ts';
 import './guvenlik.css';
 
 type GirisSatiri = GirisListeCevabi['satirlar'][number];
@@ -51,6 +51,59 @@ export function GuvenlikGirisler() {
               satirlar={sorgu.data.satirlar}
               satirAnahtari={(g) => g.id}
               bosMesaj="Bu süzgeçte giriş denemesi yok"
+              mesgul={sorgu.isPlaceholderData}
+              sayfalama={{ sayfa: sorgu.data.sayfa, sayfaBoyu: sorgu.data.sayfaBoyu, toplam: sorgu.data.toplam, degistir: sayfaYaz }}
+            />
+          )}
+    </div>
+  );
+}
+
+type RetSatiri = RetListeCevabi['satirlar'][number];
+
+const RET_SUTUNLARI: readonly Sutun<RetSatiri>[] = [
+  { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (r) => zamanMetni(r.zaman) },
+  { anahtar: 'neden', baslik: 'Neden', hucre: (r) => <Rozet ton={RET_NEDENI_TONU[r.neden]}>{RET_NEDENI_ADI[r.neden]}</Rozet> },
+  { anahtar: 'kisi', baslik: 'Kişi', hucre: (r) => (r.kisiId === null ? BOS : <span className="tc-guvenlik-kaynak">{r.kisiAdi ?? `Kişi ${r.kisiId}`}</span>) },
+  { anahtar: 'yol', baslik: 'İstek', mono: true, hucre: (r) => `${r.yontem} ${r.yol}` },
+  { anahtar: 'ip', baslik: 'Cihaz', mono: true, hucre: (r) => r.ip ?? BOS },
+];
+
+const RET_NEDENLERI = Object.keys(RET_NEDENI_ADI) as (keyof typeof RET_NEDENI_ADI)[];
+
+// 1370 a: Girişler listesinin düzeninde; yetkisiz, oturumsuz ve var olmayan adrese gelen istekler.
+export function GuvenlikReddedilenler() {
+  const [sayfa, sayfaYaz] = useState(1);
+  const [neden, nedenYaz] = useState('');
+  const [ara, araYaz] = useState('');
+  const sorgu = useQuery({
+    queryKey: anahtarlar.reddedilen(sayfa, neden, ara.trim()),
+    queryFn: () => {
+      const q = new URLSearchParams({ sayfa: String(sayfa) });
+      if (neden) q.set('neden', neden);
+      if (ara.trim()) q.set('ara', ara.trim());
+      return api.get<RetListeCevabi>(`/guvenlik/reddedilen-istekler?${q.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <div className="tc-guvenlik">
+      <p className="tc-guvenlik-not">Sistemin reddettiği istekler 90 gün saklanır; adresteki kayıt numarası ve sorgu yazılmaz.</p>
+      <div className="tc-guvenlik-suzgec">
+        <Girdi etiket="Ara" type="search" placeholder="Adres ya da cihaz" value={ara} maxLength={80}
+          onChange={(o) => { araYaz(o.target.value); sayfaYaz(1); }} />
+        <Secim etiket="Neden" value={neden} bosSecenek="Hepsi" onChange={(o) => { nedenYaz(o.target.value); sayfaYaz(1); }}
+          secenekler={RET_NEDENLERI.map((n) => ({ deger: n, baslik: RET_NEDENI_ADI[n] }))} />
+      </div>
+      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+        : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
+          : (
+            <Tablo
+              etiket="Reddedilen istekler"
+              sutunlar={RET_SUTUNLARI}
+              satirlar={sorgu.data.satirlar}
+              satirAnahtari={(r) => r.id}
+              bosMesaj="Bu süzgeçte reddedilen istek yok"
               mesgul={sorgu.isPlaceholderData}
               sayfalama={{ sayfa: sorgu.data.sayfa, sayfaBoyu: sorgu.data.sayfaBoyu, toplam: sorgu.data.toplam, degistir: sayfaYaz }}
             />

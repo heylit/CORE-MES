@@ -71,3 +71,13 @@ Hesap kilidi (PR #1363) main'e girdi; boş kilit durumu gerçek listeyle değiş
 - Arayüz kapısındaki her dosyaya `Referrer-Policy: same-origin` ve `Permissions-Policy: camera=(self), microphone=(self)`
   (`istemci/src/ortak/pwa/icerik-ilkesi.ts EK_GUVENLIK_BASLIKLARI`; geliştirme ve önizleme sunucusunda da).
 - `kurulum/canli.md`: PostgreSQL yalnız yerelden dinler; yedek, kopyası ve anahtarı ayrı yerde.
+
+## Adım 1: reddedilen istek kaydı ve kritik alarm duyurusu (1369; 1362 a, 1363 a, 1365 a, 1367 a teyit, 1368 a, 1370 a teyit)
+- Çekirdek (ayrı yama) 401, 403 ve var olmayan API adresini nedeniyle bellek tamponuna yazar; tarama her tur tamponu `guvenlik_red_olayi`
+  tablosuna boşaltır (90 gün, yalnız eklenir). Göç `20261030164000`; aynı göç alarm defterine iki sinyal ekler, kayıtlar değişmez.
+- Yeni sinyaller: `yetki-reddi-serisi` (yüksek; bir kişi 15 dk'da 5 farklı uçta red ya da 10 kapsam reddi; cihaz ve dosya türü reddi sayılmaz)
+  ve `adres-taramasi` (kritik; bir cihazdan 15 dk'da 5 farklı var olmayan adres). Eşikler VARSAYIM; geri alma ucuz (`kurallar.ts`).
+- Kritik alarm: yöneticilere `guvenlik.kritik-alarm` bildirimi ve Windows olay günlüğü (kimlik 200). Otomatik engel yok.
+- Ana menüde açık alarm sayısı (kabuk yaması, `anaMenuSayaci`).
+- Takip altında "Reddedilen istekler" listesi, Girişler düzeninde; `GET /guvenlik/reddedilen-istekler` (`guvenlik.oku`).
+- Yeni işlem, rol satırı ve paket yok. Oturumsuz red (401) bu adımda alarm açmaz, yalnız listelenir (oturumu biten ekran yanlış alarm üretirdi).

@@ -3,7 +3,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmKapatGovdesi, alarmListeCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
   guvenlikKimligi, kilitAcCevabi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumlarCevabi,
-  ozetCevabi, sunucuDurumuCevabi,
+  ozetCevabi, retListeCevabi, retListeSorgusu, sunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import * as servis from './servis.ts';
 
@@ -44,6 +44,11 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/guvenlik/oturumlar/:id/kapat', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, cevap: oturumKapatCevabi,
     isle: ({ db, parametre, istek }) => servis.oturumKapat(db, parametre.id, istek),
+  }),
+  // Reddedilen istekler (1363 a, 1370 a): yetkisiz, oturumsuz ve var olmayan adrese gelen istekler; en yeni önce.
+  uc({
+    yontem: 'GET', yol: '/guvenlik/reddedilen-istekler', yetki: 'guvenlik.oku', sorgu: retListeSorgusu, cevap: retListeCevabi,
+    isle: ({ db, sorgu }) => servis.reddedilenIstekler(db, sorgu),
   }),
   // Hesap kilitleri: oturum ucu rol yönetenindir (kisiler.rol-yonet); Güvenlik Merkezi kendi işlemiyle okur ve açar.
   uc({

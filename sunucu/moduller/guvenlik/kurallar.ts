@@ -1,7 +1,7 @@
 import { adresAraliktaMi } from '#paylasilan/ag-araligi.ts';
 import type { AgAraligi } from '#paylasilan/ag-araligi.ts';
 import type { GuncellemeKanali, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { AlarmDurumu, KorumaDurumu, Onem, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { AlarmDurumu, KorumaDurumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
 import type { DiskDurumu } from '#paylasilan/sozlesme/saglik.ts';
 
 // Eşikler ekrandan değişmez: kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
@@ -11,6 +11,14 @@ export const HEDEFLI_HESAP = { pencereSn: 60 * 60, esik: 3 } as const;
 export const COK_OTURUM = { esik: 4 } as const;
 // Kilit bir olaydır: son bir günde kurulan kilitlere bakılır; tarama durup yeniden başlasa da kaçmaz.
 export const HESAP_KILIDI = { pencereSn: 24 * 60 * 60 } as const;
+// Reddedilen istek serileri (1369). Yalnız rol, kapsam ve dış izleyici reddi sayılır: cihaz profili ve dosya türü reddi telefonun
+// olağan davranışıdır (1358), yanlış alarm üretirdi. Farklı uç sayılır: ekranın aynı ucu yoklaması seri sayılmaz (VARSAYIM).
+export const YETKI_REDDI_SERISI = { pencereSn: 15 * 60, farkliUc: 5, kapsam: 10 } as const;
+export const SAYILAN_RET_NEDENLERI: readonly RetNedeni[] = ['yetki', 'kapsam', 'dis-izleyici'];
+// Kapalı iç sistemde bir cihazdan beş farklı var olmayan API adresi tarama aracıdır; oturumu biten ekranın 401'i sayılmaz.
+export const ADRES_TARAMASI = { pencereSn: 15 * 60, farkliYol: 5 } as const;
+// Göçteki tetikleyiciyle aynı süre (1363 a).
+export const RED_SAKLAMA_GUN = 90;
 // VPN adres aralığı doluyken bu kurallarda o aralıktan gelen deneme sayılmaz (cihaz adresi kişiyi ayırt etmez).
 export const VPN_MUAF_SINYALLER: readonly Sinyal[] = ['yayilan-deneme', 'hedefli-hesap'];
 
@@ -45,6 +53,17 @@ export const SINYAL_TANIMLARI: Readonly<Record<Sinyal, { onem: Onem; baslik: str
     onem: 'orta',
     baslik: 'Hesap kilitlendi',
     kosul: 'Bir kullanıcı adı art arda hatalı denemeyle kilitlendi (oturum modülünün hesap kilidi).',
+  },
+  'yetki-reddi-serisi': {
+    onem: 'yuksek',
+    baslik: 'Yetkisiz işlem denemesi',
+    kosul: `Bir kişi ${YETKI_REDDI_SERISI.pencereSn / 60} dakikada ${YETKI_REDDI_SERISI.farkliUc} ya da daha çok farklı işlemde yetki reddi `
+      + `aldı ya da kapsamı dışındaki kayda ${YETKI_REDDI_SERISI.kapsam} kez erişmeye çalıştı. Telefon ve cihaz kısıtı sayılmaz.`,
+  },
+  'adres-taramasi': {
+    onem: 'kritik',
+    baslik: 'Adres taraması',
+    kosul: `Aynı cihazdan ${ADRES_TARAMASI.pencereSn / 60} dakikada ${ADRES_TARAMASI.farkliYol} ya da daha çok farklı var olmayan adres istendi.`,
   },
 };
 
@@ -271,4 +290,29 @@ export function sunucuSertifikaMaddesi(
     durum: 'bilinmiyor', deger: null,
     aciklama: 'Sertifika bu sunucuda değil. HTTPS\'i vekil bitiriyorsa süresini izlemek için TMIV2_IZLENEN_SERTIFIKA verilir (kurulum/gunluk.md).',
   };
+}
+
+export interface KisiRetOzeti { kisiId: number; farkliUc: number; kapsam: number; sonRet: string }
+
+// Farklı uç ya da kapsam eşiğinden biri aşılınca bulgu; sayı aşılan ölçüdür (ikisi de aşıldıysa büyüğü).
+export function yetkiReddiBulgulari(satirlar: readonly KisiRetOzeti[]): Bulgu[] {
+  return satirlar
+    .filter((r) => r.farkliUc >= YETKI_REDDI_SERISI.farkliUc || r.kapsam >= YETKI_REDDI_SERISI.kapsam)
+    .map((r) => bulgu('yetki-reddi-serisi', { kullaniciAdi: null, ip: null, kisiId: r.kisiId }, Math.max(r.farkliUc, r.kapsam), r.sonRet));
+}
+
+export interface CihazTaramaOzeti { ip: string; farkliYol: number; sonRet: string }
+
+export function adresTaramasiBulgulari(satirlar: readonly CihazTaramaOzeti[]): Bulgu[] {
+  return satirlar
+    .filter((r) => r.farkliYol >= ADRES_TARAMASI.farkliYol)
+    .map((r) => bulgu('adres-taramasi', { kullaniciAdi: null, ip: r.ip, kisiId: null }, r.farkliYol, r.sonRet));
+}
+
+// 1362 a, 1365 a: kritik alarm yöneticiye bildirilir ve olay günlüğüne yazılır; otomatik engel yoktur.
+export const duyurulurMu = (b: Pick<Bulgu, 'onem'>): boolean => b.onem === 'kritik';
+
+export function alarmDuyuruMetni(b: Pick<Bulgu, 'sinyal' | 'kullaniciAdi' | 'ip' | 'sayi'>, kisiAdi: string | null): string {
+  const kaynak = b.kullaniciAdi ?? b.ip ?? kisiAdi ?? '-';
+  return `${SINYAL_TANIMLARI[b.sinyal].baslik}: ${kaynak} (${String(b.sayi)})`;
 }

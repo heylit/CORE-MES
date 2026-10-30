@@ -355,9 +355,11 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     const kurallar = kurallarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/kurallar')).govde);
     assert.deepEqual(kurallar.kurallar.map((k) => [k.sinyal, k.onem]), [
       ['hatali-giris-serisi', 'orta'], ['yayilan-deneme', 'yuksek'], ['hedefli-hesap', 'yuksek'], ['cok-oturum', 'orta'], ['hesap-kilidi', 'orta'],
+      ['yetki-reddi-serisi', 'yuksek'], ['adres-taramasi', 'kritik'],
     ]);
     assert.deepEqual([kurallar.vpnAraliklari, kurallar.muafSinyaller], [[], []]);
     assert.equal(kurallar.saklamaGun, SAKLAMA_GUN);
+    assert.equal(kurallar.redSaklamaGun, 90);
   });
 
   test('koruma: kaynak okunamazsa madde bilinmiyor; okunan kaynak maddeye taşınır', async () => {

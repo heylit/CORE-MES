@@ -1,8 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { AlarmDurumu, AlarmGorunumu, Onem, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
-import type { Bulgu } from './kurallar.ts';
+import type { AlarmDurumu, AlarmGorunumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { Bulgu, CihazTaramaOzeti, KisiRetOzeti } from './kurallar.ts';
 
 export interface AlarmSatiri {
   id: number;
@@ -182,4 +182,70 @@ export async function durumSayilari(db: Db): Promise<DurumSayilari> {
        FROM guvenlik_alarmi WHERE durum <> 'kapandi'`,
   );
   return r ?? { kritik: 0, yuksek: 0, orta: 0, onaylandi: 0 };
+}
+
+// Reddedilen istekler (1363 a): çekirdeğin tamponundan boşaltılan olaylar tek sorguyla yazılır.
+export interface RetGirdisi { zaman: Date; neden: RetNedeni; kisiId: number | null; yontem: string; yol: string; ip: string | null }
+
+export async function retOlaylariniYaz(db: Db, olaylar: readonly RetGirdisi[]): Promise<number> {
+  if (olaylar.length === 0) return 0;
+  const satirlar = await db.sorgu(
+    `INSERT INTO guvenlik_red_olayi (zaman, neden, kisi_id, yontem, yol, ip)
+     SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::int[], $4::text[], $5::text[], $6::text[])
+     RETURNING id`,
+    [
+      olaylar.map((o) => o.zaman.toISOString()), olaylar.map((o) => o.neden), olaylar.map((o) => o.kisiId),
+      olaylar.map((o) => o.yontem), olaylar.map((o) => o.yol), olaylar.map((o) => o.ip),
+    ],
+  );
+  return satirlar.length;
+}
+
+export function kisiRetOzetleri(db: Db, pencereSn: number, nedenler: readonly RetNedeni[]): Promise<KisiRetOzeti[]> {
+  return db.sorgu<KisiRetOzeti>(
+    `SELECT kisi_id AS "kisiId",
+            count(DISTINCT (yontem, yol)) FILTER (WHERE neden <> 'kapsam')::int AS "farkliUc",
+            (count(*) FILTER (WHERE neden = 'kapsam'))::int AS kapsam,
+            ${zamanMetni('max(zaman)')} AS "sonRet"
+       FROM guvenlik_red_olayi
+      WHERE kisi_id IS NOT NULL AND neden = ANY($2::text[]) AND zaman > now() - make_interval(secs => $1)
+      GROUP BY kisi_id`,
+    [pencereSn, nedenler],
+  );
+}
+
+export function cihazTaramaOzetleri(db: Db, pencereSn: number): Promise<CihazTaramaOzeti[]> {
+  return db.sorgu<CihazTaramaOzeti>(
+    `SELECT ip, count(DISTINCT yol)::int AS "farkliYol", ${zamanMetni('max(zaman)')} AS "sonRet"
+       FROM guvenlik_red_olayi
+      WHERE neden = 'adres-yok' AND ip IS NOT NULL AND zaman > now() - make_interval(secs => $1)
+      GROUP BY ip`,
+    [pencereSn],
+  );
+}
+
+export async function eskiRetleriSil(db: Db, gun: number): Promise<number> {
+  const satirlar = await db.sorgu('DELETE FROM guvenlik_red_olayi WHERE zaman < now() - make_interval(days => $1) RETURNING id', [gun]);
+  return satirlar.length;
+}
+
+export interface RetListeSatiri { id: number; zaman: string; neden: RetNedeni; kisiId: number | null; yontem: string; yol: string; ip: string | null }
+export interface RetSuzgeci { neden: RetNedeni | null; ara: string | null }
+
+// Arama metni joker karakter taşımasın diye LIKE yerine konum aranır (giriş listesiyle aynı).
+const RET_SUZGECI = `FROM guvenlik_red_olayi r
+  WHERE ($1::text IS NULL OR r.neden = $1)
+    AND ($2::text IS NULL OR strpos(lower(r.yol), lower($2)) > 0 OR strpos(lower(coalesce(r.ip, '')), lower($2)) > 0)`;
+
+export async function retSay(db: Db, s: RetSuzgeci): Promise<number> {
+  const r = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${RET_SUZGECI}`, [s.neden, s.ara]);
+  return r?.toplam ?? 0;
+}
+
+export function retSatirlari(db: Db, s: RetSuzgeci, dilim: Dilim): Promise<RetListeSatiri[]> {
+  return db.sorgu<RetListeSatiri>(
+    `SELECT r.id::int AS id, ${zamanMetni('r.zaman')} AS zaman, r.neden, r.kisi_id AS "kisiId", r.yontem, r.yol, r.ip ${RET_SUZGECI}
+      ORDER BY r.zaman DESC, r.id DESC LIMIT $3 OFFSET $4`,
+    [s.neden, s.ara, dilim.sinir, dilim.atla],
+  );
 }

@@ -6,7 +6,9 @@ import { zamanSemasi } from '../zaman.ts';
 // Güvenlik Merkezi: giriş ve oturum sinyallerinden açılan alarm defteri ve izleme ekranları. Alarmda parola, oturum anahtarı ya
 // da özeti yoktur; kaynak yalnız kullanıcı adı, cihaz adresi (IP) ve kişi kimliğidir.
 
-export const SINYALLER = ['hatali-giris-serisi', 'yayilan-deneme', 'hedefli-hesap', 'cok-oturum', 'hesap-kilidi'] as const;
+export const SINYALLER = [
+  'hatali-giris-serisi', 'yayilan-deneme', 'hedefli-hesap', 'cok-oturum', 'hesap-kilidi', 'yetki-reddi-serisi', 'adres-taramasi',
+] as const;
 export const ONEMLER = ['kritik', 'yuksek', 'orta'] as const;
 export const ALARM_DURUMLARI = ['acik', 'onaylandi', 'kapandi'] as const;
 // Liste görünümü: "etkin" açık ve onaylanmış alarmlardır (varsayılan).
@@ -14,6 +16,9 @@ export const ALARM_GORUNUMLERI = ['etkin', 'acik', 'onaylandi', 'kapandi', 'heps
 export const KAPANIS_NOTU_EN_COK = 2000;
 export const KORUMA_DURUMLARI = ['acik', 'uyari', 'kapali', 'bilinmiyor'] as const;
 export const DENEME_SONUCLARI = ['basarili', 'hatali'] as const;
+// Reddedilen istek nedeni (1363 a); çekirdeğin ret kaydıyla aynı liste (testle bağlı).
+export const RET_NEDENLERI = ['oturum-yok', 'yetki', 'kapsam', 'dis-izleyici', 'cihaz', 'dosya-turu', 'adres-yok'] as const;
+export type RetNedeni = (typeof RET_NEDENLERI)[number];
 
 export type Sinyal = (typeof SINYALLER)[number];
 export type Onem = (typeof ONEMLER)[number];
@@ -104,6 +109,24 @@ export const oturumSatiri = z.object({
 });
 export const oturumlarCevabi = z.object({ oturumlar: z.array(oturumSatiri) });
 
+// Reddedilen istekler (1370 a): en yeni önce; süzgeç nedene göre ya da metinle (yol ya da cihaz adresi).
+export const retListeSorgusu = z.object({
+  ...sayfaSorguAlanlari,
+  neden: z.enum(RET_NEDENLERI).optional(),
+  ara: z.string().trim().max(80).optional(),
+});
+export const retSatiri = z.object({
+  id: z.number().int(),
+  zaman: zamanSemasi,
+  neden: z.enum(RET_NEDENLERI),
+  kisiId: z.number().int().nullable(),
+  kisiAdi: metinVeyaYok,
+  yontem: z.string(),
+  yol: z.string(),
+  ip: metinVeyaYok,
+});
+export const retListeCevabi = listeCevapSemasi(retSatiri);
+
 // Etkin hesap kilitleri (oturum modülünün kilidi); açma adın bütün etkin kilitlerini açar.
 export const kilitListeSorgusu = z.object({ ...sayfaSorguAlanlari });
 export const kilitSatiri = z.object({ id: z.number().int(), kullaniciAdi: z.string(), kilitlendi: zamanSemasi, bitis: zamanSemasi });
@@ -140,6 +163,8 @@ export const kurallarCevabi = z.object({
     onem: z.enum(ONEMLER),
   })),
   saklamaGun: z.number().int(),
+  // Reddedilen istek kaydının saklama süresi (1363 a).
+  redSaklamaGun: z.number().int(),
   // VPN adres aralığı ayarı: doluysa bu aralıklardan gelen deneme cihaza bağlı kurallarda sayılmaz. Boş liste: muafiyet yok.
   vpnAraliklari: z.array(z.string()),
   muafSinyaller: z.array(z.enum(SINYALLER)),
@@ -161,3 +186,5 @@ export type KilitAcCevabi = z.output<typeof kilitAcCevabi>;
 export type KorumaCevabi = z.output<typeof korumaCevabi>;
 export type SunucuDurumuCevabi = z.output<typeof sunucuDurumuCevabi>;
 export type KurallarCevabi = z.output<typeof kurallarCevabi>;
+export type RetListeSorgusu = z.input<typeof retListeSorgusu>;
+export type RetListeCevabi = z.output<typeof retListeCevabi>;

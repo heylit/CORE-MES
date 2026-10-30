@@ -1,5 +1,5 @@
 import type {
-  AlarmDurumu, AlarmGorunumu, KAPANIS_NOTU_EN_COK as SOZLESME_NOT_SINIRI, KorumaDurumu, Onem, Sinyal,
+  AlarmDurumu, AlarmGorunumu, KAPANIS_NOTU_EN_COK as SOZLESME_NOT_SINIRI, KorumaDurumu, Onem, RetNedeni, Sinyal,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
@@ -34,6 +34,8 @@ export const SINYAL_ADI = {
   'hedefli-hesap': 'Bir hesaba çok cihazdan deneme',
   'cok-oturum': 'Çok oturum',
   'hesap-kilidi': 'Hesap kilitlendi',
+  'yetki-reddi-serisi': 'Yetkisiz işlem denemesi',
+  'adres-taramasi': 'Adres taraması',
 } as const satisfies Record<Sinyal, string>;
 
 // Kural metni sunucudandır (GET /guvenlik/kurallar); bu liste yalnız yöneticiye yol gösterir.
@@ -43,6 +45,8 @@ export const NE_YAPILIR = {
   'hedefli-hesap': ['Kişiyle konuşun: bu cihazlardan giriş denedi mi?', 'Denemediyse hesabın PIN ya da parolasını yenileyin.', 'Cihaz adreslerini bilgi işleme iletin.'],
   'cok-oturum': ['Oturumlar bölümünde kişinin oturumlarına bakın.', 'Tanınmayan oturumu kapatın.'],
   'hesap-kilidi': ['Kişiye sorun: art arda hatalı giren kendisi mi?', 'Kendisiyse Oturumlar ve kilitler bölümünden kilidi açın; gerekirse yeni geçici PIN verin.', 'Kendisi değilse kilidi açmayın, cihazı bilgi işlemle araştırın.'],
+  'yetki-reddi-serisi': ['Reddedilen istekler bölümünde kişinin denediği işlemlere bakın.', 'Kişiye sorun: yanlış bağlantı ya da eksik yetki mi?', 'Bilinçli denemeyse oturumunu kapatın ve rolünü gözden geçirin.'],
+  'adres-taramasi': ['Reddedilen istekler bölümünde cihazın istediği adreslere bakın.', 'Cihazın kime ait olduğunu bilgi işlemden öğrenin.', 'Onaylı bir tarama değilse cihazı ağdan ayırtın.'],
 } as const satisfies Record<Sinyal, readonly string[]>;
 
 export const ONEM_ADI = { kritik: 'Kritik', yuksek: 'Yüksek', orta: 'Orta' } as const satisfies Record<Onem, string>;
@@ -54,6 +58,14 @@ export const GORUNUM_ADI = {
 } as const satisfies Record<AlarmGorunumu, string>;
 export const GORUNUMLER = Object.keys(GORUNUM_ADI) as AlarmGorunumu[];
 export const SONUC_ADI = { basarili: 'Başarılı', hatali: 'Hatalı' } as const;
+export const RET_NEDENI_ADI = {
+  'oturum-yok': 'Oturum yok', yetki: 'Yetki yok', kapsam: 'Kapsam dışı', 'dis-izleyici': 'Firma kişisi', cihaz: 'Cihaz kısıtı',
+  'dosya-turu': 'Telefonda dosya', 'adres-yok': 'Adres yok',
+} as const satisfies Record<RetNedeni, string>;
+// Cihaz ve dosya reddi telefonun olağan sınırıdır; ötekiler dikkat ister.
+export const RET_NEDENI_TONU = {
+  'oturum-yok': 'pasif', yetki: 'hata', kapsam: 'hata', 'dis-izleyici': 'hata', cihaz: 'pasif', 'dosya-turu': 'pasif', 'adres-yok': 'uyari',
+} as const satisfies Record<RetNedeni, RozetTonu>;
 // Tip sözleşmedeki sabittir: sınır sunucuda değişirse burası derlenmez.
 export const KAPANIS_NOTU_EN_COK: typeof SOZLESME_NOT_SINIRI = 2000;
 export const KORUMA_ADI = { acik: 'Açık', uyari: 'Uyarı', kapali: 'Kapalı', bilinmiyor: 'Bilinmiyor' } as const satisfies Record<KorumaDurumu, string>;

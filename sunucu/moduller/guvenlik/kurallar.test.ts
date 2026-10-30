@@ -5,7 +5,8 @@ import {
   COK_OTURUM, DURMA_ESIGI_DK, HATALI_SERI, alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari,
   hesapKilidiBulgulari, kapatilabilirMi, onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
   SERTIFIKA_UYARI_GUN, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
-  sunucuSertifikaMaddesi, yedekMaddesi,
+  sunucuSertifikaMaddesi, yedekMaddesi, ADRES_TARAMASI, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni,
+  duyurulurMu, yetkiReddiBulgulari,
 } from './kurallar.ts';
 import type { Bulgu, DenemeOzeti } from './kurallar.ts';
 
@@ -190,4 +191,27 @@ describe('koruma durumu maddeleri (saf)', () => {
     assert.equal(sunucuSertifikaMaddesi({ acik: false, sertifikaBitis: null }, { tanimli: false, bitis: null }, simdi).durum, 'bilinmiyor');
     assert.equal(sunucuSertifikaMaddesi(null, null, simdi).durum, 'bilinmiyor');
   });
+});
+
+test('yetki reddi serisi: farklı uç ya da kapsam eşiğinden biri yeter; sayı aşılan ölçüdür', () => {
+  const t = '2099-01-01T00:00:00.000Z';
+  const b = yetkiReddiBulgulari([
+    { kisiId: 1, farkliUc: YETKI_REDDI_SERISI.farkliUc, kapsam: 0, sonRet: t },
+    { kisiId: 2, farkliUc: 1, kapsam: YETKI_REDDI_SERISI.kapsam, sonRet: t },
+    { kisiId: 3, farkliUc: YETKI_REDDI_SERISI.farkliUc - 1, kapsam: YETKI_REDDI_SERISI.kapsam - 1, sonRet: t },
+  ]);
+  assert.deepEqual(b.map((x) => [x.kisiId, x.sayi, x.onem]), [[1, YETKI_REDDI_SERISI.farkliUc, 'yuksek'], [2, YETKI_REDDI_SERISI.kapsam, 'yuksek']]);
+  assert.deepEqual([...SAYILAN_RET_NEDENLERI].sort(), ['dis-izleyici', 'kapsam', 'yetki']);
+});
+
+test('adres taraması kritiktir; yalnız kritik alarm duyurulur (1362 a, 1365 a)', () => {
+  const t = '2099-01-01T00:00:00.000Z';
+  const b = adresTaramasiBulgulari([
+    { ip: '10.0.0.1', farkliYol: ADRES_TARAMASI.farkliYol, sonRet: t },
+    { ip: '10.0.0.2', farkliYol: ADRES_TARAMASI.farkliYol - 1, sonRet: t },
+  ]);
+  assert.deepEqual(b.map((x) => [x.ip, x.onem]), [['10.0.0.1', 'kritik']]);
+  assert.equal(duyurulurMu({ onem: 'kritik' }), true);
+  assert.equal(duyurulurMu({ onem: 'yuksek' }), false);
+  assert.equal(alarmDuyuruMetni({ sinyal: 'adres-taramasi', kullaniciAdi: null, ip: '10.0.0.1', sayi: 5 }, null), 'Adres taraması: 10.0.0.1 (5)');
 });
