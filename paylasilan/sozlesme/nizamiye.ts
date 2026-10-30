@@ -189,6 +189,20 @@ export const pdksCihazHareketiCevabi = z.object({
   satirSayisi: z.number().int(), yeniHareket: z.number().int(), zatenVardi: z.number().int(), eslesmeyen: z.number().int(), hatali: z.number().int(),
 });
 
+// Personel kartı (1326, karar 1327 a): istasyonda kart + PIN ile giriş kartı buradan kişiye çevirir. Kart numarası düz saklanmaz ve
+// geri verilmez; listede yalnız son dört hane görünür. Numara denetim kaydına girmez (gizli). Biçimi sunucu denetler (okuyucuya göre değişir).
+export const personelKartSemasi = z.object({
+  id: z.number().int(), kisiId: z.number().int(), kisiAd: z.string().nullable(), sicilNo: z.string().nullable(), kartSon4: z.string(),
+  kaydedildi: zamanSemasi, surum: surumSemasi,
+});
+export const personelKartlariCevabi = z.object({
+  kartlar: z.array(personelKartSemasi),
+  // Kart verilebilecek kişiler: etkin, kartı olmayan.
+  kisiler: z.array(z.object({ id: z.number().int(), ad: z.string(), sicilNo: z.string().nullable() })),
+});
+export const personelKartKaldirCevabi = z.object({ tamam: z.literal(true) });
+export const personelKartEkleGovdesi = z.object({ kisiId: kimlik, kartNo: gizli(z.string().max(64, 'Kart numarası çok uzun.')) }).strict();
+
 // Habersiz ziyaretçide "kimi görecek": son 30 günde en çok ziyaretçi kabul eden önde.
 export const evSahipleriCevabi = z.object({
   kisiler: z.array(z.object({ id: z.number().int(), ad: z.string(), ziyaretSayisi: z.number().int() })),
@@ -233,6 +247,9 @@ export type PdksCihaz = z.output<typeof pdksCihazSemasi>;
 export type PdksCihazlarCevabi = z.output<typeof pdksCihazlarCevabi>;
 export type PdksCihazAnahtarCevabi = z.output<typeof pdksCihazAnahtarCevabi>;
 export type PdksCihazHareketiCevabi = z.output<typeof pdksCihazHareketiCevabi>;
+export type PersonelKart = z.output<typeof personelKartSemasi>;
+export type PersonelKartlariCevabi = z.output<typeof personelKartlariCevabi>;
+export type PersonelKartEkleGovdesi = z.input<typeof personelKartEkleGovdesi>;
 export type EvSahipleriCevabi = z.output<typeof evSahipleriCevabi>;
 export type OnerilerCevabi = z.output<typeof onerilerCevabi>;
 export type BenimZiyaretcim = z.output<typeof benimZiyaretcimSemasi>;

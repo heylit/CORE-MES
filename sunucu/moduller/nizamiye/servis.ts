@@ -1,23 +1,23 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cokIstek, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bulunamadi, cokIstek, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import type {
   AcilDurumCevabi, BenimZiyaretcim, EvSahipleriCevabi, GecmisCevabi, KapiCevabi, Kart, KartlarCevabi, OnerilerCevabi, PdksAktarCevabi, PdksCihaz, PdksCihazAnahtarCevabi,
-  PdksCihazHareketiCevabi, PdksCihazlarCevabi, PdksPersonel,
+  PdksCihazHareketiCevabi, PdksCihazlarCevabi, PdksPersonel, PersonelKart, PersonelKartlariCevabi,
   Ziyaret, ZiyaretcilerimCevabi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
 import type { z } from 'zod';
 import type {
   cikisGovdesi, girisGovdesi, habersizGovdesi, kartBildirGovdesi, kartEkleGovdesi, onKayitGovdesi, pdksAktarGovdesi, pdksCihazDurumGovdesi,
-  pdksCihazEkleGovdesi, pdksCihazHareketiGovdesi,
+  pdksCihazEkleGovdesi, pdksCihazHareketiGovdesi, personelKartEkleGovdesi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import {
   cikisHatasi, geriAlma, girisHatasi, iptalHatasi, kartBildirHatasi, kartVerilemezse, kapidanGec, kimlikDogru, kimlikHatasi, onKayitZamaniHatasi, pdksCihazGovdesiniCoz,
-  pdksDosyasiniCoz, pdksIcerideMi, rafaAlmaHatasi, type KapiDurumu, type PdksSatiri,
+  pdksDosyasiniCoz, pdksIcerideMi, personelKartNoDuzelt, personelKartOzeti, rafaAlmaHatasi, type KapiDurumu, type PdksSatiri,
 } from './kurallar.ts';
 import { anahtarDogruMu, anahtarOzeti, anahtarUret } from './anahtar.ts';
 import { adresiSadelestir, cihazAgiOku, cihazAginda, hamSaklamaGunuOku, kurumIciAralikMi } from './ag.ts';
@@ -370,4 +370,53 @@ export async function rafaAl(db: Db, id: number, surum: number): Promise<Kart> {
   if (hata !== null) throw gecersiz(hata);
   await sorgu.kartDurumuYaz(db, id, 'bos', null);
   return kartCevabi(db, id);
+}
+
+/* ---------------- personel kartı (1326, karar 1327 a) ---------------- */
+
+const PERSONEL_KART_YOK = 'Etkin personel kartı bulunamadı.';
+const PERSONEL_KART_KISITLARI = {
+  nizamiye_personel_kart_etkin_kart: { ileti: 'Bu kart başka bir kişiye kayıtlı; önce oradan kaldırın.', alan: 'kartNo' },
+  nizamiye_personel_kart_etkin_kisi: { ileti: 'Kişinin kayıtlı bir kartı var; önce onu kaldırın.', alan: 'kisiId' },
+  nizamiye_personel_kart_kisi: { ileti: 'Kişi bulunamadı.', alan: 'kisiId' },
+} as const;
+
+export async function personelKartlari(db: Db): Promise<PersonelKartlariCevabi> {
+  const satirlar = await sorgu.personelKartlari(db);
+  const etkin = await kisiSecenekleri(db);
+  const bilinen = new Map(etkin.map((k) => [k.id, k]));
+  // Pasife alınmış kişinin kartı da listede kalır ki kaldırılabilsin; adı ayrıca okunur.
+  const adlar = await kisiAdlari(db, satirlar.filter((s) => !bilinen.has(s.kisiId)).map((s) => s.kisiId));
+  const kartlar: PersonelKart[] = satirlar.map((s) => ({
+    ...s, kisiAd: bilinen.get(s.kisiId)?.ad ?? adlar.get(s.kisiId) ?? null, sicilNo: bilinen.get(s.kisiId)?.sicilNo ?? null,
+  }));
+  const kartli = new Set(satirlar.map((s) => s.kisiId));
+  return { kartlar, kisiler: etkin.filter((k) => !kartli.has(k.id)) };
+}
+
+export async function personelKartEkle(db: Db, kullanici: Kullanici, g: Govde<typeof personelKartEkleGovdesi>): Promise<PersonelKart> {
+  const no = personelKartNoDuzelt(g.kartNo);
+  if (no === null) throw new UygulamaHatasi('DOGRULAMA', 'Kart numarası okunamadı; kartı yeniden okutun.', { alan: 'kartNo' });
+  if (!(await kisiSecenekleri(db)).some((k) => k.id === g.kisiId)) throw new UygulamaHatasi('DOGRULAMA', 'Kişi bulunamadı ya da etkin değil.', { alan: 'kisiId' });
+  const id = await kisitKorumali(PERSONEL_KART_KISITLARI, () =>
+    sorgu.personelKartEkle(db, { kisiId: g.kisiId, ozet: personelKartOzeti(no), son4: no.slice(-4), kaydeden: kullanici.id }));
+  return personelKartCevabi(db, id);
+}
+
+async function personelKartCevabi(db: Db, id: number): Promise<PersonelKart> {
+  const kart = (await personelKartlari(db)).kartlar.find((k) => k.id === id);
+  if (kart === undefined) throw bulunamadi(PERSONEL_KART_YOK);
+  return kart;
+}
+
+export async function personelKartKaldir(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<{ tamam: true }> {
+  if ((await sorgu.personelKarti(db, id)) === null) throw bulunamadi(PERSONEL_KART_YOK);
+  if (!(await sorgu.personelKartKapat(db, id, surum, kullanici.id))) throw eskiSurum();
+  return { tamam: true };
+}
+
+// Okunan kartın etkin sahibi; biçimsiz ya da kayıtsız kart null. Kişinin etkinliğine ve PIN'ine çağıran bakar.
+export async function personelKartSahibi(db: Db, kartNo: string): Promise<number | null> {
+  const no = personelKartNoDuzelt(kartNo);
+  return no === null ? null : sorgu.personelKartSahibi(db, personelKartOzeti(no));
 }

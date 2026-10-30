@@ -6,6 +6,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useKomut } from './komut.ts';
 import { tarihSaat } from './gorunum.ts';
+import { PersonelKartlari } from './PersonelKartlari.tsx';
 import './nizamiye.css';
 
 // Anahtar sunucuda saklanmaz (ADR 0016): açılışta ve yenilemede bir kez gösterilir, cihaza o an girilir.
@@ -111,6 +112,7 @@ export function KartOkuyucular() {
       {ekleAcik
         ? <OkuyucuEkle eklendi={(s) => { ekleAcikYaz(false); anahtarYaz(s); }} vazgec={() => ekleAcikYaz(false)} />
         : <div className="tc-nz-panel-alt"><Dugme tur="birincil" simge="plus" onClick={() => ekleAcikYaz(true)}>Kart okuyucu ekle</Dugme></div>}
+      <PersonelKartlari />
     </div>
   );
 }
