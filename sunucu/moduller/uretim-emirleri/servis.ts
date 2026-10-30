@@ -20,7 +20,7 @@ import {
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
-  emirEksiUyarisi, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
+  emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
@@ -160,10 +160,7 @@ async function paralelAlanlari(db: Db, satirlar: readonly EmirSatiri[]): Promise
     const hepsi = emirAdimlari.get(id) ?? [];
     const eksikler = adimEksikleri(hepsi);
     const partili = hepsi.some((a) => a.partili);
-    const oncekiSaglam = (a: AdimDurumSatiri): number => {
-      const o = oncekiParalelAdim(hepsi, a);
-      return o === null ? 0 : o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam;
-    };
+    const oncekiSaglam = (_a: AdimDurumSatiri, o: AdimDurumSatiri): number => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam);
     sonuc.set(id, {
       acikAdimlar: hepsi.filter((a) => a.durum === 'calisiyor').map((a) => ({
         isEmriId: a.id, opNo: a.opNo, ad: a.ad, istasyon: a.istasyonId === null ? null : adli(adlar.istasyon, a.istasyonId, 'İstasyon'),
@@ -341,9 +338,17 @@ async function sayaclar(db: Db, id: number, isEmriId: number | null = null): Pro
   return { saglam: sayac?.saglam ?? 0, hurda: sayac?.hurda ?? 0, kararBekliyor: sayac?.kararBekliyor ?? 0 };
 }
 
+// 1248 a: öncül listeli adımda her öncülün şu ana kadarki sağlamı (bitmişse kapanışı); başlatma uyarısı öncül başına denetler.
+async function onculSaglamlari(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<(o: IsEmriSatiri) => number> {
+  const acik = adimOnculleri(hepsi, adim).map((o) => o.adim).filter((o) => o.durum !== 'tamam').map((o) => o.id);
+  const sayac = new Map((await sorgular.adimSayaclariGetir(db, acik)).map((x) => [x.isEmriId, x.saglam]));
+  return (o) => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : (sayac.get(o.id) ?? 0));
+}
+
 // Adıma giren: ilk adımda null; bağımsız adımda emir adedi (önceki adıma bağlı değildir); öteki adımda önceki adımın sağlamı (adimaGiren).
+// Öncül listeli dal başı bağımsız adım gibidir: emir adedi girer.
 async function adimGirisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<number | null> {
-  if (adim.bagimlilik === 'bagimsiz') return hepsi.some((i) => i.sira < adim.sira) ? emir.adet : null;
+  if (adim.bagimlilik === 'bagimsiz' || (adim.onculler !== null && adimOnculleri(hepsi, adim).length === 0)) return hepsi.some((i) => i.sira < adim.sira) ? emir.adet : null;
   return adimaGiren(db, emir.id, hepsi, adim);
 }
 
@@ -357,7 +362,8 @@ async function adimGirdisiUyarisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEm
 
 // 654 a: adım, sonraki adımın saydığından az sağlamla biterse uyarır. Sonraki adım bağımsızsa bu adıma bağlı değildir.
 async function eksiyleBitisUyarisi(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri, kapanis: number): Promise<string | null> {
-  const sonraki = hepsi.find((i) => i.id !== adim.id && oncekiParalelAdim(hepsi, i)?.id === adim.id);
+  const sonraki = hepsi.find((i) => i.id !== adim.id && (i.onculler === null
+    ? oncekiParalelAdim(hepsi, i)?.id === adim.id : adimOnculleri(hepsi, i).some((o) => o.adim.id === adim.id)));
   if (sonraki === undefined || sonraki.durum === 'bekliyor') return null;
   return eksiyleBitirmeUyarisi(kapanis, { opNo: sonraki.opNo, sayilan: adimTuketimi((await sorgular.adimSayaclariGetir(db, [sonraki.id]))[0]) });
 }
@@ -550,7 +556,8 @@ export async function emirBaslat(
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
-  const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, (await adimaGiren(db, id, hepsi, isEmri)) ?? 0);
+  const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, isEmri.onculler === null
+    ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri));
   const an = await komutAni(db, id);
   await sorgular.baslamayiYaz(db, id, an);
   // Planlı emir adımı verilerek başlarsa emir o adımın istasyonunda başlar; başlamış emrin istasyonu öncü adımda kalır.

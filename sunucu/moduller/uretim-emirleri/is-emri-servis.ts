@@ -27,11 +27,11 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, onculGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
-import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
+import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
@@ -69,6 +69,10 @@ export interface IsEmriGirdisi {
   makineKullanimi?: 'tek' | 'paralel';
   enKucukParca?: number | null;
   yenidenAyar?: boolean;
+  // 1248 a: rota adımının dalı (boş: ana hat) ve öncülleri, aynı emirdeki kaynak op numarasıyla. null ya da yok: eski kural (bir önceki
+  // sıra, adımın bağımlılığıyla); boş dizi: dal başı, hiçbir adımı beklemez. Öncül her zaman daha küçük sıralıdır.
+  dal?: string | null;
+  onculler?: { opNo: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -152,9 +156,61 @@ const BAGLI_IS_EMRI = {
 };
 export const bekleyeniSil = async (db: Db, id: number): Promise<void> => {
   await listeIsaretsiz(db, id);
+  await silinenBaginiDevret(db, id);
   await kisitKorumali(BAGLI_IS_EMRI, () => s.bekleyenIsEmriniSil(db, id), { BAGIMLI_KAYIT: IS_EMRI_BAGLI_KAYIT });
 };
 const bekleyeniGuncelle = async (db: Db, id: number, y: IsEmriYazisi): Promise<void> => { await listeIsaretsiz(db, id); await s.bekleyenIsEmriniGuncelle(db, id, y); };
+
+/* ---------------- öncül bağları (1248 a) ---------------- */
+
+// Girdideki öncüller op numarasıyladır; iş emri kimliğine çevrilip yazılır. Listesi null olan girdi eski kuralda kalır (dal satırı silinir).
+async function onculleriKopyala(db: Db, girdiler: readonly IsEmriGirdisi[], kimlik: ReadonlyMap<number, number>): Promise<void> {
+  for (const g of girdiler) {
+    const id = kimlik.get(g.opNo);
+    if (id === undefined) continue;
+    if (g.onculler == null) { await s.onculleriSil(db, id); continue; }
+    const onculler = g.onculler.flatMap((o) => {
+      const oncul = kimlik.get(o.opNo);
+      return oncul === undefined ? [] : [{ id: oncul, tur: o.tur, devirAdedi: o.tur === 'akisli' ? o.devirAdedi : null }];
+    });
+    await s.onculleriYaz(db, id, g.dal ?? null, onculler);
+  }
+}
+
+// Listeli emirde araya giren adım öncesindeki adımın yerini ardıllarında alır, kendisi onu bekler (bağımsızsa dal başıdır); başa girerse
+// dal başları onu bekler. Hiç listeli adımı olmayan emirde sıra kuralı bunu zaten yapar, yazılmaz.
+async function araAdimiBagla(
+  db: Db, kendi: readonly IsEmriSatiri[], onceki: IsEmriSatiri | null, yeni: { id: number; bagimlilik: IsEmriYazisi['bagimlilik']; devirAdedi: number | null },
+): Promise<void> {
+  if (!kendi.some((i) => i.onculler !== null)) return;
+  const tur: OnculTuru | null = yeni.bagimlilik === 'bagimsiz' ? null : yeni.bagimlilik;
+  await s.onculleriYaz(db, yeni.id, onceki?.dal ?? null,
+    onceki === null || tur === null ? [] : [{ id: onceki.id, tur, devirAdedi: tur === 'akisli' ? yeni.devirAdedi : null }]);
+  for (const i of kendi) {
+    if (i.onculler === null) continue;
+    if (onceki === null) {
+      if (i.onculler.length === 0) await s.onculleriYaz(db, i.id, i.dal, [{ id: yeni.id, tur: 'bekleyen', devirAdedi: null }]);
+    } else if (i.onculler.some((o) => o.id === onceki.id)) {
+      await s.onculleriYaz(db, i.id, i.dal, i.onculler.map((o) => (o.id === onceki.id ? { ...o, id: yeni.id } : o)));
+    }
+  }
+}
+
+// Silinen adımı bekleyen listeli adımlar onun öncüllerini (kendi bağ türleriyle) devralır; zincir kopmaz.
+async function silinenBaginiDevret(db: Db, id: number): Promise<void> {
+  const silinen = await s.isEmriBul(db, id);
+  if (silinen === null) return;
+  const hepsi = await s.isEmirleriGetir(db, [silinen.uretimEmriId]);
+  const ardillar = hepsi.filter((i) => i.onculler?.some((o) => o.id === id));
+  if (ardillar.length === 0) return;
+  const devir = adimOnculleri(hepsi, silinen).map((o) => o.adim.id);
+  for (const a of ardillar) {
+    const bag = a.onculler?.find((o) => o.id === id);
+    const kalan = (a.onculler ?? []).filter((o) => o.id !== id);
+    const yeni: AdimOnculu[] = bag === undefined ? kalan : [...kalan, ...devir.filter((d) => !kalan.some((o) => o.id === d)).map((d) => ({ ...bag, id: d }))];
+    await s.onculleriYaz(db, a.id, a.dal, yeni);
+  }
+}
 
 async function eklerYaz(db: Db, emirId: number, isEmriId: number, g: IsEmriGirdisi): Promise<void> {
   for (const a of g.adaylar ?? []) {
@@ -170,7 +226,8 @@ function girdiDenetle(isEmirleri: readonly IsEmriGirdisi[]): void {
     sira: i.sira, opNo: i.opNo, kaynakTuru: i.kaynak?.tur ?? null, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
     terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
   })));
-  if (ihlal !== null) throw dogrulama(ihlal, 'isEmirleri');
+  const oncul = onculGirdisiIhlali(isEmirleri);
+  if (ihlal !== null || oncul !== null) throw dogrulama(ihlal ?? oncul ?? '', 'isEmirleri');
 }
 
 const tipKimlikleri = async (db: Db): Promise<Set<number>> => new Set((await operasyonTipleri(db, { pasiflerDahil: true })).map((t) => t.id));
@@ -194,6 +251,7 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
     await eklerYaz(db, id, isEmriId, ie);
     isEmriIdleri.push(isEmriId);
   }
+  await onculleriKopyala(db, sirali, new Map(sirali.map((ie, i) => [ie.opNo, isEmriIdleri[i]!])));
   await otomatikGkkKoy(db, acanId, id);
   await emirAcildiBildir(db, { uretimEmriId: id, kisiId: acanId, stoktanRezerve: g.stoktanRezerve === true });
   return { uretimEmriId: id, isEmriIdleri };
@@ -331,6 +389,7 @@ export async function isEmirleriniYenile(
     }
   }
   if (plan.koru.some((op) => !rotada.has(op))) degisenler.push('Başlamış ya da bitmiş iş emirleri korundu');
+  await onculleriKopyala(db, g.isEmirleri, new Map((await s.isEmirleriGetir(db, [uretimEmriId])).map((i) => [i.opNo, i.id])));
   await s.emirKaynakRevizyonuYaz(db, uretimEmriId, g.kaynakRotaRevizyonId);
   await otomatikGkkKoy(db, kisiId, uretimEmriId);
   await siradakiIstasyonuYaz(db, uretimEmriId);
@@ -721,17 +780,22 @@ async function fasonBaglami(db: Db, emirId: number, isEmriId: number) {
   return { e, isEmri, durum, oncekiIsEmriId: onceki?.id ?? null };
 }
 
+// Eski emirde sırası bir küçük olan adım (bağımsız adımda da); öncül listeli adımda en yakın öncülü.
 const oncekiAdim = (hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): IsEmriSatiri | undefined =>
-  hepsi.filter((i) => i.sira < isEmri.sira).sort((a, b) => b.sira - a.sira)[0];
+  isEmri.onculler !== null ? adimOnculleri(hepsi, isEmri).at(-1)?.adim : hepsi.filter((i) => i.sira < isEmri.sira).sort((a, b) => b.sira - a.sira)[0];
 
 // Adıma giren adet: önceki adımın sağlamı, bu adımda katılan kolların sağlamı, aynı sırada bölünenler düşülür. İlk adımda null.
 // Önceki adım bitmemişse (paralel adım, 639) o ana kadarki sağlamı girer. GKK adımına fasona gönderilen girer (1207 c).
+// 1248 a: öncül listeli adımda birden çok öncülün en az geleni girer; dal başında null.
 export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): Promise<number | null> {
-  const onceki = oncekiAdim(hepsi, isEmri);
+  const onculler = isEmri.onculler === null ? [oncekiAdim(hepsi, isEmri)].filter((o) => o !== undefined) : adimOnculleri(hepsi, isEmri).map((o) => o.adim);
+  const onceki = onculler.at(-1);
   if (onceki === undefined) return null;
-  const oncekiSaglam = (await gkkFasonuBul(db, hepsi, isEmri)) !== null
+  const gkk = onculler.length === 1 && (await gkkFasonuBul(db, hepsi, isEmri)) !== null;
+  const sayac = new Map((await s.adimSayaclariGetir(db, onculler.filter((o) => o.durum !== 'tamam').map((o) => o.id))).map((x) => [x.isEmriId, x.saglam]));
+  const oncekiSaglam = gkk
     ? fasonOzeti(await s.fasonHareketleriGetir(db, [onceki.id])).gonderilen
-    : onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : ((await s.adimSayaclariGetir(db, [onceki.id]))[0]?.saglam ?? 0);
+    : Math.min(...onculler.map((o) => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : (sayac.get(o.id) ?? 0))));
   const bolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [emirId]), emirId).filter((p) => p.bolunmeSira === isEmri.sira).reduce((t, p) => t + p.adet, 0);
   return oncekiSaglam + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
 }
@@ -866,6 +930,15 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
     for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni);
     kopyalar.push({ kaynak: i, yeniId: yeni });
   }
+  // Kola gelmeyen öncül düşer: kolun o adımı dal başı olur, üstü bekleme kuralı kolBaslamaIhlali'ndedir.
+  const yeniKimlik = new Map(kopyalar.map((k) => [k.kaynak.id, k.yeniId]));
+  for (const k of kopyalar) {
+    if (k.kaynak.onculler === null) continue;
+    await s.onculleriYaz(db, k.yeniId, k.kaynak.dal, k.kaynak.onculler.flatMap((o) => {
+      const id = yeniKimlik.get(o.id);
+      return id === undefined ? [] : [{ ...o, id }];
+    }));
+  }
   await kopyalandiBildir(db, kisiId, kolId, kopyalar);
 }
 
@@ -905,7 +978,10 @@ async function adimiYerineKoy(
     const sira = n < yer ? n + 1 : n + 2;
     if (i.sira !== sira) await s.isEmriSirasiYaz(db, i.id, sira);
   }
-  return s.isEmriEkle(db, emirId, await yazi(yer + 1));
+  const y = await yazi(yer + 1);
+  const id = await s.isEmriEkle(db, emirId, y);
+  await araAdimiBagla(db, kendi, sirali[yer - 1] ?? null, { id, bagimlilik: y.bagimlilik, devirAdedi: y.devirAdedi });
+  return id;
 }
 
 // UE-PB2, UE-PB8, Soru 121 a: bölünen adımın üretilmemiş adedi, sonrakiler başlamamışsa önceki adımlar bitmeden de bölünür; planlı birleşmeli kol birleşme
@@ -1333,6 +1409,10 @@ export interface PlanIsEmri {
   birimSureDk: string | null;
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
+  // 1248 a: adımın beklediği iş emirleri, ortak adimOnculleri ile çözülmüş (eski emirde de dolu; bağımsız adımda ve dal başında boş).
+  // Plandan düşen otomatik GKK adımı zincirde atlanır, yerine onun öncülleri gelir. Yok ya da null yalnız planın kendi denediği emirdedir.
+  onculler?: { isEmriId: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
+  dal?: string | null;
   durum: 'taslak' | 'planli' | 'basladi' | 'bitti' | 'iptal';
   // İş emrinin (adımın) kendi durumu: emir başlamışken bekleyen adımı plan taşır ve sıralar. Planın kendi denediği emirde yoktur.
   adimDurumu?: 'bekliyor' | 'calisiyor' | 'tamam';
@@ -1397,6 +1477,7 @@ async function acikAdimlar<R extends number | null>(
     const m = fiili.get(i.id);
     return m === undefined ? undefined : i.makineId !== null && m.includes(i.makineId) ? i.makineId : m[0];
   };
+  const plandaki = new Set(satirlar.map((i) => i.id));
   return satirlar.flatMap((i) => {
     const e = i.emir;
     const revizyon = e.kaynakRotaRevizyonId;
@@ -1408,12 +1489,29 @@ async function acikAdimlar<R extends number | null>(
       kaynakRotaRevizyonId: revizyon, ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, birlesmeOpNo: e.birlesmeOpNo, tur: i.tur, emirTuru: e.emirTuru,
       siparisSatiriId: e.siparisSatiriId, adimAdedi: adimAdedi.get(e.id)?.get(i.sira) ?? e.adet,
       sira: i.sira, opNo: i.opNo, ad: i.ad, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
-      devirAdedi: i.devirAdedi, durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
+      devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
+      durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi),
       ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
       ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];
   });
+}
+
+// 1248 a: plan satırının öncülleri. Bitmiş öncül düşer; plana girmeyen bitmemiş öncül (fason, otomatik GKK) yerine onun öncülleri gelir,
+// bağ türü planın gördüğü adımın kendi bağıdır. Fasonun beklemesi fasonBekleGun'dedir.
+function plandakiOnculler(emrin: readonly IsEmriSatiri[], adim: IsEmriSatiri, plandaki: ReadonlySet<number>): NonNullable<PlanIsEmri['onculler']> {
+  const sonuc: NonNullable<PlanIsEmri['onculler']> = [];
+  const coz = (a: IsEmriSatiri, bag: { tur: OnculTuru; devirAdedi: number | null } | null, gorulen: Set<number>): void => {
+    for (const o of adimOnculleri(emrin, a)) {
+      if (gorulen.has(o.adim.id) || o.adim.durum === 'tamam') continue;
+      gorulen.add(o.adim.id);
+      const tur = bag ?? { tur: o.tur, devirAdedi: o.devirAdedi };
+      if (plandaki.has(o.adim.id)) { if (!sonuc.some((x) => x.isEmriId === o.adim.id)) sonuc.push({ isEmriId: o.adim.id, ...tur }); } else coz(o.adim, tur, gorulen);
+    }
+  };
+  coz(adim, null, new Set());
+  return sonuc;
 }
 
 // İş emrine kopyalanan kontrol listesi (emir açılırken rotanın talimatından); Arkon paketi rotanın bugünkü talimatı yerine bunu gösterir.

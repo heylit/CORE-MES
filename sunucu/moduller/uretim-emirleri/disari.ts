@@ -356,6 +356,11 @@ export type {
   FasonHareketiOzeti, FasonTahmini, IsEmriGirdisi, IsEmriOzeti, MalzemeIhtiyaci, PlanIsEmri, UretimEmriGirdisi, UretimEmriOzeti,
 } from './is-emri-servis.ts';
 
+// 1248 a, 1245 a: adımın öncülleri tek ortak saf işlevden; plan önizlemesi kendi denediği adımlarla (id yerine op numarası olabilir) çağırır.
+// Gerçek emirde PlanIsEmri.onculler bu işlevle çözülmüş gelir. Rota açılış girdisinde IsEmriGirdisi.dal ve .onculler (op numarasıyla) verir.
+export { DAL_AZAMI, ONCUL_TURLERI, adimOnculleri } from './kurallar.ts';
+export type { AdimOnculu, OnculTuru, OnculluAdim } from './kurallar.ts';
+
 // Rota (UE1): emir, yürürlükteki rotanın kopyasıyla açılır; "emirlere uygula" güvenli kipte yeniler. Liste ve ayrıntı rota ekranı içindir.
 export const uretimEmriAc = isEmri.uretimEmriAc;
 export const isEmirleriniYenile = isEmri.isEmirleriniYenile;
