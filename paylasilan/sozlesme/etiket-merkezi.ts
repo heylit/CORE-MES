@@ -198,3 +198,24 @@ export const baskiSemasi = z.object({
 });
 export const baskilarCevabi = z.object({ baskilar: z.array(baskiSemasi) });
 export type BaskilarCevabi = z.infer<typeof baskilarCevabi>;
+
+// Etiket listesi (kart #1292, 1288): bütün etiket türleri, basılabilenler ve yapılacaklar. Satırlar etiket_merkezi_etiket_turu'ndan gelir.
+// disaridakiYol: bugün Etiket Merkezi dışında basıldığı ekran; taşınınca boşalır.
+export const ETIKET_DURUMLARI = ['hazir', 'ilk-tur', 'ikinci-tur'] as const;
+export type EtiketDurumu = (typeof ETIKET_DURUMLARI)[number];
+export const etiketTuruSemasi = z.object({
+  kod: z.string(),
+  ad: z.string(),
+  sahipModul: z.string(),
+  tetik: z.string(),
+  alanlar: z.string(),
+  sablonTuru: z.enum(SABLON_TURLERI).nullable(),
+  kayitTurleri: z.array(z.enum(KAYIT_TURLERI)),
+  durum: z.enum(ETIKET_DURUMLARI),
+  disaridakiYol: z.string().nullable(),
+  // Hazır türün kodda duran şablonları; yapılacak türde boş.
+  sablonlar: z.array(z.object({ anahtar: z.string(), ad: z.string() })),
+});
+export const etiketlerCevabi = z.object({ etiketler: z.array(etiketTuruSemasi) });
+export type EtiketTuru = z.infer<typeof etiketTuruSemasi>;
+export type EtiketlerCevabi = z.infer<typeof etiketlerCevabi>;

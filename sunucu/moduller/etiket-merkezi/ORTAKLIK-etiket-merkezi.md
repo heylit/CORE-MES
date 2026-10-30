@@ -14,4 +14,5 @@ Modülün tuttuğu ya da gösterdiği, başka modülde de olan kavramlar. Şablo
 | Baskı kaydı | etiket-merkezi (`etiket_merkezi_baski`: yazici_id, sablon_anahtar, adet, kisi_id, sonuc) | sahibi | - |
 | Basılan kayıt | etiket-merkezi (`etiket_merkezi_baski_kaydi`: baski_id, kaynak_tur, kaynak_id; yabancı anahtar yok) | sahibi | Aşama 2'de kaynak tablosuna bağ |
 | Kişi | kisiler (`kisi`) | `degistiren_kisi_id`, `kisi_id`; ad `kisiAdlari` ile | kisiler `disari.ts` |
+| Etiket türü | etiket-merkezi (`etiket_merkezi_etiket_turu`: kod, ad, sahip_modul, tetik, alanlar, sablon_turu, kayit_turleri, durum, disaridaki_yol) | sahibi; `sahip_modul` modül adı metnidir, yabancı anahtar değil | - |
 | Etiket şablonu | etiket-merkezi (şimdilik kodda; tablo tasarım ekranıyla) | sahibi | - |

@@ -68,3 +68,15 @@ export const sonBaskilar = (db: Db, sinir: number): Promise<BaskiSatiri[]> =>
       ORDER BY b.zaman DESC, b.id DESC LIMIT $1`,
     [sinir],
   );
+
+export interface EtiketTuruSatiri {
+  kod: string; ad: string; sahipModul: string; tetik: string; alanlar: string; sablonTuru: string | null; kayitTurleri: string[];
+  durum: string; disaridakiYol: string | null;
+}
+
+export const etiketTurleriOku = (db: Db): Promise<EtiketTuruSatiri[]> =>
+  db.sorgu<EtiketTuruSatiri>(
+    `SELECT kod, ad, sahip_modul AS "sahipModul", tetik, alanlar, sablon_turu AS "sablonTuru", kayit_turleri AS "kayitTurleri",
+            durum, disaridaki_yol AS "disaridakiYol"
+       FROM etiket_merkezi_etiket_turu ORDER BY sira, kod`,
+  );

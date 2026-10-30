@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  basCevabi, basGovdesi, baskilarCevabi, ciktiCevabi, ciktiSorgusu, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
+  basCevabi, basGovdesi, baskilarCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { bas, baskilar, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
+import { bas, baskilar, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -11,6 +11,8 @@ const YAZICI_OKUMA = { biri: ['etiket-merkezi.oku', 'etiket-merkezi.yazici-yaz']
 
 export const uclar = [
   uc({ yontem: 'GET', yol: '/etiket-merkezi/sablonlar', yetki: OKUMA, cevap: sablonlarCevabi, isle: () => sablonlar() }),
+  // Etiket listesi katalogdur, kayıt taşımaz: şablon listesi gibi sayfayı görene açık.
+  uc({ yontem: 'GET', yol: '/etiket-merkezi/etiketler', yetki: OKUMA, cevap: etiketlerCevabi, isle: ({ db }) => etiketler(db) }),
   uc({
     yontem: 'GET',
     yol: '/etiket-merkezi/sablonlar/:anahtar/cikti',

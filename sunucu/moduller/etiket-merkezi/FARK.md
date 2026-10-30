@@ -66,3 +66,10 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Kayıt türü `refakat` (üretim emri kimliği, lotsuz kart, QR `UE:`) sözleşmeden (`KAYIT_TURLERI`), sunucudan ve ekrandan çıktı; `?tur=refakat&id=…` adresi seçim sayılmaz, uç 400 verir. Refakat kartı yalnız `refakat-partisi` (stoktaki lotlu kart, QR `RP:`) olarak basılır; ekranda başlığı "Refakat kartları".
 - Değişmeyen: şablon türü `refakat` ve hazır `refakat-100x150` şablonu; defterde kartın emri `kaynak_tur = 'refakat'` olarak yazılır (eski satırlar da). Göç yok. Emir satırları yine Üretim Emirleri `refakatKarti`'ndan okunur.
 - Sıra: kart #588 (emir ayrıntısındaki eski "Etiket Merkezi'nde bas" düğmesi kalkar) ile aynı turda ya da ondan sonra girer.
+
+## Etiket listesi (kart #1292; 1285 a, 1286 a, 1287 a, 1288 teyitli)
+- Göç `20261029146000_etiket_merkezi_etiket_turu`: yeni boş tablo `etiket_merkezi_etiket_turu` (kod, ad, sahip modül, ne zaman basılır, içerik, şablon türü, kayıt türleri, durum, bugün başka yerde basıldığı ekran, sıra), katalog satırlarıyla dolar. Dolu tabloya dokunmaz.
+- Satırlar: basılan yedi tür (konum, raf, malzeme, lot, refakat kartı, istasyon, yazıcı denemesi); ilk tur (1285 a) kalite durum, hatalı parça, sevk koli; ikinci tur kalibrasyon, seri no, fason gidiş. Dışarıda basılan dört yol (1288) satırında yazılı: stok konum ve lot penceresi, malzeme katalog etiketi, Üretim Hazırlık seri no etiketi, Kalite Merkezi KF-19.
+- Uç `GET /etiket-merkezi/etiketler` (`biri: sayfa.etiket-merkezi`); yeni işlem ve rol yok. Tablo ile koddaki `SABLON_TURLERI` ve `KAYIT_TURLERI` testle eşlenir (EM-U17): yeni tür listeye yazılmadan girerse test düşer.
+- Borç (1309 c): Üretim Hazırlık seri no etiketi şimdi taşınmaz; seri no sunucuda kayıt değil (işin kaydında istemcide üretilir). Markalama modülündeki seri kaydıyla birlikte ikinci turda (`seri-no` satırı) ele alınır.
+- Ekran: ikinci menüde "Etiketler" (`/etiket-merkezi/etiketler`); tablo, sahip modül ana menü adıyla.

@@ -10,6 +10,9 @@ Sınıflar: TUTAN, ETKİLEYEN, SONRA.
 15. SONRA: lot etiketi malzeme türü adını basar (271 a, "Kart 1001 · Hammadde"); tür adları `kurallar.ts`'te stok ekranındakinin kopyasıdır. Ortak tür adı sözlüğü çekirdek isteği (CEKIRDEK-ISTEKLERI 4).
 
 ## Sonra
+16. SONRA (kart #1292, 1288): dışarıdaki dört baskı yolu (stok `Etiketler.tsx` ve `LotEtiketi.tsx`, malzemeler `katalog/EtiketPenceresi.tsx`, Üretim Hazırlık `hazirlik/etiket.ts`, Kalite Merkezi KF-19) Etiket Merkezi'ne taşınacak; her biri sahibinin dalında, o gelince satırdaki `disaridaki_yol` göçle boşalır. İstisna (1309 c): Üretim Hazırlık seri no etiketi markalama modülüyle birlikte ikinci turda ele alınır; o zamana kadar tarayıcı baskısı kalır, deftere yazılmaz.
+17. SONRA (kart #1292): etiket listesi salt okunur; satır değişikliği göçle. Listeden düzenleme gerekirse `etiket-merkezi.sablon-yaz` ile ayrı uç.
+18. SONRA (1285 a, 1286 a, 1287 a): kalite durum, hatalı parça ve sevk koli etiketleri yapılacak. Kalite durumu kayıttan okunur, stok hal adlarıyla basılır (elle seçilmez); koli etiketinde QR yeter. Kaynak okumaları sahiplerin `disari.ts`'inden (stok, uretim-emirleri, sevkiyat).
 5. SONRA: şablon tasarım ekranı ve kullanıcı şablonu tablosu.
 6. ETKİLEYEN: önizlemede harf genişliği tahmindir (`HARF_ORANI`); yazıcıdaki satır kırılımı farklı olabilir. Deneme etiketiyle doğrulanacak.
 7. SONRA: QR çizimi istemcide dördüncü kez yazıldı (`Onizleme.tsx`); ortak QR bileşeni çekirdek isteği.

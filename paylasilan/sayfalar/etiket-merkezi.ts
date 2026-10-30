@@ -11,6 +11,7 @@ export const ETIKET_MERKEZI_IKINCI_MENU = {
   simge: 'printer',
   gruplar: [
     { maddeler: [
+      { anahtar: 'etiketler', baslik: 'Etiketler', yol: '/etiket-merkezi/etiketler', simge: 'list', islem: 'sayfa.etiket-merkezi' },
       { anahtar: 'sablonlar', baslik: 'Hazır şablonlar', yol: '/etiket-merkezi', simge: 'grid', islem: 'sayfa.etiket-merkezi' },
       { anahtar: 'deneme', baslik: 'Yazıcı denemesi', yol: '/etiket-merkezi/deneme', simge: 'gear', islem: 'sayfa.etiket-merkezi' },
       { anahtar: 'yazicilar', baslik: 'Yazıcılar', yol: '/etiket-merkezi/yazicilar', simge: 'cpu', islem: 'etiket-merkezi.yazici-yaz', veya: ['etiket-merkezi.oku'] },
