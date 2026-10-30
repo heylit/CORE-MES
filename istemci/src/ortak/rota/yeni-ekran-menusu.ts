@@ -15,11 +15,14 @@ const TUM_YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik
   { kok: '/mesaj', yol: '/mesaj/yeni' },
   { kok: '/portal', yol: '/portal/yeni' },
   { kok: '/denetim-hazirlik', yol: '/denetim-hazirlik/yeni' },
-  { kok: '/cnc-kurulum', yol: '/cnc-kurulum/yeni' },
 ];
 const YENI_EKRANLAR = TUM_YENI_EKRANLAR.filter((e) => !kapaliModulYoluMu(e.kok));
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
+
+// Eski ekranı kalkmış, adresi `/yeni` altında kalan ekranlar (1272 a): deneme satırı yoktur, sayfa herkesin menüsündeki köktür;
+// ekran ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
+const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum/yeni'];
 
 // Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
 // kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör
@@ -49,7 +52,7 @@ const temiz = (adres: string): string => adres.replace(/(.)\/+$/, '$1');
 // yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır;
 // eski adresine geçen ekranın `eski` yolu eski ekrandır, şerit orada çizilir.
 export function yeniEkranAdresiMi(adres: string): boolean {
-  return YENI_EKRAN_YOLLARI.some((yol) => altYolMu(adres, yol))
+  return [...YENI_EKRAN_YOLLARI, ...ESKISI_KALKAN_YENI_EKRANLAR].some((yol) => altYolMu(adres, yol))
     || TASINAN_EKRANLAR.some((t) => !t.serit && yeniMi(temiz(adres), t));
 }
 

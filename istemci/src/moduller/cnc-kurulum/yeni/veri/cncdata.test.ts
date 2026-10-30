@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../../prototip.ts';
+import { prototipYukle } from '../../prototip-html.ts';
 import { D } from './cncdata.ts';
 import { htype } from './takim-turu.ts';
 

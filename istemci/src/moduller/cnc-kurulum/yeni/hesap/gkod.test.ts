@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../../prototip.ts';
+import { prototipYukle } from '../../prototip-html.ts';
 import { durumKur, state } from '../depo.ts';
 import { bekleyenGkodAl, fmtT, gkodaGonder, gParse, gsimHazirla, gYukle, SAMPLE_HEID, SAMPLE_ISO, tStation, type GSecenek } from './gkod.ts';
 

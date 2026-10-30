@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { glbYaz } from './glb.ts';
 import type { GlbAgi } from './glb.ts';
-import { prototipYukle } from './prototip.ts';
+import { prototipYukle } from './prototip-html.ts';
 
 // Prototipin kendi THREE sürümü ve model kütüphanesi (CNC3D) sayfadan alınıp çalıştırılır; üretilen GLB depodaki THREE'nin
 // glTF okuyucusuyla geri okunur (atölye haritası ve Çizimler aynı okuyucuyu kullanır).

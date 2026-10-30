@@ -1,8 +1,6 @@
-// Çerçevedeki 3B nesneyi (prototipin gömülü THREE sahnesi) glTF 2.0 ikili dosyasına (GLB) çevirir. Gömülü THREE sürümünde
-// dışa aktarıcı yoktur ve çerçeveye paket eklenmez; prototipin makine modelleri yalnız dokusuz ağ ve standart malzeme taşır.
+// Ekranın 3B makine nesnesini glTF 2.0 ikili dosyasına (GLB) çevirir. Kullanılan THREE sürümünde dışa aktarıcı yoktur ve
+// paket eklenmez; makine modelleri yalnız dokusuz ağ ve standart malzeme taşır.
 // Dönüşümler köşelere işlenir (her ağ tek düğüm); birim metre, yukarı Y: glTF'in kendi düzeni.
-//
-// Fonksiyon metin olarak çerçeveye gömülür (cerceve-kopru.ts): dışındaki hiçbir ada başvurmaz, ithal etmez.
 
 export interface GlbAgi {
   isMesh?: boolean;

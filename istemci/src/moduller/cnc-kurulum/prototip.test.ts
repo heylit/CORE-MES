@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { WASM_YER_TUTUCU, prototipBirlestir, prototipYukle, stepOkuyucuYukle } from './prototip.ts';
+import { WASM_YER_TUTUCU, prototipBirlestir, prototipYukle } from './prototip-html.ts';
+import { stepOkuyucuYukle } from './prototip.ts';
 
 const sha256 = (metin: string): string => createHash('sha256').update(metin, 'utf8').digest('hex');
 

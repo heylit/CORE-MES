@@ -73,6 +73,10 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(yeniEkranAdresiMi('/recete-rota/plan')).toBe(false);
     expect(yeniEkranAdresiMi('/plan/studio')).toBe(false);
     expect(yeniEkranAdresiMi('/malzemeler/yeni')).toBe(false);
+    // Eski ekranı kalkan CNC Kurulum'un deneme satırı yoktur, şeridi yine çizilmez (1272 a).
+    expect(YENI_EKRAN_YOLLARI).not.toContain('/cnc-kurulum/yeni');
+    expect(yeniEkranAdresiMi('/cnc-kurulum/yeni/kutuphane')).toBe(true);
+    expect(yeniEkranAdresiMi('/cnc-kurulum')).toBe(false);
   });
 
   it('yeni ekranda şerit çizilmez, çerçeveli düzen ve tam ekran kalır', () => {

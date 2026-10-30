@@ -6,20 +6,10 @@ import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { stepOkuyucuYukle } from './prototip.ts';
 
-// Çerçevedeki köprünün istekleri (kanal "cnc-kurulum") TMI uçlarına çevrilir. Kural ve yetki sunucudadır; burası yalnız taşır ve
+// Ekranın istekleri (eski çerçeve köprüsünün istek türleri) TMI uçlarına çevrilir. Kural ve yetki sunucudadır; burası yalnız taşır ve
 // yalnız bilinen istek türlerini geçirir.
 export type KopruIsleyici = (tip: string, veri: unknown) => Promise<unknown>;
 
-// Model aktarımı toplu aktarım sayfasında başlar: çerçeve modeli üretir, kabuk yükler. Verilmezse bu istekler bilinmeyen sayılır.
-export interface ModelKoprusu {
-  modelGeldi?: (model: { makineId: string; no: string | null; ad: string; glb: Uint8Array }) => Promise<unknown>;
-  // Toplu aktarımda hata hangi makinenin olduğunu taşır; çerçevedeki düğmeden gelende makine yoktur.
-  modelHatasi?: (ileti: string, makineId: string | null) => Promise<unknown>;
-  // Yalnız toplu aktarım sayfası verir: çerçeve açılınca makine listesini yollar.
-  listeGeldi?: (makineler: { makineId: string; no: string | null; ad: string }[]) => Promise<unknown>;
-  // Yalnız ana sayfa verir: çerçevedeki düğme toplu aktarım sayfasını prototipte seçili makineyle açtırır.
-  topluAc?: (makineId: string | null) => Promise<unknown>;
-}
 const STEP_HATASI = 'STEP okuyucu yüklenemedi.';
 export interface KopruHatasi { hata: string; durum: number }
 
@@ -133,7 +123,7 @@ export function stokDususleriniBul(onceki: unknown, yeni: unknown): StokDusGovde
 // kalemdeki azalışı stok ucuna gider; yoksa yalnız açık sekmede kalır. Kalem stok kartına bağlanınca çerçeve Kütüphane'de
 // yeniden kurulur (adet stoktan gelir).
 export function kopruKur(
-  model?: ModelKoprusu, yalnizHazirlik = false, ilkDurum?: string, yenile?: (gorunum?: string) => void, takimDegistirebilir = false,
+  yalnizHazirlik = false, ilkDurum?: string, yenile?: (gorunum?: string) => void, takimDegistirebilir = false,
   stokDusebilir = false,
 ): KopruIsleyici {
   const ilk = ayristir(ilkDurum);
@@ -250,27 +240,6 @@ export function kopruKur(
         const { makineId: _m, ...govde } = v;
         return api.post<TezgahAyarCevabi>(`/cnc-kurulum/tezgahlar/${String(id)}/ayar`, govde);
       }
-      case 'model-aktar': {
-        if (!model?.modelGeldi) break;
-        if (!(v['glb'] instanceof Uint8Array) || v['glb'].length === 0) throw new Error('Geçersiz model.');
-        const no = typeof v['no'] === 'string' && v['no'] !== '' ? v['no'] : null;
-        return model.modelGeldi({ makineId: metin(v['makineId'], 'makine'), no, ad: metin(v['ad'], 'ad'), glb: v['glb'] });
-      }
-      case 'model-hatasi':
-        if (!model?.modelHatasi) break;
-        return model.modelHatasi(typeof v['ileti'] === 'string' ? v['ileti'] : 'Model üretilemedi.', typeof v['makineId'] === 'string' ? v['makineId'] : null);
-      case 'makine-listesi': {
-        if (!model?.listeGeldi) break;
-        if (!Array.isArray(v['makineler'])) throw new Error('Geçersiz makine listesi.');
-        const liste = (v['makineler'] as unknown[]).map((x) => {
-          const m = nesne(x);
-          return { makineId: metin(m['makineId'], 'makine'), no: typeof m['no'] === 'string' && m['no'] !== '' ? m['no'] : null, ad: metin(m['ad'], 'ad') };
-        });
-        return model.listeGeldi(liste);
-      }
-      case 'toplu-ac':
-        if (!model?.topluAc) break;
-        return model.topluAc(typeof v['makineId'] === 'string' && v['makineId'] !== '' ? v['makineId'] : null);
       default:
         break;
     }

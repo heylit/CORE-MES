@@ -1,4 +1,3 @@
-import type { MakineOzeti, ModelIletisi } from '../../cerceve-kopru.ts';
 import { glbYaz } from '../../glb.ts';
 import { MACHINES } from '../veri/cncdata.ts';
 import type { Kalem, Tezgah } from '../veri/tipler.ts';
@@ -6,6 +5,11 @@ import { build, dispose } from './cnc3d.ts';
 
 // Çizim Merkezi'nin CNC makineleri sayfası (1135 a) modeli bu ekranın sahnesinden üretir. Kayıt sayfanın okuduğu metinden
 // ayrıştırılır; ekranın genel durumu (depo.ts) kurulmaz, çünkü sayfa CNC Kurulum'un dışındadır ve kayıt yazmaz.
+
+export interface MakineOzeti { makineId: string; no: string | null; ad: string }
+
+// Ad ve numara ekranın gösterdiğiyle aynıdır (elle yapılan düzeltmeler dahil).
+export interface ModelIletisi { makineId: string; no: string | null; ad: string; glb: Uint8Array }
 
 type Kayit = { customMachines?: unknown; mo?: unknown };
 type Makine = Partial<Tezgah> & { id?: unknown };
