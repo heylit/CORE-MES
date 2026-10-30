@@ -7,7 +7,7 @@ import {
   makineKaydiSemasi, makineKisiSorgusu, makineKisileriCevabi, makineSorgusu, makinelerCevabi, operasyonTipiGovdesi, operasyonTipiGuncellemeGovdesi, operasyonTipiKaydiSemasi,
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
   yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
-  makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
+  ayarYetkinligiBelirleGovdesi, ayarYetkinligiParametresi, makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
@@ -416,6 +416,26 @@ export const uclar = [
     govde: makineYetkinlikGovdesi,
     cevap: kisiYetkinligiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.makineYetkinlikBelirle(db, kullanici.id, parametre.kisiId, govde.makineIdleri),
+  }),
+  // 1303 a: kişinin ayar yapabildiği makineler; istasyon seçilirse bütün aktif makineleri.
+  uc({
+    yontem: 'POST',
+    yol: '/kisi-yetkinlikleri/:kisiId/ayar/belirle',
+    yetki: 'istasyonlar.yaz',
+    parametre: kisiParametresi,
+    govde: ayarYetkinligiBelirleGovdesi,
+    cevap: kisiYetkinligiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.ayarYetkinligiBelirle(db, kullanici.id, parametre.kisiId, govde),
+  }),
+  // 1303 a: ayar yetkinliğinin geçerlilik bitişi ve dayanağı; okunan sürümle, deftere yazılır.
+  uc({
+    yontem: 'POST',
+    yol: '/kisi-yetkinlikleri/:kisiId/ayar/:makineId/ayrinti',
+    yetki: 'istasyonlar.yaz',
+    parametre: ayarYetkinligiParametresi,
+    govde: yetkinlikAyrintiGovdesi,
+    cevap: kisiYetkinligiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.ayarYetkinligiAyrintisiYaz(db, kullanici, parametre.kisiId, parametre.makineId, govde),
   }),
   // 563 2 a: aynı anda en çok kaç tezgâh; boş sınırsız.
   uc({

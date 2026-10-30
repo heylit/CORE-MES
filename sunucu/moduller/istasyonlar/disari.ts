@@ -228,6 +228,11 @@ export const yetkinMi = async (db: Db, kisiId: number, istasyonId: number): Prom
 export const makineYetkinlikleri = (db: Db): Promise<{ kisiId: number; makineId: number }[]> =>
   sorgular.gecerliMakineYetkinlikleri(db, null, tesisGunu(new Date()));
 
+// 1303 a: bugün geçerli ayar yetkinlikleri (kişi x makine); pasif makine ve süresi dolan yetkinlik düşer. Plan ayarcıyı görev metni
+// yerine bundan okuyacak. Yetki sormaz: çağıran uç sorar.
+export const ayarYetkinlikleri = (db: Db): Promise<{ kisiId: number; makineId: number }[]> =>
+  sorgular.gecerliAyarYetkinlikleri(db, null, tesisGunu(new Date()));
+
 // 563 2 a: kişi başına aynı anda en çok tezgâh; satırı olmayan kişi sınırsızdır (yalnız tezgâh oranlarının toplamı 1'i geçmez).
 export const kisiTezgahSinirlari = (db: Db): Promise<{ kisiId: number; enCok: number }[]> => sorgular.kisiTezgahSinirlari(db);
 

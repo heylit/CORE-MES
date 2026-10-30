@@ -71,7 +71,7 @@ const MAKINE_DURUMLARI = {
 } satisfies MakineDurumlariCevabi;
 
 const YETKINLIKLER = {
-  yetkinlikler: [{ kisiId: 5, istasyonIdleri: [10], ayrintilar: [{ istasyonId: 10, verenKisiId: 1, verilme: '2026-10-01T07:30:00Z', gecerlilikBitis: null, dayanak: null, gecerli: true, surum: 1 }], makineIdleri: [], enCok: null }],
+  yetkinlikler: [{ kisiId: 5, istasyonIdleri: [10], ayrintilar: [{ istasyonId: 10, verenKisiId: 1, verilme: '2026-10-01T07:30:00Z', gecerlilikBitis: null, dayanak: null, gecerli: true, surum: 1 }], makineIdleri: [], enCok: null, ayar: [] }],
 } satisfies YetkinliklerCevabi;
 
 const EKIPLER = {
@@ -1107,6 +1107,43 @@ describe('personel bölümü (#1109, IS25)', () => {
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/makineler/belirle', govde: { makineIdleri: [21] } });
     expect(within(await kart('Deneme Yeni')).queryByRole('group', { name: 'Deneme Yeni makine yetkinliği' })).toBeNull();
+  });
+
+  it('1303 a: ayar yetkinliği makine ya da istasyonun bütün makineleriyle eklenir; çalışma yetkinliği olmayan kişide de satır vardır', async () => {
+    const cagrilar = sunucuKur(YONETICI, kisitlar);
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    expect(await within(usta).findByText('Ayar yetkinliği girilmemiş')).toBeTruthy();
+    await seciciSec('Deneme Usta için ayar yetkinliği ekle', /bütün makineleri/, usta);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/ayar/belirle', govde: { makineIdleri: [], istasyonIdleri: [10] } });
+    expect(within(await kart('Deneme Yeni')).getByRole('group', { name: 'Deneme Yeni ayar yetkinliği' })).toBeTruthy();
+  });
+
+  it('1303 a: ayar yetkinliğinin bitişi ve dayanağı çipten girilir, çip kaldırılır', async () => {
+    const cagrilar = sunucuKur(YONETICI, kisitlar);
+    const ortak = vi.mocked(fetch).getMockImplementation();
+    const ayarli = { yetkinlikler: [{ ...YETKINLIKLER.yetkinlikler[0]!, ayar: [{ makineId: 21, verenKisiId: 1, verilme: '2026-10-01T07:30:00Z', gecerlilikBitis: '2020-01-31', dayanak: null, gecerli: false, surum: 2 }] }] };
+    vi.mocked(fetch).mockImplementation((adres, secenek) => (String(adres).endsWith('/kisi-yetkinlikleri')
+      ? Promise.resolve(new Response(JSON.stringify(ayarli), { status: 200 })) : ortak!(adres, secenek)));
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    const grup = await within(usta).findByRole('group', { name: 'Deneme Usta ayar yetkinliği' });
+    expect(within(grup).getByText('M-02')).toBeTruthy();
+    expect(within(grup).getByText(/süresi doldu/)).toBeTruthy();
+    const duzenle = within(usta).getByRole('button', { name: 'Deneme Usta: M-02 ayar yetkinliğinin bitişi ve dayanağı' }) as HTMLButtonElement;
+    await waitFor(() => { expect(duzenle.disabled).toBe(false); });
+    fireEvent.click(duzenle);
+    const ayrinti = within(usta).getByRole('group', { name: 'Deneme Usta yetkinlik ayrıntısı' });
+    fireEvent.change(within(ayrinti).getByLabelText('Geçerlilik bitişi'), { target: { value: '2027-06-30' } });
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/ayar/21/ayrinti', govde: { gecerlilikBitis: '2027-06-30', dayanak: null, surum: 2 } });
+    const kaldir = within(usta).getByRole('button', { name: 'Deneme Usta: M-02 ayar yetkinliğini kaldır' }) as HTMLButtonElement;
+    await waitFor(() => { expect(kaldir.disabled).toBe(false); });
+    fireEvent.click(kaldir);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
+    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/ayar/belirle', govde: { makineIdleri: [] } });
   });
 
   it('IS29: yetkinliğin bitişi ve dayanağı çipten girilir; süresi dolan yetkinlik işaretlenir', async () => {

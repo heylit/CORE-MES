@@ -33,6 +33,7 @@ Sabit kimlik (proje talimatı): istasyon ve makine bu modülündür.
 | Makine durumu (çalışır, arıza, bakım) | `istasyonlar_makine_durumu` | plan, Arkon (arıza bildirimi bağlamada) | sahibi bu modül (#409) |
 | Kişi yetkinliği (çalışabildiği istasyonlar) | `istasyonlar_yetkinlik` | plan (personel kapasitesi), uretim-emirleri (S3 uyarısı) | sahibi bu modül (#409) |
 | Makine yetkinliği (kişinin baktığı makineler) | `istasyonlar_makine_yetkinlik`, defteri `istasyonlar_makine_yetkinlik_gecmisi` | plan (motorda kişi ataması, 569b) | sahibi bu modül (563 c) |
+| Ayar yetkinliği (kişinin ayar yapabildiği makineler) | `istasyonlar_ayar_yetkinligi` (`kisi_id`, `makine_id`, `gecerlilik_bitis`, `dayanak`), defteri `istasyonlar_ayar_yetkinligi_gecmisi` | plan (ayarcı; görev metni yerine, plan dalı ayrı) | sahibi bu modül (1303 a) |
 | Kişinin aynı anda en çok tezgâhı | `istasyonlar_kisi_tezgah_siniri.en_cok` | plan (motor, 569b); kisiler kişi kartı | sahibi bu modül (563 2 a) |
 | Tesis kodunun geçmişi (iş merkezi, istasyon, makine) | `istasyonlar_kod_gecmisi` (`kod`, `birakildi`) | Arkon eski kayıttaki kodu `eskiKoddanKimlikCoz` ile çözer | sahibi bu modül (AG2-2) |
 

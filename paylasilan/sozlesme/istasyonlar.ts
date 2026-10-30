@@ -334,16 +334,26 @@ export const yetkinlikAyrintisiSemasi = z.object({
   gecerli: z.boolean(),
   surum: surumSemasi,
 });
+// 1303 a: ayar yetkinliği (kişi x makine), çalışma yetkinliğinden ayrı; geçerlilik ve dayanakla.
+export const ayarYetkinligiAyrintisiSemasi = yetkinlikAyrintisiSemasi.omit({ istasyonId: true, verenKisiId: true, verilme: true })
+  .extend({ makineId: z.number().int(), verenKisiId: z.number().int(), verilme: zamanSemasi });
 const kisiYetkinligiAlanlari = {
   istasyonIdleri: z.array(z.number().int()),
   ayrintilar: z.array(yetkinlikAyrintisiSemasi),
   makineIdleri: z.array(z.number().int()),
   enCok: z.number().int().nullable(),
+  ayar: z.array(ayarYetkinligiAyrintisiSemasi),
 };
 export const kisiYetkinligiSemasi = z.object({ kisiId: z.number().int(), ...kisiYetkinligiAlanlari });
 export const yetkinliklerCevabi = z.object({ yetkinlikler: z.array(kisiYetkinligiSemasi) });
 export const kisiYetkinligiCevabi = z.object(kisiYetkinligiAlanlari);
 export const yetkinlikParametresi = z.object({ kisiId: z.coerce.number().int().positive(), istasyonId: z.coerce.number().int().positive() });
+export const ayarYetkinligiParametresi = z.object({ kisiId: z.coerce.number().int().positive(), makineId: z.coerce.number().int().positive() });
+// Liste tümden yazılır: seçilen makineler ve seçilen istasyonların bütün aktif makineleri (1303 a).
+export const ayarYetkinligiBelirleGovdesi = z.object({
+  makineIdleri: z.array(kimlik).max(500).default([]),
+  istasyonIdleri: z.array(kimlik).max(200).default([]),
+});
 export const yetkinlikAyrintiGovdesi = z.object({
   ...beklenenSurum,
   gecerlilikBitis: tarihSemasi.nullable(),
@@ -364,6 +374,15 @@ export const yetkinlikGecmisiCevabi = z.object({
     makineKod: z.string(),
     islem: z.enum(['ver', 'kaldir']),
     neden: z.enum(['elle', 'istasyon_yetkinligi_kalkti']),
+    degistirenKisiId: z.number().int(),
+    zaman: zamanSemasi,
+  })),
+  ayarGecmis: z.array(z.object({
+    makineId: z.number().int(),
+    makineKod: z.string(),
+    islem: z.enum(['ver', 'degistir', 'kaldir']),
+    gecerlilikBitis: tarihSemasi.nullable(),
+    dayanak: z.string().nullable(),
     degistirenKisiId: z.number().int(),
     zaman: zamanSemasi,
   })),
@@ -464,6 +483,8 @@ export type YetkinliklerCevabi = z.output<typeof yetkinliklerCevabi>;
 export type YetkinlikAyrintisi = z.output<typeof yetkinlikAyrintisiSemasi>;
 export type YetkinlikAyrintiGovdesi = z.input<typeof yetkinlikAyrintiGovdesi>;
 export type YetkinlikGecmisiCevabi = z.output<typeof yetkinlikGecmisiCevabi>;
+export type AyarYetkinligiAyrintisi = z.output<typeof ayarYetkinligiAyrintisiSemasi>;
+export type AyarYetkinligiBelirleGovdesi = z.input<typeof ayarYetkinligiBelirleGovdesi>;
 export type MakineTopluTasiGovdesi = z.input<typeof makineTopluTasiGovdesi>;
 export type IstasyonTopluTasiGovdesi = z.input<typeof istasyonTopluTasiGovdesi>;
 export type TopluAktiflikGovdesi = z.input<typeof topluAktiflikGovdesi>;

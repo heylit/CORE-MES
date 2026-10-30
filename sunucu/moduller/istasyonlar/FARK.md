@@ -59,3 +59,12 @@ Yalnız istemci; sunucu, sözleşme ve göç değişmedi. Bütün okumalar modü
   Ortak `IstasyonSecici` ve `MakineSecici` (kart #1317) bunu çağırır. Şema, göç, işlem ve rol değişmedi.
 - Yetki (karar 1321 b, 30.10 10:32): çağıran modüllerin işlemlerinden biri: istasyonlar okuma, `sayfa.arkon`, `sayfa.markalama`, `sayfa.stok`.
   VARSAYIM: çağıranlar bugün istasyon ya da makine seçen modüllerdir (istemci kodunda arandı); A5'te seçiciyi alan modül işlemini `SECIM_OKUMA`'ya ekler.
+## 1303 a: ayar yetkinliği (30.10.2026, dal 1313-ayar-yetkinligi)
+- Göç `20261029150000_istasyonlar_ayar_yetkinligi.sql`: yeni ve boş `istasyonlar_ayar_yetkinligi` (`kisi_id`, `makine_id` ON DELETE CASCADE, `veren_kisi_id`,
+  `verilme`, `gecerlilik_bitis`, `dayanak` en çok 300, `surum`; PK kisi_id+makine_id) ve defteri `istasyonlar_ayar_yetkinligi_gecmisi`
+  (`islem` ver / degistir / kaldir, `makine_kod`, yalnız ekleme). Dolu tabloya dokunmaz; beceri kataloğu yok.
+- Uçlar (`istasyonlar.yaz`): `POST /kisi-yetkinlikleri/:kisiId/ayar/belirle` (gövde `makineIdleri`, `istasyonIdleri`; istasyon seçilirse bütün aktif makineleri)
+  ve `POST /kisi-yetkinlikleri/:kisiId/ayar/:makineId/ayrinti` (bitiş, dayanak, sürüm). Yetkinlik cevabına `ayar`, geçmişe `ayarGecmis`.
+- Plan için: `disari.ts` `ayarYetkinlikleri(db)` → `{ kisiId, makineId }[]`, yalnız aktif makinede bugün geçerli olan. Plan bunu ayrı dalda okuyacak; bu dal plana dokunmaz.
+- Personel kartında "Ayar yapabildiği makineler" satırı: çip, "+ Ayar…" seçicisi (makine ya da istasyonun bütün makineleri), bitiş ve dayanak düzenleme.
+- VARSAYIM: ayar yetkinliği çalışma yetkinliğini şart koşmaz (ayarcı makinede üretim yapmayabilir); yetki ilkesi istasyon yetkinliğiyle aynıdır. Geri alma ucuzdur (kural IS31 tek satır).
