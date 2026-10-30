@@ -11,6 +11,8 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { komutlariTopla } from '../../ortak/rota/komutlar.ts';
+import { komutlar } from './komutlar.ts';
 import { rotalar } from './rotalar.tsx';
 
 const YAZAR: Kullanici = { id: 1, ad: 'Deneme Yazar', islemler: ['sayfa.musteri-tedarikci', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz'] };
@@ -174,6 +176,40 @@ describe('Yazma yetkisi', () => {
     expect(within(panel).getByRole('button', { name: 'Adres ekle' })).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Ornek Depo adresini düzenle' })).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Ornek Depo adresini kaldır' })).toBeTruthy();
+  });
+});
+
+describe('Ctrl K ile gelen istek (kart 1235)', () => {
+  it('komutlar kabuğun denetiminden geçer: yol bir menü maddesi, işlem kayıtlı, simge sette', () => {
+    expect(komutlariTopla({ './komutlar.ts': { komutlar } }).map((k) => k.anahtar)).toEqual(['musteri-yeni', 'tedarikci-yeni', 'fason-firma-yeni']);
+  });
+
+  it.each([
+    ['/musteri-tedarikci/musteriler?yeni=1', 'musteri'],
+    ['/musteri-tedarikci/tedarikciler?yeni=1', 'tedarikci'],
+  ])('%s yazabilene formu %s türü seçili açar', async (adres, tur) => {
+    sunucuKur(YAZAR);
+    ac(adres);
+    const form = await screen.findByRole('dialog', { name: 'Yeni firma' });
+    expect((within(form).getByLabelText('Tür') as HTMLSelectElement).value).toBe(tur);
+    fireEvent.click(within(form).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yeni firma' })).toBeNull());
+  });
+
+  it('yazamayana form açılmaz, istek gitmez', async () => {
+    const istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci/fason?yeni=1');
+    await screen.findByText('Ornek Musteri Ltd');
+    await oturumCozuldu(istekler);
+    expect(screen.queryByRole('dialog', { name: 'Yeni firma' })).toBeNull();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
+  it('firma=<id> kartın ayrıntısını açar', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    const panel = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    await within(panel).findByText('Ornek Depo');
   });
 });
 

@@ -5,6 +5,7 @@ import type { KisitEslemesi } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   Adres, AdresKimligi, Firma, FirmaAyrintiCevabi, FirmaDuzeltmesi, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi, firmaListeSorgusu,
@@ -12,7 +13,7 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
+  LOGO_KILIDI_ILETISI, adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -203,6 +204,15 @@ export async function firmaAra(
   });
   return satirlar.map(({ id, ad, kod }) => ({ id, ad, kod }));
 }
+
+// Ctrl K firma kaynağı (kart 1235, sözleşme 1233). Kartı okuyabilen bütün firmaları (pasif dahil) bulur; çekirdek
+// işlemi olmayanı kaynağa hiç sokmaz.
+export const firmaKayitKaynagi: KayitAramaKaynagi<Db> = {
+  tur: 'firma',
+  yetki: ['musteri-tedarikci.oku'],
+  ara: async (db, istek) =>
+    (await sorgular.kayitAra(db, { sade: istek.sade, icinde: istek.icindeDeseni, bas: istek.basDeseni, sinir: istek.sinir })).map(firmaAramaSonucu),
+};
 
 export interface FirmaOzeti {
   id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; vergiNo: string | null;

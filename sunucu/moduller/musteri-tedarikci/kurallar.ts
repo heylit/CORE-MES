@@ -91,3 +91,16 @@ export function defterFarki(kayit: string, onceki: Readonly<Record<string, unkno
   if (satirlar.length <= DEFTER_SATIR_SINIRI) return satirlar;
   return [...satirlar.slice(0, DEFTER_SATIR_SINIRI - 1), { kayit, alan: 'kesildi', onceki: null, yeni: satirlar.length }];
 }
+
+const TUR_ADI: Record<FirmaTuru, string> = { musteri: 'Müşteri', tedarikci: 'Tedarikçi', ikisi: 'Müşteri ve tedarikçi' };
+
+// Ctrl K sonucu (kart 1235): başlık kod (kodsuz kartta ad), açıklama ad, tür, fason ve pasif; tıklanınca liste kartı açar.
+export function firmaAramaSonucu(f: { id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; aktif: boolean }) {
+  const kod = f.kod?.trim() ? f.kod : null;
+  return {
+    anahtar: String(f.id),
+    baslik: kod ?? f.ad,
+    aciklama: [kod === null ? null : f.ad, TUR_ADI[f.tur], f.fason ? 'Fason' : null, f.aktif ? null : 'Pasif'].filter((p) => p !== null).join(' · '),
+    yol: `/musteri-tedarikci?firma=${f.id}` as const,
+  };
+}

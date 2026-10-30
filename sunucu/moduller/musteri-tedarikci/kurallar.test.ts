@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ADRES_SINIRI, FIRMA_ARAMA_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
-  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami, vergiNoHatasi,
+  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami, vergiNoHatasi,
 } from './kurallar.ts';
 
 test('MT-1 (D-9): Türkiye\'deki firmada vergi numarası 10 ya da 11 rakamdır; harf ve kısa numara reddedilir', () => {
@@ -68,4 +68,11 @@ test('MT-10: bir firmaya en çok ADRES_SINIRI adres eklenir', () => {
 test('denetim eki: yalnız değişen alan yazılır; sürüm ve zaman alanı yazılmaz', () => {
   const satirlar = defterFarki('firma:1', { ad: 'A', il: 'X', surum: 1 }, { ad: 'B', il: 'X', surum: 2 });
   assert.deepEqual(satirlar, [{ kayit: 'firma:1', alan: 'ad', onceki: 'A', yeni: 'B' }]);
+});
+
+test('Ctrl K firma sonucu (kart 1235): başlık kod, kodsuz kartta ad; açıklama tür, fason ve pasif; yol kartı açar', () => {
+  const temel = { id: 7, kod: 'F-7', ad: 'Ornek Firma', tur: 'tedarikci', fason: false, aktif: true } as const;
+  assert.deepEqual(firmaAramaSonucu(temel), { anahtar: '7', baslik: 'F-7', aciklama: 'Ornek Firma · Tedarikçi', yol: '/musteri-tedarikci?firma=7' });
+  assert.deepEqual(firmaAramaSonucu({ ...temel, kod: null, fason: true, aktif: false }).baslik, 'Ornek Firma');
+  assert.equal(firmaAramaSonucu({ ...temel, kod: '  ', fason: true, aktif: false }).aciklama, 'Tedarikçi · Fason · Pasif');
 });

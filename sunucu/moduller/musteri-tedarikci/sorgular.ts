@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { Adres, AdresKimligi, Firma, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Koordinat numeric(9,6) sütunudur; ekrana ve sözleşmeye sayı gider (altı ondalık float8'de kaybolmaz).
@@ -27,14 +28,16 @@ export interface FirmaSuzgeci {
   fason: boolean | null;
   aktif: boolean | null;
 }
-// Arama metni SQL'e yazılmaz; parametredir. LIKE yerine konum araması: % ve _ özel anlam taşımaz.
+// Arama metni SQL'e yazılmaz; sadeleşmiş, kaçırılmış desen parametresidir (\, % ve _ harf sayılır). Sütun ve desen aynı
+// Türkçe harf sadeleştirmesinden geçer (public.arama_sade, göç 20261029125000): ILIKE ve lower() veritabanının dil ayarına
+// bağlıdır, 'IŞIK' ile 'ışık'ı eşlemez. İfade trigram indeksinin aynısıdır (göç 20261029127000). Desen yoksa süzgeç yoktur.
+const desen = (metin: string | null): string | null => (metin === null ? null : icindeDeseni(metin));
 const SUZGEC = `FROM musteri_tedarikci_firma f
-  WHERE ($1::text IS NULL OR strpos(lower(f.ad), lower($1)) > 0 OR strpos(lower(coalesce(f.kod, '')), lower($1)) > 0
-         OR strpos(coalesce(f.vergi_no, ''), $1) > 0)
+  WHERE ($1::text IS NULL OR public.arama_sade(f.ad) LIKE $1 OR public.arama_sade(f.kod) LIKE $1 OR public.arama_sade(f.vergi_no) LIKE $1)
     AND ($2::text[] IS NULL OR f.tur = ANY($2::text[]))
     AND ($3::boolean IS NULL OR f.fason = $3)
     AND ($4::boolean IS NULL OR f.aktif = $4)`;
-const suzgecParametreleri = (s: FirmaSuzgeci) => [s.ara, s.turler, s.fason, s.aktif];
+const suzgecParametreleri = (s: FirmaSuzgeci) => [desen(s.ara), s.turler, s.fason, s.aktif];
 
 export async function firmaSay(db: Db, s: FirmaSuzgeci): Promise<number> {
   return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${SUZGEC}`, suzgecParametreleri(s)))?.toplam ?? 0;
@@ -127,13 +130,26 @@ export function firmaAra(
   return db.sorgu<SecimSatiri>(
     `SELECT id, kod, ad, tur, para_birimi AS "paraBirimi", vade_gunu AS "vadeGunu"
        FROM musteri_tedarikci_firma
-      WHERE ($1::text IS NULL OR strpos(lower(ad), lower($1)) > 0 OR strpos(lower(coalesce(kod, '')), lower($1)) > 0)
+      WHERE ($1::text IS NULL OR public.arama_sade(ad) LIKE $1 OR public.arama_sade(kod) LIKE $1)
         AND ($2::text[] IS NULL OR tur = ANY($2::text[]))
         AND (NOT $3 OR aktif)
         AND ($5::boolean IS NULL OR fason = $5)
       ORDER BY lower(ad), id
       LIMIT $4`,
-    [s.metin, s.turler, s.yalnizAktif, s.sinir, s.fason ?? null],
+    [desen(s.metin), s.turler, s.yalnizAktif, s.sinir, s.fason ?? null],
+  );
+}
+
+// Ctrl K kaynağı (kart 1235, sözleşme 1233): tam kod, koddan başlayan, addan başlayan önde; sonra yeni kart. Pasif de bulunur.
+// Kodsuz kartta arama_sade boş döner (STRICT); karşılaştırma IS TRUE ile yanlış sayılır, boş değer üste çıkmaz.
+export interface FirmaAramaSatiri { id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; aktif: boolean }
+export function kayitAra(db: Db, s: { sade: string; icinde: string; bas: string; sinir: number }): Promise<FirmaAramaSatiri[]> {
+  return db.sorgu<FirmaAramaSatiri>(
+    `SELECT id, kod, ad, tur, fason, aktif FROM musteri_tedarikci_firma
+      WHERE public.arama_sade(kod) LIKE $1 OR public.arama_sade(ad) LIKE $1
+      ORDER BY (public.arama_sade(kod) = $3) IS TRUE DESC, (public.arama_sade(kod) LIKE $2) IS TRUE DESC, (public.arama_sade(ad) LIKE $2) DESC, id DESC
+      LIMIT $4`,
+    [s.icinde, s.bas, s.sade, s.sinir],
   );
 }
 
