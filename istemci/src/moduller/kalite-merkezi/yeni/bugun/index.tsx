@@ -5,6 +5,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { STUDYO_YOLU, type EkranOzellikleri, type KmSayaci } from '../sekmeler.ts';
 import type { FormKaydi } from '../tipler.ts';
 import { FormOnayi } from './FormOnayi.tsx';
+import { GirisKarari } from './GirisKarari.tsx';
 import { HataliKarari } from './HataliKarari.tsx';
 import { IlkParcaKarari } from './IlkParcaKarari.tsx';
 import { bugunGorevleri, bugunOzeti, gruplara, type BugunOzeti, type Gorev, type GorevEylemi } from './gorevler.ts';
@@ -53,6 +54,7 @@ export function Bugun({ veri, yetki, git, atolye }: EkranOzellikleri) {
       />
       {yetki.onayla && <IlkParcaKarari />}
       {yetki.onayla && <HataliKarari ncrler={veri.ncr} />}
+      {yetki.onayla && <GirisKarari ncrler={veri.ncr} />}
       {yetki.yaz && (
         <section className="tc-km1-kisayollar" aria-label="Hızlı işler">
           {kisayollar.map((k) => (

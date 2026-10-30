@@ -310,11 +310,20 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const acik = tamam(await oku<{ satirlar: { id: number; malzemeId: number; miktar: string }[] }>('depo', '/stok/acik-siparis-satirlari'));
     assert.deepEqual(acik.satirlar.filter((x) => x.id === S.saSatir).map((x) => [x.malzemeId, Number(x.miktar)]), [[S.hm, HAMMADDE_KABUL]]);
 
+    // 1246: hammadde kartı giriş kalite kontrolü ister (1247 d varsayılanı); lot karantinaya karar bekliyor girer, GKK kabulüyle çıkar.
+    // Karantina alanı Depo haritasından gelir; harita bu akışın konusu değil, konum doğrudan açılır (fason testleri gibi).
+    await vt().sorgu("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'KRN-E2E', 'karantina' FROM stok_depo WHERE kod = 'ANA'");
     const mk = tamam(await yaz<{ belge: { no: string }; hareketIdler: number[] }>('depo', '/stok/mal-kabul', {
       tur: 'satin_alma', irsaliyeNo: 'IRS-E2E-1',
       satirlar: [{ malzemeId: S.hm, miktar: String(HAMMADDE_KABUL), siparisSatirId: S.saSatir, parti: { tedarikciPartiNo: 'TP-DENEME-1', dokumNo: 'DK-1', sertifikaNo: null } }],
     }));
     assert.equal(mk.hareketIdler.length, 1);
+    type Giris = { malKabulSatirId: number; malKabulNo: string; durum: string; miktar: string; tedarikciAdi: string | null };
+    const gkk = tamam(await oku<{ kayitlar: Giris[] }>('kalite', '/kalite-merkezi/giris/bekleyenler')).kayitlar.filter((x) => x.malKabulNo === mk.belge.no);
+    assert.deepEqual(gkk.map((x) => [x.durum, Number(x.miktar), x.tedarikciAdi]), [['gkk_bekliyor', HAMMADDE_KABUL, 'Deneme Tedarikci Ltd']]);
+    yasak(await yaz('depo', `/kalite-merkezi/giris/${gkk[0]!.malKabulSatirId}/gkk`, { kabul: String(HAMMADDE_KABUL), hatali: '0' }));
+    const gk = tamam(await yaz<{ kayit: Giris }>('kalite', `/kalite-merkezi/giris/${gkk[0]!.malKabulSatirId}/gkk`, { kabul: String(HAMMADDE_KABUL), hatali: '0' }));
+    assert.equal(gk.kayit.durum, 'kapandi');
     const partiler = tamam(await oku<Liste<Parti>>('depo', `/stok/partiler?malzemeId=${S.hm}`)).satirlar;
     assert.deepEqual(partiler.map((p) => [p.tedarikciPartiNo, Number(p.eldeki), p.uretimEmriId]), [['TP-DENEME-1', HAMMADDE_KABUL, null]]);
     S.hmParti = partiler[0]?.id ?? 0;
@@ -516,7 +525,9 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const ham = tamam(await oku<Iz>('depo', `/stok/partiler/${S.hmParti}/iz`));
     assert.equal(ham.parti.tedarikciPartiNo, 'TP-DENEME-1');
     assert.deepEqual(ham.emirler, [S.emir]);
-    assert.deepEqual(ham.hareketler.map((x) => [x.tur, Number(x.miktar)]), [['giris', HAMMADDE_KABUL], ['cikis', 10]]);
+    // 1246: karantinaya giriş, GKK kabulünde kabul alanına taşıma ve serbest kaliteye çevirme, sonra emre sarf.
+    assert.deepEqual(ham.hareketler.map((x) => [x.tur, Number(x.miktar)]),
+      [['giris', HAMMADDE_KABUL], ['transfer', HAMMADDE_KABUL], ['transfer', HAMMADDE_KABUL], ['cikis', 10]]);
     // Reçete 1/adet, 10 parça: elle sarf tek düşümdür, sayım ikinci kez düşmez (bulgu 1).
     assert.equal(await toplam(S.hm), HAMMADDE_KABUL - MAMUL_ADET);
     const ak = tamam(await oku<{ emir: { id: number; durum: string } }>('mudur', `/akis/emirler/${S.emir}`));

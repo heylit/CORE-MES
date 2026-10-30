@@ -74,6 +74,12 @@
 | KM-S: numune planı `kalite-merkezi.onayla`, parça ve operasyon başına sürümle (yeni sürümsüz); kural kimliği tekil, kuraldaki balon numarası parçanın etkin resimlerinde | "KM-S18 numune planı ...", "KM-S22 ..." |
 | KM-H: hatalı parça kararı (1034, 1038 a) `kalite-merkezi.onayla`, tekrar korumalı; kararla aynı işlemde NCR açılır (rework "Yeniden işle" açık, hurda kapalı, red "Karar bekliyor" açık), lot ve emir boş kalır (karantina açılmaz); ikinci karar 409 ve NCR yazılmaz; var olan NCR kimliği kararı geri alır | "bekleyenler ve karar: ...", "reddedilen: ..." (hatali-karar.test.ts) |
 | KM-H: Bugün ekranında hatalı parça kartı yalnız onaylayabilende istenir; NCR numarası NCR formundaki sıradaki numaradır | "Hatalı parça kararı" (bugun.test.tsx) |
+| KM-G1 (1246; 1247 d, 1251): kartı GKK isteyen satın alma lotu karantinaya karar bekliyor girer; karantina konumu yoksa kabul 400; GKK'sız kart ve sarf serbest girer | "kabul: ..." (giris-kontrolu.test.ts) |
+| KM-G2 (1252): GKK `kalite-merkezi.onayla`, tekrar korumalı; kabul ve hatalı toplamı karantinada bekleyene eşittir; kabul mal kabul alanına serbest, hatalı karantinada red; ikinci GKK 409 | "GKK: ..." |
+| KM-G3 (1252, 1253 a): hatalının kararı NCR açar (kaynak "Giriş muayene", lot ve emir boş); GKK'sız ya da hatalısız satırda 409; şartlı kabul şart ister; red NCR'yi açık bırakır ve tedarikçiye iade çıkışı yazar; kabul ve şartlı kabul NCR'yi kapatır | "karar: ..." |
+| KM-G4: GKK verilmiş belge düzeltilemez (409); `tedarikci_iade` elle çıkış nedeni değildir (400) | "karar: şartlı kabul ..." |
+| KM-G5: karantinadaki GKK lotu emre ayrılmaz; GKK kabulünde serbest kalan miktar bekleyen emre ayrılır | "rezerve: ..." |
+| KM-G6: Bugün ekranında giriş kontrolü yalnız onaylayabilende istenir; GKK ve karar tekrar korumalı gider; sertifikasız lot işaretlenir | "Giriş kontrolü (1246)" (GirisKarari.test.tsx) |
 | KM-A1 (1238): Ctrl K sonuç yolu kabuğun adres denetiminden geçer; kimlikteki `: @ + \|` ve Türkçe harf yüzde kodlanır | "KM-A1 kayıt yolu ..." (`arama.test.ts`) |
 | KM-A2 (1238): NCR sonucu başlıkta numara (yoksa kimlik), açıklamada parça, durum ve "Arşivde"; Uygunsuzluklar görünümünde `?ac=` ile açar | "KM-A2 NCR sonucu ..." |
 | KM-A3 (1238): karar bekleyen hatalı parça emir no, hedef emir no, parça no ya da adla bulunur (Türkçe harf duyarsız); emir no tam, sonra baştan tutan önce; Bugün görünümünü açar | "KM-A3 hatalı parça ..." |

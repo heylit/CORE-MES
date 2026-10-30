@@ -4,6 +4,7 @@ import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
   kmEmirKaynaklariCevabi, kmEslesmeSayimiCevabi, kmParcaKaynaklariCevabi, kmParcaKaynaklariSorgusu,
   kmHataliBekleyenCevabi, kmHataliKararCevabi, kmHataliKararGovdesi, kmHataliParametresi,
+  kmGirisBekleyenCevabi, kmGirisCevabi, kmGirisGkkGovdesi, kmGirisKararGovdesi, kmGirisParametresi,
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
@@ -146,6 +147,34 @@ export const uclar: Uc[] = [
     govde: kmHataliKararGovdesi,
     cevap: kmHataliKararCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.hataliKarari(db, kullanici, parametre.kayitId, govde),
+  }),
+  // Giriş kontrolü (1246; 1251 a, 1252, 1253 a): satın alma lotunun GKK'sı ve hatalının kalite kararı hatalı parça kararıyla aynı yetkidedir.
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/giris/bekleyenler',
+    yetki: 'kalite-merkezi.onayla',
+    cevap: kmGirisBekleyenCevabi,
+    isle: ({ db }) => servis.girisBekleyenListesi(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/giris/:malKabulSatirId/gkk',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmGirisParametresi,
+    govde: kmGirisGkkGovdesi,
+    cevap: kmGirisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.girisGkk(db, kullanici, parametre.malKabulSatirId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/giris/:malKabulSatirId/karar',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmGirisParametresi,
+    govde: kmGirisKararGovdesi,
+    cevap: kmGirisCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.girisKarari(db, kullanici, parametre.malKabulSatirId, govde),
   }),
   uc({
     yontem: 'GET',
