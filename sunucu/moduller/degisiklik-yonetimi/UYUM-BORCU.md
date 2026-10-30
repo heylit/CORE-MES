@@ -12,7 +12,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 7. Maliyetler (hurda, rework) ve engellenen NC denemesi null; finans ve NC doğrulama bağlanınca.
 8. Sapma satırında kapsam, kalem, revizyon, emir no ve bitiş null; kalite-merkezi sapma kaydı bağlanınca.
 9. Tatil takvimi yok; iş günü pazartesi-cuma (VARSAYIM).
-10. Malzemeye yabancı anahtar (talep_kalemi, emir_kalemi, gecerlilik_son_urun_id): Aşama 2 ayrı göç.
+10. ~~Malzemeye yabancı anahtar (talep_kalemi, emir_kalemi, gecerlilik_son_urun_id): Aşama 2 ayrı göç.~~ Kapandı (1314, 1305 a): `20261029151000_degisiklik_yonetimi_malzeme_fk.sql`.
 11. Ekran (P4 isteği): bağlı olmayan veri ekranda "bağlı değil / Veri yok" yazar; İzlenebilirlik'te "Sevk et" düğmesi yok (sevkiyat, Aşama 2).
 12. Parça kutusundaki "Kaydı aç" (malzeme ekranı yolu) Aşama 2'de bağlanır; o zamana kadar gizli (1177 a).
 13. Kural, sürüm ve sunucu kuralları akış akış kapanır; kabul kullanıcı deneyince.
