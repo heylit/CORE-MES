@@ -10,7 +10,8 @@ import type {
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
-import { firmaAdlari, firmaAra, firmaOzetleri, firmaVarMi } from '../musteri-tedarikci/disari.ts';
+import { firmaAdlari, firmaAra, firmaKonumlari, firmaOzetleri, firmaVarMi } from '../musteri-tedarikci/disari.ts';
+import type { FirmaKonumu } from '../musteri-tedarikci/disari.ts';
 import { siparisinSatirOzetleri, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { emirNolari, fasonHareketiOzeti, siparisSatirlarininEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi, FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
@@ -22,7 +23,7 @@ import { filoPlani } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
   AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
-  NOKTA_FIRMASI_GEREKIR, isNoktasiIhlali, noktaFirmasizMi, onayEngelleri, plandanCikarilmali, surumGuncel,
+  ADRES_FIRMADA_YOK, ADRES_FIRMASIZ, NOKTA_FIRMASI_GEREKIR, isNoktasiIhlali, noktaFirmasizMi, noktaKonumuSec, onayEngelleri, plandanCikarilmali, surumGuncel,
   planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
 } from './kurallar.ts';
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
@@ -80,10 +81,11 @@ function matrisSakla(paket: HaritaPaketi, gun: string, m: Matris) {
 
 const ihlalHatasi = (ihlal: KuralIhlali[]) => dogrulama(ihlal[0]!.ileti, ihlal[0]!.alan, ihlal);
 
-function noktaCevabi(n: NoktaSatiri): Nokta {
+type KonumluNokta = NoktaSatiri & { konumlar?: FirmaKonumu[] };
+function noktaCevabi(n: KonumluNokta): Nokta {
   return {
     id: n.id, ad: n.ad, tur: n.tur as Nokta['tur'], enlem: Number(n.enlem), boylam: Number(n.boylam), adres: n.adres, durakSuresiDakika: n.durakSuresiDakika,
-    aktif: n.aktif, firmaId: n.firmaId, surum: n.surum,
+    aktif: n.aktif, firmaId: n.firmaId, surum: n.surum, adresId: n.adresId, konumlar: n.konumlar ?? [],
   };
 }
 function aracCevabi(a: AracSatiri): Arac {
@@ -130,13 +132,20 @@ async function fabrikaAyari(db: Db): Promise<{ enlem: number; boylam: number } |
   return enlem === null || boylam === null ? null : { enlem, boylam };
 }
 // Bağlı noktanın adı Müşteriler ve Tedarikçiler modülündeki firmadan okunur; ayarda fabrika konumu varsa fabrika noktası oradan çıkar ve döner.
-async function noktalariOku(db: Db): Promise<NoktaSatiri[]> {
+// 1289 a: bağlı noktanın adresi ve konumu firma kartındaki seçili adresten (yoksa merkezden) okunur; kayıttaki değerler son yazılan kopyadır.
+async function noktalariOku(db: Db): Promise<KonumluNokta[]> {
   const satirlar = await sorgu.noktalariGetir(db);
-  const adlar = await firmaAdlari(db, satirlar.flatMap((n) => (n.firmaId === null ? [] : [n.firmaId])));
+  const firmalar = satirlar.flatMap((n) => (n.firmaId === null ? [] : [n.firmaId]));
+  const adlar = await firmaAdlari(db, firmalar);
+  const konumlar = await firmaKonumlari(db, firmalar);
   const ayar = await fabrikaAyari(db);
   return satirlar.map((n) => {
     if (n.tur === 'fabrika' && ayar) return { ...n, enlem: String(ayar.enlem), boylam: String(ayar.boylam) };
-    return n.firmaId === null ? n : { ...n, ad: adlar.get(n.firmaId) ?? n.ad };
+    if (n.firmaId === null) return n;
+    const firmaninKonumlari = konumlar.get(n.firmaId) ?? [];
+    const konum = noktaKonumuSec(firmaninKonumlari, n.adresId);
+    const bagli = { ...n, ad: adlar.get(n.firmaId) ?? n.ad, konumlar: firmaninKonumlari };
+    return konum ? { ...bagli, enlem: String(konum.enlem), boylam: String(konum.boylam), adres: konum.adres } : bagli;
   });
 }
 export async function noktalariListele(db: Db): Promise<{ noktalar: Nokta[]; fabrikaAyardan: boolean }> {
@@ -146,15 +155,20 @@ export async function noktalariListele(db: Db): Promise<{ noktalar: Nokta[]; fab
 export async function firmaSecenekleri(db: Db, metin: string): Promise<FirmaSecenegi[]> {
   const bulunan = await firmaAra(db, { metin, sinir: 20 });
   const ozetler = await firmaOzetleri(db, bulunan.map((f) => f.id));
+  const konumlar = await firmaKonumlari(db, bulunan.map((f) => f.id));
   const noktasi = new Map((await sorgu.noktalariGetir(db)).flatMap((n) => (n.aktif && n.firmaId !== null ? [[n.firmaId, n.id] as const] : [])));
   return bulunan.flatMap((f) => {
     const o = ozetler.get(f.id);
-    return o ? [{ id: o.id, ad: o.ad, kod: o.kod, tur: o.tur, fason: o.fason, adres: o.adres, ilce: o.ilce, il: o.il, noktaId: noktasi.get(o.id) ?? null }] : [];
+    return o ? [{
+      id: o.id, ad: o.ad, kod: o.kod, tur: o.tur, fason: o.fason, adres: o.adres, ilce: o.ilce, il: o.il, noktaId: noktasi.get(o.id) ?? null,
+      konumlar: konumlar.get(o.id) ?? [],
+    }] : [];
   });
 }
 async function firmaDenetle(db: Db, govde: NoktaGovdesi, kendiId: number | null) {
   const firmaId = govde.firmaId ?? null;
   if (noktaFirmasizMi(govde.tur, firmaId)) throw gecersiz(NOKTA_FIRMASI_GEREKIR);
+  if (firmaId === null && (govde.adresId ?? null) !== null) throw gecersiz(ADRES_FIRMASIZ);
   if (firmaId === null) return;
   if (!firmaBaglanabilir(govde.tur)) throw gecersiz('Firmaya yalnız müşteri, tedarikçi ya da fason noktası bağlanır.');
   const f = await firmaVarMi(db, firmaId);
@@ -176,10 +190,18 @@ async function fabrikaKonumuyla<T extends NoktaGovdesi>(db: Db, govde: T, onceki
   if (onceki?.tur === 'fabrika') return { ...govde, enlem: Number(onceki.enlem), boylam: Number(onceki.boylam) };
   throw gecersiz(FABRIKA_KONUMU_AYARDA);
 }
+// 1289 a: bağlı noktaya seçilen adresin (yoksa merkezin) adresi ve konumu yazılır; firmada koordinatlı adres yoksa gönderilen konum kalır.
+async function firmaKonumuyla<T extends NoktaGovdesi>(db: Db, govde: T): Promise<T & { adresId: number | null }> {
+  const firmaId = govde.firmaId ?? null, adresId = govde.adresId ?? null;
+  if (firmaId === null) return { ...govde, adresId: null };
+  const konum = noktaKonumuSec((await firmaKonumlari(db, [firmaId])).get(firmaId) ?? [], adresId);
+  if (adresId !== null && konum === null) throw gecersiz(ADRES_FIRMADA_YOK);
+  return konum ? { ...govde, adresId, enlem: konum.enlem, boylam: konum.boylam, adres: konum.adres } : { ...govde, adresId };
+}
 export async function noktaEkle(db: Db, gelen: NoktaGovdesi & { adres: string | null }): Promise<Nokta> {
   await fabrikaCakismasi(db, gelen, null);
   await firmaDenetle(db, gelen, null);
-  const govde = await fabrikaKonumuyla(db, gelen, null);
+  const govde = await firmaKonumuyla(db, await fabrikaKonumuyla(db, gelen, null));
   return noktaCevabi(await sorgu.noktaEkle(db, { ...govde, firmaId: govde.firmaId ?? null }));
 }
 // Kart #1323: güncelleme formun açıldığı sürümle gelir; arada değişen kayıt üzerine yazılmaz. Koşullu yazma, denetimle
@@ -204,7 +226,7 @@ export async function noktaGuncelle(db: Db, id: number, govde: NoktaGovdesi & { 
   }
   await fabrikaCakismasi(db, govde, id);
   await firmaDenetle(db, govde, id);
-  const yazilan = await fabrikaKonumuyla(db, govde, onceki);
+  const yazilan = await firmaKonumuyla(db, await fabrikaKonumuyla(db, govde, onceki));
   return noktaCevabi(surumluYazildi(await sorgu.noktaGuncelle(db, id, govde.surum, { ...yazilan, firmaId: yazilan.firmaId ?? null })));
 }
 // Açık soru 12: onaylı plandaki araç ve nokta, onay kaldırılmadan değişmez.

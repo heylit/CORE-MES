@@ -26,11 +26,19 @@ export const idParametresi = z.object({ id: kimlik });
 export const tarihParametresi = z.object({ tarih });
 
 // ---------- noktalar ----------
+// Firmanın koordinatlı adresi (1289 a): adresId null merkez adresidir.
+export const firmaKonumuSemasi = z.object({
+  adresId: z.number().int().nullable(), tur: z.enum(['merkez', 'fatura', 'teslim', 'sube']), ad: z.string(), adres: z.string().nullable(),
+  enlem: z.number(), boylam: z.number(),
+});
 export const noktaSemasi = z.object({
   id: z.number().int(), ad: z.string(), tur: NOKTA_TURU, enlem: z.number(), boylam: z.number(),
   adres: z.string().nullable(), durakSuresiDakika: z.number().int(), aktif: z.boolean(),
-  // Bağlı firma (finans); bağlıysa ad firmanın güncel adıdır.
+  // Bağlı firma; bağlıysa ad firmanın güncel adıdır, adres ve konum seçilen firma adresinden (yoksa merkezden) okunur (1289 a).
   firmaId: z.number().int().nullable(), surum: z.number().int(),
+  // Sunucu her zaman yazar; isteğe bağlı olması alandan önce yazılmış istemci örneklerini kırmamak içindir.
+  adresId: z.number().int().nullable().optional(),
+  konumlar: z.array(firmaKonumuSemasi).optional(),
 });
 export const noktaGovdesi = z.object({
   ad: metinAlani(120), tur: NOKTA_TURU,
@@ -38,6 +46,8 @@ export const noktaGovdesi = z.object({
   adres: bosOlabilir(400), durakSuresiDakika: z.number().int().min(0).max(240),
   // Yalnız müşteri, tedarikçi ve fason noktası firmaya bağlanır.
   firmaId: kimlik.nullable().default(null),
+  // Firmanın adresi; null merkez adresidir. Yalnız firmaya bağlı noktada verilir.
+  adresId: kimlik.nullable().default(null),
 });
 export const noktaGuncelleGovdesi = noktaGovdesi.extend({ surum: surumAlani });
 // Noktaya bağlanacak firma (finansın müşteri ve tedarikçileri); nokta türü önerisi firmanın türünden.
@@ -48,11 +58,13 @@ export const firmaSecenegi = z.object({
   adres: z.string().nullable(), ilce: z.string().nullable(), il: z.string().nullable(),
   // Firmanın aktif noktası varsa kimliği (ikinci nokta açılmaz).
   noktaId: z.number().int().nullable(),
+  konumlar: z.array(firmaKonumuSemasi).optional(),
 });
 export const firmaAramaCevabi = z.object({ firmalar: z.array(firmaSecenegi) });
 // fabrikaAyardan: fabrika noktasının konumu Sistem Ayarları'ndan geliyor (noktada yazılı konum kullanılmaz).
 export const noktalarCevabi = z.object({ noktalar: z.array(noktaSemasi), fabrikaAyardan: z.boolean() });
 export const noktaCevabi = z.object({ nokta: noktaSemasi });
+export type FirmaKonumu = z.infer<typeof firmaKonumuSemasi>;
 
 // ---------- araçlar ----------
 export const maliyetOranlariSemasi = z.object({ kilometre: z.number(), saat: z.number(), gunluk: z.number() });
