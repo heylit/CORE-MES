@@ -9,10 +9,10 @@ import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
-import { KATALOG_TURLERI, LOGO_KART_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
+import { KATALOG_TURLERI, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
-  KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru,
+  KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
@@ -105,6 +105,19 @@ export async function malzemeAra(
     metin, turler: g.turler ?? [], yalnizAktif: g.yalnizAktif ?? false, hizmetYonu: g.hizmetYonu ?? null, sinir: sayfaBoyu, atla: (sayfa - 1) * sayfaBoyu,
   });
   return { satirlar: r.satirlar, toplam: r.toplam, sayfa, sayfaBoyu };
+}
+
+// Ortak seçici (kart #1319): aktif kart onaylanmış ve kullanımdaki karttır; taslak, onayda, pasif ve iptal yalnız istenirse gelir.
+export async function malzemeSecimAra(
+  db: Db, g: { q: string; tur?: KatalogTuru | undefined; pasifler: boolean; sayfa: number },
+): Promise<MalzemeSecimCevabi> {
+  const r = await malzemeAra(db, {
+    metin: g.q, turler: g.tur ? [g.tur] : [], yalnizAktif: !g.pasifler, sayfa: g.sayfa, sayfaBoyu: MALZEME_SECIM_SAYFA_BOYU,
+  });
+  return {
+    sonuclar: r.satirlar.map((m) => ({ id: m.id, kod: m.kod, ad: m.ad ?? '', aktif: m.onayDurumu === 'aktif', ust: null })),
+    dahaVar: g.sayfa * MALZEME_SECIM_SAYFA_BOYU < (r.toplam ?? 0),
+  };
 }
 
 // Pasifler de döner (eski kartın birimi gösterilir); seçim listesi yalnız aktifleri sunar.

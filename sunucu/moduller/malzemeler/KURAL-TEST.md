@@ -151,3 +151,4 @@ MKK-1..MKK-15'in testleri `katalog-onay-baglama.test.ts`, `katalog-kartlari.test
 - Türkçe harf (1233): `Türkçe harf: büyük-küçük ve noktalı-noktasız fark gözetilmez` (izin; 1233'e göre ILIKE ile düşer, burada denenmedi)
 - İndeks: `kodda ya da adda geçen metin araması (liste ve sayım) trigram indeksini kullanır`, `seçici rakamlı arama kart no ile birlikte yine indekse düşer`
 - Mutasyon: göç kaldırılınca iki indeks testi düşüyor (29.10.2026, yerelde denendi).
+- Ortak seçici (#1319, 1321 b): `/malzemeler/secim-ara` stok kodu ya da adda arar; varsayılan yalnız aktif (onaylı) kart, `pasifler` taslak ve pasifi de getirir, iptal hiç gelmez; tür süzer; sayfa 30 ve `dahaVar`; çağıran modül işlemi şart: `secim-ara.test.ts` izinli ve reddedilen.

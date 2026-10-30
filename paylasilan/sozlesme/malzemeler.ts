@@ -203,3 +203,25 @@ export const malzemelerOzetiCevabi = z.object({
   onayBekleyen: z.number().int().nullable(),
 });
 export type MalzemelerOzetiCevabi = z.output<typeof malzemelerOzetiCevabi>;
+
+// Ortak seçicinin (MalzemeSecici) arama ucu (kart #1319): stok kodunda ya da adda arar; sayfa başına MALZEME_SECIM_SAYFA_BOYU kart.
+// Cevap ortak seçici biçimindedir (`ust` malzemede yok). Varsayılan yalnız aktif kartlar.
+export const MALZEME_SECIM_SAYFA_BOYU = 30;
+export const malzemeSecimSorgusu = z.object({
+  q: z.string().trim().max(80).default(''),
+  tur: z.enum(KATALOG_TURLERI).optional(),
+  pasifler: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
+  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+});
+export const malzemeSecimCevabi = z.object({
+  sonuclar: z.array(z.object({
+    id: z.number().int(),
+    kod: z.string(),
+    ad: z.string(),
+    aktif: z.boolean(),
+    ust: z.null(),
+  })),
+  dahaVar: z.boolean(),
+});
+export type MalzemeSecimSorgusu = z.input<typeof malzemeSecimSorgusu>;
+export type MalzemeSecimCevabi = z.output<typeof malzemeSecimCevabi>;
