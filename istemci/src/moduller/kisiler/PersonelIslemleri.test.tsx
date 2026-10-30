@@ -25,7 +25,7 @@ const ROLLER = {
 } satisfies RollerCevabi;
 
 const kisi = (ozet: Partial<KisiOzeti> & Pick<KisiOzeti, 'id' | 'ad'>): KisiOzeti => ({
-  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ...ozet,
+  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ozlukIk: false, ozlukCikisTarihi: null, ...ozet,
 });
 const AYSE = kisi({ id: 10, ad: 'Ayşe Deneme', roller: [{ id: 2, ad: 'Operatör', yonetici: false }] });
 const MEHMET = kisi({ id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false });

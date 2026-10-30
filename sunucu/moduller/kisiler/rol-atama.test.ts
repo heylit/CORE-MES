@@ -153,7 +153,7 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
     const cevap = await o.istek(yoneticiCerezi, 'GET', '/kisiler');
     const kisi = (cevap.json().kisiler as Record<string, unknown>[]).find((k) => k.id === operatorId);
     assert.ok(kisi);
-    assert.deepEqual(Object.keys(kisi).sort(), ['ad', 'aktif', 'girisVar', 'gorev', 'id', 'kullaniciAdi', 'pinVar', 'roller', 'sicilNo', 'surum']);
+    assert.deepEqual(Object.keys(kisi).sort(), ['ad', 'aktif', 'girisVar', 'gorev', 'id', 'kullaniciAdi', 'ozlukCikisTarihi', 'ozlukIk', 'pinVar', 'roller', 'sicilNo', 'surum']);
     assert.doesNotMatch(cevap.body, /parola|ozet|scrypt/);
     assert.equal(kisi.girisVar, true);
     assert.equal(kisi.kullaniciAdi, 'oku-operator');

@@ -42,5 +42,11 @@ açılan onay penceresi yalnız kolaylıktır; aynı kurallar sunucuda tutulur (
 (`servis.ts` `rolYonetimiDenetle`), pasif ya da yetkisiz aktörde `YETKI_YOK` (test `KS-3: ...`). `kendiParolasiniDegistir` (oturum)
 eski parolayı doğrular; `yoneticiOlustur` yalnız araçtan çağrılır. `hesapAc`, `kisiEkle`, `kisiPasifeAl`, `kisiAktifYap` dışarıda değil.
 
+`ozluguIkdenYaz` (kart 1311, 1302 a) dışarıdadır: İK'nın kendi yazma ucu (işlem ve sürümle) çağırır, yetkiyi o uç sorar. İşlev yine de
+bayraklı kişiye bayraksız aktörün itmesini reddeder (KS-10) ve son bayraklı kullanıcıyı çıkışla pasife almaz; değişiklik kişi tablosunun
+tetiğiyle değişiklik defterine yazma ucunun kişisiyle düşer. `ozlukBaginiKaldir` bayrağı indirir ve sicil noyu düşürür; ad, görev ve aktiflik değişmez.
+Mevcut `duzenle` ucu İK'ya bağlı kişide alan değişikliğini (KS-8), `aktif-yap` ucu çıkışı geçmiş kişiyi (KS-9) 422 ile reddeder.
+Günlük iş `kisiler-cikis-pasif` istek değildir; yalnız çıkış tarihi geçmiş aktif kişiyi pasife alır.
+
 Dışa açık okuma `kisilerinIslemleri` (toplu işlem okuması) yetki sormaz; çağıran modül kendi ucunda yetkiyi sorar. Kapsamı oturum yüklemesiyle
 aynıdır (pasif ve girişsiz kişi yok): `kisi-islemleri.test.ts`.

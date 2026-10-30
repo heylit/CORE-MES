@@ -6,7 +6,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 
 | Tablo | Sütunlar | Sahibi |
 |---|---|---|
-| `kisi` | id, ad, aktif, kullanici_adi?, parola_ozeti?, olusturuldu, sicil_no?, gorev?, oturumlar_gecersiz_once? | kisiler |
+| `kisi` | id, ad, aktif, kullanici_adi?, parola_ozeti?, olusturuldu, sicil_no?, gorev?, oturumlar_gecersiz_once?, ozluk_ik, ozluk_cikis_tarihi? | kisiler (ad, sicil no, görev ve çıkış İK'ya bağlı kişide İK'nın, 1302 a) |
 | `kisi_rolu` | kisi_id -> kisi, rol_id -> rol | kisiler |
 | `rol` | id, kod, ad, yerlesik, yonetici | kisiler (K2 a) |
 | `rol_islemi` | rol_id -> rol, islem | kisiler (K2 a) |
@@ -17,8 +17,9 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 | Kavram | Tablo ve sütun | Başka modülde | Not |
 |---|---|---|---|
 | kişi (personel) | `kisi.id`, `kisi.ad`, `kisi.aktif` | sabit kimlik: kisiler | başka modül `kisi.id` ile bağlanır; ad `kisiAdlari`, varlık `kisiVarMi`, liste `kisileriListele` (`disari.ts`) |
-| sicil no | `kisi.sicil_no` | yok | doluysa tekil (`kisi_sicil_no_tek`) |
-| görev | `kisi.gorev` | vardiya ve mesai ile çakışabilir | VARSAYIM: serbest metin; vardiya/mesai modülleri henüz yok |
+| sicil no | `kisi.sicil_no` | `ik_personel.sicil_no` | doluysa tekil (`kisi_sicil_no_tek`); İK'ya bağlı kişide İK iter (1302 a) |
+| görev | `kisi.gorev` | `ik_personel.pozisyon` | İK'ya bağlı kişide İK iter (1302 a); ayarcı görevden değil yetkinlikten okunacak (1303 a) |
+| çıkış tarihi | `kisi.ozluk_cikis_tarihi` | `ik_personel.cikis_tarihi` (asıl) | İK'nın kopyası; tarih gelince kişi pasif (1315 a) |
 | kullanıcı (giriş) | `kisi.kullanici_adi`, `kisi.parola_ozeti` | oturum okur | giriş akışı oturumda, doğrulama `girisDogrula` |
 | rol | `rol.kod`, `rol.ad`, `rol.yonetici` | yok | `yonetici` bayrağı "bütün işlemler" demektir |
 | rol x işlem | `rol_islemi (rol_id, islem)` | işlem adları bütün modüllerde (`paylasilan/islemler.ts`) | aşağıda |

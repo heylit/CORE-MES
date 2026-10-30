@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { gizli } from '../gizli.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { tarihSemasi } from '../zaman.ts';
 
 const KIMLIK = z.number().int().positive().max(2147483647);
 
@@ -23,6 +24,10 @@ export const kisiSemasi = z.object({
   gorev: z.string().nullable(),
   roller: z.array(rolSemasi),
   surum: surumSemasi,
+  // true: ad, sicil no ve görev İK personel kartından gelir, burada salt okunur (1302 a).
+  ozlukIk: z.boolean(),
+  // İK'daki çıkış tarihi (GGGG-AA-GG); yoksa null (1315).
+  ozlukCikisTarihi: tarihSemasi.nullable(),
 });
 
 export const kisilerCevabi = z.object({ kisiler: z.array(kisiSemasi) });

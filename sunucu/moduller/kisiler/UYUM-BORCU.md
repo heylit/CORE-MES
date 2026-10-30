@@ -46,3 +46,9 @@ Yok. Testler yeşil; sayfayı gören her rol (`sayfa.personel`) `kisiler.oku` ta
 
 KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `KISILER_IKINCI_MENU` `paylasilan/sayfalar/kisiler.ts:9`'da. `paylasilan/sayfalar/kisiler.ts` `KISILER_IKINCI_MENU`: tek grup, tek madde (`/personel`, işlem `kisiler.oku`). Ekran tek görünüm;
 rota değişmedi. Toplayıcıya kayıt ayrı commit'te (dar istisna).
+
+## Özlük İK'dan (kart 1311)
+
+- İK tarafı (itme ve bağ kaldırma çağrısı) 1312 dalında; o girene kadar hiçbir kişi İK'ya bağlı işaretlenmez, davranış bugünkü gibidir.
+- Canlı kurulumdan önce: İK'da çıkışı olup Kişiler'de aktif olan kişilerin listesi kullanıcıya gösterilir (1302 a okuması); 1312 DEVIR'de salt okunur sorgu.
+- Ayarcıyı görev metninden okuyan plan (`plan/motor/girdi.betik`) 1303 a ile yetkinliğe geçer (1313 + plan dalı); görev metni İK pozisyonundan gelir.

@@ -117,3 +117,11 @@ konusu kisiler adlı göçlerle yazar), K3 a ve ek karar (sürüm, `POST /kisile
 ## Örnek veride iki ayarcı (Reçete ve Rota isteği, 23 a; 27 a: kisiler Çekirdek'in) — dal `kisiler-ornek-ayarci`
 - `ornek-veri.ts`: görevi tam "Ayarcı" iki uydurma kişi (`ornek.ayarci1`, `ornek.ayarci2`, ORN-015, ORN-016). Planlama ayarcıyı görevden okur.
 - VARSAYIM: rolleri `operator` (TMI'de ayarcı rolü yok; tezgâhta çalışırlar). Geri alma: örnek veri satırı, düşük. Göç yok.
+
+## Özlük İK'dan (kart 1311; 1302 a teyitli, 1315 a teyitli)
+- Göç `20261030160000_kisiler_ozluk_ik.sql`: `kisi.ozluk_ik boolean NOT NULL DEFAULT false`, `kisi.ozluk_cikis_tarihi date` (boş başlar), kısıt `kisi_ozluk_cikisi_ik_bagli` (çıkış yalnız İK'ya bağlı kişide), kısmi dizin `kisi_ozluk_cikis_idx`. Var olan satır değişmez.
+- `disari.ts`: `ozluguIkdenYaz(db, aktorId, kisiId, { ad, sicilNo, gorev, cikisTarihi })` ad, sicil no ve görevi yazar, kişiyi İK'ya bağlar, çıkış tarihini saklar; tarih geçmişse kişiyi hemen pasife alır ve oturumlarını kapatır. Dönüş `CikisSonucu` (`pasif`, `zaten-pasif`, `son-yonetici`, `cikis-yok`). `ozlukBaginiKaldir(db, kisiId)` bağı kaldırır; ad ve görev kalır, sicil no düşer (İK'nın tekil değeri, kartla yeni kişiye gider). Yetki İK ucunda (1312) denetlenir.
+- `isler.ts` (yeni): `kisiler-cikis-pasif` saatte bir çıkış tarihi gelen aktif kişiyi pasife alır; son yönetici pasife alınmaz, günlüğe yazılır.
+- Kurallar: KS-8 İK'ya bağlı kişide ad/sicil/görev Kişiler'den değişmez (aynı değer geçer); KS-9 çıkışı geçmiş kişi aktif yapılmaz; KS-10 bayraklı kişiye yalnız bayraklı aktör iter, son bayraklı kullanıcı çıkışla pasife alınmaz.
+- Sözleşme `kisiSemasi`: `ozlukIk`, `ozlukCikisTarihi` (eklendi). Ekran: Kişi düzenleme formunda üç alan İK'ya bağlı kişide salt okunur, ipucu "İK personel kartından gelir" ve çıkış tarihi.
+- Rol x işlem, uç ve yetki değişmedi; mevcut uçlara (`duzenle`, `aktif-yap`) red kuralı eklendi.
