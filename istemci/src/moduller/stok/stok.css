@@ -486,3 +486,21 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-kutucuk:focus-visible { outline: var(--cizgi-kalin) solid var(--done); outline-offset: var(--cizgi); }
 .tc-stok-teslim-ana > .tc-dugme { min-block-size: var(--dokunma-ana); }
 .tc-stok-teslim-geri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* 1338 a: taşıma sepeti, raf içeriği, bırakma, tek istasyon çipi. */
+.tc-stok-istasyon-cipi { display: flex; align-items: center; gap: var(--b-2); }
+.tc-stok-sepet-serit { position: sticky; inset-block-end: 0; z-index: 1; display: grid; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-stok-sepet-serit-bas { display: flex; align-items: center; gap: var(--b-2); inline-size: 100%; padding: var(--b-2); border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.tc-stok-sepet-serit-bas .tc-stok-not { margin-inline-start: auto; }
+.tc-stok-sepet-sayi { min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2); background: var(--hold); color: var(--ink); font-weight: 700; text-align: center; }
+.tc-stok-birakma-hedef { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-stok-birakma-hedef > div { display: grid; gap: var(--b-1); }
+.tc-stok-birakma-satir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8rem); align-items: end; gap: var(--b-2); }
+.tc-stok-birakma-satir:not([data-secili]) { color: var(--muted); }
+.tc-stok-birakma-sec { display: flex; align-items: flex-start; gap: var(--b-2); cursor: pointer; }
+.tc-stok-birakma-sec > span { display: grid; gap: var(--b-1); }
+.tc-stok-raf-icerik { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-stok-raf-goz { display: grid; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-stok-raf-goz-bas { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-stok-kaynak-kart { display: grid; gap: var(--b-1); inline-size: auto; min-inline-size: 8rem; flex: 1 1 8rem; }
+@media (max-width: 479px) { .tc-stok-birakma-satir { grid-template-columns: minmax(0, 1fr); } }

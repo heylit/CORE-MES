@@ -47,11 +47,16 @@ export function GelenTeslim({ t }: { t: Teslim }) {
   );
 }
 
+// 1338 a (madde 4): gelen teslimle aynı kalıp; tek dokunuş tamamını alır, "Eksik geldi" miktar alanını açar.
 export function OncekiSepetSatiri({ istasyonId, x }: { istasyonId: number; x: GelecekSepetCevabi['satirlar'][number] }) {
   const statuAdi = useStatuAdi();
   const [kimlik, setKimlik] = useState(yeniKimlik);
   const [miktar, setMiktar] = useState(() => miktarMetni(x.miktar).replace(/\./g, ''));
+  const [eksikAcik, setEksikAcik] = useState(false);
   const cek = useStokKomutu((g: SepettenCekGovdesi) => korumaliPost('/stok/teslim-kutusu/sepet/cek', g), 'Teslim alındı; malzeme istasyonunuza geçti.', () => setKimlik(yeniKimlik()));
+  const cekGonder = (m: string) => cek.komut.mutate({
+    istasyonId, kaynakIstasyonId: x.kaynak.id, malzemeId: x.malzemeId, partiId: x.partiId, statuId: x.statuId, miktar: m, kaynakKimligi: kimlik,
+  });
   return (
     <li className="tc-stok-is tc-stok-teslim-satir">
       <div>
@@ -59,11 +64,16 @@ export function OncekiSepetSatiri({ istasyonId, x }: { istasyonId: number; x: Ge
         <span>{x.kaynak.ad} ({x.kaynak.kod}) · {statuAdi(x.statuId)}{x.partiEtiketi ? ` · ${x.partiEtiketi}` : ''}</span>
         {x.getiren && <span>{x.getiren}{x.gelis ? ` · ${zamanMetni(x.gelis)}` : ''}</span>}
         <div className="tc-stok-dugmeler">
-          <Girdi etiket="Alınan miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} />
-          <Dugme tur="birincil" simge="download" yukleniyor={cek.komut.isPending} disabled={miktar.trim() === ''} onClick={() => cek.komut.mutate({
-            istasyonId, kaynakIstasyonId: x.kaynak.id, malzemeId: x.malzemeId, partiId: x.partiId, statuId: x.statuId, miktar: miktarGirdisi(miktar), kaynakKimligi: kimlik,
-          })}>Teslim al</Dugme>
+          <Dugme tur="birincil" simge="check" yukleniyor={cek.komut.isPending && !eksikAcik} disabled={cek.komut.isPending}
+            onClick={() => cekGonder(x.miktar)}>Teslim al, {miktarMetni(x.miktar)}</Dugme>
+          <Dugme onClick={() => setEksikAcik((a) => !a)} aria-expanded={eksikAcik}>Eksik geldi</Dugme>
         </div>
+        {eksikAcik && (
+          <div className="tc-stok-dugmeler">
+            <Girdi etiket="Alınan miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} />
+            <Dugme tur="birincil" simge="download" yukleniyor={cek.komut.isPending} disabled={miktar.trim() === ''} onClick={() => cekGonder(miktarGirdisi(miktar))}>Bu miktarı al</Dugme>
+          </div>
+        )}
       </div>
       {cek.onayPenceresi}
     </li>

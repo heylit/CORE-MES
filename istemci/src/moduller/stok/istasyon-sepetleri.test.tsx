@@ -60,7 +60,7 @@ describe('iki sepet (745)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 30)' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/teslimler/gonder')?.govde).toMatchObject({ uretimEmriId: 30, hedef: { istasyonId: 3 }, kaynak: { istasyonId: 2 }, statuId: 7 }));
     const gelen = screen.getByRole('list', { name: 'Gelen' });
-    fireEvent.click(within(gelen).getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(within(gelen).getByRole('button', { name: 'Teslim al, 1' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/teslim-kutusu/sepet/cek')?.govde).toMatchObject({ istasyonId: 2, kaynakIstasyonId: 1, malzemeId: 901, statuId: 7 }));
   });
 

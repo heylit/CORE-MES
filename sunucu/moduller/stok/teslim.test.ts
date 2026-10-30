@@ -417,6 +417,9 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     await o().sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, raf_id, bolme_no, kat_no) VALUES ($1, $2 || '-01-01', 'raf_gozu', $3, 1, 1), ($1, $2 || '-02-01', 'raf_gozu', $3, 2, 1)`, [depoId, kod, rafId]);
     const r = await coz(` raf:${kod.toLowerCase()} `);
     assert.deepEqual(r.tur === 'raf' ? [r.raf.id, r.gozler.map((g) => g.kod).sort(), r.gozler.every((g) => g.tur === 'raf_gozu')] : r, [rafId, [`${kod}-01-01`, `${kod}-02-01`], true]);
+    assert.deepEqual(r.tur === 'raf' ? r.gozler.map((g) => g.satirlar) : r, [[], []], '1338 a: depo işlemi olan gözlerin içeriğini alır');
+    const op = okutCozCevabi.parse((await istek('operator', 'GET', `/stok/teslim-kutusu/kod-coz?kod=RAF:${kod}`)).govde);
+    assert.deepEqual(op.tur === 'raf' ? op.gozler.map((g) => g.satirlar) : op, [null, null], 'alamadığı gözün içeriği açılmaz (93 a)');
     assert.deepEqual(await coz('RAF:ZZZ'), { tur: 'bilinmiyor', kod: 'RAF:ZZZ' }, 'olmayan raf');
     assert.deepEqual(await coz('UE:4512'), { tur: 'eski-kart', kod: 'UE:4512', uretimEmriId: 4512 });
     assert.deepEqual(await coz('UE-004512'), { tur: 'bilinmiyor', kod: 'UE-004512' }, 'elle yazılan emir numarası kart değildir');
@@ -2388,6 +2391,23 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const sonuc = sepetTeslimEtCevabi.parse(gn.govde);
     assert.deepEqual([sonuc.teslimler.map((x) => x.satirId), sonuc.kalanlar.map((x) => [x.satirId, x.neden])], [[kartli.id], [[hedefsiz.id, 'Hedef seçilmedi.']]]);
     assert.deepEqual((await istek<{ satirlar: { id: number }[] }>('op_8a', 'GET', '/stok/sepet')).govde.satirlar.map((x) => x.id), [hedefsiz.id]);
+    // Başkasının sepeti (1342 a): okutan, satırın kaynağında kimin sepetinde ne kadar durduğunu görür; kendi sepeti gelmez, stok ayrılmaz.
+    const baskasi = okutCozCevabi.parse((await istek('depo', 'GET', `/stok/teslim-kutusu/kod-coz?kod=${h2}`)).govde);
+    assert.deepEqual(baskasi.tur === 'malzeme' ? baskasi.baskaSepetler?.map((x) => [x.konumId, Number(x.miktar)]) : baskasi, [[aKonum, 2]]);
+    assert.deepEqual(baskasi.tur === 'malzeme' ? baskasi.yerler.find((y) => y.konumId === aKonum)?.miktar : null, '3.000', 'sepet stok ayırmaz');
+    const kendisi = okutCozCevabi.parse((await istek('op_8a', 'GET', `/stok/teslim-kutusu/kod-coz?kod=${h2}`)).govde);
+    assert.equal(kendisi.tur === 'malzeme' ? kendisi.baskaSepetler : 'x', undefined);
+    // Parçalı bırakma (1338 a): verilen miktar gider, kalan satırda kalır; sepettekinden fazlası gönderilmez.
+    const parcaliGonder = (miktar: string) => istek<SepetTeslimEtCevabi>('op_8a', 'POST', '/stok/sepet/gonder',
+      { satirlar: [{ satirId: hedefsiz.id, hedef: { istasyonId: b.id }, miktar }], kaynakKimligi: randomUUID() });
+    const fazla = sepetTeslimEtCevabi.parse((await parcaliGonder('5')).govde);
+    assert.deepEqual([fazla.teslimler.length, fazla.kalanlar.map((x) => x.satirId)], [0, [hedefsiz.id]]);
+    const parcali = sepetTeslimEtCevabi.parse((await parcaliGonder('1.5')).govde);
+    assert.equal(parcali.teslimler.length, 1, JSON.stringify(parcali));
+    assert.deepEqual((await istek<{ satirlar: { id: number; miktar: string }[] }>('op_8a', 'GET', '/stok/sepet')).govde.satirlar.map((x) => [x.id, Number(x.miktar)]), [[hedefsiz.id, 0.5]]);
+    const tamami = sepetTeslimEtCevabi.parse((await parcaliGonder('0.5')).govde);
+    assert.equal(tamami.teslimler.length, 1, JSON.stringify(tamami));
+    assert.deepEqual((await istek<{ satirlar: { id: number }[] }>('op_8a', 'GET', '/stok/sepet')).govde.satirlar, [], 'son parça satırı siler');
     const yolda = (await o().vt.tek<{ id: number; durum: string; uretim_emri_id: number; hedef_konum_id: number }>('SELECT id, durum, uretim_emri_id, hedef_konum_id FROM stok_teslim WHERE no = $1', [sonuc.teslimler[0]!.teslimNo]))!;
     assert.deepEqual([yolda.durum, yolda.uretim_emri_id, yolda.hedef_konum_id], ['yolda', e, bKonum]);
 

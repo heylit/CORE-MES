@@ -1709,12 +1709,16 @@ export async function sepetGonder(db: Db, k: Kullanici, g: SepetTeslimEtKomutu):
     if (hedef === null) { kalanlar.push({ satirId, neden: 'Hedef seçilmedi.' }); continue; }
     if (x.kaynakKonumId === null) { kalanlar.push({ satirId, neden: 'Satırın alınacağı yer yok; malzemeyi yerinden sepete ekleyin.' }); continue; }
     const kaynakKonumId = x.kaynakKonumId;
+    const miktar = istenen.miktar === undefined ? x.miktar : bindenMetin(binde(istenen.miktar));
+    if (binde(miktar) <= 0n || binde(miktar) > binde(x.miktar)) { kalanlar.push({ satirId, neden: `Miktar sepetteki ${x.miktar} miktarını aşamaz.` }); continue; }
+    const kalan = binde(x.miktar) - binde(miktar);
     const sonuc = await kayitNoktasi(db, async () => {
       const t = await teslimGonder(db, k, {
-        malzemeId: x.malzemeId, miktar: x.miktar, partiId: x.partiId, statuId: null, kaynak: { konumId: kaynakKonumId }, hedef, aliciKodu: g.aliciKodu ?? null, not: 'Sepet',
+        malzemeId: x.malzemeId, miktar, partiId: x.partiId, statuId: null, kaynak: { konumId: kaynakKonumId }, hedef, aliciKodu: g.aliciKodu ?? null, not: 'Sepet',
         kaynakKimligi: `sepet:${g.kaynakKimligi}:${satirId}`, ...(x.refakatPartisiId === null ? {} : { refakatPartisiId: x.refakatPartisiId }),
       });
-      await sorgular.sepettenSil(db, satirId, k.id);
+      if (kalan > 0n) await sorgular.sepetMiktari(db, satirId, k.id, bindenMetin(kalan));
+      else await sorgular.sepettenSil(db, satirId, k.id);
       return t;
     });
     if (sonuc.tamam) teslimler.push({ satirId, teslimNo: sonuc.deger.teslim.no });
@@ -2546,13 +2550,27 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
     if (raf) {
       const gozler = await sorgular.rafinGozleri(db, raf.id);
       const yerler = await yerOku(gozler.map((g) => g.konumId));
-      return { tur: 'raf', raf, gozler: gozler.flatMap((g) => yerler.get(g.konumId) ?? []) };
+      const icerikli: Extract<OkutCozCevabi, { tur: 'raf' }>['gozler'] = [];
+      for (const y of gozler.flatMap((g) => yerler.get(g.konumId) ?? [])) {
+        icerikli.push({ ...y, satirlar: alinir(y) ? (await yerdekiStok(db, k, { konumId: y.konumId })).satirlar : null });
+      }
+      bulunan = { tur: 'raf', raf, gozler: icerikli };
     }
   } else if (t.tur === 'uretim-emri' && t.bicim === 'kimlik') {
     return { tur: 'eski-kart', kod: ham.trim(), uretimEmriId: Number(t.deger) };
   }
+  // 1338 a, 1342 a: okutulan yerde başkasının sepetindeki miktar etiket olarak gelir; stok ayrılmaz.
+  const sepetler = async (c: OkutCozCevabi): Promise<OkutCozCevabi> => {
+    const konumlar = c.tur === 'yer' ? [c.yer.konumId] : c.tur === 'malzeme' ? c.yerler.map((y) => y.konumId) : c.tur === 'raf' ? c.gozler.map((g) => g.konumId) : [];
+    const satirlar = await sorgular.baskaSepetlerdekiler(db, [...new Set(konumlar)], k.id);
+    if (satirlar.length === 0) return c;
+    const adlar = await kisiAdlari(db, [...new Set(satirlar.map((x) => x.kisiId))]);
+    const baskaSepetler = satirlar.filter((x) => c.tur !== 'malzeme' || x.malzemeId === c.malzeme.id)
+      .map(({ kisiId, ...x }) => ({ ...x, kisiAd: adlar.get(kisiId) ?? null }));
+    return baskaSepetler.length === 0 ? c : { ...c, baskaSepetler } as OkutCozCevabi;
+  };
   const stokluCevap = async (c: OkutCozCevabi): Promise<OkutCozCevabi> =>
-    ((c.tur === 'malzeme' || c.tur === 'yer') && stokOkurMu(k) ? { ...c, stok: await kodCoz(db, ham) } : c);
+    sepetler((c.tur === 'malzeme' || c.tur === 'yer') && stokOkurMu(k) ? { ...c, stok: await kodCoz(db, ham) } : c);
   if (bulunan) return stokluCevap(bulunan);
   const kod = ham.trim().toUpperCase();
   const yer = await yerCevabi(kod.replace(/^LOC[:\s-]*/, ''));

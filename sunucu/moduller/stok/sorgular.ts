@@ -1123,6 +1123,10 @@ export const konumdakiYoldaAyrilanlar = (db: Db, konumId: number): Promise<{ mal
 export const konumlardakiYoldaAyrilanlar = (db: Db, malzemeId: number, konumIdler: number[]): Promise<{ konumId: number; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
   konumIdler.length === 0 ? Promise.resolve([]) : db.sorgu(`SELECT kaynak_konum_id AS "konumId", parti_id AS "partiId", statu_id AS "statuId", kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar
     FROM stok_teslim WHERE durum = 'yolda' AND malzeme_id = $1 AND kaynak_konum_id = ANY($2::int[]) GROUP BY kaynak_konum_id, parti_id, statu_id, kalite_durumu`, [malzemeId, konumIdler]);
+// Başkasının sepetindeki miktar (1338 a, 1342 a): yalnız etiket içindir, stok ayırmaz; kişinin kendi satırı gelmez.
+export const baskaSepetlerdekiler = (db: Db, konumIdler: number[], haricKisiId: number): Promise<{ konumId: number; malzemeId: number; partiId: number | null; kisiId: number; miktar: string }[]> =>
+  konumIdler.length === 0 ? Promise.resolve([]) : db.sorgu(`SELECT kaynak_konum_id AS "konumId", malzeme_id AS "malzemeId", parti_id AS "partiId", kisi_id AS "kisiId", sum(miktar)::text AS miktar
+    FROM stok_sepet_satiri WHERE kaynak_konum_id = ANY($1::int[]) AND kisi_id <> $2 GROUP BY kaynak_konum_id, malzeme_id, parti_id, kisi_id ORDER BY kisi_id`, [konumIdler, haricKisiId]);
 // Raf etiketi (RAF:<kod>) rafı kodla bulur; kapalı raf okunmaz. Kod depolar arasında tekrar ederse etiket rafı ayırt etmez, null döner.
 export const rafKoduyla = async (db: Db, kod: string): Promise<{ id: number; kod: string } | null> => {
   const r = await db.sorgu<{ id: number; kod: string }>('SELECT id, kod FROM stok_raf WHERE aktif AND kod = upper($1) ORDER BY id LIMIT 2', [kod]);

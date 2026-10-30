@@ -162,8 +162,8 @@ describe('Okutma sonucu', () => {
     expect(within(sonuc).getAllByRole('button', { name: 'İş emrini aç' })).toHaveLength(1);
   });
 
-  it('raf etiketi gözleri düğme olarak verir, seçilen göz kendi etiketiyle çözülür; eski refakat kartı uyarı verir', async () => {
-    const goz = (konumId: number, kod: string) => ({ konumId, kod, ad: null, tur: 'raf_gozu' as const, istasyonId: null });
+  it('raf etiketi gözleri içerikleriyle verir, seçilen göz kendi etiketiyle çözülür; eski refakat kartı uyarı verir', async () => {
+    const goz = (konumId: number, kod: string) => ({ konumId, kod, ad: null, tur: 'raf_gozu' as const, istasyonId: null, satirlar: [] });
     const istekler = ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({
       'RAF:A1': { tur: 'raf', raf: { id: 1, kod: 'A1' }, gozler: [goz(3, 'A1-01-01'), goz(4, 'A1-02-01')] },
       'UE:7': { tur: 'eski-kart', kod: 'UE:7', uretimEmriId: 7 },
@@ -171,7 +171,10 @@ describe('Okutma sonucu', () => {
     const panel = await panelAc();
     await okut(panel, 'RAF:A1');
     expect(await within(panel).findByText('Raf A1: gözü seç ya da gözün etiketini okut.')).toBeTruthy();
-    fireEvent.click(within(within(panel).getByRole('list', { name: 'Raf A1 gözleri' })).getByRole('button', { name: 'A1-02-01' }));
+    // 1338 a: göz içeriği raf okutulunca görünür; boş göz "Boş" der.
+    const goz2 = within(panel).getByRole('region', { name: 'Göz A1-02-01' });
+    expect(within(goz2).getByText('Boş')).toBeTruthy();
+    fireEvent.click(within(goz2).getByRole('button', { name: 'A1-02-01' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent('LOC:A1-02-01')}`)).toBe(true));
     await okut(panel, 'UE:7');
     expect(await within(panel).findByText('Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.')).toBeTruthy();
@@ -377,9 +380,9 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     expect(within(within(panel).getByRole('list', { name: 'Freze 2 sepeti' })).getAllByRole('listitem').map((l) => l.textContent)).toEqual([expect.stringMatching(/Eldiven/)]);
     fireEvent.click(within(panel).getByRole('button', { name: 'Teslim alınan' }));
     expect(within(within(panel).getByRole('list', { name: 'Freze 2 sepeti' })).getAllByRole('listitem').map((l) => l.textContent)).toEqual([expect.stringMatching(/Deneme cubuk/)]);
-    // Herkese sepet (Soru 133): operatör de kendi sepetini görür; açılmadan okunmaz.
+    // Herkese sepet (Soru 133): operatör de kendi sepetini görür; taşıma sepeti şeridi (1338 a) her ekranda olduğu için panel açılınca okunur.
     expect(within(panel).getByRole('button', { name: 'Sepetim' })).toBeTruthy();
-    expect(istekler.some((i) => i.yol === '/stok/sepet')).toBe(false);
+    expect(istekler.some((i) => i.yol === '/stok/sepet')).toBe(true);
   });
 
   it('eski Okut adresi paneli depo sepetinde açar; satır kaldırılır, hepsi bir yere taşınır (soru 90 a)', async () => {
@@ -402,7 +405,7 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
 });
 
 describe('Malzeme iste: kaynak (soru 96 a)', () => {
-  it('malzeme bir istasyondaysa oradan istenir; istasyondan istekte teslim yeri zorunludur', async () => {
+  it('malzeme bir istasyondaysa oradan istenir; teslim yeri paneldeki istasyondur (1338 a)', async () => {
     const istekler = ciz(OPERATOR, {
       'GET /stok/istek-malzemeleri': () => json(200, { malzemeler: [{ id: 901, kod: 'SR-001', ad: 'Eldiven', birim: 'adet', kullanilabilir: '0', statuler: [] }] }),
       'GET /stok/teslim-kutusu/malzeme-yerleri': () => json(200, { depo: '0.000', istasyonlar: [
@@ -414,12 +417,11 @@ describe('Malzeme iste: kaynak (soru 96 a)', () => {
     fireEvent.click(await within(panel).findByRole('button', { name: 'Malzeme iste' }));
     fireEvent.change(within(panel).getByLabelText('Malzeme ara'), { target: { value: 'eld' } });
     fireEvent.click(await within(panel).findByRole('button', { name: /Eldiven/ }));
-    const nereden = await within(panel).findByLabelText(/^Nereden/);
-    await waitFor(() => expect(within(nereden).getAllByRole('option')).toHaveLength(2));
-    fireEvent.change(nereden, { target: { value: '1' } });
+    const nereden = await within(panel).findByRole('group', { name: 'Nereden' });
+    await waitFor(() => expect(within(nereden).getAllByRole('button')).toHaveLength(2));
+    fireEvent.click(within(nereden).getByRole('button', { name: /Torna 1/ }));
     fireEvent.change(within(panel).getByLabelText(/^Miktar/), { target: { value: '2' } });
-    expect(within(panel).getByRole('button', { name: 'İste' })).toHaveProperty('disabled', true);
-    fireEvent.change(within(panel).getByLabelText(/^Teslim yeri/), { target: { value: '2' } });
+    expect(within(panel).getByText('Teslim yeri: Freze 2')).toBeTruthy();
     fireEvent.click(within(panel).getByRole('button', { name: 'İste' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ malzemeId: 901, miktar: '2', istasyonId: 2, kaynakIstasyonId: 1 }));
   });

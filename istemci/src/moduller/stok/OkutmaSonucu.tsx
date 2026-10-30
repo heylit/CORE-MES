@@ -40,7 +40,7 @@ function StokAyrintisi({ c }: { c: KodCozCevabi }) {
     return (
       <Tablo etiket="Konumdaki stok" satirlar={c.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş."
         sutunlar={[
-          { anahtar: 'm', baslik: 'Malzeme', hucre: (b) => `Kart ${b.malzemeId}` },
+          { anahtar: 'm', baslik: 'Malzeme', hucre: (b) => b.malzemeAd ?? `Kart ${b.malzemeId}` },
           { anahtar: 'p', baslik: 'Parti', hucre: (b) => b.partiEtiketi ?? '—' },
           { anahtar: 'q', baslik: 'Miktar', hizala: 'sag', hucre: (b) => bakiyeMiktari(b.miktar) },
         ]} />

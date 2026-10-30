@@ -210,8 +210,11 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Bana gelen/ }));
     const liste = await screen.findByRole('list', { name: 'Bana gelenler' });
     expect(within(liste).getByText(/Torna 1 \(T1\)/)).toBeTruthy();
+    // 1338 a (madde 4): tek dokunuş tamamını alır; eksik gelen "Eksik geldi" ile miktar girer.
+    expect(within(liste).getByRole('button', { name: /^Teslim al, / })).toBeTruthy();
+    fireEvent.click(within(liste).getByRole('button', { name: 'Eksik geldi' }));
     fireEvent.change(within(liste).getByLabelText('Alınan miktar'), { target: { value: '3' } });
-    fireEvent.click(within(liste).getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(within(liste).getByRole('button', { name: 'Bu miktarı al' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({
       istasyonId: 2, kaynakIstasyonId: 1, malzemeId: 901, partiId: 4, statuId: 7, miktar: '3',
     }));
@@ -426,12 +429,14 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const istekler = ciz({
       'GET /stok/istek-malzemeleri': () => json(200, malzemeler),
       'POST /stok/malzeme-istekleri/ac': () => json(200, {}),
-    });
+    // 1338 a: teslim yeri paneldeki istasyondur; istasyonu olmayan kişinin isteği kendisine açılır.
+    }, { ...KUTU, istasyonlar: [], buradakiIstasyonId: null });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Malzeme iste' }));
     fireEvent.change(screen.getByLabelText('Malzeme ara'), { target: { value: 'sac' } });
     fireEvent.click(await screen.findByRole('button', { name: /Deneme sac/ }));
     expect(screen.getAllByText('Stokta yok').length).toBeGreaterThan(0);
+    expect(screen.getByText('Teslim yeri: Bana (istasyonsuz)')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Miktar/), { target: { value: '4' } });
     fireEvent.click(screen.getByRole('button', { name: 'İste' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ malzemeId: 901, miktar: '4', istasyonId: null, not: null }));
