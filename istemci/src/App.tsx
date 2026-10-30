@@ -15,6 +15,7 @@ import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
 import { ustSeritler } from './ortak/rota/ust-seritler.ts';
 import { hataIletisi } from './ortak/veri/api.ts';
 import { baglantiDonusunuDinle } from './ortak/veri/baglanti.ts';
+import { useBostaCikis } from './ortak/veri/bosta-cikis.ts';
 import { useGorunum, useHareketUygula } from './ortak/veri/gorunum.ts';
 import { useKapaliSayfalar } from './ortak/veri/kapali-sayfalar.ts';
 import { useKurumLogosu } from './ortak/veri/kurum-logosu.ts';
@@ -80,6 +81,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
   const logo = useKurumLogosu(Boolean(oturum.data));
   const gorunum = useGorunum(Boolean(oturum.data));
   useHareketUygula(gorunum.data?.hareket, gorunum.data?.gecisHizi);
+  useBostaCikis(oturum.data?.cihazProfili === 'istasyon', () => { cikis.mutate(); });
 
   if (oturum.isPending) return <div className="tc-acilis"><DurumKutusu durum="yukleniyor" /></div>;
   // Oturum bir kez okunduysa yeniden okumanın hatası (güncelleme, bağlantı kopması) ekranı kapatmaz: kullanıcı çalışmaya
