@@ -8,7 +8,7 @@ import {
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
-  kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
+  kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
@@ -444,6 +444,44 @@ describe('stok kuralları: terminal üretim girişi', () => {
     assert.deepEqual(plan({ statuId: 40, oncekiStatuId: 30, oncekiCiktili: true, tasinan: ym }).cevirme,
       { malzemeId: 9, kaynakStatuId: null, hedefStatuId: 40, miktar: 1000n, tasinan: true });
     assert.deepEqual(plan({ sonAdim: true, oncekiStatuId: 30, oncekiCiktili: true, tasinan: ym }).sarflar, [{ malzemeId: 9, statuId: null, miktar: 1000n, tasinan: true }]);
+  });
+  // 1348 a: dallı emirde taşıma kaynağı Reçete ve Rota statü kuralıyla aynıdır.
+  const z = (opNo: number, onculOpNolari: number[] | null, ek: Partial<ZincirAdimi> = {}): ZincirAdimi => ({ opNo, dal: null, onculOpNolari, girdiler: [], ...ek });
+  const g1 = { malzemeNo: 1, miktar: '0.6' }, g2 = { malzemeNo: 2, miktar: '1' };
+  test('1348 a taşıma kaynağı: dal başı kendi girdisi, tek öncül devam, birleştirme; ataya giden öncül sayılmaz; listesiz adım null', () => {
+    const dalli = [z(10, [], { dal: 'A', girdiler: [g1] }), z(20, [], { dal: 'B', girdiler: [g2] }), z(30, [10, 20]), z(40, [30, 10])];
+    assert.deepEqual(tasimaKaynagi(dalli, 10), { tur: 'ilk', girdi: g1 });
+    assert.deepEqual(tasimaKaynagi(dalli, 20), { tur: 'ilk', girdi: g2 });
+    assert.deepEqual(tasimaKaynagi(dalli, 30), { tur: 'birlesme', opNolari: [10, 20] });
+    assert.deepEqual(tasimaKaynagi(dalli, 40), { tur: 'oncul', opNo: 30 }, 'OP10 OP30\'un atası: tek öncül');
+    assert.equal(tasimaKaynagi([z(10, null), z(20, null)], 20), null);
+    assert.equal(tasimaKaynagi(dalli, 99), null);
+    assert.deepEqual(tasimaKaynagi([z(10, [99, 20]), z(20, [])], 10), { tur: 'ilk', girdi: null }, 'bilinmeyen ve sonraki öncül atlanır');
+  });
+  test('1348 a çatal: kendi girdisiyle başka dala geçen kendi girdisini taşır; aynı öncülü devralan ikinci dal taşımasızdır', () => {
+    const catal = [z(10, [], { girdiler: [g1] }), z(20, [10], { dal: 'A' }), z(30, [10], { dal: 'B', girdiler: [g2] }), z(40, [10], { dal: 'C' }), z(50, [20, 30, 40])];
+    assert.deepEqual(tasimaKaynagi(catal, 20), { tur: 'oncul', opNo: 10 });
+    assert.deepEqual(tasimaKaynagi(catal, 30), { tur: 'ilk', girdi: g2 });
+    assert.deepEqual(tasimaKaynagi(catal, 40), { tur: 'yok' }, 'OP10 parçası bir kez devralınır');
+    assert.deepEqual(tasimaKaynagi([z(10, [], { girdiler: [g1] }), z(20, [10], { girdiler: [g2] })], 20), { tur: 'oncul', opNo: 10 }, 'aynı dalda ara girdi taşınanı değiştirmez');
+  });
+  test('1348 a dallı plan: devam çevirir, birleştirme gelenleri tüketip ürünü adım statüsüne girer, dal başı girdisini çevirir', () => {
+    const dp = (g: Partial<Parameters<typeof dalliAdimPlani>[0]>) => dalliAdimPlani({
+      adet: 10000n, sonAdim: false, statuId: 30, cikti: null, girdiler: [], tasinan: { malzemeNo: 9, miktar: '1' }, gelenler: [], kaynak: 'birlesme', ...g,
+    });
+    const gelenler = [{ malzemeId: 1, statuId: 10, miktar: '0.6' }, { malzemeId: 2, statuId: 20, miktar: '1' }];
+    assert.deepEqual(dp({ gelenler, girdiler: [{ malzemeNo: 5, miktar: '2' }] }), {
+      sarflar: [{ malzemeId: 5, statuId: null, miktar: 20000n }, { malzemeId: 1, statuId: 10, miktar: 6000n, tasinan: true }, { malzemeId: 2, statuId: 20, miktar: 10000n, tasinan: true }],
+      cevirme: null, giris: { malzemeId: 9, miktar: 10000n, statuId: 30 },
+    });
+    assert.deepEqual(dp({ gelenler, sonAdim: true }).giris, { malzemeId: null, miktar: 10000n }, 'son adım birleştirmesi ürünü statüsüz girer');
+    assert.deepEqual(dp({ gelenler, cikti: 7 }).giris, { malzemeId: 7, miktar: 10000n }, 'çıktılı birleştirme çıktıyı girer');
+    assert.deepEqual(dp({ kaynak: 'oncul', gelenler: [gelenler[0]!], tasinan: g1 }),
+      { sarflar: [], cevirme: { malzemeId: 1, kaynakStatuId: 10, hedefStatuId: 30, miktar: 6000n, tasinan: true }, giris: null });
+    assert.deepEqual(dp({ kaynak: 'ilk', tasinan: g2, girdiler: [g2] }),
+      { sarflar: [], cevirme: { malzemeId: 2, kaynakStatuId: null, hedefStatuId: 30, miktar: 10000n }, giris: null });
+    assert.deepEqual(dp({ kaynak: 'oncul', gelenler: [gelenler[0]!], tasinan: g1, sonAdim: true }),
+      { sarflar: [{ malzemeId: 1, statuId: 10, miktar: 6000n, tasinan: true }], cevirme: null, giris: { malzemeId: null, miktar: 10000n } });
   });
   test('kaynaklardan sırayla alınır; yetmezse bulunan kadarı', () => {
     assert.deepEqual(kaynaklardanAl([{ serbest: '1.5' }, { serbest: '0' }, { serbest: '4' }], 3000n).map((x) => x.miktar), [1500n, 1500n]);
