@@ -75,3 +75,53 @@ describe('kişi iş merkezi ataması değişiklik defteri (gerçek PostgreSQL)',
     assert.deepEqual((await defter(merkezA))[0], kayit);
   });
 });
+
+// 1372 a: iş merkezi, istasyon ve makine kartı tetikleri (göç 20261030167000) aynı ortak defter işlevine bağlıdır.
+describe('iş merkezi, istasyon ve makine kartı değişiklik defteri (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let yonetici = 0;
+  let merkez = 0;
+  let istasyon = 0;
+  let makine = 0;
+
+  const o = (): TestVeritabani => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return ortam;
+  };
+  const kisiyle = (is: (db: Db) => Promise<unknown>): Promise<unknown> =>
+    o().vt.tx(async (db) => {
+      await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(yonetici)]);
+      return is(db);
+    });
+  const defter = (tablo: string, id: number): Promise<Defter[]> =>
+    o().sahip.sorgu<Defter>(
+      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 AND anahtar = jsonb_build_object('id', $2::int) ORDER BY id",
+      [tablo, id],
+    );
+  const ozet = (satirlar: Defter[]): [string, number | null, string[]][] => satirlar.map((s) => [s.islem, s.kisi_id, Object.keys(s.alanlar)]);
+
+  before(async () => {
+    ortam = await testVeritabaniKur('istasyonlar_kart_defter');
+    yonetici = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Defter Yazan', kullaniciAdi: 'istasyon-kart-defter', parola: 'dogru-parola-1' }));
+    const sahip = o().sahip;
+    merkez = (await sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('DDK', 'Deneme merkez') RETURNING id"))!.id;
+    istasyon = (await sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('DDK-1', 'Deneme istasyon', $1) RETURNING id", [merkez]))!.id;
+    makine = (await sahip.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('DDM-1', 'Deneme makine', $1) RETURNING id", [istasyon]))!.id;
+  });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('üç kartta güncelleme eski, yeni değer ve yazan kişiyle düşer; yalnız sürüm değişirse satır yazılmaz', async () => {
+    await kisiyle((db) => db.sorgu("UPDATE is_merkezi SET ad = 'Yeni merkez', surum = surum + 1 WHERE id = $1", [merkez]));
+    await kisiyle((db) => db.sorgu('UPDATE is_merkezi SET surum = surum + 1 WHERE id = $1', [merkez]));
+    await kisiyle((db) => db.sorgu('UPDATE istasyon SET aktif = false WHERE id = $1', [istasyon]));
+    await kisiyle((db) => db.sorgu("UPDATE makine SET marka_model = 'Deneme model' WHERE id = $1", [makine]));
+    assert.deepEqual(ozet(await defter('is_merkezi', merkez)), [['guncelle', yonetici, ['ad']]]);
+    assert.deepEqual(ozet(await defter('istasyon', istasyon)), [['guncelle', yonetici, ['aktif']]]);
+    assert.deepEqual((await defter('makine', makine))[0]?.alanlar.marka_model, { eski: null, yeni: 'Deneme model' });
+  });
+
+  test('kişisiz silme (göç) kişi boş yazılır', async () => {
+    await o().sahip.sorgu('DELETE FROM makine WHERE id = $1', [makine]);
+    assert.deepEqual(ozet(await defter('makine', makine)).at(-1)?.slice(0, 2), ['sil', null]);
+  });
+});
