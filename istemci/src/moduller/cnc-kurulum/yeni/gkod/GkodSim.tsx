@@ -7,7 +7,8 @@ import { bekleyenGkodAl, gsimHazirla, SAMPLE_HEID, SAMPLE_ISO } from '../hesap/g
 import { ileti } from '../ham/ileti.tsx';
 import { useParca } from '../parca.ts';
 import { GkodSahnesi } from '../sahne/gkod-sahnesi.ts';
-import { Sahne, type Cizim } from '../sahne/Sahne.tsx';
+import { Gkod2b } from '../sahne/gkod-2b.ts';
+import { CizimModuSecici, Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
 import { machine, toolLib, tools } from '../secici.ts';
 import { useCncYetkisi } from '../veri.ts';
 import type { Aciklama } from './aciklama.ts';
@@ -47,6 +48,7 @@ export function GkodSim() {
   const { yazabilir } = useCncYetkisi();
   const [, ciz] = useReducer((x: number) => x + 1, 0);
   const dosya = useRef<HTMLInputElement>(null), alan = useRef<HTMLDivElement>(null), sahne = useRef<GkodSahnesi | null>(null);
+  const [cizici2b] = useState(() => new Gkod2b()), mod = useCizimModu();
   const [birak, setBirak] = useState(false);
   const [kip, setKip] = useState<ListeKipi>('all');
   const gs = gsimHazirla();
@@ -63,11 +65,12 @@ export function GkodSim() {
     ciz();
   }, []);
 
+  // 3D sahne yalnız 3D modda kurulur: 2B modda kamera sürükleme dinleyicisi de olmaz.
   useEffect(() => {
-    const el = alan.current; if (!el) return undefined;
+    const el = alan.current; if (!el || mod !== '3d') return undefined;
     const s = new GkodSahnesi(el); sahne.current = s;
     return () => { s.dispose(); sahne.current = null; };
-  }, []);
+  }, [mod]);
   const sahneCiz = useCallback((c: Cizim) => { sahne.current?.frame(c.renderer, c.rect, yumusat(c.dt)); }, []);
 
   // Oynatma ve talas dongusu (prototipte her kare). Ekran CIZIM_MS'de bir yenilenir.
@@ -148,7 +151,7 @@ export function GkodSim() {
         onDragOver={(e) => { e.preventDefault(); setBirak(true); }} onDragLeave={() => { setBirak(false); }} onDrop={birakildi}
       >
         <div className="tc-ch-sahne-ust">
-          <div ref={alan} className="tc-ch-sahne-tuval" data-sahne="gcode"><Sahne ciz={sahneCiz} sinif="tc-ch-tuval" /></div>
+          <div ref={alan} className="tc-ch-sahne-tuval" data-sahne="gcode"><Sahne cizici2b={cizici2b} ciz={sahneCiz} sinif="tc-ch-tuval" /></div>
           {p && mv && ti && konum && (
             <div className="tc-ch-bilgi tc-ch-hud" aria-live="off">
               <div className="tc-ch-hud-ust">
@@ -163,7 +166,8 @@ export function GkodSim() {
             </div>
           )}
           <div className="tc-ch-gorus" role="group" aria-label="Simülasyon görünümü">
-            {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { sahne.current?.sigdir(v); }}>{a}</Dugme>)}
+            <CizimModuSecici />
+            {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { if (mod === '3d') sahne.current?.sigdir(v); else cizici2b.gorus = v; }}>{a}</Dugme>)}
             {ANAHTARLAR.map(({ k, baslik }) => (
               <Dugme key={k} tur={gs[k] ? 'birincil' : 'ikincil'} aria-pressed={!!gs[k]} onClick={yap(() => { anahtar(k); })}>{baslik}</Dugme>
             ))}

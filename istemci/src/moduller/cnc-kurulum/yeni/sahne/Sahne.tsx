@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type RefObject } from 'react';
+import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { Vector2, type WebGLRenderer } from 'three';
 import { glAl } from './gl.ts';
 import { sahneRengi } from './renkler.ts';
@@ -115,8 +116,108 @@ function tuvaliGizle(r: Kayit): void {
   r.tuval.hidden = true;
 }
 
-export function Sahne({ ciz, sinif }: { ciz: (c: Cizim) => void; sinif?: string }) {
-  const el = useRef<HTMLDivElement>(null);
+// ---------- çizim modu (karar kartları 1138 a ve 1271) ----------
+// 3D, grafik birimli bilgisayarda varsayılandır; 3D açılamayan bilgisayarda (glAl() null) yalnız 2B vardır. Seçim tarayıcıda tutulur:
+// her bilgisayarın kendi tercihidir, sunucuya gitmez.
+export type CizimModu = '3d' | '2b';
+const MOD_ANAHTARI = 'tmiv2.cnc-kurulum.cizim-modu';
+const modDinleyicileri = new Set<() => void>();
+let mod: CizimModu = ilkMod();
+
+function ilkMod(): CizimModu {
+  if (glAl() === null) return '2b';
+  let kayitli: string | null = null;
+  try { kayitli = localStorage.getItem(MOD_ANAHTARI); } catch { /* tarayıcı deposu kapalı */ }
+  return kayitli === '2b' ? '2b' : '3d';
+}
+export function cizimModu(): CizimModu { return mod; }
+export function cizimModunuSec(m: CizimModu): void {
+  const yeni: CizimModu = m === '3d' && glAl() !== null ? '3d' : '2b';
+  if (yeni === mod) return;
+  mod = yeni;
+  try { localStorage.setItem(MOD_ANAHTARI, yeni); } catch { /* tarayıcı deposu kapalı */ }
+  for (const d of modDinleyicileri) d();
+}
+export function useCizimModu(): CizimModu {
+  return useSyncExternalStore((d) => { modDinleyicileri.add(d); return () => { modDinleyicileri.delete(d); }; }, cizimModu, cizimModu);
+}
+
+export function CizimModuSecici() {
+  const m = useCizimModu(), uc = glAl() !== null;
+  return (
+    <span className="tc-cy-mod" role="group" aria-label="Çizim modu">
+      <Dugme tur={m === '3d' ? 'birincil' : 'ikincil'} aria-pressed={m === '3d'} disabled={!uc}
+        title={uc ? '3D çizim' : 'Bu bilgisayarda 3D çizim kapalı (ekran kartı yok)'} onClick={() => { cizimModunuSec('3d'); }}>3D</Dugme>
+      <Dugme tur={m === '2b' ? 'birincil' : 'ikincil'} aria-pressed={m === '2b'} title="Hafif 2B çizim" onClick={() => { cizimModunuSec('2b'); }}>2B</Dugme>
+    </span>
+  );
+}
+
+// ---------- 2B çizim ----------
+// 2B çizim düz tuvale yapılır ve yalnız görünümün imzası (veri, oynatma konumu, anahtarlar) ya da boyut değişince yeniden çizilir:
+// grafik birimi gerekmez, boşta işlemci harcamaz. Tekerlek yakınlaştırır, sürükleme kaydırır, çift tık sığdırır.
+export interface Gorunum2b { k: number; dx: number; dy: number }
+export interface Cizici2b {
+  imza(): string;
+  // w, h CSS pikselidir; tuval cihaz piksel oranına göre ölçeklenmiş gelir.
+  ciz(x: CanvasRenderingContext2D, w: number, h: number, g: Gorunum2b): void;
+}
+
+function Tuval2b({ cizici }: { cizici: Cizici2b }) {
+  const tuval = useRef<HTMLCanvasElement>(null);
+  const ciziciRef = useRef(cizici);
+  useEffect(() => { ciziciRef.current = cizici; }, [cizici]);
+  useEffect(() => {
+    const t = tuval.current;
+    // Tuval desteği olmayan ortamda (test) 2B bağlamı denenmez.
+    if (t === null || typeof CanvasRenderingContext2D === 'undefined') return undefined;
+    const x = t.getContext('2d');
+    if (x === null) return undefined;
+    const g: Gorunum2b = { k: 1, dx: 0, dy: 0 };
+    let iz = '', kare = 0, bekle: ReturnType<typeof setTimeout> | null = null, surukle: { x: number; y: number } | null = null;
+    const adim = (): void => {
+      kare = 0;
+      if (gorunur) {
+        const w = t.clientWidth, h = t.clientHeight, oran = Math.min(window.devicePixelRatio || 1, 2);
+        const yeni = `${ciziciRef.current.imza()}|${String(w)}|${String(h)}|${String(oran)}|${String(g.k)}|${String(g.dx)}|${String(g.dy)}`;
+        if (yeni !== iz && w > 10 && h > 10) {
+          iz = yeni;
+          if (t.width !== Math.round(w * oran) || t.height !== Math.round(h * oran)) { t.width = Math.round(w * oran); t.height = Math.round(h * oran); }
+          x.setTransform(oran, 0, 0, oran, 0, 0);
+          x.clearRect(0, 0, w, h);
+          try { ciziciRef.current.ciz(x, w, h, g); } catch (hata) { console.error(hata); }
+        }
+        kare = requestAnimationFrame(adim);
+      } else bekle = setTimeout(() => { bekle = null; kare = requestAnimationFrame(adim); }, 250);
+    };
+    kare = requestAnimationFrame(adim);
+    const tekerlek = (e: WheelEvent): void => {
+      e.preventDefault();
+      const r = t.getBoundingClientRect(), mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
+      const k2 = Math.min(40, Math.max(0.5, g.k * (e.deltaY < 0 ? 1.15 : 1 / 1.15))), o = k2 / g.k;
+      g.dx = mx - (mx - g.dx) * o; g.dy = my - (my - g.dy) * o; g.k = k2;
+    };
+    const bas = (e: PointerEvent): void => { surukle = { x: e.clientX, y: e.clientY }; t.setPointerCapture(e.pointerId); };
+    const oynat = (e: PointerEvent): void => {
+      if (!surukle) return;
+      g.dx += e.clientX - surukle.x; g.dy += e.clientY - surukle.y; surukle = { x: e.clientX, y: e.clientY };
+    };
+    const birak = (): void => { surukle = null; };
+    const sigdir = (): void => { g.k = 1; g.dx = 0; g.dy = 0; };
+    t.addEventListener('wheel', tekerlek, { passive: false });
+    t.addEventListener('pointerdown', bas); t.addEventListener('pointermove', oynat);
+    t.addEventListener('pointerup', birak); t.addEventListener('pointercancel', birak); t.addEventListener('dblclick', sigdir);
+    return () => {
+      if (kare) cancelAnimationFrame(kare);
+      if (bekle) clearTimeout(bekle);
+      t.removeEventListener('wheel', tekerlek); t.removeEventListener('pointerdown', bas); t.removeEventListener('pointermove', oynat);
+      t.removeEventListener('pointerup', birak); t.removeEventListener('pointercancel', birak); t.removeEventListener('dblclick', sigdir);
+    };
+  }, []);
+  return <canvas ref={tuval} className="tc-cy-sahne-2b" data-cizim="2b" aria-hidden="true" />;
+}
+
+function Tuval3b({ el, ciz }: { el: RefObject<HTMLDivElement | null>; ciz: (c: Cizim) => void }) {
   const tuval = useRef<HTMLCanvasElement>(null);
   const cizRef = useRef(ciz);
   useEffect(() => { cizRef.current = ciz; }, [ciz]);
@@ -127,10 +228,18 @@ export function Sahne({ ciz, sinif }: { ciz: (c: Cizim) => void; sinif?: string 
     kayitlar.add(kayit);
     baslat();
     return () => { kayitlar.delete(kayit); };
-  }, []);
+  }, [el]);
+  return <canvas ref={tuval} className="tc-cy-sahne-tuval" aria-hidden="true" hidden />;
+}
+
+// Görünüm 3D çizimini (ciz) ve varsa 2B çizimini (cizici2b) verir; hangisinin çizileceğini çizim modu seçer. 2B çizimi olmayan
+// görünüm 2B modda sahnesiz çalışır.
+export function Sahne({ ciz, cizici2b, sinif }: { ciz: (c: Cizim) => void; cizici2b?: Cizici2b; sinif?: string }) {
+  const el = useRef<HTMLDivElement>(null);
+  const m = useCizimModu();
   return (
-    <div ref={el} className={sinif ? `tc-cy-sahne ${sinif}` : 'tc-cy-sahne'}>
-      <canvas ref={tuval} className="tc-cy-sahne-tuval" aria-hidden="true" hidden />
+    <div ref={el} className={sinif ? `tc-cy-sahne ${sinif}` : 'tc-cy-sahne'} data-cizim-modu={m}>
+      {m === '3d' ? <Tuval3b el={el} ciz={ciz} /> : cizici2b ? <Tuval2b cizici={cizici2b} /> : null}
     </div>
   );
 }
