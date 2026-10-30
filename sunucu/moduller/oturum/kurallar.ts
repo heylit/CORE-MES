@@ -86,6 +86,12 @@ export function saatOnayAdi(kisiId: number): string {
   return `#saat-onay-${kisiId}`;
 }
 
+// Kart girişi (kart #1326): kayıtsız kart ya da giriş hesabı olmayan kişinin kartı cihazın bu adına hatalı deneme sayılır; cihaz
+// sınırı yine bütün adları birlikte sayar. Kayıtlı kartın denemesi kişinin kendi adına sayılır: kart ve kullanıcı adı yolu tek sayaçtır.
+export function kartGirisAdi(ip: string): string {
+  return `#kart-${ip}`;
+}
+
 // Bilinmeyen anahtarla soru cihazın kendi adına hatalı deneme sayılır ve denetim kaydına girmez: ağdaki biri rastgele
 // anahtarla sınırsız soru sorup yalnız eklenen denetim tablosunu büyütemez. Kilit cihaz başınadır, başka saati durdurmaz.
 export function saatSoruAdi(ip: string): string {

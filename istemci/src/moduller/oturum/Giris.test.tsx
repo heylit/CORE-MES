@@ -24,6 +24,10 @@ function sunucuKur() {
       return cevap(401, { kod: 'OTURUM_YOK', mesaj: 'Kullanıcı adı, PIN ya da parola hatalı.' });
     }
     if (yol === '/oturum/pin-belirle') return cevap(200, { kullanici: OPERATOR } satisfies OturumCevabi);
+    if (yol === '/oturum/kart-giris') {
+      if (govde.kart === '0004123456' && govde.pin === '730514') return cevap(200, { kullanici: OPERATOR } satisfies OturumCevabi);
+      return cevap(401, { kod: 'OTURUM_YOK', mesaj: 'Kart ya da PIN hatalı.' });
+    }
     return cevap(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return cagrilar;
@@ -131,5 +135,37 @@ describe('Giris', () => {
     expect(screen.queryByRole('group', { name: 'Rakam tuşları' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'PIN ile gir' }));
     expect(screen.getByRole('group', { name: 'Rakam tuşları' })).toBeTruthy();
+  });
+
+  it('kartla giris (1326): okuyucu karti yazip Enter basinca PIN adimi gelir; kart ve PIN birlikte gider, secim hatirlanir', async () => {
+    const cagrilar = sunucuKur();
+    const istemci = kur();
+    fireEvent.click(screen.getByRole('button', { name: 'Kartla gir' }));
+    expect(screen.queryByLabelText(/Kullanıcı adı/)).toBeNull();
+    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
+    fireEvent.change(kart, { target: { value: '0004123456' } });
+    fireEvent.submit(kart.closest('form')!);
+    expect(screen.getByText('Kart okundu')).toBeTruthy();
+    expect(cagrilar).toHaveLength(0);
+    tuslaraBas('730514');
+    fireEvent.click(girisDugmesi());
+    await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
+    expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '0004123456', pin: '730514' } }]);
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
+  });
+
+  it('kartla giris hatasinda ileti gorunur, kart ve PIN silinir, sira kart okutmaya doner; kullanici adi yoluna donulebilir', async () => {
+    sunucuKur();
+    window.localStorage.setItem('tmi.giris.yontem', 'kart');
+    kur();
+    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
+    fireEvent.change(kart, { target: { value: '0004123456' } });
+    fireEvent.submit(kart.closest('form')!);
+    tuslaraBas('111111');
+    fireEvent.click(girisDugmesi());
+    expect(await screen.findByText('Kart ya da PIN hatalı.')).toBeTruthy();
+    expect((screen.getByLabelText(/^Kart/) as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
+    expect(screen.getByLabelText(/Kullanıcı adı/)).toBeTruthy();
   });
 });
