@@ -27,7 +27,7 @@ function pompa(): void {
 }
 export function resimUnut(id: string): void { resimler.delete(id); }
 
-function KucukResim({ it }: { it: Kalem }) {
+export function KucukResim({ it }: { it: Kalem }) {
   const [src, srcYaz] = useState(resimler.get(it.id));
   useEffect(() => {
     if (resimler.has(it.id)) { srcYaz(resimler.get(it.id)); return; }

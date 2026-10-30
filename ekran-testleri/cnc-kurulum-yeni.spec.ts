@@ -219,6 +219,18 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
     await expect(page.getByText('Filtreye uyan malzeme yok').first()).toBeVisible();
   });
 
+  // 1276 a: Kütüphane tezgâhlara göre açılır; her tezgâh cepleriyle ya da magazini girilmedi notuyla görünür.
+  test('Kütüphane: tezgâhlara göre cepler ve elimizdekiler', async ({ page, ac }) => {
+    await ac('/cnc-kurulum/yeni/kutuphane');
+    await expect(page.getByRole('button', { name: 'Tezgâhlara göre' })).toHaveAttribute('aria-pressed', 'true');
+    const tezgahlar = page.locator('.tc-cl-tz');
+    await expect(tezgahlar.first()).toBeVisible();
+    const n = await tezgahlar.count();
+    for (let i = 0; i < n; i++) await expect(tezgahlar.nth(i).locator('.tc-cl-cep, .tc-cl-not').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Elimizdekiler' }).click();
+    await expect(page.getByRole('searchbox', { name: 'Kütüphanede ara' })).toBeVisible();
+  });
+
   // 1091 a, 1137 a: tezgâhlar İstasyonlar'ın makineleridir, ekleme yoktur. Örnek makinelerin ayarı yoktur: ekran gömülü listeyle
   // sürer. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
   test('Tanımlar: makineler İstasyonlar\'dan gelir, ayarı eksik olan işaretlenir, yeni tezgâh eklenmez', async ({ page, ac }) => {
@@ -299,6 +311,8 @@ test.describe('3B sahne', () => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
+      // Kütüphane tezgâh cepleriyle açılır (1276 a); raf sahnesi Elimizdekiler'dedir.
+      if (yol === 'kutuphane') await page.getByRole('button', { name: 'Elimizdekiler' }).click();
       const tuval = page.locator('.tc-cy-sahne-tuval').first();
       await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
       await expect.poll(async () => tuval.evaluate((t: HTMLCanvasElement) => {
@@ -323,7 +337,8 @@ test.describe('3B sahne', () => {
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
-      await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
+      // 2B modda Kütüphane sahne kullanmaz: cepler ve takım çizimi düz öğedir.
+      if (yol !== 'kutuphane') await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
       expect(await page.locator('.tc-cy-sahne-tuval:visible').count(), yol).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), yol).toBeLessThanOrEqual(0);
     }
@@ -363,7 +378,7 @@ test.describe('3B sahne', () => {
       }), { message: yol, timeout: 30_000 }).toBeGreaterThan(8);
     }
     await page.reload();
-    await expect(page.locator('.tc-cy-sahne-2b')).toBeVisible();
+    await expect(page.locator('.tc-cy-sahne-2b')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('group', { name: 'Çizim modu' }).getByRole('button', { name: '2B' })).toHaveAttribute('aria-pressed', 'true');
     expect(ag.hatalar).toEqual([]);
   });

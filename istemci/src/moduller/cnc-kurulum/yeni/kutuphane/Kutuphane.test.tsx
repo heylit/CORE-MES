@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { state } from '../depo.ts';
 import { defaults } from '../durum.ts';
-import { dirtyUsage, invKey } from '../secici.ts';
+import { allMachines, dirtyUsage, invKey, toolLib } from '../secici.ts';
 import { allShelves } from './raf.ts';
 
 // WebGL testte yok: sahne ve dokular boş gövdeyle gelir; görünüm testi yalnız düğme ve alanlara bakar.
-vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => <div data-testid="sahne" /> }));
+vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => <div data-testid="sahne" />, CizimModuSecici: () => null, useCizimModu: () => '3d' }));
 vi.mock('../sahne/gl.ts', () => ({ thumb: () => null, onbellekSil: () => undefined }));
 vi.mock('./raf-sahnesi.ts', () => ({
   LSP: 2.3, LSH: 3.3, renk: () => '',
@@ -95,5 +95,20 @@ describe('stok kartı bölümü', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Stok kartına bağla' }));
     fireEvent.click(await screen.findByRole('button', { name: /SF-1/ }));
     await waitFor(() => { expect(veri.stokKartiBagla).toHaveBeenCalledWith(ilkAnahtar(), 3); });
+  });
+});
+
+describe('Kütüphane tezgâh cepleri (1276 a)', () => {
+  it('açılışta her tezgâhın cepleri görünür; cepteki takım seçilince kartı açılır', async () => {
+    const m = allMachines().find((x) => x.type !== 'lathe')!, lib = toolLib(m);
+    const t = lib.find((x) => x.kind === 'drill')!;
+    state.tools[m.id] = [t.id, 'empty'];
+    dirtyUsage();
+    ac();
+    const bolum = await screen.findByRole('region', { name: m.name });
+    expect(within(bolum).getByText('1')).toBeTruthy();
+    fireEvent.click(within(bolum).getByRole('button', { name: (ad: string) => ad.startsWith(`T1 ${t.name}`) }));
+    await waitFor(() => { expect(screen.getByRole('heading', { name: t.name })).toBeTruthy(); });
+    expect(screen.getByRole('button', { name: 'Tezgâhlara göre' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
