@@ -464,8 +464,25 @@ test.describe('577d Tahta kartları', () => {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('region', { name: 'Reçete ve Rota' })).toHaveCount(0);
       for (const t of ['1', '2', '3', '4', '5', '6', '7']) await page.keyboard.press(t);
-      await expect(page.locator('.tc-pyk-kart')).toHaveCount(0);
+      await expect(page.locator('.tc-pyt-kart')).toHaveCount(0);
     }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+  });
+});
+
+// Motorun css'i sayfada yüklü kalır; tahta kartları başka parçanın önekini kullanınca maliyet sayfaları plan çubuğunun üstüne binip tıklanmaz oldu.
+test.describe('Motordan sonra öteki sayfalar', () => {
+  test('Motor açıldıktan sonra maliyet sayfalarının başlığı plan çubuğunun altında kalır ve tıklanır', async ({ page, ac }) => {
+    await ac('/plan');
+    const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
+    for (const ad of ['Maliyetler', 'Genel gider', 'Ek mesai planı', 'Fason planı']) {
+      await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();
+      const baslik = page.locator('.tc-py-gorunum').getByRole('heading', { level: 2 }).first();
+      await expect(baslik).toBeVisible({ timeout: 20_000 });
+      const cubuk = await page.getByRole('toolbar', { name: 'Plan çubuğu' }).boundingBox();
+      const b = await baslik.boundingBox();
+      expect(cubuk && b ? b.y - (cubuk.y + cubuk.height) : -1).toBeGreaterThanOrEqual(0);
+      await expect(baslik).not.toHaveCSS('pointer-events', 'none');
+    }
   });
 });

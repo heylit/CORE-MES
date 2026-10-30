@@ -31,7 +31,7 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
   };
   const degisti = q ? siraDegisti(q) : false;
   return (
-    <section ref={kok} className="tc-pym-yp tc-pym-kb tc-pys" role="dialog" aria-label="Tezgâh sırası">
+    <section ref={kok} className="tc-pym-yp tc-pym-kb tc-pyr" role="dialog" aria-label="Tezgâh sırası">
       <header>
         <b><Simge ad="sort" boyut="k" />Tezgâh sırası</b>
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Kapat (Esc)" aria-label="Kapat (Esc)" onClick={kapat}><Simge ad="x" boyut="k" /></button>
@@ -46,7 +46,7 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
           </label>
           <p className="tc-pym-kucuk-yazi">Sıradaki işleri tutup sürükleyin ya da oklarla taşıyın; sonra Uygula. Motor yeni sırayı korur, saatleri yeniden hesaplar. Sabit işin yeri değişmez.</p>
           {q.ids.length ? (
-            <ol className="tc-pys-liste" aria-label={`${q.m} kuyruğu`}>
+            <ol className="tc-pyr-liste" aria-label={`${q.m} kuyruğu`}>
               {q.ids.map((id, i) => {
                 const r = p.ops[id]; const s = sabit(id);
                 return (
@@ -57,9 +57,9 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
                     onDragLeave={() => setHedef((h) => (h === id ? null : h))}
                     onDrop={(e) => { const t = tutulan.current; if (!t) return; e.preventDefault(); tutulan.current = null; setHedef(null); yeni(siraTasi(q, t, id, sabit)); }}
                     onDragEnd={() => { tutulan.current = null; setHedef(null); }}>
-                    <span className="tc-pys-tut" aria-hidden="true"><Simge ad="more" boyut="k" /></span>
-                    <span className="tc-pys-no tc-pym-mono">{i + 1}</span>
-                    <span className="tc-pys-ic">
+                    <span className="tc-pyr-tut" aria-hidden="true"><Simge ad="more" boyut="k" /></span>
+                    <span className="tc-pyr-no tc-pym-mono">{i + 1}</span>
+                    <span className="tc-pyr-ic">
                       <b className="tc-pym-mono">{id}</b>
                       <small>{cx.byId[id]?.ad ?? ''} · <span className="tc-pym-mono">{saatYaz(c.D, r?.S)}</span>{s ? ' · sabit' : ''}</small>
                     </span>

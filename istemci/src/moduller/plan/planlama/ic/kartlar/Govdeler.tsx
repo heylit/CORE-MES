@@ -45,9 +45,9 @@ function Pasif({ ad, simge, not, kucuk = true, birincil = false }: { ad: string;
   );
 }
 const Bolum = ({ baslik, simge, children }: { baslik: string; simge: SimgeAdi; children: ReactNode }) => (
-  <section className="tc-pyk-bolum"><h4><Simge ad={simge} boyut="k" />{baslik}</h4>{children}</section>
+  <section className="tc-pyt-bolum"><h4><Simge ad={simge} boyut="k" />{baslik}</h4>{children}</section>
 );
-const Nokta = ({ D, j }: { D: PlanlamaCalismasi['D']; j: string }) => <i className="tc-pyk-nokta" ref={degisken({ '--c': `var(--tc-pym-is-${siparisRengi(D, j)})` })} />;
+const Nokta = ({ D, j }: { D: PlanlamaCalismasi['D']; j: string }) => <i className="tc-pyt-nokta" ref={degisken({ '--c': `var(--tc-pym-is-${siparisRengi(D, j)})` })} />;
 
 export function KartGovdesi({ tur, b }: { tur: KartTuru; b: KartBaglami }) {
   if (tur === 'plan') return <PlanGovdesi b={b} />;
@@ -65,16 +65,16 @@ function PlanGovdesi({ b }: { b: KartBaglami }) {
   const { c, p, cx } = b; const k = useMemo(() => planKarti(c, p, cx), [c, p, cx]);
   return (
     <>
-      <header className="tc-pyk-ust"><small>PLAN</small><b>Bütün atölye</b><small>{k.late}/{k.n} sipariş geç · toplam gecikme {saatYazi(k.wT)}</small></header>
+      <header className="tc-pyt-ust"><small>PLAN</small><b>Bütün atölye</b><small>{k.late}/{k.n} sipariş geç · toplam gecikme {saatYazi(k.wT)}</small></header>
       {k.en && (
-        <p className="tc-pyk-yorum"><Simge ad="chart" boyut="k" />
+        <p className="tc-pyt-yorum"><Simge ad="chart" boyut="k" />
           <span>Geç siparişleri en çok <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(k.en?.m ?? '')}>{k.en.m}</button> bekletiyor: {k.en.n} sipariş, toplam {saatYazi(k.en.v)}.
             {b.mercek !== 'etki' && <> <button type="button" className="tc-pym-link" onClick={b.mercekSec}>Resimde göster</button></>}
           </span>
         </p>
       )}
       <Bolum baslik={`Dikkat (${b.sor.length})`} simge="alert">
-        <ul className="tc-pyk-liste">
+        <ul className="tc-pyt-liste">
           {b.sor.length ? b.sor.map((x) => {
             const { yap, not } = eylemYapisi(x.eylem, { c, komut: b.komut, sipSec: b.sipSec, veriAc: b.veriAc });
             return (
@@ -110,11 +110,11 @@ function SiparisGovdesi({ b }: { b: KartBaglami }) {
   const pasif = b.planYaz ? MOTOR_NOTU : YETKISIZ;
   return (
     <>
-      <div className="tc-pyk-arac">
-        <div className="tc-pyk-seg" role="group" aria-label="Süz">
+      <div className="tc-pyt-arac">
+        <div className="tc-pyt-seg" role="group" aria-label="Süz">
           {SUZGECLER.map(([v, ad]) => <button key={v} type="button" aria-pressed={suz === v} onClick={() => setSuz(v)}>{ad}</button>)}
         </div>
-        <label className="tc-pyk-sirala"><span>Sırala</span>
+        <label className="tc-pyt-sirala"><span>Sırala</span>
           <select value={sira} onChange={(e) => setSira(e.target.value as SiparisSirasi)}>{SIRALAR.map(([v, ad]) => <option key={v} value={v}>{ad}</option>)}</select>
         </label>
         <small className="tc-pym-kucuk-yazi">
@@ -122,13 +122,13 @@ function SiparisGovdesi({ b }: { b: KartBaglami }) {
           {suz === 'degisen' && (canli.tur === 'okunuyor' ? ' Canlı plan okunuyor.' : canli.tur === 'hata' ? ` ${canli.ileti}` : canli.tur === 'tamam' && !Object.keys(canli.canli).length ? ' Henüz canlı plan yok.' : '')}
         </small>
       </div>
-      <div className="tc-pyk-tablo">
+      <div className="tc-pyt-tablo">
         <table aria-label="Siparişler">
           <thead><tr><th>Sipariş</th><th>Ürün</th><th>Öncelik</th><th>Termin</th><th>Bitiş</th><th>Durum</th><th>Fark</th><th>Bitişi belirleyen</th><th><span className="tc-gizli-etiket">Hamle</span></th></tr></thead>
           <tbody>
             {l.length ? l.map((x) => (
               <tr key={x.id} data-secili={sj === x.id ? '' : undefined} data-gec={x.gec ? '' : undefined}>
-                <td><button type="button" className="tc-pyk-sip" onClick={() => b.sipSec(x.id)}><Nokta D={D} j={x.id} /><b className="tc-pym-mono">{x.id}</b></button></td>
+                <td><button type="button" className="tc-pyt-sip" onClick={() => b.sipSec(x.id)}><Nokta D={D} j={x.id} /><b className="tc-pym-mono">{x.id}</b></button></td>
                 <td><small>{x.urun}</small></td>
                 <td>
                   <select value={x.oncelik} aria-label={`${x.id} önceliği`} disabled title={`Öncelik: ${pasif}`} onChange={() => undefined}>
@@ -137,7 +137,7 @@ function SiparisGovdesi({ b }: { b: KartBaglami }) {
                 </td>
                 <td className="tc-pym-mono">{x.due != null ? saatYaz(D, x.due) : '—'}</td>
                 <td className="tc-pym-mono">{x.C != null && Number.isFinite(x.C) ? saatYaz(D, x.C) : '—'}</td>
-                <td>{x.gec ? <span className="tc-pyk-gec">{gecMetin(x.T)} geç</span> : <span className="tc-pyk-tamam">yetişiyor</span>}</td>
+                <td>{x.gec ? <span className="tc-pyt-gec">{gecMetin(x.T)} geç</span> : <span className="tc-pyt-tamam">yetişiyor</span>}</td>
                 <td className="tc-pym-mono">{x.fark != null && <span data-ton={x.fark < 0 ? 'iyi' : 'kotu'}>{x.fark < 0 ? '−' : '+'}{saatYazi(Math.abs(x.fark))}</span>}</td>
                 <td>
                   {x.belirleyen?.tur === 'kaynak' ? (
@@ -165,21 +165,21 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
   const sj = b.secim.adim ? p.ops[b.secim.adim]?.job ?? null : b.secim.siparis; const gun = dilimNo(b.r, now);
   return (
     <>
-      <div className="tc-pyk-arac">
-        <div className="tc-pyk-seg" role="group" aria-label="Tezgâh grubu">
+      <div className="tc-pyt-arac">
+        <div className="tc-pyt-seg" role="group" aria-label="Tezgâh grubu">
           {gruplar.map((x) => <button key={x} type="button" aria-pressed={x === g} onClick={() => setSecilen(x)}>{x}</button>)}
         </div>
         <small className="tc-pym-kucuk-yazi">
           {b.planYaz ? `Kartı tutup aynı sütunda sıralamak ya da başka tezgâha bırakmak: ${MOTOR_NOTU} Çalışan ve sabit iş yerinden oynamaz.` : 'Sırayı değiştirme yetkiniz yok; yalnız görürsünüz.'}
         </small>
       </div>
-      <div className="tc-pyk-kolonlar">
+      <div className="tc-pyt-kolonlar">
         {tez.map((m) => {
           const l = kuyrukListesi(p, m, now); const st = s.ist[m] ? tezgahDurumu(s, b.durus, m, b.t) : null; const d = s.dol[m]?.[gun];
           return (
-            <section key={m} className="tc-pyk-kol" aria-label={`${m} kuyruğu`} data-secili={b.secim.tezgah === m ? '' : undefined}>
+            <section key={m} className="tc-pyt-kol" aria-label={`${m} kuyruğu`} data-secili={b.secim.tezgah === m ? '' : undefined}>
               <header>
-                <button type="button" onClick={() => b.tezSec(m)}><i className="tc-pyk-dur" data-dur={st?.dur ?? 'bos'} /><b className="tc-pym-mono">{m}</b></button>
+                <button type="button" onClick={() => b.tezSec(m)}><i className="tc-pyt-dur" data-dur={st?.dur ?? 'bos'} /><b className="tc-pym-mono">{m}</b></button>
                 <small className="tc-pym-mono" title="Şimdiki dilimde doluluk" data-ton={d != null && d > 0.97 ? 'hata' : undefined}>{d == null ? 'kapalı' : `%${Math.round(d * 100)}`}</small>
                 <small className="tc-pym-mono">{l.length} iş</small>
               </header>
@@ -193,9 +193,9 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
                         <span><b className="tc-pym-mono">{r.id}</b><small className="tc-pym-mono">{saatYaz(D, r.S).slice(6)}</small></span>
                         <small>{cx.byId[r.id]?.ad ?? ''} · {saatYazi(r.C - r.S)}</small>
                       </button>
-                      {cal ? <span className="tc-pyk-rozet" title="Şu an işleniyor"><Simge ad="play" boyut="k" /></span>
-                        : kl ? <span className="tc-pyk-rozet" title="Sabit"><Simge ad="lock" boyut="k" /></span>
-                          : gec ? <span className="tc-pyk-rozet" data-ton="hata" title="Siparişi geç">!</span> : null}
+                      {cal ? <span className="tc-pyt-rozet" title="Şu an işleniyor"><Simge ad="play" boyut="k" /></span>
+                        : kl ? <span className="tc-pyt-rozet" title="Sabit"><Simge ad="lock" boyut="k" /></span>
+                          : gec ? <span className="tc-pyt-rozet" data-ton="hata" title="Siparişi geç">!</span> : null}
                     </li>
                   );
                 }) : <li className="tc-pym-kucuk-yazi" data-bos="">Sırada iş yok.</li>}
@@ -224,25 +224,25 @@ function EtkiGovdesi({ b }: { b: KartBaglami }) {
     if (d.k === 'tezgah') b.tezSec(d.ad); else if (d.k === 'ariza') b.tezSec(d.ad.replace('Arıza · ', '')); else b.veriAc?.('kisitlar');
   };
   const dugum = (d: { n: string; x: number; y: number; ad: string }, alt: string, sag: boolean) => (
-    <g key={d.n} className="tc-pyk-dugum" data-yak={yak.dugum.has(d.n) ? '' : undefined} data-sec={d.n === `j:${sj ?? ''}` ? '' : undefined} tabIndex={0} role="button" aria-label={`${d.ad} ${alt}`}
+    <g key={d.n} className="tc-pyt-dugum" data-yak={yak.dugum.has(d.n) ? '' : undefined} data-sec={d.n === `j:${sj ?? ''}` ? '' : undefined} tabIndex={0} role="button" aria-label={`${d.ad} ${alt}`}
       onClick={() => bas1(d.n)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bas1(d.n); } }}
       onPointerEnter={() => setUst(d.n)} onPointerLeave={() => setUst(null)} onFocus={() => setUst(d.n)} onBlur={() => setUst(null)}>
       <circle cx={d.x} cy={d.y} r={5} />
-      <text x={sag ? d.x + 10 : d.x - 10} y={d.y + 4} textAnchor={sag ? 'start' : 'end'}>{d.ad}<tspan className="tc-pyk-alt" dx={6}>{alt}</tspan></text>
+      <text x={sag ? d.x + 10 : d.x - 10} y={d.y + 4} textAnchor={sag ? 'start' : 'end'}>{d.ad}<tspan className="tc-pyt-alt" dx={6}>{alt}</tspan></text>
     </g>
   );
   return (
     <>
-      <p className="tc-pyk-yorum"><Simge ad="chart" boyut="k" />
+      <p className="tc-pyt-yorum"><Simge ad="chart" boyut="k" />
         <span>En çok <b>{bas?.ad}</b> bekletiyor ({saatYazi(bas?.v)}); bekleme türlerinde başta <b>{(bt?.ad ?? '').toLocaleLowerCase('tr-TR')}</b> var. Düğüme basınca harita ve panel oraya gider; tür düğümü ilgili kısıtı açar.</span>
       </p>
-      <div className="tc-pyk-ag-kap">
-        <svg className="tc-pyk-ag" viewBox={`0 0 ${ag.W} ${ag.H}`} role="img" aria-label="Bekleme türü, kaynak ve geç sipariş arasındaki bağlar" data-hl={ust ? '' : undefined}>
-          <text className="tc-pyk-kolad" x={ag.x[0]} y={14} textAnchor="end">Bekleme türü</text>
-          <text className="tc-pyk-kolad" x={ag.x[1]} y={14} textAnchor="middle">Kaynak</text>
-          <text className="tc-pyk-kolad" x={ag.x[2]} y={14}>Geç sipariş</text>
+      <div className="tc-pyt-ag-kap">
+        <svg className="tc-pyt-ag" viewBox={`0 0 ${ag.W} ${ag.H}`} role="img" aria-label="Bekleme türü, kaynak ve geç sipariş arasındaki bağlar" data-hl={ust ? '' : undefined}>
+          <text className="tc-pyt-kolad" x={ag.x[0]} y={14} textAnchor="end">Bekleme türü</text>
+          <text className="tc-pyt-kolad" x={ag.x[1]} y={14} textAnchor="middle">Kaynak</text>
+          <text className="tc-pyt-kolad" x={ag.x[2]} y={14}>Geç sipariş</text>
           {ag.bag.map((x) => (
-            <path key={`${x.a}>${x.b}`} className="tc-pyk-bag" d={x.d} data-yak={yak.bag.has(x) ? '' : undefined} data-sec={x.j && x.j === sj ? '' : undefined}
+            <path key={`${x.a}>${x.b}`} className="tc-pyt-bag" d={x.d} data-yak={yak.bag.has(x) ? '' : undefined} data-sec={x.j && x.j === sj ? '' : undefined}
               ref={degisken({ '--c': `var(--tc-pym-k-${x.k})`, '--k': x.kalinlik })}>
               <title>{x.j ? `${x.a.slice(2)} → ${x.j}: ${saatYazi(x.v)} bekletti` : `${TUR_AD[x.k] ?? KATEGORI_AD[x.k]} · ${x.b.slice(2)}: ${saatYazi(x.v)}`}</title>
             </path>
@@ -260,7 +260,7 @@ function EtkiGovdesi({ b }: { b: KartBaglami }) {
 function Bayat({ b, metin }: { b: KartBaglami; metin: string }) {
   if (planGuncel(b.c)) return null;
   return (
-    <p className="tc-pyk-bayat"><Simge ad="alert" boyut="k" /><span>{metin}</span>
+    <p className="tc-pyt-bayat"><Simge ad="alert" boyut="k" /><span>{metin}</span>
       {b.planKur ? (
         <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" disabled={b.planKur.suruyor} onClick={b.planKur.kur}><Simge ad="play" boyut="k" /><span>Planı yeniden kur</span></button>
       ) : <Pasif ad="Planı yeniden kur" simge="play" not={YETKISIZ} birincil />}
@@ -296,15 +296,15 @@ function KisitGovdesi({ b }: { b: KartBaglami }) {
   return (
     <>
       <Bayat b={b} metin="Veri değişti; haritadaki plan eski veriyle kurulu." />
-      <div className="tc-pyk-izgara">
+      <div className="tc-pyt-izgara">
         <Bolum baslik="Motorun saydığı kurallar" simge="gear">
           <p className="tc-pym-kucuk-yazi">Anahtar kuralı açar ya da kapatır (plan yeniden kurulur). &quot;Etkisi&quot; kuralı kaldırmadan, kalksaydı ne olurdu diye kısa bir arama yapar; yaklaşıktır.</p>
-          <ul className="tc-pyk-kisitlar">
+          <ul className="tc-pyt-kisitlar">
             {gevsek.map((k) => {
               const kapali = c.kapali.includes(k.id); const x = bedel?.liste.find((z) => z.id === k.id);
               return (
                 <li key={k.id} data-kapali={kapali ? '' : undefined}>
-                  <label className="tc-pyk-anahtar" title={kapali ? 'Motor bu kuralı saymıyor' : 'Motor bu kuralı uyguluyor'}>
+                  <label className="tc-pyt-anahtar" title={kapali ? 'Motor bu kuralı saymıyor' : 'Motor bu kuralı uyguluyor'}>
                     <input type="checkbox" role="switch" aria-label={k.ad} checked={!kapali} disabled={!yaz}
                       onChange={(e) => { const ac = e.target.checked; yaz?.degistir(ac ? 'Kısıt açıldı' : 'Kısıt kapatıldı', (t) => { kisitDegistir(t, k.id, ac); }, { ayrinti: k.ad }); }} />
                     <i aria-hidden="true" /><span className="tc-gizli-etiket">{kapali ? 'Kapalı' : 'Açık'}</span>
@@ -321,12 +321,12 @@ function KisitGovdesi({ b }: { b: KartBaglami }) {
           </div>
         </Bolum>
         <Bolum baslik="Takvim: arıza ve ek mesai" simge="wrench">
-          <ul className="tc-pyk-liste tc-pyk-sade">
+          <ul className="tc-pyt-liste tc-pyt-sade">
             {ar.length ? ar.slice(0, GOSTERIM).map((d) => (
               <li key={`${d.m}-${d.from}-${d.to}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(d.m)}>{d.m}</button><small className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</small></li>
             )) : <li className="tc-pym-kucuk-yazi">Bilinen arıza yok.</li>}
           </ul>
-          <ul className="tc-pyk-liste tc-pyk-sade">
+          <ul className="tc-pyt-liste tc-pyt-sade">
             {em.length ? em.slice(0, GOSTERIM).map((x) => (
               <li key={`${x.m}-${x.gun}-${x.vardiya}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(x.m)}>{x.m}</button><small className="tc-pym-mono">{saatYaz(D, x.gun * 24).slice(0, 9)} {x.vardiya}</small></li>
             )) : <li className="tc-pym-kucuk-yazi">Ek mesai yok.</li>}
@@ -337,22 +337,22 @@ function KisitGovdesi({ b }: { b: KartBaglami }) {
           </div>
         </Bolum>
         <Bolum baslik="Ayarlar" simge="ruler">
-          <div className="tc-pyk-paramlar">{prm.map((p) => <ParametreGirdisi key={`${p.yer}-${p.k}`} p={p} c={c} yaz={yaz ? parametre : null} />)}</div>
+          <div className="tc-pyt-paramlar">{prm.map((p) => <ParametreGirdisi key={`${p.yer}-${p.k}`} p={p} c={c} yaz={yaz ? parametre : null} />)}</div>
           <p className="tc-pym-kucuk-yazi">Ayar değişince plan eskir; &quot;Planı yeniden kur&quot; ile yeni ayarla kurulur.</p>
         </Bolum>
         <Bolum baslik={T ? `${T.id} takvimi` : 'Tezgâh takvimi'} simge="clock">
           {!T ? <p className="tc-pym-kucuk-yazi">Haritada ya da kuyrukta bir tezgâh seçin; vardiyaları ve kapalı pencereleri burada görünür.</p> : (
             <>
-              <div className="tc-pyk-cipler" role="group" aria-label={`${T.id} vardiyaları`}>
+              <div className="tc-pyt-cipler" role="group" aria-label={`${T.id} vardiyaları`}>
                 {(D.vardiyalar ?? []).map((v) => (
-                  <label key={String(v.id)} className="tc-pyk-cip" title={`Vardiya: ${VERI_NOTU}`}>
+                  <label key={String(v.id)} className="tc-pyt-cip" title={`Vardiya: ${VERI_NOTU}`}>
                     <input type="checkbox" checked={vr.includes(String(v.id))} disabled onChange={() => undefined} />
                     <span>{String(v.id)} <small className="tc-pym-mono">{String(v.bas ?? '')}–{String(v.bit ?? '')}</small></span>
                   </label>
                 ))}
               </div>
               <div className="tc-pym-dugmeler"><Pasif ad="Bakımı dene" simge="wrench" not={pasif} /></div>
-              <ul className="tc-pyk-liste tc-pyk-sade">
+              <ul className="tc-pyt-liste tc-pyt-sade">
                 {ar.filter((d) => d.m === T.id).map((d) => (
                   <li key={`${d.from}-${d.to}`}><span className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</span><small>kapalı</small>{sil('Kapalı pencereyi kaldır', () => durusSil(d))}</li>
                 ))}
@@ -404,9 +404,9 @@ function HesapGovdesi({ b }: { b: KartBaglami }) {
   const a: PlanOlcusu | null = useMemo(() => (canli.tur === 'tamam' && Object.keys(canli.canli).length ? canliOlcu(c, p, cx, canli.canli) : null), [c, p, cx, canli]);
   const gl = useMemo(() => grupDoluluk(c, p), [c, p]);
   return (
-    <div className="tc-pyk-izgara">
+    <div className="tc-pyt-izgara">
       <Bolum baslik={`Göstergeler${a ? ' · son canlı plan ile' : ''}`} simge="chart">
-        <div className="tc-pyk-tablo">
+        <div className="tc-pyt-tablo">
           <table aria-label="Göstergeler">
             <thead><tr><th>Gösterge</th><th>Son canlı</th><th>Şu anki</th><th>Fark</th></tr></thead>
             <tbody>
@@ -424,10 +424,10 @@ function HesapGovdesi({ b }: { b: KartBaglami }) {
         </p>
       </Bolum>
       <Bolum baslik="Grup doluluğu" simge="gauge">
-        <ul className="tc-pyk-dolu">
+        <ul className="tc-pyt-dolu">
           {gl.map((g) => (
             <li key={g.ad}><span>{grupAdi(g.ad)}</span>
-              <span className="tc-pyk-bar" role="img" aria-label={`${grupAdi(g.ad)} doluluk ${yuzdeYaz(g.u)}`}><i data-ton={g.u > 0.9 ? 'hata' : undefined} ref={degisken({ '--w': `${Math.min(100, g.u * 100).toFixed(1)}%` })} /></span>
+              <span className="tc-pyt-bar" role="img" aria-label={`${grupAdi(g.ad)} doluluk ${yuzdeYaz(g.u)}`}><i data-ton={g.u > 0.9 ? 'hata' : undefined} ref={degisken({ '--w': `${Math.min(100, g.u * 100).toFixed(1)}%` })} /></span>
               <small className="tc-pym-mono">{yuzdeYaz(g.u)}</small>
             </li>
           ))}
@@ -452,18 +452,18 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
   const not = `Düzenlemek: ${VERI_NOTU}`;
   return (
     <>
-      <div className="tc-pyk-arac">
-        <label className="tc-pyk-sirala"><span>Ürün</span>
+      <div className="tc-pyt-arac">
+        <label className="tc-pyt-sirala"><span>Ürün</span>
           <select value={u.id} onChange={(e) => b.rotaUrunSec(e.target.value)}>{D.urunler.map((x) => <option key={x.id} value={x.id}>{x.id} · {x.ad ?? ''}</option>)}</select>
         </label>
         <small className="tc-pym-kucuk-yazi">{kul} sipariş kullanıyor</small>
         <BagDugmesi ad="Rotalar" b={b} bolum="rotalar" />
       </div>
       <Bayat b={b} metin="Rota ya da reçete değişti; haritadaki plan eski." />
-      <ol className="tc-pyk-rota" aria-label={`${u.ad ?? u.id} reçete ve rotası`} onPointerLeave={ust(null, null)}>
-        <li className="tc-pyk-dugum" data-tur="ham">
+      <ol className="tc-pyt-rota" aria-label={`${u.ad ?? u.id} reçete ve rotası`} onPointerLeave={ust(null, null)}>
+        <li className="tc-pyt-dugum" data-tur="ham">
           <header><Simge ad="box" boyut="k" /><b>Reçete</b><small>hammadde ve parçalar</small></header>
-          <ul className="tc-pyk-liste tc-pyk-sade">
+          <ul className="tc-pyt-liste tc-pyt-sade">
             {rec.length ? rec.map((m) => (
               <li key={m.kod}><span>{malz(m.kod)?.ad ?? m.kod}</span><small className="tc-pym-mono">{sayiYaz(m.miktar, 2)} {malz(m.kod)?.birim ?? ''}/adet</small></li>
             )) : <li className="tc-pym-kucuk-yazi">Reçetede malzeme yok.</li>}
@@ -478,13 +478,13 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
             typeof o.kasa === 'number' && `Kasa ${o.kasa}`, i > 0 && o.ortusebilir && 'Örtüşebilir', o.fai === true && 'İlk parça onayı', o.program === false && 'NC programı hazır değil',
             !o.fason && o.fasonIzin === true && 'Fasona verilebilir'].filter((x): x is string => typeof x === 'string');
           return (
-            <li key={o.k} className="tc-pyk-adim-kap">
-              <span className="tc-pyk-ok" data-tip={t}><Simge ad={t === 'x' ? 'layers' : 'down'} boyut="k" />{i > 0 && <span>{GECIS_AD[t]}{bag.length && t !== 'x' ? ` · öncül: ${bag.join(', ')}` : ''}</span>}</span>
-              <div className="tc-pyk-dugum" data-tur="adim" data-fason={o.fason ? '' : undefined} onPointerEnter={ust(o.k, null)}>
+            <li key={o.k} className="tc-pyt-adim-kap">
+              <span className="tc-pyt-ok" data-tip={t}><Simge ad={t === 'x' ? 'layers' : 'down'} boyut="k" />{i > 0 && <span>{GECIS_AD[t]}{bag.length && t !== 'x' ? ` · öncül: ${bag.join(', ')}` : ''}</span>}</span>
+              <div className="tc-pyt-dugum" data-tur="adim" data-fason={o.fason ? '' : undefined} onPointerEnter={ust(o.k, null)}>
                 <header><b className="tc-pym-mono">{o.k}</b><span>{o.ad ?? ''}</span></header>
-                <div className="tc-pyk-sat"><small>İstasyon</small><span>{o.fason ? `Fason · ${fason(o.fason)}` : gr.map(grupAdi).join(', ') || '—'}</span></div>
+                <div className="tc-pyt-sat"><small>İstasyon</small><span>{o.fason ? `Fason · ${fason(o.fason)}` : gr.map(grupAdi).join(', ') || '—'}</span></div>
                 {o.fason ? <p className="tc-pym-kucuk-yazi"><Simge ad="truck" boyut="k" /> Dış tedarikçide; kapasite ve çıkış günleri Fason bölümünde.</p> : (
-                  <ul className="tc-pyk-tezler" aria-label="Makineler">
+                  <ul className="tc-pyt-tezler" aria-label="Makineler">
                     {aday.map((m) => {
                       const x = (o.tezgahlar ?? []).find((z) => z.id === m.id);
                       return (
@@ -496,13 +496,13 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
                     })}
                   </ul>
                 )}
-                {!o.fason && !(o.tezgahlar ?? []).length && <p className="tc-pyk-uyari"><Simge ad="alert" boyut="k" /> Makine seçilmedi; bu adım planlanamaz.</p>}
-                {ekler.length > 0 && <div className="tc-pyk-cipler">{ekler.map((x) => <span key={x} className="tc-pyk-cip">{x}</span>)}</div>}
+                {!o.fason && !(o.tezgahlar ?? []).length && <p className="tc-pyt-uyari"><Simge ad="alert" boyut="k" /> Makine seçilmedi; bu adım planlanamaz.</p>}
+                {ekler.length > 0 && <div className="tc-pyt-cipler">{ekler.map((x) => <span key={x} className="tc-pyt-cip">{x}</span>)}</div>}
               </div>
             </li>
           );
         })}
-        <li className="tc-pyk-adim-kap"><span className="tc-pyk-ok"><Simge ad="down" boyut="k" /></span><div className="tc-pyk-dugum" data-tur="bitmis"><header><Simge ad="check" boyut="k" /><b>{u.ad ?? u.id}</b><small>bitmiş ürün</small></header></div></li>
+        <li className="tc-pyt-adim-kap"><span className="tc-pyt-ok"><Simge ad="down" boyut="k" /></span><div className="tc-pyt-dugum" data-tur="bitmis"><header><Simge ad="check" boyut="k" /><b>{u.ad ?? u.id}</b><small>bitmiş ürün</small></header></div></li>
       </ol>
       <div className="tc-pym-dugmeler"><Pasif ad="Adım ekle" simge="plus" not={VERI_NOTU} /></div>
       <p className="tc-pym-kucuk-yazi">Dolu makine adımın alternatifidir; motor en uygununu seçer. Kart açıkken bu ürünün rotası haritada yanar.</p>
@@ -519,12 +519,12 @@ function SenaryoGovdesi({ b }: { b: KartBaglami }) {
   const l = senaryoSirasi(v.senaryolar).filter((s) => s.durum === 'acik' || s.durum === 'onayda');
   const [gec, ad] = [GOSTERGE_SATIRLARI[0], GOSTERGE_SATIRLARI[1]];
   return (
-    <div className="tc-pyk-izgara">
-      <p className="tc-pyk-yorum"><Simge ad="flag" boyut="k" />
+    <div className="tc-pyt-izgara">
+      <p className="tc-pyt-yorum"><Simge ad="flag" boyut="k" />
         <span>{`Canlı plan sürüm ${String(v.canliSurum)}. Canlıya giden her değişiklik önce bir taslağa düşer; taslak kaydedilir, onaylanınca canlıya geçer.`}</span>
       </p>
       <Bolum baslik={`Açık taslaklar (${String(l.length)})`} simge="layers">
-        <ul className="tc-pyk-liste tc-pyk-senaryo">
+        <ul className="tc-pyt-liste tc-pyt-senaryo">
           {l.length ? l.slice(0, SENARYO_KARTI_SINIRI).map((s) => {
             const f = gec && s.gostergeler ? gostergeFarki(gec.al(v.canli), gec.al(s.gostergeler), true) : null;
             const g = ad && s.gostergeler ? ad.al(s.gostergeler) : null;
@@ -541,7 +541,7 @@ function SenaryoGovdesi({ b }: { b: KartBaglami }) {
           }) : <li className="tc-pym-kucuk-yazi">Açık taslak yok. Planlamada yapılan değişiklik bir taslağa düşer.</li>}
         </ul>
       </Bolum>
-      <div className="tc-pyk-arac">
+      <div className="tc-pyt-arac">
         <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" aria-disabled={b.senaryolarAc ? undefined : 'true'} onClick={() => b.senaryolarAc?.()}>
           <Simge ad="eye" boyut="k" /><span>Yan yana karşılaştır</span>
         </button>

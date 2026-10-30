@@ -1,171 +1,171 @@
 /* Tahta kartları (eski stil pm-tk-katman, pm-tk-kart, pm-tk-bas, pm-mz-*): haritanın üstünde, tahtayla kayar ve yakınlıkla büyüyüp küçülür.
    Genişlik kartın türünden; telefonda (dar) son kart haritanın altından açılır. */
-.tc-pyk { position: absolute; inset: 0; z-index: 4; overflow: clip; pointer-events: none; }
-.tc-pyk-kart {
+.tc-pyt { position: absolute; inset: 0; z-index: 4; overflow: clip; pointer-events: none; }
+.tc-pyt-kart {
   position: absolute; left: 0; top: 0; display: flex; flex-direction: column; width: calc(var(--b-6) * 15); max-height: var(--mh, calc(var(--b-6) * 15));
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); box-shadow: var(--shadow);
   transform: translate(var(--x, 0), var(--y, 0)) scale(var(--o, 1)); transform-origin: 0 0; pointer-events: auto; visibility: hidden;
 }
-.tc-pyk-kart[data-hazir] { visibility: visible; }
-.tc-pyk-kart[data-tut] { outline: var(--pay-ince) solid var(--sig); }
-.tc-pyk-kart[data-uzak] .tc-pyk-govde { opacity: .6; }
-.tc-pyk-kart[data-tur="plan"] { width: calc(var(--b-6) * 11.25); }
-.tc-pyk-kart[data-tur="siparis"] { width: calc(var(--b-6) * 17.5); }
-.tc-pyk-kart[data-tur="kuyruk"] { width: calc(var(--b-6) * 19.375); }
-.tc-pyk-kart[data-tur="senaryo"], .tc-pyk-kart[data-tur="hesap"] { width: calc(var(--b-6) * 16.25); }
-.tc-pyk-kart[data-tur="kisit"] { width: calc(var(--b-6) * 16.875); }
-.tc-pyk-kart[data-tur="etki"] { width: calc(var(--b-6) * 20); }
-.tc-pyk-kart[data-tur="rota"] { width: calc(var(--b-6) * 15.625); }
-.tc-pyk-bas {
+.tc-pyt-kart[data-hazir] { visibility: visible; }
+.tc-pyt-kart[data-tut] { outline: var(--pay-ince) solid var(--sig); }
+.tc-pyt-kart[data-uzak] .tc-pyt-govde { opacity: .6; }
+.tc-pyt-kart[data-tur="plan"] { width: calc(var(--b-6) * 11.25); }
+.tc-pyt-kart[data-tur="siparis"] { width: calc(var(--b-6) * 17.5); }
+.tc-pyt-kart[data-tur="kuyruk"] { width: calc(var(--b-6) * 19.375); }
+.tc-pyt-kart[data-tur="senaryo"], .tc-pyt-kart[data-tur="hesap"] { width: calc(var(--b-6) * 16.25); }
+.tc-pyt-kart[data-tur="kisit"] { width: calc(var(--b-6) * 16.875); }
+.tc-pyt-kart[data-tur="etki"] { width: calc(var(--b-6) * 20); }
+.tc-pyt-kart[data-tur="rota"] { width: calc(var(--b-6) * 15.625); }
+.tc-pyt-bas {
   display: flex; align-items: center; gap: var(--b-2); min-width: 0; padding: var(--b-1) var(--b-1) var(--b-1) var(--b-3);
   border-bottom: var(--cizgi-ince) solid var(--edge); cursor: grab; user-select: none; touch-action: none;
 }
-.tc-pyk-kart[data-kucuk] .tc-pyk-bas { border-bottom: 0; }
-.tc-pyk-kart[data-tut] .tc-pyk-bas { cursor: grabbing; }
-.tc-pyk-bas > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-pyk-govde { display: flex; flex-direction: column; gap: var(--b-2); min-height: 0; padding: var(--b-2) var(--b-3) var(--b-3); overflow: auto; font-size: var(--yazi-s); }
+.tc-pyt-kart[data-kucuk] .tc-pyt-bas { border-bottom: 0; }
+.tc-pyt-kart[data-tut] .tc-pyt-bas { cursor: grabbing; }
+.tc-pyt-bas > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyt-govde { display: flex; flex-direction: column; gap: var(--b-2); min-height: 0; padding: var(--b-2) var(--b-3) var(--b-3); overflow: auto; font-size: var(--yazi-s); }
 
 /* Telefonda kart alttan açılır, oynatıcının üstünde durur; yakınlık düğmeleri kartın üstüne binmesin diye gizlenir (iki parmakla yakınlaşılır). */
-.tc-pym-at:has(.tc-pyk[data-dar] .tc-pyk-kart) .tc-pym-sg-zum { display: none; }
-.tc-pyk[data-dar] .tc-pyk-kart {
+.tc-pym-at:has(.tc-pyt[data-dar] .tc-pyt-kart) .tc-pym-sg-zum { display: none; }
+.tc-pyt[data-dar] .tc-pyt-kart {
   top: auto; right: var(--b-1); bottom: calc(var(--b-6) * 4); left: var(--b-1); width: auto; max-height: 55%; transform: none; visibility: visible;
 }
-.tc-pyk[data-dar] .tc-pyk-bas { cursor: default; }
+.tc-pyt[data-dar] .tc-pyt-bas { cursor: default; }
 
-.tc-pyk-ust { display: grid; gap: var(--pay-ince); }
-.tc-pyk-ust > small:first-child { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .06em; }
-.tc-pyk-ust > small:last-child { color: var(--muted); }
-.tc-pyk-yorum { display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; padding: var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
-.tc-pyk-bolum { display: grid; gap: var(--b-1); }
-.tc-pyk-bolum h4 { display: flex; align-items: center; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); }
-.tc-pyk-bolum p { margin: 0; }
-.tc-pyk-liste { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-liste > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); padding: var(--pay-ince) 0; }
-.tc-pyk-liste > li[data-ton="hata"] > svg { color: var(--stop); }
-.tc-pyk-liste > li[data-ton="uyari"] > svg { color: var(--hold); }
+.tc-pyt-ust { display: grid; gap: var(--pay-ince); }
+.tc-pyt-ust > small:first-child { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .06em; }
+.tc-pyt-ust > small:last-child { color: var(--muted); }
+.tc-pyt-yorum { display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; padding: var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-pyt-bolum { display: grid; gap: var(--b-1); }
+.tc-pyt-bolum h4 { display: flex; align-items: center; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); }
+.tc-pyt-bolum p { margin: 0; }
+.tc-pyt-liste { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-liste > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); padding: var(--pay-ince) 0; }
+.tc-pyt-liste > li[data-ton="hata"] > svg { color: var(--stop); }
+.tc-pyt-liste > li[data-ton="uyari"] > svg { color: var(--hold); }
 
-.tc-pyk-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
-.tc-pyk-seg { display: inline-flex; flex-wrap: wrap; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); overflow: hidden; }
-.tc-pyk-seg > button { min-height: calc(var(--dokunma) - var(--b-2)); padding: 0 var(--b-2); border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
-.tc-pyk-seg > button + button { border-left: var(--cizgi-ince) solid var(--edge2); }
-.tc-pyk-seg > button[aria-pressed="true"] { background: var(--sig); color: var(--panel-solid); }
-.tc-pyk-sirala { display: inline-flex; align-items: center; gap: var(--b-1); }
-.tc-pyk-sirala select, .tc-pyk-tablo select { min-height: calc(var(--dokunma) - var(--b-2)); font: inherit; }
+.tc-pyt-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pyt-seg { display: inline-flex; flex-wrap: wrap; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); overflow: hidden; }
+.tc-pyt-seg > button { min-height: calc(var(--dokunma) - var(--b-2)); padding: 0 var(--b-2); border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.tc-pyt-seg > button + button { border-left: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyt-seg > button[aria-pressed="true"] { background: var(--sig); color: var(--panel-solid); }
+.tc-pyt-sirala { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pyt-sirala select, .tc-pyt-tablo select { min-height: calc(var(--dokunma) - var(--b-2)); font: inherit; }
 
-.tc-pyk-tablo { overflow: auto; }
-.tc-pyk-tablo table { width: 100%; border-collapse: collapse; }
-.tc-pyk-tablo th { position: sticky; top: 0; padding: var(--b-1); background: var(--panel-solid); color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-align: left; white-space: nowrap; }
-.tc-pyk-tablo td { padding: var(--pay-ince) var(--b-1); border-top: var(--cizgi-ince) solid var(--edge); white-space: nowrap; }
-.tc-pyk-tablo tr[data-secili] td { background: color-mix(in oklab, var(--sig) 12%, transparent); }
-.tc-pyk-sip { display: inline-flex; align-items: center; gap: var(--b-1); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
-.tc-pyk-nokta { display: inline-block; width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--c, var(--edge2)); }
-.tc-pyk-gec { color: var(--stop); font-weight: 600; }
-.tc-pyk-tamam { color: var(--done); }
-.tc-pyk-tablo [data-ton="iyi"] { color: var(--run); }
-.tc-pyk-tablo [data-ton="kotu"] { color: var(--stop); }
+.tc-pyt-tablo { overflow: auto; }
+.tc-pyt-tablo table { width: 100%; border-collapse: collapse; }
+.tc-pyt-tablo th { position: sticky; top: 0; padding: var(--b-1); background: var(--panel-solid); color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-align: left; white-space: nowrap; }
+.tc-pyt-tablo td { padding: var(--pay-ince) var(--b-1); border-top: var(--cizgi-ince) solid var(--edge); white-space: nowrap; }
+.tc-pyt-tablo tr[data-secili] td { background: color-mix(in oklab, var(--sig) 12%, transparent); }
+.tc-pyt-sip { display: inline-flex; align-items: center; gap: var(--b-1); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.tc-pyt-nokta { display: inline-block; width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--c, var(--edge2)); }
+.tc-pyt-gec { color: var(--stop); font-weight: 600; }
+.tc-pyt-tamam { color: var(--done); }
+.tc-pyt-tablo [data-ton="iyi"] { color: var(--run); }
+.tc-pyt-tablo [data-ton="kotu"] { color: var(--stop); }
 
-.tc-pyk-kolonlar { display: grid; grid-auto-columns: minmax(calc(var(--b-6) * 5.5), 1fr); grid-auto-flow: column; gap: var(--b-2); overflow-x: auto; }
-.tc-pyk-kol { display: grid; align-content: start; gap: var(--b-1); min-width: 0; padding: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); }
-.tc-pyk-kol[data-secili] { border-color: var(--sig); }
-.tc-pyk-kol > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
-.tc-pyk-kol > header > button { display: inline-flex; align-items: center; gap: var(--b-1); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
-.tc-pyk-kol > header > small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-kol > header > small[data-ton="hata"] { color: var(--stop); }
-.tc-pyk-dur { display: inline-block; width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--idle); }
-.tc-pyk-dur[data-dur="calisiyor"] { background: var(--run); }
-.tc-pyk-dur[data-dur="ariza"] { background: var(--stop); }
-.tc-pyk-kol ol { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-kol li:not([data-bos]) {
+.tc-pyt-kolonlar { display: grid; grid-auto-columns: minmax(calc(var(--b-6) * 5.5), 1fr); grid-auto-flow: column; gap: var(--b-2); overflow-x: auto; }
+.tc-pyt-kol { display: grid; align-content: start; gap: var(--b-1); min-width: 0; padding: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-pyt-kol[data-secili] { border-color: var(--sig); }
+.tc-pyt-kol > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-pyt-kol > header > button { display: inline-flex; align-items: center; gap: var(--b-1); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.tc-pyt-kol > header > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-kol > header > small[data-ton="hata"] { color: var(--stop); }
+.tc-pyt-dur { display: inline-block; width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--idle); }
+.tc-pyt-dur[data-dur="calisiyor"] { background: var(--run); }
+.tc-pyt-dur[data-dur="ariza"] { background: var(--stop); }
+.tc-pyt-kol ol { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-kol li:not([data-bos]) {
   position: relative; display: flex; align-items: center; gap: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-left: var(--kayma) solid var(--c, var(--edge2));
   border-radius: var(--yari-1); background: var(--panel-solid);
 }
-.tc-pyk-kol li[data-sabit] { opacity: .75; }
-.tc-pyk-kol li[data-secili] { border-color: var(--sig); }
-.tc-pyk-kol li[data-is] { background: color-mix(in oklab, var(--sig) 8%, var(--panel-solid)); }
-.tc-pyk-kol li > button { display: grid; flex: 1 1 auto; gap: 0; min-width: 0; padding: var(--pay-ince) var(--b-1); border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.tc-pyk-kol li > button > span { display: flex; justify-content: space-between; gap: var(--b-1); }
-.tc-pyk-kol li > button small { overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); text-overflow: ellipsis; white-space: nowrap; }
-.tc-pyk-rozet { display: inline-flex; padding: 0 var(--b-1); color: var(--muted); font-weight: 700; }
-.tc-pyk-rozet[data-ton="hata"] { color: var(--stop); }
+.tc-pyt-kol li[data-sabit] { opacity: .75; }
+.tc-pyt-kol li[data-secili] { border-color: var(--sig); }
+.tc-pyt-kol li[data-is] { background: color-mix(in oklab, var(--sig) 8%, var(--panel-solid)); }
+.tc-pyt-kol li > button { display: grid; flex: 1 1 auto; gap: 0; min-width: 0; padding: var(--pay-ince) var(--b-1); border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tc-pyt-kol li > button > span { display: flex; justify-content: space-between; gap: var(--b-1); }
+.tc-pyt-kol li > button small { overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyt-rozet { display: inline-flex; padding: 0 var(--b-1); color: var(--muted); font-weight: 700; }
+.tc-pyt-rozet[data-ton="hata"] { color: var(--stop); }
 
-.tc-pyk-ag-kap { overflow: auto; }
-.tc-pyk-ag { display: block; width: 100%; min-width: calc(var(--b-6) * 17); height: auto; }
-.tc-pyk-kolad { fill: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
-.tc-pyk-bag { fill: none; stroke: var(--c, var(--edge2)); stroke-width: var(--k, 2); opacity: .45; }
-.tc-pyk-bag[data-sec] { opacity: .9; }
-.tc-pyk-ag[data-hl] .tc-pyk-bag { opacity: .12; }
-.tc-pyk-ag[data-hl] .tc-pyk-bag[data-yak] { opacity: .9; }
-.tc-pyk-dugum { cursor: pointer; outline: none; }
-.tc-pyk-dugum circle { fill: var(--panel-solid); stroke: var(--ink); stroke-width: 1.5; }
-.tc-pyk-dugum text { fill: var(--ink); font-size: var(--yazi-xs); }
-.tc-pyk-dugum .tc-pyk-alt { fill: var(--muted); }
-.tc-pyk-dugum[data-sec] circle, .tc-pyk-dugum[data-yak] circle, .tc-pyk-dugum:focus-visible circle { fill: var(--sig); stroke: var(--sig); }
-.tc-pyk-ag[data-hl] .tc-pyk-dugum:not([data-yak]) { opacity: .4; }
+.tc-pyt-ag-kap { overflow: auto; }
+.tc-pyt-ag { display: block; width: 100%; min-width: calc(var(--b-6) * 17); height: auto; }
+.tc-pyt-kolad { fill: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-pyt-bag { fill: none; stroke: var(--c, var(--edge2)); stroke-width: var(--k, 2); opacity: .45; }
+.tc-pyt-bag[data-sec] { opacity: .9; }
+.tc-pyt-ag[data-hl] .tc-pyt-bag { opacity: .12; }
+.tc-pyt-ag[data-hl] .tc-pyt-bag[data-yak] { opacity: .9; }
+.tc-pyt-dugum { cursor: pointer; outline: none; }
+.tc-pyt-dugum circle { fill: var(--panel-solid); stroke: var(--ink); stroke-width: 1.5; }
+.tc-pyt-dugum text { fill: var(--ink); font-size: var(--yazi-xs); }
+.tc-pyt-dugum .tc-pyt-alt { fill: var(--muted); }
+.tc-pyt-dugum[data-sec] circle, .tc-pyt-dugum[data-yak] circle, .tc-pyt-dugum:focus-visible circle { fill: var(--sig); stroke: var(--sig); }
+.tc-pyt-ag[data-hl] .tc-pyt-dugum:not([data-yak]) { opacity: .4; }
 
 /* Kısıt ve veri, Hesaplar (pm-mz-izgara, pm-mz-blok, pm-mz-kisitlar, pm-mz-dolu). */
-.tc-pyk-bayat { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2); border-radius: var(--yari-1); background: color-mix(in oklab, var(--hold) 14%, var(--panel-solid)); }
-.tc-pyk-bayat > span { flex: 1 1 calc(var(--b-6) * 5); }
-.tc-pyk-izgara { display: grid; gap: var(--b-3); }
-.tc-pyk-sade > li { grid-template-columns: auto minmax(0, 1fr) auto; }
-.tc-pyk-kisitlar { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-kisitlar > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); }
-.tc-pyk-kisitlar > li > span { display: grid; min-width: 0; }
-.tc-pyk-kisitlar > li > span small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-kisitlar > li[data-kapali] b { color: var(--muted); text-decoration: line-through; }
-.tc-pyk-anahtar { position: relative; display: inline-flex; align-items: center; min-height: calc(var(--dokunma) - var(--b-2)); cursor: pointer; }
-.tc-pyk-anahtar input { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); opacity: 0; }
-.tc-pyk-anahtar i { position: relative; width: calc(var(--b-6) + var(--b-1)); height: var(--b-5); border-radius: var(--yari-tam); background: var(--edge2); }
-.tc-pyk-anahtar i::after {
+.tc-pyt-bayat { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2); border-radius: var(--yari-1); background: color-mix(in oklab, var(--hold) 14%, var(--panel-solid)); }
+.tc-pyt-bayat > span { flex: 1 1 calc(var(--b-6) * 5); }
+.tc-pyt-izgara { display: grid; gap: var(--b-3); }
+.tc-pyt-sade > li { grid-template-columns: auto minmax(0, 1fr) auto; }
+.tc-pyt-kisitlar { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-kisitlar > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); }
+.tc-pyt-kisitlar > li > span { display: grid; min-width: 0; }
+.tc-pyt-kisitlar > li > span small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-kisitlar > li[data-kapali] b { color: var(--muted); text-decoration: line-through; }
+.tc-pyt-anahtar { position: relative; display: inline-flex; align-items: center; min-height: calc(var(--dokunma) - var(--b-2)); cursor: pointer; }
+.tc-pyt-anahtar input { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); opacity: 0; }
+.tc-pyt-anahtar i { position: relative; width: calc(var(--b-6) + var(--b-1)); height: var(--b-5); border-radius: var(--yari-tam); background: var(--edge2); }
+.tc-pyt-anahtar i::after {
   content: ""; position: absolute; top: var(--pay-ince); left: var(--pay-ince); width: calc(var(--b-5) - 2 * var(--pay-ince)); height: calc(var(--b-5) - 2 * var(--pay-ince));
   border-radius: 50%; background: var(--panel-solid); transition: transform .15s;
 }
-.tc-pyk-anahtar input:checked + i { background: var(--run); }
-.tc-pyk-anahtar input:checked + i::after { transform: translateX(calc(var(--b-6) + var(--b-1) - var(--b-5))); }
-.tc-pyk-anahtar input:focus-visible + i { outline: var(--pay-ince) solid var(--sig); outline-offset: var(--pay-ince); }
-.tc-pyk-anahtar input:disabled + i { opacity: .6; }
-.tc-pyk-paramlar { display: grid; gap: var(--b-1); }
-.tc-pyk .tc-pyi-param { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--b-6) * 3); gap: var(--b-2); align-items: center; font-size: var(--yazi-xs); }
-.tc-pyk .tc-pyi-param .tc-alan-kutu { min-height: calc(var(--dokunma) - var(--b-2)); padding: 0 var(--b-2); }
-.tc-pyk .tc-pyi-param small { color: var(--muted); }
-.tc-pyk-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
-.tc-pyk-cip { display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--pay-ince) var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); font-size: var(--yazi-xs); }
-.tc-pyk-dolu { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-dolu > li { display: grid; grid-template-columns: calc(var(--b-6) * 3) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); }
-.tc-pyk-bar { position: relative; height: var(--b-2); border-radius: var(--yari-tam); background: var(--panel2); overflow: hidden; }
-.tc-pyk-bar > i { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: var(--run); }
-.tc-pyk-bar > i[data-ton="hata"] { background: var(--stop); }
+.tc-pyt-anahtar input:checked + i { background: var(--run); }
+.tc-pyt-anahtar input:checked + i::after { transform: translateX(calc(var(--b-6) + var(--b-1) - var(--b-5))); }
+.tc-pyt-anahtar input:focus-visible + i { outline: var(--pay-ince) solid var(--sig); outline-offset: var(--pay-ince); }
+.tc-pyt-anahtar input:disabled + i { opacity: .6; }
+.tc-pyt-paramlar { display: grid; gap: var(--b-1); }
+.tc-pyt .tc-pyi-param { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--b-6) * 3); gap: var(--b-2); align-items: center; font-size: var(--yazi-xs); }
+.tc-pyt .tc-pyi-param .tc-alan-kutu { min-height: calc(var(--dokunma) - var(--b-2)); padding: 0 var(--b-2); }
+.tc-pyt .tc-pyi-param small { color: var(--muted); }
+.tc-pyt-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-pyt-cip { display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--pay-ince) var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); font-size: var(--yazi-xs); }
+.tc-pyt-dolu { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-dolu > li { display: grid; grid-template-columns: calc(var(--b-6) * 3) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); }
+.tc-pyt-bar { position: relative; height: var(--b-2); border-radius: var(--yari-tam); background: var(--panel2); overflow: hidden; }
+.tc-pyt-bar > i { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: var(--run); }
+.tc-pyt-bar > i[data-ton="hata"] { background: var(--stop); }
 
 /* Reçete ve Rota (pm-rt-akis): hammadde, adımlar, bitmiş ürün yukarıdan aşağı. */
-.tc-pyk-rota { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-adim-kap { display: grid; gap: var(--b-1); }
-.tc-pyk-dugum { display: grid; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); }
-.tc-pyk-dugum[data-tur="adim"]:hover { border-color: var(--done); }
-.tc-pyk-dugum[data-fason] { border-style: dashed; }
-.tc-pyk-dugum > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
-.tc-pyk-dugum > header small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-sat { display: flex; align-items: center; gap: var(--b-2); }
-.tc-pyk-sat > small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-ok { display: flex; align-items: center; gap: var(--b-1); padding-left: var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-ok[data-tip="o"] { color: var(--done); }
-.tc-pyk-tezler { display: flex; flex-wrap: wrap; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
-.tc-pyk-tezler > li { display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--pay-ince); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }
-.tc-pyk-tezler > li[data-on] { border-color: var(--done); }
-.tc-pyk-tezler button { padding: 0 var(--b-1); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; cursor: default; }
-.tc-pyk-tezler li[data-on] button { background: var(--done); color: var(--panel-solid); }
-.tc-pyk-tezler small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-uyari { display: flex; align-items: center; gap: var(--b-1); margin: 0; color: var(--stop); font-size: var(--yazi-xs); }
+.tc-pyt-rota { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-adim-kap { display: grid; gap: var(--b-1); }
+.tc-pyt-dugum { display: grid; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-pyt-dugum[data-tur="adim"]:hover { border-color: var(--done); }
+.tc-pyt-dugum[data-fason] { border-style: dashed; }
+.tc-pyt-dugum > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pyt-dugum > header small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-sat { display: flex; align-items: center; gap: var(--b-2); }
+.tc-pyt-sat > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-ok { display: flex; align-items: center; gap: var(--b-1); padding-left: var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-ok[data-tip="o"] { color: var(--done); }
+.tc-pyt-tezler { display: flex; flex-wrap: wrap; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pyt-tezler > li { display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--pay-ince); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }
+.tc-pyt-tezler > li[data-on] { border-color: var(--done); }
+.tc-pyt-tezler button { padding: 0 var(--b-1); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; cursor: default; }
+.tc-pyt-tezler li[data-on] button { background: var(--done); color: var(--panel-solid); }
+.tc-pyt-tezler small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-uyari { display: flex; align-items: center; gap: var(--b-1); margin: 0; color: var(--stop); font-size: var(--yazi-xs); }
 
 /* Rota izi haritanın üstünde, kartların altında. */
-.tc-pyk-iz { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.tc-pyk-iz-kutu { fill: none; stroke: var(--done); stroke-width: 2.5; }
-.tc-pyk-iz-kutu[data-alt] { stroke-dasharray: 6 4; }
-.tc-pyk-iz-kutu[data-vurgu] { fill: color-mix(in oklab, var(--done) 16%, transparent); stroke-width: 4; }
-.tc-pyk-iz-ad { fill: var(--done); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; }
-.tc-pyk-iz-yol { fill: none; stroke: var(--done); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; opacity: .7; }
-.tc-pyk-iz [data-sonuk] { opacity: .3; }
+.tc-pyt-iz { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tc-pyt-iz-kutu { fill: none; stroke: var(--done); stroke-width: 2.5; }
+.tc-pyt-iz-kutu[data-alt] { stroke-dasharray: 6 4; }
+.tc-pyt-iz-kutu[data-vurgu] { fill: color-mix(in oklab, var(--done) 16%, transparent); stroke-width: 4; }
+.tc-pyt-iz-ad { fill: var(--done); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-pyt-iz-yol { fill: none; stroke: var(--done); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; opacity: .7; }
+.tc-pyt-iz [data-sonuk] { opacity: .3; }
 
 /* Senaryolar */
-.tc-pyk-senaryo > li > span:nth-child(2) { display: grid; min-width: 0; }
-.tc-pyk-senaryo > li > span:nth-child(2) > small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyk-senaryo small[data-ton="iyi"] { color: var(--run); }
-.tc-pyk-senaryo small[data-ton="kotu"] { color: var(--stop); }
+.tc-pyt-senaryo > li > span:nth-child(2) { display: grid; min-width: 0; }
+.tc-pyt-senaryo > li > span:nth-child(2) > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyt-senaryo small[data-ton="iyi"] { color: var(--run); }
+.tc-pyt-senaryo small[data-ton="kotu"] { color: var(--stop); }
