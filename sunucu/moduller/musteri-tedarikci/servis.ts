@@ -6,6 +6,12 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
+import { HIZMET_PUANI_SINIRI, YILLIK_KARNE_SINIRI, karneOlayi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type {
+  HizmetPuaniGovdesi, KarneCevabi, KarneOlayi, KarneOzeti, LotKarari, YillikKarneGovdesi,
+} from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   Adres, AdresKimligi, Firma, FirmaAyrintiCevabi, FirmaDuzeltmesi, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi, firmaListeSorgusu,
@@ -13,9 +19,9 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
+  LOGO_KILIDI_ILETISI, adresSiniriHatasi, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
 } from './kurallar.ts';
-import type { DefterSatiri, FirmaDurumu } from './kurallar.ts';
+import type { DefterSatiri, FirmaDurumu, KarneSayilari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Uç katmanının denetim eki (çekirdek `denetimEki`): komut başına bir kez çağrılır.
@@ -258,4 +264,92 @@ export async function musteriSiniflari(db: Db, idler: readonly number[]): Promis
   const tekil = [...new Set(idler)];
   if (tekil.length === 0) return new Map();
   return new Map((await sorgular.musteriSiniflariniBul(db, tekil)).map((s) => [s.id, s.sinif]));
+}
+
+// ---- Tedarikçi karnesi (1259 c, 1260 a) ----
+
+const YILLIK_KARNE_KISITLARI: KisitEslemesi = {
+  musteri_tedarikci_yillik_karne_tekil: { ileti: 'Bu firmanın bu yıl için karnesi kayıtlı.', alan: 'yil' },
+};
+
+// disari.ts: satın alma teslimi, Kalite Merkezi lot kararını kendi transaction'ında bildirir; olay kaynağın kaydıyla birlikte
+// yazılır ya da birlikte geri alınır. Aynı kaynak ve anahtar önceki olayın yerine geçer.
+export async function karneOlayiYaz(db: Db, girdi: KarneOlayi): Promise<void> {
+  const o = karneOlayi.parse(girdi);
+  if ((await sorgular.firmaVarMi(db, o.firmaId)) === null) throw bulunamadi('Firma bulunamadı.');
+  await sorgular.karneOlayiYaz(db, {
+    firmaId: o.firmaId, kaynak: o.kaynak, anahtar: o.anahtar, tur: o.tur, zaman: o.zaman,
+    termin: o.tur === 'teslim' ? o.termin : null, teslimGunu: o.tur === 'teslim' ? o.teslimGunu : null,
+    tam: o.tur === 'teslim' ? o.tam : null, lotKarari: o.tur === 'lot' ? o.karar : null,
+  });
+}
+
+// Kayan 12 aylık karne; dönem sunucunun tesis gününde biter. Teklif kıyası ve firma kartı buradan okur.
+export async function karneOzetleri(db: Db, idler: readonly number[], an: number = Date.now()): Promise<Map<number, KarneOzeti>> {
+  const tekil = [...new Set(idler)];
+  if (tekil.length === 0) return new Map();
+  const { donemBasi, donemSonu } = karneDonemi(tesisGunu(an));
+  const teslimler = await sorgular.teslimGruplari(db, tekil, donemBasi, donemSonu);
+  const lotlar = await sorgular.lotGruplari(db, tekil, donemBasi, donemSonu, TESIS_SAAT_DILIMI);
+  const hizmetler = await sorgular.hizmetGruplari(db, tekil, donemBasi, donemSonu, TESIS_SAAT_DILIMI);
+  const sayilar = new Map<number, KarneSayilari>(tekil.map((id) => [id, {
+    teslimToplam: 0, teslimZamaninda: 0, lotKararlari: {} as Partial<Record<LotKarari, number>>, hizmetSayisi: 0, hizmetToplami: 0,
+  }]));
+  for (const t of teslimler) {
+    const s = sayilar.get(t.firmaId);
+    if (!s) continue;
+    s.teslimToplam += t.sayi;
+    if (zamanindaMi(t)) s.teslimZamaninda += t.sayi;
+  }
+  for (const l of lotlar) {
+    const s = sayilar.get(l.firmaId);
+    if (s) s.lotKararlari[l.lotKarari] = (s.lotKararlari[l.lotKarari] ?? 0) + l.sayi;
+  }
+  for (const h of hizmetler) {
+    const s = sayilar.get(h.firmaId);
+    if (s) { s.hizmetSayisi = h.sayi; s.hizmetToplami = h.toplam; }
+  }
+  return new Map([...sayilar].map(([id, s]) => [id, { firmaId: id, donemBasi, donemSonu, ...karneHesapla(s) }]));
+}
+
+export async function firmaKarnesi(db: Db, id: number): Promise<KarneCevabi> {
+  await firmaGetir(db, id);
+  const ozet = await karneOzetleri(db, [id]);
+  const yillik = await sorgular.yillikKarneler(db, id, YILLIK_KARNE_SINIRI);
+  const hizmet = await sorgular.hizmetPuanlari(db, id, HIZMET_PUANI_SINIRI);
+  const karne = ozet.get(id);
+  if (!karne) throw new Error('Karne hesaplanamadı.');
+  const adlar = await kisiAdlari(db, [...yillik.map((y) => y.degerlendirenId), ...hizmet.map((h) => h.girenId)]);
+  const ad = (kisiId: number): string => adlar.get(kisiId) ?? `#${kisiId}`;
+  return {
+    karne,
+    yillikKarneler: yillik.map(({ degerlendirenId, ...y }) => ({ ...y, degerlendiren: ad(degerlendirenId) })),
+    hizmetPuanlari: hizmet.map(({ girenId, ...h }) => ({ ...h, giren: ad(girenId) })),
+  };
+}
+
+async function karneYazilabilir(db: Db, id: number): Promise<void> {
+  const firma = await sorgular.firmaGetir(db, id, true);
+  if (!firma) throw bulunamadi('Firma bulunamadı.');
+  const hata = karneYazmaHatasi(firma.tur);
+  if (hata) throw gecersiz(hata);
+}
+
+// Kişi ve zaman sunucudan yazılır; gövde yalnız puanı ve notu taşır.
+export async function hizmetPuaniEkle(db: Db, kullanici: Kullanici, id: number, g: HizmetPuaniGovdesi): Promise<KarneCevabi> {
+  await karneYazilabilir(db, id);
+  await sorgular.hizmetPuaniEkle(db, id, g.puan, g.not ?? null, kullanici.id);
+  return firmaKarnesi(db, id);
+}
+
+// Yıllık karne o anki kayan karnenin kaydıdır; puanı ve sınıfı sunucu hesaplar.
+export async function yillikKarneEkle(db: Db, kullanici: Kullanici, id: number, g: YillikKarneGovdesi): Promise<KarneCevabi> {
+  await karneYazilabilir(db, id);
+  const karne = (await karneOzetleri(db, [id])).get(id);
+  if (!karne) throw new Error('Karne hesaplanamadı.');
+  await kisitKorumali(YILLIK_KARNE_KISITLARI, () => sorgular.yillikKarneEkle(db, {
+    firmaId: id, yil: g.yil, teslimOrani: karne.teslim.oran, kalitePuani: karne.kalite.puan, hizmetPuani: karne.hizmet.puan,
+    puan: karne.puan, sinif: karne.sinif, not: g.not ?? null, degerlendirenId: kullanici.id,
+  }));
+  return firmaKarnesi(db, id);
 }

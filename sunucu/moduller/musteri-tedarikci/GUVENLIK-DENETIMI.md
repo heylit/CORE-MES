@@ -10,3 +10,5 @@
 - Finans rakamı bu modülün uçlarından ve `disari.ts`'ten dönmez (FNS-48 testi).
 - Dış çağrı, yeni paket, gerçek veri yok; örnek firmalar uydurma (ORN-).
 - Konum girişi istemcide yalnız metinden ayrıştırılır; harita servisine istek atılmaz.
+- Tedarikçi karnesi (1259 c): okuma `musteri-tedarikci.oku`; hizmet puanı `satin-alma.yaz`, yıllık karne `kalite-merkezi.onayla` (mevcut işlemler, rol x işlem değişmedi). Yazma uçları `tekrarKorumali`; kişi ve zaman sunucudan, gövdedeki puan, sınıf ve kişi alanı şemada yoktur (yıllık karnenin puanını sunucu hesaplar). Müşteri türündeki firmaya yazılmaz (422). Yıllık karne firma ve yıl başına tekildir (kısıt, CAKISMA).
+- Karne olayı yalnız `disari.ts` `karneOlayiYaz` ile, çağıranın transaction'ında yazılır; uç yoktur. Olay zod şemasıyla denetlenir, olmayan firma 404; tür alanları kısıtla ayrılır.

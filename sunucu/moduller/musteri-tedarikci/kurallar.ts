@@ -1,5 +1,8 @@
-import { ADRES_SINIRI, FIRMA_ARAMA_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { FirmaKimligi, FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import {
+  ADRES_SINIRI, FIRMA_ARAMA_SINIRI, KARNE_AGIRLIKLARI, KARNE_DONEM_AYI, KARNE_EN_AZ_LOT, KARNE_EN_AZ_TESLIM, KARNE_SINIFLARI,
+  KARNE_SINIF_ALT_SINIRLARI, LOT_KARARLARI, LOT_KARAR_PUANI, TESLIM_TOLERANS_GUNU,
+} from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { FirmaKimligi, FirmaTuru, KarneOzeti, KarneSinifi, LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Müşteri ve tedarikçi iş kuralları (saf). Numara (MT-n) KURAL-TEST.md ile aynıdır; finanstan gelenlerin eski numarası parantezde.
 
@@ -103,4 +106,68 @@ export function firmaAramaSonucu(f: { id: number; kod: string | null; ad: string
     aciklama: [kod === null ? null : f.ad, TUR_ADI[f.tur], f.fason ? 'Fason' : null, f.aktif ? null : 'Pasif'].filter((p) => p !== null).join(' · '),
     yol: `/musteri-tedarikci?firma=${f.id}` as const,
   };
+}
+
+// ---- Tedarikçi karnesi (1259 c, 1260 a) ----
+
+// MT-14: karne dönemi tesis gününde biten kayan 12 aydır; ayın son günleri kısa ayda o ayın son gününe çekilir (29 Şubat gibi).
+export function karneDonemi(bugun: string): { donemBasi: string; donemSonu: string } {
+  const [yil, ay, gun] = bugun.split('-').map(Number) as [number, number, number];
+  const hedefAy = ay - KARNE_DONEM_AYI;
+  const basYil = yil + Math.floor((hedefAy - 1) / 12);
+  const basAy = ((((hedefAy - 1) % 12) + 12) % 12) + 1;
+  const ayinSonu = new Date(Date.UTC(basYil, basAy, 0)).getUTCDate();
+  const iki = (n: number): string => String(n).padStart(2, '0');
+  return { donemBasi: `${basYil}-${iki(basAy)}-${iki(Math.min(gun, ayinSonu))}`, donemSonu: bugun };
+}
+
+// MT-15: teslim tamsa ve termin + tolerans gününü geçmediyse zamanındadır; eksik teslim zamanında sayılmaz.
+export function zamanindaMi(o: { termin: string; teslimGunu: string; tam: boolean }): boolean {
+  if (!o.tam) return false;
+  const gun = (t: string): number => Date.parse(`${t}T00:00:00Z`) / 86_400_000;
+  return gun(o.teslimGunu) - gun(o.termin) <= TESLIM_TOLERANS_GUNU;
+}
+
+export interface KarneSayilari {
+  teslimToplam: number;
+  teslimZamaninda: number;
+  lotKararlari: Partial<Record<LotKarari, number>>;
+  hizmetSayisi: number;
+  hizmetToplami: number;
+}
+
+const ondalik1 = (n: number): number => Math.round(n * 10) / 10;
+
+export function karneSinifiBul(puan: number): KarneSinifi {
+  return KARNE_SINIFLARI.find((s) => puan >= KARNE_SINIF_ALT_SINIRLARI[s]) ?? 'D';
+}
+
+// MT-16: puan = teslim 40 + kalite 40 + hizmet 20 (1260 a). Kalite lot başına kararın puanıdır (kabul 1, şartlı ve hatalı kabul 0,5,
+// red ve iade 0). Hizmet puanı girilmemişse ağırlığı öteki ikisine paylaştırılır (50/50). 12 ayda 3 teslim ve 3 lot yoksa
+// "yetersiz veri": puan ve sınıf null'dır, sıfır uydurulmaz.
+export function karneHesapla(s: KarneSayilari): Omit<KarneOzeti, 'firmaId' | 'donemBasi' | 'donemSonu'> {
+  const lot = LOT_KARARLARI.reduce((t, k) => t + (s.lotKararlari[k] ?? 0), 0);
+  const lotPuani = LOT_KARARLARI.reduce((t, k) => t + (s.lotKararlari[k] ?? 0) * LOT_KARAR_PUANI[k], 0);
+  const oran = s.teslimToplam > 0 ? ondalik1((s.teslimZamaninda / s.teslimToplam) * 100) : null;
+  const kalite = lot > 0 ? ondalik1((lotPuani / lot) * 100) : null;
+  const hizmet = s.hizmetSayisi > 0 ? ondalik1((s.hizmetToplami / s.hizmetSayisi) * 20) : null;
+  const yetersizVeri = s.teslimToplam < KARNE_EN_AZ_TESLIM || lot < KARNE_EN_AZ_LOT;
+  let puan: number | null = null;
+  if (!yetersizVeri && oran !== null && kalite !== null) {
+    const { teslim: a, kalite: b, hizmet: c } = KARNE_AGIRLIKLARI;
+    puan = hizmet === null ? ondalik1((oran + kalite) / 2) : ondalik1((oran * a + kalite * b + hizmet * c) / (a + b + c));
+  }
+  return {
+    teslim: { toplam: s.teslimToplam, zamaninda: s.teslimZamaninda, oran },
+    kalite: { lot, puan: kalite },
+    hizmet: { sayi: s.hizmetSayisi, puan: hizmet },
+    puan,
+    sinif: puan === null ? null : karneSinifiBul(puan),
+    yetersizVeri,
+  };
+}
+
+// MT-17: hizmet puanı ve yıllık karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır.
+export function karneYazmaHatasi(tur: FirmaTuru): string | null {
+  return tur === 'musteri' ? 'Karne yalnız tedarikçi firmada tutulur.' : null;
 }

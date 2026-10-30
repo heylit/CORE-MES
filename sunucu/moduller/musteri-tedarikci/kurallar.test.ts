@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ADRES_SINIRI, FIRMA_ARAMA_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
-  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami, vergiNoHatasi,
+  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, karneDonemi, karneHesapla, karneSinifiBul,
+  karneYazmaHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami, vergiNoHatasi, zamanindaMi,
 } from './kurallar.ts';
+import type { KarneSayilari } from './kurallar.ts';
 
 test('MT-1 (D-9): Türkiye\'deki firmada vergi numarası 10 ya da 11 rakamdır; harf ve kısa numara reddedilir', () => {
   assert.equal(vergiNoHatasi('TR', '1234567890'), null);
@@ -75,4 +77,58 @@ test('Ctrl K firma sonucu (kart 1235): başlık kod, kodsuz kartta ad; açıklam
   assert.deepEqual(firmaAramaSonucu(temel), { anahtar: '7', baslik: 'F-7', aciklama: 'Ornek Firma · Tedarikçi', yol: '/musteri-tedarikci?firma=7' });
   assert.deepEqual(firmaAramaSonucu({ ...temel, kod: null, fason: true, aktif: false }).baslik, 'Ornek Firma');
   assert.equal(firmaAramaSonucu({ ...temel, kod: '  ', fason: true, aktif: false }).aciklama, 'Tedarikçi · Fason · Pasif');
+});
+
+test('MT-14: karne dönemi tesis gününde biten 12 aydır; kısa ayda ayın son gününe çekilir', () => {
+  assert.deepEqual(karneDonemi('2026-10-30'), { donemBasi: '2025-10-30', donemSonu: '2026-10-30' });
+  assert.deepEqual(karneDonemi('2028-02-29'), { donemBasi: '2027-02-28', donemSonu: '2028-02-29' });
+  assert.deepEqual(karneDonemi('2026-01-01'), { donemBasi: '2025-01-01', donemSonu: '2026-01-01' });
+});
+
+test('MT-15: tam teslim termin + 2 gün içindeyse zamanındadır; geç ya da eksik teslim değildir', () => {
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-20', tam: true }), true);
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-30', tam: true }), true);
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-31', tam: true }), false);
+  assert.equal(zamanindaMi({ termin: '2026-12-31', teslimGunu: '2027-01-02', tam: true }), true);
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-28', tam: false }), false);
+});
+
+const sayilar = (ek: Partial<KarneSayilari> = {}): KarneSayilari => ({
+  teslimToplam: 10, teslimZamaninda: 9, lotKararlari: { kabul: 3, sartli_kabul: 1 }, hizmetSayisi: 2, hizmetToplami: 9, ...ek,
+});
+
+test('MT-16: puan teslim 40, kalite 40, hizmet 20 ağırlıklıdır; sınıf eşikleri 90, 75, 60', () => {
+  const k = karneHesapla(sayilar());
+  assert.deepEqual(k.teslim, { toplam: 10, zamaninda: 9, oran: 90 });
+  assert.deepEqual(k.kalite, { lot: 4, puan: 87.5 });
+  assert.deepEqual(k.hizmet, { sayi: 2, puan: 90 });
+  assert.equal(k.puan, 89);
+  assert.equal(k.sinif, 'B');
+  assert.equal(k.yetersizVeri, false);
+  assert.deepEqual([90, 89.9, 75, 74.9, 60, 59.9, 0].map(karneSinifiBul), ['A', 'B', 'B', 'C', 'C', 'D', 'D']);
+});
+
+test('MT-16: red ve iade lotu sıfır, hatalı kabul yarım sayılır; hizmet puanı yoksa teslim ve kalite yarı yarıya', () => {
+  const k = karneHesapla(sayilar({ lotKararlari: { kabul: 1, hatali_kabul: 1, red: 1, iade: 1 }, hizmetSayisi: 0, hizmetToplami: 0 }));
+  assert.equal(k.kalite.puan, 37.5);
+  assert.equal(k.hizmet.puan, null);
+  assert.equal(k.puan, 63.8);
+  assert.equal(k.sinif, 'C');
+});
+
+test('MT-16: 3 teslim ve 3 lottan az veride puan ve sınıf null, oranlar yine gösterilir; sıfır uydurulmaz', () => {
+  const az = karneHesapla(sayilar({ teslimToplam: 2, teslimZamaninda: 2 }));
+  assert.equal(az.yetersizVeri, true);
+  assert.equal(az.puan, null);
+  assert.equal(az.sinif, null);
+  assert.equal(az.teslim.oran, 100);
+  const bos = karneHesapla({ teslimToplam: 0, teslimZamaninda: 0, lotKararlari: {}, hizmetSayisi: 0, hizmetToplami: 0 });
+  assert.deepEqual([bos.teslim.oran, bos.kalite.puan, bos.hizmet.puan, bos.puan, bos.sinif], [null, null, null, null, null]);
+  assert.equal(karneHesapla(sayilar({ lotKararlari: { kabul: 2 } })).yetersizVeri, true);
+});
+
+test('MT-17: karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır', () => {
+  assert.equal(karneYazmaHatasi('tedarikci'), null);
+  assert.equal(karneYazmaHatasi('ikisi'), null);
+  assert.notEqual(karneYazmaHatasi('musteri'), null);
 });
