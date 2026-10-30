@@ -24,14 +24,13 @@ interface Ozellikler {
   onayIslemi: (x: KartKaydi, i: OnayIslemi, neden?: string) => void;
   talepIslemi: (x: KartKaydi, i: TalepIslemi, neden?: string) => void;
   birlestir: (kimlikler: string[]) => void;
-  etiket: (kimlikler: string[]) => void;
   saha: (kimlik: string) => void;
   sil: (k: KatalogKarti) => Promise<boolean>;
 }
 
 // Prototipin openItem penceresi: birleştirilmiş ve mükerrer uyarısı, talep, onay, föy, muadiller, revizyon geçmişi ve eylemler.
 export function KartPenceresi({
-  kart, kartlar, yetki, b, git, kgFiyati, mesgul, kapat, ac, onayIslemi, talepIslemi, birlestir, etiket, saha, sil,
+  kart, kartlar, yetki, b, git, kgFiyati, mesgul, kapat, ac, onayIslemi, talepIslemi, birlestir, saha, sil,
 }: Ozellikler) {
   const [silSor, silSorYaz] = useState(false);
   const x = kart.kayit;
@@ -56,8 +55,7 @@ export function KartPenceresi({
               <Dugme simge="file" onClick={() => git.yeniKart({ sablonYap: kart.kimlik })}>Şablon yap</Dugme>
             </>
           )}
-          {!hizmet && <Dugme simge="tag" onClick={() => etiket([kart.kimlik])}>Etiket</Dugme>}
-          {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => git.etiketMerkezi(kart.no)}>Etiket Merkezi'nde bas</Dugme>}
+          {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => { git.etiketMerkezi([kart.no]); }}>Etiket Merkezi'nde bas</Dugme>}
           {yetki.yaz && yetki.onayla && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
           <Dugme simge="scan" onClick={() => saha(kart.kimlik)}>Saha görünümü</Dugme>
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>

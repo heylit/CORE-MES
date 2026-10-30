@@ -23,7 +23,8 @@ export interface Gezinti {
   sablonlar: () => void;
   kilavuz: () => void;
   disari: (anahtar: DisSayfa) => void;
-  etiketMerkezi: (no: number) => void;
+  // Kart nolarıyla Etiket Merkezi'ni açar; adres kurulamazsa (geçerli no yok, sınır aşıldı) false döner.
+  etiketMerkezi: (nolar: readonly number[]) => boolean;
 }
 
 export interface EkranOzellikleri {

@@ -29,9 +29,10 @@ function useGezinti(): Gezinti {
       sablonlar: () => gezin(bolumYolu('sablonlar')),
       kilavuz: () => gezin(bolumYolu('kilavuz')),
       disari: (a) => gezin(DIS_SAYFALAR[a]),
-      etiketMerkezi: (no) => {
-        const yol = malzemeEtiketiYolu(no);
+      etiketMerkezi: (nolar) => {
+        const yol = malzemeEtiketiYolu(nolar);
         if (yol) gezin(yol);
+        return yol !== null;
       },
     };
   }, [yonlendir]);

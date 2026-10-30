@@ -15,7 +15,7 @@ import { kayitHatasi, useKartIptal, useKartKaydet, useKartlar, useKgFiyatlari } 
 import { Birlestir } from './Birlestir.tsx';
 import { katalogCsvMetni, katalogJsonMetni } from './disa-aktarma.ts';
 import { dosyaIndir } from './dosya.ts';
-import { EtiketPenceresi, etiketlenebilir } from './EtiketPenceresi.tsx';
+import { ETIKET_SECIM_SINIRI } from '../../gorunumler.ts';
 import { ExcelPenceresi } from './ExcelPenceresi.tsx';
 import { Karsilastirma } from './Karsilastirma.tsx';
 import { KartPenceresi } from './KartPenceresi.tsx';
@@ -30,7 +30,6 @@ import './katalog.css';
 
 type AcikPencere =
   | { tur: 'karsilastir'; kimlikler: string[] }
-  | { tur: 'etiket'; kimlikler: string[] }
   | { tur: 'birlestir'; kimlikler: string[] }
   | { tur: 'saha'; kimlik: string }
   | { tur: 'qr' }
@@ -208,10 +207,11 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
     }
   };
 
+  // 1288: etiket yalnız Etiket Merkezi'nde basılır; hizmet kartına etiket basılmaz (prototip).
   const etiketAc = (kimlikler: string[]) => {
-    const l = etiketlenebilir(kimlikler.map(bul).filter((k): k is KatalogKarti => !!k).map((k) => k.kayit));
+    const l = kimlikler.map(bul).filter((k): k is KatalogKarti => !!k && k.kayit.tur !== 'hizmet');
     if (!l.length) { if (kimlikler.length) bildir('bilgi', 'Hizmet kartına etiket basılmaz.'); return; }
-    pencereYaz({ tur: 'etiket', kimlikler: l.map(kimlikOf) });
+    if (!git.etiketMerkezi(l.map((k) => k.no))) bildir('bilgi', `Etiket Merkezi'nde bir seferde en çok ${ETIKET_SECIM_SINIRI} kart basılır.`);
   };
 
   if (kartlarSorgusu.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -227,8 +227,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
     const kapat = () => pencereYaz(null);
     const ogeler = 'kimlikler' in pencere ? pencere.kimlikler.map(bul).filter((k): k is KatalogKarti => !!k).map((k) => k.kayit) : [];
     switch (pencere.tur) {
-      case 'karsilastir': return <Karsilastirma kayitlar={ogeler} b={b} kapat={kapat} etiket={etiketAc} />;
-      case 'etiket': return <EtiketPenceresi kayitlar={ogeler} b={b} kapat={kapat} />;
+      case 'karsilastir': return <Karsilastirma kayitlar={ogeler} b={b} kapat={kapat} etiket={yetki.etiketMerkezi ? etiketAc : undefined} />;
       case 'birlestir': return <Birlestir kartlar={ogeler} b={b} mesgul={kaydet.isPending} kapat={kapat} birlestir={(a, d, n) => void birlestir(a, d, n)} />;
       case 'qr': return <QrPenceresi kartlar={kartlar} b={b} kapat={kapat} bulundu={(k) => pencereYaz({ tur: 'saha', kimlik: k })} />;
       case 'excel': return <ExcelPenceresi kayitlar={kayitlar} gorunen={gorunenKayitlar} yazabilir={yetki.yaz} b={b} kapat={kapat} kaydet={(g) => kaydet.mutateAsync(g)} />;
@@ -238,7 +237,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
         return (
           <SahaGorunumu
             kart={k} b={b} yetki={yetki} kapat={kapat} ac={(i) => pencereYaz({ tur: 'saha', kimlik: i })} tamFoy={() => kartAc(k.kimlik)}
-            etiket={() => etiketAc([k.kimlik])} qr={() => pencereYaz({ tur: 'qr' })} etiketMerkezi={() => git.etiketMerkezi(k.no)}
+            qr={() => pencereYaz({ tur: 'qr' })} etiketMerkezi={() => { git.etiketMerkezi([k.no]); }}
           />
         );
       }
@@ -276,7 +275,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
                 <Dugme tur="birincil" disabled={!karsilastirilabilir(secili.size)} onClick={() => pencereYaz({ tur: 'karsilastir', kimlikler: [...secili] })}>
                   {secili.size > 4 ? 'Karşılaştırma en fazla 4 kayıt' : 'Karşılaştır'}
                 </Dugme>
-                <Dugme simge="tag" onClick={() => etiketAc([...secili])}>Etiket yazdır</Dugme>
+                {yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => etiketAc([...secili])}>Etiket Merkezi'nde bas</Dugme>}
                 {yetki.yaz && onaylanabilir > 0 && (
                   <Dugme simge="check" yukleniyor={kaydet.isPending} onClick={() => void topluOnayla()}>Seçilenleri onayla ({onaylanabilir})</Dugme>
                 )}
@@ -299,7 +298,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
         <KartPenceresi
           kart={acikKart} kartlar={kartlar} yetki={yetki} b={b} git={git} kgFiyati={kgFiyatlari ? kgFiyatlari.get(acikKart.kimlik) ?? null : undefined} mesgul={kaydet.isPending || iptal.isPending}
           kapat={kartKapat} ac={kartAc} onayIslemi={(x, i, n) => void onayIslemi(x, i, n)} talepIslemi={(x, i, n) => void talepIslemi(x, i, n)}
-          birlestir={(l) => { kartKapat(); pencereYaz({ tur: 'birlestir', kimlikler: l }); }} etiket={(l) => { kartKapat(); etiketAc(l); }}
+          birlestir={(l) => { kartKapat(); pencereYaz({ tur: 'birlestir', kimlikler: l }); }}
           saha={(k) => { kartKapat(); pencereYaz({ tur: 'saha', kimlik: k }); }} sil={sil}
         />
       )}

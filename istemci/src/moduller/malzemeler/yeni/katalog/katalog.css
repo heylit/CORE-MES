@@ -109,8 +109,6 @@
 .tc-mk-liste small { flex-basis: 100%; color: var(--muted); }
 .tc-mk-revler { display: grid; gap: var(--b-2); margin: 0; padding-left: var(--b-4); font-size: var(--yazi-s); }
 
-.tc-mk-etiketler { display: grid; gap: var(--b-3); margin: var(--b-3) 0; }
-.tc-mk-etiket { display: block; width: 100%; height: auto; border: var(--cizgi-ince) solid var(--edge2); background: var(--qr-zemin); }
 
 .tc-mk-saha-bas { display: flex; align-items: center; gap: var(--b-3); margin-bottom: var(--b-3); }
 .tc-mk-saha-ad { font-size: var(--yazi-m); }
@@ -134,4 +132,3 @@
 .tc-mk-excel-secenek:disabled { cursor: default; opacity: .5; }
 .tc-mk-excel-secenek span { font-size: var(--yazi-s); color: var(--muted); }
 
-.tc-mk-gizli-cerceve { position: absolute; width: 0; height: 0; border: 0; visibility: hidden; }

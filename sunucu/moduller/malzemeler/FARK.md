@@ -300,3 +300,9 @@ Kullanıcı isteği 09.10.2026: hizmette çeşit, çeşidin kalitesi ve standard
 - Malzeme ayarları > Ad, açıklama ve zorunlu alanlar (2026-10-15): tür başına kart adı ve Açıklama 1-3 kalıbı ({alan}, {OTO}, {AD}) ve zorunlu alanlar; `malzeme` ayarının `kurallar` alanında. Boş kalıp bugünkü otomatik değeri verir.
 - Çakışma kontrolü alanları (2026-10-15): tür başına seçilen alanların hepsi aynıysa yeni kart "aynı" sayılır (gerekçe istenir); seçim yoksa yerleşik kural. Sunucu aynı alanlardan benzersiz anahtar kurar ve gerekçesiz mükerreri engeller; ayar değişince türün kartlarının anahtarı yeniden hesaplanır, etkin kartlar birbirine çakışırsa ayar kaydedilmez (kullanıcı kartı "Uyarı ve engel" ve yazılı onay; yeni sütun `varsayilan_anahtar`).
 - Şablon silme düğmesi (2026-10-16): yalnız sunucunun kaldırabilir dediği şablonda görünür (kaydeden ya da onay yetkilisi); sunucusuz açılışta bugünkü gibi her kayıtlı şablonda. Yeni görünüm yok.
+
+## Etiket yalnız Etiket Merkezi'nde (kart #1308, 1288 teyitli, 30.10.2026)
+- Katalogdaki yerel etiket penceresi (`katalog/EtiketPenceresi.tsx`, ölçü seçimi, SVG/HTML indirme, tarayıcı baskısı) kalktı; kart penceresi ve saha görünümündeki "Etiket" düğmesi kalktı, yanındaki "Etiket Merkezi'nde bas" kalır.
+- Seçim çubuğundaki "Etiket yazdır" ve karşılaştırmadaki "Etiketlerini yazdır" aynı yerde "Etiket Merkezi'nde bas" oldu: seçili kartların nolarıyla `/etiket-merkezi?tur=malzeme&id=<no,no,...>` açılır (en çok 200; hizmet kartı düşer). Yalnız `sayfa.etiket-merkezi` olan görür.
+- Sonuç: Etiket Merkezi'ni açamayan malzeme kullanıcısı artık etiket basamaz (1288 ile bilinçli). Baskı Etiket Merkezi defterine yazılır.
+- Sunucu, göç ve yetki değişmedi.

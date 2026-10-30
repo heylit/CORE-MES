@@ -143,7 +143,7 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
     const p = within(await kartiAc('HM-MET-C45-0001'));
-    for (const ad of ['Düzenle', 'Kopyasını oluştur', 'Şablon yap', 'Etiket', "Etiket Merkezi'nde bas", 'Sil', 'Saha görünümü']) {
+    for (const ad of ['Düzenle', 'Kopyasını oluştur', 'Şablon yap', "Etiket Merkezi'nde bas", 'Sil', 'Saha görünümü']) {
       expect(p.getByRole('button', { name: ad })).toBeTruthy();
     }
   });
@@ -159,7 +159,8 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     yeniEkranAc(KOK);
     const p = within(await kartiAc('HM-A'));
     for (const ad of ['Düzenle', 'Kopyasını oluştur', 'Şablon yap', 'Sil', 'Onayla', "Etiket Merkezi'nde bas"]) expect(p.queryByRole('button', { name: ad })).toBeNull();
-    expect(p.getByRole('button', { name: 'Etiket' })).toBeTruthy();
+    // 1288: yerel etiket baskısı yok; Etiket Merkezi'ni açamayan etiket basamaz.
+    expect(p.queryByRole('button', { name: 'Etiket' })).toBeNull();
   });
 
   test('onay yetkisi olmayan yazan onay bekleyen kartta ileti görür; Sil görünmez', async () => {
@@ -292,21 +293,23 @@ describe('M2 Katalog: etiket, saha ve seçim', () => {
     kur(YONETICI, kartlar(satir('h1', 1, ornekKayit('h1', 'HZ-ISL-00001', 'Örnek hizmet', 'hizmet'))));
     yeniEkranAc(KOK);
     fireEvent.click(await screen.findByRole('checkbox', { name: 'HZ-ISL-00001 seç' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Etiket yazdır' }));
+    fireEvent.click(screen.getByRole('button', { name: "Etiket Merkezi'nde bas" }));
     expect(await screen.findByText('Hizmet kartına etiket basılmaz.')).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('adres').textContent).toBe(KOK);
   });
 
-  test('etiket penceresi seçilen boyutta önizler; tek kart SVG olarak iner', async () => {
+  test("1288: seçili kartların etiketi Etiket Merkezi'nde basılır; merkezi açamayana seçim düğmesi yok", async () => {
+    kur(SORUMLU);
+    yeniEkranAc(KOK);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'HM-MET-C45-0001 seç' }));
+    expect(screen.queryByRole('button', { name: "Etiket Merkezi'nde bas" })).toBeNull();
+    cleanup();
     kur(YONETICI);
     yeniEkranAc(KOK);
-    fireEvent.click(within(await kartiAc('HM-MET-C45-0001')).getByRole('button', { name: 'Etiket' }));
-    const p = within(await screen.findByRole('dialog', { name: 'Etiket' }));
-    expect(p.getByRole('img', { name: 'HM-MET-C45-0001 etiketi' })).toBeTruthy();
-    fireEvent.click(p.getByRole('radio', { name: '70 × 37 mm' }));
-    expect(p.getByRole('radio', { name: '70 × 37 mm' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(p.getByRole('button', { name: 'Etiketi indir (.svg)' }));
-    expect(await metni(indirilen[0]!)).toContain('<svg');
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'HM-MET-C45-0001 seç' }));
+    fireEvent.click(screen.getByRole('button', { name: "Etiket Merkezi'nde bas" }));
+    expect(await screen.findByText('Başka sayfa')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('/etiket-merkezi');
   });
 
   test("Etiket Merkezi'nde bas yalnız merkezi açabilene; tıklanınca kartın no'suyla merkeze gider", async () => {

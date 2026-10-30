@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { matchPath } from 'react-router-dom';
-import { DIS_SAYFALAR, GORUNUM_YOLLARI, malzemeEtiketiYolu } from './gorunumler.ts';
+import { DIS_SAYFALAR, ETIKET_SECIM_SINIRI, GORUNUM_YOLLARI, malzemeEtiketiYolu } from './gorunumler.ts';
 import { rotalar } from './rotalar.tsx';
 
 // Menünün geçerliliği ve maddelerin kime görünür olduğu sunucu tarafındaki `ikinci-menu.test.ts`'tedir (istemci menüyü değer olarak
@@ -18,7 +18,14 @@ describe('malzemeler ikinci menü', () => {
   });
 
   it('269 a: kartın etiketi Etiket Merkezi\'nde kart no ile açılır; geçersiz no için adres yok', () => {
-    expect(malzemeEtiketiYolu(1001)).toBe('/etiket-merkezi?tur=malzeme&id=1001');
-    for (const no of [0, -3, 1.5, '1001', null, undefined, Number.NaN]) expect(malzemeEtiketiYolu(no)).toBeNull();
+    expect(malzemeEtiketiYolu([1001])).toBe('/etiket-merkezi?tur=malzeme&id=1001');
+    for (const no of [0, -3, 1.5, '1001', null, undefined, Number.NaN]) expect(malzemeEtiketiYolu([no])).toBeNull();
+  });
+
+  it('1288: seçili kartların etiketleri tek adreste; geçersiz no düşer, tekrar edilen no bir kez; sınırı aşan seçim adres kurmaz', () => {
+    expect(malzemeEtiketiYolu([1001, 0, 1002, 1001])).toBe('/etiket-merkezi?tur=malzeme&id=1001,1002');
+    expect(malzemeEtiketiYolu([])).toBeNull();
+    expect(malzemeEtiketiYolu(Array.from({ length: ETIKET_SECIM_SINIRI }, (_, i) => i + 1))).not.toBeNull();
+    expect(malzemeEtiketiYolu(Array.from({ length: ETIKET_SECIM_SINIRI + 1 }, (_, i) => i + 1))).toBeNull();
   });
 });
