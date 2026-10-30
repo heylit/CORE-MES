@@ -5,12 +5,15 @@ import {
   kartGirisGovdesi, kendiParolaGovdesi, kendiPinGovdesi, oturumCevabi, parolaCevabi, pinBelirleGovdesi, saatCihaziKapatCevabi, saatCihaziParametresi,
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
+  cihazProfiliParametresi, cihazProfilleriCevabi, kayitsizProfilCevabi, kayitsizProfilGovdesi, profilAtaCevabi, profilAtaGovdesi,
+  profilSayfalariCevabi, profilSayfalariGovdesi,
 } from '#paylasilan/sozlesme/oturum.ts';
 import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
 import {
   cikisYap, girisYap, hesapKilidiniAc, kartlaGirisYap, hesapKilitleri, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
+  cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
 
@@ -25,7 +28,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       txDisi: true,
       cevap: oturumCevabi,
       isle: async ({ db, kullanici, istek }) => ({
-        kullanici: await oturumKullanicisi(db, istek.cerez(CEREZ_ADI), kullanici),
+        kullanici: await oturumKullanicisi(db, istek.cerez(CEREZ_ADI), kullanici, istek.cerez(CIHAZ_CEREZI)),
       }),
     }),
     uc({
@@ -38,7 +41,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         const sonuc = await girisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         if (sonuc.anahtar === null) return { kullanici: null, pinBelirlenecek: true as const };
         istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, AZAMI_SN);
-        return { kullanici: sonuc.kullanici };
+        return { kullanici: await cihazaGoreKullanici(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
     // Kart + PIN yalnız yöneticinin ortak olarak kaydettiği cihazda (istasyon) açıktır; kişisel cihazda kart yolu yoktur ve hiçbir şey yazılmaz.
@@ -52,7 +55,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         if (!(await cihazDurumu(db, istek.cerez(CIHAZ_CEREZI))).ortak) throw yetkiYok('Kartla giriş yalnız istasyon olarak kayıtlı cihazda yapılır.');
         const { anahtar, kullanici } = await kartlaGirisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
-        return { kullanici };
+        return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
     uc({
@@ -64,7 +67,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       isle: async ({ db, govde, istek, gunluk }) => {
         const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
-        return { kullanici };
+        return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
     uc({
@@ -214,7 +217,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       govde: ortakCihazKaydetGovdesi,
       cevap: ortakCihazKaydetCevabi,
       isle: async ({ db, kullanici, govde, istek }) => {
-        const { cihaz, belirtec } = await ortakCihazKaydet(db, kullanici.id, govde.ad, istek.cerez(CIHAZ_CEREZI));
+        const { cihaz, belirtec } = await ortakCihazKaydet(db, kullanici, govde.ad, govde.profil, istek.cerez(CIHAZ_CEREZI));
         istek.cerezYaz(CIHAZ_CEREZI, belirtec, CIHAZ_CEREZ_SN);
         return { cihaz };
       },
@@ -230,6 +233,43 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         if (await ortakCihaziKapat(db, parametre.id, kullanici.id, istek.cerez(CIHAZ_CEREZI))) istek.cerezSil(CIHAZ_CEREZI);
         return { tamam: true as const };
       },
+    }),
+    // Cihaz profili (kart #1358; 1339 a, 1341 a, 1347 a). Yazmalar ayrıca Tam profilli cihaz ister (servis denetler); okuma yöneticinin
+    // her cihazından açıktır. İşlem ortak cihaz kaydıyla aynıdır: rol x işlem değişmez.
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/ortak-cihazlar/:id/profil',
+      yetki: 'oturum.ortak-cihaz',
+      parametre: ortakCihazParametresi,
+      govde: profilAtaGovdesi,
+      cevap: profilAtaCevabi,
+      isle: async ({ db, kullanici, parametre, govde, istek }) => ({
+        cihaz: await profilAta(db, kullanici, parametre.id, govde, istek.cerez(CIHAZ_CEREZI)),
+      }),
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/oturum/cihaz-profilleri',
+      yetki: 'oturum.ortak-cihaz',
+      cevap: cihazProfilleriCevabi,
+      isle: ({ db }) => profilListesi(db),
+    }),
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/cihaz-profilleri/:kod/sayfalar',
+      yetki: 'oturum.ortak-cihaz',
+      parametre: cihazProfiliParametresi,
+      govde: profilSayfalariGovdesi,
+      cevap: profilSayfalariCevabi,
+      isle: async ({ db, kullanici, parametre, govde }) => ({ profil: await profilSayfalariniYaz(db, kullanici, parametre.kod, govde) }),
+    }),
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/cihaz-ayari/kayitsiz-profil',
+      yetki: 'oturum.ortak-cihaz',
+      govde: kayitsizProfilGovdesi,
+      cevap: kayitsizProfilCevabi,
+      isle: ({ db, kullanici, govde }) => kayitsizProfiliYaz(db, kullanici, govde),
     }),
     uc({
       yontem: 'POST',

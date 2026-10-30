@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { islemMi } from '#paylasilan/islemler.ts';
+import type { CihazProfili, Kullanici } from '#paylasilan/kullanici.ts';
 
 export const CEREZ_ADI = 'tmiv2_oturum';
 // Ortak cihaz belirteci (kart #739): oturumdan ayrı çerezdir, çıkışta silinmez; cihaz iptal edilene dek kalır. Tarayıcılar çerez
@@ -122,4 +124,44 @@ export function belirtecOku(baslik: string | undefined): string | null {
   if (baslik === undefined) return null;
   const eslesme = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(baslik);
   return eslesme?.[1] ?? null;
+}
+
+/* ---------------- cihaz profili (kart #1358) ---------------- */
+
+// 1356 a: istasyonda boşta kalan oturum 15 dk sonra geçersizdir; sıradaki kişi öncekinin oturumunu devralmasın. Terminal sürekli
+// sorduğu için ekran açıkken bu sayaç dolmaz; istemci kendi boşta çıkışını yapar, burası ekran kapanınca kalan yedektir.
+export const ISTASYON_BOSTA_SN = 15 * 60;
+
+export interface ProfilSiniri {
+  kod: CihazProfili;
+  // null: sınır yok (Tam).
+  sayfalar: readonly string[] | null;
+}
+
+// 1347 a: yetki rol ile profilin kesişimidir, yönetici dahil. Profil yalnız sayfa işlemlerini süzer: menü ve sayfa yetkili uçlar
+// birlikte daralır. Veri işlemleri ve modül sınırı çekirdekteki kapıdadır.
+export function profilUygula(kullanici: Kullanici, profil: ProfilSiniri): Kullanici {
+  const { sayfalar } = profil;
+  const islemler = sayfalar === null
+    ? kullanici.islemler
+    : kullanici.islemler.filter((islem) => !islem.startsWith('sayfa.') || sayfalar.includes(islem));
+  return { ...kullanici, islemler, cihazProfili: profil.kod };
+}
+
+export function bostaSuresiSn(profil: CihazProfili): number {
+  return profil === 'istasyon' ? ISTASYON_BOSTA_SN : BOSTA_SN;
+}
+
+// Profil, atama ve kayıtsız cihaz ayarı yalnız Tam profilli cihazdan değişir: telefondan giren yönetici kendi cihazını genişletemez.
+// Profili olmayan kimlik (akıllı saat) de değiştiremez.
+export function profilYonetebilirMi(kullanici: Kullanici): boolean {
+  return kullanici.cihazProfili === 'tam';
+}
+
+// Profile yazılabilen sayfalar: kayıtlı sayfa işlemleri. Tekrar yazılmaz, sıra korunur.
+export function profilSayfalariHatasi(sayfalar: readonly string[]): string | null {
+  for (const sayfa of sayfalar) {
+    if (!sayfa.startsWith('sayfa.') || !islemMi(sayfa)) return `Bilinmeyen sayfa: ${sayfa}`;
+  }
+  return new Set(sayfalar).size === sayfalar.length ? null : 'Aynı sayfa iki kez seçilmiş.';
 }

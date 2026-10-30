@@ -98,3 +98,45 @@ describe('deneme koruması göçü var olan veritabanında (gerçek PostgreSQL)'
     assert.deepEqual(await adlar(), ['eski-kalan', 'genc', 'taze', 'yeni']);
   });
 });
+
+// Kart #1358: cihaz profili göçü dolu ortak cihaz tablosuna yazmaz; açık cihazlara istasyon ataması ekler (739 a davranışı sürsün),
+// kapanmış cihaza eklemez. Kayıtsız cihaz Tam başlar (1341 a geçişi).
+describe('cihaz profili göçü var olan ortak cihazlarla (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let klasor = '';
+
+  before(async () => {
+    ortam = await testSemasiAc('gocp');
+    klasor = await mkdtemp(join(tmpdir(), 'tmiv2-gocp-'));
+  });
+  after(async () => {
+    if (klasor) await rm(klasor, { recursive: true, force: true });
+    await ortam?.kaldir();
+  });
+
+  test('açık cihaz istasyon olur, kapanmış cihaza atama yazılmaz; ortak cihaz satırları değişmez', async () => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    const hepsi = (await readdir(GERCEK_KLASOR)).filter((ad) => ad.endsWith('.sql')).sort();
+    const sira = hepsi.findIndex((ad) => ad.endsWith('_oturum_cihaz_profili.sql'));
+    assert.equal(sira > 0, true, 'cihaz profili göçü bulunamadı');
+    for (const ad of hepsi.slice(0, sira)) await copyFile(join(GERCEK_KLASOR, ad), join(klasor, ad));
+    const { ayar, sema, sahip } = ortam;
+    await gocleriUygula(ayar, klasor, { sema });
+    const kisi = await sahip.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id");
+    if (kisi === null) throw new Error('kişi satırı kurulamadı');
+    await sahip.sorgu(
+      `INSERT INTO oturum_ortak_cihaz (belirtec_ozeti, ad, kaydeden_kisi_id, kaydedildi, kapandi, kapatan_kisi_id) VALUES
+         ('ozet-acik', 'Deneme acik', $1, now(), NULL, NULL), ('ozet-kapali', 'Deneme kapali', $1, now(), now(), $1)`,
+      [kisi.id],
+    );
+    const once = await sahip.sorgu('SELECT * FROM oturum_ortak_cihaz ORDER BY id');
+
+    await gocleriUygula(ayar, GERCEK_KLASOR, { sema });
+    assert.deepEqual(await sahip.sorgu('SELECT * FROM oturum_ortak_cihaz ORDER BY id'), once);
+    assert.deepEqual(
+      await sahip.sorgu(`SELECT c.ad, a.profil FROM oturum_cihaz_profil_atamasi a JOIN oturum_ortak_cihaz c ON c.id = a.cihaz_id`),
+      [{ ad: 'Deneme acik', profil: 'istasyon' }],
+    );
+    assert.deepEqual(await sahip.sorgu('SELECT kayitsiz_profil FROM oturum_cihaz_ayari'), [{ kayitsiz_profil: 'tam' }]);
+  });
+});
