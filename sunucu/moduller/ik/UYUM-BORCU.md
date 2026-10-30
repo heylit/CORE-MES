@@ -92,3 +92,7 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
 - IK-73 ekranda: `ik.oku` olup `ik.ozel-veri-oku` olmayan kişide personel formu kan grubu ve engel durumunu boş gösterir (değer sunucuda korunur). Alanı formdan kaldırmak paket yaması ister. Bugün `ik.oku` yalnız insan_kaynaklari ve yöneticide, ikisi de özel veri yetkisini alır; etkisi yok.
 - IK-73 dolaylı iz: bordro kaydındaki engelli indirimi tutarı (`ik_bordro.engelli_indirimi`) engel derecesini ele verir; bordroyu gören `ik.oku` sahibidir. Yetkisiz kişinin ekranındaki bordro önizlemesi engel durumunu bilmediği için indirimsiz hesaplar; kesinleşen bordroyu sunucu tam veriyle hesaplar.
 
+
+## Özlük itmesi (kart 1312)
+- `ik_personel.kisi_id` hâlâ boş olabilir (girişsiz ya da kişisiz personel). 1302 a "her aktif personelin bir kişisi olur": zorunluluk ayrı göçle, bağsız personeli sayıp duran kalıpla (ana veri D fazı).
+- Canlı kurulumdan önce kullanıcıya gösterilecek salt okunur liste (İK'da çıkışı geçmiş, bağlı kişisi aktif): DEVIR'deki sorgu.

@@ -103,3 +103,9 @@ kaynağı teslimde yok). Kaynak yeniden derlenirse aynı değişiklik kaynağa t
 
 ## W8 çıkan personel (23.10.2026)
 - IK-81: `disari.ts kisilerinCikisTarihleri(db, kisiIdleri): Promise<Map<kisiId, tarih | null>>`; Vardiya takvimi çıkış gününden sonrasını kapatır. Göç yok, ekran değişmedi.
+
+## Özlük kişiye itilir (kart 1312; 1302 a teyitli, 1315 a teyitli)
+- IK-84: personel kaydı (tek, toplu, iletişim ve geri getirme `yaz` üzerinden) bağlı kişiye ad (ad + soyad), sicil no, görev (pozisyon) ve çıkış tarihini `kisiler/disari.ts ozluguIkdenYaz` ile iter; yalnız bu alanlardan biri ya da bağ değişince. Bağ başka kişiye geçince, boşaltılınca ya da kart iptal edilince eski kişi `ozlukBaginiKaldir` ile serbest kalır.
+- Aynı transaction: itme reddedilirse (sicil başka kişide 409, yönetici hesabına yönetici olmayan 403) personel kaydı da yazılmaz.
+- Çıkış tarihi geçmişse kişi Kişiler'de hemen pasif; ileri tarihi Kişiler'in saatlik işi pasife alır. Kişi son yöneticiyse pasife alınmaz, kayıt cevabı `uyari` taşır.
+- Göç, uç, işlem ve ekran değişmedi. VARSAYIM: yeniden işe alımda (yeni kart, çıkışsız) kişi kendiliğinden aktif olmaz; Kişiler'den "aktif yap" gerekir.

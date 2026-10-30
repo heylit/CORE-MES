@@ -24,3 +24,5 @@ Ayrıntılı kural -> test eşlemesi: `KURAL-TEST.md`.
 
 Yalnız ekranda kalan kurallar: `UYUM-BORCU.md` "Ekranda kalan kurallar" (izin bakiyesi, tazminat, maliyet planı, Excel doğrulamaları ve benzeri).
 Tekrar koruması: bordro kesinleştirme istek kimliği taşımıyor (UYUM-BORCU).
+
+Kişiye itme (IK-84, kart 1312): personel yazan uçlar (`ik.personel-yaz` ve iletişim) kendi işlem ve sürüm denetiminden sonra `kisiler/disari.ts ozluguIkdenYaz`'ı aynı transaction'da çağırır; Kişiler yönetici hesabına yönetici olmayanın itmesini 403 ile reddeder (`ozluk-itme.test.ts`). Yeni uç ya da işlem yok.

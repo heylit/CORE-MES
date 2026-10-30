@@ -680,3 +680,33 @@ export function kimlikIbanDenetle(onceki: Govde | null, yeni: Govde): KuralHatas
   }
   return null;
 }
+
+// IK-84 (1302 a, 1315 a): personel kartı bağlı kişiye ad (ad + soyad), sicil no, görev (pozisyon) ve çıkış tarihini iter; kişi
+// kartında bunlar salt okunurdur. İtme yalnız bu alanlardan biri ya da bağ değişince yapılır (her kayıtta kişi sürümü artmasın).
+// Bağı kalkan (başka kişiye geçen, boşaltılan ya da iptal edilen kartın) eski kişisi serbest kalır.
+export interface OzlukItmesi {
+  birak: number | null;
+  it: { kisiId: number; ad: string; sicilNo: string | null; gorev: string | null; cikisTarihi: string | null } | null;
+}
+
+function ozluk(g: Govde | null): { kisiId: number | null; ad: string; sicilNo: string | null; gorev: string | null; cikisTarihi: string | null } {
+  const metin = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+  return {
+    kisiId: typeof g?.['kisiId'] === 'number' ? g['kisiId'] : null,
+    ad: [metin(g?.['ad']), metin(g?.['soyad'])].filter((p) => p !== null).join(' '),
+    sicilNo: metin(g?.['sicilNo']),
+    gorev: metin(g?.['pozisyon']),
+    cikisTarihi: metin(g?.['cikisTarihi']),
+  };
+}
+
+export function ozlukItmesi(onceki: Govde | null, yeni: Govde | null): OzlukItmesi {
+  const o = ozluk(onceki);
+  const y = ozluk(yeni);
+  const birak = o.kisiId !== null && o.kisiId !== y.kisiId ? o.kisiId : null;
+  if (y.kisiId === null) return { birak, it: null };
+  const ayni = o.kisiId === y.kisiId && o.ad === y.ad && o.sicilNo === y.sicilNo && o.gorev === y.gorev && o.cikisTarihi === y.cikisTarihi;
+  return { birak, it: ayni ? null : { kisiId: y.kisiId, ad: y.ad, sicilNo: y.sicilNo, gorev: y.gorev, cikisTarihi: y.cikisTarihi } };
+}
+
+export const OZLUK_SON_YONETICI_UYARISI = 'Çıkış tarihi geçti ama kişi son yönetici olduğu için Kişiler\'de pasife alınmadı.';

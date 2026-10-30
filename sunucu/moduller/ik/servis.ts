@@ -14,7 +14,7 @@ import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { isMerkezleri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
-import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
 import { ayarKur, ayarParcala } from './ayar-eslesme.ts';
 import { EslesmeHatasi, kur, parcala } from './eslesme.ts';
 import type { Deger, Satirlar } from './eslesme.ts';
@@ -24,7 +24,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, ozlukItmesi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -333,8 +333,21 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: '/ik-islemlerim/onaylar', kaynakKimlik: g.kimlik, haric: kullanici.id });
   }
-  const uyari = g.tur === 'emp' ? cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)) : devamUyarisi;
+  const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde) : null;
+  const uyari = g.tur === 'emp'
+    ? [cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)), ozlukUyarisi].filter((u) => u !== null).join(' ') || null
+    : devamUyarisi;
   return { kayit, gecmis, uyari };
+}
+
+// IK-84: bağlı kişinin özlük alanları Kişiler'e itilir; bağı kalkan kişi serbest kalır. Aynı transaction'da: itme reddedilirse
+// (sicil başka kişide, yönetici hesabına yönetici olmayan) personel kaydı da yazılmaz.
+async function ozluguKisiyeIt(db: Db, kullanici: Kullanici, onceki: Govde | null, yeni: Govde | null): Promise<string | null> {
+  const { birak, it } = ozlukItmesi(onceki, yeni);
+  if (birak !== null) await ozlukBaginiKaldir(db, birak);
+  if (it === null) return null;
+  const { kisiId, ...alanlar } = it;
+  return (await ozluguIkdenYaz(db, kullanici.id, kisiId, alanlar)) === 'son-yonetici' ? OZLUK_SON_YONETICI_UYARISI : null;
 }
 
 function adHaritasi(d: Durum): Map<string, string> {
@@ -378,6 +391,7 @@ export async function iptalEt(db: Db, kullanici: Kullanici, alan: IkAlani, kimli
   const iptal = await surumluGuncelle({ guncelle: () => s.kayitIptal(db, tur, kimlik, surum, kullanici.id), varMi: () => s.varMi(db, tur, kimlik) });
   const kayit = kayitKur(iptal);
   d.harita.set(kimlik, kayit);
+  if (tur === 'emp') await ozluguKisiyeIt(db, kullanici, kayitli.govde, null);
   const gecmis = await s.gecmisYaz(db, { kimlik, tur, islem: 'sil', etiket: etiket(tur, kayitli.govde, adHaritasi(d)), degisiklikler: [], notu: null, kisiId: kullanici.id });
   return { kayit: kayitCevabi(kayit, d), gecmis: await gecmisCevaplari(db, [gecmis], d) };
 }
