@@ -287,6 +287,31 @@ export function yayindakiBelgeler(db: Db, s: { tur: BelgeTuru | null; ara: strin
   );
 }
 
+export interface AramaSatiri {
+  id: number;
+  ad: string;
+  tur: BelgeTuru;
+  resimNo: string | null;
+  yayindakiSira: number;
+}
+
+// Genel arama: adda ya da resim numarasında geçen, yayında revizyonu olan etkin belgeler. Tam resim no önce, sonra baştan
+// eşleşen, sonra yeniden eskiye. Sütun ve sorgu aynı Türkçe sadeleştirmeden geçer (`public.arama_sade`, dil ayarından bağımsız);
+// desenler sadeleşmiş ve kaçırılmış gelir (`#paylasilan/kayit-aramasi.ts`). LIKE '%x%' trigram ifade indeksine düşer (göç 20261029132000).
+export function aramaSatirlari(db: Db, s: { sade: string; icinde: string; bas: string; sinir: number }): Promise<AramaSatiri[]> {
+  return db.sorgu<AramaSatiri>(
+    `SELECT b.id, b.ad, b.tur, b.resim_no AS "resimNo", y.sira AS "yayindakiSira"
+       FROM cizimler_belge b
+       JOIN cizimler_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'
+      WHERE b.aktif AND (public.arama_sade(b.resim_no) LIKE $1 OR public.arama_sade(b.ad) LIKE $1)
+      ORDER BY (public.arama_sade(b.resim_no) = $2) IS TRUE DESC,
+               (public.arama_sade(b.resim_no) LIKE $3 OR public.arama_sade(b.ad) LIKE $3) IS TRUE DESC,
+               b.guncellendi DESC, b.id DESC
+      LIMIT $4`,
+    [s.icinde, s.sade, s.bas, s.sinir],
+  );
+}
+
 // Belgenin revizyonları için kare sayısı; karesi olmayan revizyon haritada yoktur.
 export async function onizlemeSayilari(db: Db, belgeId: number): Promise<Map<number, number>> {
   const satirlar = await db.sorgu<{ revizyonId: number; n: number }>(

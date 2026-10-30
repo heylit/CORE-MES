@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { BelgeListesiCevabi, BelgeListesiSorgusu, BelgeSatiri, BelgeTuru } from '#paylasilan/sozlesme/cizimler.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Simge, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -40,6 +40,15 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
   const yonlendir = useNavigate();
   const { yazar } = useYetki();
   const [yeni, yeniYaz] = useState(false);
+  // Ctrl K komutu (komutlar.ts) `?yeni=1` ile gelir: pencere yalnız yazara ve arşiv dışında açılır. Kapatınca parametre
+  // adresten düşer ki geri tuşu ve yenileme pencereyi yeniden açmasın.
+  const [adres, adresYaz] = useSearchParams();
+  const komutla = adres.get('yeni') === '1';
+  const pencereAcik = (yeni || komutla) && yazar && !arsiv;
+  const pencereyiKapat = () => {
+    yeniYaz(false);
+    if (komutla) { const p = new URLSearchParams(adres); p.delete('yeni'); adresYaz(p, { replace: true }); }
+  };
   const [ucB, ucBYaz] = useState<UcBSekmesi>('makine');
   const ucBGorunumu = tur === '3b-model' && !arsiv;
   const liste = useListeDurumu({
@@ -86,7 +95,7 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
             />
           )}
       </div>
-      {yeni && <YeniBelge ilkTur={tur ?? 'teknik-resim'} kapat={() => { yeniYaz(false); }} />}
+      {pencereAcik && <YeniBelge ilkTur={tur ?? 'teknik-resim'} kapat={pencereyiKapat} />}
     </Kart>
   );
 }

@@ -28,3 +28,8 @@ Her uç `uclar.ts`'te `uc({...})` ile. OKUMA = `{ biri: ['sayfa.cizimler', 'cizi
 - İstemci dosyayı cihazda açar (pdf.js, occt wasm paketin içinden); dışarıya istek yok.
 - `disari.belgeAcVeBagla` uç değildir: yalnız sertifika ve rapor açar, belge yalnız verilen kayda bağlı doğar; `cizimler.*` işlemi sorulmaz, yazma yetkisi çağıran modülün ucundadır. Dosyayı içeriği yükleyen kişi bağlar (CZ-04), tür denetlenir (CZ-03); hata olursa belge kalmaz (CZ-13).
 - Kart #688 a: malzeme yazan rol merkez uçlarını kullanamaz; yalnız `/cizimler/malzemeler/:no/...` uçlarıyla ve yalnız o kartın belgelerine yazar. Küçük resim okuması oturum açan herkese açıktır (onaylı yetki genişletmesi); kare yalnız bir kayda bağlı revizyondan akar, bağsız belge ve taslak okunamaz.
+- Kart 1240: `disari.cizimAra` uç değildir; üst çubuktaki genel aramanın çizim kaynağıdır. Yalnız etkin ve yayında revizyonu olan belgenin
+  künyesini (ad, resim no, tür, yayındaki harf, belge sayfası adresi) verir; dosya ve taslak vermez. Okuma yetkisini (`sayfa.cizimler`
+  ya da `cizimler.oku`) çağıran çekirdek arama ucu uygular; izinli ve reddedilen test `arama.test.ts`. Joker karakterler düz metindir.
+- Kart 1240: Ctrl K komutları (`istemci/.../komutlar.ts`) yalnız `cizimler.yaz` taşıyana görünür ve yalnız yeni belge penceresini açar
+  (`?yeni=1`); yükleme mevcut `POST /cizimler` ucundadır. Pencere okura ve arşiv bölümünde açılmaz (ekran testi).
