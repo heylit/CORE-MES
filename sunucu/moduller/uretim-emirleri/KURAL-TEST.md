@@ -84,6 +84,12 @@ HK: `hatali-kurallar.test.ts` (saf), H: `hatali-parca.test.ts` (gerçek PostgreS
 | UE-KP6 | Duran emri planlama kapatır; durmayan emir kapatılmaz (1064, 1079 a) | KP "1064 ve 1079 a" (erken kapatma 409, kalite 403, eski sürüm 409) | yok |
 | UE-KP7 | Göçten önce bitmiş iş emirli emir onaysız tamam ve eski; açık, iptal, iş emirsiz emir girmez | KG | uretim_emirleri_kapanis_tamam_kosulu |
 
+| UE-OC1 | Öncül listesi (1248 a): rota adımının dalı ve öncülleri iş emrine kopyalanır; liste null eski kuraldır (plan motoru bagOf, 982 a), boş liste dal başıdır; öncül aynı girdide ve daha küçük sıralı, akışlıda devir artı | OK "adimOnculleri", "açılış girdisinde"; OC "açılışta dal ve öncüller" (geçersiz öncül 400) | uretim_emirleri_is_emri_onculu_tur, _devir, _kendisi; uretim_emirleri_is_emri_dali_bicimi |
+| UE-OC2 | Terminal ve plan tek işlevden okur (1245 a): başlatma her öncülü ayrı uyarır, birleştirme öncüller bitmeden bitmez, dal başı öteki dalı beklemez; plan satırında bitmiş öncül düşer, plana girmeyen öncül (fason, otomatik GKK) yerine onun öncülleri gelir | OK "terminal kuralları çok öncüllü"; OC "terminal", "eski emir" | yok |
+| UE-OC3 | Araya giren adım öncesinin yerini alır, silinen adımın öncülleri ardıllarına geçer; kola gelmeyen öncül düşer | OC "araya giren adım" | yok |
+
+OK: `oncul-kurallar.test.ts` (saf), OC: `oncul.test.ts` (gerçek PostgreSQL).
+
 KK: `kapanis-kurallar.test.ts` (saf), KP: `kapanis.test.ts` (gerçek PostgreSQL), KG: `kapanis-goc.test.ts`.
 
 Bağsız kural: yok.

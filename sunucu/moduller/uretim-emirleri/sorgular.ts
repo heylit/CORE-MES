@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import type { EmirDurumu, EmirKaydi, EmirTuru, HataliKarari, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimOnculu } from './kurallar.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -798,14 +799,22 @@ export interface IsEmriSatiri {
   bitis: string | null;
   saglamAdet: number | null;
   surum: number;
+  // 1248 a: dal satırı olmayan iş emrinde ikisi de null (eski kural); satırı olanda onculler dizidir (boş: dal başı).
+  dal: string | null;
+  onculler: AdimOnculu[] | null;
 }
+
+const DAL_VE_ONCUL = `(SELECT d.dal FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS dal,
+  (SELECT COALESCE((SELECT json_agg(json_build_object('id', o.oncul_is_emri_id, 'tur', o.tur, 'devirAdedi', o.devir_adedi) ORDER BY o.oncul_is_emri_id)
+                      FROM uretim_emirleri_is_emri_onculu o WHERE o.is_emri_id = d.is_emri_id), '[]'::json)
+     FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS onculler`;
 
 const IS_EMRI = `i.id, i.uretim_emri_id AS "uretimEmriId", i.sira, i.op_no AS "opNo", i.operasyon_tipi_id AS "operasyonTipiId", i.ad,
   i.makine_id AS "makineId", i.kisi_id AS "kisiId", i.fason_firma_id AS "fasonFirmaId", i.istasyon_id AS "istasyonId",
   i.ayar_suresi_dk::text AS "ayarSuresiDk", i.birim_sure_dk::text AS "birimSureDk", i.termin_gun AS "terminGun", i.bagimlilik,
   i.devir_adedi AS "devirAdedi", i.fire_payi_yuzde::text AS "firePayiYuzde", i.makine_kullanimi AS "makineKullanimi",
   i.en_kucuk_parca AS "enKucukParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
-  ${NULLU_ISO('i.baslama')} AS baslama, ${NULLU_ISO('i.bitis')} AS bitis, i.saglam_adet AS "saglamAdet", i.surum`;
+  ${NULLU_ISO('i.baslama')} AS baslama, ${NULLU_ISO('i.bitis')} AS bitis, i.saglam_adet AS "saglamAdet", i.surum, ${DAL_VE_ONCUL}`;
 
 export function isEmirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<IsEmriSatiri[]> {
   return db.sorgu<IsEmriSatiri>(
@@ -937,6 +946,26 @@ export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promi
   );
   if (satir === null) throw new Error('İş emri eklenemedi.');
   return satir.id;
+}
+
+// 1248 a: dal satırı silinince öncülleri de gider; iş emri eski kurala döner.
+export async function onculleriSil(db: Db, isEmriId: number): Promise<void> {
+  await db.sorgu('DELETE FROM uretim_emirleri_is_emri_dali WHERE is_emri_id = $1', [isEmriId]);
+}
+
+// 1248 a: iş emrinin dalı ve öncül listesi baştan yazılır; dal satırı iş emrini öncül listeli yapar (liste boşsa dal başıdır).
+export async function onculleriYaz(db: Db, isEmriId: number, dal: string | null, onculler: readonly AdimOnculu[]): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO uretim_emirleri_is_emri_dali (is_emri_id, dal) VALUES ($1, $2) ON CONFLICT (is_emri_id) DO UPDATE SET dal = EXCLUDED.dal`,
+    [isEmriId, dal],
+  );
+  await db.sorgu('DELETE FROM uretim_emirleri_is_emri_onculu WHERE is_emri_id = $1', [isEmriId]);
+  for (const o of onculler) {
+    await db.sorgu(
+      'INSERT INTO uretim_emirleri_is_emri_onculu (is_emri_id, oncul_is_emri_id, tur, devir_adedi) VALUES ($1, $2, $3, $4)',
+      [isEmriId, o.id, o.tur, o.devirAdedi],
+    );
+  }
 }
 
 export async function isaretliListeVar(db: Db, isEmriId: number): Promise<boolean> {
@@ -2121,7 +2150,7 @@ export interface AdimDurumSatiri {
   hataliEmirde: number;
   sonOlay: 'duraklat' | 'durdur' | 'devam' | null;
   // Bölünmüş ya da kol emir: adıma giren parti hesabı ister, listede eksik gösterilmez.
-  partili: boolean;
+  partili: boolean;  onculler: AdimOnculu[] | null;
 }
 
 // Emirlerin bütün adımları, sayaçları ve son olaylarıyla tek sorguda (liste okuması sorgu sayısını adım sayısıyla büyütmez).
@@ -2133,7 +2162,7 @@ export function adimDurumlariGetir(db: Db, emirIdleri: readonly number[]): Promi
             COALESCE(s.saglam, 0)::int AS saglam, COALESCE(s.hurda, 0)::int AS hurda, COALESCE(s.kb, 0)::int AS "kararBekliyor",
             COALESCE(h.hatali, 0)::int AS hatali, COALESCE(h.emirde, 0)::int AS "hataliEmirde",
             (SELECT o.olay FROM uretim_olayi o WHERE o.is_emri_id = i.id AND o.olay <> 'ayar' ORDER BY o.id DESC LIMIT 1) AS "sonOlay",
-            (e.ust_emir_id IS NOT NULL OR EXISTS (SELECT 1 FROM uretim_emri a WHERE a.ust_emir_id = e.id)) AS partili
+            (e.ust_emir_id IS NOT NULL OR EXISTS (SELECT 1 FROM uretim_emri a WHERE a.ust_emir_id = e.id)) AS partili, ${DAL_VE_ONCUL}
        FROM uretim_emirleri_is_emri i
        JOIN uretim_emri e ON e.id = i.uretim_emri_id
        LEFT JOIN LATERAL (
