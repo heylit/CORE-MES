@@ -1,15 +1,16 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, OlcuAletleriCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import { ekMime } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
   OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
-  KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
+  KURULUM_ISARETI, baslangicBelgeleri, ekAnmasi, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
   yonetimGerekirMi, ORTAK_KAYIT_YOLU, takvimDenetimleri,
 } from './kurallar.ts';
 import type { OdaKaydi, Veri } from './kurallar.ts';
@@ -155,17 +156,26 @@ export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi 
   return { esler: canliEsler(oda, simdi) };
 }
 
-export async function ekYukle(db: Db, kullanici: Kullanici, g: { ad: string; tur: string; veri: string }): Promise<EkCevabi> {
+// Tür yükleyenin bildirdiğinden değil içerikten bulunur (GG-1): HTML ya da SVG Blob olarak açılınca betik çalıştırırdı.
+export async function ekYukle(db: Db, kullanici: Kullanici, g: { ad: string; veri: string }): Promise<EkCevabi> {
   const icerik = Buffer.from(g.veri, 'base64');
   if (icerik.length === 0) throw dogrulama('Dosya boş.', 'veri');
   if (icerik.length > AZAMI_EK_BAYT) throw dogrulama('Dosya bu modülde en çok 700 KB olabilir.', 'veri');
-  return sorgular.ekEkle(db, { ad: g.ad, tur: g.tur, icerik, kisiId: kullanici.id });
+  await sorgular.ekKotaKilidi(db);
+  const ret = ekKotaReddi({ ...(await sorgular.ekBaytlari(db, kullanici.id)), yeniBayt: icerik.length });
+  if (ret === 'kisi') throw cokBuyuk('Yüklediğiniz eklerin toplamı bu modüldeki kişi sınırını aşıyor.');
+  if (ret === 'toplam') throw cokBuyuk('Denetim Hazırlığı ek deposu dolu.');
+  return sorgular.ekEkle(db, { ad: g.ad, tur: ekMime(icerik), icerik, kisiId: kullanici.id });
 }
 
-export async function ekOku(db: Db, id: string): Promise<EkIcerikCevabi> {
+// Okunamayan ek ile olmayan ek aynı cevabı alır: kimlik yoklanamaz. Tür okurken de içerikten bulunur; eski satırların
+// bildirilmiş türü kullanılmaz.
+export async function ekOku(db: Db, kullanici: Kullanici, id: string): Promise<EkIcerikCevabi> {
   const ek = await sorgular.ekGetir(db, id);
-  if (ek === null) throw bulunamadi('Dosya bulunamadı.');
-  return { id: ek.id, ad: ek.ad, tur: ek.tur, boyut: ek.boyut, veri: ek.icerik.toString('base64') };
+  if (ek === null || !ekOkunurMu(ek.yukleyenKisiId, await sorgular.ekiAnanYollar(db, ekAnmasi(id)), kullanici.id)) {
+    throw bulunamadi('Dosya bulunamadı.');
+  }
+  return { id: ek.id, ad: ek.ad, tur: ekMime(ek.icerik), boyut: ek.boyut, veri: ek.icerik.toString('base64') };
 }
 
 // Takvim (891): yetkiyi çağıran modül denetler (denetim-hazirlik.oku). Ortak kayıt okunur; kişiye özel alan okunmaz.

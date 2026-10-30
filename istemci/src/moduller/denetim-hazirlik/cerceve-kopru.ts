@@ -473,6 +473,8 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
 
   // ----- ekler (assets) ve /_blob/ adresleri -----
   const ekAdresleri = new Map<string, Promise<string>>();
+  // Tür sunucuda içerikten bulunur (GG-1); burada da betik çalıştırabilecek tür (HTML, SVG) Blob'a verilmez.
+  const blobTuru = (tur: string): string => (/^(?:application\/pdf|image\/(?:png|jpeg|webp|vnd\.dxf)|model\/[a-z0-9.+-]+|video\/mp4)$/.test(tur) ? tur : 'application/octet-stream');
   const base64 = (blob: Blob): Promise<string> => new Promise((coz, reddet) => {
     const okuyucu = new w.FileReader();
     okuyucu.onload = () => { coz(String(okuyucu.result).replace(/^data:[^,]*,/, '')); };
@@ -485,7 +487,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       const tur = (secenek?.type ?? blob.type ?? '').split(';')[0]?.trim().toLowerCase() || 'application/octet-stream';
       const ad = secenek?.name ?? (blob as Blob & { name?: string }).name ?? 'dosya';
       const c = await istek<{ id: string; boyut: number; tur: string }>('ek-yukle', { ad: String(ad).slice(0, 200) || 'dosya', tur, veri: await base64(blob) });
-      const url = w.URL.createObjectURL(blob);
+      const url = w.URL.createObjectURL(new w.Blob([blob], { type: blobTuru(c.tur) }));
       ekAdresleri.set(c.id, Promise.resolve(url));
       return { id: c.id, url, sizeBytes: c.boyut, contentType: c.tur };
     },
@@ -499,7 +501,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
         const ikili = w.atob(c.veri);
         const baytlar = new Uint8Array(ikili.length);
         for (let i = 0; i < ikili.length; i += 1) baytlar[i] = ikili.charCodeAt(i);
-        return w.URL.createObjectURL(new w.Blob([baytlar], { type: c.tur }));
+        return w.URL.createObjectURL(new w.Blob([baytlar], { type: blobTuru(c.tur) }));
       });
       ekAdresleri.set(id, adres);
     }

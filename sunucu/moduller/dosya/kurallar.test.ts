@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DOSYA_SINIRI, bagReddi, kotaHatasi, turBul } from './kurallar.ts';
+import { DOSYA_SINIRI, bagReddi, ekMime, kotaHatasi, turBul } from './kurallar.ts';
 
 const metin = (s: string, uzunluk = 120): Buffer => Buffer.concat([Buffer.from(s, 'latin1'), Buffer.alloc(Math.max(0, uzunluk - s.length), 0x20)]);
 const ikiliStl = (ucgen: number): Buffer => {
@@ -61,4 +61,12 @@ test('bağ sınırı: modülün izin vermediği tür ve boyut reddedilir, sını
   assert.equal(bagReddi({ tur: 'pdf', boyut: 100 }, sinir), null);
   assert.equal(bagReddi({ tur: 'step', boyut: 10 }, sinir), 'turIzinsiz');
   assert.equal(bagReddi({ tur: 'png', boyut: 101 }, sinir), 'dosyaBuyuk');
+});
+
+test('ek türü içerikten bulunur; HTML, SVG ve tanınmayan içerik indirilecek türdür', () => {
+  assert.equal(ekMime(Buffer.from('%PDF-1.7\n')), 'application/pdf');
+  assert.equal(ekMime(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])), 'image/png');
+  assert.equal(ekMime(Buffer.from('<!doctype html><script>alert(1)</script>')), 'application/octet-stream');
+  assert.equal(ekMime(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>')), 'application/octet-stream');
+  assert.equal(ekMime(Buffer.from('düz metin')), 'application/octet-stream');
 });

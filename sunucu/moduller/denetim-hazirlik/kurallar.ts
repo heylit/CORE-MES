@@ -18,6 +18,26 @@ export function erisebilirMi(yol: string, kisiId: number): boolean {
   return p.length >= 3 && p[2] === String(kisiId);
 }
 
+// Ek kotası (GG-1). VARSAYIM: prototip ve TS ekranı ek yüklemiyor; sınır yalnız uca doğrudan yüklemeyle veritabanının
+// doldurulmasını keser. Kişi başına 50 MB, modül toplamı 1 GiB.
+export const EK_SINIRI = { kisiBayt: 50 * 1024 ** 2, toplamBayt: 1024 ** 3 } as const;
+
+export function ekKotaReddi(
+  d: { kisiBayt: number; toplamBayt: number; yeniBayt: number }, sinir: { kisiBayt: number; toplamBayt: number } = EK_SINIRI,
+): 'kisi' | 'toplam' | null {
+  if (d.kisiBayt + d.yeniBayt > sinir.kisiBayt) return 'kisi';
+  if (d.toplamBayt + d.yeniBayt > sinir.toplamBayt) return 'toplam';
+  return null;
+}
+
+// Prototip eki belgede `/_blob/<kimlik>` adresiyle anar (köprü bu adresi çevirir).
+export const ekAnmasi = (id: string): string => `/_blob/${id}`;
+
+// Ekin okunması belgeye bağlıdır (GG-1): yükleyen ya da eki anan ve okuyanın açabildiği bir belge. Kimliği bilmek yetmez.
+export function ekOkunurMu(yukleyenKisiId: number, ananYollar: readonly string[], kisiId: number): boolean {
+  return yukleyenKisiId === kisiId || ananYollar.some((yol) => izinliBelgeMi(yol) && erisebilirMi(yol, kisiId));
+}
+
 // Genel depo ucu yalnız prototipin kalıcı yerel depo anahtarlarına açıktır (istemcideki `YEREL.onekler` ile aynı): prototip
 // başka koleksiyon kullanmaz, uç başka yola yazma ve okuma kapısı olmasın. Kök ortak (`yerel`) ya da kişisel
 // (`data/users/<kişi>/yerel/anahtarlar`); anahtar köprüde kodlanır, öneklerde kodlanan karakter yoktur.

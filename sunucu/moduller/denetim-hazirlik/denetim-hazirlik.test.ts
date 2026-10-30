@@ -22,6 +22,7 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
   let yazar = '';
   let yazarId = 0;
   let ikinciYazar = '';
+  let ikinciYazarId = 0;
   let okur = '';
   let yetkisiz = '';
   let sayac = 0;
@@ -69,7 +70,7 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     yonetici = await girisCerezi('yonetici');
     ({ cerez: yazar, id: yazarId } = await islemliKisi('yazar', ['denetim-hazirlik.yaz']));
-    ({ cerez: ikinciYazar } = await islemliKisi('ikinci_yazar', ['denetim-hazirlik.yaz']));
+    ({ cerez: ikinciYazar, id: ikinciYazarId } = await islemliKisi('ikinci_yazar', ['denetim-hazirlik.yaz']));
     ({ cerez: okur } = await islemliKisi('okur', ['denetim-hazirlik.oku']));
     ({ cerez: yetkisiz } = await islemliKisi('yetkisiz', ['sayfa.denetim-hazirlik']));
   });
@@ -175,16 +176,59 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(okur, 'GET', '/denetim-hazirlik/sorgu?koleksiyon=a/b')).statusCode, 400);
   });
 
-  test('BD-10: ek yüklenir ve aynı içerikle okunur; olmayan ek 404', async () => {
-    const icerik = Buffer.from('deneme içerik');
-    const yukle = await istek(yazar, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'not.txt', tur: 'text/plain', veri: icerik.toString('base64') });
+  test('BD-10: ek yüklenir ve yükleyen aynı içerikle okur; tür içerikten bulunur; olmayan ek 404', async () => {
+    const icerik = Buffer.from('%PDF-1.7\ndeneme');
+    const yukle = await istek(yazar, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'not.pdf', tur: 'text/html', veri: icerik.toString('base64') });
     assert.equal(yukle.statusCode, 200, yukle.body);
-    const ek = yukle.json() as { id: string; boyut: number };
+    const ek = yukle.json() as { id: string; boyut: number; tur: string };
     assert.match(ek.id, /^[0-9a-f]{32}$/);
-    assert.equal(ek.boyut, icerik.length);
-    const oku = (await istek(okur, 'GET', `/denetim-hazirlik/ekler/${ek.id}`)).json() as { veri: string; tur: string };
-    assert.deepEqual([Buffer.from(oku.veri, 'base64').toString(), oku.tur], ['deneme içerik', 'text/plain']);
-    assert.equal((await istek(okur, 'GET', `/denetim-hazirlik/ekler/${'0'.repeat(32)}`)).statusCode, 404);
+    assert.deepEqual([ek.boyut, ek.tur], [icerik.length, 'application/pdf']);
+    const oku = (await istek(yazar, 'GET', `/denetim-hazirlik/ekler/${ek.id}`)).json() as { veri: string; tur: string };
+    assert.deepEqual([Buffer.from(oku.veri, 'base64').toString(), oku.tur], ['%PDF-1.7\ndeneme', 'application/pdf']);
+    assert.equal((await istek(yazar, 'GET', `/denetim-hazirlik/ekler/${'0'.repeat(32)}`)).statusCode, 404);
+  });
+
+  test('BD-10c (GG-1): HTML ve SVG eki bildirilen türle değil indirilecek türle saklanır ve döner; eski satırın türü de içerikten', async () => {
+    for (const [tur, metin] of [['text/html', '<!doctype html><script>parent.x=1</script>'], ['image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg" onload="x()"/>']] as const) {
+      const yukle = await istek(yazar, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'a', tur, veri: Buffer.from(metin).toString('base64') });
+      assert.equal(yukle.statusCode, 200, yukle.body);
+      const ek = yukle.json() as { id: string; tur: string };
+      assert.equal(ek.tur, 'application/octet-stream');
+      assert.equal((await vt().tek<{ tur: string }>('SELECT tur FROM denetim_hazirlik_ek WHERE id = $1', [ek.id]))?.tur, 'application/octet-stream');
+      await vt().sorgu('UPDATE denetim_hazirlik_ek SET tur = $2 WHERE id = $1', [ek.id, tur]);
+      assert.equal(((await istek(yazar, 'GET', `/denetim-hazirlik/ekler/${ek.id}`)).json() as { tur: string }).tur, 'application/octet-stream');
+    }
+  });
+
+  test('BD-10d (GG-1): başkası eki yalnız eki anan ve kendisinin açabildiği belge varken okur; kişiye özel belgedeki anma açmaz', async () => {
+    const yukle = await istek(yazar, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'r.png', tur: 'image/png', veri: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]).toString('base64') });
+    const { id } = yukle.json() as { id: string };
+    const okuDurumu = async () => (await istek(okur, 'GET', `/denetim-hazirlik/ekler/${id}`)).statusCode;
+    assert.equal(await okuDurumu(), 404);
+    const ozel = `data/users/${String(yazarId)}/yerel/anahtarlar/kalite-denetim-ek${String(++sayac)}`;
+    assert.equal((await yaz(yazar, { yol: ozel, kip: 'tam', veri: { logo: `/_blob/${id}` } })).statusCode, 200);
+    assert.equal(await okuDurumu(), 404);
+    const ortak = yeniBelge();
+    assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: { metin: JSON.stringify({ logo: `/_blob/${id}` }) } })).statusCode, 200);
+    assert.equal(await okuDurumu(), 200);
+    assert.equal((await istek(yetkisiz, 'GET', `/denetim-hazirlik/ekler/${id}`)).statusCode, 403);
+  });
+
+  test('BD-10e (GG-1): kişinin ek toplamı kişi sınırını aşınca yükleme reddedilir, başka kişi etkilenmez', async () => {
+    // 73 dolgu eki (her biri 700 KB) kişiyi 50 MB sınırının 100 KB altına getirir.
+    await vt().sorgu(
+      `INSERT INTO denetim_hazirlik_ek (id, ad, tur, boyut, icerik, yukleyen_kisi_id)
+       SELECT replace(gen_random_uuid()::text, '-', ''), 'dolgu', 'application/octet-stream', 716800, decode(repeat('00', 716800), 'hex'), $1
+       FROM generate_series(1, 73)`,
+      [ikinciYazarId],
+    );
+    const yukle = (cerez: string, n: number) => istek(cerez, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'b', tur: 'x/y', veri: Buffer.alloc(n, 1).toString('base64') });
+    assert.equal((await yukle(ikinciYazar, 1024)).statusCode, 200);
+    const red = await yukle(ikinciYazar, 200 * 1024);
+    assert.equal(red.statusCode, 413, red.body);
+    assert.match((red.json() as { mesaj: string }).mesaj, /kişi sınırını/);
+    assert.equal((await yukle(yazar, 200 * 1024)).statusCode, 200);
+    await vt().sorgu('DELETE FROM denetim_hazirlik_ek WHERE yukleyen_kisi_id = $1', [ikinciYazarId]);
   });
 
   test('BD-10b: ek en çok 700 KB; sınırdaki yüklenir, bir bayt fazlası anlaşılır iletiyle 400 alır', async () => {
