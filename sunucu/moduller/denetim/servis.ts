@@ -56,7 +56,7 @@ export const denetimYaz: Denetle = (db, girdi) => {
 };
 
 const suzgec = (s: KayitListesiSorgusuCikti): sorgular.KayitSuzgeci => ({
-  kisi: s.kisi ?? null, baslangic: s.baslangic ?? null, bitis: s.bitis ?? null, yontem: s.yontem ?? null, yol: s.yol ?? null,
+  kisi: s.kisi ?? null, baslangic: s.baslangic ?? null, bitis: s.bitis ?? null, yontem: s.yontem ?? null, yol: s.yol ?? null, modul: s.modul ?? null,
 });
 
 export async function kayitListesi(db: Db, sorgu: KayitListesiSorgusuCikti): Promise<SayfaliListe<KayitSatiri>> {
@@ -68,7 +68,7 @@ export async function kayitListesi(db: Db, sorgu: KayitListesiSorgusuCikti): Pro
       const adlar = await kisiAdlari(db, ham.flatMap((k) => (k.kisi_id === null ? [] : [k.kisi_id])));
       return ham.map((k) => ({
         id: k.id, zaman: k.zaman, kisiId: k.kisi_id, kisiAd: k.kisi_id === null ? null : adlar.get(k.kisi_id) ?? null,
-        yontem: k.yontem, yol: k.yol, kimlikler: kimlikParametreleri(k.parametre),
+        yontem: k.yontem, yol: k.yol, modul: k.modul, yetki: k.yetki, kimlikler: kimlikParametreleri(k.parametre),
       }));
     },
   });
@@ -77,7 +77,7 @@ export async function kayitListesi(db: Db, sorgu: KayitListesiSorgusuCikti): Pro
 export async function suzgecSecenekleri(db: Db): Promise<SuzgecSecenekleriCevabi> {
   const adlar = await kisiAdlari(db, await sorgular.kayitliKisiler(db));
   const kisiler = [...adlar].map(([id, ad]) => ({ id, ad })).sort((a, b) => a.ad.localeCompare(b.ad, 'tr') || a.id - b.id);
-  return { kisiler, komutlar: await sorgular.kayitliKomutlar(db) };
+  return { kisiler, moduller: await sorgular.kayitliModuller(db), komutlar: await sorgular.kayitliKomutlar(db) };
 }
 
 // Kayıt yazılırken maskelenmiştir; okurken yeniden maskelenir: kural sonradan genişlediyse eski satırdaki değer de çıkmaz.

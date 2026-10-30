@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
   DegisiklikListesiSorgusu, DegisiklikSatiri, DenetimUclari, KayitListesiSorgusu, KayitSatiri,
 } from '#paylasilan/sozlesme/denetim.ts';
+import { grupAdi, islemAdi } from '#paylasilan/islem-adlari.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ucCagrisi } from '../../ortak/veri/uc-cagrisi.ts';
@@ -15,8 +16,8 @@ const SAYFA_BOYU = 50;
 type Gorunum = 'komutlar' | 'degisiklikler';
 const GORUNUMLER = [{ deger: 'komutlar', baslik: 'Komutlar' }, { deger: 'degisiklikler', baslik: 'Değişiklikler' }] as const;
 
-interface Suzgec { kisi: string; baslangic: string; bitis: string; komut: string; tablo: string }
-const BOS_SUZGEC: Suzgec = { kisi: '', baslangic: '', bitis: '', komut: '', tablo: '' };
+interface Suzgec { kisi: string; baslangic: string; bitis: string; modul: string; komut: string; tablo: string }
+const BOS_SUZGEC: Suzgec = { kisi: '', baslangic: '', bitis: '', modul: '', komut: '', tablo: '' };
 
 // Defterdeki tablo adının ekrandaki karşılığı (392 a listesi); listede olmayan tablo kendi adıyla görünür.
 const TABLO_ADLARI: Readonly<Record<string, string>> = {
@@ -31,11 +32,41 @@ const TABLO_ADLARI: Readonly<Record<string, string>> = {
   kisi_is_merkezi: 'Kişi iş merkezi',
   ayar: 'Sistem ayarı',
 };
+// Yol parametresinden önceki kesimin ekrandaki karşılığı (`/uretim-emirleri/:id` -> "Üretim emri 13"); listede olmayan "Kayıt" olur.
+const KESIM_ADLARI: Readonly<Record<string, string>> = {
+  'adimli-emirler': 'Emir', 'uretim-emirleri': 'Üretim emri', emirler: 'Emir', 'is-emirleri': 'İş emri', adimlar: 'Adım',
+  isler: 'İş', teklifler: 'Teklif', revizyonlar: 'Revizyon', salonlar: 'Salon', cizimler: 'Çizim', istasyonlar: 'İstasyon',
+  senaryolar: 'Senaryo', 'satin-alma-talepleri': 'Satın alma talebi', 'satin-alma-siparis-satirlari': 'Sipariş satırı',
+  kisiler: 'Kişi', 'kisi-yetkinlikleri': 'Kişi', firmalar: 'Firma', urunler: 'Ürün', sartnameler: 'Şartname',
+  'refakat-partileri': 'Refakat partisi', partiler: 'Parti', cekler: 'Çek', malzemeler: 'Malzeme', siparisler: 'Sipariş',
+  projeler: 'Proje', 'proje-maliyet': 'Proje', modeller: 'Model', 'malzeme-istekleri': 'Malzeme isteği', makineler: 'Makine',
+  belgeler: 'Belge', talepler: 'Talep', 'olcu-aletleri': 'Ölçü aleti', araclar: 'Araç', 'arac-gorevleri': 'Araç görevi',
+  ziyaretler: 'Ziyaret', teslimler: 'Teslim', tanimlar: 'Tanım', raflar: 'Raf', kontroller: 'Kontrol', hesaplar: 'Hesap',
+  toplamalar: 'Toplama', 'talimat-sablonlari': 'Talimat şablonu', sablonlar: 'Şablon', resimler: 'Resim',
+  'mal-kabuller': 'Mal kabul', konumlar: 'Konum', 'guvenlik-alarmlari': 'Alarm', ekler: 'Ek', ekipler: 'Ekip',
+  demirbaslar: 'Demirbaş', zimmetler: 'Zimmet', 'statu-tanimlari': 'Statü', satirlar: 'Satır', 'planli-duruslar': 'Planlı duruş',
+};
+
 const ISLEM_ADLARI: Readonly<Record<DegisiklikSatiri['islem'], string>> = { ekle: 'Ekleme', guncelle: 'Güncelleme', sil: 'Silme' };
 
 const zaman = (z: string) => new Date(z).toLocaleString('tr-TR');
 const komut = (k: { yontem: string; yol: string }) => `${k.yontem} ${k.yol}`;
 const kimlikMetni = (k: KayitSatiri['kimlikler']) => Object.entries(k).map(([ad, deger]) => `${ad} ${deger}`).join(', ');
+const kesimAdi = (yol: string, ad: string): string => {
+  const kesimler = yol.split('/');
+  const yer = kesimler.indexOf(`:${ad}`);
+  return (yer > 0 ? KESIM_ADLARI[kesimler[yer - 1] ?? ''] : undefined) ?? 'Kayıt';
+};
+const kayitMetni = (k: KayitSatiri) => Object.entries(k.kimlikler).map(([ad, deger]) => `${kesimAdi(k.yol, ad)} ${deger}`).join(', ');
+// Yetki yalnız 8 Ekim sonrası satırlarda vardır; boşsa komutun kendisi gösterilir. Okuma yetkisi (dosya açma) "biri:" ile gelir.
+const islemMetni = (k: KayitSatiri): string => {
+  if (k.yetki === null) return komut(k);
+  if (k.yetki === 'oturum') return 'Kendi hesabında işlem';
+  const ilk = k.yetki.startsWith('biri:') ? k.yetki.slice('biri:'.length).split('|')[0] ?? k.yetki : k.yetki;
+  const ad = islemAdi(ilk);
+  return k.yontem === 'GET' ? `Dosya açma (${ad})` : ad;
+};
+const modulMetni = (k: KayitSatiri) => (k.modul === null ? '—' : grupAdi(k.modul));
 const kisiMetni = (k: KayitSatiri) => k.kisiAd ?? (k.kisiId === null ? 'Oturumsuz' : `#${k.kisiId}`);
 const tabloAdi = (t: string) => TABLO_ADLARI[t] ?? t;
 const anahtarMetni = (a: DegisiklikSatiri['anahtar']) => Object.entries(a).map(([ad, deger]) => `${ad} ${String(deger)}`).join(', ');
@@ -46,8 +77,9 @@ const degerMetni = (d: unknown) => (d === null ? '—' : typeof d === 'string' ?
 const SUTUNLAR: readonly Sutun<KayitSatiri>[] = [
   { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (k) => zaman(k.zaman) },
   { anahtar: 'kisi', baslik: 'Kişi', hucre: kisiMetni },
-  { anahtar: 'komut', baslik: 'Komut', mono: true, hucre: komut },
-  { anahtar: 'kayit', baslik: 'Kayıt', mono: true, hucre: (k) => kimlikMetni(k.kimlikler) },
+  { anahtar: 'modul', baslik: 'Modül', hucre: modulMetni },
+  { anahtar: 'islem', baslik: 'İşlem', hucre: islemMetni },
+  { anahtar: 'kayit', baslik: 'Kayıt', hucre: kayitMetni },
 ];
 
 const DEGISIKLIK_SUTUNLARI: readonly Sutun<DegisiklikSatiri>[] = [
@@ -75,6 +107,7 @@ function sorguKur(s: Suzgec, sayfa: number): KayitListesiSorgusu {
     sayfa,
     sayfaBoyu: SAYFA_BOYU,
     ...tarihSuzgeci(s),
+    ...(s.modul === '' ? {} : { modul: s.modul }),
     ...(bosluk < 0 ? {} : { yontem: s.komut.slice(0, bosluk) as NonNullable<KayitListesiSorgusu['yontem']>, yol: s.komut.slice(bosluk + 1) }),
   };
 }
@@ -126,9 +159,15 @@ export function DenetimKaydi() {
           />
           <Girdi etiket="Başlangıç" type="date" value={suzgec.baslangic} max={suzgec.bitis || undefined} onChange={(e) => degistir({ baslangic: e.target.value })} />
           <Girdi etiket="Bitiş" type="date" value={suzgec.bitis} min={suzgec.baslangic || undefined} onChange={(e) => degistir({ bitis: e.target.value })} />
+          {komutlar && (
+            <Secim
+              etiket="Modül" bosSecenek="Hepsi" value={suzgec.modul} onChange={(e) => degistir({ modul: e.target.value })}
+              secenekler={(secenekler.data?.moduller ?? []).map((m) => ({ deger: m, baslik: grupAdi(m) }))}
+            />
+          )}
           {komutlar ? (
             <Secim
-              etiket="İşlem" bosSecenek="Hepsi" value={suzgec.komut} onChange={(e) => degistir({ komut: e.target.value })}
+              etiket="Komut" bosSecenek="Hepsi" value={suzgec.komut} onChange={(e) => degistir({ komut: e.target.value })}
               secenekler={(secenekler.data?.komutlar ?? []).map((k) => ({ deger: komut(k), baslik: komut(k) }))}
             />
           ) : (
@@ -226,8 +265,11 @@ function KayitAyrintisi({ kayit, icerikOkur }: { kayit: KayitSatiri; icerikOkur:
       <dl className="tc-denetim-ozet">
         <dt>Zaman</dt><dd>{zaman(kayit.zaman)}</dd>
         <dt>Kişi</dt><dd>{kisiMetni(kayit)}</dd>
+        <dt>Modül</dt><dd>{modulMetni(kayit)}</dd>
+        <dt>İşlem</dt><dd>{islemMetni(kayit)}</dd>
+        <dt>Kayıt</dt><dd>{kayitMetni(kayit) || 'yok'}</dd>
         <dt>Komut</dt><dd className="mono">{komut(kayit)}</dd>
-        <dt>Kayıt</dt><dd className="mono">{kimlikMetni(kayit.kimlikler) || 'yok'}</dd>
+        <dt>Kimlikler</dt><dd className="mono">{kimlikMetni(kayit.kimlikler) || 'yok'}</dd>
       </dl>
       {icerikOkur === null && <DurumKutusu durum="yukleniyor" />}
       {icerikOkur === true && <KayitIcerigi id={kayit.id} />}

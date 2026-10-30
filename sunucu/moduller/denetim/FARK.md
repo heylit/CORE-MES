@@ -57,3 +57,16 @@ Yok.
 
 ## Onaylı kararlar
 - 392 a (dolu tablo göçü), 257 a (kapsam), 258 a (rol ve kişi-iş merkezi de deftere), 259 a (ekran görünümü, prototip değişikliği).
+
+# FARK: denetim, okunur liste (1371 a, kart 1374; dal 1374-denetim-okunur)
+
+## Eklenen
+- Liste satırı `modul` ve `yetki` taşır (ikisi de boş olabilir; göç 20261008082740 öncesi satırlarda boş). Liste sorgusuna `modul` süzgeci,
+  süzgeç seçeneklerine `moduller` (yalnız dolu değerler). Göç yok; gövde ve parametre yine taşınmaz.
+- Ekran: "Komut" sütunu yerine "Modül" (`grupAdi`) ve "İşlem" (`islemAdi`, yetki adı) sütunları; "Kayıt" yol kesiminin Türkçe adıyla
+  ("Üretim emri 41"). Yetkisi boş eski satırda işlem yerine komut görünür. "Modül" süzgeci eklendi; teknik komut süzgeci "Komut" adını aldı.
+  Satır ayrıntısında teknik komut ve ham kimlikler kalır.
+- Test: `okuma.test.ts` `modül ve yetki: ...`; `DenetimKaydi.test.tsx` modül süzgeci ve Türkçe sütunlar.
+
+## Onaylı kararlar
+- 1371 a (teyitli): Denetim Kaydı okunur yapılır; başka ekrana dokunulmaz.

@@ -18,6 +18,7 @@ export interface KayitSuzgeci {
   bitis: string | null;
   yontem: string | null;
   yol: string | null;
+  modul: string | null;
 }
 
 // Gün sınırı veritabanı oturumunun saat dilimindedir; bitiş günü dahildir.
@@ -26,9 +27,10 @@ const SUZGEC = `FROM denetim_kaydi d
     AND ($2::date IS NULL OR d.zaman >= $2::date)
     AND ($3::date IS NULL OR d.zaman < $3::date + 1)
     AND ($4::text IS NULL OR d.yontem = $4)
-    AND ($5::text IS NULL OR d.yol = $5)`;
+    AND ($5::text IS NULL OR d.yol = $5)
+    AND ($6::text IS NULL OR d.modul = $6)`;
 
-const suzgecDegerleri = (s: KayitSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.yontem, s.yol];
+const suzgecDegerleri = (s: KayitSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.yontem, s.yol, s.modul];
 
 export async function kayitSay(db: Db, s: KayitSuzgeci): Promise<number> {
   return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${SUZGEC}`, suzgecDegerleri(s)))?.toplam ?? 0;
@@ -40,20 +42,27 @@ export interface KayitSatiriHam {
   kisi_id: number | null;
   yontem: string;
   yol: string;
+  modul: string | null;
+  yetki: string | null;
   parametre: unknown;
 }
 
 // Gövde bu sorguda seçilmez: liste onu hiçbir yoldan taşımaz.
 export function kayitlar(db: Db, s: KayitSuzgeci, dilim: Dilim): Promise<KayitSatiriHam[]> {
   return db.sorgu<KayitSatiriHam>(
-    `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.yontem, d.yol, d.parametre ${SUZGEC}
-      ORDER BY d.zaman DESC, d.id DESC LIMIT $6 OFFSET $7`,
+    `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.yontem, d.yol, d.modul, d.yetki, d.parametre ${SUZGEC}
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $7 OFFSET $8`,
     [...suzgecDegerleri(s), dilim.sinir, dilim.atla],
   );
 }
 
 export async function kayitliKisiler(db: Db): Promise<number[]> {
   return (await db.sorgu<{ kisi_id: number }>('SELECT DISTINCT kisi_id FROM denetim_kaydi WHERE kisi_id IS NOT NULL')).map((s) => s.kisi_id);
+}
+
+// 8 Ekim öncesi satırlarda modül boştur (göç 20261008082740); süzgeç yalnız dolu olanları sunar.
+export async function kayitliModuller(db: Db): Promise<string[]> {
+  return (await db.sorgu<{ modul: string }>('SELECT DISTINCT modul FROM denetim_kaydi WHERE modul IS NOT NULL ORDER BY modul')).map((s) => s.modul);
 }
 
 export function kayitliKomutlar(db: Db): Promise<{ yontem: string; yol: string }[]> {

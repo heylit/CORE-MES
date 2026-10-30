@@ -12,6 +12,7 @@ export const kayitListesiSorgusu = z.object({
   bitis: tarihSemasi.optional(),
   yontem: z.enum(DENETIM_YONTEMLERI).optional(),
   yol: z.string().trim().min(1).max(300).optional(),
+  modul: z.string().trim().regex(/^[a-z][a-z0-9-]{0,62}$/).optional(),
 }).superRefine((s, ctx) => {
   if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
@@ -28,6 +29,9 @@ export const kayitSatiri = z.object({
   kisiAd: z.string().nullable(),
   yontem: z.string(),
   yol: z.string(),
+  // Ucun modülü ve yetki işlemi (göç 20261008082740); daha eski satırlarda boştur, ekran o zaman komutu gösterir.
+  modul: z.string().nullable(),
+  yetki: z.string().nullable(),
   kimlikler: z.record(z.string(), z.number().int()),
 });
 
@@ -35,6 +39,7 @@ export const kayitListesiCevabi = listeCevapSemasi(kayitSatiri);
 
 export const suzgecSecenekleriCevabi = z.object({
   kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+  moduller: z.array(z.string()),
   komutlar: z.array(z.object({ yontem: z.string(), yol: z.string() })),
 });
 
