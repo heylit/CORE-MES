@@ -5,7 +5,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { IstasyonSepetiSatiri, IstasyonSepetleriCevabi, Teslim } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
-import { IstasyonSepetleri, useIstasyonSepetiSayilari } from './disari.ts';
+import { CikanSepet, IstasyonSepetleri, useIstasyonSepetiSayilari } from './disari.ts';
 
 // Terminalin iki sepeti (745): gelen önceki istasyonun parçasını ve yoldaki teslimi, çıkan burada duran parçayı sonraki istasyonla gösterir.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -85,5 +85,29 @@ describe('iki sepet (745)', () => {
     ac();
     expect(await screen.findByText('Önceki istasyondan bekleyen parça yok.')).toBeTruthy();
     expect(screen.getByText('Bu istasyonda bu emrin parçası yok.')).toBeTruthy();
+  });
+});
+
+describe('çıkan sepet tek başına (1337 a)', () => {
+  const tek = () => {
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><CikanSepet istasyonId={2} uretimEmriId={30} /></BildirimSaglayici></QueryClientProvider>);
+  };
+  it('yalnız çıkanı gösterir; gönderim iki sepetteki gibi emirle yazılır', async () => {
+    const istekler = sunucuKur(OPERATOR, {
+      'GET /stok/teslim-kutusu/istasyon-sepetleri': () => json(200, CEVAP),
+      'GET /stok/statuler': () => json(200, { statuler: [] }),
+      'POST /stok/teslimler/gonder': () => json(200, { teslim: { ...YOLDA, id: 42 } }),
+    });
+    tek();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 30)' }));
+    expect(screen.queryByRole('list', { name: 'Gelen' })).toBeNull();
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/teslimler/gonder')?.govde).toMatchObject({ uretimEmriId: 30, hedef: { istasyonId: 3 }, kaynak: { istasyonId: 2 } }));
+  });
+  it('çıkan boşsa gönderim düğmesi yok (reddedilen)', async () => {
+    sunucuKur(OPERATOR, { 'GET /stok/teslim-kutusu/istasyon-sepetleri': () => json(200, { ...CEVAP, cikan: [] }), 'GET /stok/statuler': () => json(200, { statuler: [] }) });
+    tek();
+    expect(await screen.findByText('Bu istasyonda bu emrin parçası yok.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
   });
 });
