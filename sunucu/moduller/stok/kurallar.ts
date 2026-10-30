@@ -890,6 +890,16 @@ export function karantinaEngeli(kaynakTuru: KonumTuru, g: { cikisNedeni: string 
 export const FASON_DONUS_KARANTINA = 'Fason dönüşü karantina konumuna girer; GKK kararından sonra çıkar.';
 export const KARANTINA_KONUMU_YOK = 'Karantina konumu yok; fason dönüşü için Depo haritasına karantina alanı ekleyin.';
 export const fasonDonusKonumuEngeli = (tur: KonumTuru): string | null => (tur === 'karantina' ? null : FASON_DONUS_KARANTINA);
+// 1246 (1247 d, 1251): kartı GKK isteyen satın alma lotu karantinaya karar bekliyor girer; konum seçilirse karantina türündedir.
+export const GKK_GIRIS_KARANTINA = 'Giriş kalite kontrolü isteyen kart karantina konumuna girer; kalite kararından sonra çıkar.';
+export const GKK_KARANTINA_KONUMU_YOK = 'Karantina konumu yok; giriş kalite kontrolü için Depo haritasına karantina alanı ekleyin.';
+export const gkkGirisKonumuEngeli = (tur: KonumTuru): string | null => (tur === 'karantina' ? null : GKK_GIRIS_KARANTINA);
+// 1246 (VARSAYIM): kalite kararı verilmiş GKK satırının stoğu karantinadan çıkmış ya da red olmuştur; ters hareket onu geri alamaz.
+export function girisKontroluDuzeltmeEngeli(satirlar: readonly { miktar: string; bekleyen: string }[]): string | null {
+  return satirlar.some((s) => binde(s.bekleyen) < binde(s.miktar))
+    ? 'Bu belgede giriş kontrolü kararı verilmiş satır var; düzeltme onu geri alamaz. Farkı Kalite Merkezi ve Stok Merkezi\'nde düzeltin.'
+    : null;
+}
 export function kaliteDegisimiEngeli(kaynak: KaliteDurumu, hedef: KaliteDurumu, mevcut: string, miktar: string): string | null {
   if (kaynak === hedef) return 'Kaynak ve hedef kalite durumu aynı.';
   if (binde(mevcut) < binde(miktar)) return `Bu kalite durumunda yeterli stok yok. Mevcut: ${bindenMetin(binde(mevcut))}.`;

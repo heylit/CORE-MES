@@ -612,3 +612,42 @@ export function ncrAra(db: Db, a: { sade: string; icindeDeseni: string; basDesen
     [a.icindeDeseni, a.sade, a.basDeseni, a.sinir],
   );
 }
+
+// ---- Giriş kontrolü (1246) ----------------------------------------------------------------------------------------------------------
+// Aynı mal kabul satırına iki karar aynı anda verilmesin: ikincisi birincinin yazdığını görür.
+export async function girisKilidi(db: Db, malKabulSatirId: number): Promise<void> {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('kalite_merkezi_giris'), $1)", [malKabulSatirId]);
+}
+
+export interface GirisKarariSatiri {
+  malKabulSatirId: number; asama: 'gkk' | 'karar'; kabulMiktar: string | null; hataliMiktar: string | null; karar: 'kabul' | 'sartli_kabul' | 'red' | null;
+  ncrNo: string | null; aciklama: string | null; kisiId: number; zaman: string;
+}
+const GIRIS_KARARI_SECIMI = `SELECT mal_kabul_satiri_id::int AS "malKabulSatirId", asama, kabul_miktar::text AS "kabulMiktar", hatali_miktar::text AS "hataliMiktar",
+  karar, ncr_no AS "ncrNo", aciklama, kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman FROM kalite_merkezi_giris_karari`;
+
+export function girisKararlari(db: Db, malKabulSatirIdleri: readonly number[]): Promise<GirisKarariSatiri[]> {
+  return db.sorgu(`${GIRIS_KARARI_SECIMI} WHERE mal_kabul_satiri_id = ANY($1::bigint[]) ORDER BY id`, [[...malKabulSatirIdleri]]);
+}
+
+// GKK'sı hatalı miktar veren ve kalite kararı henüz verilmemiş satırlar.
+export async function kararBekleyenGirisler(db: Db): Promise<number[]> {
+  const l = await db.sorgu<{ id: number }>(
+    `SELECT g.mal_kabul_satiri_id::int AS id FROM kalite_merkezi_giris_karari g
+      WHERE g.asama = 'gkk' AND g.hatali_miktar > 0
+        AND NOT EXISTS (SELECT 1 FROM kalite_merkezi_giris_karari k WHERE k.mal_kabul_satiri_id = g.mal_kabul_satiri_id AND k.asama = 'karar')
+      ORDER BY g.id`,
+  );
+  return l.map((r) => r.id);
+}
+
+export async function girisKarariYaz(db: Db, k: {
+  malKabulSatirId: number; asama: 'gkk' | 'karar'; kabulMiktar: string | null; hataliMiktar: string | null; karar: 'kabul' | 'sartli_kabul' | 'red' | null;
+  ncrKimlik: string | null; ncrNo: string | null; aciklama: string | null; kisiId: number;
+}): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, karar, ncr_kimlik, ncr_no, aciklama, kisi_id)
+     VALUES ($1, $2, $3::numeric, $4::numeric, $5, $6, $7, $8, $9)`,
+    [k.malKabulSatirId, k.asama, k.kabulMiktar, k.hataliMiktar, k.karar, k.ncrKimlik, k.ncrNo, k.aciklama, k.kisiId],
+  );
+}

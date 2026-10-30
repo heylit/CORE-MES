@@ -12,6 +12,8 @@ export { malzemeAdlari, malzemeOzeti, malzemeKullanilabilirMi } from './servis.t
 export { malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';
 // Genel arama (Ctrl K, 1233): çekirdek bu listeyi ad kuralıyla bulur; yetkiyi çekirdek denetler.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [malzemeAramaKaynagi];
+// 1247 d: satın alma kabulünde giriş kalite kontrolü isteyen kartlar.
+export { gkkGerekenKartlar } from './servis.ts';
 // Logo bağlantısı (kart #232): kuyruğu okur, her kartın sonucunu bildirir. Yetki denetlemez; nasıl kullanılacağı NOTLAR.md "Logo bağlantısı".
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).

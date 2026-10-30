@@ -22,7 +22,7 @@ import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
-  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
+  katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
@@ -46,6 +46,12 @@ export async function malzemeOzetleri(db: Db, idler: number[]): Promise<Map<numb
   const benzersiz = [...new Set(idler)];
   if (benzersiz.length === 0) return new Map();
   return new Map((await s.katalogMalzemeOzetleri(db, benzersiz)).map((o) => [o.id, o]));
+}
+
+// 1247 d: satın alma kabulünde lotu karantinaya alınacak kartlar (giriş kalite kontrolü). Boş dizide sorgu atılmaz; olmayan kart kümede yok.
+export async function gkkGerekenKartlar(db: Db, idler: readonly number[]): Promise<ReadonlySet<number>> {
+  const benzersiz = [...new Set(idler)];
+  return new Set(benzersiz.length === 0 ? [] : await s.gkkGerekenKartlar(db, benzersiz));
 }
 
 // Satın almanın kg fiyatı için (19.10.2026): kartın kalitesi, ailesi, formu ve stok birimi. Olmayan kart haritada yok.
@@ -514,6 +520,8 @@ export async function katalogKartiKaydet(
     const ayni = await s.katalogAyniAnahtarli(db, anahtar, kimlik);
     if (ayni.length) throw cakisma(`Bu malzemenin kartı zaten var: ${ayni.map((k) => k.stokKodu).join(', ')}. Mevcut kartı kullan ya da gerekçe yaz.`, { kartlar: ayni });
   }
+  const gkk = katalogGkkAyari(tur, g.ozet.gkk_gerekli);
+  if ('hata' in gkk) throw dogrulama(gkk.hata, 'ozet.gkk_gerekli');
   const onaylandi = yeniDurum === 'aktif' && kayitli?.onayDurumu !== 'aktif';
   const yazim: s.KatalogKartiYazimi = {
     kimlik, tur: tur, hizmetYonu, benzersizAnahtar: anahtar, varsayilanAnahtar, mukerrerGerekcesi: gerekce, onayDurumu: yeniDurum, kayit,
@@ -526,6 +534,7 @@ export async function katalogKartiKaydet(
     olcuAletiId: alet?.id ?? null,
     aciklamalar: katalogAciklamalari(g.ozet),
     birimDonusumu: kayitBirimDonusumu(kayit),
+    gkk,
   };
   // Firma kodlu türde önek ayardan gelir, gelen kod okunmaz.
   const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await katalogGenelAyari(db), tur) === null

@@ -4,7 +4,7 @@ import {
   kartBilesenKimlikleri, kartHizmetYonu, katalogAnahtarZorunluMu, katalogGecisiDenetle, katalogIcerigiDegistiMi, katalogIptalEdilirMi, katalogKodDegisebilirMi, katalogKodOneki,
   katalogOnayAkisiAcikMi, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogStokKodu, katalogSurumUyarMi, katalogTalebiBas,
   katalogTalepDenetle, katalogKaydiAlanlari, katalogFirmaKoduGecerliMi, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIptalYetkiliMi, katalogFarki, katalogTalepUygulamaDenetle,
-  katalogAgirlikAlanlari, katalogNetAgirlikKg, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
+  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
 
@@ -404,3 +404,13 @@ test('UYUM-BORCU 4, 157 a: hammadde ölçüsü ekranın kuralıyla; ölçüsüz 
   assert.equal(hammaddeOlcuHatasi(iyi, { ...iyi, talep: { yeni: hm('boru', { D: 10, t: 6, l: 1 }) } }), 'Et kalınlığı dış çapın yarısından küçük olmalı.');
 });
 
+
+test('1247 d katalogGkkAyari: gelmeyen ayar korunur, gelen yazılır; demirbaş ve hizmette açık reddedilir, ayar silinir', () => {
+  assert.deepEqual(katalogGkkAyari('hammadde', undefined), { yaz: false, deger: null });
+  assert.deepEqual(katalogGkkAyari('hammadde', false), { yaz: true, deger: false });
+  assert.deepEqual(katalogGkkAyari('sarf', true), { yaz: true, deger: true });
+  assert.deepEqual(katalogGkkAyari('ticari_mal', null), { yaz: true, deger: null });
+  assert.deepEqual(katalogGkkAyari('demirbas', true), { hata: GKK_TURU_ILETISI });
+  assert.deepEqual(katalogGkkAyari('hizmet', false), { yaz: true, deger: null });
+  assert.deepEqual(katalogGkkAyari('hizmet', undefined), { yaz: true, deger: null });
+});

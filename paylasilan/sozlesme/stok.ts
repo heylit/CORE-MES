@@ -24,7 +24,9 @@ export const KALITE_DURUMLARI = ['serbest', 'karar_bekliyor', 'sartli', 'red'] a
 export type KaliteDurumu = (typeof KALITE_DURUMLARI)[number];
 export const ELLE_KONUM_TURLERI = ['kabul', 'depo_zemini', 'fason', 'ara_alan', 'hurda'] as const;
 export const MAL_KABUL_TURLERI = ['satin_alma', 'iade', 'diger'] as const;
-export const CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger'] as const;
+export const CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger', 'tedarikci_iade'] as const;
+// 1253 a: tedarikçiye iade yalnız giriş kontrolünde kalitenin red kararıyla yazılır; elle çıkışta seçilmez.
+export const ELLE_CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger'] as const;
 export const AMBALAJ_TURLERI = ['kasa', 'koli', 'palet', 'bidon', 'makara'] as const;
 export const HAREKET_TURLERI = ['giris', 'cikis', 'transfer', 'sayim_fazla', 'sayim_eksik', 'geri_alma'] as const;
 export const LOGO_ESLESME_DURUMLARI = ['irsaliye_bekleniyor', 'eslesti', 'fark_var'] as const;
@@ -596,6 +598,8 @@ export const malKabulSatiri = z.object({
   logoDurumu: z.enum(LOGO_ESLESME_DURUMLARI),
   logoIrsaliyeSatirNo: z.number().int().nullable(),
   logoIrsaliyeMiktari: ondalikMetinSemasi.nullable(),
+  // 1246: kartı GKK isteyen satın alma satırı karantinaya karar bekliyor girer; kararı giriş kontrolü verir.
+  gkk: z.boolean(),
 });
 export const malKabulAyrintiCevabi = z.object({ belge: malKabulOzeti, satirlar: z.array(malKabulSatiri) });
 export type MalKabulAyrintiCevabi = z.output<typeof malKabulAyrintiCevabi>;
@@ -693,7 +697,7 @@ export const cikisGovdesi = z.object({
   konumId: kimlik,
   partiId: buyukKimlik.nullable().optional(),
   miktar: miktarSemasi,
-  cikisNedeni: z.enum(CIKIS_NEDENLERI),
+  cikisNedeni: z.enum(ELLE_CIKIS_NEDENLERI),
   uretimEmriId: kimlik.optional(),
   eksiOnay: z.boolean().optional(),
   aciklama: bosOlabilir(200),
@@ -807,7 +811,7 @@ export const sepetTeslimEtCevabi = z.object({
 });
 export type SepetTeslimEtCevabi = z.output<typeof sepetTeslimEtCevabi>;
 export type TeslimKomutu = z.output<typeof teslimGovdesi>;
-export const stoktanDusGovdesi = z.object({ cikisNedeni: z.enum(CIKIS_NEDENLERI), uretimEmriId: kimlik.optional(), aciklama: bosOlabilir(200), eksiOnay: z.boolean().optional() });
+export const stoktanDusGovdesi = z.object({ cikisNedeni: z.enum(ELLE_CIKIS_NEDENLERI), uretimEmriId: kimlik.optional(), aciklama: bosOlabilir(200), eksiOnay: z.boolean().optional() });
 export type StoktanDusGovdesi = z.input<typeof stoktanDusGovdesi>;
 export type StoktanDusKomutu = z.output<typeof stoktanDusGovdesi>;
 export const fisOzeti = z.object({

@@ -9,7 +9,7 @@ import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
-import type { KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -23,7 +23,7 @@ import { malzemeAra, malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disa
 import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
-import { hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
+import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
 import {
   acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
 } from '../uretim-emirleri/disari.ts';
@@ -34,6 +34,7 @@ import {
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
 import { hataliNcrGovdesi } from './kurallar.ts';
+import { girisDurumu, girisGkkEngeli, girisNcrGovdesi } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
@@ -465,6 +466,91 @@ export async function kapanisNcrDurumlari(db: Db, uretimEmriIdleri: readonly num
 
 export async function hataliBekleyenListesi(db: Db): Promise<KmHataliBekleyenCevabi> {
   return { kayitlar: await hataliKayitlari(db, { acik: true, emirId: null }) };
+}
+
+// ---- Giriş kontrolü (1246; 1251 a, 1252, 1253 a) ---------------------------------------------------------------------------------
+// Kartı GKK isteyen satın alma lotu karantinaya karar bekliyor girer. Liste: GKK'sı verilmemiş lotlar ve hatalı miktarı kalite kararını
+// bekleyenler. Emre bağlı lotun GKK'sı terminalde verilecek (1251 a, D5); o gelene kadar bu listede durur.
+export async function girisBekleyenListesi(db: Db): Promise<KmGirisBekleyenCevabi> {
+  const idler = [...new Set([...(await girisKontroluSatirlari(db, null)).map((s) => s.malKabulSatirId), ...(await sorgular.kararBekleyenGirisler(db))])];
+  return { kayitlar: (await girisKayitlari(db, idler)).filter((k) => k.durum !== 'kapandi') };
+}
+
+async function girisKayitlari(db: Db, idler: readonly number[]): Promise<KmGirisKaydi[]> {
+  if (idler.length === 0) return [];
+  const satirlar = await girisKontroluSatirlari(db, idler);
+  const kararlar = await sorgular.girisKararlari(db, satirlar.map((s) => s.malKabulSatirId));
+  const malzemeler = await malzemeOzetleri(db, satirlar.map((s) => s.malzemeId));
+  const siparisler = new Map((await siparisSatirlari(db, satirlar.flatMap((s) => (s.siparisSatirId === null ? [] : [s.siparisSatirId])))).map((r) => [r.id, r]));
+  const kisiler = await kisiAdlari(db, kararlar.map((k) => k.kisiId));
+  return satirlar.map((s) => {
+    const gkk = kararlar.find((k) => k.malKabulSatirId === s.malKabulSatirId && k.asama === 'gkk') ?? null;
+    const karar = kararlar.find((k) => k.malKabulSatirId === s.malKabulSatirId && k.asama === 'karar') ?? null;
+    const m = malzemeler.get(s.malzemeId);
+    const sp = s.siparisSatirId === null ? undefined : siparisler.get(s.siparisSatirId);
+    return {
+      malKabulSatirId: s.malKabulSatirId, malKabulNo: s.malKabulNo, zaman: s.zaman, malzemeId: s.malzemeId, malzemeKod: m?.kod ?? null, malzemeAd: m?.ad ?? null,
+      birim: m?.birim ?? null, partiId: s.partiId, partiEtiketi: s.partiEtiketi, sertifikaVar: s.sertifikaVar, tedarikciAdi: sp?.tedarikciAdi ?? null,
+      siparisNo: sp?.siparisNo ?? null, miktar: s.miktar, durum: girisDurumu(gkk, karar),
+      kabulMiktar: gkk?.kabulMiktar ?? null, hataliMiktar: gkk?.hataliMiktar ?? null,
+      gkkKisiAd: gkk === null ? null : (kisiler.get(gkk.kisiId) ?? null), gkkZaman: gkk?.zaman ?? null,
+      karar: karar?.karar ?? null, ncrNo: karar?.ncrNo ?? null,
+      kararKisiAd: karar === null ? null : (kisiler.get(karar.kisiId) ?? null), kararZaman: karar?.zaman ?? null,
+      not: karar?.aciklama ?? gkk?.aciklama ?? null,
+    };
+  });
+}
+
+async function girisKaydi(db: Db, id: number): Promise<KmGirisKaydi> {
+  const [k] = await girisKayitlari(db, [id]);
+  if (k === undefined) throw bulunamadi('Giriş kontrolü bekleyen mal kabul satırı bulunamadı.');
+  return k;
+}
+
+const girisAciklamasi = (k: KmGirisKaydi, ek: string, not: string | null): string => `${ek}: ${k.malKabulNo}${not === null ? '' : `. ${not}`}`;
+
+// 1252: GKK kabul ve hatalı verir; ikisi de karar bekleyeni kapatır. Kabul serbest olur ve mal kabul alanına geçer, hatalı karantinada
+// red kalır ve kalite kararını bekler. Kararın ikinci kez verilmesi çakışmadır.
+export async function girisGkk(db: Db, kullanici: Kullanici, id: number, g: KmGirisGkkIstegi): Promise<KmGirisCevabi> {
+  await sorgular.girisKilidi(db, id);
+  if ((await sorgular.girisKararlari(db, [id])).some((k) => k.asama === 'gkk')) throw cakisma('Bu lotun giriş kontrolü verilmiş.');
+  const [s] = await girisKontroluSatirlari(db, [id]);
+  if (s === undefined) throw bulunamadi('Giriş kontrolü bekleyen mal kabul satırı bulunamadı.');
+  const engel = girisGkkEngeli(s.bekleyen, g.kabul, g.hatali);
+  if (engel) throw dogrulama(engel, 'kabul');
+  const k = await girisKaydi(db, id);
+  const aciklama = girisAciklamasi(k, 'Giriş kontrolü', g.not);
+  if (Number(g.kabul) > 0) await girisKontroluUygula(db, kullanici.id, { malKabulSatirId: id, partiId: s.partiId, kaynak: 'karar_bekliyor', miktar: g.kabul, sonuc: 'serbest', aciklama });
+  if (Number(g.hatali) > 0) await girisKontroluUygula(db, kullanici.id, { malKabulSatirId: id, partiId: s.partiId, kaynak: 'karar_bekliyor', miktar: g.hatali, sonuc: 'red', aciklama });
+  await sorgular.girisKarariYaz(db, {
+    malKabulSatirId: id, asama: 'gkk', kabulMiktar: g.kabul, hataliMiktar: g.hatali, karar: null, ncrKimlik: null, ncrNo: null, aciklama: g.not, kisiId: kullanici.id,
+  });
+  return { kayit: await girisKaydi(db, id) };
+}
+
+// 1252, 1253 a: hatalının kalite kararı NCR açar (üretimdeki hatalı parça gibi). Kabul serbest, şartlı kabul şartlı olarak mal kabul
+// alanına geçer; red tedarikçiye iade çıkışı yazar. NCR ve stok aynı işlemdedir.
+export async function girisKarari(db: Db, kullanici: Kullanici, id: number, g: KmGirisKararIstegi): Promise<KmGirisCevabi> {
+  await sorgular.girisKilidi(db, id);
+  const kararlar = await sorgular.girisKararlari(db, [id]);
+  const gkk = kararlar.find((k) => k.asama === 'gkk');
+  if (gkk === undefined) throw cakisma('Önce giriş kontrolü (kabul ve hatalı miktar) verilir.');
+  if (kararlar.some((k) => k.asama === 'karar')) throw cakisma('Bu lotun kalite kararı verilmiş.');
+  if (gkk.hataliMiktar === null || Number(gkk.hataliMiktar) <= 0) throw cakisma('Bu lotta hatalı miktar yok; kalite kararı gerekmez.');
+  if (g.karar === 'sartli_kabul' && g.not === null) throw dogrulama('Şartlı kabulde şart yazılır.', 'not');
+  const k = await girisKaydi(db, id);
+  const ncr = girisNcrGovdesi(
+    { malKabulNo: k.malKabulNo, malzemeKod: k.malzemeKod, malzemeAd: k.malzemeAd, partiEtiketi: k.partiEtiketi, tedarikciAdi: k.tedarikciAdi, hataliMiktar: gkk.hataliMiktar, gkkNot: gkk.aciklama },
+    { karar: g.karar, ncrNo: g.ncrNo, ciddiyet: g.ciddiyet, not: g.not }, kullanici.ad, tesisGunu(Date.now()),
+  );
+  await onayla(db, kullanici, UYGUNSUZLUK_KOLEKSIYONU, g.ncrKimlik, ncr, null, null, [], null);
+  const aciklama = girisAciklamasi(k, `Kalite kararı ${g.ncrNo}`, g.not);
+  const sonuc = g.karar === 'kabul' ? 'serbest' : g.karar === 'sartli_kabul' ? 'sartli' : 'iade';
+  await girisKontroluUygula(db, kullanici.id, { malKabulSatirId: id, partiId: k.partiId, kaynak: 'red', miktar: gkk.hataliMiktar, sonuc, aciklama });
+  await sorgular.girisKarariYaz(db, {
+    malKabulSatirId: id, asama: 'karar', kabulMiktar: null, hataliMiktar: null, karar: g.karar, ncrKimlik: g.ncrKimlik, ncrNo: g.ncrNo, aciklama: g.not, kisiId: kullanici.id,
+  });
+  return { kayit: await girisKaydi(db, id) };
 }
 
 // Ctrl K kayıt kaynakları (1238): NCR `kalite-merkezi.oku` ile, karar bekleyen hatalı parça karar yetkisiyle (`kalite-merkezi.onayla`,

@@ -11,6 +11,9 @@ import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
 export const KATALOG_TURLERI = ['hammadde', 'yarimamul', 'mamul', 'sarf', 'demirbas', 'hizmet', 'ticari_mal'] as const;
 // Hizmet kartının yönü (kart #163, MH5 a): alınan hizmeti satın alma, verilen hizmeti satış kullanır; aynı iş iki yönde iki karttır.
 export const HIZMET_YONLERI = ['alinan', 'verilen'] as const;
+// 1247 d: giriş kalite kontrolü kart başına ayardır; kartta yazılı değilse türün varsayılanı geçer. Demirbaş ve hizmet lot almaz, GKK'ya giremez.
+export const GKK_VARSAYILAN_TURLER = ['hammadde', 'yarimamul', 'ticari_mal'] as const;
+export const GKK_OLMAYAN_TURLER = ['demirbas', 'hizmet'] as const;
 // Logo tür karşılığı yalnız bu altı türe yazılır; hizmet Logo'ya ayrı hizmet kartı olarak gider (kısıt `malzeme_logo_karsiligi_tur`).
 export const LOGO_TUR_KARSILIGI_TURLERI = ['hammadde', 'yarimamul', 'mamul', 'sarf', 'demirbas', 'ticari_mal'] as const;
 export const KATALOG_ONAY_DURUMLARI = ['taslak', 'onayda', 'aktif', 'pasif'] as const;
@@ -46,6 +49,8 @@ export const katalogKartiOzeti = z.object({
   aciklama_1: z.string().trim().max(200).nullable().optional(),
   aciklama_2: z.string().trim().max(200).nullable().optional(),
   aciklama_3: z.string().trim().max(200).nullable().optional(),
+  // 1247 d: gelmezse kayıtlı değer korunur; null türün varsayılanına döner.
+  gkk_gerekli: z.boolean().nullable().optional(),
 });
 
 // Başka modüllerin kartı gösterdiği özet (`disari.ts`); kimlik kartın sayı kimliğidir. Ad ve birim kartta yoksa null;

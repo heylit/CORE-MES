@@ -1113,3 +1113,39 @@ export function hataliAramaSonuclari(kayitlar: readonly HataliKaydiOzeti[], meti
       yol: '/kalite-merkezi',
     }));
 }
+
+// ---- Giriş kontrolü (1246; 1251 a, 1252, 1253 a) ----------------------------------------------------------------------------------
+// GKK lotun karantinada karar bekleyen bütününe verilir: kabul ve hatalı toplamı bekleyene eşittir, kısmi GKK yoktur (VARSAYIM).
+export function girisGkkEngeli(bekleyen: string, kabul: string, hatali: string): string | null {
+  const b = binde(bekleyen);
+  if (b <= 0n) return 'Bu lotun karantinada giriş kontrolü bekleyen miktarı yok.';
+  if (binde(kabul) + binde(hatali) !== b) return `Kabul ve hatalı toplamı bekleyen miktara eşit olmalı: ${bindenMetin(b)}.`;
+  return null;
+}
+
+export type GirisDurumu = 'gkk_bekliyor' | 'karar_bekliyor' | 'kapandi';
+export function girisDurumu(gkk: { hataliMiktar: string | null } | null, karar: object | null): GirisDurumu {
+  if (gkk === null) return 'gkk_bekliyor';
+  if (karar === null && binde(gkk.hataliMiktar ?? '0') > 0n) return 'karar_bekliyor';
+  return 'kapandi';
+}
+
+// Hatalı giriş lotunun uygunsuzluk kaydı, üretimdeki hatalı parça kaydının eşi (1252). Lot ve emir alanı boştur: dolu olsaydı açık NCR
+// partinin bütününü karantinaya alırdı (karantinaIstegi); lot tanımdadır. Stok kararla aynı işlemde yürüdüğü için MRB değeri stok
+// yansıtmaz (serbest bırakan MRB değildir). Kabul ve şartlı kabul NCR'yi kapatır; red tedarikçi takibi için açık kalır (VARSAYIM).
+export const GIRIS_NCR_KAYNAGI = 'Giriş muayene';
+const GIRIS_MRB: Readonly<Record<'kabul' | 'sartli_kabul' | 'red', string>> = { kabul: 'Olduğu gibi kabul', sartli_kabul: 'Şartlı kabul', red: 'Tedarikçiye iade' };
+export function girisNcrGovdesi(
+  s: { malKabulNo: string; malzemeKod: string | null; malzemeAd: string | null; partiEtiketi: string | null; tedarikciAdi: string | null; hataliMiktar: string; gkkNot: string | null },
+  g: { karar: 'kabul' | 'sartli_kabul' | 'red'; ncrNo: string; ciddiyet: string; not: string | null }, sorumlu: string, gun: string,
+): Record<string, unknown> {
+  const tedarikci = s.tedarikciAdi === null ? '' : `, tedarikçi ${s.tedarikciAdi}`;
+  const not = s.gkkNot === null ? '' : ` GKK notu: ${s.gkkNot}`;
+  return {
+    no: g.ncrNo, tarih: gun, kaynak: GIRIS_NCR_KAYNAGI, ciddiyet: g.ciddiyet, parcaNo: s.malzemeKod ?? '', parcaAdi: s.malzemeAd ?? '',
+    rev: '', lot: '', proje: '', emir: '', miktar: Number(s.hataliMiktar), hataTipi: '', sorumlu,
+    durum: g.karar === 'red' ? 'Açık' : UYGUNSUZLUK_KAPALI,
+    tanim: `Hatalı giriş: ${s.malKabulNo}, lot ${s.partiEtiketi ?? '-'}, ${s.hataliMiktar} hatalı${tedarikci}.${not}`,
+    mrb: GIRIS_MRB[g.karar], mrbGerekce: g.not ?? '',
+  };
+}

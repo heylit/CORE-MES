@@ -42,7 +42,7 @@ import { aktifIstasyonlar, istasyonAdlari, istasyonGetir, istasyondakiKisiler, i
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { basladigiGunTakvimi } from '../vardiya/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { gkkGerekenKartlar, malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisFaturalari } from '../finans/disari.ts';
@@ -59,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -840,8 +840,14 @@ async function malKabulSatirlariniYaz(
     const partiId = s.partiId === undefined ? undefined : Number(s.partiId);
     const hata = partiDenetimi(o.tur as MalzemeTuru, 'mal_kabul', { parti: s.parti ?? null, partiId });
     if (hata) throw dogrulama(hata, `${alan}.parti`);
-    const konumId = s.konumId === undefined ? kabul : Number(s.konumId);
-    await aktifKonum(db, konumId, `${alan}.konumId`);
+    // 1246 (1247 d, 1251): kartı GKK isteyen satın alma lotu karantinaya karar bekliyor girer; kararı giriş kontrolü verir.
+    const gkk = tur === 'satin_alma' && satirTuru.tur === 'stok' && (await gkkGerekenKartlar(db, [malzemeId])).has(malzemeId);
+    const konumId = s.konumId !== undefined ? Number(s.konumId) : gkk ? await sorgular.ilkKarantinaKonumu(db) : kabul;
+    if (konumId === null) throw dogrulama(GKK_KARANTINA_KONUMU_YOK, `${alan}.konumId`);
+    const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
+    const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : null;
+    if (gkkEngeli) throw dogrulama(gkkEngeli, `${alan}.konumId`);
+    const kalite: KaliteDurumu = gkk ? 'karar_bekliyor' : 'serbest';
     let parti: number | null = partiId ?? null;
     // Lotlu türde numarasız satır da parti açar (#1018); sarfta parti yalnız numara girilince açılır.
     const lotlu = partiGereksinimi(o.tur as MalzemeTuru, 'mal_kabul') === 'lot';
@@ -850,11 +856,16 @@ async function malKabulSatirlariniYaz(
       parti = await korumali(() => partiBulVeyaAc(db, { malzemeId, tedarikciPartiNo: p?.tedarikciPartiNo ?? null, dokumNo: p?.dokumNo ?? null, sertifikaNo: p?.sertifikaNo ?? null, uretimEmriId: null, kisiId }));
     }
     if (s.sertifika && parti === null) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
+    // Kalite kararı partiye verilir; GKK kartı lotsuz türde olamaz (malzemeler kuralı), bu yalnız savunmadır.
+    if (gkk && parti === null) throw dogrulama('Giriş kalite kontrolü isteyen satır lotla girer.', `${alan}.parti`);
     const a = s.ambalaj ?? null;
     const yazilan = await korumali(async () => {
-      const id = await sorgular.hareketYaz(db, hareket({ tur: 'giris', malzemeId, miktar, kisiId, partiId: parti, partiSecimi: parti === null ? null : 'giris', hedefKonumId: konumId, girisKaynagi: 'mal_kabul' }));
+      const id = await sorgular.hareketYaz(db, hareket({
+        tur: 'giris', malzemeId, miktar, kisiId, partiId: parti, partiSecimi: parti === null ? null : 'giris', hedefKonumId: konumId, girisKaynagi: 'mal_kabul',
+        hedefKaliteDurumu: gkk ? kalite : null,
+      }));
       await bakiyeDegistir(db, {
-        malzemeId, konumId, partiId: parti, fark: binde(miktar),
+        malzemeId, konumId, partiId: parti, kaliteDurumu: kalite, fark: binde(miktar),
         ambalaj: a ? { tur: a.tur, olcu: a.olcu, uzunluk: a.ozelOlcu?.uzunlukCm ?? null, genislik: a.ozelOlcu?.genislikCm ?? null, yukseklik: a.ozelOlcu?.yukseklikCm ?? null, adet: a.adet ?? null } : null,
       });
       const fasonCikisHareketId = fason ? await fasonCikisiYaz(db, kisiId, fason, eksiOnay) : null;
@@ -937,6 +948,9 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   if (satirlar.some((s) => s.emirAdimi)) {
     throw cakisma('Bu belgede fason işinden dönen parça var; düzeltme onu geri alamaz. Farkı Stok Merkezi\'nde hareketle düzeltin.');
   }
+  const gkkSatirlari = satirlar.filter((s) => s.gkk).map((s) => s.id);
+  const gkkEngeli = girisKontroluDuzeltmeEngeli(gkkSatirlari.length === 0 ? [] : await sorgular.girisKontroluSatirlari(db, gkkSatirlari));
+  if (gkkEngeli) throw cakisma(gkkEngeli);
   for (const s of satirlar) {
     if (s.hareketId !== null) hareketIdler.push(await tersCevir(db, kisiId, s.hareketId, g.eksiOnay === true, `Düzeltme: ${eski.no}`, true));
     if (s.fasonCikisHareketId !== null) hareketIdler.push(await tersCevir(db, kisiId, s.fasonCikisHareketId, g.eksiOnay === true, `Düzeltme: ${eski.no}`, true));
@@ -982,9 +996,105 @@ export async function malKabulAyrintisi(db: Db, id: number): Promise<MalKabulAyr
       partiId: x.partiId,
       partiEtiketi: x.partiId === null ? null : partiEtiketi({ lotNo: x.lotNo, tedarikciPartiNo: x.tedarikciPartiNo, dokumNo: x.dokumNo, uretimEmriId: x.partiEmirId }, emirNoDe(nolar, x.partiEmirId)),
       partiBelgeleri: x.partiId === null ? [] : belgeler.get(x.partiId) ?? [],
-      logoDurumu: x.logoDurumu, logoIrsaliyeSatirNo: x.logoIrsaliyeSatirNo, logoIrsaliyeMiktari: x.logoIrsaliyeMiktari,
+      logoDurumu: x.logoDurumu, logoIrsaliyeSatirNo: x.logoIrsaliyeSatirNo, logoIrsaliyeMiktari: x.logoIrsaliyeMiktari, gkk: x.gkk,
     })),
   };
+}
+
+// ---- Giriş kontrolü (1246; 1251 a, 1252, 1253 a) -------------------------------------------------------------------------------------
+// Kalite Merkezi'nin listesi için GKK satırları: kimlik verilmezse karantinada karar bekleyeni olanlar. Yetkiyi çağıran korur.
+export interface GirisKontroluSatiri {
+  malKabulSatirId: number; malKabulNo: string; zaman: string; malzemeId: number; partiId: number; partiEtiketi: string | null; sertifikaVar: boolean;
+  siparisSatirId: number | null; miktar: string; bekleyen: string;
+}
+export async function girisKontroluSatirlari(db: Db, idler: readonly number[] | null): Promise<GirisKontroluSatiri[]> {
+  if (idler !== null && idler.length === 0) return [];
+  const l = await sorgular.girisKontroluSatirlari(db, idler === null ? null : [...new Set(idler)]);
+  const belgeler = await partiBelgeleri(db, l.map((x) => x.partiId));
+  return l.map((x) => ({
+    malKabulSatirId: x.id, malKabulNo: x.malKabulNo, zaman: x.zaman, malzemeId: x.malzemeId, partiId: x.partiId,
+    partiEtiketi: partiEtiketi({ lotNo: x.lotNo, tedarikciPartiNo: x.tedarikciPartiNo, dokumNo: x.dokumNo, uretimEmriId: null }, null),
+    sertifikaVar: (belgeler.get(x.partiId) ?? []).length > 0, siparisSatirId: x.siparisSatirId,
+    miktar: bindenMetin(binde(x.miktar)), bekleyen: bindenMetin(binde(x.bekleyen)),
+  }));
+}
+// Kabul edilen giriş kontrolü lotunun gideceği konum: mal kabul alanı.
+export const malKabulKonumu = (db: Db): Promise<number> => varsayilanKonum(db, 'KABUL');
+
+// 1252: giriş kontrolünün stok yansıması. Karantinadaki `kaynak` kalitesinden `miktar` kadarı: serbest ya da şartlıysa mal kabul alanına
+// taşınır ve kalitesi çevrilir; redse karantinada red olur; iadeyse (yalnız red kaynaktan, 1253 a) tedarikçiye iade çıkışıdır. Miktar
+// karantinadaki kullanılabilir bakiyeyi aşarsa hiçbir şey yazılmaz. Yazılan hareketler döner. Yetkiyi çağıran korur.
+export type GirisKontroluSonucu = 'serbest' | 'sartli' | 'red' | 'iade';
+export async function girisKontroluUygula(db: Db, kisiId: number, g: {
+  malKabulSatirId: number; partiId: number; kaynak: 'karar_bekliyor' | 'red'; miktar: string; sonuc: GirisKontroluSonucu; aciklama: string;
+}): Promise<number[]> {
+  if (g.sonuc === 'iade') {
+    if (g.kaynak !== 'red') throw gecersiz('Tedarikçiye iade yalnız red kararından sonra yazılır.');
+    return tedarikciyeIade(db, kisiId, { partiId: g.partiId, miktar: g.miktar, aciklama: g.aciklama });
+  }
+  if (g.sonuc === 'red') {
+    let kalan = binde(g.miktar);
+    if (kalan <= 0n) throw gecersiz('Hatalı miktar sıfırdan büyük olmalı.');
+    const idler: number[] = [];
+    for (const x of (await sorgular.partininKarantinaBakiyeleri(db, g.partiId)).filter((b) => b.kaliteDurumu === g.kaynak)) {
+      if (kalan <= 0n) break;
+      const b = await sorgular.bakiyeKilitle(db, x.malzemeId, x.konumId, g.partiId, x.statuId, g.kaynak);
+      const eldeki = binde(b?.miktar ?? '0') - binde(await sorgular.yoldaAyrilan(db, x.malzemeId, x.konumId, g.partiId, x.statuId, g.kaynak));
+      const miktar = kalan < eldeki ? kalan : eldeki;
+      if (miktar <= 0n) continue;
+      kalan -= miktar;
+      idler.push(await kaliteDegistir(db, kisiId, { ...x, partiId: g.partiId, kaynak: g.kaynak, hedef: 'red', miktar, uretimEmriId: null, aciklama: g.aciklama }));
+    }
+    if (kalan > 0n) throw gecersiz('Hatalı miktar karantinadaki bakiyeyi aşıyor.');
+    return idler;
+  }
+  const tasinan = await karantinadanBirak(db, kisiId, { partiId: g.partiId, hedefKonumId: await malKabulKonumu(db), aciklama: g.aciklama, miktar: g.miktar, kaliteDurumu: g.kaynak });
+  const satirlar = new Map<string, { konumId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: bigint }>();
+  for (const t of tasinan) {
+    const k = `${t.hedefKonumId}:${t.statuId ?? ''}`;
+    satirlar.set(k, { konumId: t.hedefKonumId, statuId: t.statuId, kaliteDurumu: t.kaliteDurumu, miktar: (satirlar.get(k)?.miktar ?? 0n) + binde(t.miktar) });
+  }
+  const cevrilen = await partiKaliteDurumuYap(db, kisiId, {
+    partiId: g.partiId, hedef: g.sonuc, aciklama: g.aciklama, satirlar: [...satirlar.values()].map((x) => ({ ...x, miktar: bindenMetin(x.miktar) })),
+  });
+  // Serbest kalan lot mal kabuldeki gibi bekleyen emirlere ayrılır; siparişin talebinde seçilen emir öne geçer. Şartlı kabul ayrılmaz.
+  if (g.sonuc === 'serbest') {
+    const [s] = await sorgular.girisKontroluSatirlari(db, [g.malKabulSatirId]);
+    if (s !== undefined) {
+      const emir = s.siparisSatirId === null ? undefined : (await siparisSatirlarininEmri(db, [s.siparisSatirId])).get(s.siparisSatirId);
+      await bekleyenlereDagit(db, kisiId, [s.malzemeId], emir === undefined ? new Map() : new Map([[s.malzemeId, new Set([emir])]]));
+    }
+  }
+  return [...tasinan.map((t) => t.hareketId), ...cevrilen.map((c) => c.hareketId)];
+}
+
+// 1253 a: kalitenin red kararı partinin karantinadaki red bakiyesini tedarikçiye iade çıkışıyla düşürür; yoldaki teslime ayrılan
+// dokunulmaz. Miktar kullanılabilir red bakiyesini aşarsa hiçbir şey yazılmaz. Yetkiyi çağıran korur.
+export async function tedarikciyeIade(db: Db, kisiId: number, g: { partiId: number; miktar: string; aciklama: string }): Promise<number[]> {
+  let kalan = binde(g.miktar);
+  if (kalan <= 0n) throw gecersiz('İade miktarı sıfırdan büyük olmalı.');
+  const satirlar = (await sorgular.partininKarantinaBakiyeleri(db, g.partiId)).filter((x) => x.kaliteDurumu === 'red');
+  await siraliKilitle(db, ...satirlar.map((x) => ({ ...x, partiId: g.partiId })));
+  const plan: { s: (typeof satirlar)[number]; miktar: bigint }[] = [];
+  for (const x of satirlar) {
+    if (kalan <= 0n) break;
+    const b = await sorgular.bakiyeKilitle(db, x.malzemeId, x.konumId, g.partiId, x.statuId, 'red');
+    const eldeki = binde(b?.miktar ?? '0') - binde(await sorgular.yoldaAyrilan(db, x.malzemeId, x.konumId, g.partiId, x.statuId, 'red'));
+    const miktar = kalan < eldeki ? kalan : eldeki;
+    if (miktar <= 0n) continue;
+    kalan -= miktar;
+    plan.push({ s: x, miktar });
+  }
+  if (kalan > 0n) throw gecersiz('İade miktarı karantinadaki red bakiyesini aşıyor.');
+  const idler: number[] = [];
+  for (const { s: x, miktar } of plan) {
+    idler.push(await sorgular.hareketYaz(db, hareket({
+      tur: 'cikis', malzemeId: x.malzemeId, miktar: bindenMetin(miktar), kisiId, partiId: g.partiId, partiSecimi: 'kisi', kaynakKonumId: x.konumId,
+      kaynakStatuId: x.statuId, kaynakKaliteDurumu: 'red', cikisNedeni: 'tedarikci_iade', aciklama: g.aciklama,
+    })));
+    await bakiyeDegistir(db, { malzemeId: x.malzemeId, konumId: x.konumId, partiId: g.partiId, statuId: x.statuId, kaliteDurumu: 'red', fark: -miktar });
+  }
+  return idler;
 }
 
 // ---- Üretim girişi (DEP-47, DEP-48, DEP-52): kaynak hazır olana kadar elle --------------------------------------------------------

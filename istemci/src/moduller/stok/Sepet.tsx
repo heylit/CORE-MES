@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import type { CikisNedeni, FisCevabi, FislerCevabi, MalzemeAyrintiCevabi, SepetCevabi, SepetSatiri, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, StoktanDusGovdesi, TeslimGovdesi } from '#paylasilan/sozlesme/stok.ts';
+import type { FisCevabi, FislerCevabi, MalzemeAyrintiCevabi, SepetCevabi, SepetSatiri, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, StoktanDusGovdesi, TeslimGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -43,7 +43,7 @@ function MalzemeEkle() {
 
 function StoktanDusPenceresi({ kapat }: { kapat: () => void }) {
   const yonlendir = useNavigate();
-  const [neden, setNeden] = useState<CikisNedeni>('uretime_sarf');
+  const [neden, setNeden] = useState<StoktanDusGovdesi['cikisNedeni']>('uretime_sarf');
   const [emir, setEmir] = useState('');
   const [aciklama, setAciklama] = useState('');
   const cikis = useStokKomutu((g: StoktanDusGovdesi) => korumaliPost<FisCevabi>('/stok/sepet/stoktan-dus', g).then((c) => { kapat(); void yonlendir(`/stok/fisler/${c.fis.id}`); return c; }), 'Stoktan düşüldü; fiş yazıldı.');
@@ -52,7 +52,7 @@ function StoktanDusPenceresi({ kapat }: { kapat: () => void }) {
       alt={<Dugme tur="birincil" yukleniyor={cikis.komut.isPending} disabled={neden === 'uretime_sarf' && !emir}
         onClick={() => cikis.komut.mutate({ cikisNedeni: neden, ...(emir ? { uretimEmriId: Number(emir) } : {}), aciklama })}>Stoktan düş</Dugme>}>
       <div className="tc-stok-form">
-        <Secim etiket="Çıkış nedeni" value={neden} onChange={(e) => setNeden(e.target.value as CikisNedeni)} secenekler={CIKIS_NEDENLERI.map((n) => ({ deger: n, baslik: CIKIS_NEDENI[n] }))} />
+        <Secim etiket="Çıkış nedeni" value={neden} onChange={(e) => setNeden(e.target.value as StoktanDusGovdesi['cikisNedeni'])} secenekler={CIKIS_NEDENLERI.map((n) => ({ deger: n, baslik: CIKIS_NEDENI[n] }))} />
         {neden === 'uretime_sarf' && <EmirSecici deger={emir} degistir={setEmir} zorunlu />}
         <Girdi etiket="Not" value={aciklama} onChange={(e) => setAciklama(e.target.value)} />
         <p className="tc-stok-not">Bütün satırlar tek işlemde düşülür; biri karşılanamazsa hiçbiri yazılmaz.</p>

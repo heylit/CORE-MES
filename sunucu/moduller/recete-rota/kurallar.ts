@@ -346,7 +346,7 @@ export function tatilTarihleri(gunler: readonly { tarih: string; tur: 'tatil' | 
 
 
 const CIKIS_ETIKETI: Readonly<Record<NonNullable<Hareket['cikisNedeni']>, string>> = {
-  uretime_sarf: 'Üretime sarf', sevk: 'Sevk', fire: 'Fire', numune: 'Numune', diger: 'Stok çıkışı',
+  uretime_sarf: 'Üretime sarf', sevk: 'Sevk', fire: 'Fire', numune: 'Numune', diger: 'Stok çıkışı', tedarikci_iade: 'Tedarikçiye iade',
 };
 
 // Stok hareketi -> prototipin `moves` satırı (kart #1186). Statü kimliği prototipin "step:<adım>" anahtarına çevrilir; tanımsız statü

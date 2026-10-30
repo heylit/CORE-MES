@@ -152,6 +152,22 @@ function Sertifikalar() {
   );
 }
 
+// 1247 d: satın alma kabulünde lot karantinaya girer, kararı giriş kalite kontrolü verir. Kartta yazılı değilse türün varsayılanı geçer
+// (sunucudaki GKK_VARSAYILAN_TURLER ile aynı); demirbaş ve hizmette alan yoktur.
+const GKK_VARSAYILAN: readonly string[] = ['hammadde', 'yarimamul', 'ticari_mal'];
+function GirisKontrolu() {
+  const { taslak: d, degistir } = useSihirbaz();
+  const acik = d.com.gkk ?? GKK_VARSAYILAN.includes(d.tur);
+  return (
+    <SecenekGrubu baslik="Giriş kalite kontrolü">
+      <CipGrubu etiket="Giriş kalite kontrolü">
+        <Cip basili={acik} tikla={() => { degistir((t) => { t.com.gkk = !acik; }); }}>GKK gerekli</Cip>
+      </CipGrubu>
+      <p className="tc-my-kucuk">Açıksa satın alınan lot karantinaya girer; kalite kararından sonra kullanılır.</p>
+    </SecenekGrubu>
+  );
+}
+
 function Notlar({ ipucu }: { ipucu: string }) {
   const { taslak: d, degistir } = useSihirbaz();
   return <CokSatirAlani etiket="Notlar" deger={d.com.not} ipucu={ipucu} yaz={(v) => { degistir((t) => { t.com.not = v; }); }} />;
@@ -189,6 +205,7 @@ export function TicariAdimi() {
         <AlisBirimi />
       </Alanlar>
       <Sertifikalar />
+      <GirisKontrolu />
       <Notlar ipucu="Depo yeri, kullanım alanı, özel uyarılar" />
       <Belgeler />
     </>
@@ -233,6 +250,7 @@ export function GenelTicari() {
       </Alanlar>
       {(t === 'yarimamul' || t === 'mamul') && <GenelSecim a={{ k: 'tedarik', ad: 'Tedarik tipi', tip: 'sec', opts: ['Üretim', 'Fason üretim', 'Satın alma'] }} />}
       {t !== 'demirbas' && t !== 'hizmet' && <Sertifikalar />}
+      {t !== 'demirbas' && t !== 'hizmet' && <GirisKontrolu />}
       {(t === 'yarimamul' || t === 'mamul') && <RotaOzeti />}
       <Notlar ipucu="Kullanım yeri, uyarılar" />
       <Belgeler />

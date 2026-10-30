@@ -606,9 +606,9 @@ describe('Mal kabul', () => {
     const belge = { id: 4, no: 'MK-000004', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 2, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     const ayrinti = { belge, satirlar: [
       { sira: 1, malzemeId: 904, malzemeAd: 'Deneme mil kaplamalı', sayilanMiktar: '18.000', partiId: 12, partiEtiketi: 'KP-1', partiBelgeleri: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A' }], konumKod: 'KABUL', hareketId: 31, siparisSatirId: 51,
-        fason: { malzemeId: 905, malzemeAd: 'Deneme mil ham', miktar: '20.000', konumId: 77, konumKod: 'FSN-01', hareketId: 32, hizmetMalzemeId: 903 }, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null },
+        fason: { malzemeId: 905, malzemeAd: 'Deneme mil ham', miktar: '20.000', konumId: 77, konumKod: 'FSN-01', hareketId: 32, hizmetMalzemeId: 903 }, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false },
       { sira: 2, malzemeId: 906, malzemeAd: 'Deneme kalibrasyon', sayilanMiktar: '1.000', partiId: null, partiEtiketi: null, partiBelgeleri: [], konumKod: null, hareketId: null, siparisSatirId: 52,
-        fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null },
+        fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false },
     ] } satisfies MalKabulAyrintiCevabi;
     const istekler = sunucuKur(MUDUR, {
       'GET /stok/mal-kabuller/4': () => json(200, ayrinti),
@@ -1115,7 +1115,7 @@ describe('Lot etiketi ve LOT okutma (#1060)', () => {
   it('mal kabul belgesinden lot etiketleri basılır', async () => {
     const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     sunucuKur(DEPOCU, {
-      'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null }] } satisfies MalKabulAyrintiCevabi),
+      'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false }] } satisfies MalKabulAyrintiCevabi),
       'GET /stok/mal-kabuller/12/lot-etiketleri': () => json(200, { etiketler: [ETIKET] } satisfies LotEtiketleriCevabi),
     });
     ac('/stok/mal-kabul/12');
@@ -1128,7 +1128,7 @@ describe('Lot etiketi ve LOT okutma (#1060)', () => {
   it("270 a: Etiket Merkezi sayfası olan, mal kabulün bütün lot etiketlerini Etiket Merkezi'nde açar", async () => {
     const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     sunucuKur({ ...DEPOCU, islemler: [...DEPOCU.islemler, 'sayfa.etiket-merkezi'] }, {
-      'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null }] } satisfies MalKabulAyrintiCevabi),
+      'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false }] } satisfies MalKabulAyrintiCevabi),
     });
     ac('/stok/mal-kabul/12');
     const bas = await screen.findByRole('link', { name: /Lot etiketlerini bas/ });

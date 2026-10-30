@@ -1849,6 +1849,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
 
   test('talepte seçilen emir mal kabulde öne geçer, açılışta rezerve istemese de', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    // Rezerve sırası sınanır; GKK'lı satın alma kabulünün rezervesi kalite-merkezi/giris-kontrolu.test.ts'tedir.
+    await o().sahip.sorgu('UPDATE malzeme_katalog_karti SET gkk_gerekli = false WHERE no = $1', [hm]);
     const a = await istasyon();
     const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TRT-${sira}`]))!.id;
     const makine = (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`TRTM-${a.id}`, 'Tezgah', a.id]))!.id;
