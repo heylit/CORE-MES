@@ -337,26 +337,42 @@ export const URETIM_EYLEMLERI: readonly string[] = ['start', 'resume', 'restart'
 
 /* ── sekmeler (operator.ts tabs, MV) ── */
 export interface EkranSekmesi { id: 'st' | 'draw' | 'steps' | 'ana' | 'ozet' | 'prod' | 'queue'; l: string; simge: SimgeAdi; n?: number | null }
-export function isSekmeleri(o: Is, panelVar: boolean, panelSekmesi: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi): EkranSekmesi[] {
-  const dosyali = !!(o.pkg && o.pkg.files && o.pkg.files.length);
+// 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; Resim sekmesi çizimsiz ölçü listesine döner. Sekme dosyaya değil
+// kontrol planına bağlıdır: dosyası olup planı boş işte telefonda açılacak bir şey yoktur.
+const resimSekmesiVar = (o: Is, panelVar: boolean, telefon: boolean): boolean => (telefon
+  ? !!(o.pkg && o.pkg.plan.length)
+  : !panelVar || !!(o.pkg && o.pkg.files && o.pkg.files.length));
+export function isSekmeleri(o: Is, panelVar: boolean, panelSekmesi: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, telefon = false): EkranSekmesi[] {
   const l: EkranSekmesi[] = [];
   if (panelVar) l.push({ id: 'st', l: panelSekmesi, simge: panelSimgesi });
-  if (!panelVar || dosyali) l.push({ id: 'draw', l: panelVar ? 'Resim' : 'Teknik Resim', simge: 'ruler', n: D.due.length || null });
+  if (resimSekmesiVar(o, panelVar, telefon)) l.push({ id: 'draw', l: telefon ? 'Ölçüler' : panelVar ? 'Resim' : 'Teknik Resim', simge: 'ruler', n: D.due.length || null });
   l.push({ id: 'steps', l: 'Adımlar', simge: 'list', n: o.pkg ? o.pkg.steps.filter((x) => x.r).length : null });
   l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
   return l;
 }
-export function mobilGorunumler(o: Is, ozetVar: boolean, panelVar: boolean, panelKisa: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, yeniSayisi: number): EkranSekmesi[] {
-  const dosyali = !!(o.pkg && o.pkg.files && o.pkg.files.length);
+export function mobilGorunumler(
+  o: Is, ozetVar: boolean, panelVar: boolean, panelKisa: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, yeniSayisi: number, telefon = false,
+): EkranSekmesi[] {
   const l: EkranSekmesi[] = [];
   if (ozetVar) l.push({ id: 'ozet', l: 'Özetim', simge: 'user' });
   l.push({ id: 'prod', l: 'Üretim', simge: 'gauge' });
   if (panelVar) l.push({ id: 'st', l: panelKisa, simge: panelSimgesi });
-  if (!panelVar || dosyali) l.push({ id: 'draw', l: 'Resim', simge: 'ruler', n: D.due.length || null });
+  if (resimSekmesiVar(o, panelVar, telefon)) l.push({ id: 'draw', l: telefon ? 'Ölçüler' : 'Resim', simge: 'ruler', n: D.due.length || null });
   l.push({ id: 'queue', l: 'İşler', simge: 'list', n: yeniSayisi || null });
   l.push({ id: 'steps', l: 'Adımlar', simge: 'check' });
   if (!panelVar) l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
   return l;
+}
+
+// Telefondaki ölçü listesi: operatörün ölçtüğü noktalar önce, onların içinde sırası gelenler (kontrol takvimi) önce; kalitenin ölçtüğü
+// noktalar salt okunur görünür. Sıra kontrol planı numarasıyla bozulmaz.
+export interface OlcuSatiri { b: PlanItem; operator: boolean; sirada: boolean; olcum: Meas | null }
+export function olcuSatirlari(plan: readonly PlanItem[], operatorOlcer: readonly number[], siradaki: readonly number[], olcumler: Readonly<Record<string, Meas>>): OlcuSatiri[] {
+  const op = new Set(operatorOlcer), sira = new Set(siradaki);
+  const derece = (x: OlcuSatiri) => (x.operator ? 0 : 2) + (x.sirada ? 0 : 1);
+  return plan
+    .map((b) => ({ b, operator: op.has(b.id), sirada: sira.has(b.id), olcum: olcumler[b.id] ?? null }))
+    .sort((a, c) => derece(a) - derece(c) || a.b.id - c.b.id);
 }
 
 /* ── kalite kararı (onSampleResult) ── */

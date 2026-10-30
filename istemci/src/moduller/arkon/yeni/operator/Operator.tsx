@@ -36,6 +36,7 @@ import type { HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { hataliAdet } from '../../../../../../arkon/web/src/data/hatali-adet.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { durusNedeni, planliNedenMi } from '../cekirdek/ayarlar.ts';
@@ -57,6 +58,7 @@ import {
   OLCENLER, numuneEtiketi, numuneOlculeri, numunePlani, sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
 } from '../hazirlik/index.tsx';
 import { Adimlar } from './Adimlar.tsx';
+import { OlcuListesi } from './OlcuListesi.tsx';
 import { Analiz } from './Analiz.tsx';
 import { useDarEkran, useMerkezUyarilari, useVardiyaKaydi } from './kancalar.ts';
 import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } from './el-okuyucu.ts';
@@ -122,6 +124,8 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
   const { depo, kisi, ayarlar, yetkiVar, git, acilabilir } = useArkon();
+  // 1339 a, 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; dosya indirilmez, resim yerine ölçü listesi açılır.
+  const telefon = useOturum().data?.cihazProfili === 'telefon';
   const { tema, degistir: temaDegistir } = useTema();
   const { bildir } = useBildirim();
   const dar = useDarEkran();
@@ -273,9 +277,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // indirilmez: cihaz sınırı aşılınca silinip yeniden inmesin.
   const indirmeAnahtari = ai + '|' + isler.map((x) => (x.pkg ? x.pkg.id + ':' + x.pkg.version : '')).join(',');
   useEffect(() => {
-    if (pv) return;
+    if (pv || telefon) return;
     depo.dosyalariIndir([isler[ai], ...isler.filter((_, i) => i !== ai)].flatMap((x) => (x && x.pkg ? [x.pkg] : [])));
-  }, [indirmeAnahtari]);
+  }, [indirmeAnahtari, telefon]);
 
   useEffect(() => {
     void (async () => {
@@ -652,7 +656,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const aletler = ayarlar.olcuAletleri;
   // Paket listesi dosyasız gelir (kart #731): açık işin dosyaları ve hazır verisi burada baytlanır; gelene kadar resim boş açılır.
   const pkgAnahtari = o.pkg ? o.pkg.id + ':' + o.pkg.version : '';
-  const acikDosyalar = useCozulmus(depo, o.pkg ? { files: o.pkg.files, derived: o.pkg.derived } : null, pkgAnahtari);
+  const acikDosyalar = useCozulmus(depo, o.pkg && !telefon ? { files: o.pkg.files, derived: o.pkg.derived } : null, pkgAnahtari);
   const resimKontrolu = useMemo((): TeknikResimKontrolu => (o.pkg ? {
     anahtar: pkgAnahtari + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: o.pkg.primary,
     hazirVeri: acikDosyalar?.derived ?? null, ayar: o.pkg.readCfg,
@@ -666,7 +670,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }), [o.pkg?.id, o.pkg?.version, acikDosyalar, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);
   // 790: önizlenen işin resmi salt okunurdur; ölçüm, not ve odak ekrandaki işindir.
   const bakPkgAnahtari = b && b.pkg ? b.pkg.id + ':' + b.pkg.version : '';
-  const bakDosyalar = useCozulmus(depo, b && b.pkg ? { files: b.pkg.files, derived: b.pkg.derived } : null, bakPkgAnahtari);
+  const bakDosyalar = useCozulmus(depo, b && b.pkg && !telefon ? { files: b.pkg.files, derived: b.pkg.derived } : null, bakPkgAnahtari);
   const onizResimKontrolu = useMemo((): TeknikResimKontrolu | null => (!b ? null : b.pkg ? {
     anahtar: 'oniz:' + bakPkgAnahtari + (bakDosyalar ? '' : ':bekliyor'), dosyalar: bakDosyalar ? baytli(bakDosyalar.files) : [], anaResim: b.pkg.primary,
     hazirVeri: bakDosyalar?.derived ?? null, ayar: b.pkg.readCfg, balonlar: b.pkg.plan as TeknikResimKontrolu['balonlar'], balonlarYaz: () => undefined,
@@ -1108,12 +1112,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   /* ekran parçaları */
   const uyarili = RL.warns.some((w) => w.t);
   const panelSimgesi = OT.simge;
-  const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D);
+  const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D, telefon);
   // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
   const kaliteIstasyonu = ist.t === 'kalite';
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
-  const resim = <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={onizResimKontrolu ?? resimKontrolu} /></Suspense></div>;
+  const resim = !telefon
+    ? <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={onizResimKontrolu ?? resimKontrolu} /></Suspense></div>
+    : b
+      ? <OlcuListesi plan={b.pkg ? b.pkg.plan : []} operatorOlcer={b.pkg ? b.pkg.plan.map((x) => x.id) : []} siradaki={[]} olcumler={{}} aletler={aletler} odak={null} saltOkunur yaz={() => undefined} bildir={olcumBildir} />
+      : <OlcuListesi plan={o.pkg ? o.pkg.plan : []} operatorOlcer={opIds} siradaki={D.due.map((x) => x.id)} olcumler={o.meas || {}} aletler={aletler} odak={odak}
+        saltOkunur={pv} yaz={olcumYaz} bildir={olcumBildir} />;
   const panel = Panel ? <Panel key={siraAnahtari(o)} api={stApi} kurallar={RL} /> : null;
   const adimlar = b
     ? <Adimlar key={'oniz:' + siraAnahtari(b)} adimlar={b.pkg && b.pkg.steps} emirId={tmiEmirId(b.pkg)} onizleme />
@@ -1297,7 +1306,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   ));
 
   if (dar) {
-    const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length);
+    const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length, telefon);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
     const cubuk = gor === 'prod' && uretir && !kaliteGorunumu
       ? <EylemCubugu durum={o.state} pasif={!!o.empty} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers')} />
@@ -1351,7 +1360,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
             <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
             <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
-            <MenuSatiri simge="ruler" baslik="Teknik resim · 3B" alt="Odak modu resim panelinde" tikla={() => { ovYaz(null); mvYaz('draw'); }} />
+            <MenuSatiri simge="ruler" baslik={telefon ? 'Ölçüler' : 'Teknik resim · 3B'} alt={telefon ? 'Kontrol planı, çizimsiz' : 'Odak modu resim panelinde'} tikla={() => { ovYaz(null); mvYaz('draw'); }} />
             {gecisSatirlari}
           </Pencere>
         ) : null}
