@@ -5,7 +5,7 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { Siparis } from '../tipler.ts';
 import { fasonFiyatFormu, fiyatFormu, iscilikFormu, kgDegisFormu, kgYeniFormu, tezUcretFormu } from './formlar.ts';
 import {
-  aktifSiparisler, kgFiyatlari, kgSatiri, kisaTl, kucukHarf, maliyetBaglami, malzemeler, saatYaz,
+  aktifSiparisler, kgSatiri, kisaTl, kucukHarf, maliyetBaglami, malzemeler, saatYaz,
   sayi, siparisMaliyeti, tl, urunAdi, YOK, type MaliyetBaglami, type SiparisMaliyeti,
 } from './kurallar.ts';
 import { MaliyetSayfasi } from './asil/MaliyetSayfasi.tsx';
@@ -96,10 +96,10 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
       const mz = malzemeler(D).find((z) => z.kod === kod);
       const kg = mz ? kgSatiri(D, mz) : null;
       neden = m.mal === null
-        ? `${s.id} malzemesinin (${kod ?? 'ürünün malzemesi'}) kg fiyatı yok; malzeme maliyeti hesaplanamıyor.`
-        : `${s.id} malzemesi ${tl(m.mal)}${m.talas ? `, talaş geri dönüşü ${tl(m.talas)}` : ''}. Fiyat ${kgFiyatlari(D) === null ? 'malzemenin birim maliyetinden' : `${mz?.kalite ?? ''} kg fiyatından`} gelir.`;
-      if (kg) ekle(F?.kgDegis, { ad: `${kg.kalite} kg fiyatını değiştir`, deg: { r: kg.id }, etki: 'Bu kalitedeki bütün malzemelerin maliyeti değişir.' });
-      else if (mz?.kalite) ekle(F?.kgYeni, { ad: `${mz.kalite} kg fiyatı ekle`, deg: { kalite: mz.kalite, cins: mz.cins, form: mz.form }, adim: 1, etki: 'Bu kalitedeki bütün malzemeler bu fiyatı kullanır.' });
+        ? `${s.id} malzemesinin (${kod ?? 'ürünün malzemesi'}) Satın Alma fiyatı yok; malzeme maliyeti hesaplanamıyor. Kg fiyatı Satın Alma'da girilir.`
+        : `${s.id} malzemesi ${tl(m.mal)}${m.talas ? `, talaş geri dönüşü ${tl(m.talas)}` : ''}. Fiyat Satın Alma'dan gelir${mz?.fiyatTahmini ? ' (alışı yok, kg fiyatından tahmini)' : ''}.`;
+      if (kg) ekle(F?.kgDegis, { ad: `${kg.kalite} fire payını değiştir`, deg: { r: kg.id }, etki: 'Bu kalitedeki bütün malzemelerin ihtiyacı ve maliyeti değişir.' });
+      else if (mz?.kalite) ekle(F?.kgYeni, { ad: `${mz.kalite} fire payı ekle`, deg: { kalite: mz.kalite, cins: mz.cins, form: mz.form }, adim: 1, etki: 'Bu kalitedeki bütün malzemeler bu payı kullanır.' });
     } else if (ck === 'fas') {
       const op = b.ops.find((z) => z.job === s.id && z.fas);
       const fid = op ? op.m.replace(/^@/, '') : null;

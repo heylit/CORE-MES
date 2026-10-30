@@ -49,26 +49,27 @@ export function ucretYaz(yaz: Yaz, D: PlanVerisi, k: 'ayarciUcret' | 'mesaiUcret
     dYaz(x, { ayarlar: { ...ayarlar(x.D), [k]: v } });
   });
 }
+// 1280 a: kg fiyatını Satın Alma girer; planın satırı yalnız kalite ve formun fire payını tutar. Eski satırdaki fiyat silinmez, okunmaz.
 const kgHam = (D: PlanVerisi): unknown[] => (Array.isArray(D.kgFiyat) ? (D.kgFiyat as unknown[]) : []);
-export function kgAlanYaz(yaz: Yaz, D: PlanVerisi, id: string, k: 'fiyat' | 'fire', v: number | null, kim: string): boolean {
+export function kgAlanYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number | null, kim: string): boolean {
   const r = (kgFiyatlari(D) ?? []).find((z) => z.id === id);
-  if (!r || (k === 'fiyat' && v === null)) return false;
-  return yaz(k === 'fiyat' ? 'Kg fiyatı değişti' : 'Fire payı değişti', `${r.kalite} ${r.form || 'her form'}: ${yok(r[k])} → ${yok(v)}`, (x) => {
-    dYaz(x, { kgFiyat: kgHam(x.D).map((z) => (nesneMi(z) && String(z.id) === id ? { ...z, [k]: v, tarih: bugunIso(), kim } : z)) });
+  if (!r) return false;
+  return yaz('Fire payı değişti', `${r.kalite} ${r.form || 'her form'}: ${yok(r.fire)} → ${yok(v)}`, (x) => {
+    dYaz(x, { kgFiyat: kgHam(x.D).map((z) => (nesneMi(z) && String(z.id) === id ? { ...z, fire: v, tarih: bugunIso(), kim } : z)) });
   });
 }
 export function kgSilYaz(yaz: Yaz, D: PlanVerisi, id: string): boolean {
   const r = (kgFiyatlari(D) ?? []).find((z) => z.id === id);
   if (!r) return false;
-  return yaz('Kg fiyatı silindi', `${r.kalite} ${r.form}`, (x) => { dYaz(x, { kgFiyat: kgHam(x.D).filter((z) => !(nesneMi(z) && String(z.id) === id)) }); });
+  return yaz('Fire payı silindi', `${r.kalite} ${r.form}`, (x) => { dYaz(x, { kgFiyat: kgHam(x.D).filter((z) => !(nesneMi(z) && String(z.id) === id)) }); });
 }
 export function kgVarMi(D: PlanVerisi, kalite: string, form: string): boolean {
   return (kgFiyatlari(D) ?? []).some((r) => norm(r.kalite) === norm(kalite) && norm(r.form) === norm(form));
 }
-export function kgEkleYaz(yaz: Yaz, s: { cins: string; kalite: string; form: string; fiyat: number }, kim: string): boolean {
-  return yaz('Kg fiyatı eklendi', `${s.kalite} ${s.form || 'her form'}: ${String(s.fiyat)} TL/kg`, (x) => {
+export function kgEkleYaz(yaz: Yaz, s: { cins: string; kalite: string; form: string; fire: number }, kim: string): boolean {
+  return yaz('Fire payı eklendi', `${s.kalite} ${s.form || 'her form'}: %${String(s.fire)}`, (x) => {
     const n = sonrakiKimlik((kgFiyatlari(x.D) ?? []).map((r) => ({ id: r.id })), 'KG-');
-    dYaz(x, { kgFiyat: [...kgHam(x.D), { id: n, cins: s.cins, kalite: s.kalite, form: s.form, fiyat: s.fiyat, fire: null, tarih: bugunIso(), kim }] });
+    dYaz(x, { kgFiyat: [...kgHam(x.D), { id: n, cins: s.cins, kalite: s.kalite, form: s.form, fire: s.fire, tarih: bugunIso(), kim }] });
   });
 }
 export const fasonFiyatAlani = (D: PlanVerisi, id: string): 'saatFiyat' | 'fiyat' => (id === fasonTalasId(D) && id !== '' ? 'saatFiyat' : 'fiyat');

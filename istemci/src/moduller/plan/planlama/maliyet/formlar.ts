@@ -44,34 +44,35 @@ export function tezUcretFormu(D: PlanVerisi, yaz: Yaz): FormTanimi {
 const cinsSecenek = ML_CINS.map((c) => ({ deger: c, baslik: c }));
 const formSecenek = ML_FORM.map((c) => ({ deger: c, baslik: c }));
 
+// 1280 a: kg fiyatı Satın Alma'da girilir (Satın Alma > kg fiyatları); planda yalnız kalite ve formun fire payı yazılır.
 export function kgYeniFormu(D: PlanVerisi, yaz: Yaz, kim: string): FormTanimi {
   const ml = malzemeler(D);
   return {
-    id: 'kgyeni', ad: 'Malzeme kg fiyatı ekle', simge: 'box', ne: 'Bir kalite için kg fiyatı; o kalitedeki bütün malzemeler bunu kullanır.',
+    id: 'kgyeni', ad: 'Malzeme fire payı ekle', simge: 'box', ne: 'Bir kalite için fire payı; o kalitedeki bütün malzemeler bunu kullanır. Kg fiyatı Satın Alma\'dan gelir.',
     alanlar: () => [
       { k: 'kalite', ad: 'Kalite', tur: 'metin', zorunlu: true, ipucu: 'Malzemenin kalite adı' },
       { k: 'cins', ad: 'Cins', tur: 'secim', zorunlu: true, secenek: cinsSecenek },
       { k: 'form', ad: 'Form', tur: 'secim', secenek: formSecenek, ipucu: 'Seçmezseniz kalitenin bütün formlarına geçer' },
-      { k: 'fiyat', ad: 'Fiyat (TL/kg)', tur: 'sayi', min: 0, zorunlu: true },
+      { k: 'fire', ad: 'Fire payı (%)', tur: 'sayi', min: 0, max: 200, zorunlu: true, ipucu: 'Talaş ve hurda için eklenen pay' },
     ],
-    adimlar: [{ ad: 'Hangi malzeme', ne: 'Fiyatı olmayan malzemenin kalitesi önerildi.', k: ['kalite', 'cins', 'form'] }, { ad: 'Kg fiyatı', k: ['fiyat'] }],
-    ilk: (): Degerler => { const m = ml.find((z) => z.kaynakFiyat === null && z.kalite); return m ? { kalite: m.kalite, cins: m.cins, form: m.form } : { cins: ML_CINS[0] }; },
+    adimlar: [{ ad: 'Hangi malzeme', ne: 'Fire payı olmayan malzemenin kalitesi önerildi.', k: ['kalite', 'cins', 'form'] }, { ad: 'Fire payı', k: ['fire'] }],
+    ilk: (): Degerler => { const m = ml.find((z) => z.kalite && !kgVarMi(D, z.kalite, z.form) && !kgVarMi(D, z.kalite, '')); return m ? { kalite: m.kalite, cins: m.cins, form: m.form } : { cins: ML_CINS[0] }; },
     kontrol: (d, i) => {
       if (i === 0 || i === -1) {
         const kal = (d.kalite ?? '').trim();
-        if (kal && kgVarMi(D, kal, d.form ?? '')) return 'Bu kalite ve form için fiyat zaten var; Kg fiyatı değiştir formunu kullanın.';
+        if (kal && kgVarMi(D, kal, d.form ?? '')) return 'Bu kalite ve form için fire payı zaten var; Fire payı değiştir formunu kullanın.';
       }
-      const f = sayiAl(d, 'fiyat');
-      if ((i === 1 || i === -1) && f !== null && !(f > 0)) return 'Kg fiyatı sıfırdan büyük olmalı.';
+      const f = sayiAl(d, 'fire');
+      if ((i === 1 || i === -1) && f !== null && f < 0) return 'Fire payı eksi olamaz.';
       return null;
     },
-    sonuc: 'fiyat listeye eklenir; bu kalitedeki malzemelerin birim maliyeti hemen hesaplanır.',
+    sonuc: 'fire payı listeye eklenir; bu kalitedeki malzemelerin ihtiyacı ve maliyeti hemen yeniden hesaplanır.',
     kaydet: (d) => {
-      const kal = (d.kalite ?? '').trim(); const fo = d.form ?? ''; const fi = sayiAl(d, 'fiyat');
+      const kal = (d.kalite ?? '').trim(); const fo = d.form ?? ''; const fi = sayiAl(d, 'fire');
       if (!kal || fi === null) return false;
-      return kgEkleYaz(yaz, { cins: d.cins ?? '', kalite: kal, form: fo, fiyat: fi }, kim);
+      return kgEkleYaz(yaz, { cins: d.cins ?? '', kalite: kal, form: fo, fire: fi }, kim);
     },
-    bitti: (d) => `${(d.kalite ?? '').trim()} için ${sayi(sayiAl(d, 'fiyat'), 2)} TL/kg eklendi`,
+    bitti: (d) => `${(d.kalite ?? '').trim()} için fire payı %${sayi(sayiAl(d, 'fire'), 1)} eklendi`,
   };
 }
 
@@ -80,23 +81,17 @@ export function kgDegisFormu(D: PlanVerisi, yaz: Yaz, kim: string): FormTanimi |
   if (!l.length) return null;
   const sat = (id: string | undefined) => l.find((r) => r.id === id);
   return {
-    id: 'kgdegis', ad: 'Kg fiyatı ya da fire değiştir', simge: 'edit', ne: 'Tedarikçi fiyatı değiştiğinde.',
+    id: 'kgdegis', ad: 'Fire payı değiştir', simge: 'edit', ne: 'Talaş ve hurda payı değiştiğinde. Kg fiyatı Satın Alma\'da değişir.',
     alanlar: () => [
-      { k: 'r', ad: 'Fiyat satırı', tur: 'secim', zorunlu: true, secenek: l.map((r) => ({ deger: r.id, baslik: `${r.kalite} · ${r.form || 'her form'} · ${r.fiyat === null ? 'fiyat yok' : `${sayi(r.fiyat, 2)} TL/kg`}` })) },
-      { k: 'fiyat', ad: 'Fiyat (TL/kg)', tur: 'sayi', min: 0, zorunlu: true },
+      { k: 'r', ad: 'Fire satırı', tur: 'secim', zorunlu: true, secenek: l.map((r) => ({ deger: r.id, baslik: `${r.kalite} · ${r.form || 'her form'} · ${r.fire === null ? 'fire yok' : `%${sayi(r.fire, 1)}`}` })) },
       { k: 'fire', ad: 'Fire payı (%)', tur: 'sayi', min: 0, max: 200, ipucu: 'Talaş ve hurda için eklenen pay; boş: yok' },
     ],
-    adimlar: [{ ad: 'Hangi fiyat', k: ['r'] }, { ad: 'Yeni değer', ne: 'Şimdiki değerler dolu geldi; yalnız değişeni düzeltin.', k: ['fiyat', 'fire'] }],
-    ileri: (d, i) => { const r = sat(d.r); return i === 0 && r ? { ...d, fiyat: metinYaz(r.fiyat), fire: metinYaz(r.fire) } : d; },
-    kontrol: (d, i) => { if (i !== 1 && i !== -1) return null; const r = sat(d.r); return r && !degisti(r.fiyat, d.fiyat) && !degisti(r.fire, d.fire) ? DEGISMEDI : null; },
-    sonuc: 'bu fiyatı kullanan malzemelerin birim maliyeti yeniden hesaplanır.',
-    kaydet: (d) => {
-      const r = sat(d.r); if (!r) return false;
-      let ok = false;
-      for (const k of ['fiyat', 'fire'] as const) if (degisti(r[k], d[k])) ok = kgAlanYaz(yaz, D, r.id, k, sayiAl(d, k), kim) || ok;
-      return ok;
-    },
-    bitti: (d) => `${sat(d.r)?.kalite ?? d.r ?? ''} fiyatı güncellendi`,
+    adimlar: [{ ad: 'Hangi satır', k: ['r'] }, { ad: 'Yeni değer', ne: 'Şimdiki değer dolu geldi.', k: ['fire'] }],
+    ileri: (d, i) => { const r = sat(d.r); return i === 0 && r ? { ...d, fire: metinYaz(r.fire) } : d; },
+    kontrol: (d, i) => { if (i !== 1 && i !== -1) return null; const r = sat(d.r); return r && !degisti(r.fire, d.fire) ? DEGISMEDI : null; },
+    sonuc: 'bu satırı kullanan malzemelerin ihtiyacı ve maliyeti yeniden hesaplanır.',
+    kaydet: (d) => { const r = sat(d.r); return r ? kgAlanYaz(yaz, D, r.id, sayiAl(d, 'fire'), kim) : false; },
+    bitti: (d) => `${sat(d.r)?.kalite ?? d.r ?? ''} fire payı güncellendi`,
   };
 }
 

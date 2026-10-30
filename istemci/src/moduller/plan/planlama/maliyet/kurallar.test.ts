@@ -43,18 +43,28 @@ describe('P3 saf hesaplar', () => {
     expect(maliyetBaglami(ornekCalisma({ D: { meta: {} } }))).toBeNull();
   });
 
-  it('kg fiyat listesi varsa birim maliyet kalite ve formdan gelir; formu boş satır kalitenin bütün formlarına geçer; fire ihtiyacı büyütür', () => {
+  it('1280 a: birim maliyet Satın Alma\'dan (malzemenin fiyatı); planın kg satırındaki eski fiyat okunmaz, yalnız fire payı; formu boş satır kalitenin bütün formlarına geçer', () => {
     const c = ornekCalisma({ D: { kgFiyat: [{ id: 'KG-1', kalite: 'K1', form: '', fiyat: 20, fire: 10 }] } });
     const m = malzemeler(c.D)[0];
     if (!m) throw new Error('malzeme yok');
-    expect(birimMaliyet(c.D, m)).toBe(20);
+    expect(birimMaliyet(c.D, m)).toBe(10);
     const s = c.D.siparisler[0];
     if (!s) throw new Error('sipariş yok');
-    expect(malzemeTutari(c.D, s)).toBeCloseTo(20 * 1.5 * 1.1 * 2);
-    const yok = ornekCalisma({ D: { kgFiyat: [{ id: 'KG-1', kalite: 'BASKA', form: '', fiyat: 20 }] } });
-    const m2 = malzemeler(yok.D)[0];
-    if (!m2) throw new Error('malzeme yok');
-    expect(birimMaliyet(yok.D, m2)).toBeNull();
+    expect(malzemeTutari(c.D, s)).toBeCloseTo(10 * 1.5 * 1.1 * 2);
+  });
+
+  it('1329: fiyatı olmayan malzemede tutar bilinmez; tahmini fiyat ve Satın Alma kg başvurusu okunur', () => {
+    const c = ornekCalisma();
+    const ham = c.D.malzemeler?.[0];
+    if (!ham) throw new Error('malzeme yok');
+    const yok = ornekCalisma({ D: { malzemeler: [{ ...ham, birimFiyat: null }] } });
+    const s = yok.D.siparisler[0];
+    if (!s) throw new Error('sipariş yok');
+    expect(malzemeTutari(yok.D, s)).toBeNull();
+    const kgRef = { kalite: 'K1', form: 'Çubuk', tarih: '2026-10-01', tlKg: 12, kgFiyati: 12, paraBirimi: 'TRY' };
+    const t = malzemeler(ornekCalisma({ D: { malzemeler: [{ ...ham, birimFiyat: 12, fiyatTahmini: true, kgRef }] } }).D)[0];
+    expect([t?.kaynakFiyat, t?.fiyatTahmini, t?.kgRef]).toEqual([12, true, kgRef]);
+    expect(malzemeler(c.D)[0]?.kgRef).toBeNull();
   });
 
   it('talaş kredisi net ağırlık ve talaş fiyatıyla; fiyat yoksa null', () => {

@@ -256,3 +256,12 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Test: `ayar-secenegi.test.ts` (tek ayarcı, iki tezgâh: ayarlıda ikinci iş bekler; ayarsızda ikisi aynı anda, süre hazırlıkla). Yamasız ayarsız deneme düşer (DOĞRULANDI).
 - VARSAYIM: ayarlı adımda ayarcı bütün hazırlık süresince aranır (ayar ve hazırlık ayrımı plana gelmez); ayarcı ücreti maliyette bugünkü
   gibi hazırlık süresinden hesaplanır. Sayfa motoru (kurallar.ts) ayarcı kısıtı taşımadığı için değişmez. Geri alma: `ayarci` bayrağı okunmaz.
+## Malzeme fiyatı Satın Alma'dan (1280 a, kart 1329; 2026-10-30)
+- Değişiklik: ham malzemenin birim fiyatı her okumada Satın Alma ekinden kurulur (`girdi.betik tmiFiyatlar`): teslim alınmış siparişlerin TL
+  ortalaması, yoksa Satın Alma kg fiyatından tahmini (`fiyatTahmini`), ikisi de yoksa null (eskiden Reçete ve Rota `cost` null geldiği için
+  her zaman 0'dı). `kgRef` Satın Alma'nın geçerli kg fiyatı ve tarihidir, yalnız başvuru. Ek yalnız finans.maliyet-oku taşıyana dolar; dolmayanda
+  önceki kayıttaki fiyat da taşınmaz. Planlama maliyet ekranında kg fiyatı salt okunur; planın kg satırı yalnız fire payını tutar, satırdaki
+  eski fiyat silinmez, okunmaz.
+- Test: `plan-kg-fiyati.test.ts` (PKG-01..03), istemci `maliyet/kurallar.test.ts`.
+- VARSAYIM: ortalama bütün teslimlerindir (1291 a'nın 12 aylık ortalaması Satın Alma'dan okunur olunca geçer, P-B36); sunucu motoru fiyatı
+  null alır (yalnız tutarı etkiler). Geri alma: `malzemeFiyatlari` alanı okunmaz, eski davranış döner.

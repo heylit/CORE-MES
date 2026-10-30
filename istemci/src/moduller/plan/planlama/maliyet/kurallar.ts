@@ -137,27 +137,32 @@ export function talasFiyatlari(D: PlanVerisi): TalasFiyati[] {
   }
   return l;
 }
-export interface MalzemeBilgisi { kod: string; ad: string; birim: string; cins: string; kalite: string; form: string; olcu: string; kgBirim: number | null; kaynakFiyat: number | null }
+// Satın Alma'nın geçerli kg fiyatı (1280 a, 1329): yalnız başvuru; sunucu birleştirmesi her okumada malzemeye yazar.
+export interface KgBasvurusu { kalite: string; form: string; tarih: string | null; tlKg: number | null; kgFiyati: number | null; paraBirimi: string }
+export interface MalzemeBilgisi {
+  kod: string; ad: string; birim: string; cins: string; kalite: string; form: string; olcu: string; kgBirim: number | null; kaynakFiyat: number | null;
+  fiyatTahmini: boolean; kgRef: KgBasvurusu | null;
+}
+function kgBasvurusu(v: unknown): KgBasvurusu | null {
+  if (!nesneMi(v)) return null;
+  return { kalite: metin(v.kalite), form: metin(v.form), tarih: typeof v.tarih === 'string' ? v.tarih : null, tlKg: sayiOku(v.tlKg), kgFiyati: sayiOku(v.kgFiyati), paraBirimi: metin(v.paraBirimi) };
+}
 export function malzemeler(D: PlanVerisi): MalzemeBilgisi[] {
   return (D.malzemeler ?? []).map((m) => ({
     kod: m.kod, ad: metin(m.ad), birim: metin(m.birim), cins: metin(m.cins), kalite: metin(m.kalite), form: metin(m.form), olcu: metin(m.olcu),
-    kgBirim: sayiOku(m.kgBirim), kaynakFiyat: sayiOku(m.birimFiyat),
+    kgBirim: sayiOku(m.kgBirim), kaynakFiyat: sayiOku(m.birimFiyat), fiyatTahmini: m.fiyatTahmini === true, kgRef: kgBasvurusu(m.kgRef),
   }));
 }
-// Fiyat satırı kalite ve formla eşleşir; formu boş satır o kalitenin bütün formlarına geçer.
+// Fire satırı kalite ve formla eşleşir; formu boş satır o kalitenin bütün formlarına geçer. Satırdaki eski fiyat okunmaz (1280 a).
 export function kgSatiri(D: PlanVerisi, m: Pick<MalzemeBilgisi, 'kalite' | 'form'>): KgFiyati | null {
   const l = kgFiyatlari(D) ?? [];
   const k = norm(m.kalite);
   if (!k) return null;
   return l.find((r) => norm(r.kalite) === k && norm(r.form) === norm(m.form)) ?? l.find((r) => norm(r.kalite) === k && !norm(r.form)) ?? null;
 }
-// Birim maliyet: kg fiyat listesi varsa ondan (birim kg değilse bir birimin ağırlığıyla), yoksa kaynağın birim maliyeti.
-export function birimMaliyet(D: PlanVerisi, m: MalzemeBilgisi): number | null {
-  if (kgFiyatlari(D) === null) return m.kaynakFiyat;
-  const r = kgSatiri(D, m);
-  if (!r || r.fiyat === null) return null;
-  if (m.birim === 'kg') return r.fiyat;
-  return m.kgBirim !== null && m.kgBirim > 0 ? r.fiyat * m.kgBirim : null;
+// Birim maliyet Satın Alma'dandır (1280 a): alış ortalaması, yoksa kg fiyatından tahmini; ikisi de yoksa bilinmez. Plan fiyat girmez.
+export function birimMaliyet(_D: PlanVerisi, m: MalzemeBilgisi): number | null {
+  return m.kaynakFiyat;
 }
 export const firePayi = (D: PlanVerisi, m: MalzemeBilgisi): number => kgSatiri(D, m)?.fire ?? 0;
 const talasSatiri = (D: PlanVerisi, kalite: string): TalasFiyati | null => talasFiyatlari(D).find((t) => norm(t.kalite) === norm(kalite)) ?? null;

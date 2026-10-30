@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
+import { planGirdisi } from './plan-girdisi.ts';
 
 // 1280 a, kart 1329: planın malzeme fiyatı Satın Alma'dandır. Ek, kg fiyatını tarihiyle başvuru olarak taşır; teslimi olmayan malzemede alış
 // fiyatı null (sıfır uydurulmaz). Fiyat yalnız finans.maliyet-oku taşıyana dolar. Veriler uydurmadır.
@@ -82,5 +83,38 @@ describe('Planlama satın alma eki: malzeme fiyatları (gerçek PostgreSQL)', ()
     assert.ok(planci.tedarikTerminleri);
     const maliyetci = await oku(await islemliKisi('maliyetci', ['recete-rota.oku', 'sayfa.malzemeler', 'finans.maliyet-oku']));
     assert.equal(maliyetci.malzemeFiyatlari?.find((x) => x.kod === String(cubuk))?.kg?.tlBirimFiyati, 150);
+  });
+});
+
+// Birleşme (girdi.betik tmiFiyatlar): fiyat her okumada ekten kurulur. Örnek degerlendirme.test.ts'inkinin en azıdır.
+describe('Plan girdisi: malzeme fiyatı Satın Alma ekinden (1329)', () => {
+  const KAYIT = {
+    version: 7, savedAt: 9,
+    items: [{ id: 'H1', code: 'H1', name: 'Ornek cubuk', type: 'ham', unit: 'kg', cost: 10, stock: 100, plan: { kod: 'H1', ad: 'Ornek cubuk', birim: 'kg', stok: 100, birimFiyat: 10, tedarikGun: 5, muayeneGun: 0 } }],
+    opdefs: [], machines: [], routes: {}, orders: [],
+  };
+  const calisma = {
+    surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
+    rrSavedAt: 5, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, w: { famK: 0.3, mat: 'sert', dondurma: 4 },
+    param: { tampon: false, tamponZ: 0, acilPay: 0 }, kapali: [], olaylar: [], plan: null,
+  };
+  const KG = { kaliteKodu: 'DENEME-PK', form: 'cubuk', gecerlilik: '2026-10-01', kgFiyati: 12, paraBirimi: 'TRY', tlKgFiyati: 12, tlBirimFiyati: 12 };
+  const malzeme = (malzemeFiyatlari: unknown): Record<string, unknown> | undefined => {
+    const ek = malzemeFiyatlari === undefined ? {} : { malzemeFiyatlari };
+    const g = planGirdisi({ calisma, kayit: KAYIT, kaynak: { durum: { wcs: [], stations: [], machines: [], people: [], cal: { shifts: [], holidays: [] } }, ek }, bugun: '2026-10-19' });
+    assert.ok(g);
+    return ((g.S as { D: { malzemeler: Record<string, unknown>[] } }).D.malzemeler).find((m) => m.kod === 'H1');
+  };
+
+  test('PKG-03: alış varsa birim fiyat odur; yoksa kg fiyatından tahmini; ikisi de yoksa null; okunamayan (null) fiyat taşınmaz', () => {
+    const alis = malzeme([{ kod: 'H1', alisFiyati: 9.5, teslimSayisi: 2, kg: KG }]);
+    assert.deepEqual([alis?.birimFiyat, alis?.fiyatTahmini, alis?.kgRef], [9.5, undefined, { kalite: 'DENEME-PK', form: 'cubuk', tarih: '2026-10-01', tlKg: 12, kgFiyati: 12, paraBirimi: 'TRY' }]);
+    const tahmini = malzeme([{ kod: 'H1', alisFiyati: null, teslimSayisi: 0, kg: KG }]);
+    assert.deepEqual([tahmini?.birimFiyat, tahmini?.fiyatTahmini], [12, true]);
+    const yok = malzeme([]);
+    assert.deepEqual([yok?.birimFiyat, 'kgRef' in (yok ?? {})], [null, false]);
+    assert.equal(malzeme(null)?.birimFiyat, null);
+    // Alanı taşımayan ek (fiyatı okumayan eski çağıran) kaynağın fiyatına dokunmaz.
+    assert.equal(malzeme(undefined)?.birimFiyat, 10);
   });
 });
