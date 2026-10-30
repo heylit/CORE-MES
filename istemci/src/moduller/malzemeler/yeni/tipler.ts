@@ -43,6 +43,8 @@ export interface TicariBilgi {
   sertifika: string[];
   not: string;
   eskiKod?: string;
+  // 1247 d: giriş kalite kontrolü; yoksa türün varsayılanı (sunucu da aynı kuralla okur).
+  gkk?: boolean;
   [alan: string]: unknown;
 }
 

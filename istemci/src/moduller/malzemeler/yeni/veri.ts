@@ -241,7 +241,9 @@ export function useKartKaydet() {
     mutationFn: async ({ kayit, ozet }: { kayit: KartKaydi; ozet: KartOzeti }) => {
       const id = String(kayit.id ?? '');
       const surum = kartlarSorgusu(istemci).find((k) => k.kimlik === id)?.surum ?? null;
-      const c = await api.post<KatalogKartiKaydetCevabi>(`/malzeme-katalogu-kartlari/${yolParcasi(id)}/kaydet`, { kayit, ozet: ozetGovdesi(ozet), surum });
+      // 1247 d: GKK ayarı kartın kaydında durur; sunucu sütununa özetle gider (yazılmamışsa türün varsayılanı).
+      const gkk = typeof kayit.com.gkk === 'boolean' ? { gkk_gerekli: kayit.com.gkk } : {};
+      const c = await api.post<KatalogKartiKaydetCevabi>(`/malzeme-katalogu-kartlari/${yolParcasi(id)}/kaydet`, { kayit, ozet: { ...ozetGovdesi(ozet), ...gkk }, surum });
       return { id: c.id, stok_kodu: c.stok_kodu };
     },
     onSettled: () => istemci.invalidateQueries({ queryKey: [...MALZEMELER_YENI, 'kartlar'] }),

@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
-import { LOGO_TUR_KARSILIGI_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
+import { GKK_VARSAYILAN_TURLER, LOGO_TUR_KARSILIGI_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   HizmetYonu, KatalogKartDurumu, KatalogMalzemeOzeti, KatalogTuru, LogoGonderimDurumu, LogoKarsilikCesidi, LogoKarsiligi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -109,6 +109,8 @@ export interface KatalogKartiYazimi {
   aciklamalar: [string | null, string | null, string | null] | null;
   // 323 b: kartın alış birimi ve katsayısı her yazımda kayıttan yeniden yazılır; yoksa ikisi de boş.
   birimDonusumu: { alisBirimi: string; katsayi: string } | null;
+  // 1247 d: yaz false ise kayıtlı ayar korunur; değer null türün varsayılanıdır.
+  gkk: { yaz: boolean; deger: boolean | null };
 }
 
 // Stok kodu veritabanında türer; kart içindeki kod da aynı değere çekilir ki prototip listede aynısını görsün.
@@ -117,14 +119,14 @@ export async function katalogKartiEkle(db: Db, k: KatalogKartiYazimi, onek: stri
     `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, benzersiz_anahtar, mukerrer_gerekcesi, onay_durumu, kayit,
                                         acan_kisi_id, gonderen_kisi_id, onaylayan_kisi_id, onaylama, dort_gozsuz_onay, guncelleyen_kisi_id, hizmet_yonu,
                                         varsayilan_anahtar, birim_agirlik_kg, kalite_adi, form_adi, net_agirlik_kg, tedarikci_firma_id,
-                                        aciklama_1, aciklama_2, aciklama_3, alis_birimi, alis_katsayisi, olcu_aleti_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CASE WHEN $12 THEN now() END, $13, $9, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::numeric, $26)
+                                        aciklama_1, aciklama_2, aciklama_3, alis_birimi, alis_katsayisi, olcu_aleti_id, gkk_gerekli)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CASE WHEN $12 THEN now() END, $13, $9, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::numeric, $26, $27::boolean)
      RETURNING stok_kodu AS "stokKodu", surum`,
     [k.kimlik, k.tur, onek, sira, k.benzersizAnahtar, k.mukerrerGerekcesi, k.onayDurumu, k.kayit, k.kisiId, k.gonderenKisiId,
       k.onaylayanKisiId, k.onaylandi, k.dortGozsuz, k.hizmetYonu, k.varsayilanAnahtar,
       k.agirlik?.birimAgirlikKg ?? null, k.agirlik?.kaliteAdi ?? null, k.agirlik?.formAdi ?? null, k.netAgirlikKg, k.tedarikciFirmaId,
       k.aciklamalar?.[0] ?? null, k.aciklamalar?.[1] ?? null, k.aciklamalar?.[2] ?? null, k.birimDonusumu?.alisBirimi ?? null, k.birimDonusumu?.katsayi ?? null,
-      k.olcuAletiId],
+      k.olcuAletiId, k.gkk.deger],
   );
   await db.sorgu(
     `UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{com,kod}', to_jsonb(stok_kodu), true)
@@ -160,14 +162,15 @@ export async function katalogKartiGuncelle(db: Db, k: KatalogKartiYazimi, yeniKo
             aciklama_1 = CASE WHEN $24 THEN $25::text ELSE aciklama_1 END,
             aciklama_2 = CASE WHEN $24 THEN $26::text ELSE aciklama_2 END,
             aciklama_3 = CASE WHEN $24 THEN $27::text ELSE aciklama_3 END,
-            alis_birimi = $28, alis_katsayisi = $29::numeric, olcu_aleti_id = $30
+            alis_birimi = $28, alis_katsayisi = $29::numeric, olcu_aleti_id = $30,
+            gkk_gerekli = CASE WHEN $31 THEN $32::boolean ELSE gkk_gerekli END
       WHERE kimlik = $1
       RETURNING stok_kodu AS "stokKodu", surum`,
     [k.kimlik, k.benzersizAnahtar, k.mukerrerGerekcesi, k.onayDurumu, k.kayit, k.gonderenKisiId, k.onaylandi, k.onaylayanKisiId, k.dortGozsuz, k.kisiId,
       yeniKod?.tur ?? null, yeniKod?.onek ?? null, yeniKod?.sira ?? null, yeniKod?.stokKodu ?? null, k.hizmetYonu, k.logoAdGuncellemesi,
       k.varsayilanAnahtar, k.agirlik !== null, k.agirlik?.birimAgirlikKg ?? null, k.agirlik?.kaliteAdi ?? null, k.agirlik?.formAdi ?? null,
       k.netAgirlikKg, k.tedarikciFirmaId, k.aciklamalar !== null, k.aciklamalar?.[0] ?? null, k.aciklamalar?.[1] ?? null, k.aciklamalar?.[2] ?? null,
-      k.birimDonusumu?.alisBirimi ?? null, k.birimDonusumu?.katsayi ?? null, k.olcuAletiId],
+      k.birimDonusumu?.alisBirimi ?? null, k.birimDonusumu?.katsayi ?? null, k.olcuAletiId, k.gkk.yaz, k.gkk.deger],
   );
   return satir!;
 }
@@ -232,6 +235,13 @@ const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
 
 export function katalogMalzemeOzeti(db: Db, no: number): Promise<KatalogMalzemeOzeti | null> {
   return db.tek<KatalogMalzemeOzeti>(`SELECT ${OZET_SECIMI} WHERE k.no = $1`, [no]);
+}
+
+// 1247 d: istenen kartlardan giriş kalite kontrolü gereken (kartta yazılı değilse türün varsayılanı; kurallar.ts gkkGerekliMi ile aynı).
+export async function gkkGerekenKartlar(db: Db, nolar: readonly number[]): Promise<number[]> {
+  const varsayilan = GKK_VARSAYILAN_TURLER.map((t) => `'${t}'`).join(', ');
+  return (await db.sorgu<{ no: number }>(
+    `SELECT no FROM malzeme_katalog_karti WHERE no = ANY($1::int[]) AND COALESCE(gkk_gerekli, tur IN (${varsayilan}))`, [nolar])).map((r) => r.no);
 }
 
 export function katalogMalzemeOzetleri(db: Db, nolar: number[]): Promise<KatalogMalzemeOzeti[]> {

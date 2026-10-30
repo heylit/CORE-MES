@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { KATALOG_ONAY_DURUMLARI, KATALOG_TURLERI, LOGO_KART_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
+import { GKK_OLMAYAN_TURLER, KATALOG_ONAY_DURUMLARI, KATALOG_TURLERI, LOGO_KART_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { HizmetYonu, KatalogKartDurumu, KatalogOnayDurumu, KatalogTuru, LogoEksik } from '#paylasilan/sozlesme/malzemeler.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları: MKK-1..MKK-15 ---------------- */
@@ -177,6 +177,14 @@ export function katalogAgirlikAlanlari(tur: KatalogTuru, ozet: KatalogAgirlikOze
   if (ozet.birim_agirlik_kg === undefined && ozet.kalite_adi === undefined && ozet.form_adi === undefined) return null;
   const ad = (d: string | null | undefined): string | null => d?.trim() || null;
   return { birimAgirlikKg: ozet.birim_agirlik_kg ?? null, kaliteAdi: ad(ozet.kalite_adi), formAdi: ad(ozet.form_adi) };
+}
+
+// 1247 d: kartın yazılacak GKK ayarı. Gelmezse kayıtlı değer korunur, null türün varsayılanıdır. GKK'ya giremeyen türde ayar silinir
+// (tür değişimi eski ayarı taşımasın); orada açık istenirse reddedilir.
+export const GKK_TURU_ILETISI = 'Demirbaş ve hizmet kartında giriş kalite kontrolü açılmaz.';
+export function katalogGkkAyari(tur: KatalogTuru, gelen: boolean | null | undefined): { yaz: boolean; deger: boolean | null } | { hata: string } {
+  if (GKK_OLMAYAN_TURLER.some((t) => t === tur)) return gelen === true ? { hata: GKK_TURU_ILETISI } : { yaz: true, deger: null };
+  return gelen === undefined ? { yaz: false, deger: null } : { yaz: true, deger: gelen };
 }
 
 // 334 a: Açıklama 1, 2, 3 ekranın kuralıyla kurulur, sunucu yalnız saklar. Üçü de gelmezse null (kayıtlı değerler korunur); boş metin null.
