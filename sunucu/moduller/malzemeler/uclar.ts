@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
-  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
+  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import * as servis from './servis.ts';
@@ -10,8 +10,16 @@ import * as servis from './servis.ts';
 // Kart ve şablon kaydetme uçları bütün içeriği gövdede taşır; denetim kaydına gövde yerine özet girer (kullanıcı kararı 07.10.2026, #227 madde 23).
 // Ekran prototiptir, veri burada. Okuma uçları malzemeler sayfasının işlemini ister (kullanıcı kararı Ç1 = A); başka modüller kartı disari.ts ile okur.
 const OKUMA = { biri: ['sayfa.malzemeler'] } as const;
+// Ortak malzeme seçicisini çağıran modüller (karar 1321 b): malzemeler ve bugün malzeme seçen stok, markalama, siparişler ve Arkon.
+// Seçiciyi alan modül (A5) işlemini buraya ekler.
+const SECIM_OKUMA = { biri: ['sayfa.malzemeler', 'malzemeler.yaz', 'sayfa.stok', 'sayfa.markalama', 'sayfa.siparisler', 'sayfa.arkon'] } as const;
 
 export const uclar = [
+  // Ortak seçici (kart #1319): yalnız kart no, stok kodu, ad ve aktiflik döner.
+  uc({
+    yontem: 'GET', yol: '/malzemeler/secim-ara', yetki: SECIM_OKUMA, sorgu: malzemeSecimSorgusu, cevap: malzemeSecimCevabi,
+    isle: ({ db, sorgu }) => servis.malzemeSecimAra(db, sorgu),
+  }),
   // Pano kartı: oturumu olan sorar, her sayı kendi işlemiyle dolar (stok özetiyle aynı yol).
   uc({ yontem: 'GET', yol: '/malzemeler/ozet', yetki: 'oturum', cevap: malzemelerOzetiCevabi, isle: ({ db, kullanici }) => servis.malzemelerOzeti(db, kullanici.islemler) }),
   uc({ yontem: 'GET', yol: '/malzeme-katalogu-kartlari', yetki: OKUMA, sorgu: katalogKartlariSorgusu, cevap: katalogKartlariCevabi, isle: ({ db, sorgu }) => servis.katalogKartlariniGetir(db, sorgu) }),

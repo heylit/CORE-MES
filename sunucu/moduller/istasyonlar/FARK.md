@@ -53,3 +53,9 @@ Yalnız istemci; sunucu, sözleşme ve göç değişmedi. Bütün okumalar modü
 - Yeni uçlar `/kisi-yetkinlikleri/:kisiId/makineler/belirle` ve `/tezgah-siniri`; toplu uca `makineler`; yetkinlik cevabına `makineIdleri`, `enCok`; geçmişe `makineGecmis`.
 - `disari.ts` `makineYetkinlikleri` (yalnız makinenin bugünkü istasyonunda bugün geçerli yetkinlikle) ve `kisiTezgahSinirlari`.
 - Personel kartında "Baktığı makineler" ve "Aynı anda en çok"; yetkinlik matrisinde "Düzey: Makine".
+
+## #1318: ortak seçici arama ucu (30.10.2026, dal 1318-tesis-secim-ara)
+- `GET /istasyonlar/secim-ara?tur=istasyon|makine&q&istasyonId&pasifler&sayfa`: `{ sonuclar: [{ id, kod, ad, aktif, ust }], dahaVar }`; sayfa 30.
+  Ortak `IstasyonSecici` ve `MakineSecici` (kart #1317) bunu çağırır. Şema, göç, işlem ve rol değişmedi.
+- Yetki (karar 1321 b, 30.10 10:32): çağıran modüllerin işlemlerinden biri: istasyonlar okuma, `sayfa.arkon`, `sayfa.markalama`, `sayfa.stok`.
+  VARSAYIM: çağıranlar bugün istasyon ya da makine seçen modüllerdir (istemci kodunda arandı); A5'te seçiciyi alan modül işlemini `SECIM_OKUMA`'ya ekler.

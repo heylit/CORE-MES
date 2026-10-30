@@ -14,7 +14,9 @@ import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   aktifMalzemeListesi, DURUM_ANAHTARI, degerBicimeUyarMi, degerCokBuyukMu, durumVeEmirler, KAYNAK_OKUMA, nulKarakteriVarMi, receteRotaDurumu, surumUyarMi,
 } from '../recete-rota/disari.ts';
-import { malzemeGelisTarihleri, tedarikIhtiyaclariniYaz, tedarikTerminleri } from '../satin-alma/disari.ts';
+import {
+  malzemeGelisTarihleri, malzemeKgFiyatlari, ortalamaAlisFiyatlari, tedarikIhtiyaclariniYaz, tedarikTerminleri,
+} from '../satin-alma/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
@@ -98,6 +100,8 @@ const yetkiliMi = (k: Kullanici, islemler: readonly Islem[]): boolean => islemle
 
 // Açık satın alma siparişinin gelişi (525 1 a): satın almayı okuyan ya da depoda mal kabul eden görür (stoktaki açık sipariş satırlarıyla aynı kapsam).
 const ACIK_SIPARIS_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz', 'stok.giris'];
+// 1280 a, 1329: malzeme fiyatı planın maliyet ekranıyla aynı işlemle görünür (değerlendirmenin TL alanları gibi).
+const MALZEME_FIYATI_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
 
 // Plan kapasitesi (kart #1324): Vardiya'nın iş merkezi, istasyon ve kişi takvimlerinden prototipin kendi vardiya hesabına eklediği farklar
 // tek okumada. Kişi ve payı Vardiya'nın tek tanımıdır (`isMerkeziKisiPaylari`, Plan da bunu okur: aktif kişi; istasyon, makine ve ekip
@@ -166,7 +170,8 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const sa = await satinAlmaEkiKur(db, kullanici, d.items);
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), ...sa } };
+  // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa } };
 }
 
 // 525 1 a, 533 a: planın satın alma eki. Açık sipariş satın almayı okuyana; tedarik termini planlamada her malzeme satırında görünür
@@ -179,7 +184,32 @@ async function satinAlmaEkiKur(db: Db, kullanici: Kullanici, malzemeler: DurumCe
   return {
     acikSiparisler: yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, malzemeler) : null,
     tedarikTerminleri: await malzemeTerminleri(db, malzemeler),
+    malzemeFiyatlari: yetkiliMi(kullanici, MALZEME_FIYATI_OKUMA) ? await malzemeFiyatlari(db, malzemeler) : null,
   };
+}
+
+// 1280 a, 1329: ham malzemenin Satın Alma fiyatları (girdi.betik plandaki malzemenin birim fiyatına yazar). Alışı da kg fiyatı da olmayan
+// malzeme listede yoktur. Ortalama bütün teslimlerindir.
+type MalzemeFiyati = NonNullable<SatinAlmaEkiCevabi['malzemeFiyatlari']>[number];
+const sayi = (x: string | null): number | null => (x === null ? null : Number(x));
+async function malzemeFiyatlari(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<MalzemeFiyati[]> {
+  const ham = malzemeler.filter((m) => m.type === 'ham');
+  const nolar = ham.map((m) => m.kayitNo);
+  const alis = await ortalamaAlisFiyatlari(db, nolar);
+  const kg = await malzemeKgFiyatlari(db, nolar);
+  return ham.flatMap((m) => {
+    const a = alis.get(m.kayitNo);
+    const k = kg.get(m.kayitNo);
+    const alisFiyati = sayi(a?.tryBirimFiyat ?? null);
+    if (alisFiyati === null && k === undefined) return [];
+    return [{
+      kod: m.id, alisFiyati, teslimSayisi: a?.teslimSayisi ?? 0,
+      kg: k === undefined ? null : {
+        kaliteKodu: k.kaliteKodu, form: k.form, gecerlilik: k.gecerlilik, kgFiyati: Number(k.kgFiyati), paraBirimi: k.paraBirimi,
+        tlKgFiyati: sayi(k.tryKgFiyati), tlBirimFiyati: sayi(k.tryBirimFiyati),
+      },
+    }];
+  });
 }
 
 // 533 a: plan kaydedilince malzemenin olması gereken tarihi Satın Alma'ya aynı transaction'da gider (tam liste: planın artık istemediğinin tarihi

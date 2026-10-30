@@ -306,3 +306,7 @@ Kullanıcı isteği 09.10.2026: hizmette çeşit, çeşidin kalitesi ve standard
 - Seçim çubuğundaki "Etiket yazdır" ve karşılaştırmadaki "Etiketlerini yazdır" aynı yerde "Etiket Merkezi'nde bas" oldu: seçili kartların nolarıyla `/etiket-merkezi?tur=malzeme&id=<no,no,...>` açılır (en çok 200; hizmet kartı düşer). Yalnız `sayfa.etiket-merkezi` olan görür.
 - Sonuç: Etiket Merkezi'ni açamayan malzeme kullanıcısı artık etiket basamaz (1288 ile bilinçli). Baskı Etiket Merkezi defterine yazılır.
 - Sunucu, göç ve yetki değişmedi.
+## #1319: ortak seçici arama ucu (30.10.2026, dal 1319-malzeme-secim-ara)
+- `GET /malzemeler/secim-ara?q&tur&pasifler&sayfa` -> `{ sonuclar: [{ id (kart no), kod (stok kodu), ad, aktif, ust: null }], dahaVar }`; var olan `malzemeAra` üstünde.
+  Ortak `MalzemeSecici` (kart #1317) bunu çağırır. Şema, göç ve rol değişmedi.
+- Yetki karar 1321 b: malzemeler, stok, markalama, siparişler, Arkon sayfaları. VARSAYIM: çağıranlar bugün malzeme seçen modüller (istemci kodunda arandı); A5'te modül eklenir.

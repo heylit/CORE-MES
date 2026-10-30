@@ -129,6 +129,18 @@ export const kapasiteCevabi = z.object({
 export const satinAlmaEkiCevabi = z.object({
   acikSiparisler: z.array(z.object({ kod: kimlikMetni, miktar: z.number().positive(), tarih: tarihSemasi.nullable(), siparisNo: z.string() })).nullable(),
   tedarikTerminleri: z.array(z.object({ kod: kimlikMetni, termin: tarihSemasi.nullable(), surum: z.number().int(), aciklama: z.string() })).nullable(),
+  // 1280 a, 1329: ham malzemenin fiyatı Satın Alma'dandır; plan kendi kg listesini tutmaz. `alisFiyati` teslim edilmiş siparişlerin TL ağırlıklı
+  // ortalama birim fiyatı (malzemenin biriminde), `kg` Satın Alma'da geçerli son kg fiyatı ve tarihi (yalnız başvuru; alış yoksa tahmini birim
+  // fiyat olur). Hesaplanamayan null. Yalnız maliyeti görene (finans.maliyet-oku) dolar, göremeyene null; alan eski sürümde yoktu.
+  malzemeFiyatlari: z.array(z.object({
+    kod: kimlikMetni,
+    alisFiyati: z.number().nonnegative().nullable(),
+    teslimSayisi: z.number().int().nonnegative(),
+    kg: z.object({
+      kaliteKodu: z.string(), form: z.string().nullable(), gecerlilik: tarihSemasi,
+      kgFiyati: z.number().nonnegative(), paraBirimi: z.string(), tlKgFiyati: z.number().nonnegative().nullable(), tlBirimFiyati: z.number().nonnegative().nullable(),
+    }).nullable(),
+  })).nullable().optional(),
 });
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları sunucuda hesaplanır. Uç yalnız okur:

@@ -25,6 +25,7 @@ Kapandı (#247, IS8): üç tanım listesi sayfası olan ya da yazan role açık;
 | GET /makine-durumlari (#409) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.atolye` (195 a: Fabrika Haritası) | yok | `yetki (IS8)…`; `yetki (195 a)…`: kalite ve depo 200 | `yetki (IS8)…`: operatör 403, oturumsuz 401 |
 | GET /istasyonlar/pano-ozeti (#483) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.terminal, sayfa.vardiya, sayfa.personel` | yok; yalnız sayı, kayıt ve ad dökmez | `IS16`: operatör, idari işler ve yazan rol 200 | aynı test: finans 403, oturumsuz 401 |
 | GET /istasyonlar/ara (#1221) | `biri: sayfa.istasyonlar, istasyonlar.yaz` | sorgu 2-60 harf, en çok 5 satır, `%` joker değil | `arama/arama.test.ts` istasyon ve makine | aynı dosya: işlemsiz 403, oturumsuz 401 |
+| GET /istasyonlar/secim-ara (#1318) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.arkon, sayfa.markalama, sayfa.stok` (karar 1321 b: çağıran modüllerin işlemi; A5'te modül eklenir); yalnız kod, ad, aktiflik ve üst kaydın kodu ve adı döner | sorgu en çok 80 harf, sayfa 1-1000, sayfa başına 30 satır; `%` joker değil; varsayılan yalnız aktif | `arama/arama.test.ts` `#1318 ortak seçici` (yalnız sayfa.arkon 200) | aynı dosya: işlemsiz 403, oturumsuz 401, geçersiz sorgu 400 |
 
 ## Yazma uçları (hepsi `istasyonlar.yaz`)
 
