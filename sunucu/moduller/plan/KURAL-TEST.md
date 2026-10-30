@@ -48,6 +48,7 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | PI-01 | Plan ihtiyacı (898 a, 902 a): canlıya almayla aynı işlemde canlı planın malzeme eksiği satın almaya tam liste yazılır; taslağa yazmak yazmaz | U CA-12 (`canliya-al.test.ts`); `plan-ihtiyaci.test.ts` | satin_alma_plan_ihtiyaci_miktar, satin_alma_plan_ihtiyaci_emirler |
 | 1034 / 1036 a | Sunucu motoru kayıtlıyken kolun yerleşmeyen son adımı birleşme adımını, yerleşmeyen ek adım (rework, tamir, ek; süresiz ya da kaynaksız) emirde sonraki adımı bekletir: bekleyen iş ve emrinde sonraki adımlar yerleşmez ("Bağlı parti yerleşmedi.", "Önceki adım (OP n) yerleşmedi."), motor onlarsız yeniden koşar. Kalite kararı ve doldurulmamış rework adımı kendi nedeniyle yerleşmemiş görünür | U 1034 (`hatali-kol.test.ts`) | yok |
 | 1202 | Sunucu motoru kayıtlıyken fason rework ya da ek adım fasonundan sonraki adım fasonun kalan süresini (fasonBekleGun) bekler; öncülü motorda fason olan adım (rota, emir fasonu) motorun kendi süresiyle kalır | U 1202 (`fason-ek-adim.test.ts`) | yok |
+| 1329 | 1280 a: ham malzemenin fiyatı Satın Alma'dandır (alış ortalaması; kg fiyatı tarihiyle yalnız başvuru); fiyatı olmayan malzemede alış fiyatı null; yalnız finans.maliyet-oku taşıyana dolar | U PKG-01, PKG-02 (`plan-kg-fiyati.test.ts`) | yok |
 
 Bağı ertelenen kural: PL-06 (paralel bölme, P-B18); PL-09'un motoru erteletmesi (P-B19).
 
