@@ -82,7 +82,14 @@ function rrCevir(st) {
        bekler, bağımsız beklemez. Bağımsız adımdan sonraki adım hem onu hem ondan önceki ana adımı bekler. Anahtar önceki adımın kayıttaki
        k'sidir (aşağıda kHarita ile yenisine çevrilir). */
     let onde = [];
+    /* 1248 a: adımın çözülmüş öncül listesi (Reçete ve Rota; dal ya da birleştirme olan rotada) varsa bağ ondandır, her öncül kendi
+       türüyle; boş liste dalın ilk adımıdır, hiçbir şeyi beklemez. Liste yoksa (null) bugünkü kural. */
+    const refOf = q => { const x = steps.find(t => t.seq === q); return x ? (x.plan ? x.plan.k : String(x.seq)) : null; };
     const bagOf = (s, i) => {
+      if (Array.isArray(s.onculler)) {
+        onde = [s.plan ? s.plan.k : String(s.seq)];
+        return s.onculler.flatMap(o => { const r = refOf(o.seq); return r === null ? [] : [[r, o.tur === 'akisli' ? 'o' : 'b']]; });
+      }
       const dep = i === 0 ? 'bagimli' : s.dep || 'bagimli', son = onde[onde.length - 1];
       const bag = dep === 'bagimsiz' ? [] : onde.map(r => [r, r === son && dep === 'ortulu' ? 'o' : 'b']);
       const ref = s.plan ? s.plan.k : String(s.seq);
