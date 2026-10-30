@@ -125,3 +125,8 @@ konusu kisiler adlı göçlerle yazar), K3 a ve ek karar (sürüm, `POST /kisile
 - Kurallar: KS-8 İK'ya bağlı kişide ad/sicil/görev Kişiler'den değişmez (aynı değer geçer); KS-9 çıkışı geçmiş kişi aktif yapılmaz; KS-10 bayraklı kişiye yalnız bayraklı aktör iter, son bayraklı kullanıcı çıkışla pasife alınmaz.
 - Sözleşme `kisiSemasi`: `ozlukIk`, `ozlukCikisTarihi` (eklendi). Ekran: Kişi düzenleme formunda üç alan İK'ya bağlı kişide salt okunur, ipucu "İK personel kartından gelir" ve çıkış tarihi.
 - Rol x işlem, uç ve yetki değişmedi; mevcut uçlara (`duzenle`, `aktif-yap`) red kuralı eklendi.
+
+## #1320: ortak seçici arama ucu (30.10.2026, dal 1320-kisi-secim-ara, 1311 üstüne)
+- `GET /kisiler/secim-ara?q&pasifler&sayfa` -> `{ sonuclar: [{ id, kod (sicil no ya da boş), ad, aktif, ust: null }], dahaVar }`. Ortak `KisiSecici` (kart #1317) bunu çağırır.
+- Yetki karar 1321 b: kisiler.oku, istasyonlar.yaz (bugünkü kişi seçeneği), sayfa.mesaj, sayfa.arkon. VARSAYIM: çağıranlar bugün kişi seçen modüller (istemci kodunda arandı); A5'te modül eklenir.
+- VARSAYIM: sicil no `kod` olarak döner (aynı adlı kişiyi ayırmak için); özlük bayrağı, rol ve kullanıcı adı dönmez. Şema, göç ve rol değişmedi.

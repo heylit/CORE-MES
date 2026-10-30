@@ -1,17 +1,30 @@
 import { uc } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  eksikBilgiOzetiCevabi, hesapGovdesi, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
+  eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
   pinVerGovdesi, rolIslemiGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir,
+  baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiSecimAra,
   kisiPasifeAl, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
 } from './servis.ts';
+
+// Ortak kişi seçicisini çağıran modüller (karar 1321 b): kişiler, bugün kişi seçen istasyonlar (atama), mesaj ve Arkon.
+// Seçiciyi alan modül (A5) işlemini buraya ekler.
+const SECIM_OKUMA = { biri: ['kisiler.oku', 'istasyonlar.yaz', 'sayfa.mesaj', 'sayfa.arkon'] } as const;
 
 const bayrakGorur = (kullanici: Kullanici): boolean => kullanici.islemler.includes('kisiler.rol-yonet');
 
 export const uclar = [
+  // Ortak seçici (kart #1320).
+  uc({
+    yontem: 'GET',
+    yol: '/kisiler/secim-ara',
+    yetki: SECIM_OKUMA,
+    sorgu: kisiSecimSorgusu,
+    cevap: kisiSecimCevabi,
+    isle: ({ db, sorgu }) => kisiSecimAra(db, sorgu),
+  }),
   uc({
     yontem: 'GET',
     yol: '/kisiler',

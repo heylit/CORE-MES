@@ -4,7 +4,9 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISLEMLER, islemMi } from '#paylasilan/islemler.ts';
-import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
+import { aramaSade, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
+import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
+import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
@@ -18,6 +20,7 @@ import {
   eksikBilgiSayilari, cikisiGelenKisiler, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
 import type { KisiSatiri, RolSatiri } from './sorgular.ts';
+import { kisiSecimAra as kisiSecimSatirlari } from './sorgular.ts';
 
 const SON_ROL_KISITI = 'kisi_giris_rol_ister';
 
@@ -516,4 +519,15 @@ export async function rolAtaYetkili(db: Db, aktorId: number, kisiId: number, rol
 export async function rolAlYetkili(db: Db, aktorId: number, kisiId: number, rolId: number): Promise<KisiOzeti> {
   await rolYonetimiDenetle(db, aktorId);
   return rolAl(db, aktorId, kisiId, rolId);
+}
+
+// Ortak seçici (kart #1320): yalnız kimlik, ad, sicil no ve aktiflik döner; rol, işlem, parola, özlük bayrağı dönmez.
+export async function kisiSecimAra(db: Db, g: { q: string; pasifler: boolean; sayfa: number }): Promise<KisiSecimCevabi> {
+  const satirlar = await kisiSecimSatirlari(db, {
+    sade: aramaSade(g.q), icindeDeseni: icindeDeseni(g.q), pasifler: g.pasifler, sinir: KISI_SECIM_SAYFA_BOYU + 1, atla: (g.sayfa - 1) * KISI_SECIM_SAYFA_BOYU,
+  });
+  return {
+    sonuclar: satirlar.slice(0, KISI_SECIM_SAYFA_BOYU).map((k) => ({ id: k.id, kod: k.sicilNo ?? '', ad: k.ad, aktif: k.aktif, ust: null })),
+    dahaVar: satirlar.length > KISI_SECIM_SAYFA_BOYU,
+  };
 }
