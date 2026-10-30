@@ -55,6 +55,9 @@ export const ILETILER = {
   bayrakliEkIslem: 'Tüm yetkileri veren role sahip kişi her işleme sahiptir; ek yetki verilmez.',
   devredilmezIslem: 'Bu yetki kişiye ayrıca verilmez; yalnızca tüm yetkileri veren rolde kalır.',
   ekIslemKullaniciDegil: 'Ek yetki yalnızca aktif ve girişi olan kişiye verilir.',
+  ozlukIkte: 'Ad, sicil no ve görev bu kişide İK personel kartından gelir; İK\'da değiştirin.',
+  cikisVar: 'Kişinin İK\'da çıkış tarihi geçmiş; aktif yapmak için önce İK\'da çıkışı kaldırın.',
+  ozlukBayrakliYetkisiz: 'Tüm yetkileri veren role sahip kişinin özlük bilgisini yalnızca bu role sahip bir kişi değiştirebilir.',
 } as const;
 
 // Bayraklı rolü yalnız bayraklı rolü olan kişi verir ve alır; kural rolün adına değil bayrağına bakar.
@@ -203,4 +206,28 @@ export function ekIslemReddi(girdi: {
   if (!girdi.islemKayitli) return { tur: 'gecersiz', ileti: ILETILER.islemKayitsiz };
   if (girdi.verildi && girdi.devredilmez) return { tur: 'gecersiz', ileti: ILETILER.devredilmezIslem };
   return null;
+}
+
+// KS-8 (1302 a): İK'ya bağlı kişide ad, sicil no ve görev İK'nındır; Kişiler'den değiştirilmez. Aynı değerle gelen düzenleme
+// (form bütün alanları gönderir) geçer.
+export function ozlukDuzenlemeReddi(hedef: { ozlukIk: boolean } & KisiAlanlari, yeni: KisiAlanlari): Ret | null {
+  if (!hedef.ozlukIk) return null;
+  const ayni = hedef.ad === yeni.ad && hedef.sicilNo === yeni.sicilNo && hedef.gorev === yeni.gorev;
+  return ayni ? null : { tur: 'gecersiz', ileti: ILETILER.ozlukIkte };
+}
+
+// KS-9 (1302 a, 1315): İK'daki çıkış tarihi geçmiş kişi Kişiler'den aktif yapılmaz; çıkış İK'da kaldırılınca İK yeniden iter.
+export function cikisliAktiflikReddi(girdi: { cikisGecti: boolean }): Ret | null {
+  return girdi.cikisGecti ? { tur: 'gecersiz', ileti: ILETILER.cikisVar } : null;
+}
+
+// KS-10 (1302 a): İK'dan itme bayraklı kişiye yalnız bayraklı aktörle yapılır; yoksa İK yetkisi yönetici hesabını yeniden
+// adlandırır ya da çıkış tarihiyle kilitler (bayrakliKisiReddi ile aynı gerekçe).
+export function ozlukItmeReddi(girdi: { hedefBayrakli: boolean; aktorBayrakli: boolean }): Ret | null {
+  return girdi.hedefBayrakli && !girdi.aktorBayrakli ? { tur: 'yetki', ileti: ILETILER.ozlukBayrakliYetkisiz } : null;
+}
+
+// Çıkışla pasife almada son bayraklı kullanıcı korunur (pasifeAlmaReddi ile aynı sayım); aktör yoktur, kendi kendine kuralı uygulanmaz.
+export function cikisPasifiReddi(girdi: { hedefSayiliyor: boolean; kalanBayrakli: number }): boolean {
+  return girdi.hedefSayiliyor && girdi.kalanBayrakli < 1;
 }

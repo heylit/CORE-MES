@@ -11,6 +11,7 @@ import { ULASILAMADI_ILETISI } from '../../ortak/veri/api.ts';
 import { Personel } from './Personel.tsx';
 
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['kisiler.oku', 'kisiler.rol-yonet', 'sayfa.personel'] };
+const YAZAR: Kullanici = { id: 3, ad: 'Deneme Yazar', islemler: ['kisiler.oku', 'kisiler.yaz', 'sayfa.personel'] };
 const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: ['kisiler.oku', 'sayfa.personel'] };
 
 const ROLLER = {
@@ -21,8 +22,8 @@ const ROLLER = {
   ],
 } satisfies RollerCevabi;
 
-const AYSE: KisiOzeti = { id: 10, ad: 'Ayşe Deneme', aktif: true, girisVar: true, kullaniciAdi: 'ayse.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, roller: [{ id: 2, ad: 'Operatör', yonetici: false }] };
-const MEHMET: KisiOzeti = { id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, surum: 1, roller: [] };
+const AYSE: KisiOzeti = { id: 10, ad: 'Ayşe Deneme', aktif: true, girisVar: true, kullaniciAdi: 'ayse.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, roller: [{ id: 2, ad: 'Operatör', yonetici: false }] };
+const MEHMET: KisiOzeti = { id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, roller: [] };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -93,6 +94,25 @@ describe('Personel', () => {
     expect(screen.getByRole('button', { name: 'Mehmet Deneme rollerini düzenle' })).toBeTruthy();
   });
 
+  it('İK\'ya bağlı kişide ad, sicil no ve görev salt okunur; çıkış tarihi ipucunda (1302 a, 1315)', async () => {
+    const IKLI: KisiOzeti = { ...AYSE, sicilNo: 'S-1', gorev: 'Ayarcı', ozlukIk: true, ozlukCikisTarihi: '2026-11-30' };
+    sunucuKur({ kullanici: YAZAR, kisiler: [IKLI, MEHMET] });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ayşe Deneme düzenle' }));
+    const pencere = within(await screen.findByRole('dialog'));
+    for (const etiket of ['Ad', 'Sicil no', 'Görev']) expect((pencere.getByLabelText(etiket, { exact: false }) as HTMLInputElement).readOnly).toBe(true);
+    expect(pencere.getByText(/İK personel kartından gelir.*Çıkış: 2026-11-30/)).toBeTruthy();
+  });
+
+  it('İK\'ya bağlı olmayan kişide alanlar düzenlenir', async () => {
+    sunucuKur({ kullanici: YAZAR });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ayşe Deneme düzenle' }));
+    const pencere = within(await screen.findByRole('dialog'));
+    for (const etiket of ['Ad', 'Sicil no', 'Görev']) expect((pencere.getByLabelText(etiket, { exact: false }) as HTMLInputElement).readOnly).toBe(false);
+    expect(pencere.queryByText(/İK personel kartından gelir/)).toBeNull();
+  });
+
   it('atama: seçilen rol sunucuya gider, liste yeni rolle güncellenir, seçeneklerden düşer', async () => {
     const istekler = sunucuKur({
       kullanici: YONETICI,
@@ -143,7 +163,7 @@ describe('Personel', () => {
   });
 
   const BEN: KisiOzeti = {
-    id: YONETICI.id, ad: 'Deneme Yönetici', aktif: true, girisVar: true, kullaniciAdi: 'deneme.yonetici', pinVar: false, sicilNo: null, gorev: null, surum: 1,
+    id: YONETICI.id, ad: 'Deneme Yönetici', aktif: true, girisVar: true, kullaniciAdi: 'deneme.yonetici', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null,
     roller: [{ id: 2, ad: 'Operatör', yonetici: false }, { id: 4, ad: 'Rol Yönetimi', yonetici: false }],
   };
   const sayac = (istekler: { yol: string }[], yol: string) => istekler.filter((i) => i.yol === yol).length;
@@ -188,7 +208,7 @@ describe('Personel', () => {
 
   describe('bayraklı rol alma onayı', () => {
     const MUDUR: KisiOzeti = {
-      id: 12, ad: 'Veli Deneme', aktif: true, girisVar: true, kullaniciAdi: 'veli.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1,
+      id: 12, ad: 'Veli Deneme', aktif: true, girisVar: true, kullaniciAdi: 'veli.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null,
       roller: [{ id: 3, ad: 'Yönetici', yonetici: true }, { id: 2, ad: 'Operatör', yonetici: false }],
     };
     const ONAY = 'Rol alınsın mı?';

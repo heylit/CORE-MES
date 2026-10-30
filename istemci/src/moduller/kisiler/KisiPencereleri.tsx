@@ -63,6 +63,11 @@ export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () =
   const [ad, adYaz] = useState(kisi?.ad ?? '');
   const [sicilNo, sicilYaz] = useState(kisi?.sicilNo ?? '');
   const [gorev, gorevYaz] = useState(kisi?.gorev ?? '');
+  // İK'ya bağlı kişide bu üç alan İK personel kartından gelir (1302 a); sunucu da değişikliği reddeder.
+  const ozlukIk = kisi?.ozlukIk ?? false;
+  const ozlukIpucu = ozlukIk
+    ? `Ad, sicil no ve görev İK personel kartından gelir; İK'da değiştirin.${kisi?.ozlukCikisTarihi ? ` Çıkış: ${kisi.ozlukCikisTarihi}.` : ''}`
+    : undefined;
 
   const kaydet = useMutation({
     // Ekleme tekrar korumalıdır: cevabı yitirilen gönderim aynı kimlikle yinelenir, ikinci kişi açılmaz.
@@ -89,9 +94,9 @@ export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () =
       hazir={ad.trim() !== ''}
       onGonder={() => kaydet.mutate({ ad, sicilNo, gorev })}
     >
-      <Girdi etiket="Ad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" />
-      <Girdi etiket="Sicil no" value={sicilNo} onChange={(o) => sicilYaz(o.target.value)} autoComplete="off" />
-      <Girdi etiket="Görev" value={gorev} onChange={(o) => gorevYaz(o.target.value)} autoComplete="off" />
+      <Girdi etiket="Ad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} ipucu={ozlukIpucu} />
+      <Girdi etiket="Sicil no" value={sicilNo} onChange={(o) => sicilYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
+      <Girdi etiket="Görev" value={gorev} onChange={(o) => gorevYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
     </Form>
   );
 }

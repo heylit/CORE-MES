@@ -11,9 +11,12 @@ export { kullaniciAdiniDuzelt } from './kurallar.ts';
 export {
   girisDogrula, ilkPiniYaz, kendiParolasiniDegistir, kendiPininiDegistir, kisiBayrakliMi, kisileriListele, kisiKullaniciAdi, kisiVarMi, kullaniciYukle, yoneticiOlustur, yeniPinHatasi,
 } from './servis.ts';
-export type { GirisSirri } from './servis.ts';
+export type { CikisSonucu, GirisSirri } from './servis.ts';
+// İK personel kartının itmesi (1302 a, 1315): ad, sicil no, görev ve çıkış tarihi bağlı kişiye yazılır, kişi kartında salt okunur
+// olur; çıkış tarihi geçmişse kişi pasife alınır. Bayraklı kişiye yalnız bayraklı aktör iter. Yetki İK ucunda denetlenir.
+export { ozlukBaginiKaldir, ozluguIkdenYaz } from './servis.ts';
 // Rol komutları başka modüllerin test kurulumunda kullanılır; dışarıdan çağrıda da eylemi yapanın rol yönetme işlemi sorulur.
-// Kişi ekleme, hesap açma, pasife alma ve aktif yapma dışarı açılmaz: yalnız uçtan (yetki ve denetim kaydıyla) yapılır.
+// Kişi ekleme, hesap açma, elle pasife alma ve aktif yapma dışarı açılmaz: yalnız uçtan (yetki ve denetim kaydıyla) yapılır.
 export { rolAlYetkili as rolAl, rolAtaYetkili as rolAta } from './servis.ts';
 
 // Verilen kimliklerin adları tek sorguda. Boş dizide sorgu atılmaz; yinelenen kimlik tek kayıt, olmayan kimlik haritada yok,

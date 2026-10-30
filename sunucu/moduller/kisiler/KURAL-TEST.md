@@ -71,3 +71,13 @@ yetki denetimi silinince 1, `rolAl` sarmalayıcısındaki silinince 1 test kırm
 | Pasif ve girişsiz kişi haritada yoktur | kisi-islemleri.test.ts "pasif ve girişsiz kişi haritada yoktur; ..." | aynı test |
 
 Mutasyon (DOĞRULANDI, yerelde): bayrak çözümü kalkınca 2, aktif süzmesi kalkınca 2, giriş süzmesi kalkınca 2 test kırmızı.
+
+## Özlük İK'dan (kart 1311; 1302 a, 1315 a)
+
+| Kural | İzinli test | Reddedilen test |
+|---|---|---|
+| KS-8 İK'ya bağlı kişide ad, sicil no ve görev Kişiler'den değişmez; aynı değer geçer; bağ kalkınca düzenlenir | ozluk-ik.test.ts "itme alanları yazar, ..." (aynı değer 200, bağ kalkınca 200); saf test KS-8 | aynı test: farklı ad 422 `ozlukIkte`, kayıt değişmez |
+| KS-9 Çıkışı geçmiş kişi aktif yapılmaz; çıkış kalkınca yapılır | ozluk-ik.test.ts "geçmiş çıkış tarihi ..." (çıkış kalkınca 200) | aynı test: 422 `cikisVar`, kişi pasif kalır; saf test KS-9 |
+| Çıkış tarihi gelince kişi pasif ve oturumu kapalı; ileri tarih aktif bırakır, iş tarihi gelince pasife alır | ozluk-ik.test.ts "geçmiş çıkış ...", "ileri tarihli çıkış ..." | aynı testler: çıkışsız ve bağsız kişiye dokunulmaz; eski oturum 401 |
+| KS-10 Bayraklı kişiye yalnız bayraklı aktör iter; son bayraklı kullanıcı çıkışla pasife alınmaz | ozluk-ik.test.ts "son yönetici ..." (bayraklı aktör iter) | aynı test: bayraksız aktör `YETKI_YOK`, alan değişmez; son yönetici aktif kalır, iş günlüğe yazar |
+| Sicil benzersiz; olmayan kişi; çıkış yalnız İK'ya bağlı kişide | ozluk-ik.test.ts "sicil başka kişide ..." | aynı test: 409 `sicilVar`, 404, kısıt `kisi_ozluk_cikisi_ik_bagli` |

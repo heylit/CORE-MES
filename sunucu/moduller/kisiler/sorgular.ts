@@ -73,12 +73,16 @@ export interface KisiSatiri {
   gorev: string | null;
   roller: RolSatiri[];
   surum: number;
+  ozluk_ik: boolean;
+  ozluk_cikis_tarihi: string | null;
+  cikis_gecti: boolean;
 }
 
 // Parola ve PIN özeti hiçbir zaman seçilmez; yalnız var olup olmadığı döner. Kullanıcı adını kime göstereceğine servis karar verir.
 export function kisiSatirlari(db: Db, kisiId?: number): Promise<KisiSatiri[]> {
   return db.sorgu<KisiSatiri>(
     `SELECT k.id, k.ad, k.aktif, k.kullanici_adi IS NOT NULL AS giris_var, k.kullanici_adi, k.pin_ozeti IS NOT NULL AS pin_var, k.sicil_no, k.gorev, k.surum,
+            k.ozluk_ik, k.ozluk_cikis_tarihi::text AS ozluk_cikis_tarihi, COALESCE(k.ozluk_cikis_tarihi <= CURRENT_DATE, false) AS cikis_gecti,
             COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'ad', r.ad, 'yonetici', r.yonetici) ORDER BY r.ad, r.id)
                         FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id), '[]'::jsonb) AS roller
        FROM kisi k
@@ -239,6 +243,33 @@ export async function kisiGuncelle(db: Db, kisiId: number, alanlar: KisiAlanlari
     kisiId, alanlar.ad, alanlar.sicilNo, alanlar.gorev,
   ]);
   return satir !== null;
+}
+
+// İK'dan gelen özlük alanları (1302 a) ve çıkış tarihi (1315); kişiyi İK'ya bağlı işaretler. Sürüm artar: açık formlar 409 alır.
+export async function ozlukYaz(db: Db, kisiId: number, alanlar: KisiAlanlari, cikisTarihi: string | null): Promise<boolean> {
+  const satir = await db.tek(
+    `UPDATE kisi SET ad = $2, sicil_no = $3, gorev = $4, ozluk_ik = true, ozluk_cikis_tarihi = $5::date, surum = surum + 1
+      WHERE id = $1 RETURNING id`,
+    [kisiId, alanlar.ad, alanlar.sicilNo, alanlar.gorev, cikisTarihi],
+  );
+  return satir !== null;
+}
+
+// İK bağı kalkınca alanlar yeniden Kişiler'de düzenlenir; ad ve görev kalır. Sicil no İK'nındır ve tekildir: kart başka kişiye
+// bağlanınca yeni kişiye gider, eski kişide kalırsa çakışırdı.
+export async function ozlukBaginiSil(db: Db, kisiId: number): Promise<boolean> {
+  const satir = await db.tek(
+    'UPDATE kisi SET ozluk_ik = false, ozluk_cikis_tarihi = NULL, sicil_no = NULL, surum = surum + 1 WHERE id = $1 AND ozluk_ik RETURNING id', [kisiId],
+  );
+  return satir !== null;
+}
+
+// Çıkış tarihi bugün ya da önce olan aktif kişiler (tesis günü: oturum saat dilimi tesisindir).
+export async function cikisiGelenKisiler(db: Db): Promise<number[]> {
+  const satirlar = await db.sorgu<{ id: number }>(
+    'SELECT id FROM kisi WHERE aktif AND ozluk_cikis_tarihi <= CURRENT_DATE ORDER BY id',
+  );
+  return satirlar.map((s) => s.id);
 }
 
 // Durum zaten istenen değerdeyse false: aynı anda gelen ikinci komut ilkinin sonucunu görür.

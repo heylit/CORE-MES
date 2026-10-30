@@ -8,13 +8,14 @@ import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, RolIsleml
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
+  cikisliAktiflikReddi, cikisPasifiReddi, ozlukDuzenlemeReddi, ozlukItmeReddi,
 } from './kurallar.ts';
 import type { KisiAlanlari, Ret } from './kurallar.ts';
 import { parolaDogrula, parolaOzetle } from './parola.ts';
 import {
   aktifYaz, bayrakliKalanSayisi, bayrakliRolleriKilitle, bayrakliSayisiHaric, girisKaydiBul, hesapYaz, kisiBayrakliMi,
   kisiEkIslemSatirlari, kisiGuncelle, kisiIslemiEkle, kisiIslemiSil, kisiKullaniciMi, kisiSatirlari, kisiVarMi, kisiYaz, girisBilgisiBul, oturumlariGecersizKil, parolaYaz, pinBilgisiBul, pinYaz, rolBul, rolEkle, rolIslemiEkle, rolIslemiSil, rolKuraliniHemenDenetle,
-  eksikBilgiSayilari, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
+  eksikBilgiSayilari, cikisiGelenKisiler, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
 import type { KisiSatiri, RolSatiri } from './sorgular.ts';
 
@@ -76,6 +77,8 @@ function kisiOzeti(satir: KisiSatiri, bayrakGorur = true): KisiOzeti {
     gorev: satir.gorev,
     roller: satir.roller.map((r) => rolOzeti(r, bayrakGorur)),
     surum: satir.surum,
+    ozlukIk: satir.ozluk_ik,
+    ozlukCikisTarihi: satir.ozluk_cikis_tarihi,
   };
 }
 
@@ -268,6 +271,8 @@ export async function kisiDuzenle(
   }, ILETILER.bayrakliKaydiYetkisiz);
   if (ret !== null) reddet(ret);
   const kayit = alanlar(girdi);
+  const ozluk = ozlukDuzenlemeReddi({ ozlukIk: hedef.ozluk_ik, ad: hedef.ad, sicilNo: hedef.sicil_no, gorev: hedef.gorev }, kayit);
+  if (ozluk !== null) reddet(ozluk);
   try {
     if (!(await kisiGuncelle(db, kisiId, kayit))) throw bulunamadi(ILETILER.kisiYok);
   } catch (hata) {
@@ -306,10 +311,67 @@ export async function kisiAktifYap(
   await surumDenetle(db, kisiId, beklenen);
   const [hedef] = await kisiSatirlari(db, kisiId);
   if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
-  const ret = bayrakliKisiReddi({ hedefBayrakli: hedef.roller.some((r) => r.yonetici), aktorBayrakli: await kisiBayrakliMi(db, aktorId) });
+  const ret = bayrakliKisiReddi({ hedefBayrakli: hedef.roller.some((r) => r.yonetici), aktorBayrakli: await kisiBayrakliMi(db, aktorId) })
+    ?? cikisliAktiflikReddi({ cikisGecti: hedef.cikis_gecti });
   if (ret !== null) reddet(ret);
   if (!(await aktifYaz(db, kisiId, true))) throw cakisma(ILETILER.zatenAktif);
   return kisiyiGetir(db, kisiId, bayrakGorur);
+}
+
+export type CikisSonucu = 'pasif' | 'zaten-pasif' | 'son-yonetici' | 'cikis-yok';
+
+// Çıkış tarihi gelmiş kişiyi pasife alır (1302 a, 1315). Kendi başına kilit ve sayım: iki komut aynı anda son yöneticiyi
+// pasife alamaz. Son bayraklı kullanıcıysa dokunmaz ve 'son-yonetici' döner; çağıran günlüğe yazar, iş yarın yeniden dener.
+async function cikistanPasifeAl(db: Db, kisiId: number): Promise<CikisSonucu> {
+  await bayrakliRolleriKilitle(db);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  if (!hedef.cikis_gecti) return 'cikis-yok';
+  if (!hedef.aktif) return 'zaten-pasif';
+  const hedefBayrakli = hedef.roller.some((r) => r.yonetici);
+  if (cikisPasifiReddi({ hedefSayiliyor: hedefBayrakli && hedef.giris_var, kalanBayrakli: await bayrakliSayisiHaric(db, kisiId) })) return 'son-yonetici';
+  if (!(await aktifYaz(db, kisiId, false))) return 'zaten-pasif';
+  await oturumlariGecersizKil(db, kisiId);
+  return 'pasif';
+}
+
+// İK'nın itmesi (1302 a): bağlı kişinin ad, sicil no ve görevi İK'dan yazılır, kişi İK'ya bağlı işaretlenir, çıkış tarihi (1315)
+// saklanır; tarih geçmişse kişi hemen pasife alınır. Bayraklı kişiye yalnız bayraklı aktör iter (KS-10). Kayıt zamanı ve kişi
+// yazma ucunun transaction'ından değişiklik defterine düşer.
+export async function ozluguIkdenYaz(
+  db: Db, aktorId: number, kisiId: number, girdi: { ad: string; sicilNo: string | null; gorev: string | null; cikisTarihi: string | null },
+): Promise<CikisSonucu> {
+  await surumDenetle(db, kisiId, null);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  const ret = ozlukItmeReddi({ hedefBayrakli: hedef.roller.some((r) => r.yonetici), aktorBayrakli: await kisiBayrakliMi(db, aktorId) });
+  if (ret !== null) reddet(ret);
+  const kayit = alanlar(girdi);
+  try {
+    if (!(await ozlukYaz(db, kisiId, kayit, girdi.cikisTarihi))) throw bulunamadi(ILETILER.kisiYok);
+  } catch (hata) {
+    if (hata instanceof UygulamaHatasi) throw hata;
+    return sicilCakismasiniCevir(hata);
+  }
+  return cikistanPasifeAl(db, kisiId);
+}
+
+// İK personel kartından bağ kalkınca (başka kişiye bağlandı, boşaltıldı ya da iptal edildi) alanlar yeniden Kişiler'de düzenlenir;
+// sicil no kişiden düşer (İK'nındır, kartla birlikte gider).
+export async function ozlukBaginiKaldir(db: Db, kisiId: number): Promise<void> {
+  await ozlukBaginiSil(db, kisiId);
+}
+
+// Günlük iş: çıkış tarihi gelen aktif kişileri pasife alır; son yönetici olduğu için alınamayanlar döner.
+export async function cikisiGelenleriPasifeAl(db: Db): Promise<{ pasif: number[]; sonYonetici: number[] }> {
+  const sonuc = { pasif: [] as number[], sonYonetici: [] as number[] };
+  for (const kisiId of await cikisiGelenKisiler(db)) {
+    await surumDenetle(db, kisiId, null);
+    const durum = await cikistanPasifeAl(db, kisiId);
+    if (durum === 'pasif') sonuc.pasif.push(kisiId);
+    if (durum === 'son-yonetici') sonuc.sonYonetici.push(kisiId);
+  }
+  return sonuc;
 }
 
 export async function hesapAc(
