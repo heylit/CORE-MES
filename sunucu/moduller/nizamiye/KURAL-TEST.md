@@ -27,3 +27,5 @@
 | PDKS kart okuyucu gövdesi başlıksız, 24 saatten eski satır alınmaz | `kurallar.test.ts` `PDKS kart okuyucu gövdesi` |
 | Cihaz kapısı: dakikada 60, art arda 5 hatada 1 dk, ikiye katlanarak 1 saate kadar | `kurallar.test.ts` `PDKS cihaz kapısı` |
 | Cihaz ağı yalnız kurum içi, döngü adresi yok; saklama süresi 30-3650 | `ag.test.ts` |
+| Personel kartı (1326): yalnız PDKS aktaran kaydeder; kişi başına bir etkin kart, kart bir kişide; numara düz saklanmaz; kaldırılan kart kimseyi bulmaz | `personel-kart.test.ts` (3 test) |
+| Ekran: personel kartı kart okuyucu ekranında; kişi seçilmeden kart alanı kapalı; kaldırma önce sorar | `Nizamiye.test.tsx` `personel kartı` |

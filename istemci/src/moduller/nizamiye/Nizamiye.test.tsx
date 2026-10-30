@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { AcilDurumCevabi, KapiCevabi, KartlarCevabi, PdksCihaz, Ziyaret } from '#paylasilan/sozlesme/nizamiye.ts';
+import type { AcilDurumCevabi, KapiCevabi, KartlarCevabi, PdksCihaz, PersonelKart, PersonelKartlariCevabi, Ziyaret } from '#paylasilan/sozlesme/nizamiye.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { AcilDurum } from './AcilDurum.tsx';
 import { Kapi } from './Kapi.tsx';
@@ -52,12 +52,17 @@ const CIHAZ: PdksCihaz = { id: 4, ad: 'Ana kapı okuyucu', ip: '10.0.7.21', akti
 
 interface Gonderilen { yol: string; govde: Record<string, unknown> }
 
+const PERSONEL_KARTI: PersonelKart = { id: 7, kisiId: 31, kisiAd: 'Usta Bir', sicilNo: 'S-031', kartSon4: '3456', kaydedildi: '2026-10-30T09:00:00.000Z', surum: 1 };
+const PERSONEL_KARTLARI: PersonelKartlariCevabi = { kartlar: [PERSONEL_KARTI], kisiler: [{ id: 32, ad: 'Operatör İki', sicilNo: null }] };
+
 function sunucuKur(islemler: Islem[], acil: AcilDurumCevabi = ACIL) {
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
     const yol = new URL(adres, 'http://yerel').pathname.replace('/api', '');
     if (init?.method === 'POST') {
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)) as Record<string, unknown> });
+      if (yol === '/nizamiye/personel-kartlari') return json(200, PERSONEL_KARTI);
+      if (yol.startsWith('/nizamiye/personel-kartlari/')) return json(200, { tamam: true });
       if (yol.includes('/kartlar')) return json(200, KARTLAR.kartlar[0]);
       if (yol === '/nizamiye/pdks/cihazlar' || yol.endsWith('/anahtar')) return json(200, { cihaz: CIHAZ, anahtar: 'a'.repeat(64) });
       if (yol.endsWith('/durum')) return json(200, { ...CIHAZ, aktif: false, surum: 2 });
@@ -68,6 +73,7 @@ function sunucuKur(islemler: Islem[], acil: AcilDurumCevabi = ACIL) {
     if (yol === '/nizamiye/kapi') return json(200, KAPI);
     if (yol === '/nizamiye/kartlar') return json(200, KARTLAR);
     if (yol === '/nizamiye/pdks/cihazlar') return json(200, { cihazlar: [CIHAZ] });
+    if (yol === '/nizamiye/personel-kartlari') return json(200, PERSONEL_KARTLARI);
     if (yol === '/nizamiye/acil-durum') return json(200, acil);
     if (yol === '/nizamiye/ev-sahipleri') return json(200, { kisiler: [] });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
@@ -242,5 +248,26 @@ describe('Acil durum', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Durdur' }));
     await waitFor(() => expect(gonderilen[2]).toEqual({ yol: '/nizamiye/pdks/cihazlar/4/durum', govde: { surum: 1, aktif: false } }));
+  });
+
+  it('personel kartı kart okuyucu ekranından verilir (1326, 1327 a): kişi seçilir, kart okutulur; numara geri gösterilmez, kaldırma önce sorar', async () => {
+    const gonderilen = sunucuKur(['nizamiye.pdks-aktar']);
+    const Ekran = ayarEkranlari.find((e) => e.anahtar === 'kart-okuyucu')!.ekran;
+    ac(<Ekran />);
+    expect(await screen.findByText('Usta Bir')).toBeTruthy();
+    expect(screen.getByText(/Kart ••••3456 · Sicil S-031/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kart ver' }));
+    const kart = screen.getByLabelText(/^Kart/, { selector: 'input' });
+    expect((kart as HTMLInputElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/^Kişi/), { target: { value: '32' } });
+    fireEvent.change(kart, { target: { value: '0004123456' } });
+    fireEvent.submit(kart.closest('form')!);
+    await waitFor(() => expect(gonderilen[0]).toEqual({ yol: '/nizamiye/personel-kartlari', govde: { kisiId: 32, kartNo: '0004123456' } }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Kartı kaldır' }));
+    expect(gonderilen).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Kaldır' }));
+    await waitFor(() => expect(gonderilen[1]).toEqual({ yol: '/nizamiye/personel-kartlari/7/kaldir', govde: { surum: 1 } }));
   });
 });

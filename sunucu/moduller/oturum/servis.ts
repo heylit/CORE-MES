@@ -14,10 +14,12 @@ import {
   yeniPinHatasi,
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
+import { personelKartSahibi } from '../nizamiye/disari.ts';
 import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
   AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
-  SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk,
+  SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
+  kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
 } from './kurallar.ts';
 import {
@@ -63,6 +65,34 @@ async function oturumAc(db: Db, kisiId: number, girdi: { ip: string; tarayici?: 
   const anahtar = randomBytes(32).toString('base64url');
   await oturumEkle(db, anahtarOzeti(anahtar), kisiId, { ip: girdi.ip.trim() === '' ? null : girdi.ip, tarayici: tarayiciMetni(girdi.tarayici ?? null) });
   return anahtar;
+}
+
+const HATALI_KART = 'Kart ya da PIN hatalı.';
+
+// İstasyonda kart + PIN (kart #1326, kararlar 1327 a, 1328 a). Kart tek başına yetmez: kişinin kendi PIN'i girişle aynı bekleme, hesap
+// kilidi ve cihaz sınırıyla doğrulanır. Yalnız ortak cihazda geçer (çağıran denetler). Kayıtsız kart da bir PIN doğrulaması kadar sürer ve
+// aynı iletiyi alır: cevap kartın kayıtlı olup olmadığını ele vermez. Parolayla giren kişi ve ilk PIN'ini belirlememiş kişi kartla giremez.
+export async function kartlaGirisYap(
+  db: Db,
+  girdi: { kart: string; pin: string; ip: string; tarayici?: string | null | undefined; gunluk?: Gunluk | undefined },
+  simdi: Simdi = null,
+): Promise<{ anahtar: string; kullanici: Kullanici }> {
+  const kisiId = await personelKartSahibi(db, girdi.kart);
+  const kullaniciAdi = kisiId === null ? null : await kisiKullaniciAdi(db, kisiId);
+  const ad = kullaniciAdi === null ? kartGirisAdi(girdi.ip) : kullaniciAdiniDuzelt(kullaniciAdi);
+
+  await girisDenemesiniDenetle(db, ad, girdi.ip, simdi);
+
+  // Kayıtsız kartta sahte ad bulunmaz; doğrulama yine aynı süreyi harcar.
+  const sonuc = await girisDogrula(db, ad, { pin: girdi.pin });
+  const kullanici = sonuc === null || sonuc.kisiId !== kisiId ? null : await kimlikYukle(db, sonuc.kisiId);
+  if (sonuc === null || kullanici === null) {
+    await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
+    throw new UygulamaHatasi('OTURUM_YOK', HATALI_KART, { yazilarKalir: true });
+  }
+  if (sonuc.pinBelirlenecek) throw oturumYok('İlk PIN\'inizi giriş ekranında kullanıcı adınızla belirleyin; sonra kartla girin.');
+  await denemeyiSifirla(db, ad, girdi.ip, simdi);
+  return { anahtar: await oturumAc(db, kullanici.id, girdi), kullanici };
 }
 
 // İlk giriş: yöneticinin verdiği geçici PIN girişle aynı bekleme ve sayaçla doğrulanır, kişinin kendi PIN'i yazılır ve

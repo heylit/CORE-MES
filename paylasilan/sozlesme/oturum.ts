@@ -22,6 +22,13 @@ export const pinBelirleGovdesi = z.object({
   yeniPin: gizli(z.string().max(20)),
 });
 
+// İstasyonda kart + PIN (kart #1326, kararlar 1327 a, 1328 a): okuyucunun yazdığı kart numarası kişiyi bulur, kişinin kendi PIN'i doğrular.
+// Yalnız ortak cihazda geçer; ikisi de denetim kaydına girmez. Kart numarasının biçimini sunucu denetler (okuyucuya göre değişir).
+export const kartGirisGovdesi = z.object({
+  kart: gizli(z.string().min(1, 'Kartı okutun.').max(64)),
+  pin: gizli(z.string().min(1, 'PIN zorunlu.').max(20)),
+}).strict();
+
 // Kişinin kendi parolasını değiştirmesi: eski parola girişle aynı bekleme kuralına tabidir.
 export const kendiParolaGovdesi = z.object({ eskiParola: gizli(z.string().max(200)), yeniParola: gizli(z.string().max(200)) });
 export const parolaCevabi = z.object({ tamam: z.literal(true) });
@@ -86,6 +93,7 @@ export type OrtakCihazKaydetCevabi = z.output<typeof ortakCihazKaydetCevabi>;
 export type OrtakCihazKapatCevabi = z.output<typeof ortakCihazKapatCevabi>;
 
 export type GirisGovdesi = z.input<typeof girisGovdesi>;
+export type KartGirisGovdesi = z.input<typeof kartGirisGovdesi>;
 export type PinBelirleGovdesi = z.input<typeof pinBelirleGovdesi>;
 export type GirisCevabi = z.output<typeof girisCevabi>;
 export type KendiParolaGovdesi = z.input<typeof kendiParolaGovdesi>;

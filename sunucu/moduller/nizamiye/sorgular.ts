@@ -388,3 +388,36 @@ export async function pdksHamTemizle(db: Db, gun: number): Promise<number> {
     [gun],
   )).length;
 }
+
+// Personel kartı (1326): yalnız etkin kartlar listelenir; kapanan satır kalır ama görünmez.
+export interface PersonelKartSatiri { id: number; kisiId: number; kartSon4: string; kaydedildi: string; surum: number }
+const PERSONEL_KART_SECIMI = `SELECT id, kisi_id AS "kisiId", kart_son4 AS "kartSon4", ${zamanMetni('kaydedildi')} AS kaydedildi, surum
+  FROM nizamiye_personel_kart`;
+
+export const personelKartlari = (db: Db): Promise<PersonelKartSatiri[]> =>
+  db.sorgu<PersonelKartSatiri>(`${PERSONEL_KART_SECIMI} WHERE kapandi IS NULL ORDER BY kaydedildi DESC, id DESC`);
+
+export const personelKarti = (db: Db, id: number): Promise<PersonelKartSatiri | null> =>
+  db.tek<PersonelKartSatiri>(`${PERSONEL_KART_SECIMI} WHERE id = $1 AND kapandi IS NULL`, [id]);
+
+export async function personelKartEkle(db: Db, k: { kisiId: number; ozet: string; son4: string; kaydeden: number }): Promise<number> {
+  return (await db.tek<{ id: number }>(
+    'INSERT INTO nizamiye_personel_kart (kisi_id, kart_ozeti, kart_son4, kaydeden_kisi_id) VALUES ($1, $2, $3, $4) RETURNING id',
+    [k.kisiId, k.ozet, k.son4, k.kaydeden],
+  ))!.id;
+}
+
+// Koşullu kapatma: kapalı ya da sürümü tutmayan satır dönmez.
+export async function personelKartKapat(db: Db, id: number, surum: number, kapatan: number): Promise<boolean> {
+  return (await db.tek(
+    `UPDATE nizamiye_personel_kart SET kapandi = now(), kapatan_kisi_id = $3, surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND kapandi IS NULL RETURNING id`,
+    [id, surum, kapatan],
+  )) !== null;
+}
+
+export async function personelKartSahibi(db: Db, ozet: string): Promise<number | null> {
+  return (await db.tek<{ kisiId: number }>(
+    'SELECT kisi_id AS "kisiId" FROM nizamiye_personel_kart WHERE kart_ozeti = $1 AND kapandi IS NULL', [ozet],
+  ))?.kisiId ?? null;
+}

@@ -1,1 +1,1 @@
-export { yemegeKalanZiyaretci } from './servis.ts';
+export { personelKartSahibi, yemegeKalanZiyaretci } from './servis.ts';

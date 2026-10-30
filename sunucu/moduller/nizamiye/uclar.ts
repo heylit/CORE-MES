@@ -4,7 +4,8 @@ import {
   acilDurumCevabi, benimZiyaretcimSemasi, cikisGovdesi, evSahipleriCevabi, gecmisCevabi, gecmisSorgusu, girisGovdesi, habersizGovdesi,
   idParametresi, kapiCevabi, kartBildirGovdesi, kartEkleGovdesi, kartlarCevabi, kartSemasi, onKayitGovdesi, oneriSorgusu, onerilerCevabi,
   pdksAktarCevabi, pdksAktarGovdesi, pdksCihazAnahtarCevabi, pdksCihazDurumGovdesi, pdksCihazEkleGovdesi, pdksCihazHareketiCevabi,
-  pdksCihazHareketiGovdesi, pdksCihazlarCevabi, pdksCihazSemasi, surumGovdesi, ziyaretcilerimCevabi, ziyaretSemasi,
+  pdksCihazHareketiGovdesi, pdksCihazlarCevabi, pdksCihazSemasi, personelKartEkleGovdesi, personelKartKaldirCevabi, personelKartlariCevabi,
+  personelKartSemasi, surumGovdesi, ziyaretcilerimCevabi, ziyaretSemasi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
 import * as servis from './servis.ts';
 
@@ -54,6 +55,19 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/nizamiye/pdks/cihaz-hareketi', yetki: 'acik', govde: pdksCihazHareketiGovdesi, cevap: pdksCihazHareketiCevabi,
     isle: ({ db, istek, govde }) => servis.pdksCihazHareketi(db, istek.ip, govde),
+  }),
+  // Personel kartı (1326, karar 1327 a) kart okuyucularla aynı ekranda, aynı işlemle (PDKS aktaran, insan kaynakları) kaydedilir.
+  uc({
+    yontem: 'GET', yol: '/nizamiye/personel-kartlari', yetki: 'nizamiye.pdks-aktar', cevap: personelKartlariCevabi,
+    isle: ({ db }) => servis.personelKartlari(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/nizamiye/personel-kartlari', yetki: 'nizamiye.pdks-aktar', govde: personelKartEkleGovdesi, cevap: personelKartSemasi,
+    isle: ({ db, kullanici, govde }) => servis.personelKartEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/nizamiye/personel-kartlari/:id/kaldir', yetki: 'nizamiye.pdks-aktar', parametre: idParametresi, govde: surumGovdesi,
+    cevap: personelKartKaldirCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.personelKartKaldir(db, kullanici, parametre.id, govde.surum),
   }),
   uc({ yontem: 'GET', yol: '/nizamiye/kartlar', yetki: 'nizamiye.oku', cevap: kartlarCevabi, isle: ({ db }) => servis.kartlar(db) }),
   uc({ yontem: 'GET', yol: '/nizamiye/ev-sahipleri', yetki: 'nizamiye.yaz', cevap: evSahipleriCevabi, isle: ({ db }) => servis.evSahipleri(db) }),

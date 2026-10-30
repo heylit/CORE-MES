@@ -1,13 +1,14 @@
+import { yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import {
   cikisCevabi, girisCevabi, girisGovdesi, hesapKilidiAcCevabi, hesapKilidiParametresi, hesapKilitleriCevabi, hesapKilitleriSorgusu,
-  kendiParolaGovdesi, kendiPinGovdesi, oturumCevabi, parolaCevabi, pinBelirleGovdesi, saatCihaziKapatCevabi, saatCihaziParametresi,
+  kartGirisGovdesi, kendiParolaGovdesi, kendiPinGovdesi, oturumCevabi, parolaCevabi, pinBelirleGovdesi, saatCihaziKapatCevabi, saatCihaziParametresi,
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
 } from '#paylasilan/sozlesme/oturum.ts';
 import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
 import {
-  cikisYap, girisYap, hesapKilidiniAc, hesapKilitleri, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
+  cikisYap, girisYap, hesapKilidiniAc, kartlaGirisYap, hesapKilitleri, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
 } from './servis.ts';
@@ -38,6 +39,20 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         if (sonuc.anahtar === null) return { kullanici: null, pinBelirlenecek: true as const };
         istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, AZAMI_SN);
         return { kullanici: sonuc.kullanici };
+      },
+    }),
+    // Kart + PIN yalnız yöneticinin ortak olarak kaydettiği cihazda (istasyon) açıktır; kişisel cihazda kart yolu yoktur ve hiçbir şey yazılmaz.
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/kart-giris',
+      yetki: 'acik',
+      govde: kartGirisGovdesi,
+      cevap: oturumCevabi,
+      isle: async ({ db, govde, istek, gunluk }) => {
+        if (!(await cihazDurumu(db, istek.cerez(CIHAZ_CEREZI))).ortak) throw yetkiYok('Kartla giriş yalnız istasyon olarak kayıtlı cihazda yapılır.');
+        const { anahtar, kullanici } = await kartlaGirisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
+        istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
+        return { kullanici };
       },
     }),
     uc({

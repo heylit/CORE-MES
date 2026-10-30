@@ -29,3 +29,7 @@ kisiler (`kisi.id`, `disari.ts`). Yön `oturum -> kisiler` (`araclar/harita.test
 ## Doğal sahibi başka modül olabilecekler
 
 Yok.
+
+## Okunan başka modül
+
+- Personel kartı (1326, 1327 a): sahibi nizamiye (`nizamiye_personel_kart`); oturum yalnız `personelKartSahibi` (`nizamiye/disari.ts`) ile kart sahibini okur, kart tutmaz.

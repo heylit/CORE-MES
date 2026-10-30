@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ATOLYE_NEDENLERI } from '#paylasilan/sozlesme/nizamiye.ts';
 import type { Neden, ZiyaretDurumu } from '#paylasilan/sozlesme/nizamiye.ts';
 import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
@@ -187,4 +188,20 @@ export const kimlikDogru = (d: KapiDurumu): KapiDurumu => ({ ...d, ardArdaHata: 
 // Kişinin son hareketi giriş ve süre içindeyse içeride sayılır.
 export function pdksIcerideMi(son: { yon: PdksYonu; zaman: number } | null, simdi: number): boolean {
   return son !== null && son.yon === 'giris' && simdi - son.zaman <= PDKS_ICERIDE_EN_COK_SAAT * 3_600_000;
+}
+
+// Personel kartı (1326, karar 1327 a). Okuyucu klavye gibi yazar: kartın numarasını (EM4100'de onluk, Mifare'de onaltılık UID) Enter
+// ile bitirir. Boşluk atılır, harf büyütülür; yalnız rakam ve A-F kabul edilir. Okuyucu modeli değişirse biçim de değişebilir
+// (başta sıfır, onluk ya da onaltılık); kart o zaman yeniden okutulur.
+const PERSONEL_KART_BICIMI = /^[0-9A-F]{4,32}$/;
+
+export function personelKartNoDuzelt(ham: string): string | null {
+  const no = ham.replace(/\s+/g, '').toUpperCase();
+  return PERSONEL_KART_BICIMI.test(no) ? no : null;
+}
+
+// Kart numarası gizli değildir (kart kopyalanabilir; asıl sır PIN'dir), yine de veritabanını okuyan kişi kartları kişiye
+// eşleyemesin diye düz saklanmaz. Arama tek sorguyla yapılabilsin diye özet tuzsuz ve belirlenimcidir.
+export function personelKartOzeti(no: string): string {
+  return createHash('sha256').update(JSON.stringify(['personel-kart', no])).digest('hex');
 }
