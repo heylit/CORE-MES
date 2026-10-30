@@ -771,8 +771,8 @@ export interface UretimAdimPlani {
   // tasinan: önceki adımlardan gelen parça; statüsüz olsa da istasyonda ya da üretim çıkışında bulunabilir.
   sarflar: { malzemeId: number; statuId: number | null; miktar: bigint; tasinan?: true }[];
   cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
-  // malzemeId null: emrin ürünü.
-  giris: { malzemeId: number | null; miktar: bigint } | null;
+  // malzemeId null: emrin ürünü. statuId: birleştirmede dalların parçasından doğan ürün adımın statüsüne girer (1348 a); öteki hâllerde yok.
+  giris: { malzemeId: number | null; miktar: bigint; statuId?: number | null } | null;
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
@@ -799,6 +799,79 @@ export function uretimAdimPlani(g: {
     sarflar.push({ malzemeId: g.tasinan.malzemeNo, statuId: kaynak, miktar: tasinanMiktari, tasinan: true });
   }
   const giris = g.sonAdim ? { malzemeId: g.cikti, miktar: g.adet } : g.cikti === null ? null : { malzemeId: g.cikti, miktar: g.adet };
+  return { sarflar, cevirme, giris };
+}
+
+// Dallı emirde (1348 a) adımın taşıma kaynağı, Reçete ve Rota statü kuralıyla aynı. Öncül listesi başka öncülün zaten beklediği
+// öncülden arındırılır. ilk: öncülsüz dal başı ilk girdisini taşır (girdi yoksa taşımasız); oncul: tek öncülün parçasını taşır, başka dala
+// geçen ve kendi girdisi olan adım ise kendi girdisini (ilk); birlesme: dalların parçası tüketilir, adım emrin ürününü taşır. Aynı öncülden
+// ayrılıp onun parçasını devralacak birden çok dal varsa parçayı yalnız ilki taşır, ötekiler taşımasızdır (yok): bir parça iki kez
+// tüketilmez. Listesi olmayan adım (1248 öncesi) için null.
+export interface ZincirAdimi { opNo: number; dal: string | null; onculOpNolari: readonly number[] | null; girdiler: readonly { malzemeNo: number; miktar: string }[] }
+export type TasimaKaynagi =
+  | { tur: 'ilk'; girdi: { malzemeNo: number; miktar: string } | null }
+  | { tur: 'oncul'; opNo: number }
+  | { tur: 'birlesme'; opNolari: number[] }
+  | { tur: 'yok' };
+export function dalliOnculler(zincir: readonly ZincirAdimi[]): Map<number, number[] | null> {
+  const sira = new Map(zincir.map((a, i) => [a.opNo, i]));
+  const atalar = new Map<number, Set<number>>();
+  const sonuc = new Map<number, number[] | null>();
+  for (const a of zincir) {
+    const i = sira.get(a.opNo)!;
+    const dogrudan = a.onculOpNolari === null ? null : [...new Set(a.onculOpNolari.filter((o) => (sira.get(o) ?? i) < i))];
+    const ata = new Set<number>();
+    for (const o of dogrudan ?? []) { ata.add(o); for (const x of atalar.get(o) ?? []) ata.add(x); }
+    atalar.set(a.opNo, ata);
+    sonuc.set(a.opNo, dogrudan === null ? null : dogrudan.filter((o) => !dogrudan.some((d) => d !== o && atalar.get(d)?.has(o)))
+      .sort((x, y) => sira.get(x)! - sira.get(y)!));
+  }
+  return sonuc;
+}
+export function tasimaKaynagi(zincir: readonly ZincirAdimi[], opNo: number): TasimaKaynagi | null {
+  const onculler = dalliOnculler(zincir);
+  const adim = zincir.find((a) => a.opNo === opNo);
+  const liste = onculler.get(opNo);
+  if (adim === undefined || liste === null || liste === undefined) return null;
+  const ilkGirdi = (a: ZincirAdimi) => a.girdiler[0] ?? null;
+  if (liste.length === 0) return { tur: 'ilk', girdi: ilkGirdi(adim) };
+  if (liste.length > 1) return { tur: 'birlesme', opNolari: liste };
+  const oncul = liste[0]!;
+  const dalDegisti = (a: ZincirAdimi) => a.dal !== (zincir.find((x) => x.opNo === oncul)?.dal ?? null) && a.girdiler.length > 0;
+  if (dalDegisti(adim)) return { tur: 'ilk', girdi: ilkGirdi(adim) };
+  const devralan = zincir.find((a) => onculler.get(a.opNo)?.length === 1 && onculler.get(a.opNo)![0] === oncul && !dalDegisti(a));
+  return devralan?.opNo === opNo ? { tur: 'oncul', opNo: oncul } : { tur: 'yok' };
+}
+// Dallı emirde sayımın planı (1348 a). Gelenler öncüllerden bu adıma gelen parçalardır (birer adet için miktar). Tek öncülden devam eden
+// parça ara adımda adımın statüsüne çevrilir; birleştirmede gelen her parça tüketilir ve ara adımda emrin ürünü adımın statüsüne girer.
+// Dal başı uretimAdimPlani'nin ilk adımı gibidir. Son ve çıktılı adım gelenleri tüketir, ürünü ya da çıktıyı girer.
+export function dalliAdimPlani(g: {
+  adet: bigint; sonAdim: boolean; statuId: number | null; cikti: number | null; girdiler: readonly { malzemeNo: number; miktar: string }[];
+  tasinan: { malzemeNo: number; miktar: string }; gelenler: readonly { malzemeId: number; statuId: number | null; miktar: string }[]; kaynak: TasimaKaynagi['tur'];
+}): UretimAdimPlani {
+  const cevirmeli = !g.sonAdim && g.cikti === null;
+  const ilk = g.kaynak === 'ilk';
+  const sarflar: UretimAdimPlani['sarflar'] = [];
+  let tasinanGirdide = false;
+  for (const x of g.girdiler) {
+    if (ilk && cevirmeli && !tasinanGirdide && x.malzemeNo === g.tasinan.malzemeNo) { tasinanGirdide = true; continue; }
+    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar) });
+  }
+  let cevirme: UretimAdimPlani['cevirme'] = null;
+  let giris: UretimAdimPlani['giris'] = cevirmeli ? null : { malzemeId: g.cikti, miktar: g.adet };
+  const devam = g.kaynak === 'oncul' ? g.gelenler[0] : undefined;
+  if (cevirmeli && devam !== undefined) {
+    if (devam.statuId !== g.statuId) {
+      cevirme = { malzemeId: devam.malzemeId, kaynakStatuId: devam.statuId, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, devam.miktar), tasinan: true };
+    }
+    return { sarflar, cevirme, giris };
+  }
+  for (const p of g.gelenler) sarflar.push({ malzemeId: p.malzemeId, statuId: p.statuId, miktar: adetMiktari(g.adet, p.miktar), tasinan: true });
+  if (cevirmeli && tasinanGirdide && g.statuId !== null) {
+    cevirme = { malzemeId: g.tasinan.malzemeNo, kaynakStatuId: null, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, g.tasinan.miktar) };
+  } else if (cevirmeli && g.kaynak === 'birlesme') {
+    giris = { malzemeId: g.tasinan.malzemeNo, miktar: g.adet, statuId: g.statuId };
+  }
   return { sarflar, cevirme, giris };
 }
 
