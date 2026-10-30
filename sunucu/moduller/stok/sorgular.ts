@@ -1160,6 +1160,24 @@ export const partiAra = (db: Db, q: string): Promise<{ partiId: number; lotNo: s
   `SELECT id AS "partiId", lot_no AS "lotNo", tedarikci_parti_no AS "tedarikciPartiNo", dokum_no AS "dokumNo", uretim_emri_id AS "uretimEmriId", malzeme_id AS "malzemeId"
    FROM stok_parti WHERE lot_no ILIKE '%' || $1 || '%' OR tedarikci_parti_no ILIKE '%' || $1 || '%' OR dokum_no ILIKE '%' || $1 || '%' ORDER BY kayit_zamani DESC LIMIT 4`, [q]);
 
+// Genel arama (Ctrl K, kart 1234): sütun ve sorgu public.arama_sade ile sadeleşir (Türkçe harf dil ayarına bırakılmaz); desenler
+// çekirdekten sadeleşmiş ve kaçırılmış gelir. İfade trigram dizinini kullanır (göç 126000). Sıra: tam kod, koddan başlayan, yeniden eskiye.
+interface AramaDesenleri { sade: string; icindeDeseni: string; basDeseni: string; sinir: number }
+export interface PartiKaydi { partiId: number; lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; uretimEmriId: number | null; malzemeId: number }
+export const partiKayitAra = (db: Db, d: AramaDesenleri): Promise<PartiKaydi[]> => db.sorgu(
+  `SELECT id::int AS "partiId", lot_no AS "lotNo", tedarikci_parti_no AS "tedarikciPartiNo", dokum_no AS "dokumNo", uretim_emri_id AS "uretimEmriId", malzeme_id AS "malzemeId"
+   FROM stok_parti WHERE public.arama_sade(lot_no) LIKE $2 OR public.arama_sade(tedarikci_parti_no) LIKE $2 OR public.arama_sade(dokum_no) LIKE $2
+   ORDER BY (public.arama_sade(lot_no) = $1) DESC, (public.arama_sade(lot_no) LIKE $3) DESC, kayit_zamani DESC, id DESC LIMIT $4`, [d.sade, d.icindeDeseni, d.basDeseni, d.sinir]);
+// Konum ve raf tek listede: raf satırında rafTuru doludur, konum satırında ad ve satır sayısı. Raf tablosu küçüktür, dizin istemez.
+export interface KonumKaydi { id: number; kod: string; ad: string | null; satirSayisi: number; rafTuru: 'palet' | 'celik' | 'konsol' | 'zemin' | null }
+export const konumKayitAra = (db: Db, d: AramaDesenleri): Promise<KonumKaydi[]> => db.sorgu(
+  `(SELECT k.id, k.kod, k.ad, (SELECT count(*)::int FROM stok_bakiye b WHERE b.konum_id = k.id) AS "satirSayisi", NULL::text AS "rafTuru"
+    FROM stok_konum k WHERE k.aktif AND (public.arama_sade(k.kod) LIKE $2 OR public.arama_sade(k.ad) LIKE $2)
+    ORDER BY (public.arama_sade(k.kod) = $1) DESC, (public.arama_sade(k.kod) LIKE $3) DESC, k.kod LIMIT $4)
+   UNION ALL
+   (SELECT r.id, r.kod, NULL, 0, r.tur FROM stok_raf r WHERE r.aktif AND (public.arama_sade(r.kod) LIKE $2 OR public.arama_sade('RAF ' || r.kod) LIKE $2)
+    ORDER BY (public.arama_sade(r.kod) = $1) DESC, (public.arama_sade(r.kod) LIKE $3) DESC, r.kod LIMIT $4)`, [d.sade, d.icindeDeseni, d.basDeseni, d.sinir]);
+
 // Sayım bekleyen dolu raf gözü: hiç sayılmamış ya da son sayımı süreden eski (DEP-15).
 export const sayimBekleyenGozler = (db: Db, gun: number): Promise<{ konumId: number; kod: string; sonSayim: string | null }[]> => db.sorgu(
   `SELECT k.id AS "konumId", k.kod, ${zamanMetni('k.son_sayim')} AS "sonSayim" FROM stok_konum k

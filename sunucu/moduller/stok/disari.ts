@@ -229,3 +229,6 @@ export type { FasonGidisYazici } from './servis.ts';
 // kaydı `sunucu/kablolama.ts` yapar. Tanınmayan emirde null.
 export const kapanisIzlenebilirlikDurumu = (db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> => kapanis.izlenebilirlikDurumu(db, uretimEmriId);
 export const kapanisStokDurumu = (db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> => kapanis.stokDurumu(db, uretimEmriId);
+
+// Genel arama (Ctrl K, kart 1234): parti/lot ve depo konumu kaynakları; çekirdek bu adla bulur.
+export { kayitAramaKaynaklari } from './kayit-aramasi.ts';
