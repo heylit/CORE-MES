@@ -13,7 +13,7 @@ import type { HazirlikCozucusu } from './hazirlik.ts';
 import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
-  adimGirdileriGetir, adimUretimSatiriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
+  adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
@@ -498,6 +498,10 @@ export interface AdimUretimBilgisi {
   opNo: number;
   // Emirde bu adımdan önceki adımlar, sırayla; ilk adımda boş.
   oncekiOpNolari: number[];
+  // 1348 a: dallı emirde adımın öncülleri (op no, sırayla; boş: dal başı); 1248 öncesi emirde null (sıra kuralı geçerli).
+  onculOpNolari: number[] | null;
+  // Emrin bütün adımları sırayla; stok her dalın taşıdığı malzemeyi bundan çözer.
+  emirAdimlari: { opNo: number; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[] }[];
   sonAdim: boolean;
   girdiler: { malzemeNo: number; miktar: string }[];
   tasinan: { malzemeNo: number; miktar: string } | null;
@@ -512,6 +516,7 @@ export async function adimUretimBilgisi(db: Db, isEmriId: number): Promise<AdimU
   const fason = adim === undefined ? null : await isEmri.gkkFasonuBul(db, hepsi, adim);
   return {
     ...a, girdiler: await adimGirdileriGetir(db, isEmriId), tasinan: await tasinanGirdiGetir(db, a.uretimEmriId), gkkFasonIsEmriId: fason?.id ?? null,
+    emirAdimlari: await emirAdimZinciriGetir(db, a.uretimEmriId),
   };
 }
 
