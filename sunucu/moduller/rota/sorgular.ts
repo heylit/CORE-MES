@@ -270,6 +270,9 @@ export interface AdimSatiri {
   enKucukParca: number | null;
   yenidenAyar: boolean;
   ilkParca: IlkParcaSecimi;
+  // Çok dallı rota (1248 a): satırı olmayan adım ana hattadır (dal null) ve birleştirme yapmaz.
+  dal: string | null;
+  birlesen: string[];
 }
 
 export interface AdaySatiri {
@@ -297,8 +300,9 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
             islem_suresi_dk AS "islemSuresiDk", degisim_suresi_dk AS "degisimSuresiDk",
             bagimlilik, devir_adedi AS "devirAdedi",
             fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
-            yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca"
-       FROM rota_adimi WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
+            yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca", d.dal, coalesce(d.birlesen, '{}') AS birlesen
+       FROM rota_adimi LEFT JOIN rota_adim_dali d ON d.adim_id = rota_adimi.id
+      WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
     [revizyonIdleri],
   );
   const sonuc = new Map<number, Icerik>();
@@ -345,6 +349,7 @@ export async function icerikSil(db: Db, revizyonId: number): Promise<void> {
   await db.sorgu(`DELETE FROM rota_aday_kaynagi WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu(`DELETE FROM rota_bileseni WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu(`DELETE FROM rota_yan_urunu WHERE adim_id IN (${adim})`, [revizyonId]);
+  await db.sorgu(`DELETE FROM rota_adim_dali WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu('DELETE FROM rota_adimi WHERE revizyon_id = $1', [revizyonId]);
 }
 
@@ -372,6 +377,8 @@ export interface AdimYazimi {
   }[];
   bilesenler: readonly { malzemeId: number; miktar: number | string; fireYuzde: number | string }[];
   yanUrunler: readonly { malzemeId: number; miktar: number | string }[];
+  dal: string | null;
+  birlesen: readonly string[];
 }
 
 export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: AdimYazimi): Promise<void> {
@@ -406,6 +413,9 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
       `INSERT INTO rota_yan_urunu (adim_id, malzeme_id, miktar) SELECT $1, * FROM unnest($2::int[], $3::numeric[])`,
       [adimId, a.yanUrunler.map((x) => x.malzemeId), a.yanUrunler.map((x) => x.miktar)],
     );
+  }
+  if (a.dal !== null || a.birlesen.length > 0) {
+    await db.sorgu('INSERT INTO rota_adim_dali (adim_id, dal, birlesen) VALUES ($1, $2, $3::text[])', [adimId, a.dal, [...a.birlesen]]);
   }
 }
 
@@ -804,11 +814,14 @@ export async function olculmusIsEmirleri(db: Db, isEmriIdleri: readonly number[]
   return new Set(satirlar.map((x) => x.isEmriId));
 }
 
-export function adimGirenSayilari(db: Db, revizyonIdleri: readonly number[]): Promise<{ revizyonId: number; opNo: number; bagimlilik: Bagimlilik; girenSayisi: number }[]> {
+export function adimGirenSayilari(db: Db, revizyonIdleri: readonly number[]): Promise<{
+  revizyonId: number; opNo: number; bagimlilik: Bagimlilik; girenSayisi: number; dal: string | null; birlesen: string[];
+}[]> {
   return db.sorgu(
     `SELECT a.revizyon_id AS "revizyonId", a.op_no AS "opNo", a.bagimlilik,
-            (SELECT count(*) FROM rota_bileseni b WHERE b.adim_id = a.id)::int AS "girenSayisi"
-       FROM rota_adimi a WHERE a.revizyon_id = ANY($1::int[]) ORDER BY a.revizyon_id, a.sira`,
+            (SELECT count(*) FROM rota_bileseni b WHERE b.adim_id = a.id)::int AS "girenSayisi", d.dal, coalesce(d.birlesen, '{}') AS birlesen
+       FROM rota_adimi a LEFT JOIN rota_adim_dali d ON d.adim_id = a.id
+      WHERE a.revizyon_id = ANY($1::int[]) ORDER BY a.revizyon_id, a.sira`,
     [revizyonIdleri],
   );
 }
