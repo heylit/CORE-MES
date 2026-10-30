@@ -9,7 +9,7 @@ import {
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
-  SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari,
+  SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
@@ -251,5 +251,35 @@ describe('refakat kartı sınırı (Soru 132, 136 a)', () => {
       'sıfıra inen an gelmez, düzeltme önceki ana taşar');
     assert.deepEqual(kararAnlari([{ zaman: 't1', adet: -1 }, { zaman: 't2', adet: 3 }]), [{ zaman: 't1', adet: -1 }, { zaman: 't2', adet: 3 }]);
     assert.deepEqual(kararAnlari([]), []);
+  });
+});
+
+// 1346: dallı emirde fason adımı öncülleri bitince gidişe açılır; öncül listesiz eski emirde sıradaki iş emri kuralı sürer.
+describe('fason sırası (1346)', () => {
+  type A = { id: number; sira: number; bagimlilik: 'bekleyen'; durum: 'bekliyor' | 'calisiyor' | 'tamam'; fasonFirmaId: number | null;
+    onculler: { id: number; tur: 'bekleyen'; devirAdedi: null }[] | null };
+  const a = (id: number, durum: A['durum'], fason: boolean, onculler: number[] | null): A => ({
+    id, sira: id, bagimlilik: 'bekleyen', durum, fasonFirmaId: fason ? 7 : null, onculler: onculler?.map((o) => ({ id: o, tur: 'bekleyen', devirAdedi: null })) ?? null,
+  });
+
+  test('dallı: paralel dal çalışırken fason dalı sıradadır; öncülü bitmemiş fason değildir', () => {
+    // OP1 ana; OP2 A dalı tezgah; OP3 B dalı fason; OP4 birleştirir.
+    const dalli = [a(1, 'tamam', false, []), a(2, 'calisiyor', false, [1]), a(3, 'bekliyor', true, [1]), a(4, 'bekliyor', false, [2, 3])];
+    assert.equal(fasonSirasindaMi(dalli, dalli[2]!), true);
+    assert.equal(siradakiFasonAdimi(dalli)?.id, 3);
+    const basta = [a(1, 'calisiyor', false, []), a(2, 'bekliyor', false, [1]), a(3, 'bekliyor', true, [1])];
+    assert.equal(fasonSirasindaMi(basta, basta[2]!), false);
+    assert.equal(siradakiFasonAdimi(basta), null);
+    const bitmis = [a(1, 'tamam', false, []), a(2, 'tamam', true, [1])];
+    assert.equal(fasonSirasindaMi(bitmis, bitmis[1]!), false, 'bitmiş fason sırada değildir');
+  });
+
+  test('öncül listesiz eski emir: önceki adımların hepsi bitmeden fason sırada değildir', () => {
+    const eski = [a(1, 'tamam', false, null), a(2, 'calisiyor', false, null), a(3, 'bekliyor', true, null)];
+    assert.equal(fasonSirasindaMi(eski, eski[2]!), false);
+    assert.equal(siradakiFasonAdimi(eski), null);
+    const sirada = [a(1, 'tamam', false, null), a(2, 'tamam', false, null), a(3, 'bekliyor', true, null)];
+    assert.equal(fasonSirasindaMi(sirada, sirada[2]!), true);
+    assert.equal(siradakiFasonAdimi(sirada)?.id, 3);
   });
 });

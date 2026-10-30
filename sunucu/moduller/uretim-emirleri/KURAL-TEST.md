@@ -87,8 +87,10 @@ HK: `hatali-kurallar.test.ts` (saf), H: `hatali-parca.test.ts` (gerçek PostgreS
 | UE-OC1 | Öncül listesi (1248 a): rota adımının dalı ve öncülleri iş emrine kopyalanır; liste null eski kuraldır (plan motoru bagOf, 982 a), boş liste dal başıdır; öncül aynı girdide ve daha küçük sıralı, akışlıda devir artı | OK "adimOnculleri", "açılış girdisinde"; OC "açılışta dal ve öncüller" (geçersiz öncül 400) | uretim_emirleri_is_emri_onculu_tur, _devir, _kendisi; uretim_emirleri_is_emri_dali_bicimi |
 | UE-OC2 | Terminal ve plan tek işlevden okur (1245 a): başlatma her öncülü ayrı uyarır, birleştirme öncüller bitmeden bitmez, dal başı öteki dalı beklemez; plan satırında bitmiş öncül düşer, plana girmeyen öncül (fason, otomatik GKK) yerine onun öncülleri gelir | OK "terminal kuralları çok öncüllü"; OC "terminal", "eski emir" | yok |
 | UE-OC3 | Araya giren adım öncesinin yerini alır, silinen adımın öncülleri ardıllarına geçer; kola gelmeyen öncül düşer | OC "araya giren adım" | yok |
+| UE-OC4 | Fason gidişi ve sıradaki fason (1346): öncül listeli adımda öncüllerin hepsi bitince açılır, paralel dal beklenmez; listesi null eski emirde sıradaki iş emri kuralı (UE-04) | KT "fason sırası (1346)"; FD "dallı", "tek hat: öncül listesiz" (öncülü bitmemiş gidiş 409) | yok |
+| UE-OC5 | Sıradaki adım fasondayken sonraki tezgâh adımı adımı verilerek başlar; emir o adımın istasyonunda başlar, sıra dışı uyarısı aynen döner (1345) | FD "1345 tek hat", "dallı" (fason dönmeden bitiş 409) | uretim_emri_basladi_istasyonlu |
 
-OK: `oncul-kurallar.test.ts` (saf), OC: `oncul.test.ts` (gerçek PostgreSQL).
+OK: `oncul-kurallar.test.ts` (saf), OC: `oncul.test.ts` (gerçek PostgreSQL), KT: `kurallar.test.ts` (saf), FD: `fason-dal.test.ts` (gerçek PostgreSQL).
 
 KK: `kapanis-kurallar.test.ts` (saf), KP: `kapanis.test.ts` (gerçek PostgreSQL), KG: `kapanis-goc.test.ts`.
 

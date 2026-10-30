@@ -1044,6 +1044,18 @@ export function adimOnculleri<T extends OnculluAdim>(adimlar: readonly T[], adim
   });
 }
 
+// 1346: fason adımı gidişe sırası gelince açılır. Öncül listeli (dallı) adımda öncüllerin hepsi bitince; paralel daldaki adım beklenmez.
+// Listesi null olan eski emirde sıradaki iş emri kuralı (siradakiIsEmri) aynen kalır.
+export function fasonSirasindaMi<T extends OnculluAdim & { durum: IsEmriDurumu }>(adimlar: readonly T[], adim: T): boolean {
+  if (adim.onculler == null) return siradakiIsEmri(adimlar)?.id === adim.id;
+  return adim.durum !== 'tamam' && adimOnculleri(adimlar, adim).every((o) => o.adim.durum === 'tamam');
+}
+
+// Okutulan emrin gidişe sırası gelmiş ilk fason adımı (sıra numarasıyla); yoksa null.
+export function siradakiFasonAdimi<T extends OnculluAdim & { durum: IsEmriDurumu; fasonFirmaId: number | null }>(adimlar: readonly T[]): T | null {
+  return [...adimlar].sort((a, b) => a.sira - b.sira).find((a) => a.fasonFirmaId !== null && fasonSirasindaMi(adimlar, a)) ?? null;
+}
+
 export const ONCUL_GECERSIZ = 'Öncül adım aynı emirde, kendinden önce gelen bir op olmalı; akışlı öncülün devir adedi artı, bekleyenin boş olur.';
 export const DAL_GECERSIZ = `Dal etiketi boş olamaz, en çok ${DAL_AZAMI} karakterdir ve yalnız öncül listesiyle verilir.`;
 
