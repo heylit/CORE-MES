@@ -1,7 +1,7 @@
 # ADR 0003 — İşlem tabanlı yetki ve giriş beklemesi
 
 Durum: kabul edildi (06.10.2026). ADR 0002'nin 2., 7. ve 8. maddelerini ve 4. maddesindeki kilit
-kuralını değiştirir. 4. maddenin okuma uçları için hükmünü ADR 0007 değiştirir.
+kuralını değiştirir. 4. maddenin okuma uçları için hükmünü ADR 0007 değiştirir. 8. maddedeki saklama süresini "Ek: giriş denemesi saklama" değiştirir.
 
 ## Bağlam
 
@@ -82,3 +82,11 @@ yönetici de dahildir: telefonda ele geçen parola dar kalır.
 
 Sonuç: ekran fotoğrafı engellenmez; PDF/3B kısıtı dosyanın cihaza inmesini önler, görüntünün kopyalanmasını önlemez.
 
+## Ek: giriş denemesi saklama (30.10.2026, kart #1376; karar 1373 a)
+
+8. maddedeki 30 gün saklama süresi **365 gün** olur: "kim, ne zaman girdi" sorusu geriye bir yıl cevaplanır. Silme yine parolaya
+bakılan giriş denemesi sırasında koşar. Veritabanı koruması değişmez (30 günden genç satır silinmez, güncelleme ve boşaltma
+reddedilir); saklama süresi korumadan uzun kaldığı sürece temizlik korumaya takılmaz.
+
+Sonuç: giriş denemesi kullanıcı adı ve cihaz adresi taşır; bu kişisel veri bir yıl durur (kullanıcı kararı). Oturumdaki cihaz
+adresinin 30 gün sonra boşaltılması (386 a, 398 a) ayrı kuraldır, değişmez.
