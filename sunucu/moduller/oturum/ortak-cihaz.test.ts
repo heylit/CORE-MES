@@ -75,7 +75,7 @@ describe('ortak cihaz (gerçek PostgreSQL)', () => {
   after(async () => { await ortam?.kaldir(); });
 
   test('kayıtsız cihaz kişiseldir; oturumsuz soru 401', async () => {
-    assert.deepEqual(await durum(null), { ortak: false, id: null, ad: null, cihazCerezi: null });
+    assert.deepEqual(await durum(null), { ortak: false, id: null, ad: null, profil: 'tam', cihazCerezi: null });
     assert.equal((await iste(null, 'GET', '/oturum/cihaz')).durum, 401);
   });
 

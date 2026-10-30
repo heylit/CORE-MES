@@ -60,3 +60,25 @@ imkânı veriyordu.
   modülleri yazılırken.
 - Alan daraltma (role göre gizlenen alan): ilk daraltılacak alanı olan modül yazılırken.
 - Rol ve kişi yönetimi uçları ve ekranı; "en az bir yönetici kalır" kuralı onlarla girer.
+
+## Ek: cihaz profili (30.10.2026, kart #1358; kararlar 1339 a, 1341 a, 1347 a, 1355 a, 1356 a, 1361 a)
+
+Telefon ve ortak cihaz sisteme rolünün tamamıyla girmez. Kişinin yetkisi **rolü ile bulunduğu cihazın profilinin kesişimidir**;
+yönetici de dahildir: telefonda ele geçen parola dar kalır.
+
+- **Profiller:** Tam (bugünkü davranış, sınır yok), İstasyon (ortak cihaz: kart + PIN, çıkışta kalan yerel veri) ve Telefon. İstasyon
+  ve Telefon'un açık sayfa listesini yönetici düzenler; ilk liste Üretim Terminali, kuyruk ve Stok Merkezi'dir (QR okutma).
+- **Cihazı sunucu tanır:** istemcinin beyanı (tarayıcı adı, ekran genişliği) bir ayarla değiştiği için kullanılmaz. Profil ortak
+  cihaz kaydının (kart #739) HttpOnly çerezinden her istekte okunur; kayıtlı cihaz atanmış profilini, kayıtsız cihaz ayardaki profili
+  alır. Kısıt yalnız kayıtsız cihaz en dar profile düşerse gerçektir (1341 a): ayar geçiş için Tam başlar, ofis bilgisayarları
+  kaydedilince Telefon'a çevrilir. Çerezi silinen ofis bilgisayarı Telefon'a düşer ve yeniden kaydedilir.
+- **Profil yönetimi yalnız Tam profilli cihazdan:** profil sayfaları, cihaza profil atama ve kayıtsız cihaz ayarı. Telefondan kendini
+  kaydeden yönetici profil seçemez; cihaz profilsiz kalır ve kayıtsız cihaz profilini alır.
+- **Denetim yerleri:** oturum işlem listesindeki sayfa işlemlerini profile göre süzer (menü ve sayfa yetkili uçlar birlikte daralır).
+  Veri işlemleri süzülmez; Telefon'un modül sınırı ve dosya türü kapısı (PDF, 3B, DXF, çizim önizlemesi; 1339 a) çekirdekteki uç
+  katmanındadır. Talimat fotoğraf ve videoları telefonda yalnız görüntülenir (1355 a); dosya tarayıcıya indiği için bu kesin engel değildir.
+- **İstasyonda boşta süre 15 dk** (1356 a). Terminal sürekli sorduğu için ekran açıkken sunucu sayacı dolmaz; istemci kendi boşta
+  çıkışını yapar, sunucudaki süre ekran kapandığında kalan yedektir.
+
+Sonuç: ekran fotoğrafı engellenmez; PDF/3B kısıtı dosyanın cihaza inmesini önler, görüntünün kopyalanmasını önlemez.
+

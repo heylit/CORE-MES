@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { gizli } from '../gizli.ts';
-import { kullaniciSemasi } from '../kullanici.ts';
+import { CIHAZ_PROFILLERI, kullaniciSemasi } from '../kullanici.ts';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
+import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { zamanSemasi } from '../zaman.ts';
 
 const KULLANICI_ADI = z.string().trim().min(1, 'Kullanıcı adı zorunlu.').max(80);
@@ -77,16 +78,53 @@ export const saatCihaziKapatCevabi = z.object({ tamam: z.literal(true) });
 // Ortak cihaz (kart #739, karar 738 a). Cihaz belirteci HttpOnly çerezdedir, cevaba girmez. `GET /oturum/cihaz` oturumdaki cihazın
 // ortak olup olmadığını verir; kayıtsız ya da iptal edilmiş cihaz kişiseldir (kalıcı yerel veri tutmaz).
 const ORTAK_CIHAZ_ADI = z.string().trim().min(1, 'Cihaz adı boş olamaz.').max(80, 'Cihaz adı en çok 80 karakter.');
-export const cihazDurumuCevabi = z.object({ ortak: z.boolean(), id: z.number().int().nullable(), ad: z.string().nullable() });
+// Kart #1358: `ortak` yalnız istasyon profilli kayıtlı cihazda doğrudur (kart girişi, çıkışta kalan yerel veri). `profil` bu cihazın
+// geçerli profilidir: kayıtsız ya da profil atanmamış cihazda kayıtsız cihaz ayarındaki profil. Sunucu profil alanlarını her zaman
+// yazar; şemada isteğe bağlı olmaları, alanları bilmeyen istemci dallarının (ayarlar, arkon) ayrı dalda güncellenebilmesi içindir.
+const cihazProfiliSemasi = z.enum(CIHAZ_PROFILLERI);
+export const cihazDurumuCevabi = z.object({
+  ortak: z.boolean(), id: z.number().int().nullable(), ad: z.string().nullable(), profil: cihazProfiliSemasi.optional(),
+});
+// profil null: atanmamış; cihaz kayıtsız cihaz profilini alır. profilSurum atama satırının sürümüdür (atama yoksa null).
 export const ortakCihazSemasi = z.object({
   id: z.number().int(), ad: z.string(), kaydedenKisiId: z.number().int(), kaydedildi: zamanSemasi, buCihaz: z.boolean(),
+  profil: cihazProfiliSemasi.nullable().optional(), profilSurum: surumSemasi.nullable().optional(),
 });
 export const ortakCihazlarCevabi = z.object({ cihazlar: z.array(ortakCihazSemasi) });
-export const ortakCihazKaydetGovdesi = z.object({ ad: ORTAK_CIHAZ_ADI }).strict();
+// Profil verilmezse istasyon (739 a). Profil yalnız Tam profilli cihazdan atanır; başka cihazdan kayıt profilsiz yapılır.
+export const ortakCihazKaydetGovdesi = z.object({ ad: ORTAK_CIHAZ_ADI, profil: cihazProfiliSemasi.optional() }).strict();
 export const ortakCihazKaydetCevabi = z.object({ cihaz: ortakCihazSemasi });
 export const ortakCihazParametresi = z.object({ id: z.coerce.number().int().positive() });
 export const ortakCihazKapatCevabi = z.object({ tamam: z.literal(true) });
+// Atama: ilk atamada surum null, değiştirmede okunan profilSurum.
+export const profilAtaGovdesi = z.object({ profil: cihazProfiliSemasi, surum: surumSemasi.nullable() }).strict();
+export const profilAtaCevabi = z.object({ cihaz: ortakCihazSemasi });
+
+export const cihazProfiliKaydiSemasi = z.object({
+  kod: cihazProfiliSemasi, sayfalar: z.array(z.string()).nullable(), surum: surumSemasi,
+  guncelleyenKisiId: z.number().int().nullable(), guncellendi: zamanSemasi.nullable(),
+});
+export const cihazProfilleriCevabi = z.object({
+  profiller: z.array(cihazProfiliKaydiSemasi),
+  ayar: z.object({ kayitsizProfil: cihazProfiliSemasi, surum: surumSemasi }),
+});
+export const cihazProfiliParametresi = z.object({ kod: z.enum(['istasyon', 'telefon']) });
+export const profilSayfalariGovdesi = z.object({
+  ...beklenenSurum, sayfalar: z.array(z.string().max(80)).max(200),
+}).strict();
+export const profilSayfalariCevabi = z.object({ profil: cihazProfiliKaydiSemasi });
+export const kayitsizProfilGovdesi = z.object({ ...beklenenSurum, kayitsizProfil: cihazProfiliSemasi }).strict();
+export const kayitsizProfilCevabi = z.object({ kayitsizProfil: cihazProfiliSemasi, surum: surumSemasi });
+
 export type CihazDurumu = z.output<typeof cihazDurumuCevabi>;
+export type CihazProfiliKaydi = z.output<typeof cihazProfiliKaydiSemasi>;
+export type CihazProfilleriCevabi = z.output<typeof cihazProfilleriCevabi>;
+export type ProfilAtaGovdesi = z.input<typeof profilAtaGovdesi>;
+export type ProfilAtaCevabi = z.output<typeof profilAtaCevabi>;
+export type ProfilSayfalariGovdesi = z.input<typeof profilSayfalariGovdesi>;
+export type ProfilSayfalariCevabi = z.output<typeof profilSayfalariCevabi>;
+export type KayitsizProfilGovdesi = z.input<typeof kayitsizProfilGovdesi>;
+export type KayitsizProfilCevabi = z.output<typeof kayitsizProfilCevabi>;
 export type OrtakCihaz = z.output<typeof ortakCihazSemasi>;
 export type OrtakCihazlarCevabi = z.output<typeof ortakCihazlarCevabi>;
 export type OrtakCihazKaydetCevabi = z.output<typeof ortakCihazKaydetCevabi>;

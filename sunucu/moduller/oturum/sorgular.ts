@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import { denemeKilitAnahtari } from './kurallar.ts';
 
 export interface OturumCihazi { ip: string | null; tarayici: string | null }
@@ -483,18 +484,23 @@ export interface OrtakCihazSatiri {
   kaydedenKisiId: number;
   kaydedildi: string;
   ozet: string;
+  profil: CihazProfili | null;
+  profilSurum: number | null;
 }
 
-const ORTAK_CIHAZ_ALANLARI = `id::int AS id, ad, kaydeden_kisi_id AS "kaydedenKisiId", ${zamanMetni('kaydedildi')} AS kaydedildi,
-  belirtec_ozeti AS ozet`;
+// Profil ataması ayrı tablodadır (kart #1358); atanmamış cihazda iki alan null.
+const ORTAK_CIHAZ_SECIMI = `SELECT c.id::int AS id, c.ad, c.kaydeden_kisi_id AS "kaydedenKisiId", ${zamanMetni('c.kaydedildi')} AS kaydedildi,
+    c.belirtec_ozeti AS ozet, a.profil, a.surum AS "profilSurum"
+  FROM oturum_ortak_cihaz c LEFT JOIN oturum_cihaz_profil_atamasi a ON a.cihaz_id = c.id`;
 
-export function ortakCihazEkle(db: Db, ozet: string, ad: string, kisiId: number): Promise<OrtakCihazSatiri | null> {
-  return db.tek<OrtakCihazSatiri>(
+export async function ortakCihazEkle(db: Db, ozet: string, ad: string, kisiId: number): Promise<number | null> {
+  const satir = await db.tek<{ id: number }>(
     `INSERT INTO oturum_ortak_cihaz (belirtec_ozeti, ad, kaydeden_kisi_id, kaydedildi)
      VALUES ($1, $2, $3, now())
-     RETURNING ${ORTAK_CIHAZ_ALANLARI}`,
+     RETURNING id::int AS id`,
     [ozet, ad, kisiId],
   );
+  return satir?.id ?? null;
 }
 
 export async function acikOrtakCihazAdiVar(db: Db, ad: string): Promise<boolean> {
@@ -502,13 +508,15 @@ export async function acikOrtakCihazAdiVar(db: Db, ad: string): Promise<boolean>
 }
 
 export function acikOrtakCihazBul(db: Db, ozet: string): Promise<OrtakCihazSatiri | null> {
-  return db.tek<OrtakCihazSatiri>(`SELECT ${ORTAK_CIHAZ_ALANLARI} FROM oturum_ortak_cihaz WHERE belirtec_ozeti = $1 AND kapandi IS NULL`, [ozet]);
+  return db.tek<OrtakCihazSatiri>(`${ORTAK_CIHAZ_SECIMI} WHERE c.belirtec_ozeti = $1 AND c.kapandi IS NULL`, [ozet]);
+}
+
+export function acikOrtakCihazBulId(db: Db, id: number): Promise<OrtakCihazSatiri | null> {
+  return db.tek<OrtakCihazSatiri>(`${ORTAK_CIHAZ_SECIMI} WHERE c.id = $1 AND c.kapandi IS NULL`, [id]);
 }
 
 export function acikOrtakCihazlar(db: Db): Promise<OrtakCihazSatiri[]> {
-  return db.sorgu<OrtakCihazSatiri>(
-    `SELECT ${ORTAK_CIHAZ_ALANLARI} FROM oturum_ortak_cihaz WHERE kapandi IS NULL ORDER BY lower(ad), id`,
-  );
+  return db.sorgu<OrtakCihazSatiri>(`${ORTAK_CIHAZ_SECIMI} WHERE c.kapandi IS NULL ORDER BY lower(c.ad), c.id`);
 }
 
 export async function ortakCihazKapat(db: Db, id: number, kapatanKisiId: number): Promise<string | null> {
@@ -519,4 +527,89 @@ export async function ortakCihazKapat(db: Db, id: number, kapatanKisiId: number)
     [id, kapatanKisiId],
   );
   return satir?.ozet ?? null;
+}
+
+/* ---------------- cihaz profili (kart #1358) ---------------- */
+
+export interface CihazProfiliCozumu {
+  kod: CihazProfili;
+  sayfalar: string[] | null;
+  // Kayıtlı ve profili istasyon olan cihaz: ortak cihaz davranışı (kart girişi, çıkışta kalan yerel veri).
+  cihazId: number | null;
+  cihazAd: string | null;
+}
+
+// Tek sorgu: kayıtlı açık cihazın atanmış profili, yoksa kayıtsız cihaz ayarındaki profil. Her istekte koşar.
+export async function cihazProfiliCoz(db: Db, ozet: string | null): Promise<CihazProfiliCozumu> {
+  const satir = await db.tek<CihazProfiliCozumu>(
+    `WITH c AS (
+       SELECT oc.id, oc.ad, a.profil FROM oturum_ortak_cihaz oc LEFT JOIN oturum_cihaz_profil_atamasi a ON a.cihaz_id = oc.id
+        WHERE oc.belirtec_ozeti = $1 AND oc.kapandi IS NULL
+     )
+     SELECT p.kod, p.sayfalar, c.id::int AS "cihazId", c.ad AS "cihazAd"
+       FROM oturum_cihaz_ayari ay LEFT JOIN c ON true
+       JOIN oturum_cihaz_profili p ON p.kod = COALESCE(c.profil, ay.kayitsiz_profil)`,
+    [ozet],
+  );
+  if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
+  return satir;
+}
+
+export interface CihazProfiliSatiri {
+  kod: CihazProfili;
+  sayfalar: string[] | null;
+  surum: number;
+  guncelleyenKisiId: number | null;
+  guncellendi: string | null;
+}
+
+const PROFIL_ALANLARI = `kod, sayfalar, surum, guncelleyen_kisi_id AS "guncelleyenKisiId", ${zamanMetni('guncellendi')} AS guncellendi`;
+
+export function cihazProfilleri(db: Db): Promise<CihazProfiliSatiri[]> {
+  return db.sorgu<CihazProfiliSatiri>(
+    `SELECT ${PROFIL_ALANLARI} FROM oturum_cihaz_profili ORDER BY array_position(ARRAY['tam', 'istasyon', 'telefon'], kod)`,
+  );
+}
+
+// Tam profilinin sayfası yoktur (sınırsız); güncellenmez. Sürüm tutmazsa null.
+export function profilSayfalariYaz(db: Db, kod: CihazProfili, sayfalar: readonly string[], surum: number, kisiId: number): Promise<CihazProfiliSatiri | null> {
+  return db.tek<CihazProfiliSatiri>(
+    `UPDATE oturum_cihaz_profili SET sayfalar = $2, surum = surum + 1, guncelleyen_kisi_id = $4, guncellendi = now()
+      WHERE kod = $1 AND kod <> 'tam' AND surum = $3
+      RETURNING ${PROFIL_ALANLARI}`,
+    [kod, sayfalar, surum, kisiId],
+  );
+}
+
+export async function cihazAyari(db: Db): Promise<{ kayitsizProfil: CihazProfili; surum: number }> {
+  const satir = await db.tek<{ kayitsizProfil: CihazProfili; surum: number }>(
+    'SELECT kayitsiz_profil AS "kayitsizProfil", surum FROM oturum_cihaz_ayari',
+  );
+  if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
+  return satir;
+}
+
+export function cihazAyariYaz(db: Db, profil: CihazProfili, surum: number, kisiId: number): Promise<{ kayitsizProfil: CihazProfili; surum: number } | null> {
+  return db.tek(
+    `UPDATE oturum_cihaz_ayari SET kayitsiz_profil = $1, surum = surum + 1, guncelleyen_kisi_id = $3, guncellendi = now()
+      WHERE surum = $2
+      RETURNING kayitsiz_profil AS "kayitsizProfil", surum`,
+    [profil, surum, kisiId],
+  );
+}
+
+// surum null: ilk atama (satır varsa çakışma). Dolu: okunan atama sürümü. Yazılamazsa false.
+export async function profilAtamasiYaz(db: Db, cihazId: number, profil: CihazProfili, surum: number | null, kisiId: number): Promise<boolean> {
+  const satir = surum === null
+    ? await db.tek(
+      `INSERT INTO oturum_cihaz_profil_atamasi (cihaz_id, profil, atayan_kisi_id, atandi) VALUES ($1, $2, $3, now())
+       ON CONFLICT (cihaz_id) DO NOTHING RETURNING 1`,
+      [cihazId, profil, kisiId],
+    )
+    : await db.tek(
+      `UPDATE oturum_cihaz_profil_atamasi SET profil = $2, atayan_kisi_id = $3, atandi = now(), surum = surum + 1
+        WHERE cihaz_id = $1 AND surum = $4 RETURNING 1`,
+      [cihazId, profil, kisiId, surum],
+    );
+  return satir !== null;
 }

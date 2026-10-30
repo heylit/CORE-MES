@@ -3,12 +3,13 @@ import { cerezOku } from '#cekirdek/cerez.ts';
 import { vtUlasilamadi } from '#cekirdek/db.ts';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { UygulamaHatasi, bulunamadi, cakisma, cokIstek, gecersiz, oturumYok, veritabaniYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bulunamadi, cakisma, cokIstek, dogrulama, gecersiz, oturumYok, veritabaniYok, yetkiYok } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { Kimlik } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import type { CihazDurumu, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
+import type { CihazProfili } from '#paylasilan/kullanici.ts';
+import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
   girisDogrula, ilkPiniYaz, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
@@ -17,7 +18,7 @@ import type { GirisSirri } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
 import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
-  AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
+  AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
@@ -26,9 +27,10 @@ import {
   cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
-  saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
+  saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
+  cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz,
 } from './sorgular.ts';
-import type { OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
+import type { CihazProfiliSatiri, OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
 
 const HATALI_GIRIS = 'Kullanıcı adı, PIN ya da parola hatalı.';
 
@@ -242,14 +244,23 @@ async function kimlikYukle(db: Db, kisiId: number, oturumAcildi: string | null =
   return { ...kullanici, disIzleyici: true };
 }
 
-export async function anahtardanKullanici(db: Db, anahtar: string): Promise<Kullanici | null> {
+// Cihazın profili oturumdan değil her istekte cihaz çerezinden okunur (kart #1358): cihazın profili değişince ya da kişi aynı oturum
+// çereziyle başka cihaza geçince bir sonraki istekte geçerlidir. İstasyonda boşta süre kısadır (1356 a).
+export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirteci: string | null): Promise<Kullanici | null> {
+  const profil = await cihazProfiliCoz(db, cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null);
   const oturum = await gecerliOturumBul(db, anahtarOzeti(anahtar), {
-    bostaSn: BOSTA_SN, azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
+    bostaSn: bostaSuresiSn(profil.kod), azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
   });
   if (oturum === null) return null;
   if (oturum.bayat) await gorulduYaz(db, oturum.id);
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
-  return kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
+  const kullanici = await kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
+  return kullanici === null ? null : profilUygula(kullanici, profil);
+}
+
+// Girişin döndürdüğü kişi menüyü ilk çizer: işlemleri de bu cihazın profiliyle süzülür.
+export async function cihazaGoreKullanici(db: Db, kullanici: Kullanici, cihazBelirteci: string | null): Promise<Kullanici> {
+  return profilUygula(kullanici, await cihazProfiliCoz(db, cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null));
 }
 
 // Çerez önce gelir: tarayıcı belirteç göndermez, saat çerez göndermez. Belirteç yalnız saat uçlarında çözülür (saatBelirteciGecerMi); başka uçta
@@ -257,7 +268,7 @@ export async function anahtardanKullanici(db: Db, anahtar: string): Promise<Kull
 export function kimlikCozucu(vt: Veritabani): Kimlik {
   return async (istek) => {
     const anahtar = cerezOku(istek.headers.cookie, CEREZ_ADI);
-    if (anahtar) return anahtardanKullanici(vt, anahtar);
+    if (anahtar) return anahtardanKullanici(vt, anahtar, cerezOku(istek.headers.cookie, CIHAZ_CEREZI));
     const belirtec = belirtecOku(istek.headers.authorization);
     if (belirtec === null || !saatBelirteciGecerMi(istek.method, istek.routeOptions.url)) return null;
     return saatBelirtecindenKullanici(vt, belirtec);
@@ -355,37 +366,53 @@ export async function oturumKullanicisi(
   db: Db,
   cerez: string | null,
   cozulen: Kullanici | null,
+  cihazBelirteci: string | null,
 ): Promise<Kullanici | null> {
   if (cozulen !== null || !cerez) return cozulen;
   try {
-    return await anahtardanKullanici(db, cerez);
+    return await anahtardanKullanici(db, cerez, cihazBelirteci);
   } catch (hata) {
     if (vtUlasilamadi(hata)) throw veritabaniYok();
     throw hata;
   }
 }
 
-/* ---------------- ortak cihaz (kart #739, karar 738 a) ---------------- */
+/* ---------------- ortak cihaz (kart #739, karar 738 a) ve cihaz profili (kart #1358) ---------------- */
 
 const ortakCihaz = ({ ozet, ...satir }: OrtakCihazSatiri, buOzet: string | null): OrtakCihaz => ({ ...satir, buCihaz: ozet === buOzet });
 
-// Cihazın çerezi yoksa, bilinmiyorsa ya da cihaz iptal edildiyse cihaz kişiseldir; çağıran bayat çerezi siler.
+// Çerezi olmayan, bilinmeyen ya da iptal edilmiş cihaz kayıtsızdır; çağıran bayat çerezi siler. Ortak cihaz davranışı (kart girişi,
+// çıkışta kalan yerel veri) yalnız istasyon profilli kayıtlı cihazdadır.
 export async function cihazDurumu(db: Db, belirtec: string | null): Promise<CihazDurumu & { bayatCerez: boolean }> {
-  const satir = belirtec ? await acikOrtakCihazBul(db, anahtarOzeti(belirtec)) : null;
-  if (satir === null) return { ortak: false, id: null, ad: null, bayatCerez: belirtec !== null };
-  return { ortak: true, id: satir.id, ad: satir.ad, bayatCerez: false };
+  const profil = await cihazProfiliCoz(db, belirtec ? anahtarOzeti(belirtec) : null);
+  if (profil.cihazId === null) return { ortak: false, id: null, ad: null, profil: profil.kod, bayatCerez: belirtec !== null };
+  return { ortak: profil.kod === 'istasyon', id: profil.cihazId, ad: profil.cihazAd, profil: profil.kod, bayatCerez: false };
 }
 
-// Yönetici kaydı ortak yapılacak cihazın kendisinden yapar: belirteç bu cihazın çerezine yazılır. Zaten ortak olan cihaz yeniden kaydedilmez.
-export async function ortakCihazKaydet(db: Db, kisiId: number, ad: string, mevcutBelirtec: string | null): Promise<{ cihaz: OrtakCihaz; belirtec: string }> {
+function profilYonetimiDenetle(kullanici: Kullanici): void {
+  if (!profilYonetebilirMi(kullanici)) throw yetkiYok('Cihaz profilleri yalnız Tam profilli bir cihazdan değiştirilir.');
+}
+
+// Yönetici kaydı ortak yapılacak cihazın kendisinden yapar: belirteç bu cihazın çerezine yazılır. Zaten kayıtlı cihaz yeniden kaydedilmez.
+// Profil (verilmezse istasyon) yalnız kayıt şu an Tam profilli cihazdan yapılıyorsa atanır: telefondan giren yönetici telefonunu
+// kaydedip genişletemez; o cihaz kayıtsız cihaz profilinde kalır, profili Tam profilli bir cihazdan atanır.
+export async function ortakCihazKaydet(
+  db: Db, kullanici: Kullanici, ad: string, profil: CihazProfili | undefined, mevcutBelirtec: string | null,
+): Promise<{ cihaz: OrtakCihaz; belirtec: string }> {
   if (mevcutBelirtec && (await acikOrtakCihazBul(db, anahtarOzeti(mevcutBelirtec))) !== null) {
-    throw cakisma('Bu cihaz zaten ortak cihaz olarak kayıtlı.');
+    throw cakisma('Bu cihaz zaten kayıtlı.');
   }
-  if (await acikOrtakCihazAdiVar(db, ad)) throw cakisma('Bu adla kayıtlı bir ortak cihaz var.');
+  if (await acikOrtakCihazAdiVar(db, ad)) throw cakisma('Bu adla kayıtlı bir cihaz var.');
+  if (profil !== undefined) profilYonetimiDenetle(kullanici);
   const belirtec = randomBytes(32).toString('base64url');
   const ozet = anahtarOzeti(belirtec);
-  const satir = await ortakCihazEkle(db, ozet, ad, kisiId);
-  if (satir === null) throw new Error('Ortak cihaz yazılamadı.');
+  const id = await ortakCihazEkle(db, ozet, ad, kullanici.id);
+  if (id === null) throw new Error('Ortak cihaz yazılamadı.');
+  if (profilYonetebilirMi(kullanici) && !(await profilAtamasiYaz(db, id, profil ?? 'istasyon', null, kullanici.id))) {
+    throw new Error('Yeni cihazın profili yazılamadı.');
+  }
+  const satir = await acikOrtakCihazBulId(db, id);
+  if (satir === null) throw new Error('Ortak cihaz okunamadı.');
   return { cihaz: ortakCihaz(satir, ozet), belirtec };
 }
 
@@ -394,9 +421,46 @@ export async function ortakCihazlar(db: Db, belirtec: string | null): Promise<Or
   return (await acikOrtakCihazlar(db)).map((s) => ortakCihaz(s, buOzet));
 }
 
-// İptal edilen cihaz bir sonraki bağlantıda kişisel sayılır ve yerel verisini siler. Dönen değer: iptal edilen bu cihaz mıydı.
+// İptal edilen cihaz bir sonraki bağlantıda kayıtsız sayılır ve yerel verisini siler. Dönen değer: iptal edilen bu cihaz mıydı.
 export async function ortakCihaziKapat(db: Db, id: number, kapatanKisiId: number, belirtec: string | null): Promise<boolean> {
   const ozet = await ortakCihazKapat(db, id, kapatanKisiId);
   if (ozet === null) throw bulunamadi('Açık ortak cihaz bulunamadı.');
   return belirtec !== null && anahtarOzeti(belirtec) === ozet;
+}
+
+export async function profilAta(
+  db: Db, kullanici: Kullanici, cihazId: number, girdi: { profil: CihazProfili; surum: number | null }, belirtec: string | null,
+): Promise<OrtakCihaz> {
+  profilYonetimiDenetle(kullanici);
+  if ((await acikOrtakCihazBulId(db, cihazId)) === null) throw bulunamadi('Açık ortak cihaz bulunamadı.');
+  if (!(await profilAtamasiYaz(db, cihazId, girdi.profil, girdi.surum, kullanici.id))) {
+    throw cakisma('Cihazın profili bu arada değişmiş. Listeyi yenileyip yeniden deneyin.');
+  }
+  const satir = await acikOrtakCihazBulId(db, cihazId);
+  if (satir === null) throw bulunamadi('Açık ortak cihaz bulunamadı.');
+  return ortakCihaz(satir, belirtec ? anahtarOzeti(belirtec) : null);
+}
+
+export async function profilListesi(db: Db): Promise<CihazProfilleriCevabi> {
+  return { profiller: await cihazProfilleri(db), ayar: await cihazAyari(db) };
+}
+
+export async function profilSayfalariniYaz(
+  db: Db, kullanici: Kullanici, kod: 'istasyon' | 'telefon', girdi: { sayfalar: readonly string[]; surum: number },
+): Promise<CihazProfiliSatiri> {
+  profilYonetimiDenetle(kullanici);
+  const hata = profilSayfalariHatasi(girdi.sayfalar);
+  if (hata !== null) throw dogrulama(hata, 'sayfalar');
+  const satir = await profilSayfalariYaz(db, kod, girdi.sayfalar, girdi.surum, kullanici.id);
+  if (satir === null) throw cakisma('Profil bu arada değişmiş. Sayfayı yenileyip yeniden deneyin.');
+  return satir;
+}
+
+export async function kayitsizProfiliYaz(
+  db: Db, kullanici: Kullanici, girdi: { kayitsizProfil: CihazProfili; surum: number },
+): Promise<{ kayitsizProfil: CihazProfili; surum: number }> {
+  profilYonetimiDenetle(kullanici);
+  const satir = await cihazAyariYaz(db, girdi.kayitsizProfil, girdi.surum, kullanici.id);
+  if (satir === null) throw cakisma('Ayar bu arada değişmiş. Sayfayı yenileyip yeniden deneyin.');
+  return satir;
 }
