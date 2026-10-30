@@ -2,11 +2,11 @@ import { z } from 'zod';
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
-import { kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import { KM_MERKEZ_BICIMLERI, kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
   KmBalon, KmBalonGirdisi, KmBalonYerKipi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
@@ -45,17 +45,34 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
   return { resimler, numunePlanlari };
 }
 
+// Çizim Merkezi'nde malzeme kartına PDF ya da 3B model bağlanmış parça, Kalite Merkezi'nde kaydı olmasa da listede yer alır (1306):
+// resim parçaya yine elle alınır, okuma bir şey yazmaz.
 export async function studyoOzetleri(db: Db): Promise<KmStudyoOzeti[]> {
-  return sorgular.studyoOzetleri(db);
+  const ozetler = await sorgular.studyoOzetleri(db);
+  const merkez = await kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', KM_MERKEZ_BICIMLERI);
+  const sonuc = new Map<number, KmStudyoOzeti>(ozetler.map((o) => [o.malzemeNo, { ...o, merkezde: merkez.get(o.malzemeNo)?.length ?? 0 }]));
+  for (const [malzemeNo, belgeler] of merkez) {
+    if (!sonuc.has(malzemeNo)) sonuc.set(malzemeNo, { malzemeNo, resim: 0, model: 0, balon: 0, numunePlani: 0, merkezde: belgeler.length });
+  }
+  return [...sonuc.values()].sort((a, b) => a.malzemeNo - b.malzemeNo);
 }
 
 // Alınabilecek belgeler: yalnız yayındaki PDF ve 3B model (alma kuralıyla aynı süzgeç); sayı sınırı belge merkezinin seçici sınırıdır.
-export async function merkezBelgeleri(db: Db, ara: string | null): Promise<KmMerkezBelgesi[]> {
-  return (await yayindakiBelgeler(db, ara === null ? {} : { ara })).flatMap((b) => {
-    const tur = studyoResimTuru(b.dosyaTuru);
-    if (tur === null) return [];
-    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet }];
+// Parça verilirse kartına bağlı belgeler (aramaya uyanlar) başta gelir; aynı belge ikinci kez listelenmez.
+export async function merkezBelgeleri(db: Db, ara: string | null, malzemeNo: number | null = null): Promise<KmMerkezBelgesi[]> {
+  const uyar = (ad: string) => ara === null || ad.toLocaleLowerCase('tr').includes(ara.toLocaleLowerCase('tr'));
+  const bagli: KmMerkezBelgesi[] = malzemeNo === null ? [] : (await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)).flatMap((b) => {
+    const tur = b.dosyaTuru === null ? null : studyoResimTuru(b.dosyaTuru);
+    if (tur === null || b.revizyonId === null || b.harf === null || b.ozet === null || !uyar(b.ad)) return [];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: true }];
   });
+  const bagliIdler = new Set(bagli.map((b) => b.id));
+  const diger = (await yayindakiBelgeler(db, ara === null ? {} : { ara })).flatMap((b) => {
+    const tur = studyoResimTuru(b.dosyaTuru);
+    if (tur === null || bagliIdler.has(b.id)) return [];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: false }];
+  });
+  return [...bagli, ...diger];
 }
 
 // Belge merkezindeki yayındaki revizyon parçaya alınır; içerik kopyalanmaz, belge kimliği ve revizyon özeti tutulur.

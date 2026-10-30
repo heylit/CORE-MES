@@ -89,6 +89,8 @@ export function Parcalar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
         ? (
           <DurumKutusu durum="bos" mesaj="Henüz parça yok">
             <p>Parçalar; resim, model, muayene, lot ve NCR kayıtlarındaki parça numaralarından otomatik oluşur.</p>
+            {/* Resim listesi boşken yükleme düğmesi tek başına boş listeye döndürüyordu (1306): parça buradan da eklenir. */}
+            {yetki.yaz && <Dugme tur="ikincil" simge="plus" onClick={() => { formYaz('yeni'); }}>Parça ekle</Dugme>}
             {yetki.yaz && <Dugme tur="birincil" simge="upload" onClick={studyo}>Resim / model yükle</Dugme>}
           </DurumKutusu>
         )

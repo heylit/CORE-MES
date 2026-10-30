@@ -30,7 +30,7 @@ const SECENEK: SunucuSecenegi = {
 
 describe('Resim ve modeller stüdyosu (597 a)', () => {
   it('parça seçilmeden liste gelir (799); satır stüdyoyu açar, parça seçici stüdyoda kalır', async () => {
-    kmAc('resimler', OKUYAN, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, ozetler: [{ malzemeNo: 7, resim: 1, model: 1, balon: 0, numunePlani: 1 }] } });
+    kmAc('resimler', OKUYAN, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, ozetler: [{ malzemeNo: 7, resim: 1, model: 1, balon: 0, numunePlani: 1, merkezde: 0 }] } });
     const tablo = await screen.findByRole('table', { name: 'Resim ve modeller' });
     fireEvent.click(await within(tablo).findByText('DNM-07'));
     expect(await screen.findByRole('region', { name: 'Teknik resim' })).toBeTruthy();
@@ -63,7 +63,7 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
   });
 
   // Resim alma seçicisi ve resim alma/kaldırma cevapları ortak deneme sunucusunun üstüne konur (ötekiler ona gider).
-  const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64) };
+  const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64), bagli: true };
   function merkezliAc(k = MUHENDIS) {
     const acilan = kmAc('resimler?parca=7', k, {}, SECENEK);
     const asil = acilan.fetch.getMockImplementation()!;
@@ -78,9 +78,12 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
   }
 
   it('onaylayan belge merkezinden resim alır: seçici yayındakileri listeler, seçilen belge yayındaki harfle alınır ve listeye girer', async () => {
-    const { yazmalar } = merkezliAc();
+    const { yazmalar, fetch } = merkezliAc();
     fireEvent.click(await screen.findByRole('button', { name: 'Belge merkezinden al' }));
     const pencere = await screen.findByRole('dialog', { name: 'Belge merkezinden resim al' });
+    // 1306: seçici stüdyodaki parçayı sorar; kartına bağlı belge işaretli gelir.
+    expect(await within(pencere).findByText('Parçaya bağlı')).toBeTruthy();
+    expect(fetch.mock.calls.some(([a]) => String(a).startsWith('/api/kalite-merkezi/studyo/merkez-belgeleri') && String(a).includes('malzemeNo=7'))).toBe(true);
     fireEvent.click(await within(pencere).findByRole('button', { name: /^Merkez flanş/ }));
     await waitFor(() => { expect(yazmalar.some((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')).toBe(true); });
     expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: 'C' });

@@ -75,13 +75,15 @@ export const kmNumuneKurali = z.object({
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
 export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani) });
-// Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı.
+// Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı. `merkezde`:
+// Çizim Merkezi'nde malzeme kartına bağlı, yayındaki PDF ve 3B model sayısı (1306); alınmış olanlar da sayılır.
 export const kmStudyoOzeti = z.object({
   malzemeNo: z.number().int(),
   resim: z.number().int().nonnegative(),
   model: z.number().int().nonnegative(),
   balon: z.number().int().nonnegative(),
   numunePlani: z.number().int().nonnegative(),
+  merkezde: z.number().int().nonnegative(),
 });
 export const kmStudyoOzetleriCevabi = z.object({ parcalar: z.array(kmStudyoOzeti) });
 export const kmNumunePlaniCevabi = z.object({ plan: kmNumunePlani });
@@ -95,9 +97,11 @@ export const kmResimEkleGovdesi = z.object({
 export const kmResimCevabi = z.object({ resim: kmResim });
 // Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (cizimler/disari.ts yayindakiBelgeler); arama belge adında.
 export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
-export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
+// Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
+export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzemeNo: z.coerce.number().int().positive().max(2147483647).optional() });
 export const kmMerkezBelgesi = z.object({
   id: z.number().int().positive(), ad: z.string(), harf: z.string(), tur: z.enum(KM_RESIM_TURLERI), bicim: z.enum(KM_MERKEZ_BICIMLERI), ozet: z.string(),
+  bagli: z.boolean(),
 });
 export const kmMerkezBelgeleriCevabi = z.object({ belgeler: z.array(kmMerkezBelgesi) });
 // Resim parçadan kaldırılır (pasif); balonları ve ölçümleri silinmez. Sürüm, başkasının aynı anda yaptığı değişikliği ezmemek içindir.
