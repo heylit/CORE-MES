@@ -10,7 +10,8 @@ import {
   hamHesapla, minBox, parcaDegisti, parcaYukle, rotateBy, S, samplePart, sBodyMesh, sSetMesh, stockMat, useParca,
 } from '../parca.ts';
 import { HamSahnesi } from '../sahne/ham-sahnesi.ts';
-import { Sahne, type Cizim } from '../sahne/Sahne.tsx';
+import { Ham2b } from '../sahne/ham-2b.ts';
+import { CizimModuSecici, Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
 import { allMaterials } from '../secici.ts';
 import { useCncYetkisi } from '../veri.ts';
 import { HamFormu, type HamEylemi } from './HamFormu.tsx';
@@ -30,14 +31,16 @@ export function HamMalzeme() {
   const { git } = useGorunum();
   const { yazabilir } = useCncYetkisi();
   const dosya = useRef<HTMLInputElement>(null), alan = useRef<HTMLDivElement>(null), sahne = useRef<HamSahnesi | null>(null);
+  const [cizici2b] = useState(() => new Ham2b()), mod = useCizimModu();
   const [birak, setBirak] = useState(false);
   const st = state.stock;
 
+  // 3D sahne yalnız 3D modda kurulur: 2B modda kamera sürükleme dinleyicisi de olmaz.
   useEffect(() => {
-    const el = alan.current; if (!el) return undefined;
+    const el = alan.current; if (!el || mod !== '3d') return undefined;
     const s = new HamSahnesi(el); sahne.current = s;
     return () => { s.dispose(); sahne.current = null; };
-  }, []);
+  }, [mod]);
   const ciz = useCallback((c: Cizim) => { sahne.current?.frame(c.renderer, c.rect, yumusat(c.dt)); }, []);
 
   // Prototipin PAGES.stock.enter'i: sonuc yoksa hesaplanir.
@@ -89,14 +92,15 @@ export function HamMalzeme() {
         className={birak ? 'tc-ch-sahne tc-ch-sahne-birak' : 'tc-ch-sahne'}
         onDragOver={(e) => { e.preventDefault(); setBirak(true); }} onDragLeave={() => { setBirak(false); }} onDrop={birakildi}
       >
-        <div ref={alan} className="tc-ch-sahne-tuval" data-sahne="stock"><Sahne ciz={ciz} sinif="tc-ch-tuval" /></div>
+        <div ref={alan} className="tc-ch-sahne-tuval" data-sahne="stock"><Sahne cizici2b={cizici2b} ciz={ciz} sinif="tc-ch-tuval" /></div>
         <div className="tc-ch-bilgi">
           <small>HAM MALZEME HESABI</small>
           <b>{S.name || (r ? 'Elle girilen ölçü' : 'Model yok')}</b>
           {r && <span>{r.label}</span>}
         </div>
         <div className="tc-ch-gorus">
-          {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { sahne.current?.sigdir(v); }}>{a}</Dugme>)}
+          <CizimModuSecici />
+            {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { if (mod === '3d') sahne.current?.sigdir(v); else cizici2b.gorus = v; }}>{a}</Dugme>)}
           <Dugme tur="birincil" simge="upload" onClick={() => { dosya.current?.click(); }}>Yükle</Dugme>
         </div>
         {S.busy && <div className="tc-ch-mesgul" role="status">{S.busy}</div>}

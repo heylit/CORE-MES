@@ -125,6 +125,7 @@
 .tc-ch-hud-xyz b { color: var(--ink); }
 .tc-ch-sahne .tc-ch-gorus { left: auto; max-width: 50%; }
 .tc-ch-dock-ac { position: absolute; left: var(--b-3); bottom: var(--b-3); }
+.tc-ch-dock-ac.tc-dugme-ikincil { background: var(--panel); }
 
 @media (max-width: 767px) {
   .tc-ch-dock { left: var(--b-2); right: var(--b-2); width: auto; bottom: var(--b-2); }
