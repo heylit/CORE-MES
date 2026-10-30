@@ -14,6 +14,10 @@ Seridin sirasi, basligi ve simgesi ikinci menunun Planlama grubundan gelir (`ONE
 | P5 | ufuk/ | `YillikPlan`, `Ufuk` | yillik, ufuk | tc-pyu- |
 | P6 | sevkiyat/ | `Sevkiyat` | sevkiyat | tc-pyv- |
 
+P1'in ic sayfalari (`motor/`, `ic/`) kendi oneklerini kullanir (tc-pym-, tc-pyi-, tc-pyh-, tc-pyo-, tc-pyt- tahta kartlari, tc-pyr- tezgah sirasi); P2-P6 oneki
+yalniz kendi klasorunun css'inde ve iskelette yazilir: butun planlama css'i ayni sayfada yuklu kalir, baska parcanin onekiyle yazilan kural o
+parcanin sayfasina da uygulanir.
+
 Her bilesen `(o: PlanlamaEkranOzellikleri) => JSX` imzasindadir. Iskelet her klasore yer tutucu `index.tsx` koyar; parca o dosyayi ve klasorunu
 sahiplenir (dosya kilidi koordinatorden). Parca yalniz kendi klasorune ve `ekran-testleri/recete-rota-planlama-yeni.spec.ts` icinde kendi
 `test.describe('P<n> ...')` bloguna yazar. Kendi css dosyasi kendi klasorundedir. Iskelet dosyalarina (asagidaki liste) dokunulmaz; eksik islev

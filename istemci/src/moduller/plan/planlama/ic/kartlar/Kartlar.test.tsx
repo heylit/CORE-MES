@@ -200,7 +200,7 @@ describe('Tahta kartları', () => {
     const gor = (yaz: boolean) => {
       ac(yaz);
       for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Senaryolar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) menudenAc(ad);
-      const k = document.querySelector('.tc-pyk') as HTMLElement;
+      const k = document.querySelector('.tc-pyt') as HTMLElement;
       const l = [...within(k).getAllByRole('button'), ...within(k).getAllByRole('row'), ...within(k).getAllByRole('combobox')].map((e) => e.textContent);
       cleanup(); vi.restoreAllMocks(); localStorage.clear(); return l;
     };

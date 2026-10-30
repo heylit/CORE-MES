@@ -56,15 +56,15 @@ export function KartKatmani(o: Ozellikler) {
       a.yerler.forEach((m, j) => {
         const s = k.ist[m]; if (!s) return; const [x, y] = ekrana(k.kam, k.W, k.H, s.x, s.y); ilk ??= [x, y];
         const vurgu = iz.ustM === m || iz.ust === a.k;
-        el('rect', { class: 'tc-pyk-iz-kutu', x: x - w / 2 - 6, y: y - h / 2 - 6, width: w + 12, height: h + 12, rx: 12 * kk + 6, 'data-alt': j > 0, 'data-sonuk': sonuk, 'data-vurgu': vurgu });
-        const t = el('text', { class: 'tc-pyk-iz-ad', x: x - w / 2, y: y - h / 2 - 12, 'data-alt': j > 0, 'data-sonuk': sonuk });
+        el('rect', { class: 'tc-pyt-iz-kutu', x: x - w / 2 - 6, y: y - h / 2 - 6, width: w + 12, height: h + 12, rx: 12 * kk + 6, 'data-alt': j > 0, 'data-sonuk': sonuk, 'data-vurgu': vurgu });
+        const t = el('text', { class: 'tc-pyt-iz-ad', x: x - w / 2, y: y - h / 2 - 12, 'data-alt': j > 0, 'data-sonuk': sonuk });
         t.textContent = j ? `${a.k} alt.` : `OP ${a.k}`;
       });
       merkez.push(ilk);
     }
     for (let i = 1; i < merkez.length; i++) {
       const a = merkez[i - 1], b = merkez[i]; if (!a || !b) continue;
-      el('path', { class: 'tc-pyk-iz-yol', d: `M${a[0]},${a[1]} Q${(a[0] + b[0]) / 2},${Math.min(a[1], b[1]) - 40 * kk} ${b[0]},${b[1]}`, 'data-sonuk': !!iz.ust });
+      el('path', { class: 'tc-pyt-iz-yol', d: `M${a[0]},${a[1]} Q${(a[0] + b[0]) / 2},${Math.min(a[1], b[1]) - 40 * kk} ${b[0]},${b[1]}`, 'data-sonuk': !!iz.ust });
     }
   }, []);
   const konumla = useCallback((k: Kare) => {
@@ -137,14 +137,14 @@ export function KartKatmani(o: Ozellikler) {
 
   const gorunen = dar ? o.l.slice(-1) : o.l;
   return (
-    <div ref={kok} className="tc-pyk" data-dar={dar ? '' : undefined}>
-      <svg className="tc-pyk-iz" aria-hidden="true"><g ref={izEl} /></svg>
+    <div ref={kok} className="tc-pyt" data-dar={dar ? '' : undefined}>
+      <svg className="tc-pyt-iz" aria-hidden="true"><g ref={izEl} /></svg>
       {gorunen.map((c) => {
         const t = kartTanimi(c.tur);
         return (
-          <section key={c.tur} className="tc-pyk-kart" data-tur={c.tur} data-kucuk={c.kucuk ? '' : undefined} aria-label={t.ad} onPointerDownCapture={(e) => yaklas(c, e)}
+          <section key={c.tur} className="tc-pyt-kart" data-tur={c.tur} data-kucuk={c.kucuk ? '' : undefined} aria-label={t.ad} onPointerDownCapture={(e) => yaklas(c, e)}
             ref={(e) => { if (e) el.current.set(c.tur, e); else el.current.delete(c.tur); }}>
-            <header className="tc-pyk-bas" title={dar ? undefined : 'Tutup tahtada taşıyın'} onPointerDown={(e) => basla(c, e)}>
+            <header className="tc-pyt-bas" title={dar ? undefined : 'Tutup tahtada taşıyın'} onPointerDown={(e) => basla(c, e)}>
               <Simge ad={t.simge} boyut="k" /><b>{t.ad}</b><span className="tc-pym-ara" />
               <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label={c.kucuk ? 'Aç' : 'Küçült'} title={c.kucuk ? 'Aç' : 'Küçült'} onClick={() => o.kucult(c.tur)}>
                 <Simge ad={c.kucuk ? 'expand' : 'minus'} boyut="k" />
@@ -153,7 +153,7 @@ export function KartKatmani(o: Ozellikler) {
                 <Simge ad="x" boyut="k" />
               </button>
             </header>
-            {!c.kucuk && <div className="tc-pyk-govde">{o.govde(c.tur)}</div>}
+            {!c.kucuk && <div className="tc-pyt-govde">{o.govde(c.tur)}</div>}
           </section>
         );
       })}
