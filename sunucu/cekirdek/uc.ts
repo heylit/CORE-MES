@@ -17,6 +17,7 @@ import { kilitlenmedeYinele } from './kilitlenme.ts';
 import { UygulamaHatasi, dogrulama, gecersiz, mesgul, oturumYok, veritabaniYok, yetkiYok } from './hata.ts';
 import { baslikKimligi, istekOzeti } from './tekrar.ts';
 import type { SakliCevap, TekrarDeposu, TekrarIstegi } from './tekrar.ts';
+import { istekKisisiniIsaretle, istekReddiniKaydet, type RetNedeni } from './red-kaydi.ts';
 import { islemVarMi } from './yetki.ts';
 import type { Kullanici } from './yetki.ts';
 
@@ -490,9 +491,15 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           throw veritabaniYok();
         });
         if (tanim.yetki !== 'acik') {
-          if (kullanici === null) throw oturumYok();
-          if (!yetkisiVarMi(kullanici, tanim.yetki) || !disIzleyiciGirerMi(kullanici, modul)) throw yetkiYok();
-          if (!cihazGirerMi(kullanici, modul)) throw yetkiYok('Bu işlem bu cihazda yapılamaz.');
+          const reddet = (neden: RetNedeni, hata: UygulamaHatasi): never => {
+            istekReddiniKaydet(istek, { neden, kisiId: kullanici?.id ?? null, yontem: tanim.yontem, yol: tanim.yol });
+            throw hata;
+          };
+          if (kullanici === null) return reddet('oturum-yok', oturumYok());
+          if (!yetkisiVarMi(kullanici, tanim.yetki)) reddet('yetki', yetkiYok());
+          if (!disIzleyiciGirerMi(kullanici, modul)) reddet('dis-izleyici', yetkiYok());
+          if (!cihazGirerMi(kullanici, modul)) reddet('cihaz', yetkiYok('Bu işlem bu cihazda yapılamaz.'));
+          istekKisisiniIsaretle(istek, kullanici.id);
         }
         // Kayıtta durulmaz: uygulama bütün modüllerin uçlarını keşfeder, bayraklı tek uç deposuz kurulan her testi
         // düşürürdü. Deposuz kurulumda uç korumasız koşmaz, açık hatayla cevap verir.
@@ -618,6 +625,7 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           if (sonuc === null) return yanit.code(204).header('cache-control', 'private, no-store').send();
           const dosya = sonuc as IkiliCevap;
           if (kullanici?.cihazProfili === 'telefon' && telefondaYasakDosyaMi(dosya.tur)) {
+            istekReddiniKaydet(istek, { neden: 'dosya-turu', kisiId: kullanici.id, yontem: tanim.yontem, yol: tanim.yol });
             throw yetkiYok('Çizim ve 3B dosyaları telefonda açılmaz.');
           }
           // 385 a (ADR 0002 eki): oturumlu kişiye verilen her dosya, içerik akmadan önce kendi yazma transaction'ında deftere

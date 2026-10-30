@@ -6,6 +6,8 @@ import type { HataSatiri } from './gunluk-dosyasi.ts';
 // açılır (kurulum/gunluk.md); açılmamışsa çağrı hata verir, neden durumda tutulur ve Güvenlik Merkezi'nde görünür.
 export const OLAY_KAYNAGI = 'TMIV2';
 export const OLAY_KIMLIGI = '100';
+// Kritik güvenlik alarmı (1365 a) ayrı kimlikle yazılır: bilgi işlem izleme aracında sunucu hatasından ayrı süzer.
+export const GUVENLIK_OLAY_KIMLIGI = '200';
 // Hata fırtınası süreç fırtınasına dönmesin: bu aralıkta en çok bir olay yazılır; arada atlananlar sonrakinin metninde sayılır.
 export const OLAY_ARALIGI_MS = 60_000;
 const METIN_EN_COK = 800;
@@ -59,6 +61,16 @@ export class OlayGunlugu {
     );
   }
 
+  // Tarama yeni kritik alarm açtığında çağırır; hata fırtınası sınırına girmez (alarm defteri zaten tekilleştirir).
+  guvenlikAlarmi(metin: string): void {
+    const an = this.simdi();
+    const temiz = metin.replace(/"/g, '').replace(/[\r\n]+/g, ' ').slice(0, METIN_EN_COK);
+    this.calistir(['/T', 'WARNING', '/ID', GUVENLIK_OLAY_KIMLIGI, '/L', 'APPLICATION', '/SO', OLAY_KAYNAGI, '/D', temiz]).then(
+      () => { this.sonYazma = an; this.sonHata = null; },
+      (hata: unknown) => { this.sonHata = hata instanceof Error ? hata.message : String(hata); },
+    );
+  }
+
   durum(): OlayDurumu {
     return { sonYazma: this.sonYazma, sonHata: this.sonHata };
   }
@@ -74,4 +86,9 @@ export function surecOlayGunlugunuKur(calistir?: OlayCalistirici): OlayGunlugu {
 // Windows dışında ya da test ortamında kurulmaz: null.
 export function surecOlayDurumu(): OlayDurumu | null {
   return surecOlayGunlugu?.durum() ?? null;
+}
+
+// Olay günlüğü kurulmamışsa (Windows dışı, test) yazılmaz.
+export function surecGuvenlikAlarmiYaz(metin: string): void {
+  surecOlayGunlugu?.guvenlikAlarmi(metin);
 }
