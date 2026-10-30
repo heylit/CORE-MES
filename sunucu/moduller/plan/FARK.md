@@ -249,3 +249,10 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   PostgreSQL'de dallı rotadan açılan emir: yamasız B dalı A'nın bitişini bekliyordu, DOĞRULANDI).
 - VARSAYIM: öncül her zaman küçük sıralıdır (Üretim Emirleri girdide denetler). Fason beklemesi işin kendisinindir; öncülü olmayan iş
   (dal başı, bağımsız) beklemez. Ek adımın komşusu en yakın (son) öncülü ve onu ilk bekleyen adımdır. Geri alma: `onculler` alanı okunmaz, eski kural döner.
+## Rota adımının ayar seçeneği (1310 a; 2026-10-30)
+- Değişiklik: Reçete ve Rota adımında `ayarli: false` ise ortak motor o adımın hazırlık süresini sayar ama ayarcı aramaz ve ayarcı
+  kapasitesinden düşmez (`engine.betik ayarciIster`, `girdi.betik` adımın `ayarci` bayrağı); eksik ayarcı denemesi o işi etkilenen saymaz.
+  Alanı olmayan (eski) adım ayarlıdır; hazırlık süresi (setup, hazırlık + ayar toplamı) değişmez.
+- Test: `ayar-secenegi.test.ts` (tek ayarcı, iki tezgâh: ayarlıda ikinci iş bekler; ayarsızda ikisi aynı anda, süre hazırlıkla). Yamasız ayarsız deneme düşer (DOĞRULANDI).
+- VARSAYIM: ayarlı adımda ayarcı bütün hazırlık süresince aranır (ayar ve hazırlık ayrımı plana gelmez); ayarcı ücreti maliyette bugünkü
+  gibi hazırlık süresinden hesaplanır. Sayfa motoru (kurallar.ts) ayarcı kısıtı taşımadığı için değişmez. Geri alma: `ayarci` bayrağı okunmaz.
