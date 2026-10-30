@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OkutCozCevabi, OkutYeri } from '#paylasilan/sozlesme/stok.ts';
-import { ESKI_KART_ILETISI, OKUT_BASI, okutulanHedef, okutuldu, okutYolu, panelOkutuldu, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
+import { ESKI_KART_ILETISI, OKUT_BASI, birakmaHedefi, okutulanHedef, okutuldu, okutYolu, panelOkutuldu, sepetEkleGovdesi, sepetliOkutuldu, sepetTasinir, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
 
 const yer = (konumId: number, tur: OkutYeri['tur'], istasyonId: number | null = null): OkutYeri => ({ konumId, kod: `K${konumId}`, ad: null, tur, istasyonId });
 const malzeme = (yerler: OkutYeri[]): OkutCozCevabi => ({
@@ -97,5 +97,27 @@ describe('QR okut akışı', () => {
     expect(panelOkutuldu(OKUT_BASI, { ...kartli, anaEylem: 'teslim-al' })).toEqual({ tur: 'akis', durum: OKUT_BASI });
     expect(panelOkutuldu(OKUT_BASI, { ...kartli, anaEylem: 'teslim-et' })).toMatchObject({ tur: 'akis', durum: { adim: 'nereye' } });
     expect(okutuldu(d, { tur: 'raf', raf: { id: 1, kod: 'A1' }, gozler: [] })).toMatchObject({ adim: 'nereye', ileti: 'Raf A1: gözü seç ya da gözün etiketini okut.' });
+  });
+
+  it('1338 a: statüsüz malzeme sepete atılır, statülü eski akışla gider; sepet doluyken yer ve kişi bırakma hedefidir', () => {
+    expect(sepetliOkutuldu(OKUT_BASI, malzeme([yer(1, 'kabul')]), false)).toMatchObject({ tur: 'sepete-at', kaynak: { yer: { konumId: 1 } } });
+    expect(sepetliOkutuldu(OKUT_BASI, malzeme([yer(1, 'kabul')]), true)).toMatchObject({ tur: 'sepete-at' }); // art arda okutma sepete ekler
+    const statulu: OkutCozCevabi = { ...malzeme([yer(1, 'istasyon', 3)]), yerler: [{ ...yer(1, 'istasyon', 3), partiId: null, partiEtiketi: null, statuId: 4, miktar: '2.000' }] } as OkutCozCevabi;
+    expect(sepetliOkutuldu(OKUT_BASI, statulu, false)).toMatchObject({ tur: 'akis', durum: { adim: 'nereye' } });
+    expect(sepetliOkutuldu(OKUT_BASI, malzeme([yer(1, 'kabul'), yer(2, 'raf_gozu')]), false)).toMatchObject({ tur: 'akis', durum: { adim: 'kaynak-sec' } });
+    expect(sepetliOkutuldu(OKUT_BASI, { tur: 'yer', yer: yer(7, 'raf_gozu'), satirlar: [] }, true)).toEqual({ tur: 'birak', hedef: yer(7, 'raf_gozu') });
+    expect(sepetliOkutuldu(OKUT_BASI, KISI, true)).toEqual({ tur: 'birak', hedef: { alici: { kod: KISI.tur === 'kisi' ? KISI.kod : '', ad: 'Deneme Alıcı' }, istasyon: { id: 3, kod: 'T3', ad: 'Torna 3' } } });
+    expect(sepetliOkutuldu(OKUT_BASI, KISI, false)).toMatchObject({ tur: 'teslim-et' }); // sepet boşken kişi kodu Teslim et'i açar
+    expect(sepetliOkutuldu(OKUT_BASI, { tur: 'yer', yer: yer(7, 'raf_gozu'), satirlar: [] }, false)).toMatchObject({ tur: 'akis', durum: { adim: 'ne' } });
+  });
+
+  it('1338 a: sepet gövdesi kaynağın tamamını ve kartını taşır; depocu kartsız satırı istasyon dışına taşır, gerisi teslimdir', () => {
+    expect(sepetEkleGovdesi({ ...kaynak(yer(5, 'kabul')), partiId: 12, refakatPartisiId: 4 })).toEqual({ malzemeId: 901, miktar: '4.000', kaynakKonumId: 5, partiId: 12, refakatPartisiId: 4 });
+    expect(sepetEkleGovdesi(kaynak(yer(5, 'kabul')))).not.toHaveProperty('refakatPartisiId');
+    const kisi = { alici: { kod: 'K', ad: null }, istasyon: { id: 3, kod: 'T3', ad: 'Torna 3' } };
+    expect(birakmaHedefi(kisi)).toEqual({ istasyonId: 3 });
+    expect(birakmaHedefi(yer(6, 'raf_gozu'))).toEqual({ konumId: 6 });
+    expect([sepetTasinir(true, false, yer(6, 'raf_gozu')), sepetTasinir(false, false, yer(6, 'raf_gozu')), sepetTasinir(true, true, yer(6, 'raf_gozu')),
+      sepetTasinir(true, false, yer(9, 'istasyon', 3)), sepetTasinir(true, false, kisi)]).toEqual([true, false, false, false, false]);
   });
 });

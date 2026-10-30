@@ -6,8 +6,10 @@ import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import {
-  ELDEN_NOTU, OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
+  ELDEN_NOTU, OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, sepetEkleGovdesi, sepeteAtilir, sepetliOkutuldu, tasimaGovdesi, teslimGovdesi,
+  type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
 } from './okut-akisi.ts';
+import { BaskaSepetler, Birakma, useSepeteAt, useTasimaSepeti } from './TasimaSepeti.tsx';
 import { stokKodCozAnahtari } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
@@ -21,23 +23,37 @@ const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.i
 // bölüm görünür; okutulan kod akışı başlatınca onun yerini "ne, nereye, onay" alır. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
 // Soru 89: ilk okutmanın sonucu (`sonuc`) okuyucunun altında durur; oradan seçilen iş `sifir`ı artırıp akışı başa alır.
 // `kamerali` (809): kamera açılışta kendiliğinden başlar, görüntü büyük durur; dokunmatikte kod alanı odak almaz ki ekran klavyesi kamerayı örtmesin.
-export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, children }: {
-  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; kamerali?: boolean; children: ReactNode;
+// `sepetli` (1338 a): art arda okutulan statüsüz malzeme taşıma sepetine düşer; sepet doluyken okutulan yer ya da kişi bırakma ekranını açar.
+export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, sepetli = false, children }: {
+  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; kamerali?: boolean; sepetli?: boolean; children: ReactNode;
 }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
   // Okutulan raf: gözleri düğme olur; seçilen göz kendi etiketi okutulmuş gibi çözülür.
   const [raf, setRaf] = useState<Extract<OkutCozCevabi, { tur: 'raf' }> | null>(null);
-  useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); setRaf(null); } }, [sifir]);
+  const [birakHedefi, setBirakHedefi] = useState<OkutHedefi | null>(null);
+  const [sonCevap, setSonCevap] = useState<OkutCozCevabi | null>(null);
+  const sepet = useTasimaSepeti(sepetli);
+  const sepetSatirlari = sepet.data?.satirlar ?? [];
+  const sepeteAt = useSepeteAt();
+  const at = (k: OkutKaynagi) => { sepeteAt.komut.mutate(sepetEkleGovdesi(k)); setDurum(OKUT_BASI); setSonuc(`${k.malzemeAd} · ${miktarMetni(k.miktar)} sepete atıldı. Sıradakini okut ya da bırakacağın yeri okut.`); };
+  useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); setRaf(null); setBirakHedefi(null); setSonCevap(null); } }, [sifir]);
   const sorgu = useQueryClient();
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
     onSuccess: (c, kod) => {
       setSonuc(null);
+      setSonCevap(c);
       setRaf(c.tur === 'raf' ? c : null);
       // Stok okuması olana tam çözüm aynı cevapla gelir; Mal kabul ve Sevk bölümleri ikinci kez istemez.
       if ((c.tur === 'malzeme' || c.tur === 'yer') && c.stok) sorgu.setQueryData(stokKodCozAnahtari(kod), c.stok);
-      if (durum.adim === 'ne') okundu?.(kod, c);
+      if (sepetli && durum.adim === 'ne') {
+        const x = sepetliOkutuldu(durum, c, sepetSatirlari.length > 0);
+        if (x.tur === 'birak') { setRaf(null); setBirakHedefi(x.hedef); return; }
+        setBirakHedefi(null);
+        okundu?.(kod, c);
+        if (x.tur === 'sepete-at') { at(x.kaynak); return; }
+      } else if (durum.adim === 'ne') okundu?.(kod, c);
       const p = panelOkutuldu(durum, c);
       if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
     },
@@ -51,26 +67,33 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
     <>
       <div className="tc-stok-okut-ust">
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
+        {sepetli && sonCevap && sonCevap.tur !== 'raf' && <BaskaSepetler c={sonCevap} />}
         {durum.adim !== 'onay' && (kamerali
           ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />
           : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />)}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
-        {raf && raf.gozler.length > 0 && (
-          <ul className="tc-stok-okut-gozler" aria-label={`Raf ${raf.raf.kod} gözleri`}>
-            {raf.gozler.map((g) => <li key={g.konumId}><Dugme simge="box" disabled={coz.isPending} onClick={() => coz.mutate(`LOC:${g.kod}`)}>{g.kod}</Dugme></li>)}
-          </ul>
-        )}
+        {raf && raf.gozler.length > 0 && (sepetli
+          ? <RafIcerigi raf={raf} gozSec={(kod) => coz.mutate(`LOC:${kod}`)} bekliyor={coz.isPending} at={at} />
+          : (
+            <ul className="tc-stok-okut-gozler" aria-label={`Raf ${raf.raf.kod} gözleri`}>
+              {raf.gozler.map((g) => <li key={g.konumId}><Dugme simge="box" disabled={coz.isPending} onClick={() => coz.mutate(`LOC:${g.kod}`)}>{g.kod}</Dugme></li>)}
+            </ul>
+          ))}
         {sonucKarti}
       </div>
-      {durum.adim === 'ne' ? children : (
+      {birakHedefi ? (
+        <Birakma key={birakmaAnahtari(birakHedefi)} hedef={birakHedefi} satirlar={sepetSatirlari}
+          bitti={(metin) => { setBirakHedefi(null); setSonuc(metin); }} vazgec={() => setBirakHedefi(null)} />
+      ) : durum.adim === 'ne' ? children : (
         <div className="tc-stok-form tc-stok-okut-paneli">
           {!tekKart && <ol className="tc-stok-okut-adimlar" aria-label="Adımlar">
             <li aria-current={durum.adim === 'kaynak-sec' ? 'step' : undefined}>Ne</li>
             <li aria-current={durum.adim === 'nereye' ? 'step' : undefined}>Nereye</li>
             <li aria-current={durum.adim === 'onay' ? 'step' : undefined}>Onay</li>
           </ol>}
-          {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sec={(kaynak) => setDurum({ adim: 'nereye', kaynak, ileti: null })} />}
+          {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sepetli={sepetli}
+            sec={(kaynak) => (sepetli && sepeteAtilir(kaynak) ? at(kaynak) : setDurum({ adim: 'nereye', kaynak, ileti: null }))} />}
           {(durum.adim === 'nereye' || durum.adim === 'onay') && <KaynakOzeti kaynak={durum.kaynak} />}
           {durum.adim === 'onay' && <Onay kaynak={durum.kaynak} hedef={durum.hedef} geri={() => setDurum({ adim: 'nereye', kaynak: durum.kaynak, ileti: null })} bitti={basaDon} />}
           <div className="tc-stok-eylem"><Dugme simge="x" onClick={() => basaDon(null)}>Vazgeç</Dugme></div>
@@ -90,13 +113,47 @@ function KaynakSatiri({ k }: { k: OkutKaynagi }) {
   );
 }
 
-function KaynakSecimi({ secenekler, sec }: { secenekler: OkutKaynagi[]; sec: (k: OkutKaynagi) => void }) {
+const birakmaAnahtari = (h: OkutHedefi): string => (kisiHedefiMi(h) ? `k:${h.alici.kod}` : `y:${h.konumId}`);
+
+// Raf okutulunca (1338 a) gözler içerikleriyle gelir: alabileceği gözün serbest satırları (93 a), statüsüz satır sepete atılır.
+// Göz düğmesi gözün etiketi okutulmuş gibidir: sepet doluysa bırakma hedefi olur.
+function RafIcerigi({ raf, gozSec, bekliyor, at }: { raf: Extract<OkutCozCevabi, { tur: 'raf' }>; gozSec: (kod: string) => void; bekliyor: boolean; at: (k: OkutKaynagi) => void }) {
+  const statuAdi = useStatuAdi();
+  return (
+    <div className="tc-stok-raf-icerik" aria-label={`Raf ${raf.raf.kod}`}>
+      {raf.gozler.map(({ satirlar, ...goz }) => (
+        <section key={goz.konumId} className="tc-stok-raf-goz" aria-label={`Göz ${goz.kod}`}>
+          <div className="tc-stok-raf-goz-bas">
+            <Dugme simge="box" disabled={bekliyor} onClick={() => gozSec(goz.kod)}>{goz.kod}</Dugme>
+            <span className="tc-stok-not">{satirlar === null || satirlar === undefined ? 'İçerik açık değil' : satirlar.length === 0 ? 'Boş' : `${satirlar.length} kalem`}</span>
+          </div>
+          <BaskaSepetler c={raf} konumId={goz.konumId} />
+          {satirlar && satirlar.length > 0 && (
+            <ul className="tc-stok-satirlar">
+              {satirlar.map((x) => {
+                const k: OkutKaynagi = { malzemeId: x.malzemeId, malzemeAd: x.ad ?? x.kod ?? `Malzeme #${x.malzemeId}`, birim: null, yer: goz, partiId: x.partiId, partiEtiketi: x.partiEtiketi, statuId: x.statuId, miktar: x.miktar };
+                return (
+                  <li key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`}>
+                    <span><strong>{k.malzemeAd}</strong> <span className="tc-stok-mono">{[x.partiEtiketi, statuAdi(x.statuId)].filter(Boolean).join(' · ')} · {miktarMetni(x.miktar)}</span></span>
+                    {sepeteAtilir(k) && <Dugme simge="plus" onClick={() => at(k)}>Al</Dugme>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function KaynakSecimi({ secenekler, sec, sepetli = false }: { secenekler: OkutKaynagi[]; sec: (k: OkutKaynagi) => void; sepetli?: boolean }) {
   return (
     <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Nereden alınacak">
       {secenekler.map((k) => (
         <li key={`${k.yer.konumId}:${k.malzemeId}:${k.partiId ?? ''}:${k.statuId ?? ''}`} className="tc-stok-is">
           <div><KaynakSatiri k={k} /></div>
-          <Dugme tur="birincil" onClick={() => sec(k)}>Bunu al</Dugme>
+          <Dugme tur="birincil" simge={sepetli && sepeteAtilir(k) ? 'cart' : undefined} onClick={() => sec(k)}>{sepetli && sepeteAtilir(k) ? 'Sepete at' : 'Bunu al'}</Dugme>
         </li>
       ))}
     </ul>

@@ -799,7 +799,8 @@ export type TeslimGovdesi = z.input<typeof teslimGovdesi>;
 // Sepetten Teslim et (Soru 133, herkes): her satır hedefine "yolda" teslim olur; hedefi verilmeyen satır kaydındaki hedefe gider.
 // Kart, satırın kartıdır. Satır teslim açılınca sepetten düşer; açılamayan satır nedeniyle döner, sepette kalır.
 export const sepetTeslimEtGovdesi = z.object({
-  satirlar: z.array(z.object({ satirId: buyukKimlik, hedef: z.union([z.object({ istasyonId: kimlik }).strict(), z.object({ konumId: kimlik }).strict()]).optional() })).min(1).max(200),
+  // miktar (1338 a, parçalı bırakma): verilmezse satırın tamamı gider; azsa kalan sepette kalır.
+  satirlar: z.array(z.object({ satirId: buyukKimlik, hedef: z.union([z.object({ istasyonId: kimlik }).strict(), z.object({ konumId: kimlik }).strict()]).optional(), miktar: miktarSemasi.optional() })).min(1).max(200),
   aliciKodu: z.string().trim().min(1).max(80).nullable().optional(),
   kaynakKimligi: z.string().trim().min(3).max(120),
 });
@@ -1236,8 +1237,10 @@ export type YerdekiStokCevabi = z.output<typeof yerdekiStokCevabi>;
 // QR Okut paneli (karar 91 a): stok.istek olan herkes okutur. Konum her zaman çözülür (teslim yeri olabilir); `satirlar` yalnız kişinin
 // alabileceği yerde gelir, alamadığı yerde null. Malzeme ve lotta `yerler` yalnız alabileceği yerlerin serbest stoğudur (yoldaki düşülür).
 export const okutYeri = z.object({ konumId: z.number().int(), kod: z.string(), ad: z.string().nullable(), tur: z.enum(KONUM_TURLERI), istasyonId: z.number().int().nullable() });
+// Başkasının sepetindeki miktar (1338 a, 1342 a): yalnız bilgi; stok ayrılmaz, bırakırken sunucu serbest miktarı yeniden denetler.
+const baskaSepetler = z.array(z.object({ konumId: z.number().int(), malzemeId: z.number().int(), partiId: z.number().int().nullable(), kisiAd: z.string().nullable(), miktar: ondalikMetinSemasi })).optional();
 export const okutCozCevabi = z.discriminatedUnion('tur', [
-  z.object({ tur: z.literal('yer'), yer: okutYeri, satirlar: yerdekiStokCevabi.shape.satirlar.nullable(), stok: kodCozCevabi.optional() }),
+  z.object({ tur: z.literal('yer'), yer: okutYeri, satirlar: yerdekiStokCevabi.shape.satirlar.nullable(), stok: kodCozCevabi.optional(), baskaSepetler }),
   z.object({
     tur: z.literal('malzeme'),
     // tur ve partinin emri (kart #95): panel Teslim et'te mamul ve yarı mamulü sevke, emri fasona yönlendirir; stok okuması gerektirmez.
@@ -1255,9 +1258,11 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     anaEylem: z.enum(['teslim-al', 'isi-ac', 'teslim-et']).optional(),
     // Stok okuması olana tam çözüm aynı cevapla gelir (tek istek); okuması olmayanda yoktur.
     stok: kodCozCevabi.optional(),
+    baskaSepetler,
   }),
   // Raf etiketi (RAF:<kod>): raf stok yeri değildir; okutan rafın açık gözlerinden birini seçer.
-  z.object({ tur: z.literal('raf'), raf: z.object({ id: z.number().int(), kod: z.string() }), gozler: z.array(okutYeri) }),
+  // Gözün içeriği (1338 a) yer okutmasıyla aynı kuraldır: alabileceği gözde serbest satırlar, alamadığında null.
+  z.object({ tur: z.literal('raf'), raf: z.object({ id: z.number().int(), kod: z.string() }), gozler: z.array(okutYeri.extend({ satirlar: yerdekiStokCevabi.shape.satirlar.nullable().optional() })), baskaSepetler }),
   // Eski refakat kartı (UE:<emir>, 614 3a): teslimde geçmez; depodan refakat kartı istenir.
   z.object({ tur: z.literal('eski-kart'), kod: z.string(), uretimEmriId: z.number().int() }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.

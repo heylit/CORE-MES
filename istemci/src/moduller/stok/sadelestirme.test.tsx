@@ -72,7 +72,7 @@ describe('kart okutunca rotadaki adım (752 b)', () => {
     ac();
     const liste = await screen.findByRole('list', { name: 'Kartın parçası' });
     expect(within(liste).getByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 30)' })).toBeTruthy();
-    expect(within(liste).getByRole('button', { name: 'Teslim al' })).toBeTruthy();
+    expect(within(liste).getByRole('button', { name: /^Teslim al, / })).toBeTruthy();
     expect(within(liste).queryByText(/Başka parça/)).toBeNull();
     expect(istekler.some((i) => i.yol === '/stok/teslim-kutusu/istasyon-sepetleri?istasyonId=2&uretimEmriId=30')).toBe(true);
   });

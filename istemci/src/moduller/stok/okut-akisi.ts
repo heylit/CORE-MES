@@ -1,4 +1,4 @@
-import type { OkutCozCevabi, OkutYeri, TasimaGovdesi, TeslimGonderGovdesi, TeslimYeri } from '#paylasilan/sozlesme/stok.ts';
+import type { OkutCozCevabi, OkutYeri, SepetEkleGovdesi, TasimaGovdesi, TeslimGonderGovdesi, TeslimYeri } from '#paylasilan/sozlesme/stok.ts';
 
 // QR Okut paneli (karar 91 a, 93): önce ne (malzeme, lot ya da alınacak yer), sonra nereye (istasyon, konum ya da harita kutusu).
 // Saf: okuma cevabını adıma çevirir; gönderimi panel yapar.
@@ -117,3 +117,26 @@ export function panelOkutuldu(d: OkutDurumu, c: OkutCozCevabi): PanelOkutmasi {
   if (d.adim === 'ne' && c.tur === 'malzeme' && (c.anaEylem === 'teslim-al' || c.anaEylem === 'isi-ac')) return { tur: 'akis', durum: OKUT_BASI };
   return { tur: 'akis', durum: okutuldu(d, c) };
 }
+
+// Taşıma sepeti (1338 a): statüsüz kaynak ilk okutmada kişinin sepetine atılır; sepet doluyken okutulan yer ya da kişi bırakma hedefidir.
+// Statülü parça sepete girmez (sunucu da reddeder), eski "nereye, onay" akışıyla gider. Sepet stok ayırmaz (1342 a).
+export type SepetliOkutma = PanelOkutmasi | { tur: 'sepete-at'; kaynak: OkutKaynagi } | { tur: 'birak'; hedef: OkutHedefi };
+export const sepeteAtilir = (k: OkutKaynagi): boolean => k.statuId === null;
+export function sepetliOkutuldu(d: OkutDurumu, c: OkutCozCevabi, sepetDolu: boolean): SepetliOkutma {
+  if (d.adim === 'ne' && sepetDolu) {
+    if (c.tur === 'kisi') return { tur: 'birak', hedef: { alici: { kod: c.kod, ad: c.kisi.ad }, istasyon: c.istasyon } };
+    if (c.tur === 'yer') return { tur: 'birak', hedef: c.yer };
+  }
+  const p = panelOkutuldu(d, c);
+  if (d.adim === 'ne' && p.tur === 'akis' && p.durum.adim === 'nereye' && sepeteAtilir(p.durum.kaynak)) return { tur: 'sepete-at', kaynak: p.durum.kaynak };
+  return p;
+}
+export function sepetEkleGovdesi(k: OkutKaynagi): SepetEkleGovdesi {
+  return {
+    malzemeId: k.malzemeId, miktar: k.miktar, kaynakKonumId: k.yer.konumId, partiId: k.partiId,
+    ...(k.refakatPartisiId === undefined ? {} : { refakatPartisiId: k.refakatPartisiId }),
+  };
+}
+// Bırakma: istasyon ve kişi teslimdir (alan taraf ya da kişi kodu); depo işlemi olan, kartsız satırı istasyon dışı yere taşır.
+export const birakmaHedefi = (h: OkutHedefi): TeslimYeri => (kisiHedefiMi(h) ? { istasyonId: h.istasyon.id } : teslimYeri(h));
+export const sepetTasinir = (depocu: boolean, kartli: boolean, h: OkutHedefi): boolean => depocu && !kartli && !kisiHedefiMi(h) && h.tur !== 'istasyon';
