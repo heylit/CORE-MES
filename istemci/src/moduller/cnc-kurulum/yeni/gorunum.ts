@@ -59,6 +59,9 @@ export function useTanimlar(): { acik: boolean; sekme: TanimSekmesi } {
   return useSyncExternalStore((d) => { tanimDinleyicileri.add(d); return () => { tanimDinleyicileri.delete(d); }; }, () => tanim, () => tanim);
 }
 
+// Alt ya da Cmd'li tuş tarayıcının ve sistemin kısayoludur (Alt+Sol/Sağ geri ve ileri gider); görünümler onu yutmaz.
+export const sistemKisayoluMu = (e: Pick<KeyboardEvent, 'altKey' | 'metaKey'>): boolean => e.altKey || e.metaKey;
+
 // Klavye yalnız etkin görünümde, yazı alanı odakta değilken ve Tanımlar kapalıyken (prototipin libKey/gKey/prKey/lwKey'i).
 export function useTuslar(etkin: boolean, isleyici: (e: KeyboardEvent) => void): void {
   useEffect(() => {
@@ -66,7 +69,7 @@ export function useTuslar(etkin: boolean, isleyici: (e: KeyboardEvent) => void):
     const tus = (e: KeyboardEvent): void => {
       const h = e.target;
       if (h instanceof HTMLElement && (h.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(h.tagName))) return;
-      if (tanim.acik) return;
+      if (tanim.acik || sistemKisayoluMu(e)) return;
       isleyici(e);
     };
     window.addEventListener('keydown', tus);
