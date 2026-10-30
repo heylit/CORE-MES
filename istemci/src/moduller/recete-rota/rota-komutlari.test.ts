@@ -71,6 +71,15 @@ describe('rota köprü komutları', () => {
     expect(adimlar[1]).not.toHaveProperty('birlesen');
   });
 
+  it('1257 a: dal çarpanı kaydet gövdesinde gider; gelmeyen alan gönderilmez; tam sayı olmayan çarpan reddedilir', async () => {
+    const istekler = sunucuKur(tamam);
+    await kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, dal: 'A', adetCarpani: 2 }, ADIM] } });
+    const adimlar = (istekler[0]?.govde as { adimlar: Record<string, unknown>[] }).adimlar;
+    expect(adimlar[0]).toMatchObject({ dal: 'A', adetCarpani: 2 });
+    expect(adimlar[1]).not.toHaveProperty('adetCarpani');
+    await expect(kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, dal: 'A', adetCarpani: 1.5 }] } })).rejects.toThrow();
+  });
+
   it('1310 a: hazırlık, ayar ve ayar süresi kaydet gövdesinde gider; bölümü taşımayan adımda alanlar gönderilmez', async () => {
     const istekler = sunucuKur(tamam);
     await kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, hazirlikDk: 5, ayar: true, ayarDk: 20 }, ADIM] } });

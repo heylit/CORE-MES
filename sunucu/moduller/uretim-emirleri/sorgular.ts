@@ -802,9 +802,12 @@ export interface IsEmriSatiri {
   // 1248 a: dal satırı olmayan iş emrinde ikisi de null (eski kural); satırı olanda onculler dizidir (boş: dal başı).
   dal: string | null;
   onculler: AdimOnculu[] | null;
+  // 1257 a: bir mamul için bu adımda işlenen adet; boş 1.
+  adetCarpani: number | null;
 }
 
 const DAL_VE_ONCUL = `(SELECT d.dal FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS dal,
+  (SELECT d.adet_carpani FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS "adetCarpani",
   (SELECT COALESCE((SELECT json_agg(json_build_object('id', o.oncul_is_emri_id, 'tur', o.tur, 'devirAdedi', o.devir_adedi) ORDER BY o.oncul_is_emri_id)
                       FROM uretim_emirleri_is_emri_onculu o WHERE o.is_emri_id = d.is_emri_id), '[]'::json)
      FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS onculler`;
@@ -954,10 +957,13 @@ export async function onculleriSil(db: Db, isEmriId: number): Promise<void> {
 }
 
 // 1248 a: iş emrinin dalı ve öncül listesi baştan yazılır; dal satırı iş emrini öncül listeli yapar (liste boşsa dal başıdır).
-export async function onculleriYaz(db: Db, isEmriId: number, dal: string | null, onculler: readonly AdimOnculu[]): Promise<void> {
+export async function onculleriYaz(
+  db: Db, isEmriId: number, dal: string | null, onculler: readonly AdimOnculu[], adetCarpani: number | null,
+): Promise<void> {
   await db.sorgu(
-    `INSERT INTO uretim_emirleri_is_emri_dali (is_emri_id, dal) VALUES ($1, $2) ON CONFLICT (is_emri_id) DO UPDATE SET dal = EXCLUDED.dal`,
-    [isEmriId, dal],
+    `INSERT INTO uretim_emirleri_is_emri_dali (is_emri_id, dal, adet_carpani) VALUES ($1, $2, $3)
+     ON CONFLICT (is_emri_id) DO UPDATE SET dal = EXCLUDED.dal, adet_carpani = EXCLUDED.adet_carpani`,
+    [isEmriId, dal, dal === null ? null : adetCarpani],
   );
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_onculu WHERE is_emri_id = $1', [isEmriId]);
   for (const o of onculler) {
@@ -2167,7 +2173,7 @@ export interface AdimDurumSatiri {
   hataliEmirde: number;
   sonOlay: 'duraklat' | 'durdur' | 'devam' | null;
   // Bölünmüş ya da kol emir: adıma giren parti hesabı ister, listede eksik gösterilmez.
-  partili: boolean;  onculler: AdimOnculu[] | null;
+  partili: boolean;  onculler: AdimOnculu[] | null; adetCarpani: number | null;
 }
 
 // Emirlerin bütün adımları, sayaçları ve son olaylarıyla tek sorguda (liste okuması sorgu sayısını adım sayısıyla büyütmez).

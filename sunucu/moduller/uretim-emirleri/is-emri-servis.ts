@@ -27,7 +27,7 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, onculGirdisiIhlali,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, onculdenGelen, onculGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
@@ -73,6 +73,8 @@ export interface IsEmriGirdisi {
   // sıra, adımın bağımlılığıyla); boş dizi: dal başı, hiçbir adımı beklemez. Öncül her zaman daha küçük sıralıdır.
   dal?: string | null;
   onculler?: { opNo: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
+  // 1257 a: bir mamul için bu dal adımında işlenen adet (boş: 1); yalnız dallı adımda tutulur.
+  adetCarpani?: number | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -173,7 +175,7 @@ async function onculleriKopyala(db: Db, girdiler: readonly IsEmriGirdisi[], kiml
       const oncul = kimlik.get(o.opNo);
       return oncul === undefined ? [] : [{ id: oncul, tur: o.tur, devirAdedi: o.tur === 'akisli' ? o.devirAdedi : null }];
     });
-    await s.onculleriYaz(db, id, g.dal ?? null, onculler);
+    await s.onculleriYaz(db, id, g.dal ?? null, onculler, g.adetCarpani ?? null);
   }
 }
 
@@ -184,14 +186,15 @@ async function araAdimiBagla(
 ): Promise<void> {
   if (!kendi.some((i) => i.onculler !== null)) return;
   const tur: OnculTuru | null = yeni.bagimlilik === 'bagimsiz' ? null : yeni.bagimlilik;
+  // Araya giren adım öncesindeki adımın dalında ve çarpanındadır (aynı parçayı işler).
   await s.onculleriYaz(db, yeni.id, onceki?.dal ?? null,
-    onceki === null || tur === null ? [] : [{ id: onceki.id, tur, devirAdedi: tur === 'akisli' ? yeni.devirAdedi : null }]);
+    onceki === null || tur === null ? [] : [{ id: onceki.id, tur, devirAdedi: tur === 'akisli' ? yeni.devirAdedi : null }], onceki?.adetCarpani ?? null);
   for (const i of kendi) {
     if (i.onculler === null) continue;
     if (onceki === null) {
-      if (i.onculler.length === 0) await s.onculleriYaz(db, i.id, i.dal, [{ id: yeni.id, tur: 'bekleyen', devirAdedi: null }]);
+      if (i.onculler.length === 0) await s.onculleriYaz(db, i.id, i.dal, [{ id: yeni.id, tur: 'bekleyen', devirAdedi: null }], i.adetCarpani);
     } else if (i.onculler.some((o) => o.id === onceki.id)) {
-      await s.onculleriYaz(db, i.id, i.dal, i.onculler.map((o) => (o.id === onceki.id ? { ...o, id: yeni.id } : o)));
+      await s.onculleriYaz(db, i.id, i.dal, i.onculler.map((o) => (o.id === onceki.id ? { ...o, id: yeni.id } : o)), i.adetCarpani);
     }
   }
 }
@@ -208,7 +211,7 @@ async function silinenBaginiDevret(db: Db, id: number): Promise<void> {
     const bag = a.onculler?.find((o) => o.id === id);
     const kalan = (a.onculler ?? []).filter((o) => o.id !== id);
     const yeni: AdimOnculu[] = bag === undefined ? kalan : [...kalan, ...devir.filter((d) => !kalan.some((o) => o.id === d)).map((d) => ({ ...bag, id: d }))];
-    await s.onculleriYaz(db, a.id, a.dal, yeni);
+    await s.onculleriYaz(db, a.id, a.dal, yeni, a.adetCarpani);
   }
 }
 
@@ -786,7 +789,7 @@ const oncekiAdim = (hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): IsEmr
 
 // Adıma giren adet: önceki adımın sağlamı, bu adımda katılan kolların sağlamı, aynı sırada bölünenler düşülür. İlk adımda null.
 // Önceki adım bitmemişse (paralel adım, 639) o ana kadarki sağlamı girer. GKK adımına fasona gönderilen girer (1207 c).
-// 1248 a: öncül listeli adımda birden çok öncülün en az geleni girer; dal başında null.
+// 1248 a: öncül listeli adımda birden çok öncülün en az geleni girer; dal başında null. 1257 a: öncülün sağlamı çarpanla bu adımın birimine çevrilir.
 export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): Promise<number | null> {
   const onculler = isEmri.onculler === null ? [oncekiAdim(hepsi, isEmri)].filter((o) => o !== undefined) : adimOnculleri(hepsi, isEmri).map((o) => o.adim);
   const onceki = onculler.at(-1);
@@ -795,7 +798,7 @@ export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriS
   const sayac = new Map((await s.adimSayaclariGetir(db, onculler.filter((o) => o.durum !== 'tamam').map((o) => o.id))).map((x) => [x.isEmriId, x.saglam]));
   const oncekiSaglam = gkk
     ? fasonOzeti(await s.fasonHareketleriGetir(db, [onceki.id])).gonderilen
-    : Math.min(...onculler.map((o) => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : (sayac.get(o.id) ?? 0))));
+    : Math.min(...onculler.map((o) => onculdenGelen(o.durum === 'tamam' ? (o.saglamAdet ?? 0) : (sayac.get(o.id) ?? 0), o, isEmri)));
   const bolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [emirId]), emirId).filter((p) => p.bolunmeSira === isEmri.sira).reduce((t, p) => t + p.adet, 0);
   return oncekiSaglam + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
 }
@@ -937,7 +940,7 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
     await s.onculleriYaz(db, k.yeniId, k.kaynak.dal, k.kaynak.onculler.flatMap((o) => {
       const id = yeniKimlik.get(o.id);
       return id === undefined ? [] : [{ ...o, id }];
-    }));
+    }), k.kaynak.adetCarpani);
   }
   await kopyalandiBildir(db, kisiId, kolId, kopyalar);
 }

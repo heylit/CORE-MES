@@ -248,7 +248,8 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
   const adayKaynagi = (k: Kaynak): KaynakOzeti => ({ ...kaynak(k), tur: k.tur });
   const urun = (id: number): UrunOzeti => b.urunler.get(id) ?? { id, stokKodu: null, ad: 'Bilinmeyen kart', tur: '?', stokBirimi: null, onayDurumu: '?' };
   return icerik.adimlar.map((a, i) => {
-    const miktar = miktarlar.get(a.opNo) ?? urunMiktari;
+    // Dal adımı bir mamul için çarpan kadar parça işler (1257 a).
+    const miktar = (miktarlar.get(a.opNo) ?? urunMiktari) * (a.adetCarpani ?? 1);
     const sure = teorikSure(sayiyaCevir(a.ayarSuresiDk), sayiyaCevir(a.birimSureDk), miktar);
     const tip = b.tipler.get(a.operasyonTipiId) ?? { id: a.operasyonTipiId, kod: '?', ad: 'Bilinmeyen tip', kisaltma: '?', aktif: false };
     const akisi = akis[i] ?? { tuketir: [], cikti: { tur: 'urun' as const } };
@@ -260,7 +261,7 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: ayrim.islem, degisimSuresiDk: ayrim.degisim,
       degisimOraniYuzde: oran === null ? null : ondalikMetin(oran, 2), terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
       firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
-      hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
+      hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani, onculler: onculler[i] ?? null,
       adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
         .map((x) => {
           const ayrim = teorikAyrim(x.birimSureDk, x.islemSuresiDk, x.degisimSuresiDk);
@@ -603,7 +604,7 @@ function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[] {
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
     yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
-    hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen,
+    hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani,
   }));
 }
 
@@ -700,7 +701,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = sablon.map((st) => ({
       opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
     }));
   } else if (kaynak.tur === 'kart') {
     // Aktarım tek yönlüdür ve yalnız ilk rotada: kart sonradan değişse de var olan rota değişmez, kartta kopya kalır (#688).
@@ -710,7 +711,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = kart.map((a) => ({
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
     }));
   } else if (kaynak.tur === 'urun') {
     if ((await s.harfler(db, urunId)).length > 0) throw cakisma(ROTA_VAR);
@@ -791,8 +792,14 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   const eskiDal = new Map(mevcut.adimlar.map((m) => [m.opNo, m]));
   const dalli = secimli.map((a) => {
     const eski = a.opNo === null ? undefined : eskiDal.get(a.opNo);
-    return { ...a, dal: a.dal === undefined ? eski?.dal ?? null : a.dal, birlesen: a.birlesen ?? eski?.birlesen ?? [] };
+    const dal = a.dal === undefined ? eski?.dal ?? null : a.dal;
+    // Çarpan yalnız dal adımında anlamlıdır; 1 boş yazılır (1257 a).
+    // Alanı göndermeyen kayıt çarpanı korur; dalı kaldırılan adımda korunan çarpan düşer (ana hat bir mamul içindir).
+    const carpan = a.adetCarpani === undefined ? (dal === null ? null : eski?.adetCarpani ?? null) : a.adetCarpani;
+    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan };
   });
+  const carpanHatasi = dalli.findIndex((a) => a.dal === null && a.adetCarpani !== null);
+  if (carpanHatasi >= 0) throw dogrulama('Adet çarpanı yalnız dal adımında girilir; ana hat bir mamul içindir.', `adimlar.${carpanHatasi}.adetCarpani`);
   const dalHatasi = dalDenetle(dalli);
   if (dalHatasi) throw dogrulama(dalHatasi.ileti, dalHatasi.alan);
   await s.icerikSil(db, id);
@@ -1300,6 +1307,8 @@ export interface RotaAdimi {
   // Çok dallı rota (1248 a): öncüller kurallar.ts oncullerCikar'dan; null tek hatlı rotadır (bugünkü bağımlılık kuralı), boş dizi hiçbir adımı beklemez.
   dal: string | null;
   onculler: Oncul[] | null;
+  // Dal çarpanı (1257 a); boş 1.
+  adetCarpani: number | null;
 }
 
 export interface RotaRevizyonu {
@@ -1364,7 +1373,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
       bilesenler: (yazim[i]?.bilesenler ?? []) as RotaAdimi['bilesenler'],
       yanUrunler: (yazim[i]?.yanUrunler ?? []) as RotaAdimi['yanUrunler'],
       talimatSurumu: talimatlar.get(a.opNo) ?? null,
-      dal: a.dal, onculler: onculler[i] ?? null,
+      dal: a.dal, onculler: onculler[i] ?? null, adetCarpani: a.adetCarpani,
     })),
   };
 }
@@ -1396,6 +1405,7 @@ export interface DurumRotaAdimi {
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
   yanUrunler: { malzemeId: number; miktar: OndalikMetin }[];
   dal: string | null;
+  adetCarpani: number | null;
   birlesen: string[];
   onculler: Oncul[] | null;
 }
@@ -1430,7 +1440,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
           .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
         yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
-        hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
+        hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani, onculler: onculler[i] ?? null,
       })),
     });
   }
@@ -1519,6 +1529,7 @@ async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullable<Awai
     ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, talimatSurumu: a.talimatSurumu,
     ...isEmriBagimliligi(a),
+    adetCarpani: a.adetCarpani,
     kontrolListesi: listeler.get(a.opNo) ?? [],
     // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
     firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,

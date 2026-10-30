@@ -864,15 +864,27 @@ export const katilmaIhlali = (durum: EmirDurumu, calisma: CalismaDurumu, acikVar
 // Her adımın işleyeceği adet: taban (emir adedi ve bu adımı birlikte yapan kollar) önceki bitmiş adımın kaybı kadar azalır. Kayıp,
 // bitmiş adımın tabanı ile sağlamı arasındaki farktır ve bitmemiş adımlardan sonrakilere taşınır; adet tabanı aşmaz (deneme "sonraki
 // adımın hedefi hurdayı düşmüyor": OP10 40'tan 39 sağlam çıkınca OP20 39 parça işler).
+// 1257 a: dallı adımda taban çarpanla büyür (bir mamul için o daldan kaç adet) ve kayıp mamul birimiyle öncüllerden gelir; birleştirmede en
+// çok kaybeden dal belirler. Listesi olmayan (eski) adımın öncülü sırası bir küçük olan adımdır.
 export function adimAdetleri(
-  adimlar: readonly { sira: number; durum: string; saglamAdet: number | null }[], taban: (sira: number) => number,
+  adimlar: readonly {
+    sira: number; durum: string; saglamAdet: number | null; id?: number; onculler?: readonly { id: number }[] | null; adetCarpani?: number | null;
+  }[],
+  taban: (sira: number) => number,
 ): Map<number, number> {
   const sonuc = new Map<number, number>();
-  let kayip = 0;
-  for (const a of [...adimlar].sort((x, y) => x.sira - y.sira)) {
-    const t = taban(a.sira);
-    sonuc.set(a.sira, Math.min(t, Math.max(0, t - kayip)));
-    if (a.durum === 'tamam' && a.saglamAdet !== null) kayip = t - a.saglamAdet;
+  const kayipCikan = new Map<number, number>();
+  const sirali = [...adimlar].sort((x, y) => x.sira - y.sira);
+  const sirasi = new Map(sirali.flatMap((a) => (a.id === undefined ? [] : [[a.id, a.sira] as const])));
+  for (const [i, a] of sirali.entries()) {
+    const carpan = a.adetCarpani ?? 1;
+    const t = taban(a.sira) * carpan;
+    const onculSiralari = a.onculler == null
+      ? (i === 0 ? [] : [sirali[i - 1]!.sira])
+      : a.onculler.flatMap((o) => { const s = sirasi.get(o.id); return s === undefined ? [] : [s]; });
+    const kayip = Math.max(0, ...onculSiralari.map((s) => kayipCikan.get(s) ?? 0));
+    sonuc.set(a.sira, Math.min(t, Math.max(0, Math.floor(t - kayip * carpan + 1e-9))));
+    kayipCikan.set(a.sira, a.durum === 'tamam' && a.saglamAdet !== null ? (t - a.saglamAdet) / carpan : kayip);
   }
   return sonuc;
 }
@@ -1085,7 +1097,12 @@ export interface ParalelAdim {
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
   onculler?: readonly AdimOnculu[] | null;
+  adetCarpani?: number | null;
 }
+
+// 1257 a: öncülün sağlamı bu adımın birimine çevrilir (pim dalından 140 gelmiş, çarpan 2: birleştirmede 70 mamullük); aşağı yuvarlanır.
+export const onculdenGelen = (saglam: number, oncul: { adetCarpani?: number | null }, adim: { adetCarpani?: number | null }): number =>
+  Math.floor((saglam * (adim.adetCarpani ?? 1)) / (oncul.adetCarpani ?? 1) + 1e-9);
 
 // Adımın en yakın öncülü (adimOnculleri'nin son öğesi): eski emirde sırası bir küçük olan adım; bağımsız adımın ve dal başının öncülü yoktur.
 export function oncekiParalelAdim<T extends ParalelAdim>(adimlar: readonly T[], adim: T): T | null {
@@ -1109,7 +1126,7 @@ export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly
     if (onceki.durum === 'tamam') return null;
     if (tur === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
     const devir = devirAdedi ?? 0;
-    const gelen = typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki);
+    const gelen = onculdenGelen(typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki), onceki, adim);
     return gelen >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`;
   });
   return uyarilariBirlestir(...uyarilar);
@@ -1169,7 +1186,7 @@ export function adimEksikleri(adimlar: readonly EksikAdimi[]): Map<number, numbe
   return new Map(adimlar.map((a) => {
     // Eski emirde adet yalnız en yakın öncülden gelir (bekleme kuralı bağımsızları da sayar, adet akışı saymaz).
     const onculler = adimOnculleri(adimlar, a).map((o) => o.adim);
-    const gelen = (a.onculler == null ? onculler.slice(-1) : onculler).map((o) => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam));
+    const gelen = (a.onculler == null ? onculler.slice(-1) : onculler).map((o) => onculdenGelen(o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam, o, a));
     return [a.id, adimEksigi(gelen.length === 0 ? null : Math.min(...gelen), adimTuketimi(a))];
   }));
 }
