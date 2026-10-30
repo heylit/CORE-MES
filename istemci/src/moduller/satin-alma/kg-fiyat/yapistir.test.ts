@@ -11,9 +11,9 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
     const metin = '﻿kalite;form;kg fiyatı;para birimi;geçerlilik\nDENEME-1;cubuk;125,50;try;01.10.2026\n\nDENEME-2\t\t3.2\tEUR\t\tnot\t0,4\nDENEME-3;;80';
     expect(yapistirilaniOku(metin, BUGUN)).toEqual({
       satirlar: [
-        { kaliteKodu: 'DENEME-1', form: 'cubuk', kgFiyati: '125.50', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: '2026-10-01', aciklama: '' },
-        { kaliteKodu: 'DENEME-2', form: null, kgFiyati: '3.2', talasKgFiyati: '0.4', paraBirimi: 'EUR', gecerlilik: BUGUN, aciklama: 'not' },
-        { kaliteKodu: 'DENEME-3', form: null, kgFiyati: '80', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: BUGUN, aciklama: '' },
+        { kaliteKodu: 'DENEME-1', form: 'cubuk', kgFiyati: '125.50', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: '2026-10-01', aciklama: '', islemKatsayisi: null, araciKatsayisi: null },
+        { kaliteKodu: 'DENEME-2', form: null, kgFiyati: '3.2', talasKgFiyati: '0.4', paraBirimi: 'EUR', gecerlilik: BUGUN, aciklama: 'not', islemKatsayisi: null, araciKatsayisi: null },
+        { kaliteKodu: 'DENEME-3', form: null, kgFiyati: '80', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: BUGUN, aciklama: '', islemKatsayisi: null, araciKatsayisi: null },
       ],
       hatalar: [],
       atlanan: 0,
@@ -27,15 +27,20 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
   });
 
   it('1351: indirilen şablon (tırnaklı hücreler, BOM, bilgi sütunları) olduğu gibi okunur; kg fiyatı boş satır hata değil, atlanır', () => {
-    const satirlar = sablonSatirlari([satir({ form: null, paraBirimi: 'USD', kgFiyati: '3.2000' })], [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 1 }]);
+    const satirlar = sablonSatirlari([satir({ form: null, paraBirimi: 'USD', kgFiyati: '3.2000', islemKatsayisi: '1.15' })],
+      [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 1 }]);
     expect(satirlar).toEqual([
-      ['DENEME-AL', '', null, 'USD', null, null, null, 3.2, '19.10.2026'],
-      ['DENEME-FY', 'boru', null, 'TRY', null, null, null, null, null],
+      ['DENEME-AL', '', null, 'USD', null, null, null, 1.15, null, 3.2, '19.10.2026'],
+      ['DENEME-FY', 'boru', null, 'TRY', null, null, null, null, null, null, null],
     ]);
     expect(yapistirilaniOku(csvMetni(SABLON_BASLIKLARI, satirlar), BUGUN)).toEqual({ satirlar: [], hatalar: [], atlanan: 2 });
-    const dolu = satirlar.map((s, i) => (i === 0 ? ['DENEME-AL', '', '3,4', 'USD', '01.11.2026', 'teklif; "A"', null, 3.2, '19.10.2026'] : s));
+    // Katsayı değiştirilmezse şablondaki güncel değer yeni girişe taşınır.
+    const dolu = satirlar.map((s, i) => (i === 0 ? ['DENEME-AL', '', '3,4', 'USD', '01.11.2026', 'teklif; "A"', null, 1.15, '1,05', 3.2, '19.10.2026'] : s));
     expect(yapistirilaniOku(csvMetni(SABLON_BASLIKLARI, dolu), BUGUN)).toEqual({
-      satirlar: [{ kaliteKodu: 'DENEME-AL', form: null, kgFiyati: '3.4', talasKgFiyati: null, paraBirimi: 'USD', gecerlilik: '2026-11-01', aciklama: 'teklif; "A"' }],
+      satirlar: [{
+        kaliteKodu: 'DENEME-AL', form: null, kgFiyati: '3.4', talasKgFiyati: null, paraBirimi: 'USD', gecerlilik: '2026-11-01', aciklama: 'teklif; "A"',
+        islemKatsayisi: '1.15', araciKatsayisi: '1.05',
+      }],
       hatalar: [], atlanan: 1,
     });
   });
@@ -46,12 +51,18 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
     const cok = Array.from({ length: EN_COK_SATIR + 1 }, (_, i) => `DENEME-${i};;1`).join('\n');
     expect(yapistirilaniOku(cok, BUGUN).hatalar.at(-1)).toContain(`en çok ${EN_COK_SATIR}`);
   });
+
+  it('1352: katsayı sıfırdan büyük, en çok 100 ve en çok 4 ondalık; bozuk katsayılı satır gönderilmez', () => {
+    const r = yapistirilaniOku('DENEME;;5;TRY;;;;0\nDENEME;;5;TRY;;;;;101\nDENEME;;5;TRY;;;;1,00005\nDENEME;;5;TRY;;;;x\nDENEME;;5;TRY;;;;1,2;0,95', BUGUN);
+    expect(r.hatalar.map((h) => h.split(':')[0])).toEqual(['1. satır', '2. satır', '3. satır', '4. satır']);
+    expect(r.satirlar).toMatchObject([{ islemKatsayisi: '1.2', araciKatsayisi: '0.95' }]);
+  });
 });
 
 // Kalite kodları ve fiyatlar uydurmadır.
 const satir = (ek: Partial<KgFiyatiSatiri>): KgFiyatiSatiri => ({
   kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '100.0000', paraBirimi: 'TRY', tryKgFiyati: null, talasKgFiyati: null, tryTalasKgFiyati: null,
-  gecerlilik: '2026-10-19', aciklama: '', kisiAdi: null, zaman: '2026-10-19T08:00:00.000Z', ...ek,
+  gecerlilik: '2026-10-19', aciklama: '', kisiAdi: null, zaman: '2026-10-19T08:00:00.000Z', islemKatsayisi: null, araciKatsayisi: null, etkinKgFiyati: null, ...ek,
 });
 
 describe('kg fiyatı geçmiş grafiği (1351)', () => {

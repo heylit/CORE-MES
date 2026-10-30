@@ -9,13 +9,14 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/iste
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
 import { KgFiyatGrafigi } from './KgFiyatGrafigi.tsx';
-import { PARA_BIRIMLERI, SABLON_BASLIKLARI, ondalikOku, sablonSatirlari, tarihOku, yapistirilaniOku, type KgFiyatiGirdisi } from './yapistir.ts';
+import { PARA_BIRIMLERI, SABLON_BASLIKLARI, katsayiOku, ondalikOku, sablonSatirlari, tarihOku, yapistirilaniOku, type KgFiyatiGirdisi } from './yapistir.ts';
 import './kg-fiyatlari.css';
 
 const ANAHTAR = ['satin-alma', 'kg-fiyatlari'] as const;
 const gun = (t: string) => `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`;
 const para = (d: string | null, pb: string) => (d === null ? '—' : `${Number(d).toLocaleString('tr-TR', { maximumFractionDigits: 4 })} ${pb}`);
 const formAdi = (f: string | null) => f ?? 'Bütün formlar';
+const katsayiMetni = (d: string | null | undefined) => (d == null ? '—' : Number(d).toLocaleString('tr-TR', { maximumFractionDigits: 4 }));
 const tl = (d: string | null) => (d === null ? '—' : `${Number(d).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`);
 const fiyatsizNotu = (n: number, tutar: string | null) =>
   n > 0 ? `${n} stoklu malzemenin fiyatı yok, dahil değil` : tutar === null ? 'Fiyatlı stok yok' : 'Bütün stoklu hammadde dahil';
@@ -44,6 +45,10 @@ const SUTUNLAR: Sutun<KgFiyatiSatiri>[] = [
   { anahtar: 'fiyat', baslik: 'Kg fiyatı', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.kgFiyati, x.paraBirimi) },
   { anahtar: 'tl', baslik: 'TL/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.tryKgFiyati, 'TL') },
   { anahtar: 'talas', baslik: 'Talaş/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.talasKgFiyati, x.paraBirimi) },
+  // 1352 a: etkin fiyat bilgidir; maliyet ve stok değeri ham kg fiyatıyla kalır.
+  { anahtar: 'islemKat', baslik: 'İşlem kat.', hizala: 'sag', mono: true, hucre: (x) => katsayiMetni(x.islemKatsayisi) },
+  { anahtar: 'araciKat', baslik: 'Aracı kat.', hizala: 'sag', mono: true, hucre: (x) => katsayiMetni(x.araciKatsayisi) },
+  { anahtar: 'etkin', baslik: 'Etkin kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.etkinKgFiyati, x.paraBirimi) },
   { anahtar: 'gecerlilik', baslik: 'Geçerlilik', kirilmaz: true, hucre: (x) => gun(x.gecerlilik) },
   { anahtar: 'giren', baslik: 'Kaydeden', hucre: (x) => x.kisiAdi ?? '—' },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
@@ -68,7 +73,7 @@ function useEkle(kapat: () => void) {
 }
 
 // Satırdan ya da fiyatı olmayan kaliteden açılınca kalite ve form oradan gelir.
-type Baslangic = Pick<KgFiyatiSatiri, 'kaliteKodu' | 'form'> & { paraBirimi?: string };
+type Baslangic = Pick<KgFiyatiSatiri, 'kaliteKodu' | 'form'> & Partial<Pick<KgFiyatiSatiri, 'paraBirimi' | 'islemKatsayisi' | 'araciKatsayisi'>>;
 
 function FiyatPenceresi({ ilk, kapat }: { ilk: Baslangic | null; kapat: () => void }) {
   const bugun = tesisGunu(Date.now());
@@ -76,6 +81,8 @@ function FiyatPenceresi({ ilk, kapat }: { ilk: Baslangic | null; kapat: () => vo
   const [form, formYaz] = useState(ilk?.form ?? '');
   const [fiyat, fiyatYaz] = useState('');
   const [talas, talasYaz] = useState('');
+  const [islem, islemYaz] = useState(ilk?.islemKatsayisi?.replace('.', ',') ?? '');
+  const [araci, araciYaz] = useState(ilk?.araciKatsayisi?.replace('.', ',') ?? '');
   const [pb, pbYaz] = useState<string>(ilk?.paraBirimi ?? 'TRY');
   const [gecerlilik, gecerlilikYaz] = useState(bugun);
   const [aciklama, aciklamaYaz] = useState('');
@@ -89,8 +96,15 @@ function FiyatPenceresi({ ilk, kapat }: { ilk: Baslangic | null; kapat: () => vo
     if (kgFiyati === null) return hataYaz('Kg fiyatını sıfırdan büyük sayı olarak yazın.');
     const talasKgFiyati = talas.trim() === '' ? null : ondalikOku(talas);
     if (talas.trim() !== '' && talasKgFiyati === null) return hataYaz('Talaş fiyatını sıfırdan büyük sayı olarak yazın ya da boş bırakın.');
+    const islemKatsayisi = islem.trim() === '' ? null : katsayiOku(islem);
+    const araciKatsayisi = araci.trim() === '' ? null : katsayiOku(araci);
+    if (islem.trim() !== '' && islemKatsayisi === null) return hataYaz('İşlem katsayısını 0 ile 100 arasında yazın (ör. 1,15) ya da boş bırakın.');
+    if (araci.trim() !== '' && araciKatsayisi === null) return hataYaz('Aracı katsayısını 0 ile 100 arasında yazın (ör. 1,05) ya da boş bırakın.');
     if (tarih === null) return hataYaz('Geçerlilik tarihini seçin.');
-    ekle.mutate([{ kaliteKodu: kalite.trim(), form: form.trim() === '' ? null : form.trim(), kgFiyati, talasKgFiyati, paraBirimi: pb as KgFiyatiGirdisi['paraBirimi'], gecerlilik: tarih, aciklama: aciklama.trim() }]);
+    ekle.mutate([{
+      kaliteKodu: kalite.trim(), form: form.trim() === '' ? null : form.trim(), kgFiyati, talasKgFiyati, paraBirimi: pb as KgFiyatiGirdisi['paraBirimi'], gecerlilik: tarih,
+      aciklama: aciklama.trim(), islemKatsayisi, araciKatsayisi,
+    }]);
   };
   return (
     <Pencere acik kapat={kapat} baslik={ilk ? `Yeni fiyat: ${ilk.kaliteKodu}, ${formAdi(ilk.form)}` : 'Yeni kg fiyatı'}
@@ -101,6 +115,10 @@ function FiyatPenceresi({ ilk, kapat }: { ilk: Baslangic | null; kapat: () => vo
         <Girdi etiket="Kg fiyatı" inputMode="decimal" value={fiyat} onChange={(e) => fiyatYaz(e.target.value)} required autoFocus={ilk !== null} />
         <Girdi etiket="Talaş satış fiyatı (kg)" ipucu="Talaşın kg başına satış fiyatı, aynı para biriminde. Bilinmiyorsa boş bırakın." inputMode="decimal"
           value={talas} onChange={(e) => talasYaz(e.target.value)} />
+        <Girdi etiket="Endüstriyel işlem katsayısı" ipucu="Çarpan: 1 etkisiz, 1,15 yüzde 15 ek. Bilinmiyorsa boş bırakın." inputMode="decimal"
+          value={islem} onChange={(e) => islemYaz(e.target.value)} />
+        <Girdi etiket="Aracı maliyeti katsayısı" ipucu="Çarpan: 1 etkisiz. Bilinmiyorsa boş bırakın." inputMode="decimal"
+          value={araci} onChange={(e) => araciYaz(e.target.value)} />
         <Secim etiket="Para birimi" value={pb} onChange={(e) => pbYaz(e.target.value)} secenekler={PARA_BIRIMLERI.map((p) => ({ deger: p, baslik: p }))} />
         <Girdi etiket="Geçerlilik" type="date" value={gecerlilik} onChange={(e) => gecerlilikYaz(e.target.value)} required />
         <Girdi etiket="Açıklama" value={aciklama} onChange={(e) => aciklamaYaz(e.target.value)} maxLength={500} />
@@ -123,6 +141,8 @@ const ONIZLEME: Sutun<KgFiyatiGirdisi>[] = [
   { anahtar: 'form', baslik: 'Form', hucre: (x) => formAdi(x.form) },
   { anahtar: 'fiyat', baslik: 'Kg fiyatı', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.kgFiyati, x.paraBirimi) },
   { anahtar: 'talas', baslik: 'Talaş/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.talasKgFiyati ?? null, x.paraBirimi) },
+  { anahtar: 'islemKat', baslik: 'İşlem kat.', hizala: 'sag', mono: true, hucre: (x) => katsayiMetni(x.islemKatsayisi) },
+  { anahtar: 'araciKat', baslik: 'Aracı kat.', hizala: 'sag', mono: true, hucre: (x) => katsayiMetni(x.araciKatsayisi) },
   { anahtar: 'gecerlilik', baslik: 'Geçerlilik', kirilmaz: true, hucre: (x) => gun(x.gecerlilik) },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
 ];
@@ -154,7 +174,7 @@ function TopluGirisPenceresi({ sablon, kapat }: { sablon: Parameters<typeof sabl
         </label>
       </div>
       <CokSatir etiket="Excel ya da CSV satırları" rows={6} value={metin} onChange={(e) => { metinYaz(e.target.value); dosyaAdiYaz(null); }}
-        ipucu="Sütunlar: kalite; form; kg fiyatı; para birimi; geçerlilik; açıklama; talaş fiyatı. Form boşsa bütün formlar, para birimi boşsa TRY, geçerlilik boşsa bugün; kg fiyatı boş satır atlanır." />
+        ipucu="Sütunlar: kalite; form; kg fiyatı; para birimi; geçerlilik; açıklama; talaş fiyatı; işlem katsayısı; aracı katsayısı. Form boşsa bütün formlar, para birimi boşsa TRY, geçerlilik boşsa bugün; kg fiyatı boş satır atlanır." />
       {okunan.hatalar.length > 0 && <ul role="alert">{okunan.hatalar.map((h) => <li key={h}>{h}</li>)}</ul>}
       {okunan.atlanan > 0 && <p>{okunan.atlanan} satırda kg fiyatı boş, atlanır.</p>}
       {okunan.satirlar.length > 0 && (
