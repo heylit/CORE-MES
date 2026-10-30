@@ -3,6 +3,7 @@ import { menudeGorunur, sayfalariSirala } from './sayfa-tanimi.ts';
 import type { IkinciMenuTanimi } from './sayfa-tanimi.ts';
 import { AKIS_IKINCI_MENU, AKIS_SAYFALARI } from './sayfalar/akis.ts';
 import { MALZEME_IZI_IKINCI_MENU, MALZEME_IZI_SAYFALARI } from './sayfalar/malzeme-izi.ts';
+import { KAYNAK_IZI_IKINCI_MENU, KAYNAK_IZI_SAYFALARI } from './sayfalar/kaynak-izi.ts';
 import { ARKON_IKINCI_MENU, ARKON_SAYFALARI, KUYRUK_IKINCI_MENU, URETIM_TERMINALI_IKINCI_MENU } from './sayfalar/arkon.ts';
 import { ATOLYE_SAYFALARI } from './sayfalar/atolye.ts';
 import { AYARLAR_IKINCI_MENU, AYARLAR_SAYFALARI } from './sayfalar/ayarlar.ts';
@@ -53,6 +54,7 @@ import { PORTAL_IKINCI_MENU, PORTAL_SAYFALARI } from './sayfalar/portal.ts';
 export const TUM_SAYFALAR = sayfalariSirala([
   ...AKIS_SAYFALARI,
   ...MALZEME_IZI_SAYFALARI,
+  ...KAYNAK_IZI_SAYFALARI,
   ...ARKON_SAYFALARI,
   ...ATOLYE_SAYFALARI,
   ...AYARLAR_SAYFALARI,
@@ -138,6 +140,7 @@ export const TUM_IKINCI_MENULER = [
   MUSTERI_TEDARIKCI_IKINCI_MENU,
   AKIS_IKINCI_MENU,
   MALZEME_IZI_IKINCI_MENU,
+  KAYNAK_IZI_IKINCI_MENU,
   OEE_IKINCI_MENU,
   GUVENLIK_IKINCI_MENU,
   IDARI_ISLER_IKINCI_MENU,
