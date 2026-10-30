@@ -178,3 +178,8 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - VARSAYIM: talebe çevrilen kalem serbest adla gelir ve "kart bekler"; hizmet kartı talep eden ya da satın alma seçer. Operasyon tipinden hizmet kartı önerisi yok.
     - Kalemin fason bağı satın alma ekranında görünmez ve siparişe kendiliğinden geçmez; siparişin `is_emri_id` bağı bugünkü gibi satın almanın elindedir. Bağlamada kapanacak.
     - Ana sayfa "Taleplerim" kartı kaynak rozetini gösterir; özet kutuları ve süzgeç yalnız Taleplerim sayfasındadır.
+
+## Kart #1237 (Ctrl K)
+    - VARSAYIM: yalnız talep açan kişinin sonucu Taleplerim listesini açar, talebi seçili açmaz (Taleplerim'de adresle satır açma yok). Geri alma ucuz.
+    - VARSAYIM: yalnız onaylayan kişinin sipariş sonucu Onaylar'da talebi açar; Sipariş adımı onaylayan görünümünde yok. Geri alma ucuz.
+    - Komutlar boş form açar; değer alan komut ("talep ST-2026-001") 1233 çekirdek ucuyla gelir.

@@ -2,6 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
+// 1237: Ctrl K genel aramasının talep ve sipariş kaynakları; çekirdek ad kuralıyla bulur (1233).
+export { kayitAramaKaynaklari } from './arama/kaynaklar.ts';
 // Stok modülünün mal kabul belgesi teslim bekleyen sipariş satırlarını buradan okur (fiyatsız; SAT-37).
 export { siparisSatirlari } from './servis.ts';
 export type { SiparisSatiriOkuma as SiparisSatiri } from './sorgular.ts';

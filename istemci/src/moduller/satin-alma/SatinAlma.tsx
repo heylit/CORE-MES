@@ -1,15 +1,23 @@
 import { useEffect, useRef } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { StokYokKarti } from './StokYokKarti.tsx';
-import { merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
+import { acilisOku, merkezAc, merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
 import type { Role } from './merkez/roles.ts';
 
 // Her ikinci menü maddesi Satın Alma Merkezi'nin bir ekranını açar; arayüz prototipin kendisidir, menüyü kabuk çizer.
 function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: string }) {
   const kok = useRef<HTMLDivElement>(null);
   const git = useNavigate();
+  const [adres, adresYaz] = useSearchParams();
   useEffect(() => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, git: (y) => { void git(y); } }) : undefined), [rol, sayfa, yol, git]);
+  // Ctrl K'nın açtığı talep ya da pencere (1237); adres temizlenir ki geri gelince pencere yeniden açılmasın.
+  useEffect(() => {
+    const acilis = acilisOku(adres);
+    if (!acilis) return;
+    merkezAc(acilis);
+    adresYaz({}, { replace: true });
+  }, [adres, adresYaz]);
   return <div ref={kok} className="sa-kok" />;
 }
 
