@@ -39,8 +39,12 @@ export const DIS_SAYFALAR = {
   'urun-rotalari': Extract<ReceteRotaMaddesi, { anahtar: 'schema' }>['yol'];
 };
 
-// 269 a: kartın etiketi Etiket Merkezi'nde kart no ile açılır; geçersiz no için adres kurulmaz.
+// 269 a, 1288: kartların etiketi yalnız Etiket Merkezi'nde, kart no ile basılır. Geçersiz no adrese girmez; geçerli no yoksa ya da
+// Etiket Merkezi'nin bir seçimde kabul ettiğinden fazlası varsa adres kurulmaz (sınır sunucuda da denetlenir).
 const ETIKET_MERKEZI: (typeof ETIKET_MERKEZI_SAYFALARI)[number]['yol'] = '/etiket-merkezi';
-export function malzemeEtiketiYolu(no: unknown): string | null {
-  return typeof no === 'number' && Number.isSafeInteger(no) && no > 0 ? `${ETIKET_MERKEZI}?tur=malzeme&id=${no}` : null;
+export const ETIKET_SECIM_SINIRI = 200;
+export function malzemeEtiketiYolu(nolar: readonly unknown[]): string | null {
+  const gecerli = nolar.filter((no): no is number => typeof no === 'number' && Number.isSafeInteger(no) && no > 0);
+  if (gecerli.length === 0 || gecerli.length > ETIKET_SECIM_SINIRI) return null;
+  return `${ETIKET_MERKEZI}?tur=malzeme&id=${[...new Set(gecerli)].join(',')}`;
 }

@@ -183,7 +183,7 @@ test.describe('M2 katalog', () => {
     const pencere = page.getByRole('dialog');
     await expect(pencere).toBeVisible();
     await expect(page).toHaveURL(/[?&]kart=/);
-    await expect(pencere.getByRole('button', { name: 'Etiket', exact: true })).toBeVisible();
+    await expect(pencere.getByRole('button', { name: "Etiket Merkezi'nde bas", exact: true })).toBeVisible();
     await tasmaz(page);
     await pencere.getByRole('button', { name: 'Kapat' }).last().click();
     await expect(pencere).toBeHidden();
