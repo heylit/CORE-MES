@@ -6,6 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
+import { girdiEksigi, isEmriBagimliligi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
@@ -528,5 +529,35 @@ describe('ek adımın şartnamesi (1034)', () => {
     assert.equal(ekAdimSartnameIhlali(acik, { tur: 'rework', durum: 'tamam' }), EK_ADIM_SARTNAME_BASLAMIS);
     for (const durum of ['bitti', 'iptal']) assert.equal(ekAdimSartnameIhlali({ durum, arsiv: false }, { tur: 'rework', durum: 'bekliyor' }), EK_ADIM_SARTNAME_KAPALI);
     assert.equal(ekAdimSartnameIhlali({ durum: 'planli', arsiv: true }, { tur: 'rework', durum: 'bekliyor' }), EK_ADIM_SARTNAME_KAPALI);
+  });
+});
+
+describe('çok dallı rota (1248 a)', () => {
+  test('girdi: dallı rotada öncülü olmayan adım girensiz olmaz; tek hatlı rotada bugünkü kural', () => {
+    const g = (opNo: number, girenSayisi: number, dal: string | null, birlesen: string[] = []) => ({ opNo, bagimlilik: 'bekleyen' as const, girenSayisi, dal, birlesen });
+    assert.equal(girdiEksigi([g(10, 1, 'A'), g(20, 0, 'B'), g(30, 0, null, ['A', 'B'])]), 'OP 20: hiçbir adımı beklemediği için giren seçilmeli.');
+    assert.equal(girdiEksigi([g(10, 1, 'A'), g(20, 1, 'B'), g(30, 0, null, ['A', 'B'])]), null);
+    assert.equal(girdiEksigi([{ opNo: 10, bagimlilik: 'bekleyen', girenSayisi: 1 }, { opNo: 20, bagimlilik: 'bekleyen', girenSayisi: 0 }]), null);
+  });
+
+  test('akış: dallı rotada adım öncüllerinin çıktısını tüketir', () => {
+    const r = akisiCikar([
+      { opNo: 10, bagimlilik: 'bekleyen', dal: 'A', birlesen: [] }, { opNo: 20, bagimlilik: 'bekleyen', dal: 'B', birlesen: [] },
+      { opNo: 30, bagimlilik: 'bekleyen', dal: null, birlesen: ['A', 'B'] },
+    ]);
+    assert.deepEqual(r.map((x) => x.tuketir), [[], [], [10, 20]]);
+    assert.deepEqual(r[2]?.cikti, { tur: 'urun' });
+  });
+
+  test('iş emri: dal başı bağımsız, öncüllü adım ilk öncülün türünü alır; tek hatlı rotada bağımlılık olduğu gibi kalır', () => {
+    assert.deepEqual(isEmriBagimliligi({ bagimlilik: 'bekleyen', devirAdedi: null, dal: 'A', onculler: [] }), {
+      bagimlilik: 'bagimsiz', devirAdedi: null, dal: 'A', onculler: [],
+    });
+    assert.deepEqual(isEmriBagimliligi({ bagimlilik: 'akisli', devirAdedi: 3, dal: null, onculler: [{ opNo: 10, tur: 'akisli', devirAdedi: 3 }] }), {
+      bagimlilik: 'akisli', devirAdedi: 3, dal: null, onculler: [{ opNo: 10, tur: 'akisli', devirAdedi: 3 }],
+    });
+    assert.deepEqual(isEmriBagimliligi({ bagimlilik: 'bagimsiz', devirAdedi: null, dal: null, onculler: null }), {
+      bagimlilik: 'bagimsiz', devirAdedi: null, dal: null, onculler: null,
+    });
   });
 });

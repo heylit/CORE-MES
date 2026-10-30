@@ -40,6 +40,9 @@ const sureAyrimiGirdisi = {
 
 export const revizyonDurumu = z.enum(REVIZYON_DURUMLARI);
 export const bagimlilik = z.enum(BAGIMLILIKLAR);
+// Çok dallı rota (1248 a): dal tek büyük harftir (A-Z); boş dal ana hattır.
+export const dalAdi = z.string().regex(/^[A-Z]$/, 'Dal A ile Z arasında tek harf olmalı.');
+export const oncul = z.object({ opNo: z.number().int(), tur: z.enum(['bekleyen', 'akisli']), devirAdedi: z.number().int().nullable() });
 export const makineKullanimi = z.enum(MAKINE_KULLANIMLARI);
 export const revizyonKomutu = z.enum(REVIZYON_KOMUTLARI);
 
@@ -109,6 +112,9 @@ export const adimGirdisi = z.object({
   yenidenAyar: z.boolean(),
   // Gelmeyen seçim (alanı bilmeyen eski görünüm) adımın kayıtlı seçimini korur; yeni adımda "her kurulumda".
   ilkParca: z.enum(ILK_PARCA_SECIMLERI).optional(),
+  // Gelmeyen dal ve birleşen (alanı bilmeyen eski görünüm) adımın kayıtlı değerini korur; yeni adımda ana hat, birleştirme yok.
+  dal: dalAdi.nullable().optional(),
+  birlesen: z.array(dalAdi).max(26).optional(),
   adaylar: z.array(adayGirdisi).max(AZAMI_ADAY),
   bilesenler: z.array(bilesenGirdisi).max(AZAMI_BILESEN),
   yanUrunler: z.array(yanUrunGirdisi).max(AZAMI_YAN_URUN),
@@ -200,6 +206,10 @@ export const adimSemasi = z.object({
   enKucukParca: z.number().int().nullable(),
   yenidenAyar: z.boolean(),
   ilkParca: z.enum(ILK_PARCA_SECIMLERI),
+  dal: dalAdi.nullable(),
+  birlesen: z.array(dalAdi),
+  // Türetilmiş öncüller: null tek hatlı rotadır (bağımlılık kuralı), boş dizi hiçbir adımı beklemez.
+  onculler: z.array(oncul).nullable(),
   adaylar: z.array(z.object({
     kaynak: kaynakOzeti, ayarSuresiDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
     islemSuresiDk: ondalikMetinSemasi.nullable(), degisimSuresiDk: ondalikMetinSemasi.nullable(),

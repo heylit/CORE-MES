@@ -1,4 +1,6 @@
 import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami } from '#paylasilan/sozlesme/rota.ts';
+import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
+import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 
 export const YAZ = 'rota.yaz';
 export const ONAYLA = 'rota.onayla';
@@ -211,6 +213,23 @@ export function taslakDenetle(
   return null;
 }
 
+/* ---------------- çok dallı rota (1248 a) ---------------- */
+// Dal ve öncül kuralı ekranla ortaktır (canlı akış şeması aynı listeyi çizer): paylasilan'dadır.
+
+export { dalDenetle, dalliMi, oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
+export type { DalAdimi, Oncul, OnculTuru } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
+
+// Dallı rotada (1248 a) iş emri öncülleri taşır; adımın kendi bağımlılığı öncüllerle uyumlu yazılır: dal başı (boş liste) bağımsızdır,
+// öncüllü adım ilk öncülün türünü ve devir adedini alır. Tek hatlı rotada (null) adımın bağımlılığı olduğu gibi kalır.
+export function isEmriBagimliligi(a: { bagimlilik: Bagimlilik; devirAdedi: number | null; dal: string | null; onculler: readonly Oncul[] | null }) {
+  if (a.onculler === null) return { bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, dal: a.dal, onculler: null };
+  const ilk = a.onculler[0];
+  return {
+    bagimlilik: ilk === undefined ? 'bagimsiz' as const : ilk.tur, devirAdedi: ilk === undefined ? null : ilk.devirAdedi,
+    dal: a.dal, onculler: a.onculler.map((o) => ({ ...o })),
+  };
+}
+
 /* ---------------- onaya hazırlık (RT-08, RT-09) ---------------- */
 
 export interface HazirlikAdimi {
@@ -226,15 +245,26 @@ export interface HazirlikAdimi {
   terminGun: number | null;
   bagimlilik: Bagimlilik;
   girenSayisi: number;
+  dal?: string | null;
+  birlesen?: readonly string[];
 }
 
 // Terminal adımda ne tüketeceğini girenden okur (#1372): ilk adım ve önceki adımı beklemeyen adım girensiz olmaz; bekleyen ya da akışlı ara adım
 // önceki adımın çıktısını tüketir. Adımlar sıra düzenindedir.
-export function girdiEksigi(adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; girenSayisi: number }[]): string | null {
+// Dallı rotada (1248 a) öncülü olmayan adım (dalın ilk adımı) girensiz olmaz.
+export function girdiEksigi(
+  adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; girenSayisi: number; dal?: string | null; birlesen?: readonly string[] }[],
+): string | null {
+  const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik, devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
   for (const [i, a] of adimlar.entries()) {
     if (a.girenSayisi > 0) continue;
     if (i === 0) return `OP ${a.opNo}: giren (hammadde ya da yarı mamul) seçilmeli.`;
-    if (a.bagimlilik === 'bagimsiz') return `OP ${a.opNo}: önceki adımı beklemediği için giren seçilmeli.`;
+    const o = onculler[i];
+    if (o === null || o === undefined) {
+      if (a.bagimlilik === 'bagimsiz') return `OP ${a.opNo}: önceki adımı beklemediği için giren seçilmeli.`;
+    } else if (o.length === 0) {
+      return `OP ${a.opNo}: hiçbir adımı beklemediği için giren seçilmeli.`;
+    }
   }
   return null;
 }
@@ -282,9 +312,13 @@ export interface AkisAdimi {
 
 // Adımlar sıralı gelir. Bağımsız adım önceki adımı beklemez ve tüketmez; bekleyen ve akışlı adım zincirdeki önceki
 // adımın çıktısını ve aradaki bağımsız adımların çıktısını tüketir. Son adımın çıktısı ürünün kendisidir.
-export function akisiCikar(adimlar: readonly { opNo: number; bagimlilik: Bagimlilik }[]): AkisAdimi[] {
+// Dallı rotada (1248 a) adım öncüllerinin çıktısını tüketir.
+export function akisiCikar(adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; dal?: string | null; birlesen?: readonly string[] }[]): AkisAdimi[] {
+  const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik, devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
   return adimlar.map((a, i) => {
     const cikti: Cikti = i === adimlar.length - 1 ? { tur: 'urun' } : { tur: 'ara-hal', opNo: a.opNo };
+    const o = onculler[i];
+    if (o) return { opNo: a.opNo, tuketir: o.map((x) => x.opNo), cikti };
     if (i === 0 || a.bagimlilik === 'bagimsiz') return { opNo: a.opNo, tuketir: [], cikti };
     const tuketir: number[] = [];
     for (let j = i - 1; j >= 0; j -= 1) {
