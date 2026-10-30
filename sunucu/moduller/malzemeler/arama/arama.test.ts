@@ -4,21 +4,27 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { KayitAramaCevabi } from '#paylasilan/sayfa-tanimi.ts';
+import { aramaSade, basDeseni, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
+import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import { denetimYaz } from '../../denetim/disari.ts';
-import { rolAl, rolAta, yoneticiOlustur } from '../../kisiler/disari.ts';
+import { yoneticiOlustur } from '../../kisiler/disari.ts';
 import { kimlikCozucu } from '../../oturum/disari.ts';
+import { kayitAramaKaynaklari } from '../disari.ts';
 import { tamGovde } from '../test-kart.ts';
 import { surumlu } from '../test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
 
-describe('malzemeler genel arama ucu (kart #1221, gerçek PostgreSQL)', () => {
+describe('malzemeler genel arama kaynağı (kart #1221, #1244, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yonetici = '';
-  let yetkisiz = '';
   let sayac = 0;
+  let kisiId = 0;
+  const kaynak = kayitAramaKaynaklari.find((k) => k.tur === 'malzeme')!;
+  const ara = async (q: string, sinir = 5): Promise<KayitAramaSonucu[]> => [...await vt().okumaTx((db) => kaynak.ara(db, {
+    q, sade: aramaSade(q), icindeDeseni: icindeDeseni(q), basDeseni: basDeseni(q), sinir, kullanici: { id: kisiId, islemler: ['sayfa.malzemeler'] },
+  }))];
 
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -47,52 +53,56 @@ describe('malzemeler genel arama ucu (kart #1221, gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('malzemearama');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
     const yoneticiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'ar-yonetici', parola: PAROLA }));
-    // İşlemsiz rol: malzemeler sayfası yok.
-    const bos = await vt().tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_bos', 'Geçici Boş') RETURNING id");
-    const yoneticiRolu = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
-    await vt().tx(async (db) => {
-      const id = await yoneticiOlustur(db, { ad: 'Deneme Yetkisiz', kullaniciAdi: 'ar-yetkisiz', parola: PAROLA });
-      await rolAta(db, yoneticiId, id, bos!.id);
-      await rolAl(db, yoneticiId, id, yoneticiRolu!.id);
-    });
+    kisiId = yoneticiId;
     yonetici = await giris('ar-yonetici');
-    yetkisiz = await giris('ar-yetkisiz');
     const ayar = await istek(yonetici, 'POST', '/malzeme-katalogu-ayarlari/genel/kaydet', { deger: { onayAkisi: false } });
     assert.equal(ayar.durum, 200, JSON.stringify(ayar.govde));
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  test('kod ya da adda geçen kart katalog sayfasına giden sonuç olarak döner; en çok beş satır', async () => {
+  test('kod ya da adda geçen kart katalog sayfasına giden sonuç olarak döner; başlık kod; en çok sınır kadar satır', async () => {
     const mil = await kartAc({ tur: 'mamul', kod: 'MM-ARM-00001', ad: 'Arama Mili' });
     const taslak = await kartAc({ tur: 'hammadde', kod: 'HM-ARM-00001', ad: 'Arama Çubuğu', durum: 'taslak' });
-    const c = await istek(yonetici, 'GET', '/malzemeler/ara?q=arama');
-    assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    const { sonuclar } = c.govde as KayitAramaCevabi;
+    const sonuclar = await ara('arama');
     assert.deepEqual(sonuclar.map((s) => s.anahtar).sort(), [String(mil), String(taslak)].sort());
     const milSatiri = sonuclar.find((s) => s.anahtar === String(mil));
-    assert.deepEqual(milSatiri, { anahtar: String(mil), baslik: 'MM-ARM-00001 Arama Mili', aciklama: 'Mamul', yol: '/malzemeler' });
-    assert.equal(sonuclar.find((s) => s.anahtar === String(taslak))?.aciklama, 'Hammadde · taslak');
+    assert.match(milSatiri?.baslik ?? '', /^MM-ARM-/);
+    assert.deepEqual({ ...milSatiri, baslik: '' }, { anahtar: String(mil), baslik: '', aciklama: 'Arama Mili · Mamul', yol: '/malzemeler' });
+    assert.equal(sonuclar.find((s) => s.anahtar === String(taslak))?.aciklama, 'Arama Çubuğu · Hammadde · taslak');
     for (let i = 0; i < 5; i += 1) await kartAc({ tur: 'sarf', kod: 'SF-ARM-00001', ad: `Arama Sarf ${i}` });
-    assert.equal(((await istek(yonetici, 'GET', '/malzemeler/ara?q=arama')).govde as KayitAramaCevabi).sonuclar.length, 5);
+    assert.equal((await ara('arama')).length, 5);
+    assert.equal((await ara('arama', 25)).length, 7);
+  });
+
+  test('tam kod önce, sonra koddan başlayan, sonra yalnız adda geçen', async () => {
+    const adda = await kartAc({ tur: 'mamul', kod: 'MM-SRA-00001', ad: 'Sıra MM-SRB parçası' });
+    const bas = await kartAc({ tur: 'mamul', kod: 'MM-SRB-00001', ad: 'Sıra B' });
+    const kod = (await vt().tek<{ stok_kodu: string }>('SELECT stok_kodu FROM malzeme_katalog_karti WHERE no = $1', [bas]))!.stok_kodu;
+    assert.deepEqual((await ara('MM-SRB')).map((s) => s.anahtar), [String(bas), String(adda)]);
+    assert.equal((await ara(kod.toLowerCase()))[0]?.anahtar, String(bas));
   });
 
   // Test raporu bölüm 3: katalog araması "ERP kodu" diyor, üst arama eski/ERP koduyla bulmuyordu.
-  test('eski / ERP kodu ya da tedarikçi koduyla aranan kart bulunur; eşleşmeyen kod boş döner', async () => {
+  test('eski / ERP kodu ya da tedarikçi koduyla aranan kart bulunur; eşleşmeyen kod ve joker boş döner', async () => {
     const erp = await kartAc({ tur: 'hammadde', kod: 'HM-ERP-00001', ad: 'Erp Çubuğu', com: { eskiKod: 'ESK-4711', tkod: 'TED-K-93' } });
-    const ara = async (q: string) => {
-      const c = await istek(yonetici, 'GET', `/malzemeler/ara?q=${encodeURIComponent(q)}`);
-      assert.equal(c.durum, 200, JSON.stringify(c.govde));
-      return (c.govde as KayitAramaCevabi).sonuclar.map((s) => s.anahtar);
-    };
-    assert.deepEqual(await ara('esk-4711'), [String(erp)]);
-    assert.deepEqual(await ara('TED-K-93'), [String(erp)]);
-    assert.deepEqual(await ara('ESK-9999'), []);
+    const anahtarlar = async (q: string) => (await ara(q)).map((s) => s.anahtar);
+    assert.deepEqual(await anahtarlar('esk-4711'), [String(erp)]);
+    assert.deepEqual(await anahtarlar('TED-K-93'), [String(erp)]);
+    assert.deepEqual(await anahtarlar('ESK-9999'), []);
+    assert.deepEqual(await anahtarlar('%%'), []);
   });
 
-  test('reddedilen: sayfası olmayan 403, oturumsuz 401; tek harf ya da altmıştan uzun sorgu 400', async () => {
-    assert.equal((await istek(yetkisiz, 'GET', '/malzemeler/ara?q=arama')).durum, 403);
-    assert.equal((await istek(null, 'GET', '/malzemeler/ara?q=arama')).durum, 401);
-    assert.equal((await istek(yonetici, 'GET', '/malzemeler/ara?q=a')).durum, 400);
-    assert.equal((await istek(yonetici, 'GET', `/malzemeler/ara?q=${'a'.repeat(61)}`)).durum, 400);
+  // C.UTF-8'de ILIKE 'I' ile 'ı'yı, 'İ' ile 'i'yi eşlemiyordu (1233).
+  test('Türkçe harf: büyük-küçük ve noktalı-noktasız fark gözetilmez', async () => {
+    const isik = await kartAc({ tur: 'mamul', kod: 'MM-ISK-00001', ad: 'IŞIKLI İĞNE' });
+    for (const q of ['ışıklı', 'IŞIKLI', 'isikli', 'iğne', 'İĞNE']) assert.deepEqual((await ara(q)).map((s) => s.anahtar), [String(isik)], q);
+  });
+
+  test('iptal kart dönmez; kaynak malzemeler sayfasının okuma işlemini ister (reddi çekirdek uygular)', async () => {
+    const no = await kartAc({ tur: 'mamul', kod: 'MM-IPT-00001', ad: 'İptal Edilecek' });
+    assert.deepEqual((await ara('İptal Edilecek')).map((s) => s.anahtar), [String(no)]);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'iptal' WHERE no = $1", [no]);
+    assert.deepEqual(await ara('İptal Edilecek'), []);
+    assert.deepEqual(kaynak.yetki, ['sayfa.malzemeler']);
   });
 });

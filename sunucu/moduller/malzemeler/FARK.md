@@ -1,3 +1,11 @@
+# FARK: malzeme araması trigram indeksiyle; Ctrl K kaynağı çekirdeğin tek arama ucuna geçti (kart #1244; 1231 a, 1233 sözleşmesi)
+
+- Göç `20261029133000_malzemeler_arama_trigram.sql`: `malzeme_katalog_karti` üzerinde stok kodu, ad, eski kod ve tedarikçi kodu ifadelerinin `public.arama_sade` sadeleşmesine dört GIN (`public.gin_trgm_ops`). Veri değişmez. Uzantı 1233 göçünde (`20261029125000`).
+- Sorgu kalıbı `ILIKE` yerine sadeleşmiş `LIKE` (1233: C.UTF-8 Türkçe I/ı, İ/i eşlemiyordu); `malzemeAra` imzası aynı, eşleşme artık Türkçe harf duyarsız. ASCII ve Türkçe dışındaki büyük harf (ör. É) artık küçüğüyle eşleşmez. İndeks ifadeleri `sorgular.ts` ARAMA_KOSULU ile birebir aynıdır; `arama-indeksi.test.ts` 20.000 sentetik satırda liste ve sayım planında indeksi ister (ifade ayrışırsa kırılır; göç yokken iki test düştü, yerelde denendi).
+- Ölçüm (yerel PG16, 20.000 sentetik satır, EXPLAIN ANALYZE): indeksli 1,3 ms, indekssiz 150 ms.
+- Ctrl K: `disari.ts` `kayitAramaKaynaklari` (tür `malzeme`, yetki `sayfa.malzemeler`); başlık stok kodu, açıklama ad · tür · durum. Sıra tam kod, kart no, koddan başlayan, yeniden eskiye. `paylasilan/sayfalar/malzemeler.ts` `aramaUcu` ve `GET /malzemeler/ara` kalktı.
+- `malzemeAra` (seçiciler, stok, rota, recete-rota) imzası ve sırası değişmedi.
+
 # FARK: mükerrer kart gerekçesi en az 10 karakter (kullanıcı kararı 2026-10-16 07:24)
 
 - Sunucu (`kurallar.ts` `mukerrerGerekcesiKisaMi`, `servis.ts`): gerekçe boşluksuz 10 karakterden kısaysa 400 `DOGRULAMA`, alan `ozet.mukerrer_gerekcesi`. Kayıtlı gerekçe değişmedikçe sorulmaz. Göç yok (veritabanı kısıtı "boş değil" olarak kaldı).

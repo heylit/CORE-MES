@@ -5,7 +5,6 @@ import {
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
-import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
 
 // Kart ve şablon kaydetme uçları bütün içeriği gövdede taşır; denetim kaydına gövde yerine özet girer (kullanıcı kararı 07.10.2026, #227 madde 23).
@@ -73,5 +72,4 @@ export const uclar = [
     yontem: 'POST', yol: '/malzeme-logo-karsiliklari/kaydet', yetki: 'malzemeler.tanim-yaz', govde: logoKarsiligiKaydetGovdesi, cevap: katalogKimlikCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoKarsiligiKaydet(db, kullanici, govde),
   }),
-  ...aramaUclari,
 ];

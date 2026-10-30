@@ -1,6 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
+import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import type { KatalogKartDurumu } from '#paylasilan/sozlesme/malzemeler.ts';
+import { malzemeAramaKaynagi } from './arama/kaynak.ts';
 import { cncKimligiYaz, cncKimlikliKartlar, katalogMalzemeOzeti } from './sorgular.ts';
 
 // malzemeAdlari: adı olmayan kart koduyla yer alır; olmayan kimlik haritada yok. malzemeOzeti: `birim` kartta yoksa null.
@@ -8,6 +10,8 @@ export { malzemeAdlari, malzemeOzeti, malzemeKullanilabilirMi } from './servis.t
 // Bağlama tur 1 (kart #163): toplu özet (olmayan kimlik haritada yok), metinle sayfalı arama (stok ve rota için tek imza),
 // ölçü birimi listesi (SH4 a; pasif birim eski kartta durur, yeni kayıtta seçilemez).
 export { malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';
+// Genel arama (Ctrl K, 1233): çekirdek bu listeyi ad kuralıyla bulur; yetkiyi çekirdek denetler.
+export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [malzemeAramaKaynagi];
 // Logo bağlantısı (kart #232): kuyruğu okur, her kartın sonucunu bildirir. Yetki denetlemez; nasıl kullanılacağı NOTLAR.md "Logo bağlantısı".
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).
