@@ -740,6 +740,11 @@ const kgFiyatiSatiri = z.object({
   aciklama: z.string(),
   kisiAdi: z.string().nullable(),
   zaman: zamanSemasi,
+  // 1352 a: endüstriyel işlem ve aracı maliyeti katsayısı (çarpan); boşsa bilinmiyor. Etkin kg fiyatı ikisi de yazılıysa
+  // kg fiyatı x işlem x aracı, aynı para biriminde; maliyet ve stok değeri hesaplarına girmez.
+  islemKatsayisi: ondalikMetinSemasi.nullable(),
+  araciKatsayisi: ondalikMetinSemasi.nullable(),
+  etkinKgFiyati: ondalikMetinSemasi.nullable(),
 });
 // Katalogda kullanılan (aktif hammadde kartı olan) ama uygulanan fiyatı olmayan kalite + form, kart sayısıyla.
 const fiyatsizKalite = z.object({ kaliteKodu: z.string(), aile: z.string().nullable(), form: z.string().nullable(), kartSayisi: z.number().int() });
@@ -764,12 +769,17 @@ export type KgStokDegeri = z.output<typeof kgStokDegeri>;
 export type FiyatsizKalite = z.output<typeof fiyatsizKalite>;
 export const kgFiyatiGecmisiSorgusu = z.object({ kalite: kaliteKodu, form: z.string().trim().min(1).max(40).optional() });
 export const kgFiyatiGecmisiCevabi = z.object({ girisler: z.array(kgFiyatiSatiri) });
+// Katsayı: sıfırdan büyük, en çok 100, en çok 4 ondalık (sütun numeric(10,4)).
+const katsayi = z.string().trim().regex(/^\d{1,3}(\.\d{1,4})?$/, 'Katsayı en çok 4 ondalıklı sayı olur (ör. 1.15).')
+  .refine((d) => Number(d) > 0 && Number(d) <= 100, 'Katsayı sıfırdan büyük ve en çok 100 olur.');
 export const kgFiyatiEkleGovdesi = z.object({
   satirlar: z.array(z.object({
     kaliteKodu,
     form: z.string().trim().min(1).max(40).nullable(),
     kgFiyati: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Kg fiyatı sıfırdan büyük olur.'),
     talasKgFiyati: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Talaş fiyatı sıfırdan büyük olur.').nullable().default(null),
+    islemKatsayisi: katsayi.nullable().default(null),
+    araciKatsayisi: katsayi.nullable().default(null),
     paraBirimi: z.enum(PARA_BIRIMLERI),
     gecerlilik: tarih,
     aciklama: z.string().trim().max(500).default(''),

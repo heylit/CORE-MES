@@ -854,10 +854,13 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
 export interface KgFiyatiOkuma {
   kaliteKodu: string; form: string | null; kgFiyati: string; paraBirimi: string; tryKgFiyati: string | null; talasKgFiyati: string | null;
   tryTalasKgFiyati: string | null; gecerlilik: string; aciklama: string; kisiId: number; zaman: string;
+  islemKatsayisi: string | null; araciKatsayisi: string | null; etkinKgFiyati: string | null;
 }
 const KG_FIYATI_SECIMI = `f.kalite_kodu AS "kaliteKodu", f.form, f.kg_fiyati::text AS "kgFiyati", f.para_birimi::text AS "paraBirimi",
   (round(f.kg_fiyati * k.kur, 4))::text AS "tryKgFiyati",
-  f.talas_kg_fiyati::text AS "talasKgFiyati", (round(f.talas_kg_fiyati * k.kur, 4))::text AS "tryTalasKgFiyati", f.gecerlilik::text AS gecerlilik, f.aciklama, f.kisi_id AS "kisiId", ${ISO('f.zaman')} AS zaman`;
+  f.talas_kg_fiyati::text AS "talasKgFiyati", (round(f.talas_kg_fiyati * k.kur, 4))::text AS "tryTalasKgFiyati", f.gecerlilik::text AS gecerlilik, f.aciklama, f.kisi_id AS "kisiId", ${ISO('f.zaman')} AS zaman,
+  trim_scale(f.islem_katsayisi)::text AS "islemKatsayisi", trim_scale(f.araci_katsayisi)::text AS "araciKatsayisi",
+  (round(f.kg_fiyati * f.islem_katsayisi * f.araci_katsayisi, 4))::text AS "etkinKgFiyati"`;
 const KG_KURU = 'LEFT JOIN unnest($1::text[], $2::numeric[]) AS k(para_birimi, kur) ON k.para_birimi = f.para_birimi::text';
 export interface KurDizisi { paraBirimleri: string[]; kurlar: string[] }
 // Kalite + form başına geçerlilik günü bugünü geçmemiş en son giriş; aynı günde sonra girilen kazanır.
@@ -879,16 +882,18 @@ export function kgFiyatiGecmisi(db: Db, kur: KurDizisi, kaliteKodu: string, form
   );
 }
 export interface KgFiyatiYazimi { kaliteKodu: string; form: string | null; kgFiyati: string; talasKgFiyati: string | null; paraBirimi: string;
-  gecerlilik: string; aciklama: string;
+  gecerlilik: string; aciklama: string; islemKatsayisi: string | null; araciKatsayisi: string | null;
 }
 export async function kgFiyatlariEkle(db: Db, kisiId: number, satirlar: readonly KgFiyatiYazimi[]): Promise<void> {
   await db.sorgu(
-    `INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, aciklama, talas_kg_fiyati, kisi_id)
-     SELECT a, b, c, d, e, f, g, $8::int
-       FROM unnest($1::text[], $2::text[], $3::numeric[], $4::text[], $5::date[], $6::text[], $7::numeric[]) WITH ORDINALITY AS x(a, b, c, d, e, f, g, sira)
+    `INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, aciklama, talas_kg_fiyati, islem_katsayisi, araci_katsayisi, kisi_id)
+     SELECT a, b, c, d, e, f, g, h, i, $10::int
+       FROM unnest($1::text[], $2::text[], $3::numeric[], $4::text[], $5::date[], $6::text[], $7::numeric[], $8::numeric[], $9::numeric[])
+            WITH ORDINALITY AS x(a, b, c, d, e, f, g, h, i, sira)
       ORDER BY sira`,
     [satirlar.map((s) => s.kaliteKodu), satirlar.map((s) => s.form), satirlar.map((s) => s.kgFiyati), satirlar.map((s) => s.paraBirimi),
-      satirlar.map((s) => s.gecerlilik), satirlar.map((s) => s.aciklama), satirlar.map((s) => s.talasKgFiyati), kisiId],
+      satirlar.map((s) => s.gecerlilik), satirlar.map((s) => s.aciklama), satirlar.map((s) => s.talasKgFiyati),
+      satirlar.map((s) => s.islemKatsayisi), satirlar.map((s) => s.araciKatsayisi), kisiId],
   );
 }
 

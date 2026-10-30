@@ -1614,6 +1614,38 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("DELETE FROM satin_alma_kg_fiyati WHERE kalite_kodu = 'DENEME-AL'")), /yalnız ekleme/);
   });
 
+  test('1352 a: işlem ve aracı katsayısı girişle yazılır ve geçmişte kalır; etkin kg fiyatı ikisi de yazılıysa çarpımdır, biri boşsa boş', async () => {
+    const g = await bugun();
+    const satir = (form: string, ek: Record<string, unknown>) => ({ kaliteKodu: 'DENEME-KAT', form, kgFiyati: '100', paraBirimi: 'TRY', gecerlilik: g, ...ek });
+    tamam(await istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar: [
+      satir('cubuk', { islemKatsayisi: '1.15', araciKatsayisi: '1.05' }), satir('levha', { islemKatsayisi: '1.2' }), satir('boru', {}),
+    ] }));
+    const l = tamam<KgFiyatlariCevabi>(await istek(c.mudur, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.filter((f) => f.kaliteKodu === 'DENEME-KAT');
+    assert.deepEqual(l.map((f) => [f.form, f.islemKatsayisi, f.araciKatsayisi, f.etkinKgFiyati === null ? null : Number(f.etkinKgFiyati)]), [
+      ['boru', null, null, null], ['cubuk', '1.15', '1.05', 120.75], ['levha', '1.2', null, null],
+    ]);
+    // Katsayı maliyet hesabına girmez: TL karşılığı ham kg fiyatından.
+    assert.equal(Number(l.find((f) => f.form === 'cubuk')!.tryKgFiyati), 100);
+    tamam(await istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar: [satir('cubuk', { kgFiyati: '110', islemKatsayisi: '1.1' })] }));
+    const gecmis = tamam<KgFiyatiGecmisiCevabi>(await istek(c.mudur, 'GET', '/satin-alma-kg-fiyatlari/gecmis?kalite=DENEME-KAT&form=cubuk')).girisler;
+    assert.deepEqual(gecmis.map((x) => [Number(x.kgFiyati), x.islemKatsayisi, x.araciKatsayisi]), [[110, '1.1', null], [100, '1.15', '1.05']]);
+  });
+
+  test('1352 a: bozuk katsayı reddedilir ve hiçbir satır yazılmaz; katsayıyı da yalnız satın almayı yazan girer', async () => {
+    const g = await bugun();
+    const satir = { kaliteKodu: 'DENEME-KR', form: null, kgFiyati: '5', paraBirimi: 'TRY', gecerlilik: g };
+    const ekle = (cerez: string, satirlar: unknown[]) => istek(cerez, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar });
+    assert.equal((await ekle(c.mudur, [{ ...satir, islemKatsayisi: '1.1' }])).statusCode, 403);
+    for (const bozuk of [{ islemKatsayisi: '0' }, { islemKatsayisi: '-1' }, { araciKatsayisi: '100.5' }, { araciKatsayisi: '1.00001' }, { islemKatsayisi: 'bir' }]) {
+      assert.equal((await ekle(c.sa, [satir, { ...satir, ...bozuk }])).statusCode, 400, JSON.stringify(bozuk));
+    }
+    const sayi = await ortam!.sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM satin_alma_kg_fiyati WHERE kalite_kodu = 'DENEME-KR'");
+    assert.equal(sayi?.n, 0);
+    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu(
+      "INSERT INTO satin_alma_kg_fiyati (kalite_kodu, kg_fiyati, para_birimi, gecerlilik, islem_katsayisi, kisi_id) SELECT 'DENEME-KR', 1, 'TRY', current_date, 0, id FROM kisi LIMIT 1")),
+    /satin_alma_kg_fiyati_islem_katsayisi/);
+  });
+
   test('SAT-77: kg fiyatının TL karşılığı finansın güncel kurundan; kur yoksa boş (sıfır uydurulmaz)', async () => {
     const g = await bugun();
     const ekle = (kgFiyati: string) => istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle',

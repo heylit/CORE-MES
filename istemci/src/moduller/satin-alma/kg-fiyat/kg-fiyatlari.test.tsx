@@ -11,7 +11,7 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 // Kalite kodları ve kişi uydurmadır.
 const satir = (ek: Partial<KgFiyatiSatiri>): KgFiyatiSatiri => ({
   kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '125.5000', paraBirimi: 'TRY', tryKgFiyati: '125.5000', talasKgFiyati: null, tryTalasKgFiyati: null, gecerlilik: '2026-10-19', aciklama: '',
-  kisiAdi: 'Deneme Alıcı', zaman: '2026-10-19T08:00:00.000Z', ...ek,
+  kisiAdi: 'Deneme Alıcı', zaman: '2026-10-19T08:00:00.000Z', islemKatsayisi: null, araciKatsayisi: null, etkinKgFiyati: null, ...ek,
 });
 
 interface Istek { yontem: string; yol: string; govde: unknown; kimlik: string | null }
@@ -150,7 +150,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     fireEvent.click(within(p).getByRole('button', { name: /Şablonu indir/ }));
     expect(tikla).toHaveBeenCalled();
     const sablon = await new Promise<string>((coz) => { const r = new FileReader(); r.onload = () => coz(String(r.result)); r.readAsText(indirilen!); });
-    expect(sablon).toContain('"DENEME-AL";"cubuk";"";"TRY"');
+    expect(sablon).toContain('"DENEME-AL";"cubuk";"";"TRY";"";"";"";"";"";"125,5";"19.10.2026"');
     expect(sablon).toContain('"DENEME-FY";"boru"');
     const dolu = sablon.replace('"DENEME-AL";"cubuk";""', '"DENEME-AL";"cubuk";"131,75"');
     fireEvent.change(within(p).getByLabelText('Kg fiyatı dosyası'), { target: { files: [new File([dolu], 'kg.csv', { type: 'text/csv' })] } });
@@ -160,9 +160,27 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     fireEvent.click(within(p).getByRole('button', { name: '1 fiyatı kaydet' }));
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toHaveLength(1));
     expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toEqual({
-      satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '131.75', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), aciklama: '' }],
+      satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '131.75', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), aciklama: '',
+        islemKatsayisi: null, araciKatsayisi: null }],
     });
     tikla.mockRestore();
+  });
+
+  it('1352: satırda katsayılar ve etkin kg fiyatı görünür; satırdan açılan pencerede güncel katsayılar hazır gelir, bozuk katsayı gönderilmez', async () => {
+    const istekler = ac([satir({ islemKatsayisi: '1.15', araciKatsayisi: '1.05', etkinKgFiyati: '151.5388' })]);
+    expect(await screen.findByText('151,5388 TRY')).toBeTruthy();
+    expect(screen.getByText('1,15')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Fiyat gir/ }));
+    const p = screen.getByRole('dialog');
+    expect((within(p).getByLabelText(/işlem katsayısı/i) as HTMLInputElement).value).toBe('1,15');
+    fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '130' } });
+    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '0' } });
+    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
+    expect(within(p).getByRole('alert').textContent).toContain('Aracı katsayısını');
+    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '' } });
+    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
+    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kgFiyati: '130', islemKatsayisi: '1.15', araciKatsayisi: null }] });
   });
 
   it('sunucu reddederse ileti pencerede kalır', async () => {
