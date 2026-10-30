@@ -54,6 +54,23 @@ function disIzleyiciGirerMi(kullanici: Kullanici, modul: string | undefined): bo
   return kullanici.disIzleyici !== true || (modul !== undefined && DIS_IZLEYICI_MODULLERI.includes(modul));
 }
 
+// Telefon profilinin (kart #1358, 1347 a) girebildiği modüller: Üretim Terminali, kuyruk ve Stok Merkezi'nin (QR okutma) ekranlarının
+// ve kabuğun çağırdığı uçlar. Rolüne verilmiş olsa da öteki uçlar telefona kapalıdır; modülü bilinmeyen kayıtta da kapalıdır.
+// Profilin sayfa listesi ekrandan genişletilse de bu liste genişlemez: telefona yeni modül açmak kod ve test ister.
+export const TELEFON_MODULLERI: readonly string[] = [
+  'oturum', 'ayarlar', 'bildirim', 'arkon', 'uretim-emirleri', 'stok', 'istasyonlar', 'akis', 'atolye',
+];
+
+function cihazGirerMi(kullanici: Kullanici, modul: string | undefined): boolean {
+  return kullanici.cihazProfili !== 'telefon' || (modul !== undefined && TELEFON_MODULLERI.includes(modul));
+}
+
+// 1339 a: çizim ve 3B dosyası telefona hiç verilmez; içerik akmadan ret. Tür içerikten bulunmuş kayıtlı türdür (dosya modülü);
+// imzasız ikili içerik Arkon'un 3B ağ dizisidir. Talimat fotoğrafı ve videosu açıktır (1355 a).
+export function telefondaYasakDosyaMi(tur: string): boolean {
+  return tur === 'application/pdf' || tur.startsWith('model/') || tur === 'image/vnd.dxf' || tur === 'application/octet-stream';
+}
+
 // Yazma komutunun denetim kaydındaki kapsamı; tanımda verilmezse 'tam'.
 export type DenetimKipi = 'tam' | 'govdesiz' | 'yok';
 
@@ -475,6 +492,7 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
         if (tanim.yetki !== 'acik') {
           if (kullanici === null) throw oturumYok();
           if (!yetkisiVarMi(kullanici, tanim.yetki) || !disIzleyiciGirerMi(kullanici, modul)) throw yetkiYok();
+          if (!cihazGirerMi(kullanici, modul)) throw yetkiYok('Bu işlem bu cihazda yapılamaz.');
         }
         // Kayıtta durulmaz: uygulama bütün modüllerin uçlarını keşfeder, bayraklı tek uç deposuz kurulan her testi
         // düşürürdü. Deposuz kurulumda uç korumasız koşmaz, açık hatayla cevap verir.
@@ -599,6 +617,9 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           if (durumKodu !== null) throw new Error(`İkili cevapta durum kodu yazılamaz: ${anahtar}`);
           if (sonuc === null) return yanit.code(204).header('cache-control', 'private, no-store').send();
           const dosya = sonuc as IkiliCevap;
+          if (kullanici?.cihazProfili === 'telefon' && telefondaYasakDosyaMi(dosya.tur)) {
+            throw yetkiYok('Çizim ve 3B dosyaları telefonda açılmaz.');
+          }
           // 385 a (ADR 0002 eki): oturumlu kişiye verilen her dosya, içerik akmadan önce kendi yazma transaction'ında deftere
           // girer; yazılamazsa dosya verilmez. Satırı uç katmanı kurar: ad şemada 255 karakterle sınırlıdır, seçim sınırı
           // işleyicinin bıraktığı ek içindir. Kimliksiz açık uçta (giriş logosu) kişi yoktur, ekranın kendiliğinden yüklediği
