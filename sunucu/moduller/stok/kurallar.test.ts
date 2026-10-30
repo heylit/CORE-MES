@@ -8,7 +8,7 @@ import {
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
-  kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
+  kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
@@ -474,6 +474,9 @@ describe('stok kuralları: terminal üretim girişi', () => {
       sarflar: [{ malzemeId: 5, statuId: null, miktar: 20000n }, { malzemeId: 1, statuId: 10, miktar: 6000n, tasinan: true }, { malzemeId: 2, statuId: 20, miktar: 10000n, tasinan: true }],
       cevirme: null, giris: { malzemeId: 9, miktar: 10000n, statuId: 30 },
     });
+    assert.deepEqual(dp({ gelenler: [gelenler[0]!, { ...gelenler[1]!, oran: { pay: 2, payda: 1 } }] }).sarflar.map((x) => x.miktar), [6000n, 20000n], '1360: çarpan 2 dal iki parça verir');
+    assert.deepEqual(oranliAdet(10000n, { pay: 1, payda: 3 }), 3333n, 'bindelik adet aşağı yuvarlanır');
+    assert.deepEqual(gelenOrani({ adetCarpani: null }, {}), { pay: 1, payda: 1 });
     assert.deepEqual(dp({ gelenler, sonAdim: true }).giris, { malzemeId: null, miktar: 10000n }, 'son adım birleştirmesi ürünü statüsüz girer');
     assert.deepEqual(dp({ gelenler, cikti: 7 }).giris, { malzemeId: 7, miktar: 10000n }, 'çıktılı birleştirme çıktıyı girer');
     assert.deepEqual(dp({ kaynak: 'oncul', gelenler: [gelenler[0]!], tasinan: g1 }),
