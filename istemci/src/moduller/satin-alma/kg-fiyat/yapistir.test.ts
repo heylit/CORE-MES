@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { yapistirilaniOku } from './yapistir.ts';
+import type { KgFiyatiSatiri } from '#paylasilan/sozlesme/satin-alma.ts';
+import { csvMetni } from '../../../ortak/veri/csv.ts';
+import { fiyatSerisi } from './KgFiyatGrafigi.tsx';
+import { EN_COK_SATIR, SABLON_BASLIKLARI, sablonSatirlari, yapistirilaniOku } from './yapistir.ts';
 
 const BUGUN = '2026-10-19';
 
@@ -13,6 +16,7 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
         { kaliteKodu: 'DENEME-3', form: null, kgFiyati: '80', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: BUGUN, aciklama: '' },
       ],
       hatalar: [],
+      atlanan: 0,
     });
   });
 
@@ -20,5 +24,46 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
     const r = yapistirilaniOku(';cubuk;10\nDENEME;;0\nDENEME;;1.250,00\nDENEME;;5;JPY\nDENEME;;5;TRY;2026/10/01\nDENEME;;5;TRY;;;sıfır\nDENEME;;5', BUGUN);
     expect(r.satirlar).toHaveLength(1);
     expect(r.hatalar.map((h) => h.split(':')[0])).toEqual(['1. satır', '2. satır', '3. satır', '4. satır', '5. satır', '6. satır']);
+  });
+
+  it('1351: indirilen şablon (tırnaklı hücreler, BOM, bilgi sütunları) olduğu gibi okunur; kg fiyatı boş satır hata değil, atlanır', () => {
+    const satirlar = sablonSatirlari([satir({ form: null, paraBirimi: 'USD', kgFiyati: '3.2000' })], [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 1 }]);
+    expect(satirlar).toEqual([
+      ['DENEME-AL', '', null, 'USD', null, null, null, 3.2, '19.10.2026'],
+      ['DENEME-FY', 'boru', null, 'TRY', null, null, null, null, null],
+    ]);
+    expect(yapistirilaniOku(csvMetni(SABLON_BASLIKLARI, satirlar), BUGUN)).toEqual({ satirlar: [], hatalar: [], atlanan: 2 });
+    const dolu = satirlar.map((s, i) => (i === 0 ? ['DENEME-AL', '', '3,4', 'USD', '01.11.2026', 'teklif; "A"', null, 3.2, '19.10.2026'] : s));
+    expect(yapistirilaniOku(csvMetni(SABLON_BASLIKLARI, dolu), BUGUN)).toEqual({
+      satirlar: [{ kaliteKodu: 'DENEME-AL', form: null, kgFiyati: '3.4', talasKgFiyati: null, paraBirimi: 'USD', gecerlilik: '2026-11-01', aciklama: 'teklif; "A"' }],
+      hatalar: [], atlanan: 1,
+    });
+  });
+
+  it('1351: boş liste için şablon tek örnek satır verir; talaş yazılı ama kg fiyatı boş satır hatadır; sınırı aşan dosya gönderilmez', () => {
+    expect(sablonSatirlari([], [])).toHaveLength(1);
+    expect(yapistirilaniOku('DENEME;;;TRY;;;5', BUGUN).hatalar).toHaveLength(1);
+    const cok = Array.from({ length: EN_COK_SATIR + 1 }, (_, i) => `DENEME-${i};;1`).join('\n');
+    expect(yapistirilaniOku(cok, BUGUN).hatalar.at(-1)).toContain(`en çok ${EN_COK_SATIR}`);
+  });
+});
+
+// Kalite kodları ve fiyatlar uydurmadır.
+const satir = (ek: Partial<KgFiyatiSatiri>): KgFiyatiSatiri => ({
+  kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '100.0000', paraBirimi: 'TRY', tryKgFiyati: null, talasKgFiyati: null, tryTalasKgFiyati: null,
+  gecerlilik: '2026-10-19', aciklama: '', kisiAdi: null, zaman: '2026-10-19T08:00:00.000Z', ...ek,
+});
+
+describe('kg fiyatı geçmiş grafiği (1351)', () => {
+  it('son girişin para biriminde, eskiden yeniye, gün başına sonra girilenle çizer; başka para birimi sayılır', () => {
+    // Sunucu sırası: geçerlilik ve giriş sırası yeniden eskiye.
+    const s = fiyatSerisi([
+      satir({ gecerlilik: '2026-10-19', kgFiyati: '120.0000' }),
+      satir({ gecerlilik: '2026-10-19', kgFiyati: '118.0000' }),
+      satir({ gecerlilik: '2026-09-01', kgFiyati: '4.0000', paraBirimi: 'USD' }),
+      satir({ gecerlilik: '2026-08-01', kgFiyati: '110.5000' }),
+    ]);
+    expect(s).toEqual({ paraBirimi: 'TRY', disarida: 1, noktalar: [{ etiket: '01.08.2026', deger: 110.5 }, { etiket: '19.10.2026', deger: 120 }] });
+    expect(fiyatSerisi([])).toBeNull();
   });
 });

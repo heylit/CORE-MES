@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FiyatsizKalite, KgFiyatiSatiri, KgStokDegeri } from '#paylasilan/sozlesme/satin-alma.ts';
-import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { CokSatir, DurumKutusu, Dugme, Girdi, Kart, Pencere, Rozet, SayiKarti, Secim, Tablo, useBildirim, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
+import { CokSatir, DurumKutusu, Dugme, Girdi, Kart, Pencere, Rozet, SayiKarti, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
+import { csvIndir } from '../../../ortak/veri/csv.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
-import { PARA_BIRIMLERI, ondalikOku, tarihOku, yapistirilaniOku, type KgFiyatiGirdisi } from './yapistir.ts';
+import { KgFiyatGrafigi } from './KgFiyatGrafigi.tsx';
+import { PARA_BIRIMLERI, SABLON_BASLIKLARI, ondalikOku, sablonSatirlari, tarihOku, yapistirilaniOku, type KgFiyatiGirdisi } from './yapistir.ts';
 import './kg-fiyatlari.css';
 
 const ANAHTAR = ['satin-alma', 'kg-fiyatlari'] as const;
@@ -43,7 +45,7 @@ const SUTUNLAR: Sutun<KgFiyatiSatiri>[] = [
   { anahtar: 'tl', baslik: 'TL/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.tryKgFiyati, 'TL') },
   { anahtar: 'talas', baslik: 'Talaş/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.talasKgFiyati, x.paraBirimi) },
   { anahtar: 'gecerlilik', baslik: 'Geçerlilik', kirilmaz: true, hucre: (x) => gun(x.gecerlilik) },
-  { anahtar: 'giren', baslik: 'Giren', hucre: (x) => x.kisiAdi ?? '—' },
+  { anahtar: 'giren', baslik: 'Kaydeden', hucre: (x) => x.kisiAdi ?? '—' },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
 ];
 
@@ -108,23 +110,66 @@ function FiyatPenceresi({ ilk, kapat }: { ilk: Baslangic | null; kapat: () => vo
   );
 }
 
-function YapistirPenceresi({ kapat }: { kapat: () => void }) {
+// FileReader: Blob.text() her tarayıcıda (ve test ortamında) yok.
+const dosyaMetni = (f: Blob): Promise<string> => new Promise((coz, red) => {
+  const r = new FileReader();
+  r.onload = () => coz(String(r.result ?? ''));
+  r.onerror = () => red(r.error ?? new Error('Dosya okunamadı.'));
+  r.readAsText(f);
+});
+
+const ONIZLEME: Sutun<KgFiyatiGirdisi>[] = [
+  { anahtar: 'kalite', baslik: 'Kalite', mono: true, kirilmaz: true, hucre: (x) => x.kaliteKodu },
+  { anahtar: 'form', baslik: 'Form', hucre: (x) => formAdi(x.form) },
+  { anahtar: 'fiyat', baslik: 'Kg fiyatı', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.kgFiyati, x.paraBirimi) },
+  { anahtar: 'talas', baslik: 'Talaş/kg', hizala: 'sag', kirilmaz: true, hucre: (x) => para(x.talasKgFiyati ?? null, x.paraBirimi) },
+  { anahtar: 'gecerlilik', baslik: 'Geçerlilik', kirilmaz: true, hucre: (x) => gun(x.gecerlilik) },
+  { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
+];
+
+// 1351: şablon indirilir (kalite ve form listesi dolu, fiyat boş), doldurulup yüklenir ya da Excel satırları yapıştırılır; ikisi aynı
+// ayrıştırıcıdan ve aynı uçtan geçer. Kaydetmeden önce satırlar önizlenir; satırlar birlikte yazılır, her biri kaydedenle ve saatle.
+function TopluGirisPenceresi({ sablon, kapat }: { sablon: Parameters<typeof sablonSatirlari>; kapat: () => void }) {
   const bugun = tesisGunu(Date.now());
   const [metin, metinYaz] = useState('');
+  const [dosyaAdi, dosyaAdiYaz] = useState<string | null>(null);
   const okunan = useMemo(() => yapistirilaniOku(metin, bugun), [metin, bugun]);
   const ekle = useEkle(kapat);
   const gonderilir = okunan.satirlar.length > 0 && okunan.hatalar.length === 0;
+  const sec = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    metinYaz(await dosyaMetni(f));
+    dosyaAdiYaz(f.name);
+  };
   return (
-    <Pencere acik kapat={kapat} baslik="Toplu yapıştır"
+    <Pencere acik kapat={kapat} baslik="Toplu giriş"
       alt={<><Dugme tur="birincil" simge="upload" disabled={!gonderilir} yukleniyor={ekle.isPending} onClick={() => ekle.mutate(okunan.satirlar)}>
         {okunan.satirlar.length > 0 ? `${okunan.satirlar.length} fiyatı kaydet` : 'Kaydet'}</Dugme><Dugme onClick={kapat}>Vazgeç</Dugme></>}>
-      <CokSatir etiket="Excel ya da CSV satırları" rows={8} value={metin} onChange={(e) => metinYaz(e.target.value)} autoFocus
-        ipucu="Sütunlar: kalite; form; kg fiyatı; para birimi; geçerlilik; açıklama; talaş fiyatı. Form boşsa bütün formlar, para birimi boşsa TRY, geçerlilik boşsa bugün." />
+      <div className="sa-kg-dugmeler sa-kg-sablon">
+        <Dugme simge="download" onClick={() => csvIndir('kg-fiyat-sablonu', SABLON_BASLIKLARI, sablonSatirlari(...sablon))}>Şablonu indir</Dugme>
+        <label className="sa-kg-dosya">
+          <Simge ad="upload" boyut="k" /><span>{dosyaAdi ?? 'Dosya seç (.csv)'}</span>
+          <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => { void sec(e); }} aria-label="Kg fiyatı dosyası" />
+        </label>
+      </div>
+      <CokSatir etiket="Excel ya da CSV satırları" rows={6} value={metin} onChange={(e) => { metinYaz(e.target.value); dosyaAdiYaz(null); }}
+        ipucu="Sütunlar: kalite; form; kg fiyatı; para birimi; geçerlilik; açıklama; talaş fiyatı. Form boşsa bütün formlar, para birimi boşsa TRY, geçerlilik boşsa bugün; kg fiyatı boş satır atlanır." />
       {okunan.hatalar.length > 0 && <ul role="alert">{okunan.hatalar.map((h) => <li key={h}>{h}</li>)}</ul>}
+      {okunan.atlanan > 0 && <p>{okunan.atlanan} satırda kg fiyatı boş, atlanır.</p>}
+      {okunan.satirlar.length > 0 && (
+        <Tablo etiket="Kaydedilecek fiyatlar" sutunlar={ONIZLEME} satirlar={okunan.satirlar} satirAnahtari={(x) => `${x.kaliteKodu}|${x.form ?? ''}|${x.gecerlilik}|${x.kgFiyati}|${x.aciklama ?? ''}`} />
+      )}
       {ekle.isError && <p role="alert">{hataMetni(ekle.error)}</p>}
     </Pencere>
   );
 }
+
+const kayitZamani = (z: string) => { const t = tesisSaati(new Date(z)); return `${gun(t)} ${t.slice(11)}`; };
+const GECMIS_SUTUNLARI: Sutun<KgFiyatiSatiri>[] = [
+  ...SUTUNLAR.filter((s) => s.anahtar !== 'kalite' && s.anahtar !== 'form'),
+  { anahtar: 'zaman', baslik: 'Kayıt zamanı', kirilmaz: true, hucre: (x) => kayitZamani(x.zaman) },
+];
 
 function GecmisPenceresi({ x, kapat }: { x: KgFiyatiSatiri; kapat: () => void }) {
   const l = useQuery({
@@ -133,14 +178,15 @@ function GecmisPenceresi({ x, kapat }: { x: KgFiyatiSatiri; kapat: () => void })
   });
   return (
     <Pencere acik kapat={kapat} baslik={`Fiyat geçmişi: ${x.kaliteKodu}, ${formAdi(x.form)}`} alt={<Dugme onClick={kapat}>Kapat</Dugme>}>
+      <KgFiyatGrafigi girisler={l.data?.girisler} hata={l.isError} />
       {l.isError ? <DurumKutusu durum="hata" yenile={() => void l.refetch()} />
-        : <Tablo etiket="Fiyat geçmişi" sutunlar={SUTUNLAR.filter((s) => s.anahtar !== 'kalite' && s.anahtar !== 'form')} satirlar={l.data?.girisler ?? []}
+        : <Tablo etiket="Fiyat geçmişi" sutunlar={GECMIS_SUTUNLARI} satirlar={l.data?.girisler ?? []}
           satirAnahtari={(g) => `${g.zaman}-${g.gecerlilik}-${g.kgFiyati}`} mesgul={l.isPending} bosMesaj="Giriş yok." />}
     </Pencere>
   );
 }
 
-type Acik = { tur: 'yeni'; x: Baslangic | null } | { tur: 'yapistir' } | { tur: 'gecmis'; x: KgFiyatiSatiri };
+type Acik = { tur: 'yeni'; x: Baslangic | null } | { tur: 'toplu' } | { tur: 'gecmis'; x: KgFiyatiSatiri };
 
 // SAT-77: malzeme kg fiyatları. Satırda güncel fiyat (geçerliliği bugünü geçmemiş en son giriş); satıra basınca geçmiş.
 // Fiyatı satın almayı yazan girer, okuyan görür.
@@ -177,7 +223,7 @@ export function KgFiyatlari() {
     <Kart baslik="Malzeme kg fiyatları" sag={yazar && (
       <div className="sa-kg-dugmeler">
         <Dugme tur="birincil" simge="plus" onClick={() => acikYaz({ tur: 'yeni', x: null })}>Yeni fiyat</Dugme>
-        <Dugme simge="upload" onClick={() => acikYaz({ tur: 'yapistir' })}>Toplu yapıştır</Dugme>
+        <Dugme simge="upload" onClick={() => acikYaz({ tur: 'toplu' })}>Toplu giriş</Dugme>
       </div>
     )}>
       {stok !== null && <StokDegeri d={stok} />}
@@ -187,7 +233,7 @@ export function KgFiyatlari() {
           satirSec={(x) => acikYaz({ tur: 'gecmis', x })} mesgul={l.isPending}
           bosMesaj={ara ? 'Aramaya uyan fiyat yok.' : 'Henüz kg fiyatı girilmedi.'} />}
       {acik?.tur === 'yeni' && <FiyatPenceresi ilk={acik.x} kapat={kapat} />}
-      {acik?.tur === 'yapistir' && <YapistirPenceresi kapat={kapat} />}
+      {acik?.tur === 'toplu' && <TopluGirisPenceresi sablon={[l.data?.fiyatlar ?? [], l.data?.fiyatsizKaliteler ?? []]} kapat={kapat} />}
       {acik?.tur === 'gecmis' && <GecmisPenceresi x={acik.x} kapat={kapat} />}
     </Kart>
       {fiyatsizlar.length > 0 && (

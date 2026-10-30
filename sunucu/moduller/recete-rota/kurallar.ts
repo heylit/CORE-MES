@@ -390,23 +390,55 @@ const metinMi = (d: unknown): d is string => typeof d === 'string' && d.trim() !
 // (zincirin bağımsız olmayan ilk adımı) onun malzemesini taşır, o adım başka bir karta dönüşmüşse o kartı; ilk ve bağımsız adım ilk
 // girdisini taşır (HM girerse HM, YM girerse YM statüsü); girdisi yoksa ya da girdi statü açmayan türdeyse rota sahibini (kullanıcı kararı
 // 14.10.2026). Liste sıralı adımlardır.
+// Öncül listesi olan adımda (1248 a) "önceki" sıra değil öncüldür (1348 a): öncülsüz dal başı ilk girdisini taşır; tek öncüllü adım öncülün
+// parçasını taşır, yalnız başka dala geçen ve kendi girdisi olan adım kendi girdisini; birden çok dalı birleştiren adımda dalların
+// parçaları tüketilir, adım rota sahibini taşır. Başka öncülün zaten beklediği öncül sayılmaz (birleştirmede ana hattın eski adımı).
 function tasinanMalzemeler(adimlar: readonly Record<string, unknown>[], sahipId: string, turu: ReadonlyMap<string, { malzemeNo: string; tur: TuretilenStatu['tur'] }>): ({ malzemeNo: string; tur: TuretilenStatu['tur'] } | undefined)[] {
   const bagimsiz = (a: Record<string, unknown> | undefined): boolean => a?.['dep'] === 'bagimsiz';
+  const ilkGirdi = (adim: Record<string, unknown>): string | undefined => {
+    const girdiler = Array.isArray(adim['ins']) ? adim['ins'].map(nesne) : [];
+    return girdiler.map((g) => g?.['itemId']).find((x): x is string => metinMi(x) && turu.has(x));
+  };
+  const onculler = dalOnculleri(adimlar);
   const kimlikler: string[] = [];
+  const devralinan = (ana: number): string => {
+    const donusen = adimlar[ana]?.['outItem'];
+    return metinMi(donusen) && turu.has(donusen) ? donusen : kimlikler[ana] ?? sahipId;
+  };
   adimlar.forEach((adim, i) => {
-    let ana = -1;
-    if (i > 0 && !bagimsiz(adim)) for (let j = i - 1; j >= 0; j--) { ana = j; if (!bagimsiz(adimlar[j]) || j === 0) break; }
-    const onceki = ana >= 0 ? adimlar[ana] : undefined;
-    if (onceki !== undefined) {
-      const donusen = onceki['outItem'];
-      kimlikler.push(metinMi(donusen) && turu.has(donusen) ? donusen : kimlikler[ana] ?? sahipId);
+    const liste = onculler[i];
+    if (liste !== null && liste !== undefined) {
+      const tek = liste.length === 1 ? liste[0]! : undefined;
+      if (liste.length > 1) kimlikler.push(sahipId);
+      else if (tek === undefined) kimlikler.push(ilkGirdi(adim) ?? sahipId);
+      else kimlikler.push((adim['dal'] ?? null) !== (adimlar[tek]?.['dal'] ?? null) ? ilkGirdi(adim) ?? devralinan(tek) : devralinan(tek));
       return;
     }
-    const girdiler = Array.isArray(adim['ins']) ? adim['ins'].map(nesne) : [];
-    const ilk = girdiler.map((g) => g?.['itemId']).find((x): x is string => metinMi(x) && turu.has(x));
-    kimlikler.push(ilk ?? sahipId);
+    let ana = -1;
+    if (i > 0 && !bagimsiz(adim)) for (let j = i - 1; j >= 0; j--) { ana = j; if (!bagimsiz(adimlar[j]) || j === 0) break; }
+    kimlikler.push(ana >= 0 ? devralinan(ana) : ilkGirdi(adim) ?? sahipId);
   });
   return kimlikler.map((k) => turu.get(k) ?? turu.get(sahipId));
+}
+
+// Sıralı adımların öncülleri (sıra konumuyla): adımın `onculler` dizisi (seq ile) varsa ondan, başka öncülün atası olan öncül atılarak;
+// dizi yoksa null (eski sıra kuralı). Bilinmeyen ya da kendinden sonraki seq atlanır.
+function dalOnculleri(adimlar: readonly Record<string, unknown>[]): (number[] | null)[] {
+  const konum = new Map<unknown, number>();
+  adimlar.forEach((a, i) => { if (!konum.has(a['seq'])) konum.set(a['seq'], i); });
+  const dogrudan = adimlar.map((a, i): number[] | null => {
+    const ham = a['onculler'];
+    if (!Array.isArray(ham)) return null;
+    const l = ham.map((o) => konum.get(nesne(o)?.['seq'])).filter((k): k is number => k !== undefined && k < i);
+    return [...new Set(l)].sort((x, y) => x - y);
+  });
+  const atalar: Set<number>[] = [];
+  dogrudan.forEach((l, i) => {
+    const s = new Set<number>();
+    for (const k of l ?? []) { s.add(k); for (const x of atalar[k] ?? []) s.add(x); }
+    atalar[i] = s;
+  });
+  return dogrudan.map((l) => (l === null ? null : l.filter((k) => !l.some((d) => d !== k && atalar[d]?.has(k)))));
 }
 
 // Statülü adım: rotanın son olmayan ve çıktısı gerçek bir karta ya da tanımlı bir statüye bağlanmamış adımı (prototipte adımın

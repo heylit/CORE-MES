@@ -17,11 +17,13 @@ const SECENEK: SunucuSecenegi = {
     { malzemeNo: 1, kod: 'DNM-01', ad: 'Deneme mili', aktif: true },
     { malzemeNo: 2, kod: 'DNM-02', ad: 'Deneme flanşı', aktif: true },
     { malzemeNo: 3, kod: 'DNM-03', ad: 'Deneme gövde', aktif: true },
+    { malzemeNo: 4, kod: 'DNM-04', ad: 'Deneme burç', aktif: true },
   ],
   studyo: {
     ozetler: [
-      { malzemeNo: 1, resim: 1, model: 1, balon: 4, numunePlani: 1 },
-      { malzemeNo: 3, resim: 1, model: 0, balon: 0, numunePlani: 0 },
+      { malzemeNo: 1, resim: 1, model: 1, balon: 4, numunePlani: 1, merkezde: 0 },
+      { malzemeNo: 3, resim: 1, model: 0, balon: 0, numunePlani: 0, merkezde: 0 },
+      { malzemeNo: 4, resim: 0, model: 0, balon: 0, numunePlani: 0, merkezde: 2 },
     ],
   },
 };
@@ -29,10 +31,15 @@ const SECENEK: SunucuSecenegi = {
 describe('Resim ve modeller listesi (799)', () => {
   it('kural: resmi olmayan, balonu olmayan ve numune planı olmayan eksiktir; model eksik sayılmaz; kartsız parça satır değildir', () => {
     const l = resimListesi([2, undefined, 1, 2], [
-      { malzemeNo: 1, resim: 2, model: 0, balon: 3, numunePlani: 1 },
-      { malzemeNo: 5, resim: 1, model: 1, balon: 0, numunePlani: 0 },
+      { malzemeNo: 1, resim: 2, model: 0, balon: 3, numunePlani: 1, merkezde: 0 },
+      { malzemeNo: 5, resim: 1, model: 1, balon: 0, numunePlani: 0, merkezde: 0 },
     ]);
     expect(l.map((s) => [s.malzemeNo, s.eksik])).toEqual([[1, []], [2, ['resim', 'numune']], [5, ['balon', 'numune']]]);
+  });
+
+  it('kural (1306): resmi yok ama Çizim Merkezi\'nde bağlı belgesi olan parça "alınmadı" eksiğiyle ayrılır', () => {
+    const l = resimListesi([], [{ malzemeNo: 4, resim: 0, model: 0, balon: 0, numunePlani: 0, merkezde: 1 }]);
+    expect(l.map((s) => s.eksik)).toEqual([['alinmadi', 'numune']]);
   });
 
   it('parça seçilmeden bütün parçalar sayılarıyla ve eksikleriyle listelenir; süzgeç eksikleri ayırır', async () => {
@@ -45,7 +52,9 @@ describe('Resim ve modeller listesi (799)', () => {
     expect(within(satir('DNM-02')).getByText('Numune planı yok')).toBeTruthy();
     expect(within(satir('DNM-03')).getByText('Balon yok')).toBeTruthy();
     expect(within(tablo).queryByText('ESKI-1')).toBeNull();
-    expect(screen.getByText('3 parça · 2 eksik')).toBeTruthy();
+    // 1306: Kalite'de kaydı olmayan, kartına Çizim Merkezi'nde çizim bağlı parça da satırdır.
+    expect(within(satir('DNM-04')).getByText('Çizim Merkezi’nde var, alınmadı')).toBeTruthy();
+    expect(screen.getByText('4 parça · 3 eksik')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Eksik' }));
     expect(within(tablo).queryByText('DNM-01')).toBeNull();
     expect(within(tablo).getByText('DNM-02')).toBeTruthy();

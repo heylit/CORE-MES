@@ -14,7 +14,7 @@ import { ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvi
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
-import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
+import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, aylikFaizdenGunluk, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
 import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineler } from '../istasyonlar/disari.ts';
@@ -67,6 +67,12 @@ export interface GecerliFaiz { aylikYuzde: string; gecerlilikBaslangic: string }
 export async function faizGetir(db: Db, paraBirimi: string, tarih: string): Promise<GecerliFaiz | null> {
   const [s] = await sorgular.sonFaizler(db, paraBirimi, tarih);
   return s ? { aylikYuzde: s.aylikYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic } : null;
+}
+// 1350 a: planın finansman oranı kendi ayarı yerine bu günlük orandır; o gün geçerli faiz yoksa null (oran bilinmiyor, sıfır değil).
+export interface GecerliGunlukFaiz extends GecerliFaiz { gunlukYuzde: number }
+export async function gunlukFaizGetir(db: Db, paraBirimi: string, tarih: string): Promise<GecerliGunlukFaiz | null> {
+  const f = await faizGetir(db, paraBirimi, tarih);
+  return f && { ...f, gunlukYuzde: aylikFaizdenGunluk(Number(f.aylikYuzde)) };
 }
 export async function faizler(db: Db, tarih: string): Promise<Map<string, GecerliFaiz>> {
   return new Map((await sorgular.sonFaizler(db, null, tarih)).map((s) => [s.paraBirimi, { aylikYuzde: s.aylikYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic }]));

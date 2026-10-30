@@ -62,7 +62,7 @@ function Liste({ veri }: EkranOzellikleri) {
             <Tablo
               etiket="Resim ve modeller" sutunlar={SUTUNLAR} satirlar={gorunen} satirAnahtari={(s) => s.malzemeNo}
               satirSec={(s) => { adresYaz({ parca: String(s.malzemeNo) }); }}
-              bosMesaj={satirlar.length ? 'Aramaya uyan parça yok' : 'Malzeme kartına bağlı parça yok. Parçalar ekranından parça ekleyin.'}
+              bosMesaj={satirlar.length ? 'Aramaya uyan parça yok' : 'Çizim Merkezi’nde malzeme kartına bağlı resim ya da model yok. Kartlara çizimi Çizim Merkezi’nde bağlayın.'}
               arac={{
                 arama: { deger: sorgu, degistir: sorguYaz, etiket: 'Parça ara', yerTutucu: 'Parça no veya adı ara' },
                 suzgec: { etiket: 'Durum', secenekler: SUZGECLER, secili: suzgec, sec: suzgecYaz },

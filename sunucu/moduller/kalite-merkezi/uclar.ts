@@ -313,7 +313,9 @@ export const uclar: Uc[] = [
     yetki: 'kalite-merkezi.onayla',
     sorgu: kmMerkezBelgeSorgusu,
     cevap: kmMerkezBelgeleriCevabi,
-    isle: async ({ db, sorgu }) => ({ belgeler: await studyo.merkezBelgeleri(db, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara) }),
+    isle: async ({ db, sorgu }) => ({
+      belgeler: await studyo.merkezBelgeleri(db, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara, sorgu.malzemeNo ?? null),
+    }),
   }),
   uc({
     yontem: 'POST',

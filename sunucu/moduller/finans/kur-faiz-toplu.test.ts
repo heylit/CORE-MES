@@ -6,12 +6,13 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { KurFaizAraligi } from '#paylasilan/sozlesme/finans.ts';
+import { aylikFaizdenGunluk, gunlukFaizdenAylik, type KurFaizAraligi } from '#paylasilan/sozlesme/finans.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { gunlukFaizGetir } from './disari.ts';
 import { ileriTarihliKurSirasi, topluKurFaizKarari } from './kurallar.ts';
 
 // Kurlar ve oranlar uydurmadır.
@@ -116,6 +117,29 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     assert.equal(await kurSayisi('DKK'), 0);
     assert.equal((await yukle([{ tur: 'faiz', paraBirimi: 'SEK', tarih: '2026-05-01', deger: 101 }])).durum, 400);
     assert.equal((await yukle([{ tur: 'oran', paraBirimi: 'SEK', tarih: '2026-05-01', deger: 1 }])).durum, 400);
+  });
+
+  test('günlük faiz aylığa çevrilip faiz olarak yazılır, aynı günün aylık kaydıyla çakışır; plan günlük oranı geri okur (1350 a)', async () => {
+    assert.equal(gunlukFaizdenAylik(0.1), 3.0417);
+    assert.ok(Math.abs(aylikFaizdenGunluk(3.0417) - 0.1) < 1e-5);
+    const c = tamam(await yukle([
+      { tur: 'gunluk_faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 0.1 },
+      { tur: 'faiz', paraBirimi: 'CZK', tarih: '2026-09-01', deger: 3.5 },
+    ]));
+    assert.deepEqual(c, { eklenen: 2, ayni: 0, farkli: 0 });
+    const a = tamam(await aralik('2026-08-01', '2026-09-30'));
+    assert.deepEqual(a.faizler.filter((f) => f.paraBirimi === 'CZK').map((f) => [f.gecerlilikBaslangic, Number(f.aylikYuzde)]), [['2026-08-01', 3.0417], ['2026-09-01', 3.5]]);
+    assert.deepEqual(tamam(await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 0.1 }])), { eklenen: 0, ayni: 1, farkli: 0 });
+    const g = await vt().tx((db) => gunlukFaizGetir(db, 'CZK', '2026-08-15'));
+    assert.equal(g?.aylikYuzde, '3.0417');
+    assert.ok(g !== null && Math.abs(g.gunlukYuzde - 0.1) < 1e-5);
+    assert.equal(await vt().tx((db) => gunlukFaizGetir(db, 'CZK', '2026-07-31')), null, 'başlangıçtan önce oran yoktur, sıfır uydurulmaz');
+    assert.equal((await yukle([
+      { tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 0.1 }, { tur: 'faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 3 },
+    ])).durum, 400);
+    assert.equal((await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-02', deger: 3.3 }])).durum, 400, 'aylık %100 aşılır');
+    assert.equal((await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-02', deger: -0.1 }])).durum, 400);
+    assert.equal(Number((await vt().tek<{ n: string }>("SELECT count(*)::text AS n FROM finans_faiz WHERE para_birimi = 'RON'"))?.n), 0);
   });
 
   test('aynı istek kimliğiyle ikinci gönderim satırları ikinci kez yazmaz', async () => {

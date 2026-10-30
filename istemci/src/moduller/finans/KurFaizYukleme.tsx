@@ -7,7 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { csvIndir } from '../../ortak/veri/csv.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import {
-  SABLON_BASLIKLARI, SABLON_SATIRLARI, gonderilecekler, kayitliylaKarsilastir, okumaAraligi, sablonuOku, type OkunanDosya, type OnizlemeSatiri, type SatirDurumu,
+  GUNLUK_FAIZ, SABLON_BASLIKLARI, SABLON_SATIRLARI, gonderilecekler, kayitliylaKarsilastir, okumaAraligi, sablonuOku, type OkunanDosya, type OnizlemeSatiri, type SatirDurumu,
 } from './kur-faiz-csv.ts';
 
 // FileReader: Blob.text() her tarayıcıda (ve test ortamında) yok.
@@ -22,7 +22,12 @@ const DURUM: Record<SatirDurumu, { ton: RozetTonu; ad: string }> = {
   yeni: { ton: 'tamam', ad: 'Yeni' }, ayni: { ton: 'pasif', ad: 'Aynı' }, farkli: { ton: 'uyari', ad: 'Farklı' }, hata: { ton: 'hata', ad: 'Hata' },
 };
 const gunMetni = (t: string | null) => (t ? t.split('-').reverse().join('.') : '-');
-const degerMetni = (s: OnizlemeSatiri) => (s.deger === null ? '-' : `${s.tur === 'faiz' ? '%' : ''}${s.deger.toLocaleString('tr-TR', { maximumFractionDigits: 6 })}`);
+const oranMetni = (n: number) => n.toLocaleString('tr-TR', { maximumFractionDigits: 6 });
+const degerMetni = (s: OnizlemeSatiri) => {
+  if (s.deger === null) return '-';
+  if (s.tur === GUNLUK_FAIZ) return `%${oranMetni(s.deger)}/gün${s.aylik === null ? '' : ` (aylık %${oranMetni(s.aylik)})`}`;
+  return `${s.tur === 'faiz' ? '%' : ''}${oranMetni(s.deger)}`;
+};
 const SUTUNLAR: Sutun<OnizlemeSatiri>[] = [
   { anahtar: 'no', baslik: 'Satır', hizala: 'sag', mono: true, hucre: (s) => s.no },
   { anahtar: 'tur', baslik: 'Tür', hucre: (s) => s.tur || '-' },
@@ -87,7 +92,8 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
   return (
     <div className="tc-kfy">
       <p className="tc-kfs-not">
-        Sütunlar: Tür (kur ya da faiz), Para birimi, Tarih (kurun günü ya da faizin başlangıcı), Değer (kur: 1 birim kaç TL; faiz: aylık %).
+        Sütunlar: Tür (kur, faiz ya da günlük faiz), Para birimi, Tarih (kurun günü ya da faizin başlangıcı), Değer (kur: 1 birim kaç TL;
+        faiz: aylık %; günlük faiz: günlük %, aylığa çevrilip kaydedilir). Plan ve proje maliyeti finansmanı TL faizinden hesaplar.
         Noktalı virgül ve ondalık virgül; tarih GG.AA.YYYY. Kayıtlı güne gelen satır atlanır, o gün elle düzeltilir.
       </p>
       <div className="tc-kfy-eylem">

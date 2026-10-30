@@ -23,11 +23,11 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, onculGirdisiIhlali,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, onculGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
@@ -773,7 +773,7 @@ async function fasonBaglami(db: Db, emirId: number, isEmriId: number) {
   const ozetler = fasonOzeti(await s.fasonHareketleriGetir(db, [isEmriId]));
   const gkk = hepsi.filter((i) => i.sira > isEmri.sira).sort((a, b) => a.sira - b.sira)[0];
   const durum: FasonDurumu = {
-    durum: isEmri.durum, fason: isEmri.fasonFirmaId !== null, siradaki: siradakiIsEmri(hepsi)?.id === isEmriId, ...ozetler,
+    durum: isEmri.durum, fason: isEmri.fasonFirmaId !== null, siradaki: fasonSirasindaMi(hepsi, isEmri), ...ozetler,
     gonderilebilir: (await adimaGiren(db, emirId, hepsi, isEmri)) ?? e.adet,
     firmadaHatali: gkk === undefined ? 0 : (await gkkHesabi(db, hepsi, gkk))?.firmadaHatali ?? 0,
   };
@@ -814,13 +814,13 @@ async function adimEksikHaritasi(db: Db, emirId: number, hepsi: readonly IsEmriS
 }
 
 // Okutulan emrin sıradaki fason iş emri (kart #97): kilitlemeden okunur; gidişin kendisi `fasonGidis` ile aynı kurallarla denetlenir.
-// Kapalı, arşivdeki ya da taslak emirde ve sırada fason olmayan emirde null.
+// Dallı emirde öncülleri bitmiş ilk fason adımıdır (1346). Kapalı, arşivdeki ya da taslak emirde ve sırada fason olmayan emirde null.
 export async function siradakiFason(db: Db, emirId: number): Promise<SiradakiFasonCevabi['fason']> {
   const e = await s.ustEmirBul(db, emirId);
   if (e === null || e.malzemeNo === null) throw bulunamadi(EMIR_YOK);
   if (acikEmirIhlali(e.durum, e.arsiv) !== null || e.durum === 'taslak') return null;
   const hepsi = await s.isEmirleriGetir(db, [emirId]);
-  const sira = siradakiIsEmri(hepsi);
+  const sira = siradakiFasonAdimi(hepsi);
   if (sira === null || sira.fasonFirmaId === null) return null;
   const ozet = fasonOzeti(await s.fasonHareketleriGetir(db, [sira.id]));
   const firma = (await firmaOzetleri(db, [sira.fasonFirmaId])).get(sira.fasonFirmaId);
@@ -1690,7 +1690,7 @@ export async function fasonGonderimleri(db: Db, isler: readonly { isEmriId: numb
     if (isEmri === undefined) continue;
     const { gonderilen } = fasonOzeti(hareketler.filter((h) => h.isEmriId === x.isEmriId));
     sonuc.set(x.isEmriId, {
-      siradaki: siradakiIsEmri(emrin)?.id === x.isEmriId, gonderilen, gonderilebilir: (await adimaGiren(db, x.uretimEmriId, emrin, isEmri)) ?? x.adet,
+      siradaki: fasonSirasindaMi(emrin, isEmri), gonderilen, gonderilebilir: (await adimaGiren(db, x.uretimEmriId, emrin, isEmri)) ?? x.adet,
     });
   }
   return sonuc;

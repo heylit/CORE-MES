@@ -1939,14 +1939,30 @@ export function akisFasonGetir(db: Db, emirId: number): Promise<AkisFasonSatiri[
 
 // Sayımın stok yansıması (terminal üretim girişi): adımın yeri (önceki adımlar sırayla ve son adım), girdileri ve emrin taşıdığı malzeme. Taşınan malzeme
 // statü kuralıyla aynıdır: ilk adımın ilk girdisi (bileşen kayıt sırası); alt partide kök emrin ilk adımı.
-export interface AdimUretimSatiri { uretimEmriId: number; opNo: number; oncekiOpNolari: number[]; sonAdim: boolean }
+// 1348 a: dal satırı olan adımda öncüller op numarasıyla, sırayla (boş: dal başı); satırı olmayan (1248 öncesi) adımda null.
+export interface AdimUretimSatiri { uretimEmriId: number; opNo: number; oncekiOpNolari: number[]; onculOpNolari: number[] | null; sonAdim: boolean }
+const ONCUL_OP_NOLARI = (is: string) => `(SELECT ARRAY(SELECT p.op_no FROM uretim_emirleri_is_emri_onculu o JOIN uretim_emirleri_is_emri p ON p.id = o.oncul_is_emri_id
+                    WHERE o.is_emri_id = d.is_emri_id AND p.sira < ${is}.sira ORDER BY p.sira)
+     FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = ${is}.id)`;
 export function adimUretimSatiriGetir(db: Db, isEmriId: number): Promise<AdimUretimSatiri | null> {
   return db.tek<AdimUretimSatiri>(
     `SELECT i.uretim_emri_id AS "uretimEmriId", i.op_no AS "opNo",
             ARRAY(SELECT o.op_no FROM uretim_emirleri_is_emri o WHERE o.uretim_emri_id = i.uretim_emri_id AND o.sira < i.sira ORDER BY o.sira) AS "oncekiOpNolari",
+            ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
             NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri s WHERE s.uretim_emri_id = i.uretim_emri_id AND s.sira > i.sira) AS "sonAdim"
        FROM uretim_emirleri_is_emri i WHERE i.id = $1`,
     [isEmriId],
+  );
+}
+// Emrin bütün adımları sırayla: öncülleri (adimUretimSatiriGetir ile aynı kural) ve girdileri (bileşen kayıt sırası).
+export interface EmirAdimZinciriSatiri { opNo: number; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[] }
+export function emirAdimZinciriGetir(db: Db, uretimEmriId: number): Promise<EmirAdimZinciriSatiri[]> {
+  return db.sorgu<EmirAdimZinciriSatiri>(
+    `SELECT i.op_no AS "opNo", ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
+            COALESCE((SELECT json_agg(json_build_object('malzemeNo', b.malzeme_no, 'miktar', b.miktar::text) ORDER BY b.id)
+                        FROM uretim_emirleri_is_emri_bileseni b WHERE b.is_emri_id = i.id), '[]'::json) AS girdiler
+       FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = $1 ORDER BY i.sira`,
+    [uretimEmriId],
   );
 }
 export function adimGirdileriGetir(db: Db, isEmriId: number): Promise<{ malzemeNo: number; miktar: string }[]> {

@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { acikEmir, emirBaslat, emirBitir, isEmirleriniYenile, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import { acikEmir, adimUretimBilgisi, emirBaslat, emirBitir, isEmirleriniYenile, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { adimlariKoy, bekleyeniSil } from './is-emri-servis.ts';
 import { ONCUL_GECERSIZ } from './kurallar.ts';
@@ -137,6 +137,28 @@ describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
     await tx((db) => bekleyeniSil(db, ie2));
     b = (await baglar(id)).map((x) => [x.is_emri_id, x.oncul_is_emri_id]);
     assert.deepEqual(b, [[ie4, ie3], [ie4, ek], [ek, ie1]].sort((x, y) => x[0]! - y[0]! || x[1]! - y[1]!), 'OP25, OP20\'nin öncülü OP10\'u devraldı');
+  });
+
+  test('1348 a: stokun adım bilgisi dallı emirde öncülleri, eski emirde null döner; emrin adım zinciri girdileriyle gelir', async () => {
+    const adimlar = await dalli();
+    adimlar[2] = { ...adimlar[2]!, bilesenler: [{ malzemeNo: urunNo, miktar: '2.5' }] };
+    const { ie: [ie1, ie2, ie3, ie4] } = await ac(adimlar) as { id: number; ie: [number, number, number, number] };
+    const bilgi = (ie: number) => tx((db) => adimUretimBilgisi(db, ie));
+    assert.deepEqual((await bilgi(ie1))?.onculOpNolari, []);
+    assert.deepEqual((await bilgi(ie2))?.onculOpNolari, [10]);
+    const dalBasi = await bilgi(ie3);
+    assert.deepEqual(dalBasi?.onculOpNolari, [], 'B dalı başı öncülsüz');
+    assert.deepEqual(dalBasi?.oncekiOpNolari, [10, 20], 'sıra listesi eski okuyucular için aynen kalır');
+    const birlesme = await bilgi(ie4);
+    assert.deepEqual(birlesme?.onculOpNolari, [20, 30]);
+    assert.deepEqual(birlesme?.emirAdimlari.map((a) => [a.opNo, a.onculOpNolari, a.girdiler]), [[10, [], []], [20, [10], []], [30, [], [{ malzemeNo: urunNo, miktar: '2.5000' }]], [40, [20, 30], []]]);
+
+    const m = [await makine(), await makine()];
+    const eski = await ac([adim(1, m[0]!), adim(2, m[1]!)]);
+    const e2 = await bilgi(eski.ie[1]!);
+    assert.equal(e2?.onculOpNolari, null, '1248 öncesi emir sıra kuralında kalır');
+    assert.deepEqual(e2?.emirAdimlari.map((a) => a.onculOpNolari), [null, null]);
+    assert.equal(await bilgi(2147483647), null, 'olmayan iş emri');
   });
 
   test('eski emir (liste yok) plan motorunun bagOf kuralıyla okunur; rota yeniden uygulanınca liste gelir', async () => {

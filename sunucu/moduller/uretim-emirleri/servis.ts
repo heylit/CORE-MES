@@ -559,9 +559,10 @@ export async function emirBaslat(
   const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, isEmri.onculler === null
     ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri));
   const an = await komutAni(db, id);
-  await sorgular.baslamayiYaz(db, id, an);
   // Planlı emir adımı verilerek başlarsa emir o adımın istasyonunda başlar; başlamış emrin istasyonu öncü adımda kalır.
+  // İstasyon başlamadan önce yazılır: sıradaki adım fasondaysa emrin istasyonu boştur, başlamış emir istasyonsuz olamaz (1345).
   if (isEmriId !== undefined && !paralel && emir.istasyonId !== istasyonId) await sorgular.emirIstasyonunuYaz(db, id, istasyonId);
+  await sorgular.baslamayiYaz(db, id, an);
   if (isEmri !== null) await sorgular.isEmriBaslat(db, isEmri.id, an);
   const ilkBaslatma = !(await sorgular.baslatmaKaydiVarMi(db, id));
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'baslat', null, an, isEmri?.id ?? null);

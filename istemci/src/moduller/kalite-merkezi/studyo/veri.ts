@@ -13,7 +13,7 @@ export const studyoAnahtari = {
   emirOlcumleri: (emirId: number) => ['kalite-merkezi', 'studyo', 'emir-olcumleri', emirId] as const,
   emirNumuneleri: (emirId: number) => ['kalite-merkezi', 'studyo', 'emir-numuneleri', emirId] as const,
   acikNumuneler: ['kalite-merkezi', 'studyo', 'numuneler'] as const,
-  merkezBelgeleri: (ara: string) => ['kalite-merkezi', 'studyo', 'merkez-belgeleri', ara] as const,
+  merkezBelgeleri: (ara: string, malzemeNo: number | null) => ['kalite-merkezi', 'studyo', 'merkez-belgeleri', ara, malzemeNo] as const,
   resimDosyasi: (resimId: number, ozet: string) => ['kalite-merkezi', 'studyo', 'resim-dosyasi', resimId, ozet] as const,
 };
 
@@ -126,10 +126,15 @@ export function useBalonYeriYaz(malzemeNo: number | null) {
   });
 }
 
-export function useMerkezBelgeleri(ara: string, acik: boolean) {
+// Parça verilirse kartına Çizim Merkezi'nde bağlı belgeler başta gelir (1306).
+export function useMerkezBelgeleri(ara: string, acik: boolean, malzemeNo: number | null = null) {
+  const sorgu = new URLSearchParams();
+  if (ara) sorgu.set('ara', ara);
+  if (malzemeNo !== null) sorgu.set('malzemeNo', String(malzemeNo));
+  const ek = sorgu.toString();
   return useQuery({
-    queryKey: studyoAnahtari.merkezBelgeleri(ara),
-    queryFn: () => api.get<KmMerkezBelgeleriCevabi>(`/kalite-merkezi/studyo/merkez-belgeleri${ara ? `?ara=${encodeURIComponent(ara)}` : ''}`),
+    queryKey: studyoAnahtari.merkezBelgeleri(ara, malzemeNo),
+    queryFn: () => api.get<KmMerkezBelgeleriCevabi>(`/kalite-merkezi/studyo/merkez-belgeleri${ek ? `?${ek}` : ''}`),
     enabled: acik,
     staleTime: 15_000,
   });

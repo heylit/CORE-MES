@@ -1,10 +1,16 @@
-import type { KgFiyatiEkleGovdesi } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { FiyatsizKalite, KgFiyatiEkleGovdesi, KgFiyatiSatiri } from '#paylasilan/sozlesme/satin-alma.ts';
 
 export type KgFiyatiGirdisi = KgFiyatiEkleGovdesi['satirlar'][number];
 type ParaBirimi = KgFiyatiGirdisi['paraBirimi'];
 // Sözleşmedeki para birimleriyle aynı (değer ithali zod'u istemciye sokar); tip eşleşmezse derleme kırılır.
 export const PARA_BIRIMLERI = ['TRY', 'USD', 'EUR', 'GBP'] as const satisfies readonly ParaBirimi[];
-export interface YapistirmaSonucu { satirlar: KgFiyatiGirdisi[]; hatalar: string[] }
+// `atlanan`: kalitesi yazılı ama kg fiyatı boş satır (şablonda doldurulmamış); hata değildir, gönderilmez.
+export interface YapistirmaSonucu { satirlar: KgFiyatiGirdisi[]; hatalar: string[]; atlanan: number }
+// Sunucu bir istekte en çok bu kadar satır alır (kgFiyatiEkleGovdesi); istemci paylasilandan değer ithal etmez.
+export const EN_COK_SATIR = 500;
+
+// Şablon (1351): yapıştırmayla aynı sütun sırası; son iki sütun yalnız bilgidir, okunmaz.
+export const SABLON_BASLIKLARI = ['Kalite', 'Form', 'Kg fiyatı', 'Para birimi', 'Geçerlilik', 'Açıklama', 'Talaş fiyatı', 'Güncel kg fiyatı (bilgi)', 'Güncel geçerlilik (bilgi)'] as const;
 
 const PARA = new Set<string>(PARA_BIRIMLERI);
 // Excel'den ya da CSV'den gelen sayı: ondalık virgül ya da nokta; binlik ayırıcı yok (prototip CSV kuralı).
@@ -21,16 +27,35 @@ export function tarihOku(m: string, bugun: string): string | null {
   return n ? `${n[3]}-${n[2]!.padStart(2, '0')}-${n[1]!.padStart(2, '0')}` : null;
 }
 
+// Dışa aktarma her hücreyi tırnaklar ("a";"b"), Excel'de kaydedilen dosya tırnaksız gelir; ikisi de okunur. Formül korumasının
+// eklediği baştaki ' kaldırılır.
+function hucreler(satir: string, ayirici: string): string[] {
+  const l: string[] = [];
+  let h = '';
+  let tirnak = false;
+  for (let i = 0; i < satir.length; i += 1) {
+    const c = satir[i]!;
+    if (tirnak) {
+      if (c === '"' && satir[i + 1] === '"') { h += '"'; i += 1; } else if (c === '"') tirnak = false; else h += c;
+    } else if (c === '"' && h.trim() === '') { h = ''; tirnak = true; } else if (c === ayirici) { l.push(h); h = ''; } else h += c;
+  }
+  l.push(h);
+  return l.map((x) => x.trim().replace(/^'(?=[=+\-@])/, ''));
+}
+
 // Satır: kalite; form; kg fiyatı; para birimi; geçerlilik; açıklama; talaş fiyatı (214 a; boşsa bilinmiyor). Ayırıcı noktalı virgül ya da sekme (Excel'den kopya).
 // Form boşsa fiyat kalitenin bütün formlarınadır; para birimi boşsa TRY. Başlık satırı ("kalite" ile başlayan) atlanır.
+// Kg fiyatı boş satır atlanır (şablonun doldurulmamış satırı); talaş fiyatı yazılıysa kg fiyatı da gerekir.
 // Hatalı satır gönderilmez; hata satır numarasıyla döner.
 export function yapistirilaniOku(metin: string, bugun: string): YapistirmaSonucu {
   const satirlar: KgFiyatiGirdisi[] = [];
   const hatalar: string[] = [];
+  let atlanan = 0;
   metin.replace(/^﻿/, '').split(/\r?\n/).forEach((ham, i) => {
-    if (ham.trim() === '' || (i === 0 && /^\s*kalite/i.test(ham))) return;
-    const [kalite = '', form = '', fiyat = '', para = '', gecerlilik = '', aciklama = '', talas = ''] = ham.split(ham.includes('\t') ? '\t' : ';').map((h) => h.trim());
+    const [kalite = '', form = '', fiyat = '', para = '', gecerlilik = '', aciklama = '', talas = ''] = hucreler(ham, ham.includes('\t') ? '\t' : ';');
+    if ((kalite === '' && fiyat === '' && talas === '') || (i === 0 && /^kalite/i.test(kalite))) return;
     const no = i + 1;
+    if (kalite !== '' && fiyat === '' && talas === '') { atlanan += 1; return; }
     const kgFiyati = ondalikOku(fiyat);
     const paraBirimi = (para === '' ? 'TRY' : para.toUpperCase());
     const tarih = tarihOku(gecerlilik, bugun);
@@ -42,5 +67,18 @@ export function yapistirilaniOku(metin: string, bugun: string): YapistirmaSonucu
     else if (talas !== '' && talasKgFiyati === null) hatalar.push(`${no}. satır: talaş fiyatı sıfırdan büyük sayı olmalı ya da boş kalmalı ("${talas}").`);
     else satirlar.push({ kaliteKodu: kalite, form: form === '' ? null : form, kgFiyati, talasKgFiyati, paraBirimi: paraBirimi as ParaBirimi, gecerlilik: tarih, aciklama });
   });
-  return { satirlar, hatalar };
+  if (satirlar.length > EN_COK_SATIR) hatalar.push(`Bir kayıtta en çok ${EN_COK_SATIR} fiyat girilir; dosyada ${satirlar.length} dolu satır var, bölüp yükleyin.`);
+  return { satirlar, hatalar, atlanan };
+}
+
+// Şablon satırları: fiyatı olan her kalite + form güncel para birimi ve bilgi sütunlarıyla, fiyatı olmayanlar TRY ile; kg fiyatı boş
+// gelir, doldurulan satır yeni giriş olur, boş kalan atlanır. Liste boşsa tek örnek satır (uydurma kod) yazılır.
+type SablonHucresi = string | number | null;
+export function sablonSatirlari(fiyatlar: readonly KgFiyatiSatiri[], fiyatsizlar: readonly FiyatsizKalite[]): SablonHucresi[][] {
+  const gun = (t: string) => `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`;
+  const l: SablonHucresi[][] = [
+    ...fiyatlar.map((f) => [f.kaliteKodu, f.form ?? '', null, f.paraBirimi, null, null, null, Number(f.kgFiyati), gun(f.gecerlilik)]),
+    ...fiyatsizlar.map((f) => [f.kaliteKodu, f.form ?? '', null, 'TRY', null, null, null, null, null]),
+  ];
+  return l.length > 0 ? l : [['ORNEK-KALITE', 'cubuk', null, 'TRY', null, null, null, null, null]];
 }

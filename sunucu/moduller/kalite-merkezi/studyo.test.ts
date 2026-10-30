@@ -12,6 +12,7 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoOzetleriCevabi, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import { kaydaBagla } from '../cizimler/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -210,12 +211,49 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(r.statusCode, 200, r.body);
     const { parcalar } = r.json() as KmStudyoOzetleriCevabi;
     assert.deepEqual(parcalar.filter((p) => p.malzemeNo === flans || p.malzemeNo === mil), [
-      { malzemeNo: flans, resim: 1, model: 0, balon: 2, numunePlani: 0 },
-      { malzemeNo: mil, resim: 1, model: 0, balon: 1, numunePlani: 0 }].sort((a, b) => a.malzemeNo - b.malzemeNo));
+      { malzemeNo: flans, resim: 1, model: 0, balon: 2, numunePlani: 0, merkezde: 0 },
+      { malzemeNo: mil, resim: 1, model: 0, balon: 1, numunePlani: 0, merkezde: 0 }].sort((a, b) => a.malzemeNo - b.malzemeNo));
     assert.equal((await oku(yazar, '/kalite-merkezi/studyo/parcalar')).statusCode, 200);
     assert.equal((await oku(operator, '/kalite-merkezi/studyo/parcalar')).statusCode, 403);
     assert.equal((await oku(null, '/kalite-merkezi/studyo/parcalar')).statusCode, 401);
     await o().sahip.sorgu('DELETE FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 AND op_no = 99', [mil]);
+  });
+
+  test('KM-S25 (1306) malzeme kartına Çizim Merkezi\'nde PDF ya da 3B model bağlı parça Kalite kaydı olmadan listelenir; okuma bir şey yazmaz', async () => {
+    const burc = (await o().vt.tx((db) => ornekMalzemeNo(db, 'burc')))!;
+    const kisi = { id: yonId, ad: 'Deneme Yönetici', islemler: [] };
+    const resim = await belgeAc('Burç resmi', pdf('burc'), 'burc.pdf');
+    const taslak = await belgeAc('Burç taslak', pdf('burc-taslak'), 'burc-taslak.pdf', false);
+    const foto = await belgeAc('Burç fotoğraf', png('burc'), 'burc.png', true, 'fotograf');
+    await o().vt.tx(async (db) => { for (const b of [resim, taslak, foto]) await kaydaBagla(db, kisi, b, 'malzemeler', burc); });
+    const oncekiResim = await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_resim');
+
+    const { parcalar } = (await oku(kalite, '/kalite-merkezi/studyo/parcalar')).json() as KmStudyoOzetleriCevabi;
+    assert.deepEqual(parcalar.find((p) => p.malzemeNo === burc), { malzemeNo: burc, resim: 0, model: 0, balon: 0, numunePlani: 0, merkezde: 1 });
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_resim'))?.n, oncekiResim?.n, 'liste resim almaz');
+
+    // Alınınca resim sayılır; Çizim Merkezi'ndeki sayı değişmez.
+    await o().vt.tx((db) => resimMerkezdenEkle(db, yonId, { malzemeNo: burc, merkezBelgeId: resim }));
+    const sonra = ((await oku(kalite, '/kalite-merkezi/studyo/parcalar')).json() as KmStudyoOzetleriCevabi).parcalar.find((p) => p.malzemeNo === burc);
+    assert.deepEqual(sonra, { malzemeNo: burc, resim: 1, model: 0, balon: 0, numunePlani: 0, merkezde: 1 });
+  });
+
+  test('KM-S26 (1306) seçicide parçanın kartına bağlı belgeler başta ve işaretli gelir; aynı belge iki kez gelmez; arama bağlıları da süzer', async () => {
+    const kisi = { id: yonId, ad: 'Deneme Yönetici', islemler: [] };
+    const bagli = await belgeAc('Bağ mil resmi', pdf('bag-mil'), 'bag-mil.pdf');
+    const bagsiz = await belgeAc('Bağ başka resim', pdf('bag-baska'), 'bag-baska.pdf');
+    await o().vt.tx((db) => kaydaBagla(db, kisi, bagli, 'malzemeler', mil));
+    const ara = (q: string, no?: number) =>
+      oku(kalite, `/kalite-merkezi/studyo/merkez-belgeleri?ara=${encodeURIComponent(q)}${no === undefined ? '' : `&malzemeNo=${String(no)}`}`);
+
+    const r = await ara('Bağ', mil);
+    assert.equal(r.statusCode, 200, r.body);
+    const belgeler = (r.json() as KmMerkezBelgeleriCevabi).belgeler;
+    assert.deepEqual(belgeler.map((b) => [b.id, b.bagli]), [[bagli, true], [bagsiz, false]]);
+    assert.deepEqual(((await ara('Bağ')).json() as KmMerkezBelgeleriCevabi).belgeler.map((b) => b.bagli), [false, false], 'parça yoksa işaret yok');
+    assert.deepEqual(((await ara('başka', mil)).json() as KmMerkezBelgeleriCevabi).belgeler.map((b) => b.id), [bagsiz], 'arama bağlıları süzer');
+    assert.equal((await ara('Bağ', -1)).statusCode, 400);
+    assert.equal((await oku(yazar, `/kalite-merkezi/studyo/merkez-belgeleri?malzemeNo=${String(mil)}`)).statusCode, 403);
   });
 
   test('KM-S11 resim dosyası belge merkezinden akar; belge yeni revizyona geçince alınan revizyon 409 olur; yetkisiz 403', async () => {
