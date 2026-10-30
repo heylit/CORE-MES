@@ -6,6 +6,8 @@ import { useGorunum, useTuslar } from '../gorunum.ts';
 import { bekleyenGkodAl, gsimHazirla, SAMPLE_HEID, SAMPLE_ISO } from '../hesap/gkod.ts';
 import { ileti } from '../ham/ileti.tsx';
 import { useParca } from '../parca.ts';
+import { GkodSahnesi } from '../sahne/gkod-sahnesi.ts';
+import { Sahne, type Cizim } from '../sahne/Sahne.tsx';
 import { machine, toolLib, tools } from '../secici.ts';
 import { useCncYetkisi } from '../veri.ts';
 import type { Aciklama } from './aciklama.ts';
@@ -28,6 +30,8 @@ import '../ham/ham.css';
 const KABUL = '.h,.H,.nc,.NC,.tap,.TAP,.gcode,.ngc,.txt,.mpf,.MPF,.iso,.cnc,.eia,.i,.I';
 // Prototipte ekran bilgisi 80 ms'de bir yenilenir; oynatirken React cizimi de bu siklikta.
 const CIZIM_MS = 80;
+const GORUNUSLER = [['iso', 'İzometrik'], ['top', 'Üst'], ['front', 'Ön'], ['side', 'Yan']] as const;
+const yumusat = (dt: number): number => 1 - Math.pow(0.0008, dt);
 
 type Anahtar = 'removal' | 'showRapid' | 'showPart' | 'compare' | 'follow';
 const ANAHTARLAR: { k: Anahtar; baslik: string }[] = [
@@ -35,14 +39,14 @@ const ANAHTARLAR: { k: Anahtar; baslik: string }[] = [
   { k: 'follow', baslik: 'Takımı izle' },
 ];
 
-// Prototipin G-Kod Simulasyonu gorunumu (#gcodeStage ve #gSide). Hesap ve durum simulasyon.ts'te; 3B sahne iskeletin Sahne katmanini bekler.
+// Prototipin G-Kod Simulasyonu gorunumu (#gcodeStage ve #gSide). Hesap ve durum simulasyon.ts'te, sahne sahne/gkod-sahnesi.ts'te.
 export function GkodSim() {
   useCncSurum();
   useParca();
   const { gorunum, burada, git } = useGorunum();
   const { yazabilir } = useCncYetkisi();
   const [, ciz] = useReducer((x: number) => x + 1, 0);
-  const dosya = useRef<HTMLInputElement>(null);
+  const dosya = useRef<HTMLInputElement>(null), alan = useRef<HTMLDivElement>(null), sahne = useRef<GkodSahnesi | null>(null);
   const [birak, setBirak] = useState(false);
   const [kip, setKip] = useState<ListeKipi>('all');
   const gs = gsimHazirla();
@@ -58,6 +62,13 @@ export function GkodSim() {
     else if (gSig() !== GS.sig) yenidenHesapla();
     ciz();
   }, []);
+
+  useEffect(() => {
+    const el = alan.current; if (!el) return undefined;
+    const s = new GkodSahnesi(el); sahne.current = s;
+    return () => { s.dispose(); sahne.current = null; };
+  }, []);
+  const sahneCiz = useCallback((c: Cizim) => { sahne.current?.frame(c.renderer, c.rect, yumusat(c.dt)); }, []);
 
   // Oynatma ve talas dongusu (prototipte her kare). Ekran CIZIM_MS'de bir yenilenir.
   useEffect(() => {
@@ -137,7 +148,7 @@ export function GkodSim() {
         onDragOver={(e) => { e.preventDefault(); setBirak(true); }} onDragLeave={() => { setBirak(false); }} onDrop={birakildi}
       >
         <div className="tc-ch-sahne-ust">
-          <div className="tc-ch-sahne-tuval" data-sahne="gcode" />
+          <div ref={alan} className="tc-ch-sahne-tuval" data-sahne="gcode"><Sahne ciz={sahneCiz} sinif="tc-ch-tuval" /></div>
           {p && mv && ti && konum && (
             <div className="tc-ch-bilgi tc-ch-hud" aria-live="off">
               <div className="tc-ch-hud-ust">
@@ -152,6 +163,7 @@ export function GkodSim() {
             </div>
           )}
           <div className="tc-ch-gorus" role="group" aria-label="Simülasyon görünümü">
+            {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { sahne.current?.sigdir(v); }}>{a}</Dugme>)}
             {ANAHTARLAR.map(({ k, baslik }) => (
               <Dugme key={k} tur={gs[k] ? 'birincil' : 'ikincil'} aria-pressed={!!gs[k]} onClick={yap(() => { anahtar(k); })}>{baslik}</Dugme>
             ))}

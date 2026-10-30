@@ -293,11 +293,11 @@ test.describe('P5 Takım Ömrü', () => {
 test.describe('3B sahne', () => {
   // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
   // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
-  test('Kurulum, Hazırlık, Kütüphane, Oto-CAM ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+  test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, Oto-CAM, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer.
     test.setTimeout(180_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       const tuval = page.locator('.tc-cy-sahne-tuval').first();
       await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
@@ -320,7 +320,7 @@ test.describe('3B sahne', () => {
   // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
   test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'oto-cam', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
       await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
