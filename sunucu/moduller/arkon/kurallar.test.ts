@@ -5,7 +5,7 @@ import {
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
   girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
-  yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
+  planYokDamgala, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
@@ -317,6 +317,21 @@ test('131 b: kapı açıkken ilk sağlamdan sonrası sayılır mı', () => {
   assert.equal(ilkParcaSayimiAsildi(sag(2), 0), true);
   assert.equal(ilkParcaSayimiAsildi(sag(-1), 5), false);
   assert.equal(ilkParcaSayimiAsildi(sag(1, 'scrap'), 5), false);
+});
+
+test('1307 b: kontrol planı yok onayının anı sunucudan damgalanır; istemcinin anı sayılmaz, kayıtlı an korunur, öteki satırlara dokunulmaz', () => {
+  type Satir = { v: number; at: number; by: string; planYok?: boolean; planYokAt?: number };
+  const gecmis = (g: unknown) => (g as { history: Satir[] }).history;
+  const eski = { v: 1, at: 10, by: 'A' };
+  const yeni = planYokDamgala('pkgs', { history: [eski, { v: 2, at: 20, by: 'B', planYok: true, planYokAt: 5 }] }, { history: [eski] }, 1000);
+  assert.deepEqual(gecmis(yeni), [eski, { v: 2, at: 20, by: 'B', planYok: true, planYokAt: 1000 }]);
+  // Sonraki yazmada kayıtlı an korunur; istemci değiştirmeye çalışsa da.
+  const sonra = planYokDamgala('pkgs', { history: [eski, { ...gecmis(yeni)[1]!, planYokAt: 1 }] }, yeni, 2000);
+  assert.equal(gecmis(sonra)[1]?.planYokAt, 1000);
+  // Onaysız satıra istemci an yazamaz (reddedilen); geçmişsiz ve başka depodaki belge olduğu gibi kalır.
+  assert.deepEqual(gecmis(planYokDamgala('pkgs', { history: [{ ...eski, planYokAt: 7 }] }, {}, 3000)), [eski]);
+  assert.deepEqual(planYokDamgala('pkgs', { note: 'x' }, {}, 3000), { note: 'x' });
+  assert.deepEqual(planYokDamgala('results', { history: [{ v: 1, planYok: true }] }, {}, 3000), { history: [{ v: 1, planYok: true }] });
 });
 
 test('yeniden ilk parça kararı o anki sağlam sayımı sunucudan damgalar; istemcinin tabanı sayılmaz, değişmeyen karar damgayı korur', () => {

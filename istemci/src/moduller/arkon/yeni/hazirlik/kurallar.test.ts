@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  araNumuneSikligi, kalemBitti, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
+  PLAN_YOK_UYARISI, araNumuneSikligi, kalemBitti, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
 } from './kurallar.ts';
-import type { NumuneKurali } from './tipler.ts';
+import type { NumuneKurali, Pkg } from './tipler.ts';
 import { takimKullanimi } from './TakimKarti.tsx';
 
 // İstasyon panellerinin eski ekranda satır içi olan hesapları (istasyonlar.ts DepoPanel, MontajPanel, KalitePanel; kurallar.ts ToolsCard).
@@ -73,5 +73,29 @@ describe('ara numune sıklığı işin adedini aşınca (700 a)', () => {
     expect(ara(50)).toEqual([[25, 'op']]);
     expect(ara(75)).toEqual([[50, 'op']]);
     expect(ara(100)).toEqual([[50, 'op'], [100, 'q']]);
+  });
+});
+
+// 1307 b (kullanıcı teyidi 30.10): talaşlı işte kontrol planı eksik görevdir, gönderimi durdurmaz (uyarı onayı ister); kalite muayenesinde zorunlu.
+describe('1307 b kontrol planı görevi', () => {
+  const TESIS = { wcs: [{ id: 'TAL', name: 'Deneme merkez' }], sts: [{ id: 'IST-1', name: 'Deneme tezgah', wc: 'TAL', t: 'cnc' }], mcs: [] } as unknown as Parameters<typeof paketDenetimi>[1];
+  const paket = (ek: Partial<Pkg>): Pkg => ({
+    id: 'p1', no: 'IE-1', opType: 'cnc', st: {}, partNo: 'DN-1', part: 'Deneme', rev: 'A', op: 'Op 10', machine: 'IST-1', target: 5, cycle: 1, due: '',
+    priority: 'normal', material: '', note: '', files: [{ kind: 'pdf', name: 'a.pdf' }], primary: 'a.pdf', plan: [], steps: [{ id: 's', t: 'Bağla', d: '', r: true }],
+    status: 'draft', version: 0, dirty: true, createdAt: 1, updatedAt: 1, by: 'Deneme', ...ek,
+  }) as Pkg;
+  const plan = (p: Pkg) => paketDenetimi(p, TESIS).find((x) => x.k === 'plan')!;
+
+  it('talaşlıda plan yoksa madde eksik ama yumuşak; uyarı onayı gerekir', () => {
+    expect(plan(paket({}))).toMatchObject({ ok: false, soft: true, d: PLAN_YOK_UYARISI });
+    expect(planYokUyarisiGerekir(paket({}))).toBe(true);
+    expect(planYokUyarisiGerekir(paket({ plan: [{ id: 1, nom: 'Ø20', tol: '', min: 19.9, max: 20.1, tool: '', freq: 'İlk parça' }] as Pkg['plan'] }))).toBe(false);
+  });
+
+  it('kalite muayenesinde plan zorunlu kalır; öteki türlerde isteğe bağlı ve uyarı sorulmaz', () => {
+    expect(plan(paket({ opType: 'kalite' }))).toMatchObject({ ok: false, soft: false, d: 'En az bir kontrol noktası' });
+    expect(planYokUyarisiGerekir(paket({ opType: 'kalite' }))).toBe(false);
+    expect(plan(paket({ opType: 'boya' }))).toMatchObject({ ok: false, soft: true, d: 'İsteğe bağlı' });
+    expect(planYokUyarisiGerekir(paket({ opType: 'boya' }))).toBe(false);
   });
 });

@@ -72,6 +72,45 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yayin?.readCfg).toMatchObject({ mesh: expect.any(String), ex: expect.any(Object) });
   }, 40000);
 
+  it('1307 b: kontrol planı olmayan talaşlı iş uyarı onayıyla gönderilir; onay yayın geçmişine yazılır, vazgeçince yazma gitmez', async () => {
+    // Arkon deposu dosya içinde paylaşılır: önceki testin yayınladığı paketle karışmasın diye ayrı kimlik.
+    const planYok = { ...PAKET, id: 'tmi-ue-71', no: 'IE-DENEME-71', plan: [] };
+    const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: planYok.id, surum: 1, govde: planYok }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const yazim = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${planYok.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    expect(await within(d).findByText('Eksik · gönderirken uyarı onayı istenir')).toBeTruthy();
+    const gonder = await within(d).findByRole('button', { name: /Operatöre gönder/ });
+    expect(gonder.hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(gonder);
+    let pencere = await screen.findByRole('dialog', { name: 'Kontrol planı yok' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Kontrol planı yok' })).toBeNull(); });
+    expect(yazim(istekler).some((p) => p.status === 'published')).toBe(false);
+
+    fireEvent.click(gonder);
+    pencere = await screen.findByRole('dialog', { name: 'Kontrol planı yok' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Uyarıyı onayla ve gönder' }));
+    await waitFor(() => { expect(yazim(istekler).some((p) => p.status === 'published')).toBe(true); }, { timeout: 10000 });
+    const yayin = yazim(istekler).find((p) => p.status === 'published');
+    expect(yayin?.history?.at(-1)).toMatchObject({ v: 1, planYok: true });
+  }, 40000);
+
+  it('1307 b: kontrol planı olan işte uyarı sorulmaz ve geçmişe planYok yazılmaz', async () => {
+    const planli = { ...PAKET, id: 'tmi-ue-72', no: 'IE-DENEME-72' };
+    const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: planli.id, surum: 1, govde: planli }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const yazim = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${planli.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    fireEvent.click(await within(d).findByRole('button', { name: /Operatöre gönder/ }));
+    await waitFor(() => { expect(yazim(istekler).some((p) => p.status === 'published')).toBe(true); }, { timeout: 10000 });
+    expect(screen.queryByRole('dialog', { name: 'Kontrol planı yok' })).toBeNull();
+    expect(yazim(istekler).find((p) => p.status === 'published')?.history?.at(-1)).not.toHaveProperty('planYok');
+  }, 40000);
+
   it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma TMI\'ye gitmez', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');

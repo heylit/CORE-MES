@@ -30,7 +30,7 @@ import { kmPlani, kmSahibi } from './km-cizim.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
-  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, tmiIsEmri, yeniKimlik,
+  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
 } from './kurallar.ts';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
@@ -146,7 +146,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [klasor, klasorYaz] = useState<KlasorTutamaci | null>(null);
   const [klasorAdi, klasorAdiYaz] = useState<string | null>(null);
   const [silOnay, silOnayYaz] = useState(false);
-  const [gonderOnay, gonderOnayYaz] = useState<GonderimUyarisi | null>(null);
+  const [gonderOnay, gonderOnayYaz] = useState<(GonderimUyarisi & { planYokOnayli: boolean }) | null>(null);
+  const [planYokSor, planYokSorYaz] = useState(false);
   const [olcuSec, olcuSecYaz] = useState<number[]>([]);
   const [nSor, nSorYaz] = useState<number | null>(null);
   const [merkezSec, merkezSecYaz] = useState(false);
@@ -313,10 +314,13 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       klasorYaz(h); klasorAdiYaz(h.name); soyle('Paylaşım klasörü bağlandı: ' + h.name, 'run');
     } catch (e) { if ((e as Error).name !== 'AbortError') soyle('Klasör bağlanamadı: ' + (e as Error).message, 'stop'); }
   };
-  const yayinla = async (planOnayli = false) => {
+  const yayinla = async (planOnayli = false, planYokOnayli = false) => {
     if (!p || !yayinlar) return;
     const v = paketDenetimi(p, tesis);
     if (v.some((x) => !x.ok && !x.soft)) { soyle(istasyonsuzMu(p) ? ISTASYONSUZ_GONDERIM : rotaEksigi(p) ? rotaEksigi(p) + ' · yayınlanamadı' : 'Eksikler var · yayınlanamadı', 'stop'); return; }
+    // 1307 b: kontrol planı olmayan talaşlı iş yalnız gönderen uyarıyı onaylayınca gider.
+    const planYok = planYokUyarisiGerekir(p);
+    if (planYok && !planYokOnayli) { planYokSorYaz(true); return; }
     if (kayitZamani.current) { clearTimeout(kayitZamani.current); kayitZamani.current = null; }
     const kisi = depo.Auth.current();
     const ben = (kisi && kisi.name) || '';
@@ -329,7 +333,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     }
     // Kart #1257: canlı planda olmayan iş onaysız gönderilmez; pencere nedeni ve plan bağlantısını gösterir.
     const uyari = planOnayli ? null : gonderimUyarisi(p);
-    if (uyari) { gonderOnayYaz(uyari); return; }
+    if (uyari) { gonderOnayYaz({ ...uyari, planYokOnayli }); return; }
     yayindaYaz(true);
     try {
       const n: Pkg = { ...p, status: p.status === 'draft' ? 'published' : p.status, version: (p.version || 0) + 1, dirty: false, publishedAt: Date.now(), updatedAt: Date.now(), apReq: null };
@@ -338,7 +342,11 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       if (n.files.some((f) => f.kind === 'model' || f.kind === 'pdf')) { soyle('Resim ve 3B model operatör için hazırlanıyor…', 'done'); n.derived = await hazirVeri(depo, n); }
       // Ara onay (Terminal kural 1/5): sonraki değişiklik bu yayına göre bulunur.
       n.yayinImza = paketImzasi(n);
-      n.history = [...(p.history || []), { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: p.approval && p.approval.ok ? p.approval.by : null, st: n.machine }].slice(-60);
+      // Kişi (`by`) ve onayın anı (`planYokAt`) yeni geçmiş satırında sunucuda damgalanır; `planYok` uyarının onaylandığını kayda geçirir (1307 b).
+      const gecmis: NonNullable<Pkg['history']>[number] = Object.assign(
+        { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: p.approval && p.approval.ok ? p.approval.by : null, st: n.machine }, planYok ? { planYok: true } : {},
+      );
+      n.history = [...(p.history || []), gecmis].slice(-60);
       await depo.DB.put('pkgs', n); seciliYaz(n); await yenile();
       depo.Bus.send({ type: 'pkg', id: n.id, no: n.no, rev: n.rev, version: n.version, machine: n.machine });
       let msg = n.no + ' · Rev ' + n.rev + ' operatöre gönderildi';
@@ -858,7 +866,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                           <div key={i} className="tc-ay2-gecmis-satir">
                             <b>v{h.v}</b><span>Rev {h.rev}</span>
                             <span>{new Date(h.at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                            <span>{h.by}{h.ap ? ' · onay ' + h.ap : ''}</span><span>{h.st || ''}</span>
+                            <span>{h.by}{h.ap ? ' · onay ' + h.ap : ''}{planYokMetni(h)}</span><span>{h.st || ''}</span>
                           </div>
                         ))}
                       </details>
@@ -922,9 +930,44 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         ) : null}
       </div>
       {gonderOnay && p ? (
-        <PlanOnayPenceresi uyari={gonderOnay} kapat={() => gonderOnayYaz(null)} gonder={() => { gonderOnayYaz(null); void yayinla(true); }} plana={() => { tmiyeGit('plan'); gonderOnayYaz(null); }} />
+        <PlanOnayPenceresi uyari={gonderOnay} kapat={() => gonderOnayYaz(null)} gonder={() => { gonderOnayYaz(null); void yayinla(true, gonderOnay.planYokOnayli); }} plana={() => { tmiyeGit('plan'); gonderOnayYaz(null); }} />
+      ) : null}
+      {planYokSor && p ? (
+        <KontrolPlaniYokPenceresi
+          kapat={() => planYokSorYaz(false)} gonder={() => { planYokSorYaz(false); void yayinla(false, true); }}
+          plana={() => { planYokSorYaz(false); sekmeYaz('plan'); }}
+        />
       ) : null}
     </div>
+  );
+}
+
+// Onayın anı sunucunun damgasıdır (`planYokAt`); damga gelmemişse an yazılmaz.
+function planYokMetni(h: object): string {
+  const s = h as { planYok?: unknown; planYokAt?: unknown };
+  if (s.planYok !== true) return '';
+  const an = typeof s.planYokAt === 'number'
+    ? ' ' + new Date(s.planYokAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  return ' · kontrol planı yok, uyarı onaylandı' + an;
+}
+
+// 1307 b: kontrol planı olmayan talaşlı işi göndermeden önce uyarı; onay yayın geçmişine yazılır.
+export function KontrolPlaniYokPenceresi({ kapat, gonder, plana }: { kapat: () => void; gonder: () => void; plana: () => void }) {
+  return (
+    <Pencere
+      acik kapat={kapat} baslik="Kontrol planı yok"
+      alt={(
+        <>
+          <Dugme tur="ikincil" simge="target" onClick={plana}>Kontrol planına git</Dugme>
+          <Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>
+          <Dugme simge="next" onClick={gonder}>Uyarıyı onayla ve gönder</Dugme>
+        </>
+      )}
+    >
+      <span className="tc-ay2-ust-yazi">Operatöre gönder</span>
+      <p>Bu talaşlı işte kontrol noktası yok: operatör ölçü girmeden üretir, ilk parça ve numune ölçüsü istenmez.</p>
+      <p>Gönderirsen uyarıyı onayladığın, adın ve zamanıyla yayın geçmişine yazılır.</p>
+    </Pencere>
   );
 }
 
