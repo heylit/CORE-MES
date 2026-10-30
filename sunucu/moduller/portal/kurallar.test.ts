@@ -4,7 +4,7 @@ import {
   KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, bolumOkuyabilirMi, bolumYazabilirMi, kalemKodu, logoNiyetleri, ondalikMetni, portalRolu, portalUnvani, talepTeklifi, rolDegisiyorMu, canliEsler, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, esikleriBindir, siparisEsikleri, kilitAlinirMi, sorgula, sonParca, ustYolu, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, sonOnay,
   acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi, satinAlmaTeslimiReddi, SATIN_ALMA_TESLIMI_REDDI,
-  FIRMA_ICI, disYazmaReddi, izleyiciCikar, izleyiciGorebilirMi,
+  FIRMA_ICI, disIzleyiciMi, disYazmaReddi, izleyiciCikar, izleyiciGorebilirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -566,6 +566,13 @@ describe('portal firma görünürlüğü (1019 a)', () => {
     assert.deepEqual(izleyiciCikar({ partyId: 'p1' }, { type: 'bank' }), { tur: 'kapali' });
     assert.deepEqual(izleyiciCikar({ partyId: 7 }, { type: 'customer' }), { tur: 'kapali' });
     for (const yol of ['orders/o1', 'parties/p1', 'users/tmi-7']) assert.equal(gorur(yol, { partyId: 'p1' }, { tur: 'kapali' }), false, yol);
+  });
+
+  test('BD-K46 (1224 a): firmaya atanan kişi dış izleyicidir, kartı silinmiş ya da türü başka firmada da; atamasız ve firm iç kişidir', () => {
+    for (const kayit of [null, {}, { partyId: null }, { partyId: 'firm' }]) assert.equal(disIzleyiciMi(kayit), false, JSON.stringify(kayit));
+    for (const kayit of [{ partyId: 'p1' }, { partyId: 'p1', type: 'customer' }, { partyId: 7 }, { partyId: '' }]) {
+      assert.equal(disIzleyiciMi(kayit), true, JSON.stringify(kayit));
+    }
   });
 
   test('BD-K45 (1013 a): firma kişisi yalnız kendi portal kullanıcısını ve kişiye özel alanını yazar; firma alanını değiştiremez', () => {

@@ -14,6 +14,7 @@ import {
   yeniPinHatasi,
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
+import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
   AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk,
@@ -47,7 +48,7 @@ export async function girisYap(
 
   const sir: GirisSirri = girdi.pin !== undefined ? { pin: girdi.pin } : { parola: girdi.parola ?? '' };
   const sonuc = await girisDogrula(db, ad, sir);
-  const kullanici = sonuc === null ? null : await kullaniciYukle(db, sonuc.kisiId);
+  const kullanici = sonuc === null ? null : await kimlikYukle(db, sonuc.kisiId);
   if (sonuc === null || kullanici === null) {
     await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
     // Deneme kaydı reddedilen girişte de kalmalı; yoksa bekleme hiç artmaz.
@@ -77,7 +78,7 @@ export async function ilkPiniBelirle(
   if (kural !== null) throw new UygulamaHatasi('DOGRULAMA', kural, { alan: 'yeniPin' });
 
   const sonuc = await girisDogrula(db, ad, { pin: girdi.geciciPin });
-  const kullanici = sonuc?.pinBelirlenecek === true ? await kullaniciYukle(db, sonuc.kisiId) : null;
+  const kullanici = sonuc?.pinBelirlenecek === true ? await kimlikYukle(db, sonuc.kisiId) : null;
   if (kullanici === null) {
     await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
     throw new UygulamaHatasi('OTURUM_YOK', 'Kullanıcı adı ya da geçici PIN hatalı.', { yazilarKalir: true });
@@ -203,6 +204,14 @@ export async function cikisYap(db: Db, anahtar: string | null): Promise<void> {
   if (anahtar) await oturumKapat(db, anahtarOzeti(anahtar));
 }
 
+// Oturumun kişisi: yetkisi kişilerden, dış izleyici işareti (1224 a) portalın firma atamasından her istekte okunur; işaret
+// kopyalanmadığı için atama değişince bir sonraki istekte geçerlidir. Yalnız işaretli kişide alan vardır.
+async function kimlikYukle(db: Db, kisiId: number, oturumAcildi: string | null = null): Promise<Kullanici | null> {
+  const kullanici = await kullaniciYukle(db, kisiId, oturumAcildi);
+  if (kullanici === null || !(await disIzleyiciKisiMi(db, kullanici.id))) return kullanici;
+  return { ...kullanici, disIzleyici: true };
+}
+
 export async function anahtardanKullanici(db: Db, anahtar: string): Promise<Kullanici | null> {
   const oturum = await gecerliOturumBul(db, anahtarOzeti(anahtar), {
     bostaSn: BOSTA_SN, azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
@@ -210,7 +219,7 @@ export async function anahtardanKullanici(db: Db, anahtar: string): Promise<Kull
   if (oturum === null) return null;
   if (oturum.bayat) await gorulduYaz(db, oturum.id);
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
-  return kullaniciYukle(db, oturum.kisi_id, oturum.acildi_metin);
+  return kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
 }
 
 // Çerez önce gelir: tarayıcı belirteç göndermez, saat çerez göndermez. Belirteç yalnız saat uçlarında çözülür (saatBelirteciGecerMi); başka uçta
@@ -231,7 +240,7 @@ export async function saatBelirtecindenKullanici(db: Db, belirtec: string): Prom
   const satir = await gecerliSaatBelirteciBul(db, anahtarOzeti(belirtec));
   if (satir === null) return null;
   // Kişi pasife alınmış ya da parolası değişmişse belirteç de geçersizdir (oturumla aynı kural).
-  return kullaniciYukle(db, satir.kisi_id, satir.acildi_metin);
+  return kimlikYukle(db, satir.kisi_id, satir.acildi_metin);
 }
 
 const URETIM_DENEMESI = 5;
@@ -289,7 +298,7 @@ export async function saatIstegiSor(
   }
   if (sonuc.durum === 'erken') throw cokIstek(`Eşleşme en çok ${SAAT_SORU_ARALIGI_SN} sn'de bir sorulur.`);
   if (sonuc.durum === 'bekliyor') return sonuc;
-  const kullanici = await kullaniciYukle(db, sonuc.kisiId);
+  const kullanici = await kimlikYukle(db, sonuc.kisiId);
   if (kullanici === null) throw oturumYok(SAAT_ISTEGI_YOK);
   const belirtec = randomBytes(32).toString('base64url');
   const { son } = await saatBelirteciEkle(db, anahtarOzeti(belirtec), kullanici.id, SAAT_BELIRTECI_SN);
