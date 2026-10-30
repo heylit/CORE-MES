@@ -63,7 +63,7 @@ export const DURUM_ETIKETI: Record<'yeterli' | 'kritik' | 'eksi' | 'tanimsiz', {
   yeterli: { etiket: 'Yeterli', ton: 'tamam' }, kritik: { etiket: 'Kritik', ton: 'uyari' }, eksi: { etiket: 'Eksi bakiye', ton: 'hata' }, tanimsiz: { etiket: 'Kritik seviye yok', ton: 'pasif' },
 };
 export const CIKIS_NEDENI: Record<CikisNedeni, string> = {
-  uretime_sarf: 'Üretime sarf', sevk: 'Müşteriye sevk', fire: 'Fire / hurda', numune: 'Numune', diger: 'Diğer',
+  uretime_sarf: 'Üretime sarf', sevk: 'Müşteriye sevk', fire: 'Fire / hurda', numune: 'Numune', diger: 'Diğer', tedarikci_iade: 'Tedarikçiye iade',
 };
 // Parti gereksinimi karttaki türe göredir (DEP-20); sunucu da denetler, ekran yalnız alanı gösterir.
 // Bu türlerde her mal kabul satırı lot alır; tedarikçi parti/döküm no isteğe bağlıdır (#1018).
@@ -86,7 +86,8 @@ export const NUMARALAMALAR = anahtarlari(NUMARA);
 export const ELLE_KONUM_TURLERI = anahtarlari(ELLE_KONUM);
 export const KONUM_TURLERI = anahtarlari(KONUM_ETIKETI);
 export const HAREKET_TURLERI = anahtarlari(HAREKET_ETIKETI);
-export const CIKIS_NEDENLERI = anahtarlari(CIKIS_NEDENI);
+// Tedarikçiye iade yalnız giriş kontrolünün red kararıyla yazılır (1253 a); elle çıkışta seçilmez.
+export const CIKIS_NEDENLERI = anahtarlari(CIKIS_NEDENI).filter((n): n is Exclude<CikisNedeni, 'tedarikci_iade'> => n !== 'tedarikci_iade');
 export const LOGO_ESLESME_DURUMLARI = anahtarlari(LOGO_ETIKETI);
 export const STOK_DURUMLARI = anahtarlari(STOK_SUZGECI);
 
