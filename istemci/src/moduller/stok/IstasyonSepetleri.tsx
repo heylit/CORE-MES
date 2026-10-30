@@ -42,14 +42,28 @@ export function IstasyonSepetleri({ istasyonId, uretimEmriId }: { istasyonId: nu
           </ul>
         )}
       </section>
-      <section aria-label="Çıkan sepet">
-        <h3 className="tc-stok-teslim-baslik"><Simge ad="upload" boyut="k" /> Çıkan {cikan.length > 0 && <Rozet ton="bilgi">{cikan.length}</Rozet>}</h3>
-        {cikan.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu istasyonda bu emrin parçası yok." /> : (
-          <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Çıkan">
-            {cikan.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={[]} emirli />)}
-          </ul>
-        )}
-      </section>
+      <CikanBolumu istasyonId={istasyonId} cikan={cikan} />
     </div>
   );
+}
+
+function CikanBolumu({ istasyonId, cikan }: { istasyonId: number; cikan: IstasyonSepetleriCevabi['cikan'] }) {
+  return (
+    <section aria-label="Çıkan sepet">
+      <h3 className="tc-stok-teslim-baslik"><Simge ad="upload" boyut="k" /> Çıkan {cikan.length > 0 && <Rozet ton="bilgi">{cikan.length}</Rozet>}</h3>
+      {cikan.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu istasyonda bu emrin parçası yok." /> : (
+        <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Çıkan">
+          {cikan.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={[]} emirli />)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// 1337 a: iş bitince terminalin özetinde yalnız çıkan sepet ("Sonraki istasyona"); iki sepetle aynı okuma ve önbellek.
+export function CikanSepet({ istasyonId, uretimEmriId }: { istasyonId: number; uretimEmriId: number }) {
+  const s = useIstasyonSepetleri(istasyonId, uretimEmriId);
+  if (s.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (s.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => { void s.refetch(); }} />;
+  return <CikanBolumu istasyonId={istasyonId} cikan={s.data.cikan} />;
 }

@@ -346,3 +346,48 @@ describe('A1 Üretim Terminali hatalı parça (1034)', () => {
     expect(sayimlar.some((c) => c.kind === 'scrap')).toBe(false);
   }, 40000);
 });
+
+describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
+  const okut = (kod: string) => { for (const c of [...kod, 'Enter']) fireEvent.keyDown(document.body, { key: c }); };
+  let kartOkundu = false;
+  const kur = () => {
+    kartOkundu = false;
+    const tmi = { ...PAKET, id: 'tmi-ie-80', no: 'UE-DENEME-8', tmi: { emirId: 8 } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).includes('/arkon/refakat-kartlari')) {
+        kartOkundu = true;
+        return new Response(JSON.stringify({ kartlar: [{ id: 4, uretimEmriId: 8, etiket: 'UE-DENEME-8-P4', lotNo: 'LT-1', malzemeKod: null, malzemeAd: null, birim: null, verilen: '10', istasyondaSatirVar: true, sayilan: null, sinir: null }] }), { status: 200 });
+      }
+      return asil(adres, istek);
+    });
+    return istekler;
+  };
+
+  it('okutulan refakat kartı işi o kartla açar, başlatmaz (1062)', async () => {
+    const istekler = kur();
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-8/ })).toBeTruthy();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    okut('RP:4');
+    expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
+  }, 40000);
+
+  it('kart dışı kod ve bu istasyonun olmayan kart işi açmaz, söyler (reddedilen)', async () => {
+    const istekler = kur();
+    arkonAc('/uretim-terminali');
+    await ekran();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    okut('LOT:LT-1');
+    expect(await screen.findByText(/Refakat kartı değil/, {}, { timeout: 10000 })).toBeTruthy();
+    okut('RP:99');
+    expect(await screen.findByText(/Bu kart bu istasyondaki işlerin kartı değil/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
+  }, 40000);
+});

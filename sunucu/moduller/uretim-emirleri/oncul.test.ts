@@ -141,7 +141,7 @@ describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
 
   test('1348 a: stokun adım bilgisi dallı emirde öncülleri, eski emirde null döner; emrin adım zinciri girdileriyle gelir', async () => {
     const adimlar = await dalli();
-    adimlar[2] = { ...adimlar[2]!, bilesenler: [{ malzemeNo: urunNo, miktar: '2.5' }] };
+    adimlar[2] = { ...adimlar[2]!, bilesenler: [{ malzemeNo: urunNo, miktar: '2.5' }], adetCarpani: 2 };
     const { ie: [ie1, ie2, ie3, ie4] } = await ac(adimlar) as { id: number; ie: [number, number, number, number] };
     const bilgi = (ie: number) => tx((db) => adimUretimBilgisi(db, ie));
     assert.deepEqual((await bilgi(ie1))?.onculOpNolari, []);
@@ -151,7 +151,8 @@ describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
     assert.deepEqual(dalBasi?.oncekiOpNolari, [10, 20], 'sıra listesi eski okuyucular için aynen kalır');
     const birlesme = await bilgi(ie4);
     assert.deepEqual(birlesme?.onculOpNolari, [20, 30]);
-    assert.deepEqual(birlesme?.emirAdimlari.map((a) => [a.opNo, a.dal, a.onculOpNolari, a.girdiler]), [[10, 'A', [], []], [20, 'A', [10], []], [30, 'B', [], [{ malzemeNo: urunNo, miktar: '2.5000' }]], [40, null, [20, 30], []]]);
+    assert.deepEqual(birlesme?.emirAdimlari.map((a) => [a.opNo, a.dal, a.adetCarpani, a.onculOpNolari, a.girdiler]),
+      [[10, 'A', null, [], []], [20, 'A', null, [10], []], [30, 'B', 2, [], [{ malzemeNo: urunNo, miktar: '2.5000' }]], [40, null, null, [20, 30], []]], '1257 a: çarpan dal satırından');
 
     const m = [await makine(), await makine()];
     const eski = await ac([adim(1, m[0]!), adim(2, m[1]!)]);

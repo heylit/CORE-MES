@@ -807,7 +807,16 @@ export function uretimAdimPlani(g: {
 // geçen ve kendi girdisi olan adım ise kendi girdisini (ilk); birlesme: dalların parçası tüketilir, adım emrin ürününü taşır. Aynı öncülden
 // ayrılıp onun parçasını devralacak birden çok dal varsa parçayı yalnız ilki taşır, ötekiler taşımasızdır (yok): bir parça iki kez
 // tüketilmez. Listesi olmayan adım (1248 öncesi) için null.
-export interface ZincirAdimi { opNo: number; dal: string | null; onculOpNolari: readonly number[] | null; girdiler: readonly { malzemeNo: number; miktar: string }[] }
+export interface ZincirAdimi {
+  opNo: number; dal: string | null; adetCarpani?: number | null; onculOpNolari: readonly number[] | null; girdiler: readonly { malzemeNo: number; miktar: string }[];
+}
+// 1360 (1257 a): öncülden gelen parça adedi = adım adedi x öncül çarpanı / adım çarpanı (uretim-emirleri onculdenGelen'in tersi; boş çarpan 1).
+// Bindelik adet tam sayıya aşağı yuvarlanır.
+export interface GelenOrani { pay: number; payda: number }
+export const gelenOrani = (oncul: { adetCarpani?: number | null }, adim: { adetCarpani?: number | null }): GelenOrani =>
+  ({ pay: oncul.adetCarpani ?? 1, payda: adim.adetCarpani ?? 1 });
+export const oranliAdet = (adet: bigint, oran: GelenOrani | undefined): bigint =>
+  (oran === undefined ? adet : (adet * BigInt(oran.pay)) / BigInt(oran.payda));
 export type TasimaKaynagi =
   | { tur: 'ilk'; girdi: { malzemeNo: number; miktar: string } | null }
   | { tur: 'oncul'; opNo: number }
@@ -847,7 +856,7 @@ export function tasimaKaynagi(zincir: readonly ZincirAdimi[], opNo: number): Tas
 // Dal başı uretimAdimPlani'nin ilk adımı gibidir. Son ve çıktılı adım gelenleri tüketir, ürünü ya da çıktıyı girer.
 export function dalliAdimPlani(g: {
   adet: bigint; sonAdim: boolean; statuId: number | null; cikti: number | null; girdiler: readonly { malzemeNo: number; miktar: string }[];
-  tasinan: { malzemeNo: number; miktar: string }; gelenler: readonly { malzemeId: number; statuId: number | null; miktar: string }[]; kaynak: TasimaKaynagi['tur'];
+  tasinan: { malzemeNo: number; miktar: string }; gelenler: readonly { malzemeId: number; statuId: number | null; miktar: string; oran?: GelenOrani }[]; kaynak: TasimaKaynagi['tur'];
 }): UretimAdimPlani {
   const cevirmeli = !g.sonAdim && g.cikti === null;
   const ilk = g.kaynak === 'ilk';
@@ -862,11 +871,11 @@ export function dalliAdimPlani(g: {
   const devam = g.kaynak === 'oncul' ? g.gelenler[0] : undefined;
   if (cevirmeli && devam !== undefined) {
     if (devam.statuId !== g.statuId) {
-      cevirme = { malzemeId: devam.malzemeId, kaynakStatuId: devam.statuId, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, devam.miktar), tasinan: true };
+      cevirme = { malzemeId: devam.malzemeId, kaynakStatuId: devam.statuId, hedefStatuId: g.statuId, miktar: adetMiktari(oranliAdet(g.adet, devam.oran), devam.miktar), tasinan: true };
     }
     return { sarflar, cevirme, giris };
   }
-  for (const p of g.gelenler) sarflar.push({ malzemeId: p.malzemeId, statuId: p.statuId, miktar: adetMiktari(g.adet, p.miktar), tasinan: true });
+  for (const p of g.gelenler) sarflar.push({ malzemeId: p.malzemeId, statuId: p.statuId, miktar: adetMiktari(oranliAdet(g.adet, p.oran), p.miktar), tasinan: true });
   if (cevirmeli && tasinanGirdide && g.statuId !== null) {
     cevirme = { malzemeId: g.tasinan.malzemeNo, kaynakStatuId: null, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, g.tasinan.miktar) };
   } else if (cevirmeli && g.kaynak === 'birlesme') {

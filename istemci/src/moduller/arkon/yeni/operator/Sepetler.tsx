@@ -1,24 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
-import { IstasyonSepetleri, useIsMalzemeDurumu, useIstasyonSepetiSayilari } from '../../baglanti.ts';
+import { CikanSepet, IstasyonSepetleri, useIsMalzemeDurumu, useIstasyonSepetiSayilari } from '../../baglanti.ts';
 
 // Terminalin iki sepeti (745, karar 758 a; 317 b'nin yerine): gelen önceki istasyonun ürettiğidir (teslim al, çekme), çıkan burada
-// üretilendir (sonraki istasyona, itme). Çip iki sayıyı söyler, dokununca sepetler açılır. Adım bitince çıkan sepet biten emirle
-// kendiliğinden açılır; terminal bu arada sıradaki işe geçse de pencere biten emrin parçasını gösterir.
-const CIKAN_SEPETI_AC = 'tmi:arkon-cikan-sepeti-ac';
-export function cikanSepetiniAc(uretimEmriId: number | null): void {
-  if (uretimEmriId !== null) window.dispatchEvent(new CustomEvent<number>(CIKAN_SEPETI_AC, { detail: uretimEmriId }));
-}
-
+// üretilendir (sonraki istasyona, itme). Çip iki sayıyı söyler, dokununca sepetler açılır.
 export function Sepetler({ istasyon, emirId }: { istasyon: string; emirId: number | null }) {
   const { istasyonId } = useIsMalzemeDurumu(istasyon, emirId);
   const sayi = useIstasyonSepetiSayilari(istasyonId, emirId);
   const [acikEmir, setAcikEmir] = useState<number | null>(null);
-  useEffect(() => {
-    const ac = (o: Event) => setAcikEmir((o as CustomEvent<number>).detail);
-    window.addEventListener(CIKAN_SEPETI_AC, ac);
-    return () => window.removeEventListener(CIKAN_SEPETI_AC, ac);
-  }, []);
   if (istasyonId === null) return null;
   return (
     <>
@@ -34,4 +23,11 @@ export function Sepetler({ istasyon, emirId }: { istasyon: string; emirId: numbe
       )}
     </>
   );
+}
+
+// 1337 a: adım bitince biten emrin çıkan sepeti "İş emri tamamlandı" özetinin içindedir ("Sonraki istasyona"); ayrı pencere açılmaz.
+// Terminal bu arada sıradaki işe geçse de özet biten emrin parçasını gösterir.
+export function BitenSepet({ istasyon, emirId }: { istasyon: string; emirId: number }) {
+  const { istasyonId } = useIsMalzemeDurumu(istasyon, emirId);
+  return istasyonId === null ? null : <CikanSepet istasyonId={istasyonId} uretimEmriId={emirId} />;
 }

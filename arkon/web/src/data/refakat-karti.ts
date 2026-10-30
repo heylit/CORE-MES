@@ -1,5 +1,6 @@
-/* Refakat kartı (kart #156, Soru 134): Arkon'da okutma yoktur. İş iki yoldan kartla açılır: sıradaki işin altında istasyonda satırı olan
-   kartlardan "Aç" ya da Malzeme Teslim'de kart okutulup "İş emrini aç" (TMI adresi `?emir=<id>&kart=<id>`). Kart seçilmezse iş kartsız açılır;
+/* Refakat kartı (kart #156, Soru 134, 1337 a): iş üç yoldan kartla açılır: sıradaki işin altında istasyonda satırı olan kartlardan "Aç",
+   Üretim Terminali'nde el okuyucuyla kartın okutulması ya da Malzeme Teslim'de kart okutulup "İş emrini aç" (TMI adresi
+   `?emir=<id>&kart=<id>`). Kart seçilmezse iş kartsız açılır;
    kartı stok sayımdan bulur. Seçilen kart işin üzerinde durur (`kart`) ve her sayım satırına `refakatPartisiId` olarak yazılır. */
 import { tmiPlani } from './tmi-plan';
 

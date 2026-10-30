@@ -466,3 +466,16 @@ export function kisiAra(db: Db, sade: string, icindeDeseni: string, basDeseni: s
     [icindeDeseni, sade, basDeseni, sinir],
   );
 }
+
+// Ortak seçici (kart #1320): genel aramayla aynı sadeleştirme ve indeks; boş metin bütün kişilerdir. Sicil no'su tam tutan önce,
+// sonra ad sırası; bir fazlası okunur ki "daha var" bilinsin.
+export function kisiSecimAra(
+  db: Db, g: { sade: string; icindeDeseni: string; pasifler: boolean; sinir: number; atla: number },
+): Promise<{ id: number; ad: string; sicilNo: string | null; aktif: boolean }[]> {
+  return db.sorgu(
+    `SELECT id, ad, sicil_no AS "sicilNo", aktif FROM kisi
+      WHERE ($3::boolean OR aktif) AND ($2 = '' OR public.arama_sade(ad) LIKE $1 OR public.arama_sade(sicil_no) LIKE $1)
+      ORDER BY (public.arama_sade(sicil_no) IS NOT DISTINCT FROM $2) DESC, ad, id LIMIT $4 OFFSET $5`,
+    [g.icindeDeseni, g.sade, g.pasifler, g.sinir, g.atla],
+  );
+}

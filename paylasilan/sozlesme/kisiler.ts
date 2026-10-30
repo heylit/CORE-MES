@@ -95,3 +95,18 @@ export type SurumGovdesi = z.input<typeof surumGovdesi>;
 export type HesapGovdesi = z.input<typeof hesapGovdesi>;
 export type ParolaGovdesi = z.input<typeof parolaGovdesi>;
 export type PinVerGovdesi = z.input<typeof pinVerGovdesi>;
+
+// Ortak seçicinin (KisiSecici) arama ucu (kart #1320): adda ya da sicil no'da arar; sayfa başına KISI_SECIM_SAYFA_BOYU kişi.
+// Cevap ortak seçici biçimindedir: `kod` sicil no'dur (yoksa boş), `ust` yok. Varsayılan yalnız aktif kişiler.
+export const KISI_SECIM_SAYFA_BOYU = 30;
+export const kisiSecimSorgusu = z.object({
+  q: z.string().trim().max(80).default(''),
+  pasifler: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
+  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+});
+export const kisiSecimCevabi = z.object({
+  sonuclar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), aktif: z.boolean(), ust: z.null() })),
+  dahaVar: z.boolean(),
+});
+export type KisiSecimSorgusu = z.input<typeof kisiSecimSorgusu>;
+export type KisiSecimCevabi = z.output<typeof kisiSecimCevabi>;

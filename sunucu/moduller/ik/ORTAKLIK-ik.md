@@ -7,7 +7,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar; Aşama 2 tablosun
 | Kavram | Modül ne tutuyor | Tablo ve sütun | Başka modülde | Bağ |
 |---|---|---|---|---|
 | Kişi (TMI hesabı) | personelin TMI kullanıcısı; kaydı yazan ve onaylayan | `ik_personel.kisi_id`, `*_kisi_id`, `ik_bordro_onayi.kisi_id` | kisiler (`kisi`) | yabancı anahtar `kisi (id)`; ad `kisiler/disari.ts kisiAdlari` |
-| Personel (özlük) | ad, soyad, kimlik, iletişim, sözleşme, ücret, banka | `ik_personel` | kisiler `kisi.ad`, `kisi.sicil_no`, `kisi.gorev` | sahiplik sorulacak: kişi = hesap (kisiler), özlük = ik; ad ve sicil no iki yerde |
+| Personel (özlük) | ad, soyad, kimlik, iletişim, sözleşme, ücret, banka | `ik_personel` | kisiler `kisi.ad`, `kisi.sicil_no`, `kisi.gorev`, `kisi.ozluk_cikis_tarihi` | 1302 a: kişi = hesap (kisiler), özlük = ik; bağlı kişiye ad + soyad, sicil no, pozisyon ve çıkış İK'dan itilir (IK-84), Kişiler'de salt okunur |
 | Sicil no | personel sicil no | `ik_personel.sicil_no` | `kisi.sicil_no` | aynı kavram; tek kaynak Aşama 2'de |
 | İş merkezi | kaydın veri kapsamı | `ik_personel.is_merkezi_id`, `ik_pozisyon.is_merkezi_id` | istasyonlar (`is_merkezi`) | yabancı anahtar `is_merkezi (id)`; doğru yön |
 | Departman | ad, kod, gider hesabı, yönetici | `ik_departman` | yok (`kisi.gorev` serbest metin) | yalnız ik |

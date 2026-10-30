@@ -82,7 +82,7 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('DNM', $1, $2, '#2F6FDE', 'HM') RETURNING id", [ad, `dalli-${randomBytes(4).toString('hex')}`]))!.id;
 
   interface Kurulum { e: number; ie: Record<number, number>; urun: number; hm1: number; hm2: number; ist: { a: number; b: number; c: number }; s: Record<number, number> }
-  async function kur(): Promise<Kurulum> {
+  async function kur(bCarpani: number | null = null): Promise<Kurulum> {
     const [urun, hm1, hm2] = [await kart('yarimamul'), await kart('hammadde'), await kart('hammadde')];
     const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
     const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`SDT${String(++sira)}`]))!.id;
@@ -98,7 +98,7 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     const { uretimEmriId: e } = await o().vt.tx((db) => uretimEmriAc(db, planlamaci, {
       projeId, malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [
         adim(1, a.makine, { dal: 'A', onculler: [], bilesenler: [{ malzemeNo: hm1, miktar: '0.6' }] }),
-        adim(2, b.makine, { dal: 'B', onculler: [], bilesenler: [{ malzemeNo: hm2, miktar: '1' }] }),
+        adim(2, b.makine, { dal: 'B', onculler: [], bilesenler: [{ malzemeNo: hm2, miktar: '1' }], adetCarpani: bCarpani }),
         adim(3, c.makine, { onculler: [bekle(10), bekle(20)] }),
         adim(4, c.makine, { onculler: [bekle(30)] }),
       ],
@@ -156,6 +156,25 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.deepEqual([await bakiye(k.urun, k.ist.c, k.s[30]!), await bakiye(k.urun, k.ist.c, null)], [0, 10]);
     assert.equal(await eksiSatir(k), 0, 'hiçbir istasyonda eksi kalmaz');
     assert.notEqual((await o().vt.tx((db) => kapanisStokDurumu(db, k.e)))?.durum, 'eksik');
+  });
+
+  test('1360 (1257 a): B dalı ürün başına 2 parça verir; birleştirme 10 ürün için 20 B parçası, hurda 1 ürün için 2 B parçası düşer', async () => {
+    const k = await kur(2);
+    await malKabul(k.hm1, '6');
+    await malKabul(k.hm2, '20');
+    await teslimEt({ malzemeId: k.hm1, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '20', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+    await sayim(k, 10, k.ist.a, '10');
+    assert.equal((await sayim(k, 20, k.ist.b, '20')).uyari, null);
+    await teslimEt({ malzemeId: k.hm1, miktar: '6', statuId: k.s[10], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '20', statuId: k.s[20], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
+    assert.equal((await sayim(k, 30, k.ist.c, '9')).uyari, null);
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!), await bakiye(k.urun, k.ist.c, k.s[30]!)], [0.6, 2, 9]);
+    await o().vt.tx((db) => hurdaSayimiYansit(db, {
+      uretimEmriId: k.e, isEmriId: k.ie[30]!, istasyonId: k.ist.c, kisiId: kisiler.get('operator')!, hurdaNedeniId: 1, fark: '1',
+    }));
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [0, 0]);
+    assert.equal(await eksiSatir(k), 0);
   });
 
   test('D-A: teslim edilmemiş B dalı hammaddesi "Hammadde" uyarısıyla eksiden çevrilir; birleştirmede hurda iki dalın parçasını fire düşer', async () => {

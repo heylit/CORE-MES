@@ -1962,10 +1962,14 @@ export function adimUretimSatiriGetir(db: Db, isEmriId: number): Promise<AdimUre
 }
 // Emrin bütün adımları sırayla: öncülleri (adimUretimSatiriGetir ile aynı kural) ve girdileri (bileşen kayıt sırası).
 // dal: dal satırındaki etiket (boş: ana hat ya da 1248 öncesi emir).
-export interface EmirAdimZinciriSatiri { opNo: number; dal: string | null; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[] }
+// adetCarpani: 1257 a dal adımının "1 mamul için adet"i (boş: 1).
+export interface EmirAdimZinciriSatiri {
+  opNo: number; dal: string | null; adetCarpani: number | null; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[];
+}
 export function emirAdimZinciriGetir(db: Db, uretimEmriId: number): Promise<EmirAdimZinciriSatiri[]> {
   return db.sorgu<EmirAdimZinciriSatiri>(
-    `SELECT i.op_no AS "opNo", (SELECT d.dal FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS dal, ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
+    `SELECT i.op_no AS "opNo", (SELECT d.dal FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS dal,
+            (SELECT d.adet_carpani FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS "adetCarpani", ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
             COALESCE((SELECT json_agg(json_build_object('malzemeNo', b.malzeme_no, 'miktar', b.miktar::text) ORDER BY b.id)
                         FROM uretim_emirleri_is_emri_bileseni b WHERE b.is_emri_id = i.id), '[]'::json) AS girdiler
        FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = $1 ORDER BY i.sira`,
