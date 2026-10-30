@@ -23,8 +23,11 @@ function Adres() {
   return <output data-testid="adres">{pathname}{search}</output>;
 }
 
-function sunucu(govde: (adres: string) => unknown) {
-  const cagri = vi.fn(async (adres: string) => new Response(JSON.stringify(govde(adres)), { status: 200 }));
+const BOS_GENEL = { sonuclar: [], eksik: [] };
+
+// Çekirdeğin tek ucu (`/api/arama`) ayrı cevap verir; verilmezse boştur.
+function sunucu(govde: (adres: string) => unknown, genel: unknown = BOS_GENEL) {
+  const cagri = vi.fn(async (adres: string) => new Response(JSON.stringify(adres.startsWith('/api/arama?') ? genel : govde(adres)), { status: 200 }));
   vi.stubGlobal('fetch', cagri);
   return cagri;
 }
@@ -57,8 +60,7 @@ describe('Genel aramada kayıtlar', () => {
     const kayit = await screen.findByRole('option', { name: /MIL-01 Mil/ });
     expect(kayit.textContent).toContain('Mamul');
     expect(kayit.textContent).toContain('Stok');
-    expect(cagri).toHaveBeenCalledTimes(1);
-    expect(cagri.mock.calls[0]![0]).toBe('/api/stok/ara?q=mil');
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/arama?q=mil', '/api/stok/ara?q=mil']);
     fireEvent.click(kayit);
     expect(screen.getByTestId('adres').textContent).toBe('/stok/kart/7');
   });
@@ -77,12 +79,12 @@ describe('Genel aramada kayıtlar', () => {
     const kayit = await screen.findByRole('option', { name: /UE-0005/ });
     expect(kayit.textContent).toContain('Üretim Emirleri');
     expect(screen.getAllByRole('option')).toHaveLength(1);
-    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/uretim-emirleri/ara?q=%C3%BCretim']);
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/arama?q=%C3%BCretim', '/api/uretim-emirleri/ara?q=%C3%BCretim']);
     fireEvent.click(kayit);
     expect(screen.getByTestId('adres').textContent).toBe('/uretim-terminali?emir=5');
   });
 
-  it('reddedilen: arama işlemi olsa da sayfası kapalı modüle sorulmaz', async () => {
+  it('reddedilen: arama işlemi olsa da sayfası kapalı modülün eski ucuna sorulmaz; yalnız çekirdeğe sorulur', async () => {
     const cagri = sunucu(() => ({ sonuclar: [] }));
     render(
       <MemoryRouter initialEntries={['/']}>
@@ -94,22 +96,22 @@ describe('Genel aramada kayıtlar', () => {
     expect(ust().getByRole('combobox', { name: 'Sayfa ya da menü ara' })).toBeTruthy();
     yaz('emir');
     await new Promise((r) => { setTimeout(r, 400); });
-    expect(cagri).not.toHaveBeenCalled();
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/arama?q=emir']);
   });
 
-  it('reddedilen: sayfayı görmeyen kişi için uca sorulmaz; tek harf sunucuya gitmez', async () => {
+  it('reddedilen: sayfayı görmeyen kişi için eski uca sorulmaz (çekirdek kişinin işlemlerine göre süzer); tek harf sunucuya gitmez', async () => {
     const cagri = sunucu(() => ({ sonuclar: [] }));
     ciz(SAYFALAR_ARAMALI.filter((s) => s.yol !== '/stok'));
     expect(ust().getByRole('combobox', { name: 'Sayfa ya da menü ara' })).toBeTruthy();
     yaz('mil');
     await new Promise((r) => { setTimeout(r, 400); });
-    expect(cagri).not.toHaveBeenCalled();
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/arama?q=mil']);
     expect(screen.getByText('Sonuç yok')).toBeTruthy();
     cleanup();
     ciz();
     yaz('m');
     await new Promise((r) => { setTimeout(r, 400); });
-    expect(cagri).not.toHaveBeenCalled();
+    expect(cagri).toHaveBeenCalledTimes(1);
   });
 
   it('reddedilen: uygulama dışına giden kayıt listelenmez; uç hata verirse sayfa sonuçları kalır', async () => {
@@ -121,5 +123,42 @@ describe('Genel aramada kayıtlar', () => {
     yaz('stok');
     expect(await screen.findByRole('option', { name: /Stok/ })).toBeTruthy();
     expect(screen.queryByText('Kötü')).toBeNull();
+  });
+
+  it('çekirdeğin sonucu tür adıyla çıkar ve önde durur; aynı adrese giden eski sonuç yinelenmez', async () => {
+    const yol = '/stok/kart/7';
+    sunucu(
+      () => ({ sonuclar: [{ anahtar: '7', baslik: 'MIL-01', aciklama: null, yol }, { anahtar: '8', baslik: 'MIL-02', aciklama: null, yol: '/stok/kart/8' }] }),
+      { sonuclar: [{ tur: 'parti', anahtar: 'parti#3', baslik: 'MIL-01', aciklama: 'Parti', yol }], eksik: [] },
+    );
+    ciz();
+    yaz('mil');
+    await screen.findByRole('option', { name: /MIL-02/ });
+    const kayitlar = screen.getAllByRole('option').filter((o) => /MIL-0/.test(o.textContent ?? ''));
+    expect(kayitlar.map((o) => o.textContent)).toEqual([expect.stringContaining('Parti / lot'), expect.stringContaining('MIL-02')]);
+  });
+
+  it('önek tek türü seçer: eski uca ve sayfa listesine bakılmaz, süzgeç yazılır, işaret öneksiz metindedir', async () => {
+    const cagri = sunucu(() => ({ sonuclar: [] }), { sonuclar: [{ tur: 'emir', anahtar: 'emir#1', baslik: 'UE-0001', aciklama: null, yol: '/uretim-emirleri/1' }], eksik: [] });
+    ciz();
+    yaz('e:stok');
+    expect(screen.getByText('Yalnız Üretim emri')).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /Stok Merkezi/ })).toBeNull();
+    await screen.findByRole('option', { name: /UE-0001/ });
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/arama?q=e%3Astok']);
+  });
+
+  it('çekirdek cevap vermezse "Sonuç yok" değil hata yazılır; cevap vermeyen türler adıyla bildirilir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })));
+    ciz(SAYFALAR_ARAMALI.filter((s) => s.yol !== '/stok'));
+    yaz('qqzz');
+    expect(screen.getByText('Kayıtlar aranıyor')).toBeTruthy();
+    expect(await screen.findByText('Kayıt araması cevap vermedi')).toBeTruthy();
+    expect(screen.queryByText('Sonuç yok')).toBeNull();
+    cleanup();
+    sunucu(() => ({ sonuclar: [] }), { sonuclar: [], eksik: ['firma', 'ncr'] });
+    ciz(SAYFALAR_ARAMALI.filter((s) => s.yol !== '/stok'));
+    yaz('qqzz');
+    expect(await screen.findByText('Cevap vermeyen: Firma, NCR')).toBeTruthy();
   });
 });

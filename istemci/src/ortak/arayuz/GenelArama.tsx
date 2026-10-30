@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Sayfa } from '#paylasilan/sayfalar.ts';
 import { menudeGorunur } from '#paylasilan/sayfalar.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
+import { KAYIT_TURLERI, aramaSorgusunuAyir, type KayitTuru } from '#paylasilan/kayit-aramasi.ts';
 import { ara, aramaDizini, sadelestir } from '../rota/arama-dizini.ts';
 import { komutAra, type Komut } from '../rota/komutlar.ts';
 import type { SayfaKomutu } from '../rota/sayfa-komutlari.ts';
@@ -52,6 +53,12 @@ const BOS_SORGUDA_SAYFA_KOMUTU = 12;
 const SAYFA_KOMUTU_GRUBU = 'Bu sayfa';
 const KOMUT_GRUBU = 'Komut';
 const SON_YER_GRUBU = 'Son yerler';
+
+// Çekirdekten gelen kaydın simgesi türünden, eski kaynaktan gelenin simgesi sayfasındandır.
+const KAYIT_SIMGESI: Record<KayitTuru, SimgeAdi> = {
+  emir: 'list', malzeme: 'tag', parti: 'box', konum: 'target', firma: 'building', kisi: 'user', talep: 'edit', alim: 'truck',
+  siparis: 'download', sevk: 'route', ncr: 'alert', hatali: 'wrench', cizim: 'fit', rota: 'tool', olcuAleti: 'ruler', istasyon: 'cpu',
+};
 
 const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt', komut: 'Komut', 'sayfa-komutu': 'Bu sayfanın komutu', 'son-yer': 'Son yer' };
 
@@ -105,7 +112,7 @@ function Onizleme({ satir }: { satir: Satir | null }) {
   );
 }
 
-// Arama ucu bildiren ve kişinin gördüğü (ya da yalnız arayabildiği) sayfalar; yetkiyi yine uç denetler.
+// Eski arama ucu bildiren ve kişinin gördüğü (ya da yalnız arayabildiği) sayfalar; yetkiyi yine uç denetler.
 function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: SimgeAdi })[] {
   return sayfalar.filter(menudeGorunur).flatMap((s) => {
     const uc = (s as Pick<SayfaTanimi, 'aramaUcu'>).aramaUcu;
@@ -114,7 +121,8 @@ function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: S
 }
 
 // Üst çubuktaki arama ve komut paleti (Ctrl K). Sıra: açık sayfanın komutları ("Bu sayfa"; boş sorguda da görünür), boş sorguda son yerler, sayfa
-// ve menü maddeleri, modüllerin genel komutları (sunucuya gitmeden), altında arama ucu olan modüllerin kayıtları. Komut
+// ve menü maddeleri, modüllerin genel komutları (sunucuya gitmeden), altında kayıtlar (çekirdeğin tek arama ucu ve henüz ona geçmemiş
+// modüllerin eski uçları). Komut
 // yazma yapmaz: genel komut modülün ekranını açar, sayfa komutu sayfanın kendi işlevini çağırır; yetki yine uçtadır. Çerçeveli modülün içindeki tuşlar modülündür: tuş çerçevenin belgesine gider, buraya ulaşmaz.
 // Açılınca kutu ortada komut paleti olur, arkası perdelenir; geniş ekranda sağda seçili sonucun önizlemesi durur. Kutu DOM'da
 // üst çubukta kalır (yalnız görünüşü taşınır): odak, tuş ve ekran okuyucu düzeni kapalı kutuyla aynıdır.
@@ -132,17 +140,20 @@ export function GenelArama({
   const kimlik = useId();
   const listeKimlik = `${kimlik}-liste`;
   const dizin = useMemo(() => aramaDizini(sayfalar, menuler, islemler), [sayfalar, menuler, islemler]);
-  const sayfaSonuclari = useMemo(() => ara(dizin, sorgu), [dizin, sorgu]);
   const kaynaklar = useMemo(() => kayitKaynaklari([...sayfalar, ...aramaSayfalari]), [sayfalar, aramaSayfalari]);
   const kayitlar = useKayitAramasi(kaynaklar, acik ? sorgu : '');
+  // Önekli sorgu ("e:1234") yalnız o türün kayıtlarını arar: sayfa, komut ve son yer listelenmez, işaret öneksiz metindedir.
+  const { tur: suzgec, q: aramaMetni } = aramaSorgusunuAyir(sorgu);
+  const sayfaSonuclari = useMemo(() => (suzgec === null ? ara(dizin, sorgu) : []), [dizin, sorgu, suzgec]);
   // Öneriler sayfanın yazılana verdiği cevaptır: metinle yeniden süzülmez, sabit komutların önünde durur.
   const sayfaKomutSonuclari = useMemo(() => {
     const sabit = sayfaKomutlari.filter((k) => k.oneri !== true);
     if (sorgu.trim() === '') return sabit.slice(0, BOS_SORGUDA_SAYFA_KOMUTU);
+    if (suzgec !== null) return [];
     return [...sayfaKomutlari.filter((k) => k.oneri === true), ...komutAra(sabit, sorgu)];
-  }, [sayfaKomutlari, sorgu]);
+  }, [sayfaKomutlari, sorgu, suzgec]);
   useEffect(() => { sorguDegisti?.(acik ? sorgu : null); }, [sorguDegisti, acik, sorgu]);
-  const komutSonuclari = useMemo(() => komutAra(komutlar, sorgu), [komutlar, sorgu]);
+  const komutSonuclari = useMemo(() => (suzgec === null ? komutAra(komutlar, sorgu) : []), [komutlar, sorgu, suzgec]);
   // Yazınca yerini sayfa sonuçları alır: aynı sayfa iki kez listelenmez.
   const sonYerSonuclari = sorgu.trim() === '' ? sonYerler : YERSIZ;
   const sonuclar = useMemo<Satir[]>(() => [
@@ -167,7 +178,7 @@ export function GenelArama({
     })),
     ...kayitlar.sonuclar.map((k): Satir => ({
       anahtar: k.anahtar, tur: 'kayit', baslik: k.baslik, ust: null, ad: k.baslik, grup: k.kaynak, aciklama: k.aciklama, yol: k.yol,
-      simge: kaynaklar.find((y) => y.ad === k.kaynak)?.simge ?? 'search',
+      simge: k.tur === null ? kaynaklar.find((y) => y.ad === k.kaynak)?.simge ?? 'search' : KAYIT_SIMGESI[k.tur],
     })),
   ], [sayfaKomutSonuclari, sonYerSonuclari, menuler, gezin, sayfaSonuclari, komutSonuclari, kayitlar.sonuclar, kaynaklar]);
   const komutVar = komutlar.length > 0 || sayfaKomutlari.length > 0;
@@ -286,7 +297,8 @@ export function GenelArama({
           </button>
         </label>
         <div id={listeKimlik} role="listbox" aria-label="Arama sonuçları" className="tc-arama-liste" hidden={!listeAcik}>
-          {listeAcik && sonuclar.length === 0 && !kayitlar.suruyor && <p className="tc-arama-bos">Sonuç yok</p>}
+          {listeAcik && suzgec !== null && <p className="tc-arama-bos" role="status">Yalnız {KAYIT_TURLERI[suzgec].ad}</p>}
+          {listeAcik && sonuclar.length === 0 && !kayitlar.suruyor && !kayitlar.hata && <p className="tc-arama-bos">Sonuç yok</p>}
           {listeAcik && sonuclar.map((s, sira) => (
             <div
               key={s.anahtar}
@@ -303,13 +315,17 @@ export function GenelArama({
             >
               <Simge ad={s.simge} boyut="k" />
               <span className="tc-arama-ad">
-                {isaretle(s.ad, sorgu)}
+                {isaretle(s.ad, aramaMetni)}
                 {s.aciklama !== null && <span className="tc-arama-aciklama">{s.aciklama}</span>}
               </span>
               {s.grup !== null && <span className="tc-arama-grup">{s.grup}</span>}
             </div>
           ))}
           {listeAcik && kayitlar.suruyor && <p className="tc-arama-bos" role="status">Kayıtlar aranıyor</p>}
+          {listeAcik && !kayitlar.suruyor && kayitlar.hata && <p className="tc-arama-bos" role="status">Kayıt araması cevap vermedi</p>}
+          {listeAcik && !kayitlar.suruyor && kayitlar.eksik.length > 0 && (
+            <p className="tc-arama-bos" role="status">Cevap vermeyen: {kayitlar.eksik.join(', ')}</p>
+          )}
         </div>
         {acik && <Onizleme satir={seciliSatir} />}
       </div>
