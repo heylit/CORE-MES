@@ -8,6 +8,8 @@ export {
   firmaAdlari, firmaAra, firmaDurumuDegistir, firmaKonumlari, firmaNoKoddan, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari, tumFirmalar,
 } from './servis.ts';
 export type { FirmaKonumu, FirmaOzeti } from './servis.ts';
+// Tedarikçi karnesi (1259 c): satın alma ve Kalite Merkezi olayı kendi transaction'ında iter; teklif kıyası karneyi okur.
+export { karneOlayiYaz, karneOzetleri } from './servis.ts';
 export type { FirmaDurumu } from './kurallar.ts';
 export { ORNEK_FIRMA_ANAHTARLARI, ornekFirmaNo } from './ornek-veri.ts';
 export type { OrnekFirmaAnahtari } from './ornek-veri.ts';

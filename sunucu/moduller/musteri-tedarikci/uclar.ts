@@ -1,7 +1,8 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
-  firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, kimlikParametresi,
+  firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi,
+  kimlikParametresi, yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import * as servis from './servis.ts';
 
@@ -77,5 +78,34 @@ export const uclar = [
     govde: adresKaldirGovdesi,
     cevap: firmaAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.adresKaldir(db, kullanici, parametre.id, parametre.adresId, govde.surum),
+  }),
+  // Tedarikçi karnesi (1259 c, V6): hizmet puanını satın almacı, yıllık karneyi kalite onaylayıcısı girer; mevcut işlemler.
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/firmalar/:id/karne',
+    yetki: 'musteri-tedarikci.oku',
+    parametre: kimlikParametresi,
+    cevap: karneCevabi,
+    isle: ({ db, parametre }) => servis.firmaKarnesi(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/firmalar/:id/hizmet-puani/ekle',
+    yetki: 'satin-alma.yaz',
+    tekrarKorumali: true,
+    parametre: kimlikParametresi,
+    govde: hizmetPuaniGovdesi,
+    cevap: karneCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.hizmetPuaniEkle(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/firmalar/:id/yillik-karne/ekle',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kimlikParametresi,
+    govde: yillikKarneGovdesi,
+    cevap: karneCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.yillikKarneEkle(db, kullanici, parametre.id, govde),
   }),
 ];

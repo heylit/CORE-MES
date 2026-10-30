@@ -20,3 +20,9 @@ Her kuralın kabul ve ret testi vardır. Finanstan gelen kuralın eski numarası
 | Yetki: okuma `musteri-tedarikci.oku`, yazma `.yaz` | firma "yetki", "adres yetki" | aynı testler (401, 403, kayıt değişmez) |
 | FNS-48 finans rakamı dönmez | firma "FNS-48" | aynı test (alan listesi sabit) |
 | Göç S2/S4/S6 | goc "firma satırı ve kimliği aynı kalır..." | aynı test (pasif ve bağsız nokta kopyalanmaz, işlemsiz rol sayfa almaz, silme reddedilir) |
+| MT-14 (1260 a) karne dönemi tesis gününde biten kayan 12 ay | kurallar "MT-14" | aynı test (29 Şubat, yıl başı) |
+| MT-15 tam teslim termin + 2 gün içindeyse zamanında | kurallar "MT-15" | aynı test (3. gün, eksik teslim) |
+| MT-16 (1260 a) puan 40/40/20, hizmetsiz 50/50; lot kararı puanı; A-D; 3 teslim ve 3 lottan az veride puan ve sınıf null | kurallar "MT-16", karne "MT-16: olaylardan..." | kurallar "MT-16: 3 teslim...", karne "MT-16: yetersiz veride..." (aynı yıl CAKISMA) |
+| MT-17 karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır | kurallar "MT-17" | karne "MT-17" (422, kayıt açılmaz) |
+| Karne olayı (1259 c) kaynak ve anahtarla tektir, sonraki karar yerine geçer | karne "olay kaynak ve anahtarla tektir" | karne "reddedilen olay" (geçersiz karar, olmayan firma, `karne_olayi_alanlar` kısıtı) |
+| Yetki: karne okuma `musteri-tedarikci.oku`, hizmet puanı `satin-alma.yaz`, yıllık karne `kalite-merkezi.onayla` (V6) | karne "yetki" testleri | aynı testler (401, 403, kayıt açılmaz) |
