@@ -5,6 +5,7 @@ import {
   operasyonYaz, revizyonlari, rotaEksikleri, rotaFarki, rotaHataMetni, rotaSahibiOlur, sirali, sonrakiBagimlilik, sureGirisi, sureMetni,
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
+import { adimOnculleri, birlesebilenDallar, birlesenYaz, dalliRota, dalYaz } from './kurallar.ts';
 
 // Uydurma kartlar ve operasyonlar (gerçek veri değil).
 const malzeme = (id: string, type: Malzeme['type'], ek: Partial<Malzeme> = {}): Malzeme => ({
@@ -270,5 +271,52 @@ describe('adımın şartnameleri (971 a, 1193 a)', () => {
     expect(adimSartnameKilidi({ revDurumu: 'onay', opNo: 10, kayitBekliyor: false })).toMatch(/geri gönder/);
     expect(adimSartnameKilidi({ revDurumu: 'yururlukte', opNo: 10, kayitBekliyor: false })).toMatch(/taslak revizyonda/);
     expect(adimSartnameKilidi({ revDurumu: 'taslak', opNo: 10, kayitBekliyor: true })).toMatch(/kaydediliyor/);
+  });
+});
+
+describe('çok dallı rota (1248 a)', () => {
+  const opBul = (id: string) => (id === '21' ? op('21') : undefined);
+  const seqler = (l: (Adim[] | null)[]) => l.map((x) => x?.map((a) => a.seq) ?? null);
+  // A: 10-20, B: 30, 40 ana hatta A ve B'yi birleştirir.
+  const rota = () => [
+    adim('a', 10, { dal: 'A' }), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }),
+    adim('d', 40, { dal: null, birlesen: ['A', 'B'], dep: 'ortulu', depQty: 4 }),
+  ];
+
+  it('öncüller sunucuyla aynı kuraldan: dal başı beklemez, birleştirme adımı dalların son adımını bekler; tek hatlı rotada null', () => {
+    expect(dalliRota(rota())).toBe(true);
+    expect(seqler(adimOnculleri(rota()))).toEqual([[], [10], [], [20, 30]]);
+    expect(tuketilenAdimlar(rota(), 3).map((a) => a.seq)).toEqual([20, 30]);
+    expect(tuketilenAdimlar(rota(), 2)).toEqual([]);
+    const tek = [adim('a', 10), adim('b', 20)];
+    expect(dalliRota(tek)).toBe(false);
+    expect(adimOnculleri(tek)).toEqual([null, null]);
+    expect(tuketilenAdimlar(tek, 1).map((a) => a.seq)).toEqual([10]);
+  });
+
+  it('birleştirilebilen dallar adımdan önce başlamış, birleşmemiş ve adımın kendi dalı olmayanlardır; dal değişince kendi dalı birleşenden düşer', () => {
+    expect(birlesebilenDallar(rota(), 2)).toEqual(['A']);
+    expect(birlesebilenDallar(rota(), 3)).toEqual(['A', 'B']);
+    const l = rota();
+    l.push(adim('e', 50, { dal: null }));
+    expect(birlesebilenDallar(l, 4)).toEqual([]);
+    expect(dalYaz(adim('x', 10, { birlesen: ['A', 'B'] }), 'A')).toMatchObject({ dal: 'A', birlesen: ['B'] });
+    expect(birlesenYaz(adim('x', 10, { birlesen: ['B'] }), 'A', true).birlesen).toEqual(['A', 'B']);
+    expect(birlesenYaz(adim('x', 10, { birlesen: ['A', 'B'] }), 'A', false).birlesen).toEqual(['B']);
+  });
+
+  it('eksikler: dal başı girensiz olmaz; açıkta kalan dal birleştirme eksiği olarak gösterilir', () => {
+    const l = rota().map((a, i) => (i === 0 ? { ...a, ins: [{ itemId: '2', qty: 1, scrap: 0 }] } : a));
+    expect(rotaEksikleri(l, var_, opAdi).map((x) => x.metin)).toEqual(['OP 30 Kesim: hiçbir adımı beklemediği için giren seçilmeli']);
+    const acik = [adim('a', 10, { dal: 'A', ins: [{ itemId: '2', qty: 1, scrap: 0 }] }), adim('b', 20, { dal: 'B', ins: [{ itemId: '2', qty: 1, scrap: 0 }] }), adim('c', 30, { birlesen: ['A'] })];
+    expect(rotaEksikleri(acik, var_, opAdi).map((x) => x.metin)).toEqual(['OP 30 Kesim: B dalı hiçbir adımda birleşmiyor; birleştirme adımında seçilmeli']);
+  });
+
+  it('kaydet gövdesi dal ve birleşeni taşır; dalı olmayan adım ana hattır; fark listesi dal değişimini söyler', () => {
+    const g = kaydetGovdesi(rota(), [10, 20, 30, 40], opBul);
+    expect(g.map((x) => [x['dal'], x['birlesen']])).toEqual([['A', []], ['A', []], ['B', []], [null, ['A', 'B']]]);
+    expect(kaydetGovdesi([adim('a', 10)], [10], opBul)[0]).toMatchObject({ dal: null, birlesen: [] });
+    const ad = { op: () => 'Kesim', istasyon: () => 'İst', malzeme: () => 'K' };
+    expect(rotaFarki([adim('a', 10)], [adim('a', 10, { dal: 'A' })], ad)).toEqual(['OP 10 Kesim: dal ana hat → A']);
   });
 });

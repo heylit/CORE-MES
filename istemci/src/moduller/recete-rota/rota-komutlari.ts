@@ -38,6 +38,15 @@ const dizi = (v: unknown, alan: string, azami: number): Nesne[] => {
 const KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon'] as const;
 const ADIM_KAYNAK_TURLERI = [...KAYNAK_TURLERI, 'fason'] as const;
 const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
+// Dal tek büyük harftir (1248 a); gelmeyen alan gönderilmez, sahibi kayıtlı dalı korur.
+const dal = (v: unknown, alan: string): string => {
+  if (typeof v !== 'string' || !/^[A-Z]$/.test(v)) throw gecersiz(alan);
+  return v;
+};
+const dallar = (v: unknown): string[] => {
+  if (!Array.isArray(v) || v.length > 26) throw gecersiz('birleşen dallar');
+  return v.map((x) => dal(x, 'birleşen dal'));
+};
 const KULLANIMLAR = ['tek', 'paralel'] as const;
 const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
 const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
@@ -70,6 +79,8 @@ function adim(a: Nesne): Nesne {
     yenidenAyar: a['yenidenAyar'] === true,
     // Seçimi taşımayan (eski görünüm) adımda alan gönderilmez: sunucu kayıtlı seçimi korur.
     ...(a['ilkParca'] === undefined ? {} : { ilkParca: secenek(a['ilkParca'], ILK_PARCA_SECIMLERI, 'ilk parça onayı') }),
+    ...(a['dal'] === undefined ? {} : { dal: a['dal'] === null ? null : dal(a['dal'], 'dal') }),
+    ...(a['birlesen'] === undefined ? {} : { birlesen: dallar(a['birlesen']) }),
     adaylar: dizi(a['adaylar'], 'adaylar', 10).map((x) => {
       const k = kaynak(x['kaynak'], KAYNAK_TURLERI, 'aday kaynak');
       if (k === null) throw gecersiz('aday kaynak');
