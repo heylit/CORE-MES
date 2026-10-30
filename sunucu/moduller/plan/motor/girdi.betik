@@ -122,6 +122,8 @@ function rrCevir(st) {
       if (!o0 || ref.dep !== s.dep) { if (s.dep === 'ortulu') z.ortusebilir = true; else if (o0 && 'ortusebilir' in o0) z.ortusebilir = false; }
       /* 982 a: akışlı adımın devir adedi rotadandır (1 de); yoksa motor adedin dörtte birini devreder */
       if (!o0 || ref.depQty !== s.depQty || (s.dep === 'ortulu' && !('transfer' in o0))) { if (+s.depQty > 1 || s.dep === 'ortulu' || (o0 && 'transfer' in o0)) z.transfer = Math.max(1, +s.depQty || 1); }
+      /* 1310 a: rotada ayarı işaretsiz adımda hazırlık sayılır, ayarcı aranmaz (engine ayarciIster); alanı olmayan eski kayıt ayarlıdır */
+      if (s.ayarli === false) { if (!o0 || o0.ayarci !== false) z.ayarci = false; } else if (o0 && 'ayarci' in o0) z.ayarci = undefined;
       if (!o0 || ref.minLot !== s.minLot) { if (+s.minLot > 0 || (o0 && 'minParti' in o0)) z.minParti = +s.minLot; }
       const bag = bagOf(s, i).map(([r, t]) => { const e = ((o0 && o0.bag) || []).find(([q]) => q === r); return e ? [r, t, ...e.slice(2)] : [r, t]; });
       if (!o0 || !rrEsit(o0.bag || [], bag)) z.bag = bag;

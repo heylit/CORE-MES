@@ -45,7 +45,10 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     const [ac] = rotaYazmalari(istekler);
     expect(ac?.yol).toBe('/rota/urunler/11/taslak-ac');
     expect(ac?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 71 } });
-    expect(kaydet).toMatchObject({ surum: 1, adimlar: [{ opNo: 10, operasyonTipiId: 21, ayarSuresiDk: 45, islemSuresiDk: 5, bilesenler: [{ malzemeId: 12, miktar: 2, fireYuzde: 0 }] }] });
+    // Bölümü olmayan kayıtlı 30 dk ayardır (1310 a): hazırlık 45 girilince toplam 75 olur.
+    expect(kaydet).toMatchObject({ surum: 1, adimlar: [{
+      opNo: 10, operasyonTipiId: 21, ayarSuresiDk: 75, hazirlikDk: 45, ayar: true, ayarDk: 30, islemSuresiDk: 5, bilesenler: [{ malzemeId: 12, miktar: 2, fireYuzde: 0 }],
+    }] });
   });
 
   it('açık taslak onaya gönderilir; giren eksik rota onaya gitmez', async () => {

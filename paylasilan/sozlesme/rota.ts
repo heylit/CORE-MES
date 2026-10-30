@@ -115,6 +115,11 @@ export const adimGirdisi = z.object({
   // Gelmeyen dal ve birleşen (alanı bilmeyen eski görünüm) adımın kayıtlı değerini korur; yeni adımda ana hat, birleştirme yok.
   dal: dalAdi.nullable().optional(),
   birlesen: z.array(dalAdi).max(26).optional(),
+  // Hazırlık bölümü (1310 a): ayarSuresiDk = hazırlık + ayar olarak sunucuda hesaplanır. Gelmeyen bölüm (eski görünüm) yalnız toplamı yollar;
+  // ayar kapalıyken gelen ayar süresi yok sayılır.
+  hazirlikDk: sure(99_999).nullable().optional(),
+  ayar: z.boolean().optional(),
+  ayarDk: sure(99_999).nullable().optional(),
   adaylar: z.array(adayGirdisi).max(AZAMI_ADAY),
   bilesenler: z.array(bilesenGirdisi).max(AZAMI_BILESEN),
   yanUrunler: z.array(yanUrunGirdisi).max(AZAMI_YAN_URUN),
@@ -206,6 +211,10 @@ export const adimSemasi = z.object({
   enKucukParca: z.number().int().nullable(),
   yenidenAyar: z.boolean(),
   ilkParca: z.enum(ILK_PARCA_SECIMLERI),
+  // ayarSuresiDk toplamdır: hazırlık + (ayar işaretliyse) ayar.
+  hazirlikDk: ondalikMetinSemasi.nullable(),
+  ayar: z.boolean(),
+  ayarDk: ondalikMetinSemasi.nullable(),
   dal: dalAdi.nullable(),
   birlesen: z.array(dalAdi),
   // Türetilmiş öncüller: null tek hatlı rotadır (bağımlılık kuralı), boş dizi hiçbir adımı beklemez.

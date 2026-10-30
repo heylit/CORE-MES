@@ -6,7 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { girdiEksigi, isEmriBagimliligi } from './kurallar.ts';
+import { girdiEksigi, hazirlikBol, isEmriBagimliligi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
@@ -78,6 +78,9 @@ describe('revizyon', () => {
     assert.match(onayaHazirMi([{ ...tam, kaynakAktif: false }]) ?? '', /makine ya da kişi/);
     assert.match(onayaHazirMi([{ ...tam, adaylarAktif: [true, false] }]) ?? '', /aday/);
     assert.equal(onayaHazirMi([{ ...tam, birimSureDk: null }]), 'OP 10: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.');
+    assert.equal(onayaHazirMi([{ ...tam, ayar: true, ayarDk: null }]), 'OP 10: ayar işaretli; ayar süresi girilmeli.');
+    assert.equal(onayaHazirMi([{ ...tam, ayar: true, ayarDk: 0 }]), null);
+    assert.equal(onayaHazirMi([{ ...tam, ayar: false, ayarDk: null }]), null);
     assert.match(onayaHazirMi([{ ...tam, ayarSuresiDk: null }]) ?? '', /hazırlık süresi/);
     assert.doesNotMatch(onayaHazirMi([{ ...tam, birimSureDk: null }]) ?? '', /ayar/, 'eski "ayar" adı iletide kalmaz');
   });
@@ -559,5 +562,26 @@ describe('çok dallı rota (1248 a)', () => {
     assert.deepEqual(isEmriBagimliligi({ bagimlilik: 'bagimsiz', devirAdedi: null, dal: null, onculler: null }), {
       bagimlilik: 'bagimsiz', devirAdedi: null, dal: null, onculler: null,
     });
+  });
+});
+
+describe('hazırlık bölümü (1310 a)', () => {
+  test('toplam hazırlık ile ayarın toplamıdır; ayar kapalıyken ayar süresi yok sayılır; ikisi de boşsa toplam boştur', () => {
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 99, hazirlikDk: 10, ayar: true, ayarDk: 20 }, null), { hazirlikDk: 10, ayar: true, ayarDk: 20, toplam: 30 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 99, hazirlikDk: 10, ayar: false, ayarDk: 20 }, null), { hazirlikDk: 10, ayar: false, ayarDk: null, toplam: 10 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: null, hazirlikDk: null, ayar: true, ayarDk: 15 }, null), { hazirlikDk: null, ayar: true, ayarDk: 15, toplam: 15 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 5, hazirlikDk: null, ayar: false }, null), { hazirlikDk: null, ayar: false, ayarDk: null, toplam: null });
+  });
+
+  test('yalnız toplamı yollayan eski istemci: toplam aynıysa bölüm kalır; değiştiyse işaret korunur, fark ayara ya da hazırlığa yazılır; kayıt yoksa göç kuralı', () => {
+    const eski = { hazirlikDk: 10, ayar: true, ayarDk: 20, toplam: 30 };
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 30 }, eski), eski);
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 45 }, eski), { hazirlikDk: 10, ayar: true, ayarDk: 35, toplam: 45 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 4 }, eski), { hazirlikDk: 4, ayar: true, ayarDk: 0, toplam: 4 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 12 }, { hazirlikDk: 8, ayar: false, ayarDk: null, toplam: 8 }), { hazirlikDk: 12, ayar: false, ayarDk: null, toplam: 12 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: null }, eski), { hazirlikDk: null, ayar: true, ayarDk: null, toplam: null });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 25 }, null), { hazirlikDk: 0, ayar: true, ayarDk: 25, toplam: 25 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: 0 }, null), { hazirlikDk: 0, ayar: false, ayarDk: null, toplam: 0 });
+    assert.deepEqual(hazirlikBol({ ayarSuresiDk: null }, null), { hazirlikDk: null, ayar: false, ayarDk: null, toplam: null });
   });
 });

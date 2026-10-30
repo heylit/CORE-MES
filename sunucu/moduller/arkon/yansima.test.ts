@@ -1726,8 +1726,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) SELECT $1, op_no, $2 FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3
        ON CONFLICT DO NOTHING`, [kart, rev.id, uretimEmriId]);
     await sahip.sorgu(
-      `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, birim_sure_dk, bagimlilik, ilk_parca)
-       SELECT $1, $2, op_no, row_number() OVER (ORDER BY op_no), operasyon_tipi_id, ad, makine_id, 10, 1, 'bekleyen',
+      `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, hazirlik_dk, birim_sure_dk, bagimlilik, ilk_parca)
+       SELECT $1, $2, op_no, row_number() OVER (ORDER BY op_no), operasyon_tipi_id, ad, makine_id, 10, 10, 1, 'bekleyen',
               CASE WHEN op_no = $4 THEN 'yok' ELSE 'her_kurulum' END
        FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3`, [rev.id, kart, uretimEmriId, ilkParcasizOp]);
     const girdi = (await sahip.tek<{ no: number }>(

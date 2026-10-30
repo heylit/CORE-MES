@@ -389,3 +389,15 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: komut emrin sürümünü denetler ama artırmaz (emir değişmez); aynı iş emrine eşzamanlı iki komut danışma kilidiyle sıraya girer.
 - Bulgu (ayrı iş): bölmede kol için yeni iş emri açılır; rota şartnamesi yalnız emir açılışında ve emre uygulamada sabitlenir, kol adımları
   (tekrar adımı dahil) şartnamesiz kalır [Muhtemel, kod okuması, denenmedi].
+
+## Hazırlık ve ayar ayrımı (1310 a, 2026-10-30)
+- Rota adımında hazırlık süresi iki parçadır: hazırlık ve (Ayar kutusu işaretliyse) ayar. `ayar_suresi_dk` ikisinin toplamı olarak kalır;
+  plan, iş emri ve öteki okuyanlar değişmez. Ayar işareti Reçete ve Rota durum çıktısında `ayarli` olarak plana gider (ayarlı değilse ayarcı aranmaz).
+- Göç 20261029148000: yeni sütunlar `hazirlik_dk`, `ayar`, `ayar_dk`; var olan adımda süre ayara taşınır (süre > 0 ise ayar işaretli, hazırlık 0),
+  onaylı revizyonlar da dolar (içerik kilidi yalnız bu UPDATE için, göçün işlemi içinde kapatılıp açılır). Kısıt: toplam = hazırlık + ayar.
+- Ekran: "Hazırlık (dk / parti)", "Ayar" kutusu, kutu işaretliyken "Ayar (dk / parti)" ve "Toplam hazırlık" yan yana görünür.
+  Dikkat: eski adımda kayıtlı süre ayar sayıldığı için "Hazırlık" alanına yazılan değer toplama eklenir (30 dk ayar + 45 hazırlık = 75).
+- VARSAYIM: aday kaynakların hazırlık süresi tek toplam alan olarak kalır. Geri alma: orta (aday tablosuna ikinci göç).
+- VARSAYIM: ayar işaretliyse onaya gönderirken ayar süresi zorunlu (0 girilebilir). Geri alma: ucuz (kuralda tek satır).
+- VARSAYIM: bölümü göndermeyen istemci ya da yalnız toplamı yazan yer (akış tablosu, gerçekleşen süre kabulü): toplam aynıysa bölüm kalır;
+  değiştiyse işaret korunur, fark ayara (işaret kapalıysa hazırlığa) yazılır. Geri alma: ucuz.

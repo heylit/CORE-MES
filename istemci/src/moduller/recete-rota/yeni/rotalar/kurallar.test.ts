@@ -6,6 +6,7 @@ import {
   tuketilenAdimlar, yeniAdim, yururlukteki, type Adim, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
 import { adimOnculleri, birlesebilenDallar, birlesenYaz, dalliRota, dalYaz } from './kurallar.ts';
+import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 
 // Uydurma kartlar ve operasyonlar (gerçek veri değil).
 const malzeme = (id: string, type: Malzeme['type'], ek: Partial<Malzeme> = {}): Malzeme => ({
@@ -318,5 +319,40 @@ describe('çok dallı rota (1248 a)', () => {
     expect(kaydetGovdesi([adim('a', 10)], [10], opBul)[0]).toMatchObject({ dal: null, birlesen: [] });
     const ad = { op: () => 'Kesim', istasyon: () => 'İst', malzeme: () => 'K' };
     expect(rotaFarki([adim('a', 10)], [adim('a', 10, { dal: 'A' })], ad)).toEqual(['OP 10 Kesim: dal ana hat → A']);
+  });
+});
+
+describe('hazırlık bölümü (1310 a)', () => {
+  it('bölümü olmayan adımda süre ayardır; ayar açılınca süre alanı gelir, toplam hazırlık + ayar olur; ayar kapanınca ayar süresi düşer', () => {
+    expect(toplamdanBolum(25)).toEqual({ hazirlik: 0, ayarli: true, ayarDk: 25 });
+    expect(toplamdanBolum(0)).toEqual({ hazirlik: 0, ayarli: false, ayarDk: null });
+    const a = adim('a', 10, { setup: 25 });
+    expect(hazirlikBolumu(a)).toEqual({ hazirlik: 0, ayarli: true, ayarDk: 25 });
+    const b = hazirlikYaz(a, { hazirlik: 10 });
+    expect([b.setup, b.hazirlik, b.ayarli, b.ayarDk]).toEqual([35, 10, true, 25]);
+    const c = hazirlikYaz(b, { ayarli: false });
+    expect([c.setup, c.hazirlik, c.ayarli, c.ayarDk]).toEqual([10, 10, false, null]);
+    const d = hazirlikYaz(c, { ayarli: true, ayarDk: 5 });
+    expect([d.setup, d.ayarDk]).toEqual([15, 5]);
+    expect(hazirlikYaz(adim('b', 20, { setup: null }), { hazirlik: null }).setup).toBeNull();
+    const eksik = hazirlikYaz(adim('a', 10, { ins: [{ itemId: '2', qty: 1, scrap: 0 }] }), { hazirlik: 5, ayarli: true, ayarDk: null });
+    expect(rotaEksikleri([eksik], () => true, () => null).map((x) => x.metin)).toEqual(['OP 10: ayar işaretli; ayar süresi girilmeli']);
+  });
+
+  it('yalnız toplam girilen yerde ayarlı adımda fark ayara, ayarsız adımda hazırlığa yazılır', () => {
+    const ayarli = hazirlikYaz(adim('a', 10), { hazirlik: 10, ayarli: true, ayarDk: 20 });
+    const x = sureYaz(ayarli, 'setup', 45);
+    expect([x.setup, x.hazirlik, x.ayarDk]).toEqual([45, 10, 35]);
+    const ayarsiz = hazirlikYaz(adim('b', 20), { hazirlik: 8, ayarli: false });
+    const y = sureYaz(ayarsiz, 'setup', 12);
+    expect([y.setup, y.hazirlik, y.ayarli, y.ayarDk]).toEqual([12, 12, false, null]);
+  });
+
+  it('kaydet gövdesine bölüm gider; fasonda bölüm boştur', () => {
+    const opBul = (id: string) => (id === '21' ? op('21') : undefined);
+    const a = hazirlikYaz(adim('a', 10), { hazirlik: 5, ayarli: true, ayarDk: 20 });
+    expect(kaydetGovdesi([a], [], opBul)[0]).toMatchObject({ ayarSuresiDk: 25, hazirlikDk: 5, ayar: true, ayarDk: 20 });
+    const f = adim('f', 10, { stationId: null, fasonId: '7', terminGun: 5 });
+    expect(kaydetGovdesi([f], [], opBul)[0]).toMatchObject({ ayarSuresiDk: null, hazirlikDk: null, ayar: false, ayarDk: null });
   });
 });

@@ -30,7 +30,7 @@ import { adimliEmirAyrintisi, isEmirleriniYenile, isEmriSureOzeti, uretimEmriAc,
 import type { EmirBittiOlayi, IsEmriKopyalandiOlayi } from '../uretim-emirleri/disari.ts';
 import {
   YAZ, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
-  dalDenetle, isEmriBagimliligi, girdiEksigi, girdiOlabilirMi, oncullerCikar, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
+  dalDenetle, hazirlikBol, isEmriBagimliligi, girdiEksigi, girdiOlabilirMi, oncullerCikar, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
   adimDegerleriDenetle, cozulmusDegerler, ekAdimSartnameIhlali, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
   adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, medyaSinirHatasi, medyaTuru, talimatAdimiHatasi, urunMedyaToplami,
@@ -260,7 +260,7 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: ayrim.islem, degisimSuresiDk: ayrim.degisim,
       degisimOraniYuzde: oran === null ? null : ondalikMetin(oran, 2), terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
       firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
-      dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
+      hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
       adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
         .map((x) => {
           const ayrim = teorikAyrim(x.birimSureDk, x.islemSuresiDk, x.degisimSuresiDk);
@@ -566,6 +566,8 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
     girenSayisi: icerik.bilesenler.filter((b) => b.adimId === a.id).length,
     dal: a.dal,
     birlesen: a.birlesen,
+    ayar: a.ayar,
+    ayarDk: sayiyaCevir(a.ayarDk),
   })));
   if (hata) throw gecersiz(hata);
   await sartnameOnayDenetimi(db, r.id, icerik);
@@ -601,7 +603,7 @@ function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[] {
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
     yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
-    dal: a.dal, birlesen: a.birlesen,
+    hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen,
   }));
 }
 
@@ -698,7 +700,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = sablon.map((st) => ({
       opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
     }));
   } else if (kaynak.tur === 'kart') {
     // Aktarım tek yönlüdür ve yalnız ilk rotada: kart sonradan değişse de var olan rota değişmez, kartta kopya kalır (#688).
@@ -708,7 +710,7 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
     adimlar = kart.map((a) => ({
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [],
     }));
   } else if (kaynak.tur === 'urun') {
     if ((await s.harfler(db, urunId)).length > 0) throw cakisma(ROTA_VAR);
@@ -726,7 +728,15 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
 export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: KaydetGovdesiCikti): Promise<KomutCevabi> {
   const { r } = await komutIcinAl(db, kullanici, id, 'kaydet', govde.surum);
   const mevcut = await s.icerikOku(db, id);
-  const ayrilmis = taslakSureleri(govde.adimlar.map((a) => ({
+  // Hazırlık bölümü (1310 a): toplam sunucuda hesaplanır; bölümü göndermeyen ekran kayıtlı bölümü bozmaz.
+  const eskiBolum = new Map(mevcut.adimlar.map((m) => [m.opNo, {
+    hazirlikDk: sayiyaCevir(m.hazirlikDk), ayar: m.ayar, ayarDk: sayiyaCevir(m.ayarDk), toplam: sayiyaCevir(m.ayarSuresiDk),
+  }]));
+  const bolumlu = govde.adimlar.map((a) => {
+    const { toplam, ...bolum } = hazirlikBol(a, (a.opNo === null ? undefined : eskiBolum.get(a.opNo)) ?? null);
+    return { ...a, ...bolum, ayarSuresiDk: toplam };
+  });
+  const ayrilmis = taslakSureleri(bolumlu.map((a) => ({
     ...a, terminGun: a.terminGun ?? null, islemSuresiDk: a.islemSuresiDk ?? null, degisimSuresiDk: a.degisimSuresiDk ?? null,
     adaylar: a.adaylar.map((x) => ({ ...x, islemSuresiDk: x.islemSuresiDk ?? null, degisimSuresiDk: x.degisimSuresiDk ?? null })),
   })));
@@ -1166,7 +1176,14 @@ export async function gerceklesenKabulEt(
     islemSuresiDk: sayiMi(yer.islemSuresiDk === null ? null : String(yer.islemSuresiDk)), degisimSuresiDk: sayiMi(yer.degisimSuresiDk === null ? null : String(yer.degisimSuresiDk)),
   }, g.tur, Number(satir.sureDk));
   if ('ileti' in yeni) throw gecersiz(yeni.ileti);
+  const sayi = (x: number | string | null): number | null => (x === null ? null : Number(x));
+  const eskiBolum = { hazirlikDk: sayi(hedef.hazirlikDk), ayar: hedef.ayar, ayarDk: sayi(hedef.ayarDk), toplam: sayi(hedef.ayarSuresiDk) };
   Object.assign(yer, yeni);
+  if (yer === hedef) {
+    // Kabul edilen hazırlık toplamdır; bölüm kayıtlı işarete göre yeniden kurulur (1310 a).
+    const { toplam, ...bolum } = hazirlikBol({ ayarSuresiDk: sayi(hedef.ayarSuresiDk) }, eskiBolum);
+    Object.assign(hedef, bolum, { ayarSuresiDk: toplam });
+  }
   await s.icerikSil(db, taslakId);
   await adimlariYaz(db, taslakId, adim.malzemeId, yazimlar);
   const surum = await s.duzenlemeYaz(db, taslakId, kullanici.id);
@@ -1370,6 +1387,10 @@ export interface DurumRotaAdimi {
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
   yenidenAyar: boolean;
+  // Ayar işaretli adımda plan ayarcı arar; ayarSuresiDk hazırlık ile ayarın toplamıdır (1310 a).
+  hazirlikDk: OndalikMetin | null;
+  ayar: boolean;
+  ayarDk: OndalikMetin | null;
   ilkParca: IlkParcaSecimi;
   adaylar: { kaynak: Kaynak; ayarSuresiDk: OndalikMetin | null; birimSureDk: OndalikMetin | null; islemSuresiDk: OndalikMetin | null; degisimSuresiDk: OndalikMetin | null }[];
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
@@ -1409,7 +1430,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
           .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
         yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
-        dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
+        hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, onculler: onculler[i] ?? null,
       })),
     });
   }

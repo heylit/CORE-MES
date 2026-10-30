@@ -111,7 +111,7 @@ function compile(st){
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
       const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length};
+        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
@@ -186,9 +186,11 @@ function kisiDagit(cx,u,M,k){let kalan=M.opOran;const sec=[];
   const ad=M.kisiler.filter(i=>{const p=cx.PK[i];return p.av[k]>0&&u.pl[i][k]<1-1e-6&&u.pn[i][k]<p.enCok;}).sort((a,b)=>u.pl[a][k]-u.pl[b][k]||a-b);
   for(const i of ad){const al=Math.min(kalan,1-u.pl[i][k]);sec.push([i,al]);kalan-=al;if(kalan<=1e-6)return sec;}
   return null;}
+/* 1310 a: ayarcı yalnız rotada ayarı işaretli adımın hazırlığında aranır; ayarsız adımın hazırlık süresi sayılır, ayarcı kullanmaz */
+function ayarciIster(cx,r){const o=cx.byId[r.id];return r.su>0&&!(o&&o.ayarsiz);}
 function checkUse(cx,u,M,r,apId){
   // dönüş: -1 uygun; yoksa sorunlu slot ve tür
-  if(r.su>0){for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
+  if(ayarciIster(cx,r)){for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
   const d=M.opOran;
   if(d>0&&M.kisiler){
     for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;
@@ -201,7 +203,7 @@ function checkUse(cx,u,M,r,apId){
   return null;
 }
 function addUse(cx,u,M,r,apId,sign=1){
-  if(r.su>0)for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k])u.ayar[k]+=sign;
+  if(ayarciIster(cx,r))for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k])u.ayar[k]+=sign;
   const d=M.opOran;if(d>0){const G=u.g[M.grup];const pa=M.kisiler&&sign>0?(u.pa[r.id]=[]):null;
     for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;u.tot[k]+=d*sign;if(G)G[k]+=d*sign;
       if(pa){const sec=kisiDagit(cx,u,M,k);if(sec)for(const [i,al] of sec){u.pl[i][k]+=al;u.pn[i][k]++;pa.push(k,i,al);}}}
@@ -578,7 +580,8 @@ function hitJobs(base,info,st){const h=new Set(info.jobs||[]);
   if(info.kind==='sure')for(const id in st.sapma||{})h.add(jobOf(id));
   if(info.kind==='eksik'){const D=st.D,v=D.vardiyalar.find(x=>x.id===info.vardiya);if(v){const a=info.gun*24+hm(v.bas);let b=info.gun*24+hm(v.bit);if(b<=a)b+=24;
     const g=new Set(D.tezgahlar.filter(m=>info.grup==='ayar'||m.grup===info.grup).map(m=>m.id));
-    for(const r of Object.values(base.ops))if(!r.fas&&g.has(r.m)&&(info.grup==='ayar'?r.su>0&&r.S<b&&r.Su>a:r.S<b&&r.C>a))h.add(r.job);}}
+    const ayarsiz=new Set();for(const j of D.siparisler){const u=D.urunler.find(x=>x.id===j.urun);for(const o of (u&&u.rota)||[])if(o.ayarci===false)ayarsiz.add(j.id+'.'+o.k);}
+    for(const r of Object.values(base.ops))if(!r.fas&&g.has(r.m)&&(info.grup==='ayar'?r.su>0&&!ayarsiz.has(r.id)&&r.S<b&&r.Su>a:r.S<b&&r.C>a))h.add(r.job);}}
   return h;}
 function autoK(st,plan){const cx=plan.cx||compile(st);const ds=Object.values(cx.jobs).map(j=>j.due).filter(x=>x!=null);if(!ds.length)return null;
   let C=st.now;for(const r of Object.values(plan.ops))C=Math.max(C,r.C);const Ch=Math.max(1,C-st.now);
