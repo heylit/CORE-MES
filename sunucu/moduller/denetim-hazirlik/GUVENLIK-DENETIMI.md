@@ -14,8 +14,13 @@ Kaynak: `sunucu/moduller/denetim-hazirlik/uclar.ts`, `servis.ts`; testler `denet
 | `GET /denetim-hazirlik/kisiler` | `.oku` ya da `.yaz` | yalnız etkin kişilerin no ve adı (`kisiler/disari.ts`) | BD-07 | BD-07 |
 | `POST /denetim-hazirlik/kurulum` | `.yonet` (yalnız yönetici) | işaret belgesi varsa kurmaz (BD-10) | BD-11 | BD-11 (`.yaz` ile 403) |
 | `GET /denetim-hazirlik/oda` | `.oku` ya da `.yaz` | yalnız son 45 sn (BD-11) | BD-12 | BD-07 |
-| `POST /denetim-hazirlik/ekler/yukle` | `.yaz` | boyut en çok 700 KB (BD-9, kısıt); denetim kaydına içerik girmez, ad ve tür girer | BD-10 | BD-07 |
-| `GET /denetim-hazirlik/ekler/:id` | `.oku` ya da `.yaz` | kimlik biçimi | BD-10 | BD-10 (olmayan ek 404) |
+| `POST /denetim-hazirlik/ekler/yukle` | `.yaz` | boyut en çok 700 KB (BD-9, kısıt); tür içerikten, tanınmayan `application/octet-stream` (BD-17); kişi ve modül kotası (BD-18); denetim kaydına içerik girmez, ad ve bildirilen tür girer | BD-10, BD-10c | BD-07, BD-10b, BD-10e (413) |
+| `GET /denetim-hazirlik/ekler/:id` | `.oku` ya da `.yaz` | kimlik biçimi; yalnız yükleyene ya da eki anan ve okuyanın açabildiği belge varken (BD-19); tür okurken içerikten (BD-17) | BD-10, BD-10d | BD-10 (olmayan ek 404), BD-10d (anılmayan ya da kişiye özel belgede anılan ek 404) |
+
+## GG-1 (güvenlik giriş denetimi, 30.10.2026)
+Ek türü eskiden istemcinin bildirdiğiydi ve okuma ucu eki kimliği bilen her okura veriyordu. Bugün çerçeveye `assets` yeteneği verilmiyor
+(`YETENEKLER` boş), TS ekranı da ek yüklemiyor; uçlar yalnız doğrudan API ile kullanılabiliyordu. Tür içerikten (`dosya/disari.ts`
+`ekMime`), kota ve belgeye bağ eklendi; köprü de Blob'a HTML ya da SVG türü vermez (CK-09). Yetim ek silinmez (soru 1270).
 
 ## Yalnız ekranda kalan kurallar
 Prototipin iş kuralları (denetim programı, bulgu, DÖF, kapanış) ekrandadır; sunucu belge gövdesini yorumlamaz. UYUM-BORCU.md'de "bağlamada kapanacak".

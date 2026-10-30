@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
+  EK_SINIRI, KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -163,6 +163,25 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
       assert.equal(yonetimGerekirMi(ORTAK, { deger: '1' }, null), false);
       assert.equal(yonetimGerekirMi('data/users/7/yerel/anahtarlar/kalite-denetim-v4', depo({ a: dolu }), null), false);
     });
+  });
+});
+
+describe('denetim-hazirlik ekleri (GG-1)', () => {
+  test('BD-K12: kişi ve toplam kotası; sınıra eşit yükleme kabul, bir bayt fazlası ret', () => {
+    const sinir = { kisiBayt: 100, toplamBayt: 1000 };
+    assert.equal(ekKotaReddi({ kisiBayt: 60, toplamBayt: 500, yeniBayt: 40 }, sinir), null);
+    assert.equal(ekKotaReddi({ kisiBayt: 60, toplamBayt: 500, yeniBayt: 41 }, sinir), 'kisi');
+    assert.equal(ekKotaReddi({ kisiBayt: 0, toplamBayt: 950, yeniBayt: 51 }, sinir), 'toplam');
+    assert.equal(EK_SINIRI.kisiBayt < EK_SINIRI.toplamBayt, true);
+  });
+
+  test('BD-K13: eki yükleyen ya da eki anan ve okuyanın açabildiği belge okutur; kimlik tek başına yetmez', () => {
+    assert.equal(ekOkunurMu(7, [], 7), true);
+    assert.equal(ekOkunurMu(7, [], 8), false);
+    assert.equal(ekOkunurMu(7, ['yerel/kalite-denetim-v4'], 8), true);
+    assert.equal(ekOkunurMu(7, ['data/users/7/yerel/anahtarlar/kalite-denetim-v4'], 8), false);
+    assert.equal(ekOkunurMu(7, ['data/users/8/yerel/anahtarlar/kalite-denetim-v4'], 8), true);
+    assert.equal(ekOkunurMu(7, ['yerel/baska-anahtar'], 8), false);
   });
 });
 

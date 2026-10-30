@@ -98,7 +98,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/denetim-hazirlik/ekler/yukle',
     yetki: 'denetim-hazirlik.yaz',
-    // Dosya içeriği deftere girmez (boyutu ve özeti girer); adı ve türü seçilir. Kullanıcı kararı bekler (CEKIRDEK-ISTEKLERI).
+    // Dosya içeriği deftere girmez (boyutu ve özeti girer); adı ve bildirilen türü seçilir. Saklanan tür içerikten bulunur.
     denetim: 'govdesiz',
     denetimOzeti: (g) => ({ ad: g.ad, tur: g.tur }),
     govde: ekYukleGovdesi,
@@ -111,6 +111,6 @@ export const uclar = [
     yetki: OKUMA,
     parametre: ekParametresi,
     cevap: ekIcerikCevabi,
-    isle: ({ db, parametre }) => ekOku(db, parametre.id),
+    isle: ({ db, kullanici, parametre }) => ekOku(db, kullanici, parametre.id),
   }),
 ];

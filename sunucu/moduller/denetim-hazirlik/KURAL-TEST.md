@@ -14,7 +14,10 @@ Dosyalar: `sunucu/moduller/denetim-hazirlik/kurallar.test.ts` (saf, 13), `sunucu
 | BD-6 Her yazma ve silme damgayı ilerletir | `denetim_hazirlik_surum` sayacı | `BD-01`, `BD-05` |
 | BD-7 Okuma `oku` ya da `yaz`, yazma `yaz`, kurulum `yonet` ister (ortak kaydı silen ya da boşaltan yazma için BD-16) | uç yetkisi | `BD-07`, `BD-11` |
 | BD-8 Kilit başkasına geçerliyken verilmez | servis (`kilitAlinirMi`) | `BD-K6`, `BD-08` |
-| BD-9 Ek en çok 700 KB, boyut içerikle aynı | `denetim_hazirlik_ek_boyut` | `BD-10` |
+| BD-9 Ek en çok 700 KB, boyut içerikle aynı | `denetim_hazirlik_ek_boyut` | `BD-10`, `BD-10b` |
+| BD-17 (GG-1) Ek türü içerikten bulunur (`dosya` `ekMime`), bildirilen tür saklanmaz; HTML, SVG ve tanınmayan içerik `application/octet-stream`; okurken de içerikten (eski satırlar). Köprü Blob'a yalnız güvenli türü verir | servis, `dosya/kurallar.ts`, köprü | `ek türü içerikten bulunur ...`, `BD-10`, `BD-10c`, `CK-09` |
+| BD-18 (GG-1) Kişi başına ek toplamı 50 MB, modül toplamı 1 GiB (VARSAYIM); denetim ve ekleme tek kilit altında | servis (`ekKotaReddi`), `pg_advisory_xact_lock` | `BD-K12`, `BD-10e` |
+| BD-19 (GG-1) Eki yükleyen ya da eki (`/_blob/<kimlik>`) anan ve okuyanın açabildiği prototip belgesi okutur; okunamayan ek olmayan ek gibi 404 | servis (`ekOkunurMu`) | `BD-K13`, `BD-10d` |
 | BD-10 Başlangıç belgeleri yalnız işaret belgesi yokken bir kez | servis | `BD-K8`, `BD-11` |
 | BD-11 Oda yalnız son 45 sn içinde görülenleri döner | servis (`canliEsler`) | `BD-K7`, `BD-12` |
 | BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | içerik politikası | `prototipi içerik politikasıyla, köprüyle ve dış yazı tipi bağlantısı olmadan yalıtılmış çerçevede açar`, `sayfaKur dış yazı tipi bağlantısını çıkarır, politikayı ve betiği başa koyar` |

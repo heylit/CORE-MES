@@ -88,6 +88,27 @@ export async function ekEkle(db: Db, g: { ad: string; tur: string; icerik: Buffe
   return satir;
 }
 
-export async function ekGetir(db: Db, id: string): Promise<{ id: string; ad: string; tur: string; boyut: number; icerik: Buffer } | null> {
-  return db.tek('SELECT id, ad, tur, boyut, icerik FROM denetim_hazirlik_ek WHERE id = $1', [id]);
+export async function ekGetir(
+  db: Db, id: string,
+): Promise<{ id: string; ad: string; tur: string; boyut: number; icerik: Buffer; yukleyenKisiId: number } | null> {
+  return db.tek('SELECT id, ad, tur, boyut, icerik, yukleyen_kisi_id AS "yukleyenKisiId" FROM denetim_hazirlik_ek WHERE id = $1', [id]);
+}
+
+// Kota denetimi ile ekleme arasında başka yükleme araya girmesin: modülün ek yazmaları sıraya girer (yükleme seyrektir).
+export async function ekKotaKilidi(db: Db): Promise<void> {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('denetim_hazirlik_ek'))");
+}
+
+export async function ekBaytlari(db: Db, kisiId: number): Promise<{ kisiBayt: number; toplamBayt: number }> {
+  const s = await db.tek<{ kisi: string; toplam: string }>(
+    `SELECT coalesce(sum(boyut) FILTER (WHERE yukleyen_kisi_id = $1), 0)::text AS kisi, coalesce(sum(boyut), 0)::text AS toplam
+     FROM denetim_hazirlik_ek`,
+    [kisiId],
+  );
+  return { kisiBayt: Number(s?.kisi ?? 0), toplamBayt: Number(s?.toplam ?? 0) };
+}
+
+// Eki anan belgeler: belge gövdesi yorumlanmaz, metninde ekin adresi aranır.
+export async function ekiAnanYollar(db: Db, anma: string): Promise<string[]> {
+  return (await db.sorgu<{ yol: string }>('SELECT yol FROM denetim_hazirlik_belge WHERE strpos(veri::text, $1) > 0', [anma])).map((s) => s.yol);
 }

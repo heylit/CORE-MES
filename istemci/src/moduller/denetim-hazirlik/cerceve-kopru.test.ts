@@ -147,6 +147,33 @@ describe('çerçeve köprüsü', () => {
     expect(await oda).toBeNull();
   });
 
+  it('CK-09 (GG-1): ek Blob\'u sunucunun verdiği türle kurulur; HTML ve SVG türü Blob\'a geçmez', async () => {
+    const turler: string[] = [];
+    const urlAc = vi.fn((b: Blob) => { turler.push(b.type); return 'blob:x'; });
+    Object.defineProperty(window.URL, 'createObjectURL', { value: urlAc, configurable: true });
+    cevaplar = (tip, veri) => {
+      if (tip === 'ek-yukle') return { ok: true, veri: { id: 'a'.repeat(32), boyut: 4, tur: 'text/html' } };
+      return { ok: true, veri: { id: veri['id'], tur: veri['id'] === 'b'.repeat(32) ? 'image/svg+xml' : 'image/png', veri: btoa('abcd'), boyut: 4 } };
+    };
+    const w = kur({ ...AYAR, yetenekler: ['assets'] });
+    const ekler = w.claude.use('assets') as Promise<{ upload: (b: Blob, s?: { type?: string }) => Promise<{ contentType: string }> }>;
+    await vi.advanceTimersByTimeAsync(1);
+    const yukleme = (await ekler).upload(new Blob(['<b>x</b>'], { type: 'text/html' }), { type: 'text/html' });
+    await vi.advanceTimersByTimeAsync(50);
+    await yukleme;
+    for (const id of ['b'.repeat(32), 'c'.repeat(32)]) {
+      const img = document.createElement('img');
+      img.setAttribute('src', `/_blob/${id}`);
+      document.body.append(img);
+      await vi.advanceTimersByTimeAsync(1);
+      img.remove();
+    }
+    // Önceki testlerin köprüleri de aynı belgeyi izler; sayı değil türler denetlenir.
+    expect(turler[0]).toBe('application/octet-stream');
+    expect(turler).toContain('image/png');
+    expect(turler.filter((t) => t === 'text/html' || t === 'image/svg+xml')).toEqual([]);
+  });
+
   it('CK-04: sıralı ve sınırlı sorgu aboneliği koşulu sunucuya taşır, belgeleri kimlikleriyle verir; yazma aboneliği yeniler', async () => {
     let surum = 1;
     cevaplar = (tip) => (tip === 'db-sorgu'

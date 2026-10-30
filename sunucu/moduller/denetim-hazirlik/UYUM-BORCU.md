@@ -7,7 +7,7 @@
 | Eşzamanlı düzenleme | İki kişi aynı anda düzenlerse ikinci yazan uyarı alır, değişikliği kaydedilmez. | Aşama 2: kayıt başına tablo ve sürüm. |
 | Kendi stili, rengi ve bileşenleri | Ekran prototipin kendisidir (yalıtılmış çerçeve, kendi CSS ve renkleri); TMI tasarım değişkenleri ve ortak bileşenler kullanılmaz. | Kullanıcı kararı: ekran olduğu gibi (görünüm değişmez). |
 | KAPANDI (borç turu 19.10.2026): önek listesi gözden geçirildi, `kalite-denetim-v4` kalıcı; eski sürüm anahtarları (`iso9001-denetim-v1..v3`) yalnız taşıma için okunur, bellekte kalır; değişiklik gerekmedi (prototipteki `localStorage` çağrıları tarandı). Tarayıcıda tutulan veri | Prototipin `localStorage` kullanımı köprüyle sunucuya taşınır; önek dışındaki anahtarlar yalnız o sekmede kalır. | Bağlamada önek listesi gözden geçirilir. |
-| Ek boyutu | Ek en çok 700 KB (JSON gövde sınırı); ekler modülün kendi tablosunda. | Aşama 2: `dosyalar` modülüne bağlanır. |
+| Ek boyutu | Ek en çok 700 KB (JSON gövde sınırı); ekler modülün kendi tablosunda. Tür içerikten, kota ve belgeye bağ var (GG-1, BD-17..19); yetim ek temizliği yok (soru 1270). | Aşama 2: `dosya` modülüne bağlanır (ikili cevap, sahipsiz dosya temizliği). |
 | Kişi yabancı anahtarı yok | `*_kisi_id` sütunları `kisi` tablosuna bağlı değil. | Aşama 2: ayrı göçle yabancı anahtar. |
 | Tema yalnız açılışta | Açık/koyu tema çerçeve kurulurken geçer; açıkken değişirse sayfa yenilenince uyar. | Gerekirse köprüye tema iletisi. |
 | Kullanılmayan çekirdek kalıbı | Belge deposu her modülde ayrı kopyadır (sunucu + `cerceve-kopru.ts`). | Önerilen çekirdek parçası: ortak belge deposu (CEKIRDEK-ISTEKLERI). |
