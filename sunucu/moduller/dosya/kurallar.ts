@@ -82,6 +82,12 @@ export function turBul(ilk: Buffer, boyut: number): DosyaTuru | null {
   return null;
 }
 
+// İçeriği base64 JSON ile taşıyan ek uçları (Denetim Hazırlığı; Mesaj ve Portal da aynı kalıptadır) için tür. Yükleyenin bildirdiği
+// tür HTML ya da SVG olabilir ve tarayıcıda Blob olarak açılınca betik çalıştırır; tür içerikten bulunur, tanınmayan içerik indirilir.
+export function ekMime(icerik: Buffer): string {
+  return DOSYA_MIME[turBul(icerik, icerik.length) ?? IKILI];
+}
+
 export type KotaReddi = 'kotaYukleme' | 'kotaBayt' | 'kotaBagsiz' | 'kotaDepo';
 // kisiAdet: kişinin açık yükleme sayısı (zaten açık bir yüklemeye devam ediyorsa 0 verilir); kisiBagsizBayt: kişinin yükleyip
 // bağlamadığı dosyaların toplamı; yeniBayt: bu parçanın ekleyeceği bayt.
