@@ -91,6 +91,10 @@ export const BILDIRIM_TURLERI = {
   'arkon.toplu-tutarsiz': {
     baslik: 'Toplu giriş süreye sığmıyor', onem: 'uyari', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
+  // 1365 a: Güvenlik Merkezi'nin kritik alarmı yöneticilere uygulama içinde duyurulur; dışarı (e-posta) gitmez.
+  'guvenlik.kritik-alarm': {
+    baslik: 'Kritik güvenlik alarmı', onem: 'acil', alanIslemler: ['guvenlik.oku'], yol: '/guvenlik', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;
