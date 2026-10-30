@@ -21,7 +21,7 @@ import { acikRevizyonSayisi, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
-import { FASON_VARSAYILAN_GUN, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { FASON_VARSAYILAN_GUN, adimOnculleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
@@ -30,7 +30,7 @@ import {
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
-import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, Kural, MotorIsi, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, Kural, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
@@ -57,7 +57,7 @@ const BENZETIM_SAHIBI: Record<string, string> = {
 // verim: makinenin istasyonunun plan ayarı (1 = %100); süre verime bölünür. Kişide 1.
 interface KaynakBilgisi extends PlanKaynagi { isMerkeziId: number | null; verim: number }
 // Taslak emir (ayar "taslak emirleri de planla") planda planlı iş gibi yerleşir; uyarıyla ayrılır.
-type Is = Omit<PlanIsEmri, 'durum'> & { durum: 'planli' | 'basladi' | 'bitti' | 'iptal'; taslakEmir: boolean; urunKodu: string; urunAdi: string; rotaKaynaklari: Kaynak[]; sureDk: number | null; ayarDk: number | null; devirDk: number | null; devirAyarDk: number | null; devirSonDk: number | null };
+type Is = Omit<PlanIsEmri, 'durum'> & { durum: 'planli' | 'basladi' | 'bitti' | 'iptal'; taslakEmir: boolean; urunKodu: string; urunAdi: string; rotaKaynaklari: Kaynak[]; sureDk: number | null; ayarDk: number | null; devirDk: number | null; devirAyarDk: number | null; devirSonDk: number | null; motorOnculleri?: MotorOnculu[] };
 interface Baglam {
   simdi: number;
   // Bugünün başı (UTC), simdi'ye göre dakika: günler ve matris buradan sayılır.
@@ -248,19 +248,54 @@ async function isKur(
   };
 }
 
+// 1248 a: işin emir içi öncülleri. uretim-emirleri gerçek emirde listeyi çözülmüş verir; planın kendi denediği emirde liste yoktur, aynı
+// ortak işlevle (adimOnculleri) kurulur. Listede olup açık işlerde olmayan (bitmiş) öncül beklenmez.
+type IcOncul = { is: Is; tur: 'bekleyen' | 'akisli'; devirAdedi: number | null };
+function icOnculler(isler: ReadonlyMap<number, Is>, i: Is): IcOncul[] {
+  if (i.onculler) return i.onculler.flatMap((o) => { const x = isler.get(o.isEmriId); return x ? [{ is: x, tur: o.tur, devirAdedi: o.devirAdedi }] : []; });
+  const adimlar = [...isler.values()].filter((x) => x.uretimEmriId === i.uretimEmriId).map((x) => ({ id: x.id, sira: x.sira, bagimlilik: x.bagimlilik, devirAdedi: x.devirAdedi }));
+  return adimOnculleri(adimlar, adimlar.find((x) => x.id === i.id)!).map(({ adim, tur, devirAdedi }) => ({ is: isler.get(adim.id)!, tur, devirAdedi }));
+}
+// Sınır hesabı için iş, tek öncülüyle görülür: türü öncülün türü, devri o öncülünki (enErkenBaslangic, enErkenBitis).
+function onculeGore(is: Is, o: IcOncul): Is {
+  const m = is.motorOnculleri?.find((x) => x.id === o.is.id);
+  return { ...is, bagimlilik: o.tur, ...(m && o.tur === 'akisli' ? { devirDk: m.devirDk ?? null, devirAyarDk: m.devirAyarDk ?? null } : {}) };
+}
+
 // Akışlı devir (PL-02): ardıl, öncülün devir adedini üretmesini (öncülün ayarı ve birim süresi) bekler; son devir partisini kendi birim
-// süresiyle öncülün bitişinden sonra işler. Öncül emirdeki önceki açık iç adımdır; açık öncülü olmayan (bitmiş) adımda devir yoktur.
+// süresiyle öncülün bitişinden sonra işler. Açık öncülü olmayan (bitmiş) adımda devir yoktur. 1248 a: devir öncül başınadır
+// (motorOnculleri); işin devirDk'sı ilk akışlı öncülünkidir, son parti en büyük devir adedidir.
 function devirleriKur(isler: Map<number, Is>): void {
   const sayi = (x: string | null) => (x === null ? null : Number(x));
   for (const i of isler.values()) {
-    if (i.bagimlilik !== 'akisli' || i.devirAdedi === null) continue;
-    const o = [...isler.values()].filter((x) => x.uretimEmriId === i.uretimEmriId && x.sira < i.sira).sort((x, y) => y.sira - x.sira)[0];
-    const ob = o ? sayi(o.birimSureDk) : null;
+    const devir = (o: IcOncul): Pick<MotorOnculu, 'devirDk' | 'devirAyarDk'> => {
+      const ob = sayi(o.is.birimSureDk);
+      return o.devirAdedi === null || ob === null ? { devirDk: null, devirAyarDk: null }
+        : { devirDk: (sayi(o.is.ayarSuresiDk) ?? 0) + Math.min(o.devirAdedi, o.is.adimAdedi ?? o.is.adet) * ob, devirAyarDk: sayi(o.is.ayarSuresiDk) };
+    };
+    const l = icOnculler(isler, i);
+    i.motorOnculleri = l.map((o) => ({ id: o.is.id, tur: o.tur, ...(o.tur === 'akisli' ? devir(o) : {}) }));
+    const akisli = l.filter((o) => o.tur === 'akisli' && o.devirAdedi !== null);
+    if (akisli.length === 0) continue;
     const b = sayi(i.birimSureDk);
-    i.devirDk = o && ob !== null ? (sayi(o.ayarSuresiDk) ?? 0) + Math.min(i.devirAdedi, o.adimAdedi ?? o.adet) * ob : null;
-    i.devirAyarDk = o && ob !== null ? sayi(o.ayarSuresiDk) : null;
-    i.devirSonDk = b === null ? null : Math.min(i.devirAdedi, i.adimAdedi ?? i.adet) * b;
+    Object.assign(i, devir(akisli[0]!));
+    i.devirSonDk = b === null ? null : Math.min(Math.max(...akisli.map((o) => o.devirAdedi!)), i.adimAdedi ?? i.adet) * b;
   }
+}
+
+// 1248 a: planın denediği emirde öncül listesi rotadandır (op numarasından iş kimliğine). Fason adım iş olmadığından listede onun
+// yerine fason adımın öncülleri geçer. Tek hatlı rotada (liste null) ortak eski kural uygulanır.
+function denemeOnculleri(adimlar: readonly RotaAdimi[], icler: readonly { a: RotaAdimi }[], id: (n: number) => number): PlanIsEmri['onculler'][] {
+  const no = new Map(icler.map(({ a }, n) => [a.opNo, id(n)]));
+  const adim = new Map(adimlar.map((a) => [a.opNo, a]));
+  const coz = (l: NonNullable<RotaAdimi['onculler']>, gorulen: Set<number>): NonNullable<PlanIsEmri['onculler']> => l.flatMap((o) => {
+    const x = no.get(o.opNo);
+    if (x !== undefined) return [{ isEmriId: x, tur: o.tur, devirAdedi: o.devirAdedi }];
+    const f = adim.get(o.opNo);
+    if (!f?.onculler || gorulen.has(o.opNo)) return [];
+    return coz(f.onculler, new Set([...gorulen, o.opNo]));
+  });
+  return icler.map(({ a }) => (a.onculler === null ? null : coz(a.onculler, new Set())));
 }
 
 // Rotanın iç adımları; fason adım iş olmaz, termini sonraki iç adımın beklemesine eklenir (termini girilmemiş fason FASON_VARSAYILAN_GUN).
@@ -285,9 +320,11 @@ async function denemeIsleri(
   rotalar.set(v.revizyonId, r);
   if (!r) return [];
   const sonuc: Is[] = [];
-  for (const [n, { a, fasonBekleGun }] of icAdimlar(r.adimlar).entries()) {
+  const icler = icAdimlar(r.adimlar);
+  const onculler = denemeOnculleri(r.adimlar, icler, (n) => -(d.id * 1000 + n + 1));
+  for (const [n, { a, fasonBekleGun }] of icler.entries()) {
     sonuc.push(await isKur(db, {
-      fasonBekleGun,
+      fasonBekleGun, onculler: onculler[n] ?? null,
       id: -(d.id * 1000 + n + 1), uretimEmriId: -d.id, emirNo: `DENEME-${d.id}`, malzemeNo: v.malzemeNo, adet: v.adet, teslim: v.teslim,
       kaynakRotaRevizyonId: v.revizyonId, sira: a.sira, opNo: a.opNo, ad: a.ad, kaynak: isEmriKaynagi(a.kaynak), ayarSuresiDk: a.ayarSuresiDk,
       birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, durum: 'planli', oncelik: 1, acilma: new Date().toISOString(), baslangic: null,
@@ -478,17 +515,23 @@ function bekleyenAdimlar(
   const emri = new Map<number, Is[]>();
   for (const i of b.isler.values()) if (planlanacak(i)) emri.set(i.uretimEmriId, [...(emri.get(i.uretimEmriId) ?? []), i]);
   for (const l of emri.values()) l.sort((x, y) => x.sira - y.sira);
+  // 1248 a: bekleyen işin emirdeki ardılları (öncül listesiyle, dolaylı dahil) da bekler; öteki dallar beklemez.
   const bekle = (is: Is, neden: string) => {
     if (onceki.has(is.id) || yeni.has(is.id)) return;
     yeni.set(is.id, neden);
-    for (const x of emri.get(is.uretimEmriId) ?? []) if (x.sira > is.sira && yer.has(x.id) && !onceki.has(x.id) && !yeni.has(x.id)) yeni.set(x.id, `Önceki adım (OP ${is.opNo}) yerleşmedi.`);
+    const bagli = new Set([is.id]);
+    for (const x of emri.get(is.uretimEmriId) ?? []) {
+      if (x.sira <= is.sira || !icOnculler(b.isler, x).some((o) => bagli.has(o.is.id))) continue;
+      bagli.add(x.id);
+      if (yer.has(x.id) && !onceki.has(x.id) && !yeni.has(x.id)) yeni.set(x.id, `Önceki adım (OP ${is.opNo}) yerleşmedi.`);
+    }
   };
   const baglar = partiBaglariOf(b);
   for (const l of emri.values()) {
-    for (const [n, is] of l.entries()) {
+    for (const is of l) {
       if (!yer.has(is.id)) continue;
-      const once = l[n - 1];
-      if (once !== undefined && (once.tur ?? 'rota') !== 'rota' && !hazir(once.id)) bekle(is, `Önceki adım (OP ${once.opNo}) yerleşmedi.`);
+      const once = icOnculler(b.isler, is).find((o) => (o.is.tur ?? 'rota') !== 'rota' && !hazir(o.is.id));
+      if (once !== undefined) bekle(is, `Önceki adım (OP ${once.is.opNo}) yerleşmedi.`);
       else if (!(baglar.get(is.id) ?? []).every(hazir)) bekle(is, BAGLI_PARTI);
     }
   }
@@ -599,8 +642,8 @@ function yerlesmemeNedeni(b: Baglam, i: Is, yerlesmis: ReadonlySet<number>): str
   const k = i.kaynak === null ? undefined : b.kaynaklar.get(kaynakAnahtari(i.kaynak));
   if (k !== undefined && !k.aktif) return `${k.tur === 'makine' ? 'Makinesi' : 'Kişisi'} kullanımda değil.`;
   if (b.eskiRota.get(i.uretimEmriId)?.has(i.opNo) === false) return 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.';
-  const once = [...b.isler.values()].filter((x) => x.uretimEmriId === i.uretimEmriId && x.sira < i.sira && planlanacak(x)).sort((x, y) => y.sira - x.sira)[0];
-  if (once !== undefined && !yerlesmis.has(once.id)) return `Önceki adım (OP ${once.opNo}) yerleşmedi.`;
+  const once = icOnculler(b.isler, i).find((o) => planlanacak(o.is) && !yerlesmis.has(o.is.id));
+  if (once !== undefined) return `Önceki adım (OP ${once.is.opNo}) yerleşmedi.`;
   if ((partiBaglariOf(b).get(i.id) ?? []).some((o) => { const x = b.isler.get(o); return x !== undefined && planlanacak(x) && !yerlesmis.has(o); })) return BAGLI_PARTI;
   return 'Yerleştirilmedi.';
 }
@@ -613,9 +656,11 @@ function ekAdimlari(b: Baglam, idler: readonly number[], anahtarOf: (id: number)
     .flatMap((i) => {
       const ayarDk = sayi(i.ayarSuresiDk), birimDk = sayi(i.birimSureDk);
       if (ayarDk === null || birimDk === null) return [];
-      const l = emri(i.uretimEmriId), n = l.findIndex((x) => x.id === i.id);
+      // 1248 a: komşular öncül listesinden: en yakın (son) öncülü ve onu ilk bekleyen adım.
+      const l = emri(i.uretimEmriId);
       const komsu = (x: Is | undefined) => (x === undefined ? null : anahtarOf(x.id));
-      return [{ anahtar: anahtarOf(i.id)!, ad: i.ad, oncul: komsu(l[n - 1]), ardil: komsu(l[n + 1]), ayarDk, birimDk, adet: i.adimAdedi ?? i.adet }];
+      const ardil = l.find((x) => x.sira > i.sira && icOnculler(b.isler, x).some((o) => o.is.id === i.id));
+      return [{ anahtar: anahtarOf(i.id)!, ad: i.ad, oncul: komsu(icOnculler(b.isler, i).at(-1)?.is), ardil: komsu(ardil), ayarDk, birimDk, adet: i.adimAdedi ?? i.adet }];
     });
 }
 const vardiyasizTezgahta = (b: Baglam, i: Is): boolean =>
@@ -724,19 +769,24 @@ function uzlasikParcalar<P extends { adet: number }>(is: Is, parcalar: readonly 
 }
 const parcaIso = (p: ParcaSatiri) => ({ no: p.no, adet: p.adet, kaynak: p.kaynak, baslangic: p.baslangic.toISOString(), bitis: p.bitis.toISOString(), elleKaynak: p.elleKaynak });
 
-// Emirdeki önceki iç adımın yerine göre en erken başlangıç (öncülün takvimi ve verimiyle) ve akışlı işin en erken bitişi (kendi kaynağının
-// takvimi ve verimiyle); öncülün yeri yoksa sınır yok.
+// Emir içi öncüllerin (1248 a, 1245 a: listedeki her öncül kendi türü ve deviriyle) yerine göre en erken başlangıç (öncülün takvimi ve
+// verimiyle) ve akışlı işin en erken bitişi (kendi kaynağının takvimi ve verimiyle); yeri olan öncül yoksa sınır yok.
 function onculSinirlari(b: Baglam, isEmriId: number, yerler: readonly Yer[], kaynak: Kaynak): { enErken: number | null; enErkenBitis: number | null } {
   const is = b.isler.get(isEmriId);
-  const oncul = is ? [...b.isler.values()].filter((x) => x.uretimEmriId === is.uretimEmriId && x.sira < is.sira).sort((x, y) => y.sira - x.sira)[0] : undefined;
-  const oy = oncul ? yerler.find((y) => y.isEmriId === oncul.id) ?? null : null;
-  if (!is || !oy) return { enErken: null, enErkenBitis: null };
+  if (!is) return { enErken: null, enErkenBitis: null };
   const t = takvim(b);
-  const bitis = enErkenBitis(is, oy, t(kaynak), verimi(b)(kaynak));
-  return {
-    enErken: enErkenBaslangic(is, oy, Number.NEGATIVE_INFINITY, t(oy.kaynak), verimi(b)(oy.kaynak)),
-    enErkenBitis: bitis === Number.NEGATIVE_INFINITY ? null : bitis,
-  };
+  let enErken: number | null = null;
+  let bitis: number | null = null;
+  for (const o of icOnculler(b.isler, is)) {
+    const oy = yerler.find((y) => y.isEmriId === o.is.id);
+    if (!oy) continue;
+    const x = onculeGore(is, o);
+    const bas = enErkenBaslangic(x, oy, Number.NEGATIVE_INFINITY, t(oy.kaynak), verimi(b)(oy.kaynak));
+    const son = enErkenBitis(x, oy, t(kaynak), verimi(b)(kaynak));
+    enErken = Math.max(enErken ?? bas, bas);
+    if (son !== null && son !== Number.NEGATIVE_INFINITY) bitis = Math.max(bitis ?? son, son);
+  }
+  return { enErken, enErkenBitis: bitis };
 }
 
 // 308 b: planlanacak adım, emirdeki önceki adımın izin verdiği en erken andan önce başlayamaz. Verilen emirlerin bütün yerleşik
@@ -1536,16 +1586,27 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const yerlesenParca = new Map<number, number>();
         const tamam = (id: number) => yeniYer.has(id) && (yerlesenParca.get(id) ?? 0) === (parcaNolari.get(id)?.length ?? 0);
         // Akışlı adım ilk devir partisiyle başlar ve öncülünden önce bitemez: gerekirse kuyruğun kaynağında bu bitişe kadar uzar.
+        // 1248 a: her emir içi öncül kendi türü ve deviriyle; en geç sınır geçerlidir.
         const onculSiniri = (is: Is, kaynak: Kaynak): { enErken: number; bitisSiniri: number } => {
-          const once = [...b.isler.values()].filter((x) => x.uretimEmriId === is.uretimEmriId && x.sira < is.sira).sort((x, y) => y.sira - x.sira)[0];
-          const eski = once ? hepsi.find((y) => y.isEmriId === once.id) : undefined;
-          const o = once ? (tamam(once.id) ? yeniYer.get(once.id) : undefined) ?? onceki.get(once.id) ?? yeniYer.get(once.id)
-            ?? (eski ? { baslangic: dk(b, eski.baslangic), bitis: dk(b, eski.bitis), kaynak: eski.kaynak } : null) : null;
-          const fason = is.bagimlilik === 'bagimsiz' ? 0 : (is.fasonBekleGun ?? 0) * GUN_DK;
-          if (fason > 0) return { enErken: Math.max(0, o?.bitis ?? 0) + fason, bitisSiniri: Number.NEGATIVE_INFINITY };
+          const yeri = (id: number) => {
+            const eski = hepsi.find((y) => y.isEmriId === id);
+            return (tamam(id) ? yeniYer.get(id) : undefined) ?? onceki.get(id) ?? yeniYer.get(id)
+              ?? (eski ? { baslangic: dk(b, eski.baslangic), bitis: dk(b, eski.bitis), kaynak: eski.kaynak } : null);
+          };
+          const l = icOnculler(b.isler, is).flatMap((o) => {
+            const a = yeri(o.is.id);
+            return a ? [{ a, x: onculeGore(is, o) }] : [];
+          });
+          const fason = icOnculler(b.isler, is).length === 0 ? 0 : (is.fasonBekleGun ?? 0) * GUN_DK;
+          if (fason > 0) return { enErken: Math.max(0, ...l.map(({ a }) => a.bitis)) + fason, bitisSiniri: Number.NEGATIVE_INFINITY };
           const t = takvim(b);
-          const bas = enErkenBaslangic(is, o, Number.NEGATIVE_INFINITY, o ? t(o.kaynak) : null, o ? verimi(b)(o.kaynak) : 1);
-          return { enErken: bas, bitisSiniri: enErkenBitis(is, o, t(kaynak), verimi(b)(kaynak)) ?? Number.NEGATIVE_INFINITY };
+          let enErken = Number.NEGATIVE_INFINITY;
+          let bitisSiniri = Number.NEGATIVE_INFINITY;
+          for (const { a, x } of l) {
+            enErken = Math.max(enErken, enErkenBaslangic(x, a, Number.NEGATIVE_INFINITY, t(a.kaynak), verimi(b)(a.kaynak)));
+            bitisSiniri = Math.max(bitisSiniri, enErkenBitis(x, a, t(kaynak), verimi(b)(kaynak)) ?? Number.NEGATIVE_INFINITY);
+          }
+          return { enErken, bitisSiniri };
         };
         const yerlesen: { i: (typeof kuyruklar)[number]['isler'][number]; q: (typeof kuyruklar)[number]['q']; yer: Aralik }[] = [];
         for (const { q, isler } of kuyruklar) {
@@ -1684,7 +1745,7 @@ function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[], koruna
     bagli: bagli.get(i.id) ?? [], id: i.id, uretimEmriId: i.uretimEmriId, sira: i.sira, teslimDk: teslimDk(b, i.teslim), sureDk: i.sureDk, ayarDk: i.ayarDk,
     ...(elleKaynak.has(i.id) ? { kaynak: elleKaynak.get(i.id)!, adaylar: [] } : { kaynak: i.kaynak && uygun(i.kaynak) ? i.kaynak : null, adaylar: i.rotaKaynaklari.filter(uygun) }), bagimlilik: i.bagimlilik, devirDk: i.devirDk, devirAyarDk: i.devirAyarDk,
     devirSonDk: i.devirSonDk, oncelik: oncelikSinifi(i.oncelik), acilmaDk: dk(b, new Date(i.acilma)), emirBaslangicDk: i.baslangic ? (tesisGunBasi(i.baslangic) - b.simdi) / DK : null, elleSira: elle.get(i.id) ?? null,
-    fasonBekleDk: (i.fasonBekleGun ?? 0) * GUN_DK,
+    fasonBekleDk: (i.fasonBekleGun ?? 0) * GUN_DK, ...(i.motorOnculleri ? { onculler: i.motorOnculleri } : {}),
     ...(parcalar.has(i.id) ? { parcalar: parcalar.get(i.id)! }
       : b.yersiz.has(i.id) ? { parcalar: uzlasikParcalar(i, b.yersiz.get(i.id)!).map((p) => ({ no: p.no, sureDk: parcaSuresi(i, p.adet), kaynak: null })) } : {}),
   }));
@@ -1915,9 +1976,11 @@ export async function onizle(db: Db, k: Kullanici, g: {
   const once = kos();
   const rotalar: RotaOnbellek = new Map([[r.id, r]]);
   const urunler = new Map<number, { kod: string; ad: string }>();
-  for (const [n, { a, fasonBekleGun }] of icAdimlar(r.adimlar).entries()) {
+  const icler = icAdimlar(r.adimlar);
+  const onculler = denemeOnculleri(r.adimlar, icler, (n) => ONIZLEME_EMRI - n);
+  for (const [n, { a, fasonBekleGun }] of icler.entries()) {
     const i = await isKur(db, {
-      fasonBekleGun, id: ONIZLEME_EMRI - n, uretimEmriId: ONIZLEME_EMRI, emirNo: 'Yeni emir', malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim,
+      fasonBekleGun, onculler: onculler[n] ?? null, id: ONIZLEME_EMRI - n, uretimEmriId: ONIZLEME_EMRI, emirNo: 'Yeni emir', malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim,
       oncelik: g.oncelik, acilma: new Date(b.simdi).toISOString(), baslangic: g.baslangic, kaynakRotaRevizyonId: r.id, sira: a.sira, opNo: a.opNo, ad: a.ad, kaynak: isEmriKaynagi(a.kaynak),
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, durum: 'planli',
     }, rotalar, urunler, b.istasyonMakineleri);

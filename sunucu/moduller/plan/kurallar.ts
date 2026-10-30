@@ -109,12 +109,20 @@ export interface MotorIsi {
   // Elle bölme (kart #1572): iş parça parça, her parça kendi süresiyle (ayar dahil) ayrı yer bulur; kaynağı verilen parça orada kalır.
   // Sonraki adım bütün parçaları bekler.
   parcalar?: readonly { no: number; sureDk: number | null; kaynak: Kaynak | null }[];
+  // 1248 a: emir içi öncüller (çok dallı rota, iş emrinin öncül listesi). Verilirse "emirdeki bir önceki sıra" yerine bunlar beklenir ve
+  // bagimlilik kullanılmaz; boş liste işin hiçbir emir içi adımı beklemediğidir (dalın ilk adımı). Öncül her zaman küçük sıralıdır.
+  onculler?: readonly MotorOnculu[];
 }
+// Akışlı öncülün devri o öncülün süresiyledir (devirDk, devirAyarDk: MotorIsi'deki gibi); son devir partisi işin kendi devirSonDk'sıdır.
+export interface MotorOnculu { id: number; tur: 'bekleyen' | 'akisli'; devirDk?: number | null; devirAyarDk?: number | null }
 // Bölünmüş sabit iş parça başına bir sabittir (aynı iş emri kimliğiyle).
 export interface Sabit extends Aralik { isEmriId: number; uretimEmriId: number; sira: number; kaynak: Kaynak }
 export interface YerlesimParcasi extends Aralik { no: number; kaynak: Kaynak }
 // Bölünmüş işte yer zarftır (ilk parçanın kaynağı, ilk başlangıç, son bitiş).
 export interface Yerlesim extends Aralik { isEmriId: number; kaynak: Kaynak; parcalar?: YerlesimParcasi[] }
+
+// Emir içi öncülü olmayan iş fason dönüşünü de beklemez (bağımsız adım, dalın ilk adımı).
+const bekleyensiz = (is: Pick<MotorIsi, 'bagimlilik' | 'onculler'>): boolean => (is.onculler ? is.onculler.length === 0 : is.bagimlilik === 'bagimsiz');
 
 // Öncülün işe koyduğu en erken başlangıç (PL-02): bekleyen öncül bitince, akışlı devir kadar sonra, bağımsız hemen. Devir öncülün
 // takviminde ve veriminde sayılır (vardiya dışı beklenir); öncülün bitişini geçmez.
@@ -533,6 +541,16 @@ function onerTuru(isler: readonly MotorIsi[], sabitler: readonly Sabit[], simdi:
     const z = yer.get(s.isEmriId);
     yerYaz(s.isEmriId, z ? { ...z, baslangic: Math.min(z.baslangic, s.baslangic), bitis: Math.max(z.bitis, s.bitis) } : s);
   }
+  // 1248 a: öncül listesi olan işin öncülleri yerleriyle; planlanacak ama yerleşmemiş öncül 'yok', yeri olmayan (bitmiş) öncül beklenmez.
+  const planlanacakIs = new Set(isler.map((x) => x.id));
+  const onculYerleri = (is: MotorIsi): { a: Aralik & { kaynak: Kaynak }; o: MotorOnculu }[] | 'yok' => {
+    const l: { a: Aralik & { kaynak: Kaynak }; o: MotorOnculu }[] = [];
+    for (const o of is.onculler ?? []) {
+      const a = yer.get(o.id);
+      if (a) l.push({ a, o }); else if (planlanacakIs.has(o.id)) return 'yok';
+    }
+    return l;
+  };
   const oncul = (uretimEmriId: number, sira: number): (Aralik & { kaynak: Kaynak }) | null | 'yok' => {
     let once: MotorIsi | undefined;
     for (const x of emirIsleri.get(uretimEmriId) ?? []) if (x.sira < sira && (!once || x.sira > once.sira)) once = x;
@@ -590,19 +608,22 @@ function onerTuru(isler: readonly MotorIsi[], sabitler: readonly Sabit[], simdi:
     if (is.sureDk === null) return { neden: 'Süre bilinmiyor.' };
     const adaylar = [...(is.kaynak ? [is.kaynak] : []), ...is.adaylar.filter((a) => !is.kaynak || !ayniKaynak(a, is.kaynak))];
     if (adaylar.length === 0 && !is.parcalar?.every((p) => p.kaynak)) return { neden: 'Makine ya da kişi atanmamış, aday da yok.' };
-    const o = oncul(is.uretimEmriId, is.sira);
+    // Liste yoksa emir içi öncül bir önceki sıradır, türü işin bağımlılığı.
+    const o = is.onculler ? onculYerleri(is) : oncul(is.uretimEmriId, is.sira);
     if (o === 'yok') return { neden: 'Önceki iş emri yerleşmedi.' };
     if (bagli === 'yok') return { neden: 'Bağlı parti yerleşmedi.' };
-    const fason = is.bagimlilik === 'bagimsiz' ? 0 : is.fasonBekleDk ?? 0;
-    const onculSiniri = fason > 0 ? Math.max(simdi, o?.bitis ?? emirHazir) + fason
-      : enErkenBaslangic(is, o, simdi, o ? takvim(o.kaynak) : null, o ? verim(o.kaynak) : 1);
+    const icler = Array.isArray(o) ? o.map(({ a, o: x }) => ({ a, is: { ...is, bagimlilik: x.tur, devirDk: x.devirDk ?? null, devirAyarDk: x.devirAyarDk ?? null } }))
+      : o ? [{ a: o, is }] : [];
+    const fason = bekleyensiz(is) ? 0 : is.fasonBekleDk ?? 0;
+    const onculSiniri = fason > 0 ? Math.max(simdi, icler.length > 0 ? Math.max(...icler.map((x) => x.a.bitis)) : emirHazir) + fason
+      : icler.reduce((t, x) => Math.max(t, enErkenBaslangic(x.is, x.a, simdi, takvim(x.a.kaynak), verim(x.a.kaynak))), enErkenBaslangic(is, null, simdi));
     const enErken = Math.max(emirHazir, onculSiniri, bagli);
     // Akışlı iş öncülünden (başka emirdeki parti öncülü dahil) önce bitemez: iş ilk partiyle başlar, gerekirse bu bitişe kadar uzar.
-    const bitisOnculleri = fason > 0 ? [] : [...(o ? [o] : []), ...(is.bagli ?? []).flatMap((id) => yer.get(id) ?? [])];
+    const bitisOnculleri = fason > 0 ? [] : [...icler, ...(is.bagli ?? []).flatMap((id) => { const a = yer.get(id); return a ? [{ a, is }] : []; })];
     const bitisSiniri = (k: Kaynak): number | null => {
       let t = Number.NEGATIVE_INFINITY;
-      for (const a of bitisOnculleri) {
-        const b = enErkenBitis(is, a, takvim(k), verim(k));
+      for (const { a, is: x } of bitisOnculleri) {
+        const b = enErkenBitis(x, a, takvim(k), verim(k));
         if (b === null) return null;
         t = Math.max(t, b);
       }
@@ -661,17 +682,27 @@ function onerTuru(isler: readonly MotorIsi[], sabitler: readonly Sabit[], simdi:
     };
   };
   // Geri yön: son adımdan başa, her adım kendi kaynağının (yoksa ilk adayın) takviminde biter-başlar; fason beklemesi takvim günüdür.
-  // Takvimin başına sığmazsa emir hemen hazırdır.
+  // Takvimin başına sığmazsa emir hemen hazırdır. 1248 a: öncül listeli emirde her iş ardıllarının en erken geri başlangıcında biter
+  // (dallar ayrı ayrı geri sayılır), emir dalların en erken başlangıcında hazırdır.
   const geriBaslangic = (l: readonly MotorIsi[], son: number): number => {
+    const listeli = l.some((x) => x.onculler);
+    const sonu = new Map<number, number>();
     let t = son;
+    let en = son;
     for (const is of [...l].reverse()) {
-      if (yer.has(is.id) || is.sureDk === null) continue;
-      const k = is.kaynak ?? is.adaylar[0];
-      const bas = k ? calismaBasiGeri(takvim(k), t, verimliSure(is.sureDk, is.ayarDk, verim(k))) : t - is.sureDk;
-      if (bas === null) return Number.NEGATIVE_INFINITY;
-      t = bas - (is.bagimlilik === 'bagimsiz' ? 0 : is.fasonBekleDk ?? 0);
+      const bitis = listeli ? sonu.get(is.id) ?? son : t;
+      let sinir = bitis;
+      if (!yer.has(is.id) && is.sureDk !== null) {
+        const k = is.kaynak ?? is.adaylar[0];
+        const bas = k ? calismaBasiGeri(takvim(k), bitis, verimliSure(is.sureDk, is.ayarDk, verim(k))) : bitis - is.sureDk;
+        if (bas === null) return Number.NEGATIVE_INFINITY;
+        sinir = bas - (bekleyensiz(is) ? 0 : is.fasonBekleDk ?? 0);
+      }
+      if (!listeli) { t = sinir; continue; }
+      for (const o of is.onculler ?? []) sonu.set(o.id, Math.min(sonu.get(o.id) ?? Number.POSITIVE_INFINITY, sinir));
+      en = Math.min(en, sinir);
     }
-    return t;
+    return listeli ? en : t;
   };
   // Karar 72 b (ekran yöntemi): zaman ilerler; her turda her emrin sıradaki işi denenir, en erken başlayabilenler yarışır ve kural
   // (adım düzeyinde, S1 a) birini seçer. Kaynak boş kalmaz: hazır iş, sonra gelecek acil iş için bekletilmez. Elle sıralı emirler

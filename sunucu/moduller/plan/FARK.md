@@ -237,3 +237,15 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Düzeltme: kuyruk işinin `fasonBekleGun`'u (bağımsız değilse) istekle gider (`fasonBekleme`); motor (emirler.betik fasonBeklemeleriniEkle) işin
   öncülü motorda fason değilse önüne o kadar süren hemen çıkan fason adımı koyar. Rota ve emir fasonu değişmez; sayfa motoru değişmez.
 - VARSAYIM: rota fasonu ile ek adım fasonu art arda gelirse motor yalnız rota fasonunu sayar. Geri alma: `fasonBekleme` alanı kalkar.
+
+## Emir içi öncül listesi, çok dallı rota (1248 a, 1245 a; 2026-10-30)
+- Değişiklik: plan emir içi öncülü "bir önceki sıra" saymaz, Üretim Emirleri'nin listesinden okur (`PlanIsEmri.onculler`; listesiz emirde
+  ortak `adimOnculleri`). Sayfa motoru (`kurallar.ts oner`): dallar aynı anda yerleşir, birleştirme adımı her öncülü kendi türü ve deviriyle
+  bekler (en geç sınır); geri yön dalları ayrı sayar. Servis: akışlı devir öncül başına, önizleme uyarısı ve sıra denetimi (onculSinirlari),
+  yerleşmeme nedeni, ek adım bekletmesi (yalnız ardıl dal), motorsuz kuyruk sınırı ve ek adım komşuları listeden. Planın denediği emir
+  (deneme ve teklif önizlemesi) listeyi rotanın `onculler`inden kurar; fason adımın yerine onun öncülleri geçer. Ortak motor girdisi
+  (`girdi.betik bagOf`): Reçete ve Rota adımında çözülmüş `onculler` varsa bağ ondandır; `null` ise bugünkü kural.
+- Test: `oncul-listesi.test.ts` (dallar, liste yok, akışlı öncül, yerleşmeyen öncül, sabit ve bitmiş öncül, geri yön, girdi bağı; gerçek
+  PostgreSQL'de dallı rotadan açılan emir: yamasız B dalı A'nın bitişini bekliyordu, DOĞRULANDI).
+- VARSAYIM: öncül her zaman küçük sıralıdır (Üretim Emirleri girdide denetler). Fason beklemesi işin kendisinindir; öncülü olmayan iş
+  (dal başı, bağımsız) beklemez. Ek adımın komşusu en yakın (son) öncülü ve onu ilk bekleyen adımdır. Geri alma: `onculler` alanı okunmaz, eski kural döner.
