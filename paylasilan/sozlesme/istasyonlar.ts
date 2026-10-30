@@ -470,3 +470,26 @@ export type TopluAktiflikGovdesi = z.input<typeof topluAktiflikGovdesi>;
 export type MakineTopluDurumGovdesi = z.input<typeof makineTopluDurumGovdesi>;
 export type MakineCokluEkleGovdesi = z.input<typeof makineCokluEkleGovdesi>;
 export type IstasyonCokluEkleGovdesi = z.input<typeof istasyonCokluEkleGovdesi>;
+
+// Ortak seçicinin (IstasyonSecici, MakineSecici) arama ucu (kart #1318): kod ya da ad içinde arar, sayfa başına SECIM_SAYFA_BOYU
+// kayıt; `ust` makinede istasyon, istasyonda iş merkezidir (seçici gruplar). Varsayılan yalnız aktifler.
+export const SECIM_SAYFA_BOYU = 30;
+export const tesisSecimSorgusu = z.object({
+  tur: z.enum(['istasyon', 'makine']),
+  q: z.string().trim().max(80).default(''),
+  istasyonId: z.coerce.number().int().positive().optional(),
+  pasifler: mantiksal,
+  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+});
+export const tesisSecimCevabi = z.object({
+  sonuclar: z.array(z.object({
+    id: z.number().int(),
+    kod: z.string(),
+    ad: z.string(),
+    aktif: z.boolean(),
+    ust: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  })),
+  dahaVar: z.boolean(),
+});
+export type TesisSecimSorgusu = z.input<typeof tesisSecimSorgusu>;
+export type TesisSecimCevabi = z.output<typeof tesisSecimCevabi>;
