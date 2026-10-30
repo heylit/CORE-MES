@@ -1000,6 +1000,71 @@ export const ADIM_SECILMELI = 'Bu emirde birden çok adım açık; işlemi hangi
 export const ADIM_BASLAMIS = 'Bu adım zaten başlamış ya da bitmiş.';
 export const ADIM_ACIK_DEGIL = 'Bu adım çalışmıyor; önce başlatın.';
 
+/* ---------------- öncül listesi (1248 a, 1245 a): plan, terminal ve rota tek işlevden okur ---------------- */
+
+export type OnculTuru = 'bekleyen' | 'akisli';
+export const ONCUL_TURLERI: readonly OnculTuru[] = ['bekleyen', 'akisli'];
+export const DAL_AZAMI = 20;
+
+// Adımın bir öncülü; akışlı öncülde devirAdedi öncülden gelmesi beklenen adettir (bekleyende null).
+export interface AdimOnculu { id: number; tur: OnculTuru; devirAdedi: number | null }
+
+export interface OnculluAdim {
+  id: number;
+  sira: number;
+  bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
+  devirAdedi?: number | null;
+  onculler?: readonly AdimOnculu[] | null;
+}
+
+// Öncül listesi olan adım (null değil; boş dizi dal başıdır, hiçbir adımı beklemez) yalnız listesindekileri bekler. Listesi null olan adım
+// (1248 öncesi açılmış emir) plan motorunun bagOf kuralıdır (982 a, 1245 a): ilk adım ve bağımsız adım beklemez, bağımsız adımlar önde
+// birikir; öteki adım son bağımlı adımı ve ondan sonra biriken bağımsızları bekler. Akışlı tür yalnız en yakın öncüle, ötekiler bekleyen.
+// Sonuç eskiden yeniye sıralıdır (son öğe en yakın öncül). Öncül her zaman daha küçük sıralıdır; listede olup adımlarda olmayan ya da
+// sırası büyük olan atlanır.
+export function adimOnculleri<T extends OnculluAdim>(adimlar: readonly T[], adim: T): { adim: T; tur: OnculTuru; devirAdedi: number | null }[] {
+  if (adim.onculler != null) {
+    const kimlik = new Map(adimlar.map((a) => [a.id, a]));
+    return adim.onculler.flatMap((o) => {
+      const a = kimlik.get(o.id);
+      return a === undefined || a.sira >= adim.sira ? [] : [{ adim: a, tur: o.tur, devirAdedi: o.tur === 'akisli' ? o.devirAdedi : null }];
+    });
+  }
+  if (adim.bagimlilik === 'bagimsiz') return [];
+  const oncekiler = adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira);
+  const ilkSira = Math.min(...adimlar.map((a) => a.sira));
+  const bekledigi: T[] = [];
+  for (const a of oncekiler) {
+    bekledigi.unshift(a);
+    if (a.bagimlilik !== 'bagimsiz' || a.sira === ilkSira) break;
+  }
+  return bekledigi.map((a, n) => {
+    const tur: OnculTuru = n === bekledigi.length - 1 ? adim.bagimlilik as OnculTuru : 'bekleyen';
+    return { adim: a, tur, devirAdedi: tur === 'akisli' ? (adim.devirAdedi ?? null) : null };
+  });
+}
+
+export const ONCUL_GECERSIZ = 'Öncül adım aynı emirde, kendinden önce gelen bir op olmalı; akışlı öncülün devir adedi artı, bekleyenin boş olur.';
+export const DAL_GECERSIZ = `Dal etiketi boş olamaz, en çok ${DAL_AZAMI} karakterdir ve yalnız öncül listesiyle verilir.`;
+
+// Açılış girdisindeki dal ve öncül listesi (op numarasıyla). Liste verilmeyen girdi eski kuraldır.
+export function onculGirdisiIhlali(
+  isEmirleri: readonly { sira: number; opNo: number; dal?: string | null; onculler?: readonly { opNo: number; tur: OnculTuru; devirAdedi: number | null }[] | null }[],
+): string | null {
+  const siraOp = new Map(isEmirleri.map((i) => [i.opNo, i.sira]));
+  for (const i of isEmirleri) {
+    if (i.dal != null && (i.dal.trim() === '' || i.dal.length > DAL_AZAMI || i.onculler == null)) return DAL_GECERSIZ;
+    const goruldu = new Set<number>();
+    for (const o of i.onculler ?? []) {
+      const sira = siraOp.get(o.opNo);
+      if (sira === undefined || sira >= i.sira || goruldu.has(o.opNo) || !ONCUL_TURLERI.includes(o.tur)) return ONCUL_GECERSIZ;
+      if ((o.tur === 'akisli') !== (o.devirAdedi !== null) || (o.devirAdedi !== null && o.devirAdedi <= 0)) return ONCUL_GECERSIZ;
+      goruldu.add(o.opNo);
+    }
+  }
+  return null;
+}
+
 export interface ParalelAdim {
   id: number;
   sira: number;
@@ -1007,12 +1072,12 @@ export interface ParalelAdim {
   durum: IsEmriDurumu;
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
+  onculler?: readonly AdimOnculu[] | null;
 }
 
-// Önceki adım sıra numarası bir küçük olan adımdır; bağımsız adımın önceki adımı yoktur (önceki adıma bağlı değildir).
+// Adımın en yakın öncülü (adimOnculleri'nin son öğesi): eski emirde sırası bir küçük olan adım; bağımsız adımın ve dal başının öncülü yoktur.
 export function oncekiParalelAdim<T extends ParalelAdim>(adimlar: readonly T[], adim: T): T | null {
-  if (adim.bagimlilik === 'bagimsiz') return null;
-  return adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0] ?? null;
+  return adimOnculleri(adimlar, adim).at(-1)?.adim ?? null;
 }
 
 // Komutun adımı verilmezse: terminalde açık (çalışan ya da duraklamış) adım tekse odur, yoksa sıradaki; birden çoksa adım sorulur.
@@ -1025,30 +1090,34 @@ export function varsayilanAdim<T extends ParalelAdim & { fasonFirmaId: number | 
 
 export const KATILIM_TEK_ACIK_IS_EMIRSIZ = 'uretim_emirleri_katilim_is_emirsiz_tek_acik';
 
-// 626 a: kuralı tutmayan başlatma reddedilmez, uyarı döner. Bekleyen adım önceki bitmeden, akışlı adım devir adedi gelmeden başlarsa uyarır.
-// oncekiSaglam: önceki adımın şu ana kadarki sağlamı (bitmişse kapanışı).
-export function siraDisiBaslatmaUyarisi(adimlar: readonly ParalelAdim[], adim: ParalelAdim, oncekiSaglam: number): string | null {
-  const onceki = oncekiParalelAdim(adimlar, adim);
-  if (onceki === null || onceki.durum === 'tamam') return null;
-  if (adim.bagimlilik === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
-  const devir = adim.devirAdedi ?? 0;
-  return oncekiSaglam >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${oncekiSaglam}.`;
+// 626 a: kuralı tutmayan başlatma reddedilmez, uyarı döner. Bekleyen öncül bitmeden, akışlı öncülden devir adedi gelmeden başlarsa uyarır;
+// 1248 a ile her öncül ayrı denetlenir. oncekiSaglam: öncülün şu ana kadarki sağlamı (bitmişse kapanışı); sayı verilirse her öncüle aynısı.
+export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): string | null {
+  const uyarilar = adimOnculleri(adimlar, adim).map(({ adim: onceki, tur, devirAdedi }) => {
+    if (onceki.durum === 'tamam') return null;
+    if (tur === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
+    const devir = devirAdedi ?? 0;
+    const gelen = typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki);
+    return gelen >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`;
+  });
+  return uyarilariBirlestir(...uyarilar);
 }
 
 // Kuralı tutan, şimdi başlatılabilecek adımlar: bekleyen, istasyonlu ve fason olmayan; sıra dışı uyarısı vermeyenler.
+// oncekiSaglam(adim, oncul): adımın o öncülünden gelen sağlam.
 export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: number | null; fasonFirmaId: number | null }>(
-  adimlar: readonly T[], oncekiSaglam: (adim: T) => number,
+  adimlar: readonly T[], oncekiSaglam: (adim: T, oncul: T) => number,
 ): number[] {
   return adimlar
     .filter((a) => a.durum === 'bekliyor' && a.istasyonId !== null && a.fasonFirmaId === null)
-    .filter((a) => siraDisiBaslatmaUyarisi(adimlar, a, oncekiSaglam(a)) === null)
+    .filter((a) => siraDisiBaslatmaUyarisi(adimlar, a, (o) => oncekiSaglam(a, o)) === null)
     .map((a) => a.id);
 }
 
-// 649 a (uyarılı ret): akışlı ya da bekleyen adım, önceki adım bitmeden bitirilemez; bağımsız adım bekleme olmadan biter.
+// 649 a (uyarılı ret): akışlı ya da bekleyen adım, öncülleri bitmeden bitirilemez; bağımsız adım ve dal başı bekleme olmadan biter.
 export function oncekiBitmediIhlali(adimlar: readonly ParalelAdim[], adim: ParalelAdim): string | null {
-  const onceki = oncekiParalelAdim(adimlar, adim);
-  return onceki === null || onceki.durum === 'tamam' ? null : `OP ${onceki.opNo} bitmeden OP ${adim.opNo} bitirilemez; önce OP ${onceki.opNo} bitirilmeli.`;
+  const onceki = adimOnculleri(adimlar, adim).find((o) => o.adim.durum !== 'tamam')?.adim;
+  return onceki === undefined ? null : `OP ${onceki.opNo} bitmeden OP ${adim.opNo} bitirilemez; önce OP ${onceki.opNo} bitirilmeli.`;
 }
 
 // Adımın önceki adıma göre bakiyesi: önceki adımın sağlamı eksi bu adımda sayılan (sağlam, karar bekleyen, hurda). Artı: gelmiş, işlenmemiş;
@@ -1082,13 +1151,14 @@ export interface EksikAdimi extends ParalelAdim, AdimSayimi {
   saglamAdet: number | null;
 }
 
-// Adım başına eksik (adimEksigi): önceki adım bitmişse kapanışı, bitmemişse o ana kadarki sağlamı adıma girer. Kol ve bölünme hesabı
-// istemeyen (partisiz) emir içindir; partili emirde girdi adimaGiren ile okunur.
+// Adım başına eksik (adimEksigi): öncül bitmişse kapanışı, bitmemişse o ana kadarki sağlamı adıma girer; birden çok öncülde (1248 a)
+// en az geleni. Kol ve bölünme hesabı istemeyen (partisiz) emir içindir; partili emirde girdi adimaGiren ile okunur.
 export function adimEksikleri(adimlar: readonly EksikAdimi[]): Map<number, number | null> {
   return new Map(adimlar.map((a) => {
-    const onceki = oncekiParalelAdim(adimlar, a);
-    const giren = onceki === null ? null : onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : onceki.saglam;
-    return [a.id, adimEksigi(giren, adimTuketimi(a))];
+    // Eski emirde adet yalnız en yakın öncülden gelir (bekleme kuralı bağımsızları da sayar, adet akışı saymaz).
+    const onculler = adimOnculleri(adimlar, a).map((o) => o.adim);
+    const gelen = (a.onculler == null ? onculler.slice(-1) : onculler).map((o) => (o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam));
+    return [a.id, adimEksigi(gelen.length === 0 ? null : Math.min(...gelen), adimTuketimi(a))];
   }));
 }
 

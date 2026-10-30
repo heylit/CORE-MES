@@ -27,11 +27,11 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, onculGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
-import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
+import type { BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
@@ -69,6 +69,10 @@ export interface IsEmriGirdisi {
   makineKullanimi?: 'tek' | 'paralel';
   enKucukParca?: number | null;
   yenidenAyar?: boolean;
+  // 1248 a: rota adımının dalı (boş: ana hat) ve öncülleri, aynı emirdeki kaynak op numarasıyla. null ya da yok: eski kural (bir önceki
+  // sıra, adımın bağımlılığıyla); boş dizi: dal başı, hiçbir adımı beklemez. Öncül her zaman daha küçük sıralıdır.
+  dal?: string | null;
+  onculler?: { opNo: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -170,7 +174,8 @@ function girdiDenetle(isEmirleri: readonly IsEmriGirdisi[]): void {
     sira: i.sira, opNo: i.opNo, kaynakTuru: i.kaynak?.tur ?? null, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
     terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
   })));
-  if (ihlal !== null) throw dogrulama(ihlal, 'isEmirleri');
+  const oncul = onculGirdisiIhlali(isEmirleri);
+  if (ihlal !== null || oncul !== null) throw dogrulama(ihlal ?? oncul ?? '', 'isEmirleri');
 }
 
 const tipKimlikleri = async (db: Db): Promise<Set<number>> => new Set((await operasyonTipleri(db, { pasiflerDahil: true })).map((t) => t.id));
@@ -1333,6 +1338,10 @@ export interface PlanIsEmri {
   birimSureDk: string | null;
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
+  // 1248 a: adımın beklediği iş emirleri, ortak adimOnculleri ile çözülmüş (eski emirde de dolu; bağımsız adımda ve dal başında boş).
+  // Plandan düşen otomatik GKK adımı zincirde atlanır, yerine onun öncülleri gelir. Yok ya da null yalnız planın kendi denediği emirdedir.
+  onculler?: { isEmriId: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
+  dal?: string | null;
   durum: 'taslak' | 'planli' | 'basladi' | 'bitti' | 'iptal';
   // İş emrinin (adımın) kendi durumu: emir başlamışken bekleyen adımı plan taşır ve sıralar. Planın kendi denediği emirde yoktur.
   adimDurumu?: 'bekliyor' | 'calisiyor' | 'tamam';
