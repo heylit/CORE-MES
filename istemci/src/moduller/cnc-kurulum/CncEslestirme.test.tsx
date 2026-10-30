@@ -6,7 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import type { MakineOzeti } from './cerceve-kopru.ts';
+import type { MakineOzeti } from './yeni/sahne/model-uret.ts';
 import { onerilenIstasyon } from './CncEslestirme.tsx';
 import { rotalar } from './rotalar.tsx';
 

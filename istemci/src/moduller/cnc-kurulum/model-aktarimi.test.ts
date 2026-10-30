@@ -66,38 +66,12 @@ describe('modeli Çizimlere aktarma', () => {
   });
 });
 
-describe('kabuk köprüsünde model istekleri', () => {
-  it('KP-01: model köprüsü verilmezse model istekleri bilinmeyen sayılır', async () => {
+describe('köprüde model istekleri', () => {
+  it('KP-01: eski çerçevenin model ve toplu aktarım istekleri bilinmeyen sayılır (model ekranın sahnesinden üretilir)', async () => {
     const isle = kopruKur();
-    await expect(isle('model-aktar', MODEL)).rejects.toThrow('Bilinmeyen istek: model-aktar');
-    await expect(isle('model-hatasi', { ileti: 'x' })).rejects.toThrow('Bilinmeyen istek');
-  });
-
-  it('KP-02: model geçerli biçimde kabuğa geçer; boş ya da ikili olmayan model reddedilir', async () => {
-    const modelGeldi = vi.fn(async () => ({ tamam: true }));
-    const isle = kopruKur({ modelGeldi, modelHatasi: async () => ({}) });
-    await isle('model-aktar', { ...MODEL, no: '' });
-    expect(modelGeldi).toHaveBeenCalledWith({ ...MODEL, no: null });
-    await expect(isle('model-aktar', { ...MODEL, glb: [1, 2] })).rejects.toThrow('Geçersiz model.');
-    await expect(isle('model-aktar', { ...MODEL, glb: new Uint8Array() })).rejects.toThrow('Geçersiz model.');
-  });
-
-  it('KP-03: model köprüsünde yalnız model istekleri geçer; başka tür bilinmeyendir', async () => {
-    const isle = kopruKur({ modelGeldi: async () => ({}), modelHatasi: async () => ({}) });
-    await expect(isle('komut-bekle', {})).rejects.toThrow('Bilinmeyen istek: komut-bekle');
-    await expect(isle('secili-makine', { ad: 'Dikey' })).rejects.toThrow('Bilinmeyen istek: secili-makine');
-  });
-
-  it('KP-06: toplu aktarımı açma isteği yalnız ana sayfanın köprüsünde geçer; boş makine null olur', async () => {
-    await expect(kopruKur({ modelGeldi: async () => ({}), modelHatasi: async () => ({}) })('toplu-ac', { makineId: 'f5a' }))
-      .rejects.toThrow('Bilinmeyen istek: toplu-ac');
-    const topluAc = vi.fn(async () => ({ tamam: true }));
-    const isle = kopruKur({ topluAc });
-    await isle('toplu-ac', { makineId: 'f5a' });
-    await isle('toplu-ac', { makineId: '' });
-    await isle('toplu-ac', {});
-    expect(topluAc.mock.calls).toEqual([['f5a'], [null], [null]]);
-    await expect(isle('model-aktar', MODEL)).rejects.toThrow('Bilinmeyen istek: model-aktar');
+    for (const tip of ['model-aktar', 'model-hatasi', 'makine-listesi', 'toplu-ac']) {
+      await expect(isle(tip, MODEL)).rejects.toThrow(`Bilinmeyen istek: ${tip}`);
+    }
   });
 });
 
@@ -132,26 +106,5 @@ describe('yayınlama ve makine eşleştirmesi (kart #1196)', () => {
     istekler = belgeSunucusu('yayinda', [{ hedefModul: 'istasyonlar', hedefId: 5 }]);
     expect(await yayinlaVeEslestir({ belgeId: 7, ozet: OZET }, 5, true)).toEqual({ yayinda: true });
     expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(0);
-  });
-});
-
-describe('toplu aktarım köprüsü', () => {
-  it('KP-04: makine listesi yalnız toplu sayfanın köprüsünde geçer; boş numara null, eksik ad reddedilir', async () => {
-    const listeGeldi = vi.fn(async () => ({ tamam: true }));
-    await expect(kopruKur({ modelGeldi: async () => ({}), modelHatasi: async () => ({}) })('makine-listesi', { makineler: [] }))
-      .rejects.toThrow('Bilinmeyen istek: makine-listesi');
-    const isle = kopruKur({ modelGeldi: async () => ({}), modelHatasi: async () => ({}), listeGeldi });
-    await isle('makine-listesi', { makineler: [{ makineId: 'f5a', no: '', ad: 'Beş eksen' }] });
-    expect(listeGeldi).toHaveBeenCalledWith([{ makineId: 'f5a', no: null, ad: 'Beş eksen' }]);
-    await expect(isle('makine-listesi', { makineler: [{ makineId: 'x' }] })).rejects.toThrow('Geçersiz ad.');
-    await expect(isle('makine-listesi', { makineler: 'x' })).rejects.toThrow('Geçersiz makine listesi.');
-  });
-
-  it('KP-05: model hatası hangi makinenin olduğunu taşır', async () => {
-    const modelHatasi = vi.fn(async () => ({}));
-    const isle = kopruKur({ modelGeldi: async () => ({}), modelHatasi });
-    await isle('model-hatasi', { ileti: 'Makine modeli bulunamadı.', makineId: 'f5a' });
-    await isle('model-hatasi', { ileti: 'x' });
-    expect(modelHatasi.mock.calls).toEqual([['Makine modeli bulunamadı.', 'f5a'], ['x', null]]);
   });
 });

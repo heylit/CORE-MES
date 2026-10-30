@@ -7,8 +7,8 @@ import { Dugme, DurumKutusu, IsaretKutusu, Secim, Simge } from '../../ortak/aray
 import type { Secenek } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import type { MakineOzeti } from './cerceve-kopru.ts';
-import { ONEK, yerelDegerler } from './CncKurulumCercevesi.tsx';
+import { ONEK, yerelDegerler } from './yeni/veri.ts';
+import type { MakineOzeti } from './yeni/sahne/model-uret.ts';
 import { belgeAdi, kucukResimUret, mevcutEslesmeler, modeliCizimlereAktar, yayinlaVeEslestir } from './model-aktarimi.ts';
 import type { AktarilacakModel, MevcutEslesme } from './model-aktarimi.ts';
 import './cnc-kurulum.css';

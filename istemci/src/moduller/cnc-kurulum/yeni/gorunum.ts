@@ -9,11 +9,13 @@ export const VIEW_HASH: Record<Gorunum, string> = {
 };
 export const HASH_VIEW: Record<string, Gorunum> = Object.fromEntries(GORUNUMLER.map((g) => [VIEW_HASH[g], g]));
 export const KOK = '/cnc-kurulum/yeni';
+// Menünün kökü; ekran orada yönlenmeden Ana Sayfa'yı gösterir.
+export const MENU_KOKU = '/cnc-kurulum';
 // Prototip adres yoksa Ana Sayfa'da açılır.
 export const ACILIS: Gorunum = 'home';
 
 export function gorunumOku(adres: string | undefined): Gorunum | null { return adres === undefined ? null : HASH_VIEW[adres] ?? null; }
-// Ekran kalıcı rotadır (rota dışında çizilir, useParams boştur); görünüm adresin kendisinden okunur.
+// Ekran iki rotada çizilir (menünün kökü ve görünüm adresi); görünüm useParams'tan değil adresin kendisinden okunur.
 export function adrestenGorunum(yol: string): Gorunum | null {
   return yol.startsWith(`${KOK}/`) ? gorunumOku(yol.slice(KOK.length + 1).split('/')[0]) : null;
 }
@@ -25,13 +27,13 @@ export function gorunumAdresi(g: Gorunum): string { return `${KOK}/${VIEW_HASH[g
 export interface OmurGecisi { tezgah: string; cep?: number | string | null }
 export interface HazirlikGecisi { adim: 'son' | 'prog' }
 
-// Ekran başka sayfadayken gizli kalır; o sürede son görünüm korunur, `burada` yanlıştır (gizliyken yönlendirme yapılmaz).
+// Ekranın adresi dışında `burada` yanlıştır (o anda yönlendirme yapılmaz); son görünüm modülde saklanır.
 let gecisSecenegi: { gorunum: Gorunum; deger: unknown } | null = null;
 let sonGorunum: Gorunum = ACILIS;
 export function useGorunum(): { gorunum: Gorunum; burada: boolean; git: (g: Gorunum, secenek?: unknown) => void } {
   const { pathname } = useLocation();
   const git = useNavigate();
-  const burada = pathname === KOK || pathname.startsWith(`${KOK}/`);
+  const burada = pathname === MENU_KOKU || pathname === KOK || pathname.startsWith(`${KOK}/`);
   if (burada) sonGorunum = adrestenGorunum(pathname) ?? ACILIS;
   return {
     gorunum: sonGorunum, burada,
