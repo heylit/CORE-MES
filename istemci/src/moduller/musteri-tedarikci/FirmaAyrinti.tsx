@@ -4,11 +4,12 @@ import type {
   Adres, AdresKaldirGovdesi, Firma, FirmaAyrintiCevabi, FirmaCevabi, FirmaDurumGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
-  Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet, Simge, Tablo, useBildirim, type Sutun,
+  Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type Sekme, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AdresFormu } from './AdresFormu.tsx';
+import { FirmaKarnesi } from './FirmaKarnesi.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
 import { ADRES_TURU_ETIKETI, LOGO_DURUMU, SINIF_ETIKETI, TUR_ETIKETI } from './gorunum.ts';
 import { koordinatMetni } from './koordinat.ts';
@@ -35,6 +36,10 @@ type Acik =
   | { tur: 'kaldir'; adres: Adres }
   | { tur: 'pasif' };
 
+type Bolum = 'kart' | 'karne';
+// Değerlendirme yalnız tedarikçi ya da iki yönlü firmada vardır (1259 c).
+const BOLUMLER: readonly Sekme<Bolum>[] = [{ anahtar: 'kart', baslik: 'Kart', simge: 'file' }, { anahtar: 'karne', baslik: 'Değerlendirme', simge: 'chart' }];
+
 interface Ozellikler {
   id: number;
   kapat: () => void;
@@ -45,6 +50,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
   const { bildir } = useBildirim();
   const yazabilir = useYazabilir();
   const [acik, acikYaz] = useState<Acik | null>(null);
+  const [bolum, bolumYaz] = useState<Bolum>('kart');
   const ayrinti = useQuery({
     queryKey: anahtarlar.ayrinti(id),
     queryFn: () => api.get<FirmaAyrintiCevabi>(`/musteri-tedarikci/firmalar/${id}`),
@@ -136,7 +142,9 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
         {ayrinti.isError && (
           <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Firma alınamadı')} yenile={() => { void ayrinti.refetch(); }} />
         )}
-        {firma && (
+        {firma && firma.tur !== 'musteri' && <Sekmeler etiket="Firma bölümleri" sekmeler={BOLUMLER} secili={bolum} sec={bolumYaz} />}
+        {firma && firma.tur !== 'musteri' && bolum === 'karne' && <FirmaKarnesi firmaId={firma.id} />}
+        {firma && (firma.tur === 'musteri' || bolum === 'kart') && (
           <div className="tc-mt-ayrinti">
             <div className="tc-mt-rozetler">
               <Rozet ton={firma.aktif ? 'tamam' : 'pasif'}>{firma.aktif ? 'Aktif' : 'Pasif'}</Rozet>

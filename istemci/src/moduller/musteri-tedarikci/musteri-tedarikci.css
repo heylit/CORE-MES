@@ -24,6 +24,8 @@
 .tc-mt-ikili { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3); }
 .tc-mt-uclu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-3); }
 .tc-mt-konum-giris { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-mt-karne-toplam { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-mt-karne-puan { font-size: var(--yazi-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 .tc-mt-hata { margin: 0; color: var(--stop); font-weight: 700; }
 
 @media (max-width: 479px) {

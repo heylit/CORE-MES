@@ -4,4 +4,5 @@ export const anahtarlar = {
   listeler: ['musteri-tedarikci', 'liste'] as const,
   liste: (sorgu: object) => ['musteri-tedarikci', 'liste', sorgu] as const,
   ayrinti: (id: number) => ['musteri-tedarikci', 'ayrinti', id] as const,
+  karne: (id: number) => ['musteri-tedarikci', 'karne', id] as const,
 };
