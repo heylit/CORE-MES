@@ -1,5 +1,6 @@
 import type { IsMerkezi, Istasyon, Makine, MakineDurumuDegeri, OperasyonTipi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
+import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
 import type { KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { PlanAyari } from '#paylasilan/sozlesme/plan.ts';
 import type { DurumEmirleri, DurumMalzemesi, DurumRotaAdimi as DurumRotaAdimiCikti, DurumRotaRevizyonu, DurumMaliyeti } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -812,4 +813,28 @@ export function maliyetCevir(
   malzeme: MaliyetKayitlari, istasyon: MaliyetKayitlari, kisi: MaliyetKayitlari, yazabilir: boolean,
 ): DurumMaliyeti {
   return { yazabilir, malzeme: maliyetHaritasi(malzeme), istasyon: maliyetHaritasi(istasyon), kisi: maliyetHaritasi(kisi) };
+}
+
+// Genel aramanın rota kaynağı (kart #1241): yalnız yürürlükte rotası olan kalem sonuçtur. Kodu tam tutan önce, sonra koddan
+// başlayan, sonra öteki (malzemelerin verdiği sıra korunur). Sonuç kalemin "Ürün ve rotalar" bölümünü o kalem seçili açar.
+export interface RotaAramaAdayi { id: number; kod: string; ad: string | null }
+export interface RotaAramaSonucu { anahtar: string; baslik: string; aciklama: string | null; yol: `/${string}` }
+export function rotaAramaSonuclari(
+  adaylar: readonly RotaAramaAdayi[], rotaHarfi: ReadonlyMap<number, string>, metin: string, sinir: number,
+): RotaAramaSonucu[] {
+  // Türkçe harf farkı genel aramanın sadeleştirmesiyle kalkar ("mil" yazan "MIL-..." kodunu tam tutmuş sayılır).
+  const sade = (x: string): string => aramaSade(x.trim());
+  const m = sade(metin);
+  const derece = (kod: string): number => { const k = sade(kod); return k === m ? 0 : k.startsWith(m) ? 1 : 2; };
+  return adaylar
+    .filter((a) => rotaHarfi.has(a.id))
+    .map((a, sira) => ({ a, sira, d: derece(a.kod) }))
+    .sort((x, y) => x.d - y.d || x.sira - y.sira)
+    .slice(0, Math.max(0, sinir))
+    .map(({ a }) => ({
+      anahtar: String(a.id),
+      baslik: a.kod,
+      aciklama: [a.ad?.trim() ?? '', `Rota ${rotaHarfi.get(a.id) ?? ''} · yürürlükte`].filter((p) => p !== '').join(' · '),
+      yol: `/recete-rota/schema?kayit=${String(a.id)}`,
+    }));
 }

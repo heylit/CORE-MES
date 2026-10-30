@@ -4,7 +4,7 @@ import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   degerBicimeUyarMi, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
-  rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
+  rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 
 describe('recete-rota kuralları (saf)', () => {
@@ -148,5 +148,30 @@ describe('recete-rota durum çevirisi (saf)', () => {
       { seq: 1, opNo: 10, ad: 'Kesim', opId: null, stationId: null, setup: null, cycle: 2, durum: 'tamam' },
       { seq: 2, opNo: 20, ad: 'Frezeleme', opId: '4', stationId: '9', setup: 15.5, cycle: null, durum: 'bekliyor' },
     ]);
+  });
+});
+
+describe('recete-rota genel arama sonuçları (saf, kart #1241)', () => {
+  const adaylar = [
+    { id: 1, kod: 'MIL-0010A', ad: 'Mil uzun' },
+    { id: 2, kod: 'XMIL-0010', ad: null },
+    { id: 3, kod: 'MIL-0010', ad: 'Mil' },
+    { id: 4, kod: 'MIL-0099', ad: '  ' },
+  ];
+  const harf = new Map([[1, 'A'], [2, 'B'], [3, 'C'], [4, 'D']]);
+
+  test('RR-A1: tam kod önce, sonra koddan başlayan, sonra öteki gelen sırayla; sınır uygulanır', () => {
+    assert.deepEqual(rotaAramaSonuclari(adaylar, harf, 'mil-0010', 10).map((s) => s.anahtar), ['3', '1', '2', '4']);
+    assert.deepEqual(rotaAramaSonuclari(adaylar, harf, ' mil-0010 ', 2).map((s) => s.anahtar), ['3', '1']);
+    const isik = [{ id: 9, kod: 'XIŞIK-01', ad: null }, { id: 8, kod: 'IŞIK-01', ad: null }];
+    assert.deepEqual(rotaAramaSonuclari(isik, new Map([[8, 'A'], [9, 'A']]), 'ışık-01', 5).map((s) => s.anahtar), ['8', '9']);
+  });
+
+  test('RR-A2: yürürlükte rotası olmayan aday düşer; boş ad açıklamaya girmez; yol Ürün ve rotalar bölümüdür', () => {
+    assert.deepEqual(rotaAramaSonuclari(adaylar, new Map([[4, 'D'], [2, 'B']]), 'mil', 5), [
+      { anahtar: '4', baslik: 'MIL-0099', aciklama: 'Rota D · yürürlükte', yol: '/recete-rota/schema?kayit=4' },
+      { anahtar: '2', baslik: 'XMIL-0010', aciklama: 'Rota B · yürürlükte', yol: '/recete-rota/schema?kayit=2' },
+    ]);
+    assert.equal(rotaAramaSonuclari(adaylar, harf, 'mil', 5)[0]?.aciklama, 'Mil uzun · Rota A · yürürlükte');
   });
 });

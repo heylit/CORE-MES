@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { DurumKutusu, SayfaBasligi, Sekmeler } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
@@ -12,8 +13,12 @@ type Sekme = 'sartname' | 'talimat';
 // sekmedir; şablon talimata kopyalanır, bağ kurulmaz. Okuma oturumla açıktır; yazma rota.sartname-yaz, yayın rota.sartname-yayinla,
 // şablon rota.talimat-yaz ister.
 export function SartnameTalimat(o: EkranOzellikleri) {
-  const [sekme, setSekme] = useState<Sekme>('sartname');
-  const [yeni, setYeni] = useState<Sekme | null>(null);
+  const [sorgu] = useSearchParams();
+  // Genel aramanın komutu (kart #1241): `?yeni=sartname` ya da `?yeni=talimat` o sekmenin yeni kayıt penceresini açar; yetki düğmeninkidir.
+  const istenen = sorgu.get('yeni');
+  const acilis: Sekme | null = istenen === 'sartname' && o.yetki.sartnameYaz ? 'sartname' : istenen === 'talimat' && o.yetki.talimatYaz ? 'talimat' : null;
+  const [sekme, setSekme] = useState<Sekme>(acilis ?? 'sartname');
+  const [yeni, setYeni] = useState<Sekme | null>(acilis);
   const sartnameler = useSartnameler();
   const sablonlar = useSablonlar();
   const yazabilir = sekme === 'sartname' ? o.yetki.sartnameYaz : o.yetki.talimatYaz;

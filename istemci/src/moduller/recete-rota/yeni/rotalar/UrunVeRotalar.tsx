@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
@@ -19,7 +20,8 @@ import { UrunListesi } from './UrunListesi.tsx';
 // değişikliği ilk düzenlemede taslağa yazılır.
 export function UrunVeRotalar(o: EkranOzellikleri) {
   const { bildir } = useBildirim();
-  const [secim, setSecim] = useState<Secim | null>(null);
+  const [sorgu] = useSearchParams();
+  const [secim, setSecim] = useState<Secim | null>(() => (o.yetki.rotaYaz && sorgu.get('yeni') === '1' ? { tur: 'yeniRota' } : null));
   const duzen = useRotaDuzeni(o.veri, o.yetki, (urunId, adimId) => { setSecim({ tur: 'adim', urunId, adimId, seq: 0, miktar: 1 }); });
   const { h } = duzen;
   const urunler = useMemo(() => [...h.malzeme.values()]

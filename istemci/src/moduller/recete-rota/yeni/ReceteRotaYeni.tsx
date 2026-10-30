@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
@@ -107,7 +107,8 @@ function VeriSaglayici() {
 }
 
 function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; planVerisiEksik: boolean }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const [sorgu] = useSearchParams();
   const yonlen = useNavigate();
   const izin = useYetki();
   const yetki = useRrYetkisi();
@@ -145,7 +146,9 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
           {veri.isError && (
             <DurumKutusu durum="hata" mesaj={veri.error.message || 'Reçete ve Rota verisi alınamadı'} yenile={() => { void veri.refetch(); }} />
           )}
-          {veri.data && <Bolum veri={veri.data} yetki={yetki} git={git} kimlik={kimlik} />}
+          {/* Genel arama ve komut bölümü adresle açar (kart #1241): `?kayit=` seçili kayıt, `?yeni=1` bölümün yeni kayıt penceresi. Adres
+              değişince bölüm yeniden kurulur; aynı bölümdeyken açılan ikinci sonuç da kendi kaydını seçer. */}
+          {veri.data && <Bolum key={search} veri={veri.data} yetki={yetki} git={git} kimlik={sorgu.get('kayit') ?? kimlik} />}
         </section>
       </div>
     </>
