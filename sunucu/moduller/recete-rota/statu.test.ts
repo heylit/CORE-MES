@@ -113,6 +113,62 @@ describe('statü türetme kuralı', () => {
     };
     assert.deepEqual(statuleriTuret(b).map((x) => [x.kaynakAdim, x.malzemeNo]), [['a1', 'HM-1'], ['a2', 'HM-2'], ['a3', 'HM-1']]);
   });
+
+  // 1348 a: dallı rotada her dal kendi malzemesini taşır; birleştirme dalların parçasını tüketir, rota sahibini (ya da çıkan kartı) taşır.
+  const dalli = (adimlar: unknown[]) => ({
+    items: [{ id: 'h1', code: 'HM-1', type: 'ham' }, { id: 'h2', code: 'HM-2', type: 'ham' }, { id: 'y1', code: 'YM-1', type: 'yari' }, { id: 'm1', code: 'MM-1', type: 'mamul' }],
+    opdefs: [{ id: 'op1', name: 'Kesim' }],
+    routes: { m1: { steps: adimlar } },
+  });
+  const o = (...seq: number[]) => seq.map((x) => ({ seq: x, tur: 'bekleyen' }));
+
+  test('1348 a: A ve B dalı kendi girdisini taşır; birleştirme ve ardındaki adım rota sahibini taşır', () => {
+    const b = dalli([
+      adim('a10', 10, { dal: 'A', onculler: [], ins: [{ itemId: 'h1', qty: 1 }] }),
+      adim('a20', 20, { dal: 'A', onculler: o(10) }),
+      adim('b30', 30, { dal: 'B', onculler: [], ins: [{ itemId: 'h2', qty: 1 }] }),
+      adim('m40', 40, { dal: null, onculler: o(20, 30) }),
+      adim('m50', 50, { dal: null, onculler: o(40) }),
+      adim('m60', 60, { dal: null, onculler: o(50) }),
+    ]);
+    assert.deepEqual(statuleriTuret(b).map((x) => [x.kaynakAdim, x.malzemeNo]),
+      [['a10', 'HM-1'], ['a20', 'HM-1'], ['b30', 'HM-2'], ['m40', 'MM-1'], ['m50', 'MM-1']]);
+  });
+
+  test('1348 a: ana hattan ayrılan dal kendi girdisi varsa onu, yoksa ana hattın parçasını taşır; birleştirmede ana hattın eski adımı sayılmaz', () => {
+    const b = dalli([
+      adim('a10', 10, { dal: null, onculler: [], ins: [{ itemId: 'h1', qty: 1 }] }),
+      adim('a20', 20, { dal: 'A', onculler: o(10) }),
+      adim('b30', 30, { dal: 'B', onculler: o(10), ins: [{ itemId: 'h2', qty: 1 }] }),
+      adim('m40', 40, { dal: null, onculler: o(10, 20) }),
+      adim('m50', 50, { dal: null, onculler: o(30, 40) }),
+      adim('m60', 60, { dal: null, onculler: o(50) }),
+    ]);
+    assert.deepEqual(statuleriTuret(b).map((x) => [x.kaynakAdim, x.malzemeNo]),
+      [['a10', 'HM-1'], ['a20', 'HM-1'], ['b30', 'HM-2'], ['m40', 'HM-1'], ['m50', 'MM-1']], 'OP40\'ın öncülü OP10, OP20\'nin atası: tek öncül sayılır');
+  });
+
+  test('1348 a: çıkan karta dönüşen dal o kartı taşır; çıkan kartı olan birleştirme statü açmaz, ardındaki adım o kartı taşır', () => {
+    const b = dalli([
+      adim('a10', 10, { dal: 'A', onculler: [], ins: [{ itemId: 'h1', qty: 1 }], outItem: 'y1' }),
+      adim('a20', 20, { dal: 'A', onculler: o(10) }),
+      adim('b30', 30, { dal: 'B', onculler: [] }),
+      adim('m40', 40, { onculler: o(20, 30), outItem: 'y1' }),
+      adim('m50', 50, { onculler: o(40) }),
+      adim('m60', 60, { onculler: o(50) }),
+    ]);
+    assert.deepEqual(statuleriTuret(b).map((x) => [x.kaynakAdim, x.malzemeNo]),
+      [['a20', 'YM-1'], ['b30', 'MM-1'], ['m50', 'YM-1']], 'girdisiz dal başı rota sahibini taşır');
+  });
+
+  test('1348 a: öncül listesi bozuksa bilinmeyen ve ileri seq atlanır; listesi olmayan adım eski sıra kuralında kalır', () => {
+    const b = dalli([
+      adim('a10', 10, { onculler: [{ seq: 99 }, { seq: 30 }, 'x'], ins: [{ itemId: 'h2', qty: 1 }] }),
+      adim('a20', 20, { ins: [{ itemId: 'h1', qty: 1 }] }),
+      adim('a30', 30),
+    ]);
+    assert.deepEqual(statuleriTuret(b).map((x) => [x.kaynakAdim, x.malzemeNo]), [['a10', 'HM-2'], ['a20', 'HM-2']]);
+  });
 });
 
 describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
