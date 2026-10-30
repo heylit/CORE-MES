@@ -60,7 +60,7 @@ export function TumIsler() {
   const { bildir } = useBildirim();
   const yonlendir = useNavigate();
   const kart = useKartKipi();
-  const [parametreler] = useSearchParams();
+  const [parametreler, setParametreler] = useSearchParams();
   const gelen = aramadanGelen(parametreler);
   const [gorunum, setGorunum] = useState<Gorunum>(gelen?.gorunum ?? 'karar');
   const [ara, setAra] = useState(gelen?.ara ?? '');
@@ -76,6 +76,13 @@ export function TumIsler() {
   const [ayrintiAnahtari, setAyrinti] = useState<string | null>(null);
   const [diger, setDiger] = useState<string | null>(null);
   const [elleAcik, setElleAcik] = useState(false);
+  // Ctrl K komutu `?elle=1` elle kalem formunu açar, yalnız iş yazana (oturum gelmeden yetki boştur; sorgu bekler). Açılınca silinir.
+  const elleIstegi = parametreler.get('elle') === '1';
+  useEffect(() => {
+    if (!elleIstegi || !yetki.isYaz) return;
+    setElleAcik(true);
+    setParametreler((o) => { const s = new URLSearchParams(o); s.delete('elle'); return s; }, { replace: true });
+  }, [elleIstegi, yetki.isYaz, setParametreler]);
   // Sayfa açıkken genel aramadan yeni emir seçilirse süzgeç ona geçer.
   const gelenAra = gelen?.ara ?? null;
   const gelenGorunum = gelen?.gorunum ?? null;

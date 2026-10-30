@@ -169,3 +169,18 @@ describe('Tüm işler', () => {
     expect(screen.queryByRole('button', { name: 'Elle iş' })).toBeNull();
   });
 });
+
+describe('Tüm işler adresten açılan form (1239)', () => {
+  it('izinli: ?elle=1 iş yazana elle iş penceresini açar', async () => {
+    sunucuKur(SEVKIYATCI);
+    ac('/sevkiyat/tum-isler?elle=1');
+    expect(await screen.findByRole('dialog', { name: 'Elle iş' })).toBeTruthy();
+  });
+
+  it('reddedilen: yalnız okuyana pencere açılmaz', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/sevkiyat/tum-isler?elle=1');
+    await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

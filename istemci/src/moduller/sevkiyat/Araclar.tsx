@@ -1,5 +1,6 @@
 // Araçlar: tür, kapasite, müsaitlik aralığı ve maliyet oranları (boşsa türün örnek değeri).
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Arac, AracGovdesi, AracTuru } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
@@ -36,6 +37,15 @@ export function Araclar() {
   const [pasifOnayi, setPasifOnayi] = useState<Arac | null>(null);
   const alan = <K extends keyof Taslak>(ad: K, deger: Taslak[K]) => setTaslak((t) => (t ? { ...t, [ad]: deger } : t));
   const formAc = (yeni: Taslak) => { komut.reset(); setTaslak(yeni); };
+  // Ctrl K komutu `?yeni=1` boş formu açar, yalnız tanım yazana (oturum gelmeden yetki boştur; sorgu o zamana kadar bekler).
+  // Açılınca sorgu silinir ki geri ve yenile formu yeniden açmasın.
+  const [adres, setAdres] = useSearchParams();
+  const yeniIstegi = adres.get('yeni') === '1';
+  useEffect(() => {
+    if (!yeniIstegi || !yetki.tanimYaz) return;
+    setTaslak(bosTaslak());
+    setAdres((o) => { const s = new URLSearchParams(o); s.delete('yeni'); return s; }, { replace: true });
+  }, [yeniIstegi, yetki.tanimYaz, setAdres]);
   const kaydet = (e: FormEvent) => {
     e.preventDefault(); if (!taslak) return;
     const govde: AracGovdesi = {

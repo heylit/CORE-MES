@@ -1,7 +1,7 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
 export const SEVKIYAT_SAYFALARI = [
-  { yol: '/sevkiyat', islem: 'sayfa.sevkiyat', baslik: 'Sevkiyat', simge: 'route', grup: 'Planlama', sira: 50, aramaUcu: '/sevkiyat/ara' },
+  { yol: '/sevkiyat', islem: 'sayfa.sevkiyat', baslik: 'Sevkiyat', simge: 'route', grup: 'Planlama', sira: 50 },
 ] as const satisfies readonly SayfaTanimi[];
 
 // Bölümlerin hepsi sayfayı gören herkese açıktır; yazma uçta ayrıca sevkiyat işlemlerini ister. Tüm işler plan gününü de gösterir (946 a).

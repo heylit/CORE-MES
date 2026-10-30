@@ -34,9 +34,9 @@ function sunucuKur(kullanici: Kullanici, yazma: () => Response = () => json(200,
   }));
   return yazilan;
 }
-function ac() {
+function ac(adres = '/sevkiyat/noktalar') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/noktalar']}><Noktalar /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}><Noktalar /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 // Zorunlu alanın etiketinde ' *' işareti de yazılır; etiket başından eşlenir.
 const doldur = (etiket: string, deger: string) => fireEvent.change(screen.getByLabelText(new RegExp(`^${etiket}`)), { target: { value: deger } });
@@ -134,5 +134,21 @@ describe('Noktalar', () => {
     await new Promise((coz) => setTimeout(coz, 20));
     expect(screen.queryByRole('button', { name: 'Yeni nokta' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+  });
+});
+
+describe('Noktalar adresten açılan form (1239)', () => {
+  it('izinli: ?yeni=1 tanım yazana boş nokta formunu açar', async () => {
+    sunucuKur(TANIMCI);
+    ac('/sevkiyat/noktalar?yeni=1');
+    expect(await screen.findByLabelText(/^Ad/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeni nokta' })).toBeNull();
+  });
+
+  it('reddedilen: yalnız okuyana form açılmaz', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/sevkiyat/noktalar?yeni=1');
+    await screen.findByText(NOKTALAR.noktalar[0]!.ad);
+    expect(screen.queryByLabelText(/^Ad/)).toBeNull();
   });
 });

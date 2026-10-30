@@ -31,9 +31,9 @@ function sunucuKur(kullanici: Kullanici, yazmaCevabi: (istek: Istek) => Response
   }));
   return istekler;
 }
-function ac() {
+function ac(ek = '') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}${ek}`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const aracAc = (ad: string) => screen.findByRole('region', { name: ad });
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
@@ -284,5 +284,36 @@ describe('SevkiyatPlani onaylı plan', () => {
     expect(within(havuz).getByText('Yapılamadı: Müşteri kapalı')).toBeTruthy();
     fireEvent.change(within(havuz).getByRole('combobox', { name: /işi işlemleri$/ }), { target: { value: 'kapat' } });
     await waitFor(() => expect(yazmalar(istekler)).toEqual([{ yontem: 'POST', yol: `/sevkiyat/isler/${bekleyenIs.id}/durum`, govde: { durum: 'tamamlandi', tarih: TARIH, not: null } }]));
+  });
+});
+
+// 1239: Ctrl K komutu ve irsaliye araması formu açar; yazma yine formun ucundadır.
+describe('SevkiyatPlani adresten açılan form', () => {
+  it('izinli: ?is= o işin formunu belge numarasıyla dolu açar, ?yeni=1 boş yeni iş formunu açar', async () => {
+    sunucuKur(PLANCI);
+    ac('&is=1');
+    const pencere = await screen.findByRole('dialog', { name: 'İşi düzenle' });
+    expect(within(pencere).getByDisplayValue('DENEME-1')).toBeTruthy();
+    cleanup();
+    sunucuKur(PLANCI);
+    ac('&yeni=1');
+    expect(await screen.findByRole('dialog', { name: 'Yeni iş' })).toBeTruthy();
+  });
+
+  it('reddedilen: yalnız okuyana, onaylı planda ve yoldaki işte form açılmaz; gün planı görünür', async () => {
+    sunucuKur(OKUYUCU);
+    ac('&is=1');
+    await aracAc('Kamyonet 1');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+    sunucuKur(PLANCI, undefined, { ...GUN_PLANI, onaylandi: '2026-10-08T06:00:00.000Z' });
+    ac('&yeni=1');
+    await aracAc('Kamyonet 1');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+    sunucuKur(PLANCI, undefined, { ...GUN_PLANI, isler: GUN_PLANI.isler.map((i) => (i.id === 1 ? { ...i, durum: 'yolda' as const } : i)) });
+    ac('&is=1');
+    await aracAc('Kamyonet 1');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

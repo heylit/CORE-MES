@@ -59,7 +59,6 @@ const BEKLENEN: Record<string, Islem | { biri: readonly string[] }> = {
   'GET /sevkiyat/harita': 'sevkiyat.oku',
   'GET /sevkiyat/trafik': 'sevkiyat.oku',
   'GET /sevkiyat/arama': 'sevkiyat.oku',
-  'GET /sevkiyat/ara': { biri: ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
 };
 
 describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
