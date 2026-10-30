@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 export const FIRMA_TURLERI = ['musteri', 'tedarikci', 'ikisi'] as const;
 export const LOGO_GONDERIM_DURUMLARI = ['bekliyor', 'gonderildi', 'hata'] as const;
@@ -171,3 +171,109 @@ export const firmaSecimSorgusu = z.object({
 export const firmaSecimSatiri = firmaSemasi.pick({ id: true, kod: true, ad: true, tur: true, paraBirimi: true, vadeGunu: true });
 export const firmaSecimCevabi = z.object({ firmalar: z.array(firmaSecimSatiri).max(FIRMA_ARAMA_SINIRI) });
 export type FirmaSecimCevabi = z.output<typeof firmaSecimCevabi>;
+
+// Tedarikçi karnesi (1259 c, 1260 a). Karnenin sahibi Müşteri-Tedarikçi'dir; satın alma teslimi, Kalite Merkezi lot kararını kendi
+// işlemi içinde olay olarak iter (disari.ts), çünkü Müşteri-Tedarikçi onları ithal ederse modül döngüsü olur (ADR 0006).
+export const KARNE_AGIRLIKLARI = { teslim: 40, kalite: 40, hizmet: 20 } as const;
+// Az alım yapılan tedarikçide kısa dönem anlamlı veri vermez; puan her gün kayan son 12 ayla hesaplanır.
+export const KARNE_DONEM_AYI = 12;
+export const TESLIM_TOLERANS_GUNU = 2;
+export const KARNE_EN_AZ_TESLIM = 3;
+export const KARNE_EN_AZ_LOT = 3;
+export const KARNE_SINIFLARI = ['A', 'B', 'C', 'D'] as const;
+export const KARNE_SINIF_ALT_SINIRLARI = { A: 90, B: 75, C: 60, D: 0 } as const;
+export const HIZMET_PUANI_EN_AZ = 1;
+export const HIZMET_PUANI_EN_COK = 5;
+export const KARNE_OLAY_KAYNAKLARI = ['satin-alma', 'kalite-merkezi', 'uretim-emirleri'] as const;
+// Kalite lot başına sayılır: hammadde kg ve metreyle gelir, adet tabanlı PPM orada anlamsızdır.
+export const LOT_KARARLARI = ['kabul', 'sartli_kabul', 'hatali_kabul', 'red', 'iade'] as const;
+export const LOT_KARAR_PUANI = { kabul: 1, sartli_kabul: 0.5, hatali_kabul: 0.5, red: 0, iade: 0 } as const;
+export const YILLIK_KARNE_SINIRI = 50;
+export const HIZMET_PUANI_SINIRI = 100;
+
+export const karneSinifi = z.enum(KARNE_SINIFLARI);
+export type KarneSinifi = z.output<typeof karneSinifi>;
+export const karneOlayKaynagi = z.enum(KARNE_OLAY_KAYNAKLARI);
+export type KarneOlayKaynagi = z.output<typeof karneOlayKaynagi>;
+export const lotKarari = z.enum(LOT_KARARLARI);
+export type LotKarari = z.output<typeof lotKarari>;
+
+// Olay kaynak ve anahtarıyla tektir: aynı kaydın sonraki kararı (lot NCR'den iadeye döndü gibi) öncekinin yerine geçer,
+// geçmişi geri doldurma da tekrar güvenlidir.
+const olayOrtak = {
+  kaynak: karneOlayKaynagi,
+  anahtar: z.string().trim().min(1).max(120),
+  firmaId: z.number().int().positive(),
+  zaman: zamanSemasi,
+};
+export const teslimOlayi = z.object({
+  ...olayOrtak,
+  tur: z.literal('teslim'),
+  termin: tarihSemasi,
+  teslimGunu: tarihSemasi,
+  // Eksik teslim zamanında sayılmaz; satırın kalanı geldiğinde aynı anahtarla yeni olay yazılır.
+  tam: z.boolean(),
+});
+export const lotOlayi = z.object({ ...olayOrtak, tur: z.literal('lot'), karar: lotKarari });
+export const karneOlayi = z.discriminatedUnion('tur', [teslimOlayi, lotOlayi]);
+export type TeslimOlayi = z.output<typeof teslimOlayi>;
+export type LotOlayi = z.output<typeof lotOlayi>;
+export type KarneOlayi = z.input<typeof karneOlayi>;
+
+export const hizmetPuaniGovdesi = z.object({
+  puan: z.number().int().min(HIZMET_PUANI_EN_AZ, 'Puan 1 ile 5 arasındadır.').max(HIZMET_PUANI_EN_COK, 'Puan 1 ile 5 arasındadır.'),
+  not: istegeBagli(500),
+});
+export type HizmetPuaniGovdesi = z.input<typeof hizmetPuaniGovdesi>;
+// Yıllık karne o anki kayan puanın kaydıdır (ISO 9001 8.4.1 kaydı); puanı sunucu hesaplar, gövde yalnız yılı ve notu taşır.
+export const yillikKarneGovdesi = z.object({
+  yil: z.number().int().min(2000, 'Yıl geçersiz.').max(2100, 'Yıl geçersiz.'),
+  not: istegeBagli(1000),
+});
+export type YillikKarneGovdesi = z.input<typeof yillikKarneGovdesi>;
+
+const yuzluk = z.number().min(0).max(100).nullable();
+export const karneOzetiSemasi = z.object({
+  firmaId: z.number().int().positive(),
+  donemBasi: tarihSemasi,
+  donemSonu: tarihSemasi,
+  teslim: z.object({ toplam: z.number().int().nonnegative(), zamaninda: z.number().int().nonnegative(), oran: yuzluk }),
+  kalite: z.object({ lot: z.number().int().nonnegative(), puan: yuzluk }),
+  hizmet: z.object({ sayi: z.number().int().nonnegative(), puan: yuzluk }),
+  puan: yuzluk,
+  sinif: karneSinifi.nullable(),
+  // En az veri yoksa puan ve sınıf null'dır; ekran "Yetersiz veri" yazar.
+  yetersizVeri: z.boolean(),
+});
+export type KarneOzeti = z.output<typeof karneOzetiSemasi>;
+
+export const yillikKarneSemasi = z.object({
+  id: z.number().int().positive(),
+  firmaId: z.number().int().positive(),
+  yil: z.number().int(),
+  teslimOrani: yuzluk,
+  kalitePuani: yuzluk,
+  hizmetPuani: yuzluk,
+  puan: yuzluk,
+  sinif: karneSinifi.nullable(),
+  not: z.string().nullable(),
+  degerlendiren: z.string(),
+  olusturma: zamanSemasi,
+});
+export type YillikKarne = z.output<typeof yillikKarneSemasi>;
+
+export const hizmetPuaniSemasi = z.object({
+  id: z.number().int().positive(),
+  puan: z.number().int().min(HIZMET_PUANI_EN_AZ).max(HIZMET_PUANI_EN_COK),
+  not: z.string().nullable(),
+  giren: z.string(),
+  olusturma: zamanSemasi,
+});
+export type HizmetPuani = z.output<typeof hizmetPuaniSemasi>;
+
+export const karneCevabi = z.object({
+  karne: karneOzetiSemasi,
+  yillikKarneler: z.array(yillikKarneSemasi).max(YILLIK_KARNE_SINIRI),
+  hizmetPuanlari: z.array(hizmetPuaniSemasi).max(HIZMET_PUANI_SINIRI),
+});
+export type KarneCevabi = z.output<typeof karneCevabi>;
