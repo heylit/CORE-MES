@@ -287,6 +287,22 @@ export function yayindakiBelgeler(db: Db, s: { tur: BelgeTuru | null; ara: strin
   );
 }
 
+// Bir modülün kayıtlarına bağlı, yayındaki revizyonu verilen dosya türlerinden olan etkin belgeler; kayıt sırasıyla. Taslak ya da arşivdeki
+// belge gelmez. Kayıt kimliği bilinmeden çağrılır: listeyi bağı olan kayıtlar oluşturur.
+export function bagliYayindakiBelgeler(
+  db: Db, hedefModul: BagModulu, dosyaTurleri: readonly DosyaTuru[],
+): Promise<(YayindakiBelgeSatiri & { hedefId: number })[]> {
+  return db.sorgu<YayindakiBelgeSatiri & { hedefId: number }>(
+    `SELECT g.hedef_id AS "hedefId", b.id, b.ad, b.tur, y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
+       FROM cizimler_bag g
+       JOIN cizimler_belge b ON b.id = g.belge_id AND b.aktif
+       JOIN cizimler_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'
+      WHERE g.hedef_modul = $1 AND y.dosya_turu = ANY($2::text[])
+      ORDER BY g.hedef_id, b.ad, b.id`,
+    [hedefModul, [...dosyaTurleri]],
+  );
+}
+
 export interface AramaSatiri {
   id: number;
   ad: string;

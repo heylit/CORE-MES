@@ -13,7 +13,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
+  belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
   kayitlarinKucukResimleri, yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './disari.ts';
 
@@ -737,6 +737,39 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       const arsiv = (await oku(yonetici, `/cizimler/${ikinci.id}`)).json<BelgeAyrintisi>();
       assert.equal((await gonder(yonetici, `/cizimler/${ikinci.id}/arsivle`, { surum: arsiv.surum })).statusCode, 200);
       assert.equal((await vt().tx((db) => yayindakiOnizleme(db, hedef)))?.belgeId, ilk.id, 'arşivdeki atlanır');
+    });
+
+    test('disari 1306: kayıtlara bağlı yayındaki belgeler istenen dosya türüyle kayıt başına gelir; taslak, arşiv ve başka modül gelmez', async () => {
+      const kullanici = { id: yonetici.id, ad: 'deneme', islemler: [] };
+      const turler = ['pdf', 'step', 'stl', 'iges'] as const;
+      let resim = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Toplu resim');
+      resim = (await gonder(yonetici, `/cizimler/${resim.id}/revizyonlar/${resim.revizyonlar[0]?.id}/yayinla`, { surum: resim.surum })).json<BelgeAyrintisi>();
+      const model = await yayindaModel('Toplu model');
+      const taslak = await belgeAc(yonetici, '3b-model', step(), 'Toplu taslak');
+      const arsivlenecek = await yayindaModel('Toplu arşiv');
+      const baskaKayit = await yayindaModel('Toplu başka kayıt');
+      await vt().tx(async (db) => {
+        for (const b of [resim, model, taslak, arsivlenecek]) await kaydaBagla(db, kullanici, b.id, 'malzemeler', 8820);
+        await kaydaBagla(db, kullanici, baskaKayit.id, 'malzemeler', 8821);
+        await kaydaBagla(db, kullanici, model.id, 'istasyonlar', 8820);
+      });
+      const a = (await oku(yonetici, `/cizimler/${arsivlenecek.id}`)).json<BelgeAyrintisi>();
+      assert.equal((await gonder(yonetici, `/cizimler/${arsivlenecek.id}/arsivle`, { surum: a.surum })).statusCode, 200);
+
+      const harita = await vt().tx((db) => kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', turler));
+      const kayit = harita.get(8820) ?? [];
+      assert.deepEqual(kayit.map((b) => b.id).sort((x, y) => x - y), [resim.id, model.id].sort((x, y) => x - y));
+      const r = kayit.find((b) => b.id === resim.id);
+      assert.equal(r?.dosyaTuru, 'pdf');
+      assert.equal(r?.harf, 'A');
+      assert.equal(r?.revizyonId, resim.revizyonlar[0]?.id);
+      assert.deepEqual((harita.get(8821) ?? []).map((b) => b.id), [baskaKayit.id]);
+
+      const yalnizPdf = await vt().tx((db) => kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', ['pdf']));
+      assert.deepEqual((yalnizPdf.get(8820) ?? []).map((b) => b.id), [resim.id], 'dosya türü süzülür');
+      assert.equal(yalnizPdf.has(8821), false, 'süzgeçten belge kalmayan kayıt haritada yok');
+      const istasyon = await vt().tx((db) => kayitlaraBagliYayindakiBelgeler(db, 'istasyonlar', turler));
+      assert.deepEqual((istasyon.get(8820) ?? []).map((b) => b.id), [model.id], 'modül ayrımı');
     });
 
     test('veritabanı: kare 0..15 aralığında, revizyon ve dosya var olmalı; geçerli satır kabul edilir', async () => {

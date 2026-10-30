@@ -498,6 +498,20 @@ export interface YayindakiBelge {
   ozet: string;
 }
 
+// Kayıt başına bağlı ve yayında olan belgeler (ör. Kalite Merkezi resim listesi: malzeme kartına bağlı PDF ve 3B modeller, 1306).
+// Bağı olmayan kayıt haritada yoktur. Okuma yetkisi ve kapsam çağıran modülün ucundadır.
+export async function kayitlaraBagliYayindakiBelgeler(
+  db: Db, hedefModul: BagModulu, dosyaTurleri: readonly BagliDosya['tur'][],
+): Promise<Map<number, YayindakiBelge[]>> {
+  const sonuc = new Map<number, YayindakiBelge[]>();
+  for (const b of await sorgular.bagliYayindakiBelgeler(db, hedefModul, dosyaTurleri)) {
+    const liste = sonuc.get(b.hedefId) ?? [];
+    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet });
+    sonuc.set(b.hedefId, liste);
+  }
+  return sonuc;
+}
+
 const SECICI_SINIRI = 200;
 
 // Başka modülün seçicisi için (Arkon, atölye): yayındaki belgeler. Okuma yetkisi çağıran modülün ucundadır.
