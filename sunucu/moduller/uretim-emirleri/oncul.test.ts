@@ -151,13 +151,13 @@ describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
     assert.deepEqual(dalBasi?.oncekiOpNolari, [10, 20], 'sıra listesi eski okuyucular için aynen kalır');
     const birlesme = await bilgi(ie4);
     assert.deepEqual(birlesme?.onculOpNolari, [20, 30]);
-    assert.deepEqual(birlesme?.emirAdimlari.map((a) => [a.opNo, a.onculOpNolari, a.girdiler]), [[10, [], []], [20, [10], []], [30, [], [{ malzemeNo: urunNo, miktar: '2.5000' }]], [40, [20, 30], []]]);
+    assert.deepEqual(birlesme?.emirAdimlari.map((a) => [a.opNo, a.dal, a.onculOpNolari, a.girdiler]), [[10, 'A', [], []], [20, 'A', [10], []], [30, 'B', [], [{ malzemeNo: urunNo, miktar: '2.5000' }]], [40, null, [20, 30], []]]);
 
     const m = [await makine(), await makine()];
     const eski = await ac([adim(1, m[0]!), adim(2, m[1]!)]);
     const e2 = await bilgi(eski.ie[1]!);
     assert.equal(e2?.onculOpNolari, null, '1248 öncesi emir sıra kuralında kalır');
-    assert.deepEqual(e2?.emirAdimlari.map((a) => a.onculOpNolari), [null, null]);
+    assert.deepEqual(e2?.emirAdimlari.map((a) => [a.dal, a.onculOpNolari]), [[null, null], [null, null]]);
     assert.equal(await bilgi(2147483647), null, 'olmayan iş emri');
   });
 

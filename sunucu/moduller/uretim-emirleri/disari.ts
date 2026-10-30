@@ -500,8 +500,8 @@ export interface AdimUretimBilgisi {
   oncekiOpNolari: number[];
   // 1348 a: dallı emirde adımın öncülleri (op no, sırayla; boş: dal başı); 1248 öncesi emirde null (sıra kuralı geçerli).
   onculOpNolari: number[] | null;
-  // Emrin bütün adımları sırayla; stok her dalın taşıdığı malzemeyi bundan çözer.
-  emirAdimlari: { opNo: number; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[] }[];
+  // Emrin bütün adımları sırayla; stok her dalın taşıdığı malzemeyi bundan çözer (dal: Reçete ve Rota statü kuralındaki dal geçişi).
+  emirAdimlari: { opNo: number; dal: string | null; onculOpNolari: number[] | null; girdiler: { malzemeNo: number; miktar: string }[] }[];
   sonAdim: boolean;
   girdiler: { malzemeNo: number; miktar: string }[];
   tasinan: { malzemeNo: number; miktar: string } | null;
