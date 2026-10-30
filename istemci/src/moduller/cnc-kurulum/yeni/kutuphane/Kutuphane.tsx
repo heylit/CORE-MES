@@ -4,13 +4,14 @@ import { useCncSurum } from '../depo.ts';
 import { clamp } from '../bicim.ts';
 import { byId, invKey } from '../secici.ts';
 import { onbellekSil } from '../sahne/gl.ts';
-import { Sahne, type Cizim, type Dikdortgen } from '../sahne/Sahne.tsx';
+import { CizimModuSecici, Sahne, useCizimModu, type Cizim, type Dikdortgen } from '../sahne/Sahne.tsx';
 import { useTuslar } from '../gorunum.ts';
 import { download } from '../indir.ts';
 import { useCncYetkisi } from '../veri.ts';
 import { KalemAyrintisi } from './KalemAyrintisi.tsx';
 import { Liste, resimUnut } from './Liste.tsx';
 import { Onizleme } from './onizleme.ts';
+import { TakimCizimi, TezgahCepleri } from './TezgahCepleri.tsx';
 import { LSH, LSP, RafSahnesi } from './raf-sahnesi.ts';
 import {
   allShelves, bumpQty, deleteCustom, ozet, saveEdit, stokCsvAdi, stokCsvMetni, suzulmusRaflar, tezgahOzetleri,
@@ -45,7 +46,13 @@ export function Kutuphane() {
   const g = useRef<Gezinme>({ r: 0, sel: {}, curKey: undefined, dragR: null, dragK: null });
   const sahneKutusu = useRef<HTMLDivElement>(null);
   const sahneDikdortgeni = useRef<Dikdortgen | null>(null);
-  const [mode, modeYaz] = useState<'3d' | 'list'>('3d');
+  // Bölüm: tezgâhların cepleri (1276 a, açılış) ya da elimizdeki bütün kalemler (raf ya da liste). 2B modda raf yerine liste açılır.
+  const [bolum, bolumYaz] = useState<'tezgah' | 'stok'>('tezgah');
+  const [tezgahSecimi, tezgahSecimiYaz] = useState<{ it: Kalem; raf: Raf } | null>(null);
+  const [yalnizSorunlu, yalnizSorunluYaz] = useState(false);
+  const uc = useCizimModu() === '3d';
+  const [secilenKip, modeYaz] = useState<'3d' | 'list'>('3d');
+  const mode = uc ? secilenKip : 'list';
   const [aramaMetni, aramaMetniYaz] = useState('');
   const [suzgec, suzgecYaz] = useState({ q: '', mach: '', low: false });
   const [raflar, raflarYaz] = useState<Raf[]>([]);
@@ -76,7 +83,12 @@ export function Kutuphane() {
   const k = seciliSira(g.current, raflar, g.current.r);
   const it = row?.items[k] ?? null;
   if (row) g.current.curKey = row.key;
-  if (it) onizleme.current.goster(it);
+  const secili = bolum === 'tezgah' && tezgahSecimi ? tezgahSecimi : it && row ? { it, raf: row } : null;
+  if (secili) onizleme.current.goster(secili.it);
+  const tezgahtanSec = (kalem: Kalem): void => {
+    const raf = allShelves().find((x) => x.items.some((y) => y.id === kalem.id));
+    if (raf) { tezgahSecimiYaz({ it: kalem, raf }); duzenlemeYaz(null); }
+  };
 
   const lSetSel = (ri: number, kk: number): void => {
     const r = raflar[ri];
@@ -96,7 +108,7 @@ export function Kutuphane() {
   useEffect(() => { sahne.current?.etiketleriYenile(null); }, [surum]);
 
   useTuslar(true, (e: KeyboardEvent) => {
-    if (mode === 'list') return;
+    if (mode === 'list' || bolum !== 'stok') return;
     const t = e.key;
     let h = true;
     if (t === 'ArrowDown' || t === 's' || t === 'S') lGoRow(g.current.r + 1);
@@ -113,7 +125,7 @@ export function Kutuphane() {
   /* ---------- sürükleme, tıklama, tekerlek (prototipin lStage olayları) ---------- */
   const surukle = useRef<{ x: number; y: number; axis: 'x' | 'y' | null; r0: number; k0: number } | null>(null);
   const imlecBas = (e: TepkiImleci<HTMLDivElement>): void => {
-    if (mode !== '3d' || (e.target as HTMLElement).closest('button,input,select,label')) return;
+    if (mode !== '3d' || bolum !== 'stok' || (e.target as HTMLElement).closest('button,input,select,label')) return;
     surukle.current = { x: e.clientX, y: e.clientY, axis: null, r0: g.current.r, k0: k };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* imleç yakalanamazsa sürükleme yine çalışır */ }
     e.currentTarget.dataset.tut = '';
@@ -145,7 +157,7 @@ export function Kutuphane() {
   const tekerlekIsleyici = useRef<(e: WheelEvent) => void>(() => undefined);
   const birikim = useRef({ x: 0, y: 0, son: 0 });
   tekerlekIsleyici.current = (e: WheelEvent) => {
-    if (mode !== '3d' || (e.target as HTMLElement).closest('.tc-cl-cubuk')) return;
+    if (mode !== '3d' || bolum !== 'stok') return;
     e.preventDefault();
     let dx = e.deltaX, dy = e.deltaY;
     if (e.deltaMode === 1) { dx *= 33; dy *= 33; }
@@ -176,6 +188,7 @@ export function Kutuphane() {
   /* ---------- düzenleme ---------- */
   const yeniKalem = (): void => {
     if (mode === 'list') modeYaz('3d');
+    bolumYaz('stok');
     const base = it ?? allShelves()[0]!.items[0]!;
     duzenlemeYaz({ mode: 'new', base, shelf: row ? row.key : 'mill' });
     panelAcikYaz(true);
@@ -208,39 +221,53 @@ export function Kutuphane() {
 
   return (
     <div className="tc-cl-kutuphane" data-panel={panelAcik ? 'acik' : undefined}>
+      <div className="tc-cl-cubuk">
+        <div className="tc-cl-segment" role="group" aria-label="Kütüphane bölümü">
+          <Dugme simge="gear" tur={bolum === 'tezgah' ? 'birincil' : 'ikincil'} aria-pressed={bolum === 'tezgah'} onClick={() => { bolumYaz('tezgah'); }}>Tezgâhlara göre</Dugme>
+          <Dugme simge="cube" tur={bolum === 'stok' ? 'birincil' : 'ikincil'} aria-pressed={bolum === 'stok'} onClick={() => { bolumYaz('stok'); }}>Elimizdekiler</Dugme>
+        </div>
+        <CizimModuSecici />
+        {bolum === 'tezgah'
+          ? <IsaretKutusu etiket="Yalnız stok uyarısı olanlar" checked={yalnizSorunlu} onChange={(o) => { yalnizSorunluYaz(o.target.checked); }} />
+          : (
+            <>
+              <input
+                className="tc-alan-kutu" type="search" aria-label="Kütüphanede ara" placeholder="Ara: ad, kod, Ø10, M8…" autoComplete="off"
+                value={aramaMetni} onChange={(o) => { aramaMetniYaz(o.target.value); }}
+              />
+              <select
+                className="tc-alan-kutu" aria-label="Tezgâh" value={suzgec.mach}
+                onChange={(o) => { suzgecYaz({ ...suzgec, mach: o.target.value }); }}
+              >
+                <option value="">Tüm tezgâhlar</option>
+                {tezgahlar.map((m) => <option key={m.id} value={m.id}>{`${m.name} · ${String(m.aktif)} aktif`}</option>)}
+              </select>
+              <IsaretKutusu etiket="Kritik / eksik" checked={suzgec.low} onChange={(o) => { suzgecYaz({ ...suzgec, low: o.target.checked }); }} />
+              <div className="tc-cl-segment" role="group" aria-label="Görünüm">
+                {uc && <Dugme simge="cube" aria-pressed={mode === '3d'} onClick={() => { modeYaz('3d'); }}>3D Raf</Dugme>}
+                <Dugme simge="list" aria-pressed={mode === 'list'} onClick={() => { modeYaz('list'); }}>Liste</Dugme>
+              </div>
+            </>
+          )}
+        {yetki.yazabilir && <Dugme simge="plus" onClick={yeniKalem}>Yeni kalem</Dugme>}
+        <Dugme simge="download" onClick={() => { download(stokCsvAdi(), stokCsvMetni(), 'text/csv;charset=utf-8'); }}>Stok CSV</Dugme>
+      </div>
       <div
-        ref={sahneKutusu} className="tc-cl-sahne" data-kip={mode}
+        ref={sahneKutusu} className="tc-cl-sahne" data-kip={bolum === 'tezgah' ? 'tezgah' : mode}
         onPointerDown={imlecBas} onPointerMove={imlecGezin} onPointerUp={imlecBit} onPointerCancel={imlecBit}
       >
-        {mode === '3d' && <Sahne ciz={rafCiz} sinif="tc-cl-tuval" />}
-        <div className="tc-cl-bilgi">
-          <div className="tc-cl-adimno">RAF <b>{raflar.length ? g.current.r + 1 : 0}</b> / <span>{raflar.length}</span></div>
-          <div className="tc-cl-rafadi">{row ? row.title : 'Sonuç yok'}</div>
-          <div className="tc-cl-kalemadi">{it && row ? `${it.name}  ·  ${String(k + 1)} / ${String(row.items.length)}` : ''}</div>
-        </div>
-        <div className="tc-cl-cubuk">
-          <input
-            className="tc-alan-kutu" type="search" aria-label="Kütüphanede ara" placeholder="Ara: ad, kod, Ø10, M8…" autoComplete="off"
-            value={aramaMetni} onChange={(o) => { aramaMetniYaz(o.target.value); }}
-          />
-          <select
-            className="tc-alan-kutu" aria-label="Tezgâh" value={suzgec.mach}
-            onChange={(o) => { suzgecYaz({ ...suzgec, mach: o.target.value }); }}
-          >
-            <option value="">Tüm tezgâhlar</option>
-            {tezgahlar.map((m) => <option key={m.id} value={m.id}>{`${m.name} · ${String(m.aktif)} aktif`}</option>)}
-          </select>
-          <IsaretKutusu etiket="Kritik / eksik" checked={suzgec.low} onChange={(o) => { suzgecYaz({ ...suzgec, low: o.target.checked }); }} />
-          <div className="tc-cl-segment" role="group" aria-label="Görünüm">
-            <Dugme simge="cube" aria-pressed={mode === '3d'} onClick={() => { modeYaz('3d'); }}>3D Raf</Dugme>
-            <Dugme simge="list" aria-pressed={mode === 'list'} onClick={() => { modeYaz('list'); }}>Liste</Dugme>
+        {bolum === 'tezgah' && <TezgahCepleri resimli={uc} yalnizSorunlu={yalnizSorunlu} seciliId={secili?.it.id ?? null} sec={tezgahtanSec} />}
+        {bolum === 'stok' && mode === '3d' && <Sahne ciz={rafCiz} sinif="tc-cl-tuval" />}
+        {bolum === 'stok' && (
+          <div className="tc-cl-bilgi">
+            <div className="tc-cl-adimno">RAF <b>{raflar.length ? g.current.r + 1 : 0}</b> / <span>{raflar.length}</span></div>
+            <div className="tc-cl-rafadi">{row ? row.title : 'Sonuç yok'}</div>
+            <div className="tc-cl-kalemadi">{it && row ? `${it.name}  ·  ${String(k + 1)} / ${String(row.items.length)}` : ''}</div>
           </div>
-          {yetki.yazabilir && <Dugme simge="plus" onClick={yeniKalem}>Yeni kalem</Dugme>}
-          <Dugme simge="download" onClick={() => { download(stokCsvAdi(), stokCsvMetni(), 'text/csv;charset=utf-8'); }}>Stok CSV</Dugme>
-        </div>
-        {mode === 'list' && <Liste raflar={raflar} seciliId={it?.id ?? null} sec={(ri, kk) => { g.current.r = ri; lSetSel(ri, kk); modeYaz('3d'); }} />}
-        {!raflar.length && <div className="tc-cl-bos">Filtreye uyan malzeme yok</div>}
-        {mode === '3d' && (
+        )}
+        {bolum === 'stok' && mode === 'list' && <Liste raflar={raflar} seciliId={it?.id ?? null} sec={(ri, kk) => { g.current.r = ri; lSetSel(ri, kk); if (uc) modeYaz('3d'); }} />}
+        {bolum === 'stok' && !raflar.length && <div className="tc-cl-bos">Filtreye uyan malzeme yok</div>}
+        {bolum === 'stok' && mode === '3d' && (
           <>
             <div className="tc-cl-denetim">
               <button type="button" className="tc-cl-ok" title="Önceki malzeme" aria-label="Önceki malzeme" onClick={() => { lMove(-1); }}><Simge ad="chev-left" /></button>
@@ -268,15 +295,26 @@ export function Kutuphane() {
           onPointerMove={(e) => { if (pv.surukle == null) return; pv.yaw += (e.clientX - pv.surukle) * 0.012; pv.surukle = e.clientX; pv.autoT = 2.5; }}
           onPointerUp={() => { pv.surukle = null; }} onPointerCancel={() => { pv.surukle = null; }}
         >
-          <Sahne ciz={onizlemeCiz} sinif="tc-cl-tuval" />
-          <div className="tc-cl-dondur">sürükle: döndür</div>
+          {uc
+            ? <><Sahne ciz={onizlemeCiz} sinif="tc-cl-tuval" /><div className="tc-cl-dondur">sürükle: döndür</div></>
+            : secili && (
+              <div className="tc-cl-onizleme-2b">
+                <TakimCizimi it={secili.it} sinif="tc-cl-cizim-buyuk" />
+                <dl>
+                  {secili.it.d != null && <><dt>Ø</dt><dd>{secili.it.d}</dd></>}
+                  {secili.it.lc != null && <><dt>Kesme boyu</dt><dd>{secili.it.lc}</dd></>}
+                  {secili.it.ln != null && <><dt>Boy</dt><dd>{secili.it.ln}</dd></>}
+                  {secili.it.z != null && <><dt>Ağız</dt><dd>{secili.it.z}</dd></>}
+                </dl>
+              </div>
+            )}
         </div>
         <section className="tc-cl-ayrinti">
-          {it && row
+          {secili
             ? (
               <KalemAyrintisi
-                it={it} raf={row} duzenleme={duzenleme} duzenle={duzenlemeYaz} kaydet={kaydet} sablonDegistir={sablonDegistir}
-                sil={() => { silinecekYaz(it); }}
+                it={secili.it} raf={secili.raf} duzenleme={duzenleme} duzenle={duzenlemeYaz} kaydet={kaydet} sablonDegistir={sablonDegistir}
+                sil={() => { silinecekYaz(secili.it); }}
               />
             )
             : <p className="tc-cl-not">Filtreye uyan malzeme yok.</p>}
@@ -293,7 +331,7 @@ export function Kutuphane() {
           {tezgahlar.map((m) => (
             <button
               key={m.id} type="button" className="tc-cl-tezgahkart" aria-pressed={suzgec.mach === m.id}
-              onClick={() => { suzgecYaz({ ...suzgec, mach: suzgec.mach === m.id ? '' : m.id }); }}
+              onClick={() => { bolumYaz('stok'); suzgecYaz({ ...suzgec, mach: suzgec.mach === m.id ? '' : m.id }); }}
             >
               <b>{m.name}</b>
               <span>{`${String(m.aktif)} kalem aktif${m.yuklu !== null ? ` · ${String(m.yuklu)} takım yüklü` : ' · kurulum yok'}`}</span>
