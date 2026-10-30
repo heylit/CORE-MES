@@ -44,11 +44,11 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     expect(screen.getAllByText('Deneme Alıcı').length).toBe(2);
   });
 
-  it('okuyan fiyat giremez: Yeni fiyat, Toplu yapıştır ve Fiyat gir düğmeleri yok', async () => {
+  it('okuyan fiyat giremez: Yeni fiyat, Toplu giriş ve Fiyat gir düğmeleri yok', async () => {
     ac([satir({})], ['satin-alma.oku']);
     expect(await screen.findByText('cubuk')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Yeni fiyat/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Toplu yapıştır/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Toplu giriş/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Fiyat gir/ })).toBeNull();
   });
 
@@ -94,7 +94,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
 
   it('toplu yapıştırmada hatalı satır varken kaydedilmez; düzelince sayı düğmede görünür ve hepsi tek istekte gider', async () => {
     const istekler = ac([]);
-    fireEvent.click(await screen.findByRole('button', { name: /Toplu yapıştır/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Toplu giriş/ }));
     const p = screen.getByRole('dialog');
     const alan = within(p).getByLabelText(/Excel ya da CSV/);
     fireEvent.change(alan, { target: { value: 'DENEME-1;cubuk;10\nDENEME-2;;sıfır' } });
@@ -127,11 +127,42 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     expect(screen.queryByText(/Stok değeri/)).toBeNull();
   });
 
-  it('satıra basınca o kalite ve formun geçmişi açılır', async () => {
+  it('satıra basınca o kalite ve formun geçmişi açılır: kaydeden, kayıt zamanı (tesis saati) ve fiyat grafiği görünür', async () => {
     const istekler = ac([satir({})], ['satin-alma.oku']);
     fireEvent.click(await screen.findByText('DENEME-AL'));
-    expect(await screen.findByText('01.10.2026')).toBeTruthy();
+    const p = await screen.findByRole('dialog');
+    const tablo = await within(p).findByRole('table', { name: 'Fiyat geçmişi' });
+    expect(within(tablo).getByText('01.10.2026')).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: 'Kaydeden' })).toBeTruthy();
+    expect(within(tablo).getAllByText('19.10.2026 11:00')).toHaveLength(2);
+    expect(within(p).getByText('Kg fiyatı, geçerlilik gününe göre', { selector: '.tc-grafik-baslik' })).toBeTruthy();
+    expect(within(p).getByText('125,5 TL', { selector: '.tc-grafik-son' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/gecmis?kalite=DENEME-AL&form=cubuk')).toBe(true);
+  });
+
+  it('1351: şablon kalite listesiyle iner; seçilen dosya önizlenir, kg fiyatı boş satır atlanır, dolu satırlar tek istekte gider', async () => {
+    const istekler = ac([satir({})], undefined, undefined, [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 2 }]);
+    let indirilen: Blob | null = null;
+    vi.stubGlobal('URL', Object.assign(Object.create(URL) as typeof URL, { createObjectURL: (b: Blob) => { indirilen = b; return 'blob:deneme'; }, revokeObjectURL: () => undefined }));
+    const tikla = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(await screen.findByRole('button', { name: /Toplu giriş/ }));
+    const p = screen.getByRole('dialog');
+    fireEvent.click(within(p).getByRole('button', { name: /Şablonu indir/ }));
+    expect(tikla).toHaveBeenCalled();
+    const sablon = await new Promise<string>((coz) => { const r = new FileReader(); r.onload = () => coz(String(r.result)); r.readAsText(indirilen!); });
+    expect(sablon).toContain('"DENEME-AL";"cubuk";"";"TRY"');
+    expect(sablon).toContain('"DENEME-FY";"boru"');
+    const dolu = sablon.replace('"DENEME-AL";"cubuk";""', '"DENEME-AL";"cubuk";"131,75"');
+    fireEvent.change(within(p).getByLabelText('Kg fiyatı dosyası'), { target: { files: [new File([dolu], 'kg.csv', { type: 'text/csv' })] } });
+    const onizleme = await within(p).findByRole('table', { name: 'Kaydedilecek fiyatlar' });
+    expect(within(onizleme).getByText('131,75 TRY')).toBeTruthy();
+    expect(within(p).getByText('1 satırda kg fiyatı boş, atlanır.')).toBeTruthy();
+    fireEvent.click(within(p).getByRole('button', { name: '1 fiyatı kaydet' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toHaveLength(1));
+    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toEqual({
+      satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '131.75', talasKgFiyati: null, paraBirimi: 'TRY', gecerlilik: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), aciklama: '' }],
+    });
+    tikla.mockRestore();
   });
 
   it('sunucu reddederse ileti pencerede kalır', async () => {

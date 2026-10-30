@@ -1,3 +1,11 @@
 /* İki düğme kart başlığının sağında yan yana durur; dar ekranda alt satıra iner. */
 .sa-kg-dugmeler { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
 .sa-kg-deger { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); margin-block-end: var(--b-3); }
+/* Şablon ve dosya seçimi toplu giriş penceresinin başında, kur ve faiz yüklemesindeki dosya seçicisiyle aynı görünüşte. */
+.sa-kg-sablon { justify-content: flex-start; margin-block-end: var(--b-3); }
+.sa-kg-dosya {
+  position: relative; display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); padding-inline: var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); color: var(--ink); cursor: pointer; overflow-wrap: anywhere;
+}
+.sa-kg-dosya:focus-within { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.sa-kg-dosya input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
