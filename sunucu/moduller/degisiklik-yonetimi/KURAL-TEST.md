@@ -24,3 +24,4 @@ Kural, saf işlev (`kurallar.ts`), test (`kurallar.test.ts` ve `degisiklik-yonet
 | DY-18 | görev hedef süresi | `gorevSuresi` | "DY-17 ve DY-18", "listeler" | |
 | DY-19 | görev adımları, kimin olduğu (benim/ekip) ve hat | `talepGorevi`, `emirGorevleri`, `benimGorevimMi`, `talepHatti`, `emirHatti` | "DY-19: görev adımları", "listeler" | |
 | DY-20 | talep yalnız aktif mamul ya da yarı mamul kartına | servis `talepParcalariniDenetle` (malzemeler `disari.ts`) | "DY-20: talep yalnız" | `_talep_kalemi_tek` |
+| DY-21 | parça kimliği malzeme kartına bağlı (1305 a); göç bağsız satırda durur | göç `20261029151000` | `malzeme-fk.test.ts` | `_talep_kalemi_malzeme`, `_emir_kalemi_malzeme`, `_emir_son_urun` |
