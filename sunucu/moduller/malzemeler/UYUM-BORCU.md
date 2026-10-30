@@ -280,3 +280,7 @@ Açık:
 - Eski `kalAy`, `sonKal`, `kalKurulus` salt okunurdur: sunucu gelen değeri yok sayar, kayıtlı değeri korur; ekran yalnız değeri olan kartta salt okunur gösterir; yeni kart bu alanları almaz. Aleti bağlı kartta takvim ve uyarı eski tarihten hesaplanmaz.
 - VARSAYIM (geri alma ucuz): alet silinirse kart bağsız kalır (`ON DELETE SET NULL`), karttaki numara metni durur ve ekran "Bu numarada ölçü aleti yok" der. Kullanım dışı alet bağlanabilir; kart durumunu gösterir.
 - KALAN: Excel içe aktarımı ve prototip `katalog.html` eski alanları yazmaya devam eder; sunucu yok sayar. Kart listesinde (katalog tablosu) alet vadesi gösterilmez, yalnız sihirbazın bakım adımında görünür.
+
+## Etiket yalnız Etiket Merkezi'nde (kart #1308, 1288)
+- SONRA: `kurallar/cekirdek/etiket.ts` (`labelSVG`) ve kural testindeki etiket ölçüleri artık ekranda kullanılmıyor; prototip kural katmanına dokunulmadı, kaldırılması ayrı iş.
+- ETKİLEYEN: madde 66'daki cihaz denemesindeki "etiket yazdırma" artık Etiket Merkezi'nde denenir.

@@ -27,7 +27,7 @@ export function karsilastirmaSatirlari(kayitlar: readonly KartKaydi[], b: KuralB
 }
 
 export function Karsilastirma({ kayitlar, b, kapat, etiket }: {
-  kayitlar: readonly KartKaydi[]; b: KuralBaglami; kapat: () => void; etiket: (kimlikler: string[]) => void;
+  kayitlar: readonly KartKaydi[]; b: KuralBaglami; kapat: () => void; etiket?: (kimlikler: string[]) => void;
 }) {
   const [yalnizFark, yalnizFarkYaz] = useState(false);
   const satirlar = karsilastirmaSatirlari(kayitlar, b);
@@ -39,7 +39,7 @@ export function Karsilastirma({ kayitlar, b, kapat, etiket }: {
       acik kapat={kapat} baslik="Karşılaştırma" tur="tam"
       alt={(
         <div className="tc-mk-pencere-alt">
-          <Dugme simge="tag" onClick={() => etiket(kayitlar.map(kimlikOf))}>Etiketlerini yazdır</Dugme>
+          {etiket && <Dugme simge="printer" onClick={() => etiket(kayitlar.map(kimlikOf))}>Etiket Merkezi'nde bas</Dugme>}
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
         </div>
       )}

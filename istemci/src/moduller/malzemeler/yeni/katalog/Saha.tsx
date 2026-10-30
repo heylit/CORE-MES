@@ -67,9 +67,9 @@ export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][]
   return sat;
 }
 
-export function SahaGorunumu({ kart, b, yetki, kapat, ac, tamFoy, etiket, qr, etiketMerkezi }: {
+export function SahaGorunumu({ kart, b, yetki, kapat, ac, tamFoy, qr, etiketMerkezi }: {
   kart: KatalogKarti; b: KuralBaglami; yetki: MalzemeYetkisi; kapat: () => void; ac: (kimlik: string) => void;
-  tamFoy: () => void; etiket: () => void; qr: () => void; etiketMerkezi: () => void;
+  tamFoy: () => void; qr: () => void; etiketMerkezi: () => void;
 }) {
   const x = kart.kayit;
   const hizmet = x.tur === 'hizmet';
@@ -81,7 +81,6 @@ export function SahaGorunumu({ kart, b, yetki, kapat, ac, tamFoy, etiket, qr, et
       alt={(
         <div className="tc-mk-pencere-alt">
           <Dugme tur="birincil" simge="file" onClick={tamFoy}>Tam föy</Dugme>
-          {!hizmet && <Dugme simge="tag" onClick={etiket}>Etiket</Dugme>}
           {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={etiketMerkezi}>Etiket Merkezi'nde bas</Dugme>}
           <Dugme simge="scan" onClick={qr}>Başka QR okut</Dugme>
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
