@@ -205,6 +205,26 @@ test.describe('A1 Operatör', () => {
 
     // Düzeltme yetkisi olan kişide sayaçta beş tuş durur: üstte İyi +1 ve Hurda +1, altında düzeltme (−1) tuşları tek kısa sırada
     // (1046 a), en altta Toplu giriş. Tuşlar sayacın içinde, Şimdi şeridinin altında kalır, kadran küçülüp yazıları üst üste gelmez.
+    // Kullanıcının bildirdiği kayma: istasyon şeridinde oklar, not ve "Bu istasyona geç" üst satırı sıkıştırıyor, "3 / 11" kırılıp
+    // şerit düğmesine biniyordu. Sıra tek satırdır ve şeritle, eylem satırıyla kesişmez.
+    for (const boy of [{ width: 1280, height: 1000 }, { width: 2000, height: 1146 }]) {
+      test(`${String(boy.width)}x${String(boy.height)} istasyon şeridinde sıra yazısı şerit düğmelerine binmez`, async ({ page, ag, ac }, bilgi) => {
+        test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+        const cark = await ac900(page, ac, 0, boy);
+        await cark.getByRole('button', { name: /İstasyonlar ·/ }).click();
+        await cark.getByRole('button', { name: 'Önceki: istasyonlar' }).click();
+        await expect(cark.getByRole('button', { name: 'Bu istasyona geç' })).toBeVisible();
+        const k = await page.evaluate(() => Object.fromEntries(['.tc-ay1-tcark-serit > :last-child', '.tc-ay1-tcark-konum', '.tc-ay1-tcark-alt']
+          .map((s) => { const b = document.querySelector(s)!.getBoundingClientRect(); return [s, { sol: b.left, sag: b.right, ust: b.top, alt: b.bottom }]; })));
+        const [dugme, konum, alt] = [k['.tc-ay1-tcark-serit > :last-child']!, k['.tc-ay1-tcark-konum']!, k['.tc-ay1-tcark-alt']!];
+        const bilgiYazisi = JSON.stringify(k);
+        expect(konum.sol, bilgiYazisi).toBeGreaterThanOrEqual(dugme.sag);
+        expect(konum.alt - konum.ust, bilgiYazisi).toBeLessThan(2 * (dugme.alt - dugme.ust));
+        expect(alt.ust, bilgiYazisi).toBeGreaterThanOrEqual(Math.max(dugme.alt, konum.alt) - 1);
+        expect(ag.hatalar).toEqual([]);
+      });
+    }
+
     test.describe('düzeltme tuşlarıyla', () => {
       test.use({ hesap: 'ornek.yonetici' });
       for (const boy of [{ width: 1280, height: 900 }, { width: 1600, height: 1000 }, { width: 1920, height: 1080 }]) {
