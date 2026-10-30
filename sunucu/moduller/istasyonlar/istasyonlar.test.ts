@@ -15,7 +15,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   aktifIstasyonlar, aktifMakineler, isMerkezleri, istasyonGetir, istasyondakiMakineler, istasyonlar, kisininIzinliIsMerkezleri,
-  aktifUretimAlaniMi, kisiTezgahSinirlari, makineGetir, makineYetkinlikleri, operasyonTipleri, uretimAlanlari,
+  aktifUretimAlaniMi, ayarYetkinlikleri, kisiTezgahSinirlari, makineGetir, makineYetkinlikleri, operasyonTipleri, uretimAlanlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 
@@ -291,6 +291,11 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       },
       { uc: '/kisi-yetkinlikleri/:kisiId/makineler/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/makineler/belirle`, govde: { makineIdleri: [mk.id] }, basari: 200 },
       { uc: '/kisi-yetkinlikleri/:kisiId/tezgah-siniri', yol: `/kisi-yetkinlikleri/${operatorId}/tezgah-siniri`, govde: { enCok: 2 }, basari: 200 },
+      { uc: '/kisi-yetkinlikleri/:kisiId/ayar/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/ayar/belirle`, govde: { makineIdleri: [mk.id] }, basari: 200 },
+      {
+        uc: '/kisi-yetkinlikleri/:kisiId/ayar/:makineId/ayrinti', yol: `/kisi-yetkinlikleri/${operatorId}/ayar/${mk.id}/ayrinti`,
+        govde: { gecerlilikBitis: '2999-12-31', dayanak: 'Yetki', surum: 1 }, basari: 200,
+      },
       { uc: '/makineler/toplu-tasi', yol: '/makineler/toplu-tasi', govde: { kayitlar: [{ id: topluMk1.id, surum: 1 }], istasyonId: atamaIst.id }, basari: 200 },
       { uc: '/makineler/toplu-aktiflik', yol: '/makineler/toplu-aktiflik', govde: { kayitlar: [{ id: topluMk2.id, surum: 1 }], aktif: false }, basari: 200 },
       { uc: '/makineler/toplu-durum', yol: '/makineler/toplu-durum', govde: { kayitlar: [{ id: topluMk3.id, surum: 0 }], durum: 'ariza' }, basari: 200 },
@@ -325,6 +330,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(`/kisi-is-merkezleri/${operatorId}/belirle`, { isMerkeziIdleri: [] })).durum, 200);
     assert.equal((await yaz(`/kisi-yetkinlikleri/${operatorId}/belirle`, { istasyonIdleri: [] })).durum, 200);
     assert.equal((await yaz(`/kisi-yetkinlikleri/${operatorId}/tezgah-siniri`, { enCok: null })).durum, 200);
+    assert.equal((await yaz(`/kisi-yetkinlikleri/${operatorId}/ayar/belirle`, { makineIdleri: [] })).durum, 200);
   });
 
   test('IS30 (263 a): bakımcı, vardiya sorumlusu ve müdür makine durumunu tek tek ve toplu değiştirir; bakımcı ve vardiya sorumlusu makine tanımını değiştiremez', async () => {
@@ -783,6 +789,63 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
 
     assert.equal((await yaz(`/kisi-yetkinlikleri/${operatorId}/belirle`, { istasyonIdleri: [] })).durum, 200);
     assert.deepEqual(await makineler(), []);
+  });
+
+  test('IS31, IS32 (1303 a): ayar yetkinliği makine başınadır, istasyon seçilirse aktif makinelerinin hepsi yazılır; çalışma yetkinliği şart değildir; defter ve sürüm', async () => {
+    const im = await isMerkeziKur();
+    const a = await istasyonKur(im.id);
+    const [a1, a2] = [await makineKur({ istasyonId: a.id }), await makineKur({ istasyonId: a.id })];
+    const pasif = await makineKur({ istasyonId: a.id });
+    assert.equal((await surumluYaz(`/makineler/${pasif.id}/guncelle`, { kod: pasif.kod, ad: 'Deneme Pasif', istasyonId: a.id, aktif: false })).durum, 200);
+    const istasyonsuz = await makineKur();
+    type Ayar = { makineId: number; gecerlilikBitis: string | null; dayanak: string | null; gecerli: boolean; surum: number };
+    const ayarlar = async (): Promise<Ayar[]> =>
+      ((await oku<{ yetkinlikler: { kisiId: number; ayar: Ayar[] }[] }>('/kisi-yetkinlikleri')).govde.yetkinlikler.find((y) => y.kisiId === operatorId)?.ayar ?? [])
+        .sort((x, y) => x.makineId - y.makineId);
+    const idler = async () => (await ayarlar()).map((x) => x.makineId);
+    const ayarYaz = (govde: unknown) => yaz<{ ayar: Ayar[] }>(`/kisi-yetkinlikleri/${operatorId}/ayar/belirle`, govde);
+    const sirali = (...x: number[]) => x.sort((p, q) => p - q);
+
+    // İstasyon yetkinliği olmayan kişiye verilir; istasyonun pasif makinesi girmez, istasyonsuz makine tek başına verilir.
+    const verildi = await ayarYaz({ istasyonIdleri: [a.id], makineIdleri: [istasyonsuz.id] });
+    assert.equal(verildi.durum, 200, JSON.stringify(verildi.govde));
+    assert.deepEqual(await idler(), sirali(a1.id, a2.id, istasyonsuz.id));
+    for (const reddedilen of [pasif.id, 999999]) {
+      const red = await ayarYaz({ makineIdleri: [a1.id, reddedilen] });
+      assert.equal(red.durum, 400, String(reddedilen));
+      assert.deepEqual(await idler(), sirali(a1.id, a2.id, istasyonsuz.id));
+    }
+    assert.equal((await ayarYaz({ istasyonIdleri: [999999] })).durum, 200);
+    assert.deepEqual(await idler(), []);
+    assert.equal((await ayarYaz({ istasyonIdleri: [a.id] })).durum, 200);
+
+    // Bitiş ve dayanak okunan sürümle değişir; eski sürüm 409, kaydı olmayan makine 404.
+    const ayrinti = (makineId: number, govde: unknown) => yaz(`/kisi-yetkinlikleri/${operatorId}/ayar/${makineId}/ayrinti`, govde);
+    assert.equal((await ayrinti(a1.id, { gecerlilikBitis: '2020-01-31', dayanak: '  Eğitim  ', surum: 1 })).durum, 200);
+    assert.deepEqual((await ayrinti(a1.id, { gecerlilikBitis: null, dayanak: null, surum: 1 })).durum, 409);
+    assert.equal((await ayrinti(istasyonsuz.id, { gecerlilikBitis: null, dayanak: null, surum: 1 })).durum, 404);
+    const a1Ayar = (await ayarlar()).find((x) => x.makineId === a1.id);
+    assert.deepEqual([a1Ayar?.gecerlilikBitis, a1Ayar?.dayanak, a1Ayar?.gecerli, a1Ayar?.surum], ['2020-01-31', 'Eğitim', false, 2]);
+
+    // Plan yalnız bugün geçerli ve aktif makinedeki yetkinliği görür; listede kalanın bitişi tümden yazımda korunur.
+    const plan = async () => (await ayarYetkinlikleri(vt())).filter((x) => x.kisiId === operatorId).map((x) => x.makineId).sort((p, q) => p - q);
+    assert.deepEqual(await plan(), [a2.id]);
+    assert.equal((await ayarYaz({ makineIdleri: [a1.id, a2.id, istasyonsuz.id] })).durum, 200);
+    assert.equal((await ayarlar()).find((x) => x.makineId === a1.id)?.gecerlilikBitis, '2020-01-31');
+    assert.equal((await surumluYaz(`/makineler/${a2.id}/guncelle`, { kod: a2.kod, ad: 'Deneme Pasif', istasyonId: a.id, aktif: false })).durum, 200);
+    assert.deepEqual(await plan(), [istasyonsuz.id]);
+    assert.ok((await idler()).includes(a2.id));
+
+    const kendi = await istek(tesisci, 'POST', `/kisi-yetkinlikleri/${tesisciId}/ayar/belirle`, { makineIdleri: [] });
+    assert.deepEqual([kendi.durum, hataKodu(kendi)], [403, 'YETKI_YOK']);
+    assert.equal((await istek(tesisci, 'POST', `/kisi-yetkinlikleri/${operatorId}/ayar/belirle`, { makineIdleri: [a1.id] })).durum, 200);
+    assert.equal((await yaz('/kisi-yetkinlikleri/999999/ayar/belirle', { makineIdleri: [] })).durum, 404);
+
+    const gecmis = await oku<{ ayarGecmis: { makineKod: string; islem: string; dayanak: string | null }[] }>(`/kisi-yetkinlikleri/${operatorId}/gecmis`);
+    assert.deepEqual(gecmis.govde.ayarGecmis.filter((g) => g.makineKod === a1.kod).map((g) => g.islem), ['degistir', 'ver', 'kaldir', 'ver']);
+    assert.ok(gecmis.govde.ayarGecmis.some((g) => g.makineKod === a2.kod && g.islem === 'kaldir'));
+    await assert.rejects(vt().sorgu('DELETE FROM istasyonlar_ayar_yetkinligi_gecmisi'), /yalnız ekleme/);
+    assert.equal((await ayarYaz({ makineIdleri: [] })).durum, 200);
   });
 
   test('563 2 a: tezgâh sınırı 1-20 arası ya da boştur; değişiklik ortak deftere düşer; kişi kendisininkini yazamaz', async () => {

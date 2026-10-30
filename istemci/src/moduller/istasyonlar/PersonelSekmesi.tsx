@@ -87,12 +87,13 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
   const yetkinlik = v.yetkinlikler?.find((x) => x.kisiId === k.id);
   const yetkin = yetkinlik?.istasyonIdleri ?? [];
   // Karar 146 a: geçerlilik bitişi ve dayanak çipin düzenle düğmesiyle girilir; süresi dolan yetkinlik iş başlatmaz.
-  const [duzenlenen, duzenlenenYaz] = useState<{ istasyonId: number; bitis: string; dayanak: string; surum: number } | null>(null);
+  // Aynı düzenleyici ayar yetkinliğine de yazar (1303 a); yalnız uç yolu ve başlık değişir.
+  const [duzenlenen, duzenlenenYaz] = useState<{ yol: string; baslik: string; bitis: string; dayanak: string; surum: number } | null>(null);
   const ayrinti = (istasyonId: number) => yetkinlik?.ayrintilar.find((a) => a.istasyonId === istasyonId);
   const ayrintiKaydet = () => {
     if (duzenlenen === null) return;
     y.gonder({
-      yol: `/kisi-yetkinlikleri/${k.id}/istasyonlar/${duzenlenen.istasyonId}/ayrinti`,
+      yol: duzenlenen.yol,
       govde: { gecerlilikBitis: duzenlenen.bitis || null, dayanak: duzenlenen.dayanak || null, surum: duzenlenen.surum }, satir,
     });
     duzenlenenYaz(null);
@@ -116,6 +117,20 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
   const makineSecenekleri = v.makineler.filter((m) => m.aktif && m.istasyonId !== null && yetkin.includes(m.istasyonId) && !makineYetkin.includes(m.id))
     .map((m) => ({ deger: String(m.id), baslik: `${m.kod} ${m.ad}`, grup: v.istasyonlar.find((i) => i.id === m.istasyonId)?.kod ?? 'İstasyon' }));
   const enCok = yetkinlik?.enCok ?? null;
+  // 1303 a: ayar yetkinliği makine bazındadır ve çalışma yetkinliğinden bağımsızdır; istasyon seçilirse sunucu bütün aktif makinelerini ekler.
+  const ayar = yetkinlik?.ayar ?? [];
+  const ayarIdleri = ayar.map((a) => a.makineId);
+  const ayarYaz = (govde: { makineIdleri: number[]; istasyonIdleri?: number[] }) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/ayar/belirle`, govde, satir });
+  const ayarSecenekleri = [
+    ...v.makineler.filter((m) => m.aktif && !ayarIdleri.includes(m.id))
+      .map((m) => ({ deger: `makine:${m.id}`, baslik: `${m.kod} ${m.ad}`, grup: v.istasyonlar.find((i) => i.id === m.istasyonId)?.kod ?? 'İstasyonsuz' })),
+    ...istasyonlar.map((i) => ({ ...i, deger: `istasyon:${i.deger}`, baslik: `${i.baslik} (bütün makineleri)` })),
+  ];
+  const ayarEkle = (d: string) => {
+    const [tur, id] = d.split(':');
+    if (tur === 'makine') ayarYaz({ makineIdleri: [...ayarIdleri, Number(id)] });
+    if (tur === 'istasyon') ayarYaz({ makineIdleri: ayarIdleri, istasyonIdleri: [Number(id)] });
+  };
   const ata = () => {
     const [tur, id] = hedef.split(':') as [AtamaTuru, string];
     y.gonder({ yol: `${ATAMA_YOLU[tur](Number(id))}/ata`, govde: { kisiId: k.id, yuzde: yuzde.replace(',', '.') }, satir });
@@ -183,7 +198,9 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
                 {a?.gecerlilikBitis && (a.gecerli ? ` · ${a.gecerlilikBitis} bitiş` : <span className="tc-ist-dal-uyari"> süresi doldu ({a.gecerlilikBitis})</span>)}
                 {yazabilir && a && (
                   <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${i.kod} yetkinliğinin bitişi ve dayanağı`} disabled={kapali}
-                    onClick={() => duzenlenenYaz({ istasyonId: i.id, bitis: a.gecerlilikBitis ?? '', dayanak: a.dayanak ?? '', surum: a.surum })}>
+                    onClick={() => duzenlenenYaz({
+                      yol: `/kisi-yetkinlikleri/${k.id}/istasyonlar/${i.id}/ayrinti`, baslik: i.kod, bitis: a.gecerlilikBitis ?? '', dayanak: a.dayanak ?? '', surum: a.surum,
+                    })}>
                     <Simge ad="edit" boyut="k" />
                   </button>
                 )}
@@ -232,9 +249,41 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
             </span>
           </div>
         )}
+        {v.yetkinlikler && (
+          <div className="tc-ist-kisi-satir">
+            <span className="tc-ist-kisi-etiket">Ayar yapabildiği makineler</span>
+            <span className="tc-ist-cipler" role="group" aria-label={`${k.ad} ayar yetkinliği`}>
+              {ayar.length === 0 && <small className="tc-ist-ipucu">Ayar yetkinliği girilmemiş</small>}
+              {ayar.map((a) => { const m = v.makineler.find((x) => x.id === a.makineId); const kod = m?.kod ?? `#${a.makineId}`; return (
+                <span key={a.makineId} className="tc-ist-cip" title={a.dayanak ? `${m?.ad ?? kod}: ${a.dayanak}` : m?.ad}>
+                  <Simge ad="tool" boyut="k" /> <span className="tc-ist-mono">{kod}</span>{m && !m.aktif && ' (pasif)'}
+                  {a.gecerlilikBitis && (a.gecerli ? ` · ${a.gecerlilikBitis} bitiş` : <span className="tc-ist-dal-uyari"> süresi doldu ({a.gecerlilikBitis})</span>)}
+                  {yazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğinin bitişi ve dayanağı`} disabled={kapali}
+                      onClick={() => duzenlenenYaz({
+                        yol: `/kisi-yetkinlikleri/${k.id}/ayar/${a.makineId}/ayrinti`, baslik: `${kod} ayar`, bitis: a.gecerlilikBitis ?? '', dayanak: a.dayanak ?? '', surum: a.surum,
+                      })}>
+                      <Simge ad="edit" boyut="k" />
+                    </button>
+                  )}
+                  {yazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğini kaldır`} disabled={kapali}
+                      onClick={() => ayarYaz({ makineIdleri: ayarIdleri.filter((x) => x !== a.makineId) })}>
+                      <Simge ad="x" boyut="k" />
+                    </button>
+                  )}
+                </span>
+              ); })}
+              {yazabilir && (
+                <AranabilirSecim etiket={`${k.ad} için ayar yetkinliği ekle`} tur="makine" deger="" yerTutucu="+ Ayar…" disabled={kapali}
+                  secenekler={ayarSecenekleri} sec={(d) => { if (d !== '') ayarEkle(d); }} />
+              )}
+            </span>
+          </div>
+        )}
         {duzenlenen && (
           <div className="tc-ist-kisi-satir" role="group" aria-label={`${k.ad} yetkinlik ayrıntısı`}>
-            <span className="tc-ist-kisi-etiket">{v.istasyonlar.find((i) => i.id === duzenlenen.istasyonId)?.kod ?? 'Yetkinlik'}</span>
+            <span className="tc-ist-kisi-etiket">{duzenlenen.baslik}</span>
             <span className="tc-ist-ata-satir">
               <Girdi etiket="Geçerlilik bitişi" type="date" value={duzenlenen.bitis} onChange={(o) => duzenlenenYaz({ ...duzenlenen, bitis: o.target.value })} ipucu="Boşsa süresiz." />
               <Girdi etiket="Dayanak" value={duzenlenen.dayanak} maxLength={300} onChange={(o) => duzenlenenYaz({ ...duzenlenen, dayanak: o.target.value })} ipucu="Eğitim ya da sertifika." />

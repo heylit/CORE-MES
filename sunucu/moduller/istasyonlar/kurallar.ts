@@ -189,3 +189,13 @@ export function makineYetkinligiReddi(makine: { istasyonId: number | null; aktif
 // İstasyon yetkinliği kalkınca o istasyondaki makine kayıtları da kalkar.
 export const istasyonuKalkanMakineler = (kayitlar: readonly { makineId: number; istasyonId: number | null }[], kaldirilan: readonly number[]): number[] =>
   kayitlar.filter((k) => k.istasyonId !== null && kaldirilan.includes(k.istasyonId)).map((k) => k.makineId);
+
+// IS31 (1303 a): ayar yetkinliği yalnız var olan, aktif makineye verilir. Çalışma yetkinliği şart değildir: ayarcı makinede
+// üretim yapmayabilir. Listede duran (sonradan pasife dönen) makine kalabilir; plan onu geçerli saymaz.
+export function ayarYetkinligiReddi(makine: { aktif: boolean } | undefined): string | null {
+  return makine === undefined || !makine.aktif ? 'Ayar yetkinliği yalnız var olan, aktif makineye verilir.' : null;
+}
+
+// IS32 (1303 a): istasyon seçilirse istasyonun bütün aktif makineleri listeye girer; tekrar edenler bir kez.
+export const ayarListesi = (makineIdleri: readonly number[], istasyonMakineleri: readonly number[]): number[] =>
+  [...new Set([...makineIdleri, ...istasyonMakineleri])];

@@ -696,3 +696,97 @@ export async function kisiTezgahSiniriYaz(db: Db, kisiId: number, enCok: number 
     [kisiId, enCok, degistirenKisiId],
   );
 }
+
+// 1303 a: ayar yetkinliği (kişi x makine).
+export interface AyarYetkinligiSatiri {
+  kisiId: number;
+  makineId: number;
+  verenKisiId: number;
+  verilme: string;
+  gecerlilikBitis: string | null;
+  dayanak: string | null;
+  surum: number;
+}
+const AYAR_YETKINLIGI = `kisi_id AS "kisiId", makine_id AS "makineId", veren_kisi_id AS "verenKisiId", ${zamanMetni('verilme')} AS verilme,
+  gecerlilik_bitis::text AS "gecerlilikBitis", dayanak, surum`;
+
+// Süresi dolmuşlar dahil (ekran listesi).
+export function ayarYetkinlikleri(db: Db, kisiId: number | null): Promise<AyarYetkinligiSatiri[]> {
+  return db.sorgu<AyarYetkinligiSatiri>(
+    `SELECT ${AYAR_YETKINLIGI} FROM istasyonlar_ayar_yetkinligi WHERE $1::int IS NULL OR kisi_id = $1 ORDER BY kisi_id, makine_id`,
+    [kisiId],
+  );
+}
+
+// Kişinin satırları kilitlenir: eşzamanlı iki liste yazması sırayla uygulanır.
+export function kisiAyarYetkinlikleriniKilitle(db: Db, kisiId: number): Promise<AyarYetkinligiSatiri[]> {
+  return db.sorgu<AyarYetkinligiSatiri>(
+    `SELECT ${AYAR_YETKINLIGI} FROM istasyonlar_ayar_yetkinligi WHERE kisi_id = $1 ORDER BY makine_id FOR UPDATE`,
+    [kisiId],
+  );
+}
+
+// Bugün geçerli ayar yetkinlikleri; pasif makine düşer (plan ve dışarı okuma).
+export function gecerliAyarYetkinlikleri(db: Db, kisiId: number | null, gun: string): Promise<{ kisiId: number; makineId: number }[]> {
+  return db.sorgu<{ kisiId: number; makineId: number }>(
+    `SELECT a.kisi_id AS "kisiId", a.makine_id AS "makineId"
+       FROM istasyonlar_ayar_yetkinligi a JOIN makine m ON m.id = a.makine_id
+      WHERE ($1::int IS NULL OR a.kisi_id = $1) AND m.aktif AND (a.gecerlilik_bitis IS NULL OR a.gecerlilik_bitis >= $2::date)
+      ORDER BY a.kisi_id, a.makine_id`,
+    [kisiId, gun],
+  );
+}
+
+// IS32: istasyon seçilince istasyonun bugünkü aktif makineleri.
+export async function istasyonlarinAktifMakineleri(db: Db, istasyonIdleri: readonly number[]): Promise<number[]> {
+  if (istasyonIdleri.length === 0) return [];
+  const satirlar = await db.sorgu<{ id: number }>(
+    'SELECT id FROM makine WHERE istasyon_id = ANY($1::int[]) AND aktif ORDER BY id', [[...istasyonIdleri]],
+  );
+  return satirlar.map((s) => s.id);
+}
+
+export async function ayarYetkinligiEkle(db: Db, kisiId: number, makineId: number, verenKisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO istasyonlar_ayar_yetkinligi (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [kisiId, makineId, verenKisiId]);
+}
+
+export async function ayarYetkinligiKaldir(db: Db, kisiId: number, makineId: number): Promise<void> {
+  await db.sorgu('DELETE FROM istasyonlar_ayar_yetkinligi WHERE kisi_id = $1 AND makine_id = $2', [kisiId, makineId]);
+}
+
+export function ayarYetkinligiAyrintisiYaz(
+  db: Db, kisiId: number, makineId: number, g: { gecerlilikBitis: string | null; dayanak: string | null; surum: number },
+): Promise<AyarYetkinligiSatiri | null> {
+  return db.tek<AyarYetkinligiSatiri>(
+    `UPDATE istasyonlar_ayar_yetkinligi SET gecerlilik_bitis = $3, dayanak = $4, surum = surum + 1
+      WHERE kisi_id = $1 AND makine_id = $2 AND surum = $5 RETURNING ${AYAR_YETKINLIGI}`,
+    [kisiId, makineId, g.gecerlilikBitis, g.dayanak, g.surum],
+  );
+}
+
+export interface AyarYetkinligiGecmisSatiri {
+  makineId: number;
+  makineKod: string;
+  islem: 'ver' | 'degistir' | 'kaldir';
+  gecerlilikBitis: string | null;
+  dayanak: string | null;
+  degistirenKisiId: number;
+  zaman: string;
+}
+export async function ayarYetkinligiGecmisiYaz(
+  db: Db, g: { kisiId: number; makineId: number; islem: AyarYetkinligiGecmisSatiri['islem']; gecerlilikBitis: string | null; dayanak: string | null; degistirenKisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO istasyonlar_ayar_yetkinligi_gecmisi (kisi_id, makine_id, makine_kod, islem, gecerlilik_bitis, dayanak, degistiren_kisi_id)
+       SELECT $1, $2, m.kod, $3, $4, $5, $6 FROM makine m WHERE m.id = $2`,
+    [g.kisiId, g.makineId, g.islem, g.gecerlilikBitis, g.dayanak, g.degistirenKisiId],
+  );
+}
+export function ayarYetkinligiGecmisi(db: Db, kisiId: number): Promise<AyarYetkinligiGecmisSatiri[]> {
+  return db.sorgu<AyarYetkinligiGecmisSatiri>(
+    `SELECT makine_id AS "makineId", makine_kod AS "makineKod", islem, gecerlilik_bitis::text AS "gecerlilikBitis", dayanak,
+            degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('zaman')} AS zaman
+       FROM istasyonlar_ayar_yetkinligi_gecmisi WHERE kisi_id = $1 ORDER BY zaman DESC, id DESC LIMIT 500`,
+    [kisiId],
+  );
+}
