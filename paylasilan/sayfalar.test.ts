@@ -84,7 +84,8 @@ test('Planlama ikinci menüsünde planlama maddeleri plan.planlama-oku, maliyet 
   assert.ok(maddeler.every((m) => m.veya === undefined && (m.yol === '/plan' || m.yol === `/plan/${m.anahtar}`)));
   const rr = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
   assert.ok(rr);
-  assert.ok(rr.gruplar.flatMap((g) => g.maddeler).every((m) => m.islem === 'sayfa.recete-rota'));
+  // Tek istisna kapanış onaylarıdır (1416 a): kapanış okuması olmayan rol maddeyi görmez.
+  assert.ok(rr.gruplar.flatMap((g) => g.maddeler).every((m) => m.islem === (m.anahtar === 'kapanis' ? 'uretim-emirleri.kapanis-oku' : 'sayfa.recete-rota')));
 });
 
 test('İK ikinci menüsünde PDKS aktar maddesi yalnız nizamiye.pdks-aktar ister (341 a); öteki maddeler ik.oku', () => {
