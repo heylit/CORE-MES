@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { planGirdisi } from './plan-girdisi.ts';
+import { TERMIN_SAATI } from './kurallar.ts';
 import { motorYukle } from './plan-motoru.ts';
 
 // Sunucu planın girdisini çerçevenin koduyla (motor/girdi.betik) kurar; çerçeveyle eşitliği istemcideki planlama-girdisi.test.ts sınar.
@@ -53,7 +54,7 @@ describe('plan girdisi (sunucu)', () => {
   });
 
   // 524/5 a, kural 5: teslimi boş emir bugüne bitmiş sayılmaz (ekranda bugünün tarihi ve "gecikiyor" görünüyordu).
-  test('sunucu emrinin teslimi yoksa termini de yoktur; başlangıcı yoksa bugünden başlar; teslimi olanın termini günün 17:00ıdır', () => {
+  test('sunucu emrinin teslimi yoksa termini de yoktur; başlangıcı yoksa bugünden başlar; teslimi olanın termini günün sonudur (1401 a)', () => {
     const emirler = { orders: [
       { id: 'O1', no: 'E-1', itemId: '50', qty: 10, start: null, due: null, priority: 2, status: 'uretimde' },
       { id: 'O2', no: 'E-2', itemId: '50', qty: 5, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'serbest' },
@@ -61,7 +62,18 @@ describe('plan girdisi (sunucu)', () => {
     const r = planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak: { durum: { ...KAYNAK.durum, emirler }, ek: null }, bugun: '2026-10-21' });
     const sip = (r?.st as { D: { siparisler: Array<{ id: string; termin: string | null; serbest: string | null }> } }).D.siparisler;
     assert.equal(sip.find((x) => x.id === 'O1')?.termin, null);
-    assert.equal(sip.find((x) => x.id === 'O2')?.termin, '2026-10-30 17:00');
+    assert.equal(sip.find((x) => x.id === 'O2')?.termin, `2026-10-30 ${TERMIN_SAATI}`);
+  });
+
+  // 1401 a: termin saatinin tek tanımı; betik kurallar.ts'i ithal edemez (çerçeveye gömülür), aynılığı motorun kurduğu girdiden denetlenir.
+  test('1401 a: motorun termin saati sunucunun TERMIN_SAATI ile aynıdır; eski kayıttaki 17:00 gün sonuna düzelir', () => {
+    // Kayıttaki emrin eski motor kaydı (plan) 17:00'lı termin taşır; tarih aynı olsa da saat düzelir.
+    const emir = { id: 'O2', no: 'E-2', itemId: '50', qty: 5, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'serbest' };
+    const kayit = { ...KAYIT, orders: [{ ...emir, plan: { id: 'O2', urun: '50', adet: 5, termin: '2026-10-30 17:00', serbest: null, oncelik: 1, ad: 'E-2' } }] };
+    const emirler = { orders: [emir], opStatus: {}, opProg: {} };
+    const r = planGirdisi({ calisma: calisma(D0), kayit, kaynak: { durum: { ...KAYNAK.durum, emirler }, ek: null }, bugun: '2026-10-21' });
+    const sip = (r?.st as { D: { siparisler: Array<{ id: string; termin: string | null }> } }).D.siparisler;
+    assert.equal(sip.find((x) => x.id === 'O2')?.termin, `2026-10-30 ${TERMIN_SAATI}`);
   });
 
   test('563 c, 563 2 a: kişinin makineleri ve en çok tezgâhı motor girdisine geçer; yetkinlik kısıtı kapalıysa düşer', () => {

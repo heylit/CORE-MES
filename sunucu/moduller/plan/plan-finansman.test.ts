@@ -4,7 +4,8 @@ import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
-// 1383 a: planın finansman oranı finansın TRY faizidir (aylık x 12 / 365, günlük yüzde); finansta yoksa elle oran kalır. Ayrı dosyadır:
+// 1383 a: planın finansman oranı finansın TRY faizidir (aylık x 12 / 365, günlük yüzde). 1448 a: bedel ayarındaki elle oran salt okunurdur ve
+// okunmaz; finansta yoksa finansman bedele girmez. Ayrı dosyadır:
 // finans faizi silinemez, bu dosyanın şemasında kalır. Veriler uydurmadır.
 describe('plan (gerçek PostgreSQL): finansman oranı finanstan (1383 a)', () => {
   const { c, tamam, yeniAdim, isEmirleriAc, planOku, taslaktaOner, durum } = planTestOrtami();
@@ -12,7 +13,7 @@ describe('plan (gerçek PostgreSQL): finansman oranı finanstan (1383 a)', () =>
   let yoneticiId = 0;
   before(() => { ({ ortam, yoneticiId } = durum()); });
 
-  test('finansta TRY faizi yokken elle oran, varken finansın oranı işler; planlama çalışması aynı oranı taşır', async () => {
+  test('1448 a: finansta TRY faizi yokken elle oran işlemez, varken finansın oranı işler; bedel ayarı onu okur; planlama çalışması aynı oranı taşır', async () => {
     const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-04-10');
     await ortam!.sahip.tx(async (db) => {
       const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 1412', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
@@ -27,11 +28,16 @@ describe('plan (gerçek PostgreSQL): finansman oranı finanstan (1383 a)', () =>
     try {
       const elle = p.gostergeler.maliyetTl;
       assert.equal(typeof elle, 'number');
+      await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_ayari SET finansman_orani_gun = NULL'));
+      assert.equal((await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl, elle, 'elle oran (0,12) plana girmiyordu');
+      assert.equal((await tamam<{ finansmanOraniGun: number | null }>(c.mudur, 'GET', '/plan/bedel-ayari')).finansmanOraniGun, null, 'finansta oran yok');
       // Aylık %36,5 = günlük %1,2: elle oranın (0,12) on katı.
       await ortam!.sahip.tx((db) => db.sorgu(
         "INSERT INTO finans_faiz (para_birimi, gecerlilik_baslangic, aylik_yuzde, olusturan_id) VALUES ('TRY', DATE '2000-01-01', 36.5, $1)", [yoneticiId]));
       const finansli = (await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl!;
       assert.ok(finansli > elle!, `${finansli} > ${elle}`);
+      assert.ok(Math.abs((await tamam<{ finansmanOraniGun: number }>(c.mudur, 'GET', '/plan/bedel-ayari')).finansmanOraniGun - (36.5 * 12) / 365) < 1e-9,
+        'bedel ayarı finansın oranını gösterir');
       await tamam(c.planlama, 'POST', '/plan/planlama-calismasi/olustur');
       const calisma = (await tamam<PlanlamaCalismasiCevabi>(c.planlama, 'GET', '/plan/planlama-calismasi')).calisma as { D: { planAgirlik?: { fin?: number } } } | null;
       assert.ok(calisma !== null);

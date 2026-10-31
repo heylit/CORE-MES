@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
-import { ONCELIK_AGIRLIGI, oncelikSinifi } from './kurallar.ts';
+import { ONCELIK_AGIRLIGI, oncelikSinifi, terminDakikasi } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 507 1 a: /plan göstergelerinde eski motorun ayar saati ve öncelik ağırlıklı gecikmesi (salt okuma). Veriler uydurmadır.
@@ -16,8 +16,8 @@ describe('plan (gerçek PostgreSQL): ayar saati ve öncelik ağırlıklı gecikm
     const p = await taslaktaOner();
     assert.equal(p.gostergeler.ayarSaat, 1.3, '30 + 45 dakika');
     const e = p.emirler.find((x) => x.teslim === dun)!;
-    // Teslim sınırı sunucudaki gunSonu ile aynı: ertesi gün başından 1 sn önce. 1 sn fark ağırlıkla çarpılıp bir ondalığa yuvarlanınca sonucu kaydırır.
-    const gecikme = (Date.parse(e.bitis!) - (tesisGunBasi(tesisGunu(Date.parse(`${dun}T12:00:00Z`) + 86_400_000)) - 1000)) / 3_600_000;
+    // Teslim sınırı sunucudaki gunSonu ile aynı (1401 a: günün TERMIN_SAATI'si). Küçük fark ağırlıkla çarpılıp bir ondalığa yuvarlanınca sonucu kaydırır.
+    const gecikme = (Date.parse(e.bitis!) - (tesisGunBasi(dun) + terminDakikasi() * 60_000)) / 3_600_000;
     assert.ok(gecikme > 0);
     // F-7: ağırlık ham öncelikle değil öncelik sınıfıyladır (öncelik 3 Normal: sınıf 2, ağırlık 2).
     const sinif = oncelikSinifi(e.oncelik);

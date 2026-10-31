@@ -132,8 +132,11 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       assert.equal(q.gostergeler.maliyetTl, null, 'planlama fiyatı görmez');
       const once = p.gostergeler.maliyetTl;
       assert.equal(typeof once, 'number');
+      assert.equal(p.gostergeler.bedeliBilinmeyenEmir, 0, 'TL satırın bedeli bilinir');
+      assert.equal(q.gostergeler.bedeliBilinmeyenEmir, undefined, 'fiyatı görmeyene bilinmeyen sayısı da gitmez');
+      // 1448 a: ayar satırındaki elle oran okunmaz; finansta TRY faizi yokken finansman bedele girmez (finanslı hâli plan-finansman testinde).
       await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_ayari SET finansman_orani_gun = 0.12'));
-      assert.ok((await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl! > once!, '2.400.000 TL satır bitişine kadar finansman öder');
+      assert.equal((await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl, once, 'elle finansman oranı plana girmez');
     } finally {
       await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${q.taslak!.id}/vazgec`, { surum: q.taslak!.surum });
@@ -288,6 +291,8 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   test('210 a, denetim #21: bedel ayarını yalnız plan.bedel-ayari değiştirir (müdür); planlama değiştiremez; değerler sınırlıdır; çarpansız gövde çarpanları korur', async () => {
     const varsayilan = { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 };
     const yeni = { tabanBedelSaat: 200, finansmanOraniGun: 0.14, karRiskiOraniGun: 0.25, yuksekEsigi: 1.8, dusukEsigi: 0.5 };
+    // 1448 a: finansman oranı salt okunurdur: gövdede gelse de yazılmaz, okuma finansın oranını (bu şemada yok: null) verir.
+    const okunan = { ...yeni, finansmanOraniGun: null };
     const carpanlar = { yuksekCarpani: 3, normalCarpani: 1.2, dusukCarpani: 0.4 };
     const taslak = null;
     assert.equal((await istek(c.planlama, 'POST', '/plan/bedel-ayari', { ...yeni, taslak })).statusCode, 403);
@@ -299,11 +304,12 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       // 148 a: yazma taslağa gider; canlı onaya kadar değişmez, taslağın okuması yeni değeri verir. 955 b: sınıf çarpanı artık alan değildir.
       const t = await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, ...carpanlar, sinifACarpani: 2, taslak });
       assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), varsayilan, 'canlı onaya kadar değişmez');
-      assert.deepEqual(await tamam(c.cam, 'GET', `/plan/bedel-ayari?taslak=${t.taslak!.id}`), { ...yeni, ...carpanlar });
+      assert.deepEqual(await tamam(c.cam, 'GET', `/plan/bedel-ayari?taslak=${t.taslak!.id}`), { ...okunan, ...carpanlar });
       await canliyaGecir(c.mudur, t);
-      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...yeni, ...carpanlar });
+      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar });
+      assert.equal((await ortam!.sahip.tek<{ f: string | null }>('SELECT finansman_orani_gun AS f FROM plan_ayari'))!.f, null, 'elle oran yazılmadı');
       await bedelYaz({ ...yeni, tabanBedelSaat: 250 });
-      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...yeni, ...carpanlar, tabanBedelSaat: 250 },
+      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar, tabanBedelSaat: 250 },
         'çarpanları göstermeyen ekranın gövdesi çarpanları değiştirmez');
     } finally {
       await bedelYaz(varsayilan);
