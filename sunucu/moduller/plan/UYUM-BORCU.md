@@ -48,14 +48,14 @@
 
 | No | Borç | Ekrana dokunur | Kapanış |
 |---|---|---|---|
-| P-B27 | KAPANDI (627 a, kart 625h): `sunucu/kablolama.ts` `bag('plan motoru -> plan', planMotoruCozucusu, receteRota.sunucuPlanCozucusu)`; canlıya almada ve kuyruk yazımında makine kuyrukları ortak motorla yeniden dizilir. `/plan/oner` ve `/plan/karsilastir` kalktı (625n; testler, akış sağlığı ve robot Planı kur'a, yani kuyruk yazımına geçti). Sıralama kuralları sayfanın (687 a); ek adım emrin kendi adımı olarak motora gider (686 a; 689 a ara yolu kalktı). Kalan Motor A kullanımları (220 a motor yerleşimi, emir önizleme, hızlı deneme, parçalı kuyruk yazımı) ayrı kartta (625m). Planlama sayfasının çalışma kaydı yoksa çözücü 409 verir (canlıya alma durur, ileti sayfayı bir kez kaydetmeyi söyler) | Hayır | Kalan Motor A kullanımları 625m'de kalkar |
-| P-B28 | Çözücü kayıtlıyken parçalı ya da kişi kaynaklı kuyruk yazımı Motor A yolundan gider (çözücü cevabı parça ve kişi taşımıyor); canlıya almada bölünmüş iş ve kişi kaynaklı iş yeniden dizilmez, sabit kalır | Hayır | Çözücü parça ve kişi kaynağı verince |
+| P-B27 | KAPANDI (627 a, kart 625h): `sunucu/kablolama.ts` `bag('plan motoru -> plan', planMotoruCozucusu, receteRota.sunucuPlanCozucusu)`; canlıya almada ve kuyruk yazımında makine kuyrukları ortak motorla yeniden dizilir. `/plan/oner` ve `/plan/karsilastir` kalktı (625n; testler, akış sağlığı ve robot Planı kur'a, yani kuyruk yazımına geçti). Sıralama kuralları sayfanın (687 a); ek adım emrin kendi adımı olarak motora gider (686 a; 689 a ara yolu kalktı). Motor A kalktı (625m, 1381 a, kart 1408): 220 a motor yerleşimi, emir önizleme ve hızlı deneme çözücüyü 'yeni' kipte çağırır (deneme değişiklikleri: sanal emir, öncelik ve teslim, arızalı makine, kapalı gün); çalışma kaydı yoksa çözücü sayfanın boş çalışmasıyla bellekte çözer, 409 yok. Plan ayarındaki `kural` motoru etkilemez; sıra motor ayarının kuralındandır | - |
+| P-B28 | KAPANDI (1408, 1409 a varsayımıyla): parçalı, kişi kaynaklı ve elle sıralı kuyruk işi motorsuz yazılır (ekran sırası, takvimle), makine işleri çözücüye sabit olarak gider; canlıya almada bölünmüş ve kişi kaynaklı iş sabit kalır. 1409 cevabı başka çıkarsa yeniden açılır | - |
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /plan/canli-yerlesim`, `POST /plan/senaryolar/:id/{canliyi-al, cogalt, degisiklikleri-at}`. Senaryo uçları plan stüdyosunun sunucu yarısıdır; stüdyo bugün sunucuya bağlı değil (`degerlendirme/sistem-uyum/plan-akisi.md`).
 
 ## Plan akışı bağlaması (kart 625, 26.10.2026)
-- Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, P-B27 ve P-B28 (627), ekranı olmayan uçlar.
+- Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, ekranı olmayan uçlar.
 
 ## Planlamanın plan modülüne taşınması (658 c, 26.10.2026)
 - P-B29 kapandı (815, 699/3 a): plan sırasına yalnız üretim emrinin önceliği girer (1-2 Yüksek, 3 Normal, 4 Düşük); sipariş tutarı, gecikme cezası,
