@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { KurFaizAraligi, kurFaizTopluSatiri } from '#paylasilan/sozlesme/finans.ts';
+import { gunlukFaizdenAylik } from '#paylasilan/sozlesme/finansman.ts';
 import { csvSatirlari, csvSayisi, csvTarihi } from './yeni/ayarlar/csv.ts';
 
 // Kur ve faiz şablonunun okunması (1083-1087), saf. Ekran yalnız önizler; sunucu her satırı yeniden denetler ve sayıları o verir.
@@ -7,8 +8,8 @@ export type TopluSatir = z.input<typeof kurFaizTopluSatiri>;
 // Sözleşmedeki KUR_FAIZ_TOPLU_SINIRI ve KUR_FAIZ_ARALIGI_GUN ile aynıdır (istemci paylaşılandan değer almaz); sunucu yeniden denetler.
 const KUR_FAIZ_TOPLU_SINIRI = 400;
 const KUR_FAIZ_ARALIGI_GUN = 1830;
-// Sözleşmedeki gunlukFaizdenAylik ile aynıdır (1350 a): günlük oran aylığa çevrilip dört ondalıkla kaydedilir; sunucu yeniden çevirir.
-export const gunlukFaizdenAylik = (gunlukYuzde: number): number => Math.round(((gunlukYuzde * 365) / 12) * 1e4) / 1e4;
+// 1350 a, 1383 a: günlük oran aylığa sözleşmedeki tek çevirmeyle çevrilip dört ondalıkla kaydedilir; sunucu yeniden çevirir.
+export { gunlukFaizdenAylik };
 export const GUNLUK_FAIZ = 'günlük faiz';
 const turOku = (ham: string): string => {
   const t = ham.trim().toLocaleLowerCase('tr').replace(/[\s_]+/g, ' ');
