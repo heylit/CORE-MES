@@ -5,6 +5,7 @@ import { grupAdi, islemAdi, islemGrubu } from '#paylasilan/islem-adlari.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import './yetkiler.css';
 
@@ -87,6 +88,7 @@ export function Yetkiler() {
         <div className="tc-yetki-dugmeler">
           <Dugme simge="plus" onClick={() => aciklarYaz(new Set(tumGruplar.map((g) => g.anahtar)))}>Tümünü aç</Dugme>
           <Dugme simge="minus" onClick={() => aciklarYaz(new Set())}>Tümünü kapat</Dugme>
+          <GecmisDugmesi kayitlar={[...roller.map((r) => ({ tablo: 'rol', anahtar: { id: r.id } })), ...roller.map((r) => ({ tablo: 'rol_islemi', anahtar: { rol_id: r.id } }))]} />
         </div>
       </div>
       {roller.length === 0 && <DurumKutusu durum="bos" mesaj="Rol yok." />}
