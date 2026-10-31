@@ -74,3 +74,13 @@
   .km-st-m-resim .km-st-sol, .km-st-m-resim .km-st-sag,
   .km-st-m-plan .km-st-sol, .km-st-m-plan .km-st-orta { display: none; }
 }
+/* CMM sonucu yükleme ve ölçüm planı pencereleri (1439 a). */
+.km-st-cmm { display: grid; gap: var(--b-3); min-width: 0; }
+.km-st-cmm-esleme { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 4), 1fr)); gap: var(--b-2); }
+.km-st-dosya {
+  position: relative;
+  display: flex; align-items: center; gap: var(--b-2); min-height: var(--dugme-boy); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  border: var(--cizgi-ince) dashed var(--edge); background: var(--panel2); color: var(--ink); cursor: pointer; overflow-wrap: anywhere;
+}
+.km-st-dosya:hover { border-color: color-mix(in srgb, var(--hazard) 50%, transparent); }
+.km-st-dosya input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

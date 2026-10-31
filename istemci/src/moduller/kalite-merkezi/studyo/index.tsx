@@ -11,6 +11,8 @@ import { MalzemeSecici } from '../yeni/parcalar/MalzemeSecici.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../yeni/sekmeler.ts';
 import { Resim, useKaliteFormu, type OlcumYazici } from './KaliteFormu.tsx';
 import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } from './kurallar.ts';
+import { CmmPlani } from './CmmPlani.tsx';
+import { CmmYukle } from './CmmYukle.tsx';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
 import { useBalonPlaniYaz, useEmirNumuneleri, useOlcumYaz, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
@@ -41,6 +43,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const [resimId, resimIdYaz] = useState<number | null>(null);
   const [secici, seciciYaz] = useState(false);
   const [mobil, mobilYaz] = useState<MobilGorunum>('resim');
+  const [cmm, cmmYaz] = useState<'yukle' | 'plan' | null>(null);
 
   const parcaSec = (no: number) => {
     const y = new URLSearchParams(adres);
@@ -164,6 +167,10 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
               <Secim etiket="Ölçümleri gösterilen emir" value={emir?._id ?? ''} onChange={(o) => { emirSec(o.target.value); }}
                 secenekler={emirler.map((e) => ({ deger: e._id, baslik: `${e.no ?? e._id} · ${e.durum ?? ''}` }))} />
             ) : <span className="km-st-soluk">Bu parçanın iş emri yok.</span>}
+            {resim && uretimEmriId !== null && yetki.yaz ? (
+              <Dugme tur="ikincil" simge="upload" disabled={taslak !== null} onClick={() => { cmmYaz('yukle'); }}>CMM sonucu yükle</Dugme>
+            ) : null}
+            {resim ? <Dugme tur="ikincil" simge="printer" onClick={() => { cmmYaz('plan'); }}>CMM ölçüm planı</Dugme> : null}
           </section>
         ) : null}
       </aside>
@@ -211,6 +218,10 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
       >
         <p>{kaldirilacak?.ad} parçanın resimlerinden kaldırılır. Kontrol planı ve ölçümler silinmez; resim yeniden alınınca geri gelir.</p>
       </OnayPenceresi>
+      {resim && uretimEmriId !== null ? (
+        <CmmYukle acik={cmm === 'yukle'} kapat={() => { cmmYaz(null); }} uretimEmriId={uretimEmriId} emirAdi={emir?.no ?? emir?._id ?? ''} resim={resim} />
+      ) : null}
+      {resim ? <CmmPlani acik={cmm === 'plan'} kapat={() => { cmmYaz(null); }} resim={resim} /> : null}
       <MalzemeSecici acik={secici} kapat={() => { seciciYaz(false); }} sec={(k) => { seciciYaz(false); parcaSec(k.malzemeNo); }} />
     </div>
   );
