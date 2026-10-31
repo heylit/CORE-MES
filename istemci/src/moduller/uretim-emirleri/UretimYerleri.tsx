@@ -20,14 +20,16 @@ const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur 
 
 const yerMetni = (a: IsEmri): string => (a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim');
 
-export function UretimYerleri({ emir }: { emir: { id: number; malzemeNo?: number | null } }) {
+// Üretim Emirleri salt okumadır (1391 a): değiştirme yalnız emrin evinde (Reçete ve Rota) açılır; orası `duzenlenir` verir.
+export function UretimYerleri({ emir, duzenlenir = false }: { emir: { id: number; malzemeNo?: number | null }; duzenlenir?: boolean }) {
   const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
   const gorur = emir.malzemeNo != null && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   if (!gorur) return null;
-  return <Adimlar emirId={emir.id} yazar={islemler.includes('uretim-emirleri.yaz')} />;
+  const yetkili = islemler.includes('uretim-emirleri.yaz');
+  return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} evdeYazilir={!duzenlenir && yetkili} />;
 }
 
-function Adimlar({ emirId, yazar }: { emirId: number; yazar: boolean }) {
+function Adimlar({ emirId, yazar, evdeYazilir }: { emirId: number; yazar: boolean; evdeYazilir: boolean }) {
   const [secili, seciliYaz] = useState<IsEmri | null>(null);
   const d = useQuery({
     queryKey: anahtarlar.adimli(emirId),
@@ -74,7 +76,8 @@ function Adimlar({ emirId, yazar }: { emirId: number; yazar: boolean }) {
       {d.data && (
         <>
           <Tablo etiket="Operasyon adımları" sutunlar={sutunlar} satirlar={d.data.emir.isEmirleri} satirAnahtari={(a) => a.id} bosMesaj="Adım yok" />
-          <p className="tc-emir-not">Değişiklik yalnız bu emri etkiler; rota aynı kalır. Başlamış adım değiştirilemez.</p>
+          {yazar && <p className="tc-emir-not">Değişiklik yalnız bu emri etkiler; rota aynı kalır. Başlamış adım değiştirilemez.</p>}
+          {evdeYazilir && <p className="tc-emir-not">Üretim yeri Reçete ve Rota'daki emirde değiştirilir.</p>}
           {secili && <YerPenceresi emirId={emirId} surum={d.data.emir.surum} adim={secili} kapat={() => seciliYaz(null)} />}
         </>
       )}

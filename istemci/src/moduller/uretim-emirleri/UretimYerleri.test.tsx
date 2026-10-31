@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { AdimliEmirAyrintisi, EmirAyrintiCevabi, IsEmri, IzlemeEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
-import { degisimEngeli } from './UretimYerleri.tsx';
+import { UretimYerleri, degisimEngeli } from './UretimYerleri.tsx';
 import { OKUYUCU, YAZAR, ac, json, sunucuKur } from './test-ortak.tsx';
 
 // Emirde adımın iç ya da dış üretimi (UE-URY). Veriler uydurmadır.
@@ -26,6 +26,8 @@ const FASONDA = adim(20, {
   fason: { gonderilen: 0, donenSaglam: 0, donenHurda: 0, hareketler: [] },
 });
 const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }];
+// Emrin evi (Reçete ve Rota) bileşeni `duzenlenir` ile çizer (1391 a).
+const ev = [{ yol: '/ev/:id', ekran: () => <UretimYerleri emir={{ id: 3, malzemeNo: 501 }} duzenlenir /> }];
 const yollar = (isEmirleri: IsEmri[], ek: Record<string, (g: unknown) => Response> = {}) => ({
   'GET /uretim-emirleri/3': () => json(200, { emir: EMIR, kayitlar: [] } satisfies EmirAyrintiCevabi),
   'GET /adimli-emirler/3': () => json(200, { emir: ayrinti(isEmirleri) }),
@@ -39,7 +41,7 @@ describe('Emirde iç ve dış üretim', () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10, { durum: 'calisiyor', baslama: '2026-10-06T09:00:00+00:00' }), adim(20)], {
       'POST /adimli-emirler/3/uretim-yeri': () => json(200, { emir: ayrinti([adim(10), FASONDA]) }),
     }));
-    ac(ekran, '/uretim-emirleri/3');
+    ac(ev, '/ev/3');
     const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
     expect(within(tablo).getAllByText('İç üretim')).toHaveLength(2);
     expect(within(tablo).getByText('Başladı; değişmez.')).toBeTruthy();
@@ -73,7 +75,7 @@ describe('Emirde iç ve dış üretim', () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10), { ...FASONDA, uretimYeriDegisimi: { yer: 'fason', kisi: { id: 7, ad: 'Deneme Planlamaci' }, zaman: '2026-10-07T08:00:00+00:00' } }], {
       'POST /adimli-emirler/3/uretim-yeri': () => json(200, { emir: ayrinti([adim(10), adim(20)]) }),
     }));
-    ac(ekran, '/uretim-emirleri/3');
+    ac(ev, '/ev/3');
     const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
     expect(within(tablo).getByText('Dış üretim: F-01 Deneme kaplama')).toBeTruthy();
     expect(within(tablo).getByText(/Deneme Planlamaci ·/)).toBeTruthy();
@@ -84,11 +86,21 @@ describe('Emirde iç ve dış üretim', () => {
     await waitFor(() => { expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ opNo: 20, yer: 'ic', firmaId: null, terminGun: null, surum: 4 }); });
   });
 
-  it('yazma yetkisi olmayan adımları görür ama değiştiremez', async () => {
-    sunucuKur(OKUYUCU, yollar([adim(10), adim(20)]));
+  it('1391 a: Üretim Emirleri salt okumadır; yazma yetkisi olana da düğme çıkmaz, yer Reçete ve Rota olarak söylenir', async () => {
+    const istekler = sunucuKur(YAZAR, yollar([adim(10), FASONDA]));
     ac(ekran, '/uretim-emirleri/3');
     const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    expect(within(tablo).queryByRole('button')).toBeNull();
+    expect(screen.getByText("Üretim yeri Reçete ve Rota'daki emirde değiştirilir.")).toBeTruthy();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
+  it('yazma yetkisi olmayan emrin evinde de adımları görür ama değiştiremez', async () => {
+    sunucuKur(OKUYUCU, yollar([adim(10), adim(20)]));
+    ac(ev, '/ev/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
     expect(within(tablo).queryByRole('button', { name: 'Fasona al' })).toBeNull();
+    expect(screen.queryByText("Üretim yeri Reçete ve Rota'daki emirde değiştirilir.")).toBeNull();
   });
 
   it('başlamış, bitmiş ya da fasona gönderilmiş adım değişmez; bekleyen değişir', () => {

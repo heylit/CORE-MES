@@ -19,8 +19,8 @@ import { durumGosterimi, kayitAdedi, saglamSayisi } from './gorunum.ts';
 describe('canlı gösterim', () => {
   const canli = { calisma: 'durakli', saglam: 4, hurda: 1, durusNedeni: null, durusBaslangic: null } as const;
 
-  it('başlamış emirde ayrım çalışma durumundan gelir; canlı yoksa nötr "Başladı"', () => {
-    expect(durumGosterimi({ durum: 'basladi', canli }).etiket).toBe('Duraklı');
+  it('1389 a: başlamış emirde canlı durum ikinci parçadır; canlı yoksa yalnız "Başladı"', () => {
+    expect(durumGosterimi({ durum: 'basladi', canli }).etiket).toBe('Başladı · Duraklı');
     expect(durumGosterimi({ durum: 'basladi', canli: null }).etiket).toBe('Başladı');
     expect(durumGosterimi({ durum: 'bitti', canli: { ...canli, calisma: null } }).etiket).toBe('Üretimi bitti');
   });

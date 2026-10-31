@@ -31,7 +31,7 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
 
   it('çalışıyor: rozet, sayaçlar; duruş satırı yok', async () => {
     await ayrintiAc(basladi(1, { ...CANLI, hurda: 2 }));
-    expect(deger('Durum')).toBe('Çalışıyor');
+    expect(deger('Durum')).toBe('Başladı · Çalışıyor');
     expect(deger('Sağlam adet')).toBe('4');
     expect(deger('Hurda')).toBe('2');
     expect(screen.queryByText('Duruş nedeni')).toBeNull();
@@ -41,7 +41,7 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
   it('duraklı: başlangıç saati ham, neden yok', async () => {
     const saat = '2026-10-06T10:30:00+00:00';
     await ayrintiAc(basladi(2, { ...CANLI, calisma: 'durakli', durusBaslangic: saat }));
-    expect(deger('Durum')).toBe('Duraklı');
+    expect(deger('Durum')).toBe('Başladı · Duraklı');
     expect(deger('Duruş başlangıcı')).toBe(new Date(saat).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }));
     expect(screen.queryByText('Duruş nedeni')).toBeNull();
   });
@@ -50,7 +50,7 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
     await ayrintiAc(basladi(3, {
       ...CANLI, calisma: 'durdu', durusNedeni: { id: 1, ad: 'Takım kırıldı' }, durusBaslangic: '2026-10-06T10:30:00+00:00',
     }));
-    expect(deger('Durum')).toBe('Durdu');
+    expect(deger('Durum')).toBe('Başladı · Durdu');
     expect(deger('Duruş nedeni')).toBe('Takım kırıldı');
     expect(deger('Duruş başlangıcı')).toBe(new Date('2026-10-06T10:30:00+00:00').toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }));
   });
@@ -137,9 +137,9 @@ describe('Liste: canlı sayaç ve çalışma rozeti', () => {
     expect(saglam('UE-000001')).toBe('4 (hurda 2)');
     expect(saglam('UE-000002')).toBe('7');
     expect(saglam('UE-000004')).toBe('9');
-    expect(within(satir('UE-000001')).getByText('Çalışıyor')).toBeTruthy();
-    expect(within(satir('UE-000002')).getByText('Duraklı')).toBeTruthy();
-    expect(within(satir('UE-000003')).getByText('Durdu')).toBeTruthy();
+    expect(within(satir('UE-000001')).getByText('Başladı · Çalışıyor')).toBeTruthy();
+    expect(within(satir('UE-000002')).getByText('Başladı · Duraklı')).toBeTruthy();
+    expect(within(satir('UE-000003')).getByText('Başladı · Durdu')).toBeTruthy();
     expect(within(satir('UE-000004')).getByText('Üretimi bitti')).toBeTruthy();
   });
 });

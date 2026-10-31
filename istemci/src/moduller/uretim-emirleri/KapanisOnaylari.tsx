@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type {
   KapanisAsamasi, KapanisCevabi, KapanisListeCevabi, KapanisListeSatiri, KapanisMaddesi, KapanisOnayi,
@@ -22,11 +22,17 @@ const kapanisUcu = (id: number) => `/adimli-emirler/${String(id)}/kapanis`;
 // Süzgeç: onay veren kişi açılışta kendi onayını bekleyenleri görür; planlama bütün açık kapanışları.
 type Gorunum = 'bekleyen' | 'acik' | 'tamam';
 
-export function KapanisOnaylari() {
+// Onay emrin evinde (Reçete ve Rota) verilir (1416 a); orası `duzenlenir` verir. Üretim Emirleri'ndeki aynı liste salt okumadır ve
+// onay verecek kişiyi seçili emirle oraya yönlendirir.
+export const KAPANIS_EVI = '/recete-rota/kapanis';
+
+export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }) {
   const oturum = useOturum();
+  const yonlendir = useNavigate();
   const islemler = (oturum.data?.islemler ?? []) as readonly string[];
-  const yetkili = (t: KapanisOnayi) => islemler.includes(KAPANIS_YETKISI[t]);
-  const onayci = yetkili('kalite') || yetkili('mudur');
+  const onayVerir = (t: KapanisOnayi) => islemler.includes(KAPANIS_YETKISI[t]);
+  const yetkili = (t: KapanisOnayi) => duzenlenir && onayVerir(t);
+  const onayci = onayVerir('kalite') || onayVerir('mudur');
   const [adres, adresYaz] = useSearchParams();
   const secili = Number(adres.get('emir')) || null;
   // Seçilmemişse rolden gelir; oturum gelmeden karar verilmez (yoksa onay veren kişi açılışta bütün listeyi görürdü).
@@ -47,7 +53,8 @@ export function KapanisOnaylari() {
     placeholderData: (onceki) => onceki,
   });
   const sec = (id: number) => { adresYaz((a) => { const y = new URLSearchParams(a); y.set('emir', String(id)); return y; }, { replace: true }); };
-  const satirlar = (liste.data?.satirlar ?? []).filter((r) => gorunum !== 'bekleyen' || r.bekleyenOnaylar.some(yetkili));
+  const satirlar = (liste.data?.satirlar ?? []).filter((r) => gorunum !== 'bekleyen' || r.bekleyenOnaylar.some(onayVerir));
+  const evdeAc = () => { void yonlendir(secili === null ? KAPANIS_EVI : `${KAPANIS_EVI}?emir=${String(secili)}`); };
   const simdi = new Date();
   const sutunlar: Sutun<KapanisListeSatiri>[] = [
     { anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, hucre: (r) => (
@@ -66,7 +73,9 @@ export function KapanisOnaylari() {
   return (
     <div className="tc-kapanis">
       <Kart baslik="Kapanış onayları" simge="clipboard-check"
-        sag={<span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>}>
+        sag={onayci && !duzenlenir
+          ? <Dugme simge="tool" onClick={evdeAc}>Reçete ve Rota'da onayla</Dugme>
+          : <span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>}>
         {liste.isPending && <DurumKutusu durum="yukleniyor" />}
         {liste.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Kapanışlar alınamadı.')} yenile={() => { void liste.refetch(); }} />}
         {liste.data && (
@@ -80,7 +89,9 @@ export function KapanisOnaylari() {
             // "Onayımı bekleyen" sunucunun onay aşamasından kişinin rolüne göre süzülür; sayfa toplamı ona uymadığı için sayfalama yalnız öbür görünümlerdedir.
             sayfalama={gorunum === 'bekleyen' ? undefined : { sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, degistir: sayfaYaz, etiket: 'Kapanış sayfaları' }} />
         )}
-        <p className="tc-emir-not">Satıra tıklayınca emrin kapanışı aşağıda açılır.</p>
+        <p className="tc-emir-not">
+          {onayci && !duzenlenir ? "Satıra tıklayınca emrin kapanışı aşağıda açılır; onay Reçete ve Rota'da verilir." : 'Satıra tıklayınca emrin kapanışı aşağıda açılır.'}
+        </p>
       </Kart>
       {secili !== null && <SeciliKapanis id={secili} yetkili={yetkili} />}
     </div>
