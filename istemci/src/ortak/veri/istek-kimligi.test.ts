@@ -127,7 +127,7 @@ describe('yeniIstekKimligi', () => {
     // Baytların sırası korunur ve tek haneli bayt iki haneyle yazılır.
     vi.stubGlobal('crypto', { getRandomValues: (dizi: Uint8Array) => dizi.map((_b, i) => i) });
     expect(yeniIstekKimligi()).toBe('00010203-0405-4607-8809-0a0b0c0d0e0f');
-    vi.stubGlobal('crypto', { getRandomValues: (dizi: Uint8Array) => gercek.getRandomValues(dizi) });
+    vi.stubGlobal('crypto', { getRandomValues: (dizi: Uint8Array<ArrayBuffer>) => gercek.getRandomValues(dizi) });
     const kimlikler = Array.from({ length: 50 }, () => yeniIstekKimligi());
     for (const kimlik of kimlikler) expect(kimlik).toMatch(V4);
     expect(new Set(kimlikler).size).toBe(50);
@@ -137,7 +137,7 @@ describe('yeniIstekKimligi', () => {
   it('ureteci nesnesinin ustunden cagirir: ayrik cagriyi reddeden tarayicida da kimlik uretir', () => {
     const gercek = globalThis.crypto;
     const yalnizYedek = {
-      getRandomValues(this: unknown, dizi: Uint8Array) {
+      getRandomValues(this: unknown, dizi: Uint8Array<ArrayBuffer>) {
         if (this !== yalnizYedek) throw new TypeError('Illegal invocation');
         return gercek.getRandomValues(dizi);
       },
