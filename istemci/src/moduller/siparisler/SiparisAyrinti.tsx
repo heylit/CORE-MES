@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisSatiri } from '#paylasilan/sozlesme/siparisler.ts';
 import { Dugme, DurumKutusu, CokSatir, Kart, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SIPARIS_DURUMU, fiyatMetni, kalanGun, miktarMetni, paraMetni, tarihMetni, zamanMetni } from './gorunum.ts';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
@@ -137,7 +138,10 @@ export function SiparisAyrinti() {
         </dl>
       </Kart>
 
-      <Kart baslik="Kalemler">
+      <Kart
+        baslik="Kalemler"
+        sag={<GecmisDugmesi kayitlar={s.satirlar.map((m) => ({ tablo: 'siparisler_siparis_satiri', anahtar: { id: m.id } }))} />}
+      >
         <Tablo etiket="Sipariş kalemleri" sutunlar={sutunlar} satirlar={s.satirlar} satirAnahtari={(m) => m.id} bosMesaj="Satır yok." />
         {fiyatGorur && (
           <dl className="tc-sp-toplamlar">
