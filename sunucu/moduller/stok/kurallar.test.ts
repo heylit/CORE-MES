@@ -11,7 +11,7 @@ import {
   kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
-  eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -689,6 +689,13 @@ describe('stok kuralları: test bulguları 16.1, 21.4, 17.3 (saf)', () => {
     assert.match(eksiKaliteEngeli([{ kaliteDurumu: 'red', miktar: '10.000' }]) ?? '', /^Bu gözdeki parça serbest değil: 10 red \(karantinada\)\. Eksi onayı kalite kararını aşmaz/);
     assert.match(eksiKaliteEngeli([{ kaliteDurumu: 'karar_bekliyor', miktar: '2.500' }, { kaliteDurumu: 'red', miktar: '1' }]) ?? '',
       /1 red \(karantinada\), 2\.5 kalite kararı bekliyor/);
+  });
+  test('B-7 uretimGirisiDurumEngeli: açık ve bitmiş emre giriş yazılır; taslak, iptal ve kapanışı onaylanmış emre yazılmaz', () => {
+    for (const d of ['planli', 'basladi', 'bitti']) assert.equal(uretimGirisiDurumEngeli(d, false), null, d);
+    assert.equal(uretimGirisiDurumEngeli('iptal', false), 'İptal edilmiş emre üretim girişi yazılmaz.');
+    assert.equal(uretimGirisiDurumEngeli('taslak', false), 'Emir henüz planlanmadı; üretim girişi yazılmaz.');
+    assert.equal(uretimGirisiDurumEngeli('bitti', true), 'Emrin kapanışı onaylanmış; üretim girişi yazılmaz.');
+    assert.equal(uretimGirisiDurumEngeli('planli', true), 'Emrin kapanışı onaylanmış; üretim girişi yazılmaz.', 'geri açılmamış kapanış her durumda kapatır');
   });
   test('21.4 uretimGirisiEngeli: girilenle birlikte adedi aşan giriş reddedilir, sınırdaki geçer; aşılmışsa kalan 0 yazılır', () => {
     assert.equal(uretimGirisiEngeli(5, '0', '5'), null);

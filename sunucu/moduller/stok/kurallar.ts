@@ -62,6 +62,16 @@ export function uretimGirisiEngeli(hedefAdet: number, girilen: string, miktar: s
   return `Üretim girişi emrin girilmemiş adedini (${bindenMetin(kalan > 0n ? kalan : 0n)}) aşamaz.`;
 }
 
+// Elle üretim girişi yalnız açık ya da üretimi bitmiş emre yazılır: iptal, taslak ve onaylı kapanışı tamamlanmış emrin (1080 a:
+// kayıtları değişmez) stoğu üretimden gelmez. Bitmiş emir tamamlama ve kapanış öncesi düzeltme için açık kalır.
+export const URETIM_GIRISI_EMIR_DURUMLARI = ['planli', 'basladi', 'bitti'] as const;
+export function uretimGirisiDurumEngeli(durum: string, kapanisTamam: boolean): string | null {
+  if (kapanisTamam) return 'Emrin kapanışı onaylanmış; üretim girişi yazılmaz.';
+  if (durum === 'iptal') return 'İptal edilmiş emre üretim girişi yazılmaz.';
+  if (!(URETIM_GIRISI_EMIR_DURUMLARI as readonly string[]).includes(durum)) return 'Emir henüz planlanmadı; üretim girişi yazılmaz.';
+  return null;
+}
+
 // ---- Çıkış önerisi: en eski giriş önce (DEP-05, DEP-06, DEP-07, DEP-08) --------------------------------------------
 export interface OneriSatiri { bakiyeId: number; konumId: number; konumKod: string; konumTur: string; partiId: number | null; partiEtiketi: string | null; miktar: string; ilkGiris: string }
 // Ayrılmış yer: hurda, karantina ve sevkiyat kutusundaki stok kimseye ayrılmaz, üretime ve çıkışa önerilmez (karar 108 a).

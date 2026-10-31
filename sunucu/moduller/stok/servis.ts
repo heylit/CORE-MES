@@ -50,7 +50,7 @@ import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, dep
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
-  uretimEmriOzeti, emirNolari, refakatKarti,
+  uretimEmriOzeti, emirNolari, refakatKarti, kapanisSonuclari,
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
@@ -59,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -1112,8 +1112,10 @@ export async function uretimGirisi(db: Db, kisiId: number, g: UretimGirisiKomutu
   // 21.4: emrin kendi ürünü sayım ve tamamlamayla da girer; elle giriş adedi aşmaz. Tamamlamayla aynı kilit: eşzamanlı iki giriş
   // sınırı birlikte aşamaz. Emrin ürünü olmayan yarı mamulün emirdeki miktarı adetten çıkmaz, sınırsız kalır.
   const e = await uretimEmriOzeti(db, emir);
+  if (e !== null && e.malzemeNo === malzemeId) await sorgular.emirTamamlamaKilidi(db, emir);
+  const durumEngeli = e === null ? null : uretimGirisiDurumEngeli(e.durum, (await kapanisSonuclari(db, [emir])).get(emir) != null);
+  if (durumEngeli) throw cakisma(durumEngeli);
   if (e !== null && e.malzemeNo === malzemeId) {
-    await sorgular.emirTamamlamaKilidi(db, emir);
     const asim = uretimGirisiEngeli(e.saglamAdet ?? e.adet, await sorgular.emirUretimGirisi(db, emir, malzemeId), miktar);
     if (asim) throw dogrulama(asim, 'miktar');
   }
