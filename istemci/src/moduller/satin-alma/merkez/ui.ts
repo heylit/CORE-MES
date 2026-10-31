@@ -1412,7 +1412,7 @@ ACTIONS["cert-remove"] = (el) => {
 ACTIONS["invoice-link"] = (el) => {
   const fs = faturaSiparisi; if (!fs || !canWrite()) return;
   const bagla = el.dataset.bagla === "1";
-  $$("#fi-list button").forEach(b => { (b as HTMLButtonElement).disabled = true; });
+  $$("#fi-list button").forEach(b => { b.disabled = true; });
   void backend.siparisFaturasiBagla(fs.talepId, fs.teklifId, Number(el.dataset.id), bagla).then(liste => {
     if (faturaSiparisi !== fs || !$("#fi-list")) return;
     if (liste === null) { void faturalariYukle(); return; }
