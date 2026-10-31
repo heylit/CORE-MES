@@ -429,8 +429,8 @@ export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: n
 
 // 507 1 a: eski Reçete ve Rota motorunun özetindeki iki gösterge (evaluate suH ve wT), salt okuma. Ayar saati: yerleşen işlerin (bölünmüş
 // işte her parçanın) ayar süresi toplamı; başlamış ve sayımı olan işin ayarı yapılmıştır, sayılmaz. Öncelik ağırlıklı gecikme: emrin bütün
-// işleri yerleşmişse son bitişin teslim günü sonunu aştığı saat x öncelik ağırlığı x sipariş satırındaki adet payı. Ağırlık eski motorun
-// PW'si (1: 4, 2: 2, 3: 1); tanımsız öncelik (4 dahil) 1. Yerleşmemiş işi olan ya da teslimsiz emir gecikmeye girmez. Saatler bir ondalık.
+// işleri yerleşmişse son bitişin teslim günü sonunu aştığı saat x öncelik ağırlığı x sipariş satırındaki adet payı. Ağırlık motorun PW'si,
+// öncelik sınıfıyla (oncelikSinifi; 1: 4, 2: 2, 3: 1); sınıfsız emir 1. Yerleşmemiş işi olan ya da teslimsiz emir gecikmeye girmez. Saatler bir ondalık.
 export const ONCELIK_AGIRLIGI: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1 };
 export function ayarVeGecikme(
   y: readonly (Aralik & { isEmriId: number; uretimEmriId: number; ayarDk: number | null })[],

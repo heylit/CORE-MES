@@ -889,7 +889,7 @@ function gosterge(b: Baglam, yerler: readonly Yer[]) {
   }), [...emirler.values()].map((e) => {
     const i = ilkIs.get(e.id)!;
     const satir = i.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId) ?? null;
-    return { ...e, oncelik: i.oncelik, pay: adetPayi(satir, i.adet) };
+    return { ...e, oncelik: oncelikSinifi(i.oncelik), pay: adetPayi(satir, i.adet) };
   }));
   // İlk sistem: personel kısıtı kapalıyken sınırlı gün sayılmaz (0); kişi verisi olan iş merkezi yoksa bilinmez (null).
   return { ...g, ...ek, personelGun: personel.length === 0 ? null : b.ayar.personelKisiti ? sinirliGunSayisi(personel) : 0 };
