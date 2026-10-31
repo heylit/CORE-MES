@@ -1,3 +1,4 @@
+import { vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
 import type { PurchaseRequest, Quote, RequestItem, Settings } from "./tipler.ts";
 import { CRIT, KART_SAYFASI, OPEN, SUP_STATUS } from "./constants.ts";
 import { S, V, nameOf, settings } from "./store.ts";
@@ -202,7 +203,7 @@ export function viewSettings(draft?: Settings | null): string {
     <div class="panel-b"><div class="tw"><table class="rt"><thead><tr><th>Para birimi</th><th>TL kuru</th><th>Aylık fırsat maliyeti (%)</th></tr></thead><tbody>
     ${CURS.map(c => `<tr><td class="lead"><b>${c}</b> ${SYM[c]}</td><td class="num">${c === "TRY" ? "1" : isNum(s.currencies[c].rate) ? nfx.format(s.currencies[c].rate!) : '<span class="muted">finansta kur yok</span>'}</td><td class="num" data-sa-y="15">%${numIn(parseNum(s.currencies[c].monthly))}</td></tr>`).join("")}
     </tbody></table></div>
-    <p class="small muted" data-sa-y="16">Kur ve faiz finansın tablolarından okunur; burada değiştirilmez, Satın Alma ana sayfasındaki kur ve faiz şeridinden girilir. Teklif kendi günündeki kurla saklanır ve sonradan değişmez; finansta o günün kuru yoksa teklifte girilir. Finansta faiz yoksa fırsat maliyeti sıfır sayılır. Şu anki ayarla 90 gün vadeli 100.000 ₺ bugün yaklaşık ${money(100000 / Math.pow(1 + (parseNum(s.currencies.TRY.monthly) || 0) / 100, 3), "TRY", 0)} değerinde.</p></div></section>
+    <p class="small muted" data-sa-y="16">Kur ve faiz finansın tablolarından okunur; burada değiştirilmez, Satın Alma ana sayfasındaki kur ve faiz şeridinden girilir. Teklif kendi günündeki kurla saklanır ve sonradan değişmez; finansta o günün kuru yoksa teklifte girilir. Finansta faiz yoksa fırsat maliyeti sıfır sayılır. Şu anki ayarla 90 gün vadeli 100.000 ₺ bugün yaklaşık ${money(100000 * vadeIndirimCarpani(parseNum(s.currencies.TRY.monthly) || 0, 90), "TRY", 0)} değerinde.</p></div></section>
   <section class="panel"><div class="panel-h"><h2>Değerlendirme varsayılanları</h2></div><div class="panel-b grid g4">
     ${CRIT.map(c => `<label class="f"><span>${c.l} ağırlığı</span><input type="number" min="0" max="100" data-set="w" data-k="${c.k}" value="${+s.weights[c.k] || 0}"></label>`).join("")}
     <label class="f"><span>Teklif geçerliliği (gün)</span><input type="number" min="1" data-set="validityDays" value="${s.validityDays}"></label>

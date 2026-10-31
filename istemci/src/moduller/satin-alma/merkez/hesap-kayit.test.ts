@@ -7,7 +7,7 @@ import {
   approvalState, awardTotals, birimReddi, durumEtiketi, evaluate, kurIstenir, lateBy, leadScore, payText, quoteCalc, requiredApprover,
 } from './calc.ts';
 
-// Bugünkü davranışı sabitler (kayıt: hesaplar.md H1-H4); beklenen değerler bugünkü çıktıdır. Girdiler kayıt betiğindeki gibi eksik
+// Bugünkü davranışı sabitler (kayıt: hesaplar.md H1-H4); beklenen değerler bugünkü çıktıdır; vade değerleri 1383 a ile basit faiz, 365 gündür. Girdiler kayıt betiğindeki gibi eksik
 // alanlıdır, çünkü eksik alanın (ör. compliant yok) nasıl yorumlandığı da sabitlenen davranışın parçasıdır.
 
 const AYAR: Settings = {
@@ -63,9 +63,9 @@ describe('SA-HESAP H1: teklif toplamı ve bugünkü değer', () => {
     expect(x.ship).toBe(0);
     expect(x.total).toBeCloseTo(49.5, 6);
     expect(x.totalTRY).toBeCloseTo(1683, 2);
-    expect(x.factor).toBeCloseTo(0.99443, 5);
-    expect(x.pvTRY).toBeCloseTo(1673.63, 2);
-    expect(x.vadeGain).toBeCloseTo(9.37, 2);
+    expect(x.factor).toBeCloseTo(0.99452, 5);
+    expect(x.pvTRY).toBeCloseTo(1673.78, 2);
+    expect(x.vadeGain).toBeCloseTo(9.22, 2);
     expect(x.coverage).toBe(1);
   });
 
@@ -73,9 +73,9 @@ describe('SA-HESAP H1: teklif toplamı ve bugünkü değer', () => {
     const x = quoteCalc(talep(TALEP), teklif(q3), AYAR);
     expect({ rate: x.rate, sub: x.sub, net: x.net, ship: x.ship, total: x.total, totalTRY: x.totalTRY, coverage: x.coverage })
       .toEqual({ rate: 1, sub: 800, net: 800, ship: 100, total: 900, totalTRY: 900, coverage: 0.5 });
-    expect(x.factor).toBeCloseTo(0.97087, 5);
-    expect(x.pvTRY).toBeCloseTo(873.79, 2);
-    expect(x.vadeGain).toBeCloseTo(26.21, 2);
+    expect(x.factor).toBeCloseTo(0.97126, 5);
+    expect(x.pvTRY).toBeCloseTo(874.14, 2);
+    expect(x.vadeGain).toBeCloseTo(25.86, 2);
   });
 
   it('SA-HESAP H1: ödeme metni [peşin, avans ve vade, %100 avans, yalnız vade]', () => {
@@ -104,10 +104,10 @@ describe('SA-HESAP H2: puanlama ve öneri', () => {
       s: Object.fromEntries(Object.entries(x.s).map(([a, b]) => [a, +(+b).toFixed(2)])), score: +x.score.toFixed(2), late: x.late,
     }));
     expect(ozet).toEqual([
-      { id: 'q1', uygun: true, fill: 0, scorePV: 2050, s: { cost: 81.64, lead: 100, supplier: 60, warranty: 100 }, score: 82.82, late: null },
-      { id: 'q2', uygun: true, fill: 0, scorePV: 1673.63, s: { cost: 100, lead: 73.33, supplier: 60, warranty: 50 }, score: 81.67, late: 4 },
+      { id: 'q1', uygun: true, fill: 0, scorePV: 2050, s: { cost: 81.65, lead: 100, supplier: 60, warranty: 100 }, score: 82.82, late: null },
+      { id: 'q2', uygun: true, fill: 0, scorePV: 1673.78, s: { cost: 100, lead: 73.33, supplier: 60, warranty: 50 }, score: 81.67, late: 4 },
       // Kısmi teklif uygun sayılır; eksik kalem en pahalı birim fiyatla doldurulur.
-      { id: 'q3', uygun: true, fill: 1000, scorePV: 1873.79, s: { cost: 89.32, lead: 100, supplier: 60, warranty: 100 }, score: 86.66, late: null },
+      { id: 'q3', uygun: true, fill: 1000, scorePV: 1874.14, s: { cost: 89.31, lead: 100, supplier: 60, warranty: 100 }, score: 86.65, late: null },
     ]);
   });
 
@@ -135,9 +135,9 @@ describe('SA-HESAP H3: kalem bazlı bölme', () => {
     const sp = evaluate(talep(TALEP)).split;
     expect(sp).not.toBeNull();
     expect(sp!.plan.assign).toEqual({ i1: 'q2', i2: 'q2' });
-    expect(sp!.total).toBeCloseTo(1673.63, 2);
+    expect(sp!.total).toBeCloseTo(1673.78, 2);
     expect(sp!.best?.q.id).toBe('q2');
-    expect(sp!.bestTotal).toBeCloseTo(1673.63, 2);
+    expect(sp!.bestTotal).toBeCloseTo(1673.78, 2);
     expect(sp!.saving).toBeCloseTo(0, 6);
     expect(sp!.suggested).toBe(false);
   });
@@ -156,7 +156,7 @@ describe('SA-HESAP H3: kalem bazlı bölme', () => {
     const r = talep({ ...TALEP, status: 'approval', award: { mode: 'single', quoteId: 'q2', approvals: [{ decision: 'approved' }] } });
     const t = awardTotals(r)!;
     expect(t.totalTRY).toBeCloseTo(1683, 2);
-    expect(t.pvTRY).toBeCloseTo(1673.63, 2);
+    expect(t.pvTRY).toBeCloseTo(1673.78, 2);
     expect(t.suppliers).toEqual(['s2']);
     expect(durumEtiketi(r)).toBe('Onaylandı, sipariş bekliyor');
     expect(approvalState(r).state).toBe('approved');

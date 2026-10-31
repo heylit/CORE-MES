@@ -1,3 +1,4 @@
+import { vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
 import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { Approval, ApprovalLimit, Currency, ExcessLine, PurchaseRequest, Quality, Quote, RequestItem, Settings, Supplier, Weights } from "./tipler.ts";
 import { COMMITTED, CRIT, OPEN, stLabel, type CritKey } from "./constants.ts";
@@ -71,7 +72,8 @@ export function quoteCalc(req: PurchaseRequest, q: Quote, set: Settings = settin
   const total = net + ship + other;
   const adv = clamp((parseNum(q.advancePct) || 0) / 100, 0, 1);
   const days = parseNum(q.payDays) || 0;
-  const factor = adv + (1 - adv) / Math.pow(1 + m, days / 30);
+  // 1383 a: sunucudaki hesap-kurallar.ts teklifHesabi ile aynı; basit faiz, 365 günlük yıl.
+  const factor = adv + (1 - adv) * vadeIndirimCarpani(m * 100, days);
   const totalTRY = total * rate, pvTRY = totalTRY * factor;
   const n = (req.items ?? []).length;
   return { rate, sub, disc, net, ship, other, total, totalTRY, pvTRY, factor, vadeGain: totalTRY - pvTRY, covered, coverage: n ? covered / n : 0, lines, unitFactorTRY: rate * (1 - disc) * factor, unitTRY: rate * (1 - disc), monthly: m };
