@@ -5,6 +5,7 @@ import { DurumKutusu, Rozet, SayfaBasligi, Sekmeler, type RozetTonu } from '../.
 import { useSayfaKomutlari } from '../../../ortak/rota/sayfa-komutlari.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
+import { useIkinciMenuSayaclari } from '../../../ortak/veri/ikinci-menu-sayaclari.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import type { AkisDegerleri, OlayTuru } from './akislar.ts';
 import { KurulumUyarisi } from './ana/KurulumUyarisi.tsx';
@@ -13,7 +14,7 @@ import { openFindings } from './gorunum.ts';
 import { KayitCekmecesi } from './KayitFormu.tsx';
 import { CSV_BASLIKLARI, kayitCsvSatirlari } from './kayitlar/kurallar.ts';
 import { finansKomutlari } from './sayfa-komutlari.ts';
-import { adrestenSekme, EKRANLAR, SEKMELER, VERISIZ, yeniYol, type SekmeAnahtari } from './sekmeler.ts';
+import { adrestenSekme, EKRANLAR, SAYAC_UCU, SEKMELER, VERISIZ, yeniYol, type SekmeAnahtari } from './sekmeler.ts';
 import { useFinansVerisi, useFinansYetkisi, useGunlukSkor, type FinansVerisi, type FinansYetkisi } from './veri.ts';
 import './finans-yeni.css';
 
@@ -78,6 +79,9 @@ function FinansYeniIci() {
   const A = useMemo(() => finans?.motor.runAnalysis() ?? null, [finans]);
   const kritik = A && finans ? openFindings(finans.motor, A).filter((f) => f.sev === 3).length : 0;
   const yazabilir = acik && yetki.yaz && finans !== null;
+  // Sekme şeridi çizilmeyende (tek bölüm ya da hiç) sayı okunmaz.
+  const sayaclar = useIkinciMenuSayaclari(gorunen.length > 1 ? SAYAC_UCU : undefined);
+  const sekmeSayisi = (a: SekmeAnahtari): number | undefined => (a === 'durum' ? kritik : sayaclar?.[a] ?? undefined);
 
   // Liste her çizimde kurulur; kabuk yalnız başlık ve sözcükler değişince yeniler, çalıştırılan işlev son çizimdendir.
   useSayfaKomutlari('finans', acik ? finansKomutlari({
@@ -132,7 +136,10 @@ function FinansYeniIci() {
       {gorunen.length > 1 && (
         <Sekmeler<SekmeAnahtari>
           etiket="Finans bölümleri"
-          sekmeler={gorunen.map((s) => ({ anahtar: s.anahtar, baslik: s.baslik, simge: s.simge, ...(s.anahtar === 'durum' ? { sayi: kritik } : {}) }))}
+          sekmeler={gorunen.map((s) => {
+            const sayi = sekmeSayisi(s.anahtar);
+            return { anahtar: s.anahtar, baslik: s.baslik, simge: s.simge, ...(sayi !== undefined ? { sayi } : {}) };
+          })}
           secili={sekme.anahtar}
           sec={(a) => { void git(yeniYol(a)); }}
         />

@@ -343,3 +343,27 @@ describe('Sistem Ayarları > Finans ve Muhasebe', () => {
     expect(istekler.some((i) => i.yol.startsWith('/finans/'))).toBe(false);
   });
 });
+
+describe('finans ekranı: menü sayaçları sekmelerde', () => {
+  it('kabuk şeridinin sayıları aynı uçtan sekmelere yazılır; boş (null) sayı rozet çizmez', async () => {
+    const istekler = sunucuKur(OKUYAN, { 'GET /finans/menu-sayaclari': () => json(200, { firmalar: 3, cekler: null }) });
+    finansAc('/finans/kayitlar');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Firmalar/ }).textContent).toContain('(3)'));
+    expect(screen.getByRole('tab', { name: /Çek ve senet/ }).textContent).not.toMatch(/\(\d+\)/);
+    expect(istekler.filter((i) => i.yol === '/finans/menu-sayaclari' && i.yontem === 'GET').length).toBeGreaterThan(0);
+  });
+
+  it('sayaç okunamazsa sekmeler sayısız açılır', async () => {
+    sunucuKur(OKUYAN, { 'GET /finans/menu-sayaclari': () => json(500, { kod: 'HATA', mesaj: 'x' }) });
+    finansAc('/finans/kayitlar');
+    await acikBolum('Kayıtlar');
+    expect(screen.getByRole('tab', { name: /Firmalar/ }).textContent).not.toMatch(/\(\d+\)/);
+  });
+
+  it('tek bölüm görene (şerit yok) sayaç okunmaz', async () => {
+    const istekler = sunucuKur(FIRMACI);
+    finansAc('/finans/firmalar');
+    await acikBolum('Firmalar');
+    expect(istekler.some((i) => i.yol === '/finans/menu-sayaclari')).toBe(false);
+  });
+});
