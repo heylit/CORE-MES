@@ -7,7 +7,6 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { BelgeCevabi, BenCevabi, KisilerCevabi, OlcuAletleriCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
-import { YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
 import { DenetimSaglayici } from './baglam.tsx';
 import { depoMetni, depoOku } from './normalize.ts';
@@ -16,7 +15,7 @@ import { BELGE_YOLU, yukle } from './veri.ts';
 
 // Parça testleri için ortak kurulum: sahte sunucu (aynı uçlar) ve bağlam. Kişi adları uydurmadır; veri sentetiktir.
 
-export const YONETICI: Kullanici = { id: 5, ad: 'Deneme Yönetici', islemler: ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim-hazirlik.yonet', YENI_EKRAN_ISLEMI] };
+export const YONETICI: Kullanici = { id: 5, ad: 'Deneme Yönetici', islemler: ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim-hazirlik.yonet'] };
 
 export interface SahteSunucuSecenegi {
   kullanici?: Kullanici;
@@ -83,7 +82,7 @@ const sarmala = (cocuk: ReactNode, adres: string) => {
   );
 };
 
-// Bütün ekranı adresle açar (kapı, yükleme, kabuk).
+// Bütün ekranı adresle açar (yetki, yükleme, kabuk).
 export function ekraniAc(adres = '/denetim-hazirlik/yeni/bugun') {
   return render(sarmala(null, adres));
 }

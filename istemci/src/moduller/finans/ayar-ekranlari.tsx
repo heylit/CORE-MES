@@ -1,11 +1,7 @@
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
-import { FinansCercevesi } from './FinansCercevesi.tsx';
+import { FinansAyarlariBolumu } from './yeni/FinansYeni.tsx';
 
-// Finans ayarları kendi sayfasında (/finans/ayarlar) olduğu gibi çerçevede açılır; aynı ekran, aynı uçlar.
-function FinansAyarlari() {
-  return <FinansCercevesi sabitGorunum="ayarlar" />;
-}
-
+// Finans ayarları kendi sayfasındaki (/finans/ayarlar) Ayarlar bölümüdür; burada aynı bileşen, aynı uçlarla açılır.
 export const ayarEkranlari: AyarEkrani[] = [
-  { anahtar: 'finans', baslik: 'Finans ve Muhasebe', simge: 'lira', sira: 50, islem: 'finans.yonet', ekran: FinansAyarlari },
+  { anahtar: 'finans', baslik: 'Finans ve Muhasebe', simge: 'lira', sira: 50, islem: 'finans.yonet', ekran: FinansAyarlariBolumu },
 ];

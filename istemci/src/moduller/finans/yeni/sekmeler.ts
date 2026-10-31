@@ -12,9 +12,9 @@ import { Butce, NakitPlani, VergiTakvimi } from './plan/index.tsx';
 import { AyKapanisi, DurumVeOneriler, GelirTablosu, KararAraclari, Tahminler } from './raporlar/index.tsx';
 import { GenelGider } from './genel-gider.tsx';
 
-// Yeni ekranın iç gezinmesi: ikinci menünün 14 maddesi aynı sırayla sekme olur (menü verisinden okunur). İkinci menü
-// alıma kadar eski ekranlara gider. Parça yazarları (F1-F4) bu dosyaya dokunmaz; yalnız kendi klasörlerindeki ekranı doldurur.
-export const YENI_KOK = '/finans/yeni';
+// Ekranın iç gezinmesi: ikinci menünün 14 maddesi aynı sırayla sekme olur (menü verisinden okunur). Her sekme menü maddesinin
+// adresinde açılır (1418, 1392 a): menü, hızlı işler ve başka modüllerin bağları değişmeden ekrana gelir.
+export const YENI_KOK = '/finans';
 
 export interface EkranOzellikleri {
   // Rakam yetkisi (finans.oku) olmayanda null: Firmalar ve Genel gider veri beklemeden açılır.
@@ -28,6 +28,8 @@ export interface EkranOzellikleri {
 const finansMenusu = IKINCI_MENULER.find((m) => m.kok === '/finans');
 if (!finansMenusu) throw new Error('Finans ikinci menüsü bulunamadı');
 type Madde = (typeof finansMenusu)['gruplar'][number]['maddeler'][number];
+// Kabuk şeridinin madde sayıları (firmalar, çekler) aynı uçtan sekmelere de yazılır: şerit bu ekranda çizilmez.
+export const SAYAC_UCU: string | undefined = finansMenusu.sayacUcu;
 export type SekmeAnahtari = Madde['anahtar'];
 
 // Sekme -> ekran ve sahibi parça. Firmalar ve Genel gider rakam yetkisi istemez (kendi işlemiyle açılır).
@@ -57,12 +59,23 @@ export interface YeniSekme {
   simge: SimgeAdi;
   islem: string;
   yol: string;
-  eskiYol: string;
+  // Menüdeki grubun başlığı (Plan, Raporlar, Sistem); ilk grubun başlığı yoktur.
+  grup: string | null;
 }
-export const yeniYol = (anahtar: SekmeAnahtari): string => (anahtar === 'ana-sayfa' ? YENI_KOK : `${YENI_KOK}/${anahtar}`);
-const maddeler: readonly Madde[] = (finansMenusu.gruplar as readonly { maddeler: readonly Madde[] }[]).flatMap((g) => g.maddeler);
-export const SEKMELER: readonly YeniSekme[] = maddeler.map((m) => ({
-  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, yol: yeniYol(m.anahtar), eskiYol: m.yol,
-}));
-export const sekmeBul = (bolum: string | undefined): YeniSekme | undefined =>
-  (bolum === undefined ? SEKMELER[0] : SEKMELER.find((s) => s.anahtar === bolum && s.anahtar !== 'ana-sayfa'));
+const gruplar = finansMenusu.gruplar as readonly { baslik?: string; maddeler: readonly Madde[] }[];
+export const SEKMELER: readonly YeniSekme[] = gruplar.flatMap((g) => g.maddeler.map((m) => ({
+  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, yol: m.yol, grup: g.baslik ?? null,
+})));
+const YOLLAR = new Map(SEKMELER.map((s) => [s.anahtar, s.yol]));
+export const yeniYol = (anahtar: SekmeAnahtari): string => YOLLAR.get(anahtar) ?? YENI_KOK;
+
+// Sondaki `/` aynı adrestir (yönlendirici de öyle eşler); menüde olmayan adres sekme değildir.
+export const adrestenSekme = (yol: string): YeniSekme | undefined => {
+  const temiz = yol.length > 1 ? yol.replace(/\/+$/, '') : yol;
+  return SEKMELER.find((s) => s.yol === temiz);
+};
+
+// TS geçişinin deneme adresi (`/finans/yeni`, `/finans/yeni/<bölüm>`) aynı bölümün adresine düşer; bilinmeyen bölüm Ana sayfa'ya.
+export const ESKI_DENEME_KOKU = '/finans/yeni';
+export const denemeAdresindenYeni = (bolum: string | undefined): string =>
+  SEKMELER.find((s) => s.anahtar === bolum)?.yol ?? YENI_KOK;

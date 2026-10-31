@@ -1,7 +1,7 @@
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Denetim Hazırlığı yeni ekranı (199 b). Her parça yalnız kendi `test.describe` bloğuna yazar (PARCA-SOZLESMESI); iskelet Y0'ındır.
-// Yeni ekran alıma kadar yalnız yöneticide açılır (YeniEkranKapisi).
+// Denetim Hazırlığı ekranı (199 b, 1392 a). Her parça yalnız kendi `test.describe` bloğuna yazar (PARCA-SOZLESMESI); iskelet Y0'ındır.
+// Ekran menünün kökünde açılır ve sayfa yetkisi olan her role açıktır; yönetici dışı hesaplar en altta.
 test.use({ hesap: 'ornek.yonetici' });
 
 test.describe('Y0 iskelet', () => {
@@ -71,6 +71,45 @@ test.describe('P3 ic denetim, takvim, performans, kalibrasyon, ayarlar', () => {
       expect((await tasmaOlc(page)).belge, `${yol}: yatay taşma`).toBeLessThanOrEqual(0);
     }
     await expect(page.getByRole('heading', { name: 'Sıfırlama' })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('1418 eski adres ve yardım', () => {
+  test('menünün kökü Bugün\'ü açar; eski görünüm parçası yeni adrese gider; yardım ? ile açılır', async ({ page, ag, ac }) => {
+    await ac('/denetim-hazirlik');
+    await expect(page.getByRole('tablist', { name: 'Bölümler' }).getByRole('tab', { name: 'Bugün', selected: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/denetim-hazirlik$/);
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: 'Yardım: Bugün' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await page.keyboard.press('Escape');
+    await ac('/denetim-hazirlik#kalib');
+    await expect(page).toHaveURL(/\/denetim-hazirlik\/yeni\/kalibrasyon$/);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+// Eski çerçevenin girişiyle aynı roller (sayfa, okuma ya da yazma): kalite yazar, planlama okur.
+test.describe('1418 yönetici dışı rol: kalite', () => {
+  test.use({ hesap: 'ornek.kalite' });
+  test('ekran açılır, yeni ekran kapısı yok; yıkıcı ayarlar görünmez', async ({ page, ag, ac }) => {
+    await ac('/denetim-hazirlik');
+    await expect(page.getByRole('tablist', { name: 'Bölümler' })).toBeVisible();
+    await ac('/denetim-hazirlik/yeni/ayarlar');
+    await expect(page.getByRole('heading', { name: 'Firma ve denetim bilgileri' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sıfırlama' })).toHaveCount(0);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('1418 yönetici dışı rol: planlama', () => {
+  test.use({ hesap: 'ornek.planlama' });
+  test('okuyan ekranı açar, yazma düğmeleri görünmez', async ({ page, ag, ac }) => {
+    await ac('/denetim-hazirlik');
+    await expect(page.getByRole('tablist', { name: 'Bölümler' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Hızlı tur/ })).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });
 });

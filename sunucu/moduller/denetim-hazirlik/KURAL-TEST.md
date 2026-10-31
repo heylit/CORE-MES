@@ -1,7 +1,8 @@
 # denetim-hazirlik: kural ve test eşlemesi
 
 Dosyalar: `sunucu/moduller/denetim-hazirlik/kurallar.test.ts` (saf, 13), `sunucu/moduller/denetim-hazirlik/denetim-hazirlik.test.ts` (gerçek PostgreSQL, 18),
-`istemci/src/moduller/denetim-hazirlik/DenetimHazirlikCercevesi.test.tsx` (6), `istemci/src/moduller/denetim-hazirlik/cerceve-kopru.test.ts` (6). Hepsi koşuldu, yeşil (UYGULA.md).
+istemci: `istemci/src/moduller/denetim-hazirlik/yeni/**/*.test.ts(x)`. Eski çerçevenin testleri (`DenetimHazirlikCercevesi.test.tsx`, `cerceve-kopru.test.ts`)
+çerçeveyle birlikte 1418'de kalktı; BD-12 ve BD-13 çerçeveye aitti.
 
 | Kural | Kısıt / yer | Test |
 |---|---|---|
@@ -15,15 +16,15 @@ Dosyalar: `sunucu/moduller/denetim-hazirlik/kurallar.test.ts` (saf, 13), `sunucu
 | BD-7 Okuma `oku` ya da `yaz`, yazma `yaz`, kurulum `yonet` ister (ortak kaydı silen ya da boşaltan yazma için BD-16) | uç yetkisi | `BD-07`, `BD-11` |
 | BD-8 Kilit başkasına geçerliyken verilmez | servis (`kilitAlinirMi`) | `BD-K6`, `BD-08` |
 | BD-9 Ek en çok 700 KB, boyut içerikle aynı | `denetim_hazirlik_ek_boyut` | `BD-10`, `BD-10b` |
-| BD-17 (GG-1) Ek türü içerikten bulunur (`dosya` `ekMime`), bildirilen tür saklanmaz; HTML, SVG ve tanınmayan içerik `application/octet-stream`; okurken de içerikten (eski satırlar). Köprü Blob'a yalnız güvenli türü verir | servis, `dosya/kurallar.ts`, köprü | `ek türü içerikten bulunur ...`, `BD-10`, `BD-10c`, `CK-09` |
+| BD-17 (GG-1) Ek türü içerikten bulunur (`dosya` `ekMime`), bildirilen tür saklanmaz; HTML, SVG ve tanınmayan içerik `application/octet-stream`; okurken de içerikten (eski satırlar). Köprü (1418'de kalktı) Blob'a yalnız güvenli türü verirdi | servis, `dosya/kurallar.ts` | `ek türü içerikten bulunur ...`, `BD-10`, `BD-10c` |
 | BD-18 (GG-1) Kişi başına ek toplamı 50 MB, modül toplamı 1 GiB (VARSAYIM); denetim ve ekleme tek kilit altında | servis (`ekKotaReddi`), `pg_advisory_xact_lock` | `BD-K12`, `BD-10e` |
 | BD-19 (GG-1) Eki yükleyen ya da eki (`/_blob/<kimlik>`) anan ve okuyanın açabildiği prototip belgesi okutur; okunamayan ek olmayan ek gibi 404 | servis (`ekOkunurMu`) | `BD-K13`, `BD-10d` |
 | BD-10 Başlangıç belgeleri yalnız işaret belgesi yokken bir kez | servis | `BD-K8`, `BD-11` |
 | BD-11 Oda yalnız son 45 sn içinde görülenleri döner | servis (`canliEsler`) | `BD-K7`, `BD-12` |
-| BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | içerik politikası | `prototipi içerik politikasıyla, köprüyle ve dış yazı tipi bağlantısı olmadan yalıtılmış çerçevede açar`, `sayfaKur dış yazı tipi bağlantısını çıkarır, politikayı ve betiği başa koyar` |
-| BD-13 Yerel depo önekli anahtarı yazar; ortak kapsamda çatışma uyarır ve durur | köprü | `CK-01`, `CK-02` |
-| BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `sayfayı görmeyen kişiye yetki iletisi gösterir, uçlara gitmez` |
+| KAPANDI (1418) BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | çerçeve kalktı; TS ekranı yalnız modülün uçlarına gider | - |
+| BD-13 Kayıt sürüm denetimiyle yazılır; çatışmada yazma durur ve kişiye söylenir | `yeni/veri.ts` | `başkası yazdıysa yazma durur ve kişiye söylenir` |
+| BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `okuma yetkisi olan kişide de açılır; giriş işlemi olmayana yetki iletisi, uca istek gitmez` |
 | BD-15 (B7) Genel depo ucu yalnız prototipin önekli yerel depo anahtarına (`yerel/kalite-denetim*`, kişisel kökte `data/users/<kişi>/yerel/anahtarlar/kalite-denetim*`) yazar, siler, kilitler ve okur; sorgu yalnız bu iki koleksiyonda; öteki yol 403 | servis (`izinliBelgeMi`, `izinliKoleksiyonMu`) | `BD-K10`, `BD-15` |
-| BD-16 (226 a) Ortak kayıtta profil sayısını düşüren (profil silme, "Tümünü sil"), dolu kaydı boşaltan ya da okunamaz kılan yazma, kilit gövdesi ve dolu kaydın silinmesi `denetim-hazirlik.yonet` ister (yalnız yönetici); olağan düzenleme, profil ekleme ve kopyalama yazara açık. "Dolu" prototipin `isEmptyProfile` tanımıdır. Ekranda bu düğmeler (profil sil, seçerek sıfırla, tümünü sil, yedek yükle) yönetici olmayana gizlenir, tıklama yakalanır | servis (`yonetimGerekirMi`), ekran (`yonetim-dugmeleri.ts`) | `BD-K11`, `BD-16`, `Denetim Hazırlığı yönetim düğmeleri (226 a)`, `yönetici olmayana yönetim düğmelerini gizleyen betik ...` |
+| BD-16 (226 a) Ortak kayıtta profil sayısını düşüren (profil silme, "Tümünü sil"), dolu kaydı boşaltan ya da okunamaz kılan yazma, kilit gövdesi ve dolu kaydın silinmesi `denetim-hazirlik.yonet` ister (yalnız yönetici); olağan düzenleme, profil ekleme ve kopyalama yazara açık. "Dolu" prototipin `isEmptyProfile` tanımıdır. Ekranda bu düğmeler (profil sil, seçerek sıfırla, tümünü sil, yedek yükle) yönetici olmayana gösterilmez | servis (`yonetimGerekirMi`), ekran (`yeni/yonetim.ts`) | `BD-K11`, `BD-16`, `yöneticide yıkıcı işlemler izinli, yazarda değil` |
 
 Prototipin kendi iş kuralları (ekranda kalanlar) `UYUM-BORCU.md`'dedir; bunlar için sunucu testi yoktur.

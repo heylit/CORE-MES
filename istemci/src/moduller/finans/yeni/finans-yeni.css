@@ -37,6 +37,13 @@
 
 .tc-fy-gizli-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+/* Başlığın altındaki sağlık skoru: bağ rozetin kendisidir, altı çizilmez. */
+.tc-fy-skor { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-fy-skor a { text-decoration: none; }
+.tc-fy-skor a:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+/* Sistem Ayarları'ndaki Ayarlar bölümü: dolguyu ve kaydırmayı ayar sayfası verir. */
+.tc-fy-gomulu { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+
 @media (max-width: 479px) {
   .tc-fy { padding: var(--b-3); }
 }

@@ -1,0 +1,32 @@
+/* Denetim Hazırlığı yardım paneli ve terim bağlantısı. Yalnız tasarım değişkenleri. */
+.tc-dhy-yardim { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-dhy-yardim-bolum { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-dhy-yardim-bolum h3 {
+  display: flex; align-items: center; gap: var(--b-1); margin: 0;
+  color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-02); text-transform: uppercase;
+}
+.tc-dhy-yardim-bolum p, .tc-dhy-yardim-bolum ol { margin: 0; }
+.tc-dhy-yardim-bolum ol { display: flex; flex-direction: column; gap: var(--b-1); padding-inline-start: var(--b-5); }
+.tc-dhy-yardim-ornek, .tc-dhy-yardim-hata { padding: var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-dhy-yardim-ornek h3 { color: var(--done); }
+.tc-dhy-yardim-hata h3 { color: var(--hold); }
+.tc-dhy-yardim-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+.tc-dhy-yardim-puan summary { cursor: pointer; font-weight: 600; }
+.tc-dhy-yardim-puan > p { margin: var(--b-2) 0; }
+.tc-dhy-yardim-puan dl { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; }
+.tc-dhy-yardim-puan dt { font-weight: 700; }
+.tc-dhy-yardim-puan dd { margin: 0; }
+
+.tc-dhy-terimler { display: flex; flex-direction: column; gap: var(--b-3); margin: 0; }
+.tc-dhy-terim { display: flex; flex-direction: column; gap: var(--b-1); padding-block-end: var(--b-3); border-block-end: var(--cizgi-ince) solid var(--edge); }
+.tc-dhy-terim dt { font-weight: 700; }
+.tc-dhy-terim dd { margin: 0; }
+.tc-dhy-terim-ornek { color: var(--muted); }
+.tc-dhy-terim-ornek > span { margin-inline-end: var(--b-2); font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; }
+
+.tc-dhy-terim-dugme {
+  display: inline-grid; place-items: center; inline-size: var(--dokunma-yogun); block-size: var(--dokunma-yogun); padding: 0;
+  border: 0; border-radius: var(--yari-tam); background: var(--panel2); color: var(--muted); cursor: help;
+}
+.tc-dhy-terim-dugme:hover, .tc-dhy-terim-dugme:focus-visible { color: var(--ink); }

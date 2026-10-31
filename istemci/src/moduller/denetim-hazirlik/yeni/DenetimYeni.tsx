@@ -1,27 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
-import { Dugme, DurumKutusu, Rozet, SayfaBasligi, Sekmeler, type RozetTonu, type Sekme } from '../../../ortak/arayuz/index.ts';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
+import { useOturum } from '../../../ortak/veri/oturum.ts';
+import { Dugme, DurumKutusu, Rozet, SayfaBasligi, Sekmeler, type MenuOgesi, type RozetTonu, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { DenetimSaglayici, useDenetim } from './baglam.tsx';
-import { ALT_BASLIK, BOLUMLER, gorunum, PROGRAM_SEKMELERI, yoldanGorunum, type Bolum, type ProgramSekmesi } from './gorunumler.ts';
+import { ALT_BASLIK, BOLUMLER, GORUNUMLER, gorunum, PROGRAM_SEKMELERI, yoldanGorunum, type Bolum, type ProgramSekmesi } from './gorunumler.ts';
 import { PROGRAMLAR, PROGRAM_SIRASI } from './icerik/programlar.ts';
+import { DenetimKomutlari } from './komutlar.tsx';
 import { gecikmisSayisi } from './kurallar/bugun.ts';
 import { profilAdi } from './kurallar/profil.ts';
+import { OrnekFirmaBandi } from './ornek-firma.tsx';
 import type { GorunumKodu, ProgramKodu } from './tipler.ts';
 import { KOK, yukle, type KayitDurumu, type Yukleme } from './veri.ts';
+import { useYardim, YardimSaglayici } from './yardim/index.tsx';
 import './denetim-yeni.css';
 
-// TS geçişinde Denetim Hazırlığı'nın yeni ekranı (199 b): eski çerçevenin yanında `/denetim-hazirlik/yeni/<görünüm>` adresinde, alıma kadar
-// yalnız yöneticide (YeniEkranKapisi). Aynı kaydı aynı uçlarla okur ve yazar (204 a); eski ekran değişmez.
+// Denetim Hazırlığı ekranı (199 b, 1392 a). Menünün kökü (`/denetim-hazirlik`) yönlenmeden Bugün'ü açar; görünümler
+// `/denetim-hazirlik/yeni/<görünüm>` adresindedir. Kök ile görünümler aynı bileşendir: aralarında geçişte ekran yeniden yüklenmez.
+// Eski çerçevenin girişiyle aynı işlemler açar (sayfa, okuma ya da yazma); yazma ve yönetim sınırları sunucudan gelen `ben`dedir.
+const OKUMA_ISLEMLERI = ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz'];
+
+// Eski ekranın adresleri görünüm koduyla biterdi (`/denetim-hazirlik#kalib`); yer imleri görünümün yeni adresine gider.
+const kokMu = (yol: string): boolean => yol.replace(/\/+$/, '') === KOK;
+
+export function eskiAdresHedefi(yol: string, hash: string): string | null {
+  if (!kokMu(yol)) return null;
+  const kod = hash.replace(/^#/, '');
+  const g = GORUNUMLER.find((x) => x.kod === kod);
+  return g ? `${KOK}/yeni/${g.yol}` : null;
+}
 
 export function DenetimYeni() {
-  return <YeniEkranKapisi><Yukleyici /></YeniEkranKapisi>;
+  const oturum = useOturum();
+  const { pathname, hash } = useLocation();
+  const hedef = eskiAdresHedefi(pathname, hash);
+  if (hedef !== null) return <Navigate to={hedef} replace />;
+  if (oturum.isPending) return <DurumKutusu durum="yukleniyor" />;
+  const kullanici = oturum.data;
+  if (!kullanici) return <DurumKutusu durum="hata" mesaj="Oturum bulunamadı." />;
+  if (!kullanici.islemler.some((i) => OKUMA_ISLEMLERI.includes(i))) return <DurumKutusu durum="hata" mesaj="Bu bölümü görme yetkiniz yok." />;
+  return <Yukleyici />;
 }
 
 function Yukleyici() {
   const { gorunum: yol } = useParams();
-  const g = yoldanGorunum(yol);
+  const { pathname } = useLocation();
+  const g = kokMu(pathname) ? gorunum('home') : yoldanGorunum(yol);
   const [yukleme, yuklemeYaz] = useState<Yukleme | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   const [deneme, denemeYaz] = useState(0);
@@ -36,7 +60,11 @@ function Yukleyici() {
   if (!g) return <Navigate to={`${KOK}/yeni/${gorunum('home').yol}`} replace />;
   if (hata) return <DurumKutusu durum="hata" mesaj={hata} yenile={() => { denemeYaz((n) => n + 1); }} />;
   if (!yukleme) return <DurumKutusu durum="yukleniyor" />;
-  return <DenetimSaglayici yukleme={yukleme} gorunum={g.kod}><Kabuk /></DenetimSaglayici>;
+  return (
+    <DenetimSaglayici yukleme={yukleme} gorunum={g.kod}>
+      <YardimSaglayici><Kabuk /><DenetimKomutlari /></YardimSaglayici>
+    </DenetimSaglayici>
+  );
 }
 
 const KAYIT: Record<KayitDurumu, { metin: string; ton: RozetTonu }> = {
@@ -49,6 +77,7 @@ const KAYIT: Record<KayitDurumu, { metin: string; ton: RozetTonu }> = {
 
 function Kabuk() {
   const d = useDenetim();
+  const yardim = useYardim();
   const g = gorunum(d.gorunum);
   const gecikmis = useMemo(() => gecikmisSayisi(d.kb, d.cihazlar), [d.kb, d.cihazlar]);
   // Program sekmesine dönülünce o sekmede son açılan alt görünüm açılır (prototip lastIn; oturum boyunca).
@@ -66,6 +95,10 @@ function Kabuk() {
   const altlar = sekme && sekme.gorunumler.length > 1 ? sekme.gorunumler : null;
   const kayit = KAYIT[d.kayit];
   const Ekran = g.ekran;
+  const eylemler: MenuOgesi[] = [
+    ...(d.yetki.yazabilir ? [{ anahtar: 'geri-al', baslik: 'Geri al (Ctrl Z)', simge: 'rotate' as const, sec: d.geriAl, pasif: !d.geriAlinabilir, pasifNedeni: 'Geri alınacak işlem yok' }] : []),
+    { anahtar: 'yardim', baslik: 'Yardım (?)', simge: 'help', sec: () => { yardim.ac('sayfa'); } },
+  ];
 
   return (
     <div className="tc-dhy">
@@ -79,8 +112,9 @@ function Kabuk() {
             {gecikmis > 0 && <Rozet ton="hata">{`${String(gecikmis)} gecikmiş iş`}</Rozet>}
           </span>
         )}
-        eylemler={d.yetki.yazabilir ? [{ anahtar: 'geri-al', baslik: 'Geri al (Ctrl Z)', simge: 'rotate', sec: d.geriAl, pasif: !d.geriAlinabilir, pasifNedeni: 'Geri alınacak işlem yok' }] : []}
+        eylemler={eylemler}
       />
+      <OrnekFirmaBandi />
       {d.kayit === 'catisma' && (
         <div className="tc-dhy-bant" role="alert">
           <span>Bu kayıt başka bir kişi tarafından değiştirildi. Son hâli okuyun; bu ekrandaki kaydedilmemiş değişiklik bırakılır.</span>

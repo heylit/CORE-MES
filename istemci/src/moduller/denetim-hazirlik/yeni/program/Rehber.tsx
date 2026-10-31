@@ -3,10 +3,10 @@ import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi } from '../gorunumler.ts';
 import { aktifSorular, dokumanIstatistigi, puanHesapla } from '../kurallar/puan.ts';
 import { useNavigate } from 'react-router-dom';
-import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
 import { Cark } from './grafikler.tsx';
 import { Halka, IpucuKutusu, ProgramBandi, PSimge, useProgramEkrani } from './ortak.tsx';
 import { useIsaret } from './paylasilan.tsx';
+import { OLCU_ALETI_YOLU } from '../veri.ts';
 import { AS9100_GUN_NOTU, BULGU_ORNEGI, DENETIM_GUNU, EYDEP_GUNU } from './rehber-metni.ts';
 
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
+import { eskiAdresHedefi } from './DenetimYeni.tsx';
 import { useDenetim } from './baglam.tsx';
 import { depoOku, yeniDenetim } from './normalize.ts';
 import { bugunTarihi, gunEkle } from './tarih.ts';
@@ -26,12 +27,46 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); window.l
 
 const YAZAR: Kullanici = { id: 7, ad: 'Deneme Yazar', islemler: ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim-hazirlik.yonet'] };
 
-describe('DenetimYeni kapı ve kabuk', () => {
-  it('kapı işlemi olmayan kişide (modülün bütün işlemleri olsa da) açılmaz', async () => {
-    sahteSunucu({ kullanici: YAZAR });
+const OKUR: Kullanici = { id: 8, ad: 'Deneme Okur', islemler: ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku'] };
+const YETKISIZ: Kullanici = { id: 9, ad: 'Deneme Yetkisiz', islemler: ['sayfa.kalibrasyon'] };
+
+describe('DenetimYeni giriş ve kabuk', () => {
+  it('yeni ekran kapısı istemez: sayfa yetkisi olan yönetici olmayan kişide de açılır (1392 a)', async () => {
+    sahteSunucu({ kullanici: YAZAR, yonetici: false });
     ekraniAc();
-    expect(await screen.findByText(YENI_EKRAN_ILETISI)).toBeTruthy();
-    expect(screen.queryByRole('tablist', { name: 'Bölümler' })).toBeNull();
+    expect(await screen.findByRole('tablist', { name: 'Bölümler' })).toBeTruthy();
+    expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
+  });
+
+  it('okuma yetkisi olan kişide de açılır; giriş işlemi olmayana yetki iletisi, uca istek gitmez', async () => {
+    sahteSunucu({ kullanici: OKUR, yazabilir: false, yonetici: false });
+    ekraniAc('/denetim-hazirlik');
+    expect(await screen.findByRole('tablist', { name: 'Bölümler' })).toBeTruthy();
+    cleanup();
+    const sunucu = sahteSunucu({ kullanici: YETKISIZ });
+    ekraniAc('/denetim-hazirlik');
+    expect(await screen.findByText('Bu bölümü görme yetkiniz yok.')).toBeTruthy();
+    expect(sunucu.istekler.some((i) => i.includes('/denetim-hazirlik/'))).toBe(false);
+  });
+
+  it('menünün kökü yönlenmeden Bugün\'ü açar; görünüme geçince ekran yeniden yüklenmez', async () => {
+    const sunucu = sahteSunucu();
+    ekraniAc('/denetim-hazirlik');
+    expect(await screen.findByText('parca:Bugun')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Bugün', selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Takvim' }));
+    expect(await screen.findByText('parca:Takvim')).toBeTruthy();
+    expect(sunucu.istekler.filter((i) => i === 'GET /denetim-hazirlik/ben')).toHaveLength(1);
+  });
+
+  it('eski adresin görünüm parçası (#kalib) yeni görünüm adresine gider', async () => {
+    expect(eskiAdresHedefi('/denetim-hazirlik', '#kalib')).toBe('/denetim-hazirlik/yeni/kalibrasyon');
+    expect(eskiAdresHedefi('/denetim-hazirlik/', '#home')).toBe('/denetim-hazirlik/yeni/bugun');
+    expect(eskiAdresHedefi('/denetim-hazirlik', '#yok')).toBeNull();
+    expect(eskiAdresHedefi('/denetim-hazirlik/yeni/kys', '#kalib')).toBeNull();
+    sahteSunucu();
+    ekraniAc('/denetim-hazirlik#perf');
+    expect(await screen.findByText('parca:Performans')).toBeTruthy();
   });
 
   it('yöneticide bölümleri, kayıt durumunu ve görünümü açar; kök adres Bugün\'e gider', async () => {
@@ -202,7 +237,9 @@ describe('yetki (izinli ve reddedilen)', () => {
     sahteSunucu({ yazabilir: false, yonetici: false });
     ekraniAc();
     await screen.findByRole('tablist', { name: 'Bölümler' });
-    expect(screen.queryByRole('button', { name: /diğer işlemler/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
+    expect(screen.getByRole('menuitem', { name: /Yardım/ })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Geri al/ })).toBeNull();
   });
 
   it('yöneticide yıkıcı işlemler izinli, yazarda değil', async () => {

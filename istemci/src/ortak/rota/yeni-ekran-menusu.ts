@@ -9,20 +9,18 @@ export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
 const TUM_YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
-  { kok: '/finans', yol: '/finans/yeni' },
   { kok: '/ik', yol: '/ik/yeni' },
   { kok: '/ik-islemlerim', yol: '/ik-islemlerim/yeni' },
   { kok: '/mesaj', yol: '/mesaj/yeni' },
   { kok: '/portal', yol: '/portal/yeni' },
-  { kok: '/denetim-hazirlik', yol: '/denetim-hazirlik/yeni' },
 ];
 const YENI_EKRANLAR = TUM_YENI_EKRANLAR.filter((e) => !kapaliModulYoluMu(e.kok));
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
 
-// Eski ekranı kalkmış yeni ekranlar (1272 a): deneme satırı yoktur, ekran menünün kökünde ve `/yeni` altında açılır;
+// Eski ekranı kalkmış yeni ekranlar (1272 a, 1392 a): deneme satırı yoktur, ekran menünün kökünde ve `/yeni` altında açılır;
 // ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
-const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum'];
+const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum', '/finans', '/denetim-hazirlik'];
 
 // Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
 // kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör

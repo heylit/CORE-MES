@@ -9,7 +9,7 @@ const kayitYazmasi = (i: Istek) => i.yontem === 'POST' && i.yol !== '/finans/sko
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.yonet'] as Kullanici['islemler'] };
-const ADRES = '/finans/yeni/kayitlar';
+const ADRES = '/finans/kayitlar';
 // Belge 2 (Hammadde) mahsupla kapanan parça ve açık kalan olarak iki satırdır; açık kalan (gecikmiş) alınır.
 const hammaddeSatiri = async () => (await screen.findAllByRole('row', { name: /Hammadde.*gecikti/ }))[0]!;
 

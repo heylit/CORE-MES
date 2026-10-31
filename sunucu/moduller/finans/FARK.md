@@ -227,3 +227,11 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 ## Faiz ve düzenli ödeme eklemesi tekrar korumalı (551 a)
 - `POST /finans/faizler/ekle` ve `POST /finans/duzenli-odemeler/ekle` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen istek ikinci satır açmaz, ilk cevabı alır (FNS-40).
 - İstemci üç yoldan da kimlikle gönderir: Ayarlar komutları, Kur ve Faiz şeridi (sonucu bilinmeyen gönderimden sonra yeniden kaydet aynı kimliği kullanır), finans çerçeve köprüsü.
+
+## Eski çerçeve kalktı, finans ekranı menü adreslerinde (1418, 1392 a)
+- `/finans` ve her ikinci menü maddesi (`/finans/<madde>`, Genel gider oranı dahil) TS ekranını açar; ekran bölümü adresten okur, sekmelerini kendisi çizer. Deneme adresi `/finans/yeni` ve `/finans/yeni/<bölüm>` aynı bölümün adresine yönlenir (sorgu korunur).
+- Yeni ekran kapısı kalktı: sayfa işlemi (`sayfa.finans`) olan herkes açar; sekmeler menü maddelerinin işlemiyle süzülür, rol ve işlem değişmedi. Hiçbir maddeyi açamayana "Finans bölümünü görme yetkiniz yok."; yalnız firma yetkisi olan kökte Firmalar'a düşer.
+- Eski çerçeveden gelenler: Ctrl K komutları (kayıt olayları, bölümler, Excel, yazdır, cari tahsilat ve ödeme; `yeni/sayfa-komutlari.ts`), "N" ile "Kayıt gir", başlıkta sağlık skoru rozeti ve "Durum ve öneriler" sekmesinde kritik öneri sayısı, Plan bölümlerinde ilk kurulum uyarısı (`yeni/ana/KurulumUyarisi.tsx`, Ana sayfa ile ortak).
+- Sistem Ayarları > Finans ve Muhasebe ekranın Ayarlar bölümünü açar (`FinansAyarlariBolumu`), çerçeveyi değil.
+- Silinen: `FinansCercevesi.tsx`, `kopru.ts`, `yazi-tipleri.ts`, `cerceve/yazi/`, `yeni/Hazirlaniyor.tsx` ve yalnız çerçeveyi sınayan testler (`FinansCercevesi.test.tsx`, `finans-tema`, `finans-ortak-palet`, `finans-iade`, kökteki `motor.test.ts`). İade ve sipariş/sevk seçimi testleri ekran üzerinde yeniden yazıldı (`yeni/iade-siparis.test.tsx`); motor sayıları `yeni/motor.test.ts`'te. `cerceve/finans.html` yalnız eşitlik testlerinin başvurusudur.
+- Sunucu, göç ve veri değişmedi.

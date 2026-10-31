@@ -10,6 +10,8 @@ import type { Depo } from './tipler.ts';
 
 export const BELGE_YOLU = 'yerel/kalite-denetim-v4';
 export const KOK = '/denetim-hazirlik';
+// 329 a: ölçü aletleri Kalibrasyon modülünde yönetilir; bu ekran listeyi yalnız okur, ekleme ve düzenleme oraya götürür.
+export const OLCU_ALETI_YOLU = '/kalibrasyon';
 // Çerçeve köprüsüyle aynı gecikme: art arda değişiklik tek yazmada toplanır.
 export const YAZMA_GECIKMESI_MS = 800;
 // Başkasının değişikliği bu sıklıkla aranır (çerçevede 10 sn).

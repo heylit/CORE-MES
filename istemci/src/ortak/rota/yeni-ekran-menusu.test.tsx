@@ -31,7 +31,9 @@ describe('yeni ekran menü satırları', () => {
     expect(within(menu).getByText(YENI_EKRAN_GRUBU)).toBeTruthy();
     const adresler = within(menu).getAllByRole('link').map((a) => a.getAttribute('href'));
     for (const yol of YENI_EKRAN_YOLLARI) expect(adresler, yol).toContain(yol);
-    expect(within(menu).getByRole('link', { name: 'Finans ve Muhasebe (yeni)' }).getAttribute('href')).toBe('/finans/yeni');
+    expect(within(menu).getByRole('link', { name: 'İnsan Kaynakları (yeni)' }).getAttribute('href')).toBe('/ik/yeni');
+    // Eski ekranı kalkanların (1392 a) deneme satırı yoktur.
+    for (const ad of ['Finans ve Muhasebe (yeni)', 'Denetim Hazırlığı (yeni)']) expect(within(menu).queryByRole('link', { name: ad }), ad).toBeNull();
     // Eski adresine geçenlerin (541) deneme satırı yoktur, ana menüdeki satır yeni ekranı açar.
     for (const ad of ['Kuyruk (yeni)', 'Reçete ve Rota (yeni)', 'Planlama (yeni)', 'Üretim Terminali (yeni)', 'Üretim Hazırlık (yeni)']) {
       expect(within(menu).queryByRole('link', { name: ad }), ad).toBeNull();
@@ -48,10 +50,10 @@ describe('yeni ekran menü satırları', () => {
   });
 
   it('kişiye görünmeyen ya da kapatılan sayfanın yeni ekranı listelenmez', () => {
-    const finanssiz = SAYFALAR.filter((s) => s.yol !== '/finans');
-    const yollar = yeniEkranBaglantilari(finanssiz, [YENI_EKRAN_ISLEMI]).map((b) => b.yol);
-    expect(yollar).not.toContain('/finans/yeni');
-    expect(yollar).toContain('/ik/yeni');
+    const iksiz = SAYFALAR.filter((s) => s.yol !== '/ik');
+    const yollar = yeniEkranBaglantilari(iksiz, [YENI_EKRAN_ISLEMI]).map((b) => b.yol);
+    expect(yollar).not.toContain('/ik/yeni');
+    expect(yollar).toContain('/ik-islemlerim/yeni');
     ciz([YENI_EKRAN_ISLEMI], ['/ik']);
     expect(within(anaMenu()).queryByRole('link', { name: 'İnsan Kaynakları (yeni)' })).toBeNull();
   });
@@ -78,6 +80,11 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(yeniEkranAdresiMi('/cnc-kurulum/yeni/kutuphane')).toBe(true);
     expect(yeniEkranAdresiMi('/cnc-kurulum')).toBe(true);
     expect(yeniEkranAdresiMi('/cnc-kurulumlar')).toBe(false);
+    // Finans ve Denetim Hazırlığı da eski çerçevesi kalkınca kendi kökünde açılır (1392 a).
+    for (const yol of ['/finans', '/finans/kayitlar', '/denetim-hazirlik', '/denetim-hazirlik/yeni/takvim']) expect(yeniEkranAdresiMi(yol), yol).toBe(true);
+    expect(YENI_EKRAN_YOLLARI).not.toContain('/finans/yeni');
+    expect(YENI_EKRAN_YOLLARI).not.toContain('/denetim-hazirlik/yeni');
+    expect(yeniEkranAdresiMi('/finansal')).toBe(false);
   });
 
   it('yeni ekranda şerit çizilmez, çerçeveli düzen ve tam ekran kalır', () => {
