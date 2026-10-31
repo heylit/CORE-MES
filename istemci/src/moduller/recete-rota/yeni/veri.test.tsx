@@ -22,7 +22,7 @@ function Yoklayici({ y, eski = false }: { y: Yoklama; eski?: boolean }) {
 
 function kur(eski = false) {
   const y: Yoklama = {};
-  const baglam: RrBaglami = { kopru: kopruKur([]), ilkOkuma: () => Promise.resolve() };
+  const baglam: RrBaglami = { kopru: kopruKur([]) };
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>

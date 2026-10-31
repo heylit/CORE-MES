@@ -93,14 +93,11 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(okuma);
   });
 
-  it('rota.yaz olana ilk okumada kart taslakları bir kez açılır (bugünkü ekran gibi)', async () => {
-    const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /rota/karttan-taslaklar': () => json(200, { acilan: 0 }) } });
+  it('1395 a: rota.yaz olanın ekranı açılışta yazma yapmaz, yalnız okur', async () => {
+    const istekler = sunucuKur(YONETICI);
     rrAc();
     await parcaCizildi(await acikBolum('Üretim emirleri'), 'R3');
-    const yazmalar = istekler.filter((i) => i.yontem !== 'GET');
-    expect(yazmalar.map((i) => i.yol)).toEqual(['/rota/karttan-taslaklar']);
-    const taslak = istekler.findIndex((i) => i.yol === '/rota/karttan-taslaklar');
-    expect(taslak).toBeLessThan(istekler.findIndex((i) => i.yol === '/plan/planlama-kaynagi'));
+    expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
   });
 
   it('durum okunamazsa sunucu iletisi ve yeniden dene gösterilir; parça çizilmez', async () => {
