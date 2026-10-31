@@ -22,61 +22,12 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
 const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum', '/finans', '/denetim-hazirlik'];
 
-// Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
-// kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör
-// yalnız yeni ekranı görür; başkası eski adreste "yetkiniz yok" görür (App.tsx).
-// Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
-// haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar).
-// yalnizYonetici: eski ekran yalnız yöneticide açılır ve geçiş yalnız ona görünür.
-// serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
-// (Reçete ve Rota'dan Planlama'ya) yol kalmaz. Tek maddelik menü de eski sayfadaki gibi şerit çizer (Kuyruk, Üretim Terminali).
-interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; serit?: true; haric?: readonly string[]; yalnizYonetici?: true }
-export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
-  { yol: '/kuyruk', eski: '/kuyruk/eski', serit: true },
-  { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
-  { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
-];
-
-const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);
-const yeniMi = (adres: string, t: TasinanEkran): boolean =>
-  altYolMu(adres, t.yol) && !altYolMu(adres, t.eski) && !(t.haric ?? []).some((h) => altYolMu(adres, h));
-const eskiMi = (adres: string, t: TasinanEkran): boolean => altYolMu(adres, t.eski);
-const yenisi = (adres: string, t: TasinanEkran): string => t.yol + adres.slice(t.eski.length);
-const eskisi = (adres: string, t: TasinanEkran): string => t.eski + adres.slice(t.yol.length);
-// Sondaki `/` aynı adrestir (yönlendirici de öyle eşler).
-const temiz = (adres: string): string => adres.replace(/(.)\/+$/, '$1');
-
 // Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
-// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır;
-// eski adresine geçen ekranın `eski` yolu eski ekrandır, şerit orada çizilir.
+// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır.
+// Kuyruk, Üretim Terminali ve Üretim Hazırlık (Arkon) listede yoktur: kabuğun şeridi onlarda durur, yeni ekran kendi sekmesini
+// çizmez (553 1 a); tek maddelik menü de şerit çizer.
 export function yeniEkranAdresiMi(adres: string): boolean {
-  return [...YENI_EKRAN_YOLLARI, ...ESKISI_KALKAN_YENI_EKRANLAR].some((yol) => altYolMu(adres, yol))
-    || TASINAN_EKRANLAR.some((t) => !t.serit && yeniMi(temiz(adres), t));
-}
-
-// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/arkon/eski/kalite` -> Kalite, kök madde değil).
-export function seritAdresi(adres: string): string {
-  const a = temiz(adres);
-  const t = TASINAN_EKRANLAR.find((e) => e.serit && eskiMi(a, e));
-  return t === undefined ? adres : yenisi(a, t);
-}
-
-// Eski ekranın adresi (`/kuyruk/eski`, `/arkon/eski/pano`); sondaki `/` aynı adrestir.
-export function eskiGorunumAdresiMi(adres: string): boolean {
-  const a = temiz(adres);
-  return TASINAN_EKRANLAR.some((t) => eskiMi(a, t));
-}
-
-// Kişi menüsündeki geçiş: yeni ekrandayken eskisine, eski ekrandayken yenisine. Eskisi olmayan adreste ve eskisi yalnız yöneticide olan
-// ekranda yönetici olmayana null.
-export function gorunumGecisi(adres: string, islemler: readonly string[] = []): { baslik: string; yol: string } | null {
-  const a = temiz(adres);
-  for (const t of TASINAN_EKRANLAR) {
-    if (t.yalnizYonetici && !islemler.includes(YENI_EKRAN_ISLEMI) && (eskiMi(a, t) || yeniMi(a, t))) return null;
-    if (eskiMi(a, t)) return { baslik: 'Yeni görünüm', yol: yenisi(a, t) };
-    if (yeniMi(a, t)) return { baslik: 'Eski görünüm', yol: eskisi(a, t) };
-  }
-  return null;
+  return [...YENI_EKRAN_YOLLARI, ...ESKISI_KALKAN_YENI_EKRANLAR].some((yol) => adres === yol || adres.startsWith(`${yol}/`));
 }
 
 // Yeni ekran adresinin satırı ve bağlı olduğu ana menü sayfası. En uzun yol kazanır: `/ik-islemlerim/yeni` İK İşlemlerim'dir,
