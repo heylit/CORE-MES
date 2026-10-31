@@ -17,6 +17,9 @@ import {
 import {
   malzemeGelisTarihleri, malzemeKgFiyatlari, ortalamaAlisFiyatlari, tedarikIhtiyaclariniYaz, tedarikTerminleri,
 } from '../satin-alma/disari.ts';
+import { kurlar } from '../finans/disari.ts';
+import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import { planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
@@ -25,6 +28,7 @@ import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
 } from './planlama-kurallar.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
+import { emirTutari, satirKuru } from './kurallar.ts';
 import { calisanAdimlar, canliOzeti, planFinansmanOrani } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
@@ -102,6 +106,8 @@ const yetkiliMi = (k: Kullanici, islemler: readonly Islem[]): boolean => islemle
 const ACIK_SIPARIS_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz', 'stok.giris'];
 // 1280 a, 1329: malzeme fiyatı planın maliyet ekranıyla aynı işlemle görünür (değerlendirmenin TL alanları gibi).
 const MALZEME_FIYATI_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
+// 1460 a, 1461 a: siparişin tutarı ve gecikme cezası planın gelirine girer; sipariş fiyatını gören görür (planın bedel satırı gibi).
+const SIPARIS_FIYATI_OKUMA: readonly Islem[] = ['siparisler.fiyat-oku'];
 
 // Plan kapasitesi (kart #1324): Vardiya'nın iş merkezi, istasyon ve kişi takvimlerinden prototipin kendi vardiya hesabına eklediği farklar
 // tek okumada. Kişi ve payı Vardiya'nın tek tanımıdır (`isMerkeziKisiPaylari`, Plan da bunu okur: aktif kişi; istasyon, makine ve ekip
@@ -171,7 +177,35 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const sa = await satinAlmaEkiKur(db, kullanici, d.items);
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa } };
+  return {
+    durum: d,
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici) },
+  };
+}
+
+// 1460 a, 1461 a: emrin geliri sipariş satırındaki payıdır (birim fiyat × emir adedi), plan gününün kuruyla TL; ceza siparişin günlük oranı
+// ve tavanı (yüzde). Anahtar motorun sipariş kimliği (emir kimliği). Plana girecek her emir listededir: fiyatı görmeyende ve satırı olmayan
+// emirde değerler null'dır, girdi.betik sayfada elle girilmiş değeri taşımaz. Kuru girilmemiş döviz satırda gelir null (bilinmez); ceza oranı
+// yine gelir, motor tutarsız cezayı hesaplamaz.
+export interface SiparisBedeli { gelir: number | null; cezaOran: number | null; cezaTavan: number | null }
+const BEDELSIZ: SiparisBedeli = { gelir: null, cezaOran: null, cezaTavan: null };
+async function siparisBedelleri(db: Db, kullanici: Kullanici): Promise<Record<string, SiparisBedeli> | null> {
+  if (!yetkiliMi(kullanici, KAYNAK_OKUMA.emir)) return null;
+  const emirler = new Map<number, { siparisSatiriId: number | null; adet: number }>();
+  for (const i of await planlanacakIsEmirleri(db, { taslakDahil: true })) {
+    if (!emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, { siparisSatiriId: i.siparisSatiriId ?? null, adet: i.adet });
+  }
+  if (!yetkiliMi(kullanici, SIPARIS_FIYATI_OKUMA)) return Object.fromEntries([...emirler.keys()].map((id) => [String(id), BEDELSIZ]));
+  const satirlar = await siparisSatiriOzetleri(db, [...emirler.values()].flatMap((e) => (e.siparisSatiriId === null ? [] : [e.siparisSatiriId])));
+  const kur = new Map([...await kurlar(db, tesisGunu(Date.now()))].map(([pb, k]) => [pb, Number(k.kur)]));
+  const sayi = (x: string | null): number | null => (x == null ? null : Number(x));
+  return Object.fromEntries([...emirler].map(([id, e]) => {
+    const satir = e.siparisSatiriId === null ? null : satirlar.get(e.siparisSatiriId) ?? null;
+    if (satir === null) return [String(id), BEDELSIZ];
+    const tutar = sayi(emirTutari(satir, e.adet));
+    const k = satirKuru({ paraBirimi: satir.paraBirimi, kur: kur.get(satir.paraBirimi) ?? null });
+    return [String(id), { gelir: tutar === null || k === null ? null : tutar * k, cezaOran: sayi(satir.cezaOraniGun), cezaTavan: sayi(satir.cezaTavaniOrani) }];
+  }));
 }
 
 // 525 1 a, 533 a: planın satın alma eki. Açık sipariş satın almayı okuyana; tedarik termini planlamada her malzeme satırında görünür
@@ -249,7 +283,7 @@ export async function planlamaCalismaKaydi(db: Db): Promise<unknown> {
 // Okunan veri kimseye dönmez; çözücü yalnız saat verir. Yazma işlemi taşımaz.
 const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   id: 0, ad: 'plan motoru',
-  islemler: [...new Set([...Object.values(KAYNAK_OKUMA).flat(), ...ACIK_SIPARIS_OKUMA])],
+  islemler: [...new Set([...Object.values(KAYNAK_OKUMA).flat(), ...ACIK_SIPARIS_OKUMA, ...SIPARIS_FIYATI_OKUMA])],
 };
 export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
 // Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.

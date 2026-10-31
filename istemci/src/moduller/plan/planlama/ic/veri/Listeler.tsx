@@ -245,7 +245,7 @@ export function MalzemeListesi({ c, cx, komut, planYaz, maliyet, uyar }: ListeOz
             etiket="Malzemeler" satirlar={D.malzemeler ?? []} anahtar={(m) => m.kod}
             sutunlar={[
               { anahtar: 'kod', baslik: 'Kod', hucre: (m) => mono(m.kod) }, { anahtar: 'ad', baslik: 'Ad', hucre: (m) => m.ad ?? '—' },
-              { anahtar: 'stok', baslik: 'Stok', sag: true, hucre: (m) => `${sayiYazi(m.stok, 1)} ${m.birim ?? ''}` },
+              { anahtar: 'stok', baslik: 'Stok', sag: true, hucre: (m) => (m.stok == null ? 'bilinmiyor' : `${sayiYazi(m.stok, 1)} ${m.birim ?? ''}`) },
               ...(maliyet ? [{ anahtar: 'fiyat', baslik: 'TL/birim', sag: true, hucre: (m: NonNullable<typeof D.malzemeler>[number]) => sayiYazi(m.birimFiyat, 2) }] : []),
               { anahtar: 'tedarik', baslik: 'Tedarik', sag: true, hucre: (m) => (m.tedarikGun != null ? `${m.tedarikGun} gün` : '—') },
               islem(() => <SahipDugmesi ad="Sil" simge="trash" />),
