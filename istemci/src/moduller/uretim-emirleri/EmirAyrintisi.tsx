@@ -7,6 +7,7 @@ import { AdimListesi, Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { KucukResimKutusu, useKucukResimler } from '../cizimler/disari.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
@@ -73,6 +74,7 @@ export function EmirAyrintisi() {
         <div className="tc-emir-ust">
           <Dugme simge="list" onClick={() => { void yonlendir('/uretim-emirleri'); }}>Listeye dön</Dugme>
           {emir && <Dugme simge="scan" aria-pressed={iplikAcik} onClick={izle}>Parçayı izle</Dugme>}
+          {emir && <GecmisDugmesi kayitlar={[{ tablo: 'uretim_emri', anahtar: { id: emir.id } }]} />}
           {receteRotaGorur && (
             <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da aç</Dugme>
           )}
