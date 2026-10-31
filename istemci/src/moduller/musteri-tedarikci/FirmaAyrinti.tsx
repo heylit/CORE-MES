@@ -7,6 +7,7 @@ import {
   Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type Sekme, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AdresFormu } from './AdresFormu.tsx';
 import { FirmaKarnesi } from './FirmaKarnesi.tsx';
@@ -133,6 +134,12 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
                     </Dugme>
                   )}
               </>
+            )}
+            {firma && (
+              <GecmisDugmesi kayitlar={[
+                { tablo: 'musteri_tedarikci_firma', anahtar: { id: firma.id } },
+                ...adresler.map((a) => ({ tablo: 'musteri_tedarikci_adres', anahtar: { id: a.id } })),
+              ]} />
             )}
             <Dugme onClick={kapat}>Kapat</Dugme>
           </>
