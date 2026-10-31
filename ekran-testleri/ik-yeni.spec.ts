@@ -96,6 +96,28 @@ test.describe('P3 bordro', () => {
   });
 });
 // P4 isealim
+test.describe('P4 ise alim, performans ve egitim', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('Performans, Eğitim ve İşe alım sekmeleri açılır; okurken yazma ve ağ hatası yok; yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni/performans');
+    await expect(page.getByRole('heading', { name: 'Performans', level: 2, exact: true })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'performans yatay taşması').toBe(0);
+    await page.getByRole('tab', { name: 'Eğitim' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/egitim$/);
+    await expect(page.getByRole('heading', { name: 'Eğitim', level: 2, exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'İşe alım' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/ise-alim$/);
+    await expect(page.getByRole('heading', { name: 'İşe alım', level: 2, exact: true })).toBeVisible();
+    for (const sekme of ['Görüşmeler', 'Aday karşılaştırma', 'Pozisyonlar', 'Soru bankası', 'Aday süreci']) {
+      await page.getByRole('tab', { name: new RegExp(`^${sekme}`) }).click();
+      await expect(page.getByRole('tab', { name: new RegExp(`^${sekme}`), selected: true })).toBeVisible();
+    }
+    expect((await tasmaOlc(page)).belge, 'işe alım yatay taşması').toBe(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P5 analiz
 test.describe('P5 analiz', () => {
   test.use({ hesap: 'ornek.yonetici' });
