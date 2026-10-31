@@ -6,6 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Secim, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { csvIndir } from './csv.ts';
 import { KAPASITE_KAYNAGI_ADLARI, KAPASITE_KAYNAGI_SECENEKLERI, TIP_ADLARI, TIP_SECENEKLERI } from './etiketler.ts';
@@ -91,6 +92,7 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
         <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
         {/* Stok yalnız işaretli istasyonda üretim alanı konumu açar (SH5 b). */}
         <IsaretKutusu etiket="Üretim alanı" checked={uretimAlani} onChange={(o) => uretimAlaniYaz(o.target.checked)} />
+        {kayit && <div className="tc-form-tam"><GecmisDugmesi kayitlar={[{ tablo: 'istasyon', anahtar: { id: kayit.id } }]} /></div>}
       </KayitPenceresi>
       <OnayPenceresi
         acik={silOnayi}

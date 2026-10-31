@@ -4,6 +4,7 @@ import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/ist
 import type { KisiGovdesi } from '#paylasilan/sozlesme/kisiler.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -147,6 +148,10 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
         <div className="tc-ist-kisi-bas">
           <b>{k.ad}</b>
           {!k.aktif && <small className="tc-ist-ipucu">pasif</small>}
+          <GecmisDugmesi kayitlar={[
+            { tablo: 'kisi_is_merkezi', anahtar: { kisi_id: k.id } },
+            { tablo: 'istasyonlar_kisi_tezgah_siniri', anahtar: { kisi_id: k.id } },
+          ]} />
           {v.takvim && (
             <label className="tc-ist-kisi-alan">
               <span>Vardiya</span>
