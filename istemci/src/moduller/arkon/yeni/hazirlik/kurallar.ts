@@ -156,9 +156,10 @@ export const ondalik = (s: unknown): number => parseFloat(String(s ?? '').replac
 /* ── paket ── */
 export const SIKLIKLAR = ['İlk parça', 'Her 10 parça', 'Her 50 parça', 'Saatlik', 'Vardiya başı', 'Son parça'] as const;
 export type PaketDurumu = 'draft' | 'review' | 'published' | 'production' | 'done';
+// Bu iş paketinin durumudur, üretim emrinin değil: ad "Paket:" ile başlar ki emir durumuyla karışmasın (1417 a).
 export const PAKET_DURUMLARI: Readonly<Record<PaketDurumu, { l: string; ton: Ton }>> = {
-  draft: { l: 'Taslak', ton: 'idle' }, review: { l: 'Onayda', ton: 'done' }, published: { l: 'Yayında', ton: 'run' },
-  production: { l: 'Üretimde', ton: 'hazard' }, done: { l: 'Tamamlandı', ton: 'done' },
+  draft: { l: 'Paket: Taslak', ton: 'idle' }, review: { l: 'Paket: Onayda', ton: 'done' }, published: { l: 'Paket: Yayında', ton: 'run' },
+  production: { l: 'Paket: Üretimde', ton: 'hazard' }, done: { l: 'Paket: Tamamlandı', ton: 'done' },
 };
 // Paket kartındaki durum: üretimden sonuç geldiyse ona göre.
 export function paketKartDurumu(p: Pick<Pkg, 'status'>, r: Pick<Result, 'state'> | null | undefined): PaketDurumu {
