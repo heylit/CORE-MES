@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { AdimliEmirOzeti, AdimliListeCevabi, EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { DurumKutusu, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
+import type { AdimliEmirOzeti, AdimliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { tarihMetni } from './gosterim.ts';
@@ -9,14 +10,7 @@ import { tarihMetni } from './gosterim.ts';
 // Emir listesini okuyabilen işlemler: üretim emirleri ucunun okuma kümesi (GET /adimli-emirler). Yetkisi olmayana bölüm gösterilmez.
 export const EMIR_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'] as const;
 
-const DURUM: Record<EmirDurumu, { metin: string; ton: RozetTonu }> = {
-  taslak: { metin: 'Taslak', ton: 'pasif' },
-  planli: { metin: 'Planlı', ton: 'bilgi' },
-  basladi: { metin: 'Başladı', ton: 'uyari' },
-  bitti: { metin: 'Bitti', ton: 'tamam' },
-  iptal: { metin: 'İptal', ton: 'hata' },
-};
-
+// Durum adı ve tonu emir durumunun tek sözlüğünden (1389 a).
 const SUTUNLAR: Sutun<AdimliEmirOzeti>[] = [
   // Emir ayrıntısı Rota'nın emir listesindedir; numarayla aranmış olarak açılır.
   { anahtar: 'emirNo', baslik: 'Emir no', mono: true, kirilmaz: true, hucre: (e) => <Link to={`/uretim-emirleri?ara=${encodeURIComponent(e.emirNo)}`}>{e.emirNo}</Link> },
@@ -24,7 +18,7 @@ const SUTUNLAR: Sutun<AdimliEmirOzeti>[] = [
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', mono: true, hucre: (e) => e.adet },
   { anahtar: 'ilerleme', baslik: 'Adım', hizala: 'sag', mono: true, hucre: (e) => `${e.tamamAdim}/${e.adimSayisi}` },
   { anahtar: 'teslim', baslik: 'Teslim', mono: true, kirilmaz: true, hucre: (e) => tarihMetni(e.teslim) },
-  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={DURUM[e.durum].ton}>{DURUM[e.durum].metin}</Rozet> },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={EMIR_DURUMU[e.durum].ton}>{EMIR_DURUMU[e.durum].etiket}</Rozet> },
 ];
 
 export function ProjeEmirleri({ projeId }: { projeId: number }) {
