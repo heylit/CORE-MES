@@ -5,13 +5,14 @@ import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
-import { cozumGirdisi, type EkAdim } from './plan-girdisi.ts';
+import { cozumGirdisi, type EkAdim, type PlanBenzetimi } from './plan-girdisi.ts';
 import { motorKodu, planCoz, type MotorDurumu } from './plan-motoru.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
 import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 
 // ADR 0018 karar 5: plan modülünün planMotoruCozucusu kaydının karşılığı. Girdiyi bu modül kurar (planlama sayfasının çalışması, Reçete ve
-// Rota kaydı ve sunucunun güncel emir, rota ve kaynakları); motor aramasız sabit kipte, kuyruktaki tezgâh sırasını koruyarak dizer.
+// Rota kaydı ve sunucunun güncel emir, rota ve kaynakları); motor aramasız koşar: 'sabit' kuyruktaki tezgâh sırasını korur, 'yeni' sırayı ve
+// tezgâhı kuraldan kurar (motor yerleşimi ve hızlı deneme; kuyruğun tezgâhı adaylara eklenir).
 // Motorun yerleştiremediği iş yerlesmeyen'dedir, nedeni nedenler'de (981 a-1): plan onu yerleşmemiş bırakır, ötekiler yazılır. Vardiyası
 // tanımsız tezgâhın işi vardiyasiz'dadır (168 b): plan onu uyarıyla boş bırakır, komutu durdurmaz.
 export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: PlanMotoruIstegi) => {
@@ -25,7 +26,7 @@ export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: Plan
 // 686 a: ek adım alanı plan modülünün isteğine ayrıca girer; çözücü alanı olan ve olmayan isteği aynı okur.
 export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
-  istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] },
+  istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] } & PlanBenzetimi,
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, string> }> {
   const g = cozumGirdisi({
     ...kaynak,
@@ -36,6 +37,10 @@ export async function coz(
       ...(istek.baglar ? { baglar: istek.baglar.map((x) => ({ anahtar: x.anahtar, oncul: x.oncul })) } : {}),
       ...(istek.ekAdimlar ? { ekAdimlar: istek.ekAdimlar.map((e) => ({ ...e })) } : {}),
       ...(istek.fasonBekleme ? { fasonBekleme: istek.fasonBekleme.map((x) => ({ anahtar: x.anahtar, gun: x.gun })) } : {}),
+      ...(istek.sanalEmirler ? { sanalEmirler: istek.sanalEmirler.map((x) => ({ ...x })) } : {}),
+      ...(istek.emirDegisiklikleri ? { emirDegisiklikleri: istek.emirDegisiklikleri.map((x) => ({ ...x })) } : {}),
+      ...(istek.kapaliMakineler ? { kapaliMakineler: [...istek.kapaliMakineler] } : {}),
+      ...(istek.kapaliGunler ? { kapaliGunler: [...istek.kapaliGunler] } : {}),
     },
   });
   if (g === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');
@@ -44,7 +49,7 @@ export async function coz(
   const vardiyasiz = [...g.vardiyasiz];
   const malzemeBekleyen: string[] = [];
   if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
-  const plan = await planCoz({ durum: g.st, kip: 'sabit', taban: g.taban });
+  const plan = await planCoz({ durum: g.st, kip: istek.kip, taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];

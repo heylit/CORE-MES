@@ -56,7 +56,7 @@ export function yeniCalisma(kayit: unknown, kaynak: KaynakOkumasi | null, bugun:
 }
 
 // Asıl plana yazan komutun isteği motorun diline (ADR 0018 karar 3): anahtar "emir no|OP no", makine kimliği metin, anlar ISO.
-export interface CozumIstegi {
+export interface CozumIstegi extends PlanBenzetimi {
   simdi: string;
   kuyruklar: { makineId: number; anahtarlar: string[] }[];
   sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[];
@@ -69,6 +69,14 @@ export interface CozumIstegi {
   ekAdimlar?: EkAdim[];
   // 1202: kuyruk işinin önündeki bitmemiş fasonun kalan süresi (gün; Üretim Emirleri'nin fasonBekleGun'u). Motor öncülü fason değilse uygular.
   fasonBekleme?: { anahtar: string; gun: number }[];
+}
+// 1408: taslağın denemesi ve emir önizlemesi (eski motorun yerine). Sanal emrin adımları kuyrukta "no|OP no" anahtarıyla geçer; makine
+// kimliği ve günler metin değil sayı ve 'GGGG-AA-GG'.
+export interface PlanBenzetimi {
+  sanalEmirler?: { no: string; malzemeId: number; adet: number; baslangic: string | null; teslim: string | null; oncelik: number }[];
+  emirDegisiklikleri?: { emirNo: string; oncelik?: number; teslim?: string }[];
+  kapaliMakineler?: number[];
+  kapaliGunler?: string[];
 }
 export interface EkAdim { anahtar: string; ad: string; oncul: string | null; ardil: string | null; ayarDk: number; birimDk: number; adet: number }
 export interface CozumGirdisi {

@@ -28,11 +28,16 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
   const nolar = new Set();
   for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
-  const asil = o => o.status === 'taslak' ? Object.assign({}, o, { status: 'serbest' }) : o;
+  /* 1408: taslağın denemesi (P6) ve emir önizlemesi girdiye uygulanır, sahibi modülün verisi değişmez. Sanal emir (acil sipariş, önizlenen
+     emir) sunucunun emirlerine ürünün yürürlükteki rotasıyla eklenir; öncelik ve teslim denemesi emrin kendisine. */
+  const sanal = (istek.sanalEmirler || []).map(x => ({ id: 'sanal-' + x.no, no: x.no, itemId: String(x.malzemeId), qty: x.adet, start: x.baslangic || null, due: x.teslim || null, priority: x.oncelik, status: 'serbest' }));
+  const degisen = new Map((istek.emirDegisiklikleri || []).map(x => [x.emirNo, x]));
+  const denemeli = o => { const d = degisen.get(o.no); return d ? Object.assign({}, o, d.oncelik != null ? { priority: d.oncelik } : {}, d.teslim != null ? { due: d.teslim } : {}) : o; };
+  const asil = o => denemeli(o.status === 'taslak' ? Object.assign({}, o, { status: 'serbest' }) : o);
   /* girdiKur kaynak okumasını kaydın üstüne yeniden koyar (sunucuKaydi): emir süzgeci okumanın kendisine de uygulanır */
   const durum0 = kaynak && kaynak.durum ? kaynak.durum : {};
   const e0 = durum0.emirler;
-  const durum = e0 && Array.isArray(e0.orders) ? Object.assign({}, durum0, { emirler: Object.assign({}, e0, { orders: e0.orders.filter(o => nolar.has(o.no)).map(asil) }) }) : durum0;
+  const durum = e0 && Array.isArray(e0.orders) ? Object.assign({}, durum0, { emirler: Object.assign({}, e0, { orders: [...e0.orders, ...sanal].filter(o => nolar.has(o.no)).map(asil) }) }) : durum0;
   const k = sunucuKaydi(kayit, durum, S0.D, bugun);
   k.plan = sunucuPlani(S0.D);
   k.orders = (k.orders || []).filter(o => nolar.has(o.no)).map(asil);
@@ -52,6 +57,9 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const st = g.st, D = g.S.D;
   const simdi = tmiSaat(D, istek.simdi);
   if (simdi != null && simdi >= 0) st.now = simdi;
+  /* 1408: arıza denemesindeki makine ufuk boyunca kapalı, kapalı gün denemesi tatil */
+  for (const m of istek.kapaliMakineler || []) st.down.push({ id: 'ariza-' + m, m: String(m), from: st.now, to: st.now + HDAYS * 24, neden: 'ariza' });
+  if ((istek.kapaliGunler || []).length) st.D.tatiller = [...new Set([...(st.D.tatiller || []), ...istek.kapaliGunler])];
   const opOf = tmiIslemler(k, D);
   for (const c of istek.calisanlar) {
     const id = opOf[c.anahtar], o = okunan.get(c.anahtar) || {};
@@ -75,7 +83,9 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const sira = new Set();
   /* 168 b: vardiyası tanımsız tezgâhın işi yerleşmez ama komutu durdurmaz; plan uyarıyla boş bırakır */
   const vardiyasiz = [];
-  const takvimsiz = m => { const M = cx.M[String(m)]; return !!M && M.rw.length === 0; };
+  /* arıza denemesindeki makine vardiyasız değildir: 'yeni' kipte işi başka adaya gider, 'sabit' kipte yerleşmez */
+  const arizali = new Set((istek.kapaliMakineler || []).map(String));
+  const takvimsiz = m => { const M = cx.M[String(m)]; return !arizali.has(String(m)) && !!M && M.rw.length === 0; };
   istek.kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
     const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
     if (takvimsiz(q.makineId)) { vardiyasiz.push(a); return; }
