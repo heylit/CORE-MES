@@ -193,6 +193,45 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     }
   });
 
+  test('1379 a: katkı payı emrin bütün iş emrinin maliyetiyle; bitmiş adımın maliyeti de düşülür, yarı bitmiş emir kârlı görünmez', async () => {
+    // Termini geçmiş, cezasız 2.400.000 TL satır; iki adımlı emrin ilk adımı bitmiş. Bitmiş adım 2.000.000, kalan 400.000 TL.
+    // Eski hesap yalnız kalanı düşerdi: katkı 2.000.000, kâr riski tabanı aşar. Yeni hesapta katkı 0: yalnız taban işler.
+    const [bitmis, kalan] = await isEmirleriAc([yeniAdim(), yeniAdim()], 10, '2020-01-10');
+    await ortam!.sahip.tx(async (db) => {
+      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 1379', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
+      const id = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
+        VALUES ('SS-2030-1379', 'onayli', $1, '2020-01-01', current_date + 30, 20, $2, $2, now()) RETURNING id`, [firma, yoneticiId]))!.id;
+      const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [kalan!]))!.malzeme_no;
+      const satir = (await db.tek<{ id: number }>("INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin) VALUES ($1, 1, $2, 10, 240000, '2020-01-10') RETURNING id", [id, malzeme]))!.id;
+      await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, kalan]);
+      await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now() - interval '2 hours', bitis = now() - interval '1 hour', saglam_adet = 10 WHERE id = $1", [bitmis]);
+    });
+    const sorulan = new Set<number>();
+    const maliyetler = (bitmisMaliyeti: number) => tahminiMaliyetCozucusu(async (_db, idler) => {
+      for (const id of idler) sorulan.add(id);
+      return new Map(idler.map((id) => [id, id === bitmis ? bitmisMaliyeti : id === kalan ? 400_000 : null]));
+    });
+    malzemeMaliyetiCozucusu(null);
+    const p = await taslaktaOner(c.yonetici);
+    try {
+      const once = p.gostergeler.maliyetTl!;
+      const toplam = async () => (await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl;
+      malzemeMaliyetiCozucusu(async (_db, idler) => new Map(idler.map((id) => [id, 0])));
+      maliyetler(0);
+      assert.ok((await toplam())! > once, 'bitmiş adımın maliyeti sıfırken katkı 2.000.000: kâr riski tabanı aşar (eski sayı)');
+      assert.ok(sorulan.has(bitmis!) && sorulan.has(kalan!), 'bitmiş adımın maliyeti de sorulur');
+      maliyetler(2_000_000);
+      assert.equal(await toplam(), once, 'bitmiş adım düşülünce katkı 0: kâr riski tabanı aşmaz (yeni sayı)');
+      tahminiMaliyetCozucusu(async (_db, idler) => new Map(idler.map((id) => [id, id === kalan ? 400_000 : null])));
+      assert.equal(await toplam(), once, 'bitmiş adımın maliyeti bilinmezse katkı bilinmez: kâr riski yok');
+    } finally {
+      tahminiMaliyetCozucusu(isEmriTahminiMaliyetleri);
+      malzemeMaliyetiCozucusu(uretimEmriMalzemeMaliyetleri);
+      await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
+      await ortam!.sahip.tx((db) => db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = NULL WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1)', [kalan]));
+    }
+  });
+
   test('225: aynı satıra bağlı emir satırın birim fiyatıyla kendi adedi kadar tutar taşır; satırın tamamı her emre yazılmaz', async () => {
     // Termini geçmiş (284 a), günde %1 cezalı satır; emir 10 adet. Satır 10 adetse emir tutarın tamamını, 20 adetse yarısını taşır.
     const [g] = await isEmirleriAc([yeniAdim()], 10, '2020-01-10');

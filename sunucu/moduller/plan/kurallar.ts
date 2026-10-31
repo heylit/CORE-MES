@@ -346,8 +346,9 @@ export function emirTutari(satir: { tutar: string | null; miktar: string }, adet
   return satir.tutar == null || !(miktar > 0) ? null : String((Number(satir.tutar) * adet) / miktar);
 }
 
-// Kâr riskinin tabanı (194 a, 227 a): emrin katkı payı = emrin TL tutarı (225) − emrin plandaki iş emirlerinin tahmini maliyeti − emrin plan
-// malzeme maliyeti (Proje maliyet). Bir kalem bilinmiyorsa, emir TL değilse ya da fiyatsızsa katkı payı bilinmez (null); kâr riski işlemez.
+// Kâr riskinin tabanı (194 a, 227 a, 1379 a): emrin katkı payı = emrin TL tutarı (225) − emrin bütün iş emirlerinin (bitmiş ve fason dahil)
+// tahmini maliyeti − emrin plan malzeme maliyeti (Proje maliyet). Tutar emrin tamamınındır; maliyet de tamamı olmalı, yoksa yarı bitmiş emir
+// kârlı görünür. Bir kalem bilinmiyorsa, emir TL değilse ya da fiyatsızsa katkı payı bilinmez (null); kâr riski işlemez.
 export function katkiPaylari(
   emirler: ReadonlyMap<number, { tutar: string | null; paraBirimi: string }>, isler: readonly { id: number; uretimEmriId: number }[],
   maliyet: ReadonlyMap<number, number | null>, malzeme: ReadonlyMap<number, number | null>,

@@ -21,7 +21,7 @@ import { acikRevizyonSayisi, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
-import { FASON_VARSAYILAN_GUN, adimOnculleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { FASON_VARSAYILAN_GUN, adimOnculleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
@@ -413,7 +413,9 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
   if (tahminiMaliyet && malzemeMaliyeti) {
     const emirler = new Map<number, BedelSatiri>();
     for (const i of isler.values()) { const satir = emirSatiri(b, i); if (satir && !emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, satir); }
-    const bagli = [...isler.values()].filter((i) => emirler.has(i.uretimEmriId));
+    // 1379 a: katkı emrin bütün iş emrinin maliyetiyle hesaplanır (bitmiş ve fason dahil); yalnız plandaki kalan iş düşülürse yarı bitmiş
+    // emir tam tutarına karşı kalan maliyetle kârlı görünür.
+    const bagli = [...await emirlerinIsEmriIdleri(db, [...emirler.keys()])].flatMap(([uretimEmriId, idler]) => idler.map((id) => ({ id, uretimEmriId })));
     b.katkilar = katkiPaylari(emirler, bagli, await tahminiMaliyet(db, bagli.map((i) => i.id)), await malzemeMaliyeti(db, [...emirler.keys()]));
   }
   // Taslaktaki denemeler (P6): sahibi modülün verisi değişmeden plan girdisine uygulanır.
