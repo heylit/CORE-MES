@@ -429,8 +429,20 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.equal(k1.durum, 200, JSON.stringify(k1.govde));
     const s1 = (await depoListesi()).find((x) => x.kalemId === gelis);
     assert.deepEqual(s1 && [s1.is, s1.kabulAdet], ['kabul', '2.0000'], 'kısmi kabulde kalem açık');
-    assert.equal((await kabul('3', gelis)).durum, 200);
+    const k2 = await istek<{ belge: { id: number } }>('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: sarf, miktar: '3', sevkKalemiId: gelis }] });
+    assert.equal(k2.durum, 200, JSON.stringify(k2.govde));
     assert.equal(await kalemAsamasi(gelis), 'tamamlandi');
     assert.equal((await kabul('1', gelis)).durum, 409, 'kapanan kalem yeniden kabul edilmez');
+
+    // B-4 (1405 a): mal kabul düzeltmesi satırın kabulünü kalemden geri alır; kalem depoda yeniden bekler, yeni satır ona yeniden bağlanır.
+    const duzelt = (ad: string, satirlar: unknown[]) => istek(ad, 'POST', `/stok/mal-kabuller/${String(k2.govde.belge.id)}/duzelt`, { satirlar });
+    assert.equal((await duzelt('operator', [])).durum, 403, 'geri alma işlemi olmayan düzeltemez');
+    assert.equal(await kalemAsamasi(gelis), 'tamamlandi', 'reddedilen düzeltme kalemi değiştirmez');
+    const d = await duzelt('depo', [{ malzemeId: sarf, miktar: '1', sevkKalemiId: gelis }]);
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    const s2 = (await depoListesi()).find((x) => x.kalemId === gelis);
+    assert.deepEqual(s2 && [s2.is, s2.kabulAdet], ['kabul', '3.0000'], '2 + 3 kabul, 3 geri alındı, düzeltmede 1 yeniden kabul: kalem açık');
+    assert.equal((await kabul('2', gelis)).durum, 200);
+    assert.equal(await kalemAsamasi(gelis), 'tamamlandi');
   });
 });
