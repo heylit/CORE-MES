@@ -26,7 +26,7 @@ export { tedarikIhtiyaclariniYaz, tedarikTerminleri } from './servis.ts';
 export { planIhtiyaclariniYaz } from './servis.ts';
 export type { TedarikTermini } from '#paylasilan/sozlesme/satin-alma.ts';
 // SAT-77: malzemenin uygulanan kg fiyatı ve stok biriminin birim fiyatı (TRY karşılığıyla); fiyatı ya da birim ağırlığı olmayan değer null. Yetki denetlemez.
-export { malzemeKgFiyatlari } from './servis.ts';
+export { degerlemeKgFiyatlari, malKabulFiyatlari, malzemeKgFiyatlari, type DegerlemeKgFiyati } from './servis.ts';
 export type { MalzemeKgFiyati } from './servis.ts';
 // #205 karar 1: Logo bağlantısı siparişi, düzenlemesini, kapatmasını ve iptalini buradan alır, sonucu buraya yazar. Yetki denetlemez, çağıranın işlemini kullanır.
 export {

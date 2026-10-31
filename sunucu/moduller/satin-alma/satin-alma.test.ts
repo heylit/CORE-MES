@@ -17,7 +17,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari,
+  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
@@ -770,10 +770,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   });
 
   // Kalem bazlı kararla iki tedarikçiye sipariş verilmiş talep: A'ya kayış (4), B'ye rulman (10).
-  async function bolunmusSiparis(k2FiyatiA = '5'): Promise<{ s: Talep; k1: string; k2: string; a: string; b: string }> {
+  async function bolunmusSiparis(k2FiyatiA = '5', teklifA: Record<string, unknown> = {}): Promise<{ s: Talep; k1: string; k2: string; a: string; b: string }> {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
-    const a = teklif(firmaA, [[k1, '10'], [k2, k2FiyatiA]]);
+    const a = teklif(firmaA, [[k1, '10'], [k2, k2FiyatiA]], teklifA);
     const b = teklif(firmaB, [[k1, '9'], [k2, '6']]);
     const onayda = tamam<Talep>(await kaydet(c.sa, {
       ...govde(t), durum: 'onayda', teklifler: [a, b],
@@ -857,11 +857,24 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     f = await oku();
     assert.equal(f.get(m1)?.birimFiyat, '9');
     assert.match(f.get(m1)!.zaman, /^\d{4}-\d{2}-\d{2}T/);
-    // Geri alma (eksi kayıt) son teslimi değiştirmez.
+    // 1382 d: geri alınan teslim son alış sayılmaz.
     const once = f.get(m1)!.zaman;
     await geriAl(7702);
-    assert.equal((await oku()).get(m1)?.zaman, once);
+    assert.notEqual((await oku()).get(m1)?.zaman, once);
     assert.deepEqual(await vt().tx((db) => sonAlisFiyatlari(db, [])), new Map());
+  });
+
+  test('1382 d: alış fiyatı nettir (teklif iskontosu düşülür); mal kabul satırı fiyatı aynı net fiyattır, teslimi olmayan satır yoktur', async () => {
+    const { s, a, k2 } = await bolunmusSiparis('8', { iskontoYuzdesi: '10' });
+    const m = (await vt().tx((db) => db.tek<{ n: number }>(
+      'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [s.id, k2])))!.n;
+    await teslimEt(siparisi(s, a).satirlar[0]!.id, '2', 7901);
+    const son = (await vt().tx((db) => sonAlisFiyatlari(db, [m]))).get(m)!;
+    assert.deepEqual([son.birimFiyat, son.tryBirimFiyat], ['7.2', '7.2']);
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [7901, 7999])), new Map([[7901, '7.2']]));
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [])), new Map());
+    await geriAl(7901);
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [7901])), new Map([[7901, '7.2']]), 'geri alınan satırın fiyatı stokun geri almasında kullanılır');
   });
 
   test('plan: açık siparişteki malzemenin kalan miktarı ve beklenen gelişi termin sırasıyla; tarihsiz en sonda; teslim düşer, biten satır çıkar', async () => {
@@ -896,7 +909,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await vt().tx((db) => malzemeGelisTarihleri(db, [])), new Map());
   });
 
-  test('stok değeri (ortalama): pozitif teslimlerin TRY birim fiyatı teslim miktarıyla ağırlıklı; geri alma girmez; teslimi olmayan malzemenin fiyatı boş', async () => {
+  test('stok değeri (ortalama): neti artı teslimlerin net TRY birim fiyatı net miktarla ağırlıklı; geri alınan teslim çıkar; teslimi olmayan malzemenin fiyatı boş', async () => {
     const malzemeNo = async (t: Talep, kalemId: string) => (await vt().tx((db) => db.tek<{ n: number }>(
       'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [t.id, kalemId])))!.n;
     const oku = (nolar: number[]) => vt().tx((db) => ortalamaAlisFiyatlari(db, nolar));
@@ -909,7 +922,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const miktar0 = Number((await vt().tx((db) => db.tek<{ q: string }>(
       `SELECT sum(m.miktar)::text AS q FROM satin_alma_teslim m JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
          JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
-        WHERE c.malzeme_no = $1 AND m.miktar > 0`, [m])))!.q);
+        WHERE c.malzeme_no = $1 AND m.mal_kabul_satiri_id IN (SELECT mal_kabul_satiri_id FROM satin_alma_teslim GROUP BY 1 HAVING sum(miktar) > 0)`, [m])))!.q);
     const fiyat0 = Number(once.get(m)!.tryBirimFiyat);
     const pahali = await bolunmusSiparis('7');
     assert.equal(await malzemeNo(pahali.s, pahali.k2), m);
@@ -919,7 +932,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(sonra.teslimSayisi, once.get(m)!.teslimSayisi + 1);
     await geriAl(7801);
     sonra = (await oku([m])).get(m)!;
-    assert.equal(sonra.teslimSayisi, once.get(m)!.teslimSayisi + 1);
+    assert.deepEqual(sonra, once.get(m), 'geri alınan teslim ortalamadan çıkar');
     assert.deepEqual(await oku([]), new Map());
   });
 
@@ -1714,6 +1727,13 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([m.get(levha)?.form, Number(m.get(levha)?.kgFiyati), m.get(levha)?.birimFiyati, Number(m.get(levha)?.tryTalasKgFiyati)], [null, 120, null, 30]);
     assert.equal(m.get(cubuk)?.talasKgFiyati, null);
     assert.equal(m.has(fiyatsiz), false);
+    assert.equal('tryTalasBirimFiyati' in m.get(cubuk)!, false);
+    // 1382 d: stok değerlemesi verilen günün kg fiyatıyla; talaş stok birimine çevrilir; o gün geçerli fiyat yoksa kart yok.
+    const kgGun = await vt().tx((db) => servis.degerlemeKgFiyatlari(db, [cubuk, levha, fiyatsiz], g));
+    assert.deepEqual(kgGun, new Map([[cubuk, { tryBirimFiyati: '150', tryTalasBirimFiyati: null }], [levha, { tryBirimFiyati: null, tryTalasBirimFiyati: null }]]));
+    assert.deepEqual(await vt().tx((db) => servis.degerlemeKgFiyatlari(db, [cubuk, levha], null)), kgGun);
+    const dun = new Date(Date.parse(`${g}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    assert.deepEqual(await vt().tx((db) => servis.degerlemeKgFiyatlari(db, [cubuk, levha], dun)), new Map());
     // Hammadde stok değeri: kg fiyatıyla (birim fiyatı bilinmeyen ve fiyatsız kalem dışarıda, sayılır) ve alış fiyatıyla; yalnız finans.oku olana.
     // 228 a: değer yalnız kullanılabilir stoktan; geri kalanı Stok'un değer gruplarıyla ayrı döner, değere girmez. Hammadde dışı kart sayılmaz.
     const stokDegeri = async (cerez: string) => tamam<KgFiyatlariCevabi>(await istek(cerez, 'GET', '/satin-alma-kg-fiyatlari')).stokDegeri;
