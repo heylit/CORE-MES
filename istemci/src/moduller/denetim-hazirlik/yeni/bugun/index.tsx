@@ -1,18 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
-import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
 import { useDenetim } from '../baglam.tsx';
 import { PROGRAMLAR, PROGRAM_SIRASI, eyGrade } from '../icerik/programlar.ts';
 import { bugunListesi, type BugunGrubu, type BugunMaddesi } from '../kurallar/bugun.ts';
 import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';
 import { icBaslat, sahaBaslat } from '../kurallar/ic-denetim.ts';
 import { kysMaddesi } from '../kurallar/kys.ts';
-import { ornekMi, ornekProfil, profilEkle } from '../kurallar/profil.ts';
 import { programPuani } from '../kurallar/puan.ts';
 import { bugunTarihi, gunFarki, tarihMetni, tariheGore } from '../tarih.ts';
+import { OLCU_ALETI_YOLU } from '../veri.ts';
 import { kararTonu, puanYazisi } from '../program/hesaplar.ts';
 import { PSimge, rozetTonu } from '../program/ortak.tsx';
 import { useHizliTur } from '../program/paylasilan.tsx';
+import { useOrnegeGec } from '../ornek-firma.tsx';
+import { SADE_IPUCU, useSadeGorunum } from '../yardim/index.tsx';
 import { baslarkenAdimlari, denetimSonrasi, selamlama } from './hesaplar.ts';
 import './bugun.css';
 
@@ -23,6 +24,8 @@ export function Bugun() {
   const d = useDenetim();
   const gezin = useNavigate();
   const hizliTur = useHizliTur();
+  const ornegeGec = useOrnegeGec();
+  const sade = useSadeGorunum();
   const st = d.profil;
   const yaz = d.yetki.yazabilir;
   const liste = bugunListesi(d.kb, d.cihazlar);
@@ -65,14 +68,6 @@ export function Bugun() {
     );
   };
 
-  const ornegeGec = () => {
-    d.depoDegistir(null, (t) => {
-      const var0 = t.order.find((id) => ornekMi(t.data[id]));
-      t.active = var0 ?? profilEkle(t, ornekProfil());
-    });
-    d.git('dash');
-    d.bildir('Örnek firma açıldı. Kendi profilinize Ayarlar sayfasından dönebilirsiniz.');
-  };
 
   const adimiAc = () => {
     if (!sirada) return;
@@ -221,7 +216,10 @@ export function Bugun() {
               <p><b>Sıradaki:</b> {sirada.t}</p>
               <div className="tc-dhb-dugmeler">
                 {yaz && <Dugme tur="birincil" onClick={adimiAc}>Başla</Dugme>}
-                {d.yetki.yonetici && <Dugme simge="layers" onClick={ornegeGec}>Örnek firmayı gez</Dugme>}
+                {ornegeGec && <Dugme simge="layers" onClick={ornegeGec}>Örnek firmayı gez</Dugme>}
+                {d.ekran.ux !== 'uzman' && (
+                  <button type="button" className="tc-dhb-baglanti" title={SADE_IPUCU} onClick={() => { sade(true); }}>Deneyimliyim: sade görünüm</button>
+                )}
                 <button type="button" className="tc-dhb-baglanti" onClick={() => {
                   d.ekranDegistir((s) => { s.onbHide = true; });
                   d.bildir('Başlarken rehberi gizlendi; Yardım panelinden yeniden açabilirsiniz');
