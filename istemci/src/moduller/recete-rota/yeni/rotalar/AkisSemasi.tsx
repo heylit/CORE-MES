@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimArkasinaTasi, adimBirlesen, adimDali, adimOnculleri, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
+  adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
@@ -248,6 +248,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
                 <span className="tc-rr1-daletiket">
                   <Simge ad={adimBirlesen(a).length > 0 ? 'layers' : 'route'} boyut="k" />
                   {adimDali(a) === null ? 'Ana hat' : `Dal ${adimDali(a) ?? ''}`}
+                  {adimDali(a) !== null && adimCarpani(a) > 1 && <em> 1 mamul için {String(adimCarpani(a))} adet</em>}
                   {adimBirlesen(a).length > 0 && <em> birleşir: {adimBirlesen(a).join(', ')}</em>}
                 </span>
               )}

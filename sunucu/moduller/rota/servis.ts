@@ -248,8 +248,9 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
   const adayKaynagi = (k: Kaynak): KaynakOzeti => ({ ...kaynak(k), tur: k.tur });
   const urun = (id: number): UrunOzeti => b.urunler.get(id) ?? { id, stokKodu: null, ad: 'Bilinmeyen kart', tur: '?', stokBirimi: null, onayDurumu: '?' };
   return icerik.adimlar.map((a, i) => {
-    // Dal adımı bir mamul için çarpan kadar parça işler (1257 a).
-    const miktar = (miktarlar.get(a.opNo) ?? urunMiktari) * (a.adetCarpani ?? 1);
+    // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); bileşen miktarı ise mamul başınadır, çarpanla büyümez (1333 a).
+    const mamulMiktari = miktarlar.get(a.opNo) ?? urunMiktari;
+    const miktar = mamulMiktari * (a.adetCarpani ?? 1);
     const sure = teorikSure(sayiyaCevir(a.ayarSuresiDk), sayiyaCevir(a.birimSureDk), miktar);
     const tip = b.tipler.get(a.operasyonTipiId) ?? { id: a.operasyonTipiId, kod: '?', ad: 'Bilinmeyen tip', kisaltma: '?', aktif: false };
     const akisi = akis[i] ?? { tuketir: [], cikti: { tur: 'urun' as const } };
@@ -270,7 +271,7 @@ function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi
       bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id)
         .map((x) => ({
           malzeme: urun(x.malzemeId), miktar: x.miktar, fireYuzde: x.fireYuzde,
-          toplamMiktar: ondalikMetin(miktar * sayi(x.miktar) * (1 + sayi(x.fireYuzde) / 100)),
+          toplamMiktar: ondalikMetin(mamulMiktari * sayi(x.miktar) * (1 + sayi(x.fireYuzde) / 100)),
         })),
       yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map((x) => ({ malzeme: urun(x.malzemeId), miktar: x.miktar })),
       akis: { tuketir: akisi.tuketir, cikti: akisi.cikti },
