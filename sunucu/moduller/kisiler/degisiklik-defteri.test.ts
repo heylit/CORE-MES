@@ -89,3 +89,53 @@ describe('yetki tabloları değişiklik defteri (gerçek PostgreSQL)', () => {
     assert.deepEqual((await defter('rol', { id: rol }))[0], kayit);
   });
 });
+
+// 1372 a: kişi kartı tetiği (göç 20261030168000). Parola özeti, oturum düşürme anı ve sürüm deftere girmez.
+describe('kişi kartı değişiklik defteri (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let yonetici = 0;
+  let kisi = 0;
+
+  const o = (): TestVeritabani => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return ortam;
+  };
+  const kisiyle = (is: (db: Db) => Promise<unknown>): Promise<unknown> =>
+    o().vt.tx(async (db) => {
+      await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(yonetici)]);
+      return is(db);
+    });
+  const defter = (): Promise<Defter[]> =>
+    o().sahip.sorgu<Defter>(
+      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'kisi' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY id",
+      [kisi],
+    );
+
+  before(async () => {
+    ortam = await testVeritabaniKur('kisiler_kart_defter');
+    yonetici = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Defter Yazan', kullaniciAdi: 'kisi-kart-defter', parola: 'dogru-parola-1' }));
+    kisi = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Kart Kişi', kullaniciAdi: 'kisi-kart-defter-2', parola: 'dogru-parola-1' }));
+  });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('ad ve etkinlik değişimi eski, yeni değer ve yazan kişiyle düşer', async () => {
+    await kisiyle((db) => db.sorgu("UPDATE kisi SET ad = 'Yeni Ad', aktif = false, surum = surum + 1 WHERE id = $1", [kisi]));
+    const [satir, ...fazla] = await defter();
+    assert.deepEqual(fazla, []);
+    assert.equal(satir?.kisi_id, yonetici);
+    assert.deepEqual(Object.keys(satir?.alanlar ?? {}).sort(), ['ad', 'aktif']);
+    assert.deepEqual(satir?.alanlar.ad, { eski: 'Kart Kişi', yeni: 'Yeni Ad' });
+  });
+
+  test('parola değişimi ve oturumları düşürme satır yazmaz; parola özeti defterde hiç geçmez', async () => {
+    const once = (await defter()).length;
+    await kisiyle((db) => db.sorgu("UPDATE kisi SET parola_ozeti = 'deneme-ozet', oturumlar_gecersiz_once = now(), surum = surum + 1 WHERE id = $1", [kisi]));
+    assert.equal((await defter()).length, once);
+    await kisiyle((db) => db.sorgu("UPDATE kisi SET parola_ozeti = 'deneme-ozet-2', ad = 'Son Ad' WHERE id = $1", [kisi]));
+    const son = (await defter()).at(-1);
+    assert.deepEqual(Object.keys(son?.alanlar ?? {}), ['ad']);
+    const metin = JSON.stringify(await o().sahip.sorgu("SELECT alanlar FROM denetim_degisiklik WHERE tablo = 'kisi'"));
+    assert.equal(metin.includes('deneme-ozet'), false);
+    assert.equal(metin.includes('parola_ozeti'), false);
+  });
+});
