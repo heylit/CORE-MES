@@ -335,4 +335,35 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     await ortam!.sahip.sorgu("UPDATE siparisler_siparis SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [ikinci.id]);
     assert.equal((await ok(b.id)).gelir, 0);
   });
+
+  test('PM-38 (1398 a): döviz siparişinde faturalanan kısım fatura kuruyla, kalanı bugünün kuruyla; kur farkı ayrı; TL faturası belge günü kuruyla çevrilir; fiyat yetkisi yoksa null', async () => {
+    const firmaId = (await tamam<{ firma: { id: number } }>(gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Müşteri 3', tur: 'musteri' }))).firma.id;
+    const taslak = await tamam<SiparisAyrintisi>(gonder(yonetici, '/siparisler/ekle', {
+      firmaId, musteriSiparisNo: null, siparisTarihi: '2026-10-01', termin: '2026-11-15', kdvOrani: '20', odemeKosulu: null, aciklama: null, paraBirimi: 'EUR',
+      satirlar: [{ malzemeNo: await mamulAc(), miktar: '10', birimFiyat: '100', termin: null, aciklama: null }],
+    }));
+    const onayli = await tamam<SiparisAyrintisi>(gonder(yonetici, `/siparisler/${taslak.id}/onayla`, { surum: taslak.surum }));
+    const p = await tamam<Proje>(gonder(yonetici, `/projeler/siparisten/${onayli.id}/ac`, { kod: 'PM.7', ad: 'Döviz' }));
+    await isEmriAc(p.id, { adet: 10, siparisSatiriId: onayli.satirlar[0]!.id });
+    for (const [tarih, kur] of [['2026-10-05', '30'], ['2026-10-10', '32'], ['2026-10-19', '35']] as const) {
+      await ortam!.sahip.sorgu('INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING', ['EUR', tarih, kur, yoneticiId]);
+    }
+    const ok = (islemler: string[]) => vt().tx((db) => projeMaliyeti(db, kullanici(islemler), p.id, SIMDI));
+    const yetkili = ['finans.maliyet-oku', FIYAT_ISLEMI];
+    // Fatura yokken bütün tutar bugünün kuruyla: 1000 EUR x 35.
+    assert.deepEqual([(await ok(yetkili)).gelir, (await ok(yetkili)).kurFarki], [35000, 0]);
+    const belge = (tarih: string, paraBirimi: string, kur: string, tutar: string) => ortam!.sahip.sorgu(
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, siparis_id, olusturan_id)
+       VALUES ('gelir', 'fatura', 'urun_satisi', $1, $2, $2, $3, $4, $5, 20, $6, $7)`, [firmaId, tarih, paraBirimi, kur, tutar, onayli.id, yoneticiId]);
+    // 300 EUR 30 kuruyla; 100 EUR karşılığı TL fatura (3.200 TL, belge günü kuru 32).
+    await belge('2026-10-05', 'EUR', '30', '300');
+    await belge('2026-10-10', 'TRY', '1', '3200');
+    const c = await ok(yetkili);
+    // 400 EUR faturalı: 9.000 + 3.200 = 12.200 TL; kalan 600 EUR x 35 = 21.000. Kur farkı 400 x 35 - 12.200 = 1.800.
+    assert.equal(c.gelir, 33200);
+    assert.equal(c.kurFarki, 1800);
+    assert.ok(!c.eksikler.includes('kur_yok'));
+    const siz = await ok(['finans.maliyet-oku']);
+    assert.deepEqual([siz.gelir, siz.kurFarki], [null, null]);
+  });
 });

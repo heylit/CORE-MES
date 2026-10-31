@@ -115,6 +115,10 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
           <SayiKarti baslik="Sipariş tutarı" simge="lira" metin={tl(m.gelir)}
             altMetin={m.siparis === null ? 'Siparişe bağlı değil' : `${m.siparis.no} · termin ${gunAy(m.siparis.termin)}`} />
         )}
+        {m.fiyatGorunur && m.siparis !== null && m.siparis.paraBirimi !== 'TRY' && (
+          <SayiKarti baslik="Kur farkı" simge="rotate" metin={m.kurFarki === null ? '—' : `${m.kurFarki > 0 ? '+' : ''}${tl(m.kurFarki)}`}
+            altMetin="Faturalanan kısım bugünün kuruyla; tutara ve katkıya eklenmez" />
+        )}
         <SayiKarti baslik="Gerçekleşen maliyet" simge="chart" metin={tl(m.gerceklesen)}
           altMetin={planaOran === null ? `Hedef ${tl(m.hedef)}` : `Hedefin ${yuzde(planaOran)}'i · ${m.butce === null ? 'plan' : 'bütçe'} ${tl(m.hedef)}`} />
         {m.fiyatGorunur && (

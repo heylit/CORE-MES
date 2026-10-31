@@ -8,7 +8,7 @@ import type {
   EksikVeri, MaliyetKalemi, MaliyetOzeti, MasrafSecenekleriCevabi, ProjeMaliyetCevabi, Taban,
 } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { birimMaliyetleri, faizGetir, genelGiderOrani, giderBelgeleri, giderBelgesiSecenekleri, kurGetir } from '../finans/disari.ts';
+import { birimMaliyetleri, faizGetir, genelGiderOrani, giderBelgeleri, giderBelgesiSecenekleri, kurGetir, siparisFaturalari } from '../finans/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
@@ -25,7 +25,8 @@ import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
 import { MASRAF_YOK, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
-import type { GelirPayi, MalzemeBileseni, MaliyetKaydi, TalasAdedi } from './kurallar.ts';
+import { faturaDurumu } from './kurallar.ts';
+import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
 
 // Sipariş tutarı ve kâr için ayrıca bu işlem gerekir (180 cevabı: yalnız yönetici ve müdür). İşlem Çekirdek'in göçüyle gelir;
 // listede yokken kimse fiyatı görmez.
@@ -182,29 +183,57 @@ export async function uretimEmriMalzemeMaliyetleri(db: Db, uretimEmriIdleri: rea
   return sonuc;
 }
 
-// PM-36: emirlerin sipariş satırı payları; para birimi başına bugünün kuru. Satırsız emir gelire girmez ve bildirilir.
-async function gelirHesapla(db: Db, isler: readonly ProjeIsEmri[], bugun: string, eksikler: EksikVeri[]): Promise<number | null> {
+// PM-36, 1398 a: emirlerin sipariş satırı payları; siparişin faturalanan kısmı fatura kuruyla, kalanı para birimi başına bugünün kuruyla.
+// Satırsız emir gelire girmez ve bildirilir.
+async function gelirHesapla(db: Db, isler: readonly ProjeIsEmri[], bugun: string, eksikler: EksikVeri[]): Promise<ProjeGeliriSonucu> {
   const emirler = new Map(isler.map((i) => [i.uretimEmriId, i]));
   if ([...emirler.values()].some((e) => e.siparisSatiriId === null)) eksikler.push('satirsiz_emir');
   const bagli = [...emirler.values()].filter((e) => e.siparisSatiriId !== null);
   const satirlar = await siparisSatiriOzetleri(db, bagli.map((e) => e.siparisSatiriId!));
   const kurlar = new Map<string, number | null>();
+  const kurOku = async (paraBirimi: string, gun: string): Promise<number | null> => {
+    const anahtar = `${paraBirimi}|${gun}`;
+    if (!kurlar.has(anahtar)) kurlar.set(anahtar, await kurGetir(db, paraBirimi, gun).then((k) => (k === null ? null : Number(k.kur))));
+    return kurlar.get(anahtar) ?? null;
+  };
+  const faturalar = await siparisFaturalari(db, [...new Set([...satirlar.values()].map((s) => s.siparisId))]);
+  const durumlar = new Map<number, FaturaDurumu | null | 'bilinmez'>();
+  const faturaOku = async (siparisId: number, paraBirimi: string): Promise<FaturaDurumu | null | 'bilinmez'> => {
+    if (durumlar.has(siparisId)) return durumlar.get(siparisId) ?? null;
+    const belgeler = faturalar.get(siparisId) ?? [];
+    const kayitlar: FaturaKaydi[] = [];
+    for (const f of belgeler) {
+      // Başka para birimindeki belge (çoğunlukla TL kesilen döviz siparişi) sipariş para birimine belge gününün kuruyla çevrilir.
+      const belgeKuru = f.paraBirimi === paraBirimi ? null : await kurOku(paraBirimi, f.belgeTarihi);
+      const doviz = f.paraBirimi === paraBirimi ? Number(f.tutar) : belgeKuru === null ? null : Number(f.netTl) / belgeKuru;
+      kayitlar.push({ tur: f.tur, doviz, tl: Number(f.netTl) });
+    }
+    const tutar = belgeler.length === 0 ? null : (await siparisAyrintisi(db, siparisId)).araToplam;
+    const d = faturaDurumu(kayitlar, tutar === null ? null : Number(tutar));
+    durumlar.set(siparisId, d);
+    return d;
+  };
   const paylar: GelirPayi[] = [];
   for (const e of bagli) {
     const satir = satirlar.get(e.siparisSatiriId!);
-    if (satir === undefined) { paylar.push({ adet: e.adet, birimFiyat: null, kur: null, iptal: false }); continue; }
-    if (!kurlar.has(satir.paraBirimi)) kurlar.set(satir.paraBirimi, await kurGetir(db, satir.paraBirimi, bugun).then((k) => (k === null ? null : Number(k.kur))));
-    const kur = kurlar.get(satir.paraBirimi) ?? null;
+    if (satir === undefined) { paylar.push({ adet: e.adet, birimFiyat: null, kur: null, iptal: false, fatura: null }); continue; }
+    const kur = await kurOku(satir.paraBirimi, bugun);
     const iptal = satir.siparisDurumu === 'iptal';
-    if (!iptal && kur === null && !eksikler.includes('kur_yok')) eksikler.push('kur_yok');
-    paylar.push({ adet: e.adet, birimFiyat: satir.birimFiyat === null ? null : Number(satir.birimFiyat), kur, iptal });
+    const fatura = iptal ? null : await faturaOku(satir.siparisId, satir.paraBirimi);
+    const bilinmez = !iptal && (kur === null || fatura === 'bilinmez');
+    if (bilinmez && !eksikler.includes('kur_yok')) eksikler.push('kur_yok');
+    paylar.push({
+      adet: e.adet, birimFiyat: satir.birimFiyat === null ? null : Number(satir.birimFiyat), kur: fatura === 'bilinmez' ? null : kur, iptal,
+      fatura: fatura === 'bilinmez' ? null : fatura,
+    });
   }
   return projeGeliri(paylar);
 }
 
 type Hesap = Omit<ProjeMaliyetCevabi, 'ozet'> & { isEmriSayisi: number };
 
-// Projenin maliyet özeti (197 a): salt okuma; hesap kurallar.ts'tedir. Gelir sipariş para biriminden bugünün kuruyla TRY'ye çevrilir.
+// Projenin maliyet özeti (197 a): salt okuma; hesap kurallar.ts'tedir. Gelir sipariş para biriminden TRY'ye: faturalanan kısım fatura kuruyla,
+// kalanı bugünün kuruyla (1398 a).
 export async function projeMaliyeti(db: Db, kullanici: Kullanici, projeId: number, simdi = Date.now()): Promise<ProjeMaliyetCevabi> {
   const { isEmriSayisi: _sayi, ...h } = await hesapla(db, kullanici, projeId, simdi);
   return { ...h, ozet: await maliyetOzeti(db, projeId, h) };
@@ -223,7 +252,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
   const butce: number | null = null;
 
   const { kayitlar: guncel, eksikler: kayitEksikleri, isler } = await maliyetKayitlari(db, projeId, bugun);
-  const gelir = await gelirHesapla(db, isler, bugun, eksikler);
+  const { gelir, kurFarki } = await gelirHesapla(db, isler, bugun, eksikler);
   // 199 a: bitmiş iş emri defterden, açık iş emri güncel fiyatla.
   const isKayitlari = defteriUygula(guncel, await defterOku(db, projeId));
   eksikler.push(...kayitEksikleri);
@@ -256,6 +285,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
     fiyatGorunur,
     bugun,
     gelir: fiyat(gelir),
+    kurFarki: fiyat(kurFarki),
     butce,
     hedef: g.hedef,
     plan: g.plan,
