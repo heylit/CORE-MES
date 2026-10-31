@@ -1,0 +1,38 @@
+/* 3D Atölyesi: geniş ekranda liste solda, ayrıntı sağda; dar ekranda biri görünür (seçim ayrıntıyı açar). */
+.tc-g3b { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-g3b-izgara { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-g3b-liste, .tc-g3b-sag, .tc-g3b-ayrinti { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-g3b-suzgec { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-g3b-suzgec > * { flex: 1 1 calc(var(--b-6) * 4); min-width: 0; }
+.tc-g3b-satirlar { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-g3b-satir {
+  display: flex; align-items: center; gap: var(--b-2); inline-size: 100%; min-block-size: var(--dokunma); padding: var(--b-2);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel); color: var(--ink); text-align: start; cursor: pointer;
+}
+.tc-g3b-satir:hover { background: var(--panel2); }
+.tc-g3b-satir:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-g3b-satir[aria-current='true'] { border-color: var(--hazard); }
+.tc-g3b-satir-metin { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tc-g3b-soluk { color: var(--muted); font-size: var(--yazi-s); }
+.tc-g3b-hata { margin: 0 0 var(--b-2); color: var(--stop); overflow-wrap: anywhere; }
+.tc-g3b-baslik { margin: 0; overflow-wrap: anywhere; }
+.tc-g3b-sahne {
+  position: relative; inline-size: 100%; block-size: var(--ekran-boy-40); min-block-size: var(--kadran-enaz);
+  border-radius: var(--yari-1); overflow: hidden; background: var(--sahne-arka); touch-action: none;
+}
+.tc-g3b-tuval { display: block; inline-size: 100%; block-size: 100%; }
+.tc-g3b-kartlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 8)), 1fr)); gap: var(--b-3); align-items: start; }
+.tc-g3b-degerler { margin: 0; display: grid; gap: var(--b-1); }
+.tc-g3b-degerler > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-2); }
+.tc-g3b-degerler dt { color: var(--muted); }
+.tc-g3b-degerler dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+/* Dar ekran: seçim varken liste gizlenir, geri düğmesi görünür. */
+.tc-g3b-secili > .tc-g3b-liste { display: none; }
+.tc-g3b-izgara:not(.tc-g3b-secili) > .tc-g3b-sag { display: none; }
+
+@media (min-width: 768px) {
+  .tc-g3b-izgara { grid-template-columns: minmax(calc(var(--b-6) * 8), 1fr) minmax(0, 2fr); }
+  .tc-g3b-secili > .tc-g3b-liste, .tc-g3b-izgara:not(.tc-g3b-secili) > .tc-g3b-sag { display: flex; }
+  .tc-g3b-geri { display: none; }
+}
