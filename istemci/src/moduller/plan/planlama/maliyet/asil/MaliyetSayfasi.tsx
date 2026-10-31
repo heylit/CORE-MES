@@ -6,7 +6,7 @@ import type { PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
   agAyar, baslangicMs, birimMaliyet, fasonTalasId, genelGiderHesabi, kgFiyatlari, kgSatiri, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
-  norm, planMaliyeti, sayi, sayiGirdisi, takvimKur, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type MaliyetBaglami,
+  norm, planMaliyeti, sayi, sayiGirdisi, takvimKur, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
 } from '../kurallar.ts';
 import {
   ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, talasYaz,
@@ -191,30 +191,34 @@ function FasonFiyatKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boole
   );
 }
 
+// 1280 a, 1329: kg fiyatı Satın Alma'nındır, burada tarihiyle salt okunur görünür; plan yalnız kalite ve formun fire payını yazar.
+const kgMetni = (r: KgBasvurusu | null): string => (r === null || r.tlKg === null ? '—' : `${sayi(r.tlKg, 2)} TL/kg`);
 function KgKarti({ c, kapali, y, kim }: { c: PlanlamaCalismasi; kapali: boolean; y: Y; kim: string }) {
   const D = c.D;
   const ml = malzemeler(D);
   const kg = kgFiyatlari(D) ?? [];
   const fiyatsiz = ml.filter((m) => birimMaliyet(D, m) === null);
+  const tahmini = ml.filter((m) => m.fiyatTahmini);
   return (
     <AsilKart simge="box" baslik="Malzeme kg fiyatları">
       <div className="tc-tablo-kap">
         <table className="tc-tablo">
-          <thead><tr><th>Cins</th><th>Kalite</th><th>Form</th><th className="tc-pyk-num">TL/kg</th><th className="tc-pyk-num">Fire %</th><th>Kullanan malzemeler</th><th>Güncelleme</th><th><span className="tc-gizli-etiket">İşlem</span></th></tr></thead>
+          <thead><tr><th>Cins</th><th>Kalite</th><th>Form</th><th className="tc-pyk-num">TL/kg (Satın Alma)</th><th className="tc-pyk-num">Fire %</th><th>Kullanan malzemeler</th><th>Güncelleme</th><th><span className="tc-gizli-etiket">İşlem</span></th></tr></thead>
           <tbody>
-            {kg.length === 0 && <tr><td colSpan={8} className="tc-pyk-soluk">Fiyat yok.</td></tr>}
+            {kg.length === 0 && <tr><td colSpan={8} className="tc-pyk-soluk">Fire payı yok.</td></tr>}
             {kg.map((r) => {
               const l = ml.filter((m) => kgSatiri(D, m)?.id === r.id);
+              const ref = l.find((m) => m.kgRef !== null)?.kgRef ?? null;
               return (
                 <tr key={r.id}>
                   <td>{r.cins || '—'}</td>
                   <td><b>{r.kalite}</b></td>
                   <td>{r.form || 'her form'}</td>
-                  <td className="tc-pyk-num"><SayiGir deger={r.fiyat} ad={`${r.kalite} kg fiyatı`} bosOlmaz kapali={kapali} yaz={(v) => y((z) => kgAlanYaz(z, D, r.id, 'fiyat', v, kim))} /></td>
-                  <td className="tc-pyk-num"><SayiGir deger={r.fire} ad={`${r.kalite} fire payı`} max={200} yer="0" kapali={kapali} yaz={(v) => y((z) => kgAlanYaz(z, D, r.id, 'fire', v, kim))} /></td>
+                  <td className="tc-pyk-num">{kgMetni(ref)}{ref?.tarih && <span className="tc-pyk-soluk"> · {ref.tarih}</span>}</td>
+                  <td className="tc-pyk-num"><SayiGir deger={r.fire} ad={`${r.kalite} fire payı`} max={200} yer="0" kapali={kapali} yaz={(v) => y((z) => kgAlanYaz(z, D, r.id, v, kim))} /></td>
                   <td>
                     {l.length
-                      ? <span className="tc-pyk-cipler">{l.map((m) => { const bm = birimMaliyet(D, m); return <span key={m.kod} className="tc-pyk-cip" title={m.ad}>{m.kod} · {bm === null ? 'kg ağırlığı yok' : `${sayi(bm, 2)} TL/${m.birim}`}</span>; })}</span>
+                      ? <span className="tc-pyk-cipler">{l.map((m) => { const bm = birimMaliyet(D, m); return <span key={m.kod} className="tc-pyk-cip" title={m.ad}>{m.kod} · {bm === null ? 'fiyat yok' : `${sayi(bm, 2)} TL/${m.birim}${m.fiyatTahmini ? ' (tahmini)' : ''}`}</span>; })}</span>
                       : <span className="tc-pyk-soluk">yok</span>}
                   </td>
                   <td><span className="tc-pyk-soluk">{r.tarih ?? '—'} · {r.kim}</span></td>
@@ -227,8 +231,9 @@ function KgKarti({ c, kapali, y, kim }: { c: PlanlamaCalismasi; kapali: boolean;
       </div>
       {!kapali && <KgFormu c={c} y={y} kim={kim} />}
       <Not>
-        Malzemenin birim maliyeti buradan anlık gelir: kalite ve form eşleşen satır, yoksa kalitenin "her form" satırı. Birimi kg olmayan malzemede bir birimin ağırlığı gerekir. Fire payı (talaş ve hurda) ihtiyacı büyütür; malzeme planı ve maliyet ikisi de bunu sayar.
-        {fiyatsiz.length > 0 && <> <b>Kg fiyatı bulunmayan malzeme:</b> {fiyatsiz.map((m) => m.kod).join(', ')}.</>}
+        Malzemenin birim maliyeti Satın Alma&apos;dan gelir: teslim alınmış siparişlerin ortalama alış fiyatı, alışı yoksa Satın Alma kg fiyatından tahmini. Kg fiyatı <Link to="/satin-alma/kg-fiyatlari">Satın Alma &gt; Kg fiyatları</Link> sayfasında girilir. Fire payı (talaş ve hurda) kalite ve formun satırından gelir, ihtiyacı büyütür; malzeme planı ve maliyet ikisi de bunu sayar.
+        {tahmini.length > 0 && <> <b>Fiyatı tahmini (alışı yok):</b> {tahmini.map((m) => m.kod).join(', ')}.</>}
+        {fiyatsiz.length > 0 && <> <b>Fiyatı bulunmayan malzeme:</b> {fiyatsiz.map((m) => `${m.kod}${m.kgRef ? ` (${kgMetni(m.kgRef)}, kg ağırlığı yok)` : ''}`).join(', ')}.</>}
       </Not>
     </AsilKart>
   );
@@ -241,19 +246,19 @@ function KgFormu({ c, y, kim }: { c: PlanlamaCalismasi; y: Y; kim: string }) {
     const f = o.currentTarget;
     const al = (k: string): string => (f.elements.namedItem(k) as HTMLInputElement | HTMLSelectElement | null)?.value ?? '';
     const kal = al('kalite').trim(), fo = al('form');
-    const fi = sayiGirdisi(al('fiyat'));
+    const fi = sayiGirdisi(al('fire'));
     if (!kal) { hataYaz('Kalite yazın.'); return; }
-    if (!fi.tamam || fi.deger === null || !(fi.deger > 0)) { hataYaz('Kg fiyatı girin.'); return; }
-    if (kgVarMi(c.D, kal, fo)) { hataYaz('Bu kalite ve form için fiyat zaten var.'); return; }
+    if (!fi.tamam || fi.deger === null || fi.deger < 0 || fi.deger > 200) { hataYaz('Fire payı girin (0-200).'); return; }
+    if (kgVarMi(c.D, kal, fo)) { hataYaz('Bu kalite ve form için fire payı zaten var.'); return; }
     const v = fi.deger;
-    if (y((z) => kgEkleYaz(z, { cins: al('cins'), kalite: kal, form: fo, fiyat: v }, kim))) { hataYaz(null); f.reset(); }
+    if (y((z) => kgEkleYaz(z, { cins: al('cins'), kalite: kal, form: fo, fire: v }, kim))) { hataYaz(null); f.reset(); }
   };
   return (
-    <form className="tc-pyk-yeni" noValidate onSubmit={gonder} aria-label="Kg fiyatı ekle">
+    <form className="tc-pyk-yeni" noValidate onSubmit={gonder} aria-label="Fire payı ekle">
       <select className="tc-alan-kutu" name="cins" aria-label="Cins">{ML_CINS.map((x) => <option key={x}>{x}</option>)}</select>
       <input className="tc-alan-kutu" name="kalite" placeholder="Kalite" aria-label="Kalite" required />
       <select className="tc-alan-kutu" name="form" aria-label="Form"><option value="">Her form</option>{ML_FORM.map((x) => <option key={x}>{x}</option>)}</select>
-      <input className="tc-alan-kutu" name="fiyat" inputMode="decimal" placeholder="TL/kg" aria-label="TL/kg" required />
+      <input className="tc-alan-kutu" name="fire" inputMode="decimal" placeholder="Fire %" aria-label="Fire %" required />
       <Dugme type="submit" tur="birincil" simge="plus">Ekle</Dugme>
       {hata && <p className="tc-pyk-ileti" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
     </form>
@@ -262,7 +267,7 @@ function KgFormu({ c, y, kim }: { c: PlanlamaCalismasi; y: Y; kim: string }) {
 
 function TalasKarti({ c, kapali, y, kim }: { c: PlanlamaCalismasi; kapali: boolean; y: Y; kim: string }) {
   const D = c.D;
-  const kg = kgFiyatlari(D) ?? [];
+  const ml = malzemeler(D);
   const l = [...talasFiyatlari(D)].sort((a, b) => a.cins.localeCompare(b.cins, 'tr') || a.kalite.localeCompare(b.kalite, 'tr'));
   return (
     <AsilKart simge="rotate" baslik="Malzeme talaş satış fiyatları">
@@ -272,7 +277,7 @@ function TalasKarti({ c, kapali, y, kim }: { c: PlanlamaCalismasi; kapali: boole
           <tbody>
             {l.length === 0 && <tr><td colSpan={5} className="tc-pyk-soluk">Kg fiyatı girilen kalite yok.</td></tr>}
             {l.map((t) => {
-              const f = kg.filter((r) => norm(r.kalite) === norm(t.kalite) && r.fiyat !== null).map((r) => r.fiyat as number);
+              const f = ml.flatMap((m) => (m.kgRef !== null && m.kgRef.tlKg !== null && norm(m.kalite) === norm(t.kalite) ? [m.kgRef.tlKg] : []));
               const kf = f.length ? Math.min(...f) : null;
               return (
                 <tr key={t.kalite}>
@@ -287,7 +292,7 @@ function TalasKarti({ c, kapali, y, kim }: { c: PlanlamaCalismasi; kapali: boole
           </tbody>
         </table>
       </div>
-      <Not>Kalite başına tek fiyat; kg fiyatı eklenen her kalite burada da görünür. Talaşın değeri malzeme maliyetinden düşülür: (hammadde kg × (1 + fire) − net parça kg) × adet × talaş fiyatı (214 a). Hammadde oranı talaş fiyatının en düşük kg fiyatına oranıdır.</Not>
+      <Not>Kalite başına tek fiyat; kg fiyatı eklenen her kalite burada da görünür. Talaşın değeri malzeme maliyetinden düşülür: (hammadde kg × (1 + fire) − net parça kg) × adet × talaş fiyatı (214 a). Hammadde oranı talaş fiyatının Satın Alma'daki en düşük kg fiyatına oranıdır.</Not>
     </AsilKart>
   );
 }

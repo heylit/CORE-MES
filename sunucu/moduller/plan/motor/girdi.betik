@@ -428,7 +428,23 @@ function tmiCevir(st, kaynak, D0, bugun) {
   const sa = k && k.ek && k.ek.acikSiparisler;
   if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
   if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
+  if (k && k.ek && 'malzemeFiyatlari' in k.ek && Array.isArray(D.malzemeler)) tmiFiyatlar(D.malzemeler, k.ek.malzemeFiyatlari);
   return D;
+}
+/* 1280 a, 1329: ham malzemenin birim fiyatı Satın Alma'dandır: alış ortalaması, yoksa kg fiyatından tahmini (fiyatTahmini), yoksa null
+   (bilinmez; sıfır sayılmaz). kgRef Satın Alma'nın geçerli kg fiyatı ve tarihidir, yalnız başvuru. Her okumada yeniden kurulur; okunamadıysa
+   (null: maliyeti görmeyen) önceki kayıttaki fiyat da taşınmaz, alanlar boştur. Alanı hiç taşımayan ek (fiyatı okumayan eski çağıran)
+   malzemenin kaynaktan gelen fiyatını değiştirmez. */
+function tmiFiyatlar(malzemeler, l) {
+  const F = new Map((Array.isArray(l) ? l : []).map(x => [String(x.kod), x]));
+  for (const m of malzemeler) {
+    delete m.fiyatTahmini; delete m.kgRef;
+    const x = F.get(m.kod), kg = x && x.kg;
+    const tahmini = !x || x.alisFiyati != null ? null : kg && kg.tlBirimFiyati != null ? kg.tlBirimFiyati : null;
+    m.birimFiyat = x && x.alisFiyati != null ? x.alisFiyati : tahmini;
+    if (tahmini != null) m.fiyatTahmini = true;
+    if (kg) m.kgRef = { kalite: kg.kaliteKodu, form: kg.form, tarih: kg.gecerlilik, tlKg: kg.tlKgFiyati, kgFiyati: kg.kgFiyati, paraBirimi: kg.paraBirimi };
+  }
 }
 /* 561 1 b: TMI'de tezgâhın operatör oranı istasyonun plan ayarıdır (çalışan bir makinenin istediği operatör; "bir operatör en çok N
    tezgâh" 1/N yazar). Planlamada girilmez: kaynak okundukça istasyonunkiyle yazılır; istasyonu okunmayan tezgâhta oran 1 sayılır. */
