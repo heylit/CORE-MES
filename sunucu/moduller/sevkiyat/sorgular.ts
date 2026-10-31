@@ -687,6 +687,27 @@ export function depoYaz(db: Db, id: number, kisiId: number, kabulAdet: string | 
       WHERE id = $1 AND depo_zamani IS NULL`, [id, kisiId, kabulAdet, tamam],
   );
 }
+// Kabul kaydı (1405 a): mal kabul satırının kabul ettiği adet; düzeltme geri alır.
+export function kabulKaydiYaz(db: Db, bekleyenId: number, malKabulSatiriId: number, adet: string, kisiId: number): Promise<unknown> {
+  return db.sorgu('INSERT INTO sevkiyat_kabul (bekleyen_id, mal_kabul_satiri_id, adet, kisi_id) VALUES ($1, $2, $3, $4)', [bekleyenId, malKabulSatiriId, adet, kisiId]);
+}
+export function acikKabulKayitlari(db: Db, malKabulSatiriIdler: readonly number[]): Promise<{ id: number; bekleyenId: number; adet: string }[]> {
+  return db.sorgu(
+    `SELECT id, bekleyen_id AS "bekleyenId", adet::text AS adet FROM sevkiyat_kabul
+      WHERE mal_kabul_satiri_id = ANY($1::bigint[]) AND geri_alindi IS NULL ORDER BY bekleyen_id, id FOR UPDATE`, [[...malKabulSatiriIdler]],
+  );
+}
+export function kabulKaydiGeriAl(db: Db, id: number, kisiId: number): Promise<unknown> {
+  return db.sorgu('UPDATE sevkiyat_kabul SET geri_alindi = now(), geri_alan_kisi_id = $2 WHERE id = $1 AND geri_alindi IS NULL', [id, kisiId]);
+}
+// Kabulün geri alınması: adet düşer (sıfırsa boş), kalem kapanmıyorsa depoda yeniden bekler.
+export function depoKabulunuDus(db: Db, id: number, kabulAdet: string | null, acik: boolean): Promise<unknown> {
+  return db.sorgu(
+    `UPDATE sevkiyat_bekleyen SET kabul_adet = $2::numeric,
+       depo_zamani = CASE WHEN $3 THEN NULL ELSE depo_zamani END, depo_kisi_id = CASE WHEN $3 THEN NULL ELSE depo_kisi_id END
+      WHERE id = $1`, [id, kabulAdet, acik],
+  );
+}
 export function fasonHareketiBagla(db: Db, id: number, hareketId: number): Promise<unknown> {
   return db.sorgu("UPDATE sevkiyat_bekleyen SET fason_hareket_id = $2 WHERE id = $1 AND kaynak = 'fason' AND fason_hareket_id IS NULL", [id, hareketId]);
 }

@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, emirlerinSevkDurumu, emirlerinSevkleri, kapanisSevkiyatDurumu, sevkIsiOzeti, siparisinSevkleri, urunSevkiDinle } from './disari.ts';
+import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKabulunuGeriAl, emirlerinSevkDurumu, emirlerinSevkleri, kapanisSevkiyatDurumu, sevkIsiOzeti, siparisinSevkleri, urunSevkiDinle } from './disari.ts';
 import type { UrunSevkiOlayi } from './disari.ts';
 import * as servis from './servis.ts';
 import { izgaraKaynagi } from './test-agi.ts';
@@ -666,10 +666,22 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const t = await istek('planlama_proje', 'POST', `/sevkiyat/kalemler/${donusId}/tasima`, { tasima: 'firma' });
     assert.equal(t.durum, 200, JSON.stringify(t.govde));
     assert.deepEqual([kalemCevabi.parse(t.govde).satir.asama, kalemCevabi.parse(t.govde).satir.sonYazan?.yer], ['depoda', 'sevkiyat']);
-    assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '2')), false, 'kısmi kabulde kalem açık');
+    assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '2', 900001)), false, 'kısmi kabulde kalem açık');
     assert.deepEqual([(await satir(`kalem:${donusId}`))?.asama, (await satir(`kalem:${donusId}`))?.depo?.kabulAdet], ['depoda', '2.0000']);
-    assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '3')), true);
+    assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '3', 900002)), true);
     assert.equal((await satir(`kalem:${donusId}`))?.asama, 'tamamlandi');
+
+    // B-4 (1405 a): düzeltilen satırın kabulü düşer, kalem depoda yeniden bekler; ikinci geri alma ve kaydı olmayan satır bir şey değiştirmez.
+    assert.deepEqual(await o().vt.tx((db) => depoKabulunuGeriAl(db, yoneticiId, [900002, 900999])), [donusId]);
+    assert.deepEqual([(await satir(`kalem:${donusId}`))?.asama, (await satir(`kalem:${donusId}`))?.depo?.kabulAdet], ['depoda', '2.0000']);
+    assert.deepEqual(await o().vt.tx((db) => depoKabulunuGeriAl(db, yoneticiId, [900002])), [], 'geri alınmış kayıt ikinci kez düşmez');
+    assert.ok((await o().vt.tx((db) => depoBekleyenleri(db))).some((d) => d.kalemId === donusId && d.is === 'kabul'), 'kalem yeniden kabul bekler');
+    assert.equal(await o().vt.tx((db) => depoKabuluYaz(db, yoneticiId, donusId, '3', 900003)), true, 'yeniden kabul kalemi kapatır');
+    assert.deepEqual(await o().vt.tx((db) => depoKabulunuGeriAl(db, yoneticiId, [900001, 900003])), [donusId]);
+    const bos = await satir(`kalem:${donusId}`);
+    assert.deepEqual([bos?.asama, bos?.depo], ['depoda', null], 'bütün kabul geri alınınca adet boş');
+    const kayit = await o().vt.sorgu<{ geri: boolean }>('SELECT geri_alindi IS NOT NULL AS geri FROM sevkiyat_kabul WHERE bekleyen_id = $1 ORDER BY mal_kabul_satiri_id', [donusId]);
+    assert.deepEqual(kayit.map((x) => x.geri), [true, true, true]);
   });
 
   test('1075 a: kapanışın sevkiyat maddesi sağlam adet kadar depo çıkışında tamam; kısmi çıkış ve geri alınan çıkış eksik; bitmemiş ve tanınmayan emir null', async () => {

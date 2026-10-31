@@ -850,6 +850,27 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await gir(baska, '11')).durum, 200, 'emrin ürünü olmayan yarı mamul sınırsız');
   });
 
+  test('B-7: elle üretim girişi iptal, taslak ve kapanışı onaylanmış emre yazılmaz; bitmiş ve kapanışı açık emre yazılır', async () => {
+    const m = await kart('mamul');
+    const gir = (e: number) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: e, malzemeId: m, miktar: '1' });
+    const iptal = await emir();
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [iptal]);
+    const r1 = await gir(iptal);
+    assert.deepEqual([r1.durum, r1.govde.mesaj], [409, 'İptal edilmiş emre üretim girişi yazılmaz.'], JSON.stringify(r1.govde));
+    const taslak = await emir();
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'taslak' WHERE id = $1", [taslak]);
+    assert.equal((await gir(taslak)).durum, 409, 'taslak emre giriş yazılmaz');
+    const bitti = await emir();
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = now(), bitis = now(), saglam_adet = 10 WHERE id = $1", [bitti]);
+    await o().sahip.sorgu("INSERT INTO uretim_emirleri_kapanis (uretim_emri_id) VALUES ($1)", [bitti]);
+    assert.equal((await gir(bitti)).durum, 200, 'kapanış onayı beklerken giriş açık');
+    await o().sahip.sorgu("UPDATE uretim_emirleri_kapanis SET durum = 'tamam', tamamlanma = now(), kalite_kisi_id = $2, kalite_zamani = now(), mudur_kisi_id = $2, mudur_zamani = now() WHERE uretim_emri_id = $1", [bitti, kisiler.get('yonetici')]);
+    const r2 = await gir(bitti);
+    assert.deepEqual([r2.durum, r2.govde.mesaj], [409, 'Emrin kapanışı onaylanmış; üretim girişi yazılmaz.'], JSON.stringify(r2.govde));
+    const hareket = await o().vt.sorgu("SELECT 1 FROM stok_hareketi WHERE malzeme_id = $1 AND uretim_emri_id = ANY($2::int[])", [m, [iptal, taslak, bitti]]);
+    assert.equal(hareket.length, 1, 'reddedilen girişler hareket yazmaz');
+  });
+
   test('kart #1338 akış süresi okumaları: emrin, partisinin ve tesliminin hareketleri tekrarsız ve sıralı; parti giriş zamanı', async () => {
     const e = await emir();
     const m = await kart('mamul');

@@ -46,11 +46,11 @@ import { gkkGerekenKartlar, malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, 
 import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisFaturalari } from '../finans/disari.ts';
-import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKalemiAl, emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
+import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKabulunuGeriAl, depoKalemiAl, emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
-  uretimEmriOzeti, emirNolari, refakatKarti,
+  uretimEmriOzeti, emirNolari, refakatKarti, kapanisSonuclari,
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
@@ -59,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -818,7 +818,7 @@ async function malKabulSatirlariniYaz(
       if (s.sertifika) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar, partiId: null, konumId: null, hareketId: null, siparisSatirId, fasonCikisHareketId: null }));
       await teslimIsle(db, k, { siparisSatirId: siparisSatirId!, miktar, malKabulSatirId: satirId });
-      await sevkKalemiKabulu(db, kisiId, s, alan);
+      await sevkKalemiKabulu(db, kisiId, s, alan, satirId);
       continue;
     }
     if (s.fasonIsi !== undefined) {
@@ -833,7 +833,7 @@ async function malKabulSatirlariniYaz(
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar: bindenMetin(giren.miktar), partiId: null, konumId, hareketId: giren.hareketId, siparisSatirId, fasonCikisHareketId: null }));
       idler.push(giren.hareketId);
       if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar: bindenMetin(giren.miktar), malKabulSatirId: satirId });
-      await sevkKalemiKabulu(db, kisiId, s, alan);
+      await sevkKalemiKabulu(db, kisiId, s, alan, satirId);
       continue;
     }
     const fason = satirTuru.tur === 'fason' ? await fasonGideni(db, s.fason!, miktar, `${alan}.fason`) : null;
@@ -880,7 +880,7 @@ async function malKabulSatirlariniYaz(
     }
     // SH1 a: teslim satın almaya aynı işlemde yazılır; kalanı aşan miktar reddedilmez, satın almada fazla teslim görünür.
     if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar, malKabulSatirId: yazilan.satirId });
-    await sevkKalemiKabulu(db, kisiId, s, alan);
+    await sevkKalemiKabulu(db, kisiId, s, alan, yazilan.satirId);
     idler.push(yazilan.id, ...(yazilan.fasonCikisHareketId === null ? [] : [yazilan.fasonCikisHareketId]));
   }
   return idler;
@@ -956,6 +956,8 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
     if (s.fasonCikisHareketId !== null) hareketIdler.push(await tersCevir(db, kisiId, s.fasonCikisHareketId, g.eksiOnay === true, `Düzeltme: ${eski.no}`, true));
     if (s.siparisSatirId !== null) await teslimGeriAl(db, k, { malKabulSatirId: s.id });
   }
+  // B-4 (1405 a): satırın kabul ettiği sevkiyat kalemi kabulü geri alır; kalem depoda yeniden bekler, yeni satır ona yeniden bağlanabilir.
+  await depoKabulunuGeriAl(db, kisiId, satirlar.map((s) => s.id));
   const yeni = await korumali(async () => sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: eski.tur, irsaliyeNo: eski.irsaliyeNo, duzeltilenId: id, kisiId }));
   const denetim: DenetimDefteri = [];
   hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim)));
@@ -1112,8 +1114,10 @@ export async function uretimGirisi(db: Db, kisiId: number, g: UretimGirisiKomutu
   // 21.4: emrin kendi ürünü sayım ve tamamlamayla da girer; elle giriş adedi aşmaz. Tamamlamayla aynı kilit: eşzamanlı iki giriş
   // sınırı birlikte aşamaz. Emrin ürünü olmayan yarı mamulün emirdeki miktarı adetten çıkmaz, sınırsız kalır.
   const e = await uretimEmriOzeti(db, emir);
+  if (e !== null && e.malzemeNo === malzemeId) await sorgular.emirTamamlamaKilidi(db, emir);
+  const durumEngeli = e === null ? null : uretimGirisiDurumEngeli(e.durum, (await kapanisSonuclari(db, [emir])).get(emir) != null);
+  if (durumEngeli) throw cakisma(durumEngeli);
   if (e !== null && e.malzemeNo === malzemeId) {
-    await sorgular.emirTamamlamaKilidi(db, emir);
     const asim = uretimGirisiEngeli(e.saglamAdet ?? e.adet, await sorgular.emirUretimGirisi(db, emir, malzemeId), miktar);
     if (asim) throw dogrulama(asim, 'miktar');
   }
@@ -5017,7 +5021,7 @@ export async function depoCikisiniGeriAlYap(db: Db, kisiId: number, kalemId: num
 }
 
 // Mal kabul satırının sevkiyat kalemi (944, 957 a): yalnız geliş; fason dönüşünde aynı fason adımı, alımda aynı sipariş satırı.
-async function sevkKalemiKabulu(db: Db, kisiId: number, s: MalKabulKomutu['satirlar'][number], alan: string): Promise<void> {
+async function sevkKalemiKabulu(db: Db, kisiId: number, s: MalKabulKomutu['satirlar'][number], alan: string, malKabulSatirId: number): Promise<void> {
   if (s.sevkKalemiId === undefined) return;
   const k = await depoKalemiAl(db, Number(s.sevkKalemiId), 'kabul');
   if (k.kaynak === 'fason-donus' && (s.fasonIsi === undefined || Number(s.fasonIsi.isEmriId) !== k.isEmriId)) {
@@ -5026,7 +5030,7 @@ async function sevkKalemiKabulu(db: Db, kisiId: number, s: MalKabulKomutu['satir
   if (k.kaynak === 'alim' && k.siparisSatiriId !== null && (s.siparisSatirId === undefined || Number(s.siparisSatirId) !== k.siparisSatiriId)) {
     throw dogrulama('Bu kalem başka bir sipariş satırının alımıdır.', `${alan}.sevkKalemiId`);
   }
-  await depoKabuluYaz(db, kisiId, k.kalemId, bindenMetin(binde(s.miktar)));
+  await depoKabuluYaz(db, kisiId, k.kalemId, bindenMetin(binde(s.miktar)), malKabulSatirId);
 }
 
 // ---- Refakat partisi (kart #123): depo lotu okutup emre ayırınca doğar, kartı basılır; teslim kartla yapılır ------------------

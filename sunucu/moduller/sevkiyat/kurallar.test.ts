@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  kabulGeriAlimi,
   aracIhlalleri, araDonusleriTemizle, bolmeIhlali, durumGecisiIhlali, ileriSonucIhlali, gunTipi, isDegistirilebilir, isDuzenlenebilir, isIhlalleri, onayEngelleri, planDegistirilebilir, yeniIsDurumu,
   planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi,
   depoGeriAlIhlali, elleKalemIhlalleri, kapanisSevki, serbestBirakmaIhlali, tasimaIhlali, tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
@@ -278,4 +279,12 @@ test('1075 a: kapanış sevki emir adedi ile sağlamın küçüğü kadar çık�
   assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 10, cikan: '9.5' }), { durum: 'eksik', ayrinti: '9,5 / 10 depodan çıktı' });
   assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 10, cikan: '0' }), { durum: 'eksik', ayrinti: '0 / 10 depodan çıktı' });
   assert.deepEqual(kapanisSevki({ adet: 10, saglamAdet: 0, cikan: '0' }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+});
+
+test('B-4 kabulGeriAlimi (1405 a): geri alınan adet düşer; sıfırsa adet boş, kalem kapanmıyorsa açılır', () => {
+  assert.deepEqual(kabulGeriAlimi('5', '5.0000', '3'), { kabulAdet: '2', acik: true });
+  assert.deepEqual(kabulGeriAlimi('5', '5.0000', '5'), { kabulAdet: null, acik: true });
+  assert.deepEqual(kabulGeriAlimi('5', '7.0000', '2'), { kabulAdet: '5', acik: false }, 'fazla kabulün bir kısmı geri alınırsa kalem kapalı kalır');
+  assert.deepEqual(kabulGeriAlimi(null, '4.0000', '1.5'), { kabulAdet: '2.5', acik: false }, 'adedi bilinmeyen kalem kabul kaldıkça kapalı');
+  assert.deepEqual(kabulGeriAlimi('5', '2.0000', '3'), { kabulAdet: null, acik: true }, 'kaydı aşan geri alma sıfırda durur');
 });

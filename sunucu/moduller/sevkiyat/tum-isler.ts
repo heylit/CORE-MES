@@ -13,7 +13,7 @@ import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { adimliEmirListesi, emirNolari, fasonGonderimleri, fasonIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { FasonGonderimi, FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  adayListede, depoGeriAlIhlali, depoIhlali, elleKalemIhlalleri, emirIlerlemesi, fasonAdayiHazir, kabulTamamMi, KALEM_SAHIBI, serbestBirakmaIhlali, tasimaIhlali,
+  adayListede, depoGeriAlIhlali, depoIhlali, elleKalemIhlalleri, emirIlerlemesi, fasonAdayiHazir, kabulTamamMi, kabulGeriAlimi, KALEM_SAHIBI, serbestBirakmaIhlali, tasimaIhlali,
   tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
 } from './kurallar.ts';
 import * as sorgu from './sorgular.ts';
@@ -327,11 +327,29 @@ export async function depoCikisiniGeriAl(db: Db, id: number): Promise<DepoKalemi
   await sorgu.depoGeriAl(db, id);
   return depoKalemi(k);
 }
-// Kabul (mal kabul satırı): gelen adet eklenir; kalemin adedine ulaşınca kalem kapanır. Döner: kalem kapandı mı.
-export async function depoKabuluYaz(db: Db, kisiId: number, id: number, gelen: string): Promise<boolean> {
+// Kabul (mal kabul satırı): gelen adet eklenir; kalemin adedine ulaşınca kalem kapanır. Döner: kalem kapandı mı. Satır verilirse
+// kabul kaydı yazılır (1405 a); düzeltme kabulü o kayıtla geri alır.
+export async function depoKabuluYaz(db: Db, kisiId: number, id: number, gelen: string, malKabulSatiriId?: number): Promise<boolean> {
   const k = await depoKalemiAl(db, id, 'kabul');
   const tamam = kabulTamamMi(k.adet, k.kabulAdet, gelen);
   await sorgu.depoYaz(db, id, kisiId, gelen, tamam);
+  if (malKabulSatiriId !== undefined) await sorgu.kabulKaydiYaz(db, id, malKabulSatiriId, gelen, kisiId);
   return tamam;
+}
+// Mal kabul düzeltmesi (B-4, 1405 a): satırların kabul ettiği adet kalemden düşer, kalem açılırsa depoda yeniden kabul bekler.
+// Kaydı olmayan satır (göçten önceki kabul ya da kalemsiz satır) kalemi değiştirmez. Döner: kabulü geri alınan kalemler.
+export async function depoKabulunuGeriAl(db: Db, kisiId: number, malKabulSatiriIdler: readonly number[]): Promise<number[]> {
+  if (malKabulSatiriIdler.length === 0) return [];
+  const kayitlar = await sorgu.acikKabulKayitlari(db, malKabulSatiriIdler);
+  if (kayitlar.length === 0) return [];
+  const kalemler = new Map((await sorgu.kalemleriKilitle(db, [...new Set(kayitlar.map((x) => x.bekleyenId))])).map((k) => [k.id, k]));
+  for (const x of kayitlar) {
+    const k = kalemler.get(x.bekleyenId)!;
+    const g = kabulGeriAlimi(k.adet, k.kabulAdet, x.adet);
+    await sorgu.depoKabulunuDus(db, k.id, g.kabulAdet, g.acik);
+    await sorgu.kabulKaydiGeriAl(db, x.id, kisiId);
+    kalemler.set(k.id, { ...k, kabulAdet: g.kabulAdet });
+  }
+  return [...kalemler.keys()];
 }
 export { KALEM_SAHIBI };
