@@ -1,6 +1,9 @@
 /* Planlama TS ekranı iskeleti (tc-py-). Görünümler kendi önekleriyle gelir (PARCA-SOZLESMESI); ortak çizelge tc-pyc-. Ekran ikinci menünün
    yanındaki alanı doldurur; görünüm şeridi kabuğun ikinci menüsüdür, kaydırma görünüm alanındadır. */
 .tc-py { display: grid; grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--bg); }
+.tc-py[data-calisma-yok] { grid-template-rows: auto minmax(0, 1fr); }
+/* 1395 a: çalışma kaydı yokken yazabilene açma düğmesi; görünüm alanının üstünde tek satır. */
+.tc-py-calisma-yok { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-2) var(--b-5); border-bottom: 1px solid var(--edge); color: var(--muted); font-size: var(--yazi-s); }
 .tc-py-gorunum { min-height: 0; min-width: 0; overflow: auto; }
 .tc-py-durum { padding: var(--b-5); }
 .tc-py-yer { padding: var(--b-5); }

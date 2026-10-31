@@ -55,7 +55,7 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
       const tum = kap.getByText('Tüm satırlar');
       if (await tum.count()) await tum.click();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+      expect(ag.yazmalar).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
@@ -76,7 +76,7 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
       await kap.getByText('Tüm satırlar').click();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+      expect(ag.yazmalar).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
@@ -88,6 +88,6 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
     await expect(kap.getByRole('heading', { name: 'Ek mesai planı', level: 2 })).toBeVisible({ timeout: 20_000 });
     await expect(kap.locator('.tc-pyk-durum').getByRole('button', { name: 'Önerileri hesapla' })).toBeDisabled();
     await expect(kap.getByRole('button', { name: /diğer işlemler/ })).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
   });
 });
