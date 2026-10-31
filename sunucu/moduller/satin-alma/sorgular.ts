@@ -779,6 +779,13 @@ export function malKabulNetleri(db: Db, malKabulSatirId: number): Promise<{ sipa
     [malKabulSatirId],
   );
 }
+// Kapalı siparişe düzeltme yazımı (1404): aynı işlemde (now() işlem başlangıcıdır) bu sipariş satırına ters teslim yazıldı mı.
+export async function buIslemdeGeriAlindiMi(db: Db, siparisSatirId: number): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM satin_alma_teslim WHERE siparis_satiri_id = $1 AND miktar < 0 AND zaman = now()) AS var',
+    [siparisSatirId],
+  ))!.var;
+}
 export async function teslimEkle(db: Db, siparisSatirId: number, malKabulSatirId: number, miktar: string, kisiId: number): Promise<void> {
   await db.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, $3, $4)',
     [siparisSatirId, malKabulSatirId, miktar, kisiId]);
