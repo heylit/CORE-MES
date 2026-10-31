@@ -8,6 +8,7 @@ import type { KendiParolaGovdesi } from '#paylasilan/sozlesme/oturum.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { kullaniciAdiOner } from './kullanici-adi.ts';
 
@@ -97,6 +98,13 @@ export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () =
       <Girdi etiket="Ad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} ipucu={ozlukIpucu} />
       <Girdi etiket="Sicil no" value={sicilNo} onChange={(o) => sicilYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
       <Girdi etiket="Görev" value={gorev} onChange={(o) => gorevYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
+      {kisi !== null && (
+        <GecmisDugmesi kayitlar={[
+          { tablo: 'kisi', anahtar: { id: kisi.id } },
+          { tablo: 'kisi_rolu', anahtar: { kisi_id: kisi.id } },
+          { tablo: 'kisi_islemi', anahtar: { kisi_id: kisi.id } },
+        ]} />
+      )}
     </Form>
   );
 }
