@@ -1,4 +1,4 @@
-import { ADRES, cerceve, expect, kesilenBasliklar, tasmaOlc, test, ustCubukCakisanlar } from './ortak.ts';
+import { ADRES, expect, kesilenBasliklar, tasmaOlc, test, ustCubukCakisanlar } from './ortak.ts';
 import type { Hesap } from './ortak.ts';
 
 // Öncelikli modüllerin sayfaları her genişlikte açılır: doğru adrese varır, başlığı görünür, konsol ve API hatası vermez,
@@ -13,7 +13,6 @@ interface Sayfa {
   varis?: RegExp;
   hesap: Hesap;
   baslik: string | RegExp;
-  cerceve?: boolean;
   // Kendi başlığı olmayan yeni ekran (Üretim Terminali): başlık kabuktadır, dar ekranda bölüm adıyla bulunur.
   bolum?: string;
   tasma?: Partial<Record<'g360' | 'g768' | 'g1280', number>>;
@@ -54,11 +53,9 @@ const SAYFALAR: Sayfa[] = [
       ? { varis: PLANLAMA, hesap: 'ornek.yonetici', baslik: 'Planlama' }
       : { varis: RECETE_ROTA, hesap: 'ornek.planlama', ...yeniBolum(b) }),
   })),
-  // Üretim Terminali yeni ekrandadır (541); eski çerçeve /uretim-terminali/eski altında.
+  // Üretim Terminali yeni ekrandadır (541; eski çerçeve 1392 a ile kalktı).
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
-  // Eski çerçeve yalnız yöneticidedir (681 a); operatörün reddi uretim-terminali.spec.ts'te.
-  { modul: 'uretim-terminali', yol: '/uretim-terminali/eski', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', cerceve: true },
   { modul: 'stok', yol: '/stok', hesap: 'ornek.depo', baslik: 'Stok Merkezi' },
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
@@ -76,11 +73,6 @@ for (const s of SAYFALAR) {
       if (s.bolum !== undefined) {
         if (bilgi.project.name === 'g1280') await expect(page.getByRole('heading', { name: s.baslik, exact: true })).toBeVisible();
         await expect(page.getByRole('region', { name: s.bolum, exact: true })).toBeVisible();
-      } else if (s.cerceve === true) {
-        // Çerçeveli sayfanın başlığı kabuğun üst çubuğundadır; dar ekranda üst çubuk başlığı göstermez.
-        if (bilgi.project.name === 'g1280') await expect(page.getByRole('heading', { name: s.baslik, exact: true })).toBeVisible();
-        const f = await cerceve(page);
-        await expect(f.locator('main, header, [role=banner]').filter({ visible: true }).first()).toBeVisible();
       } else {
         await expect(page.getByRole('heading', { name: s.baslik, exact: true }).filter({ visible: true }).first()).toBeVisible();
       }
