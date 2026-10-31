@@ -54,6 +54,14 @@ describe('yardım paneli', () => {
     expect(terimSuz('kılçığı').map((t) => t[0])).toEqual(['Kök neden']);
   });
 
+  it('yardım metni bu sistemin veri yerini ve cihaz kaynağını doğru söyler', () => {
+    const metin = (k: 'kalib' | 'profil') => JSON.stringify(SAYFA_YARDIMI[k]);
+    expect(metin('profil')).not.toMatch(/tarayıcıda saklanır|HTML/);
+    expect(metin('profil')).toContain('sunucusunda saklanır');
+    expect(metin('kalib')).toContain('salt okunur');
+    expect(metin('kalib')).not.toMatch(/Excel|tek tek ekleyin/);
+  });
+
   it('Başlarken rehberini göster gizlenen paneli geri getirir; kayda yazmaz', async () => {
     const s = sahteSunucu();
     await baglamlaAc(<YardimSaglayici><Bugun /></YardimSaglayici>, 'home');
