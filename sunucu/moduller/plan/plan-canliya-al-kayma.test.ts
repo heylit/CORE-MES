@@ -64,8 +64,11 @@ describe('plan (gerçek PostgreSQL): taslaktan sonra zaman geçince canlıya alm
       const canli: PlanCevabi = await planOku();
       const y = canli.yerlesimler.find((x) => x.isEmriId === op20) ?? canli.yerlesmemis.find((x) => x.isEmriId === op20)!;
       const baslangic = new Date(an + 3600_000).toISOString();
+      // 1408: kuyruk yazımı yalnız kuyruktaki işleri dizer (eski motor kuyrukta olmayanı da yerleştiriyordu); önceki adım da kuyruktadır.
       const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [
-        { kaynak: { tur: 'makine', id: u1 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 1, adet: 4 } }] },
+        { kaynak: { tur: 'makine', id: u1 }, baslangic, isler: [
+          { emirNo: y.emirNo, opNo: y.opNo - 10, dondurulmus: false, elle: false }, { emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 1, adet: 4 } },
+        ] },
         { kaynak: { tur: 'makine', id: u2 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 2, adet: 6 } }] },
       ] });
       const t = await planOku(yazildi.taslak);

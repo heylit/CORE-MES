@@ -39,7 +39,8 @@ describe('plan (gerçek PostgreSQL): plan satırı olmayan çalışan adım sabi
     // Kalan (ayar 30 + 10 x 2 dk, verim ve takvimle) son sayımdan, sayım yoksa başladığı andan sayılır.
     assert.ok(Date.parse(c1.bitis) > simdi, 'kalan süre şimdiden ileri');
     assert.ok(Date.parse(a.baslangic) >= Date.parse(c1.bitis) + 5 * GUN_MS - 1000, 'fason beklemesi çalışan adımın bitişinden sayılır');
-    assert.ok(Date.parse(b.baslangic) >= Date.parse(c1.bitis) || Date.parse(b.bitis) <= Date.parse(c1.baslangic), 'çalışan işin makinesi dolu');
+    // 1408: sunucu motoru işi istasyonun boş makinesine de koyabilir; çalışan işin makinesindeyse onun üstüne binmez.
+    assert.ok(b.kaynak.id !== m1.id || Date.parse(b.baslangic) >= Date.parse(c1.bitis) || Date.parse(b.bitis) <= Date.parse(c1.baslangic), 'çalışan işin makinesi dolu');
     assert.ok(r.ekranYerlesimi[`${c1.emirNo}|${String(c1.opNo)}`]?.some((e) => e.makineId === m1.id), 'ekran yerleşiminde çalışan iş');
     // Aynı veri her okumada aynı planı verir (kalan son sayımdan sayılır); ardılın başlangıcı saatle kaymaz.
     const r2 = await motor();
