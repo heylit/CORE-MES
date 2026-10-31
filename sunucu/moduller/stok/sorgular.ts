@@ -4,7 +4,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
-import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
+import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
 
 // Sabit tür adları; kullanıcı girdisi değildir.
 const AYRILMIS_SQL = AYRILMIS_KONUM_TURLERI.map((t) => `'${t}'`).join(', ');
@@ -32,7 +32,7 @@ export interface HareketHam {
   lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null; kaynakKonumId: number | null; hedefKonumId: number | null;
   kaynakKonumKod: string | null; hedefKonumKod: string | null; miktar: string; onayliEksi: boolean; girisKaynagi: 'mal_kabul' | 'uretim' | null;
   cikisNedeni: 'uretime_sarf' | 'sevk' | 'fire' | 'numune' | 'diger' | null; uretimEmriId: number | null; geriAlinanId: number | null;
-  geriAlindi: boolean; malKabulSatiriMi: boolean; fisId: number | null; fisNo: string | null; kisiId: number; aciklama: string | null;
+  geriAlindi: boolean; malKabulSatiriMi: boolean; fisId: number | null; fisNo: string | null; hareketFisiId: number | null; hareketFisiNo: string | null; akis: string | null; kisiId: number; aciklama: string | null;
   kaynakStatuId: number | null; hedefStatuId: number | null; kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null;
 }
 export interface PartiHam {
@@ -401,12 +401,28 @@ export interface HareketYeni {
   kisiId: number; aciklama: string | null; kaynakStatuId: number | null; hedefStatuId: number | null;
   kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null; isEmriId: number | null;
 }
-// Her hareket tek yerden yazılır; fişi olan hareket aynı işlemde fişine bağlanır (kart #492).
+// Her hareket tek yerden yazılır: aynı işlemde hareket fişine (1385 a; fişsiz hareketi veritabanı reddeder) ve Logo'ya giden türdeyse
+// malzeme fişine (kart #492) bağlanır.
 export const hareketYaz = async (db: Db, h: HareketYeni): Promise<number> => {
   const id = await hareketSatiriYaz(db, h);
+  await hareketFisineBagla(db, id, h);
   await malzemeFisineBagla(db, id, h);
   return id;
 };
+// Akış adı işlem boyunca geçerli ayardır (set_config yerel): başka modülün çağırdığı stok yazıcısı onu `akistan` ile koyar.
+const AKIS_AYARI = 'tmiv2.stok_akis';
+export async function akisAyarla(db: Db, akis: string): Promise<void> { await db.sorgu("SELECT set_config($1, $2, true)", [AKIS_AYARI, akis]); }
+// Komut (işlem) ve akış başına, tür grubu başına tek fiş. Fiş değişmez; ikinci hareket var olan fişe satır olarak eklenir.
+async function hareketFisineBagla(db: Db, hareketId: number, h: HareketYeni): Promise<void> {
+  await db.sorgu(
+    `WITH a AS (SELECT NULLIF(current_setting('${AKIS_AYARI}', true), '') AS akis),
+       y AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id, akis) SELECT $1, pg_current_xact_id(), $2, a.akis FROM a
+             ON CONFLICT (islem_kimligi, tur, (COALESCE(akis, ''))) WHERE islem_kimligi IS NOT NULL DO NOTHING RETURNING id)
+     INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id)
+     SELECT $3, COALESCE((SELECT id FROM y), (SELECT f.id FROM stok_hareket_fisi f, a
+                                               WHERE f.islem_kimligi = pg_current_xact_id() AND f.tur = $1 AND f.akis IS NOT DISTINCT FROM a.akis))`,
+    [hareketFisiTuru(h.tur), h.kisiId, hareketId]);
+}
 const hareketSatiriYaz = async (db: Db, h: HareketYeni): Promise<number> => (await db.tek<{ id: number }>(
   `INSERT INTO stok_hareketi (tur, malzeme_id, parti_id, parti_secimi, kaynak_konum_id, hedef_konum_id, miktar, onayli_eksi, eksi_onay_kaynagi,
      giris_kaynagi, cikis_nedeni, uretim_emri_id, geri_alinan_id, kisi_id, aciklama, kaynak_statu_id, hedef_statu_id, kaynak_kalite_durumu, hedef_kalite_durumu, is_emri_id)
@@ -421,8 +437,10 @@ const HAREKET_SECIMI = `SELECT h.id, ${zamanMetni('h.zaman')} AS zaman, h.tur, h
   h.geri_alinan_id AS "geriAlinanId", EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id) AS "geriAlindi",
   EXISTS (SELECT 1 FROM stok_mal_kabul_satiri s WHERE s.hareket_id = h.id OR s.fason_cikis_hareket_id = h.id) AS "malKabulSatiriMi", h.kisi_id AS "kisiId", h.aciklama,
   h.kaynak_statu_id AS "kaynakStatuId", h.hedef_statu_id AS "hedefStatuId", h.kaynak_kalite_durumu AS "kaynakKaliteDurumu",
-  h.hedef_kalite_durumu AS "hedefKaliteDurumu", fs.fis_id AS "fisId", (SELECT f.no FROM stok_fis f WHERE f.id = fs.fis_id) AS "fisNo"`;
-const HAREKET_BAGLARI = `FROM stok_hareketi h LEFT JOIN stok_parti p ON p.id = h.parti_id LEFT JOIN stok_fis_satiri fs ON fs.hareket_id = h.id
+  h.hedef_kalite_durumu AS "hedefKaliteDurumu", fs.fis_id AS "fisId", (SELECT f.no FROM stok_fis f WHERE f.id = fs.fis_id) AS "fisNo",
+  hs.fis_id AS "hareketFisiId", (SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) AS "hareketFisiNo",
+  (SELECT f.akis FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) AS "akis"`;
+const HAREKET_BAGLARI = `FROM stok_hareketi h LEFT JOIN stok_parti p ON p.id = h.parti_id LEFT JOIN stok_fis_satiri fs ON fs.hareket_id = h.id LEFT JOIN stok_hareket_fisi_satiri hs ON hs.hareket_id = h.id
   LEFT JOIN stok_konum kk ON kk.id = h.kaynak_konum_id LEFT JOIN stok_konum hk ON hk.id = h.hedef_konum_id`;
 export const hareketBul = (db: Db, id: number): Promise<HareketHam | null> => db.tek(`${HAREKET_SECIMI} ${HAREKET_BAGLARI} WHERE h.id = $1`, [id]);
 export interface HareketSuzgeci {
@@ -434,7 +452,8 @@ const hareketSuzgeci = (s: HareketSuzgeci) => ({
         AND ($3::bigint IS NULL OR h.parti_id = $3) AND ($4::text IS NULL OR h.tur = $4) AND ($5::int IS NULL OR h.uretim_emri_id = $5)
         AND ($6::timestamptz IS NULL OR h.zaman >= $6) AND ($7::timestamptz IS NULL OR h.zaman < $7)
         AND ($8::text IS NULL OR h.aciklama ILIKE '%' || $8 || '%' OR kk.kod ILIKE '%' || $8 || '%' OR hk.kod ILIKE '%' || $8 || '%'
-          OR p.lot_no ILIKE '%' || $8 || '%' OR p.tedarikci_parti_no ILIKE '%' || $8 || '%' OR p.dokum_no ILIKE '%' || $8 || '%')`,
+          OR p.lot_no ILIKE '%' || $8 || '%' OR p.tedarikci_parti_no ILIKE '%' || $8 || '%' OR p.dokum_no ILIKE '%' || $8 || '%'
+          OR (SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) ILIKE $8)`,
   p: [s.malzemeId ?? null, s.konumId ?? null, s.partiId ?? null, s.tur ?? null, s.uretimEmriId ?? null, s.baslangic ?? null, s.bitis ?? null, s.metin ?? null],
 });
 export const suzgecVarMi = (s: HareketSuzgeci): boolean => Object.values(s).some((v) => v !== undefined);
@@ -1384,6 +1403,28 @@ export const emrinIstasyonEksileri = (db: Db, uretimEmriId: number): Promise<{ k
                 JOIN stok_konum kk ON kk.id = a.konum_id WHERE kk.tur = 'istasyon'), '[]'::json) END AS karsiliklar
        FROM net n JOIN stok_konum k ON k.id = n.konum_id
       ORDER BY k.kod, n.malzeme_id, n.statu_id`, [uretimEmriId]);
+// K-2 a (1386): emrin istasyonda kalan artı bakiyesi. Bakiye emre etiketli değildir; emre ait kısım, istasyon konumunda emrin hareketleriyle
+// giren eksi çıkandır (malzeme, parti, statü ve kalite başına), o yerin bakiyesiyle sınırlı. Emirsiz taşıma ya da çıkışla bakiye boşalırsa madde kapanır.
+export const emrinIstasyonArtilari = (db: Db, uretimEmriId: number): Promise<{ konumKod: string; malzemeId: number; statuId: number | null; miktar: string }[]> =>
+  db.sorgu(
+    `WITH akis AS (
+       SELECT h.hedef_konum_id AS konum_id, h.malzeme_id, h.parti_id, h.hedef_statu_id AS statu_id, COALESCE(h.hedef_kalite_durumu, 'serbest') AS kalite, h.miktar
+         FROM stok_hareketi h WHERE h.uretim_emri_id = $1 AND h.hedef_konum_id IS NOT NULL
+       UNION ALL
+       SELECT h.kaynak_konum_id, h.malzeme_id, h.parti_id, h.kaynak_statu_id, COALESCE(h.kaynak_kalite_durumu, 'serbest'), -h.miktar
+         FROM stok_hareketi h WHERE h.uretim_emri_id = $1 AND h.kaynak_konum_id IS NOT NULL),
+     net AS (
+       SELECT a.konum_id, a.malzeme_id, a.parti_id, a.statu_id, a.kalite, sum(a.miktar) AS miktar
+         FROM akis a JOIN stok_konum k ON k.id = a.konum_id WHERE k.tur = 'istasyon'
+        GROUP BY a.konum_id, a.malzeme_id, a.parti_id, a.statu_id, a.kalite HAVING sum(a.miktar) > 0),
+     kalan AS (
+       SELECT n.konum_id, n.malzeme_id, n.statu_id, LEAST(n.miktar, COALESCE((
+                SELECT sum(b.miktar) FROM stok_bakiye b WHERE b.konum_id = n.konum_id AND b.malzeme_id = n.malzeme_id AND b.parti_id IS NOT DISTINCT FROM n.parti_id
+                   AND b.statu_id IS NOT DISTINCT FROM n.statu_id AND b.kalite_durumu = n.kalite), 0)) AS miktar
+         FROM net n)
+     SELECT k.kod AS "konumKod", x.malzeme_id AS "malzemeId", x.statu_id AS "statuId", sum(x.miktar)::text AS miktar
+       FROM kalan x JOIN stok_konum k ON k.id = x.konum_id WHERE x.miktar > 0
+      GROUP BY k.kod, x.malzeme_id, x.statu_id ORDER BY k.kod, x.malzeme_id, x.statu_id NULLS FIRST`, [uretimEmriId]);
 // Sayım düşünce geri çevrilecek parçanın eski kalitesi (1214 O-1): emrin bu istasyonda kaynak statüden adım statüsüne çevirdiği hareketler
 // (en yenisi önce) ve o kaliteden geri çevrilen toplam. Geri çevirme en yenisinden düştüğü için önceki geri çevirmeler en yenilerden düşülür.
 export async function emrinStatuCevirmeleri(

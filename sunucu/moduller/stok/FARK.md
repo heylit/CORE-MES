@@ -1,3 +1,16 @@
+# FARK: stok, hareket fişi, fiili tüketim, istasyon artısı, eksi onayı ve otomatik hareket (kart #1414; 1385 a, 1386 a, 1387 a, 1388 a)
+
+Kullanıcı kararları 2026-10-31, hepsi teyitli: 1385 a (fiili tüketim, her hareket fişte, eski kayıtlar açılış fişine), 1386 a (istasyonda emre ait artı kalırsa emir kapanmaz), 1387 a (eksiye düşüm onayı ve geri alma yalnız müdürde, ayrı iki işlem), 1388 a (otomatik hareket Stok Merkezi'nden geri alınmaz).
+- Göç `20261030171000_stok_hareket_fisi`: `stok_hareket_fisi` (no `HF-000001`, tür, işlem kimliği, kişi, akış) ve `stok_hareket_fisi_satiri` (hareket başına bir satır); ikisi yalnız eklenir. Göç öncesi bütün hareketler tek "açılış fişi"ne bağlanır, hareket satırları değişmez. Ertelenmiş kısıt tetiği `stok_hareketi_fisli`: fişsiz hareket işlemin sonunda reddedilir.
+- Fiş tek yazma noktasında açılır (`sorgular.hareketYaz`): aynı işlemin aynı tür grubundaki hareketleri (giriş, çıkış, transfer, sayım, geri alma) ve aynı akışı tek fiştedir. Logo malzeme fişi, mal kabul ve teslim belgeleri değişmez.
+- Akış (1388 a): `disari.ts` sarmalayıcıları işleme yerel `tmiv2.stok_akis` ayarını koyar (terminal, fason, sevk, kalite, cnc, emir); fiş akışı taşır. Akışlı hareket Stok Merkezi'nden geri alınmaz (409, "Bu hareketi ... akışı yazdı"); yazan akışın kendi geri alması değişmez. Açılış fişindeki eski hareketler elle sayılır.
+- Hareket listesi: `hareketFisiId`, `hareketFisiNo`, `otomatik`; metin süzgeci fiş no ile de arar. Ekran fiş no'yu gösterir, otomatik harekette Geri al düğmesi yoktur.
+- Tamamlama (K-1 a, S-2): `POST /stok/uretim-emirleri/:id/tamamla` sarf yazmaz, yalnız sağlam adedin girilmemiş kısmını girer; eksik malzeme engeli kalktı, bileşen satırlarında kalan, mevcut ve eksik 0. Yetki (giriş + çıkış) ve DEP-36 kapsamı aynı. Rol panosundaki "eksik emir" sayısı plana göre öngörü olarak kalır.
+- Kapanış (K-2 a): "Stoğa işlendi" maddesi istasyonda emre ait artı bakiye varsa eksik olur ("istasyonda kalan: KONUM MALZEME miktar (depoya taşıyın ya da fire çıkışı yapın)"); sağlamsız emirde de bakılır. Kalan sarf aranmaz. Kendiliğinden taşıma yok.
+- Yetki (1387 a): yeni işlem `stok.eksi-onayla`. `eksiOnay: true` gövdeli bütün yazma uçları bu işlemi ister (403); terminal ve akışların otomatik eksisi bu onayın dışında. Göç `20261030173000_kisiler_stok_eksi_onayi`: depo rolünden `stok.geri-al` silinir, müdüre `stok.eksi-onayla` eklenir; kişiye verilmiş ek işlemlere dokunulmaz.
+- S-10: göç `20261030172000_stok_emir_kisiti` hiçbir satırı reddetmeyen `stok_hareketi_emir_yalniz_uretimde` yerine `stok_hareketi_emir_kurali` (NOT VALID; uymayan eski satır sayısı NOTICE ile yazılır).
+- Başka modül: istemci `recete-rota/kopru.ts` ve `uretim-emirleri/refakat.ts` stok işlem listesi kopyalarına `stok.eksi-onayla` eklendi (tip denetimi ister). `proje-maliyet.test.ts` doğrudan hareket yazan kurgusu fişle yazar.
+
 # FARK: stok, emre giden malzeme refakat kartıyla gider, tek onayla (kart 621; sorular 615-2 a, 632 a, 633 b)
 
 Kullanıcı kararları 2026-10-26: 615-2 a, 632 a (yarı otomatik, tek kontrollü adım), 633 b (lotsuz da onaya düşer). Göç, uç ve yetki değişmedi.

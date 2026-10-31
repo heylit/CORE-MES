@@ -676,6 +676,14 @@ describe('Hareketler', () => {
     expect(screen.getByText(/Emir #42/)).toBeTruthy();
     expect(screen.queryByText(/Emir #41/)).toBeNull();
   });
+  it('1388 a: akışın yazdığı harekette geri al düğmesi yok; hareket fişi no ile fişin hareketlerine gider', async () => {
+    const otomatik = { ...H, id: 10, onayliEksi: false, fisId: null, fisNo: null, hareketFisiId: 3, hareketFisiNo: 'HF-000003', otomatik: true } as const;
+    sunucuKur(MUDUR, { 'GET /stok/hareketler': () => json(200, { satirlar: [otomatik], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies HareketlerCevabi) });
+    ac('/stok/hareketler');
+    const baglanti = await screen.findByRole('link', { name: 'HF-000003' });
+    expect(baglanti.getAttribute('href')).toBe('/stok/hareketler?metin=HF-000003');
+    expect(screen.queryByRole('button', { name: 'Geri al' })).toBeNull();
+  });
   it('geri alma işlemi olmayan kişi düğmeyi görmez', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/hareketler': () => json(200, { satirlar: [H], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies HareketlerCevabi) });
     ac('/stok/hareketler');

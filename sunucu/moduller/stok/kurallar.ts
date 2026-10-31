@@ -231,12 +231,17 @@ export function sayimFarki(sistem: string, sayilan: string): SayimFarki {
 }
 
 // ---- Geri alma (DEP-17, DEP-18, DEP-19, DEP-53) -------------------------------------------------------------------------
-export interface GeriAlinacak { tur: string; geriAlindi: boolean; malKabulSatiriMi: boolean; disCagriMi: boolean }
+// elleAkis: Stok Merkezi'nden elle geri almada hareketi yazan akış (1388 a); akışın kendi geri alması ve elle hareket null verir.
+export interface GeriAlinacak { tur: string; geriAlindi: boolean; malKabulSatiriMi: boolean; disCagriMi: boolean; elleAkis?: string | null }
+const AKIS_ADI: Readonly<Record<string, string>> = {
+  terminal: 'üretim terminali', fason: 'fason', sevk: 'sevkiyat', kalite: 'Kalite Merkezi', cnc: 'CNC kurulum', emir: 'üretim emri',
+};
 export function geriAlmaEngeli(h: GeriAlinacak): string | null {
   if (h.tur === 'geri_alma') return 'Geri alma hareketi geri alınmaz.';
   if (h.geriAlindi) return 'Bu hareket zaten geri alındı.';
   if (h.malKabulSatiriMi) return 'Mal kabul hareketi tek başına geri alınmaz; belgeyi düzeltin.';
   if (h.disCagriMi) return 'Otomatik hareket yalnız onu yazan çağrıyla geri alınır.';
+  if (h.elleAkis != null) return `Bu hareketi ${AKIS_ADI[h.elleAkis] ?? h.elleAkis} akışı yazdı; Stok Merkezi'nden geri alınmaz, yalnız o akış geri alır.`;
   return null;
 }
 // Kalite durumunu yalnız Kalite Merkezi yazar (229 a): kaliteyi değiştiren hareket onun kararıdır, stok geri almasıyla çevrilmez (denetim #16).
@@ -1211,6 +1216,13 @@ export type HareketFisBagi =
   | { tur: 'ambar_adayi' }
   | { tur: 'geri_alma' }
   | null;
+// Hareket fişinin türü (1385 a): sayım fazlası ve eksiği tek sayım fişindedir; geri alma kendi fişindedir.
+export type HareketFisiTuru = 'giris' | 'cikis' | 'transfer' | 'sayim' | 'geri_alma';
+export function hareketFisiTuru(tur: string): HareketFisiTuru {
+  if (tur === 'giris' || tur === 'cikis' || tur === 'transfer' || tur === 'geri_alma') return tur;
+  if (tur === 'sayim_fazla' || tur === 'sayim_eksik') return 'sayim';
+  throw new Error(`Bilinmeyen hareket türü: ${tur}`);
+}
 export function hareketinFisBagi(h: { tur: string; cikisNedeni: string | null; girisKaynagi: string | null; uretimEmriId: number | null }): HareketFisBagi {
   if (h.tur === 'geri_alma') return { tur: 'geri_alma' };
   if (h.tur === 'sayim_fazla') return { tur: 'sayim_fazlasi' };
@@ -1264,19 +1276,25 @@ export function kapanisIzlenebilirligi(kartlar: readonly { lotNo: string | null;
 // hesabı) ve emrin eksiden düştüğü istasyon satırı kapanmış (1214 O-5: teslim edilmeden sayılan parça girişi tamamlar ama istasyonda
 // eksi bırakır). Sağlamsız emirde (1079 a) madde gerekmez. Bitmemiş emirde hedef emrin adedidir. Miktarlar binde.
 export interface IstasyonEksisi { malzeme: string; konum: string; miktar: bigint; statulu: boolean; karsiliklar: readonly { konum: string; miktar: bigint }[] }
-export function kapanisStoguIslendi(g: { adet: number; saglamAdet: number | null; girilen: bigint; kalanSarfKalemi: number; istasyonEksileri: readonly IstasyonEksisi[] }): KapanisMaddeBilgisi {
-  if (g.saglamAdet === 0) return { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' };
+// K-1 a: kalan sarf maddesi yoktur (tüketim fiilidir). K-2 a (1386): istasyonda emre ait artı bakiye kalmışsa madde eksiktir; bakiye depoya
+// taşıma ya da fire çıkışıyla (ikisi de fişli) kapatılır. Sağlamsız emirde giriş gerekmez ama istasyonda kalan bakiye yine kapatılır.
+export interface IstasyonArtisi { malzeme: string; konum: string; miktar: bigint; statulu: boolean }
+export function kapanisStoguIslendi(g: {
+  adet: number; saglamAdet: number | null; girilen: bigint; istasyonEksileri: readonly IstasyonEksisi[]; istasyonArtilari: readonly IstasyonArtisi[];
+}): KapanisMaddeBilgisi {
+  const artilar = g.istasyonArtilari.length === 0 ? [] : [`istasyonda kalan: ${g.istasyonArtilari.map((x) => `${x.konum} ${x.malzeme} ${bindenMetin(x.miktar)}${x.statulu ? ' (statülü)' : ''}`).join(', ')} (depoya taşıyın ya da fire çıkışı yapın)`];
+  if (g.saglamAdet === 0) return artilar.length === 0 ? { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' } : { durum: 'eksik', ayrinti: ['Sağlam parça yok', ...artilar].join('; ') };
   const hedef = BigInt(g.saglamAdet ?? g.adet) * 1000n;
   const giris = `${bindenMetin(g.girilen)} / ${bindenMetin(hedef)} stoğa girdi`;
-  if (g.girilen >= hedef && g.kalanSarfKalemi === 0 && g.istasyonEksileri.length === 0) return { durum: 'tamam', ayrinti: giris };
+  if (g.girilen >= hedef && g.istasyonEksileri.length === 0 && artilar.length === 0) return { durum: 'tamam', ayrinti: giris };
   const eksi = (x: IstasyonEksisi): string => {
     const yer = x.karsiliklar.length === 0 ? '' : `; aynı statüde ${x.karsiliklar.map((k) => `${k.konum}: ${bindenMetin(k.miktar)}`).join(', ')}`;
     return `${x.konum} ${x.malzeme} ${bindenMetin(x.miktar)}${x.statulu ? ` (statülü${yer})` : ''}`;
   };
   return { durum: 'eksik', ayrinti: [
     giris,
-    ...(g.kalanSarfKalemi > 0 ? [`kalan sarf: ${g.kalanSarfKalemi} malzeme`] : []),
     ...(g.istasyonEksileri.length > 0 ? [`istasyonda eksi: ${g.istasyonEksileri.map(eksi).join(', ')}`] : []),
+    ...artilar,
   ].join('; ') };
 }
 

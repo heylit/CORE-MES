@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { emirlerinMalzemeIhtiyaci, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
-import { binde, ihtiyacToplami, kalanSarf, kapanisIzlenebilirligi, kapanisStoguIslendi, stoklanirMi } from './kurallar.ts';
+import { binde, ihtiyacToplami, kapanisIzlenebilirligi, kapanisStoguIslendi, stoklanirMi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Onaylı kapanışın stok maddeleri (1074 a): Üretim Emirleri bu çözücüleri madde başına kaydeder (bağı kablolama kurar; stok onu
@@ -28,23 +28,20 @@ export async function izlenebilirlikDurumu(db: Db, uretimEmriId: number): Promis
   return kapanisIzlenebilirligi(kartlar, ihtiyac.size > 0);
 }
 
-// Stoğa işlendi: ürün sağlam adedi kadar girdi, kalan sarf yok, istasyonda emrin eksiden düştüğü açık satır yok (1214 O-5); sağlamsız
-// emirde gerekmez (1079 a).
+// Stoğa işlendi: ürün sağlam adedi kadar girdi, istasyonda emrin eksiden düştüğü açık satır yok (1214 O-5) ve emrin istasyonda kalan artı
+// bakiyesi yok (K-2 a, 1386). Tüketim fiilidir, kalan sarf aranmaz (K-1 a, 1385). Sağlamsız emirde giriş gerekmez (1079 a).
 export async function stokDurumu(db: Db, uretimEmriId: number): Promise<KapanisMaddeBilgisi | null> {
   const emir = await uretimEmriOzeti(db, uretimEmriId);
   if (emir === null || emir.malzemeNo === null) return null;
-  const ihtiyac = await stokluIhtiyac(db, uretimEmriId);
-  if (ihtiyac === null) return null;
-  const verilen = new Map<number, bigint>();
-  for (const s of await sorgular.emirlerinNetSarfi(db, [uretimEmriId])) verilen.set(s.malzemeId, (verilen.get(s.malzemeId) ?? 0n) + binde(s.miktar));
-  const kalanSarfKalemi = [...ihtiyac].filter(([malzemeId, brut]) => kalanSarf(brut, verilen.get(malzemeId) ?? 0n) > 0n).length;
   const girilen = emir.saglamAdet === 0 ? 0n : binde(await sorgular.emirUretimGirisi(db, uretimEmriId, emir.malzemeNo));
   const eksiler = emir.saglamAdet === 0 ? [] : await sorgular.emrinIstasyonEksileri(db, uretimEmriId);
-  const kartlar = await malzemeOzetleri(db, [...new Set(eksiler.map((x) => x.malzemeId))]);
+  const artilar = await sorgular.emrinIstasyonArtilari(db, uretimEmriId);
+  const kartlar = await malzemeOzetleri(db, [...new Set([...eksiler, ...artilar].map((x) => x.malzemeId))]);
+  const kod = (id: number): string => kartlar.get(id)?.kod ?? `#${String(id)}`;
   const istasyonEksileri = eksiler.map((x) => ({
-    malzeme: kartlar.get(x.malzemeId)?.kod ?? `#${String(x.malzemeId)}`, konum: x.konumKod, miktar: binde(x.miktar), statulu: x.statuId !== null,
+    malzeme: kod(x.malzemeId), konum: x.konumKod, miktar: binde(x.miktar), statulu: x.statuId !== null,
     karsiliklar: x.karsiliklar.map((k) => ({ konum: k.konumKod, miktar: binde(k.miktar) })),
   }));
-  return kapanisStoguIslendi({ adet: emir.adet, saglamAdet: emir.saglamAdet, girilen, kalanSarfKalemi, istasyonEksileri });
+  const istasyonArtilari = artilar.map((x) => ({ malzeme: kod(x.malzemeId), konum: x.konumKod, miktar: binde(x.miktar), statulu: x.statuId !== null }));
+  return kapanisStoguIslendi({ adet: emir.adet, saglamAdet: emir.saglamAdet, girilen, istasyonEksileri, istasyonArtilari });
 }
-

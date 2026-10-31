@@ -155,7 +155,10 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.equal((await sayim(k, 40, k.ist.c, '10')).uyari, null);
     assert.deepEqual([await bakiye(k.urun, k.ist.c, k.s[30]!), await bakiye(k.urun, k.ist.c, null)], [0, 10]);
     assert.equal(await eksiSatir(k), 0, 'hiçbir istasyonda eksi kalmaz');
-    assert.notEqual((await o().vt.tx((db) => kapanisStokDurumu(db, k.e)))?.durum, 'eksik');
+    // Eksi kalmaz; emrin ürünü birleştirme istasyonunda durduğu sürece madde yalnız istasyonda kalanı söyler (K-2 a, 1386).
+    const kapanis = await o().vt.tx((db) => kapanisStokDurumu(db, k.e));
+    assert.doesNotMatch(kapanis?.ayrinti ?? '', /istasyonda eksi/);
+    assert.match(kapanis?.ayrinti ?? '', /istasyonda kalan: \S+ \S+ 10 /);
   });
 
   test('1360 (1257 a): B dalı ürün başına 2 parça verir; birleştirme 10 ürün için 20 B parçası, hurda 1 ürün için 2 B parçası düşer', async () => {

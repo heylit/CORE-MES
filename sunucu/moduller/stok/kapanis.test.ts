@@ -27,19 +27,23 @@ test('izlenebilirlik kuralı: her kartta lot ve sertifika no dolu tamam; lot bek
   assert.equal(kapanisIzlenebilirligi([{ lotNo: 'L-1', sertifikaNo: null }], false).durum, 'eksik');
 });
 
-test('stoğa işlendi kuralı: sağlam adet girdi ve kalan sarf yoksa tamam; sağlamsız emirde gerekmez; bitmemiş emirde hedef adettir', () => {
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 5000n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '5 / 8 stoğa girdi' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 2, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; kalan sarf: 2 malzeme' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, kalanSarfKalemi: 1, istasyonEksileri: [] }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: null, girilen: 0n, kalanSarfKalemi: 0, istasyonEksileri: [] }), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi' });
+test('stoğa işlendi kuralı: sağlam adet girdi, istasyonda eksi ve kalan artı yoksa tamam; kalan sarf aranmaz (K-1 a); sağlamsız emirde gerekmez', () => {
+  const t = { istasyonEksileri: [], istasyonArtilari: [] };
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, ...t }), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 5000n, ...t }), { durum: 'eksik', ayrinti: '5 / 8 stoğa girdi' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, ...t }), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: null, girilen: 0n, ...t }), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi' });
   // 1214 O-5: teslim edilmeden sayılan parçanın istasyonda bıraktığı eksi, girişi tam olan emri de eksik yapar; parçanın yeri birlikte söylenir.
   const eksi = { malzeme: 'HM-1', konum: 'IST-2', miktar: -20000n, statulu: true, karsiliklar: [{ konum: 'IST-1', miktar: 20000n }] };
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 0, istasyonEksileri: [eksi] }),
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, istasyonEksileri: [eksi], istasyonArtilari: [] }),
     { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; istasyonda eksi: IST-2 HM-1 -20 (statülü; aynı statüde IST-1: 20)' });
-  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, kalanSarfKalemi: 1, istasyonEksileri: [{ ...eksi, statulu: false, karsiliklar: [] }] }),
-    { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; kalan sarf: 1 malzeme; istasyonda eksi: IST-2 HM-1 -20' });
-  assert.equal(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, kalanSarfKalemi: 0, istasyonEksileri: [eksi] }).durum, 'gerekmez', '1079 a');
+  assert.equal(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, istasyonEksileri: [eksi], istasyonArtilari: [] }).durum, 'gerekmez', '1079 a');
+  // K-2 a (1386): istasyonda emre ait kalan artı bakiye, girişi tam olan ve sağlamsız emri de eksik yapar; yer ve miktar yazılır.
+  const arti = { malzeme: 'HM-1', konum: 'IST-1', miktar: 2500n, statulu: false };
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 8, girilen: 8000n, istasyonEksileri: [], istasyonArtilari: [arti] }),
+    { durum: 'eksik', ayrinti: '8 / 8 stoğa girdi; istasyonda kalan: IST-1 HM-1 2.5 (depoya taşıyın ya da fire çıkışı yapın)' });
+  assert.deepEqual(kapanisStoguIslendi({ adet: 10, saglamAdet: 0, girilen: 0n, istasyonEksileri: [], istasyonArtilari: [{ ...arti, statulu: true }] }),
+    { durum: 'eksik', ayrinti: 'Sağlam parça yok; istasyonda kalan: IST-1 HM-1 2.5 (statülü) (depoya taşıyın ya da fire çıkışı yapın)' });
 });
 
 const PAROLA = 'dogru-parola-1';
@@ -163,17 +167,46 @@ describe('stok: kapanış maddeleri (gerçek PostgreSQL)', () => {
     assert.equal((await iz(e2))?.durum, 'tamam');
   });
 
-  test('stoğa işlendi: bitmemiş emir eksik; stokta tamamlanınca tamam; sağlamsız emir gerekmez', async () => {
+  test('stoğa işlendi: bitmemiş emir eksik; stokta tamamlanınca tamam ve tamamlama sarf yazmaz (K-1 a); sağlamsız emir gerekmez', async () => {
     await lotAl(hm, '20', 'SRT-2');
     const [e1, e2] = [await emirAc(10, [{ malzemeNo: hm, miktar: '1' }]), await emirAc(4, [{ malzemeNo: hm, miktar: '1' }])];
-    assert.deepEqual(await stok(e1), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi; kalan sarf: 1 malzeme' });
+    assert.deepEqual(await stok(e1), { durum: 'eksik', ayrinti: '0 / 10 stoğa girdi' });
+    const once = await o().vt.tek<{ m: string }>('SELECT sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [hm]);
 
     await bitir(e1, 8);
-    assert.deepEqual(await stok(e1), { durum: 'eksik', ayrinti: '0 / 8 stoğa girdi; kalan sarf: 1 malzeme' });
-    const c = await istek('yonetici', 'POST', `/stok/uretim-emirleri/${e1}/tamamla`, {});
+    assert.deepEqual(await stok(e1), { durum: 'eksik', ayrinti: '0 / 8 stoğa girdi' });
+    const c = await istek<{ hareketIdler: number[] }>('yonetici', 'POST', `/stok/uretim-emirleri/${e1}/tamamla`, {});
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal(c.govde.hareketIdler.length, 1, 'yalnız çıktı girer');
+    assert.deepEqual(await o().vt.tek<{ m: string }>('SELECT sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [hm]), once, 'fire payı ve plan sarfı düşülmez');
     await bitir(e2, 0);
     assert.deepEqual(await stok(e1), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
     assert.deepEqual(await stok(e2), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+  });
+
+  test('K-2 a: istasyonda emre ait artı bakiye kapanışı durdurur; depoya taşınınca madde kapanır; başka emrin bakiyesi sayılmaz', async () => {
+    await lotAl(hm, '10', 'SRT-3');
+    const kaynak = (await o().vt.tek<{ konum_id: number }>(
+      'SELECT konum_id FROM stok_bakiye WHERE malzeme_id = $1 AND miktar > 0 ORDER BY konum_id LIMIT 1', [hm]))!.konum_id;
+    const [e1, e2] = [await emirAc(2, [{ malzemeNo: hm, miktar: '1' }]), await emirAc(2, [{ malzemeNo: hm, miktar: '1' }])];
+    const g = await istek<{ teslim: { id: number; surum: number; hedef: { konumId: number; kod: string } } }>('depo', 'POST', '/stok/teslimler/gonder', {
+      malzemeId: hm, miktar: '3', statuId: null, kaynak: { konumId: kaynak }, hedef: { istasyonId }, uretimEmriId: e1, not: null, kaynakKimligi: randomUUID(), kartOnayi: true,
+    });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    const al = await istek('yonetici', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '3' });
+    assert.equal(al.durum, 200, JSON.stringify(al.govde));
+    await bitir(e1, 0);
+    await bitir(e2, 0);
+    const k = await stok(e1);
+    assert.equal(k?.durum, 'eksik', JSON.stringify(k));
+    const yer = (await o().vt.tek<{ kod: string }>('SELECT kod FROM stok_konum WHERE id = $1', [g.govde.teslim.hedef.konumId]))!.kod;
+    assert.match(k?.ayrinti ?? '', new RegExp(`^Sağlam parça yok; istasyonda kalan: ${yer} \\S+ 3 \\(depoya`));
+    assert.deepEqual(await stok(e2), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+
+    const parti = (await o().vt.tek<{ parti_id: string }>('SELECT parti_id FROM stok_bakiye WHERE konum_id = $1 AND malzeme_id = $2 AND miktar > 0',
+      [g.govde.teslim.hedef.konumId, hm]))!.parti_id;
+    const t = await istek('yonetici', 'POST', '/stok/tasima', { malzemeId: hm, kaynakKonumId: g.govde.teslim.hedef.konumId, hedefKonumId: kaynak, partiId: Number(parti), miktar: '3' });
+    assert.equal(t.durum, 200, JSON.stringify(t.govde));
+    assert.deepEqual(await stok(e1), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
   });
 });
