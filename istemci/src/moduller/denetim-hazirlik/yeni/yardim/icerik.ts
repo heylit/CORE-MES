@@ -1,6 +1,7 @@
 import type { GorunumKodu } from '../tipler.ts';
 
-// Yardım panelinin metinleri (prototip HELP, GLOS, RUBRIC). Metin prototipteki gibidir; örnekler uydurmadır, firma verisi değildir.
+// Yardım panelinin metinleri (prototip HELP, GLOS, RUBRIC). Metin prototipteki gibidir; yalnız bu sistemde yanlış olan cümleler
+// düzeltildi (veriler sunucuda, cihazlar Kalibrasyon sayfasında). Örnekler uydurmadır, firma verisi değildir.
 
 // a: ne işe yarar; s: nasıl kullanılır; e: örnek ("rubric" puanlama örneğini gösterir); m: sık yapılan hata.
 export interface SayfaYardimi { a: string; s: readonly string[]; e: string; m: string }
@@ -101,9 +102,9 @@ export const SAYFA_YARDIMI: Partial<Record<GorunumKodu, SayfaYardimi>> = {
   kalib: {
     a: 'Ölçüm cihazlarının kalibrasyon durumunu, geri sayımını ve geçmişini takip eder (ISO 9001 madde 7.1.5).',
     s: [
-      'Cihazları tek tek ekleyin ya da Excel listenizi yapıştırın.',
-      'Son kalibrasyon tarihini ve periyodu girin; sonraki tarih hesaplanır.',
-      'Kalibrasyon yapılınca "Kalibre edildi" ile tarihi, sonucu ve sertifikayı kaydedin.',
+      'Cihazlar Kalibrasyon sayfasından salt okunur gelir; ekleme ve düzenleme orada yapılır, burada cihaz eklenmez.',
+      'Son kalibrasyon tarihi ve periyot Kalibrasyon sayfasında girilir; sonraki tarih hesaplanır.',
+      'Kalibrasyon yapılınca tarihi, sonucu ve sertifikayı Kalibrasyon sayfasında kaydedin.',
       'Takvim görünümünden ayın planını görün; tarihleri takviminize ekleyin.',
     ],
     e: 'Kumpas OC-001: son kalibrasyon 10.10.2025, periyot 12 ay, yani sonraki 10.10.2026. 30 gün kala turuncu, 7 gün kala kırmızı olur. Laboratuvardan "uygun değil" gelirse cihaz kullanım dışına alınır ve son uygun kalibrasyondan beri bu cihazla ölçülen ürünler için geriye dönük değerlendirme hatırlatılır.',
@@ -148,10 +149,10 @@ export const SAYFA_YARDIMI: Partial<Record<GorunumKodu, SayfaYardimi>> = {
       'Firma bilgilerini girin; dokümanlara ve raporlara işlenir.',
       'Her firma veya saha için ayrı profil açın; profiller birbirini görmez.',
       'Düzenli olarak "Tüm profilleri yedekle" ile .json yedek alın.',
-      'Başka bilgisayarda aynı HTML dosyasını açıp "Yedek yükle" deyin.',
+      'Başka bir kurulumda devam etmek için yedeği orada "Yedek yükle" ile açın (yalnız yönetici).',
     ],
-    e: 'Danışmansanız her müşteri için ayrı profil açın. Müşteri ziyaretinden önce yedek alın; dosyayı kendi bilgisayarınızda da açabilirsiniz.',
-    m: 'Tarayıcı geçmişini temizlemeden önce yedek almamak. Veriler tarayıcıda saklanır.',
+    e: 'Danışmansanız her müşteri için ayrı profil açın. Müşteri ziyaretinden önce yedek alın.',
+    m: 'Profil silmeden ya da sıfırlamadan önce yedek almamak. Veriler TMI sunucusunda saklanır; yalnız ekran tercihleri (açık sekme, sade görünüm) bu tarayıcıda kalır.',
   },
 };
 
