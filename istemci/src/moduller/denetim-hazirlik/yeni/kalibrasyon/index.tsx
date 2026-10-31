@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Dugme, Kart, Rozet, Sekmeler, Simge, Tablo, type RozetTonu, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
-import { OLCU_ALETI_YOLU } from '../../olcu-aleti.ts';
 import { useDenetim } from '../baglam.tsx';
 import { csvMetni, guvenliAd, icsKatla, indir, yazdir } from '../disa-aktar.ts';
 import { KDUR, KSON, KTUR } from '../icerik/kalibrasyon.ts';
@@ -12,6 +11,7 @@ import {
 import { profilAdi } from '../kurallar/profil.ts';
 import { aylar, bugunTarihi, gunEkle, isoTarih, pazartesi, tarihMetni } from '../tarih.ts';
 import type { Cihaz } from '../tipler.ts';
+import { OLCU_ALETI_YOLU } from '../veri.ts';
 import { basimHtml } from '../kys/dokuman-uretici.tsx';
 import { dokumanBul } from '../kys/dokuman-metni.ts';
 import '../kys/kys.css';

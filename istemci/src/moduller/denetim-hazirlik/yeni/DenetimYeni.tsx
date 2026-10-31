@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
-import { Dugme, DurumKutusu, Rozet, SayfaBasligi, Sekmeler, type RozetTonu, type Sekme } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Rozet, SayfaBasligi, Sekmeler, type MenuOgesi, type RozetTonu, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { DenetimSaglayici, useDenetim } from './baglam.tsx';
 import { ALT_BASLIK, BOLUMLER, gorunum, PROGRAM_SEKMELERI, yoldanGorunum, type Bolum, type ProgramSekmesi } from './gorunumler.ts';
 import { PROGRAMLAR, PROGRAM_SIRASI } from './icerik/programlar.ts';
+import { DenetimKomutlari } from './komutlar.tsx';
 import { gecikmisSayisi } from './kurallar/bugun.ts';
 import { profilAdi } from './kurallar/profil.ts';
+import { OrnekFirmaBandi } from './ornek-firma.tsx';
 import type { GorunumKodu, ProgramKodu } from './tipler.ts';
 import { KOK, yukle, type KayitDurumu, type Yukleme } from './veri.ts';
+import { useYardim, YardimSaglayici } from './yardim/index.tsx';
 import './denetim-yeni.css';
 
 // TS geçişinde Denetim Hazırlığı'nın yeni ekranı (199 b): eski çerçevenin yanında `/denetim-hazirlik/yeni/<görünüm>` adresinde, alıma kadar
@@ -36,7 +39,11 @@ function Yukleyici() {
   if (!g) return <Navigate to={`${KOK}/yeni/${gorunum('home').yol}`} replace />;
   if (hata) return <DurumKutusu durum="hata" mesaj={hata} yenile={() => { denemeYaz((n) => n + 1); }} />;
   if (!yukleme) return <DurumKutusu durum="yukleniyor" />;
-  return <DenetimSaglayici yukleme={yukleme} gorunum={g.kod}><Kabuk /></DenetimSaglayici>;
+  return (
+    <DenetimSaglayici yukleme={yukleme} gorunum={g.kod}>
+      <YardimSaglayici><Kabuk /><DenetimKomutlari /></YardimSaglayici>
+    </DenetimSaglayici>
+  );
 }
 
 const KAYIT: Record<KayitDurumu, { metin: string; ton: RozetTonu }> = {
@@ -49,6 +56,7 @@ const KAYIT: Record<KayitDurumu, { metin: string; ton: RozetTonu }> = {
 
 function Kabuk() {
   const d = useDenetim();
+  const yardim = useYardim();
   const g = gorunum(d.gorunum);
   const gecikmis = useMemo(() => gecikmisSayisi(d.kb, d.cihazlar), [d.kb, d.cihazlar]);
   // Program sekmesine dönülünce o sekmede son açılan alt görünüm açılır (prototip lastIn; oturum boyunca).
@@ -66,6 +74,10 @@ function Kabuk() {
   const altlar = sekme && sekme.gorunumler.length > 1 ? sekme.gorunumler : null;
   const kayit = KAYIT[d.kayit];
   const Ekran = g.ekran;
+  const eylemler: MenuOgesi[] = [
+    ...(d.yetki.yazabilir ? [{ anahtar: 'geri-al', baslik: 'Geri al (Ctrl Z)', simge: 'rotate' as const, sec: d.geriAl, pasif: !d.geriAlinabilir, pasifNedeni: 'Geri alınacak işlem yok' }] : []),
+    { anahtar: 'yardim', baslik: 'Yardım (?)', simge: 'help', sec: () => { yardim.ac('sayfa'); } },
+  ];
 
   return (
     <div className="tc-dhy">
@@ -79,8 +91,9 @@ function Kabuk() {
             {gecikmis > 0 && <Rozet ton="hata">{`${String(gecikmis)} gecikmiş iş`}</Rozet>}
           </span>
         )}
-        eylemler={d.yetki.yazabilir ? [{ anahtar: 'geri-al', baslik: 'Geri al (Ctrl Z)', simge: 'rotate', sec: d.geriAl, pasif: !d.geriAlinabilir, pasifNedeni: 'Geri alınacak işlem yok' }] : []}
+        eylemler={eylemler}
       />
+      <OrnekFirmaBandi />
       {d.kayit === 'catisma' && (
         <div className="tc-dhy-bant" role="alert">
           <span>Bu kayıt başka bir kişi tarafından değiştirildi. Son hâli okuyun; bu ekrandaki kaydedilmemiş değişiklik bırakılır.</span>

@@ -202,7 +202,9 @@ describe('yetki (izinli ve reddedilen)', () => {
     sahteSunucu({ yazabilir: false, yonetici: false });
     ekraniAc();
     await screen.findByRole('tablist', { name: 'Bölümler' });
-    expect(screen.queryByRole('button', { name: /diğer işlemler/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
+    expect(screen.getByRole('menuitem', { name: /Yardım/ })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Geri al/ })).toBeNull();
   });
 
   it('yöneticide yıkıcı işlemler izinli, yazarda değil', async () => {

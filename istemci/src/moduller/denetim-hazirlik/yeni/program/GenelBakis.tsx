@@ -11,6 +11,7 @@ import { HazirlikKadrani } from './grafikler.tsx';
 import { siradakiAdimlar } from './hesaplar.ts';
 import { Halka, OrnekBandi, ProgramBandi, PSimge } from './ortak.tsx';
 import { HaftaMaddesiSatiri, useHizliTur } from './paylasilan.tsx';
+import { TerimDugmesi } from '../yardim/index.tsx';
 
 export function GenelBakis() {
   const d = useDenetim();
@@ -76,18 +77,22 @@ export function GenelBakis() {
           <Halka yuzde={r.total ? (r.answered / r.total) * 100 : 0} />
           <span><small><PSimge ad="clip" /> Simülasyon</small><b>{`${String(r.answered)} / ${String(r.total)}`}</b><small>Cevaplanan soru</small></span>
         </button>
-        <button type="button" className="tc-dhp-kpi" onClick={() => { d.git('rapor'); }}>
-          <Halka yuzde={kapali} etiket={String(acik)} ton="iyi" />
-          <span>
-            <small><PSimge ad="alert" /> Açık riskler</small>
-            <b className="tc-dhp-riskler">
-              <span title={lv('major')}><i className="tc-dhp-risk-nokta tc-dhy-ton-kotu" aria-hidden="true" />{String(r.major)}<span className="tc-dhp-gizli">{` ${lv('major')}`}</span></span>
-              <span title={lv('minor')}><i className="tc-dhp-risk-nokta tc-dhy-ton-uyari" aria-hidden="true" />{String(r.minor)}<span className="tc-dhp-gizli">{` ${lv('minor')}`}</span></span>
-              <span title={lv('obs')}><i className="tc-dhp-risk-nokta tc-dhy-ton-bilgi" aria-hidden="true" />{String(r.obs)}<span className="tc-dhp-gizli">{` ${lv('obs')}`}</span></span>
-            </b>
-            <small>{r.risks.length ? `%${String(kapali)} kapatıldı` : `${lv('major')} · ${lv('minor')} · ${lv('obs')}`}</small>
-          </span>
-        </button>
+        <div className="tc-dhp-kpi-kap">
+          <button type="button" className="tc-dhp-kpi" onClick={() => { d.git('rapor'); }}>
+            <Halka yuzde={kapali} etiket={String(acik)} ton="iyi" />
+            <span>
+              <small><PSimge ad="alert" /> Açık riskler</small>
+              <b className="tc-dhp-riskler">
+                <span title={lv('major')}><i className="tc-dhp-risk-nokta tc-dhy-ton-kotu" aria-hidden="true" />{String(r.major)}<span className="tc-dhp-gizli">{` ${lv('major')}`}</span></span>
+                <span title={lv('minor')}><i className="tc-dhp-risk-nokta tc-dhy-ton-uyari" aria-hidden="true" />{String(r.minor)}<span className="tc-dhp-gizli">{` ${lv('minor')}`}</span></span>
+                <span title={lv('obs')}><i className="tc-dhp-risk-nokta tc-dhy-ton-bilgi" aria-hidden="true" />{String(r.obs)}<span className="tc-dhp-gizli">{` ${lv('obs')}`}</span></span>
+              </b>
+              <small>{r.risks.length ? `%${String(kapali)} kapatıldı` : `${lv('major')} · ${lv('minor')} · ${lv('obs')}`}</small>
+            </span>
+          </button>
+          {/* Düğmenin içinde düğme olamaz: terim bağlantısı kartın köşesinde, kartın üstünde durur. */}
+          <TerimDugmesi terim="bulgu" sinif="tc-dhp-kpi-terim" />
+        </div>
         <button type="button" className="tc-dhp-kpi" onClick={() => { d.git('rehber'); }}>
           <Halka yuzde={ds.n ? (ds.k / ds.n) * 100 : 0} ton="iyi" />
           <span><small><PSimge ad="file" /> {kb.pg.docsKpi}</small><b>{`${String(ds.k)} / ${String(ds.n)}`}</b><small>Hazır olarak işaretli</small></span>
