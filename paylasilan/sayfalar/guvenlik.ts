@@ -11,6 +11,8 @@ export const GUVENLIK_IKINCI_MENU = {
   baslik: 'Güvenlik Merkezi',
   simge: 'lock',
   sayacUcu: '/guvenlik/menu-sayaclari',
+  // 1365 a: açık alarm sayısı ana menüde de görünür; yönetici sayfaya girmeden görür.
+  anaMenuSayaci: 'alarmlar',
   gruplar: [
     { baslik: 'İzleme', maddeler: [
       { anahtar: 'durum', baslik: 'Durum', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
@@ -19,6 +21,7 @@ export const GUVENLIK_IKINCI_MENU = {
     { baslik: 'Takip', maddeler: [
       { anahtar: 'girisler', baslik: 'Girişler', yol: '/guvenlik/girisler', simge: 'user', islem: 'guvenlik.oku' },
       { anahtar: 'oturumlar', baslik: 'Oturumlar ve kilitler', yol: '/guvenlik/oturumlar', simge: 'lock', islem: 'guvenlik.oku' },
+      { anahtar: 'reddedilen', baslik: 'Reddedilen istekler', yol: '/guvenlik/reddedilen', simge: 'alert', islem: 'guvenlik.oku' },
     ] },
     { baslik: 'Koruma', maddeler: [
       { anahtar: 'koruma', baslik: 'Koruma durumu', yol: '/guvenlik/koruma', simge: 'check', islem: 'guvenlik.oku' },

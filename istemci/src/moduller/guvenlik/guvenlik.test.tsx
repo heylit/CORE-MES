@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type {
-  Alarm, AlarmListeCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi, OturumlarCevabi, OzetCevabi, SunucuDurumuCevabi,
+  Alarm, AlarmListeCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi, OturumlarCevabi, OzetCevabi, RetListeCevabi, SunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -13,7 +13,7 @@ import type { Kullanici } from '../../ortak/veri/oturum.ts';
 import { GuvenlikAlarmlar } from './Alarmlar.tsx';
 import { GuvenlikDurum, genelDurum } from './Durum.tsx';
 import { GuvenlikKoruma, GuvenlikKurallar } from './Koruma.tsx';
-import { GuvenlikOturumlar } from './Takip.tsx';
+import { GuvenlikOturumlar, GuvenlikReddedilenler } from './Takip.tsx';
 import { tarayiciOzeti } from './gorunum.ts';
 
 // Biçim sunucu cevabından (guvenlik.test.ts); adlar ve adresler uydurma deneme değerleridir.
@@ -31,7 +31,7 @@ const ozet = (o: Partial<OzetCevabi> = {}): OzetCevabi => ({
 const liste = (satirlar: Alarm[]): AlarmListeCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });
 const kurallar: KurallarCevabi = {
   kurallar: [{ sinyal: 'hatali-giris-serisi', baslik: 'Hatalı giriş serisi', kosul: 'Deneme koşul metni', onem: 'orta' }],
-  saklamaGun: 400, taramaAraligiSn: 60, durmaEsigiDk: 5, vpnAraliklari: [], muafSinyaller: [],
+  saklamaGun: 400, redSaklamaGun: 90, taramaAraligiSn: 60, durmaEsigiDk: 5, vpnAraliklari: [], muafSinyaller: [],
 };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -273,5 +273,27 @@ describe('Oturumlar ve koruma', () => {
     cizdir(<GuvenlikKoruma />);
     expect(await screen.findByText('Bilinmiyor')).toBeTruthy();
     expect(screen.getAllByText('Açık')).toHaveLength(1);
+  });
+});
+
+describe('Güvenlik Merkezi reddedilen istekler (1370 a)', () => {
+  const ret: RetListeCevabi = {
+    satirlar: [
+      { id: 2, zaman: T, neden: 'yetki', kisiId: 7, kisiAdi: 'Deneme Kişi', yontem: 'GET', yol: '/finans/faturalar', ip: '10.0.0.5' },
+      { id: 1, zaman: T, neden: 'adres-yok', kisiId: null, kisiAdi: null, yontem: 'GET', yol: '/api/yonetim', ip: '10.0.0.6' },
+    ],
+    toplam: 2, sayfa: 1, sayfaBoyu: 50,
+  };
+
+  it('neden, kişi, istek ve cihazı listeler; neden süzgeci sunucuya gider', async () => {
+    const cagrilar = sunucuKur({ 'GET /guvenlik/reddedilen-istekler': () => json(200, ret) });
+    cizdir(<GuvenlikReddedilenler />);
+    const tablo = await screen.findByRole('table', { name: 'Reddedilen istekler' });
+    expect(within(tablo).getByText('Yetki yok')).toBeTruthy();
+    expect(within(tablo).getByText('Deneme Kişi')).toBeTruthy();
+    expect(within(tablo).getByText('GET /finans/faturalar')).toBeTruthy();
+    expect(within(tablo).getByText('Adres yok')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Neden'), { target: { value: 'kapsam' } });
+    await waitFor(() => expect(cagrilar.some((c) => c.yol.includes('neden=kapsam'))).toBe(true));
   });
 });

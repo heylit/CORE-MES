@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { HataSatiri } from './gunluk-dosyasi.ts';
-import { OLAY_ARALIGI_MS, OLAY_KAYNAGI, OlayGunlugu, olayMetni } from './olay-gunlugu.ts';
+import { GUVENLIK_OLAY_KIMLIGI, OLAY_ARALIGI_MS, OLAY_KAYNAGI, OlayGunlugu, olayMetni } from './olay-gunlugu.ts';
 
 const hata = (ileti: string): HataSatiri => ({ zaman: new Date(0), ileti, istekKimligi: 'ab12cd34', hata: 'Error: "tırnak"\nsatır' });
 const bekle = () => new Promise((coz) => { setImmediate(coz); });
@@ -42,4 +42,16 @@ test('olay günlüğü: araç hata verirse neden durumda tutulur, süreç düşm
 
 test('olay metni en çok 800 karakter', () => {
   assert.equal(olayMetni({ ...hata('x'.repeat(2000)) }, 0).length, 800);
+});
+
+test('olay günlüğü: kritik güvenlik alarmı uyarı türü ve kendi kimliğiyle yazılır; hata aralığına takılmaz', async () => {
+  const cagrilar: string[][] = [];
+  const o = new OlayGunlugu(async (a) => { cagrilar.push(a); }, () => new Date(0));
+  o.bildir(hata('bir'));
+  o.guvenlikAlarmi('Tuzak hesap "x"\ndenendi');
+  o.guvenlikAlarmi('İkinci alarm');
+  await bekle();
+  assert.equal(cagrilar.length, 3);
+  assert.deepEqual(cagrilar[1]?.slice(0, 4), ['/T', 'WARNING', '/ID', GUVENLIK_OLAY_KIMLIGI]);
+  assert.equal(cagrilar[1]?.[9], 'Tuzak hesap x denendi');
 });

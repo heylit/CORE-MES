@@ -95,6 +95,13 @@ test('boş başlık, boş grup, grupsuz menü ve biçimsiz sayaç ucu reddedilir
   assert.match(hatalar({ ...GECERLI, sayacUcu: '/Ornek sayac' }), /sayaç ucu yol biçiminde değil/);
 });
 
+test('ana menü sayacı menüdeki bir madde ve sayaç ucu ister', () => {
+  assert.equal(hatalar({ ...GECERLI, anaMenuSayaci: 'kutular' }), '');
+  assert.match(hatalar({ ...GECERLI, anaMenuSayaci: 'yok' }), /ana menü sayacı menüde olmayan madde: yok/);
+  const { sayacUcu: _, ...sayacsiz } = GECERLI;
+  assert.match(hatalar({ ...sayacsiz, anaMenuSayaci: 'kutular' }), /ana menü sayacı sayaç ucu ister/);
+});
+
 
 test('bir sayfaya iki ikinci menü verilemez; hata hangi menüde olduğunu söyler', () => {
   assert.deepEqual(ikinciMenulerinHatalari([GECERLI], BAGLAM), []);

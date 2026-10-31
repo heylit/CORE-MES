@@ -43,7 +43,7 @@ export function GuvenlikKurallar() {
     <div className="tc-guvenlik">
       <p className="tc-guvenlik-not">
         Tarama her {k.taramaAraligiSn} saniyede bir koşar; {k.durmaEsigiDk} dakikadan uzun koşmazsa durum sayfası uyarır.
-        Kapanan alarm {k.saklamaGun} gün saklanır. Uyarılar yalnız bu uygulamada görünür.
+        Kapanan alarm {k.saklamaGun} gün, reddedilen istek {k.redSaklamaGun} gün saklanır. Kritik alarm yöneticilere bildirim olarak düşer ve Windows olay günlüğüne yazılır; dışarı ileti gitmez.
       </p>
       {k.vpnAraliklari.length > 0 && (
         <Kart baslik="VPN muafiyeti" sag={<Rozet ton="bilgi">Etkin</Rozet>}>

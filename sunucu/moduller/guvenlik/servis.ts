@@ -8,15 +8,17 @@ import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   Alarm, AlarmGorunumu, AlarmKapatGovdesi, AlarmOnaylaGovdesi, GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi,
-  OturumlarCevabi, OzetCevabi, SunucuDurumuCevabi,
+  OturumlarCevabi, OzetCevabi, RetListeCevabi, RetNedeni, SunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import { SINYALLER } from '#paylasilan/sozlesme/guvenlik.ts';
 import { pgVeriDiziniOku } from '#cekirdek/ayar.ts';
 import { GUNLUK_SAKLAMA_GUN, sonHatalariOku, surecGunlukDurumu, type GunlukDurumu, type HataSatiri } from '#cekirdek/gunluk-dosyasi.ts';
 import { httpsDurumuOku, izlenenSertifikaOku } from '#cekirdek/https-durumu.ts';
-import { surecOlayDurumu, type OlayDurumu } from '#cekirdek/olay-gunlugu.ts';
+import { surecGuvenlikAlarmiYaz, surecOlayDurumu, type OlayDurumu } from '#cekirdek/olay-gunlugu.ts';
+import { retOlaylariniBosalt } from '#cekirdek/red-kaydi.ts';
 import type { GuncellemeKanali } from '#paylasilan/sozlesme/ayarlar.ts';
 import { guncellemeKanaliDurumu, sistemAyariOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
+import { bildirimGonder } from '../bildirim/disari.ts';
 import { denetimDurumu } from '../denetim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
@@ -24,6 +26,8 @@ import {
   oturumuKapat, saatlikGirisDenemeleri, sonHesapKilitleri,
 } from '../oturum/disari.ts';
 import {
+  ADRES_TARAMASI, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
+  yetkiReddiBulgulari, type Bulgu,
   DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
@@ -31,6 +35,14 @@ import {
 } from './kurallar.ts';
 import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
+
+// Olay günlüğü yazıcısı testte değiştirilir; süreçte kurulmamışsa (Windows dışı) yazılmaz.
+let olayaYaz: (metin: string) => void = surecGuvenlikAlarmiYaz;
+export function olayYazicisiniKur(yazici: (metin: string) => void): () => void {
+  const onceki = olayaYaz;
+  olayaYaz = yazici;
+  return () => { olayaYaz = onceki; };
+}
 
 export interface TaramaSonucu { yeniAlarm: number; guncellenenAlarm: number; silinen: number }
 
@@ -46,7 +58,10 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
   const simdi = await s.veritabaniSaati(db);
   const kisa = await girisDenemeleriniOzetle(db, { sonSn: HATALI_SERI.pencereSn });
   const uzun = vpnDisindakiler(await girisDenemeleriniOzetle(db, { sonSn: YAYILAN_DENEME.pencereSn }), (await vpnAraliklari(db)).araliklar);
+  await reddedilenleriYaz(db);
   const bulgular = [
+    ...yetkiReddiBulgulari(await s.kisiRetOzetleri(db, YETKI_REDDI_SERISI.pencereSn, SAYILAN_RET_NEDENLERI)),
+    ...adresTaramasiBulgulari(await s.cihazTaramaOzetleri(db, ADRES_TARAMASI.pencereSn)),
     ...hataliSeriBulgulari(kisa),
     ...yayilanDenemeBulgulari(uzun),
     ...hedefliHesapBulgulari(uzun),
@@ -62,7 +77,10 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
   for (const b of bulgular) {
     const mevcut = acik.get(kaynakAnahtari(b));
     if (mevcut === undefined) {
-      if ((await s.alarmAc(db, b)) !== null) yeniAlarm += 1;
+      const id = await s.alarmAc(db, b);
+      if (id === null) continue;
+      yeniAlarm += 1;
+      if (duyurulurMu(b)) await alarmiDuyur(db, id, b);
       continue;
     }
     const guncelleme = alarmGuncellemesi(mevcut, b);
@@ -70,8 +88,23 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
   }
   if (yeniAlarm > 0) await s.taramaDefterineYaz(db, yeniAlarm, guncellenenAlarm);
   await s.taramaDurumunuYaz(db);
-  const silinen = await s.eskileriSil(db, SAKLAMA_GUN);
+  const silinen = (await s.eskileriSil(db, SAKLAMA_GUN)) + (await s.eskiRetleriSil(db, RED_SAKLAMA_GUN));
   return { yeniAlarm, guncellenenAlarm, silinen };
+}
+
+// Çekirdeğin tamponundaki reddedilen istekler tabloya geçer. Kişisi silinmiş olamaz (kişi silinmez, pasifleşir); tampon boşaltılınca
+// olay ondan çıkar, transaction geri alınırsa o turun olayları kaybolur (VARSAYIM: tur seyrek düşer, kayıp en çok bir dakikalıktır).
+async function reddedilenleriYaz(db: Db): Promise<void> {
+  const { olaylar } = retOlaylariniBosalt();
+  await s.retOlaylariniYaz(db, olaylar);
+}
+
+// 1362 a: yalnız duyuru; oturum kapatma ya da engelleme yönetici elle yapar. 1365 a: yöneticilere bildirim ve Windows olay günlüğü.
+async function alarmiDuyur(db: Db, id: number, b: Bulgu): Promise<void> {
+  const kisiAdi = b.kisiId === null ? null : (await kisiAdlari(db, [b.kisiId])).get(b.kisiId) ?? null;
+  const metin = alarmDuyuruMetni(b, kisiAdi);
+  await bildirimGonder(db, { tur: 'guvenlik.kritik-alarm', baslik: SINYAL_TANIMLARI[b.sinyal].baslik, metin, yol: '/guvenlik/alarmlar', kaynakKimlik: String(id) });
+  olayaYaz(`TMI guvenlik alarmi: ${metin}`);
 }
 
 async function adlarlaAlarmlar(db: Db, satirlar: s.AlarmSatiri[]): Promise<Alarm[]> {
@@ -185,6 +218,20 @@ export async function oturumKapat(db: Db, id: number, istek: { cerez(ad: string)
   if (sonuc === 'yok') throw bulunamadi('Açık oturum bulunamadı.');
   if (sonuc === 'kendi') throw gecersiz('Kendi oturumunuzu buradan kapatamazsınız; çıkış yapın.');
   return { id };
+}
+
+export async function reddedilenIstekler(
+  db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; neden?: RetNedeni | undefined; ara?: string | undefined },
+): Promise<RetListeCevabi> {
+  const suzgec = { neden: sorgu.neden ?? null, ara: sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara };
+  return sayfaliListe(sorgu, {
+    say: () => s.retSay(db, suzgec),
+    satirlar: async (dilim) => {
+      const satirlar = await s.retSatirlari(db, suzgec, dilim);
+      const adlar = await kisiAdlari(db, satirlar.flatMap((r) => (r.kisiId === null ? [] : [r.kisiId])));
+      return satirlar.map((r) => ({ ...r, kisiAdi: r.kisiId === null ? null : adlar.get(r.kisiId) ?? null }));
+    },
+  });
 }
 
 export interface KorumaKaynagi {
@@ -311,6 +358,7 @@ export async function kurallar(db: Db): Promise<KurallarCevabi> {
   return {
     kurallar: SINYALLER.map((sinyal) => ({ sinyal, ...SINYAL_TANIMLARI[sinyal] })),
     saklamaGun: SAKLAMA_GUN,
+    redSaklamaGun: RED_SAKLAMA_GUN,
     vpnAraliklari: vpn.metin,
     muafSinyaller: vpn.metin.length === 0 ? [] : [...VPN_MUAF_SINYALLER],
     taramaAraligiSn: TARAMA_ARALIGI_SN,

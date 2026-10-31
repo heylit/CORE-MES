@@ -341,3 +341,26 @@ describe('Kabuk: ikinci menü sayaçları', () => {
     expect(cagri).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Kabuk: ana menü sayısı', () => {
+  const anaMenuSayisi = () => document.querySelector(`.tc-kabuk-menu a[href="${KOK}"] .tc-kabuk-bag-sayi`)?.textContent ?? null;
+
+  it('anaMenuSayaci verilen maddenin sayısı başka sayfadayken de ana menüdeki bağlantıda görünür; sıfırda görünmez', async () => {
+    const cagri = sayacSunucusu(sayilar({ is: 4, ayar: 7 }));
+    ciz({ adres: '/', menu: { ...SAYACLI, anaMenuSayaci: 'is' } });
+    await waitFor(() => expect(anaMenuSayisi()).toBe('4'));
+    expect(cagri.mock.calls.map((c) => c[0])).toEqual(['/api/ornek/menu-sayaclari']);
+    cleanup();
+    sayacSunucusu(sayilar({ is: 0 }));
+    ciz({ adres: '/', menu: { ...SAYACLI, anaMenuSayaci: 'is' } });
+    await waitFor(() => expect(document.querySelector(`.tc-kabuk-menu a[href="${KOK}"]`)).not.toBeNull());
+    expect(anaMenuSayisi()).toBeNull();
+  });
+
+  it('anaMenuSayaci verilmeyen menünün sayacı ana menüde gösterilmez ve başka sayfada yoklanmaz', () => {
+    const cagri = sayacSunucusu(sayilar({ is: 4 }));
+    ciz({ adres: '/', menu: SAYACLI });
+    expect(cagri).not.toHaveBeenCalled();
+    expect(anaMenuSayisi()).toBeNull();
+  });
+});

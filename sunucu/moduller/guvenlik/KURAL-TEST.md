@@ -37,3 +37,8 @@ Her kural için izin verilen ve reddedilen durum aynı testte sınanır.
 | G-26 koruma: sertifika (30 gün) | 30 gün ve üstü "açık" | 30 günden az "uyarı", dolmuş "kapalı", okunamayan "bilinmiyor", HTTPS kapalıysa "kapalı" | `G-26: ...`; `https-durumu.test.ts` |
 | G-27 koruma: denetim kaydı | yazılır ve değiştirme koruması etkin "açık", değer son kaydın zamanı | koruma yoksa "uyarı", yazılamıyorsa "kapalı" | `G-27: ...`; `özet, girişler, koruma ve kurallar` |
 | Bilinmeyen değer | | sıfır uydurulmaz: `null` ya da "bilinmiyor" | `özet, girişler, koruma ve kurallar`; ekran `Veri yok`, `Bilinmiyor` |
+| G-28 reddedilen istek kaydı (1363 a) | kapı, kapsam ve adres-yok reddi nedeni, kişisi, yol kalıbı ve cihazıyla tabloya geçer | izinli istek yazılmaz; adresteki sorgu yazılmaz | çekirdek `uc-red-kaydi.test.ts`; `reddedilen istek tarama turunda ...` |
+| G-29 yetki reddi serisi (5 farklı uç ya da 10 kapsam / 15 dk, yüksek) | eşikte açar | aynı ucu yoklamak, cihaz ve dosya türü reddi açmaz | `yetki reddi serisi: ...` (saf ve akış) |
+| G-30 adres taraması (5 farklı yok adres / 15 dk, kritik) | eşikte açar; yöneticiye bildirim ve olay günlüğü | 4 adres açmaz; süren koşul ikinci duyuru yapmaz; müdür bildirim almaz | `adres taraması: ...` (saf ve akış) |
+| G-31 ret kaydı saklama (90 gün) | süresi geçen satırı tarama siler | genç satır silinmez, değişmez, boşaltılamaz; kişisiz yetki reddi kısıta takılır | `saklama: ...` |
+| G-32 Reddedilen istekler listesi (1370 a) | `guvenlik.oku` okur; neden ve metin süzgeci sunucuda | müdür 403; bilinmeyen neden 400 | `reddedilen istek tarama turunda ...`; ekran `Güvenlik Merkezi reddedilen istekler` |

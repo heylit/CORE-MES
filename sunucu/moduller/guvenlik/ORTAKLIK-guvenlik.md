@@ -13,3 +13,6 @@ Modülün kendi tabloları: `guvenlik_alarmi`, `guvenlik_taramasi`, `guvenlik_ta
 | denetim kaydı | tutulmaz | denetim | `/denetim` sayfasına bağlantı |
 | durum listesi | `guvenlik_alarmi.durum` (acik, onaylandi, kapandi) | guvenlik | |
 | önem listesi | `guvenlik_alarmi.onem` (kritik, yuksek, orta) | guvenlik | |
+| reddedilen istek | `guvenlik_red_olayi` (zaman, neden, kisi_id, yontem, yol, ip) | guvenlik (olayı çekirdek üretir) | çekirdek `retOlaylariniBosalt` |
+| kişi | `guvenlik_red_olayi.kisi_id` | kisiler | `kisiAdlari` |
+| bildirim | tutulmaz; `guvenlik.kritik-alarm` türü | bildirim | `bildirimGonder` |

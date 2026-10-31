@@ -223,3 +223,16 @@
   grid-template-areas: "ust" "icerik";
 }
 .tc-kabuk[data-ikinci][data-tam-ekran] :is(.tc-kabuk-menu, .tc-ikinci-kap, .tc-kabuk-alt) { display: none; }
+
+/* Ana menü sayısı (ör. açık güvenlik alarmı): dikkat ister, sayfaya girmeden görünür. Simge şeridinde simgenin köşesine biner.
+   Konum yalnız yan menüdeki bağlantıya verilir: alt çubuktaki konumlu bağlantı, terminalin kendi alt gezinmesinin üstüne biner. */
+.tc-kabuk-menu .tc-kabuk-bag { position: relative; }
+.tc-kabuk-bag-sayi {
+  flex: none; margin-left: auto; min-width: var(--b-5); padding: 0 var(--b-2); border-radius: var(--yari-tam);
+  background: var(--stop); color: var(--parlak); font-size: var(--yazi-xs); font-weight: 700;
+  line-height: var(--b-5); text-align: center;
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tc-kabuk-menu .tc-kabuk-bag-sayi { position: absolute; top: 0; right: 0; margin: 0; }
+}
+.tc-kabuk[data-menu-dar] .tc-kabuk-menu .tc-kabuk-bag-sayi { position: absolute; top: 0; right: 0; margin: 0; }

@@ -13,9 +13,14 @@
 | Arama | Giriş listesinde arama `strpos`, LIKE joker karakteri yorumlanmaz | oturum `sorgular.ts denemeSatirlari`; test `guvenlik-okumalari` |
 | Tarama | Tek kopya (advisory kilit); zamanlayıcı işi | `sorgular.ts taramaKilidiAl`; test `G-15`, `zamanlanmış iş` |
 | Sunucu durumu | Salt okuma, `guvenlik.oku`; son hatalarda yalnız ileti, hata türü ve iletisi, zaman ve hata kodu (istek gövdesi ve başlığı yok); okunamayan kaynak "bilinmiyor"; ağ sürücüsündeki disk 2 sn'de bırakılır | `servis.ts sunucuDurumu`; test `sunucu durumu` |
-| Dış çağrı | Yok: e-posta, SMS, telemetri, CDN yok; uyarı yalnız uygulama içinde | kod |
-| Olay günlüğü | Windows'un kendi `eventcreate` aracı, kurum içi, dışarı çağrı değil; dakikada en çok bir olay | çekirdek `olay-gunlugu.ts` |
+| Dış çağrı | Yok: e-posta, SMS, telemetri, CDN yok; kritik alarm uygulama içi bildirim ve Windows olay günlüğüdür (1365 a) | kod; bildirim türü e-postası kapalı |
+| Reddedilen istek kaydı | Kayıtta parola, çerez, gövde ve sorgu dizgesi yok; kayıtlı uçta yol kalıbı, yok adreste temizlenmiş ve 200 karakterle kesilmiş yol; tablo yalnız eklenir, 90 gün | çekirdek `red-kaydi.ts`; göç `20261030164000`; test `saklama` |
+| Otomatik yanıt | Yok (1362 a): alarm oturum kapatmaz, hesap ya da cihaz kilitlemez | `servis.ts alarmiDuyur` |
+| Olay günlüğü | Windows'un kendi `eventcreate` aracı, kurum içi, dışarı çağrı değil; hata için dakikada en çok bir olay, kritik güvenlik alarmı ayrı kimlikle (200) her yeni alarmda | çekirdek `olay-gunlugu.ts` |
 | Gerçek veri | Testlerde uydurma ad ve 10.0.0.0/8 adresleri | testler |
 
 Açık risk (tarif notu): VPN adres paylaştırırsa (NAT) birçok kişi aynı IP'den gelir; G-03 yanlış alarm, G-20 körleşir.
 Muafiyet ayarı boş başlar; VPN'in adres verme biçimi doğrulanmadı. `UYUM-BORCU.md` madde 4.
+
+Açık risk (1369): reddedilen istekler süreç belleğinde en çok bir tarama turu (60 sn) bekler; sunucu bu arada durursa o olaylar kaybolur.
+Tampon 5000 olayla sınırlıdır; dolarsa en eskisi düşer. Arayüz kapısının kendi sunduğu (API dışı) adreslere gelen istekler kaydedilmez.

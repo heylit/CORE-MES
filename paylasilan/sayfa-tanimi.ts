@@ -72,6 +72,8 @@ export interface IkinciMenuTanimi<S extends string = string, I extends string = 
   gruplar: readonly IkinciMenuGrubu<S, I>[];
   // Maddelerin yanındaki sayıları veren tek okuma ucu (api yolu); cevap `IkinciMenuSayaclari`.
   sayacUcu?: `/${string}`;
+  // Bu maddenin sayısı ana menüdeki sayfa bağlantısında da görünür (ör. açık güvenlik alarmı): kişi sayfaya girmeden görür.
+  anaMenuSayaci?: string;
   // İçeriği çerçeve olan modül: içerik alanı boşluksuz olur, kaydırmayı çerçeve yapar.
   cerceveli?: boolean;
   // Cihaz tercihi açıkken menü yalnız bu maddeleri gösterir (ör. depo tabletinde depocu modu). Tercih kişiye değil
@@ -120,6 +122,12 @@ export function ikinciMenuHatalari(tanim: IkinciMenuTanimi, baglam: IkinciMenuBa
   if (!simgeGecerli(tanim.simge)) hatalar.push(`menü simgesi geçersiz: "${tanim.simge}"`);
   if (tanim.sayacUcu !== undefined && !MENU_YOLU.test(tanim.sayacUcu)) hatalar.push(`sayaç ucu yol biçiminde değil: ${tanim.sayacUcu}`);
   if (tanim.gruplar.length === 0) hatalar.push('menüde grup yok');
+  if (tanim.anaMenuSayaci !== undefined) {
+    if (tanim.sayacUcu === undefined) hatalar.push('ana menü sayacı sayaç ucu ister');
+    if (!tanim.gruplar.some((g) => g.maddeler.some((m) => m.anahtar === tanim.anaMenuSayaci))) {
+      hatalar.push(`ana menü sayacı menüde olmayan madde: ${tanim.anaMenuSayaci}`);
+    }
+  }
   if (tanim.sade !== undefined) {
     if (!MADDE_ANAHTARI.test(tanim.sade.tercih)) hatalar.push(`sade görünüm tercih adı biçime uymuyor: "${tanim.sade.tercih}"`);
     if (tanim.sade.maddeler.length === 0) hatalar.push('sade görünümde madde yok');

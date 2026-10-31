@@ -6,12 +6,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
-import { HATA_DURUMU, HATA_KODU_BASLIGI } from '#paylasilan/hata.ts';
+import { HATA_DURUMU, HATA_KODU_BASLIGI, KAPSAM_DISI_ILETISI } from '#paylasilan/hata.ts';
 import type { Ayar } from './ayar.ts';
 import { kisitIhlali, vtDiskDolu, vtGeciciCakisma, vtHataIzi, vtSureDoldu, vtUlasilamadi, vtVeriHatasi } from './db.ts';
 import type { KisitIhlali, Veritabani } from './db.ts';
 import { UygulamaHatasi, cokBuyuk, mesgul, veritabaniYok } from './hata.ts';
 import { istekOlcumunuKur } from './istek-olcumu.ts';
+import { adresYokKaydet, isleyiciReddiniKaydet } from './red-kaydi.ts';
 import { genelAramaUcu, kaynaklariKesfet } from './kayit-aramasi.ts';
 import { surecGunlugunuKur, varsayilanGunlukDizini, type GunlukYazici } from './gunluk-dosyasi.ts';
 import { surecOlayGunlugunuKur } from './olay-gunlugu.ts';
@@ -162,9 +163,15 @@ export function hataYonetiminiKur(app: FastifyInstance): void {
     // Cevap hangi kısıt olduğunu söylemez; ön denetimden kaçan kural yalnız buradan bulunur.
     if (kisit) istek.log.info({ kisit }, 'Kısıt ihlali');
     if (durum >= HATA_DURUMU.SUNUCU) void yanit.header(HATA_KODU_BASLIGI, istek.id);
+    if (hata instanceof UygulamaHatasi && hata.kod === 'YETKI_YOK') {
+      // Uç tanımındaki yol kalıbı yazılır (kapının yazdığıyla aynı biçim); adresteki kimlik yazılmaz.
+      const kalip = istek.routeOptions.url?.replace(/^\/api(?=\/)/, '') ?? null;
+      isleyiciReddiniKaydet(istek, kalip, hata.message === KAPSAM_DISI_ILETISI);
+    }
     return yanit.code(durum).send(govde);
   });
-  app.setNotFoundHandler((_istek, yanit) => {
+  app.setNotFoundHandler((istek, yanit) => {
+    adresYokKaydet(istek);
     const govde: HataGovdesi = { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' };
     return yanit.code(HATA_DURUMU.BULUNAMADI).send(govde);
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sayfalar.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
@@ -122,20 +122,34 @@ const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim
 // Ana sayfa bağlantısı yalnız kendi yolunda seçili görünür: rolün panosu bir modül sayfasıysa alt yollarda modülün maddesi seçilidir.
 // Yeni ekran adresinde (`/ik-islemlerim/yeni`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
 // (`/ik`) seçili görünmez.
+// Ana menüde sayı gösteren sayfaların sayıları (sayfa yolu -> sayı). Okuyucu kabukta tektir; menü, alt çubuk ve tüm sayfalar
+// listesi aynı sayıyı gösterir.
+const AnaMenuSayacBaglami = createContext<ReadonlyMap<string, number>>(new Map());
+
+// Menünün sayaç ucunu okuyup tek maddenin sayısını yazar; görünmez. Kişinin okuma yetkisi yoksa uç sayı vermez.
+function AnaMenuSayacOkuyucu({ kok, uc, anahtar, yaz }: { kok: string; uc: string; anahtar: string; yaz: (kok: string, sayi: number | null) => void }) {
+  const sayaclar = useIkinciMenuSayaclari(uc);
+  const sayi = sayaclar?.[anahtar] ?? null;
+  useEffect(() => { yaz(kok, sayi); }, [kok, sayi, yaz]);
+  return null;
+}
+
 function Baglanti({ sayfa, kapat, tam = sayfa.yol === '/' }: { sayfa: BaglantiSayfasi; kapat?: () => void; tam?: boolean }) {
   const yeni = yeniEkranEslesmesi(useLocation().pathname);
   const yalnizKendiYolu = tam || (yeni !== null && sayfa.yol !== yeni.yol);
+  const sayi = useContext(AnaMenuSayacBaglami).get(sayfa.yol) ?? 0;
   return (
     <NavLink
       to={sayfa.yol}
       end={yalnizKendiYolu}
       className={({ isActive }) => `tc-kabuk-bag${isActive ? ' tc-kabuk-bag-acik' : ''}`}
-      aria-label={sayfa.baslik}
+      aria-label={sayi > 0 ? `${sayfa.baslik}, ${String(sayi)} bekleyen` : sayfa.baslik}
       title={sayfa.baslik}
       onClick={kapat}
     >
       <Simge ad={sayfa.simge} />
       <span className="tc-kabuk-bag-metin">{sayfa.baslik}</span>
+      {sayi > 0 && <span className="tc-kabuk-bag-sayi mono" aria-hidden="true">{sayi}</span>}
     </NavLink>
   );
 }
@@ -159,6 +173,16 @@ export function Kabuk({
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
   const ikinciMenuler = useMemo(() => kapaliMaddeleriSuz(tumMenuler, kapali), [tumMenuler, kapali]);
+  const [anaMenuSayilari, anaMenuSayilariniYaz] = useState<ReadonlyMap<string, number>>(new Map());
+  const anaMenuSayisiYaz = useCallback((kok: string, sayi: number | null) => {
+    anaMenuSayilariniYaz((onceki) => {
+      if ((onceki.get(kok) ?? null) === sayi) return onceki;
+      const yeni = new Map(onceki);
+      if (sayi === null) yeni.delete(kok);
+      else yeni.set(kok, sayi);
+      return yeni;
+    });
+  }, []);
   // Sayfası görünmeyen ama arama işlemi olan kişi de o sayfanın kayıtlarını arar (aramaIslemi).
   const aramaSayfalari = useMemo(() => SAYFALAR.filter((s) => {
     const islem = (s as Pick<SayfaTanimi, 'aramaIslemi'>).aramaIslemi;
@@ -302,7 +326,13 @@ export function Kabuk({
   const seritler = gorunenUstSeritler(ustSeritler, islemler);
   const sonYerListesi = sonYerler(gecmis);
   const hesapMaddeleri = gorunenler.flatMap((e) => (e.hesapMaddesi === undefined ? [] : [{ anahtar: e.anahtar, hesapMaddesi: e.hesapMaddesi }]));
+  // Yalnız kişinin gördüğü sayfaların sayısı okunur: görmediği sayfanın ucunu yoklamaz.
+  const anaMenuSayaclari = ikinciMenuler.filter((m) => m.anaMenuSayaci !== undefined && m.sayacUcu !== undefined && sayfalar.some((p) => p.yol === m.kok));
   return (
+    <AnaMenuSayacBaglami.Provider value={anaMenuSayilari}>
+    {anaMenuSayaclari.map((m) => (
+      <AnaMenuSayacOkuyucu key={m.kok} kok={m.kok} uc={m.sayacUcu ?? ''} anahtar={m.anaMenuSayaci ?? ''} yaz={anaMenuSayisiYaz} />
+    ))}
     <div className="tc-kabuk-cati">
       {seritler.map((s) => <s.serit key={s.anahtar} />)}
       <BaglantiSeridi />
@@ -490,5 +520,6 @@ export function Kabuk({
         )}
       </div>
     </div>
+    </AnaMenuSayacBaglami.Provider>
   );
 }
