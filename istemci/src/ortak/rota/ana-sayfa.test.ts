@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bolumlereAyir, gorunenKartlar, kartlariTopla, type AnaSayfaKarti } from './ana-sayfa.ts';
+import { ROL_GORUNUMLERI } from '#paylasilan/rol-gorunumleri.ts';
+import { anaSayfaKartlari, bolumlereAyir, gorunenKartlar, kartlariTopla, rolKartlari, type AnaSayfaKarti } from './ana-sayfa.ts';
 
 const Ekran = () => null;
 const kart = (anahtar: string, ek: Partial<AnaSayfaKarti> = {}): AnaSayfaKarti => ({ anahtar, sira: 100, ekran: Ekran, ...ek });
@@ -71,5 +72,19 @@ describe('bolumlereAyir', () => {
   it('reddedilen: karti olmayan bolum verilmez; hic kart yoksa grup yoktur', () => {
     expect(anahtarlar([kart('u', { bolum: 'uyari' }), kart('genel')])).toEqual([['uyari', ['u']], [null, ['genel']]]);
     expect(bolumlereAyir([])).toEqual([]);
+  });
+});
+
+describe('rolKartlari', () => {
+  it('rol listesi verilince yalnız listedeki kartlar kalır; null süzmez', () => {
+    const liste = [kart('a'), kart('b')];
+    expect(rolKartlari(liste, new Set(['b'])).map((k) => k.anahtar)).toEqual(['b']);
+    expect(rolKartlari(liste, null)).toBe(liste);
+  });
+
+  it('rol listelerindeki her kart anahtarı modüllerin bildirdiği bir karttır: adı değişen kart sessizce kaybolmasın', () => {
+    const var_ = new Set(anaSayfaKartlari.map((k) => k.anahtar));
+    const eksik = Object.entries(ROL_GORUNUMLERI).flatMap(([rol, g]) => g.kartlar.filter((a) => !var_.has(a)).map((a) => `${rol}: ${a}`));
+    expect(eksik).toEqual([]);
   });
 });

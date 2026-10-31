@@ -15,6 +15,8 @@ export const kullaniciSemasi = z.object({
   islemler: z.array(z.string().refine((deger): deger is Islem => islemMi(deger))),
   // Girişte açılacak sayfa (rolden); null ya da yoksa ana sayfa. Yetki değildir: sayfayı görmeyen kullanıcı ana sayfada kalır.
   acilisSayfasi: z.string().nullable().optional(),
+  // Rol kodları: yalnız istemcinin rol başına varsayılan menüsü ve ana sayfası içindir (1390 a); yetki değildir.
+  roller: z.array(z.string()).optional(),
   // Firma kişisi (1224 a): işlemlerinden bağımsız olarak yalnız portal ve oturum uçlarına girer. Yoksa iç kişidir.
   disIzleyici: z.boolean().optional(),
   // Oturumun açık olduğu cihazın profili; yoksa sınır yoktur (akıllı saat belirteci gibi). İşlem listesi buna göre süzülmüş gelir.

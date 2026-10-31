@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gorunenUstSeritler, ustSeritler, ustSeritleriTopla, type UstSerit } from './ust-seritler.ts';
+import { gorunenUstSeritler, rolSeritleri, ustSeritler, ustSeritleriTopla, type UstSerit } from './ust-seritler.ts';
 
 const Serit = () => null;
 const serit = (anahtar: string, ek: Partial<UstSerit> = {}): UstSerit => ({ anahtar, sira: 10, islem: 'oturum', serit: Serit, ...ek });
@@ -32,5 +32,20 @@ describe('gorunenUstSeritler', () => {
 
   it('952 a: uygulamanın topladığı kur ve faiz şeridi finans işlemi olmayan kişiye de görünür', () => {
     expect(gorunenUstSeritler(ustSeritler, []).map((s) => s.anahtar)).toEqual(['kur-faiz']);
+  });
+});
+
+describe('rolSeritleri', () => {
+  it('kur ve faiz şeridi yalnız finans, satın alma, müdür ve yöneticide (1394 a); rolsüz şerit herkeste', () => {
+    const liste = [serit('kur-faiz'), serit('baska')];
+    const anahtarlar = (roller?: string[]) => rolSeritleri(liste, roller).map((s) => s.anahtar);
+    for (const rol of ['muhasebe_finans', 'satin_alma', 'mudur', 'yonetici']) expect(anahtarlar([rol])).toEqual(['kur-faiz', 'baska']);
+    for (const rol of ['operator', 'kalite', 'depo', 'ozel_rol']) expect(anahtarlar([rol])).toEqual(['baska']);
+    expect(anahtarlar(['operator', 'satin_alma'])).toEqual(['kur-faiz', 'baska']);
+    expect(anahtarlar(undefined)).toEqual(['baska']);
+  });
+
+  it('modüllerin bildirdiği kur ve faiz şeridi rol listesindeki anahtarla aynıdır', () => {
+    expect(ustSeritler.map((s) => s.anahtar)).toContain('kur-faiz');
   });
 });

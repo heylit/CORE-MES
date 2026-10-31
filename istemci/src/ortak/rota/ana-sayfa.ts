@@ -73,6 +73,11 @@ export function gorunenKartlar(kartlar: readonly AnaSayfaKarti[], islemler: read
     .sort((a, b) => a.sira - b.sira || a.anahtar.localeCompare(b.anahtar));
 }
 
+// Rolün kart listesi (1390 a): null süzgeç yoktur. Yalnız görünürlüktür; kart yine kendi işlemiyle süzülür.
+export function rolKartlari(kartlar: readonly AnaSayfaKarti[], izinli: ReadonlySet<string> | null): readonly AnaSayfaKarti[] {
+  return izinli === null ? kartlar : kartlar.filter((k) => izinli.has(k.anahtar));
+}
+
 export const anaSayfaKartlari: readonly AnaSayfaKarti[] = kartlariTopla(
   import.meta.glob('../../moduller/*/ana-sayfa.tsx', { eager: true }),
 );

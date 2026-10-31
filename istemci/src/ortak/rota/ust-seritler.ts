@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
+import { seritRolGorunurMu } from '#paylasilan/rol-gorunumleri.ts';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 
 // Bütün sayfaların en üstünde, kabuğun tam genişliğinde duran modül şeridi (istemci/src/moduller/<ad>/ust-serit.tsx; 939).
@@ -41,6 +42,11 @@ export function gorunenUstSeritler(seritler: readonly UstSerit[], islemler: read
   return seritler
     .filter((s) => s.islem === 'oturum' || maddeGorunurMu({ islem: s.islem }, islemler))
     .sort((a, b) => a.sira - b.sira || a.anahtar.localeCompare(b.anahtar));
+}
+
+// Rolle sınırlı şerit (1394 a, kur ve faiz) yalnız o rollerde kalır; sınırsız şerit herkesin işlem süzgecine gider.
+export function rolSeritleri(seritler: readonly UstSerit[], roller: readonly string[] | undefined): readonly UstSerit[] {
+  return seritler.filter((s) => seritRolGorunurMu(s.anahtar, roller));
 }
 
 export const ustSeritler: readonly UstSerit[] = ustSeritleriTopla(

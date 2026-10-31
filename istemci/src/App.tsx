@@ -1,16 +1,17 @@
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { etkinGorunum } from '#paylasilan/rol-gorunumleri.ts';
 import { SAYFALAR, yolKapaliMi } from '#paylasilan/sayfalar.ts';
 import { AcilisGosterisi, AnaSayfa, BildirimSaglayici, BildirimSayfaIzleyici, DurumKutusu, HataSiniri, Kabuk, Karsilama, Kart, useBildirim } from './ortak/arayuz/index.ts';
-import { anaSayfaKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts';
+import { anaSayfaKartlari, rolKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts';
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
 import { IKINCI_MENU_TANIMLARI, adresMaddesiKapaliMi } from './ortak/rota/ikinci-menu.ts';
 import { KaliciEkranlar } from './ortak/rota/kalici.tsx';
 import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
-import { ustSeritler } from './ortak/rota/ust-seritler.ts';
+import { rolSeritleri, ustSeritler } from './ortak/rota/ust-seritler.ts';
 import { hataIletisi } from './ortak/veri/api.ts';
 import { baglantiDonusunuDinle } from './ortak/veri/baglanti.ts';
 import { useBostaCikis } from './ortak/veri/bosta-cikis.ts';
@@ -97,6 +98,8 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
     : null;
   // Kapalı sayfanın işlemi pano için düşer: o sayfanın kartları ana sayfadan da kalkar. Rotalar durur; kabuk "kapalı" yazar.
   const kapaliIslemler = new Set(SAYFALAR.filter((s) => yolKapaliMi(s.yol, kapali)).map((s) => s.islem as string));
+  // Rolün varsayılan görünümü (1390 a): menü, ana sayfa kartları ve rolle sınırlı şerit; yetki değişmez.
+  const rolGorunumu = etkinGorunum(kullanici.roller);
   const panoIslemleri = kapaliIslemler.size === 0 ? kullanici.islemler : kullanici.islemler.filter((i) => !kapaliIslemler.has(i));
   return (
     <BrowserRouter>
@@ -111,16 +114,17 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
         logo={logo.data?.logo ?? null}
         anaSayfa={acilis ?? '/'}
         ustEylemler={ustEylemler}
-        ustSeritler={ustSeritler}
+        ustSeritler={rolSeritleri(ustSeritler, kullanici.roller)}
         hizliIsler={hizliIsler}
         komutlar={komutlar}
         kisiId={kullanici.id}
+        menuSirasi={rolGorunumu.sayfalar === null ? undefined : rolGorunumu.sayfaSirasi}
         cikis={() => cikis.mutate(undefined, { onError: (hata) => bildir('hata', hataIletisi(hata, 'Çıkış yapılamadı')) })}
       >
         <EkranAlani>
           <AdresKorumasi islemler={kullanici.islemler}>
           <Routes>
-            <Route path="/" element={<AnaSayfa kartlar={kartlar} islemler={panoIslemleri} ad={kullanici.ad} />} />
+            <Route path="/" element={<AnaSayfa kartlar={rolKartlari(kartlar, rolGorunumu.kartlar)} islemler={panoIslemleri} ad={kullanici.ad} />} />
             {plan.ekranlar.map((r) => (
               <Route key={r.yol} path={r.yol} element={r.kalici === true ? null : <r.ekran />} />
             ))}

@@ -277,10 +277,13 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
     await o.istek(yoneticiCerezi, 'POST', `/kisiler/${hedef}/rol-ata`, { rolId: await o.rolId('planlama_proje') });
     assert.ok((await islemler()).includes('kisiler.oku'));
     assert.equal((await o.istek(hedefCerezi, 'GET', '/kisiler')).statusCode, 200);
+    // Rol kodları oturumda görünüm içindir (1390 a); kod sırasıyla gelir.
+    assert.deepEqual((await o.istek(hedefCerezi, 'GET', '/oturum')).json().kullanici.roller, ['operator', 'planlama_proje']);
 
     await o.istek(yoneticiCerezi, 'POST', `/kisiler/${hedef}/rol-al`, { rolId: await o.rolId('planlama_proje') });
     assert.deepEqual(await islemler(), OPERATOR);
     assert.equal((await o.istek(hedefCerezi, 'GET', '/kisiler')).statusCode, 403);
+    assert.deepEqual((await o.istek(hedefCerezi, 'GET', '/oturum')).json().kullanici.roller, ['operator']);
   });
 
   test('M6: başarılı atama ve alma denetim kaydına düşer; reddedilen komut kayıt bırakmaz', async () => {

@@ -285,6 +285,29 @@ describe('Kabuk', () => {
     expect(cikis).toHaveBeenCalledTimes(1);
   });
 
+  it('rol menusu verilince ana menu ve alt cubuk rol sirasiyla yalniz onu gosterir; gorunmeyen sayfa listede olsa da cikmaz; Tum sayfalar gerisini acar (1390 a)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
+    render(
+      <MemoryRouter>
+        <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk', '/cnc-kurulum']}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+    const baglantilar = () => menu.getAllByRole('link').map((b) => b.getAttribute('href'));
+    expect(baglantilar()).toEqual(['/', '/profil', '/stok', '/kuyruk']);
+    const alt = within(screen.getByRole('navigation', { name: 'Alt gezinme' }));
+    expect(alt.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
+    const tum = menu.getByRole('button', { name: 'Tüm sayfalar' });
+    expect(tum.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(tum);
+    expect(tum.getAttribute('aria-expanded')).toBe('true');
+    expect(baglantilar()).toEqual(expect.arrayContaining(['/arkon', '/plan']));
+    // Telefondaki Tümü listesi her zaman bütün sayfalardır.
+    fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
+    const liste = within(screen.getByRole('dialog', { name: 'Tüm sayfalar' }));
+    for (const s of gorunen) expect(liste.getByRole('link', { name: s.baslik })).toBeTruthy();
+  });
+
   it('Tumu listesi Esc ile kapanir ve odagi Tumu dugmesine geri verir', () => {
     ciz();
     const tumu = screen.getByRole('button', { name: 'Tümü' });

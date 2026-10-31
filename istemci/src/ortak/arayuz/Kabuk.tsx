@@ -90,6 +90,9 @@ interface Ozellikler {
   rehberler?: readonly SayfaRehberi[];
   // Verilirse ilk girişte tanıtım önerilir; görüldü bilgisi kişiye göre tutulur.
   kisiId?: number;
+  // Rolün varsayılan menüsü (1390 a), sırasıyla sayfa yolları. Verilirse ana menü ve telefonun alt çubuğu yalnız bunları
+  // gösterir, öteki sayfalar "Tüm sayfalar" altında kalır; yetki değildir. Verilmezse tam menü.
+  menuSirasi?: readonly string[];
   children: ReactNode;
 }
 
@@ -167,7 +170,7 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
 const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/kuyruk']);
 
 export function Kabuk({
-  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, ustSeritler = SERITSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, children,
+  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, ustSeritler = SERITSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, menuSirasi, children,
 }: Ozellikler) {
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
@@ -200,6 +203,12 @@ export function Kabuk({
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);
+  // Rol menüsü kişinin gördüğü sayfalardan, rol listesinin sırasıyla; işlemi olmayan sayfa listede olsa da çıkmaz.
+  const rolMenusu = useMemo(
+    () => (menuSirasi === undefined ? null : menuSirasi.flatMap((yol) => menudekiler.filter((s) => s.yol === yol))),
+    [menuSirasi, menudekiler],
+  );
+  const [tumMenuAcik, tumMenuYaz] = useState(false);
   // Geçici (308 d): yeni ekran satırları yalnız yöneticide, ayrı grupta; bağlamada kalkar.
   const yeniEkranlar = useMemo(() => yeniEkranBaglantilari(menudekiler, islemler), [menudekiler, islemler]);
   const olayGruplari = useMemo(
@@ -366,7 +375,22 @@ export function Kabuk({
           </button>
           <Baglanti sayfa={anaBaglanti} tam />
           <Baglanti sayfa={PROFIL_BAGLANTISI} />
-          {gruplar.map((g) => (
+          {rolMenusu !== null && (
+            <div className="tc-kabuk-grup">
+              {rolMenusu.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+              <button
+                type="button"
+                className="tc-kabuk-bag"
+                onClick={() => tumMenuYaz((a) => !a)}
+                aria-expanded={tumMenuAcik}
+                title="Tüm sayfalar"
+              >
+                <Simge ad="dash" />
+                <span className="tc-kabuk-bag-metin">Tüm sayfalar</span>
+              </button>
+            </div>
+          )}
+          {(rolMenusu === null || tumMenuAcik) && gruplar.map((g) => (
             <div className="tc-kabuk-grup" key={g.grup}>
               <p className="tc-kabuk-grup-ad">{g.grup}</p>
               {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
@@ -468,7 +492,7 @@ export function Kabuk({
 
         <nav className="tc-kabuk-alt" aria-label="Alt gezinme">
           <Baglanti sayfa={anaBaglanti} tam />
-          {menudekiler.slice(0, ALT_CUBUK_SAYISI - 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+          {(rolMenusu ?? menudekiler).slice(0, ALT_CUBUK_SAYISI - 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
           <button type="button" className="tc-kabuk-bag" onClick={() => tumuYaz(true)} aria-haspopup="dialog">
             <Simge ad="dash" />
             <span className="tc-kabuk-bag-metin">Tümü</span>
