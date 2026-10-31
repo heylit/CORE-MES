@@ -447,8 +447,6 @@ export function emirSeciminiGonder(pencere: Pick<Window, 'dispatchEvent'> & { __
 }
 
 export const ONIZLEME_SALT_OKUR = 'Önizlemede kayıt yapılmaz; istek TMI\'ye gönderilmedi.';
-// 4a (kart 723): taşınan ekranların eski görünümü yönetici için bir süre yalnız bakmak içindir; kayıt yeni ekranda yapılır.
-export const ESKI_GORUNUM_SALT_OKUR = 'Eski görünüm yalnız okunur; kayıt yeni ekranda yapılır. İstek TMI\'ye gönderilmedi.';
 // Arkon'un TMI'de açtırabileceği sayfalar (A5, kart #541): yalnız bu listedeki hedef açılır, çerçeve TMI'de yol seçemez.
 export const TMI_HEDEFLERI: Readonly<Record<string, string>> = { 'emir-ac': '/recete-rota', plan: '/recete-rota/plan', istasyonlar: '/istasyonlar' };
 
@@ -503,8 +501,6 @@ export function bagla(
   pencere: Pencere, secenek: {
     istemci?: Istemci; cikis?: () => void; reddedildi?: (ileti: string) => void; git?: (yol: string) => void;
     makineDolu?: (red: MakineDoluRedi) => void; uyari?: (ileti: string) => void;
-    // Eski görünüm (723): okuma TMI'ye gider, hiçbir yazma gönderilmez; ilk ret kullanıcıya söylenir (Arkon 403'ü kuyruğa almaz, düşürür).
-    saltOkunur?: boolean;
     // Çerçevenin az önce aldığı /arkon/ben cevabı ve alındığı an (ms): Arkon açılışta sırayla iki kez daha sorar (health, me).
     ben?: { cevap: ArkonBenCevabi; zaman: number };
   } = {},
@@ -550,10 +546,6 @@ export function bagla(
     // Önizleme ("Operatör gözüyle") TMI'yi yalnız okur: ekranın kendi kayıtları önizlemede kapalı, köprü de yazmayı TMI'ye hiç iletmez.
     if (yontem !== 'GET' && pencere.location.hash.startsWith('#onizle:')) {
       return new pencere.Response(JSON.stringify({ error: ONIZLEME_SALT_OKUR }), { status: 403, headers: { 'Content-Type': 'application/json' } });
-    }
-    if (yontem !== 'GET' && secenek.saltOkunur === true) {
-      reddet(ESKI_GORUNUM_SALT_OKUR);
-      return new pencere.Response(JSON.stringify({ error: ESKI_GORUNUM_SALT_OKUR }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
     const cevap = await cevapla(istemci, { yontem, yol, sorgu: url.searchParams, govde: ayar?.body ?? undefined }, secenek.cikis);
     const ret = reddiBildirimi(yontem, yol, cevap);

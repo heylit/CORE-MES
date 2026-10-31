@@ -1,6 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { IkinciMenuMaddesi } from '#paylasilan/sayfa-tanimi.ts';
-import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
+import { IKINCI_MENULER, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import type { ArkonRolu } from '#paylasilan/sozlesme/arkon.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 
 // Yeni Arkon ekranının sayfaları. Anahtar adres parçasıdır (/arkon/<anahtar>) ve eski Arkon'un adres işaretiyle aynıdır
@@ -8,7 +9,6 @@ import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 // menüde olmayan sayfalar (Operatör, Kuyruk, Önizleme) kendi tanımını taşır. Her sayfanın ekranı bir parçanın klasöründedir.
 // Operatör (Üretim Terminali) ve Kuyruk eskisi gibi ayrı sayfadır (soru 497/5 a): Arkon sekmelerinde yoktur, sekme şeridi çizilmez.
 
-// Eski adresine geçti (541, 527 1 a); eski çerçeve bir süre /arkon/eski altındadır.
 export const KOK = '/arkon';
 
 export type ArkonSayfasi =
@@ -69,6 +69,14 @@ export function sekmeMaddeleri(): SekmeMaddesi[] {
   const menu = IKINCI_MENULER.find((m) => m.kok === '/arkon');
   return (menu?.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler) ?? [])
     .map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, ...(m.veya ? { veya: m.veya } : {}) }));
+}
+
+// Rolün giriş sayfası kişinin Arkon rolündendir (sunucu rolü kişinin TMI rolünden çözer; ek Arkon işlemi değiştirmez, soru 38/49 A):
+// operatör operatör ekranından, Pano'yu görebilen öteki roller Pano'dan girer.
+export function arkonGirisSayfasi(rol: ArkonRolu, islemler: readonly string[]): ArkonSayfasi {
+  if (rol === 'operator') return 'operator';
+  const pano = sekmeMaddeleri().find((m) => m.anahtar === 'pano');
+  return pano !== undefined && maddeGorunurMu(pano, islemler) ? 'pano' : 'operator';
 }
 
 // Ayrı sayfanın adresi TMI'deki kendi menü satırıdır (Üretim Terminali, Kuyruk).

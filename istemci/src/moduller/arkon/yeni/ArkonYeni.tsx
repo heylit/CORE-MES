@@ -10,7 +10,6 @@ import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
 import { useTema } from '../../../ortak/veri/tema.ts';
 import { anahtarlar } from '../anahtarlar.ts';
-import { arkonGirisSayfasi } from '../ArkonCercevesi.tsx';
 import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
@@ -23,12 +22,11 @@ import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
 import { ArkonBaglamiKaynagi, ArkonDarAlanKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
 import { depoyuBaslat, type ArkonDeposu, type ArkonDurumu } from './veri/depo.ts';
 import { tasiyiciYap } from './veri/tasiyici.ts';
-import { KOK, SAYFALAR, SAYFA_DISI, sayfaAdresi, sayfaMi, sekmeMaddeleri, type ArkonSayfasi, type SayfaTanimi, type SekmeMaddesi } from './sayfalar.ts';
+import { KOK, SAYFALAR, SAYFA_DISI, arkonGirisSayfasi, sayfaAdresi, sayfaMi, sekmeMaddeleri, type ArkonSayfasi, type SayfaTanimi, type SekmeMaddesi } from './sayfalar.ts';
 import './arkon-yeni.css';
 
 // TS geçişinin Arkon ekranı (Soru 271 c): Üretim Terminali ve Üretim Hazırlık kabuğun içinde, çerçevesiz. Eski adresine geçti (541, 527 1 a):
-// sayfayı gören herkes açar, eski çerçeve bir süre /arkon/eski altındadır. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi
-// sekmesini çizmez (553 1 a).
+// sayfayı gören herkes açar. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi sekmesini çizmez (553 1 a).
 export function ArkonYeni() {
   return <ArkonYeniEkrani />;
 }
@@ -39,7 +37,15 @@ export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
   return <ArkonYeniEkrani sabitSayfa={sayfa} />;
 }
 
-function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: TasinanSayfa }) {
+// Sistem Ayarları'ndaki Arkon bölümü: Üretim Hazırlık > Ayarlar'ın kendisi, aynı görünürlük ve aynı kayıt. Adres Sistem Ayarları'nındır;
+// sayfa açık değilse giriş sayfasına götürülmez, yerinde "açık değil" yazar.
+export function ArkonAyarBolumu() {
+  return <ArkonYeniEkrani sabitSayfa="ayarlar" />;
+}
+
+type SabitSayfa = TasinanSayfa | 'ayarlar';
+
+function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
   const oturum = useOturum();
   const islemler = useMemo(() => oturum.data?.islemler ?? [], [oturum.data]);
   const ben = useQuery({ queryKey: anahtarlar.ben, queryFn: () => api.get<ArkonBenCevabi>('/arkon/ben') });
@@ -111,7 +117,7 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: TasinanSayfa }) {
 
 interface AcikEkranOzellikleri {
   depo: ArkonDeposu;
-  sabitSayfa: TasinanSayfa | undefined;
+  sabitSayfa: SabitSayfa | undefined;
   islemler: readonly string[];
   arkonRolu: ArkonRolu;
   saltOkunur: boolean;
@@ -227,7 +233,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     ? ayriAcik(sayfa)
     : secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa));
   const etiket = ayri ? tanim?.baslik : maddeler.find((m) => m.anahtar === secili)?.baslik;
-  if (!acik && !ayri && sayfa !== null) {
+  if (!acik && !ayri && sayfa !== null && sabitSayfa === undefined) {
     const hedef = girisHedefi();
     if (hedef !== null && hedef !== sayfaAdresi(sayfa)) return <Navigate replace to={hedef} />;
   }
