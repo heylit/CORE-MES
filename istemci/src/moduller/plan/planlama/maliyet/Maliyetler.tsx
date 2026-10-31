@@ -69,7 +69,8 @@ function enTezgah(b: MaliyetBaglami, sid: string): string | null {
 export function Maliyetler(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma;
   const yonlen = useNavigate();
-  const b = useMemo(() => (o.yetki.maliyetOku ? maliyetBaglami(c) : null), [c, o.yetki.maliyetOku]);
+  const emirler = o.depo.durum?.emirler ?? null;
+  const b = useMemo(() => (o.yetki.maliyetOku ? maliyetBaglami(c, emirler) : null), [c, emirler, o.yetki.maliyetOku]);
   const V = useMemo(() => (!o.yetki.maliyetOku ? PARA_KILIDI : b ? maliyetIsisi(b) : { bos: 'Plan kurulunca her siparişin maliyeti kalem kalem burada görünür.' }), [b, o.yetki.maliyetOku]);
   const yaz = yazici(o.komut);
   const yazabilir = o.komut !== null && o.yetki.maliyetOku;

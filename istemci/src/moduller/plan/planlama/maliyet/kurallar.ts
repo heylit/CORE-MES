@@ -1,3 +1,4 @@
+import { bitenler, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi, PlanVerisi, Siparis, Tezgah } from '../tipler.ts';
 
 // P3'ün saf hesapları (205 a): maliyet, genel gider, ek mesai ve fason. Bugünkü sayfanın hesaplarının aynısıdır (cerceve/planlama/parca
@@ -842,19 +843,49 @@ export interface SiparisMaliyeti {
   fin: number | null; bek: Bekleme | null; top: number; eksik: string[]; tutar: number | null; gec: number; T: number | null; erken: number;
   kar: number | null; net: number | null;
 }
-export interface MaliyetBaglami { c: PlanlamaCalismasi; T: Takvim; I: Map<string, IsTanimi>; G: GenelGiderHesabi; W: BeklemeHesabi; MP: Record<string, number | null>; ops: PlanIsi[] }
-// Planın maliyet hesabı için bir kez kurulan bağlam; plan yoksa null.
-export function maliyetBaglami(c: PlanlamaCalismasi | null): MaliyetBaglami | null {
+// biten: plana girmeyen biten adımların iş kaydı (1379 a); yerleri yoktur (S, C NaN), yalnız maliyete girer.
+export interface MaliyetBaglami { c: PlanlamaCalismasi; T: Takvim; I: Map<string, IsTanimi>; G: GenelGiderHesabi; W: BeklemeHesabi; MP: Record<string, number | null>; ops: PlanIsi[]; biten: PlanIsi[] }
+// Planın maliyet hesabı için bir kez kurulan bağlam; plan yoksa null. emirler: sunucunun iş emri durumu (depo.durum.emirler); okunamadıysa
+// biten adım kayıtlı plandan çıkarılır (planda da başarısızlarda da olmayan adım), ekranın öteki görünümleri gibi.
+export function maliyetBaglami(c: PlanlamaCalismasi | null, emirler: unknown = null): MaliyetBaglami | null {
   if (!c || !c.plan || baslangicMs(c.D) === null) return null;
   const T = takvimKur(c);
   const I = isTanimlari(c, T);
-  return { c, T, I, G: genelGiderHesabi(c, T), W: beklemeHesabi(c, T, I), MP: mesaiPaylari(c, T), ops: planIsleri(c) };
+  const ops = planIsleri(c);
+  return { c, T, I, G: genelGiderHesabi(c, T), W: beklemeHesabi(c, T, I), MP: mesaiPaylari(c, T), ops, biten: bitenIsler(c, T, I, ops, emirler) };
+}
+// 1410 a (1379 a): biten adım plana girmez ama siparişin maliyetidir; sayılmazsa yarı bitmiş sipariş tam tutarına karşı yalnız kalan işin
+// maliyetiyle kârlı görünür. Gerçek tezgâh bilinmez: rotadaki ilk tanımlı tezgâh (motor/engine.betik bitenAdimMaliyeti ile aynı seçim),
+// planın süre hesabıyla (isTanimlari) ve rotadaki ayar süresiyle; fasonda rotadaki fasoncu. Tutar plandaki işle aynı formülle siparisMaliyeti'nde hesaplanır.
+function bitenIsler(c: PlanlamaCalismasi, T: Takvim, I: Map<string, IsTanimi>, ops: readonly PlanIsi[], emirler: unknown): PlanIsi[] {
+  const kayitli = alan(c, 'bitti');
+  const biten = new Set([
+    ...(nesneMi(kayitli) ? Object.keys(kayitli).filter((k) => kayitli[k]) : []),
+    ...(emirler !== null && emirler !== undefined ? bitenler(emirler, c.D) : plandanBitenler(c, planOku(c))).adim,
+  ]);
+  const planda = new Set(ops.map((r) => r.id));
+  const out: PlanIsi[] = [];
+  for (const s of aktifSiparisler(c.D)) {
+    for (const o of c.D.urunler.find((u) => u.id === s.urun)?.rota ?? []) {
+      const id = `${s.id}.${o.k}`;
+      const t = I.get(id);
+      if (!biten.has(id) || planda.has(id) || !t) continue;
+      const bos = { id, job: s.id, S: Number.NaN, C: Number.NaN, done: true, act: false, sl: null };
+      if (o.fason) { out.push({ ...bos, m: `@${o.fason}`, su: 0, run: 0, fas: true }); continue; }
+      const a = (o.tezgahlar ?? []).find((x) => T.M[x.id] !== undefined);
+      const sec = a ? t.secenekler.find((x) => x.m === a.id) : undefined;
+      // Tezgâhı takvimde olmayan adımın maliyeti bilinmez: ilk tanımlı tezgâh adıyla eksik yazılsın diye ücretsiz tezgâh kimliğiyle gelir.
+      out.push({ ...bos, m: a?.id ?? (o.tezgahlar?.[0]?.id ?? o.k), su: (sayiOku(a?.ayar) ?? 0) / 60, run: sec?.run ?? 0, fas: false });
+    }
+  }
+  return out;
 }
 export function siparisMaliyeti(b: MaliyetBaglami, s: Siparis): SiparisMaliyeti | null {
   const { c, T, I, G } = b;
   const D = c.D;
-  const ops = b.ops.filter((r) => r.job === s.id);
-  if (!ops.length) return null;
+  const plandaki = b.ops.filter((r) => r.job === s.id);
+  if (!plandaki.length) return null;
+  const ops = [...plandaki, ...b.biten.filter((r) => r.job === s.id)];
   let isl = 0, ayar = 0, fas = 0, gg = 0, ggBilinmez = false;
   const eksik: string[] = [];
   const ggEkle = (r: PlanIsi) => { const o = genelGiderOrani(D, G, r.m); if (o === null) ggBilinmez = true; else gg += (r.run + r.su) * o; };

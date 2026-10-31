@@ -237,6 +237,28 @@ describe('P3 saf hesaplar', () => {
     expect(W(true)?.tah ?? 0).toBeLessThan(0);
   });
 
+  it('1410 a: sipariş maliyeti ve kârı biten adımları da sayar (iş emri durumundan ya da kayıttaki bitenlerden); planda olan adım iki kez sayılmaz', () => {
+    // Tornalama bitti, planda yalnız kaplama kaldı. Gelir 1000; malzeme 30; tornalama 2 adet × 60 dk, acil pay %5 süreye eklenip ücretten düşer: 200; kaplama 10.
+    const yari = ornekCalisma({ plan: { dataVer: 1, ops: { 'S1.20': { id: 'S1.20', job: 'S1', m: '@F1', S: 10, C: 58, su: 0, run: 0, fas: true } }, J: { S1: { C: 58, T: 0 } } } });
+    const s = yari.D.siparisler[0]!;
+    const eski = siparisMaliyeti(maliyetBaglami(yari)!, s);
+    expect(eski?.isl).toBe(0);
+    expect(eski?.kar).toBeCloseTo(960);
+    const emirler = { orders: [], opStatus: { 'S1|root|1': 'tamam' } };
+    const m = siparisMaliyeti(maliyetBaglami(yari, emirler)!, s);
+    expect(m?.isl).toBeCloseTo(200);
+    expect(m?.fas).toBe(10);
+    expect(m?.kar).toBeCloseTo(760);
+    expect(siparisMaliyeti(maliyetBaglami({ ...yari, bitti: { 'S1.10': 1 } })!, s)?.kar).toBeCloseTo(760);
+    // Kaplama hem planda hem biten listesinde olsa da bir kez sayılır.
+    expect(siparisMaliyeti(maliyetBaglami({ ...yari, bitti: { 'S1.10': 1, 'S1.20': 1 } })!, s)?.fas).toBe(10);
+    // Biten adımın tezgâh ücreti bilinmezse kâr bilinmez (null), sıfır uydurulmaz.
+    const ucretsiz = { ...yari, D: { ...yari.D, tezgahlar: yari.D.tezgahlar.map((t) => ({ ...t, ucret: null })) } };
+    const u = siparisMaliyeti(maliyetBaglami(ucretsiz, emirler)!, s);
+    expect(u?.eksik).toContain('T1 saat maliyeti');
+    expect(u?.kar).toBeNull();
+  });
+
   it('1379 a: katkı payı siparişin bütün adımlarıyla; biten adım plana girmese de rotadaki ilk tezgâhın ücretiyle düşülür', () => {
     // Gelir 1000; malzeme 2 × 1,5 kg × 10 = 30; tornalama 2 adet × 60 dk × 100 TL/sa = 200; kaplama 2 × 5 = 10.
     const tam = ornekCalisma();

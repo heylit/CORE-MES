@@ -84,7 +84,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
     );
   }
 
-  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku ? siparisMaliyetleri(calisma) : null);
+  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku ? siparisMaliyetleri(calisma, depo.durum?.emirler ?? null) : null);
   const acilim = (r: DengeSatiri, ck: string) => {
     const A = dengeAcilimi(r, ck, V.sutunlar.find((x) => x.k === ck)?.ad ?? '');
     return (
