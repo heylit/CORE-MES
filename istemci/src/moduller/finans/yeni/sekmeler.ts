@@ -28,6 +28,8 @@ export interface EkranOzellikleri {
 const finansMenusu = IKINCI_MENULER.find((m) => m.kok === '/finans');
 if (!finansMenusu) throw new Error('Finans ikinci menüsü bulunamadı');
 type Madde = (typeof finansMenusu)['gruplar'][number]['maddeler'][number];
+// Kabuk şeridinin madde sayıları (firmalar, çekler) aynı uçtan sekmelere de yazılır: şerit bu ekranda çizilmez.
+export const SAYAC_UCU: string | undefined = finansMenusu.sayacUcu;
 export type SekmeAnahtari = Madde['anahtar'];
 
 // Sekme -> ekran ve sahibi parça. Firmalar ve Genel gider rakam yetkisi istemez (kendi işlemiyle açılır).
