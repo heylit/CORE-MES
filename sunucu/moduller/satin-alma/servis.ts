@@ -1397,7 +1397,7 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string):
     return {
       kaynak: 'satin-alma', kimlik: String(x.id), tarih: x.beklenenTeslim, no: x.no,
       baslik: x.no ? `Sipariş ${x.no}` : x.talepBasligi,
-      ilgili: (x.firmaId === null ? null : adlar.get(x.firmaId) ?? null) ?? (x.tedarikciAdi || null), durum: TAKVIM_TESLIM_DURUMU[durum], bitti: durum === 'tamam',
+      ilgili: x.firmaId === null ? x.tedarikciAdi || null : (adlar.get(x.firmaId) ?? (x.tedarikciAdi || null)), durum: TAKVIM_TESLIM_DURUMU[durum], bitti: durum === 'tamam',
     };
   });
 }

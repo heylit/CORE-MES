@@ -44,7 +44,7 @@ export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
       const satirlar = await alimAra(db, istek);
       const adlar = await firmaAdlari(db, [...new Set(satirlar.flatMap((s) => (s.firmaId === null ? [] : [s.firmaId])))]);
       return satirlar.map((s) => {
-        const tedarikci = (s.firmaId === null ? null : adlar.get(s.firmaId) ?? null) ?? (s.tedarikciAdi || null);
+        const tedarikci = s.firmaId === null ? s.tedarikciAdi || null : (adlar.get(s.firmaId) ?? (s.tedarikciAdi || null));
         const baslik = s.no ?? (s.siparisNo || s.talepNo);
         const logo = s.no !== null && s.siparisNo !== '' ? s.siparisNo : null;
         return {
