@@ -12,6 +12,7 @@ import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { gunlukFaizGetir } from '../finans/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -82,6 +83,8 @@ interface Baglam {
   katkilar: Map<number, string | null>;
   // Bedel ayarı (209 a) taslakta da canlı plan ayarından okunur: senaryo bedeli değiştirmez.
   bedelAyari: BedelAyari;
+  // 1383 a: finansın bugünkü TRY faizinin günlük yüzdesi; yoksa null ve bedel ayarındaki elle oran kullanılır.
+  finansmanOraniGun: number | null;
   defter: DegisiklikSatiri[];
   // Vardiya takvimi (PL-03, PL-04), anahtar 'tur:id' (makine, kişi, iş merkezi); null: takvim yok, sürekli çalışır sayılır.
   takvimler: Map<string, Aralik[] | null>;
@@ -406,7 +409,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri));
   }
   const b: Baglam = {
-    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
+    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(simdi)), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await ekMesaiTakvimde(db, hedef, simdi, await vardiyaOku(db, simdi, kaynaklar)),
     izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
@@ -855,7 +858,7 @@ function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number |
       bitDk: e.bit, teslimDk: satir ? teslimDk(b, satir.termin) : e.teslimDk, satir: satir && { ...satir, katkiPayi: b.katkilar.get(e.id) ?? null },
       carpan: emirCarpani(b, i ?? null), pay: i ? adetPayi(ham, i.adet) : 1,
     };
-  }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.bedelAyari.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
+  }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.finansmanOraniGun ?? b.bedelAyari.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
 }
 
 function gosterge(b: Baglam, yerler: readonly Yer[]) {
@@ -1119,6 +1122,11 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
 }
 
 // Bedel ayarı (209 a): plan sayfasını gören herkes okur; değiştirmek plan.bedel-ayari ister (210 a). Taslak verilirse taslağınki (148 a).
+// 1383 a: planın finansman oranı finansın o günkü TRY faizidir (günlük yüzde, aylık x 12 / 365); finansta yoksa null.
+export async function planFinansmanOrani(db: Db, gun: string): Promise<number | null> {
+  return (await gunlukFaizGetir(db, 'TRY', gun))?.gunlukYuzde ?? null;
+}
+
 export async function bedelAyari(db: Db, taslak?: number): Promise<BedelAyari> {
   await hedefDenetle(db, taslak ?? null);
   return s.bedelAyariOku(db, taslak ?? null);

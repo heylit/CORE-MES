@@ -114,12 +114,12 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
     const istekler = sunucuKur(['finans.kur-yaz']);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
-    expect(screen.getByText('yıllık %51,1')).toBeTruthy();
+    expect(screen.getByText('yıllık %42')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('USD aylık faiz (%)'), { target: { value: '0,4' } });
     fireEvent.click(screen.getByRole('button', { name: 'Faizi kaydet' }));
     await vi.waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toEqual({ paraBirimi: 'USD', gecerlilikBaslangic: '2026-10-13', aylikYuzde: 0.4 });
-    expect(yillikFaiz(3.5)).toBeCloseTo(51.11, 2);
+    expect(yillikFaiz(3.5)).toBeCloseTo(42, 6);
   });
 
   it('FNS-40: cevabı gelmeyen faiz gönderimi aynı istek kimliğiyle yinelenir', async () => {

@@ -1,3 +1,4 @@
+import { aylikFaizdenYillik, vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
 import type {
   Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus,
   Settings, Supplier, Weights,
@@ -711,7 +712,7 @@ function calcModal(r: PurchaseRequest, qid: string | undefined): void {
       ${cur !== "TRY" ? line("Kur", nfx.format(c.rate), rateHow) : ""}
       ${line("Toplam TL", money(c.totalTRY), cur !== "TRY" ? `${money(c.total, cur)} × ${nfx.format(c.rate)}` : "")}
       ${adv ? line("Avans (peşin ödenen)", money(c.totalTRY * adv), `%${nf0.format(adv * 100)}`) : ""}
-      ${days ? line("Vadeli kısmın bugünkü değeri", money(c.totalTRY * (1 - adv) / Math.pow(1 + c.monthly, days / 30)), `${money(c.totalTRY * (1 - adv))} ÷ (1 + %${nfx.format(c.monthly * 100)})^(${days} ÷ 30); ${cur} aylık fırsat maliyeti`) : line("Ödeme", "Peşin", "indirgeme yok")}
+      ${days ? line("Vadeli kısmın bugünkü değeri", money(c.totalTRY * (1 - adv) * vadeIndirimCarpani(c.monthly * 100, days)), `${money(c.totalTRY * (1 - adv))} ÷ (1 + %${nfx.format(aylikFaizdenYillik(c.monthly * 100))} × ${days} ÷ 365); ${cur} yıllık fırsat maliyeti, basit faiz`) : line("Ödeme", "Peşin", "indirgeme yok")}
       ${line("Net bugünkü maliyet", money(c.pvTRY), c.vadeGain > 0.5 ? `vade avantajı ${money(c.vadeGain)}` : "", "tot")}
       ${elig && x.fill > 0 ? line("Eksik kalemler için ekleme", "+ " + money(x.fill), "eksik kalemler diğer tekliflerin en yüksek fiyatıyla tamamlanır (yalnızca puanlamada)") : ""}
       ${elig ? `<tr class="sec"><td colspan="2"><b>3. Puan</b></td></tr>

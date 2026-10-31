@@ -25,6 +25,19 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
   });
 });
 
+describe('plan: finansman oranı finanstan gelir (1383 a)', () => {
+  test('finansın günlük oranı D.planAgirlik.fin olur, öbür ağırlıklar kalır; oran yoksa elle oran kalır', () => {
+    const kayit = { D: { planAgirlik: { fin: 0.13, taban: 12 }, planTL: {} } };
+    const finansli = calismayaMotorAyari(kayit, MOTOR_AYARI_VARSAYILAN, (3 * 12) / 365) as { D: { planAgirlik: { fin: number; taban: number } } };
+    assert.deepEqual(finansli.D.planAgirlik, { fin: (3 * 12) / 365, taban: 12 });
+    assert.equal(kayit.D.planAgirlik.fin, 0.13);
+    const elle = calismayaMotorAyari(kayit, MOTOR_AYARI_VARSAYILAN, null) as typeof kayit;
+    assert.deepEqual(elle.D.planAgirlik, { fin: 0.13, taban: 12 });
+    const bos = calismayaMotorAyari({ D: {} }, MOTOR_AYARI_VARSAYILAN, 0.1) as { D: { planAgirlik: unknown } };
+    assert.deepEqual(bos.D.planAgirlik, { fin: 0.1 });
+  });
+});
+
 // 776 b: tek tezgâhta iki sipariş. O1 öncelikli ve uzun, termini geç, listede önce; O2 kısa, termini erken. Kural sırayı belirler.
 const KAYIT = {
   version: 7, savedAt: 9,

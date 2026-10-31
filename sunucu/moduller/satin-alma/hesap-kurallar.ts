@@ -1,5 +1,6 @@
 // Teklif karşılaştırma hesabı: saf fonksiyonlar; veritabanı ve saat yok. Ekranın karar destek hesabının (merkez/calc.ts) sunucudaki
 // karşılığıdır (1094 b): onaya, siparişe ve rapora giden sayı tek yerde hesaplanır. Kalem ayrıntısı 1099 a ile gelir.
+import { vadeIndirimCarpani } from '#paylasilan/sozlesme/finans.ts';
 import type { Teklif } from '#paylasilan/sozlesme/satin-alma.ts';
 
 export type Kriter = 'maliyet' | 'termin' | 'tedarikci' | 'garanti';
@@ -74,7 +75,8 @@ export function teklifHesabi(q: HesapTeklifi, kalemler: readonly HesapKalemi[], 
   const faiz = o.aylikFaiz(q.paraBirimi);
   const avans = kirp((sayi(q.avansYuzdesi) ?? 0) / 100, 0, 1);
   const vadeli = q.vadeGun > 0 && avans < 1;
-  const carpan = avans + (1 - avans) / Math.pow(1 + (faiz ?? 0) / 100, q.vadeGun / 30);
+  // 1383 a: vadeli kısım basit faizle, 365 günlük yılla indirgenir (finansmanın tek tanımı).
+  const carpan = avans + (1 - avans) * vadeIndirimCarpani(faiz ?? 0, q.vadeGun);
   const fiyat = new Map(q.fiyatlar.map((f) => [f.kalemId, f]));
   const ham: { kalemId: string; birimFiyat: number; alinanMiktar: number; satirTutari: number; termin: number | null }[] = [];
   for (const k of kalemler) {

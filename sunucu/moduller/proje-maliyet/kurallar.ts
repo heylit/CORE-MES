@@ -1,4 +1,5 @@
 // Proje maliyet kuralları (197 a, 194 a). Saf: veritabanı ve saat yok. Tutarlar TRY, KDV hariç; tarihler tesis günü (YYYY-AA-GG).
+import { aylikFaizdenGunluk } from '#paylasilan/sozlesme/finansman.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { EksikVeri, KalemSatiri, MaliyetKalemi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
 
@@ -411,9 +412,9 @@ export function malzemePlani(
 // Bekleme finansmanının tabanı: bağlanan para. Genel gider, işten bağımsız ödenen yük olduğu için tabana girmez.
 export const FINANSMAN_TABANI = ['malzeme', 'isleme', 'ayar', 'fason', 'iscilik'] as const satisfies readonly MaliyetKalemi[];
 
-// PM-28: aylık faiz yüzdesinden günlük oran (yüzde / 100 x 12 / 365). Faiz yoksa null.
+// PM-28, 1383 a: aylık faiz yüzdesinden günlük oran (kesir), finansmanın tek tanımıyla (basit faiz, 365 gün). Faiz yoksa null.
 export function gunlukFaizOrani(aylikYuzde: number | null): number | null {
-  return aylikYuzde === null ? null : (aylikYuzde / 100) * 12 / 365;
+  return aylikYuzde === null ? null : aylikFaizdenGunluk(aylikYuzde) / 100;
 }
 
 // PM-29 (212 a, 213 a, ödeme vadesi üretim bitişinden): bekleme finansmanı = kaydın taban tutarı x günlük faiz x kaydın gününden tahsilata

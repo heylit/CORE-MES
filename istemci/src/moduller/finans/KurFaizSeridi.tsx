@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KurFaizOzeti } from '#paylasilan/sozlesme/finans.ts';
+import { aylikFaizdenYillik } from '#paylasilan/sozlesme/finansman.ts';
 import { Dugme, Girdi, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
@@ -22,8 +23,8 @@ const girdiSayisi = (metin: string): number | null => {
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 };
-// Aylık bileşik faizin yıllık karşılığı; girişin yanında gösterilir, kaydedilen aylıktır.
-export const yillikFaiz = (aylik: number): number => (Math.pow(1 + aylik / 100, 12) - 1) * 100;
+// 1383 a: aylık faizin yıllık karşılığı basit faizle (aylık x 12), finansmanın tek tanımıyla; girişin yanında gösterilir, kaydedilen aylıktır.
+export const yillikFaiz = aylikFaizdenYillik;
 const gunMetni = (tarih: string, bugun: string): string => (tarih === bugun ? 'bugün' : tarih.split('-').reverse().slice(0, 2).join('.'));
 // Giriş anı tesis saatiyle; bugünse "bugün 09:44".
 function girisMetni(iso: string, bugun: string): string {

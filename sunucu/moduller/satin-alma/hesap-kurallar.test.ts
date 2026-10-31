@@ -30,13 +30,14 @@ const ORTAM: HesapOrtami = {
 const yakin = (gercek: number | null, beklenen: number, hassasiyet = 0.01) =>
   assert.ok(gercek !== null && Math.abs(gercek - beklenen) < hassasiyet, `${gercek} ≈ ${beklenen}`);
 
-test('1094 b: teklif hesabı ekranla aynı formül: iskonto, kur, vade çarpanı, bugünkü değer', () => {
+test('1094 b, 1383 a: teklif hesabı ekranla aynı formül: iskonto, kur, basit faizli vade çarpanı, bugünkü değer', () => {
   const h = teklifHesabi(C, KALEMLER, ORTAM);
   // 20 × 38,5 + 30 × 24 + 10 × 18 = 1.670 €; %5 iskonto 1.586,5 €; × 37,2 = 59.017,8 ₺
   yakin(h.araToplam, 1670);
   yakin(h.toplam, 1586.5);
   yakin(h.tlToplam, 59017.8);
-  const carpan = 1 / Math.pow(1.003, 2);
+  // 1383 a: basit faiz, 365 gün: 1 / (1 + 0,3 x 12 / 365 / 100 x 60)
+  const carpan = 1 / (1 + (0.3 * 12 / 365 / 100) * 60);
   yakin(h.carpan, carpan, 1e-9);
   yakin(h.bugunkuDeger, 59017.8 * carpan);
   yakin(h.vadeKazanci, 59017.8 * (1 - carpan));
