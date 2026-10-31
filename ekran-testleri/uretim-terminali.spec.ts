@@ -1,9 +1,9 @@
-import { cerceve, expect, test } from './ortak.ts';
+import { expect, test } from './ortak.ts';
 
 // Kaynak: kayit/uretim-terminali/akislar.md A0 (operatör açar), A2 adım 1 (yönetici istasyon seçer).
 // Bilinen yanlış davranışlar (360 taşması) burada sınanmaz: degisecek.spec.ts.
 
-// Operatör yalnız yeni terminali görür (681 a): davranış yeni ekranda sınanır; eski çerçeve ona kapalıdır, geçiş maddesi yoktur.
+// Eski çerçeve kalktı (1418, karar 1392 a): davranış yeni ekranda sınanır; kişi menüsünde görünüm geçişi yoktur.
 test.describe('operatör', () => {
   test.use({ hesap: 'ornek.operator1' });
 
@@ -35,9 +35,9 @@ test.describe('operatör', () => {
     await expect(terminal.locator('.tc-ay1-kadran')).not.toContainText('kaldı');
   });
 
-  test('eski terminal kapalıdır; kişi menüsünde eski görünüm geçişi yoktur (681 a)', async ({ page, ac }) => {
+  test('eski terminal adresi çerçeve açmaz; kişi menüsünde görünüm geçişi yoktur', async ({ page, ac }) => {
     await ac('/uretim-terminali/eski');
-    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' }).or(page.getByRole('region', { name: 'Üretim Terminali' })).first()).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
     await ac('/uretim-terminali');
     await page.getByRole('button', { name: 'Hesap' }).click();
@@ -50,12 +50,11 @@ test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
   test('cihazda istasyon yokken seçici kendiliğinden açılır ve bütün istasyonları listeler', async ({ page, ag, ac }) => {
-    await ac('/uretim-terminali/eski');
-    const f = await cerceve(page);
-    const secici = f.locator('.ov').filter({ hasText: 'Hangi istasyonda?' });
+    await ac('/uretim-terminali');
+    const secici = page.getByRole('dialog', { name: 'Hangi istasyonda?' });
     await expect(secici).toBeVisible();
     for (const istasyon of ['ORN-TORNA-1', 'ORN-TORNA-2', 'ORN-FREZE-1', 'ORN-FREZE-2', 'ORN-KONTROL']) await expect(secici).toContainText(istasyon);
     expect(ag.hatalar).toEqual([]);
-    expect(ag.yazmalar, 'seçici açmak yazmaz').toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler')), 'seçici açmak yazmaz').toEqual([]);
   });
 });

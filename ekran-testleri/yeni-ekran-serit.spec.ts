@@ -2,7 +2,7 @@ import { kapaliModulYoluMu } from '#paylasilan/kapali-moduller.ts';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Yeni ekranda kabuk ikinci menü şeridini çizmez (soru 315 a): menünün maddeleri ekranın kendi sekmeleridir, üst üste iki şerit
-// kalmaz. Eski ekranda şerit durur. Adresler istemci/src/ortak/rota/yeni-ekran-menusu.ts'deki listedir.
+// kalmaz. Şeridi kendi menüsü olan ekranda şerit durur. Adresler istemci/src/ortak/rota/yeni-ekran-menusu.ts'deki listedir.
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
@@ -45,11 +45,12 @@ for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota
   });
 }
 
-// Üretim Hazırlık, Üretim Terminali ve Kuyruk da öyle (553 1 a, 2): eski görünümde de seçili madde aynıdır; Malzemeler ve Kalite Merkezi'nin eskisi yoktur (979 a).
+// Üretim Hazırlık, Üretim Terminali, Kuyruk, Malzemeler ve Kalite Merkezi de öyle (553 1 a, 2; 979 a). Eski `/eski` adreslerinin
+// yeni adrese gitmesi arkon, arkon-yeni ve uretim-terminali testlerinde sınanır (1392 a).
 const SERITLI = [
-  ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
-  ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
-  ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
+  ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
+  ['/uretim-terminali', 'Üretim Terminali', 'Operatör'],
+  ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'],
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
   ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;

@@ -7,8 +7,6 @@ import { anaSayfaKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts'
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
 import { IKINCI_MENU_TANIMLARI, adresMaddesiKapaliMi } from './ortak/rota/ikinci-menu.ts';
-import { YENI_EKRAN_ISLEMI } from './ortak/rota/yeni-ekran.tsx';
-import { eskiGorunumAdresiMi } from './ortak/rota/yeni-ekran-menusu.ts';
 import { KaliciEkranlar } from './ortak/rota/kalici.tsx';
 import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
@@ -51,12 +49,8 @@ function EkranAlani({ children }: { children: ReactNode }) {
 }
 
 // Menüde göremediği bölümü adresle açan kişi ekranı değil "yetkiniz yok" görür (195 a); menüdeki süzgeçle aynı kural.
-// Taşınan ekranın eski görünümü yalnız yöneticidedir (681 a): sayfayı gören başkası eski adresi açamaz.
 function AdresKorumasi({ islemler, children }: { islemler: readonly string[]; children: ReactNode }) {
   const { pathname } = useLocation();
-  if (eskiGorunumAdresiMi(pathname) && !islemler.includes(YENI_EKRAN_ISLEMI)) {
-    return <Kart baslik="Yetkiniz yok"><DurumKutusu durum="bos" mesaj="Eski görünüm yalnız yöneticiye açıktır." /></Kart>;
-  }
   if (adresMaddesiKapaliMi(IKINCI_MENU_TANIMLARI, pathname, islemler)) {
     return <Kart baslik="Yetkiniz yok"><DurumKutusu durum="bos" mesaj="Bu bölümü görme yetkiniz yok." /></Kart>;
   }

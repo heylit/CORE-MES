@@ -240,7 +240,7 @@ describe('Kabuk', () => {
       expect(secili('Reçete ve Rota')).toBeNull();
       unmount();
     }
-    // Eski adresine geçen yeni ekran (541) kendi ana menü satırını seçili tutar.
+    // Kuyruk ve Üretim Terminali'nin yeni ekranı (541) kendi ana menü satırını seçili tutar.
     const { unmount: kuyrukKapat } = yeniCiz('/kuyruk');
     expect(baslik()).toBe('Kuyruk');
     expect(secili('Kuyruk')).toBe('page');
@@ -251,13 +251,10 @@ describe('Kabuk', () => {
     expect(secili('Üretim Terminali')).toBe('page');
     expect(secili('Üretim Hazırlık')).toBeNull();
     terminalKapat();
-    // Alt yolda önek kuralı sürer: yeni ve eski görünüm aynı satırdadır.
-    for (const yol of ['/arkon/pano', '/arkon/eski/pano']) {
-      const { unmount } = yeniCiz(yol);
-      expect(baslik()).toBe('Üretim Hazırlık');
-      expect(secili('Üretim Hazırlık')).toBe('page');
-      unmount();
-    }
+    // Alt yolda önek kuralı sürer.
+    yeniCiz('/arkon/pano');
+    expect(baslik()).toBe('Üretim Hazırlık');
+    expect(secili('Üretim Hazırlık')).toBe('page');
   });
 
   it('yetkisi olmayan sayfanin adresinde baslik o sayfanin adini vermez', () => {

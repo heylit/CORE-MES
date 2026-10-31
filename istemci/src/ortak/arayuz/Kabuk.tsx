@@ -16,8 +16,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
-import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
-import { gorunumGecisi, seritAdresi, YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
+import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
@@ -198,8 +197,6 @@ export function Kabuk({
   const [menuDar, menuDarYaz] = useCihazTercihi(MENU_DAR_TERCIHI);
   const konum = useLocation();
   const gezin = useNavigate();
-  // Eski ve yeni görünüm arasındaki geçiş yalnız yöneticidedir (681 a); eski adresin kapısı App.tsx'tedir.
-  const gecis = islemler.includes(YENI_EKRAN_ISLEMI) ? gorunumGecisi(konum.pathname, islemler) : null;
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);
@@ -441,8 +438,6 @@ export function Kabuk({
                   sec: () => { acmaIstekleriYaz((o) => ({ ...o, [anahtar]: (o[anahtar] ?? 0) + 1 })); },
                 })),
                 { anahtar: 'yardim', baslik: 'Yardım ve rehber', simge: 'help', sec: () => { yardimYaz(true); } },
-                // Eski adresine geçen yeni ekranın eski görünümü (541); yalnız o sayfadayken çıkar, sayfayı gören açar.
-                ...(gecis === null ? [] : [{ anahtar: 'gorunum', baslik: gecis.baslik, simge: 'rotate' as const, sec: () => { void gezin(gecis.yol); } }]),
                 { anahtar: 'tema', baslik: tema === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç', simge: tema === 'dark' ? 'sun' : 'moon', sec: degistir },
                 { anahtar: 'performans', baslik: performansEtiketi, simge: 'gauge', sec: performansDegistir },
                 { anahtar: 'parola', baslik: 'Parolamı değiştir', simge: 'edit', sec: () => { parolaYaz(true); } },
@@ -455,7 +450,7 @@ export function Kabuk({
         {/* Yeni ekran menünün maddelerini kendi sekmesi olarak çizer; şerit yalnız çizilmez, menü açık kalır: çerçeveli düzen,
             tam ekran ve sayaçlar kökün menüsünden gelmeye devam eder. */}
         {ikinci && !yeniEkranAdresiMi(konum.pathname) && (
-          <IkinciMenu menu={ikinci} adres={seritAdresi(konum.pathname)} sayaclar={sayaclar} />
+          <IkinciMenu menu={ikinci} adres={konum.pathname} sayaclar={sayaclar} />
         )}
 
         <span className="tc-kabuk-tarama" aria-hidden="true" />
