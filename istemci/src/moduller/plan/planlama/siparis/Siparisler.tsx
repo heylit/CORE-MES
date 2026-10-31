@@ -31,7 +31,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
           <OrtusmeKarti c={calisma} p={p} />
         </>
       )}
-      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} />
+      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} emirler={depo.durum?.emirler ?? null} />
     </TumSatirlar>
   );
 
