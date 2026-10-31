@@ -1927,6 +1927,37 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await kapatmaKuyrugu([ia]), []);
   });
 
+  test('B-5 (1404): kalanı kapatılmış siparişte mal kabul düzeltmesi aynı işlemde geri alıp yeniden yazar; geri almasız ya da ayrı işlemdeki yazım reddedilir', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const ia = await siparisNo(s.id, a);
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoSonucu(ia, { kayitNo: '9500', satirlar: [{ satirId: satirA, logoSatirRef: '9501' }] });
+    await teslimEt(satirA, '1', 940401);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    const kapaliRed = (h: { mesaj?: string }) => /kalanı kapatıldı/.test(h.mesaj ?? '');
+    const net = async () => (await vt().tx((db) => db.tek<{ n: string }>(
+      'SELECT coalesce(sum(miktar), 0)::text AS n FROM satin_alma_teslim WHERE siparis_satiri_id = $1', [satirA])))!.n;
+    // Reddedilen: geri alma olmadan yeni mal kabul satırı kapalı siparişe yazılmaz.
+    await assert.rejects(teslimEt(satirA, '1', 940402), kapaliRed);
+    // İzinli: düzeltme (stok DEP-53) aynı işlemde eski teslimi geri alır, doğru miktarı yeni satırla yazar; büyük miktar da yazılır.
+    await vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 940401 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '1.5', malKabulSatirId: 940403 });
+    });
+    assert.equal(Number(await net()), 1.5);
+    assert.equal(siparisi(await acilistaki(s.id), a).logo?.kapatmaDurumu, 'bekliyor', 'düzeltme kapatmayı açmaz');
+    // Reddedilen: geri alma önceki işlemde kaldıysa sonraki işlemdeki yazım düzeltme sayılmaz.
+    await geriAl(940403);
+    await assert.rejects(teslimEt(satirA, '1.5', 940404), kapaliRed);
+    assert.equal(Number(await net()), 0);
+    // Reddedilen: aynı işlemde başka sipariş satırının teslimini geri almak kapalı satıra yazım izni vermez.
+    await teslimEt(satirB, '2', 940405);
+    await assert.rejects(vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 940405 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '2', malKabulSatirId: 940406 });
+    }), kapaliRed);
+  });
+
   test('#205 Kalanı kapat: irsaliyesiz kapatılan sipariş düzenlenmez; talep iptal edilince gitmemiş kapatma düşer, iptal gider; geç gelen kapatma sonucu yok sayılır', async () => {
     const { s, k2, a } = await bolunmusSiparis();
     const ia = await siparisNo(s.id, a);

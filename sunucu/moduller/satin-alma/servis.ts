@@ -921,12 +921,14 @@ export async function ayarlarKaydet(db: Db, a: AyarlarKaydetYazimi): Promise<Aya
 // Kalıp `kisiAdlari` ile aynı: boş dizide sorgu yok, olmayan kimlik sonuçta yok.
 // SH1 a: stok mal kabul işleminin içinde çağırır (çağıranın işlemi; yetki stok ucundadır). Kişi oturumdan, zaman sunucudan.
 // Kalanı aşan miktar reddedilmez, sipariş satırında fazla teslim görünür. Aynı mal kabul satırı ikinci kez yazılmaz.
+// Kalanı kapatılmış siparişe yalnız aynı işlemde geri alınmış teslimin düzeltmesi yazılır.
 export async function teslimIsle(db: Db, k: Kullanici, g: { siparisSatirId: number; miktar: string; malKabulSatirId: number }): Promise<void> {
   if (!ondalikMetinSemasi.safeParse(g.miktar).success || ondalikKiyas(g.miktar, '0') <= 0) throw gecersiz(ILETILER.teslimMiktari);
   const hedef = await s.teslimHedefiKilitle(db, g.siparisSatirId);
   if (hedef === null) throw gecersiz(ILETILER.teslimSiparisYok);
   if (hedef.talepDurumu !== 'siparis_verildi') throw gecersiz(ILETILER.teslimDurumu);
-  if (hedef.kapali) throw gecersiz(ILETILER.kapaliSipariseTeslim);
+  // Kapalı siparişte yalnız mal kabul düzeltmesi yazar: stok aynı işlemde önce eski teslimi geri alır (B-5).
+  if (hedef.kapali && !(await s.buIslemdeGeriAlindiMi(db, g.siparisSatirId))) throw gecersiz(ILETILER.kapaliSipariseTeslim);
   if ((await s.malKabulNetleri(db, g.malKabulSatirId)).length > 0) throw cakisma(ILETILER.teslimTekrar);
   await s.teslimEkle(db, g.siparisSatirId, g.malKabulSatirId, g.miktar, k.id);
 }
