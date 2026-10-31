@@ -152,8 +152,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'CA-IM', ad: 'Deneme merkez', aciklama: null });
     const istasyon = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'CA-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
     makineA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'CA-MA', ad: 'Deneme makine A', istasyonId: istasyon })).id;
-    // ADR 0018: canlıya alma ve kuyruk yazımı sunucu motoruyla dizer. Motor planlama sayfasının çalışma kaydı olmadan çözmez (409) ve
-    // vardiyası tanımsız tezgâha yer vermez (168 b): kayıt boş yazılır, makinenin iş merkezi her gün çalışır.
+    // ADR 0018: canlıya alma ve kuyruk yazımı sunucu motoruyla dizer. Motor vardiyası tanımsız tezgâha yer vermez (168 b): makinenin iş merkezi
+    // her gün çalışır; boş planlama kaydı testin motor ayarını (dondurma 0) taşır.
     const gun = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('CA gunduz', '00:00', '23:59') RETURNING id"))!.id;
     await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT $1, g, $2 FROM generate_series(1, 7) g', [merkez.id, gun]);
     await tamam(c.yonetici, 'POST', '/plan/planlama-kayitlari/yaz', {

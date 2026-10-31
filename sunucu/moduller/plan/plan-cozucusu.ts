@@ -16,8 +16,7 @@ import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 // Motorun yerleştiremediği iş yerlesmeyen'dedir, nedeni nedenler'de (981 a-1): plan onu yerleşmemiş bırakır, ötekiler yazılır. Vardiyası
 // tanımsız tezgâhın işi vardiyasiz'dadır (168 b): plan onu uyarıyla boş bırakır, komutu durdurmaz.
 export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: PlanMotoruIstegi) => {
-  const kaynak = await planCozumKaynagi(db);
-  if (kaynak === null) throw cakisma('Sunucu plan motoru planlama sayfasının çalışma kaydı olmadan plan kuramaz. Planlama sayfasını açıp bir kez kaydedin.');
+  const kaynak = await planCozumKaynagi(db, istek.simdi.getTime());
   // Girdi güncel motor ayarıyla gelir; taslak kendi sürümüyle dizilir (774 a).
   const { degerler } = await hedefMotorAyari(db, istek.taslakId);
   return coz({ ...kaynak, calisma: calismayaMotorAyari(kaynak.calisma, degerler) }, istek);

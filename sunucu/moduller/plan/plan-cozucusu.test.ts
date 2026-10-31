@@ -380,18 +380,20 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
 
   test('kaynaklar ve emirler kullanıcısız okunur; emri olmayan kuyruk işi yerleşmez', async () => {
     const k = await vt().tx((db) => planCozumKaynagi(db));
-    const d = k?.kaynak.durum as { machines: Array<{ id: string }> | null; emirler: unknown; routes: unknown } | undefined;
+    const d = k.kaynak.durum as { machines: Array<{ id: string }> | null; emirler: unknown; routes: unknown } | undefined;
     assert.deepEqual(d?.machines?.map((m) => m.id), [String(makineId)]);
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
     // N8: takvim eki planlama sayfasındaki gibi kurulur (iş merkezinin haftalık vardiyası)
-    assert.deepEqual(Object.keys((k?.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
+    assert.deepEqual(Object.keys((k.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
     assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [], malzemeBekleyen: [], nedenler: { 'E-404|10': 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.' } });
   });
 
-  test('planlama sayfasının çalışma kaydı yoksa komut reddedilir', async () => {
+  test('1408: planlama sayfasının çalışma kaydı yoksa çözücü boş çalışmayla bellekte çözer; kayıt yazılmaz', async () => {
     await vt().tx((db) => sorgular.planlamaKaydiSil(db, PLANLAMA_ANAHTARI));
-    await assert.rejects(vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-1|10'] }] }))), /çalışma kaydı/);
+    const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
+    assert.deepEqual(r.yerlesmeyen, ['E-404|10']);
+    assert.equal(await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)), null);
   });
 });

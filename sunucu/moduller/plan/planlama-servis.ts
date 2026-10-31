@@ -252,10 +252,11 @@ const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   islemler: [...new Set([...Object.values(KAYNAK_OKUMA).flat(), ...ACIK_SIPARIS_OKUMA])],
 };
 export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
-// Planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çalışma yoktur: null.
 // Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.
-export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null> {
-  return (await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU)).girdi;
+// 1408: planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çözücü sayfanın ilk açılışında kuracağı boş çalışmayla (657 a)
+// bellekte çözer, kayıt yazılmaz: eski motor kalkınca motor yerleşimi, önizleme ve hızlı deneme sayfa kaydı olmadan da çalışır.
+export async function planCozumKaynagi(db: Db, simdi: number = Date.now()): Promise<PlanCozumKaynagi> {
+  return (await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU, simdi)).girdi!;
 }
 
 // Planlama sayfasının açılışı (288 a). Eski çerçeve çalışmayı, Reçete ve Rota kaydını ve kaynak okumasını tarayıcıda girdi.betik ile
@@ -298,13 +299,16 @@ export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now())
 // Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki
 // dahil). Değerlendirme ucu (Soru 357 a) aynı girdiyle hesaplar. Çalışma yoksa (ya da kaydın biçimi eskiyse) girdi null; sürüm kaydınındır.
 // Plan amacı kayıttan değil güncel motor ayarından gelir (kart 811, 771 a): sayfa, değerlendirme ve sunucu motoru aynı amaçla hesaplar.
-export async function planlamaGirdisi(db: Db, kullanici: Kullanici): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null }> {
+// bosCalismaAni verilirse kayıt yokken girdi null olmaz: çalışma o günün boş çalışmasıdır (yalnız bellekte).
+export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAni?: number): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null }> {
   const satir = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
-  const calisma = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
+  const kayitli = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
   const surum = satir?.surum ?? null;
-  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return { surum, girdi: null };
+  const gecerli = kayitli !== null && kayitli.surum === PLANLAMA_SURUMU && !!kayitli.D;
+  if (!gecerli && bosCalismaAni === undefined) return { surum, girdi: null };
   const kayit = kayitDegeri(await receteRotaDurumu(db));
   const kaynak = await kaynakOku(db, kullanici);
+  const calisma = gecerli ? kayitli : yeniCalisma(kayit, kaynak, tesisGunu(bosCalismaAni!));
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
   const { degerler } = await hedefMotorAyari(db, null);
   return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler), kayit, kaynak: { durum: kaynak.durum, ek } } };

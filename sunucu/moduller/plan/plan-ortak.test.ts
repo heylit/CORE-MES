@@ -201,9 +201,9 @@ export function planTestOrtami() {
     makineA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MA', ad: 'Deneme makine A', istasyonId: istasyonA })).id;
     makineB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MB', ad: 'Deneme makine B', istasyonId: istasyonB })).id;
     operatorId = (await vt().tx((db) => db.tek<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme operator'")))!.id;
-    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez (168 b, 650 a: tezgâh kendi merkezinin haftasıyla)
-    // ve planlama sayfasının çalışma kaydı olmadan çözmez (409): merkez her gün tam gün çalışır (Motor A'nın takvimsiz varsayımı), kayıt boştur
-    // (vardiya, tezgâh ve emir canlıdan). Tam gün iki yarımdır: vardiyanın başı ve sonu aynı saat olamaz.
+    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez (168 b, 650 a: tezgâh kendi merkezinin haftasıyla):
+    // merkez her gün tam gün çalışır, planlama kaydı boştur (vardiya, tezgâh ve emir canlıdan) ve motor ayarını taşır. Tam gün iki yarımdır:
+    // vardiyanın başı ve sonu aynı saat olamaz.
     tamGun = (await ortam.sahip.sorgu<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('RT gun ilk yari', '00:00', '12:00'), ('RT gun son yari', '12:00', '00:00') RETURNING id")).map((x) => x.id);
     await tamGunVer(merkez.id);
     merkezId = merkez.id;
