@@ -912,7 +912,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual(onculler, [{ isEmriId: m, oncul: a, tur: 'bekleyen' }, { isEmriId: m, oncul: b, tur: 'bekleyen' }]);
   });
 
-  test('1257 a: dal çarpanı kaydedilir ve emre kopyalanır; 1 boş yazılır; ana hatta reddedilir; teorik miktar çarpanla büyür', async () => {
+  test('1257 a: dal çarpanı kaydedilir ve emre kopyalanır; 1 boş yazılır; ana hatta reddedilir; teorik miktar çarpanla büyür, bileşen miktarı büyümez', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();
     const k = await kaydet(id, 1, [yeniAdim({ dal: 'A', adetCarpani: 2 }), yeniAdim({ dal: 'B', adetCarpani: 1 }), yeniAdim({ birlesen: ['A', 'B'], bilesenler: [] })]);
@@ -920,6 +920,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const a = await ayrinti(id);
     assert.deepEqual(a.adimlar.map((x) => x.adetCarpani), [2, null, null]);
     assert.equal(Number(a.adimlar[0]?.adimMiktari), 2 * Number(a.adimlar[1]?.adimMiktari));
+    // Bileşen miktarı mamul başınadır; çarpan malzemeyi büyütmez (1333 a, 1409 a).
+    assert.ok(ortakHammadde);
+    assert.deepEqual(a.adimlar.slice(0, 2).map((x) => x.bilesenler.map((b) => b.toplamMiktar)), [['1'], ['1']]);
     // Alanı bilmeyen görünüm çarpanı silmez.
     const k2 = await kaydet(id, k.json<KomutCevabi>().surum, a.adimlar.map(govdeye));
     assert.equal(k2.statusCode, 200, k2.body);

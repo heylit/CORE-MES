@@ -51,6 +51,23 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     }] });
   });
 
+  it('1409 a: dal çarpanı dal etiketinde ayrı gösterilir; giren miktarı mamul başına kalır', async () => {
+    const adimlar = [
+      adimOrnegi({ dal: 'A', adetCarpani: 2 }),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o30', seq: 30, opNo: 30, birlesen: ['A', 'B'], ins: [] }),
+    ];
+    sunucuKur(OKUYAN, { durum: rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3, adimlar)]) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
+    const etiketler = [...bolge.querySelectorAll('.tc-rr1-daletiket')].map((e) => e.textContent?.trim());
+    expect(etiketler).toEqual(['Dal A 1 mamul için 2 adet', 'Dal B', 'Ana hat birleşir: A, B']);
+    // Bir mamul için giren 2 kg; çarpan girenin miktarını büyütmez.
+    const giren = within(bolge).getAllByText('HM-0012')[0]?.closest('.tc-rr1-cip');
+    expect(giren?.querySelector('.tc-rr1-cq')?.textContent).toMatch(/^2/);
+  });
+
   it('açık taslak onaya gönderilir; giren eksik rota onaya gitmez', async () => {
     const tam = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 4)]);
     const istekler = sunucuKur(YONETICI, {
