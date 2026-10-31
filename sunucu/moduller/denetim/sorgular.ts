@@ -91,15 +91,19 @@ export interface DegisiklikSuzgeci {
   baslangic: string | null;
   bitis: string | null;
   tablo: string | null;
+  kayitlar: readonly { tablo: string; anahtar: Record<string, unknown> }[] | null;
 }
 
+// Kayıt çifti tablo eşitliği ve anahtar kapsamasıyla eşleşir; tablo dizini önce daraltır.
 const DEGISIKLIK_SUZGECI = `FROM denetim_degisiklik d
   WHERE ($1::int IS NULL OR d.kisi_id = $1)
     AND ($2::date IS NULL OR d.zaman >= $2::date)
     AND ($3::date IS NULL OR d.zaman < $3::date + 1)
-    AND ($4::text IS NULL OR d.tablo = $4)`;
+    AND ($4::text IS NULL OR d.tablo = $4)
+    AND ($5::jsonb IS NULL OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements($5::jsonb) k WHERE d.tablo = k ->> 'tablo' AND d.anahtar @> (k -> 'anahtar')))`;
 
-const degisiklikSuzgecDegerleri = (s: DegisiklikSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.tablo];
+const degisiklikSuzgecDegerleri = (s: DegisiklikSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.tablo, s.kayitlar === null ? null : JSON.stringify(s.kayitlar)];
 
 export async function degisiklikSay(db: Db, s: DegisiklikSuzgeci): Promise<number> {
   return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${DEGISIKLIK_SUZGECI}`, degisiklikSuzgecDegerleri(s)))?.toplam ?? 0;
@@ -120,7 +124,7 @@ export function degisiklikler(db: Db, s: DegisiklikSuzgeci, dilim: Dilim): Promi
   return db.sorgu<DegisiklikSatiriHam>(
     `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.tablo, d.anahtar, d.islem,
             ARRAY(SELECT k FROM jsonb_object_keys(d.alanlar) AS k ORDER BY k) AS alan_adlari ${DEGISIKLIK_SUZGECI}
-      ORDER BY d.zaman DESC, d.id DESC LIMIT $5 OFFSET $6`,
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $6 OFFSET $7`,
     [...degisiklikSuzgecDegerleri(s), dilim.sinir, dilim.atla],
   );
 }

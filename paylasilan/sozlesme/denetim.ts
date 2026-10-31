@@ -56,12 +56,28 @@ export const kayitIcerigiCevabi = z.object({
 // Eski ve yeni değer içeriktir; kayıt gövdesiyle aynı yetkiyle (`denetim.govde-oku`) ayrı uçtan okunur.
 export const DEGISIKLIK_ISLEMLERI = ['ekle', 'guncelle', 'sil'] as const;
 
+const TABLO_ADI = /^[a-z_][a-z0-9_]{0,62}$/;
+
+export const kayitSecimi = z.object({
+  tablo: z.string().regex(TABLO_ADI),
+  anahtar: z.record(z.string().regex(/^[a-z_][a-z0-9_]{0,62}$/), z.union([z.number(), z.string().max(200), z.boolean()]))
+    .refine((a) => Object.keys(a).length > 0 && Object.keys(a).length <= 4, 'Anahtar 1-4 alan taşır.'),
+}).strict();
+
 export const degisiklikListesiSorgusu = z.object({
   ...sayfaSorguAlanlari,
   kisi: z.coerce.number().int().positive().max(2147483647).optional(),
   baslangic: tarihSemasi.optional(),
   bitis: tarihSemasi.optional(),
-  tablo: z.string().trim().regex(/^[a-z_][a-z0-9_]{0,62}$/).optional(),
+  tablo: z.string().trim().regex(TABLO_ADI).optional(),
+  // 1384 b: kayıt ekranındaki "Geçmiş" düğmesi; JSON dizisi. Satır, çiftlerden birinin tablosunda ve anahtarı o anahtarı
+  // kapsıyorsa döner ({ kisi_id: 3 } kişinin bütün rol satırlarını da getirir).
+  kayitlar: z.string().max(4000).transform((metin, ctx) => {
+    try { return JSON.parse(metin) as unknown; } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Kayıt listesi okunamadı.' });
+      return z.NEVER;
+    }
+  }).pipe(z.array(kayitSecimi).min(1).max(50)).optional(),
 }).superRefine((s, ctx) => {
   if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
@@ -103,6 +119,7 @@ export type KayitListesiCevabi = z.output<typeof kayitListesiCevabi>;
 export type SuzgecSecenekleriCevabi = z.output<typeof suzgecSecenekleriCevabi>;
 export type KayitIcerigiCevabi = z.output<typeof kayitIcerigiCevabi>;
 export type DegisiklikListesiSorgusu = z.input<typeof degisiklikListesiSorgusu>;
+export type KayitSecimi = z.output<typeof kayitSecimi>;
 export type DegisiklikSatiri = z.output<typeof degisiklikSatiri>;
 export type DegisiklikListesiCevabi = z.output<typeof degisiklikListesiCevabi>;
 export type DegisiklikSecenekleriCevabi = z.output<typeof degisiklikSecenekleriCevabi>;

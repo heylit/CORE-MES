@@ -9,7 +9,7 @@ Tek yazma yolu `denetimYaz` (`disari.ts`): uç katmanı her yazma komutunda ça�
 | `GET /denetim-kayitlari/suzgecler` | `denetim.oku` | kişi adları ve komut kalıpları; içerik yok | `süzgeç seçenekleri: ...` | `liste: ...` (operatör 403) |
 | `GET /denetim-kayitlari/:id/govde` | `denetim.govde-oku` | okumada `gizle` yeniden; yoksa 404 | `gövde ucu: ...` (yönetici) | aynı test (müdür ve operatör 403) |
 
-| `GET /denetim-degisiklikleri` | `denetim.oku` | değer taşımaz; tablo, kayıt anahtarı, işlem, alan adları | `degisiklik.test.ts` `liste: ...` (müdür) | `degisiklik.test.ts` `reddedilen: ...` (operatör 403, oturumsuz 401) |
+| `GET /denetim-degisiklikleri` | `denetim.oku` | değer taşımaz; tablo, kayıt anahtarı, işlem, alan adları; `kayitlar` süzgeci şemayla sınırlı (en çok 50 çift, tablo ve alan adı kalıpla, değer parametreyle gider; 1384 b) | `degisiklik.test.ts` `liste: ...` (müdür) | `degisiklik.test.ts` `reddedilen: ...` (operatör 403, oturumsuz 401); `kayıt süzgeci: ...` (bozuk liste 400, operatör 403) |
 | `GET /denetim-degisiklikleri/suzgecler` | `denetim.oku` | kişi ve tablo listesi | `degisiklik.test.ts` `liste: ...` | aynı red testi (operatör 403) |
 | `GET /denetim-degisiklikleri/:id/icerik` | `denetim.govde-oku` | okumada gizli adlı alanın iki değeri de maskelenir; yoksa 404 | `degisiklik.test.ts` `içerik: ...` (yönetici) | `degisiklik.test.ts` `reddedilen: ...` (müdür 403) |
 

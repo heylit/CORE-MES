@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
-  DegisiklikListesiSorgusu, DegisiklikSatiri, DenetimUclari, KayitListesiSorgusu, KayitSatiri,
+  DegisiklikListesiSorgusu, DegisiklikSatiri, DenetimUclari, KayitListesiSorgusu, KayitSatiri, KayitSecimi,
 } from '#paylasilan/sozlesme/denetim.ts';
 import { grupAdi, islemAdi } from '#paylasilan/islem-adlari.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -108,8 +109,30 @@ const tarihSuzgeci = (s: Suzgec) => ({
   ...(s.bitis === '' ? {} : { bitis: s.bitis }),
 });
 
-function degisiklikSorgusuKur(s: Suzgec, sayfa: number): DegisiklikListesiSorgusu {
-  return { sayfa, sayfaBoyu: SAYFA_BOYU, ...tarihSuzgeci(s), ...(s.tablo === '' ? {} : { tablo: s.tablo }) };
+function degisiklikSorgusuKur(s: Suzgec, sayfa: number, kayitlar: string | null): DegisiklikListesiSorgusu {
+  return {
+    sayfa, sayfaBoyu: SAYFA_BOYU, ...tarihSuzgeci(s), ...(s.tablo === '' ? {} : { tablo: s.tablo }), ...(kayitlar === null ? {} : { kayitlar }),
+  };
+}
+
+const kayitMi = (k: unknown): k is KayitSecimi => {
+  if (k === null || typeof k !== 'object') return false;
+  const { tablo, anahtar } = k as { tablo?: unknown; anahtar?: unknown };
+  return typeof tablo === 'string' && anahtar !== null && typeof anahtar === 'object' && !Array.isArray(anahtar)
+    && Object.values(anahtar).every((d) => ['number', 'string', 'boolean'].includes(typeof d));
+};
+
+// "Geçmiş" düğmesinin getirdiği kayıt listesi (1384 b); okunamayan adres süzgeçsiz açılır. Asıl doğrulama sunucudadır.
+function kayitlariOku(metin: string | null): { metin: string; etiket: string } | null {
+  if (metin === null) return null;
+  try {
+    const liste: unknown = JSON.parse(metin);
+    if (!Array.isArray(liste) || liste.length === 0 || liste.length > 50 || !liste.every(kayitMi)) return null;
+    const etiket = liste.map((k) => `${tabloAdi(k.tablo)} ${Object.values(k.anahtar).map(String).join('/')}`).join(', ');
+    return { metin, etiket };
+  } catch {
+    return null;
+  }
 }
 
 function sorguKur(s: Suzgec, sayfa: number): KayitListesiSorgusu {
@@ -127,14 +150,16 @@ function sorguKur(s: Suzgec, sayfa: number): KayitListesiSorgusu {
 // süzgeçlerle eski/yeni değer defterini (392 a) listeler; değer, gövde gibi `denetim.govde-oku` ister.
 export function DenetimKaydi() {
   const oturum = useOturum();
-  const [gorunum, gorunumYaz] = useState<Gorunum>('komutlar');
+  const [adres, adresYaz] = useSearchParams();
+  const kayitSuzgeci = kayitlariOku(adres.get('kayitlar'));
+  const [gorunum, gorunumYaz] = useState<Gorunum>(kayitSuzgeci ? 'degisiklikler' : 'komutlar');
   const [suzgec, suzgecYaz] = useState<Suzgec>(BOS_SUZGEC);
   const [sayfa, sayfaYaz] = useState(1);
   const [secili, seciliYaz] = useState<KayitSatiri | null>(null);
   const [seciliDegisiklik, seciliDegisiklikYaz] = useState<DegisiklikSatiri | null>(null);
   const komutlar = gorunum === 'komutlar';
   const sorgu = sorguKur(suzgec, sayfa);
-  const dSorgu = degisiklikSorgusuKur(suzgec, sayfa);
+  const dSorgu = degisiklikSorgusuKur(suzgec, sayfa, komutlar ? null : kayitSuzgeci?.metin ?? null);
   const secenekler = useQuery({ queryKey: anahtarlar.suzgecler, queryFn: () => cagri.get('/denetim-kayitlari/suzgecler'), enabled: komutlar });
   const dSecenekler = useQuery({
     queryKey: anahtarlar.degisiklikSuzgecleri, queryFn: () => cagri.get('/denetim-degisiklikleri/suzgecler'), enabled: !komutlar,
@@ -159,6 +184,14 @@ export function DenetimKaydi() {
   return (
     <Kart baslik="Denetim Kaydı">
       <div className="tc-denetim">
+        {kayitSuzgeci && !komutlar && (
+          <p className="tc-denetim-uyari">
+            <Simge ad="clock" boyut="k" />Bu kayıt: {kayitSuzgeci.etiket}
+            <Dugme onClick={() => { adresYaz((a) => { a.delete('kayitlar'); return a; }); sayfaYaz(1); }}>
+              <Simge ad="x" boyut="k" />Bütün değişiklikler
+            </Dugme>
+          </p>
+        )}
         <div className="tc-denetim-suzgec">
           <Secim
             etiket="Görünüm" value={gorunum} secenekler={GORUNUMLER}

@@ -182,6 +182,28 @@ describe('eski/yeni değer defteri (gerçek PostgreSQL)', () => {
     assert.deepEqual(cozulen.kisiler.map((k) => k.id), [yoneticiId]);
   });
 
+  // 1384 b: kayıt ekranındaki "Geçmiş" düğmesi listeyi tablo ve anahtar çiftleriyle süzer; anahtar kapsamayla eşleşir.
+  test('kayıt süzgeci: çiftlerden birine uyan satırlar gelir; kısmi anahtar kapsar; bozuk liste 400, operatör 403', async () => {
+    for (const [kisi, rol] of [[12, 1], [12, 2], [13, 1]]) {
+      await kisiyle(String(yoneticiId), (db) => db.sorgu('INSERT INTO deneme_yetki (kisi_id, rol_id) VALUES ($1, $2)', [kisi, rol]));
+    }
+    const kayitlar = encodeURIComponent(JSON.stringify([{ tablo: 'deneme_yetki', anahtar: { kisi_id: 12 } }, { tablo: 'deneme_kart', anahtar: { id: 5 } }]));
+    const liste = await oku<DegisiklikListesiCevabi>(mudur, `/denetim-degisiklikleri?kayitlar=${kayitlar}&sayfaBoyu=50`);
+    assert.equal(liste.durum, 200, JSON.stringify(liste.govde));
+    assert.deepEqual(
+      liste.govde.satirlar.map((s) => [s.tablo, s.anahtar]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      [['deneme_kart', { id: 5 }], ['deneme_kart', { id: 5 }], ['deneme_yetki', { kisi_id: 12, rol_id: 1 }], ['deneme_yetki', { kisi_id: 12, rol_id: 2 }]],
+    );
+    assert.equal(liste.govde.toplam, 4);
+    // Tablo adı eşleşmeyen çift başka tablonun aynı anahtarlı satırını getirmez.
+    const yanlis = encodeURIComponent(JSON.stringify([{ tablo: 'deneme_yetki', anahtar: { id: 5 } }]));
+    assert.equal((await oku<DegisiklikListesiCevabi>(mudur, `/denetim-degisiklikleri?kayitlar=${yanlis}`)).govde.toplam, 0);
+    for (const bozuk of ['{', '[]', JSON.stringify([{ tablo: 'x;drop', anahtar: { id: 1 } }]), JSON.stringify([{ tablo: 'deneme_kart', anahtar: {} }])]) {
+      assert.equal((await oku(mudur, `/denetim-degisiklikleri?kayitlar=${encodeURIComponent(bozuk)}`)).durum, 400, bozuk);
+    }
+    assert.equal((await oku(operator, `/denetim-degisiklikleri?kayitlar=${kayitlar}`)).durum, 403);
+  });
+
   test('içerik: denetim.govde-oku ile eski ve yeni değer gelir, gizli adlı alanın iki değeri de maskelenir', async () => {
     const liste = await oku<DegisiklikListesiCevabi>(yonetici, '/denetim-degisiklikleri?tablo=deneme_kart&sayfaBoyu=50');
     const id = liste.govde.satirlar.find((s) => s.anahtar.id === 6)?.id ?? 0;
