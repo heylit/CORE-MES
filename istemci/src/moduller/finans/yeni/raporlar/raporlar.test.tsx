@@ -22,7 +22,7 @@ const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POS
 describe('F3 Durum ve öneriler', () => {
   it('skor, öneriler ve göstergeler gelir; finans.yaz varsa öneri durumu tek uca gider', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/oneriler/durum': tamam });
-    finansAc('/finans/yeni/durum');
+    finansAc('/finans/durum');
     const oneriler = await screen.findByRole('region', { name: 'Öneriler' });
     expect(screen.getByRole('img', { name: /^Finansal sağlık skoru / })).toBeTruthy();
     expect(screen.getByText('Temel göstergeler')).toBeTruthy();
@@ -35,7 +35,7 @@ describe('F3 Durum ve öneriler', () => {
 
   it('Kapat "kapatildi" gönderir; Kapatılan süzgecinde kayıtlı kapatılan öneri Yeniden aç ile gelir', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/oneriler/durum': tamam });
-    finansAc('/finans/yeni/durum');
+    finansAc('/finans/durum');
     const oneriler = await screen.findByRole('region', { name: 'Öneriler' });
     fireEvent.click(within(oneriler).getAllByRole('button', { name: 'Kapat' })[0]!);
     await waitFor(() => expect(yazmalar(istekler)[0]?.govde).toMatchObject({ durum: 'kapatildi' }));
@@ -45,7 +45,7 @@ describe('F3 Durum ve öneriler', () => {
 
   it('finans.yaz yoksa öneri durum düğmeleri yok; bilanço yalnız okunur', async () => {
     const istekler = sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/durum');
+    finansAc('/finans/durum');
     const oneriler = await screen.findByRole('region', { name: 'Öneriler' });
     expect(within(oneriler).queryByRole('button', { name: 'Uyguluyorum' })).toBeNull();
     expect(within(oneriler).queryByRole('button', { name: 'Kapat' })).toBeNull();
@@ -56,7 +56,7 @@ describe('F3 Durum ve öneriler', () => {
 
   it('finans.yonet ile bilanço alanı bırakılınca ayar ucuna kayıtlı sürümle gider', async () => {
     const istekler = sunucuKur(YONETEN, { 'POST /finans/ayar/guncelle': () => json(200, { ayar: {} }) });
-    finansAc('/finans/yeni/durum');
+    finansAc('/finans/durum');
     const alan = await screen.findByLabelText(/Dönen varlıklar/);
     fireEvent.change(alan, { target: { value: '500000' } });
     fireEvent.blur(alan);
@@ -66,7 +66,7 @@ describe('F3 Durum ve öneriler', () => {
 
   it('"İlgili ekran" bulgunun bölümüne, "Nasıl hesaplandı?" Tahminler\'deki modele gider', async () => {
     sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/durum');
+    finansAc('/finans/durum');
     const oneriler = await screen.findByRole('region', { name: 'Öneriler' });
     fireEvent.click(within(oneriler).getAllByRole('button', { name: 'Nasıl hesaplandı?' })[0]!);
     await screen.findByRole('heading', { name: 'Teknik ayrıntılar' });
@@ -77,7 +77,7 @@ describe('F3 Durum ve öneriler', () => {
 describe('F3 Gelir tablosu', () => {
   it('6 ay varsayılan, 12 ay seçilince sütunlar artar; CSV ve yazdır herkese açık', async () => {
     sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/gelir-tablosu');
+    finansAc('/finans/gelir-tablosu');
     const tablo = await screen.findByRole('table', { name: 'Gelir tablosu' });
     const sutun = () => within(tablo).getAllByRole('columnheader').length;
     expect(sutun()).toBe(8);
@@ -92,7 +92,7 @@ describe('F3 Gelir tablosu', () => {
 describe('F3 Karar araçları', () => {
   it('girdi kesinleşince (alan bırakılınca) başabaş yeniden hesaplanır, uca istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/karar-araclari');
+    finansAc('/finans/karar-araclari');
     const sabit = await screen.findByLabelText('Aylık sabit gider');
     expect(screen.getByText('1.072 adet')).toBeTruthy();
     fireEvent.change(sabit, { target: { value: '840000' } });
@@ -106,7 +106,7 @@ describe('F3 Karar araçları', () => {
 describe('F3 Ay sonu kapanışı', () => {
   it('finans.yaz ile işaret tek uca gider; banka ve çek düğmeleri kayıt formunu açar', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/kapanis/isaretle': tamam });
-    finansAc('/finans/yeni/ay-sonu');
+    finansAc('/finans/ay-sonu');
     const kutu = await screen.findByRole('checkbox', { name: /Kasa sayımı/ });
     await waitFor(() => expect((kutu as HTMLInputElement).disabled).toBe(false));
     fireEvent.click(kutu);
@@ -118,7 +118,7 @@ describe('F3 Ay sonu kapanışı', () => {
 
   it('finans.yaz yoksa işaretler kilitli, banka ve çek düğmeleri yok', async () => {
     sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/ay-sonu');
+    finansAc('/finans/ay-sonu');
     const kutular = await screen.findAllByRole('checkbox');
     expect(kutular).toHaveLength(10);
     for (const k of kutular) expect((k as HTMLInputElement).disabled).toBe(true);
@@ -128,7 +128,7 @@ describe('F3 Ay sonu kapanışı', () => {
 
   it('kayıtlı işaret seçili ayda görünür', async () => {
     sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/ay-sonu');
+    finansAc('/finans/ay-sonu');
     await screen.findAllByRole('checkbox');
     fireEvent.click(screen.getByRole('button', { name: /^Eyl 26$/ }));
     expect((screen.getByRole('checkbox', { name: /Banka mutabakatı/ }) as HTMLInputElement).checked).toBe(true);
@@ -139,7 +139,7 @@ describe('F3 Ay sonu kapanışı', () => {
 describe('F3 Tahminler ve doğruluk', () => {
   it('dört karne kartı ve altı model bölümü gelir; yazma yok', async () => {
     const istekler = sunucuKur(OKUYAN);
-    finansAc('/finans/yeni/tahminler');
+    finansAc('/finans/tahminler');
     await screen.findByRole('heading', { name: 'Teknik ayrıntılar' });
     for (const b of ['Nakit tahmini', 'Satış tahmini', 'Tahsilat ve alacak kaybı', 'Müşteri risk notları']) expect(screen.getByRole('heading', { name: b })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '1. Monte Carlo nakit simülasyonu' })).toBeTruthy();

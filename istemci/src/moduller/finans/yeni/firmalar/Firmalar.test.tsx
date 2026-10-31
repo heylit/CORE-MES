@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const ekle = (k: Kullanici, id: number, ...islem: string[]): Kullanici => ({ ...k, id, islemler: [...k.islemler, ...islem] as Kullanici['islemler'] });
 const KART_YAZAN = ekle(FIRMACI, 11, 'musteri-tedarikci.yaz');
 const TAM = ekle(YAZAN, 12, 'musteri-tedarikci.yaz');
-const LISTE = '/finans/yeni/firmalar';
+const LISTE = '/finans/firmalar';
 
 const kartCevabi = (o: Parameters<typeof ornekFirma>[0] = {}) => () => json(200, { firma: ornekFirma(o), adresler: [] });
 // Firma 4 finansta kaydı olmayan firmadır: pasife alma ön denetiminden geçer.
