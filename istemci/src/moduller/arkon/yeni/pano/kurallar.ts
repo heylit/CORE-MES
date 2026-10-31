@@ -264,9 +264,10 @@ export const tmiIsi = (p: Pick<Pkg, 'id'>): boolean => String(p.id).startsWith('
 export const onayBekliyor = (p: Pick<Pkg, 'apReq' | 'approval'> | null | undefined): boolean => !!(p && p.apReq && !(p.approval && p.approval.at >= p.apReq.at));
 
 export type KartDurumu = 'draft' | 'review' | 'published' | 'production' | 'done';
+// Bu iş paketinin durumudur, üretim emrinin değil: ad "Paket:" ile başlar ki emir durumuyla karışmasın (1417 a).
 export const KART_DURUMLARI: Readonly<Record<KartDurumu, { etiket: string; renk: Renk }>> = {
-  draft: { etiket: 'Taslak', renk: 'idle' }, review: { etiket: 'Onayda', renk: 'done' }, published: { etiket: 'Yayında', renk: 'run' },
-  production: { etiket: 'Üretimde', renk: 'hazard' }, done: { etiket: 'Tamamlandı', renk: 'done' },
+  draft: { etiket: 'Paket: Taslak', renk: 'idle' }, review: { etiket: 'Paket: Onayda', renk: 'done' }, published: { etiket: 'Paket: Yayında', renk: 'run' },
+  production: { etiket: 'Paket: Üretimde', renk: 'hazard' }, done: { etiket: 'Paket: Tamamlandı', renk: 'done' },
 };
 // Kart rozeti (PSTAT seçimi): bitmiş, üretimde, kalite onayında, yoksa paketin kendi durumu.
 export function kartDurumu(p: Pkg, r: Result | null | undefined): KartDurumu {

@@ -7,6 +7,8 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 const BOLUMLER = [
   { sekme: 'Üretim emirleri', parca: 'R3' }, { sekme: 'Stok', parca: 'R3' }, { sekme: 'Ürün ve rotalar', parca: 'R1' },
   { sekme: 'Operasyonlar', parca: 'R1' }, { sekme: 'Süreler', parca: 'R2' }, { sekme: 'Malzemeler', parca: 'R2' }, { sekme: 'Kaynaklar', parca: 'R2' },
+  // Emrin evi (1416 a): kapanış onayları burada verilir.
+  { sekme: 'Kapanış onayları', parca: 'R3' },
 ] as const;
 
 // Şerit maddesinin adı sayı rozeti taşıyabilir (Üretim emirleri 2): ad baştan eşlenir.

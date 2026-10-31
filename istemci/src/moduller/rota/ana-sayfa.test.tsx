@@ -122,7 +122,7 @@ describe('rota ana sayfa kartları (#489)', () => {
   it('#1085: üretim akışı özetin sayılarını adımlara yazar; geciken adımı uyarı tonunda; aynı özet isteğini paylaşır', async () => {
     const yollar = kur();
     const tablo = await screen.findByRole('table', { name: 'Üretim akışı' });
-    await waitFor(() => expect([...tablo.querySelectorAll('tr')].map((r) => r.textContent)).toEqual(['Taslak1', 'Planlı2', 'Üretimde2', 'Geciken2', 'Biten1']));
+    await waitFor(() => expect([...tablo.querySelectorAll('tr')].map((r) => r.textContent)).toEqual(['Taslak1', 'Planlı2', 'Başladı2', 'Geciken2', 'Biten1']));
     const akis = screen.getByText('Üretim akışı', { selector: '.tc-grafik-baslik' }).closest('.tc-grafik-karti');
     expect([...(akis?.querySelectorAll('.tc-akis-adim[data-dikkat]') ?? [])].map((a) => a.querySelector('.tc-akis-etiket')?.textContent)).toEqual(['Geciken']);
     await waitFor(() => expect(akis?.getAttribute('href')).toBe('/uretim-emirleri'));

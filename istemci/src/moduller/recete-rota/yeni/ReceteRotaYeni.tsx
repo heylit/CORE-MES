@@ -23,7 +23,7 @@ export const PLAN_VERISI_EKSIK = 'İstasyon, makine ya da iş merkezi listesi bu
 // Eski ekranın bölüm başı (sec-head): başlık ve altında kısa açıklama. Metinler bugünkü bağlı ekranın davranışına göredir. Ürün ve rotalar'da
 // eski ekranda başlık yoktur (şema araç çubuğuyla başlar); Kaynaklar'da açıklama yoktur.
 export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> = {
-  orders: 'Serbest ve üretimdeki emirler birlikte planlanır: önce öncelik, sonra teslim tarihi sırasıyla istasyonlara yerleştirilir ve stok emirler '
+  orders: 'Planlı ve başlamış emirler birlikte planlanır: önce öncelik, sonra teslim tarihi sırasıyla istasyonlara yerleştirilir ve stok emirler '
     + 'arasında bu sırayla paylaştırılır. Taslak emirler plana girmez.',
   stock: 'Eldeki serbest stoktur; statülü miktar üretimdeki yarı parçadır ve aşağıda ayrıca görünür. Stok hareketleri Stok sayfasıyla ortaktır.',
   schema: null,
@@ -36,11 +36,12 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
     + 'okunurdur. Birim maliyet Finans\'ta tutulur: rotası olan yarı mamul ve mamullerin malzeme maliyeti adımlara giren malzemelerden toplanır.',
   res: null,
   sartnameler: null,
+  kapanis: null,
 };
-// Şartname ve talimatlar kendi sayfa başlığını çizer (prototip).
-const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler']);
-// Kütüphane sayfası planla ilgisizdir: plan şeridi çizilmez (prototipte yoktur).
-const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler']);
+// Şartname ve talimatlar (prototip) ve kapanış onayları kendi başlığını çizer.
+const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler', 'kapanis']);
+// Kütüphane ve kapanış sayfası planla ilgisizdir: plan şeridi çizilmez.
+const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis']);
 
 // İkinci menü sayıları, eski ekranın kuralıyla (Sayaclar.hesapla): aktif emir (serbest ve üretimde), minimumun altındaki kalem, onayda
 // (yoksa taslak) rota revizyonu, operasyon ve malzeme sayısı. Okunamayan dilimin sayısı null'dır. Eski ekran boş stoğu 0 sayardı; burada

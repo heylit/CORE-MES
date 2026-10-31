@@ -1,14 +1,10 @@
 import type {
-  ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, CalismaDurumu, Emir, EmirDurumu, KayitOlayi, UretimKaydi,
+  ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, Emir, EmirDurumu, KayitOlayi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi, type KapanisSonucu } from '#paylasilan/sozlesme/emir-durumu.ts';
 
-export const DURUM_ETIKETI: Record<EmirDurumu, string> = {
-  taslak: 'Taslak', planli: 'Planlı', basladi: 'Başladı', bitti: 'Üretimi bitti', iptal: 'İptal',
-};
-export const DURUM_TONU: Record<EmirDurumu, RozetTonu> = {
-  taslak: 'pasif', planli: 'bilgi', basladi: 'uyari', bitti: 'tamam', iptal: 'pasif',
-};
+// Ad ve ton tek sözlükten (1389 a); bu modül ve başka ekranlar aynı adı yazar.
+export const DURUM_ETIKETI = Object.fromEntries(Object.entries(EMIR_DURUMU).map(([d, g]) => [d, g.etiket])) as Record<EmirDurumu, string>;
 // İş emirli emri okuyabilen işlemler; tip sözleşmedeki listeye birebir eşit olmak zorundadır (sapma derlemede yakalanır).
 export const ADIMLI_OKUMA_ISLEMLERI: typeof SUNUCUDAKI_LISTE = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'];
 
@@ -30,20 +26,11 @@ export function farkMetni(adet: number, saglamAdet: number | null): string | nul
   return fark < 0 ? `Emir adedinden ${-fark} eksik` : `Emir adedinden ${fark} fazla`;
 }
 
-export const CALISMA_ETIKETI: Record<CalismaDurumu, string> = { calisiyor: 'Çalışıyor', durakli: 'Duraklı', durdu: 'Durdu' };
-export const CALISMA_TONU: Record<CalismaDurumu, RozetTonu> = { calisiyor: 'tamam', durakli: 'uyari', durdu: 'hata' };
+export type KapanisSonucuAlani = { kapanisSonucu?: KapanisSonucu | null };
 
-// Onaylı kapanışın sonucu (1082 a): son adımda emir "Üretimi bitti" olur; kalite ve müdür onayından sonra "Tamamlandı".
-export type KapanisSonucuAlani = { kapanisSonucu?: 'tamamlandi' | 'saglamsiz' | null };
-const KAPANIS_SONUC_ETIKETI = { tamamlandi: 'Tamamlandı', saglamsiz: 'Kapandı (sağlamsız)' } as const;
-
-// Başlamış emirde ayrım çalışma durumundan gelir (emir durumu `basladi` kalır); canlı bilgi yoksa nötr "Başladı".
-export function durumGosterimi(emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonucuAlani): { etiket: string; ton: RozetTonu } {
-  const calisma = emir.durum === 'basladi' ? emir.canli?.calisma : null;
-  if (calisma) return { etiket: CALISMA_ETIKETI[calisma], ton: CALISMA_TONU[calisma] };
-  if (emir.durum === 'bitti' && emir.kapanisSonucu) return { etiket: KAPANIS_SONUC_ETIKETI[emir.kapanisSonucu], ton: DURUM_TONU.bitti };
-  return { etiket: DURUM_ETIKETI[emir.durum], ton: DURUM_TONU[emir.durum] };
-}
+// Başlamış emirde canlı çalışma durumu adın ikinci parçasıdır ("Başladı · Duraklı"); canlı bilgi yoksa yalnız "Başladı".
+export const durumGosterimi = (emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonucuAlani): DurumGosterimi =>
+  emirDurumuGosterimi({ durum: emir.durum, kapanisSonucu: emir.kapanisSonucu ?? null, calisma: emir.canli?.calisma ?? null });
 
 // Başlamışta canlı sayaç, bitmişte kapanış adedi; öbürlerinde yok (sıfır uydurulmaz).
 export function saglamSayisi(emir: Pick<Emir, 'durum' | 'canli' | 'saglamAdet'>): number | null {

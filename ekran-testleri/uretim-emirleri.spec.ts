@@ -1,6 +1,6 @@
 import { expect, test } from './ortak.ts';
 
-// Kaynak: kayit/uretim-emirleri/akislar.md A1 (izleme), A5 (Fasona al penceresi), A6 (refakat kartları, Soru 586).
+// Kaynak: kayit/uretim-emirleri/akislar.md A1 (izleme), A5 (Fasona al Reçete ve Rota'ya taşındı, 1391 a), A6 (refakat kartları, Soru 586).
 test.use({ hesap: 'ornek.planlama' });
 
 test('liste: açık emirler, süzgeç ve Bitenler sekmesi', async ({ page, ag, ac }) => {
@@ -40,16 +40,12 @@ test('ayrıntı: satırdan emre gidilir, adımlar görünür, listeye dönülür
   expect(ag.yazmalar).toEqual([]);
 });
 
-test('Fasona al penceresi açılır ve vazgeçince kayıt değişmez', async ({ page, ag, ac }) => {
+test('ayrıntı salt okumadır (1391 a): adımlar görünür, Fasona al düğmesi yok, yazma yok', async ({ page, ag, ac }) => {
   await ac('/uretim-emirleri/2');
-  const satir = page.getByRole('table', { name: 'Operasyon adımları' }).getByRole('row').filter({ has: page.getByRole('button', { name: 'Fasona al' }) }).first();
-  await satir.getByRole('button', { name: 'Fasona al' }).click();
-  const pencere = page.getByRole('dialog');
-  await expect(pencere).toBeVisible();
-  await expect(pencere).toContainText('nerede yapılsın');
-  await pencere.getByRole('button', { name: 'Vazgeç' }).click();
-  await expect(pencere).toBeHidden();
-  expect(ag.yazmalar, 'vazgeçilen pencere yazmaz').toEqual([]);
+  await expect(page.getByRole('table', { name: 'Operasyon adımları' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Fasona al|Stoka tamamla)$/ })).toHaveCount(0);
+  await expect(page.getByText("Üretim yeri Reçete ve Rota'daki emirde değiştirilir.")).toBeVisible();
+  expect(ag.yazmalar).toEqual([]);
   expect(ag.hatalar).toEqual([]);
 });
 

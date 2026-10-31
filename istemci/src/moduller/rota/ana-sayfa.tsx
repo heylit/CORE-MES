@@ -10,6 +10,7 @@ import { SayiKarti } from '../../ortak/arayuz/SayiKarti.tsx';
 import type { AnaSayfaKarti } from '../../ortak/rota/ana-sayfa.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
 // İki kart sunucunun saydığı revizyon özetini okur (tek istek, ürün listesi taşınmaz); anahtar liste anahtarının altındadır, liste yenilenince o da yenilenir.
@@ -39,7 +40,7 @@ function useEmirListesiYolu(): string | undefined {
 
 function AcikEmir() {
   const o = useEmirOzeti();
-  return <SayiKarti baslik="Açık emir" simge="list" sayi={o.data?.acik} altMetin="Taslak, serbest ya da üretimde" yol={useEmirListesiYolu()} hata={o.isError} />;
+  return <SayiKarti baslik="Açık emir" simge="list" sayi={o.data?.acik} altMetin={`${EMIR_DURUMU.taslak.etiket}, ${EMIR_DURUMU.planli.etiket.toLocaleLowerCase('tr-TR')} ya da ${EMIR_DURUMU.basladi.etiket.toLocaleLowerCase('tr-TR')}`} yol={useEmirListesiYolu()} hata={o.isError} />;
 }
 function GecikenEmir() {
   const o = useEmirOzeti();
@@ -53,9 +54,10 @@ function UretimAkisi() {
       baslik="Üretim akışı" simge="layers" yol={useEmirListesiYolu()} hata={o.isError}
       altMetin="Arşive alınmamış üretim emirleri"
       adimlar={[
-        { etiket: 'Taslak', sayi: o.data?.taslak, altMetin: 'Planlanacak' },
-        { etiket: 'Planlı', sayi: o.data?.planli, altMetin: 'Serbest, başlamadı' },
-        { etiket: 'Üretimde', sayi: o.data?.basladi },
+        // Adlar emir durumunun tek sözlüğünden (1389 a).
+        { etiket: EMIR_DURUMU.taslak.etiket, sayi: o.data?.taslak, altMetin: 'Planlanacak' },
+        { etiket: EMIR_DURUMU.planli.etiket, sayi: o.data?.planli, altMetin: 'Başlamadı' },
+        { etiket: EMIR_DURUMU.basladi.etiket, sayi: o.data?.basladi },
         { etiket: 'Geciken', sayi: o.data?.geciken, altMetin: 'Teslim tarihi geçmiş', dikkat: true },
         { etiket: 'Biten', sayi: o.data?.biten },
       ]}

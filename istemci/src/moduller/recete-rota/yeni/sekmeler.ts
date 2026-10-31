@@ -5,7 +5,7 @@ import type { RrVerisi } from './veri.ts';
 import type { RrYetkisi } from './yetki.ts';
 import { Operasyonlar, UrunVeRotalar } from './rotalar/index.tsx';
 import { Kaynaklar, Malzemeler, Sureler } from './kaynaklar/index.tsx';
-import { Stok, UretimEmirleri } from './emirler/index.tsx';
+import { Kapanis, Stok, UretimEmirleri } from './emirler/index.tsx';
 import { SartnameTalimat } from './sartnameler/index.tsx';
 
 // Yeni ekranın iç gezinmesi: ikinci menünün "Reçete ve Rota" grubunun yedi maddesi aynı sırayla sekme olur (menü verisinden okunur).
@@ -37,6 +37,7 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   res: { ekran: Kaynaklar, parca: 'R2' },
   // Rota modülünün kütüphaneleri (989 a); rota tarafı olduğu için R1'in alanındadır.
   sartnameler: { ekran: SartnameTalimat, parca: 'R1' },
+  kapanis: { ekran: Kapanis, parca: 'R3' },
 };
 
 export interface YeniSekme {

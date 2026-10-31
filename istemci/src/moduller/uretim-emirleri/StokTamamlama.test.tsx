@@ -3,7 +3,7 @@ import { cleanup, screen } from '@testing-library/react';
 import type { EmirTamamlamaCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { EmirAyrintiCevabi, IzlemeEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
-import { tamamlamaKomutu } from './StokTamamlama.tsx';
+import { StokTamamlama, tamamlamaKomutu } from './StokTamamlama.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 const BITMIS = {
@@ -15,6 +15,8 @@ const tamamlama = (kalan: string, bilesenler = [SARF]): EmirTamamlamaCevabi => (
   emir: { id: 3, emirNo: 'EM-3', durum: 'bitti', adet: 10, malzemeId: 501, malzemeAd: null }, cikti: { girilen: '1', kalan }, bilesenler, engel: null,
 });
 const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }];
+// Emrin evi (Reçete ve Rota) bileşeni `islenir` ile çizer (1391 a).
+const ev = [{ yol: '/ev/:id', ekran: () => <StokTamamlama emir={{ id: 3, emirNo: 'EM-3', durum: 'bitti', malzemeNo: 501 }} islenir /> }];
 const yollar = {
   'GET /uretim-emirleri/3': () => json(200, { emir: BITMIS, kayitlar: [] } satisfies EmirAyrintiCevabi),
   'GET /stok/uretim-emirleri/3/tamamlama': () => json(200, tamamlama('3')),
@@ -22,10 +24,18 @@ const yollar = {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Stoka tamamla', () => {
-  it('stok giriş ve çıkış yetkisi olana bitmiş emrin ayrıntısında düğme çıkar; istasyonsuz emir de açılır', async () => {
+  it('stok giriş ve çıkış yetkisi olana bitmiş emrin evinde düğme çıkar', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'stok.giris', 'stok.cikis'] }, yollar);
+    ac(ev, '/ev/3');
+    expect(await screen.findByRole('button', { name: 'Stoka tamamla' })).toBeTruthy();
+  });
+
+  it('1391 a: Üretim Emirleri ayrıntısı salt okumadır; yetkiliye de düğme yok, sarf görünür ve yer söylenir; istasyonsuz emir açılır', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'stok.giris', 'stok.cikis'] }, yollar);
     ac(ekran, '/uretim-emirleri/3');
-    expect(await screen.findByRole('button', { name: 'Stoka tamamla' })).toBeTruthy();
+    expect(await screen.findByText("Stoğa işleme Reçete ve Rota'daki emirdedir.")).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'EM-3 sarfı' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stoka tamamla' })).toBeNull();
     expect(screen.getByText('İstasyon').nextElementSibling?.textContent).toBe('yok');
   });
 
