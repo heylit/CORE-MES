@@ -22,8 +22,11 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   before(() => { ({ ortam, yoneticiId } = durum()); });
 
   // 815 (699/3 a): plan sırasına yalnız üretim emrinin önceliği girer; sipariş bedeli, müşteri sınıfı ve elle çarpan girmez.
-  test('815: motor aynı makinede, aynı teslimde emrin önceliğine göre sıralar; öncelik değişince sıra değişir', async () => {
-    await gunduzde(async () => {
+  // 1408: sıranın kuralı motor ayarındandır; öncelik kuralında önce öncelik sınıfı, sonra teslim (776 b). Varsayılan ATCS'de teslimi uzak
+  // emirler arasında öncelik farkı sırayı değiştirmeyebilir.
+  test('815: öncelik kuralında motor aynı makinede, aynı teslimde emrin önceliğine göre sıralar; öncelik değişince sıra değişir', async () => {
+    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'oncelik' });
+    try { await gunduzde(async () => {
       const [a] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
       const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
       const oncelikVer = (id: number, oncelik: number) => ortam!.sahip.tx((db) => db.sorgu(
@@ -37,7 +40,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       await once(b!, a!);
       await oncelikVer(a!, 1); await oncelikVer(b!, 4);
       await once(a!, b!);
-    });
+    }); } finally { await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'atcs' }); }
   });
 
   test('815: çarpan yazma ve bant uçları yok; çarpan geçmişi okunur, tabloya yazılmaz', async () => {
@@ -71,7 +74,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 });
   });
 
-  test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); öner aynı yerleri yazar', async () => {
+  test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); Planı kur aynı yerleri yazar', async () => {
     await gunduzde(async () => {
       const [a1, a2] = await isEmirleriAc([yeniAdim(), yeniAdim()], 10, '2030-05-10');
       const surum = (await istek(c.kalite, 'GET', '/plan/surum')).json<{ planSurumu: number }>().planSurumu;
@@ -82,12 +85,13 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       assert.ok(Date.parse(satir(a1).bitis) <= Date.parse(satir(a2).baslangic), 'rota sırası');
       assert.equal(typeof satir(a1).emirNo, 'string');
       assert.deepEqual(m.ekranYerlesimi[`${satir(a1).emirNo}|${String(satir(a1).opNo)}`], [{ makineId: satir(a1).kaynak.id, baslangic: satir(a1).baslangic }], 'ekran anahtarı canlı kuyruktaki gibi');
-      const p = await taslaktaOner();
+      // 1408: sayfa motor yerleşimini çizer ve "Planı kur"da onun sırasını gönderir; sunucu motoru aynı yerleri yazar.
+      const p = await taslaktaOner(c.planlama, undefined, m);
       try {
         // Motor "şimdi"den sayar: iki çağrı arasındaki saniyeler dışında aynı yer ve kaynak.
         for (const id of [a1, a2]) {
           assert.deepEqual(yer(p, id!).kaynak, satir(id).kaynak);
-          assert.ok(Math.abs(Date.parse(yer(p, id!).baslangic) - Date.parse(satir(id).baslangic)) < 60_000, 'öner motorun yerini yazar');
+          assert.ok(Math.abs(Date.parse(yer(p, id!).baslangic) - Date.parse(satir(id).baslangic)) < 60_000, 'Planı kur motorun yerini yazar');
         }
       } finally {
         await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });

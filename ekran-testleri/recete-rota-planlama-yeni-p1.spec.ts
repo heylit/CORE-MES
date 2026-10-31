@@ -23,10 +23,16 @@ test.describe('P1a Planlama motoru', () => {
     if (await page.getByText(BOS).first().isVisible()) {
       // Planı kur sunucudaki motorla açıktır (576): çalışma varken yazabilene açık, çalışma yoksa pasif. Basılmaz (yazma göndermez).
       // Yazma yetkisiz pasif hali birim testlerinde (Motor, Atölye): örnek veride sayfayı görüp plan yazamayan rol yok.
-      const calismaYok = await page.getByText('Planlama çalışması yok.').isVisible();
-      for (const b of await page.getByRole('button', { name: 'Planı kur' }).all()) {
-        if (calismaYok) await expect(b).toHaveAttribute('aria-disabled', 'true'); else await expect(b).toBeEnabled();
-      }
+      // 657 a: yazabilende "Planlama çalışması yok." geçicidir; sayfa boş çalışmayı kurdurunca "Plan henüz kurulmadı" olur. Yazı ve düğme
+      // aynı anda okunur, ikisi uyuşana kadar yeniden denenir: yazı okunduktan sonra ekran değişirse yeni düğme eski yazıyla sınanmaz.
+      await expect(async () => {
+        const calismaYok = await page.getByText('Planlama çalışması yok.').isVisible();
+        const dugmeler = await page.getByRole('button', { name: 'Planı kur' }).all();
+        expect(dugmeler.length).toBeGreaterThan(0);
+        for (const b of dugmeler) {
+          if (calismaYok) expect(await b.getAttribute('aria-disabled')).toBe('true'); else expect(await b.isEnabled()).toBe(true);
+        }
+      }).toPass();
       await tasmaz(page); return;
     }
     await expect(ozet).toBeVisible();

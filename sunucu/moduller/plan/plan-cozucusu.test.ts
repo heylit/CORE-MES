@@ -68,6 +68,38 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(ters, 'E-1|10')!.baslangic, '2026-10-19T05:00:00.000Z');
   });
 
+  test("1408: 'yeni' kip kuyruğun tezgâh sırasını korumaz, işleri kuraldan dizer ve aday tezgâhlara dağıtır; her koşuda aynı plan", async () => {
+    const i = istek({ kip: 'yeni', kuyruklar: [{ makineId: 100, anahtarlar: ['E-2|10', 'E-1|10'] }] });
+    const r = await coz(KAYNAK, i);
+    assert.deepEqual(r.yerlesmeyen, []);
+    const e1 = yer(r, 'E-1|10')!, e2 = yer(r, 'E-2|10')!;
+    assert.notEqual(e1.makineId, e2.makineId, 'iki torna boşken iki iş aynı tezgâhı beklemez');
+    assert.equal(e1.baslangic, '2026-10-19T05:00:00.000Z');
+    assert.equal(e2.baslangic, '2026-10-19T05:00:00.000Z');
+    assert.deepEqual(await coz(KAYNAK, i), r);
+  });
+
+  test('1408: arıza denemesindeki makine kapalı, kapalı gün tatil sayılır', async () => {
+    const kuyruklar = [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }];
+    const r = await coz(KAYNAK, { ...istek({ kip: 'yeni', kuyruklar }), kapaliMakineler: [100] });
+    assert.deepEqual([yer(r, 'E-1|10')!.makineId, yer(r, 'E-2|10')!.makineId], [101, 101]);
+    const g = await coz(KAYNAK, { ...istek({ kuyruklar }), kapaliGunler: ['2026-10-19'] });
+    assert.equal(yer(g, 'E-1|10')!.baslangic, '2026-10-20T05:00:00.000Z');
+  });
+
+  test('1408: öncelik denemesi emrin sırasını değiştirir; sanal emir yürürlükteki rotasıyla dizilir', async () => {
+    const kuyruklar = [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }];
+    const r = await coz(KAYNAK, { ...istek({ kip: 'yeni', kuyruklar }), kapaliMakineler: [101], emirDegisiklikleri: [{ emirNo: 'E-1', oncelik: 4 }] });
+    assert.equal(yer(r, 'E-2|10')!.baslangic, '2026-10-19T05:00:00.000Z', 'düşük öncelikli emir sona kalır');
+    assert.ok(Date.parse(yer(r, 'E-1|10')!.baslangic) >= Date.parse(yer(r, 'E-2|10')!.bitis));
+    const sanalEmirler = [{ no: 'Yeni emir', malzemeId: 50, adet: 2, baslangic: null, teslim: '2026-10-30', oncelik: 2 }];
+    const s = await coz(KAYNAK, { ...istek({ kip: 'yeni', kuyruklar: [{ makineId: 100, anahtarlar: ['Yeni emir|10', 'Yeni emir|20'] }] }), sanalEmirler });
+    assert.deepEqual(s.yerlesmeyen, []);
+    assert.equal((Date.parse(yer(s, 'Yeni emir|10')!.bitis) - Date.parse(yer(s, 'Yeni emir|10')!.baslangic)) / 60_000, 60, '2 adet x 30 dk');
+    assert.ok(Date.parse(yer(s, 'Yeni emir|20')!.baslangic) >= Date.parse(yer(s, 'Yeni emir|10')!.bitis));
+    assert.deepEqual((await coz(KAYNAK, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['Yeni emir|10'] }] }))).yerlesmeyen, ['Yeni emir|10'], 'sanal emir verilmezse yoktur');
+  });
+
   test('aynı istek her koşuda aynı planı verir', async () => {
     const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }, { makineId: 101, anahtarlar: ['E-1|20', 'E-2|20'] }] });
     assert.deepEqual(await coz(KAYNAK, i), await coz(KAYNAK, i));
@@ -348,18 +380,20 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
 
   test('kaynaklar ve emirler kullanıcısız okunur; emri olmayan kuyruk işi yerleşmez', async () => {
     const k = await vt().tx((db) => planCozumKaynagi(db));
-    const d = k?.kaynak.durum as { machines: Array<{ id: string }> | null; emirler: unknown; routes: unknown } | undefined;
+    const d = k.kaynak.durum as { machines: Array<{ id: string }> | null; emirler: unknown; routes: unknown } | undefined;
     assert.deepEqual(d?.machines?.map((m) => m.id), [String(makineId)]);
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
     // N8: takvim eki planlama sayfasındaki gibi kurulur (iş merkezinin haftalık vardiyası)
-    assert.deepEqual(Object.keys((k?.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
+    assert.deepEqual(Object.keys((k.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
     assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [], malzemeBekleyen: [], nedenler: { 'E-404|10': 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.' } });
   });
 
-  test('planlama sayfasının çalışma kaydı yoksa komut reddedilir', async () => {
+  test('1408: planlama sayfasının çalışma kaydı yoksa çözücü boş çalışmayla bellekte çözer; kayıt yazılmaz', async () => {
     await vt().tx((db) => sorgular.planlamaKaydiSil(db, PLANLAMA_ANAHTARI));
-    await assert.rejects(vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-1|10'] }] }))), /çalışma kaydı/);
+    const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
+    assert.deepEqual(r.yerlesmeyen, ['E-404|10']);
+    assert.equal(await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)), null);
   });
 });

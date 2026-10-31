@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { KuyrukYazCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { KuyrukYazCevabi, MotorYerlesimiCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { AdimGirdisi, KomutCevabi, RevizyonAyrintisi, SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -201,9 +201,9 @@ export function planTestOrtami() {
     makineA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MA', ad: 'Deneme makine A', istasyonId: istasyonA })).id;
     makineB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MB', ad: 'Deneme makine B', istasyonId: istasyonB })).id;
     operatorId = (await vt().tx((db) => db.tek<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme operator'")))!.id;
-    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez (168 b, 650 a: tezgâh kendi merkezinin haftasıyla)
-    // ve planlama sayfasının çalışma kaydı olmadan çözmez (409): merkez her gün tam gün çalışır (Motor A'nın takvimsiz varsayımı), kayıt boştur
-    // (vardiya, tezgâh ve emir canlıdan). Tam gün iki yarımdır: vardiyanın başı ve sonu aynı saat olamaz.
+    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez (168 b, 650 a: tezgâh kendi merkezinin haftasıyla):
+    // merkez her gün tam gün çalışır, planlama kaydı boştur (vardiya, tezgâh ve emir canlıdan) ve motor ayarını taşır. Tam gün iki yarımdır:
+    // vardiyanın başı ve sonu aynı saat olamaz.
     tamGun = (await ortam.sahip.sorgu<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('RT gun ilk yari', '00:00', '12:00'), ('RT gun son yari', '12:00', '00:00') RETURNING id")).map((x) => x.id);
     await tamGunVer(merkez.id);
     merkezId = merkez.id;
@@ -239,7 +239,8 @@ export function planTestOrtami() {
   // oynayabilen (planlı, kilitsiz, dondurulmamış, bölünmemiş) işler kendi makinesinde başlangıç sırasıyla, yerleşmemiş işler rotadaki makinede
   // arkalarından kuyruğa yazılır; saatleri sunucu motoru verir, yeni taslak açılır. Taslak (cevabı ya da kimliği) verilirse plan ondan okunur
   // ve ona yazılır. Elle sıra ve elle seçilen makine işaretiyle gider (sayfa da öyle gönderir).
-  const taslaktaOner = async (cerez = c.planlama, taslak?: PlanCevabi | number): Promise<PlanCevabi> => {
+  // 1408: motor verilirse kuyruk, sayfanın çizdiği motor yerleşiminin sırasıyla ve makinesiyle yazılır (sayfa "Planı kur"da bunu gönderir).
+  const taslaktaOner = async (cerez = c.planlama, taslak?: PlanCevabi | number, motor?: MotorYerlesimiCevabi): Promise<PlanCevabi> => {
     const id = typeof taslak === 'number' ? taslak : taslak?.taslak?.id;
     const canli = id === undefined ? await tamam<PlanCevabi>(cerez, 'GET', '/plan') : await tamam<PlanCevabi>(cerez, 'GET', `/plan?taslak=${String(id)}`);
     type Satir = { emirNo: string; opNo: number; elleSira?: number | null; elleKaynak?: boolean };
@@ -250,6 +251,10 @@ export function planTestOrtami() {
     const oynar = canli.yerlesimler.filter((y) => y.durum === 'planli' && !y.kilitli && !y.dondurulmus && !y.parcalar?.length && y.kaynak.tur === 'makine');
     for (const y of oynar.sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic))) ekle(y.kaynak.id, y);
     for (const y of canli.yerlesmemis) if (y.kaynak?.tur === 'makine' && y.durum === 'planli' && !y.bolme) ekle(y.kaynak.id, y);
+    if (motor) {
+      kuyruk.clear();
+      for (const y of motor.yerlesimler.filter((x) => !x.sabit && x.kaynak.tur === 'makine').sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic))) ekle(y.kaynak.id, y);
+    }
     if (kuyruk.size === 0) throw new Error('Planı kur: kuyruğa yazılacak iş yok.');
     // Elle sıralı iş kuyruktaki yerini (elle sıra numarasını) korur; ötekiler başlangıç sırasıyla aradaki yerleri doldurur.
     const dizi = (l: Satir[]) => {
