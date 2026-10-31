@@ -90,6 +90,7 @@ export async function kayitIcerigi(db: Db, id: number): Promise<{ id: number; pa
 export async function degisiklikListesi(db: Db, sorgu: DegisiklikListesiSorgusuCikti): Promise<SayfaliListe<DegisiklikSatiri>> {
   const s: sorgular.DegisiklikSuzgeci = {
     kisi: sorgu.kisi ?? null, baslangic: sorgu.baslangic ?? null, bitis: sorgu.bitis ?? null, tablo: sorgu.tablo ?? null,
+    kayitlar: sorgu.kayitlar ?? null,
   };
   return sayfaliListe(sorgu, {
     say: () => sorgular.degisiklikSay(db, s),

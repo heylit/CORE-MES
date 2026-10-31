@@ -70,3 +70,15 @@ Yok.
 
 ## Onaylı kararlar
 - 1371 a (teyitli): Denetim Kaydı okunur yapılır; başka ekrana dokunulmaz.
+
+# FARK: denetim, Geçmiş düğmesi (1384 b, kart 1413; dal 1413-denetim)
+
+## Eklenen
+- `GET /denetim-degisiklikleri` sorgusuna `kayitlar` (JSON dizisi, 1-50 çift `{ tablo, anahtar }`). Satır, çiftlerden birinin tablosunda
+  ve anahtarı çiftin anahtarını kapsıyorsa (`@>`) döner. Yetki aynı (`denetim.oku`); göç ve yeni işlem yok; değer yine taşınmaz.
+- İstemci: `GecmisDugmesi` (yalnız `denetim.oku` taşıyana görünür) ve modül dışına açılan `istemci/src/moduller/denetim/disari.ts`.
+  Denetim Kaydı `?kayitlar=` adresiyle Değişiklikler görünümünde, "Bu kayıt: ..." çubuğuyla açılır; okunamayan adres süzgeçsiz açılır.
+- Test: `degisiklik.test.ts` `kayıt süzgeci: ...`; `DenetimKaydi.test.tsx` ve `GecmisDugmesi.test.tsx`.
+
+## Onaylı kararlar
+- 1384 b (teyitli): düğme defteri olan bütün kayıt ekranlarında; modüller düğmeyi kendi dallarında ekler.

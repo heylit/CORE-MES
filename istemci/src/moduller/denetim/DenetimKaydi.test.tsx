@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   DegisiklikIcerigiCevabi, DegisiklikListesiCevabi, DegisiklikSatiri, DegisiklikSecenekleriCevabi, KayitIcerigiCevabi, KayitListesiCevabi,
@@ -61,8 +62,12 @@ function sunucuKur(kullanici: Kullanici): string[] {
   return yollar;
 }
 
-function ac() {
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><DenetimKaydi /></QueryClientProvider>);
+function ac(adres = '/denetim') {
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[adres]}><DenetimKaydi /></MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -159,5 +164,24 @@ describe('DenetimKaydi', () => {
     expect(screen.getAllByRole('cell', { name: '[gizli]' })).toHaveLength(2);
     expect(screen.getByRole('cell', { name: '5' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: '7' })).toBeTruthy();
+  });
+
+  it('1384 b: "Geçmiş" adresiyle açılınca Değişiklikler görünümü kayıt süzgeciyle gelir; çubuk kaydı adıyla yazar ve süzgeç kaldırılır', async () => {
+    const yollar = sunucuKur(MUDUR);
+    const kayitlar = JSON.stringify([{ tablo: 'uretim_emri', anahtar: { id: 41 } }]);
+    ac(`/denetim?kayitlar=${encodeURIComponent(kayitlar)}`);
+    expect(await screen.findByText(/Bu kayıt: Üretim emri 41/)).toBeTruthy();
+    await waitFor(() => expect(yollar.some((y) => y.startsWith('/denetim-degisiklikleri?') && y.includes(`kayitlar=${encodeURIComponent(kayitlar)}`))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: /Bütün değişiklikler/ }));
+    await waitFor(() => expect(screen.queryByText(/Bu kayıt:/)).toBeNull());
+    await waitFor(() => expect(yollar.some((y) => y.startsWith('/denetim-degisiklikleri?') && !y.includes('kayitlar='))).toBe(true));
+  });
+
+  it('okunamayan kayıt adresi süzgeçsiz Komutlar görünümüyle açılır', async () => {
+    const yollar = sunucuKur(MUDUR);
+    ac('/denetim?kayitlar=%7B');
+    await screen.findByText('Oturumsuz');
+    expect(screen.queryByText(/Bu kayıt:/)).toBeNull();
+    expect(yollar.some((y) => y.includes('kayitlar='))).toBe(false);
   });
 });
