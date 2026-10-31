@@ -190,15 +190,16 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     assert.equal(mudur.islemler.includes('denetim.govde-oku'), false);
   });
 
-  // Kullanıcı kararı RC1 R4-R6, R13 (kart #223) ve kart #1225: depo ve müdür bütün stok işlemlerini taşır, planlama yalnız toplar; bakım yalnız okur.
+  // Kullanıcı kararı RC1 R4-R6, R13 (kart #223) ve kart #1225: depo ve müdür stok işlemlerini taşır, planlama yalnız toplar; bakım yalnız okur.
+  // Hareket geri alma yalnız müdürdedir (1387 a): depo kendi hareketini geri alamaz.
   // Ölçülen yetki kapısıdır: 403 dışındaki her cevap kapıdan geçmiştir. Yazma uçlarına boş gövde gider, hiçbir kayıt yazılmaz.
-  test('stok: depo ve müdür alır, çıkarır, taşır, sayar, toplar, tanımlar ve geri alır; planlama toplar; bakım ve kalite okur; operatör görmez', async () => {
+  test('stok: depo ve müdür alır, çıkarır, taşır, sayar, toplar, tanımlar; yalnız müdür geri alır; planlama toplar; bakım ve kalite okur; operatör görmez', async () => {
     const tum = { okuma: true, giris: true, cikis: true, transfer: true, sayim: true, tanim: true, geriAl: true, toplama: true };
     const salt = { okuma: true, giris: false, cikis: false, transfer: false, sayim: false, tanim: false, geriAl: false, toplama: false };
     const BEKLENEN: Record<string, typeof tum> = {
       yonetici: tum,
       mudur: tum,
-      depo: tum,
+      depo: { ...tum, geriAl: false },
       planlama_proje: { ...salt, toplama: true },
       bakim: salt,
       kalite: salt,

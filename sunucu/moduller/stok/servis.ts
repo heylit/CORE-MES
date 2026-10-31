@@ -142,6 +142,7 @@ async function hareketleriCevir(db: Db, satirlar: HareketHam[]): Promise<Hareket
     partiEtiketi: h.partiId === null ? null : partiEtiketi({ lotNo: h.lotNo, tedarikciPartiNo: h.tedarikciPartiNo, dokumNo: h.dokumNo, uretimEmriId: h.partiEmirId }, emirNoDe(nolar, h.partiEmirId)),
     kaynakKonumKod: h.kaynakKonumKod, hedefKonumKod: h.hedefKonumKod, miktar: h.miktar, onayliEksi: h.onayliEksi, girisKaynagi: h.girisKaynagi,
     cikisNedeni: h.cikisNedeni, uretimEmriId: h.uretimEmriId, emirNo: emirNoDe(nolar, h.uretimEmriId), geriAlinanId: h.geriAlinanId, geriAlindi: h.geriAlindi, fisId: h.fisId, fisNo: h.fisNo,
+    hareketFisiId: h.hareketFisiId, hareketFisiNo: h.hareketFisiNo, otomatik: h.akis !== null,
     kisiAd: kisiler.get(h.kisiId) ?? null, aciklama: h.aciklama, kaynakStatuId: h.kaynakStatuId, hedefStatuId: h.hedefStatuId,
     kaynakKaliteDurumu: h.kaynakKaliteDurumu, hedefKaliteDurumu: h.hedefKaliteDurumu,
   }));
@@ -297,7 +298,7 @@ export async function stokOzeti(db: Db, islemler: readonly string[]): Promise<St
     eksikEmir: okur ? await eksikEmirSayisi(db) : null,
   };
 }
-// Açık emirlerden kalan sarfı kullanılabilir stokla karşılanamayanlar (tamamlama önizlemesiyle aynı hesap). Her emir stoğu
+// Açık emirlerden plana göre kalan ihtiyacı kullanılabilir stokla karşılanamayanlar: bir öngörüdür; tamamlama eksik aramaz (K-1 a). Her emir stoğu
 // tek başına görür: iki emir aynı malzemeyi bekliyorsa ikisi de yeterli sayılabilir. Ürün kartı olmayan eski emir sayılmaz.
 // Emirler aynı malzemeleri paylaşır: bakiye ve kart özeti tek okuma işleminde bir kez okunur (hesap aynı, sorgu azalır).
 async function eksikEmirSayisi(db: Db): Promise<number> {
@@ -312,7 +313,7 @@ async function eksikEmirSayisi(db: Db): Promise<number> {
     const ihtiyac = ihtiyacToplami(satirlar.map((m) => ({ malzemeId: m.malzemeNo, brut: m.brut })));
     const verilen = new Map(verilenler.filter((v) => v.emirId === id).map((v) => [v.malzemeId, binde(v.miktar)]));
     const ozet = await onbellekliOzetler(db, [...ihtiyac.keys()], onbellek);
-    if ((await bilesenPlani(db, ihtiyac, verilen, ozet, onbellek)).bilesenler.some((b) => binde(b.eksik) > 0n)) n += 1;
+    if ((await kalanIhtiyacPlani(db, ihtiyac, verilen, ozet, onbellek)).bilesenler.some((b) => binde(b.eksik) > 0n)) n += 1;
   }
   return n;
 }
@@ -1166,8 +1167,6 @@ interface TamamlamaPlani {
   cevap: EmirTamamlamaCevabi;
   sarflar: { malzemeId: number; konumId: number; partiId: number | null; miktar: string }[];
 }
-// Kalan sarf, emre verilmiş net sarf (hurdanın fire çıkışı dahil, geri alınan düşülür) brütten çıkarılarak bulunur; en eski girişten, fason ve üretim alanı
-// dışındaki konumlardan alınır (çıkış önerisiyle aynı kural). Hizmet bileşeni stoklanmaz, düşülmez.
 // Yalnız okuma hesabında (sayaç) verilir; yazan komut her zaman taze okur.
 interface TamamlamaOnbellegi {
   bakiye: Map<number, BakiyeHam[]>;
@@ -1185,8 +1184,9 @@ async function onbellekliBakiyeler(db: Db, malzemeId: number, onbellek?: Tamamla
   if (b === undefined) { b = await sorgular.serbestBakiyeler(db, malzemeId); onbellek.bakiye.set(malzemeId, b); }
   return b;
 }
-// Bileşen başına kalan sarf ve en eski girişten karşılanan (tamamlama önizlemesi ve stok özeti aynı hesabı kullanır).
-async function bilesenPlani(
+// Açık emrin plana göre kalan ihtiyacı ve en eski girişten karşılanan: yalnız iş kutusu sayacı (eksik malzemeli emir) için bir öngörüdür,
+// tüketim yazmaz. Tamamlama fiili tüketimle kapanır (K-1 a, aşağıda).
+async function kalanIhtiyacPlani(
   db: Db, ihtiyac: Map<number, bigint>, verilen: Map<number, bigint>, ozet: Map<number, KatalogMalzemeOzeti>, onbellek?: TamamlamaOnbellegi,
 ): Promise<Pick<TamamlamaPlani, 'sarflar'> & { bilesenler: EmirTamamlamaCevabi['bilesenler'] }> {
   const sarflar: TamamlamaPlani['sarflar'] = [];
@@ -1214,6 +1214,24 @@ async function bilesenPlani(
   }
   return { sarflar, bilesenler };
 }
+// K-1 a (1385): emrin hammadde tüketimi fiilidir: terminalde düşülen ve hurdanın fire çıkışı (emre verilmiş net sarf). Plandaki fire
+// payı tüketim sayılmaz; tamamlama sarf yazmaz, yalnız çıktıyı girer. Brüt plan bilgisi olarak gösterilir, kalan her zaman sıfırdır.
+// Böylece tamamlamanın istasyondaki malzemeyi görmeden depodan ikinci kez düşmesi (S-2) de ortadan kalkar.
+const SIFIR = bindenMetin(0n);
+function bilesenPlani(
+  ihtiyac: ReadonlyMap<number, bigint>, verilen: ReadonlyMap<number, bigint>, ozet: ReadonlyMap<number, KatalogMalzemeOzeti>,
+): Pick<TamamlamaPlani, 'sarflar'> & { bilesenler: EmirTamamlamaCevabi['bilesenler'] } {
+  const bilesenler: EmirTamamlamaCevabi['bilesenler'] = [];
+  for (const [malzemeId, brut] of ihtiyac) {
+    const o = ozet.get(malzemeId);
+    const hizmet = o !== undefined && !stoklanirMi(o.tur);
+    bilesenler.push({
+      malzemeId, malzemeAd: o?.ad ?? o?.kod ?? null, hizmet, brut: bindenMetin(brut), verilen: bindenMetin(verilen.get(malzemeId) ?? 0n), kalan: SIFIR,
+      mevcut: SIFIR, eksik: SIFIR,
+    });
+  }
+  return { sarflar: [], bilesenler };
+}
 async function tamamlamaPlani(db: Db, emirId: number, ciktiMiktari?: string, onbellek?: TamamlamaOnbellegi): Promise<TamamlamaPlani> {
   const emir = await uretimEmriOzeti(db, emirId);
   if (emir === null) throw bulunamadi('Üretim emri bulunamadı.');
@@ -1222,7 +1240,7 @@ async function tamamlamaPlani(db: Db, emirId: number, ciktiMiktari?: string, onb
   const verilen = new Map<number, bigint>();
   for (const p of await sorgular.emrinPartileri(db, emirId)) verilen.set(p.malzemeId, (verilen.get(p.malzemeId) ?? 0n) + binde(p.miktar));
   const ozet = await onbellekliOzetler(db, [emir.malzemeNo, ...ihtiyac.keys()], onbellek);
-  const { sarflar, bilesenler } = await bilesenPlani(db, ihtiyac, verilen, ozet, onbellek);
+  const { sarflar, bilesenler } = bilesenPlani(ihtiyac, verilen, ozet);
   const girilen = binde(await sorgular.emirUretimGirisi(db, emirId, emir.malzemeNo));
   // Çıktı emrin sağlam adedine göre girer (fire düşülmüş, bitmiş emirde dolu); bitmemiş emirde adet gösterilir, engel zaten vardır.
   const hedef = BigInt(emir.saglamAdet ?? emir.adet) * 1000n;
@@ -1246,30 +1264,16 @@ async function tamamlamaPlani(db: Db, emirId: number, ciktiMiktari?: string, onb
 export async function emirTamamlamaOku(db: Db, emirId: number): Promise<EmirTamamlamaCevabi> {
   return (await tamamlamaPlani(db, emirId)).cevap;
 }
-// Uç giriş işlemiyle açılır; komut çıkış da yazdığı için çıkış işlemi de istenir. Sarf kapsamı üretime sarfla aynıdır (DEP-36).
-// Hesap komutun içinde, emir kilidi alındıktan sonra yeniden yapılır; bakiye kilitlendiğinde azalmışsa yazılmaz (önizleme eskimiştir).
+// Uç giriş işlemiyle açılır; çıkış işlemi de istenir (yetki K-1 a öncesiyle aynı kalır, genişletilmez). K-1 a: tamamlama sarf yazmaz,
+// yalnız sağlam adedin girilmemiş kısmını girer. Hesap emir kilidi alındıktan sonra yeniden yapılır.
 export async function emirTamamla(db: Db, k: Kullanici, emirId: number, g: EmirTamamlaKomutu): Promise<HareketCevabi> {
-  if (!islemVarMi(k, 'stok.cikis')) throw yetkiYok('Tamamlama sarf da yazar; stok çıkış yetkisi gerekir.');
+  if (!islemVarMi(k, 'stok.cikis')) throw yetkiYok('Stokta tamamlama için stok çıkış yetkisi de gerekir.');
   await sorgular.emirTamamlamaKilidi(db, emirId);
   const plan = await tamamlamaPlani(db, emirId, g.miktar);
   if (plan.cevap.engel !== null) throw cakisma(plan.cevap.engel, { bilesenler: plan.cevap.bilesenler });
+  // DEP-36 kapsamı sarf yazılmasa da korunur: kapsam dışındaki emri tamamlayamaz.
   await sarfEmriDenetle(db, k.id, emirId);
-  const hareketIdler = await korumali(async () => {
-    const idler: number[] = [];
-    await siraliKilitle(db, ...plan.sarflar.map((x) => ({ malzemeId: x.malzemeId, konumId: x.konumId, partiId: x.partiId })));
-    for (const x of plan.sarflar) {
-      const b = await sorgular.bakiyeKilitle(db, x.malzemeId, x.konumId, x.partiId);
-      if (binde(b?.miktar ?? '0') < binde(x.miktar)) throw cakisma('Stok bu sırada değişti; tamamlamayı yeniden açın.');
-      await rezerveyiAsmasin(db, x.malzemeId, null, emirId, binde(x.miktar));
-      await rezerveDegistir(db, { malzemeId: x.malzemeId, statuId: null, uretimEmriId: emirId, fark: -binde(x.miktar) });
-      idler.push(await sorgular.hareketYaz(db, hareket({
-        tur: 'cikis', malzemeId: x.malzemeId, miktar: x.miktar, kisiId: k.id, partiId: x.partiId, partiSecimi: x.partiId === null ? null : 'en_eski',
-        kaynakKonumId: x.konumId, cikisNedeni: 'uretime_sarf', uretimEmriId: emirId, aciklama: g.aciklama ?? null,
-      })));
-      await bakiyeDegistir(db, { malzemeId: x.malzemeId, konumId: x.konumId, partiId: x.partiId, fark: -binde(x.miktar) });
-    }
-    return idler;
-  });
+  const hareketIdler: number[] = [];
   if (binde(plan.cevap.cikti.kalan) > 0n) {
     const giris = await uretimGirisi(db, k.id, { uretimEmriId: emirId, malzemeId: plan.cevap.emir.malzemeId, miktar: plan.cevap.cikti.kalan });
     hareketIdler.push(...giris.hareketIdler);
@@ -1595,10 +1599,18 @@ async function faturaliSevkDenetle(db: Db, h: { tur: string; cikisNedeni: string
   const engel = faturaliSevkEngeli(isId, (await siparisFaturalari(db, [siparisId])).get(siparisId) ?? []);
   if (engel) throw cakisma(engel);
 }
-async function tersCevir(db: Db, kisiId: number, hareketId: number, eksiOnay: boolean, aciklama: string | null, malKabulDuzeltmesi = false): Promise<number> {
+// 1387 a: elle eksiye düşüm onayı ayrı işlemdir (stok.eksi-onayla, yalnız müdür). Terminalin ve akışların kendi eksisi bu onayı istemez;
+// onlar uçtan değil, çağıranın işleminden yazar.
+export function eksiOnayiDenetle(k: Kullanici, g: { eksiOnay?: boolean | undefined }): void {
+  if (g.eksiOnay === true && !islemVarMi(k, 'stok.eksi-onayla')) throw yetkiYok('Stoğu eksiye düşürme onayı yetkiniz yok; müdür onaylar.');
+}
+// elle: Stok Merkezi'nin geri alması; akışın yazdığı hareketi almaz (1388 a). Akışların ve belge düzeltmesinin kendi geri alması elle değildir.
+async function tersCevir(db: Db, kisiId: number, hareketId: number, eksiOnay: boolean, aciklama: string | null, malKabulDuzeltmesi = false, elle = false): Promise<number> {
   const h = await sorgular.hareketBul(db, hareketId);
   if (!h) throw bulunamadi('Hareket bulunamadı.');
-  const engel = geriAlmaEngeli({ tur: h.tur, geriAlindi: h.geriAlindi, malKabulSatiriMi: h.malKabulSatiriMi && !malKabulDuzeltmesi, disCagriMi: kaliteKarariHareketiMi(h) });
+  const engel = geriAlmaEngeli({
+    tur: h.tur, geriAlindi: h.geriAlindi, malKabulSatiriMi: h.malKabulSatiriMi && !malKabulDuzeltmesi, disCagriMi: kaliteKarariHareketiMi(h), elleAkis: elle ? h.akis : null,
+  });
   if (engel) throw cakisma(engel);
   await faturaliSevkDenetle(db, h);
   const y = tersYon(h.kaynakKonumId, h.hedefKonumId);
@@ -1635,7 +1647,7 @@ async function tersCevir(db: Db, kisiId: number, hareketId: number, eksiOnay: bo
   });
 }
 export async function geriAl(db: Db, kisiId: number, hareketId: number, g: { eksiOnay?: boolean | undefined; aciklama?: string | null | undefined }): Promise<HareketCevabi> {
-  const id = await tersCevir(db, kisiId, hareketId, g.eksiOnay === true, g.aciklama ?? null);
+  const id = await tersCevir(db, kisiId, hareketId, g.eksiOnay === true, g.aciklama ?? null, false, true);
   const h = await sorgular.hareketBul(db, id);
   return { hareketIdler: [id], onayliEksi: h?.onayliEksi ?? false };
 }
@@ -1651,7 +1663,7 @@ export async function topluGeriAl(db: Db, kisiId: number, g: TopluGeriAlKomutu):
     { malzemeId: h.malzemeId, konumId: h.kaynakKonumId, partiId: h.partiId, statuId: h.kaynakStatuId },
     { malzemeId: h.malzemeId, konumId: h.hedefKonumId, partiId: h.partiId, statuId: h.hedefStatuId },
   ]));
-  for (const id of [...idler].sort((a, b) => b - a)) yazilan.push(await tersCevir(db, kisiId, id, g.eksiOnay === true, g.aciklama ?? null));
+  for (const id of [...idler].sort((a, b) => b - a)) yazilan.push(await tersCevir(db, kisiId, id, g.eksiOnay === true, g.aciklama ?? null, false, true));
   // İşlem tek bağlantıdadır: sorgular sırayla gider (pg aynı istemcide eşzamanlı sorguyu reddedecek).
   let onayliEksi = false;
   for (const id of yazilan) if ((await sorgular.hareketBul(db, id))?.onayliEksi === true) { onayliEksi = true; break; }

@@ -39,13 +39,13 @@ export function HareketTablosu({ satirlar, geriAl, saatle }: { satirlar: Hareket
       <Rozet ton={HAREKET_TONU[h.tur]}>{HAREKET_ETIKETI[h.tur]}</Rozet>
       {h.onayliEksi && <Rozet ton="hata">Onaylı eksi</Rozet>}{h.geriAlindi && <Rozet ton="pasif">Geri alındı</Rozet>}
     </> },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (h) => <span className="tc-stok-ad"><strong>{h.malzemeAd ?? `Kart ${h.malzemeId}`}</strong><span>{not(h)}{h.fisId !== null && <> · <Link to={`/stok/fisler/${h.fisId}`}>Fiş {h.fisNo}</Link></>}</span></span> },
+    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (h) => <span className="tc-stok-ad"><strong>{h.malzemeAd ?? `Kart ${h.malzemeId}`}</strong><span>{not(h)}{h.fisId !== null && <> · <Link to={`/stok/fisler/${h.fisId}`}>Fiş {h.fisNo}</Link></>}{h.hareketFisiNo != null && <> · <Link to={`/stok/hareketler?metin=${encodeURIComponent(h.hareketFisiNo)}`}>{h.hareketFisiNo}</Link></>}</span></span> },
     { anahtar: 'parti', baslik: 'Parti', hucre: (h) => h.partiEtiketi ?? '—' },
     { anahtar: 'yer', baslik: 'Yer', mono: true, hucre: yer },
     { anahtar: 'statu', baslik: 'Statü', hucre: (h) => hareketStatusu(h, statuAdi) ?? '—' },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (h) => { const y = hareketIsareti(h); return <strong className={y.eksi ? 'tc-stok-eksi' : ''}>{y.isaret === '⇄' ? '⇄ ' : y.isaret}{miktarMetni(h.miktar)}</strong>; } },
     { anahtar: 'kisi', baslik: 'Kim', hucre: (h) => h.kisiAd ?? '—' },
-    ...(geriAl ? [{ anahtar: 'eylem', baslik: '', hucre: (h: Hareket) => (h.tur !== 'geri_alma' && !h.geriAlindi && h.girisKaynagi !== 'mal_kabul' ? <Dugme onClick={() => geriAl(h)}>Geri al</Dugme> : <span />) }] : []),
+    ...(geriAl ? [{ anahtar: 'eylem', baslik: '', hucre: (h: Hareket) => (h.tur !== 'geri_alma' && !h.geriAlindi && h.girisKaynagi !== 'mal_kabul' && h.otomatik !== true ? <Dugme onClick={() => geriAl(h)}>Geri al</Dugme> : <span />) }] : []),
   ];
   return <Tablo etiket="Hareketler" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(h) => h.id} bosMesaj="Hareket yok." />;
 }

@@ -280,10 +280,9 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     await istek('operator', 'POST', `/stok/teslimler/${ilk.govde.teslim.id}/teslim-al`, { surum: ilk.govde.teslim.surum, alinan: '5' });
     const aKonum = (await istasyonKonumu(a.id))!;
     // Statüyü üretim verir; burada yalnız kurulum için servis doğrudan çağrılır (uç yetkisi bu testin konusu değil).
-    await statuDegistir(o().vt, kisiler.get('yonetici')!, {
-      malzemeId: ym, konumId: aKonum, partiId: (await o().vt.tek<{ p: number }>('SELECT parti_id AS p FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [ym, aKonum]))!.p,
-      kaynakStatuId: null, hedefStatuId: st, miktar: '5',
-    });
+    const yariParti = (await o().vt.tek<{ p: number }>('SELECT parti_id AS p FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [ym, aKonum]))!.p;
+    // Hareket fişi işlemin sonunda denetlenir (1385 a): komut uçtaki gibi tek işlemde yazılır.
+    await o().vt.tx((db) => statuDegistir(db, kisiler.get('yonetici')!, { malzemeId: ym, konumId: aKonum, partiId: yariParti, kaynakStatuId: null, hedefStatuId: st, miktar: '5' }));
     const g = await gonder('operator', { malzemeId: ym, miktar: '5', statuId: st, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id } });
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
     assert.equal(g.govde.teslim.statuId, st);
@@ -990,9 +989,9 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual([f.sarf[0]!.stokKodu, f.giris[0]!.stokKodu], [kodlar.get(hm), kodlar.get(ym)], 'stok kodu kartın kodu');
     // 337 a: net sarf (saat, proje maliyeti) hurdada düşülen HM'yi de sayar; hurda geri alınınca yalnız geri alınan kadar düşer.
     assert.deepEqual((await o().vt.tx((db) => emirlerinNetSarfi(db, [e]))).map((x) => [x.malzemeId, Number(x.miktar)]), [[hm, 7.5]], 'net sarf fişin sarfıyla aynı');
-    // 339 a: tamamlamanın verileni de hurdada düşülen HM'yi sayar; kalan yalnız ihtiyaçtan geri kalandır (10 x 2,5 - 7,5).
+    // 339 a: tamamlamanın verileni de hurdada düşülen HM'yi sayar. K-1 a: tüketim fiilidir, plandan kalan sarf yazılmaz (kalan 0).
     const hmSatiri = (await o().vt.tx((db) => emirTamamlamaOku(db, e))).bilesenler.find((b) => b.malzemeId === hm);
-    assert.deepEqual([Number(hmSatiri?.brut), Number(hmSatiri?.verilen), Number(hmSatiri?.kalan)], [25, 7.5, 17.5], 'tamamlama verileni net sarfla aynı');
+    assert.deepEqual([Number(hmSatiri?.brut), Number(hmSatiri?.verilen), Number(hmSatiri?.kalan)], [25, 7.5, 0], 'tamamlama verileni net sarfla aynı');
     adimStatusuCozucusuKaydet(async () => null);
   });
 

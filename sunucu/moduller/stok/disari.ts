@@ -10,6 +10,16 @@ import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
 import * as kapanis from './kapanis.ts';
 
+// Akışın yazdığı hareket (1388 a) fişinde akış adını taşır; Stok Merkezi'nden elle geri alınmaz. Ayar işlem yereldir ve yazıcı
+// bitince boşaltılır: aynı işlemde sonradan yazılan elle hareket akışa sayılmaz.
+type Akis = 'terminal' | 'fason' | 'sevk' | 'kalite' | 'cnc' | 'emir';
+async function akistan<T>(db: Db, akis: Akis, yaz: () => Promise<T>): Promise<T> {
+  await sorgular.akisAyarla(db, akis);
+  const sonuc = await yaz();
+  await sorgular.akisAyarla(db, '');
+  return sonuc;
+}
+
 // Malzeme başına stok: toplam, kullanılabilir (raf, kabul, depo zemini) ve üretim çıkış alanında bekleyen. Miktarlar numeric metin.
 // Stoğu olmayan malzeme haritada yoktur (sıfır uydurulmaz).
 export async function stokMiktarlari(db: Db, malzemeIdler: number[]): Promise<Map<number, { toplam: string; kullanilabilir: string; uretimde: string }>> {
@@ -28,17 +38,17 @@ export const degerGrubuToplamlari = (db: Db) => sorgular.degerGrubuMalzemeToplam
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);
 // Satır verilirse (320 a) yalnız o bakiyeler çevrilir; `karantinadanBirak` sonucunun `hedefKonumId`, `statuId`, `kaliteDurumu`, `miktar` alanları verilir.
 export const partiKaliteDurumuYap = (db: Db, kisiId: number, g: Parameters<typeof servis.partiKaliteDurumuYap>[2]) =>
-  servis.partiKaliteDurumuYap(db, kisiId, g);
+  akistan(db, 'kalite', () => servis.partiKaliteDurumuYap(db, kisiId, g));
 // Denetim #15: karantinadaki partiyi serbest bırakma yalnız Kalite Merkezi'nin kararıyla; yetkiyi çağıran korur.
 // 320 a: partilerin red bakiyeleri (karantinada ve yerinde), yoldaki ayrılan düşülmüş; önce karantina konumları. Salt okur.
 export const partilerinRedBakiyeleri = (db: Db, partiIdler: readonly number[]) => servis.partilerinRedBakiyeleri(db, partiIdler);
-export const karantinadanBirak = (db: Db, kisiId: number, g: Parameters<typeof servis.karantinadanBirak>[2]) => servis.karantinadanBirak(db, kisiId, g);
+export const karantinadanBirak = (db: Db, kisiId: number, g: Parameters<typeof servis.karantinadanBirak>[2]) => akistan(db, 'kalite', () => servis.karantinadanBirak(db, kisiId, g));
 // 1246 giriş kontrolü: karantinada karar bekleyen satın alma lotları (kimlik verilirse o satırlar) ve kararın stok yansıması (kabul ve
 // şartlı kabul mal kabul alanına, hatalı karantinada red, kalitenin reddi tedarikçiye iade; 1252, 1253 a). Çağıranın transaction'ında
 // yürür; yetkiyi çağıran korur.
 export const girisKontroluSatirlari = (db: Db, idler: readonly number[] | null) => servis.girisKontroluSatirlari(db, idler);
 export type { GirisKontroluSatiri } from './servis.ts';
-export const girisKontroluUygula = (db: Db, kisiId: number, g: Parameters<typeof servis.girisKontroluUygula>[2]) => servis.girisKontroluUygula(db, kisiId, g);
+export const girisKontroluUygula = (db: Db, kisiId: number, g: Parameters<typeof servis.girisKontroluUygula>[2]) => akistan(db, 'kalite', () => servis.girisKontroluUygula(db, kisiId, g));
 // Kalite Merkezi'nin serbest bırakma seçimi için konumlar ve karantina defterindeki hareketten partiye geçiş.
 export const karantinaDisiKonumlar = (db: Db) => sorgular.karantinaDisiKonumlar(db);
 export const hareketPartileri = (db: Db, hareketIdler: readonly number[]): Promise<Map<number, number>> => sorgular.hareketPartileri(db, hareketIdler);
@@ -108,7 +118,7 @@ export const sonPartiler = (db: Db, malzemeId: number, sinir = 10) => servis.son
 // (ilk giren önce, eksiye inmez; yetmezse hiç düşmez). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export type { CncTakimCikisiSonucu } from './servis.ts';
 export const cncTakimCikisi = (db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<servis.CncTakimCikisiSonucu> =>
-  servis.cncTakimCikisi(db, kisiId, g);
+  akistan(db, 'cnc', () => servis.cncTakimCikisi(db, kisiId, g));
 // Kalıp: kisiAdlari. Boş dizide sorgu atılmaz; olmayan kimlik haritada yoktur; pasif konum da koduyla döner.
 export async function konumAdlari(db: Db, idler: number[]): Promise<Map<number, string>> {
   if (idler.length === 0) return new Map();
@@ -150,24 +160,24 @@ export async function sonHareketler(db: Db, sinir = 100): Promise<Hareket[]> {
 // alan saglamAdet). Yetki denetlemez.
 export type { AdimStatusuCozucusu, UretimSayimiYansimasi } from './servis.ts';
 export const uretimGirdiUyarisi = (db: Db, g: Parameters<typeof servis.uretimGirdiUyarisi>[1]): Promise<string | null> => servis.uretimGirdiUyarisi(db, g);
-export const uretimSayimiYansit = async (db: Db, g: servis.UretimSayimiYansimasi): Promise<void> => { await servis.uretimSayimiYansit(db, g); };
+export const uretimSayimiYansit = async (db: Db, g: servis.UretimSayimiYansimasi): Promise<void> => { await akistan(db, 'terminal', () => servis.uretimSayimiYansit(db, g)); };
 // Aynısı, sayım cevabına giden uyarıyla (kart #157): dinleyici dönüş alınca kablolama buna geçer; o zamana kadar uyarı yalnız harekette.
-export const uretimSayimiYansitUyarili = (db: Db, g: servis.UretimSayimiYansimasi): Promise<{ uyari: string | null }> => servis.uretimSayimiYansit(db, g);
+export const uretimSayimiYansitUyarili = (db: Db, g: servis.UretimSayimiYansimasi): Promise<{ uyari: string | null }> => akistan(db, 'terminal', () => servis.uretimSayimiYansit(db, g));
 // İlk parça kararı (131 b): emrin karar bekleyen parçası serbest ya da red olur.
-export const kaliteKarariYansit = (db: Db, g: servis.KaliteKarariYansimasi): Promise<void> => servis.kaliteKarariYansit(db, g);
+export const kaliteKarariYansit = (db: Db, g: servis.KaliteKarariYansimasi): Promise<void> => akistan(db, 'kalite', () => servis.kaliteKarariYansit(db, g));
 // Hurda sayımının girdisi: hurdaya ayrılan parçanın HM'si istasyondaki emrin stoğundan fire çıkışıyla düşer; eksi fark geri alır. Yetki denetlemez.
 export type { HurdaSayimiYansimasi } from './servis.ts';
-export const hurdaSayimiYansit = async (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => { await servis.hurdaSayimiYansit(db, g); };
+export const hurdaSayimiYansit = async (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => { await akistan(db, 'terminal', () => servis.hurdaSayimiYansit(db, g)); };
 // Aynısı, sayım cevabına giden uyarıyla (601 a): önceki adımın parçası istasyonda yoksa eksiye düşüldüğü söylenir (sağlam sayımdaki gibi).
-export const hurdaSayimiYansitUyarili = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<{ uyari: string | null }> => servis.hurdaSayimiYansit(db, g);
+export const hurdaSayimiYansitUyarili = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<{ uyari: string | null }> => akistan(db, 'terminal', () => servis.hurdaSayimiYansit(db, g));
 // Emrin istasyondan teslim edilen miktarı (yoldaki ve alınan); istasyondan hiç teslim olmadıysa null.
 // Arkon'dan operatörün gönderdiği numune (karar 115 a, 125 a): teslim kaydı; engel değildir, yazılamazsa neden döner.
 export type { NumuneTeslimi, NumuneTeslimSonucu } from './servis.ts';
-export const numuneTeslimi = (db: Db, g: servis.NumuneTeslimi): Promise<servis.NumuneTeslimSonucu> => servis.numuneTeslimi(db, g);
+export const numuneTeslimi = (db: Db, g: servis.NumuneTeslimi): Promise<servis.NumuneTeslimSonucu> => akistan(db, 'terminal', () => servis.numuneTeslimi(db, g));
 // 564 6 a: kalite istasyonunun lot reddi emrin istasyondaki serbest parçasını red kalitesine geçirir (kabul değiştirmez); geçen miktar döner.
 // Çağıranın transaction'ında yürür; yetkiyi ve Kalite Merkezi lot kaydını çağıran yazar.
 export type { IstasyonLotKarari } from './servis.ts';
-export const istasyonLotKarari = (db: Db, g: servis.IstasyonLotKarari): Promise<string> => servis.istasyonLotKarari(db, g);
+export const istasyonLotKarari = (db: Db, g: servis.IstasyonLotKarari): Promise<string> => akistan(db, 'kalite', () => servis.istasyonLotKarari(db, g));
 export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istasyonId: number }): Promise<string | null> => servis.istasyondanTeslimEdilen(db, g);
 // Reçete ve Rota başlangıçta adımın statüsünü çözen işlevi kaydeder (stok onu ithal edemez). Son ve statüsüz adımda null döner.
 export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
@@ -179,7 +189,14 @@ export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void 
 export const acikNcrPartiCozucusu = (cozucu: servis.AcikNcrPartiCozucusu): void => servis.acikNcrPartiCozucusuKaydet(cozucu);
 // Ters yöndeki haberlerin karşılığı: uretim-emirleri ve sevkiyat stoğu ithal edemez; bağı sunucu/kablolama.ts kurar. Olay komutla
 // aynı işlemde gelir; stoğun reddi komutu da geri alır.
-export { emirAcildiYansit, emirBirlestiYansit, emirBittiYansit, emirIptalYansit, fasonHareketiYansit, fasonSevkiYansit, urunSevkiYansit } from './servis.ts';
+type Ilk<F> = F extends (db: Db, olay: infer O) => unknown ? O : never;
+export const emirAcildiYansit = (db: Db, olay: Ilk<typeof servis.emirAcildiYansit>): Promise<void> => akistan(db, 'emir', () => servis.emirAcildiYansit(db, olay));
+export const emirBirlestiYansit = (db: Db, olay: Ilk<typeof servis.emirBirlestiYansit>): Promise<void> => akistan(db, 'emir', () => servis.emirBirlestiYansit(db, olay));
+export const emirBittiYansit = (db: Db, olay: Ilk<typeof servis.emirBittiYansit>): Promise<void> => akistan(db, 'emir', () => servis.emirBittiYansit(db, olay));
+export const emirIptalYansit = (db: Db, olay: Ilk<typeof servis.emirIptalYansit>): Promise<void> => akistan(db, 'emir', () => servis.emirIptalYansit(db, olay));
+export const fasonHareketiYansit = (db: Db, olay: Ilk<typeof servis.fasonHareketiYansit>): Promise<void> => akistan(db, 'fason', () => servis.fasonHareketiYansit(db, olay));
+export const fasonSevkiYansit = (db: Db, olay: Ilk<typeof servis.fasonSevkiYansit>): Promise<void> => akistan(db, 'fason', () => servis.fasonSevkiYansit(db, olay));
+export const urunSevkiYansit = (db: Db, olay: Ilk<typeof servis.urunSevkiYansit>): Promise<string[]> => akistan(db, 'sevk', () => servis.urunSevkiYansit(db, olay));
 // Refakat partisi (kart #123): Arkon kart QR'ından (`RP:<id>`) emri ve partiyi okur. Yoksa null; yetki denetlemez, çağıran korur.
 // Birleşmiş kolun kartı birleştiği kartı döndürür (kart #126).
 export interface RefakatPartisiOzeti {

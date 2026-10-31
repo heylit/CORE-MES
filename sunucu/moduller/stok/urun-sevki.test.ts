@@ -159,7 +159,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     projeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('STOK.SEVK', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
-    for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo']] as const) await kisiEkle(ad, rol);
+    for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo'], ['mudur', 'mudur']] as const) await kisiEkle(ad, rol);
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('US-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('US-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     urunNo = (await ortam.sahip.tek<{ no: number }>(
@@ -229,12 +229,14 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     const cikis = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_hareketi WHERE cikis_nedeni = 'sevk' AND uretim_emri_id = $1", [id]))!.id;
     const engel = 'Sevk faturalandı (DNM-FAT-186); stok çıkışı geri alınmaz. Önce faturayı iptal edin ya da iade kesin.';
 
-    const elle = await istek<{ mesaj: string }>('depo', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {});
-    assert.deepEqual([elle.durum, elle.govde.mesaj], [409, engel]);
-    assert.equal((await istek('depo', 'POST', '/stok/hareketler/geri-al', { hareketIdler: [cikis] })).durum, 409);
+    // 1387 a: depo hareket geri alamaz. 1388 a: sevkin yazdığı çıkış Stok Merkezi'nden müdürce de geri alınmaz, yalnız sevkiyat geri alır.
+    assert.equal((await istek('depo', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {})).durum, 403);
+    const elle = await istek<{ mesaj: string }>('mudur', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {});
+    assert.deepEqual([elle.durum, elle.govde.mesaj], [409, "Bu hareketi sevkiyat akışı yazdı; Stok Merkezi'nden geri alınmaz, yalnız o akış geri alır."]);
+    assert.equal((await istek('mudur', 'POST', '/stok/hareketler/geri-al', { hareketIdler: [cikis] })).durum, 409);
     await assert.rejects(gecis(s, 'tamamlandi', 'yolda'), (h: { message: string }) => h.message === engel);
     await belge({ tur: 'iade', tutar: 500, iade: fatura });
-    assert.equal((await istek('depo', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {})).durum, 409, 'kısmi iade yetmez');
+    await assert.rejects(gecis(s, 'tamamlandi', 'yolda'), (h: { message: string }) => h.message === engel, 'kısmi iade yetmez');
     assert.equal(await sevkCikisi(id), 4);
     await belge({ tur: 'iade', tutar: 500, iade: fatura });
     await gecis(s, 'tamamlandi', 'yolda');
@@ -248,7 +250,8 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     await o().sahip.sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [ikinci, yoneticiId]);
     const yeni = (await o().sahip.tek<{ id: number }>(
       "SELECT h.id FROM stok_hareketi h WHERE h.cikis_nedeni = 'sevk' AND h.uretim_emri_id = $1 AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)", [id]))!.id;
-    assert.equal((await istek('depo', 'POST', `/stok/hareketler/${String(yeni)}/geri-al`, {})).durum, 200);
+    assert.equal((await istek('mudur', 'POST', `/stok/hareketler/${String(yeni)}/geri-al`, {})).durum, 409, 'sevk çıkışı elle geri alınmaz');
+    await gecis(s, 'tamamlandi', 'yolda');
     assert.equal(await sevkCikisi(id), 0);
   });
 
@@ -388,7 +391,8 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${isId}/durum`, { durum: 'tamamlandi', tarih, not: null })).durum, 200);
     assert.equal(await sevkCikisi(id), 5, 'teslim ikinci kez düşmez');
 
-    const geri = await istek('depo', 'POST', `/stok/depo-sevk/${kalemId}/geri-al`);
+    assert.equal((await istek('depo', 'POST', `/stok/depo-sevk/${kalemId}/geri-al`)).durum, 403, '1387 a: geri alma yalnız müdürde');
+    const geri = await istek('mudur', 'POST', `/stok/depo-sevk/${kalemId}/geri-al`);
     assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
     assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await sevkCikisi(id), await kalemAsamasi(kalemId)], [5, 0, 'depoda']);
     assert.equal((await istek('depo', 'POST', `/stok/depo-sevk/${kalemId}/cikis`)).durum, 200);
@@ -438,7 +442,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     const duzelt = (ad: string, satirlar: unknown[]) => istek(ad, 'POST', `/stok/mal-kabuller/${String(k2.govde.belge.id)}/duzelt`, { satirlar });
     assert.equal((await duzelt('operator', [])).durum, 403, 'geri alma işlemi olmayan düzeltemez');
     assert.equal(await kalemAsamasi(gelis), 'tamamlandi', 'reddedilen düzeltme kalemi değiştirmez');
-    const d = await duzelt('depo', [{ malzemeId: sarf, miktar: '1', sevkKalemiId: gelis }]);
+    const d = await duzelt('mudur', [{ malzemeId: sarf, miktar: '1', sevkKalemiId: gelis }]);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     const s2 = (await depoListesi()).find((x) => x.kalemId === gelis);
     assert.deepEqual(s2 && [s2.is, s2.kabulAdet], ['kabul', '3.0000'], '2 + 3 kabul, 3 geri alındı, düzeltmede 1 yeniden kabul: kalem açık');

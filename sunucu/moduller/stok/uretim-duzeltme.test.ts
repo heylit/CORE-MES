@@ -138,10 +138,12 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
     assert.equal(once?.durum, 'eksik');
     assert.match(once?.ayrinti ?? '', new RegExp(`istasyonda eksi: ${kodB!} UUD-DNM-\\d+ -6 \\(statülü; aynı statüde ${kodA!}: 6\\)`));
 
-    // Parça OP 20 istasyonuna teslim edilince eksi kapanır; madde istasyondan söz etmez.
+    // Parça OP 20 istasyonuna teslim edilince eksi kapanır; madde eksiden söz etmez. Emrin ürünü OP 20 istasyonunda durduğu sürece
+    // madde istasyonda kalan artıyı söyler (K-2 a, 1386); depoya taşınınca kapanır.
     await teslimEt({ malzemeId: hm, miktar: '6', statuId: s10, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id } });
     const sonra = await o().vt.tx((db) => kapanisStokDurumu(db, e));
-    assert.doesNotMatch(sonra?.ayrinti ?? '', /istasyonda/);
+    assert.doesNotMatch(sonra?.ayrinti ?? '', /istasyonda eksi/);
+    assert.match(sonra?.ayrinti ?? '', new RegExp(`istasyonda kalan: ${kodB!} UUD-DNM-\\d+ 10 `));
   });
 
   test('O-1 sayım düzeltmesi: karar bekleyen sayımla çevrilen parça geri çevrilince eski kalitesine döner; eksiden çevrilen lotsuz eksi kapanır', async () => {

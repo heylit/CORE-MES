@@ -86,7 +86,7 @@ export const uclar = [
 
   uc({ yontem: 'GET', yol: '/stok/fason-isleri', yetki: 'stok.giris', sorgu: fasonIsleriSorgusu, cevap: fasonIsleriCevabi, isle: ({ db, sorgu }) => s.fasonIsleri(db, sorgu.konumId) }),
   uc({ yontem: 'GET', yol: '/stok/acik-siparis-satirlari', yetki: ACIK_SIPARIS_OKUMA, cevap: acikSiparisSatirlariCevabi, isle: ({ db }) => s.acikSiparisSatirlari(db) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/mal-kabul', yetki: 'stok.giris', govde: malKabulGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, govde, denetimEki }) => s.malKabulYap(db, kullanici, govde, denetimEki) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/mal-kabul', yetki: 'stok.giris', govde: malKabulGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulYap(db, kullanici, govde, denetimEki); } }),
   // Kart #1124: satın alma siparişinin irsaliye satırı.
   uc({ yontem: 'GET', yol: '/stok/siparis-irsaliyeleri', yetki: SON_PARTI_OKUMA, sorgu: siparisIrsaliyeleriSorgusu, cevap: siparisIrsaliyeleriCevabi,
     isle: ({ db, sorgu }) => s.siparisIrsaliyeleri(db, sorgu.siparisSatirlari) }),
@@ -94,26 +94,26 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id/lot-etiketleri', yetki: OKUMA, parametre: kimlikParametresi, cevap: lotEtiketleriCevabi, isle: ({ db, parametre }) => s.malKabulLotEtiketleri(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malKabulAyrintiCevabi, isle: ({ db, parametre }) => s.malKabulAyrintisi(db, parametre.id) }),
   // Düzeltme hareketleri ters çevirir: geri alma işlemiyle korunur (DEP-53).
-  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/mal-kabuller/:id/duzelt', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: malKabulDuzeltGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, parametre, govde, denetimEki }) => s.malKabulDuzelt(db, kullanici, parametre.id, govde, denetimEki) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/mal-kabuller/:id/duzelt', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: malKabulDuzeltGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, parametre, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulDuzelt(db, kullanici, parametre.id, govde, denetimEki); } }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/uretim-girisi', yetki: 'stok.giris', govde: uretimGirisiGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.uretimGirisi(db, kullanici.id, govde) }),
 
   // Emir tamamlama: bitmiş emrin kalan sarfı ve çıktısı tek komutla (EK "Stok ve tamamlama"). Komut çıkış yetkisini ayrıca ister.
   uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/tamamlama', yetki: OKUMA, parametre: kimlikParametresi, cevap: emirTamamlamaCevabi, isle: ({ db, parametre }) => s.emirTamamlamaOku(db, parametre.id) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/uretim-emirleri/:id/tamamla', yetki: 'stok.giris', parametre: kimlikParametresi, govde: emirTamamlaGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, parametre, govde }) => s.emirTamamla(db, kullanici, parametre.id, govde) }),
 
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/tasima', yetki: 'stok.transfer', govde: tasimaGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.tasimaYap(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/tasima', yetki: 'stok.transfer', govde: tasimaGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.tasimaYap(db, kullanici.id, govde); } }),
   // Statülü malzemenin emre ayrılması: statü değiştirme yetkisiyle (müdür; kullanıcı kararı 15.10, yeni yetki yok).
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-et', yetki: 'stok.statu-degistir', govde: rezerveEtGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveEt(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-kaldir', yetki: 'stok.statu-degistir', govde: rezerveKaldirGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveKaldir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/statu-degistir', yetki: 'stok.statu-degistir', govde: statuDegistirGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.statuDegistir(db, kullanici.id, govde) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.cikisYap(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.cikisYap(db, kullanici.id, govde); } }),
   // Depo sevk (944, 962 a): sevkiyatın tetiklediği gidişin son çıkışı; gelişler mal kabul satırıyla (sevkKalemiId) kapanır.
   uc({ yontem: 'GET', yol: '/stok/depo-sevk', yetki: { biri: ['stok.cikis', 'stok.giris'] }, cevap: depoSevkCevabi, isle: ({ db }) => s.depoSevkListesi(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/depo-sevk/:id/cikis', yetki: 'stok.cikis', parametre: kimlikParametresi, cevap: depoCikisCevabi, isle: ({ db, kullanici, parametre }) => s.depoCikisiYap(db, kullanici.id, parametre.id) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/depo-sevk/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, cevap: depoCikisCevabi, isle: ({ db, kullanici, parametre }) => s.depoCikisiniGeriAlYap(db, kullanici.id, parametre.id) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim', yetki: 'stok.sayim', govde: sayimGovdesi, cevap: sayimCevabi, isle: ({ db, kullanici, govde }) => s.sayimYap(db, kullanici.id, govde) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/hareketler/geri-al', yetki: 'stok.geri-al', govde: topluGeriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.topluGeriAl(db, kullanici.id, govde) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/hareketler/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: geriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, parametre, govde }) => s.geriAl(db, kullanici.id, parametre.id, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/hareketler/geri-al', yetki: 'stok.geri-al', govde: topluGeriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.topluGeriAl(db, kullanici.id, govde); } }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/hareketler/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: geriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, parametre, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.geriAl(db, kullanici.id, parametre.id, govde); } }),
   uc({ yontem: 'GET', yol: '/stok/hareketler', yetki: ROTA_STOK_OKUMA, sorgu: hareketlerSorgusu, cevap: hareketlerCevabi, isle: ({ db, sorgu }) => s.hareketListesi(db, sorgu) }),
 
   // Okut ve sepet. Sepet kişinindir; teslim tek işlemde fiş yazar (DEP-40). Konuma teslim taşımadır, stoktan düşme çıkıştır.
@@ -124,7 +124,7 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/stok/sepet/satirlar/:id/sil', yetki: 'stok.istek', parametre: kimlikParametresi, cevap: sepetCevabi, isle: ({ db, kullanici, parametre }) => s.sepetSatiriSil(db, kullanici.id, parametre.id) }),
   // Herkese sepet (Soru 133): sepet kişinindir, her satır kendi hedefine yoldaki teslim olur. Depo taşıması (teslim-et) depo işidir.
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/gonder', yetki: 'stok.istek', govde: sepetTeslimEtGovdesi, cevap: sepetTeslimEtCevabi, isle: ({ db, kullanici, govde }) => s.sepetGonder(db, kullanici, govde) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/teslim-et', yetki: 'stok.transfer', govde: teslimGovdesi, cevap: sepetTeslimCevabi, isle: ({ db, kullanici, govde }) => s.teslimEt(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/teslim-et', yetki: 'stok.transfer', govde: teslimGovdesi, cevap: sepetTeslimCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.teslimEt(db, kullanici.id, govde); } }),
   // Refakat partisi (kart #123): depo lotu okutup emre ayırır, kartı basar; hiç teslimi olmayan kart iptal edilir.
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/refakat-partileri/ac', yetki: 'stok.transfer', govde: refakatPartisiAcGovdesi, cevap: refakatPartisiCevabi, isle: ({ db, kullanici, govde }) => s.refakatPartisiAc(db, kullanici.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/refakat-partileri/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartisiCevabi, isle: ({ db, parametre }) => s.refakatPartisiOku(db, parametre.id) }),
@@ -140,7 +140,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/lot-bekleyen-kartlar', yetki: OKUMA, cevap: lotBekleyenKartlarCevabi, isle: ({ db }) => s.lotBekleyenKartlar(db) }),
   uc({ yontem: 'POST', yol: '/stok/refakat-partileri/:id/iptal-et', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: surumGovdesi, cevap: refakatPartisiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.refakatPartisiIptal(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/refakat-partileri', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartileriCevabi, isle: ({ db, parametre }) => s.emrinRefakatPartileri(db, parametre.id) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/stoktan-dus', yetki: 'stok.cikis', govde: stoktanDusGovdesi, cevap: fisCevabi, isle: ({ db, kullanici, govde }) => s.stoktanDus(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/stoktan-dus', yetki: 'stok.cikis', govde: stoktanDusGovdesi, cevap: fisCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.stoktanDus(db, kullanici.id, govde); } }),
   uc({ yontem: 'GET', yol: '/stok/fisler', yetki: OKUMA, sorgu: fislerSorgusu, cevap: fislerCevabi, isle: ({ db, sorgu }) => s.fisListesi(db, sorgu) }),
   // Malzeme fişleri (kart #492): stok okuyan görür; Logo'ya elle gönderim ve yeniden gönderim ayrı işlemdir (295 a).
   uc({ yontem: 'GET', yol: '/stok/malzeme-fisleri', yetki: OKUMA, sorgu: malzemeFisleriSorgusu, cevap: malzemeFisleriCevabi, isle: ({ db, sorgu }) => mf.malzemeFisiListesi(db, sorgu) }),
@@ -153,7 +153,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/toplamalar', yetki: OKUMA, sorgu: toplamalarSorgusu, cevap: toplamalarCevabi, isle: ({ db, kullanici, sorgu }) => s.toplamaListesi(db, kullanici.id, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/toplamalar/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: toplamaAyrintiCevabi, isle: ({ db, kullanici, parametre }) => s.toplamaAyrintisiGor(db, kullanici.id, parametre.id) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/toplamalar', yetki: 'stok.toplama', govde: toplamaAcGovdesi, cevap: toplamaAyrintiCevabi, isle: ({ db, kullanici, govde }) => s.toplamaAc(db, kullanici, govde) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/toplamalar/:id/adimlar/:adimId/topla', yetki: 'stok.toplama', parametre: toplamaAdimParametresi, govde: adimToplaGovdesi, cevap: toplamaAyrintiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.adimTopla(db, kullanici.id, parametre.id, parametre.adimId, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/toplamalar/:id/adimlar/:adimId/topla', yetki: 'stok.toplama', parametre: toplamaAdimParametresi, govde: adimToplaGovdesi, cevap: toplamaAyrintiCevabi, isle: ({ db, kullanici, parametre, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.adimTopla(db, kullanici.id, parametre.id, parametre.adimId, govde); } }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/toplamalar/:id/kapat', yetki: 'stok.toplama', parametre: kimlikParametresi, govde: toplamaKapatGovdesi, cevap: toplamaAyrintiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.toplamaKapat(db, kullanici.id, parametre.id, govde) }),
   // Malzeme isteği: üretim (Arkon) stok/disari ile açar; depo hazırlar, teslim eder ya da iptal eder.
   uc({ yontem: 'GET', yol: '/stok/malzeme-istekleri', yetki: OKUMA, sorgu: malzemeIstekleriSorgusu, cevap: malzemeIstekleriCevabi, isle: ({ db, kullanici, sorgu }) => s.malzemeIstekleriListesi(db, kullanici.id, sorgu) }),

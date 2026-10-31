@@ -40,7 +40,7 @@ export function useIslem(islem: Islem): boolean {
 }
 // Tam stok okuması sunucudaki OKUMA ile aynıdır: sayfa.stok ya da herhangi bir stok işlemi; stok.istek tek başına açmaz (soru 93 a).
 // Liste istemcide yazılır (paylasilan değeri zod taşıyabilir); eksik işlem tip denetiminde yakalanır.
-const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir'] as const;
+const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla'] as const;
 const stokOkumaTam: [Exclude<(typeof STOK_ISLEMLERI)[number], (typeof STOK_OKUMA)[number]>] extends [never] ? true : never = true;
 export function useStokOkur(): boolean {
   const islemler = useOturum().data?.islemler ?? [];

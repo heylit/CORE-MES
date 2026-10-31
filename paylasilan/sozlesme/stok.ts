@@ -158,6 +158,11 @@ export const hareket = z.object({
   geriAlindi: z.boolean(),
   fisId: z.number().int().nullable(),
   fisNo: z.string().nullable(),
+  // Hareket fişi (1385 a): her hareketin fişi. Başka modülün fikstürleri alanı bilmez; sunucu her zaman doldurur.
+  hareketFisiId: z.number().int().nullable().optional(),
+  hareketFisiNo: z.string().nullable().optional(),
+  // Hareketi bir akış (terminal, fason, sevk, kalite, CNC, emir) yazdı: Stok Merkezi'nden elle geri alınmaz (1388 a).
+  otomatik: z.boolean().optional(),
   kisiAd: z.string().nullable(),
   aciklama: z.string().nullable(),
   kaynakStatuId: z.number().int().nullable(),

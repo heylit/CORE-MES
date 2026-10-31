@@ -195,7 +195,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const FIRMA_OKU = ['musteri-tedarikci.oku', 'sayfa.musteri-tedarikci'];
   const FIRMA = [...FIRMA_OKU, 'musteri-tedarikci.yaz'];
   // Stok (kart #223, kullanıcı kararı RC1 R4-R6, R13; kart #1225): müdür ve depo bütün stok işlemlerini taşır.
-  const DEPO_STOK = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.toplama', 'stok.tanim', 'stok.geri-al'];
+  const DEPO_STOK = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.toplama', 'stok.tanim'];
+  // Hareket geri alma ve elle eksiye düşüm onayı yalnız müdürde (1387 a); depo kendi hareketini geri alamaz.
+  const MUDUR_STOK = ['stok.geri-al', 'stok.eksi-onayla'];
   // Malzeme fişini Logo'ya elle gönderme yalnız depoda (295 a, 299 a; kart #495); müdür depo stok işlemlerini alsa da bunu almaz.
   const FIS_GONDER = ['stok.malzeme-fisi-gonder'];
   // Satın alma (kart #223, kullanıcı kararı RC1 R1-R3; ana sayfadan talep, kart #375): talep açmayı üretimdeki roller de alır, operatör almaz.
@@ -248,7 +250,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'kisiler.oku', 'denetim.oku', 'vardiya.yaz', 'vardiya.gecmis-yaz', 'vardiya.durus-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'terminal.uret',
       ...MALZEME_ONAYI, 'malzemeler.tanim-yaz', 'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'istasyonlar.yaz',
       'finans.oku', 'finans.maliyet-oku', 'musteri-tedarikci.oku',
-      ...DEPO_STOK,
+      ...DEPO_STOK, ...MUDUR_STOK,
       'satin-alma.oku', TALEP, 'satin-alma.onayla',
       'sevkiyat.oku', 'portal.oku', 'portal.yaz', 'portal.satinalma', 'portal.satis', 'portal.finans', 'portal.kalite', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz',
       'cnc-kurulum.oku', 'cnc-kurulum.yaz',

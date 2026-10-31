@@ -247,8 +247,10 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     const emir = await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]);
     const konum = await ortam!.sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'PM-SARF', 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id");
     await ortam!.sahip.sorgu(
-      `INSERT INTO stok_hareketi (tur, malzeme_id, kaynak_konum_id, miktar, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
-       VALUES ('cikis', $1, $2, 3, 'uretime_sarf', $3, $4, true, 'kisi')`, [bilesen, konum!.id, emir!.id, yoneticiId]);
+      `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ('cikis', pg_current_xact_id(), $4) RETURNING id),
+         h AS (INSERT INTO stok_hareketi (tur, malzeme_id, kaynak_konum_id, miktar, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
+               VALUES ('cikis', $1, $2, 3, 'uretime_sarf', $3, $4, true, 'kisi') RETURNING id)
+       INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f`, [bilesen, konum!.id, emir!.id, yoneticiId]);
     c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
     malzeme = c.kalemler.find((x) => x.kalem === 'malzeme')!;
     assert.equal(malzeme.gerceklesen, null);
