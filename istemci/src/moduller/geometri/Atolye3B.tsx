@@ -8,7 +8,7 @@ import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim,
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, kutuMetni, suruyorMu, uzunluk } from './gorunum.ts';
+import { buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, stokOlcuMetni, suruyorMu, uzunluk } from './gorunum.ts';
 import './geometri.css';
 
 const Goruntu3B = lazy(() => import('./Goruntu3B.tsx'));
@@ -114,29 +114,63 @@ function AnalizKarti({ revizyonId, cevap }: { revizyonId: number; cevap: Geometr
   );
 }
 
+const HAM_NEDEN: Readonly<Record<NonNullable<GeometriHamCevabi['neden']>, string>> = {
+  'analiz-yok': 'Analiz gelince hesaplanır.',
+  'stok-listesi-yok': 'Ölçüsü girilmiş aktif hammadde kartı yok (Malzemeler, hammadde form ve ölçüleri).',
+  'sigan-yok': 'Bu ölçüye sığan hammadde kartı yok.',
+};
+
+// Stok listesi aktif hammadde kartlarıdır (1469 a). Pay boşsa sistem ayarı geçerlidir; ekran hangisinin kullanıldığını söyler.
 function HamKarti({ revizyonId, analizVar }: { revizyonId: number; analizVar: boolean }) {
   const [pay, payYaz] = useState('');
+  const [kalite, kaliteYaz] = useState('');
   const payMm = pay.trim() === '' ? null : Number(pay.replace(',', '.'));
   // Üst sınırı sunucu denetler (sözleşme PAY_EN_COK_MM); aşan pay sunucunun iletisiyle döner.
-  const gecerli = payMm !== null && Number.isFinite(payMm) && payMm >= 0;
+  const gecerli = payMm === null || (Number.isFinite(payMm) && payMm >= 0);
   const sorgu = useQuery({
-    queryKey: anahtarlar.ham(revizyonId, gecerli ? payMm : -1),
-    queryFn: () => api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(revizyonId)}?payMm=${String(payMm)}`),
+    queryKey: anahtarlar.ham(revizyonId, payMm ?? -1, kalite),
+    queryFn: () => {
+      const q = new URLSearchParams();
+      if (payMm !== null) q.set('payMm', String(payMm));
+      if (kalite !== '') q.set('kalite', kalite);
+      const ek = q.toString();
+      return api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(revizyonId)}${ek === '' ? '' : `?${ek}`}`);
+    },
     enabled: gecerli && analizVar,
+    placeholderData: keepPreviousData,
   });
+  const v = sorgu.data;
+  const payIpucu = v === undefined || payMm !== null ? undefined
+    : v.payKaynagi === 'ayar' ? `Boş bırakılırsa sistem ayarı: ${uzunluk(v.payMm)} mm` : 'Pay ayarı boş; pay 0 mm alındı.';
   return (
     <Kart baslik="Ham önerisi" simge="box">
       <Girdi etiket="İşleme payı (her yüz, mm)" inputMode="decimal" value={pay} onChange={(o) => payYaz(o.target.value)}
-        hata={payMm !== null && !gecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
-      {!analizVar ? <p className="tc-g3b-soluk">Analiz gelince hesaplanır.</p>
-        : !gecerli ? <p className="tc-g3b-soluk">Payı yazınca en küçük ham ölçüsü görünür.</p>
+        ipucu={payIpucu} hata={!gecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+      {v !== undefined && v.kaliteler.length > 0 && (
+        <Secim etiket="Kalite" value={kalite} bosSecenek="Tüm kaliteler" onChange={(o) => kaliteYaz(o.target.value)}
+          secenekler={v.kaliteler.map((k) => ({ deger: k, baslik: k }))} />
+      )}
+      {!analizVar ? <p className="tc-g3b-soluk">{HAM_NEDEN['analiz-yok']}</p>
+        : !gecerli ? null
           : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
             : sorgu.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Ham önerisi okunamadı.')} />
               : (
-                <dl className="tc-g3b-degerler">
-                  <div><dt>En az ham</dt><dd>{sorgu.data.enAz ? kutuMetni(sorgu.data.enAz.a, sorgu.data.enAz.b, sorgu.data.enAz.c) : '-'}</dd></div>
-                  <div><dt>Stok ölçüsü</dt><dd className="tc-g3b-soluk">Stok ölçü listesi henüz yok (Malzemeler'den gelecek).</dd></div>
-                </dl>
+                <>
+                  <dl className="tc-g3b-degerler">
+                    <div><dt>En az ham</dt><dd>{sorgu.data.enAz ? kutuMetni(sorgu.data.enAz.a, sorgu.data.enAz.b, sorgu.data.enAz.c) : '-'}</dd></div>
+                  </dl>
+                  {sorgu.data.neden !== null ? <p className="tc-g3b-soluk">{HAM_NEDEN[sorgu.data.neden]}</p> : (
+                    <ul className="tc-g3b-oneriler" aria-label="Stok önerileri">
+                      {sorgu.data.oneriler.map((o) => (
+                        <li key={o.form}>
+                          <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}</span>
+                          <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
+                          {o.kesimBoyuMm !== null && <span>Kesim boyu {uzunluk(o.kesimBoyuMm)} mm</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
     </Kart>
   );

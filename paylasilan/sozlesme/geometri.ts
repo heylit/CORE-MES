@@ -79,18 +79,41 @@ export const geometriAnalizCevabi = z.object({
 });
 export type GeometriAnalizCevabi = z.output<typeof geometriAnalizCevabi>;
 
-// Pay her yüzeye eklenen işleme payıdır (mm). Ayarı Malzemeler'in stok ölçü listesiyle gelir (1433 a); o gelene kadar ekran sorar.
+// Pay her yüzeye eklenen işleme payıdır (mm). Sorguda yoksa sistem ayarı (geometri.ham-payi-mm) geçerlidir; ayar da boşsa pay 0 ve
+// kaynağı 'yok' döner, ekran bunu söyler. Stok listesi aktif hammadde kartlarıdır (1469 a); kalite verilirse yalnız o kalite.
 export const PAY_EN_COK_MM = 100;
-export const geometriHamSorgusu = z.object({ payMm: z.coerce.number().min(0).max(PAY_EN_COK_MM) });
-export const HAM_STOK_NEDENLERI = ['stok-listesi-yok', 'analiz-yok'] as const;
+export const geometriHamSorgusu = z.object({
+  payMm: z.coerce.number().min(0).max(PAY_EN_COK_MM).optional(),
+  kalite: z.string().trim().min(1).max(100).optional(),
+});
+export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok'] as const;
+export const HAM_PAY_KAYNAKLARI = ['istek', 'ayar', 'yok'] as const;
+export const HAM_STOK_NEDENLERI = ['analiz-yok', 'stok-listesi-yok', 'sigan-yok'] as const;
+export const hamStokOnerisi = z.object({
+  malzemeNo: z.number().int(),
+  kod: z.string(),
+  ad: z.string().nullable(),
+  kalite: z.string().nullable(),
+  form: z.enum(HAM_STOK_FORMLARI),
+  // Kartın ölçüleri, Malzemeler'in form ölçü adlarıyla (çubuk d,l; altıgen s,l; lama a,b,l; levha t,w,l; blok a,b,h).
+  olcu: z.record(z.string(), z.number()),
+  // Çubuk, altıgen, lama ve levhada kesilecek boy; blokta null.
+  kesimBoyuMm: mm.nullable(),
+  hamHacimMm3: mm,
+});
+export type HamStokOnerisi = z.output<typeof hamStokOnerisi>;
 export const geometriHamCevabi = z.object({
   revizyonId: z.number().int(),
   payMm: z.number(),
+  payKaynagi: z.enum(HAM_PAY_KAYNAKLARI),
   // Döndürülmüş kutu + iki yüzde pay; analiz yoksa null.
   enAz: z.object({ a: mm, b: mm, c: mm }).nullable(),
-  // En küçük uygun stok ölçüsü; liste yoksa ya da uygun ölçü yoksa null ve neden.
-  stokOlcusu: z.null(),
-  neden: z.enum(HAM_STOK_NEDENLERI),
+  // Her formda sığan en küçük kart, ham hacmine göre artan sırada (en az talaş önce).
+  oneriler: z.array(hamStokOnerisi),
+  // Listede bulunan kaliteler (süzgeç için; kalite süzgecinden bağımsız).
+  kaliteler: z.array(z.string()),
+  // Öneri yoksa nedeni; varsa null.
+  neden: z.enum(HAM_STOK_NEDENLERI).nullable(),
 });
 export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 

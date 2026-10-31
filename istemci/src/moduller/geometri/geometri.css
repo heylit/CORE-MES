@@ -26,6 +26,9 @@
 .tc-g3b-degerler > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-2); }
 .tc-g3b-degerler dt { color: var(--muted); }
 .tc-g3b-degerler dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tc-g3b-oneriler { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--b-2); }
+.tc-g3b-oneriler > li { display: grid; gap: var(--b-1); padding-block-start: var(--b-2); border-block-start: var(--cizgi-ince) solid var(--edge); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tc-g3b-oneri-ust { display: flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
 
 /* Dar ekran: seçim varken liste gizlenir, geri düğmesi görünür. */
 .tc-g3b-secili > .tc-g3b-liste { display: none; }

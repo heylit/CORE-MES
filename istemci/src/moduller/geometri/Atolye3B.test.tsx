@@ -12,7 +12,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown; basliklar: Record<string, string> }
 
-function sunucuKur(yollar: Record<string, (govde: unknown) => Response>) {
+function sunucuKur(yollar: Record<string, (govde: unknown, yol: string) => Response>) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -20,7 +20,7 @@ function sunucuKur(yollar: Record<string, (govde: unknown) => Response>) {
     const govde = secenek?.body ? JSON.parse(String(secenek.body)) : undefined;
     istekler.push({ yontem, yol, govde, basliklar: Object.fromEntries(new Headers(secenek?.headers).entries()) });
     const isle = yollar[`${yontem} ${yol}`] ?? yollar[`${yontem} ${yol.split('?')[0]}`];
-    return isle ? isle(govde) : json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    return isle ? isle(govde, yol) : json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
 }
@@ -53,7 +53,11 @@ const ANALIZ: GeometriAnalizCevabi = {
     hacimMm3: 8000, alanMm2: 2800, govdeSayisi: 1, kapali: true, ucgenSayisi: 12, hesapSuresiMs: 200, hesapZamani: '2026-10-31T20:00:02+03:00',
   },
 };
-const HAM: GeometriHamCevabi = { revizyonId: 41, payMm: 2, enAz: { a: 44, b: 24, c: 14 }, stokOlcusu: null, neden: 'stok-listesi-yok' };
+const HAM: GeometriHamCevabi = {
+  revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null,
+  oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, kesimBoyuMm: 44, hamHacimMm3: 21598.4 }],
+};
+const HAM_AYAR: GeometriHamCevabi = { ...HAM, payMm: 3, payKaynagi: 'ayar', enAz: { a: 46, b: 26, c: 16 } };
 const DOSYA = () => new Response(new Uint8Array([1, 2, 3]), { status: 200 });
 
 describe('3D Atölyesi', () => {
@@ -62,7 +66,7 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller': () => json(200, LISTE),
       'GET /geometri/analizler/41': () => json(200, ANALIZ),
       'GET /geometri/modeller/41/dosya': DOSYA,
-      'GET /geometri/ham-onerisi/41': () => json(200, HAM),
+      'GET /geometri/ham-onerisi/41': (_g, yol) => json(200, yol.includes('payMm') ? HAM : HAM_AYAR),
     });
     ac();
     expect(await screen.findByText('MLZ-0007')).toBeTruthy();
@@ -74,10 +78,15 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('8.000 mm³')).toBeTruthy();
     expect(screen.getByText('Ø 22,4 x 40 mm')).toBeTruthy();
     expect(await screen.findByText('görüntü')).toBeTruthy();
-    expect(screen.getByText('Payı yazınca en küçük ham ölçüsü görünür.')).toBeTruthy();
+    expect(await screen.findByText('46 x 26 x 16 mm')).toBeTruthy();
+    expect(screen.getByText('Boş bırakılırsa sistem ayarı: 3 mm')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/İşleme payı/), { target: { value: '2' } });
     expect(await screen.findByText('44 x 24 x 14 mm')).toBeTruthy();
-    expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2')).toBe(true);
+    expect(screen.getByText('Ø 25 x 3.000 mm')).toBeTruthy();
+    expect(screen.getByText('Kesim boyu 44 mm')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Kalite'), { target: { value: 'C45' } });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
+    expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41')).toBe(true);
   });
 
   it('yeniden hesapla okunan sürümle ve istek kimliğiyle gider; kuyruğa alınınca durum değişir', async () => {

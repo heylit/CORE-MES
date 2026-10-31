@@ -7,4 +7,6 @@
 | Malzeme | (tablo yok) | malzemeler | belge bağı Çizim Merkezi'ndedir; kod ve ad `malzemeler/disari.ts` `malzemeOzetleri` |
 | Geometri analizi | `geometri_analiz` (kutu, döndürülmüş kutu, hacim, alan, gövde, kapalılık) | geometri | yalnız bu modülde |
 | Analiz kuyruğu ve durum listesi | `geometri_is.durum` (bekliyor, calisiyor, bitti, hata) | geometri | `paylasilan/sozlesme/geometri.ts` |
-| Yoğunluk, stok ölçüsü, işleme payı | (tablo yok) | malzemeler | 1446 a ve 1447 a ile ayrı yamalarda okunur |
+| Stok ölçüsü (hammadde formu ve ölçüleri) | `malzeme_katalog_karti.kayit` (form, dims) | malzemeler | `hammaddeStokOlculeri` ile okunur (1469 a) |
+| İşleme payı | sistem ayarı `geometri.ham-payi-mm` | geometri | ayar tablosu |
+| Yoğunluk | (sunucuda yok) | malzemeler | 1446 / 1468 cevabıyla |

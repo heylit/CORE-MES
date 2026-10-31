@@ -135,7 +135,26 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     assert.equal(a.analiz.kapali, true);
     assert.equal(a.is?.denemeSayisi, 1);
     const ham = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2`)));
-    assert.deepEqual(ham, { revizyonId: once.revizyonId, payMm: 2, enAz: { a: 44, b: 24, c: 14 }, stokOlcusu: null, neden: 'stok-listesi-yok' });
+    assert.equal(ham.payKaynagi, 'istek');
+    assert.deepEqual(ham.enAz, { a: 44, b: 24, c: 14 });
+    assert.equal(ham.neden, null);
+    // Örnek veride hammadde kartları çubuk ve levha; 10 mm levha 14 mm kalınlığa sığmaz, çubuk çapı kesit köşegeni + 2 pay'ı kapsar.
+    assert.ok(ham.oneriler.length > 0 && ham.oneriler.every((x) => x.form === 'cubuk'), JSON.stringify(ham.oneriler));
+    assert.ok(ham.oneriler[0]!.olcu['d']! >= Math.hypot(20, 10) + 4 - 1e-6);
+    assert.equal(ham.oneriler[0]!.kesimBoyuMm, 44);
+    assert.ok(ham.kaliteler.includes('C45') && ham.kaliteler.includes('S235'));
+    const c45 = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=C45`)));
+    assert.deepEqual(c45.oneriler.map((x) => [x.kalite, x.form, x.olcu]), [['C45', 'cubuk', { d: 50, l: 3000 }]]);
+    const yok = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=YOK`)));
+    assert.deepEqual([yok.oneriler, yok.neden], [[], 'stok-listesi-yok']);
+    const genis = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=100&kalite=C45`)));
+    assert.deepEqual([genis.oneriler, genis.neden], [[], 'sigan-yok']);
+    // Pay verilmezse ayar; ayar boşsa 0 ve kaynak 'yok'.
+    const paysiz = async () => geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}`)));
+    assert.deepEqual([(await paysiz()).payMm, (await paysiz()).payKaynagi, (await paysiz()).enAz], [0, 'yok', { a: 40, b: 20, c: 10 }]);
+    tamam(await istek('yonetici', 'POST', '/ayarlar/geometri.ham-payi-mm/degistir', { deger: 3 }));
+    const ayarli = await paysiz();
+    assert.deepEqual([ayarli.payMm, ayarli.payKaynagi, ayarli.enAz], [3, 'ayar', { a: 46, b: 26, c: 16 }]);
     assert.equal(await tur(), 0, 'bitmiş iş yeniden hesaplanmaz');
   });
 

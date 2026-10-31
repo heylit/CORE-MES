@@ -48,6 +48,9 @@ export { rotaRevizyonlariCozucusuKaydet as rotaRevizyonlariCozucusu } from './se
 // Kartın sürümü de döner: satın alma siparişteki kopyanın karttan geri kaldığını bununla bilir (1105 a). İptal ve olmayan kart haritada yok.
 export { malzemeSatinAlmaAyrintilari } from './servis.ts';
 export type { MalzemeSatinAlmaAyrintisi } from './servis.ts';
+// 1469 a: 3D Atölyesi'nin ham önerisi için aktif hammadde kartlarının formu ve ölçüleri (`dims` olduğu gibi). Yetki denetlemez.
+export { hammaddeStokOlculeri } from './servis.ts';
+export type { HammaddeStokOlcusu } from './servis.ts';
 // Kart #688: çizim merkezi resmi kartla teknik resim no ve revizyonla eşler. Yalnız yarı mamul ve mamulde dolu; boş ya da yalnız
 // boşluk null; olmayan kart haritada yok. Yetki denetlemez.
 export { malzemeResimAnahtarlari } from './servis.ts';

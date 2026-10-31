@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { agOlcumu, bicimDenetimi, kapsayanDaireCapi, enAzHam, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER } from './kurallar.ts';
-import type { UcgenAgi } from './kurallar.ts';
+import { agOlcumu, bicimDenetimi, kapsayanDaireCapi, enAzHam, stokEslestir, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER } from './kurallar.ts';
+import type { StokAdayi, UcgenAgi } from './kurallar.ts';
 
 // Eksenlere hizalı kutu ağı: 8 köşe, 12 üçgen, dışa bakan yüzler.
 function kutu(x: number, y: number, z: number, d: [number, number, number] = [0, 0, 0]): UcgenAgi {
@@ -72,6 +72,24 @@ describe('geometri kuralları', () => {
   test('G-K5 ham: her kenara iki yüzün payı eklenir', () => {
     assert.deepEqual(enAzHam({ a: 100, b: 20, c: 10 }, 3), { a: 106, b: 26, c: 16 });
     assert.deepEqual(enAzHam({ a: 100, b: 20, c: 10 }, 0), { a: 100, b: 20, c: 10 });
+  });
+
+  test('G-K9 stok ölçüsü: her formda sığan en küçük, sığmayan ve ölçüsü eksik aday önerilmez', () => {
+    const aday = (malzemeNo: number, form: string, olcu: Record<string, unknown>): StokAdayi => ({ malzemeNo, kod: `K${malzemeNo}`, ad: null, kalite: 'C45', form, olcu });
+    const obb = { a: 40, b: 20, c: 10, cap: Math.hypot(20, 10) };
+    const o = stokEslestir(obb, 1, [
+      aday(1, 'cubuk', { d: 24, l: 3000 }), aday(2, 'cubuk', { d: 25, l: 3000 }), aday(3, 'cubuk', { d: 30, l: 3000 }),
+      aday(4, 'lama', { a: 12, b: 25, l: 6000 }), aday(5, 'lama', { a: 22, b: 12, l: 6000 }), aday(6, 'lama', { a: 22, b: 11, l: 6000 }),
+      aday(7, 'levha', { t: 12, w: 1000, l: 2000 }), aday(8, 'levha', { t: 12, w: 21, l: 2000 }),
+      aday(9, 'blok', { a: 50, b: 30, h: 15 }), aday(10, 'cubuk', { d: 40, l: 0 }), aday(11, 'cubuk', { d: '40', l: 3000 }),
+      aday(12, 'boru', { D: 60, t: 5, l: 6000 }), aday(13, 'cubuk', { d: 25, l: 41 }),
+    ]);
+    assert.deepEqual(o.map((x) => [x.form, x.malzemeNo]), [['lama', 5], ['levha', 7], ['cubuk', 2], ['blok', 9]]);
+    const cubuk = o.find((x) => x.form === 'cubuk')!;
+    assert.equal(cubuk.kesimBoyuMm, 42);
+    assert.ok(Math.abs(cubuk.hamHacimMm3 - (Math.PI * 25 ** 2 / 4) * 42) < 1e-3);
+    assert.equal(o.find((x) => x.form === 'blok')!.kesimBoyuMm, null);
+    assert.deepEqual(stokEslestir(obb, 50, [aday(1, 'cubuk', { d: 30, l: 3000 })]), []);
   });
 
   test('G-K6 biçim denetimi: STEP başlığı ve IGES başlangıç bölümü', () => {
