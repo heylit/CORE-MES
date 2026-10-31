@@ -12,6 +12,7 @@ import { D, fmtDY, fmtK, MON, pct } from '../motor.ts';
 import type { EkranOzellikleri, SekmeAnahtari } from '../sekmeler.ts';
 import { yeniYol } from '../sekmeler.ts';
 import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
+import { KurulumUyarisi } from './KurulumUyarisi.tsx';
 import { NakitYelpazesi } from './NakitYelpazesi.tsx';
 import { anaSayilar, gununOzeti, nakitHukmu, selam, type Parca } from './ozet.ts';
 import { veriTamligi, type TamlikHedefi } from './tamlik.ts';
@@ -72,14 +73,7 @@ function AnaSayfaIci({ finans, yetki, kayitGir }: { finans: FinansVerisi } & Omi
         )}
       </header>
 
-      {!s.setupDone && (
-        <div className="tc-fa-uyari" role="status" data-kurulum-uyarisi>
-          <span>Finans ilk kurulumu yapılmadı. Şirket bilgisi ve başlangıç kasa ve banka bakiyesi girilmeden nakit tahmini eksik kalır.</span>
-          {yetki.yonet
-            ? <Dugme simge="gear" onClick={() => sekme('ayarlar', 'sekme=kurulum')}>Ayarlar'da tamamla</Dugme>
-            : <span className="tc-fa-soluk">Finans yöneticisi Ayarlar'dan tamamlar.</span>}
-        </div>
-      )}
+      <KurulumUyarisi finans={finans} yetki={yetki} />
 
       {s.tx.length > 0 && (
         <section className="tc-fa-ozet" aria-label="Günün özeti">

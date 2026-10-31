@@ -1,23 +1,34 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
+import { SayfaKomutBaglami, type SayfaKomutu, type SayfaKomutYazici } from '../../../ortak/rota/sayfa-komutlari.ts';
 import type { FinansHamVerisi } from './donustur.ts';
-import { FinansYeni } from './FinansYeni.tsx';
+import { rotalar } from '../rotalar.tsx';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
 import { LISTELER } from './veri.ts';
 
 // Yeni finans ekranı testlerinin ortak kurulumu (F1-F4 de kullanır). Kullanıcılar uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
-export const KAPI = 'kisiler.rol-yonet';
-export const YAZAN = kisi(1, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yaz', 'musteri-tedarikci.oku']);
-export const YONETEN = kisi(5, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'musteri-tedarikci.oku']);
-export const OKUYAN = kisi(2, [KAPI, 'sayfa.finans', 'finans.oku', 'musteri-tedarikci.oku']);
-export const FIRMACI = kisi(3, [KAPI, 'sayfa.finans', 'musteri-tedarikci.oku']);
-export const KAPISIZ = kisi(4, ['sayfa.finans', 'finans.oku', 'finans.yaz']);
+// Yeni ekran kapısı (kisiler.rol-yonet) yoktur: hiçbirinde kapı işlemi bulunmaz.
+export const YAZAN = kisi(1, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'musteri-tedarikci.oku']);
+export const YONETEN = kisi(5, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'musteri-tedarikci.oku']);
+export const OKUYAN = kisi(2, ['sayfa.finans', 'finans.oku', 'musteri-tedarikci.oku']);
+export const FIRMACI = kisi(3, ['sayfa.finans', 'musteri-tedarikci.oku']);
+// Sayfa işlemi var, hiçbir menü maddesinin işlemi yok.
+export const BOLUMSUZ = kisi(4, ['sayfa.finans', 'finans.yaz']);
+
+// Kabuğun tuttuğu son "Bu sayfa" listesi (kaynak başına).
+export function komutToplayici(): { yaz: SayfaKomutYazici; liste: (kaynak?: string) => readonly SayfaKomutu[] } {
+  const kayit = new Map<string, readonly SayfaKomutu[]>();
+  return {
+    yaz: (kaynak, komutlar) => { if (komutlar === null) kayit.delete(kaynak); else kayit.set(kaynak, komutlar); },
+    liste: (kaynak = 'finans') => kayit.get(kaynak) ?? [],
+  };
+}
 
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 export interface Istek { yontem: string; yol: string; govde: unknown }
@@ -48,18 +59,26 @@ export function sunucuKur(kullanici: Kullanici, yazmalar: Record<string, (govde:
   return istekler;
 }
 
-export function finansAc(adres = '/finans/yeni') {
+// Uygulamadaki gibi modülün bütün rotaları kurulur (menü adresleri ve deneme adresinin yönlendirmesi); açık adres sayfada yazılır.
+function Adres() {
+  const { pathname, search } = useLocation();
+  return <span hidden data-testid="adres">{pathname + search}</span>;
+}
+// komutlar: kabuğun yerine Ctrl K "Bu sayfa" listesini toplayan yazıcı (verilmezse komutlar düşer).
+export function finansAc(adres = '/finans', komutlar: SayfaKomutYazici | null = null) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
-        <MemoryRouter initialEntries={[adres]}>
-          <Routes>
-            <Route path="/finans/yeni" element={<FinansYeni />} />
-            <Route path="/finans/yeni/:bolum" element={<FinansYeni />} />
-            <Route path="*" element={<p>Başka sayfa</p>} />
-          </Routes>
-        </MemoryRouter>
+        <SayfaKomutBaglami.Provider value={komutlar}>
+          <MemoryRouter initialEntries={[adres]}>
+            <Routes>
+              {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
+              <Route path="*" element={<p>Başka sayfa</p>} />
+            </Routes>
+            <Adres />
+          </MemoryRouter>
+        </SayfaKomutBaglami.Provider>
       </BildirimSaglayici>
     </QueryClientProvider>,
   );

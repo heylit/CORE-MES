@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { finansMotoru, type FinansMotoru, type SiparisKalemi } from './motor.ts';
 import { bilancoDoldur, ornekDurum, ORNEK_BUGUN, zenginlestir } from './ornek-veri.ts';
 
-// Eski motor testinin (FNM-01..08) aynı sayılarla yeni motora karşılığı; eski test çerçeveyi alıma kadar sınamaya devam eder.
+// Prototip motorunun sabitlenen sayıları (FNM-01..08); prototiple eşitlik ayrıca esitlik.test.ts'tedir.
 function ornekMotor(ek?: (m: FinansMotoru) => void): FinansMotoru {
   const m = finansMotoru(ORNEK_BUGUN);
   m.durum = ornekDurum(m);

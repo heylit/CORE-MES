@@ -5,9 +5,10 @@ export const rehber: readonly SayfaRehberi[] = [
     yol: '/finans',
     ozet: 'Satış, alış, tahsilat, ödeme, çek-senet, nakit planı, bütçe ve finans raporları.',
     nasil: [
-      'Ana sayfada "Kayıt gir" ile olayı seçin: "Satış gir", "Tahsilat gir", "Ödeme gir", "Çek aldım", "Çek verdim".',
+      'Başlıktaki "Kayıt gir" düğmesiyle ya da N tuşuyla olayı seçin: "Satış yaptım", "Müşteriden para geldi", "Tedarikçiye ödeme yaptım", çek alma ve verme.',
+      'Ctrl K ile olay, bölüm ya da firma arayın; firmanın tahsilatını ya da ödemesini oradan da girebilirsiniz.',
       'Çek ve senet bölümünde durumu güncelleyin: "Tahsil edildi", "Ödendi".',
-      'Plan ve Raporlar sekmelerinde nakit planı, bütçe, gelir tablosu ve ay sonu kapanışı vardır.',
+      'Plan ve Raporlar sekmelerinde nakit planı, bütçe, gelir tablosu ve ay sonu kapanışı vardır; başlıktaki sağlık skoru Durum ve öneriler\'e götürür.',
       'Listeleri "Excel\'e aktar" ya da "Yazdır / PDF" ile alın.',
     ],
     sinirlar: [

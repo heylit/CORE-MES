@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import { finansAc, json, KAPI, sunucuKur, type Istek } from '../test-ortak.tsx';
+import { finansAc, json, sunucuKur, type Istek } from '../test-ortak.tsx';
 
 // Ayarlar finans.yonet ister (menü işlemi); kur ve faiz girişi finans.kur-yaz. Kişiler uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
-const YONETICI = kisi(10, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', 'musteri-tedarikci.oku']);
-const KURSUZ = kisi(11, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yonet']);
+const YONETICI = kisi(10, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', 'musteri-tedarikci.oku']);
+const KURSUZ = kisi(11, ['sayfa.finans', 'finans.oku', 'finans.yonet']);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -19,7 +19,7 @@ const tamam = (govde: unknown = {}) => () => json(200, govde);
 const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
 const ac = async (kullanici: Kullanici, sekme: string, yazmalar: Record<string, () => Response> = {}) => {
   const istekler = sunucuKur(kullanici, yazmalar);
-  finansAc(`/finans/yeni/ayarlar?sekme=${sekme}`);
+  finansAc(`/finans/ayarlar?sekme=${sekme}`);
   await screen.findByRole('tablist', { name: 'Ayar bölümleri' });
   return istekler;
 };
@@ -27,7 +27,7 @@ const ac = async (kullanici: Kullanici, sekme: string, yazmalar: Record<string, 
 describe('F4 ayarlar', () => {
   it('dokuz sekme prototipteki sırayla; kurulum yapılmışsa Şirket açılır', async () => {
     sunucuKur(YONETICI);
-    finansAc('/finans/yeni/ayarlar');
+    finansAc('/finans/ayarlar');
     const serit = await screen.findByRole('tablist', { name: 'Ayar bölümleri' });
     expect(within(serit).getAllByRole('tab').map((s) => s.textContent)).toEqual([
       'Şirket', 'Nakit ve düzenli ödemeler', 'Analiz ayarları', 'Veri aktarımı', 'Hesaplar', 'KDV oranları', 'Kurlar ve faiz', 'Sabit kıymetler', 'İlk kurulum',

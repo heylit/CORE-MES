@@ -1,6 +1,7 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
-// Finans tek sayfadır; kendi sayfaları ikinci menüdedir. İçerik prototipin kendisidir ve çerçevede açılır.
+// Finans tek sayfadır; kendi sayfaları ikinci menüdedir. Her madde finans ekranını kendi adresinde açar, ekran maddeleri kendi
+// sekmesi olarak çizer (1392 a).
 // Sira 5: Sistem Ayarları (10) Yönetim grubunda en sonda kalır.
 export const FINANS_SAYFALARI = [
   { yol: '/finans', islem: 'sayfa.finans', baslik: 'Finans ve Muhasebe', simge: 'lira', grup: 'Yönetim', sira: 5 },
@@ -12,6 +13,7 @@ export const FINANS_IKINCI_MENU = {
   kok: '/finans',
   baslik: 'Finans ve Muhasebe',
   simge: 'lira',
+  // Ekran dolgusunu ve kaydırmasını kendisi yapar; kabuk içerik alanını dolgusuz verir, tam ekran düğmesi kalır.
   cerceveli: true,
   sayacUcu: '/finans/menu-sayaclari',
   gruplar: [

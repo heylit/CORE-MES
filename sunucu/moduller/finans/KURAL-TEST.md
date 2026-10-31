@@ -1,6 +1,6 @@
 # Kural ve test eşlemesi (finans, tam teslim)
 
-Dosyalar: `sunucu/moduller/finans/kurallar.test.ts` (saf, 15), `para.test.ts` (gerçek PostgreSQL, 43), `firma.test.ts` (gerçek PostgreSQL, 17), `istemci/src/moduller/finans/FinansCercevesi.test.tsx` (9). Her satırdaki test hem izinli hem yasak durumu sınar. "Kısıt" sütunu veritabanının aynı kuralı tutan kısıt ya da tetikleyici adıdır (servis atlansa da reddeder).
+Dosyalar: `sunucu/moduller/finans/kurallar.test.ts` (saf, 15), `para.test.ts` (gerçek PostgreSQL, 43), `firma.test.ts` (gerçek PostgreSQL, 17), `istemci/src/moduller/finans/yeni/*.test.ts(x)` (ekran; eski çerçeve testleri 1418'de çerçeveyle kalktı). Her satırdaki test hem izinli hem yasak durumu sınar. "Kısıt" sütunu veritabanının aynı kuralı tutan kısıt ya da tetikleyici adıdır (servis atlansa da reddeder).
 
 | Kural | Kısıt / tetikleyici | Test (dosya: adın başı) |
 |---|---|---|
@@ -49,7 +49,7 @@ Dosyalar: `sunucu/moduller/finans/kurallar.test.ts` (saf, 15), `para.test.ts` (g
 | FNS-39 sürüm denetimi | `surumluGuncelle` | para: "FNS-9, FNS-39", "FNS-13, FNS-14", "FNS-57", ayar testi; firma: "FNS-39" |
 | FNS-40 tekrar korumalı komutlar | `tekrarKorumali` | para: "FNS-38, FNS-40"; firma: "FNS-40" |
 | FNS-41 toplu aktarım ≤1000, tek işlem, denetime özet | `denetim: 'govdesiz'` | para: "FNS-41, FNS-50" |
-| FNS-42 kullanıcı metni kaçırılır | prototip `esc()` | FinansCercevesi.test: "ayar betiği ..."; GUVENLIK-DENETIMI bölüm 4 |
+| FNS-42 kullanıcı metni kaçırılır | ekran React ile çizer (metin düğüm olarak yazılır, `innerHTML` yok); çerçeve ve ayar betiği 1418'de kalktı | GUVENLIK-DENETIMI bölüm 4 |
 | FNS-43..49, FNS-53, D-9 (firma) | firma göçü kısıtları | firma.test ve kurallar.test (firma teslimindeki KURAL-TEST ile aynı) |
 | FNS-46 pasif firmaya yeni kayıt yok | `finans_pasif_firma` | para: "FNS-46" |
 | FNS-50 toplu aktarımda firma tam eşleşir (İ/I duyarsız) | servis | kurallar: "FNS-50"; para: "FNS-41, FNS-50" |
