@@ -395,6 +395,9 @@ export const uclar: Uc[] = [
     yontem: 'POST',
     yol: '/kalite-merkezi/studyo/olcumler/cmm-onizle',
     yetki: 'kalite-merkezi.oku',
+    // 1450 a: dosya metni deftere girmez.
+    denetim: 'govdesiz',
+    denetimOzeti: (g) => ({ uretimEmriId: g.uretimEmriId, resimId: g.resimId }),
     govde: kmCmmOnizleGovdesi,
     cevap: kmCmmOnizlemeCevabi,
     isle: ({ db, govde }) => cmm.cmmOnizle(db, govde),
@@ -404,6 +407,8 @@ export const uclar: Uc[] = [
     yol: '/kalite-merkezi/studyo/olcumler/cmm-yaz',
     yetki: 'kalite-merkezi.yaz',
     tekrarKorumali: true,
+    denetim: 'govdesiz',
+    denetimOzeti: (g) => ({ uretimEmriId: g.uretimEmriId, resimId: g.resimId, resimSurumu: g.resimSurumu, numuneId: g.numuneId ?? null, onaylanan: g.onaylananlar.length }),
     govde: kmCmmYazGovdesi,
     cevap: kmCmmYazCevabi,
     isle: ({ db, kullanici, govde }) => cmm.cmmYaz(db, kullanici.id, govde),

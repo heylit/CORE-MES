@@ -162,6 +162,13 @@ describe('Kalite Merkezi CMM sonuç dönüşü (gerçek PostgreSQL, gerçek giri
     const onayli = await yaz(kalite, yol, { ...temel, onaylananlar: [4] });
     assert.equal(onayli.statusCode, 200, onayli.body);
     assert.deepEqual((onayli.json() as KmCmmYazCevabi).olcumler.map((x) => [x.balonId, x.deger, x.kaynak]).sort(), [[balon.cap, '10.012', 'cmm'], [balon.boy, '25.05', 'cmm']].sort());
+    // 1450 a: dosya metni denetim defterine girmez; emir, resim ve onay sayısı girer.
+    const defter = await o().sahip.sorgu<{ govde: string }>(
+      "SELECT govde::text AS govde FROM denetim_kaydi WHERE yol = '/kalite-merkezi/studyo/olcumler/cmm-yaz' ORDER BY id DESC LIMIT 1",
+    );
+    assert.equal(defter.length, 1);
+    assert.equal(defter[0]!.govde.includes('10,012'), false, defter[0]!.govde);
+    assert.match(defter[0]!.govde, /"onaylanan":\s*1/);
     const hic = await yaz(kalite, yol, { ...temel, metin: 'Karakteristik;Ölçülen\nB9;1\n' });
     assert.deepEqual([hic.statusCode, ileti(hic)], [400, CMM_ILETILER.yazilacakYok]);
   });

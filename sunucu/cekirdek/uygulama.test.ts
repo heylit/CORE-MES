@@ -153,6 +153,9 @@ const TAM_DENETLENMEYEN_UCLAR = [
   // Kalite Merkezi kaydı fotoğraf taşır: içerik deftere girmez; kayıt adresle, sürüm ve geri yüklemenin parça bilgisi seçimle girer (kullanıcı kararı 16.10.2026, "Gövdesiz").
   'POST /kalite-merkezi/kayitlar/:koleksiyon/:kimlik/yaz govdesiz+secim',
   'POST /kalite-merkezi/geri-yukle govdesiz+secim',
+  // CMM sonuç dosyası (1450 a): dosya metni deftere girmez; emir, resim ve (yazmada) resim sürümü ile onaylanan satır sayısı girer.
+  'POST /kalite-merkezi/studyo/olcumler/cmm-onizle govdesiz+secim',
+  'POST /kalite-merkezi/studyo/olcumler/cmm-yaz govdesiz+secim',
 ];
 
 // 385 a: dosya veren okuma ucu dosyayı verirken denetime yazılır. Yalnız ekranın kendiliğinden yüklediği, kişinin dosya olarak
