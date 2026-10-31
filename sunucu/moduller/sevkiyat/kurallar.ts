@@ -426,6 +426,18 @@ export function kabulTamamMi(adet: string | null, onceki: string | null, gelen: 
   return a === null || o === null || g === null || o + g >= a;
 }
 
+// Kabulün geri alınması (1405 a): kalemin kabul adedinden geri alınan düşer; kalan sıfırsa adet boştur. Kalan kalemi kapatmıyorsa
+// kalem açılır ve depoda yeniden kabul bekler. Kayıttaki adet kalemdekini aşamaz; aşarsa (bozuk veri) kalan sıfır sayılır.
+export function kabulGeriAlimi(adet: string | null, kabulAdet: string | null, geriAlinan: string): { kabulAdet: string | null; acik: boolean } {
+  const onceki = kabulAdet === null ? 0n : binde(kabulAdet) ?? 0n;
+  const g = binde(geriAlinan) ?? 0n;
+  const kalan = onceki > g ? onceki - g : 0n;
+  if (kalan === 0n) return { kabulAdet: null, acik: true };
+  const tam = kalan / 10_000n, kesir = (kalan % 10_000n).toString().padStart(ADET_ONDALIK, '0').replace(/0+$/, '');
+  const metin = kesir === '' ? tam.toString() : `${tam.toString()}.${kesir}`;
+  return { kabulAdet: metin, acik: !kabulTamamMi(adet, null, metin) };
+}
+
 // ---------- maliyet görünürlüğü ----------
 // 180, 200 a: araç oranı ve rota maliyeti yalnız finans.maliyet-oku olana gider; öteki için alan null (sıfır uydurulmaz).
 // Sıra ve yol seçimi aynı kalır, yalnız rakam gizlenir.

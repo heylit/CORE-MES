@@ -53,6 +53,8 @@ export type { SiparisSevki } from './servis.ts';
 
 // Depo son çıkışı ve kabulü (960, 962 a): stok listeyi okur, komutunu kendi işlemiyle aynı transaction'da yazar.
 export { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKalemiAl } from './tum-isler.ts';
+// Mal kabul düzeltmesi (B-4, 1405 a): düzeltilen satırların kabulü kalemden düşer; stok kendi işlemiyle aynı transaction'da çağırır.
+export { depoKabulunuGeriAl } from './tum-isler.ts';
 export type { DepoKalemi } from './tum-isler.ts';
 
 // Satın almanın teslim yöntemi kalemin taşımasını yazar (959 b): yer 'satin-alma', son yazan izi kalır.
