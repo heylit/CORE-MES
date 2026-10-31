@@ -6,3 +6,4 @@ export const Bordro: IkEkrani = () => <YerTutucu />;
 export const Hesaplamalar: IkEkrani = () => <YerTutucu />;
 export const MaliyetPlani: IkEkrani = () => <YerTutucu />;
 export const Ayarlar: IkEkrani = () => <YerTutucu />;
+export { BordroPusulasi, BordroTahmini, TazminatDokumu, TazminatHesabi } from './CalisanParcalari.tsx';

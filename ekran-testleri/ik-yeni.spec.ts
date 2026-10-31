@@ -70,6 +70,31 @@ test.describe('P2 izin ve devam', () => {
   });
 });
 // P3 bordro
+test.describe('P3 bordro', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('Bordro, Hesaplamalar, Maliyet planı ve Ayarlar açılır; okurken yazma ve ağ hatası yok; yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni/bordro');
+    await expect(page.getByRole('heading', { name: 'Bordro', level: 2, exact: true })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'bordro yatay taşması').toBe(0);
+    await page.getByRole('tab', { name: 'Hesaplamalar' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/hesaplamalar$/);
+    await expect(page.getByRole('heading', { name: 'Hesaplamalar', level: 2, exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Net → brüt' }).click();
+    await expect(page.getByRole('button', { name: 'Net → brüt', pressed: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Maliyet planı' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/maliyet-plani$/);
+    await expect(page.getByRole('heading', { name: 'Maliyet planı', level: 2, exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Ayarlar' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/ayarlar$/);
+    await expect(page.getByRole('heading', { name: 'Ayarlar', level: 2, exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Ücret, vergi ve SGK' }).click();
+    await expect(page.getByRole('button', { name: 'Ücret, vergi ve SGK', pressed: true })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'ayarlar yatay taşması').toBe(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P4 isealim
 // P5 analiz
 test.describe('P5 analiz', () => {
