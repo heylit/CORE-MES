@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari, sayfaSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { gunlukFaizdenAylik } from './finansman.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 const mantiksal = z.enum(['true', 'false']).optional().transform((d) => (d === undefined ? undefined : d === 'true'));
@@ -241,10 +242,8 @@ export type KurFaizOzeti = z.output<typeof kurFaizOzetiCevabi>;
 // Kur ve faiz toplu yükleme (1083-1087): şablondan okunan satırlar birlikte yazılır ya da hiçbiri. Kayıtlı güne farklı değer
 // atlanır, düzeltme tek tek yapılır (1085 a). Kur ileri tarihli olamaz, faiz olabilir (1086 a); bugün sunucuda bilinir.
 export const KUR_FAIZ_TOPLU_SINIRI = 400;
-// 1350 a: faizin tek kaynağı finans_faiz'in aylık yüzdesidir. Günlük oran yıl 365 gün, ay yılın 12'de biri sayılarak ondan türer
-// (proje maliyetindeki çevirmeyle aynı); günlük girilen oran aylığa çevrilip dört ondalığa yuvarlanarak yazılır.
-export const aylikFaizdenGunluk = (aylikYuzde: number): number => (aylikYuzde * 12) / 365;
-export const gunlukFaizdenAylik = (gunlukYuzde: number): number => Math.round(((gunlukYuzde * 365) / 12) * 1e4) / 1e4;
+// 1350 a, 1383 a: faiz çevirmeleri ve finansmanın tek tanımı zodsuz dosyadadır (istemci de değer olarak ithal eder).
+export { aylikFaizdenGunluk, aylikFaizdenYillik, finansmanTutari, gunlukFaizdenAylik, vadeIndirimCarpani } from './finansman.ts';
 const gunlukFaizSemasi = z.number().min(0, 'Günlük faiz sıfırdan küçük olamaz.')
   .refine((v) => ondalik(6, '')(v) === true, 'Günlük faiz en çok altı ondalık olabilir.')
   .refine((v) => gunlukFaizdenAylik(v) <= 100, 'Günlük faiz aylık %100\'ü aşamaz.')
