@@ -266,6 +266,11 @@ export function takvimliBosluk(dolu: readonly Aralik[], takvim: Takvim, enErken:
   return null;
 }
 
+// 1401 a: termin günün sonudur ve tek tanımdır: sunucu (servis.ts gunSonu) ve planlama motoru (motor/girdi.betik TERMIN_SAATI) bu
+// saati kullanır; betik bu dosyayı ithal edemez (çerçeveye de gömülür), aynılığını plan-girdisi testi denetler. Saat tesis saatidir.
+export const TERMIN_SAATI = '23:59';
+export const terminDakikasi = (): number => Number(TERMIN_SAATI.slice(0, 2)) * 60 + Number(TERMIN_SAATI.slice(3, 5));
+
 // 815 (699/3 a): plana yalnız emrin önceliği girer. Emrin önceliği (1-4; 195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük) motorun sınıfına (1-3)
 // ve gecikme maliyetinin çarpanına çevrilir; siparişin elle çarpanı, tutarı ve müşteri sınıfı sıraya girmez. Çarpanlar müdürün bedel
 // ayarındadır (denetim #21); bunlar ayar satırının varsayılanlarıdır.
@@ -287,22 +292,29 @@ export function oncelikSinifi(oncelik: number | null): 1 | 2 | 3 | null {
 // + finansman × şimdiden bitişe ya da termine (hangisi sonraysa) kadar saat). Ödeme vadesi terminde başlar (3b): erken biten mamul
 // termine kadar bekler, erken bitiş tahsilatı öne çekmez. Ceza tavanı dolunca plan bedeli tabana düşmez, ceza son oranıyla sürer (2b):
 // düşseydi motor gecikmiş müşteriyi daha da geciktirirdi; tavan sözleşmedeki tutardır, sıralamayı yönetmez. Ceza ve kâr riski yalnız
-// teslimi geçen saatte işler. Hepsi yalnız TL satırda hesaplanır: kur verisi yok. Oranı boş olan parça girmez; sıfır uydurulmaz ama taban
+// teslimi geçen saatte işler. 1397 a: döviz satırın tutarı ve katkı payı plan gününün kuruyla TL'ye çevrilir (kur satırda; TL satırda 1); kuru
+// olmayan döviz satırın bedeli bilinmez (null): sıfır sayılmaz, toplama girmez, ayrıca sayılır. Oranı boş olan parça girmez; sıfır uydurulmaz ama taban
 // her geciken emre işler (196 a). 35 b: taban, emrin sipariş satırı adedindeki payıyla ağırlanır (ceza, kâr ve finansman emrin tutar payıyla
 // zaten ağırlıdır, 225); bölünen sipariş tabanı parça sayısı kadar saymaz. Satırsız emrin payı 1.
 export interface MaliyetAyari { tabanSaat: number; finansmanOraniGun: number | null; karRiskiOraniGun: number }
-export interface MaliyetSatiri extends BedelSatiri { cezaTavaniOrani: string | null; katkiPayi: string | null }
+export interface MaliyetSatiri extends BedelSatiri { cezaTavaniOrani: string | null; katkiPayi: string | null; kur?: number | null }
+// 1397 a: satır para biriminin 1 biriminin plan günündeki TL karşılığı; TL satırda 1, kuru olmayan döviz satırda null.
+export function satirKuru(satir: Pick<MaliyetSatiri, 'paraBirimi' | 'kur'>): number | null {
+  return satir.paraBirimi === 'TRY' ? 1 : satir.kur ?? null;
+}
 export function gecikmeMaliyeti(
   satir: MaliyetSatiri | null, carpan: number, zaman: { bitisSaat: number; teslimSaat: number | null }, ayar: MaliyetAyari, pay = 1,
-): number {
-  const tl = satir !== null && satir.paraBirimi === 'TRY';
-  const tutar = tl && satir.tutar != null ? Number(satir.tutar) : 0;
+): number | null {
+  const kur = satir === null ? 1 : satirKuru(satir);
+  if (kur === null) return null;
+  const tutar = satir !== null && satir.tutar != null ? Number(satir.tutar) * kur : 0;
   const saatlik = (taban: number, oranGun: number | null) => (oranGun == null ? 0 : (taban * oranGun) / 100 / 24);
   const finansman = saatlik(tutar, ayar.finansmanOraniGun) * Math.max(0, zaman.bitisSaat, zaman.teslimSaat ?? 0);
   const gecikme = zaman.teslimSaat === null ? 0 : Math.max(0, zaman.bitisSaat - zaman.teslimSaat);
   if (gecikme === 0) return finansman * carpan;
   const ceza = saatlik(tutar, satir?.cezaOraniGun == null ? null : Number(satir.cezaOraniGun)) * gecikme;
-  const katki = tl && satir.katkiPayi != null ? Number(satir.katkiPayi) : 0;
+  // Katkı payı katkiPaylari'nda TL'ye çevrilmiştir.
+  const katki = satir !== null && satir.katkiPayi != null ? Number(satir.katkiPayi) : 0;
   return (Math.max(ayar.tabanSaat * pay * gecikme, ceza + saatlik(katki, ayar.karRiskiOraniGun) * gecikme) + finansman) * carpan;
 }
 
@@ -321,9 +333,10 @@ export function emirTutari(satir: { tutar: string | null; miktar: string }, adet
 
 // Kâr riskinin tabanı (194 a, 227 a, 1379 a): emrin katkı payı = emrin TL tutarı (225) − emrin bütün iş emirlerinin (bitmiş ve fason dahil)
 // tahmini maliyeti − emrin plan malzeme maliyeti (Proje maliyet). Tutar emrin tamamınındır; maliyet de tamamı olmalı, yoksa yarı bitmiş emir
-// kârlı görünür. Bir kalem bilinmiyorsa, emir TL değilse ya da fiyatsızsa katkı payı bilinmez (null); kâr riski işlemez.
+// kârlı görünür. 1397 a: döviz emrin tutarı plan gününün kuruyla TL'ye çevrilir. Bir kalem bilinmiyorsa, döviz emrin kuru yoksa ya da emir
+// fiyatsızsa katkı payı bilinmez (null); kâr riski işlemez.
 export function katkiPaylari(
-  emirler: ReadonlyMap<number, { tutar: string | null; paraBirimi: string }>, isler: readonly { id: number; uretimEmriId: number }[],
+  emirler: ReadonlyMap<number, { tutar: string | null; paraBirimi: string; kur?: number | null }>, isler: readonly { id: number; uretimEmriId: number }[],
   maliyet: ReadonlyMap<number, number | null>, malzeme: ReadonlyMap<number, number | null>,
 ): Map<number, string | null> {
   const toplam = new Map<number, number | null>();
@@ -335,21 +348,25 @@ export function katkiPaylari(
   }
   return new Map([...toplam].map(([id, m]) => {
     const e = emirler.get(id)!;
-    return [id, m === null || e.tutar == null || e.paraBirimi !== 'TRY' ? null : String(Number(e.tutar) - m)];
+    const kur = satirKuru(e);
+    return [id, m === null || e.tutar == null || kur === null ? null : String(Number(e.tutar) * kur - m)];
   }));
 }
 
 // Planın TL toplamı (203 a): yerleşen emirlerin maliyetleri toplanır. Tam yerleşmemiş emrin bitişi bilinmez, toplama girmez; yerleşmeyen
-// emir sayısı göstergelerde ayrıca görünür.
+// emir sayısı göstergelerde ayrıca görünür. 1397 a: bedeli bilinmeyen (kuru olmayan döviz) yerleşen emir toplama girmez, bilinmeyen'de sayılır.
 export function planMaliyeti(
   emirler: readonly { bitDk: number | null; teslimDk: number | null; satir: MaliyetSatiri | null; carpan: number; pay?: number }[], ayar: MaliyetAyari,
-): number {
+): { tl: number; bilinmeyen: number } {
   let toplam = 0;
+  let bilinmeyen = 0;
   for (const e of emirler) {
     if (e.bitDk === null) continue;
-    toplam += gecikmeMaliyeti(e.satir, e.carpan, { bitisSaat: e.bitDk / 60, teslimSaat: e.teslimDk === null ? null : e.teslimDk / 60 }, ayar, e.pay);
+    const m = gecikmeMaliyeti(e.satir, e.carpan, { bitisSaat: e.bitDk / 60, teslimSaat: e.teslimDk === null ? null : e.teslimDk / 60 }, ayar, e.pay);
+    if (m === null) bilinmeyen += 1;
+    else toplam += m;
   }
-  return Math.round(toplam);
+  return { tl: Math.round(toplam), bilinmeyen };
 }
 
 // Uyarılar (P5; kayıt geçer): teslim gecikmesi, sıraya aykırı başlangıç, akışlı işin öncülünden önce bitmesi, rotadaki kaynak ve adaylar
@@ -391,7 +408,7 @@ export interface GostergeIsi extends Aralik { isEmriId: number; uretimEmriId: nu
 export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: number; teslimDk: number | null; isSayisi: number }[], ufukDk: number,
   kaynakSayisi: (istasyonId: number) => number = () => 1,
   kapasite: { takvim?: (anahtar: string) => Takvim; istasyon?: (istasyonId: number) => number } = {},
-  maliyet: (emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]) => number | null = () => null,
+  maliyet: (emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]) => { tl: number; bilinmeyen: number } | null = () => null,
 ) {
   const takvimi = kapasite.takvim ?? (() => null);
   const calisma = (anahtar: string, a: number, z: number) => Math.max(0, kesisimDk(takvimi(anahtar), Math.max(a, 0), Math.min(z, ufukDk)));
@@ -423,9 +440,13 @@ export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: n
     darbogaz: dar && dar.oran > 0 ? { istasyonId: dar.id, ad: dar.ad, dolulukYuzde: Math.round(dar.oran * 100) } : null,
     enDoluKaynak: en ? { ad: en.ad, dolulukYuzde: Math.round(en.oran * 100) } : null,
     personelGun: null as number | null,
-    maliyetTl: maliyet(emirSonu),
+    ...tlGostergesi(maliyet(emirSonu)),
   };
 }
+
+// Fiyatı görmeyene (null) TL toplamı null, bilinmeyen sayısı yok; görene ikisi de (1397 a).
+const tlGostergesi = (m: { tl: number; bilinmeyen: number } | null) =>
+  (m === null ? { maliyetTl: null } : { maliyetTl: m.tl, bedeliBilinmeyenEmir: m.bilinmeyen });
 
 // 507 1 a: eski Reçete ve Rota motorunun özetindeki iki gösterge (evaluate suH ve wT), salt okuma. Ayar saati: yerleşen işlerin (bölünmüş
 // işte her parçanın) ayar süresi toplamı; başlamış ve sayımı olan işin ayarı yapılmıştır, sayılmaz. Öncelik ağırlıklı gecikme: emrin bütün

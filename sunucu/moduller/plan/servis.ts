@@ -12,7 +12,7 @@ import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { gunlukFaizGetir } from '../finans/disari.ts';
+import { gunlukFaizGetir, kurlar } from '../finans/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -28,7 +28,7 @@ import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -85,6 +85,8 @@ interface Baglam {
   bedelAyari: BedelAyari;
   // 1383 a: finansın bugünkü TRY faizinin günlük yüzdesi; yoksa null ve bedel ayarındaki elle oran kullanılır.
   finansmanOraniGun: number | null;
+  // 1397 a: plan gününün kurları (para birimi -> 1 birimin TL karşılığı); TRY her zaman 1. Kuru olmayan para birimi yoktur.
+  kurlar: Map<string, number>;
   defter: DegisiklikSatiri[];
   // Vardiya takvimi (PL-03, PL-04), anahtar 'tur:id' (makine, kişi, iş merkezi); null: takvim yok, sürekli çalışır sayılır.
   takvimler: Map<string, Aralik[] | null>;
@@ -112,7 +114,8 @@ const dk = (b: Pick<Baglam, 'simdi'>, t: Date): number => (t.getTime() - b.simdi
 const tarih = (b: Baglam, d: number): Date => new Date(b.simdi + d * DK);
 const gunTarihi = (b: Baglam, i: number): string => tesisGunu(tarih(b, b.gun0 + i * GUN_DK));
 // Teslim günü tesiste biter; UTC gün sonu İstanbul'da ertesi gün 02:59'dur.
-const gunSonu = (gun: string): number => tesisGunBasi(gunEkle(gun, 1)) - 1000;
+// 1401 a: termin anı günün TERMIN_SAATI'dir (motorla aynı tanım).
+const gunSonu = (gun: string): number => tesisGunBasi(gun) + terminDakikasi() * DK;
 const teslimDk = (b: Pick<Baglam, 'simdi'>, teslim: string | null): number | null => (teslim ? (gunSonu(teslim) - b.simdi) / DK : null);
 
 // Kaynaklar istasyonlar ve kişiler modüllerinin verisidir; kişinin istasyonu istasyonlar'dan. Pasif istasyondaki, arızalı ya da bakımdaki
@@ -376,9 +379,10 @@ let malzemeMaliyeti: MalzemeMaliyetiCozucusu | null = null;
 export function malzemeMaliyetiCozucusuKaydet(cozucu: MalzemeMaliyetiCozucusu | null): void { malzemeMaliyeti = cozucu; }
 
 // 225: emrin bedel satırı, satırın tutarı yerine emrin payıyla (birim fiyat × emrin adedi).
-function emirSatiri(b: Pick<Baglam, 'siparisSatirlari'>, i: Pick<Is, 'siparisSatiriId' | 'adet'>) {
+// 1397 a: satırın plan günündeki kuru da taşınır; kuru olmayan döviz satırda null (bedeli bilinmez).
+function emirSatiri(b: Pick<Baglam, 'siparisSatirlari' | 'kurlar'>, i: Pick<Is, 'siparisSatiriId' | 'adet'>) {
   const satir = i.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId) ?? null;
-  return satir && { ...satir, tutar: emirTutari(satir, i.adet) };
+  return satir && { ...satir, tutar: emirTutari(satir, i.adet), kur: b.kurlar.get(satir.paraBirimi) ?? null };
 }
 
 // 815 (699/3 a): plana yalnız emrin önceliği girer; gecikme bedelinin çarpanı da emrin öncelik çarpanıdır. Siparişin elle çarpanı ve
@@ -409,13 +413,13 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri));
   }
   const b: Baglam = {
-    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(simdi)), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
+    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(simdi)), kurlar: await planKurlari(db, tesisGunu(simdi)), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await ekMesaiTakvimde(db, hedef, simdi, await vardiyaOku(db, simdi, kaynaklar)),
     izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
   };
   if (tahminiMaliyet && malzemeMaliyeti) {
-    const emirler = new Map<number, BedelSatiri>();
+    const emirler = new Map<number, BedelSatiri & { kur: number | null }>();
     for (const i of isler.values()) { const satir = emirSatiri(b, i); if (satir && !emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, satir); }
     // 1379 a: katkı emrin bütün iş emrinin maliyetiyle hesaplanır (bitmiş ve fason dahil); yalnız plandaki kalan iş düşülürse yarı bitmiş
     // emir tam tutarına karşı kalan maliyetle kârlı görünür.
@@ -842,11 +846,11 @@ function ekAdimNedeni(i: Is): string | null {
 }
 
 // 6c: emrin satırı ve çarpanı, öncelik bedeliyle aynı kaynaktan (196 a, 195 a). Katkı payı bilinmeyen satırda kâr riski işlemez.
-function planinMaliyeti(b: Baglam, emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]): number | null {
+function planinMaliyeti(b: Baglam, emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]): { tl: number; bilinmeyen: number } | null {
   return b.fiyatGorur ? tlToplami(b, emirler) : null;
 }
 
-function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]): number {
+function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number | null; bit: number | null }[]): { tl: number; bilinmeyen: number } {
   const ilkIs = new Map<number, Is>();
   for (const i of b.isler.values()) if (!ilkIs.has(i.uretimEmriId)) ilkIs.set(i.uretimEmriId, i);
   return planMaliyeti(emirler.map((e) => {
@@ -858,7 +862,8 @@ function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number |
       bitDk: e.bit, teslimDk: satir ? teslimDk(b, satir.termin) : e.teslimDk, satir: satir && { ...satir, katkiPayi: b.katkilar.get(e.id) ?? null },
       carpan: emirCarpani(b, i ?? null), pay: i ? adetPayi(ham, i.adet) : 1,
     };
-  }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.finansmanOraniGun ?? b.bedelAyari.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
+  // 1448 a: finansman oranı yalnız finansın tek oranıdır; finansta yoksa finansman bedele girmez (elle orana düşülmez).
+  }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
 }
 
 function gosterge(b: Baglam, yerler: readonly Yer[]) {
@@ -1126,14 +1131,22 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
 export async function planFinansmanOrani(db: Db, gun: string): Promise<number | null> {
   return (await gunlukFaizGetir(db, 'TRY', gun))?.gunlukYuzde ?? null;
 }
+// 1397 a: plan gününün geçerli kurları (finans); kuru girilmemiş para birimi haritada yoktur.
+async function planKurlari(db: Db, gun: string): Promise<Map<string, number>> {
+  return new Map([...await kurlar(db, gun)].map(([pb, k]) => [pb, Number(k.kur)]));
+}
 
+// 1448 a: bedel ayarındaki finansman oranı salt okunurdur; değer finansın bugünkü tek oranıdır (1383 a), ayar satırındaki elle değer okunmaz.
 export async function bedelAyari(db: Db, taslak?: number): Promise<BedelAyari> {
   await hedefDenetle(db, taslak ?? null);
-  return s.bedelAyariOku(db, taslak ?? null);
+  return { ...await s.bedelAyariOku(db, taslak ?? null), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(Date.now())) };
 }
 // 148 a: bütün siparişlerin sırasını değiştirdiği için canlıya doğrudan yazılmaz; taslağa gider, onayla canlıya geçer. Defter değer
 // taşımaz (bedel ticari bilgidir, 237 a), yalnız değişen alanları.
-export function bedelAyariYaz(db: Db, k: Kullanici, t: TaslakGirdisi, a: BedelAyariGovdesi) {
+// 1448 a: gövdedeki finansman oranı yazılmaz (salt okunur; eski ekran gönderebilir).
+export function bedelAyariYaz(db: Db, k: Kullanici, t: TaslakGirdisi, govde: BedelAyariGovdesi) {
+  const a: BedelAyariGovdesi = { ...govde };
+  delete a.finansmanOraniGun;
   return taslagaYaz(db, k, t, async (b, id) => {
     await s.bedelTaslagaYaz(db, id, a);
     const fark = (Object.keys(a) as (keyof BedelAyariGovdesi)[]).filter((x) => a[x] !== undefined && a[x] !== b.bedelAyari[x]);

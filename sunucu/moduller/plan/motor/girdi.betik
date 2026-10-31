@@ -16,6 +16,8 @@ const rrDuzle = x => Array.isArray(x) ? x.map(rrDuzle)
 const rrEsit = (a, b) => JSON.stringify(rrDuzle(a)) === JSON.stringify(rrDuzle(b));
 const rrTarih = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(0, 10) : '';
 const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) ? s.slice(11, 16) : '';
+/* 1401 a: termin günün sonudur; sunucuyla tek tanım (plan/kurallar.ts TERMIN_SAATI, plan-girdisi testi aynılığını denetler) */
+const TERMIN_SAATI = '23:59';
 const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
 const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 
@@ -168,9 +170,9 @@ function rrCevir(st) {
     if (!a || a.id !== o.id) y.id = o.id;
     if (!a || a.urun !== o.itemId) y.urun = o.itemId;
     if (!a || a.adet !== o.qty) y.adet = +o.qty;
-    /* teslim yoksa termin de yoktur (kural 5): "null 17:00" ya da uydurma tarih yazılmaz */
+    /* teslim yoksa termin de yoktur (kural 5): uydurma tarih yazılmaz. Termin saati her zaman TERMIN_SAATI: kayıtta başka saat kalmışsa düzelir */
     const due = rrTarih(o.due) || null;
-    if (!a || (rrTarih(a.termin) || null) !== due) y.termin = due ? due + ' ' + (rrSaat(a && a.termin) || '17:00') : null;
+    if (!a || (rrTarih(a.termin) || null) !== due || (due && rrSaat(a.termin) !== TERMIN_SAATI)) y.termin = due ? due + ' ' + TERMIN_SAATI : null;
     if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (o.serbestSaat || rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
     else if (o.serbestSaat && a.serbest && rrSaat(a.serbest) !== o.serbestSaat) y.serbest = o.start !== bas ? o.start + ' ' + o.serbestSaat : null;
     if (!a || a.oncelik !== oncSinifi(o.priority)) y.oncelik = oncSinifi(o.priority);

@@ -49,6 +49,9 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | 1034 / 1036 a | Sunucu motoru kayıtlıyken kolun yerleşmeyen son adımı birleşme adımını, yerleşmeyen ek adım (rework, tamir, ek; süresiz ya da kaynaksız) emirde sonraki adımı bekletir: bekleyen iş ve emrinde sonraki adımlar yerleşmez ("Bağlı parti yerleşmedi.", "Önceki adım (OP n) yerleşmedi."), motor onlarsız yeniden koşar. Kalite kararı ve doldurulmamış rework adımı kendi nedeniyle yerleşmemiş görünür | U 1034 (`hatali-kol.test.ts`) | yok |
 | 1202 | Sunucu motoru kayıtlıyken fason rework ya da ek adım fasonundan sonraki adım fasonun kalan süresini (fasonBekleGun) bekler; öncülü motorda fason olan adım (rota, emir fasonu) motorun kendi süresiyle kalır | U 1202 (`fason-ek-adim.test.ts`) | yok |
 | 1329 | 1280 a: ham malzemenin fiyatı Satın Alma'dandır (alış ortalaması; kg fiyatı tarihiyle yalnız başvuru); fiyatı olmayan malzemede alış fiyatı null; yalnız finans.maliyet-oku taşıyana dolar | U PKG-01, PKG-02 (`plan-kg-fiyati.test.ts`) | yok |
+| PL-1397 | 1397 a: döviz sipariş satırının tutarı ve katkı payı plan gününün kuruyla (finans) TL'ye çevrilir; kuru olmayan döviz emrin bedeli bilinmez, plan TL toplamına sıfır olarak girmez, `bedeliBilinmeyenEmir`'de sayılır | K 6c, 227 a; U `plan-doviz.test.ts`, `plan-bedel.test.ts` 6c | yok |
+| PL-1401 | 1401 a: termin günün sonudur (`TERMIN_SAATI`, 23:59 tesis saati); sunucu gecikmesi ve planlama motoru girdisi aynı saati kullanır; motor kaydında kalan eski saat düzelir | `plan-girdisi.test.ts` 1401 a, `plan-gosterge-ayar.test.ts` | yok |
+| PL-1448 | 1448 a: bedel ayarındaki finansman oranı salt okunurdur: okuma finansın tek oranını (1383 a) verir, yazma gövdedeki değeri yazmaz; finansta oran yoksa finansman plana girmez (elle orana düşülmez) | `plan-finansman.test.ts`, `plan-bedel.test.ts` 210 a | yok |
 
 Bağı ertelenen kural: PL-06 (paralel bölme, P-B18); PL-09'un motoru erteletmesi (P-B19).
 
