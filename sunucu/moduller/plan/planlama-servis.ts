@@ -25,7 +25,7 @@ import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
 } from './planlama-kurallar.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
-import { calisanAdimlar, canliOzeti } from './servis.ts';
+import { calisanAdimlar, canliOzeti, planFinansmanOrani } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -268,7 +268,8 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
   if (g === null) return { calisma: null, surum: k.surum };
   // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
-  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
+  const fin = await planFinansmanOrani(db, tesisGunu(simdi));
+  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler, fin) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
@@ -311,7 +312,8 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const calisma = gecerli ? kayitli : yeniCalisma(kayit, kaynak, tesisGunu(bosCalismaAni!));
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
   const { degerler } = await hedefMotorAyari(db, null);
-  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler), kayit, kaynak: { durum: kaynak.durum, ek } } };
+  const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
+  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin), kayit, kaynak: { durum: kaynak.durum, ek } } };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

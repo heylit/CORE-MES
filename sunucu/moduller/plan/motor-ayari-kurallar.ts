@@ -26,12 +26,19 @@ export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
 // sıralı ayarda kayıt ne derse desin kapalıdır; sıralama kuralı w.rule'dur (girdi.betik stKur). Girdi birleşmesi D'yi Reçete ve Rota kaydından
 // yeniden kurunca planTL düşebilir: amaç w.amac ile de gider, motor onu kayıttakinin önüne koyar (durum.betik ymUygula). Okunan kopya değişir;
 // sayfa kaydederse kayıt da bunları taşır, motor yine ayarı okur.
-export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari): unknown {
+// 1383 a: finansman oranı finansın TRY faizinden gelir (günlük yüzde, finansmanın tek tanımıyla); motor ve planlama sayfası onu
+// D.planAgirlik.fin'de okur (durum.betik agAyar). Finansta TRY faizi yoksa (null) kayıttaki elle oran kalır.
+export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
   if (c.D === null || typeof c.D !== 'object') return calisma;
-  const D = c.D as { planTL?: unknown };
+  const D = c.D as { planTL?: unknown; planAgirlik?: unknown };
   const planTL = D.planTL !== null && typeof D.planTL === 'object' ? D.planTL : {};
+  const agirlik = finansmanOraniGun === null ? {}
+    : { planAgirlik: { ...(D.planAgirlik !== null && typeof D.planAgirlik === 'object' ? D.planAgirlik : {}), fin: finansmanOraniGun } };
   const w = (c as { w?: unknown }).w;
-  return { ...c, D: { ...D, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } }, w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac } };
+  return {
+    ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
+    w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac },
+  };
 }
