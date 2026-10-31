@@ -268,7 +268,7 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
 
     const OPERATOR = [
       'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',
-      'sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.hazirlik-onayla', 'cnc-kurulum.takim-degistir', 'uretim-emirleri.ara-istasyon',
+      'uretim-emirleri.ara-istasyon',
       'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
     ].sort();
     assert.deepEqual(await islemler(), OPERATOR);

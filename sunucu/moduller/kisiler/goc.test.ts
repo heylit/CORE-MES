@@ -150,14 +150,11 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
   ].sort();
   const OPERATOR_SONUNDA = [
     'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',
-    // CNC Kurulum okuma ve hazırlık onayı göçü (kullanıcı kararı, 16.10.2026).
-    'sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.hazirlik-onayla',
+    // CNC Kurulum okuma, hazırlık onayı ve takım değişimi 1393 c+ ve 1458 a ile operatörden kalktı (kart #1454).
     // Ctrl K istasyon araması göçü (kullanıcı kararı, 16.10.2026).
     'uretim-emirleri.ara-istasyon',
     // İdari İşler göçü (kullanıcı kararı 216 a, 19.10.2026).
     'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
-    // Takım değişimi göçü (kullanıcı kararı 300 a, 20.10.2026).
-    'cnc-kurulum.takim-degistir',
   ].sort();
 
   // Her biri elle yapılmış bir değişikliktir; göç hangisini görürse görsün üstüne yazmadan durmalıdır.
