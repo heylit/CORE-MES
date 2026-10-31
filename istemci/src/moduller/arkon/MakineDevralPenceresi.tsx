@@ -1,5 +1,6 @@
 import { OnayPenceresi } from '../../ortak/arayuz/index.ts';
 import type { MakineDoluRedi } from './baglanti.ts';
+import './arkon.css';
 
 // Makine (ya da makinesiz işin istasyon yeri) başka işte doluyken başlatma reddedilir; kullanıcı o işi durdurup kendi işini başlatmayı onaylayabilir.
 export const devralMetni = (red: MakineDoluRedi): string => {

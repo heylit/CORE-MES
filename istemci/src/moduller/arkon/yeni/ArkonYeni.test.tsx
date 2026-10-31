@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
-import { rotalar } from '../rotalar.tsx';
+import { eskiAdresinYenisi, rotalar } from '../rotalar.tsx';
 import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
-import { SAYFALAR, sekmeMaddeleri } from './sayfalar.ts';
+import { SAYFALAR, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 
 // İskeletin sözleşmesi: yol, giriş sayfası, bölüm. Bölümlerin içine bakılmaz (parçalar doldurur); bölüm adıyla (aria-label) ve
@@ -128,6 +128,56 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     const b = await bolum('Üretim Terminali Hazırlık');
     expect(b.getAttribute('data-sayfa')).toBe('onizle');
     expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
+  }, 20000);
+});
+
+// Rolün giriş sayfası Arkon rolündendir; operatöre ek verilen planlama işlemi açılan ekranı değiştirmez (soru 38/49 A).
+describe('Arkon giriş sayfası', () => {
+  it('Pano maddesini gören rol Pano\'dan, operatör ve Pano\'yu görmeyen operatör ekranından girer', () => {
+    expect(arkonGirisSayfasi('admin', ['sayfa.arkon', 'arkon.yonetici'])).toBe('pano');
+    expect(arkonGirisSayfasi('lead', ['sayfa.arkon', 'arkon.amir'])).toBe('pano');
+    expect(arkonGirisSayfasi('operator', ['sayfa.arkon', 'arkon.operator'])).toBe('operator');
+    expect(arkonGirisSayfasi('operator', ['sayfa.arkon', 'arkon.operator', 'arkon.planlama'])).toBe('operator');
+    expect(arkonGirisSayfasi('admin', ['sayfa.arkon'])).toBe('operator');
+  });
+});
+
+// Eski çerçeve kalktı (1418, karar 1392 a): `/eski` adresleri yer imi için aynı yolun yeni adresine gider.
+describe('Eski görünüm adresleri', () => {
+  it('eski adres aynı yolun yenisine çevrilir; başka adres değişmez', () => {
+    expect(eskiAdresinYenisi('/arkon/eski')).toBe('/arkon');
+    expect(eskiAdresinYenisi('/arkon/eski/pano')).toBe('/arkon/pano');
+    expect(eskiAdresinYenisi('/arkon/eski/onizle/IST-1')).toBe('/arkon/onizle/IST-1');
+    expect(eskiAdresinYenisi('/kuyruk/eski')).toBe('/kuyruk');
+    expect(eskiAdresinYenisi('/uretim-terminali/eski')).toBe('/uretim-terminali');
+    expect(eskiAdresinYenisi('/arkon/eskiler')).toBe('/arkon/eskiler');
+    expect(eskiAdresinYenisi('/arkon/pano')).toBe('/arkon/pano');
+  });
+
+  it('eski Pano adresi yeni Pano\'yu açar, adres geçmişe eklenmeden değişir', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/eski/pano');
+    expect((await bolum('Pano')).getAttribute('data-sayfa')).toBe('pano');
+    expect(adres()).toBe('/arkon/pano');
+  }, 20000);
+
+  it('eski Kuyruk ve eski terminal adresi yeni ekranı açar; terminalde iş emri seçimi korunur', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/kuyruk/eski');
+    expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');
+    expect(adres()).toBe('/kuyruk');
+    cleanup();
+    const w = window as unknown as { __tmiEmirSec?: number };
+    const secilen: (number | undefined)[] = [];
+    const dinle = () => { secilen.push(w.__tmiEmirSec); };
+    window.addEventListener('tmi-emir-sec', dinle);
+    sunucuKur(OPERATOR);
+    arkonAc('/uretim-terminali/eski?emir=42');
+    expect((await bolum('Üretim Terminali')).getAttribute('data-sayfa')).toBe('operator');
+    expect(adres()).toBe('/uretim-terminali');
+    await waitFor(() => { expect(secilen).toEqual([42]); });
+    window.removeEventListener('tmi-emir-sec', dinle);
+    delete w.__tmiEmirSec;
   }, 20000);
 });
 
