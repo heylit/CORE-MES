@@ -19,7 +19,7 @@ const GORUNUMLER = [{ deger: 'komutlar', baslik: 'Komutlar' }, { deger: 'degisik
 interface Suzgec { kisi: string; baslangic: string; bitis: string; modul: string; komut: string; tablo: string }
 const BOS_SUZGEC: Suzgec = { kisi: '', baslangic: '', bitis: '', modul: '', komut: '', tablo: '' };
 
-// Defterdeki tablo adının ekrandaki karşılığı (392 a listesi); listede olmayan tablo kendi adıyla görünür.
+// Defterdeki tablo adının ekrandaki karşılığı (392 a ve 1372 a listeleri); listede olmayan tablo kendi adıyla görünür.
 const TABLO_ADLARI: Readonly<Record<string, string>> = {
   uretim_emri: 'Üretim emri',
   uretim_emirleri_is_emri: 'İş emri',
@@ -30,6 +30,17 @@ const TABLO_ADLARI: Readonly<Record<string, string>> = {
   kisi_rolu: 'Kişi rolü',
   kisi_islemi: 'Kişi yetkisi',
   kisi_is_merkezi: 'Kişi iş merkezi',
+  istasyonlar_kisi_tezgah_siniri: 'Kişi tezgah sınırı',
+  musteri_tedarikci_firma: 'Firma',
+  musteri_tedarikci_adres: 'Firma adresi',
+  rota_revizyonu: 'Rota revizyonu',
+  rota_adimi: 'Rota adımı',
+  is_merkezi: 'İş merkezi',
+  istasyon: 'İstasyon',
+  makine: 'Makine',
+  kisi: 'Kişi kartı',
+  stok_malzeme_ayari: 'Stok ayarı',
+  stok_konum: 'Stok konumu',
   ayar: 'Sistem ayarı',
 };
 // Yol parametresinden önceki kesimin ekrandaki karşılığı (`/uretim-emirleri/:id` -> "Üretim emri 13"); listede olmayan "Kayıt" olur.

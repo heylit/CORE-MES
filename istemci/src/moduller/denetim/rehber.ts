@@ -8,7 +8,7 @@ export const rehber: readonly SayfaRehberi[] = [
       '"Kişi", "Başlangıç", "Bitiş", "Modül" ve "Komut" süzgeçlerini seçin; "Temizle" sıfırlar.',
       'Listede işlem yetki adıyla, kayıt adıyla görünür (ör. "Üretim emri 41"); teknik komut satır ayrıntısındadır.',
       'Satıra tıklayın; yan pencerede ayrıntı açılır.',
-      '"Görünüm"den "Değişiklikler"i seçin: üretim emri, iş emri, sipariş satırı, malzeme kartı, yetki ve ayar kayıtlarında hangi alanın neyden neye değiştiği listelenir.',
+      '"Görünüm"den "Değişiklikler"i seçin: üretim emri, iş emri, sipariş satırı, malzeme kartı, firma, rota, iş merkezi, istasyon, makine, kişi kartı, stok ayarı ve konumu, yetki ve ayar kayıtlarında hangi alanın neyden neye değiştiği listelenir.',
     ],
     sinirlar: [
       'Kayıt değiştirilemez ve silinemez.',
