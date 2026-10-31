@@ -692,26 +692,31 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
   );
 }
 
-// ---- Stok değeri için son alış fiyatı: malzemenin en son teslim alınan sipariş satırının teklif birim fiyatı (iskonto ve
-// masraf dağıtılmaz). TRY karşılığı siparişte sabitlenen kurla, yoksa teklif günü kuruyla (döviz teklifi kursuz yazılamaz, SA3);
-// ikisi de yoksa boş. Güncel kur finanstadır, burada kullanılmaz. Geri alma kaydı (eksi miktar) "son teslim" sayılmaz.
-// Ağırlıklı ortalama: bütün pozitif teslimler, teslim miktarıyla; TRY karşılığı son alış fiyatındaki kuralla. Karşılığı
-// olmayan teslim ortalamaya girmez. İskonto ve masraf dağıtılmaz.
-export interface OrtalamaAlisFiyatiSatiri { malzemeNo: number; tryBirimFiyat: string | null; teslimSayisi: number }
-export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Promise<OrtalamaAlisFiyatiSatiri[]> {
-  return db.sorgu<OrtalamaAlisFiyatiSatiri>(
-    `SELECT n.no AS "malzemeNo", (round(sum(x.tl * x.miktar) / nullif(sum(x.miktar), 0), 4))::text AS "tryBirimFiyat", count(x.miktar)::int AS "teslimSayisi"
-       FROM unnest($1::int[]) AS n(no)
-       LEFT JOIN (
-         SELECT c.malzeme_no, m.miktar, f.birim_fiyat * coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END) AS tl
-           FROM satin_alma_teslim m
+// ---- Stok değeri için alış fiyatları (1382 d). Fiyat net: teklif satırının ve teklifin iskontosu düşülür; masraf dağıtılmaz.
+// TRY karşılığı siparişte sabitlenen kurla, yoksa teklif günü kuruyla (döviz teklifi kursuz yazılamaz, SA3); ikisi de yoksa boş.
+// Güncel kur finanstadır, burada kullanılmaz. Teslim mal kabul satırı başına netlenir: geri alınan (neti sıfır ya da eksi) teslim
+// ne son alış ne ortalama sayılır.
+const NET_BIRIM_FIYAT = 'f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - COALESCE(q.iskonto_yuzdesi, 0) / 100)';
+const TRY_KURU = "coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END)";
+const TESLIM_FIYATI_BAGI = `
            JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
            JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
            JOIN satin_alma_katalog c ON c.id = k.katalog_id
            JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
            JOIN satin_alma_teklif_satiri f ON f.talep_id = s.talep_id AND f.teklif_id = s.teklif_id AND f.kalem_id = s.kalem_id
-           LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = s.talep_id AND sk.para_birimi = q.para_birimi
-          WHERE c.malzeme_no = ANY($1::int[]) AND m.miktar > 0) x ON x.malzeme_no = n.no AND x.tl IS NOT NULL
+           LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = s.talep_id AND sk.para_birimi = q.para_birimi`;
+// Ağırlıklı ortalama: neti artı kalan teslimler, net miktarla; karşılığı olmayan teslim ortalamaya girmez.
+export interface OrtalamaAlisFiyatiSatiri { malzemeNo: number; tryBirimFiyat: string | null; teslimSayisi: number }
+export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Promise<OrtalamaAlisFiyatiSatiri[]> {
+  return db.sorgu<OrtalamaAlisFiyatiSatiri>(
+    `SELECT n.no AS "malzemeNo", (round(sum(x.tl * x.net) / nullif(sum(x.net), 0), 4))::text AS "tryBirimFiyat", count(x.net)::int AS "teslimSayisi"
+       FROM unnest($1::int[]) AS n(no)
+       LEFT JOIN (
+         SELECT c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
+           FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
+          WHERE c.malzeme_no = ANY($1::int[])
+          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+         HAVING sum(m.miktar) > 0) x ON x.malzeme_no = n.no AND x.tl IS NOT NULL
       GROUP BY n.no`,
     [malzemeNolar],
   );
@@ -719,18 +724,29 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
 export interface SonAlisFiyatiSatiri { malzemeNo: number; birimFiyat: string; paraBirimi: string; tryBirimFiyat: string | null; zaman: string }
 export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Promise<SonAlisFiyatiSatiri[]> {
   return db.sorgu<SonAlisFiyatiSatiri>(
-    `SELECT DISTINCT ON (c.malzeme_no) c.malzeme_no AS "malzemeNo", f.birim_fiyat::text AS "birimFiyat", q.para_birimi AS "paraBirimi",
-        (round(f.birim_fiyat * coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END), 4))::text AS "tryBirimFiyat", ${ISO('m.zaman')} AS zaman
-       FROM satin_alma_teslim m
-       JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
-       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
-       JOIN satin_alma_katalog c ON c.id = k.katalog_id
-       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
-       JOIN satin_alma_teklif_satiri f ON f.talep_id = s.talep_id AND f.teklif_id = s.teklif_id AND f.kalem_id = s.kalem_id
-       LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = s.talep_id AND sk.para_birimi = q.para_birimi
-      WHERE c.malzeme_no = ANY($1::int[]) AND m.miktar > 0
-      ORDER BY c.malzeme_no, m.zaman DESC, m.id DESC`,
+    `SELECT DISTINCT ON (x.malzeme_no) x.malzeme_no AS "malzemeNo", (round(x.net_fiyat, 4))::text AS "birimFiyat", x.para_birimi AS "paraBirimi",
+        (round(x.net_fiyat * x.kur, 4))::text AS "tryBirimFiyat", ${ISO('x.zaman')} AS zaman
+       FROM (
+         SELECT c.malzeme_no, ${NET_BIRIM_FIYAT} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
+                max(m.zaman) FILTER (WHERE m.miktar > 0) AS zaman, max(m.id) FILTER (WHERE m.miktar > 0) AS id
+           FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
+          WHERE c.malzeme_no = ANY($1::int[])
+          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+         HAVING sum(m.miktar) > 0) x
+      ORDER BY x.malzeme_no, x.zaman DESC, x.id DESC`,
     [malzemeNolar],
+  );
+}
+// Stokun mal kabul satırı başına net TRY birim fiyatı (stok hareketli ortalaması ve son alışı için). Teslimi olmayan satır yoktur.
+export interface MalKabulFiyatiSatiri { malKabulSatirId: number; tryBirimFiyat: string | null }
+export function malKabulFiyatlariOku(db: Db, malKabulSatirIdler: readonly number[]): Promise<MalKabulFiyatiSatiri[]> {
+  return db.sorgu<MalKabulFiyatiSatiri>(
+    `SELECT DISTINCT ON (m.mal_kabul_satiri_id) m.mal_kabul_satiri_id::int AS "malKabulSatirId",
+        (round(${NET_BIRIM_FIYAT} * ${TRY_KURU}, 4))::text AS "tryBirimFiyat"
+       FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
+      WHERE m.mal_kabul_satiri_id = ANY($1::bigint[])
+      ORDER BY m.mal_kabul_satiri_id, m.id`,
+    [malKabulSatirIdler],
   );
 }
 
@@ -871,14 +887,15 @@ const KG_FIYATI_SECIMI = `f.kalite_kodu AS "kaliteKodu", f.form, f.kg_fiyati::te
 const KG_KURU = 'LEFT JOIN unnest($1::text[], $2::numeric[]) AS k(para_birimi, kur) ON k.para_birimi = f.para_birimi::text';
 export interface KurDizisi { paraBirimleri: string[]; kurlar: string[] }
 // Kalite + form başına geçerlilik günü bugünü geçmemiş en son giriş; aynı günde sonra girilen kazanır.
-export function guncelKgFiyatlari(db: Db, kur: KurDizisi): Promise<KgFiyatiOkuma[]> {
+// Gün verilirse o gün geçerli olan giriş (stok değerinin ay sonu serisi, 1382 d).
+export function guncelKgFiyatlari(db: Db, kur: KurDizisi, gun: string | null = null): Promise<KgFiyatiOkuma[]> {
   return db.sorgu<KgFiyatiOkuma>(
     `SELECT ${KG_FIYATI_SECIMI} FROM (
-       SELECT DISTINCT ON (kalite_kodu, form) * FROM satin_alma_kg_fiyati WHERE gecerlilik <= current_date
+       SELECT DISTINCT ON (kalite_kodu, form) * FROM satin_alma_kg_fiyati WHERE gecerlilik <= coalesce($3::date, current_date)
         ORDER BY kalite_kodu, form, gecerlilik DESC, id DESC) f
        ${KG_KURU}
       ORDER BY f.kalite_kodu, f.form NULLS FIRST`,
-    [kur.paraBirimleri, kur.kurlar],
+    [kur.paraBirimleri, kur.kurlar, gun],
   );
 }
 export function kgFiyatiGecmisi(db: Db, kur: KurDizisi, kaliteKodu: string, form: string | null): Promise<KgFiyatiOkuma[]> {

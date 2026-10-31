@@ -428,6 +428,57 @@ export function stokDegeri(toplamlar: readonly { malzemeId: number; toplam: stri
   return { deger: `${kurus / 100n}.${(kurus % 100n).toString().padStart(2, '0')}`, fiyatsizKart };
 }
 
+
+// ---- Alış fiyatı ile değerleme (1382 d) ----------------------------------------------------------------------------------------
+// Mal kabuller zaman sırasıyla işlenir; her kesimde (o andan önceki olaylar; null bütün geçmiş) kart başına iki fiyat çıkar:
+// - Hareketli ortalama: mal kabulde (eldeki x ortalama + miktar x fiyat) / (eldeki + miktar). Eldeki, hareketten önceki stoktur;
+//   eksiyse sıfır sayılır. Çıkış ortalamayı değiştirmez. Ortalama yokken (ilk fiyatlı kabul) eldeki her şey o fiyatla sayılır.
+//   Geri alınan mal kabul kendi fiyatıyla çıkar: (eldeki x ortalama - miktar x fiyat) / (eldeki - miktar); kalan sıfırsa ya da
+//   sonuç eksiye düşerse ortalama değişmez.
+// - Son alış: geri alınmamış en son fiyatlı mal kabulün fiyatı.
+// Fiyatı olmayan mal kabul (TRY karşılığı yok) fiyatı değiştirmez. Fiyat TRY, on binde yuvarlanır (yarım yukarı).
+export interface AlisOlayi { malzemeId: number; zaman: string; miktar: string; once: string; malKabulSatirId: number; geri: boolean; fiyat: string | null }
+export interface AlisFiyatlari { ortalama: string | null; sonAlis: string | null }
+function onBindenMetin(d: bigint): string {
+  const kalan = (d % 10000n).toString().padStart(4, '0').replace(/0+$/, '');
+  return kalan === '' ? `${d / 10000n}` : `${d / 10000n}.${kalan}`;
+}
+const yuvarlaBol = (pay: bigint, payda: bigint): bigint => (2n * pay + payda) / (2n * payda);
+export function alisFiyatlari(olaylar: readonly AlisOlayi[], kesimler: readonly (string | null)[]): Map<number, AlisFiyatlari>[] {
+  const sinirlar = kesimler.map((k) => (k === null ? Infinity : Date.parse(k)));
+  const sonuc = kesimler.map(() => new Map<number, AlisFiyatlari>());
+  const kartlar = new Map<number, AlisOlayi[]>();
+  for (const o of olaylar) kartlar.set(o.malzemeId, [...(kartlar.get(o.malzemeId) ?? []), o]);
+  for (const [malzemeId, liste] of kartlar) {
+    const sirali = [...liste].sort((a, b) => Date.parse(a.zaman) - Date.parse(b.zaman));
+    let ortalama: bigint | null = null;
+    const acik: { malKabulSatirId: number; fiyat: bigint }[] = [];
+    const yaz = (i: number) => {
+      const son = acik.at(-1);
+      sonuc[i]!.set(malzemeId, { ortalama: ortalama === null ? null : onBindenMetin(ortalama), sonAlis: son === undefined ? null : onBindenMetin(son.fiyat) });
+    };
+    const bekleyen = sinirlar.map((_, i) => i).sort((a, b) => sinirlar[a]! - sinirlar[b]!);
+    let k = 0;
+    for (const o of sirali) {
+      const an = Date.parse(o.zaman);
+      while (k < bekleyen.length && sinirlar[bekleyen[k]!]! <= an) yaz(bekleyen[k++]!);
+      if (o.fiyat === null) continue;
+      const f = onBinde(o.fiyat), q = binde(o.miktar), eldeki = binde(o.once) > 0n ? binde(o.once) : 0n;
+      if (!o.geri) {
+        acik.push({ malKabulSatirId: o.malKabulSatirId, fiyat: f });
+        ortalama = ortalama === null || eldeki === 0n ? f : yuvarlaBol(eldeki * ortalama + q * f, eldeki + q);
+        continue;
+      }
+      const i = acik.findIndex((x) => x.malKabulSatirId === o.malKabulSatirId);
+      if (i >= 0) acik.splice(i, 1);
+      const pay = ortalama === null ? -1n : eldeki * ortalama - q * f;
+      if (ortalama !== null && eldeki > q && pay >= 0n) ortalama = yuvarlaBol(pay, eldeki - q);
+    }
+    while (k < bekleyen.length) yaz(bekleyen[k++]!);
+  }
+  return sonuc;
+}
+
 // ---- Fabrika Haritası eşlemesi (kart #686, #711) -----------------------------------------------------------------------------
 // Harita raf, göz ve alanın tek kaynağıdır; stok konumu yerin stok tarafıdır. Yalnız depo seçilmiş bölümün (aktif stok deposu
 // bağlı) gözü ve stok alanı konum olur; üretim bölümünün rafı stok sayılmaz. Haritadan açılan göz konumunun kodu göz adresidir ve

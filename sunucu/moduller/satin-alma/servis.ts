@@ -950,8 +950,6 @@ export async function sonAlisFiyatlari(db: Db, malzemeNolar: readonly number[]):
   const l = await s.sonAlisFiyatlariOku(db, [...new Set(malzemeNolar)]);
   return new Map(l.map(({ malzemeNo, ...x }) => [malzemeNo, { ...x, birimFiyat: sade(x.birimFiyat), tryBirimFiyat: x.tryBirimFiyat === null ? null : sade(x.tryBirimFiyat) }]));
 }
-// Stok değeri (stok isteği, kullanıcı kararı 12.10.2026): ağırlıklı ortalama alış fiyatı; istenen her malzeme haritadadır,
-// teslimi olmayanın fiyatı boş.
 // Plan motoru: açık siparişte gelecek malzeme, termin sırasıyla (tarihsiz en sonda). Miktar kalemin birimiyle; fiyat yok.
 export interface MalzemeGelisi { tarih: string | null; miktar: string; birim: string; siparisNo: string }
 export async function malzemeGelisTarihleri(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, MalzemeGelisi[]>> {
@@ -961,11 +959,18 @@ export async function malzemeGelisTarihleri(db: Db, malzemeNolar: readonly numbe
   for (const { malzemeNo, ...x } of await s.malzemeGelisleriOku(db, tekil)) m.set(malzemeNo, [...(m.get(malzemeNo) ?? []), { ...x, miktar: sade(x.miktar) }]);
   return m;
 }
+// Ağırlıklı ortalama net alış fiyatı (plan, malzeme izi, kg fiyatları ekranı); istenen her malzeme haritadadır, teslimi olmayanın fiyatı boş.
 export interface OrtalamaAlisFiyati { tryBirimFiyat: string | null; teslimSayisi: number }
 export async function ortalamaAlisFiyatlari(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, OrtalamaAlisFiyati>> {
   if (malzemeNolar.length === 0) return new Map();
   const l = await s.ortalamaAlisFiyatlariOku(db, [...new Set(malzemeNolar)]);
   return new Map(l.map(({ malzemeNo, tryBirimFiyat, teslimSayisi }) => [malzemeNo, { tryBirimFiyat: sade(tryBirimFiyat), teslimSayisi }]));
+}
+// Stok değerlemesi (1382 d): mal kabul satırı -> net TRY birim fiyatı; teslimi olmayan satır haritada yoktur, karşılığı olmayanın fiyatı boş.
+export async function malKabulFiyatlari(db: Db, malKabulSatirIdler: readonly number[]): Promise<Map<number, string | null>> {
+  if (malKabulSatirIdler.length === 0) return new Map();
+  const l = await s.malKabulFiyatlariOku(db, [...new Set(malKabulSatirIdler)]);
+  return new Map(l.map((x) => [x.malKabulSatirId, x.tryBirimFiyat === null ? null : sade(x.tryBirimFiyat)]));
 }
 export function siparisSatirlari(db: Db, idler?: readonly number[]): Promise<s.SiparisSatiriOkuma[]> {
   if (idler !== undefined && idler.length === 0) return Promise.resolve([]);
@@ -1216,8 +1221,8 @@ export async function stokYokIstekleri(db: Db): Promise<StokYokIstekleriCevabi> 
 }
 
 // ---- Kg fiyatı (SAT-77). TL karşılığı finansın bugünkü ya da önceki son kuruyla; kuru olmayan para biriminde boş.
-async function kgKuru(db: Db): Promise<s.KurDizisi> {
-  const k = [...(await kurlar(db, await s.bugun(db))).entries()];
+async function kgKuru(db: Db, gun: string | null = null): Promise<s.KurDizisi> {
+  const k = [...(await kurlar(db, gun ?? await s.bugun(db))).entries()];
   return { paraBirimleri: k.map(([p]) => p), kurlar: k.map(([, v]) => v.kur) };
 }
 async function kgFiyatiAdlari(db: Db, satirlar: s.KgFiyatiOkuma[]): Promise<KgFiyatiSatiri[]> {
@@ -1290,10 +1295,20 @@ export interface MalzemeKgFiyati {
   birimFiyati: string | null; tryBirimFiyati: string | null; talasKgFiyati: string | null; tryTalasKgFiyati: string | null;
 }
 export async function malzemeKgFiyatlari(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, MalzemeKgFiyati>> {
-  const sonuc = new Map<number, MalzemeKgFiyati>();
+  return new Map([...(await kgFiyatlariHesapla(db, malzemeNolar, null))].map(([no, { tryTalasBirimFiyati: _, ...f }]) => [no, f]));
+}
+// Stok değerlemesi (1382 d): verilen gün (boşsa bugün) geçerli kg fiyatı ve o günün kuruyla stok birimi başına TRY fiyatı; hurda
+// talaş kg fiyatıyla değerlenir. Fiyatı olmayan kart haritada yoktur; birim ağırlığı bilinmeyen kartta fiyatlar boştur.
+export interface DegerlemeKgFiyati { tryBirimFiyati: string | null; tryTalasBirimFiyati: string | null }
+export async function degerlemeKgFiyatlari(db: Db, malzemeNolar: readonly number[], gun: string | null): Promise<Map<number, DegerlemeKgFiyati>> {
+  return new Map([...(await kgFiyatlariHesapla(db, malzemeNolar, gun))].map(([no, f]) => [no, { tryBirimFiyati: f.tryBirimFiyati === null ? null : sade(f.tryBirimFiyati), tryTalasBirimFiyati: f.tryTalasBirimFiyati === null ? null : sade(f.tryTalasBirimFiyati) }]));
+}
+async function kgFiyatlariHesapla(db: Db, malzemeNolar: readonly number[], gun: string | null): Promise<Map<number, MalzemeKgFiyati & { tryTalasBirimFiyati: string | null }>> {
+  const sonuc = new Map<number, MalzemeKgFiyati & { tryTalasBirimFiyati: string | null }>();
+  if (malzemeNolar.length === 0) return sonuc;
   const bilgiler = await malzemeMaliyetBilgileri(db, [...malzemeNolar]);
   if (bilgiler.size === 0) return sonuc;
-  const fiyatlar = await s.guncelKgFiyatlari(db, await kgKuru(db));
+  const fiyatlar = await s.guncelKgFiyatlari(db, await kgKuru(db, gun), gun);
   for (const [no, b] of bilgiler) {
     if (b.kaliteKodu === null) continue;
     const f = uygulananKgFiyati(fiyatlar, b.kaliteKodu, b.form);
@@ -1302,6 +1317,7 @@ export async function malzemeKgFiyatlari(db: Db, malzemeNolar: readonly number[]
       kaliteKodu: f.kaliteKodu, form: f.form, kgFiyati: f.kgFiyati, paraBirimi: f.paraBirimi as KgFiyatiSatiri['paraBirimi'], tryKgFiyati: f.tryKgFiyati, gecerlilik: f.gecerlilik,
       talasKgFiyati: f.talasKgFiyati, tryTalasKgFiyati: f.tryTalasKgFiyati,
       birimFiyati: birimFiyati(f.kgFiyati, b.stokBirimi, b.birimKg), tryBirimFiyati: birimFiyati(f.tryKgFiyati, b.stokBirimi, b.birimKg),
+      tryTalasBirimFiyati: birimFiyati(f.tryTalasKgFiyati, b.stokBirimi, b.birimKg),
     });
   }
   return sonuc;

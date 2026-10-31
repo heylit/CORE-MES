@@ -636,23 +636,46 @@ export const degerGrubuMalzemeToplamlari = (db: Db): Promise<{ malzemeId: number
                    WHEN k.tur = ANY($1::text[]) AND b.statu_id IS NULL THEN 'kullanilabilir' ELSE 'diger' END AS grup,
               sum(b.miktar)::text AS toplam
               FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id GROUP BY 1, 2 ORDER BY 1, 2`, [KULLANILABILIR_KONUM_TURLERI]);
-// Ay sonu (içinde bulunulan ay için bugün) malzeme toplamları: bugünkü bakiyeden ay sonundan sonraki hareketlerin net etkisi düşülür.
-// Hedefi olan hareket o miktarı ekler, kaynağı olan düşer; transfer toplamı değiştirmez. Her ay en az bir satırla döner; toplamı sıfırın üstünde kart yoksa kart ve toplam null'dır.
-export const aySonuMalzemeToplamlari = (db: Db, ay: number): Promise<{ ay: string; malzemeId: number | null; toplam: string | null }[]> => db.sorgu(
+// Ay sonu (içinde bulunulan ay için bugün) malzeme toplamları, hurda konumu ayrı (1382 d: hurda talaş fiyatıyla): bugünkü bakiyeden
+// ay sonundan sonraki hareketlerin net etkisi düşülür. Hareket hedef konumuna ekler, kaynak konumundan düşer; hurdaya ya da hurdadan
+// taşıma iki ayrı satırı değiştirir. `son` ayın bittiği an (içinde bulunulan ayda null), `gun` ayın son günü (içinde bulunulan ayda
+// bugün). Her ay en az bir satırla döner; toplamı sıfırın üstünde kart yoksa kart ve toplam null'dır.
+export interface AySonuToplami { ay: string; son: string | null; gun: string; malzemeId: number | null; hurda: boolean | null; toplam: string | null }
+export const aySonuMalzemeToplamlari = (db: Db, ay: number): Promise<AySonuToplami[]> => db.sorgu(
   `WITH aylar AS (
      SELECT a::date AS ay, CASE WHEN a < date_trunc('month', now()) THEN a + interval '1 month' END AS son
      FROM generate_series(date_trunc('month', now()) - make_interval(months => $1::int - 1), date_trunc('month', now()), interval '1 month') AS a),
-   simdi AS (SELECT malzeme_id, sum(miktar) AS m FROM stok_bakiye GROUP BY malzeme_id),
-   net AS (
-     SELECT a.ay, h.malzeme_id, sum(CASE WHEN h.hedef_konum_id IS NULL THEN 0 ELSE h.miktar END - CASE WHEN h.kaynak_konum_id IS NULL THEN 0 ELSE h.miktar END) AS n
-     FROM aylar a JOIN stok_hareketi h ON h.zaman >= a.son GROUP BY a.ay, h.malzeme_id),
-   kartlar AS (SELECT malzeme_id FROM simdi UNION SELECT malzeme_id FROM net)
-   SELECT to_char(a.ay, 'YYYY-MM') AS ay, x."malzemeId", x.toplam
+   simdi AS (SELECT b.malzeme_id, k.tur = 'hurda' AS hurda, sum(b.miktar) AS m FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id GROUP BY 1, 2),
+   etki AS (
+     SELECT h.zaman, h.malzeme_id, k.tur = 'hurda' AS hurda, h.miktar AS d FROM stok_hareketi h JOIN stok_konum k ON k.id = h.hedef_konum_id
+     UNION ALL
+     SELECT h.zaman, h.malzeme_id, k.tur = 'hurda', -h.miktar FROM stok_hareketi h JOIN stok_konum k ON k.id = h.kaynak_konum_id),
+   net AS (SELECT a.ay, e.malzeme_id, e.hurda, sum(e.d) AS n FROM aylar a JOIN etki e ON e.zaman >= a.son GROUP BY 1, 2, 3),
+   kartlar AS (SELECT malzeme_id, hurda FROM simdi UNION SELECT malzeme_id, hurda FROM net)
+   SELECT to_char(a.ay, 'YYYY-MM') AS ay, ${zamanMetni('a.son')} AS son,
+     (CASE WHEN a.son IS NULL THEN current_date ELSE (a.ay + interval '1 month' - interval '1 day')::date END)::text AS gun,
+     x."malzemeId", x.hurda, x.toplam
    FROM aylar a LEFT JOIN LATERAL (
-     SELECT k.malzeme_id AS "malzemeId", (COALESCE(s.m, 0) - COALESCE(n.n, 0))::text AS toplam
-     FROM kartlar k LEFT JOIN simdi s ON s.malzeme_id = k.malzeme_id LEFT JOIN net n ON n.ay = a.ay AND n.malzeme_id = k.malzeme_id
+     SELECT k.malzeme_id AS "malzemeId", k.hurda, (COALESCE(s.m, 0) - COALESCE(n.n, 0))::text AS toplam
+     FROM kartlar k LEFT JOIN simdi s ON s.malzeme_id = k.malzeme_id AND s.hurda = k.hurda
+       LEFT JOIN net n ON n.ay = a.ay AND n.malzeme_id = k.malzeme_id AND n.hurda = k.hurda
      WHERE COALESCE(s.m, 0) - COALESCE(n.n, 0) > 0) x ON true
-   ORDER BY a.ay, x."malzemeId"`, [ay]);
+   ORDER BY a.ay, x."malzemeId", x.hurda`, [ay]);
+// Stok değerlemesi (1382 d): satın almadan gelen mal kabuller ve geri almaları, zaman sırasıyla; her biri için hareketten hemen önceki
+// eldeki miktar (kartın bütün konumları; hareket geçmişinin toplamı). Hizmet ve fason dönüşü stok girişi olmadığından yoktur.
+export interface DegerlemeAlisOlayiHam { malzemeId: number; zaman: string; miktar: string; once: string; malKabulSatirId: number; geri: boolean }
+export const degerlemeAlisOlaylari = (db: Db, malzemeIdler: readonly number[]): Promise<DegerlemeAlisOlayiHam[]> => db.sorgu(
+  `WITH h AS (
+     SELECT h.id, h.malzeme_id, h.zaman, h.tur, h.giris_kaynagi, h.geri_alinan_id, h.miktar,
+       COALESCE(sum(CASE WHEN h.hedef_konum_id IS NULL THEN 0 ELSE h.miktar END - CASE WHEN h.kaynak_konum_id IS NULL THEN 0 ELSE h.miktar END)
+         OVER (PARTITION BY h.malzeme_id ORDER BY h.zaman, h.id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS once
+     FROM stok_hareketi h WHERE h.malzeme_id = ANY($1::int[]))
+   SELECT h.malzeme_id AS "malzemeId", ${zamanMetni('h.zaman')} AS zaman, h.miktar::text AS miktar, h.once::text AS once,
+     ks.id::int AS "malKabulSatirId", h.tur = 'geri_alma' AS geri
+   FROM h JOIN stok_mal_kabul_satiri ks ON ks.hareket_id = CASE WHEN h.tur = 'geri_alma' THEN h.geri_alinan_id ELSE h.id END
+   WHERE ((h.tur = 'giris' AND h.giris_kaynagi = 'mal_kabul') OR h.tur = 'geri_alma') AND ks.siparis_satir_id IS NOT NULL
+     AND ks.fason_cikis_hareket_id IS NULL
+   ORDER BY h.malzeme_id, h.zaman, h.id`, [malzemeIdler]);
 export const panelSayilari = (db: Db): Promise<{ malzemeCesidi: number; gozDolu: number; gozToplam: number; kritik: number; eksi: number; kabulde: number } | null> => db.tek(
   `SELECT (SELECT count(DISTINCT malzeme_id)::int FROM stok_bakiye) AS "malzemeCesidi",
      (SELECT count(DISTINCT b.konum_id)::int FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE k.tur = 'raf_gozu' AND k.aktif) AS "gozDolu",
