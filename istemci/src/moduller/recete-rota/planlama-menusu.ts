@@ -29,6 +29,7 @@ export const ONERILEN_IKINCI_MENU = {
       { anahtar: 'items', baslik: 'Malzemeler', yol: '/recete-rota/items', simge: 'cube', islem: 'sayfa.recete-rota' },
       { anahtar: 'res', baslik: 'Kaynaklar', yol: '/recete-rota/res', simge: 'cpu', islem: 'sayfa.recete-rota' },
       { anahtar: 'sartnameler', baslik: 'Şartname ve talimatlar', yol: '/recete-rota/sartnameler', simge: 'clipboard-check', islem: 'sayfa.recete-rota' },
+      { anahtar: 'kapanis', baslik: 'Kapanış onayları', yol: '/recete-rota/kapanis', simge: 'check', islem: 'uretim-emirleri.kapanis-oku' },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

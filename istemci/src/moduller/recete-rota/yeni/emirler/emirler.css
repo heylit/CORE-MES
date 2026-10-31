@@ -92,10 +92,11 @@
 .tc-rr3-oncelik[data-oncelik="4"] { opacity: .7; }
 .tc-rr3-rev { border-radius: var(--yari-tam); border-color: var(--run); background: color-mix(in srgb, var(--run) 14%, var(--panel)); color: var(--run); }
 .tc-rr3-durum { border-radius: var(--cizgi-kalin); background: var(--panel2); }
-.tc-rr3-durum[data-durum="serbest"] { color: var(--done); border-color: var(--done); }
-.tc-rr3-durum[data-durum="uretimde"] { background: var(--run); color: var(--bg); border-color: var(--run); }
-.tc-rr3-durum[data-durum="tamam"] { color: var(--run); border-color: var(--run); }
-.tc-rr3-durum[data-durum="iptal"] { color: var(--stop); border-color: var(--stop); }
+/* Renk durum sözlüğünün tonundan (1389 a): her ekranda aynı durum aynı tonla görünür. */
+.tc-rr3-durum[data-ton="bilgi"] { color: var(--done); border-color: var(--done); }
+.tc-rr3-durum[data-ton="uyari"] { color: var(--hold); border-color: var(--hold); }
+.tc-rr3-durum[data-ton="tamam"] { color: var(--run); border-color: var(--run); }
+.tc-rr3-durum[data-ton="hata"] { color: var(--stop); border-color: var(--stop); }
 .tc-rr3-etiket { border-radius: var(--cizgi-kalin); color: var(--muted); font-weight: 600; }
 .tc-rr3-etiket[data-tur="ham"] { border-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .tc-rr3-etiket[data-tur="yari"] { color: var(--run); border-color: var(--run); }

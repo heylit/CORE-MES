@@ -10,7 +10,7 @@ import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  aramaUyar, bugun, DURUM_SUZGECLERI, durumAdi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
+  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
@@ -153,7 +153,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
           <PlanHucresi plan={plan} tampon={tampon} />
           {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined}>{plan.alt}</small>}
         </span>
-        <span className="tc-rr3-durum-hucre"><span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span></span>
+        <span className="tc-rr3-durum-hucre"><span className="tc-rr3-durum" data-durum={o.status} data-ton={durumGosterimi(o).ton}>{durumAdi(o)}</span></span>
         <Simge ad="chev-right" boyut="k" />
       </button>
     </li>
@@ -240,7 +240,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
         />
         <Secim
           etiket="Durum" value={f.durum} onChange={(o) => { yaz({ durum: o.target.value === 'taslak' ? 'taslak' : 'serbest' }); }}
-          secenekler={[{ deger: 'serbest', baslik: 'Serbest (plana girer)' }, { deger: 'taslak', baslik: 'Taslak' }]}
+          secenekler={[{ deger: 'serbest', baslik: `${DURUM_ADI.serbest} (plana girer)` }, { deger: 'taslak', baslik: DURUM_ADI.taslak }]}
         />
         <Secim etiket="Emir türü" value={f.tur} secenekler={TUR_SECENEKLERI} onChange={(o) => { yaz({ tur: o.target.value }); }} />
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />

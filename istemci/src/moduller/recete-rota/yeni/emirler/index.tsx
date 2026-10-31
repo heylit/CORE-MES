@@ -4,3 +4,4 @@ import './emirler.css';
 // statü atlatma, sayım, süreçteki malzeme, hareketler). Bileşen adları değişmez; sekmeler.ts buradan ithal eder.
 export { UretimEmirleri } from './UretimEmirleri.tsx';
 export { Stok } from './Stok.tsx';
+export { Kapanis } from './Kapanis.tsx';

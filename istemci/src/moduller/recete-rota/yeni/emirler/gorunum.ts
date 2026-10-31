@@ -3,8 +3,7 @@ import type { RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { tarih } from '../bicim.ts';
 import type { Emir, PlanOzeti } from './kurallar.ts';
 
-// Liste ve ayrıntının ortak gösterimleri: durum rengi (Rozet tonu; metin her zaman yazılır), tür adı, plan hücresi.
-export const DURUM_TONU: Readonly<Record<Emir['status'], RozetTonu>> = { taslak: 'pasif', serbest: 'bilgi', uretimde: 'uyari', tamam: 'tamam', iptal: 'hata' };
+// Liste ve ayrıntının ortak gösterimleri: tür adı, plan hücresi. Durum adı ve tonu tek sözlükten gelir (kurallar.ts durumGosterimi).
 export const turAdi = (tur: string): string => (EMIR_TURU_ADLARI as Record<string, string>)[tur] ?? tur;
 const TAMPON_ADI = { gec: 'Gecikiyor', kirmizi: 'Tampon kritik', sari: 'Tampon azaldı', yesil: 'Tampon yeterli' } as const;
 const TAMPON_TONU: Readonly<Record<keyof typeof TAMPON_ADI, RozetTonu>> = { gec: 'hata', kirmizi: 'hata', sari: 'uyari', yesil: 'tamam' };

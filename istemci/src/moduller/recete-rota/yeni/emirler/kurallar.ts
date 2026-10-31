@@ -1,4 +1,6 @@
 import type { DurumEmirleri, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
+import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
@@ -14,13 +16,15 @@ const EPS = 1e-9;
 const yuvarla6 = (x: number): number => Math.round(x * 1e6) / 1e6;
 
 export const ONCELIK_ADI: Readonly<Record<number, string>> = { 1: 'Acil', 2: 'Yüksek', 3: 'Normal', 4: 'Düşük' };
-export const DURUM_ADI: Readonly<Record<Emir['status'], string>> = {
-  taslak: 'Taslak', serbest: 'Serbest', uretimde: 'Üretimde', tamam: 'Üretimi bitti', iptal: 'İptal',
-};
+// Durum adı ve tonu üretim emrinin tek sözlüğündendir (1389 a); prototipin durum anahtarı sunucuda emir durumundan çevrilir, burada geri çevrilir.
+const EMIR_DURUMU_KARSILIGI: Readonly<Record<Emir['status'], EmirDurumu>> = { taslak: 'taslak', serbest: 'planli', uretimde: 'basladi', tamam: 'bitti', iptal: 'iptal' };
+export const DURUM_ADI = Object.fromEntries(
+  Object.entries(EMIR_DURUMU_KARSILIGI).map(([s, d]) => [s, EMIR_DURUMU[d].etiket]),
+) as Readonly<Record<Emir['status'], string>>;
 // 1082 a: son adımda emir "Üretimi bitti" olur; kalite ve müdür onayından sonra sahibinin kapanış sonucu yazılır.
-const KAPANIS_ADI = { tamamlandi: 'Tamamlandı', saglamsiz: 'Kapandı (sağlamsız)' } as const;
-export const durumAdi = (o: Pick<Emir, 'status' | 'kapanisSonucu'>): string =>
-  (o.status === 'tamam' && o.kapanisSonucu ? KAPANIS_ADI[o.kapanisSonucu] : DURUM_ADI[o.status]);
+export const durumGosterimi = (o: Pick<Emir, 'status' | 'kapanisSonucu'>): DurumGosterimi =>
+  emirDurumuGosterimi({ durum: EMIR_DURUMU_KARSILIGI[o.status], kapanisSonucu: o.kapanisSonucu ?? null });
+export const durumAdi = (o: Pick<Emir, 'status' | 'kapanisSonucu'>): string => durumGosterimi(o).etiket;
 const ACIK_DURUMLAR: ReadonlySet<Emir['status']> = new Set(['taslak', 'serbest', 'uretimde']);
 export const acikMi = (o: Pick<Emir, 'status'>): boolean => ACIK_DURUMLAR.has(o.status);
 // Plana giren emir: serbest ve üretimdeki (taslak plana girmez; bugünkü ekranla aynı).

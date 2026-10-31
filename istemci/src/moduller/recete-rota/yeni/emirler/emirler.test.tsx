@@ -22,7 +22,11 @@ describe('R3 emir durumu adı (1082 a)', () => {
     expect(durumAdi({ status: 'tamam', kapanisSonucu: null })).toBe('Üretimi bitti');
     expect(durumAdi({ status: 'tamam', kapanisSonucu: 'tamamlandi' })).toBe('Tamamlandı');
     expect(durumAdi({ status: 'tamam', kapanisSonucu: 'saglamsiz' })).toBe('Kapandı (sağlamsız)');
-    expect(durumAdi({ status: 'uretimde', kapanisSonucu: 'tamamlandi' })).toBe('Üretimde');
+    expect(durumAdi({ status: 'uretimde', kapanisSonucu: 'tamamlandi' })).toBe('Başladı');
+  });
+
+  it('1389 a: adlar üretim emrinin tek sözlüğündendir; prototipin "Serbest" ve "Üretimde" adları kalmaz', () => {
+    expect(['taslak', 'serbest', 'uretimde', 'iptal'].map((status) => durumAdi({ status: status as 'taslak' }))).toEqual(['Taslak', 'Planlı', 'Başladı', 'İptal']);
   });
 });
 
@@ -284,7 +288,7 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     expect(within(ayrinti).getByRole('group', { name: 'Bölme türü' })).toBeTruthy();
   });
 
-  it('hiçbir durumda stoktan düşme düğmesi yok; üretimi biten emirde Üretim Emirleri uyarısı, kapanınca yok', async () => {
+  it('stoktan düşme düğmesi yalnız stok tamamlama bölümündedir; üretimi biten emirde kapanış uyarısı, kapanınca yok (1391 a)', async () => {
     for (const [status, kapanis, uyari] of [['serbest', null, false], ['tamam', null, true], ['tamam', 'tamamlandi', false]] as const) {
       sunucuKur(YONETICI, { durum: adimli(status, kapanis) });
       rrAc();
@@ -293,7 +297,8 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
       fireEvent.click(await within(b).findByRole('button', { name: /UE-0001/ }));
       const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
       expect(within(ayrinti).queryByRole('button', { name: /stoktan düş|Emri tamamla|Stoğa işle/ })).toBeNull();
-      expect(within(ayrinti).queryByText(/Stoğa işleme ve kapanış Üretim Emirleri'ndedir/) !== null).toBe(uyari);
+      expect(within(ayrinti).queryByText(/Üretimi bitti: aşağıda stoğa işlenir/) !== null).toBe(uyari);
+      expect(within(ayrinti).queryByRole('button', { name: 'Kapanış onayları' }) !== null).toBe(uyari);
       cleanup();
       vi.unstubAllGlobals();
     }

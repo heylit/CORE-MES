@@ -7,16 +7,15 @@ import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
+import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDurumu, adimPlani, durumAdi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
+  acikMi, adimDurumu, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
 const TALEP_YOLU = '/satin-alma/talepler';
-const ADIM_DURUMU = { bekliyor: 'Bekliyor', calisiyor: 'Çalışıyor', tamam: 'Bitti' } as const;
-const ADIM_TONU = { bekliyor: 'pasif', calisiyor: 'uyari', tamam: 'tamam' } as const;
 
 interface Ozellikler {
   durum: RrDurumu;
@@ -40,7 +39,8 @@ export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetn
 
 // Emir ayrıntısı (1100 B): listenin yanındaki panel. Emrin alanları burada düzenlenmez (812 a; emir Üretim Emirleri'nde tutulur, ilerleme
 // terminalden gelir). Sıra: başlık ve üç bilgi, uyarılar, adımlar ve malzeme, en altta tek eylem çubuğu. Seyrek ya da geri alınamaz işler
-// (böl, katılma, geri katma, iptal) "Diğer" menüsündedir (1102 a). Stoğa işleme Üretim Emirleri'ndedir (1106 a): bitmiş emri yalnız orası işler.
+// (böl, katılma, geri katma, iptal) "Diğer" menüsündedir (1102 a). Emrin evi burasıdır (1391 a, 1416 a): üretim yeri, stoğa işleme ve kapanış
+// onayı burada; Üretim Emirleri salt okumadır. Bileşenler üretim emrinin sahibinden gelir, komut ve yetki onun ucundadır.
 export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, kapat }: Ozellikler) {
   const yonlen = useNavigate();
   const [iptal, setIptal] = useState(false);
@@ -80,7 +80,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       <header className="tc-rr3-pbas">
         <Dugme className="tc-rr3-geri" simge="chev-left" onClick={kapat}>Emirler</Dugme>
         <h3 className="tc-rr3-emirno">{o.no}</h3>
-        <span className="tc-rr3-durum" data-durum={o.status}>{durumAdi(o)}</span>
+        <span className="tc-rr3-durum" data-durum={o.status} data-ton={durumGosterimi(o).ton}>{durumAdi(o)}</span>
         <Dugme className="tc-rr3-kapat" simge="x" aria-label="Ayrıntıyı kapat" onClick={kapat} />
       </header>
       <p className="tc-rr3-purun">
@@ -127,14 +127,16 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       {o.status === 'tamam' && !o.kapanisSonucu && (
         <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status">
           <Simge ad="clipboard-check" />
-          <span>Stoğa işleme ve kapanış Üretim Emirleri'ndedir: emir ayrıntısında stoğa tamamlanır, kapanış onaylarıyla kapanır.</span>
-          <Dugme simge="next" onClick={ueAc}>Üretim Emirleri'nde aç</Dugme>
+          <span>Üretimi bitti: aşağıda stoğa işlenir, kapanış onaylarıyla kapanır.</span>
+          <Dugme simge="next" onClick={() => { void yonlen(`${KAPANIS_EVI}?emir=${String(o.kayitNo)}`); }}>Kapanış onayları</Dugme>
         </div>
       )}
 
       <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem} islemKapat={() => { setIslem(null); }} />
       {o.rotasiz && <RotasizAdimlar durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />}
       <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} />
+      {urun && <UretimYerleri emir={{ id: o.kayitNo, malzemeNo: Number(urun.id) }} duzenlenir />}
+      {urun && o.status === 'tamam' && <StokTamamlama emir={{ id: o.kayitNo, emirNo: o.no, durum: 'bitti', malzemeNo: Number(urun.id) }} islenir />}
 
       <p className="tc-rr3-meta">
         {o.start && <span>Başlangıç <b>{tarih(o.start)}</b></span>}
@@ -277,7 +279,7 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
     { anahtar: 'operasyon', baslik: 'Operasyon', hucre: (a) => { const x = d.opdefs?.find((p) => p.id === a.opId); return x ? `${x.abbr ?? x.code} ${x.name}` : null; } },
     { anahtar: 'ayar', baslik: 'Hazırlık (dk)', hizala: 'sag', hucre: (a) => sayi(kaynak.find((k) => k.opNo === a.opNo)?.setup ?? null) },
     { anahtar: 'birim', baslik: 'Birim (dk)', hizala: 'sag', hucre: (a) => sayi(kaynak.find((k) => k.opNo === a.opNo)?.cycle ?? null) },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (a) => ADIM_DURUMU[a.durum ?? 'bekliyor'] },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (a) => IS_EMRI_DURUMU[a.durum ?? 'bekliyor'].etiket },
     {
       anahtar: 'eylem', baslik: 'İşlem', csv: false,
       hucre: (a) => (acik && (a.durum ?? 'bekliyor') === 'bekliyor' ? (
@@ -438,12 +440,12 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
               <small>{adimYeri(s)}</small>
             </span>
             <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
-            <Rozet ton={ADIM_TONU[s.durum]}>{ADIM_DURUMU[s.durum]}</Rozet>
+            <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
           </li>
         ))}
         {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
       </ol>
-      {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği Üretim Emirleri'nde yapılır; rota değişmez.</p>}
+      {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği aşağıdaki "Operasyon adımları" bölümünde yapılır; rota değişmez.</p>}
       {planda && (
         <>
           <h4>Malzeme</h4>
