@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
-  projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
+  faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
-import type { IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
+import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
 import { beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
@@ -134,12 +134,34 @@ describe('proje-maliyet kuralları', () => {
   });
 
   test('PM-36 proje geliri (226 a, 225): emir adedi x satır birim fiyatı x kur; iptal siparişin satırı 0; bağlı emir yoksa, fiyat ya da kur yoksa bilinmez', () => {
-    assert.equal(projeGeliri([{ adet: 4, birimFiyat: 250, kur: 1, iptal: false }, { adet: 2, birimFiyat: 10, kur: 30, iptal: false }]), 1600);
-    assert.equal(projeGeliri([{ adet: 4, birimFiyat: 250, kur: 1, iptal: true }]), 0);
-    assert.equal(projeGeliri([{ adet: 4, birimFiyat: 250, kur: 1, iptal: true }, { adet: 1, birimFiyat: null, kur: 1, iptal: true }]), 0);
-    assert.equal(projeGeliri([]), null);
-    assert.equal(projeGeliri([{ adet: 4, birimFiyat: null, kur: 1, iptal: false }]), null);
-    assert.equal(projeGeliri([{ adet: 4, birimFiyat: 250, kur: null, iptal: false }]), null);
+    const pay = (adet: number, birimFiyat: number | null, kur: number | null, iptal = false): GelirPayi => ({ adet, birimFiyat, kur, iptal, fatura: null });
+    assert.deepEqual(projeGeliri([pay(4, 250, 1), pay(2, 10, 30)]), { gelir: 1600, kurFarki: 0 });
+    assert.equal(projeGeliri([pay(4, 250, 1, true)]).gelir, 0);
+    assert.equal(projeGeliri([pay(4, 250, 1, true), pay(1, null, 1, true)]).gelir, 0);
+    assert.deepEqual(projeGeliri([]), { gelir: null, kurFarki: null });
+    assert.deepEqual(projeGeliri([pay(4, null, 1)]), { gelir: null, kurFarki: null });
+    assert.deepEqual(projeGeliri([pay(4, 250, null)]), { gelir: null, kurFarki: null });
+  });
+
+  test('PM-38 (1398 a): faturalanan kısım fatura kuruyla, kalanı bugünün kuruyla; kur farkı ayrı ve gelire eklenmez', () => {
+    // 10 adet x 100 EUR = 1000 EUR; %40'ı 30 kuruyla faturalandı, bugün 35: gelir 400 x 30 + 600 x 35 = 33.000; kur farkı 400 x 5 = 2.000.
+    const fatura: FaturaDurumu = { oran: 0.4, kur: 30 };
+    assert.deepEqual(projeGeliri([{ adet: 10, birimFiyat: 100, kur: 35, iptal: false, fatura }]), { gelir: 33000, kurFarki: 2000 });
+    // TL güçlenirse kur farkı eksidir; tamamı faturalıysa bugünün kuru gelire girmez.
+    assert.deepEqual(projeGeliri([{ adet: 10, birimFiyat: 100, kur: 28, iptal: false, fatura: { oran: 1, kur: 30 } }]), { gelir: 30000, kurFarki: -2000 });
+    // Eski hesap (hepsi bugünün kuru) = gelir + kur farkı.
+    const { gelir, kurFarki } = projeGeliri([{ adet: 10, birimFiyat: 100, kur: 35, iptal: false, fatura }]);
+    assert.equal((gelir ?? 0) + (kurFarki ?? 0), 35000);
+  });
+
+  test('PM-39 (1398 a): faturalanan oran sipariş tutarına oranla; iade düşülür, oran 1\'i geçmez; tutar bilinmezse bilinmez', () => {
+    assert.equal(faturaDurumu([], 1000), null);
+    assert.deepEqual(faturaDurumu([{ tur: 'fatura', doviz: 300, tl: 9000 }, { tur: 'fatura', doviz: 100, tl: 3200 }], 1000), { oran: 0.4, kur: 30.5 });
+    assert.deepEqual(faturaDurumu([{ tur: 'fatura', doviz: 500, tl: 15000 }, { tur: 'iade', doviz: 100, tl: 3000 }], 1000), { oran: 0.4, kur: 30 });
+    assert.deepEqual(faturaDurumu([{ tur: 'fatura', doviz: 1200, tl: 36000 }], 1000), { oran: 1, kur: 30 });
+    assert.equal(faturaDurumu([{ tur: 'fatura', doviz: 100, tl: 3000 }, { tur: 'iade', doviz: 100, tl: 3000 }], 1000), null);
+    assert.equal(faturaDurumu([{ tur: 'fatura', doviz: null, tl: 3000 }], 1000), 'bilinmez');
+    assert.equal(faturaDurumu([{ tur: 'fatura', doviz: 100, tl: 3000 }], null), 'bilinmez');
   });
 
   test('PM-16: yalnız bitmiş, bitiş zamanı bilinen ve defterde olmayan iş emri dondurulur; emir düzeyi kayıt dondurulmaz', () => {

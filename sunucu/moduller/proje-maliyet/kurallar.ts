@@ -228,20 +228,52 @@ export function gostergeler(
   };
 }
 
-export interface GelirPayi { adet: number; birimFiyat: number | null; kur: number | null; iptal: boolean }
+// fatura: payın siparişinin faturalanan oranı ve o kısmın ortalama fatura kuru (faturaDurumu); faturası yoksa null.
+export interface GelirPayi { adet: number; birimFiyat: number | null; kur: number | null; iptal: boolean; fatura: FaturaDurumu | null }
+export interface FaturaDurumu { oran: number; kur: number }
+// kurFarki: faturalanan kısmın bugünün kuruyla değeri eksi fatura kuruyla değeri (1398 a); gelire eklenmez, ayrı satırdır.
+export interface ProjeGeliri { gelir: number | null; kurFarki: number | null }
 
-// PM-36 (226 a, 225): proje geliri = emir adedi x bağlı sipariş satırının birim fiyatı x bugünün kuru; aynı siparişin projeleri yalnız
-// kendi emirlerinin payını alır (#9). İptal siparişin satırı gelir değildir (#38). Satıra bağlı emir yoksa, bir payın fiyatı ya da
-// kuru bilinmiyorsa gelir bilinmez.
-export function projeGeliri(paylar: readonly GelirPayi[]): number | null {
-  if (paylar.length === 0) return null;
-  let toplam = 0;
+// PM-36 (226 a, 225, 1398 a): proje geliri = emir adedi x bağlı sipariş satırının birim fiyatı; siparişin faturalanan oranı fatura kuruyla,
+// kalanı bugünün kuruyla TRY'ye çevrilir. Bugünün kuru bütün tutara uygulanırsa TL değer kaybettikçe döviz satışlı projenin katkısı
+// kendiliğinden artardı. Aynı siparişin projeleri yalnız kendi emirlerinin payını alır (#9). İptal siparişin satırı gelir değildir (#38).
+// Satıra bağlı emir yoksa, bir payın fiyatı ya da kuru bilinmiyorsa gelir de kur farkı da bilinmez.
+export function projeGeliri(paylar: readonly GelirPayi[]): ProjeGeliri {
+  if (paylar.length === 0) return { gelir: null, kurFarki: null };
+  let gelir = 0;
+  let kurFarki = 0;
   for (const p of paylar) {
     if (p.iptal) continue;
-    if (p.birimFiyat === null || p.kur === null) return null;
-    toplam += p.adet * p.birimFiyat * p.kur;
+    if (p.birimFiyat === null || p.kur === null) return { gelir: null, kurFarki: null };
+    const doviz = p.adet * p.birimFiyat;
+    const oran = p.fatura?.oran ?? 0;
+    const faturaKuru = p.fatura?.kur ?? p.kur;
+    gelir += doviz * oran * faturaKuru + doviz * (1 - oran) * p.kur;
+    kurFarki += doviz * oran * (p.kur - faturaKuru);
   }
-  return toplam;
+  return { gelir, kurFarki };
+}
+
+// Siparişin faturası ve iadesi: doviz siparişin para birimiyle KDV hariç tutar (fatura başka para birimindeyse belge günü kuruyla çevrilmiş;
+// o gün kur yoksa null), tl belge kuruyla KDV hariç TRY.
+export interface FaturaKaydi { tur: 'fatura' | 'iade'; doviz: number | null; tl: number }
+
+// 1398 a: faturalar satıra değil siparişe bağlıdır (finans_belge.siparis_id); faturalanan oran siparişin KDV hariç tutarına oranla bulunur
+// ve siparişin bütün satırlarına aynı oranla dağılır. İade faturadan düşülür; oran 1'i geçmez. Fatura yoksa ya da net faturalanan sıfırsa
+// null (hepsi bugünün kuruyla). Bir belgenin sipariş para birimindeki tutarı ya da siparişin tutarı bilinmiyorsa 'bilinmez'.
+export function faturaDurumu(kayitlar: readonly FaturaKaydi[], siparisTutari: number | null): FaturaDurumu | null | 'bilinmez' {
+  if (kayitlar.length === 0) return null;
+  let doviz = 0;
+  let tl = 0;
+  for (const k of kayitlar) {
+    if (k.doviz === null) return 'bilinmez';
+    const isaret = k.tur === 'iade' ? -1 : 1;
+    doviz += isaret * k.doviz;
+    tl += isaret * k.tl;
+  }
+  if (doviz <= 0) return null;
+  if (siparisTutari === null || siparisTutari <= 0) return 'bilinmez';
+  return { oran: Math.min(1, doviz / siparisTutari), kur: tl / doviz };
 }
 
 // PM-16 (199 a): dondurulacak kayıtlar: bitmiş, iş emrine bağlı, bitiş zamanı bilinen ve defterde olmayan.

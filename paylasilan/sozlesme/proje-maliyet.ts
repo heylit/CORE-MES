@@ -58,7 +58,10 @@ export const projeMaliyetCevabi = z.object({
   fiyatGorunur: z.boolean(),
   // Hesap günü (tesis günü); kâr riski ve gecikme buna göredir.
   bugun: tarihSemasi,
+  // Gelir TRY: faturalanan kısım fatura kuruyla, kalanı bugünün kuruyla (1398 a).
   gelir: tutar,
+  // Faturalanan kısmın bugünün kuruyla değeri eksi fatura kuruyla değeri; gelire eklenmez, ayrı satırdır (1398 a). Fiyat yetkisi yoksa null.
+  kurFarki: tutar,
   // Proje bütçesi (198 a); girilmemişse hedef plan maliyetidir.
   butce: tutar,
   hedef: tutar,
