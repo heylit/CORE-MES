@@ -458,14 +458,14 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     acikZimmetCozucusu(async (_db, kisiIdleri) => { istenen.push([...kisiIdleri]); return acik; });
     const kisi = await kaydet(c.yon, 'personel', personel('emp_cz', { sicilNo: '7401', kisiId: kim.uzm }));
     assert.equal(kisi.uyari, undefined, 'çıkışı olmayan kişide uyarı yok');
-    const cikis = { ...kisi.kayit.govde, cikisTarihi: '2026-10-31', cikisKodu: '03 Belirsiz süreli sözleşmenin işçi tarafından feshi (istifa)' };
+    const cikis = { ...kisi.kayit.govde, cikisTarihi: '2999-12-31', cikisKodu: '03 Belirsiz süreli sözleşmenin işçi tarafından feshi (istifa)' };
     const r = await kaydet(c.yon, 'personel', cikis);
     assert.equal(r.uyari, 'Çıkış kaydedildi; kişinin üzerinde iade edilmemiş 1 zimmet var: DB-00007 Deneme dizüstü.');
     assert.deepEqual(istenen.at(-1), [kim.uzm], 'zimmet personelin bağlı olduğu kişiden sorulur');
-    assert.equal((await vt().tek<{ t: string }>("SELECT cikis_tarihi::text AS t FROM ik_personel WHERE kimlik = 'emp_cz'"))?.t, '2026-10-31', 'çıkış engellenmez');
+    assert.equal((await vt().tek<{ t: string }>("SELECT cikis_tarihi::text AS t FROM ik_personel WHERE kimlik = 'emp_cz'"))?.t, '2999-12-31', 'çıkış engellenmez');
     acik.clear();
     assert.equal((await kaydet(c.yon, 'personel', { ...r.kayit.govde, telefon: '0500 000 00 74' })).uyari, undefined, 'iade edilince uyarı kalkar');
-    const bagsiz = await kaydet(c.yon, 'personel', personel('emp_cz2', { sicilNo: '7402', cikisTarihi: '2026-10-31', cikisKodu: cikis.cikisKodu }));
+    const bagsiz = await kaydet(c.yon, 'personel', personel('emp_cz2', { sicilNo: '7402', cikisTarihi: '2999-12-31', cikisKodu: cikis.cikisKodu }));
     assert.equal(bagsiz.uyari, undefined, 'kişiye bağlı olmayan personelin zimmeti bilinmez, uyarı uydurulmaz');
   });
 
