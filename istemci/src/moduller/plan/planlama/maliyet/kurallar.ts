@@ -621,10 +621,34 @@ export function mesaiAtamasi(c: PlanlamaCalismasi): { liste: MesaiAtamasi[]; pla
 
 // ---------- gecikme bedeli (motor/durum.betik agKatki, agBedel; zr-agirlik agGecTL) ----------
 const isPayi = (s: Siparis): number => { const p = sayiOku(s.pay); return p !== null && p > 0 && p < 1 ? p : 1; };
-function katkiPayi(c: PlanlamaCalismasi, s: Siparis): number | null {
+// 1379 a: biten adım (c.bitti) plana girmez ama siparişin maliyetidir; düşülmezse yarı bitmiş sipariş tam gelirine karşı kalan maliyetle
+// kârlı görünür (motor/engine.betik bitenAdimMaliyeti). Gerçek tezgâh bilinmez: rotadaki ilk tanımlı tezgâh, sapmasız süre ve saat ücretiyle;
+// fasonda fiyat × adet. Bilinmeyen kalem varsa null.
+export function bitenAdimMaliyeti(c: PlanlamaCalismasi, s: Siparis): number | null {
+  const D = c.D;
+  const bitti = alan(c, 'bitti');
+  const u = D.urunler.find((x) => x.id === s.urun);
+  if (!nesneMi(bitti) || !u) return 0;
+  let t = 0;
+  for (const o of u.rota ?? []) {
+    const id = `${s.id}.${o.k}`;
+    if (!bitti[id]) continue;
+    const ad = sayiOku(alan(D.opAdet, id)) ?? s.adet;
+    if (o.fason) { const f = fasoncular(D).find((x) => x.id === o.fason); if (!f || f.fiyat === null) return null; t += f.fiyat * ad; continue; }
+    const a = (o.tezgahlar ?? []).find((x) => D.tezgahlar.some((m) => m.id === x.id));
+    const m = a ? D.tezgahlar.find((x) => x.id === a.id) : undefined;
+    const ucret = sayiOku(m?.ucret);
+    if (!a || !m || ucret === null) return null;
+    t += ((ad * (sayiOku(a.cevrim) ?? 0)) / 60 / (sayiOku(m.verim) || 1)) * ucret + ((sayiOku(a.ayar) ?? 0) / 60) * (ucret + ayarciUcreti(D));
+  }
+  return t;
+}
+export function katkiPayi(c: PlanlamaCalismasi, s: Siparis): number | null {
   const D = c.D;
   if (s.gelir === null || s.gelir === undefined || !c.plan) return null;
-  let t = 0;
+  const biten = bitenAdimMaliyeti(c, s);
+  if (biten === null) return null;
+  let t = biten;
   const ml = malzemeler(D);
   for (const r of s.malzeme ?? []) { const m = ml.find((x) => x.kod === r.kod); const b = m ? birimMaliyet(D, m) : null; if (b === null) return null; t += b * r.miktar * s.adet; }
   const ops = planIsleri(c).filter((r) => r.job === s.id);

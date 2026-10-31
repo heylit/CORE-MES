@@ -44,13 +44,15 @@ function agHazirla(D) {
 }
 function agAyar(D = cerceveD()) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, kip: AG0.kip, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
 function agElle(s) { return s.elle != null ? +s.elle : 1; }
-/* katkı payı = tutar − malzeme − işleme − ayar − fason. İşleme ve ayar son plandaki tezgâh seçimiyle, saat ücretinden hesaplanır
-   (operatör payı yok sayılır); fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur.
-   S0: çalışma (son planı oradan) */
+/* katkı payı = tutar − malzeme − işleme − ayar − fason, siparişin bütün adımlarıyla (1379 a). Kalan adımın işleme ve ayarı son plandaki
+   tezgâh seçimiyle, saat ücretinden hesaplanır (operatör payı yok sayılır); biten adım plana girmez, maliyeti engine.betik
+   bitenAdimMaliyeti'nden. Fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur.
+   S0: çalışma (son planı ve biten adımları oradan) */
 function agKatki(s, D = cerceveD(), S0 = cerceveS()) {
   if (s.gelir == null || !S0 || !S0.plan) return null;
   let t = 0; const A = D.ayarlar || {};
   for (const r of (s.malzeme || [])) { const m = (D.malzemeler || []).find(x => x.kod === r.kod); if (!m || m.birimFiyat == null) return null; t += m.birimFiyat * r.miktar * s.adet; }
+  const b = bitenAdimMaliyeti(D, S0.bitti, s); if (b.miss.length) return null; t += b.mc + b.sc + b.fc;
   const ops = Object.values(S0.plan.ops).filter(r => r.job === s.id); if (!ops.length) return null;
   for (const r of ops) {
     if (r.fas) { const f = (D.fasoncular || []).find(x => '@' + x.id === r.m); if (!f || f.fiyat == null) return null; t += f.fiyat * s.adet; continue; }
