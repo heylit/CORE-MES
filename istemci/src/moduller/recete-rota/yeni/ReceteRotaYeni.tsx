@@ -83,7 +83,6 @@ function VeriSaglayici() {
   // Burada oturum hazırdır. Köprü bir kez kurulur (oturum yenilense de sürümler kaybolmasın).
   const [baglam] = useState<RrBaglami>(() => {
     const islemler = oturum.data?.islemler;
-    let taslaklar: Promise<void> | null = null;
     return {
       kopru: kopruKur([], {
         ...(islemler ? { islemler } : {}),
@@ -91,11 +90,6 @@ function VeriSaglayici() {
         planVerisi: setPlanVerisiEksik,
         emirSecimi: (secenekler) => new Promise<EmirSecimi | null>((coz) => { setSecim({ secenekler, coz }); }),
       }),
-      // Açılamazsa durum yine okunur; dakikalık tarama sonra açar (bugünkü ekranla aynı). Kullanıcının gönderdiği kayıt değildir:
-      // kopukluk uyarısına girmez (Soru 487/3 a).
-      ilkOkuma: () => (taslaklar ??= yetki.var('rota.yaz')
-        ? api.post<unknown>('/rota/karttan-taslaklar', undefined, { arkaPlan: true }).then(() => undefined, () => undefined)
-        : Promise.resolve()),
     };
   });
 

@@ -9,7 +9,7 @@ import { json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, YONETICI, type Istek }
 beforeEach(() => { try { window.localStorage.clear(); } catch { /* depo kapalı */ } });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const yazmalar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem !== 'GET' && i.yol !== '/rota/karttan-taslaklar');
+const yazmalar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem !== 'GET');
 const bolumAc = async (ad: string) => {
   const bolge = await screen.findByRole('region', { name: ad });
   await waitFor(() => expect(bolge.querySelector('[data-parca="R2"]')).not.toBeNull());
