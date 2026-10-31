@@ -62,7 +62,7 @@ test.describe('P6 Sevkiyat', () => {
     await expect(kap.getByText(/\. hafta · 02\.03/).first()).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await expect(kap.locator('input[type="date"]')).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -74,7 +74,7 @@ test.describe('P6 Sevkiyat', () => {
     await expect(page.getByText('Plan kurulunca siparişlerin sevk günleri burada görünür.')).toBeVisible({ timeout: 15_000 });
     await page.locator('[data-gorunum="sevkiyat"]').getByText('Tüm satırlar', { exact: true }).click();
     await expect(page.getByText('Önce plan kurulmalı.')).toBeVisible();
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });

@@ -32,15 +32,19 @@ describe('PlanlamaYeni', () => {
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
   }, 20000);
 
-  it('657 a: kayıt yoksa yazabilen kişide boş çalışma bir kez kurulur ve yeniden okunur; yazamayan yalnız okur', async () => {
+  it('1395 a: kayıt yoksa açılış yazmaz; yazabilen düğmeyle boş çalışmayı kurdurur ve yeniden okunur; yazamayana düğme çıkmaz', async () => {
     const istekler = sunucuKur(YONETICI);
     ac('/plan');
+    const dugme = await screen.findByRole('button', { name: 'Planlama çalışmasını aç' }, { timeout: 10000 });
+    expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+    fireEvent.click(dugme);
     await waitFor(() => { expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual(['POST /plan/planlama-calismasi/olustur']); }, { timeout: 10000 });
     await waitFor(() => { expect(istekler.filter((i) => i === 'GET /plan/planlama-calismasi')).toHaveLength(2); }, { timeout: 10000 });
     cleanup(); vi.unstubAllGlobals();
     const okuyan = sunucuKur(MALIYETSIZ);
     ac('/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    expect(screen.queryByRole('button', { name: 'Planlama çalışmasını aç' })).toBeNull();
     expect(okuyan.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
