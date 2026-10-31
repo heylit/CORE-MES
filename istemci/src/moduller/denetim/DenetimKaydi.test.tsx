@@ -27,7 +27,7 @@ const DEGISIKLIKLER: DegisiklikSatiri[] = [
   { id: 7, zaman: '2026-10-07T11:00:00.000+03:00', kisiId: 2, kisiAd: 'Deneme Müdür', tablo: 'uretim_emri', anahtar: { id: 41 }, islem: 'guncelle', alanAdlari: ['adet', 'termin'] },
   { id: 6, zaman: '2026-10-07T08:00:00.000+03:00', kisiId: null, kisiAd: null, tablo: 'kisi_rolu', anahtar: { kisi_id: 3, rol_id: 2 }, islem: 'ekle', alanAdlari: ['kisi_id', 'rol_id'] },
 ];
-const D_SECENEKLER = { kisiler: [{ id: 2, ad: 'Deneme Müdür' }], tablolar: ['kisi_rolu', 'uretim_emri'] } satisfies DegisiklikSecenekleriCevabi;
+const D_SECENEKLER = { kisiler: [{ id: 2, ad: 'Deneme Müdür' }], tablolar: ['kisi_rolu', 'stok_konum', 'uretim_emri'] } satisfies DegisiklikSecenekleriCevabi;
 const D_ICERIK = { id: 7, alanlar: [{ alan: 'adet', eski: 5, yeni: 7 }, { alan: 'kayit.parola', eski: '[gizli]', yeni: '[gizli]' }] } satisfies DegisiklikIcerigiCevabi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -133,6 +133,7 @@ describe('DenetimKaydi', () => {
     expect(screen.getByRole('cell', { name: 'Sistem' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'kisi_id 3, rol_id 2' })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('option', { name: 'Kişi rolü' })).toBeTruthy());
+    expect(screen.getByRole('option', { name: 'Stok konumu' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Kayıt türü'), { target: { value: 'kisi_rolu' } });
     await waitFor(() => expect(screen.queryByRole('cell', { name: 'Üretim emri' })).toBeNull());
     expect(yollar.some((y) => y.startsWith('/denetim-degisiklikleri?') && y.includes('tablo=kisi_rolu'))).toBe(true);
