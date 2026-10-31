@@ -8,6 +8,7 @@ import { ayarEkranlari, gorunenAyarEkranlari, type AyarEkrani } from '../../orta
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BaglantiHazirligi } from './BaglantiHazirligi.tsx';
 import { GORUNUM_ANAHTARLARI, GorunumAyarlari } from './GorunumAyarlari.tsx';
@@ -244,7 +245,7 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
   const ayarlar = liste.data?.ayarlar.filter((a) => ayarKategorisi(a) === kategori);
   if (bossaGizle && (liste.isPending || ayarlar?.length === 0)) return null;
   return (
-    <Kart baslik={baslik}>
+    <Kart baslik={baslik} sag={ayarlar && <GecmisDugmesi kayitlar={ayarlar.map((a) => ({ tablo: 'ayar', anahtar: { anahtar: a.anahtar } }))} />}>
       {liste.isPending && <DurumKutusu durum="yukleniyor" />}
       {liste.isError && (
         <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Ayarlar alınamadı.')} yenile={() => { void liste.refetch(); }} />
