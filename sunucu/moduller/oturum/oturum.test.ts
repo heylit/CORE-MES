@@ -806,14 +806,15 @@ describe('oturum (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('30 günden eski deneme kaydı parolaya bakılan giriş denemesinde silinir, bekleme reddinde silinmez; yenisi kalır; silme zaman indeksiyle bulur', async () => {
+  test('1373 a: bir yıldan eski deneme kaydı parolaya bakılan giriş denemesinde silinir, bekleme reddinde silinmez; 31 günlük ve yenisi kalır; silme zaman indeksiyle bulur', async () => {
     await hataliSeri('temizlik-bekleyen', 4);
     // Silmeyi veritabanı kendi saatiyle de denetler; test saati ondan ileridedir. Eski satır veritabanı
     // saatine göre eski (iki saate göre de eski), yeni satır test saatine göre yeni (iki saate göre de yeni) kurulur.
     await vt().sorgu(
       `INSERT INTO giris_denemesi (kullanici_adi, sonuc, ip, zaman) VALUES
-         ('eski-kayit', 'hatali', '10.0.0.9', now() - interval '30 days 1 hour'),
-         ('yeni-kayit', 'hatali', '10.0.0.9', $1::timestamptz - interval '29 days 23 hours')`,
+         ('eski-kayit', 'hatali', '10.0.0.9', now() - interval '365 days 1 hour'),
+         ('orta-kayit', 'hatali', '10.0.0.9', now() - interval '31 days'),
+         ('yeni-kayit', 'hatali', '10.0.0.9', $1::timestamptz - interval '364 days 23 hours')`,
       [saat],
     );
     assert.deepEqual(await sonuclar('eski-kayit'), ['hatali']);
@@ -822,6 +823,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.deepEqual(await sonuclar('eski-kayit'), ['hatali']);
     await hataliDene('temizlik-tetikleyen');
     assert.deepEqual(await sonuclar('eski-kayit'), []);
+    assert.deepEqual(await sonuclar('orta-kayit'), ['hatali']);
     assert.deepEqual(await sonuclar('yeni-kayit'), ['hatali']);
 
     const indeks = await vt().sorgu(
@@ -872,7 +874,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     // dosyanın sonuna dek kalır: test saatine bir saat pay bırakılır, yoksa sonraki saatli girişler ona takılır.
     await vt().sorgu(
       `INSERT INTO giris_denemesi (kullanici_adi, sonuc, ip, zaman) VALUES
-         ('sinir-eski', 'hatali', '10.0.4.1', now() - interval '30 days 1 minute'),
+         ('sinir-eski', 'hatali', '10.0.4.1', now() - interval '365 days 1 minute'),
          ('sinir-genc', 'hatali', '10.0.4.1', $1::timestamptz - interval '29 days 23 hours')`,
       [saat],
     );

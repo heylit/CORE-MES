@@ -2,7 +2,7 @@
 
 Durum: kabul edildi (05.10.2026). ADR 0003 ile değişti: 2., 7. ve 8. maddeler ile 4. maddedeki
 kilit kuralı geçersizdir; yetki işlem tabanlıdır, kilit yerine artan bekleme vardır, yetenek dosyası
-kalkmıştır ve giriş denemeleri 30 günde silinir. ADR 0012 ile 3. madde değişti: yönetici dışındaki kullanıcı PIN ile girer.
+kalkmıştır ve giriş denemeleri 30 günde silinir (ADR 0003 eki ile 365 gün, karar 1373 a). ADR 0012 ile 3. madde değişti: yönetici dışındaki kullanıcı PIN ile girer.
 
 ## Bağlam
 

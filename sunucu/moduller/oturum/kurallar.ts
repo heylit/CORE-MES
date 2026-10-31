@@ -14,7 +14,9 @@ export const AZAMI_SN = 30 * 24 * 60 * 60;
 export const GORULME_ARALIGI_SN = 60;
 
 export const BEKLEME_AZAMI_SN = 60;
-export const DENEME_SAKLAMA_GUN = 30;
+// 1373 a: geriye dönük "kim ne zaman girdi" sorusu bir yıl cevaplanır. Veritabanı koruması 30 günden genç satırın
+// silinmesini ayrıca reddeder; bu süre ondan uzun olmalıdır.
+export const DENEME_SAKLAMA_GUN = 365;
 // 398 a: oturumdaki adres ve tarayıcı kişisel veridir; oturum kapandıktan bu kadar gün sonra boşaltılır, satır kalır.
 export const CIHAZ_SAKLAMA_GUN = 30;
 

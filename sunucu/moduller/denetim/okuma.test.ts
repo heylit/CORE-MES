@@ -109,7 +109,7 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
     assert.equal(y.durum, 200);
     const metin = JSON.stringify(y.govde);
     for (const yasak of [GIZLI_DEGER, 'Deneme malzeme', 'MK-9', 'adet', '"govde"', '"parametre"']) assert.equal(metin.includes(yasak), false, yasak);
-    assert.deepEqual(y.govde.satirlar.map((s) => Object.keys(s).sort()), y.govde.satirlar.map(() => ['id', 'kimlikler', 'kisiAd', 'kisiId', 'yol', 'yontem', 'zaman']));
+    assert.deepEqual(y.govde.satirlar.map((s) => Object.keys(s).sort()), y.govde.satirlar.map(() => ['id', 'kimlikler', 'kisiAd', 'kisiId', 'modul', 'yetki', 'yol', 'yontem', 'zaman']));
     assert.deepEqual(y.govde.satirlar.map((s) => ({ yol: s.yol, kimlikler: s.kimlikler, kisiAd: s.kisiAd })), [
       { yol: '/oturum/giris', kimlikler: {}, kisiAd: null },
       { yol: '/deneme/:token/:id', kimlikler: { id: 8 }, kisiAd: 'Deneme Yönetici' },
@@ -119,11 +119,11 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
   });
 
   test('şema: liste cevabında gövde ve parametre alanı yoktur; gövde ucunun şemasında vardır', () => {
-    assert.deepEqual(Object.keys(kayitSatiri.shape).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'yol', 'yontem', 'zaman']);
+    assert.deepEqual(Object.keys(kayitSatiri.shape).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'modul', 'yetki', 'yol', 'yontem', 'zaman']);
     assert.deepEqual(Object.keys(kayitListesiCevabi.shape).sort(), ['satirlar', 'sayfa', 'sayfaBoyu', 'toplam']);
     // Şema fazla alanı atar: işleyici yanlışlıkla gövde koysa da istemciye gitmez.
-    const satir = { id: 1, zaman: '2020-03-01T10:00:00+00:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/x', kimlikler: {}, govde: { a: 1 }, parametre: { b: 2 } };
-    assert.deepEqual(Object.keys(kayitSatiri.parse(satir)).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'yol', 'yontem', 'zaman']);
+    const satir = { id: 1, zaman: '2020-03-01T10:00:00+00:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/x', modul: null, yetki: null, kimlikler: {}, govde: { a: 1 }, parametre: { b: 2 } };
+    assert.deepEqual(Object.keys(kayitSatiri.parse(satir)).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'modul', 'yetki', 'yol', 'yontem', 'zaman']);
     assert.deepEqual(Object.keys(kayitIcerigiCevabi.shape).sort(), ['govde', 'id', 'parametre']);
   });
 
@@ -140,6 +140,26 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
     const ters = await oku<{ kod: string }>(mudur, '/denetim-kayitlari?baslangic=2020-03-03&bitis=2020-03-02');
     assert.equal(ters.durum, 400);
     assert.equal((await oku(mudur, '/denetim-kayitlari?kisi=2147483648')).durum, 400);
+  });
+
+  // 1371 a: ekran işlemi yetki adıyla, modülü adıyla gösterir; modülü boş eski satır süzgeçte seçilmez.
+  test('modül ve yetki: satırda döner; modül süzgeci ve seçeneği; tanımsız modül adı 400', async () => {
+    await vt().sorgu(
+      `INSERT INTO denetim_kaydi (zaman, kisi_id, yontem, yol, parametre, govde, modul, yetki)
+       VALUES ('2019-05-01T10:00:00+00:00', $1, 'POST', '/is-emirleri/:id/bitir', '{"id":7}', '{}', 'uretim-emirleri', 'uretim-emirleri.yaz')`,
+      [mudurId],
+    );
+    const m = await oku<KayitListesiCevabi>(mudur, '/denetim-kayitlari?modul=uretim-emirleri&bitis=2019-12-31');
+    assert.equal(m.durum, 200, JSON.stringify(m.govde));
+    assert.deepEqual(m.govde.satirlar.map((s) => ({ modul: s.modul, yetki: s.yetki, kimlikler: s.kimlikler })), [
+      { modul: 'uretim-emirleri', yetki: 'uretim-emirleri.yaz', kimlikler: { id: 7 } },
+    ]);
+    const eski = await oku<KayitListesiCevabi>(mudur, '/denetim-kayitlari?baslangic=2020-03-01&bitis=2020-03-01');
+    assert.deepEqual(eski.govde.satirlar.map((s) => [s.modul, s.yetki]), [[null, null]]);
+    const secenek = await oku<SuzgecSecenekleriCevabi>(mudur, '/denetim-kayitlari/suzgecler');
+    assert.ok(secenek.govde.moduller.includes('uretim-emirleri'));
+    assert.equal((await oku(mudur, "/denetim-kayitlari?modul=x'or")).durum, 400);
+    assert.equal((await oku(operator, '/denetim-kayitlari?modul=uretim-emirleri')).durum, 403);
   });
 
   test('sayfalama: sayfa boyu ve sayfa uygulanır, toplam bütün süzgeç sonucudur', async () => {

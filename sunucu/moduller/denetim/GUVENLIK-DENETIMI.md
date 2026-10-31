@@ -5,7 +5,7 @@ Tek yazma yolu `denetimYaz` (`disari.ts`): uç katmanı her yazma komutunda ça�
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
-| `GET /denetim-kayitlari` | `denetim.oku` | gövde ve parametre seçilmez, cevap şemasında yok; yalnız DNT-01 kimlikleri | `liste: denetim.oku taşıyan müdür görür; ...` | aynı test (operatör 403, oturumsuz 401); `liste satırı gövde ve parametre taşımaz; ...` |
+| `GET /denetim-kayitlari` | `denetim.oku` | gövde ve parametre seçilmez, cevap şemasında yok; yalnız DNT-01 kimlikleri, modül ve yetki adı; modül süzgeci kalıpla sınırlı (1371 a) | `liste: denetim.oku taşıyan müdür görür; ...` | aynı test (operatör 403, oturumsuz 401); `liste satırı gövde ve parametre taşımaz; ...`; `modül ve yetki: ...` (kötü modül adı 400, operatör 403) |
 | `GET /denetim-kayitlari/suzgecler` | `denetim.oku` | kişi adları ve komut kalıpları; içerik yok | `süzgeç seçenekleri: ...` | `liste: ...` (operatör 403) |
 | `GET /denetim-kayitlari/:id/govde` | `denetim.govde-oku` | okumada `gizle` yeniden; yoksa 404 | `gövde ucu: ...` (yönetici) | aynı test (müdür ve operatör 403) |
 
