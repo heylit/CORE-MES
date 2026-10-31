@@ -2205,27 +2205,39 @@ export function adimDurumlariGetir(db: Db, emirIdleri: readonly number[]): Promi
 
 export interface AsimSatiri { sayimId: number; isEmriId: number; opNo: number; kisiId: number; adet: number; oncekiSaglam: number; zaman: string }
 
-// 647 a: adımın sayımı önceki adımın o anki sağlamını aştığında yazılmıştır; aşan satır iki adımın sayımlarının zaman sırasıyla birleşik
-// koşu toplamından okunur. Bu adımda sağlam ve karar bekleyen, önceki adımda sağlam sayılır (sonraki adıma geçen). Kalite kararı satırı
-// (karar bekleyenden sağlama geçiş) toplamı değiştirmediği için aşan satır sayılmaz. Bağımsız ve ilk adımda aşım yoktur.
+// 647 a: adımın sayımı önceki adımın o anki sağlamını aştığında yazılmıştır; aşan satır, bu adımın koşu toplamının o ana kadar öncülde
+// sayılan sağlamı geçtiği satırdır. Bu adımda sağlam ve karar bekleyen, öncülde sağlam sayılır (sonraki adıma geçen). Kalite kararı satırı
+// (karar bekleyenden sağlama geçiş) toplamı değiştirmediği için aşan satır sayılmaz. Bağımsız adımda, ilk adımda ve dal başında aşım yoktur.
+// Öncül (B-3): dal satırı olan adımda öncül listesi (birden çok öncülde en az gelen, 1257 a çarpanıyla bu adımın birimine çevrilmiş,
+// aşağı yuvarlanmış), olmayan eski adımda sırası bir küçük olan adım (kurallar.ts adetOnculleri ile aynı).
 export function asimlarGetir(db: Db, emirId: number, isEmriId: number): Promise<AsimSatiri[]> {
   return db.sorgu<AsimSatiri>(
     `WITH adim AS (
-       SELECT id, uretim_emri_id, sira, op_no FROM uretim_emirleri_is_emri WHERE id = $2 AND uretim_emri_id = $1 AND bagimlilik <> 'bagimsiz'),
+       SELECT i.id, i.uretim_emri_id, i.sira, i.op_no, d.is_emri_id IS NOT NULL AS dalli, COALESCE(d.adet_carpani, 1) AS carpan
+         FROM uretim_emirleri_is_emri i LEFT JOIN uretim_emirleri_is_emri_dali d ON d.is_emri_id = i.id
+        WHERE i.id = $2 AND i.uretim_emri_id = $1 AND i.bagimlilik <> 'bagimsiz'),
      onceki AS (
-       SELECT i.id FROM uretim_emirleri_is_emri i JOIN adim a ON i.uretim_emri_id = a.uretim_emri_id AND i.sira < a.sira ORDER BY i.sira DESC LIMIT 1),
-     hareket AS (
-       SELECT s.id, s.zaman, s.kisi_id, s.adet, s.karar_veren_kisi_id, s.is_emri_id = (SELECT id FROM adim) AS bu
+       SELECT o.oncul_is_emri_id AS id, COALESCE(od.adet_carpani, 1) AS carpan
+         FROM uretim_emirleri_is_emri_onculu o
+         JOIN adim a ON o.is_emri_id = a.id AND a.dalli
+         LEFT JOIN uretim_emirleri_is_emri_dali od ON od.is_emri_id = o.oncul_is_emri_id
+       UNION ALL
+       (SELECT i.id, 1 FROM uretim_emirleri_is_emri i JOIN adim a ON i.uretim_emri_id = a.uretim_emri_id AND i.sira < a.sira AND NOT a.dalli
+         ORDER BY i.sira DESC LIMIT 1)),
+     bu AS (
+       SELECT s.id, s.zaman, s.kisi_id, s.adet, s.karar_veren_kisi_id, sum(s.adet) OVER (ORDER BY s.zaman, s.id) AS bu_toplam
          FROM uretim_sayimi s
-        WHERE (s.is_emri_id = (SELECT id FROM adim) AND s.tur IN ('saglam', 'karar_bekliyor'))
-           OR (s.is_emri_id = (SELECT id FROM onceki) AND s.tur = 'saglam')),
+        WHERE s.is_emri_id = (SELECT id FROM adim) AND s.tur IN ('saglam', 'karar_bekliyor')),
      kosu AS (
-       SELECT h.*, sum(CASE WHEN h.bu THEN h.adet ELSE 0 END) OVER w AS bu_toplam, sum(CASE WHEN h.bu THEN 0 ELSE h.adet END) OVER w AS onceki_toplam
-         FROM hareket h WINDOW w AS (ORDER BY h.zaman, h.id))
+       SELECT b.*, (SELECT min(floor(COALESCE((SELECT sum(p.adet) FROM uretim_sayimi p
+                                                  WHERE p.is_emri_id = o.id AND p.tur = 'saglam' AND (p.zaman, p.id) <= (b.zaman, b.id)), 0)
+                                     * a.carpan::numeric / o.carpan))
+                      FROM onceki o CROSS JOIN adim a) AS onceki_toplam
+         FROM bu b)
      SELECT k.id AS "sayimId", a.id AS "isEmriId", a.op_no AS "opNo", k.kisi_id AS "kisiId",
             LEAST(k.adet, k.bu_toplam - k.onceki_toplam)::int AS adet, k.onceki_toplam::int AS "oncekiSaglam", ${ISO('k.zaman')} AS zaman
        FROM kosu k CROSS JOIN adim a
-      WHERE k.bu AND k.adet > 0 AND k.karar_veren_kisi_id IS NULL AND k.bu_toplam > k.onceki_toplam AND EXISTS (SELECT 1 FROM onceki)
+      WHERE k.adet > 0 AND k.karar_veren_kisi_id IS NULL AND k.bu_toplam > k.onceki_toplam AND EXISTS (SELECT 1 FROM onceki)
       ORDER BY k.zaman, k.id`,
     [emirId, isEmriId],
   );

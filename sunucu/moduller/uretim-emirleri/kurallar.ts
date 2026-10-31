@@ -432,11 +432,13 @@ export function otomatikGkkYerleri(
 }
 
 // GKK adımı fason adımının hemen arkasındaki GKK tipli adımdır; girdisi fasona gönderilendir, dönen değil (1207 c). Fason adımı döner.
-export function gkkFasonu<T extends { sira: number; operasyonTipiId: number; fasonFirmaId: number | null }>(
-  adimlar: readonly T[], adim: { sira: number; operasyonTipiId: number }, gkkTipiId: number | null,
+// Dallı rotada fason, GKK'nın öncülüdür; sırası bir küçük olan adım başka dalda olabilir.
+export function gkkFasonu<T extends { id?: number; sira: number; operasyonTipiId: number; fasonFirmaId: number | null }>(
+  adimlar: readonly T[], adim: { sira: number; operasyonTipiId: number; onculler?: readonly { id: number }[] | null }, gkkTipiId: number | null,
 ): T | null {
   if (gkkTipiId === null || adim.operasyonTipiId !== gkkTipiId) return null;
-  const onceki = adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0];
+  const onculler = adetOnculleri(adimlar, adim);
+  const onceki = onculler.length === 1 ? onculler[0] : undefined;
   return onceki !== undefined && onceki.fasonFirmaId !== null ? onceki : null;
 }
 
@@ -481,25 +483,30 @@ export const yeniAdimOndeIletisi = (oplar: readonly number[]): string =>
   `${oplar.map((o) => `OP ${String(o)}`).join(', ')} başlamış ya da bitmiş adımların önüne düşüyor; emre eklenmedi. Bu emirde adım ancak başlamamış adımların arasına ya da sona eklenebilir.`;
 
 // Emrin malzeme ihtiyacı (brüt): bileşenin iş emrindeki adım miktarı x bir adet miktarı x (1 + bileşen firesi). Adım miktarı emir adedidir,
-// o ve sonraki iş emirlerinin fire paylarıyla büyür: adet / Π(1 - pay). Formül rotadaki ağaç hesabıyla aynıdır; emir kendi kopyasından okur.
-// Bölünmüş emrin bölünmeden önceki adımları alt partiler için de yapılmıştır: alt partinin (ağacıyla) adedi, bölündüğü sıradan önceki
-// adımlara eklenir. Alt parti yalnız kendi adımlarını sayar; böylece malzeme ne kaybolur ne iki kez sayılır. Planlı birleşmeli kol
-// birleşme adımı ve sonrasını taşımaz: o adımları üst kolun adedi için de yapar (birlesmeSira, üstün sırasıdır).
+// o adımın ve ardıllarının (adımın çıktısını tüketen adımlar, zincirle) fire paylarıyla büyür: adet / Π(1 - pay); birden çok ardıl yolunda en
+// büyüğü. Dallı rotada bir dalın firesi paralel dalı büyütmez. Bileşen miktarı mamul başınadır; dal çarpanı malzemeyi çarpmaz (1333 a).
+// Bölünmüş emrin kola kopyalanmayan adımları (bölünmeden önceki, dallı rotada paralel dal) alt partiler için de yapılmıştır: alt partinin
+// (ağacıyla) adedi bu adımlara eklenir (kolAdimlari). Alt parti yalnız kendi adımlarını sayar; böylece malzeme ne kaybolur ne iki kez
+// sayılır. Planlı birleşmeli kol birleşme adımı ve sonrasını taşımaz: o adımları üst kolun adedi için de yapar (birlesmeSira, üstün sırasıdır).
 export function malzemeIhtiyaci(
   adet: number,
-  isEmirleri: readonly { id: number; sira: number; opNo: number; firePayiYuzde: number }[],
+  isEmirleri: readonly { id: number; sira: number; opNo: number; firePayiYuzde: number; onculler?: readonly { id: number }[] | null }[],
   bilesenler: readonly { isEmriId: number; malzemeNo: number; miktar: number; fireYuzde: number }[],
   altPartiler: readonly { bolunmeSira: number; adet: number; birlesmeSira?: number | null }[] = [],
 ): { malzemeNo: number; opNo: number; brut: number }[] {
   const sirali = [...isEmirleri].sort((a, b) => a.sira - b.sira);
+  const ardillar = new Map<number, number[]>();
+  for (const ie of sirali) for (const o of adetOnculleri(sirali, ie)) ardillar.set(o.id, [...(ardillar.get(o.id) ?? []), ie.id]);
+  // Alt parti kola kopyalanan adımları kendisi yapar; ötekileri (bölünmeden önceki, birleşmeden sonraki, paralel dal) emir yapar.
+  const kolda = new Map(altPartiler.map((p) => [p, new Set(kolAdimlari(sirali, p.bolunmeSira, p.birlesmeSira ?? null).map((i) => i.id))]));
+  const fireCarpani = new Map<number, number>();
   const adimMiktari = new Map<number, number>();
-  let carpan = 1;
   for (let i = sirali.length - 1; i >= 0; i -= 1) {
     const ie = sirali[i];
     if (!ie) continue;
-    carpan /= 1 - ie.firePayiYuzde / 100;
-    const tasinan = altPartiler.filter((p) => p.bolunmeSira > ie.sira || (p.birlesmeSira != null && ie.sira >= p.birlesmeSira))
-      .reduce((t, p) => t + p.adet, 0);
+    const carpan = Math.max(1, ...(ardillar.get(ie.id) ?? []).map((a) => fireCarpani.get(a) ?? 1)) / (1 - ie.firePayiYuzde / 100);
+    fireCarpani.set(ie.id, carpan);
+    const tasinan = altPartiler.filter((p) => !kolda.get(p)!.has(ie.id)).reduce((t, p) => t + p.adet, 0);
     adimMiktari.set(ie.id, (adet + tasinan) * carpan);
   }
   const opNo = new Map(sirali.map((ie) => [ie.id, ie.opNo]));
@@ -543,7 +550,7 @@ export const BIRLESME_GELMEDI = 'Bu adımda birleşecek parti henüz gelmedi; ad
 export const KOL_ONCEKI_BITMEDI = 'Kol, üst emirde bölündüğü adımdan önceki adım bitmeden başlamaz.';
 
 export type IsEmriTuru = 'rota' | 'rework' | 'tamir' | 'ek';
-interface PartiAdimi { sira: number; opNo: number; durum: IsEmriDurumu; tur?: IsEmriTuru }
+interface PartiAdimi { sira: number; opNo: number; durum: IsEmriDurumu; tur?: IsEmriTuru; id?: number; onculler?: readonly { id: number }[] | null; adetCarpani?: number | null }
 
 export interface BolmeDurumu {
   durum: EmirDurumu;
@@ -558,13 +565,15 @@ export interface BolmeDurumu {
   bolunenIslenen?: number;
 }
 
-// Elde kalan: önceki adım bitmişse onun sağlamı ve bu adımda katılan kolların sağlamı, aynı sırada bölünmüş olanlar düşülerek;
-// önceki adım yoksa ya da bitmemişse (ileri adımdan bölme, PB-K2) emir adedi (önceki bölmeler adetten düşmüştür).
+// Elde kalan: öncül adım(lar) bitmişse sağlamı (birden çok öncülde en az gelen, mamul birimiyle) ve bu adımda katılan kolların sağlamı,
+// aynı sırada bölünmüş olanlar düşülerek; öncül yoksa ya da bitmemişse (ileri adımdan bölme, PB-K2) emir adedi (önceki bölmeler
+// adetten düşmüştür). Öncül adetOnculleri'dendir: dallı rotada sıradaki önceki adım başka dalın adımı olabilir.
 export function eldekiAdet(d: BolmeDurumu, sira: number): number {
-  const onceki = [...d.isEmirleri].filter((i) => i.sira < sira).sort((a, b) => b.sira - a.sira)[0];
-  const gelen = onceki === undefined || onceki.durum !== 'tamam'
+  const adim = d.isEmirleri.find((i) => i.sira === sira) ?? { sira };
+  const onculler = adetOnculleri(d.isEmirleri, adim);
+  const gelen = onculler.length === 0 || onculler.some((o) => o.durum !== 'tamam')
     ? d.adet
-    : (onceki.saglamAdet ?? 0) + (d.birlesenGelen ?? 0) - d.ayniSiradanBolunen;
+    : Math.min(...onculler.map((o) => onculdenGelen(o.saglamAdet ?? 0, o, {}))) + (d.birlesenGelen ?? 0) - d.ayniSiradanBolunen;
   return Math.min(d.adet, gelen);
 }
 
@@ -893,25 +902,28 @@ export function adimAdetleri(
 export const FASON_VARSAYILAN_GUN = 7;
 const GUN_MS = 24 * 60 * 60_000;
 
-// Sıradan geriye, ilk iç adıma kadar bitmemiş fason adımların süresi: termin, yoksa tahmin, yoksa FASON_VARSAYILAN_GUN. Gönderilmiş
+// Öncül zincirinde geriye, ilk iç adıma kadar bitmemiş fason adımların süresi: termin, yoksa tahmin, yoksa FASON_VARSAYILAN_GUN. Gönderilmiş
 // (başlamış) fason adımda termin ilk gidişten sayılır: geçen gün düşülür, termini geçmiş adım beklemez (0). simdi verilmezse düşülmez.
+// Zincir adetOnculleri'ndendir (B-2): dallı rotada paralel dalın fasonu bu adımı bekletmez; birleşme adımı öncül dallarından en uzun
+// bekleyeni bekler. Listesi olmayan eski emirde zincir sıradır.
 export function fasonBeklemesi(
   emrinIsEmirleri: readonly {
-    sira: number; fasonFirmaId: number | null; terminGun: number | null; durum: string; baslama?: string | null; tur?: string; ekAciklama?: string | null;
+    id?: number; sira: number; fasonFirmaId: number | null; terminGun: number | null; durum: string; baslama?: string | null; tur?: string;
+    ekAciklama?: string | null; onculler?: readonly { id: number }[] | null;
   }[], sira: number,
   tahmin: (x: { sira: number; fasonFirmaId: number }) => number | null = () => null, simdi?: number,
 ): number {
-  let gun = 0;
-  for (const x of [...emrinIsEmirleri].filter((y) => y.sira < sira).sort((a, b) => b.sira - a.sira)) {
+  type Adim = (typeof emrinIsEmirleri)[number];
+  const bekleme = (a: Pick<Adim, 'sira' | 'onculler'>): number => Math.max(0, ...adetOnculleri(emrinIsEmirleri, a).map((x) => {
     // Otomatik GKK plana girmez (süresiz, kaynaksız): fasonun beklemesi arkasındaki adıma geçer.
-    if (x.tur !== undefined && otomatikGkkMi({ tur: x.tur, ekAciklama: x.ekAciklama ?? null })) continue;
-    if (x.fasonFirmaId === null) break;
-    if (x.durum === 'tamam') continue;
+    if (x.tur !== undefined && otomatikGkkMi({ tur: x.tur, ekAciklama: x.ekAciklama ?? null })) return bekleme(x);
+    if (x.fasonFirmaId === null) return 0;
+    if (x.durum === 'tamam') return bekleme(x);
     const sure = x.terminGun ?? tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId }) ?? FASON_VARSAYILAN_GUN;
     const gecen = simdi !== undefined && x.baslama ? Math.max(0, (simdi - Date.parse(x.baslama)) / GUN_MS) : 0;
-    gun += Math.max(0, sure - gecen);
-  }
-  return gun;
+    return Math.max(0, sure - gecen) + bekleme(x);
+  }));
+  return bekleme(emrinIsEmirleri.find((x) => x.sira === sira) ?? { sira });
 }
 
 // Hazırlık durdurucuları (120-122 a, denetim #14). Madde emirde seçiliyse (sahibi modül söyler) ve tamam değilse, muafiyeti yoksa iş emri
@@ -956,10 +968,11 @@ export function kayitAniIhlali(an: string, sonAn: string | null, simdi: string):
 /* ---------------- refakat kartının adet sınırı (Soru 132, 136 a) ---------------- */
 
 // Kartın bir adımdaki sınırı. Adımın girdisi kartın malzemesiyse sınır kartla verilen malzemeden çıkan parçadır; değilse önceki adımda
-// bu kartla sayılan sağlamdır (karar bekleyen ve red sonraki adıma geçmez). Sarf tanımsız ilk adımda sınır yoktur (null).
+// bu kartla sayılan sağlamdır (karar bekleyen ve red sonraki adıma geçmez). Sarf tanımsız ilk adımda ve dal başında sınır yoktur (null).
+// Öncül adetOnculleri'ndendir; birden çok öncülde en az gelen, dal çarpanıyla bu adımın birimine çevrilir.
 // Sınır yumuşaktır: dolunca ekran uyarır, sayım durmaz.
 export function kartSiniri(
-  adimlar: readonly { id: number; sira: number }[],
+  adimlar: readonly { id: number; sira: number; onculler?: readonly { id: number }[] | null; adetCarpani?: number | null }[],
   adimId: number,
   girdiler: readonly { isEmriId: number; malzemeNo: number; miktar: number }[],
   kart: { malzemeNo: number | null; verilen: number },
@@ -968,10 +981,9 @@ export function kartSiniri(
   const girdi = kart.malzemeNo === null ? undefined : girdiler.find((g) => g.isEmriId === adimId && g.malzemeNo === kart.malzemeNo);
   // Ondalık bölmede 2,5 / 0,5 gibi tam sonuç 4,9999... çıkmasın: kuruşun altı yuvarlanır.
   if (girdi !== undefined && girdi.miktar > 0) return Math.max(0, Math.floor(kart.verilen / girdi.miktar + 1e-9));
-  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
-  const i = sirali.findIndex((a) => a.id === adimId);
-  const onceki = i > 0 ? sirali[i - 1] : undefined;
-  return onceki === undefined ? null : oncekiSaglam(onceki.id);
+  const adim = adimlar.find((a) => a.id === adimId);
+  const onculler = adim === undefined ? [] : adetOnculleri(adimlar, adim);
+  return adim === undefined || onculler.length === 0 ? null : Math.min(...onculler.map((o) => onculdenGelen(oncekiSaglam(o.id), o, adim)));
 }
 
 // Kartın sayıldığı adım: istasyondaki çalışan iş emri, yoksa istasyonun sıradaki iş emri; istasyon verilmezse ya da istasyonda
@@ -1104,6 +1116,32 @@ export interface ParalelAdim {
 export const onculdenGelen = (saglam: number, oncul: { adetCarpani?: number | null }, adim: { adetCarpani?: number | null }): number =>
   Math.floor((saglam * (adim.adetCarpani ?? 1)) / (oncul.adetCarpani ?? 1) + 1e-9);
 
+// Kola kopyalanan adımlar: bölünen adımdan birleşme adımına kadar. Dallı rotada (öncül listeli) yalnız bölünen adımdan öncül zinciriyle
+// ulaşılan adımlar; sıra aralığındaki paralel dalın adımı ana partide kalır (B-3). Birleşmesiz bölme ve eski emir sıra aralığıdır.
+export function kolAdimlari<T extends { id: number; sira: number; onculler?: readonly { id: number }[] | null }>(
+  adimlar: readonly T[], adimSira: number, birlesmeSira: number | null,
+): T[] {
+  const aralik = adimlar.filter((i) => i.sira >= adimSira && (birlesmeSira === null || i.sira < birlesmeSira)).sort((a, b) => a.sira - b.sira);
+  const bas = aralik[0];
+  if (birlesmeSira === null || bas === undefined || bas.sira !== adimSira || bas.onculler == null) return aralik;
+  const ulasilan = new Set([bas.id]);
+  for (const i of aralik) if (adetOnculleri(adimlar, i).some((o) => ulasilan.has(o.id))) ulasilan.add(i.id);
+  return aralik.filter((i) => ulasilan.has(i.id));
+}
+
+// Adımın adet aldığı öncüller (B-3): öncül listeli adımda listesi (dal başında boş), listesi olmayan (1248 öncesi) adımda sırası bir küçük
+// olan adım. Dallı rotada sıradaki önceki adım başka dalın adımı olabilir; adet, bekleme ve sınır hesapları öncülü buradan okur.
+export function adetOnculleri<T extends { id?: number; sira: number }>(
+  adimlar: readonly T[], adim: { sira: number; onculler?: readonly { id: number }[] | null },
+): T[] {
+  if (adim.onculler != null) {
+    const kimlik = new Map(adimlar.flatMap((a) => (a.id === undefined ? [] : [[a.id, a] as const])));
+    return adim.onculler.flatMap((o) => { const a = kimlik.get(o.id); return a === undefined || a.sira >= adim.sira ? [] : [a]; });
+  }
+  const onceki = adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0];
+  return onceki === undefined ? [] : [onceki];
+}
+
 // Adımın en yakın öncülü (adimOnculleri'nin son öğesi): eski emirde sırası bir küçük olan adım; bağımsız adımın ve dal başının öncülü yoktur.
 export function oncekiParalelAdim<T extends ParalelAdim>(adimlar: readonly T[], adim: T): T | null {
   return adimOnculleri(adimlar, adim).at(-1)?.adim ?? null;
@@ -1210,17 +1248,16 @@ export const HATALI_KALITE_TIPI_YOK = 'Kalite kararı adımı için aktif kalite
 // 1045 b: emrin kendisinde (4 a) bütün parça hurda ya da red olduysa emir durur. Ayrı durum yoktur: bekleyen adımın önceki adımı bu
 // kararın sağlamsız kalite adımıdır. adimId verilirse yalnız o adımın başlaması sorulur.
 export function hataliDurduMu(
-  adimlar: readonly { id: number; sira: number; durum: string; saglamAdet: number | null }[],
+  adimlar: readonly { id: number; sira: number; durum: string; saglamAdet: number | null; onculler?: readonly { id: number }[] | null }[],
   kayitlar: readonly { uretimEmriId: number; hedefEmirId: number; kaliteIsEmriId: number; karar: string | null }[],
   adimId?: number,
 ): boolean {
   const kok = new Set(kayitlar.filter((k) => k.hedefEmirId === k.uretimEmriId && (k.karar === 'hurda' || k.karar === 'red')).map((k) => k.kaliteIsEmriId));
   if (kok.size === 0) return false;
-  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
-  return sirali.some((a, i) => {
+  // Dallı rotada kalite adımının ardılı öncül listesinden bulunur (B-3); paralel dalın adımı durmaz.
+  return adimlar.some((a) => {
     if (a.durum !== 'bekliyor' || (adimId !== undefined && a.id !== adimId)) return false;
-    const onceki = sirali[i - 1];
-    return onceki !== undefined && onceki.durum === 'tamam' && (onceki.saglamAdet ?? 0) === 0 && kok.has(onceki.id);
+    return adetOnculleri(adimlar, a).some((o) => o.durum === 'tamam' && (o.saglamAdet ?? 0) === 0 && kok.has(o.id));
   });
 }
 export const HATALI_EMIR_DURDU = 'Emir durdu: bütün parça hurda ya da red oldu. Planlama yeniden başlatır ya da kapatır.';

@@ -24,7 +24,7 @@ import {
   KAPANIS_KILITLI, kapanisSonucu,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
-import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
+import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
@@ -346,9 +346,11 @@ async function onculSaglamlari(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsE
 }
 
 // Adıma giren: ilk adımda null; bağımsız adımda emir adedi (önceki adıma bağlı değildir); öteki adımda önceki adımın sağlamı (adimaGiren).
-// Öncül listeli dal başı bağımsız adım gibidir: emir adedi girer.
+// Öncül listeli dal başı bağımsız adım gibidir: emir adedi girer, dal adımında çarpanla (dalBasiAdedi).
 async function adimGirisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<number | null> {
-  if (adim.bagimlilik === 'bagimsiz' || (adim.onculler !== null && adimOnculleri(hepsi, adim).length === 0)) return hepsi.some((i) => i.sira < adim.sira) ? emir.adet : null;
+  if (adim.bagimlilik === 'bagimsiz' || (adim.onculler !== null && adimOnculleri(hepsi, adim).length === 0)) {
+    return hepsi.some((i) => i.sira < adim.sira) ? dalBasiAdedi(emir.adet, adim) : null;
+  }
   return adimaGiren(db, emir.id, hepsi, adim);
 }
 

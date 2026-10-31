@@ -417,6 +417,23 @@ function slack(plan,cx){
     LS[o.id]=ls;o.sl=ls-o.S;}
 }
 
+/* 1379 a: kâr ve katkı payı siparişin bütün adımlarının maliyetini düşer; biten adım (st.bitti) plana girmediği için burada sayılır, yoksa yarı
+   bitmiş sipariş tam gelirine karşı kalan maliyetle kârlı görünür. Hangi tezgâhta işlendiği motor verisinde yok: rotadaki ilk tanımlı tezgâh
+   (rotanın tercihi), sapmasız süre ve saat ücretiyle; fasonda fiyat × adet. Bilinmeyen kalem miss'e yazılır. Dönen: { mc, sc, fc, miss }. */
+function bitenAdimMaliyeti(D, bitti, j) {
+  const y = { mc: 0, sc: 0, fc: 0, miss: [] }; if (!bitti || !D) return y;
+  const u = (D.urunler || []).find(x => x.id === j.urun); if (!u) return y;
+  const A = D.ayarlar || {};
+  for (const o of u.rota || []) {
+    const id = j.id + '.' + o.k; if (!bitti[id]) continue;
+    const ad = D.opAdet && D.opAdet[id] != null && isFinite(+D.opAdet[id]) ? +D.opAdet[id] : j.adet;
+    if (o.fason) { const f = (D.fasoncular || []).find(x => x.id === o.fason); if (!f || f.fiyat == null) y.miss.push('fason fiyatı'); else y.fc += f.fiyat * ad; continue; }
+    const t = (o.tezgahlar || []).find(x => (D.tezgahlar || []).some(m => m.id === x.id)); const m = t && D.tezgahlar.find(x => x.id === t.id);
+    if (!m || m.ucret == null) { y.miss.push((m ? m.id : o.k) + ' saat ücreti'); continue; }
+    y.mc += ad * (+t.cevrim || 0) / 60 / (m.verim || 1) * m.ucret; y.sc += (+t.ayar || 0) / 60 * (m.ucret + (+A.ayarciUcret || 0));
+  }
+  return y;
+}
 /* ---- değerlendirme ---- */
 function evaluate(plan,st,ref,fast){
   const cx=plan.cx||compile(st),w=st.w,J={},A=cx.A;
@@ -432,6 +449,7 @@ function evaluate(plan,st,ref,fast){
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
     const pw=isAgirligi(j);
     let p=null;if(T!=null)p=j.cezaGun!=null?T/24*j.cezaGun*isPayi(j):T*w.ceza*pw;
+    {const b=bitenAdimMaliyeti(cx.D,cx.st.bitti,j);mc+=b.mc;sc+=b.sc;fc+=b.fc;miss.push(...b.miss);}
     const mf=cx.mat.res[jid]?cx.mat.res[jid].fiyat:null;if(mf==null&&(j.malzeme||[]).length)miss.push('malzeme fiyatı');
     if(j.gelir==null)miss.push('gelir');
     const h=E*w.mu;

@@ -12,7 +12,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import {
-  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir, takvimKayitlari,
+  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirlerinIsEmriIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir, takvimKayitlari,
 } from './disari.ts';
 import { BASLAMAMIS_EMIR, KAPSAM_DISI } from './kurallar.ts';
 import { emirAc } from './servis.ts';
@@ -224,6 +224,21 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     const harita = await vt().okumaTx((db) => emirIdleri(db, [a.emirNo, b.emirNo, a.emirNo, 'YOK-0000']));
     assert.deepEqual([...harita].sort(), [[a.emirNo, a.id], [b.emirNo, b.id]].sort());
     assert.equal((await vt().okumaTx((db) => emirIdleri(db, []))).size, 0);
+  });
+
+  test('1379 a: emrin bütün iş emirleri bitmiş ve fason dahil sırayla döner; iş emirsiz emir haritada yok, boş dizide boş harita', async () => {
+    const [a, b] = [await planliEmir(), await planliEmir()];
+    const firma = (await sahip().tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Fasoncu 1379', 'tedarikci', $1) RETURNING id", [yoneticiId]))!.id;
+    const ekle = async (sira: number, durum: string, fason: number | null) => (await sahip().tek<{ id: number }>(
+      `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, durum, fason_firma_id, baslama, bitis, saglam_adet)
+       VALUES ($1, $2, $3, (SELECT min(id) FROM istasyonlar_operasyon_tipi), 'Deneme', $4::text, $5,
+               CASE WHEN $4::text = 'tamam' THEN now() - interval '1 hour' END, CASE WHEN $4::text = 'tamam' THEN now() END, CASE WHEN $4::text = 'tamam' THEN 10 END)
+       RETURNING id`, [a.id, sira, sira * 10, durum, fason]))!.id;
+    const ikinci = await ekle(2, 'bekliyor', firma);
+    const ilk = await ekle(1, 'tamam', null);
+    const harita = await vt().okumaTx((db) => emirlerinIsEmriIdleri(db, [a.id, b.id, a.id]));
+    assert.deepEqual([...harita], [[a.id, [ilk, ikinci]]]);
+    assert.equal((await vt().okumaTx((db) => emirlerinIsEmriIdleri(db, []))).size, 0);
   });
 
   test('emir özeti: olmayan kimlikte null döner, hata vermez', async () => {

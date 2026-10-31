@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  beklemeHesabi, birimMaliyet, calisilir, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
+  beklemeHesabi, bitenAdimMaliyeti, birimMaliyet, calisilir, katkiPayi, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
   mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
@@ -225,5 +225,20 @@ describe('P3 saf hesaplar', () => {
     expect(W(false)?.son ?? 0).toBeGreaterThan(0);
     expect(W(true)?.son).toBe(0);
     expect(W(true)?.tah ?? 0).toBeLessThan(0);
+  });
+
+  it('1379 a: katkı payı siparişin bütün adımlarıyla; biten adım plana girmese de rotadaki ilk tezgâhın ücretiyle düşülür', () => {
+    // Gelir 1000; malzeme 2 × 1,5 kg × 10 = 30; tornalama 2 adet × 60 dk × 100 TL/sa = 200; kaplama 2 × 5 = 10.
+    const tam = ornekCalisma();
+    expect(katkiPayi(tam, tam.D.siparisler[0]!)).toBe(760);
+    // Tornalama bitti: plandan düştü. Eski hesap yalnız kalanı düşerdi: 1000 − 30 − 10 = 960. Yeni hesap 760, tam plandakiyle aynı.
+    const yari = ornekCalisma({ plan: { dataVer: 1, ops: { 'S1.20': { id: 'S1.20', job: 'S1', m: '@F1', S: 10, C: 58, su: 0, run: 0, fas: true } }, J: { S1: { C: 58, T: 0 } } } });
+    const yariBitti = { ...yari, bitti: { 'S1.10': 1 } };
+    expect(katkiPayi(yari, yari.D.siparisler[0]!)).toBe(960);
+    expect(bitenAdimMaliyeti(yariBitti, yari.D.siparisler[0]!)).toBe(200);
+    expect(katkiPayi(yariBitti, yari.D.siparisler[0]!)).toBe(760);
+    // Biten adımın tezgâh ücreti bilinmezse katkı bilinmez (null), sıfır uydurulmaz.
+    const ucretsiz = { ...yariBitti, D: { ...yariBitti.D, tezgahlar: yariBitti.D.tezgahlar.map((t) => ({ ...t, ucret: null })) } };
+    expect(katkiPayi(ucretsiz, ucretsiz.D.siparisler[0]!)).toBeNull();
   });
 });

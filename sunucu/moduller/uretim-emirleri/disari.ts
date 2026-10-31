@@ -145,6 +145,16 @@ export async function siparisSatirlarininEmirleri(db: Db, satirIdleri: readonly 
   return new Map((await siparisSatiriEmirleriGetir(db, tekil)).map((r) => [r.satirId, r.emirIdleri]));
 }
 
+// Plan katkı payı (1379 a): emrin bütün iş emirleri, durumu ve kaynağı ne olursa olsun (bitmiş ve fason dahil), sıra düzeniyle.
+// İş emri olmayan emir haritada yoktur.
+export async function emirlerinIsEmriIdleri(db: Db, emirIdleri: readonly number[]): Promise<Map<number, number[]>> {
+  const tekil = [...new Set(emirIdleri)];
+  const harita = new Map<number, number[]>();
+  if (tekil.length === 0) return harita;
+  for (const i of await isEmirleriGetir(db, tekil)) harita.set(i.uretimEmriId, [...(harita.get(i.uretimEmriId) ?? []), i.id]);
+  return harita;
+}
+
 /* ---------------- anomali okumaları (kart #1145) ---------------- */
 
 export type { SayimKirilimi } from './sorgular.ts';

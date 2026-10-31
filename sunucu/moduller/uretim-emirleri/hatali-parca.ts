@@ -14,7 +14,7 @@ import {
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
   ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, FIRMA_HATALISI_GKK_DISI, firmaHatalisiIhlali, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
-  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
+  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, adetOnculleri, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
   hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
@@ -94,6 +94,8 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
   const sirali = [...hepsi].sort((a, b) => a.sira - b.sira);
   const onceki = sirali.filter((i) => i.sira < adim.sira).at(-1) ?? null;
   const sonraki = sirali.find((i) => i.sira > adim.sira) ?? null;
+  // Kol, hatalı adımın ardılında (onu öncül alan ilk adım) katılır; dallı rotada sıradaki adım başka dalın adımı olabilir (B-3).
+  const ardil = sirali.find((i) => i.sira > adim.sira && adetOnculleri(sirali, i).some((o) => o.id === adim.id)) ?? null;
   const yol = hataliYolu(durum, adim.sira, g.adet);
   let hedefEmirId = emirId;
   let idler: number[];
@@ -101,7 +103,7 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
   if (yol === 'kol') {
     const oplar = araOpNolari(onceki?.opNo ?? 0, adim.opNo, 2);
     if (oplar === null) throw cakisma(HATALI_OP_YERI);
-    hedefEmirId = await kilitliEmriBol(db, kisiId, e, { adimSira: adim.sira, adet: g.adet, birlesmeOpNo: sonraki?.opNo ?? null });
+    hedefEmirId = await kilitliEmriBol(db, kisiId, e, { adimSira: adim.sira, adet: g.adet, birlesmeOpNo: ardil?.opNo ?? null });
     idler = await adimlariKoy(db, kisiId, hedefEmirId, null, [{ ...kalite, opNo: oplar[0]! }, { ...rework, opNo: oplar[1]! }]);
     await siradakiIstasyonuYaz(db, hedefEmirId);
   } else {
