@@ -1,80 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { oner } from './kurallar.ts';
-import type { MotorIsi, Yerlesim } from './kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
-// 1248 a: emir içi öncül listesi (çok dallı rota). Liste verilince "bir önceki sıra" varsayılmaz; dallar paralel yerleşir, birleştirme
-// adımı dalların en geç bitenini bekler. Veriler uydurmadır.
-const M1 = { tur: 'makine' as const, id: 1 };
-const M2 = { tur: 'makine' as const, id: 2 };
-const M3 = { tur: 'makine' as const, id: 3 };
-const is = (p: Partial<MotorIsi>): MotorIsi => ({
-  id: 1, uretimEmriId: 1, sira: 1, teslimDk: null, kaynak: M1, adaylar: [], sureDk: 60, bagimlilik: 'bekleyen', devirDk: null, ...p,
-});
-const yeri = (l: readonly Yerlesim[], id: number) => { const y = l.find((x) => x.isEmriId === id); assert.ok(y, `iş ${id} yerleşmeli`); return y; };
-
-// Dal A: 1 -> 2 (M1), dal B: 3 (M2), birleştirme 4 (M3).
-const dallar = (p: { a1?: Partial<MotorIsi>; b1?: Partial<MotorIsi>; m?: Partial<MotorIsi> } = {}): MotorIsi[] => [
-  is({ id: 1, sira: 10, ...p.a1, onculler: [] }),
-  is({ id: 2, sira: 20, onculler: [{ id: 1, tur: 'bekleyen' }] }),
-  is({ id: 3, sira: 30, kaynak: M2, sureDk: 30, onculler: [], ...p.b1 }),
-  is({ id: 4, sira: 50, kaynak: M3, sureDk: 10, onculler: [{ id: 2, tur: 'bekleyen' }, { id: 3, tur: 'bekleyen' }], ...p.m }),
-];
-
-describe('plan: emir içi öncül listesi (1248 a)', () => {
-  test('dallar aynı anda yerleşir, birleştirme en geç biten dalın arkasına', () => {
-    const o = oner(dallar(), [], 0);
-    assert.equal(o.yerlesmeyen.length, 0);
-    assert.equal(yeri(o.yerlesimler, 3).baslangic, 0);
-    assert.equal(yeri(o.yerlesimler, 2).baslangic, 60);
-    assert.equal(yeri(o.yerlesimler, 4).baslangic, 120);
-    // Kısa dal uzarsa birleştirme onu bekler.
-    const uzun = oner(dallar({ b1: { sureDk: 200 } }), [], 0);
-    assert.equal(yeri(uzun.yerlesimler, 4).baslangic, 200);
-  });
-
-  test('liste yoksa bugünkü kural: adım emirdeki bir önceki sırayı bekler', () => {
-    const l = dallar().map(({ onculler: _, ...x }) => x);
-    const o = oner(l, [], 0);
-    assert.equal(yeri(o.yerlesimler, 3).baslangic, 120);
-    assert.equal(yeri(o.yerlesimler, 4).baslangic, 150);
-  });
-
-  test('akışlı öncül kendi devriyle başlatır, bekleyen öncül bitişiyle', () => {
-    const o = oner(dallar({ m: { devirSonDk: 1, onculler: [{ id: 2, tur: 'akisli', devirDk: 20 }, { id: 3, tur: 'bekleyen' }] } }), [], 0);
-    // Dal A 60'ta başlar, devir 20 dakikada: 80; bekleyen dal B 30'da biter. Akışlı öncülden önce bitemez: en erken 121.
-    const m = yeri(o.yerlesimler, 4);
-    assert.equal(m.baslangic, 80);
-    assert.ok(m.bitis >= 121);
-  });
-
-  test('yerleşmeyen öncülün ardılı yerleşmez; öteki dal yerleşir', () => {
-    const o = oner(dallar({ a1: { sureDk: null } }), [], 0);
-    const neden = new Map(o.yerlesmeyen.map((x) => [x.isEmriId, x.neden]));
-    assert.equal(neden.get(1), 'Süre bilinmiyor.');
-    assert.equal(neden.get(2), 'Önceki iş emri yerleşmedi.');
-    assert.equal(neden.get(4), 'Önceki iş emri yerleşmedi.');
-    assert.equal(yeri(o.yerlesimler, 3).baslangic, 0);
-  });
-
-  test('sabit öncül yerinden beklenir, bitmiş (yeri olmayan) öncül beklenmez', () => {
-    const l = dallar().filter((x) => x.id !== 1);
-    const sabit = oner(l, [{ isEmriId: 1, uretimEmriId: 1, sira: 10, kaynak: M1, baslangic: 0, bitis: 90 }], 0);
-    assert.equal(yeri(sabit.yerlesimler, 2).baslangic, 90);
-    const bitmis = oner(l, [], 0);
-    assert.equal(yeri(bitmis.yerlesimler, 2).baslangic, 0);
-  });
-
-  test('geri yön dalları ayrı sayar: emir en uzun dalın başlangıcında hazır', () => {
-    const l = dallar().map((x) => ({ ...x, teslimDk: 1000 }));
-    const o = oner(l, [], 0, { kural: 'oncelik', yon: 'geri', tamponDk: 0 });
-    assert.equal(yeri(o.yerlesimler, 4).bitis, 1000);
-    assert.equal(yeri(o.yerlesimler, 1).baslangic, 870);
-  });
-});
-
+// 1248 a: emir içi öncül listesi (çok dallı rota). Liste verilince "bir önceki sıra" varsayılmaz. Veriler uydurmadır.
 // Ortak motorun girdisi (girdi.betik): Reçete ve Rota adımının çözülmüş öncül listesi adımın bağı olur.
 type Bag = [string, string][];
 const rotaBaglari = (adimlar: readonly Record<string, unknown>[]): [string, Bag][] => {

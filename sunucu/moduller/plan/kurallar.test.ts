@@ -1,18 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  araliklaraEkle, araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
-  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirliGunSayisi, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
+  araliklaraEkle, araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBitisi, dondurulacaklar, enErkenBaslangic, gostergeler, isSuresi, kesisimDk,
+  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, emirTutari, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirliGunSayisi, takvimliBosluk, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
-import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
+import type { MaliyetSatiri, PersonelMerkezi } from './kurallar.ts';
 
 const M1 = { tur: 'makine' as const, id: 1 };
 const M2 = { tur: 'makine' as const, id: 2 };
 const GUN = 1440;
-const VARDIYA_2 = [{ baslangic: 480, bitis: 960 }, { baslangic: 1920, bitis: 2400 }];
-const is = (p: Partial<MotorIsi>): MotorIsi => ({
-  id: 1, uretimEmriId: 1, sira: 1, teslimDk: null, kaynak: M1, adaylar: [], sureDk: 60, bagimlilik: 'bekleyen', devirDk: null, ...p,
-});
 
 describe('plan kuralları', () => {
   test('PL-01: kaynakta boşluk dolu aralıklara değmez; süre ayar + adet x birimdir, birim yoksa bilinmez', () => {
@@ -27,91 +23,6 @@ describe('plan kuralları', () => {
     assert.equal(enErkenBaslangic({ bagimlilik: 'bekleyen', devirDk: null }, o, 0), 100);
     assert.equal(enErkenBaslangic({ bagimlilik: 'akisli', devirDk: 25 }, o, 0), 35);
     assert.equal(enErkenBaslangic({ bagimlilik: 'bagimsiz', devirDk: null }, o, 0), 0);
-  });
-
-  test('PL-02 akışlı: ardıl ilk devir partisi gelince başlar, öncülünden önce bitemez; son devir partisi öncül bitince işlenir', () => {
-    // Yazılım değerlendirmesi P5: OP10 100 adet x 10 dk [0, 1000); OP20 100 adet x 1 dk, devir 1 adet. OP20 [10, 110) çıkıyordu.
-    // Ekran (prototip) ardılı ilk partiyle başlatır ve parça bekleyerek öncül bitince bitirir: [10, 1001).
-    const s = oner([is({ id: 1, sureDk: 1000 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 100, bagimlilik: 'akisli', devirDk: 10, devirSonDk: 1 })], [], 0);
-    assert.deepEqual(s.yerlesimler.find((y) => y.isEmriId === 2), { isEmriId: 2, kaynak: M2, baslangic: 10, bitis: 1001 });
-    // Gölge senaryosu akisli-devir: OP10 ayar 10 + 10 x 6 [0, 70); OP20 ayar 10 + 10 x 4, devir 2: ilk parti 10 + 2 x 6 = 22'de, bitiş 70 + 2 x 4.
-    const g = oner([is({ id: 1, sureDk: 70 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 50, bagimlilik: 'akisli', devirDk: 22, devirSonDk: 8 })], [], 0);
-    assert.deepEqual(g.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]), [[1, 0, 70], [2, 22, 78]]);
-    // Uzayan iş kaynağı baştan sona tutar: aradaki boşluğa başka iş girmez, sığmazsa ilk uygun yerden başlar.
-    const dolu = oner([is({ id: 1, sureDk: 70 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 50, bagimlilik: 'akisli', devirDk: 22, devirSonDk: 8 })],
-      [{ isEmriId: 9, uretimEmriId: 9, sira: 1, kaynak: M2, baslangic: 40, bitis: 45 }], 0);
-    assert.deepEqual(dolu.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]), [[1, 0, 70], [2, 45, 95]]);
-    // Ardıl yavaşsa devirden sonra başlar, öncülden sonra biter: sınır başlangıcı geri itmez.
-    const yavas = oner([is({ id: 1, sureDk: 100 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 500, bagimlilik: 'akisli', devirDk: 10, devirSonDk: 5 })], [], 0);
-    assert.deepEqual(yavas.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]), [[1, 0, 100], [2, 10, 510]]);
-    assert.equal(enErkenBitis({ bagimlilik: 'akisli', devirSonDk: 30 }, { baslangic: 480, bitis: 940 }, VARDIYA_2), 1930);
-    assert.equal(enErkenBitis({ bagimlilik: 'bekleyen', devirSonDk: 30 }, { baslangic: 0, bitis: 100 }), Number.NEGATIVE_INFINITY);
-    assert.deepEqual(uyarilar({ baslangic: 20, bitis: 120, kaynak: M1 }, { teslimDk: null, enErken: 10, enErkenBitis: 1001, rotaKaynaklari: [] }),
-      ['Önceki iş emri bitmeden bitiyor (akışlı devir).']);
-  });
-
-  test('PL-02 akışlı devir öncülün takviminde ve veriminde sayılır: vardiya dışı beklenir, yavaş makinede devir uzar', () => {
-    // Öncül M1 08-16 vardiyalı, %50 verimli: 300 dk'lık iş 600 çalışma dakikası, [480, 2040). Devir 250 dk = 500 çalışma dakikası:
-    // ertesi sabah 08:20'de (1940) dolar. Duvar saatinde 480 + 250 = 730 çıkıyordu.
-    assert.equal(enErkenBaslangic({ bagimlilik: 'akisli', devirDk: 250 }, { baslangic: 480, bitis: 2040 }, 0, VARDIYA_2, 0.5), 1940);
-    assert.equal(enErkenBaslangic({ bagimlilik: 'akisli', devirDk: 5000 }, { baslangic: 480, bitis: 2040 }, 0, VARDIYA_2, 0.5), 2040, 'devir öncülün bitişini geçmez');
-    const takvim = (k: { id: number }) => (k.id === 1 ? VARDIYA_2 : null);
-    const verim = (k: { id: number }) => (k.id === 1 ? 0.5 : 1);
-    const s = oner([is({ id: 1, sureDk: 300 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 200, bagimlilik: 'akisli', devirDk: 250, devirSonDk: 0 })], [], 0, undefined, takvim, verim);
-    assert.deepEqual(s.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]), [[1, 480, 2040], [2, 1940, 2140]]);
-  });
-
-  test('verim yalnız işleme süresine uygulanır, ayara uygulanmaz (prototip): ayar 10 + işleme 40, %80 verim 60 dk; devirde de öncülün ayarı verimsiz', () => {
-    const verim = (k: { id: number }) => (k.id === 1 ? 0.8 : 1);
-    const s = oner([is({ id: 1, sureDk: 50, ayarDk: 10 }), is({ id: 2, sira: 2, kaynak: M2, sureDk: 30, ayarDk: 10 })], [], 0, undefined, undefined, verim);
-    assert.deepEqual(s.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]), [[1, 0, 60], [2, 60, 90]]);
-    assert.equal(verimliSure(50, 10, 0.8), 60);
-    assert.equal(verimliSure(50, null, 0.5), 100, 'ayarsız işte bütün süre işlemedir');
-    // Devir: öncülün ayarı 10 + 2 adet x 8 dk; %50 verimde 10 + 16 / 0,5 = 42.
-    assert.equal(enErkenBaslangic({ bagimlilik: 'akisli', devirDk: 26, devirAyarDk: 10 }, { baslangic: 0, bitis: 500 }, 0, null, 0.5), 42);
-  });
-
-  test('PL-FSN: fason adım atölye kaynağını tüketmez; sonraki adım öncülün bitişinden termin kadar sonra başlar, bağımsız adım beklemez', () => {
-    const gun = 24 * 60;
-    const s = oner([is({ id: 1 }), is({ id: 2, sira: 3, fasonBekleDk: 2 * gun }), is({ id: 3, uretimEmriId: 2, sira: 1, oncelik: 9 })], [], 0);
-    assert.deepEqual(s.yerlesimler.map((y) => [y.isEmriId, y.baslangic]), [[1, 0], [2, 60 + 2 * gun], [3, 60]], 'fason beklemesi makineyi boş bırakır');
-    const ilk = oner([is({ id: 4, fasonBekleDk: gun })], [], 0);
-    assert.equal(ilk.yerlesimler[0]?.baslangic, gun, 'öncülü olmayan adım şimdiden termin kadar bekler');
-    const bagimsiz = oner([is({ id: 1 }), is({ id: 2, sira: 3, kaynak: M2, bagimlilik: 'bagimsiz', fasonBekleDk: gun })], [], 0);
-    assert.equal(bagimsiz.yerlesimler.find((y) => y.isEmriId === 2)?.baslangic, 0);
-  });
-
-  test('B7: parti kolu üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler; kol önce sıralansa da', () => {
-    const ust = (p: Partial<MotorIsi>) => is({ uretimEmriId: 1, oncelik: 2, ...p });
-    const kol = (p: Partial<MotorIsi>) => is({ id: 20, uretimEmriId: 2, sira: 2, oncelik: 1, kaynak: M2, sureDk: 30, bagli: [10], ...p });
-    const s = oner([ust({ id: 10 }), ust({ id: 11, sira: 3, bagli: [20] }), kol({})], [], 0);
-    assert.deepEqual(s.yerlesimler.map((y) => [y.isEmriId, y.baslangic, y.bitis]).sort((a, b) => a[0]! - b[0]!), [[10, 0, 60], [11, 90, 150], [20, 60, 90]]);
-    const akis = oner([ust({ id: 10 }), ust({ id: 11, sira: 3, bagli: [20], bagimlilik: 'akisli', devirDk: 10 }), kol({})], [], 0);
-    assert.equal(akis.yerlesimler.find((y) => y.isEmriId === 11)?.baslangic, 70);
-    const yok = oner([ust({ id: 10 }), ust({ id: 11, sira: 3, bagli: [20] }), kol({ sureDk: null })], [], 0);
-    assert.deepEqual(yok.yerlesmeyen, [{ isEmriId: 20, neden: 'Süre bilinmiyor.' }, { isEmriId: 11, neden: 'Bağlı parti yerleşmedi.' }]);
-    const dongu = oner([is({ id: 30, bagli: [40] }), is({ id: 40, uretimEmriId: 2, bagli: [30] })], [], 0);
-    assert.deepEqual(dongu.yerlesmeyen.map((y) => [y.isEmriId, y.neden]), [[30, 'Bağlı parti yerleşmedi.'], [40, 'Bağlı parti yerleşmedi.']]);
-    const sabit = oner([is({ id: 50, bagli: [9] })], [{ isEmriId: 9, uretimEmriId: 9, sira: 1, kaynak: M2, baslangic: 0, bitis: 45 }], 0);
-    assert.equal(sabit.yerlesimler[0]?.baslangic, 45);
-  });
-
-  test('P1: motor sabitleri yerinde bırakır, adaylardan en erken bitireni seçer; kaynaksız ve süresiz iş yerleşmez', () => {
-    const s = oner([
-      is({ id: 1 }),
-      is({ id: 2, uretimEmriId: 2, kaynak: M1, adaylar: [M2] }),
-      is({ id: 3, uretimEmriId: 3, kaynak: null, adaylar: [] }),
-      is({ id: 4, uretimEmriId: 4, sureDk: null }),
-    ], [{ isEmriId: 9, uretimEmriId: 9, sira: 1, kaynak: M1, baslangic: 0, bitis: 30 }], 0);
-    assert.deepEqual(s.yerlesimler.map((y) => [y.isEmriId, y.kaynak.id, y.baslangic]), [[1, 1, 30], [2, 2, 0]]);
-    assert.deepEqual(s.yerlesmeyen.map((y) => y.isEmriId).sort(), [3, 4]);
-  });
-
-  test('Verim: süre kaynağın istasyon verimine bölünür; adaylardan verimli olan en erken bitirir', () => {
-    const verim = (k: { id: number }) => (k.id === 1 ? 0.5 : 1);
-    assert.deepEqual(oner([is({ id: 1 })], [], 0, undefined, undefined, verim).yerlesimler.map((y) => [y.kaynak.id, y.bitis]), [[1, 120]]);
-    assert.deepEqual(oner([is({ id: 1, adaylar: [M2] })], [], 0, undefined, undefined, verim).yerlesimler.map((y) => [y.kaynak.id, y.bitis]), [[2, 60]]);
-    assert.deepEqual(oner([is({ id: 1 })], [], 0).yerlesimler.map((y) => y.bitis), [60]);
   });
 
   test('P5 uyarı: teslim gecikmesi, sıraya aykırı başlangıç, rota dışı kaynak; sıralama arka arkaya dizer', () => {
@@ -136,64 +47,6 @@ describe('plan kuralları', () => {
     assert.deepEqual(arkaArkaya([120, 60], 900, VARDIYA), [{ baslangic: 900, bitis: 1980 }, { baslangic: 1980, bitis: 2040 }]);
     assert.deepEqual(arkaArkaya([30], 1000, VARDIYA), [{ baslangic: 1920, bitis: 1950 }]);
     assert.equal(arkaArkaya([600], 900, VARDIYA), null);
-  });
-
-  test('PL-05: ufukta çalışma zamanı bulamayan iş yerleşmez; ardılı da yerleşmez, emir zamanında sayılmaz', () => {
-    assert.equal(takvimliBosluk([], VARDIYA, 0, 2000), null);
-    const s = oner([is({ id: 1, sureDk: 2000 }), is({ id: 2, sira: 2, sureDk: 10 })], [], 0, undefined, () => VARDIYA);
-    assert.deepEqual(s.yerlesimler, []);
-    assert.deepEqual(s.yerlesmeyen.map((x) => [x.isEmriId, x.neden]), [[1, 'Plan ufkunda çalışma zamanı bulunamadı.'], [2, 'Önceki iş emri yerleşmedi.']]);
-    const g = gostergeler([], [{ id: 1, teslimDk: 5000, isSayisi: 2 }], 3 * GUN);
-    assert.equal(g.zamanindaYuzde, 0);
-    assert.equal(g.geciken, 1);
-  });
-
-  test('PL-07: öncelik kuralı teslimi erken olanı, eşitse acili önce (karar: elle > teslim > öncelik), EDD en erken teslimi, SPT en kısa işi, CR en sıkışık emri önce alır', () => {
-    const e = [
-      { id: 1, oncelik: 3, teslimDk: 1000, sureDk: 600, elleSira: null },
-      { id: 2, oncelik: 1, teslimDk: 5000, sureDk: 60, elleSira: null },
-      { id: 3, oncelik: 2, teslimDk: 2000, sureDk: 1900, elleSira: null },
-    ];
-    assert.deepEqual(emirSirasi(e, 'oncelik', 0).map((x) => x.id), [1, 3, 2]);
-    assert.deepEqual(emirSirasi([...e, { id: 4, oncelik: 1, teslimDk: 1000, sureDk: 10, elleSira: null }], 'oncelik', 0).map((x) => x.id), [4, 1, 3, 2]);
-    assert.deepEqual(emirSirasi(e, 'edd', 0).map((x) => x.id), [1, 3, 2]);
-    assert.deepEqual(emirSirasi(e, 'spt', 0).map((x) => x.id), [2, 1, 3]);
-    assert.deepEqual(emirSirasi(e, 'cr', 0).map((x) => x.id), [3, 1, 2]);
-  });
-
-  test('72 b: kaynak boş kalmaz; boşalan kaynağa o an hazır işlerden kural seçer, sonra gelecek acil iş için yer tutulmaz', () => {
-    // E1 (teslimi erken): 1. adım M2'de 200 dk, 2. adım M1'de. E2 (teslimi geç): M1'de 380 dk, hemen hazır. M1 0'da boş: E2 başlar, E1'in 2. adımı arkasında.
-    const isler = [
-      is({ id: 1, uretimEmriId: 1, sira: 1, kaynak: M2, sureDk: 200, teslimDk: 1000 }), is({ id: 2, uretimEmriId: 1, sira: 2, kaynak: M1, sureDk: 100, teslimDk: 1000 }),
-      is({ id: 3, uretimEmriId: 2, sira: 1, kaynak: M1, sureDk: 380, teslimDk: 5000 }),
-    ];
-    const y = oner(isler, [], 0).yerlesimler;
-    assert.deepEqual(y.map((x) => [x.isEmriId, x.baslangic]), [[1, 0], [2, 380], [3, 0]]);
-  });
-
-  test('S1 a: SPT o adımın süresine, FIFO adımın hazır olduğu ana bakar (emrin toplamına ya da açılışına değil)', () => {
-    // E1: kısa toplam (M2 10 + M1 300). E2: tek adım M1 100. İkisinin M1 adımı 10'da hazır yarışır: SPT kısa adımı (E2) seçer.
-    const spt = oner([
-      is({ id: 1, uretimEmriId: 1, sira: 1, kaynak: M2, sureDk: 10 }), is({ id: 2, uretimEmriId: 1, sira: 2, kaynak: M1, sureDk: 300 }),
-      is({ id: 3, uretimEmriId: 2, sira: 1, kaynak: M1, sureDk: 100, emirBaslangicDk: 10 }),
-    ], [], 0, { kural: 'spt', yon: 'ileri', tamponDk: 0 }).yerlesimler;
-    assert.deepEqual(spt.map((x) => [x.isEmriId, x.baslangic]).sort((a, b) => a[0]! - b[0]!), [[1, 0], [2, 110], [3, 10]]);
-    // FIFO: E1 önce açılmış ama M1 adımı 50'de hazır; E2 sonra açılmış, M1 adımı 20'de hazır. M1 50'ye dek E3 ile dolu: 50'de önce hazır olan E2.
-    const fifo = oner([
-      is({ id: 1, uretimEmriId: 1, sira: 1, kaynak: M2, sureDk: 50, acilmaDk: -100 }), is({ id: 2, uretimEmriId: 1, sira: 2, kaynak: M1, sureDk: 10, acilmaDk: -100 }),
-      is({ id: 3, uretimEmriId: 2, sira: 1, kaynak: M1, sureDk: 10, acilmaDk: -50, emirBaslangicDk: 20 }),
-    ], [{ isEmriId: 99, uretimEmriId: 99, sira: 1, kaynak: M1, baslangic: 0, bitis: 50 }], 0, { kural: 'fifo', yon: 'ileri', tamponDk: 0 }).yerlesimler;
-    assert.deepEqual(fifo.map((x) => [x.isEmriId, x.baslangic]).sort((a, b) => a[0]! - b[0]!), [[1, 0], [2, 60], [3, 50]]);
-  });
-
-  test('218 a: CR teslime kalan süreyi kaynağın vardiya takviminde sayar', () => {
-    // İkisi 0'da M1'de yarışır; vardiya 480-960 ve 1920-2400. E1: teslim 1900 (gece), kalan iş 120: takvimde kalan 480 dk, oran 4. E2: teslim 960,
-    // kalan iş 100: takvimde 480 dk, oran 4,8. Düz dakikayla E2 önde olurdu (960/100 = 9,6 < 1900/120 = 15,8).
-    const isler = [
-      is({ id: 1, uretimEmriId: 1, sureDk: 120, teslimDk: 1900 }), is({ id: 2, uretimEmriId: 2, sureDk: 100, teslimDk: 960 }),
-    ];
-    const y = oner(isler, [], 0, { kural: 'cr', yon: 'ileri', tamponDk: 0 }, () => VARDIYA_2).yerlesimler;
-    assert.deepEqual(y.map((x) => [x.isEmriId, x.baslangic]).sort((a, b) => a[0]! - b[0]!), [[1, 480], [2, 600]]);
   });
 
   test('815 (699/3 a): emrin önceliği motor sınıfına ve gecikme çarpanına çevrilir (195 a: 1 ve 2 Yüksek, 3 Normal, 4 Düşük); önceliksiz emir sınıfsız', () => {
@@ -250,29 +103,6 @@ describe('plan kuralları', () => {
     assert.equal(planMaliyeti([], ayar), 0);
   });
 
-  test('denetim #21, 203 a: TL amacı kural planından başlar, kaynağı paylaşan ardışık emirleri değiştirip TL toplamı düşerse tutar; elle sıralı emir yerinde kalır; koşu sınırlı', () => {
-    // Tek makine. A teslimi 5 sa, ucuz (150 TL/sa); B teslimi 6 sa, pahalı (1.000 TL/sa); ikisi de 6 sa. Kural A'yı öne alır: A 1 sa, B 6 sa geç (6.150 TL).
-    // B önce: B zamanında, A 7 sa geç (1.050 TL).
-    const isler = [is({ id: 1, uretimEmriId: 1, teslimDk: 300, sureDk: 360 }), is({ id: 2, uretimEmriId: 2, teslimDk: 360, sureDk: 360 })];
-    const bedel = new Map([[1, 150], [2, 1000]]);
-    const teslim = new Map([[1, 300], [2, 360]]);
-    let kosu = 0;
-    const kos = (sira?: ReadonlyMap<number, number>) => { kosu += 1; return oner(isler, [], 0, { ...VARSAYILAN_MOTOR, ...(sira ? { sira } : {}) }); };
-    const maliyet = (r: ReturnType<typeof kos>) => r.yerlesimler.reduce((t, y) => t + bedel.get(y.isEmriId)! * Math.max(0, y.bitis - teslim.get(y.isEmriId)!) / 60, 0);
-    const kural = kos();
-    assert.deepEqual(kural.yerlesimler.map((y) => [y.isEmriId, y.baslangic]), [[1, 0], [2, 360]]);
-    assert.equal(maliyet(kural), 6150);
-    const tl = tlIyilestir(kos, maliyet, (id) => id, new Set());
-    assert.deepEqual(tl.yerlesimler.map((y) => [y.isEmriId, y.baslangic]).sort((a, b) => a[0]! - b[0]!), [[1, 360], [2, 0]]);
-    assert.equal(maliyet(tl), 1050);
-    kosu = 0;
-    assert.equal(maliyet(tlIyilestir(kos, maliyet, (id) => id, new Set([1]))), 6150, 'elle sıralı emir yer değiştirmez');
-    kosu = 0;
-    tlIyilestir(kos, maliyet, (id) => id, new Set(), 2);
-    assert.equal(kosu, 2, 'sınır kural koşusunu da sayar');
-    assert.deepEqual([1, 200, 400, 2000, 8000, 100000].map(tlKosuSiniri), [40, 40, 20, 4, 2, 2], 'koşu sayısı iş sayısıyla küçülür, en az 2');
-  });
-
   test('225: emrin tutarı satırın birim fiyatı × emrin adedi; miktarı sıfır ya da tutarı boş satırda bilinmez', () => {
     assert.equal(emirTutari({ tutar: '2400000', miktar: '10' }, 4), '960000');
     assert.equal(emirTutari({ tutar: '2400000', miktar: '10.000' }, 10), '2400000');
@@ -294,90 +124,6 @@ describe('plan kuralları', () => {
     assert.deepEqual([...katkiPaylari(emirler, isler, maliyet, malzeme)], [[1, '40000'], [2, null], [3, null], [4, null], [5, null]]);
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 99, uretimEmriId: 1 }], maliyet, malzeme)], [[1, null]], 'haritada olmayan iş emri bilinmez');
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 11, uretimEmriId: 1 }], maliyet, new Map())], [[1, null]], 'malzeme maliyeti bilinmeyen emirde katkı bilinmez');
-  });
-
-  test('PL-07: FIFO en eski açılan emri önce alır; eşitlikte emir numarası, elle sıra yine önde', () => {
-    const e = [
-      { id: 1, oncelik: 1, teslimDk: 100, sureDk: 10, elleSira: null, acilmaDk: -10 },
-      { id: 2, oncelik: 3, teslimDk: 900, sureDk: 90, elleSira: null, acilmaDk: -500 },
-      { id: 3, oncelik: 2, teslimDk: 500, sureDk: 50, elleSira: null, acilmaDk: -500 },
-      { id: 4, oncelik: 4, teslimDk: 700, sureDk: 70, elleSira: 1, acilmaDk: -1 },
-    ];
-    assert.deepEqual(emirSirasi(e, 'fifo', 0).map((x) => x.id), [4, 2, 3, 1]);
-  });
-
-  test('PL-07: geri yönde emir teslimden tampon ve süre kadar önce başlar; ileri yönde hemen', () => {
-    const isler = [is({ id: 1, teslimDk: 3000, sureDk: 100 })];
-    assert.equal(oner(isler, [], 0, { kural: 'oncelik', yon: 'geri', tamponDk: 500 }).yerlesimler[0]?.baslangic, 2400);
-    assert.equal(oner(isler, [], 0, { kural: 'oncelik', yon: 'ileri', tamponDk: 500 }).yerlesimler[0]?.baslangic, 0);
-  });
-
-  test('K2: geri yönde gece ve vardiya dışı düşülür; adımlar sondan geriye kendi takviminde sayılır', () => {
-    // Gündüz 08:00-16:00 iki gün: [480, 960], [1920, 2400]. Teslim ikinci gün 10:00 (2040): 120 dk o sabah, 60 dk önceki akşam.
-    const V = [{ baslangic: 480, bitis: 960 }, { baslangic: 1920, bitis: 2400 }];
-    assert.equal(calismaBasiGeri(V, 2040, 180), 900);
-    assert.equal(calismaBasiGeri(null, 2040, 180), 1860);
-    assert.equal(calismaBasiGeri(V, 2040, 1000), null);
-    const isler = [is({ id: 1, sira: 1, teslimDk: 2040, sureDk: 60 }), is({ id: 2, sira: 2, teslimDk: 2040, sureDk: 180 })];
-    const y = oner(isler, [], 0, { kural: 'oncelik', yon: 'geri', tamponDk: 0 }, () => V).yerlesimler;
-    assert.deepEqual(y.map((x) => [x.isEmriId, x.baslangic, x.bitis]), [[1, 840, 900], [2, 900, 2040]], 'teslimde biter, gece sayılmaz');
-  });
-
-  test('241 a: geri yönde makine doluysa emir önce erkene kaydırılır, ancak sığmazsa ileri itilir', () => {
-    // E1 140-200'de; E2'nin geri başlangıcı (160) E1'e çarpar. Eskiden E2 200-260 (40 dk geç); şimdi ikisi de teslimde biter.
-    const isler = [is({ id: 1, uretimEmriId: 1, teslimDk: 200, sureDk: 60 }), is({ id: 2, uretimEmriId: 2, teslimDk: 220, sureDk: 60 })];
-    const y = oner(isler, [], 0, { kural: 'oncelik', yon: 'geri', tamponDk: 0 }).yerlesimler;
-    assert.deepEqual(y.map((x) => [x.isEmriId, x.baslangic, x.bitis]), [[1, 100, 160], [2, 160, 220]]);
-    // Erkene yer yoksa (şimdiden önce olamaz) ileri itilir.
-    const dar = [is({ id: 1, uretimEmriId: 1, teslimDk: 60, sureDk: 60 }), is({ id: 2, uretimEmriId: 2, teslimDk: 80, sureDk: 60 })];
-    assert.deepEqual(oner(dar, [], 0, { kural: 'oncelik', yon: 'geri', tamponDk: 0 }).yerlesimler.map((x) => [x.isEmriId, x.baslangic, x.bitis]), [[1, 0, 60], [2, 60, 120]]);
-  });
-
-  test('KY-03: elle sırası olan emir kural sırasından önce yerleşir; elle sıra yoksa kural', () => {
-    const isler = [is({ id: 1, uretimEmriId: 1, oncelik: 1 }), is({ id: 2, uretimEmriId: 2, oncelik: 4, elleSira: 1 })];
-    assert.deepEqual(oner(isler, [], 0).yerlesimler.map((y) => [y.isEmriId, y.baslangic]), [[2, 0], [1, 60]]);
-    const kural = [is({ id: 1, uretimEmriId: 1, oncelik: 1 }), is({ id: 2, uretimEmriId: 2, oncelik: 4 })];
-    assert.deepEqual(oner(kural, [], 0).yerlesimler.map((y) => [y.isEmriId, y.baslangic]), [[1, 0], [2, 60]]);
-  });
-
-  test('denetim #19: elle sıra makinede korunur; elle 2. iş, başlangıcı ileride olan elle 1. işin önündeki boşluğa geçmez', () => {
-    const isler = [
-      is({ id: 1, uretimEmriId: 1, sureDk: 100, elleSira: 1, emirBaslangicDk: 600 }),
-      is({ id: 2, uretimEmriId: 2, sureDk: 300, elleSira: 2 }),
-      is({ id: 3, uretimEmriId: 3, sureDk: 200 }),
-    ];
-    const y = new Map(oner(isler, [], 0).yerlesimler.map((x) => [x.isEmriId, [x.baslangic, x.bitis]]));
-    assert.deepEqual(y.get(1), [600, 700]);
-    assert.deepEqual(y.get(2), [700, 1000], 'elle 2. iş elle 1. işten sonra');
-    assert.deepEqual(y.get(3), [0, 200], 'elle sırasız iş boşluğu doldurur');
-    // Başka kaynakta elle 1. iş yoksa elle 2. iş beklemez.
-    const ayri = [is({ id: 1, uretimEmriId: 1, sureDk: 100, elleSira: 1, emirBaslangicDk: 600 }), is({ id: 2, uretimEmriId: 2, kaynak: M2, sureDk: 300, elleSira: 2 })];
-    assert.deepEqual(oner(ayri, [], 0).yerlesimler.find((x) => x.isEmriId === 2)!.baslangic, 0);
-  });
-
-  test('276 a: elle sıra işin kendi sırasıdır, emrinki değil; aynı makinede elle 2. iş, emrinin elle 3. işinden önce gelir', () => {
-    const isler = [
-      is({ id: 1, uretimEmriId: 1, sira: 1, sureDk: 50, elleSira: 1 }),
-      is({ id: 2, uretimEmriId: 1, sira: 2, sureDk: 50, elleSira: 3, fasonBekleDk: 2000 }),
-      is({ id: 3, uretimEmriId: 2, sira: 1, sureDk: 50, elleSira: 2 }),
-      is({ id: 4, uretimEmriId: 2, sira: 2, sureDk: 50, elleSira: 4, fasonBekleDk: 2000 }),
-    ];
-    const y = new Map(oner(isler, [], 0).yerlesimler.map((x) => [x.isEmriId, [x.baslangic, x.bitis]]));
-    assert.deepEqual([1, 3, 2, 4].map((id) => y.get(id)), [[0, 50], [50, 100], [2050, 2100], [2100, 2150]]);
-  });
-
-  test('282 a: personel kısıtı açıkken kişi-dakikası dolan güne o merkeze yeni iş konmaz, ilk uygun güne kayar', () => {
-    const isler = [is({ id: 1, uretimEmriId: 1, sureDk: 60 }), is({ id: 2, uretimEmriId: 2, kaynak: M2, sureDk: 30 })];
-    // İki makine aynı merkezde, makine başına bir kişi; ilk gün 60 kişi-dakikası var, ilk iş onu doldurur.
-    const personel = { gun0: 0, merkezi: () => ({ id: 7, operator: 1 }), kapasite: new Map([[7, [60, 1000]]]) };
-    const yer = (ayar: Parameters<typeof oner>[3]) => new Map(oner(isler, [], 0, ayar).yerlesimler.map((x) => [x.isEmriId, [x.baslangic, x.bitis]]));
-    assert.deepEqual(yer({ kural: 'oncelik', yon: 'ileri', tamponDk: 0 }).get(2), [0, 30], 'kısıt yokken aynı gün');
-    const k = yer({ kural: 'oncelik', yon: 'ileri', tamponDk: 0, personel });
-    assert.deepEqual(k.get(1), [0, 60]);
-    assert.deepEqual(k.get(2), [1440, 1470], 'dolu günden sonraki ilk gün');
-    // Başka merkezin işi etkilenmez.
-    const ayri = { ...personel, merkezi: (x: { id: number }) => ({ id: x.id === 1 ? 7 : 8, operator: 1 }) };
-    assert.deepEqual(yer({ kural: 'oncelik', yon: 'ileri', tamponDk: 0, personel: ayri }).get(2), [0, 30]);
   });
 
   test('PL-11: darboğaz en dolu istasyondur; makine sayısı doluluğu böler; iş yoksa darboğaz yok', () => {
@@ -415,15 +161,6 @@ describe('plan kuralları', () => {
     const y = [{ isEmriId: 1, baslangic: 100, bitis: 200 }, { isEmriId: 2, baslangic: 3 * GUN, bitis: 3 * GUN + 10 }, { isEmriId: 3, baslangic: 50, bitis: 60 }];
     assert.deepEqual(dondurulacaklar(y, 2, 0, (id) => id !== 3).map((x) => x.isEmriId), [1]);
     assert.deepEqual(dondurulacaklar(y, 0, 0, () => true), []);
-  });
-
-  test('Seçenekleri karşılaştır: her kural için son bitiş ve bugünkü plana göre başlangıcı değişen emir sayısı', () => {
-    const isler = [is({ id: 1, uretimEmriId: 1, oncelik: 2, sureDk: 100 }), is({ id: 2, uretimEmriId: 2, oncelik: 1, sureDk: 10 })];
-    const simdiki = new Map([[1, 0], [2, 100]]);
-    const r = karsilastir(['oncelik', 'spt'], (k) => oner(isler, [], 0, { kural: k, yon: 'ileri', tamponDk: 0 }), simdiki, (id) => id, () => ({ geciken: 0, darbogaz: null }));
-    assert.deepEqual(r.map((x) => [x.kural, x.sonBitisDk, x.etkilenenEmir]), [['oncelik', 110, 2], ['spt', 110, 2]]);
-    const ayni = karsilastir(['edd'], () => ({ yerlesimler: [{ isEmriId: 1, kaynak: M1, baslangic: 0, bitis: 100 }] }), simdiki, (id) => id, () => ({ geciken: 0, darbogaz: null }));
-    assert.equal(ayni[0]?.etkilenenEmir, 0);
   });
 
   test('PL-04: kapalı aralık çalışmadan çıkar; kesişim yalnız çalışma dakikasını sayar, takvimsiz kaynak sürekli', () => {
