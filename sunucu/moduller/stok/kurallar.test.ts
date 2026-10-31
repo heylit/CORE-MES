@@ -7,7 +7,7 @@ import {
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
-  ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
+  ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
@@ -267,6 +267,32 @@ describe('stok kuralları (saf)', () => {
     assert.deepEqual(stokDegeri([{ malzemeId: 9, toplam: '2' }], new Map()), { deger: null, fiyatsizKart: 1 });
     assert.deepEqual(stokDegeri([], new Map()), { deger: null, fiyatsizKart: 0 });
     assert.deepEqual(stokDegeri([{ malzemeId: 1, toplam: '0.001' }], new Map([[1, '0.0049']])), { deger: '0.00', fiyatsizKart: 0 });
+  });
+
+  test('1382 d alış fiyatları: hareketli ortalama eldeki miktarla, çıkış ortalamayı değiştirmez; geri alınan kabul kendi fiyatıyla çıkar; son alış geri alınmamış en son; kesim öncesi olaylar', () => {
+    const o = (gun: number, miktar: string, once: string, satir: number, fiyat: string | null, geri = false) =>
+      ({ malzemeId: 1, zaman: `2026-01-${String(gun).padStart(2, '0')}T10:00:00Z`, miktar, once, malKabulSatirId: satir, geri, fiyat });
+    const olaylar = [
+      o(1, '5', '0', 11, '100'),
+      // 4 birim çıktı: eldeki 1. Gelen 5 x 180: (1 x 100 + 5 x 180) / 6 = 166.6667.
+      o(3, '5', '1', 12, '180'),
+      // Fiyatsız kabul ortalamayı ve son alışı değiştirmez.
+      o(4, '2', '6', 13, null),
+      // 12 geri alınır: eldeki 8; (8 x 166.6667 - 5 x 180) / 3 = 144.4445.
+      o(5, '5', '8', 12, '180', true),
+      { ...o(2, '1', '0', 21, '50'), malzemeId: 2 },
+    ];
+    const [ilk, ara, son] = alisFiyatlari(olaylar, ['2026-01-02T00:00:00Z', '2026-01-04T00:00:00Z', null]);
+    assert.deepEqual(ilk!.get(1), { ortalama: '100', sonAlis: '100' });
+    assert.deepEqual(ilk!.get(2), { ortalama: null, sonAlis: null }, 'kesimden sonraki kabul sayılmaz');
+    assert.deepEqual(ara!.get(1), { ortalama: '166.6667', sonAlis: '180' });
+    assert.deepEqual(son!.get(1), { ortalama: '144.4445', sonAlis: '100' });
+    assert.deepEqual(son!.get(2), { ortalama: '50', sonAlis: '50' });
+    assert.equal(son!.has(3), false);
+    // Eksi eldeki sıfır sayılır; kalanı sıfırlayan geri alma ortalamayı değiştirmez.
+    const [eksi] = alisFiyatlari([o(1, '2', '-3', 31, '40'), o(2, '2', '0', 32, '60'), o(3, '2', '2', 32, '60', true)], [null]);
+    assert.deepEqual(eksi!.get(1), { ortalama: '60', sonAlis: '40' });
+    assert.deepEqual(alisFiyatlari([], [null, '2026-01-01T00:00:00Z']), [new Map(), new Map()]);
   });
 
   test('harita eşlemesi (#686): depo kodu bölüm kodundan, doluysa sıralı', () => {

@@ -14,6 +14,8 @@ Veri kapsamı (DEP-36): üretime sarf (`/stok/cikis` emirli, `/stok/sepet/stokta
 | `GET /stok/is-kutusu` | sayılamayan madde null | menü (K6) | yetki (K3) girişsiz 401 (ortak) |
 | `GET /stok/menu-sayaclari` | sayı kişinin işlemine göre süzülür: `stok.giris` olmayana mal kabul sayısı null | menü (K6) | menü (K6): satın almacıda `mal-kabul` null |
 | `GET /stok/panel` | stok değeri yok (maliyet tutulmaz) | panel, DEP-34 | YOK |
+| `GET /stok/deger?yontem=` | 1382 d: yöntem yalnız `guncel_kg`, `son_alis`, `hareketli_ortalama` (varsayılan güncel kg); değer yalnız `finans.oku` olana hesaplanır, değilse `degerGorunur: false`, değerler null; fiyat satın almanın `disari.ts`'inden | "1382 d stok değeri", "1382 d güncel kg" | "1382 d stok değeri": depo `degerGorunur: false`, bilinmeyen yöntem 400 |
+| `GET /stok/panel/aylik-deger?ay=&yontem=` | ay 1-24, yöntem yukarıdaki gibi; değer yalnız `finans.oku` olana | "#1079, 1382 d aylık" | aynı test: depo `degerGorunur: false`, `ay=25` 400 |
 | `GET /stok/depolar` | — | YOK | YOK |
 | `GET /stok/konumlar`, `/:id` | sayfalı liste | DEP-09/13 | YOK |
 | `GET /stok/raflar`, `/:id` | sayfalı liste; matris | DEP-14/12/13 | YOK |

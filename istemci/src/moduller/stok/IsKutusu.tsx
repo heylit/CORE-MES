@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { HaritaOzetiCevabi, IsKutusuCevabi, PanelCevabi, SayimBekleyenlerCevabi, SepetCevabi, ToplamalarCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { DegerlemeYontemi, HaritaOzetiCevabi, IsKutusuCevabi, PanelCevabi, SayimBekleyenlerCevabi, SepetCevabi, StokDegeriCevabi, ToplamalarCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -32,8 +32,34 @@ export function isler(k: IsKutusuCevabi, eslenmemis = 0): Is[] {
   return l.sort((a, b) => TON_SIRASI[a.ton] - TON_SIRASI[b.ton]);
 }
 
-// Güncel değerin dışında, kendi satırında değerlenen konumlar (228 a).
-const AYRI_DEGERLER = [['kalite', 'Kalite bekleyen / red'], ['hurda', 'Hurda'], ['fason', 'Fason'], ['yolda', 'Yolda'], ['diger', 'Üretimde ve diğer'], ['toplam', 'Toplam']] as const satisfies readonly (readonly [keyof PanelCevabi['guncelAyri'], string])[];
+// Kullanılabilir değerin dışında, kendi satırında değerlenen konumlar (228 a); hurda talaş fiyatıyla (1382 d).
+const AYRI_DEGERLER = [['kalite', 'Kalite bekleyen / red'], ['hurda', 'Hurda (talaş)'], ['fason', 'Fason'], ['yolda', 'Yolda'], ['diger', 'Üretimde ve diğer'], ['toplam', 'Toplam']] as const satisfies readonly (readonly [keyof StokDegeriCevabi['ayri'], string])[];
+// 1382 d: değerleme yöntemi stok panosunda seçilir; varsayılan güncel kg.
+const YONTEM_ADI: Record<DegerlemeYontemi, string> = { guncel_kg: 'Güncel kg fiyatı', son_alis: 'Son alış fiyatı', hareketli_ortalama: 'Hareketli ortalama' };
+const YONTEMLER = Object.keys(YONTEM_ADI) as DegerlemeYontemi[];
+const stokDegeriSorgusu = (yontem: DegerlemeYontemi) => ({
+  queryKey: [...anahtarlar.hepsi, 'deger', yontem], queryFn: () => api.get<StokDegeriCevabi>(`/stok/deger?yontem=${yontem}`),
+  // Yöntem değişince seçici kaybolmasın: yeni değer gelene kadar kart kalır, sayı "—" olur.
+  placeholderData: keepPreviousData,
+});
+function StokDegeriKarti() {
+  const [yontem, setYontem] = useState<DegerlemeYontemi>('guncel_kg');
+  const q = useQuery(stokDegeriSorgusu(yontem));
+  const d = q.data;
+  // Değer finans rakamıdır (#680): görmeyene kart çizilmez. Yöntem değişirken önceki yöntemin değeri gösterilmez.
+  if (d?.degerGorunur !== true) return null;
+  return (
+    <div className="tc-stok-kpi">
+      <strong>{q.isPlaceholderData ? '—' : d.stokDegeri === null ? 'Veri yok' : paraMetni(d.stokDegeri)}</strong>
+      <span>Stok değeri</span>
+      <select className="tc-alan-kutu" aria-label="Değerleme yöntemi" value={yontem} onChange={(e) => setYontem(e.target.value as DegerlemeYontemi)}>
+        {YONTEMLER.map((y) => <option key={y} value={y}>{YONTEM_ADI[y]}</option>)}
+      </select>
+      {!q.isPlaceholderData && <small>Yalnız kullanılabilir{d.fiyatsizKart ? ` · ${d.fiyatsizKart} kartın fiyatı yok` : ''}</small>}
+      {!q.isPlaceholderData && <small>{AYRI_DEGERLER.map(([k, ad]) => `${ad} ${d.ayri[k] === null ? '—' : paraMetni(d.ayri[k])}`).join(' · ')}</small>}
+    </div>
+  );
+}
 const GUN = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 function Gunluk({ gunluk }: { gunluk: PanelCevabi['gunluk'] }) {
   const enCok = Math.max(1, ...gunluk.flatMap((g) => [g.giris, g.cikis]));
@@ -120,8 +146,7 @@ export function IsKutusu() {
       {d && (
         <div className="tc-stok-kpiler">
           <Link to="/stok/malzemeler" className="tc-stok-kpi"><strong>{d.malzemeCesidi}</strong><span>Malzeme çeşidi</span></Link>
-          {d.degerGorunur && <div className="tc-stok-kpi"><strong>{d.stokDegeri === null ? 'Veri yok' : paraMetni(d.stokDegeri)}</strong><span>Stok değeri</span><small>Ortalama alış fiyatıyla{d.fiyatsizKart ? ` · ${d.fiyatsizKart} kartın fiyatı yok` : ''}</small></div>}
-          {d.degerGorunur && <div className="tc-stok-kpi"><strong>{d.guncelDeger === null ? '—' : paraMetni(d.guncelDeger)}</strong><span>Güncel stok değeri</span><small>Satın alma kg fiyatıyla{d.guncelFiyatsizKart ? ` · ${d.guncelFiyatsizKart} kartın fiyatı yok` : ''}</small><small>Yalnız kullanılabilir · {AYRI_DEGERLER.map(([k, ad]) => `${ad} ${d.guncelAyri[k] === null ? '—' : paraMetni(d.guncelAyri[k])}`).join(' · ')}</small></div>}
+          <StokDegeriKarti />
           <Link to="/stok/raflar" className="tc-stok-kpi"><strong>%{d.gozToplam ? Math.round((d.gozDolu / d.gozToplam) * 100) : 0}</strong><span>Raf doluluğu ({d.gozDolu}/{d.gozToplam})</span></Link>
           <Link to="/stok/malzemeler?durum=kritik" className={`tc-stok-kpi ${d.kritik + d.eksi ? 'tc-stok-kpi-uyari' : ''}`}><strong>{d.kritik + d.eksi}</strong><span>Kritik ya da eksi</span></Link>
           <Link to="/stok/malzemeler?durum=kabulde" className="tc-stok-kpi"><strong>{d.kabulde}</strong><span>Mal kabul bekleyen</span></Link>

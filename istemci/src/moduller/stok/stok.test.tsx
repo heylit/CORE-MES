@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type {
-  AcikSiparisSatirlariCevabi, PartiIziCevabi, LotEtiketi, LotEtiketleriCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
+  AcikSiparisSatirlariCevabi, PartiIziCevabi, LotEtiketi, LotEtiketleriCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, StokDegeriCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, MUDUR, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 import { ApiHatasi, ISTEK_KIMLIGI_BASLIGI } from '../../ortak/veri/api.ts';
@@ -27,8 +27,10 @@ const PANEL = {
   malzemeCesidi: 8, gozDolu: 6, gozToplam: 28, kritik: 1, eksi: 1, kabulde: 2, toplamaBekleyen: 3,
   gunluk: [{ gun: '2026-10-06', giris: 2, cikis: 1 }, { gun: '2026-10-07', giris: 5, cikis: 3 }],
   kritikListe: [{ malzemeId: 5, ad: 'İş eldiveni', kod: 'SR-00002', toplam: '37', kritikSeviye: '50' }],
-  raflar: [{ rafId: 1, kod: 'A', tur: 'palet', dolu: 4, toplam: 12 }], sonHareketler: [], stokDegeri: null, fiyatsizKart: 0, guncelDeger: null, guncelFiyatsizKart: 0, guncelAyri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }, degerGorunur: false,
+  raflar: [{ rafId: 1, kod: 'A', tur: 'palet', dolu: 4, toplam: 12 }], sonHareketler: [],
 } satisfies PanelCevabi;
+const BOS_AYRI = { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null };
+const DEGER = { degerGorunur: true, yontem: 'guncel_kg', stokDegeri: null, fiyatsizKart: 0, ayri: BOS_AYRI } satisfies StokDegeriCevabi;
 const AYRINTI = {
   satir: SATIR, bakiyeler: [BAKIYE], ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null }, sonHareketler: [], statuKirilimi: [], tanimliStatuler: [], rezerveler: [], bekleyenler: [],
 } satisfies MalzemeAyrintiCevabi;
@@ -42,46 +44,42 @@ describe('İş kutusu', () => {
     expect(screen.queryByRole('button', { name: /Mal kabul/ })).toBeNull();
   });
   it('önizlemedeki gösterge kartlarını, kritik stoğu ve raf doluluğunu gösterir; stok değerini uydurmaz', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, { ...PANEL, degerGorunur: true } satisfies PanelCevabi) });
+    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL), 'GET /stok/deger': () => json(200, DEGER) });
     ac('/stok');
     expect(await screen.findByText('Malzeme çeşidi')).toBeTruthy();
     expect(screen.getByText('%21')).toBeTruthy();
-    expect(screen.getByText('Veri yok')).toBeTruthy();
+    expect(await screen.findByText('Veri yok')).toBeTruthy();
     expect(screen.getByText('37 / 50')).toBeTruthy();
     expect(screen.getByText('Raf A')).toBeTruthy();
     expect(screen.getByRole('img', { name: /Son yedi günün/ })).toBeTruthy();
   });
-  it('stok değeri ortalama alış fiyatıyla TRY gösterilir; fiyatı olmayan kart sayısı söylenir', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, { ...PANEL, stokDegeri: '1234567.50', fiyatsizKart: 2, degerGorunur: true } satisfies PanelCevabi) });
+  it('1382 d: stok değeri seçilen yöntemle; varsayılan güncel kg; fiyatsız kart sayısı ve ayrı değerlenen gruplar söylenir, sıfır uydurulmaz', async () => {
+    const istekler = sunucuKur(OKUYUCU, {
+      'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL),
+      'GET /stok/deger?yontem=guncel_kg': () => json(200, { ...DEGER, stokDegeri: '600', fiyatsizKart: 3 } satisfies StokDegeriCevabi),
+      'GET /stok/deger?yontem=hareketli_ortalama': () => json(200, { ...DEGER, yontem: 'hareketli_ortalama', stokDegeri: '1234567.50', fiyatsizKart: 0,
+        ayri: { kalite: '30', hurda: '150', fason: null, yolda: '20.5', diger: null, toplam: '800.5' } } satisfies StokDegeriCevabi),
+    });
     ac('/stok');
-    expect(await screen.findByText('1.234.567,50 ₺')).toBeTruthy();
-    expect(screen.getByText('Ortalama alış fiyatıyla · 2 kartın fiyatı yok')).toBeTruthy();
-  });
-  it('güncel stok değeri satın alma kg fiyatıyla ayrı gösterilir; fiyatı yoksa sıfır değil "—", fiyatsız kart sayısı söylenir', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, { ...PANEL, guncelDeger: '600', guncelFiyatsizKart: 3, degerGorunur: true } satisfies PanelCevabi) });
-    ac('/stok');
-    const kutu = (await screen.findByText('Güncel stok değeri')).closest('div')!;
-    expect(within(kutu).getByText('600,00 ₺')).toBeTruthy();
-    expect(within(kutu).getByText('Satın alma kg fiyatıyla · 3 kartın fiyatı yok')).toBeTruthy();
-    expect(within(kutu).getByText('Yalnız kullanılabilir · Kalite bekleyen / red — · Hurda — · Fason — · Yolda — · Üretimde ve diğer — · Toplam —')).toBeTruthy();
-    expect(screen.getByText('Stok değeri')).toBeTruthy();
-    cleanup();
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, { ...PANEL, degerGorunur: true } satisfies PanelCevabi) });
-    ac('/stok');
-    expect(within((await screen.findByText('Güncel stok değeri')).closest('div')!).getByText('—')).toBeTruthy();
-    cleanup();
-    // 228 a: hurda, fason ve yoldaki değer güncel değerin dışında, kendi satırında.
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, { ...PANEL, guncelDeger: '600', guncelAyri: { kalite: '30', hurda: '150', fason: null, yolda: '20.5', diger: null, toplam: '800.5' }, degerGorunur: true } satisfies PanelCevabi) });
-    ac('/stok');
-    const ayri = (await screen.findByText('Güncel stok değeri')).closest('div')!;
-    expect(within(ayri).getByText('Yalnız kullanılabilir · Kalite bekleyen / red 30,00 ₺ · Hurda 150,00 ₺ · Fason — · Yolda 20,50 ₺ · Üretimde ve diğer — · Toplam 800,50 ₺')).toBeTruthy();
+    const kutu = (await screen.findByText('Stok değeri')).closest('div')!;
+    expect(await within(kutu).findByText('600,00 ₺')).toBeTruthy();
+    expect(within(kutu).getByText('Yalnız kullanılabilir · 3 kartın fiyatı yok')).toBeTruthy();
+    expect(within(kutu).getByText('Kalite bekleyen / red — · Hurda (talaş) — · Fason — · Yolda — · Üretimde ve diğer — · Toplam —')).toBeTruthy();
+    const secici = within(kutu).getByRole('combobox', { name: 'Değerleme yöntemi' }) as HTMLSelectElement;
+    expect([secici.value, [...secici.options].map((o) => o.textContent)]).toEqual(['guncel_kg', ['Güncel kg fiyatı', 'Son alış fiyatı', 'Hareketli ortalama']]);
+    fireEvent.change(secici, { target: { value: 'hareketli_ortalama' } });
+    expect(await within(kutu).findByText('1.234.567,50 ₺')).toBeTruthy();
+    expect(within(kutu).getByText('Yalnız kullanılabilir')).toBeTruthy();
+    expect(within(kutu).getByText('Kalite bekleyen / red 30,00 ₺ · Hurda (talaş) 150,00 ₺ · Fason — · Yolda 20,50 ₺ · Üretimde ve diğer — · Toplam 800,50 ₺')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/deger')).map((i) => i.yol)).toEqual(['/stok/deger?yontem=guncel_kg', '/stok/deger?yontem=hareketli_ortalama']);
   });
   it('stok değeri finans rakamıdır: değeri görmeyen (degerGorunur false) göstergeyi hiç görmez', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL) });
+    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL),
+      'GET /stok/deger': () => json(200, { ...DEGER, degerGorunur: false } satisfies StokDegeriCevabi) });
     ac('/stok');
     await screen.findByText('Malzeme çeşidi');
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: 'Değerleme yöntemi' })).toBeNull());
     expect(screen.queryByText('Stok değeri')).toBeNull();
-    expect(screen.queryByText('Güncel stok değeri')).toBeNull();
   });
   it('sayı şeridi mal kabul ve toplama bekleyenleri kendi listelerine bağlar', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL) });

@@ -417,30 +417,42 @@ export const panelCevabi = z.object({
   kritikListe: z.array(z.object({ malzemeId: z.number().int(), ad: z.string().nullable(), kod: z.string().nullable(), toplam: ondalikMetinSemasi, kritikSeviye: ondalikMetinSemasi })),
   raflar: z.array(z.object({ rafId: z.number().int(), kod: z.string(), tur: z.enum(RAF_TURLERI), dolu: z.number().int(), toplam: z.number().int() })),
   sonHareketler: z.array(hareket),
-  // Ağırlıklı ortalama alış fiyatıyla TRY (#544). Fiyatlı stoklu kart yoksa null; fiyatı olmayan stoklu kartlar değere katılmaz, sayılır.
+});
+export type PanelCevabi = z.output<typeof panelCevabi>;
+// ---- Stok değeri (1382 d) ------------------------------------------------------------------------------------------------
+// Üç yöntem, tek hesap: güncel kg (satın almanın o gün geçerli kg fiyatından stok birimi fiyatı), son alış (geri alınmamış en son
+// mal kabulün net fiyatı) ve hareketli ortalama (her mal kabulde eldeki miktarla yeniden ortalanan net fiyat; çıkış ortalamayı
+// değiştirmez, geri alınan mal kabul kendi fiyatıyla çıkar). Net: teklif satırı ve teklif iskontosu düşülür. Hurda her yöntemde
+// talaş kg fiyatıyladır. Varsayılan güncel kg.
+export const DEGERLEME_YONTEMLERI = ['guncel_kg', 'son_alis', 'hareketli_ortalama'] as const;
+export type DegerlemeYontemi = (typeof DEGERLEME_YONTEMLERI)[number];
+export const stokDegeriSorgusu = z.object({ yontem: z.enum(DEGERLEME_YONTEMLERI).default('guncel_kg') });
+// 228 a: değer ve fiyatsız sayısı yalnız kullanılabilir stoktandır (raf, kabul, zemin; statüsüz; serbest ya da şartlı). Kalite
+// bekleyen ve red (karantina dahil), hurda, fason, yolda (sevkiyat dahil) ve diğer (üretimde, ara alan) ayrı değerlenir; toplam
+// bütün stoktur. Fiyatı olmayan stoklu kart değere katılmaz, sayılır; fiyatlı kart yoksa değer null (sıfır uydurulmaz).
+// Değer yalnız finans rakamlarını görene (finans.oku) hesaplanır; değilse degerGorunur false, değerler null, sayı 0 (#680).
+export const stokDegeriCevabi = z.object({
+  degerGorunur: z.boolean(),
+  yontem: z.enum(DEGERLEME_YONTEMLERI),
   stokDegeri: ondalikMetinSemasi.nullable(),
   fiyatsizKart: z.number().int(),
-  // Güncel değer: eldeki miktar x satın almanın kg fiyatından birim fiyatı (TRY). Birim fiyatı olmayan kart (kalitesi fiyatsız ya da
-  // kg ağırlığı bilinmiyor) değere katılmaz, sayılır; hiçbiri fiyatlı değilse null.
-  guncelDeger: ondalikMetinSemasi.nullable(),
-  guncelFiyatsizKart: z.number().int(),
-  // 228 a: güncel değer ve fiyatsız sayısı yalnız kullanılabilir stoktandır (raf, kabul, zemin; statüsüz; serbest ya da şartlı). Kalite
-  // bekleyen ve red (karantina dahil), hurda, fason, yolda (sevkiyat dahil) ve diğer (üretimde, ara alan) aynı fiyatla ayrı değerlenir;
-  // toplam bütün stoktur. Fiyatlı kart yoksa null.
-  guncelAyri: z.object({
+  ayri: z.object({
     kalite: ondalikMetinSemasi.nullable(), hurda: ondalikMetinSemasi.nullable(), fason: ondalikMetinSemasi.nullable(),
     yolda: ondalikMetinSemasi.nullable(), diger: ondalikMetinSemasi.nullable(), toplam: ondalikMetinSemasi.nullable(),
   }),
-  // Değer yalnız finans rakamlarını görene (finans.oku) hesaplanır ve gösterilir; değilse false, değer null, sayı 0 (#680).
-  degerGorunur: z.boolean(),
 });
-export type PanelCevabi = z.output<typeof panelCevabi>;
-// Yönetici paneli (#1079): son `ay` ayın ay sonu stok değeri, eskiden yeniye; içinde bulunulan ayın noktası bugündür.
-// Ay sonu miktarı bugünkü bakiyeden sonraki hareketler geri sarılarak bulunur; fiyat bugünkü ağırlıklı ortalama alış fiyatıdır
-// (geçmiş fiyat tutulmaz). Seri panel gibi yalnız finans.oku görene hesaplanır; değilse degerGorunur false, aylar boş.
-export const aylikStokDegeriSorgusu = z.object({ ay: z.coerce.number().int().min(1).max(24).default(12) });
+export type StokDegeriCevabi = z.output<typeof stokDegeriCevabi>;
+// Yönetici paneli (#1079): son `ay` ayın ay sonu stok değeri (bütün stok), eskiden yeniye; içinde bulunulan ayın noktası bugündür.
+// Ay sonu miktarı bugünkü bakiyeden sonraki hareketler geri sarılarak bulunur; fiyat seçilen yöntemle o ayın sonundaki fiyattır
+// (kg fiyatı ve kuru o günün, alış fiyatı o güne kadarki mal kabullerin). Seri yalnız finans.oku görene hesaplanır; değilse
+// degerGorunur false, aylar boş.
+export const aylikStokDegeriSorgusu = z.object({
+  ay: z.coerce.number().int().min(1).max(24).default(12),
+  yontem: z.enum(DEGERLEME_YONTEMLERI).default('guncel_kg'),
+});
 export const aylikStokDegeriCevabi = z.object({
   degerGorunur: z.boolean(),
+  yontem: z.enum(DEGERLEME_YONTEMLERI),
   aylar: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), stokDegeri: ondalikMetinSemasi.nullable(), fiyatsizKart: z.number().int() })),
 });
 export type AylikStokDegeriCevabi = z.output<typeof aylikStokDegeriCevabi>;

@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
-  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, malKabulAyrintiCevabi,
+  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, malKabulAyrintiCevabi,
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
@@ -40,7 +40,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/ozet', yetki: 'oturum', cevap: stokOzetiCevabi, isle: ({ db, kullanici }) => s.stokOzeti(db, kullanici.islemler) }),
   uc({ yontem: 'GET', yol: '/stok/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => s.menuSayaclari(db, kullanici.islemler, kullanici.id) }),
   uc({ yontem: 'GET', yol: '/stok/panel', yetki: OKUMA, cevap: panelCevabi, isle: ({ db, kullanici }) => s.panel(db, kullanici.islemler) }),
-  uc({ yontem: 'GET', yol: '/stok/panel/aylik-deger', yetki: OKUMA, sorgu: aylikStokDegeriSorgusu, cevap: aylikStokDegeriCevabi, isle: ({ db, kullanici, sorgu }) => s.aylikStokDegeri(db, kullanici.islemler, sorgu.ay) }),
+  // 1382 d: değer finans rakamıdır (#680); stoğu okuyan uca ulaşır, değeri yalnız finans.oku olan görür.
+  uc({ yontem: 'GET', yol: '/stok/deger', yetki: OKUMA, sorgu: stokDegeriSorgusu, cevap: stokDegeriCevabi, isle: ({ db, kullanici, sorgu }) => s.stokDegeriOku(db, kullanici.islemler, sorgu.yontem) }),
+  uc({ yontem: 'GET', yol: '/stok/panel/aylik-deger', yetki: OKUMA, sorgu: aylikStokDegeriSorgusu, cevap: aylikStokDegeriCevabi, isle: ({ db, kullanici, sorgu }) => s.aylikStokDegeri(db, kullanici.islemler, sorgu.ay, sorgu.yontem) }),
   // Teslim paneli (stok.istek) parçanın statüsünü adıyla gösterir; statü adı stok miktarı taşımaz (Akış A provası D2).
   uc({ yontem: 'GET', yol: '/stok/statuler', yetki: { biri: [...OKUMA.biri, 'stok.istek'] }, cevap: statulerCevabi, isle: ({ db }) => s.statuler(db) }),
   uc({ yontem: 'GET', yol: '/stok/depolar', yetki: OKUMA, cevap: depolarCevabi, isle: ({ db }) => s.depoListesi(db) }),

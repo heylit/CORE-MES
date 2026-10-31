@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { AylikStokDegeriCevabi, PanelCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { AylikStokDegeriCevabi, PanelCevabi, StokDegeriCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { gorunenKartlar } from '../../ortak/rota/ana-sayfa.ts';
 import { anaSayfaKartlari } from './ana-sayfa.tsx';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
@@ -11,7 +11,9 @@ const OZET_KARTLARI = anaSayfaKartlari.filter((k) => k.bolum !== 'yonetim');
 const YONETIM_KARTLARI = anaSayfaKartlari.filter((k) => k.bolum === 'yonetim');
 const PANEL: PanelCevabi = {
   malzemeCesidi: 8, gozDolu: 6, gozToplam: 28, kritik: 2, eksi: 1, kabulde: 0, toplamaBekleyen: 0, gunluk: [], kritikListe: [], raflar: [], sonHareketler: [],
-  stokDegeri: '1234567.50', fiyatsizKart: 4, guncelDeger: null, guncelFiyatsizKart: 0, guncelAyri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }, degerGorunur: true,
+};
+const DEGER: StokDegeriCevabi = {
+  degerGorunur: true, yontem: 'guncel_kg', stokDegeri: null, fiyatsizKart: 0, ayri: { kalite: null, hurda: null, fason: null, yolda: '1234567.50', diger: null, toplam: '1234567.50' },
 };
 
 function panoyuAc(kartlar = OZET_KARTLARI) {
@@ -49,20 +51,24 @@ describe('Rol panosu kartları', () => {
     expect((await screen.findAllByText('Alınamadı')).length).toBe(4);
   });
 
-  it('Şirket özeti: stok değeri yalnız kullanılabilir stoktan (228 a, denetim #36) tam TL ve fiyatsız kart sayısı, kritik ile eksi toplamı; tek panel isteği', async () => {
-    const istekler = sunucuKur(DEPOCU, { 'GET /stok/panel': () => json(200, { ...PANEL, guncelDeger: '987654.40', guncelFiyatsizKart: 2 } satisfies PanelCevabi) });
+  it('Şirket özeti: stok değeri yalnız kullanılabilir stoktan (228 a, denetim #36) güncel kg fiyatıyla (1382 d) tam TL ve fiyatsız kart sayısı, kritik ile eksi toplamı', async () => {
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/panel': () => json(200, PANEL),
+      'GET /stok/deger': () => json(200, { ...DEGER, stokDegeri: '987654.40', fiyatsizKart: 2 } satisfies StokDegeriCevabi),
+    });
     panoyuAc(YONETIM_KARTLARI);
     await screen.findByText('987.654');
     expect(kart('Stok değeri').textContent).not.toContain('1.234.568');
-    expect(kart('Stok değeri').textContent).toContain('Yalnız kullanılabilir · TL, satın alma kg fiyatıyla · 2 kartın fiyatı yok');
+    expect(kart('Stok değeri').textContent).toContain('Yalnız kullanılabilir · TL, güncel kg fiyatıyla · 2 kartın fiyatı yok');
     expect(kart('Kritik ya da eksi stok').textContent).toContain('3');
     expect(kart('Kritik ya da eksi stok').getAttribute('href')).toBe('/stok/malzemeler?durum=kritik');
     expect(istekler.filter((i) => i.yol === '/stok/panel')).toHaveLength(1);
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/deger')).map((i) => i.yol)).toEqual(['/stok/deger?yontem=guncel_kg']);
     cleanup();
-    sunucuKur(DEPOCU, { 'GET /stok/panel': () => json(200, { ...PANEL, guncelDeger: null, guncelFiyatsizKart: 0 } satisfies PanelCevabi) });
+    sunucuKur(DEPOCU, { 'GET /stok/panel': () => json(200, PANEL), 'GET /stok/deger': () => json(200, DEGER) });
     panoyuAc(YONETIM_KARTLARI);
     await vi.waitFor(() => expect(kart('Stok değeri').textContent).toContain('Veri yok'));
-    expect(kart('Stok değeri').textContent).toContain('TL, satın alma kg fiyatıyla');
+    expect(kart('Stok değeri').textContent).toContain('TL, güncel kg fiyatıyla');
     expect(kart('Stok değeri').textContent).not.toContain('kartın fiyatı yok');
   });
 
@@ -94,8 +100,9 @@ describe('Rol panosu kartları', () => {
   it('#1085: şirket özetinde son 7 günün giriş ve çıkışı iki seriyle; değer finans yetkisi olmayana nedeniyle boş; aylık değer boş durumda', async () => {
     const gunluk = [{ gun: '2026-10-12', giris: 4, cikis: 0 }, { gun: '2026-10-13', giris: 1, cikis: 3 }];
     sunucuKur(DEPOCU, {
-      'GET /stok/panel': () => json(200, { ...PANEL, gunluk, stokDegeri: null, degerGorunur: false } satisfies PanelCevabi),
-      'GET /stok/panel/aylik-deger': () => json(200, { degerGorunur: false, aylar: [] } satisfies AylikStokDegeriCevabi),
+      'GET /stok/panel': () => json(200, { ...PANEL, gunluk } satisfies PanelCevabi),
+      'GET /stok/deger': () => json(200, { ...DEGER, degerGorunur: false } satisfies StokDegeriCevabi),
+      'GET /stok/panel/aylik-deger': () => json(200, { degerGorunur: false, yontem: 'guncel_kg', aylar: [] } satisfies AylikStokDegeriCevabi),
     });
     panoyuAc(YONETIM_KARTLARI);
     const tablo = await screen.findByRole('table', { name: 'Stok hareketi, son 7 gün' });
@@ -118,12 +125,13 @@ describe('Rol panosu kartları', () => {
     ];
     const istekler = sunucuKur(DEPOCU, {
       'GET /stok/panel': () => json(200, PANEL),
-      'GET /stok/panel/aylik-deger': () => json(200, { degerGorunur: true, aylar } satisfies AylikStokDegeriCevabi),
+      'GET /stok/panel/aylik-deger': () => json(200, { degerGorunur: true, yontem: 'guncel_kg', aylar } satisfies AylikStokDegeriCevabi),
     });
     panoyuAc(YONETIM_KARTLARI);
     const aylik = (await screen.findByText('Stok değeri, aylık', { selector: '.tc-grafik-baslik' })).closest('.tc-grafik-karti');
     await vi.waitFor(() => expect(aylik?.querySelector('.tc-grafik-son')?.textContent).toBe('4.700.000 TL'));
     expect([...(aylik?.querySelectorAll('table tr') ?? [])].map((r) => r.textContent)).toEqual(['08.263.900.000 TL', '10.264.700.000 TL']);
-    expect(istekler.filter((i) => i.yol === '/stok/panel/aylik-deger')).toHaveLength(1);
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/panel/aylik-deger')).map((i) => i.yol)).toEqual(['/stok/panel/aylik-deger?yontem=guncel_kg']);
+    expect(aylik?.textContent).toContain('Ay sonu, o günün kg fiyatıyla');
   });
 });

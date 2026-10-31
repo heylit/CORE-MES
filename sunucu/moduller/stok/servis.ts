@@ -20,7 +20,7 @@ import type {
   AcikSiparisSatirlariCevabi, BakiyeSatiri, KaliteDurumu, CikisKomutu, CikisOnerisiCevabi, DepolarCevabi, Hareket, HareketCevabi, HareketlerListesi, IsKutusuCevabi, Konum, KonumAyrintiCevabi,
   KonumlarListesi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, MalzemeAyarKomutu,
   FasonIsleriCevabi, MalzemeAyrintiCevabi, RezervelerCevabi, RezerveEtKomutu, RezerveKaldirKomutu, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi, PartilerListesi, Raf,
-  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi,
+  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi, StokDegeriCevabi, DegerlemeYontemi,
   FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu, StoktanDusKomutu, TeslimKomutu,
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
@@ -43,7 +43,7 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { basladigiGunTakvimi } from '../vardiya/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { gkkGerekenKartlar, malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
+import { degerlemeKgFiyatlari, malKabulFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisFaturalari } from '../finans/disari.ts';
 import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKabulunuGeriAl, depoKalemiAl, emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
@@ -54,7 +54,7 @@ import {
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
-  binde, bindenMetin, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, ilkGirisBirlesik, kalanAmbalajAdedi, partiDenetimi, partiEtiketi, partiGereksinimi, statuAramasi, statuDegisimiEngeli, statuKirilimi, statuKodlari, stokDegeri, stoksuzStatuler, stoklanirMi,
+  binde, bindenMetin, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, ilkGirisBirlesik, kalanAmbalajAdedi, partiDenetimi, partiEtiketi, partiGereksinimi, statuAramasi, statuDegisimiEngeli, statuKirilimi, statuKodlari, stokDegeri, alisFiyatlari, DEGER_GRUPLARI, stoksuzStatuler, stoklanirMi,
   bolmeNo, malKabulGozOnerisi, partiSec, rafGozleri, rotaSirala, sayimFarki, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, stokDurumu, tersYon,
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
@@ -687,40 +687,72 @@ export async function panel(db: Db, islemler: readonly string[]): Promise<PanelC
     kritikListe,
     raflar: raflar.map((r) => ({ rafId: r.id, kod: r.kod, tur: r.tur, dolu: r.doluGoz, toplam: r.toplamGoz })),
     sonHareketler: await hareketleriCevir(db, son),
-    ...(islemler.includes('finans.oku') ? { ...(await stokDegeriHesapla(db)), degerGorunur: true }
-      : { stokDegeri: null, fiyatsizKart: 0, guncelDeger: null, guncelFiyatsizKart: 0, guncelAyri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }, degerGorunur: false }),
   };
 }
-async function stokDegeriHesapla(db: Db): Promise<Pick<PanelCevabi, 'stokDegeri' | 'fiyatsizKart' | 'guncelDeger' | 'guncelFiyatsizKart' | 'guncelAyri'>> {
-  const toplamlar = await sorgular.stokluMalzemeToplamlari(db);
-  const nolar = toplamlar.map((t) => t.malzemeId);
-  const fiyatlar = await ortalamaAlisFiyatlari(db, nolar);
-  const d = stokDegeri(toplamlar, new Map([...fiyatlar].map(([no, f]) => [no, f.tryBirimFiyat])));
-  const kg = new Map([...(await malzemeKgFiyatlari(db, nolar))].map(([no, f]) => [no, f.tryBirimFiyati]));
+// ---- Stok değeri (1382 d): üç yöntemin tek hesabı ---------------------------------------------------------------------------
+// Kesim: `son` o andan önceki mal kabuller (null bütün geçmiş), `gun` kg fiyatının ve kurun günü (null bugün). Hurda her yöntemde
+// talaş fiyatıyladır; fiyatı satın almadan (disari) gelir, eldeki miktar ve mal kabul sırası stoğundur.
+interface Kesim { son: string | null; gun: string | null }
+interface KesimFiyati { fiyat: ReadonlyMap<number, string | null>; talas: ReadonlyMap<number, string | null> }
+async function degerlemeFiyatlari(db: Db, yontem: DegerlemeYontemi, malzemeIdler: readonly number[], kesimler: readonly Kesim[]): Promise<KesimFiyati[]> {
+  const nolar = [...new Set(malzemeIdler)];
+  let alis: Map<number, { ortalama: string | null; sonAlis: string | null }>[] = [];
+  if (yontem !== 'guncel_kg' && nolar.length > 0) {
+    const olaylar = await sorgular.degerlemeAlisOlaylari(db, nolar);
+    const fiyat = await malKabulFiyatlari(db, olaylar.map((o) => o.malKabulSatirId));
+    alis = alisFiyatlari(olaylar.map((o) => ({ ...o, fiyat: fiyat.get(o.malKabulSatirId) ?? null })), kesimler.map((k) => k.son));
+  }
+  const sonuc: KesimFiyati[] = [];
+  for (const [i, k] of kesimler.entries()) {
+    const kg = await degerlemeKgFiyatlari(db, nolar, k.gun);
+    const alisFiyati = (no: number) => { const f = alis[i]?.get(no); return (yontem === 'son_alis' ? f?.sonAlis : f?.ortalama) ?? null; };
+    sonuc.push({
+      fiyat: new Map(nolar.map((no) => [no, yontem === 'guncel_kg' ? kg.get(no)?.tryBirimFiyati ?? null : alisFiyati(no)])),
+      talas: new Map(nolar.map((no) => [no, kg.get(no)?.tryTalasBirimFiyati ?? null])),
+    });
+  }
+  return sonuc;
+}
+const kurusa = (d: string): bigint => BigInt(d.replace('.', ''));
+const kurustan = (k: bigint): string => `${k / 100n}.${(k % 100n).toString().padStart(2, '0')}`;
+// Ayrı fiyatla değerlenen satırların (hurda ve öteki) değeri: fiyatlı kart yoksa null, fiyatsız kartlar sayılır.
+function degerleriTopla(l: readonly { deger: string | null; fiyatsizKart: number }[]): { deger: string | null; fiyatsizKart: number } {
+  const fiyatli = l.flatMap((x) => (x.deger === null ? [] : [kurusa(x.deger)]));
+  return { deger: fiyatli.length === 0 ? null : kurustan(fiyatli.reduce((a, b) => a + b, 0n)), fiyatsizKart: l.reduce((a, x) => a + x.fiyatsizKart, 0) };
+}
+function hurdaAyriDeger(l: readonly { malzemeId: number; toplam: string; hurda: boolean }[], f: KesimFiyati): { deger: string | null; fiyatsizKart: number } {
+  return degerleriTopla([stokDegeri(l.filter((x) => !x.hurda), f.fiyat), stokDegeri(l.filter((x) => x.hurda), f.talas)]);
+}
+
+export async function stokDegeriOku(db: Db, islemler: readonly string[], yontem: DegerlemeYontemi): Promise<StokDegeriCevabi> {
+  if (!islemler.includes('finans.oku')) {
+    return { degerGorunur: false, yontem, stokDegeri: null, fiyatsizKart: 0, ayri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null } };
+  }
   const gruplar = await sorgular.degerGrubuMalzemeToplamlari(db);
-  const grup = (g: (typeof gruplar)[number]['grup']) => stokDegeri(gruplar.filter((x) => x.grup === g), kg);
-  const g = grup('kullanilabilir');
+  const [f] = await degerlemeFiyatlari(db, yontem, gruplar.map((g) => g.malzemeId), [{ son: null, gun: null }]);
+  const grup = (g: (typeof gruplar)[number]['grup']) => stokDegeri(gruplar.filter((x) => x.grup === g), g === 'hurda' ? f!.talas : f!.fiyat);
+  const d = Object.fromEntries(DEGER_GRUPLARI.map((g) => [g, grup(g)])) as Record<(typeof DEGER_GRUPLARI)[number], ReturnType<typeof stokDegeri>>;
   return {
-    stokDegeri: d.deger, fiyatsizKart: d.fiyatsizKart, guncelDeger: g.deger, guncelFiyatsizKart: g.fiyatsizKart,
-    guncelAyri: {
-      kalite: grup('kalite').deger, hurda: grup('hurda').deger, fason: grup('fason').deger, yolda: grup('yolda').deger, diger: grup('diger').deger,
-      toplam: stokDegeri(toplamlar, kg).deger,
+    degerGorunur: true, yontem, stokDegeri: d.kullanilabilir.deger, fiyatsizKart: d.kullanilabilir.fiyatsizKart,
+    ayri: {
+      kalite: d.kalite.deger, hurda: d.hurda.deger, fason: d.fason.deger, yolda: d.yolda.deger, diger: d.diger.deger,
+      toplam: degerleriTopla(Object.values(d)).deger,
     },
   };
 }
 
 // Yönetici paneli (#1079): ay sonu stok değeri serisi. Ay listesi verisiz aylarda da tamdır; stoksuz ay null değerlidir.
-export async function aylikStokDegeri(db: Db, islemler: readonly string[], ay: number): Promise<AylikStokDegeriCevabi> {
-  if (!islemler.includes('finans.oku')) return { degerGorunur: false, aylar: [] };
+export async function aylikStokDegeri(db: Db, islemler: readonly string[], ay: number, yontem: DegerlemeYontemi): Promise<AylikStokDegeriCevabi> {
+  if (!islemler.includes('finans.oku')) return { degerGorunur: false, yontem, aylar: [] };
   const satirlar = await sorgular.aySonuMalzemeToplamlari(db, ay);
-  const kartli = satirlar.flatMap((x) => (x.malzemeId === null || x.toplam === null ? [] : [{ ay: x.ay, malzemeId: x.malzemeId, toplam: x.toplam }]));
-  const fiyatlar = await ortalamaAlisFiyatlari(db, [...new Set(kartli.map((x) => x.malzemeId))]);
-  const tryFiyat = new Map([...fiyatlar].map(([no, f]) => [no, f.tryBirimFiyat]));
+  const aylar = [...new Map(satirlar.map((x) => [x.ay, { ay: x.ay, son: x.son, gun: x.son === null ? null : x.gun }])).values()];
+  const kartli = satirlar.flatMap((x) => (x.malzemeId === null || x.toplam === null ? [] : [{ ay: x.ay, malzemeId: x.malzemeId, toplam: x.toplam, hurda: x.hurda === true }]));
+  const fiyatlar = await degerlemeFiyatlari(db, yontem, kartli.map((x) => x.malzemeId), aylar);
   return {
-    degerGorunur: true,
-    aylar: [...new Set(satirlar.map((x) => x.ay))].map((a) => {
-      const d = stokDegeri(kartli.filter((x) => x.ay === a), tryFiyat);
-      return { ay: a, stokDegeri: d.deger, fiyatsizKart: d.fiyatsizKart };
+    degerGorunur: true, yontem,
+    aylar: aylar.map((a, i) => {
+      const d = hurdaAyriDeger(kartli.filter((x) => x.ay === a.ay), fiyatlar[i]!);
+      return { ay: a.ay, stokDegeri: d.deger, fiyatsizKart: d.fiyatsizKart };
     }),
   };
 }

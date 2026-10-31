@@ -11,10 +11,10 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import { STOK_IKINCI_MENU } from '#paylasilan/sayfalar/stok.ts';
 import {
   cikisOnerisiCevabi, emirTamamlamaCevabi, hareketlerCevabi, isKutusuCevabi, konumAyrintiCevabi, malKabulAyrintiCevabi, malKabulCevabi, malzemeAyrintiCevabi, malzemelerCevabi,
-  araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
+  araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, LotEtiketleriCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, PanelCevabi, Raf, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, LotEtiketleriCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, PanelCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/plan-stok-komutlari.ts';
@@ -1251,36 +1251,52 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual((await o().vt.tx((db) => kayitlaraBagliBelgeler(db, 'satin-alma', [ss2]))).get(ss2) ?? [], []);
   });
 
-  test('stok değeri (#544): eldeki miktar x ağırlıklı ortalama alış fiyatı (TRY); fiyatı olmayan stoklu kart sayılır; yalnız finans.oku görür', async () => {
-    const kurus = (d: string | null) => (d === null ? 0n : BigInt(d.replace('.', '')));
-    const once = await mudur<PanelCevabi>('GET', '/stok/panel');
-    assert.equal(once.durum, 200, JSON.stringify(once.govde));
-    const [k, fiyatsiz] = [await kart('sarf'), await kart('sarf')];
-    const fiyatliTeslim = async (fiyat: number) => {
-      const ss = await siparisSatiri('5', 'siparis_verildi', k);
-      await o().sahip.sorgu(`INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat)
-        SELECT talep_id, teklif_id, kalem_id, $2 FROM satin_alma_siparis_satiri WHERE id = $1`, [ss, fiyat]);
-      assert.equal((await malKabul(k, '5', { siparisSatirId: ss })).durum, 200);
-    };
-    await fiyatliTeslim(245.5);
-    await malKabul(fiyatsiz, '3');
-    const sonra = await mudur<PanelCevabi>('GET', '/stok/panel');
-    panelCevabi.parse(sonra.govde);
-    // Değer finans rakamıdır (#680): depo stoğu okur ama değeri görmez; uç hesaplamaz.
-    const depocu = await depo<PanelCevabi>('GET', '/stok/panel');
-    assert.deepEqual([depocu.govde.degerGorunur, depocu.govde.stokDegeri, depocu.govde.fiyatsizKart, sonra.govde.degerGorunur], [false, null, 0, true]);
-    assert.equal(kurus(sonra.govde.stokDegeri) - kurus(once.govde.stokDegeri), 122750n);
-    assert.equal(sonra.govde.fiyatsizKart - once.govde.fiyatsizKart, 1);
-    // İkinci teslim 5 x 100: ortalama (5 x 245.5 + 5 x 100) / 10 = 172.75; eldeki 10 x 172.75 = 1727.50 (son fiyat 100 olsaydı 1000).
-    await fiyatliTeslim(100);
-    const iki = await mudur<PanelCevabi>('GET', '/stok/panel');
-    assert.equal(kurus(iki.govde.stokDegeri) - kurus(once.govde.stokDegeri), 172750n);
+  // 1382 d: üç yöntem tek uçtan; değer yalnız kullanılabilir stoktan, öteki gruplar ayrı.
+  const kurus = (d: string | null) => (d === null ? 0n : BigInt(d.replace('.', '')));
+  const deger = async (yontem: string) => {
+    const r = await mudur<StokDegeriCevabi>('GET', `/stok/deger?yontem=${yontem}`);
+    assert.equal(r.durum, 200, JSON.stringify(r.govde));
+    return stokDegeriCevabi.parse(r.govde);
+  };
+  // Sipariş satırına net fiyat: teklif satırının birim fiyatı ve teklifin iskontosu.
+  async function fiyatliSiparis(malzemeNo: number, fiyat: number, iskonto = 0): Promise<number> {
+    const ss = await siparisSatiri('5', 'siparis_verildi', malzemeNo);
+    await o().sahip.sorgu(`INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat)
+      SELECT talep_id, teklif_id, kalem_id, $2 FROM satin_alma_siparis_satiri WHERE id = $1`, [ss, fiyat]);
+    await o().sahip.sorgu(`UPDATE satin_alma_teklif q SET iskonto_yuzdesi = $2 FROM satin_alma_siparis_satiri s
+      WHERE s.id = $1 AND q.talep_id = s.talep_id AND q.id = s.teklif_id`, [ss, iskonto]);
+    return ss;
+  }
+
+  test('1382 d stok değeri: hareketli ortalama (çıkış ortalamayı değiştirmez), son alış ve güncel kg; net fiyat; geri alınan mal kabul çıkar; yalnız finans.oku görür', async () => {
+    const yontemler = ['hareketli_ortalama', 'son_alis', 'guncel_kg'] as const;
+    const oku = async () => Object.fromEntries(await Promise.all(yontemler.map(async (y) => [y, await deger(y)] as const))) as Record<(typeof yontemler)[number], StokDegeriCevabi>;
+    const once = await oku();
+    const k = await kart('sarf');
+    assert.equal((await malKabul(k, '5', { siparisSatirId: await fiyatliSiparis(k, 100) })).durum, 200);
+    assert.equal((await depo('POST', '/stok/cikis', { malzemeId: k, konumId: await konumId('KABUL'), miktar: '4', cikisNedeni: 'fire' })).durum, 200);
+    const ikinci = await malKabul(k, '5', { siparisSatirId: await fiyatliSiparis(k, 200, 10) });
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    let sonra = await oku();
+    // Eldeki 1 x 100, gelen 5 x 180 (iskonto %10): (100 + 900) / 6 = 166.6667; 6 x 166.6667 = 1000.00. Ağırlıklı ortalama 140 olurdu.
+    const fark = (y: (typeof yontemler)[number]) => kurus(sonra[y].stokDegeri) - kurus(once[y].stokDegeri);
+    assert.deepEqual([fark('hareketli_ortalama'), fark('son_alis'), fark('guncel_kg')], [100000n, 108000n, 0n]);
+    assert.equal(sonra.guncel_kg.fiyatsizKart - once.guncel_kg.fiyatsizKart, 1, 'kg fiyatı olmayan kart sayılır');
+    assert.deepEqual(yontemler.map((y) => sonra[y].yontem), [...yontemler]);
+    // İkinci mal kabul düzeltilip kaldırılınca kendi fiyatıyla çıkar: (6 x 166.6667 - 5 x 180) / 1 = 100.0002; son alış ilk kabule döner.
+    assert.equal((await mudur('POST', `/stok/mal-kabuller/${ikinci.govde.belge.id}/duzelt`, { satirlar: [] })).durum, 200);
+    sonra = await oku();
+    assert.deepEqual([fark('hareketli_ortalama'), fark('son_alis')], [10000n, 10000n]);
+    // Varsayılan güncel kg; değer finans rakamıdır (#680): depo uca ulaşır, değeri görmez.
+    assert.equal((await mudur<StokDegeriCevabi>('GET', '/stok/deger')).govde.yontem, 'guncel_kg');
+    const depocu = await depo<StokDegeriCevabi>('GET', '/stok/deger?yontem=son_alis');
+    assert.deepEqual(depocu.govde, { degerGorunur: false, yontem: 'son_alis', stokDegeri: null, fiyatsizKart: 0,
+      ayri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null } });
+    assert.equal((await mudur('GET', '/stok/deger?yontem=fifo')).durum, 400);
   });
 
-  test('güncel stok değeri (228 a: yalnız kullanılabilir; hurda, fason, yolda ayrı): eldeki miktar x satın almanın kg fiyatından birim fiyatı (TRY); birim fiyatı olmayan kart değere katılmaz, sayılır; yalnız finans.oku görür', async () => {
-    const kurus = (d: string | null) => (d === null ? 0n : BigInt(d.replace('.', '')));
-    const once = await mudur<PanelCevabi>('GET', '/stok/panel');
-    assert.equal(once.durum, 200, JSON.stringify(once.govde));
+  test('1382 d güncel kg (228 a: yalnız kullanılabilir; hurda talaş fiyatıyla, fason, kalite ayrı): birim fiyatı olmayan kart değere katılmaz, sayılır', async () => {
+    const once = await deger('guncel_kg');
     const kalite = `STK-KG-${kartSira}`;
     const kgKarti = async (birim: string): Promise<number> => {
       const no = await kart('hammadde', 'aktif', birim);
@@ -1288,20 +1304,16 @@ describe('stok (gerçek PostgreSQL)', () => {
       return no;
     };
     const [kg, adet] = [await kgKarti('kg'), await kgKarti('adet')];
-    await o().sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ($1, NULL, 150, 'TRY', current_date, $2)",
+    await o().sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, talas_kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ($1, NULL, 150, 30, 'TRY', current_date, $2)",
       [kalite, kisiler.get('yonetici')]);
     for (const [m, miktar] of [[kg, '4'], [adet, '3']] as const) {
       const r = await malKabul(m, miktar);
       assert.equal(r.durum, 200, JSON.stringify(r.govde));
     }
-    const sonra = await mudur<PanelCevabi>('GET', '/stok/panel');
-    panelCevabi.parse(sonra.govde);
-    assert.equal(kurus(sonra.govde.guncelDeger) - kurus(once.govde.guncelDeger), 60000n, '4 kg x 150 TL');
+    const sonra = await deger('guncel_kg');
+    assert.equal(kurus(sonra.stokDegeri) - kurus(once.stokDegeri), 60000n, '4 kg x 150 TL');
     // Adetle tutulan kartın kg ağırlığı bilinmiyor: birim fiyatı yok, değere sıfır olarak katılmaz, fiyatsız sayılır.
-    assert.equal(sonra.govde.guncelFiyatsizKart - once.govde.guncelFiyatsizKart, 1);
-    // Ortalama alış fiyatıyla değer ayrı kalır: bu kartların alış fiyatı yok.
-    assert.equal(kurus(sonra.govde.stokDegeri) - kurus(once.govde.stokDegeri), 0n);
-    // 228 a: hurda, fason ve karantinadaki miktar güncel değerden çıkar, kendi satırında görünür; toplam aynı kalır.
+    assert.equal(sonra.fiyatsizKart - once.fiyatsizKart, 1);
     const yer = async (tur: 'hurda' | 'fason' | 'karantina'): Promise<number> => {
       if (tur === 'karantina') {
         return (await o().sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT depo_id, $1, 'karantina' FROM stok_konum WHERE kod = 'KABUL' RETURNING id",
@@ -1315,44 +1327,44 @@ describe('stok (gerçek PostgreSQL)', () => {
       const t = await depo('POST', '/stok/tasima', { malzemeId: kg, kaynakKonumId: await konumId('KABUL'), hedefKonumId: await yer(tur), miktar });
       assert.equal(t.durum, 200, JSON.stringify(t.govde));
     }
-    const ayrik = await mudur<PanelCevabi>('GET', '/stok/panel');
-    panelCevabi.parse(ayrik.govde);
-    const fark = (k: keyof PanelCevabi['guncelAyri']) => kurus(ayrik.govde.guncelAyri[k]) - kurus(sonra.govde.guncelAyri[k]);
-    assert.deepEqual([kurus(ayrik.govde.guncelDeger) - kurus(sonra.govde.guncelDeger), fark('hurda'), fark('fason'), fark('kalite'), fark('yolda'), fark('diger'), fark('toplam')],
-      [-52500n, 15000n, 30000n, 7500n, 0n, 0n, 0n]);
-    assert.equal(ayrik.govde.guncelFiyatsizKart, sonra.govde.guncelFiyatsizKart);
+    const ayrik = await deger('guncel_kg');
+    const fark = (k: keyof StokDegeriCevabi['ayri']) => kurus(ayrik.ayri[k]) - kurus(sonra.ayri[k]);
+    // Hurda 1 kg x 30 TL talaş; toplam 600 TL'den 0.5 x 150 + 30 + 2 x 150 + 0.5 x 150 = 480 TL'ye iner.
+    assert.deepEqual([kurus(ayrik.stokDegeri) - kurus(sonra.stokDegeri), fark('hurda'), fark('fason'), fark('kalite'), fark('yolda'), fark('diger'), fark('toplam')],
+      [-52500n, 3000n, 30000n, 7500n, 0n, 0n, -12000n]);
+    assert.equal(ayrik.fiyatsizKart, sonra.fiyatsizKart);
     // Satın alma aynı kırılımı disari'dan alır.
     assert.deepEqual((await degerGrubuToplamlari(o().vt)).filter((x) => x.malzemeId === kg).map((x) => [x.grup, Number(x.toplam)]),
       [['fason', 2], ['hurda', 1], ['kalite', 0.5], ['kullanilabilir', 0.5]]);
-    const depocu = await depo<PanelCevabi>('GET', '/stok/panel');
-    assert.deepEqual([depocu.govde.degerGorunur, depocu.govde.guncelDeger, depocu.govde.guncelFiyatsizKart, depocu.govde.guncelAyri],
-      [false, null, 0, { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }]);
   });
 
-  test('#1079 aylık stok değeri: ay sonu miktarı bugünkü bakiyeden sonraki hareketler geri sarılarak bulunur; yalnız finans.oku görür', async () => {
-    const kurus = (d: string | null) => (d === null ? 0n : BigInt(d.replace('.', '')));
-    const seri = async () => {
-      const r = await mudur<AylikStokDegeriCevabi>('GET', '/stok/panel/aylik-deger?ay=6');
+  test('#1079, 1382 d aylık stok değeri: ay sonu miktarı geri sarılarak, fiyat o ayın sonundaki fiyatla; yalnız finans.oku görür', async () => {
+    const seri = async (yontem: string) => {
+      const r = await mudur<AylikStokDegeriCevabi>('GET', `/stok/panel/aylik-deger?ay=6&yontem=${yontem}`);
       assert.equal(r.durum, 200, JSON.stringify(r.govde));
       return aylikStokDegeriCevabi.parse(r.govde).aylar;
     };
-    const once = await seri();
-    assert.equal(once.length, 6);
-    const k = await kart('sarf');
-    const ss = await siparisSatiri('5', 'siparis_verildi', k);
-    await o().sahip.sorgu(`INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat)
-      SELECT talep_id, teklif_id, kalem_id, 100 FROM satin_alma_siparis_satiri WHERE id = $1`, [ss]);
-    assert.equal((await malKabul(k, '5', { siparisSatirId: ss })).durum, 200);
+    const [onceKg, onceOrt] = [await seri('guncel_kg'), await seri('hareketli_ortalama')];
+    assert.equal(onceKg.length, 6);
+    const kalite = `STK-AY-${kartSira}`;
+    const k = await kart('hammadde', 'aktif', 'kg');
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET kayit = kayit || jsonb_build_object('grade', $2::text, 'form', 'cubuk', 'fam', 'metal') WHERE no = $1", [k, kalite]);
+    await o().sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ($1, NULL, 100, 'TRY', current_date - 400, $2)",
+      [kalite, kisiler.get('yonetici')]);
+    assert.equal((await malKabul(k, '5', { siparisSatirId: await fiyatliSiparis(k, 100) })).durum, 200);
     // Dört ay önce giren, iki ay önce çıkan 3 birim (defter toplamı değişmez): yalnız aradaki iki ay sonunda vardı.
     await o().sahip.sorgu(`INSERT INTO stok_hareketi (zaman, tur, malzeme_id, kaynak_konum_id, hedef_konum_id, miktar, giris_kaynagi, cikis_nedeni, kisi_id)
       SELECT date_trunc('month', now()) - make_interval(months => g.once) + interval '1 day', g.tur, $1, g.kaynak, g.hedef, 3, g.giris, g.neden, (SELECT min(id) FROM kisi)
       FROM (SELECT konum_id FROM stok_bakiye WHERE malzeme_id = $1 LIMIT 1) b,
         LATERAL (VALUES (4, 'giris', NULL::int, b.konum_id, 'mal_kabul', NULL), (2, 'cikis', b.konum_id, NULL::int, NULL, 'fire')) AS g(once, tur, kaynak, hedef, giris, neden)`, [k]);
-    const sonra = await seri();
-    assert.deepEqual(sonra.map((a) => a.ay), once.map((a) => a.ay));
-    assert.deepEqual(sonra.map((a, i) => kurus(a.stokDegeri) - kurus(once[i]!.stokDegeri)), [0n, 30000n, 30000n, 0n, 0n, 50000n]);
+    const [sonraKg, sonraOrt] = [await seri('guncel_kg'), await seri('hareketli_ortalama')];
+    assert.deepEqual(sonraKg.map((a) => a.ay), onceKg.map((a) => a.ay));
+    assert.deepEqual(sonraKg.map((a, i) => kurus(a.stokDegeri) - kurus(onceKg[i]!.stokDegeri)), [0n, 30000n, 30000n, 0n, 0n, 50000n]);
+    // Mal kabul bu ay: geçmiş ay sonlarında alış fiyatı yoktu, o aylar fiyatsız sayılır (bugünün fiyatı geriye taşınmaz).
+    assert.deepEqual(sonraOrt.map((a, i) => kurus(a.stokDegeri) - kurus(onceOrt[i]!.stokDegeri)), [0n, 0n, 0n, 0n, 0n, 50000n]);
+    assert.deepEqual(sonraOrt.map((a, i) => a.fiyatsizKart - onceOrt[i]!.fiyatsizKart), [0, 1, 1, 0, 0, 0]);
     const depocu = await depo<AylikStokDegeriCevabi>('GET', '/stok/panel/aylik-deger');
-    assert.deepEqual(depocu.govde, { degerGorunur: false, aylar: [] });
+    assert.deepEqual(depocu.govde, { degerGorunur: false, yontem: 'guncel_kg', aylar: [] });
     assert.equal((await mudur<unknown>('GET', '/stok/panel/aylik-deger?ay=25')).durum, 400);
   });
 

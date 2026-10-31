@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { AylikStokDegeriCevabi, PanelCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { AylikStokDegeriCevabi, PanelCevabi, StokDegeriCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { GrafikKarti } from '../../ortak/arayuz/GrafikKarti.tsx';
 import { IkiSeriKarti } from '../../ortak/arayuz/PanoGrafikleri.tsx';
 import { SayiKarti } from '../../ortak/arayuz/SayiKarti.tsx';
@@ -34,15 +34,16 @@ function EksikEmir() {
 function usePanel() {
   return useQuery({ queryKey: [...anahtarlar.hepsi, 'panel'], queryFn: () => api.get<PanelCevabi>('/stok/panel') });
 }
+// Stok değeri kartı stok panosunun değer ucunu ve önbelleğini paylaşır; ana sayfada varsayılan yöntem, güncel kg (1382 d).
 function StokDegeri() {
-  const p = usePanel();
+  const p = useQuery({ queryKey: [...anahtarlar.hepsi, 'deger', 'guncel_kg'], queryFn: () => api.get<StokDegeriCevabi>('/stok/deger?yontem=guncel_kg') });
   const d = p.data;
   // Sayı kartı yalnız sayı gösterir: değer tam TL'ye yuvarlanır, kuruşlu değer ve öteki gruplar stok panosundadır. Değer yalnız
   // kullanılabilir stoktandır (228 a): red, hurda, fason ve yoldaki bakiye sayılmaz.
-  const sayi = d === undefined ? undefined : d.guncelDeger === null ? null : Math.round(Number(d.guncelDeger));
+  const sayi = d === undefined ? undefined : d.stokDegeri === null ? null : Math.round(Number(d.stokDegeri));
   // Değer yalnız finans rakamlarını görene hesaplanır (#680); öteki okuyan "Veri yok" ile nedenini görür.
   const alt = d?.degerGorunur === false ? 'Değer finans yetkisiyle görünür'
-    : `Yalnız kullanılabilir · TL, satın alma kg fiyatıyla${d?.guncelFiyatsizKart ? ` · ${d.guncelFiyatsizKart} kartın fiyatı yok` : ''}`;
+    : `Yalnız kullanılabilir · TL, güncel kg fiyatıyla${d?.fiyatsizKart ? ` · ${d.fiyatsizKart} kartın fiyatı yok` : ''}`;
   return <SayiKarti baslik="Stok değeri" simge="box" sayi={sayi} altMetin={alt} yol="/stok" hata={p.isError} />;
 }
 function KritikEksi() {
@@ -61,14 +62,15 @@ function StokHareketi() {
       yol="/stok" hata={p.isError} />
   );
 }
-// Ay sonu stok değeri (kart #1079, #1117). Değeri bilinmeyen ay çizilmez (sıfır uydurulmaz); değer finans yetkisiyle görünür (#680).
+// Ay sonu stok değeri (kart #1079, #1117), o ayın sonundaki güncel kg fiyatıyla (1382 d). Değeri bilinmeyen ay çizilmez (sıfır
+// uydurulmaz); değer finans yetkisiyle görünür (#680).
 const ayAdi = (ay: string): string => `${ay.slice(5)}.${ay.slice(2, 4)}`;
 function AylikStokDegeri() {
-  const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'panel', 'aylik-deger'], queryFn: () => api.get<AylikStokDegeriCevabi>('/stok/panel/aylik-deger') });
+  const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'panel', 'aylik-deger', 'guncel_kg'], queryFn: () => api.get<AylikStokDegeriCevabi>('/stok/panel/aylik-deger?yontem=guncel_kg') });
   const d = s.data;
   const noktalar = d === undefined ? undefined : !d.degerGorunur ? null
     : d.aylar.flatMap((a) => (a.stokDegeri === null ? [] : [{ etiket: ayAdi(a.ay), deger: Math.round(Number(a.stokDegeri)) }]));
-  const altMetin = d?.degerGorunur === false ? 'Değer finans yetkisiyle görünür' : 'Ay sonu, ortalama alış fiyatıyla';
+  const altMetin = d?.degerGorunur === false ? 'Değer finans yetkisiyle görünür' : 'Ay sonu, o günün kg fiyatıyla';
   return <GrafikKarti baslik="Stok değeri, aylık" simge="chart" tur="egri" birim="TL" noktalar={noktalar} altMetin={altMetin} yol="/stok" hata={s.isError} />;
 }
 

@@ -14,7 +14,6 @@ const SATIR: MalzemeStokSatiri = {
 };
 const PANEL = {
   malzemeCesidi: 1, gozDolu: 0, gozToplam: 0, kritik: 0, eksi: 0, kabulde: 0, toplamaBekleyen: 0, gunluk: [], kritikListe: [], raflar: [], sonHareketler: [],
-  stokDegeri: null, fiyatsizKart: 0, guncelDeger: null, guncelFiyatsizKart: 0, guncelAyri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }, degerGorunur: false,
 } satisfies PanelCevabi;
 const liste = (satirlar: MalzemeStokSatiri[]): MalzemelerCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });
 const STATULER: Statu[] = [
