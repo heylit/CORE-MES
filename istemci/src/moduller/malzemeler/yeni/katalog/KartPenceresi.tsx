@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dugme, OnayPenceresi, Pencere } from '../../../../ortak/arayuz/index.ts';
+import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { Foy } from '../ortak/Foy.tsx';
 import { ResimAlani } from '../ortak/ResimAlani.tsx';
 import * as K from '../kurallar/index.ts';
@@ -58,6 +59,7 @@ export function KartPenceresi({
           {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => { git.etiketMerkezi([kart.no]); }}>Etiket Merkezi'nde bas</Dugme>}
           {yetki.yaz && yetki.onayla && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
           <Dugme simge="scan" onClick={() => saha(kart.kimlik)}>Saha görünümü</Dugme>
+          <GecmisDugmesi kayitlar={[{ tablo: 'malzeme_katalog_karti', anahtar: { kimlik: kart.kimlik } }]} />
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
         </div>
       )}

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { IsMerkeziGovdesi, SurumluIsMerkezi, IsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { CokSatir, DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { csvIndir } from './csv.ts';
 import { durumSutunu } from './durumSutunu.tsx';
@@ -35,6 +36,7 @@ export function IsMerkeziFormu({ kayit, kapat }: { kayit: SurumluIsMerkezi | nul
           <CokSatir etiket="Açıklama" value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)} />
         </div>
         <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
+        {kayit && <div className="tc-form-tam"><GecmisDugmesi kayitlar={[{ tablo: 'is_merkezi', anahtar: { id: kayit.id } }]} /></div>}
       </KayitPenceresi>
       <OnayPenceresi
         acik={silOnayi}

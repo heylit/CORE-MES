@@ -10,6 +10,7 @@ import { HareketTablosu } from './Hareketler.tsx';
 import { useKonumSecenekleri } from './MalKabul.tsx';
 import { hataMetni, KaliteRozeti, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { EtiketPenceresi } from './Etiketler.tsx';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { EmirSecici } from './EmirSecici.tsx';
@@ -238,6 +239,7 @@ export function MalzemeAyrinti() {
           {sepetYetkisi && <Dugme simge="box" onClick={() => setIslem({ tur: 'sepet' })}>Sepete ekle</Dugme>}
           <Dugme simge="scan" onClick={() => setIslem({ tur: 'etiket' })}>QR etiketi</Dugme>
           {tanimlar && <Dugme simge="tool" onClick={() => setIslem({ tur: 'ayar' })}>Stok ayarı</Dugme>}
+          <GecmisDugmesi kayitlar={[{ tablo: 'stok_malzeme_ayari', anahtar: { malzeme_id: s.malzemeId } }]} />
         </>} />
       <Kart baslik="Bakiye satırları"><Tablo etiket="Bakiye satırları" sutunlar={sutunlar} satirlar={m.data.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu malzemenin stoğu yok." /></Kart>
       {statuluVar && <Kart baslik="Statü kırılımı"><Tablo etiket="Statü kırılımı" sutunlar={kirilimSutunlari} satirlar={kirilim} satirAnahtari={(k) => k.statuId ?? 0} /></Kart>}

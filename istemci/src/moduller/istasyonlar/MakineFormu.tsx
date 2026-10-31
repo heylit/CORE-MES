@@ -5,6 +5,7 @@ import type {
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Secim, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { csvIndir } from './csv.ts';
 import { BAGLANTI_ADLARI, BAGLANTI_SECENEKLERI, MAKINE_DURUM_ADLARI } from './etiketler.ts';
@@ -83,6 +84,7 @@ export function MakineFormu({ kayit, kapat }: { kayit: SurumluMakine | null; kap
           ipucu="Yalnız bağlantı türü seçiliyken girilir."
         />
         <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
+        {kayit && <div className="tc-form-tam"><GecmisDugmesi kayitlar={[{ tablo: 'makine', anahtar: { id: kayit.id } }]} /></div>}
       </KayitPenceresi>
       <OnayPenceresi
         acik={silOnayi}

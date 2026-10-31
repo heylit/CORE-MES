@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dugme, OnayPenceresi, Tablo } from '../../../../ortak/arayuz/index.ts';
+import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { tarih } from '../bicim.ts';
 import {
   acikRevizyon, gkkUyarilari, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Revizyon,
@@ -109,6 +110,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
         {fark.length > 0 && (
           <Dugme tur="ikincil" aria-pressed={panel === 'fark'} onClick={() => { ac('fark'); }}>{fark.length} fark</Dugme>
         )}
+        <GecmisDugmesi kayitlar={revs.flatMap((x) => (Number.isSafeInteger(Number(x.id)) ? [{ tablo: 'rota_revizyonu', anahtar: { id: Number(x.id) } }] : []))} />
         <Dugme tur="ikincil" simge="more" aria-pressed={panel === 'daha' || panel === 'gecmis' || panel === 'kopya'} onClick={() => { ac('daha'); }}>Revizyon</Dugme>
       </div>
       {eksikler.length > 0 && (
