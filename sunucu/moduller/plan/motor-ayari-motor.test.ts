@@ -92,6 +92,22 @@ const ilkSiparis = (kural: MotorAyarlari['kural'] | null): { rule: string; ilk: 
   return { rule: (g.st as { w: { rule: string } }).w.rule, ilk };
 };
 
+describe('plan: süre öğrenmesi motora (1714, 1684 b)', () => {
+  // Ürün 50'nin tek adımı rotada sıra 10'dur; motorun anahtarı "ürün sıra"dır.
+  const sigma = (ayar: MotorAyarlari, ogren: Record<string, { n: number; f: number; v: number }> | null): number[] => {
+    const g = planGirdisi({ calisma: calismayaMotorAyari(calismaKur(), ayar, null, null, ogren), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
+    assert.ok(g);
+    const m = motorYukle(); const st = m.stHazirla(g.st);
+    return [...(m.compile(st) as { ops: { sig: number }[] }).ops].map((o) => o.sig);
+  };
+  test('açıkken öğrenilen belirsizlik adıma geçer; kapalıyken varsayılan kalır', () => {
+    const ogren = { '50 10': { n: 5, f: 1.25, v: 0.0625 } };
+    const varsayilan = sigma(MOTOR_AYARI_VARSAYILAN, null);
+    assert.deepEqual(sigma(MOTOR_AYARI_VARSAYILAN, ogren), varsayilan);
+    assert.deepEqual(sigma({ ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' }, ogren), varsayilan.map(() => 0.2));
+  });
+});
+
 describe('plan: amaç motor ayarından motora (771 a)', () => {
   test('899 a (832 a): TL amacı her iki ayarda kapalı; bedel kipi kalktı, kayıttaki amaç geçmez', () => {
     const tlAcik = (amac: MotorAyarlari['amac']): unknown => {
