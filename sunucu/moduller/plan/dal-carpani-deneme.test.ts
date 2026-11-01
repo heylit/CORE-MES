@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { kimlikCozucu } from '../oturum/disari.ts';
 import { sanalAdimAdetleriyle } from './plan-cozucusu.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 import { teklifAdimAdetleri } from './planlama-servis.ts';
-import { plan as planServisi } from './servis.ts';
 import { teklifDenemesi, type DenemeIstegi } from './teklif-denemesi.ts';
 
 // 1527: emri açılmamış işte (planın deneme emri, satış teklifi kalemi) dal adımı bir mamul için çarpan kadar parça işler (1257 a); adet
@@ -105,7 +103,7 @@ describe('dal çarpanı: emri açılmamış işin adım adedi (1527)', () => {
 });
 
 describe('dal çarpanı (gerçek PostgreSQL): planın deneme emri (1527)', () => {
-  const { c, vt, tamam, yeniAdim, isEmirleriAc, planOku } = planTestOrtami();
+  const { c, tamam, yeniAdim, isEmirleriAc, planOku } = planTestOrtami();
 
   test('acil sipariş denemesinde dal adımının adedi ve motordaki süresi çarpanla; ana hat ve birleştirme emir adediyle', async () => {
     // Dal A (çarpan 2) ve dal B birleştirmede buluşur; ayar 30 dk, birim 2 dk. Deneme emri 100 adet: dal A 200 parça, 30 + 400 dk.
@@ -116,9 +114,11 @@ describe('dal çarpanı (gerçek PostgreSQL): planın deneme emri (1527)', () =>
     assert.equal([...gercek.yerlesimler, ...gercek.yerlesmemis].find((y) => y.isEmriId === a1)?.adet, 20, 'gerçek emir (10 adet) zaten çarpanlı');
     let s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: 'Dal 1527' })).senaryolar.find((x) => x.ad === 'Dal 1527')!;
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/hizli`, { tur: 'acil', surum: s.surum })).senaryolar.find((x) => x.id === s.id)!;
-    // Servis doğrudan okunur: GET /plan cevap şeması deneme emrinin eksi kimliğini reddediyor (main'de de; ayrı bulgu, bu kartın dışı).
-    const k = (await kimlikCozucu(vt())({ headers: { cookie: c.planlama } } as never))!;
-    const p = await vt().tx((db) => planServisi(db, k, s.id));
+    // Uçtan okunur (1556): cevap şeması deneme emrinin eksi kimliğini kabul eder; önceden GET /plan?taslak= 500 dönüyordu.
+    const p = await planOku(s.id);
+    // Ekranın çizdiği motor yerleşimi de aynı taslağı okur; deneme işleri eksi kimlikle gelir.
+    const m = await tamam<{ yerlesimler: { isEmriId: number }[] }>(c.planlama, 'GET', `/plan/motor-yerlesimi?taslak=${s.id}`);
+    assert.ok(m.yerlesimler.some((y) => y.isEmriId < 0), 'motor yerleşiminde deneme işi var');
     const deneme = [...p.yerlesimler, ...p.yerlesmemis].filter((y) => y.isEmriId < 0).sort((x, y) => x.opNo - y.opNo);
     assert.deepEqual(deneme.map((y) => y.adet), [200, 100, 100]);
     const dalA = p.yerlesimler.find((y) => y.isEmriId === deneme[0]!.isEmriId);

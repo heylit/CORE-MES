@@ -3,6 +3,9 @@ import type { PLAN_ISLEMLERI } from '../islemler/plan.ts';
 import { IS_EMRI_TURLERI } from './uretim-emirleri.ts';
 
 const KIMLIK = z.number().int().positive().max(2_147_483_647);
+// Taslaktaki acil sipariş denemesinin emri ve işleri canlıya geçmez, eksi kimlik taşır (plan servisi, denemeIsleri); taslağı okuyan
+// cevaplar (plan, motor yerleşimi) onları da taşır. Yazma girdileri KIMLIK kalır: deneme işine komut gönderilemez.
+const PLAN_KIMLIGI = z.number().int().min(-2_147_483_648).max(2_147_483_647).refine((v) => v !== 0, 'Kimlik sıfır olamaz.');
 const zaman = z.string();
 const tarih = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG olmalı.');
 export const kaynakGirdisi = z.object({ tur: z.enum(['makine', 'kisi']), id: KIMLIK });
@@ -27,7 +30,7 @@ export const planKaynagi = z.object({
   istasyon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
 });
 const isOzeti = {
-  isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), opNo: z.number().int(),
+  isEmriId: PLAN_KIMLIGI, uretimEmriId: PLAN_KIMLIGI, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), opNo: z.number().int(),
   ad: z.string(), adet: z.number().int(), teslim: z.string().nullable(), durum: z.enum(['planli', 'basladi', 'bitti', 'iptal']),
   // Bölünmüş alt partide üst emir (kart #262); ekran alt partiyi üstün altında dal gösterir.
   ustEmirId: KIMLIK.nullable(),
@@ -70,7 +73,7 @@ export const taslakOzeti = z.object({
   benim: z.boolean(),
 });
 export const planEmri = z.object({
-  uretimEmriId: KIMLIK, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), adet: z.number().int(), teslim: z.string().nullable(),
+  uretimEmriId: PLAN_KIMLIGI, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), adet: z.number().int(), teslim: z.string().nullable(),
   ustEmirId: KIMLIK.nullable(),
   // Emir önceliği (1 acil - 4 düşük); yalnız hızlı denemenin benzettiği emirde null olabilir.
   oncelik: z.number().int().nullable(), baslangic: zaman.nullable(), bitis: zaman.nullable(), tamponGun: z.number().nullable(), engelli: z.boolean(), isSayisi: z.number().int(),
@@ -176,12 +179,12 @@ export const motorYerlesimiCevabi = z.object({
   hesaplanma: zaman,
   ayar: z.object({ kural: z.enum(PLAN_KURALLARI), yon: z.enum(['ileri', 'geri']), tamponGun: z.number() }),
   yerlesimler: z.array(z.object({
-    isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), kaynak: kaynakGirdisi, kaynakAdi: z.string().nullable(),
+    isEmriId: PLAN_KIMLIGI, uretimEmriId: PLAN_KIMLIGI, emirNo: z.string(), opNo: z.number().int(), kaynak: kaynakGirdisi, kaynakAdi: z.string().nullable(),
     baslangic: zaman, bitis: zaman, sabit: z.boolean(),
     // 493 1 a: adet parçanın canlıya yazılacak tam sayı adedidir (kayıtlı bölmenin oranı adım adedine dağıtılmış); bölme yazılamıyorsa null.
     parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, adet: z.number().int().positive().nullable() })).optional(),
   })),
-  yerlesmeyen: z.array(z.object({ isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
+  yerlesmeyen: z.array(z.object({ isEmriId: PLAN_KIMLIGI, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
   // Ekranın planRun opts.yerlesim girişi (Reçete ve Rota, #1860): anahtar canlı kuyruktaki gibi `emirNo|opNo`, bölünmüş işte parça başına
   // `emirNo|opNo~parçaNo`; değer makine (kişi kaynağında null) ve ISO başlangıç.
   ekranYerlesimi: z.record(z.string(), z.array(z.object({ makineId: KIMLIK.nullable(), baslangic: zaman }))),
@@ -190,7 +193,7 @@ export const motorYerlesimiCevabi = z.object({
   // emirde bitis ve bollukGun null. 493 2 a: rotaEski, emir açıldıktan sonra ürünün yürürlükteki rotası değişti (emir açıldığı rotada kaldı);
   // bolmeYazilamaz, bölmesi canlıya yazılamayan adımların OP numaraları (adım adedi tam sayı değil ya da parça bir tam adetten az kalıyor).
   emirler: z.array(z.object({
-    uretimEmriId: KIMLIK, emirNo: z.string(), teslim: z.string().nullable(), bitis: zaman.nullable(), bollukGun: z.number().nullable(),
+    uretimEmriId: PLAN_KIMLIGI, emirNo: z.string(), teslim: z.string().nullable(), bitis: zaman.nullable(), bollukGun: z.number().nullable(),
     rotaEski: z.boolean(), bolmeYazilamaz: z.array(z.number().int()),
   })),
   // 307 a: motorun kullanıcıya söylemesi gereken genel durumlar (ör. personel kısıtı açık ama personel tanımsız); yoksa boş dizi.
