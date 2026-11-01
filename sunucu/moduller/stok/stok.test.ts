@@ -26,7 +26,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, partilerinMalzemeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri } from './disari.ts';
+import { parcaRevizyonuCozucusu, malzemePartiBakiyeleri, statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri, partilerinMalzemeleri } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { cikisYap, kaliteDegistir } from './servis.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
@@ -2597,5 +2597,22 @@ describe('stok (gerçek PostgreSQL)', () => {
   test('DEP-11 her (malzeme, konum, parti) için bakiye hareket toplamına eşittir', async () => {
     const fark = await o().vt.tx((db) => sorgular.bakiyeDefterFarki(db));
     assert.deepEqual(fark, []);
+  });
+
+  test('1647: parti açılışta yürürlükteki parça revizyonunu alır (bağ yoksa boş); parti bakiyesi revizyonla okunur, partisiz bakiye tek satır', async () => {
+    const m = await kart('hammadde');
+    const bos = await malKabul(m, '2', { parti: { tedarikciPartiNo: 'REV-0' } });
+    assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
+    parcaRevizyonuCozucusu(async (_db, idler) => new Map(idler.filter((x) => x === m).map((x) => [x, 'B'])));
+    try {
+      assert.equal((await malKabul(m, '3', { parti: { tedarikciPartiNo: 'REV-1' } })).durum, 200);
+    } finally {
+      parcaRevizyonuCozucusu(async () => new Map());
+    }
+    const konum = (await o().vt.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    await o().vt.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, '4', now())", [m, konum]);
+    const satirlar = await o().vt.tx((db) => malzemePartiBakiyeleri(db, [m, m]));
+    assert.deepEqual(satirlar.map((x) => [x.partiId === null, x.parcaRevizyonu, Number(x.miktar)]), [[true, null, 4], [false, null, 2], [false, 'B', 3]]);
+    assert.deepEqual(await o().vt.tx((db) => malzemePartiBakiyeleri(db, [])), []);
   });
 });

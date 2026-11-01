@@ -191,6 +191,15 @@ export const adimCiktisiCozucusu = (cozucu: servis.AdimStatusuCozucusu): void =>
 // Reçete ve Rota statü listesini veren işlevi kaydeder; stok bunu `GET /stok/statuler` ucundan stok okuyanlara sunar.
 export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void => servis.statuListesiCozucusuKaydet(cozucu);
 // 1222 a: Kalite Merkezi verilen partilerden açık uygunsuzluğu (NCR) olanları veren işlevi kaydeder; ürün sevki ve depo çıkışı onları almaz.
+// 1647: değişiklik yönetimi partinin parça revizyonunu verir; bağı kablolama.ts kurar.
+export type { ParcaRevizyonuCozucusu } from './servis.ts';
+export const parcaRevizyonuCozucusu = (cozucu: servis.ParcaRevizyonuCozucusu): void => servis.parcaRevizyonuCozucusuKaydet(cozucu);
+// 1647: değişiklik etkisi için malzemenin parti başına pozitif bakiyesi ve partinin revizyonu; yetki denetlemez.
+export type { PartiBakiyesi } from './sorgular.ts';
+export async function malzemePartiBakiyeleri(db: Db, malzemeIdler: readonly number[]): Promise<sorgular.PartiBakiyesi[]> {
+  const tekil = [...new Set(malzemeIdler)];
+  return tekil.length === 0 ? [] : sorgular.malzemePartiBakiyeleri(db, tekil);
+}
 export const acikNcrPartiCozucusu = (cozucu: servis.AcikNcrPartiCozucusu): void => servis.acikNcrPartiCozucusuKaydet(cozucu);
 // Ters yöndeki haberlerin karşılığı: uretim-emirleri ve sevkiyat stoğu ithal edemez; bağı sunucu/kablolama.ts kurar. Olay komutla
 // aynı işlemde gelir; stoğun reddi komutu da geri alır.

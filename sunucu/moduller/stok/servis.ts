@@ -73,12 +73,20 @@ import type { BakiyeHam, BelgeTablosu, HareketHam, HareketYeni, IstekHam, Refaka
 const belgeNo = (db: Db, anahtar: NumaraAnahtari, tablo: BelgeTablosu): Promise<string> =>
   numaraAl(db, anahtar, { varMi: (no) => sorgular.belgeNoVarMi(db, tablo, no) });
 
+// 1647: parti açıldığı anda yürürlükteki parça revizyonunu taşır. Revizyonun sahibi değişiklik yönetimidir ve bu modülü okur; bağı
+// kablolama.ts kurar. Bağ yoksa ya da parçanın revizyonu yoksa boş kalır.
+export type ParcaRevizyonuCozucusu = (db: Db, malzemeIdleri: readonly number[]) => Promise<Map<number, string>>;
+let parcaRevizyonuCozucu: ParcaRevizyonuCozucusu = async () => new Map();
+export function parcaRevizyonuCozucusuKaydet(cozucu: ParcaRevizyonuCozucusu): void { parcaRevizyonuCozucu = cozucu; }
+const partiRevizyonu = async (db: Db, malzemeId: number): Promise<string | null> => (await parcaRevizyonuCozucu(db, [malzemeId])).get(malzemeId) ?? null;
+
 // Her mal kabul gelişi ayrı lottur, aynı tedarikçi parti/döküm no gelse de (#124); yalnız üretim girişi emrin partisine eklenir.
-async function partiBulVeyaAc(db: Db, p: sorgular.PartiAnahtari): Promise<number> {
+// Siparişli mal kabulde revizyon sipariş satırınındır (sipariş verilirken yürürlükte olan); yoksa açılış anında yürürlükteki.
+async function partiBulVeyaAc(db: Db, p: sorgular.PartiAnahtari, siparisRevizyonu: string | null = null): Promise<number> {
   const varOlan = p.uretimEmriId !== null ? await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId) : null;
   if (varOlan !== null) return varOlan;
   const lotNo = await numaraAl(db, 'stok.lot-no', { varMi: (no) => sorgular.lotNoVarMi(db, no) });
-  return (await sorgular.partiAc(db, { ...p, lotNo })) ?? (await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId!))!;
+  return (await sorgular.partiAc(db, { ...p, lotNo, parcaRevizyonu: siparisRevizyonu ?? await partiRevizyonu(db, p.malzemeId) })) ?? (await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId!))!;
 }
 // Üretim girişinin partisi: refakat kartıyla sayılan parça kartın partisine, kartsız sayım emrin partisine girer (#126).
 async function uretimPartisi(db: Db, p: { malzemeId: number; uretimEmriId: number; refakatPartisiId: number | null; kisiId: number }): Promise<number> {
@@ -88,7 +96,7 @@ async function uretimPartisi(db: Db, p: { malzemeId: number; uretimEmriId: numbe
   const varOlan = await sorgular.refakatCiktiPartisiBul(db, p.malzemeId, p.refakatPartisiId);
   if (varOlan !== null) return varOlan;
   const lotNo = await numaraAl(db, 'stok.lot-no', { varMi: (no) => sorgular.lotNoVarMi(db, no) });
-  return (await sorgular.refakatCiktiPartisiAc(db, { ...p, refakatPartisiId: p.refakatPartisiId, lotNo }))
+  return (await sorgular.refakatCiktiPartisiAc(db, { ...p, refakatPartisiId: p.refakatPartisiId, lotNo, parcaRevizyonu: await partiRevizyonu(db, p.malzemeId) }))
     ?? (await sorgular.refakatCiktiPartisiBul(db, p.malzemeId, p.refakatPartisiId))!;
 }
 
@@ -902,7 +910,7 @@ async function malKabulSatirlariniYaz(
     const lotlu = partiGereksinimi(o.tur as MalzemeTuru, 'mal_kabul') === 'lot';
     if (parti === null && (lotlu || (s.parti && (s.parti.tedarikciPartiNo || s.parti.dokumNo)))) {
       const p = s.parti;
-      parti = await korumali(() => partiBulVeyaAc(db, { malzemeId, tedarikciPartiNo: p?.tedarikciPartiNo ?? null, dokumNo: p?.dokumNo ?? null, sertifikaNo: p?.sertifikaNo ?? null, uretimEmriId: null, kisiId }));
+      parti = await korumali(() => partiBulVeyaAc(db, { malzemeId, tedarikciPartiNo: p?.tedarikciPartiNo ?? null, dokumNo: p?.dokumNo ?? null, sertifikaNo: p?.sertifikaNo ?? null, uretimEmriId: null, kisiId }, ss?.parcaRevizyonu ?? null));
     }
     if (s.sertifika && parti === null) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
     // Kalite kararı partiye verilir; GKK kartı lotsuz türde olamaz (malzemeler kuralı), bu yalnız savunmadır.
