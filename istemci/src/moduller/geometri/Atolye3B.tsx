@@ -8,7 +8,7 @@ import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim,
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, stokOlcuMetni, suruyorMu, uzunluk } from './gorunum.ts';
+import { agirlikKg, agirlikMetni, buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, stokOlcuMetni, suruyorMu, uzunluk, yogunlukOku } from './gorunum.ts';
 import './geometri.css';
 
 const Goruntu3B = lazy(() => import('./Goruntu3B.tsx'));
@@ -121,8 +121,11 @@ const HAM_NEDEN: Readonly<Record<NonNullable<GeometriHamCevabi['neden']>, string
 };
 
 // Stok listesi aktif hammadde kartlarıdır (1469 a). Pay boşsa sistem ayarı geçerlidir; ekran hangisinin kullanıldığını söyler.
-function HamKarti({ revizyonId, analizVar }: { revizyonId: number; analizVar: boolean }) {
+function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; analizVar: boolean; hacimMm3: number | null }) {
   const [pay, payYaz] = useState('');
+  // Yoğunluğu kullanıcı yazar (1446 a, 1468 a); kaydedilmez, Malzemeler'den ön değer 1480 ile gelir.
+  const [yogunlukMetni, yogunlukYaz] = useState('');
+  const yogunluk = yogunlukOku(yogunlukMetni);
   const [kalite, kaliteYaz] = useState('');
   const payMm = pay.trim() === '' ? null : Number(pay.replace(',', '.'));
   // Üst sınırı sunucu denetler (sözleşme PAY_EN_COK_MM); aşan pay sunucunun iletisiyle döner.
@@ -146,6 +149,9 @@ function HamKarti({ revizyonId, analizVar }: { revizyonId: number; analizVar: bo
     <Kart baslik="Ham önerisi" simge="box">
       <Girdi etiket="İşleme payı (her yüz, mm)" inputMode="decimal" value={pay} onChange={(o) => payYaz(o.target.value)}
         ipucu={payIpucu} hata={!gecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+      <Girdi etiket="Yoğunluk (g/cm³)" inputMode="decimal" value={yogunlukMetni} onChange={(o) => yogunlukYaz(o.target.value)}
+        ipucu="Yazılınca net ve ham ağırlık görünür (yaklaşık)."
+        hata={yogunlukMetni.trim() !== '' && yogunluk === null ? 'Pozitif bir sayı yazın.' : undefined} />
       {v !== undefined && v.kaliteler.length > 0 && (
         <Secim etiket="Kalite" value={kalite} bosSecenek="Tüm kaliteler" onChange={(o) => kaliteYaz(o.target.value)}
           secenekler={v.kaliteler.map((k) => ({ deger: k, baslik: k }))} />
@@ -158,6 +164,9 @@ function HamKarti({ revizyonId, analizVar }: { revizyonId: number; analizVar: bo
                 <>
                   <dl className="tc-g3b-degerler">
                     <div><dt>En az ham</dt><dd>{sorgu.data.enAz ? kutuMetni(sorgu.data.enAz.a, sorgu.data.enAz.b, sorgu.data.enAz.c) : '-'}</dd></div>
+                    {yogunluk !== null && (
+                      <div><dt>Net ağırlık</dt><dd>{hacimMm3 === null ? 'Hacim yok, hesaplanamadı' : `≈ ${agirlikMetni(agirlikKg(hacimMm3, yogunluk)!)}`}</dd></div>
+                    )}
                   </dl>
                   {sorgu.data.neden !== null ? <p className="tc-g3b-soluk">{HAM_NEDEN[sorgu.data.neden]}</p> : (
                     <ul className="tc-g3b-oneriler" aria-label="Stok önerileri">
@@ -166,6 +175,7 @@ function HamKarti({ revizyonId, analizVar }: { revizyonId: number; analizVar: bo
                           <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}</span>
                           <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
                           {o.kesimBoyuMm !== null && <span>Kesim boyu {uzunluk(o.kesimBoyuMm)} mm</span>}
+                          {yogunluk !== null && <span>Ham ağırlık ≈ {agirlikMetni(agirlikKg(o.hamHacimMm3, yogunluk)!)}</span>}
                         </li>
                       ))}
                     </ul>
@@ -206,7 +216,7 @@ function ModelAyrintisi({ satir, revizyonId }: { satir: GeometriModelSatiri | nu
           )}
       <div className="tc-g3b-kartlar">
         <AnalizKarti revizyonId={revizyonId} cevap={analiz.data} />
-        <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} />
+        <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
       </div>
     </div>
   );

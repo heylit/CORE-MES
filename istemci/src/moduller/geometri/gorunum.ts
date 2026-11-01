@@ -33,3 +33,13 @@ export function stokOlcuMetni(o: HamStokOnerisi): string {
     case 'blok': return `${d('a')} x ${d('b')} x ${d('h')} mm`;
   }
 }
+
+// Net ağırlık (1446 a): hacim x yoğunluk, yalnız ekranda öneri. Yoğunluk g/cm³ (1 g/cm³ = 1e-6 kg/mm³); hacim ya da yoğunluk yoksa null.
+export const yogunlukOku = (metin: string): number | null => {
+  const x = Number(metin.trim().replace(',', '.'));
+  return metin.trim() === '' || !Number.isFinite(x) || x <= 0 ? null : x;
+};
+export const agirlikKg = (hacimMm3: number | null, yogunluk: number | null): number | null =>
+  (hacimMm3 === null || yogunluk === null ? null : (hacimMm3 * yogunluk) / 1e6);
+const kg = bicim(3);
+export const agirlikMetni = (x: number): string => `${kg.format(x)} kg`;

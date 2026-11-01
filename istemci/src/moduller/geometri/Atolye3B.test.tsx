@@ -87,6 +87,14 @@ describe('3D Atölyesi', () => {
     fireEvent.change(screen.getByLabelText('Kalite'), { target: { value: 'C45' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
     expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41')).toBe(true);
+    // 1446 a: yoğunluk yazılınca net ve ham ağırlık (8000 mm³ x 7,85 g/cm³; çubuğun ham hacmi x 7,85).
+    expect(screen.queryByText('Net ağırlık')).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '7,85' } });
+    expect(await screen.findByText('≈ 0,063 kg')).toBeTruthy();
+    expect(screen.getByText('Ham ağırlık ≈ 0,17 kg')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '-1' } });
+    expect(await screen.findByText('Pozitif bir sayı yazın.')).toBeTruthy();
+    expect(screen.queryByText('Net ağırlık')).toBeNull();
   });
 
   it('yeniden hesapla okunan sürümle ve istek kimliğiyle gider; kuyruğa alınınca durum değişir', async () => {
