@@ -2,7 +2,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IkPuantajCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { IK_OKUYAN, IK_YONETICI, ikAc, ornekVeri, type Yazma } from '../test-ortak.tsx';
-import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 
 // Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
 // modüller testlerden önce yüklenir.
@@ -39,7 +38,7 @@ const ekim: IkPuantajCevabi = {
 
 describe('P2 izinler', () => {
   it('İK yöneticisi bekleyen talebi görür ve onaylar (izin yazma ucu, bugünkü köprü kuralı)', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/izinler');
+    const { yazmalar } = ikAc('/ik/izinler');
     const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
     expect(within(satir).getByText('Beklemede')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'İzin talebi' })).toBeTruthy();
@@ -49,7 +48,7 @@ describe('P2 izinler', () => {
   });
 
   it('okuyan kişi listeyi görür; talep, onay ve düzenleme düğmesi yoktur', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/izinler', { kullanici: IK_OKUYAN });
+    const { yazmalar } = ikAc('/ik/izinler', { kullanici: IK_OKUYAN });
     const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
     expect(screen.queryByRole('button', { name: 'İzin talebi' })).toBeNull();
     expect(within(satir).queryByRole('button', { name: 'Onayla' })).toBeNull();
@@ -60,21 +59,21 @@ describe('P2 izinler', () => {
   });
 
   it('onay yetkisi olmayan izin yazan Onayla ve Reddet görmez (Soru 854 b)', async () => {
-    ikAc('/ik/yeni/izinler', { kullanici: { id: 5, ad: 'Deneme Yazan', islemler: ['ik.oku', 'ik.izin-yaz', 'sayfa.ik', YENI_EKRAN_ISLEMI] } });
+    ikAc('/ik/izinler', { kullanici: { id: 5, ad: 'Deneme Yazan', islemler: ['ik.oku', 'ik.izin-yaz', 'sayfa.ik'] } });
     const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
     expect(within(satir).queryByRole('button', { name: 'Onayla' })).toBeNull();
     expect(within(satir).queryByRole('button', { name: 'Reddet' })).toBeNull();
   });
 
   it('salt okunur oturumda yazma düğmesi yoktur (210.6)', async () => {
-    ikAc('/ik/yeni/izinler', { veri: ornekVeri({ saltOkunur: true }) });
+    ikAc('/ik/izinler', { veri: ornekVeri({ saltOkunur: true }) });
     const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
     expect(within(satir).queryByRole('button', { name: 'Onayla' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'İzin talebi' })).toBeNull();
   });
 
   it('durum süzgeci ve ad araması listeyi daraltır; not satırı sayar', async () => {
-    ikAc('/ik/yeni/izinler');
+    ikAc('/ik/izinler');
     await screen.findByText('Mehmet Deneme');
     expect(screen.getByText('1 kayıt, onaylanan toplam 0 gün.')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Çalışan ara'), { target: { value: 'ayşe' } });
@@ -85,7 +84,7 @@ describe('P2 izinler', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00'));
     try {
-      ikAc('/ik/yeni/izinler');
+      ikAc('/ik/izinler');
       await screen.findByText('Mehmet Deneme');
       fireEvent.click(screen.getByRole('tab', { name: 'Bakiyeler' }));
       const tablo = await screen.findByRole('table', { name: 'İzin bakiyeleri' });
@@ -98,7 +97,7 @@ describe('P2 izinler', () => {
   });
 
   it('izin formu kalan izni ve iş günü sayısını motordan önerir', async () => {
-    ikAc('/ik/yeni/izinler');
+    ikAc('/ik/izinler');
     await screen.findByText('Mehmet Deneme');
     fireEvent.click(screen.getByRole('button', { name: 'İzin talebi' }));
     const pencere = await screen.findByRole('dialog');
@@ -113,7 +112,7 @@ describe('P2 izinler', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-03T09:00:00'));
     try {
-      ikAc('/ik/yeni/izinler');
+      ikAc('/ik/izinler');
       await screen.findByText('Mehmet Deneme');
       fireEvent.click(screen.getByRole('tab', { name: 'Takvim' }));
       const tablo = await screen.findByRole('table', { name: /2026-11 izin takvimi/ });
@@ -128,12 +127,12 @@ describe('P2 devam ve mesai', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00'));
     try {
-      ikAc('/ik/yeni/devam');
+      ikAc('/ik/devam');
       const satir = within(await screen.findByRole('table', { name: 'Devam ve mesai kayıtları' })).getByText('Mehmet Deneme').closest('tr') as HTMLElement;
       expect(within(satir).getByText('Beklemede')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Kayıt ekle' })).toBeTruthy();
       cleanup();
-      ikAc('/ik/yeni/devam', { kullanici: IK_OKUYAN });
+      ikAc('/ik/devam', { kullanici: IK_OKUYAN });
       const satir2 = within(await screen.findByRole('table', { name: 'Devam ve mesai kayıtları' })).getByText('Mehmet Deneme').closest('tr') as HTMLElement;
       expect(screen.queryByRole('button', { name: 'Kayıt ekle' })).toBeNull();
       fireEvent.click(satir2);
@@ -145,7 +144,7 @@ describe('P2 devam ve mesai', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00'));
     try {
-      ikAc('/ik/yeni/devam');
+      ikAc('/ik/devam');
       const yazmalar = puantajSun(ekim);
       await screen.findByRole('table', { name: 'Devam ve mesai kayıtları' });
       fireEvent.click(screen.getByRole('tab', { name: 'Puantaj' }));
@@ -167,7 +166,7 @@ describe('P2 devam ve mesai', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00'));
     try {
-      ikAc('/ik/yeni/devam', { kullanici: IK_OKUYAN });
+      ikAc('/ik/devam', { kullanici: IK_OKUYAN });
       puantajSun(ekim);
       await screen.findByRole('table', { name: 'Devam ve mesai kayıtları' });
       fireEvent.click(screen.getByRole('tab', { name: 'Puantaj' }));
@@ -182,7 +181,7 @@ describe('P2 devam ve mesai', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00'));
     try {
-      ikAc('/ik/yeni/devam', { kullanici: IK_YONETICI, veri: ornekVeri({ saltOkunur: true }) });
+      ikAc('/ik/devam', { kullanici: IK_YONETICI, veri: ornekVeri({ saltOkunur: true }) });
       puantajSun(ekim);
       await screen.findByRole('table', { name: 'Devam ve mesai kayıtları' });
       fireEvent.click(screen.getByRole('tab', { name: 'Puantaj' }));

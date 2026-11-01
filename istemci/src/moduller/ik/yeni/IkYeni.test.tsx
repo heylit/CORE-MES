@@ -1,13 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { rotalar } from '../rotalar.tsx';
 import { GORUNUMLER, adrestenGorunum, gorunumAdresi } from './gorunumler.ts';
 import { ikBicimi, ikSabitleri, motorKur } from './motor.ts';
-import { CALISAN, IK_OKUYAN, IK_YONETICI, KAPISIZ, MUDUR, ikAc, ornekVeri } from './test-ortak.tsx';
+import { CALISAN, IK_OKUYAN, IK_YONETICI, MUDUR, ikAc, ornekVeri } from './test-ortak.tsx';
 
-// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// IkYeni parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
 // modüller testlerden önce yüklenir.
 beforeAll(async () => { await Promise.all([import('./IkYeni.tsx'), import('./personel/index.tsx'), import('./izin-devam/index.tsx'), import('./bordro/index.tsx'), import('./islemlerim/index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -15,7 +14,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const sekme = (ad: string) => screen.queryByRole('tab', { name: ad });
 
 describe('İK yeni ekran: rotalar ve adresler', () => {
-  it('yeni yollar eski çerçeve yollarıyla çakışmaz', () => {
+  it('yollar birbiriyle ve PDKS yoluyla çakışmaz', () => {
     expect(() => rotalariTopla({ 'ik/rotalar.tsx': { rotalar } })).not.toThrow();
   });
 
@@ -24,9 +23,9 @@ describe('İK yeni ekran: rotalar ve adresler', () => {
       const t = GORUNUMLER[g];
       expect(adrestenGorunum(t.kok, t.adres === '' ? undefined : t.adres)).toBe(g);
     }
-    expect(gorunumAdresi('pano')).toBe('/ik/yeni');
-    expect(gorunumAdresi('calisan', 'emp_b')).toBe('/ik/yeni/calisan/emp_b');
-    expect(gorunumAdresi('ekiptakvim')).toBe('/ik-islemlerim/yeni/ekip-takvimi');
+    expect(gorunumAdresi('pano')).toBe('/ik');
+    expect(gorunumAdresi('calisan', 'emp_b')).toBe('/ik/calisan/emp_b');
+    expect(gorunumAdresi('ekiptakvim')).toBe('/ik-islemlerim/ekip-takvimi');
     expect(adrestenGorunum('/ik', 'yok')).toBeNull();
   });
 
@@ -58,15 +57,9 @@ describe('İK yeni ekran: rotalar ve adresler', () => {
   });
 });
 
-describe('İK yeni ekran: kapı ve gezinme', () => {
-  it('kapı işlemi olmayan kişide açılmaz', async () => {
-    ikAc('/ik/yeni', { kullanici: KAPISIZ });
-    expect(await screen.findByText(YENI_EKRAN_ILETISI)).toBeTruthy();
-    expect(sekme('Pano')).toBeNull();
-  });
-
+describe('İK yeni ekran: gezinme', () => {
   it('İK sayfası ikinci menünün maddelerini sekme olarak verir; PDKS Nizamiye ekranına gider', async () => {
-    ikAc('/ik/yeni/izinler');
+    ikAc('/ik/izinler');
     expect(await screen.findByRole('tab', { name: 'İzinler', selected: true })).toBeTruthy();
     for (const ad of ['Pano', 'Yapılacaklar', 'Personel', 'Bordro', 'İşe alım', 'Değişiklik günlüğü', 'Ayarlar', 'PDKS aktar']) expect(sekme(ad)).toBeTruthy();
     fireEvent.click(sekme('Bordro') as HTMLElement);
@@ -74,19 +67,19 @@ describe('İK yeni ekran: kapı ve gezinme', () => {
   });
 
   it('ayrıntı sayfasında üst madde seçili görünür', async () => {
-    ikAc('/ik/yeni/calisan/emp_b');
+    ikAc('/ik/calisan/emp_b');
     expect(await screen.findByRole('tab', { name: 'Personel', selected: true })).toBeTruthy();
   });
 
   it('İK okuması olmayan kişi İK sayfasının görünümlerini açamaz', async () => {
-    ikAc('/ik/yeni/bordro', { kullanici: CALISAN, veri: ornekVeri({ rol: 'calisan', personelKimlik: 'emp_c' }) });
+    ikAc('/ik/bordro', { kullanici: CALISAN, veri: ornekVeri({ rol: 'calisan', personelKimlik: 'emp_c' }) });
     expect(await screen.findByText('Bu görünüm bulunamadı ya da size açık değil.')).toBeTruthy();
   });
 });
 
 describe('İK yeni ekran: İK İşlemlerim ve 214 a', () => {
   it('çalışan ekip maddelerini görmez', async () => {
-    ikAc('/ik-islemlerim/yeni', { kullanici: CALISAN, veri: ornekVeri({ rol: 'calisan', personelKimlik: 'emp_c' }) });
+    ikAc('/ik-islemlerim', { kullanici: CALISAN, veri: ornekVeri({ rol: 'calisan', personelKimlik: 'emp_c' }) });
     expect(await screen.findByRole('tab', { name: 'Benim sayfam', selected: true })).toBeTruthy();
     expect(sekme('Mesailerim')).toBeTruthy();
     expect(sekme('Onaylar')).toBeNull();
@@ -94,24 +87,24 @@ describe('İK yeni ekran: İK İşlemlerim ve 214 a', () => {
   });
 
   it('izin onayı olan yönetici ekip maddelerini görür', async () => {
-    ikAc('/ik-islemlerim/yeni/onaylar', { kullanici: MUDUR, veri: ornekVeri({ rol: 'yonetici', personelKimlik: 'emp_a' }) });
+    ikAc('/ik-islemlerim/onaylar', { kullanici: MUDUR, veri: ornekVeri({ rol: 'yonetici', personelKimlik: 'emp_a' }) });
     expect(await screen.findByRole('tab', { name: 'Onaylar', selected: true })).toBeTruthy();
     expect(sekme('İzin takvimi')).toBeTruthy();
   });
 
   it('ekibi olan ama izin onayı olmayan kişi Onaylar adresini açamaz', async () => {
-    ikAc('/ik-islemlerim/yeni/onaylar', { kullanici: CALISAN, veri: ornekVeri({ rol: 'yonetici', personelKimlik: 'emp_a' }) });
+    ikAc('/ik-islemlerim/onaylar', { kullanici: CALISAN, veri: ornekVeri({ rol: 'yonetici', personelKimlik: 'emp_a' }) });
     expect(await screen.findByText('Bu görünüm bulunamadı ya da size açık değil.')).toBeTruthy();
   });
 });
 
 describe('İK yeni ekran: salt okunur', () => {
   it('yazma işlemi olmayan kişiye salt okunur şeridi çıkar', async () => {
-    ikAc('/ik/yeni', { kullanici: IK_OKUYAN, veri: ornekVeri({ saltOkunur: true }) });
+    ikAc('/ik', { kullanici: IK_OKUYAN, veri: ornekVeri({ saltOkunur: true }) });
     expect(await screen.findByText('Bu kayıtları yalnızca görüntüleyebilirsiniz.')).toBeTruthy();
   });
   it('yazabilen kişide şerit yok', async () => {
-    ikAc('/ik/yeni', { kullanici: IK_YONETICI });
+    ikAc('/ik', { kullanici: IK_YONETICI });
     expect(await screen.findByRole('tab', { name: 'Pano', selected: true })).toBeTruthy();
     expect(screen.queryByText('Bu kayıtları yalnızca görüntüleyebilirsiniz.')).toBeNull();
   });
@@ -119,7 +112,7 @@ describe('İK yeni ekran: salt okunur', () => {
 
 describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
   it('kişi sayfasındaki izin talebi gerçek formu açar, yer tutucu kalmadı', async () => {
-    ikAc('/ik/yeni/calisan/emp_b');
+    ikAc('/ik/calisan/emp_b');
     fireEvent.click(await screen.findByRole('button', { name: 'İzin talebi' }));
     const pencere = await screen.findByRole('dialog', { name: 'Yeni izin' });
     expect(within(pencere).queryByText('Bu görünüm hazırlanıyor')).toBeNull();
@@ -127,7 +120,7 @@ describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
   });
 
   it('Ara kişiyi bulur, Enter kişi sayfasını açar', async () => {
-    ikAc('/ik/yeni');
+    ikAc('/ik');
     fireEvent.click(await screen.findByRole('button', { name: 'Ara' }));
     const kutu = within(await screen.findByRole('dialog', { name: 'Ara' })).getByRole('combobox');
     fireEvent.change(kutu, { target: { value: 'mehmet' } });
@@ -138,7 +131,7 @@ describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
   });
 
   it('reddedilen: salt okuyan aramada personel ekle görmez', async () => {
-    ikAc('/ik/yeni', { kullanici: IK_OKUYAN, veri: ornekVeri({ saltOkunur: true }) });
+    ikAc('/ik', { kullanici: IK_OKUYAN, veri: ornekVeri({ saltOkunur: true }) });
     fireEvent.click(await screen.findByRole('button', { name: 'Ara' }));
     fireEvent.change(within(await screen.findByRole('dialog', { name: 'Ara' })).getByRole('combobox'), { target: { value: 'ekle' } });
     const islemler = screen.getAllByRole('option').map((o) => o.textContent).filter((t) => t?.startsWith('İşlem'));
@@ -146,7 +139,7 @@ describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
   });
 
   it('Yardım ve F1 kılavuzu açar; görünümün konusu başta gelir', async () => {
-    ikAc('/ik/yeni/yapilacaklar');
+    ikAc('/ik/yapilacaklar');
     fireEvent.click(await screen.findByRole('button', { name: /Yardım/ }));
     const kilavuz = await screen.findByRole('dialog', { name: 'Kullanım kılavuzu' });
     expect(within(kilavuz).getByText('Bu sayfa hakkında')).toBeTruthy();

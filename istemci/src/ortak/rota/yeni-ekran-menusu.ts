@@ -9,8 +9,6 @@ export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
 const TUM_YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
-  { kok: '/ik', yol: '/ik/yeni' },
-  { kok: '/ik-islemlerim', yol: '/ik-islemlerim/yeni' },
   { kok: '/mesaj', yol: '/mesaj/yeni' },
   { kok: '/portal', yol: '/portal/yeni' },
 ];
@@ -18,20 +16,22 @@ const YENI_EKRANLAR = TUM_YENI_EKRANLAR.filter((e) => !kapaliModulYoluMu(e.kok))
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
 
-// Eski ekranı kalkmış yeni ekranlar (1272 a, 1392 a): deneme satırı yoktur, ekran menünün kökünde ve `/yeni` altında açılır;
-// ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
-const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum', '/finans', '/denetim-hazirlik'];
+// Eski ekranı kalkmış yeni ekranlar (1272 a, 1392 a, 1614): deneme satırı yoktur, ekran menünün kökünde (CNC ve Denetim
+// `/yeni` altında da) açılır; ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
+const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum', '/finans', '/denetim-hazirlik', '/ik', '/ik-islemlerim'];
+// Kökün altında başka modülün ekranı olan madde (PDKS aktarımı Nizamiye'nindir): sekme çizmez, kabuğun şeridi orada durur.
+const KABUK_SERIDI_KALAN: readonly string[] = ['/ik/pdks'];
 
 // Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
-// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır.
+// yoksa iki şerit üst üste durur. Alt yollar (`/ik/izinler`) da sayılır.
 // Kuyruk, Üretim Terminali ve Üretim Hazırlık (Arkon) listede yoktur: kabuğun şeridi onlarda durur, yeni ekran kendi sekmesini
 // çizmez (553 1 a); tek maddelik menü de şerit çizer.
 export function yeniEkranAdresiMi(adres: string): boolean {
+  if (KABUK_SERIDI_KALAN.some((yol) => adres === yol || adres.startsWith(`${yol}/`))) return false;
   return [...YENI_EKRAN_YOLLARI, ...ESKISI_KALKAN_YENI_EKRANLAR].some((yol) => adres === yol || adres.startsWith(`${yol}/`));
 }
 
-// Yeni ekran adresinin satırı ve bağlı olduğu ana menü sayfası. En uzun yol kazanır: `/ik-islemlerim/yeni` İK İşlemlerim'dir,
-// önekteki başka sayfa değil. Kabuk başlığı ve menü seçimi bununla bulunur.
+// Yeni ekran adresinin satırı ve bağlı olduğu ana menü sayfası. En uzun yol kazanır: önekteki başka sayfa değil. Kabuk başlığı ve menü seçimi bununla bulunur.
 export function yeniEkranEslesmesi(adres: string): { yol: string; kok: string } | null {
   let bulunan: { yol: string; kok: string } | null = null;
   for (const e of YENI_EKRANLAR) {

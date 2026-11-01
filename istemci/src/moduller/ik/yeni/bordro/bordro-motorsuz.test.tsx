@@ -12,7 +12,7 @@ beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./in
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('P3 motor yüklenmeden', () => {
-  it.each(['/ik/yeni/bordro', '/ik/yeni/hesaplamalar', '/ik/yeni/maliyet-plani', '/ik/yeni/ayarlar'])('%s hazırlanıyor iletisi gösterir, tutar uydurmaz', async (adres) => {
+  it.each(['/ik/bordro', '/ik/hesaplamalar', '/ik/maliyet-plani', '/ik/ayarlar'])('%s hazırlanıyor iletisi gösterir, tutar uydurmaz', async (adres) => {
     const { yazmalar } = ikAc(adres);
     expect(await screen.findByText(MOTOR_HAZIRLANIYOR)).toBeTruthy();
     expect(screen.queryByText(/₺/)).toBeNull();

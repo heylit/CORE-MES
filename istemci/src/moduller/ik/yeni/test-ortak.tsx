@@ -10,7 +10,6 @@ import type {
 } from '#paylasilan/sozlesme/ik.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
-import { YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
 
 // Parçaların ortak sınama düzeni. Örnek veri uydurmadır: ad, kimlik ve tutarların gerçek kişiyle ilgisi yoktur.
@@ -20,13 +19,11 @@ const IK_TUM: Islem[] = [
   'ik.bordro-kilit-ac', 'ik.performans-yaz', 'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.pozisyon-onay', 'ik.ayar-yaz', 'ik.ozel-veri-oku',
   'sayfa.ik', 'sayfa.ik-islemlerim', 'nizamiye.pdks-aktar',
 ];
-export const IK_YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: [...IK_TUM, YENI_EKRAN_ISLEMI] };
+export const IK_YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: IK_TUM };
 // Bütün kayıtları görür, hiçbir şey yazamaz.
-export const IK_OKUYAN: Kullanici = { id: 2, ad: 'Deneme Okuyan', islemler: ['ik.oku', 'sayfa.ik', 'sayfa.ik-islemlerim', YENI_EKRAN_ISLEMI] };
-export const MUDUR: Kullanici = { id: 3, ad: 'Deneme Mudur', islemler: ['sayfa.ik-islemlerim', 'ik.izin-talep', 'ik.izin-onay', 'ik.bordro-gordum', YENI_EKRAN_ISLEMI] };
-export const CALISAN: Kullanici = { id: 4, ad: 'Deneme Calisan', islemler: ['sayfa.ik-islemlerim', 'ik.izin-talep', 'ik.bordro-gordum', YENI_EKRAN_ISLEMI] };
-// Kapı işlemi yok: yeni ekran açılmaz.
-export const KAPISIZ: Kullanici = { id: 5, ad: 'Deneme Kapisiz', islemler: IK_TUM };
+export const IK_OKUYAN: Kullanici = { id: 2, ad: 'Deneme Okuyan', islemler: ['ik.oku', 'sayfa.ik', 'sayfa.ik-islemlerim'] };
+export const MUDUR: Kullanici = { id: 3, ad: 'Deneme Mudur', islemler: ['sayfa.ik-islemlerim', 'ik.izin-talep', 'ik.izin-onay', 'ik.bordro-gordum'] };
+export const CALISAN: Kullanici = { id: 4, ad: 'Deneme Calisan', islemler: ['sayfa.ik-islemlerim', 'ik.izin-talep', 'ik.bordro-gordum'] };
 
 const kayit = (tur: IkKayit['tur'], kimlik: string, govde: Record<string, unknown>, surum = 1): IkKayit =>
   ({ kimlik, tur, surum, govde: { id: kimlik, kind: tur, ...govde } });

@@ -7,7 +7,7 @@ test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
   '/finans',
-  '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni', '/cnc-kurulum',
+  '/ik', '/ik-islemlerim', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni', '/cnc-kurulum',
 ].filter((yol) => !kapaliModulYoluMu(yol));
 
 // Ekran başına ayrı test: her açılış kendi süresini alır (tek testte art arda açılış 360'ta sınırı aşıyordu).

@@ -32,8 +32,8 @@ Test adları `sunucu/moduller/ik/kurallar.test.ts` (saf) ve `sunucu/moduller/ik/
 | IK-24 ekip | "IK-24: ekip yönetici bağından (alt kademeler) ve departman yöneticiliğinden" | "IK-21, IK-24, IK-25: rol ve kapsam: İK hepsini, yönetici ekibini (süzülmüş), çalışan kendini görür" |
 | IK-25 TMI kullanıcısı eşleşmesi | "IK-25: kişi personel kaydıyla TMI kullanıcısı alanından; çift bağda hiçbiri" | "IK-21, IK-24, IK-25: rol ve kapsam: İK hepsini, yönetici ekibini (süzülmüş), çalışan kendini görür"; dizin `ik_personel_kisi_id_tek` ("IK-19, IK-23: sürüm denetimi; kayıt zamanı sunucudan") |
 
-İstemci: `istemci/src/moduller/ik/kopru.test.ts` (yönlendirme, sürüm, bordro girdileri, eski sürümde yenileme),
-`sayfa.test.ts` (içerik politikası, kaçış, köken denetimi).
+İstemci: `istemci/src/moduller/ik/yeni/veri.test.ts` (yazma ucunun seçimi, sürüm, eski sürümde yenileme) ve parça testleri
+(`istemci/src/moduller/ik/yeni/**/*.test.tsx`).
 
 ## v2 ekleri
 | Kural | Saf test | Veritabanı testi / kısıt |
@@ -51,8 +51,7 @@ Test adları `sunucu/moduller/ik/kurallar.test.ts` (saf) ve `sunucu/moduller/ik/
 
 ## v3 ekleri (ON-PAKET-ik-v3, 12.10.2026)
 Saf test: `sunucu/moduller/ik/kurallar.test.ts` "İK v3 kuralları". Veritabanı testi (gerçek PostgreSQL, gerçek giriş):
-`sunucu/moduller/ik/bordro-onayi.test.ts`. Ekran testi (uygulama paketi jsdom'da, sahte depo): `istemci/src/moduller/ik/uygulama.test.ts`.
-Köprü: `istemci/src/moduller/ik/kopru.test.ts`.
+`sunucu/moduller/ik/bordro-onayi.test.ts`. Ekran testleri: `istemci/src/moduller/ik/yeni/**/*.test.tsx` (sahte sunucu).
 
 | Kural | Saf test | Veritabanı / ekran testi |
 |---|---|---|
@@ -83,7 +82,7 @@ Köprü: `istemci/src/moduller/ik/kopru.test.ts`.
 birlikte çekirdek dalına gider (CEKIRDEK-ISTEKLERI madde 3); bu dalda yoklar.
 
 ## Puantaj (kart #1571)
-Saf testler `puantaj-kurallar.test.ts`, veritabanı testleri `puantaj.test.ts`, ekran testleri `istemci/src/moduller/ik/uygulama.test.ts` ("İK puantaj yaması").
+Saf testler `puantaj-kurallar.test.ts`, veritabanı testleri `puantaj.test.ts`, ekran testleri `istemci/src/moduller/ik/yeni/izin-devam/izin-devam.test.tsx`.
 
 | Kural | Saf test | Veritabanı testi / kısıt / ekran |
 |---|---|---|

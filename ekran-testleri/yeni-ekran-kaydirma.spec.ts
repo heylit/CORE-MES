@@ -8,7 +8,7 @@ test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
   '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/plan', '/malzemeler', '/kalite-merkezi',
-  '/kalite-merkezi/muayeneler', '/finans', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni',
+  '/kalite-merkezi/muayeneler', '/finans', '/ik/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni',
 ].filter((yol) => !kapaliModulYoluMu(yol));
 
 // İçerik alanında alanın altına taşan ve kaydırılabilen hiçbir atasının içinde olmayan görünür öğeler: bunlara ulaşılamaz.
@@ -54,13 +54,4 @@ test('uzun katalogda tekerlek yeni ekranı kaydırır', async ({ page, ac }) => 
   await page.mouse.move(kutu.x + kutu.width / 2, kutu.y + kutu.height / 2);
   await page.mouse.wheel(0, 600);
   await expect.poll(() => alan.evaluate((e) => e.scrollTop)).toBeGreaterThan(0);
-});
-
-test('eski çerçeveli sayfada içerik alanı taşmaz, kaydırma çerçevededir', async ({ page, ac }) => {
-  for (const yol of ['/ik']) {
-    await ac(yol);
-    await expect(page.locator('main.tc-kabuk-icerik iframe').first()).toBeVisible();
-    const fark = await page.locator('main.tc-kabuk-icerik').evaluate((e) => e.scrollHeight - e.clientHeight);
-    expect(fark, yol).toBeLessThanOrEqual(0);
-  }
 });

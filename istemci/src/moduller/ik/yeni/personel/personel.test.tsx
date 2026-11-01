@@ -14,7 +14,7 @@ const govdesi = (g: unknown) => (g as { govde: Record<string, unknown> }).govde;
 
 describe('P1 personel listesi', () => {
   it('aktif kişiler listelenir; Ayrılanlar süzgeci çıkanı gösterir', async () => {
-    ikAc('/ik/yeni/personel');
+    ikAc('/ik/personel');
     expect(await screen.findByText('Mehmet Deneme')).toBeTruthy();
     expect(screen.getByText('Ayşe Örnek')).toBeTruthy();
     expect(screen.queryByText('Can Sınama')).toBeNull();
@@ -23,19 +23,19 @@ describe('P1 personel listesi', () => {
   });
 
   it('izinli: personel yazabilen Personel ekle görür ve formu açar', async () => {
-    ikAc('/ik/yeni/personel');
+    ikAc('/ik/personel');
     fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));
     expect(await screen.findByRole('dialog', { name: 'Yeni personel' })).toBeTruthy();
   });
 
   it('reddedilen: salt okuyan Personel ekle görmez', async () => {
-    ikAc('/ik/yeni/personel', { kullanici: IK_OKUYAN });
+    ikAc('/ik/personel', { kullanici: IK_OKUYAN });
     expect(await screen.findByText('Mehmet Deneme')).toBeTruthy();
     expect(dugme('Personel ekle')).toBeNull();
   });
 
   it('satıra basınca kişi sayfası açılır', async () => {
-    ikAc('/ik/yeni/personel');
+    ikAc('/ik/personel');
     fireEvent.click(await screen.findByText('Mehmet Deneme'));
     expect(await screen.findByRole('tab', { name: 'Ücret' })).toBeTruthy();
   });
@@ -43,7 +43,7 @@ describe('P1 personel listesi', () => {
 
 describe('P1 kişi sayfası', () => {
   it('on iki sekme; zimmet sekmesi yok; izin bakiyesi ve hak ediş satırları motordan', async () => {
-    ikAc('/ik/yeni/calisan/emp_b');
+    ikAc('/ik/calisan/emp_b');
     const sekmeler = await screen.findByRole('tablist', { name: 'Özlük dosyası bölümleri' });
     expect(within(sekmeler).getAllByRole('tab')).toHaveLength(12);
     expect(within(sekmeler).queryByRole('tab', { name: /Zimmet/ })).toBeNull();
@@ -54,12 +54,12 @@ describe('P1 kişi sayfası', () => {
   });
 
   it('bulunmayan kayıt boş durum gösterir', async () => {
-    ikAc('/ik/yeni/calisan/emp_yok');
+    ikAc('/ik/calisan/emp_yok');
     expect(await screen.findByText('Kayıt bulunamadı. Bu personel silinmiş olabilir.')).toBeTruthy();
   });
 
   it('izinli: yönetici bölüm düzenler ve kayıt yazılır', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/calisan/emp_b');
+    const { yazmalar } = ikAc('/ik/calisan/emp_b');
     fireEvent.click(await screen.findByRole('tab', { name: 'Kimlik' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
     const pencere = await screen.findByRole('dialog');
@@ -72,7 +72,7 @@ describe('P1 kişi sayfası', () => {
   });
 
   it('reddedilen: salt okuyan düzenle, izin talebi, belge ve sil görmez', async () => {
-    ikAc('/ik/yeni/calisan/emp_b', { kullanici: IK_OKUYAN });
+    ikAc('/ik/calisan/emp_b', { kullanici: IK_OKUYAN });
     fireEvent.click(await screen.findByRole('tab', { name: 'Kimlik' }));
     expect(dugme('Düzenle')).toBeNull();
     expect(dugme('İzin talebi')).toBeNull();
@@ -83,7 +83,7 @@ describe('P1 kişi sayfası', () => {
   });
 
   it('not eklenir; boş not yazılmaz', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/calisan/emp_b');
+    const { yazmalar } = ikAc('/ik/calisan/emp_b');
     fireEvent.click(await screen.findByRole('tab', { name: 'Notlar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Notu ekle' }));
     expect(await screen.findByText('Not boş olamaz.')).toBeTruthy();
@@ -96,7 +96,7 @@ describe('P1 kişi sayfası', () => {
   });
 
   it('silme personeli ve bağlı izin ile mesaiyi iptal eder, bordroya dokunmaz', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/calisan/emp_b');
+    const { yazmalar } = ikAc('/ik/calisan/emp_b');
     await screen.findByRole('tab', { name: 'Özet' });
     fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Sil' }));
@@ -106,7 +106,7 @@ describe('P1 kişi sayfası', () => {
 
   it('ücret değişikliği planlı satır yazar; yüzde yöntemi brütü artırır', async () => {
     expect(yeniBrut(40000, 'yuzde', 10)).toBe(44000);
-    const { yazmalar } = ikAc('/ik/yeni/calisan/emp_b');
+    const { yazmalar } = ikAc('/ik/calisan/emp_b');
     fireEvent.click(await screen.findByRole('tab', { name: 'Ücret' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ücret değişikliği' }));
     const pencere = await screen.findByRole('dialog');
@@ -120,7 +120,7 @@ describe('P1 kişi sayfası', () => {
   });
 
   it('çalışma belgesi belge menüsünden açılır', async () => {
-    ikAc('/ik/yeni/calisan/emp_b');
+    ikAc('/ik/calisan/emp_b');
     await screen.findByRole('tab', { name: 'Özet' });
     fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Belge oluştur' }));
@@ -131,7 +131,7 @@ describe('P1 kişi sayfası', () => {
 
 describe('P1 organizasyon', () => {
   it('departman tablosu ve şema; yönetici departman ekler', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/organizasyon');
+    const { yazmalar } = ikAc('/ik/organizasyon');
     expect(await screen.findByRole('table', { name: 'Departmanlar' })).toBeTruthy();
     expect(screen.getAllByText('Ayşe Örnek').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Departman ekle' }));
@@ -143,7 +143,7 @@ describe('P1 organizasyon', () => {
   });
 
   it('reddedilen: salt okuyan departman ekleyemez ve satır formu açmaz', async () => {
-    ikAc('/ik/yeni/organizasyon', { kullanici: IK_OKUYAN });
+    ikAc('/ik/organizasyon', { kullanici: IK_OKUYAN });
     fireEvent.click(within(await screen.findByRole('table', { name: 'Departmanlar' })).getByText('Üretim'));
     expect(dugme('Departman ekle')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -152,7 +152,7 @@ describe('P1 organizasyon', () => {
 
 describe('P1 içe aktarma', () => {
   it('izinli: yapıştırılan tablo eşlenir ve önizlenir; reddedilende menü maddesi yok', async () => {
-    ikAc('/ik/yeni/personel', { veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }) });
+    ikAc('/ik/personel', { veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }) });
     await screen.findByText('Mehmet Deneme');
     fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Excel’den aktar' }));
@@ -162,7 +162,7 @@ describe('P1 içe aktarma', () => {
     fireEvent.click(await within(pencere).findByRole('button', { name: 'Önizle' }));
     expect(await within(pencere).findByRole('button', { name: '1 kaydı aktar' })).toBeTruthy();
     cleanup();
-    ikAc('/ik/yeni/personel', { kullanici: IK_OKUYAN });
+    ikAc('/ik/personel', { kullanici: IK_OKUYAN });
     await screen.findByText('Mehmet Deneme');
     const menu = dugme(/diğer işlemler/);
     if (menu) { fireEvent.click(menu); expect(screen.queryByRole('menuitem', { name: 'Excel’den aktar' })).toBeNull(); }

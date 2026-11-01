@@ -5,7 +5,6 @@ import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { DurumKutusu, Dugme, Pencere, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../ortak/rota/sayfa-komutlari.ts';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
@@ -20,8 +19,8 @@ import { useIkDeposu } from './veri.ts';
 import { useIkYetkisi } from './yetki.ts';
 import './ik-yeni.css';
 
-// TS geçişinin İK ekranı (199 b). Alıma kadar eski çerçevenin yanında `/ik/yeni` ve `/ik-islemlerim/yeni` adresindedir ve yalnız
-// yöneticide açılır; gezinme ikinci menünün aynı maddeleriyle sekmelerdedir. Üstteki araçlar bugünkü ekranınkilerdir: Ara ve
+// İK ve İK İşlemlerim ekranı (TS geçişi 199 b; eski çerçeve 1614 ile kalktı). Gezinme ikinci menünün aynı maddeleriyle
+// sekmelerdedir (315 a; kabuk bu adreslerde şeridini çizmez). Üstteki araçlar bugünkü ekranınkilerdir: Ara ve
 // Yardım (F1); "Başka bir gözle görüntüle" 856 ile kalktı.
 const SAYFA_DISI = { pdks: '/ik/pdks' } as const;
 
@@ -33,7 +32,7 @@ function menuMaddeleri(kok: IkKoku): readonly MenuMaddesi[] {
 }
 
 export function IkYeni({ kok }: { kok: IkKoku }) {
-  return <YeniEkranKapisi><IkEkrani kok={kok} /></YeniEkranKapisi>;
+  return <IkEkrani kok={kok} />;
 }
 
 export function IkYeniIk() { return <IkYeni kok="/ik" />; }
