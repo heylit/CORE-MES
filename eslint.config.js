@@ -81,8 +81,11 @@ export default [
       ],
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-      // Durum ya da tür eklenince unutulan dal derlemede değil lintte görünür. Var olan 28 ihlal düzelene kadar uyarıdır (kart 1551).
-      '@typescript-eslint/switch-exhaustiveness-check': 'warn',
+      // Durum ya da tür eklenince unutulan dal derlemede değil lintte görünür: varsayılan dal yeni durumu sessizce yutmasın diye her
+      // durum adıyla yazılır.
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      // Tipsiz değer unknown alır ve kullanıldığı yerde daraltılır; any denetimi sessizce kapatır.
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
   // Ayrıştırıcı project listesini sırayla dener ve geçtiği programları da bellekte kurar; ortak listede istemci dosyası için
@@ -110,6 +113,9 @@ export default [
     ignores: ['**/*.test.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...SOZLESME_CAGRILARI, ...RASTGELE_KIMLIK, ...TASARIM] },
   },
+  // Arkon belgeleri tipsiz JSON'dur; bu test iç içe alanları (history[n].by, results['1'].by) doğrudan okur. noUncheckedIndexedAccess
+  // altında gerçek tip, kırka yakın doğrulamanın yeniden yazılmasını ister; güvenlik testinin doğrulamaları yerinde bırakılır.
+  { files: ['sunucu/moduller/arkon/guvenlik.test.ts'], rules: { '@typescript-eslint/no-explicit-any': 'off' } },
   {
     files: ['sunucu/**/*.ts'],
     ignores: ['**/*.test.ts'],
