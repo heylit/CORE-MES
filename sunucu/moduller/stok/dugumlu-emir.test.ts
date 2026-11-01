@@ -114,10 +114,10 @@ describe('stok: çok katmanlı emir (gerçek PostgreSQL)', () => {
     const ie = Object.fromEntries((await o().vt.sorgu<{ id: number; op_no: number }>('SELECT id, op_no FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [e])).map((x) => [x.op_no, x.id]));
     const s = { kok: await statu('URUN OP 10'), alt: await statu('ALT OP 10') };
     // Çözücü Reçete ve Rota'nın yerine geçer: kök adım emrin revizyonuyla (emir verilir), alt düğüm adımı kendi malzemesi ve rotadaki
-    // numarasıyla, emirsiz sorulmalı; başka her soru statüsüz.
+    // numarasıyla ve emirle sorulmalı (1558 a: donmuş revizyon emrin patlatmasındadır); başka her soru statüsüz.
     adimStatusuCozucusuKaydet(async (_db, g) => {
       if (g.malzemeNo === urun && g.opNo === 10 && g.uretimEmriId === e) return s.kok;
-      if (g.malzemeNo === alt && g.opNo === 10 && g.uretimEmriId === null) return s.alt;
+      if (g.malzemeNo === alt && g.opNo === 10 && g.uretimEmriId === e) return s.alt;
       return null;
     });
     return { e, ie, urun, alt, hm1, hm2, ist: { a: a.id, b: b.id, c: c.id }, s };

@@ -408,6 +408,8 @@ export { isEmriVarliklari } from './sorgular.ts';
 // 1476-E: çok katmanlı emirde iş emrinin düğümü, düğüm malzemesi, rotadaki op numarası (kaynak_op_no) ve emrin patlatması; yetki denetlemez.
 export { isEmriDugumleri } from './sorgular.ts';
 export type { IsEmriDugumu } from './sorgular.ts';
+// 1558 a: emrin açıldığı patlamış rota; Reçete ve Rota alt düğümün donmuş revizyonunu bununla bulur. Tek katmanlı emirde null; yetki denetlemez.
+export { emrinPatlatmasi } from './sorgular.ts';
 // CNC kurulum (266 a): açık iş emirleri; yetki denetlemez, çağıran korur.
 export { acikIsEmirleri, acikIsEmri } from './sorgular.ts';
 export type { AcikIsEmri } from './sorgular.ts';

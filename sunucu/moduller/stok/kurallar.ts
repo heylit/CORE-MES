@@ -800,9 +800,28 @@ export function sonrakiIstasyon(adimlar: readonly SepetAdimi[], buradakiIstasyon
 // Bir adet için reçete miktarı (dört ondalık) x adet (binde); stoğun üç ondalığına yukarı yuvarlanır (eksik düşülmez).
 // bolen (1532 a, 1333 a): dal adımında reçete miktarı mamul başınadır, adım ise mamul başına çarpan kadar parça işler; bir parçanın
 // miktarı çarpana bölünür. Bölme çarpımdan sonra yapılır, yuvarlama bir kez.
-export function adetMiktari(adetBinde: bigint, birimMiktar: string, bolen = 1): bigint {
+// onceki (1554 a): adımda bu sayımdan önce sayılan adet (binde). Sayım parça parça gelir; her parça ayrı yukarı yuvarlansa toplam, aynı
+// adedin tek sayımından fazla düşer (çarpan 3'te üç tek sayım 1,002, tek sayım 1,000). Miktar, toplam adedin yuvarlanmış miktarından
+// öncekinin yuvarlanmış miktarı çıkarılarak bulunur: sayımlar toplamı tek sayıma eşittir, geri alma aynı farkı tersler.
+export function adetMiktari(adetBinde: bigint, birimMiktar: string, bolen = 1, onceki = 0n): bigint {
   const b = BigInt(Math.max(1, bolen));
-  return (adetBinde * onBindeOku(birimMiktar) + 10000n * b - 1n) / (10000n * b);
+  const onBinde = onBindeOku(birimMiktar);
+  const tavan = (a: bigint): bigint => (a * onBinde + 10000n * b - 1n) / (10000n * b);
+  const o = onceki > 0n ? onceki : 0n;
+  return tavan(o + adetBinde) - tavan(o);
+}
+// 1554 a: öncülden gelen parçanın birikimli miktarı. Oranlı adet de toplam üzerinden aşağı yuvarlanır (oranliAdet), sonra miktar.
+export function birikimliMiktar(adetBinde: bigint, onceki: bigint, birimMiktar: string, bolen?: number, oran?: GelenOrani): bigint {
+  const o = oranliAdet(onceki > 0n ? onceki : 0n, oran);
+  return adetMiktari(oranliAdet((onceki > 0n ? onceki : 0n) + adetBinde, oran) - o, birimMiktar, bolen, o);
+}
+// 1555 a: iş malzemeleri listesinde adımın kalan adedi. Çok katmanlı emirde alt düğümün adımı alt parça işler: gereken parça emir adedi x
+// kök başına adettir (düğümün birim çarpanı, dört ondalık; tam parçaya yukarı). Sayılan adım adedi de alt parçadır. Düğümsüz adımda çarpan 1.
+export function kalanAdimAdedi(emirAdedi: number, birimCarpani: string | null, sayilan: number): bigint {
+  const carpan = birimCarpani === null ? 10000n : onBindeOku(birimCarpani);
+  const gereken = (BigInt(emirAdedi) * carpan + 9999n) / 10000n;
+  const kalan = gereken - BigInt(sayilan);
+  return kalan > 0n ? kalan : 0n;
 }
 function onBindeOku(birimMiktar: string): bigint {
   const p = DORT_ONDALIK.exec(birimMiktar.trim());
@@ -847,19 +866,20 @@ export interface UretimAdimPlani {
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
-  cikti: number | null; girdiler: readonly ReceteGirdisi[]; tasinan: ReceteGirdisi;
+  cikti: number | null; girdiler: readonly ReceteGirdisi[]; tasinan: ReceteGirdisi; onceki?: bigint;
 }): UretimAdimPlani {
   const cevirmeli = !g.sonAdim && g.cikti === null;
   const sarflar: UretimAdimPlani['sarflar'] = [];
   let tasinanGirdide = false;
+  const onceki = g.onceki ?? 0n;
   for (const x of g.girdiler) {
     if (g.ilkAdim && !tasinanGirdide && x.malzemeNo === g.tasinan.malzemeNo) {
       tasinanGirdide = true;
       if (cevirmeli) continue;
     }
-    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar, x.bolen) });
+    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar, x.bolen, onceki) });
   }
-  const tasinanMiktari = adetMiktari(g.adet, g.tasinan.miktar, g.tasinan.bolen);
+  const tasinanMiktari = adetMiktari(g.adet, g.tasinan.miktar, g.tasinan.bolen, onceki);
   const kaynak = g.ilkAdim || g.oncekiCiktili ? null : g.oncekiStatuId;
   let cevirme: UretimAdimPlani['cevirme'] = null;
   if (cevirmeli) {
@@ -932,27 +952,29 @@ export function tasimaKaynagi(zincir: readonly ZincirAdimi[], opNo: number): Tas
 export function dalliAdimPlani(g: {
   adet: bigint; sonAdim: boolean; statuId: number | null; cikti: number | null; girdiler: readonly ReceteGirdisi[];
   tasinan: ReceteGirdisi; gelenler: readonly { malzemeId: number; statuId: number | null; miktar: string; bolen?: number; oran?: GelenOrani }[]; kaynak: TasimaKaynagi['tur'];
+  onceki?: bigint;
 }): UretimAdimPlani {
   const cevirmeli = !g.sonAdim && g.cikti === null;
   const ilk = g.kaynak === 'ilk';
+  const onceki = g.onceki ?? 0n;
   const sarflar: UretimAdimPlani['sarflar'] = [];
   let tasinanGirdide = false;
   for (const x of g.girdiler) {
     if (ilk && cevirmeli && !tasinanGirdide && x.malzemeNo === g.tasinan.malzemeNo) { tasinanGirdide = true; continue; }
-    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar, x.bolen) });
+    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar, x.bolen, onceki) });
   }
   let cevirme: UretimAdimPlani['cevirme'] = null;
   let giris: UretimAdimPlani['giris'] = cevirmeli ? null : { malzemeId: g.cikti, miktar: g.adet };
   const devam = g.kaynak === 'oncul' ? g.gelenler[0] : undefined;
   if (cevirmeli && devam !== undefined) {
     if (devam.statuId !== g.statuId) {
-      cevirme = { malzemeId: devam.malzemeId, kaynakStatuId: devam.statuId, hedefStatuId: g.statuId, miktar: adetMiktari(oranliAdet(g.adet, devam.oran), devam.miktar, devam.bolen), tasinan: true };
+      cevirme = { malzemeId: devam.malzemeId, kaynakStatuId: devam.statuId, hedefStatuId: g.statuId, miktar: birikimliMiktar(g.adet, onceki, devam.miktar, devam.bolen, devam.oran), tasinan: true };
     }
     return { sarflar, cevirme, giris };
   }
-  for (const p of g.gelenler) sarflar.push({ malzemeId: p.malzemeId, statuId: p.statuId, miktar: adetMiktari(oranliAdet(g.adet, p.oran), p.miktar, p.bolen), tasinan: true });
+  for (const p of g.gelenler) sarflar.push({ malzemeId: p.malzemeId, statuId: p.statuId, miktar: birikimliMiktar(g.adet, onceki, p.miktar, p.bolen, p.oran), tasinan: true });
   if (cevirmeli && tasinanGirdide && g.statuId !== null) {
-    cevirme = { malzemeId: g.tasinan.malzemeNo, kaynakStatuId: null, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, g.tasinan.miktar, g.tasinan.bolen) };
+    cevirme = { malzemeId: g.tasinan.malzemeNo, kaynakStatuId: null, hedefStatuId: g.statuId, miktar: adetMiktari(g.adet, g.tasinan.miktar, g.tasinan.bolen, onceki) };
   } else if (cevirmeli && g.kaynak === 'birlesme') {
     giris = { malzemeId: g.tasinan.malzemeNo, miktar: g.adet, statuId: g.statuId };
   }

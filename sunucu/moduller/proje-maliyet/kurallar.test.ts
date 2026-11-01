@@ -96,9 +96,13 @@ describe('proje-maliyet kuralları', () => {
     assert.equal(karRiski(100_000, 0.3, null), null);
   });
 
-  test('PM-10: gecikme cezası tavanla sınırlı; oran yoksa null', () => {
+  test('PM-10: gecikme cezası tavanla sınırlı; tavan boşsa %10; oran yoksa null', () => {
     assert.equal(gecikmeCezasi(100_000, 0.5, null, 4), 2000);
     assert.equal(gecikmeCezasi(100_000, 0.5, 1, 4), 1000);
+    // 1557 a: tavan boşken sınırsız değil, plan motoruyla aynı %10.
+    assert.equal(gecikmeCezasi(100_000, 0.5, null, 30), 10_000);
+    assert.equal(gecikmeCezasi(100_000, 0.5, 50, 30), 15_000);
+    assert.equal(gecikmeCezasi(100_000, 0.5, 0, 4), 0);
     assert.equal(gecikmeCezasi(100_000, null, 10, 4), null);
   });
 
