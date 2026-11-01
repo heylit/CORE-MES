@@ -35,6 +35,7 @@ Sütunlar araçla okunur: `Durum` sabit listedendir; `Değiştirir` ve `Değişt
 | 0023 | NC programı tezgaha doğrudan gitmez | kabul | - | - | TMI tezgaha ve DNC'ye bağlanmaz; program yalnız indirilir, sistemin ürettiği program onaysız inmez. | istemci/src/moduller/cnc-kurulum/yeni/indir.ts |
 | 0024 | Güvenilmeyen geometri dosyası ayrı süreçte işlenir | kabul | 0001 | - | STEP/IGES yalnız ağsız, veritabanısız ayrı süreçte okunur; çökmesi ana sunucuyu durdurmaz. | sunucu/moduller/geometri/surec.ts#fork, sunucu/moduller/geometri/hesap-sureci.ts |
 | 0025 | Büyük kod tabanı için mühendislik kuralları | kabul | - | - | Deterministik kural dosyası, any yok, eksiksiz dal, istek izli günlük, kritik yazmada tekrar koruması ve eşzamanlılık testi, tohumlu test, markalı kimlik pilotu, denetim defteri, para/stok/yetki uçlarında strict; paket yok. | eslint.config.js, paylasilan/durum-gecis.ts#GecisTablosu, sunucu/cekirdek/tekrar.ts#TekrarDeposu, sunucu/cekirdek/test-vt.ts |
+| 0026 | Belgeler ve revizyonları tek modülde kontrol edilir | kabul | - | - | Belge, revizyon, bağ ve dağıtımın tek sahibi belge-merkezi; çizimler taşınır; taslak, onay bekliyor, yürürlükte, eski; dört göz ayarı varsayılan kapalı; okundu yok; emre sabitleme Aşama 2. | - |
 
 ## Kural
 
