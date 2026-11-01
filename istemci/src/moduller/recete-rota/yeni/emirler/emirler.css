@@ -233,3 +233,26 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
   .tc-rr3-adimlar > li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .tc-rr3-adimlar .tc-rr3-adim-saglam { grid-column: 2; flex-direction: row; gap: var(--b-1); justify-self: start; }
 }
+
+/* Çok katmanlı emir seçimi (1476-F): alt parçalar dal rengiyle (--bp); stoktan çıkan satır sönük. Dar ekranda serbest stok gizlenir. */
+.tc-rr3-ck {
+  display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3);
+  border: 1px solid var(--edge2); border-left: var(--b-1) solid var(--bp); border-radius: var(--yari-1); background: var(--panel2);
+}
+.tc-rr3-ck[data-kapali] { border-left-color: var(--edge2); }
+.tc-rr3-ck-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-4); font-weight: 700; }
+.tc-rr3-ck td { font-size: var(--yazi-s); }
+.tc-rr3-ck tr[data-disarida] td { color: var(--faint); }
+.tc-rr3-ck tr[data-disarida] .tc-rr1-pr-dal { opacity: var(--saydam-50); }
+.tc-rr3-ck [data-ton="yeter"] { color: var(--run); font-weight: 700; }
+.tc-rr3-ck [data-ton="yetmez"] { color: var(--hold); font-weight: 700; }
+.tc-rr3-ck-girinti { display: inline-block; }
+.tc-rr3-ck-girinti[data-katman="1"] { padding-left: var(--b-4); }
+.tc-rr3-ck-girinti[data-katman="2"] { padding-left: var(--b-6); }
+.tc-rr3-ck-girinti[data-katman="3"], .tc-rr3-ck-girinti[data-katman="4"] { padding-left: calc(var(--b-6) + var(--b-4)); }
+.tc-rr3-ck-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-4); font-size: var(--yazi-s); color: var(--muted); }
+.tc-rr3-ck-ozet b { color: var(--ink); }
+.tc-rr3-ck-bosluk { flex: 1 1 auto; }
+@media (max-width: 767px) {
+  .tc-rr3-ck-genis { display: none; }
+}

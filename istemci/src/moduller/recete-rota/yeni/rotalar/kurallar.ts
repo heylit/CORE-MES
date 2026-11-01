@@ -1,7 +1,7 @@
 import { dalDenetle, dalliMi, oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import type { RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type { PatlatmaOnizlemeCevabi, RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
 
 // R1 saf kuralları (205 a): bugünkü ekranın tarayıcı kuralları (rotaEksikleri, islemSuresiEksik, girdiOlur, stepFactors, matCost) ve
 // rota düzenlemesi. Veri bağlı durumun biçimidir (prototipin `st` alan adları). Kural ve yetki sahibinin ucundadır; buradakiler ekranın
@@ -589,3 +589,29 @@ export function adimSartnameKilidi(g: { revDurumu: RevDurumu | null; opNo: numbe
   if (g.kayitBekliyor) return 'Rota değişikliği kaydediliyor…';
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Patlamış rota (1476-F): sunucunun önizlemesinin gösterimi. Numara, dal ve kök başına adet sunucudadır; burada yalnız sıra ve özet.
+export type OnizlemeDugumu = PatlatmaOnizlemeCevabi['dugumler'][number];
+
+const yolParcalari = (dugum: string): number[] => dugum.split('.').map(Number);
+// Ağaç sırası: kök önce, her düğümün altı yol sırasıyla (tüketen adım sırası). Emir sırası sunucudan geldiği gibidir (alt önce).
+export function agacSirasi(dugumler: readonly OnizlemeDugumu[]): OnizlemeDugumu[] {
+  return [...dugumler].sort((a, b) => {
+    const x = yolParcalari(a.dugum);
+    const y = yolParcalari(b.dugum);
+    for (let i = 0; i < Math.min(x.length, y.length); i += 1) if (x[i] !== y[i]) return (x[i] ?? 0) - (y[i] ?? 0);
+    return x.length - y.length;
+  });
+}
+
+export function onizlemeOzeti(dugumler: readonly OnizlemeDugumu[]): { katman: number; parca: number; adim: number } {
+  return {
+    katman: dugumler.length === 0 ? 0 : Math.max(...dugumler.map((d) => d.katman)) + 1,
+    parca: dugumler.length,
+    adim: dugumler.reduce((t, d) => t + d.adimlar.length, 0),
+  };
+}
+
+// Düğümün adedi: kök başına adet x gösterilen miktar (baz kipte 1). Kök başına adet ondalık metindir.
+export const dugumAdedi = (d: Pick<OnizlemeDugumu, 'kokBasina'>, miktar: number): number => Math.round(Number(d.kokBasina) * miktar * 10_000) / 10_000;

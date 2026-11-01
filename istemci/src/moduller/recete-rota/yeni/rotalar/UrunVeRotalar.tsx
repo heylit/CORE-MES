@@ -4,13 +4,14 @@ import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
   adimEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, islemSuresiEksik, malzemeMaliyeti, rotaEksikleri, rotaSahibiOlur,
-  sirali, statuNo, yeniAdim, type Operasyon,
+  sirali, statuNo, yeniAdim, yururlukteki, type Operasyon,
 } from './kurallar.ts';
 import { sayi, YOK } from '../bicim.ts';
 import { tercihOku, tercihYaz, type RotaEkrani, type Secim } from './ortak.tsx';
 import { useRotaDuzeni, yeniKimlik } from './useRotaDuzeni.ts';
 import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
 import { AkisTablosu } from './AkisTablosu.tsx';
+import { PatlamisRota } from './PatlamisRota.tsx';
 import { AdimPaneli } from './AdimPaneli.tsx';
 import { DuzenlemePaneli } from './DuzenlemePaneli.tsx';
 import { RevizyonCubugu } from './RevizyonCubugu.tsx';
@@ -31,7 +32,9 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const kokId = kok !== null && h.malzeme.has(kok) ? kok : urunler[0]?.id ?? null;
   const [revUrun, setRevUrun] = useState<string | null>(null);
   const [liste, setListe] = useState(false);
-  const [gorunum, setGorunum] = useState(() => tercihOku('gorunum', 'sema'));
+  const [gorunumTercihi, setGorunum] = useState(() => tercihOku('gorunum', 'sema'));
+  // Patlamış rota (1476-F) emri açabilenindir; işlemi olmayanda kalmış tercih şemaya düşer.
+  const gorunum = gorunumTercihi === 'patlamis' && !o.yetki.rotaEmreKopyala ? 'sema' : gorunumTercihi;
   const [kip, setKip] = useState(() => tercihOku('miktar-kipi', 'siparis'));
   const [siparis, setSiparis] = useState(() => { const n = Number(tercihOku('siparis', '1')); return Number.isFinite(n) && n > 0 ? n : 1; });
   const [adimPaneli, setAdimPaneli] = useState(() => tercihOku('adim-paneli', '') === '1');
@@ -61,6 +64,8 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const agac = kokId ? agacUrunleri(kokId, duzen.adimlar, malzeme, (id) => duzen.adimlar(id).length > 0 || acikRevizyon(duzen.revler(id)) !== null) : [];
   const revId = revUrun !== null && agac.includes(revUrun) ? revUrun : kokId;
   const dugum = kokId ? agacKur(kokId, miktar, duzen.adimlar, malzeme) : null;
+  // Emir yalnız yürürlükteki revizyondan açılır; patlamış rota da ondan kurulur.
+  const yururlukteRevizyon = ((y) => (y === null ? null : Number(y.id)))(kokId ? yururlukteki(duzen.revler(kokId)) : null);
   // Özet çubuğu motorsuzdur: birim malzeme maliyeti (prototipte matCost) ve şemadaki rotaların eksikleri. Bitiş ve darboğaz plan işidir.
   const birim = (id: string): number | null => {
     const g = duzen.durum.maliyet?.malzeme[id];
@@ -163,8 +168,12 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         {!liste && (
           <>
             <span className="tc-rr1-seg" role="group" aria-label="Görünüm">
-              <button type="button" aria-pressed={gorunum !== 'tablo'} onClick={() => { tercih('gorunum', 'sema', setGorunum); }}><Simge ad="route" boyut="k" /> Akış şeması</button>
+              <button type="button" aria-pressed={gorunum !== 'tablo' && gorunum !== 'patlamis'} onClick={() => { tercih('gorunum', 'sema', setGorunum); }}><Simge ad="route" boyut="k" /> Akış şeması</button>
               <button type="button" aria-pressed={gorunum === 'tablo'} onClick={() => { tercih('gorunum', 'tablo', setGorunum); }}><Simge ad="grid" boyut="k" /> Akış tablosu</button>
+              {o.yetki.rotaEmreKopyala && (
+                <button type="button" aria-pressed={gorunum === 'patlamis'} title="Çok katmanlı emrin açılış görüntüsü: bütün alt parçaların adımları emir numarasıyla"
+                  onClick={() => { tercih('gorunum', 'patlamis', setGorunum); }}><Simge ad="layers" boyut="k" /> Patlamış rota</button>
+              )}
             </span>
             <span className="tc-rr1-seg" role="group" aria-label="Gösterilen miktar">
               <button type="button" aria-pressed={kip === 'baz'} onClick={() => { tercih('miktar-kipi', 'baz', setKip); }}>Baz miktar</button>
@@ -192,6 +201,9 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
       {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); setSecim(null); }} /> : (
         <>
           {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} />}
+          {gorunum === 'patlamis' && kokId ? (
+            <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
+          ) : (
           <div className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}`}>
             {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} />}
             {dugum ? (
@@ -207,6 +219,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             )}
             <DuzenlemePaneli r={r} />
           </div>
+          )}
         </>
       )}
     </div>

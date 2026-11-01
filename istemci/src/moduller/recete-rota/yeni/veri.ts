@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { PatlatmaOnizlemeCevabi, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
 
@@ -25,6 +25,7 @@ export const anahtarlar = {
   eskiKayit: [...RR_ANAHTARI, 'eski-kayit'] as const,
   stok: (idler: readonly number[]) => [...RR_ANAHTARI, 'stok', idler.join(',')] as const,
   sureler: (revizyonId: number, makineId: number | null) => [...RR_ANAHTARI, 'sureler', revizyonId, makineId] as const,
+  patlatma: (revizyonId: number) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId] as const,
 };
 
 // Köprü komutunun adı: tablo kopru.ts IZINLI_KOMUTLAR'dır (rota, emir, kaynak, statü, stok, maliyet). Tabloda olmayan ad gönderilmez.
@@ -115,6 +116,18 @@ export function useSureler(revizyonId: number | null, makineId: number | null = 
     queryKey: anahtarlar.sureler(revizyonId ?? 0, makineId),
     enabled: revizyonId !== null,
     queryFn: () => cagir<SurelerCevabi>(kopru, 'sure-oku', { revizyonId, makineId }),
+  });
+}
+
+// Patlamış rota önizlemesi (1476-F): ürünün yürürlükteki revizyonundan çok katmanlı emrin açılış görüntüsü; yazma yoktur. Uç
+// rota.emre-kopyala ister; ekran işlemi olmayana sormaz.
+export function usePatlatmaOnizlemesi(revizyonId: number | null, etkin = true) {
+  return useQuery({
+    queryKey: anahtarlar.patlatma(revizyonId ?? 0),
+    enabled: etkin && revizyonId !== null,
+    queryFn: async () => {
+      try { return await api.get<PatlatmaOnizlemeCevabi>(`/rota/revizyonlar/${String(revizyonId)}/patlatma-onizleme`); } catch (h) { throw new RrHatasi(h); }
+    },
   });
 }
 
