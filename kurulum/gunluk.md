@@ -5,6 +5,9 @@
   `D:\TMIV2\TMIV2-GUNLUK`), güncelleme ona dokunmaz. Bekçinin kendi günlüğü (`bekci.log`) aynı klasördedir.
 - Her gün yeni dosya: `sunucu-YYYY-AA-GG.log` (sunucunun yerel tarihi). Satırlar JSON'dur (pino); çerez ve yetki başlığı `[gizli]` yazılır.
 - 60 günden eski `sunucu-*.log` dosyaları gün dönerken silinir. Başka dosyaya dokunulmaz.
+- İstek başına tek satır yazılır ("Uç süresi": yol kalıbı, sorgu dizgesiz yol, istemci adresi, durum, süre, sorgu sayısı;
+  `kurulum/yavas-sorgular.md`; sorgu dizgesi kişisel veri taşıyabileceği için yazılmaz). Bilgi satırları
+  biriktirilip en geç ~0,2 sn sonra dosyaya düşer; hata ve ölümcül satırlar, öncekilerle birlikte, hemen yazılır.
 - Test ortamında günlük kapalıdır.
 
 ## Hata kodu

@@ -215,7 +215,11 @@ export async function uygulamaKur(secenek: UygulamaSecenegi, gunlukDizini?: stri
   }
   const { vt, ayar, kimlik = async () => null, denetle, tekrar } = secenek;
   const guvenilen = ayar.vekilAdresi === undefined ? GUVENILEN_VEKIL : [...GUVENILEN_VEKIL, ayar.vekilAdresi];
-  const app = Fastify({ logger: gunlukKur(ayar.ortam, gunlukDizini), trustProxy: guvenilen, genReqId: istekIziUret, requestIdHeader: false });
+  // İstek başına tek satır: Fastify'ın "incoming request" ve "request completed" satırları kapalıdır, yerine "Uç süresi"
+  // satırı (istek-olcumu.ts) yazılır. Beklenmeyen hata hata yöneticisinde ayrıca yazılır.
+  const app = Fastify({
+    logger: gunlukKur(ayar.ortam, gunlukDizini), trustProxy: guvenilen, genReqId: istekIziUret, requestIdHeader: false, disableRequestLogging: true,
+  });
   vekilUyarisiniKur(app, guvenilen, (ileti) => { app.log.warn(ileti); });
   hataYonetiminiKur(app);
   istekOlcumunuKur(app);

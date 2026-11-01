@@ -21,7 +21,8 @@ export interface OlcumSecenegi {
 export const YAVAS_UC_MS = 500;
 
 // Yavaşlık ölçülmeden hangi düzeltmenin işe yaradığı bilinmez: her cevapta süre ve sorgu sayısı yalnız yerel günlüğe
-// yazılır. Satır adresin kalıbını taşır, adresin kendisini değil: adresteki kimlik ve sorgu dizgesi günlüğe girmez.
+// yazılır. İstek başına tek satır budur (1748): güvenlik izi için istemci adresi ve sorgu dizgesiz yol da buradadır.
+// Sorgu dizgesi günlüğe girmez: arama metni gibi kişisel veri taşıyabilir.
 export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = {}): void {
   const yavasMs = secenek.yavasMs ?? YAVAS_UC_MS;
   const sayaclar = new WeakMap<object, Sayac>();
@@ -36,6 +37,8 @@ export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = 
     const olcum = {
       yontem: istek.method,
       yol: istek.routeOptions.url ?? null,
+      adres: istek.url.split('?', 1)[0] ?? '',
+      ip: istek.ip,
       durum: yanit.statusCode,
       sureMs,
       sorgu: sayaclar.get(istek)?.sorgu ?? 0,

@@ -10,7 +10,7 @@ import { uc, uclariKaydet } from './uc.ts';
 import { hataYonetiminiKur } from './uygulama.ts';
 
 // Yavaşlık ölçülmeden düzeltilemez: her uç cevabında süre ve o isteğin sorgu sayısı yerel günlüğe bir satır
-// yazılır, eşiği geçen uç ayrı iletiyle ayrılır. Satır adresin kalıbını taşır; adresteki değer ve sorgu metni girmez.
+// yazılır, eşiği geçen uç ayrı iletiyle ayrılır. Satır kalıbı, sorgu dizgesiz yolu ve istemci adresini taşır; sorgu metni girmez.
 describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   // Eşik uygulamaya göre seçilir: sayım testi yüklü makinede de yavaş sayılmasın, eşik testi kesin yavaş olsun.
@@ -66,7 +66,7 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
     await ortam?.kaldir();
   });
 
-  test('her istek yol kalıbı, durum, süre ve kendi sorgu sayısıyla bir satır yazar; eşzamanlı istekler karışmaz', async () => {
+  test('her istek yol kalıbı, sorgu dizgesiz yol, istemci adresi, durum, süre ve kendi sorgu sayısıyla bir satır yazar; eşzamanlı istekler karışmaz', async () => {
     gunluk.length = 0;
     const cevaplar = await Promise.all([3, 5, 0].map((kac) => sayimApp.inject({ method: 'GET', url: `/api/uc-sayi/${String(kac)}?gizli=deger-91` })));
     for (const c of cevaplar) assert.equal(c.statusCode, 200, c.body);
@@ -77,6 +77,8 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
     for (const s of olcumler) {
       assert.equal(s.yontem, 'GET');
       assert.equal(s.yol, '/api/uc-sayi/:kac');
+      assert.match(String(s.adres), /^\/api\/uc-sayi\/[035]$/);
+      assert.equal(s.ip, '127.0.0.1');
       assert.equal(s.durum, 200);
       assert.equal(typeof s.sureMs, 'number');
     }
