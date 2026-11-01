@@ -10,6 +10,7 @@ import { ResimAlani } from '../../ortak/ResimAlani.tsx';
 import { Alanlar, Cip, CipGrubu, CokSatirAlani, MetinAlani, SecenekGrubu, Yardim } from '../parcalar.tsx';
 import { Belgeler, TedarikciAlani } from './TicariAdimi.tsx';
 import { TurKartlari } from './Baslangic.tsx';
+import { AnalizAgirligi } from './AnalizAgirligi.tsx';
 import { useOlcuAletleri } from '../../veri.ts';
 import type { OlcuAleti } from '../../veri.ts';
 
@@ -209,6 +210,7 @@ export function GenelAdim({ adim }: { adim: { ozel?: string; alanlar?: readonly 
     <>
       {adim.ozel === 'alis' && <Alanlar><TedarikciAlani /></Alanlar>}
       <GenelAlanlar alanlar={adim.alanlar ?? []} />
+      {adim.alanlar?.some((a) => a.k === 'net') && <AnalizAgirligi />}
       {adim.alanlar?.some((a) => a.k === 'resim') && <ResimAlani tur={d.tur} no={kartlar.find((k) => k.kimlik === d.id)?.no} />}
       {adim.ozel === 'bakim' && d.tur === 'demirbas' && d.g.kalibrasyon === 'Gerekli' && <Alanlar><OlcuAletiAlani /></Alanlar>}
       {adim.ozel === 'bakim' && <BakimTarihleri />}
