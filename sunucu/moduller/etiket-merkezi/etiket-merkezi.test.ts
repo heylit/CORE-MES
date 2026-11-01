@@ -530,6 +530,54 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(kayitlar, [{ kaynak_tur: 'kalite-durum', kaynak_id: bakiye }]);
   });
 
+  test('EM-U20 (1287 a): sevk koli etiketi Sevkiyat kaleminden çıkar; koli başına etiket n/N; koli içi adet elle; QR kalemin emri; deftere kalem bir kez; koli yalnız sevk kolisinde', async () => {
+    const e = await emirAc();
+    const sahip = ortam!.sahip;
+    const firma = (await sahip.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Koli Müşteri', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
+    const nokta = (await sahip.tek<{ id: number }>(
+      "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, firma_id) VALUES ('Koli Noktası', 'musteri', 39.95, 32.75, $1) RETURNING id", [firma]))!.id;
+    const is = (await sahip.tek<{ id: number }>(
+      `INSERT INTO sevkiyat_isi (tarih, istenen_tarih, tur, birakis_noktasi_id, agirlik_kilogram, palet_sayisi, belge_no)
+       VALUES ('2031-05-02', '2031-05-02', 'teslimat', $1, 10, 1, 'DNM-K1') RETURNING id`, [nokta]))!.id;
+    // Kalem Sevkiyat'ın tablosudur; test kendi satırını doğrudan açar (bekleyen akışı Sevkiyat'ın testindedir).
+    const kalem = (await sahip.tek<{ id: number }>(
+      `INSERT INTO sevkiyat_bekleyen (kaynak, yon, firma_id, uretim_emri_id, malzeme_no, adet, is_id)
+       VALUES ('urun', 'gidis', $1, $2, $3, 200, $4) RETURNING id`, [firma, e.id, e.malzemeNo, is]))!.id;
+    const adres = (ek: string) => `/etiket-merkezi/sablonlar/sevk-koli-100x75/kayit-cikti?dil=zpl&dpi=203&tur=sevk-koli&id=${kalem},2147483004${ek}`;
+    const metinler = (c: KayitCiktiCevabi) => c.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
+
+    const tek = await al(yonetici, adres(''));
+    assert.equal(tek.statusCode, 200, tek.body);
+    const t = tek.json() as KayitCiktiCevabi;
+    assert.deepEqual(t.kayitlar, [{ id: kalem, baslik: `Deneme Koli Müşteri ${e.emirNo}` }]);
+    assert.deepEqual(t.eksikler, [2147483004]);
+    assert.equal((t.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `UE:${e.id}`);
+    assert.deepEqual(metinler(t).filter((m) => m.startsWith('Deneme Koli') || m.endsWith('adet') || m.startsWith('Koli ') || m.includes('DNM-K1')),
+      ['Deneme Koli Müşteri', '200 adet', 'Koli 1/1', '02.05.2031 · Belge DNM-K1']);
+
+    const koli = await al(yonetici, adres('&koliSayisi=4&koliIci=50'));
+    assert.equal(koli.statusCode, 200, koli.body);
+    const k = koli.json() as KayitCiktiCevabi;
+    assert.equal(k.kayitlar.length, 4, 'koli başına bir etiket');
+    assert.ok(metinler(k).includes('Koli içi 50 adet'), metinler(k).join(' | '));
+    assert.ok(metinler(k).includes('Koli 1/4'));
+    assert.match(k.komut, /Koli 4\/4/);
+    assert.equal((await al(yonetici, adres('&koliSayisi=501'))).statusCode, 400, 'koli sınırı');
+    assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=lot&id=${kalem}&koliSayisi=2`)).statusCode, 400, 'koli yalnız sevk kolisinde');
+    assert.equal((await al(yetkisiz, adres(''))).statusCode, 403);
+
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const c = await yaz(yonetici, '/etiket-merkezi/sablonlar/sevk-koli-100x75/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'sevk-koli', idler: [kalem], koli: { sayi: 3, ici: null } } });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.match((c.json() as IndirCevabi).komut, /Koli 3\/3/);
+    const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
+      'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
+    );
+    assert.deepEqual(kayitlar, [{ kaynak_tur: 'sevk-koli', kaynak_id: kalem }]);
+  });
+
   test('EM-U14: malzeme etiketi karttan, mal kabul seçimi o kabulün bütün lotlarından çıkar; mal kabul lotları deftere lot olarak bağlanır', async () => {
     const parti = await partiAc('P-ETK-MK');
     const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
@@ -635,7 +683,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       assert.deepEqual(e.sablonlar, [], e.kod);
     }
     // 1285 a: ilk tur kalite durum, hatalı parça ve sevk koli etiketi; 1288: dışarıdaki dört baskı yolu listede.
-    assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), ['sevk-koli']);
+    assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), []);
     assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['kalite-durum', 'konum', 'lot', 'malzeme', 'seri-no']);
     assert.equal((await al(yetkisiz, '/etiket-merkezi/etiketler')).statusCode, 403);
   });

@@ -20,6 +20,7 @@ const SABLONLAR: SablonlarCevabi = {
     { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [] },
     { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [] },
     { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [] },
+    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [] },
   ],
   alanlar: {},
   secenekler: {
@@ -354,6 +355,23 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText('LT-000502')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /çıkar/ })).toBeNull();
     expect(istekler).toContain('/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=mal-kabul&id=7');
+  });
+
+  it('sevk koli adresinde koli sayısı ve koli içi adet çıktı isteğine ve baskı gövdesine gider; koli sayısı sınırı denetlenir', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=sevk-koli&id=11');
+    expect(await screen.findByText('Sevk koli etiketleri')).toBeTruthy();
+    expect(screen.queryByText('Lot 100x50')).toBeNull();
+    fireEvent.change(await screen.findByLabelText('Koli sayısı'), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText(/^Koli içi adet/), { target: { value: '12,5' } });
+    await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/sevk-koli-100x75/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=sevk-koli&id=11&koliSayisi=4&koliIci=12.5'));
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yazıcıya gönder' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ govde: { yaziciId: 1, adet: 1, kayit: { tur: 'sevk-koli', idler: [11], koli: { sayi: 4, ici: 12.5 } } } });
+    fireEvent.change(screen.getByLabelText('Koli sayısı'), { target: { value: '0' } });
+    expect(screen.getByText('Koli sayısı 1 ile 500 arasında olur.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Yazıcıya gönder' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('bozuk adres seçim sayılmaz: hazır şablonlar örnek değerlerle açılır', async () => {

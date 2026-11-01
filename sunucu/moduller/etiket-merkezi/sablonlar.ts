@@ -29,6 +29,10 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'islem', ad: 'İşlem no ve adı' }, { anahtar: 'adetNeden', ad: 'Adet ve hurda nedeni' }, { anahtar: 'ayiran', ad: 'Ayıran ve zaman' },
     { anahtar: 'karar', ad: 'Karar veren, zaman, NCR no, not' },
   ],
+  'sevk-koli': [
+    { anahtar: 'qr', ad: 'QR (UE, kalemin emri)' }, { anahtar: 'musteri', ad: 'Müşteri' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
+    { anahtar: 'adet', ad: 'Koli içi adet' }, { anahtar: 'koli', ad: 'Koli sırası (n/N)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'sevk', ad: 'Sevk tarihi ve belge no' },
+  ],
   deneme: [{ anahtar: 'qr', ad: 'QR' }, { anahtar: 'yazici', ad: 'Dil ve çözünürlük' }],
 };
 
@@ -76,6 +80,12 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     metin(2, 2, 96, 9, 8, 'durum', true), kutu(2, 12, 96, 0.5, 0.5), qr(2, 14, 34),
     metin(38, 14, 60, 7, 5, 'lotNo', true), metin(38, 23, 60, 9, 3.5, 'malzeme'), metin(38, 34, 60, 9, 3.5, 'miktar'),
   ] },
+  // Müşteri en üstte; adet ve koli sırası büyük: kolinin içi açılmadan sayılır.
+  { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [
+    metin(2, 2, 96, 8, 6, 'musteri', true), kutu(2, 11, 96, 0.5, 0.5), qr(2, 13, 44),
+    metin(48, 13, 50, 12, 4, 'parca', true), metin(48, 27, 50, 8, 5, 'adet', true), metin(48, 37, 50, 8, 5, 'koli', true),
+    metin(48, 47, 50, 5, 3.5, 'emirNo'), metin(48, 53, 50, 5, 3, 'sevk'),
+  ] },
   // Durum en üstte ve büyük: parça uzaktan ayrılır. Lot etiketiyle aynı rulo (100x50).
   { anahtar: 'hatali-parca-100x50', ad: 'Hatalı parça 100x50', tur: 'hatali-parca', genislik: 100, yukseklik: 50, ogeler: [
     metin(2, 2, 96, 7, 6, 'durum', true), kutu(2, 9.5, 96, 0.5, 0.5), qr(2, 11, 36),
@@ -110,6 +120,10 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
   istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
   'kalite-durum': {
     qr: `${KOD_ONEKI.lot}:LT-000123`, durum: 'KARAR BEKLİYOR', lotNo: 'LT-000123', malzeme: 'Örnek çubuk Ø40 · ORN-HM-01', miktar: '120 kg · Konum ORN-A01',
+  },
+  'sevk-koli': {
+    qr: `${KOD_ONEKI['uretim-emri']}:4512`, musteri: 'Örnek Müşteri', parca: 'ORN-FL-01 · Örnek flanş', adet: 'Koli içi 50 adet', koli: 'Koli 1/4',
+    emirNo: 'UE-004512', sevk: '30.10.2026 · Belge ORN-1',
   },
   'hatali-parca': {
     qr: `${KOD_ONEKI['uretim-emri']}:4513`, durum: 'KARAR BEKLİYOR', emirNo: 'UE-004512 · kol UE-004513', parca: 'ORN-FL-01 · Örnek flanş', islem: 'OP 20 Örnek frezeleme',

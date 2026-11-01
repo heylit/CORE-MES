@@ -9,3 +9,4 @@ Bu PR'a gerekmez; kaynak bağlama PR'ından önce sahiplerine gider.
 - uretim-emirleri ve lot ekranları: "Etiket Merkezi'nde bas" bağlantısı aynı biçimle (`/etiket-merkezi?tur=<tur>&id=<id,...>`), tür eklendikçe.
 - stok (#115): Okut ve teslimde `RAF:<raf kodu>` okutulunca rafın gözleri listelensin, göz seçilsin (raf stok konumu değildir). Etiket Merkezi rafı Fabrika Haritası raf kimliğiyle basar (#116).
 - uretim-emirleri (kart 1525): hatalı parça listesinde ve kalite kararı ekranında "Etiket bas" bağlantısı `/etiket-merkezi?tur=hatali-parca&id=<hatalı kayıt kimliği,...>`, yalnız `sayfa.etiket-merkezi` olana. Veri `disari.ts hataliKaydi` ile okunuyor; yeni fonksiyon gerekmedi.
+- sevkiyat (kart 1525): müşteriye giden kalemde (Tüm işler, sevke hazır listesi) "Koli etiketi" bağlantısı `/etiket-merkezi?tur=sevk-koli&id=<kalem kimliği,...>`, yalnız `sayfa.etiket-merkezi` olana. Veri `disari.ts koliKalemleri` ile okunuyor (1525 adım 2b).

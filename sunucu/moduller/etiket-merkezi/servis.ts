@@ -14,11 +14,12 @@ import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
-import { hataliKaydi, refakatKarti } from '../uretim-emirleri/disari.ts';
+import { koliKalemleri } from '../sevkiyat/disari.ts';
+import { hataliKaydi, refakatKarti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, hataliParcaDegerleri, kaliteDurumDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  baskiEngeli, dogrudanBaskiDurumu, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -98,6 +99,22 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
     const satirlar = await kaliteEtiketleri(db, k.idler);
     return tekli(new Map(satirlar.map((e) => [e.bakiyeId, { id: e.bakiyeId, baslik: `${e.lotNo} ${e.konumKod}`, degerler: kaliteDurumDegerleri(e) }])));
   }
+  if (k.tur === 'sevk-koli') {
+    // Kalem başına koli sayısı kadar etiket (n/N); deftere kalem bir kez yazılır. Emir no ve parça sahiplerinden okunur.
+    const kalemler = await koliKalemleri(db, k.idler);
+    const malzemeler = await malzemeOzetleri(db, [...new Set(kalemler.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))]);
+    const emirNolari = new Map<number, string | null>();
+    for (const e of new Set(kalemler.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])))) emirNolari.set(e, (await uretimEmriOzeti(db, e))?.emirNo ?? null);
+    const toplam = k.koli?.sayi ?? 1;
+    return new Map(kalemler.map((x) => {
+      const emirNo = x.uretimEmriId === null ? null : emirNolari.get(x.uretimEmriId) ?? null;
+      const m = x.malzemeNo === null ? null : malzemeler.get(x.malzemeNo) ?? null;
+      const baslik = [x.firmaAdi, emirNo ?? x.belgeNo].filter(Boolean).join(' ') || `Kalem ${x.kalemId}`;
+      return [x.kalemId, Array.from({ length: toplam }, (_, i) => ({
+        id: x.kalemId, baslik, degerler: sevkKoliDegerleri(x, emirNo, m, i + 1, toplam, k.koli?.ici ?? null),
+      }))];
+    }));
+  }
   if (k.tur === 'malzeme') {
     const ozetler = await malzemeOzetleri(db, k.idler);
     return tekli(new Map([...ozetler].map(([id, o]) => [id, { id, baslik: o.kod, degerler: malzemeDegerleri(o) }])));
@@ -162,11 +179,13 @@ export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, sece
   const sablon = sablonBul(anahtar);
   const uyum = kayitUyumHatasi(sablon.tur, k.tur);
   if (uyum !== null) throw dogrulama(uyum);
-  const toplam = toplamEtiketHatasi(k.idler.length, secenek.adet);
+  const koli = koliHatasi(k.tur, k.koli);
+  if (koli !== null) throw dogrulama(koli);
+  const toplam = toplamEtiketHatasi(k.idler.length * (k.koli?.sayi ?? 1), secenek.adet);
   if (toplam !== null) throw dogrulama(toplam, 'adet');
   const { bulunan, eksikler } = await kayitDegerleri(db, k);
   if (bulunan.length === 0) throw bulunamadi('Seçilen kayıtlar bulunamadı.');
-  // Mal kabul birden çok lot verir; sınır basılacak etiket sayısıyla yeniden denetlenir.
+  // Mal kabul birden çok lot, sevk kolisi koli sayısı kadar etiket verir; sınır basılacak etiket sayısıyla yeniden denetlenir.
   const basilacak = toplamEtiketHatasi(bulunan.length, secenek.adet);
   if (basilacak !== null) throw dogrulama(basilacak, 'adet');
   return {
@@ -253,9 +272,9 @@ function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): P
   return g.kayit ? kayitCiktisi(db, anahtar, g.kayit, secenek) : Promise.resolve({ ...ornekCikti(anahtar, secenek), kayitlar: null });
 }
 
-// Defterde yalnız gerçekten komuta giren (bulunan) kayıtlar yer alır.
+// Defterde yalnız gerçekten komuta giren (bulunan) kayıtlar yer alır; koliler gibi bir kaydın birden çok etiketi tek satırdır.
 function basilanKayitlar(g: BasGovdesi, hazir: { kayitlar: KayitCiktiCevabi['kayitlar'] | null }): { tur: string; idler: number[] } | null {
-  return g.kayit && hazir.kayitlar ? { tur: kayitSablonTuru(g.kayit.tur), idler: hazir.kayitlar.map((k) => k.id) } : null;
+  return g.kayit && hazir.kayitlar ? { tur: kayitSablonTuru(g.kayit.tur), idler: [...new Set(hazir.kayitlar.map((k) => k.id))] } : null;
 }
 
 export async function baskilar(db: Db): Promise<BaskilarCevabi> {

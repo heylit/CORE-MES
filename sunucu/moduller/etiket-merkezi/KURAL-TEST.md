@@ -44,3 +44,5 @@
 | Hatalı parça kaydı Üretim Emirleri'nden; olmayan eksikte; lot şablonu basmaz; deftere `hatali-parca` olarak kayıt kimliği; `oku` olmayan 403 | `EM-U18` |
 | EM-22: kalite durum etiketi bakiye satırından; durum satırdan, stok hal adlarıyla; QR lot (`LOT:`) | `kurallar.test.ts` EM-7, `EM-U19` |
 | Kalite durumu stoktan (`disari.ts kaliteEtiketleri`); olmayan, lotsuz, boş satır eksikte; lot şablonu basmaz; deftere `kalite-durum` olarak bakiye satırı; `oku` olmayan 403 | `EM-U19` |
+| EM-23: sevk koli etiketi Sevkiyat kaleminden; koli başına bir etiket (n/N); koli içi adet elle, yoksa kalemin adedi; QR kalemin emri (`UE:`), emirsizde yok | `kurallar.test.ts` EM-7, `EM-U20`, `EtiketMerkezi.test.tsx` |
+| EM-24: koli sayısı yalnız sevk kolisinde (başka türde 400); kayıt x koli x adet sınırı; deftere kalem bir kez | `EM-U20` |

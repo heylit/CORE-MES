@@ -4,6 +4,7 @@ import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
+import type { Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
@@ -179,6 +180,10 @@ export function kayitSablonTuru(kayitTuru: KayitTuru): SablonTuru {
 }
 
 // EM-12: bir baskıda kayıt sayısı x adet en çok EN_COK_ADET etikettir (yanlışlıkla rulo bitirilmesin).
+// EM-24: koli sayısı ve koli içi adet yalnız sevk kolisinde girilir.
+export const koliHatasi = (kayitTuru: KayitTuru, koli: Koli | undefined): string | null =>
+  koli !== undefined && kayitTuru !== 'sevk-koli' ? 'Koli sayısı yalnız sevk kolisi etiketinde girilir.' : null;
+
 export function toplamEtiketHatasi(kayitSayisi: number, adet: number): string | null {
   return kayitSayisi * adet > EN_COK_ADET ? `Bir baskıda en çok ${EN_COK_ADET} etiket basılır (${kayitSayisi} kayıt x ${adet} adet).` : null;
 }
@@ -307,5 +312,23 @@ export function kaliteDurumDegerleri(e: {
     lotNo: e.lotNo,
     malzeme: birlestir([e.malzemeAd ?? `Kart ${e.malzemeId}`, e.malzemeKod]),
     miktar: birlestir([[miktarYazisi(e.miktar), e.birim].filter(Boolean).join(' '), `Konum ${e.konumKod}`]),
+  };
+}
+
+// EM-23 (1287 a): sevk koli etiketi Sevkiyat'ın giden kalemini basar; her koli ayrı etikettir (n/N). Koli içi adet elle girilir;
+// girilmezse kalemin adedi basılır. QR kalemin emridir (`UE:`; 1287 a: QR yeter, yeni önek yok); emirsiz kalemde QR basılmaz.
+// İrsaliye no uydurulmaz: belge no işin belge numarasıdır, yoksa boş kalır.
+export function sevkKoliDegerleri(k: {
+  firmaAdi: string | null; tarih: string | null; belgeNo: string | null; adet: string | null; aciklama: string | null; uretimEmriId: number | null;
+}, emirNo: string | null, malzeme: { ad: string | null; kod: string | null } | null, sira: number, toplam: number, ici: number | null): AlanDegerleri {
+  const adet = ici !== null ? miktarYazisi(String(ici)) : k.adet === null ? null : miktarYazisi(k.adet);
+  return {
+    qr: k.uretimEmriId === null ? null : `${KOD_ONEKI['uretim-emri']}:${k.uretimEmriId}`,
+    musteri: k.firmaAdi,
+    parca: malzeme === null ? k.aciklama : birlestir([malzeme.kod, malzeme.ad]),
+    adet: adet === null ? null : `${ici !== null ? 'Koli içi ' : ''}${adet} adet`,
+    koli: `Koli ${sira}/${toplam}`,
+    emirNo,
+    sevk: birlestir([k.tarih && gunAyYil(k.tarih), k.belgeNo && `Belge ${k.belgeNo}`]),
   };
 }

@@ -87,3 +87,11 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Basılan: durum (SERBEST, KARAR BEKLİYOR, ŞARTLI, RED; satırdan, elle seçilmez), lot no, malzeme adı ve kodu, miktar, birim ve konum. QR `LOT:<lot no>`. Karar tarihi, karar veren, GKK/NCR basılmaz (UYUM-BORCU 21).
 - Deftere `kaynak_tur = 'kalite-durum'`, `kaynak_id` bakiye satırı. Göç `20261031211100_etiket_merkezi_kalite_durum.sql` (1530): etiket listesinde `kalite-durum` satırı `hazir` olur; tür kısıtı 20261031211000'de açıldı. Dışarıdaki yol (KF-19) adım 4'te boşalır.
 - Uç, işlem ve rol değişmedi.
+
+## Sevk koli etiketi (kart 1525, 1287 a)
+- Yeni şablon türü ve kayıt türü `sevk-koli`; hazır şablon `sevk-koli-100x75`. Kaynak Sevkiyat `disari.ts koliKalemleri` (ayrı sevkiyat yaması, 1525 adım 2b); emir no Üretim Emirleri `uretimEmriOzeti`, parça Malzemeler `malzemeOzetleri`.
+- Kimlik Sevkiyat'ın müşteriye giden kalemidir (ürün ve elle gidiş; geliş, fason, kaldırılmış ve iptal işin kalemi eksik).
+- Koli sayısı ve koli içi adet Etiket Merkezi'nde elle girilir (sözleşme: kayıt seçiminde istege bağlı `koli: { sayi, ici }`, kayıt çıktısında `koliSayisi`, `koliIci`); her koli ayrı etikettir ("Koli n/N"). Koli içi adet boşsa kalemin adedi basılır. Koli yalnız sevk kolisinde geçerlidir (başka türde 400). Sınır kayıt x koli x adet.
+- Basılan: müşteri, parça no ve adı (elle kalemde açıklama), adet, koli sırası, emir no, sevk tarihi ve belge no. QR kalemin emri `UE:<kimlik>` (1287 a: QR yeter); emirsiz kalemde QR yok. Sipariş no, revizyon, lot basılmaz (UYUM-BORCU 23).
+- Deftere `kaynak_tur = 'sevk-koli'`, `kaynak_id` kalem, koli sayısından bağımsız bir kez. Göç `20261031211200_etiket_merkezi_sevk_koli.sql` (1530): etiket listesinde `sevk-koli` satırı `hazir` olur.
+- Uç, işlem ve rol değişmedi.
