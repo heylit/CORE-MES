@@ -655,12 +655,13 @@ export async function ayarListeleriniYaz(db: Db, a: AyarlarKaydetYazimi): Promis
 export interface SiparisSatiriOkuma {
   id: number; talepId: string; talepNo: string; siparisNo: string; firmaId: number | null; tedarikciAdi: string;
   malzemeNo: number | null; kalemAdi: string; miktar: string; kalanMiktar: string; birim: string; beklenenTeslim: string | null;
+  isEmriId: number | null; parcaRevizyonu: string | null;
 }
 export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Promise<SiparisSatiriOkuma[]> {
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
         c.malzeme_no AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
-        p.beklenen_teslim AS "beklenenTeslim"
+        p.beklenen_teslim AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -1122,4 +1123,22 @@ export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Pro
       ORDER BY p.beklenen_teslim, p.id`,
     [baslangic, bitis],
   );
+}
+
+// 1647: revizyonu henüz yazılmamış, malzemeli sipariş satırları (talep başına) ve revizyonun bir kez yazılması.
+export function revizyonsuzSiparisSatirlari(db: Db, talepId: string): Promise<{ id: number; malzemeNo: number }[]> {
+  return db.sorgu(
+    `SELECT s.id, c.malzeme_no AS "malzemeNo"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE s.talep_id = $1 AND s.parca_revizyonu IS NULL AND c.malzeme_no IS NOT NULL
+      ORDER BY s.id`, [talepId]);
+}
+export async function siparisSatiriRevizyonlariYaz(db: Db, satirlar: readonly { id: number; parcaRevizyonu: string }[]): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `UPDATE satin_alma_siparis_satiri s SET parca_revizyonu = r.rev
+       FROM unnest($1::int[], $2::text[]) AS r(id, rev) WHERE s.id = r.id AND s.parca_revizyonu IS NULL`,
+    [satirlar.map((x) => x.id), satirlar.map((x) => x.parcaRevizyonu)]);
 }
