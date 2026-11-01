@@ -58,7 +58,7 @@ import {
   bolmeNo, malKabulGozOnerisi, partiSec, rafGozleri, rotaSirala, sayimFarki, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, stokDurumu, tersYon,
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
-  sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
+  sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
@@ -260,7 +260,7 @@ export async function fasonEksikGonderimSayisi(db: Db): Promise<number> {
     if (x.firmaId === null || (x.gonderilen ?? 0) <= 0) continue;
     if (!emirler.has(x.uretimEmriId)) emirler.set(x.uretimEmriId, await uretimEmriOzeti(db, x.uretimEmriId));
     const emir = emirler.get(x.uretimEmriId)!;
-    const bilgi = await adimUretimBilgisi(db, x.isEmriId);
+    const bilgi = await adimBilgisi(db, x.isEmriId);
     if (!emir || emir.malzemeNo === null || !bilgi || (bilgi.onculOpNolari ?? bilgi.oncekiOpNolari).length === 0) continue;
     if (!kartlar.has(emir.malzemeNo)) kartlar.set(emir.malzemeNo, await malzemeOzeti(db, emir.malzemeNo));
     const o = kartlar.get(emir.malzemeNo)!;
@@ -2746,7 +2746,7 @@ export async function sepettenCek(db: Db, k: Kullanici, g: SepettenCekGovdesi): 
 // ---- Üretime hazırlık (kart #1289) ------------------------------------------------------------------------------------------------
 // Adımın girdileri istasyonda serbest (statüsüz, yoldaki teslime ayrılmamış) miktarla karşılaştırılır; bir adetlik yoksa eksiktir.
 async function baslatmaGirdiEksikleri(db: Db, uretimEmriId: number, isEmriId: number, istasyonId: number, adet: number): Promise<BaslatmaEksigi[]> {
-  const bilgi = await adimUretimBilgisi(db, isEmriId);
+  const bilgi = await adimBilgisi(db, isEmriId);
   if (bilgi === null || bilgi.girdiler.length === 0) return [];
   // Hizmet stoklanmaz: istasyona gelmesi beklenmez.
   const kartlar = await malzemeOzetleri(db, [...new Set(bilgi.girdiler.map((g) => g.malzemeNo))]);
@@ -2757,7 +2757,10 @@ async function baslatmaGirdiEksikleri(db: Db, uretimEmriId: number, isEmriId: nu
     const satirlar = konumId === null ? [] : (await sorgular.uretimGirdiKaynaklari(db, m, null, konumId, uretimEmriId)).filter((k) => k.konumId === konumId);
     istasyonda.set(m, satirlar.reduce((t, k) => t + binde(k.serbest), 0n));
   }
-  return baslatmaEksikleri(girdiler, istasyonda, BigInt(adet) * 1000n);
+  // Çok katmanlı emirde alt düğümün girdisi alt parça başınadır: emrin bütün adedi kök başına adetle çarpılır (1476-C). Dal çarpanı
+  // malzemeyi çarpmaz (1333 a): tek katmanlı emirde ve kökte emir adedi.
+  const carpan = Number((await emirDugumleri(db, uretimEmriId)).get(bilgi.opNo)?.birimCarpani ?? 1);
+  return baslatmaEksikleri(girdiler, istasyonda, BigInt(Math.round(adet * carpan * 1000)));
 }
 
 // Terminal başlatmadan önce sorar: her eksik girdi için istasyona malzeme isteği bir kez açılır (aynı adım ve malzeme ikinci istek açmaz,
@@ -2783,7 +2786,7 @@ export async function uretimHazirligi(db: Db, k: Kullanici, g: UretimHazirligiGo
 interface TasinanGirdi { malzemeId: number; statuId: number | null; birAdet: bigint }
 // Dallı emirde (1348 a) birleştirme adımına her dalın parçası ayrı gelir; dal başına önceki parça gelmez.
 async function tasinanGirdileri(
-  db: Db, malzemeNo: number, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, uretimEmriId: number,
+  db: Db, malzemeNo: number, bilgi: AdimBilgisi, uretimEmriId: number,
 ): Promise<TasinanGirdi[]> {
   const stoklanir = async (m: number) => stoklanirMi((await malzemeOzeti(db, m))?.tur ?? '');
   const dalli = await dalliTasima(db, malzemeNo, bilgi, uretimEmriId);
@@ -2791,7 +2794,7 @@ async function tasinanGirdileri(
     const l: TasinanGirdi[] = [];
     for (const p of dalli.gelenler) {
       if (bilgi.girdiler.some((g) => g.malzemeNo === p.malzemeId) || !(await stoklanir(p.malzemeId))) continue;
-      l.push({ malzemeId: p.malzemeId, statuId: p.statuId, birAdet: adetMiktari(oranliAdet(1000n, p.oran), p.miktar) });
+      l.push({ malzemeId: p.malzemeId, statuId: p.statuId, birAdet: adetMiktari(oranliAdet(1000n, p.oran), p.miktar, p.bolen) });
     }
     return l;
   }
@@ -2799,11 +2802,11 @@ async function tasinanGirdileri(
   if (oncekiOpNo === null || tasinan === null || bilgi.girdiler.some((g) => g.malzemeNo === tasinan.malzemeNo)) return [];
   if (!(await stoklanir(tasinan.malzemeNo))) return [];
   const statuId = adimStatusu === null || (await cikti(oncekiOpNo)) !== null ? null : await adimStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId });
-  return [{ malzemeId: tasinan.malzemeNo, statuId, birAdet: adetMiktari(1000n, tasinan.miktar) }];
+  return [{ malzemeId: tasinan.malzemeNo, statuId, birAdet: adetMiktari(1000n, tasinan.miktar, tasinan.bolen) }];
 }
 async function adimTasinanGirdileri(db: Db, uretimEmriId: number, malzemeNo: number, opNo: number): Promise<TasinanGirdi[]> {
   const isEmriId = (await adimliEmirAyrintisi(db, uretimEmriId)).isEmirleri.find((x) => x.opNo === opNo)?.id;
-  const bilgi = isEmriId === undefined ? null : await adimUretimBilgisi(db, isEmriId);
+  const bilgi = isEmriId === undefined ? null : await adimBilgisi(db, isEmriId);
   return bilgi === null ? [] : tasinanGirdileri(db, malzemeNo, bilgi, uretimEmriId);
 }
 async function istasyondakiSerbest(db: Db, malzemeId: number, statuId: number | null, konumId: number | null, uretimEmriId: number): Promise<bigint> {
@@ -2816,7 +2819,7 @@ async function tasinanEksikleri(
   db: Db, emir: { id: number; malzemeNo: number | null }, isEmriId: number, istasyonId: number,
 ): Promise<UretimHazirligiCevabi['eksikler']> {
   if (emir.malzemeNo === null) return [];
-  const bilgi = await adimUretimBilgisi(db, isEmriId);
+  const bilgi = await adimBilgisi(db, isEmriId);
   const l: UretimHazirligiCevabi['eksikler'] = [];
   for (const t of bilgi === null ? [] : await tasinanGirdileri(db, emir.malzemeNo, bilgi, emir.id)) {
     const e = await tasinanEksigi(db, emir.id, t, istasyonId);
@@ -2837,7 +2840,7 @@ async function tasinanEksigi(db: Db, emirId: number, t: TasinanGirdi, istasyonId
 async function eksikIstekleriAc(
   db: Db, kisiId: number, emir: { id: number; emirNo: string; adet: number }, isEmriId: number, istasyonId: number, neden: string,
 ): Promise<UretimHazirligiCevabi['eksikler']> {
-  const opNo = (await adimUretimBilgisi(db, isEmriId))?.opNo ?? 0;
+  const opNo = (await adimBilgisi(db, isEmriId))?.opNo ?? 0;
   const eksikler = await baslatmaGirdiEksikleri(db, emir.id, isEmriId, istasyonId, emir.adet);
   const kartlar = await malzemeOzetleri(db, eksikler.map((e) => e.malzemeId));
   const istasyonKonumu = await sorgular.istasyonKonumu(db, istasyonId);
@@ -3736,12 +3739,31 @@ export async function statuler(db: Db): Promise<StatulerCevabi> {
   return { statuler: statuListesiCozucu ? await statuListesiCozucu(db) : [] };
 }
 
+// 1532 a (1333 a): dal adımında reçete miktarı mamul başınadır, adım mamul başına çarpan kadar parça işler; her girdi adımın kendi dal
+// çarpanını bölen olarak taşır (adetMiktari). Çok katmanlı emirde (1476) alt düğümün bileşeni zaten alt parça başınadır: bölen yalnız
+// düğümün kendi dal çarpanıdır (emirdeki çarpan / kök başına adet).
+type AdimBilgisi = Omit<NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, 'girdiler' | 'emirAdimlari'> & {
+  girdiler: ReceteGirdisi[];
+  emirAdimlari: (Omit<NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>['emirAdimlari'][number], 'girdiler'> & { girdiler: ReceteGirdisi[] })[];
+};
+async function adimBilgisi(db: Db, isEmriId: number): Promise<AdimBilgisi | null> {
+  const b = await adimUretimBilgisi(db, isEmriId);
+  if (b === null) return null;
+  const dugumler = await emirDugumleri(db, b.uretimEmriId);
+  const bolenli = (opNo: number, carpan: number | null, girdiler: readonly { malzemeNo: number; miktar: string }[]): ReceteGirdisi[] => {
+    const bolen = Math.round((carpan ?? 1) / Number(dugumler.get(opNo)?.birimCarpani ?? 1));
+    return girdiler.map((g) => (bolen > 1 ? { ...g, bolen } : { ...g }));
+  };
+  const emirAdimlari = b.emirAdimlari.map((a) => ({ ...a, girdiler: bolenli(a.opNo, a.adetCarpani, a.girdiler) }));
+  const kendi = b.emirAdimlari.find((a) => a.opNo === b.opNo);
+  return { ...b, emirAdimlari, girdiler: bolenli(b.opNo, kendi?.adetCarpani ?? null, b.girdiler) };
+}
 // Taşınan, en yakın çıktılı önceki adımın çıktısıdır (bir adet); çıktılı önceki adım yoksa ilk adımın ilk girdisi. Taşınan yoksa null:
 // sayım eski yolla (yalnız ürün girişi) yansır.
 // Çıktı emrin revizyonundan çözülür (1214 D-8): yürürlükteki rota sonradan değişse de açık emir statüsüyle aynı rotayı okur.
 async function adimTasinani(
-  db: Db, malzemeNo: number, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, uretimEmriId: number,
-): Promise<{ oncekiOpNo: number | null; tasinan: { malzemeNo: number; miktar: string } | null; cikti: (opNo: number) => Promise<number | null> }> {
+  db: Db, malzemeNo: number, bilgi: AdimBilgisi, uretimEmriId: number,
+): Promise<{ oncekiOpNo: number | null; tasinan: ReceteGirdisi | null; cikti: (opNo: number) => Promise<number | null> }> {
   const cikti = async (opNo: number) => (adimCiktisi === null ? null : adimCiktisi(db, { malzemeNo, opNo, uretimEmriId }));
   const oncekiOpNo = bilgi.oncekiOpNolari.at(-1) ?? null;
   let oncekiCikti: number | null = null;
@@ -3754,30 +3776,30 @@ async function adimTasinani(
 // Dallı emirde (1348 a) adımın taşıdığı ve öncüllerinden gelen parçalar; öncül listesi olmayan emirde null (adimTasinani geçerli).
 // Gelen parça öncülün çıktısıdır (statüsüz, bir adet) ya da öncülün taşıdığı malzemenin öncül statüsündeki hâli; adedi dal çarpanı oranıyla
 // (1360): adımın bir adedine öncülden oran kadar parça gelir.
-interface GelenParca { opNo: number; malzemeId: number; statuId: number | null; miktar: string; oran?: GelenOrani }
-interface DalliTasima { kaynak: TasimaKaynagi; tasinan: { malzemeNo: number; miktar: string } | null; gelenler: GelenParca[] }
+interface GelenParca { opNo: number; malzemeId: number; statuId: number | null; miktar: string; bolen?: number; oran?: GelenOrani }
+interface DalliTasima { kaynak: TasimaKaynagi; tasinan: ReceteGirdisi | null; gelenler: GelenParca[] }
 async function dalliTasima(
-  db: Db, malzemeNo: number, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, uretimEmriId: number,
+  db: Db, malzemeNo: number, bilgi: AdimBilgisi, uretimEmriId: number,
 ): Promise<DalliTasima | null> {
   if (bilgi.onculOpNolari === null) return null;
   const dugumler = await emirDugumleri(db, uretimEmriId);
   const zincir = bilgi.emirAdimlari.map((a) => ({ ...a, dugum: dugumler.get(a.opNo)?.dugum ?? null }));
   const cikti = async (opNo: number) => (adimCiktisi === null ? null : adimCiktisi(db, { malzemeNo, opNo, uretimEmriId }));
   const statu = async (opNo: number) => (adimStatusu === null ? null : adimStatusu(db, { malzemeNo, opNo, uretimEmriId }));
-  const tasinanlar = new Map<number, { malzemeNo: number; miktar: string } | null>();
+  const tasinanlar = new Map<number, ReceteGirdisi | null>();
   const parca = async (opNo: number): Promise<GelenParca | null> => {
     const c = await cikti(opNo);
     if (c !== null) return { opNo, malzemeId: c, statuId: null, miktar: '1' };
     const t = await tasinanOf(opNo);
-    return t === null ? null : { opNo, malzemeId: t.malzemeNo, statuId: await statu(opNo), miktar: t.miktar };
+    return t === null ? null : { opNo, malzemeId: t.malzemeNo, statuId: await statu(opNo), miktar: t.miktar, ...(t.bolen === undefined ? {} : { bolen: t.bolen }) };
   };
-  const tasinanOf = async (opNo: number): Promise<{ malzemeNo: number; miktar: string } | null> => {
+  const tasinanOf = async (opNo: number): Promise<ReceteGirdisi | null> => {
     if (tasinanlar.has(opNo)) return tasinanlar.get(opNo)!;
     const k = tasimaKaynagi(zincir, opNo);
-    let t: { malzemeNo: number; miktar: string } | null = null;
+    let t: ReceteGirdisi | null = null;
     if (k?.tur === 'ilk') t = k.girdi;
     else if (k?.tur === 'birlesme') t = { malzemeNo: dugumler.get(opNo)?.malzemeNo ?? malzemeNo, miktar: '1' };
-    else if (k?.tur === 'oncul') { const p = await parca(k.opNo); t = p === null ? null : { malzemeNo: p.malzemeId, miktar: p.miktar }; }
+    else if (k?.tur === 'oncul') { const p = await parca(k.opNo); t = p === null ? null : { malzemeNo: p.malzemeId, miktar: p.miktar, ...(p.bolen === undefined ? {} : { bolen: p.bolen }) }; }
     tasinanlar.set(opNo, t);
     return t;
   };
@@ -3790,7 +3812,7 @@ async function dalliTasima(
   return { kaynak, tasinan: await tasinanOf(bilgi.opNo), gelenler };
 }
 async function adimPlaniKur(
-  db: Db, uretimEmriId: number, malzemeNo: number, statuId: number | null, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, adet: bigint,
+  db: Db, uretimEmriId: number, malzemeNo: number, statuId: number | null, bilgi: AdimBilgisi, adet: bigint,
 ): Promise<UretimAdimPlani | null> {
   const dalli = await dalliTasima(db, malzemeNo, bilgi, uretimEmriId);
   if (dalli !== null) {
@@ -3828,7 +3850,7 @@ export async function uretimSayimiYansit(db: Db, g: UretimSayimiYansimasi): Prom
   const statuId = adim === null || adimStatusu === null ? null : await adimStatusu(db, { malzemeNo: malzemeId, opNo: adim.opNo, uretimEmriId: g.uretimEmriId });
   const konumId = await istasyonKonumuBul(db, g.istasyonId, 'istasyonId');
   const aciklama = `Üretim sayımı · emir ${emir.emirNo}${adim ? ` · OP ${String(adim.opNo)}` : ''}`;
-  const bilgi = g.isEmriId === null ? null : await adimUretimBilgisi(db, g.isEmriId);
+  const bilgi = g.isEmriId === null ? null : await adimBilgisi(db, g.isEmriId);
   const plan = bilgi === null ? null : await adimPlaniKur(db, g.uretimEmriId, malzemeId, statuId, bilgi, fark > 0n ? fark : -fark);
   if (plan !== null) {
     const y: UretimYazimi = { uretimEmriId: g.uretimEmriId, kisiId: g.kisiId, konumId, malzemeId, aciklama, kalite, isEmriId: g.isEmriId, kart, uyarilar: new Set() };
@@ -3885,17 +3907,17 @@ export async function hurdaSayimiYansit(db: Db, g: HurdaSayimiYansimasi): Promis
   if (!emir || emir.malzemeNo === null) return yok;
   const o = await malzemeOzeti(db, emir.malzemeNo);
   if (!o || (o.tur !== 'mamul' && o.tur !== 'yarimamul')) return yok;
-  const bilgi = await adimUretimBilgisi(db, g.isEmriId);
+  const bilgi = await adimBilgisi(db, g.isEmriId);
   if (bilgi === null) return yok;
   const statuId = adimStatusu === null ? null : await adimStatusu(db, { malzemeNo: emir.malzemeNo, opNo: bilgi.opNo, uretimEmriId: g.uretimEmriId });
   // Hurdaya giden parçalar: dallı emirde (1348 a) birleştirmede her dalın parçası, öteki adımda taşınan; adımın statüsü yalnız taşınanındır.
-  const parcalar: { malzemeId: number; miktar: string; statuler: (number | null)[]; oran?: GelenOrani }[] = [];
+  const parcalar: { malzemeId: number; miktar: string; bolen?: number; statuler: (number | null)[]; oran?: GelenOrani }[] = [];
   const dalli = await dalliTasima(db, emir.malzemeNo, bilgi, g.uretimEmriId);
   if (dalli?.kaynak.tur === 'birlesme') {
-    for (const p of dalli.gelenler) parcalar.push({ malzemeId: p.malzemeId, miktar: p.miktar, statuler: [p.statuId, null], oran: p.oran });
+    for (const p of dalli.gelenler) parcalar.push({ malzemeId: p.malzemeId, miktar: p.miktar, bolen: p.bolen, statuler: [p.statuId, null], oran: p.oran });
   } else if (dalli !== null) {
     const p = dalli.gelenler[0];
-    if (dalli.tasinan !== null) parcalar.push({ malzemeId: dalli.tasinan.malzemeNo, miktar: dalli.tasinan.miktar, statuler: [p?.statuId ?? null, null, statuId], ...(p ? { oran: p.oran } : {}) });
+    if (dalli.tasinan !== null) parcalar.push({ malzemeId: dalli.tasinan.malzemeNo, miktar: dalli.tasinan.miktar, bolen: dalli.tasinan.bolen, statuler: [p?.statuId ?? null, null, statuId], ...(p ? { oran: p.oran } : {}) });
   } else {
     const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, emir.malzemeNo, bilgi, g.uretimEmriId);
     const oncekiStatuId = oncekiOpNo === null || adimStatusu === null || (await cikti(oncekiOpNo)) !== null
@@ -3910,7 +3932,7 @@ export async function hurdaSayimiYansit(db: Db, g: HurdaSayimiYansimasi): Promis
       uretimEmriId: g.uretimEmriId, isEmriId: g.isEmriId, kisiId: g.kisiId, konumId, malzemeId: p.malzemeId, aciklama: `${HURDA_ACIKLAMASI} · emir ${emir.emirNo} · OP ${String(bilgi.opNo)}`,
       kart: refakat, uyarilar,
     };
-    const miktar = adetMiktari(oranliAdet(fark > 0n ? fark : -fark, p.oran), p.miktar);
+    const miktar = adetMiktari(oranliAdet(fark > 0n ? fark : -fark, p.oran), p.miktar, p.bolen);
     if (miktar === 0n) continue;
     await korumali(async () => {
       if (fark > 0n) await hurdaHmDus(db, y, miktar, [...new Set(p.statuler)]);
@@ -3975,7 +3997,7 @@ async function girdiStokUyarisi(db: Db, g: { uretimEmriId: number; isEmriId: num
   if (!emir || emir.malzemeNo === null) return null;
   const urun = await malzemeOzeti(db, emir.malzemeNo);
   if (!urun || (urun.tur !== 'mamul' && urun.tur !== 'yarimamul')) return null;
-  const bilgi = await adimUretimBilgisi(db, g.isEmriId);
+  const bilgi = await adimBilgisi(db, g.isEmriId);
   if (bilgi === null) return null;
   if (bilgi.tasinan === null && bilgi.girdiler.length === 0) {
     return g.stokYok === true ? null : `OP ${String(bilgi.opNo)}: rotada girdi tanımlı değil; sayım stoktan malzeme düşmez. Reçete ve Rota'da ilk adıma girdi ekleyin.`;
@@ -4003,7 +4025,7 @@ async function girdiStokUyarisi(db: Db, g: { uretimEmriId: number; isEmriId: num
 // İş 558: önceki adımın parçası K2 ve 562 gereği yalnız bu istasyondan alınır. Teslim edilmemişse sayım
 // istasyonda eksiye düşer; operatör başlatmada ve sayımda görür.
 async function tasinanTeslimUyarisi(
-  db: Db, malzemeNo: number, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, uretimEmriId: number, konumId: number,
+  db: Db, malzemeNo: number, bilgi: AdimBilgisi, uretimEmriId: number, konumId: number,
 ): Promise<string[]> {
   const dalli = await dalliTasima(db, malzemeNo, bilgi, uretimEmriId);
   let gelenler: GelenParca[] = dalli?.gelenler ?? [];
@@ -4500,7 +4522,7 @@ async function adimParcasi(db: Db, uretimEmriId: number, isEmriId: number | null
   const urun = await malzemeOzeti(db, malzemeNo);
   if (!urun || (urun.tur !== 'mamul' && urun.tur !== 'yarimamul')) return null;
   if (isEmriId === null) return { malzemeId: malzemeNo, statuId: null, miktar: adet };
-  const bilgi = await adimUretimBilgisi(db, isEmriId);
+  const bilgi = await adimBilgisi(db, isEmriId);
   if (bilgi === null) return null;
   const statuId = adimStatusu === null ? null : await adimStatusu(db, { malzemeNo, opNo: bilgi.opNo, uretimEmriId });
   const { tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
@@ -4509,7 +4531,7 @@ async function adimParcasi(db: Db, uretimEmriId: number, isEmriId: number | null
   const ara = await cikti(bilgi.opNo);
   if (ara !== null) return { malzemeId: ara, statuId: null, miktar: adet };
   if (tasinan === null || !stoklanirMi((await malzemeOzeti(db, tasinan.malzemeNo))?.tur ?? '')) return null;
-  return { malzemeId: tasinan.malzemeNo, statuId, miktar: adetMiktari(adet, tasinan.miktar) };
+  return { malzemeId: tasinan.malzemeNo, statuId, miktar: adetMiktari(adet, tasinan.miktar, tasinan.bolen) };
 }
 // ---- Kalite kararı (131 b, 136 a) ----------------------------------------------------------------------------------------------
 // İlk parça kararı adımın karar bekleyen parçasını her konumda serbest (onay) ya da red (ret) yapar; red parça uyarıyla akışta kalır (135).
@@ -4640,7 +4662,7 @@ async function emirParcasiniTasi(db: Db, kisiId: number, d: { malzemeId: number;
 // birim: bir adetin stok miktarı (taşınan girdinin reçete miktarı; çıktı için 1).
 interface YariParca { malzemeId: number; statuId: number | null; emirPartisi: boolean; birim: string }
 async function fasonYariParcasi(db: Db, uretimEmriId: number, urunNo: number, isEmriId: number): Promise<YariParca | null> {
-  const bilgi = await adimUretimBilgisi(db, isEmriId);
+  const bilgi = await adimBilgisi(db, isEmriId);
   if (!bilgi) return null;
   // Dallı emirde (1348 a) yarı parça tek öncülden devralınan parçadır; dal başı ve birleştirme fasonunda emrin ürünü gider.
   const dalli = await dalliTasima(db, urunNo, bilgi, uretimEmriId);
@@ -4833,7 +4855,7 @@ async function fasonDonusPlani(db: Db, uretimEmriId: number, isEmriId: number, a
   if (!emir || emir.malzemeNo === null) return null;
   const urun = emir.malzemeNo;
   const yari = await fasonYariParcasi(db, uretimEmriId, urun, isEmriId);
-  const bilgi = await adimUretimBilgisi(db, isEmriId);
+  const bilgi = await adimBilgisi(db, isEmriId);
   const uretim = yari && bilgi ? await adimPlaniKur(db, uretimEmriId, urun, adimStatusu === null ? null : await adimStatusu(db, { malzemeNo: urun, opNo: bilgi.opNo, uretimEmriId }), bilgi, adet) : null;
   if (!yari || !uretim) return { urun, yari: { malzemeId: urun, statuId: null, emirPartisi: true, birim: '1' } satisfies YariParca, uretim: null, donenKart: urun, statulu: false };
   const donenKart = uretim.giris !== null ? (uretim.giris.malzemeId ?? urun) : yari.malzemeId;

@@ -161,18 +161,19 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.match(kapanis?.ayrinti ?? '', /istasyonda kalan: \S+ \S+ 10 /);
   });
 
-  test('1360 (1257 a): B dalı ürün başına 2 parça verir; birleştirme 10 ürün için 20 B parçası, hurda 1 ürün için 2 B parçası düşer', async () => {
+  test('1360 (1257 a), 1532 a: B dalı ürün başına 2 parça verir; hammadde mamul başınadır: 10 ürün için 10 HM2, hurda 1 ürün için 1 HM2 düşer', async () => {
     const k = await kur(2);
     await malKabul(k.hm1, '6');
-    await malKabul(k.hm2, '20');
+    await malKabul(k.hm2, '10');
     await teslimEt({ malzemeId: k.hm1, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
-    await teslimEt({ malzemeId: k.hm2, miktar: '20', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
     await sayim(k, 10, k.ist.a, '10');
-    assert.equal((await sayim(k, 20, k.ist.b, '20')).uyari, null);
+    assert.equal((await sayim(k, 20, k.ist.b, '20')).uyari, null, '20 B parçası 10 HM2 çevirir');
+    assert.equal(await bakiye(k.hm2, k.ist.b, k.s[20]!), 10);
     await teslimEt({ malzemeId: k.hm1, miktar: '6', statuId: k.s[10], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
-    await teslimEt({ malzemeId: k.hm2, miktar: '20', statuId: k.s[20], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', statuId: k.s[20], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
     assert.equal((await sayim(k, 30, k.ist.c, '9')).uyari, null);
-    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!), await bakiye(k.urun, k.ist.c, k.s[30]!)], [0.6, 2, 9]);
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!), await bakiye(k.urun, k.ist.c, k.s[30]!)], [0.6, 1, 9]);
     await o().vt.tx((db) => hurdaSayimiYansit(db, {
       uretimEmriId: k.e, isEmriId: k.ie[30]!, istasyonId: k.ist.c, kisiId: kisiler.get('operator')!, hurdaNedeniId: 1, fark: '1',
     }));

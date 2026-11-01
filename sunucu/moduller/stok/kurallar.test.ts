@@ -8,7 +8,7 @@ import {
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
-  kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
+  adetMiktari, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
@@ -483,6 +483,15 @@ describe('stok kuralları: terminal üretim girişi', () => {
     assert.equal(tasimaKaynagi([z(10, null), z(20, null)], 20), null);
     assert.equal(tasimaKaynagi(dalli, 99), null);
     assert.deepEqual(tasimaKaynagi([z(10, [99, 20]), z(20, [])], 10), { tur: 'ilk', girdi: null }, 'bilinmeyen ve sonraki öncül atlanır');
+  });
+  test('1532 a: dal adımında parça miktarı reçete miktarının çarpana bölünmüşüdür; bölme çarpımdan sonra, yukarı yuvarlı', () => {
+    assert.equal(adetMiktari(20000n, '1'), 20000n);
+    assert.equal(adetMiktari(20000n, '1', 2), 10000n);
+    assert.equal(adetMiktari(30000n, '1', 3), 10000n, '30 parça x 1/3 tam 10');
+    assert.equal(adetMiktari(1000n, '1', 3), 334n, 'tek parça yukarı yuvarlanır');
+    assert.deepEqual(dalliAdimPlani({
+      adet: 20000n, sonAdim: false, statuId: 20, cikti: null, girdiler: [{ malzemeNo: 2, miktar: '1', bolen: 2 }], tasinan: { malzemeNo: 2, miktar: '1', bolen: 2 }, gelenler: [], kaynak: 'ilk',
+    }).cevirme, { malzemeId: 2, kaynakStatuId: null, hedefStatuId: 20, miktar: 10000n });
   });
   test('1476-C düğüm: alt parçadan gelen tek öncül montajdır (birleşme); aynı düğümde devam ve düğümsüz emir değişmez', () => {
     const d = (opNo: number, onculler: number[], dugum: string, ek: Partial<ZincirAdimi> = {}) => z(opNo, onculler, { dugum, ...ek });
