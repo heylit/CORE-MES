@@ -9,6 +9,7 @@ import { ATOLYE_SAYFALARI } from './sayfalar/atolye.ts';
 import { AYARLAR_IKINCI_MENU, AYARLAR_SAYFALARI } from './sayfalar/ayarlar.ts';
 import { CIZELGE_SAYFALARI } from './sayfalar/cizelge.ts';
 import { CIZIMLER_IKINCI_MENU, CIZIMLER_SAYFALARI } from './sayfalar/cizimler.ts';
+import { GEOMETRI_IKINCI_MENU, GEOMETRI_SAYFALARI } from './sayfalar/geometri.ts';
 import { CNC_KURULUM_IKINCI_MENU, CNC_KURULUM_SAYFALARI } from './sayfalar/cnc-kurulum.ts';
 import { RECETE_ROTA_IKINCI_MENU, RECETE_ROTA_SAYFALARI } from './sayfalar/recete-rota.ts';
 import { DEGISIKLIK_YONETIMI_IKINCI_MENU, DEGISIKLIK_YONETIMI_SAYFALARI } from './sayfalar/degisiklik-yonetimi.ts';
@@ -60,6 +61,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...AYARLAR_SAYFALARI,
   ...CIZELGE_SAYFALARI,
   ...CIZIMLER_SAYFALARI,
+  ...GEOMETRI_SAYFALARI,
   ...CNC_KURULUM_SAYFALARI,
   ...RECETE_ROTA_SAYFALARI,
   ...PLAN_SAYFALARI,
@@ -135,6 +137,7 @@ export const TUM_IKINCI_MENULER = [
   PROJELER_IKINCI_MENU,
   MESAJ_IKINCI_MENU,
   CNC_KURULUM_IKINCI_MENU,
+  GEOMETRI_IKINCI_MENU,
   RECETE_ROTA_IKINCI_MENU,
   PLAN_IKINCI_MENU,
   MUSTERI_TEDARIKCI_IKINCI_MENU,

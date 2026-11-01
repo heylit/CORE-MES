@@ -69,7 +69,12 @@ describe('plan kuralları', () => {
     // Tavan tutarın %0,5'i = 12.000 TL; 2b: tavan dolunca bedel tabana düşmez, ceza son oranıyla (1.000/sa) sürer: 24 saatte 24.000.
     assert.equal(gecikmeMaliyeti(satir({ cezaTavaniOrani: '0.5' }), 1, { bitisSaat: 24, teslimSaat: 0 }, ayar), 24000 + 60 * 24 + 120 * 24);
     assert.equal(gecikmeMaliyeti(satir({ cezaOraniGun: null, katkiPayi: null }), 1, { bitisSaat: 10, teslimSaat: 0 }, { ...ayar, finansmanOraniGun: null }), 1500, 'boş oranlar girmez, taban kalır');
-    assert.equal(gecikmeMaliyeti(satir({ paraBirimi: 'EUR' }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500);
+    // 1397 a: döviz satır plan gününün kuruyla TL'ye çevrilir; aynı TL karşılığı aynı bedeli verir. Kuru olmayan döviz satırın bedeli bilinmez.
+    assert.equal(gecikmeMaliyeti(satir({ paraBirimi: 'EUR', tutar: '60000', katkiPayi: '12000', kur: 40 }), 1, { bitisSaat: 50, teslimSaat: 40 }, ayar),
+      gecikmeMaliyeti(satir({ katkiPayi: '12000' }), 1, { bitisSaat: 50, teslimSaat: 40 }, ayar), 'katkı payı katkiPaylari\'nda TL\'ye çevrilmiştir');
+    assert.equal(gecikmeMaliyeti(satir({ paraBirimi: 'EUR' }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), null, 'kursuz döviz satır sıfır sayılmaz');
+    assert.equal(gecikmeMaliyeti(satir({ paraBirimi: 'EUR', kur: null }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), null);
+    assert.equal(gecikmeMaliyeti(satir({ kur: null }), 1, { bitisSaat: 50, teslimSaat: 40 }, ayar), 10600 + 6000, 'TL satırın kuru her zaman 1');
     assert.equal(gecikmeMaliyeti(satir({ tutar: null, katkiPayi: null }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500, '201 a: fiyatsız satır tabanda');
     assert.equal(gecikmeMaliyeti(null, 0.5, { bitisSaat: 10, teslimSaat: 0 }, ayar), 750);
   });
@@ -84,7 +89,7 @@ describe('plan kuralları', () => {
     assert.equal(gecikmeMaliyeti(fiyatsiz, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar, 0.5), 750);
     assert.equal(gecikmeMaliyeti(fiyatsiz, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500, 'pay verilmezse 1');
     const yarim = { bitDk: 10 * 60, teslimDk: 0, satir: fiyatsiz, carpan: 1, pay: 0.5 };
-    assert.equal(planMaliyeti([yarim, yarim], ayar), planMaliyeti([{ ...yarim, pay: 1 }], ayar), 'bölünen sipariş tabanı iki kez saymaz');
+    assert.deepEqual(planMaliyeti([yarim, yarim], ayar), planMaliyeti([{ ...yarim, pay: 1 }], ayar), 'bölünen sipariş tabanı iki kez saymaz');
     // Ceza tabanı aşınca pay cezaya ikinci kez uygulanmaz: ceza emrin tutar payıyla zaten ağırlıdır (225).
     const cezali: MaliyetSatiri = { tutar: '1200000', paraBirimi: 'TRY', cezaOraniGun: '1', cezaTavaniOrani: null, katkiPayi: null };
     assert.equal(gecikmeMaliyeti(cezali, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar, 0.5), 5000);
@@ -98,9 +103,13 @@ describe('plan kuralları', () => {
       { bitDk: 50 * 60, teslimDk: 40 * 60, satir, carpan: oncelikCarpani(3) },
       { bitDk: 5 * 60, teslimDk: 3 * 60, satir: null, carpan: oncelikCarpani(1) },
     ];
-    assert.equal(planMaliyeti(emirler, ayar), 10000 + 6000 + 2 * 150 * 2);
-    assert.equal(planMaliyeti([...emirler, { bitDk: null, teslimDk: 0, satir, carpan: 1 }], ayar), 10000 + 6000 + 2 * 150 * 2);
-    assert.equal(planMaliyeti([], ayar), 0);
+    assert.deepEqual(planMaliyeti(emirler, ayar), { tl: 10000 + 6000 + 2 * 150 * 2, bilinmeyen: 0 });
+    assert.deepEqual(planMaliyeti([...emirler, { bitDk: null, teslimDk: 0, satir, carpan: 1 }], ayar), { tl: 10000 + 6000 + 2 * 150 * 2, bilinmeyen: 0 });
+    assert.deepEqual(planMaliyeti([], ayar), { tl: 0, bilinmeyen: 0 });
+    // 1397 a: kuru olmayan döviz emir toplama sıfır olarak girmez, bilinmeyen sayılır; yerleşmemişi sayılmaz.
+    const kursuz = { ...satir, paraBirimi: 'USD' };
+    assert.deepEqual(planMaliyeti([...emirler, { bitDk: 60, teslimDk: 0, satir: kursuz, carpan: 1 }, { bitDk: null, teslimDk: 0, satir: kursuz, carpan: 1 }], ayar),
+      { tl: 10000 + 6000 + 2 * 150 * 2, bilinmeyen: 1 });
   });
 
   test('225: emrin tutarı satırın birim fiyatı × emrin adedi; miktarı sıfır ya da tutarı boş satırda bilinmez', () => {
@@ -110,7 +119,7 @@ describe('plan kuralları', () => {
     assert.equal(emirTutari({ tutar: '2400000', miktar: '0' }, 4), null);
   });
 
-  test('227 a: katkı payı = emrin tutarı − emrin açık iş emirlerinin tahmini maliyeti − emrin malzeme maliyeti; bir kalem bilinmiyorsa, TL değilse ya da fiyatsızsa bilinmez', () => {
+  test('227 a: katkı payı = emrin tutarı − emrin açık iş emirlerinin tahmini maliyeti − emrin malzeme maliyeti; bir kalem bilinmiyorsa, kursuz dövizse ya da fiyatsızsa bilinmez', () => {
     const emirler = new Map([
       [1, { tutar: '100000', paraBirimi: 'TRY' }], [2, { tutar: '50000', paraBirimi: 'TRY' }], [3, { tutar: '9000', paraBirimi: 'EUR' }],
       [4, { tutar: null, paraBirimi: 'TRY' }], [5, { tutar: '1000', paraBirimi: 'TRY' }],
@@ -124,6 +133,9 @@ describe('plan kuralları', () => {
     assert.deepEqual([...katkiPaylari(emirler, isler, maliyet, malzeme)], [[1, '40000'], [2, null], [3, null], [4, null], [5, null]]);
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 99, uretimEmriId: 1 }], maliyet, malzeme)], [[1, null]], 'haritada olmayan iş emri bilinmez');
     assert.deepEqual([...katkiPaylari(emirler, [{ id: 11, uretimEmriId: 1 }], maliyet, new Map())], [[1, null]], 'malzeme maliyeti bilinmeyen emirde katkı bilinmez');
+    // 1397 a: döviz emrin tutarı plan gününün kuruyla TL'ye çevrilir: 9.000 EUR x 40 = 360.000 TL − 10 − 0.
+    const kurlu = new Map([[3, { tutar: '9000', paraBirimi: 'EUR', kur: 40 }]]);
+    assert.deepEqual([...katkiPaylari(kurlu, [{ id: 31, uretimEmriId: 3 }], maliyet, malzeme)], [[3, '359990']]);
   });
 
   test('PL-11: darboğaz en dolu istasyondur; makine sayısı doluluğu böler; iş yoksa darboğaz yok', () => {

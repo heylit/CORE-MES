@@ -27,7 +27,8 @@ export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
 // yeniden kurunca planTL düşebilir: amaç w.amac ile de gider, motor onu kayıttakinin önüne koyar (durum.betik ymUygula). Okunan kopya değişir;
 // sayfa kaydederse kayıt da bunları taşır, motor yine ayarı okur.
 // 1383 a: finansman oranı finansın TRY faizinden gelir (günlük yüzde, finansmanın tek tanımıyla); motor ve planlama sayfası onu
-// D.planAgirlik.fin'de okur (durum.betik agAyar). Finansta TRY faizi yoksa (null) kayıttaki elle oran kalır.
+// D.planAgirlik.fin'de okur (durum.betik agAyar). Finansta TRY faizi yoksa (null) çalışma kaydındaki oran kalır; plan bedel ayarının elle
+// finansman oranı 1448 a ile salt okunurdur ve buraya gelmez.
 export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };

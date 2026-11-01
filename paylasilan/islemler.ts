@@ -10,6 +10,7 @@ import { DENETIM_HAZIRLIK_ISLEMLERI } from './islemler/denetim-hazirlik.ts';
 import { DURUS_NEDENLERI_ISLEMLERI } from './islemler/durus-nedenleri.ts';
 import { ETIKET_MERKEZI_ISLEMLERI } from './islemler/etiket-merkezi.ts';
 import { FINANS_ISLEMLERI } from './islemler/finans.ts';
+import { GEOMETRI_ISLEMLERI } from './islemler/geometri.ts';
 import { GUVENLIK_ISLEMLERI } from './islemler/guvenlik.ts';
 import { IDARI_ISLER_ISLEMLERI } from './islemler/idari-isler.ts';
 import { IK_ISLEMLERI } from './islemler/ik.ts';
@@ -61,6 +62,7 @@ export const VERI_ISLEMLERI = [
   ...ETIKET_MERKEZI_ISLEMLERI,
   ...IK_ISLEMLERI,
   ...FINANS_ISLEMLERI,
+  ...GEOMETRI_ISLEMLERI,
   ...GUVENLIK_ISLEMLERI,
   ...IDARI_ISLER_ISLEMLERI,
   ...ISTASYONLAR_ISLEMLERI,

@@ -57,6 +57,8 @@ export const planGostergeleri = z.object({
   // 6c, planın TL toplamı (203 a): yerleşen emirlerin gecikme, ceza, finansman ve kâr riski. Yalnız siparisler.fiyat-oku (180) görür;
   // görmeyene null. Ekranlar okumaya başlayana dek isteğe bağlı.
   maliyetTl: z.number().nullable().optional(),
+  // 1397 a: kuru olmayan döviz satırlı yerleşen emir sayısı; bedeli bilinmez, maliyetTl'ye girmez (sıfır sayılmaz). Fiyatı görmeyene yok.
+  bedeliBilinmeyenEmir: z.number().int().optional(),
   // 507 1 a (eski motorun suH ve wT'si, salt okuma): yerleşen işlerin ayar saati toplamı; emir başına teslim günü sonunu aşan saat x öncelik
   // ağırlığı (1: 4, 2: 2, 3: 1, diğer 1) x sipariş satırındaki adet payı. Ekranlar okumaya başlayana dek isteğe bağlı.
   ayarSaat: z.number().optional(),
@@ -410,8 +412,9 @@ export const bedelAyari = z.object({
   yuksekEsigi: z.number().gt(1), dusukEsigi: z.number().gt(0).lt(1),
   yuksekCarpani: carpan, normalCarpani: carpan, dusukCarpani: carpan,
 });
+// 1448 a: finansman oranı salt okunurdur (finansın tek oranı); gövdede gelirse yazılmaz.
 export const bedelAyariGovdesi = bedelAyari.partial({
-  yuksekCarpani: true, normalCarpani: true, dusukCarpani: true,
+  yuksekCarpani: true, normalCarpani: true, dusukCarpani: true, finansmanOraniGun: true,
 });
 
 // Plan motoru ayarları (kart 811; 771 a, 772 a, 776 b): amaç (sıralı ya da TL), stoku bilinmeyen malzemede davranış (dur ya da varsay) ve
