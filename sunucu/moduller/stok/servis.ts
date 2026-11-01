@@ -3730,14 +3730,14 @@ const kartOnce = <T extends { partiId: number | null; konumId?: number }>(l: rea
 };
 export type AdimStatusuCozucusu = (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }) => Promise<number | null>;
 // 1476-C: çok katmanlı emirde alt düğümün adımı emrin ürününün rotasında değil, düğümün malzemesinin rotasında kaynak op numarasıyladır.
-// Çözücüye düğümün malzemesi ve rotadaki numarası gider; emir verilmez, çünkü Reçete ve Rota emrin (kök) revizyonunu okur, alt parçanın
-// revizyonu o değildir; alt parça yürürlükteki revizyonundan çözülür. Düğümün son adımının çıktısı düğümün malzemesidir: alt parça stoğa
-// girmeden tüketen adıma akar (1482 a). Kök düğümde ve tek katmanlı emirde çağrı olduğu gibi geçer.
+// Çözücüye düğümün malzemesi, rotadaki numarası ve emir gider; Reçete ve Rota alt parçanın revizyonunu emrin patlatmasında donmuş olandan
+// okur (1558 a). Düğümün son adımının çıktısı düğümün malzemesidir: alt parça stoğa girmeden tüketen adıma akar (1482 a). Kök düğümde ve
+// tek katmanlı emirde çağrı olduğu gibi geçer.
 const dugumlu = (cozucu: AdimStatusuCozucusu, cikti: boolean): AdimStatusuCozucusu => async (db, g) => {
   const d = g.uretimEmriId == null ? undefined : (await emirDugumleri(db, g.uretimEmriId)).get(g.opNo);
   if (d === undefined || d.dugum === '0') return cozucu(db, g);
   if (cikti && d.dugumSonu) return d.malzemeNo;
-  return cozucu(db, { malzemeNo: d.malzemeNo, opNo: d.kaynakOpNo, uretimEmriId: null });
+  return cozucu(db, { malzemeNo: d.malzemeNo, opNo: d.kaynakOpNo, uretimEmriId: g.uretimEmriId });
 };
 let adimStatusu: AdimStatusuCozucusu | null = null;
 export function adimStatusuCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimStatusu = dugumlu(cozucu, false); }
