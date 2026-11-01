@@ -580,19 +580,25 @@ export interface UstEmirYazisi {
   emirNo?: string | null;
   projeId?: number | null;
   siparisSatiriId?: number | null;
+  patlatmaId?: number | null;
 }
 
 export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, oncelik, baslangic, teslim,
-       aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+       aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
     [e.parcaNo, e.parcaAd, e.adet, e.istasyonId, acanId, e.malzemeNo, e.kaynakRotaRevizyonId, e.oncelik, e.baslangic, e.teslim, e.aciklama, e.durum,
       e.ustEmirId ?? null, e.bolunmeSira ?? null, e.birlesmeOpNo ?? null, e.emirTuru, e.emirNo ?? null, e.projeId ?? null,
-      e.siparisSatiriId ?? null],
+      e.siparisSatiriId ?? null, e.patlatmaId ?? null],
   );
   if (satir === null) throw new Error('Üretim emri eklenemedi.');
   return satir.id;
+}
+
+// 1476: emrin açıldığı patlamış rota; tek katmanlı emirde null.
+export async function emrinPatlatmasi(db: Db, emirId: number): Promise<number | null> {
+  return (await db.tek<{ p: number | null }>('SELECT patlatma_id AS p FROM uretim_emri WHERE id = $1', [emirId]))?.p ?? null;
 }
 
 export async function emirNoVarMi(db: Db, emirNo: string): Promise<boolean> {
@@ -932,6 +938,8 @@ export interface IsEmriYazisi {
   // Yalnız eklemede: verilmezse rota adımıdır. Güncelleme türü değiştirmez.
   tur?: 'rota' | 'rework' | 'tamir' | 'ek';
   ekAciklama?: string | null;
+  // 1476: çok katmanlı emirde adımın düğümü (alt parça), rotadaki op numarası ve kök başına adedi; tek katmanlı emirde yok.
+  dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
 }
 
 const IS_EMRI_DEGERLERI = (y: IsEmriYazisi) => [
@@ -943,9 +951,10 @@ export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promi
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, istasyon_id,
        ayar_suresi_dk, birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-       talimat_surumu, tur, ek_aciklama)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING id`,
-    [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null],
+       talimat_surumu, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::numeric) RETURNING id`,
+    [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null,
+      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null],
   );
   if (satir === null) throw new Error('İş emri eklenemedi.');
   return satir.id;

@@ -1101,6 +1101,24 @@ export function onculGirdisiIhlali(
   return null;
 }
 
+// 1476: çok katmanlı emir patlatmayla açılır ve her iş emri düğümünü taşır; tek katmanlı emirde düğüm yoktur. Stok ve plan bağı
+// kurulana dek (1476-C, 1476-D) çok katmanlı emir yalnız taslak açılır. Düğüm adı patlatmanın yol biçimidir, rotadaki numara ve çarpan pozitiftir.
+export const DUGUM_GECERSIZ = 'Çok katmanlı emrin adımları düğüm bilgisi taşımalı; tek katmanlı emirde düğüm olmaz.';
+export const COK_KATMANLI_TASLAK = 'Çok katmanlı emir şimdilik yalnız taslak açılır (kart 1476).';
+export function dugumGirdisiIhlali(
+  patlatmaId: number | null, taslak: boolean,
+  isEmirleri: readonly { dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null }[],
+): string | null {
+  if (patlatmaId === null) return isEmirleri.some((i) => i.dugum != null) ? DUGUM_GECERSIZ : null;
+  if (!taslak) return COK_KATMANLI_TASLAK;
+  for (const i of isEmirleri) {
+    const d = i.dugum;
+    if (d == null || !/^0(\.[1-9][0-9]*)*$/.test(d.ad) || d.ad.length > 40 || !Number.isInteger(d.kaynakOpNo) || d.kaynakOpNo <= 0
+      || !Number.isInteger(d.malzemeNo) || d.malzemeNo <= 0 || !(Number(d.birimCarpani) > 0)) return DUGUM_GECERSIZ;
+  }
+  return isEmirleri.some((i) => i.dugum?.ad === '0') ? null : DUGUM_GECERSIZ;
+}
+
 export interface ParalelAdim {
   id: number;
   sira: number;
