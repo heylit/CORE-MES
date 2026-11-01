@@ -243,7 +243,6 @@ describe('oturum (gerçek PostgreSQL)', () => {
   // Sayfa okuma yetkisiyle aynı rollerde görünür (kullanıcı kararı 193 a).
   const SIPARIS_OKU = ['siparisler.oku', 'sayfa.siparisler'];
   const SIPARIS_YAZ = [...SIPARIS_OKU, 'siparisler.yaz'];
-  const SIPARIS_ONAY = [...SIPARIS_YAZ, 'siparisler.onayla'];
   const MATRIS: Record<string, string[]> = {
     yonetici: [...ISLEMLER],
     mudur: [

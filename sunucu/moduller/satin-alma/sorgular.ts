@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type {
-  Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Senaryo, Talep, TalepYazimi, Teklif,
+  Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 

@@ -1,19 +1,16 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type {
-  IsMerkezleriCevabi, IstasyonKisileriCevabi, KapasiteKaynagi, KisiSecenekleriCevabi, MakinelerCevabi, SurumluIstasyon, IstasyonGovdesi,
-  IstasyonTipi, IstasyonlarCevabi,
+  IsMerkezleriCevabi, KapasiteKaynagi, KisiSecenekleriCevabi, SurumluIstasyon, IstasyonGovdesi,
+  IstasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Secim, Tablo } from '../../ortak/arayuz/index.ts';
+import { Girdi, IsaretKutusu, OnayPenceresi, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { csvIndir } from './csv.ts';
-import { KAPASITE_KAYNAGI_ADLARI, KAPASITE_KAYNAGI_SECENEKLERI, TIP_ADLARI, TIP_SECENEKLERI } from './etiketler.ts';
-import { durumSutunu } from './durumSutunu.tsx';
+import { KAPASITE_KAYNAGI_SECENEKLERI, TIP_SECENEKLERI } from './etiketler.ts';
 import { KayitPenceresi } from './KayitPenceresi.tsx';
 import { KisiPaneli } from './KisiPaneli.tsx';
-import { ListeAraclari, aramayaUyar } from './ListeAraclari.tsx';
 import { PlanAyariOzeti } from './PlanAyariOzeti.tsx';
 import { useKayitIslemleri } from './kayitIslemleri.ts';
 

@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
+import type { Hareket, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
 import { stokDurumu, type StokDurumu } from './kurallar.ts';
 import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';

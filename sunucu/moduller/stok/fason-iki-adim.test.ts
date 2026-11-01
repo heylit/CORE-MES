@@ -8,8 +8,6 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { bekleyenlerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
-import type { Bekleyen } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { FasonIsleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -127,15 +125,6 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
   };
   const fason = (id: number, isEmriId: number, yol: string, govde?: unknown) =>
     istek<{ hareketId: number; mesaj?: string }>('depo', 'POST', `/adimli-emirler/${id}/is-emirleri/${isEmriId}/${yol}`, govde);
-  const bekleyenler = async (): Promise<Bekleyen[]> => {
-    const c = await istek<{ bekleyenler: Bekleyen[] }>('planlama_proje', 'GET', '/sevkiyat/bekleyenler');
-    assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    return bekleyenlerCevabi.parse(c.govde).bekleyenler;
-  };
-  const isGovdesi = (tarih: string, birakisNoktasiId: number) => ({
-    tarih, tur: 'teslimat', alisNoktasiId: null, birakisNoktasiId, agirlikKilogram: 120, paletSayisi: 2, durakSuresiDakika: null,
-    alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, belgeNo: null, aciklama: null, sabitAracId: null,
-  });
 
   before(async () => {
     ortam = await testVeritabaniKur('stok_fason_iki_adim');

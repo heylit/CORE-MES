@@ -1,4 +1,4 @@
-import type { AsamaRengi, BelgelendirmeAsamasi, BulguSeviyesiTanimi, Departman, HazirlikDonemi, IzHalkasi, Madde, PuanAciklamasi, Soru, ZorunluDokuman } from '../tipler.ts';
+import type { AsamaRengi, BelgelendirmeAsamasi, BulguSeviyesiTanimi, Departman, HazirlikDonemi, IzHalkasi, Madde, Soru, ZorunluDokuman } from '../tipler.ts';
 
 // EYDEP içeriği (hazırlık soruları; resmi soru setinin kopyası değildir, prototipteki not aynen).
 export const CL_EY: Record<string, Madde> = {

@@ -118,7 +118,6 @@ export interface UyariGirdisi {
   simdi: number;
 }
 
-const tarihKisa = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 
 // Prototip `evalRules`: kural başına tetiklenecek uyarılar; tekrar gönderimi `anahtar` ve tetik kaydı önler.
 export function uyarilariHesapla(g: UyariGirdisi): Uyari[] {

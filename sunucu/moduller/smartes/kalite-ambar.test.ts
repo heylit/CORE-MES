@@ -23,7 +23,6 @@ import type { TanimKaynagi } from './tanim-kaynagi.ts';
 const PAROLA = 'dogru-parola-1';
 const tablo = (satirlar: Record<string, string>[]): SahteCevap => ({ tur: 'tablo', satirlar });
 const KAYNAKLAR: readonly KaliteAmbarKaynagi[] = ['red', 'ambar', 'kalite'];
-const METOT: Record<KaliteAmbarKaynagi, string> = { red: 'WsWorkordersRejectStatusList', ambar: 'WarehouseStatusList', kalite: 'QualityControlStatusList' };
 const TABLO: Record<KaliteAmbarKaynagi, string> = { red: 'smartes_red', ambar: 'smartes_ambar_hareketi', kalite: 'smartes_kalite_kontrol' };
 // SmartES'te yazma, işaretleme ya da silme anlamına gelen her metot: kalite/ambar akışında hiçbiri çağrılamaz.
 const YAZAN_METOT = /(SetIsErp|SetErpOkRed|Delete|CreateUpdate|Create)$/;

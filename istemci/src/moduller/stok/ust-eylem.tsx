@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, SepettenCekGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi,
+  GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimYeri, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Simge, useBildirim, type Secenek } from '../../ortak/arayuz/index.ts';
 import type { UstEylem } from '../../ortak/rota/ust-eylemler.ts';
@@ -612,7 +612,6 @@ const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
   { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Sepetim' },
 ];
 function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean; buradaki: number | null }) {
-  const depocu = useIslem('stok.transfer');
   const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
   const istasyonId = buradaki ?? kutu.istasyonlar[0]?.id ?? 0;
   const sepet = useQuery({

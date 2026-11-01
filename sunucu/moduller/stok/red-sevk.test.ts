@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
@@ -7,11 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { bekleyenlerCevabi, tumIslerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
-import { depoCikisCevabi, depoSevkCevabi, partiIziCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { PartiIziCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -54,12 +49,6 @@ describe('stok red ve açık NCR\'li parça sevki (gerçek PostgreSQL)', () => {
     }
     return id;
   };
-  async function istek<T = unknown>(ad: string, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
-    const basliklar: Record<string, string> = { cookie: cerezler.get(ad) ?? '' };
-    if (yontem === 'POST') basliklar[ISTEK_KIMLIGI_BASLIGI] = randomUUID();
-    const c = await app.inject({ method: yontem, url: `/api${yol}`, headers: basliklar, ...(govde === undefined ? {} : { payload: govde as object }) });
-    return { durum: c.statusCode, govde: (c.body ? c.json() : undefined) as T };
-  }
   async function kisiEkle(kullaniciAdi: string, rolKodu: string): Promise<void> {
     const rol = await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rolKodu]);
     const yoneticiRolu = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
@@ -126,31 +115,10 @@ describe('stok red ve açık NCR\'li parça sevki (gerçek PostgreSQL)', () => {
   const bakiye = async (kosul: string, deger: string | number, emirId: number): Promise<number> => Number((await o().sahip.tek<{ m: string }>(
     `SELECT COALESCE(sum(b.miktar), 0)::text AS m FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id JOIN stok_parti p ON p.id = b.parti_id
       WHERE ${kosul} = $1 AND p.uretim_emri_id = $2`, [deger, emirId]))!.m);
-  const sevkCikisi = async (emirId: number): Promise<number> => Number((await o().sahip.tek<{ m: string }>(
-    `SELECT COALESCE(sum(h.miktar), 0)::text AS m FROM stok_hareketi h
-      WHERE h.cikis_nedeni = 'sevk' AND h.uretim_emri_id = $1 AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)`, [emirId]))!.m);
   const emirNumarasi = async (emirId: number): Promise<string> => (await o().sahip.tek<{ no: string }>('SELECT emir_no AS no FROM uretim_emri WHERE id = $1', [emirId]))!.no;
   const gecis = (satir: UrunSevkSatiri, onceki: SevkIsDurumu, yeni: SevkIsDurumu) =>
     o().vt.tx((db) => urunSevkiYansit(db, { satirlar: [satir], onceki, yeni, kisiId: yoneticiId }));
 
-  const eskiKayit = (emirId: number) => o().sahip.sorgu(
-    `UPDATE sevkiyat_bekleyen SET serbest_zamani = hazir_zamani, tasima = 'biz', son_yazan_yer = 'otomatik', son_yazan_zamani = hazir_zamani
-      WHERE kaynak = 'urun' AND uretim_emri_id = $1`, [emirId]);
-  const bugun = async (): Promise<string> => (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date, 'YYYY-MM-DD') AS g"))!.g;
-  const isGovdesi = (tarih: string, nokta: number) => ({
-    tarih, tur: 'teslimat', alisNoktasiId: null, birakisNoktasiId: nokta, agirlikKilogram: 120, paletSayisi: 2, durakSuresiDakika: null,
-    alisEnErken: null, alisEnGec: null, birakisEnErken: null, birakisEnGec: null, belgeNo: null, aciklama: null, sabitAracId: null,
-  });
-  const kalemAsamasi = async (kalemId: number): Promise<string | undefined> => {
-    const g = await bugun();
-    const c = await istek('planlama_proje', 'GET', `/sevkiyat/tum-isler?baslangic=${g}&bitis=${g}`);
-    return tumIslerCevabi.parse(c.govde).satirlar.find((x) => x.kalemId === kalemId)?.asama;
-  };
-  const depoListesi = async () => {
-    const c = await istek('depo', 'GET', '/stok/depo-sevk');
-    assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    return depoSevkCevabi.parse(c.govde).satirlar;
-  };
 
   before(async () => {
     ortam = await testVeritabaniKur('stok_red_sevk');

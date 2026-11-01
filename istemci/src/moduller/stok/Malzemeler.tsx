@@ -8,7 +8,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { stokCsvAlani } from './csv-alani.ts';
-import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar, miktarMetni } from './gorunum.ts';
+import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { CSV_AZAMI_SATIR, tumSatirlar } from './Hareketler.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';

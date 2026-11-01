@@ -4,7 +4,7 @@ import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet }
 import { DurumKutusu, Dugme, Girdi, Secim, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useTema } from '../veri/tema.ts';
-import { bellegeKoy, cihazAyari, PDF_BELLEGI, saklanacak, type PdfKaydi, type SaklananPdfKaydi } from './bellek.ts';
+import { bellegeKoy, cihazAyari, PDF_BELLEGI, saklanacak, type PdfKaydi } from './bellek.ts';
 import { AKTol } from './cekirdek.ts';
 import { bekle, tesseract } from './kitaplik.ts';
 import { BALON_BOYLARI, BALON_KIPI_ADI, BALON_KIPLERI, balonDizimi, kilavuzCizgisi, type BalonKipi, type DizimKonumu } from './balon-dizimi.ts';
@@ -12,13 +12,13 @@ import {
   ayarDuzelt, ayarImzasi, balonCogalt, balonlariCikar, balonYazisi, dosyaBicimi, duzenlemeMetni, enYakinYazi, gdtdenCevir, GDT_SEMBOLLERI, gdtYazimi,
   gdtYazimiMetni, gdtyeCevir, gecmisGeri, gecmisIleri, gecmisKaydet, GORUNUS_ANAHTARLARI, KONTROL_SIKLIKLARI, modelAdiMi, noktaAlanlari, numaraDegistir,
   numaralariUygula, numaraSirasi, ocrGerekir, OLCU_ALETLERI, OLCU_TURLERI, olcuTuru, olcuTuruSec, olcuYazimi, olcuYazimiMetni, olcumDegerlendir,
-  olcumRaporu, onerileriEkle, PDF_ANAHTARLARI, SIRA_YOLU_ADI, TOL_KIPI_ADI, tolKipiSec, toleransKonumu, yeniOneriler, yontem, YONTEM_ADI,
+  olcumRaporu, onerileriEkle, SIRA_YOLU_ADI, TOL_KIPI_ADI, tolKipiSec, toleransKonumu, yeniOneriler, yontem, YONTEM_ADI,
   type Balon, type CalismaDosyasi, type Gecmis, type NumaraYolu, type Oneri, type Olcum, type OlcumYontemi, type OkumaAyari, type SiraYolu, type TolKipi,
 } from './kurallar.ts';
 import { dosyaOzeti, modelIsle, type Gorunum3B, type ModelKaydi } from './model.ts';
 import { Model3B } from './Model3B.tsx';
 import { ocrGoruntu, ocrPdfSayfasi } from './ocr.ts';
-import { bitAc, murekkep, olcuBirlestir, olcuOnerileri, onayIster, tabloBul, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi, type OlcuOnerisi } from './okuma.ts';
+import { olcuBirlestir, olcuOnerileri, onayIster, tabloBul, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi } from './okuma.ts';
 import { useCizimOrtami } from './ortam.tsx';
 import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renklendir, type PdfBelgesi } from './pdf.ts';
 import { pdfKaydiAnahtari, saklananiAc, sayfaKaydi } from './pdf-hazir.ts';

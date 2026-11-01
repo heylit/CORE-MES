@@ -1124,7 +1124,6 @@ describe('KD-010 elle yeniden gönderim', () => {
 });
 
 describe('Lot etiketi ve LOT okutma (#1060)', () => {
-  const LOT = { tur: 'lot', parti: { id: 4, lotNo: 'LT-000123', etiket: 'LT-000123 · döküm D-7' }, ozet: { id: 901, tur: 'hammadde', kod: 'HM-001', ad: 'Deneme sac', onayDurumu: 'aktif', kullanilabilir: true, birim: 'kg' }, toplam: '3', bakiyeler: [BAKIYE] } as const;
 
   it("1288: Etiket Merkezi'ni açamayan mal kabulde lot etiketi düğmesi görmez; stokta ayrı basım penceresi yok", async () => {
     const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;

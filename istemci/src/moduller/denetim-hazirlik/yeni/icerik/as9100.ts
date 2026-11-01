@@ -1,4 +1,4 @@
-import type { AsamaRengi, BelgelendirmeAsamasi, BulguSeviyesiTanimi, Departman, HazirlikDonemi, IzHalkasi, Madde, PuanAciklamasi, Soru, ZorunluDokuman } from '../tipler.ts';
+import type { BelgelendirmeAsamasi, BulguSeviyesiTanimi, Departman, HazirlikDonemi, IzHalkasi, Madde, Soru, ZorunluDokuman } from '../tipler.ts';
 import { DOCS, Q, maddeAnahtari, soru } from './iso9001.ts';
 
 // AS9100D içeriği. ISO 9001 sorularının yedisi çıkar, kalanlar havacılık sorularıyla birleşip madde sırasına dizilir (prototipteki gibi).

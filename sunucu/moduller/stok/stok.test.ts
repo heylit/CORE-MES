@@ -14,7 +14,7 @@ import {
   araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, LotEtiketleriCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, PanelCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, LotEtiketleriCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/plan-stok-komutlari.ts';
