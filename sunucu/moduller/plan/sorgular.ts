@@ -544,3 +544,43 @@ export async function planlamaKaydiSil(db: Db, anahtar: string): Promise<boolean
 export async function planlamaSonGecmis(db: Db, anahtar: string): Promise<{ surum: number; bicim: string; deger: unknown } | null> {
   return db.tek('SELECT surum, bicim, deger FROM plan_planlama_kaydi_gecmisi WHERE anahtar = $1 ORDER BY id DESC LIMIT 1', [anahtar]);
 }
+
+/* ---------------- ölçüm (1470 a) ---------------- */
+
+export interface PlanOlcumuGirdisi {
+  senaryoId: number; yazanKisiId: number; toplamIs: number; yerlesmeyenIs: number; gecikenEmir: number; zamanindaYuzde: number | null;
+  agirlikliGecikmeSaat: number; degisenIs: number; yakinDegisenIs: number; yeniIs: number; vardiyasizIs: number; gelirsizEmir: number;
+}
+// Canlıya alma işleminin içinde, plan sürümü artırıldıktan sonra çağrılır: ölçüm yeni canlı sürümü taşır.
+export async function olcumYaz(db: Db, o: PlanOlcumuGirdisi, emirler: readonly { uretimEmriId: number; tahminiBitis: Date | null; termin: string | null }[]): Promise<number> {
+  const id = (await db.tek<{ id: number }>(
+    `INSERT INTO plan_olcumu (plan_surumu, senaryo_id, yazan_kisi_id, toplam_is, yerlesmeyen_is, geciken_emir, zamaninda_yuzde, agirlikli_gecikme_saat,
+       degisen_is, yakin_degisen_is, yeni_is, vardiyasiz_is, gelirsiz_emir)
+     SELECT surum, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12 FROM plan_durumu RETURNING id`,
+    [o.senaryoId, o.yazanKisiId, o.toplamIs, o.yerlesmeyenIs, o.gecikenEmir, o.zamanindaYuzde, o.agirlikliGecikmeSaat, o.degisenIs, o.yakinDegisenIs, o.yeniIs,
+      o.vardiyasizIs, o.gelirsizEmir],
+  ))!.id;
+  if (emirler.length > 0) {
+    await db.sorgu(
+      `INSERT INTO plan_olcumu_emri (olcum_id, uretim_emri_id, tahmini_bitis, termin)
+       SELECT $1, e, b, t FROM unnest($2::int[], $3::timestamptz[], $4::date[]) AS x(e, b, t)`,
+      [id, emirler.map((e) => e.uretimEmriId), emirler.map((e) => e.tahminiBitis), emirler.map((e) => e.termin)],
+    );
+  }
+  return id;
+}
+
+export interface PlanOlcumuSatiri extends PlanOlcumuGirdisi { id: number; planSurumu: number; zaman: string }
+// Plan Sağlığı okuması: verilen andan sonraki ölçümler, zamana göre artan.
+export const olcumler = (db: Db, baslangic: Date): Promise<PlanOlcumuSatiri[]> =>
+  db.sorgu(`SELECT id::int AS id, plan_surumu AS "planSurumu", senaryo_id AS "senaryoId", yazan_kisi_id AS "yazanKisiId", to_json(zaman) #>> '{}' AS zaman,
+      toplam_is AS "toplamIs", yerlesmeyen_is AS "yerlesmeyenIs", geciken_emir AS "gecikenEmir", zamaninda_yuzde AS "zamanindaYuzde",
+      agirlikli_gecikme_saat::float AS "agirlikliGecikmeSaat", degisen_is AS "degisenIs", yakin_degisen_is AS "yakinDegisenIs", yeni_is AS "yeniIs",
+      vardiyasiz_is AS "vardiyasizIs", gelirsiz_emir AS "gelirsizEmir"
+    FROM plan_olcumu WHERE zaman >= $1 ORDER BY zaman, id`, [baslangic]);
+
+export interface EmirTahminiSatiri { olcumId: number; zaman: string; uretimEmriId: number; tahminiBitis: string | null; termin: string | null }
+export const emirTahminleri = (db: Db, baslangic: Date): Promise<EmirTahminiSatiri[]> =>
+  db.sorgu(`SELECT e.olcum_id::int AS "olcumId", to_json(o.zaman) #>> '{}' AS zaman, e.uretim_emri_id AS "uretimEmriId",
+      to_json(e.tahmini_bitis) #>> '{}' AS "tahminiBitis", e.termin::text AS termin
+    FROM plan_olcumu_emri e JOIN plan_olcumu o ON o.id = e.olcum_id WHERE o.zaman >= $1 ORDER BY o.zaman, o.id, e.uretim_emri_id`, [baslangic]);
