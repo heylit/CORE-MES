@@ -5,7 +5,7 @@ import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from '../proje
 import { karRiskiOraniGun, malzemeMaliyetiCozucusu, tahminiMaliyetCozucusu } from './disari.ts';
 import { PERSONEL_TANIMSIZ } from './kurallar.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { gunduzde } from './plan-saat.test.ts';
+import { anSabit, gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
@@ -115,7 +115,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     });
   });
 
-  test('6c: planın TL toplamını yalnız fiyatı gören görür (180); finansman oranı toplamı artırır; karşılaştırma her kuralın toplamını verir', async () => {
+  test('6c: planın TL toplamını yalnız fiyatı gören görür (180); finansman oranı toplamı artırır; karşılaştırma her kuralın toplamını verir', async () => anSabit(async () => {
     const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-04-10');
     await ortam!.sahip.tx(async (db) => {
       const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 6c', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
@@ -142,7 +142,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${q.taslak!.id}/vazgec`, { surum: q.taslak!.surum });
       await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_ayari SET finansman_orani_gun = NULL'));
     }
-  });
+  }));
 
   test('284 a: gecikme cezası sipariş satırının termininden işler, emrin tesliminden değil', async () => {
     const gun = (fark: number) => new Date(Date.now() + fark * 86_400_000).toISOString().slice(0, 10);
@@ -166,7 +166,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     }
   });
 
-  test('6c, 227 a: kâr riski Proje maliyet çözücülerinin katkı payıyla işler; malzeme katkıdan düşülür; çözücü kayıtsızken işlemez', async () => {
+  test('6c, 227 a: kâr riski Proje maliyet çözücülerinin katkı payıyla işler; malzeme katkıdan düşülür; çözücü kayıtsızken işlemez', async () => anSabit(async () => {
     // Termini geçmiş (284 a: ceza satırın termininden), cezasız 2.400.000 TL satır: gecikme saatinde taban 150 TL, katkı payı 2.400.000 − 400.000 ile kâr riski saatte 250 TL.
     const [g] = await isEmirleriAc([yeniAdim()], 10, '2020-01-10');
     await ortam!.sahip.tx(async (db) => {
@@ -198,9 +198,9 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       malzemeMaliyetiCozucusu(uretimEmriMalzemeMaliyetleri);
       await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
     }
-  });
+  }));
 
-  test('1379 a: katkı payı emrin bütün iş emrinin maliyetiyle; bitmiş adımın maliyeti de düşülür, yarı bitmiş emir kârlı görünmez', async () => {
+  test('1379 a: katkı payı emrin bütün iş emrinin maliyetiyle; bitmiş adımın maliyeti de düşülür, yarı bitmiş emir kârlı görünmez', async () => anSabit(async () => {
     // Termini geçmiş, cezasız 2.400.000 TL satır; iki adımlı emrin ilk adımı bitmiş. Bitmiş adım 2.000.000, kalan 400.000 TL.
     // Eski hesap yalnız kalanı düşerdi: katkı 2.000.000, kâr riski tabanı aşar. Yeni hesapta katkı 0: yalnız taban işler.
     const [bitmis, kalan] = await isEmirleriAc([yeniAdim(), yeniAdim()], 10, '2020-01-10');
@@ -237,9 +237,9 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
       await ortam!.sahip.tx((db) => db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = NULL WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1)', [kalan]));
     }
-  });
+  }));
 
-  test('225: aynı satıra bağlı emir satırın birim fiyatıyla kendi adedi kadar tutar taşır; satırın tamamı her emre yazılmaz', async () => {
+  test('225: aynı satıra bağlı emir satırın birim fiyatıyla kendi adedi kadar tutar taşır; satırın tamamı her emre yazılmaz', async () => anSabit(async () => {
     // Termini geçmiş (284 a), günde %1 cezalı satır; emir 10 adet. Satır 10 adetse emir tutarın tamamını, 20 adetse yarısını taşır.
     const [g] = await isEmirleriAc([yeniAdim()], 10, '2020-01-10');
     const satirId = await ortam!.sahip.tx(async (db) => {
@@ -260,9 +260,9 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     } finally {
       await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
     }
-  });
+  }));
 
-  test('35 b: fiyatsız satırda geciken emrin tabanı satır adedindeki payıyla sayılır; emrin payı yarıya inince tabanı da yarıya iner', async () => {
+  test('35 b: fiyatsız satırda geciken emrin tabanı satır adedindeki payıyla sayılır; emrin payı yarıya inince tabanı da yarıya iner', async () => anSabit(async () => {
     const [g] = await isEmirleriAc([yeniAdim()], 10, '2020-01-10');
     const satirId = await ortam!.sahip.tx(async (db) => {
       const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 35', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
@@ -286,7 +286,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     } finally {
       await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
     }
-  });
+  }));
 
   test('210 a, denetim #21: bedel ayarını yalnız plan.bedel-ayari değiştirir (müdür); planlama değiştiremez; değerler sınırlıdır; çarpansız gövde çarpanları korur', async () => {
     const varsayilan = { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 };
