@@ -102,7 +102,7 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     const beklenen = planGirdisi({ calisma: calisma(2), kayit, kaynak: { durum: kaynak.durum, ek: { ...(kaynak.ek as object), takvim } }, bugun: tesisGunu(Date.now()) });
     assert.ok(beklenen);
     // Plan amacı motor ayarındandır (kart 811, 771 a); ayar yazılmamışsa varsayılan. Motor ölçeği sistem ayarının varsayılanıdır (1477 a).
-    assert.deepEqual(c.calisma, JSON.parse(JSON.stringify(calismayaMotorAyari(beklenen.S, MOTOR_AYARI_VARSAYILAN, null, { ufukGun: 63, dilimDk: 15 }))));
+    assert.deepEqual(c.calisma, JSON.parse(JSON.stringify(calismayaMotorAyari(beklenen.S, MOTOR_AYARI_VARSAYILAN, null, { ufukGun: 120, dilimDk: 15 }))));
     // Takvim eki girdiye girer: eksiz birleşme başka çalışma verir.
     const eksiz = planGirdisi({ calisma: calisma(2), kayit, kaynak, bugun: tesisGunu(Date.now()) });
     assert.notDeepEqual(c.calisma, JSON.parse(JSON.stringify(eksiz?.S)));

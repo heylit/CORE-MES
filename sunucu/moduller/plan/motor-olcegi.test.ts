@@ -5,7 +5,7 @@ import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle, type MotorDurumu } from './plan-motoru.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
-// 1477 a: motorun ufku (gün) ve zaman dilimi sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); varsayılan 63 gün, 15 dk.
+// 1477 a: motorun ufku (gün) ve zaman dilimi sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); varsayılan 120 gün (1681 b), 15 dk.
 // Veriler uydurmadır.
 
 const GUNLER = { pzt: ['V'], sal: ['V'], car: ['V'], per: ['V'], cum: ['V'] };
@@ -22,9 +22,9 @@ const st = (m: ReturnType<typeof motorYukle>, olcek?: Record<string, unknown>, a
 const derle = (m: ReturnType<typeof motorYukle>, s: MotorDurumu) => m.compile(s) as { days: unknown[]; gen: unknown };
 
 describe('plan motoru: ufuk ve dilim (1477 a)', () => {
-  test('varsayılan 63 gün: ufku aşan iş yerleşmez; ufuk 90 gün olunca yerleşir', () => {
+  test('ufuk 63 gün: ufku aşan iş yerleşmez; ufuk 90 gün olunca yerleşir', () => {
     const m = motorYukle();
-    const p63 = m.schedule(st(m), 'yeni', null);
+    const p63 = m.schedule(st(m, { ufukGun: 63, dilimDk: 15 }), 'yeni', null);
     assert.equal(p63.ops['S1.10'], undefined);
     assert.deepEqual([...(p63.fail ?? [])], ['S1.10']);
     const m2 = motorYukle();
@@ -33,12 +33,25 @@ describe('plan motoru: ufuk ve dilim (1477 a)', () => {
     assert.ok(r && r.C > 63 * 24 && r.C < 90 * 24, JSON.stringify(r));
   });
 
+  // 120 adet x 6 saat = 720 saat, günde 8 saat: 90 iş günü, yaklaşık 126 takvim günü
+  test('varsayılan 120 gün (1681 b): ufku aşan iş yerleşmez; ufuk 182 gün olunca yerleşir', () => {
+    const m = motorYukle();
+    const p120 = m.schedule(st(m, undefined, 120), 'yeni', null);
+    assert.equal(p120.ops['S1.10'], undefined);
+    assert.deepEqual([...(p120.fail ?? [])], ['S1.10']);
+    const m2 = motorYukle();
+    const p182 = m2.schedule(st(m2, { ufukGun: 182, dilimDk: 15 }, 120), 'yeni', null);
+    const r = p182.ops['S1.10'];
+    assert.ok(r && r.C > 120 * 24 && r.C < 182 * 24, JSON.stringify(r));
+  });
+
   test('derleme ufuk kadar gün kurar; sınır dışı ufuk ve tanımsız dilim varsayılana döner', () => {
     const m = motorYukle();
     assert.equal(derle(m, st(m, { ufukGun: 120, dilimDk: 30 })).days.length, 120);
-    assert.equal(derle(m, st(m, { ufukGun: 500, dilimDk: 7 })).days.length, 63);
-    assert.equal(derle(m, st(m, { ufukGun: 'x' })).days.length, 63);
-    assert.equal(derle(m, st(m)).days.length, 63);
+    assert.equal(derle(m, st(m, { ufukGun: 63, dilimDk: 15 })).days.length, 63);
+    assert.equal(derle(m, st(m, { ufukGun: 500, dilimDk: 7 })).days.length, 120);
+    assert.equal(derle(m, st(m, { ufukGun: 'x' })).days.length, 120);
+    assert.equal(derle(m, st(m)).days.length, 120);
   });
 
   test('30 dakikalık dilimde plan kurulur, iş aynı saatte biter (tam saatli iş)', () => {
@@ -54,7 +67,7 @@ describe('plan motoru: ufuk ve dilim (1477 a)', () => {
     const taban = m.schedule(st(m, { ufukGun: 90, dilimDk: 15 }), 'yeni', null);
     const m2 = motorYukle();
     // dondurma 0: başlangıçtaki iş dondurulmuş sayılıp tabandaki yerinde kalmasın
-    const s = st(m2, { dondurma: 0 });
+    const s = st(m2, { dondurma: 0, ufukGun: 63 });
     const p = m2.schedule(s, 'sabit', taban);
     assert.equal(p.ops['S1.10'], undefined);
     assert.deepEqual([...(p.fail ?? [])], ['S1.10']);
@@ -79,14 +92,14 @@ describe('plan girdisi: motor ölçeği (1477 a)', () => {
 
 describe('plan (gerçek PostgreSQL): motor ölçeği sistem ayarından (1477 a)', () => {
   const { c, tamam } = planTestOrtami();
-  test('varsayılan 63 gün ve 15 dk; yönetici değiştirince planlama çalışması yeni ölçeği taşır', async () => {
+  test('varsayılan 120 gün ve 15 dk; yönetici değiştirince planlama çalışması yeni ölçeği taşır', async () => {
     const calisma = async () => {
       const w = (await tamam<{ calisma: { w: { ufukGun?: unknown; dilimDk?: unknown } } | null }>(c.planlama, 'POST', '/plan/planlama-calismasi/olustur', {})).calisma?.w;
       return [w?.ufukGun, w?.dilimDk];
     };
-    assert.deepEqual(await calisma(), [63, 15]);
-    await tamam(c.yonetici, 'POST', '/ayarlar/plan.motor-ufuk-gun/degistir', { deger: 120 });
+    assert.deepEqual(await calisma(), [120, 15]);
+    await tamam(c.yonetici, 'POST', '/ayarlar/plan.motor-ufuk-gun/degistir', { deger: 90 });
     await tamam(c.yonetici, 'POST', '/ayarlar/plan.motor-dilim-dk/degistir', { deger: '30' });
-    assert.deepEqual(await calisma(), [120, 30]);
+    assert.deepEqual(await calisma(), [90, 30]);
   });
 });

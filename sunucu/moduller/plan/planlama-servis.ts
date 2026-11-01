@@ -353,7 +353,7 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
 
 // 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
 async function motorOlcegi(db: Db): Promise<MotorOlcegi> {
-  return { ufukGun: (await sistemAyariOku(db, 'plan.motor-ufuk-gun')) ?? 63, dilimDk: Number(await sistemAyariOku(db, 'plan.motor-dilim-dk')) };
+  return { ufukGun: (await sistemAyariOku(db, 'plan.motor-ufuk-gun')) ?? 120, dilimDk: Number(await sistemAyariOku(db, 'plan.motor-dilim-dk')) };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

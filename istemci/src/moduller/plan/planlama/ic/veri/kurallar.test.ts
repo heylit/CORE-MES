@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { derle, girdiKur, planOku, plandanBitenler, saatYaz, veriDenetimi } from '../../motor/kurallar.ts';
 import { ornekCalisma } from '../../motor/ornek.ts';
 import {
@@ -7,8 +7,13 @@ import {
   vardiyalar, durusDenetle, kisitDegistir,
 } from './kurallar.ts';
 import { calismaKur } from './test-veri.tsx';
+import { ufukKur } from '../../ufuk-olcegi.ts';
 
 const cxKur = (c = calismaKur()) => derle(girdiKur(c, plandanBitenler(c, planOku(c))));
+
+// Bu dosyanın beklenen değerleri 63 günlük ufukla kuruldu; testin konusu varsayılan ufuk değil (1681 b ile varsayılan 120 gün).
+beforeEach(() => { ufukKur({ ufukGun: 63 }); });
+afterEach(() => { ufukKur(null); });
 
 describe('Veri ve kısıtlar hesapları', () => {
   it('kısıt kataloğu bugünkü sayfanınki: 6 grup, durum sayıları', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import Module from 'highs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
@@ -8,6 +8,7 @@ import {
   talepHizi, tezgahPencereleri, ufukMalzemesi, ufukTakvimi, ufukVerisi, urunAileleri, yatirimTL, yillikAyarOku, yillikAyarYaz, yillikDonemler,
   yillikHedefKur, yillikModel, yillikOzet, yillikSonuc, yillikTalep, yillikVeri, zamanKur, type CozumCevabi, type Zaman,
 } from './kurallar.ts';
+import { ufukKur } from '../ufuk-olcegi.ts';
 
 // Uydurma veri: iki tezgâh (torna, freze), bir vardiya (08-16, yarım saat mola), hafta içi; başlangıç 2026-10-05 pazartesi.
 function calisma(ek: Record<string, unknown> = {}, cek: Record<string, unknown> = {}): PlanlamaCalismasi {
@@ -61,6 +62,10 @@ const coz = async (lp: string, sure: number, want: readonly string[]) => {
   highs ??= (Module as unknown as () => Promise<HighsOrnegi>)();
   return modelCoz(await highs, lp, sure, want);
 };
+
+// Bu dosyanın beklenen değerleri 63 günlük ufukla kuruldu; testin konusu varsayılan ufuk değil (1681 b ile varsayılan 120 gün).
+beforeEach(() => { ufukKur({ ufukGun: 63 }); });
+afterEach(() => { ufukKur(null); });
 
 describe('zaman ve takvim', () => {
   it('saat ekseni başlangıç günü 00:00\'dan; başlangıç yoksa zaman kurulmaz; şimdi 07:00\'den önce olmaz', () => {

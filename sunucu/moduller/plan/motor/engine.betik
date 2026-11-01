@@ -1,7 +1,7 @@
 /* ================= Plan motoru v2: çekirdek ================= */
 /* 1477 a: ufuk (gün) ve dilim (saat) sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); sunucu çalışmanın w.ufukGun ve w.dilimDk alanlarıyla verir.
-   Verilmezse ya da sınır dışındaysa 63 gün ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
-const UFUK_VARSAYILAN=63,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30];
+   Verilmezse ya da sınır dışındaysa 120 gün (1681 b) ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
+const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30];
 let SL=0.25, HDAYS=UFUK_VARSAYILAN, NS=HDAYS*24/SL;
 function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
   HDAYS=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}

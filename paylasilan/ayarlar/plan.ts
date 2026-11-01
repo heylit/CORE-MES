@@ -13,7 +13,7 @@ export const PLAN_AYARLARI = {
   'plan.motor-ufuk-gun': {
     modul: 'plan',
     tur: 'sayi',
-    varsayilan: 63,
+    varsayilan: 120,
     enAz: 28,
     enCok: 182,
     ondalik: 0,
