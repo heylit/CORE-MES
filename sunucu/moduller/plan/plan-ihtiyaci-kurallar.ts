@@ -3,6 +3,8 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 // Plan malzeme ihtiyacı (898 a, Dal 2), saf. Canlıya alınan planın açık emirlerinden satın alınacak malzeme eksiği: emrin kalan sarfı
 // (brüt ihtiyaç eksi verilmiş net sarf) malzemeyi tüketen adımların canlı başlangıcına göre sıralanır, serbest stok en erken tüketime
 // düşer; karşılanamayan miktar malzeme başına toplanır. Açık sipariş ve açık talep satın almanın kendi tablosudur, orada düşülür.
+// 1542 a (1472 M2): rotası olan yarı mamul ve mamul bileşen önce kendi serbest stoğuyla aynı sırada netlenir; karşılanamayan miktar
+// ürün ağacıyla (agaclar) yaprağa açılır ve açılan satın alınan malzeme aynı tüketim anıyla ihtiyaca eklenir (MRP raporuyla aynı kural).
 
 // Satın alınan katalog türleri (eksik-stok-kurallar HAM_TURLER ile aynı küme): yarı mamul ve mamul üretilir, ihtiyacı satın almaya gitmez.
 const SATIN_ALINAN_TURLER: ReadonlySet<string> = new Set(['hammadde', 'ticari_mal']);
@@ -21,6 +23,8 @@ export interface IhtiyacGirdisi {
   kartlar: ReadonlyMap<number, { tur: string }>;
   // Stok kaydı olan kartın serbest miktarı; kaydı olmayan kart haritada yoktur (stoku bilinmiyor, sıfır sayılır).
   serbest: ReadonlyMap<number, string>;
+  // Açılan ürün -> 1 adedi için yaprak malzeme miktarları; haritada olmayan ürün açılmaz.
+  agaclar: ReadonlyMap<number, ReadonlyMap<number, number>>;
 }
 
 export interface PlanIhtiyaci {
@@ -39,14 +43,15 @@ interface Tuketim { emirNo: string; miktar: number; zaman: number }
 const sayi = (m: string): number => { const n = Number(m); return Number.isFinite(n) ? n : 0; };
 const yuvarla = (n: number): number => Math.round(n * 10_000) / 10_000;
 
-export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
+// Emir başına kalan tüketimler (brüt eksi verilmiş sarf); satın alınan malzeme ve ürün ayrı toplanır.
+function tuketimleriTopla(g: Omit<IhtiyacGirdisi, 'agaclar'>): { tuketimler: Map<number, Tuketim[]>; urunler: Map<number, Tuketim[]> } {
   const tuketimler = new Map<number, Tuketim[]>();
+  const urunler = new Map<number, Tuketim[]>();
   for (const e of g.emirler) {
     const satirlar = g.ihtiyaclar.get(e.id);
     if (!satirlar) continue;
     const malzeme = new Map<number, { brut: number; zaman: number }>();
     for (const s of satirlar) {
-      if (!SATIN_ALINAN_TURLER.has(g.kartlar.get(s.malzemeNo)?.tur ?? '')) continue;
       const m = malzeme.get(s.malzemeNo) ?? { brut: 0, zaman: Infinity };
       m.brut += sayi(s.brut);
       m.zaman = Math.min(m.zaman, g.baslangiclar.get(`${e.id}:${s.opNo}`) ?? Infinity);
@@ -58,9 +63,45 @@ export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
       const verilen = g.sarflar.filter((x) => x.emirId === e.id && x.malzemeId === no).reduce((t, x) => t + sayi(x.miktar), 0);
       const kalan = m.brut - verilen;
       if (kalan <= ESIK) continue;
-      const l = tuketimler.get(no) ?? [];
-      l.push({ emirNo: e.no, miktar: kalan, zaman: m.zaman });
-      tuketimler.set(no, l);
+      const hedef = SATIN_ALINAN_TURLER.has(g.kartlar.get(no)?.tur ?? '') ? tuketimler : urunler;
+      hedef.set(no, [...(hedef.get(no) ?? []), { emirNo: e.no, miktar: kalan, zaman: m.zaman }]);
+    }
+  }
+  return { tuketimler, urunler };
+}
+
+// Serbest stok en erken tüketime düşer; karşılanamayan tüketimler sırasıyla döner.
+function stoklaNetle(l: readonly Tuketim[], serbest: string | undefined): Tuketim[] {
+  let stok = serbest === undefined ? 0 : Math.max(0, sayi(serbest));
+  const acik: Tuketim[] = [];
+  for (const t of [...l].sort((a, b) => a.zaman - b.zaman || a.emirNo.localeCompare(b.emirNo, 'tr'))) {
+    const karsilanan = Math.min(stok, t.miktar);
+    stok -= karsilanan;
+    if (t.miktar - karsilanan > ESIK) acik.push({ ...t, miktar: t.miktar - karsilanan });
+  }
+  return acik;
+}
+
+// Açılacak ürünler ve stokla karşılanamayan toplamları: çağıran ağacı bu miktarla okur ve agaclar'ı ondan kurar.
+export function acilacakUrunler(g: Omit<IhtiyacGirdisi, 'agaclar'>): Map<number, number> {
+  const sonuc = new Map<number, number>();
+  for (const [no, l] of tuketimleriTopla(g).urunler) {
+    const toplam = stoklaNetle(l, g.serbest.get(no)).reduce((t, x) => t + x.miktar, 0);
+    if (toplam > ESIK) sonuc.set(no, toplam);
+  }
+  return sonuc;
+}
+
+export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
+  const { tuketimler, urunler } = tuketimleriTopla(g);
+  for (const [no, l] of urunler) {
+    const agac = g.agaclar.get(no);
+    if (agac === undefined) continue;
+    for (const t of stoklaNetle(l, g.serbest.get(no))) {
+      for (const [alt, birim] of agac) {
+        if (!SATIN_ALINAN_TURLER.has(g.kartlar.get(alt)?.tur ?? '') || !(t.miktar * birim > ESIK)) continue;
+        tuketimler.set(alt, [...(tuketimler.get(alt) ?? []), { ...t, miktar: t.miktar * birim }]);
+      }
     }
   }
   const sonuc: PlanIhtiyaci[] = [];
