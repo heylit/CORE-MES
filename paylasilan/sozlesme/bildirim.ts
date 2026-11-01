@@ -32,6 +32,13 @@ export const BILDIRIM_TURLERI = {
   'satin-alma.talep-onay-bekliyor': {
     baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: true },
   },
+  // TMI A2: onay ve ret, talebi açana ve talep edene gider (kayda bağlı kişi, alan işlemi yok); onaylayan kendisi almaz.
+  'satin-alma.talep-onaylandi': {
+    baslik: 'Satın alma talebin onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/taleplerim', varsayilan: { mesaj: false, eposta: false },
+  },
+  'satin-alma.talep-reddedildi': {
+    baslik: 'Satın alma talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/taleplerim', varsayilan: { mesaj: false, eposta: false },
+  },
   'siparisler.onay-bekliyor': {
     baslik: 'Sipariş onay bekliyor', onem: 'uyari', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
   },
