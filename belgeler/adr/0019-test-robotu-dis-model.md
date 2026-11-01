@@ -24,10 +24,6 @@ bir aylık kullanım bir saat içinde koşmalı. Yorum dil modeli ister. CLAUDE.
    Biçim `ekran-testleri/benzetim/sozlesme.ts`'dedir; izleme uygulaması yalnız bu dosyaları okur.
 6. **Yorum karar değildir.** Model bulgu ve kart önerisi yazar; karta geçiş kullanıcı onayıyla olur.
 
-## CLAUDE.md satırı
-
-Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
-
 ## Sonuçlar
 
 - Robot ayrı yapılandırmayla koşar (`npm run robot`); `npm run ekran` ve `kontrol` ona dokunmaz. Birim testleri `npm run robot:test`.

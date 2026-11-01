@@ -14,7 +14,7 @@ yazma (iş emri gönderimi, IsErp işareti) tek anahtarla birlikte açılır.
 1. **Kurum içi SmartES ayrı tutulur.** Sunucunun kurum içindeki SmartES servisine SOAP isteği "dış servis çağrısı" sayılmaz. İnternete
    çıkan her çağrı, telemetri ve CDN yasağı aynen sürer.
 2. **Kurum içi adres açılışta denetlenir.** ADR 0011 karar 2'deki kural aynen: özel ya da yerel IP, ya da noktasız tek parçalı sunucu adı.
-   Adreste kullanıcı, parola, sorgu ve `#` olmaz; yönlendirme izlenmez (`sunucu/moduller/smartes/ayar.ts` `kurumIciMi`, `istemci.ts`).
+   Adreste kullanıcı, parola, sorgu ve `#` olmaz; yönlendirme izlenmez (`sunucu/cekirdek/kurum-ici.ts` `kurumIciMi`; `smartes/ayar.ts`, `istemci.ts`).
 3. **SmartES ile tek modül konuşur.** `sunucu/moduller/smartes/istemci.ts` dışında hiçbir dosya SmartES'e istek atmaz. Başka modüllerin verisi
    yalnız `disari.ts` ile okunur (uretim-emirleri, istasyonlar, malzemeler, durus-nedenleri); smartes başka modüle yazmaz.
 4. **Adres yalnız ortam değişkenindedir** (`TMIV2_SMARTES_ADRESI`, isteğe bağlı `TMIV2_SMARTES_AD_ALANI`). Depoya, karta, teste, günlüğe ve hata
@@ -25,13 +25,9 @@ yazma (iş emri gönderimi, IsErp işareti) tek anahtarla birlikte açılır.
 6. **MES'teki üretim verisi silinmez, değiştirilmez.** Yazılan yalnız: TMI'ye okunmuş ve bitmiş kaydın "ERP'ye aktarıldı" işareti (IsErpOK,
    IsErpRED), TMI iş emrinin SmartES'te açılması ve güncellenmesi, plandan düşen emrin pasif ya da bitti yapılması. Silme metodu çağrılmaz.
 7. **İş zamanlanmış iş kalıbıyla koşar** (ADR 0010). Yeni paket yok: Node'un `fetch`'i ve el yazımı, DTD ve tanımsız varlık reddeden XML okuyucu.
-   Tur, istekleri bekleyebilmek için yalnız kendi transaction'ında "boşta transaction" kesmesini uzatır (ADR 0011 karar 6 ile aynı).
+   İşler transaction dışı koşar (ADR 0010, "Ek: transaction dışı iş"); istek beklenirken transaction tutulmaz.
 8. **Okuma tekrarı zararsızdır.** Her kayıt SmartES kimliğiyle bir kez yazılır (UPSERT); okuma penceresi 15 dakika geriden başlar; hata
    pencereyi ilerletmez. İşaret, TMI yazması bittikten sonraki turda gider; düşerse kayıt yine okunur ve tekillikle atlanır.
-
-## Kırmızı çizgi için öneri metni
-
-Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 

@@ -1,6 +1,7 @@
 # ADR 0010 — Zamanlanmış iş
 
-Durum: kabul (kullanıcı kararları Z1 a, Z2 a, Z3 a, Z4 a, Z4d a, Z5 b, V3 koşullu kabul, V4 kabul; 08.10.2026, kartlar #208, #298)
+Durum: kabul (kullanıcı kararları Z1 a, Z2 a, Z3 a, Z4 a, Z4d a, Z5 b, V3 koşullu kabul, V4 kabul; 08.10.2026, kartlar #208, #298).
+Karar 4 ve 8 transaction dışı iş için "Ek: transaction dışı iş" ile daralır (30.10.2026, #1054).
 
 ## Bağlam
 
@@ -35,6 +36,19 @@ Logo giden kutusu, Logo irsaliye okuma ve SMARTES gerçekleşen okuma (#205, #21
 - Denetim (karar 8): Arkon yineleyicinin izi `arkon_tmi_yansima`dadır (kişi, sonuç, neden, deneme, son deneme zamanı).
 - Süreçte tek zamanlayıcı başlatılır; ikincisi açılışta hata verir. İş adı tekildir; iki modül aynı adı verirse sunucu açılmaz.
 - Kilit anahtarı şemayı içerir (`<şema>:is-<ad>`): aynı veritabanında paralel test şemaları birbirinin işini atlatmaz.
+
+## Ek: transaction dışı iş (30.10.2026, #1054)
+
+Dış servisi bekleyen iş (Logo, SmartES) ve uzun hesap (geometri) beklerken transaction ve bağlantı tutmamalıdır. İş tanımı `calis` yerine
+`txDisi` alabilir (ikisi birden tanım hatasıdır).
+
+- **Kilit oturum düzeyindedir.** Tur, ödünç aldığı tek bağlantıda `pg_try_advisory_lock` alır (anahtar karar 4'teki gibi şemayı içerir);
+  o bağlantıda transaction açılmaz. Tur bitince kilit bırakılır; tur hata verirse bağlantı havuza dönmez, kapanır ve kilit onunla düşer.
+- **İş kendi kısa transaction'larını açar** (`vt.tx`) ve dış servisi transaction dışında bekler. Karar 8'deki "turu düşüren hata turun
+  yazdıklarını geri alır" bu işte geçerli değildir: önceki transaction'larda yazılanlar kalır. İz kuralı (her denemenin kendi tablosunda
+  zamanı ve sonucu) aynen sürer.
+- Veritabanının `oturumda` yöntemi gerekir; yoksa iş tanım hatası verir.
+- Kod: `sunucu/cekirdek/zamanlayici.ts` (`IsTanimi.txDisi`, `turKos`). Kullananlar `npm run harita` çıktısındadır.
 
 ## Vazgeçilenler
 

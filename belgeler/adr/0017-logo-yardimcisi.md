@@ -30,10 +30,6 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
 7. **Canlı deneme yalnız test kayıtlarıyla.** `--deneme` yalnız `TMI-ERP-TEST-001` malzemesini ve `TMI-ERP-` önekli fişleri kullanır,
    açtığını siler; gerçek kayıt silinmez.
 
-## CLAUDE.md satırı
-
-Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
-
 ## Sonuçlar
 
 - Kurulum `kurulum/logo-yardimcisi.md`; Windows CI işi yardımcıyı derler ve sahte Logo testlerini koşar.
