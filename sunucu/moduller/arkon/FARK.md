@@ -929,3 +929,22 @@ Bu tur şunları varsaydı:
 2. Gösterge fazla sayan adımın kartındadır; önceki adımın kartında ayrıca gösterilmez.
 3. Eksik yalnız çalışan (açık) adımda okunur; partili ya da kol emirde uretim-emirleri `eksik` vermediği için gösterge çıkmaz. Bölünmüş işin parçaları adımın değerini taşır.
 4. Metin bitiş uyarısının (654 a) diliyle aynıdır; renk durdu (kırmızı) tonudur.
+
+# FARK: arkon, aylık bölüm (kart 1765; dal 1765-arkon-aylik-bolum)
+
+## Değişen
+- Göç `20261108063300_arkon_kayit_aylik_bolum.sql`: `arkon_kayit` `zaman` sütununa göre aylık bölümlü tabloya çevrilir (çekirdek
+  `cekirdek_aylik_bolume_cevir`). Satır ve kimlik değişmez; birincil anahtar `(id, zaman)` olur; dizinler, kişi bağı ve yalnız-ekleme
+  tetikleri ana tabloda ve her bölümde durur.
+- `(tur, cid)` tekilliği bölümlü tabloda tutulamadığı için yeni, bölümsüz, yalnız eklenen `arkon_kayit_cid (tur, cid)` koruma
+  tablosuna taşındı; `sorgular.ts kayitEkle` önce ona ekler, yinelenen gönderim eskisi gibi `null` döner. `(tur, cid, zaman)`
+  yetmezdi: pencere dışı tablet kaydına her gönderimde sunucu saati yazılır (`kurallar.ts kayitZamani`), aynı kayıt iki kez sayılırdı.
+  Kayda cid ile ulaşan okuma için `arkon_kayit_cid_idx (tur, cid)` dizini eklendi.
+- `arkon_tmi_yansima.kayit_zaman` (NOT NULL, var olan satırlarda kayıttan dolduruldu); bağ `(kayit_id, kayit_zaman)` ->
+  `arkon_kayit (id, zaman)` (`arkon_tmi_yansima_kayit_baglantisi`). `sorgular.ts yansimaYaz` zamanı kayıttan okur; servis değişmedi.
+- Uç, işlem, rol ve ekran değişmedi.
+- Test: `aylik-bolum.test.ts` (dolu tabloda göç, yinelenen ve eşzamanlı gönderim, yansıma bağı, yalnız ekleme);
+  `yansima.test.ts` iki plan testi bölümlere uyarlandı (tam tarama denetimi her bölümü kapsar).
+
+## Onaylı kararlar
+- 1765 b + teyit: arkon_kayit aylık bölümlenir; arkon_tmi_yansima bağı değişir; tetikler her bölüme kurulur.

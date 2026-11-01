@@ -1277,7 +1277,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     await ortam?.sahip.sorgu(
       `INSERT INTO arkon_kayit (tur, cid, zaman, govde, kisi_id) SELECT 'counts', 'toplu-' || g, now(), '{}'::jsonb, $1 FROM generate_series(1, 20000) g`, [operatorId]);
     await ortam?.sahip.sorgu(
-      `INSERT INTO arkon_tmi_yansima (kayit_id, emir_id, kisi_id, sonuc) SELECT id, $1, kisi_id, 'yazildi' FROM arkon_kayit WHERE cid LIKE 'toplu-%'`, [emir]);
+      `INSERT INTO arkon_tmi_yansima (kayit_id, kayit_zaman, emir_id, kisi_id, sonuc) SELECT id, zaman, $1, kisi_id, 'yazildi' FROM arkon_kayit WHERE cid LIKE 'toplu-%'`, [emir]);
     await ortam?.sahip.sorgu('ANALYZE arkon_tmi_yansima');
     await ortam?.sahip.sorgu('ANALYZE arkon_kayit');
     // A11: "TMI'ye yazılamayanlar" sayımı (sonuc <> 'yazildi') da tabloyu taramaz.
@@ -1305,9 +1305,15 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const liste = (emirNo: string | null, paketId: string | null) =>
       ['events', null, null, null, null, emirNo, paketId, null, 5000, bos.merkez, bos.istasyon, bos.makine, false, [], [], []];
     for (const [sql, param] of [[PARCA_SAGLAMI_SQL, ['kd5-p7', null]], [KAYITLAR_SQL, liste(null, 'kd5-p7')], [KAYITLAR_SQL, liste('KD5-7', null)]] as const) {
-      const plan = JSON.stringify(await vt().sorgu(`EXPLAIN (FORMAT JSON) ${sql}`, param as unknown[]));
-      assert.ok(!/"Node Type":"Seq Scan"[^}]*"Relation Name":"arkon_kayit"/.test(plan), plan.slice(0, 600));
-      assert.match(plan, /arkon_kayit_(paket|emir)_idx/);
+      // arkon_kayit aylık bölümlüdür (1765): tam tarama denetimi her bölüme uygulanır, dizin bölümün adını taşır. Boş bölümde
+      // (gelecek aylar) sıralı tarama bedelsiz görünür; bu işlemde pahalı sayılır ki sonuç istatistiğe değil dizine bağlı olsun:
+      // dizini sorguya uymayan bölüm yine sıralı taramaya düşer ve yakalanır.
+      const plan = await vt().tx(async (db) => {
+        await db.sorgu('SET LOCAL enable_seqscan = off');
+        return JSON.stringify(await db.sorgu(`EXPLAIN (FORMAT JSON) ${sql}`, param as unknown[]));
+      });
+      assert.ok(!/"Node Type":"Seq Scan"[^}]*"Relation Name":"arkon_kayit(_y\d{4}m\d{2}|_varsayilan)?"/.test(plan), plan.slice(0, 600));
+      assert.match(plan, /"Index Name":"arkon_kayit_(y\d{4}m\d{2}_|varsayilan_)?(tur_)?(paket|emir)(_id|_no)?(_zaman)?_idx"/);
     }
   });
 
