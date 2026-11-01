@@ -2,7 +2,7 @@ import type { ArkonBenCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import {
   BASKA_SUNUCU, ONIZLEME_SALT_OKUR, SANAL_SUNUCU, anlikIletimKur, benOnbellekli, cevapla, kapaliIletim, makineDoluRetleri, reddiBildirimi,
-  tekrarSuzgeci, tmiReddiBildirimleri, tmiUyarilari, type AnlikIletim, type Istemci, type MakineDoluRedi,
+  tekrarSuzgeci, tmiReddiBildirimleri, tmiUyarilari, YETKI_YOK, type AnlikIletim, type Istemci, type MakineDoluRedi,
 } from '../../baglanti.ts';
 
 // Yeni ekranın istek taşıyıcısı: Arkon veri katmanının (store.ts) isteklerini pencerenin fetch'ine dokunmadan köprünün çevirisine
@@ -64,7 +64,7 @@ export function tasiyiciYap(s: TasiyiciSecenegi): Tasiyici {
       s.reddedildi?.(BASKA_SUNUCU);
       return kapaliIletim();
     }
-    const iletim = anlikIletimKur(istemci, new URL(adres).searchParams.get('c') ?? 'tmi');
+    const iletim = anlikIletimKur(istemci, new URL(adres).searchParams.get('c') ?? 'tmi', undefined, (durum) => { if (durum === 403) reddet(YETKI_YOK); });
     const kapa = iletim.close.bind(iletim);
     iletim.close = () => { acik.delete(iletim); kapa(); };
     acik.add(iletim);

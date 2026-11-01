@@ -11,6 +11,6 @@
 Rol x işlem (1445 a): Aşama 1'de yalnız yönetici; roller 1390 rol menüsüyle verilir, göç yok.
 Veri kapsamı (iş merkezi) yok: malzeme kartı ve çizim iş merkezine bağlı değildir.
 Güvenilmeyen girdi: STEP/IGES ayrı süreçte okunur (1427 a). Dosya 200 MB sınırı, biçim başlığı denetimi, iş başına 120 sn süre sınırı,
-süreç belleği 2 GB'ı aşınca öldürülür; süreç ağa açılmaz, veritabanına bağlanmaz, ortam değişkeni okumaz (`execArgv: []`), ana süreç
+süreç belleği 2 GB'ı aşınca öldürülür; süreç ağa açılmaz, veritabanına bağlanmaz, ana sürecin bayraklarını (`execArgv: []`) ve ortam değişkenlerini almaz (yalnız `PATH`, `SystemRoot` ve geçici klasör değişkenleri geçer; `G-O1`, `G-O2`), ana süreç
 kapanınca kendisi de kapanır. Hata metni kısaltılır (500 karakter); dosya içeriği hata metnine girmez.
 Zaman ve kişi sunucudan; denetim kaydı yeniden hesaplatmada tam gövdeyle (çekirdeğin varsayılanı).

@@ -13,6 +13,18 @@ export type HesapYaniti =
 
 const GIRIS = fileURLToPath(new URL('./hesap-sureci.ts', import.meta.url));
 
+// fork env verilmezse ana sürecin bütün ortamı (veritabanı parolası dahil TMIV2_*) güvenilmeyen dosyayı okuyan sürece geçer
+// (ADR 0024 karar 2). Yalnız işletim sisteminin süreç açmak için istediği değişkenler geçer; Windows'ta SystemRoot gerekir.
+const GECEN_DEGISKENLER = ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR'] as const;
+export function hesapOrtami(ortam: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const sonuc: NodeJS.ProcessEnv = {};
+  for (const ad of GECEN_DEGISKENLER) {
+    const deger = ortam[ad];
+    if (deger !== undefined) sonuc[ad] = deger;
+  }
+  return sonuc;
+}
+
 export interface GeometriSureci {
   hesapla(tur: DosyaTuru, veri: Uint8Array): Promise<HesapYaniti>;
   kapat(): void;
@@ -30,8 +42,10 @@ export function geometriSureciKur(s: { sureMs?: number; bellekEsigi?: number; gi
 
   const ac = (): ChildProcess => {
     if (cocuk !== null && cocuk.exitCode === null && cocuk.signalCode === null && cocuk.connected) return cocuk;
-    // Ana sürecin --import ve --watch bayrakları geçmez: hesap süreci ortam değişkeni okumaz, dosya izlemez.
-    const yeni = fork(s.giris ?? GIRIS, [], { serialization: 'advanced', execArgv: [], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+    // Ana sürecin --import ve --watch bayrakları geçmez: hesap süreci ortam dosyası yüklemez, dosya izlemez.
+    const yeni = fork(s.giris ?? GIRIS, [], {
+      serialization: 'advanced', execArgv: [], env: hesapOrtami(process.env), stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    });
     yeni.stderr?.resume();
     yeni.unref();
     yeni.channel?.unref();

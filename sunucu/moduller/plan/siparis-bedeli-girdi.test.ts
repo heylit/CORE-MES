@@ -68,11 +68,14 @@ describe('plan motoru: siparişin gecikme cezası (1461 a)', () => {
     return e.J.S1!;
   };
 
-  test('ceza tutar × günlük oran × gecikme günüdür; tavan tutarın yüzdesiyle sınırlar; tavan yoksa sınır yok', () => {
+  test('ceza tutar × günlük oran × gecikme günüdür; tavan tutarın yüzdesiyle sınırlar; tavan yoksa varsayılan %10 (1500 a)', () => {
     const j = ceza({ gelir: 2400, cezaOran: 1 });
     assert.ok(j.T > 0, `gecikme ${String(j.T)}`);
     assert.ok(Math.abs(j.p - j.T / 24 * 2400 * 0.01) < 1e-6, `${String(j.p)}`);
     assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000, cezaTavan: 5 }).p - 120) < 1e-6);
+    assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000 }).p - 240) < 1e-6);
+    assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000, cezaTavan: null }).p - 240) < 1e-6);
+    assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000, cezaTavan: 50 }).p - 1200) < 1e-6, 'girilen tavan varsayılandan büyük olabilir');
     // Gelir bilinmezse oran uygulanamaz: motorun eski puan cezası (ağırlıklı) kalır.
     const bilinmez = ceza({ gelir: null, cezaOran: 1 });
     assert.ok(Math.abs(bilinmez.p - bilinmez.T * Number(m.W0.ceza)) < 1e-6, `${String(bilinmez.p)}`);

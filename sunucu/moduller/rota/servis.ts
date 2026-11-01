@@ -557,6 +557,26 @@ async function patlat(db: Db, kisiId: number, revizyonId: number, kokMalzemeId: 
   return { id, satirlar: p.satirlar };
 }
 
+// 1476-E: patlatma başına düğümün rota revizyonu ve malzemesi (donmuş görüntü, 1481 a). Çok katmanlı emrin iş emri rota adımına
+// (revizyon, kaynak_op_no) ile bağlanır; emrin kaynak revizyonu yalnız kökündür. Bulunmayan patlatma haritada yoktur; yetki denetlemez.
+export interface PatlatmaDugumu { revizyonId: number; malzemeId: number }
+export async function patlatmaDugumleri(db: Db, patlatmaIdleri: readonly number[]): Promise<Map<number, Map<string, PatlatmaDugumu>>> {
+  const sonuc = new Map<number, Map<string, PatlatmaDugumu>>();
+  for (const id of new Set(patlatmaIdleri)) {
+    const satirlar = await s.patlatmaSatirlariOku(db, id);
+    if (satirlar.length === 0) continue;
+    sonuc.set(id, new Map(satirlar.map((x) => [x.dugum, { revizyonId: x.revizyonId, malzemeId: x.malzemeId }])));
+  }
+  return sonuc;
+}
+
+// Patlatmada malzemenin rota revizyonu (1476-C stok): patlatma malzeme başına tek revizyon kullanır, malzeme birden çok düğümde olsa da
+// revizyonu aynıdır. Patlatmada olmayan malzeme ya da patlatma null döner; yetki denetlemez.
+export async function patlatmaRevizyonu(db: Db, patlatmaId: number, malzemeId: number): Promise<number | null> {
+  const satir = (await s.patlatmaSatirlariOku(db, patlatmaId)).find((x) => x.malzemeId === malzemeId);
+  return satir?.revizyonId ?? null;
+}
+
 export async function patlatmaGetir(db: Db, id: number): Promise<PatlatmaCevabi> {
   const b = await s.patlatmaBasligiOku(db, id);
   if (b === null) throw bulunamadi('Patlatma bulunamadı.');
