@@ -682,9 +682,9 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       assert.equal(e.sablonTuru, null, e.kod);
       assert.deepEqual(e.sablonlar, [], e.kod);
     }
-    // 1285 a: ilk tur kalite durum, hatalı parça ve sevk koli etiketi; 1288: dışarıdaki dört baskı yolu listede.
+    // 1285 a: ilk tur kalite durum, hatalı parça ve sevk koli etiketi; 1288, 1531 a: taşınan yollar kapandı, yalnız seri no dışarıda.
     assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), []);
-    assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['kalite-durum', 'konum', 'lot', 'malzeme', 'seri-no']);
+    assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['seri-no']);
     assert.equal((await al(yetkisiz, '/etiket-merkezi/etiketler')).statusCode, 403);
   });
 });

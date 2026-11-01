@@ -95,3 +95,6 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Basılan: müşteri, parça no ve adı (elle kalemde açıklama), adet, koli sırası, emir no, sevk tarihi ve belge no. QR kalemin emri `UE:<kimlik>` (1287 a: QR yeter); emirsiz kalemde QR yok. Sipariş no, revizyon, lot basılmaz (UYUM-BORCU 23).
 - Deftere `kaynak_tur = 'sevk-koli'`, `kaynak_id` kalem, koli sayısından bağımsız bir kez. Göç `20261031211200_etiket_merkezi_sevk_koli.sql` (1530): etiket listesinde `sevk-koli` satırı `hazir` olur.
 - Uç, işlem ve rol değişmedi.
+
+## Kapanış göçü (kart 1525, 1531 a)
+- Göç `20261031212000_etiket_merkezi_kapanis.sql`: etiket listesinde `konum`, `lot`, `malzeme` ve `kalite-durum` satırlarının `disaridaki_yol` değeri boşalır (taşındılar: stok 1525 adım 1, malzemeler 1308, KF-19 1525 adım 3). `seri-no` dışarıda kalır (1309 c). Yalnız katalog satırı; defter ve gerçek veri değişmez.
