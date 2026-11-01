@@ -8,6 +8,7 @@ import { cagriEkipleriniAl } from './cagri-ekiplerim';
 import type { CagriEkiplerim } from './cagri-ekiplerim';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
+import { logIletisiniDagit } from './log-tepki';
 import { depoOkunur } from './depo-okuma';
 import { BUDANAN_DEPOLAR, budanacakAnahtarlar, yerelKayitBudanir } from './kayit-budama';
 import { sunucuyaGonderilir } from './kayit-gonderimi';
@@ -474,7 +475,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     const es = new (tasiyici ? tasiyici.EventSource : EventSource)(SRV.base + '/api/bus?t=' + encodeURIComponent(session.token) + '&c=' + SRV.cid);
     es.onopen = () => { if (!SRV.online) { SRV.online = true; SRV.lastErr = ''; emit(); } flush(); };
     es.onerror = () => { if (SRV.online) { SRV.online = false; SRV.lastErr = 'Sunucuya ulaşılamıyor'; emit(); } };
-    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logSubs.forEach(f => { try { f(m.kind, null); } catch (x) {} }); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: ret })); deliver(m); } catch (x) {} };
+    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logIletisiniDagit(m, logSubs); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: ret })); deliver(m); } catch (x) {} };
     SRV.es = es;
   }
   const Bus = {

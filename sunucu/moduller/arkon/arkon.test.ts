@@ -572,6 +572,20 @@ describe('arkon (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu("UPDATE arkon_kayit SET emir_no = 'X'"));
   });
 
+  test('kayıt iletisi ($log) yazılan kayıtların istasyonlarını taşır; istasyonsuz kayıt varsa liste gönderilmez (1747)', async () => {
+    const { son } = (await istek<IletilerCevabi>(yonetici, 'GET', '/arkon/iletiler?kaynak=log-izle')).govde;
+    const satir = { at: Date.now(), wc: 'TAL', orderNo: 'UE-1', kind: 'good', delta: 1 };
+    await istek(operator, 'POST', '/arkon/kayitlar/counts/ekle', {
+      satirlar: [{ ...satir, cid: 'l1', machine: 'TZG-04' }, { ...satir, cid: 'l2', machine: 'FRZ-11' }, { ...satir, cid: 'l3', machine: 'TZG-04' }], kaynak: 'log-yaz',
+    });
+    await istek(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar: [{ ...satir, cid: 'l4', machine: 'TZG-04' }, { ...satir, cid: 'l5' }], kaynak: 'log-yaz' });
+    const { iletiler } = (await istek<IletilerCevabi>(yonetici, 'GET', `/arkon/iletiler?kaynak=log-izle&son=${son}`)).govde;
+    assert.deepEqual(iletiler.filter((i) => i['type'] === '$log'), [
+      { type: '$log', kind: 'counts', machines: ['FRZ-11', 'TZG-04'] },
+      { type: '$log', kind: 'counts' },
+    ]);
+  });
+
   test('dosya parça parça yüklenir, özetle doğrulanır ve aynen okunur; özeti tutmayan reddedilir', async () => {
     const icerik = Buffer.from('ISO-10303-21; deneme modeli '.repeat(40));
     const ozet = createHash('sha256').update(icerik).digest('hex');
