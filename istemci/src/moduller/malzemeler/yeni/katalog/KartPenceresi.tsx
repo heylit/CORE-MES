@@ -9,6 +9,7 @@ import type { Gezinti } from '../sekmeler.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import type { KgFiyati } from '../veri.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
+import { DemirbasBolumu } from './DemirbasBolumu.tsx';
 import { kimlikOf, yerineOf } from './liste.ts';
 import { Muadiller, OnayPaneli, Revizyonlar, TalepPaneli, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
 
@@ -83,6 +84,7 @@ export function KartPenceresi({
       <TalepPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => talepIslemi(x, i, n)} />
       <OnayPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => onayIslemi(x, i, n)} />
       <Foy veri={K.foyVerisi(x, b)} {...(kgFiyati !== undefined ? { kgFiyati } : {})} />
+      {x.tur === 'demirbas' && <DemirbasBolumu kimlik={kart.kimlik} yazar={yetki.yaz && !kilitli} />}
       <ResimAlani tur={x.tur} no={kart.no} />
       <Muadiller x={x} kayitlar={kayitlar} b={b} ac={ac} />
       <Revizyonlar x={x} />

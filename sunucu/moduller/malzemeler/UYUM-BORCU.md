@@ -284,3 +284,9 @@ Açık:
 ## Etiket yalnız Etiket Merkezi'nde (kart #1308, 1288)
 - SONRA: `kurallar/cekirdek/etiket.ts` (`labelSVG`) ve kural testindeki etiket ölçüleri artık ekranda kullanılmıyor; prototip kural katmanına dokunulmadı, kaldırılması ayrı iş.
 - ETKİLEYEN: madde 66'daki cihaz denemesindeki "etiket yazdırma" artık Etiket Merkezi'nde denenir.
+
+## Demirbaş teknik bilgisi (kart 1595; 1596 teyit a, 1597 a, 1598 a, 1599 a)
+- Kartın kaydındaki makine kategorisi alanları (güç kW, kapasite, ağırlık, kontrol ünitesi, marka, model, seri, yıl) kayıtta kalır; tipli sütuna taşımak dolu tablodaki jsonb'yi değiştirir, ayrı kart ve onay ister. Kurulu güç bu alandır; tüketim tipli sütundadır.
+- İş mili devri `cnc_kurulum_tezgah.devir/is_mili_devri`'de de var (CNC Kurulum, makine başına); bağlamada tek sahibe bağlanır.
+- Finansın sabit kıymet listesi (Ayarlar > Sabit kıymetler) makine kodunu elle alır; kartlardan beslenmesi ayrı kart adayı.
+- Kart kaydındaki `com.fiyat` (öteki türlerde fiyat) kartı okuyan herkese gider; demirbaşta ekran fiyat istemez. Sunucuda süzme ayrı iştir: süzülen alanla kaydeden kart fiyatı silerdi.

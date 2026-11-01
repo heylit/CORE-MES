@@ -12,7 +12,7 @@ import {
   aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
-  maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi,
+  maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
   skorListesiCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
 } from '#paylasilan/sozlesme/finans.ts';
 import type { ListeAdi } from './sorgular.ts';
@@ -75,6 +75,9 @@ export const paraUclari = [
   oku('/finans/skorlar', 'skor', skorListesiCevabi),
   uc({ yontem: 'GET', yol: '/finans/sabit-kiymetler', yetki: 'finans.oku', sorgu: finansListeSorgusu, cevap: sabitKiymetListesiCevabi,
     isle: ({ db, sorgu }) => servis.sabitKiymetleriListele(db, sorgu) }),
+  // Malzemeler demirbaş kartı (1596, 1599 a): fiyat ve amortisman yalnız finansı okuyana.
+  uc({ yontem: 'GET', yol: '/finans/sabit-kiymetler/makine/:makineId', yetki: 'finans.oku', parametre: makineIdParametresi, cevap: makineSabitKiymetleriCevabi,
+    isle: async ({ db, parametre }) => ({ sabitKiymetler: await servis.makineSabitKiymetleri(db, parametre.makineId) }) }),
   uc({ yontem: 'GET', yol: '/finans/amortisman', yetki: 'finans.oku', cevap: amortismanCevabi, isle: ({ db }) => servis.amortismanAylari(db) }),
   // 952 a: ortak kur ve faiz şeridi her sayfadadır; giriş yapan herkes okur (yalnız kur, faiz ve giren kişi; finans rakamı yok).
   uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: 'oturum', cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
@@ -173,6 +176,8 @@ export const paraUclari = [
     isle: ({ db, kullanici, govde }) => servis.genelGiderOraniEkle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/sabit-kiymetler/ekle', yetki: 'finans.yonet', tekrarKorumali: true, govde: sabitKiymetEkleGovdesi, cevap: sabitKiymetCevabi,
     isle: async ({ db, kullanici, govde }) => ({ sabitKiymet: await servis.sabitKiymetEkle(db, kullanici, govde) }) }),
+  uc({ yontem: 'POST', yol: '/finans/sabit-kiymetler/:id/guncelle', yetki: 'finans.yonet', parametre: kimlikParametresi, govde: sabitKiymetGuncelleGovdesi, cevap: sabitKiymetCevabi,
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ sabitKiymet: await servis.sabitKiymetGuncelle(db, kullanici, parametre.id, govde, denetimEki) }) }),
   uc({ yontem: 'POST', yol: '/finans/sabit-kiymetler/:id/pasif', yetki: 'finans.yonet', parametre: kimlikParametresi, govde: sabitKiymetPasifGovdesi, cevap: sabitKiymetCevabi,
     isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ sabitKiymet: await servis.sabitKiymetPasif(db, kullanici, parametre.id, govde, denetimEki) }) }),
   uc({ yontem: 'GET', yol: '/finans/maliyetler/:tur', yetki: 'finans.maliyet-oku', parametre: maliyetTuruParametresi, sorgu: finansListeSorgusu, cevap: maliyetListesiCevabi,

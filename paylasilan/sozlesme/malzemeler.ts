@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { zamanSemasi } from '../zaman.ts';
+import { surumSemasi } from '../surum.ts';
 import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ----------------
@@ -230,3 +231,55 @@ export const malzemeSecimCevabi = z.object({
 });
 export type MalzemeSecimSorgusu = z.input<typeof malzemeSecimSorgusu>;
 export type MalzemeSecimCevabi = z.output<typeof malzemeSecimCevabi>;
+
+/* ---------------- Demirbaş teknik bilgisi (1595; 1596 teyit a, 1597 a) ----------------
+   Sınırlar tipli alandır (ölçü mm, yük kg, devir dev/dk, güç kW, tüketim kWh/saat); bilinmeyen alan null'dır. Nadir alanlar serbest listededir.
+   Fiyat ve amortisman burada değil, finansın sabit kıymet kaydındadır; kart ona bağlı makine üzerinden ulaşır. */
+export const DEMIRBAS_TEZGAH_TURLERI = ['dik_isleme', 'yatay_isleme', 'bes_eksen', 'torna', 'torna_freze', 'taslama', 'erozyon', 'diger'] as const;
+export type DemirbasTezgahTuru = (typeof DEMIRBAS_TEZGAH_TURLERI)[number];
+const olcu = (ust: number) => z.number().positive('Değer sıfırdan büyük olmalı.').max(ust, `En çok ${ust}.`).nullable();
+const tamSayi = (alt: number, ust: number) => z.number().int('Tam sayı girin.').min(alt, `En az ${alt}.`).max(ust, `En çok ${ust}.`).nullable();
+const tuketim = z.number().min(0, 'Tüketim eksi olamaz.').max(999999.99, 'En çok 999999,99.').nullable();
+export const demirbasTeknikAlanlari = z.object({
+  tezgahTuru: z.enum(DEMIRBAS_TEZGAH_TURLERI).nullable(),
+  eksenSayisi: tamSayi(1, 12),
+  xKursuMm: olcu(9999999), yKursuMm: olcu(9999999), zKursuMm: olcu(9999999),
+  tablaEnMm: olcu(9999999), tablaBoyMm: olcu(9999999), tablaYukuKg: olcu(99999999),
+  azamiDevir: tamSayi(1, 100000),
+  isMiliGucuKw: olcu(99999),
+  isMiliKonigi: z.string().trim().min(1).max(40, 'En çok 40 karakter.').nullable(),
+  takimCebi: tamSayi(1, 999),
+  tornalamaCapiMm: olcu(9999999), tornalamaBoyuMm: olcu(9999999), cubukGecisCapiMm: olcu(9999999),
+  konumlamaHassasiyetiMm: olcu(999),
+  calismaTuketimiKwh: tuketim, beklemeTuketimiKwh: tuketim,
+});
+export type DemirbasTeknikAlanlari = z.output<typeof demirbasTeknikAlanlari>;
+export const DEMIRBAS_OZELLIK_SINIRI = 50;
+export const demirbasOzelligi = z.object({
+  ad: z.string().trim().min(1, 'Özellik adı boş olamaz.').max(80, 'En çok 80 karakter.'),
+  deger: z.string().trim().min(1, 'Değer boş olamaz.').max(200, 'En çok 200 karakter.'),
+  birim: z.string().trim().max(20, 'En çok 20 karakter.').nullable().transform((v) => (v === null || v === '' ? null : v)),
+});
+export type DemirbasOzelligi = z.output<typeof demirbasOzelligi>;
+// İlk kayıtta sürüm null'dır; sonraki her kayıt okunan sürümü taşır.
+export const demirbasTeknikKaydetGovdesi = z.object({
+  surum: surumSemasi.nullable(),
+  makineId: z.number().int().positive().nullable(),
+  alanlar: demirbasTeknikAlanlari,
+  ozellikler: z.array(demirbasOzelligi).max(DEMIRBAS_OZELLIK_SINIRI, `En çok ${DEMIRBAS_OZELLIK_SINIRI} özellik.`),
+}).strict();
+export type DemirbasTeknikKaydetGovdesi = z.input<typeof demirbasTeknikKaydetGovdesi>;
+export const demirbasMakinesi = z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), aktif: z.boolean() });
+export const demirbasTeknikCevabi = z.object({
+  // Kayıt yoksa null: kartın teknik bilgisi girilmemiş.
+  teknik: z.object({
+    surum: surumSemasi, alanlar: demirbasTeknikAlanlari, ozellikler: z.array(demirbasOzelligi),
+    makine: demirbasMakinesi.nullable(), guncelleme: zamanSemasi,
+  }).nullable(),
+});
+export type DemirbasTeknikCevabi = z.output<typeof demirbasTeknikCevabi>;
+// Bağlanabilecek makineler: başka karta bağlı olan, o kartın kimliğiyle döner.
+export const demirbasMakineSecenekleriCevabi = z.object({
+  makineler: z.array(demirbasMakinesi.extend({ bagliKart: z.string().nullable() })),
+});
+export type DemirbasMakineSecenekleriCevabi = z.output<typeof demirbasMakineSecenekleriCevabi>;

@@ -327,11 +327,11 @@ export const sonKurFaizGirisi = (db: Db) => db.tek<{ girenId: number; giris: str
 // ---- Sabit kıymet (yönetim amaçlı amortisman) ----
 const SABIT_KIYMET = `id, ad, makine_kodu AS "makineKodu", rtrim(para_birimi) AS "paraBirimi", bedel, kur, ${tarihMetni('alis_tarihi')} AS "alisTarihi",
   omur_ay AS "omurAy", yontem, kalinti_degeri AS "kalintiDegeri", ${tarihMetni('devir_tarihi')} AS "devirTarihi", devir_birikmis_tl AS "devirBirikmisTl",
-  ${tarihMetni('pasif_tarihi')} AS "pasifTarihi", aciklama, surum, ${zamanMetni('olusturma')} AS olusturma`;
+  ${tarihMetni('pasif_tarihi')} AS "pasifTarihi", aciklama, surum, ${zamanMetni('olusturma')} AS olusturma, makine_id AS "makineId"`;
 export interface SabitKiymetKaydi {
   id: number; ad: string; makineKodu: string | null; paraBirimi: string; bedel: string; kur: string; alisTarihi: string; omurAy: number;
   yontem: 'normal' | 'azalan'; kalintiDegeri: string; devirTarihi: string | null; devirBirikmisTl: string | null; pasifTarihi: string | null;
-  aciklama: string | null; surum: number; olusturma: string;
+  aciklama: string | null; surum: number; olusturma: string; makineId: number | null;
 }
 export const sabitKiymetSay = async (db: Db) => (await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM finans_sabit_kiymet'))?.n ?? 0;
 export const sabitKiymetSatirlari = (db: Db, dilim: ListeDilimi) =>
@@ -339,6 +339,8 @@ export const sabitKiymetSatirlari = (db: Db, dilim: ListeDilimi) =>
 export const sabitKiymetlerHepsi = (db: Db) => db.sorgu<SabitKiymetKaydi>(`SELECT ${SABIT_KIYMET} FROM finans_sabit_kiymet ORDER BY id`);
 export const makineSabitKiymetleri = (db: Db, makineKodu: string) =>
   db.sorgu<SabitKiymetKaydi>(`SELECT ${SABIT_KIYMET} FROM finans_sabit_kiymet WHERE makine_kodu = $1 ORDER BY id`, [makineKodu]);
+export const makineIdSabitKiymetleri = (db: Db, makineId: number) =>
+  db.sorgu<SabitKiymetKaydi>(`SELECT ${SABIT_KIYMET} FROM finans_sabit_kiymet WHERE makine_id = $1 ORDER BY id`, [makineId]);
 export const sabitKiymetGetir = (db: Db, id: number, kilit = false) =>
   db.tek<SabitKiymetKaydi>(`SELECT ${SABIT_KIYMET} FROM finans_sabit_kiymet WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 export const sabitKiymetEkle = (db: Db, k: {
@@ -349,6 +351,16 @@ export const sabitKiymetEkle = (db: Db, k: {
     `INSERT INTO finans_sabit_kiymet (ad, makine_kodu, para_birimi, bedel, kur, alis_tarihi, omur_ay, yontem, kalinti_degeri, devir_tarihi, devir_birikmis_tl, aciklama, olusturan_id, makine_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [k.ad, k.makineKodu, k.paraBirimi, k.bedel, k.kur, k.alisTarihi, k.omurAy, k.yontem, k.kalintiDegeri, k.devirTarihi, k.devirBirikmisTl, k.aciklama, kisi, k.makineId]);
+// Düzeltme pasif kıymete yazmaz: pasif tarihi amortismanın bittiği yerdir, sonrası değişirse geçmiş aylar kayar.
+export const sabitKiymetGuncelle = (db: Db, id: number, surum: number, k: {
+  ad: string; makineKodu: string | null; paraBirimi: string; bedel: string; kur: string; alisTarihi: string; omurAy: number; yontem: string;
+  kalintiDegeri: string; devirTarihi: string | null; devirBirikmisTl: string | null; aciklama: string | null; makineId: number | null;
+}) =>
+  db.tek<{ id: number }>(
+    `UPDATE finans_sabit_kiymet SET ad = $3, makine_kodu = $4, para_birimi = $5, bedel = $6, kur = $7, alis_tarihi = $8, omur_ay = $9, yontem = $10,
+       kalinti_degeri = $11, devir_tarihi = $12, devir_birikmis_tl = $13, aciklama = $14, makine_id = $15, surum = surum + 1
+     WHERE id = $1 AND surum = $2 AND pasif_tarihi IS NULL RETURNING id`,
+    [id, surum, k.ad, k.makineKodu, k.paraBirimi, k.bedel, k.kur, k.alisTarihi, k.omurAy, k.yontem, k.kalintiDegeri, k.devirTarihi, k.devirBirikmisTl, k.aciklama, k.makineId]);
 export const sabitKiymetPasif = (db: Db, id: number, surum: number, pasifTarihi: string) =>
   db.tek<{ id: number }>('UPDATE finans_sabit_kiymet SET pasif_tarihi = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 AND pasif_tarihi IS NULL RETURNING id', [id, surum, pasifTarihi]);
 export const kdvOraniEkle = (db: Db, oran: string, baslangic: string, kisi: number) =>

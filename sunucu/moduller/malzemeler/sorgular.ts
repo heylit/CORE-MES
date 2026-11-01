@@ -4,7 +4,7 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { GKK_VARSAYILAN_TURLER, LOGO_TUR_KARSILIGI_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
-  HizmetYonu, KatalogKartDurumu, KatalogMalzemeOzeti, KatalogTuru, LogoGonderimDurumu, LogoKarsilikCesidi, LogoKarsiligi,
+  DemirbasOzelligi, DemirbasTeknikAlanlari, HizmetYonu, KatalogKartDurumu, KatalogMalzemeOzeti, KatalogTuru, LogoGonderimDurumu, LogoKarsilikCesidi, LogoKarsiligi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ---------------- */
@@ -697,4 +697,74 @@ export async function katalogKartNoKimlikten(db: Db, kimlik: string): Promise<nu
 
 export async function ornekKartVarMi(db: Db): Promise<boolean> {
   return (await db.tek<{ var: boolean }>(`SELECT EXISTS (SELECT 1 FROM malzeme_katalog_karti WHERE kimlik LIKE 'ornek-%') AS var`))?.var === true;
+}
+
+/* ---------------- Demirbaş teknik bilgisi (1595) ---------------- */
+// Ölçüler numeric saklanır; sayı olarak döner (para değildir, kuruş yuvarlaması gerekmez).
+const DEMIRBAS_TEKNIK_SUTUNLARI = [
+  ['tezgahTuru', 'tezgah_turu', ''], ['eksenSayisi', 'eksen_sayisi', ''], ['xKursuMm', 'x_kursu_mm', '::float8'], ['yKursuMm', 'y_kursu_mm', '::float8'],
+  ['zKursuMm', 'z_kursu_mm', '::float8'], ['tablaEnMm', 'tabla_en_mm', '::float8'], ['tablaBoyMm', 'tabla_boy_mm', '::float8'],
+  ['tablaYukuKg', 'tabla_yuku_kg', '::float8'], ['azamiDevir', 'azami_devir', ''], ['isMiliGucuKw', 'is_mili_gucu_kw', '::float8'],
+  ['isMiliKonigi', 'is_mili_konigi', ''], ['takimCebi', 'takim_cebi', ''], ['tornalamaCapiMm', 'tornalama_capi_mm', '::float8'],
+  ['tornalamaBoyuMm', 'tornalama_boyu_mm', '::float8'], ['cubukGecisCapiMm', 'cubuk_gecis_capi_mm', '::float8'],
+  ['konumlamaHassasiyetiMm', 'konumlama_hassasiyeti_mm', '::float8'], ['calismaTuketimiKwh', 'calisma_tuketimi_kwh', '::float8'],
+  ['beklemeTuketimiKwh', 'bekleme_tuketimi_kwh', '::float8'],
+] as const satisfies readonly (readonly [keyof DemirbasTeknikAlanlari, string, string])[];
+
+export interface DemirbasTeknikSatiri {
+  surum: number; makineId: number | null; guncelleme: string; alanlar: DemirbasTeknikAlanlari;
+}
+
+export async function demirbasTeknikGetir(db: Db, kimlik: string, kilit = false): Promise<DemirbasTeknikSatiri | null> {
+  const secim = DEMIRBAS_TEKNIK_SUTUNLARI.map(([ad, sutun, tip]) => `${sutun}${tip} AS "${ad}"`).join(', ');
+  const satir = await db.tek<Record<string, unknown> & { surum: number; makineId: number | null; guncelleme: string }>(
+    `SELECT surum, makine_id AS "makineId", ${zamanMetni('guncelleme')} AS guncelleme, ${secim}
+       FROM malzemeler_demirbas_teknik WHERE kart_kimlik = $1${kilit ? ' FOR UPDATE' : ''}`, [kimlik]);
+  if (!satir) return null;
+  const alanlar = Object.fromEntries(DEMIRBAS_TEKNIK_SUTUNLARI.map(([ad]) => [ad, satir[ad] ?? null])) as DemirbasTeknikAlanlari;
+  return { surum: satir.surum, makineId: satir.makineId, guncelleme: satir.guncelleme, alanlar };
+}
+
+export function demirbasOzellikleri(db: Db, kimlik: string): Promise<DemirbasOzelligi[]> {
+  return db.sorgu<DemirbasOzelligi>(
+    'SELECT ad, deger, birim FROM malzemeler_demirbas_ozellik WHERE kart_kimlik = $1 ORDER BY sira', [kimlik]);
+}
+
+export async function demirbasTeknikEkle(db: Db, kimlik: string, makineId: number | null, a: DemirbasTeknikAlanlari, kisiId: number): Promise<void> {
+  const sutunlar = DEMIRBAS_TEKNIK_SUTUNLARI.map(([, sutun]) => sutun);
+  const degerler = DEMIRBAS_TEKNIK_SUTUNLARI.map(([ad]) => a[ad]);
+  await db.sorgu(
+    `INSERT INTO malzemeler_demirbas_teknik (kart_kimlik, makine_id, guncelleyen_kisi_id, ${sutunlar.join(', ')})
+     VALUES ($1, $2, $3, ${sutunlar.map((_, i) => `$${i + 4}`).join(', ')})`,
+    [kimlik, makineId, kisiId, ...degerler]);
+}
+
+// Koşullu yazma: sürüm tutmazsa satır dönmez.
+export function demirbasTeknikGuncelle(db: Db, kimlik: string, surum: number, makineId: number | null, a: DemirbasTeknikAlanlari, kisiId: number): Promise<{ surum: number } | null> {
+  const atama = DEMIRBAS_TEKNIK_SUTUNLARI.map(([, sutun], i) => `${sutun} = $${i + 5}`).join(', ');
+  return db.tek<{ surum: number }>(
+    `UPDATE malzemeler_demirbas_teknik SET makine_id = $3, guncelleyen_kisi_id = $4, guncelleme = now(), surum = surum + 1, ${atama}
+      WHERE kart_kimlik = $1 AND surum = $2 RETURNING surum`,
+    [kimlik, surum, makineId, kisiId, ...DEMIRBAS_TEKNIK_SUTUNLARI.map(([ad]) => a[ad])]);
+}
+
+export async function demirbasOzellikleriYaz(db: Db, kimlik: string, ozellikler: readonly DemirbasOzelligi[]): Promise<void> {
+  await db.sorgu('DELETE FROM malzemeler_demirbas_ozellik WHERE kart_kimlik = $1', [kimlik]);
+  if (ozellikler.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO malzemeler_demirbas_ozellik (kart_kimlik, sira, ad, deger, birim)
+     SELECT $1, o.sira, o.ad, o.deger, o.birim FROM unnest($2::text[], $3::text[], $4::text[]) WITH ORDINALITY AS o(ad, deger, birim, sira)`,
+    [kimlik, ozellikler.map((o) => o.ad), ozellikler.map((o) => o.deger), ozellikler.map((o) => o.birim)]);
+}
+
+// Makine kimliğinden bağlı kart (makine seçeneklerinde başka karta bağlı olanı göstermek için).
+export async function makineBagliKartlari(db: Db): Promise<Map<number, string>> {
+  const satirlar = await db.sorgu<{ makineId: number; kimlik: string }>(
+    'SELECT makine_id AS "makineId", kart_kimlik AS kimlik FROM malzemeler_demirbas_teknik WHERE makine_id IS NOT NULL');
+  return new Map(satirlar.map((s) => [s.makineId, s.kimlik]));
+}
+
+export function katalogKartTuru(db: Db, kimlik: string): Promise<{ tur: string; onayDurumu: string } | null> {
+  return db.tek<{ tur: string; onayDurumu: string }>(
+    'SELECT tur, onay_durumu AS "onayDurumu" FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]);
 }

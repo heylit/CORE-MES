@@ -831,7 +831,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const yollar = (yetki: string) => uclar.filter((u) => u.yontem === 'POST' && u.yetki === yetki).map((u) => u.yol.replace('/finans/', '').replace(':id', '1'));
     const YONET = yollar('finans.yonet');
     const YAZ = yollar('finans.yaz');
-    assert.equal(YONET.length, 24);
+    assert.equal(YONET.length, 25);
     assert.equal(YAZ.length, 15);
     const sonuc = async (kim: string, yollar: string[]) => Promise.all(yollar.map(async (y) => `${y} ${(await yaz(`/finans/${y}`, {}, kim)).durum}`));
     assert.deepEqual(await sonuc('yazan', YONET), YONET.map((y) => `${y} 403`));

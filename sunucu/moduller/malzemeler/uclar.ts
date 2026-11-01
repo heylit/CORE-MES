@@ -2,6 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
+  demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -47,6 +48,17 @@ export const uclar = [
     yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/iptal', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi, cevap: katalogKimlikCevabi,
     isle: ({ db, kullanici, parametre }) => servis.katalogKartiIptal(db, kullanici, parametre.kimlik),
   }),
+  // Demirbaş teknik bilgisi (1595): sınırlar, enerji ve serbest özellikler; kartı okuyan görür, kartı yazan girer. Fiyat burada yok (finans, 1599 a).
+  uc({
+    yontem: 'GET', yol: '/malzeme-katalogu-kartlari/:kimlik/demirbas-teknik', yetki: OKUMA, parametre: katalogKimlikParametresi, cevap: demirbasTeknikCevabi,
+    isle: ({ db, parametre }) => servis.demirbasTeknikOku(db, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/demirbas-teknik/kaydet', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,
+    govde: demirbasTeknikKaydetGovdesi, cevap: demirbasTeknikCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.demirbasTeknikKaydet(db, kullanici, parametre.kimlik, govde),
+  }),
+  uc({ yontem: 'GET', yol: '/malzeme-demirbas-makineleri', yetki: 'malzemeler.yaz', cevap: demirbasMakineSecenekleriCevabi, isle: ({ db }) => servis.demirbasMakineSecenekleri(db) }),
   uc({ yontem: 'GET', yol: '/malzeme-katalogu-sablonlari', yetki: OKUMA, cevap: katalogSablonlariCevabi, isle: ({ db, kullanici }) => servis.katalogSablonlariniGetir(db, kullanici) }),
   uc({
     yontem: 'POST', yol: '/malzeme-katalogu-sablonlari/:kimlik/kaydet', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,
