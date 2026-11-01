@@ -21,10 +21,11 @@ import type { ModelDizisi, ModelYerlesimi } from './model.ts';
 import { alanKutusu, duvarParcasi as duvarOlcusu, icindeMi, kapiKonumu, katilar, sahneNesneleri, odaParcalari, parcayaUzaklik, rafKutusu } from './geometri.ts';
 import type { Dikdortgen, Parca } from './geometri.ts';
 import {
-  andon, andonKolonu, cerceveDokusu, duvarDokusu, duvarParcasi, ekle, granitDokusu, haleDokusu, istasyonGovdesi, izMalzemesi, kapiUstu, kolon, kutu,
+  andon, andonKolonu, cerceveDokusu, durumIziDokusu, durumIziSaydamligi, duvarDokusu, duvarParcasi, ekle, granitDokusu, haleDokusu, istasyonGovdesi, izMalzemesi, kapiUstu, kolon, kutu,
   gozCephesi, malzemeleriKur, modelBolgesi, okDokusu, onbellegiBosalt, onbellekteMi, palet, rafGovdesi, rafYukleri, silindir, temasDokusu, zeminIzi,
 } from './nesneler.ts';
 import type { Andon, Animasyon, DuvarAcikligi, Ekran, Malzemeler, RafOlcusu } from './nesneler.ts';
+import { HAFIF_PIKSEL_ORANI, hafifGerekir, kareAraligi, yanipDegeri } from './kare-araligi.ts';
 import { konsoluSuzgecle } from './konsol.ts';
 import { malzemeImzasi, paletOku } from './renkler.ts';
 import type { Palet } from './renkler.ts';
@@ -59,6 +60,8 @@ export interface SahneOlaylari {
   // Bakan yerin (yürüyüşte göz, gezinmede kameranın baktığı nokta) fabrika metresi ve bakış yönü (radyan, +x'ten
   // saat yönünde); küçük harita için, değiştikçe en çok saniyede beş kez.
   kameraDegisti?: (yer: KameraYeri) => void;
+  // Piksel oranı en alta indiği hâlde kareler yavaş: hafif görünüm önerilir (oturumda bir kez).
+  yavasCizim?: () => void;
 }
 
 export interface KameraYeri {
@@ -196,7 +199,6 @@ const ETIKET_RAF_UZAKLIGI = 55;
 const ANDON_DURUMLARI = ['calisiyor', 'durakli', 'durdu'] as const;
 // Son dokunuştan bu kadar sonra (ms) ve kamera durunca kare hızı düşer.
 const ETKIN_SURE_MS = 1500;
-const BOSTA_KARE_MS = 33;
 const EN_AZ_PIKSEL_ORANI = 0.75;
 // Rafta gerçek parça modeli yalnız ekranda yeterince büyükse (gözün yarıçapı yarım ekran yüksekliğinin bu oranından
 // büyük; 30° görüşte 0,8 m'lik göz için yaklaşık 20 m) ve bu üçgen bütçesine kadar çizilir; ötesi vekil kutu.
@@ -377,9 +379,18 @@ export class SahneMotoru {
   private sonDokunus: { anahtar: string; zaman: number } | null = null;
   private readonly isinci = new Raycaster();
   private readonly enAzKareMs = kaba() ? 30 : 0;
-  // Kare hızı ve çözünürlük: kullanıcı dokunmuyorsa saniyede 30 kare yeter (andon, makine hareketi); dokunurken tam
-  // hız. Tam hızda kareler yavaşsa piksel oranı adım adım düşer, uzun süre hızlıysa geri çıkar.
+  // Kare hızı ve çözünürlük: dokunurken tam hız; dokunulmuyorsa kıpırdayan bir şey (andon, makine hareketi, geçiş)
+  // varken saniyede 30 kare, yoksa saniyede bir (kare-araligi.ts). Veri, seçim ya da ayar değişince `kirli` bir kareyi
+  // hemen çizdirir. Tam hızda kareler yavaşsa piksel oranı adım adım düşer, uzun süre hızlıysa geri çıkar.
   private sonEtkinlik = 0;
+  private kirli = true;
+  // Hafif görünüm: gölge, ortam ışığı (yansıma) ve ortam hareketi yok, çözünürlük sınırlı; zayıf cihaz ve gün boyu açık ekran için.
+  private hafif = false;
+  private ortamDokusu: Texture | null = null;
+  private cihazPikselOrani = 1;
+  private yavasBildirildi = false;
+  // Son çizilen karede kıpırdayan şeyler; bir sonraki karenin ne zaman çizileceğine bunlar karar verir.
+  private kipirti = { gecis: false, hareket: false, yanip: false };
   private etiketAcik = true;
   private etiketKarariBekliyor = false;
   private sonKameraHareketi = 0;
@@ -416,7 +427,8 @@ export class SahneMotoru {
     this.imza = malzemeImzasi(this.palet);
     konsoluSuzgecle();
     this.cizer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.enCokPikselOrani = Math.min(window.devicePixelRatio || 1, kaba() ? 1.5 : 2);
+    this.cihazPikselOrani = Math.min(window.devicePixelRatio || 1, kaba() ? 1.5 : 2);
+    this.enCokPikselOrani = this.cihazPikselOrani;
     this.pikselOrani = this.enCokPikselOrani;
     this.cizer.setPixelRatio(this.pikselOrani);
     this.cizer.outputColorSpace = SRGBColorSpace;
@@ -473,6 +485,7 @@ export class SahneMotoru {
 
   // Bölümler fabrika planındaki yerlerinde birlikte kurulur; görünen bölümler değişince kamera genel görünüme döner.
   fabrikaKur(bolumler: readonly BolumYerlesimi[]): void {
+    this.kirli = true;
     const imza = (l: readonly { yerlesim: YerlesimCevabi }[]) => l.map((b) => b.yerlesim.salon.id).join(',');
     const ilk = imza(this.kurulacak) !== imza(bolumler);
     // Önceki bölüm kümesinin bakışı, dünyanın ortası değişmeden saklanır.
@@ -549,6 +562,7 @@ export class SahneMotoru {
 
   // Bakılan yere git (küçük haritadan; fabrika metresi): yürüyüşte oraya yürür, gezinmede kamera oraya kayar.
   yereGit(x: number, z: number): void {
+    this.kirli = true;
     if (this.odak) return;
     const { x: mx, z: mz } = this.merkez;
     if (this.yuruyus.acik) {
@@ -570,6 +584,7 @@ export class SahneMotoru {
   }
 
   private temaDegisti(): void {
+    this.kirli = true;
     const yeni = paletOku();
     const imza = malzemeImzasi(yeni);
     this.palet = yeni;
@@ -838,7 +853,10 @@ export class SahneMotoru {
       birlestir(govde.grup, govde.hareketli);
       if (!yer.aktif) govde.grup.traverse((c) => { if (c instanceof Mesh) c.material = this.solukMalzeme(c.material as Material); });
       zeminIzi(ig, kk.genislik * 1.05, kk.derinlik * 1.15, izMalzemesi(this.temas, this.palet.siyah, 1), 0.004);
-      const hale = zeminIzi(ig, kk.genislik + 1.2, kk.derinlik + 1.2, izMalzemesi(this.hale, this.palet.bekliyor, 0.2), 0.008);
+      const ig_ = kk.genislik + 1.2;
+      const id_ = kk.derinlik + 1.2;
+      const izDoku = this.saklananDoku(`d|${ig_.toFixed(2)}|${id_.toFixed(2)}`, () => durumIziDokusu(ig_, id_, 0.6));
+      const hale = zeminIzi(ig, ig_, id_, izMalzemesi(izDoku, this.palet.bekliyor, durumIziSaydamligi('sirada', 0)), 0.008);
       const cg = kk.genislik + 0.5;
       const cd = kk.derinlik + 0.5;
       const cerceveDoku = this.saklananDoku(`c|${cg.toFixed(2)}|${cd.toFixed(2)}`, () => cerceveDokusu(cg, cd));
@@ -1025,6 +1043,7 @@ export class SahneMotoru {
       sahneler.set(model.anahtar, sahne);
     }
     sahne.then((ham) => {
+      this.kirli = true;
       const n = this.istasyonlar.get(anahtar);
       const m = this.malzeme;
       // Arada sahne yeniden kurulduysa (kayıt, salon değişimi) eski yükleme bırakılır.
@@ -1114,8 +1133,9 @@ export class SahneMotoru {
     p2.position.set(-en / 2 + 0.1, 7.5, 0);
     oda.add(p1, p2);
     const pm = new PMREMGenerator(this.cizer);
-    const eski = this.sahne.environment;
-    this.sahne.environment = pm.fromScene(oda, 0.03).texture;
+    const eski = this.ortamDokusu;
+    this.ortamDokusu = pm.fromScene(oda, 0.03).texture;
+    this.sahne.environment = this.hafif ? null : this.ortamDokusu;
     eski?.dispose();
     pm.dispose();
     oda.traverse((o) => { if (o instanceof Mesh) { (o.geometry as BufferGeometry).dispose(); (o.material as Material).dispose(); } });
@@ -1156,6 +1176,7 @@ export class SahneMotoru {
   // ---------- canlı durum ve seçim ----------
 
   canliYaz(canli: ReadonlyMap<string, IstasyonCanli>): void {
+    this.kirli = true;
     this.canli = new Map(canli);
     this.durumlariUygula();
   }
@@ -1226,12 +1247,14 @@ export class SahneMotoru {
 
   // Etiketler kapatılınca yalnız seçili öğenin ve bölümlerin adı kalır.
   etiketlerYaz(acik: boolean): void {
+    this.kirli = true;
     if (this.etiketAcik === acik) return;
     this.etiketAcik = acik;
     this.etiketlerKirli = true;
   }
 
   secimYaz(anahtar: string | null): void {
+    this.kirli = true;
     this.secili = anahtar;
     this.secimUygula();
   }
@@ -1245,6 +1268,7 @@ export class SahneMotoru {
   // ---------- raf yükü ----------
 
   rafYukleriYaz(yukler: ReadonlyMap<number, readonly RafYuku[]>): void {
+    this.kirli = true;
     this.yukler = new Map([...yukler].map(([k, v]) => [k, [...v]]));
     this.yukleriKur();
     if (this.odak) this.rafOdakYaz(this.odak.istek);
@@ -1298,6 +1322,7 @@ export class SahneMotoru {
       const bolge = model && y.bicim === 'model' ? modelBolgesi(olcu, y) : null;
       if (!model || !bolge) continue;
       this.hamModel(model).then((ham) => {
+        this.kirli = true;
         if (!gecerli()) return;
         const dizi = modelDizisi(ham.clone(true), { birim: model.birim, yukari: model.yukari, donus: sayi(model.donus) }, bolge, y.doluluk);
         grup.add(dizi.kok);
@@ -1319,6 +1344,7 @@ export class SahneMotoru {
   // ---------- bölmeye karşıdan bakış ----------
 
   rafOdakYaz(istek: RafOdakIstegi | null): void {
+    this.kirli = true;
     const r = istek ? this.bolumler.flatMap((b) => b.yerlesim.raflar).find((x) => x.id === istek.rafId) : undefined;
     const m = this.malzeme;
     if (!istek || !r || !m) { this.odakKapat(); return; }
@@ -1532,11 +1558,13 @@ export class SahneMotoru {
   // ---------- işlenen parça önizlemesi ----------
 
   parcalarYaz(parcalar: ReadonlyMap<number, ParcaModeli>): void {
+    this.kirli = true;
     this.parcalar = new Map(parcalar);
     this.parcalariKur();
   }
 
   parcaGosterYaz(acik: boolean): void {
+    this.kirli = true;
     this.parcaGoster = acik;
   }
 
@@ -1582,6 +1610,7 @@ export class SahneMotoru {
       if (!parca || !kaynak) continue;
       const anahtar = n.anahtar;
       kaynak.sahne().then((sahne) => {
+        this.kirli = true;
         const hedef = this.istasyonlar.get(anahtar);
         const guncel = hedef?.canliId == null ? undefined : this.parcalar.get(hedef.canliId);
         // Arada sahne yeniden kurulduysa ya da istasyonun parçası değiştiyse bu yükleme bırakılır.
@@ -1608,6 +1637,7 @@ export class SahneMotoru {
   }
 
   izgaraYaz(acik: boolean): void {
+    this.kirli = true;
     this.izgaraAcik = acik;
     for (const i of this.izgaralar) i.visible = acik;
   }
@@ -1615,6 +1645,7 @@ export class SahneMotoru {
   // ---------- kamera ----------
 
   gorunum(gr: Gorunum, ucarak = true): void {
+    this.kirli = true;
     const { g, d } = this.olcu;
     const kenar = Math.max(g, d);
     this.kontrol.maxDistance = kenar * 3;
@@ -1624,6 +1655,7 @@ export class SahneMotoru {
 
   // Bölüm noktasına yaklaş (bölüm verilmezse ilk bölüm).
   odakla(x: number, z: number, yakinlik = 1, salonId: number | null = null): void {
+    this.kirli = true;
     this.cercevele(this.dunyaNoktasi(salonId, x, 0.5, z), 12 * yakinlik);
   }
 
@@ -1644,6 +1676,7 @@ export class SahneMotoru {
 
   // Rota bölüm noktalarıdır (sunucu bölüm içinde hesaplar).
   rotaYaz(noktalar: readonly { x: number; z: number }[] | null, salonId: number | null = null): void {
+    this.kirli = true;
     this.temizle(this.rotaGrubu);
     if (!noktalar || noktalar.length < 2) return;
     const yol = noktalar.map((n) => this.dunyaNoktasi(salonId, n.x, 0, n.z).setY(0));
@@ -1656,6 +1689,7 @@ export class SahneMotoru {
   // ---------- yürüyüş ----------
 
   yuruyusYaz(acik: boolean): void {
+    this.kirli = true;
     const yu = this.yuruyus;
     if (acik === yu.acik) return;
     yu.acik = acik;
@@ -1720,6 +1754,7 @@ export class SahneMotoru {
 
   // Dokunmatik kol: -1..1 ileri ve yana.
   yuruyusKolu(ileri: number, yana: number): void {
+    this.kirli = true;
     this.yuruyus.kol = { x: yana, y: ileri };
   }
 
@@ -1886,6 +1921,7 @@ export class SahneMotoru {
     const yaziYuklendi = () => {
       for (const e of this.etiketler) { e.boyut = null; e.kisaBoyut = null; }
       this.etiketlerKirli = true;
+      this.kirli = true;
     };
     document.fonts?.addEventListener('loadingdone', yaziYuklendi);
     this.olaySokuculer.push(() => document.fonts?.removeEventListener('loadingdone', yaziYuklendi));
@@ -1941,6 +1977,7 @@ export class SahneMotoru {
 
   // Öğeye git: kamera bakış yönünü koruyarak öğeyi çerçeveler; yürüyüşte öğenin yanına yürür.
   git(anahtar: string): void {
+    this.kirli = true;
     if (this.odak) return;
     const kutu_ = this.secimKutulari.find((k) => k.userData.anahtar === anahtar);
     if (!kutu_) return;
@@ -2028,7 +2065,24 @@ export class SahneMotoru {
     return this.sahneEtkin || kok.contains(document.activeElement);
   }
 
+  // Hafif görünüm aç/kapat. Gölge ve ortam ışığı kapanınca gölgelendiriciler bir kez yeniden derlenir (three ışık
+  // durumunu izler); sahne yeniden kurulmaz.
+  hafifYaz(acik: boolean): void {
+    if (this.hafif === acik) return;
+    this.hafif = acik;
+    this.kirli = true;
+    this.gunes.castShadow = !acik;
+    this.sahne.environment = acik ? null : this.ortamDokusu;
+    if (!acik) this.cizer.shadowMap.needsUpdate = true;
+    this.enCokPikselOrani = acik ? Math.min(this.cihazPikselOrani, HAFIF_PIKSEL_ORANI) : this.cihazPikselOrani;
+    this.pikselOrani = acik ? Math.min(this.pikselOrani, this.enCokPikselOrani) : this.enCokPikselOrani;
+    this.hizOlcumu = { bas: 0, kare: 0, iyi: 0, dustu: false, bekleyen: 0 };
+    this.cizer.setPixelRatio(this.pikselOrani);
+    this.cizer.setSize(this.boyut.en, this.boyut.boy, false);
+  }
+
   boyutla(): void {
+    this.kirli = true;
     // Sahne gizliyken (başka sekme) çizici küçültülmez ve çizim durur; görünür olunca eski ölçüden devam eder.
     this.gizli = this.kap.clientWidth === 0 || this.kap.clientHeight === 0;
     if (this.gizli) return;
@@ -2070,6 +2124,10 @@ export class SahneMotoru {
     h.kare = 0;
     const simdiki = h.bekleyen || this.pikselOrani;
     let yeni = simdiki;
+    if (!this.hafif && !this.yavasBildirildi && hafifGerekir(ort, simdiki, EN_AZ_PIKSEL_ORANI)) {
+      this.yavasBildirildi = true;
+      this.olaylar.yavasCizim?.();
+    }
     // Bir kez düşen oran oturum boyunca geri çıkmaz (düş-çık döngüsü ekranda yanıp sönme yapar).
     if (ort > 28) { yeni = Math.max(EN_AZ_PIKSEL_ORANI, simdiki - 0.25); h.iyi = 0; h.dustu = true; } else if (ort < 18 && !h.dustu) {
       h.iyi++;
@@ -2082,19 +2140,23 @@ export class SahneMotoru {
     this.kare = requestAnimationFrame((s) => this.dongu(s));
     if (document.hidden || this.gizli) return;
     const etkin = this.ucus !== null || this.yuruyus.acik || this.yuruyus.tuslar.size > 0 || this.suruklenme !== null || t - this.sonEtkinlik < ETKIN_SURE_MS;
-    const aralik = Math.max(this.enAzKareMs, etkin ? 0 : BOSTA_KARE_MS);
+    const aralik = kareAraligi({ etkin, kirli: this.kirli, ...this.kipirti, hafif: this.hafif, enAzKareMs: this.enAzKareMs });
     // rAF zamanı ekran tazelemesine bağlıdır: aralığın biraz altı kabul edilir (60 Hz'de 30 kare için 2 tazelemede bir).
     if (aralik && t - this.sonZaman < aralik - 4) return;
+    this.kirli = false;
     this.hizUyarla(t, etkin && aralik === 0);
+    const kipirti = { gecis: false, hareket: false, yanip: false };
     const dt = Math.max(0, Math.min(0.1, (t - this.sonZaman) / 1000));
     this.sonZaman = t;
     const hareketsiz = azHareket();
     if (!hareketsiz) this.zaman += dt;
     const T = this.zaman;
 
-    const yanip = (Math.sin(t / 170) + 1) / 2;
+    const hafif = this.hafif;
+    const yanip = yanipDegeri(t, hafif);
     for (const n of this.istasyonlar.values()) {
       const durum = n.canli.durum;
+      if (durum === 'durdu') kipirti.yanip = true;
       for (const ad of ANDON_DURUMLARI) {
         const dilim = n.andon[ad];
         const k = durum === ad ? (ad === 'durdu' ? 0.25 + yanip * 0.75 : 1) : 0;
@@ -2102,9 +2164,11 @@ export class SahneMotoru {
         dilim.hale.material.opacity = k * 0.85;
       }
       const hale = n.hale.material as MeshBasicMaterial;
-      hale.opacity = durum === 'durdu' ? 0.12 + yanip * 0.3 : durum === 'sirada' ? 0.1 : 0.2;
+      hale.opacity = durumIziSaydamligi(durum, yanip);
       const a = n.anim;
-      const calis = durum === 'calisiyor' && !hareketsiz;
+      // Hafif görünümde makine parçaları kıpırdamaz; durum andon ve zemin izinden okunur.
+      const calis = durum === 'calisiyor' && !hareketsiz && !hafif;
+      if (calis && (a.kafa || a.besik || a.ayna || a.portal || a.kopru || a.fan)) kipirti.hareket = true;
       if (a.kafa && a.kafaY !== undefined && calis) a.kafa.position.y = a.kafaY + Math.sin(T * 2.2) * 0.05;
       if (a.besik && calis) a.besik.rotation.x = Math.sin(T * 0.6) * 0.35;
       if (a.ayna && calis) a.ayna.rotation.x += dt * 18;
@@ -2135,7 +2199,7 @@ export class SahneMotoru {
         if (e && Math.abs(e.konum.y - etiketY) > 1e-3) { e.konum.y = etiketY; this.etiketlerKirli = true; }
         if (gorunur) {
           p.kok.position.y = n.ust + 0.9 + n.parcaKenari / 2;
-          if (!hareketsiz) p.doner.rotation.y += dt * 0.5;
+          if (!hareketsiz && !hafif) { p.doner.rotation.y += dt * 0.5; kipirti.hareket = true; }
           // Çalışmayan makinedeki parça soluk: işlenmekte olan parça tam görünür.
           const soluk = durum !== 'calisiyor';
           for (const mm of p.malzemeler) {
@@ -2153,10 +2217,15 @@ export class SahneMotoru {
         for (const k of a.kapilar) {
           const hedef = k.kapali + (k.acik - k.kapali) * ac;
           k.nesne.position.x += (hedef - k.nesne.position.x) * Math.min(1, dt * 3);
+          if (Math.abs(hedef - k.nesne.position.x) > 1e-3) kipirti.gecis = true;
         }
       }
     }
-    if (!hareketsiz) this.ok.offset.x -= dt * 0.9;
+    // Ok dokusu yalnız rota ve yürüyüş izinde görünür; ikisi de yoksa akması için kare çizilmez.
+    if (!hareketsiz && !hafif && (this.rotaGrubu.children.length > 0 || this.yuruyusIzi.children.length > 0)) {
+      this.ok.offset.x -= dt * 0.9;
+      kipirti.hareket = true;
+    }
 
     if (this.yuruyus.acik) {
       this.yuruyusAdimi(dt);
@@ -2165,6 +2234,7 @@ export class SahneMotoru {
       if (this.kamera.fov !== gorus) {
         this.kamera.fov += (gorus - this.kamera.fov) * Math.min(1, dt * 3.2);
         if (Math.abs(this.kamera.fov - gorus) < 0.03) this.kamera.fov = gorus;
+        else kipirti.gecis = true;
         this.kamera.updateProjectionMatrix();
       }
       if (!this.odak) this.klavyeGez(dt);
@@ -2192,6 +2262,7 @@ export class SahneMotoru {
       this.atilacak = [];
     }
     this.etiketleriYerlestir();
+    this.kipirti = kipirti;
   }
 
   // Kameraya en yakın, görüş alanındaki model dizileri ayrıntılı çizilir; üçgen bütçesi dolunca ya da uzakta vekil
@@ -2342,7 +2413,7 @@ export class SahneMotoru {
     this.temizle(this.yapi);
     this.temizle(this.rotaGrubu);
     this.temizle(this.yuruyusIzi);
-    this.sahne.environment?.dispose();
+    this.ortamDokusu?.dispose();
     for (const d of this.dokular) d.dispose();
     for (const d of this.dokuOnbellegi.values()) d.dispose();
     this.dokuOnbellegi.clear();

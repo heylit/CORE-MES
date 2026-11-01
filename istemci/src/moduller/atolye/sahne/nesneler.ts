@@ -242,6 +242,43 @@ export function haleDokusu(): Texture {
   return dokuyaCevir(c, false);
 }
 
+// Zemindeki durum izi: istasyonun çevresinde hafif bir parıltı ve ayak izinin kenarından IZ_PAYI dışarıda düz bir
+// çerçeve (zemine boyanmış şerit gibi). Renk ve saydamlık malzemeden gelir; doku yalnız biçimi taşır. Çerçeve,
+// gölgesiz hafif görünümde de makinenin durumunu uzaktan okutur. Ölçü metre; g ve d izin toplam ölçüsüdür.
+export const IZ_PAYI = 0.25;
+export function durumIziDokusu(g_: number, d_: number, kenar: number): Texture {
+  const PX = 48;
+  const t = tuval(g_ * PX, d_ * PX);
+  if (!t) return bosDoku();
+  const [c, g] = t;
+  g.save();
+  g.translate(c.width / 2, c.height / 2);
+  g.scale(c.width / 2, c.height / 2);
+  const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+  gr.addColorStop(0, 'rgba(255,255,255,.25)');
+  gr.addColorStop(0.25, 'rgba(255,255,255,.14)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.fillRect(-1, -1, 2, 2);
+  g.restore();
+  const ic = (kenar - IZ_PAYI) * PX;
+  const w = 0.09 * PX;
+  g.strokeStyle = 'rgba(255,255,255,1)';
+  g.lineWidth = w;
+  g.beginPath();
+  g.roundRect(ic, ic, c.width - 2 * ic, c.height - 2 * ic, 0.18 * PX);
+  g.stroke();
+  return dokuyaCevir(c, false);
+}
+
+// Durum izinin saydamlığı: çerçeve tam görünür olmasın diye 0,8; duran makinede andonla birlikte yanıp söner
+// (yanıp 0..1), bekleyende sönük.
+export function durumIziSaydamligi(durum: string, yanip: number): number {
+  if (durum === 'durdu') return 0.4 + yanip * 0.55;
+  if (durum === 'sirada') return 0.45;
+  return 0.8;
+}
+
 // Seçim çerçevesi: kesik çizgili, köşesi yuvarlak.
 export function cerceveDokusu(g_: number, d_: number): Texture {
   const PX = 64;

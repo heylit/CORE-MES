@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Box3, Group, Mesh, Texture } from 'three';
 import type { Object3D } from 'three';
-import { andon, andonKolonu, gozCephesi, istasyonGovdesi, modelBolgesi, netKatlar, rafYukleri, malzemeleriKur, palet, rafGovdesi } from './nesneler.ts';
+import { andon, andonKolonu, durumIziDokusu, durumIziSaydamligi, gozCephesi, istasyonGovdesi, modelBolgesi, netKatlar, rafYukleri, malzemeleriKur, palet, rafGovdesi } from './nesneler.ts';
 import type { GozYuku, Malzemeler, YukBicimi } from './nesneler.ts';
 import { paletOku } from './renkler.ts';
 
@@ -212,5 +212,19 @@ describe('kat kat net ölçü', () => {
     expect(modelBolgesi({ ...p, katlar: [1, 1] }, { bolme: 2, kat: 3, goz: 1 })).toEqual(once);
     expect(netKatlar({ ...p, katlar: [1, 1] })).toBeNull();
     expect(gozCephesi({ ...p, katlar: null }, { bolme: 1, kat: 2, goz: 1 })).toEqual(gozCephesi(p, { bolme: 1, kat: 2, goz: 1 }));
+  });
+});
+
+describe('zemindeki durum izi (kart 1588)', () => {
+  it('çalışan ve duraklayan makinede çerçeve belirgin; bekleyende sönük; duranda andonla yanıp söner', () => {
+    expect(durumIziSaydamligi('calisiyor', 0)).toBe(0.8);
+    expect(durumIziSaydamligi('durakli', 1)).toBe(0.8);
+    expect(durumIziSaydamligi('sirada', 1)).toBeLessThan(durumIziSaydamligi('calisiyor', 1));
+    expect(durumIziSaydamligi('durdu', 0)).toBeLessThan(durumIziSaydamligi('durdu', 1));
+    expect(durumIziSaydamligi('durdu', 1)).toBeLessThanOrEqual(1);
+  });
+
+  it('doku tuvalsiz ortamda da kurulur (çizim yok, boş doku)', () => {
+    expect(durumIziDokusu(4.4, 3, 0.6)).toBeInstanceOf(Texture);
   });
 });

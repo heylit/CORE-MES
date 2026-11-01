@@ -6,6 +6,7 @@ import {
 } from '../../ortak/arayuz/index.ts';
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
+import { performansOku } from '../../ortak/veri/gorunum.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { HaritaAraclari } from './HaritaAraclari.tsx';
 import { useOtomatikTur, useTamEkran } from './tam-ekran.ts';
@@ -56,6 +57,22 @@ function Gosterge({ ad, deger, durum, birim }: { ad: string; deger: string; duru
   );
 }
 
+// Hafif görünüm tercihi cihaza aittir. Elle seçilmediyse cihazın performans modu (Görünüm ayarı ya da cihaz tahmini) geçerlidir.
+const HAFIF_ANAHTARI = 'tmiv2.atolye.hafif';
+
+function hafifTercihi(): boolean | null {
+  try {
+    const k = localStorage.getItem(HAFIF_ANAHTARI);
+    return k === 'acik' ? true : k === 'kapali' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+function hafifSakla(acik: boolean): void {
+  try { localStorage.setItem(HAFIF_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* depo kapalı: bu sayfada bellekte kalır */ }
+}
+
 function aramaAnahtari(s: AramaSonucu, y: YerlesimCevabi | undefined): { anahtar: string | null; adres: string | null } {
   if (s.tur === 'istasyon') return { anahtar: y ? istasyonNesnesi([y], s.kimlik) : `istasyon:${s.kimlik}`, adres: null };
   if (s.tur === 'raf') return { anahtar: `raf:${s.kimlik}`, adres: null };
@@ -86,6 +103,13 @@ export function AtolyeHaritasi() {
     [gorunen, kapsam],
   );
   const canli = useCanliDurum();
+  const [hafif, hafifYaz] = useState(() => hafifTercihi() ?? performansOku());
+  // Elle seçim yoksa ve sahne bu cihazda yavaşsa hafif görünüme kendiliğinden geçilir; kullanıcı düğmeyle geri alabilir.
+  const yavasCizim = useCallback(() => {
+    if (hafifTercihi() !== null) return;
+    hafifYaz(true);
+    bildir('bilgi', 'Harita bu cihazda yavaş çiziliyor; hafif görünüme geçildi.');
+  }, [bildir]);
   const [secili, seciliYaz] = useState<string | null>(null);
   const [vurguAdres, vurguAdresYaz] = useState<string | null>(null);
   const [gorunum, gorunumYaz] = useState<{ tur: Gorunum; sayac: number }>({ tur: 'genel', sayac: 0 });
@@ -355,6 +379,8 @@ export function AtolyeHaritasi() {
               rafOdak={odakRafi && rafOdak ? rafOdak : null}
               rafOdakYaz={rafOdakYaz}
               gozKalemleri={gozKalemListesi}
+              hafif={hafif}
+              yavasCizim={yavasCizim}
             />
           </Suspense>
 
@@ -429,6 +455,7 @@ export function AtolyeHaritasi() {
             tamEkran={tamEkran.acik}
             tur={tur}
             listeAcik={listeGorunur}
+            hafif={hafif}
             sec={(a) => {
               if (a === 'genel' || a === 'kus') { yuruyusYaz(false); gorunumYaz((g) => ({ tur: a, sayac: g.sayac + 1 })); }
               if (a === 'yuru') { seciliYaz(null); turYaz(false); yuruyusYaz((v) => !v); }
@@ -443,6 +470,7 @@ export function AtolyeHaritasi() {
               if (a === 'duzenle') { tamEkran.kapat(); turYaz(false); yuruyusYaz(false); duzenleyiciYaz(true); }
               if (a === 'tur') { yuruyusYaz(false); turYaz((v) => !v); }
               if (a === 'liste') listeAcikYaz((v) => !v);
+              if (a === 'hafif') { hafifSakla(!hafif); hafifYaz(!hafif); }
               if (a === 'tam') { if (tamEkran.acik) { tamEkran.kapat(); turYaz(false); } else tamEkran.ac(); }
             }}
           />}
