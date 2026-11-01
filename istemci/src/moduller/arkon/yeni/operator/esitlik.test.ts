@@ -43,9 +43,16 @@ vi.mock('../../../../../../arkon/web/src/app/baslat.ts', () => ({ Brand: () => n
 vi.mock('../../../../../../arkon/web/src/app/gomulu.ts', () => ({ gomuluMu: () => true }));
 vi.mock('../../../../../../arkon/web/src/app/cizim-merkezi.ts', () => ({ MerkezRozeti: () => null, MerkezSecici: () => null, merkezVar: () => true, useMerkezUyarilari: () => ({}) }));
 
-// Eski modül tipsizdir.
+// Eski modül tipsizdir; yalnız testin kullandığı yüz tiplenir. Sonuç yeni hesapla karşılaştırılır, biçimi burada varsayılmaz.
 // Yol değişkendedir: derleyici eski modülü (tipsiz, büyük) bu projede denetlemesin.
-let O: any;
+type EskiIslev = (...girdi: unknown[]) => unknown;
+interface EskiOperator {
+  dueControls(o: unknown, simdi: number): { due: unknown; next: unknown; who: unknown; why: unknown };
+  nextTask(...girdi: unknown[]): Record<string, unknown> | null;
+  ilkParcaKalemleri: EskiIslev; firstGate: EskiIslev; readyCount: EskiIslev;
+  READY: { k: string; l: string; d: string }[]; CALL_STAGES: unknown;
+}
+let O: EskiOperator;
 const YOL = '../../../../../../arkon/web/src/app/';
 beforeAll(async () => {
   O = await import(/* @vite-ignore */ YOL + 'operator-parcalar.ts');

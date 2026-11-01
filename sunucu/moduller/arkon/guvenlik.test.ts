@@ -1271,7 +1271,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const p2 = await oku2('pkgs', 'kd-p');
       assert.equal(p2['approval'].ok, true);
       assert.equal(p2['approval'].by, 'Deneme k_admin');
-      const gunluk = (await istek<{ satirlar: Record<string, any>[] }>(cerezler.admin, 'GET', '/arkon/kayitlar/audit')).govde.satirlar.filter((s) => s['target'] === 'KD-1' && s['action'] === 'yayınlandı');
+      const gunluk = (await istek<{ satirlar: Record<string, unknown>[] }>(cerezler.admin, 'GET', '/arkon/kayitlar/audit')).govde.satirlar.filter((s) => s['target'] === 'KD-1' && s['action'] === 'yayınlandı');
       assert.match(String(gunluk.at(-1)?.['detail']), /onay: Deneme k_admin/);
       // Onayı değiştirmeyen yazım onay sahibini korur.
       await yaz3('plan', 'pkgs', 'kd-p', { ...p2, note: 'sadece not' });
@@ -1522,7 +1522,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     const yeniSatirlar = async (islem: () => Promise<unknown>): Promise<{ area: string; action: string; target: string; detail: string | null; userId: string }[]> => {
       const once = (await istek<{ satirlar: unknown[] }>(cerezler.admin, 'GET', '/arkon/kayitlar/audit')).govde.satirlar.length;
       await islem();
-      const hepsi = (await istek<{ satirlar: Record<string, any>[] }>(cerezler.admin, 'GET', '/arkon/kayitlar/audit')).govde.satirlar;
+      const hepsi = (await istek<{ satirlar: Record<string, unknown>[] }>(cerezler.admin, 'GET', '/arkon/kayitlar/audit')).govde.satirlar;
       return hepsi.slice(once) as never;
     };
     const belgeYaz = async (rol: ArkonRolu, depo: string, kimlik: string, govde: Record<string, unknown>) => {

@@ -46,8 +46,21 @@ vi.mock('../../../../../../arkon/web/src/app/baslat.ts', () => ({ Brand: () => n
 vi.mock('../../../../../../arkon/web/src/app/gomulu.ts', () => ({ gomuluMu: () => true }));
 vi.mock('../../../../../../arkon/web/src/app/cizim-merkezi.ts', () => ({ MerkezRozeti: () => null, MerkezSecici: () => null, merkezVar: () => true, useMerkezUyarilari: () => ({}) }));
 
-// Eski modüller tipsizdir.
-let K: any; let S: any; let O: any; let H: any;
+// Eski modüller tipsizdir; yalnız testin kullandığı yüz tiplenir. Sonuç yeni hesapla karşılaştırılır, biçimi burada varsayılmaz.
+type EskiIslev = (...girdi: unknown[]) => unknown;
+interface EskiKurallar {
+  rulesOf: EskiIslev; rulesSummary(kurallar: unknown): string; nearEdge: EskiIslev; famOf: EskiIslev;
+  defaultRulesFor(p: Pkg): Promise<{ name: string; rules: ReturnType<typeof isKurallari> } | null>;
+}
+interface EskiIstasyonlar {
+  opOf: EskiIslev; stOf: EskiIslev; stValidate: EskiIslev; fmtSerial: EskiIslev; dewPoint: EskiIslev; isoWeek: EskiIslev; sampEvents: EskiIslev;
+  numunePlaniYaz: EskiIslev;
+}
+interface EskiOperator { sampOf: EskiIslev; sampLabel: EskiIslev; sampItems: EskiIslev; whoAt: EskiIslev }
+interface EskiHazirlik {
+  apOk: EskiIslev; apRejected: EskiIslev; apPending: EskiIslev; needApproval: EskiIslev; validate(p: Pkg): { k: string; ok: boolean; l: string }[];
+}
+let K: EskiKurallar; let S: EskiIstasyonlar; let O: EskiOperator; let H: EskiHazirlik;
 const YOL = '../../../../../../arkon/web/src/app/';
 beforeAll(async () => {
   K = await import(/* @vite-ignore */ YOL + 'kurallar.ts');
@@ -98,7 +111,7 @@ describe('A2 kurallar eski hesaplarla aynı', () => {
       const eski = await K.defaultRulesFor(p);
       expect(yeni ? yeni.name : null).toBe(eski ? eski.name : null);
       const kimliksiz = (r: ReturnType<typeof isKurallari>) => ({ ...r, warns: r.warns.map(({ id: _i, ...w }) => w), prod: { ...r.prod, tools: r.prod.tools.map(({ id: _i, ...t }) => t) } });
-      if (yeni) expect(kimliksiz(kurallariKopyala(isKurallari({ rules: yeni.rules })))).toEqual(kimliksiz(eski.rules));
+      if (yeni) expect(kimliksiz(kurallariKopyala(isKurallari({ rules: yeni.rules })))).toEqual(kimliksiz(eski!.rules));
     }
   });
 

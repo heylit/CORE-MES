@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Gerçek Arkon veri katmanı (store.ts) sunucu kipinde; IndexedDB ve fetch sahte. Uygulama yeniden açılınca modül yeniden yüklenir,
 // sahte IndexedDB testin elinde kaldığı için cihazdaki veri açılışlar arasında korunur (kesinti tatbikatı D1).
 const STORE_YOLU = '../../../../arkon/web/src/data/store.ts';
-interface Depo { init(): Promise<unknown>; DB: { get(s: string, k: string): Promise<any>; put(s: string, v: unknown): Promise<void> }; local: { all(s: string): Promise<unknown[]> } }
+interface Depo { init(): Promise<unknown>; DB: { get(s: string, k: string): Promise<{ durum?: unknown }>; put(s: string, v: unknown): Promise<void> }; local: { all(s: string): Promise<unknown[]> } }
 
 type Anahtar = number | string;
 interface SahteDepo { yol?: string; otomatik: boolean; sira: number; kayit: Map<Anahtar, unknown> }
