@@ -273,7 +273,10 @@ export const kurFaizTopluGovdesi = z.object({
   const gorulen = new Set<string>();
   g.satirlar.forEach((s, i) => {
     const anahtar = `${s.tur}|${s.paraBirimi}|${s.tarih}`;
-    if (gorulen.has(anahtar)) c.addIssue({ code: 'custom', path: ['satirlar', i], message: `${i + 1}. satır aynı tür, para birimi ve tarihle ikinci kez var.` });
+    // Günlük faiz bu noktada faize çevrilmiştir: metin türü değil para birimi ve günü söyler ki farklı yazılmış iki faiz satırı neden çakışıyor anlaşılsın.
+    const message = s.tur === 'kur' ? `${i + 1}. satır aynı tür, para birimi ve tarihle ikinci kez var.`
+      : `${i + 1}. satır aynı para birimi ve tarihte ikinci faiz; aylık ve günlük faiz aynı oranın iki yazılışıdır, biri kalmalı.`;
+    if (gorulen.has(anahtar)) c.addIssue({ code: 'custom', path: ['satirlar', i], message });
     gorulen.add(anahtar);
   });
 });
