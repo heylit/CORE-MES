@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -17,10 +17,10 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
+import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  MetrikToplayici, ayrintiTopla, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, denemeKaydiOku, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
 import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
@@ -135,6 +135,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
     assert.deepEqual(ayrinti, {
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), yayin: null, calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
       uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
+      geriYuklemeDenemesi: null,
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
@@ -366,7 +367,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
-      'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
       'vtBaglantiSayisi', 'yayin', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
@@ -625,6 +626,44 @@ describe('sağlık (gerçek PostgreSQL)', () => {
       { tur: 'is', ileti: 'bozuk işi son turda hata verdi (Veritabanı hatası 23514).' },
       { tur: 'disk', ileti: 'Yedek diskinde 2,0 GB boş yer kaldı.' },
     ]);
+  });
+
+  test('/saglik/ayrinti geri yükleme denemesi: son kayıt ayrıntıda görünür; başarısız ya da hiç yoksa yedek uyarısı; okunmadıysa uyarı yok', async () => {
+    const simdi = Date.now();
+    const deneme = {
+      zaman: new Date(simdi - 3 * 86_400_000).toISOString(), yedek: 'tmiv2-elle-1.tmiv2y', sonuc: 'basarisiz' as const, sureSn: 3.1,
+      kisiSayisi: null, gocSayisi: null, hata: 'Yedek şifreli; anahtar yok.',
+    };
+    const ayrinti = async (sonDeneme: typeof deneme | null | undefined) => {
+      const hedef = kaynakliUygulama({
+        ayarOku: () => ({ commit: null, ortam: 'test' }), gitOku: async () => null, isDurumlari: () => [],
+        yedekOku: async () => ({ durum: 'acik', sonYedek: new Date(simdi - 3_600_000), ...(sonDeneme === undefined ? {} : { sonDeneme }) }),
+      });
+      const c = await ayrintiIste(hedef, izleyenCerezi);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json() as { geriYuklemeDenemesi: unknown; uyarilar: { tur: string; ileti: string }[] };
+    };
+    const kotu = await ayrinti(deneme);
+    assert.deepEqual(kotu.geriYuklemeDenemesi, deneme);
+    assert.deepEqual(kotu.uyarilar, [{ tur: 'yedek', ileti: 'Son geri yükleme denemesi başarısız oldu (Yedek şifreli; anahtar yok.).' }]);
+    assert.deepEqual((await ayrinti(null)).uyarilar, [{ tur: 'yedek', ileti: 'Yedek hiç geri yüklenerek denenmemiş (npm run geri-yukle-deneme).' }]);
+    assert.deepEqual((await ayrinti({ ...deneme, sonuc: 'basarili', kisiSayisi: 3, gocSayisi: 9, hata: null } as never)).uyarilar, []);
+    const bilinmiyor = await ayrinti(undefined);
+    assert.deepEqual(bilinmiyor.uyarilar, []);
+    assert.equal(bilinmiyor.geriYuklemeDenemesi, null);
+  });
+
+  test('geri yükleme denemesi kaydı: klasördeki dosyanın son geçerli satırı okunur; yarım satır atlanır; dosya ya da klasör yoksa null', async () => {
+    const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-deneme-'));
+    try {
+      assert.equal(await denemeKaydiOku(null), null);
+      assert.equal(await denemeKaydiOku(dizin), null);
+      const satir = (yedek: string) => JSON.stringify({ zaman: '2026-11-01T10:00:00.000Z', yedek, sonuc: 'basarili', sureSn: 1, kisiSayisi: 1, gocSayisi: 1, hata: null });
+      await writeFile(join(dizin, DENEME_KAYDI_DOSYASI), `${satir('a')}\n${satir('b')}\n{"zaman":"2026-11-0`);
+      assert.equal((await denemeKaydiOku(dizin))?.yedek, 'b');
+    } finally {
+      await rm(dizin, { recursive: true, force: true });
+    }
   });
 
   test('/saglik/ayrinti git başarısızken de onu bir kez dener; commit ortam değerinden gelir', async () => {

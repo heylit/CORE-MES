@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Ayrinti, IsDurumuOzeti, SaglikCevabi, Uyari } from '#paylasilan/sozlesme/saglik.ts';
+import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, SaglikCevabi, Uyari } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo } from '../../ortak/arayuz/index.ts';
 import type { RozetTonu, Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -30,6 +30,8 @@ function AyrintiListesi({ ayrinti, saglikli }: { ayrinti: Ayrinti; saglikli: boo
       <dd>{sureMetni(ayrinti.calismaSuresiSn)}</dd>
       <dt>Ortam</dt>
       <dd>{ortamAdi(ayrinti.ortam)}</dd>
+      <dt>Son geri yükleme denemesi</dt>
+      <dd><DenemeSatiri deneme={ayrinti.geriYuklemeDenemesi ?? null} /></dd>
     </dl>
   );
 }
@@ -43,6 +45,18 @@ const SONUC: Record<NonNullable<IsDurumuOzeti['sonSonuc']>, { metin: string; ton
 
 const zamanMetni = (iso: string | null): string =>
   iso === null ? YOK : new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' });
+
+// Yedeğin ayrı veritabanına yüklenerek denenmesi (1670): `npm run geri-yukle-deneme` yazar; sonuç ve tarih.
+function DenemeSatiri({ deneme }: { deneme: GeriYuklemeDenemesi | null }) {
+  if (deneme === null) return <>{YOK}</>;
+  const basarili = deneme.sonuc === 'basarili';
+  return (
+    <>
+      <Rozet ton={basarili ? 'tamam' : 'hata'}>{basarili ? 'Başarılı' : 'Başarısız'}</Rozet>
+      {' '}{zamanMetni(deneme.zaman)}
+    </>
+  );
+}
 
 // Süren turda sonuç önceki turundur; son çalışma bu yüzden başlama anıdır.
 const IS_SUTUNLARI: readonly Sutun<IsDurumuOzeti>[] = [

@@ -5,7 +5,7 @@ import type { VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
-  DiskDurumu, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+  DiskDurumu, GeriYuklemeDenemesi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
@@ -49,7 +49,12 @@ export const YEDEK_EN_ESKI_SAAT = 26;
 export const IS_ASILMA_SINIRI_MS = 30 * 60_000;
 const IS_ARALIK_KATSAYISI = 3;
 
-export interface YedekBilgisi { durum: YedekDurumu; sonYedek: Date | null }
+export interface YedekBilgisi {
+  durum: YedekDurumu;
+  sonYedek: Date | null;
+  // Yedek klasöründeki deneme kaydının son satırı (1670): kayıt yoksa null, okunmadıysa verilmez.
+  sonDeneme?: GeriYuklemeDenemesi | null;
+}
 
 export interface UyariGirdisi {
   simdi: Date;
@@ -99,6 +104,9 @@ export function uyarilar(g: UyariGirdisi): Uyari[] {
   }
   if (g.yedekDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Yedek diskinde ${gbMetni(g.yedekDiski.bosBayt)} GB boş yer kaldı.` });
   if (g.veritabaniDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Veritabanı diskinde ${gbMetni(g.veritabaniDiski.bosBayt)} GB boş yer kaldı.` });
+  // Kayıt okunmadıysa (undefined) bilinmez, uyarı yok; okunup yoksa (null) hiç denenmemiştir.
+  const deneme = g.yedek === null || g.yedek.durum !== 'acik' || g.yedek.sonDeneme === undefined ? null : denemeUyarisi(g.yedek.sonDeneme, g.simdi);
+  if (deneme !== null) sonuc.push({ tur: 'yedek', ileti: deneme });
   for (const ileti of g.esikler ?? []) sonuc.push({ tur: 'esik', ileti });
   return sonuc;
 }
@@ -426,4 +434,32 @@ export function saatlikBaslangic(aralik: SaatlikAralik, simdi: Date): Date {
   const t = new Date(simdi);
   t.setUTCMonth(t.getUTCMonth() - SAAT_SAKLAMA_AY);
   return t;
+}
+
+// Geri yükleme denemesi (1670, 1743 a). Kaydı araç yazar (araclar/geri-yukleme-denemesi.ts), sunucu okur: biçim burada tektir.
+// Ayda bir önerilir (kurulum/yedek.md); 35 gün bir ayın kaydırılmış gününü de kapsar (VARSAYIM).
+export const DENEME_KAYDI_DOSYASI = 'geri-yukleme-denemesi.jsonl';
+export const DENEME_EN_ESKI_GUN = 35;
+
+export const denemeSatiri = (d: GeriYuklemeDenemesi): string => `${JSON.stringify(d)}\n`;
+
+// Son geçerli satır; bozuk ya da yarım satır atlanır (yazım kesilmiş olabilir). Kayıt yoksa null.
+export function sonDeneme(metin: string, gecerli: (deger: unknown) => deger is GeriYuklemeDenemesi): GeriYuklemeDenemesi | null {
+  const satirlar = metin.split(/\r?\n/).filter((s) => s.trim() !== '');
+  for (let i = satirlar.length - 1; i >= 0; i -= 1) {
+    try {
+      const deger: unknown = JSON.parse(satirlar[i] ?? '');
+      if (gecerli(deger)) return deger;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export function denemeUyarisi(d: GeriYuklemeDenemesi | null, simdi: Date): string | null {
+  if (d === null) return 'Yedek hiç geri yüklenerek denenmemiş (npm run geri-yukle-deneme).';
+  if (d.sonuc === 'basarisiz') return `Son geri yükleme denemesi başarısız oldu (${d.hata ?? 'ayrıntı yok'}).`;
+  const gun = Math.floor((simdi.getTime() - new Date(d.zaman).getTime()) / 86_400_000);
+  return gun > DENEME_EN_ESKI_GUN ? `Son geri yükleme denemesi ${gun} gün önce yapıldı.` : null;
 }

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
@@ -262,4 +262,20 @@ test('uyarılar: açık eşik iletileri esik türüyle listelenir', () => {
     esikler: ['Bellek az.'],
   };
   assert.deepEqual(uyarilar(g).filter((u) => u.tur === 'esik'), [{ tur: 'esik', ileti: 'Bellek az.' }]);
+});
+
+test('geri yükleme denemesi uyarısı: hiç yoksa, başarısızsa ya da 35 günden eskiyse; yedek kapalıyken ya da kayıt okunmadıysa yok', () => {
+  const simdi = new Date('2026-11-01T10:00:00Z');
+  const d = { zaman: '2026-10-20T10:00:00.000Z', yedek: 'a', sonuc: 'basarili' as const, sureSn: 1, kisiSayisi: 1, gocSayisi: 1, hata: null };
+  assert.match(denemeUyarisi(null, simdi) ?? '', /hiç geri yüklenerek denenmemiş/);
+  assert.equal(denemeUyarisi(d, simdi), null);
+  assert.equal(denemeUyarisi({ ...d, zaman: '2026-09-20T10:00:00.000Z' }, simdi), 'Son geri yükleme denemesi 42 gün önce yapıldı.');
+  assert.equal(denemeUyarisi({ ...d, sonuc: 'basarisiz', hata: 'x' }, simdi), 'Son geri yükleme denemesi başarısız oldu (x).');
+  const g = (yedek: UyariGirdisi['yedek']): UyariGirdisi => ({
+    simdi, surecBaslangici: simdi, isler: [], yedek, yedekDiski: null, veritabaniDiski: null,
+  });
+  const deneme = (u: ReturnType<typeof uyarilar>) => u.filter((x) => x.ileti.includes('geri yük') || x.ileti.includes('denenmemiş'));
+  assert.equal(deneme(uyarilar(g({ durum: 'acik', sonYedek: simdi, sonDeneme: null }))).length, 1);
+  assert.equal(deneme(uyarilar(g({ durum: 'acik', sonYedek: simdi }))).length, 0);
+  assert.equal(deneme(uyarilar(g({ durum: 'dizin-yok', sonYedek: null, sonDeneme: null }))).length, 0);
 });

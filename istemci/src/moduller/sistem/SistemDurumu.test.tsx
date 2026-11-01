@@ -149,6 +149,18 @@ describe('SistemDurumu ayrinti', () => {
     expect(komsu('Commit')).toBe('yok');
     expect(komsu('Veritabanı')).toContain('yok');
     expect(komsu('Veritabanı')).not.toContain('ms');
+    expect(komsu('Son geri yükleme denemesi')).toBe('yok');
+  });
+
+  it('son geri yukleme denemesi sonucu ve tarihiyle gosterilir (1670)', async () => {
+    const deneme = {
+      zaman: '2026-10-20T10:00:00.000Z', yedek: 'tmiv2-elle-1.tmiv2y', sonuc: 'basarisiz' as const, sureSn: 2, kisiSayisi: null, gocSayisi: null, hata: 'x',
+    };
+    sunucuKur({ kullanici: YONETICI, ayrinti: ayrintiVer({ ...AYRINTI, geriYuklemeDenemesi: deneme }) });
+    ac();
+    await screen.findByText('Son geri yükleme denemesi');
+    expect(komsu('Son geri yükleme denemesi')).toContain('Başarısız');
+    expect(komsu('Son geri yükleme denemesi')).toContain(new Date(deneme.zaman).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }));
   });
 
   it('veritabani durumu saglik cevabindan gelir: ok "Calisiyor"; saglik hata iken ayrinti gelse de "Sorun var"', async () => {

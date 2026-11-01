@@ -11,6 +11,7 @@ import { diskKunyeOzetleri } from '../sunucu/moduller/dosya/disari.ts';
 import {
   MEDYA_AYNA_KLASORU, dosyasiOlmayanlar, medyaAynala, medyaDiziniOku, medyaGeriYukle, yedekAl, yedekOrtamiOku, yedekSifresiniCoz, type YedekOrtami,
 } from '../sunucu/moduller/ayarlar/disari.ts';
+import { denemeKaydiYaz, denemeSayilari, denemeVeritabani, denemeYap } from './geri-yukleme-denemesi.ts';
 import { geriYuklemeKilidiniDenetle, yedegiGeriYukle } from './guncelleyici.ts';
 
 // Komut satırından veritabanı yedeği ve geri yükleme: `npm run yedek`, `npm run geri-yukle -- <dosya>`; yeni yedek anahtarı
@@ -164,6 +165,40 @@ async function geriYukle(ortam: YedekOrtami, argumanlar: string[]): Promise<void
   console.log('Kod yedekten yeniyse önce eski koda dönün; sonra "npm run goc" ve "npm run baslat".');
 }
 
+// `npm run geri-yukle-deneme -- <yedek>` (1670): asıl veritabanına dokunmaz; sunucu açıkken de koşar. Sonuç yedek klasörüne yazılır.
+async function geriYuklemeDenemesi(ortam: YedekOrtami, argumanlar: string[]): Promise<void> {
+  const dosya = argumanlar.find((a) => !a.startsWith('--'));
+  if (dosya === undefined) throw new Error('Denenecek yedek dosyasını verin: npm run geri-yukle-deneme -- <dosya>');
+  const yedek = path.resolve(dosya);
+  if (!existsSync(yedek)) throw new Error(`Yedek dosyası yok: ${yedek}`);
+  const ad = denemeVeritabani(process.env);
+  const deneme = { ...ortam, pg: { ...ortam.pg, veritabani: ad } };
+  const goc = { kullanici: process.env['TMIV2_PG_GOC_USER']?.trim() ?? '', parola: process.env['TMIV2_PG_GOC_PASSWORD'] ?? '' };
+  console.log(`"${yedek}" yedeği "${ad}" deneme veritabanına yükleniyor; asıl veritabanı değişmez...`);
+  const sonuc = await denemeYap(yedek, {
+    yukle: async () => {
+      await geriYuklemeKilidiniDenetle(deneme, goc, kok);
+      await yedegiGeriYukle(deneme, goc, yedek, kok);
+    },
+    say: async () => {
+      const vt = gocBaglantisiAc({ ...ayarOku({ ...process.env, TMIV2_PG_DATABASE: ad }), goc: gocKimligiOku() });
+      try {
+        return await denemeSayilari(vt);
+      } finally {
+        await vt.kapat();
+      }
+    },
+    simdi: () => new Date(),
+  });
+  const kayit = await denemeKaydiYaz(yedekKlasoru(process.env, kok), sonuc);
+  if (sonuc.sonuc === 'basarili') {
+    console.log(`Deneme başarılı (${String(sonuc.sureSn)} sn): ${String(sonuc.kisiSayisi)} kişi, ${String(sonuc.gocSayisi)} göç kaydı. Kayıt: ${kayit}`);
+  } else {
+    console.error(`Deneme başarısız: ${sonuc.hata ?? ''} Kayıt: ${kayit}`);
+    process.exitCode = 1;
+  }
+}
+
 async function coz(ortam: YedekOrtami, argumanlar: string[]): Promise<void> {
   const [kaynak, hedef] = argumanlar;
   if (kaynak === undefined || hedef === undefined) throw new Error('Kullanım: npm run yedek-coz -- <şifreli yedek> <düz hedef dosya>');
@@ -186,10 +221,12 @@ if (dogrudanKosuyor) {
     else if (komut === 'al') await al(ortam);
     else if (komut === 'medya-geri-yukle') await medyaGeriYaz(ortam, secenek(argumanlar, '--kaynak') ?? yedekKlasoru(process.env, kok));
     else if (komut === 'geri-yukle') await geriYukle(ortam, argumanlar);
+    else if (komut === 'geri-yukle-deneme') await geriYuklemeDenemesi(ortam, argumanlar);
     else if (komut === 'coz') await coz(ortam, argumanlar);
     else {
       throw new Error('Kullanım: npm run yedek | npm run yedek -- medya [--hedef <klasör>] | npm run geri-yukle -- <dosya> | '
-        + 'npm run geri-yukle-medya [-- --kaynak <klasör>] | npm run yedek-anahtari | npm run yedek-coz -- <yedek> <hedef>');
+        + 'npm run geri-yukle-medya [-- --kaynak <klasör>] | npm run geri-yukle-deneme -- <dosya> | npm run yedek-anahtari | '
+        + 'npm run yedek-coz -- <yedek> <hedef>');
     }
   } catch (hata) {
     console.error(hata instanceof Error ? hata.message : String(hata));

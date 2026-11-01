@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { statfs } from 'node:fs/promises';
+import { readFile, statfs } from 'node:fs/promises';
 import { cpus, freemem, totalmem } from 'node:os';
 import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
@@ -10,10 +10,11 @@ import { istekSayaclari } from '#cekirdek/istek-olcumu.ts';
 import { surecEsikOlayiYaz } from '#cekirdek/olay-gunlugu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import type { Ayrinti, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
+import { geriYuklemeDenemesiSemasi } from '#paylasilan/sozlesme/saglik.ts';
+import type { Ayrinti, GeriYuklemeDenemesi, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import {
-  BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
-  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, uyarilar,
+  BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, DENEME_KAYDI_DOSYASI, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
+  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar,
 } from './kurallar.ts';
 import type { EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import {
@@ -77,9 +78,19 @@ export async function saglikliMi(db: Db, sureSiniriMs: number = YOKLAMA_SURE_SIN
 
 // Yedek klasöründeki en yeni yedek dosyası: Sistem Ayarları'ndaki yedek listesiyle aynı kaynak.
 export async function surecYedegi(db: Db): Promise<YedekBilgisi> {
-  const { durum, yedekler } = await yedekleriListele(await yedekOrtaminiKur(db));
+  const ortam = await yedekOrtaminiKur(db);
+  const { durum, yedekler } = await yedekleriListele(ortam);
   const en = yedekler[0];
-  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman) };
+  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman), sonDeneme: await denemeKaydiOku(ortam.dizin) };
+}
+
+const denemeMi = (d: unknown): d is GeriYuklemeDenemesi => geriYuklemeDenemesiSemasi.safeParse(d).success;
+
+// Kayıt dosyası yoksa ya da okunamıyorsa null (hiç deneme görülmedi); klasör seçilmemişse yedek zaten kapalıdır.
+export async function denemeKaydiOku(dizin: string | null): Promise<GeriYuklemeDenemesi | null> {
+  if (dizin === null) return null;
+  const metin = await readFile(path.join(dizin, DENEME_KAYDI_DOSYASI), 'utf8').catch(() => null);
+  return metin === null ? null : sonDeneme(metin, denemeMi);
 }
 
 export type OlayDongusuOlcer = () => number | null;
@@ -227,6 +238,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     olayDongusuGecikmeMs: girdi.olayDongusu?.() ?? null,
     vtBaglantiSayisi,
     otomatikAcilis,
+    geriYuklemeDenemesi: yedek?.sonDeneme ?? null,
     uyarilar: uyarilar({
       simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
       esikler: (girdi.esikler ?? surecEsikleri).iletiler(),

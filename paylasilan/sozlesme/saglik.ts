@@ -43,6 +43,20 @@ export const otomatikAcilisSemasi = z.object({
   gorevAdi: z.string(),
 });
 
+// Yedeğin ayrı veritabanına yüklenerek denenmesi (1670, 1743 a): `npm run geri-yukle-deneme` yedek klasörüne yazar, sunucu son kaydı okur.
+export const GERI_YUKLEME_SONUCLARI = ['basarili', 'basarisiz'] as const;
+export const geriYuklemeDenemesiSemasi = z.object({
+  zaman: zamanSemasi,
+  // Denenen yedek dosyasının adı (klasörsüz).
+  yedek: z.string(),
+  sonuc: z.enum(GERI_YUKLEME_SONUCLARI),
+  sureSn: z.number().nonnegative(),
+  // Yüklenen veritabanındaki kişi ve göç kaydı sayısı; başarısız denemede null.
+  kisiSayisi: z.number().int().nonnegative().nullable(),
+  gocSayisi: z.number().int().nonnegative().nullable(),
+  hata: z.string().nullable(),
+});
+
 export const ayrintiCevabi = z.object({
   // Veritabanının durumu yalnız `/saglik` cevabındadır; yoklama başarısızsa gecikme null.
   veritabaniGecikmeMs: z.number().int().nonnegative().nullable(),
@@ -65,6 +79,8 @@ export const ayrintiCevabi = z.object({
   vtBaglantiSayisi: z.number().int().nonnegative().nullable().optional(),
   // Windows dışında null.
   otomatikAcilis: otomatikAcilisSemasi.nullable().optional(),
+  // Son geri yükleme denemesi; hiç yapılmamışsa ya da yedek klasörü okunamazsa null. Eski istemci kırılmasın diye isteğe bağlı.
+  geriYuklemeDenemesi: geriYuklemeDenemesiSemasi.nullable().optional(),
 });
 
 const sayi = z.number().int().nonnegative();
@@ -158,6 +174,7 @@ export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
 export type IstekOzeti = z.output<typeof istekOzetiSemasi>;
 export type UcOzeti = z.output<typeof ucOzetiSemasi>;
 export type SaatOzeti = z.output<typeof saatOzetiSemasi>;
+export type GeriYuklemeDenemesi = z.output<typeof geriYuklemeDenemesiSemasi>;
 export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
 export type SaatlikCevabi = z.output<typeof saatlikCevabi>;
 export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;
