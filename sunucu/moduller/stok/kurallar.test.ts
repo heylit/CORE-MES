@@ -8,7 +8,7 @@ import {
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
-  adetMiktari, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
+  adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
@@ -489,6 +489,13 @@ describe('stok kuralları: terminal üretim girişi', () => {
     assert.equal(adetMiktari(20000n, '1', 2), 10000n);
     assert.equal(adetMiktari(30000n, '1', 3), 10000n, '30 parça x 1/3 tam 10');
     assert.equal(adetMiktari(1000n, '1', 3), 334n, 'tek parça yukarı yuvarlanır');
+    // 1554 a: önceki adetle birikimli; parça parça sayım toplu sayıma eşittir, onceki 0 iken eski sonuç.
+    assert.deepEqual([0n, 1000n, 2000n].map((o) => adetMiktari(1000n, '1', 3, o)), [334n, 333n, 333n], 'üç tek sayım toplam 1000');
+    assert.equal(adetMiktari(3000n, '1', 3, 0n), 1000n);
+    assert.equal(adetMiktari(1000n, '0.0004', 1, 0n) + adetMiktari(1000n, '0.0004', 1, 1000n), 1n, 'iki parça 0,8 binde: tek yuvarlama');
+    assert.equal(adetMiktari(1000n, '1', 3, -5000n), 334n, 'eksi önceki sıfır sayılır');
+    assert.deepEqual([0n, 1000n, 2000n].map((o) => birikimliMiktar(1000n, o, '1', undefined, { pay: 1, payda: 2 })), [500n, 500n, 500n]);
+    assert.deepEqual([0n, 1000n, 2000n].map((o) => birikimliMiktar(1000n, o, '1', 3, { pay: 1, payda: 2 })), [167n, 167n, 166n], 'oran ve bölen birlikte: toplam 500');
     assert.deepEqual(dalliAdimPlani({
       adet: 20000n, sonAdim: false, statuId: 20, cikti: null, girdiler: [{ malzemeNo: 2, miktar: '1', bolen: 2 }], tasinan: { malzemeNo: 2, miktar: '1', bolen: 2 }, gelenler: [], kaynak: 'ilk',
     }).cevirme, { malzemeId: 2, kaynakStatuId: null, hedefStatuId: 20, miktar: 10000n });
@@ -866,5 +873,14 @@ test('1214 eksiden çevirme uyarısı: ilk adımda hammadde, sonra önceki adım
     assert.equal(girisKontroluDuzeltmeEngeli([]), null);
     assert.equal(girisKontroluDuzeltmeEngeli([{ miktar: '5', bekleyen: '5.000' }]), null);
     assert.match(girisKontroluDuzeltmeEngeli([{ miktar: '5', bekleyen: '5' }, { miktar: '2', bekleyen: '0' }]) ?? '', /giriş kontrolü kararı/);
+  });
+});
+
+describe('1555 a: iş malzemeleri kalan adedi', () => {
+  test('alt düğümde gereken emir adedi x kök başına adet, sayılan alt parça düşülür; düğümsüzde çarpan 1; sıfırın altına inmez', () => {
+    assert.equal(kalanAdimAdedi(10, null, 3), 7n);
+    assert.equal(kalanAdimAdedi(10, '2.0000', 3), 17n);
+    assert.equal(kalanAdimAdedi(3, '0.5000', 0), 2n, 'kesirli çarpan tam parçaya yukarı');
+    assert.equal(kalanAdimAdedi(10, '2', 25), 0n);
   });
 });

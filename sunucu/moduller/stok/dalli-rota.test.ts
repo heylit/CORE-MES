@@ -181,6 +181,31 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.equal(await eksiSatir(k), 0);
   });
 
+  test('1554 a: tek tek sayılan dal parçası toplu sayımla aynı hammaddeyi düşer (birikimli yuvarlama); geri alma son farkı tersler', async () => {
+    const k = await kur(3);
+    await malKabul(k.hm2, '10');
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+    const operator = kisiler.get('operator')!;
+    // Sayım satırı olaydan önce yazılır (uretim-emirleri saglamYaz); stok önceki adedi oradan okur.
+    const satir = (tur: 'saglam' | 'hurda', adet: number) => o().sahip.sorgu(
+      'INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, is_emri_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [k.e, operator, k.ist.b, tur, adet, tur === 'hurda' ? 1 : null, adet < 0, k.ie[20]]);
+    for (let n = 0; n < 3; n += 1) { await satir('saglam', 1); await sayim(k, 20, k.ist.b, '1'); }
+    assert.equal(await bakiye(k.hm2, k.ist.b, k.s[20]!), 1, 'üç tek sayım 1,002 değil 1,000 çevirir');
+    await satir('saglam', -1);
+    await sayim(k, 20, k.ist.b, '-1');
+    assert.equal(await bakiye(k.hm2, k.ist.b, k.s[20]!), 0.667, 'geri alma üçüncü parçanın payını (0,333) geri verir');
+    await satir('saglam', 1);
+    await sayim(k, 20, k.ist.b, '1');
+    assert.equal(await bakiye(k.hm2, k.ist.b, k.s[20]!), 1);
+    for (let n = 0; n < 3; n += 1) {
+      await satir('hurda', 1);
+      await o().vt.tx((db) => hurdaSayimiYansit(db, { uretimEmriId: k.e, isEmriId: k.ie[20]!, istasyonId: k.ist.b, kisiId: operator, hurdaNedeniId: 1, fark: '1' }));
+    }
+    assert.equal(await bakiye(k.hm2, k.ist.b, null), 8, 'üç tek hurda 1,000 fire düşer');
+    assert.equal(await eksiSatir(k), 0);
+  });
+
   test('D-A: teslim edilmemiş B dalı hammaddesi "Hammadde" uyarısıyla eksiden çevrilir; birleştirmede hurda iki dalın parçasını fire düşer', async () => {
     const k = await kur();
     const b = await sayim(k, 20, k.ist.b, '2');
