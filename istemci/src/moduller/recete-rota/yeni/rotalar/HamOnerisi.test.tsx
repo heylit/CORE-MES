@@ -16,11 +16,11 @@ const ONERI: HamOnerisiCevabi = {
   oneriler: [{ malzemeNo: 12, kod: 'HM-0012', ad: null, kalite: 'C45', form: 'cubuk', olcu: { d: 30, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85, kesimBoyuMm: 44, hamHacimMm3: 100_000 }],
 };
 
-function kur(ins: { itemId: string; qty: number; scrap: number }[], kisi: Kullanici = YONETICI) {
+function kur(ins: { itemId: string; qty: number; scrap: number }[], kisi: Kullanici = YONETICI, cevap: HamOnerisiCevabi = ONERI) {
   return sunucuKur(kisi, {
     durum: rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [adimOrnegi({ ins })])]),
     yazmalar: {
-      [`GET ${ONERI_YOLU}`]: () => json(200, ONERI),
+      [`GET ${ONERI_YOLU}`]: () => json(200, cevap),
       'POST /rota/revizyonlar/72/kaydet': () => json(200, { id: 72, durum: 'taslak', surum: 5 }),
     },
   });
@@ -63,5 +63,24 @@ describe('1709 rota bileşeninde hammadde önerisi', () => {
     await within(panel).findByText('Girenler (0)');
     expect(within(panel).queryByRole('group', { name: 'Önerilen hammadde' })).toBeNull();
     expect(istekler.some((i) => i.yol === ONERI_YOLU)).toBe(false);
+  });
+
+  // 1741: yerleşik kalitede sunucu yoğunluğu bilmez; hammadde kartının aile ve kalite koduyla Malzemeler tablosundan gelir.
+  it('yerleşik kalitede (yoğunluk null) kg, kartın kalitesinin tablo yoğunluğuyla hesaplanır', async () => {
+    const oneri = ONERI.oneriler[0]!;
+    kur([], YONETICI, { ...ONERI, oneriler: [{ ...oneri, kalite: 'S235', aile: 'metal', kaliteKodu: 'S235', yogunluk: null }] });
+    rrAc('/recete-rota/schema');
+    const panel = await adimPaneli();
+    const grup = await within(panel).findByRole('group', { name: 'Önerilen hammadde' });
+    expect(await within(grup).findByText('0,785 kg', {}, BEKLE)).toBeTruthy();
+  });
+
+  it('kalite tabloda da yoksa miktar boş kalır, kullanıcı yazar', async () => {
+    const oneri = ONERI.oneriler[0]!;
+    kur([], YONETICI, { ...ONERI, oneriler: [{ ...oneri, kalite: 'X', aile: 'metal', kaliteKodu: 'YOK-KALITE', yogunluk: null }] });
+    rrAc('/recete-rota/schema');
+    const panel = await adimPaneli();
+    const grup = await within(panel).findByRole('group', { name: 'Önerilen hammadde' });
+    expect(within(grup).getByText('Miktar: siz yazın')).toBeTruthy();
   });
 });

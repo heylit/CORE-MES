@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import type { HamOnerisiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { Dugme } from '../../../../ortak/arayuz/index.ts';
+import { yerlesikKaliteYogunlugu } from '../../../malzemeler/disari.ts';
 import { miktar, sayi } from '../bicim.ts';
 import { useHamOnerisi } from '../veri.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar, turKisa, type Adim, type Malzeme } from './kurallar.ts';
@@ -24,6 +26,19 @@ interface Ozellikler {
 export function HamOnerisi({ urunId, adimlar, malzeme, ekle }: Ozellikler) {
   const gerekli = !hamGirdisiVar(adimlar, malzeme);
   const { data } = useHamOnerisi(urunId, gerekli);
+  // 1741: sunucu yerleşik kalitenin yoğunluğunu bilmez (null); hammadde kartında seçilen kalitenin (aile, kod) yoğunluğu
+  // Malzemeler'in kalite tablosundan okunur. Tabloda da yoksa miktar boş kalır ve kullanıcı yazar.
+  const eksik = [...new Set((data?.oneriler ?? []).filter((o) => o.yogunluk === null && o.aile !== null && o.kaliteKodu !== null)
+    .map((o) => `${o.aile ?? ''}|${o.kaliteKodu ?? ''}`))].sort();
+  const { data: yerlesik } = useQuery({
+    queryKey: ['recete-rota', 'yerlesik-kalite-yogunlugu', eksik],
+    enabled: gerekli && eksik.length > 0,
+    staleTime: Infinity,
+    queryFn: async () => new Map(await Promise.all(eksik.map(async (k) => {
+      const [aile = '', kod = ''] = k.split('|');
+      return [k, await yerlesikKaliteYogunlugu(aile, kod)] as const;
+    }))),
+  });
   if (!gerekli || data === undefined || data.model === null) return null;
   const kartlar = onerilebilirKartlar(data.oneriler, malzeme);
   if (kartlar.length === 0) {
@@ -34,7 +49,8 @@ export function HamOnerisi({ urunId, adimlar, malzeme, ekle }: Ozellikler) {
     <div className="tc-rr1-qt" role="group" aria-label="Önerilen hammadde">
       <p className="tc-rr1-ipucu">Önerilen hammadde: {data.model.belgeAdi} ({data.model.harf}) 3B analizinden, en az talaş önce.</p>
       {kartlar.map(({ oneri, kart }) => {
-        const n = hamOneriMiktari(oneri, kart.unit);
+        const yogunluk = oneri.yogunluk ?? yerlesik?.get(`${oneri.aile ?? ''}|${oneri.kaliteKodu ?? ''}`) ?? null;
+        const n = hamOneriMiktari({ ...oneri, yogunluk }, kart.unit);
         return (
           <div key={kart.id} className="tc-rr1-qtr">
             <span className="tc-rr1-qtn">
