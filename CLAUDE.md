@@ -16,7 +16,7 @@ TEMEL KURAL: Bilmediğini uydurma, eksikte sor.
 
 # TMI CORE V2
 CNC talaşlı imalat atölyesi için üretim planlama ve izlenebilirlik sistemi; kurum içi, tek sunucu. Türkçe konuş; kod tanımlayıcıları
-Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub kartlarında (`gh issue list`); kurulum `kurulum/devir.md`.
+Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği numara; GitHub kartları #679'da durdu, arşivdir. Kararlar devir belgesinde tutulur; kurulum `kurulum/devir.md`.
 
 ## Çalışma tercihleri
 - Kısa yaz, emoji yok; soruda Türkçe karakterleri düz yaz. Rapor en çok 15 satır: önce sonuç (adım başına tek satır), sonra yalnız "sorulur" kademesindeki
@@ -45,7 +45,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
    geçici karşılık) ve borca yazılır; yabancı anahtar Aşama 2'de ayrı göçle gelir. Aynı anda en çok iki teslim oturtulur; her teslim önce geçici ağaçta denenir.
 5. Teslim gelince: `FARK.md`, `CEKIRDEK-ISTEKLERI.md`, `BASKA-MODUL-ISTEKLERI.md` okunur; çekirdek ve ortak istekleri önce ayrı kartlarla girer; gelen modül kartıyla bir dala konur ve
    depodakinin yerine geçer. Olduğu gibi alınır: yeniden tasarlanmaz, yeniden yazılmaz, ekranına dokunulmaz; yapılan yalnız oturtmadır (veri kaynağı, sayfa ve yetki kaydı, ikinci menü,
-   derleme ve test kırıkları). Gelen kural depodaki onaylı kararla çelişirse gelen geçerlidir; çelişkiler kullanıcıya tek listede bildirilir, onay beklenmez. Her dış modül ikinci menülü gelir
+   derleme ve test kırıkları). Gelen kural depodaki onaylı kararla çelişirse gelen geçerlidir; çelişkiler kullanıcıya tek listede bildirilir, onay beklenmez. Bu yalnız dış modül tesliminde geçerlidir; proje içinde yazılan işte onaylı kararla çelişme sorulur (`kurulum/proje-talimati.md` ONAY). Her dış modül ikinci menülü gelir
    (menü veri olarak bildirilir, kabuk çizer). Her modül için `ORTAKLIK-<ad>.md` çıkar (teslimde yoksa yazılır): modülün tuttuğu ve başka modülde de olabilecek her kavram (firma, malzeme, kişi,
    istasyon, depo, birim, para birimi, belge no, durum listeleri), tablo ve sütun adıyla.
    Aşama 2, bağla: `ORTAKLIK` dosyalarından tek tablo çıkar (kavram başına hangi modül ne tutuyor); sahiplik kullanıcıya tek listede sorulur. Belli olanlar: malzeme malzemeler, firma musteri-tedarikci,
