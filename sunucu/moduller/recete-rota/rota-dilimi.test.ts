@@ -114,7 +114,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
       adim({
         ad: 'Birinci', kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 10, birimSureDk: 4, islemSuresiDk: 3, degisimSuresiDk: 1, firePayiYuzde: 2,
         makineKullanimi: 'paralel', enKucukParca: 5, yenidenAyar: false, ilkParca: 'yok',
-        adaylar: [{ kaynak: { tur: 'istasyon', id: istB }, ayarSuresiDk: 5, birimSureDk: 6 }, { kaynak: { tur: 'makine', id: makineB }, ayarSuresiDk: null, birimSureDk: 7 }],
+        adaylar: [{ kaynak: { tur: 'istasyon', id: istB }, ayarSuresiDk: 5, birimSureDk: 6 }, { kaynak: { tur: 'makine', id: makineB }, ayarSuresiDk: 0, birimSureDk: 7 }],
         bilesenler: [{ malzemeId: hammadde, miktar: 2, fireYuzde: 5 }], yanUrunler: [{ malzemeId: yanUrun, miktar: 0.5 }],
       }),
       adim({ ad: 'İkinci', kaynak: { tur: 'istasyon', id: istC }, ayarSuresiDk: 0, birimSureDk: 8, bagimlilik: 'akisli', devirAdedi: 10 }),
@@ -139,7 +139,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, terminGun: null,
       setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], adetCarpani: null, onculler: null,
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
-      digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: null, proc: 7, chg: null, cycle: 7 }],
+      digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: 0, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
     });
     // İstasyona bağlı adımda makine yoktur; ayarı 0 olan süre 0'dır (uydurma değil), girilmeyen değişim null; kaynağı olmayan adımın istasyonu null.

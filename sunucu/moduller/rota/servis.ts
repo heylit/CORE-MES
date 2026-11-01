@@ -674,18 +674,21 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
   const hazirlik = [];
   for (const a of icerik.adimlar) {
     const adaylarAktif: boolean[] = [];
-    for (const x of icerik.adaylar.filter((y) => y.adimId === a.id)) adaylarAktif.push(await aktifMi(x.kaynak));
+    const adaylar = icerik.adaylar.filter((y) => y.adimId === a.id);
+    for (const x of adaylar) adaylarAktif.push(await aktifMi(x.kaynak));
     hazirlik.push({
       a,
       kaynakAktif: a.kaynak === null ? null : await aktifMi(a.kaynak),
       adaylarAktif,
+      adaySureleri: adaylar.map((x) => ({ ayarSuresiDk: sayiyaCevir(x.ayarSuresiDk), birimSureDk: sayiyaCevir(x.birimSureDk) })),
     });
   }
-  const hata = onayaHazirMi(hazirlik.map(({ a, kaynakAktif, adaylarAktif }) => ({
+  const hata = onayaHazirMi(hazirlik.map(({ a, kaynakAktif, adaylarAktif, adaySureleri }) => ({
     opNo: a.opNo,
     operasyonTipiAktif: tipler.get(a.operasyonTipiId)?.aktif === true,
     kaynakAktif,
     adaylarAktif,
+    adaySureleri,
     fason: a.kaynak?.tur === 'fason',
     makineKullanimi: a.makineKullanimi,
     ayarSuresiDk: sayiyaCevir(a.ayarSuresiDk),

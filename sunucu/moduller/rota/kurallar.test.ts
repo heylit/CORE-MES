@@ -87,6 +87,21 @@ describe('revizyon', () => {
     assert.doesNotMatch(onayaHazirMi([{ ...tam, birimSureDk: null }]) ?? '', /ayar/, 'eski "ayar" adı iletide kalmaz');
   });
 
+  test('1737 c: aday kaynakta işlem ve hazırlık süresi onayda zorunlu; hazırlık 0 olabilir, adım süresine düşülmez', () => {
+    const tam: HazirlikAdimi = {
+      opNo: 10, operasyonTipiAktif: true, kaynakAktif: true, adaylarAktif: [true, true], fason: false, makineKullanimi: 'tek', ayarSuresiDk: 0, birimSureDk: 2,
+      terminGun: null, bagimlilik: 'bekleyen', girenSayisi: 1,
+      adaySureleri: [{ ayarSuresiDk: 0, birimSureDk: 3 }, { ayarSuresiDk: 15, birimSureDk: 2.5 }],
+    };
+    assert.equal(onayaHazirMi([tam]), null);
+    assert.equal(onayaHazirMi([{ ...tam, adaySureleri: [{ ayarSuresiDk: 0, birimSureDk: 3 }, { ayarSuresiDk: 15, birimSureDk: null }] }]),
+      'OP 10: aday kaynağın işlem süresi girilmeli.');
+    assert.equal(onayaHazirMi([{ ...tam, adaySureleri: [{ ayarSuresiDk: null, birimSureDk: 3 }, { ayarSuresiDk: 15, birimSureDk: 2.5 }] }]),
+      'OP 10: aday kaynağın hazırlık süresi girilmeli; yoksa 0 yazın.');
+    assert.match(onayaHazirMi([{ ...tam, birimSureDk: null }]) ?? '', /^OP 10: işlem süresi/, 'önce adımın kendi süresi');
+    assert.equal(onayaHazirMi([{ ...tam, adaylarAktif: [], adaySureleri: [] }]), null);
+  });
+
   test('#1372: ilk adım ve önceki adımı beklemeyen adım girensiz onaya gitmez; bekleyen ara adım önceki çıktıyı tüketir', () => {
     const ilk: HazirlikAdimi = {
       opNo: 10, operasyonTipiAktif: true, kaynakAktif: true, adaylarAktif: [], fason: false, makineKullanimi: 'tek', ayarSuresiDk: 0, birimSureDk: 2, terminGun: null,
