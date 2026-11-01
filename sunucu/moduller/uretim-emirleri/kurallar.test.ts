@@ -11,7 +11,7 @@ import {
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
-import { DUGUM_GECERSIZ, dugumGirdisiIhlali, malzemeIhtiyaci } from './kurallar.ts';
+import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, malzemeIhtiyaci } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
@@ -307,5 +307,25 @@ describe('1476 çok katmanlı emir girdisi', () => {
     const bilesenler = [{ isEmriId: 1, malzemeNo: 7, miktar: 1, fireYuzde: 0 }, { isEmriId: 3, malzemeNo: 8, miktar: 1, fireYuzde: 0 }];
     assert.deepEqual(malzemeIhtiyaci(4, adimlar, bilesenler).map((m) => [m.opNo, m.malzemeNo, m.brut]), [[10, 8, 5], [1010, 7, 30]]);
     assert.deepEqual(malzemeIhtiyaci(4, adimlar.map((a) => ({ ...a, birimCarpani: null })), bilesenler).map((m) => m.brut), [5, 5]);
+  });
+});
+
+describe('1713 (1682 b): kaynak adaysa süre adaydan gelir, eski ana kaynak adaylara geçer', () => {
+  const ana = { makineId: 1, kisiId: null, ayarSuresiDk: '10', birimSureDk: '1.5' };
+  const aday = { makineId: 2, kisiId: null, ayarSuresiDk: '20', birimSureDk: '2.5' };
+  const kisi = { makineId: null, kisiId: 7, ayarSuresiDk: null, birimSureDk: '4' };
+  test('adaya geçişte takas', () => {
+    assert.deepEqual(kaynakSuresi(ana, { makineId: 2, kisiId: null }, [aday, kisi]), {
+      sure: { ayarSuresiDk: '20', birimSureDk: '2.5' }, cikanAday: { makineId: 2, kisiId: null }, girenAday: ana,
+    });
+    assert.deepEqual(kaynakSuresi(ana, { makineId: null, kisiId: 7 }, [aday, kisi])?.sure, { ayarSuresiDk: null, birimSureDk: '4' });
+  });
+  test('aday olmayan ya da aynı kaynakta süre ve adaylar değişmez', () => {
+    assert.equal(kaynakSuresi(ana, { makineId: 9, kisiId: null }, [aday]), null);
+    assert.equal(kaynakSuresi(ana, { makineId: 1, kisiId: null }, [aday]), null);
+    assert.equal(kaynakSuresi(ana, { makineId: null, kisiId: null }, [aday]), null);
+  });
+  test('kaynaksız ana satırın süresi adaya geçmez', () => {
+    assert.equal(kaynakSuresi({ ...ana, makineId: null }, { makineId: 2, kisiId: null }, [aday])?.girenAday, null);
   });
 });
