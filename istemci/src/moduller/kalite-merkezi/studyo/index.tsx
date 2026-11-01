@@ -23,6 +23,16 @@ import './studyo.css';
 // Telefonda üç sütun sekmeyle değişir.
 type MobilGorunum = 'dosya' | 'resim' | 'plan';
 
+// Geniş ekranda yan sütunlar katlanır, resim tam genişliğe çıkar (1738 c): üç sütunda resim balonlanamayacak kadar küçük kalır. Varsayılan
+// kapalıdır; tercih yalnız bu tarayıcıda tutulur, depolama kullanılamıyorsa varsayılan geçerlidir.
+const YAN_PANEL_ANAHTARI = 'kalite-merkezi:studyo-yan-panel';
+function yanPanelOku(): boolean {
+  try { return window.localStorage.getItem(YAN_PANEL_ANAHTARI) === 'acik'; } catch { return false; }
+}
+function yanPanelYaz(acik: boolean): void {
+  try { window.localStorage.setItem(YAN_PANEL_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* depolama yok: yalnız bu açılışta geçerli */ }
+}
+
 function NumuneSatiri({ n }: { n: KmNumune }) {
   const d = NUMUNE_DURUMU[n.durum];
   return (
@@ -44,6 +54,8 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const [secici, seciciYaz] = useState(false);
   const [mobil, mobilYaz] = useState<MobilGorunum>('resim');
   const [cmm, cmmYaz] = useState<'yukle' | 'plan' | null>(null);
+  const [yanAcik, yanAcikYaz] = useState(yanPanelOku);
+  const yanDegistir = () => { const y = !yanAcik; yanAcikYaz(y); yanPanelYaz(y); };
 
   const parcaSec = (no: number) => {
     const y = new URLSearchParams(adres);
@@ -124,14 +136,14 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const bos = malzemeNo === null ? 'Parça seçin' : parca.isPending ? 'Yükleniyor' : parca.isError ? undefined : 'Bu parçaya alınmış resim ya da model yok.';
 
   return (
-    <div className={`km-st km-st-m-${mobil}`}>
+    <div className={`km-st km-st-m-${mobil}${yanAcik ? '' : ' km-st-genis'}`}>
       <div className="km-st-mseg" role="tablist" aria-label="Görünüm">
         {([['dosya', 'Parça'], ['resim', 'Resim'], ['plan', 'Plan']] as const).map(([k, ad]) => (
           <button key={k} type="button" role="tab" aria-selected={mobil === k} className={mobil === k ? 'on' : ''} onClick={() => { mobilYaz(k); }}>{ad}</button>
         ))}
       </div>
 
-      <aside className="km-st-sol" aria-label="Parça ve resimler">
+      <aside id="km-st-sol" className="km-st-sol" aria-label="Parça ve resimler">
         <section className="km-st-kart">
           <span className="km-st-baslik">Parça</span>
           {kart ? <div className="km-st-parca"><b className="km-st-kod">{kart.kod}</b><span>{kart.ad ?? '—'}</span></div>
@@ -176,6 +188,12 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
       </aside>
 
       <section className="km-st-orta" aria-label="Teknik resim">
+        <div className="km-st-orta-ust">
+          <Dugme tur="ikincil" simge="layers" aria-expanded={yanAcik} aria-controls="km-st-sol km-st-sag" onClick={yanDegistir}>
+            {yanAcik ? 'Yan panelleri gizle' : 'Yan panelleri göster'}
+          </Dugme>
+          {!yanAcik && kart ? <span className="km-st-soluk"><b className="km-st-kod">{kart.kod}</b>{resim ? ` · ${resim.ad}` : ''}{emir ? ` · ${emir.no ?? ''}` : ''}</span> : null}
+        </div>
         {taslak !== null ? (
           <div className="km-st-taslak" role="status">
             <Simge ad="edit" boyut="k" />
@@ -191,7 +209,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
         ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
       </section>
 
-      <aside className="km-st-sag" aria-label="Numune planı ve numuneler">
+      <aside id="km-st-sag" className="km-st-sag" aria-label="Numune planı ve numuneler">
         <section className="km-st-kart">
           <span className="km-st-baslik">Numune planı</span>
           {parca.data?.numunePlanlari.length ? parca.data.numunePlanlari.map((p) => (

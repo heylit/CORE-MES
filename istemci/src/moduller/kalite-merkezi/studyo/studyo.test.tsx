@@ -56,6 +56,22 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     expect(await within(sag).findByText('Bu emirde numune isteği yok.')).toBeTruthy();
   });
 
+  it('yan paneller kapalı açılır (1738 c); düğme açar, tercih bu tarayıcıda hatırlanır', async () => {
+    window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
+    kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
+    const dugme = await screen.findByRole('button', { name: 'Yan panelleri göster' });
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    expect(dugme.closest('.km-st')?.classList.contains('km-st-genis')).toBe(true);
+    const ust = dugme.parentElement!;
+    expect(await within(ust).findByText('DNM-07')).toBeTruthy();
+    fireEvent.click(dugme);
+    const kapat = screen.getByRole('button', { name: 'Yan panelleri gizle' });
+    expect(kapat.getAttribute('aria-expanded')).toBe('true');
+    expect(kapat.closest('.km-st')?.classList.contains('km-st-genis')).toBe(false);
+    expect(window.localStorage.getItem('kalite-merkezi:studyo-yan-panel')).toBe('acik');
+    window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
+  });
+
   it('açılışta yazma isteği gitmez', async () => {
     const { fetch } = kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
     await screen.findByRole('button', { name: /Deneme resim/ });
