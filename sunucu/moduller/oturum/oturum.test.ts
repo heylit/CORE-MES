@@ -93,7 +93,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
     }
   }
 
-  const ES_ZAMANLI = 20;
+  // Eşzamanlı deneme sayısı havuzu aşmalıdır; havuz ortamdan geldiği için sayı ondan türetilir.
+  const ES_ZAMANLI = Math.max(20, HAVUZ_BOYUTU + 10);
   const SURUYOR = { durum: 429, kod: 'COK_ISTEK', mesaj: 'Aynı anda başka bir giriş denemesi sürüyor. Birazdan yeniden deneyin.' };
 
   // Bağlantılar sırayla açılırsa eşzamanlı istekler kendiliğinden sıraya girer, kilit ölçülmez.
@@ -712,7 +713,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.equal((await saatliGiris('cihaz', PAROLA, '10.0.0.1')).json().mesaj, beklet(8));
   });
 
-  test('aynı çiftten 20 eşzamanlı deneme beklemeyi atlatamaz ve havuzu doldurmaz: yalnız biri parolaya bakar, başka cihazdan başka kullanıcı girer', async () => {
+  test('aynı çiftten havuzdan fazla eşzamanlı deneme beklemeyi atlatamaz ve havuzu doldurmaz: yalnız biri parolaya bakar, başka cihazdan başka kullanıcı girer', async () => {
     await kisiEkle('yarisan');
     await kisiEkle('yarisan-komsu');
     await hataliSeri('yarisan', 4);
@@ -738,7 +739,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await havuzBosta();
   });
 
-  test('süren deneme varken aynı cihazdan gelen 20 istek beklemeden 429 alır: kişi kaydına ve parolaya bakılmaz, kayıt yazılmaz, olmayan ad ve başka kullanıcı ayırt edilmez; başka cihaz etkilenmez', async () => {
+  test('süren deneme varken aynı cihazdan gelen havuzdan fazla istek beklemeden 429 alır: kişi kaydına ve parolaya bakılmaz, kayıt yazılmaz, olmayan ad ve başka kullanıcı ayırt edilmez; başka cihaz etkilenmez', async () => {
     await kisiEkle('suren');
     await kisiEkle('suren-komsu');
     await havuzuIsit();
