@@ -169,12 +169,14 @@ export async function sifirlamaHazirla(
   const { sahip } = ortam;
   const tablolar = (await sahip.sorgu<{ ad: string }>(
     `SELECT c.relname::text AS ad FROM pg_class c
-      WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind IN ('r', 'p') AND c.relname <> 'goc_kaydi' ORDER BY 1`,
+      WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+        AND c.relname <> 'goc_kaydi' ORDER BY 1`,
   )).map((t) => t.ad);
   const tetikli = (await sahip.sorgu<{ ad: string }>(
     `SELECT DISTINCT c.relname::text AS ad FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-      WHERE NOT t.tgisinternal AND c.relnamespace = current_schema()::regnamespace ORDER BY 1`,
+      WHERE NOT t.tgisinternal AND NOT c.relispartition AND c.relnamespace = current_schema()::regnamespace ORDER BY 1`,
   )).map((t) => t.ad);
+  // Bölüm ayrı tablo sayılmaz: satırları ana tablodan okunur ve yazılır, ana tablodaki tetik kapatma bölümlerine iner.
   // Ebeveyn önce: tohum satırları yabancı anahtar sırasıyla geri yazılır.
   const baglar = await sahip.sorgu<{ cocuk: string; ebeveyn: string }>(
     `SELECT conrelid::regclass::text AS cocuk, confrelid::regclass::text AS ebeveyn FROM pg_constraint

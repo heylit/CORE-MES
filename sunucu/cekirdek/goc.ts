@@ -156,5 +156,16 @@ async function uygula(vt: Veritabani, dosyalar: readonly GocDosyasi[], uygulamaK
     });
     if (uygulandi) uygulananlar.push(dosya.ad);
   }
+  await aylikBolumleriHazirla(vt);
   return uygulananlar;
+}
+
+// Aylık bölümlü defterlerin gelecek aylarını açar (göç 20261108063100). Bölümü uygulama kullanıcısı açamaz; göç koşusu
+// her güncellemede çalıştığı için gelecek aylar burada hazırlanır. Göç olmasa da koşar; işlev yoksa (eski şema) atlanır.
+async function aylikBolumleriHazirla(vt: Veritabani): Promise<void> {
+  await vt.tx(async (db) => {
+    await sirayaGir(db);
+    const islev = await db.tek<{ ad: string | null }>("SELECT to_regproc('cekirdek_aylik_bolumleri_hazirla')::text AS ad");
+    if (islev?.ad != null) await db.sorgu('SELECT cekirdek_aylik_bolumleri_hazirla()');
+  });
 }
