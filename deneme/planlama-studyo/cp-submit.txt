@@ -1,9 +1,0 @@
-  if (tur === 'olay') {
-    const { ev, hata } = olayOku(f); if (hata) return hataGoster([hata]);
-    olayDene(ev); return;
-  }
-  if (tur === 'cp-oneri') {
-    let x; try { x = JSON.parse(f.json.value); } catch (er) { return hataGoster(['JSON okunamadı: ' + er.message]); }
-    if (oneriDene(x, x.kaynak || 'Dış çözücü')) { U.pencere = null; katmanCiz(); }
-    return;
-  }

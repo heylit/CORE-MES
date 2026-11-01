@@ -6,8 +6,8 @@ Kapsam: `POST /nizamiye/pdks/cihaz-hareketi` ve bu belge; kapı mevcut yol. Ayr�
 ## Bağlam
 
 PDKS hareketleri bugün dosyayla elle yükleniyor (243 a, 259 a). Kullanıcı kart okuyucunun veriyi doğrudan TMI'ye yazmasını istedi
-("kart okuyucu cihazı direkt bize yazıcak veriyi"). Cihazın markası ve protokolü bilinmiyor. Taslak ve karşılaştırılan yollar:
-`/mnt/project-files/inceleme/nizamiye/pdks-otomatik-okuma-adr-taslagi.md` (klasör, kart yazılımının veritabanı, cihazdan çekme, cihazın göndermesi).
+("kart okuyucu cihazı direkt bize yazıcak veriyi"). Cihazın markası ve protokolü bilinmiyor. Taslak depo dışındadır; karşılaştırılan yollar:
+klasör, kart yazılımının veritabanı, cihazdan çekme, cihazın göndermesi.
 
 ## Karar
 

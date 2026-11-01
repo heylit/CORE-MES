@@ -23,10 +23,6 @@ yavaştır ve yanlış yazıcıya basılmasına yol açar. Kullanıcı kararı 9
 6. **Her gönderim yalnız eklenen deftere yazılır** (`etiket_merkezi_baski`, `yalniz_ekleme` tetikleyicisi): kişi, yazıcı, şablon, adet,
    sonuç. Hata metni yazıcı adresini taşımaz.
 
-## Kırmızı çizgi metni
-
-Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
-
 ## Sonuçlar
 
 - Atölye ağındaki yazıcıya tek tuşla baskı. Bedeli sunucudan iç ağa yeni bir çıkış yoludur; sınırı modülün testleri tutar (aralık dışı,

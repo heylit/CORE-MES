@@ -1,6 +1,6 @@
 # Kurulum notu
 
-Açık işler, kararlar ve iş kuralı taslakları GitHub kartlarındadır (`gh issue list`); bu dosyada
+Açık işler, kararlar ve iş kuralı taslakları özel takip deposundadır (GitHub kartları arşivdir); bu dosyada
 yalnız kurulum bilgisi durur. Kurallar `CLAUDE.md`, mimari kararlar `belgeler/adr/` altındadır.
 
 ## Makine

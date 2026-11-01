@@ -1,7 +1,7 @@
 # ADR 0015 — Bildirimlerin kurum içi posta sunucusundan e-postayla gönderilmesi
 
-Durum: kabul (kullanıcı kararları 223 a, 19.10.2026; 274 a, 20.10.2026). Kod henüz yok; bildirim merkezinin üçüncü aşamasında gelir. Kurgu
-`/mnt/project-files/arastirma/bildirim/2026-10-19-bildirim-merkezi-kurgusu.md` §8 (depo dışında).
+Durum: kabul (kullanıcı kararları 223 a, 19.10.2026; 274 a, 20.10.2026). Kod yoktur; bildirim merkezinin üçüncü aşamasında gelir. Kurgu
+belgesi depo dışındadır.
 
 ## Bağlam
 
@@ -15,7 +15,7 @@ içi zil ve mesajla ulaşmıyor. Kullanıcı kararı 223 a: bildirimler şirket 
    İnternete çıkan her çağrı, telemetri ve CDN yasağı aynen sürer.
 2. **Posta sunucusuyla tek modül konuşur.** Yalnız `bildirim` modülünün göndericisi (`node:net` ve `node:tls`) bağlanır; başka modül
    `disari.ts` ile yalnız kuyruğa yazar, bağlanamaz.
-3. **Adres yalnız ortam değişkenindedir ve yalnız IP'dir** (`TMIV2_POSTA_SUNUCUSU`, ör. `10.0.0.25:587`). Adres kurum içi bloklarda
+3. **Adres yalnız ortam değişkenindedir ve yalnız IP'dir** (`TMIV2_POSTA_SUNUCUSU`, `<ip>:<kapı>` biçiminde). Adres kurum içi bloklarda
    olmalıdır (ADR 0014'teki liste); değilse sunucu açılmaz ve hata değeri yazmaz. Ad çözülmez.
 4. **Alıcı alanı kısıtlıdır.** E-posta yalnız `TMIV2_POSTA_ALAN_ADI` listesindeki şirket alan adlarına gider; yanlış yazılmış dış adrese
    gönderilmez. Adres İK'daki iş e-postasından alınır; İK kaydı olmayan kişiye e-posta gitmez.
@@ -27,7 +27,7 @@ içi zil ve mesajla ulaşmıyor. Kullanıcı kararı 223 a: bildirimler şirket 
 
 ## Kırmızı çizgi metni
 
-Metin CLAUDE.md'dedir; posta istisnası CLAUDE.md'ye kod geldiğinde girer, o zamana kadar kullanılmaz (eski öneri metni 01.11.2026'da kaldırıldı, 1495 a).
+Posta istisnası CLAUDE.md'ye kod geldiğinde girer; o zamana kadar kullanılmaz.
 
 ## Sonuçlar
 

@@ -1,6 +1,8 @@
 # ADR 0012 — PIN ile giriş
 
 Durum: kabul edildi (11.10.2026, kart #484). ADR 0002'nin 3. maddesini değiştirir: herkes parolayla girmez.
+Karar 2'deki "hesap kilidi yine yoktur" ADR 0003 "Ek: hesap ve cihaz kilidi" ile, Sonuçlar'daki "kendi PIN'ini değiştirme yoktur"
+"Ek: kendi PIN'i ve kart + PIN girişi" ile değişti (1534 a, 01.11.2026).
 
 ## Bağlam
 
@@ -31,3 +33,15 @@ var olan satırlara dokunulmaz (3a); PIN'i yönetici geçici olarak verir, kişi
   tarayıcıda hatırlanır.
 - Kişinin kendi PIN'ini isteğe bağlı değiştirmesi bu kararda yoktur: unutulan ya da değişecek PIN için yönetici yenisini verir.
 - Denetim kaydı `pin`, `geciciPin`, `yeniPin` alanlarını var olan kuralla maskeler.
+
+## Ek: kendi PIN'i ve kart + PIN girişi (kart + PIN 1331 a; ADR'ye yazımı 1534 a, 01.11.2026)
+
+- **Kendi PIN'ini değiştirme.** Girişi olan, PIN'i bulunan ve bayraklı olmayan kişi `POST /hesabim/pin-degistir` (`'oturum'`) ile eski
+  PIN'ini vererek yenisini yazar; yeni PIN karar 2'nin kuralına uyar ve eskisiyle aynı olamaz. Unutulan PIN için yöneticinin geçici PIN
+  vermesi (karar 3) sürer.
+- **Kart + PIN girişi (1331 a).** `POST /oturum/kart-giris` (`'acik'`) yalnız yöneticinin ortak cihaz olarak kaydettiği cihazda (istasyon,
+  ADR 0003 cihaz profili) açıktır; başka cihazda 403 döner ve hiçbir şey yazılmaz. Kişi kendi altı haneli PIN'iyle girer; bekleme, hesap
+  kilidi ve cihaz sınırı parola ve PIN girişiyle ortak sayaçtır. Kayıtsız kart aynı ileti ve aynı süreyle reddedilir. Parolalı yönetici ve
+  ilk PIN'ini belirlememiş kişi kartla giremez.
+- Kod: `sunucu/moduller/oturum/uclar.ts` (`/hesabim/pin-degistir`, `/oturum/kart-giris`), `sunucu/moduller/kisiler/servis.ts` `kendiPininiDegistir`.
+- DOĞRULANMADI: kendi PIN değiştirmenin hangi kullanıcı kararıyla geldiği (özel takip deposunda bulunamadı); davranış koddan yazıldı.

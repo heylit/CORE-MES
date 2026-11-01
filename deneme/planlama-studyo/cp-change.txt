@@ -1,8 +1,0 @@
-  if (c === 'hs-sure') { U.hsSure = +el.value; return; }
-  if (c === 'cp-dosya') { const fl = el.files && el.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = () => { const t = el.form && el.form.json; if (t) t.value = String(rd.result || ''); }; rd.readAsText(fl); return; }
-  if (c === 'ekip-ayar') { if (!yetkili('plan.yaz')) return; S.ekipAyar = { ...(S.ekipAyar || {}), [el.dataset.v]: el.checked }; iz('Ekip ayarı', `${el.dataset.v}: ${el.checked ? 'açık' : 'kapalı'}`); kaydet(); render(); return; }
-  if (c === 'k-grup') { U.kGrup = el.value; render(); return; }
-  if (c === 'k-gec') { U.yalnizGec = el.checked; render(); return; }
-  if (c === 'k-tasi') { if (el.value) kanbanTasi(el.dataset.v, el.value, null, true); return; }
-  if (c === 'fb-iz') { FB.iz = el.value; FB.sec = null; fbDetayYenile(); fbKamera('genel'); return; }
-  if (c === 'fb-tasi') { if (el.value) kanbanTasi(el.dataset.v, el.value, null, true); return; }

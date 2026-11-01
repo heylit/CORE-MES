@@ -1,7 +1,7 @@
 # ADR 0004 — İstek sınırı, veritabanı ve sağlık kararları
 
 Durum: kabul edildi (05-06.10.2026). Kullanıcının tek tek onayladığı çekirdek kararlarının kaydıdır;
-önce devir notunda ve commit mesajlarında duruyordu. Karar bekleyenler GitHub'da `tur: karar` kartlarındadır.
+önce devir notunda ve commit mesajlarında duruyordu. Kararlar özel takip deposundadır.
 
 ## Karar
 
@@ -48,5 +48,4 @@ Durum: kabul edildi (05-06.10.2026). Kullanıcının tek tek onayladığı çeki
 
 ## Açık konular
 
-- Eşzamanlı göç koşusunun süreli beklemesi (#27),
-  ondalık metne uzunluk sınırı (#26), çerezsiz `GET /oturum`'un veritabanına gitmemesi (#28).
+- Ondalık metne uzunluk sınırı (#26). Çerezsiz `GET /oturum` karar 2'de, eşzamanlı göç kilidi `sunucu/cekirdek/goc.ts`'tedir.

@@ -28,8 +28,8 @@ yazılıyor; önceki depodan kod, şema, test ve veri taşınmıyor.
    verir. Önceki sistemin veritabanı adı reddedilir.
 8. **Tek tasarım sistemi.** Arkon değişkenleri; ekran renk ve ölçü yazmaz. Tek kabuk, üç yerleşim;
    her ekran telefon, tablet ve bilgisayarda tam işlevlidir.
-9. **Paralel çalışma dosya ayrıklığıyla.** Bir oturum bir modül klasörü. İş kaydı, karar ve göç iş
-   başına ayrı dosyadır; üretilen dizinler depoya girmez.
+9. **Paralel çalışma dosya ayrıklığıyla.** Bir oturum bir modül klasörü. Göç iş başına ayrı dosyadır;
+   iş kaydı ve kararlar bu depoda değil, özel takip deposundadır. Üretilen dizinler depoya girmez.
 
 ## Sonuçlar
 
@@ -40,6 +40,5 @@ yazılıyor; önceki depodan kod, şema, test ve veri taşınmıyor.
 
 ## Açık konular
 
-- Veritabanı rolleri (uygulama, göç, salt-okur) henüz ayrılmadı; şimdilik tek kullanıcı.
-- Oturum ve kullanıcı modülü, denetim kaydı ve canlı güncelleme (SSE) sonraki adımlar.
-- Üretim derlemesinin sunucudan servisi ve yayın betiği henüz yok.
+- Canlı güncelleme (SSE) yoktur; gelirse ayrı ADR ister.
+- Veritabanı rolleri ADR 0005'te, oturum ve denetim ADR 0002 ve 0003'te; kurulum paketi ve güncelleme `kurulum/guncelleme.md`'de.

@@ -45,7 +45,7 @@ Kırmızı çizgiler ve çekirdek korumalarıdır; borca yazılarak geçilmez. A
   tarayıcıda tutulan veri ve yalnız ekranda kalan kural borçtur.
 - İş kuralların öneriyle ilerler: ön pakette tek cümlelik, sınanabilir maddelerle yaz; onay beklemeden yazarsın, kullanıcı itiraz ettiğini değiştirir.
   Depodaki onaylı kararla çelişen kuralın geçerlidir; `FARK.md`'ye yaz, kullanıcıya listede bildirilir.
-  Eski sistem kuralları (`kurulum/eski-kurallar/`) öneriyle ilerlemez: kullanıcı açıkça "kalsın" demeden onaylı değildir; aldıysan ön pakette işaretle.
+  Eski sistem kuralları (özel takip deposunda) öneriyle ilerlemez: kullanıcı açıkça "kalsın" demeden onaylı değildir; aldıysan ön pakette işaretle.
 - Bir teslim tek modüldür; sunucu ve istemci tarafı birlikte gelir. Dosya ve klasör adları yalnız `[A-Za-z0-9._-]` taşır.
 
 ## Teslim biçimi

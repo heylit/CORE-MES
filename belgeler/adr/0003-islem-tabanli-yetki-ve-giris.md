@@ -1,7 +1,8 @@
 # ADR 0003 — İşlem tabanlı yetki ve giriş beklemesi
 
 Durum: kabul edildi (06.10.2026). ADR 0002'nin 2., 7. ve 8. maddelerini ve 4. maddesindeki kilit
-kuralını değiştirir. 4. maddenin okuma uçları için hükmünü ADR 0007 değiştirir. 8. maddedeki saklama süresini "Ek: giriş denemesi saklama" değiştirir.
+kuralını değiştirir. 4. maddenin okuma uçları için hükmünü ADR 0007 değiştirir. 8. maddedeki saklama süresini "Ek: giriş denemesi saklama" değiştirir. 7. maddedeki "hesap kilidi yoktur" hükmünü
+"Ek: hesap ve cihaz kilidi" değiştirir (1534 a, 01.11.2026; karar 14.10.2026).
 
 ## Bağlam
 
@@ -90,3 +91,19 @@ reddedilir); saklama süresi korumadan uzun kaldığı sürece temizlik korumaya
 
 Sonuç: giriş denemesi kullanıcı adı ve cihaz adresi taşır; bu kişisel veri bir yıl durur (kullanıcı kararı). Oturumdaki cihaz
 adresinin 30 gün sonra boşaltılması (386 a, 398 a) ayrı kuraldır, değişmez.
+
+## Ek: hesap ve cihaz kilidi (karar 14.10.2026 ve soru 66; ADR'ye yazımı 1534 a, 01.11.2026)
+
+7. maddedeki artan bekleme kullanıcı adı ve IP çiftine göredir; farklı cihazlardan dağıtık deneme ve ortak tabletten adları sırayla deneme
+onu aşar. Bu yüzden beklemeye iki sınır eklendi:
+
+- **Hesap kilidi.** Bir kullanıcı adına bütün cihazlardan, son başarılı girişten ve son kilidin başından beri art arda 10 hatalı deneme adı
+  15 dakika kilitler. Ad yabancı anahtar değildir: olmayan ad da kilitlenir, kilit hesabın varlığını ele vermez. Kilitler
+  `GET /oturum/kilitler` ile görülür, `POST /oturum/kilitler/:id/ac` ile açılır (`kisiler.rol-yonet`).
+- **Cihaz sınırı.** Bir cihazdan bütün adlara 15 dakikalık pencerede 20 hatalı deneme o cihazı pencerenin en eski denemesi düşene kadar
+  girişe kapatır. Başarılı giriş sayacı sıfırlamaz. Sayılar varsayımdır.
+- Sınırlar parola, PIN ve kart + PIN girişinde ortaktır (ADR 0012 eki).
+- Kod: `sunucu/moduller/oturum/kurallar.ts` (`HESAP_KILIDI_ESIGI`, `CIHAZ_SINIRI`), göç `20261014220800_oturum_hesap_kilidi.sql`.
+
+Sonuç: hesap kilidi, adı bilen herkese o kişiyi 15 dakika dışarıda bırakma imkânı verir (Bağlam'da kilidin kaldırılma gerekçesi); kilit
+açma yetkisi ve dağıtık denemeye karşı koruma bunun karşılığıdır.

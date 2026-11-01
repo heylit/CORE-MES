@@ -28,7 +28,7 @@ kurması aynı kotayı, temizliği ve yetki açığını çoğaltırdı.
 
 - Akış transaction dışında okunduğu için yalnız değişmeyen içerik ikili cevapla verilir. Akış sırasında dosya silinirse
   (yalnız bağsız ve süresi dolmuş dosya) bağlantı kesilir; istemci yarım dosya almaz.
-- Temizlik zamanlanmış iş gelene kadar yüklemede fırsatla koşar (UYUM-BORCU).
+- Temizlik `dosya-temizlik` zamanlanmış işidir, saatte bir koşar (`sunucu/moduller/dosya/isler.ts`, ADR 0010).
 - Sınırlar ortam değişkeni değil sabittir: modüller ayarı almaz; değiştirmek kod ve karar ister.
 - Malzemeler (#300), kalibrasyon (#301) ve Arkon (#302) kendi kartlarıyla bağlanır; Arkon'un eski tabloları ayrı göçle düşer (DS7).
 
