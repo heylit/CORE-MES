@@ -45,3 +45,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'siparisler-yaklasan-termin', sira: 150, bolum: 'ozet', islem: 'siparisler.oku', ekran: YaklasanTermin },
   { anahtar: 'siparisler-aylik', sira: 150, bolum: 'grafik', islem: 'siparisler.yaz', ekran: AylikSiparis },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

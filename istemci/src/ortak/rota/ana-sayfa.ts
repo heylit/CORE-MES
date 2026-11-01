@@ -91,6 +91,8 @@ export interface AnaSayfaKaynagi {
   veya?: readonly Islem[];
   // İş kaynağı boş döndüğünde "yolunda" satırına düşen kısa metin; verilmezse boş kaynak hiç görünmez.
   yolunda?: string;
+  // Kişinin kendi işi (operatörün günü, kuyruğu): yalnız rol listesinde adıyla anılınca görünür; tam görünümde (yönetici) çizilmez.
+  kisisel?: true;
   kaynak: ComponentType;
 }
 
@@ -122,6 +124,11 @@ export function kaynaklariTopla(dosyalar: Record<string, unknown>, kartlar: read
     }
   }
   return toplam;
+}
+
+// Rol listesi yoksa (tam görünüm) kişisel kaynaklar düşer; liste varsa yalnız listedekiler kalır.
+export function rolKaynaklari(kaynaklar: readonly AnaSayfaKaynagi[], izinli: ReadonlySet<string> | null): readonly AnaSayfaKaynagi[] {
+  return izinli === null ? kaynaklar.filter((k) => k.kisisel !== true) : kaynaklar.filter((k) => izinli.has(k.anahtar));
 }
 
 export function gorunenKaynaklar(kaynaklar: readonly AnaSayfaKaynagi[], islemler: readonly string[]): AnaSayfaKaynagi[] {

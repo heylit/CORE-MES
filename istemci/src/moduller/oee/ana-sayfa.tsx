@@ -49,3 +49,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'oee-tesis', sira: 50, bolum: 'ozet', islem: 'oee.oku', ekran: TesisOee },
   { anahtar: 'oee-is-merkezi', sira: 190, bolum: 'grafik', islem: 'oee.oku', ekran: IsMerkeziOee },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

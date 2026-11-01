@@ -15,3 +15,5 @@ function VadesiGecen() {
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'kalibrasyon-vadesi-gecen', sira: 300, bolum: 'uyari', islem: 'sayfa.kalibrasyon', veya: ['kalibrasyon.oku'], ekran: VadesiGecen },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

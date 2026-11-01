@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ROL_GORUNUMLERI } from '#paylasilan/rol-gorunumleri.ts';
 import type { IsKalemi } from '#paylasilan/sozlesme/pano.ts';
 import {
-  anaSayfaKaynaklari, anaSayfaKartlari, bolumlereAyir, gorunenKaynaklar, gorunenKartlar, islerSirala, kaynaklariTopla, kartlariTopla, rolKartlari,
+  anaSayfaKaynaklari, anaSayfaKartlari, bolumlereAyir, gorunenKaynaklar, gorunenKartlar, islerSirala, kaynaklariTopla, kartlariTopla, rolKaynaklari, rolKartlari,
   type AnaSayfaKaynagi, type AnaSayfaKarti,
 } from './ana-sayfa.ts';
 
@@ -87,8 +87,12 @@ describe('rolKartlari', () => {
   });
 
   it('rol listelerindeki her kart anahtarı modüllerin bildirdiği bir karttır: adı değişen kart sessizce kaybolmasın', () => {
-    const var_ = new Set([...anaSayfaKartlari, ...anaSayfaKaynaklari].map((k) => k.anahtar));
-    const eksik = Object.entries(ROL_GORUNUMLERI).flatMap(([rol, g]) => g.kartlar.filter((a) => !var_.has(a)).map((a) => `${rol}: ${a}`));
+    const kartlar = new Set(anaSayfaKartlari.map((k) => k.anahtar));
+    const kaynaklar = new Set(anaSayfaKaynaklari.map((k) => k.anahtar));
+    const eksik = Object.entries(ROL_GORUNUMLERI).flatMap(([rol, g]) => [
+      ...g.kartlar.filter((a) => !kartlar.has(a)).map((a) => `${rol}: kart ${a}`),
+      ...(g.kaynaklar ?? []).filter((a) => !kaynaklar.has(a)).map((a) => `${rol}: kaynak ${a}`),
+    ]);
     expect(eksik).toEqual([]);
   });
 });
@@ -119,6 +123,14 @@ describe('gorunenKaynaklar', () => {
     const k = [kaynak('b', { sira: 20 }), kaynak('a', { sira: 10, islem: 'satin-alma.talep-ac' })];
     expect(gorunenKaynaklar(k, ['satin-alma.talep-ac']).map((x) => x.anahtar)).toEqual(['a', 'b']);
     expect(gorunenKaynaklar(k, []).map((x) => x.anahtar)).toEqual(['b']);
+  });
+});
+
+describe('rolKaynaklari', () => {
+  const k = [kaynak('ortak'), kaynak('gunum', { kisisel: true })];
+  it('tam görünümde kişisel kaynak düşer; rol listesinde adıyla anılan kişisel kaynak kalır', () => {
+    expect(rolKaynaklari(k, null).map((x) => x.anahtar)).toEqual(['ortak']);
+    expect(rolKaynaklari(k, new Set(['gunum'])).map((x) => x.anahtar)).toEqual(['gunum']);
   });
 });
 

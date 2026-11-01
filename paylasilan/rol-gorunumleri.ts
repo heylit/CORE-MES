@@ -8,6 +8,9 @@ export interface RolGorunumu {
   sayfalar: readonly `/${string}`[];
   // Ana sayfa kartlarının anahtarları; sıra kartın kendi sırasıdır.
   kartlar: readonly string[];
+  // Rol panosu kaynakları (kart 1585). Dolu liste rolü yeni düzene geçirir ve eski iş, uyarı, özet kartlarını kaldırır (1594 a):
+  // rol yalnız işinin bütün kaynakları hazır olunca listeye girer (1590 a dalgası). Verilmezse boş: rol bugünkü kart panosunda kalır.
+  kaynaklar?: readonly string[];
 }
 
 const KISISEL = '/ik-islemlerim';
@@ -16,6 +19,7 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
   operator: {
     sayfalar: ['/uretim-terminali', '/kuyruk', KISISEL, '/idari-isler'],
     kartlar: ['arkon-ozetim', 'uretim-emirleri-kuyrugum', 'vardiya-vardiyam', 'istasyonlar-duran-makine'],
+    kaynaklar: ['uretim-emirleri-kuyrugum-is', 'istasyonlar-duran-is', 'arkon-gunum-olcu'],
   },
   vardiya_sorumlusu: {
     sayfalar: ['/uretim-terminali', '/kuyruk', '/arkon', '/vardiya', '/istasyonlar', '/cnc-kurulum', KISISEL],
@@ -23,6 +27,7 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
       'arkon-ozetim', 'uretim-emirleri-kuyrugum', 'vardiya-secilmeyen', 'vardiya-bugun', 'vardiya-planli-durus',
       'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'istasyonlar-personel', 'oee-tesis',
     ],
+    kaynaklar: ['uretim-emirleri-kuyrugum-is', 'istasyonlar-duran-is', 'vardiya-vardiyasiz-is', 'istasyonlar-makine-olcu', 'arkon-gunum-olcu'],
   },
   planlama_proje: {
     sayfalar: ['/plan', '/recete-rota', '/uretim-emirleri', '/kuyruk', '/arkon', '/siparisler', '/malzemeler', KISISEL],
@@ -117,9 +122,10 @@ export interface EtkinGorunum {
   // Menü sırası: rollerin listeleri sırayla, tekrarsız.
   sayfaSirasi: readonly string[];
   kartlar: ReadonlySet<string> | null;
+  kaynaklar: ReadonlySet<string> | null;
 }
 
-export const TAM_GORUNUM: EtkinGorunum = { sayfalar: null, sayfaSirasi: [], kartlar: null };
+export const TAM_GORUNUM: EtkinGorunum = { sayfalar: null, sayfaSirasi: [], kartlar: null, kaynaklar: null };
 
 // Birden çok rol: listeler birleşir. Rol bilgisi yoksa (eski oturum, akıllı saat belirteci) ya da rollerden biri listesizse tam görünüm.
 export function etkinGorunum(roller: readonly string[] | undefined): EtkinGorunum {
@@ -132,6 +138,8 @@ export function etkinGorunum(roller: readonly string[] | undefined): EtkinGorunu
     sayfalar: new Set(sayfaSirasi),
     sayfaSirasi,
     kartlar: tumKart ? null : new Set((gorunumler as RolGorunumu[]).flatMap((g) => g.kartlar)),
+    // Kart süzgeci olmayan rol (müdür) de kaynağını listeden alır: yeni düzene dalgasıyla geçer.
+    kaynaklar: new Set((gorunumler as RolGorunumu[]).flatMap((g) => g.kaynaklar ?? [])),
   };
 }
 
