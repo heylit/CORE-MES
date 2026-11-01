@@ -1844,6 +1844,10 @@ export async function kayitEkle(
   let eklenen = 0;
   const yazilanlar: number[] = [];
   const yazilanCidler = new Set<string>();
+  // Yazılan kayıtların istasyonları iletiyle gider ki terminal yalnız kendi istasyonunun kaydında yeniden okusun (1747);
+  // istasyonsuz kayıt varsa liste gönderilmez, herkes okur.
+  const makineler = new Set<string>();
+  let makinesiz = false;
   const ekler: EkToplayici = new Map();
   const simdi = Date.now();
   const tumSutunlar = satirlar.map((s) => kayitSutunlari(s, simdi));
@@ -1884,6 +1888,8 @@ export async function kayitEkle(
     const kayitId = await sorgular.kayitEkle(db, tur, sutunlar, govde, kullanici.id, await kimlikCoz(sutunlar));
     if (kayitId === null) continue;
     eklenen++;
+    if (sutunlar.makine === null) makinesiz = true;
+    else makineler.add(sutunlar.makine);
     yazilanlar.push(kayitId);
     yazilanCidler.add(sutunlar.cid);
     const cagri = tur === 'calls' ? cagriBildirimi(govde) : null;
@@ -1896,7 +1902,7 @@ export async function kayitEkle(
     }
     if (karar !== undefined) await tmiyeKuyrugaAl(db, kullanici, kayitId, karar, kararinEmri(karar), okunamadi(karar), gunluk, onbellek);
   }
-  if (eklenen > 0) await sorgular.iletiEkle(db, kaynak, { type: '$log', kind: tur });
+  if (eklenen > 0) await sorgular.iletiEkle(db, kaynak, { type: '$log', kind: tur, ...(makinesiz ? {} : { machines: [...makineler].sort() }) });
   // Art arda TMI komutları kişi kapsamını ve ad tablolarını bir kez okusun (uretim-emirleri komut önbelleği); Arkon bu kapsamda yalnız kendi tablolarına yazar.
   const buIstek = new Set(yazilanlar);
   await komutOnbellegiyle(db, async () => { for (const id of [...kilitli].sort((a, b) => a - b)) await korumaliIsle(db, id, ekler, onbellek, buIstek); });
