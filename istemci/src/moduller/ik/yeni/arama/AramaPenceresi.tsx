@@ -2,10 +2,15 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { Pencere } from '../../../../ortak/arayuz/index.ts';
 import { yardimAra } from '../analiz/kurallar.ts';
 import { IK_YARDIM } from '../analiz/yardim.ts';
+import { DonemPenceresi } from '../bordro/DonemPencereleri.tsx';
+import { donemTarihte } from '../bordro/motor-yuzu.ts';
+import { TopluZam } from '../bordro/TopluZam.tsx';
 import type { IkEkranOzellikleri, IkGorunum } from '../gorunumler.ts';
+import { AdayFormu, GorusmeFormu } from '../isealim/formlar.tsx';
 import { IzinFormu } from '../izin-devam/index.tsx';
 import { IzinTalebi } from '../islemlerim/izin-talebi.tsx';
 import { kisininIzinleri } from '../islemlerim/kurallar.ts';
+import { IceAktarma } from '../personel/IceAktarma.tsx';
 import { PersonelFormu } from '../personel/index.tsx';
 import { ekipKimlikleri } from '../rol.ts';
 import { ikAra, type AramaIslemi, type AramaSayfasi, type AramaSonucu } from './kurallar.ts';
@@ -22,7 +27,8 @@ interface Ozellikler {
 
 const kilavuzda = (q: string) => yardimAra(IK_YARDIM, q).map((s) => ({ konu: s.konu.kimlik, baslik: s.konu.baslik, ozet: s.konu.ozet }));
 
-// Bugünkü ekranın "Ara" penceresi: yazdıkça sonuç, ↑ ↓ ile gezinme, Enter ile açma. Formu açan işlemler pencere kapanınca açılır.
+// Bugünkü ekranın "Ara" penceresi: yazdıkça sonuç, ↑ ↓ ile gezinme, Enter ile açma. Formu açan işlemler pencere kapanınca açılır;
+// sayfası olan form (toplu zam, personel aktarma) önce o sayfaya geçer, bugünkü ekran gibi.
 export function AramaPenceresi({ acik, kapat, o, sayfalar, gun, kilavuzAc }: Ozellikler) {
   const [q, qYaz] = useState('');
   const [secili, seciliYaz] = useState(0);
@@ -35,9 +41,12 @@ export function AramaPenceresi({ acik, kapat, o, sayfalar, gun, kilavuzAc }: Oze
     rol, sayfalar, gun,
     personeller: depo.tur('emp'), adaylar: depo.tur('cand'), departmanlar: depo.tur('dept'), pozisyonlar: depo.tur('job'),
     ekip: rol === 'yonetici' && ben ? ekipKimlikleri(depo.tur('emp'), depo.tur('dept'), ben.id) : new Set<string>(),
-    yazabilir: { personel: yetki.personelYaz, izin: yetki.izinYaz, izinTalep: yetki.izinTalep && ben !== null },
+    yazabilir: {
+      personel: yetki.personelYaz, izin: yetki.izinYaz, izinTalep: yetki.izinTalep && ben !== null, iseAlim: yetki.iseAlimYaz,
+      zam: yetki.ucretYaz && yetki.personelYaz && o.motor !== null, ayar: yetki.ayarYaz && o.motor !== null,
+    },
     kilavuz: kilavuzda,
-  }, q), [depo, rol, ben, yetki, sayfalar, gun, q]);
+  }, q), [depo, rol, ben, yetki, o.motor, sayfalar, gun, q]);
 
   useEffect(() => { if (!acik) { qYaz(''); seciliYaz(0); } }, [acik]);
   useEffect(() => { liste.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' }); }, [secili]);
@@ -48,8 +57,13 @@ export function AramaPenceresi({ acik, kapat, o, sayfalar, gun, kilavuzAc }: Oze
     const h = s.hedef;
     if (h.tur === 'gorunum') o.git(h.gorunum as IkGorunum, h.kimlik);
     else if (h.tur === 'kilavuz') kilavuzAc(h.konu, q);
-    else islemYaz(h.islem);
+    else {
+      if (h.islem === 'toplu-zam') o.git('bordro');
+      if (h.islem === 'personel-aktar') o.git('personel');
+      islemYaz(h.islem);
+    }
   };
+  const bitti = () => { islemYaz(null); };
   const tus = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); seciliYaz((i) => Math.min(sonuclar.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); seciliYaz((i) => Math.max(0, i - 1)); }
@@ -84,12 +98,21 @@ export function AramaPenceresi({ acik, kapat, o, sayfalar, gun, kilavuzAc }: Oze
         </div>
       </Pencere>
       {islem === 'personel-ekle' && (
-        <PersonelFormu acik onDolu={{}} kapat={() => { islemYaz(null); }} kaydedildi={(p) => { islemYaz(null); o.git('calisan', p.id); }} />
+        <PersonelFormu acik onDolu={{}} kapat={bitti} kaydedildi={(p) => { islemYaz(null); o.git('calisan', p.id); }} />
       )}
-      {islem === 'izin-gir' && <IzinFormu o={o} acik kayit={null} onDolu={{}} kapat={() => { islemYaz(null); }} />}
+      {islem === 'izin-gir' && <IzinFormu o={o} acik kayit={null} onDolu={{}} kapat={bitti} />}
       {islem === 'izin-talep' && ben && (
-        <IzinTalebi acik kapat={() => { islemYaz(null); }} personel={ben} kendiIzinleri={kisininIzinleri(depo.tur('leave'), ben.id)} motor={o.motor} />
+        <IzinTalebi acik kapat={bitti} personel={ben} kendiIzinleri={kisininIzinleri(depo.tur('leave'), ben.id)} motor={o.motor} />
       )}
+      {islem === 'gorusme-planla' && <GorusmeFormu o={o} kayit={null} kapat={bitti} />}
+      {islem === 'aday-ekle' && (
+        <AdayFormu o={o} kayit={null} bolumler={['Aday', 'Profil']} kapat={bitti} kaydedildi={(a) => { islemYaz(null); o.git('aday', a.id); }} />
+      )}
+      {islem === 'toplu-zam' && o.motor && <TopluZam o={o} m={o.motor} bugun={gun} kapat={bitti} />}
+      {islem === 'yeni-donem' && o.motor && (
+        <DonemPenceresi o={o} m={o.motor} secili={donemTarihte(o.motor, gun)} kapat={bitti} olustu={(id) => { o.git('ayarlar', id); }} />
+      )}
+      <IceAktarma acik={islem === 'personel-aktar'} kapat={bitti} depo={depo} />
     </>
   );
 }

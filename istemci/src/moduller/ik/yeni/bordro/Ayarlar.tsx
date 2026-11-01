@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
@@ -58,10 +58,16 @@ function AyarFormu({ o, m }: { o: IkEkranOzellikleri; m: IkMotoru }) {
   const bugun = tesisGunu(Date.now());
   const liste = donemler(m);
   const kimlikDonem = liste.find((d) => d.id === o.kimlik) ?? null;
-  const [bolum, bolumYaz] = useState<AyarBolumu>(kimlikDonem ? 'ucret' : 'genel');
+  // Adresin kimlik parçası dönem ya da bölüm olabilir (Kılavuzdaki "İlgili sayfayı aç" bölümü seçer).
+  const kimlikBolum = AYAR_BOLUMLERI.find(([k]) => k === o.kimlik)?.[0] ?? null;
+  const [bolum, bolumYaz] = useState<AyarBolumu>(kimlikBolum ?? (kimlikDonem ? 'ucret' : 'genel'));
+  useEffect(() => { if (kimlikBolum) bolumYaz(kimlikBolum); }, [kimlikBolum]);
   const [donemId, donemIdYaz] = useState(kimlikDonem?.id ?? donemTarihte(m, bugun).id);
   const [taslak, taslakYaz] = useState<Readonly<Record<string, unknown>>>({});
   const [pencere, pencereYaz] = useState<'yeni' | 'yonet' | 'hesap' | null>(null);
+  // Aramadaki "Yeni parametre dönemi" oluşan dönemin adresine gelir; sayfa açıkken de o dönem seçilir.
+  const kimlikDonemId = kimlikDonem?.id ?? null;
+  useEffect(() => { if (kimlikDonemId) { donemIdYaz(kimlikDonemId); taslakYaz({}); bolumYaz((b) => (DONEMLI.includes(b) ? b : 'ucret')); } }, [kimlikDonemId]);
   const donem: Donem = liste.find((d) => d.id === donemId) ?? donemTarihte(m, bugun);
   const durum = donemDurumu(m, donem);
   const donemli = DONEMLI.includes(bolum);

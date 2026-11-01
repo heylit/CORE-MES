@@ -16,7 +16,7 @@ const GIRDI: AramaGirdisi = {
   departmanlar: [{ id: 'dept_u', kind: 'dept', ad: 'Üretim' } as Departman],
   pozisyonlar: [{ id: 'job_1', kind: 'job', baslik: 'CNC operatörü', durum: 'Açık' } as Pozisyon],
   ekip: new Set(),
-  yazabilir: { personel: true, izin: true, izinTalep: false },
+  yazabilir: { personel: true, izin: true, izinTalep: false, iseAlim: true, zam: true, ayar: true },
   gun: '2026-11-01',
   kilavuz: (q) => (q.includes('kıdem') ? [{ konu: 'kidem-ihbar', baslik: 'Kıdem ve ihbar', ozet: 'Hesap' }] : []),
 };
@@ -44,12 +44,26 @@ describe('İK\'da ara', () => {
   });
 
   it('reddedilen: yazamayan kişiye form açan işlem çıkmaz', () => {
-    const s = ikAra({ ...GIRDI, yazabilir: { personel: false, izin: false, izinTalep: false } }, 'ekle');
+    const s = ikAra({ ...GIRDI, yazabilir: { personel: false, izin: false, izinTalep: false, iseAlim: false, zam: false, ayar: false } }, 'ekle');
     expect(s.map((x) => x.baslik)).toEqual(['Aday ekle']);
+    expect(s[0]?.hedef).toEqual({ tur: 'gorunum', gorunum: 'isealim' });
+  });
+
+  it('yazabilene beş işlem formu doğrudan açar (1617 a); yazamayana ilgili sayfayı açar', () => {
+    const hedef = (g: AramaGirdisi, baslik: string) => ikAra(g, baslik).find((x) => x.baslik === baslik)?.hedef;
+    const beklenen: [string, string, string][] = [
+      ['Görüşme planla', 'gorusme-planla', 'isealim'], ['Aday ekle', 'aday-ekle', 'isealim'],
+      ['Toplu ücret güncelle (zam)', 'toplu-zam', 'bordro'], ['Yeni parametre dönemi', 'yeni-donem', 'ayarlar'],
+      ['Personel aktar (Excel / CSV)', 'personel-aktar', 'personel'],
+    ];
+    for (const [baslik, islem, sayfa] of beklenen) {
+      expect(hedef(GIRDI, baslik)).toEqual({ tur: 'islem', islem });
+      expect(hedef({ ...GIRDI, yazabilir: { personel: false, izin: false, izinTalep: false, iseAlim: false, zam: false, ayar: false } }, baslik)).toEqual({ tur: 'gorunum', gorunum: sayfa });
+    }
   });
 
   it('çalışan yalnız sayfalarını ve izin talebini görür; kayıt aranmaz', () => {
-    const g: AramaGirdisi = { ...GIRDI, rol: 'calisan', sayfalar: [{ gorunum: 'izinlerim', baslik: 'İzinlerim' }], yazabilir: { personel: false, izin: false, izinTalep: true } };
+    const g: AramaGirdisi = { ...GIRDI, rol: 'calisan', sayfalar: [{ gorunum: 'izinlerim', baslik: 'İzinlerim' }], yazabilir: { personel: false, izin: false, izinTalep: true, iseAlim: false, zam: false, ayar: false } };
     expect(ikAra(g, 'izin').map((x) => x.baslik)).toEqual(['İzin talep et', 'İzinlerim']);
     expect(ikAra(g, 'mehmet')).toEqual([]);
   });

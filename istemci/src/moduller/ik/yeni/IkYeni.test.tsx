@@ -138,14 +138,70 @@ describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
     expect(islemler).toEqual(['İşlemAday ekle']);
   });
 
-  it('Yardım ve F1 kılavuzu açar; görünümün konusu başta gelir', async () => {
+  it('Yardım ve F1 kılavuzu içeriğin yanında panel olarak açar (1617 a); sayfa kullanılır kalır', async () => {
     ikAc('/ik/yapilacaklar');
     fireEvent.click(await screen.findByRole('button', { name: /Yardım/ }));
-    const kilavuz = await screen.findByRole('dialog', { name: 'Kullanım kılavuzu' });
+    const kilavuz = await screen.findByRole('complementary', { name: 'Kullanım kılavuzu' });
     expect(within(kilavuz).getByText('Bu sayfa hakkında')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Yapılacaklar', selected: true })).toBeTruthy();
     fireEvent.click(within(kilavuz).getByRole('button', { name: 'Kılavuzu kapat' }));
-    expect(screen.queryByRole('dialog', { name: 'Kullanım kılavuzu' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'Kullanım kılavuzu' })).toBeNull();
     fireEvent.keyDown(window, { key: 'F1' });
-    expect(await screen.findByRole('dialog', { name: 'Kullanım kılavuzu' })).toBeTruthy();
+    expect(await screen.findByRole('complementary', { name: 'Kullanım kılavuzu' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Kılavuzu kapat' }), { key: 'Escape' });
+    expect(screen.queryByRole('complementary', { name: 'Kullanım kılavuzu' })).toBeNull();
+  });
+
+  it('kılavuzdaki "İlgili sayfayı aç" Ayarlar\'ın ilgili bölümünü seçer (1617 a)', async () => {
+    ikAc('/ik');
+    fireEvent.click(await screen.findByRole('button', { name: /Yardım/ }));
+    const kilavuz = await screen.findByRole('complementary', { name: 'Kullanım kılavuzu' });
+    fireEvent.click(within(kilavuz).getByRole('button', { name: /SGK teşvikleri/ }));
+    fireEvent.click(within(kilavuz).getByRole('button', { name: 'İlgili sayfayı aç' }));
+    expect(await screen.findByRole('tab', { name: 'Ayarlar', selected: true })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Teşvikler', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Kullanım kılavuzu' })).toBeTruthy();
+  });
+});
+
+describe('İK yeni ekran: aramadan doğrudan form (1617 a)', () => {
+  const ara = async (adres: string, q: string, kullanici = IK_YONETICI) => {
+    ikAc(adres, { kullanici });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ara' }));
+    const kutu = within(await screen.findByRole('dialog', { name: 'Ara' })).getByRole('combobox');
+    fireEvent.change(kutu, { target: { value: q } });
+    fireEvent.click(screen.getByRole('option', { name: new RegExp(q) }));
+  };
+
+  it('Görüşme planla ve Aday ekle formu sayfa değiştirmeden açar', async () => {
+    await ara('/ik/personel', 'Görüşme planla');
+    expect(await screen.findByRole('dialog', { name: /görüşme/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Personel', selected: true })).toBeTruthy();
+    cleanup();
+    await ara('/ik/personel', 'Aday ekle');
+    expect(await screen.findByRole('dialog', { name: /aday/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Personel', selected: true })).toBeTruthy();
+  });
+
+  it('Toplu zam bordroya geçip formu, Personel aktar personele geçip aktarmayı açar', async () => {
+    await ara('/ik', 'Toplu ücret güncelle');
+    expect(await screen.findByRole('dialog', { name: 'Toplu ücret güncelleme' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Bordro', selected: true })).toBeTruthy();
+    cleanup();
+    await ara('/ik', 'Personel aktar');
+    expect(await screen.findByRole('tab', { name: 'Personel', selected: true })).toBeTruthy();
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it('Yeni parametre dönemi formu açar', async () => {
+    await ara('/ik', 'Yeni parametre dönemi');
+    expect(await screen.findByRole('dialog', { name: 'Yeni parametre dönemi' })).toBeTruthy();
+  });
+
+  it('reddedilen: yazamayan kişide işlem formu açmaz, sayfayı açar', async () => {
+    await ara('/ik', 'Toplu ücret güncelle', IK_OKUYAN);
+    expect(await screen.findByRole('tab', { name: 'Bordro', selected: true })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

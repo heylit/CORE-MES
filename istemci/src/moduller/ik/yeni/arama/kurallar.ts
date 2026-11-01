@@ -5,7 +5,8 @@ import type { Aday, Departman, Personel, Pozisyon } from '../tipler.ts';
 // İK'da ara (bugünkü ekranın genel araması): kayıtlar, sayfalar, sık işlemler ve kılavuz tek listede. Eşleşme küçük harfle
 // (Türkçe) alanların birleşiminde geçmektir; sonuç en çok 14 satırdır, boş sorguda kısa bir başlangıç listesi gelir.
 
-export type AramaIslemi = 'personel-ekle' | 'izin-gir' | 'izin-talep';
+export type AramaIslemi =
+  | 'personel-ekle' | 'izin-gir' | 'izin-talep' | 'gorusme-planla' | 'aday-ekle' | 'toplu-zam' | 'yeni-donem' | 'personel-aktar';
 export type AramaHedefi =
   | { tur: 'gorunum'; gorunum: IkGorunum; kimlik?: string }
   | { tur: 'islem'; islem: AramaIslemi }
@@ -25,7 +26,8 @@ export interface AramaGirdisi {
   pozisyonlar: readonly Pozisyon[];
   // Yöneticinin ekibi (kimlik listesi); başka rolde boş.
   ekip: ReadonlySet<string>;
-  yazabilir: { personel: boolean; izin: boolean; izinTalep: boolean };
+  // Yazamayan için form açan işlem ilgili sayfayı açar.
+  yazabilir: { personel: boolean; izin: boolean; izinTalep: boolean; iseAlim: boolean; zam: boolean; ayar: boolean };
   gun: string;
   kilavuz: (q: string) => readonly KilavuzSonucu[];
 }
@@ -36,24 +38,28 @@ const aktif = (p: Personel, gun: string): boolean => !p.cikisTarihi || p.cikisTa
 
 const gorunum = (g: IkGorunum, kimlik?: string): AramaHedefi => ({ tur: 'gorunum', gorunum: g, ...(kimlik === undefined ? {} : { kimlik }) });
 
-// Bugünkü ekranın sık işlemleri. Formu doğrudan açanlar `islem`, ötekiler ilgili sayfayı (hesaplamada sekmesiyle) açar.
+const islem = (i: AramaIslemi): AramaHedefi => ({ tur: 'islem', islem: i });
+
+// Bugünkü ekranın sık işlemleri. Formu doğrudan açanlar `islem` (yazma yetkisi yoksa ilgili sayfa), ötekiler ilgili
+// sayfayı (hesaplamada sekmesiyle) açar.
 function islemler(g: AramaGirdisi): AramaSonucu[] {
   const s = (tur: string, baslik: string, hedef: AramaHedefi): AramaSonucu => ({ tur, baslik, alt: null, hedef });
+  const y = g.yazabilir;
   return [
-    ...(g.yazabilir.personel ? [s('İşlem', 'Personel ekle', { tur: 'islem', islem: 'personel-ekle' })] : []),
-    ...(g.yazabilir.izin ? [s('İşlem', 'İzin talebi gir', { tur: 'islem', islem: 'izin-gir' })] : []),
-    s('İşlem', 'Görüşme planla', gorunum('isealim')),
-    s('İşlem', 'Aday ekle', gorunum('isealim')),
+    ...(y.personel ? [s('İşlem', 'Personel ekle', islem('personel-ekle'))] : []),
+    ...(y.izin ? [s('İşlem', 'İzin talebi gir', islem('izin-gir'))] : []),
+    s('İşlem', 'Görüşme planla', y.iseAlim ? islem('gorusme-planla') : gorunum('isealim')),
+    s('İşlem', 'Aday ekle', y.iseAlim ? islem('aday-ekle') : gorunum('isealim')),
     s('Hesaplama', 'Brüt → net maaş hesapla', gorunum('hesap', 'brutnet')),
     s('Hesaplama', 'Net → brüt maaş hesapla', gorunum('hesap', 'netbrut')),
     s('Hesaplama', 'Kıdem ve ihbar tazminatı hesapla', gorunum('hesap', 'tazminat')),
     s('Hesaplama', 'Yıllık izin hak edişi hesapla', gorunum('hesap', 'izin')),
     s('Hesaplama', 'Fazla mesai ücreti hesapla', gorunum('hesap', 'mesai')),
-    s('İşlem', 'Personel aktar (Excel / CSV)', gorunum('personel')),
+    s('İşlem', 'Personel aktar (Excel / CSV)', y.personel ? islem('personel-aktar') : gorunum('personel')),
     s('Sayfa', 'Maliyet planı ve kıdem yükümlülüğü', gorunum('plan')),
     s('Sayfa', 'Yapılacaklar', gorunum('gorev')),
-    s('İşlem', 'Toplu ücret güncelle (zam)', gorunum('bordro')),
-    s('İşlem', 'Yeni parametre dönemi', gorunum('ayarlar')),
+    s('İşlem', 'Toplu ücret güncelle (zam)', y.zam ? islem('toplu-zam') : gorunum('bordro')),
+    s('İşlem', 'Yeni parametre dönemi', y.ayar ? islem('yeni-donem') : gorunum('ayarlar')),
     s('Sayfa', 'Mülakat soru bankası', gorunum('isealim')),
   ];
 }
@@ -64,7 +70,7 @@ const kilavuzSatiri = (k: KilavuzSonucu): AramaSonucu => ({ tur: 'Kılavuz', bas
 function kisiAramasi(g: AramaGirdisi, q: string): AramaSonucu[] {
   const gecer = (...alanlar: unknown[]) => kucuk(alanlar.filter(Boolean).join(' ')).includes(q);
   const sonuc: AramaSonucu[] = g.sayfalar.filter((s) => gecer(s.baslik)).map((s) => ({ tur: 'Sayfa', baslik: s.baslik, alt: null, hedef: gorunum(s.gorunum) }));
-  if (g.yazabilir.izinTalep && gecer('izin talep et', 'izin iste')) sonuc.unshift({ tur: 'İşlem', baslik: 'İzin talep et', alt: null, hedef: { tur: 'islem', islem: 'izin-talep' } });
+  if (g.yazabilir.izinTalep && gecer('izin talep et', 'izin iste')) sonuc.unshift({ tur: 'İşlem', baslik: 'İzin talep et', alt: null, hedef: islem('izin-talep') });
   if (g.rol === 'yonetici') {
     for (const p of g.personeller) {
       if (g.ekip.has(p.id) && gecer(ad(p), p.pozisyon)) sonuc.push({ tur: 'Ekip', baslik: ad(p), alt: p.pozisyon || null, hedef: gorunum('uye', p.id) });

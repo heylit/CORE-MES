@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { DurumKutusu, Dugme, Pencere, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../ortak/rota/sayfa-komutlari.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
@@ -21,7 +21,8 @@ import './ik-yeni.css';
 
 // İK ve İK İşlemlerim ekranı (TS geçişi 199 b; eski çerçeve 1614 ile kalktı). Gezinme ikinci menünün aynı maddeleriyle
 // sekmelerdedir (315 a; kabuk bu adreslerde şeridini çizmez). Üstteki araçlar bugünkü ekranınkilerdir: Ara ve
-// Yardım (F1); "Başka bir gözle görüntüle" 856 ile kalktı.
+// Yardım (F1); "Başka bir gözle görüntüle" 856 ile kalktı. Kılavuz bugünkü ekrandaki gibi içeriğin yanında paneldir (1617 a):
+// sayfa açık ve kullanılır kalır; dar ekranda içeriğin üstüne tam genişlikte açılır.
 const SAYFA_DISI = { pdks: '/ik/pdks' } as const;
 
 interface MenuMaddesi { anahtar: string; baslik: string; simge?: SimgeAdi; islem: Islem }
@@ -93,30 +94,35 @@ function IkEkrani({ kok }: { kok: IkKoku }) {
   };
 
   return (
-    <div className="tc-ik-yeni">
-      <div className="tc-ik-ust">
-        <Sekmeler etiket={kok === '/ik' ? 'İnsan Kaynakları' : 'İK İşlemlerim'} sekmeler={sekmeler} secili={secili} sec={sec} />
-        <div className="tc-ik-arac">
-          <Dugme simge="search" onClick={() => { pencereYaz(true); }}>Ara</Dugme>
-          <Dugme simge="help" aria-keyshortcuts="F1" aria-label="Yardım ve kullanım kılavuzu (F1)" onClick={() => { kilavuzYaz({ konu: null, vurgu: '' }); }}>Yardım</Dugme>
+    <div className="tc-ik-cerceve" data-kilavuz={kilavuz ? '' : undefined}>
+      <div className="tc-ik-yeni">
+        <div className="tc-ik-ust">
+          <Sekmeler etiket={kok === '/ik' ? 'İnsan Kaynakları' : 'İK İşlemlerim'} sekmeler={sekmeler} secili={secili} sec={sec} />
+          <div className="tc-ik-arac">
+            <Dugme simge="search" onClick={() => { pencereYaz(true); }}>Ara</Dugme>
+            <Dugme
+              simge="help" aria-keyshortcuts="F1" aria-label="Yardım ve kullanım kılavuzu (F1)" aria-expanded={kilavuz !== null}
+              onClick={() => { kilavuzYaz((k) => (k ? null : { konu: null, vurgu: '' })); }}
+            >Yardım</Dugme>
+          </div>
         </div>
+        {d.ben.saltOkunur && <div className="tc-ik-serit" role="status">Bu kayıtları yalnızca görüntüleyebilirsiniz.</div>}
+        <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+          <Ekran {...o} />
+        </Suspense>
+        <AramaPenceresi
+          acik={pencere} kapat={() => { pencereYaz(false); }} o={o} sayfalar={aramaSayfalari} gun={gun}
+          kilavuzAc={(konu, vurgu) => { kilavuzYaz({ konu, vurgu }); }}
+        />
       </div>
-      {d.ben.saltOkunur && <div className="tc-ik-serit" role="status">Bu kayıtları yalnızca görüntüleyebilirsiniz.</div>}
-      <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-        <Ekran {...o} />
-      </Suspense>
-      <AramaPenceresi
-        acik={pencere} kapat={() => { pencereYaz(false); }} o={o} sayfalar={aramaSayfalari} gun={gun}
-        kilavuzAc={(konu, vurgu) => { kilavuzYaz({ konu, vurgu }); }}
-      />
-      <Pencere acik={kilavuz !== null} kapat={() => { kilavuzYaz(null); }} baslik="Kullanım kılavuzu" tur="yan" ust={null}>
-        {kilavuz && (
+      {kilavuz && (
+        <div className="tc-ik-kilavuz" onKeyDown={(e) => { if (e.key === 'Escape' && !e.defaultPrevented) kilavuzYaz(null); }}>
           <YardimGorunumu
             key={`${kilavuz.konu ?? ''}|${kilavuz.vurgu}`} gorunum={gorunum} konu={kilavuz.konu} vurgu={kilavuz.vurgu}
-            kapat={() => { kilavuzYaz(null); }} git={(g, sekme) => { gezin(g as IkGorunum, g === 'hesap' ? sekme : undefined); }}
+            kapat={() => { kilavuzYaz(null); }} git={(g, sekme) => { gezin(g as IkGorunum, g === 'hesap' || g === 'ayarlar' ? sekme : undefined); }}
           />
-        )}
-      </Pencere>
+        </div>
+      )}
     </div>
   );
 }
