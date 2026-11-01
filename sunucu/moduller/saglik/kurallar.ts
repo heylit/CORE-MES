@@ -57,6 +57,8 @@ export interface UyariGirdisi {
   yedek: YedekBilgisi | null;
   yedekDiski: DiskDurumu | null | undefined;
   veritabaniDiski: DiskDurumu | null | undefined;
+  // Açık eşik uyarılarının iletileri (1663).
+  esikler?: readonly string[];
 }
 
 const dakika = (ms: number): number => Math.floor(ms / 60_000);
@@ -95,6 +97,7 @@ export function uyarilar(g: UyariGirdisi): Uyari[] {
   }
   if (g.yedekDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Yedek diskinde ${gbMetni(g.yedekDiski.bosBayt)} GB boş yer kaldı.` });
   if (g.veritabaniDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Veritabanı diskinde ${gbMetni(g.veritabaniDiski.bosBayt)} GB boş yer kaldı.` });
+  for (const ileti of g.esikler ?? []) sonuc.push({ tur: 'esik', ileti });
   return sonuc;
 }
 
@@ -355,4 +358,82 @@ export function saatOzeti(saat: Date, dakikalar: readonly MetrikDakikasi[]): Saa
       enUzunTxSnEnCok: enCok(vtler.map((v) => v.enUzunTxSn)),
     },
   };
+}
+
+// Eşik kuralları (kart 1663, karar 1618 a). Kural, son `sure` dakikanın hepsinde aşılınca açılır; son `kapanis` dakikanın hiçbirinde
+// aşılmayınca kapanır (tek dakikalık dalgalanma uyarı açıp kapatmasın). Ölçülemeyen dakika (null) ne açar ne kapatır.
+// Değerler VARSAYIM: ölçümle ayarlanır (DEVIR 1663 tablosu).
+export interface EsikKurali {
+  kod: string;
+  baslik: string;
+  sure: number;
+  asildi: (d: MetrikDakikasi) => boolean | null;
+  ileti: string;
+}
+
+const EN_AZ_ISTEK = 20;
+const vtAlani = <T>(d: MetrikDakikasi, oku: (v: NonNullable<MetrikDakikasi['veritabani']>) => T | null): T | null =>
+  d.veritabani === null ? null : oku(d.veritabani);
+
+export const ESIK_KURALLARI: readonly EsikKurali[] = [
+  {
+    kod: 'yanit-suresi', baslik: 'Yanıt süresi yüksek', sure: 5, ileti: 'Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.',
+    asildi: (d) => (d.istek.sayi < EN_AZ_ISTEK || d.istek.p95Ms === null ? null : d.istek.p95Ms > 1000),
+  },
+  {
+    kod: 'sunucu-hatasi', baslik: 'Sunucu hatası artıyor', sure: 3, ileti: 'Sunucu hatası artıyor: son 3 dakikada isteklerin yüzde 5\'inden fazlası 5xx.',
+    asildi: (d) => (d.istek.sayi < EN_AZ_ISTEK ? null : d.istek.sunucuHatasi >= 5 && d.istek.sunucuHatasi / d.istek.sayi >= 0.05),
+  },
+  {
+    kod: 'havuz-dolu', baslik: 'Veritabanı bağlantıları yetmiyor', sure: 3, ileti: 'Veritabanı bağlantıları yetmiyor: son 3 dakikada istek bağlantı bekledi ya da reddedildi.',
+    asildi: (d) => (d.havuz === null ? null : d.havuz.bekleyen > 0 || d.havuz.mesgul > 0),
+  },
+  {
+    kod: 'islemci', baslik: 'İşlemci dolu', sure: 10, ileti: 'İşlemci dolu: makine son 10 dakikada yüzde 90 üzerinde çalıştı.',
+    asildi: (d) => (d.makineIslemciYuzde === null ? null : d.makineIslemciYuzde >= 90),
+  },
+  {
+    kod: 'bellek', baslik: 'Bellek az', sure: 10, ileti: 'Bellek az: makinede son 10 dakikada belleğin yüzde 10\'undan azı boş.',
+    asildi: (d) => (d.bellek.makineToplamBayt <= 0 ? null : d.bellek.makineBosBayt / d.bellek.makineToplamBayt < 0.1),
+  },
+  {
+    kod: 'olay-dongusu', baslik: 'Sunucu tıkanıyor', sure: 5, ileti: 'Sunucu tıkanıyor: olay döngüsü gecikmesi son 5 dakikada 500 ms üzerinde.',
+    asildi: (d) => (d.olayDongusuP99Ms === null ? null : d.olayDongusuP99Ms > 500),
+  },
+  {
+    kod: 'kilit-bekleme', baslik: 'Veritabanında kilit bekleniyor', sure: 5, ileti: 'Veritabanında kilit bekleniyor: son 5 dakikada en az 5 bağlantı kilit bekledi.',
+    asildi: (d) => vtAlani(d, (v) => v.baglanti.kilitBekleyen >= 5),
+  },
+  {
+    kod: 'uzun-islem', baslik: 'Uzun süren veritabanı işlemi', sure: 1, ileti: 'Uzun süren veritabanı işlemi: 10 dakikadan uzun açık transaction var.',
+    asildi: (d) => vtAlani(d, (v) => (v.enUzunTxSn === null ? false : v.enUzunTxSn >= 600)),
+  },
+  {
+    kod: 'deadlock', baslik: 'Veritabanında kilitlenme', sure: 1, ileti: 'Veritabanında kilitlenme (deadlock) oldu; bir işlem geri alındı.',
+    asildi: (d) => vtAlani(d, (v) => v.deadlock > 0),
+  },
+  {
+    kod: 'xid-yasi', baslik: 'Veritabanı bakımı gecikti', sure: 1, ileti: 'Veritabanı bakımı gecikti: işlem numarası yaşı 1 milyarı geçti (vacuum gerekli).',
+    asildi: (d) => vtAlani(d, (v) => (v.xidYasi === null ? null : v.xidYasi >= 1_000_000_000)),
+  },
+];
+
+export const kapanisSuresi = (k: EsikKurali): number => Math.max(3, k.sure);
+
+// Açık kurallar ve son dakikalar verilince bu turdaki geçişler. Dakikalar zamana göre sıralıdır.
+export function esikGecisleri(
+  dakikalar: readonly MetrikDakikasi[], acik: ReadonlySet<string>, kurallar: readonly EsikKurali[] = ESIK_KURALLARI,
+): { acilan: EsikKurali[]; kapanan: EsikKurali[] } {
+  const acilan: EsikKurali[] = [];
+  const kapanan: EsikKurali[] = [];
+  for (const k of kurallar) {
+    if (acik.has(k.kod)) {
+      const son = dakikalar.slice(-kapanisSuresi(k));
+      if (son.length === kapanisSuresi(k) && son.every((d) => k.asildi(d) === false)) kapanan.push(k);
+    } else {
+      const son = dakikalar.slice(-k.sure);
+      if (son.length === k.sure && son.every((d) => k.asildi(d) === true)) acilan.push(k);
+    }
+  }
+  return { acilan, kapanan };
 }

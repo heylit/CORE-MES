@@ -26,9 +26,9 @@ export const diskDurumuSemasi = z.object({
   az: z.boolean(),
 });
 
-export const UYARI_TURLERI = ['yedek', 'is', 'disk'] as const;
+export const UYARI_TURLERI = ['yedek', 'is', 'disk', 'esik'] as const;
 
-// Sunucunun hesapladığı uyarı: yedek alınmadı, iş asıldı ya da hata verdi, disk az. Eşikler sunucu kuralıdır.
+// Sunucunun hesapladığı uyarı: yedek alınmadı, iş asıldı ya da hata verdi, disk az, ölçü eşiği aşıldı (1663). Eşikler sunucu kuralıdır.
 export const uyariSemasi = z.object({
   tur: z.enum(UYARI_TURLERI),
   ileti: z.string(),

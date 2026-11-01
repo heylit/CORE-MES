@@ -7,19 +7,21 @@ import { promisify } from 'node:util';
 import { surecHavuzDurumu } from '#cekirdek/db.ts';
 import type { Db, HavuzDurumu } from '#cekirdek/db.ts';
 import { istekSayaclari } from '#cekirdek/istek-olcumu.ts';
+import { surecEsikOlayiYaz } from '#cekirdek/olay-gunlugu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { Ayrinti, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import {
   BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
-  otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, uyarilar,
+  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, uyarilar,
 } from './kurallar.ts';
-import type { GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
+import type { EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import {
   metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay,
 } from './sorgular.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
+import { bildirimGonder } from '../bildirim/disari.ts';
 
 const calistir = promisify(execFile);
 
@@ -148,6 +150,8 @@ export async function diskOku(dizin: string): Promise<DiskOlcusu | null> {
 }
 
 export interface AyrintiGirdisi {
+  // Verilmezse süreçteki eşik izleyicisi (dakikalık işin açtığı uyarılar).
+  esikler?: Pick<EsikIzleyici, 'iletiler'>;
   gitOkuyucu: GitOkuyucu;
   ortamCommit: string | null;
   ortam: Ayrinti['ortam'];
@@ -225,6 +229,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     otomatikAcilis,
     uyarilar: uyarilar({
       simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
+      esikler: (girdi.esikler ?? surecEsikleri).iletiler(),
     }),
   };
 }
@@ -330,4 +335,49 @@ export async function metrikleriSakla(db: Db, dakika: MetrikDakikasi | null, sim
   }
   const silinen = await suresiGecenMetrikleriSil(db, simdi, DAKIKA_SAKLAMA_GUN, SAAT_SAKLAMA_AY);
   return { saat, silinen };
+}
+
+// Açık eşik uyarıları süreçtedir: yeniden açılışta sıfırlanır, kural koşulu sürüyorsa birkaç dakikada yeniden açılır.
+export class EsikIzleyici {
+  private readonly acik = new Set<string>();
+  private readonly kurallar: readonly EsikKurali[];
+
+  constructor(kurallar: readonly EsikKurali[] = ESIK_KURALLARI) {
+    this.kurallar = kurallar;
+  }
+
+  gecisler(dakikalar: readonly MetrikDakikasi[]): { acilan: EsikKurali[]; kapanan: EsikKurali[] } {
+    return esikGecisleri(dakikalar, this.acik, this.kurallar);
+  }
+
+  // Bildirim yazıldıktan sonra çağrılır: bildirim hata verirse durum ilerlemez, sonraki tur yeniden dener.
+  uygula(g: { acilan: readonly EsikKurali[]; kapanan: readonly EsikKurali[] }): void {
+    for (const k of g.acilan) this.acik.add(k.kod);
+    for (const k of g.kapanan) this.acik.delete(k.kod);
+  }
+
+  iletiler(): string[] {
+    return this.kurallar.filter((k) => this.acik.has(k.kod)).map((k) => k.ileti);
+  }
+}
+
+export const surecEsikleri = new EsikIzleyici();
+
+export interface EsikCikisi {
+  olay: (tur: 'asildi' | 'duzeldi', metin: string) => void;
+}
+
+// Açılan kural sistem durumunu okuyanlara bildirim olur (tekil anahtar kural kodudur: okunmamışken yinelenmez) ve olay günlüğüne
+// 400 yazılır; kapanan yalnız olay günlüğüne 401. Olay günlüğü geri alınamadığı için bildirimler yazıldıktan sonra yazılır.
+export async function esikleriIsle(
+  db: Db, izleyici: EsikIzleyici, dakikalar: readonly MetrikDakikasi[], cikis: EsikCikisi = { olay: surecEsikOlayiYaz },
+): Promise<{ acilan: string[]; kapanan: string[] }> {
+  const g = izleyici.gecisler(dakikalar);
+  for (const k of g.acilan) {
+    await bildirimGonder(db, { tur: 'saglik.esik-uyarisi', baslik: k.baslik, metin: k.ileti, yol: '/ayarlar', kaynakKimlik: k.kod });
+  }
+  izleyici.uygula(g);
+  for (const k of g.acilan) cikis.olay('asildi', k.ileti);
+  for (const k of g.kapanan) cikis.olay('duzeldi', `Düzeldi: ${k.baslik}.`);
+  return { acilan: g.acilan.map((k) => k.kod), kapanan: g.kapanan.map((k) => k.kod) };
 }

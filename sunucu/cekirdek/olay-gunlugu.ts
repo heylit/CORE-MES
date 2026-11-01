@@ -8,6 +8,9 @@ export const OLAY_KAYNAGI = 'TMIV2';
 export const OLAY_KIMLIGI = '100';
 // Kritik güvenlik alarmı (1365 a) ayrı kimlikle yazılır: bilgi işlem izleme aracında sunucu hatasından ayrı süzer.
 export const GUVENLIK_OLAY_KIMLIGI = '200';
+// Sağlık eşiği aşıldı (400) ve düzeldi (401), kart 1663: bilgi işlem aracı uyarıyı ve kapanışını ayrı süzer. 300/301 dış bekçinindir.
+export const ESIK_OLAY_KIMLIGI = '400';
+export const ESIK_DUZELDI_OLAY_KIMLIGI = '401';
 // Hata fırtınası süreç fırtınasına dönmesin: bu aralıkta en çok bir olay yazılır; arada atlananlar sonrakinin metninde sayılır.
 export const OLAY_ARALIGI_MS = 60_000;
 const METIN_EN_COK = 800;
@@ -71,6 +74,17 @@ export class OlayGunlugu {
     );
   }
 
+  // Eşik açılış ve kapanışı kuralda tekildir (her geçişte bir kez); hata fırtınası sınırına girmez.
+  esikOlayi(tur: 'asildi' | 'duzeldi', metin: string): void {
+    const an = this.simdi();
+    const temiz = metin.replace(/"/g, '').replace(/[\r\n]+/g, ' ').slice(0, METIN_EN_COK);
+    const [olayTuru, kimlik] = tur === 'asildi' ? ['WARNING', ESIK_OLAY_KIMLIGI] : ['INFORMATION', ESIK_DUZELDI_OLAY_KIMLIGI];
+    this.calistir(['/T', olayTuru, '/ID', kimlik, '/L', 'APPLICATION', '/SO', OLAY_KAYNAGI, '/D', temiz]).then(
+      () => { this.sonYazma = an; this.sonHata = null; },
+      (hata: unknown) => { this.sonHata = hata instanceof Error ? hata.message : String(hata); },
+    );
+  }
+
   durum(): OlayDurumu {
     return { sonYazma: this.sonYazma, sonHata: this.sonHata };
   }
@@ -91,4 +105,9 @@ export function surecOlayDurumu(): OlayDurumu | null {
 // Olay günlüğü kurulmamışsa (Windows dışı, test) yazılmaz.
 export function surecGuvenlikAlarmiYaz(metin: string): void {
   surecOlayGunlugu?.guvenlikAlarmi(metin);
+}
+
+// Olay günlüğü kurulmamışsa (Windows dışı, test) yazılmaz.
+export function surecEsikOlayiYaz(tur: 'asildi' | 'duzeldi', metin: string): void {
+  surecOlayGunlugu?.esikOlayi(tur, metin);
 }

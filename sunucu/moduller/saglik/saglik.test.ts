@@ -20,7 +20,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  MetrikToplayici, ayrintiTopla, metrikleriSakla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
 import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
@@ -455,6 +455,37 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Sözleşmeye uyan dakika jsonb'den aynen geri okunur.
     const geri = await vt.tek<{ veri: unknown }>("SELECT veri FROM saglik_metrik_dakika WHERE an = '2026-11-01T06:10:00Z'");
     assert.deepEqual(geri?.veri, dakika('2026-11-01T06:10:00.000Z', 60));
+  });
+
+  test('eşik: aşılınca sistem durumunu okuyanlara bir bildirim ve olay 400; sürerken yinelenmez; düzelince olay 401; ayrıntıda uyarı görünür', async () => {
+    const vt = acik().vt;
+    // Süreç izleyicisi: ayrıntı ucu onu okur. Test sonunda kural kapanır, izleyici boş kalır.
+    const izleyici = surecEsikleri;
+    const olaylar: string[] = [];
+    const cikis = { olay: (tur: 'asildi' | 'duzeldi', metin: string) => { olaylar.push(`${tur}:${metin}`); } };
+    const dakika = (p95Ms: number) => ({
+      an: '2026-11-01T10:00:00.000Z', aralikSn: 60,
+      istek: { sayi: 100, saniyede: 1.67, p50Ms: 25, p95Ms, p99Ms: p95Ms, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: null, makineIslemciYuzde: null,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1000, makineToplamBayt: 2000 }, olayDongusuP99Ms: null, veritabani: null,
+    });
+    const isle = (d: ReturnType<typeof dakika>[]) => vt.tx((db) => esikleriIsle(db, izleyici, d, cikis));
+    const sayi = async () => (await vt.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'saglik.esik-uyarisi' AND tekil_anahtar = 'saglik.esik-uyarisi:yanit-suresi'",
+    ))?.n;
+    const yavas = Array.from({ length: 5 }, () => dakika(2500));
+    assert.deepEqual(await isle(yavas), { acilan: ['yanit-suresi'], kapanan: [] });
+    const ilk = await sayi();
+    assert.equal((ilk ?? 0) >= 1, true);
+    assert.deepEqual(await isle(yavas), { acilan: [], kapanan: [] });
+    assert.equal(await sayi(), ilk);
+    assert.deepEqual(olaylar, ['asildi:Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.']);
+    const govde = (await ayrintiIste(app, yoneticiCerezi)).json();
+    assert.deepEqual(govde.uyarilar.filter((u: { tur: string }) => u.tur === 'esik').map((u: { ileti: string }) => u.ileti),
+      ['Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.']);
+    assert.deepEqual(await isle([...yavas, ...Array.from({ length: 5 }, () => dakika(50))]), { acilan: [], kapanan: ['yanit-suresi'] });
+    assert.equal(olaylar.at(-1), 'duzeldi:Düzeldi: Yanıt süresi yüksek.');
+    assert.deepEqual(izleyici.iletiler(), []);
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {

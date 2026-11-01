@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { HataSatiri } from './gunluk-dosyasi.ts';
-import { GUVENLIK_OLAY_KIMLIGI, OLAY_ARALIGI_MS, OLAY_KAYNAGI, OlayGunlugu, olayMetni } from './olay-gunlugu.ts';
+import { ESIK_DUZELDI_OLAY_KIMLIGI, ESIK_OLAY_KIMLIGI, GUVENLIK_OLAY_KIMLIGI, OLAY_ARALIGI_MS, OLAY_KAYNAGI, OlayGunlugu, olayMetni } from './olay-gunlugu.ts';
 
 const hata = (ileti: string): HataSatiri => ({ zaman: new Date(0), ileti, istekKimligi: 'ab12cd34', hata: 'Error: "tırnak"\nsatır' });
 const bekle = () => new Promise((coz) => { setImmediate(coz); });
@@ -54,4 +54,18 @@ test('olay günlüğü: kritik güvenlik alarmı uyarı türü ve kendi kimliği
   assert.equal(cagrilar.length, 3);
   assert.deepEqual(cagrilar[1]?.slice(0, 4), ['/T', 'WARNING', '/ID', GUVENLIK_OLAY_KIMLIGI]);
   assert.equal(cagrilar[1]?.[9], 'Tuzak hesap x denendi');
+});
+
+test('olay günlüğü: eşik aşılınca uyarı 400, düzelince bilgi 401; kimlikler diğer olaylarla çakışmaz, fırtına sınırına girmez', async () => {
+  const cagrilar: string[][] = [];
+  const o = new OlayGunlugu(async (a) => { cagrilar.push(a); }, () => new Date(5000));
+  o.bildir(hata('önce bir hata'));
+  o.esikOlayi('asildi', 'Yanıt "süresi"\nyüksek');
+  o.esikOlayi('duzeldi', 'Yanıt süresi düzeldi');
+  await bekle();
+  assert.equal(cagrilar.length, 3);
+  assert.deepEqual(cagrilar[1]?.slice(0, 4), ['/T', 'WARNING', '/ID', '400']);
+  assert.equal(cagrilar[1]?.[9], 'Yanıt süresi yüksek');
+  assert.deepEqual(cagrilar[2]?.slice(0, 4), ['/T', 'INFORMATION', '/ID', '401']);
+  assert.equal(new Set(['100', GUVENLIK_OLAY_KIMLIGI, '300', '301', ESIK_OLAY_KIMLIGI, ESIK_DUZELDI_OLAY_KIMLIGI]).size, 6);
 });

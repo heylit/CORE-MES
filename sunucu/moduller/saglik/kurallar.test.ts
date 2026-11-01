@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
@@ -208,4 +208,58 @@ test('saat özeti: toplamlar toplanır, uçlar en kötüsüyle, ortalamalar yaln
   assert.equal(o.veritabani?.deadlock, 1);
   assert.equal(o.veritabani?.onbellekIsabetiYuzdeEnAz, 99);
   assert.equal(saatOzeti(saat, [dakikaOrnegi({ veritabani: null })])?.veritabani, null);
+});
+
+test('eşik: son süre boyunca her dakika aşılınca açılır; ölçülemeyen ya da az istekli dakika açmaz; kapanış süre kadar, en az 3 temiz dakika ister', () => {
+  const yavas = dakikaOrnegi({ istek: { ...dakikaOrnegi().istek, p95Ms: 2500 } });
+  const hizli = dakikaOrnegi();
+  const az = dakikaOrnegi({ istek: { ...dakikaOrnegi().istek, sayi: 5, p95Ms: 2500 } });
+  const kodlar = (g: { acilan: { kod: string }[]; kapanan: { kod: string }[] }) => [g.acilan.map((k) => k.kod), g.kapanan.map((k) => k.kod)];
+  assert.deepEqual(kodlar(esikGecisleri([yavas, yavas, yavas, yavas], new Set())), [[], []]);
+  assert.deepEqual(kodlar(esikGecisleri([yavas, yavas, yavas, yavas, yavas], new Set())), [['yanit-suresi'], []]);
+  assert.deepEqual(kodlar(esikGecisleri([yavas, yavas, az, yavas, yavas], new Set())), [[], []]);
+  const acik = new Set(['yanit-suresi']);
+  assert.deepEqual(kodlar(esikGecisleri([yavas, yavas, yavas, yavas, yavas], acik)), [[], []]);
+  assert.deepEqual(kodlar(esikGecisleri([yavas, hizli, hizli, hizli, hizli], acik)), [[], []]);
+  assert.deepEqual(kodlar(esikGecisleri([yavas, hizli, hizli, hizli, hizli, hizli], acik)), [[], ['yanit-suresi']]);
+  // Tek dakikalık kural (deadlock) 3 temiz dakikada kapanır.
+  const kilitli = dakikaOrnegi({ veritabani: { ...dakikaOrnegi().veritabani!, deadlock: 1 } });
+  assert.deepEqual(kodlar(esikGecisleri([kilitli], new Set())), [['deadlock'], []]);
+  assert.deepEqual(kodlar(esikGecisleri([kilitli, hizli, hizli, hizli], new Set(['deadlock']))), [[], ['deadlock']]);
+  // Az istekli dakika ölçülemedi sayılır: kapatmaz.
+  assert.deepEqual(kodlar(esikGecisleri([hizli, az, hizli], acik)), [[], []]);
+});
+
+test('eşik kuralları: her kural kendi alanına bakar; veri yoksa null, uydurulmaz', () => {
+  const kural = (kod: string) => {
+    const k = ESIK_KURALLARI.find((x) => x.kod === kod);
+    assert.ok(k, kod);
+    return k;
+  };
+  const vt = dakikaOrnegi().veritabani!;
+  assert.equal(new Set(ESIK_KURALLARI.map((k) => k.kod)).size, ESIK_KURALLARI.length);
+  assert.equal(kural('havuz-dolu').asildi(dakikaOrnegi({ havuz: null })), null);
+  assert.equal(kural('havuz-dolu').asildi(dakikaOrnegi({ havuz: { boyut: 30, kullanimda: 30, bekleyen: 2, mesgul: 0 } })), true);
+  assert.equal(kural('sunucu-hatasi').asildi(dakikaOrnegi({ istek: { ...dakikaOrnegi().istek, sunucuHatasi: 4 } })), false);
+  assert.equal(kural('sunucu-hatasi').asildi(dakikaOrnegi({ istek: { ...dakikaOrnegi().istek, sunucuHatasi: 6 } })), true);
+  assert.equal(kural('islemci').asildi(dakikaOrnegi({ makineIslemciYuzde: null })), null);
+  assert.equal(kural('islemci').asildi(dakikaOrnegi({ makineIslemciYuzde: 95 })), true);
+  assert.equal(kural('bellek').asildi(dakikaOrnegi({ bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 150, makineToplamBayt: 2000 } })), true);
+  assert.equal(kural('olay-dongusu').asildi(dakikaOrnegi({ olayDongusuP99Ms: 800 })), true);
+  assert.equal(kural('deadlock').asildi(dakikaOrnegi({ veritabani: null })), null);
+  assert.equal(kural('deadlock').asildi(dakikaOrnegi({ veritabani: { ...vt, deadlock: 1 } })), true);
+  assert.equal(kural('uzun-islem').asildi(dakikaOrnegi({ veritabani: { ...vt, enUzunTxSn: 900 } })), true);
+  assert.equal(kural('uzun-islem').asildi(dakikaOrnegi({ veritabani: { ...vt, enUzunTxSn: null } })), false);
+  assert.equal(kural('xid-yasi').asildi(dakikaOrnegi({ veritabani: { ...vt, xidYasi: null } })), null);
+  assert.equal(kural('xid-yasi').asildi(dakikaOrnegi({ veritabani: { ...vt, xidYasi: 1_200_000_000 } })), true);
+  assert.equal(kural('kilit-bekleme').asildi(dakikaOrnegi({ veritabani: { ...vt, baglanti: { ...vt.baglanti, kilitBekleyen: 5 } } })), true);
+});
+
+test('uyarılar: açık eşik iletileri esik türüyle listelenir', () => {
+  const g: UyariGirdisi = {
+    simdi: new Date('2026-11-01T10:00:00Z'), surecBaslangici: new Date('2026-11-01T09:00:00Z'), isler: [],
+    yedek: { durum: 'acik', sonYedek: new Date('2026-11-01T09:30:00Z') }, yedekDiski: null, veritabaniDiski: null,
+    esikler: ['Bellek az.'],
+  };
+  assert.deepEqual(uyarilar(g).filter((u) => u.tur === 'esik'), [{ tur: 'esik', ileti: 'Bellek az.' }]);
 });
