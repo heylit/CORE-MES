@@ -703,9 +703,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await yururlugeAlinmisRota(alt, [yeniAdim({ bilesenler: [{ malzemeId: alt2, miktar: 3, fireYuzde: 0 }] }), yeniAdim()]);
     const id = await yururlugeAlinmisRota(ust, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [{ malzemeId: alt, miktar: 2, fireYuzde: 0 }] })]);
     const yol = `/rota/revizyonlar/${id}/emre-kopyala`;
+    // 1476-C: stok adımı düğümüyle okuduğundan çok katmanlı emir taslak olmadan da açılır.
     const plansiz = await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, cokKatmanli: true });
-    assert.notEqual(plansiz.statusCode, 200);
-    assert.match(plansiz.body, /yalnız taslak/);
+    assert.equal(plansiz.statusCode, 200, plansiz.body);
     assert.equal((await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, stoktanDugumler: ['0.1'] })).statusCode, 422);
     const k = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, taslak: true, cokKatmanli: true });
     assert.equal(k.isEmriIdleri.length, 5);
@@ -734,8 +734,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       ['0.1.1', 2, 10, '0.1', 10], ['0.1', 1, 10, '0', 20], ['0.1', 1, 20, '0', 20], ['0', 0, 10, null, null], ['0', 0, 20, null, null],
     ]);
     assert.equal((await istek(c.operator, 'GET', '/rota/patlatmalar/999999')).statusCode, 404);
-    // Stok ve plan bağı gelene dek emir taslakta kalır; parti ve rota komutları reddedilir.
-    assert.equal((await istek(c.planlama, 'POST', `/adimli-emirler/${k.uretimEmriId}/plana-al`, { surum: emir.surum })).statusCode, 409);
+    // Taslak emir plana alınır (1476-C); parti ve rota komutları düğüm düzenini bozacağından reddedilir.
+    const planda = await istek(c.planlama, 'POST', `/adimli-emirler/${k.uretimEmriId}/plana-al`, { surum: emir.surum });
+    assert.equal(planda.statusCode, 200, planda.body);
     assert.equal((await istek(c.planlama, 'POST', `/rota/emirler/${k.uretimEmriId}/yururlukteki-rotayi-uygula`)).statusCode, 409);
     // Aynı revizyonlarla ikinci emir aynı patlatmayı kullanır (donmuş görüntü, 1481 a); stoktan karşılanan düğüm ve alt ağacı emre girmez (1483 a).
     const k2 = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', yol, {
