@@ -68,6 +68,9 @@
 .tc-tanitim-davet-metin { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .tc-tanitim-davet-metin > span { color: var(--muted); font-size: var(--yazi-s); }
 .tc-tanitim-davet-dugmeler { display: flex; flex-basis: 100%; gap: var(--b-2); justify-content: flex-end; }
+/* Davet açıkken içeriğin sonu davetin altında kalmasın (360'ta onay düğmesi, 1280'de tablo düğmesi tıklanamıyordu): içerik ve
+   çerçeveli modülün çerçevesi davet yüksekliği kadar yukarıda biter. Pay davetin iki satır metin ve düğme satırını karşılar. */
+.tc-kabuk .tc-kabuk-icerik[data-davet] { padding-block-end: calc(var(--dokunma) * 2 + var(--b-6) * 3); }
 
 @media (max-width: 767px) {
   /* Alt gezinme çubuğunun üstünde durur. */
