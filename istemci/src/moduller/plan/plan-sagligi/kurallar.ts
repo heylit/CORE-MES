@@ -23,3 +23,11 @@ export const tablolarGorunur = (roller: readonly string[] | undefined) => !(roll
 
 // Ölçüm kaydı (1470) hiç yoksa kayma ve tutarlılık kartları bunu söyler; boşluk "sıfır değişim" sanılmasın.
 export const olcumYok = (c: PlanSagligiCevabi) => c.veri.sonOlcum === null && c.soz.izlenenEmir === 0;
+
+// 1714: öğrenme kartının durumu. Kapalıyken de gösterilir (gölge dönem): planlamacı açmadan önce neyin değişeceğini görür.
+export function ogrenmeMetni(o: PlanSagligiCevabi['ogrenme']): string {
+  const kac = o.ogrenilenAdim === 0 ? 'En az üç örneği olan adım henüz yok' : `${String(o.ogrenilenAdim)} ürün adımının gerçek süresi öğrenildi`;
+  return o.durum === 'acik'
+    ? `${kac}. Öğrenme açık: motor bu adımların tamponunu buna göre kurar; rota süresi değişmez.`
+    : `${kac}. Öğrenme kapalı: motor kullanmıyor; Motor ayarlarından açılınca yalnız tampon değişir.`;
+}

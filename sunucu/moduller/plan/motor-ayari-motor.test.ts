@@ -25,6 +25,22 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
   });
 });
 
+describe('plan: süre öğrenmesi çalışmaya uygulanır (1714, 1684 b)', () => {
+  const ogren = { '7 1': { n: 3, f: 1.2, v: 0.01 } };
+  const acik = { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' as const };
+  const oku = (c: unknown) => (c as { ogren: unknown }).ogren;
+  test('kapalıyken alan boştur; açıkken verilen değer gider; kayda geçmiş eski değer açık verilen değerle ezilir', () => {
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {} }, MOTOR_AYARI_VARSAYILAN, null, null, ogren)), {});
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {} }, acik, null, null, ogren)), ogren);
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {}, ogren: { '9 9': { n: 5, f: 2, v: 0 } } }, acik, null, null, null)), {});
+  });
+  test('verilmezse çalışmadaki değer korunur; taslağın ayarında öğrenme kapalıysa boşalır', () => {
+    const ilk = calismayaMotorAyari({ D: {} }, acik, null, null, ogren);
+    assert.deepEqual(oku(calismayaMotorAyari(ilk, acik)), ogren);
+    assert.deepEqual(oku(calismayaMotorAyari(ilk, MOTOR_AYARI_VARSAYILAN)), {});
+  });
+});
+
 describe('plan: finansman oranı finanstan gelir (1383 a)', () => {
   test('finansın günlük oranı D.planAgirlik.fin olur, öbür ağırlıklar kalır; oran yoksa elle oran kalır', () => {
     const kayit = { D: { planAgirlik: { fin: 0.13, taban: 12 }, planTL: {} } };

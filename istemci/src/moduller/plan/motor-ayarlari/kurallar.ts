@@ -21,6 +21,12 @@ export const AYAR_SECENEKLERI: { [K in keyof MotorAyarlari]: { baslik: string; i
       { deger: 'spt', baslik: 'En kısa iş (SPT)' }, { deger: 'fifo', baslik: 'İlk gelen önce (FIFO)' },
     ],
   },
+  // 1714 (1684 b): öğrenme yalnız tamponu değiştirir, rota süresine dokunmaz; kapalıyken de Plan sağlığında görünür.
+  ogrenme: {
+    baslik: 'Gerçek sürelerden öğrenme',
+    ipucu: 'Açık: son 90 günde biten adımların süre sapması emniyet payına (tampon) eklenir; en az 3 örnek gerekir, rota süresi değişmez. Kapalıyken öğrenilen değerler yalnız Plan sağlığında görünür.',
+    secenekler: [{ deger: 'kapali', baslik: 'Kapalı' }, { deger: 'acik', baslik: 'Açık (yalnız tampon)' }],
+  },
 };
 
 // 771 a, 832 a: TL amacı ayarda kapalıdır; seçim listesinde yalnız şu an kayıtlıysa görünür (sunucu da yazmayı reddeder).

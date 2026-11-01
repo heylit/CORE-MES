@@ -1,4 +1,5 @@
 import { MOTOR_AYARI_VARSAYILAN, motorAyarlari, type MotorAyariGovdesi, type MotorAyarlari } from '#paylasilan/sozlesme/plan.ts';
+import type { OgrenilenSure } from './ogrenme-kurallar.ts';
 
 // Plan motoru ayarları (kart 811), saf. Sürüm satırının değerleri jsonb'dir: sonradan eklenen anahtar eski satırda yoktur, o anahtar
 // koddaki varsayılanı alır; tanınmayan değer de varsayılana düşer (satır değiştirilemez, düzeltilemez).
@@ -32,7 +33,14 @@ export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
 // 1477 a: motorun ufku ve dilimi sistem ayarındandır; motor w.ufukGun ve w.dilimDk'yı okur (engine.betik olcekKur;
 // girdi birleşmesi D'yi yeniden kurar, w kalır). Verilmezse kayıttaki kalır.
 export interface MotorOlcegi { ufukGun: number; dilimDk: number }
-export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null): unknown {
+// 1714 (1684 b): öğrenme açıksa ürün ve adım başına süre belirsizliği çalışmanın `ogren` alanıyla gider (girdi.betik stKur motora verir);
+// kapalıysa alan boştur, motor varsayılan belirsizlikle (w.mcSigma) kurar. Kayıttan okuyan girdi değeri hep açıkça verir (yoksa null):
+// sayfa kaydederse kayda geçen eski değer sonraki planda kullanılmaz. Verilmezse (undefined) çalışmadaki değer korunur; taslağın kendi
+// ayar sürümüyle ikinci kez uygulanan çözücü girdisi (plan-cozucusu) taze değeri böyle taşır, taslakta öğrenme kapalıysa boşaltır.
+export function calismayaMotorAyari(
+  calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
+  ogren?: Readonly<Record<string, OgrenilenSure>> | null,
+): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
   if (c.D === null || typeof c.D !== 'object') return calisma;
@@ -41,8 +49,12 @@ export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finan
   const agirlik = finansmanOraniGun === null ? {}
     : { planAgirlik: { ...(D.planAgirlik !== null && typeof D.planAgirlik === 'object' ? D.planAgirlik : {}), fin: finansmanOraniGun } };
   const w = (c as { w?: unknown }).w;
+  const onceki = (c as { ogren?: unknown }).ogren;
+  const ogrenilen = ogren !== undefined ? ogren
+    : onceki !== null && typeof onceki === 'object' ? onceki as Readonly<Record<string, OgrenilenSure>> : null;
   return {
     ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
     w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
+    ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},
   };
 }

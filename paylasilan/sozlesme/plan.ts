@@ -426,10 +426,12 @@ export const bedelAyariGovdesi = bedelAyari.partial({
 export const MOTOR_AMACLARI = ['sirali', 'tl'] as const;
 export const EKSIK_STOK_DAVRANISLARI = ['dur', 'varsay'] as const;
 export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
+// 1714 (1684 b): gerçek sürelerden öğrenme motorun tamponuna girer mi; varsayılan kapalı (gölge dönemde yalnız plan sağlığında görünür).
+export const MOTOR_OGRENME = ['kapali', 'acik'] as const;
 export const motorAyarlari = z.object({
-  amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI),
+  amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
 // Yazarken verilmeyen alan güncel sürümdekinden kalır.
 export const motorAyariGovdesi = motorAyarlari.partial();
 // Sürüm kimliği boşsa koddaki varsayılandır (henüz sürüm yazılmamış).
@@ -518,6 +520,14 @@ export const planSagligiCevabi = z.object({
     istasyonId: KIMLIK.nullable(), istasyonAdi: z.string(), ornek: SAYI, ortancaOran: z.number(),
     enCok: z.object({ emirNo: z.string(), opNo: z.number().int(), oran: z.number() }),
   })).max(PLAN_SAGLIGI_SATIR),
+  // 1714 (1684 b): gerçek sürelerden öğrenme. Anahtar kapalıyken de hesaplanır ki planlamacı açmadan önce görsün (gölge dönem); motor
+  // yalnız açıkken kullanır. Satırlar bire en uzak ortalama orandan başlar; dagilim oranın standart sapmasıdır.
+  ogrenme: z.object({
+    durum: z.enum(MOTOR_OGRENME), ogrenilenAdim: SAYI,
+    satirlar: z.array(z.object({
+      malzemeId: KIMLIK, malzemeKodu: z.string().nullable(), opNo: z.number().int(), ornek: SAYI, oran: z.number(), dagilim: z.number(),
+    })).max(PLAN_SAGLIGI_SATIR),
+  }),
 });
 export type PlanSagligiCevabi = z.output<typeof planSagligiCevabi>;
 

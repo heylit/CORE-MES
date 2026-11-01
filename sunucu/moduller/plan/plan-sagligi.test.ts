@@ -17,6 +17,7 @@ describe('plan (gerçek PostgreSQL): plan sağlığı ucu', () => {
     assert.equal(bos.termin.yuzde, null, 'biten emir yokken sıfır değil boş');
     assert.equal(bos.tutarlilik.yuzde, null);
     assert.equal(bos.veri.sonOlcum, null);
+    assert.deepEqual(bos.ogrenme, { durum: 'kapali', ogrenilenAdim: 0, satirlar: [] }, '1714: öğrenme varsayılan kapalı; örnek yokken boş');
 
     // Üç gün önce terminli emir dün bitti: geç. Tek adımlı emir, adım bitince emir de bitmiş sayılır.
     const simdi = Date.now();
