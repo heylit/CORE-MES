@@ -7,9 +7,10 @@ import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
+import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDurumu, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
+  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
@@ -372,7 +373,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
-  const ops: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
+  const kokOps: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
     const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
     const k = `${o.id}|root|${String(o.kol ? a.sira - o.kol.n : a.sira)}`;
     return {
@@ -380,6 +381,15 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
       makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: opProg[k] ?? null,
     };
   });
+  // 1476-F C: alt parça adımları kökten önce (iş sırası); durumları emrin kaydından, sağlam sayacı yalnız kök adımda vardır.
+  const altOps: OpSatiri[] = altDugumAdimlari(d, o).map((a) => {
+    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
+    return {
+      adim: a, durum: a.durum ?? 'bekliyor', baslangic: p?.baslangic ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null,
+    };
+  });
+  const ops = [...altOps, ...kokOps];
   const birim = (id: string) => d.items?.find((i) => i.id === id)?.unit ?? null;
   const kart = (id: string) => d.items?.find((i) => i.id === id) ?? null;
   const tutar = (e: IhtiyacSatiri): string | null => {
@@ -432,17 +442,21 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
       )}
       <h4>Adımlar</h4>
       <ol className="tc-rr3-adimlar" aria-label={`${o.no} operasyonları`}>
-        {ops.map((s) => (
-          <li key={s.adim.sira}>
+        {ops.map((s) => {
+          // 1476-F C (1553 a): çok katmanlı emirde alt parça adımı dal etiketi, parça kodu ve rotadaki op numarasıyla gösterilir.
+          const g = adimDugumu(o, s.adim.opNo);
+          return (
+          <li key={s.adim.opNo}>
             <span className="tc-rr3-op">{s.adim.opNo}</span>
             <span className="tc-rr3-adim-ad">
-              <span>{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
-              <small>{adimYeri(s)}</small>
+              <span className="tc-rr3-adim-dal">{g && <DalRozeti dal={g.dal} />}{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
+              <small>{g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}</small>
             </span>
             <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
             <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
           </li>
-        ))}
+          );
+        })}
         {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
       </ol>
       {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği aşağıdaki "Operasyon adımları" bölümünde yapılır; rota değişmez.</p>}

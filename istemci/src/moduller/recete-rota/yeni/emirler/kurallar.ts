@@ -564,3 +564,25 @@ export function cokKatmanOzeti(dugumler: readonly OnizlemeDugumu[], stoktan: Rea
     gonderilecek: ustSecilen.map((d) => d.dugum),
   };
 }
+
+// Çok katmanlı emirde adımın düğümü (1476-F C, 1553): emirdeki op numarası alt düğümün adımıysa dal adı ("K1.2"), düğüm ürünü ve rotadaki
+// op numarası; kök adımı ya da tek katmanlı emirde null. Dal adı rota modülünün kuralıyla aynıdır ("0.1.2" -> "K1.2").
+export interface AdimDugumu { dal: string; itemId: string; kaynakOpNo: number }
+export function adimDugumu(o: Pick<Emir, 'dugumler'>, opNo: number): AdimDugumu | null {
+  for (const d of o.dugumler ?? []) {
+    if (d.dugum === '0') continue;
+    const a = d.adimlar.find((x) => x.opNo === opNo);
+    if (a) return { dal: `K${d.dugum.slice(2)}`, itemId: d.itemId, kaynakOpNo: a.kaynakOpNo };
+  }
+  return null;
+}
+
+// Çok katmanlı emrin alt düğüm adımları (1476-F C): emirAdimlari yalnız kökün rotasını verir (durum anahtarı kökün rota yeridir), alt
+// adımlar ayrıca, iş sırasıyla (alt önce) gösterilir. Adı, operasyonu ve istasyonu düğüm ürününün yürürlükteki rotasından okunur; rotada
+// bulunmazsa ad "OP <rotadaki no>" yazılır, alan uydurulmaz. Durum emrin kendi kaydındandır. sira 0: kök sırasına girmez.
+export function altDugumAdimlari(d: Pick<Durum, 'routes'>, o: Pick<Emir, 'dugumler'>): EmirAdimi[] {
+  return (o.dugumler ?? []).filter((g) => g.dugum !== '0').flatMap((g) => g.adimlar.map((a) => {
+    const r = d.routes?.[g.itemId]?.steps.find((s) => s.opNo === a.kaynakOpNo);
+    return { sira: 0, opNo: a.opNo, ad: r?.name ?? `OP ${String(a.kaynakOpNo)}`, opId: r?.opId ?? null, stationId: r?.stationId ?? null, durum: a.durum };
+  }));
+}

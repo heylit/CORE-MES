@@ -256,3 +256,5 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 @media (max-width: 767px) {
   .tc-rr3-ck-genis { display: none; }
 }
+/* 1476-F C (1553 a): alt parça adımının dal etiketi adın önünde. */
+.tc-rr3-adim-dal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
