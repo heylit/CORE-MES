@@ -25,7 +25,7 @@ Değiştirir: -. ADR 0009'u (dosya saklama) ve ADR 0022'yi (donmuş kopya) tamam
 Seçenek b.
 
 1. **Tek sahip.** Belge, revizyon, bağ, önizleme ve dağıtım listesinin sahibi `belge-merkezi` modülüdür. `cizimler` modülünün tabloları,
-   kodu ve ekranları bu modüle taşınır; kimlikler değişmez (göç `20261031214000`). Başka modül belgeyi yalnız `belge-merkezi/disari.ts`
+   kodu ve ekranları bu modüle taşınır; kimlikler değişmez (göç `20261101191400`). Başka modül belgeyi yalnız `belge-merkezi/disari.ts`
    ile okur ve bağlar.
 2. **Belge türü aileleri.** Teknik (teknik resim, 3B model, makine, kroki, diğer; sertifika ve rapor revizyonsuz kanıttır), KYS (el kitabı,
    politika, prosedür, talimat, form şablonu, liste, plan, görev tanımı) ve dış kaynaklı (müşteri şartnamesi, standart). Her belgenin
