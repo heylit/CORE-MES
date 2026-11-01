@@ -1,0 +1,82 @@
+/* Rol panosu (kart 1585): yönlendirme şeridi, İşlerim ve Gidişat. Renk ve ölçü yalnız tasarım değişkeninden. */
+.tc-rol-panosu { display: flex; flex-direction: column; gap: var(--b-5); min-width: 0; }
+.tc-rol-panosu-izgara { display: grid; gap: var(--b-5); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1024px) {
+  .tc-rol-panosu-izgara { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+.tc-islerim .tc-pano-baslik, .tc-gidisat .tc-pano-baslik { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
+
+/* Yönlendirme: tek iş, tek düğme. Sol çizgi aciliyetin rengidir; anlamı etiket metni de taşır. */
+.tc-yonlendirme {
+  --c: var(--done);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-3) var(--b-4); align-items: center;
+  padding: var(--b-4); border-radius: var(--yari-2); background: var(--panel); border: 1px solid var(--edge);
+  border-inline-start: var(--b-1) solid var(--c);
+}
+.tc-yonlendirme[data-aciliyet="gecikmis"] { --c: var(--stop); }
+.tc-yonlendirme[data-aciliyet="bekliyor"] { --c: var(--hold); }
+.tc-yonlendirme[data-aciliyet="bugun"] { --c: var(--run); }
+.tc-yonlendirme-simge { display: grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border-radius: var(--yari-1); background: var(--panel2); color: var(--c); }
+.tc-yonlendirme-govde { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-yonlendirme-govde p { margin: 0; overflow-wrap: anywhere; }
+.tc-yonlendirme-etiket { font-size: var(--yazi-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tc-yonlendirme-baslik { font-size: var(--yazi-l); font-weight: 800; color: var(--ink); }
+.tc-yonlendirme-neden { font-size: var(--yazi-s); color: var(--muted); }
+.tc-yonlendirme-eylem { grid-column: 1 / -1; justify-self: start; }
+@media (min-width: 768px) {
+  .tc-yonlendirme { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tc-yonlendirme-eylem { grid-column: auto; }
+}
+
+/* İşlerim */
+.tc-islerim-suzgec { display: flex; gap: var(--b-2); overflow-x: auto; padding-block-end: var(--b-2); margin-block-end: var(--b-2); }
+.tc-islerim-suzgec button {
+  flex: none; min-height: var(--dugme-boy); padding: 0 var(--b-3); border-radius: var(--yari-tam); border: 1px solid var(--edge2);
+  background: none; color: var(--muted); font: inherit; font-size: var(--yazi-s); font-weight: 700; cursor: pointer;
+}
+.tc-islerim-suzgec button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.tc-islerim-liste { list-style: none; margin: 0; padding: 0; }
+.tc-is-satiri {
+  --c: var(--done);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-2) var(--b-3); align-items: center;
+  padding-block: var(--b-3); border-block-start: 1px solid var(--edge);
+}
+.tc-is-satiri:first-child { border-block-start: 0; }
+.tc-is-satiri[data-aciliyet="gecikmis"] { --c: var(--stop); }
+.tc-is-satiri[data-aciliyet="bekliyor"] { --c: var(--hold); }
+.tc-is-satiri[data-aciliyet="hafta"] { --c: var(--idle); }
+.tc-is-simge { display: grid; place-items: center; inline-size: var(--dokunma-yogun); block-size: var(--dokunma-yogun); border-radius: var(--yari-1); background: var(--panel2); color: var(--c); }
+.tc-is-govde { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-is-baslik { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.tc-is-ayrinti { font-size: var(--yazi-s); color: var(--muted); overflow-wrap: anywhere; }
+.tc-is-etiketler { grid-column: 2; display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+@media (min-width: 768px) {
+  .tc-is-satiri { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tc-is-etiketler { grid-column: auto; justify-content: flex-end; }
+}
+.tc-islerim-hata { display: flex; align-items: center; gap: var(--b-2); margin: var(--b-3) 0 0; font-size: var(--yazi-s); color: var(--stop); }
+.tc-islerim-yolunda { display: flex; flex-wrap: wrap; gap: var(--b-2); list-style: none; margin: var(--b-3) 0 0; padding: var(--b-3) 0 0; border-block-start: 1px dashed var(--edge2); }
+
+/* Gidişat */
+.tc-olcu-listesi { list-style: none; margin: 0; padding: 0; }
+.tc-olcu {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); align-items: end;
+  padding-block: var(--b-3); border-block-start: 1px solid var(--edge);
+}
+.tc-olcu:first-child { border-block-start: 0; padding-block-start: 0; }
+.tc-olcu-ad { grid-column: 1 / -1; font-size: var(--yazi-s); color: var(--muted); }
+.tc-olcu-deger { font-size: var(--yazi-xl); font-weight: 700; color: var(--ink); }
+.tc-olcu-deger[data-bos] { font-size: var(--yazi-s); font-weight: 400; color: var(--muted); }
+.tc-olcu-kiyas { font-size: var(--yazi-xs); font-weight: 700; color: var(--muted); text-align: end; }
+.tc-olcu-kiyas[data-yon="iyi"] { color: var(--run); }
+.tc-olcu-kiyas[data-yon="kotu"] { color: var(--stop); }
+.tc-olcu-plan { grid-column: 1 / -1; display: block; inline-size: 100%; block-size: var(--b-2); }
+.tc-olcu-plan-iz { fill: var(--panel2); }
+.tc-olcu-plan-dolgu { fill: var(--grafik); }
+.tc-olcu-egilim { grid-column: 1 / -1; display: block; inline-size: 100%; block-size: var(--b-6); }
+.tc-olcu-egilim polyline { fill: none; stroke: var(--grafik); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.tc-olcu .tc-cubuk-listesi { grid-column: 1 / -1; }
+
+/* Müdürün şirket özeti (1593 c) yeni düzende altta, kapalı başlar. */
+.tc-pano-katlanir > summary { cursor: pointer; list-style-position: inside; }
+.tc-pano-katlanir[open] > summary { margin-block-end: var(--b-3); }

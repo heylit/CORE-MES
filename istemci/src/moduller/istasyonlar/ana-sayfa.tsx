@@ -73,3 +73,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'istasyonlar-calisan-makine', sira: 30, bolum: 'ozet', islem: 'sayfa.istasyonlar', ekran: CalisanMakine },
   { anahtar: 'istasyonlar-personel', sira: 40, bolum: 'ozet', islem: 'sayfa.vardiya', veya: ['sayfa.personel'], ekran: Personel },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

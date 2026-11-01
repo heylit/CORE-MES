@@ -72,3 +72,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'vardiya-bugun', sira: 45, bolum: 'ozet', islem: 'sayfa.vardiya', ekran: BugununVardiyasi },
   { anahtar: 'vardiya-planli-durus', sira: 46, bolum: 'ozet', islem: 'sayfa.vardiya', ekran: PlanliDuruslar },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

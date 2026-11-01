@@ -10,7 +10,7 @@ import type { KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { CikisCevabi, GirisGovdesi, OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { SaglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { App } from './App.tsx';
-import { anaSayfaKartlari } from './ortak/rota/ana-sayfa.ts';
+import { anaSayfaKaynaklari, anaSayfaKartlari } from './ortak/rota/ana-sayfa.ts';
 import { modulRotalari, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { OTURUM_BITTI, ULASILAMADI_ILETISI, api } from './ortak/veri/api.ts';
 import { baglantiSifirla } from './ortak/veri/baglanti.ts';
@@ -240,14 +240,15 @@ describe('App modul rotalari', () => {
     await screen.findByRole('navigation', { name: 'Ana menü' });
   }
 
-  it('ana sayfa kabugundur: modul klasorunden kesfedilen kartlar gelir, modul "/" rotasi vermez', async () => {
+  it('ana sayfa kabugundur: modul klasorunden kesfedilen kartlar ve kaynaklar gelir, modul "/" rotasi vermez', async () => {
     // Kartın metnine bakılmaz: metin modüle aittir, burada ölçülen keşfin kendisidir.
     expect(modulRotalari.some((r) => r.yol === '/')).toBe(false);
     expect(anaSayfaKartlari.length).toBeGreaterThan(0);
+    expect(anaSayfaKaynaklari.length).toBeGreaterThan(0);
 
-    // Operatör panosu (Arkon) her kurulumda vardır; terminal sayfasını görene açılır.
-    await ac({ ...OPERATOR, islemler: [...OPERATOR.islemler, 'sayfa.uretim-terminali'] }, '/');
-    expect(document.querySelectorAll('[data-kart]').length).toBeGreaterThan(0);
+    // Operatörün günü (Arkon kaynağı) her kurulumda vardır; kişiseldir, operatör rolünü rol panosuna geçirir (kart 1585).
+    await ac({ ...OPERATOR, roller: ['operator'], islemler: [...OPERATOR.islemler, 'sayfa.uretim-terminali'] }, '/');
+    expect(screen.getByRole('region', { name: /İşlerim/ })).toBeTruthy();
     expect(screen.queryByText('Sayfa bulunamadı')).toBeNull();
   });
 

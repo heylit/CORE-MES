@@ -29,3 +29,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   // Şirket özeti kartını sevkiyatı okuyan görür (kart #1085).
   { anahtar: 'sevkiyat-geciken', sira: 120, bolum: 'yonetim', islem: 'sevkiyat.oku', ekran: GecikenYonetim },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

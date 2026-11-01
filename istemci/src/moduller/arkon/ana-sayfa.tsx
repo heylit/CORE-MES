@@ -33,3 +33,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'arkon-hazirlik', sira: 310, bolum: 'is', islem: 'arkon.hazirlik', ekran: HazirlikBekleyen },
   { anahtar: 'arkon-kalite', sira: 310, bolum: 'ozet', islem: 'arkon.kalite', ekran: KaliteBekleyen },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

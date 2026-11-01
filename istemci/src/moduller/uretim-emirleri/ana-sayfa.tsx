@@ -39,3 +39,5 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'uretim-emirleri-yonetim-gunluk', sira: 800, bolum: 'yonetim', islem: ADIMLI_OKUMA_ISLEMLERI[0], veya: ADIMLI_OKUMA_ISLEMLERI, ekran: GunlukUretim },
   { anahtar: 'uretim-emirleri-yonetim-durus', sira: 810, bolum: 'yonetim', islem: ADIMLI_OKUMA_ISLEMLERI[0], veya: ADIMLI_OKUMA_ISLEMLERI, ekran: DurusDagilimi },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

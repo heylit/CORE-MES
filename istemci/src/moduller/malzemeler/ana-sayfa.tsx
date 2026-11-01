@@ -16,3 +16,5 @@ function OnayBekleyen() {
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'malzemeler-onay-bekleyen', sira: 300, bolum: 'is', islem: 'malzemeler.onayla', ekran: OnayBekleyen },
 ];
+
+export { anaSayfaKaynaklari } from './pano-kaynaklari.tsx';

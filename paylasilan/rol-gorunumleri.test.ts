@@ -35,6 +35,19 @@ describe('rol görünümleri (1390 a)', () => {
     assert.equal(mudur.kartlar, null);
   });
 
+  test('rol panosu kaynakları (kart 1585): rol yalnız kendi listesiyle yeni düzene geçer; listesiz rol ve müdür boş küme, yönetici tam', () => {
+    const operator = etkinGorunum(['operator']);
+    assert.ok(operator.kaynaklar?.has('uretim-emirleri-kuyrugum-is'));
+    assert.equal(etkinGorunum(['depo']).kaynaklar?.size, 0);
+    assert.equal(etkinGorunum(['mudur']).kaynaklar?.size, 0);
+    assert.ok(etkinGorunum(['operator', 'depo']).kaynaklar?.has('istasyonlar-duran-is'));
+    assert.equal(etkinGorunum(['yonetici']).kaynaklar, null);
+    for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {
+      const k = g.kaynaklar ?? [];
+      assert.equal(new Set(k).size, k.length, `${rol}: tekrar eden kaynak`);
+    }
+  });
+
   test('kur ve faiz şeridi yalnız finans, satın alma, müdür ve yöneticide (1394 a)', () => {
     for (const rol of ['muhasebe_finans', 'satin_alma', 'mudur', 'yonetici']) assert.equal(seritRolGorunurMu('kur-faiz', [rol]), true);
     for (const rol of ['operator', 'kalite', 'planlama_proje', 'ozel_rol']) assert.equal(seritRolGorunurMu('kur-faiz', [rol]), false);
