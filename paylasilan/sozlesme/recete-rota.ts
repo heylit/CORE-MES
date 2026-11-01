@@ -254,10 +254,14 @@ export const durumEmirSemasi = z.object({
   // 1476-D: çok katmanlı emrin alt düğümleri (kök hariç); tek katmanlı emirde alan yok. dugum patlatma yolu ("0.1"), itemId düğüm ürünü,
   // carpan kök başına, birim üst düğüm başına adet (okunamazsa null), ust üst düğümün yolu ("0" kök), ustOpNo çıktıyı tüketen üst adımın
   // rotadaki op numarası (bulunamazsa null). Adımın opNo'su emirdeki, kaynakOpNo düğüm ürününün rotasındaki numaradır.
+  // fasonId ve terminGun (1559 a): bitmemiş düğüm adımı emirde fasondaysa kökteki opYer gibi firması ve termin günü; değilse alan yok.
   dugumler: z.array(z.object({
     dugum: z.string(), itemId: kimlikMetni, carpan: z.number().positive().nullable(), birim: z.number().positive().nullable(), ust: z.string(),
     ustOpNo: z.number().int().nullable(),
-    adimlar: z.array(z.object({ opNo: z.number().int(), kaynakOpNo: z.number().int(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']) })),
+    adimlar: z.array(z.object({
+      opNo: z.number().int(), kaynakOpNo: z.number().int(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']),
+      fasonId: kimlikMetni.optional(), terminGun: z.number().int().nullable().optional(),
+    })),
   })).optional(),
 });
 // opStatus ve opProg anahtarı `<emir>|root|<sıra>`: emrin kendi iş emrinin sırası (1 tabanlı). Prototip bunu rota adımına kendi emir

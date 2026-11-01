@@ -269,6 +269,7 @@ function rotaYeri(e: EmirKaydi, sira: number, kolKaymasi = 0): number | null {
 // 1476-D: çok katmanlı emrin alt düğümleri motorun montaj bağına (plan motor/girdi.betik): her düğüm kendi ürününün rotasıyla ayrı iş olur,
 // çıktısını tüketen üst adımı bekletir. Tüketen adım üst düğümde, öncülleri arasında bu düğümün bir adımı bulunan ilk adımdır (emrin kendi
 // kaydı; emir açılırken patlatmadan kurulur). carpan kök başına, birim üst düğüm başına adettir; okunamayan çarpan null (uydurulmaz).
+// 1559 a: emirde fasona alınan bitmemiş düğüm adımı firmasını ve termin gününü taşır (kökte opYer'in işi); motor onu fason adım gibi kurar.
 export function dugumleriCevir(e: EmirKaydi): NonNullable<DurumEmirleri['orders'][number]['dugumler']> | undefined {
   const gruplar = new Map<string, EmirKaydi['isEmirleri'][number][]>();
   for (const i of [...e.isEmirleri].sort((a, b) => a.sira - b.sira)) {
@@ -290,7 +291,10 @@ export function dugumleriCevir(e: EmirKaydi): NonNullable<DurumEmirleri['orders'
     return {
       dugum: d, itemId: String(adimlar[0]!.dugum!.malzemeNo), carpan: c, birim: c === null || uc === null ? null : c / uc, ust,
       ustOpNo: tuketen === undefined ? null : tuketen.dugum?.kaynakOpNo ?? tuketen.opNo,
-      adimlar: adimlar.map((a) => ({ opNo: a.opNo, kaynakOpNo: a.dugum!.kaynakOpNo, durum: a.durum })),
+      adimlar: adimlar.map((a) => ({
+        opNo: a.opNo, kaynakOpNo: a.dugum!.kaynakOpNo, durum: a.durum,
+        ...(a.durum !== 'tamam' && a.kaynak?.tur === 'fason' ? { fasonId: String(a.kaynak.id), terminGun: a.terminGun ?? null } : {}),
+      })),
     };
   });
 }
