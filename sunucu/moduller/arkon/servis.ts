@@ -33,7 +33,7 @@ import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri,
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
-import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimat, girdisiEksikRevizyonlar, revizyonGetir } from '../rota/disari.ts';
+import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimat, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
@@ -46,7 +46,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri,
+  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -56,7 +56,7 @@ import {
   adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
-  plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
+  plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
@@ -67,7 +67,7 @@ import {
   emekVerimi, mesaiSaniyesi,
   DOSYA_IMZA_BAYTI, dosyaTuruBul,
 } from './kurallar.ts';
-import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
+import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, RotaAnahtari, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
 import type { ArkonDurumu, BelgeEylemi, DurusKimlikleri, DurusKodlari, GunlukSatiri, KatilimDurumu, KatilimYolu, KayitSutunlari, Konum, KonumKimlikleri, NumuneTeslimGirdisi, StokIstegiGirdisi, TmiAyari, YansimaKarari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -264,7 +264,9 @@ async function isEmriTaslaklari(
   const bolmeler = new Map(yerlesimler.flatMap((y) => (y.parcalar?.length ? [[y.isEmriId, y.parcalar] as const] : [])));
   const taslakta = await taslaktakiler(db, rotali.filter((i) => !planlar.has(i.id)).map((i) => i.id));
   const makineler = new Map((await aktifMakineler(db)).map((m) => [m.id, m]));
-  const rotaEksik = await girdisiEksikRevizyonlar(db, isEmirleri.flatMap((i) => (i.kaynakRotaRevizyonId === null ? [] : [i.kaynakRotaRevizyonId])));
+  const anahtarlar = await rotaAnahtarlari(db, isEmirleri);
+  const anahtar = (ie: { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null }) => anahtarlar.get(ie.id) ?? rotaAnahtari(ie, undefined, new Map());
+  const rotaEksik = await girdisiEksikRevizyonlar(db, [...anahtarlar.values()].flatMap((a) => (a.revizyonId === null ? [] : [a.revizyonId])));
   const revizyonlar = new Map<number, string | null>();
   const talimatlar = new Map<string, string | null>();
   const govdeler = kayitli.map((b) => b.govde);
@@ -277,16 +279,17 @@ async function isEmriTaslaklari(
     const istasyon = istasyonId === null ? null : istasyonlarById.get(istasyonId);
     if (emir === undefined || istasyon === undefined) continue;
     const revizyonId = ie.kaynakRotaRevizyonId;
-    if (revizyonId !== null && !revizyonlar.has(revizyonId)) revizyonlar.set(revizyonId, (await revizyonGetir(db, revizyonId))?.harf ?? null);
-    const revizyon = revizyonId === null ? null : revizyonlar.get(revizyonId) ?? null;
+    const rota = anahtar(ie);
+    if (rota.revizyonId !== null && !revizyonlar.has(rota.revizyonId)) revizyonlar.set(rota.revizyonId, (await revizyonGetir(db, rota.revizyonId))?.harf ?? null);
+    const revizyon = rota.revizyonId === null ? null : revizyonlar.get(rota.revizyonId) ?? null;
     const kayitsiz = !kayitliKimlik.has(isEmriPaketKimligi(ie.id));
-    const sablon = kayitsiz ? sablonPaket(govdeler, ie.malzemeNo, ie.opNo, revizyon) : null;
-    const anahtar = `${ie.malzemeNo}:${ie.opNo}`;
-    if (kayitsiz && sablon === null && !talimatlar.has(anahtar)) talimatlar.set(anahtar, (await gecerliTalimat(db, ie.malzemeNo, ie.opNo))?.metin ?? null);
+    const sablon = kayitsiz ? sablonPaket(govdeler, rota.malzemeNo, rota.opNo, revizyon) : null;
+    const talimatAnahtari = `${rota.malzemeNo}:${rota.opNo}`;
+    if (kayitsiz && sablon === null && !talimatlar.has(talimatAnahtari)) talimatlar.set(talimatAnahtari, (await gecerliTalimat(db, rota.malzemeNo, rota.opNo))?.metin ?? null);
     const girdi: IsEmriPaketGirdisi = {
-      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(anahtar) ?? null, sablon,
+      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(talimatAnahtari) ?? null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
-      rotaEksik: revizyonId === null ? null : rotaEksik.get(revizyonId) ?? null,
+      rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
     };
     const parcalar = bolmeler.get(ie.id);
     girdiler.push(parcalar === undefined ? girdi : { ...girdi, bolunmus: true });
@@ -308,7 +311,7 @@ async function isEmriTaslaklari(
   const hazirliklar = await isEmriHazirlikDurumlari(db, girdiler.flatMap((g) => (g.istasyon?.tip === 'talasli' ? [g.isEmri.id] : [])));
   // 744 a: ilk parça kararı ve seçimi adım başınadır; rotada bulunmayan adım (rotasız emir, ek adım) her kurulumda sorar.
   const ilkParcalar = await adimIlkParcaKararlari(db, girdiler.map((g) => g.isEmri.id));
-  const ilkParcaSecimleri = await adimIlkParcaSecimleri(db, girdiler.flatMap((g) => (g.isEmri.kaynakRotaRevizyonId == null ? [] : [g.isEmri.kaynakRotaRevizyonId])));
+  const ilkParcaSecimleri = await adimIlkParcaSecimleri(db, [...new Set(girdiler.flatMap((g) => { const r = anahtar(g.isEmri).revizyonId; return r === null ? [] : [r]; }))]);
   const kayitsizlar = girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id)));
   const girenler = await adimGirenleri(db, kayitsizlar);
   // Karar 732 a: kayıtsız taslak malzemenin Çizimler'de yayındaki PDF ve 3B modelini önerir; Hazırlık açınca merkezden alır (bağ yazma ucundadır).
@@ -325,7 +328,7 @@ async function isEmriTaslaklari(
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = g.istasyon?.tip === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
-      ilkParcaSecimi: g.isEmri.kaynakRotaRevizyonId == null ? undefined : ilkParcaSecimleri.get(`${g.isEmri.kaynakRotaRevizyonId}:${g.isEmri.opNo}`), girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
+      ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)), girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     const kimlik = String(yayinli['id']);
@@ -1048,14 +1051,29 @@ const acikEmirOku = (db: Db, onbellek: OkumaOnbellegi, emirId: number) => onbell
 const uretimEmriOzetiOku = (db: Db, onbellek: OkumaOnbellegi, emirId: number) => onbellek.oku(`${DURUM_ONEKI}uretimEmriOzeti:${emirId}`, () => uretimEmriOzeti(db, emirId));
 const isEmriOzetiOku = (db: Db, onbellek: OkumaOnbellegi, isEmriId: number) => onbellek.oku(`${DURUM_ONEKI}isEmriOzeti:${isEmriId}`, () => isEmriOzeti(db, isEmriId));
 
+// 1476-E: iş emirlerinin rota adımı tek turda; düğüm ve patlatma yalnız çok katmanlı emrin iş emirleri için okunur (rotaAnahtari).
+async function rotaAnahtarlari(
+  db: Db, isEmirleri: readonly { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null | undefined }[],
+): Promise<Map<number, RotaAnahtari>> {
+  const dugumler = await isEmriDugumleri(db, isEmirleri.map((i) => i.id));
+  const patlatmalar = await patlatmaDugumleri(db, [...dugumler.values()].flatMap((d) => (d.patlatmaId === null ? [] : [d.patlatmaId])));
+  return new Map(isEmirleri.map((i) => [i.id, rotaAnahtari(i, dugumler.get(i.id), patlatmalar)]));
+}
+
+const ilkParcaSecimiOku = (secimler: ReadonlyMap<string, IlkParcaSecimi>, rota: RotaAnahtari): IlkParcaSecimi | undefined =>
+  rota.revizyonId === null ? undefined : secimler.get(`${rota.revizyonId}:${rota.opNo}`);
+
 // 744 a: adımın ilk parça seçimi emrin kaynak revizyonundaki aynı OP'li adımdadır; onaylı revizyon değişmediği için revizyon başına bir kez okunur.
 // Rotasız emirde ve rotada bulunmayan adımda (ek adım) her kurulumda sorulur.
 async function adimIlkParcaSecimi(db: Db, onbellek: OkumaOnbellegi, isEmriId: number): Promise<IlkParcaSecimi> {
   const adim = await isEmriOzetiOku(db, onbellek, isEmriId);
-  const revizyonId = adim === null ? null : (await uretimEmriOzetiOku(db, onbellek, adim.uretimEmriId))?.kaynakRotaRevizyonId ?? null;
-  if (adim === null || revizyonId === null) return 'her_kurulum';
+  const emir = adim === null ? null : await uretimEmriOzetiOku(db, onbellek, adim.uretimEmriId);
+  if (adim === null || emir?.kaynakRotaRevizyonId == null || emir.malzemeNo == null) return 'her_kurulum';
+  const rota = (await rotaAnahtarlari(db, [{ id: isEmriId, malzemeNo: emir.malzemeNo, opNo: adim.opNo, kaynakRotaRevizyonId: emir.kaynakRotaRevizyonId }])).get(isEmriId);
+  const revizyonId = rota?.revizyonId ?? null;
+  if (rota === undefined || revizyonId === null) return 'her_kurulum';
   const secimler = await onbellek.oku(`ilkParcaSecimleri:${revizyonId}`, () => adimIlkParcaSecimleri(db, [revizyonId]));
-  return secimler.get(`${revizyonId}:${adim.opNo}`) ?? 'her_kurulum';
+  return secimler.get(`${revizyonId}:${rota.opNo}`) ?? 'her_kurulum';
 }
 
 async function adimIlkParcaGereksinimi(db: Db, onbellek: OkumaOnbellegi, isEmriId: number, istasyonId: number | null) {
@@ -2352,17 +2370,23 @@ async function anomaliHesapla(
   // Etkin süreler bütün işler için tek turda okunur: iş başına okuma istasyon sayısıyla büyüyordu (yük raporu).
   const sureAnahtari = (revizyonId: number, makineId: number | null): string => `${revizyonId}:${makineId ?? ''}`;
   const sureIstekleri = new Map<string, { revizyonId: number; makineId: number | null }>();
+  const rotalar = await rotaAnahtarlari(db, ilgiliIsler.filter((i) => i.kaynak !== null && canli.has(i.id)));
   for (const i of ilgiliIsler) {
-    if (i.kaynak === null || !canli.has(i.id)) continue;
+    const revizyonId = rotalar.get(i.id)?.revizyonId ?? null;
+    if (i.kaynak === null || !canli.has(i.id) || revizyonId === null) continue;
     const makineId = i.kaynak.tur === 'makine' ? i.kaynak.id : null;
-    sureIstekleri.set(sureAnahtari(i.kaynakRotaRevizyonId, makineId), { revizyonId: i.kaynakRotaRevizyonId, makineId });
+    sureIstekleri.set(sureAnahtari(revizyonId, makineId), { revizyonId, makineId });
   }
   const okunanSureler = await adimEtkinSureleriToplu(db, [...sureIstekleri.values()]);
   const sureler = new Map([...sureIstekleri.keys()].map((k, n) => [k, okunanSureler[n]]));
+  const rotaSuresi = (i: (typeof isEmirleri)[number], makineId: number | null) => {
+    const r = rotalar.get(i.id);
+    return r === undefined || r.revizyonId === null ? undefined : sureler.get(sureAnahtari(r.revizyonId, makineId))?.get(r.opNo);
+  };
   const birimSure = (i: (typeof isEmirleri)[number], makineId: number | null): number | null =>
-    sureler.get(sureAnahtari(i.kaynakRotaRevizyonId, makineId))?.get(i.opNo)?.birimSureDk ?? (i.birimSureDk === null ? null : Number(i.birimSureDk));
+    rotaSuresi(i, makineId)?.birimSureDk ?? (i.birimSureDk === null ? null : Number(i.birimSureDk));
   const ayarSure = (i: (typeof isEmirleri)[number], makineId: number | null): number =>
-    sureler.get(sureAnahtari(i.kaynakRotaRevizyonId, makineId))?.get(i.opNo)?.ayarSuresiDk ?? (i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk));
+    rotaSuresi(i, makineId)?.ayarSuresiDk ?? (i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk));
 
   // Sayım penceresi dün başlayan son vardiyanın bitişinden bugün başlayan son vardiyanın bitişinedir (gece vardiyası yoksa takvim günü;
   // şimdiye kadar yazılmış her sayım dahil); kaydı olmayan kimlik haritada yoktur: o gün giriş yok = 0.
