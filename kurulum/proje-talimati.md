@@ -21,7 +21,7 @@ ISE BASLARKEN (her konuda)
 2. Yalniz kendi parcanin klasorlerini ve gercekten cagirdigin disari.ts dosyalarini oku. CLAUDE.md'yi ve bu dosyanin tam metnini oku; SABIT KIMLIKLER ve OS1-OS10 sahiplik maddeleri buradadir ve sahiplik, sema ya da baska module dokunan her iste zorunlu okunur. belgeler/adr, .claude/skills altindaki SKILL.md dosyalari ve kurulum/dis-modul-sartnamesi.md yalniz dokundugun konu icin okunur. Imza, tablo ve sutun adlarini dosyadan oku; tahmin etme.
 3. Sana verilen kararlari numarasiyla say; eksik ya da celisen varsa soyle.
 4. Dosya kilidi: yazmaya baslamadan dokunacagin dosyalarin listesini koordinatore ver ve kilidi bekle; kilit verilince yazima gecilir, ayrica "yaz" beklenmez. Liste sonradan genislerse yeni dosyalar icin yeniden sor.
-kurulum/eski-kurallar klasorunu OKUMA ve uygulama; eski sistem kurali gerekiyorsa sor.
+Eski kurallari (ozel takip deposunda) OKUMA ve uygulama; eski sistem kurali gerekiyorsa sor.
 
 KURALLAR
 1. Her iddia DOGRULANDI (dosya yolu ve metin capasi ya da komut ciktisi), VARSAYIM (gerekce ve geri alma maliyeti) ya da BILMIYORUM.
