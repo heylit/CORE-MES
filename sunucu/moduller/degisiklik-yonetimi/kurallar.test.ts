@@ -93,6 +93,12 @@ describe('degisiklik-yonetimi kuralları', () => {
       kod: 'beklet', mod: 'mrb', gerekce: 'Seri aralığı geçerlilik sınırını kesiyor; emir bölünmeli.',
     });
     assert.equal(emirKarariOner('D2', { tur: 'tarih', tarih: '2026-12-01' }, emir()).kod, 'eskiyle_tamamla');
+    // Başlangıcı olmayan emir tarih geçerliliğinde otomatik uygulanmaz; başlamışsa başlangıç aranmaz.
+    assert.deepEqual(
+      [emirKarariOner('P2', { tur: 'tarih', tarih: '2026-12-01' }, emir({ baslangic: null })).kod, emirKarariOner('P2', { tur: 'tarih', tarih: '2026-12-01' }, emir({ baslangic: null })).mod],
+      ['yeniden_olustur', 'onayli'],
+    );
+    assert.equal(emirKarariOner('D1', { tur: 'tarih', tarih: '2026-12-01' }, emir({ baslangic: null, basladi: true })).kod, 'beklet');
     assert.deepEqual([emirKarariOner('D1', null, emir({ durum: 'tamamlandi' })).kod, emirKarariOner('D1', null, emir({ durum: 'tamamlandi' })).mod], ['rework', 'mrb']);
     assert.equal(emirKarariOner('P2', null, emir({ durum: 'tamamlandi' })).mod, 'otomatik');
     assert.equal(emirKarariOner('P1', null, emir({ durum: 'fasonda' })).kod, 'beklet');

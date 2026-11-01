@@ -287,12 +287,12 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(acan, 'POST', `${K}/emirler/${e.id}/yayina-gonder`, { surum: x.surum });
     await kod(onaylayan, `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'seri', sonUrunMalzemeId: 2147480000, ilkSeri: 120 }, surum: x.surum }, 400, /Son ürün/);
     x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'seri', sonUrunMalzemeId: mil, ilkSeri: 120 }, surum: x.surum });
-    // Etki kaynağı bağlı değil: karar yok, ilk parça şartları bekler.
+    // Etki kaynağı bağlı (1644); bu parçanın açık emri ve stoğu yok: karar yok, kararlar koşulu tamam, ilk parça şartları bekler.
     assert.equal(x.durum, 'uygulamada');
     assert.deepEqual(x.gecerlilik?.tur === 'seri' ? [x.gecerlilik.sonUrun.malzemeId, x.gecerlilik.ilkSeri] : null, [mil, 120]);
     assert.deepEqual(x.fai.map((f) => [f.kalemId, f.tur, f.durum, f.kanitVar]), [[k1.id, 'tam', 'bekliyor', null], [k2.id, 'kismi', 'bekliyor', null]]);
     assert.equal(x.kararlar.length, 0);
-    assert.equal(x.kapanisKosullari.find((k) => k.kosul === 'kararlar')?.durum, 'bilinmiyor');
+    assert.equal(x.kapanisKosullari.find((k) => k.kosul === 'kararlar')?.durum, 'tamam');
     assert.equal(x.kapanisKosullari.find((k) => k.kosul === 'fai')?.durum, 'eksik');
     assert.equal(x.gecmis.find((g) => g.olay === 'yayinlandi')?.imzaAnlami, IMZA_ANLAMLARI.yayinlandi);
     await kod(onaylayan, `${K}/emirler/${e.id}/kapat`, { surum: x.surum }, 409);
@@ -561,5 +561,43 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     // Konfigürasyon yalnız eklenir.
     await assert.rejects(vt().sorgu('UPDATE degisiklik_yonetimi_konfigurasyon SET proses_surumu = 9 WHERE malzeme_id = $1', [flans]), /yalnız|eklenir|izin/i);
     await assert.rejects(vt().sorgu('DELETE FROM degisiklik_yonetimi_konfigurasyon_ogesi WHERE revizyon_id = 900002'), /yalnız|eklenir|izin/i);
+  });
+
+  test('1644: etki kaynağı bağlı; açık emirler ve stok karar satırı olur, bitmiş ve iptal emir olmaz; boş başlangıç onaylıya düşer', async () => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı.');
+    const { sahip } = ortam;
+    await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('DYE-', 0) ON CONFLICT (onek) DO NOTHING");
+    const parca = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('dye-1', 'mamul', 'DYE-', 1, 'aktif', $1, $2, $2) RETURNING no`, [JSON.stringify({ id: 'dye-1', com: { ad: 'Deneme etki' } }), acanId]))!.no;
+    const emir = async (durum: 'taslak' | 'planli' | 'bitti' | 'iptal', baslangic: string | null): Promise<number> => {
+      const id = (await sahip.tek<{ id: number }>(
+        "INSERT INTO uretim_emri (parca_no, parca_ad, adet, acan_id, malzeme_no, baslangic) VALUES ('P-DYE', 'Deneme', 4, $1, $2, $3) RETURNING id",
+        [acanId, parca, baslangic]))!.id;
+      const ek = { taslak: '', planli: null, bitti: ', baslama = now(), bitis = now(), saglam_adet = 4', iptal: ', iptal = now()' }[durum];
+      if (ek !== null) await sahip.sorgu(`UPDATE uretim_emri SET durum = $2${ek} WHERE id = $1`, [id, durum]);
+      return id;
+    };
+    const serbest = await emir('planli', '2026-12-10');
+    const taslak = await emir('taslak', null);
+    const bitmis = await emir('bitti', null);
+    const iptal = await emir('iptal', null);
+    await sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) SELECT $1, id, '5', now() FROM stok_konum WHERE kod = 'KABUL'", [parca]);
+    const emirNo = async (id: number) => (await sahip.tek<{ no: string }>('SELECT emir_no AS no FROM uretim_emri WHERE id = $1', [id]))!.no;
+
+    const e = await yayinaHazir(await emreKadar('P1', [parca]));
+    const x = await tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'tarih', tarih: '2026-12-01' }, surum: e.surum });
+    const hedef = (h: 'emir' | 'stok', id: number) => x.kararlar.find((k) => k.hedef === h && k.hedefId === id);
+    assert.equal(x.kararlar.length, 3);
+    assert.ok(hedef('emir', bitmis) === undefined && hedef('emir', iptal) === undefined);
+    assert.deepEqual([hedef('emir', serbest)?.onerilenKod, hedef('emir', serbest)?.mod, hedef('emir', serbest)?.hedefEtiketi], ['yeniden_olustur', 'onayli', await emirNo(serbest)]);
+    assert.deepEqual([hedef('emir', taslak)?.onerilenKod, hedef('emir', taslak)?.mod, hedef('emir', taslak)?.verilenKod], ['yeniden_olustur', 'onayli', null]);
+    assert.match(hedef('emir', taslak)?.gerekce ?? '', /başlangıç yok/);
+    // P1'de stok değiştirilebilir: otomatik "işlem yok"; etiket malzeme kodu.
+    assert.deepEqual([hedef('stok', parca)?.verilenKod, hedef('stok', parca)?.mod], ['islem_yok', 'otomatik']);
+    assert.match(hedef('stok', parca)?.hedefEtiketi ?? '', /^DYE-/);
+    assert.equal(x.durum, 'karar');
+    assert.deepEqual(x.kapanisKosullari.find((k) => k.kosul === 'kararlar'), { kosul: 'kararlar', durum: 'eksik', ayrinti: '2 karar bekliyor.' });
+    await kod(onaylayan, `${K}/emirler/${e.id}/kapat`, { surum: x.surum }, 409);
   });
 });

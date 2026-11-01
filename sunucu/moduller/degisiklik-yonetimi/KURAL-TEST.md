@@ -12,13 +12,13 @@ Kural, saf işlev (`kurallar.ts`), test (`kurallar.test.ts` ve `degisiklik-yonet
 | DY-6 | iki yönde değiştirilebilir değilse yeni parça no | `yeniParcaNoGerekirMi` | "DY-6: değiştirilebilirlik", "D1 akışı" | |
 | DY-7 | yayına gönderim eksikleri | `yayinaGonderimEksigi` | "DY-7: yayına gönderimde", "D1 akışı" | |
 | DY-8 | ilk parça türü | `ilkParcaTuru` | "DY-8: ilk parça", "D1 akışı" | `degisiklik_yonetimi_ilk_parca_kalem_tek`, `_onay_alanlari` |
-| DY-9 | emir karar önerisi | `emirKarariOner` | "DY-9: emir karar önerisi", "DY-9 - DY-13" | |
-| DY-10 | stok karar önerisi | `stokKarariOner` | "DY-10: stok önerisi", "DY-9 - DY-13" | |
+| DY-9 | emir karar önerisi (1644: başlangıcı boş emir tarih geçerliliğinde onaylı) | `emirKarariOner` | "DY-9: emir karar önerisi", "DY-9 - DY-13", "1644: etki kaynağı bağlı" | |
+| DY-10 | stok karar önerisi | `stokKarariOner` | "DY-10: stok önerisi", "DY-9 - DY-13", "1644: etki kaynağı bağlı" | |
 | DY-11 | izinli kodlar | `izinliKodlar` | "DY-11: izinli kodlar", "DY-9 - DY-13" | `_verilen_izinli`, `_kod_degeri` |
 | DY-12 | MRB kararı ayrı işlem | `kararIslemi` (S0 `mrbKarariMi`) | "DY-12: hurda", "DY-9 - DY-13" | |
 | DY-13 | toplu onay neyi atlar | `topluUygulanirMi` | "DY-13: toplu onay", "DY-9 - DY-13" | `_alanlar`, `_sapmali` |
 | DY-14 | emir ilerlemesi | `emirIlerler` | "DY-14: emir kararlar", "D1 akışı" | `_yayinli` |
-| DY-15 | kapanış koşulları | `kapanisKosullari`, `kapatilabilirMi` | "DY-15: eksik koşul", "D1 akışı" | `_kapanisli` |
+| DY-15 | kapanış koşulları | `kapanisKosullari`, `kapatilabilirMi` | "DY-15: eksik koşul", "D1 akışı", "1644: etki kaynağı bağlı" | `_kapanisli` |
 | DY-16 | seri uyumu | `seriUyumu` | "DY-16: seri uyumu" | `_gecerlilik_butun` |
 | DY-17 | iş günü; çevrim müşteri onayını beklemeyi saymaz | `isGunuFarki`, `cevrimIsGunu` | "DY-17 ve DY-18", "listeler" | |
 | DY-18 | görev hedef süresi | `gorevSuresi` | "DY-17 ve DY-18", "listeler" | |

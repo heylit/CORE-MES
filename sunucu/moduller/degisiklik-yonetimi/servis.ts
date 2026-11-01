@@ -13,6 +13,9 @@ import type {
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { stokMiktarlari } from '../stok/disari.ts';
+import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
+import type { EtkilenenEmir as UretimdekiEmir } from '../uretim-emirleri/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
   cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
@@ -234,6 +237,9 @@ export async function emirCevabi(db: Db, id: number): Promise<EmirCevabi> {
   const fai = await s.emirIlkParcalari(db, id);
   const gecmis = await s.emirGecmisi(db, id);
   const ozet = await malzemeOzetHaritasi(db, [...kalemler.map((k) => k.malzemeId), ...(e.gecerlilikSonUrunId === null ? [] : [e.gecerlilikSonUrunId])]);
+  const emirEtiketleri = await uretimEmriNolari(db, kararlar.filter((k) => k.hedef === 'emir').map((k) => k.hedefId));
+  const hedefEtiketi = (k: KararSatiriHam): string | null =>
+    k.hedef === 'emir' ? emirEtiketleri.get(k.hedefId) ?? null : ozet(k.hedefId).kod;
   const adlar = await kisiAdlari(db, [e.koordinatorKisiId, ...kararlar.flatMap((k) => k.verenKisiId ?? []), ...fai.flatMap((f) => f.onaylayanKisiId ?? [])]);
   const kisi = (kisiId: number, zaman: string) => ({ kisiId, kisiAdi: adlar.get(kisiId) ?? null, zaman });
   return {
@@ -256,7 +262,7 @@ export async function emirCevabi(db: Db, id: number): Promise<EmirCevabi> {
     }),
     gecerlilik: gecerlilikCevabi(e, ozet),
     kararlar: kararlar.map((k) => ({
-      id: k.id, hedef: k.hedef, hedefId: k.hedefId, hedefEtiketi: null, onerilenKod: k.onerilenKod, mod: k.mod, gerekce: k.gerekce,
+      id: k.id, hedef: k.hedef, hedefId: k.hedefId, hedefEtiketi: hedefEtiketi(k), onerilenKod: k.onerilenKod, mod: k.mod, gerekce: k.gerekce,
       izinliKodlar: k.izinliKodlar, verilenKod: k.verilenKod,
       veren: k.verenKisiId === null || k.verilme === null ? null : kisi(k.verenKisiId, k.verilme),
       sapmaReferansi: k.sapmaReferansi, not: k.not,
@@ -381,6 +387,29 @@ export interface EtkiKaynagi {
 export type EtkiCozucusu = (db: Db, g: { malzemeIdleri: number[]; gecerlilik: Gecerlilik }) => Promise<EtkiKaynagi | null>;
 export const ETKI_KAYNAGI_BAGLI_DEGIL: EtkiCozucusu = async () => null;
 
+// 1644: üretim emri durumu karar tablosunun diline çevrilir. Taslak henüz serbest bırakılmamış öneridir; planlı emir serbesttir.
+// Donmuş bölge ve seri aralığı emirde tutulmuyor, termin kayması hesaplanmıyor (UYUM-BORCU 25): termin null olduğundan emir kararı
+// hiçbir zaman otomatik uygulanmaz.
+function etkilenenEmir(u: UretimdekiEmir, gecerlilik: Gecerlilik): EtkilenenEmir {
+  const durum: EtkilenenEmir['durum'] = u.fasonda ? 'fasonda' : u.durum === 'basladi' || u.basladi ? 'uretimde' : u.durum === 'planli' ? 'serbest' : 'planli';
+  return {
+    durum, basladi: u.basladi, donmus: false, seriAraligi: null,
+    sonUrunu: gecerlilik.tur === 'seri' && gecerlilik.sonUrunMalzemeId === u.malzemeNo,
+    baslangic: u.baslangic, terminKayar: null,
+  };
+}
+
+// Etkilenenler sahiplerinden okunur: malzemenin bitmemiş üretim emirleri ve stoğu olan malzeme (malzeme başına tek stok hedefi; parti
+// başına karar ayrı iş, UYUM-BORCU 26). Bitmiş emrin ürünü stoktadır, ayrıca hedef olmaz.
+export const KAYNAKLARDAN_ETKI: EtkiCozucusu = async (db, g) => {
+  const emirler = await malzemelerinAcikEmirleri(db, g.malzemeIdleri);
+  const stok = await stokMiktarlari(db, g.malzemeIdleri);
+  return {
+    emirler: emirler.map((u) => ({ uretimEmriId: u.id, malzemeId: u.malzemeNo, emir: etkilenenEmir(u, g.gecerlilik) })),
+    stok: [...stok].filter(([, m]) => Number(m.toplam) > 0).map(([malzemeId]) => ({ stokId: malzemeId, malzemeId })),
+  };
+};
+
 function yayinOzeti(g: Gecerlilik, sonUrunKodu: string | null): string {
   if (g.tur === 'seri') return `${sonUrunKodu ?? 'Son ürün'}, seri ${g.ilkSeri} ve sonrası`;
   if (g.tur === 'tarih') return `${g.tarih} ve sonrası başlayan emirler`;
@@ -388,7 +417,7 @@ function yayinOzeti(g: Gecerlilik, sonUrunKodu: string | null): string {
 }
 
 export async function yayinla(
-  db: Db, kullanici: Kullanici, id: number, g: YayinlaGovdesi, etkiCozucusu: EtkiCozucusu = ETKI_KAYNAGI_BAGLI_DEGIL,
+  db: Db, kullanici: Kullanici, id: number, g: YayinlaGovdesi, etkiCozucusu: EtkiCozucusu = KAYNAKLARDAN_ETKI,
 ): Promise<EmirCevabi> {
   const e = await emirAdimi(db, id, g.surum, 'yayinla');
   const gecerlilik = g.gecerlilik;

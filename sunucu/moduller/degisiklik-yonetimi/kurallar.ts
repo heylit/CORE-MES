@@ -96,7 +96,8 @@ export interface EtkilenenEmir {
   seriAraligi: readonly [number, number] | null;
   // Emrin ürünü (ya da hizmet ettiği seri ürün) geçerliliğin son ürünü mü.
   sonUrunu: boolean;
-  baslangic: string;
+  // Planlanan başlangıç; emirde yoksa null (uydurulmaz).
+  baslangic: string | null;
   // Yeni rotayla termin kayıyor mu; hesaplanamıyorsa null.
   terminKayar: boolean | null;
 }
@@ -116,8 +117,10 @@ export function emirKarariOner(sinif: Sinif, gecerlilik: Gecerlilik | null, e: E
     }
     if (ilk < gecerlilik.ilkSeri) return { kod: 'beklet', mod: 'mrb', gerekce: 'Seri aralığı geçerlilik sınırını kesiyor; emir bölünmeli.' };
   }
-  if (gecerlilik?.tur === 'tarih' && e.baslangic < gecerlilik.tarih && !e.basladi && e.durum !== 'tamamlandi') {
-    return { kod: 'eskiyle_tamamla', mod: 'onayli', gerekce: 'Planlanan başlangıç geçerlilik tarihinden önce.' };
+  if (gecerlilik?.tur === 'tarih' && !e.basladi && e.durum !== 'tamamlandi') {
+    // Başlangıç yoksa emrin geçerlilikten önce mi sonra mı başlayacağı bilinmez: karar kişiye bırakılır.
+    if (e.baslangic === null) return { kod: 'yeniden_olustur', mod: 'onayli', gerekce: 'Planlanan başlangıç yok; geçerlilik tarihine göre yeri bilinmiyor.' };
+    if (e.baslangic < gecerlilik.tarih) return { kod: 'eskiyle_tamamla', mod: 'onayli', gerekce: 'Planlanan başlangıç geçerlilik tarihinden önce.' };
   }
   if (e.durum === 'tamamlandi') {
     return d1
