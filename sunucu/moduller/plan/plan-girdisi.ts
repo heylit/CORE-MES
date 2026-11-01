@@ -73,7 +73,8 @@ export interface CozumIstegi extends PlanBenzetimi {
 // 1408: taslağın denemesi ve emir önizlemesi (eski motorun yerine). Sanal emrin adımları kuyrukta "no|OP no" anahtarıyla geçer; makine
 // kimliği ve günler metin değil sayı ve 'GGGG-AA-GG'.
 export interface PlanBenzetimi {
-  sanalEmirler?: { no: string; malzemeId: number; adet: number; baslangic: string | null; teslim: string | null; oncelik: number }[];
+  // adimAdetleri: OP no -> adımın adedi, yalnız emir adedinden farklı olanlar (dal çarpanı, 1257 a); motor gerçek emirdeki gibi okur.
+  sanalEmirler?: { no: string; malzemeId: number; adet: number; baslangic: string | null; teslim: string | null; oncelik: number; adimAdetleri?: Record<string, number> }[];
   emirDegisiklikleri?: { emirNo: string; oncelik?: number; teslim?: string }[];
   kapaliMakineler?: number[];
   kapaliGunler?: string[];

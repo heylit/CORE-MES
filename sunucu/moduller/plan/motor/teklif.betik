@@ -15,12 +15,19 @@ function teklifCalismaGunu(D, gun) {
   for (let i = 0; i < 366; i++, gun++) { const g = teklifGunAdi(D, gun); if (!g) return null; if (((D.calismaGunleri || {})[g.ad] || []).length && !(D.tatiller || []).includes(g.iso)) return gun; }
   return null;
 }
-function teklifSiparis(s, id, urun, adet, termin, oncelik) {
+/* adimAdetleri (1527): adımın işleyeceği adet, ürün rotasının sırasıyla (dal adımı çarpanla, 1257 a; sunucu uretim-emirleri'nin kuralıyla
+   verir). Gerçek emirdeki gibi yalnız sipariş adedinden farklı olan D.opAdet'e yazılır; dizi rotayla aynı uzunlukta değilse yok sayılır. */
+function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri) {
   s.D.siparisler = s.D.siparisler.filter(x => x.id !== id);
   applyEvent(s, { tip: 'acil', urun, adet, termin, oncelik, gelir: null });
   s.D.siparisler[s.D.siparisler.length - 1].id = id;
+  const y = Object.assign({}, s.D.opAdet || {});
+  for (const k of Object.keys(y)) if (k.startsWith(id + '.')) delete y[k];
+  const u = (s.D.urunler || []).find(x => x.id === urun), rota = (u && u.rota) || [];
+  if (Array.isArray(adimAdetleri) && adimAdetleri.length === rota.length) rota.forEach((o, i) => { const n = adimAdetleri[i]; if (n != null && n !== adet) y[id + '.' + o.k] = n; });
+  s.D.opAdet = y;
 }
-/* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet }], termin: 'GGGG-AA-GG SS:DD' | null,
+/* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet, adimAdetleri? }], termin: 'GGGG-AA-GG SS:DD' | null,
    taslaklar: [{ id, kalemler: [{ id, urun, adet, termin }], yerlesim: { islemId: { m, S } } }], haric: düzenlenen taslak kimliği | null,
    tamponGun: plan termini için bitişe eklenen gün, gecerlilik: 'GGGG-AA-GG' | null (plan şeridinin penceresi için) }. */
 function teklifDene(st0, taban0, istek) {
@@ -36,13 +43,13 @@ function teklifDene(st0, taban0, istek) {
   }
   for (const t of istek.taslaklar || []) {
     if (t.id === istek.haric) continue;
-    for (const k of t.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, k.termin, 3);
+    for (const k of t.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, k.termin, 3, k.adimAdetleri);
     for (const [op, y] of Object.entries(t.yerlesim || {})) s.locks[op] = { m: y.m, S: +y.S };
   }
   const tabanE = taban ? evaluate(taban, s, null, false) : null;
   const farkli = istek.termin != null;
   const sonGun = HDAYS * 24 - 1;
-  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3);
+  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri);
   const satinalma = {}; const eksik = {};
   for (const k of istek.kalemler) { satinalma[k.id] = []; eksik[k.id] = []; }
   { const cx0 = compile(s);

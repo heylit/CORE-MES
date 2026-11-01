@@ -22,7 +22,9 @@ import { acikRevizyonSayisi, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
-import { FASON_VARSAYILAN_GUN, adimOnculleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import {
+  FASON_VARSAYILAN_GUN, adimOnculleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri, rotadanAdimAdetleri,
+} from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
@@ -330,10 +332,12 @@ async function denemeIsleri(
   const sonuc: Is[] = [];
   const icler = icAdimlar(r.adimlar);
   const onculler = denemeOnculleri(r.adimlar, icler, (n) => -(d.id * 1000 + n + 1));
+  // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); adet gerçek emirdeki gibi uretim-emirleri'nin kuralından.
+  const adimAdetleri = rotadanAdimAdetleri(v.adet, r.adimlar);
   for (const [n, { a, fasonBekleGun }] of icler.entries()) {
     sonuc.push(await isKur(db, {
       fasonBekleGun, onculler: onculler[n] ?? null,
-      id: -(d.id * 1000 + n + 1), uretimEmriId: -d.id, emirNo: `DENEME-${d.id}`, malzemeNo: v.malzemeNo, adet: v.adet, teslim: v.teslim,
+      id: -(d.id * 1000 + n + 1), uretimEmriId: -d.id, emirNo: `DENEME-${d.id}`, malzemeNo: v.malzemeNo, adet: v.adet, adimAdedi: adimAdetleri.get(a.opNo) ?? v.adet, teslim: v.teslim,
       kaynakRotaRevizyonId: v.revizyonId, sira: a.sira, opNo: a.opNo, ad: a.ad, kaynak: isEmriKaynagi(a.kaynak), ayarSuresiDk: a.ayarSuresiDk,
       birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, durum: 'planli', oncelik: 1, acilma: new Date().toISOString(), baslangic: null,
     }, rotalar, urunler, istasyonMakineleri));
@@ -1872,7 +1876,12 @@ function benzetimi(b: Baglam): PlanBenzetimi {
   }
   const sanal = new Map<number, Is>();
   for (const i of b.isler.values()) if (i.uretimEmriId < 0 && !sanal.has(i.uretimEmriId)) sanal.set(i.uretimEmriId, i);
-  const sanalEmirler = [...sanal.values()].map((i) => ({ no: i.emirNo, malzemeId: i.malzemeNo, adet: i.adet, baslangic: i.baslangic, teslim: i.teslim, oncelik: i.oncelik }));
+  // Adım adedi emir adedinden farklıysa (dal çarpanı, 1257 a) motor onu adımın adedi olarak alır; anahtar OP no.
+  const adimAdetleri = (uretimEmriId: number) => Object.fromEntries([...b.isler.values()]
+    .filter((i) => i.uretimEmriId === uretimEmriId && i.adimAdedi !== undefined && i.adimAdedi !== i.adet).map((i) => [String(i.opNo), i.adimAdedi!]));
+  const sanalEmirler = [...sanal.values()].map((i) => ({
+    no: i.emirNo, malzemeId: i.malzemeNo, adet: i.adet, baslangic: i.baslangic, teslim: i.teslim, oncelik: i.oncelik, adimAdetleri: adimAdetleri(i.uretimEmriId),
+  }));
   return {
     ...(sanalEmirler.length > 0 ? { sanalEmirler } : {}), ...(emirDegisiklikleri.length > 0 ? { emirDegisiklikleri } : {}),
     ...(kapaliMakineler.length > 0 ? { kapaliMakineler } : {}), ...(kapaliGunler.length > 0 ? { kapaliGunler } : {}),
