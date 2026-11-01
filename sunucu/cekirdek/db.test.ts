@@ -147,6 +147,25 @@ describe('db (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('boştaki bağlantı koparsa bildirim çağrılır, süreç düşmez; havuz yeni bağlantıyla sürer', { timeout: 20_000 }, async () => {
+    const bildirilen: Error[] = [];
+    const ozel = veritabaniAc(ayar, { sema, havuzBoyutu: 2, baglantiHatasiBildir: (hata) => { bildirilen.push(hata); } });
+    try {
+      await ozel.tx(async (db) => {
+        // İkinci bağlantı işini bitirip havuza boşta döner; tx bağlantısı onu sunucuda keser.
+        const bos = await ozel.tek<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+        assert.notEqual(bos, null);
+        await db.sorgu('SELECT pg_terminate_backend($1)', [bos?.pid]);
+      });
+      const son = Date.now() + 5000;
+      while (bildirilen.length === 0 && Date.now() < son) await new Promise((coz) => setTimeout(coz, 20));
+      assert.equal(bildirilen.length, 1);
+      assert.equal((await ozel.tek<{ bir: number }>('SELECT 1 AS bir'))?.bir, 1);
+    } finally {
+      await ozel.kapat();
+    }
+  });
+
   test('kilitli tabloyu okuyanlar okuma süresinde düşer ve bağlantıyı bırakır; ilgisiz okuma havuz sırasında beklemez', { timeout: 20_000 }, async () => {
     const OKUMA_MS = 300;
     const ozel = veritabaniAc({ pg: { ...ayar.pg, okumaSureMs: OKUMA_MS } }, { sema, havuzBoyutu: 2 });

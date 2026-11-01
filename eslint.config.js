@@ -156,6 +156,14 @@ export default [
     files: [KIMLIK_URETICISI, 'istemci/**/*.test.ts', 'istemci/**/*.test.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...SOZLESME_CAGRILARI] },
   },
+  // Sunucu günlüğü Fastify günlüğüdür (dosya, olay günlüğü, gizleme, istek izi); console satırı bunların hiçbirinden geçmez.
+  // Komut satırı giriş dosyaları kullanıcıya terminalde yazar; adıyla hariçtir.
+  {
+    files: ['sunucu/**/*.ts'],
+    ignores: ['**/*.test.ts', 'sunucu/ana.ts', 'sunucu/cekirdek/goc-calistir.ts', 'sunucu/moduller/plan/kiyas-komutu.ts',
+      'sunucu/moduller/logo/sahte-kopru-calistir.ts'],
+    rules: { 'no-console': 'error' },
+  },
   // Kural seçicileri dosya girdisine göre yer değiştirir, birleşmez: her ağacın kendi seçicileri burada yeniden verilir. Saf
   // dosyada db yoktur; eşzamanlı db seçicisi burada hata düzeyindedir.
   {

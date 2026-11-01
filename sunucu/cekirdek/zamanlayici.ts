@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { vtHataIzi } from './db.ts';
 import type { Db, Veritabani } from './db.ts';
 import { gunlukKur } from './gunluk.ts';
+import { istekIziUret, izIle } from './istek-izi.ts';
 import type { Gunluk, HamGunluk } from './gunluk.ts';
 import { UygulamaHatasi } from './hata.ts';
 
@@ -129,7 +130,7 @@ export async function modulIsleriniKesfet(klasor: string = MODUL_KLASORU): Promi
 export async function isiBirKezCalistir(
   vt: Veritabani, tanim: IsTanimi, gunluk: HamGunluk = SESSIZ,
 ): Promise<'tamam' | 'atlandi' | 'bekliyor'> {
-  return (await turKos(vt, tanim, gunluk)).sonuc;
+  return (await izIle(istekIziUret(), () => turKos(vt, tanim, gunluk))).sonuc;
 }
 
 type TurSonucu = { sonuc: 'tamam' | 'atlandi' } | { sonuc: 'bekliyor'; neden: string };
@@ -270,7 +271,8 @@ export function zamanlayiciKur({ vt, gunluk, isler, kalici = false }: Zamanlayic
     if (durdu) return;
     const saat = setTimeout(() => {
       saatler.delete(is.ad);
-      const tur = turCalistir(is).finally(() => { surenler.delete(tur); kur(is); });
+      // Her tur kendi izini taşır: turun ve içinde koşan çekirdek yardımcılarının satırları tek aramayla bulunur.
+      const tur = izIle(istekIziUret(), () => turCalistir(is)).finally(() => { surenler.delete(tur); kur(is); });
       surenler.add(tur);
     }, is.aralikMs);
     saat.unref();

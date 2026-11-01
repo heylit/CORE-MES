@@ -6,6 +6,7 @@ import { after, before, describe, test } from 'node:test';
 import { setTimeout as bekle } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { veritabaniAc } from './db.ts';
+import { etkinIz } from './istek-izi.ts';
 import type { Db, Veritabani } from './db.ts';
 import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
@@ -135,6 +136,17 @@ describe('çalışma (gerçek PostgreSQL)', { timeout: 40_000 }, () => {
       calis: async (db) => { await yaz(db, 'gider'); throw new Error('dur'); },
     })), /dur/);
     assert.deepEqual(await izler(), ['kalir']);
+  });
+
+  test('iz: her tur kendi izini taşır; tur dışında iz yoktur', async () => {
+    const gorulen: (string | undefined)[] = [];
+    const is = isTanimi({ ad: 'izli', aralikMs: 5000, calis: async () => { gorulen.push(etkinIz()); } });
+    assert.equal(await isiBirKezCalistir(acik(), is), 'tamam');
+    assert.equal(await isiBirKezCalistir(acik(), is), 'tamam');
+    assert.equal(gorulen.length, 2);
+    for (const iz of gorulen) assert.match(iz ?? '', /^[0-9a-f]{8}$/);
+    assert.notEqual(gorulen[0], gorulen[1]);
+    assert.equal(etkinIz(), undefined);
   });
 
   test('kilit: aynı şemada aynı iş kilidi tutuluyorsa tur atlanır ve calis çağrılmaz; başka şemanın kilidi turu durdurmaz', async () => {

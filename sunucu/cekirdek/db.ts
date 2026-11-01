@@ -26,7 +26,13 @@ export interface VeritabaniSecenegi {
   havuzBoyutu?: number;
   // Bir istek havuz dolu olduğu için reddedildiğinde, o an sırada bekleyen istek sayısıyla çağrılır.
   mesgulBildir?: (bekleyen: number) => void;
+  // Boştaki bağlantı koptuğunda çağrılır; sunucu uygulama günlüğünü verir. Verilmezse (göç, araç) standart hataya yazılır.
+  baglantiHatasiBildir?: (hata: Error) => void;
 }
+
+export const baglantiHatasiniYaz = (hata: Error): void => {
+  process.stderr.write(`Veritabanı bağlantı hatası: ${hata.message}\n`);
+};
 
 export interface UyariGunlugu {
   warn(nesne: { bekleyen: number }, mesaj: string): void;
@@ -439,8 +445,13 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
     options: oturumAyarlari.map((a) => `-c ${a}`).join(' '),
   });
   // Boştaki bağlantının kopması dinleyicisiz kalırsa süreci düşürür.
+  const baglantiHatasi = secenek.baglantiHatasiBildir ?? baglantiHatasiniYaz;
   havuz.on('error', (hata) => {
-    console.error('Veritabanı bağlantı hatası:', hata.message);
+    try {
+      baglantiHatasi(hata);
+    } catch {
+      // Dinleyiciden çıkan hata süreci düşürür; bildirim yazılamasa da havuz sürer.
+    }
   });
 
   // statement_timeout'u sunucu uygular; sunucu susarsa o da işlemez. İstemci sınırı ağ payı kadar

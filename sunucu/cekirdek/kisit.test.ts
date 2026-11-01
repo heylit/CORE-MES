@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { inspect } from 'node:util';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -327,9 +326,9 @@ describe('kısıt ihlalleri (gerçek PostgreSQL)', () => {
     assert.equal(gunluk.join('').includes(DEGER), false);
 
     // Günlükleyici hata verince yazılan yedek satır da süzülmüş izi taşır.
-    const yedek = t.mock.method(console, 'error', () => undefined);
+    const yedek = t.mock.method(process.stderr, 'write', () => true);
     yakalanmamisRetYaz({ error: (): void => { throw new Error('günlük kapalı'); } }, ham);
-    const yedekMetni = yedek.mock.calls.map((cagri) => inspect(cagri.arguments, { depth: 5 })).join('\n');
+    const yedekMetni = yedek.mock.calls.map((cagri) => String(cagri.arguments[0])).join('\n');
     yedek.mock.restore();
     assert.equal(yedek.mock.callCount(), 1);
     assert.equal(yedekMetni.includes('22P02'), true);

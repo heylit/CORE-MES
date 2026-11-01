@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { vtHataIzi } from './db.ts';
 
 export interface HataGunlugu {
@@ -15,7 +16,8 @@ export function yakalanmamisRetYaz(gunluk: HataGunlugu, sebep: unknown): void {
     gunluk.error({ err }, 'Yakalanmamış söz reddi');
   } catch (hata) {
     // Dinleyiciden çıkan hata yakalanmamış istisna olur ve süreci düşürür.
-    console.error('Yakalanmamış söz reddi günlüğe yazılamadı:', hata, err);
+    // Günlükleyicinin kendisi düşmüştür; son çare olarak standart hataya düz satır yazılır.
+    process.stderr.write(`Yakalanmamış söz reddi günlüğe yazılamadı: ${inspect(hata)} | ${inspect(err)}\n`);
   }
 }
 
