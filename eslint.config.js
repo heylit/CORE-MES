@@ -85,6 +85,16 @@ export default [
       '@typescript-eslint/switch-exhaustiveness-check': 'warn',
     },
   },
+  // Ayrıştırıcı project listesini sırayla dener ve geçtiği programları da bellekte kurar; ortak listede istemci dosyası için
+  // önce bütün sunucu programı kurulur ve lint parçası yığın sınırına dayanır. Her ağaç yalnız kendi programını alır.
+  {
+    files: ['istemci/**/*.ts', 'istemci/**/*.tsx', 'arkon/**/*.ts'],
+    languageOptions: { parserOptions: { project: ['istemci/tsconfig.json'] } },
+  },
+  {
+    files: ['ekran-testleri/**/*.ts'],
+    languageOptions: { parserOptions: { project: ['ekran-testleri/tsconfig.json'] } },
+  },
   {
     files: ['istemci/**/*.ts', 'istemci/**/*.tsx'],
     rules: {
