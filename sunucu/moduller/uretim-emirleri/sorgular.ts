@@ -596,6 +596,22 @@ export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Pro
   return satir.id;
 }
 
+// 1476-C: çok katmanlı emrin iş emirlerinin düğümü (rotadaki malzeme ve op numarası, kök başına adet); tek katmanlı emirde satır yok.
+// dugumSonu: alt düğümün son adımı (düğüm içinde ardılı yok; çıktısı tüketen üst adıma gider); kökte her zaman false.
+export interface DugumSatiri {
+  isEmriId: number; uretimEmriId: number; opNo: number; dugum: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string; dugumSonu: boolean;
+}
+export function dugumleriGetir(db: Db, emirIdleri: readonly number[]): Promise<DugumSatiri[]> {
+  return db.sorgu<DugumSatiri>(
+    `SELECT i.id AS "isEmriId", i.uretim_emri_id AS "uretimEmriId", i.op_no AS "opNo", i.dugum, i.dugum_malzeme_id AS "malzemeNo", i.kaynak_op_no AS "kaynakOpNo",
+            i.birim_carpani::text AS "birimCarpani",
+            i.dugum <> '0' AND NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri_onculu o JOIN uretim_emirleri_is_emri a ON a.id = o.is_emri_id
+                                            WHERE o.oncul_is_emri_id = i.id AND a.dugum = i.dugum) AS "dugumSonu"
+       FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = ANY($1::int[]) AND i.dugum IS NOT NULL ORDER BY i.uretim_emri_id, i.sira`,
+    [[...emirIdleri]],
+  );
+}
+
 // 1476: emrin açıldığı patlamış rota; tek katmanlı emirde null.
 export async function emrinPatlatmasi(db: Db, emirId: number): Promise<number | null> {
   return (await db.tek<{ p: number | null }>('SELECT patlatma_id AS p FROM uretim_emri WHERE id = $1', [emirId]))?.p ?? null;

@@ -14,7 +14,7 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
@@ -529,6 +529,14 @@ export async function adimUretimBilgisi(db: Db, isEmriId: number): Promise<AdimU
     ...a, girdiler: await adimGirdileriGetir(db, isEmriId), tasinan: await tasinanGirdiGetir(db, a.uretimEmriId), gkkFasonIsEmriId: fason?.id ?? null,
     emirAdimlari: await emirAdimZinciriGetir(db, a.uretimEmriId),
   };
+}
+
+// 1476-C: çok katmanlı emirde adımın düğümü; stok statüyü ve çıktıyı emrin ürününün değil düğümün malzemesi ve rotadaki op numarasıyla
+// çözer. Anahtar emir içindeki op numarasıdır; tek katmanlı emirde harita boştur. Yetki denetlemez.
+// dugumSonu: alt düğümün son adımı; çıktısı düğümün malzemesidir ve tüketen üst adıma gider (1482 a).
+export interface AdimDugumu { dugum: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string; dugumSonu: boolean }
+export async function emirDugumleri(db: Db, uretimEmriId: number): Promise<Map<number, AdimDugumu>> {
+  return new Map((await dugumleriGetir(db, [uretimEmriId])).map((d) => [d.opNo, { dugum: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani, dugumSonu: d.dugumSonu }]));
 }
 
 // Plan, rotadan önizlediği emirde de aynı fason varsayılanını kullanır.

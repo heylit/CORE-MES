@@ -11,7 +11,7 @@ import {
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
-import { COK_KATMANLI_TASLAK, DUGUM_GECERSIZ, dugumGirdisiIhlali } from './kurallar.ts';
+import { DUGUM_GECERSIZ, dugumGirdisiIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
@@ -287,14 +287,25 @@ describe('fason sırası (1346)', () => {
 
 describe('1476 çok katmanlı emir girdisi', () => {
   const d = (ad: string) => ({ dugum: { ad, malzemeNo: 5, kaynakOpNo: 10, birimCarpani: '2' } });
-  test('tek katmanlı emirde düğüm olmaz; çok katmanlıda her adım geçerli düğüm taşır, kök düğüm vardır ve emir taslaktır', () => {
-    assert.equal(dugumGirdisiIhlali(null, false, [{}]), null);
-    assert.equal(dugumGirdisiIhlali(null, true, [d('0')]), DUGUM_GECERSIZ);
-    assert.equal(dugumGirdisiIhlali(3, false, [d('0')]), COK_KATMANLI_TASLAK);
-    assert.equal(dugumGirdisiIhlali(3, true, [d('0'), d('0.1')]), null);
-    assert.equal(dugumGirdisiIhlali(3, true, [d('0.1')]), DUGUM_GECERSIZ);
-    assert.equal(dugumGirdisiIhlali(3, true, [d('0'), {}]), DUGUM_GECERSIZ);
-    assert.equal(dugumGirdisiIhlali(3, true, [d('0'), d('1.2')]), DUGUM_GECERSIZ);
-    assert.equal(dugumGirdisiIhlali(3, true, [d('0'), { dugum: { ad: '0.1', malzemeNo: 5, kaynakOpNo: 10, birimCarpani: '0' } }]), DUGUM_GECERSIZ);
+  test('tek katmanlı emirde düğüm olmaz; çok katmanlıda her adım geçerli düğüm taşır ve kök düğüm vardır; taslak koşulu yok (1476-C)', () => {
+    assert.equal(dugumGirdisiIhlali(null, [{}]), null);
+    assert.equal(dugumGirdisiIhlali(null, [d('0')]), DUGUM_GECERSIZ);
+    assert.equal(dugumGirdisiIhlali(3, [d('0')]), null);
+    assert.equal(dugumGirdisiIhlali(3, [d('0'), d('0.1')]), null);
+    assert.equal(dugumGirdisiIhlali(3, [d('0.1')]), DUGUM_GECERSIZ);
+    assert.equal(dugumGirdisiIhlali(3, [d('0'), {}]), DUGUM_GECERSIZ);
+    assert.equal(dugumGirdisiIhlali(3, [d('0'), d('1.2')]), DUGUM_GECERSIZ);
+    assert.equal(dugumGirdisiIhlali(3, [d('0'), { dugum: { ad: '0.1', malzemeNo: 5, kaynakOpNo: 10, birimCarpani: '0' } }]), DUGUM_GECERSIZ);
+  });
+  test('1476-C: alt düğümün bileşeni kök başına adetle çarpılır; kök ve tek katmanlı adım çarpılmaz; fire tüketen adımdan alt düğüme geçer', () => {
+    const adimlar = [
+      { id: 1, sira: 1, opNo: 1010, firePayiYuzde: 0, onculler: [], birimCarpani: 6 },
+      { id: 2, sira: 2, opNo: 1020, firePayiYuzde: 0, onculler: [{ id: 1 }], birimCarpani: 2 },
+      { id: 3, sira: 3, opNo: 10, firePayiYuzde: 0, onculler: [], birimCarpani: 1 },
+      { id: 4, sira: 4, opNo: 20, firePayiYuzde: 20, onculler: [{ id: 3 }, { id: 2 }], birimCarpani: 1 },
+    ];
+    const bilesenler = [{ isEmriId: 1, malzemeNo: 7, miktar: 1, fireYuzde: 0 }, { isEmriId: 3, malzemeNo: 8, miktar: 1, fireYuzde: 0 }];
+    assert.deepEqual(malzemeIhtiyaci(4, adimlar, bilesenler).map((m) => [m.opNo, m.malzemeNo, m.brut]), [[10, 8, 5], [1010, 7, 30]]);
+    assert.deepEqual(malzemeIhtiyaci(4, adimlar.map((a) => ({ ...a, birimCarpani: null })), bilesenler).map((m) => m.brut), [5, 5]);
   });
 });

@@ -485,12 +485,13 @@ export const yeniAdimOndeIletisi = (oplar: readonly number[]): string =>
 // Emrin malzeme ihtiyacı (brüt): bileşenin iş emrindeki adım miktarı x bir adet miktarı x (1 + bileşen firesi). Adım miktarı emir adedidir,
 // o adımın ve ardıllarının (adımın çıktısını tüketen adımlar, zincirle) fire paylarıyla büyür: adet / Π(1 - pay); birden çok ardıl yolunda en
 // büyüğü. Dallı rotada bir dalın firesi paralel dalı büyütmez. Bileşen miktarı mamul başınadır; dal çarpanı malzemeyi çarpmaz (1333 a).
+// Çok katmanlı emirde (1476) alt düğümün bileşeni kendi rotasındaki gibi alt parça başınadır: kök başına adet (birimCarpani) ile çarpılır.
 // Bölünmüş emrin kola kopyalanmayan adımları (bölünmeden önceki, dallı rotada paralel dal) alt partiler için de yapılmıştır: alt partinin
 // (ağacıyla) adedi bu adımlara eklenir (kolAdimlari). Alt parti yalnız kendi adımlarını sayar; böylece malzeme ne kaybolur ne iki kez
 // sayılır. Planlı birleşmeli kol birleşme adımı ve sonrasını taşımaz: o adımları üst kolun adedi için de yapar (birlesmeSira, üstün sırasıdır).
 export function malzemeIhtiyaci(
   adet: number,
-  isEmirleri: readonly { id: number; sira: number; opNo: number; firePayiYuzde: number; onculler?: readonly { id: number }[] | null }[],
+  isEmirleri: readonly { id: number; sira: number; opNo: number; firePayiYuzde: number; onculler?: readonly { id: number }[] | null; birimCarpani?: number | null }[],
   bilesenler: readonly { isEmriId: number; malzemeNo: number; miktar: number; fireYuzde: number }[],
   altPartiler: readonly { bolunmeSira: number; adet: number; birlesmeSira?: number | null }[] = [],
 ): { malzemeNo: number; opNo: number; brut: number }[] {
@@ -507,7 +508,7 @@ export function malzemeIhtiyaci(
     const carpan = Math.max(1, ...(ardillar.get(ie.id) ?? []).map((a) => fireCarpani.get(a) ?? 1)) / (1 - ie.firePayiYuzde / 100);
     fireCarpani.set(ie.id, carpan);
     const tasinan = altPartiler.filter((p) => !kolda.get(p)!.has(ie.id)).reduce((t, p) => t + p.adet, 0);
-    adimMiktari.set(ie.id, (adet + tasinan) * carpan);
+    adimMiktari.set(ie.id, (adet + tasinan) * carpan * (ie.birimCarpani ?? 1));
   }
   const opNo = new Map(sirali.map((ie) => [ie.id, ie.opNo]));
   return bilesenler.flatMap((b) => {
@@ -1108,16 +1109,14 @@ export function onculGirdisiIhlali(
   return null;
 }
 
-// 1476: çok katmanlı emir patlatmayla açılır ve her iş emri düğümünü taşır; tek katmanlı emirde düğüm yoktur. Stok ve plan bağı
-// kurulana dek (1476-C, 1476-D) çok katmanlı emir yalnız taslak açılır. Düğüm adı patlatmanın yol biçimidir, rotadaki numara ve çarpan pozitiftir.
+// 1476: çok katmanlı emir patlatmayla açılır ve her iş emri düğümünü taşır; tek katmanlı emirde düğüm yoktur. Stok adımı düğümün
+// malzemesi ve rotadaki numarasıyla okur (1476-C). Düğüm adı patlatmanın yol biçimidir, rotadaki numara ve çarpan pozitiftir.
 export const DUGUM_GECERSIZ = 'Çok katmanlı emrin adımları düğüm bilgisi taşımalı; tek katmanlı emirde düğüm olmaz.';
-export const COK_KATMANLI_TASLAK = 'Çok katmanlı emir şimdilik yalnız taslak açılır (kart 1476).';
 export function dugumGirdisiIhlali(
-  patlatmaId: number | null, taslak: boolean,
+  patlatmaId: number | null,
   isEmirleri: readonly { dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null }[],
 ): string | null {
   if (patlatmaId === null) return isEmirleri.some((i) => i.dugum != null) ? DUGUM_GECERSIZ : null;
-  if (!taslak) return COK_KATMANLI_TASLAK;
   for (const i of isEmirleri) {
     const d = i.dugum;
     if (d == null || !/^0(\.[1-9][0-9]*)*$/.test(d.ad) || d.ad.length > 40 || !Number.isInteger(d.kaynakOpNo) || d.kaynakOpNo <= 0
