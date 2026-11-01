@@ -3,9 +3,10 @@ import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  degerBicimeUyarMi, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
+  degerBicimeUyarMi, dugumleriCevir, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
   rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
+import type { EmirKaydi } from './kurallar.ts';
 
 describe('recete-rota kuralları (saf)', () => {
   test('RR-K1: yazma yalnız beklenen sürümde geçer; null yalnız kayıt yokken', () => {
@@ -173,5 +174,54 @@ describe('recete-rota genel arama sonuçları (saf, kart #1241)', () => {
       { anahtar: '2', baslik: 'XMIL-0010', aciklama: 'Rota B · yürürlükte', yol: '/recete-rota/schema?kayit=2' },
     ]);
     assert.equal(rotaAramaSonuclari(adaylar, harf, 'mil', 5)[0]?.aciklama, 'Mil uzun · Rota A · yürürlükte');
+  });
+});
+
+describe('recete-rota çok katmanlı emrin düğümleri (saf, 1476-D)', () => {
+  // 1476-D: emir 7, kök ürün 1 (OP10, OP20), alt düğüm 0.1 ürün 2 (OP10 -> 1010, OP20 -> 1020; kök başına 2), onun altı 0.1.1 ürün 3
+  // (OP10 -> 1030; kök başına 6). Sıra alt katmandan başlar (rota cokKatmanaCevir); tüketen adım öncülünden okunur.
+  const katmanliEmir = (): EmirKaydi => {
+    const adim = (sira: number, opNo: number, dugum: [string, number, number, string], onculler: number[], durum: 'bekliyor' | 'tamam' = 'bekliyor') => ({
+      sira, opNo, durum, saglamAdet: null, canliAdet: null, ad: 'A', operasyonTipiId: 1, istasyonId: 4, ayarSuresiDk: '5', birimSureDk: '2', tur: 'rota' as const,
+      dugum: { ad: dugum[0], malzemeNo: dugum[1], kaynakOpNo: dugum[2], birimCarpani: dugum[3] }, onculler: onculler.map((opNo) => ({ opNo })),
+    });
+    return {
+      id: 7, emirNo: 'E7', malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, kaynakRotaRevizyonId: 8, durum: 'taslak',
+      emirTuru: 'seri', acilma: '2030-01-01T00:00:00Z', bitis: null, ustEmirId: null, bolunmeSira: null, birlestigiEmirId: null, birlesmeOpNo: null, surum: 1,
+      isEmirleri: [
+        adim(1, 1030, ['0.1.1', 3, 10, '6.0000'], [], 'tamam'),
+        adim(2, 1010, ['0.1', 2, 10, '2.0000'], []),
+        adim(3, 1020, ['0.1', 2, 20, '2.0000'], [1010, 1030]),
+        adim(4, 10, ['0', 1, 10, '1.0000'], [], 'tamam'),
+        adim(5, 20, ['0', 1, 20, '1.0000'], [10, 1020]),
+      ],
+    };
+  };
+
+  test('1476-D: çok katmanlı emirde kök adımın yeri kökün rota adımları arasındaki sırasıdır; alt düğüm adımı kök anahtarı almaz', () => {
+    const c = emirleriCevir([katmanliEmir()]);
+    assert.deepEqual(c.opStatus, { '7|root|1': 'tamam' }, 'kökün OP10\'u rotanın 1. adımı; biten alt düğüm adımı kök anahtarına girmez');
+    assert.deepEqual(Object.keys(c.opYer ?? {}), ['7|root|2']);
+  });
+
+  test('1476-D: alt düğümler ürün, kök ve üst başına adet, tüketen üst adım ve adım eşlemesiyle gider', () => {
+    assert.deepEqual(dugumleriCevir(katmanliEmir()), [
+      { dugum: '0.1.1', itemId: '3', carpan: 6, birim: 3, ust: '0.1', ustOpNo: 20, adimlar: [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }] },
+      { dugum: '0.1', itemId: '2', carpan: 2, birim: 2, ust: '0', ustOpNo: 20,
+        adimlar: [{ opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' }, { opNo: 1020, kaynakOpNo: 20, durum: 'bekliyor' }] },
+    ]);
+    assert.deepEqual(emirleriCevir([katmanliEmir()]).orders[0]!.dugumler?.map((d) => d.dugum), ['0.1.1', '0.1']);
+  });
+
+  test('1476-D reddedilen: tüketen adım bulunamazsa ustOpNo, okunamayan çarpanda adet null; tek katmanlı ve rotasız emirde alan yok', () => {
+    const e = katmanliEmir();
+    const bagsiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 5 ? { ...i, onculler: [{ opNo: 10 }] } : i.sira === 1 ? { ...i, dugum: { ...i.dugum!, birimCarpani: 'x' } } : i)) };
+    const d = dugumleriCevir(bagsiz)!;
+    assert.equal(d.find((x) => x.dugum === '0.1')!.ustOpNo, null, 'öncül yoksa bağ uydurulmaz');
+    assert.deepEqual([d[0]!.carpan, d[0]!.birim], [null, null]);
+    const tek = { ...e, isEmirleri: e.isEmirleri.filter((i) => i.dugum!.ad === '0').map(({ dugum: _d, onculler: _o, ...i }) => i) };
+    assert.equal(dugumleriCevir(tek), undefined);
+    assert.equal('dugumler' in emirleriCevir([tek]).orders[0]!, false);
+    assert.equal('dugumler' in emirleriCevir([{ ...e, kaynakRotaRevizyonId: null }]).orders[0]!, false);
   });
 });
