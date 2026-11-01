@@ -487,3 +487,33 @@ export type SenaryoOnayi = z.output<typeof senaryoOnayi>;
 export type SenaryoYapabilir = z.output<typeof senaryoYapabilir>;
 export type OnayaGonderGovdesi = z.output<typeof onayaGonderGovdesi>;
 export type GeriGonderGovdesi = z.output<typeof geriGonderGovdesi>;
+
+// Plan sağlığı (1478): planın ne kadar tuttuğu ve ne kadar oynadığı; yalnız okur. Eğilim dizileri `haftalar` sırasıyladır (en eski önce);
+// ölçülemeyen hafta boştur, sıfır uydurulmaz. Kayma geçmişi ve plan tutarlılığı canlıya almada yazılan ölçüm kaydından (1470) gelir.
+export const PLAN_SAGLIGI_HAFTA = 8;
+export const PLAN_SAGLIGI_SATIR = 10;
+const yuzde = z.number().min(0).max(100).nullable();
+const egilim = z.array(z.number().nullable()).length(PLAN_SAGLIGI_HAFTA);
+const SAYI = z.number().int().nonnegative();
+export const planSagligiCevabi = z.object({
+  hesaplanan: zaman,
+  haftalar: z.array(z.object({ baslangic: tarih, bitis: tarih })).length(PLAN_SAGLIGI_HAFTA),
+  termin: z.object({ yuzde, emir: SAYI, gecKalan: SAYI, ortancaGecikmeGun: z.number().nullable(), egilim }),
+  soz: z.object({ ortancaKaymaSaat: z.number().nullable(), kayanEmir: SAYI, izlenenEmir: SAYI, egilim }),
+  tutarlilik: z.object({ yuzde, yakinDegisen: SAYI.nullable(), canliyaAlma: SAYI, egilim }),
+  uyum: z.object({ yuzde, olculenAdim: SAYI, tezgahDisi: SAYI, siraDisi: SAYI, kaymaDisi: SAYI, egilim }),
+  veri: z.object({
+    eksikKonu: SAYI, okunamayanKonu: SAYI,
+    sonOlcum: zaman.nullable(), yerlesmeyenIs: SAYI.nullable(), vardiyasizIs: SAYI.nullable(), gelirsizEmir: SAYI.nullable(),
+  }),
+  kayanEmirler: z.array(z.object({
+    uretimEmriId: KIMLIK, emirNo: z.string(), termin: tarih.nullable(), ilkTahmin: zaman.nullable(), sonTahmin: zaman.nullable(),
+    kaymaSaat: z.number().nullable(), degisim: SAYI,
+    gecmis: z.array(z.object({ zaman, tahminiBitis: zaman.nullable() })),
+  })).max(PLAN_SAGLIGI_SATIR),
+  sapanSureler: z.array(z.object({
+    istasyonId: KIMLIK.nullable(), istasyonAdi: z.string(), ornek: SAYI, ortancaOran: z.number(),
+    enCok: z.object({ emirNo: z.string(), opNo: z.number().int(), oran: z.number() }),
+  })).max(PLAN_SAGLIGI_SATIR),
+});
+export type PlanSagligiCevabi = z.output<typeof planSagligiCevabi>;

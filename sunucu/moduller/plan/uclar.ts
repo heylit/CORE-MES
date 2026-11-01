@@ -4,7 +4,7 @@ import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
-  siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, veriSagligiCevabi,
+  siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, planSagligiCevabi, veriSagligiCevabi,
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
@@ -17,6 +17,7 @@ import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalis
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import * as planlama from './planlama-servis.ts';
+import { planSagligi } from './plan-sagligi.ts';
 import { projePlani } from './proje-plani.ts';
 import * as servis from './servis.ts';
 import { veriSagligi } from './veri-sagligi.ts';
@@ -52,6 +53,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   // 782: plana giden verinin kaynağında boş olan yerler; yalnız okur, kaynak çağıranın yetkisiyle.
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),
+  // 1478: plan sağlığı; yalnız okur. Planlama sayfalarını gören (yönetici, müdür, planlama) okur.
+  uc({ yontem: 'GET', yol: '/plan/plan-sagligi', yetki: PLANLAMA_OKUR, cevap: planSagligiCevabi, isle: ({ db, kullanici }) => planSagligi(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
