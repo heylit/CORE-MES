@@ -125,3 +125,15 @@ export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 // İş henüz yoksa null gönderilir (ekran 'yok' gördü); iş varsa okunan sürüm.
 export const yenidenHesaplaGovdesi = z.object({ surum: surumSemasi.nullable() }).strict();
 export const yenidenHesaplaCevabi = geometriAnalizCevabi;
+
+// Malzeme kartında net ağırlık (1710, 1704 a): kartın yayındaki en yeni modelinin hacmi ve yoğunluk ön değeri için ilk stok
+// önerisinin kalitesi (3D Atölyesi ekranının kuralı, 1480). Ağırlığı ekran hesaplar ve yalnız düğmeyle forma yazar; kart her
+// zamanki kaydetmeyle yazılır. neden: model-yok, analiz-yok, hacim-yok (ağ kapalı değil); hacim varsa null.
+export const malzemeParametresi = z.object({ malzemeNo: z.coerce.number().int().min(1) });
+export const agirlikOzetiCevabi = z.object({
+  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  hacimMm3: z.number().positive().nullable(),
+  neden: z.enum(['model-yok', 'analiz-yok', 'hacim-yok']).nullable(),
+  kalite: z.object({ ad: z.string().nullable(), aile: z.string().nullable(), kaliteKodu: z.string().nullable(), yogunluk: z.number().positive().nullable() }).nullable(),
+});
+export type AgirlikOzetiCevabi = z.output<typeof agirlikOzetiCevabi>;

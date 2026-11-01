@@ -3,6 +3,7 @@ import type {
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
   KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -25,6 +26,7 @@ export const anahtar = {
   rotaSablonlari: [...MALZEMELER_YENI, 'rota-sablonlari'] as const,
   rotaliUrunler: [...MALZEMELER_YENI, 'rotali-urunler'] as const,
   olcuAletleri: [...MALZEMELER_YENI, 'olcu-aletleri'] as const,
+  analizAgirligi: (no: number) => [...MALZEMELER_YENI, 'analiz-agirligi', no] as const,
 };
 
 // Kimlik yolun tek parçasıdır; ".." bir üst yola çıkardı.
@@ -214,6 +216,16 @@ export function useOlcuAletleri() {
   return useQuery({
     queryKey: anahtar.olcuAletleri,
     queryFn: async (): Promise<readonly OlcuAleti[]> => (await api.get<OlcuAletiSecenekleriCevabi>('/malzeme-olcu-aletleri')).aletler,
+  });
+}
+
+// 1710 (1704 a): kartın yayındaki 3B modelinin hacmi ve yoğunluk ön değeri (sahibi geometri); yalnız kart yazan ister.
+export function useAnalizAgirligi(no: number | null, etkin: boolean) {
+  return useQuery({
+    queryKey: anahtar.analizAgirligi(no ?? 0),
+    enabled: etkin && no !== null,
+    staleTime: 60_000,
+    queryFn: () => api.get<AgirlikOzetiCevabi>(`/geometri/malzemeler/${String(no)}/agirlik-ozeti`),
   });
 }
 
