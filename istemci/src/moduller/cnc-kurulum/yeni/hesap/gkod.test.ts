@@ -101,10 +101,8 @@ describe('program durumu', () => {
   });
 
   it('gönderim bir kez alınır; Hazırlık gönderimi aynı ad yüklüyse yeniden okutmaz', () => {
-    gkodaGonder('G0 X1', 'P1', { opt: { stockSrc: 'ham', lathe: true }, takimlar: { 3: { id: 'em10' } } });
+    gkodaGonder('G0 X1', 'P1');
     expect(state['gsimText']).toEqual({ name: 'P1', text: 'G0 X1' });
-    expect(gsimHazirla()).toMatchObject({ stockSrc: 'ham', lathe: true });
-    expect((state['gtools'] as Record<string, unknown>)['P1']).toEqual({ 3: { id: 'em10' } });
     expect(bekleyenGkodAl('P1')).toEqual({ name: 'P1', text: 'G0 X1' });
     expect(bekleyenGkodAl(null)).toBeNull();
     gkodaGonder('G0 X2', 'P2', { adDegisinceYukle: true });

@@ -47,9 +47,6 @@ describe('açılış varsayılanları', () => {
     ['var STOCK_DEF = {', '\n'], ['state.stock = Object.assign({}, STOCK_DEF', '\n'], ['if (state.stock.axV !== 3)', '\n'],
     ['var gs = state.gsimOpt = Object.assign(', '\n'], ['if (!state.gtools || !state.gtools.__v2)', '\n'], ['if (state.gstock && !state.gstockMan)', '\n'],
     ['var LIFE_DEF = {', '\n'], ['state.life = Object.assign({}, LIFE_DEF', '\n'], ['state.wear = state.wear || {};', '\n'],
-    ["state.cam = Object.assign({ prm: {}, dialect: ''", '\n'], ["state.cam.mtMill = state.cam.mtMill || 'same';", '\n'],
-    ['if (state.cam.suV !== 2)', '\n'], ['state.cam.su = state.cam.su || {};', '\n'], ["state.cam.sc = Object.assign({ meas: 'probe'", '\n'],
-    ['state.suProf = state.suProf || {};', '\n'],
   ] as const;
   const prototipVarsayimlari = (kayit: unknown): unknown => {
     const govde = SATIRLAR.map(([bas, son]) => { const i = HTML.indexOf(bas); if (i < 0) throw new Error(bas); return HTML.slice(i, HTML.indexOf(son, i)); }).join('\n');

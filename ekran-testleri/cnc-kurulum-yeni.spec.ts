@@ -45,7 +45,7 @@ const kayitYazan = test.extend<{ kayitSirasi: undefined }>({
   }, { auto: true }],
 });
 
-const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Oto-CAM', 'G-Kod Sim.', 'Takım Ömrü'];
+const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'G-Kod Sim.', 'Takım Ömrü'];
 
 test.describe('iskelet', () => {
   test('görünüm şeridi tam, her görünüm adresiyle açılır, sayfa yatay taşmaz', async ({ page, ac }) => {
@@ -60,7 +60,7 @@ test.describe('iskelet', () => {
 
   // Görünüm alanı kendi kaydırıcısıyla kaydığı için belge taşmaz; kabuğun ve görünüm alanının ayrıca kendi eninde kaldığı ölçülür.
   test('kabuk ve görünüm alanı ekran eninde kalır', async ({ page, ac }) => {
-    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
       const olcu = await page.evaluate(() => {
@@ -117,31 +117,6 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
       }
     });
   }
-});
-
-// P4: Oto-CAM (prototip 22798-24480). Örnek burç sentetiktir (döner profil), dosya okumaz. Plan bellekte durur; örnek seçimi
-// hammadde ayarıdır ve kayda yazılır (cam/is.ts), bu yüzden test kayıt sırasında koşar.
-test.describe('P4 Oto-CAM', () => {
-  kayitYazan('Oto-CAM: bakmak yazmaz, örnek parçadan plan üretilir, 360/768/1280 taşmaz', async ({ page, ac, ag }) => {
-    await ac('/cnc-kurulum/yeni/oto-cam');
-    await expect(page.getByText('OTO-CAM · OTOMATİK PROGRAM')).toBeVisible();
-    expect(ag.yazmalar).toEqual([]);
-    // 860 ve altında panel alttan çekmecedir (prototipteki gibi).
-    const cekmece = page.locator('.tc-cc-cekmece');
-    if (await cekmece.isVisible()) await cekmece.click();
-    await page.getByRole('button', { name: 'Örnek burç (boru)' }).click();
-    const uret = page.getByRole('button', { name: /üret$/ });
-    await expect(uret).toBeEnabled();
-    await uret.click();
-    await expect(page.getByText('Süre kalibrasyonu')).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/^3 · (Plan|Sonuç)/)).toBeVisible();
-    for (const genislik of [360, 768, 1280]) {
-      await page.setViewportSize({ width: genislik, height: 800 });
-      if (genislik <= 860) await expect(cekmece).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-    }
-    expect(ag.hatalar).toEqual([]);
-  });
 });
 
 test.describe('P3 Ham Malzeme ve G-Kod', () => {
@@ -307,7 +282,7 @@ test.describe('3B sahne', () => {
   // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
   test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
       // 2B modda Kütüphane sahne kullanmaz: cepler ve takım çizimi düz öğedir.

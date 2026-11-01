@@ -6,7 +6,6 @@ import type { Tezgah as SunucuTezgahi, TezgahAyari } from '#paylasilan/sozlesme/
 import { dirtyUsage, tezgahlariKur } from '../secici.ts';
 
 vi.mock('../sahne/gl.ts', () => ({ onbellekSil: () => undefined }));
-vi.mock('../cam/disari.tsx', () => ({ AyarSuresiProfili: () => <p>Ayar süresi profili</p> }));
 vi.mock('../depo.ts', async (asil) => ({ ...await asil<object>(), save: vi.fn() }));
 const yetki = vi.hoisted(() => ({ yazabilir: true }));
 const sunucu = vi.hoisted(() => ({ yaz: vi.fn() }));
@@ -77,8 +76,8 @@ describe('Tanımlar penceresi', () => {
     expect(screen.queryByRole('button', { name: 'Yeni malzeme' })).toBeNull();
   });
 
-  it('Hazırlık süreleri sekmesi Oto-CAM parçasının profilini gösterir', () => {
-    render(<TanimlarPenceresi sekme="su" kapat={() => undefined} />);
-    expect(screen.getByText('Ayar süresi profili')).toBeTruthy();
+  it('Oto-CAM kalktığı için Hazırlık süreleri sekmesi yoktur (1399)', () => {
+    render(<TanimlarPenceresi sekme="mach" kapat={() => undefined} />);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual(['Tezgâhlar', 'İş Malzemeleri', '3B modeller']);
   });
 });

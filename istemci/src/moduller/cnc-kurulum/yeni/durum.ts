@@ -2,7 +2,7 @@ import { D } from './veri/cncdata.ts';
 import type { IsMalzemesi, Kalem, Tezgah, TezgahTuru } from './veri/tipler.ts';
 
 // Prototipin bütün durumu: tek kayıt (`cnc-kurulum-motoru.v1`), eski ekranla aynı şema (soru 204 a). Görünümlere ait alanların
-// (`cam`, `gsim*`, `prep`, `mstat`, `suProf`...) iç yapısını görünüm kendi tipiyle okur; açılış varsayılanları ise prototipte
+// (`gsim*`, `prep`, `mstat`...) iç yapısını görünüm kendi tipiyle okur; açılış varsayılanları ise prototipte
 // betik yüklenirken bütün görünümler için uygulanır, bu yüzden burada tek yerdedir (acilisVarsayimlari).
 export const DURUM_ANAHTARI = 'cnc-kurulum-motoru.v1';
 
@@ -68,13 +68,11 @@ const gsimOptDef = () => ({
   rapid: 30000, dialect: 'auto', lathe: false, removal: true, showRapid: true, follow: false, speed: 'auto', stockSrc: 'blk', hamOrigin: 'tlf',
   showPart: true, compare: true,
 });
-const camDef = () => ({ prm: {}, dialect: '', cal: {}, vis: {}, sel: 0 });
-const camScDef = () => ({ meas: 'probe', jaw: 'std', fix: 'vise', kit: 'yes', job: 'repeat', op: 'exp', qc: 'op', tol: 'fine', faiw: 'wait' });
 
 const alanNesnesi = (v: unknown): Record<string, unknown> => (v !== null && typeof v === 'object' ? v as Record<string, unknown> : {});
 
-// Prototipin betik yüklenirken duruma uyguladığı varsayılanlar, prototipteki sırayla (satır 18517-18518, 19069-19071, 19646-19647,
-// 22797, 23204, 23864-23866, 24075). Kayıt yüklendikten hemen sonra bir kez uygulanır.
+// Prototipin betik yüklenirken duruma uyguladığı varsayılanlar, prototipteki sırayla (satır 18517-18518, 19069-19071, 19646-19647).
+// Kayıt yüklendikten hemen sonra bir kez uygulanır. Oto-CAM kalktı (1399): kayıttaki `cam` ve `suProf` alanlarına dokunulmaz.
 export function acilisVarsayimlari(s: CncDurumu): void {
   s.stock = Object.assign({}, STOCK_DEF, s.stock || {});
   if (s.stock.axV !== 3) { s.stock.axis = 'auto'; s.stock.axV = 3; }
@@ -86,13 +84,6 @@ export function acilisVarsayimlari(s: CncDurumu): void {
   if (!s.life.cal) s.life.cal = {};
   s['wear'] = s['wear'] || {};
   s['wearLog'] = s['wearLog'] || [];
-  const cam = Object.assign(camDef(), s['cam'] || {}) as Record<string, unknown>;
-  s['cam'] = cam;
-  cam['mtMill'] = cam['mtMill'] || 'same';
-  if (cam['suV'] !== 2) { cam['su'] = {}; cam['suV'] = 2; }
-  cam['su'] = cam['su'] || {};
-  cam['sc'] = Object.assign(camScDef(), cam['sc'] || {});
-  s['suProf'] = s['suProf'] || {};
 }
 
 export function defaults(): CncDurumu {

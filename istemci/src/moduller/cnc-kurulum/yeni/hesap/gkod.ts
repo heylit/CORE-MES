@@ -3,7 +3,7 @@ import { save, state } from '../depo.ts';
 import type { Tezgah } from '../veri/tipler.ts';
 
 // G-Kod simülasyonunun yorumlayıcısı (Heidenhain Klartext + ISO) ve programın durumdaki yeri. Sahne, çizim ve panel P3'tedir;
-// buradaki kısım başka görünümlerin de okuduğu kısımdır (Hazırlık program kaynağı, Takım Ömrü süreleri, Oto-CAM gönderimi).
+// buradaki kısım başka görünümlerin de okuduğu kısımdır (Hazırlık program kaynağı, Takım Ömrü süreleri).
 
 const TAU = Math.PI * 2;
 
@@ -415,23 +415,17 @@ export function gYukle(text: string, name: string): { prog: GProgram } | { hata:
 }
 
 export interface GonderimAyari {
-  // Simülasyon ayarı (prototipte gönderen: ham kaynağı, sıfır noktası, torna kipi).
-  opt?: Partial<GsimAyari>;
-  // Programdaki takımların kütüphane eşleşmesi (Oto-CAM).
-  takimlar?: GTakimEslesmesi;
-  // Hazırlık'tan açılışta program aynı adla zaten yüklüyse yeniden okunmaz (prOpenSim); Oto-CAM her gönderimde yeniden okutur.
+  // Hazırlık'tan açılışta program aynı adla zaten yüklüyse yeniden okunmaz (prOpenSim).
   adDegisinceYukle?: boolean;
 }
 let bekleyen: (GsimMetni & { adDegisince: boolean }) | null = null;
 
-// Başka görünümden simülasyona program gönderir (prototipte prOpenSim, camSim, Oto-CAM çoklu program): metni ve ayarı duruma
+// Başka görünümden simülasyona program gönderir (prototipte prOpenSim): metni duruma
 // yazar, kaydeder ve G-Kod görünümünün açılışta okuyacağı gönderimi bırakır. Görünüme geçmek gönderenin işidir (`git('gcode')`):
 // görünüm geçişi kabuktadır, hesap katmanı gezinmez.
 export function gkodaGonder(metin: string, ad: string, ayar: GonderimAyari = {}): void {
-  const gs = gsimHazirla();
+  gsimHazirla();
   state['gsimText'] = { name: ad, text: metin };
-  if (ayar.takimlar) gsimTakimlari()[ad] = ayar.takimlar;
-  if (ayar.opt) Object.assign(gs, ayar.opt);
   save();
   bekleyen = { name: ad, text: metin, adDegisince: !!ayar.adDegisinceYukle };
 }

@@ -4,7 +4,7 @@ import { clamp, fmtN } from '../bicim.ts';
 import { durumKur } from '../depo.ts';
 import { allMaterials, byId, material } from '../secici.ts';
 import type { IsMalzemesi } from '../veri/tipler.ts';
-import { matBeh, matRef, mbAp, mbCat, mbK, mbSo, mbStars, mbTimeAs, type MalzemeOzu } from './malzeme-davranisi.ts';
+import { matBeh, matRef, mbK, mbStars, type MalzemeOzu } from './malzeme-davranisi.ts';
 
 // Taşıma prototiptekiyle aynı sonucu vermeli: prototipin işlevleri, eski ekranın yüklediği prototipten alınıp aynı
 // seçicilerle koşturulur.
@@ -29,10 +29,10 @@ type Islev = (...a: unknown[]) => unknown;
 let P: Record<string, Islev> = {};
 beforeAll(async () => {
   HTML = await prototipYukle();
-  const kod = [parca('var MB_ISO = {', '\n  };'), ...['matBeh(m)', 'matRef()', 'mbAp(mat)', 'mbSo(mat, so)', 'mbK(m)', 'mbCat(r)', 'mbTimeAs(S, from, to)', 'mbStars(m)']
+  const kod = [parca('var MB_ISO = {', '\n  };'), ...['matBeh(m)', 'matRef()', 'mbK(m)', 'mbStars(m)']
     .map((a) => islev(`function ${a}`))].join('\n');
   P = new Function('material', 'byId', 'allMaterials', 'clamp', 'fmtN',
-    `${kod}\nreturn { matBeh, matRef, mbAp, mbSo, mbK, mbCat, mbTimeAs, mbStars };`)(material, byId, allMaterials, clamp, fmtN) as Record<string, Islev>;
+    `${kod}\nreturn { matBeh, matRef, mbK, mbStars };`)(material, byId, allMaterials, clamp, fmtN) as Record<string, Islev>;
 });
 beforeEach(() => { durumKur(null, null); });
 
@@ -45,11 +45,9 @@ const ornekler = (): MalzemeOzu[] => [
 ];
 
 describe('malzeme davranışı', () => {
-  it('matBeh, mbAp, mbSo, mbK prototiptekiyle aynı', () => {
+  it('matBeh ve mbK prototiptekiyle aynı', () => {
     for (const m of ornekler()) {
       expect(matBeh(m)).toEqual(p('matBeh')(m));
-      expect(mbAp(m)).toBe(p('mbAp')(m));
-      for (const so of [0.1, 0.45, 2]) expect(mbSo(m, so)).toBe(p('mbSo')(m, so));
       expect(mbK(m)).toEqual(p('mbK')(m));
     }
     expect(matBeh()).toEqual(p('matBeh')());
@@ -59,14 +57,6 @@ describe('malzeme davranışı', () => {
     expect(matRef()).toEqual(p('matRef')());
     durumKur(JSON.stringify({ matO: {} }), null);
     expect(matRef().id).toBe('c45');
-  });
-
-  it('mbCat ve mbTimeAs prototiptekiyle aynı', () => {
-    const satirlar = [{ proc: 'turn', sub: 'rough' }, { proc: 'turn', lo: { sub: 'rough-x' } }, { proc: 'turn' }, { kind: 'rest' }, { kind: 'helix' }, { kind: 'finish' }, {}];
-    for (const r of satirlar) expect(mbCat(r)).toBe(p('mbCat')(r));
-    const S = { fin: 3, mill: 5, turn: 2, tot: 14 };
-    const L = allMaterials();
-    for (const a of L) for (const b of L.slice(0, 5)) expect(mbTimeAs(S, a, b)).toBe(p('mbTimeAs')(S, a, b));
   });
 
   it('mbStars prototipin yıldız sayısı ve oranıyla aynı', () => {

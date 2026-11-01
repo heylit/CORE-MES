@@ -1,5 +1,5 @@
 // Ham malzeme hesabı: STEP/STL ağından hammadde ölçüsü, ağırlık, talaş, dönme ekseni ve yöntem (prototipin hesap kısmı aynen;
-// P3 yazdı, çekirdeğe alındı çünkü sonucu Ana Sayfa, Hazırlık, G-Kod ve Oto-CAM de okur). Parça S'den okuyan sarmalayıcı parca.ts'te.
+// P3 yazdı, çekirdeğe alındı çünkü sonucu Ana Sayfa, Hazırlık ve G-Kod de okur). Parça S'den okuyan sarmalayıcı parca.ts'te.
 import { Matrix4, Quaternion } from 'three';
 import { num } from '../bicim.ts';
 import { STOCK_DEF, type StokAyari } from '../durum.ts';

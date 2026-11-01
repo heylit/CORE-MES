@@ -1,18 +1,10 @@
-import { clamp, fmtN } from '../bicim.ts';
 import { allMaterials, byId, material } from '../secici.ts';
 import type { IsMalzemesi, IsoGrubu } from '../veri/tipler.ts';
 
 // Prototipin MALZEME DAVRANIŞI bölümünün veri ve hesap kısmı: zor malzemede kesme hızı ve ilerleme dışındaki farklar.
 //   eng: kaba frezede radyal kavrama (ae) çarpanı · apT: kaba tornada talaş derinliği (ap) çarpanı (referans 2 mm)
 //   nk: Taylor üssü n çarpanı (küçük n = ömür kesme hızına daha duyarlı) · tune: ilk işte ek deneme süresi (dk)
-//   wh: iş sertleşmesi. ISO grubu varsayılanı malzemeye özel değerle (m.beh) ezilir. Arayüz kısmı (camMatBox) Oto-CAM'dedir.
-
-// Kaynaklar arayüzde düz metin satırı olarak gösterilir (bağlantı açılmaz).
-export const MB_SRC: readonly (readonly [string, string])[] = [
-  ['Machining Doctor · 17-4PH kesme verisi, sertliğe göre düzeltme', 'https://machiningdoctor.com/mds?matId=3030'],
-  ['PMPA · 17-4PH yaşlandırmada boyut küçülmesi', 'https://productionmachining.com/articles/craftsmans-cribsheet-number-67-dimensional-contraction-of-17-4-ph-stainless-steel'],
-  ['Smith Metal · 17-4PH durumları ve sertlik', 'https://www.smithmetal.com/pdf/stainless/ph/17-4ph.pdf'],
-];
+//   wh: iş sertleşmesi. ISO grubu varsayılanı malzemeye özel değerle (m.beh) ezilir.
 
 export interface Davranis { eng: number; apT: number; nk: number; tune: number; wh: number; [alan: string]: number }
 
@@ -41,8 +33,6 @@ export function matBeh(m?: MalzemeOzu | null): Davranis {
   return b;
 }
 export function matRef(): MalzemeOzu { return byId(allMaterials(), 'c45') || { id: 'c45', name: 'C45', vcK: 180, fk: 0.9, iso: 'P' }; }
-export function mbAp(mat?: MalzemeOzu | null): number { return Math.max(0.5, Math.round(20 * matBeh(mat).apT) / 10); }
-export function mbSo(mat: MalzemeOzu | null | undefined, so: number): number { return clamp(so * matBeh(mat).eng, 0.12, 0.65); }
 
 // Kesme süresi katsayıları: süre ∝ 1 / (Vc · f); kabada ayrıca 1 / kavrama.
 export interface SureKatsayisi { fin: number; mill: number; turn: number }
@@ -50,20 +40,6 @@ export function mbK(m: MalzemeOzu): SureKatsayisi {
   const b = matBeh(m), f = 1 / Math.max(1, m.vcK * m.fk);
   return { fin: f, mill: f / b.eng, turn: f / b.apT };
 }
-
-export interface SureSatiri { proc?: string; sub?: string; lo?: { sub?: string } | null; kind?: string }
-export function mbCat(r: SureSatiri): 'turn' | 'fin' | 'mill' {
-  if (r.proc === 'turn') return /rough/.test(r.sub || (r.lo && r.lo.sub) || '') ? 'turn' : 'fin';
-  return /rough|rest|face|helix/.test(r.kind || '') ? 'mill' : 'fin';
-}
-
-// Süre dağılımı (mbSplit'in çıktısı; mbSplit Oto-CAM işinin yapısını okur, orada kalır).
-export interface SureDagilimi { fin: number; mill: number; turn: number; tot: number }
-export function mbTimeAs(S: SureDagilimi, from: MalzemeOzu, to: MalzemeOzu): number {
-  const a = mbK(from), b = mbK(to);
-  return S.tot - S.fin - S.mill - S.turn + S.fin * b.fin / a.fin + S.mill * b.mill / a.mill + S.turn * b.turn / a.turn;
-}
-export function mbRange(x: number, a: number, b: number): string { return `${fmtN(x * a, 3)}–${fmtN(x * b, 3)} mm`; }
 
 // Zorluk göstergesi: C45'e göre kaba işleme süre katsayısı 1-5 yıldıza iner. Prototip HTML döndürür; burada değer döner,
 // çizimi görünüm yapar (yildiz dolu nokta sayısı, oran başlıktaki "×" değeri).
