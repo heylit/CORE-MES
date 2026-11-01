@@ -11,7 +11,7 @@ import { MotorAyarlari } from './MotorAyarlari.tsx';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811: uydurma sürümler.
-const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' };
+const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
 const yetki = (islemler: string[]) => vi.spyOn(oturum, 'useOturum').mockReturnValue({ data: { islemler } } as unknown as ReturnType<typeof oturum.useOturum>);
 const ciz = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><MotorAyarlari /></BildirimSaglayici></QueryClientProvider>);
@@ -46,5 +46,17 @@ describe('motor ayarları', () => {
     fireEvent.change(screen.getByLabelText('Sıralama kuralı'), { target: { value: 'edd' } });
     fireEvent.click(kaydet);
     await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd' }); });
+  });
+
+  it('1714: süre öğrenmesi varsayılan kapalı; açılınca gönderilir', async () => {
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(BOS);
+    ciz();
+    const secim = await screen.findByLabelText('Gerçek sürelerden öğrenme');
+    expect((secim as HTMLSelectElement).value).toBe('kapali');
+    fireEvent.change(secim, { target: { value: 'acik' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' }); });
   });
 });

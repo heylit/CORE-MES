@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { PlanSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { api } from '../../../ortak/veri/api.ts';
-import { egilimNoktalari, olcumYok, saatMetni, tablolarGorunur, yuzdeMetni } from './kurallar.ts';
+import { egilimNoktalari, ogrenmeMetni, olcumYok, saatMetni, tablolarGorunur, yuzdeMetni } from './kurallar.ts';
 import { PlanSagligi } from './PlanSagligi.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -24,6 +24,7 @@ const RAPOR: PlanSagligiCevabi = {
     gecmis: [{ zaman: '2026-10-27T09:00:00.000Z', tahminiBitis: '2026-11-05T10:00:00.000Z' }, { zaman: '2026-10-31T09:00:00.000Z', tahminiBitis: null }],
   }],
   sapanSureler: [],
+  ogrenme: { durum: 'kapali', ogrenilenAdim: 1, satirlar: [{ malzemeId: 4, malzemeKodu: 'M-4', opNo: 20, ornek: 5, oran: 1.25, dagilim: 0.1 }] },
 };
 
 function ciz(roller: string[]) {
@@ -65,5 +66,15 @@ describe('plan sağlığı', () => {
     ciz(['mudur']);
     expect((await screen.findAllByText('Plan tutarlılığı')).length).toBeGreaterThan(0);
     expect(screen.queryByText('En çok kayan emirler')).toBeNull();
+    expect(screen.queryByText('M-4')).toBeNull();
+  });
+
+  it('1714: öğrenme kapalıyken de öğrenilenler görünür (gölge dönem); açıkken motorun kullandığı yazılır', async () => {
+    expect(ogrenmeMetni(RAPOR.ogrenme)).toMatch(/kapalı: motor kullanmıyor/);
+    expect(ogrenmeMetni({ ...RAPOR.ogrenme, durum: 'acik' })).toMatch(/açık: motor bu adımların tamponunu/);
+    expect(ogrenmeMetni({ durum: 'kapali', ogrenilenAdim: 0, satirlar: [] })).toMatch(/^En az üç örneği olan adım henüz yok/);
+    ciz(['planlama_proje']);
+    expect(await screen.findByText('M-4')).toBeTruthy();
+    expect(screen.getByText('±0,1')).toBeTruthy();
   });
 });

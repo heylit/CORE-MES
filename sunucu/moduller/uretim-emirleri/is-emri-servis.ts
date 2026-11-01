@@ -22,7 +22,7 @@ import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.t
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
@@ -697,13 +697,19 @@ export async function oncelikDegistir(db: Db, kullanici: Kullanici, id: number, 
   await s.oncelikDegisimiEkle(db, id, e.oncelik, oncelik, kisiId, await s.anAl(db));
 }
 
+// 1713 (1682 b, 1736): kaynak bir adaysa süre de o adayınkine geçer (kurallar.kaynakSuresi). Elle atama (UE-10) da plan da aynı yoldan yazar.
 async function kaynagiYaz(db: Db, e: UstEmirSatiri, isEmri: IsEmriSatiri, kaynak: AtanabilirKaynak | null): Promise<void> {
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
   const ihlal = kaynakDegisimIhlali({ durum: isEmri.durum, kaynakTuru: kaynakTuru(isEmri) });
   if (ihlal !== null) throw cakisma(ihlal);
   const k = await kaynakCoz(db, kaynak);
-  if ((await s.isEmriKaynagiYaz(db, isEmri.id, k, null)) === null) throw cakisma(ihlal ?? 'Yalnız bekleyen iş emrinin kaynağı değişir.');
+  const takas = kaynakSuresi(isEmri, k, await s.adaylariGetir(db, [isEmri.id]));
+  if ((await s.isEmriKaynagiYaz(db, isEmri.id, k, null, takas?.sure ?? null)) === null) throw cakisma(ihlal ?? 'Yalnız bekleyen iş emrinin kaynağı değişir.');
+  if (takas !== null) {
+    await s.adaySil(db, isEmri.id, takas.cikanAday);
+    if (takas.girenAday !== null) await s.adayEkle(db, isEmri.id, takas.girenAday);
+  }
   await siradakiIstasyonuYaz(db, e.id);
 }
 

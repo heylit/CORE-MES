@@ -1,10 +1,13 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { PlanSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { PLAN_SAGLIGI_SATIR, type PlanSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
+import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { bitenIsEmirleri, emirlerinIsEmriIdleri, emirNolari, isEmriPlanBilgileri, isEmriZamanlari } from '../uretim-emirleri/disari.ts';
 import { haftaSiniri, planSagligi as kural, type BitenEmir, type OlculenAdim } from './plan-sagligi-kurallar.ts';
 import { planSapmalari } from './sapma.ts';
+import { hedefMotorAyari } from './motor-ayari.ts';
+import { ogrenmeOzeti } from './ogrenme.ts';
 import { emirTahminleri, olcumler } from './sorgular.ts';
 import { veriSagligi } from './veri-sagligi.ts';
 
@@ -49,9 +52,18 @@ export async function planSagligi(db: Db, kullanici: Kullanici, simdi = Date.now
   });
 
   const v = await veriSagligi(db, kullanici);
-  return kural({
+  const og = await ogrenmeOzeti(db, PLAN_SAGLIGI_SATIR, simdi);
+  const kodlar = await malzemeOzetleri(db, og.satirlar.map((x) => Number(x.urun)));
+  const ogrenme: PlanSagligiCevabi['ogrenme'] = {
+    durum: (await hedefMotorAyari(db, null)).degerler.ogrenme, ogrenilenAdim: og.ogrenilenAdim,
+    satirlar: og.satirlar.map((x) => ({
+      malzemeId: Number(x.urun), malzemeKodu: kodlar.get(Number(x.urun))?.kod ?? null, opNo: x.opNo, ornek: x.ornek, oran: x.oran, dagilim: x.dagilim,
+    })),
+  };
+  const sonuc = kural({
     simdi, adimlar, olcumler: olcum, tahminler, emirNolari: nolar,
     emirler: emirler.map((e) => ({ ...e, emirNo: no(e.uretimEmriId) })),
     veri: { eksikKonu: v.kategoriler.filter((k) => (k.sayi ?? 0) > 0).length, okunamayanKonu: v.kategoriler.filter((k) => k.sayi === null).length },
   });
+  return { ...sonuc, ogrenme };
 }

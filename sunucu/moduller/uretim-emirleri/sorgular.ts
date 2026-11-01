@@ -1086,14 +1086,25 @@ export function bilesenleriGetir(db: Db, isEmriIdleri: readonly number[]): Promi
   );
 }
 
-// Kaynak bir makine ya da kişidir (null: atanmamış); istasyon kaynaktan türer. Yalnız bekleyen ve fason olmayan iş emri.
+// Kaynak bir makine ya da kişidir (null: atanmamış); istasyon kaynaktan türer. Yalnız bekleyen ve fason olmayan iş emri. Süre verilirse
+// (1713: kaynak bir adaydan geldi) ayar ve birim süresi de yazılır; verilmezse kalır.
 export function isEmriKaynagiYaz(
   db: Db, id: number, k: { makineId: number | null; kisiId: number | null; istasyonId: number | null }, surum: number | null,
+  sure: { ayarSuresiDk: string | null; birimSureDk: string | null } | null = null,
 ): Promise<{ id: number } | null> {
   return db.tek(
-    `UPDATE uretim_emirleri_is_emri SET makine_id = $2, kisi_id = $3, istasyon_id = $4, surum = surum + 1
+    `UPDATE uretim_emirleri_is_emri SET makine_id = $2, kisi_id = $3, istasyon_id = $4, surum = surum + 1,
+            ayar_suresi_dk = CASE WHEN $6::boolean THEN $7::numeric ELSE ayar_suresi_dk END,
+            birim_sure_dk = CASE WHEN $6::boolean THEN $8::numeric ELSE birim_sure_dk END
       WHERE id = $1 AND durum = 'bekliyor' AND fason_firma_id IS NULL AND ($5::int IS NULL OR surum = $5) RETURNING id`,
-    [id, k.makineId, k.kisiId, k.istasyonId, surum],
+    [id, k.makineId, k.kisiId, k.istasyonId, surum, sure !== null, sure?.ayarSuresiDk ?? null, sure?.birimSureDk ?? null],
+  );
+}
+
+export function adaySil(db: Db, isEmriId: number, k: { makineId: number | null; kisiId: number | null }): Promise<unknown> {
+  return db.sorgu(
+    'DELETE FROM uretim_emirleri_is_emri_adayi WHERE is_emri_id = $1 AND (makine_id = $2 OR kisi_id = $3)',
+    [isEmriId, k.makineId, k.kisiId],
   );
 }
 

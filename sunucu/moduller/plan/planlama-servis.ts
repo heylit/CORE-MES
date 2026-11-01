@@ -24,6 +24,7 @@ import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/d
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
+import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
@@ -348,12 +349,14 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
   const { degerler } = await hedefMotorAyari(db, null);
   const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
-  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db)), kayit, kaynak: { durum: kaynak.durum, ek } } };
+  // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
+  const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
+  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek } } };
 }
 
 // 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
 async function motorOlcegi(db: Db): Promise<MotorOlcegi> {
-  return { ufukGun: (await sistemAyariOku(db, 'plan.motor-ufuk-gun')) ?? 63, dilimDk: Number(await sistemAyariOku(db, 'plan.motor-dilim-dk')) };
+  return { ufukGun: (await sistemAyariOku(db, 'plan.motor-ufuk-gun')) ?? 120, dilimDk: Number(await sistemAyariOku(db, 'plan.motor-dilim-dk')) };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

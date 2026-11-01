@@ -738,6 +738,25 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('1713 (1682 b, 1736): kaynak adaya geçince süre adayınki olur, eski tezgâh süresiyle adaylara geçer; geri dönünce süre geri gelir; aday olmayan kaynakta süre kalır', async () => {
+    const ist = await istasyonKur();
+    const [m1, m2, m3] = [await makineKur(ist), await makineKur(ist), await makineKur(ist)];
+    const { uretimEmriId: id, isEmriIdleri } = await ac([adim(1, { tur: 'makine', id: m1 }, {
+      adaylar: [{ kaynak: { tur: 'makine', id: m2 }, ayarSuresiDk: '20', birimSureDk: '2.5' }],
+    })]);
+    const ie = isEmriIdleri[0]!;
+    const durum = async () => {
+      const a = (await ayrinti(id)).isEmirleri[0]!;
+      return { kaynak: a.kaynak?.id ?? null, sure: [a.ayarSuresiDk, a.birimSureDk].map(Number), adaylar: a.adaylar.map((x) => [x.kaynak.id, Number(x.ayarSuresiDk), Number(x.birimSureDk)]) };
+    };
+    await o().vt.tx((db) => isEmriKaynagiYaz(db, kim('planlama_proje'), ie, { tur: 'makine', id: m2 }));
+    assert.deepEqual(await durum(), { kaynak: m2, sure: [20, 2.5], adaylar: [[m1, 10, 1.5]] }, 'plan adaya geçirdi');
+    await o().vt.tx((db) => isEmriKaynagiYaz(db, kim('planlama_proje'), ie, { tur: 'makine', id: m1 }));
+    assert.deepEqual(await durum(), { kaynak: m1, sure: [10, 1.5], adaylar: [[m2, 20, 2.5]] }, 'geri dönünce süre geri gelir');
+    await o().vt.tx((db) => isEmriKaynagiYaz(db, kim('planlama_proje'), ie, { tur: 'makine', id: m3 }));
+    assert.deepEqual(await durum(), { kaynak: m3, sure: [10, 1.5], adaylar: [[m2, 20, 2.5]] }, 'aday olmayan kaynakta süre uydurulmaz');
+  });
+
   test('plan: planlanacak iş emirleri fasonsuz ve bitmemiştir, öncelik ve tarih taşır, taslak istenirse gelir; kaynak ve plan bilgisi yazılır; işlemsiz kişi reddedilir', async () => {
     const ist = await istasyonKur();
     const makine = await makineKur(ist);

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import { adaylar, adaySureleri, gunAcilimlari, gunCizelgesi, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { ufukKur } from '../../ufuk-olcegi.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -10,6 +11,10 @@ function kur() {
   const cx = derle(girdiKur(c, plandanBitenler(c, p))); return { c, p, cx, now: simdiSaati(c) };
 }
 const yz = (v: number) => Number((v * 100).toFixed(3));
+
+// Bu dosyanın beklenen değerleri 63 günlük ufukla kuruldu; testin konusu varsayılan ufuk değil (1681 b ile varsayılan 120 gün).
+beforeEach(() => { ufukKur({ ufukGun: 63 }); });
+afterEach(() => { ufukKur(null); });
 
 describe('çizelge hesapları', () => {
   it('hafta: satır sırası, gün başlıkları, işler ve şimdi çizgisi eski çizelgeyle aynı', () => {

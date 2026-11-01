@@ -19,7 +19,7 @@ export function MotorAyarlari() {
   const q = useQuery({ queryKey: ANAHTAR, queryFn: () => api.get<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU) });
   return (
     <div>
-      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı ve sıralama kuralı." />
+      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı, sıralama kuralı ve süre öğrenmesi." />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
         : q.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Motor ayarları alınamadı')} yenile={() => { void q.refetch(); }} />
           : <Kart baslik="Güncel ayarlar" simge="gear">

@@ -113,7 +113,9 @@ function rrCevir(st) {
       const ad = opAd(s.opId) || (o0 && o0.ad) || ('OP ' + s.seq); if (!o0 || o0.ad !== ad) z.ad = ad;
       const ref = o0 ? rrAdimYerli(o0, grupOf, s.opId) : null;
       if (!o0 || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
-        const izin = [s.stationId, ...(s.alts || [])].filter(Boolean);
+        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ayar süresi
+           boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
+        const izin = [s.stationId, ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
         const eski = (o0 && o0.tezgahlar) || [];
         const sure = g => g === s.stationId ? { ayar: +s.setup || 0, cevrim: +s.cycle || 0 } : { ayar: +((s.altTimes || {})[g] || {}).setup || 0, cevrim: +((s.altTimes || {})[g] || {}).cycle || 0 };
         const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
@@ -563,7 +565,15 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
     agHazirla(Object.assign({}, D0, ...TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined).map(a => ({ [a]: D[a] }))));
     D0k = rrKopya(D0); agHazirla(D0k);
   }
-  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !rrEsit(D[a], D0k[a]));
+  /* Okuyanın göremediği dilim (yetki yok: null) boş liste sayılırsa tezgâh ve kişinin plan ayarları (verim, vardiya, ...) ve adımların tezgâh
+     süreleri açık çalışmadan silinir, sayfa kaydedince kalıcı olur. O dilimden kurulan alan çalışmadaki gibi kalır; görebilen açınca yenilenir. */
+  const d = (kaynak && kaynak.durum) || {};
+  const kayittaVar = k => !!kayit && Array.isArray(kayit[k]) && kayit[k].length > 0;
+  const okunamayan = new Set([
+    ...(Array.isArray(d.machines) && Array.isArray(d.stations) || kayittaVar('machines') ? [] : ['tezgahlar', 'urunler']),
+    ...(Array.isArray(d.people) || kayittaVar('people') ? [] : ['personel']),
+  ].filter(a => Array.isArray(D0[a])));
+  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
   for (const a of alanlar) D0[a] = D[a];
   if (alanlar.length) tmiTabanKur(D0, bugun);
   return alanlar;
@@ -629,7 +639,7 @@ function stKur(S, ek = [], gevset = true) {
   D.siparisler = D.siparisler.filter(s => !s.havuz);
   const st = {
     D, now: 7, down: S.down.map((d, i) => ({ ...d, id: 'd' + i })), ekMesai: clone(S.ekMesai), eksik: [],
-    locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
+    locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: clone(S.ogren || {}),
     w: { ...clone(W0), rule: MOTOR_KURALI.has(S.w.rule) ? S.w.rule : W0.rule, famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta),
       /* 1477 a: motor ölçeği (sistem ayarı); yoksa motor varsayılanı (engine olcekKur) */
       ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null },

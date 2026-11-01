@@ -328,6 +328,24 @@ export function kendiligindenSatir(
   return { satirId: adaylar[0]?.id ?? null };
 }
 
+// 1713 (1682 b): iş emrinin süresi kaynağının süresidir. Açılışta rotadan kopyalanan adaylar kendi süresini taşır; seçilen kaynak bir adaysa
+// süre o adaydan gelir ve eski ana kaynak süresiyle adaylara geçer (takas), ki plan sonra eski tezgâha dönerse onun süresi kaybolmasın.
+// Seçilen kaynak aday değilse (aynı kaynak, rotada olmayan kaynak) süre ve adaylar değişmez: bilinmeyen süre uydurulmaz. Kaynaksız ana satırın
+// süresi adaya geçemez (adayın makinesi ya da kişisi olmalı).
+export interface KaynakRef { makineId: number | null; kisiId: number | null }
+export interface SureliKaynak extends KaynakRef { ayarSuresiDk: string | null; birimSureDk: string | null }
+const ayniKaynakMi = (a: KaynakRef, b: KaynakRef) => (a.makineId !== null && a.makineId === b.makineId) || (a.kisiId !== null && a.kisiId === b.kisiId);
+export function kaynakSuresi(
+  mevcut: SureliKaynak, yeni: KaynakRef, adaylar: readonly SureliKaynak[],
+): { sure: { ayarSuresiDk: string | null; birimSureDk: string | null }; cikanAday: KaynakRef; girenAday: SureliKaynak | null } | null {
+  if (ayniKaynakMi(mevcut, yeni)) return null;
+  const aday = adaylar.find((a) => ayniKaynakMi(a, yeni));
+  if (aday === undefined) return null;
+  const girenAday = mevcut.makineId !== null || mevcut.kisiId !== null
+    ? { makineId: mevcut.makineId, kisiId: mevcut.kisiId, ayarSuresiDk: mevcut.ayarSuresiDk, birimSureDk: mevcut.birimSureDk } : null;
+  return { sure: { ayarSuresiDk: aday.ayarSuresiDk, birimSureDk: aday.birimSureDk }, cikanAday: { makineId: aday.makineId, kisiId: aday.kisiId }, girenAday };
+}
+
 export function kaynakDegisimIhlali(isEmri: { durum: IsEmriDurumu; kaynakTuru: IsEmriKaynakTuru | null }): string | null {
   if (isEmri.kaynakTuru === 'fason') return FASON_KAYNAGI_SABIT;
   return isEmri.durum === 'bekliyor' ? null : KAYNAK_BEKLEYENDE;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
@@ -12,6 +12,7 @@ import { KAYDEDILEMEDI } from './coz.ts';
 import { PlanlamaMotoru } from './index.tsx';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
 import { ornekCalisma } from './ornek.ts';
+import { ufukKur } from '../ufuk-olcegi.ts';
 
 afterEach(cleanup);
 
@@ -41,6 +42,10 @@ const komutKur = (c: PlanlamaCalismasi) => {
   const komut: CalismaKomutu = { degistir: vi.fn((_ne, fn) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }) } as unknown as CalismaKomutu;
   return { komut, yazilan };
 };
+
+// Bu dosyanın beklenen değerleri 63 günlük ufukla kuruldu; testin konusu varsayılan ufuk değil (1681 b ile varsayılan 120 gün).
+beforeEach(() => { ufukKur({ ufukGun: 63 }); });
+afterEach(() => { ufukKur(null); });
 
 describe('PlanlamaMotoru', () => {
   it('çalışma yoksa söyler: üç adım, pasif Planı kur ve Veri ve kısıtlar, sayı yok; plan çubuğu üstte (489/2 c, 497/10 a)', async () => {

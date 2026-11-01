@@ -9,7 +9,7 @@ import { MotorKurali } from './MotorKurali.tsx';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811 (833 a, 830 a): uydurma taslak ve sürüm.
-const DEGERLER = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs' } as const;
+const DEGERLER = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' } as const;
 const cevap = (farkli: boolean, kural: 'edd' | null): MotorAyarlariCevabi => ({
   guncel: { surumId: 2, degerler: DEGERLER, yazan: 'Deneme Kişi', zaman: null },
   taslak: { id: 7, surum: { surumId: 1, degerler: DEGERLER, yazan: 'Deneme Kişi', zaman: null }, farkli, kural },

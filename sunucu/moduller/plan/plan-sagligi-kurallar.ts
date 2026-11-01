@@ -171,7 +171,8 @@ function sapanSureler(g: PlanSagligiGirdisi): PlanSagligiCevabi['sapanSureler'] 
   }).sort((a, b) => uzaklik(b.ortancaOran) - uzaklik(a.ortancaOran) || b.ornek - a.ornek).slice(0, PLAN_SAGLIGI_SATIR);
 }
 
-export function planSagligi(g: PlanSagligiGirdisi): PlanSagligiCevabi {
+// Öğrenme bölümü (1714) motor ayarı ve rota okuması ister; çağıran ekler.
+export function planSagligi(g: PlanSagligiGirdisi): Omit<PlanSagligiCevabi, 'ogrenme'> {
   const { hafta, haftalar } = haftaSiniri(g.simdi);
   const s = soz(g, hafta);
   const sonOlcum = [...g.olcumler].sort((a, b) => Date.parse(a.zaman) - Date.parse(b.zaman)).at(-1) ?? null;

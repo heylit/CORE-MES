@@ -8,13 +8,14 @@ import { SayiKarti } from '../../../ortak/arayuz/SayiKarti.tsx';
 import { Tablo } from '../../../ortak/arayuz/Tablo.tsx';
 import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
-import { egilimNoktalari, olcumYok, saatMetni, tablolarGorunur, tarihMetni, yuzdeMetni } from './kurallar.ts';
+import { egilimNoktalari, ogrenmeMetni, olcumYok, saatMetni, tablolarGorunur, tarihMetni, yuzdeMetni } from './kurallar.ts';
 
 // Plan sağlığı (1478): planın ne kadar tuttuğu ve ne kadar oynadığı, son 8 hafta. Yalnız okur; her kart neyi neden ölçtüğünü yazar.
 export const PLAN_SAGLIGI_YOLU = '/plan/plan-sagligi';
 
 type KayanEmir = PlanSagligiCevabi['kayanEmirler'][number];
 type SapanSure = PlanSagligiCevabi['sapanSureler'][number];
+type OgrenilenAdim = PlanSagligiCevabi['ogrenme']['satirlar'][number];
 
 export function PlanSagligi() {
   const q = useQuery({ queryKey: ['plan', 'plan-sagligi'], queryFn: () => api.get<PlanSagligiCevabi>(PLAN_SAGLIGI_YOLU) });
@@ -103,6 +104,23 @@ function Tablolar({ c }: { c: PlanSagligiCevabi }) {
             { anahtar: 'ornek', baslik: 'Örnek', hucre: (s) => String(s.ornek) },
             { anahtar: 'encok', baslik: 'En çok sapan', hucre: (s) => `${s.enCok.emirNo} / ${String(s.enCok.opNo)}: ${s.enCok.oran.toLocaleString('tr-TR')}`,
               csv: (s) => `${s.enCok.emirNo} ${String(s.enCok.opNo)} ${String(s.enCok.oran)}` },
+          ]}
+        />
+      </Kart>
+      <Kart baslik="Gerçek sürelerden öğrenme" simge="chart">
+        <p>{ogrenmeMetni(c.ogrenme)}</p>
+        <Tablo<OgrenilenAdim>
+          etiket="Gerçek sürelerden öğrenme"
+          satirlar={c.ogrenme.satirlar}
+          satirAnahtari={(o) => `${String(o.malzemeId)}-${String(o.opNo)}`}
+          bosMesaj="Son 90 günde en az üç kez biten ürün adımı yok."
+          sutunlar={[
+            { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (o) => <span className="mono">{o.malzemeKodu ?? `#${String(o.malzemeId)}`}</span>,
+              csv: (o) => o.malzemeKodu ?? String(o.malzemeId) },
+            { anahtar: 'op', baslik: 'Op', hucre: (o) => String(o.opNo) },
+            { anahtar: 'oran', baslik: 'Gerçek / plan (ortalama)', kirilmaz: true, hucre: (o) => o.oran.toLocaleString('tr-TR') },
+            { anahtar: 'dagilim', baslik: 'Dağılım', hucre: (o) => `±${o.dagilim.toLocaleString('tr-TR')}`, csv: (o) => String(o.dagilim) },
+            { anahtar: 'ornek', baslik: 'Örnek', hucre: (o) => String(o.ornek) },
           ]}
         />
       </Kart>

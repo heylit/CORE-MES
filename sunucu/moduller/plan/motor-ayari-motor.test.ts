@@ -25,6 +25,22 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
   });
 });
 
+describe('plan: süre öğrenmesi çalışmaya uygulanır (1714, 1684 b)', () => {
+  const ogren = { '7 1': { n: 3, f: 1.2, v: 0.01 } };
+  const acik = { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' as const };
+  const oku = (c: unknown) => (c as { ogren: unknown }).ogren;
+  test('kapalıyken alan boştur; açıkken verilen değer gider; kayda geçmiş eski değer açık verilen değerle ezilir', () => {
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {} }, MOTOR_AYARI_VARSAYILAN, null, null, ogren)), {});
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {} }, acik, null, null, ogren)), ogren);
+    assert.deepEqual(oku(calismayaMotorAyari({ D: {}, ogren: { '9 9': { n: 5, f: 2, v: 0 } } }, acik, null, null, null)), {});
+  });
+  test('verilmezse çalışmadaki değer korunur; taslağın ayarında öğrenme kapalıysa boşalır', () => {
+    const ilk = calismayaMotorAyari({ D: {} }, acik, null, null, ogren);
+    assert.deepEqual(oku(calismayaMotorAyari(ilk, acik)), ogren);
+    assert.deepEqual(oku(calismayaMotorAyari(ilk, MOTOR_AYARI_VARSAYILAN)), {});
+  });
+});
+
 describe('plan: finansman oranı finanstan gelir (1383 a)', () => {
   test('finansın günlük oranı D.planAgirlik.fin olur, öbür ağırlıklar kalır; oran yoksa elle oran kalır', () => {
     const kayit = { D: { planAgirlik: { fin: 0.13, taban: 12 }, planTL: {} } };
@@ -75,6 +91,22 @@ const ilkSiparis = (kural: MotorAyarlari['kural'] | null): { rule: string; ilk: 
   const ilk = Object.entries(p.ops).sort(([, a], [, b]) => a.S - b.S)[0]![0].split('.')[0]!;
   return { rule: (g.st as { w: { rule: string } }).w.rule, ilk };
 };
+
+describe('plan: süre öğrenmesi motora (1714, 1684 b)', () => {
+  // Ürün 50'nin tek adımı rotada sıra 10'dur; motorun anahtarı "ürün sıra"dır.
+  const sigma = (ayar: MotorAyarlari, ogren: Record<string, { n: number; f: number; v: number }> | null): number[] => {
+    const g = planGirdisi({ calisma: calismayaMotorAyari(calismaKur(), ayar, null, null, ogren), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
+    assert.ok(g);
+    const m = motorYukle(); const st = m.stHazirla(g.st);
+    return [...(m.compile(st) as { ops: { sig: number }[] }).ops].map((o) => o.sig);
+  };
+  test('açıkken öğrenilen belirsizlik adıma geçer; kapalıyken varsayılan kalır', () => {
+    const ogren = { '50 10': { n: 5, f: 1.25, v: 0.0625 } };
+    const varsayilan = sigma(MOTOR_AYARI_VARSAYILAN, null);
+    assert.deepEqual(sigma(MOTOR_AYARI_VARSAYILAN, ogren), varsayilan);
+    assert.deepEqual(sigma({ ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' }, ogren), varsayilan.map(() => 0.2));
+  });
+});
 
 describe('plan: amaç motor ayarından motora (771 a)', () => {
   test('899 a (832 a): TL amacı her iki ayarda kapalı; bedel kipi kalktı, kayıttaki amaç geçmez', () => {
