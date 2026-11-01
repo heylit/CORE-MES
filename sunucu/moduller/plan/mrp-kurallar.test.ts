@@ -39,6 +39,7 @@ describe('plan: MRP ihtiyaç kuralı (1472 M1)', () => {
   test('stok kaydı yoksa serbest ve net boş; brüt yine görünür', () => {
     const y = satir(mrpSatirlari(temel), YARI)!;
     assert.deepEqual([y.brut, y.serbest, y.net, y.acildi], [4, null, null, false], 'ağacı verilmeyen yarı mamul açılmaz');
+    assert.equal(y.eksikTarihi, null, 'net bilinmezken eksik günü de boş');
   });
 
   test('verilmiş sarf düşülür; tamamı verilmiş malzeme satır vermez', () => {
@@ -99,9 +100,10 @@ describe('plan: MRP ihtiyaç kuralı (1472 M1)', () => {
 
   test('1545 a: satın alma görünmüyorsa açık sipariş ve net boş; stok görünmüyorsa serbest ve net boş', () => {
     const h = satir(mrpSatirlari({ ...temel, gelisler: null }), HAM)!;
-    assert.deepEqual([h.brut, h.serbest, h.acikSiparis, h.net, h.emniyetPayi], [13, 4, null, null, null]);
+    assert.deepEqual([h.brut, h.serbest, h.acikSiparis, h.net, h.emniyetPayi, h.eksikTarihi], [13, 4, null, null, null, null]);
     const s = satir(mrpSatirlari({ ...temel, serbest: new Map() }), HAM)!;
-    assert.deepEqual([s.serbest, s.net, s.acikSiparis], [null, null, 0]);
+    assert.deepEqual([s.serbest, s.net, s.acikSiparis, s.eksikTarihi], [null, null, 0, null]);
+    assert.equal(satir(mrpSatirlari(temel), HAM)!.eksikTarihi, '2026-11-02', 'ikisi de görünürken eksik günü dolu');
   });
 
   test('sıra: eksik günü, sonra ihtiyaç günü, sonra malzeme', () => {
