@@ -20,6 +20,11 @@ const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.t
 const TERMIN_SAATI = '23:59';
 const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
 const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
+/* 1476-D: çok katmanlı emrin alt düğümü motorda ayrı siparişdir ve tüketen üst adıma montaj bağıyla bağlanır (durum.betik mtStUygula,
+   kancalar.betik montajUygula). Kimlik kök emrin kimliği ve düğüm yoludur ("0.1.2" -> "<emir>-Y1-Y2"; "-Y" sayısı derinliktir). */
+const dugumSipId = (o, yol) => String(o.id) + String(yol).split('.').slice(1).map(n => '-Y' + n).join('');
+const rotaOpNo = a => a.opNo > 0 ? a.opNo : a.seq;
+const rotaAdimlari = (st, id) => ((((st && st.routes) || {})[id] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
 
 /* rota adımının çerçevedeki karşılığı: istasyon = ilk makinenin grubu, alternatif = öteki gruplar, süre = grubun ilk makinesi */
 /* fason adım çerçevede istasyonsuz, fasonId'li adımdır; termin günü fasoncunun süresidir */
@@ -192,6 +197,31 @@ function rrCevir(st) {
       if (!a || !rrEsit(a.malzeme || [], mal)) y.malzeme = mal; }
     return rrKur(a, y);
   });
+  /* 1476-D: alt düğüm ürününün yürürlükteki rotasıyla dizilir (983 b: emir eski revizyondan açıldıysa rotada olmayan adımı yerleşmez).
+     Adedi kök adedi x kök başına adet; termini yoktur, motor tüketen üst adımın başlangıcından geriye kurar. Tüketen adım bulunamazsa
+     bağ uydurulmaz, düğüm emrin terminiyle bağımsız iş olur. Ürünü, rotası ya da çarpanı okunamayan düğüm plana girmez (adımları yerleşmez).
+     Gelir ve ceza yalnız kök emrindir. dugumBiten: düğümün biten adımları (tmiBitenler). */
+  const dugumSiparisleri = [];
+  for (const o of st.orders || []) for (const d of o.dugumler || []) {
+    const steps = rotaAdimlari(st, d.itemId), ak = adimAnahtari[d.itemId];
+    if (!urunMu(item(d.itemId)) || !steps.length || !ak || !(+d.carpan > 0)) continue;
+    const kOf = (id, adimlar, op) => { const x = adimlar.find(t => rotaOpNo(t) === op); return x && adimAnahtari[id] ? adimAnahtari[id][x.seq] ?? null : null; };
+    const ustUrun = d.ust === '0' ? o.itemId : ((o.dugumler.find(x => x.dugum === d.ust) || {}).itemId);
+    const ustAdim = d.ustOpNo == null || ustUrun == null ? null : kOf(ustUrun, rotaAdimlari(st, ustUrun), d.ustOpNo);
+    const ana = siparisler.find(x => String(x.id) === String(o.id)) || {};
+    const biten = (d.adimlar || []).filter(x => x.durum === 'tamam').map(x => kOf(d.itemId, steps, x.kaynakOpNo)).filter(k => k != null);
+    const mal = steps.flatMap(t => (t.ins || []).filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty, adim: ak[t.seq] ?? String(t.seq) })));
+    const bagli = ustAdim != null && +d.birim > 0;
+    /* sayfanın eklediği alanlar (ağırlık, elle öncelik) önceki kopyada (d.plan) kalır; sunucunun alanları her okumada yeniden yazılır */
+    dugumSiparisleri.push(rrKur(d.plan || null, {
+      id: dugumSipId(o, d.dugum), urun: d.itemId, adet: +o.qty * +d.carpan, termin: bagli ? null : ana.termin ?? null, serbest: ana.serbest ?? null,
+      oncelik: ana.oncelik ?? oncSinifi(o.priority), havuz: ana.havuz ? true : undefined, ad: (ana.ad || o.no || o.id) + ' ' + d.dugum,
+      gelir: null, cezaGun: null, malzeme: mal, dugum: d.dugum,
+      ust: bagli ? (d.ust === '0' ? String(o.id) : dugumSipId(o, d.ust)) : undefined, ustAdim: bagli ? String(ustAdim) : undefined, birim: bagli ? +d.birim : undefined,
+      dugumBiten: biten.length ? biten : undefined,
+    }));
+  }
+  siparisler.push(...dugumSiparisleri);
   /* takvim: vardiya, çalışma günü ve tatil değişmemişse asıl kayıt */
   /* 168 b: vardiyanın molaları (Vardiya modülü) motora geçer; motor molada tezgâhı çalıştırmaz */
   const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit, molalar: v.molalar || [] }));
@@ -319,6 +349,13 @@ function tmiIslemler(st, D) {
     const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
     const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
     adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
+    /* 1476-D: alt düğüm adımı emirdeki numarasıyla ("emir no|1010") düğüm siparişinin, rotadaki numarası (kaynakOpNo) olan adımına */
+    for (const d of o.dugumler || []) {
+      const sid = dugumSipId(o, d.dugum), du = (D.urunler || []).find(x => x.id === d.itemId);
+      if (!du || !(D.siparisler || []).some(s => String(s.id) === sid)) continue;
+      const da = rotaAdimlari(st, d.itemId);
+      for (const x of d.adimlar || []) { const i = da.findIndex(t => rotaOpNo(t) === x.kaynakOpNo); const k = i < 0 ? null : du.rota[i] && du.rota[i].k; if (k != null) opOf[`${o.no}|${x.opNo}`] = `${sid}.${k}`; }
+    }
   }
   return opOf;
 }
@@ -340,8 +377,9 @@ function tmiBitenler(emirler, D) {
   const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
   for (const s of (D && D.siparisler) || []) {
     const rota = (urun[s.urun] || {}).rota || [];
+    if (s.dugum && y.siparis[String(s.id).split('-Y')[0]]) y.siparis[s.id] = 1;
     if (y.siparis[s.id] || !rota.length) continue;
-    const biten = rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
+    const biten = s.dugum ? rota.filter(a => (s.dugumBiten || []).includes(a.k)) : rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
     if (biten.length === rota.length) y.siparis[s.id] = 1;
     else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
   }
@@ -417,7 +455,9 @@ function sunucuKaydi(kayit, durum, D0, bugun) {
     k.orders = e.orders.map(x => {
       const plan = sip0(x.id) || (eskiEmir.get(x.id) || {}).plan;
       /* 678 a: başlangıcı olmayan emir bugünün başından serbesttir; ilk vardiyanın saati (kayıtta takvim yokken 08:00) beklenmez */
-      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || null, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, x.start ? {} : { serbestSaat: '00:00' }, plan ? { plan } : {});
+      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || null, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, x.start ? {} : { serbestSaat: '00:00' }, plan ? { plan } : {},
+        /* 1476-D: düğüm siparişinin motor ayarı da (sayfanın düzenlediği) açık çalışmadan, aynı kimlikle korunur */
+        Array.isArray(x.dugumler) && x.dugumler.length ? { dugumler: x.dugumler.map(d => { const p = sip0(dugumSipId(x, d.dugum)); return p ? Object.assign({}, d, { plan: p }) : d; }) } : {});
     });
   }
   return k;
