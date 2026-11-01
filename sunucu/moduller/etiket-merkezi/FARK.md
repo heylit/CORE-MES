@@ -73,3 +73,10 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Uç `GET /etiket-merkezi/etiketler` (`biri: sayfa.etiket-merkezi`); yeni işlem ve rol yok. Tablo ile koddaki `SABLON_TURLERI` ve `KAYIT_TURLERI` testle eşlenir (EM-U17): yeni tür listeye yazılmadan girerse test düşer.
 - Borç (1309 c): Üretim Hazırlık seri no etiketi şimdi taşınmaz; seri no sunucuda kayıt değil (işin kaydında istemcide üretilir). Markalama modülündeki seri kaydıyla birlikte ikinci turda (`seri-no` satırı) ele alınır.
 - Ekran: ikinci menüde "Etiketler" (`/etiket-merkezi/etiketler`); tablo, sahip modül ana menü adıyla.
+
+## Hatalı parça etiketi (kart 1525, 1285 a)
+- Yeni şablon türü ve kayıt türü `hatali-parca`; hazır şablon `hatali-parca-100x50` (lot etiketiyle aynı rulo). Kaynak Üretim Emirleri `disari.ts hataliKaydi`; sahip modülde değişiklik yok.
+- Basılan: durum (karar: REWORK, HURDA, RED, KABUL, ŞARTLI KABUL; karar yoksa KARAR BEKLİYOR), emir no (kol açıldıysa "kol <no>"), parça no ve adı, OP no ve adı, adet ve hurda nedeni, ayıran ve zaman, karar veren, zaman, NCR no ve not. Boş alan basılmaz.
+- QR emrin `UE:<kimlik>`i (parçanın bulunduğu emir: kol ya da emrin kendisi); yeni önek yok (UYUM-BORCU 19).
+- Deftere `kaynak_tur = 'hatali-parca'`, `kaynak_id` hatalı kayıt kimliği. Göç `20261031211000_etiket_merkezi_ilk_tur.sql` (1530): defter tür kısıtı genişler, etiket listesinde `hatali-parca` satırı `hazir` olur.
+- Uç, işlem ve rol değişmedi: kayıt çıktısı `etiket-merkezi.oku`, basma ve indirme mevcut işlemleriyle.

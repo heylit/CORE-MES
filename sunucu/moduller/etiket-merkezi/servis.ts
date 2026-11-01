@@ -14,11 +14,11 @@ import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { istasyonKonumlari, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
-import { refakatKarti } from '../uretim-emirleri/disari.ts';
+import { hataliKaydi, refakatKarti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  baskiEngeli, dogrudanBaskiDurumu, hataliParcaDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -108,6 +108,14 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
       if (r === null || r.durum === 'iptal') continue;
       const kart = await refakatKarti(db, r.uretimEmriId).catch((h: unknown) => { if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') return null; throw h; });
       if (kart) sonuc.set(id, [{ id: r.uretimEmriId, baslik: r.etiket, degerler: refakatPartisiDegerleri(kart, r, r, basim) }]);
+    }
+    return sonuc;
+  }
+  if (k.tur === 'hatali-parca') {
+    // Başlık parçanın emri ve işlemidir; deftere hatalı kaydın kimliği yazılır.
+    for (const id of k.idler) {
+      const h = await hataliKaydi(db, id);
+      if (h) sonuc.set(id, [{ id, baslik: `${h.uretimEmri.emirNo} OP ${h.isEmri.opNo}`, degerler: hataliParcaDegerleri(h) }]);
     }
     return sonuc;
   }

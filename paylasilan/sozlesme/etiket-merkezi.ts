@@ -9,10 +9,10 @@ export const DOSYA_UZANTILARI: Record<YaziciDili, string> = { zpl: 'zpl', pplb: 
 export const COZUNURLUKLER = [203, 300] as const;
 export type Cozunurluk = (typeof COZUNURLUKLER)[number];
 
-export const SABLON_TURLERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'istasyon', 'deneme'] as const;
+export const SABLON_TURLERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'istasyon', 'hatali-parca', 'deneme'] as const;
 export type SablonTuru = (typeof SABLON_TURLERI)[number];
 export const SABLON_TURU_ADLARI: Record<SablonTuru, string> = {
-  konum: 'Konum ve harita kutusu', raf: 'Raf', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'İstasyon', deneme: 'Yazıcı denemesi',
+  konum: 'Konum ve harita kutusu', raf: 'Raf', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'İstasyon', 'hatali-parca': 'Hatalı parça', deneme: 'Yazıcı denemesi',
 };
 
 export const EN_COK_ADET = 500;
@@ -20,7 +20,8 @@ export const EN_COK_ADET = 500;
 // Gerçek kayıttan basılan etiketin kaynağı. Stok ekranı seçili konumları adresle gönderir: /etiket-merkezi?tur=konum&id=1,2,3
 // "mal-kabul" o kabulden açılan bütün lotları lot şablonuyla basar; "raf" Fabrika Haritası'ndaki raftır (#116).
 // refakat-partisi: stoktaki refakat kartı (emir + lot, kart #127), refakat şablonuyla basılır. Emirden lotsuz kart basılmaz (Soru 587 a).
-export const KAYIT_TURLERI = ['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'mal-kabul'] as const;
+// hatali-parca: Üretim Emirleri'nin hatalı parça kaydı (1285 a).
+export const KAYIT_TURLERI = ['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'mal-kabul', 'hatali-parca'] as const;
 export type KayitTuru = (typeof KAYIT_TURLERI)[number];
 export const EN_COK_KAYIT = 200;
 const kayitId = z.number().int().positive().max(2147483647);

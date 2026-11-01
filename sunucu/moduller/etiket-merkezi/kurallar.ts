@@ -1,9 +1,9 @@
 import qrcode from 'qrcode-generator';
 import { adresAraliktaMi, adresCoz, type AgAraligi } from '#paylasilan/ag-araligi.ts';
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
 
@@ -269,5 +269,27 @@ export function refakatPartisiDegerleri(
     qr: r.qr,
     emirNo: r.etiket,
     lot: birlestir([`Lot ${lot.lotNo}`, lot.tedarikciPartiNo && `Parti ${lot.tedarikciPartiNo}`, lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`]),
+  };
+}
+
+// EM-21 (1285 a): hatalı parça etiketi Üretim Emirleri'nin hatalı kaydını basar. Durum karardan gelir, elle seçilmez; karar yoksa
+// "Karar bekliyor". QR parçanın bulunduğu emri gösterir (kol ya da emrin kendisi); yeni kod öneki açılmaz.
+export const HATALI_DURUM_ADLARI: Record<NonNullable<HataliKaydiOzeti['karar']>, string> = {
+  rework: 'REWORK', hurda: 'HURDA', red: 'RED', kabul: 'KABUL', sartli_kabul: 'ŞARTLI KABUL',
+};
+const anYazisi = (an: string): string => { const [gun = '', saat = ''] = tesisSaati(new Date(an)).split(' '); return `${gunAyYil(gun)} ${saat}`; };
+export function hataliParcaDegerleri(h: HataliKaydiOzeti): AlanDegerleri {
+  const kol = h.hedefEmir.id === h.uretimEmri.id ? null : `kol ${h.hedefEmir.emirNo}`;
+  return {
+    qr: `${KOD_ONEKI['uretim-emri']}:${h.hedefEmir.id}`,
+    durum: h.karar === null ? 'KARAR BEKLİYOR' : HATALI_DURUM_ADLARI[h.karar],
+    emirNo: birlestir([h.uretimEmri.emirNo, kol]),
+    parca: birlestir([h.uretimEmri.parcaNo, h.uretimEmri.parcaAd]),
+    islem: `OP ${h.isEmri.opNo} ${h.isEmri.ad}`,
+    adetNeden: birlestir([`${h.adet} adet`, h.hurdaNedeni.ad]),
+    ayiran: birlestir([h.kisi.ad && `Ayıran ${h.kisi.ad}`, anYazisi(h.zaman)]),
+    karar: h.karar === null ? null : birlestir([
+      h.kararKisi?.ad ? `Karar ${h.kararKisi.ad}` : null, h.kararZamani && anYazisi(h.kararZamani), h.ncrKimlik && `NCR ${h.ncrKimlik}`, h.kararNotu,
+    ]),
   };
 }
