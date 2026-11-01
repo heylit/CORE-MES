@@ -15,7 +15,7 @@ const calisma = (D: Record<string, unknown>): Record<string, unknown> => ({
 });
 const adim = (urun: string, op: number, ins: { itemId: string; qty: number }[] = []) =>
   ({ id: `${urun}-o${String(op)}`, seq: op, opNo: op, opId: '13', stationId: '10', setup: 10, cycle: 2, alts: [], altTimes: {}, ins });
-type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string }[] };
+type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string; fasonId?: string; terminGun?: number | null }[] };
 const DUGUMLER: Dugum[] = [
   { dugum: '0.1.1', itemId: '70', carpan: 6, birim: 3, ust: '0.1', ustOpNo: 10,
     adimlar: [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }, { opNo: 1040, kaynakOpNo: 20, durum: 'bekliyor' }] },
@@ -97,5 +97,38 @@ describe('plan girdisi: çok katmanlı emrin düğümleri montaj bağıyla (1476
     assert.deepEqual(kur(DUGUMLER, D0, 'tamam').st.D.siparisler, []);
     const ilk = kur(DUGUMLER);
     assert.deepEqual(kur(DUGUMLER, ilk.S.D).S.D, ilk.S.D);
+  });
+
+  // 1559 a: emirde fasona alınan alt düğüm adımı (dugumler[].adimlar[].fasonId) düğüm siparişinin emre özel ürün kopyasında fason adım olur;
+  // tezgâhı yoktur, kuyruğa girmez (988 a'nın kökteki kuralı). Fasonsuz düğüm ve kök emir ürünü değişmez.
+  test('1559 a: alt düğümde fasona alınan adım motorda fason adımdır; kuyruktaki anahtarı tezgâha dizilmez', () => {
+    const fasonlu = DUGUMLER.map((d) => (d.dugum !== '0.1' ? d : { ...d, adimlar: d.adimlar.map((a) => (a.opNo === 1020 ? { ...a, fasonId: '5', terminGun: 4 } : a)) }));
+    const g = cozumGirdisi({
+      calisma: calisma(D0), kayit: KAYIT, kaynak: { durum: durum(fasonlu), ek: null },
+      istek: { simdi: '2026-10-19T05:00:00Z', kuyruklar: [{ makineId: 100, anahtarlar: ['UE-7|1010', 'UE-7|1020', 'UE-7|10'] }], sabitler: [], calisanlar: [] },
+    }) as unknown as { st: { D: { siparisler: Siparis[]; urunler: { id: string; rota: { k: string; fason?: string; tezgahlar?: unknown[] }[] }[]; fasoncular: { id: string; sureGun: number }[] } } } | null;
+    assert.ok(g);
+    const D = g.st.D;
+    const sip = Object.fromEntries(D.siparisler.map((x) => [x.id, x]));
+    assert.equal(sip['7-Y1']!.urun, '60#7-Y1', 'düğüm siparişi emre özel ürün kopyasına geçer');
+    assert.equal(sip['7']!.urun, '50', 'kök emrin ürünü değişmez');
+    assert.equal(sip['7-Y1-Y1']!.urun, '70', 'fasonsuz düğüm değişmez');
+    const rota = D.urunler.find((u) => u.id === '60#7-Y1')!.rota;
+    assert.deepEqual([rota[0]!.fason, rota[1]!.fason], [undefined, '~60#7-Y1.20']);
+    assert.deepEqual(rota[1]!.tezgahlar, []);
+    assert.equal(D.urunler.find((u) => u.id === '60')!.rota[1]!.fason, undefined, 'ortak ürün rotası değişmez');
+    assert.equal(D.fasoncular.find((f) => f.id === '~60#7-Y1.20')!.sureGun, 4);
+  });
+
+  test('1559 a reddedilen: düğüm rotasında olmayan op numarası ve fasonsuz adım fason kurmaz; termin günü yoksa varsayılan 7 gün', () => {
+    const yerli = (adimlar: Dugum['adimlar']) => cozumGirdisi({
+      calisma: calisma(D0), kayit: KAYIT, kaynak: { durum: durum([{ ...DUGUMLER[1]!, adimlar }]), ek: null },
+      istek: { simdi: '2026-10-19T05:00:00Z', kuyruklar: [{ makineId: 100, anahtarlar: ['UE-7|1010', 'UE-7|10'] }], sabitler: [], calisanlar: [] },
+    }) as unknown as { st: { D: { siparisler: Siparis[]; fasoncular?: { id: string; sureGun: number }[] } } };
+    const yok = yerli([{ opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' }, { opNo: 1020, kaynakOpNo: 99, durum: 'bekliyor', fasonId: '5', terminGun: 4 }]);
+    assert.equal(yok.st.D.siparisler.find((x) => x.id === '7-Y1')!.urun, '60', 'rotada karşılığı olmayan adım için kopya kurulmaz');
+    assert.equal(yerli(DUGUMLER[1]!.adimlar).st.D.siparisler.find((x) => x.id === '7-Y1')!.urun, '60');
+    const varsayilan = yerli([{ opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor', fasonId: '5', terminGun: null }]);
+    assert.equal(varsayilan.st.D.fasoncular!.find((f) => f.id === '~60#7-Y1.10')!.sureGun, 7);
   });
 });

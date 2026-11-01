@@ -68,7 +68,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
   fasonlariAdimaCevir(k, st.D);
-  emirFasonlariniEkle(st.D, durum.emirler);
+  emirFasonlariniEkle(st.D, durum.emirler, k);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
   fasonBeklemeleriniEkle(st.D, istek, opOf);
@@ -144,14 +144,20 @@ function fasonlariAdimaCevir(k, D) {
 }
 /* 988 a (983 b'nin istisnası): emirde sonradan fasona alınan adım (uretim-emirleri, emrin adım kaydı; durum.emirler.opYer, anahtar
    "emir|root|rotadaki sıra") rotadaki fason adım gibi döner: önceki iç adımın bitişinden emrin termin günü kadar sonra (girilmemişse
-   FASON_VARSAYILAN_GUN). Emre özel ürün kopyası kurulur; adımın tezgâhı yoktur, kuyruğa girmez. */
-function emirFasonlariniEkle(D, emirler) {
-  const yer = (emirler && emirler.opYer) || {};
+   FASON_VARSAYILAN_GUN). Emre özel ürün kopyası kurulur; adımın tezgâhı yoktur, kuyruğa girmez.
+   1559 a: çok katmanlı emrin alt düğüm adımı opYer'de değil, düğümün adım listesindedir (fasonId, terminGun); düğüm siparişinin ürün
+   rotasındaki yeri kaynakOpNo'dan bulunur (tmiIslemler ile aynı eşleme). */
+function emirFasonlariniEkle(D, emirler, k) {
+  const yer = Object.entries((emirler && emirler.opYer) || {}).map(([anahtar, y]) => { const [sid, , sira] = anahtar.split('|'); return [sid, +sira - 1, y]; });
+  for (const o of (emirler && emirler.orders) || []) for (const d of o.dugumler || []) {
+    const da = rotaAdimlari(k, d.itemId);
+    for (const x of d.adimlar || []) if (x.fasonId != null) yer.push([dugumSipId(o, d.dugum), da.findIndex(t => rotaOpNo(t) === x.kaynakOpNo), x]);
+  }
   const urun = new Map((D.urunler || []).map(u => [u.id, u]));
   const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
-  for (const [anahtar, y] of Object.entries(yer)) {
-    if (!y || y.fasonId == null) continue;
-    const [sid, , sira] = anahtar.split('|'), s = sip.get(sid), i = +sira - 1;
+  for (const [sid, i, y] of yer) {
+    if (!y || y.fasonId == null || !(i >= 0)) continue;
+    const s = sip.get(sid);
     let u = s && urun.get(s.urun);
     if (!u || !u.rota || !u.rota[i] || u.rota[i].fason) continue;
     if (!u.emreOzel) {
