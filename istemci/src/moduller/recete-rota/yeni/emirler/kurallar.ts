@@ -102,14 +102,17 @@ export function adimDurumu(o: Pick<Emir, 'id' | 'kol'>, rotaSirasi: number, opSt
   return opStatus[`${o.id}|root|${String(sira)}`] ?? 'bekliyor';
 }
 
+// Çok katmanlı emirde alt düğüm adımları da emrin işidir: kökün rotasında yer almadıkları için emrin düğüm kaydından ayrıca sayılır.
 export interface Ilerleme { biten: number; toplam: number }
 export function ilerleme(d: Durum, o: Emir): Ilerleme {
   const adimlar = emirAdimlari(d, o);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const kendi = adimlar.filter((a) => a.sira >= ilk && a.sira <= son);
   const opStatus = d.emirler?.opStatus ?? {};
-  const biten = kendi.filter((a) => (a.durum ?? adimDurumu(o, a.sira, opStatus)) === 'tamam').length;
-  return { biten, toplam: kendi.length };
+  const alt = (o.dugumler ?? []).filter((g) => g.dugum !== '0').flatMap((g) => g.adimlar);
+  const biten = kendi.filter((a) => (a.durum ?? adimDurumu(o, a.sira, opStatus)) === 'tamam').length
+    + alt.filter((a) => a.durum === 'tamam').length;
+  return { biten, toplam: kendi.length + alt.length };
 }
 
 // Plan motorunun yerleşimi (215 a): anahtar `emirNo|opNo`, bölünmüş işte `emirNo|opNo~parça`. Adımın plan başlangıcı parçaların en

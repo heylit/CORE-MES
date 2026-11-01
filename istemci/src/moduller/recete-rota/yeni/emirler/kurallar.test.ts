@@ -74,6 +74,19 @@ describe('adımlar, ilerleme ve plan', () => {
     expect(emirAdimlari(d, emir('1')).map((a) => a.opNo)).toEqual([10, 20, 30]);
   });
 
+  it('1570: çok katmanlı emrin ilerlemesi alt düğüm adımlarını da sayar; kök düğüm satırı ikinci kez sayılmaz', () => {
+    const o = emir('1', { dugumler: [
+      { dugum: '0.1', itemId: '13', carpan: 2, birim: 2, ust: '0', ustOpNo: 10, adimlar: [
+        { opNo: 1010, kaynakOpNo: 10, durum: 'tamam' }, { opNo: 1020, kaynakOpNo: 20, durum: 'calisiyor' },
+      ] },
+      { dugum: '0.1.1', itemId: '14', carpan: 2, birim: 1, ust: '0.1', ustOpNo: 10, adimlar: [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }] },
+      { dugum: '0', itemId: '1', carpan: 1, birim: 1, ust: '', ustOpNo: null, adimlar: [{ opNo: 10, kaynakOpNo: 10, durum: 'tamam' }] },
+    ] });
+    const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|1': 'tamam' }, opProg: {} } });
+    expect(ilerleme(d, o)).toEqual({ biten: 3, toplam: 6 });
+    expect(ilerleme(d, emir('1'))).toEqual({ biten: 1, toplam: 3 });
+  });
+
   it('rotasız emrin adımları emrin kendisinden gelir', () => {
     const o = emir('7', { rotasiz: true, rev: null, adimlar: [
       { seq: 20, opNo: 20, ad: 'B', opId: null, stationId: null, setup: null, cycle: null, durum: 'tamam' },
