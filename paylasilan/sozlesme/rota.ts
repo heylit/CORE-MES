@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { OPERASYON_GRUP_KODLARI } from './istasyonlar.ts';
 import { EMIR_TURLERI } from './uretim-emirleri.ts';
+import { HAM_STOK_NEDENLERI, hamStokOnerisi } from './geometri.ts';
 
 export const REVIZYON_DURUMLARI = ['taslak', 'onay_bekliyor', 'onayli', 'yururlukte', 'iptal'] as const;
 export const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
@@ -780,3 +781,14 @@ export const ekAdimSartnameleriGovdesi = z.object({
   sartnameler: z.array(z.object({ sartnameId: KIMLIK, degerler: parametreDegerleri })).max(AZAMI_ADIM_SARTNAMESI),
 }).strict();
 export type EkAdimSartnameleriGovdesi = z.input<typeof ekAdimSartnameleriGovdesi>;
+
+// Rota bileşeninde hammadde önerisi (1709): ürünün yayındaki en yeni 3B modelinin analizinden, sığan en küçük stok kartları (en az
+// talaş önce, en çok ONERI_SAYISI). Model yoksa model null ve neden 'model-yok'; öneri yoksa nedeni geometri'nin nedenidir.
+export const HAM_ONERI_SAYISI = 3;
+export const hamOnerisiCevabi = z.object({
+  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  payMm: z.number().nullable(),
+  oneriler: z.array(hamStokOnerisi).max(HAM_ONERI_SAYISI),
+  neden: z.enum(['model-yok', ...HAM_STOK_NEDENLERI]).nullable(),
+});
+export type HamOnerisiCevabi = z.output<typeof hamOnerisiCevabi>;

@@ -12,6 +12,7 @@ import {
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
+import { HamOnerisi } from './HamOnerisi.tsx';
 import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
@@ -252,6 +253,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             <p className="tc-rr1-ipucu">Miktarlar 1 {birim} {sahip.code} başınadır.</p>
           </div>
         ) : <p className="tc-rr1-ipucu">Bu adıma ek malzeme girmiyor; önceki adımın çıktısıyla devam eder.</p>}
+        {duzen && idx === 0 && <HamOnerisi urunId={s.urunId} adimlar={liste} malzeme={h.malzeme} ekle={girenEkle} />}
         {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi haricId={sahip.id} ekle={girenEkle} etiket="Giren malzeme" />}
       </Bolme>
       <Bolme baslik={`Yan ürünler (${String(a.outs.length)})`}>
