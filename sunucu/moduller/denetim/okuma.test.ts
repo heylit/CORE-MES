@@ -198,6 +198,26 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM denetim_kaydi'))?.n, once);
   });
 
+  // Süzgeç listeleri dizin üzerinde atlayarak okunur; sonuç düz DISTINCT ile aynı kalmalı (tekrar, boş modül ve boş kişi dahil).
+  test('süzgeç seçenekleri: kişi, modül ve komut listeleri düz DISTINCT ile aynı; tekrar yok, boş değer yok', async () => {
+    for (const [kisi, modul, yontem, yol] of [
+      [mudurId, 'zz-deneme', 'POST', '/zz-deneme/:id'], [mudurId, 'zz-deneme', 'POST', '/zz-deneme/:id'],
+      [null, null, 'DELETE', '/zz-deneme/:id'], [yoneticiId, 'aa-deneme', 'PATCH', '/aa-deneme'],
+    ] as const) {
+      await vt().sorgu('INSERT INTO denetim_kaydi (kisi_id, yontem, yol, modul) VALUES ($1, $2, $3, $4)', [kisi, yontem, yol, modul]);
+    }
+    const s = await oku<SuzgecSecenekleriCevabi>(mudur, '/denetim-kayitlari/suzgecler');
+    assert.equal(s.durum, 200);
+    const moduller = (await vt().sorgu<{ modul: string }>('SELECT DISTINCT modul FROM denetim_kaydi WHERE modul IS NOT NULL ORDER BY modul')).map((r) => r.modul);
+    const komutlar = await vt().sorgu<{ yontem: string; yol: string }>('SELECT DISTINCT yontem, yol FROM denetim_kaydi ORDER BY yol, yontem');
+    const kisiler = (await vt().sorgu<{ kisi_id: number }>('SELECT DISTINCT kisi_id FROM denetim_kaydi WHERE kisi_id IS NOT NULL ORDER BY kisi_id')).map((r) => r.kisi_id);
+    assert.deepEqual(s.govde.moduller, moduller);
+    assert.deepEqual(s.govde.komutlar.map((k) => ({ yontem: k.yontem, yol: k.yol })), komutlar);
+    assert.deepEqual(s.govde.kisiler.map((k) => k.id).sort((a, b) => a - b), kisiler);
+    assert.ok(s.govde.komutlar.some((k) => k.yontem === 'DELETE' && k.yol === '/zz-deneme/:id'));
+    assert.deepEqual(s.govde.moduller.filter((m) => m.endsWith('-deneme')), ['aa-deneme', 'zz-deneme']);
+  });
+
   // Kullanıcı kararı N4: ek gövdenin parçasıdır; yalnız `denetim.govde-oku` olan görür, liste cevabında yer almaz.
   test('denetim eki: gövdede `_ek` olarak maskeli yazılır; liste göstermez, müdür gövde ucunda 403, yönetici görür', async () => {
     const ek = [{ teklif: 12, kalem: 'K-1', onceki: '10.50', yeni: '11.00', paraBirimi: 'TRY', miktar: 3, tedarikci: 7, parola: GIZLI_DEGER }];

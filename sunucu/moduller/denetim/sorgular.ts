@@ -59,17 +59,39 @@ export function kayitlar(db: Db, s: KayitSuzgeci, dilim: Dilim): Promise<KayitSa
   );
 }
 
+// Kişi dizini (kisi_id, zaman) iki tabloda da vardır; boş kişi atlanır.
+const farkliKisiler = (tablo: 'denetim_kaydi' | 'denetim_degisiklik') => `WITH RECURSIVE k(kisi_id) AS (
+    (SELECT kisi_id FROM ${tablo} WHERE kisi_id IS NOT NULL ORDER BY kisi_id LIMIT 1)
+    UNION ALL
+    SELECT (SELECT d.kisi_id FROM ${tablo} d WHERE d.kisi_id > k.kisi_id ORDER BY d.kisi_id LIMIT 1) FROM k WHERE k.kisi_id IS NOT NULL
+  ) SELECT kisi_id FROM k WHERE kisi_id IS NOT NULL`;
+
+// Süzgeç listeleri farklı değerleri dizin üzerinde atlayarak okur (değer başına tek dizin adımı); DISTINCT tabloyu
+// baştan sona tarıyordu ve süre kayıt sayısıyla büyüyordu.
 export async function kayitliKisiler(db: Db): Promise<number[]> {
-  return (await db.sorgu<{ kisi_id: number }>('SELECT DISTINCT kisi_id FROM denetim_kaydi WHERE kisi_id IS NOT NULL')).map((s) => s.kisi_id);
+  return (await db.sorgu<{ kisi_id: number }>(farkliKisiler('denetim_kaydi'))).map((s) => s.kisi_id);
 }
 
 // 8 Ekim öncesi satırlarda modül boştur (göç 20261008082740); süzgeç yalnız dolu olanları sunar.
 export async function kayitliModuller(db: Db): Promise<string[]> {
-  return (await db.sorgu<{ modul: string }>('SELECT DISTINCT modul FROM denetim_kaydi WHERE modul IS NOT NULL ORDER BY modul')).map((s) => s.modul);
+  return (await db.sorgu<{ modul: string }>(
+    `WITH RECURSIVE m(modul) AS (
+       (SELECT modul FROM denetim_kaydi WHERE modul IS NOT NULL ORDER BY modul LIMIT 1)
+       UNION ALL
+       SELECT (SELECT d.modul FROM denetim_kaydi d WHERE d.modul > m.modul ORDER BY d.modul LIMIT 1) FROM m WHERE m.modul IS NOT NULL
+     ) SELECT modul FROM m WHERE modul IS NOT NULL ORDER BY modul`,
+  )).map((s) => s.modul);
 }
 
 export function kayitliKomutlar(db: Db): Promise<{ yontem: string; yol: string }[]> {
-  return db.sorgu<{ yontem: string; yol: string }>('SELECT DISTINCT yontem, yol FROM denetim_kaydi ORDER BY yol, yontem');
+  return db.sorgu<{ yontem: string; yol: string }>(
+    `WITH RECURSIVE k(yol, yontem) AS (
+       (SELECT yol, yontem FROM denetim_kaydi ORDER BY yol, yontem LIMIT 1)
+       UNION ALL
+       SELECT s.yol, s.yontem FROM k CROSS JOIN LATERAL (
+         SELECT d.yol, d.yontem FROM denetim_kaydi d WHERE (d.yol, d.yontem) > (k.yol, k.yontem) ORDER BY d.yol, d.yontem LIMIT 1) s
+     ) SELECT yontem, yol FROM k ORDER BY yol, yontem`,
+  );
 }
 
 export function kayitIcerigi(db: Db, id: number): Promise<{ id: number; parametre: unknown; govde: unknown } | null> {
@@ -133,11 +155,17 @@ export function degisiklikler(db: Db, s: DegisiklikSuzgeci, dilim: Dilim): Promi
 }
 
 export async function degisiklikKisileri(db: Db): Promise<number[]> {
-  return (await db.sorgu<{ kisi_id: number }>('SELECT DISTINCT kisi_id FROM denetim_degisiklik WHERE kisi_id IS NOT NULL')).map((s) => s.kisi_id);
+  return (await db.sorgu<{ kisi_id: number }>(farkliKisiler('denetim_degisiklik'))).map((s) => s.kisi_id);
 }
 
 export async function degisiklikTablolari(db: Db): Promise<string[]> {
-  return (await db.sorgu<{ tablo: string }>('SELECT DISTINCT tablo FROM denetim_degisiklik ORDER BY tablo')).map((s) => s.tablo);
+  return (await db.sorgu<{ tablo: string }>(
+    `WITH RECURSIVE t(tablo) AS (
+       (SELECT tablo FROM denetim_degisiklik ORDER BY tablo LIMIT 1)
+       UNION ALL
+       SELECT (SELECT d.tablo FROM denetim_degisiklik d WHERE d.tablo > t.tablo ORDER BY d.tablo LIMIT 1) FROM t WHERE t.tablo IS NOT NULL
+     ) SELECT tablo FROM t WHERE tablo IS NOT NULL ORDER BY tablo`,
+  )).map((s) => s.tablo);
 }
 
 export function degisiklikIcerigi(db: Db, id: number): Promise<{ id: number; alanlar: Record<string, { eski?: unknown; yeni?: unknown }> } | null> {
