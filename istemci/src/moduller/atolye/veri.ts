@@ -175,12 +175,27 @@ export function gozKalemiSil(id: number): Promise<void> {
   return api.post<undefined>('/atolye/goz-kalemleri/sil', { id });
 }
 
-// Bütün emirler (planlı, süren, biten): parçanın hangi makinede üretildiği buradan çıkar. Ayrı tablo tutulmaz.
-// Liste varsayılanı açık emirlerdir (kart #1323); biten emirler `kapsam=hepsi` ile gelir.
+// Haritanın emirleri: açık emirler ve son BITEN_GUN günde kapananlar (karar 1613 a). Parçanın hangi makinede
+// üretildiği, ikizin bugünkü biten sayısı ve geçmiş anları buradan çıkar; daha eskisi haritada yoktur. İkisinden biri
+// okunamazsa liste yoktur (eksik listeyle sayı uydurulmaz).
+export const BITEN_GUN = 7;
+
+// İki liste ayrıktır (açık / kapalı); iki istek arasında kapanan emir ikisinde de gelirse kapalı hali kalır. En yeni üstte.
+export function emirleriBirlestir<T extends { id: number }>(acik: readonly T[], kapanan: readonly T[]): T[] {
+  const kapali = new Set(kapanan.map((e) => e.id));
+  return [...acik.filter((e) => !kapali.has(e.id)), ...kapanan].sort((a, b) => b.id - a.id);
+}
+
 export function useTumEmirler(acik = true) {
   return useQuery({
     queryKey: anahtarlar.tumEmirler,
-    queryFn: () => api.get<EmirlerCevabi>('/uretim-emirleri?kapsam=hepsi'),
+    queryFn: async (): Promise<EmirlerCevabi> => {
+      const [acikEmirler, kapananlar] = await Promise.all([
+        api.get<EmirlerCevabi>('/uretim-emirleri'),
+        api.get<EmirlerCevabi>(`/uretim-emirleri?bitenGun=${BITEN_GUN}`),
+      ]);
+      return { emirler: emirleriBirlestir(acikEmirler.emirler, kapananlar.emirler) };
+    },
     enabled: acik,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
