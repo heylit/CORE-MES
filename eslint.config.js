@@ -52,6 +52,36 @@ const ESZAMANLI_DB = [
   },
 ];
 
+// kurallar.ts saftır (ADR 0025 kural 1): aynı girdi aynı sonucu verir, testi saate ve şansa bağlı kalmaz. Zaman ve kimlik
+// çağırandan parametre olarak gelir. Argümanlı new Date(x) ayrıştırmadır, serbesttir.
+const DETERMINISTIK = [
+  {
+    selector: ":matches(MemberExpression[object.name='Date'][property.name='now'], NewExpression[callee.name='Date'][arguments.length=0], " +
+      "CallExpression[callee.name='Date'])",
+    message: 'kurallar.ts saati okumaz; şimdiki zaman çağırandan parametre olarak gelir',
+  },
+  {
+    selector: "MemberExpression[object.name='Math'][property.name='random']",
+    message: 'kurallar.ts rastgele sayı üretmez; değer çağırandan parametre olarak gelir',
+  },
+  {
+    selector: ":matches(MemberExpression[property.name='randomUUID'], MemberExpression[property.value='randomUUID'], " +
+      "ObjectPattern > Property[key.name='randomUUID'], ImportSpecifier[imported.name='randomUUID'])",
+    message: 'kurallar.ts kimlik üretmez; kimlik çağırandan parametre olarak gelir',
+  },
+];
+// Kural girmeden önce ihlali olan istemci dosyaları; ihlal modül başına kapanınca dosya listeden çıkar. Bu dosyalarda
+// istemcinin öteki kuralları yukarıdaki istemci girdisinden geçerlidir.
+const DETERMINISTIK_BORCU = [
+  'istemci/src/moduller/recete-rota/yeni/emirler/kurallar.ts',
+  'istemci/src/moduller/kalite-merkezi/yeni/kurallar.ts',
+  'istemci/src/moduller/ik/yeni/personel/kurallar.ts',
+  'istemci/src/moduller/arkon/yeni/pano/kurallar.ts',
+  'istemci/src/moduller/arkon/yeni/operator/kurallar.ts',
+  'istemci/src/moduller/arkon/yeni/hazirlik/kurallar.ts',
+  'istemci/src/moduller/mesaj/yeni/kurallar.ts',
+];
+
 export default [
   // Ajan çalışma ağaçları deponun tam kopyasıdır ve kendi yapılandırmasıyla ayrı tip programı kurar; kökten taranmaz.
   // Arkon MES arayüzü (arkon/web, arkon/shared) değiştirilmeden gömülür ve kendi kurallarıyla yazılmıştır; TMI kuralları
@@ -125,5 +155,16 @@ export default [
   {
     files: [KIMLIK_URETICISI, 'istemci/**/*.test.ts', 'istemci/**/*.test.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...SOZLESME_CAGRILARI] },
+  },
+  // Kural seçicileri dosya girdisine göre yer değiştirir, birleşmez: her ağacın kendi seçicileri burada yeniden verilir. Saf
+  // dosyada db yoktur; eşzamanlı db seçicisi burada hata düzeyindedir.
+  {
+    files: ['sunucu/**/kurallar.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...ESZAMANLI_DB, ...DETERMINISTIK] },
+  },
+  {
+    files: ['istemci/**/kurallar.ts'],
+    ignores: DETERMINISTIK_BORCU,
+    rules: { 'no-restricted-syntax': ['error', ...SOZLESME_CAGRILARI, ...RASTGELE_KIMLIK, ...DETERMINISTIK] },
   },
 ];
