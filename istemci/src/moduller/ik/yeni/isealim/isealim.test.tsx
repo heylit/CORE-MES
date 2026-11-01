@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IkKayit, IkVeriCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { IK_OKUYAN, IK_YONETICI, ikAc, ornekVeri } from '../test-ortak.tsx';
 
+// Rota IkYeni'yi, IkYeni de bu parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// ikisi testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // Uydurma örnek: aday, görüşme, değerlendirme ve eğitim kayıtları gerçek kişiyle ilgisizdir.
