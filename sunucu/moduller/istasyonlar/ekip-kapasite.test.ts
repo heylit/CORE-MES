@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
+import { semaliKilitAnahtariSql } from '#cekirdek/kilit.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -268,7 +269,7 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
     const b = vt().tx(ikinci).then(() => ({}), sonuc).finally(() => { ikinciBitti = true; });
     const bekleyen = async (): Promise<boolean> => {
       const satir = await vt().tek<{ n: number }>(
-        "SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND classid = (hashtext('kisi_atama')::bigint & 4294967295)::oid AND objid = $1::oid",
+        `SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND classid = (${semaliKilitAnahtariSql("'kisi_atama'")}::bigint & 4294967295)::oid AND objid = $1::oid`,
         [kisiId],
       );
       return (satir?.n ?? 0) > 0;

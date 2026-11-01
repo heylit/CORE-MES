@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { NcrAramaSatiri } from './kurallar.ts';
 
@@ -616,7 +617,7 @@ export function ncrAra(db: Db, a: { sade: string; icindeDeseni: string; basDesen
 // ---- Giriş kontrolü (1246) ----------------------------------------------------------------------------------------------------------
 // Aynı mal kabul satırına iki karar aynı anda verilmesin: ikincisi birincinin yazdığını görür.
 export async function girisKilidi(db: Db, malKabulSatirId: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('kalite_merkezi_giris'), $1)", [malKabulSatirId]);
+  await islemKilidiAl(db, 'kalite_merkezi_giris', malKabulSatirId);
 }
 
 export interface GirisKarariSatiri {

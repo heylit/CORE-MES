@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { SaklananTur } from './kurallar.ts';
 
@@ -55,11 +56,11 @@ export function dosyaBul(db: Db, ozet: string): Promise<DosyaSatiri | null> {
 
 // Kişi başına işlem kilidi: eşzamanlı ilk parçalar kişi sınırını aşmaz. Özet kilidi yalnız tamamlamada alınır (önce kişi, sonra özet).
 export async function kisiKilitle(db: Db, kisiId: number): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`dosya-yukleme-kisi-${kisiId}`]);
+  await islemKilidiAl(db, `dosya-yukleme-kisi-${kisiId}`);
 }
 
 export async function ozetKilitle(db: Db, ozet: string): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`dosya-yukleme-ozet-${ozet}`]);
+  await islemKilidiAl(db, `dosya-yukleme-ozet-${ozet}`);
 }
 
 // Aynı parça yeniden gelirse (bağlantı kopup tekrar gönderildi) yenisi geçerlidir.

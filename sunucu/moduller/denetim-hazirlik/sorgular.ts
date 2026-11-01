@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { DepoBelgesi, Veri } from './kurallar.ts';
 
@@ -96,7 +97,7 @@ export async function ekGetir(
 
 // Kota denetimi ile ekleme arasında başka yükleme araya girmesin: modülün ek yazmaları sıraya girer (yükleme seyrektir).
 export async function ekKotaKilidi(db: Db): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('denetim_hazirlik_ek'))");
+  await islemKilidiAl(db, 'denetim_hazirlik_ek');
 }
 
 export async function ekBaytlari(db: Db, kisiId: number): Promise<{ kisiBayt: number; toplamBayt: number }> {

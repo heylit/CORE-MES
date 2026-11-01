@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiDene } from '#cekirdek/kilit.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { AlarmDurumu, AlarmGorunumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
@@ -34,12 +35,8 @@ const SECIM = `a.id::int AS id, a.sinyal, a.onem, a.kullanici_adi AS "kullaniciA
 const SIRA = `CASE a.onem WHEN 'kritik' THEN 0 WHEN 'yuksek' THEN 1 ELSE 2 END, a.son_goruldu DESC, a.id DESC`;
 
 // Taramanın kendi kilidi: zamanlayıcının iş kilidinden ayrıdır ki tarama başka yoldan çağrılsa da tek kopya koşsun (G-15).
-// Anahtara şema katılır: aynı veritabanındaki başka şema (paralel test) bu şemanın taramasını atlatmasın.
 export async function taramaKilidiAl(db: Db): Promise<boolean> {
-  const r = await db.tek<{ alindi: boolean }>(
-    "SELECT pg_try_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':guvenlik-taramasi')) AS alindi",
-  );
-  return r?.alindi === true;
+  return islemKilidiDene(db, 'guvenlik-taramasi');
 }
 
 export async function veritabaniSaati(db: Db): Promise<string> {

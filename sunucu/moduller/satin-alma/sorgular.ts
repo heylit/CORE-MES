@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type {
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
@@ -546,11 +547,11 @@ export function takmaAdlariOku(db: Db): Promise<{ katalogId: string; takmaAd: st
 }
 // Katalog kalemi ekleme işlem sonuna kadar sıralanır: aynı karta ikinci kalem açılmamalıdır (KD-012).
 export async function katalogEklemeKilidi(db: Db): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('satin-alma-katalog-ekle'))");
+  await islemKilidiAl(db, 'satin-alma-katalog-ekle');
 }
 // Faturanın sipariş bağı işlem sonuna kadar sıralanır: iki kişi aynı faturayı iki siparişe aynı anda bağlarsa ikincisi öncekinin bağını görür.
 export async function faturaBagKilidi(db: Db, belgeId: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('satin-alma-fatura-bag'), $1)", [belgeId]);
+  await islemKilidiAl(db, 'satin-alma-fatura-bag', belgeId);
 }
 type KatalogYazimi = KatalogKaydetYazimi & { kategori: string };
 export function katalogEkle(db: Db, k: KatalogYazimi): Promise<{ id: string } | null> {
@@ -990,7 +991,7 @@ export async function fasonBagliIsEmirleri(db: Db, isEmriIdleri: readonly number
 }
 // Aynı fason adımı iki talep aynı anda bağlamasın: bağ denetimi ile yazma arası iş emri başına sıralanır.
 export async function fasonBagKilidi(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
-  for (const id of [...new Set(isEmriIdleri)].sort((a, b) => a - b)) await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('satin-alma-fason-bag'), $1)", [id]);
+  for (const id of [...new Set(isEmriIdleri)].sort((a, b) => a - b)) await islemKilidiAl(db, 'satin-alma-fason-bag', id);
 }
 export interface OnTalepYoksaySatiri { id: number; isEmriId: number; neden: string; kisiId: number; zaman: string }
 export function fasonYoksaylari(db: Db): Promise<OnTalepYoksaySatiri[]> {

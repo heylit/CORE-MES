@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { BedelAyari, BedelAyariGovdesi, PlanAyari, SenaryoDurumu } from '#paylasilan/sozlesme/plan.ts';
 import type { Kaynak } from './kurallar.ts';
 
@@ -430,7 +431,7 @@ export const motorAyarGuncelSurumu = (db: Db): Promise<MotorAyarSurumSatiri | nu
 export const motorAyarSenaryoSurumu = (db: Db, senaryoId: number): Promise<MotorAyarSurumSatiri | null> =>
   db.tek(`SELECT ${MOTOR_SURUM} FROM plan_motor_ayar_surumu WHERE id = ${SENARYO_MOTOR_SURUMU}`, [senaryoId]);
 // Aynı anda iki yazma güncel sürümü aynı okuyup iki satır yazmasın: karşılaştırma ve yazma bu kilitle sıralanır.
-export const motorAyarYazmaKilidi = (db: Db) => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('plan_motor_ayari'))");
+export const motorAyarYazmaKilidi = (db: Db): Promise<void> => islemKilidiAl(db, 'plan_motor_ayari');
 export const motorAyarSurumuYaz = async (db: Db, degerler: Record<string, unknown>, kisiId: number): Promise<MotorAyarSurumSatiri> =>
   (await db.tek<MotorAyarSurumSatiri>(`INSERT INTO plan_motor_ayar_surumu (degerler, yazan_kisi_id) VALUES ($1, $2) RETURNING ${MOTOR_SURUM}`,
     [JSON.stringify(degerler), kisiId]))!;

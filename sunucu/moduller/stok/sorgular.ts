@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { Dilim, SiralamaIstegi } from '#cekirdek/liste.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
@@ -831,7 +832,7 @@ export const sonPartiler = (db: Db, malzemeId: number, sinir: number): Promise<{
    FROM stok_parti p WHERE p.malzeme_id = $1 AND p.uretim_emri_id IS NULL ORDER BY p.kayit_zamani DESC, p.id DESC LIMIT $2`, [malzemeId, sinir]);
 // Aynı emrin tamamlaması sıraya girer: ikinci istek ilk işlem bitince yeniden hesaplar (kilit işlem sonunda bırakılır).
 export const emirTamamlamaKilidi = async (db: Db, emirId: number): Promise<void> => {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_emir_tamamlama'), $1)", [emirId]);
+  await islemKilidiAl(db, 'stok_emir_tamamlama', emirId);
 };
 // Emrin ürününden üretim girişiyle giren net miktar: üretim girişinin geri alması kaynaktan düşer (hedefi yoktur).
 export const emirUretimGirisi = async (db: Db, emirId: number, malzemeId: number): Promise<string> => (await db.sorgu<{ miktar: string }>(
@@ -1481,7 +1482,7 @@ export interface RezerveSatiri { malzemeId: number; statuId: number | null; uret
 
 // Aynı malzemenin ayırma ve kaldırmaları sıraya girer: ikinci istek ilk işlem bitince ayrılmamış miktarı yeniden okur.
 export const rezerveKilidi = async (db: Db, malzemeId: number): Promise<void> => {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_rezerve'), $1)", [malzemeId]);
+  await islemKilidiAl(db, 'stok_rezerve', malzemeId);
 };
 export const rezerveArtir = (db: Db, r: { malzemeId: number; statuId: number | null; uretimEmriId: number; miktar: string }): Promise<unknown> => db.sorgu(
   `INSERT INTO stok_rezerve (malzeme_id, statu_id, uretim_emri_id, miktar) VALUES ($1, $2, $3, $4)
@@ -1580,7 +1581,7 @@ export const istasyondaSatiriOlanKartlar = async (db: Db, kartIdler: readonly nu
       WHERE r.id = ANY($1::int[])`, [kartIdler, istasyonId])).map((x) => x.id));
 // Sıra emir başına artar; aynı emre eşzamanlı iki açılış sırayla girer (kilit işlem sonunda bırakılır).
 export const refakatPartisiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; partiId: number; kisiId: number; ustRefakatPartisiId?: number | null }): Promise<number | null> => {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_refakat_partisi'), $1)", [r.uretimEmriId]);
+  await islemKilidiAl(db, 'stok_refakat_partisi', r.uretimEmriId);
   return (await db.tek<{ id: number }>(
     `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, ust_refakat_partisi_id)
      SELECT $1, COALESCE(max(sira), 0) + 1, $2, $3, $4, $5 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
@@ -1654,7 +1655,7 @@ export const acikIstisnaKarti = (db: Db, uretimEmriId: number, malzemeId: number
   db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.malzeme_id = $2 AND r.parti_id IS NULL AND r.durum = 'acik' AND r.birlestigi_refakat_partisi_id IS NULL`,
     [uretimEmriId, malzemeId]);
 export const istisnaKartiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; kisiId: number }): Promise<number | null> => {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_refakat_partisi'), $1)", [r.uretimEmriId]);
+  await islemKilidiAl(db, 'stok_refakat_partisi', r.uretimEmriId);
   return (await db.tek<{ id: number }>(
     `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id)
      SELECT $1, COALESCE(max(sira), 0) + 1, $2, NULL, $3 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
