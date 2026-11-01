@@ -14,7 +14,7 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
@@ -136,6 +136,14 @@ export async function emirDurumlari(db: Db, idler: readonly number[]): Promise<M
   const tekil = [...new Set(idler)];
   if (tekil.length === 0) return new Map();
   return new Map((await emirDurumlariGetir(db, tekil)).map((r) => [r.id, r.durum]));
+}
+
+// Plan süre öğrenmesi (1714): emrin malzemesi ve üst emri tek sorguda; malzemesiz emirde malzemeNo null, kök emirde ustEmirId null.
+// Olmayan kimlik haritada yoktur.
+export async function emirMalzemeleri(db: Db, idler: readonly number[]): Promise<Map<number, { malzemeNo: number | null; ustEmirId: number | null }>> {
+  const tekil = [...new Set(idler)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await ustEmirlerBul(db, tekil)).map((r) => [r.id, { malzemeNo: r.malzemeNo, ustEmirId: r.ustEmirId }]));
 }
 
 // Satır başına bağlı emirler (iptal dahil, kimlik sırasıyla); emirsiz satır haritada yoktur (Sevkiyat, Finans).

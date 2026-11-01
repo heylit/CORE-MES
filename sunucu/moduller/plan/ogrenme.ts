@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { revizyonGetir, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
-import { bitenIsEmirleri, isEmriPlanBilgileri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { bitenIsEmirleri, emirMalzemeleri, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { OGRENME_SINIRI, ogrenilenSureler, ogrenmeSatirlari, type OgrenilenSure, type OgrenmeSatiri, type SureOrnegi } from './ogrenme-kurallar.ts';
 import { planSapmalari } from './sapma.ts';
 
@@ -15,12 +15,9 @@ export async function sureOrnekleri(db: Db, simdi: number = Date.now()): Promise
   const ids = biten.map((b) => b.isEmriId);
   const sapmalar = await planSapmalari(db, { isEmriIdleri: ids, simdi });
   const bilgiler = await isEmriPlanBilgileri(db, ids);
-  const malzeme = new Map<number, number | null>();
-  for (const id of new Set(biten.map((b) => b.uretimEmriId))) {
-    const e = await uretimEmriOzeti(db, id);
-    // Alt emir (çok katmanlı emrin düğümü) kendi malzemesiyle değil üst emrin planıyla dizilir; öğrenilmez.
-    malzeme.set(id, e === null || e.ustEmirId !== null ? null : e.malzemeNo);
-  }
+  const emirler = await emirMalzemeleri(db, biten.map((b) => b.uretimEmriId));
+  // Alt emir (çok katmanlı emrin düğümü) kendi malzemesiyle değil üst emrin planıyla dizilir; öğrenilmez.
+  const malzeme = new Map([...emirler].map(([id, e]) => [id, e.ustEmirId !== null ? null : e.malzemeNo]));
   const malzemeler = [...new Set([...malzeme.values()].filter((m): m is number => m !== null))];
   const revizyon = await yururluktekiRevizyonIdleri(db, malzemeler);
   const sira = new Map<number, Map<number, number>>();

@@ -12,7 +12,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import {
-  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirlerinIsEmriIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir, takvimKayitlari,
+  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirlerinIsEmriIdleri, emirMalzemeleri, emirOzeti, emirSayim, kararliSayimiSonuclandir, takvimKayitlari,
 } from './disari.ts';
 import { BASLAMAMIS_EMIR, KAPSAM_DISI } from './kurallar.ts';
 import { emirAc } from './servis.ts';
@@ -239,6 +239,15 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     const harita = await vt().okumaTx((db) => emirlerinIsEmriIdleri(db, [a.id, b.id, a.id]));
     assert.deepEqual([...harita], [[a.id, [ilk, ikinci]]]);
     assert.equal((await vt().okumaTx((db) => emirlerinIsEmriIdleri(db, []))).size, 0);
+  });
+
+  test('1714: emrin malzemesi ve üst emri toplu okunur; olmayan kimlik haritada yok, boş dizide boş harita', async () => {
+    const [a, b] = [await planliEmir(), await planliEmir()];
+    const db = (await sahip().sorgu<{ id: number; malzemeNo: number | null; ustEmirId: number | null }>(
+      'SELECT id, malzeme_no AS "malzemeNo", ust_emir_id AS "ustEmirId" FROM uretim_emri WHERE id = ANY($1::int[]) ORDER BY id', [[a.id, b.id]]));
+    const harita = await vt().okumaTx((t) => emirMalzemeleri(t, [b.id, a.id, a.id, 2_000_000_000]));
+    assert.deepEqual([...harita].sort(([x], [y]) => x - y), db.map((r) => [r.id, { malzemeNo: r.malzemeNo, ustEmirId: r.ustEmirId }]));
+    assert.equal((await vt().okumaTx((t) => emirMalzemeleri(t, []))).size, 0);
   });
 
   test('emir özeti: olmayan kimlikte null döner, hata vermez', async () => {
