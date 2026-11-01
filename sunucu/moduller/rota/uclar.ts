@@ -1,6 +1,6 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
+  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
   talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
@@ -8,7 +8,7 @@ import {
   urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import {
-  agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
+  agac, emreKopyala, emreUygula, patlatmaGetir, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
   karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
@@ -360,6 +360,15 @@ export const uclar = [
     govde: emreKopyalaGovdesi,
     cevap: emreKopyalaCevabi,
     isle: ({ db, kullanici, parametre, govde }) => emreKopyala(db, kullanici, parametre.id, govde),
+  }),
+  // Patlamış rota (1476): emir açılışında yazılan donmuş görüntü; okuma rota okuması gibi oturumla.
+  uc({
+    yontem: 'GET',
+    yol: '/rota/patlatmalar/:id',
+    yetki: 'oturum',
+    parametre: patlatmaParametresi,
+    cevap: patlatmaCevabi,
+    isle: ({ db, parametre }) => patlatmaGetir(db, parametre.id),
   }),
   uc({
     yontem: 'POST',

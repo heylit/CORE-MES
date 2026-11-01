@@ -23,6 +23,7 @@ export const AZAMI_AGAC_DERINLIGI = 12;
 
 const TAM_SAYI_UST = 2147483647;
 const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
+const DUGUM_YOLU = z.string().regex(/^0(\.[1-9][0-9]*)*$/, 'Düğüm yolu 0, 0.1, 0.1.2 biçiminde olmalı.').max(40);
 // Malzeme kimliği bigint'tir; JavaScript sayısı 2^53'e kadar tamdır.
 const MALZEME_KIMLIGI = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const yolKimligi = z.coerce.number().pipe(KIMLIK);
@@ -526,8 +527,25 @@ export const emreKopyalaGovdesi = z.object({
   stoktanRezerve: z.boolean().optional(),
   // Emrin türü (kart #699, borç R13): ekranda seçilen etiket; verilmezse uretim-emirleri varsayılanı (seri).
   emirTuru: z.enum(EMIR_TURLERI).optional(),
+  // 1476: tek emir çok katmanlı reçetenin tamamını taşır (patlamış rota). Stoktan karşılanacak düğümler (1483 a) emre girmez.
+  cokKatmanli: z.boolean().optional(),
+  stoktanDugumler: z.array(DUGUM_YOLU).max(200).optional(),
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
+
+// Patlamış rota (1476, 1481 a): donmuş anlık görüntü; düğüm yolu "0" kök, "0.2" kökün 2. ürün bileşeni.
+export const patlatmaParametresi = z.object({ id: yolKimligi });
+export const patlatmaCevabi = z.object({
+  id: KIMLIK,
+  kokMalzemeId: KIMLIK,
+  kokRevizyonId: KIMLIK,
+  zaman,
+  satirlar: z.array(z.object({
+    sira: KIMLIK, dugum: DUGUM_YOLU, katman: z.number().int().min(0), malzemeId: KIMLIK, revizyonId: KIMLIK, rotaAdimiId: KIMLIK,
+    kaynakOpNo: KIMLIK, birimCarpani: z.string(), tuketenDugum: DUGUM_YOLU.nullable(), tuketenOpNo: KIMLIK.nullable(),
+  })),
+});
+export type PatlatmaCevabi = z.output<typeof patlatmaCevabi>;
 export type EmreKopyalaGovdesi = z.input<typeof emreKopyalaGovdesi>;
 
 // Emir listesi (teslimdeki "Rev N akışta aç" ve "rota değişti"): emir kaynak revizyonun kimliğini taşır; harf ve yürürlük rotada.
