@@ -49,9 +49,8 @@ export class RrHatasi extends Error {
 
 // Ekranın köprüsü ve köprünün bildirdiği iki durum. ReceteRotaYeni.tsx sağlar.
 export interface RrBaglami {
+  // Kart onayından rota taslağı sunucunun dakikalık işinde açılır (#688); ekran açılışı yazma yapmaz (1395 a).
   kopru: KopruIsleyici;
-  // İlk okumada Malzemeler'de yeni onaylanan kartların rota taslağı açılır (#688; bugünkü ekran gibi, yalnız rota.yaz ile).
-  ilkOkuma: () => Promise<void>;
 }
 export const RrBaglamKaynagi = createContext<RrBaglami | null>(null);
 export function useRrBaglami(): RrBaglami {
@@ -66,14 +65,11 @@ const cagir = async <T,>(kopru: KopruIsleyici, tip: string, veri: unknown = {}):
 
 // Bütün bölümlerin okuması tek uçtan (GET /plan/planlama-kaynagi; Reçete ve Rota dilimleri ve planın alanları, 658 b) ve sahiplerin kaynak okumalarından gelir; sürümler köprüde kalır.
 export function useRrVerisi(etkin = true) {
-  const { kopru, ilkOkuma } = useRrBaglami();
+  const { kopru } = useRrBaglami();
   return useQuery({
     queryKey: anahtarlar.veri,
     enabled: etkin,
-    queryFn: async () => {
-      await ilkOkuma();
-      return cagir<RrVerisi>(kopru, 'kaynak-oku');
-    },
+    queryFn: () => cagir<RrVerisi>(kopru, 'kaynak-oku'),
   });
 }
 

@@ -517,7 +517,8 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const normal = tamam(await ekle({ makineKodu: 'cnc-01', bedel: 120000, alisTarihi: `${ay(-24)}-15`, omurAy: 120 })).sabitKiymet;
     assert.deepEqual([normal.makineKodu, normal.kur, normal.buAyTl, normal.birikmisTl, normal.netTl], ['CNC-01', '1.000000', '1000.00', '25000.00', '95000.00']);
     assert.equal(await makineIdsi(normal.id), makine?.id);
-    assert.equal(await makineIdsi(tamam(await ekle({ makineKodu: 'YOK-02', bedel: 1000, alisTarihi: TARIH, omurAy: 10 })).sabitKiymet.id), null);
+    // Alış bu ayda: özetin son üç tamamlanmış ayına girmez; sabit tarih ay dönünce kârı 1000'den fazla düşürürdü.
+    assert.equal(await makineIdsi(tamam(await ekle({ makineKodu: 'YOK-02', bedel: 1000, alisTarihi: `${buAy}-01`, omurAy: 10 })).sabitKiymet.id), null);
     assert.equal(await kisitAdi('UPDATE finans_sabit_kiymet SET makine_id = 999999 WHERE id = $1', [normal.id]), 'finans_sabit_kiymet_makine');
     assert.ok(Math.abs((await ozetKar()) - (karOnce - 1000)) < 0.01);
     assert.equal(await makineAmortismani(vt(), 'CNC-01', buAy), '1000.00');

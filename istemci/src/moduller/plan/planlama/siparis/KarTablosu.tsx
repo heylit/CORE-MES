@@ -28,12 +28,13 @@ function Gostergeler({ l }: { l: readonly Gosterge[] }) {
 
 interface Satir { s: Siparis; x: SiparisMaliyeti | null }
 
-export function KarTablosu({ c, p, fg, komut }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; fg: boolean; komut: CalismaKomutu | null }) {
+// emirler: sunucunun iş emri durumu; biten adımların maliyeti ondan bulunur (1410 a).
+export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; fg: boolean; komut: CalismaKomutu | null; emirler?: unknown }) {
   const { bildir } = useBildirim();
   if (!fg) return <Kart baslik={BASLIK} simge="lock"><p className="tc-pys-kucuk"><Simge ad="lock" boyut="k" /> Fiyat, maliyet ve kâr bilgisini müdür ve yönetici görür ve girer (karar 180, öneri a).</p></Kart>;
   if (!c || !p) return <Kart baslik={BASLIK} simge="list"><p className="tc-pys-kucuk">Maliyet plandan çıkar (tezgâh, ayar, fason). Önce plan kurulmalı.</p></Kart>;
   const D = c.D;
-  const b = maliyetBaglami(c);
+  const b = maliyetBaglami(c, emirler);
   const satirlar: Satir[] = D.siparisler.filter((s) => !s.havuz).map((s) => ({ s, x: b ? siparisMaliyeti(b, s) : null }));
   const top = (f: (x: SiparisMaliyeti) => number | null): number => satirlar.reduce((a, r) => a + (r.x ? f(r.x) ?? 0 : 0), 0);
   const tutar = top((x) => x.tutar); const maliyet = top((x) => x.top); const gec = top((x) => x.gec); const net = top((x) => x.net);

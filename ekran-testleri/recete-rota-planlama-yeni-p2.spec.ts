@@ -25,7 +25,7 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
         await expect(kap.getByRole('button', { name: 'Planı kur' })).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar.filter((x) => x !== 'POST /api/plan/planlama-degerlendirmesi' && x !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+      expect(ag.yazmalar.filter((x) => x !== 'POST /api/plan/planlama-degerlendirmesi')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }

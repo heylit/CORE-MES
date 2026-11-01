@@ -47,7 +47,7 @@ function sunucuKur(cevap: (yontem: string, yol: string, govde: unknown) => Respo
   return istekler;
 }
 // Ekranın ilk okumasındaki karttan taslak eşlemesi (#688) ayrı sınanır (KOM-30).
-const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/rota/karttan-taslaklar');
+const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 const sorun = (e: unknown) => kopruHatasi(e);
 
 // Sahibinin istasyon kaydı: güncelleme okunan sürümü ister, eskiyse 409 (kayıtlar `surum` taşır).
@@ -406,17 +406,7 @@ describe('köprü komutları', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('KOM-30: ekranın ilk okumasında onaylı kartların rota taslağı bir kez açtırılır (#688), sonra durum okunur; reddedilirse durum yine okunur', async () => {
-    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(403, { kod: 'YETKI_YOK', mesaj: 'Yetki yok.' }) : json(200, DURUM)));
-    const isle = kopruKur([], { kartTaslakAcabilir: true });
-    expect(await isle('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: null, planMotoru: { emirler: [], parcaAdetleri: {} } });
-    await isle('durum-oku', {});
-    expect(istekler.map((i) => [i.yontem, i.yol])).toEqual([
-      ['POST', '/rota/karttan-taslaklar'], ['GET', '/plan/planlama-kaynagi'], ['GET', '/plan/motor-yerlesimi'], ['GET', '/plan/planlama-kaynagi'], ['GET', '/plan/motor-yerlesimi'],
-    ]);
-  });
-
-  it('KOM-30b: rota yazamayanın ekranı açılışta rotaya yazma denemez, yalnız durumu okur (uçtan uca deneme Y4)', async () => {
+  it('KOM-30: ekran açılışı rotaya yazma denemez, yalnız durumu okur (1395 a; kart taslakları sunucunun dakikalık işinde açılır)', async () => {
     const istekler = sunucuKur(() => json(200, DURUM));
     const isle = kopruKur();
     expect(await isle('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: null, planMotoru: { emirler: [], parcaAdetleri: {} } });
@@ -481,7 +471,7 @@ describe('köprü: birim maliyet yazma (kart #1187)', () => {
   it('MAL-04: başarıdan sonra sürüm yenilenir; ikinci yazma yeni sürümle gider', async () => {
     let surum = 3;
     const istekler = sunucuKur((yontem, yol) => {
-      if (yontem === 'POST' && yol !== '/rota/karttan-taslaklar') { surum += 1; return json(200, { maliyet: { anahtar: 12, surum } }); }
+      if (yontem === 'POST') { surum += 1; return json(200, { maliyet: { anahtar: 12, surum } }); }
       return yol === '/plan/planlama-kaynagi'
         ? json(200, { ...MALIYETLI, maliyet: { ...MALIYETLI.maliyet!, malzeme: { '12': { birimMaliyet: '4.5000', paraBirimi: 'TRY', surum } } } })
         : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });

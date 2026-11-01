@@ -23,8 +23,8 @@ test.describe('P1a Planlama motoru', () => {
     if (await page.getByText(BOS).first().isVisible()) {
       // Planı kur sunucudaki motorla açıktır (576): çalışma varken yazabilene açık, çalışma yoksa pasif. Basılmaz (yazma göndermez).
       // Yazma yetkisiz pasif hali birim testlerinde (Motor, Atölye): örnek veride sayfayı görüp plan yazamayan rol yok.
-      // 657 a: yazabilende "Planlama çalışması yok." geçicidir; sayfa boş çalışmayı kurdurunca "Plan henüz kurulmadı" olur. Yazı ve düğme
-      // aynı anda okunur, ikisi uyuşana kadar yeniden denenir: yazı okunduktan sonra ekran değişirse yeni düğme eski yazıyla sınanmaz.
+      // 1395 a: açılış çalışma kurmaz; çalışma yoksa yazabilene "Planlama çalışmasını aç" düğmesi çıkar (basılmaz). Yazı ve düğme aynı
+      // anda okunur, ikisi uyuşana kadar yeniden denenir: yazı okunduktan sonra ekran değişirse yeni düğme eski yazıyla sınanmaz.
       await expect(async () => {
         const calismaYok = await page.getByText('Planlama çalışması yok.').isVisible();
         const dugmeler = await page.getByRole('button', { name: 'Planı kur' }).all();
@@ -33,6 +33,7 @@ test.describe('P1a Planlama motoru', () => {
           if (calismaYok) expect(await b.getAttribute('aria-disabled')).toBe('true'); else expect(await b.isEnabled()).toBe(true);
         }
       }).toPass();
+      if (await page.getByText('Planlama çalışması yok.').isVisible()) await expect(page.getByRole('button', { name: 'Planlama çalışmasını aç' })).toBeVisible();
       await tasmaz(page); return;
     }
     await expect(ozet).toBeVisible();
@@ -58,7 +59,7 @@ test.describe('P1a Planlama motoru', () => {
     await page.getByRole('button', { name: 'Keşfet' }).click();
     await expect(page.getByRole('tablist', { name: 'Keşfet görünümleri' })).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -107,7 +108,7 @@ test.describe('P1b Tezgâh haritası', () => {
     await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -181,7 +182,7 @@ test.describe('P1c Çizelge', () => {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Düzenle' })).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -212,7 +213,7 @@ test.describe('P1d Keşfet', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.getByText(/^3 \/ \d+$/)).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -248,7 +249,7 @@ test.describe('P1d Yan panel', () => {
     await expect(dk.getByText(/takvimi$/)).toBeVisible();
     await expect(dk.getByRole('button', { name: 'Bakımı dene' })).toHaveAttribute('aria-disabled', 'true');
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -298,7 +299,7 @@ test.describe('P1e Planlama atölyesi', () => {
     // Taban ve canlı sunucudan okunur (505 a): boş veritabanında canlı plan yoktur; sekme yazmaz.
     await expect(page.locator('.tc-pym-tp-pg').getByText(/Henüz canlıya alınmış plan yok|Plana uyum/)).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-kayitlari/yaz' && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-kayitlari/yaz')).toEqual([]);
   });
 });
 
@@ -324,7 +325,7 @@ test.describe('577b Veri ve kısıtlar', () => {
     await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(page.locator('[data-parca="veri"]')).toHaveCount(0);
     await expect(page).toHaveURL(/\/plan$/);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -353,7 +354,7 @@ test.describe('577a Nasıl hesaplandı', () => {
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -373,7 +374,7 @@ test.describe('577a Bugünün kararları', () => {
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -397,7 +398,7 @@ test.describe('577a Odak tahtası', () => {
       await page.locator('body').press('Escape');
       await expect(odak).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -433,7 +434,7 @@ test.describe('577c Geçmiş ve fark', () => {
       await satir.getByRole('button', { name: 'Farkı kapat' }).click();
       await expect(satir).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -445,7 +446,7 @@ test.describe('577d Tezgâh stüdyosu', () => {
     await expect(page.locator('.tc-pym-tp')).toBeVisible();
     if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/plan\/studio$/);
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 
@@ -472,7 +473,7 @@ test.describe('577d Tahta kartları', () => {
       for (const t of ['1', '2', '3', '4', '5', '6', '7']) await page.keyboard.press(t);
       await expect(page.locator('.tc-pyt-kart')).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
 

@@ -29,6 +29,7 @@ const cevap = (fiyatGorunur: boolean, o: Partial<ProjeMaliyetCevabi> = {}): Proj
   fiyatGorunur,
   bugun: '2026-10-19',
   gelir: fiyatGorunur ? 2000 : null,
+  kurFarki: fiyatGorunur ? 0 : null,
   butce: null,
   hedef: 1000,
   plan: 1000,
@@ -103,6 +104,18 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.getByRole('link', { name: /Plana git/ }).getAttribute('href')).toBe('/plan');
     expect(screen.getByRole('table', { name: 'En çok sapan iş emirleri' })).toBeTruthy();
     expect(screen.getByText(/Toplamlara girmeyen kalemler.*Fason/)).toBeTruthy();
+  });
+
+  it('1398 a: döviz siparişinde kur farkı ayrı kartta, işaretiyle; TL siparişinde kart yok', async () => {
+    sunucuKur(() => json(200, cevap(true, { siparis: { id: 3, no: 'SIP-0003', termin: '2026-11-15', paraBirimi: 'EUR', tutar: 50 }, kurFarki: 120 })));
+    cizdir();
+    expect(await screen.findByText('Kur farkı')).toBeTruthy();
+    expect(screen.getByText(/^\+120\sTL$/)).toBeTruthy();
+    cleanup();
+    sunucuKur(() => json(200, cevap(true)));
+    cizdir();
+    expect(await screen.findByText('Sipariş tutarı')).toBeTruthy();
+    expect(screen.queryByText('Kur farkı')).toBeNull();
   });
 
   it('fiyat yetkisi yoksa tutar, katkı, sapma ve kâr riski görünmez; maliyet görünür', async () => {

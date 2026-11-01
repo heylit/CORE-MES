@@ -385,8 +385,9 @@ export interface DengeSatiri extends IsiSatiri { s: Siparis; T: number | null; C
 export interface DengeIsisi { sutunlar: IsiSutunu[]; satirlar: DengeSatiri[]; ust: UstDurum; yalnizGec: boolean }
 
 // Siparişlerin plandan maliyeti (zz30-isi isSipMal: ymSipMaliyet); plan ya da takvim yoksa boş.
-export function siparisMaliyetleri(c: PlanlamaCalismasi): Map<string, SiparisMaliyeti> {
-  const b = maliyetBaglami(c); const m = new Map<string, SiparisMaliyeti>();
+// emirler: sunucunun iş emri durumu; biten adımlar ondan bulunur (maliyetBaglami).
+export function siparisMaliyetleri(c: PlanlamaCalismasi, emirler: unknown = null): Map<string, SiparisMaliyeti> {
+  const b = maliyetBaglami(c, emirler); const m = new Map<string, SiparisMaliyeti>();
   if (!b) return m;
   for (const s of plandaki(c.D)) { const x = siparisMaliyeti(b, s); if (x) m.set(s.id, x); }
   return m;

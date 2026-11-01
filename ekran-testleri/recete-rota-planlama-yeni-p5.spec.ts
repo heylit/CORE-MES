@@ -31,7 +31,7 @@ test.describe('P5 yıllık plan ve ufuk', () => {
     await expect(harita.or(yok).first()).toBeVisible();
     if (await harita.isVisible()) await expect(gorunum.getByText('Tüm satırlar')).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -61,7 +61,7 @@ test.describe('P5 yıllık plan ve ufuk', () => {
     await gorunum.getByText('Tüm satırlar').click();
     await expect(gorunum.getByRole('heading', { name: 'Varsayımlar' })).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar.every((y) => y === 'POST /api/plan/yillik-plan/coz' || y === 'POST /api/plan/planlama-calismasi/olustur')).toBe(true);
+    expect(ag.yazmalar.every((y) => y === 'POST /api/plan/yillik-plan/coz')).toBe(true);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -77,7 +77,7 @@ test.describe('P5 yıllık plan ve ufuk', () => {
       await expect(secim.getByRole('button', { name: 'Malzeme' })).toHaveAttribute('aria-pressed', 'true');
     }
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });

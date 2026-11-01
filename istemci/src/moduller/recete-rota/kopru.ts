@@ -326,7 +326,6 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
   return secim;
 }
 
-// kartTaslakAcabilir: oturumda `rota.yaz` var. Yoksa ekran açılışı rotaya yazma denemez (sunucu zaten reddeder; uçtan uca deneme Y4).
 // bedelAyariYazabilir: oturumda `plan.bedel-ayari` var; çerçeve öncelik ayarlarını yalnız o zaman düzenlenebilir çizer (yetkiyi sunucu verir).
 // emirSecimi: emir açılışında proje (ve gerekirse sipariş satırı) seçimi; verilmezse proje gereken emir açılmaz.
 // acilMusteriSecimi: acil sipariş denemesi olan taslağın canlıya alınmasında müşteri seçimi; verilmezse böyle taslak canlıya alınmaz.
@@ -340,7 +339,7 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
 export function kopruKur(
   cihazAnahtarlari: readonly string[] = [],
   secenek: {
-    kartTaslakAcabilir?: boolean; bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
+    bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
     motorUyarilari?: (uyarilar: readonly string[]) => void; yerlesimCizilmez?: () => boolean;
     islemler?: readonly string[];
   } = {},
@@ -397,13 +396,6 @@ export function kopruKur(
           planMotoru: m?.motor ?? null,
         };
       });
-  // Malzemeler'de yeni onaylanan kartın ilk rota taslağı ekran açılırken açılır (#688), dakikalık tarama beklenmez. Ekranın ilk
-  // okumasında bir kez, yalnız rota yazabilene denenir; açılamazsa durum yine okunur (tarama sonra açar). Kullanıcının gönderdiği kayıt
-  // değildir: ulaşılamazsa kopukluk uyarısına "gönderilen kayıt" olarak girmez (Soru 487/3 a).
-  let kartTaslaklari: Promise<unknown> | null = secenek.kartTaslakAcabilir === true ? null : Promise.resolve(null);
-  const ilkDurumOku = (): Promise<DurumCevabi> =>
-    (kartTaslaklari ??= api.post<unknown>('/rota/karttan-taslaklar', undefined, { arkaPlan: true }).catch(() => null)).then(durumOku);
-
   return async (tip, veri) => {
     const v = nesne(veri);
     switch (tip) {
@@ -435,7 +427,7 @@ export function kopruKur(
         return api.post<SilCevabi>(`${kayitKoku(anahtar)}/sil`, { anahtar, beklenenSurum: beklenen });
       }
       case 'durum-oku':
-        return ilkDurumOku();
+        return durumOku();
       case 'stok-oku':
         return stokOku(v, secenek.islemler);
       // Canlı plan sürümü (hafif): ekran kısa aralıkla sorar, başkası canlıya aldıysa uyarır.

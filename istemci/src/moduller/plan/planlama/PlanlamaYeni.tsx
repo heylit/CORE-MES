@@ -1,8 +1,8 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import { DurumKutusu, useBildirim } from '../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
@@ -41,17 +41,16 @@ function PlanlamaEkrani() {
   );
   const gorunum = parca === undefined ? ACILIS : gorunumOku(parca);
   const { bildir } = useBildirim();
-  // 657 a: çalışma kaydı yoksa yazabilen kişide sayfa boş çalışmayı sunucuya kurdurur (Reçete ve Rota kaydından) ve düzenlenebilir açılır;
-  // yazamayan salt okunur boş görür. Sayfa ömründe bir kez denenir: hata yeniden denemeye dönmesin.
-  const kurulumDenendi = useRef(false);
-  useEffect(() => {
-    if (durum.tur !== 'hazir' || durum.depo.calisma !== null || yetki === null || !yetki.calismaYazabilir || kurulumDenendi.current) return;
-    kurulumDenendi.current = true;
+  // 657 a, 1395 a: çalışma kaydı yoksa sayfa açılışta yazmaz; yazabilen kişi boş çalışmayı düğmeyle sunucuya kurdurur (Reçete ve Rota
+  // kaydından) ve sayfa düzenlenebilir açılır. Yazamayan salt okunur boş görür.
+  const [kuruluyor, setKuruluyor] = useState(false);
+  const calismaAc = useCallback((): void => {
+    setKuruluyor(true);
     tekrarKorumaliGonder((d) => api.post<PlanlamaCalismasiCevabi>('/plan/planlama-calismasi/olustur', undefined, d)).then(
-      () => { tazele(); },
-      (h: unknown) => { bildir('hata', hataIletisi(h, 'Planlama çalışması açılamadı; sayfa salt okunur.')); },
+      () => { setKuruluyor(false); tazele(); },
+      (h: unknown) => { setKuruluyor(false); bildir('hata', hataIletisi(h, 'Planlama çalışması açılamadı; sayfa salt okunur.')); },
     );
-  }, [durum, yetki, tazele, bildir]);
+  }, [tazele, bildir]);
   // Yazıcı açılıştaki çalışma ve sürümle kurulur; yazma yetkisi ya da çalışma kaydı yoksa ekran salt okunur (komut null).
   const yazici = useMemo(() => {
     if (durum.tur !== 'hazir' || yetki === null || !yetki.calismaYazabilir || durum.depo.calisma === null || !kullanici) return null;
@@ -98,8 +97,16 @@ function PlanlamaEkrani() {
   const alt = gorunum === 'plan' ? altEkranOku(sorgu) : TAHTA;
   const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
 
+  const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
+
   return (
-    <div className="tc-py" data-gorunum={gorunum}>
+    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined}>
+      {calismaYok && (
+        <div className="tc-py-calisma-yok" role="status">
+          <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
+          <Dugme tur="birincil" simge="plus" yukleniyor={kuruluyor} disabled={kuruluyor} onClick={calismaAc}>Planlama çalışmasını aç</Dugme>
+        </div>
+      )}
       <div className="tc-py-gorunum">
         {etkin === undefined
           ? <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Bu sayfayı görme yetkiniz yok." /></div>

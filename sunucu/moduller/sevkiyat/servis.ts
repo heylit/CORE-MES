@@ -816,7 +816,7 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string):
   return satirlar.map((s): TakvimKaydi => ({
     kaynak: 'sevk', kimlik: String(s.id), tarih: s.tarih, no: s.belgeNo || null,
     baslik: s.belgeNo ? `${TAKVIM_IS_TURU[s.tur]} ${s.belgeNo}` : TAKVIM_IS_TURU[s.tur],
-    ilgili: (s.firmaId === null ? null : adlar.get(s.firmaId) ?? null) ?? s.noktaAdi, durum: TAKVIM_IS_DURUMU[s.durum], bitti: s.durum === 'tamamlandi',
+    ilgili: s.firmaId === null ? s.noktaAdi : (adlar.get(s.firmaId) ?? s.noktaAdi), durum: TAKVIM_IS_DURUMU[s.durum], bitti: s.durum === 'tamamlandi',
   }));
 }
 
