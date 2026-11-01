@@ -11,7 +11,7 @@
 | PM-07 | Tahmini bitiş | kurallar.test.ts "PM-07, PM-08" |
 | PM-08 | Gecikme günü = tahmini bitiş - termin, en az 0 | kurallar.test.ts "PM-07, PM-08" |
 | PM-09 | Kâr riski = katkı x günlük oran x gün (194 a; oran plan bedel ayarından, 227 a); zararda 0 | kurallar.test.ts "PM-09" |
-| PM-10 | Gecikme cezası tavanla | kurallar.test.ts "PM-10" |
+| PM-10 | Gecikme cezası tavanla; tavan boşsa %10 (plan motoruyla aynı) | kurallar.test.ts "PM-10" |
 | PM-11 | En çok sapan 5 iş emri ve nedeni | kurallar.test.ts "PM-11" |
 | PM-12 | Hedef = bütçe ya da plan; katkı = gelir - (gerçek + kalan plan); maliyet tam değilse katkı ve oranları null (#10) | kurallar.test.ts "PM-04, PM-12" |
 | PM-13 | `finans.maliyet-oku` yoksa 403; girişsiz 401; olmayan proje 404 | proje-maliyet.test.ts "PM-13" |

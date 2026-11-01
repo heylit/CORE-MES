@@ -4,6 +4,9 @@ import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { EksikVeri, KalemSatiri, MaliyetKalemi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
 
 export const SAPAN_IS_EMRI_SAYISI = 5;
+// Sipariş tavanı boşken plan motoru da %10 kullanır (plan/motor/engine.betik CEZA_TAVANI_VARSAYILAN); rapor ile motor aynı
+// sipariş için aynı cezayı vermeli.
+export const CEZA_TAVANI_VARSAYILAN = 10;
 
 // Anahtarı olmayan kalem o kayıtta yoktur (sıfır); null bilinmiyor demektir ve toplamı bozar.
 export type KalemTutarlari = Partial<Record<MaliyetKalemi, number | null>>;
@@ -160,11 +163,11 @@ export function karRiski(katkiPayi: number | null, gunlukOranYuzde: number, geci
   return katkiPayi === null || gecikme === null ? null : Math.max(0, katkiPayi) * (gunlukOranYuzde / 100) * gecikme;
 }
 
-// PM-10: gecikme cezası = gelir x günlük ceza yüzdesi x gün; tavan varsa gelirin tavan yüzdesini aşmaz. Oran yoksa bilinmez.
+// PM-10: gecikme cezası = gelir x günlük ceza yüzdesi x gün; gelirin tavan yüzdesini aşmaz, tavan boşsa %10. Oran yoksa bilinmez.
 export function gecikmeCezasi(gelir: number | null, cezaOraniGun: number | null, tavanOrani: number | null, gecikme: number | null): number | null {
   if (gelir === null || cezaOraniGun === null || gecikme === null) return null;
   const ceza = gelir * (cezaOraniGun / 100) * gecikme;
-  return tavanOrani === null ? ceza : Math.min(ceza, gelir * (tavanOrani / 100));
+  return Math.min(ceza, gelir * ((tavanOrani ?? CEZA_TAVANI_VARSAYILAN) / 100));
 }
 
 // PM-11: en çok sapan iş emirleri: sapma = gerçekleşen - bugüne kadarki plan (dahil kalemlerde), yalnız artı sapma, büyükten
