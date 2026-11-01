@@ -51,7 +51,6 @@ export function sSetMesh(m: Ag, name: string, keepBodies?: boolean): void {
   if (S.vol < 1e-6) S.msg = '⚠ Model kapalı bir katı değil — hacim hesaplanamadı. Hammadde ölçüsü yine de hesaplandı.';
   S.fitPending = true;
   hamHesapla();
-  if (S.after) { const af = S.after; S.after = null; setTimeout(af, 0); }
 }
 
 // Prototipin rotateBy ve minBox'u: yön değişir, ham yeniden hesaplanır.
@@ -75,7 +74,7 @@ export { aabb };
 const STEP_AYRINTI = 0.0006;
 const STEP_ACI = 0.15;
 
-// Prototipin loadSTEP'i; Oto-CAM örnek STEP parçasını baytla yükler. Söz yükleme bitince çözülür (S.after da koşar).
+// Prototipin loadSTEP'i: STEP baytlarını üçgenler; söz yükleme bitince çözülür.
 export async function stepBaytYukle(buf: Uint8Array, name: string): Promise<void> {
   sBusy('STEP geometrisi üçgenleniyor…');
   let aglar: Awaited<ReturnType<typeof stepOku>> | null;

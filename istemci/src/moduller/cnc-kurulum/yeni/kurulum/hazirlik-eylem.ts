@@ -50,11 +50,10 @@ export function prUI(): void {
   yenile();
 }
 
-// Oto-CAM'den gelişte program adımına gidilir (prototipin camToPrep'i: prGo, adım kaydı da değişir).
-export function prEnter(adim?: 'son' | 'prog'): void {
+// Açılışta kayıtlı adıma, Ana Sayfa'nın "Deneme"sinden gelişte son adıma gidilir.
+export function prEnter(adim?: 'son'): void {
   PR.at = clamp(num(PS().at, 0), 0, 99); PR.seq = prSeq(); sahneKirli();
   if (adim === 'son') PR.at = PR.seq.length - 1;
-  if (adim === 'prog') { const i = PR.seq.findIndex((s) => s.key === 'prog'); if (i >= 0) prGo(i); }
   prUI();
 }
 

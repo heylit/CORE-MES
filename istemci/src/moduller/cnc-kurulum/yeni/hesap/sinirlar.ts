@@ -1,9 +1,8 @@
-import { fmtN } from '../bicim.ts';
 import type { Tezgah } from '../veri/tipler.ts';
 
 // Prototipin SIĞMA KONTROLÜ bölümünün veri ve saf kısmı: parça ve ham tezgâhın çap, boy, kurs, yük sınırlarına sığıyor mu.
 // Tezgâh değerleri Hazırlık → Tezgâh bilgileri'nden (girildiyse), yoksa katalog değerlerinden (CAP_DEF; tipik katalog
-// değerleri, varsayım). Sığma denetiminin kendisi (camFitMT ve ötekiler) Oto-CAM'dedir.
+// değerleri, varsayım).
 
 export interface KapasiteDegerleri {
   maxD?: number; maxL?: number; bar?: number; subBar?: number; chuck?: number;
@@ -26,49 +25,4 @@ export const CAP_DEF: Record<string, KapasiteDegerleri> = {
 // Kopya tezgâh (`f5a_2` gibi) aslının katalog değerini alır.
 export function capDefOf(m: Pick<Tezgah, 'id'>): KapasiteDegerleri {
   return CAP_DEF[m.id] || CAP_DEF[String(m.id).replace(/_\d+$/, '')] || {};
-}
-
-export type KapasiteKaynagi = 'girilen' | 'katalog' | 'tahmin';
-export interface Kapasite {
-  maxD?: number; maxL?: number; bar?: number; subBar?: number; chuck?: number;
-  xT?: number; yT?: number; zT?: number; zDay?: number; load?: number; viseW?: number;
-  // Girilen tabla ölçüsü metin olmayabilir; prototip olduğu gibi taşır.
-  tbl?: unknown;
-  tblD?: number | null; tblW?: [number, number] | null;
-  src: Partial<Record<keyof KapasiteDegerleri, KapasiteKaynagi>>;
-}
-
-const KAPASITE_ALANLARI = ['maxD', 'maxL', 'bar', 'subBar', 'chuck', 'xT', 'yT', 'zT', 'zDay', 'load', 'viseW', 'tbl'] as const;
-
-export function camCaps(m: Pick<Tezgah, 'id' | 'info'>): Kapasite {
-  const I: Record<string, unknown> = Object.assign({}, m.info || {}), d = capDefOf(m), o: Kapasite = { src: {} };
-  const yaz = o as unknown as Record<string, unknown>;
-  KAPASITE_ALANLARI.forEach((k) => {
-    const v = I[k];
-    if (v != null && v !== '') { yaz[k] = k === 'tbl' ? v : Number(v); o.src[k] = 'girilen'; }
-    else if (d[k] != null) { yaz[k] = d[k]; o.src[k] = 'katalog'; }
-  });
-  if (o.zT && !o.zDay) { o.zDay = o.zT + 150; o.src.zDay = 'tahmin'; }
-  if (o.tbl) {
-    const tm = /Ø\s*(\d+)/.exec(String(o.tbl)), rm = /(\d+)\s*[×x]\s*(\d+)/.exec(String(o.tbl));
-    o.tblD = tm ? Number(tm[1]) : null;
-    o.tblW = rm ? [Number(rm[1]), Number(rm[2])] : null;
-  }
-  return o;
-}
-
-export type SigmaDurumu = 'ok' | 'warn' | 'bad' | 'na';
-export interface SigmaSatiri { st: SigmaDurumu; lbl: string; val: string; lim: string; txt: string }
-
-export function fitI(st: SigmaDurumu, lbl: string, val: string, lim: string, txt?: string): SigmaSatiri {
-  return { st, lbl, val, lim, txt: txt || '' };
-}
-export function fitCmp(
-  lbl: string, v: number, lim: number | null | undefined, src: KapasiteKaynagi | undefined, unit: string,
-  warnAt?: number, txtBad?: string, txtWarn?: string,
-): SigmaSatiri {
-  if (lim == null || !(lim > 0)) return fitI('na', lbl, `${fmtN(v, 0)} ${unit}`, '—', 'tezgâh bilgisi yok — Hazırlık → Tezgâh bilgileri\'nden girin');
-  const r = v / lim, st: SigmaDurumu = r > 1 ? 'bad' : r > (warnAt || 0.92) ? 'warn' : 'ok';
-  return fitI(st, lbl, `${fmtN(v, v < 10 ? 1 : 0)} ${unit}`, `${fmtN(lim, 0)} ${unit}${src === 'katalog' ? ' (katalog)' : src === 'tahmin' ? ' (tahmin)' : ''}`,
-    st === 'bad' ? txtBad : st === 'warn' ? (txtWarn || 'sınıra çok yakın') : '');
 }

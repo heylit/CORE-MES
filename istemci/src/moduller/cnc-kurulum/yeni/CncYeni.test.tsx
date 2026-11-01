@@ -59,7 +59,7 @@ describe('CncYeni', () => {
     expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/ana-sayfa');
     expect(screen.getAllByRole('tab').map((s) => s.textContent)).toEqual(
-      ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Oto-CAM', 'G-Kod Sim.', 'Takım Ömrü'],
+      ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'G-Kod Sim.', 'Takım Ömrü'],
     );
     expect(screen.getByRole('button', { name: /Tanımlar/ })).toBeTruthy();
     expect(state.machine).toBe('t2');

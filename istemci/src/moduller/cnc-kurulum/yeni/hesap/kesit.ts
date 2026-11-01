@@ -1,7 +1,7 @@
 import * as clipperModulu from './clipper.js';
 import type { ClipperKutuphanesi, IntPoint, Path, Paths } from './clipper.d.ts';
 
-// Prototipin clipper yardımcıları ve ağ dilimleme (camSlice). Ham hesabı (dönme ekseni) ve Oto-CAM aynı dilimlemeyi kullanır.
+// Prototipin clipper yardımcıları ve ağ dilimleme (camSlice). Ham hesabı (dönme ekseni) dilimlemeyi kullanır.
 // Clipper tam sayıyla çalışır: mm × CK.
 // Kütüphane CommonJS ortamında (test, paketleyici dönüştürünce) dışa verir, tarayıcıda genel nesneye koyar; ikisi de okunur.
 function kutuphane(): ClipperKutuphanesi {
@@ -17,7 +17,6 @@ export type Nokta2 = [number, number];
 
 export function cpt(x: number, y: number): IntPoint { return { X: Math.round(x * CK), Y: Math.round(y * CK) }; }
 export function cpPaths(arr: readonly (readonly Nokta2[])[]): Paths { return arr.map((p) => p.map((q) => cpt(q[0], q[1]))); }
-export function unpPaths(ps: Paths): Nokta2[][] { return ps.map((p) => p.map((q): Nokta2 => [q.X / CK, q.Y / CK])); }
 export function cBool(type: number, a: Paths, b: Paths | null | undefined, fill?: number | null): Paths {
   const c = new CLP.Clipper();
   const out = new CLP.Paths();
@@ -28,33 +27,7 @@ export function cBool(type: number, a: Paths, b: Paths | null | undefined, fill?
   return out;
 }
 export function cUnion(a: Paths, b?: Paths | null, fill?: number | null): Paths { return cBool(CLP.ClipType.ctUnion, a, b || [], fill); }
-export function cDiff(a: Paths, b?: Paths | null): Paths { if (!a.length) return []; if (!b || !b.length) return a; return cBool(CLP.ClipType.ctDifference, a, b); }
-export function cInter(a: Paths, b?: Paths | null): Paths { if (!a.length || !b || !b.length) return []; return cBool(CLP.ClipType.ctIntersection, a, b); }
-export function cOff(a: Paths, d: number): Paths {
-  if (!a.length) return [];
-  const co = new CLP.ClipperOffset(2, 0.015 * CK);
-  const out = new CLP.Paths();
-  co.AddPaths(a, CLP.JoinType.jtRound, CLP.EndType.etClosedPolygon);
-  co.Execute(out, d * CK);
-  return out;
-}
-export function cArea(a: Paths): number { let s = 0; a.forEach((p) => { s += CLP.Clipper.Area(p); }); return s / (CK * CK); }
-export function cClipOpen(lines: Paths, polys: Paths): Paths {
-  if (!lines.length || !polys.length) return [];
-  const c = new CLP.Clipper();
-  const pt = new CLP.PolyTree();
-  c.AddPaths(lines, CLP.PolyType.ptSubject, false);
-  c.AddPaths(polys, CLP.PolyType.ptClip, true);
-  c.Execute(CLP.ClipType.ctIntersection, pt, CLP.PolyFillType.pftNonZero, CLP.PolyFillType.pftNonZero);
-  return CLP.Clipper.OpenPathsFromPolyTree(pt);
-}
 export function cClean(a: Paths, d?: number): Paths { return CLP.Clipper.CleanPolygons(a, (d || 0.004) * CK); }
-export function cInside(pt: IntPoint, polys: Paths): boolean {
-  let c = 0;
-  polys.forEach((p) => { const r = CLP.Clipper.PointInPolygon(pt, p); if (r !== 0) c += CLP.Clipper.Orientation(p) ? 1 : -1; });
-  return c > 0;
-}
-export function camRect(x0: number, y0: number, x1: number, y1: number): Paths { return [[cpt(x0, y0), cpt(x1, y0), cpt(x1, y1), cpt(x0, y1)]]; }
 
 // Dilimlenecek ağ: köşeler (x, y, z üçlüleri), üçgen dizinleri ve her üçgenin z aralığı.
 export interface DilimAgi { V: ArrayLike<number>; T: ArrayLike<number>; tz0: ArrayLike<number>; tz1: ArrayLike<number> }

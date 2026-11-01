@@ -10,11 +10,11 @@ test.use({ launchOptions: async ({ launchOptions }, kullan) => { await kullan({ 
 test.describe('3B sahne', () => {
   // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
   // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
-  test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, Oto-CAM, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+  test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer.
     test.setTimeout(180_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'oto-cam', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       // Kütüphane tezgâh cepleriyle açılır (1276 a); raf sahnesi Elimizdekiler'dedir.
       if (yol === 'kutuphane') await page.getByRole('button', { name: 'Elimizdekiler' }).click();

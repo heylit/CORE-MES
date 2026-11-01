@@ -495,12 +495,3 @@ export function prChecks(): KontrolMaddesi[] {
   return out;
 }
 
-// Oto-CAM'in "Hazırlığa gönder"i (prototipin camToPrep'i): program Hazırlık'ın kaynağı olur. Görünüm geçişi ve program adımına
-// gidiş çağıranındır: `git('prep', { adim: 'prog' })`; Hazırlık açılışta gecisSecenegiAl('prep') ile adımı alır (prGo).
-export function hazirligaGonder(metin: string, ad: string): void {
-  state['gsimText'] = { name: ad, text: metin };
-  PS().src = 'cur';
-  PR.progKey = '';
-  save();
-  haberVer('program');
-}

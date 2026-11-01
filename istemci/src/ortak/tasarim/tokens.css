@@ -229,13 +229,3 @@
   --cnc3d-m-isik-yesil: #2aff6a; --cnc3d-m-isik-yesil-yanar: #20d050; --cnc3d-m-isik-sari: #ffb020; --cnc3d-m-isik-sari-yanar: #402800;
   --cnc3d-m-isik-kirmizi: #ff3030; --cnc3d-m-isik-kirmizi-yanar: #300000; --cnc3d-m-gk-cam: #9cc4d8;
 }
-/* CNC Kurulum Oto-CAM: islem turu, takim yolu, ulasilamaz bolge, torna-freze makine simulasyonu ve sure cubugu renkleri (prototipin
-   Oto-CAM degerleri). Kaba, kalan, finis ve serbest yuzey --cnc3d-vurgu, -uyari, -ok, -acik-mavi'yi kullanir. */
-:root {
-  --cnc3d-cam-alin: #9aa7b5; --cnc3d-cam-helis: #c084fc; --cnc3d-cam-delme: #ff6b9a; --cnc3d-cam-kilavuz: #2dd4bf;
-  --cnc3d-cam-hizli: #5b6673; --cnc3d-cam-ulasilamaz: #ff3b3b; --cnc3d-cam-parca: #b7c2cd;
-  --cnc3d-cam-torna-yuzey: #1550c0; --cnc3d-cam-freze-yuzey: #d85a00; --cnc3d-cam-torna-lejant: #5d9cf5; --cnc3d-cam-freze-lejant: #ffa31a;
-  --cnc3d-cam-torna-arka: #ffb35c; --cnc3d-cam-kesme: #ff5a5a; --cnc3d-cam-ayna: #2b3440;
-  --cnc3d-cam-ms-celik: #9aa4ae; --cnc3d-cam-ms-koyu: #2b333c; --cnc3d-cam-ms-kutuk: #b8c0c8; --cnc3d-cam-ms-kafa: #3a4450;
-  --cnc3d-cam-freze-cevrim: #7cc8ff; --cnc3d-cam-yukleme: #8a97a6;
-}

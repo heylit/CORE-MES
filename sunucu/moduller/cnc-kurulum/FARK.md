@@ -98,6 +98,12 @@ Doğrulama (tarayıcıda, çerçevesiz prototip):
   Başka sayfaya gidip dönünce ekran kayıtlardan yeniden kurulur: açık 3B sahne ve kaydırma sıfırlanır, kaydedilmemiş yarım giriş kaybolabilir.
   Kayıtlı veri kaybolmaz. Kök ile görünümler arasında geçişte ekran yeniden kurulmaz.
 
+## Oto-CAM kaldırıldı (kart 1399, 01.11.2026)
+Oto-CAM doğru çalışmadığı için kullanıcı kararıyla ("1399 sil") silindi: sekme, `istemci/src/moduller/cnc-kurulum/yeni/cam/`, yalnız
+onun kullandığı hesap yardımcıları, Oto-CAM renk değişkenleri ve ekran testi. Tanımlar penceresinin "Hazırlık süreleri" sekmesi
+(ayar süresi profili) de kalktı; tek tüketicisi Oto-CAM'di. Sunucu, uç, tablo ve göç değişmedi. Kayıttaki `cam` ve `suProf` alanları
+silinmez, okunmaz; eski `/cnc-kurulum/yeni/oto-cam` adresi Ana Sayfa'ya düşer.
+
 ## Değişen onaylı karar
 - Kart #1084 "aktarım taslak açar": eşleştirilen modelde yayına alınır (kullanıcı kararı, kart #1196). Eşleştirmesiz aktarım taslak kalır.
 - Operatöre verilmedi (kart #713 kararı: operatör yalnız terminal ve kuyruğu görür).

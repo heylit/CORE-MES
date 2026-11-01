@@ -97,10 +97,9 @@ describe('seçim kilidi (cerceve-kopru.ts 905-940)', () => {
 });
 
 describe('Hazırlık açılışı', () => {
-  it('kayıtlı adımda, son adım istenirse sonda, Oto-CAM gönderiminde program adımında açılır', () => {
+  it('kayıtlı adımda, son adım istenirse sonda açılır', () => {
     hz.kayit.at = 2; prEnter(); expect(prCurStep()?.key).toBe('fixture');
     prEnter('son'); expect(prCurStep()?.key).toBe('trial');
-    hz.kayit.at = 0; prEnter('prog'); expect(prCurStep()?.key).toBe('prog'); expect(hz.kayit.at).toBe(1);
   });
 });
 

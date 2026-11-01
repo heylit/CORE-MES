@@ -1,7 +1,7 @@
 import { Quaternion } from 'three';
 import type { Geometri, Govde, HamSonuc } from './hesap/ham.ts';
 
-// Yüklenen parça (prototipin `S`inin veri kısmı). Ham Malzeme, Oto-CAM, G-Kod ve Hazırlık aynı parçayı görür. Sahne, ağ ve
+// Yüklenen parça (prototipin `S`inin veri kısmı). Ham Malzeme, G-Kod ve Hazırlık aynı parçayı görür. Sahne, ağ ve
 // malzeme nesneleri görünümündür; burada yalnız geometri ve hesap sonuçları durur. Kayda girmez (prototipte de bellekte).
 
 export type { Ag, Govde, HamSonuc, Geometri } from './hesap/ham.ts';
@@ -27,15 +27,13 @@ export interface ParcaDurumu {
   alt: { bar: HamSonuc; block: HamSonuc } | null;
   // Görünüm kamerayı parçaya oturtsun (prototipte sahne bir sonraki karede yapar).
   fitPending: boolean;
-  // Yükleme bitince bir kez koşacak iş (prototipte Oto-CAM "parçayı yükle ve devam et").
-  after: (() => void) | null;
   busy: string | null;
   msg: string;
 }
 
 export const S: ParcaDurumu = {
   P: null, I: null, vol: 0, area: 0, tris: 0, name: '', solids: 1, q: new Quaternion(), bodies: null, bodySel: 0, bodyFile: '', axKey: null,
-  geo: null, res: null, alt: null, fitPending: false, after: null, busy: null, msg: '',
+  geo: null, res: null, alt: null, fitPending: false, busy: null, msg: '',
 };
 
 let surum = 0;
