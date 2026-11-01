@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, readSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { appendFile, appendFileSync, closeSync, mkdirSync, openSync, readSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -84,14 +84,25 @@ export interface GunlukDurumu {
   sonHata: string | null;
 }
 
-// pino satırı tek tek verir (`write`); dosyaya eşzamanlı eklenir ki süreç düşmeden hemen önceki satır da dosyada kalsın.
+// Bilgi satırları biriktirilip arka planda eklenir: her satırı eşzamanlı yazmak yük altında ana iş parçacığının üçte birini
+// tutuyordu (yük testi 2026-11-01, 1748). Hata ve ölümcül satır, gün dönüşü ve süreç çıkışı biriktirileni hemen ve eşzamanlı
+// yazar: süreç düşmeden hemen önceki hata da ondan önceki satırlar da dosyada kalır. Arka planda yazılan bir parti o sırada
+// sürüyorsa eşzamanlı yazılan ondan önce dosyaya düşebilir; her satır kendi zamanını taşır.
 // Yazılamayan günlük sunucuyu durdurmaz: neden durumda tutulur, Güvenlik Merkezi'nde görünür.
+export const BOSALTMA_MS = 200;
+export const TAMPON_EN_COK = 256 * 1024;
+
 export class GunlukYazici {
   private readonly o: GunlukOrtami;
   private gun: string | null = null;
   private dosya: string | null = null;
   private sonYazma: Date | null = null;
   private sonHata: string | null = null;
+  private bekleyen: string[] = [];
+  private bekleyenBayt = 0;
+  private bekleyenAn: Date | null = null;
+  private zamanlayici: NodeJS.Timeout | null = null;
+  private yaziliyor = false;
 
   constructor(o: GunlukOrtami) {
     this.o = o;
@@ -100,17 +111,24 @@ export class GunlukYazici {
   write(satir: string): void {
     this.o.konsol?.(satir);
     const simdi = this.o.simdi?.() ?? new Date();
-    try {
-      const gun = yerelTarih(simdi);
-      if (gun !== this.gun) this.gunuDondur(simdi, gun);
-      appendFileSync(this.dosya ?? '', satir);
-      this.sonYazma = simdi;
-      this.sonHata = null;
-    } catch (hata) {
-      this.sonHata = hata instanceof Error ? hata.message : String(hata);
+    const gun = yerelTarih(simdi);
+    if (gun !== this.gun) {
+      this.bosalt();
+      try {
+        this.gunuDondur(simdi, gun);
+      } catch (hata) {
+        this.hataTut(hata);
+      }
     }
+    this.bekleyen.push(satir);
+    this.bekleyenBayt += satir.length;
+    this.bekleyenAn = simdi;
+    const hataDuzeyinde = Number(DUZEY_DESENI.exec(satir)?.[1] ?? 0) >= HATA_DUZEYI;
+    if (hataDuzeyinde) this.bosalt();
+    else if (this.bekleyenBayt >= TAMPON_EN_COK) this.arkaPlandaYaz();
+    else this.zamanla();
     const { hataBildir } = this.o;
-    if (hataBildir === undefined) return;
+    if (hataBildir === undefined || !hataDuzeyinde) return;
     const h = hataSatiriCoz(satir);
     if (h === null) return;
     try {
@@ -118,6 +136,60 @@ export class GunlukYazici {
     } catch {
       // Olay günlüğüne yazılamaması günlüğü durdurmaz.
     }
+  }
+
+  // Biriktirileni hemen ve eşzamanlı ekler (hata satırı, gün dönüşü, süreç çıkışı, test).
+  bosalt(): void {
+    if (this.zamanlayici !== null) { clearTimeout(this.zamanlayici); this.zamanlayici = null; }
+    const parti = this.partiAl();
+    if (parti === null) return;
+    try {
+      if (this.dosya === null) throw new Error(`Günlük klasörü açılamadı: ${this.o.dizin}`);
+      appendFileSync(this.dosya, parti.metin);
+      this.yazildi(parti.an);
+    } catch (hata) {
+      this.hataTut(hata);
+    }
+  }
+
+  private zamanla(): void {
+    if (this.zamanlayici !== null) return;
+    this.zamanlayici = setTimeout(() => { this.zamanlayici = null; this.arkaPlandaYaz(); }, BOSALTMA_MS);
+    this.zamanlayici.unref();
+  }
+
+  private arkaPlandaYaz(): void {
+    if (this.yaziliyor) return;
+    const dosya = this.dosya;
+    if (dosya === null) { this.bosalt(); return; }
+    const parti = this.partiAl();
+    if (parti === null) return;
+    this.yaziliyor = true;
+    appendFile(dosya, parti.metin, (hata) => {
+      this.yaziliyor = false;
+      if (hata === null) this.yazildi(parti.an);
+      else this.hataTut(hata);
+      if (this.bekleyenBayt >= TAMPON_EN_COK) this.arkaPlandaYaz();
+      else if (this.bekleyen.length > 0) this.zamanla();
+    });
+  }
+
+  private partiAl(): { metin: string; an: Date } | null {
+    if (this.bekleyen.length === 0 || this.bekleyenAn === null) return null;
+    const parti = { metin: this.bekleyen.join(''), an: this.bekleyenAn };
+    this.bekleyen = [];
+    this.bekleyenBayt = 0;
+    this.bekleyenAn = null;
+    return parti;
+  }
+
+  private yazildi(an: Date): void {
+    this.sonYazma = an;
+    this.sonHata = null;
+  }
+
+  private hataTut(hata: unknown): void {
+    this.sonHata = hata instanceof Error ? hata.message : String(hata);
   }
 
   durum(): GunlukDurumu {
@@ -138,8 +210,11 @@ export class GunlukYazici {
 let surecYazicisi: GunlukYazici | null = null;
 
 export function surecGunlugunuKur(o: GunlukOrtami): GunlukYazici {
-  surecYazicisi = new GunlukYazici(o);
-  return surecYazicisi;
+  const y = new GunlukYazici(o);
+  // Olağan kapanışta bekleyen satırlar kaybolmasın; çökmede son hata satırı zaten eşzamanlı yazılmıştır.
+  process.once('exit', () => { y.bosalt(); });
+  surecYazicisi = y;
+  return y;
 }
 
 export function surecGunlukDurumu(): GunlukDurumu | null {
