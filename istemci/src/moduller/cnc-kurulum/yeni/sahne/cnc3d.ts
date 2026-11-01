@@ -226,6 +226,7 @@ function holder(taper: string | undefined, ht: string | undefined, toolR: number
       bot = top - 4.9 * Math.max(0.8, es); ins = 2.2;
       add(g, cy(2.0 * es, 2.0 * es, top, top - 2.8, M.steel), cy(2.45 * es, 2.45 * es, top - 2.8, top - 4.2, M.steel), cy(1.5 * es, Math.max(toolR + 0.15, 0.5), top - 4.2, bot, M.steel)); break;
     }
+    case undefined:
     default: bot = top - 1; ins = 0; g.add(cy(1.8, 1.8, top, bot, M.steel));
   }
   return { g, bot, ins };
@@ -493,6 +494,7 @@ function gauge(kind: string | undefined): THREE.Group {
       for (let i = 0; i < 6; i++) { const t2 = tor(0.48, 0.07, M.steel, -1.9 - i * 0.13, 0, 0); t2.rotation.y = PI / 2; g.add(t2); }
       break;
     case 'g_rough': add(g, bx(3, 1.4, 2, M.paint, 0, 0.7, 0), bx(1.6, 0.8, 0.05, M.screen, 0, 1.0, 1.02), bx(2.4, 0.3, 0.3, M.paintDark, -2.4, 0.6, 0), cy(0.05, 0.05, 0.45, 0.1, M.ruby)); cocuk(g, 3).position.x = -3.5; break;
+    case undefined:
     default: g.add(bx(2, 2, 2, M.steel));
   }
   return g;
@@ -516,6 +518,7 @@ function consumable(it: Kalem): THREE.Group {
       add(g, cyZ(1.0, 1.0, -0.05, 0.05, M.glass, -1.1, 0), cyZ(1.0, 1.0, -0.05, 0.05, M.glass, 1.1, 0), tor(1.0, 0.07, M.dark, -1.1, 0, 0), tor(1.0, 0.07, M.dark, 1.1, 0, 0),
         bx(0.4, 0.12, 0.12, M.dark, 0, 0.3, 0), bx(0.1, 0.1, 3, M.dark, -2.1, 0.3, -1.5), bx(0.1, 0.1, 3, M.dark, 2.1, 0.3, -1.5)); break;
     case 'marker': add(g, cyX(0.3, 0.3, -2.5, 1.5, M.white), cyX(0.32, 0.32, 1.5, 2.8, c), cyX(0.1, 0.02, -2.9, -2.5, c)); break;
+    case undefined:
     default: g.add(bx(2, 2, 2, c));
   }
   return g;
@@ -743,6 +746,7 @@ function gauge2(k: string | undefined): THREE.Group {
       return g;
     }
     case 'z_tset': add(g, cy(1.3, 1.5, 2.2, 0, M.paintDark), cy(0.3, 0.3, 3.0, 2.2, M.steel), bx(1.0, 0.25, 1.0, M.carb, 0, 3.1, 0), sp(0.12, M.green, 1.0, 1.6, 0.8)); return g;
+    case undefined: break;
   }
   return gauge(k);
 }
@@ -758,6 +762,7 @@ function consumable2(it: Kalem): THREE.Group {
     case 'plugs': add(g, cy(0.35, 0.45, 1.2, 0, M.orangeRub), cy(0.35, 0.45, 1.2, 0, M.orangeRub), tor(1.0, 0.04, M.blue, 0, 1.2, 0, PI)); cocuk(g, 0).position.x = -1; cocuk(g, 1).position.x = 1; return g;
     case 'can': add(g, cy(1.0, 1.0, 3.5, 0, c), cy(1.0, 0.5, 3.9, 3.5, M.steel), cy(0.18, 0.12, 5.0, 3.9, M.steel), cy(1.02, 1.02, 2.4, 1.2, M.white)); return g;
     case 'cart': add(g, cy(0.9, 0.9, 5, 0, c), cy(0.92, 0.92, 0.3, 0, M.dark), cy(0.2, 0.2, 5.6, 5, M.white)); return g;
+    case undefined: break;
   }
   return consumable(it);
 }

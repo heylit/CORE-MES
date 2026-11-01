@@ -423,6 +423,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         case 'yavas':
           sonra(kopru.gecikmeMs, () => { json(cevap, 200, acCevap()); });
           return;
+        case 'basari':
         default: {
           // Logo davranışı bilinmiyor (LB8): sahte köprü aynı kodu ikinci kez açar; kalkanın Logo'ya güvenmediği böyle görünür.
           json(cevap, 200, acCevap());

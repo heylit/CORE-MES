@@ -59,6 +59,7 @@ function deger(f: FormAlani, p: Personel, o: IkEkranOzellikleri): ReactNode {
     case 'isaret': return v ? <Rozet ton="tamam">Evet</Rozet> : 'Hayır';
     case 'tesvik': return o.motor?.tesvikById(String(v))?.ad ?? null;
     case 'primler': return null;
+    case 'cok': case 'eposta': case 'metin': case 'sayi': case 'secim': case 'tckn': case 'tel': case undefined:
     default: return String(v);
   }
 }

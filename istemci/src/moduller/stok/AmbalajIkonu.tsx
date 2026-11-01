@@ -47,6 +47,7 @@ export function AmbalajIkonu({ tur }: { tur: AmbalajTuru | 'yok' | 'oto' }) {
         <rect x={9} y={6} width={26} height={22} rx={3} fill="none" className="tc-pk-cizgi" strokeWidth={1.6} />
         <path d="M16 22l6-12 6 12M18.5 18h7" fill="none" className="tc-pk-cizgi" strokeWidth={2} strokeLinecap="round" />
       </svg>);
+    case 'yok':
     default: return (
       <svg {...ortak}>
         <path d="M7 27c4-9 10-14 15-14s11 5 15 14z" className="tc-pk-gri-acik tc-pk-cizgi" strokeWidth={1.4} />

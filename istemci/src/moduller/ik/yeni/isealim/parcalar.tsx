@@ -239,6 +239,7 @@ function AlanGirdisi({ f, deger, degistir, hata, b, sabitler, degerler, hepsiDeg
     }
     case 'soruSeti':
       return <SoruSetiEkle depo={b.depo} ekle={(s) => { hepsiDegistir({ mulakatSorulari: sorulariEkle(String(degerler['mulakatSorulari'] ?? ''), s) }); }} />;
+    case 'metin': case undefined:
     default:
       return <Girdi {...ortak} value={metin} onChange={(o) => { degistir(o.target.value); }} />;
   }

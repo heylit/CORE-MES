@@ -385,6 +385,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
       case 'tarih':
         ic = <Girdi {...ortak} type="date" value={String(v ?? '')} onChange={(o) => degistir(a.k, o.target.value)} />;
         break;
+      case 'metin': case undefined:
       default:
         ic = <Girdi {...ortak} value={String(v ?? '')} placeholder={a.yerTutucu} list={listeKimligi(a.liste ?? (a.k === 'parcaNo' ? 'parca' : undefined))}
           autoComplete={a.liste ? 'off' : undefined} onChange={(o) => degistir(a.k, o.target.value)}

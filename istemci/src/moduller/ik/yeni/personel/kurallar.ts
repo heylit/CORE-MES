@@ -158,6 +158,7 @@ export function personelSirala(
       case 'dept': return b.departmanAdi(p.departmanId);
       case 'giris': return p.iseGiris ?? '';
       case 'izin': return b.kalanIzin?.(p) ?? Number.NEGATIVE_INFINITY;
+      case 'ad':
       default: return adSoyadMetni(p);
     }
   };

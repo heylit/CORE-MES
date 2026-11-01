@@ -209,6 +209,7 @@ function gecerlilikCevabi(e: EmirSatiri, ozet: (id: number) => MalzemeOzeti): Em
       if (e.gecerlilikTarihi === null) throw new Error(`Tarih geçerliliği eksik: ${e.no}`);
       return { tur: 'tarih', tarih: e.gecerlilikTarihi };
     case 'tum': return { tur: 'tum' };
+    case null:
     default: return null;
   }
 }

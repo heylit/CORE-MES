@@ -334,6 +334,7 @@ export function izleyiciGorebilirMi(yol: string, veri: Veri | null, iz: Izleyici
     case 'contracts': return kendi && veri['approval'] === 'approved';
     case 'docs': case 'recons': case 'users': return kendi;
     case 'parties': return p[1] === iz.firma;
+    case undefined:
     default: return false;
   }
 }
