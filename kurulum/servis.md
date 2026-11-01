@@ -92,6 +92,37 @@ Deneme:
 Durdurmak: Görev Zamanlayıcı'da görev "Sonlandır"; güncellemeden önce görev sonlandırılır, sonra `git pull`, `npm.cmd install`,
 `npm.cmd run yedek`, `npm.cmd run goc` ve görev yeniden "Çalıştır".
 
+## 4. Dış bekçi: sunucu düşünce olay günlüğüne yazar (kart 1665)
+
+Bekçi sunucuyu yeniden açar ama kendisi, bilgisayar ya da vekil düşerse kimse haber almaz; uygulama içindeki uyarı da sunucuyla
+birlikte susar. Dış bekçi Görev Zamanlayıcı'nın dakikada bir açtığı tek turluk araçtır: sağlık ucunu yoklar, arızayı Windows olay
+günlüğüne yazar ve kapanır. Paket gerekmez. Bilgi işlemin izleme aracı bu olaylara bağlanır (e-posta uyarısı yoktur, 1061 a ve 1618 a).
+
+Ne yoklar:
+- Sunucu: `http://127.0.0.1:<TMIV2_PORT>/api/saglik`, her zaman.
+- Vekil üzerinden sunucu: `.env`'de `TMIV2_DIS_BEKCI_VEKIL` doluysa (`https://<sunucu adı>`, yalnız şema, ad ve kapı; kurum içi ad
+  ya da özel IP). Boşsa yalnız sunucu yoklanır. Vekilin kurum CA sertifikasına Node'un güvenmesi için görev `--use-system-ca`
+  ile açılır (Windows sertifika deposu; doğrulanmadı, ilk kurulumda "Deneme" ile sınanır).
+
+Olaylar (Uygulama günlüğü, kaynak `TMIV2`; kaynağın açılması `kurulum/gunluk.md`):
+- 300, Hata: art arda 3 turda (yaklaşık 3 dk) cevap yok, beklenmeyen cevap ya da veritabanına ulaşılamıyor (503). Arıza sürdükçe
+  saatte bir, nedeni değişince hemen yeniden yazılır. Kısa yeniden açılış (bekçi 5-60 sn) olay yazmaz.
+- 301, Bilgi: arızadan sonra sunucu yeniden cevap veriyor; metinde arızanın süresi.
+- Bilgisayar açıldıktan sonraki ilk 3 dakikada ve ekrandan güncelleme sürerken yoklama yapılmaz (sunucu bilerek kapalıdır).
+- Son durum depo klasörünün yanındaki `TMIV2-GUNLUK\dis-bekci-durum.json`'dadır; silinirse sayım baştan başlar.
+
+Görev (Görev Zamanlayıcı, "Görev Oluştur"; bekçi göreviyle aynı hesap, 3. bölüm):
+- Genel: ad `TMIV2 Dis Bekci`; "Kullanıcı oturum açmış olsun ya da olmasın çalıştır"; "En yüksek ayrıcalıklarla çalıştır" işaretlenmez.
+- Tetikleyiciler: "Başlangıçta"; "Görevi şu sıklıkla yinele" 1 dakika, "süresince" Süresiz.
+- Eylemler: program `node.exe`'nin tam yolu; bağımsız değişken `--use-system-ca araclar\dis-bekci.ts`; başlangıç klasörü depo klasörü.
+- Ayarlar: "Görev şundan uzun çalışırsa durdur" 1 dakika; "Görev zaten çalışıyorsa: Yeni örnek başlatma".
+
+Son çalışma sonucu: `0` tur tamam (arıza varsa yazıldı), `1` ayar hatası (`TMIV2_PORT` ya da `TMIV2_DIS_BEKCI_VEKIL`), `2` olay
+yazılamadı (kaynak açık değil ya da hesabın izni yok). `2`de aynı olay sonraki turda yeniden denenir.
+
+Deneme: sunucu açıkken `npm.cmd run dis-bekci` hiçbir şey yazmadan `0` ile biter. Bekçi penceresini kapatın, 4 dakika bekleyin; Olay
+Görüntüleyici > Windows Günlükleri > Uygulama'da kaynak `TMIV2`, kimlik 300 görünür. Bekçiyi açın; bir iki dakika içinde 301 görünür.
+
 ## Elektrik kesintisinden sonra
 
 Bilgisayar yeniden açılınca sunucu kendiliğinden gelmez; şu sırayla bakın:
