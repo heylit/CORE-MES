@@ -1,7 +1,7 @@
 import { dalDenetle, dalliMi, oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import type { PatlatmaOnizlemeCevabi, RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type { HamOnerisiCevabi, PatlatmaOnizlemeCevabi, RevizyonSartnameleriCevabi, SartnameKapsami, SartnameOzeti } from '#paylasilan/sozlesme/rota.ts';
 
 // R1 saf kuralları (205 a): bugünkü ekranın tarayıcı kuralları (rotaEksikleri, islemSuresiEksik, girdiOlur, stepFactors, matCost) ve
 // rota düzenlemesi. Veri bağlı durumun biçimidir (prototipin `st` alan adları). Kural ve yetki sahibinin ucundadır; buradakiler ekranın
@@ -615,3 +615,28 @@ export function onizlemeOzeti(dugumler: readonly OnizlemeDugumu[]): { katman: nu
 
 // Düğümün adedi: kök başına adet x gösterilen miktar (baz kipte 1). Kök başına adet ondalık metindir.
 export const dugumAdedi = (d: Pick<OnizlemeDugumu, 'kokBasina'>, miktar: number): number => Math.round(Number(d.kokBasina) * miktar * 10_000) / 10_000;
+
+// ----- hammadde önerisi (1709; 1726 a, 1727 a) -----
+type HamOneri = HamOnerisiCevabi['oneriler'][number];
+const yuvarla = (x: number, basamak: number): number => Math.round(x * 10 ** basamak) / 10 ** basamak;
+
+// 1 ürün için önerilen kartın miktarı, kartın biriminde (1727 a): kg ham hacim x yoğunluk; m ve mm kesim boyu; adet 1. Başka birimde,
+// yoğunluk ya da kesim boyu bilinmiyorsa null: sayı uydurulmaz, kullanıcı yazar.
+export function hamOneriMiktari(o: Pick<HamOneri, 'hamHacimMm3' | 'yogunluk' | 'kesimBoyuMm'>, birim: string | null): number | null {
+  switch ((birim ?? '').trim().toLocaleLowerCase('tr')) {
+    case 'kg': return o.yogunluk === null || o.hamHacimMm3 <= 0 ? null : yuvarla((o.hamHacimMm3 / 1000) * o.yogunluk / 1000, 3);
+    case 'm': return o.kesimBoyuMm === null ? null : yuvarla(o.kesimBoyuMm / 1000, 4);
+    case 'mm': return o.kesimBoyuMm;
+    case 'adet': return 1;
+    default: return null;
+  }
+}
+
+// Öneri yalnız rotada ham madde girdisi yokken gösterilir (1726 a); listede olmayan ya da girdi olamayan kart önerilmez.
+export const hamGirdisiVar = (adimlar: readonly Adim[], malzeme: ReadonlyMap<string, Malzeme>): boolean =>
+  adimlar.some((a) => a.ins.some((g) => malzeme.get(g.itemId)?.type === 'ham'));
+export const onerilebilirKartlar = (oneriler: readonly HamOneri[], malzeme: ReadonlyMap<string, Malzeme>): { oneri: HamOneri; kart: Malzeme }[] =>
+  oneriler.flatMap((oneri) => {
+    const kart = malzeme.get(String(oneri.malzemeNo));
+    return kart !== undefined && kart.aktif && kart.girdiOlabilir ? [{ oneri, kart }] : [];
+  });

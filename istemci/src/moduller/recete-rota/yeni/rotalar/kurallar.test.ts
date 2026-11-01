@@ -7,6 +7,8 @@ import {
 } from './kurallar.ts';
 import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz, dalliRota, dalYaz } from './kurallar.ts';
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
+import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
+import { adimOrnegi } from './test-veri.ts';
 
 // Uydurma kartlar ve operasyonlar (gerçek veri değil).
 const malzeme = (id: string, type: Malzeme['type'], ek: Partial<Malzeme> = {}): Malzeme => ({
@@ -366,5 +368,34 @@ describe('hazırlık bölümü (1310 a)', () => {
     expect(kaydetGovdesi([a], [], opBul)[0]).toMatchObject({ ayarSuresiDk: 25, hazirlikDk: 5, ayar: true, ayarDk: 20 });
     const f = adim('f', 10, { stationId: null, fasonId: '7', terminGun: 5 });
     expect(kaydetGovdesi([f], [], opBul)[0]).toMatchObject({ ayarSuresiDk: null, hazirlikDk: null, ayar: false, ayarDk: null });
+  });
+});
+
+describe('1709 hammadde önerisi (1726 a, 1727 a)', () => {
+  const o = { hamHacimMm3: 100_000, yogunluk: 7.85, kesimBoyuMm: 44 };
+  it('miktar kartın biriminden: kg hacim x yoğunluk, m ve mm kesim boyu, adet 1; bilinmeyende null', () => {
+    expect(hamOneriMiktari(o, 'kg')).toBe(0.785);
+    expect(hamOneriMiktari(o, ' KG ')).toBe(0.785);
+    expect(hamOneriMiktari(o, 'm')).toBe(0.044);
+    expect(hamOneriMiktari(o, 'mm')).toBe(44);
+    expect(hamOneriMiktari(o, 'adet')).toBe(1);
+    expect(hamOneriMiktari({ ...o, yogunluk: null }, 'kg')).toBeNull();
+    expect(hamOneriMiktari({ ...o, kesimBoyuMm: null }, 'm')).toBeNull();
+    expect(hamOneriMiktari(o, 'm²')).toBeNull();
+    expect(hamOneriMiktari(o, null)).toBeNull();
+  });
+
+  it('öneri rotada ham girdi yokken; listede olmayan, pasif ya da girdi olamayan kart önerilmez', () => {
+    const kart = (id: string, ek: Partial<Malzeme> = {}): Malzeme => ({
+      id, kayitNo: Number(id), code: `HM-${id}`, name: 'Deneme', type: 'ham', unit: 'kg', cost: null, stock: null, min: null, aktif: true,
+      kategori: null, kategoriAdi: null, girdiOlabilir: true, ...ek,
+    });
+    const harita = new Map([['1', kart('1')], ['2', kart('2', { aktif: false })], ['3', kart('3', { girdiOlabilir: false })], ['4', kart('4', { type: 'sarf' })]]);
+    expect(hamGirdisiVar([adimOrnegi({ ins: [{ itemId: '4', qty: 1, scrap: 0 }] })], harita)).toBe(false);
+    expect(hamGirdisiVar([adimOrnegi({ ins: [] }), adimOrnegi({ id: 'o20', ins: [{ itemId: '1', qty: 1, scrap: 0 }] })], harita)).toBe(true);
+    const oneri = (malzemeNo: number) => ({
+      malzemeNo, kod: '', ad: null, kalite: null, form: 'cubuk' as const, olcu: { d: 30, l: 3000 }, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 1,
+    });
+    expect(onerilebilirKartlar([1, 2, 3, 9].map(oneri), harita).map((x) => x.kart.id)).toEqual(['1']);
   });
 });
