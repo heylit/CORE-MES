@@ -765,3 +765,21 @@ export function irsaliyeAra(db: Db, a: { sade: string; icindeDeseni: string; bas
     [a.icindeDeseni, a.basDeseni, a.sade, a.sinir],
   );
 }
+
+// Koli etiketi (kart 1525, 1287 a): müşteriye giden ürün ve elle gidiş kalemleri; kaldırılmış kalem ve iptal edilmiş işin kalemi basılmaz.
+// Firma üründe işin bırakış noktasından gelir. Belge no işin belge numarasıdır; irsaliye Logo'dadır, yoksa boş kalır.
+export interface KoliKalemiSatiri {
+  kalemId: number; isId: number | null; belgeNo: string | null; tarih: string | null; firmaId: number | null; uretimEmriId: number | null;
+  malzemeNo: number | null; adet: string | null; aciklama: string | null;
+}
+export function koliKalemleri(db: Db, kalemIdler: readonly number[]): Promise<KoliKalemiSatiri[]> {
+  return db.sorgu<KoliKalemiSatiri>(
+    `SELECT b.id AS "kalemId", b.is_id AS "isId", i.belge_no AS "belgeNo", COALESCE(i.tarih, b.istenen_tarih)::text AS tarih,
+            COALESCE(b.firma_id, n.firma_id) AS "firmaId", b.uretim_emri_id AS "uretimEmriId", b.malzeme_no AS "malzemeNo", b.adet::text AS adet,
+            b.aciklama
+       FROM ${KALEM_KAYNAKLARI}
+      WHERE b.id = ANY($1::int[]) AND b.yon = 'gidis' AND b.kaynak IN ('urun', 'elle') AND b.kaldirildi IS NULL
+        AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)`,
+    [kalemIdler],
+  );
+}

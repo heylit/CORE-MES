@@ -190,3 +190,7 @@ npm run sinir -- --modul sevkiyat → 0 sınır ihlali; göç damgası 0 ihlal; 
   Yoldaki ya da havuzdaki iş "Teslim edildi", yoldaki iş "Yapılamadı" ile mevcut durum ucundan (`sevkiyat.is-yaz`) ilerletilir;
   stok düşümü bugünkü olayla (`urunSevkiDinle`) bir kez yapılır. Taslak plandaki ve işe çevrilmemiş kayıtta düğme yok, nedeni yazılır.
 - VARSAYIM: iş durum ucu sürüm almıyor (bugünkü sözleşme); panel ekranın gördüğü durumu göndermez, geçiş kuralları sunucuda.
+
+## Koli etiketi okuması (kart 1525, 1287 a)
+- `disari.ts koliKalemleri(db, kalemIdler)`: müşteriye giden ürün ve elle gidiş kaleminin işi, işin belge no'su, tarihi (iş yoksa istenen tarih), firması (üründe işin bırakış noktasından) ve adı, emri, malzeme no, adet ve açıklaması. Geliş, fason gidişi, kaldırılmış kalem ve iptal işin kalemi dönmez. Etiket Merkezi sevk koli etiketini bununla basar.
+- Uç, işlem, tablo ve göç yok; salt okuma. İrsaliye no uydurulmaz (Logo'dadır); işin belge no'su yoksa boş kalır.
