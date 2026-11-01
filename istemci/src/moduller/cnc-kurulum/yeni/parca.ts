@@ -114,3 +114,20 @@ export function samplePart(): void {
   state.stock.type = 'bar'; state.stock.axis = 'auto';
   hamHesapla();
 }
+
+// 1705 a: geometri analizinin döndürülmüş kutusu elle girilen zarf ölçüsü olur; uzun kenar (a) Z'ye yazılır, otomatik eksen
+// elle ölçüde Z'yi alır. Pay yazılmaz: payı formun kendi ayarı ekler. Yüklü model kaldırılır (ham hesabı ağı ölçüden önce görür);
+// kaldırmadan önce kullanıcı onayı ekranındır.
+export interface AnalizOlcusu { a: number; b: number; c: number; hacimMm3: number | null }
+const yuvarla = (x: number, basamak: number): number => Math.round(x * 10 ** basamak) / 10 ** basamak;
+export function analizOlcusuYaz(olcu: AnalizOlcusu, kaynak: string): void {
+  S.P = null; S.I = null; S.bodies = null; S.bodySel = 0; S.bodyFile = ''; S.name = ''; S.vol = 0; S.area = 0; S.tris = 0; S.solids = 1;
+  S.axKey = null; S.geo = null; S.q.identity(); S.busy = null;
+  const st = state.stock;
+  st.mx = yuvarla(olcu.b, 2); st.my = yuvarla(olcu.c, 2); st.mz = yuvarla(olcu.a, 2);
+  st.mvol = olcu.hacimMm3 === null ? '' : yuvarla(olcu.hacimMm3 / 1000, 3);
+  st.axis = 'auto';
+  S.msg = `✓ Ölçü analizden alındı: ${kaynak}`;
+  S.fitPending = true;
+  hamHesapla();
+}

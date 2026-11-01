@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type {
-  BenCevabi, EmirSecenegi, EmirlerCevabi, HazirlikCevabi, KayitlarCevabi, KurulumDurumu, KurulumTamamCevabi, StokKarti,
+  BenCevabi, EmirSecenegi, EmirlerCevabi, HamAnaliziCevabi, HazirlikCevabi, KayitlarCevabi, KurulumDurumu, KurulumTamamCevabi, StokKarti,
   StokKartiBaglaCevabi, StokKartlariCevabi, Tezgah, TezgahAyari, TezgahAyarCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type { KopruIsleyici } from '../kopru.ts';
@@ -160,4 +160,10 @@ export async function stokKartiBagla(kimlik: string, malzemeId: number | null): 
 // Ayar makine başınadır; sürüm tutmazsa sunucu 409 döner (başkası değiştirdi), ekran iletiyi gösterir.
 export async function tezgahAyarYaz(t: Pick<Tezgah, 'makineId' | 'surum'>, ayar: TezgahAyari): Promise<Tezgah> {
   return (await bag().isle('tezgah-ayar', { makineId: t.makineId, ...ayar, beklenenSurum: t.surum }) as TezgahAyarCevabi).tezgah;
+}
+
+// ----- ham malzeme analizden (1705 a) -----
+// Okumadır: sayfayı okuyan herkes alır; ölçüyü forma yazmak ekranın işidir.
+export async function hamAnalizi(): Promise<HamAnaliziCevabi> {
+  return await bag().isle('ham-analizi', {}) as HamAnaliziCevabi;
 }
