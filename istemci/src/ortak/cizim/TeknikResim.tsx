@@ -103,6 +103,17 @@ const degiskenler = (d: Readonly<Record<string, string | number>>) => (el: HTMLE
   if (el) for (const [k, v] of Object.entries(d)) el.style.setProperty(k, String(v));
 };
 
+// Antet ve tablo blokları sayfa kaydına (ck) göre bir kez bulunur: resim yeniden açılınca bütün mürekkep haritası yeniden taranmaz.
+const ANTET_BELLEGI = new Map<string, ReturnType<typeof tabloBul>>();
+function sayfaAnteti(P: { ck: string; ink: Uint8Array; w: number; h: number }): ReturnType<typeof tabloBul> {
+  const bulunan = ANTET_BELLEGI.get(P.ck);
+  if (bulunan) return bulunan;
+  const t = tabloBul(P.ink, P.w, P.h);
+  ANTET_BELLEGI.set(P.ck, t);
+  while (ANTET_BELLEGI.size > 6) { const ilk = ANTET_BELLEGI.keys().next().value; if (ilk === undefined) break; ANTET_BELLEGI.delete(ilk); }
+  return t;
+}
+
 function indir(ad: string, veri: string, tur: string): void {
   const url = URL.createObjectURL(new Blob([veri], { type: tur })), a = document.createElement('a');
   a.href = url; a.download = ad; document.body.appendChild(a); a.click();
@@ -594,10 +605,13 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const onPrimary = doc.file === ctl.anaResim;
   const pop = useRef({ key: '', t: 0 }); if (pop.current.key !== doc.key) pop.current = { key: doc.key, t: Date.now() };
   const pdfSayfasi = doc.kind === 'pdf' && pageRef.current && pageRef.current.w === doc.w ? pageRef.current : null;
-  const antet = useMemo(() => (pdfSayfasi ? tabloBul(pdfSayfasi.ink, pdfSayfasi.w, pdfSayfasi.h) : []), [pdfSayfasi]);
+  const antet = useMemo(() => (pdfSayfasi ? sayfaAnteti(pdfSayfasi) : []), [pdfSayfasi]);
+  // Dizim yalnız balonun yerini belirleyen alanlara bakar. Taşımada liste üç kez yenilenir (bekleyen yer, sunucunun cevabı, bekleyenin
+  // bırakılması); içerik aynıysa ağır dizim yeniden hesaplanmaz.
+  const dizimImzasi = useMemo(() => JSON.stringify(bal.map((x) => [x.id, x.x, x.y, x.ar ?? null, x.yer ?? null, x.yerKipi ?? null, x.ar ? null : x.nom])), [bal]);
   const LB = useMemo(() => balonDizimi(bal.map((x) => balonYazisi(x, pdfSayfasi?.dims, doc.w)), {
     W: doc.w, H: doc.h, carpan: BK, kip: balonAyari.kip, ink: pdfSayfasi?.ink ?? null, yazilar: pdfSayfasi?.dims.map((d) => d.ar), yasak: antet,
-  }), [bal, doc.key, doc.w, doc.h, pageTick, BK, balonAyari.kip, antet]); // sayfa okuması pageTick ile tazelenir
+  }), [dizimImzasi, doc.key, doc.w, doc.h, pageTick, BK, balonAyari.kip, antet]); // sayfa okuması pageTick ile tazelenir
   // Sürüklenen balon bırakılana kadar yalnız ekranda yer değiştirir.
   const konum = (x: Balon): DizimKonumu => {
     const p = LB.pos[x.id];
