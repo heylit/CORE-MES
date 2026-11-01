@@ -267,8 +267,8 @@ jobs:
   # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
   # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
   # Parçalara bölünür ki ekran işi CI süresini belirleyen iş olmasın; her parça kendi veritabanında koşar, oturum kurulumu her
-  # parçada yeniden koşar. Üç parça iki parçadan kısa sürmüyordu: testler süreye göre değil sayıya göre bölünür ve ağır olanlar
-  # bir parçada toplanıyordu.
+  # parçada yeniden koşar. Playwright testleri süreye göre değil, sırayla ve sayıya göre böler; sıra g360, g768, g1280 olduğundan
+  # üç parçada her parça kabaca bir genişliğe düşer ve en uzunu 1280'dir. Parça sayısı değişirse süreler yeniden ölçülür.
   ekran:
     needs: kapsam
     if: needs.kapsam.outputs.ekran == 'true'
@@ -277,7 +277,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2]
+        parca: [1, 2, 3]
     services:
       postgres:
         image: postgres:18
@@ -313,7 +313,7 @@ jobs:
       - run: npm run goc
       - run: npm run ekran:hazirla
       - run: npm run derle:istemci
-      - run: npm run ekran -- --shard=${{ matrix.parca }}/2
+      - run: npm run ekran -- --shard=${{ matrix.parca }}/3
       - name: Düşen testlerin görüntü ve izleri
         if: failure()
         uses: actions/upload-artifact@v4
