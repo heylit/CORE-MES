@@ -13,7 +13,7 @@ import {
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi,
-  skorGovdesi, skorListesiCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
+  skorListesiCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
 } from '#paylasilan/sozlesme/finans.ts';
 import type { ListeAdi } from './sorgular.ts';
 
@@ -196,7 +196,6 @@ export const paraUclari = [
   // ---- danışman ve süreç ----
   uc({ yontem: 'POST', yol: '/finans/oneriler/durum', yetki: 'finans.yaz', govde: oneriDurumuGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.oneriDurumu(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kapanis/isaretle', yetki: 'finans.yaz', govde: kapanisGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kapanisIsaretle(db, kullanici, govde) }),
-  uc({ yontem: 'POST', yol: '/finans/skorlar/kaydet', yetki: 'finans.yaz', govde: skorGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.skorKaydet(db, kullanici, govde) }),
 ];
 
 export const uclar = [...firmaUclari, ...paraUclari];

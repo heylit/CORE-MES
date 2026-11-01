@@ -15,7 +15,7 @@ import { KayitCekmecesi } from './KayitFormu.tsx';
 import { CSV_BASLIKLARI, kayitCsvSatirlari } from './kayitlar/kurallar.ts';
 import { finansKomutlari } from './sayfa-komutlari.ts';
 import { adrestenSekme, EKRANLAR, SAYAC_UCU, SEKMELER, VERISIZ, yeniYol, type SekmeAnahtari } from './sekmeler.ts';
-import { useFinansVerisi, useFinansYetkisi, useGunlukSkor, type FinansVerisi, type FinansYetkisi } from './veri.ts';
+import { useFinansVerisi, useFinansYetkisi, type FinansVerisi, type FinansYetkisi } from './veri.ts';
 import './finans-yeni.css';
 
 interface Cekmece {
@@ -70,7 +70,6 @@ function FinansYeniIci() {
   const yetki = useFinansYetkisi();
   const veri = useFinansVerisi(yetki.oku);
   const c = useKayitCekmecesi();
-  useGunlukSkor(veri.finans, yetki.yaz);
 
   const gorunen = SEKMELER.filter((s) => izin.var(s.islem as Islem));
   const sekme = adrestenSekme(pathname) ?? SEKMELER[0]!;

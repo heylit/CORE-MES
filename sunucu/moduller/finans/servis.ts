@@ -10,7 +10,13 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { gunlukSkorHesapla, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
+import {
+  amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
+  esitlemeListesiCevabi, faizListesiCevabi, hesapListesiCevabi, kapanisListesiCevabi, kdvOraniListesiCevabi, kurFaizOzetiCevabi, kurListesiCevabi, mahsupListesiCevabi,
+  odemeListesiCevabi, oneriListesiCevabi, sabitKiymetListesiCevabi, skorListesiCevabi, virmanListesiCevabi,
+} from '#paylasilan/sozlesme/finans.ts';
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -21,7 +27,7 @@ import { makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
-  kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, skorGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
+  kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import {
@@ -690,7 +696,46 @@ export async function oneriDurumu(db: Db, k: Kullanici, g: G<typeof oneriDurumuG
   return { bulguKimligi: g.bulguKimligi };
 }
 export async function kapanisIsaretle(db: Db, k: Kullanici, g: G<typeof kapanisGovdesi>) { await sorgular.kapanisYaz(db, g.donem, g.madde, g.isaretli, k.id); return g; }
-export async function skorKaydet(db: Db, k: Kullanici, g: G<typeof skorGovdesi>) { await sorgular.skorYaz(db, g.gun, g.skor, g.nakit, k.id); return { gun: g.gun }; }
+
+// ---- Günlük sağlık skoru (1456 b): zamanlayıcı yazar, ekran yalnız okur ----
+// Girdi ekranın okuduğu veridir: aynı listeler, aynı sıra, uçların cevap şemasından ve JSON'dan geçmiş biçimde (ekranla aynı sayı).
+// Şirket adı satın almanın ayarıdır (finans onu ithal edemez, ADR 0006) ve skora girmez: null verilir.
+const telden = <S extends z.ZodTypeAny>(sema: S, deger: unknown): z.output<S> => JSON.parse(JSON.stringify(sema.parse(deger))) as z.output<S>;
+const SKOR_LISTELERI = {
+  belgeler: ['belge', belgeListesiCevabi.shape.satirlar], odemeler: ['odeme', odemeListesiCevabi.shape.satirlar], dagitimlar: ['dagilim', dagilimListesiCevabi.shape.satirlar],
+  mahsuplar: ['mahsup', mahsupListesiCevabi.shape.satirlar], cekler: ['cek', cekListesiCevabi.shape.satirlar], hesaplar: ['hesap', hesapListesiCevabi.shape.satirlar],
+  virmanlar: ['virman', virmanListesiCevabi.shape.satirlar], kurlar: ['kur', kurListesiCevabi.shape.satirlar], kdvOranlari: ['kdv', kdvOraniListesiCevabi.shape.satirlar],
+  faizler: ['faiz', faizListesiCevabi.shape.satirlar], duzenliOdemeler: ['duzenli', duzenliOdemeListesiCevabi.shape.satirlar], butce: ['butce', butceListesiCevabi.shape.satirlar],
+  esitlemeler: ['esitleme', esitlemeListesiCevabi.shape.satirlar], oneriler: ['oneri', oneriListesiCevabi.shape.satirlar], kapanis: ['kapanis', kapanisListesiCevabi.shape.satirlar],
+  skorlar: ['skor', skorListesiCevabi.shape.satirlar],
+} as const satisfies Record<string, readonly [sorgular.ListeAdi, z.ZodTypeAny]>;
+
+export async function skorGirdisi(db: Db, bugun: string): Promise<FinansHamVerisi<FirmaCekirdegi>> {
+  const listeler: Record<string, unknown> = {};
+  for (const [ad, [kaynak, sema]] of Object.entries(SKOR_LISTELERI)) listeler[ad] = telden(sema, await sorgular.listeTumu(db, kaynak));
+  const ay = buAy();
+  const sabitKiymetler = telden(sabitKiymetListesiCevabi.shape.satirlar, (await sorgular.sabitKiymetlerHepsi(db)).map((k) => sabitKiymetHesapla(k, ay)));
+  const firmalar = (await tumFirmalar(db)).map(({ id, ad, kod }) => ({ id, ad, kod }));
+  return {
+    ...(listeler as Pick<FinansHamVerisi<FirmaCekirdegi>, keyof typeof SKOR_LISTELERI>),
+    sabitKiymetler, firmalar,
+    ayar: telden(ayarCevabi, { ayar: await ayarOku(db) }).ayar,
+    amortisman: telden(amortismanCevabi, await amortismanAylari(db)).aylar,
+    kurOzeti: telden(kurFaizOzetiCevabi, await kurFaizOzeti(db, bugun)),
+    beklenenOdemeler: telden(beklenenOdemelerCevabi, await beklenenOdemeler(db)).odemeler,
+    sirketAdi: null,
+  };
+}
+
+// Günün (tesis günü) satırı varsa dokunulmaz; skor hesaplanamıyorsa yazılmaz ve neden döner.
+export async function gunlukSkorYaz(db: Db, simdi: Date): Promise<'var' | 'yazildi' | 'hesaplanamadi'> {
+  const gun = tesisGunu(simdi);
+  if (await sorgular.skorVarMi(db, gun)) return 'var';
+  const sonuc = gunlukSkorHesapla(await skorGirdisi(db, gun), gun);
+  if (sonuc === null) return 'hesaplanamadi';
+  await sorgular.skorYaz(db, gun, sonuc.skor, sonuc.nakit);
+  return 'yazildi';
+}
 
 // ---- Toplu içe aktarma (FNS-41, FNS-50): bir satır hatalıysa hiçbiri yazılmaz ----
 export function topluAktar(db: Db, k: Kullanici, g: G<typeof topluAktarGovdesi>): Promise<{ eklenen: number }> {

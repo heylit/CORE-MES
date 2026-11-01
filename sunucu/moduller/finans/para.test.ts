@@ -614,7 +614,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal((await yaz('/finans/toplu-ice-aktar', { satirlar: Array.from({ length: 1001 }, () => satir(fk.ad)) })).durum, 400);
   });
 
-  test('ayar, öneri, kapanış ve skor: kendi işlemini ister; sürüm ve aralık sunucuda denetlenir', async () => {
+  test('ayar, öneri ve kapanış kendi işlemini ister; sürüm ve aralık sunucuda denetlenir; skoru ekran yazamaz', async () => {
     const a = tamam(await istek<{ ayar: Record<string, unknown> & { surum: number } }>('okuyan', 'GET', '/finans/ayar')).ayar;
     const govde = { ...a, nakitEsigi: 250000, beklenenAylikSatis: null, cekKarsiliksizOlasiligi: 3, anomaliEsigi: 3.5, bilancoDonen: null, bilancoStok: null, bilancoKvb: null, bilancoToplamBorc: null, bilancoOzkaynak: null, bilancoBirikmisKar: null };
     tamam(await yaz('/finans/ayar/guncelle', govde));
@@ -624,8 +624,8 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal((await yaz('/finans/oneriler/durum', { bulguKimligi: 'x', durum: 'kapatildi' }, 'okuyan')).durum, 403);
     tamam(await yaz('/finans/kapanis/isaretle', { donem: '2026-09', madde: 'banka', isaretli: true }, 'yazan'));
     assert.equal((await yaz('/finans/kapanis/isaretle', { donem: '2026-13', madde: 'banka', isaretli: true }, 'yazan')).durum, 400);
-    tamam(await yaz('/finans/skorlar/kaydet', { gun: TARIH, skor: 71, nakit: 100.5 }, 'yazan'));
-    assert.equal((await yaz('/finans/skorlar/kaydet', { gun: TARIH, skor: 101 }, 'yazan')).durum, 400);
+    // 1456 b: günlük skoru zamanlayıcı yazar (gunluk-skor.test.ts); eski yazma ucu yoktur.
+    assert.equal((await yaz('/finans/skorlar/kaydet', { gun: TARIH, skor: 71, nakit: 100.5 }, 'yazan')).durum, 404);
   });
 
   test('FNS-38, FNS-40: açan kişi ve zaman sunucudan; aynı istek kimliğiyle yinelenen belge ikinci kez açılmaz', async () => {
@@ -833,7 +833,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const YONET = yollar('finans.yonet');
     const YAZ = yollar('finans.yaz');
     assert.equal(YONET.length, 24);
-    assert.equal(YAZ.length, 16);
+    assert.equal(YAZ.length, 15);
     const sonuc = async (kim: string, yollar: string[]) => Promise.all(yollar.map(async (y) => `${y} ${(await yaz(`/finans/${y}`, {}, kim)).durum}`));
     assert.deepEqual(await sonuc('yazan', YONET), YONET.map((y) => `${y} 403`));
     assert.deepEqual(await sonuc('okuyan', YAZ), YAZ.map((y) => `${y} 403`));

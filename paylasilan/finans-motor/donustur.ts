@@ -8,7 +8,7 @@ import type { FirmaSatiri } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { FinansMotoru, Islem, MotorDurumu } from './motor.ts';
 
 // Sunucu verisi prototipin motor biçimine çevrilir: prototipte `verileriHazirla` ve `durumKur` (tam kip). Hesap ve sıra
-// prototiple aynıdır; `donustur.test.ts` iki tarafı aynı girdiyle karşılaştırır.
+// prototiple aynıdır; istemcideki `donustur.test.ts` iki tarafı aynı girdiyle karşılaştırır. Sunucunun günlük skoru da buradan geçer (1456 b).
 
 export type Dagitim = z.output<typeof dagilimSemasi>;
 export type Mahsup = z.output<typeof mahsupSemasi>;
@@ -28,8 +28,11 @@ export type AmortismanAyi = z.output<typeof amortismanCevabi>['aylar'][number];
 export type BeklenenOdeme = z.output<typeof beklenenOdemelerCevabi>['odemeler'][number];
 export type { Belge, Odeme, SunucuCeki, SabitKiymetSatiri, FirmaSatiri };
 
+// Dönüşüm firmadan yalnız kimlik, ad ve kodu okur (etiket); sunucu firma kartının bu kadarını verir, ekran tam satırı.
+export type FirmaCekirdegi = Pick<FirmaSatiri, 'id' | 'ad' | 'kod'>;
+
 // Sunucudan okunan bütün finans verisi (prototipte `finans-yukle` cevabı); analiz bütün geçmişi ister.
-export interface FinansHamVerisi {
+export interface FinansHamVerisi<F extends FirmaCekirdegi = FirmaSatiri> {
   belgeler: Belge[];
   odemeler: Odeme[];
   dagitimlar: Dagitim[];
@@ -47,7 +50,7 @@ export interface FinansHamVerisi {
   kapanis: KapanisKaydi[];
   skorlar: Skor[];
   sabitKiymetler: SabitKiymetSatiri[];
-  firmalar: FirmaSatiri[];
+  firmalar: F[];
   ayar: FinansAyari;
   amortisman: AmortismanAyi[];
   kurOzeti: KurFaizOzeti;
@@ -71,8 +74,8 @@ export const sayi = (v: unknown): number => Number(v) || 0;
 export const yuvarla = (v: number): number => Math.round(v * 100) / 100;
 const kategoriAdi = (k: string): string => KAT[k as KategoriKodu];
 
-export interface HazirVeri extends Omit<FinansHamVerisi, 'kurlar' | 'faizler'> {
-  firmaById: Map<number, FirmaSatiri>;
+export interface HazirVeri<F extends FirmaCekirdegi = FirmaSatiri> extends Omit<FinansHamVerisi<F>, 'kurlar' | 'faizler'> {
+  firmaById: Map<number, F>;
   etiket: Map<number, string>;
   etiketten: Map<string, number>;
   // Para birimi başına güncel kur (FNS-57): o güne kadarki son elle girilen kur; yoksa kayıtların kendi kuru.
@@ -87,13 +90,13 @@ export interface HazirVeri extends Omit<FinansHamVerisi, 'kurlar' | 'faizler'> {
   faizler_listesi: Faiz[];
 }
 
-export function verileriHazirla(d: FinansHamVerisi, bugun: string): HazirVeri {
+export function verileriHazirla<F extends FirmaCekirdegi>(d: FinansHamVerisi<F>, bugun: string): HazirVeri<F> {
   const firmaById = new Map(d.firmalar.map((f) => [f.id, f]));
   const adSayisi: Record<string, number> = {};
   for (const f of d.firmalar) adSayisi[f.ad] = (adSayisi[f.ad] || 0) + 1;
   const etiket = new Map(d.firmalar.map((f) => [f.id, adSayisi[f.ad]! > 1 ? `${f.ad} · ${f.kod || '#' + f.id}` : f.ad]));
   const etiketten = new Map([...etiket.entries()].map(([id, e]) => [e, id]));
-  const kurlar: HazirVeri['kurlar'] = {};
+  const kurlar: HazirVeri<F>['kurlar'] = {};
   for (const k of d.kurlar) {
     const o = kurlar[k.paraBirimi];
     if (k.tarih <= bugun && (!o || (o.tarih !== null && o.tarih < k.tarih))) kurlar[k.paraBirimi] = { tarih: k.tarih, kur: sayi(k.kur) };
@@ -121,7 +124,7 @@ export function gecerliFaizler(liste: readonly Faiz[], bugun: string): Record<st
 }
 
 // İade satırı asıl faturayı anar (260 a); siparişe bağlı satış ve alış faturası işaretlenir.
-export function belgeAciklamasi(V: HazirVeri, b: Belge): string {
+export function belgeAciklamasi(V: HazirVeri<FirmaCekirdegi>, b: Belge): string {
   if (b.tur === 'acilis') return 'Açılış bakiyesi';
   const bagli = b.satinAlmaSiparisi || b.siparisId ? ' (siparişe bağlı)' : '';
   if (b.tur === 'iade') {
@@ -130,18 +133,18 @@ export function belgeAciklamasi(V: HazirVeri, b: Belge): string {
   }
   return (b.aciklama || b.belgeNo || (b.yon === 'gelir' ? 'Satış faturası' : 'Alış faturası')) + bagli;
 }
-export const firmaEtiketi = (V: HazirVeri, id: number | null | undefined): string | null =>
+export const firmaEtiketi = (V: HazirVeri<FirmaCekirdegi>, id: number | null | undefined): string | null =>
   (id === null || id === undefined ? null : V.etiket.get(id) || `#${id}`);
-export const tlKuru = (V: HazirVeri, pb: string): number | null => (pb === 'TRY' ? 1 : V.kurlar[pb] ? V.kurlar[pb].kur : null);
+export const tlKuru = (V: HazirVeri<FirmaCekirdegi>, pb: string): number | null => (pb === 'TRY' ? 1 : V.kurlar[pb] ? V.kurlar[pb].kur : null);
 const nakitYontemi = (o: Odeme): boolean => ['nakit', 'banka', 'kredi_karti'].includes(o.yontem);
 
-export function hesapToplamiTl(V: HazirVeri): number {
+export function hesapToplamiTl(V: HazirVeri<FirmaCekirdegi>): number {
   return V.hesaplar.reduce((t, h) => { const k = tlKuru(V, h.paraBirimi); return t + (k === null ? 0 : sayi(h.bakiye) * k); }, 0);
 }
 
 // Motor durumunu kurar ve motora verir. Belge parçalara bölünür: her dağıtım ve mahsup kapanan parça, kalan açık parça.
 // Tutarlar TL'dir; tevkifatlı belgede KDV oranı, KDV dahil tutar belge toplamına eşit olacak biçimde etkin orandır.
-export function durumKur(V: HazirVeri, motor: FinansMotoru): MotorDurumu {
+export function durumKur(V: HazirVeri<FirmaCekirdegi>, motor: FinansMotoru): MotorDurumu {
   const bugun = motor.bugun;
   const s = motor.normalize(motor.emptyState());
   const a = V.ayar;

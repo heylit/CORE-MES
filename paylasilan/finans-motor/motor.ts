@@ -1,5 +1,5 @@
-// Finans analiz motoru: prototipin ENGINE-START / ENGINE-END bloğunun tipli karşılığı (karar 205 a: hesap tarayıcıda saf
-// işlev olarak kalır). Sayılar prototiple birebir aynı olmalı; `esitlik.test.ts` iki motoru aynı girdiyle koşturur.
+// Finans analiz motoru: prototipin ENGINE-START / ENGINE-END bloğunun tipli karşılığı; saf işlevdir. Ekran ve sunucu aynı
+// kodu koşar (1456 b: günlük skoru sunucu yazar). Sayılar prototiple birebir aynı olmalı; istemcideki `esitlik.test.ts` iki motoru aynı girdiyle koşturur.
 // Bu yüzden veri alan adları ve işlev adları prototipteki gibidir (satır satır karşılaştırma için) ve işlem sırası
 // değiştirilmez: kayan nokta toplamları sıraya bağlıdır. Motor DOM'a, ağa ve saate dokunmaz (`at` ve `ms` dışında).
 

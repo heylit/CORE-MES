@@ -100,6 +100,11 @@ export async function listeSay(db: Db, ad: ListeAdi, iptalDahil: boolean): Promi
   const l = LISTELER[ad];
   return (await db.tek<{ n: number }>(`SELECT count(*)::int AS n FROM ${l.kaynak} WHERE ($1 OR ${l.iptal})`, [iptalDahil]))?.n ?? 0;
 }
+// Günlük skor bütün geçmişi ister (ekranın sayfa sayfa okuduğu listenin tamamı, aynı sırayla).
+export function listeTumu<T>(db: Db, ad: ListeAdi): Promise<T[]> {
+  const l = LISTELER[ad];
+  return db.sorgu<T>(`SELECT ${l.secim} FROM ${l.kaynak} WHERE ${l.iptal} ORDER BY ${l.sira}`);
+}
 export function listeSatirlari<T>(db: Db, ad: ListeAdi, iptalDahil: boolean, dilim: ListeDilimi): Promise<T[]> {
   const l = LISTELER[ad];
   return db.sorgu<T>(`SELECT ${l.secim} FROM ${l.kaynak} WHERE ($1 OR ${l.iptal}) ORDER BY ${l.sira} LIMIT $2 OFFSET $3`, [iptalDahil, dilim.sinir, dilim.atla]);
@@ -381,9 +386,11 @@ export const oneriYaz = (db: Db, kimlik: string, durum: string | null, ertele: s
 export const kapanisYaz = (db: Db, donem: string, madde: string, isaretli: boolean, kisi: number) =>
   db.sorgu(`INSERT INTO finans_kapanis (donem, madde, isaretli, guncelleyen_id) VALUES ($1, $2, $3, $4)
     ON CONFLICT (donem, madde) DO UPDATE SET isaretli = EXCLUDED.isaretli, guncelleyen_id = EXCLUDED.guncelleyen_id, guncelleme = now()`, [donem, madde, isaretli, kisi]);
-export const skorYaz = (db: Db, gun: string, skor: number, nakit: string | null, kisi: number) =>
-  db.sorgu(`INSERT INTO finans_skor (gun, skor, nakit, guncelleyen_id) VALUES ($1, $2, $3, $4)
-    ON CONFLICT (gun) DO UPDATE SET skor = EXCLUDED.skor, nakit = EXCLUDED.nakit, guncelleyen_id = EXCLUDED.guncelleyen_id, guncelleme = now()`, [gun, skor, nakit, kisi]);
+// Günlük skoru zamanlayıcı yazar (1456 b): satırın kişisi yoktur; günün satırı varsa dokunulmaz.
+export const skorVarMi = async (db: Db, gun: string) =>
+  (await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM finans_skor WHERE gun = $1) AS var', [gun]))?.var === true;
+export const skorYaz = (db: Db, gun: string, skor: number, nakit: string) =>
+  db.sorgu(`INSERT INTO finans_skor (gun, skor, nakit, guncelleyen_id) VALUES ($1, $2, $3, NULL) ON CONFLICT (gun) DO NOTHING`, [gun, skor, nakit]);
 // Ana sayfa panosu (finans.oku). Açık belgenin kalanı belgenin kendi kuruyla TL'ye çevrilir; yaklaşan ödeme bugün dahil 7 gündür.
 export interface PanoRakamlari {
   gecikenSayi: number; gecikenTl: string; yaklasanSayi: number; yaklasanTl: string; cekSayi: number; cekTl: string; nakitTl: string | null;

@@ -12,12 +12,12 @@ Yok. Para kuralları (belge, ödeme, dağıtım, mahsup, çek, hesap, virman), d
 
 | Konu | Dosya | Neden |
 |---|---|---|
-| Analizler (nakit tahmini, Monte Carlo, satış tahmini, Markov, risk notu, Altman/DuPont, anomali, danışman, sağlık skoru) | `istemci/src/moduller/finans/yeni/motor.ts` | Prototipin analiz motorunun tipli karşılığı (205 a; prototiple eşitliği `esitlik.test.ts`); sunucuda zamanlanmış iş yok. Skor sunucuya yazılır ama tarayıcıda hesaplanır. |
+| Analizler (nakit tahmini, Monte Carlo, satış tahmini, Markov, risk notu, Altman/DuPont, anomali, danışman, sağlık skoru) | `paylasilan/finans-motor/motor.ts` (ekran ve sunucu ortak) | Prototipin analiz motorunun tipli karşılığı (prototiple eşitliği `esitlik.test.ts`). Gösterim tarayıcıda hesaplanır; günlük skoru sunucu zamanlayıcısı aynı motorla hesaplayıp yazar (1456 b, kart #1463). |
 | FNS-34, FNS-36, FNS-52, FNS-57, FNS-58 | `yeni/motor.ts`, `yeni/donustur.ts` | Gösterim ve öneri kuralları (kâr/zarar dışı tutma, vergi ekranı, varsayılan önerisi, güncel kurla değerleme, kur farkı satırı). |
 | Tevkifatlı belgede prototipin KDV ekranları etkin oranla hesaplar | `yeni/donustur.ts` (prototipin tam kip dönüştürücüsünün karşılığı) | Prototip KDV'yi tutar x oran olarak tutar; belgenin sunucudaki toplamı doğru, KDV ekranındaki tevkifat ayrımı yaklaşıktır. |
 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): borç değil; sunucu her dağıtım satırını ayrıca denetliyor, ekrandaki yalnız öneri. Dağıtım planı (en eski vadeden başlayarak) | tam kip katmanı | Sunucu her satırın sınırını ayrıca denetler. |
 
-Kalır (151 a, 23.10.2026): ilk üç satır hesap ve gösterimdir, yazmayı korumaz; tarayıcıda kalır, borç sayılmaz. Skor yalnız geçmiş gösterimidir: `finans_skor` tablosunu yalnız finans ekranı okur (`GET /finans/skorlar`), başka modül, kural ya da kablolama okumaz.
+Kalır (151 a, 23.10.2026): ilk üç satır hesap ve gösterimdir, yazmayı korumaz; tarayıcıda kalır, borç sayılmaz. Skor yalnız geçmiş gösterimidir: `finans_skor` tablosunu yalnız finans zamanlayıcısı yazar ve yalnız finans ekranı okur (`GET /finans/skorlar`), başka modül, kural ya da kablolama okumaz.
 
 ## Ekran (yol A, kullanıcı kararı: ekran olduğu gibi)
 
