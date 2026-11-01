@@ -729,11 +729,13 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(bilesenler.some((b) => b.malzemeNo === alt || b.malzemeNo === alt2), false);
     const emir = await vt().tx((db) => db.tek<{ patlatmaId: number; surum: number }>('SELECT patlatma_id AS "patlatmaId", surum FROM uretim_emri WHERE id = $1', [k.uretimEmriId]));
     assert.ok(emir?.patlatmaId);
-    const p = await tamam<PatlatmaCevabi>(c.operator, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`);
+    // ADR 0022 madde 6 (1526-b): patlatmayı emri açabilen okur; yalnız oturumu olan reddedilir.
+    for (const cerez of [c.operator, c.cam]) assert.equal((await istek(cerez, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`)).statusCode, 403);
+    const p = await tamam<PatlatmaCevabi>(c.planlama, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`);
     assert.deepEqual(p.satirlar.map((x) => [x.dugum, x.katman, x.kaynakOpNo, x.tuketenDugum, x.tuketenOpNo]), [
       ['0.1.1', 2, 10, '0.1', 10], ['0.1', 1, 10, '0', 20], ['0.1', 1, 20, '0', 20], ['0', 0, 10, null, null], ['0', 0, 20, null, null],
     ]);
-    assert.equal((await istek(c.operator, 'GET', '/rota/patlatmalar/999999')).statusCode, 404);
+    assert.equal((await istek(c.planlama, 'GET', '/rota/patlatmalar/999999')).statusCode, 404);
     // Taslak emir plana alınır (1476-C); parti ve rota komutları düğüm düzenini bozacağından reddedilir.
     const planda = await istek(c.planlama, 'POST', `/adimli-emirler/${k.uretimEmriId}/plana-al`, { surum: emir.surum });
     assert.equal(planda.statusCode, 200, planda.body);

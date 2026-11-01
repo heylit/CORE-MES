@@ -361,11 +361,11 @@ export const uclar = [
     cevap: emreKopyalaCevabi,
     isle: ({ db, kullanici, parametre, govde }) => emreKopyala(db, kullanici, parametre.id, govde),
   }),
-  // Patlamış rota (1476): emir açılışında yazılan donmuş görüntü; okuma rota okuması gibi oturumla.
+  // Patlamış rota (1476): emir açılışında yazılan donmuş görüntü; emri açabilen okur (ADR 0022 madde 6, 1526-b).
   uc({
     yontem: 'GET',
     yol: '/rota/patlatmalar/:id',
-    yetki: 'oturum',
+    yetki: 'rota.emre-kopyala',
     parametre: patlatmaParametresi,
     cevap: patlatmaCevabi,
     isle: ({ db, parametre }) => patlatmaGetir(db, parametre.id),
