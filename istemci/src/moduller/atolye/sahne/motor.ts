@@ -25,7 +25,7 @@ import {
   gozCephesi, malzemeleriKur, modelBolgesi, okDokusu, onbellegiBosalt, onbellekteMi, palet, rafGovdesi, rafYukleri, silindir, temasDokusu, zeminIzi,
 } from './nesneler.ts';
 import type { Andon, Animasyon, DuvarAcikligi, Ekran, Malzemeler, RafOlcusu } from './nesneler.ts';
-import { kareAraligi } from './kare-araligi.ts';
+import { HAFIF_PIKSEL_ORANI, hafifGerekir, kareAraligi, yanipDegeri } from './kare-araligi.ts';
 import { konsoluSuzgecle } from './konsol.ts';
 import { malzemeImzasi, paletOku } from './renkler.ts';
 import type { Palet } from './renkler.ts';
@@ -60,6 +60,8 @@ export interface SahneOlaylari {
   // Bakan yerin (yürüyüşte göz, gezinmede kameranın baktığı nokta) fabrika metresi ve bakış yönü (radyan, +x'ten
   // saat yönünde); küçük harita için, değiştikçe en çok saniyede beş kez.
   kameraDegisti?: (yer: KameraYeri) => void;
+  // Piksel oranı en alta indiği hâlde kareler yavaş: hafif görünüm önerilir (oturumda bir kez).
+  yavasCizim?: () => void;
 }
 
 export interface KameraYeri {
@@ -382,6 +384,11 @@ export class SahneMotoru {
   // hemen çizdirir. Tam hızda kareler yavaşsa piksel oranı adım adım düşer, uzun süre hızlıysa geri çıkar.
   private sonEtkinlik = 0;
   private kirli = true;
+  // Hafif görünüm: gölge, ortam ışığı (yansıma) ve ortam hareketi yok, çözünürlük sınırlı; zayıf cihaz ve gün boyu açık ekran için.
+  private hafif = false;
+  private ortamDokusu: Texture | null = null;
+  private cihazPikselOrani = 1;
+  private yavasBildirildi = false;
   // Son çizilen karede kıpırdayan şeyler; bir sonraki karenin ne zaman çizileceğine bunlar karar verir.
   private kipirti = { gecis: false, hareket: false, yanip: false };
   private etiketAcik = true;
@@ -420,7 +427,8 @@ export class SahneMotoru {
     this.imza = malzemeImzasi(this.palet);
     konsoluSuzgecle();
     this.cizer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.enCokPikselOrani = Math.min(window.devicePixelRatio || 1, kaba() ? 1.5 : 2);
+    this.cihazPikselOrani = Math.min(window.devicePixelRatio || 1, kaba() ? 1.5 : 2);
+    this.enCokPikselOrani = this.cihazPikselOrani;
     this.pikselOrani = this.enCokPikselOrani;
     this.cizer.setPixelRatio(this.pikselOrani);
     this.cizer.outputColorSpace = SRGBColorSpace;
@@ -1122,8 +1130,9 @@ export class SahneMotoru {
     p2.position.set(-en / 2 + 0.1, 7.5, 0);
     oda.add(p1, p2);
     const pm = new PMREMGenerator(this.cizer);
-    const eski = this.sahne.environment;
-    this.sahne.environment = pm.fromScene(oda, 0.03).texture;
+    const eski = this.ortamDokusu;
+    this.ortamDokusu = pm.fromScene(oda, 0.03).texture;
+    this.sahne.environment = this.hafif ? null : this.ortamDokusu;
     eski?.dispose();
     pm.dispose();
     oda.traverse((o) => { if (o instanceof Mesh) { (o.geometry as BufferGeometry).dispose(); (o.material as Material).dispose(); } });
@@ -2053,6 +2062,22 @@ export class SahneMotoru {
     return this.sahneEtkin || kok.contains(document.activeElement);
   }
 
+  // Hafif görünüm aç/kapat. Gölge ve ortam ışığı kapanınca gölgelendiriciler bir kez yeniden derlenir (three ışık
+  // durumunu izler); sahne yeniden kurulmaz.
+  hafifYaz(acik: boolean): void {
+    if (this.hafif === acik) return;
+    this.hafif = acik;
+    this.kirli = true;
+    this.gunes.castShadow = !acik;
+    this.sahne.environment = acik ? null : this.ortamDokusu;
+    if (!acik) this.cizer.shadowMap.needsUpdate = true;
+    this.enCokPikselOrani = acik ? Math.min(this.cihazPikselOrani, HAFIF_PIKSEL_ORANI) : this.cihazPikselOrani;
+    this.pikselOrani = acik ? Math.min(this.pikselOrani, this.enCokPikselOrani) : this.enCokPikselOrani;
+    this.hizOlcumu = { bas: 0, kare: 0, iyi: 0, dustu: false, bekleyen: 0 };
+    this.cizer.setPixelRatio(this.pikselOrani);
+    this.cizer.setSize(this.boyut.en, this.boyut.boy, false);
+  }
+
   boyutla(): void {
     this.kirli = true;
     // Sahne gizliyken (başka sekme) çizici küçültülmez ve çizim durur; görünür olunca eski ölçüden devam eder.
@@ -2096,6 +2121,10 @@ export class SahneMotoru {
     h.kare = 0;
     const simdiki = h.bekleyen || this.pikselOrani;
     let yeni = simdiki;
+    if (!this.hafif && !this.yavasBildirildi && hafifGerekir(ort, simdiki, EN_AZ_PIKSEL_ORANI)) {
+      this.yavasBildirildi = true;
+      this.olaylar.yavasCizim?.();
+    }
     // Bir kez düşen oran oturum boyunca geri çıkmaz (düş-çık döngüsü ekranda yanıp sönme yapar).
     if (ort > 28) { yeni = Math.max(EN_AZ_PIKSEL_ORANI, simdiki - 0.25); h.iyi = 0; h.dustu = true; } else if (ort < 18 && !h.dustu) {
       h.iyi++;
@@ -2108,7 +2137,7 @@ export class SahneMotoru {
     this.kare = requestAnimationFrame((s) => this.dongu(s));
     if (document.hidden || this.gizli) return;
     const etkin = this.ucus !== null || this.yuruyus.acik || this.yuruyus.tuslar.size > 0 || this.suruklenme !== null || t - this.sonEtkinlik < ETKIN_SURE_MS;
-    const aralik = kareAraligi({ etkin, kirli: this.kirli, ...this.kipirti, enAzKareMs: this.enAzKareMs });
+    const aralik = kareAraligi({ etkin, kirli: this.kirli, ...this.kipirti, hafif: this.hafif, enAzKareMs: this.enAzKareMs });
     // rAF zamanı ekran tazelemesine bağlıdır: aralığın biraz altı kabul edilir (60 Hz'de 30 kare için 2 tazelemede bir).
     if (aralik && t - this.sonZaman < aralik - 4) return;
     this.kirli = false;
@@ -2120,7 +2149,8 @@ export class SahneMotoru {
     if (!hareketsiz) this.zaman += dt;
     const T = this.zaman;
 
-    const yanip = (Math.sin(t / 170) + 1) / 2;
+    const hafif = this.hafif;
+    const yanip = yanipDegeri(t, hafif);
     for (const n of this.istasyonlar.values()) {
       const durum = n.canli.durum;
       if (durum === 'durdu') kipirti.yanip = true;
@@ -2133,7 +2163,8 @@ export class SahneMotoru {
       const hale = n.hale.material as MeshBasicMaterial;
       hale.opacity = durum === 'durdu' ? 0.12 + yanip * 0.3 : durum === 'sirada' ? 0.1 : 0.2;
       const a = n.anim;
-      const calis = durum === 'calisiyor' && !hareketsiz;
+      // Hafif görünümde makine parçaları kıpırdamaz; durum andon ve zemin izinden okunur.
+      const calis = durum === 'calisiyor' && !hareketsiz && !hafif;
       if (calis && (a.kafa || a.besik || a.ayna || a.portal || a.kopru || a.fan)) kipirti.hareket = true;
       if (a.kafa && a.kafaY !== undefined && calis) a.kafa.position.y = a.kafaY + Math.sin(T * 2.2) * 0.05;
       if (a.besik && calis) a.besik.rotation.x = Math.sin(T * 0.6) * 0.35;
@@ -2165,7 +2196,7 @@ export class SahneMotoru {
         if (e && Math.abs(e.konum.y - etiketY) > 1e-3) { e.konum.y = etiketY; this.etiketlerKirli = true; }
         if (gorunur) {
           p.kok.position.y = n.ust + 0.9 + n.parcaKenari / 2;
-          if (!hareketsiz) { p.doner.rotation.y += dt * 0.5; kipirti.hareket = true; }
+          if (!hareketsiz && !hafif) { p.doner.rotation.y += dt * 0.5; kipirti.hareket = true; }
           // Çalışmayan makinedeki parça soluk: işlenmekte olan parça tam görünür.
           const soluk = durum !== 'calisiyor';
           for (const mm of p.malzemeler) {
@@ -2188,7 +2219,7 @@ export class SahneMotoru {
       }
     }
     // Ok dokusu yalnız rota ve yürüyüş izinde görünür; ikisi de yoksa akması için kare çizilmez.
-    if (!hareketsiz && (this.rotaGrubu.children.length > 0 || this.yuruyusIzi.children.length > 0)) {
+    if (!hareketsiz && !hafif && (this.rotaGrubu.children.length > 0 || this.yuruyusIzi.children.length > 0)) {
       this.ok.offset.x -= dt * 0.9;
       kipirti.hareket = true;
     }
@@ -2379,7 +2410,7 @@ export class SahneMotoru {
     this.temizle(this.yapi);
     this.temizle(this.rotaGrubu);
     this.temizle(this.yuruyusIzi);
-    this.sahne.environment?.dispose();
+    this.ortamDokusu?.dispose();
     for (const d of this.dokular) d.dispose();
     for (const d of this.dokuOnbellegi.values()) d.dispose();
     this.dokuOnbellegi.clear();

@@ -4,7 +4,7 @@ import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 // Sahnenin üstündeki araç sütunu: görünüm, katmanlar, git, düzen ve ekran. Düğmeler yalnız simgedir; ad ipucunda ve
 // ekran okuyucuda. Seçili durum vurgulanır. Sütun sahnenin sağ kenarında; sığmazsa ikinci sütuna kayar.
 
-export type HaritaAraci = 'genel' | 'kus' | 'yuru' | 'izgara' | 'etiket' | 'parca' | 'depo' | 'rota' | 'duzenle' | 'tur' | 'liste' | 'tam';
+export type HaritaAraci = 'genel' | 'kus' | 'yuru' | 'izgara' | 'etiket' | 'parca' | 'depo' | 'rota' | 'duzenle' | 'tur' | 'liste' | 'hafif' | 'tam';
 
 interface Ozellikler {
   gorunum: 'genel' | 'kus' | null;
@@ -21,6 +21,7 @@ interface Ozellikler {
   tamEkran: boolean;
   tur: boolean;
   listeAcik: boolean;
+  hafif: boolean;
   sec: (a: HaritaAraci) => void;
 }
 
@@ -54,6 +55,7 @@ export function HaritaAraclari(o: Ozellikler) {
         { a: 'tur' as const, ad: o.tur ? 'Otomatik turu durdur' : 'Otomatik tur (sorunlu istasyon önce)', simge: (o.tur ? 'pause' : 'play') as SimgeAdi, basili: o.tur },
         { a: 'liste' as const, ad: o.listeAcik ? 'Makine listesini gizle' : 'Makine listesini göster', simge: 'list' as const, basili: o.listeAcik },
       ] : []),
+      { a: 'hafif', ad: o.hafif ? 'Tam görünüm (gölge, yansıma ve makine hareketi)' : 'Hafif görünüm (zayıf cihaz ve atölye ekranı için: gölgesiz, hareketsiz)', simge: 'gauge', basili: o.hafif },
       { a: 'tam', ad: o.tamEkran ? 'Tam ekrandan çık' : 'Tam ekran (atölye ekranı)', simge: o.tamEkran ? 'x' : 'expand', basili: o.tamEkran },
     ],
   ];

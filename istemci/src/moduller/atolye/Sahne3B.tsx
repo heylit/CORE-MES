@@ -45,6 +45,10 @@ export interface SahneOzellikleri {
   rafOdak: RafOdakSecimi | null;
   rafOdakYaz: (s: RafOdakSecimi | null) => void;
   gozKalemleri: readonly GozKalemi[] | undefined;
+  // Hafif görünüm (gölgesiz, ortam ışığı ve hareket yok); iki boyutlu planda etkisizdir.
+  hafif: boolean;
+  // Bu cihazda kareler en düşük çözünürlükte de yavaş: çağıran hafif görünüme geçebilir.
+  yavasCizim: () => void;
 }
 
 // Bakışta sahnenin üstünü araç çubuğu, sağını (genişse) göz paneli örter; bölme kalan alana sığdırılır.
@@ -121,8 +125,8 @@ function UcBoyut(o: SahneOzellikleri) {
   const [yakin, yakinYaz] = useState<string | null>(null);
   const [yer, yerYaz] = useState<KameraYeri | null>(null);
   const { bildir } = useBildirim();
-  const olaylar = useRef({ sec, rotaIste, bildir, rafOdakYaz });
-  olaylar.current = { sec, rotaIste, bildir, rafOdakYaz };
+  const olaylar = useRef({ sec, rotaIste, bildir, rafOdakYaz, yavasCizim: o.yavasCizim });
+  olaylar.current = { sec, rotaIste, bildir, rafOdakYaz, yavasCizim: o.yavasCizim };
 
   useEffect(() => {
     if (!kap.current || !etiketler.current) return undefined;
@@ -139,6 +143,7 @@ function UcBoyut(o: SahneOzellikleri) {
         ),
         gozSec: (g) => olaylar.current.rafOdakYaz(g),
         kameraDegisti: yerYaz,
+        yavasCizim: () => olaylar.current.yavasCizim(),
       });
     } catch {
       hataYaz(true);
@@ -149,6 +154,7 @@ function UcBoyut(o: SahneOzellikleri) {
     };
   }, []);
 
+  useEffect(() => { motor.current?.hafifYaz(o.hafif); }, [o.hafif]);
   useEffect(() => { motor.current?.fabrikaKur(bolumler); }, [bolumler]);
   useEffect(() => { motor.current?.canliYaz(canli); }, [canli, bolumler]);
   useEffect(() => { motor.current?.secimYaz(secili); }, [secili, bolumler]);

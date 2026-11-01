@@ -396,6 +396,24 @@ describe('fabrika haritası', () => {
     await waitFor(() => expect(container.querySelector('.tc-atolye-tam')).toBeNull());
   });
 
+  it('hafif görünüm: düğme açar ve kapatır, seçim cihazda saklanır (kart 1588)', async () => {
+    // Elle seçim performans modunun önüne geçer.
+    localStorage.setItem('tmiv2.atolye.hafif', 'kapali');
+    sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    const dugme = screen.getByRole('button', { name: /Hafif görünüm/ });
+    expect(dugme.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(dugme);
+    const acik = screen.getByRole('button', { name: /Tam görünüm/ });
+    expect(acik.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('acik');
+    fireEvent.click(acik);
+    expect(screen.getByRole('button', { name: /Hafif görünüm/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('kapali');
+    localStorage.removeItem('tmiv2.atolye.hafif');
+  });
+
   it('okuma yetkisiyle düzenleme ve salon ekleme düğmesi görünmez', async () => {
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
