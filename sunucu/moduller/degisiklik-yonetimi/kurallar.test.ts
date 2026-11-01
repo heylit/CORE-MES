@@ -4,9 +4,9 @@ import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE, kapanisImzaAnlami } from '
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
-  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
+  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon,
 } from './kurallar.ts';
-import type { EtkilenenEmir, KalemTaslagi } from './kurallar.ts';
+import type { EtkilenenEmir, KalemTaslagi, Konfigurasyon } from './kurallar.ts';
 
 const emir = (ek: Partial<EtkilenenEmir> = {}): EtkilenenEmir => ({
   durum: 'planli', basladi: false, donmus: false, seriAraligi: null, sonUrunu: false, baslangic: '2026-11-10', terminKayar: false, ...ek,
@@ -193,5 +193,42 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.equal(talepHatti('emir_acildi'), null);
     assert.equal(emirHatti('uygulamada'), 'fai');
     assert.equal(emirHatti('kapandi'), null);
+  });
+
+  test('DY-22: öğe listesi tutarlı; eski revizyon konfigürasyonda olmalı (konfigürasyon yoksa denetlenmez)', () => {
+    const mevcut = [{ tur: 'rota' as const, revizyonId: 10 }, { tur: 'cizim' as const, revizyonId: 20 }];
+    assert.equal(ogeEksigi([{ tur: 'rota', eskiRevizyonId: 10, yeniRevizyonId: 11 }], mevcut), null);
+    assert.match(ogeEksigi([{ tur: 'rota', eskiRevizyonId: 9, yeniRevizyonId: 11 }], mevcut) ?? '', /yürürlükteki konfigürasyonunda yok/);
+    assert.equal(ogeEksigi([{ tur: 'rota', eskiRevizyonId: 9, yeniRevizyonId: 11 }], null), null);
+    assert.match(ogeEksigi([{ tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 30 }, { tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 30 }], mevcut) ?? '', /iki kez/);
+    assert.match(ogeEksigi([{ tur: 'rota', eskiRevizyonId: 10, yeniRevizyonId: 11 }, { tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 12 }], mevcut) ?? '', /tek/);
+    assert.equal(ogeEksigi([{ tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 30 }, { tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 31 }], mevcut), null);
+  });
+
+  test('DY-23: eski alanla yazılan öğenin eskisi konfigürasyonda o türün tek öğesidir', () => {
+    assert.equal(eskiRevizyonuBul(null, 'rota'), null);
+    assert.equal(eskiRevizyonuBul([{ tur: 'rota', revizyonId: 10 }], 'rota'), 10);
+    assert.equal(eskiRevizyonuBul([{ tur: 'cizim', revizyonId: 1 }, { tur: 'cizim', revizyonId: 2 }], 'cizim'), null);
+    assert.equal(eskiRevizyonuBul([{ tur: 'rota', revizyonId: 10 }], 'cizim'), null);
+  });
+
+  test('DY-24: yeni konfigürasyon; parça revizyonu yalnız tasarımda değişir ve proses sürümünü 1 yapar; proses sürümü artar', () => {
+    const onceki: Konfigurasyon = { parcaRevizyonu: 'B', prosesSurumu: 3, ogeler: [{ tur: 'cizim', revizyonId: 20 }, { tur: 'rota', revizyonId: 10 }] };
+    const proses = yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'rota', eskiRevizyonId: 10, yeniRevizyonId: 11 }, { tur: 'nc-programi', eskiRevizyonId: null, yeniRevizyonId: 40 }], yeniParcaRevizyonu: null, tasarimMi: false });
+    assert.deepEqual(proses, { konfigurasyon: { parcaRevizyonu: 'B', prosesSurumu: 4, ogeler: [{ tur: 'cizim', revizyonId: 20 }, { tur: 'nc-programi', revizyonId: 40 }, { tur: 'rota', revizyonId: 11 }] } });
+    const tasarim = yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'cizim', eskiRevizyonId: 20, yeniRevizyonId: 21 }], yeniParcaRevizyonu: 'C', tasarimMi: true });
+    assert.ok('konfigurasyon' in tasarim);
+    assert.deepEqual([tasarim.konfigurasyon.parcaRevizyonu, tasarim.konfigurasyon.prosesSurumu], ['C', 1]);
+    const ayniRev = yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'cizim', eskiRevizyonId: 20, yeniRevizyonId: 21 }], yeniParcaRevizyonu: 'B', tasarimMi: true });
+    assert.ok('konfigurasyon' in ayniRev && ayniRev.konfigurasyon.prosesSurumu === 4);
+    const cikar = yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'cizim', eskiRevizyonId: 20, yeniRevizyonId: null }], yeniParcaRevizyonu: null, tasarimMi: false });
+    assert.ok('konfigurasyon' in cikar && cikar.konfigurasyon.ogeler.every((o) => o.tur !== 'cizim'));
+    assert.match(String((yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 12 }], yeniParcaRevizyonu: null, tasarimMi: false }) as { hata: string }).hata), /eskisini belirtin/);
+    assert.match(String((yeniKonfigurasyon(onceki, { ogeler: [{ tur: 'rota', eskiRevizyonId: 9, yeniRevizyonId: 12 }], yeniParcaRevizyonu: null, tasarimMi: false }) as { hata: string }).hata), /konfigürasyonunda yok/);
+    const ilk = yeniKonfigurasyon(null, { ogeler: [{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 10 }], yeniParcaRevizyonu: 'A', tasarimMi: true });
+    assert.ok('konfigurasyon' in ilk);
+    assert.deepEqual([ilk.konfigurasyon.parcaRevizyonu, ilk.konfigurasyon.prosesSurumu], ['A', 1]);
+    const ilkProses = yeniKonfigurasyon(null, { ogeler: [{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 10 }], yeniParcaRevizyonu: null, tasarimMi: false });
+    assert.ok('konfigurasyon' in ilkProses && ilkProses.konfigurasyon.parcaRevizyonu === null && ilkProses.konfigurasyon.prosesSurumu === 1);
   });
 });

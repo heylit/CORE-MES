@@ -1,6 +1,6 @@
-import { HEDEF_IS_GUNU, KARAR_KODLARI, MRB_KODLARI, mrbKarariMi, onerilenSinif } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { HEDEF_IS_GUNU, KARAR_KODLARI, MRB_KODLARI, OGE_TURU_ADLARI, TEKIL_OGE_TURLERI, mrbKarariMi, onerilenSinif } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
-  Aciliyet, Cevap, EmirDurumu, GorevIslemi, HatAsamasi, EtkiAnalizi, FaiTuru, Gecerlilik, KapanisKosulu, KararHedefi, KararKodu, KararModu, KosulHali, Sinif,
+  Aciliyet, Cevap, EmirDurumu, GorevIslemi, HatAsamasi, EtkiAnalizi, FaiTuru, Gecerlilik, KapanisKosulu, KararHedefi, KararKodu, KararModu, KosulHali, OgeTuru, Sinif,
   SiniflandirmaSorusu, TalepDurumu, UyumHali,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
@@ -298,4 +298,69 @@ export function emirHatti(durum: EmirDurumu): HatAsamasi | null {
     acik: 'revizyon', revizyon_hazirlaniyor: 'revizyon', yayina_hazir: 'yayin', karar: 'karar', uygulamada: 'fai', dogrulama: 'kapanis', kapandi: null,
   };
   return esleme[durum];
+}
+
+/* ---------------- Konfigürasyon (1642) ---------------- */
+
+export interface KonfigurasyonOgesi { tur: OgeTuru; revizyonId: number }
+export interface OgeDegisikligi { tur: OgeTuru; eskiRevizyonId: number | null; yeniRevizyonId: number | null }
+export interface Konfigurasyon { parcaRevizyonu: string | null; prosesSurumu: number; ogeler: readonly KonfigurasyonOgesi[] }
+
+const tekilMi = (tur: OgeTuru): boolean => (TEKIL_OGE_TURLERI as readonly OgeTuru[]).includes(tur);
+const ayniOge = (a: KonfigurasyonOgesi, tur: OgeTuru, revizyonId: number): boolean => a.tur === tur && a.revizyonId === revizyonId;
+
+// DY-22: kalemin öğe listesi kendi içinde tutarlıdır: aynı eski ya da aynı yeni revizyon iki kez geçmez, tekil türde (rota) en çok bir
+// değişiklik vardır. Konfigürasyon varsa her eski revizyon onda bulunmalıdır (değişiklik yürürlükteki tanımdan başlar). İlk eksikle döner.
+export function ogeEksigi(ogeler: readonly OgeDegisikligi[], mevcut: readonly KonfigurasyonOgesi[] | null): string | null {
+  const gorulen = new Set<string>();
+  for (const o of ogeler) {
+    const ad = OGE_TURU_ADLARI[o.tur];
+    for (const [yon, id] of [['eski', o.eskiRevizyonId], ['yeni', o.yeniRevizyonId]] as const) {
+      if (id === null) continue;
+      const anahtar = `${yon}:${o.tur}:${id}`;
+      if (gorulen.has(anahtar)) return `${ad}: aynı revizyon iki kez verilmiş.`;
+      gorulen.add(anahtar);
+    }
+    if (tekilMi(o.tur) && ogeler.filter((x) => x.tur === o.tur).length > 1) return `${ad}: parçada tek ${ad.toLocaleLowerCase('tr')} değişir.`;
+    if (o.eskiRevizyonId !== null && mevcut !== null && !mevcut.some((m) => ayniOge(m, o.tur, o.eskiRevizyonId as number))) {
+      return `${ad}: eski revizyon parçanın yürürlükteki konfigürasyonunda yok.`;
+    }
+  }
+  return null;
+}
+
+// DY-23: eski alanla (yalnız yeni revizyon verilerek) yazılan öğenin eskisi konfigürasyondan okunur: tekil türde yürürlükteki tek öğe,
+// başka türde o türden tek öğe varsa o; yoksa öğe eklenir (eski boş).
+export function eskiRevizyonuBul(mevcut: readonly KonfigurasyonOgesi[] | null, tur: OgeTuru): number | null {
+  const ayni = (mevcut ?? []).filter((m) => m.tur === tur);
+  return ayni.length === 1 ? (ayni[0]?.revizyonId ?? null) : null;
+}
+
+// DY-24: yayında yeni konfigürasyon. Öğeler öncekinden kalemin değişiklikleriyle türetilir (eski çıkar, yeni girer). Parça revizyonu
+// tasarım otoritesinindir (1608 a): yalnız tasarım sınıfında ve verilmişse değişir, o zaman proses sürümü 1'e döner; öbür durumda parça
+// revizyonu kalır, proses sürümü bir artar. Yayın anında eski revizyon konfigürasyonda yoksa (araya başka yayın girdi) hata döner.
+export function yeniKonfigurasyon(
+  onceki: Konfigurasyon | null, d: { ogeler: readonly OgeDegisikligi[]; yeniParcaRevizyonu: string | null; tasarimMi: boolean },
+): { konfigurasyon: Konfigurasyon } | { hata: string } {
+  const eksik = ogeEksigi(d.ogeler, onceki === null ? null : onceki.ogeler);
+  if (eksik !== null) return { hata: eksik };
+  let ogeler = [...(onceki?.ogeler ?? [])];
+  for (const o of d.ogeler) {
+    if (o.eskiRevizyonId !== null) ogeler = ogeler.filter((m) => !ayniOge(m, o.tur, o.eskiRevizyonId as number));
+  }
+  for (const o of d.ogeler) {
+    if (o.yeniRevizyonId !== null && !ogeler.some((m) => ayniOge(m, o.tur, o.yeniRevizyonId as number))) ogeler.push({ tur: o.tur, revizyonId: o.yeniRevizyonId });
+  }
+  for (const tur of TEKIL_OGE_TURLERI) {
+    if (ogeler.filter((m) => m.tur === tur).length > 1) return { hata: `${OGE_TURU_ADLARI[tur]}: parçada tek ${OGE_TURU_ADLARI[tur].toLocaleLowerCase('tr')} olur; eskisini belirtin.` };
+  }
+  ogeler.sort((a, b) => a.tur.localeCompare(b.tur) || a.revizyonId - b.revizyonId);
+  const revizyonDegisir = d.tasarimMi && d.yeniParcaRevizyonu !== null && d.yeniParcaRevizyonu !== (onceki?.parcaRevizyonu ?? null);
+  return {
+    konfigurasyon: {
+      parcaRevizyonu: revizyonDegisir ? d.yeniParcaRevizyonu : (onceki?.parcaRevizyonu ?? (d.tasarimMi ? d.yeniParcaRevizyonu : null)),
+      prosesSurumu: revizyonDegisir ? 1 : (onceki?.prosesSurumu ?? 0) + 1,
+      ogeler,
+    },
+  };
 }

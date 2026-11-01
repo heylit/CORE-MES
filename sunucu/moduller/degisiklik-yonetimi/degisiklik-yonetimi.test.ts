@@ -465,7 +465,11 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const sonlar = await tamam<SonUrunlerCevabi>(acan, 'GET', `${K}/son-urunler`);
     assert.ok(sonlar.sonUrunler.some((s) => s.malzemeId === mil && s.seriIzlenir === null));
     const konf = await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${mil}`);
-    assert.deepEqual([konf.baseline, konf.seriler, konf.revizyonStogu, konf.aileIpligi], [null, null, null, null]);
+    // 1642: konfigürasyon bu modülün kaydıdır; önceki testlerin yayınları onu yazdı. Etiketler sahibi modülden (bağlı değil).
+    assert.equal(konf.baseline?.length, 1);
+    assert.match(konf.baseline?.[0]?.degisiklikNo ?? '', /^ECO-/);
+    assert.equal(konf.baseline?.[0]?.rotaRevizyonu, null);
+    assert.deepEqual([konf.seriler, konf.revizyonStogu, konf.aileIpligi], [null, null, null]);
     assert.ok(konf.gecerlilikler.some((g) => g.ilkSeri === 120));
     assert.ok(konf.acikDegisiklikler.some((a) => a.tur === 'talep' && a.id === t.id));
     assert.equal((await cagir(acan, 'GET', `${K}/konfigurasyon/2147480000`)).statusCode, 404);
@@ -479,5 +483,74 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     assert.ok(rapor.cevrim.length > 0 && rapor.cevrim.every((r) => r.isGunu >= 0 && r.acilis <= r.kapanis));
     assert.deepEqual([rapor.rotaOlgunlugu, rapor.hurdaMaliyeti, rapor.reworkMaliyeti, rapor.engellenenNcDenemesi], [null, null, null, null]);
     assert.equal((await cagir(acan, 'GET', `${K}/raporlar?baslangic=2026-12-01&bitis=2026-11-01`)).statusCode, 400);
+  });
+
+  test('DY-22 - DY-24: öğe listesi, eski revizyon konfigürasyondan; yayın konfigürasyon yazar; parça revizyonu tasarımda, proses sürümü proseste', async () => {
+    const konfigurasyon = async () => (await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`)).baseline?.[0] ?? null;
+    const once = await konfigurasyon();
+    const eskiRota = once?.ogeler.find((o) => o.tur === 'rota')?.revizyonId ?? null;
+    const taslak = async (sinif: 'D2' | 'P2'): Promise<EmirCevabi> => {
+      const e = await emreKadar(sinif, [flans]);
+      return tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${e.id}/taslak-ac`, { surum: e.surum });
+    };
+    const kalemGovdesi = (x: EmirCevabi, ek: Record<string, unknown>) => ({
+      kalemId: x.kalemler[0]?.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: null, eskiYeniyeUyar: x.sinif === 'D2' ? 'evet' : null,
+      yeniEskiyeUyar: x.sinif === 'D2' ? 'evet' : null, ozet: 'Konfigürasyon denemesi', surum: x.surum, ...ek,
+    });
+    const yayinla = async (x: EmirCevabi): Promise<EmirCevabi> => {
+      const y = await tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${x.id}/yayina-gonder`, { surum: x.surum });
+      return tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${x.id}/yayinla`, { gecerlilik: { tur: 'tum' }, surum: y.surum });
+    };
+
+    // ECO 1 (P2): öğe listesiyle rota ve NC programı. Reddedilenler: liste ile eski alanlar birlikte, aynı revizyon iki kez, proseste parça revizyonu.
+    let a = await taslak('P2');
+    const url = (x: EmirCevabi) => `${K}/emirler/${x.id}/kalem-kaydet`;
+    const ogeler = [{ tur: 'rota', eskiRevizyonId: eskiRota, yeniRevizyonId: 900001 }, { tur: 'nc-programi', eskiRevizyonId: null, yeniRevizyonId: 910001 }];
+    await kod(acan, url(a), kalemGovdesi(a, { ogeler, yeniRotaRevizyonuId: 900001 }), 400, /Öğe listesi/);
+    await kod(acan, url(a), kalemGovdesi(a, { ogeler: [...ogeler, { tur: 'nc-programi', eskiRevizyonId: null, yeniRevizyonId: 910001 }] }), 400, /iki kez/);
+    await kod(acan, url(a), kalemGovdesi(a, { ogeler, yeniParcaRevizyonu: 'C' }), 400, /parça revizyonu/);
+    a = await tamam(acan, 'POST', url(a), kalemGovdesi(a, { ogeler }));
+    assert.deepEqual(a.kalemler[0]?.ogeler.map((o) => [o.tur, o.eski?.id ?? null, o.yeni?.id ?? null]).sort(), [['nc-programi', null, 910001], ['rota', eskiRota, 900001]]);
+    assert.equal(a.kalemler[0]?.yeniRotaRevizyonu?.id, 900001);
+    a = await yayinla(a);
+    const k1 = await konfigurasyon();
+    assert.equal(k1?.degisiklikNo, a.no);
+    assert.equal(k1?.prosesSurumu, (once?.prosesSurumu ?? 0) + 1);
+    assert.equal(k1?.parcaRevizyonu, once?.parcaRevizyonu ?? null);
+    assert.deepEqual(k1?.ogeler.filter((o) => o.tur === 'rota' || o.tur === 'nc-programi').map((o) => [o.tur, o.revizyonId]).sort(), [['nc-programi', 910001], ['rota', 900001]]);
+
+    // ECO 2 (D2): eski alanla rota; eskisi konfigürasyondan (DY-23). Konfigürasyonda olmayan eski reddedilir.
+    let b = await taslak('D2');
+    await kod(acan, url(b), kalemGovdesi(b, { ogeler: [{ tur: 'cizim', eskiRevizyonId: 123456, yeniRevizyonId: 920001 }] }), 400, /yürürlükteki konfigürasyonunda yok/);
+    b = await tamam(acan, 'POST', url(b), kalemGovdesi(b, { yeniRotaRevizyonuId: 900002, yeniParcaRevizyonu: 'C' }));
+    assert.deepEqual(b.kalemler[0]?.ogeler.map((o) => [o.tur, o.eski?.id ?? null, o.yeni?.id ?? null]), [['rota', 900001, 900002]]);
+    assert.equal(b.kalemler[0]?.yeniParcaRevizyonu, 'C');
+
+    // ECO 3 (P2) araya girer ve rotayı değiştirir: ECO 2'nin eskisi artık yürürlükte değil, yayın 409 ve hiçbir şey yazılmaz.
+    let c = await taslak('P2');
+    c = await tamam(acan, 'POST', url(c), kalemGovdesi(c, { yeniRotaRevizyonuId: 900003 }));
+    c = await yayinla(c);
+    assert.equal((await konfigurasyon())?.ogeler.find((o) => o.tur === 'rota')?.revizyonId, 900003);
+    const b1 = await tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${b.id}/yayina-gonder`, { surum: b.surum });
+    const sayi = async () => (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM degisiklik_yonetimi_konfigurasyon WHERE malzeme_id = $1', [flans]))?.n;
+    const oncekiSayi = await sayi();
+    await kod(onaylayan, `${K}/emirler/${b.id}/yayinla`, { gecerlilik: { tur: 'tum' }, surum: b1.surum }, 409, /yürürlükteki konfigürasyonunda yok/);
+    assert.equal(await sayi(), oncekiSayi);
+    assert.equal((await tamam<EmirCevabi>(acan, 'GET', `${K}/emirler/${b.id}`)).durum, 'yayina_hazir');
+
+    // Geri gönderilip yeniden kaydedilince eski yürürlükteki rotadan alınır; tasarımda parça revizyonu değişir, proses sürümü 1'e döner.
+    b = await tamam(onaylayan, 'POST', `${K}/emirler/${b.id}/geri-gonder`, { aciklama: 'Rota değişti', surum: b1.surum });
+    b = await tamam(acan, 'POST', url(b), kalemGovdesi(b, { yeniRotaRevizyonuId: 900002, yeniParcaRevizyonu: 'C' }));
+    assert.equal(b.kalemler[0]?.eskiRotaRevizyonu?.id, 900003);
+    b = await yayinla(b);
+    const k3 = await konfigurasyon();
+    assert.deepEqual([k3?.degisiklikNo, k3?.parcaRevizyonu, k3?.prosesSurumu], [b.no, 'C', 1]);
+    assert.ok(k3?.ogeler.some((o) => o.tur === 'rota' && o.revizyonId === 900002) && k3.ogeler.some((o) => o.tur === 'nc-programi' && o.revizyonId === 910001));
+    const olaylar = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?ara=${b.no}`);
+    assert.ok(olaylar.satirlar.some((o) => o.tur === 'revizyon_yayinlandi' && o.alanlar.ogeler === 'rota:900003>900002' && o.alanlar.parcaRevizyonu === 'C'));
+
+    // Konfigürasyon yalnız eklenir.
+    await assert.rejects(vt().sorgu('UPDATE degisiklik_yonetimi_konfigurasyon SET proses_surumu = 9 WHERE malzeme_id = $1', [flans]), /yalnız|eklenir|izin/i);
+    await assert.rejects(vt().sorgu('DELETE FROM degisiklik_yonetimi_konfigurasyon_ogesi WHERE revizyon_id = 900002'), /yalnız|eklenir|izin/i);
   });
 });
