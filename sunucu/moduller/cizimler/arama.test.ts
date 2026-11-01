@@ -115,9 +115,11 @@ describe('çizim merkezi genel arama kaynağı (kart 1240, gerçek PostgreSQL)',
   });
 
   test('arama sütunlarında trigram indeksi var', async () => {
-    const satirlar = await vt().sorgu<{ indexname: string }>(
-      "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'cizimler_belge' AND indexdef LIKE '%gin_trgm_ops%' ORDER BY indexname",
+    // Tanım süzgeci SQL'de değil burada: SQL'de planlayıcı pg_get_indexdef'i şema süzgecinden önce, aynı veritabanındaki
+    // bütün test şemalarının dizinleri için çağırıyor; eşzamanlı dosyanın sildiği dizinde "could not open relation" ile düşüyordu.
+    const satirlar = await vt().sorgu<{ indexname: string; indexdef: string }>(
+      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'cizimler_belge' ORDER BY indexname",
     );
-    assert.deepEqual(satirlar.map((s) => s.indexname), ['cizimler_belge_ad_trgm', 'cizimler_belge_resim_no_trgm']);
+    assert.deepEqual(satirlar.filter((s) => s.indexdef.includes('gin_trgm_ops')).map((s) => s.indexname), ['cizimler_belge_ad_trgm', 'cizimler_belge_resim_no_trgm']);
   });
 });
