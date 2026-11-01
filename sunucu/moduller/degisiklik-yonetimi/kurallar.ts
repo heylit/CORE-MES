@@ -157,10 +157,20 @@ export function stokKarariOner(sinif: Sinif): KararOnerisi {
     : { kod: 'islem_yok', mod: 'otomatik', gerekce: 'Değiştirilebilir; stok kullanılabilir.' };
 }
 
+// DY-25: açık satın alma sipariş satırı (yoldaki malzeme) için öneri (1647). Değiştirilemez değişiklikte yoldaki eski revizyon yeni
+// konfigürasyona hizmet etmez: tedarikçiyle revizyon değişikliği ya da iptal MRB'de kararlaştırılır. Öteki sınıflarda olduğu gibi kullanılır.
+export function siparisKarariOner(sinif: Sinif): KararOnerisi {
+  return sinif === 'D1'
+    ? { kod: 'beklet', mod: 'mrb', gerekce: 'Yoldaki malzeme eski revizyonda. Tedarikçiyle revizyon değişikliği ya da iptal MRB’de kararlaştırılmalı.' }
+    : { kod: 'islem_yok', mod: 'otomatik', gerekce: 'Değiştirilebilir; yoldaki malzeme kullanılabilir.' };
+}
+
 // DY-11: hedefe uygulanabilecek kodlar. Bitmiş emirde yeniden oluşturma ve geçirme yok; başlamış emir yeniden oluşturulmaz; yeni parça numarası
-// alan kalemde kalanlar yeni revizyona geçirilemez. Stokta yalnız yedek, işlem yok, hurda ve rework.
+// alan kalemde kalanlar yeni revizyona geçirilemez. Stokta (parti ya da partisiz) yalnız yedek, işlem yok, hurda ve rework; sipariş
+// satırında yalnız bekletme, işlem yok ve yedek (1647).
 export function izinliKodlar(hedef: KararHedefi, emir: EtkilenenEmir | null, yeniParcaNoVar: boolean): KararKodu[] {
-  if (hedef === 'stok' || emir === null) return ['eski_yedek', 'islem_yok', 'hurda', 'rework'];
+  if (hedef === 'siparis_satiri') return ['beklet', 'islem_yok', 'eski_yedek'];
+  if (hedef !== 'emir' || emir === null) return ['eski_yedek', 'islem_yok', 'hurda', 'rework'];
   if (emir.durum === 'tamamlandi') return ['islem_yok', 'rework', 'eski_yedek', 'hurda', 'eskiyle_tamamla_sapma'];
   const kodlar: KararKodu[] = [];
   if (!emir.basladi) kodlar.push('yeniden_olustur');

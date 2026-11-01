@@ -13,12 +13,13 @@ import type {
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { stokMiktarlari } from '../stok/disari.ts';
+import { siparisSatirlari } from '../satin-alma/disari.ts';
+import { malzemePartiBakiyeleri, partiGirisZamanlari } from '../stok/disari.ts';
 import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
 import type { EtkilenenEmir as UretimdekiEmir } from '../uretim-emirleri/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
-  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
+  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, siparisKarariOner, stokKarariOner,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
 import type { EMIR_ADIMLARI, EtkilenenEmir, TALEP_ADIMLARI } from './kurallar.ts';
@@ -237,9 +238,18 @@ export async function emirCevabi(db: Db, id: number): Promise<EmirCevabi> {
   const fai = await s.emirIlkParcalari(db, id);
   const gecmis = await s.emirGecmisi(db, id);
   const ozet = await malzemeOzetHaritasi(db, [...kalemler.map((k) => k.malzemeId), ...(e.gecerlilikSonUrunId === null ? [] : [e.gecerlilikSonUrunId])]);
-  const emirEtiketleri = await uretimEmriNolari(db, kararlar.filter((k) => k.hedef === 'emir').map((k) => k.hedefId));
-  const hedefEtiketi = (k: KararSatiriHam): string | null =>
-    k.hedef === 'emir' ? emirEtiketleri.get(k.hedefId) ?? null : ozet(k.hedefId).kod;
+  const kimlikler = (h: KararHedefi) => kararlar.filter((k) => k.hedef === h).map((k) => k.hedefId);
+  const emirEtiketleri = await uretimEmriNolari(db, kimlikler('emir'));
+  const partiEtiketleri = await partiGirisZamanlari(db, kimlikler('stok'));
+  const siparisEtiketleri = new Map((kimlikler('siparis_satiri').length === 0 ? [] : await siparisSatirlari(db, kimlikler('siparis_satiri'))).map((x) => [x.id, x.siparisNo]));
+  const hedefEtiketi = (k: KararSatiriHam): string | null => {
+    switch (k.hedef) {
+      case 'emir': return emirEtiketleri.get(k.hedefId) ?? null;
+      case 'stok': return partiEtiketleri.get(k.hedefId)?.lotNo ?? null;
+      case 'siparis_satiri': return siparisEtiketleri.get(k.hedefId) ?? null;
+      case 'partisiz_stok': return ozet(k.hedefId).kod;
+    }
+  };
   const adlar = await kisiAdlari(db, [e.koordinatorKisiId, ...kararlar.flatMap((k) => k.verenKisiId ?? []), ...fai.flatMap((f) => f.onaylayanKisiId ?? [])]);
   const kisi = (kisiId: number, zaman: string) => ({ kisiId, kisiAdi: adlar.get(kisiId) ?? null, zaman });
   return {
@@ -379,10 +389,12 @@ export async function geriGonder(db: Db, kullanici: Kullanici, id: number, g: Ge
   return emirCevabi(db, id);
 }
 
-// Etkilenen emir ve stoku sahibi modüller verir (Aşama 2). null: kaynak bağlı değil; boş diziler: kaynak bağlı, etkilenen yok.
+// Etkilenen emir, stok ve yoldaki malzemeyi sahibi modüller verir. null: kaynak bağlı değil; boş diziler: kaynak bağlı, etkilenen yok.
 export interface EtkiKaynagi {
   emirler: { uretimEmriId: number; malzemeId: number; emir: EtkilenenEmir }[];
-  stok: { stokId: number; malzemeId: number }[];
+  // Parti başına (1647); partiId boşsa malzemenin partisiz bakiyesi.
+  stok: { partiId: number | null; malzemeId: number }[];
+  siparisSatirlari: { siparisSatiriId: number; malzemeId: number }[];
 }
 export type EtkiCozucusu = (db: Db, g: { malzemeIdleri: number[]; gecerlilik: Gecerlilik }) => Promise<EtkiKaynagi | null>;
 export const ETKI_KAYNAGI_BAGLI_DEGIL: EtkiCozucusu = async () => null;
@@ -399,14 +411,18 @@ function etkilenenEmir(u: UretimdekiEmir, gecerlilik: Gecerlilik): EtkilenenEmir
   };
 }
 
-// Etkilenenler sahiplerinden okunur: malzemenin bitmemiş üretim emirleri ve stoğu olan malzeme (malzeme başına tek stok hedefi; parti
-// başına karar ayrı iş, UYUM-BORCU 26). Bitmiş emrin ürünü stoktadır, ayrıca hedef olmaz.
+// Etkilenenler sahiplerinden okunur: malzemenin bitmemiş üretim emirleri, pozitif bakiyeli partileri (partisiz bakiye malzeme başına tek
+// hedef) ve açık satın alma sipariş satırları (1647). Bitmiş emrin ürünü stoktadır, ayrıca hedef olmaz. Fason hizmet satırı emrin
+// parçasıdır; emir hedefi onu kapsar.
 export const KAYNAKLARDAN_ETKI: EtkiCozucusu = async (db, g) => {
+  const malzemeler = new Set(g.malzemeIdleri);
   const emirler = await malzemelerinAcikEmirleri(db, g.malzemeIdleri);
-  const stok = await stokMiktarlari(db, g.malzemeIdleri);
+  const partiler = await malzemePartiBakiyeleri(db, g.malzemeIdleri);
+  const siparisler = (await siparisSatirlari(db)).filter((x) => x.isEmriId === null && x.malzemeNo !== null && malzemeler.has(x.malzemeNo));
   return {
     emirler: emirler.map((u) => ({ uretimEmriId: u.id, malzemeId: u.malzemeNo, emir: etkilenenEmir(u, g.gecerlilik) })),
-    stok: [...stok].filter(([, m]) => Number(m.toplam) > 0).map(([malzemeId]) => ({ stokId: malzemeId, malzemeId })),
+    stok: partiler.map((p) => ({ partiId: p.partiId, malzemeId: p.malzemeId })),
+    siparisSatirlari: siparisler.map((x) => ({ siparisSatiriId: x.id, malzemeId: x.malzemeNo! })),
   };
 };
 
@@ -502,11 +518,15 @@ async function kararlariOner(
   const sonuc: { verildi: boolean }[] = [];
   const hedefler: { hedef: KararHedefi; hedefId: number; malzemeId: number; emir: EtkilenenEmir | null }[] = [
     ...kaynak.emirler.map((x) => ({ hedef: 'emir' as const, hedefId: x.uretimEmriId, malzemeId: x.malzemeId, emir: x.emir })),
-    ...kaynak.stok.map((x) => ({ hedef: 'stok' as const, hedefId: x.stokId, malzemeId: x.malzemeId, emir: null })),
+    ...kaynak.stok.map((x) => (x.partiId === null
+      ? { hedef: 'partisiz_stok' as const, hedefId: x.malzemeId, malzemeId: x.malzemeId, emir: null }
+      : { hedef: 'stok' as const, hedefId: x.partiId, malzemeId: x.malzemeId, emir: null })),
+    ...kaynak.siparisSatirlari.map((x) => ({ hedef: 'siparis_satiri' as const, hedefId: x.siparisSatiriId, malzemeId: x.malzemeId, emir: null })),
   ];
   for (const h of hedefler) {
     const kalem = kalemler.find((k) => k.malzemeId === h.malzemeId);
-    const oneri = h.emir === null ? stokKarariOner(e.sinif) : emirKarariOner(e.sinif, gecerlilik, h.emir);
+    const oneri = h.emir !== null ? emirKarariOner(e.sinif, gecerlilik, h.emir)
+      : h.hedef === 'siparis_satiri' ? siparisKarariOner(e.sinif) : stokKarariOner(e.sinif);
     const izinli = izinliKodlar(h.hedef, h.emir, kalem?.yeniParcaNo != null);
     // Öneri izinli değilse (ör. bekletme stokta yoktur) otomatik uygulanmaz; liste öneriyi taşır ki karar verilebilsin.
     const kodlar = izinli.includes(oneri.kod) ? izinli : [...izinli, oneri.kod];
@@ -533,8 +553,10 @@ async function kararSonrasi(db: Db, e: EmirSatiri, surum: number, kisiId: number
 
 async function kararOlayi(db: Db, e: EmirSatiri, k: KararSatiriHam, kod: KararGovdesi['kod'], kisiAdi: string): Promise<void> {
   await s.olayEkle(db, {
-    tur: k.hedef === 'emir' ? 'emir_karari' : 'stok_karari', ilgili: k.hedef === 'emir' ? 'uretim-emirleri' : 'stok', kayitNo: e.no,
-    alanlar: { hedefId: String(k.hedefId), karar: KARAR_KODU_ADLARI[kod], mod: k.mod, kararVeren: kisiAdi },
+    // Sipariş satırı kararının ilgilisi satın almadır; olay ilgili listesinde yok (UYUM-BORCU 30): ilgili boş, hedef alanda.
+    tur: k.hedef === 'emir' ? 'emir_karari' : 'stok_karari',
+    ilgili: k.hedef === 'emir' ? 'uretim-emirleri' : k.hedef === 'siparis_satiri' ? null : 'stok', kayitNo: e.no,
+    alanlar: { hedef: k.hedef, hedefId: String(k.hedefId), karar: KARAR_KODU_ADLARI[kod], mod: k.mod, kararVeren: kisiAdi },
   });
   if (kod === 'rework') await s.olayEkle(db, { tur: 'rework_istendi', ilgili: 'kalite-merkezi', kayitNo: e.no, alanlar: { hedef: k.hedef, hedefId: String(k.hedefId) } });
   if (kod === 'eskiyle_tamamla_sapma') await s.olayEkle(db, { tur: 'sapma_acildi', ilgili: 'kalite-merkezi', kayitNo: e.no, alanlar: { hedefId: String(k.hedefId) } });

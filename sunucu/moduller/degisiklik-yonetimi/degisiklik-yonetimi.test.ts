@@ -12,7 +12,7 @@ import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-y
 import { IMZA_ANLAMLARI, KAPANIS_ENGELI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   EmirCevabi, EmirListeCevabi, GorevlerimCevabi, IzlenebilirlikCevabi, KonfigurasyonCevabi, OlayListeCevabi, ParcaAdaylariCevabi, RaporCevabi,
-  SeriListeCevabi, SonUrunlerCevabi, TalepCevabi, TalepListeCevabi,
+  KararHedefi, SeriListeCevabi, SonUrunlerCevabi, TalepCevabi, TalepListeCevabi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type { RollerCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -352,7 +352,7 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
         { uretimEmriId: 503, malzemeId: g.malzemeIdleri[0] ?? 0, emir: { durum: 'uretimde', basladi: true, donmus: false, seriAraligi: null, sonUrunu: false, baslangic: '2026-10-01', terminKayar: null } },
         { uretimEmriId: 504, malzemeId: g.malzemeIdleri[0] ?? 0, emir: { durum: 'tamamlandi', basladi: true, donmus: false, seriAraligi: null, sonUrunu: false, baslangic: '2026-09-01', terminKayar: null } },
       ],
-      stok: [{ stokId: 601, malzemeId: g.malzemeIdleri[0] ?? 0 }],
+      stok: [{ partiId: 601, malzemeId: g.malzemeIdleri[0] ?? 0 }], siparisSatirlari: [],
     });
     const kisi = { id: onaylayanId, ad: 'Deneme dy-onaylayan', islemler: [...DEGISIKLIK_YONETIMI_ISLEMLERI] };
     let x = await vt().tx((db) => yayinla(db, kisi, e.id, { gecerlilik: { tur: 'tum' }, surum: e.surum }, cozucu));
@@ -563,7 +563,7 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu('DELETE FROM degisiklik_yonetimi_konfigurasyon_ogesi WHERE revizyon_id = 900002'), /yalnız|eklenir|izin/i);
   });
 
-  test('1644: etki kaynağı bağlı; açık emirler ve stok karar satırı olur, bitmiş ve iptal emir olmaz; boş başlangıç onaylıya düşer', async () => {
+  test('1644, 1647: etki kaynağı bağlı; açık emirler ve stok karar satırı olur, bitmiş ve iptal emir olmaz; boş başlangıç onaylıya düşer', async () => {
     if (!ortam) throw new Error('Test veritabanı açılamadı.');
     const { sahip } = ortam;
     await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('DYE-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -587,17 +587,34 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
 
     const e = await yayinaHazir(await emreKadar('P1', [parca]));
     const x = await tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'tarih', tarih: '2026-12-01' }, surum: e.surum });
-    const hedef = (h: 'emir' | 'stok', id: number) => x.kararlar.find((k) => k.hedef === h && k.hedefId === id);
+    const hedef = (h: KararHedefi, id: number) => x.kararlar.find((k) => k.hedef === h && k.hedefId === id);
     assert.equal(x.kararlar.length, 3);
     assert.ok(hedef('emir', bitmis) === undefined && hedef('emir', iptal) === undefined);
     assert.deepEqual([hedef('emir', serbest)?.onerilenKod, hedef('emir', serbest)?.mod, hedef('emir', serbest)?.hedefEtiketi], ['yeniden_olustur', 'onayli', await emirNo(serbest)]);
     assert.deepEqual([hedef('emir', taslak)?.onerilenKod, hedef('emir', taslak)?.mod, hedef('emir', taslak)?.verilenKod], ['yeniden_olustur', 'onayli', null]);
     assert.match(hedef('emir', taslak)?.gerekce ?? '', /başlangıç yok/);
-    // P1'de stok değiştirilebilir: otomatik "işlem yok"; etiket malzeme kodu.
-    assert.deepEqual([hedef('stok', parca)?.verilenKod, hedef('stok', parca)?.mod], ['islem_yok', 'otomatik']);
-    assert.match(hedef('stok', parca)?.hedefEtiketi ?? '', /^DYE-/);
+    // P1'de stok değiştirilebilir: otomatik "işlem yok". Partisiz bakiye malzeme başına tek hedef, etiketi malzeme kodu (1647).
+    assert.deepEqual([hedef('partisiz_stok', parca)?.verilenKod, hedef('partisiz_stok', parca)?.mod], ['islem_yok', 'otomatik']);
+    assert.match(hedef('partisiz_stok', parca)?.hedefEtiketi ?? '', /^DYE-/);
     assert.equal(x.durum, 'karar');
     assert.deepEqual(x.kapanisKosullari.find((k) => k.kosul === 'kararlar'), { kosul: 'kararlar', durum: 'eksik', ayrinti: '2 karar bekliyor.' });
     await kod(onaylayan, `${K}/emirler/${e.id}/kapat`, { surum: x.surum }, 409);
+  });
+
+  test('1647: DY-25 sipariş satırı ve parti hedefi; D1 sipariş satırı MRB bekletme, parti eski yedek; etiketler sahibinden', async () => {
+    const e = await yayinaHazir(await emreKadar('D1'));
+    const cozucu: EtkiCozucusu = async (_db, g) => ({
+      emirler: [], stok: [{ partiId: 701, malzemeId: g.malzemeIdleri[0] ?? 0 }],
+      siparisSatirlari: [{ siparisSatiriId: 801, malzemeId: g.malzemeIdleri[0] ?? 0 }],
+    });
+    const kisi = { id: onaylayanId, ad: 'Deneme dy-onaylayan', islemler: [...DEGISIKLIK_YONETIMI_ISLEMLERI] };
+    const x = await vt().tx((db) => yayinla(db, kisi, e.id, { gecerlilik: { tur: 'tum' }, surum: e.surum }, cozucu));
+    const siparis = x.kararlar.find((k) => k.hedef === 'siparis_satiri');
+    const parti = x.kararlar.find((k) => k.hedef === 'stok');
+    assert.deepEqual([siparis?.hedefId, siparis?.onerilenKod, siparis?.mod, siparis?.izinliKodlar, siparis?.verilenKod], [801, 'beklet', 'mrb', ['beklet', 'islem_yok', 'eski_yedek'], null]);
+    assert.deepEqual([parti?.hedefId, parti?.onerilenKod, parti?.mod], [701, 'eski_yedek', 'mrb']);
+    // Kimliği sahibinde olmayan hedefin etiketi yok (uydurulmaz).
+    assert.deepEqual([siparis?.hedefEtiketi, parti?.hedefEtiketi], [null, null]);
+    await assert.rejects(vt().sorgu("UPDATE degisiklik_yonetimi_karar SET hedef = 'baska' WHERE id = $1", [siparis?.id]), /hedef_degeri/);
   });
 });

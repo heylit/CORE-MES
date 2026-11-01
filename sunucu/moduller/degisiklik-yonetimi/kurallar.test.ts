@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { kapatilabilirMi, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
-  izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
+  izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, siparisKarariOner, stokKarariOner, talepAdimiUygunMu,
   talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon,
 } from './kurallar.ts';
 import type { EtkilenenEmir, KalemTaslagi, Konfigurasyon } from './kurallar.ts';
@@ -118,6 +118,14 @@ describe('degisiklik-yonetimi kuralları', () => {
   test('DY-10: stok önerisi D1 eski yedek (MRB), öteki sınıflarda işlem yok (otomatik)', () => {
     assert.deepEqual([stokKarariOner('D1').kod, stokKarariOner('D1').mod], ['eski_yedek', 'mrb']);
     assert.deepEqual([stokKarariOner('P1').kod, stokKarariOner('P1').mod], ['islem_yok', 'otomatik']);
+  });
+
+  test('DY-25: sipariş satırı önerisi ve izinli kodları; partisiz stok stokla aynı (1647)', () => {
+    assert.deepEqual([siparisKarariOner('D1').kod, siparisKarariOner('D1').mod], ['beklet', 'mrb']);
+    assert.deepEqual([siparisKarariOner('D2').kod, siparisKarariOner('D2').mod], ['islem_yok', 'otomatik']);
+    assert.deepEqual([siparisKarariOner('P1').kod, siparisKarariOner('P1').mod], ['islem_yok', 'otomatik']);
+    assert.deepEqual(izinliKodlar('siparis_satiri', null, false), ['beklet', 'islem_yok', 'eski_yedek']);
+    assert.deepEqual(izinliKodlar('partisiz_stok', null, false), izinliKodlar('stok', null, false));
   });
 
   test('DY-11: izinli kodlar hedefe ve emrin durumuna göre', () => {
