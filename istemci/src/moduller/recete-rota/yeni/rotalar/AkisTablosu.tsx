@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
+  adimCarpani, adimEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani } from './ortak.tsx';
@@ -98,7 +98,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     const op = h.op.get(a.opId);
     const ist = a.stationId ? h.istasyon.get(a.stationId) : undefined;
     const fason = fasonMu(a);
-    const t = adimSuresi(a, q, ist, r.gunSaati(ist?.wcId ?? null));
+    // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); sunucunun teorik süresiyle aynı.
+    const t = adimSuresi(a, q * adimCarpani(a), ist, r.gunSaati(ist?.wcId ?? null));
     const son = j === liste.length - 1;
     const secili = sec?.tur === 'adim' && sec.urunId === urunId && sec.adimId === a.id;
     const istasyonlar = [...h.istasyon.values()].filter((x) => x.aktif || x.id === a.stationId);

@@ -93,7 +93,8 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
   const im = ist ? h.isMerkezi.get(ist.wcId) : undefined;
   const fason = fasonMu(a);
   const miktar = d.adimlar[i]?.miktar ?? d.miktar;
-  const t = adimSuresi(a, miktar, ist, r.gunSaati(ist?.wcId ?? null));
+  // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); sunucunun teorik süresiyle aynı.
+  const t = adimSuresi(a, miktar * adimCarpani(a), ist, r.gunSaati(ist?.wcId ?? null));
   const son = i === liste.length - 1;
   const kart = akisKarti(sahip.id, liste, i, r.duzen.malzemeVar);
   const kartAdi = kartBasligi(h.malzeme.get(kart.itemId), kart.adim, r.duzen.opAdi);
