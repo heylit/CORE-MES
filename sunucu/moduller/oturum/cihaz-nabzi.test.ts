@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
+import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
+import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { KUYRUK_BIRIKME_ESIGI, anahtarOzeti } from './kurallar.ts';
-import { cihazNabizDurumlari, nabizKaydet } from './servis.ts';
+import { cihazNabizDurumlari, kimlikCozucu, nabizKaydet } from './servis.ts';
 
 // Kart 1666 (1619 a, 1621 a): cihaz nabzının yazılması, sıklık sınırı, günlük özet, panel okuması ve 30 günlük saklama.
-// Uç ve yetki 1745 cevabıyla ayrı sınanır. Kişi ve cihaz adları uydurmadır.
+// Kişi ve cihaz adları uydurmadır.
 describe('cihaz nabzı (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let kisiId = 0;
@@ -173,5 +176,100 @@ describe('cihaz nabzı (gerçek PostgreSQL)', () => {
     await assert.rejects(ekle(0, 0, ''), /oturum_cihaz_nabzi_surum/);
     await assert.rejects(ekle(0, 0, 'x'.repeat(65)), /oturum_cihaz_nabzi_surum/);
     await ekle(null, 0, 'x'.repeat(64));
+  });
+});
+
+// 1745 a: uç /oturum/nabiz, yalnız giriş ister; dış izleyici reddedilir, telefon gönderir. 1755 a: denetim defterine yazılmaz.
+describe('cihaz nabzı ucu (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let app: FastifyInstance;
+  const PAROLA = 'dogru-parola-1';
+  const GOVDE = { surum: '1.2.3', kuyruk: null, sonEsitlemeSn: null, jsHata: 0 };
+
+  const vt = (): TestVeritabani['vt'] => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return ortam.vt;
+  };
+  const kisiEkle = (kullaniciAdi: string): Promise<number> =>
+    vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kişi', kullaniciAdi, parola: PAROLA }));
+  const giris = async (kullaniciAdi: string): Promise<string> => {
+    const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
+    assert.equal(c.statusCode, 200, c.body);
+    return String(c.headers['set-cookie']).split(';')[0] ?? '';
+  };
+  const nabiz = (cerez: string | null, govde: unknown = GOVDE) => app.inject({
+    method: 'POST', url: '/api/oturum/nabiz', headers: cerez === null ? {} : { cookie: cerez }, payload: govde as object,
+  });
+  const nabizSayisi = async (): Promise<number> =>
+    (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM oturum_cihaz_nabzi'))?.n ?? 0;
+
+  before(async () => {
+    ortam = await testVeritabaniKur('nabiz_uc');
+    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
+  });
+
+  after(async () => {
+    await ortam?.kaldir();
+  });
+
+  test('izinli: girişli kişi nabız gönderir, yazılır; denetim defterine satır girmez', async () => {
+    await kisiEkle('nabiz.izinli');
+    const cerez = await giris('nabiz.izinli');
+    const once = (await vt().tek<{ n: number }>(`SELECT count(*)::int AS n FROM denetim_kaydi WHERE yol LIKE '%/oturum/nabiz'`))?.n;
+    const c = await nabiz(cerez);
+    assert.equal(c.statusCode, 200, c.body);
+    assert.deepEqual(c.json(), { yazildi: true });
+    const sonra = (await vt().tek<{ n: number }>(`SELECT count(*)::int AS n FROM denetim_kaydi WHERE yol LIKE '%/oturum/nabiz'`))?.n;
+    assert.equal(sonra, once);
+    // Hemen ardından gelen nabız yazılmaz ama hata da değildir.
+    assert.deepEqual((await nabiz(cerez)).json(), { yazildi: false });
+  });
+
+  test('izinli: kayıtsız cihaz telefon profilindeyken de nabız gider', async () => {
+    await kisiEkle('nabiz.telefon');
+    await vt().sorgu(`UPDATE oturum_cihaz_ayari SET kayitsiz_profil = 'telefon'`);
+    try {
+      const cerez = await giris('nabiz.telefon');
+      const c = await nabiz(cerez);
+      assert.equal(c.statusCode, 200, c.body);
+      assert.deepEqual(c.json(), { yazildi: true });
+    } finally {
+      await vt().sorgu(`UPDATE oturum_cihaz_ayari SET kayitsiz_profil = 'tam'`);
+    }
+  });
+
+  test('reddedilen: oturumsuz istek 401, hiçbir şey yazılmaz', async () => {
+    const once = await nabizSayisi();
+    assert.equal((await nabiz(null)).statusCode, 401);
+    assert.equal(await nabizSayisi(), once);
+  });
+
+  test('reddedilen: dış izleyici (firma kişisi) 403', async () => {
+    const kisi = await kisiEkle('nabiz.dis');
+    await vt().sorgu(
+      `INSERT INTO portal_belge (yol, ust, kimlik, veri, surum) VALUES ($1, 'users', $2, $3, 1)`,
+      [`users/tmi-${kisi}`, `tmi-${kisi}`, JSON.stringify({ id: `tmi-${kisi}`, partyId: 'p1' })],
+    );
+    const cerez = await giris('nabiz.dis');
+    const once = await nabizSayisi();
+    assert.equal((await nabiz(cerez)).statusCode, 403);
+    assert.equal(await nabizSayisi(), once);
+  });
+
+  test('reddedilen: negatif ya da sınır dışı sayı, fazladan alan (kişi, konum, saat) 400', async () => {
+    await kisiEkle('nabiz.gecersiz');
+    const cerez = await giris('nabiz.gecersiz');
+    for (const govde of [
+      { ...GOVDE, kuyruk: -1 },
+      { ...GOVDE, jsHata: -1 },
+      { ...GOVDE, jsHata: 10_001 },
+      { ...GOVDE, kuyruk: 100_001 },
+      { ...GOVDE, surum: 'x'.repeat(65) },
+      { ...GOVDE, kisiId: 1 },
+      { ...GOVDE, konum: 'x' },
+      { ...GOVDE, zaman: new Date().toISOString() },
+    ]) {
+      assert.equal((await nabiz(cerez, govde)).statusCode, 400, JSON.stringify(govde));
+    }
   });
 });

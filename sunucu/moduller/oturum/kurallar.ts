@@ -187,10 +187,6 @@ export const SESSIZ_ESIK_SN = 3 * NABIZ_ARALIGI_SN;
 export const KUYRUK_BIRIKME_ESIGI = 20;
 // 1619 a: cihaz nabzı 30 gün saklanır.
 export const NABIZ_SAKLAMA_GUN = 30;
-// Gövde sınırları: gerçek değerin çok üstünde, bozuk istemcinin sayaçları taşıramayacağı kadar dar.
-export const NABIZ_KUYRUK_AZAMI = 100_000;
-export const NABIZ_JS_HATA_AZAMI = 10_000;
-export const NABIZ_SURUM_AZAMI = 64;
 // Son eşitleme istemci saatiyle değil, "kaç saniye önce" diye gelir; zaman sunucuda hesaplanır. Saklama süresinden eskisi bilinmez sayılır.
 export const NABIZ_ESITLEME_AZAMI_SN = NABIZ_SAKLAMA_GUN * 24 * 60 * 60;
 
