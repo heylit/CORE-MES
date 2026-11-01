@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
@@ -7,6 +7,9 @@ import { GORUNUMLER, adrestenGorunum, gorunumAdresi } from './gorunumler.ts';
 import { ikBicimi, ikSabitleri, motorKur } from './motor.ts';
 import { CALISAN, IK_OKUYAN, IK_YONETICI, KAPISIZ, MUDUR, ikAc, ornekVeri } from './test-ortak.tsx';
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('./IkYeni.tsx'), import('./personel/index.tsx'), import('./izin-devam/index.tsx'), import('./bordro/index.tsx'), import('./islemlerim/index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const sekme = (ad: string) => screen.queryByRole('tab', { name: ad });

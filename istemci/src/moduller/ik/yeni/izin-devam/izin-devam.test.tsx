@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IkPuantajCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { IK_OKUYAN, IK_YONETICI, ikAc, ornekVeri, type Yazma } from '../test-ortak.tsx';
 import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // Puantaj ve izin gunu uclari ortak sinama duzeninde yok; yalniz bu testte, ortak cevabin onune konur.
