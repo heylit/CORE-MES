@@ -845,19 +845,21 @@ export const emirUretimGirisi = async (db: Db, emirId: number, malzemeId: number
      AND (giris_kaynagi = 'uretim' OR (tur = 'geri_alma' AND kaynak_konum_id IS NOT NULL AND hedef_konum_id IS NULL))`, [emirId, malzemeId]))[0]?.miktar ?? '0';
 export const konumKodlari = (db: Db, idler: number[]): Promise<{ id: number; kod: string }[]> =>
   db.sorgu('SELECT id, kod FROM stok_konum WHERE id = ANY($1::int[])', [idler]);
-// Bakiyenin hareket toplamına eşitliği (DEP-11): fark veren eksenler.
-export const bakiyeDefterFarki = (db: Db): Promise<{ malzemeId: number; konumId: number; partiId: number | null; bakiye: string; defter: string }[]> => db.sorgu(
-  `WITH defter AS (
+// Bakiyenin hareket toplamına eşitliği (DEP-11): fark veren eksenler. Gece karşılaştırması (1692 a) aynı seçimi kaydeder.
+const DEFTER_FARKI_SECIMI = `WITH defter AS (
      SELECT malzeme_id, konum_id, parti_id, statu_id, kalite_durumu, sum(etki) AS toplam FROM (
        SELECT malzeme_id, hedef_konum_id AS konum_id, parti_id, hedef_statu_id AS statu_id, COALESCE(hedef_kalite_durumu, 'serbest') AS kalite_durumu, miktar AS etki
          FROM stok_hareketi WHERE hedef_konum_id IS NOT NULL
        UNION ALL SELECT malzeme_id, kaynak_konum_id, parti_id, kaynak_statu_id, COALESCE(kaynak_kalite_durumu, 'serbest'), -miktar FROM stok_hareketi WHERE kaynak_konum_id IS NOT NULL) x
      GROUP BY malzeme_id, konum_id, parti_id, statu_id, kalite_durumu)
-   SELECT COALESCE(b.malzeme_id, d.malzeme_id) AS "malzemeId", COALESCE(b.konum_id, d.konum_id) AS "konumId", COALESCE(b.parti_id, d.parti_id) AS "partiId",
-     COALESCE(b.miktar, 0)::text AS bakiye, COALESCE(d.toplam, 0)::text AS defter
+   SELECT COALESCE(b.malzeme_id, d.malzeme_id) AS malzeme_id, COALESCE(b.konum_id, d.konum_id) AS konum_id, COALESCE(b.parti_id, d.parti_id) AS parti_id,
+     COALESCE(b.statu_id, d.statu_id) AS statu_id, COALESCE(b.kalite_durumu, d.kalite_durumu) AS kalite_durumu,
+     COALESCE(b.miktar, 0) AS bakiye, COALESCE(d.toplam, 0) AS defter
    FROM stok_bakiye b FULL JOIN defter d ON d.malzeme_id = b.malzeme_id AND d.konum_id = b.konum_id AND d.parti_id IS NOT DISTINCT FROM b.parti_id
      AND d.statu_id IS NOT DISTINCT FROM b.statu_id AND d.kalite_durumu = b.kalite_durumu
-   WHERE COALESCE(b.miktar, 0) <> COALESCE(d.toplam, 0)`);
+   WHERE COALESCE(b.miktar, 0) <> COALESCE(d.toplam, 0)`;
+export const bakiyeDefterFarki = (db: Db): Promise<{ malzemeId: number; konumId: number; partiId: number | null; bakiye: string; defter: string }[]> => db.sorgu(
+  `SELECT malzeme_id AS "malzemeId", konum_id AS "konumId", parti_id AS "partiId", bakiye::text AS bakiye, defter::text AS defter FROM (${DEFTER_FARKI_SECIMI}) f`);
 
 // ---- Sepet ve fiş ----------------------------------------------------------------------------------------------------------
 export interface SepetHam {
@@ -1916,3 +1918,30 @@ export const malzemePartiBakiyeleri = (db: Db, malzemeIdler: readonly number[]):
     GROUP BY b.malzeme_id, b.parti_id, p.lot_no, p.parca_revizyonu
    HAVING sum(b.miktar) > 0
     ORDER BY b.malzeme_id, b.parti_id NULLS FIRST`, [[...malzemeIdler]]);
+
+// ---- Gece defter karşılaştırması (1692 a) ----------------------------------------------------------------------------------
+// Son karşılaştırmanın zamanı; hiç yapılmadıysa null.
+export const sonDefterKarsilastirmasi = (db: Db): Promise<{ id: number; zaman: string; farkSayisi: number } | null> =>
+  db.tek(`SELECT id, ${zamanMetni('zaman')} AS zaman, fark_sayisi AS "farkSayisi" FROM stok_defter_karsilastirma ORDER BY zaman DESC, id DESC LIMIT 1`);
+// Bugün (İstanbul günü) karşılaştırma yapıldı mı ve yerel saat eşiği geçti mi: iş saatte bir koşar, gece bir kez karşılaştırır.
+export const defterKarsilastirmaZamaniMi = async (db: Db, saat: number): Promise<boolean> => (await db.tek<{ zamani: boolean }>(
+  `SELECT extract(hour FROM now() AT TIME ZONE 'Europe/Istanbul') >= $1
+      AND NOT EXISTS (SELECT 1 FROM stok_defter_karsilastirma WHERE (zaman AT TIME ZONE 'Europe/Istanbul')::date = (now() AT TIME ZONE 'Europe/Istanbul')::date) AS zamani`,
+  [saat]))?.zamani ?? false;
+// Karşılaştırmayı tek ifadede yazar: tur satırı ve farkları aynı anlık görüntüden.
+export const defterKarsilastir = async (db: Db): Promise<{ id: number; farkSayisi: number }> => (await db.tek<{ id: number; farkSayisi: number }>(
+  `WITH f AS (${DEFTER_FARKI_SECIMI}),
+        k AS (INSERT INTO stok_defter_karsilastirma (fark_sayisi) SELECT count(*) FROM f RETURNING id, fark_sayisi),
+        y AS (INSERT INTO stok_defter_farki (karsilastirma_id, malzeme_id, konum_id, parti_id, statu_id, kalite_durumu, bakiye, defter)
+              SELECT k.id, f.malzeme_id, f.konum_id, f.parti_id, f.statu_id, f.kalite_durumu, f.bakiye, f.defter FROM f, k)
+   SELECT id, fark_sayisi AS "farkSayisi" FROM k`))!;
+export interface DefterFarkiHam {
+  malzemeId: number; malzemeAd: string | null; konumId: number; konumKod: string | null; partiId: number | null; lotNo: string | null;
+  statuId: number | null; kaliteDurumu: string; bakiye: string; defter: string;
+}
+export const defterFarklari = (db: Db, karsilastirmaId: number): Promise<DefterFarkiHam[]> => db.sorgu(
+  `SELECT f.malzeme_id AS "malzemeId", m.kayit #>> '{com,ad}' AS "malzemeAd", f.konum_id AS "konumId", k.kod AS "konumKod", f.parti_id AS "partiId",
+     p.lot_no AS "lotNo", f.statu_id AS "statuId", f.kalite_durumu AS "kaliteDurumu", f.bakiye::text AS bakiye, f.defter::text AS defter
+   FROM stok_defter_farki f LEFT JOIN malzeme_katalog_karti m ON m.no = f.malzeme_id LEFT JOIN stok_konum k ON k.id = f.konum_id
+     LEFT JOIN stok_parti p ON p.id = f.parti_id
+   WHERE f.karsilastirma_id = $1 ORDER BY k.kod NULLS LAST, f.malzeme_id, f.parti_id NULLS FIRST`, [karsilastirmaId]);
