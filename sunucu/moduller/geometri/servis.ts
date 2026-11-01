@@ -8,9 +8,10 @@ import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../cizimler/disari.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, TUR_BASINA_EN_COK_IS,
+  bicimDenetimi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
@@ -94,10 +95,20 @@ export async function analizOku(db: Db, revizyonId: number): Promise<GeometriAna
   return analizCevabi(db, await model(db, revizyonId));
 }
 
-export async function hamOnerisi(db: Db, revizyonId: number, payMm: number): Promise<GeometriHamCevabi> {
+// Pay sorgudan, yoksa sistem ayarından; ikisi de yoksa 0 ve kaynak 'yok' (ekran söyler). Stok listesi aktif hammadde kartları (1469 a).
+export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined }): Promise<GeometriHamCevabi> {
+  const ayar = sorgu.payMm === undefined ? await sistemAyariOku(db, 'geometri.ham-payi-mm') : null;
+  const payMm = sorgu.payMm ?? ayar ?? 0;
+  const payKaynagi = sorgu.payMm !== undefined ? 'istek' : ayar !== null ? 'ayar' : 'yok';
   const c = await analizOku(db, revizyonId);
-  if (c.analiz === null) return { revizyonId, payMm, enAz: null, stokOlcusu: null, neden: 'analiz-yok' };
-  return { revizyonId, payMm, enAz: enAzHam(c.analiz.obb, payMm), stokOlcusu: null, neden: 'stok-listesi-yok' };
+  if (c.analiz === null) return { revizyonId, payMm, payKaynagi, enAz: null, oneriler: [], kaliteler: [], neden: 'analiz-yok' };
+  const enAz = enAzHam(c.analiz.obb, payMm);
+  const liste = await hammaddeStokOlculeri(db, STOK_FORMLARI);
+  const kaliteler = [...new Set(liste.flatMap((k) => (k.kalite === null ? [] : [k.kalite])))].sort((x, y) => x.localeCompare(y, 'tr'));
+  const adaylar = sorgu.kalite === undefined ? liste : liste.filter((k) => k.kalite === sorgu.kalite);
+  const oneriler = stokEslestir(c.analiz.obb, payMm, adaylar);
+  const neden = oneriler.length > 0 ? null : adaylar.length === 0 ? 'stok-listesi-yok' : 'sigan-yok';
+  return { revizyonId, payMm, payKaynagi, enAz, oneriler, kaliteler, neden };
 }
 
 // İş yoksa (tarama yakalamadı) açılır; varsa sürüm koşuluyla yeniden kuyruğa girer. Süren iş de yeniden kuyruğa alınabilir:

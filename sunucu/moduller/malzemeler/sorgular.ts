@@ -361,6 +361,19 @@ export function kullanilanKaliteSatirlari(db: Db): Promise<KullanilanKaliteSatir
       GROUP BY kalite, form ORDER BY kalite, form NULLS LAST`);
 }
 
+// 1469 a: ham önerisinin stok listesi aktif hammadde kartlarıdır; ölçüler kartın `dims` nesnesinden olduğu gibi döner (sayıya çeviren okuyan).
+// Formu istenenlerden olmayan ya da ölçü nesnesi olmayan kart dönmez. kalite null bütün kaliteler.
+export interface HammaddeStokSatiri { no: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Record<string, unknown> }
+export function hammaddeStokSatirlari(db: Db, formlar: readonly string[], kalite: string | null): Promise<HammaddeStokSatiri[]> {
+  return db.sorgu<HammaddeStokSatiri>(
+    `SELECT no, kod, ad, kalite, form, olcu FROM (
+       SELECT k.no, k.stok_kodu AS kod, ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} AS ad, ${KATALOG_KALITE} AS kalite,
+              ${KATALOG_METIN('form')} AS form, k.kayit -> 'dims' AS olcu
+         FROM malzeme_katalog_karti k
+        WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde' AND jsonb_typeof(k.kayit -> 'dims') = 'object') x
+      WHERE form = ANY($1::text[]) AND ($2::text IS NULL OR kalite = $2) ORDER BY no`, [formlar, kalite]);
+}
+
 export function katalogKartKaydiNoIle(db: Db, no: number): Promise<{ kayit: Record<string, unknown> } | null> {
   return db.tek<{ kayit: Record<string, unknown> }>(`SELECT kayit FROM malzeme_katalog_karti WHERE no = $1`, [no]);
 }

@@ -147,7 +147,9 @@ function rrCevir(st) {
     if (!a || a.kod !== it.id) y.kod = it.id;
     if (!a || a.ad !== it.name) y.ad = it.name;
     if (!a || (a.birim || '') !== it.unit) y.birim = it.unit;
-    if (!a || (+a.stok || 0) !== it.stock) y.stok = +it.stock || 0;
+    /* 1459 a: stok satırı olmayan malzemenin stoku bilinmez (null); 0 sayılmaz. Motor dağıtımda 0 gibi kullanır ve uyarır (engine evaluate) */
+    const stok = it.stock == null || it.stock === '' || !isFinite(+it.stock) ? null : +it.stock;
+    if (!a || (a.stok ?? null) !== stok) y.stok = stok;
     if (!a || (+a.birimFiyat || 0) !== it.cost) y.birimFiyat = +it.cost || 0;
     if (!a) Object.assign(y, { tedarikGun: 0, muayeneGun: 0 });
     return rrKur(a, y);
@@ -378,7 +380,7 @@ function sunucuKaydi(kayit, durum, D0, bugun) {
     k.items = d.items.map(s => {
       const o = eski.get(s.id) || {};
       const plan = urun0(s.id) || o.plan;
-      return Object.assign({}, o, { id: s.id, code: s.code, name: s.name, type: s.type, unit: s.unit || '', cost: maliyet(s.id), stock: s.stock == null ? 0 : s.stock }, plan ? { plan } : {});
+      return Object.assign({}, o, { id: s.id, code: s.code, name: s.name, type: s.type, unit: s.unit || '', cost: maliyet(s.id), stock: s.stock == null ? null : s.stock }, plan ? { plan } : {});
     });
   }
   if (Array.isArray(d.opdefs)) k.opdefs = d.opdefs.map(s => ({ id: s.id, code: s.code, name: s.name }));
@@ -431,6 +433,7 @@ function tmiCevir(st, kaynak, D0, bugun) {
   if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
   if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   if (k && k.ek && 'malzemeFiyatlari' in k.ek && Array.isArray(D.malzemeler)) tmiFiyatlar(D.malzemeler, k.ek.malzemeFiyatlari);
+  if (k && k.ek && 'siparisBedelleri' in k.ek && Array.isArray(D.siparisler)) tmiSiparisBedelleri(D.siparisler, k.ek.siparisBedelleri);
   return D;
 }
 /* 1280 a, 1329: ham malzemenin birim fiyatı Satın Alma'dandır: alış ortalaması, yoksa kg fiyatından tahmini (fiyatTahmini), yoksa null
@@ -446,6 +449,18 @@ function tmiFiyatlar(malzemeler, l) {
     m.birimFiyat = x && x.alisFiyati != null ? x.alisFiyati : tahmini;
     if (tahmini != null) m.fiyatTahmini = true;
     if (kg) m.kgRef = { kalite: kg.kaliteKodu, form: kg.form, tarih: kg.gecerlilik, tlKg: kg.tlKgFiyati, kgFiyati: kg.kgFiyati, paraBirimi: kg.paraBirimi };
+  }
+}
+/* 1460 a, 1461 a: emrin geliri (TL) ve gecikme cezası (günlük oran ve tavan, tutarın yüzdesi) siparişindendir; sayfada elle girilen gelir
+   ve günlük TL ceza (cezaGun) bunlara yer verir. l emir kimliğinden değerlere: listedeki emrin değeri yazılır (bilinmeyen null), listede
+   olmayan sipariş (sayfanın kendi denemesi) dokunulmaz. l null ise emirler okunamamıştır: önceki kayıttaki değer taşınmaz, alanlar boştur.
+   Alanı hiç taşımayan ek (eski çağıran) dokunmaz. */
+function tmiSiparisBedelleri(siparisler, l) {
+  const sayi = v => (v == null || !isFinite(+v) ? null : +v);
+  for (const s of siparisler) {
+    if (l && !Object.prototype.hasOwnProperty.call(l, s.id)) continue;
+    const x = l ? l[s.id] : null;
+    s.gelir = sayi(x && x.gelir); s.cezaOran = sayi(x && x.cezaOran); s.cezaTavan = sayi(x && x.cezaTavan); s.cezaGun = null;
   }
 }
 /* 561 1 b: TMI'de tezgâhın operatör oranı istasyonun plan ayarıdır (çalışan bir makinenin istediği operatör; "bir operatör en çok N

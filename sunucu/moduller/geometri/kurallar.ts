@@ -1,5 +1,7 @@
 // Geometri kuralları: saf hesap, veritabanı ve saat yok. Ölçüler mm.
 
+import { HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
+
 // Güvenilmeyen girdi sınırları (VARSAYIM, kart 1441; geri alma ucuz).
 export const DOSYA_EN_BUYUK_BAYT = 200 * 1024 * 1024;
 export const IS_SURE_SINIRI_MS = 120_000;
@@ -278,7 +280,75 @@ export function agOlcumu(aglar: readonly UcgenAgi[]): Olcum | null {
   };
 }
 
-// Ham önerisi: döndürülmüş kutunun her kenarına iki yüzün payı eklenir. Stok ölçüsüne yuvarlama Malzemeler'in listesi gelince (1433 a).
+// Ham önerisi: döndürülmüş kutunun her kenarına iki yüzün payı eklenir.
 export function enAzHam(obb: { a: number; b: number; c: number }, payMm: number): { a: number; b: number; c: number } {
   return { a: yuvarla(obb.a + 2 * payMm), b: yuvarla(obb.b + 2 * payMm), c: yuvarla(obb.c + 2 * payMm) };
+}
+
+// Stok ölçüsüne yuvarlama (1433 a): ölçü adları Malzemeler'in hammadde formlarındakiyle aynıdır (çubuk d,l; altıgen s,l; lama a,b,l;
+// levha t,w,l; blok a,b,h). Boru, profil ve disk parçanın yönüyle eşlenemediği için önerilmez.
+export const STOK_FORMLARI = HAM_STOK_FORMLARI;
+export type StokFormu = (typeof HAM_STOK_FORMLARI)[number];
+const FORM_OLCULERI: Record<StokFormu, readonly string[]> = { cubuk: ['d', 'l'], altigen: ['s', 'l'], lama: ['a', 'b', 'l'], levha: ['t', 'w', 'l'], blok: ['a', 'b', 'h'] };
+
+export interface StokAdayi { malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Readonly<Record<string, unknown>> }
+export interface StokOnerisi {
+  malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: StokFormu; olcu: Record<string, number>;
+  // Çubuk, altıgen, lama ve levhada kesilecek parça boyu (uzun eksen + pay); blokta null (blok bütün kullanılır).
+  kesimBoyuMm: number | null;
+  // Kullanılan ham parçanın hacmi; formlar arası sıra bununla (en az talaş önce).
+  hamHacimMm3: number;
+}
+
+const AYNI = 1e-9;
+const sigar = (x: number, gereken: number) => x + AYNI >= gereken;
+
+function olcuOku(form: StokFormu, ham: Readonly<Record<string, unknown>>): Record<string, number> | null {
+  const o: Record<string, number> = {};
+  for (const k of FORM_OLCULERI[form]) {
+    const v = ham[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return null;
+    o[k] = v;
+  }
+  return o;
+}
+
+// Ölçüsü eksik ya da sıfır olan aday önerilmez (uydurulmaz). Sığmayan aday yoksa boş liste.
+export function stokEslestir(
+  obb: { a: number; b: number; c: number; cap: number }, payMm: number, adaylar: readonly StokAdayi[],
+): StokOnerisi[] {
+  const L = obb.a + 2 * payMm, B = obb.b + 2 * payMm, C = obb.c + 2 * payMm, D = obb.cap + 2 * payMm;
+  const enIyi = new Map<StokFormu, StokOnerisi>();
+  for (const aday of adaylar) {
+    if (!(STOK_FORMLARI as readonly string[]).includes(aday.form)) continue;
+    const form = aday.form as StokFormu;
+    const o = olcuOku(form, aday.olcu);
+    if (o === null) continue;
+    let hacim: number | null = null;
+    let kesim: number | null = L;
+    if (form === 'cubuk') {
+      if (sigar(o['d']!, D) && sigar(o['l']!, L)) hacim = (Math.PI * o['d']! ** 2 / 4) * L;
+    } else if (form === 'altigen') {
+      // Altıgenin iç teğet dairesi anahtar ağzıdır: kapsayan daire buna sığmalı.
+      if (sigar(o['s']!, D) && sigar(o['l']!, L)) hacim = (Math.sqrt(3) / 2) * o['s']! ** 2 * L;
+    } else if (form === 'lama') {
+      const g = Math.max(o['a']!, o['b']!), k = Math.min(o['a']!, o['b']!);
+      if (sigar(g, B) && sigar(k, C) && sigar(o['l']!, L)) hacim = g * k * L;
+    } else if (form === 'levha') {
+      const u = Math.max(o['w']!, o['l']!), e = Math.min(o['w']!, o['l']!);
+      if (sigar(o['t']!, C) && sigar(u, L) && sigar(e, B)) hacim = o['t']! * L * B;
+    } else {
+      const s = [o['a']!, o['b']!, o['h']!].sort((x, y) => y - x);
+      kesim = null;
+      if (sigar(s[0]!, L) && sigar(s[1]!, B) && sigar(s[2]!, C)) hacim = s[0]! * s[1]! * s[2]!;
+    }
+    if (hacim === null) continue;
+    const onceki = enIyi.get(form);
+    if (onceki !== undefined && onceki.hamHacimMm3 <= hacim) continue;
+    enIyi.set(form, {
+      malzemeNo: aday.malzemeNo, kod: aday.kod, ad: aday.ad, kalite: aday.kalite, form, olcu: o,
+      kesimBoyuMm: kesim === null ? null : yuvarla(kesim), hamHacimMm3: yuvarla(hacim),
+    });
+  }
+  return [...enIyi.values()].sort((x, y) => x.hamHacimMm3 - y.hamHacimMm3);
 }

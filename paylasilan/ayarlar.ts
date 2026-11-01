@@ -2,6 +2,7 @@ import type { AyarTanimi, TurDegerleri } from './ayar-tanimi.ts';
 import { ARKON_AYARLARI } from './ayarlar/arkon.ts';
 import { KABUK_AYARLARI } from './ayarlar/kabuk.ts';
 import { ETIKET_MERKEZI_AYARLARI } from './ayarlar/etiket-merkezi.ts';
+import { GEOMETRI_AYARLARI } from './ayarlar/geometri.ts';
 import { GUVENLIK_AYARLARI } from './ayarlar/guvenlik.ts';
 import { IDARI_ISLER_AYARLARI } from './ayarlar/idari-isler.ts';
 import { IK_AYARLARI } from './ayarlar/ik.ts';
@@ -26,6 +27,7 @@ export const AYAR_TANIMLARI = {
   ...ARKON_AYARLARI,
   ...KABUK_AYARLARI,
   ...ETIKET_MERKEZI_AYARLARI,
+  ...GEOMETRI_AYARLARI,
   ...GUVENLIK_AYARLARI,
   ...IDARI_ISLER_AYARLARI,
   ...IK_AYARLARI,

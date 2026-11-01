@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { Worker } from 'node:worker_threads';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
+import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor-sinir.ts';
 
 // Ortak plan motoru (ADR 0018): planlama çerçevesine gömülen dosyaların aynısı sunucuda koşar. Motor tarayıcı nesnesi kullanmaz; boş
 // `vm` bağlamında yüklenir, sunucunun hiçbir nesnesini görmez. Uzun çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında koşar.
@@ -21,8 +22,7 @@ export function motorKodu(): string {
 
 // Motorun girdisi ve çıktısı çerçevedeki biçimdir (saat ekseni, işlem kimliği 'sipariş.adım'); alanları `motor/kisitlar.betik` sayar.
 export type MotorDurumu = Record<string, unknown>;
-export interface MotorYerlesimi { m: string; S: number; C: number; Su?: number; pin?: number; act?: number; done?: number; fas?: number }
-export interface MotorPlani { ops: Record<string, MotorYerlesimi>; fail?: unknown[] }
+export type { MotorPlani, MotorYerlesimi } from './motor-sinir.ts';
 export interface Motor {
   schedule: (st: MotorDurumu, kip: string, taban: MotorPlani | null, secenek?: Record<string, unknown>) => MotorPlani;
   compile: (st: MotorDurumu) => unknown;
@@ -62,6 +62,10 @@ parentPort.postMessage({ ops: p.ops, fail: p.fail || [] });
 let sira: Promise<unknown> = Promise.resolve();
 export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS): Promise<MotorPlani> {
   if (!SUNUCU_KIPLERI.includes(istek.kip)) return Promise.reject(new Error(`Plan motoru kipi geçersiz: ${String(istek.kip)}`));
+  try {
+    motorGirdisiDenetle(istek.durum);
+    if (istek.taban !== null) motorPlaniDenetle(istek.taban, 'taban');
+  } catch (e) { return Promise.reject(e as Error); }
   const is = sira.then(() => calistir(istek, sureMs));
   sira = is.catch(() => undefined);
   return is;
@@ -73,7 +77,9 @@ function calistir(istek: PlanIstegi, sureMs: number): Promise<MotorPlani> {
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
     const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Plan motoru ${String(sureMs)} ms içinde bitmedi.`))), sureMs);
-    isci.once('message', (p: MotorPlani) => sonlan(() => coz(p)));
+    isci.once('message', (p: unknown) => sonlan(() => {
+      try { coz(motorPlaniDenetle(p)); } catch (e) { reddet(e as Error); }
+    }));
     isci.once('error', (e) => sonlan(() => reddet(e)));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Plan motoru iş parçacığı ${String(kodu)} koduyla kapandı.`))));
   });

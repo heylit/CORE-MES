@@ -662,3 +662,10 @@ const FIRMA_SECENEK_SINIRI = 50;
 export async function olcuAletiSecenekleri(db: Db): Promise<OlcuAletiSecenekleriCevabi> {
   return { aletler: (await aletKimlikleri(db)).map((a) => ({ no: a.no, tur: a.tur, vade: a.vade, durum: a.durum })) };
 }
+
+// 1469 a: ham önerisinin stok listesi (aktif hammadde kartları, istenen formlarda). Yetki denetlemez.
+export type HammaddeStokOlcusu = Omit<s.HammaddeStokSatiri, 'no'> & { malzemeNo: number };
+export async function hammaddeStokOlculeri(db: Db, formlar: readonly string[], kalite: string | null = null): Promise<HammaddeStokOlcusu[]> {
+  if (formlar.length === 0) return [];
+  return (await s.hammaddeStokSatirlari(db, formlar, kalite)).map(({ no, ...r }) => ({ malzemeNo: no, ...r }));
+}

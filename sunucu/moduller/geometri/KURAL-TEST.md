@@ -9,7 +9,8 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Döndürülmüş kutu parçanın kendi ölçüsünü bulur | `G-K2` |
 | Açık ağda hacim null, sıfır uydurulmaz | `G-K3`; kısıt `geometri_analiz_kapali_hacim` |
 | Çok gövde: hacim toplanır, kutu kapsar; boş model analiz vermez | `G-K4` |
-| Ham: her kenara iki yüzün payı; stok ölçüsü listesi gelene kadar null + neden | `G-K5`, `G-A1`, `G-A2` |
+| Ham: her kenara iki yüzün payı; pay sorgudan, yoksa ayardan, o da yoksa 0 ve kaynak 'yok' | `G-K5`, `G-A1`, `G-A2` |
+| Stok önerisi (1469 a): aktif hammadde kartlarından her formda sığan en küçük; ölçüsü eksik kart ve boru/profil/disk önerilmez; sığan yoksa neden | `G-K9`, `G-A1` |
 | Biçim başlığı tutmayan dosya sürece gitmez | `G-K6` |
 | Kalıcı hata bir denemede biter; geçici hata 3 denemeye kadar, aynı turda yinelenmez | `G-K7`, `G-A2`, `G-A5` |
 | Süre aşımında süreç öldürülür ve yeniden açılır | `G-A5` |

@@ -26,7 +26,7 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, sorgu: geometriHamSorgusu, cevap: geometriHamCevabi,
-    isle: ({ db, parametre, sorgu }) => hamOnerisi(db, parametre.revizyonId, sorgu.payMm),
+    isle: ({ db, parametre, sorgu }) => hamOnerisi(db, parametre.revizyonId, sorgu),
   }),
   uc({
     yontem: 'POST', yol: '/geometri/analizler/:revizyonId/yeniden-hesapla', yetki: 'geometri.hesapla', tekrarKorumali: true,
