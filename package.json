@@ -33,7 +33,7 @@
     "geri-yukle": "node --import ./araclar/ortam-yukle-goc.ts araclar/yedek.ts geri-yukle",
     "geri-yukle-medya": "node --import ./araclar/ortam-yukle-goc.ts araclar/yedek.ts medya-geri-yukle",
     "ornek-veri": "node --import ./araclar/ortam-yukle.ts araclar/ornek-veri.ts",
-    "tip": "tsc -p sunucu && node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p istemci && tsc -p arkon/web && tsc -p arkon/web/tsconfig.core.json && tsc -p ekran-testleri",
+    "tip": "node node_modules/typescript7/bin/tsc -p sunucu --singleThreaded && node node_modules/typescript7/bin/tsc -p istemci --singleThreaded && node node_modules/typescript7/bin/tsc -p arkon/web --singleThreaded && node node_modules/typescript7/bin/tsc -p arkon/web/tsconfig.core.json --singleThreaded && node node_modules/typescript7/bin/tsc -p ekran-testleri --singleThreaded",
     "sinir": "node araclar/sinir-denetimi.ts",
     "harita": "node araclar/harita.ts",
     "dizin": "node araclar/harita.ts",
@@ -91,6 +91,7 @@
     "three-147": "npm:three@0.147.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.71.1",
+    "typescript7": "npm:typescript@7.0.2",
     "vite": "^6.0.0",
     "vitest": "^4.1.12"
   }
