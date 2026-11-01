@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  Yedek, YedekAlCevabi, YedekDiziniCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedeklerCevabi,
+  DosyaDeposuDurumu, Yedek, YedekAlani, YedekAlCevabi, YedekDiziniCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -24,6 +24,38 @@ const SUREN_YENILEME_MS = 3000;
 export function boyutMetni(bayt: number): string {
   if (bayt < 1024 * 1024) return `${(bayt / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} KB`;
   return `${(bayt / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} MB`;
+}
+
+// Yedek alanı ve depo GB ölçeğinde büyür; 1 GB altı liste boyutuyla aynı yazılır.
+export function alanMetni(bayt: number): string {
+  if (bayt < 1024 ** 3) return boyutMetni(bayt);
+  return `${(bayt / 1024 ** 3).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} GB`;
+}
+
+// Kart 1763: yedeğin ve dosya deposunun büyüyünce isteyeceği yer. Bilinmeyen değer yazılmaz, uydurulmaz.
+function YedekAlaniSatiri({ alan, depo }: { alan: YedekAlani | null; depo: DosyaDeposuDurumu }) {
+  const alanMetinleri = alan === null ? null : [
+    alan.gereken === null
+      ? 'Henüz yedek yok; gereken yer ilk yedekten sonra hesaplanır.'
+      : `Tahmini yedek alanı ${alanMetni(alan.gereken)} (son yedek ${alanMetni(alan.sonBoyut ?? 0)} × ${String(alan.adet)} yedek).`,
+    `Şimdiki yedekler ${alanMetni(alan.mevcut)}.`,
+    alan.bosYer === null ? 'Yedek diskinin boş yeri okunamadı.' : `Yedek diskinde boş ${alanMetni(alan.bosYer)}.`,
+  ].join(' ');
+  return (
+    <div className="tc-ayar">
+      <div className="tc-ayar-metin">
+        <p className="tc-ayar-baslik">
+          Yedek alanı
+          {alan?.yetmiyor === true && <>{' '}<Rozet ton="uyari">Yedek alanı yetmeyecek</Rozet></>}
+          {depo.uyari && <>{' '}<Rozet ton="uyari">Dosya deposu dolmak üzere</Rozet></>}
+        </p>
+        {alanMetinleri !== null && <p className="tc-ayar-aciklama">{alanMetinleri}</p>}
+        <p className="tc-ayar-aciklama">
+          {`Dosya deposu ${alanMetni(depo.bayt)} / ${alanMetni(depo.sinir)}. Dosyalar veritabanında durur ve her yedeğe girer; depo büyüdükçe yedek de büyür.`}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 // İndirme iki adımdır (145 a): önce izin komutu (denetim kaydına kişi ve yedek adıyla düşer), sonra tarayıcı dosyayı o izinle bir
@@ -150,6 +182,7 @@ export function Yedekler() {
               </Dugme>
             </div>
           </div>
+          <YedekAlaniSatiri alan={veri.alan} depo={veri.dosyaDeposu} />
           <KlasorSecimi dizin={veri.dizin} kaynak={veri.kaynak} />
           <Tablo etiket="Veritabanı yedekleri" sutunlar={SUTUNLAR} satirlar={veri.yedekler} satirAnahtari={(y) => y.ad} bosMesaj="Yedek yok." />
         </>

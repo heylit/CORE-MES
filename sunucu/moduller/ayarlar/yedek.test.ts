@@ -12,12 +12,14 @@ import type { YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { DOSYA_SINIRI } from '../dosya/disari.ts';
 import {
-  YEDEK_EN_AZ_BOS_BAYT, YEDEK_EN_AZ_KALAN, YEDEK_SAKLAMA_GUN, geceYedegiGerekliMi, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
+  DOSYA_DEPOSU_UYARI_ORANI, YEDEK_EN_AZ_BOS_BAYT, YEDEK_EN_AZ_KALAN, YEDEK_SAKLAMA_GUN, YEDEK_SAKLANAN_ADET, dosyaDeposuHesapla, yedekAlaniHesapla,
+  geceYedegiGerekliMi, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
   yedekYeriEksigi, type YedekDosyasi,
 } from './kurallar.ts';
 import {
-  geceYedegiTuru, surenYedek, windowsPgDump, yedekAl, yedekleriListele, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz,
+  geceYedegiTuru, surenYedek, windowsPgDump, yedekAl, yedekEkrani, yedekleriListele, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz,
   type PgDumpArama, type YedekOrtami,
 } from './yedek.ts';
 
@@ -100,6 +102,37 @@ describe('ayarlar yedek kuralları (saf)', () => {
     assert.deepEqual(silinecekYedekler([enEski, eski, dahaEski, dosya('gece', '2026-08-01T00:00:00Z')], simdi).map((y) => y.ad), [
       dosya('gece', '2026-08-01T00:00:00Z').ad,
     ]);
+  });
+});
+
+describe('ayarlar yedek alanı ve dosya deposu (saf, kart 1763)', () => {
+  const GB = 1024 ** 3;
+
+  test('saklamada aynı anda 14 + 1 gece yedeği durur; gereken yer son yedeğin o kadar katı', () => {
+    assert.equal(YEDEK_SAKLANAN_ADET, YEDEK_SAKLAMA_GUN + 1);
+    assert.deepEqual(yedekAlaniHesapla({ sonBoyut: 2 * GB, mevcut: 10 * GB, bosYer: 20 * GB }), {
+      sonBoyut: 2 * GB, adet: YEDEK_SAKLANAN_ADET, gereken: 30 * GB, mevcut: 10 * GB, bosYer: 20 * GB, yetmiyor: false,
+    });
+  });
+
+  test('boş yer artı mevcut yedekler gerekenden azsa yetmiyor; tam eşitse yeter', () => {
+    assert.equal(yedekAlaniHesapla({ sonBoyut: 2 * GB, mevcut: 10 * GB, bosYer: 20 * GB - 1 }).yetmiyor, true);
+    assert.equal(yedekAlaniHesapla({ sonBoyut: 2 * GB, mevcut: 0, bosYer: 30 * GB }).yetmiyor, false);
+  });
+
+  test('son yedek yoksa gereken bilinmez, boş yer okunamadıysa karşılaştırılmaz: ikisinde de uyarı uydurulmaz', () => {
+    assert.deepEqual(yedekAlaniHesapla({ sonBoyut: null, mevcut: 0, bosYer: 0 }), {
+      sonBoyut: null, adet: YEDEK_SAKLANAN_ADET, gereken: null, mevcut: 0, bosYer: 0, yetmiyor: false,
+    });
+    assert.equal(yedekAlaniHesapla({ sonBoyut: 100 * GB, mevcut: 0, bosYer: null }).yetmiyor, false);
+  });
+
+  test(`dosya deposu sınırın yüzde ${String(DOSYA_DEPOSU_UYARI_ORANI * 100)}'ine gelince uyarır, altında uyarmaz`, () => {
+    const sinir = DOSYA_SINIRI.depoBayt;
+    assert.equal(sinir, 50 * GB);
+    assert.deepEqual(dosyaDeposuHesapla(40 * GB, sinir), { bayt: 40 * GB, sinir, uyari: true });
+    assert.equal(dosyaDeposuHesapla(40 * GB - 1, sinir).uyari, false);
+    assert.equal(dosyaDeposuHesapla(0, sinir).uyari, false);
   });
 });
 
@@ -306,6 +339,24 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
       { ad: eski, tur: 'gece', zaman: '2026-10-12T23:00:00.000Z', boyut: 3 },
     ]);
     assert.equal(cevap.suruyor, null);
+    // Kart 1763: gereken yer en yeni yedeğin boyundan, mevcut bütün yedeklerin toplamından; depo boş test veritabanından.
+    assert.equal(cevap.alan?.sonBoyut, 6);
+    assert.equal(cevap.alan.gereken, 6 * YEDEK_SAKLANAN_ADET);
+    assert.equal(cevap.alan.mevcut, 9);
+    assert.equal(typeof cevap.alan.bosYer, 'number');
+    assert.deepEqual(cevap.dosyaDeposu, { bayt: 0, sinir: DOSYA_SINIRI.depoBayt, uyari: false });
+  });
+
+  test('yedek alanı boş yer yetmezse uyarır; klasör yoksa yer tahmini yoktur, dosya deposu yine verilir', async () => {
+    await writeFile(path.join(dizin, yedekAdi(VT, 'gece', new Date('2026-10-13T23:00:00Z'))), 'x'.repeat(100));
+    const yetmeyen = await vt().tx((db) => yedekEkrani(db, yedekOrtami(), () => Promise.resolve(100 * YEDEK_SAKLANAN_ADET - 101)));
+    assert.equal(yetmeyen.alan?.yetmiyor, true);
+    const yeten = await vt().tx((db) => yedekEkrani(db, yedekOrtami(), () => Promise.resolve(100 * YEDEK_SAKLANAN_ADET - 100)));
+    assert.equal(yeten.alan?.yetmiyor, false);
+    const kapali = await vt().tx((db) => yedekEkrani(db, yedekOrtami(path.join(dizin, 'yok'))));
+    assert.equal(kapali.durum, 'dizin-yok');
+    assert.equal(kapali.alan, null);
+    assert.equal(kapali.dosyaDeposu.sinir, DOSYA_SINIRI.depoBayt);
   });
 
   test('indirme dosyanın kendisini ek olarak verir; bozuk ad 400, başka veritabanının ya da olmayan yedek 404', async () => {

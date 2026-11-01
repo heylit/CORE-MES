@@ -10,7 +10,7 @@ import {
   ayarDegistir, ayarlariListele, girisLogosuOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
-import { elleYedekBaslat, indirmeIzniVer, yedekIndir, yedekleriListele } from './yedek.ts';
+import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
 
 export const uclar = [
   uc({
@@ -151,7 +151,7 @@ export const uclar = [
     yol: '/yedekler',
     yetki: 'ayarlar.yedek-indir',
     cevap: yedeklerCevabi,
-    isle: async ({ db }) => yedekleriListele(await yedekOrtaminiKur(db)),
+    isle: async ({ db }) => yedekEkrani(db, await yedekOrtaminiKur(db)),
   }),
   uc({
     yontem: 'POST',

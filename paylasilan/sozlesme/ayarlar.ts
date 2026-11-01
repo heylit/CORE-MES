@@ -266,7 +266,7 @@ export const yedekDiziniGovdesi = z.object({
 export const yedekDiziniCevabi = z.object({ dizin: z.string().nullable(), kaynak: z.enum(YEDEK_DIZINI_KAYNAKLARI).nullable() });
 // durum: acik ya da neden kapalı olduğu. Kapalı durumda liste boştur; yedek alınmaz.
 export const YEDEK_DURUMLARI = ['acik', 'dizin-yok', 'anahtar-yok'] as const;
-export const yedeklerCevabi = z.object({
+export const yedekListesi = z.object({
   durum: z.enum(YEDEK_DURUMLARI),
   // Gece yedeğinin tesis saati ve saklama kuralı; ekran bunları açıklamada yazar.
   saat: z.number().int(),
@@ -281,11 +281,31 @@ export const yedeklerCevabi = z.object({
   dizin: z.string().nullable(),
   kaynak: z.enum(YEDEK_DIZINI_KAYNAKLARI).nullable(),
 });
+// Yedeğin büyüyen veritabanıyla isteyeceği yer (kart 1763). Gereken: son yedeğin boyu çarpı saklamada aynı anda duran yedek sayısı;
+// mevcut yedekler döndükçe yerini bıraktığı için karşılaştırma boş yer artı mevcut toplamla yapılır. Bilinmeyen değer null'dır.
+export const yedekAlani = z.object({
+  sonBoyut: z.number().int().nonnegative().nullable(),
+  adet: z.number().int().positive(),
+  gereken: z.number().int().nonnegative().nullable(),
+  mevcut: z.number().int().nonnegative(),
+  bosYer: z.number().int().nonnegative().nullable(),
+  yetmiyor: z.boolean(),
+});
+// Ortak dosya deposu veritabanında durur ve her gece yedeğine girer: dolduğunda yedek de o kadar büyür.
+export const dosyaDeposuDurumu = z.object({
+  bayt: z.number().int().nonnegative(),
+  sinir: z.number().int().positive(),
+  uyari: z.boolean(),
+});
+export const yedeklerCevabi = yedekListesi.extend({ alan: yedekAlani.nullable(), dosyaDeposu: dosyaDeposuDurumu });
 export const yedekAlCevabi = z.object({ baslangic: zamanSemasi });
 
 export type YedekTuru = (typeof YEDEK_TURLERI)[number];
 export type YedekDurumu = (typeof YEDEK_DURUMLARI)[number];
 export type Yedek = z.output<typeof yedekSemasi>;
+export type YedekListesi = z.output<typeof yedekListesi>;
+export type YedekAlani = z.output<typeof yedekAlani>;
+export type DosyaDeposuDurumu = z.output<typeof dosyaDeposuDurumu>;
 export type YedeklerCevabi = z.output<typeof yedeklerCevabi>;
 export type YedekAlCevabi = z.output<typeof yedekAlCevabi>;
 export type YedekIndirmeIzniCevabi = z.output<typeof yedekIndirmeIzniCevabi>;

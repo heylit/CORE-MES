@@ -8,12 +8,14 @@ import type { Yedek, YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
-import { boyutMetni } from './Yedekler.tsx';
+import { alanMetni, boyutMetni } from './Yedekler.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
 const YEDEK: Yedek = { ad: 'tmiv2-20261013T230000Z-gece.dump', tur: 'gece', zaman: '2026-10-13T23:00:00.000Z', boyut: 5 * 1024 * 1024 };
 const ACIK: YedeklerCevabi = {
   durum: 'acik', dizin: 'D:\\TMIV2-YEDEK', kaynak: 'ortam', saat: 2, saklamaGun: 14, enAzKalan: 3, suruyor: null, sonHata: null, yedekler: [YEDEK],
+  alan: { sonBoyut: YEDEK.boyut, adet: 15, gereken: 15 * YEDEK.boyut, mevcut: YEDEK.boyut, bosYer: 10 * 1024 ** 3, yetmiyor: false },
+  dosyaDeposu: { bayt: 2 * 1024 ** 3, sinir: 50 * 1024 ** 3, uyari: false },
 };
 const CAKISMA = { kod: 'CAKISMA', mesaj: 'Bir yedek zaten alınıyor; bitince yeniden deneyin.' } satisfies HataGovdesi;
 
@@ -141,6 +143,44 @@ describe('Sistem Ayarları, yedekler', () => {
     fireEvent.click(screen.getByRole('button', { name: /Sunucu ayarına dön/ }));
     expect(await screen.findByText('Yedek klasörü kaydedildi.')).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde)).toEqual([{ dizin: null }]);
+  });
+
+  it('yedek alanı tahmini, boş yer ve dosya deposu yazılır; yetmeyen alan ve dolan depo uyarılır', async () => {
+    sunucuKur(ACIK);
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText(/Tahmini yedek alanı 75 MB \(son yedek 5 MB × 15 yedek\)\. Şimdiki yedekler 5 MB\. Yedek diskinde boş 10 GB\./)).toBeTruthy();
+    expect(screen.getByText(/Dosya deposu 2 GB \/ 50 GB/)).toBeTruthy();
+    expect(screen.queryByText('Yedek alanı yetmeyecek')).toBeNull();
+    expect(screen.queryByText('Dosya deposu dolmak üzere')).toBeNull();
+    cleanup();
+    sunucuKur({
+      ...ACIK,
+      alan: { sonBoyut: null, adet: 15, gereken: null, mevcut: 0, bosYer: null, yetmiyor: false },
+      dosyaDeposu: { bayt: 41 * 1024 ** 3, sinir: 50 * 1024 ** 3, uyari: true },
+      yedekler: [],
+    });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText(/Henüz yedek yok; gereken yer ilk yedekten sonra hesaplanır\..*boş yeri okunamadı/)).toBeTruthy();
+    expect(screen.getByText('Dosya deposu dolmak üzere')).toBeTruthy();
+    cleanup();
+    sunucuKur({ ...ACIK, alan: { ...ACIK.alan!, yetmiyor: true } });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('Yedek alanı yetmeyecek')).toBeTruthy();
+    cleanup();
+    // Yedek kapalıyken yer tahmini yoktur; depo yine yazılır.
+    sunucuKur({ ...ACIK, durum: 'dizin-yok', dizin: null, kaynak: null, yedekler: [], alan: null });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText(/Dosya deposu 2 GB/)).toBeTruthy();
+    expect(screen.queryByText(/Tahmini yedek alanı/)).toBeNull();
+  });
+
+  it('alan 1 GB altında boyut gibi, üstünde GB olarak yazılır', () => {
+    expect(alanMetni(5 * 1024 * 1024)).toBe('5 MB');
+    expect(alanMetni(1.5 * 1024 ** 3)).toBe('1,5 GB');
   });
 
   it('boyut KB altında ve MB olarak okunur yazılır', () => {
