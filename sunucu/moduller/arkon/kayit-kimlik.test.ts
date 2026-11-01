@@ -31,10 +31,6 @@ describe('arkon kayıt kimlikleri (gerçek PostgreSQL)', () => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam.vt;
   };
-  const sahip = (): TestVeritabani['sahip'] => {
-    if (!ortam) throw new Error('Test veritabanı açılamadı.');
-    return ortam.sahip;
-  };
 
   async function istek(cerez: string, yontem: 'GET' | 'POST', yol: string, govde?: unknown) {
     const cevap = await app.inject({

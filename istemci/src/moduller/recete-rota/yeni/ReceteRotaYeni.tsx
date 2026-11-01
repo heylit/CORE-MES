@@ -4,7 +4,6 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
 import { useCerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
-import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { EmirProjeSecimi } from '../EmirProjeSecimi.tsx';
@@ -76,7 +75,6 @@ interface Secim { secenekler: AcilisSecenekleri; coz: (s: EmirSecimi | null) => 
 // bugünkü ekrandaki pencereyle sorulur.
 function VeriSaglayici() {
   const oturum = useOturum();
-  const yetki = useYetki();
   const [motorOkunamadi, setMotorOkunamadi] = useState(false);
   const [planVerisiEksik, setPlanVerisiEksik] = useState(false);
   const [secim, setSecim] = useState<Secim | null>(null);

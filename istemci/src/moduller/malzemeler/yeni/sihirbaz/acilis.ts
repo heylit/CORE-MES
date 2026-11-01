@@ -1,7 +1,7 @@
 import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
-import type { KartKaydi, KatalogKarti, Sablon } from '../tipler.ts';
+import type { KatalogKarti, Sablon } from '../tipler.ts';
 import { kopyala, type Taslak } from './durum.ts';
 import type { SablonAlanlari } from './turler.ts';
 

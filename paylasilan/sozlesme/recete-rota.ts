@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { HATA_KODLARI } from '../hata.ts';
 import { ILK_PARCA_SECIMLERI } from './rota.ts';
-import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { zamanSemasi } from '../zaman.ts';
 
 // Reçete ve Rota Motoru prototipi TMI içinde değiştirilmeden çalışır. Prototip durumunu tarayıcının yerel deposunda tutar (ana
 // durum, plan stüdyosu senaryoları, operatör ve menü tercihleri); çerçevedeki köprü bu depoyu TMI'ye bağlar: anahtar başına bir

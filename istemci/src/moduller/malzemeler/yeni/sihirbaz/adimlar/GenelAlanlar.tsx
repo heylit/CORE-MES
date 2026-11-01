@@ -4,7 +4,7 @@ import * as S from '../../sabitler/index.ts';
 import { useSihirbaz } from '../baglam.ts';
 import type { Taslak } from '../durum.ts';
 import { girdiler } from '../turler.ts';
-import type { Alan, Kategori, TakvimKaydi } from '../../kurallar/index.ts';
+import type { Alan, Kategori } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { ResimAlani } from '../../ortak/ResimAlani.tsx';
 import { Alanlar, Cip, CipGrubu, CokSatirAlani, MetinAlani, SecenekGrubu, Yardim } from '../parcalar.tsx';

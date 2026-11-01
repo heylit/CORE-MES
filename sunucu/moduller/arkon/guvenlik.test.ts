@@ -8,7 +8,7 @@ import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { ArkonDeposu, ArkonRolu, BelgeCevabi, BelgeYazCevabi } from '#paylasilan/sozlesme/arkon.ts';
+import type { ArkonRolu, BelgeCevabi, BelgeYazCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';

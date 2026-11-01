@@ -388,15 +388,10 @@ export interface GsimAyari {
   compare: boolean;
   [alan: string]: unknown;
 }
-const GSIM_DEF: GsimAyari = {
-  rapid: 30000, dialect: 'auto', lathe: false, removal: true, showRapid: true, follow: false, speed: 'auto', stockSrc: 'blk', hamOrigin: 'tlf',
-  showPart: true, compare: true,
-};
 // Programdaki takım numarası → kütüphane kalemi ya da elle çap (program adı başına).
 export type GTakimEslesmesi = Record<string, { id?: string; d?: number }>;
 export interface GsimMetni { name: string; text: string }
 
-const nesneMi = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object';
 
 // Açılış varsayılanları durum kurulurken uygulanır (durum.ts acilisVarsayimlari); burada yalnız tipli okunur.
 export function gsimHazirla(): GsimAyari { return state['gsimOpt'] as GsimAyari; }

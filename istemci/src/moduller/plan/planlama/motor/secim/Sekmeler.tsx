@@ -4,7 +4,7 @@ import { Dg } from '../cizelge/Dugme.tsx';
 import { durusOku } from '../harita/kurallar.ts';
 import { saatYaz } from '../kurallar.ts';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from '../ortak.tsx';
-import { isoYerel, rotaAdimlari, tezgahYazi } from './kurallar.ts';
+import { isoYerel, rotaAdimlari } from './kurallar.ts';
 import type { Ozellikler } from './SecimPaneli.tsx';
 
 // Rota sekmesi (za-merkez mzRota): siparişin adımları rota sırasıyla, her adımda yapabilen tezgâhlar. Adımı başka tezgâha taşımak motorla

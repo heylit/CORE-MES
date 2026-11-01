@@ -4,11 +4,11 @@ import { _xlBos } from './excel.ts';
 import { _asc } from './kod-yapisi.ts';
 import { _gImza, _kim, _nm, benzerKartlar, onayDurum } from './onay.ts';
 import { stokOzeti__4 } from './operasyon.ts';
-import { C, F, grade, newDraft } from './taslak.ts';
+import { grade, newDraft } from './taslak.ts';
 import { _katalog, hzImza } from './turler.ts';
 import { clsKeyFor } from './uyumluluk.ts';
 import { clone, isNum, tlc } from './yardimcilar.ts';
-import type { Kisi, OnayBilgisi } from '../../tipler.ts';
+import type { OnayBilgisi } from '../../tipler.ts';
 import type { BenzerKart } from './onay.ts';
 import type { Olcu, Sozluk, Taslak } from './tipler.ts';
 

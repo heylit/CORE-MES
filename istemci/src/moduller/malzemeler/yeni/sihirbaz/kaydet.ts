@@ -6,7 +6,6 @@ import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi } from '../veri.ts';
 import type { SihirbazAdimi } from './AdimCubugu.tsx';
 import type { Sihirbaz } from './baglam.ts';
 import { kopyala, RECETE_KAYNAGI, receteKaynagi, type Taslak } from './durum.ts';
-import type { BenzerKart } from '../kurallar/index.ts';
 
 // Prototipteki yeni kimlik biçimi ('m' kart, 't' şablon): sunucu kendi kimliğini dönerse o geçerlidir.
 export function yeniKimlik(on: string, ek = ''): string {

@@ -11,7 +11,7 @@ import { ekipKimlikleri } from '../rol.ts';
 import type { Personel } from '../tipler.ts';
 import {
   izinGunuMetni,
-  bekleyenTalepler, bugunIzinde, calisiyorMu, denemede, kisininIzinleri, performansEtiketi, performansOrtalamasi, sayi, sonPerformans,
+  bekleyenTalepler, bugunIzinde, calisiyorMu, denemede, kisininIzinleri, performansEtiketi, performansOrtalamasi, sonPerformans,
   sonrakiIzin, sayiMetni,
 } from './kurallar.ts';
 import {

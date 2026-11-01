@@ -3,7 +3,7 @@ import * as K from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { Taslak } from './durum.ts';
-import type { TurAdimi, UyumSorunu } from '../kurallar/index.ts';
+import type { TurAdimi } from '../kurallar/index.ts';
 
 export interface SihirbazAdimi {
   ad: string;

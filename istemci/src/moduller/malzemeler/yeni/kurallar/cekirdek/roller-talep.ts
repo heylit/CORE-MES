@@ -1,13 +1,12 @@
 import type { DegisiklikTalebi } from '../../tipler.ts';
 import type { Taslak } from './tipler.ts';
 import type { OperasyonListesi, StokOzeti } from './operasyon.ts';
-import { AYAR, GA, ROLLER, Roller, YETKI, _sahip, myUid } from './durum.ts';
+import { AYAR, ROLLER, Roller, YETKI, _sahip, myUid } from './durum.ts';
 import { stokOzeti__5 } from './hizli-arama.ts';
 import { kodlariSabitle } from './kod-yapisi.ts';
 import { _kim, _nm } from './onay.ts';
 import { Host } from './ortam.ts';
 import { _katalog, birimFarki, diffItems, withRev } from './turler.ts';
-import { A } from './uyumluluk.ts';
 import { clone } from './yardimcilar.ts';
 
 export function aktifRol(): string {

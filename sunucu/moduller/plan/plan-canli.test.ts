@@ -11,7 +11,7 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 import { anSabit } from './plan-saat.test.ts';
 
 describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
-  const { c, vt, istek, tamam, yeniAdim, ayrinti, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
   // gönderilmez.
   const gonder = async (id: number, surum: number, sahip = c.planlama) => {

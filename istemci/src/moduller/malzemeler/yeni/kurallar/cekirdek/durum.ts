@@ -16,7 +16,7 @@ import { Host, localStorage, toast } from './ortam.ts';
 import { aktifRol, opFarkOzeti, stokOzeti } from './roller-talep.ts';
 import { _hmMi } from './suzgecler.ts';
 import { G } from './tanimlar.ts';
-import { C, clsOfGrade, grade, newDraft, uygulanmayanZorunlu } from './taslak.ts';
+import { clsOfGrade, grade, newDraft, uygulanmayanZorunlu } from './taslak.ts';
 import { dbKat, finalBirim } from './turler.ts';
 import { A, SET, clsKeyFor, has, inF } from './uyumluluk.ts';
 import { clone, isNum } from './yardimcilar.ts';

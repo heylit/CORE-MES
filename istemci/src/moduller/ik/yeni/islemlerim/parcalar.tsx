@@ -5,7 +5,6 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { ApiHatasi, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { adSoyad, basHarfler, YOK } from '../bicim.ts';
-import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import type { IkMotoru, IzinBakiyesi } from '../motor.ts';
 import { ayKaydir } from '../ortak/AySecici.tsx';
 import type { Departman, Personel } from '../tipler.ts';

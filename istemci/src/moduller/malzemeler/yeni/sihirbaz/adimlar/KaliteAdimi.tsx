@@ -32,7 +32,7 @@ function KaliteSatiri({ fam, cls, g, nerede }: { fam: string; cls: string; g: Ka
 }
 
 function OzelSatir() {
-  const { taslak: d, b, kaliteSec } = useSihirbaz();
+  const { taslak: d, kaliteSec } = useSihirbaz();
   return (
     <button type="button" className="tc-my-kalite tc-my-kalite-ozel" aria-pressed={d.grade === '__ozel'} onClick={() => { kaliteSec(d.fam ?? '', null, '__ozel'); }}>
       <b>+ Özel kalite tanımla</b>
@@ -112,7 +112,6 @@ function StandartKutusu() {
   );
 }
 
-interface Muadil { sinif: string; kod: string; ad: string; tip: string; not?: string }
 
 // Prototipte `muadilBoxHTML`.
 function MuadilKutusu() {

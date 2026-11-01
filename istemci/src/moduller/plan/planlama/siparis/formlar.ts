@@ -1,7 +1,7 @@
 import type { CalismaKomutu } from '../kayit.ts';
 import type { SihirbazDegeri, SihirbazTanimi } from '../ortak/sade/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { fasonTerminiYaz, gunYaz, sayi, tarihGirdisi, tl, urunAdi, type FasonSatiri } from './kurallar.ts';
+import { fasonTerminiYaz, gunYaz, tarihGirdisi, type FasonSatiri } from './kurallar.ts';
 
 // P2'nin "Veri gir" sihirbazı (zz25-sade-takvim SADE.terminler fason). Çizimi ortak sade kabuğu
 // yapar; açılımdan sipariş ya da iş dolu açılır. Yazma yalnız komut.degistir ile; termin ve öncelik sahibinindir, burada form yoktur (222 a);

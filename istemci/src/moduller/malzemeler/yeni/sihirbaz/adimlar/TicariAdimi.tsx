@@ -6,7 +6,6 @@ import type { Firma } from '../../tipler.ts';
 import { firmaAra } from '../../veri.ts';
 import { useSihirbaz } from '../baglam.ts';
 import { Alanlar, Cip, CipGrubu, CokSatirAlani, MetinAlani, SecenekGrubu, SecimAlani } from '../parcalar.tsx';
-import type { RotaAdimi } from '../../kurallar/index.ts';
 import { GenelSecim } from './GenelAlanlar.tsx';
 
 // Kodu sunucu verir (önek + sıra, #234 madde 10): alan salt okunurdur, "Otomatik" düğmesi yoktur.

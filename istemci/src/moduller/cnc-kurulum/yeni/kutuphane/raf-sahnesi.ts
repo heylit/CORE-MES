@@ -8,7 +8,7 @@ import { clamp, upTR } from '../bicim.ts';
 import { invKey, stockOf } from '../secici.ts';
 import { rafRengi, type Kalem, type Raf } from './raf.ts';
 
-const { build, dispose, fit, isLatheTool } = CNC3D;
+const { build, fit, isLatheTool } = CNC3D;
 
 const PI = Math.PI;
 export const LSP = 2.3;

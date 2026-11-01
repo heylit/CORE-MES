@@ -3,7 +3,7 @@ import { varsayilanlariUygula } from './hizli-arama.ts';
 import { _asc, alanZorunlu, finalAc, teknikKod } from './kod-yapisi.ts';
 import { _nm, benzerKartlar, onayDurum } from './onay.ts';
 import { opBul, opListe, rota } from './operasyon.ts';
-import { C, F, dimsErr, finalAd, grade, newDraft } from './taslak.ts';
+import { dimsErr, finalAd, grade, newDraft } from './taslak.ts';
 import type { Alan, Kalite, Kategori, Sinif, Sozluk, Taslak } from './tipler.ts';
 import { _katalog, birimFarki, diffItems, finalBirim, gEksik, gStepOk, gtinGecerli, turAdimlari } from './turler.ts';
 import { clsKeyFor } from './uyumluluk.ts';

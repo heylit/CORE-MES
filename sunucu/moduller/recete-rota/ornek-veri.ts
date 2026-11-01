@@ -2,7 +2,6 @@
 // İstasyonlar, Malzemeler, Rota ve Üretim emirleri örneklerinin kimlikleriyle gelir. Ekran kaydı açılışta sahiplerinden aynı biçimde
 // okur; planlama sayfası rotayı ve emri kayıttan okuduğu için kimlikler tesisle (istasyon, makine) eşleşmek zorundadır. Tezgâh, kişi
 // ve takvim kayda yazılmaz (bagliDilimleriAyikla). Gerçek ürün, müşteri ya da kişi adı yoktur.
-import type { Db } from '#cekirdek/db.ts';
 import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';

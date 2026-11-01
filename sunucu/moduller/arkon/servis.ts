@@ -17,7 +17,7 @@ import type {
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { AZAMI_DOSYA, DOSYA_PARCASI } from '#paylasilan/sozlesme/arkon.ts';
+import { AZAMI_DOSYA } from '#paylasilan/sozlesme/arkon.ts';
 import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
@@ -65,7 +65,6 @@ import {
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
   donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
   emekVerimi, mesaiSaniyesi,
-  DOSYA_IMZA_BAYTI, dosyaTuruBul,
 } from './kurallar.ts';
 import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, RotaAnahtari, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
 import type { ArkonDurumu, BelgeEylemi, DurusKimlikleri, DurusKodlari, GunlukSatiri, KatilimDurumu, KatilimYolu, KayitSutunlari, Konum, KonumKimlikleri, NumuneTeslimGirdisi, StokIstegiGirdisi, TmiAyari, YansimaKarari } from './kurallar.ts';
@@ -2258,7 +2257,6 @@ export const anomaliEsikleri = async (db: Db): Promise<AnomaliEsikleri> => ({
   adetToleransYuzde: await sistemAyariOku(db, 'arkon.anomali-adet-tolerans-yuzde'),
 });
 
-const GUN_MS = 24 * 3_600_000;
 const yuvarla = (x: number): number => Math.round(x * 100) / 100;
 const yuvarlaVeyaBos = (x: number | null): number | null => (x === null ? null : yuvarla(x));
 const kesinToplam = (parcalar: readonly (number | null)[]): number | null => kesinBeklenen(beklenenTopla(parcalar));
@@ -2856,7 +2854,6 @@ export async function operatorOzeti(
   const { cevap: anomali } = await anomaliHesapla(db, kapsam, await anomaliEsikleri(db), simdi, undefined, hesapKisileri);
   const oran = (k: AnomaliKisiSatiri): number | null => (k.beklenen === null || k.beklenen <= 0 || k.uretilen === null ? null : k.uretilen / k.beklenen);
   const kendi = anomali.kisiler.find((k) => k.kisiId === kisiId);
-  const kendiOrani = kendi === undefined ? null : oran(kendi);
   const ekipOranlari = anomali.kisiler.filter((k) => k.kisiId === kisiId || kesisirMi(merkezleri.get(k.kisiId), ekibim)).map(oran).filter((o): o is number => o !== null);
 
   // Son 7 gün, dönem ve rozet için bu ay: kayıtsız gün boş kalır.

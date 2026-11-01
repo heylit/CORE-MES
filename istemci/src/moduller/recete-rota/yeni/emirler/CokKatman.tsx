@@ -12,8 +12,6 @@ import { cokKatmanOzeti, stoktanCikar } from './kurallar.ts';
 // parça için "bu emirde üret" ya da "stoktan" seçilir (1483 a). Varsayılan kapalı ve bütün alt parçalar üretilir; stok yalnız bilgidir,
 // kendiliğinden seçim yapılmaz. Kural, numara ve ret sahibinin (rota) ucundadır.
 
-type Dugum = PatlatmaOnizlemeCevabi['dugumler'][number];
-
 const ustYol = (dugum: string): string => dugum.split('.').slice(0, -1).join('.');
 
 export interface CokKatmanSecimi { acik: boolean; stoktan: ReadonlySet<string> }

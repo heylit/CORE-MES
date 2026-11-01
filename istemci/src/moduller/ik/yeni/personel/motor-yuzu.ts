@@ -1,5 +1,4 @@
 import type { IkMotoru, Prim, Tesvik } from '../motor.ts';
-import type { Personel } from '../tipler.ts';
 
 // P1'in motordan okuduğu kısa yollar; tipler motor.ts'ten gelir.
 export type { Prim, Tesvik };

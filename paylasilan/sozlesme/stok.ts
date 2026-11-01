@@ -52,7 +52,6 @@ const MIKTAR = /^\d{1,11}(\.\d{1,3})?$/;
 export const miktarSemasi = z.string().trim().regex(MIKTAR, 'Miktar en çok üç ondalıklı bir sayı olmalı (örnek: 12.5).')
   .refine((v) => /[1-9]/.test(v), 'Miktar sıfırdan büyük olmalı.');
 export const sifirOlabilirMiktar = z.string().trim().regex(MIKTAR, 'Miktar en çok üç ondalıklı bir sayı olmalı (örnek: 12.5).');
-const kisaMetin = (en: number) => z.string().trim().min(1).max(en);
 const bosOlabilir = (en: number) => z.string().trim().max(en).transform((v) => (v === '' ? null : v)).nullable().optional();
 const KOD = /^[A-Z0-9-]{2,20}$/;
 const olcuM = z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, 'Ölçü metre olarak, en çok iki ondalıkla yazılır.')

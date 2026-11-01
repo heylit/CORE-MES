@@ -379,7 +379,7 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   }, 40000);
 
   it('kart dışı kod ve bu istasyonun olmayan kart işi açmaz, söyler (reddedilen)', async () => {
-    const istekler = kur();
+    kur();
     arkonAc('/uretim-terminali');
     await ekran();
     await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });

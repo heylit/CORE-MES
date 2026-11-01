@@ -562,11 +562,6 @@ export function terminAyari(D: PlanVerisi): TerminAyari {
 }
 
 // Malzeme kendi katsayısını taşırsa genelin yerine o kullanılır (zv-termin tmKat).
-function terminKatsayisi(m: Malzeme | undefined, k: 'terminKat' | 'terminEk', genel: number): number {
-  const v = m?.[k];
-  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
-  return typeof n === 'number' && Number.isFinite(n) ? n : genel;
-}
 
 // Sayfanın şimdisi (girdi.betik simdiUygula): çalışmanın kaydettiği şimdi, yoksa başlangıç günü 07:00 (741 a: 07:00'den önce de olur). Bütün
 // planlama görünümleri aynı şimdiyi kullanır; ortak yeri iskelettir (oraya taşınacak).

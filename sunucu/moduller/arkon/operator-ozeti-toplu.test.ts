@@ -124,11 +124,8 @@ describe('arkon operatör özeti toplu okuma (gerçek PostgreSQL)', () => {
     `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, zaman)
      VALUES ($1, $2, $3, 'saglam', $4, to_timestamp($5::double precision / 1000))`, [emirId, kisiId, istasyonId, adet, gunBasi + saat * SAAT]);
 
-  const ozet = async (cerez: string | null, sorgu = ''): Promise<Cevap<OperatorOzetiCevabi>> => istek<OperatorOzetiCevabi>(cerez, 'GET', `/arkon/operator-ozeti${sorgu}`);
   const hesapla = (kisiId: number, sorgu: Parameters<typeof operatorOzeti>[2] = { donem: 'gun' }): Promise<OperatorOzetiCevabi> =>
     vt().tx(async (db) => operatorOzeti(db, (await kullaniciYukle(db, kisiId))!, sorgu, simdi));
-  const isMerkeziKisitla = (kisiId: number, merkezId: number): Promise<unknown> =>
-    sahip().sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisiId, merkezId]);
 
   before(async () => {
     ortam = await testVeritabaniKur('arkonozettoplu');

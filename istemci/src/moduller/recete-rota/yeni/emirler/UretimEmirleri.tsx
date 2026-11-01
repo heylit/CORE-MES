@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
@@ -12,7 +12,7 @@ import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
   aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId,
-  type DurumSuzgeci, type Emir, type PlanOzeti,
+  type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
