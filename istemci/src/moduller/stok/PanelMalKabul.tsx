@@ -6,7 +6,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar } from './gorunum.ts';
 import { HizliMalKabul, kabulGovdesi, kopyaSayisi, type BekleyenGiris } from './HizliMalKabul.tsx';
-import { LotEtiketPenceresi } from './LotEtiketi.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { useStokKodCoz } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost } from './ortak.tsx';
 
@@ -16,13 +16,12 @@ export function PanelMalKabul({ kod }: { kod: string }) {
   const stok = useStokKodCoz(kod);
   const [bekleyen, setBekleyen] = useState<BekleyenGiris | null>(null);
   const [son, setSon] = useState<{ belgeId: number; kopya: number; metin: string } | null>(null);
-  const [etiket, setEtiket] = useState(false);
   return (
     <>
       <h3 className="tc-stok-teslim-baslik">Mal kabul</h3>
       {son && (
         <p className="tc-stok-bilgi" role="status"><span>{son.metin}</span>
-          <Dugme tur="ikincil" simge="tag" onClick={() => setEtiket(true)}>Etiket bas</Dugme>
+          <EtiketMerkeziDugmesi tur="mal-kabul" idler={[son.belgeId]}>Etiket bas</EtiketMerkeziDugmesi>
         </p>
       )}
       {stok.isPending ? <DurumKutusu durum="yukleniyor" />
@@ -30,7 +29,6 @@ export function PanelMalKabul({ kod }: { kod: string }) {
         : stok.data.tur !== 'malzeme' ? <p className="tc-stok-not">Mal kabul için malzemenin kodunu okutun; lot etiketi stoktaki partiyi gösterir.</p>
         : <Kabul ozet={stok.data.ozet} bekleyenAc={setBekleyen} bitti={(belgeId, kopya, metin) => setSon({ belgeId, kopya, metin })} />}
       {bekleyen && <RafOkut b={bekleyen} kapat={() => setBekleyen(null)} bitti={(belgeId, metin) => { setBekleyen(null); setSon({ belgeId, kopya: kopyaSayisi(bekleyen.ambalajSayisi), metin }); }} />}
-      {etiket && son && <LotEtiketPenceresi baslik="Lot etiketi" yol={`/stok/mal-kabuller/${son.belgeId}/lot-etiketleri`} kopyalar={{ 1: son.kopya }} kapat={() => setEtiket(false)} />}
     </>
   );
 }

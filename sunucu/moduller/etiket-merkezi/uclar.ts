@@ -29,7 +29,9 @@ export const uclar = [
     parametre: sablonParametresi,
     sorgu: kayitCiktiSorgusu,
     cevap: kayitCiktiCevabi,
-    isle: ({ db, parametre, sorgu: { tur, id, ...secenek } }) => kayitCiktisi(db, parametre.anahtar, { tur, idler: id }, secenek),
+    isle: ({ db, parametre, sorgu: { tur, id, koliSayisi, koliIci, ...secenek } }) => kayitCiktisi(
+      db, parametre.anahtar, { tur, idler: id, ...(koliSayisi === undefined && koliIci === undefined ? {} : { koli: { sayi: koliSayisi ?? 1, ici: koliIci ?? null } }) }, secenek,
+    ),
   }),
   // Raf seçimi gerçek kayıt okumasıdır: kayıt çıktısıyla aynı işlem.
   uc({ yontem: 'GET', yol: '/etiket-merkezi/raflar', yetki: 'etiket-merkezi.oku', cevap: raflarCevabi, isle: ({ db }) => rafSecenekleri(db) }),

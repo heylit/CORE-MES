@@ -13,7 +13,7 @@ import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_TURLERI, LOGO_ESLESME_DURUMLARI, LOGO_ETIKETI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU, zamanMetni } from './gorunum.ts';
-import { LotEtiketPenceresi } from './LotEtiketi.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -378,11 +378,10 @@ export function MalKabul() {
   const [adres] = useSearchParams();
   const emirId = Number(adres.get('emir'));
   const sevkKalemi = Number(adres.get('sevkKalemi'));
-  // Teslim alınınca lot etiketleri önerilir; kopya sayısı satırın ambalaj sayısıdır (kullanıcı değiştirebilir).
-  const [etiketAcik, setEtiketAcik] = useState(false);
-  const [etiket, setEtiket] = useState<{ id: number; no: string; kopyalar: Record<number, number> } | null>(null);
+  // Teslim alınınca lot etiketleri Etiket Merkezi'nde önerilir (1288).
+  const [etiket, setEtiket] = useState<{ id: number; no: string } | null>(null);
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => {
-    setEtiket({ id: c.belge.id, no: c.belge.no, kopyalar: Object.fromEntries(satirlar.flatMap((s, i) => (Number(s.ambalajSayisi) > 0 ? [[i + 1, Math.trunc(Number(s.ambalajSayisi))]] : []))) });
+    setEtiket({ id: c.belge.id, no: c.belge.no });
     return c;
   }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); });
   const liste = useListeDurumu({ suzgecler: { logoDurumu: '' as '' | (typeof LOGO_ESLESME_DURUMLARI)[number] }, suzgecDegerleri: { logoDurumu: LOGO_ESLESME_DURUMLARI }, siralamaAlanlari: ['zaman'], adres: true });
@@ -410,7 +409,7 @@ export function MalKabul() {
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
             <div className="tc-stok-sag"><Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
-            {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><Dugme tur="ikincil" simge="tag" onClick={() => setEtiketAcik(true)}>Lot etiketlerini bas</Dugme></p>}
+            {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
           </form>
         </Kart>
       )}
@@ -425,7 +424,6 @@ export function MalKabul() {
             {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
         )}
       </Kart>
-      {etiket && etiketAcik && <LotEtiketPenceresi baslik={`${etiket.no} lot etiketleri`} yol={`/stok/mal-kabuller/${etiket.id}/lot-etiketleri`} kopyalar={etiket.kopyalar} kapat={() => setEtiketAcik(false)} />}
       {onayPenceresi}
     </section>
   );

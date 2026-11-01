@@ -57,6 +57,9 @@ export const partilerinRedGirisleri = (db: Db, partiIdler: readonly number[]): P
 // Etiket Merkezi: partinin ya da mal kabul belgesinin lot etiketleri (LotEtiketleriCevabi.etiketler biçimi); olmayan kayıt boş dizi.
 export type { LotEtiketi } from '#paylasilan/sozlesme/stok.ts';
 export const lotEtiketleri = (db: Db, a: { partiId: number } | { malKabulId: number }) => servis.lotEtiketleri(db, a);
+// Kalite durum etiketi (kart 1525, Etiket Merkezi okur): kimlik bakiye satırıdır; durum satırdan okunur, elle seçilmez (1286 a).
+export type { KaliteEtiketi } from './servis.ts';
+export const kaliteEtiketleri = (db: Db, bakiyeIdler: readonly number[]) => servis.kaliteEtiketleri(db, bakiyeIdler);
 // İstasyonun stok konumu (kimlik ve basılı kod); konumu açılmamış istasyon haritada yoktur. Boş dizide sorgu atılmaz.
 export async function istasyonKonumlari(db: Db, istasyonIdler: readonly number[]): Promise<Map<number, { konumId: number; kod: string }>> {
   if (istasyonIdler.length === 0) return new Map();

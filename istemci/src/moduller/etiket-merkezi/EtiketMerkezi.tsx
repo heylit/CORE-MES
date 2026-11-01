@@ -103,21 +103,34 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const [dpi, setDpi] = useState<string>('203');
   const [adet, setAdet] = useState('1');
   const [sade, setSade] = useState(false);
+  // 1287 a: giden ambalaj kaydı yok; sevk kolisinde koli sayısı ve koli içi adet burada girilir, her koli ayrı etikettir (n/N).
+  const koliMi = kayit?.tur === 'sevk-koli';
+  const [koliSayisi, setKoliSayisi] = useState('1');
+  const [koliIci, setKoliIci] = useState('');
+  const koliSayi = koliMi ? Math.trunc(Number(koliSayisi)) : 1;
+  const koliSayiGecerli = Number.isFinite(koliSayi) && koliSayi >= 1 && koliSayi <= enCokAdet;
+  const iciSayi = koliIci.trim() === '' ? null : Number(koliIci.replace(',', '.'));
+  const iciGecerli = iciSayi === null || (Number.isFinite(iciSayi) && iciSayi > 0);
   const adetSayi = Math.trunc(Number(adet));
-  // Bir baskıda kayıt sayısı x adet en çok enCokAdet etikettir; sunucu da reddeder.
-  const etiketSayisi = (kayit?.idler.length ?? 1) * adetSayi;
+  // Bir baskıda kayıt sayısı x koli x adet en çok enCokAdet etikettir; sunucu da reddeder.
+  const etiketSayisi = (kayit?.idler.length ?? 1) * (koliSayiGecerli ? koliSayi : 1) * adetSayi;
   const adetGecerli = Number.isFinite(adetSayi) && adetSayi >= 1 && etiketSayisi <= enCokAdet;
   const adetHatasi = adetGecerli ? undefined : kayit && adetSayi >= 1 && adetSayi <= enCokAdet
-    ? `Bir baskıda en çok ${enCokAdet} etiket (${kayit.idler.length} kayıt x ${adetSayi}).`
+    ? `Bir baskıda en çok ${enCokAdet} etiket (${kayit.idler.length} kayıt${koliMi ? ` x ${koliSayi} koli` : ''} x ${adetSayi}).`
     : `Adet 1 ile ${enCokAdet} arasında olur.`;
+  const koliGecerli = !koliMi || (koliSayiGecerli && iciGecerli);
+  const secim: KayitSecimi | null = kayit && koliMi && koliGecerli ? { ...kayit, koli: { sayi: koliSayi, ici: iciSayi } } : kayit;
   const parametre = new URLSearchParams({ dil, dpi, adet: String(adetGecerli ? adetSayi : 1), sade: String(sade) });
   if (kayit) { parametre.set('tur', kayit.tur); parametre.set('id', kayit.idler.join(',')); }
+  if (secim?.koli) { parametre.set('koliSayisi', String(secim.koli.sayi)); if (secim.koli.ici !== null) parametre.set('koliIci', String(secim.koli.ici)); }
   const sorgu = parametre.toString();
   const c = useQuery({
     queryKey: anahtarlar.cikti(sablon.anahtar, sorgu),
     queryFn: () => api.get<CiktiCevabi | KayitCiktiCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/${kayit ? 'kayit-cikti' : 'cikti'}?${sorgu}`),
   });
   const kayitlar = c.data && 'kayitlar' in c.data ? c.data : null;
+  // Sevk kolisinde bir kalemin her kolisi ayrı etikettir; çip kalem başına birdir.
+  const cipler = kayitlar ? [...new Map(kayitlar.kayitlar.map((k) => [k.id, k])).values()] : [];
   return (
     <div className="tc-etk-cikti">
       <div className="tc-etk-secimler">
@@ -125,6 +138,14 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
           secenekler={secenekler.diller.map((d) => ({ deger: d.deger, baslik: d.ad }))} />
         <Secim etiket="Çözünürlük" value={dpi} onChange={(e) => setDpi(e.target.value)}
           secenekler={secenekler.cozunurlukler.map((d) => ({ deger: String(d), baslik: `${d} dpi` }))} />
+        {koliMi && (
+          <>
+            <Girdi etiket="Koli sayısı" inputMode="numeric" value={koliSayisi} onChange={(e) => setKoliSayisi(e.target.value)}
+              hata={koliSayiGecerli ? undefined : `Koli sayısı 1 ile ${enCokAdet} arasında olur.`} />
+            <Girdi etiket="Koli içi adet" inputMode="decimal" value={koliIci} onChange={(e) => setKoliIci(e.target.value)}
+              ipucu="Boş bırakılırsa kalemin adedi basılır." hata={iciGecerli ? undefined : 'Koli içi adet sıfırdan büyük bir sayı olur.'} />
+          </>
+        )}
         <Girdi etiket={kayit ? 'Kayıt başına adet' : 'Adet'} inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} hata={adetHatasi} />
         <IsaretKutusu etiket="Türkçe harfleri sadeleştir (ş -> s)" checked={sade} onChange={(e) => setSade(e.target.checked)} />
       </div>
@@ -133,11 +154,11 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
       {kayitlar && (
         <div className="tc-etk-kayitlar">
           <ul className="tc-etk-ciplar" aria-label="Seçili kayıtlar">
-            {kayitlar.kayitlar.map((k) => (
+            {cipler.map((k) => (
               <li key={k.id} className="tc-etk-cip">
                 <span>{k.baslik}</span>
                 {/* Mal kabulde çip lottur, seçim kabul belgesidir: tek lot çıkarılamaz. */}
-                {kayitlar.kayitlar.length > 1 && kayit?.tur !== 'mal-kabul' && (
+                {cipler.length > 1 && kayit?.tur !== 'mal-kabul' && (
                   <button type="button" className="tc-etk-cip-sil" aria-label={`${k.baslik} çıkar`} onClick={() => kayitCikar(k.id)}>×</button>
                 )}
               </li>
@@ -156,7 +177,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
           </p>
           <div className="tc-etk-dugmeler">
             {/* Elle seçilen dil ve çözünürlükle iner, deftere yazılmaz; deftere yazılan indirme aşağıda dosya yazıcısı seçilerek yapılır. */}
-            <Dugme simge="download" disabled={!adetGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
+            <Dugme simge="download" disabled={!adetGecerli || !koliGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
           </div>
           <details className="tc-etk-komut">
             <summary>Komutu göster</summary>
@@ -165,7 +186,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
         </>
       )}
       {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. */}
-      {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli ? adetSayi : null} kayit={kayit} />}
+      {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli ? adetSayi : null} kayit={secim} />}
     </div>
   );
 }

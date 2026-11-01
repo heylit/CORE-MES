@@ -43,6 +43,15 @@ export type { SevkIsDurumu, UrunSevkiDinleyicisi, UrunSevkiOlayi, UrunSevkSatiri
 // komutu da geri alır.
 export { alimYansit, emirBittiYansit, fasonHareketiYansit } from './servis.ts';
 
+// Koli etiketi (kart 1525, Etiket Merkezi okur): müşteriye giden kalemin işi, belge no, tarih ve firması; kimlik sırası korunmaz.
+export type KoliKalemi = sorgu.KoliKalemiSatiri & { firmaAdi: string | null };
+export async function koliKalemleri(db: Db, kalemIdler: readonly number[]): Promise<KoliKalemi[]> {
+  if (kalemIdler.length === 0) return [];
+  const satirlar = await sorgu.koliKalemleri(db, kalemIdler);
+  const adlar = await firmaAdlari(db, [...new Set(satirlar.flatMap((s) => (s.firmaId === null ? [] : [s.firmaId])))]);
+  return satirlar.map((s) => ({ ...s, firmaAdi: s.firmaId === null ? null : adlar.get(s.firmaId) ?? null }));
+}
+
 // Satış faturası sevke bağlanırken (260 a, Finans): iş yoksa null; firma ve sipariş bilinmiyorsa null.
 export { sevkIsiOzeti } from './servis.ts';
 export type { SevkIsiOzeti } from './servis.ts';

@@ -10,9 +10,9 @@ Sınıflar: TUTAN, ETKİLEYEN, SONRA.
 15. SONRA: lot etiketi malzeme türü adını basar (271 a, "Kart 1001 · Hammadde"); tür adları `kurallar.ts`'te stok ekranındakinin kopyasıdır. Ortak tür adı sözlüğü çekirdek isteği (CEKIRDEK-ISTEKLERI 4).
 
 ## Sonra
-16. SONRA (kart #1292, 1288): dışarıdaki dört baskı yolu (stok `Etiketler.tsx` ve `LotEtiketi.tsx`, malzemeler `katalog/EtiketPenceresi.tsx`, Üretim Hazırlık `hazirlik/etiket.ts`, Kalite Merkezi KF-19) Etiket Merkezi'ne taşınacak; her biri sahibinin dalında, o gelince satırdaki `disaridaki_yol` göçle boşalır. İstisna (1309 c): Üretim Hazırlık seri no etiketi markalama modülüyle birlikte ikinci turda ele alınır; o zamana kadar tarayıcı baskısı kalır, deftere yazılmaz.
+16. KAPANDI kısmen (kart 1525, 1531 a: stok, malzemeler ve KF-19 taşındı, göç 20261031212000 `disaridaki_yol`'u boşalttı; KF-19 kaydının tarayıcı kartı 1548'e bağlı, kalite-merkezi UYUM-BORCU). Eski metin: dışarıdaki dört baskı yolu (stok `Etiketler.tsx` ve `LotEtiketi.tsx`, malzemeler `katalog/EtiketPenceresi.tsx`, Üretim Hazırlık `hazirlik/etiket.ts`, Kalite Merkezi KF-19) Etiket Merkezi'ne taşınacak; her biri sahibinin dalında, o gelince satırdaki `disaridaki_yol` göçle boşalır. İstisna (1309 c): Üretim Hazırlık seri no etiketi markalama modülüyle birlikte ikinci turda ele alınır; o zamana kadar tarayıcı baskısı kalır, deftere yazılmaz.
 17. SONRA (kart #1292): etiket listesi salt okunur; satır değişikliği göçle. Listeden düzenleme gerekirse `etiket-merkezi.sablon-yaz` ile ayrı uç.
-18. SONRA (1285 a, 1286 a, 1287 a): kalite durum, hatalı parça ve sevk koli etiketleri yapılacak. Kalite durumu kayıttan okunur, stok hal adlarıyla basılır (elle seçilmez); koli etiketinde QR yeter. Kaynak okumaları sahiplerin `disari.ts`'inden (stok, uretim-emirleri, sevkiyat).
+18. SONRA (1285 a, 1286 a, 1287 a): hatalı parça (`hatali-parca`), kalite durum (`kalite-durum`) ve sevk koli (`sevk-koli`) etiketleri yapıldı (kart 1525). Koli etiketinde QR yeter (1287 a). Kaynak okumaları sahiplerin `disari.ts`'inden (stok, uretim-emirleri, sevkiyat).
 5. SONRA: şablon tasarım ekranı ve kullanıcı şablonu tablosu.
 6. ETKİLEYEN: önizlemede harf genişliği tahmindir (`HARF_ORANI`); yazıcıdaki satır kırılımı farklı olabilir. Deneme etiketiyle doğrulanacak.
 7. SONRA: QR çizimi istemcide dördüncü kez yazıldı (`Onizleme.tsx`); ortak QR bileşeni çekirdek isteği.
@@ -24,3 +24,9 @@ Sınıflar: TUTAN, ETKİLEYEN, SONRA.
 10. ETKİLEYEN: "gönderildi" yazıcının bağlantıyı kabul ettiğini gösterir; etiketin çıktığını göstermez (yazıcıdan durum okunmaz).
 11. SONRA: Argox OS-214 USB'de (100): doğrudan baskı yok, dosya indirilir. PPLB komutları cihazda doğrulanmadı.
 15. VARSAYIM (kart #127): refakat partisinin baskısı deftere emrin refakat kartı olarak yazılır (`kaynak_tur = 'refakat'`, emir kimliği); hangi partinin basıldığı defterde yok. Ayrı tür için dolu tabloya kısıt göçü gerekir (sorulur). Geri alma maliyeti: göç ve tek satır.
+19. SONRA (kart 1525): hatalı parça ve sevk koli etiketinin QR'ı emrin `UE:<kimlik>`idir; ayrı önek açılmadı (`paylasilan/kod-sozlugu.ts` ortak). Okutan emri açar, hatalı kaydı değil. Ayrı önek istenirse ortak kart.
+20. ETKİLEYEN (kart 1525): hatalı parça etiketi basıldığı andaki kararı basar; karar sonradan değişirse etiket kendiliğinden değişmez, yeniden basılır (Etiket Merkezi ekran notunda yazılı). Kalite durum etiketi de böyledir.
+21. SONRA (kart 1525, 1286 a): kalite durum etiketi karar tarihi, karar veren, GKK ya da NCR no ve şartlı kabul notunu basmaz: stok bakiye satırı bunları tutmaz. Kalite kararının kaydı Kalite Merkezi'ndedir; bağlamada o modülün `disari.ts`'inden okunur (adım 3, KF-19).
+22. SONRA (kart 1525): kalite durumu adları (SERBEST, KARAR BEKLİYOR, ŞARTLI, RED) stok ekranının hal adlarının kopyasıdır (`kurallar.ts KALITE_DURUM_ADLARI`); ortak sözlük çekirdek isteği (15 gibi).
+23. SONRA (kart 1525, 1287 a): sevk koli etiketi müşteri sipariş no, revizyon ve lot basmaz: Sevkiyat kalemi bunları tutmaz (sipariş bağı Siparişler'de, lot stokta). Bağlamada sahiplerin `disari.ts`'inden okunur. Koli sayısı ve koli içi adet her baskıda elle girilir; giden ambalaj kaydı yoktur, deftere yalnız kalem yazılır (kaç koli basıldığı defterde yok).
+24. SONRA (kart 1525): elle girilen sevk kalemi (numune, tamir vb.) emirsizdir; etiketinde QR yoktur, parça yerine kalemin açıklaması basılır.

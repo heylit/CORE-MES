@@ -75,3 +75,6 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 - Stok `hurdaSayimiYansitUyarili` uyarıyı döner (önceki adımın parçası istasyonda yoksa eksiye düşüldüğü). Kalan iki parça ayrı dallarda:
   uretim-emirleri hurda sayımında bu işlevi çağırıp uyarıyı sayım cevabına koyar (sağlam sayımdaki `uretimSayimiYansitUyarili` gibi);
   Arkon hurda komutunun cevabına ekler ve operatöre gösterir. O zamana kadar uyarı yalnız harekette ve başlatma/sağlam sayım uyarısında görünür.
+
+## Etiketler Etiket Merkezi'nde (kart 1525) - sonra
+53. SONRA: stok istemcisi lot ve konum etiketini artık kendisi basmaz; `GET /stok/mal-kabuller/:id/lot-etiketleri` ve `GET /stok/partiler/:id/etiket` uçları kullanılmıyor. Etiket Merkezi `disari.ts lotEtiketleri` ile okur. Uçların kaldırılması ayrı kart (sunucu stok dosyaları bu dalın kilidinde değildi). Refakat kartının tarayıcı "Yazdır" tuşu kalktı (1529 a); işlem tablosu ve "Bitti" kutuları Etiket Merkezi refakat şablonuna gelene kadar basılı kartta yoktur.

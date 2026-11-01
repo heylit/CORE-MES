@@ -15,7 +15,7 @@ import type { EkranOzellikleri, KmSayaci } from '../sekmeler.ts';
 import { YENI_KAYIT, type FormKaydi } from '../tipler.ts';
 import { useKmKomutu, type KmVerisi } from '../veri.ts';
 import { sonucTonu } from './dsl.ts';
-import { BosDslFormu, BosModulFormu, FormKaydiBelgesi } from './FormBelgesi.tsx';
+import { BosDslFormu, BosModulFormu, EtiketMerkezindeBas, FormKaydiBelgesi } from './FormBelgesi.tsx';
 import { FormDoldur, type DoldurulanSablon } from './FormDoldur.tsx';
 import { FormTasarla } from './FormTasarla.tsx';
 import { FORM_KATEGORILERI, formBul, formListesi, type ListedekiForm } from './sablonlar.ts';
@@ -168,6 +168,7 @@ export function Formlar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikler
       return (
         <span className="tc-km3-eylemler" onClick={(o) => o.stopPropagation()} onKeyDown={(o) => o.stopPropagation()}>
           <Dugme simge="eye" onClick={() => goruntule(r)}>Görüntüle</Dugme>
+          <EtiketMerkezindeBas r={r} />
           {d !== ONAYLANDI && yetki.yaz && <Dugme simge="edit" onClick={() => duzenle(r)}>Düzenle</Dugme>}
           {d === ONAY_BEKLIYOR && yetki.kapat && <Dugme simge="check" onClick={() => { kararYaz('Onayla'); onayNotYaz(''); pencereYaz({ tur: 'onayla', rec: r }); }}>Onayla</Dugme>}
           {d === TASLAK && yetki.yaz && <Dugme simge="next" onClick={() => void onayaGonder(r)}>Onaya gönder</Dugme>}

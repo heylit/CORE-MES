@@ -153,3 +153,6 @@ Paket dosyası (`uygulama/paket.ts`) değişmedi; her şey köprü (`kopru.ts`) 
 - VARSAYIM (geri alma ucuz): numunesi ve ölçümü olmayan emirde parçanın kuralı boş olmayan numune planı varsa eksik, yoksa gerekmez.
 - VARSAYIM (geri alma ucuz): elle açılan NCR'nin `emir` alanındaki numara emre bağdır; açıksa maddeyi durdurur. Bağı olmayan eski hatalı parça NCR'si tanımındaki emir numarasıyla tanınır; açıksa madde bilinmiyor (null) olur, kapalıysa sayılmaz.
 - VARSAYIM (geri alma ucuz): kaynak emir hatalı parçanın girildiği emirdir (kol emri değil).
+- Bağlamada kapanacak (kart 1525, 1548): KF-19 kaydının tarayıcıdan basılan etiket kartı (önizleme, Yazdır) kalite kaydı olarak duruyor ve deftere yazılmıyor; ürün etiketi yalnız "Etiket Merkezi'nde bas" ile basılmalı. Kaldırılması 1548 kararına bağlıdır (öneri a ile ilerlendi: kart kalır).
+- Bağlamada kapanacak (kart 1525): KF-19'daki durum sözlüğü (KABUL, ŞARTLI KABUL, KARANTİNA, RET) stok kalite durumundan (serbest, karar bekliyor, şartlı, red) ayrı; etiket stoktakini basar, formdaki seçim stoka yazılmaz. Formun stok durumunu değiştirmesi ayrı karar.
+- Bağlamada kapanacak (kart 1525): "Etiket Merkezi'nde bas" stok okuması (`stok.oku` ya da sayfa) ister; yoksa hata iletisi verir. Seri no (lot olmayan) stokta çözülmez.

@@ -1,3 +1,10 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { KodCozCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
+import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
+import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { Belge, Imza, kutu } from '../Belge.tsx';
 import { trd } from '../bicim.ts';
 import { D8 } from '../sabitler.ts';
@@ -223,3 +230,34 @@ export function BosModulFormu({ veri, form }: { veri: Ayar; form: ListedekiForm 
   );
 }
 
+// 1288, 1548: ürün durum etiketi (etiket formu, KF-19) Etiket Merkezi'nden basılır; durum stoktaki lot satırından okunur (1286 a),
+// formdaki seçim kalite kaydı olarak kalır. Formdaki lot stokta lot okutması gibi (`LOT:`, paylasilan/kod-sozlugu.ts) çözülür, satırları Etiket Merkezi'nde açılır; her baskı deftere yazılır.
+export const etiketLotu = (r: FormKaydi): string | null => {
+  if (r.etiket !== true || typeof r.dsl !== 'string') return null;
+  const veri = (r as KayitIcerigi).veri ?? {};
+  for (const [si, b] of dslCoz(r.dsl).entries()) {
+    for (const [ai, a] of b.alanlar.entries()) {
+      const v = veri[alanAnahtari(si, ai)];
+      if (/^lot/i.test(a.etiket) && typeof v === 'string' && v.trim() !== '') return v.trim();
+    }
+  }
+  return null;
+};
+
+export function EtiketMerkezindeBas({ r }: { r: FormKaydi }) {
+  const islemler = useOturum().data?.islemler ?? [];
+  const git = useNavigate();
+  const { bildir } = useBildirim();
+  const [okunuyor, setOkunuyor] = useState(false);
+  const lot = etiketLotu(r);
+  if (lot === null || !islemler.includes('sayfa.etiket-merkezi')) return null;
+  const bas = () => {
+    setOkunuyor(true);
+    void api.get<KodCozCevabi>(`/stok/kod-coz?kod=${encodeURIComponent(`LOT:${lot}`)}`).then((c) => {
+      const idler = c.tur === 'lot' ? c.bakiyeler.map((b) => b.id) : [];
+      if (idler.length === 0) bildir('bilgi', `${lot} stokta yok; ürün durum etiketi stoktaki lot için basılır.`);
+      else void git(`/etiket-merkezi?tur=kalite-durum&id=${idler.slice(0, 200).join(',')}`);
+    }, (h: unknown) => bildir('hata', hataIletisi(h, 'Lot stokta okunamadı.'))).finally(() => setOkunuyor(false));
+  };
+  return <Dugme simge="tag" yukleniyor={okunuyor} onClick={bas}>Etiket Merkezi&apos;nde bas</Dugme>;
+}

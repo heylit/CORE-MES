@@ -808,6 +808,19 @@ export async function lotEtiketleri(db: Db, a: { partiId: number } | { malKabulI
   }
   return lotEtiketleriCevir(db, await sorgular.malKabulLotEtiketleri(db, a.malKabulId));
 }
+// Etiket Merkezi kalite durum etiketi (kart 1525): olmayan, lotsuz ya da boş satır listeye girmez; sıra istenen sıradır.
+export interface KaliteEtiketi { bakiyeId: number; lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; birim: string | null; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu }
+export async function kaliteEtiketleri(db: Db, bakiyeIdler: readonly number[]): Promise<KaliteEtiketi[]> {
+  if (bakiyeIdler.length === 0) return [];
+  const satirlar = new Map((await sorgular.kaliteEtiketleri(db, bakiyeIdler)).map((h) => [h.bakiyeId, h]));
+  const ozet = await malzemeOzetleri(db, [...new Set([...satirlar.values()].map((h) => h.malzemeId))]);
+  return bakiyeIdler.flatMap((id) => {
+    const h = satirlar.get(id);
+    if (!h) return [];
+    const o = ozet.get(h.malzemeId);
+    return [{ ...h, malzemeAd: o?.ad ?? null, malzemeKod: o?.kod ?? null, birim: o?.birim ?? null }];
+  });
+}
 export async function partiLotEtiketi(db: Db, partiId: number): Promise<LotEtiketleriCevabi> {
   const h = await sorgular.partiLotEtiketi(db, partiId);
   if (!h) throw bulunamadi('Parti bulunamadı.');

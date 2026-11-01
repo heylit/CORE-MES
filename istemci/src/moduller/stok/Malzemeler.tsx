@@ -9,7 +9,7 @@ import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { stokCsvAlani } from './csv-alani.ts';
 import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar, miktarMetni } from './gorunum.ts';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { CSV_AZAMI_SATIR, tumSatirlar } from './Hareketler.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
@@ -65,7 +65,6 @@ export function Malzemeler() {
   const malKabul = useIslem('stok.giris');
   const liste = useListeDurumu({ suzgecler: { durum: '' as '' | (typeof STOK_DURUMLARI)[number], metin: '', kapsam: '' as '' | 'kartlar' }, suzgecDegerleri: { durum: STOK_DURUMLARI, kapsam: ['kartlar'] as const }, siralamaAlanlari: ['malzeme', 'toplam'], adres: true });
   const [arama, setArama] = useState(liste.suzgecler.metin);
-  const [etiket, setEtiket] = useState(false);
   const [hizli, setHizli] = useState<{ m: MalzemeStokSatiri; tur: HizliIslemTuru } | null>(null);
   useEffect(() => { const t = setTimeout(() => { if (arama !== liste.suzgecler.metin) liste.suzgecDegistir({ metin: arama }); }, 300); return () => clearTimeout(t); }, [arama]);
   const l = useQuery({ queryKey: anahtarlar.liste('malzemeler', liste.sorgu), queryFn: () => api.get<MalzemelerCevabi>(`/stok/malzemeler${sorguMetni(liste.sorgu)}`) });
@@ -100,7 +99,7 @@ export function Malzemeler() {
       <SayfaBasi baslik="Malzemeler" alt={l.data?.toplam !== null && l.data ? (kartlar ? `${l.data.toplam} stoklanır malzeme kartı; stoğu olmayanlar 0 görünür.` : `${l.data.toplam} malzemenin stoğu ya da stok ayarı var. Stoğu olmayan kart için Bütün kartlar.`) : 'Malzeme başına stok.'}
         sag={<>
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
-          <Dugme simge="scan" onClick={() => setEtiket(true)}>Etiketler</Dugme>
+          <EtiketMerkeziDugmesi tur="malzeme" simge="scan" idler={(l.data?.satirlar ?? []).map((m) => m.malzemeId)}>Etiketler</EtiketMerkeziDugmesi>
           <Dugme simge="download" disabled={!l.data?.satirlar.length} yukleniyor={indiriliyor} onClick={() => void indir()}>CSV</Dugme>
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
@@ -117,7 +116,6 @@ export function Malzemeler() {
         )}
       </Kart>
       {hizli && <HizliIslem tur={hizli.tur} m={hizli.m} kapat={() => setHizli(null)} />}
-      {etiket && <EtiketPenceresi baslik="Malzeme etiketleri (bu sayfa)" kapat={() => setEtiket(false)} ogeler={(l.data?.satirlar ?? []).map((m) => ({ tur: 'malzeme' as const, no: m.malzemeId, ad: m.ad ?? `Kart ${m.malzemeId}`, kod: m.stokKodu ?? '' }))} />}
     </section>
   );
 }

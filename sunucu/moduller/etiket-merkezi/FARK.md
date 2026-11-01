@@ -73,3 +73,28 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Uç `GET /etiket-merkezi/etiketler` (`biri: sayfa.etiket-merkezi`); yeni işlem ve rol yok. Tablo ile koddaki `SABLON_TURLERI` ve `KAYIT_TURLERI` testle eşlenir (EM-U17): yeni tür listeye yazılmadan girerse test düşer.
 - Borç (1309 c): Üretim Hazırlık seri no etiketi şimdi taşınmaz; seri no sunucuda kayıt değil (işin kaydında istemcide üretilir). Markalama modülündeki seri kaydıyla birlikte ikinci turda (`seri-no` satırı) ele alınır.
 - Ekran: ikinci menüde "Etiketler" (`/etiket-merkezi/etiketler`); tablo, sahip modül ana menü adıyla.
+
+## Hatalı parça etiketi (kart 1525, 1285 a)
+- Yeni şablon türü ve kayıt türü `hatali-parca`; hazır şablon `hatali-parca-100x50` (lot etiketiyle aynı rulo). Kaynak Üretim Emirleri `disari.ts hataliKaydi`; sahip modülde değişiklik yok.
+- Basılan: durum (karar: REWORK, HURDA, RED, KABUL, ŞARTLI KABUL; karar yoksa KARAR BEKLİYOR), emir no (kol açıldıysa "kol <no>"), parça no ve adı, OP no ve adı, adet ve hurda nedeni, ayıran ve zaman, karar veren, zaman, NCR no ve not. Boş alan basılmaz.
+- QR emrin `UE:<kimlik>`i (parçanın bulunduğu emir: kol ya da emrin kendisi); yeni önek yok (UYUM-BORCU 19).
+- Deftere `kaynak_tur = 'hatali-parca'`, `kaynak_id` hatalı kayıt kimliği. Göç `20261031211000_etiket_merkezi_ilk_tur.sql` (1530): defter tür kısıtı genişler, etiket listesinde `hatali-parca` satırı `hazir` olur.
+- Uç, işlem ve rol değişmedi: kayıt çıktısı `etiket-merkezi.oku`, basma ve indirme mevcut işlemleriyle.
+
+## Kalite durum etiketi (kart 1525, 1286 a)
+- Yeni şablon türü ve kayıt türü `kalite-durum`; hazır şablon `kalite-durum-100x50` (lot etiketiyle aynı rulo). Kaynak stok `disari.ts kaliteEtiketleri` (ayrı stok yaması, 1525 adım 2c).
+- Kimlik stok bakiye satırıdır (kalite durumu lotta değil satırdadır; aynı lot iki konumda iki durumda olabilir). Olmayan, lotsuz ve boş satır eksik sayılır.
+- Basılan: durum (SERBEST, KARAR BEKLİYOR, ŞARTLI, RED; satırdan, elle seçilmez), lot no, malzeme adı ve kodu, miktar, birim ve konum. QR `LOT:<lot no>`. Karar tarihi, karar veren, GKK/NCR basılmaz (UYUM-BORCU 21).
+- Deftere `kaynak_tur = 'kalite-durum'`, `kaynak_id` bakiye satırı. Göç `20261031211100_etiket_merkezi_kalite_durum.sql` (1530): etiket listesinde `kalite-durum` satırı `hazir` olur; tür kısıtı 20261031211000'de açıldı. Dışarıdaki yol (KF-19) adım 4'te boşalır.
+- Uç, işlem ve rol değişmedi.
+
+## Sevk koli etiketi (kart 1525, 1287 a)
+- Yeni şablon türü ve kayıt türü `sevk-koli`; hazır şablon `sevk-koli-100x75`. Kaynak Sevkiyat `disari.ts koliKalemleri` (ayrı sevkiyat yaması, 1525 adım 2b); emir no Üretim Emirleri `uretimEmriOzeti`, parça Malzemeler `malzemeOzetleri`.
+- Kimlik Sevkiyat'ın müşteriye giden kalemidir (ürün ve elle gidiş; geliş, fason, kaldırılmış ve iptal işin kalemi eksik).
+- Koli sayısı ve koli içi adet Etiket Merkezi'nde elle girilir (sözleşme: kayıt seçiminde istege bağlı `koli: { sayi, ici }`, kayıt çıktısında `koliSayisi`, `koliIci`); her koli ayrı etikettir ("Koli n/N"). Koli içi adet boşsa kalemin adedi basılır. Koli yalnız sevk kolisinde geçerlidir (başka türde 400). Sınır kayıt x koli x adet.
+- Basılan: müşteri, parça no ve adı (elle kalemde açıklama), adet, koli sırası, emir no, sevk tarihi ve belge no. QR kalemin emri `UE:<kimlik>` (1287 a: QR yeter); emirsiz kalemde QR yok. Sipariş no, revizyon, lot basılmaz (UYUM-BORCU 23).
+- Deftere `kaynak_tur = 'sevk-koli'`, `kaynak_id` kalem, koli sayısından bağımsız bir kez. Göç `20261031211200_etiket_merkezi_sevk_koli.sql` (1530): etiket listesinde `sevk-koli` satırı `hazir` olur.
+- Uç, işlem ve rol değişmedi.
+
+## Kapanış göçü (kart 1525, 1531 a)
+- Göç `20261031212000_etiket_merkezi_kapanis.sql`: etiket listesinde `konum`, `lot`, `malzeme` ve `kalite-durum` satırlarının `disaridaki_yol` değeri boşalır (taşındılar: stok 1525 adım 1, malzemeler 1308, KF-19 1525 adım 3). `seri-no` dışarıda kalır (1309 c). Yalnız katalog satırı; defter ve gerçek veri değişmez.
