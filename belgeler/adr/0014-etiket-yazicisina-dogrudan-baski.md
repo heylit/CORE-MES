@@ -1,6 +1,6 @@
 # ADR 0014 — Sunucudan kurum içi etiket yazıcısına doğrudan baskı
 
-Durum: kabul (kullanıcı kararları 98 evet, 18.10.2026; 113 evet, 19.10.2026). Modülün önerisi `sunucu/moduller/etiket-merkezi/ADR-ONERISI.md`.
+Durum: kabul (kullanıcı kararları 98 evet, 18.10.2026; 113 evet, 19.10.2026).
 
 ## Bağlam
 
@@ -25,8 +25,7 @@ yavaştır ve yanlış yazıcıya basılmasına yol açar. Kullanıcı kararı 9
 
 ## Kırmızı çizgi metni
 
-> İstisnalar kurum içi üç servistir: Logo köprüsü (ADR 0011, yalnız `logo` modülü), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket
-> yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı).
+Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 

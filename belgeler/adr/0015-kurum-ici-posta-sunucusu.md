@@ -27,11 +27,7 @@ içi zil ve mesajla ulaşmıyor. Kullanıcı kararı 223 a: bildirimler şirket 
 
 ## Kırmızı çizgi metni
 
-> İstisnalar kurum içi dört servistir: Logo köprüsü (ADR 0011, yalnız `logo` modülü), SmartES (ADR 0013, yalnız `smartes` modülü), etiket
-> yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı) ve posta sunucusu
-> (ADR 0015, yalnız `bildirim` modülü, yalnız `TMIV2_POSTA_ALAN_ADI` alanlarına).
-
-Bu metin CLAUDE.md'ye kod geldiğinde girer; o zamana kadar kod yoksa istisna da kullanılmaz.
+Metin CLAUDE.md'dedir; posta istisnası CLAUDE.md'ye kod geldiğinde girer, o zamana kadar kullanılmaz (eski öneri metni 01.11.2026'da kaldırıldı, 1495 a).
 
 ## Sonuçlar
 

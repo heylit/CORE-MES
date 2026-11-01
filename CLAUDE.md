@@ -16,7 +16,7 @@ TEMEL KURAL: Bilmediğini uydurma, eksikte sor.
 
 # TMI CORE V2
 CNC talaşlı imalat atölyesi için üretim planlama ve izlenebilirlik sistemi; kurum içi, tek sunucu. Türkçe konuş; kod tanımlayıcıları
-Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub kartlarında (`gh issue list`); kurulum `kurulum/devir.md`.
+Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği numara; GitHub kartları #679'da durdu, arşivdir. Kararlar devir belgesinde tutulur; kurulum `kurulum/devir.md`.
 
 ## Çalışma tercihleri
 - Kısa yaz, emoji yok; soruda Türkçe karakterleri düz yaz. Rapor en çok 15 satır: önce sonuç (adım başına tek satır), sonra yalnız "sorulur" kademesindeki
@@ -28,7 +28,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
 
 ## Kırmızı çizgiler
 - Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve dış servis çağrısı yok; yalnız kurum içi üç servis istisna: Logo yardımcısı (ADR 0017, yalnız `logo` modülü, yalnız aynı bilgisayar: 127.0.0.1), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı). Üçünde de adres yalnız `TMIV2_*` ortam değişkenindedir ve kurum içi olmalıdır (Logo için yalnız 127.0.0.1); bağlantı varsayılan olarak kapalıdır.
-  Dış sunucu istisnası (ADR 0021, kararlar 1011 b, 1012 a, 1037 a): iç sunucu internete açılmaz ve internete istek atmaz; yalnız `dis-kopru` modülü DMZ'deki dış sunucunun köprü kapısına bağlanır (adres yalnız `TMIV2_DIS_KOPRU_ADRESI`'nde, kurum içi olmalı; mTLS ve imzalı ileti; varsayılan kapalı). Dış sunucu (`dis-sunucu/`) iç sunucuya bağlanmaz; dışarı yalnız ADR 0021'deki veri çıkar. Uygulama kodu internete istek atmaz; sertifika yenilemesi DMZ'deki ACME aracınındır.
+  Dış sunucu istisnası (ADR 0021, kararlar 1011 b, 1012 a, 1037 a): iç sunucu internete açılmaz ve internete istek atmaz; yalnız `dis-kopru` modülü DMZ'deki dış sunucunun köprü kapısına bağlanır (adres yalnız `TMIV2_DIS_KOPRU_ADRESI`'nde, kurum içi olmalı; mTLS ve imzalı ileti; varsayılan kapalı). Dış sunucu (`dis-sunucu/`) iç sunucuya bağlanmaz; dışarı yalnız ADR 0021'deki veri çıkar. Uygulama kodu internete istek atmaz; sertifika yenilemesi DMZ'deki ACME aracınındır. Kod gelene kadar bu istisna kullanılmaz; dış erişim askıdadır (1493 c, ADR 0021 ertelendi).
   Test robotu istisnası (ADR 0019, karar 174 c): yalnız `ekran-testleri/benzetim/model.ts` dil modeli çağırır (Claude API ya da yerel `claude -p`); yalnız canlı olmayan ortamda, boş ve sentetik veriyle; anahtar yalnız `TMIV2_ROBOT_MODEL_ANAHTARI`'nda; varsayılan kapalı; uygulama ve canlı paketi bu kodu içermez.
 - Eski sistem (`Desktop\Planlama`, veritabanı `tmi`, port 4000) ve `Desktop\TMI_YEDEK` bu deponun
   dışındadır; okunmaz, yazılmaz, bağlanılmaz. Bu sistem yalnız `TMIV2_*` ortam değişkenlerini okur.
@@ -45,7 +45,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
    geçici karşılık) ve borca yazılır; yabancı anahtar Aşama 2'de ayrı göçle gelir. Aynı anda en çok iki teslim oturtulur; her teslim önce geçici ağaçta denenir.
 5. Teslim gelince: `FARK.md`, `CEKIRDEK-ISTEKLERI.md`, `BASKA-MODUL-ISTEKLERI.md` okunur; çekirdek ve ortak istekleri önce ayrı kartlarla girer; gelen modül kartıyla bir dala konur ve
    depodakinin yerine geçer. Olduğu gibi alınır: yeniden tasarlanmaz, yeniden yazılmaz, ekranına dokunulmaz; yapılan yalnız oturtmadır (veri kaynağı, sayfa ve yetki kaydı, ikinci menü,
-   derleme ve test kırıkları). Gelen kural depodaki onaylı kararla çelişirse gelen geçerlidir; çelişkiler kullanıcıya tek listede bildirilir, onay beklenmez. Her dış modül ikinci menülü gelir
+   derleme ve test kırıkları). Gelen kural depodaki onaylı kararla çelişirse gelen geçerlidir; çelişkiler kullanıcıya tek listede bildirilir, onay beklenmez. Bu yalnız dış modül tesliminde geçerlidir; proje içinde yazılan işte onaylı kararla çelişme sorulur (`kurulum/proje-talimati.md` ONAY). Her dış modül ikinci menülü gelir
    (menü veri olarak bildirilir, kabuk çizer). Her modül için `ORTAKLIK-<ad>.md` çıkar (teslimde yoksa yazılır): modülün tuttuğu ve başka modülde de olabilecek her kavram (firma, malzeme, kişi,
    istasyon, depo, birim, para birimi, belge no, durum listeleri), tablo ve sütun adıyla.
    Aşama 2, bağla: `ORTAKLIK` dosyalarından tek tablo çıkar (kavram başına hangi modül ne tutuyor); sahiplik kullanıcıya tek listede sorulur. Belli olanlar: malzeme malzemeler, firma musteri-tedarikci,
