@@ -61,6 +61,12 @@ describe('Giris', () => {
     expect(resim.hidden).toBe(true);
   });
 
+  it('surum notu yayin adini ya da "geliştirme"yi derleme tarihiyle yazar; v oneki yok', () => {
+    sunucuKur();
+    kur();
+    expect(document.querySelector('.tc-giris-surum')?.textContent).toMatch(/^(geliştirme|[^v\s][^\s]*) · \d{2}\.\d{2}\.\d{4}$/);
+  });
+
   it('PIN ile acilir; tuslarla girilen alti hane gonderilir ve oturum yazilir', async () => {
     const cagrilar = sunucuKur();
     const istemci = kur();

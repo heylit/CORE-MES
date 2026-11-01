@@ -106,7 +106,7 @@ export function SurumBilgisi() {
   return (
     <Kart baslik="Sürüm">
       <div className="tc-ayarlar">
-        <Satir ad="Sürüm" deger={`v${DERLEME.surum}`} />
+        <Satir ad="Sürüm" deger={/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} />
         <Satir ad="Derleme tarihi" deger={derlemeTarihi(DERLEME.tarih, true)} />
         <Satir ad="Arayüz commit" deger={kisaCommit(DERLEME.commit) ?? 'Bilinmiyor'} />
         {okur && <Satir ad="Sunucu commit" deger={sunucu} />}
