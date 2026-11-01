@@ -15,7 +15,12 @@ import './kg-fiyatlari.css';
 const ANAHTAR = ['satin-alma', 'kg-fiyatlari'] as const;
 const gun = (t: string) => `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`;
 const para = (d: string | null, pb: string) => (d === null ? '—' : `${Number(d).toLocaleString('tr-TR', { maximumFractionDigits: 4 })} ${pb}`);
-const formAdi = (f: string | null) => f ?? 'Bütün formlar';
+// Form malzeme kartından ham kodla gelir (TMI A11: "cubuk"); bilinen kodlar okunur ada çevrilir, bilinmeyen olduğu gibi kalır.
+const FORM_ADLARI: Readonly<Record<string, string>> = {
+  cubuk: 'Çubuk', altigen: 'Altıgen', lama: 'Lama', levha: 'Levha', blok: 'Blok', boru: 'Boru', rulo: 'Rulo', kutu: 'Kutu profil',
+  kosebent: 'Köşebent', tel: 'Tel', disk: 'Disk', granul: 'Granül',
+};
+const formAdi = (f: string | null) => (f === null ? 'Bütün formlar' : FORM_ADLARI[f] ?? f);
 const katsayiMetni = (d: string | null | undefined) => (d == null ? '—' : Number(d).toLocaleString('tr-TR', { maximumFractionDigits: 4 }));
 const tl = (d: string | null) => (d === null ? '—' : `${Number(d).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`);
 const fiyatsizNotu = (n: number, tutar: string | null) =>
@@ -217,7 +222,7 @@ export function KgFiyatlari() {
   const [acik, acikYaz] = useState<Acik | null>(null);
   const l = useQuery({ queryKey: ANAHTAR, queryFn: () => cagri.get('/satin-alma-kg-fiyatlari', SURE) });
   const aranan = ara.trim().toLocaleUpperCase('tr-TR');
-  const satirlar = (l.data?.fiyatlar ?? []).filter((x) => aranan === '' || `${x.kaliteKodu} ${x.form ?? ''}`.toLocaleUpperCase('tr-TR').includes(aranan));
+  const satirlar = (l.data?.fiyatlar ?? []).filter((x) => aranan === '' || `${x.kaliteKodu} ${x.form ?? ''} ${formAdi(x.form)}`.toLocaleUpperCase('tr-TR').includes(aranan));
   const stok = l.data?.stokDegeri ?? null;
   const satirDegeri = new Map((stok?.satirlar ?? []).map((x) => [`${x.kaliteKodu}|${x.form ?? ''}`, x.tutar]));
   const temel: Sutun<KgFiyatiSatiri>[] = stok === null ? SUTUNLAR : [...SUTUNLAR.slice(0, 5), {
@@ -227,7 +232,7 @@ export function KgFiyatlari() {
     anahtar: 'islem', baslik: 'İşlem', kirilmaz: true,
     hucre: (x) => <Dugme simge="edit" onClick={(e) => { e.stopPropagation(); acikYaz({ tur: 'yeni', x }); }}>Fiyat gir</Dugme>,
   }];
-  const fiyatsizlar = (l.data?.fiyatsizKaliteler ?? []).filter((x) => aranan === '' || `${x.kaliteKodu} ${x.form ?? ''}`.toLocaleUpperCase('tr-TR').includes(aranan));
+  const fiyatsizlar = (l.data?.fiyatsizKaliteler ?? []).filter((x) => aranan === '' || `${x.kaliteKodu} ${x.form ?? ''} ${formAdi(x.form)}`.toLocaleUpperCase('tr-TR').includes(aranan));
   const fiyatsizSutunlari: Sutun<FiyatsizKalite>[] = [
     { anahtar: 'kalite', baslik: 'Kalite', mono: true, kirilmaz: true, hucre: (x) => x.kaliteKodu },
     { anahtar: 'form', baslik: 'Form', hucre: (x) => x.form ?? '—' },

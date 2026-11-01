@@ -22,4 +22,10 @@ describe('Sipariş metni', () => {
     expect(metin).not.toContain('[adres]');
     expect(metin).not.toContain('Teslimat adresi');
   });
+
+  it('TMI A11: konu talep numarasını değil sipariş numarasını yazar; Logo numarası varsa yanında', () => {
+    expect(poText(r, o).split('\n')[0]).toBe('Konu: Sipariş SA-1, Deneme talep');
+    expect(poText(r, { ...o, poNo: 'LG-9' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş SA-1 / LG-9, Deneme talep');
+    expect(poText(r, { ...o, orderNo: '' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş ST-1, Deneme talep');
+  });
 });

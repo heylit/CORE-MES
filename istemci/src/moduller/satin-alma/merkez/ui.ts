@@ -168,6 +168,17 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
   <div class="mf"><div class="live" id="q-live"></div><span class="spacer"></span><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="save-quote">${q ? "Değişiklikleri kaydet" : "Teklifi kaydet"}</button></div>`);
   readQuoteForm(); updateQuoteLive();
 }
+const EKSI_OLAMAZ = ["q-fx", "q-disc", "q-pay", "q-adv", "q-lead", "q-war", "q-ship", "q-other"];
+// TMI A5: sunucu eksi değeri 400 ile reddeder ve ekran sunucudaki hâle döner (tasiyici `hata`), girilen her şey kaybolurdu;
+// değer kaydetmeden önce yakalanır, girilenler yerinde kalır, hatalı alan işaretlenir.
+function eksiAlanVar(alanlar: readonly (HTMLInputElement | null | undefined)[]): boolean {
+  const sayilar = alanlar.filter((i): i is HTMLInputElement => !!i && i.type !== "checkbox" && i.tagName === "INPUT");
+  sayilar.forEach(i => i.removeAttribute("aria-invalid"));
+  const eksi = sayilar.find(i => !i.disabled && (parseNum(i.value) ?? 0) < 0);
+  if (!eksi) return false;
+  eksi.setAttribute("aria-invalid", "true"); toast("Değer eksi olamaz."); eksi.focus();
+  return true;
+}
 function readQuoteForm(): void {
   const g = (id: string) => $("#" + id); if (!g("q-sup")) return;
   const prevCur = draftQ.currency, prevDate = draftQ.date, set = settings();
@@ -568,6 +579,7 @@ function bulkClose(): void {
 function bulkSave(): void {
   const r = S.requests[BULK!.rid]; if (!r || !canWrite()) return;
   bulkRead();
+  if (eksiAlanVar([...$$<HTMLInputElement>("#bulk [data-bi]"), ...$$<HTMLInputElement>("#bulk [data-bf]")])) return;
   const set = settings();
   const used = BULK!.cols.map((c, j) => ({ c, j })).filter(x => Object.keys(x.c.prices).length || x.c.qid);
   if (!used.length) { toast("Kaydedilecek fiyat yok."); return; }
@@ -877,6 +889,7 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-quote": (_el, r) => {
     if (!r) return; readQuoteForm(); const n = clone(r);
+    if (eksiAlanVar([...$$<HTMLInputElement>("#qform [data-price]"), ...EKSI_OLAMAZ.map(id => $<HTMLInputElement>("#" + id))])) return;
     if (draftQ.supplierId === "__new") {
       const nm = $("#q-newsup").value.trim(); if (!nm) { toast("Yeni tedarikçinin adını girin."); $("#q-newsup").focus(); return; }
       const ex = Object.values(S.suppliers).find(s => norm(s.name) === norm(nm));

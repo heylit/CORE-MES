@@ -1642,6 +1642,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const mudur = tamam<Record<string, number | null>>(await istek(c.mudur, 'GET', '/satin-alma-menu-sayaclari'));
     assert.ok((mudur.onaylar ?? 0) >= 1);
     assert.deepEqual(Object.values(tamam<Record<string, number | null>>(await istek(c.operator, 'GET', '/satin-alma-menu-sayaclari'))).every((x) => x === null), true);
+    // TMI A4: onaylanıp siparişe dönmemiş talep onay beklemez; menü sayacı panoyla aynı tanımı kullanır.
+    const t = await kararli();
+    const sayac = async () => tamam<Record<string, number | null>>(await istek(c.mudur, 'GET', '/satin-alma-menu-sayaclari')).onaylar ?? -1;
+    const once = await sayac();
+    tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] }));
+    assert.equal(await sayac(), once - 1);
   });
 
   test('SAT-69: ayarlar satin-alma.ayar ister; kurlar, kategoriler, birimler ve onay limitleri kaydedilir; sürüm korunur', async () => {

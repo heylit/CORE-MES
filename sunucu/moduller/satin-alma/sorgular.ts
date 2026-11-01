@@ -824,12 +824,17 @@ export function karneTeslimBilgisi(db: Db, siparisSatirId: number): Promise<Karn
   );
 }
 
+// Onay bekleyen talep, menüde ve panoda tek tanım: onaydaki talepte son onay kaydı "onay" değil (onaylanıp sipariş bekleyen sayılmaz;
+// ret sonrası yeniden gönderilen sayılır). Menü yalnız durumu sayınca boş Onaylar sayfasında sayaç 1 görünüyordu (TMI A4).
+const ONAY_BEKLEYEN_SQL = `SELECT count(*)::int FROM satin_alma_talep t WHERE t.durum = 'onayda'
+               AND (SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) IS DISTINCT FROM 'onay'`;
+
 // ---- İkinci menü sayıları (madde başına tek sorgu; yetki serviste süzülür)
 export async function menuSayilari(db: Db): Promise<{ acik: number; onayda: number; katalog: number; tedarikci: number }> {
   return (await db.tek<{ acik: number; onayda: number; katalog: number; tedarikci: number }>(
     // "Açık" prototipteki tanımdır (OPEN: taslak, teklif isteniyor, değerlendirme, onayda): menü sayısı listeyle aynı olsun.
     `SELECT (SELECT count(*)::int FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')) AS acik,
-            (SELECT count(*)::int FROM satin_alma_talep WHERE durum = 'onayda') AS onayda,
+            (${ONAY_BEKLEYEN_SQL}) AS onayda,
             (SELECT count(*)::int FROM satin_alma_katalog) AS katalog,
             (SELECT count(*)::int FROM satin_alma_tedarikci) AS tedarikci`))!;
 }
@@ -844,8 +849,7 @@ export async function panoSayilari(db: Db): Promise<PanoSayilariSatiri> {
     `WITH bekleyen AS (
        SELECT s.talep_id, s.teklif_id FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id AND t.durum = 'siparis_verildi'
        WHERE coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar)
-     SELECT (SELECT count(*)::int FROM satin_alma_talep t WHERE t.durum = 'onayda'
-               AND (SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) IS DISTINCT FROM 'onay') AS "onayBekleyen",
+     SELECT (${ONAY_BEKLEYEN_SQL}) AS "onayBekleyen",
             (SELECT count(*)::int FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')) AS "acikTalep",
             (SELECT count(*)::int FROM bekleyen) AS "teslimBekleyenSatir",
             (SELECT count(*)::int FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) x) AS "acikSiparis",

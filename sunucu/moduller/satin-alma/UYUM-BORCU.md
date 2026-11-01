@@ -183,3 +183,9 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - VARSAYIM: yalnız talep açan kişinin sonucu Taleplerim listesini açar, talebi seçili açmaz (Taleplerim'de adresle satır açma yok). Geri alma ucuz.
     - VARSAYIM: yalnız onaylayan kişinin sipariş sonucu Onaylar'da talebi açar; Sipariş adımı onaylayan görünümünde yok. Geri alma ucuz.
     - Komutlar boş form açar; değer alan komut ("talep ST-2026-001") 1233 çekirdek ucuyla gelir.
+
+## Kart 1733 (TMI satın alma bulguları, bağlamada)
+46. [bağlama] TMI A13: fatura bağlama yalnız Sipariş adımındaki düğmede; Finans fatura formunda siparişe bağ yok. Finans ile akış D bağlanırken kapanır.
+47. [bağlama] TMI A14: alım "tamamlandı" görünürken giriş kontrolü (GKK) kararı bekleyen miktar satın almada görünmez; stok `disari.ts` kalite durumu okumasıyla sipariş özetine eklenir.
+48. TMI A10 (yeniden üretilmedi, BİLMİYORUM): ikinci talepte teklif kaydından sonra Karşılaştır adımı açılmadı. VARSAYIM: talep, teklif sayısı ayarlardaki "en az teklif" sayısına ulaşınca değerlendirmeye geçer (`merkez/ui.ts` save-quote); ikinci talepte teklif sayısı altta kalmış olabilir. Yeniden üretilirse ayrı kart.
+49. TMI A11: sipariş PDF'i yok (yalnız e-posta metni); yeni özellik, kullanıcıya sorulur.
