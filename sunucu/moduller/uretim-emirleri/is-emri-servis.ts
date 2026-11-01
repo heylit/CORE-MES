@@ -533,7 +533,8 @@ export interface EmirDilimiSatiri {
   birlestigiEmirId: number | null;
   birlesmeOpNo: number | null;
   surum: number;
-  // saglamAdet: biten iş emrinin kapanış değeri. canliAdet: çalışan iş emrinin terminal sayacındaki sağlam adet (sayım yoksa 0); çalışmayanda null.
+  // saglamAdet: biten iş emrinin kapanış değeri. canliAdet: çalışan iş emrinin kendi sayacındaki net sağlam adet (sayım yoksa 0); çalışmayanda null.
+  // Sayaç emrin değil adımındır: iki adım birlikte çalışabilir (paralel adım, çok katmanlı emirde alt düğüm ile kök).
   // ad'dan bilesenler'e kadar alanlar rotasız emrin adımlarını Reçete ve Rota'da göstermek içindir (B13); süreler numeric metindir.
   isEmirleri: {
     sira: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; saglamAdet: number | null; canliAdet: number | null;
@@ -553,8 +554,8 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
   const isEmirleri = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
   const emreGore = new Map<number, IsEmriSatiri[]>();
   for (const i of isEmirleri) emreGore.set(i.uretimEmriId, [...(emreGore.get(i.uretimEmriId) ?? []), i]);
-  const baslamislar = emirler.filter((e) => (emreGore.get(e.id) ?? []).some((i) => i.durum === 'calisiyor')).map((e) => e.id);
-  const sayaclar = new Map((baslamislar.length === 0 ? [] : await s.sayaclariGetir(db, baslamislar)).map((x) => [x.emirId, x.saglam]));
+  const calisanlar = isEmirleri.filter((i) => i.durum === 'calisiyor').map((i) => i.id);
+  const sayaclar = new Map((await s.adimSayaclariGetir(db, calisanlar)).map((x) => [x.isEmriId, x.saglam]));
   const bilesenler = await s.bilesenleriGetir(db, isEmirleri.map((i) => i.id));
   const dugumler = new Map((await s.dugumleriGetir(db, emirler.map((e) => e.id))).map((d) => [d.isEmriId, d]));
   const opNolari = new Map(isEmirleri.map((i) => [i.id, i.opNo]));
@@ -568,7 +569,7 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
     durum: gorunenDurum(e.durum, (emreGore.get(e.id) ?? []).some((i) => i.durum !== 'bekliyor')),
     bolunmeSira: e.bolunmeSira, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo, surum: e.surum,
     isEmirleri: (emreGore.get(e.id) ?? []).map((i) => ({
-      sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(e.id) ?? 0 : null,
+      sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(i.id) ?? 0 : null,
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({ malzemeId: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde })),
       tur: i.tur,

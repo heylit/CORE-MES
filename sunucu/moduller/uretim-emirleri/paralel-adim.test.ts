@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
+import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, IS_EMRI_YOK, MAKINE_DOLU } from './kurallar.ts';
 
@@ -239,5 +239,25 @@ describe('uretim-emirleri paralel adım (kart 639, gerçek PostgreSQL)', () => {
     const son = await tx((db) => emirBitir(db, op(), id, undefined, undefined, ie2));
     assert.equal(son.emir.durum, 'bitti');
     assert.equal(son.uyari, "Emir eksi bakiyeyle bitti: OP 20'de 2 fazla sayıldı.");
+  });
+
+  test('1566: emir diliminde canlı adet her çalışan adımın kendi sağlam sayacıdır; bekleyen adımda yoktur', async () => {
+    const a = await makineliIstasyon();
+    const b = await makineliIstasyon();
+    const c = await makineliIstasyon();
+    const { id, adimlar: [, ie2] } = await ac([
+      adim(1, a.makine), adim(2, b.makine, { bagimlilik: 'akisli', devirAdedi: 1 }), adim(3, c.makine, { bagimlilik: 'akisli', devirAdedi: 1 }),
+    ]) as { id: number; adimlar: [number, number, number] };
+    const canli = async (): Promise<(number | null)[]> =>
+      (await tx((db) => emirDilimi(db))).find((e) => e.id === id)!.isEmirleri.map((i) => i.canliAdet);
+    assert.deepEqual(await canli(), [null, null, null], 'çalışan adım yok');
+    await tx((db) => emirBaslat(db, op(), id));
+    assert.deepEqual(await canli(), [0, null, null], 'sayımsız çalışan adım 0');
+    await sayim(id, 1);
+    await ilkParcaOnay(id);
+    await sayim(id, 2);
+    await tx((db) => emirBaslat(db, kim('operator2'), id, undefined, undefined, ie2));
+    await sayim(id, 2, ie2);
+    assert.deepEqual(await canli(), [3, 2, null], 'iki adım birlikte çalışırken her biri kendi sayısını taşır');
   });
 });
