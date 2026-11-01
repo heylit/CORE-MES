@@ -1081,6 +1081,29 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlesme_op_no = 0 WHERE id = $1', [kol]), /uretim_emri_birlesme_op_pozitif/);
   });
 
+  test('1476-D: emir dilimi çok katmanlı emrin adımlarını düğümü ve öncülleriyle verir; tek katmanlı adımda düğüm yok', async () => {
+    const m = await makineKur(await istasyonKur());
+    const alt = await kartKur('mamul');
+    const patlatma = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO rota_patlatma (kok_malzeme_id, kok_rota_revizyonu_id, ozet, kisi_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [urunNo, rev1, `ie-dugum-${randomUUID()}`, yoneticiId]))!.id;
+    const bekle = (opNo: number) => ({ opNo, tur: 'bekleyen' as const, devirAdedi: null });
+    const dugum = (ad: string, malzemeNo: number, kaynakOpNo: number, birimCarpani: string) => ({ dugum: { ad, malzemeNo, kaynakOpNo, birimCarpani } });
+    const { uretimEmriId: id } = await o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
+      projeId: denemeProjeId, malzemeNo: urunNo, adet: 4, teslim: null, kaynakRotaRevizyonId: rev1, patlatmaId: patlatma, isEmirleri: [
+        adim(1, { tur: 'makine', id: m }, { opNo: 1010, dal: 'K1', adetCarpani: 2, onculler: [], ...dugum('0.1', alt, 10, '2') }),
+        adim(2, { tur: 'makine', id: m }, { opNo: 10, onculler: [bekle(1010)], ...dugum('0', urunNo, 10, '1') }),
+      ],
+    }));
+    const { uretimEmriId: tek } = await ac([adim(1, { tur: 'makine', id: m })]);
+    const dilim = await o().vt.tx((db) => emirDilimi(db));
+    assert.deepEqual(dilim.find((e) => e.id === id)?.isEmirleri.map((i) => [i.opNo, i.dugum, i.onculler]), [
+      [1010, { ad: '0.1', malzemeNo: alt, kaynakOpNo: 10, birimCarpani: '2.0000' }, []],
+      [10, { ad: '0', malzemeNo: urunNo, kaynakOpNo: 10, birimCarpani: '1.0000' }, [{ opNo: 1010 }]],
+    ]);
+    assert.deepEqual(dilim.find((e) => e.id === tek)?.isEmirleri.map((i) => [i.dugum, i.onculler]), [[null, null]]);
+  });
+
   test('283 a: kollardaki hurda ana emrin ayrıntısında ayrı satırdır, ana emrin hurdasına karışmaz; kolu olmayan emirde yoktur', async () => {
     const mk = (id: number) => ({ tur: 'makine' as const, id });
     const [m1, m2] = [await makineKur(await istasyonKur()), await makineKur(await istasyonKur())];

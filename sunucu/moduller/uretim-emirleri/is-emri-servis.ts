@@ -541,6 +541,10 @@ export interface EmirDilimiSatiri {
     ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null; bilesenler: { malzemeId: number; miktar: string; fireYuzde: string }[];
     // 697: ek adım (rework, tamir, ek) rotada yer tutmaz; Reçete ve Rota durum anahtarını rotadaki yerle kurar.
     tur: 'rota' | 'rework' | 'tamir' | 'ek';
+    // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"; rotadaki op numarası, kök başına adet) ve emir içindeki öncülleri (op no);
+    // plan motoru alt düğümü tüketen üst adıma bağlar. Tek katmanlı emirde düğüm null; dal satırı olmayan adımda öncüller null.
+    dugum: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
+    onculler: { opNo: number }[] | null;
   }[];
 }
 
@@ -552,6 +556,12 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
   const baslamislar = emirler.filter((e) => (emreGore.get(e.id) ?? []).some((i) => i.durum === 'calisiyor')).map((e) => e.id);
   const sayaclar = new Map((baslamislar.length === 0 ? [] : await s.sayaclariGetir(db, baslamislar)).map((x) => [x.emirId, x.saglam]));
   const bilesenler = await s.bilesenleriGetir(db, isEmirleri.map((i) => i.id));
+  const dugumler = new Map((await s.dugumleriGetir(db, emirler.map((e) => e.id))).map((d) => [d.isEmriId, d]));
+  const opNolari = new Map(isEmirleri.map((i) => [i.id, i.opNo]));
+  const dugumOf = (id: number): EmirDilimiSatiri['isEmirleri'][number]['dugum'] => {
+    const d = dugumler.get(id);
+    return d === undefined ? null : { ad: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani };
+  };
   return emirler.flatMap((e) => (e.malzemeNo === null ? [] : [{
     id: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, baslangic: e.baslangic, teslim: e.teslim, oncelik: e.oncelik, aciklama: e.aciklama,
     kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, acilma: e.acilma, bitis: e.bitis, ustEmirId: e.ustEmirId,
@@ -562,6 +572,8 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({ malzemeId: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde })),
       tur: i.tur,
+      dugum: dugumOf(i.id),
+      onculler: i.onculler === null ? null : i.onculler.flatMap((o) => { const op = opNolari.get(o.id); return op === undefined ? [] : [{ opNo: op }]; }),
     })),
   }]));
 }
