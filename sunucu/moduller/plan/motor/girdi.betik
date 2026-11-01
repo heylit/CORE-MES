@@ -113,7 +113,9 @@ function rrCevir(st) {
       const ad = opAd(s.opId) || (o0 && o0.ad) || ('OP ' + s.seq); if (!o0 || o0.ad !== ad) z.ad = ad;
       const ref = o0 ? rrAdimYerli(o0, grupOf, s.opId) : null;
       if (!o0 || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
-        const izin = [s.stationId, ...(s.alts || [])].filter(Boolean);
+        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ayar süresi
+           boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
+        const izin = [s.stationId, ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
         const eski = (o0 && o0.tezgahlar) || [];
         const sure = g => g === s.stationId ? { ayar: +s.setup || 0, cevrim: +s.cycle || 0 } : { ayar: +((s.altTimes || {})[g] || {}).setup || 0, cevrim: +((s.altTimes || {})[g] || {}).cycle || 0 };
         const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
