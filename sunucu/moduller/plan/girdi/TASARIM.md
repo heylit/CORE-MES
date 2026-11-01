@@ -66,6 +66,10 @@ Elle alanların sahibi (`sahip` sütunu) öneridir; kesin sahip 1719'un sahiplik
    ürünlerin adımları eski listeye kurulu olduğundan tezgâhlar eski yolunki kalır. Günlüğe yazan gölge koşu yapılmadı; eşdeğerliği
    `kaynaklar-vt.test.ts` KV-05 ve KV-06 bütün çalışma (S) ve motor girdisi (st) üzerinde sınar. Kayıt yokken açılan boş çalışma
    (`yeniCalisma`) eski yoldadır.
+   İkinci parça "1720 değerlendirme": planlama değerlendirmesi ve satış teklifi denemesi kendi iş parçacıklarında koşar. Bayrak açıkken
+   `birlestirme.ts` oraya dinamik import ile yüklenir ve aynı sarma kurulur. Teklif yolunun okumasında takvim eki olmadığı için tipli dilim
+   de takvimsiz verilir; sonuç eski yolla aynı kalır. Tipli dilimle iş parçacığı hata verirse istek eski yolla, kalan sürede yeniden koşar.
+   Sınama `degerlendirme-esdegerlik.test.ts`'tedir.
 
 ## 5. Eşdeğerlik düzeni
 

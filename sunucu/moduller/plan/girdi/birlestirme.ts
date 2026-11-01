@@ -23,3 +23,19 @@ export function tipliKaynakBirlestir(eski: KaynakBirlestir, okuma: KaynakDilimiO
     return [...new Set([...degisen, ...alanlar])];
   };
 }
+
+// Değerlendirme ve teklif denemesi betikleri kendi iş parçacıklarında, kendi bağlamlarında koşar. Bu dosya oraya dinamik import ile yüklenir
+// ve bağlamın kaynakBirlestir'i aynı sarmayla değişir. Tipli okuma yoksa (bayrak kapalı) hiçbir şey yüklenmez. Yükleme ya da sarma
+// başarısız olursa iş eski yolla sürer; hata iş parçacığının hata çıkışına yazılır.
+export const BIRLESTIRME_ADRESI = import.meta.url;
+export const ISCI_TIPLI_KAYNAK = `
+async function tipliKaynakBagla(b, okuma, adres) {
+  if (!okuma) return;
+  try {
+    const { tipliKaynakBirlestir } = await import(adres);
+    b.kaynakBirlestir = tipliKaynakBirlestir(b.kaynakBirlestir, okuma);
+  } catch (e) {
+    console.error('Tipli kaynak dilimi bağlanamadı; eski yolla sürüyor.', e);
+  }
+}
+`;

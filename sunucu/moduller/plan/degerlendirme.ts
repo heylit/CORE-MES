@@ -10,6 +10,8 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import type { HataKodu } from '#paylasilan/hata.ts';
 import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
+import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
+import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { planlamaGirdisi } from './planlama-servis.ts';
 
@@ -26,7 +28,10 @@ function degerlendirmeKodu(): string {
   return kod;
 }
 
-export interface DegerlendirmeGirdisi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi | null; bugun?: string; istek: DegerlendirmeIstegi; sira?: number }
+// kaynakDilimi: 1720, bayrak (plan.tipli-girdi) açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts).
+export interface DegerlendirmeGirdisi {
+  calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi | null; bugun?: string; istek: DegerlendirmeIstegi; sira?: number; kaynakDilimi?: KaynakDilimiOkumasi | null;
+}
 // Betiğin dönüşü: çalışma yoksa null, isteğin çalışmayla uyuşmadığı durum hata kodu, aksi halde cevabın zarfı (sonuç sözleşmenin biçimindedir).
 export type DegerlendirmeHatasi = 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi';
 export interface DegerlendirmeZarfi { dataVer: number; baslangic: string | null; simdi: number; sonuc: Record<string, unknown> & { tur: DegerlendirmeIstegi['tur'] } }
@@ -36,11 +41,15 @@ export type DegerlendirmeDonusu = { hata: DegerlendirmeHatasi } | DegerlendirmeZ
 const ISCI = `
 const { parentPort, workerData } = require('node:worker_threads');
 const vm = require('node:vm');
-const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
-b.self = b;
-const m = vm.runInContext(workerData.kod, b, { filename: 'planlama-degerlendirmesi.js' });
-const i = workerData.girdi;
-parentPort.postMessage(m.degerlendir(i.calisma, i.kayit, i.kaynak, i.bugun, workerData.simdi, i.sira == null ? i.istek : { ...i.istek, sira: i.sira }));
+${ISCI_TIPLI_KAYNAK}
+(async () => {
+  const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
+  b.self = b;
+  const m = vm.runInContext(workerData.kod, b, { filename: 'planlama-degerlendirmesi.js' });
+  const i = workerData.girdi;
+  await tipliKaynakBagla(b, i.kaynakDilimi, workerData.birlestirmeAdresi);
+  parentPort.postMessage(m.degerlendir(i.calisma, i.kayit, i.kaynak, i.bugun, workerData.simdi, i.sira == null ? i.istek : { ...i.istek, sira: i.sira }));
+})();
 `;
 
 // Hesap uç transaction'ının dışında koşar (463 a); süre kuyruğa girişten sayılır.
@@ -71,13 +80,18 @@ async function kosustur(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: numb
 }
 
 function calistir(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: number): Promise<DegerlendirmeDonusu> {
+  const son = Date.now() + sureMs;
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi } });
+    const isci = new Worker(ISCI, { eval: true, workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
     const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Planlama değerlendirmesi ${String(sureMs)} ms içinde bitmedi; daha az seçenekle ya da biraz sonra yeniden deneyin.`))), sureMs);
     isci.once('message', (s: DegerlendirmeDonusu) => sonlan(() => coz(s)));
-    isci.once('error', (e) => sonlan(() => reddet(e)));
+    // 1720: tipli dilimle iş parçacığı hata verirse aynı girdi eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
+    isci.once('error', (e) => sonlan(() => {
+      if (girdi.kaynakDilimi) calistir({ ...girdi, kaynakDilimi: null }, simdi, Math.max(1, son - Date.now())).then(coz, reddet);
+      else reddet(e);
+    }));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Planlama değerlendirmesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
   });
 }

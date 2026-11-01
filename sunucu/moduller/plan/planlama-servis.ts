@@ -353,14 +353,18 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
   // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
   const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
-  // 1720 kaynak: bayrak açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts); izinli günler aynı kapasite okumasındandır.
-  const kaynakDilimi = (await sistemAyariOku(db, 'plan.tipli-girdi'))
-    ? await kaynakDilimiOku(db, kullanici, kapasitedenIzinler((kaynak.ek as { kapasite?: Parameters<typeof kapasitedenIzinler>[0] }).kapasite))
-    : null;
+  const kaynakDilimi = await tipliKaynakOkumasi(db, kullanici, kaynak);
   return {
     surum,
     girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
   };
+}
+
+// 1720 kaynak: bayrak (plan.tipli-girdi) açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts); kapalıyken okunmaz (null).
+// İzinli günler aynı kapasite okumasındandır.
+async function tipliKaynakOkumasi(db: Db, kullanici: Kullanici, kaynak: KaynakOkumasi): Promise<KaynakDilimiOkumasi | null> {
+  if (!(await sistemAyariOku(db, 'plan.tipli-girdi'))) return null;
+  return kaynakDilimiOku(db, kullanici, kapasitedenIzinler((kaynak.ek as { kapasite?: Parameters<typeof kapasitedenIzinler>[0] }).kapasite));
 }
 
 // 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
@@ -474,8 +478,10 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
     })),
     yerlesim: Object.fromEntries(t.kalemler.flatMap((k, i) => Object.entries(k.yerlesim).map(([adim, y]) => [`${t.id}-${String(i + 1)}.${adim}`, { m: y.makineId, S: saat(y.baslangic) }]))),
   }));
+  // Teklif yolunun kaynak okumasında takvim eki yoktur (kaynakOku); tipli dilim de takvimsiz okunur ki sonuç eski yolla aynı kalsın.
+  const dilim = await tipliKaynakOkumasi(db, kullanici, kaynak);
   const r: DenemeSonucu | null = await teklifDenemesi({
-    calisma, kayit, kaynak, bugun,
+    calisma, kayit, kaynak, bugun, kaynakDilimi: dilim === null ? null : { ...dilim, takvim: null },
     kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, ...adimlar(String(k.malzemeNo), k.adet) })),
     termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
     taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await sorgular.ayarOku(db, null)).tamponGun, gecerlilik: g.gecerlilik,
