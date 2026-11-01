@@ -459,3 +459,54 @@ describe('göç koşuları: sıra, bağlantı kapanışı ve kenarlar (gerçek P
     assert.deepEqual(await acik().vt.sorgu('SELECT id FROM sayac'), [{ id: 1 }]);
   });
 });
+
+describe('göç sırası şemaya özeldir (gerçek PostgreSQL)', () => {
+  let a: TestVeritabani | undefined;
+  let b: TestVeritabani | undefined;
+  let klasorA = '';
+  let klasorB = '';
+
+  const ortamlar = (): [TestVeritabani, TestVeritabani] => {
+    if (!a || !b) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return [a, b];
+  };
+  const uygula = (ortam: TestVeritabani, klasor: string): Promise<string[]> =>
+    gocleriUygula({ pg: { ...ortam.ayar.pg, kilitSureMs: ULASMA_SINIRI_MS }, goc: ortam.ayar.goc }, klasor, { sema: ortam.sema });
+
+  before(async () => {
+    a = await testSemasiAc('goca');
+    b = await testSemasiAc('gocs');
+    klasorA = await mkdtemp(join(tmpdir(), 'tmiv2-goca-'));
+    klasorB = await mkdtemp(join(tmpdir(), 'tmiv2-gocs-'));
+  });
+
+  after(async () => {
+    for (const klasor of [klasorA, klasorB]) if (klasor) await rm(klasor, { recursive: true, force: true });
+    await a?.kaldir();
+    await b?.kaldir();
+  });
+
+  // Aynı veritabanındaki iki şema ayrı kurulumdur (test şemaları gibi): birinin göçü ötekini beklememeli.
+  test('bir şemada sırayı tutan koşu beklerken öteki şemanın göçü beklemeden uygulanır', { timeout: 120_000 }, async () => {
+    const [ilk, ikinci] = ortamlar();
+    await ilk.sahip.sorgu('CREATE TABLE tutulan (id int)');
+    await writeFile(join(klasorA, '100_tutulan.sql'), 'ALTER TABLE tutulan ADD COLUMN ek int;\n');
+    await writeFile(join(klasorB, '100_ayri.sql'), 'CREATE TABLE ayri (id int);\n');
+    const kilit = await tabloyuTut(ilk, 'tutulan');
+    const kosu = kosuBaslat(uygula(ilk, klasorA));
+    let oteki: unknown = 'ilk koşu tabloya ulaşmadı';
+    try {
+      // İlk koşu tabloyu bekliyorsa sırayı tutuyordur: sıra kilidi göç transaction'ının başında alınır.
+      if (await olanaDek(async () => (await bekleyenTurleri(ilk)).includes('relation'), kosu)) {
+        const ust = new Promise<string>((coz) => setTimeout(() => coz('öteki şema sırayı bekledi'), 15_000));
+        oteki = await Promise.race([uygula(ikinci, klasorB), ust]);
+      }
+      assert.equal(kosu.bitti(), false);
+    } finally {
+      await kilit.birak();
+    }
+    assert.deepEqual(oteki, ['100_ayri.sql']);
+    assert.deepEqual(await kosu.sonuc, ['100_tutulan.sql']);
+    assert.equal(await tabloVarMi(ikinci.vt, 'ayri'), true);
+  });
+});

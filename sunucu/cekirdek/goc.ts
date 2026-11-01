@@ -20,8 +20,11 @@ export function gocHataIletisi(hata: unknown): string {
   return hata instanceof Error ? hata.message : String(hata);
 }
 
-// Aynı anda iki göç koşusunu sıraya sokan danışma kilidinin anahtarı.
-const KILIT_ANAHTARI = 7402100001;
+// Aynı şemadaki iki göç koşusunu sıraya sokan danışma kilidinin anahtarı. Danışma kilidi veritabanı geneline
+// işler; aynı veritabanındaki ayrı şemalar (test şemaları gibi) ayrı kurulumdur, birbirini beklememeli.
+// Anahtar bağlantının kendi şemasından türer, istemcideki ayardan değil: kilit, göçün yazdığı şemayı izler.
+const KILIT_ANAHTARI_SQL =
+  "('x' || left(encode(sha256(convert_to(coalesce(current_schema(), '') || ':goc_sirasi', 'UTF8')), 'hex'), 16))::bit(64)::bigint";
 
 const KAYIT_TABLOSU = `CREATE TABLE IF NOT EXISTS goc_kaydi (
   ad text PRIMARY KEY,
@@ -76,7 +79,7 @@ function damgayiDogrula(ad: string, sonUygulanan: string | null, buKosudaUygulan
 // Sınır danışma kilidine de işler, bu yüzden bekleme boyunca kaldırılır ve oturum değerine geri alınır.
 async function sirayaGir(db: Db): Promise<void> {
   await db.sorgu('SET LOCAL lock_timeout = 0');
-  await db.sorgu('SELECT pg_advisory_xact_lock($1)', [KILIT_ANAHTARI]);
+  await db.sorgu(`SELECT pg_advisory_xact_lock(${KILIT_ANAHTARI_SQL})`);
   await db.sorgu('RESET lock_timeout');
 }
 
