@@ -80,8 +80,11 @@ export async function yansimaYaz(
 }
 
 // Emir başına işleme kilidi (işlem sonuna kadar), bekletmeden yoklanır: başka işleyici tutuyorsa false.
+// Anahtara şema katılır: aynı veritabanındaki başka şema (paralel test) aynı kimlikli emrin kilidini tutup bu şemayı bekletmesin.
 export async function emirKilidiniDene(db: Db, emirId: number): Promise<boolean> {
-  return (await db.tek<{ alindi: boolean }>('SELECT pg_try_advisory_xact_lock(hashtext($1)) AS alindi', [`arkon-yansima-emir-${emirId}`]))?.alindi === true;
+  return (await db.tek<{ alindi: boolean }>(
+    "SELECT pg_try_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text)) AS alindi", [emirId],
+  ))?.alindi === true;
 }
 
 export async function kisaBekle(db: Db): Promise<void> {

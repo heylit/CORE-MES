@@ -1076,7 +1076,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const emir = await calisanEmir();
     const s = sayim(emir, 'good', 3);
     await vt().tx(async (db) => {
-      await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`arkon-yansima-emir-${emir}`]);
+      await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [emir]);
       const c = await ekle(operator, 'counts', s);
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
       assert.equal(await kayitSayisi(String(s['cid'])), 1);
@@ -1093,7 +1093,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const emirler = [await calisanEmir(), await calisanEmir(), await calisanEmir()];
     const satirlar = emirler.map((e) => sayim(e, 'good', 1));
     await vt().tx(async (db) => {
-      for (const e of emirler) await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`arkon-yansima-emir-${e}`]);
+      for (const e of emirler) await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [e]);
       const t0 = Date.now();
       const c = await istek<{ eklenen: number }>(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar, kaynak: 'y1' });
       const sure = Date.now() - t0;
@@ -1624,7 +1624,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const { emir, c } = await bekleyenKur(172, 'yineleyici_2');
     await denemeyeHazirla();
     await vt().tx(async (db) => {
-      await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`arkon-yansima-emir-${emir}`]);
+      await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [emir]);
       assert.equal(await turKos(), 'tamam');
       assert.equal((await yansima(c))?.sonuc, 'bekliyor');
     });
