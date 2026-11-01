@@ -355,7 +355,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       if (yer === null) continue;
       const anahtar = `${String(e.id)}|root|${String(yer)}`;
       if (i.durum !== 'bekliyor') opStatus[anahtar] = i.durum;
-      // Biten adımın ilerlemesi prototipte durumdan okunur; ilerleme yalnız süren adımın terminal sayacıdır (sayım yoksa yazılmaz).
+      // Biten adımın ilerlemesi prototipte durumdan okunur; ilerleme yalnız süren adımın kendi sayacıdır (sayım yoksa yazılmaz).
       if (i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0) opProg[anahtar] = i.canliAdet;
       if (e.kaynakRotaRevizyonId !== null && i.durum !== 'tamam') {
         const fason = i.kaynak?.tur === 'fason' ? String(i.kaynak.id) : null;
