@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, SaglikCevabi, Uyari } from '#paylasilan/sozlesme/saglik.ts';
+import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, SaglikCevabi, TabloBuyuklugu, Uyari, VeritabaniBuyumesi } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo } from '../../ortak/arayuz/index.ts';
 import type { RozetTonu, Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -83,6 +83,53 @@ function IsTablosu({ isler }: { isler: readonly IsDurumuOzeti[] }) {
 }
 
 // Uyarıyı sunucu hesaplar (yedek alınmadı, iş asıldı ya da hata verdi, disk az); ekran yalnız listeler.
+const SAYI = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
+
+function baytMetni(bayt: number): string {
+  const birimler = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+  let deger = bayt;
+  let i = 0;
+  while (deger >= 1024 && i < birimler.length - 1) {
+    deger /= 1024;
+    i += 1;
+  }
+  return `${SAYI.format(deger)} ${birimler[i]}`;
+}
+
+const TABLO_SUTUNLARI: readonly Sutun<TabloBuyuklugu>[] = [
+  { anahtar: 'ad', baslik: 'Tablo', hucre: (t) => t.ad, mono: true },
+  { anahtar: 'toplamBayt', baslik: 'Boyut', hucre: (t) => baytMetni(t.toplamBayt), hizala: 'sag', kirilmaz: true },
+  { anahtar: 'dizinBayt', baslik: 'Dizin', hucre: (t) => baytMetni(t.dizinBayt), hizala: 'sag', kirilmaz: true },
+  { anahtar: 'canliSatir', baslik: 'Satır', hucre: (t) => SAYI.format(t.canliSatir), hizala: 'sag' },
+  { anahtar: 'oluOraniYuzde', baslik: 'Ölü satır', hucre: (t) => (t.oluOraniYuzde === null ? YOK : `%${SAYI.format(t.oluOraniYuzde)}`), hizala: 'sag' },
+  { anahtar: 'sonAutovacuum', baslik: 'Son autovacuum', hucre: (t) => zamanMetni(t.sonAutovacuum), kirilmaz: true },
+];
+
+// Saklama kararı (1764 a) için ölçü: veritabanı ve en büyük tablolar. Değerler sunucudan; ekran eşik ya da yorum eklemez.
+function VeritabaniBuyumesiBolumu({ buyume }: { buyume: VeritabaniBuyumesi | null }) {
+  return (
+    <section aria-labelledby="tc-sistem-vt-buyume">
+      <h3 id="tc-sistem-vt-buyume" className="tc-sistem-baslik"><Simge ad="layers" boyut="k" /> Veritabanı büyümesi</h3>
+      {buyume === null ? <p>Ölçü yok</p> : (
+        <>
+          <dl className="tc-sistem-liste">
+            <dt>Veritabanı boyutu</dt>
+            <dd>{baytMetni(buyume.boyutBayt)}</dd>
+            <dt>XID yaşı</dt>
+            <dd>{buyume.xidYasi === null ? YOK : SAYI.format(buyume.xidYasi)}</dd>
+            <dt>En uzun açık işlem</dt>
+            <dd>{buyume.enUzunTxSn === null ? YOK : `${SAYI.format(buyume.enUzunTxSn)} sn`}</dd>
+          </dl>
+          {buyume.tablolar.length === 0
+            ? <p>Tablo yok</p>
+            : <Tablo etiket="En büyük tablolar" sutunlar={TABLO_SUTUNLARI} satirlar={buyume.tablolar} satirAnahtari={(t) => t.ad} />}
+          <p className="tc-sistem-soluk">En büyük {buyume.tablolar.length} tablo; boyut dizin dahil, satır sayıları PostgreSQL tahminidir.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function UyariListesi({ uyarilar }: { uyarilar: readonly Uyari[] }) {
   if (uyarilar.length === 0) return null;
   return (
@@ -124,6 +171,7 @@ export function SistemDurumu() {
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <UyariListesi uyarilar={ayrinti.data.uyarilar} />}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <Performans />}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <AyrintiListesi ayrinti={ayrinti.data} saglikli={saglikli} />}
+      {ayrintiGorur && !saglik.isPending && ayrinti.data && <VeritabaniBuyumesiBolumu buyume={ayrinti.data.veritabaniBuyumesi ?? null} />}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <IsTablosu isler={ayrinti.data.isler} />}
       {ayrintiGorur && ayrinti.isError && <p role="alert">{hataIletisi(ayrinti.error, 'Ayrıntı alınamadı')}</p>}
     </Kart>

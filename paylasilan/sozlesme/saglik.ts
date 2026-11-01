@@ -57,6 +57,29 @@ export const geriYuklemeDenemesiSemasi = z.object({
   hata: z.string().nullable(),
 });
 
+// Veritabanı büyümesi (1761): saklama kararı (1764 a) üç ay bu ölçüyle verilecek. Satır sayıları PostgreSQL istatistik
+// tahminidir; ölü satır oranı canlı ve ölü toplamı sıfırsa null. Hiç autovacuum ya da autoanalyze koşmamışsa zaman null.
+export const tabloBuyukluguSemasi = z.object({
+  ad: z.string(),
+  toplamBayt: z.number().int().nonnegative(),
+  dizinBayt: z.number().int().nonnegative(),
+  canliSatir: z.number().int().nonnegative(),
+  oluSatir: z.number().int().nonnegative(),
+  oluOraniYuzde: z.number().nonnegative().nullable(),
+  sonAutovacuum: zamanSemasi.nullable(),
+  sonAutoanalyze: zamanSemasi.nullable(),
+});
+
+export const veritabaniBuyumesiSemasi = z.object({
+  boyutBayt: z.number().int().nonnegative(),
+  // Wraparound'a uzaklık (2 milyara yaklaşınca PostgreSQL yazmayı durdurur); okunamazsa null.
+  xidYasi: z.number().int().nonnegative().nullable(),
+  // Görünen en uzun açık transaction (sn): uzun açık transaction autovacuum'un ölü satırı temizlemesini engeller; yoksa null.
+  enUzunTxSn: z.number().nonnegative().nullable(),
+  // En büyükten küçüğe, en çok 10 tablo (dizin ve TOAST dahil boyut).
+  tablolar: z.array(tabloBuyukluguSemasi),
+});
+
 export const ayrintiCevabi = z.object({
   // Veritabanının durumu yalnız `/saglik` cevabındadır; yoklama başarısızsa gecikme null.
   veritabaniGecikmeMs: z.number().int().nonnegative().nullable(),
@@ -81,6 +104,8 @@ export const ayrintiCevabi = z.object({
   otomatikAcilis: otomatikAcilisSemasi.nullable().optional(),
   // Son geri yükleme denemesi; hiç yapılmamışsa ya da yedek klasörü okunamazsa null. Eski istemci kırılmasın diye isteğe bağlı.
   geriYuklemeDenemesi: geriYuklemeDenemesiSemasi.nullable().optional(),
+  // Veritabanı okunamadıysa null. Eski istemci kırılmasın diye isteğe bağlı.
+  veritabaniBuyumesi: veritabaniBuyumesiSemasi.nullable().optional(),
 });
 
 const sayi = z.number().int().nonnegative();
@@ -174,6 +199,8 @@ export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
 export type IstekOzeti = z.output<typeof istekOzetiSemasi>;
 export type UcOzeti = z.output<typeof ucOzetiSemasi>;
 export type SaatOzeti = z.output<typeof saatOzetiSemasi>;
+export type TabloBuyuklugu = z.output<typeof tabloBuyukluguSemasi>;
+export type VeritabaniBuyumesi = z.output<typeof veritabaniBuyumesiSemasi>;
 export type GeriYuklemeDenemesi = z.output<typeof geriYuklemeDenemesiSemasi>;
 export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
 export type SaatlikCevabi = z.output<typeof saatlikCevabi>;

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, oluOraniYuzde, veritabaniBuyumesi, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
@@ -278,4 +278,28 @@ test('geri yükleme denemesi uyarısı: hiç yoksa, başarısızsa ya da 35 gün
   assert.equal(deneme(uyarilar(g({ durum: 'acik', sonYedek: simdi, sonDeneme: null }))).length, 1);
   assert.equal(deneme(uyarilar(g({ durum: 'acik', sonYedek: simdi }))).length, 0);
   assert.equal(deneme(uyarilar(g({ durum: 'dizin-yok', sonYedek: null, sonDeneme: null }))).length, 0);
+});
+
+test('veritabanı büyümesi: ölü satır oranı yüzde, boş tablo null; ölçü ya da tablo listesi yoksa bütün ölçü null', () => {
+  assert.equal(oluOraniYuzde(75, 25), 25);
+  assert.equal(oluOraniYuzde(2, 1), 33.3);
+  assert.equal(oluOraniYuzde(0, 0), null);
+  const vt: VtIstatistigi = {
+    boyutBayt: 1024.4, xidYasi: 1200, islem: 0, geriAlma: 0, deadlock: 0, blokIsabet: 0, blokOkuma: 0, geciciBayt: 0,
+    baglanti: { toplam: 1, aktif: 1, bosta: 0, bosTx: 0, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: 12.34,
+  };
+  const tablo = {
+    ad: 'ornek', toplamBayt: 8192, dizinBayt: 4096, canliSatir: 0, oluSatir: 0,
+    sonAutovacuum: new Date('2026-11-01T02:00:00Z'), sonAutoanalyze: null,
+  };
+  assert.deepEqual(veritabaniBuyumesi(vt, [tablo]), {
+    boyutBayt: 1024, xidYasi: 1200, enUzunTxSn: 12.3,
+    tablolar: [{
+      ad: 'ornek', toplamBayt: 8192, dizinBayt: 4096, canliSatir: 0, oluSatir: 0, oluOraniYuzde: null,
+      sonAutovacuum: '2026-11-01T02:00:00.000Z', sonAutoanalyze: null,
+    }],
+  });
+  assert.equal(veritabaniBuyumesi(null, [tablo]), null);
+  assert.equal(veritabaniBuyumesi(vt, null), null);
+  assert.deepEqual(veritabaniBuyumesi({ ...vt, enUzunTxSn: null, xidYasi: null }, [])?.tablolar, []);
 });

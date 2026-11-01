@@ -1,11 +1,11 @@
 import { SURE_KOVALARI_MS } from '#cekirdek/istek-olcumu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { HavuzDurumu } from '#cekirdek/db.ts';
-import type { VtIstatistigi } from './sorgular.ts';
+import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
-  DiskDurumu, GeriYuklemeDenemesi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+  DiskDurumu, GeriYuklemeDenemesi, VeritabaniBuyumesi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
@@ -462,4 +462,30 @@ export function denemeUyarisi(d: GeriYuklemeDenemesi | null, simdi: Date): strin
   if (d.sonuc === 'basarisiz') return `Son geri yükleme denemesi başarısız oldu (${d.hata ?? 'ayrıntı yok'}).`;
   const gun = Math.floor((simdi.getTime() - new Date(d.zaman).getTime()) / 86_400_000);
   return gun > DENEME_EN_ESKI_GUN ? `Son geri yükleme denemesi ${gun} gün önce yapıldı.` : null;
+}
+
+// Veritabanı büyümesi (1761). Ölü satır oranı tablodaki ölü satırın payıdır; tablo boşsa (ikisi de sıfır) ölçü yok, null.
+export function oluOraniYuzde(canli: number, olu: number): number | null {
+  const toplam = canli + olu;
+  return toplam <= 0 ? null : Math.round((olu / toplam) * 1000) / 10;
+}
+
+// Veritabanı ölçüsü okunamadıysa büyüme de bilinmiyor: null. Tablo listesi okunamazsa boş liste değil, bütün ölçü null.
+export function veritabaniBuyumesi(vt: VtIstatistigi | null, tablolar: readonly TabloOlcusu[] | null): VeritabaniBuyumesi | null {
+  if (vt === null || tablolar === null) return null;
+  return {
+    boyutBayt: Math.round(vt.boyutBayt),
+    xidYasi: vt.xidYasi,
+    enUzunTxSn: vt.enUzunTxSn === null ? null : Math.round(vt.enUzunTxSn * 10) / 10,
+    tablolar: tablolar.map((t) => ({
+      ad: t.ad,
+      toplamBayt: Math.round(t.toplamBayt),
+      dizinBayt: Math.round(t.dizinBayt),
+      canliSatir: Math.round(t.canliSatir),
+      oluSatir: Math.round(t.oluSatir),
+      oluOraniYuzde: oluOraniYuzde(t.canliSatir, t.oluSatir),
+      sonAutovacuum: zamanMetni(t.sonAutovacuum),
+      sonAutoanalyze: zamanMetni(t.sonAutoanalyze),
+    })),
+  };
 }

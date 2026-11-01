@@ -110,3 +110,36 @@ export async function metrikSaatleriOku<T>(db: Db, baslangic: Date): Promise<T[]
   const satirlar = await db.sorgu<{ veri: T }>('SELECT veri FROM saglik_metrik_saat WHERE saat >= $1 ORDER BY saat', [baslangic]);
   return satirlar.map((s) => s.veri);
 }
+
+// Veritabanı büyümesi (kart 1761): en büyük tablolar, ölü satır ve son autovacuum. Kaynak pg_stat_user_tables ve boyut
+// fonksiyonları; süper kullanıcı ya da pg_monitor istemez. Satır sayıları istatistik tahminidir (ANALYZE ile güncellenir).
+// Yalnız arama yolundaki şemalar: testler kendi şemasında koşar, canlı `public`'tedir.
+export interface TabloOlcusu {
+  ad: string;
+  toplamBayt: number;
+  dizinBayt: number;
+  canliSatir: number;
+  oluSatir: number;
+  sonAutovacuum: Date | null;
+  sonAutoanalyze: Date | null;
+}
+
+export const EN_BUYUK_TABLO_SAYISI = 10;
+
+export async function enBuyukTablolariOku(db: Db, enCok: number = EN_BUYUK_TABLO_SAYISI): Promise<TabloOlcusu[]> {
+  const satirlar = await db.sorgu<{
+    ad: string; toplam: number; dizin: number; canli: number; olu: number; son_autovacuum: Date | null; son_autoanalyze: Date | null;
+  }>(
+    `SELECT relname AS ad, pg_total_relation_size(relid)::float8 AS toplam, pg_indexes_size(relid)::float8 AS dizin,
+            n_live_tup::float8 AS canli, n_dead_tup::float8 AS olu, last_autovacuum AS son_autovacuum, last_autoanalyze AS son_autoanalyze
+       FROM pg_stat_user_tables
+      WHERE schemaname = ANY (current_schemas(false))
+      ORDER BY pg_total_relation_size(relid) DESC, relname
+      LIMIT $1`,
+    [enCok],
+  );
+  return satirlar.map((s) => ({
+    ad: s.ad, toplamBayt: s.toplam, dizinBayt: s.dizin, canliSatir: s.canli, oluSatir: s.olu,
+    sonAutovacuum: s.son_autovacuum, sonAutoanalyze: s.son_autoanalyze,
+  }));
+}

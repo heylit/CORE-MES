@@ -17,7 +17,7 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
+import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, oluOraniYuzde, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
   MetrikToplayici, ayrintiTopla, denemeKaydiOku, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
@@ -135,7 +135,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
     assert.deepEqual(ayrinti, {
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), yayin: null, calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
       uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
-      geriYuklemeDenemesi: null,
+      geriYuklemeDenemesi: null, veritabaniBuyumesi: null,
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
@@ -367,7 +367,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
-      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniBuyumesi', 'veritabaniDiski', 'veritabaniGecikmeMs',
       'vtBaglantiSayisi', 'yayin', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
@@ -384,6 +384,48 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     await new Promise((coz) => setTimeout(coz, 120));
     const ikinci = (await ayrintiIste(app, yoneticiCerezi)).json();
     assert.equal(typeof ikinci.olayDongusuGecikmeMs === 'number' && ikinci.olayDongusuGecikmeMs >= 0, true);
+  });
+
+  test('/saglik/ayrinti veritabanı büyümesi: boyut ve en büyük tablolar gerçek istatistikten; tablo listesi sınırlı ve büyükten küçüğe', async () => {
+    // Tabloyu sahibi kurar; uç uygulama kullanıcısıyla okur: boyut ve istatistik ek yetki istemez.
+    const asil = acik().sahip;
+    await asil.sorgu('CREATE TABLE vt_buyume_deneme (id int PRIMARY KEY, metin text NOT NULL)');
+    await asil.sorgu("INSERT INTO vt_buyume_deneme SELECT g, repeat('x', 200) FROM generate_series(1, 20000) g");
+    await asil.sorgu('DELETE FROM vt_buyume_deneme WHERE id <= 5000');
+    await asil.sorgu('ANALYZE vt_buyume_deneme');
+    try {
+      const cevap = await ayrintiIste(app, izleyenCerezi);
+      assert.equal(cevap.statusCode, 200);
+      const b = cevap.json().veritabaniBuyumesi;
+      assert.equal(Number.isInteger(b.boyutBayt) && b.boyutBayt > 0, true);
+      assert.equal(Number.isInteger(b.xidYasi) && b.xidYasi >= 0, true);
+      assert.equal(b.tablolar.length > 0 && b.tablolar.length <= 10, true);
+      const boyutlar = b.tablolar.map((t: { toplamBayt: number }) => t.toplamBayt);
+      assert.deepEqual(boyutlar, [...boyutlar].sort((x, y) => y - x));
+      // Test şemasının en büyük tablosu budur; başka şemanın tablosu listeye girmez.
+      const t = b.tablolar[0];
+      assert.equal(t.ad, 'vt_buyume_deneme');
+      assert.equal(t.toplamBayt > t.dizinBayt && t.dizinBayt > 0, true);
+      // Sayılar istatistik tahminidir ve başka bağlantının sayacı gecikmeli yazılır: kesin değer değil tutarlılık beklenir.
+      assert.equal(Number.isInteger(t.canliSatir) && t.canliSatir > 0, true);
+      assert.equal(Number.isInteger(t.oluSatir) && t.oluSatir >= 0, true);
+      assert.equal(t.oluOraniYuzde, oluOraniYuzde(t.canliSatir, t.oluSatir));
+      assert.equal(t.sonAutoanalyze === null || typeof t.sonAutoanalyze === 'string', true);
+      sizdirmaYok(cevap.body);
+    } finally {
+      await asil.sorgu('DROP TABLE vt_buyume_deneme');
+    }
+  });
+
+  test('/saglik/ayrinti veritabanı büyümesi: tablo istatistiği okunamazsa sıfır değil null', async () => {
+    const asil = acik().vt;
+    const tabloOkumaz: Veritabani = {
+      ...asil,
+      sorgu: <T>(sql: string, p?: readonly unknown[]) => (sql.includes('pg_stat_user_tables') ? Promise.reject(new Error('yetki yok')) : asil.sorgu<T>(sql, p)),
+    };
+    const ayrinti = await ayrintiTopla(tabloOkumaz, girdi(null, null));
+    assert.equal(ayrinti.veritabaniBuyumesi, null);
+    assert.equal(Number.isInteger(ayrinti.veritabaniGecikmeMs), true);
   });
 
   test('/saglik/metrikler: kimliksiz 401, işlemi olmayan 403, işlemi olan toplayıcının dakikalarını görür', async () => {

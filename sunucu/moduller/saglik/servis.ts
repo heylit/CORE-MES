@@ -14,11 +14,11 @@ import { geriYuklemeDenemesiSemasi } from '#paylasilan/sozlesme/saglik.ts';
 import type { Ayrinti, GeriYuklemeDenemesi, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import {
   BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, DENEME_KAYDI_DOSYASI, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
-  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar,
+  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar, veritabaniBuyumesi,
 } from './kurallar.ts';
 import type { EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import {
-  metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay,
+  enBuyukTablolariOku, metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay, vtIstatistigiOku,
 } from './sorgular.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
@@ -214,10 +214,15 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
   let veritabaniGecikmeMs: number | null = null;
   let sonGoc: string | null = null;
   let vtBaglantiSayisi: number | null = null;
+  let veritabaniBuyumesiOlcu: Ayrinti['veritabaniBuyumesi'] = null;
   if (await saglikliMi(db, sureSiniri)) {
     veritabaniGecikmeMs = Math.round(performance.now() - baslangic);
     sonGoc = await sureliGuvenli(() => sonGocAdi(db), sureSiniri);
     vtBaglantiSayisi = await sureliGuvenli(() => vtBaglantiSay(db), sureSiniri);
+    veritabaniBuyumesiOlcu = veritabaniBuyumesi(
+      await sureliGuvenli(() => vtIstatistigiOku(db), sureSiniri),
+      await sureliGuvenli(() => enBuyukTablolariOku(db), sureSiniri),
+    );
   }
   const bellek = girdi.bellekOku?.() ?? process.memoryUsage();
   const isler = girdi.isDurumlari();
@@ -239,6 +244,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     vtBaglantiSayisi,
     otomatikAcilis,
     geriYuklemeDenemesi: yedek?.sonDeneme ?? null,
+    veritabaniBuyumesi: veritabaniBuyumesiOlcu,
     uyarilar: uyarilar({
       simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
       esikler: (girdi.esikler ?? surecEsikleri).iletiler(),
