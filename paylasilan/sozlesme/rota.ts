@@ -546,6 +546,32 @@ export const patlatmaCevabi = z.object({
   })),
 });
 export type PatlatmaCevabi = z.output<typeof patlatmaCevabi>;
+// Patlamış rota önizlemesi (1476-F): çok katmanlı emrin bugünkü yürürlükteki rotalarla nasıl açılacağı; yazma yoktur, patlatma kaydı açılmaz.
+// Patlatma kurulamazsa (döngü, katman sınırı) `ileti` dolu, düğümler boştur. Kurulur ama çok katmanlı emir açılamazsa (kesirli ya da 1000 üstü
+// kök başına adet, uzun dal adı) `engel` doludur; düğümler yine gösterilir. Emir op numarası alt düğümlerde açılıştakiyle aynıdır.
+export const patlatmaOnizlemeCevabi = z.object({
+  kokRevizyon: revizyonBaglantisi,
+  ileti: z.string().nullable(),
+  engel: z.string().nullable(),
+  dugumler: z.array(z.object({
+    dugum: DUGUM_YOLU,
+    // Emirdeki dal adı ("K1.2"); kök null.
+    dal: z.string().nullable(),
+    katman: z.number().int().min(0),
+    malzeme: urunOzeti,
+    revizyon: revizyonBaglantisi,
+    // Kökün 1 adedi için düğümden kaç adet.
+    kokBasina: ondalikMetinSemasi,
+    // Düğümün ürününü tüketen adım (kökte null): üst düğüm ve o adımın rotadaki ile emirdeki numarası.
+    tuketen: z.object({ dugum: DUGUM_YOLU, dal: z.string().nullable(), kaynakOpNo: KIMLIK, emirOpNo: KIMLIK }).nullable(),
+    adimlar: z.array(z.object({
+      kaynakOpNo: KIMLIK, emirOpNo: KIMLIK, ad: z.string(),
+      // Adımın yeri: istasyon adı, istasyonsuz kaynağın adı ya da fason firması; atanmamışsa null.
+      yer: z.string().nullable(),
+    })),
+  })),
+});
+export type PatlatmaOnizlemeCevabi = z.output<typeof patlatmaOnizlemeCevabi>;
 export type EmreKopyalaGovdesi = z.input<typeof emreKopyalaGovdesi>;
 
 // Emir listesi (teslimdeki "Rev N akışta aç" ve "rota değişti"): emir kaynak revizyonun kimliğini taşır; harf ve yürürlük rotada.
