@@ -37,6 +37,39 @@ export function balonYaricapi(bal: readonly Pick<DizilecekBalon, 'ar'>[], W: num
 
 const icinde = (ar: YaziKutusu, x: number, y: number, pay: number) => { const p = kutuNoktasi(ar, x, y); return Math.hypot(p[0] - x, p[1] - y) <= pay; };
 
+// Yazı kutularının ızgara dizini. Dizim her aday yer için yazılara bakar; bütün kutuları taramak balon ve yazı sayısıyla karesel büyür ve
+// her balon değişikliğinde ekranı dondurur. Kutu, köşegen yarıçaplı dairesini örten hücrelere konur: bir noktaya `pay` kadar yakın kutunun en
+// yakın noktası o dairededir, o noktanın hücresi de sorgu karesindedir. Aday bulunduktan sonra kesin sınama aynıdır: sonuç değişmez.
+interface KutuDizini { herBiri(x: number, y: number, pay: number, f: (ar: YaziKutusu) => boolean): boolean }
+function kutuDizini(kutular: readonly YaziKutusu[], hucre: number): KutuDizini {
+  const anahtar = (gx: number, gy: number) => (gx + 1e5) * 2e5 + gy + 1e5;
+  const hucreler = new Map<number, number[]>();
+  kutular.forEach((ar, i) => {
+    const r = Math.hypot(ar[2], ar[3]);
+    for (let gx = Math.floor((ar[0] - r) / hucre); gx <= Math.floor((ar[0] + r) / hucre); gx++) {
+      for (let gy = Math.floor((ar[1] - r) / hucre); gy <= Math.floor((ar[1] + r) / hucre); gy++) {
+        const k = anahtar(gx, gy), l = hucreler.get(k);
+        if (l) l.push(i); else hucreler.set(k, [i]);
+      }
+    }
+  });
+  const damga = new Uint32Array(kutular.length);
+  let tur = 0;
+  return {
+    // f true dönünce durur ve true döner (Array.some gibi); her kutu bir sorguda en çok bir kez görülür.
+    herBiri(x, y, pay, f) {
+      tur++;
+      for (let gx = Math.floor((x - pay) / hucre); gx <= Math.floor((x + pay) / hucre); gx++) {
+        for (let gy = Math.floor((y - pay) / hucre); gy <= Math.floor((y + pay) / hucre); gy++) {
+          const l = hucreler.get(anahtar(gx, gy));
+          if (l) for (const i of l) { if (damga[i] === tur) continue; damga[i] = tur; if (f(kutular[i]!)) return true; }
+        }
+      }
+      return false;
+    },
+  };
+}
+
 function kesisir(a: Kilavuz, b: Kilavuz): boolean {
   const o = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
   return o(a[0], a[1], a[2], a[3], b[0], b[1]) * o(a[0], a[1], a[2], a[3], b[2], b[3]) < 0
@@ -59,15 +92,17 @@ export function balonDizimi(bal: readonly DizilecekBalon[] | null | undefined, s
   const kutular: YaziKutusu[] = [...(sec.yazilar ?? []), ...bal.flatMap((b) => (b.ar ? [b.ar] : []))];
   const yasak = sec.yasak ?? [];
   const yerler: [number, number][] = [], kilavuzlar: Kilavuz[] = [];
+  const dizin = kutuDizini(kutular, 2 * R);
 
-  const murekkep = (x: number, y: number, r: number) => {
+  // `esik` verilirse oran eşiği aşınca sayım durur: dönen değer yine eşiğin üstündedir (yalnız eşikle karşılaştırılan yerde kullanılır).
+  const murekkep = (x: number, y: number, r: number, esik = Number.POSITIVE_INFINITY) => {
     if (!ink) return 0;
-    let n = 0, t = 0;
+    let n = 0;
     for (const f of [0.3, 0.6, 0.92]) for (let k = 0; k < 20; k++) {
-      const a = k * Math.PI / 10, px = Math.round(x + Math.cos(a) * r * f), py = Math.round(y + Math.sin(a) * r * f); t++;
-      if (px > 0 && py > 0 && px < W && py < H && ink[py * W + px]) n++;
+      const a = k * Math.PI / 10, px = Math.round(x + Math.cos(a) * r * f), py = Math.round(y + Math.sin(a) * r * f);
+      if (px > 0 && py > 0 && px < W && py < H && ink[py * W + px]) { n++; if (n / 60 > esik) return n / 60; }
     }
-    return n / t;
+    return n / 60;
   };
   // Kılavuzun kestiği çizgi sayısı; uçtaki birkaç piksel (yazının kendisi) sayılmaz.
   const cizgiKesimi = (l: Kilavuz) => {
@@ -82,16 +117,16 @@ export function balonDizimi(bal: readonly DizilecekBalon[] | null | undefined, s
   };
   const yaziKeser = (l: Kilavuz, kendi: YaziKutusu | undefined) => {
     const d = Math.hypot(l[2] - l[0], l[3] - l[1]), adim = R * 0.4;
-    return kutular.some((ar) => {
-      if (ar === kendi) return false;
-      for (let s = adim; s < d - adim; s += adim) if (icinde(ar, l[0] + (l[2] - l[0]) * s / d, l[1] + (l[3] - l[1]) * s / d, 0)) return true;
-      return false;
-    });
+    for (let s = adim; s < d - adim; s += adim) {
+      const px = l[0] + (l[2] - l[0]) * s / d, py = l[1] + (l[3] - l[1]) * s / d;
+      if (dizin.herBiri(px, py, 0, (ar) => ar !== kendi && icinde(ar, px, py, 0))) return true;
+    }
+    return false;
   };
   const sayfada = (x: number, y: number) => x > R * 1.2 && y > R * 1.2 && x < W - R * 1.2 && y < H - R * 1.2
     && !yasak.some((b) => x > b.x0 - R && x < b.x1 + R && y > b.y0 - R && y < b.y1 + R);
   const balonaBiner = (x: number, y: number) => yerler.some((p) => Math.hypot(p[0] - x, p[1] - y) < 2 * R + bosluk);
-  const yaziyaBiner = (x: number, y: number) => kutular.some((ar) => icinde(ar, x, y, R + bosluk * 0.5));
+  const yaziyaBiner = (x: number, y: number) => dizin.herBiri(x, y, R + bosluk * 0.5, (ar) => icinde(ar, x, y, R + bosluk * 0.5));
   const koy = (b: DizilecekBalon, x: number, y: number, yer: DizimKonumu['yer']) => {
     const l = kilavuzCizgisi(b, x, y, R);
     out.pos[b.id] = { x, y, lead: l, yer }; yerler.push([x, y]); if (l) kilavuzlar.push(l);
@@ -100,7 +135,8 @@ export function balonDizimi(bal: readonly DizilecekBalon[] | null | undefined, s
   for (const b of bal) if (b.yer) koy(b, b.yer[0], b.yer[1], 'sabit');
   const kalan = bal.filter((b) => !b.yer);
   // Sıkışık olan önce yer seçer.
-  const zorluk = (b: DizilecekBalon) => murekkep(b.x, b.y, R * 4) + kutular.filter((ar) => Math.hypot(ar[0] - b.x, ar[1] - b.y) < R * 6).length * 0.05;
+  const yakinYazi = (x: number, y: number) => { let n = 0; dizin.herBiri(x, y, R * 6, (ar) => { if (Math.hypot(ar[0] - x, ar[1] - y) < R * 6) n++; return false; }); return n; };
+  const zorluk = (b: DizilecekBalon) => murekkep(b.x, b.y, R * 4) + yakinYazi(b.x, b.y) * 0.05;
   const sirali = kalan.map((b) => [zorluk(b), b] as const).sort((p, q) => q[0] - p[0]).map((p) => p[1]);
   const seride: DizilecekBalon[] = [];
   for (const b of sirali) {
@@ -114,7 +150,7 @@ export function balonDizimi(bal: readonly DizilecekBalon[] | null | undefined, s
       for (let k = 0; k < 8; k++) {
         const d = kenar + bosluk + R + k * R * 0.8, x = ox + ux * d, yy = oy + uy * d;
         if (!sayfada(x, yy) || balonaBiner(x, yy) || yaziyaBiner(x, yy)) continue;
-        const m = murekkep(x, yy, R); if (m > 0.04) continue;
+        const m = murekkep(x, yy, R, 0.04); if (m > 0.04) continue;
         const l = kilavuzCizgisi(b, x, yy, R);
         let maliyet = m * 400 + (d / R) * 5 + y * 0.05;
         if (l) maliyet += cizgiKesimi(l) * 25 + (yaziKeser(l, b.ar) ? 300 : 0) + kilavuzlar.filter((q) => kesisir(l, q)).length * 200;
@@ -130,7 +166,7 @@ export function balonDizimi(bal: readonly DizilecekBalon[] | null | undefined, s
 
 interface SeritBaglami {
   W: number; H: number; R: number; bosluk: number;
-  murekkep: (x: number, y: number, r: number) => number;
+  murekkep: (x: number, y: number, r: number, esik?: number) => number;
   balonaBiner: (x: number, y: number) => boolean; yaziyaBiner: (x: number, y: number) => boolean; sayfada: (x: number, y: number) => boolean;
   cizgiKesimi: (l: Kilavuz) => number; yaziKeser: (l: Kilavuz, kendi: YaziKutusu | undefined) => boolean;
   koy: (b: DizilecekBalon, x: number, y: number, yer: DizimKonumu['yer']) => void;
@@ -149,7 +185,7 @@ function seritDizimi(liste: readonly DizilecekBalon[], c: SeritBaglami): void {
       const sabit = ust ? M * o + R : (yatay ? H : W) - M * o - R, uzun = yatay ? W : H, yuva: number[] = [];
       for (let v = M * 0.03 + R; v <= uzun - M * 0.03 - R; v += yarim) {
         const x = yatay ? v : sabit, y = yatay ? sabit : v;
-        if (c.sayfada(x, y) && !c.balonaBiner(x, y) && !c.yaziyaBiner(x, y) && c.murekkep(x, y, R) < 0.04) yuva.push(v);
+        if (c.sayfada(x, y) && !c.balonaBiner(x, y) && !c.yaziyaBiner(x, y) && c.murekkep(x, y, R, 0.04) < 0.04) yuva.push(v);
       }
       if (!en || yuva.length > en.yuva.length) en = { yatay, sabit, yuva, uye: [] };
     }

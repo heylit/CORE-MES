@@ -272,3 +272,12 @@ describe('CNC köprüsü: tezgâh ayarı (1091 a)', () => {
     ]);
   });
 });
+
+describe('CNC köprüsü: ham malzeme analizden (1705 a)', () => {
+  it('KP-15: analiz okuması gövdesiz GET olarak kendi ucuna gider', async () => {
+    const istekler = sunucuKur();
+    const isle = kopruKur();
+    await isle('ham-analizi', { yoksay: true });
+    expect(istekler).toEqual([{ yol: '/cnc-kurulum/ham-analizi', govde: null }]);
+  });
+});

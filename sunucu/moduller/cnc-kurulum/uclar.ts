@@ -4,10 +4,11 @@ import {
   kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
   stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, tezgahAyarCevabi, tezgahAyarGovdesi, tezgahlarCevabi, tezgahParametresi, yazCevabi,
   yazGovdesi, modelBaglaCevabi, modelBaglaGovdesi, modellerCevabi, modelParametresi, modelSecenekleriCevabi, modelSecenekleriSorgusu,
+  hamAnaliziCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, tezgahAyarYaz,
-  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri,
+  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri, hamAnalizi,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
@@ -187,5 +188,13 @@ export const uclar = [
     govde: modelBaglaGovdesi,
     cevap: modelBaglaCevabi,
     isle: ({ db, kullanici, govde }) => modelBagla(db, kullanici, govde),
+  }),
+  // Ham Malzeme "Analizden al" (1705 a): ölçü sayfayı okuyana açıktır; geometri yetkisi sorulmaz (atölye modeli ucundaki kalıp).
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/ham-analizi',
+    yetki: OKUMA,
+    cevap: hamAnaliziCevabi,
+    isle: ({ db }) => hamAnalizi(db),
   }),
 ];

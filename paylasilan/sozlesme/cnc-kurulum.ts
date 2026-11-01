@@ -178,6 +178,16 @@ export const modelBaglaGovdesi = z.object({
   hedef: modelHedefiSemasi, belgeId: z.number().int().positive().max(2147483647).nullable(), beklenenSurum: z.number().int().min(0).max(2147483647),
 });
 export const modelBaglaCevabi = z.object({ model: cncModelSemasi });
+
+// Ham malzeme analizden (1705 a): seçili iş emrinin ürününün yayındaki 3B modelinin geometri analizi. olcu döndürülmüş en küçük
+// kutudur (a >= b >= c, mm; pay eklenmemiş: payı kurulumun kendi ayarı ekler); hacim ağ kapalı değilse null. Okunamıyorsa neden
+// dolu, olcu null: emir-yok (iş emri seçilmedi), malzeme-yok (emrin ürün kartı yok), model-yok, analiz-yok (bu içeriğin analizi yok: bekliyor ya da hatalı).
+export const HAM_ANALIZI_NEDENLERI = ['emir-yok', 'malzeme-yok', 'model-yok', 'analiz-yok'] as const;
+export const hamAnaliziCevabi = z.object({
+  neden: z.enum(HAM_ANALIZI_NEDENLERI).nullable(),
+  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  olcu: z.object({ a: z.number().nonnegative(), b: z.number().nonnegative(), c: z.number().nonnegative(), hacimMm3: z.number().positive().nullable() }).nullable(),
+});
 export const modelSecenekleriSorgusu = z.object({ ara: z.string().trim().max(100).optional() });
 export const modelSecenekleriCevabi = z.object({ belgeler: z.array(modelBelgesiSemasi) });
 export const modelParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
@@ -219,3 +229,4 @@ export type ModellerCevabi = z.output<typeof modellerCevabi>;
 export type ModelBaglaGovdesi = z.output<typeof modelBaglaGovdesi>;
 export type ModelBaglaCevabi = z.output<typeof modelBaglaCevabi>;
 export type ModelSecenekleriCevabi = z.output<typeof modelSecenekleriCevabi>;
+export type HamAnaliziCevabi = z.output<typeof hamAnaliziCevabi>;

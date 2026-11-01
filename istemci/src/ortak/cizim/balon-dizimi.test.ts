@@ -52,6 +52,15 @@ describe('balon dizimi', () => {
     for (let i = 0; i < yer.length; i++) for (let j = i + 1; j < yer.length; j++) expect(Math.hypot(yer[i]!.x - yer[j]!.x, yer[i]!.y - yer[j]!.y)).toBeGreaterThanOrEqual(2 * d.R);
   });
 
+  it('hücreden uzun, döndürülmüş ve sayfa dışına taşan yazılar da sayılır: balon onlara binmez', () => {
+    const uzun = [kutu(500, 350, 260, 0.6), kutu(500, 350, 240, -0.9), kutu(-10, 200, 60), kutu(1005, 400, 40, Math.PI / 2)];
+    const ar = [kutu(420, 300), kutu(580, 300), kutu(30, 230), kutu(960, 420)];
+    for (const kip of ['karma', 'yakin', 'serit'] as const) {
+      const d = balonDizimi(ar.map((a, i) => balon(i + 1, a[0], a[1], a)), { W, H, carpan: 1, kip, yazilar: uzun });
+      for (const p of Object.values(d.pos)) if (p.yer !== 'sabit') for (const a of uzun) expect(yaziyaDeger(a, p.x, p.y, d.R)).toBe(false);
+    }
+  });
+
   it('elle konan balon yerinde kalır, öteki ondan kaçar', () => {
     const a = kutu(400, 400);
     const d = balonDizimi([balon(1, 0, 0, a, { yer: [400, 375] }), balon(2, 0, 0, kutu(400, 420))], { W, H, carpan: 1, kip: 'karma' });

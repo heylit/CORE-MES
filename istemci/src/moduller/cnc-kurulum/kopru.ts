@@ -1,5 +1,5 @@
 import type {
-  EmirSecCevabi, EmirlerCevabi, HazirlikCevabi, KurulumTamamCevabi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKartiBaglaCevabi,
+  EmirSecCevabi, EmirlerCevabi, HamAnaliziCevabi, HazirlikCevabi, KurulumTamamCevabi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKartiBaglaCevabi,
   StokKartlariCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, TezgahAyarCevabi, TezgahlarCevabi, YazCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
@@ -231,6 +231,9 @@ export function kopruKur(
         return api.get<EmirlerCevabi>('/cnc-kurulum/emirler');
       case 'hazirlik':
         return api.get<HazirlikCevabi>('/cnc-kurulum/hazirlik');
+      // 1705 a: Ham Malzeme "Analizden al"; seçili iş emrinin ürün modelinin geometri analizi.
+      case 'ham-analizi':
+        return api.get<HamAnaliziCevabi>('/cnc-kurulum/ham-analizi');
       // 1091 a: tezgâh listesi ve ayarı; yalnız yeni ekran ister.
       case 'tezgahlar':
         return api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar');

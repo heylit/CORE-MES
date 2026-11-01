@@ -8,6 +8,7 @@ import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
   KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
   StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, TezgahAyarCevabi, TezgahAyarGovdesi, TezgahlarCevabi, ModelBaglaCevabi, ModelBaglaGovdesi, ModellerCevabi, ModelSecenekleriCevabi,
+  HamAnaliziCevabi,
   YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
@@ -23,7 +24,8 @@ import {
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { acikIsEmri, acikIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { acikEmir, acikIsEmri, acikIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { malzemeGeometrisi } from '../geometri/disari.ts';
 import type { AcikIsEmri } from '../uretim-emirleri/disari.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -374,4 +376,20 @@ export async function modelDosyasi(db: Db, id: number): Promise<IkiliCevap | nul
   if ((await sorgular.modelSatiri(db, id)) === null) throw bulunamadi('Model bağı bulunamadı.');
   const belge = modelBelgesiSec(await kaydaBagliBelgeler(db, MODEL_HEDEFI, id));
   return belge === null ? null : kayittakiBelgeDosyasi(db, MODEL_HEDEFI, id, belge.belgeId);
+}
+
+// Ham malzeme analizden (1705 a): seçili iş emrinin üretim emrinin ürün kartı, onun yayındaki en yeni modeli ve analizi. Ölçü
+// geometri modülünündür; burada yalnız kurulumun istediği alanlar seçilir.
+export async function hamAnalizi(db: Db): Promise<HamAnaliziCevabi> {
+  const bos = (neden: NonNullable<HamAnaliziCevabi['neden']>, model: HamAnaliziCevabi['model'] = null): HamAnaliziCevabi => ({ neden, model, olcu: null });
+  const secili = await seciliIsEmri(db);
+  if (secili === null) return bos('emir-yok');
+  const malzemeNo = (await acikEmir(db, secili.uretimEmriId))?.malzemeNo ?? null;
+  if (malzemeNo === null) return bos('malzeme-yok');
+  const g = await malzemeGeometrisi(db, malzemeNo);
+  if (g === null) return bos('model-yok');
+  const model = { belgeAdi: g.belgeAdi, harf: g.harf };
+  const a = g.analiz.analiz;
+  if (a === null) return bos('analiz-yok', model);
+  return { neden: null, model, olcu: { a: a.obb.a, b: a.obb.b, c: a.obb.c, hacimMm3: a.hacimMm3 } };
 }

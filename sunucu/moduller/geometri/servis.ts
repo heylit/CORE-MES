@@ -111,6 +111,25 @@ export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: nu
   return { revizyonId, payMm, payKaynagi, enAz, oneriler, kaliteler, neden };
 }
 
+// Malzemenin yayındaki 3B modeli, analizi ve ham önerisi: başka modül (CNC Kurulum ham ekranı) `disari.ts` ile okur (1703 a).
+// Malzemeye bağlı birden çok yayındaki model varsa en son yayına gireni (en büyük revizyon kimliği) alınır.
+// Model yoksa null; model var ama analiz henüz yoksa analiz null ve öneri 'analiz-yok' nedeniyle boştur. Yetki denetlemez.
+export interface MalzemeGeometrisi {
+  malzemeNo: number;
+  belgeAdi: string;
+  harf: string;
+  analiz: GeometriAnalizCevabi;
+  ham: GeometriHamCevabi;
+}
+
+export async function malzemeGeometrisi(
+  db: Db, malzemeNo: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined } = {},
+): Promise<MalzemeGeometrisi | null> {
+  const m = (await modeller(db)).filter((x) => x.malzemeNo === malzemeNo).sort((a, b) => b.revizyonId - a.revizyonId)[0];
+  if (m === undefined) return null;
+  return { malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu) };
+}
+
 // İş yoksa (tarama yakalamadı) açılır; varsa sürüm koşuluyla yeniden kuyruğa girer. Süren iş de yeniden kuyruğa alınabilir:
 // süreç sonucu dönünce 'bitti' yazar, yeni tur aynı içeriği yeniden hesaplar (zarar yok).
 export async function yenidenHesapla(db: Db, revizyonId: number, surum: number | null): Promise<GeometriAnalizCevabi> {
