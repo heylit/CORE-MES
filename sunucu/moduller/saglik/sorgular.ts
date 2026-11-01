@@ -104,3 +104,9 @@ export async function suresiGecenMetrikleriSil(db: Db, simdi: Date, dakikaGun: n
   );
   return { dakika: d.length, saat: s.length };
 }
+
+// [baslangic, şimdi] aralığının saatlik özetleri, zamana göre. 13 ayda en çok ~9.500 satır.
+export async function metrikSaatleriOku<T>(db: Db, baslangic: Date): Promise<T[]> {
+  const satirlar = await db.sorgu<{ veri: T }>('SELECT veri FROM saglik_metrik_saat WHERE saat >= $1 ORDER BY saat', [baslangic]);
+  return satirlar.map((s) => s.veri);
+}

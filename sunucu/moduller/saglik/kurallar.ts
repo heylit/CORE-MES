@@ -4,7 +4,9 @@ import type { HavuzDurumu } from '#cekirdek/db.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { DiskDurumu, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, UcOzeti, Uyari } from '#paylasilan/sozlesme/saglik.ts';
+import type {
+  DiskDurumu, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+} from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
 
@@ -280,27 +282,6 @@ export function ozetlenecekSaatler(ilkDakika: Date | null, simdi: Date, enCok: n
   return sonuc;
 }
 
-export interface SaatOzeti {
-  saat: string;
-  // Saatte ölçülen dakika; sunucu kapalıyken eksilir, eksik dakika uydurulmaz.
-  dakikaSayisi: number;
-  istek: {
-    sayi: number; saniyede: number | null;
-    // Saatlik yüzdelik dakikalardan birleştirilemez: dakikalık p95/p99'ların en kötüsü yazılır.
-    p95MsEnCok: number | null; p99MsEnCok: number | null;
-    istemciHatasi: number; sunucuHatasi: number; mesgul: number;
-  };
-  havuz: { kullanimdaEnCok: number; bekleyenEnCok: number; mesgul: number } | null;
-  surecIslemciYuzde: { ort: number; enCok: number } | null;
-  makineIslemciYuzde: { ort: number; enCok: number } | null;
-  bellek: { rssBaytEnCok: number; makineBosBaytEnAz: number };
-  olayDongusuP99MsEnCok: number | null;
-  veritabani: {
-    boyutBayt: number; xidYasi: number | null; saniyedeIslem: number; geriAlma: number; deadlock: number;
-    onbellekIsabetiYuzdeEnAz: number | null; geciciBayt: number; baglantiEnCok: number; kilitBekleyenEnCok: number; enUzunTxSnEnCok: number | null;
-  } | null;
-}
-
 const dolu = <T>(d: readonly (T | null)[]): T[] => d.filter((x): x is T => x !== null);
 const enCok = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.max(...x); };
 const enAz = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.min(...x); };
@@ -436,4 +417,13 @@ export function esikGecisleri(
     }
   }
   return { acilan, kapanan };
+}
+
+// Saatlik aralığın başlangıcı: 24 saat, 7 gün, 13 ay (saklama süresi kadar).
+export function saatlikBaslangic(aralik: SaatlikAralik, simdi: Date): Date {
+  if (aralik === 'gun') return new Date(simdi.getTime() - 24 * SAAT_MS);
+  if (aralik === 'hafta') return new Date(simdi.getTime() - 7 * 24 * SAAT_MS);
+  const t = new Date(simdi);
+  t.setUTCMonth(t.getUTCMonth() - SAAT_SAKLAMA_AY);
+  return t;
 }

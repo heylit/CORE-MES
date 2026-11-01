@@ -17,7 +17,7 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
+import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
   MetrikToplayici, ayrintiTopla, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
@@ -486,6 +486,41 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.deepEqual(await isle([...yavas, ...Array.from({ length: 5 }, () => dakika(50))]), { acilan: [], kapanan: ['yanit-suresi'] });
     assert.equal(olaylar.at(-1), 'duzeldi:Düzeldi: Yanıt süresi yüksek.');
     assert.deepEqual(izleyici.iletiler(), []);
+  });
+
+  test('/saglik/metrikler/saatlik: kimliksiz 401, işlemi olmayan 403; aralığa göre saatlik özetler zamana göre; geçersiz aralık 400', async () => {
+    const vt = acik().vt;
+    await vt.sorgu('DELETE FROM saglik_metrik_saat');
+    const dakika = {
+      an: '2026-11-01T10:00:00.000Z', aralikSn: 60,
+      istek: { sayi: 60, saniyede: 1, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: 5, makineIslemciYuzde: 10,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+    };
+    const simdi = Date.now();
+    const saatBasi = (geri: number) => new Date(Math.floor(simdi / 3_600_000) * 3_600_000 - geri * 3_600_000);
+    const ekle = async (geriSaat: number) => {
+      const ozet = saatOzeti(saatBasi(geriSaat), [dakika]);
+      await vt.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2)', [ozet?.saat, JSON.stringify(ozet)]);
+    };
+    for (const g of [2, 30, 24 * 30]) await ekle(g);
+    // Biçimi sözleşmeye uymayan eski satır atlanır, grafiği düşürmez.
+    await vt.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2)', [saatBasi(3), JSON.stringify({ saat: saatBasi(3).toISOString() })]);
+    const iste = (aralik: string, cerez?: string) => app.inject({
+      method: 'GET', url: `/api/saglik/metrikler/saatlik?aralik=${aralik}`, ...(cerez === undefined ? {} : { headers: { cookie: cerez } }),
+    });
+    assert.equal((await iste('gun')).statusCode, 401);
+    assert.equal((await iste('gun', operatorCerezi)).statusCode, 403);
+    assert.equal((await iste('bilmem', izleyenCerezi)).statusCode, 400);
+    const saatler = async (aralik: string) => {
+      const c = await iste(aralik, izleyenCerezi);
+      assert.equal(c.statusCode, 200, c.body);
+      sizdirmaYok(c.body);
+      return (c.json() as { saatler: { saat: string }[] }).saatler.map((x) => x.saat);
+    };
+    assert.deepEqual(await saatler('gun'), [saatBasi(2).toISOString()]);
+    assert.deepEqual(await saatler('hafta'), [saatBasi(30).toISOString(), saatBasi(2).toISOString()]);
+    assert.deepEqual(await saatler('yil'), [saatBasi(24 * 30).toISOString(), saatBasi(30).toISOString(), saatBasi(2).toISOString()]);
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {

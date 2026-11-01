@@ -6,6 +6,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { isAdi, ortamAdi } from './is-adlari.ts';
+import { Performans } from './Performans.tsx';
 import { sureMetni } from './sure.ts';
 import './sistem-durumu.css';
 
@@ -107,6 +108,7 @@ export function SistemDurumu() {
         </p>
       )}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <UyariListesi uyarilar={ayrinti.data.uyarilar} />}
+      {ayrintiGorur && !saglik.isPending && ayrinti.data && <Performans />}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <AyrintiListesi ayrinti={ayrinti.data} saglikli={saglikli} />}
       {ayrintiGorur && !saglik.isPending && ayrinti.data && <IsTablosu isler={ayrinti.data.isler} />}
       {ayrintiGorur && ayrinti.isError && <p role="alert">{hataIletisi(ayrinti.error, 'Ayrıntı alınamadı')}</p>}

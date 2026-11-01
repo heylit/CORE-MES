@@ -124,6 +124,31 @@ export const metrikDakikasiSemasi = z.object({
 
 export const metriklerCevabi = z.object({ dakikalar: z.array(metrikDakikasiSemasi) });
 
+// Saatlik özet (1662): dakikalardan çıkar; yüzdelikler birleştirilemediği için saatin en kötü dakikası yazılır.
+const ortVeEnCok = z.object({ ort: z.number().nonnegative(), enCok: z.number().nonnegative() }).nullable();
+export const saatOzetiSemasi = z.object({
+  saat: zamanSemasi,
+  // Saatte ölçülen dakika; sunucu kapalıyken eksilir.
+  dakikaSayisi: sayi,
+  istek: z.object({
+    sayi, saniyede: sure, p95MsEnCok: sure, p99MsEnCok: sure, istemciHatasi: sayi, sunucuHatasi: sayi, mesgul: sayi,
+  }),
+  havuz: z.object({ kullanimdaEnCok: sayi, bekleyenEnCok: sayi, mesgul: sayi }).nullable(),
+  surecIslemciYuzde: ortVeEnCok,
+  makineIslemciYuzde: ortVeEnCok,
+  bellek: z.object({ rssBaytEnCok: sayi, makineBosBaytEnAz: sayi }),
+  olayDongusuP99MsEnCok: sure,
+  veritabani: z.object({
+    boyutBayt: sayi, xidYasi: z.number().int().nonnegative().nullable(), saniyedeIslem: z.number().nonnegative(), geriAlma: sayi, deadlock: sayi,
+    onbellekIsabetiYuzdeEnAz: sure, geciciBayt: sayi, baglantiEnCok: sayi, kilitBekleyenEnCok: sayi, enUzunTxSnEnCok: sure,
+  }).nullable(),
+});
+
+// Sistem durumu grafiklerinin aralıkları: 24 saat, 7 gün, 13 ay (saatlik özetin saklama süresi, 1619 a).
+export const SAATLIK_ARALIKLAR = ['gun', 'hafta', 'yil'] as const;
+export const saatlikSorgusu = z.object({ aralik: z.enum(SAATLIK_ARALIKLAR) });
+export const saatlikCevabi = z.object({ saatler: z.array(saatOzetiSemasi) });
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;
@@ -132,5 +157,8 @@ export type Uyari = z.output<typeof uyariSemasi>;
 export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
 export type IstekOzeti = z.output<typeof istekOzetiSemasi>;
 export type UcOzeti = z.output<typeof ucOzetiSemasi>;
+export type SaatOzeti = z.output<typeof saatOzetiSemasi>;
+export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
+export type SaatlikCevabi = z.output<typeof saatlikCevabi>;
 export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;
 export type MetriklerCevabi = z.output<typeof metriklerCevabi>;
