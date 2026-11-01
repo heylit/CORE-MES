@@ -73,20 +73,24 @@ export async function belgeSil(db: Db, depo: ArkonDeposu, kimlik: string): Promi
 export async function kayitEkle(
   db: Db, tur: ArkonKayitTuru, s: KayitSutunlari, govde: unknown, kisiId: number, kimlikler: KonumKimlikleri,
 ): Promise<number | null> {
+  // Yinelenen gönderim koruma tablosunda elenir (göç 20261108063300): bölümlü kayıt tablosu (tur, cid) tekilliğini tutamaz.
   const sonuc = await db.sorgu<{ id: number }>(
-    `INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, varis)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now()) ON CONFLICT (tur, cid) DO NOTHING RETURNING id`,
+    `WITH yeni AS (INSERT INTO arkon_kayit_cid (tur, cid) VALUES ($1, $2) ON CONFLICT (tur, cid) DO NOTHING RETURNING tur)
+     INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, varis)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now() FROM yeni RETURNING id`,
     [tur, s.cid, s.zaman, s.makine, s.isMerkezi, s.emirNo, s.paketId, s.maddeId, JSON.stringify(govde), kisiId, kimlikler.istasyonId, kimlikler.isMerkeziId],
   );
   return sonuc[0]?.id ?? null;
 }
 
 // Kayıt başına tek yansıma (UNIQUE kayit_id); yinelenen kayıt yansıtılmaz. Yansıma satırı Arkon kaydıyla aynı işlemde yazılır.
+// Kaydın zamanı bağın parçasıdır (bölümlü tablo) ve kayıttan okunur; kayıt yoksa boş zamanı NOT NULL reddeder.
 export async function yansimaYaz(
   db: Db, kayitId: number, emirId: number | null, kisiId: number, sonuc: 'bekliyor' | 'yazildi' | 'reddedildi' | 'eslenemedi', neden: string | null,
 ): Promise<void> {
   await db.sorgu(
-    `INSERT INTO arkon_tmi_yansima (kayit_id, emir_id, kisi_id, sonuc, neden) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (kayit_id) DO NOTHING`,
+    `INSERT INTO arkon_tmi_yansima (kayit_id, kayit_zaman, emir_id, kisi_id, sonuc, neden)
+     VALUES ($1, (SELECT zaman FROM arkon_kayit WHERE id = $1), $2, $3, $4, $5) ON CONFLICT (kayit_id) DO NOTHING`,
     [kayitId, emirId, kisiId, sonuc, neden],
   );
 }
