@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
-import { yayindakiBelgeDosyasi } from '../cizimler/disari.ts';
+import { yayindakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
 import { emirCizimDurumu, paketMerkezDosyalari } from './kurallar.ts';
 import type { EmirCizimDurumu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';

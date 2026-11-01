@@ -7,7 +7,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri,
 } from '#paylasilan/sozlesme/geometri.ts';
-import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../cizimler/disari.ts';
+import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {

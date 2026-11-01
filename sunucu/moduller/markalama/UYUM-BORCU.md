@@ -11,6 +11,6 @@ Her madde: kural / nerede / nasıl uyumlanır. İşaretler: DOĞRULANDI, VARSAYI
 5. Kalite: red ve hurdanın KM NCR kaydına bağlanması (karar 4a). Uyum: kalite modülü `disari.ts` ile, akış akış.
 6. Hurda nedenleri `GET /hurda-nedenleri`'den okunur; o ucun okuma yetkisi `sayfa.markalama`'yı içermez. Yöneticide çalışır; kalite rolünde 403 olur.
    Uyum: durus-nedenleri okuma listesine `sayfa.markalama` (BASKA-MODUL-ISTEKLERI).
-7. 3B model Çizim Merkezi okuma yetkisi ister; operatörde 403 olabilir (ekran yazıyla uyarır). Uyum: rol matrisinde operatöre `cizimler.oku` ya da cizimler okuma listesine `sayfa.markalama`.
+7. 3B model Çizim Merkezi okuma yetkisi ister; operatörde 403 olabilir (ekran yazıyla uyarır). Uyum: rol matrisinde operatöre `belge-merkezi.oku` ya da cizimler okuma listesine `sayfa.markalama`.
 8. `paylasilan/islem-adlari.ts` satırları #811 birleşince ayrı yama (DEVIR'de); o yama olmadan `tip` kırmızıdır, bu yüzden teslimin bütün yamaları birlikte girer.
 9. Emir özeti ve izleme kişi adı göstermiyor (yalnız `kisi_id`). Uyum: kisiler `disari.ts`.

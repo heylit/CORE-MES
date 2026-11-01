@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { UretimEmirleri } from './UretimEmirleri.tsx';

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Vector3 } from 'three';
-import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
 import { DurumKutusu, Secim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';

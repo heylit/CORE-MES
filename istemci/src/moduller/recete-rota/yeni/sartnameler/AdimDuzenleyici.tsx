@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { KontrolNoktasi } from '#paylasilan/sozlesme/rota.ts';
 import { CokSatir, Dugme, Girdi, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
-import { DosyaHatasi, dosyaYukle } from '../../../cizimler/disari.ts';
+import { DosyaHatasi, dosyaYukle } from '../../../belge-merkezi/disari.ts';
 import {
   adimArkasinaTasi, adimTasi, AZAMI_ADIM_MEDYASI, AZAMI_KONTROL_SECENEGI, AZAMI_TALIMAT_ADIMI, bosAdim, KONTROL_ADLARI, KONTROL_TURLERI, kontrolKur, kontrolOzeti, MEDYA_IPUCU, medyaAdresi, medyaHatasi, medyaTuru, sayiOku, videoSuresiHatasi,
   type AdimTaslagi,

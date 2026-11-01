@@ -3051,7 +3051,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const icerik = Buffer.from(`%PDF-1.4\n% km-${r.emirId}\n%%EOF\n`);
     const ozet = createHash('sha256').update(icerik).digest('hex');
     await sahip.sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, 'pdf', $3)", [ozet, icerik.length, yoneticiId]);
-    const belge = (await sahip.tek<{ id: number }>("INSERT INTO cizimler_belge (ad, tur, olusturan_id) VALUES ('KM resmi', 'teknik-resim', $1) RETURNING id", [yoneticiId]))!.id;
+    const belge = (await sahip.tek<{ id: number }>("INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ('KM resmi', 'teknik-resim', $1) RETURNING id", [yoneticiId]))!.id;
     const resim = (await sahip.tek<{ id: number }>(
       "INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, ekleyen_id, guncelleyen_id) VALUES ($1, 'resim', $2, $3, 'KM resmi', $4, $4) RETURNING id",
       [r.kart, belge, ozet, yoneticiId]))!.id;

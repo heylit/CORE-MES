@@ -12,7 +12,7 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoOzetleriCevabi, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { kaydaBagla } from '../cizimler/disari.ts';
+import { kaydaBagla } from '../belge-merkezi/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';

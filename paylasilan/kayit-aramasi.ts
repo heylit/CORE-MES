@@ -16,7 +16,7 @@ export const KAYIT_TURLERI = {
   sevk: { onek: 's', ad: 'Sevkiyat', modul: 'sevkiyat' },
   ncr: { onek: 'n', ad: 'NCR', modul: 'kalite-merkezi' },
   hatali: { onek: 'h', ad: 'Hatalı parça', modul: 'kalite-merkezi' },
-  cizim: { onek: 'c', ad: 'Çizim', modul: 'cizimler' },
+  cizim: { onek: 'c', ad: 'Çizim', modul: 'belge-merkezi' },
   rota: { onek: 'r', ad: 'Reçete ve rota', modul: 'recete-rota' },
   olcuAleti: { onek: 'ol', ad: 'Ölçü aleti', modul: 'kalibrasyon' },
   istasyon: { onek: 'i', ad: 'İstasyon', modul: 'istasyonlar' },

@@ -94,7 +94,7 @@ export const OLAY_TURLERI = [
   'talep_gonderildi', 'etki_analizi', 'musteri_onayi_istendi', 'emir_acildi', 'revizyon_yayinlandi', 'gecerlilik', 'karar_onerildi',
   'emir_karari', 'stok_karari', 'emir_karantinada', 'rework_istendi', 'sapma_acildi', 'fai_onaylandi', 'emir_kapandi',
 ] as const;
-export const OLAY_ILGILILERI = ['uretim-emirleri', 'rota', 'cizimler', 'malzemeler', 'stok', 'plan', 'kalite-merkezi', 'sevkiyat'] as const;
+export const OLAY_ILGILILERI = ['uretim-emirleri', 'rota', 'belge-merkezi', 'malzemeler', 'stok', 'plan', 'kalite-merkezi', 'sevkiyat'] as const;
 
 // planli: açık emrin henüz başlamamış seri aralığı; başlamışsa uretimde (1143 a).
 export const SERI_DURUMLARI = ['planli', 'uretimde', 'stokta', 'sahada'] as const;

@@ -2238,7 +2238,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(ilk.belgeler.map((x) => [x.ad, x.tur]), [[ad, 'sertifika']]);
     const tekrar = tamam<SiparisBelgeleriCevabi>(await istek(c.sa, 'POST', `/satin-alma-siparis-satirlari/${satirA}/belge-ekle`, govde, kimlik));
     assert.deepEqual(tekrar, ilk);
-    const acilan = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM cizimler_belge WHERE ad = $1', [ad]));
+    const acilan = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM belge_merkezi_belge WHERE ad = $1', [ad]));
     assert.equal(acilan?.n, 1);
     const belgeId = ilk.belgeler[0]!.id;
 

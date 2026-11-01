@@ -22,8 +22,8 @@ const DURUM_ANAHTARI = `${ONEK}v1`;
 const sahneYukle = () => import('./yeni/sahne/model-uret.ts');
 export const ESLESTIRME_YOLU = '/cizimler/cnc-makineleri';
 const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz'];
-const AKTARMA_ISLEMI = 'cizimler.yaz';
-const YAYIN_ISLEMI = 'cizimler.yayinla';
+const AKTARMA_ISLEMI = 'belge-merkezi.yaz';
+const YAYIN_ISLEMI = 'belge-merkezi.yayinla';
 // "Sistemdeki makine" listesi istasyon kayıtlarıdır; tezgâh orada yoksa istasyon İstasyonlar ekranında açılır.
 const ISTASYON_SAYFASI = { islem: 'sayfa.istasyonlar', yol: '/istasyonlar/is-merkezleri' } as const;
 

@@ -33,7 +33,7 @@ import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { belgeAcVeBagla, kaydaBagla, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi } from '../cizimler/disari.ts';
+import { belgeAcVeBagla, kaydaBagla, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
 import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri,
   rafYerlesimiKaydet, zemin as haritaZemini,

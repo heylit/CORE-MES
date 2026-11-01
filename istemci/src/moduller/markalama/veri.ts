@@ -1,7 +1,7 @@
-import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import { ApiHatasi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
-import type { ModelBicimi } from '../cizimler/disari.ts';
+import type { ModelBicimi } from '../belge-merkezi/disari.ts';
 
 // İkili cevap `api` ile okunmaz (JSON bekler); çizim modülündeki okuyucunun aynısı. `api`'ye ikili okuma eklenince kalkar.
 export async function ikiliOku(yol: string, sinyal?: AbortSignal): Promise<Uint8Array> {

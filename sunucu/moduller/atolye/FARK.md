@@ -339,7 +339,7 @@ npm ls occt-import-js three pdfjs-dist → occt-import-js@0.0.23, three@0.186.1,
 
 ## Bölüm krokisi Çizim Merkezi'nden (kart #772, dal `772-atolye-kroki-merkez`; kullanıcı kararı 12.10.2026 "Simdi bagla")
 - Bölüm krokisi Çizim Merkezi'ndeki yayında PDF belgeden alınabilir: `GET /atolye/cizim-merkezi/krokiler`, `POST /atolye/salonlar/:id/kroki/merkezden`
-  (`atolye.yaz`). Dosya krokiye kopyalanır (çizim harita açılırken merkezden okunmaz), belge bölüme bağlanır (`cizimler_bag`, `atolye`).
+  (`atolye.yaz`). Dosya krokiye kopyalanır (çizim harita açılırken merkezden okunmaz), belge bölüme bağlanır (`belge_merkezi_bag`, `atolye`).
 - Kroki cevabında `merkez` (belge, ad, harf, ozet): ozet krokininkinden farklıysa merkezde yeni revizyon var; panel "Güncelle" sunar.
   Aynı belgeden güncellemede hizalama korunur (kâğıt ölçüsü değişmediği varsayıldı; panel "hizalamayı kontrol edin" der).
 - Elle PDF yükleme ve kaldırma merkez bağını çözer. Fabrika krokisi yerinde kalır (atölye oturumuyla anlaşıldı).

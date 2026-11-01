@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { CncModel } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { kaydaBagla, kaydaBagliBelgeler } from '../cizimler/disari.ts';
+import { kaydaBagla, kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';

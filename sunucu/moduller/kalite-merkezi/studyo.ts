@@ -6,7 +6,7 @@ import { KM_MERKEZ_BICIMLERI, kmNumuneKurali } from '#paylasilan/sozlesme/kalite
 import type {
   KmBalon, KmBalonGirdisi, KmBalonYerKipi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';

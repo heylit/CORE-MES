@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { yerOlustur, yonelim } from './sahne.ts';
 import { modelSecenekleri } from './veri.ts';
 

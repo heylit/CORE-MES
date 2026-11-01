@@ -13,7 +13,7 @@ import type {
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
 import { cncTakimCikisi, stokMiktarlari } from '../stok/disari.ts';
-import { kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { istasyonAdlari, istasyonlar, makineGetir, makineler } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';

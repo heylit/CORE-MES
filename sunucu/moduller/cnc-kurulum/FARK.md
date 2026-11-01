@@ -67,9 +67,9 @@ Doğrulama (tarayıcıda, çerçevesiz prototip):
 - `test:modul -- cnc-kurulum`: sunucu 14/14, istemci 12/12.
 
 ## Toplu aktarım (kart #1196, 14.10.2026)
-- İkinci menüye "Çizim Merkezi'ne aktar" (`/cnc-kurulum/aktar`, işlem `cizimler.yaz`). Prototip görünmez çerçevede `toplu` kipte açılır
+- İkinci menüye "Çizim Merkezi'ne aktar" (`/cnc-kurulum/aktar`, işlem `belge-merkezi.yaz`). Prototip görünmez çerçevede `toplu` kipte açılır
   (düğme yok, kayıt yazmaz), makine listesini yollar ve kabuğun istediği makinenin GLB'sini üretir. Satırda sistemdeki istasyon seçilir
-  (makine numarası istasyon koduyla aynıysa önerilir); eşleşen model yayına alınır (kullanıcı kararı: doğrudan yayınla; `cizimler.yayinla`
+  (makine numarası istasyon koduyla aynıysa önerilir); eşleşen model yayına alınır (kullanıcı kararı: doğrudan yayınla; `belge-merkezi.yayinla`
   yoksa taslak kalır) ve istasyona bağlanır. Üst çubuktaki tek makine aktarımı aynen kalır; sonraki adımlar Çizim Merkezi'ndeki eşleştirmeyi gösterir.
 
 ## Köşe düğmesi toplu aktarımı açar (kart #1238, 14.10.2026)
@@ -83,7 +83,7 @@ Doğrulama (tarayıcıda, çerçevesiz prototip):
 
 ## Eşleştirme Çizim Merkezi'nde (15.10.2026)
 - Kullanıcı isteği: CNC Kurulum'daki makineler doğrudan Çizim Merkezi'nde görünsün, eşleştirme orada yapılsın; "Çizime aktar" kalksın.
-- Toplu aktarım sayfası Çizim Merkezi'nin "CNC makineleri" bölümü oldu (`/cizimler/cnc-makineleri`, ikinci menüde, `cizimler.yaz`).
+- Toplu aktarım sayfası Çizim Merkezi'nin "CNC makineleri" bölümü oldu (`/cizimler/cnc-makineleri`, ikinci menüde, `belge-merkezi.yaz`).
   Ekran bu modülde kalır (modeli prototipin kütüphanesi üretir; cnc-kurulum zaten cizimler/disari.ts'yi ithal eder, ters ithal döngü olurdu).
 - Satır makinenin Çizim Merkezi'ndeki durumunu gösterir (aynı adlı 3B model belgesi ve bağlı istasyon); var olan eşleşme seçili gelir.
 - CNC ikinci menüsündeki "Çizim Merkezi'ne aktar" maddesi ve çerçevenin köşe düğmesi kalktı; eski `/cnc-kurulum/aktar` adresi yeni sayfaya

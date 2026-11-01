@@ -9,8 +9,8 @@ import { ARAMA_AZAMI_SONUC, MERKEZ_MODEL_TURLERI } from '#paylasilan/sozlesme/at
 import { MODEL_AZAMI_BAYT, MODEL_PARCA_BAYT, parcaAnahtari } from '#paylasilan/atolye-sabitleri.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
-import type { BagliBelge } from '../cizimler/disari.ts';
+import { kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
+import type { BagliBelge } from '../belge-merkezi/disari.ts';
 import { istasyonGetir, istasyonlar as istasyonListesi, aktifMakineler, makineGetir } from '../istasyonlar/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
