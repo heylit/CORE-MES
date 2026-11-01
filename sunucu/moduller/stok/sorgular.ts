@@ -3,6 +3,7 @@ import type { Dilim, SiralamaIstegi } from '#cekirdek/liste.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { aramaSade, basDeseni, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
 
@@ -61,11 +62,15 @@ export const konumBul = (db: Db, id: number, kilit = false): Promise<KonumSatiri
   db.tek(`${KONUM_SECIMI} ${KONUM_KAYNAGI} WHERE k.id = $1${kilit ? ' FOR UPDATE OF k' : ''}`, [id]);
 export const konumKoduyla = (db: Db, kod: string): Promise<KonumSatiri | null> => db.tek(`${KONUM_SECIMI} ${KONUM_KAYNAGI} WHERE k.kod = $1`, [kod]);
 
+// Metin süzgeçleri Türkçe harfi dil ayarına bırakmaz (C.UTF-8'de 'IŞIK' ILIKE 'ışık' yanlıştır): sütun public.arama_sade'den geçer,
+// desen paylasilan/kayit-aramasi.ts ile sadeleşir ve joker karakterleri kaçırılır. ILIKE yazılmaz.
+const S = (sutun: string): string => `public.arama_sade(${sutun})`;
+const icinde = (metin: string | undefined | null): string | null => (metin == null ? null : icindeDeseni(metin));
 export interface KonumSuzgeci { tur?: string | undefined; rafId?: number | undefined; metin?: string | undefined }
 const konumSuzgeci = (s: KonumSuzgeci): { sql: string; p: unknown[] } => ({
   sql: `${KONUM_KAYNAGI} WHERE k.aktif AND ($1::text IS NULL OR k.tur = $1) AND ($2::int IS NULL OR k.raf_id = $2)
-        AND ($3::text IS NULL OR k.kod ILIKE '%' || $3 || '%' OR k.ad ILIKE '%' || $3 || '%')`,
-  p: [s.tur ?? null, s.rafId ?? null, s.metin ?? null],
+        AND ($3::text IS NULL OR ${S('k.kod')} LIKE $3 OR ${S('k.ad')} LIKE $3)`,
+  p: [s.tur ?? null, s.rafId ?? null, icinde(s.metin)],
 });
 export const KONUM_SIRALAMASI: SiralamaTanimi<'kod' | 'tur'> = { sutunlar: { kod: 'k.kod', tur: 'k.tur' }, ikincil: 'k.id', varsayilan: { sutun: 'k.kod', yon: 'artan' } };
 export async function konumSay(db: Db, s: KonumSuzgeci): Promise<number> {
@@ -150,7 +155,7 @@ const RAF_SECIMI = `SELECT r.id, r.depo_id AS "depoId", r.kod, r.tur, r.numarala
 export const rafBul = (db: Db, id: number, kilit = false): Promise<RafSatiri | null> =>
   db.tek(`${RAF_SECIMI} FROM stok_raf r WHERE r.id = $1${kilit ? ' FOR UPDATE OF r' : ''}`, [id]);
 export interface RafSuzgeci { tur?: string | undefined; metin?: string | undefined }
-const rafSuzgeci = (s: RafSuzgeci) => ({ sql: `FROM stok_raf r WHERE r.aktif AND ($1::text IS NULL OR r.tur = $1) AND ($2::text IS NULL OR r.kod ILIKE $2 || '%')`, p: [s.tur ?? null, s.metin ?? null] });
+const rafSuzgeci = (s: RafSuzgeci) => ({ sql: `FROM stok_raf r WHERE r.aktif AND ($1::text IS NULL OR r.tur = $1) AND ($2::text IS NULL OR ${S('r.kod')} LIKE $2)`, p: [s.tur ?? null, s.metin == null ? null : basDeseni(s.metin)] });
 export const RAF_SIRALAMASI: SiralamaTanimi<'kod'> = { sutunlar: { kod: 'r.kod' }, ikincil: 'r.id', varsayilan: { sutun: 'r.kod', yon: 'artan' } };
 export async function rafSay(db: Db, s: RafSuzgeci): Promise<number> {
   const f = rafSuzgeci(s);
@@ -378,9 +383,9 @@ export const refakatUretimiVar = async (db: Db, refakatPartisiId: number): Promi
 export const lotNoVarMi = async (db: Db, no: string): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_parti WHERE lot_no = $1', [no])) !== null;
 export interface PartiSuzgeci { malzemeId?: number | undefined; metin?: string | undefined }
 const partiSuzgeci = (s: PartiSuzgeci) => ({
-  sql: `FROM stok_parti p WHERE ($1::int IS NULL OR p.malzeme_id = $1) AND ($2::text IS NULL OR p.lot_no ILIKE '%' || $2 || '%' OR p.tedarikci_parti_no ILIKE '%' || $2 || '%'
-        OR p.dokum_no ILIKE '%' || $2 || '%' OR p.sertifika_no ILIKE '%' || $2 || '%')`,
-  p: [s.malzemeId ?? null, s.metin ?? null],
+  sql: `FROM stok_parti p WHERE ($1::int IS NULL OR p.malzeme_id = $1) AND ($2::text IS NULL OR ${S('p.lot_no')} LIKE $2 OR ${S('p.tedarikci_parti_no')} LIKE $2
+        OR ${S('p.dokum_no')} LIKE $2 OR ${S('p.sertifika_no')} LIKE $2)`,
+  p: [s.malzemeId ?? null, icinde(s.metin)],
 });
 export const PARTI_SIRALAMASI: SiralamaTanimi<'kayitZamani' | 'partiNo'> = {
   sutunlar: { kayitZamani: 'p.kayit_zamani', partiNo: 'p.tedarikci_parti_no' }, ikincil: 'p.id', varsayilan: { sutun: 'p.kayit_zamani', yon: 'azalan' },
@@ -451,10 +456,11 @@ const hareketSuzgeci = (s: HareketSuzgeci) => ({
   sql: `${HAREKET_BAGLARI} WHERE ($1::int IS NULL OR h.malzeme_id = $1) AND ($2::int IS NULL OR h.kaynak_konum_id = $2 OR h.hedef_konum_id = $2)
         AND ($3::bigint IS NULL OR h.parti_id = $3) AND ($4::text IS NULL OR h.tur = $4) AND ($5::int IS NULL OR h.uretim_emri_id = $5)
         AND ($6::timestamptz IS NULL OR h.zaman >= $6) AND ($7::timestamptz IS NULL OR h.zaman < $7)
-        AND ($8::text IS NULL OR h.aciklama ILIKE '%' || $8 || '%' OR kk.kod ILIKE '%' || $8 || '%' OR hk.kod ILIKE '%' || $8 || '%'
-          OR p.lot_no ILIKE '%' || $8 || '%' OR p.tedarikci_parti_no ILIKE '%' || $8 || '%' OR p.dokum_no ILIKE '%' || $8 || '%'
-          OR (SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) ILIKE $8)`,
-  p: [s.malzemeId ?? null, s.konumId ?? null, s.partiId ?? null, s.tur ?? null, s.uretimEmriId ?? null, s.baslangic ?? null, s.bitis ?? null, s.metin ?? null],
+        AND ($8::text IS NULL OR ${S('h.aciklama')} LIKE $8 OR ${S('kk.kod')} LIKE $8 OR ${S('hk.kod')} LIKE $8
+          OR ${S('p.lot_no')} LIKE $8 OR ${S('p.tedarikci_parti_no')} LIKE $8 OR ${S('p.dokum_no')} LIKE $8
+          OR ${S('(SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id)')} = $9)`,
+  p: [s.malzemeId ?? null, s.konumId ?? null, s.partiId ?? null, s.tur ?? null, s.uretimEmriId ?? null, s.baslangic ?? null, s.bitis ?? null,
+    icinde(s.metin), s.metin == null ? null : aramaSade(s.metin)],
 });
 export const suzgecVarMi = (s: HareketSuzgeci): boolean => Object.values(s).some((v) => v !== undefined);
 export const HAREKET_SIRALAMASI: SiralamaTanimi<'zaman'> = { sutunlar: { zaman: 'h.zaman' }, ikincil: 'h.id', varsayilan: { sutun: 'h.zaman', yon: 'azalan' } };
@@ -464,7 +470,7 @@ export async function hareketSay(db: Db, s: HareketSuzgeci): Promise<number> {
 }
 export function hareketler(db: Db, s: HareketSuzgeci, sira: SiralamaIstegi<'zaman'>, d: Dilim): Promise<HareketHam[]> {
   const f = hareketSuzgeci(s);
-  return db.sorgu(`${HAREKET_SECIMI} ${f.sql} ORDER BY ${siralamaSql(HAREKET_SIRALAMASI, sira)} LIMIT $9 OFFSET $10`, [...f.p, d.sinir, d.atla]);
+  return db.sorgu(`${HAREKET_SECIMI} ${f.sql} ORDER BY ${siralamaSql(HAREKET_SIRALAMASI, sira)} LIMIT $10 OFFSET $11`, [...f.p, d.sinir, d.atla]);
 }
 
 // ---- Malzeme gözüyle stok ----------------------------------------------------------------------------------------------------
@@ -494,8 +500,8 @@ const malzemeSuzgeci = (s: MalzemeSuzgeci) => ({
           OR EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.malzeme_id = m.malzeme_id AND b.statu_id = ANY($4::int[]) AND b.miktar <> 0)
           OR EXISTS (SELECT 1 FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
           LEFT JOIN stok_parti p ON p.id = b.parti_id WHERE b.malzeme_id = m.malzeme_id
-          AND (k.kod ILIKE '%' || $2 || '%' OR p.lot_no ILIKE '%' || $2 || '%' OR p.tedarikci_parti_no ILIKE '%' || $2 || '%' OR p.dokum_no ILIKE '%' || $2 || '%')))`,
-  p: [s.durum ?? null, s.metin ?? null, s.adlaBulunan ?? [], s.statuIdleri ?? [], s.statuluKartlar ?? []],
+          AND (${S('k.kod')} LIKE $6 OR ${S('p.lot_no')} LIKE $6 OR ${S('p.tedarikci_parti_no')} LIKE $6 OR ${S('p.dokum_no')} LIKE $6)))`,
+  p: [s.durum ?? null, s.metin ?? null, s.adlaBulunan ?? [], s.statuIdleri ?? [], s.statuluKartlar ?? [], icinde(s.metin)],
 });
 export const MALZEME_SIRALAMASI: SiralamaTanimi<'malzeme' | 'toplam'> = { sutunlar: { malzeme: 'm.malzeme_id', toplam: 't.toplam' }, ikincil: 'm.malzeme_id' };
 export async function malzemeSay(db: Db, s: MalzemeSuzgeci): Promise<number> {
@@ -507,7 +513,7 @@ export function malzemeStoklari(db: Db, s: MalzemeSuzgeci, sira: SiralamaIstegi<
   return db.sorgu(
     `SELECT m.malzeme_id AS "malzemeId", t.toplam::text AS toplam, t.serbest::text AS serbest, t.statude::text AS statude, a.kritik_seviye AS "kritikSeviye", t.konumlar AS "konumSayisi",
        ${KONUM_ETIKETLERI('m.malzeme_id')} AS konumlar ${f.sql}
-     ORDER BY ${siralamaSql(MALZEME_SIRALAMASI, sira)} LIMIT $6 OFFSET $7`, [...f.p, d.sinir, d.atla]);
+     ORDER BY ${siralamaSql(MALZEME_SIRALAMASI, sira)} LIMIT $7 OFFSET $8`, [...f.p, d.sinir, d.atla]);
 }
 export const kartStoklari = (db: Db, idler: readonly number[]): Promise<MalzemeStokHam[]> => db.sorgu(
   `SELECT m.id AS "malzemeId", COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = m.id), 0)::text AS toplam,
@@ -621,8 +627,8 @@ const malKabulSuzgeci = (s: MalKabulSuzgeci) => ({
   sql: `FROM stok_mal_kabul m WHERE ($1::text IS NULL OR m.tur = $1)
         AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id AND s.logo_durumu = $2))
         AND ($3::timestamptz IS NULL OR m.zaman >= $3) AND ($4::timestamptz IS NULL OR m.zaman < $4)
-        AND ($5::text IS NULL OR m.no ILIKE '%' || $5 || '%' OR m.irsaliye_no ILIKE '%' || $5 || '%')`,
-  p: [s.tur ?? null, s.logoDurumu ?? null, s.baslangic ?? null, s.bitis ?? null, s.metin ?? null],
+        AND ($5::text IS NULL OR ${S('m.no')} LIKE $5 OR ${S('m.irsaliye_no')} LIKE $5)`,
+  p: [s.tur ?? null, s.logoDurumu ?? null, s.baslangic ?? null, s.bitis ?? null, icinde(s.metin)],
 });
 export const MAL_KABUL_SIRALAMASI: SiralamaTanimi<'zaman' | 'no'> = { sutunlar: { zaman: 'm.zaman', no: 'm.id' }, ikincil: 'm.id', varsayilan: { sutun: 'm.zaman', yon: 'azalan' } };
 export async function malKabulSay(db: Db, s: MalKabulSuzgeci): Promise<number> {
@@ -1096,7 +1102,7 @@ export const teslimBul = (db: Db, id: number, kilit = false): Promise<TeslimHam 
 export const teslimKaynaktan = (db: Db, kaynakKimligi: string): Promise<TeslimHam | null> => db.tek(`${TESLIM_SECIMI} WHERE t.kaynak_kimligi = $1`, [kaynakKimligi]);
 // Adında verilen sözcük geçen konumlar (istasyon konumu sayılmaz); tam ad eşleşmesini Türkçe harf kuralıyla çağıran yapar.
 export const adiGecenKonumlar = (db: Db, sozcuk: string): Promise<{ id: number; kod: string; ad: string; tur: KonumTuru }[]> =>
-  db.sorgu("SELECT id, kod, ad, tur FROM stok_konum WHERE aktif AND tur <> 'istasyon' AND ad ILIKE '%' || $1 || '%' ORDER BY id", [sozcuk]);
+  db.sorgu(`SELECT id, kod, ad, tur FROM stok_konum WHERE aktif AND tur <> 'istasyon' AND ${S('ad')} LIKE $1 ORDER BY id`, [icindeDeseni(sozcuk)]);
 // Teslim hedefi olabilen depo konumları: rafsız depo alanları (kabul, depo zemini); raf gözüne yerleştirme depo işidir.
 export const teslimDepoKonumlari = (db: Db): Promise<{ id: number; kod: string; ad: string | null }[]> =>
   db.sorgu("SELECT id, kod, ad FROM stok_konum WHERE aktif AND tur IN ('kabul', 'depo_zemini') ORDER BY kod");
@@ -1215,15 +1221,17 @@ export const kodDenetiminiErtele = (db: Db): Promise<unknown[]> => db.sorgu('SET
 export const kodDenetiminiAc = (db: Db): Promise<unknown[]> => db.sorgu('SET CONSTRAINTS stok_konum_kod_tek IMMEDIATE');
 
 // ---- Arama ----------------------------------------------------------------------------------------------------------------
+// $1 sade metin (tam eşleşme), $2 baştan, $3 içinde, $4 kaçırılmış sade metin ("-" ile biten kod sonu için).
+const aramaDesenleri = (q: string): [string, string, string, string] => [aramaSade(q), basDeseni(q), icindeDeseni(q), icindeDeseni(q).slice(1, -1)];
 export const konumAra = (db: Db, q: string): Promise<{ konumId: number; kod: string; ad: string | null; satirSayisi: number }[]> => db.sorgu(
   `SELECT k.id AS "konumId", k.kod, k.ad, (SELECT count(*)::int FROM stok_bakiye b WHERE b.konum_id = k.id) AS "satirSayisi"
-   FROM stok_konum k WHERE k.aktif AND (k.kod ILIKE $1 || '%' OR k.kod ILIKE '%-' || $1 OR k.ad ILIKE '%' || $1 || '%')
-   ORDER BY (k.kod = upper($1)) DESC, k.kod LIMIT 6`, [q]);
+   FROM stok_konum k WHERE k.aktif AND (${S('k.kod')} LIKE $2 OR ${S('k.kod')} LIKE '%-' || $4 OR ${S('k.ad')} LIKE $3)
+   ORDER BY (${S('k.kod')} = $1) DESC, k.kod LIMIT 6`, aramaDesenleri(q));
 export const rafAra = (db: Db, q: string): Promise<{ rafId: number; kod: string; rafTuru: 'palet' | 'celik' | 'konsol' | 'zemin' }[]> =>
-  db.sorgu(`SELECT id AS "rafId", kod, tur AS "rafTuru" FROM stok_raf WHERE aktif AND (kod = upper($1) OR 'RAF ' || kod = upper($1)) ORDER BY id LIMIT 3`, [q]);
+  db.sorgu(`SELECT id AS "rafId", kod, tur AS "rafTuru" FROM stok_raf WHERE aktif AND (${S('kod')} = $1 OR ${S("'RAF ' || kod")} = $1) ORDER BY id LIMIT 3`, [aramaSade(q)]);
 export const partiAra = (db: Db, q: string): Promise<{ partiId: number; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; uretimEmriId: number | null; malzemeId: number }[]> => db.sorgu(
   `SELECT id AS "partiId", lot_no AS "lotNo", tedarikci_parti_no AS "tedarikciPartiNo", dokum_no AS "dokumNo", uretim_emri_id AS "uretimEmriId", malzeme_id AS "malzemeId"
-   FROM stok_parti WHERE lot_no ILIKE '%' || $1 || '%' OR tedarikci_parti_no ILIKE '%' || $1 || '%' OR dokum_no ILIKE '%' || $1 || '%' ORDER BY kayit_zamani DESC LIMIT 4`, [q]);
+   FROM stok_parti WHERE ${S('lot_no')} LIKE $1 OR ${S('tedarikci_parti_no')} LIKE $1 OR ${S('dokum_no')} LIKE $1 ORDER BY kayit_zamani DESC LIMIT 4`, [icindeDeseni(q)]);
 
 // Genel arama (Ctrl K, kart 1234): sütun ve sorgu public.arama_sade ile sadeleşir (Türkçe harf dil ayarına bırakılmaz); desenler
 // çekirdekten sadeleşmiş ve kaçırılmış gelir. İfade trigram dizinini kullanır (göç 126000). Sıra: tam kod, koddan başlayan, yeniden eskiye.

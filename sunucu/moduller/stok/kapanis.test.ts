@@ -109,7 +109,7 @@ describe('stok: kapanış maddeleri (gerçek PostgreSQL)', () => {
 
   let mm = 0;
   let hm = 0;
-  let emirAc: (adet: number, bilesenler: { malzemeNo: number; miktar: string }[]) => Promise<number>;
+  let emirAc: (adet: number, bilesenler: { malzemeNo: number; miktar: string; fireYuzde?: string }[], firePayiYuzde?: string) => Promise<number>;
 
   before(async () => {
     ortam = await testVeritabaniKur('stok_kapanis');
@@ -131,10 +131,11 @@ describe('stok: kapanış maddeleri (gerçek PostgreSQL)', () => {
       `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
        VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id`, [mm, kisiler.get('yonetici')]))!.id;
     const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
-    emirAc = async (adet, bilesenler) => (await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, {
+    emirAc = async (adet, bilesenler, firePayiYuzde) => (await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, {
       projeId, malzemeNo: mm, adet, teslim: '2026-11-30', kaynakRotaRevizyonId: revizyon, isEmirleri: [{
         sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: null, ayarSuresiDk: '10', birimSureDk: '1',
         terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler,
+        ...(firePayiYuzde === undefined ? {} : { firePayiYuzde }),
       }],
     }))).uretimEmriId;
   });
@@ -182,6 +183,29 @@ describe('stok: kapanış maddeleri (gerçek PostgreSQL)', () => {
     await bitir(e2, 0);
     assert.deepEqual(await stok(e1), { durum: 'tamam', ayrinti: '8 / 8 stoğa girdi' });
     assert.deepEqual(await stok(e2), { durum: 'gerekmez', ayrinti: 'Sağlam parça yok' });
+  });
+
+  test('S-1: fire payı tüketim değildir; adım ve bileşen firesi olan emir stokta tamamlanınca hammadde düşmez, yalnız sağlam adet girer; stok yazma yetkisi olmayan reddedilir', async () => {
+    await lotAl(hm, '20', 'SRT-FIRE');
+    const e = await emirAc(10, [{ malzemeNo: hm, miktar: '1', fireYuzde: '10' }], '20');
+    const hmOnce = await o().vt.tek<{ m: string }>('SELECT sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [hm]);
+    const mmOnce = Number((await o().vt.tek<{ m: string }>('SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [mm]))!.m);
+    await bitir(e, 10);
+    const plan = await istek<{ bilesenler: { malzemeId: number; brut: string; kalan: string; eksik: string }[] }>('yonetici', 'GET', `/stok/uretim-emirleri/${e}/tamamlama`);
+    assert.equal(plan.durum, 200, JSON.stringify(plan.govde));
+    const b = plan.govde.bilesenler.find((x) => x.malzemeId === hm)!;
+    assert.equal(Number(b.brut), 13.75, 'brüt plan bilgisidir: 10 / (1 - 0,20) x 1 x 1,10');
+    assert.deepEqual([Number(b.kalan), Number(b.eksik)], [0, 0], 'fire payı kalan ya da eksik sayılmaz');
+
+    const red = await istek('planlama_proje', 'POST', `/stok/uretim-emirleri/${e}/tamamla`, {});
+    assert.equal(red.durum, 403, JSON.stringify(red.govde));
+    assert.equal(Number((await o().vt.tek<{ m: string }>('SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [mm]))!.m), mmOnce, 'reddedilen tamamlama ürün girmez');
+
+    const c = await istek<{ hareketIdler: number[] }>('yonetici', 'POST', `/stok/uretim-emirleri/${e}/tamamla`, {});
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal(c.govde.hareketIdler.length, 1, 'yalnız çıktı girer');
+    assert.deepEqual(await o().vt.tek<{ m: string }>('SELECT sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [hm]), hmOnce, 'hammadde ne net ne fire payı kadar düşer');
+    assert.equal(Number((await o().vt.tek<{ m: string }>('SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [mm]))!.m), mmOnce + 10);
   });
 
   test('K-2 a: istasyonda emre ait artı bakiye kapanışı durdurur; depoya taşınınca madde kapanır; başka emrin bakiyesi sayılmaz', async () => {
