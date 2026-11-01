@@ -1,4 +1,6 @@
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { durumKur, verileriHazirla, yuvarla, type FinansHamVerisi, type FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
+import { finansMotoru } from '#paylasilan/finans-motor/motor.ts';
 
 // Finans iş kuralları (saf). Numara (FNS-n) ON-PAKET-finans ve KURAL-TEST.md ile aynıdır.
 
@@ -449,4 +451,15 @@ export function vergiTakvimi(baslangic: string, bitis: string): VergiGunu[] {
   }
   return sonuc.filter((v) => v.tarih >= baslangic && v.tarih <= bitis)
     .sort((a, b) => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : a.kod < b.kod ? -1 : 1));
+}
+
+// 1456 b: günlük sağlık skoru sunucuda, ekranla aynı motor ve dönüşümle hesaplanır (paylasilan/finans-motor). Skor
+// hesaplanamıyorsa (kayıt yok, ağırlıklar sıfır) null döner; sıfır uydurulmaz. Nakit bugünkü hesap toplamıdır (TL, iki ondalık).
+export interface GunlukSkor { skor: number; nakit: string }
+export function gunlukSkorHesapla<F extends FirmaCekirdegi>(ham: FinansHamVerisi<F>, bugun: string): GunlukSkor | null {
+  const motor = finansMotoru(bugun);
+  durumKur(verileriHazirla(ham, motor.bugun), motor);
+  const skor = motor.runAnalysis().score;
+  if (skor === null) return null;
+  return { skor, nakit: yuvarla(motor.cashToday()).toFixed(2) };
 }

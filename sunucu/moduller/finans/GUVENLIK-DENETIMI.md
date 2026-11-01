@@ -76,9 +76,10 @@ Her uç `uc()` ile tanımlıdır, tek yetki ister; gövde, parametre ve sorgu zo
 | POST /finans/toplu-ice-aktar | finans.yonet · tekrar korumalı · denetim gövdesiz | FNS-41, 50 | para: FNS-41, FNS-50 | para: FNS-41 (eşleşmeyen firma, 1001 satır, 403) |
 | POST /finans/oneriler/durum | finans.yaz | aralık/biçim | para: ayar, öneri | para: okuyan 403, ertele tarihsiz 400 |
 | POST /finans/kapanis/isaretle | finans.yaz | dönem biçimi | para: kapanış | para: 2026-13 400 |
-| POST /finans/skorlar/kaydet | finans.yaz | 0..100 | para: skor | para: 101 400 |
 
 Genel uç yoktur: "durumu topluca kaydet" biçiminde bir yazma ucu teslimde bulunmaz. Prototipin kendi saklama katmanı (`save`, `connectStorage`) gömülü tam kipte boş işleve çevrilir; her yazma köprüde adlandırılmış türle tek uca gider (`istemci/src/moduller/finans/kopru.ts`, `YAZMALAR`). Bilinmeyen tür, bozuk kimlik ve bilinmeyen çek komutu sunucuya gitmeden reddedilir (istemci testi).
+
+Günlük sağlık skoru (1456 b, kart #1463): yazma ucu yoktur; skoru sunucu zamanlayıcısı (`isler.ts`, `finans-gunluk-skor`) ekranla aynı motorla hesaplar ve kişisiz yazar. Testler: gunluk-skor (kayıtsız bekleme, ekranla eşit skor, ikinci tur dokunmaz), para (eski uç 404).
 
 Ek (FNS-60): `POST /finans/firmalar/:id/pasif` açık faturası, faturaya dağıtılmamış ödemesi ya da sonuçlanmamış çeki olan firmayı 422 ile reddeder; ileti ne kaldığını sayar, tutarları yalnız `finans.oku` olana yazar (firma yetkili kullanıcıya rakam sızmaz). Testler: para "FNS-60", kurallar "FNS-60".
 

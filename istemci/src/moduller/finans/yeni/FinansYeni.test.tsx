@@ -25,7 +25,7 @@ const acikBolum = async (ad: string) => {
   if (screen.queryByRole('tablist')) expect(screen.getByRole('tab', { selected: true }).textContent).toContain(ad);
 };
 // Günlük skor açılışta kendiliğinden yazılır; kayıt testleri onu saymaz.
-const kayitYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
+const kayitYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 // Finans verisinin son okuması şirket adıdır; okununca bölüm veriyle çizilir.
 const okundu = async (istekler: readonly Istek[]) => {
@@ -145,16 +145,13 @@ describe('yeni finans ekranı: Kayıt gir', () => {
   });
 });
 
+// 1456 b: günlük skoru sunucu zamanlayıcısı yazar; ekran açılışta yazmaz, kayıtları yalnız okur.
 describe('yeni finans ekranı: günlük skor', () => {
-  it('yazma yetkisi olan açınca bugünün skoru bir kez kaydedilir', async () => {
-    const istekler = sunucuKur(YAZAN, { 'POST /finans/skorlar/kaydet': () => json(200, {}) });
+  it('yazma yetkisi olan açınca skor yazılmaz', async () => {
+    const istekler = sunucuKur(YAZAN);
     finansAc();
     await okundu(istekler);
-    await waitFor(() => expect(istekler.filter((i) => i.yol === '/finans/skorlar/kaydet')).toHaveLength(1));
-    const skor = istekler.find((i) => i.yol === '/finans/skorlar/kaydet')!.govde as { gun: string; skor: number; nakit: number };
-    expect(skor.skor).toBeGreaterThanOrEqual(0);
-    expect(skor.skor).toBeLessThanOrEqual(100);
-    expect(typeof skor.nakit).toBe('number');
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
   it('yalnız okuyan açınca skor yazılmaz', async () => {

@@ -1074,3 +1074,50 @@ export const isEmriSabitleri = (db: Db, isEmriIdleri: readonly number[]): Promis
       WHERE x.is_emri_id = ANY($1::int[]) ORDER BY x.is_emri_id, x.sira`,
     [[...isEmriIdleri]],
   );
+
+/* ---------------- patlamış rota (1476) ---------------- */
+
+export interface PatlatmaSatiri {
+  sira: number; dugum: string; katman: number; malzemeId: number; revizyonId: number; rotaAdimiId: number; kaynakOpNo: number;
+  birimCarpani: string; tuketenDugum: string | null; tuketenOpNo: number | null;
+}
+export interface PatlatmaBasligi { id: number; kokMalzemeId: number; kokRevizyonId: number; kisiId: number; zaman: string }
+
+// Patlatma değişmez: aynı kök revizyon ve aynı özet varsa var olan kimlik döner, satırlar yeniden yazılmaz. Eşzamanlı iki yazımda
+// ikincisi tekillik kısıtında bekler ve var olanı okur.
+export async function patlatmaYaz(
+  db: Db, g: { kokMalzemeId: number; kokRevizyonId: number; ozet: string; kisiId: number },
+  satirlar: readonly (Omit<PatlatmaSatiri, 'birimCarpani'> & { birimCarpani: number })[],
+): Promise<number> {
+  const yeni = await db.tek<{ id: number }>(
+    `INSERT INTO rota_patlatma (kok_malzeme_id, kok_rota_revizyonu_id, ozet, kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (kok_rota_revizyonu_id, ozet) DO NOTHING RETURNING id`,
+    [g.kokMalzemeId, g.kokRevizyonId, g.ozet, g.kisiId]);
+  if (yeni === null) {
+    const onceki = await db.tek<{ id: number }>('SELECT id FROM rota_patlatma WHERE kok_rota_revizyonu_id = $1 AND ozet = $2', [g.kokRevizyonId, g.ozet]);
+    return onceki!.id;
+  }
+  await db.sorgu(
+    `INSERT INTO rota_patlamis_rota (patlatma_id, sira, dugum, katman, malzeme_id, rota_revizyonu_id, rota_adimi_id, kaynak_op_no, birim_carpani, tuketen_dugum, tuketen_op_no)
+     SELECT $1, x.sira, x.dugum, x.katman, x.malzeme_id, x.rota_revizyonu_id, x.rota_adimi_id, x.kaynak_op_no, x.birim_carpani, x.tuketen_dugum, x.tuketen_op_no
+       FROM jsonb_to_recordset($2::jsonb) AS x(sira int, dugum text, katman int, malzeme_id int, rota_revizyonu_id int, rota_adimi_id int, kaynak_op_no int,
+            birim_carpani numeric, tuketen_dugum text, tuketen_op_no int)`,
+    [yeni.id, JSON.stringify(satirlar.map((x) => ({
+      sira: x.sira, dugum: x.dugum, katman: x.katman, malzeme_id: x.malzemeId, rota_revizyonu_id: x.revizyonId, rota_adimi_id: x.rotaAdimiId,
+      kaynak_op_no: x.kaynakOpNo, birim_carpani: x.birimCarpani, tuketen_dugum: x.tuketenDugum, tuketen_op_no: x.tuketenOpNo,
+    })))]);
+  return yeni.id;
+}
+
+export function patlatmaBasligiOku(db: Db, id: number): Promise<PatlatmaBasligi | null> {
+  return db.tek<PatlatmaBasligi>(
+    `SELECT id, kok_malzeme_id AS "kokMalzemeId", kok_rota_revizyonu_id AS "kokRevizyonId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+       FROM rota_patlatma WHERE id = $1`, [id]);
+}
+
+export function patlatmaSatirlariOku(db: Db, id: number): Promise<PatlatmaSatiri[]> {
+  return db.sorgu<PatlatmaSatiri>(
+    `SELECT sira, dugum, katman, malzeme_id AS "malzemeId", rota_revizyonu_id AS "revizyonId", rota_adimi_id AS "rotaAdimiId",
+            kaynak_op_no AS "kaynakOpNo", birim_carpani::text AS "birimCarpani", tuketen_dugum AS "tuketenDugum", tuketen_op_no AS "tuketenOpNo"
+       FROM rota_patlamis_rota WHERE patlatma_id = $1 ORDER BY sira`, [id]);
+}

@@ -16,7 +16,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const tamam = (govde: unknown = {}) => () => json(200, govde);
 // Günlük skor kaydı açılışta kendiliğinden gider (F0); ayar yazmalarından ayrı sayılır.
-const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
+const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 const ac = async (kullanici: Kullanici, sekme: string, yazmalar: Record<string, () => Response> = {}) => {
   const istekler = sunucuKur(kullanici, yazmalar);
   finansAc(`/finans/ayarlar?sekme=${sekme}`);

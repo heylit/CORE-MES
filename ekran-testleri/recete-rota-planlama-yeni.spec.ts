@@ -4,9 +4,9 @@ import { expect, test } from './ortak.ts';
 // davranışı yeni yolda sınar. İskelet yalnız kabuğu sınar; yer tutucu metnine bağlı değildir (görünüm kabın data-gorunum'undan okunur).
 test.use({ hesap: 'ornek.yonetici' });
 
-// Şeridin son iki maddesi görünüm değil, ayrı sayfalardır: salt okunur rapor (782) ve motor ayarları (811), menünün ikinci grubu.
+// Şeridin son üç maddesi görünüm değil, ayrı sayfalardır: salt okunur raporlar (782, 1478) ve motor ayarları (811), menünün ikinci grubu.
 const GORUNUMLER = ['Planlama motoru', 'Planlama atölyesi', 'Siparişler', 'Maliyetler', 'Genel gider', 'Ek mesai planı', 'Fason planı',
-  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Yıllık plan', 'Ufuk', 'Sevkiyat', 'Veri sağlığı', 'Motor ayarları'];
+  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Yıllık plan', 'Ufuk', 'Sevkiyat', 'Veri sağlığı', 'Plan sağlığı', 'Motor ayarları'];
 
 test.describe('iskelet', () => {
   test('görünüm şeridi tam, her görünüm adresiyle açılır, sayfa yatay taşmaz', async ({ page, ac }) => {

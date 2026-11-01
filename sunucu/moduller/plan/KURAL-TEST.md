@@ -52,6 +52,7 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | PL-1397 | 1397 a: döviz sipariş satırının tutarı ve katkı payı plan gününün kuruyla (finans) TL'ye çevrilir; kuru olmayan döviz emrin bedeli bilinmez, plan TL toplamına sıfır olarak girmez, `bedeliBilinmeyenEmir`'de sayılır | K 6c, 227 a; U `plan-doviz.test.ts`, `plan-bedel.test.ts` 6c | yok |
 | PL-1401 | 1401 a: termin günün sonudur (`TERMIN_SAATI`, 23:59 tesis saati); sunucu gecikmesi ve planlama motoru girdisi aynı saati kullanır; motor kaydında kalan eski saat düzelir | `plan-girdisi.test.ts` 1401 a, `plan-gosterge-ayar.test.ts` | yok |
 | PL-1448 | 1448 a: bedel ayarındaki finansman oranı salt okunurdur: okuma finansın tek oranını (1383 a) verir, yazma gövdedeki değeri yazmaz; finansta oran yoksa finansman plana girmez (elle orana düşülmez) | `plan-finansman.test.ts`, `plan-bedel.test.ts` 210 a | yok |
+| PL-1478 | 1478: plan sağlığı ölçüleri: termin günün sonuna göre (1401 a), terminsiz emir sayılmaz; emir bütün adımları bitince biter; plan uyumu tezgâh, sıra ve 8 saatten az kayma (ölçüsüz adım sayılmaz, boş ölçü bozulmuş sayılmaz); söz değişimi bir saatten çok oynama; süre doğruluğu en az üç örnekli istasyon; ölçülemeyen değer boş, sıfır uydurulmaz | `plan-sagligi-kurallar.test.ts`, `plan-sagligi.test.ts` | yok |
 
 Bağı ertelenen kural: PL-06 (paralel bölme, P-B18); PL-09'un motoru erteletmesi (P-B19).
 

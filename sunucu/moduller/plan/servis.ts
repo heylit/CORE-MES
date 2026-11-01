@@ -36,6 +36,7 @@ import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
+import { degisimler, emirBitisleri } from './olcum-kurallar.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
 import type { PlanBenzetimi } from './plan-girdisi.ts';
 
@@ -2352,11 +2353,34 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     const u = b.isler.get(i)?.uretimEmriId;
     return u === undefined || i < 0 ? [] : [{ isEmriId: i, uretimEmriId: u }];
   }), k.id);
+  await olcumYaz(db, b, id, k.id, canli, gecen, vardiyasiz.size);
   await s.onayKaydiEkle(db, id, 'canliya_al', k.id, asmaKaydi, dortGozsuz);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
   await kardesleriKapat(db, k, id, x.tabanPlanSurumu);
   await planIhtiyaclariniBildir(db);
   return senaryolar(db, k);
+}
+
+// 1470 a: canlıya almanın ölçümü, yeni canlı plan yazıldıktan sonra aynı işlemde. Önceki canlıyla fark yalnız geçen işlerde sayılır;
+// gösterge plan sayfasınınkiyle aynı hesaptır (geciken, zamanında yüzdesi, ağırlıklı gecikme).
+async function olcumYaz(db: Db, b: Baglam, senaryoId: number, kisiId: number, eskiCanli: readonly YerlesimSatiri[], gecen: ReadonlySet<number>, vardiyasizIs: number): Promise<void> {
+  const olcumYeri = (y: YerlesimSatiri) => { const x = yerOf(b, y); return { isEmriId: x.isEmriId, kaynak: kaynakAnahtari(x.kaynak), baslangic: x.baslangic, bitis: x.bitis }; };
+  const yeniCanli = (await s.yerlesimler(db, null)).filter((y) => y.isEmriId > 0);
+  const yeni = yeniCanli.map(olcumYeri);
+  const isler = [...b.isler.values()].filter((i) => i.id > 0 && planlanacak(i));
+  const yerli = new Set(yeni.map((y) => y.isEmriId));
+  const g = gosterge(b, yeniCanli.map((y) => yerOf(b, y)));
+  const d = degisimler(eskiCanli.filter((y) => y.isEmriId > 0).map(olcumYeri), yeni, gecen);
+  const ilkIs = new Map<number, Is>();
+  for (const i of isler) if (!ilkIs.has(i.uretimEmriId)) ilkIs.set(i.uretimEmriId, i);
+  const gelirsiz = [...ilkIs.values()].filter((i) => (i.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId)?.tutar ?? null) === null).length;
+  await s.olcumYaz(db, {
+    senaryoId, yazanKisiId: kisiId, toplamIs: isler.length, yerlesmeyenIs: isler.filter((i) => !yerli.has(i.id)).length, gecikenEmir: g.geciken,
+    zamanindaYuzde: g.zamanindaYuzde, agirlikliGecikmeSaat: g.agirlikliGecikmeSaat, degisenIs: d.degisen, yakinDegisenIs: d.yakinDegisen, yeniIs: d.yeni,
+    vardiyasizIs, gelirsizEmir: gelirsiz,
+  }, emirBitisleri(isler.map((i) => ({ id: i.id, uretimEmriId: i.uretimEmriId, teslim: i.teslim })), yeni).map((e) => ({
+    uretimEmriId: e.uretimEmriId, tahminiBitis: e.bitis === null ? null : new Date(b.simdi + e.bitis * DK), termin: e.termin === null ? null : e.termin.slice(0, 10),
+  })));
 }
 
 // 984 a: taslağın açılışından sonra terminalde başlayan iş, taslakta yeri ya da kaynağı canlıdan farklı bir iş onun gerçek aralığıyla

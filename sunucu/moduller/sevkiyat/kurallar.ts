@@ -205,6 +205,14 @@ export const firmaBaglanabilir = (tur: string): boolean => tur === 'musteri' || 
 // düzeltilirken firmaya bağlanır.
 export const NOKTA_FIRMASI_GEREKIR = 'Müşteri, tedarikçi ve fason noktası bir firmaya bağlanır; firmayı seçin.';
 export const noktaFirmasizMi = (tur: string, firmaId: number | null): boolean => firmaBaglanabilir(tur) && firmaId === null;
+// 1289 a: bağlı noktanın konumu seçilen firma adresidir; adres seçilmemişse merkez adresi. Firmada koordinatlı adres yoksa null döner ve
+// nokta kendi konumunu korur (koordinat zorunlu, firmasız kalan konum kaybolmasın).
+export interface FirmaKonumuSecenegi { adresId: number | null; enlem: number; boylam: number; adres: string | null }
+export function noktaKonumuSec<K extends FirmaKonumuSecenegi>(konumlar: readonly K[], adresId: number | null): K | null {
+  return konumlar.find((k) => k.adresId === adresId) ?? null;
+}
+export const ADRES_FIRMASIZ = 'Adres yalnız firmaya bağlı noktada seçilir.';
+export const ADRES_FIRMADA_YOK = 'Seçilen adres bu firmanın değil ya da koordinatı yok.';
 
 export const AKTIF_FABRIKA_KALDIRILAMAZ = 'Aktif fabrika noktası pasifleştirilemez ya da başka türe çevrilemez; fabrika taşındıysa konumunu Sistem Ayarları\'nda güncelleyin.';
 export const FABRIKA_KONUMU_AYARDA = 'Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu\'nda girilir; önce orada girin.';

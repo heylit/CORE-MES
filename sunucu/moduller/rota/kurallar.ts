@@ -950,3 +950,179 @@ export function ekAdimSartnameIhlali(emir: { durum: string; arsiv: boolean }, ad
   if (adim.tur === 'rota') return EK_ADIM_SARTNAME_ROTA;
   return adim.durum === 'bekliyor' ? null : EK_ADIM_SARTNAME_BASLAMIS;
 }
+
+/* ---------------- patlamış rota ve çok katmanlı emir (1476; 1481 a, 1482 a, 1483 a, 1484 a) ---------------- */
+
+// Düğüm yolu emirde dal adı olur ("K2.1/A"); emrin dal sütunu en çok 20 karakter taşıdığı için katman sınırı 5'tir.
+export const PATLATMA_AZAMI_KATMAN = 5;
+
+export interface PatlatmaRotasi {
+  revizyonId: number;
+  adimlar: readonly { id: number; opNo: number; sira: number; bilesenler: readonly { malzemeId: number; miktar: number }[] }[];
+}
+
+export interface PatlamisSatir {
+  sira: number;
+  dugum: string;
+  katman: number;
+  malzemeId: number;
+  revizyonId: number;
+  rotaAdimiId: number;
+  kaynakOpNo: number;
+  birimCarpani: number;
+  tuketenDugum: string | null;
+  tuketenOpNo: number | null;
+}
+
+// Kökün rotası, bileşenlerinden rotası verilenlerin rotalarıyla yinelemeli açılır; rotası verilmeyen bileşen satın alınan ya da stoktan
+// gelen malzemedir ve adımın bileşeni olarak kalır. Sıra: her düğümün alt düğümleri (tüketen adım sırasıyla) kendisinden önce gelir.
+// Birim çarpanı kökün 1 adedi için düğümden kaç adettir; bileşen firesi adet çarpanına girmez (fire adımın fire payıyla karşılanır).
+export function rotaPatlat(kokMalzemeId: number, rotalar: ReadonlyMap<number, PatlatmaRotasi>): { satirlar: PatlamisSatir[] } | { ileti: string; yol?: number[] } {
+  const satirlar: Omit<PatlamisSatir, 'sira'>[] = [];
+  let hata: { ileti: string; yol?: number[] } | null = null;
+  const ac = (malzemeId: number, dugum: string, katman: number, carpan: number, yol: readonly number[], tuketen: { dugum: string; opNo: number } | null): void => {
+    const rota = rotalar.get(malzemeId);
+    if (rota === undefined || hata !== null) return;
+    const adimlar = [...rota.adimlar].sort((a, b) => a.sira - b.sira);
+    let k = 0;
+    for (const adim of adimlar) {
+      for (const b of adim.bilesenler) {
+        if (!rotalar.has(b.malzemeId)) continue;
+        if (yol.includes(b.malzemeId)) { hata = { ileti: 'Reçete döngüsü var.', yol: [...yol, b.malzemeId] }; return; }
+        if (katman + 1 > PATLATMA_AZAMI_KATMAN) { hata = { ileti: `Reçete en çok ${PATLATMA_AZAMI_KATMAN} katman açılır.`, yol: [...yol, b.malzemeId] }; return; }
+        if (!(b.miktar > 0)) { hata = { ileti: 'Ürün bileşeninin miktarı sıfırdan büyük olmalı.', yol: [...yol, b.malzemeId] }; return; }
+        k += 1;
+        ac(b.malzemeId, `${dugum}.${k}`, katman + 1, carpan * b.miktar, [...yol, b.malzemeId], { dugum, opNo: adim.opNo });
+        if (hata !== null) return;
+      }
+    }
+    for (const adim of adimlar) {
+      satirlar.push({
+        dugum, katman, malzemeId, revizyonId: rota.revizyonId, rotaAdimiId: adim.id, kaynakOpNo: adim.opNo,
+        birimCarpani: Math.round(carpan * 10_000) / 10_000, tuketenDugum: tuketen?.dugum ?? null, tuketenOpNo: tuketen?.opNo ?? null,
+      });
+    }
+  };
+  if (!rotalar.has(kokMalzemeId)) return { ileti: 'Kök ürünün rotası yok.' };
+  ac(kokMalzemeId, '0', 0, 1, [kokMalzemeId], null);
+  if (hata !== null) return hata;
+  return { satirlar: satirlar.map((x, i) => ({ ...x, sira: i + 1 })) };
+}
+
+// Aynı revizyon kümesi aynı patlatmayı verir: özet düğümlerin malzeme:revizyon çiftlerinin sıralı listesidir.
+export function patlatmaOzeti(satirlar: readonly Pick<PatlamisSatir, 'malzemeId' | 'revizyonId'>[]): string {
+  return [...new Set(satirlar.map((x) => `${x.malzemeId}:${x.revizyonId}`))].sort().join(',');
+}
+
+export interface KatmanAdimi {
+  sira: number;
+  opNo: number;
+  bagimlilik: Bagimlilik;
+  devirAdedi: number | null;
+  dal?: string | null | undefined;
+  onculler?: readonly Oncul[] | null | undefined;
+  adetCarpani?: number | null | undefined;
+  bilesenler?: readonly { malzemeNo: number; miktar: string; fireYuzde?: string }[] | undefined;
+}
+
+export interface KatmanDugumu {
+  ad: string;
+  malzemeNo: number;
+  kaynakOpNo: number;
+  birimCarpani: string;
+}
+
+// Emir dal sütunu en çok 20 karakter; dal çarpanı 1-1000 tam sayı (uretim_emirleri_is_emri_dali kısıtları).
+const EMIR_DAL_AZAMI = 20;
+const DAL_CARPANI_AZAMI = 1000;
+
+// Patlamış rotadan tek emrin iş emri girdileri (1484 a): kök adımlar rotadaki op numarasını korur, alt düğüm adımları kökün en büyük
+// numarasından sonraki binlikten onar artan yeni numara alır; rotadaki numara düğüm bilgisinde kalır. Alt düğüm emirde bir dal olur
+// ("K" + yol, kendi dalı varsa "/" ile), adedi emir adedi x birim çarpanı (dal çarpanı); son adımları tüketen üst adımın öncülüdür.
+// 1482 a: alt düğümün ürünü tüketen adımın bileşeninden çıkar, stoğa girmeden akar. 1483 a: stoktan karşılanan düğüm (alt ağacıyla)
+// emre girmez, ürünü tüketen adımda bileşen olarak kalır.
+export function cokKatmanaCevir<T extends KatmanAdimi>(
+  satirlar: readonly PatlamisSatir[],
+  dugumGirdileri: ReadonlyMap<string, readonly T[]>,
+  stoktan: readonly string[],
+): { girdiler: (T & { dugum: KatmanDugumu })[] } | { ileti: string; alan: string } {
+  const dugumler = new Set(satirlar.map((x) => x.dugum));
+  for (const d of stoktan) {
+    if (d === '0') return { ileti: 'Kök ürün stoktan karşılanmaz.', alan: 'stoktanDugumler' };
+    if (!dugumler.has(d)) return { ileti: `${d} düğümü patlatmada yok.`, alan: 'stoktanDugumler' };
+  }
+  const disarida = (d: string) => stoktan.some((x) => d === x || d.startsWith(`${x}.`));
+  const kalan = satirlar.filter((x) => !disarida(x.dugum));
+  const sirali = [...new Set(kalan.map((x) => x.dugum))];
+  const kokAdimlari = dugumGirdileri.get('0') ?? [];
+  const altVar = sirali.some((d) => d !== '0');
+  const enBuyuk = Math.max(0, ...kokAdimlari.map((a) => a.opNo));
+  let yeniNo = (Math.floor(enBuyuk / 1000) + 1) * 1000;
+  const numara = new Map<string, number>();
+  const bilgi = new Map<string, PatlamisSatir>();
+  const bas = new Map<string, PatlamisSatir>();
+  for (const x of kalan) { bilgi.set(`${x.dugum}|${x.kaynakOpNo}`, x); if (!bas.has(x.dugum)) bas.set(x.dugum, x); }
+  for (const d of sirali) {
+    const adimlar = [...(dugumGirdileri.get(d) ?? [])].sort((a, b) => a.sira - b.sira);
+    for (const a of adimlar) {
+      if (!bilgi.has(`${d}|${a.opNo}`)) return { ileti: `${d} düğümünün ${a.opNo} adımı patlatmada yok.`, alan: 'isEmirleri' };
+      if (d === '0') numara.set(`${d}|${a.opNo}`, a.opNo);
+      else { yeniNo += 10; numara.set(`${d}|${a.opNo}`, yeniNo); }
+    }
+  }
+  // Düğümün son adımları: düğüm içinde hiçbir adımın öncülü olmayanlar; tek hatlıda son sıradaki.
+  const sonAdimlar = (d: string): number[] => {
+    const adimlar = [...(dugumGirdileri.get(d) ?? [])].sort((a, b) => a.sira - b.sira);
+    if (adimlar.every((a) => a.onculler == null)) return adimlar.length === 0 ? [] : [adimlar.at(-1)!.opNo];
+    const oncul = new Set(adimlar.flatMap((a) => (a.onculler ?? []).map((o) => o.opNo)));
+    return adimlar.filter((a) => !oncul.has(a.opNo)).map((a) => a.opNo);
+  };
+  const girdiler: (T & { dugum: KatmanDugumu })[] = [];
+  let sira = 0;
+  for (const d of sirali) {
+    const adimlar = [...(dugumGirdileri.get(d) ?? [])].sort((a, b) => a.sira - b.sira);
+    for (const [i, a] of adimlar.entries()) {
+      const p = bilgi.get(`${d}|${a.opNo}`)!;
+      const no = (op: number) => numara.get(`${d}|${op}`)!;
+      sira += 1;
+      const dugum: KatmanDugumu = { ad: d, malzemeNo: p.malzemeId, kaynakOpNo: a.opNo, birimCarpani: String(p.birimCarpani) };
+      if (!altVar) { girdiler.push({ ...a, sira, dugum }); continue; }
+      let onculler: Oncul[];
+      if (a.onculler != null) onculler = a.onculler.map((o) => ({ ...o, opNo: no(o.opNo) }));
+      else {
+        const onceki = adimlar[i - 1];
+        onculler = onceki === undefined || a.bagimlilik === 'bagimsiz' ? [] : [{
+          opNo: no(onceki.opNo), tur: a.bagimlilik === 'akisli' ? 'akisli' : 'bekleyen', devirAdedi: a.bagimlilik === 'akisli' ? a.devirAdedi : null,
+        }];
+      }
+      const altlar = sirali.filter((c) => bas.get(c)?.tuketenDugum === d && bas.get(c)?.tuketenOpNo === a.opNo);
+      const tuketilen = new Set<number>();
+      for (const c of altlar) {
+        tuketilen.add(bas.get(c)!.malzemeId);
+        for (const op of sonAdimlar(c)) {
+          const yeni = numara.get(`${c}|${op}`)!;
+          if (!onculler.some((o) => o.opNo === yeni)) onculler.push({ opNo: yeni, tur: 'bekleyen', devirAdedi: null });
+        }
+      }
+      const ilk = onculler[0];
+      let dal = a.dal ?? null;
+      let adetCarpani = a.adetCarpani ?? null;
+      if (d !== '0') {
+        dal = `K${d.slice(2)}${a.dal ? `/${a.dal}` : ''}`;
+        const carpan = p.birimCarpani * (a.adetCarpani ?? 1);
+        if (!Number.isInteger(carpan) || carpan < 1 || carpan > DAL_CARPANI_AZAMI) {
+          return { ileti: `${d} düğümünün kök başına adedi (${carpan}) 1-${DAL_CARPANI_AZAMI} arası tam sayı olmalı.`, alan: 'isEmirleri' };
+        }
+        adetCarpani = carpan;
+      }
+      if (dal !== null && dal.length > EMIR_DAL_AZAMI) return { ileti: `${d} düğümünün dal adı ${EMIR_DAL_AZAMI} karakteri aşıyor.`, alan: 'isEmirleri' };
+      girdiler.push({
+        ...a, sira, opNo: no(a.opNo), dal, adetCarpani, onculler,
+        bagimlilik: ilk === undefined ? 'bagimsiz' : ilk.tur, devirAdedi: ilk === undefined ? null : ilk.devirAdedi,
+        ...(a.bilesenler === undefined ? {} : { bilesenler: a.bilesenler.filter((b) => !tuketilen.has(b.malzemeNo)) }),
+        dugum,
+      });
+    }
+  }
+  return { girdiler };
+}

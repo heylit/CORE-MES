@@ -11,8 +11,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-// Günlük skor kaydı açılışta kendiliğinden gider (F0); satır eylemlerinden ayrı sayılır.
-const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
+// Günlük skoru sunucu yazar (1456 b); ekranın her POST'u satır eylemidir.
+const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 const anaSayfa = async (istekler: readonly Istek[]) => {
   await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));

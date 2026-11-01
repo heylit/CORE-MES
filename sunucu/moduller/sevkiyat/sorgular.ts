@@ -5,9 +5,9 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 
 export interface NoktaSatiri {
   id: number; ad: string; tur: string; enlem: string; boylam: string; adres: string | null; durakSuresiDakika: number; aktif: boolean;
-  firmaId: number | null; surum: number;
+  firmaId: number | null; adresId: number | null; surum: number;
 }
-const NOKTA_ALANLARI = `id, ad, tur, enlem, boylam, adres, durak_suresi_dakika AS "durakSuresiDakika", aktif, firma_id AS "firmaId", surum`;
+const NOKTA_ALANLARI = `id, ad, tur, enlem, boylam, adres, durak_suresi_dakika AS "durakSuresiDakika", aktif, firma_id AS "firmaId", adres_id AS "adresId", surum`;
 
 export function noktalariGetir(db: Db): Promise<NoktaSatiri[]> {
   return db.sorgu<NoktaSatiri>(`SELECT ${NOKTA_ALANLARI} FROM sevkiyat_noktasi ORDER BY aktif DESC, (tur = 'fabrika') DESC, ad`);
@@ -18,20 +18,24 @@ export function noktaGetir(db: Db, id: number): Promise<NoktaSatiri | null> {
 export function aktifFabrikaGetir(db: Db): Promise<NoktaSatiri | null> {
   return db.tek<NoktaSatiri>(`SELECT ${NOKTA_ALANLARI} FROM sevkiyat_noktasi WHERE tur = 'fabrika' AND aktif`);
 }
-export interface NoktaYazisi { ad: string; tur: string; enlem: number; boylam: number; adres: string | null; durakSuresiDakika: number; firmaId: number | null }
+export interface NoktaYazisi {
+  ad: string; tur: string; enlem: number; boylam: number; adres: string | null; durakSuresiDakika: number; firmaId: number | null; adresId?: number | null;
+}
 export async function noktaEkle(db: Db, n: NoktaYazisi): Promise<NoktaSatiri> {
   const satir = await db.tek<NoktaSatiri>(
-    `INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, adres, durak_suresi_dakika, firma_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${NOKTA_ALANLARI}`,
-    [n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId],
+    `INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, adres, durak_suresi_dakika, firma_id, adres_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${NOKTA_ALANLARI}`,
+    [n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId, n.adresId ?? null],
   );
   return satir!;
 }
 // Sürüm tutmazsa (arada başkası değiştirdi) satır dönmez.
 export function noktaGuncelle(db: Db, id: number, surum: number, n: NoktaYazisi): Promise<NoktaSatiri | null> {
   return db.tek<NoktaSatiri>(
-    `UPDATE sevkiyat_noktasi SET ad = $2, tur = $3, enlem = $4, boylam = $5, adres = $6, durak_suresi_dakika = $7, firma_id = $8, surum = surum + 1
+    `UPDATE sevkiyat_noktasi SET ad = $2, tur = $3, enlem = $4, boylam = $5, adres = $6, durak_suresi_dakika = $7, firma_id = $8, adres_id = $10,
+      surum = surum + 1
       WHERE id = $1 AND surum = $9 RETURNING ${NOKTA_ALANLARI}`,
-    [id, n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId, surum],
+    [id, n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId, surum, n.adresId ?? null],
   );
 }
 // İptal edilmemiş bir işte alış ya da bırakış noktası mı?

@@ -5,7 +5,7 @@ import {
 } from './akislar.ts';
 import { KAT_KOD } from './donustur.ts';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
-import { finansiKur, gunlukSkorKomutu } from './veri.ts';
+import { finansiKur } from './veri.ts';
 
 const BUGUN = '2026-10-15';
 const { V, motor } = finansiKur(ornekHamVeri(), BUGUN);
@@ -110,15 +110,5 @@ describe('çekin durumu ve düzenli ödeme', () => {
     const [k] = komutlar(duzenliOdendiKomutu(V, motor, 1));
     expect(k!.uc).toBe('POST /finans/duzenli-odemeler/:id/odendi');
     expect(k!.govde).toMatchObject({ tarih: BUGUN, hesapId: 1, yontem: 'banka' });
-  });
-});
-
-describe('günlük skor', () => {
-  it('bugünün skoru yoksa kaydetme komutu kurulur; varsa kurulmaz', () => {
-    const f = finansiKur(ornekHamVeri(), BUGUN);
-    const k = gunlukSkorKomutu(f.motor);
-    expect(k).toMatchObject({ uc: 'POST /finans/skorlar/kaydet', tekrar: false, govde: { gun: BUGUN } });
-    f.motor.durum.history.push({ d: BUGUN, score: 50, cash: 0, src: 'sunucu' });
-    expect(gunlukSkorKomutu(f.motor)).toBeNull();
   });
 });

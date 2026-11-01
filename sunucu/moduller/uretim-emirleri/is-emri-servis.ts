@@ -27,7 +27,7 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
-  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali,
+  adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
@@ -44,6 +44,13 @@ const TIP_YOK = 'Operasyon tipi bulunamadı.';
 const FASON_FIRMA_YOK = 'Fason firma bulunamadı, pasif ya da fason işaretli değil.';
 const KONTROL_LISTESI = `Kontrol listesi en çok ${AZAMI_ADIM} maddedir; madde adı boş olamaz, en çok 120 karakterdir.`;
 const URETILEBILIR_TURLER: readonly string[] = ['mamul', 'yarimamul'];
+const COK_KATMANLI_PLANA = 'Çok katmanlı emrin stok ve plan bağı henüz kurulmadı; emir taslakta kalır (kart 1476).';
+const COK_KATMANLI_DEGISMEZ = 'Çok katmanlı emir bölünmez, birleştirilmez ve rotası yeniden uygulanmaz (kart 1476).';
+
+// 1476: patlamış rotadan açılmış emirde parti ve rota komutları düğüm düzenini bozar; bu komutlar reddedilir.
+async function cokKatmanliDegil(db: Db, emirId: number, ileti: string): Promise<void> {
+  if ((await s.emrinPatlatmasi(db, emirId)) !== null) throw cakisma(ileti);
+}
 
 /* ---------------- girdiler (UE1; rota baglanti.ts UretimEmriGirdisi ile birebir, ek alanlar isteğe bağlı) ---------------- */
 
@@ -75,6 +82,8 @@ export interface IsEmriGirdisi {
   onculler?: { opNo: number; tur: OnculTuru; devirAdedi: number | null }[] | null;
   // 1257 a: bir mamul için bu dal adımında işlenen adet (boş: 1); yalnız dallı adımda tutulur.
   adetCarpani?: number | null;
+  // 1476: çok katmanlı emirde adımın düğümü (rota cokKatmanaCevir); tek katmanlı emirde yok.
+  dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -96,6 +105,8 @@ export interface UretimEmriGirdisi {
   siparisSatiriId?: number | null;
   // Girdiler serbest stoktan emre ayrılsın mı (formda varsayılan açık); verilmezse ayrılmaz.
   stoktanRezerve?: boolean;
+  // 1476: emir bu patlamış rotadan açıldı (çok katmanlı); her iş emri düğümünü taşır.
+  patlatmaId?: number | null;
 }
 
 // Dışa açık komut işlemi kendisi arar: üst modülün ucunda aranan işlem bu komutun işlemi değildir.
@@ -140,7 +151,7 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
     sira, opNo: g.opNo, operasyonTipiId: g.operasyonTipiId, ad: g.ad, ...k, istasyonId: k.istasyonId ?? g.istasyonId ?? null, ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
-    talimatSurumu: g.talimatSurumu,
+    talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null,
   };
 }
 
@@ -241,6 +252,8 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
   const baslik = await basligiDenetle(db, g);
   girdiDenetle(g.isEmirleri);
+  const dugumIhlali = dugumGirdisiIhlali(g.patlatmaId ?? null, g.taslak === true, g.isEmirleri);
+  if (dugumIhlali !== null) throw dogrulama(dugumIhlali, 'isEmirleri');
   const tipler = await tipKimlikleri(db);
   const sirali = [...g.isEmirleri].sort((a, b) => a.sira - b.sira);
   const yazilar: IsEmriYazisi[] = [];
@@ -315,7 +328,7 @@ async function basligiYaz(
     parcaNo, parcaAd: (b.urun.ad ?? b.urun.kod).slice(0, 120), adet: g.adet, istasyonId,
     malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: g.teslim, aciklama: b.aciklama,
     durum: g.taslak === true ? 'taslak' : 'planli', emirTuru: b.emirTuru, emirNo, projeId: b.proje?.id ?? null,
-    siparisSatiriId: b.siparisSatiriId,
+    siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null,
   }, acanId);
 }
 
@@ -351,6 +364,7 @@ export async function isEmirleriniYenile(
 ): Promise<{ degisenler: string[] }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
   const e = await kilitliUstEmir(db, uretimEmriId);
+  await cokKatmanliDegil(db, uretimEmriId, COK_KATMANLI_DEGISMEZ);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
   girdiDenetle(g.isEmirleri);
@@ -626,6 +640,7 @@ export async function planaAl(db: Db, kullanici: Kullanici, id: number, surum?: 
   islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, surum);
+  await cokKatmanliDegil(db, id, COK_KATMANLI_PLANA);
   const ihlal = planaAlIhlali(e.durum, e.arsiv);
   if (ihlal !== null) throw cakisma(ihlal);
   await s.planaAlYaz(db, id, e.surum);
@@ -1010,6 +1025,7 @@ export async function partiyiBol(
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
+  await cokKatmanliDegil(db, id, COK_KATMANLI_DEGISMEZ);
   const altEmirId = await kilitliEmriBol(db, acanId, e, g);
   const kol = await s.ustEmirBul(db, altEmirId);
   if (kol === null) throw bulunamadi(EMIR_YOK);
@@ -1283,6 +1299,7 @@ export async function rotasizAdimSil(db: Db, kullanici: Kullanici, id: number, g
 // adımlarını yeniden taşır. Kilit sırası üst, sonra kol (üst her zaman önce açılmıştır, kimliği küçüktür).
 export async function birlesmePlani(db: Db, kullanici: Kullanici, id: number, g: { birlesmeOpNo: number | null; surum: number }): Promise<void> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  await cokKatmanliDegil(db, id, COK_KATMANLI_DEGISMEZ);
   const ilk = await s.ustEmirBul(db, id);
   if (ilk === null || ilk.malzemeNo === null) throw bulunamadi(EMIR_YOK);
   const ust = ilk.ustEmirId === null ? null : await kilitliUstEmir(db, ilk.ustEmirId);
@@ -1365,6 +1382,7 @@ export async function partileriBirlestir(
 ): Promise<void> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const ilk = await kilitliUstEmir(db, Math.min(hedefId, g.kaynakEmirId));
+  for (const e of [hedefId, g.kaynakEmirId]) await cokKatmanliDegil(db, e, COK_KATMANLI_DEGISMEZ);
   const ikinci = hedefId === g.kaynakEmirId ? ilk : await kilitliUstEmir(db, Math.max(hedefId, g.kaynakEmirId));
   const [hedef, kaynak] = ilk.id === hedefId ? [ilk, ikinci] : [ikinci, ilk];
   surumDenetle(hedef, g.surum);

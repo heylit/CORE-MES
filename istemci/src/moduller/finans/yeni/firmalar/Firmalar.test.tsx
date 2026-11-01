@@ -7,7 +7,7 @@ import { FIRMACI, finansAc, json, OKUYAN, sunucuKur, YAZAN, type Istek } from '.
 import { ornekFirma } from './test-veri.ts';
 
 // Açılışta günlük skor kendiliğinden yazılabilir (F0); testler yalnız ekranın kendi yazmalarına bakar.
-const kayitYazmasi = (i: Istek) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet';
+const kayitYazmasi = (i: Istek) => i.yontem === 'POST';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const ekle = (k: Kullanici, id: number, ...islem: string[]): Kullanici => ({ ...k, id, islemler: [...k.islemler, ...islem] as Kullanici['islemler'] });

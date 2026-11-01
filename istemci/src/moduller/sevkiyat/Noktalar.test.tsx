@@ -53,7 +53,7 @@ describe('Noktalar', () => {
     doldur('Boylam', '32.81');
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilan).toHaveLength(1));
-    expect(yazilan[0]).toEqual({ yol: '/sevkiyat/noktalar/ekle', govde: { ad: 'Örnek Kargo D', tur: 'kargo', enlem: 39.95, boylam: 32.81, adres: null, durakSuresiDakika: 20, firmaId: null } satisfies NoktaGovdesi });
+    expect(yazilan[0]).toEqual({ yol: '/sevkiyat/noktalar/ekle', govde: { ad: 'Örnek Kargo D', tur: 'kargo', enlem: 39.95, boylam: 32.81, adres: null, durakSuresiDakika: 20, firmaId: null, adresId: null } satisfies NoktaGovdesi });
   });
 
   it('firmadan alınan nokta firmanın adını, türünü ve adresini alır, konum firmanın ilçe ve iliyle aranır; noktası olan firma seçilemez', async () => {
@@ -108,6 +108,34 @@ describe('Noktalar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilan).toHaveLength(1));
     expect(yazilan[0]).toMatchObject({ yol: '/sevkiyat/noktalar/2/guncelle', govde: { firmaId: 11, surum: 1 } });
+  });
+
+  it('1289 a: koordinatlı adresi olan firmada konum ve adres karttan seçilir, elle girilmez; gövde adres kimliğini taşır', async () => {
+    const yazilan = sunucuKur(TANIMCI);
+    const KONUMLU = { ...FIRMALAR.firmalar[0]!, id: 13, ad: 'Örnek Adresli Firma', fason: false, tur: 'musteri' as const, konumlar: [
+      { adresId: null, tur: 'merkez' as const, ad: 'Merkez', adres: 'Merkez Cad. 1', enlem: 39.91, boylam: 32.71 },
+      { adresId: 31, tur: 'teslim' as const, ad: 'Depo', adres: 'Depo Yolu 2', enlem: 39.97, boylam: 32.77 },
+    ] };
+    vi.mocked(fetch).mockImplementation(async (adres, ayar) => {
+      const yol = String(adres).replace('/api', '');
+      if (ayar?.method === 'POST') { yazilan.push({ yol, govde: JSON.parse(String(ayar.body)) }); return json(200, { nokta: NOKTALAR.noktalar[1] }); }
+      if (yol === '/oturum') return json(200, { kullanici: TANIMCI } satisfies OturumCevabi);
+      if (yol === '/sevkiyat/noktalar') return json(200, NOKTALAR);
+      if (yol.startsWith('/sevkiyat/firmalar')) return json(200, { firmalar: [KONUMLU] } satisfies FirmaAramaCevabi);
+      if (yol === '/sevkiyat/harita') return json(200, { harita: null } satisfies HaritaCevabi);
+      return json(200, { sonuclar: [], dizinVar: true, kisaBaglanti: false });
+    });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni nokta' }));
+    fireEvent.focus(screen.getByLabelText('Firmadan al'));
+    fireEvent.click(within(await screen.findByRole('list', { name: 'Firmalar' })).getByRole('button', { name: /Örnek Adresli Firma/ }));
+    expect(screen.queryByLabelText(/^Enlem/)).toBeNull();
+    expect((screen.getByLabelText(/^Açık adres/) as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText(/^Açık adres/) as HTMLInputElement).value).toBe('Merkez Cad. 1');
+    fireEvent.change(screen.getByLabelText('Firma adresi'), { target: { value: '31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazilan).toHaveLength(1));
+    expect(yazilan[0]?.govde).toMatchObject({ firmaId: 13, adresId: 31, enlem: 39.97, boylam: 32.77, adres: 'Depo Yolu 2' });
   });
 
   it('bütün noktalar firmalıysa Firmasız süzgeci çıkmaz', async () => {

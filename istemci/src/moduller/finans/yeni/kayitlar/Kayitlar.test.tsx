@@ -5,7 +5,7 @@ import { ornekHamVeri } from '../ornek-ham-veri.ts';
 import { finansAc, json, OKUYAN, sunucuKur, YAZAN, type Istek } from '../test-ortak.tsx';
 
 // Açılışta günlük skor kendiliğinden yazılabilir (F0); testler yalnız ekranın kendi yazmalarına bakar.
-const kayitYazmasi = (i: Istek) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet';
+const kayitYazmasi = (i: Istek) => i.yontem === 'POST';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.yonet'] as Kullanici['islemler'] };

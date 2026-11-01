@@ -17,7 +17,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 // Günlük skor kaydı (F0, çerçevede recordHistory) yetkiliye kendiliğinden gider; rapor yazması sayılmaz.
 // Gunluk skor kaydi (F0, cercevede recordHistory) yetkiliye kendiliginden gider; rapor yazmasi sayilmaz.
-const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
+const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 describe('F3 Durum ve öneriler', () => {
   it('skor, öneriler ve göstergeler gelir; finans.yaz varsa öneri durumu tek uca gider', async () => {

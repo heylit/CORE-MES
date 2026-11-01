@@ -88,6 +88,41 @@ test('1264 a: müşteri, tedarikçi ve fason noktası firmasız yazılmaz; kargo
   assert.equal((await tx((db) => servis.noktalariListele(db))).noktalar.find((x) => x.id === eski.id)?.ad, 'Eski Müşteri Firması');
 });
 
+test('1289 a: bağlı noktanın adresi ve konumu seçilen firma adresinden, yoksa merkezden okunur; kart değişince nokta da değişir', async () => {
+  const { firmaId, teslimId } = await tx(async (db) => {
+    const kisi = (await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Adres Deneme') RETURNING id"))!.id;
+    const f = (await db.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_firma (ad, tur, adres, enlem, boylam, olusturan_id) VALUES ('Adresli Firma', 'musteri', 'Merkez Cad. 1', 39.91, 32.71, $1) RETURNING id", [kisi]))!.id;
+    const a = (await db.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_adres (firma_id, tur, ad, adres, enlem, boylam, olusturan_id) VALUES ($1, 'teslim', 'Depo', 'Depo Yolu 2', 39.97, 32.77, $2) RETURNING id", [f, kisi]))!.id;
+    return { firmaId: f, teslimId: a };
+  });
+  const govde = { ad: 'Adresli Nokta', tur: 'musteri' as const, ...konum(9, 9), adres: 'elle yazılan', durakSuresiDakika: 10, firmaId };
+  const merkezde = await tx((db) => servis.noktaEkle(db, govde));
+  assert.deepEqual([merkezde.adresId, merkezde.enlem, merkezde.boylam, merkezde.adres], [null, 39.91, 32.71, 'Merkez Cad. 1']);
+  const depoda = await tx((db) => servis.noktaGuncelle(db, merkezde.id, { ...govde, adresId: teslimId, surum: merkezde.surum }));
+  assert.deepEqual([depoda.adresId, depoda.enlem, depoda.boylam, depoda.adres], [teslimId, 39.97, 32.77, 'Depo Yolu 2']);
+  await tx((db) => db.sorgu('UPDATE musteri_tedarikci_adres SET enlem = 39.99, adres = $2 WHERE id = $1', [teslimId, 'Yeni Depo Yolu']));
+  const okunan = (await tx((db) => servis.noktalariListele(db))).noktalar.find((n) => n.id === merkezde.id)!;
+  assert.deepEqual([okunan.enlem, okunan.adres], [39.99, 'Yeni Depo Yolu']);
+  assert.deepEqual(okunan.konumlar?.map((k) => k.adresId), [null, teslimId]);
+  await tx((db) => servis.noktaPasiflestir(db, merkezde.id));
+});
+
+test('1289 a reddedilen: başka firmanın adresi, firmasız noktada adres ve kısıt; koordinatsız firmada nokta kendi konumunu tutar', async () => {
+  const baskaFirma = await firmaAc('Başka Adresli');
+  const baskaAdres = await tx(async (db) => (await db.tek<{ id: number }>(
+    "INSERT INTO musteri_tedarikci_adres (firma_id, tur, ad, enlem, boylam, olusturan_id) VALUES ($1, 'teslim', 'Başka Depo', 39.5, 32.5, (SELECT min(id) FROM kisi)) RETURNING id", [baskaFirma]))!.id);
+  const firmaId = await firmaAc('Koordinatsız Firma');
+  const govde = { ad: 'Koordinatsız', tur: 'musteri' as const, ...konum(9, 8), adres: 'elle', durakSuresiDakika: 10, firmaId };
+  await assert.rejects(tx((db) => servis.noktaEkle(db, { ...govde, adresId: baskaAdres })), (h: unknown) => hata('GECERSIZ')(h) && (h as Error).message.includes('bu firmanın değil'));
+  await assert.rejects(tx((db) => servis.noktaEkle(db, { ...govde, tur: 'kargo', firmaId: null, adresId: baskaAdres })), hata('GECERSIZ'));
+  await assert.rejects(tx((db) => db.sorgu("INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, adres_id) VALUES ('Kısıt', 'kargo', 1, 1, $1)", [baskaAdres])), kisit('sevkiyat_noktasi_adres_firmali'));
+  const n = await tx((db) => servis.noktaEkle(db, govde));
+  assert.deepEqual([n.enlem, n.boylam, n.adres, n.adresId], [govde.enlem, govde.boylam, 'elle', null]);
+  await tx((db) => servis.noktaPasiflestir(db, n.id));
+});
+
 test('nokta firmaya bağlanır: ad finanstan okunur, firma başına tek aktif nokta, kargo bağlanmaz (kart #836)', async () => {
   const firma = await tx(async (db) => {
     const kisi = await db.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Firma Deneme') RETURNING id");

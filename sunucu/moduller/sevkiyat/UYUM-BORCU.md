@@ -6,7 +6,8 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 
 1. ~~Firma bağı yok.~~ Kapandı (kart #836): boş olabilen `sevkiyat_noktasi.firma_id` -> `musteri_tedarikci_firma(id)` (kart #1164 ile finanstan taşındı), ad musteri-tedarikci `disari.ts`'ten okunur; firmanın tek aktif noktası olur.
    1264 a: yeni ve düzeltilen müşteri, tedarikçi ve fason noktası firmasız yazılmaz (servis kuralı); eski bağsız noktalar Noktalar ekranındaki
-   "Firmasız" süzgecinde eşlenir. Kalan: eşleme bitince `firma_id` zorunluluğu göçü (bağsız nokta varsa sayıp durur); adres ve koordinatın karttan okunması soru 1289'a bağlı.
+   "Firmasız" süzgecinde eşlenir. Kalan: eşleme bitince `firma_id` zorunluluğu göçü (bağsız nokta varsa sayıp durur); adres ve koordinat 1289 a ile karttan okunur (`adres_id`, göç 20261031210000). Not: noktada kullanılan firma adresi
+   Müşteri-Tedarikçi'de kaldırılmak istenirse yabancı anahtar reddeder (genel bağımlı kayıt iletisi); özel ileti Müşteri-Tedarikçi'ye istek.
 2. Belge no serbest metin (`sevkiyat_isi.belge_no`); Logo irsaliyesiyle bağ yok. Uyum: akış C bağlanırken sorulur. Stok çıkışı (E-12): ürün taşıyan işin durum değişimi
    olayla bildirilir (`urunSevkiDinle`, #1875); stok dinleyicisi kullanıcı kararı 235 a ile (yolda: Yolda konumu, teslim: çıkış) Stok şeridinde yazılır.
 3. ~~Fabrika konumu iki yerde olabilir.~~ Kapandı (930 a): fabrikanın konumunun tek kaynağı Sistem Ayarları (`sevkiyat.fabrika-enlem`, `-boylam`).

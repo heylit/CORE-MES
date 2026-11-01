@@ -6,6 +6,8 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
+import type { PatlatmaRotasi } from './kurallar.ts';
 import { girdiEksigi, hazirlikBol, isEmriBagimliligi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
@@ -583,5 +585,48 @@ describe('hazırlık bölümü (1310 a)', () => {
     assert.deepEqual(hazirlikBol({ ayarSuresiDk: 25 }, null), { hazirlikDk: 0, ayar: true, ayarDk: 25, toplam: 25 });
     assert.deepEqual(hazirlikBol({ ayarSuresiDk: 0 }, null), { hazirlikDk: 0, ayar: false, ayarDk: null, toplam: 0 });
     assert.deepEqual(hazirlikBol({ ayarSuresiDk: null }, null), { hazirlikDk: null, ayar: false, ayarDk: null, toplam: null });
+  });
+});
+
+describe('1476 patlamış rota ve çok katmanlı emir', () => {
+  const rota = (revizyonId: number, adimlar: [number, [number, number][]][]): PatlatmaRotasi => ({
+    revizyonId, adimlar: adimlar.map(([opNo, b], i) => ({ id: revizyonId * 100 + i, opNo, sira: i + 1, bilesenler: b.map(([malzemeId, miktar]) => ({ malzemeId, miktar })) })),
+  });
+  test('döngü, katman sınırı ve kök rotası olmayan patlatma reddedilir; rotası olmayan bileşen açılmaz', () => {
+    assert.deepEqual(rotaPatlat(1, new Map()), { ileti: 'Kök ürünün rotası yok.' });
+    const dongu = rotaPatlat(1, new Map([[1, rota(10, [[10, [[2, 1]]]])], [2, rota(20, [[10, [[1, 1]]]])]]));
+    assert.ok('ileti' in dongu && /döngüsü/.test(dongu.ileti));
+    assert.deepEqual('yol' in dongu ? dongu.yol : null, [1, 2, 1]);
+    const zincir = new Map(Array.from({ length: PATLATMA_AZAMI_KATMAN + 2 }, (_, i) => [i + 1, rota(i + 1, [[10, [[i + 2, 1]]]])] as const));
+    assert.ok('ileti' in rotaPatlat(1, zincir));
+    const p = rotaPatlat(1, new Map([[1, rota(10, [[10, [[99, 5]]], [20, [[2, 2]]]])], [2, rota(20, [[10, []]])]]));
+    assert.ok('satirlar' in p);
+    assert.deepEqual(p.satirlar.map((x) => [x.sira, x.dugum, x.birimCarpani, x.tuketenOpNo]), [[1, '0.1', 2, 20], [2, '0', 1, null], [3, '0', 1, null]]);
+    assert.equal(patlatmaOzeti(p.satirlar), '1:10,2:20');
+  });
+  test('çok katmana çevirme: kesirli ya da 1000 üstü düğüm adedi ve kök düğümü stoktan reddedilir; alt düğümsüz emir tek hatlı kalır', () => {
+    const adim = (opNo: number, sira: number) => ({ sira, opNo, bagimlilik: 'bekleyen' as const, devirAdedi: null, dal: null, onculler: null, adetCarpani: null, bilesenler: [] });
+    const p = rotaPatlat(1, new Map([[1, rota(10, [[10, [[2, 0.5]]]])], [2, rota(20, [[10, []]])]]));
+    assert.ok('satirlar' in p);
+    const girdiler = new Map([['0', [adim(10, 1)]], ['0.1', [adim(10, 1)]]]);
+    assert.match(String((cokKatmanaCevir(p.satirlar, girdiler, []) as { ileti: string }).ileti), /tam sayı/);
+    assert.match(String((cokKatmanaCevir(p.satirlar, girdiler, ['0']) as { ileti: string }).ileti), /Kök/);
+    const tek = cokKatmanaCevir(p.satirlar, girdiler, ['0.1']);
+    assert.ok('girdiler' in tek);
+    assert.deepEqual(tek.girdiler.map((g) => [g.opNo, g.onculler, g.dugum.ad]), [[10, null, '0']]);
+  });
+  test('dallı alt düğümün birleşmeyen son adımları tüketen adımın öncülü olur', () => {
+    const p = rotaPatlat(1, new Map([[1, rota(10, [[10, [[2, 1]]]])], [2, rota(20, [[10, []], [20, []], [30, []]])]]));
+    assert.ok('satirlar' in p);
+    const g = (opNo: number, sira: number, dal: string | null, onculler: { opNo: number; tur: 'bekleyen'; devirAdedi: null }[] | null) =>
+      ({ sira, opNo, bagimlilik: 'bekleyen' as const, devirAdedi: null, dal, onculler, adetCarpani: null });
+    const c = cokKatmanaCevir(p.satirlar, new Map([
+      ['0', [g(10, 1, null, null)]],
+      ['0.1', [g(10, 1, 'A', []), g(20, 2, 'B', []), g(30, 3, null, [{ opNo: 10, tur: 'bekleyen', devirAdedi: null }])]],
+    ]), []);
+    assert.ok('girdiler' in c);
+    assert.deepEqual(c.girdiler.map((x) => [x.opNo, x.dal, x.onculler?.map((o) => o.opNo)]), [
+      [1010, 'K1/A', []], [1020, 'K1/B', []], [1030, 'K1', [1010]], [10, null, [1020, 1030]],
+    ]);
   });
 });

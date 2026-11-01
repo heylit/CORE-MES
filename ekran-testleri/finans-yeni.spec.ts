@@ -26,8 +26,8 @@ test.describe('F0 iskelet', () => {
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await form.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(form).toBeHidden();
-    // Açılışta yalnız günlük skor yazılır (prototipteki gibi); form vazgeçilince yazma gitmez.
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    // Günlük skoru sunucu yazar (1456 b); form vazgeçilince yazma gitmez.
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -45,8 +45,8 @@ test.describe('F0 iskelet', () => {
 });
 
 test.describe('F4 ana sayfa ve ayarlar', () => {
-  // Açılışta günlük skor kendiliğinden yazılabilir (F0); ekranın kendi işlemleri yazma göndermez.
-  const yazmalar = (y: readonly string[]) => y.filter((x) => x !== 'POST /api/finans/skorlar/kaydet');
+  // Günlük skoru sunucu yazar (1456 b); ekranın kendi işlemleri yazma göndermez.
+  const yazmalar = (y: readonly string[]) => y;
 
   test('ana sayfa: dört sayı, yapılacaklar, nakit ve finansal durum; yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
     await ac('/finans');
@@ -117,7 +117,7 @@ test.describe('F3 raporlar', () => {
       await expect(icerik).toBeVisible({ timeout: 15_000 });
       expect((await tasmaOlc(page)).belge, yol).toBeLessThanOrEqual(0);
     }
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
@@ -146,7 +146,7 @@ test.describe('F3 raporlar', () => {
       await expect(page).toHaveURL(/\/finans\/tahminler#m-/);
     }
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });
@@ -208,8 +208,8 @@ test.describe('F2 çek ve senet, nakit planı, bütçe, vergi', () => {
     { yol: 'butce', baslik: 'Bütçe', ozet: 'Bütçe özeti', kart: 'Görsel karşılaştırma' },
     { yol: 'vergi', baslik: 'Vergi takvimi', ozet: 'KDV özeti', kart: 'KDV dönem tablosu' },
   ] as const;
-  // Yazan kullanıcı ekranı açınca günlük skor kaydı gidebilir (F0); bölümlerin kendisi yazma göndermez.
-  const bolumYazmalari = (yazmalar: readonly string[]) => yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet');
+  // Günlük skoru sunucu yazar (1456 b); bölümler yazma göndermez.
+  const bolumYazmalari = (yazmalar: readonly string[]) => yazmalar;
   for (const b of BOLUMLER) {
     test(`${b.baslik}: özet, kartlar ve grafik açılır; yatay taşma ve yazma yok`, async ({ page, ag, ac }) => {
       await ac(`/finans/${b.yol}`);

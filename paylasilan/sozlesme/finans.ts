@@ -327,7 +327,6 @@ export const oneriDurumuGovdesi = z.object({
 export const oneriDurumuSatiri = z.object({ bulguKimligi: z.string(), durum: z.enum(['uygulaniyor', 'ertelendi', 'kapatildi']), erteleBitis: tarihSemasi.nullable() });
 export const kapanisGovdesi = z.object({ donem: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/), madde: z.string().regex(/^[a-z_]{1,30}$/), isaretli: z.boolean() });
 export const kapanisSatiri = z.object({ donem: z.string(), madde: z.string(), isaretli: z.boolean() });
-export const skorGovdesi = z.object({ gun: tarihSemasi, skor: z.number().int().min(0).max(100), nakit: isaretliTutarSemasi.nullish().transform((v) => v ?? null) });
 export const skorSatiri = z.object({ gun: tarihSemasi, skor: z.number().int(), nakit: numerik.nullable() });
 
 // ---- Toplu içe aktarma (yalnız açık belge; firma tam eşleşmeyle, FNS-50) ----

@@ -31,6 +31,7 @@ export const PLAN_IKINCI_MENU = {
     // (planlama/gorunumler.ts).
     { baslik: 'Veri', maddeler: [
       { anahtar: 'veri-sagligi', baslik: 'Veri sağlığı', yol: '/plan/veri-sagligi', simge: 'alert', islem: 'plan.planlama-oku' },
+      { anahtar: 'plan-sagligi', baslik: 'Plan sağlığı', yol: '/plan/plan-sagligi', simge: 'gauge', islem: 'plan.planlama-oku' },
       { anahtar: 'motor-ayarlari', baslik: 'Motor ayarları', yol: '/plan/motor-ayarlari', simge: 'gear', islem: 'plan.planlama-oku' },
     ] },
   ],
