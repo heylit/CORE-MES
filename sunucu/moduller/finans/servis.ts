@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { gunlukSkorHesapla, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { faizSec, gunlukSkorHesapla, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
@@ -19,7 +19,7 @@ import {
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
-import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, aylikFaizdenGunluk, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
+import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
 import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
@@ -68,19 +68,30 @@ export async function kurlar(db: Db, tarih: string): Promise<Map<string, Gecerli
   return sonuc;
 }
 
+// 1700 b, 1725 a: başka modüllere giden faiz ayardaki birimdendir (faizSec); aylık ve günlük karşılığı birlikte verilir.
 export interface GecerliFaiz { aylikYuzde: string; gecerlilikBaslangic: string }
+export interface GecerliGunlukFaiz extends GecerliFaiz { gunlukYuzde: number }
+async function secilenFaizler(db: Db, paraBirimi: string | null, tarih: string): Promise<Map<string, GecerliGunlukFaiz>> {
+  const tercih = await sorgular.faizBirimi(db);
+  const aylik = new Map((await sorgular.sonFaizler(db, paraBirimi, tarih)).map((s) => [s.paraBirimi, { yuzde: s.aylikYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic }]));
+  const gunluk = new Map((await sorgular.sonGunlukFaizler(db, paraBirimi, tarih)).map((s) => [s.paraBirimi, { yuzde: s.gunlukYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic }]));
+  const sonuc = new Map<string, GecerliGunlukFaiz>();
+  for (const pb of new Set([...aylik.keys(), ...gunluk.keys()])) {
+    const f = faizSec(tercih, aylik.get(pb), gunluk.get(pb));
+    if (f) sonuc.set(pb, { aylikYuzde: f.aylikYuzde, gunlukYuzde: f.gunlukYuzde, gecerlilikBaslangic: f.gecerlilikBaslangic });
+  }
+  return sonuc;
+}
 export async function faizGetir(db: Db, paraBirimi: string, tarih: string): Promise<GecerliFaiz | null> {
-  const [s] = await sorgular.sonFaizler(db, paraBirimi, tarih);
-  return s ? { aylikYuzde: s.aylikYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic } : null;
+  const f = (await secilenFaizler(db, paraBirimi, tarih)).get(paraBirimi);
+  return f ? { aylikYuzde: f.aylikYuzde, gecerlilikBaslangic: f.gecerlilikBaslangic } : null;
 }
 // 1350 a: planın finansman oranı kendi ayarı yerine bu günlük orandır; o gün geçerli faiz yoksa null (oran bilinmiyor, sıfır değil).
-export interface GecerliGunlukFaiz extends GecerliFaiz { gunlukYuzde: number }
 export async function gunlukFaizGetir(db: Db, paraBirimi: string, tarih: string): Promise<GecerliGunlukFaiz | null> {
-  const f = await faizGetir(db, paraBirimi, tarih);
-  return f && { ...f, gunlukYuzde: aylikFaizdenGunluk(Number(f.aylikYuzde)) };
+  return (await secilenFaizler(db, paraBirimi, tarih)).get(paraBirimi) ?? null;
 }
 export async function faizler(db: Db, tarih: string): Promise<Map<string, GecerliFaiz>> {
-  return new Map((await sorgular.sonFaizler(db, null, tarih)).map((s) => [s.paraBirimi, { aylikYuzde: s.aylikYuzde, gecerlilikBaslangic: s.gecerlilikBaslangic }]));
+  return new Map([...(await secilenFaizler(db, null, tarih))].map(([pb, f]) => [pb, { aylikYuzde: f.aylikYuzde, gecerlilikBaslangic: f.gecerlilikBaslangic }]));
 }
 
 // Ana sayfa panosu: bugün (tesis günü) geçerli son kurlar.
@@ -579,14 +590,17 @@ export function kurGuncelle(db: Db, k: Kullanici, g: G<typeof kurGuncelleGovdesi
 export async function kurFaizOzeti(db: Db, bugun: string): Promise<KurFaizOzeti> {
   const kurlar = await sorgular.kurOzeti(db, bugun);
   const faizler = await sorgular.faizOzeti(db, bugun);
+  const gunlukFaizler = await sorgular.gunlukFaizOzeti(db, bugun);
   const son = await sorgular.sonKurFaizGirisi(db);
   const gecmis = await sorgular.kurFaizGecmisi(db, KUR_FAIZ_GECMISI_BOYU);
-  const adlar = await kisiAdlari(db, [...kurlar, ...faizler, ...gecmis, ...(son ? [son] : [])].map((s) => s.girenId));
+  const adlar = await kisiAdlari(db, [...kurlar, ...faizler, ...gunlukFaizler, ...gecmis, ...(son ? [son] : [])].map((s) => s.girenId));
   const ad = (id: number): string | null => adlar.get(id) ?? null;
   return {
     bugun,
     kurlar: kurlar.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
     faizler: faizler.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
+    gunlukFaizler: gunlukFaizler.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
+    faizBirimi: await sorgular.faizBirimi(db),
     sonGiris: son ? { tur: son.tur, giris: son.giris, girenAd: ad(son.girenId) } : null,
     gecmis: gecmis.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
   };
@@ -599,14 +613,19 @@ export function kurFaizTopluYukle(db: Db, k: Kullanici, g: G<typeof kurFaizToplu
     const anahtar = (pb: string, tarih: string) => `${pb}|${tarih}`;
     const kurSatirlari = g.satirlar.filter((s) => s.tur === 'kur');
     const faizSatirlari = g.satirlar.filter((s) => s.tur === 'faiz');
-    const kayitliKur = new Map((await sorgular.kayitliKurlar(db, kurSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.kur]));
-    const kayitliFaiz = new Map((await sorgular.kayitliFaizler(db, faizSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.aylikYuzde]));
+    const gunlukSatirlari = g.satirlar.filter((s) => s.tur === 'gunluk_faiz');
+    const kayitli = {
+      kur: new Map((await sorgular.kayitliKurlar(db, kurSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.kur])),
+      faiz: new Map((await sorgular.kayitliFaizler(db, faizSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.aylikYuzde])),
+      gunluk_faiz: new Map((await sorgular.kayitliGunlukFaizler(db, gunlukSatirlari)).map((s) => [anahtar(s.paraBirimi, s.tarih), s.gunlukYuzde])),
+    };
     const sayi = { eklenen: 0, ayni: 0, farkli: 0 };
     for (const s of g.satirlar) {
-      const karar = topluKurFaizKarari(s.deger, (s.tur === 'kur' ? kayitliKur : kayitliFaiz).get(anahtar(s.paraBirimi, s.tarih)));
+      const karar = topluKurFaizKarari(s.deger, kayitli[s.tur].get(anahtar(s.paraBirimi, s.tarih)));
       if (karar === 'ayni') { sayi.ayni += 1; continue; }
       if (karar === 'farkli') { sayi.farkli += 1; continue; }
       if (s.tur === 'kur') await sorgular.kurEkle(db, { paraBirimi: s.paraBirimi, tarih: s.tarih, kur: s.deger }, k.id);
+      else if (s.tur === 'gunluk_faiz') await sorgular.gunlukFaizEkle(db, { paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, gunlukYuzde: s.deger }, k.id);
       else await sorgular.faizEkle(db, { paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, aylikYuzde: s.deger }, k.id);
       sayi.eklenen += 1;
     }
@@ -614,7 +633,10 @@ export function kurFaizTopluYukle(db: Db, k: Kullanici, g: G<typeof kurFaizToplu
   });
 }
 export async function kurFaizAraligi(db: Db, baslangic: string, bitis: string): Promise<KurFaizAraligi> {
-  return { kurlar: await sorgular.aralikKurlari(db, baslangic, bitis), faizler: await sorgular.aralikFaizleri(db, baslangic, bitis) };
+  return {
+    kurlar: await sorgular.aralikKurlari(db, baslangic, bitis), faizler: await sorgular.aralikFaizleri(db, baslangic, bitis),
+    gunlukFaizler: await sorgular.aralikGunlukFaizleri(db, baslangic, bitis),
+  };
 }
 export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {
   return korumali(async () => ({ id: (await sorgular.faizEkle(db, g, k.id))!.id }));

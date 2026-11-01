@@ -58,6 +58,7 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     await girisliKisi('yukleyen', ['finans.kur-yaz']);
     await girisliKisi('okuyan', ['finans.oku', 'finans.yaz']);
     await girisliKisi('firmaci', ['musteri-tedarikci.oku']);
+    await girisliKisi('ayarci', ['finans.oku', 'finans.yonet']);
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -119,27 +120,65 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     assert.equal((await yukle([{ tur: 'oran', paraBirimi: 'SEK', tarih: '2026-05-01', deger: 1 }])).durum, 400);
   });
 
-  test('günlük faiz aylığa çevrilip faiz olarak yazılır, aynı günün aylık kaydıyla çakışır; plan günlük oranı geri okur (1350 a)', async () => {
+  test('1700 b: günlük faiz kendi tablosuna günlük yazılır; aynı günün aylık kaydıyla birlikte durur; aynı türün tekrarı ve sınır dışı reddedilir', async () => {
     assert.equal(gunlukFaizdenAylik(0.1), 3.0417);
     assert.ok(Math.abs(aylikFaizdenGunluk(3.0417) - 0.1) < 1e-5);
     const c = tamam(await yukle([
       { tur: 'gunluk_faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 0.1 },
-      { tur: 'faiz', paraBirimi: 'CZK', tarih: '2026-09-01', deger: 3.5 },
+      { tur: 'faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 3.5 },
     ]));
     assert.deepEqual(c, { eklenen: 2, ayni: 0, farkli: 0 });
     const a = tamam(await aralik('2026-08-01', '2026-09-30'));
-    assert.deepEqual(a.faizler.filter((f) => f.paraBirimi === 'CZK').map((f) => [f.gecerlilikBaslangic, Number(f.aylikYuzde)]), [['2026-08-01', 3.0417], ['2026-09-01', 3.5]]);
+    assert.deepEqual(a.faizler.filter((f) => f.paraBirimi === 'CZK').map((f) => [f.gecerlilikBaslangic, Number(f.aylikYuzde)]), [['2026-08-01', 3.5]]);
+    assert.deepEqual(a.gunlukFaizler.filter((f) => f.paraBirimi === 'CZK').map((f) => [f.gecerlilikBaslangic, f.gunlukYuzde]), [['2026-08-01', '0.100000']]);
     assert.deepEqual(tamam(await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 0.1 }])), { eklenen: 0, ayni: 1, farkli: 0 });
-    const g = await vt().tx((db) => gunlukFaizGetir(db, 'CZK', '2026-08-15'));
-    assert.equal(g?.aylikYuzde, '3.0417');
-    assert.ok(g !== null && Math.abs(g.gunlukYuzde - 0.1) < 1e-5);
-    assert.equal(await vt().tx((db) => gunlukFaizGetir(db, 'CZK', '2026-07-31')), null, 'başlangıçtan önce oran yoktur, sıfır uydurulmaz');
+    assert.deepEqual(tamam(await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'CZK', tarih: '2026-08-01', deger: 0.2 }])), { eklenen: 0, ayni: 0, farkli: 1 });
     assert.equal((await yukle([
-      { tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 0.1 }, { tur: 'faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 3 },
-    ])).durum, 400);
+      { tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 0.1 }, { tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-01', deger: 0.2 },
+    ])).durum, 400, 'aynı türün aynı gün tekrarı');
     assert.equal((await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-02', deger: 3.3 }])).durum, 400, 'aylık %100 aşılır');
+    assert.equal((await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-02', deger: 3.287672 }])).durum, 400, 'sınır yuvarlamasız denetlenir');
     assert.equal((await yukle([{ tur: 'gunluk_faiz', paraBirimi: 'RON', tarih: '2026-08-02', deger: -0.1 }])).durum, 400);
+    assert.equal(Number((await vt().tek<{ n: string }>("SELECT count(*)::text AS n FROM finans_gunluk_faiz WHERE para_birimi = 'RON'"))?.n), 0);
     assert.equal(Number((await vt().tek<{ n: string }>("SELECT count(*)::text AS n FROM finans_faiz WHERE para_birimi = 'RON'"))?.n), 0);
+  });
+
+  test('1725 a: hesaplar ayardaki birimin oranını alır, o birimde oran yoksa öbürünü çevirir; birimi yalnız finans.yonet değiştirir', async () => {
+    tamam(await yukle([
+      { tur: 'faiz', paraBirimi: 'HUF', tarih: '2026-07-01', deger: 3 },
+      { tur: 'gunluk_faiz', paraBirimi: 'HUF', tarih: '2026-07-10', deger: 0.12 },
+      { tur: 'gunluk_faiz', paraBirimi: 'BGN', tarih: '2026-07-01', deger: 0.05 },
+    ]));
+    const oku = (pb: string, gun: string) => vt().tx((db) => gunlukFaizGetir(db, pb, gun));
+    // Varsayılan aylık: HUF aylık 3 (günlük 3x12/365); BGN'de aylık yok, günlük çevrilir.
+    const aylikHuf = await oku('HUF', '2026-07-15');
+    assert.equal(aylikHuf?.aylikYuzde, '3.0000');
+    assert.ok(aylikHuf !== null && Math.abs(aylikHuf.gunlukYuzde - aylikFaizdenGunluk(3)) < 1e-12);
+    const bgn = await oku('BGN', '2026-07-15');
+    assert.deepEqual([bgn?.aylikYuzde, bgn?.gunlukYuzde, bgn?.gecerlilikBaslangic], ['1.5208', 0.05, '2026-07-01']);
+    assert.equal(await oku('HUF', '2026-06-30'), null, 'başlangıçtan önce oran yoktur, sıfır uydurulmaz');
+
+    const ayar = await istek<{ ayar: Record<string, unknown> }>('ayarci', 'GET', '/finans/ayar');
+    // Okunan ayar sayıları metin taşır; gövde sayı ister (ekranın ayarGovdesi gibi).
+    const sayili = Object.fromEntries(Object.entries(tamam(ayar).ayar).map(([k, v]) => [k, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]));
+    const govde = { ...sayili, faizBirimi: 'gunluk' };
+    assert.equal((await istek('yukleyen', 'POST', '/finans/ayar/guncelle', govde)).durum, 403, 'kur-yaz birimi değiştiremez');
+    assert.equal((await istek('ayarci', 'POST', '/finans/ayar/guncelle', { ...govde, faizBirimi: 'haftalik' })).durum, 400);
+    const yeni = tamam(await istek<{ ayar: { faizBirimi: string } }>('ayarci', 'POST', '/finans/ayar/guncelle', govde));
+    assert.equal(yeni.ayar.faizBirimi, 'gunluk');
+    const ozet = tamam(await istek<{ faizBirimi: string; gunlukFaizler: { paraBirimi: string }[] }>('yukleyen', 'GET', '/finans/kur-ozeti'));
+    assert.equal(ozet.faizBirimi, 'gunluk');
+    assert.ok(ozet.gunlukFaizler.some((f) => f.paraBirimi === 'HUF'));
+
+    // Günlük tercih: HUF 10 Temmuz'dan sonra günlük 0,12; öncesinde günlük yok, aylık çevrilir.
+    const gunlukHuf = await oku('HUF', '2026-07-15');
+    assert.deepEqual([gunlukHuf?.gunlukYuzde, gunlukHuf?.aylikYuzde, gunlukHuf?.gecerlilikBaslangic], [0.12, '3.6500', '2026-07-10']);
+    assert.equal((await oku('HUF', '2026-07-05'))?.aylikYuzde, '3.0000');
+    const birimsiz = { ...govde };
+    delete (birimsiz as { faizBirimi?: unknown }).faizBirimi;
+    const sonra = tamam(await istek<{ ayar: { faizBirimi: string; surum: number } }>('ayarci', 'POST', '/finans/ayar/guncelle', { ...birimsiz, surum: yeni.ayar['surum' as keyof typeof yeni.ayar] }));
+    assert.equal(sonra.ayar.faizBirimi, 'gunluk', 'gönderilmeyen birim korunur');
+    await vt().sorgu("UPDATE finans_ayar SET faiz_birimi = 'aylik' WHERE id = 1");
   });
 
   test('aynı istek kimliğiyle ikinci gönderim satırları ikinci kez yazmaz', async () => {

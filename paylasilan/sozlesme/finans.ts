@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
-import { gunlukFaizdenAylik } from './finansman.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 const mantiksal = z.enum(['true', 'false']).optional().transform((d) => (d === undefined ? undefined : d === 'true'));
@@ -242,13 +241,18 @@ export const amortismanCevabi = z.object({ aylar: z.array(z.object({ ay: z.strin
 // Ortak kur ve faiz şeridi (939, 952 a): giriş yapan herkes okur. Kur satırının sürümü aynı günün düzeltmesi içindir; geçmiş son girişlerdir
 // (düzeltme de giriş sayılır), en yeni başta.
 export const KUR_FAIZ_GECMISI_BOYU = 8;
+// 1700 b, 1725 a: günlük faiz kendi birimiyle ayrı tutulur; hesaplar finans ayarındaki birimi kullanır, o birimde oran yoksa öbürünü çevirir.
+export const FAIZ_BIRIMLERI = ['aylik', 'gunluk'] as const;
+const KUR_FAIZ_TURLERI = ['kur', 'faiz', 'gunluk_faiz'] as const;
 export const kurFaizOzetiCevabi = z.object({
   bugun: tarihSemasi,
   kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
   faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
-  sonGiris: z.object({ tur: z.enum(['kur', 'faiz']), giris: zamanSemasi, girenAd: z.string().nullable() }).nullable(),
+  gunlukFaizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, gunlukYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
+  faizBirimi: z.enum(FAIZ_BIRIMLERI),
+  sonGiris: z.object({ tur: z.enum(KUR_FAIZ_TURLERI), giris: zamanSemasi, girenAd: z.string().nullable() }).nullable(),
   gecmis: z.array(z.object({
-    tur: z.enum(['kur', 'faiz']), paraBirimi: z.string(), deger: numerik, tarih: tarihSemasi, duzeltme: z.boolean(), girenAd: z.string().nullable(), giris: zamanSemasi,
+    tur: z.enum(KUR_FAIZ_TURLERI), paraBirimi: z.string(), deger: numerik, tarih: tarihSemasi, duzeltme: z.boolean(), girenAd: z.string().nullable(), giris: zamanSemasi,
   })).max(KUR_FAIZ_GECMISI_BOYU),
 });
 export type KurFaizOzeti = z.output<typeof kurFaizOzetiCevabi>;
@@ -259,17 +263,18 @@ export const KUR_FAIZ_TOPLU_SINIRI = 400;
 export { aylikFaizdenGunluk, aylikFaizdenYillik, finansmanTutari, gunlukFaizdenAylik, vadeIndirimCarpani } from './finansman.ts';
 const gunlukFaizSemasi = z.number().min(0, 'Günlük faiz sıfırdan küçük olamaz.')
   .refine((v) => ondalik(6, '')(v) === true, 'Günlük faiz en çok altı ondalık olabilir.')
-  .refine((v) => gunlukFaizdenAylik(v) <= 100, 'Günlük faiz aylık %100\'ü aşamaz.')
-  .transform((v) => gunlukFaizdenAylik(v).toFixed(4));
+  // Veritabanının kısıtıyla aynı, yuvarlamasız: sınırdaki değer burada geçip yazımda reddedilmesin.
+  .refine((v) => (v * 365) / 12 <= 100, 'Günlük faiz aylık %100\'ü aşamaz.')
+  .transform((v) => v.toFixed(6));
 export const kurFaizTopluSatiri = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('kur'), paraBirimi: paraBirimiSemasi.refine((p) => p !== 'TRY', 'TRY için kur girilmez.'), tarih: tarihSemasi, deger: kurSemasi }),
   z.object({ tur: z.literal('faiz'), paraBirimi: paraBirimiSemasi, tarih: tarihSemasi, deger: aylikFaizSemasi }),
   z.object({ tur: z.literal('gunluk_faiz'), paraBirimi: paraBirimiSemasi, tarih: tarihSemasi, deger: gunlukFaizSemasi }),
 ]);
-// Günlük faiz satırı aylık faiz satırına çevrilir: aynı para birimi ve günde ikisi birden aynı oranın iki kaydıdır.
+// 1700 b: aylık ve günlük faiz ayrı kayıttır; aynı para birimi ve günde ikisi birden girilebilir, aynı türün tekrarı reddedilir.
 export const kurFaizTopluGovdesi = z.object({
   satirlar: z.array(kurFaizTopluSatiri).min(1, 'Dosyada satır yok.').max(KUR_FAIZ_TOPLU_SINIRI, `Tek seferde en çok ${KUR_FAIZ_TOPLU_SINIRI} satır.`),
-}).transform((g) => ({ satirlar: g.satirlar.map((s) => (s.tur === 'gunluk_faiz' ? { ...s, tur: 'faiz' as const } : s)) })).superRefine((g, c) => {
+}).superRefine((g, c) => {
   const gorulen = new Set<string>();
   g.satirlar.forEach((s, i) => {
     const anahtar = `${s.tur}|${s.paraBirimi}|${s.tarih}`;
@@ -288,6 +293,7 @@ export const kurFaizAraligiSorgusu = z.object({ baslangic: tarihSemasi, bitis: t
 export const kurFaizAraligiCevabi = z.object({
   kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik })),
   faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik })),
+  gunlukFaizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, gunlukYuzde: numerik })),
 });
 export type KurFaizAraligi = z.output<typeof kurFaizAraligiCevabi>;
 export const kdvOraniKapatGovdesi = z.object({ oran: oranSemasi, gecerlilikBaslangic: tarihSemasi, gecerlilikBitis: tarihSemasi, ...beklenenSurum });
@@ -321,6 +327,8 @@ export const ayarAlanlari = z.object({
   // Gönderilmezse kayıtlı pay korunur: prototipin ayar gövdesi bu alanı taşımaz. Okunan ayar geri gönderilebilsin diye sayı metni de kabul edilir.
   caprazKurPayi: z.union([z.number(), z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, 'Sayı bekleniyor.').transform(Number)])
     .pipe(z.number().gt(0, 'Pay sıfırdan büyük olmalı.').max(100, 'Pay en çok %100 olur.')).nullish().transform((v) => v ?? null),
+  // 1725 a: gönderilmezse kayıtlı birim korunur (çapraz kur payı gibi).
+  faizBirimi: z.enum(FAIZ_BIRIMLERI).nullish().transform((v) => v ?? null),
 });
 export const ayarGuncelleGovdesi = ayarAlanlari.extend(beklenenSurum);
 export const ayarSemasi = z.object({
@@ -328,7 +336,8 @@ export const ayarSemasi = z.object({
   riskToleransi: z.number().int(), simulasyonSayisi: z.number().int(), cekKarsiliksizOlasiligi: numerik, batikGunu: z.number().int(), anomaliEsigi: numerik,
   agirlikLikidite: z.number().int(), agirlikNakit: z.number().int(), agirlikKarlilik: z.number().int(), agirlikVerimlilik: z.number().int(), agirlikBorcluluk: z.number().int(),
   bilancoDonen: numerik.nullable(), bilancoStok: numerik.nullable(), bilancoKvb: numerik.nullable(), bilancoToplamBorc: numerik.nullable(),
-  bilancoOzkaynak: numerik.nullable(), bilancoBirikmisKar: numerik.nullable(), kurulumTamam: z.boolean(), caprazKurPayi: numerik, surum: surumSemasi,
+  bilancoOzkaynak: numerik.nullable(), bilancoBirikmisKar: numerik.nullable(), kurulumTamam: z.boolean(), caprazKurPayi: numerik,
+  faizBirimi: z.enum(FAIZ_BIRIMLERI), surum: surumSemasi,
 });
 export const ayarCevabi = z.object({ ayar: ayarSemasi });
 

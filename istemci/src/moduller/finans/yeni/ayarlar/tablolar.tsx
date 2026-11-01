@@ -115,6 +115,7 @@ export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
   const kur = useSatirFormu({ pb: 'EUR', tarih: motor.bugun, kur: '' });
   const faiz = useSatirFormu({ pb: 'TRY', baslangic: motor.bugun, yuzde: '' });
   const [pay, payYaz] = useState(String(sayi(V.ayar.caprazKurPayi)));
+  const [birim, birimYaz] = useState<FaizBirimi>(V.ayar.faizBirimi);
   const kurlar = [...V.kurlar_listesi].reverse().slice(0, 60);
   const kurSutunlari: Sutun<KurKaydi>[] = [
     { anahtar: 'pb', baslik: 'Para birimi', hucre: (k) => k.paraBirimi },
@@ -166,10 +167,25 @@ export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
           </form>
         )}
         <p className="tc-fa-not">Aynı para birimine aynı gün ikinci oran girilirse sonraki geçerlidir; ikisi de listede kalır.</p>
+        {yetki.yonet && (
+          <form className="tc-fa-ayar-satir" aria-label="Hesaplarda kullanılan faiz"
+            onSubmit={(e) => { e.preventDefault(); void gonder([ayarBirimKomutu(finans, birim)]); }}>
+            <Secim etiket="Hesaplarda kullanılan faiz" value={birim} secenekler={FAIZ_BIRIMI_SECENEKLERI} onChange={(e) => birimYaz(e.target.value as FaizBirimi)} />
+            <Dugme type="submit" simge="check" yukleniyor={mesgul}>Birimi kaydet</Dugme>
+          </form>
+        )}
+        <p className="tc-fa-not">
+          Plan, proje maliyeti ve satın alma {V.ayar.faizBirimi === 'gunluk' ? 'günlük' : 'aylık'} faizi kullanır; o birimde oran yoksa öbürü çevrilir.
+          Günlük faiz toplu yüklemeyle girilir.
+        </p>
       </Kart>
     </>
   );
 }
+// 1725 a: hesapların faiz birimi finans ayarındadır.
+type FaizBirimi = FinansVerisi['V']['ayar']['faizBirimi'];
+const FAIZ_BIRIMI_SECENEKLERI = [{ deger: 'aylik', baslik: 'Aylık faiz' }, { deger: 'gunluk', baslik: 'Günlük faiz' }];
+const ayarBirimKomutu = (f: FinansVerisi, birim: FaizBirimi): Komut => ayarKomutu(f.V.ayar, f.V.sirketAdi, { faizBirimi: birim }, 'Faiz birimi kaydedildi.');
 const ayarPayKomutu = (f: FinansVerisi, pay: string): Komut => ayarKomutu(f.V.ayar, f.V.sirketAdi, { caprazKurPayi: sayi(pay) }, 'Çapraz kur payı kaydedildi.');
 
 /* ---------- Sabit kıymetler ---------- */

@@ -93,7 +93,7 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
     <div className="tc-kfy">
       <p className="tc-kfs-not">
         Sütunlar: Tür (kur, faiz ya da günlük faiz), Para birimi, Tarih (kurun günü ya da faizin başlangıcı), Değer (kur: 1 birim kaç TL;
-        faiz: aylık %; günlük faiz: günlük %, aylığa çevrilip kaydedilir). Plan ve proje maliyeti finansmanı TL faizinden hesaplar.
+        faiz: aylık %; günlük faiz: günlük %, ayrı kaydedilir). Plan, proje maliyeti ve satın alma finans ayarındaki faiz birimini kullanır.
         Noktalı virgül ve ondalık virgül; tarih GG.AA.YYYY. Kayıtlı güne gelen satır atlanır, o gün elle düzeltilir.
       </p>
       <div className="tc-kfy-eylem">
