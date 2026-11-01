@@ -3,7 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { istekOlcumunuKur } from './istek-olcumu.ts';
+import { SURE_KOVALARI_MS, durumSinifi, istekOlcumunuKur, istekSay, istekSayaclari, kovaSirasi } from './istek-olcumu.ts';
 import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
 import { uc, uclariKaydet } from './uc.ts';
@@ -98,5 +98,33 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
     assert.equal(yavas[0]?.sorgu, 1);
     assert.ok((yavas[0]?.sureMs as number) >= 150);
     assert.equal(satirlar('Uç süresi').length, 0);
+  });
+});
+
+describe('uç sayaçları (bellekte, dakikalık metrik için)', () => {
+  test('durum sınıfı ve süre kovası sınırları', () => {
+    assert.deepEqual([101, 200, 204, 302, 404, 499, 500, 503].map(durumSinifi), ['1xx', '2xx', '2xx', '3xx', '4xx', '4xx', '5xx', '5xx']);
+    assert.equal(kovaSirasi(0), 0);
+    assert.equal(kovaSirasi(25), 0);
+    assert.equal(kovaSirasi(26), 1);
+    assert.equal(kovaSirasi(60_000), SURE_KOVALARI_MS.length - 1);
+    assert.equal(kovaSirasi(60_001), SURE_KOVALARI_MS.length);
+  });
+
+  test('kalıp ve sınıf başına birikir; 503 ayrıca sayılır; okunan kopya sayacı değiştirmez', () => {
+    const yol = `/sayac-deneme-${String(process.hrtime.bigint())}`;
+    istekSay('GET', yol, 200, 10);
+    istekSay('GET', yol, 200, 300);
+    istekSay('GET', yol, 503, 40);
+    const bul = () => istekSayaclari().filter((s) => s.yol === yol);
+    const [ikiyuz, besyuz] = [bul().find((s) => s.sinif === '2xx'), bul().find((s) => s.sinif === '5xx')];
+    assert.equal(ikiyuz?.sayi, 2);
+    assert.equal(ikiyuz?.toplamMs, 310);
+    assert.equal(ikiyuz?.kovalar[0], 1);
+    assert.equal(ikiyuz?.kovalar[4], 1);
+    assert.equal(ikiyuz?.mesgul, 0);
+    assert.equal(besyuz?.mesgul, 1);
+    if (ikiyuz) ikiyuz.sayi = 99;
+    assert.equal(bul().find((s) => s.sinif === '2xx')?.sayi, 2);
   });
 });

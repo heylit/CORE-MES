@@ -4,12 +4,14 @@ import type { Db } from '#cekirdek/db.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { isDurumlari } from '#cekirdek/zamanlayici.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import { ayrintiCevabi, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import { ayrintiCevabi, metriklerCevabi, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
 import type { YedekBilgisi } from './kurallar.ts';
 import {
-  ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, saglikliMi, surecYedegi, zamanlayiciGoreviSorgula,
+  ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, saglikliMi, surecMetrikleri, surecYedegi,
+  zamanlayiciGoreviSorgula,
 } from './servis.ts';
+import type { MetrikToplayici } from './servis.ts';
 import type { DiskDizinleri, DiskOkuyucu, GitOkuyucu } from './servis.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import { calisanYayinOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
@@ -28,6 +30,8 @@ export interface SaglikKaynagi {
   gorevSorgula?: (gorevAdi: string) => Promise<GorevSorgusu>;
   // Verilmezse güncelleyicinin yazdığı çalışan sürüm dosyasından (Sistem Ayarları > Güncelleme ile aynı kaynak).
   yayinOku?: () => Promise<string | null>;
+  // Verilmezse süreçte dakikalık işin doldurduğu toplayıcı.
+  metrikler?: Pick<MetrikToplayici, 'dakikalar'>;
 }
 
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
@@ -83,6 +87,14 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
           ...(otomatikAcilisOku === undefined ? {} : { otomatikAcilisOku }),
         });
       },
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/metrikler',
+      yetki: 'saglik.ayrinti-oku',
+      txDisi: true,
+      cevap: metriklerCevabi,
+      isle: () => ({ dakikalar: (kaynak.metrikler ?? surecMetrikleri).dakikalar() }),
     }),
   ];
 }

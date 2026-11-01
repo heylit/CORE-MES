@@ -67,9 +67,54 @@ export const ayrintiCevabi = z.object({
   otomatikAcilis: otomatikAcilisSemasi.nullable().optional(),
 });
 
+const sayi = z.number().int().nonnegative();
+// Ölçülemeyen ya da o dakikada örneği olmayan değer null'dır; sıfır uydurulmaz.
+const sure = z.number().nonnegative().nullable();
+
+// Bir dakikanın istek toplamı. Yüzdelikler süre kovasının üst sınırıdır (gerçek süre ondan kısa ya da eşit); en üst kovada null.
+export const istekOzetiSemasi = z.object({
+  sayi,
+  saniyede: z.number().nonnegative(),
+  p50Ms: sure,
+  p95Ms: sure,
+  p99Ms: sure,
+  istemciHatasi: sayi,
+  sunucuHatasi: sayi,
+  // 503: havuz dolu ya da veritabanına ulaşılamıyor.
+  mesgul: sayi,
+});
+
+export const ucOzetiSemasi = istekOzetiSemasi.extend({
+  yontem: z.string(),
+  // Eşleşen uç yoksa (404) null.
+  yol: z.string().nullable(),
+});
+
+export const metrikDakikasiSemasi = z.object({
+  // Ölçüm aralığının sonu.
+  an: zamanSemasi,
+  aralikSn: z.number().positive(),
+  istek: istekOzetiSemasi,
+  // En çok istek alan uçlar, en çoktan aza; liste kısaltılmıştır.
+  uclar: z.array(ucOzetiSemasi),
+  // Süreçte uygulama havuzu yoksa null. mesgul: bu aralıkta doluluk yüzünden reddedilen istek.
+  havuz: z.object({ boyut: sayi, kullanimda: sayi, bekleyen: sayi, mesgul: sayi }).nullable(),
+  // Sürecin ve makinenin işlemci kullanımı (yüzde, bütün çekirdekler 100).
+  surecIslemciYuzde: sure,
+  makineIslemciYuzde: sure,
+  bellek: z.object({ rssBayt: sayi, yiginBayt: sayi, makineBosBayt: sayi, makineToplamBayt: sayi }),
+  olayDongusuP99Ms: sure,
+});
+
+export const metriklerCevabi = z.object({ dakikalar: z.array(metrikDakikasiSemasi) });
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;
 export type IsDurumuOzeti = z.output<typeof isDurumuSemasi>;
 export type Uyari = z.output<typeof uyariSemasi>;
 export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
+export type IstekOzeti = z.output<typeof istekOzetiSemasi>;
+export type UcOzeti = z.output<typeof ucOzetiSemasi>;
+export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;
+export type MetriklerCevabi = z.output<typeof metriklerCevabi>;
