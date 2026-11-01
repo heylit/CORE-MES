@@ -14,7 +14,7 @@ import type {
   ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
-import { firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
+import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
@@ -28,7 +28,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali,
-  GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -865,12 +865,21 @@ async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriI
 // Fason dönüşü mal kabulden girer (kullanıcı kararı 15.10, B): stok, mal kabul yetkisiyle dönüş kaydını bu yoldan yazar; adet sınırı
 // burada denetlenir, hurda stok dinleyicisiyle firmadan düşer.
 export async function fasonDonusuKaydet(db: Db, kisiId: number, emirId: number, isEmriId: number, saglamAdet: number, hurdaAdet: number): Promise<{ hareketId: number }> {
-  const { durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId);
+  const { isEmri, durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId);
   const ihlal = fasonDonusIhlali(durum, saglamAdet, hurdaAdet);
   if (ihlal !== null) throw cakisma(ihlal);
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'donus', adet: saglamAdet, hurdaAdet, kisiId, an: await s.anAl(db) });
   await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId, sevkKalemiId: null });
+  await fasonKarnesiniYaz(db, isEmri);
   return { hareketId };
+}
+
+// Kart 1474: fason dönüşü tedarikçi karnesine aynı işlemde olay olarak gider (iş emri başına tek; her dönüşte yenilenir).
+async function fasonKarnesiniYaz(db: Db, isEmri: { id: number; fasonFirmaId: number | null; terminGun: number | null }): Promise<void> {
+  const olay = fasonKarneOlayi(isEmri, await s.fasonHareketleriGetir(db, [isEmri.id]), (z) => tesisGunu(Date.parse(z)));
+  if (olay === null) return;
+  await karneOlayiYaz(db, { kaynak: 'uretim-emirleri', anahtar: `is-emri:${isEmri.id}`, firmaId: olay.firmaId, zaman: olay.zaman, tur: 'teslim',
+    termin: olay.termin, teslimGunu: tesisGunu(Date.parse(olay.zaman)), tam: olay.tam });
 }
 
 // Gönderilenin hepsi dönünce fason iş emri tamamlanır; sağlam adedi dönen sağlamdır. Son iş emriyse emir biter.

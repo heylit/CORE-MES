@@ -89,6 +89,7 @@ HK: `hatali-kurallar.test.ts` (saf), H: `hatali-parca.test.ts` (gerçek PostgreS
 | UE-OC3 | Araya giren adım öncesinin yerini alır, silinen adımın öncülleri ardıllarına geçer; kola gelmeyen öncül düşer | OC "araya giren adım" | yok |
 | UE-OC4 | Fason gidişi ve sıradaki fason (1346): öncül listeli adımda öncüllerin hepsi bitince açılır, paralel dal beklenmez; listesi null eski emirde sıradaki iş emri kuralı (UE-04) | KT "fason sırası (1346)"; FD "dallı", "tek hat: öncül listesiz" (öncülü bitmemiş gidiş 409) | yok |
 | UE-OC5 | Sıradaki adım fasondayken sonraki tezgâh adımı adımı verilerek başlar; emir o adımın istasyonunda başlar, sıra dışı uyarısı aynen döner (1345) | FD "1345 tek hat", "dallı" (fason dönmeden bitiş 409) | uretim_emri_basladi_istasyonlu |
+| UE-1474 | Fason dönüşü aynı işlemde tedarikçi karnesine iş emri başına tek teslim olayı yazar: termin ilk gidişin tesis günü + termin günü, teslim günü son dönüşün tesis günü, sağlam + hurda gönderilene ulaşınca tam. Firma, termin günü, gidiş ya da dönüş yoksa olay yok | is-emri "fason karne olayı kuralı", "terminal: iş emri biter..." (karne olayı) | is-emri "reddedilen: firma, termin günü...", reddedilen dönüş olay yazmaz |
 
 OK: `oncul-kurallar.test.ts` (saf), OC: `oncul.test.ts` (gerçek PostgreSQL), KT: `kurallar.test.ts` (saf), FD: `fason-dal.test.ts` (gerçek PostgreSQL).
 
