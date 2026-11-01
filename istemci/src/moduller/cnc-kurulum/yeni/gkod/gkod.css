@@ -134,3 +134,23 @@
   .tc-ch-dock-sutun, .tc-ch-kod { grid-template-columns: var(--b-6) minmax(0, 1fr) minmax(0, 1fr); }
   .tc-ch-sure { order: 9; }
 }
+
+/* G-Kod sahnesinde anlik takim kutusu, kod listesi ve gorunum araclari ayni izgaradadir; ust uste binmez. Genis sahnede kutu ve liste
+   solda, araclar sagda; dar sahnede (768 ekranda da sahne dar) kutu ustte, liste ortada, araclar ve liste dugmesi altta. */
+.tc-ch[data-page="gcode"] .tc-ch-sahne-gkod { container: gkod-sahne / inline-size; }
+.tc-ch[data-page="gcode"] .tc-ch-sahne-ust {
+  display: grid; grid-template-columns: minmax(0, min(var(--cekmece-genis), 52%)) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "hud gorus" "dock gorus";
+  align-items: start; gap: var(--b-2); padding: var(--b-3);
+}
+.tc-ch[data-page="gcode"] .tc-ch-hud { grid-area: hud; position: relative; inset: auto; max-width: none; }
+.tc-ch[data-page="gcode"] .tc-ch-sahne .tc-ch-gorus { grid-area: gorus; position: relative; inset: auto; max-width: none; }
+.tc-ch[data-page="gcode"] .tc-ch-dock { grid-area: dock; position: relative; inset: auto; width: auto; align-self: stretch; }
+@container gkod-sahne (max-width: 560px) {
+  .tc-ch[data-page="gcode"] .tc-ch-sahne-ust {
+    grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "hud hud" "dock dock" "ac gorus"; padding: var(--b-2);
+  }
+  .tc-ch[data-page="gcode"] .tc-ch-sahne .tc-ch-gorus { align-self: end; }
+  .tc-ch[data-page="gcode"] .tc-ch-dock-ac { grid-area: ac; position: relative; inset: auto; align-self: end; }
+}
