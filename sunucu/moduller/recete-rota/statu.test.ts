@@ -451,4 +451,66 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     assert.equal(await cikti(10, 2_000_000_000), ym2, 'bilinmeyen emir yürürlükteki');
     assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20, uretimEmriId: eskiEmir }), null, 'A\'da OP 20 karta bağlı: statü açmaz, çıktıyla tutarlı');
   });
+  test('1558 a: çok katmanlı emrin alt düğümü statü ve çıktıyı patlatmada donmuş revizyondan alır; patlatmada olmayan malzeme ve emirsiz yürürlükteki', async () => {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('DGR-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kartAc = async (sira: number, tur: string) => (await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, $2, 'DGR-', $3, 'aktif', $4, $5, $5) RETURNING no`,
+      [`dgr-${String(sira)}`, tur, sira, JSON.stringify({ id: `dgr-${String(sira)}`, com: { ad: 'Düğüm revizyon deneme' } }), yoneticiId]))!.no;
+    const kok = await kartAc(1, 'mamul');
+    const alt = await kartAc(2, 'yarimamul');
+    const ym1 = await kartAc(3, 'yarimamul');
+    const ym2 = await kartAc(4, 'yarimamul');
+    const tip = (await vt().tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('DGRT', 'Torna', 'TAL') RETURNING id"))!.id;
+    const revizyon = async (malzeme: number, tur: string, harf: string, durum: 'onayli' | 'yururlukte', oplar: number[]) => {
+      const id = (await vt().tek<{ id: number }>('INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, $2, $3, $4) RETURNING id', [malzeme, tur, harf, yoneticiId]))!.id;
+      const adimlar = new Map<number, number>();
+      for (const [i, op] of oplar.entries()) {
+        await vt().sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [malzeme, op, id]);
+        adimlar.set(op, (await vt().tek<{ id: number }>(
+          'INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [id, malzeme, op, i + 1, tip, `Adım ${String(op)}`]))!.id);
+      }
+      await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [id, yoneticiId]);
+      await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [id, yoneticiId]);
+      if (durum === 'yururlukte') await vt().sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [id, yoneticiId]);
+      return { id, adimlar };
+    };
+    // Emir açıldığında alt parçanın yürürlükteki revizyonu A idi; patlatma A'yı dondurdu. Sonra B yürürlüğe girdi (OP 20 kalktı, OP 10'un çıkanı değişti).
+    const kokRev = await revizyon(kok, 'mamul', 'K', 'yururlukte', [10]);
+    const a = await revizyon(alt, 'yarimamul', 'A', 'onayli', [10, 20, 30]);
+    const b = await revizyon(alt, 'yarimamul', 'B', 'yururlukte', [10, 30]);
+    const patlatma = (await vt().tek<{ id: number }>(
+      "INSERT INTO rota_patlatma (kok_malzeme_id, kok_rota_revizyonu_id, ozet, kisi_id) VALUES ($1, $2, 'deneme', $3) RETURNING id", [kok, kokRev.id, yoneticiId]))!.id;
+    await vt().sorgu(
+      `INSERT INTO rota_patlamis_rota (patlatma_id, sira, dugum, katman, malzeme_id, rota_revizyonu_id, rota_adimi_id, kaynak_op_no, birim_carpani, tuketen_dugum, tuketen_op_no)
+       VALUES ($1, 1, '0.1', 1, $2, $3, $4, 10, 1, '0', 10), ($1, 2, '0.1', 1, $2, $3, $5, 20, 1, '0', 10), ($1, 3, '0.1', 1, $2, $3, $6, 30, 1, '0', 10),
+              ($1, 4, '0', 0, $7, $8, $9, 10, 1, NULL, NULL)`,
+      [patlatma, alt, a.id, a.adimlar.get(10), a.adimlar.get(20), a.adimlar.get(30), kok, kokRev.id, kokRev.adimlar.get(10)]);
+    const emir = (await vt().tek<{ id: number }>(
+      `INSERT INTO uretim_emri (emir_no, parca_no, parca_ad, adet, acan_id, malzeme_no, kaynak_rota_revizyonu_id, patlatma_id)
+       VALUES ('DGR-1', 'P', 'Parca', 1, $1, $2, $3, $4) RETURNING id`, [yoneticiId, kok, kokRev.id, patlatma]))!.id;
+    const k = String(alt);
+    await kaydet({
+      items: [{ id: String(kok), code: 'ORN-DK', type: 'mamul' }, { id: k, code: 'ORN-DA', type: 'yari' }, { id: String(ym1), code: 'ORN-DY1', type: 'yari' }, { id: String(ym2), code: 'ORN-DY2', type: 'yari' }],
+      opdefs: [{ id: 'op1', name: 'Torna' }],
+      routes: {},
+      routeRevs: [
+        { id: String(a.id), itemId: k, status: 'onayli', data: { steps: [{ id: `${k}-o10`, opNo: 10, outItem: String(ym1) }] } },
+        { id: String(b.id), itemId: k, status: 'yururlukte', data: { steps: [{ id: `${k}-o10`, opNo: 10, outItem: String(ym2) }] } },
+      ],
+    });
+    const statu = (opNo: number, uretimEmriId?: number) => adimStatusu(vt(), { malzemeNo: alt, opNo, uretimEmriId });
+    const cikti = (opNo: number, uretimEmriId?: number) => adimCiktisi(vt(), { malzemeNo: alt, opNo, uretimEmriId });
+    assert.equal(await cikti(10), ym2, 'emirsiz: yürürlükteki B');
+    assert.equal(await cikti(10, emir), ym1, 'alt düğüm patlatmadaki A\'nın bağını okur');
+    assert.equal(await statu(20), null, 'emirsiz: OP 20 B\'de yok');
+    const donmus20 = await statu(20, emir);
+    assert.ok(donmus20 !== null, 'B\'de kalkmış OP 20 açık emirde A\'nın statüsünü alır');
+    const satirlar = new Map((await receteRotaStatuleri(vt())).map((x) => [x.id, x]));
+    assert.equal(satirlar.get(donmus20!)?.revizyon, 'A', 'statü satırı donmuş revizyona yazılır');
+    // Patlatmada olmayan malzeme (alt düğüm değil) yürürlükteki revizyondan çözülür; emrin kök revizyonu ona uygulanmaz.
+    const yabanci = await kartAc(5, 'yarimamul');
+    assert.equal(await adimCiktisi(vt(), { malzemeNo: yabanci, opNo: 10, uretimEmriId: emir }), null);
+  });
 });

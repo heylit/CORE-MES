@@ -12,7 +12,7 @@ import type {
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { planlamaAnahtariMi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { emirDilimi, kapanisSonuclari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { emirDilimi, emrinPatlatmasi, kapanisSonuclari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, kisiTezgahSinirlari, makineDurumlari, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
@@ -20,7 +20,7 @@ import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
-import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
+import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -298,18 +298,28 @@ async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null 
 const emirOzeti = async (db: Db, uretimEmriId: number | null | undefined) =>
   (uretimEmriId === undefined || uretimEmriId === null ? null : uretimEmriOzeti(db, uretimEmriId));
 
+// Sayımın rota revizyonu; null ise yürürlükteki okunur. Emir yoksa null. Çok katmanlı emrin alt düğümünde (malzeme emrin ürünü değil) revizyon
+// patlatmada donmuş olandır (1558 a, 1481 a): emir açıldıktan sonra alt parçanın yeni revizyonu yürürlüğe girse de açık emir kendi rotasıyla
+// sayılır. Patlatmada bulunmayan malzeme yürürlükteki revizyondan okunur. Kökte ve tek katmanlı emirde emrin açıldığı revizyondur.
+async function sayimRevizyonu(db: Db, malzemeNo: number, uretimEmriId: number | null | undefined): Promise<number | null> {
+  const emir = await emirOzeti(db, uretimEmriId);
+  if (emir === null) return null;
+  const patlatma = emir.malzemeNo === malzemeNo ? null : await emrinPatlatmasi(db, emir.id);
+  return patlatma === null ? emir.kaynakRotaRevizyonId : patlatmaRevizyonu(db, patlatma, malzemeNo);
+}
+
 // Üretim sayımında stok girişinin statüsü (kart #1289): adımın statüsü, rotanın şimdiki hâlinde statü açıyorsa (son adım değilse, başka
 // karta ya da tanımlı statüye bağlı değilse) kimliği döner; yoksa null. Rotadan kalkmış adımın eski statü satırı kullanılmaz. Statü rota
-// revizyonuna aittir: emir verilirse adım ve statü emrin açıldığı revizyondandır, verilmezse (ya da emir rotasızsa) yürürlükteki revizyondan.
-// Satır henüz yoksa burada açılır (çerçevenin yazımındaki eşitlemeyle aynı).
+// revizyonuna aittir: emir verilirse adım ve statü emrin açıldığı revizyondandır (alt düğümde patlatmadaki), verilmezse (ya da emir rotasızsa)
+// yürürlükteki revizyondan. Satır henüz yoksa burada açılır (çerçevenin yazımındaki eşitlemeyle aynı).
 export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null | undefined }): Promise<number | null> {
-  const emir = await emirOzeti(db, g.uretimEmriId);
-  const belge = await sayimDurumu(db, g.malzemeNo, emir?.kaynakRotaRevizyonId ?? null);
+  const emirRevizyonu = await sayimRevizyonu(db, g.malzemeNo, g.uretimEmriId);
+  const belge = await sayimDurumu(db, g.malzemeNo, emirRevizyonu);
   if (belge === null) return null;
   const kimlik = adimKimligi(g.malzemeNo, g.opNo);
   const turetilen = statuleriTuret(belge);
   if (!turetilen.some((x) => x.kaynakAdim === kimlik)) return null;
-  const revizyon = emir?.kaynakRotaRevizyonId ?? await yururluktekiRevizyonId(db, g.malzemeNo);
+  const revizyon = emirRevizyonu ?? await yururluktekiRevizyonId(db, g.malzemeNo);
   const id = await sorgular.statuKimligi(db, kimlik, revizyon);
   if (id !== null) return id;
   await sorgular.statuEsitle(db, turetilen.filter((x) => urunu(x) === g.malzemeNo).map((x) => ({ ...x, rotaRevizyonuId: revizyon })));
@@ -317,10 +327,9 @@ export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; 
 }
 
 // Üretim sayımında adımın çıktı kartı (kart #1289): rotada ara adımın "çıkan" kalemi; yoksa null. Statüyle aynı revizyondan okunur
-// (kart #1214): emir verilirse emrin açıldığı revizyonun bağı, verilmezse (ya da emir rotasızsa) yürürlükteki; ikisi ayrı revizyondan
-// okunursa revizyon sonrası açık emirde çıktı yeni, statü eski rotadan gelir.
+// (kart #1214): emir verilirse emrin açıldığı revizyonun bağı (alt düğümde patlatmadaki), verilmezse (ya da emir rotasızsa) yürürlükteki;
+// ikisi ayrı revizyondan okunursa revizyon sonrası açık emirde çıktı yeni, statü eski rotadan gelir.
 export async function adimCiktisi(db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null | undefined }): Promise<number | null> {
-  const emir = await emirOzeti(db, g.uretimEmriId);
-  const belge = await sayimDurumu(db, g.malzemeNo, emir?.kaynakRotaRevizyonId ?? null);
+  const belge = await sayimDurumu(db, g.malzemeNo, await sayimRevizyonu(db, g.malzemeNo, g.uretimEmriId));
   return belge === null ? null : adimCiktisiBul(belge, g.malzemeNo, g.opNo);
 }
