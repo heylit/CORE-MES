@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
 } from './kurallar.ts';
+import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
 
 const GIT = 'a'.repeat(40);
@@ -128,4 +129,32 @@ test('metrik dakikası: havuz reddi tabana göre fark, havuz yoksa null; istek y
   assert.deepEqual(d.havuz, { boyut: 30, kullanimda: 1, bekleyen: 0, mesgul: 3 });
   assert.deepEqual(d.istek, { sayi: 0, saniyede: 0, p50Ms: null, p95Ms: null, p99Ms: null, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 });
   assert.equal(metrikDakikasi({ ...temel, havuz: null, oncekiMesgulToplam: null }).havuz, null);
+});
+
+const vtOlcusu = (y: Partial<VtIstatistigi> = {}): VtIstatistigi => ({
+  boyutBayt: 1000, xidYasi: 50, islem: 100, geriAlma: 2, deadlock: 0, blokIsabet: 900, blokOkuma: 100, geciciBayt: 0,
+  baglanti: { toplam: 5, aktif: 1, bosta: 3, bosTx: 1, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: 1.234, ...y,
+});
+
+test('veritabanı özeti: sayaçlar farkla, anlık değerler son ölçüden; taban yoksa null', () => {
+  assert.equal(vtOzeti(null, vtOlcusu(), 60), null);
+  assert.equal(vtOzeti(vtOlcusu(), null, 60), null);
+  const o = vtOzeti(vtOlcusu(), vtOlcusu({ islem: 154, geriAlma: 8, deadlock: 1, blokIsabet: 1890, blokOkuma: 110, geciciBayt: 4096, boyutBayt: 2000 }), 60);
+  assert.deepEqual(o, {
+    boyutBayt: 2000, xidYasi: 50, saniyedeIslem: 1, geriAlma: 6, deadlock: 1, onbellekIsabetiYuzde: 99, geciciBayt: 4096,
+    baglanti: { toplam: 5, aktif: 1, bosta: 3, bosTx: 1, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: 1.2,
+  });
+});
+
+test('veritabanı özeti: istatistik sıfırlanırsa aralık sıfırdan sayılır; blok okunmadıysa isabet yüzdesi null, uydurulmaz', () => {
+  const o = vtOzeti(vtOlcusu({ islem: 5000, deadlock: 3 }), vtOlcusu({ islem: 30, geriAlma: 0, deadlock: 0, enUzunTxSn: null }), 60);
+  assert.equal(o?.saniyedeIslem, 0.5);
+  assert.equal(o?.deadlock, 0);
+  assert.equal(o?.geriAlma, 0);
+  assert.equal(o?.enUzunTxSn, null);
+  assert.equal(vtOzeti(vtOlcusu(), vtOlcusu(), 60)?.onbellekIsabetiYuzde, null);
+  assert.equal(metrikDakikasi({
+    an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
+    bellek: { rss: 1, heapUsed: 1 }, makineBos: 1, makineToplam: 2, olayDongusuP99Ms: null, havuz: null, oncekiMesgulToplam: null,
+  }).veritabani, null);
 });

@@ -104,6 +104,22 @@ export const metrikDakikasiSemasi = z.object({
   makineIslemciYuzde: sure,
   bellek: z.object({ rssBayt: sayi, yiginBayt: sayi, makineBosBayt: sayi, makineToplamBayt: sayi }),
   olayDongusuP99Ms: sure,
+  // Okunamadıysa null. Sayaç alanları bu aralıktaki farktır; boyut ve xid yaşı o anki değerdir.
+  veritabani: z.object({
+    boyutBayt: sayi,
+    // Wraparound'a uzaklık: PostgreSQL 2 milyara yaklaşınca yazmayı durdurur; okunamazsa null.
+    xidYasi: z.number().int().nonnegative().nullable(),
+    saniyedeIslem: z.number().nonnegative(),
+    geriAlma: sayi,
+    deadlock: sayi,
+    // Okumaların bellekten karşılanan payı; okuma yoksa null.
+    onbellekIsabetiYuzde: sure,
+    geciciBayt: sayi,
+    // Bu veritabanının istemci bağlantıları. Başka rolün bağlantısının durumu yetkisiz görünmez: "gorunmeyen".
+    baglanti: z.object({ toplam: sayi, aktif: sayi, bosta: sayi, bosTx: sayi, kilitBekleyen: sayi, gorunmeyen: sayi }),
+    // Görünen en uzun açık transaction (sn); yoksa null.
+    enUzunTxSn: sure,
+  }).nullable(),
 });
 
 export const metriklerCevabi = z.object({ dakikalar: z.array(metrikDakikasiSemasi) });

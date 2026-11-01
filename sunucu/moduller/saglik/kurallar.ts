@@ -1,6 +1,7 @@
 import { SURE_KOVALARI_MS } from '#cekirdek/istek-olcumu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { HavuzDurumu } from '#cekirdek/db.ts';
+import type { VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { DiskDurumu, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, UcOzeti, Uyari } from '#paylasilan/sozlesme/saglik.ts';
@@ -215,6 +216,28 @@ export interface DakikaGirdisi {
   makineBos: number;
   makineToplam: number;
   olayDongusuP99Ms: number | null;
+  // Bu turda ve önceki turda okunan veritabanı ölçüsü; biri yoksa farkı alınamaz.
+  vt?: { onceki: VtIstatistigi | null; simdiki: VtIstatistigi | null };
+}
+
+// Sayaç farkı: PostgreSQL istatistiği sıfırlanırsa (pg_stat_reset, yeniden başlatma) fark eksiye düşer; o aralık sıfırdan sayılır.
+const artis = (simdiki: number, onceki: number): number => (simdiki >= onceki ? simdiki - onceki : simdiki);
+
+export function vtOzeti(onceki: VtIstatistigi | null, simdiki: VtIstatistigi | null, aralikSn: number): MetrikDakikasi['veritabani'] {
+  if (simdiki === null || onceki === null || aralikSn <= 0) return null;
+  const isabet = artis(simdiki.blokIsabet, onceki.blokIsabet);
+  const okuma = artis(simdiki.blokOkuma, onceki.blokOkuma);
+  return {
+    boyutBayt: Math.round(simdiki.boyutBayt),
+    xidYasi: simdiki.xidYasi,
+    saniyedeIslem: Math.round(((artis(simdiki.islem, onceki.islem) + artis(simdiki.geriAlma, onceki.geriAlma)) / aralikSn) * 100) / 100,
+    geriAlma: Math.round(artis(simdiki.geriAlma, onceki.geriAlma)),
+    deadlock: Math.round(artis(simdiki.deadlock, onceki.deadlock)),
+    onbellekIsabetiYuzde: isabet + okuma === 0 ? null : Math.round((isabet / (isabet + okuma)) * 1000) / 10,
+    geciciBayt: Math.round(artis(simdiki.geciciBayt, onceki.geciciBayt)),
+    baglanti: simdiki.baglanti,
+    enUzunTxSn: simdiki.enUzunTxSn === null ? null : Math.round(simdiki.enUzunTxSn * 10) / 10,
+  };
 }
 
 export function metrikDakikasi(g: DakikaGirdisi): MetrikDakikasi {
@@ -232,5 +255,6 @@ export function metrikDakikasi(g: DakikaGirdisi): MetrikDakikasi {
     makineIslemciYuzde: g.makineIslemciYuzde,
     bellek: { rssBayt: g.bellek.rss, yiginBayt: g.bellek.heapUsed, makineBosBayt: g.makineBos, makineToplamBayt: g.makineToplam },
     olayDongusuP99Ms: g.olayDongusuP99Ms,
+    veritabani: vtOzeti(g.vt?.onceki ?? null, g.vt?.simdiki ?? null, aralikSn),
   };
 }

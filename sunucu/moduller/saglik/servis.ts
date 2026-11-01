@@ -16,6 +16,7 @@ import {
 } from './kurallar.ts';
 import type { GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import { sonGocAdi, veritabaniYokla, vtBaglantiSay } from './sorgular.ts';
+import type { VtIstatistigi } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 
 const calistir = promisify(execFile);
@@ -260,7 +261,9 @@ export const SUREC_METRIK_KAYNAGI: MetrikKaynagi = {
   olayDongusu: olayDongusuOlceri(),
 };
 
-interface Taban { an: number; istek: UcSayaci[]; mesgulToplam: number | null; surecCpu: NodeJS.CpuUsage; makineCpu: IslemciZamani }
+interface Taban {
+  an: number; istek: UcSayaci[]; mesgulToplam: number | null; surecCpu: NodeJS.CpuUsage; makineCpu: IslemciZamani; vt: VtIstatistigi | null;
+}
 
 // Dakikalık tur: ilk tur yalnız taban alır, sonraki her tur bir önceki turdan bu yana olanı yazar. Son METRIK_PENCERESI dakika bellekte.
 export class MetrikToplayici {
@@ -272,7 +275,8 @@ export class MetrikToplayici {
     this.k = kaynak;
   }
 
-  tur(): MetrikDakikasi | null {
+  // Veritabanı ölçüsünü iş okur (transaction içinde); okunamadıysa null ve o dakikanın veritabanı alanı boş kalır.
+  tur(vt: VtIstatistigi | null = null): MetrikDakikasi | null {
     const an = this.k.simdi();
     const istek = this.k.istekSayaclari();
     const havuz = this.k.havuz();
@@ -280,7 +284,7 @@ export class MetrikToplayici {
     const makineCpu = this.k.makineIslemci();
     const olayDongusuP99Ms = this.k.olayDongusu();
     const onceki = this.taban;
-    this.taban = { an, istek, mesgulToplam: havuz?.mesgulToplam ?? null, surecCpu, makineCpu };
+    this.taban = { an, istek, mesgulToplam: havuz?.mesgulToplam ?? null, surecCpu, makineCpu, vt };
     if (onceki === null || an <= onceki.an) return null;
     const gecenMs = an - onceki.an;
     const cpuFarki = surecCpu.user + surecCpu.system - (onceki.surecCpu.user + onceki.surecCpu.system);
@@ -297,6 +301,7 @@ export class MetrikToplayici {
       makineBos: makine.bos,
       makineToplam: makine.toplam,
       olayDongusuP99Ms,
+      vt: { onceki: onceki.vt, simdiki: vt },
     });
     this.pencere.push(dakika);
     if (this.pencere.length > METRIK_PENCERESI) this.pencere.splice(0, this.pencere.length - METRIK_PENCERESI);
