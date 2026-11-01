@@ -898,6 +898,13 @@ export function adimAdetleri(
   return sonuc;
 }
 
+// Emri henüz açılmamış rotanın (planın deneme emri, satış teklifi kalemi) adım adetleri: adimAdetleri'nin kuralı, kayıpsız; dal adımı
+// çarpanla büyür (1257 a). Plan çarpanı kendisi uygulamaz, adedi buradan alır. Anahtar OP no.
+export function rotadanAdimAdetleri(adet: number, adimlar: readonly { opNo: number; adetCarpani?: number | null }[]): Map<number, number> {
+  const adetler = adimAdetleri(adimlar.map((a, i) => ({ sira: i + 1, durum: 'bekliyor', saglamAdet: null, adetCarpani: a.adetCarpani ?? null })), () => adet);
+  return new Map(adimlar.map((a, i) => [a.opNo, adetler.get(i + 1) ?? adet]));
+}
+
 // Kullanıcı kararı (CA-2): termini girilmemiş fason adım, satın almanın geçmiş teslimat tahmini yoksa bu kadar gün sürer.
 export const FASON_VARSAYILAN_GUN = 7;
 const GUN_MS = 24 * 60 * 60_000;
