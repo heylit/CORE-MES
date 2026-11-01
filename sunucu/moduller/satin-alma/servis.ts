@@ -1364,11 +1364,17 @@ export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminler
   const satirlar = await s.tedarikTerminleriOku(db, null);
   const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeNo));
   const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.kisiId === null ? [] : [t.kisiId])));
+  // Sipariş verilmiş malzeme "termin bekleniyor" görünmesin: açık siparişin beklenen teslimi satırda gösterilir (TMI A3).
+  const gelisler = await malzemeGelisTarihleri(db, satirlar.map((t) => t.malzemeNo));
   return {
     terminler: satirlar.map((t) => {
       const m = malzemeler.get(t.malzemeNo);
-      return { ...terminCikisi(t), malzemeKodu: m?.kod ?? '', malzemeAdi: m?.ad ?? '', kisiAdi: t.kisiId === null ? null : adlar.get(t.kisiId) ?? null };
+      return {
+        ...terminCikisi(t), malzemeKodu: m?.kod ?? '', malzemeAdi: m?.ad ?? '', kisiAdi: t.kisiId === null ? null : adlar.get(t.kisiId) ?? null,
+        siparisler: gelisler.get(t.malzemeNo) ?? [],
+      };
     }),
+    bugun: await s.bugun(db),
   };
 }
 // Plan okuması: satırı olmayan malzeme haritada yoktur (termin bekliyor, ilk giriş sürümsüz yazılır).
