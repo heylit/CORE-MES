@@ -21,7 +21,7 @@ import type { ModelDizisi, ModelYerlesimi } from './model.ts';
 import { alanKutusu, duvarParcasi as duvarOlcusu, icindeMi, kapiKonumu, katilar, sahneNesneleri, odaParcalari, parcayaUzaklik, rafKutusu } from './geometri.ts';
 import type { Dikdortgen, Parca } from './geometri.ts';
 import {
-  andon, andonKolonu, cerceveDokusu, duvarDokusu, duvarParcasi, ekle, granitDokusu, haleDokusu, istasyonGovdesi, izMalzemesi, kapiUstu, kolon, kutu,
+  andon, andonKolonu, cerceveDokusu, durumIziDokusu, durumIziSaydamligi, duvarDokusu, duvarParcasi, ekle, granitDokusu, haleDokusu, istasyonGovdesi, izMalzemesi, kapiUstu, kolon, kutu,
   gozCephesi, malzemeleriKur, modelBolgesi, okDokusu, onbellegiBosalt, onbellekteMi, palet, rafGovdesi, rafYukleri, silindir, temasDokusu, zeminIzi,
 } from './nesneler.ts';
 import type { Andon, Animasyon, DuvarAcikligi, Ekran, Malzemeler, RafOlcusu } from './nesneler.ts';
@@ -853,7 +853,10 @@ export class SahneMotoru {
       birlestir(govde.grup, govde.hareketli);
       if (!yer.aktif) govde.grup.traverse((c) => { if (c instanceof Mesh) c.material = this.solukMalzeme(c.material as Material); });
       zeminIzi(ig, kk.genislik * 1.05, kk.derinlik * 1.15, izMalzemesi(this.temas, this.palet.siyah, 1), 0.004);
-      const hale = zeminIzi(ig, kk.genislik + 1.2, kk.derinlik + 1.2, izMalzemesi(this.hale, this.palet.bekliyor, 0.2), 0.008);
+      const ig_ = kk.genislik + 1.2;
+      const id_ = kk.derinlik + 1.2;
+      const izDoku = this.saklananDoku(`d|${ig_.toFixed(2)}|${id_.toFixed(2)}`, () => durumIziDokusu(ig_, id_, 0.6));
+      const hale = zeminIzi(ig, ig_, id_, izMalzemesi(izDoku, this.palet.bekliyor, durumIziSaydamligi('sirada', 0)), 0.008);
       const cg = kk.genislik + 0.5;
       const cd = kk.derinlik + 0.5;
       const cerceveDoku = this.saklananDoku(`c|${cg.toFixed(2)}|${cd.toFixed(2)}`, () => cerceveDokusu(cg, cd));
@@ -2161,7 +2164,7 @@ export class SahneMotoru {
         dilim.hale.material.opacity = k * 0.85;
       }
       const hale = n.hale.material as MeshBasicMaterial;
-      hale.opacity = durum === 'durdu' ? 0.12 + yanip * 0.3 : durum === 'sirada' ? 0.1 : 0.2;
+      hale.opacity = durumIziSaydamligi(durum, yanip);
       const a = n.anim;
       // Hafif görünümde makine parçaları kıpırdamaz; durum andon ve zemin izinden okunur.
       const calis = durum === 'calisiyor' && !hareketsiz && !hafif;
