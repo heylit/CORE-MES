@@ -130,6 +130,21 @@ export function kaynakDilimiKur(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi):
   };
 }
 
+// Planın kapasite okumasındaki (planlama-servis.ts kapasite) onaylı izinli günler; eski yol da devamsızlığı aynı okumadan kurar.
+export function kapasitedenIzinler(kp: { kisiler: readonly { id: string; izinli: readonly string[] }[] | null } | null | undefined): KaynakDilimiOkumasi['izinler'] {
+  return kp?.kisiler ? kp.kisiler.map((k) => ({ kisiId: k.id, gunler: k.izinli.slice() })) : null;
+}
+
+// 1744 a: okunamayan dilimden kurulan alanı tipli yol belirlemez, eski yolun değeri kalır (Reçete ve Rota kaydında makine ya da kişi varsa
+// oradan, yoksa açık çalışmadaki gibi, 1742). Kıyas setinde kısıtlı kullanıcıda da fark çıkmaz.
+export function kaynakDilimiKapsami(o: KaynakDilimiOkumasi): KaynakAlani[] {
+  return KAYNAK_ALANLARI.filter((a) => {
+    if (a === 'tezgahlar' || a === 'calismaGunleri') return o.istasyon !== null && o.takvim !== null;
+    if (a === 'personel') return o.kisiler !== null;
+    return true;
+  });
+}
+
 export const KAYNAK_DILIMI = {
   ad: 'kaynaklar', kart: 1716, alanlar: KAYNAK_ALANLARI, kur: kaynakDilimiKur,
 } as const satisfies Dilim<KaynakDilimiOkumasi, KaynakElleVerisi, KaynakAlani>;

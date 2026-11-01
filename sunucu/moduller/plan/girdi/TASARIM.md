@@ -59,6 +59,13 @@ Elle alanların sahibi (`sahip` sütunu) öneridir; kesin sahip 1719'un sahiplik
 5. **Birleştirme** (1720): `plan-girdisi.ts` dilimleri sırayla kurar, sayfa alanlarını açık çalışmadan taşır, `stTamKur` aynı kalır. Yeni
    yol bayrakla kapalıdır. Öneri (1720'de kesinleşir): bayrak açıkken eski yol da karşılaştırma için koşar ve fark günlüğe yazılır. Eski yol (girdi.betik birleştirme kısmı,
    emirler.betik) kullanıcının "tamam"ından sonra 1723'te silinir.
+   İlk parça "1720 kaynak" (yalnız kaynak dilimi): bayrak sistem ayarı `plan.tipli-girdi` (varsayılan kapalı). Açıkken `planlamaGirdisi`
+   tipli okumayı da verir; `plan-girdisi.ts` betik bağlamındaki `kaynakBirlestir`'i sarar (`birlestirme.ts`): eski birleştirme önce koşar,
+   dilimi okunan kaynak alanları sonra tipli kurulumla değişir. Okunamayan dilimin alanı eski yolunki kalır (1744 a: Reçete ve Rota kaydında
+   makine ya da kişi varsa oradan, yoksa açık çalışmadaki gibi, 1742). Tipli tezgâh listesi kimlik ya da istasyon olarak eskisinden ayrılırsa
+   ürünlerin adımları eski listeye kurulu olduğundan tezgâhlar eski yolunki kalır. Günlüğe yazan gölge koşu yapılmadı; eşdeğerliği
+   `kaynaklar-vt.test.ts` KV-05 ve KV-06 bütün çalışma (S) ve motor girdisi (st) üzerinde sınar. Kayıt yokken açılan boş çalışma
+   (`yeniCalisma`) eski yoldadır.
 
 ## 5. Eşdeğerlik düzeni
 

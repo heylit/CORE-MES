@@ -22,6 +22,8 @@ import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
+import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
@@ -287,7 +289,7 @@ const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   id: 0, ad: 'plan motoru',
   islemler: [...new Set([...Object.values(KAYNAK_OKUMA).flat(), ...ACIK_SIPARIS_OKUMA, ...SIPARIS_FIYATI_OKUMA])],
 };
-export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
+export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi; kaynakDilimi?: KaynakDilimiOkumasi | null }
 // Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.
 // 1408: planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çözücü sayfanın ilk açılışında kuracağı boş çalışmayla (657 a)
 // bellekte çözer, kayıt yazılmaz: eski motor kalkınca motor yerleşimi, önizleme ve hızlı deneme sayfa kaydı olmadan da çalışır.
@@ -351,7 +353,14 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
   // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
   const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
-  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek } } };
+  // 1720 kaynak: bayrak açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts); izinli günler aynı kapasite okumasındandır.
+  const kaynakDilimi = (await sistemAyariOku(db, 'plan.tipli-girdi'))
+    ? await kaynakDilimiOku(db, kullanici, kapasitedenIzinler((kaynak.ek as { kapasite?: Parameters<typeof kapasitedenIzinler>[0] }).kapasite))
+    : null;
+  return {
+    surum,
+    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
+  };
 }
 
 // 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
