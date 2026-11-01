@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
 import { ApiHatasi, api } from '../../ortak/veri/api.ts';
 import { baglantiDurumu, baglantiSifirla } from '../../ortak/veri/baglanti.ts';
-import { BASKA_SUNUCU, BEN_TAZE_MS, benOnbellekli, ONIZLEME_SALT_OKUR, PARCA, SANAL_SUNUCU, TMI_HEDEFLERI, anlikIletimKur, bagla, base64Oku, base64Yaz, cevapla, ikiliOku, listeKesildi, makineDoluRetleri, reddiBildirimi, temayiUygula, tekrarSuzgeci, tmiReddiBildirimleri, tmiUyarilari, tohumla } from './baglanti.ts';
+import { BASKA_SUNUCU, BEN_TAZE_MS, benOnbellekli, ONIZLEME_SALT_OKUR, PARCA, SANAL_SUNUCU, TMI_HEDEFLERI, anlikIletimKur, bagla, base64Oku, cevapla, ikiliOku, listeKesildi, makineDoluRetleri, reddiBildirimi, temayiUygula, tekrarSuzgeci, tmiReddiBildirimleri, tmiUyarilari, tohumla } from './baglanti.ts';
 import type { MakineDoluRedi } from './baglanti.ts';
 import type { Istemci, IstekGirdisi } from './baglanti.ts';
 import { tmiyeGit } from '../../../../arkon/web/src/data/yeni-paket.ts';

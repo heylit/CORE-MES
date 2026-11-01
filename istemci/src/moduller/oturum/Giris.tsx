@@ -7,7 +7,7 @@ import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
-import { DERLEME } from '../../ortak/veri/surum.ts';
+import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
 import './giris.css';
 
 const PIN_HANE = 6;
@@ -228,7 +228,7 @@ export function Giris() {
           </ul>
           <p className="tc-giris-not">
             <Simge ad="lock" boyut="k" /><span>Kurum içi sistem · yalnız iç ağda</span>
-            <span className="tc-giris-surum mono">v{DERLEME.surum}</span>
+            <span className="tc-giris-surum mono">{/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}</span>
           </p>
         </div>
       </section>

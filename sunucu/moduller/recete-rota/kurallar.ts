@@ -2,14 +2,12 @@ import type { IsMerkezi, Istasyon, Makine, MakineDurumuDegeri, OperasyonTipi } f
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
 import type { KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { PlanAyari } from '#paylasilan/sozlesme/plan.ts';
 import type { DurumEmirleri, DurumMalzemesi, DurumRotaAdimi as DurumRotaAdimiCikti, DurumRotaRevizyonu, DurumMaliyeti } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { girdiOlabilirMi } from '../rota/disari.ts';
 import type { DurumRotaAdimi, DurumRotaRevizyonu as DurumRotaRevizyonuGirdisi } from '../rota/disari.ts';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
-import { tesisGunBasi, tesisSaati } from '#paylasilan/zaman.ts';
 
 // Reçete ve Rota kayıt deposunun saf kuralları.
 

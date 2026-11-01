@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import type { EmirSecenegi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { OnayPenceresi } from '../../../../ortak/arayuz/OnayPenceresi.tsx';
@@ -7,7 +7,7 @@ import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
 import { state, useCncSurum } from '../depo.ts';
 import { D } from '../durum.ts';
 import { fint, fmt, pad2 } from '../bicim.ts';
-import { byId, holderIdFor, invKey, machine, material, stockOf, toolById, tools, type KalemStokOzeti } from '../secici.ts';
+import { byId, holderIdFor, invKey, machine, material, stockOf, toolById, tools } from '../secici.ts';
 import { coolHint, cutData, holderOf } from '../hesap/kesme.ts';
 import { openDefs, useGorunum, useTuslar } from '../gorunum.ts';
 import { Sahne } from '../sahne/Sahne.tsx';

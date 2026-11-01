@@ -6,7 +6,7 @@ import type {
   CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
-import { DORT_SAAT_RED_NEDENI, PLAN_KURALLARI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
+import { DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,

@@ -8,7 +8,6 @@ import type { KartKaydi } from '../tipler.ts';
 import { fasetDegerleri, type FiltreSecimi } from './liste.ts';
 
 interface Faset { k: string; ad: string; et?: (v: string) => string }
-type Sayilar = Record<string, [string, number][]>;
 
 const SINIR = 6;
 

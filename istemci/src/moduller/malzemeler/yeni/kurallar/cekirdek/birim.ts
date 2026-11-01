@@ -1,5 +1,4 @@
 import { FRAC, PCONV } from './durum.ts';
-import { G } from './tanimlar.ts';
 import type { Sozluk, Taslak } from './tipler.ts';
 import { clsKeyFor } from './uyumluluk.ts';
 import type { OlcuGrubu } from './varyant.ts';

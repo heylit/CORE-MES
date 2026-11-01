@@ -81,7 +81,9 @@ describe('sürüm bölümü', () => {
   it('derleme sürümünü ve tarihini gösterir; sunucu commit ve son göç yalnız sağlık ayrıntısını okuyana', async () => {
     sunucuKur(null);
     ac(<SurumBilgisi />);
-    expect(screen.getByText(`v${DERLEME.surum}`)).toBeTruthy();
+    // Güncelleyicinin kurduğu derlemede yayın adı, elle kurulumda package.json yer tutucusu yerine "geliştirme".
+    expect(screen.getByText(/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum)).toBeTruthy();
+    expect(screen.queryByText(`v${DERLEME.surum}`)).toBeNull();
     expect(screen.getByText('Derleme tarihi')).toBeTruthy();
     expect(screen.queryByText('Sunucu commit')).toBeNull();
     cleanup();

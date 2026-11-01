@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { DurumKutusu, Dugme, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { adSoyad, paraKisa, tarih } from '../bicim.ts';

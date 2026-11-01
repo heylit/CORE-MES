@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ROL_GORUNUMLERI, SERIT_ROLLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
+import { ROL_GORUNUMLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
 import { SAYFALAR, menudeGorunur } from './sayfalar.ts';
 
 describe('rol görünümleri (1390 a)', () => {

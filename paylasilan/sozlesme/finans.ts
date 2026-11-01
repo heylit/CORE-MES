@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { listeCevapSemasi, listeSorguAlanlari, sayfaSorguAlanlari } from '../liste.ts';
+import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { gunlukFaizdenAylik } from './finansman.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';

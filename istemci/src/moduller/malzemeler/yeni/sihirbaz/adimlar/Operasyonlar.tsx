@@ -7,7 +7,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { RECETE_KAYNAGI, receteKaynagi } from '../durum.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { BagDugmesi, Uyari } from '../parcalar.tsx';
-import type { OperasyonGrubu, OperasyonTanimi, RotaAdimi } from '../../kurallar/index.ts';
+import type { RotaAdimi } from '../../kurallar/index.ts';
 import { RotaOzeti } from './TicariAdimi.tsx';
 
 // Prototipte `opsHTML` + rotalı kart eki (233 a): rotası olan kartın operasyonları salt okunur; düzenleme Reçete ve Rota'dadır.

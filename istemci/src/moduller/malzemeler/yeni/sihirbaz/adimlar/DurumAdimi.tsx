@@ -3,9 +3,8 @@ import { tlc } from '../../bicim.ts';
 import * as K from '../../kurallar/index.ts';
 import * as S from '../../sabitler/index.ts';
 import { useSihirbaz } from '../baglam.ts';
-import type { Taslak } from '../durum.ts';
 import { aileler, formlar } from '../turler.ts';
-import type { AileSecenegi, UyumSorunu } from '../../kurallar/index.ts';
+import type { AileSecenegi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { BagDugmesi, Cip, CipGrubu, MetinAlani, SecenekGrubu, Uyari, type CipTonu } from '../parcalar.tsx';
 

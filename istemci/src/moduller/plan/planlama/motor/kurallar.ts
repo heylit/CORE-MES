@@ -281,7 +281,7 @@ export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new 
 
 export function derle(g: Girdi): Derleme {
   const bitti = (id: string) => g.bitti.has(id);
-  const { D, now, kapali } = g;
+  const { D, now } = g;
   const vs: Record<string, Vardiya> = {};
   for (const v of D.vardiyalar ?? []) {
     const id = metin(v.id); if (id === null) continue;

@@ -1,5 +1,5 @@
 import {
-  allMachines, depotCards, DEPOT_G, dirtyUsage, invKey, machineCards, num, state, wearRec,
+  dirtyUsage, invKey, num, state, wearRec,
 } from './cekirdek.ts';
 import type { CarkKarti, DepoKarti, OmurKarti, Takim, Tezgah } from './tipler.ts';
 

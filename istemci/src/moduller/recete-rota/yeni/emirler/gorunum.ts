@@ -1,7 +1,7 @@
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { tarih } from '../bicim.ts';
-import type { Emir, PlanOzeti } from './kurallar.ts';
+import type { PlanOzeti } from './kurallar.ts';
 
 // Liste ve ayrıntının ortak gösterimleri: tür adı, plan hücresi. Durum adı ve tonu tek sözlükten gelir (kurallar.ts durumGosterimi).
 export const turAdi = (tur: string): string => (EMIR_TURU_ADLARI as Record<string, string>)[tur] ?? tur;

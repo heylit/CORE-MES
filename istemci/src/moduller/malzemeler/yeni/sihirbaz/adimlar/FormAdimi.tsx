@@ -5,7 +5,6 @@ import * as S from '../../sabitler/index.ts';
 import { useSihirbaz } from '../baglam.ts';
 import type { Taslak } from '../durum.ts';
 import { aileler, formlar } from '../turler.ts';
-import type { OlcuGrubu } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { Alanlar, BagDugmesi, Cip, CipGrubu, MetinAlani, Uyari, Yardim } from '../parcalar.tsx';
 

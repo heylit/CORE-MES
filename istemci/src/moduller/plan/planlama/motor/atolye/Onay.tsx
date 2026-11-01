@@ -18,7 +18,7 @@ import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
   agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
-  paSecim, planFarki, sunucuEkMesai, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
+  paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 // Onay ve canlı (zz22 sPlanAtolye): durum şeridi, akış, incelenecek planlar, seçili planın farkı, kontrolü ve kararı, karşılaştırma; yanda canlıdan
@@ -43,7 +43,6 @@ const dortSaatMi = (e: unknown): e is ApiHatasi =>
 const sayi = (x: number, k = 0) => x.toLocaleString('tr-TR', { maximumFractionDigits: k, minimumFractionDigits: k });
 const yuzde = (x: number | null | undefined) => (x == null ? '—' : `%${Math.round(x)}`);
 const tl = (x: number | null | undefined) => (x == null ? '—' : `${sayi(x / 1000)} bin`);
-const gun = (x: number | null | undefined) => (x == null ? '—' : `${sayi(x, 1)} g`);
 
 function Fark({ a, b, k = 1, kucukIyi = true }: { a: number | null | undefined; b: number | null | undefined; k?: number; kucukIyi?: boolean }) {
   const f = farkKur(a, b, k, kucukIyi);
@@ -457,7 +456,7 @@ function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: Bekley
 }
 
 interface SeciliEylemi { ac: (s: SunucuSenaryosu) => Promise<void>; onaya: (s: SunucuSenaryosu) => Promise<void>; cek: (s: SunucuSenaryosu) => Promise<void>; geri: (s: SunucuSenaryosu) => Promise<void>; vazgec: (s: SunucuSenaryosu) => Promise<void>; canli: (s: SunucuSenaryosu) => Promise<void> }
-function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, eylem, motorDegisti }: {
+function Secili({ s, canli, pa, pc, f, K, o, not, notYaz, gidiyor, eylem, motorDegisti }: {
   s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; pa: PlanCevabi | null; pc: PlanCevabi | null; f: PlanFarki | null; K: KontrolMaddesi[];
   o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi; motorDegisti: () => void;
 }) {

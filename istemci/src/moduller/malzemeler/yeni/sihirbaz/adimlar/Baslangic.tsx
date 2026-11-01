@@ -7,7 +7,7 @@ import type { KuralBaglami } from '../../kurallar/index.ts';
 import type { SonKullanilan } from '../../tercihler.ts';
 import type { KartKaydi } from '../../tipler.ts';
 import { aileler, formlar, girdiler } from '../turler.ts';
-import type { Aile, HizliAramaSonucu, Kalite, Tur } from '../../kurallar/index.ts';
+import type { Aile, Tur } from '../../kurallar/index.ts';
 import { useSihirbaz } from '../baglam.ts';
 import { kopyala, type Taslak } from '../durum.ts';
 import { AktifSuzgecler, Suzgecler } from '../../katalog/Suzgecler.tsx';
@@ -152,7 +152,7 @@ function KartSatiri({ x, neden, vurgu }: { x: KartKaydi; neden?: string; vurgu?:
 // yakın kartları gösterir; yoksa bilgileri doldurulmuş yeni kart açar.
 export function HizliArama() {
   const s = useSihirbaz();
-  const { b, kartlar, bildir, yenisiniKur, sonaKoy } = s;
+  const { b, bildir, yenisiniKur, sonaKoy } = s;
   const [metin, metinYaz] = useState('');
   const [gecikmeli, gecikmeliYaz] = useState('');
   useEffect(() => {

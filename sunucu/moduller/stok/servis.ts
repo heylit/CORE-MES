@@ -3009,10 +3009,6 @@ export async function isMalzemesiIste(db: Db, k: Kullanici, g: IsMalzemesiIsteGo
   }
   return isMalzemeleri(db, k, istasyonId);
 }
-async function konumAdlariAl(db: Db, idler: number[]): Promise<Map<number, string>> {
-  if (idler.length === 0) return new Map();
-  return new Map((await sorgular.konumKodlari(db, [...new Set(idler)])).map((x) => [x.id, x.kod]));
-}
 
 // Karar 110 b: adımın girdisi istasyonda bir adetlik yokken iş yine başlar. Eksik, başlatmayla aynı işlemde istasyona açılan malzeme
 // isteğiyle iz bırakır (Hazırlık'ta depo karşılar ya da iptal eder); stok burada yazılmaz. Sayım yalnız bulunan stoktan düşer, emrin

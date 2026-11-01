@@ -11,7 +11,6 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { malzemeKullanilabilirMi, malzemeOzeti } from './disari.ts';
-import { uclar } from './uclar.ts';
 import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 

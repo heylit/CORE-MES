@@ -3,7 +3,7 @@ import { adresCoz } from '../ag-araligi.ts';
 import { gizli } from '../gizli.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { KART_DURUMLARI, KART_KAYIT_DURUMLARI, KART_TURLERI, KIMLIK_TURLERI, NEDENLER, ZIYARET_DURUMLARI } from './nizamiye-sabitleri.ts';
+import { KART_DURUMLARI, KART_TURLERI, KIMLIK_TURLERI, NEDENLER, ZIYARET_DURUMLARI } from './nizamiye-sabitleri.ts';
 
 export * from './nizamiye-sabitleri.ts';
 

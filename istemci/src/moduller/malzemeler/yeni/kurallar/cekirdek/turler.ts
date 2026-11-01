@@ -1,5 +1,5 @@
 import type { Nesne, ReceteSatiri, Revizyon, RevizyonFarki } from '../../tipler.ts';
-import { ALAN, BIRIM_T, D, DB_KAT, FAM_ICON, G_ALAN_IKON, HZ_KAT, KAT_ICON, OPT_ICON, SARF_KAT, Store, TURLER, TUR_ICON, myUid, step } from './durum.ts';
+import { ALAN, BIRIM_T, D, DB_KAT, FAM_ICON, G_ALAN_IKON, HZ_KAT, KAT_ICON, OPT_ICON, SARF_KAT, Store, TURLER, TUR_ICON, myUid } from './durum.ts';
 import { prices } from './fiyat.ts';
 import { specHTML__0, specMD__0 } from './foy.ts';
 import { flatItem__0 } from './karsilastirma.ts';
@@ -11,7 +11,7 @@ import type { KartBelgesi } from './hizli-arama.ts';
 import { Host } from './ortam.ts';
 import { autoAd__0, autoKod__0, autoStd__0, dimsStr__0, finalAd, finalBirim__0, finalKod, weight__0 } from './taslak.ts';
 import type { Agirlik, Alan, DemirbasKategorisi, HizmetCesidi, HizmetKategorisi, Kategori, Sozluk, Taslak, Tur, TurAdimi } from './tipler.ts';
-import { A, compatIssues__0 } from './uyumluluk.ts';
+import { compatIssues__0 } from './uyumluluk.ts';
 import type { UyumSorunu } from './uyumluluk.ts';
 import { cleanKod, esc, fmt, fmtD, isNum, parseNum, r4 } from './yardimcilar.ts';
 

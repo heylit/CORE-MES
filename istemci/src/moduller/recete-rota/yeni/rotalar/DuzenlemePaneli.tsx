@@ -12,7 +12,7 @@ import {
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
-import { BAG_ADI, Bolme, fasonAdi, MetinAlani, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
+import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
