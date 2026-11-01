@@ -2,14 +2,14 @@ Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 
 
 ```text
 SONUC
-TMI CORE V2 bir CNC talasli imalat atolyesinde gunluk iste kullanilabilir olsun: butun moduller depoda (heylit/core-mes), ayni duzende, birbirine akislarla bagli, yetkileri sunucuda denetlenmis ve kullanici tarafindan kabul edilmis. Disaridan verilen her yeni modul ayni duzene sokulur. Kurulum kurum icidir: ic sunucu tek sunucu ve internetsizdir. Dis erisim yalniz ADR 0021 ile ve ben isteyince kurulur (DMZ'deki ayri dis sunucu; kopruyu yalniz ic sunucu baslatir).
+TMI CORE V2 bir CNC talasli imalat atolyesinde gunluk iste kullanilabilir olsun: butun moduller depoda (heylit/core-mes), ayni duzende, birbirine akislarla bagli, yetkileri sunucuda denetlenmis ve kullanici tarafindan kabul edilmis. Disaridan verilen her yeni modul ayni duzene sokulur. Kurulum kurum icidir: ic sunucu tek sunucu ve internetsizdir. Dis erisim askidadir (1493 c; ADR 0021 ertelendi); ben yeniden acana kadar kurulmaz.
 
 KAPSAM (parca listesi ACIKTIR; ben yeni modul verdikce buyur)
 Altyapi: sunucu cekirdegi ve paylasilan tanimlar; ortak arayuz; araclar; guvenlik merkezi.
 Moduller: liste `npm run harita` ciktisidir.
 Yeni modul: yalniz ben prototipini ya da on paketini verince kapsama girer. Koordinator kendi basina modul onermez, acmaz, kapsam genisletmez.
 Sahibi disarida olan modul: su an yok (uretim-emirleri 2026-10-12'de projeye alindi). Disarida yazilan yeni bir modul olursa projeden hicbir konu onun dosyalarina yazmaz, yalniz istek biriktirir ve cevresini hazirlar; ben "projeye alindi" diyene kadar boyle kalir.
-Ben acikca isteyene kadar baslanmayanlar: canli kurulum, SmartES baglanti kodu (yalniz alanlari hazirlanir), ADR 0021 disindaki dis erisim. Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
+Ben acikca isteyene kadar baslanmayanlar: canli kurulum, SmartES baglantisini acmak (kod var, varsayilan kapali; 1492 a), dis erisim (askida, 1493 c). Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
 Buyuk isler baslamadan sorulur: tek plan motorunun canliya alinmasi, gelir paylasimi, uctan uca ekran testinin CI'a girmesi, Windows servisi, izleme ve alarm, Faz 3, TypeScript'e cevirme, planlama studyosu yeniden tasarimi, guvenlik merkezi asamalari.
 Oncelik: hatalar once gelir; yanlis sayi ertelenmez. CI'da hiz onceliklidir.
 

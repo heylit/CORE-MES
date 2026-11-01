@@ -26,7 +26,7 @@ bir aylık kullanım bir saat içinde koşmalı. Yorum dil modeli ister. CLAUDE.
 
 ## CLAUDE.md satırı
 
-> Test robotu istisnası (ADR 0019, karar 174 c): yalnız `ekran-testleri/benzetim/model.ts` dil modeli çağırır ...
+Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 

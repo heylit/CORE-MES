@@ -1,6 +1,7 @@
 # ADR 0021 — Dış erişim: DMZ'de dış sunucu ve tek yönlü köprü
 
-Durum: kabul (2026-10-28; yazılı onay 1037 a ve TOTP paketsiz 1041 a, 07:42, okuma teyidi 13:11; kullanıcı kararları 1011 b, 1012 a, 1013 a, 1014 c, 1015 a, 1016 a, 1017 a, 1018 a, 1019 a, 1025 a, 1026 a, 1027 c, 1028 b, 1029 a, 1030 a, 1031 a, 1032 b, 1040 a, 1041 a).
+Durum: ertelendi (1493 c, 01.11.2026): dış erişim askıdadır; kod yoktur, kullanıcı yeniden açana kadar bu belgeye göre iş başlamaz. Yeniden açılırsa 1027 c, 1028 b ve 1032 b'nin "Birlikte risk" notu önce sorulur.
+Önceki durum: kabul (2026-10-28; yazılı onay 1037 a ve TOTP paketsiz 1041 a, 07:42, okuma teyidi 13:11; kullanıcı kararları 1011 b, 1012 a, 1013 a, 1014 c, 1015 a, 1016 a, 1017 a, 1018 a, 1019 a, 1025 a, 1026 a, 1027 c, 1028 b, 1029 a, 1030 a, 1031 a, 1032 b, 1040 a, 1041 a).
 `kurulum/https.md`'deki 2026-10-14 kararının ("şirket dışından erişim VPN ile olur") Portal ve Mesaj için yerine geçer; öteki modüller için o karar sürer.
 ADR 0002, 0003 ve 0012 iç kullanıcı için değişmez; dış hesaplar bu ADR'nin 4. kararına uyar. ADR 0011 karar 2'deki kurum içi adres kuralı köprü adresine de uygulanır.
 

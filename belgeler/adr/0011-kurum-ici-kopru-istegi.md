@@ -32,8 +32,7 @@ gerçek köprüye istek atılmaz. Firma, sipariş, talep ve fişler bu kararın 
 
 ## CLAUDE.md için öneri metni (kırmızı çizgiler, ilk madde)
 
-> - Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve internete çıkan servis çağrısı yok.
->   Tek istisna kurum içindeki Logo köprüsüdür (ADR 0011): yalnız `logo` modülü, yalnız kurum içi adrese, adres ve anahtar `TMIV2_*` ortam değişkeninde.
+Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 

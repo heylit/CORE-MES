@@ -1,6 +1,6 @@
 # ADR 0013 — Sunucudan kurum içi SmartES (MES) servisine SOAP isteği
 
-Durum: öneri (kart #778; kullanıcı kararları 1a, 2a, 3b, 12.10.2026). Kırmızı çizgi satırına eklenecek metin aşağıdadır; satırı şef değiştirir.
+Durum: kabul (1492 a, 01.11.2026; önce öneri: kart #778, kullanıcı kararları 1a, 2a, 3b, 12.10.2026). Kod `smartes` modülündedir, bağlantı varsayılan kapalıdır; bağlantıyı açmak kullanıcı isteyince yapılır.
 
 ## Bağlam
 
@@ -31,9 +31,7 @@ yazma (iş emri gönderimi, IsErp işareti) tek anahtarla birlikte açılır.
 
 ## Kırmızı çizgi için öneri metni
 
-> - Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve internete çıkan servis çağrısı yok.
->   İstisnalar kurum içi iki servistir: Logo köprüsü (ADR 0011, yalnız `logo` modülü) ve SmartES (ADR 0013, yalnız `smartes` modülü);
->   yalnız kurum içi adrese, adres `TMIV2_*` ortam değişkeninde, bağlantı varsayılan kapalı.
+Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 

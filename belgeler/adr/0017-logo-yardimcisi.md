@@ -32,7 +32,7 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
 
 ## CLAUDE.md satırı
 
-> ... yalnız kurum içi üç servis istisna: Logo yardımcısı (ADR 0017, yalnız `logo` modülü, yalnız aynı bilgisayar: 127.0.0.1), ...
+Metin CLAUDE.md'dedir (kırmızı çizgiler); buradaki eski öneri metni 01.11.2026'da kaldırıldı (1495 a).
 
 ## Sonuçlar
 
