@@ -15,7 +15,8 @@ listeden seçilir ve "Uygula" ile kurulur. Kurulumu sunucu değil, sunucuyu aça
    koşar, yeni sunucu açılır ve sağlık ucu cevap verene kadar beklenir.
 4. Sonuç `uygulama-sonucu.json`'a yazılır ve Güncelleme sekmesinde görünür:
    - **Kuruldu**: yeni sürüm çalışıyor. `calisan.json` yeni sürümü gösterir.
-   - **Başarısız**: 2. adımda ya da yedekte bozuldu. Veritabanı değişmedi, eski sürüm çalışıyor.
+   - **Başarısız**: 2. adımda ya da yedekte bozuldu. Veritabanı değişmedi, eski sürüm çalışıyor. Yedekten sonra PostgreSQL kilit
+     ayarının geri yüklemeye yetip yetmediğine bakılır (kurulum/yedek.md, Kurulum 5); yetmiyorsa göç başlamaz, sonuç buradadır.
    - **Geri alındı**: göç ya da açılış bozuldu. Yedek geri yüklendi, eski sürüm açıldı.
    - Geri yükleme de bozulursa sunucu kapalı bırakılır ve güncelleyici durur: eski kod yeni şemayla çalışmasın.
      Yedek elle geri yüklenir (kurulum/yedek.md "Geri yükleme"), sonra `npm run baslat`.

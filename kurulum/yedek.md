@@ -67,7 +67,15 @@ bozulursa son yedek geri yüklenir; kayıp en çok bir günle sınırlı kalır.
 4. Sunucuyu yeniden başlatın. Sistem Ayarları > Yedekler'de "Yedek açık" görünmeli. "Şimdi yedek al" ile ilk yedeği alın; listede
    görünmezse kırmızı satırdaki hatayı okuyun (en sık: pg_dump bulunamadı, sürüm uyuşmazlığı, klasöre yazma izni).
    İsteğe bağlı: `TMIV2_PG_VERI_DIZINI=C:\Program Files\PostgreSQL\18\data` verilirse `/saglik/ayrinti` veritabanı diskinin boş yerini de gösterir (yedek diski her zaman; 5 GB ya da yüzde 10 altı `az`).
-5. Haftada bir en son yedeği "İndir" ile alıp sunucunun dışında güvenli bir yerde saklayın (dosya şifrelidir; anahtar ayrı durur).
+5. PostgreSQL kilit ayarı: geri yükleme tek transaction'dır ve şemadaki her nesneyi kilitler (499 göçlü şemada ~20 bin kilit;
+   varsayılan ayarın sığası ~6400). `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.conf`) şu satırı
+   yazın ve PostgreSQL servisini yeniden başlatın:
+   ```
+   max_locks_per_transaction = 512
+   ```
+   Değeri görmek için: `psql -U tmiv2_goc -d tmiv2 -c "SHOW max_locks_per_transaction"`. Ayar yetmezse `npm run geri-yukle` ve
+   güncelleyici veritabanına dokunmadan durur ve gereken değeri yazar; güncelleyici bu durumda göçe hiç başlamaz.
+6. Haftada bir en son yedeği "İndir" ile alıp sunucunun dışında güvenli bir yerde saklayın (dosya şifrelidir; anahtar ayrı durur).
 
 pg_dump uygulama kullanıcısıyla (`TMIV2_PG_USER`) bağlanır; parola komut satırına girmez, alt sürecin ortamından verilir. Alt sürece
 `TMIV2_` değişkenleri geçmez.
@@ -94,7 +102,8 @@ npm.cmd run goc
 
 Komut veritabanı adını yazmanızı ister, önce bugünkü hali ayrıca yedekler, sonra şifreli yedeği `TMIV2_YEDEK_ANAHTARI` ile geçici
 dosyaya açar ve göç kullanıcısıyla tek transaction'da şemayı boşaltıp yedeği yükler; hata olursa hiçbir şey değişmez, geçici dosyalar
-her durumda silinir. Anahtar uymazsa "Yedek açılamadı: anahtar uymuyor ya da dosya bozuk" der ve veritabanına dokunmaz. Başka
+her durumda silinir. Başlamadan önce PostgreSQL kilit tablosunun yetip yetmeyeceğine bakar (Kurulum 5); yetmezse onay ve ön yedek
+istemeden "kilit tablosu yetmiyor" der, önerdiği `max_locks_per_transaction` değerini yazar ve hiçbir şeye dokunmaz. Anahtar uymazsa "Yedek açılamadı: anahtar uymuyor ya da dosya bozuk" der ve veritabanına dokunmaz. Başka
 makineye taşınan yedek için o makinenin `.env`'ine aynı anahtar yazılır. `npm run goc` göç kaydının yazma hakkını uygulamadan yeniden alır.
 Linux'ta PostgreSQL 16 ile denendi (2026-10-15): yedek, veri bozma, geri yükleme; tablo sayısı ve tablo başına satır sayıları
 yedek anıyla aynı çıktı. Şifreli yedekle Linux'ta PostgreSQL 16 üzerinde yeniden denendi (2026-10-19): `npm run yedek`, `npm run

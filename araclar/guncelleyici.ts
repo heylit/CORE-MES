@@ -169,17 +169,94 @@ export function pgAraci(pgDump: string, ad: 'pg_restore' | 'psql'): string {
   return yol.join(yol.dirname(pgDump), yol.basename(pgDump).replace(/pg_dump/i, ad));
 }
 
+// Geri yükleme tek transaction'dır ve şemadaki her nesneyi hem silerken hem yeniden kurarken kilitler; kilitler transaction
+// bitene dek sunucunun ortak kilit tablosunda durur (max_locks_per_transaction x (max_connections + max_prepared_transactions)).
+// Ölçüm (PostgreSQL 16, 499 göçlü boş şema, 1783 pg_class satırı, 4529 döküm girdisi): silme 11674, yükleme 8223, birlikte
+// 19891 kilit; varsayılan ayarın sığası 6400'dür. Katsayılar bu ölçümün üstünde kalacak biçimde yuvarlandı: şema büyüdükçe
+// ihtiyaç da nesne sayısıyla büyür. Tahmin tutmasa bile transaction hata verip geri alınır; tahmin yalnız işe başlamadan
+// açık iletiyle durmak içindir.
+export const SINIF_BASINA_KILIT = 12;
+export const DOKUM_GIRDISI_BASINA_KILIT = 5;
+const KILIT_PAYI = 1.25;
+const EN_AZ_KILIT_AYARI = 128;
+
+export interface KilitDurumu {
+  maxLocks: number;
+  baglanti: number;
+  hazirlanan: number;
+  kullanilan: number;
+}
+
+export function geriYuklemeKilidi(sinifSayisi: number, dokumGirdisi: number): number {
+  return Math.max(SINIF_BASINA_KILIT * sinifSayisi, DOKUM_GIRDISI_BASINA_KILIT * dokumGirdisi);
+}
+
+// Sığa yetmiyorsa veritabanına dokunmadan önce söylenecek ileti; yetiyorsa null. Önerilen değer ikinin kuvvetine yuvarlanır.
+export function kilitYetersizligi(gerekli: number, d: KilitDurumu): string | null {
+  const yuva = d.baglanti + d.hazirlanan;
+  const bos = d.maxLocks * yuva - d.kullanilan;
+  if (bos >= gerekli) return null;
+  let oneri = EN_AZ_KILIT_AYARI;
+  while (oneri * yuva < gerekli * KILIT_PAYI + d.kullanilan) oneri *= 2;
+  return `Geri yükleme için PostgreSQL kilit tablosu yetmiyor: tahmini ${String(gerekli)} kilit gerekli, boş ${String(Math.max(bos, 0))} `
+    + `(max_locks_per_transaction ${String(d.maxLocks)} x ${String(yuva)} bağlantı yuvası, kullanılan ${String(d.kullanilan)}). `
+    + `postgresql.conf'ta max_locks_per_transaction = ${String(oneri)} yazıp PostgreSQL servisini yeniden başlatın (kurulum/yedek.md). Veritabanına dokunulmadı.`;
+}
+
+// Tahmin tutmayıp transaction kilit tablosunda düşerse (53200) aynı yol gösterilir; ipucu satırı ayar adını her dilde taşır.
+export function kilitHatasiMi(ileti: string): boolean {
+  return /max_locks_per_transaction|out of shared memory/i.test(ileti);
+}
+
+type GocKimligi = { kullanici: string; parola: string };
+
+function psqlArgumanlari(ortam: ReturnType<typeof yedekOrtamiOku>, goc: GocKimligi): string[] {
+  return [
+    '-X', '-q', '-v', 'ON_ERROR_STOP=1', `--host=${ortam.pg.host}`, `--port=${String(ortam.pg.port)}`,
+    `--username=${goc.kullanici}`, `--dbname=${ortam.pg.veritabani}`, '--no-password',
+  ];
+}
+
+// Şemanın bugünkü nesne sayısı ve sunucunun kilit sığası; göç kullanıcısı bunları süper kullanıcı olmadan okuyabilir.
+async function kilitDurumuOku(
+  ortam: ReturnType<typeof yedekOrtamiOku>, goc: GocKimligi, cwd: string,
+): Promise<KilitDurumu & { sinif: number }> {
+  const sorgu = `SELECT current_setting('max_locks_per_transaction'), current_setting('max_connections'),
+    current_setting('max_prepared_transactions'), (SELECT count(*) FROM pg_locks),
+    (SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace)`;
+  const cikti = await calistir(pgAraci(ortam.pgDump.dosya, 'psql'), [...psqlArgumanlari(ortam, goc), '-A', '-t', '-F', ',', '-c', sorgu], {
+    cwd, env: { ...altSurecOrtami(process.env, true), PGPASSWORD: goc.parola },
+  }, true);
+  const [maxLocks, baglanti, hazirlanan, kullanilan, sinif] = cikti.trim().split(',').map(Number);
+  const sayilar = [maxLocks, baglanti, hazirlanan, kullanilan, sinif];
+  if (sayilar.some((x) => x === undefined || !Number.isFinite(x))) throw new Error(`Kilit ayarı okunamadı: ${cikti.trim().slice(0, 200)}`);
+  return { maxLocks: maxLocks!, baglanti: baglanti!, hazirlanan: hazirlanan!, kullanilan: kullanilan!, sinif: sinif! };
+}
+
+// Güncelleyici göçten önce de sorar: geri alınamayacak göç başlamasın. Döküm girdisi verilmezse ihtiyaç bugünkü şemadan
+// tahmin edilir (güncelleyicinin yedeği bugünkü şemanın kendisidir).
+export async function geriYuklemeKilidiniDenetle(
+  ortam: ReturnType<typeof yedekOrtamiOku>, goc: GocKimligi, cwd: string, dokumGirdisi = 0,
+): Promise<void> {
+  if (goc.kullanici === '') throw new Error('Göç kullanıcısı tanımlı değil (TMIV2_PG_GOC_USER); yedek geri yüklenemez.');
+  const d = await kilitDurumuOku(ortam, goc, cwd);
+  const engel = kilitYetersizligi(geriYuklemeKilidi(d.sinif, dokumGirdisi), d);
+  if (engel !== null) throw new Error(engel);
+}
+
 // Yedek tabloların sahibi (göç kullanıcısı) olarak, tek transaction'da: şema boşaltılır, yedek yüklenir. Hata olursa
-// hiçbir şey değişmez. Varsayılan yetkiler role bağlıdır (araclar/vt/kurulum.sql), şemayla gitmez; şema yetkisi yedektedir.
+// hiçbir şey değişmez. Kilit tablosu yetmeyecekse (1746 a) veritabanına dokunmadan ayarı söyleyerek durur.
+// Varsayılan yetkiler role bağlıdır (araclar/vt/kurulum.sql), şemayla gitmez; şema yetkisi yedektedir.
 // Süper kullanıcı gerekmez: şemanın sahibi göç kullanıcısıdır. Şifreli yedek (145 a) önce geçici dosyaya çözülür; şifreleme
 // öncesinden kalan düz yedek olduğu gibi alınır. Geçici dosyalar her durumda silinir.
 export async function yedegiGeriYukle(
-  ortam: ReturnType<typeof yedekOrtamiOku>, goc: { kullanici: string; parola: string }, yedek: string, cwd: string,
+  ortam: ReturnType<typeof yedekOrtamiOku>, goc: GocKimligi, yedek: string, cwd: string,
 ): Promise<void> {
   if (goc.kullanici === '') throw new Error('Göç kullanıcısı tanımlı değil (TMIV2_PG_GOC_USER); yedek geri yüklenemez.');
   const betik = `${yedek}.geri.sql`;
   const bosalt = `${yedek}.bosalt.sql`;
   const cozulmus = `${yedek}.cozulmus`;
+  const pgOrtami = { cwd, env: { ...altSurecOrtami(process.env, true), PGPASSWORD: goc.parola } };
   try {
     let kaynak = yedek;
     if (await yedekSifreliMi(yedek)) {
@@ -188,12 +265,19 @@ export async function yedegiGeriYukle(
       await yedekSifresiniCoz(ortam.anahtar.anahtar, yedek, cozulmus);
       kaynak = cozulmus;
     }
+    const liste = await calistir(pgAraci(ortam.pgDump.dosya, 'pg_restore'), ['--list', kaynak], { cwd, env: process.env }, true);
+    const girdi = liste.split(/\r?\n/).filter((s) => s.trim() !== '' && !s.startsWith(';')).length;
+    await geriYuklemeKilidiniDenetle(ortam, goc, cwd, girdi);
     await calistir(pgAraci(ortam.pgDump.dosya, 'pg_restore'), ['--no-owner', `--file=${betik}`, kaynak], { cwd, env: process.env });
     await writeFile(bosalt, 'DROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n');
-    await calistir(pgAraci(ortam.pgDump.dosya, 'psql'), [
-      '-X', '-q', '-1', '-v', 'ON_ERROR_STOP=1', `--host=${ortam.pg.host}`, `--port=${String(ortam.pg.port)}`,
-      `--username=${goc.kullanici}`, `--dbname=${ortam.pg.veritabani}`, '--no-password', `--file=${bosalt}`, `--file=${betik}`,
-    ], { cwd, env: { ...altSurecOrtami(process.env, true), PGPASSWORD: goc.parola } });
+    try {
+      await calistir(pgAraci(ortam.pgDump.dosya, 'psql'), [...psqlArgumanlari(ortam, goc), '-1', `--file=${bosalt}`, `--file=${betik}`], pgOrtami);
+    } catch (hata) {
+      const ileti = hata instanceof Error ? hata.message : String(hata);
+      if (!kilitHatasiMi(ileti)) throw hata;
+      throw new Error(`Geri yükleme PostgreSQL kilit tablosu dolduğu için geri alındı; veritabanı değişmedi. postgresql.conf'ta `
+        + `max_locks_per_transaction değerini artırıp (kurulum/yedek.md) PostgreSQL servisini yeniden başlatın. Ayrıntı: ${ileti}`);
+    }
   } finally {
     await rm(betik, { force: true });
     await rm(bosalt, { force: true });
@@ -201,18 +285,21 @@ export async function yedegiGeriYukle(
   }
 }
 
-function calistir(komut: string, argumanlar: readonly string[], secenek: { cwd: string; env: NodeJS.ProcessEnv }): Promise<void> {
+// `topla` verilirse standart çıktı ekrana değil sonuca gider (psql sorgu cevabı, pg_restore listesi).
+function calistir(komut: string, argumanlar: readonly string[], secenek: { cwd: string; env: NodeJS.ProcessEnv }, topla = false): Promise<string> {
   return new Promise((coz, reddet) => {
-    const surec = spawn(komut, argumanlar, { cwd: secenek.cwd, env: secenek.env, stdio: ['ignore', 'inherit', 'pipe'], windowsHide: true });
+    const surec = spawn(komut, argumanlar, { cwd: secenek.cwd, env: secenek.env, stdio: ['ignore', topla ? 'pipe' : 'inherit', 'pipe'], windowsHide: true });
+    let cikti = '';
+    if (topla) { surec.stdout?.setEncoding('utf8'); surec.stdout?.on('data', (parca: string) => { cikti += parca; }); }
     let hata = '';
-    surec.stderr.setEncoding('utf8');
-    surec.stderr.on('data', (parca: string) => {
+    surec.stderr?.setEncoding('utf8');
+    surec.stderr?.on('data', (parca: string) => {
       process.stderr.write(parca);
       if (hata.length < 4000) hata += parca;
     });
     surec.on('error', (h) => { reddet(new Error(`${basename(komut)} başlatılamadı: ${h.message}`)); });
     surec.on('close', (kod) => {
-      if (kod === 0) { coz(); return; }
+      if (kod === 0) { coz(cikti); return; }
       const satir = hata.split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== '').at(-1) ?? '';
       reddet(new Error(`${basename(komut)} ${argumanlar.filter((a) => !a.startsWith('-')).slice(-1).join('')} hata verdi (çıkış ${String(kod)})${satir === '' ? '' : `: ${satir}`}`));
     });
@@ -403,10 +490,14 @@ export class Guncelleyici {
         yedek = join(yedekOrtami.dizin ?? '', dosya.ad);
         yedekAlindi(yedek);
         console.log(`Güncelleme: yedek alındı: ${yedek}`);
+        // Göç bozulursa bu yedek geri yüklenecek: yüklenemeyecekse göç hiç başlamaz, eski sürüm açılır.
+        await geriYuklemeKilidiniDenetle(yedekOrtami, this.goc, this.s.dizin);
       },
-      gocle: () => calistir(process.execPath, ['--import', './araclar/ortam-yukle-goc.ts', 'sunucu/cekirdek/goc-calistir.ts'], {
-        cwd: yeniKlasor, env: altSurecOrtami(process.env, this.envVar),
-      }),
+      gocle: async () => {
+        await calistir(process.execPath, ['--import', './araclar/ortam-yukle-goc.ts', 'sunucu/cekirdek/goc-calistir.ts'], {
+          cwd: yeniKlasor, env: altSurecOrtami(process.env, this.envVar),
+        });
+      },
       yeniyiAc: async () => {
         if (yeni === null) throw new Error('Paket doğrulanmadı.');
         await this.ac(yeniKlasor, yeni, false);
