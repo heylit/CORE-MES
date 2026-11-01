@@ -3,7 +3,6 @@ import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { KisitEslemesi } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Firma } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
@@ -25,7 +24,7 @@ import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, 
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineler } from '../istasyonlar/disari.ts';
 import type {
-  belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagitGovdesi,
+  belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
   kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';

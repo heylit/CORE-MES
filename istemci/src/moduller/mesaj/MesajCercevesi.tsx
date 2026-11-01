@@ -5,7 +5,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
 import { useYalitilmisGorunum } from '../../ortak/rota/cerceve-gorunumu.ts';
-import { anahtarParcasi, cerceveBetigi, yerelKoku } from './cerceve-kopru.ts';
+import { cerceveBetigi, yerelKoku } from './cerceve-kopru.ts';
 import type { CerceveAyari } from './cerceve-kopru.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { gomuluYaziStili } from './yazi-tipleri.ts';

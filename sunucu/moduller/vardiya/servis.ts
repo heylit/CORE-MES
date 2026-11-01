@@ -10,7 +10,7 @@ import type { z } from 'zod';
 import { KAPSAM_DISI_ILETISI } from '#paylasilan/hata.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  FazlaMesai, FazlaMesaiGirdisi, GunlukMesaiCevabi, KaynakTakvimi, KisiVardiyasiTopluGovdesi, MatrisKopyalaGovdesi, MatrisTopluGovdesi, TopluRetAyrintisi, TakvimAraligi, KaynakTuru, KisiVardiyasiGovdesi, MatrisGovdesi, PlanliDurus, PlanliDurusGirdisi, PlanliDurusListeSorgusu, TakvimCevabi, TakvimGunuGovdesi,
+  FazlaMesai, FazlaMesaiGirdisi, GunlukMesaiCevabi, KaynakTakvimi, KisiVardiyasiTopluGovdesi, MatrisKopyalaGovdesi, MatrisTopluGovdesi, TopluRetAyrintisi, TakvimAraligi, KaynakTuru, KisiVardiyasiGovdesi, MatrisGovdesi, PlanliDurus, PlanliDurusGirdisi, TakvimCevabi, TakvimGunuGovdesi,
   Vardiya, VardiyaGirdisi, VardiyaGuncelleGirdisi, VardiyaPersoneliCevabi,
 } from '#paylasilan/sozlesme/vardiya.ts';
 import { AZAMI_TAKVIM_GUNU, takvimGunuGovdesi } from '#paylasilan/sozlesme/vardiya.ts';

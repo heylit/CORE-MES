@@ -96,7 +96,6 @@ export function yetkinlikBirlesimi(yetkinlikler: unknown, kisiId: number, yenile
 }
 
 async function tezgahlariKur(b: SenaryoBaglami, kopyaSayisi: number): Promise<RotaMakinesi[][] | null> {
-  const r = b.rastgele;
   const im = await b.bekle(MUDUR, 'iş merkezi aç', 'POST', '/api/is-merkezleri', 200, { kod: kod(b, 'im'), ad: kod(b, 'merkez'), aciklama: null });
   if (im === null) return null;
   const ciftler: RotaMakinesi[][] = [];

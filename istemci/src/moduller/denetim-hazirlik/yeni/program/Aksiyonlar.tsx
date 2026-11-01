@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi } from '../gorunumler.ts';
-import { htmlKacis, yazdir } from '../disa-aktar.ts';
 import { CRIT } from '../icerik/iso9001.ts';
 import { seviyeAdi } from '../icerik/programlar.ts';
 import { siradakiDenetim } from '../kurallar/denetim-takvimi.ts';

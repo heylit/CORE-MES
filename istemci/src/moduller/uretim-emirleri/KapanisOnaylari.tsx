@@ -10,7 +10,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
-  KAPANIS_YETKISI, MADDE_ADI, MADDE_HALI, SERITLER, beklemeGunu, bekleyenOnaylar, defterMetni, eksikMaddeler, kisaZaman, kuyrukAsamasi,
+  KAPANIS_YETKISI, MADDE_ADI, MADDE_HALI, SERITLER, beklemeGunu, defterMetni, eksikMaddeler, kisaZaman, kuyrukAsamasi,
   seritSirasi, sonucMetni, ustRozet,
 } from './kapanis.ts';
 import './uretim-emirleri.css';

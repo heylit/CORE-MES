@@ -8,7 +8,6 @@ import { KDUR, KSON, KTUR } from '../icerik/kalibrasyon.ts';
 import {
   cihazCevrimi, cihazDurumu, cihazListesi, cihazVadesi, kalibrasyonIstatistigi, type CihazDurumu,
 } from '../kurallar/kalibrasyon.ts';
-import { profilAdi } from '../kurallar/profil.ts';
 import { aylar, bugunTarihi, gunEkle, isoTarih, pazartesi, tarihMetni } from '../tarih.ts';
 import type { Cihaz } from '../tipler.ts';
 import { OLCU_ALETI_YOLU } from '../veri.ts';

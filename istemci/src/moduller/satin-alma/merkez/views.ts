@@ -1,5 +1,5 @@
 import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
-import type { Award, Currency, ExcessLine, Priority, PurchaseRequest, Quality, RequestStatus, Weights } from "./tipler.ts";
+import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, RequestStatus, Weights } from "./tipler.ts";
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
@@ -10,13 +10,13 @@ import {
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fmtDate, fmtTs, isNum, money, MONTHS, nf0, nf2, nfx, norm, numIn,
-  nf1, pad, parseNum, pct, short, sum, todayStr, type FormEl,
+  pad, parseNum, pct, short, sum, todayStr, type FormEl,
 } from "./util.ts";
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
-import { getRole, jobCount, pendingApprovalCount, ROLES, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester, type Role } from "./roles.ts";
+import { getRole, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 export function render(): void {
   renderNav();
@@ -686,7 +686,6 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const a: Partial<Award> = r.award || {}, top = ev.ranking[0]!;
   const sel = a.quoteId || top.q.id;
   const canSplit = !!ev.split;
-  const mode = a.mode === "split" && canSplit ? "split" : "single";
   const tt = r.award ? awardTotals(r) : null;
   const ap = tt ? requiredApprover(tt.totalTRY) : null;
   const approvals = a.approvals || [];
@@ -823,18 +822,6 @@ function teslimBilgisiHTML(a: { deliveredDate?: string; quality?: Quality; expec
   return `<div class="tw"><table class="rt"><thead><tr><th>Tedarikçi</th><th>Beklenen</th><th>Teslim</th><th>Kalite</th></tr></thead><tbody>${govde}</tbody></table></div>`;
 }
 
-function deliveriesFormHTML(orders: OrderInfo[]): string {
-  const t = todayStr();
-  return `<div class="tw"><table class="itbl rt" id="deliveries-form"><thead><tr><th>Tedarikçi</th><th>Beklenen</th><th>Teslim tarihi</th><th>Kalite</th><th>Durum</th></tr></thead><tbody>
-  ${orders.map(o => { const due = orderDue(o); const late = o.deliveredDate && due ? dayDiff(due, o.deliveredDate) : due && !o.deliveredDate ? dayDiff(due, t) : null;
-    const st = o.deliveredDate ? ((late ?? 0) > 0 ? `<span class="flag warn">${late} gün geç geldi</span>` : '<span class="flag good">zamanında</span>') : ((late ?? 0) > 0 ? `<span class="flag bad">${late} gün gecikti</span>` : '<span class="flag mute">bekleniyor</span>');
-    return `<tr data-order="${o.qid}"><td class="lead"><b>${esc(supName(o.q))}</b><span class="sub">${esc(siparisEtiketi(o) || "sipariş no yok")}, ${o.items.map(it => esc(it.name)).join(", ")}</span></td>
-    <td class="num">${fmtDate(due)}</td>
-    <td><input type="date" data-of="deliveredDate" value="${esc(o.deliveredDate)}"></td>
-    <td><select data-of="quality"><option value="">–</option>${Object.entries(QUALITY).map(([k, l]) => `<option value="${k}" ${o.quality === k ? "selected" : ""}>${l}</option>`).join("")}</select></td>
-    <td>${st}</td></tr>`; }).join("")}
-  </tbody></table></div>`;
-}
 /* kalem → tedarikçi ataması; toplam canlı hesaplanır (updateSplitSum) */
 function splitEditorHTML(r: PurchaseRequest, ev: Evaluation, assign: Record<string, string>, locked: boolean): string {
   const opt = ev.split!.plan.assign;

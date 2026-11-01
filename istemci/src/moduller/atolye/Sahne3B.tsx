@@ -9,7 +9,7 @@ import { zeminPlaniKur } from './zemin-plani.ts';
 import { SahneMotoru, webglVarMi } from './sahne/motor.ts';
 import type { BolumYerlesimi, Gorunum, KameraYeri } from './sahne/motor.ts';
 import { KucukHarita } from './KucukHarita.tsx';
-import { gozOzetleri, hucreAnahtari, sayi } from './kurallar.ts';
+import { gozOzetleri, hucreAnahtari } from './kurallar.ts';
 import { malzemeModelDosyasi, merkezModelDosyasi, modelDosyasi } from './veri.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from './kurallar.ts';
 import { rafOzetleri } from './DepoGorunumu.tsx';

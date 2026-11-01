@@ -1,14 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { IsMerkeziGovdesi, SurumluIsMerkezi, IsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { CokSatir, DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Tablo } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import type { IsMerkeziGovdesi, SurumluIsMerkezi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import { CokSatir, Girdi, IsaretKutusu, OnayPenceresi } from '../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
-import { anahtarlar } from './anahtarlar.ts';
-import { csvIndir } from './csv.ts';
-import { durumSutunu } from './durumSutunu.tsx';
 import { KayitPenceresi } from './KayitPenceresi.tsx';
-import { ListeAraclari, aramayaUyar } from './ListeAraclari.tsx';
 import { useKayitIslemleri } from './kayitIslemleri.ts';
 
 export function IsMerkeziFormu({ kayit, kapat }: { kayit: SurumluIsMerkezi | null; kapat: () => void }) {

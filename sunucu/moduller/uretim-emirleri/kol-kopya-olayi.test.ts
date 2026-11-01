@@ -29,7 +29,6 @@ describe('uretim-emirleri iş emri kopyalandı olayı (1203 b; gerçek PostgreSQ
   let tipId = 0;
   let urunNo = 0;
   let rev = 0;
-  let kaliteIst = 0;
   let sayac = 0;
   const cerezler = new Map<string, string>();
   const kullanicilar = new Map<string, Kullanici>();
@@ -128,7 +127,7 @@ describe('uretim-emirleri iş emri kopyalandı olayı (1203 b; gerçek PostgreSQ
     rev = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
       [urunNo, yoneticiId]))!.id;
-    kaliteIst = (await istasyon('kalite')).ist;
+    await istasyon('kalite');
   });
   after(async () => { await ortam?.kaldir(); });
 

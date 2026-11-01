@@ -69,8 +69,6 @@ describe('Kalite Merkezi açık NCR\'li parti sevki (gerçek PostgreSQL)', () =>
   const kalite = async (emirId: number) => (await o().vt.sorgu<{ q: string; m: string }>(
     `SELECT b.kalite_durumu AS q, sum(b.miktar)::text AS m FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id
      WHERE p.uretim_emri_id = $1 AND b.miktar > 0 GROUP BY 1 ORDER BY 1`, [emirId])).map((r) => [r.q, r.m]);
-  const defter = async (ncr: string) => (await o().vt.tek<{ n: number }>(
-    'SELECT count(*)::int AS n FROM kalite_merkezi_karantina WHERE ncr_kimlik = $1', [ncr]))!.n;
   const ncr = (kimlik: string, govde: Record<string, unknown>, surum: number | null = null) =>
     o().vt.tx((db) => servis.yaz(db, yonetici, 'ncr', kimlik, { no: kimlik, durum: 'Açık', ...govde }, surum));
 

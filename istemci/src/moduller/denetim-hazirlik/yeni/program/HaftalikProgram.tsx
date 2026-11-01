@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Dugme, Girdi, Kart } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi } from '../gorunumler.ts';
-import { guvenliAd, htmlKacis, icsKatla, indir, yazdir } from '../disa-aktar.ts';
+import { guvenliAd, icsKatla, indir } from '../disa-aktar.ts';
 import { PROGRAMLAR } from '../icerik/programlar.ts';
 import { denetimTarihiAyarla, kalanGun, onerilenAsama } from '../kurallar/denetim-takvimi.ts';
 import { WKT, haftalariKur, type Hafta, type HaftaMaddesi } from '../kurallar/hafta.ts';

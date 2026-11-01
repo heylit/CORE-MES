@@ -19,7 +19,6 @@ import { uclar } from './uclar.ts';
 const PAROLA = 'dogru-parola-1';
 const TEKRARLI = /\/(ekle|dagit|ciro|esitle|odendi|toplu-ice-aktar)$/;
 interface Cevap<T = unknown> { durum: number; govde: T }
-const kod = (c: Cevap): unknown => (c.govde as { kod?: unknown } | undefined)?.kod;
 const alan = (c: Cevap): unknown => (c.govde as { alan?: unknown } | undefined)?.alan;
 const TARIH = '2026-10-01';
 

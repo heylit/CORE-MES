@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { KodCozCevabi, OkutCozCevabi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
+import { Dugme, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { VARSAYILAN_TAZELIK_MS } from '../../ortak/veri/sorgu-istemcisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.ts';
-import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
+import { useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
 import { KartRotasi } from './KartRotasi.tsx';
 import { RefakatAcPenceresi, RefakatKartPenceresi, refakatLotSatiri, refakatMalzemeSatiri } from './RefakatKarti.tsx';
 import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';

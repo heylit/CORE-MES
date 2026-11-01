@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { GelecekSepetCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, IstekMalzemeleriCevabi, MalzemeIstegi, Teslim, TeslimKutusuCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GelecekSepetCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, IstekMalzemeleriCevabi, MalzemeIstegi, Teslim, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
 import { MALZEME_TESLIM_AC } from './disari.ts';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
-import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/recete-rota.ts';
+import { ANAHTAR_BICIMI, durumEmirlerSemasi } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   degerBicimeUyarMi, dugumleriCevir, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
   rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
@@ -211,6 +211,21 @@ describe('recete-rota çok katmanlı emrin düğümleri (saf, 1476-D)', () => {
         adimlar: [{ opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' }, { opNo: 1020, kaynakOpNo: 20, durum: 'bekliyor' }] },
     ]);
     assert.deepEqual(emirleriCevir([katmanliEmir()]).orders[0]!.dugumler?.map((d) => d.dugum), ['0.1.1', '0.1']);
+  });
+
+  test('1559 a: emirde fasona alınan bitmemiş düğüm adımı firmasını ve termin gününü taşır; biten ve içerideki adım taşımaz', () => {
+    const e = katmanliEmir();
+    const fasonlu = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 3 ? { ...i, kaynak: { tur: 'fason', id: 9 }, terminGun: 4 }
+      : i.sira === 1 ? { ...i, kaynak: { tur: 'fason', id: 9 }, terminGun: 2 } : i.sira === 2 ? { ...i, kaynak: { tur: 'makine', id: 3 } } : i)) };
+    const d = dugumleriCevir(fasonlu)!;
+    assert.deepEqual(d.find((x) => x.dugum === '0.1')!.adimlar, [
+      { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' }, { opNo: 1020, kaynakOpNo: 20, durum: 'bekliyor', fasonId: '9', terminGun: 4 },
+    ]);
+    assert.deepEqual(d.find((x) => x.dugum === '0.1.1')!.adimlar, [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }], 'biten fason adım plana girmez');
+    const terminsiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 2 ? { ...i, kaynak: { tur: 'fason', id: 9 } } : i)) };
+    assert.deepEqual(dugumleriCevir(terminsiz)!.find((x) => x.dugum === '0.1')!.adimlar[0], { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor', fasonId: '9', terminGun: null });
+    assert.deepEqual(Object.keys(emirleriCevir([fasonlu]).opYer ?? {}), ['7|root|2'], 'düğüm adımı kök anahtarına yazılmaz');
+    assert.doesNotThrow(() => durumEmirlerSemasi.parse(emirleriCevir([fasonlu])));
   });
 
   test('1476-D reddedilen: tüketen adım bulunamazsa ustOpNo, okunamayan çarpanda adet null; tek katmanlı ve rotasız emirde alan yok', () => {

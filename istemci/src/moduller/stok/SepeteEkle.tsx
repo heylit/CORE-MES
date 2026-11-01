@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { BakiyeSatiri, SepetCevabi, SepetEkleGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, Pencere } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
 import { miktarGirdisi, miktarMetni } from './gorunum.ts';
 import { korumaliPost, useStokKomutu } from './ortak.tsx';
 

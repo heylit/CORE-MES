@@ -1,19 +1,16 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type {
-  BaglantiTuru, IstasyonlarCevabi, MakineDurumlariCevabi, SurumluMakine, MakineGovdesi, MakinelerCevabi,
+  BaglantiTuru, IstasyonlarCevabi, SurumluMakine, MakineGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Secim, Tablo } from '../../ortak/arayuz/index.ts';
+import { Girdi, IsaretKutusu, OnayPenceresi, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { csvIndir } from './csv.ts';
-import { BAGLANTI_ADLARI, BAGLANTI_SECENEKLERI, MAKINE_DURUM_ADLARI } from './etiketler.ts';
-import { durumSutunu } from './durumSutunu.tsx';
+import { BAGLANTI_SECENEKLERI } from './etiketler.ts';
 import { KayitPenceresi } from './KayitPenceresi.tsx';
 import { KisiPaneli } from './KisiPaneli.tsx';
-import { ListeAraclari, aramayaUyar } from './ListeAraclari.tsx';
-import { MakineDurumRozeti, MakineDurumuPaneli } from './MakineDurumuPaneli.tsx';
+import { MakineDurumuPaneli } from './MakineDurumuPaneli.tsx';
 import { useKayitIslemleri } from './kayitIslemleri.ts';
 
 export function MakineFormu({ kayit, kapat }: { kayit: SurumluMakine | null; kapat: () => void }) {

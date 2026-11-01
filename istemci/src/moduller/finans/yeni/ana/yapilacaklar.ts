@@ -1,5 +1,5 @@
 import type { CekDurumu } from '../akislar.ts';
-import { addDays, diffDays, fmtD, fmtDY, gross, pad, sum, type DuzenliOdeme, type FinansMotoru, type Islem } from '../motor.ts';
+import { addDays, diffDays, fmtD, fmtDY, gross, pad, sum, type FinansMotoru, type Islem } from '../motor.ts';
 
 // Ana sayfanın "Yapılacaklar" kutusu (prototip inbox): geciken ve yaklaşan tahsilat ve ödemeler firma başına, takipteki
 // çekler, bu haftanın düzenli ödemeleri ve 30 gün içindeki vergi günleri. Grup 0 gecikmiş, 1 bu hafta, 2 otuz gün içinde.
