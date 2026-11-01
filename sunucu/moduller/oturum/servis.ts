@@ -22,15 +22,18 @@ import {
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   beklemeIletisi, kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
+  NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu,
 } from './kurallar.ts';
+import type { NabizDurumu } from './kurallar.ts';
 import {
   cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
   cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz, defterKisisiniYaz,
+  cihazNabizlari, eskiNabizlariSil, nabizYaz,
 } from './sorgular.ts';
-import type { CihazProfiliSatiri, OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
+import type { CihazNabziSatiri, CihazProfiliSatiri, NabizGirdisi, OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
 
 const HATALI_GIRIS = 'Kullanıcı adı, PIN ya da parola hatalı.';
 
@@ -153,6 +156,24 @@ export async function girisDenemesiniDenetle(db: Db, ad: string, ip: string, sim
 // güncelleme girişin kilit sırasını bozar (kişi satırından önce oturum tablosunu kilitlerdi).
 export async function eskiOturumCihaziniTemizle(db: Db): Promise<void> {
   await eskiOturumCihaziniBosalt(db, CIHAZ_SAKLAMA_GUN, { bostaSn: BOSTA_SN, azamiSn: AZAMI_SN }, null);
+}
+
+// Nabız oturum çerezinden bulunur; ortak cihaz çerezi varsa nabız o cihaza da bağlanır. Sık gelen nabız sessizce düşer (false).
+export async function nabizKaydet(db: Db, anahtar: string, cihazBelirteci: string | null, girdi: NabizGirdisi): Promise<boolean> {
+  return nabizYaz(
+    db, anahtarOzeti(anahtar), cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null,
+    { ...girdi, sonEsitlemeSn: esitlemeSuresi(girdi.sonEsitlemeSn) }, NABIZ_EN_SIK_SN,
+  );
+}
+
+// Panel bütün açık oturumlara bakar: istasyonun kısa boşta süresi burada uzun süreyle örtülür, kapanan oturum zaten düşer.
+export async function cihazNabizDurumlari(db: Db): Promise<(CihazNabziSatiri & { durum: NabizDurumu })[]> {
+  const satirlar = await cihazNabizlari(db, { bostaSn: BOSTA_SN, azamiSn: AZAMI_SN });
+  return satirlar.map((s) => ({ ...s, durum: nabizDurumu(s.sonNabizdanBeriSn, s.kuyruk) }));
+}
+
+export async function eskiNabizlariTemizle(db: Db, simdi: Simdi = null): Promise<void> {
+  await eskiNabizlariSil(db, NABIZ_SAKLAMA_GUN, simdi);
 }
 
 // Ada bütün cihazlardan gelen seri eşiğe varınca ad kilitlenir. Yöneticiye bildirim yolu yok (UYUM-BORCU): kilit tabloda

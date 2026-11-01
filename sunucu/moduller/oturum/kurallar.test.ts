@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BEKLEME_AZAMI_SN, TARAYICI_AZAMI, beklemeSn, denemeKilitAnahtari, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk, tarayiciMetni } from './kurallar.ts';
+import {
+  BEKLEME_AZAMI_SN, KUYRUK_BIRIKME_ESIGI, NABIZ_ESITLEME_AZAMI_SN, SESSIZ_ESIK_SN, TARAYICI_AZAMI, beklemeSn, denemeKilitAnahtari, esitlemeSuresi,
+  hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk, nabizDurumu, tarayiciMetni,
+} from './kurallar.ts';
 
 test('bekleme her hatalı denemede ikiye katlanır: 1, 2, 4, 8... sn; üst sınır 60 sn', () => {
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(beklemeSn), [0, 1, 2, 4, 8, 16, 32]);
@@ -53,4 +56,24 @@ test('tarayıcı metni (386 a): başlık yoksa ya da boşsa bilinmiyor (null) sa
   assert.equal(tarayiciMetni(null), null);
   assert.equal(tarayiciMetni(''), null);
   assert.equal(tarayiciMetni('   '), null);
+});
+
+test('cihaz nabzı (1621 a): üç nabız (15 dk) kaçıran cihaz sessizdir; sessizlik kuyruktan önce gelir', () => {
+  assert.equal(SESSIZ_ESIK_SN, 15 * 60);
+  assert.equal(nabizDurumu(SESSIZ_ESIK_SN - 1, 0), 'iyi');
+  assert.equal(nabizDurumu(SESSIZ_ESIK_SN, 0), 'sessiz');
+  assert.equal(nabizDurumu(SESSIZ_ESIK_SN, KUYRUK_BIRIKME_ESIGI + 5), 'sessiz');
+});
+
+test('cihaz nabzı: kuyruk eşiğe varınca birikmiş sayılır; kuyruğu bilinmeyen cihaz (null) iyi sayılır, sıfır uydurulmaz', () => {
+  assert.equal(nabizDurumu(0, KUYRUK_BIRIKME_ESIGI - 1), 'iyi');
+  assert.equal(nabizDurumu(0, KUYRUK_BIRIKME_ESIGI), 'kuyruk');
+  assert.equal(nabizDurumu(0, null), 'iyi');
+});
+
+test('cihaz nabzı: saklama süresinden (30 gün) eski eşitleme bilinmez sayılır', () => {
+  assert.equal(esitlemeSuresi(null), null);
+  assert.equal(esitlemeSuresi(0), 0);
+  assert.equal(esitlemeSuresi(NABIZ_ESITLEME_AZAMI_SN), NABIZ_ESITLEME_AZAMI_SN);
+  assert.equal(esitlemeSuresi(NABIZ_ESITLEME_AZAMI_SN + 1), null);
 });
