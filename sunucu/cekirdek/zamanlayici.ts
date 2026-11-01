@@ -182,6 +182,14 @@ export function hataOzeti(hata: unknown): string {
   return hata instanceof Error ? `Beklenmeyen hata (${hata.name})` : 'Beklenmeyen hata';
 }
 
+// Zamanlanmış işler uygulamanın havuzunu paylaşmaz (1750): yük altında isteklerin sırası dolunca işler de MESGUL alıyordu.
+// Boyut iş sayısı + 1: her işin aynı anda en çok bir turu koşar ve txDisi turu kilit için bir oturum bağlantısını tur boyunca
+// tutup sorgularını ikinci bir bağlantıdan yapar. Bütün işler aynı anda oturum tutsa da en az bir bağlantı boş kalır; sorgular
+// sırayla ondan geçer ve hiçbir tur ötekini beklerken kilitlenmez. İş sayısı kadar havuzda bu boş bağlantı yoktur.
+export function isHavuzuBoyutu(isler: readonly IsTanimi[]): number {
+  return isler.length + 1;
+}
+
 let etkin: Zamanlayici | null = null;
 
 // Sağlık ayrıntısı için: süreçte başlatılmış zamanlayıcı yoksa (test, açılış) liste boştur.
