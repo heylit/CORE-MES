@@ -2,7 +2,8 @@
 
 ## Bağlamada kapanacak
 1. Rol x işlem: `sayfa.geometri`, `geometri.oku`, `geometri.hesapla` yalnız yöneticide (1445 a); roller 1390 rol menüsüyle verilir.
-2. Net ağırlık (1446 a): hacim x yoğunluk yalnız ekranda öneri; yoğunluk okuması ayrı küçük yamadır (malzemeler/disari.ts okuma fonksiyonu).
+2. Ağırlık (1446 a, 1480): net ve ham ağırlık yalnız ekranda öneri, kaydedilmez. Yerleşik kalite yoğunluğu yalnız istemcide (Malzemeler tablosu); sunucu ağırlık hesaplamaz.
+   Ayarda yerleşik kaliteyle aynı kodla eklenen kalite istemcide yok sayılır, sunucu ise onun yoğunluğunu döner (ayar ekranı bunu zaten engellemiyorsa uç durum).
 3. Stok önerisi kalite süzgeci kullanıcı seçimidir: parçanın reçetedeki hammaddesi okunmaz (Reçete ve Rota bağı Aşama 2).
 4. Yayına girişte anında tetik yok: tarama 30 sn'lik turdadır (cizimler geometri'yi çağırmaz, ADR 0006).
 5. Sağlık ekranı: hesap sürecinin durumu (açık mı, kaç kez açıldı) yalnız `surec.ts` `durum()` ile okunur; Güvenlik Merkezi kartı yok.

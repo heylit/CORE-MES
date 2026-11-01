@@ -363,12 +363,18 @@ export function kullanilanKaliteSatirlari(db: Db): Promise<KullanilanKaliteSatir
 
 // 1469 a: ham önerisinin stok listesi aktif hammadde kartlarıdır; ölçüler kartın `dims` nesnesinden olduğu gibi döner (sayıya çeviren okuyan).
 // Formu istenenlerden olmayan ya da ölçü nesnesi olmayan kart dönmez. kalite null bütün kaliteler.
-export interface HammaddeStokSatiri { no: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Record<string, unknown> }
+// 1480: aile ve kalite kodu (özel kalitede `__ozel`) ile özel kalitenin kartta yazılı yoğunluğu (`custom.p.ro`) da döner.
+export interface HammaddeStokSatiri {
+  no: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Record<string, unknown>;
+  aile: string | null; kaliteKodu: string | null; ozelYogunluk: number | null;
+}
 export function hammaddeStokSatirlari(db: Db, formlar: readonly string[], kalite: string | null): Promise<HammaddeStokSatiri[]> {
   return db.sorgu<HammaddeStokSatiri>(
-    `SELECT no, kod, ad, kalite, form, olcu FROM (
+    `SELECT no, kod, ad, kalite, form, olcu, aile, "kaliteKodu", "ozelYogunluk" FROM (
        SELECT k.no, k.stok_kodu AS kod, ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} AS ad, ${KATALOG_KALITE} AS kalite,
-              ${KATALOG_METIN('form')} AS form, k.kayit -> 'dims' AS olcu
+              ${KATALOG_METIN('form')} AS form, k.kayit -> 'dims' AS olcu, ${KATALOG_METIN('fam')} AS aile, ${KATALOG_METIN('grade')} AS "kaliteKodu",
+              CASE WHEN jsonb_typeof(k.kayit #> '{custom,p,ro}') = 'number' AND (k.kayit #>> '{custom,p,ro}')::float8 > 0
+                   THEN (k.kayit #>> '{custom,p,ro}')::float8 END AS "ozelYogunluk"
          FROM malzeme_katalog_karti k
         WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde' AND jsonb_typeof(k.kayit -> 'dims') = 'object') x
       WHERE form = ANY($1::text[]) AND ($2::text IS NULL OR kalite = $2) ORDER BY no`, [formlar, kalite]);

@@ -145,9 +145,15 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     assert.ok(ham.kaliteler.includes('C45') && ham.kaliteler.includes('S235'));
     const c45 = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=C45`)));
     assert.deepEqual(c45.oneriler.map((x) => [x.kalite, x.form, x.olcu]), [['C45', 'cubuk', { d: 50, l: 3000 }]]);
+    // 1480: yerleşik kalitenin yoğunluğu sunucuda yok (ekran Malzemeler tablosundan bulur); özel kalitede kartta yazılı olan döner.
+    assert.deepEqual([c45.oneriler[0]!.aile, c45.oneriler[0]!.kaliteKodu, c45.oneriler[0]!.yogunluk], ['metal', 'C45', null]);
+    await o().vt.sorgu(`UPDATE malzeme_katalog_karti SET kayit = kayit || '{"grade":"__ozel","custom":{"ad":"Ozel","kod":"OZ1","p":{"ro":2.7}}}'::jsonb
+                         WHERE no = $1`, [c45.oneriler[0]!.malzemeNo]);
+    const ozel = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=OZ1`)));
+    assert.deepEqual(ozel.oneriler.map((x) => [x.kalite, x.kaliteKodu, x.yogunluk]), [['OZ1', '__ozel', 2.7]]);
     const yok = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=YOK`)));
     assert.deepEqual([yok.oneriler, yok.neden], [[], 'stok-listesi-yok']);
-    const genis = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=100&kalite=C45`)));
+    const genis = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=100&kalite=OZ1`)));
     assert.deepEqual([genis.oneriler, genis.neden], [[], 'sigan-yok']);
     // Pay verilmezse ayar; ayar boşsa 0 ve kaynak 'yok'.
     const paysiz = async () => geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}`)));
