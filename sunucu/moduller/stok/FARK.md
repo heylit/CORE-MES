@@ -545,3 +545,6 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 - Ayarlar'daki "Bütün raf gözü etiketleri" gözleri (en çok 200) tıklanınca okur ve Etiket Merkezi'ni açar; Etiket Merkezi en çok 200 kimlik kabul eder.
 - Refakat kartının kendi "Yazdır" tuşu ve tarayıcı basımı kalktı (1529 a): refakat kartı yalnız Etiket Merkezi'nden basılır. Bedeli: Etiket Merkezi'ni açamayan kullanıcı refakat kartı basamaz; Etiket Merkezi'nin refakat şablonu işlem tablosunu ve "Bitti" kutularını basmaz (etiket-merkezi UYUM-BORCU 3). R6'daki stokun kendi belgesi bununla geçersizdir.
 - Uçlar `GET /stok/mal-kabuller/:id/lot-etiketleri` ve `GET /stok/partiler/:id/etiket` istemcide artık çağrılmıyor; bu dalda sunucuya dokunulmadı (UYUM-BORCU 53).
+## Kalite durum etiketi okuması (kart 1525, 1286 a)
+- `disari.ts kaliteEtiketleri(db, bakiyeIdler)`: kalite durumu bakiye satırındadır; etiket satırın lot no'sunu, malzemesini (ad, kod, birim), konum kodunu, miktarını ve kalite durumunu verir. Lotsuz ve olmayan satır dönmez; istenen sıra korunur. Etiket Merkezi kalite durum etiketini bununla basar.
+- Uç, işlem, tablo ve göç yok; salt okuma. Karar tarihi, karar veren ve GKK/NCR no ilk turda verilmez (hareket geçmişinden okunması ayrı iş).

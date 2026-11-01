@@ -1853,3 +1853,11 @@ export const gonderimIstegiYaz = (db: Db, id: number, surum: number, kisiId: num
    WHERE f.id = $1 AND f.surum = $2 RETURNING f.id`, [id, surum, kisiId]);
 export const malzemeFisiVarMi = async (db: Db, id: number): Promise<boolean> =>
   (await db.tek('SELECT 1 AS var FROM stok_malzeme_fisi WHERE id = $1', [id])) !== null;
+
+// Kalite durum etiketi (kart 1525, 1286 a): kalite durumu bakiye satırındadır (lotun değil); etiket o satırın lotunu, miktarını ve
+// durumunu basar. Lotsuz ve boş satır etiket vermez.
+export interface KaliteEtiketiHam { bakiyeId: number; lotNo: string; malzemeId: number; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu }
+export const kaliteEtiketleri = (db: Db, bakiyeIdler: readonly number[]): Promise<KaliteEtiketiHam[]> => db.sorgu(
+  `SELECT b.id AS "bakiyeId", p.lot_no AS "lotNo", b.malzeme_id AS "malzemeId", k.kod AS "konumKod", b.miktar::text AS miktar, b.kalite_durumu AS "kaliteDurumu"
+     FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id JOIN stok_konum k ON k.id = b.konum_id
+    WHERE b.id = ANY($1::int[]) AND b.miktar > 0`, [bakiyeIdler]);
