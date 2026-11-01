@@ -3,7 +3,7 @@ import { CALISAN_ACILAMADI, calisanOkuyucu, type CalisanBenzeri } from '../../or
 
 // Sahte çalışan: gelen mesajları kaydeder; cevabı test verir.
 function sahteCalisan() {
-  const giden: { veri: any; aktar: unknown[] }[] = [];
+  const giden: { veri: unknown; aktar: unknown[] }[] = [];
   let kapandi = false;
   const c: CalisanBenzeri = {
     onmessage: null, onerror: null,

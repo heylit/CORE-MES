@@ -832,6 +832,7 @@ function kisiAlaniTuruHatasi(depo: ArkonDeposu, govde: unknown, kimlik: string):
       const sonuclar = govde['results'];
       return sonuclar === undefined || (kayitMi(sonuclar) && Object.values(sonuclar).every(kayitMi)) ? null : hata('results', 'Numune ölçümleri nesne olmalı.');
     }
+    case 'downs': case 'draws': case 'gauges': case 'logi': case 'maint':
     default: return null;
   }
 }
@@ -1307,6 +1308,7 @@ export function gunlukSatirlari(depo: ArkonDeposu, kimlik: string, onceki: unkno
       const ayar = AYAR_GUNLUGU.get(kimlik);
       return ayar === undefined ? [] : [{ ...ayar, target: '', detail: silme ? 'silindi' : null }];
     }
+    case 'gauges': case 'logi': case 'requests': case 'results':
     default: return [];
   }
 }
@@ -1511,6 +1513,7 @@ export function belgeKonumu(depo: ArkonDeposu, kimlik: string, govde: unknown): 
       if (govde['scope'] === 'wc') return konumKur({ merkez: [govde['target']] });
       if (govde['scope'] === 'st') return konumKur({ istasyon: [govde['target']] });
       return { ...KONUMSUZ, gecersiz: true };
+    case 'draws': case 'gauges': case 'kv':
     default: return KONUMSUZ;
   }
 }

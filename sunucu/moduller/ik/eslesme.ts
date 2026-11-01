@@ -64,6 +64,7 @@ export function yazimDegeri(a: Alan, v: unknown, yol: string): Deger {
       if (typeof n !== 'number' || !Number.isInteger(n)) throw new EslesmeHatasi(`${yol}: tam sayı bekleniyor.`, yol);
       return n;
     }
+    case 'hesap': case 'sayi': case 'tutar':
     default: {
       const n = typeof v === 'string' ? Number(v) : v;
       if (typeof n !== 'number' || !Number.isFinite(n)) throw new EslesmeHatasi(`${yol}: sayı bekleniyor.`, yol);
@@ -80,6 +81,7 @@ export function okumaDegeri(a: Alan, v: Deger | undefined): unknown {
     case 'tutar': case 'hesap': case 'sayi': case 'tamsayi': return Number(v);
     case 'ay': return String(v).slice(0, 7);
     case 'saat': return String(v).slice(0, 5);
+    case 'mantik': case 'metin': case 'tarih': case 'zaman':
     default: return v;
   }
 }

@@ -27,6 +27,7 @@ export function eylemYapisi(e: SorunEylemiKaydi, { c, komut, sipSec, veriAc = nu
     case 'sec-is': return { yap: () => sipSec(e.v), not: '' };
     case 'git': { const b = bolumOku(e.v); return { yap: veriAc && b ? () => veriAc(b) : null, not: YOK_NOTU }; }
     case 'suz-gec': return { yap: null, not: HAZIRLANIYOR };
+    case 'ekip': case 'hs-mesai': case 'one-al':
     default: return { yap: null, not: MOTOR_NOTU };
   }
 }

@@ -261,6 +261,7 @@ export function talepGorevi(durum: TalepDurumu): GorevAdimi | null {
     case 'ccb_bekliyor': return { adim: 'CCB kararı ver', islem: 'degisiklik-yonetimi.ccb-karar' };
     case 'musteri_onayi_bekliyor': return { adim: 'Müşteri onayını kaydet', islem: 'degisiklik-yonetimi.musteri-onayi' };
     case 'onaylandi': return { adim: 'ECO aç', islem: 'degisiklik-yonetimi.emir-ac' };
+    case 'emir_acildi': case 'reddedildi':
     default: return null;
   }
 }
@@ -273,6 +274,7 @@ export function emirGorevleri(e: { durum: EmirDurumu; bekleyenKarar: number; bek
     case 'yayina_hazir': return [{ adim: 'Geçerliliği belirle ve yayınla', islem: 'degisiklik-yonetimi.yayinla' }];
     case 'dogrulama': return [{ adim: 'ECO’yu kapat', islem: 'degisiklik-yonetimi.kapat' }];
     case 'kapandi': return [];
+    case 'karar': case 'uygulamada':
     default: break;
   }
   const adimlar: GorevAdimi[] = [];

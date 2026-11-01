@@ -29,6 +29,10 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
     case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
+    case 'bos': case 'gonderim': case 'guncelleme': case 'iptal': case 'kapatma': case 'karsilama': case 'liste':
+    case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
+    case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
+    case 'talep':
     default:
       return undefined;
   }

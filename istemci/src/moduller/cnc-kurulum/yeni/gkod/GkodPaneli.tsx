@@ -137,6 +137,7 @@ function takimDurumu(b: TakimBilgisi): { metin: string; ton: RozetTonu } {
     case 'ov': return { metin: 'Simülasyon için değiştirildi', ton: 'bilgi' };
     case 'empty': return { metin: 'Cep ' + b.T + ' boş — takım seçin', ton: 'uyari' };
     case 'nopocket': return { metin: 'Magazinde ' + b.T + '. cep yok', ton: 'uyari' };
+    case 'name':
     default: return { metin: 'İsimle çağrıldı — takım seçin', ton: 'uyari' };
   }
 }

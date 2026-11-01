@@ -98,6 +98,7 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
     case 'intv':
       if (!dolu(g['candId'])) return dogrulama('Görüşme bir adaya bağlı olmalı.', 'govde.candId');
       break;
+    case 'cand': case 'pay': case 'train':
     default:
       break;
   }
@@ -116,6 +117,7 @@ export function kayitIsMerkezi(tur: IkTuru, g: Govde, bul: (kimlik: string) => G
     case 'leave': case 'att': case 'perf': case 'pay': { const e = al(g['empId']); return e && sayiMi(e['isMerkeziId']) ? e['isMerkeziId'] : null; }
     case 'cand': { const j = al(g['jobId']); return j && sayiMi(j['isMerkeziId']) ? j['isMerkeziId'] : null; }
     case 'intv': { const c = al(g['candId']); return c ? kayitIsMerkezi('cand', c, bul) : null; }
+    case 'dept': case 'train':
     default: return null;
   }
 }

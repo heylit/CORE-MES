@@ -158,6 +158,7 @@ export function AlanGirdisi({ f, deger, degistir, hata, b }: {
     }
     case 'primler':
       return <PrimDuzenleyici f={f} deger={deger} degistir={degistir} b={b} />;
+    case 'metin': case undefined:
     default:
       return <Girdi {...ortak} value={metin} onChange={(o) => { degistir(o.target.value); }} />;
   }

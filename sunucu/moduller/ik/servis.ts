@@ -197,6 +197,7 @@ export async function veriGetir(db: Db, kullanici: Kullanici): Promise<IkVeriCev
         const katilan = Array.isArray(c.govde['katilimcilar']) ? (c.govde['katilimcilar'] as unknown[]).filter((x) => x === benim || d.ekip.has(String(x))) : [];
         return katilan.length ? { ...c, govde: { ...c.govde, katilimcilar: katilan } } : null;
       }
+      case 'cand': case 'intv': case 'job':
       default: return null;
     }
   };

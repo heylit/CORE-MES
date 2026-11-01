@@ -11,7 +11,7 @@ interface Depo {
   DB: { put(s: string, v: unknown, k?: string): Promise<void>; del(s: string, k: string): Promise<void> };
   Cache: { put(k: string, v: unknown): Promise<void> };
   Auth: { logout(): Promise<void>; login(id: string, pin: string): Promise<unknown> };
-  local: { all(s: string): Promise<any[]>; get(s: string, k: string): Promise<any>; put(s: string, v: unknown, k?: string): Promise<unknown> };
+  local: { all(s: string): Promise<{ op?: unknown }[]>; get(s: string, k: string): Promise<unknown>; put(s: string, v: unknown, k?: string): Promise<unknown> };
 }
 interface Temizlik { yerelVeriyiTemizle(ls: Storage, idb: unknown): Promise<void>; bekleyenKuyrukVar(idb: unknown): Promise<boolean> }
 

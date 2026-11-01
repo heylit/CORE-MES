@@ -80,6 +80,8 @@ function cevir(sorun: z.ZodIssueOptionalMessage): string {
       return `Değer ${String(sorun.multipleOf)} sayısının katı olmalı.`;
     case 'not_finite':
       return 'Sonlu bir sayı olmalı.';
+    case 'custom': case 'invalid_arguments': case 'invalid_intersection_types': case 'invalid_literal':
+    case 'invalid_return_type': case 'invalid_union':
     default:
       return 'Geçersiz değer.';
   }

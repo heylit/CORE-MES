@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Kart #731 (karar 726 a): yeni ekranın tembel kipi. Paket listesi dosyasız gelir, dosya açılınca iner; arka plan indirmesi ayrı uçtan
 // cihaza yazar; temizlik anılmayan dosyayı siler. Gerçek store.ts; IndexedDB ve fetch sahte (surum-kaybi.test.ts'deki gibi).
 const STORE_YOLU = '../../../../arkon/web/src/data/store.ts';
+// Sınanan paketlerin hepsi dosyalıdır; ilk dosyaya doğrudan bakılır.
+interface PaketKaydi { files: readonly [{ bytes: unknown }, ...{ bytes: unknown }[]]; [alan: string]: unknown }
 interface Depo {
   init(): Promise<unknown>; tembelKur(): void; coz<T>(x: T): Promise<T>; dosyalariIndir(o: readonly unknown[], d?: readonly unknown[]): void;
   dosyaDeposunuTemizle(): Promise<string[]>;
-  DB: { all(s: string): Promise<any[]>; get(s: string, k: string): Promise<any>; put(s: string, v: unknown): Promise<void> };
-  local: { all(s: string): Promise<unknown[]>; keys(s: string): Promise<unknown[]>; get(s: string, k: string): Promise<any>; put(s: string, v: unknown, k?: string): Promise<unknown> };
+  DB: { all(s: string): Promise<[PaketKaydi, ...PaketKaydi[]]>; get(s: string, k: string): Promise<PaketKaydi>; put(s: string, v: unknown): Promise<void> };
+  local: { all(s: string): Promise<unknown[]>; keys(s: string): Promise<unknown[]>; get(s: string, k: string): Promise<unknown>; put(s: string, v: unknown, k?: string): Promise<unknown> };
 }
 
 type Anahtar = number | string;

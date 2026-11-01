@@ -6,13 +6,19 @@ export interface CalisanBenzeri {
   postMessage(veri: unknown, aktar?: Transferable[]): void;
   terminate(): void;
 }
-export interface OcctOkuyucu { ReadStepFile(bytes: Uint8Array, ayar: unknown): Promise<any>; ReadIgesFile(bytes: Uint8Array, ayar: null): Promise<any> }
+// Okuyucunun sonucu: ortak/cizim/cekirdek.ts'teki OcctSonucu ile aynı biçim. O dosya Vite'a özgü glob kullandığı için bu dosyayı
+// da derleyen Arkon tip programına alınamaz; biçim burada yazılır, eşliği istemci tip denetimi (kitaplik.ts atamasında) sınar.
+export interface OcctSonucu {
+  success?: boolean;
+  meshes: { name?: string; attributes: { position: { array: ArrayLike<number> }; normal?: { array: ArrayLike<number> } }; index: { array: ArrayLike<number> } }[];
+}
+export interface OcctOkuyucu { ReadStepFile(bytes: Uint8Array, ayar: unknown): Promise<OcctSonucu>; ReadIgesFile(bytes: Uint8Array, ayar: null): Promise<OcctSonucu> }
 
 export const CALISAN_ACILAMADI = 'STEP okuyucu çalışanı açılamadı.';
 
 export function calisanOkuyucu(calisan: CalisanBenzeri, wasm: ArrayBuffer): Promise<OcctOkuyucu> {
   let sira = 0;
-  const bekleyen = new Map<number, { coz: (s: any) => void; reddet: (h: Error) => void }>();
+  const bekleyen = new Map<number, { coz: (s: unknown) => void; reddet: (h: Error) => void }>();
   calisan.onmessage = (e) => {
     const b = bekleyen.get(e.data && e.data.no);
     if (!b) return;
@@ -23,13 +29,14 @@ export function calisanOkuyucu(calisan: CalisanBenzeri, wasm: ArrayBuffer): Prom
     for (const b of bekleyen.values()) b.reddet(new Error(CALISAN_ACILAMADI));
     bekleyen.clear();
   };
-  const iste = (tur: string, veri: Record<string, unknown>, aktar: Transferable[] = []): Promise<any> => new Promise((coz, reddet) => {
+  // Çalışanın cevabı yapılandırılmış kopyadır, tip taşımaz: sonucun biçimine çalışan (step-calisan.js) kefildir.
+  const iste = <T>(tur: string, veri: Record<string, unknown>, aktar: Transferable[] = []): Promise<T> => new Promise<T>((coz, reddet) => {
     sira += 1;
-    bekleyen.set(sira, { coz, reddet });
+    bekleyen.set(sira, { coz: coz as (s: unknown) => void, reddet });
     calisan.postMessage(Object.assign({ no: sira, tur }, veri), aktar);
   });
-  return iste('kur', { wasm }, [wasm]).then(
-    () => ({ ReadStepFile: (bytes, ayar) => iste('step', { bytes, ayar }), ReadIgesFile: (bytes) => iste('iges', { bytes }) }),
+  return iste<unknown>('kur', { wasm }, [wasm]).then(
+    () => ({ ReadStepFile: (bytes, ayar) => iste<OcctSonucu>('step', { bytes, ayar }), ReadIgesFile: (bytes) => iste<OcctSonucu>('iges', { bytes }) }),
     (h) => { calisan.terminate(); throw h; },
   );
 }

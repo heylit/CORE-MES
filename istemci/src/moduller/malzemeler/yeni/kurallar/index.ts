@@ -10,8 +10,6 @@ import type * as C from './cekirdek/hepsi.ts';
 // işlev taslağı parametre olarak alır, genel duruma bakan her işlev son parametre olarak bağlamı alır. Çekirdek (cekirdek/) prototipin
 // kural kodudur, tiplidir; dönüş tipleri çekirdeğin işlevlerinden gelir. Girdi nesneleri değiştirilmez: taslak
 // her çağrıda kopyalanır, kartı değiştiren işlev (withRev, onayAta, kodlariSabitle) kopyayı döndürür.
-// Geçiş tipi: parçalar sarmalların dönüşünü önce Ham diye aldı; dönüşler artık çekirdeğin tipidir. Parçalar tipli dönüşe geçince kalkar.
-export type Ham = any;
 
 // Parçaların kullandığı çekirdek tipleri (sihirbaz, katalog, şablonlar yerel tip yazmasın diye).
 export type {
