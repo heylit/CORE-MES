@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
 import type { AraCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -17,7 +18,8 @@ const SAYFALAR = [
   ['Ayarlar', '/stok/ayarlar', 'etiket depocu'],
 ] as const;
 interface Sonuc { anahtar: string; baslik: string; alt: string; yol: string }
-const sade = (s: string): string => s.toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Sunucudaki arama_sade ile aynı eşleme (GH 45): "I" ve "ı" aynıdır, Türkçe harf düz harfe iner; anahtar sözcükler de sadeleşir.
+const sade = (s: string): string => aramaSade(s.trim());
 
 export function sonuclar(c: AraCevabi | undefined, q: string): Sonuc[] {
   const l: Sonuc[] = (c?.sonuclar ?? []).map((x): Sonuc => {
@@ -29,7 +31,7 @@ export function sonuclar(c: AraCevabi | undefined, q: string): Sonuc[] {
     }
   });
   const s = sade(q);
-  for (const [b, y, k] of SAYFALAR) if (s && (sade(b).includes(s) || k.includes(s))) l.push({ anahtar: y, baslik: b, alt: 'Sayfa', yol: y });
+  for (const [b, y, k] of SAYFALAR) if (s && (sade(b).includes(s) || sade(k).includes(s))) l.push({ anahtar: y, baslik: b, alt: 'Sayfa', yol: y });
   return l.slice(0, 12);
 }
 
