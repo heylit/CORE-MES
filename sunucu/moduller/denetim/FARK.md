@@ -82,3 +82,14 @@ Yok.
 
 ## Onaylı kararlar
 - 1384 b (teyitli): düğme defteri olan bütün kayıt ekranlarında; modüller düğmeyi kendi dallarında ekler.
+
+# FARK: denetim, aylık bölüm (kart 1765; dal 1765-denetim-aylik-bolum)
+
+## Değişen
+- Göç `20261108063200_denetim_aylik_bolum.sql`: `denetim_kaydi` ve `denetim_degisiklik` `zaman` sütununa göre aylık bölümlü
+  tabloya çevrilir (çekirdek `cekirdek_aylik_bolume_cevir`). Satır ve kimlik değişmez; birincil anahtar `(id, zaman)` olur;
+  dizinler, kişi bağı ve yalnız-ekleme tetikleri ana tabloda ve her bölümde durur. Uç, işlem, rol ve ekran değişmedi.
+- Test: `aylik-bolum.test.ts` (dolu tabloda göç; satırlar aynı, ayına göre bölüm, yalnız ekleme sürer).
+
+## Onaylı kararlar
+- 1765 b + teyit: denetim_kaydi, arkon_kayit, denetim_degisiklik aylık bölümlenir; tetikler her bölüme kurulur.
