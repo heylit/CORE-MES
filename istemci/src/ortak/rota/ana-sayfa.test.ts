@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ROL_GORUNUMLERI } from '#paylasilan/rol-gorunumleri.ts';
-import { anaSayfaKartlari, bolumlereAyir, gorunenKartlar, kartlariTopla, rolKartlari, type AnaSayfaKarti } from './ana-sayfa.ts';
+import type { IsKalemi } from '#paylasilan/sozlesme/pano.ts';
+import {
+  anaSayfaKaynaklari, anaSayfaKartlari, bolumlereAyir, gorunenKaynaklar, gorunenKartlar, islerSirala, kaynaklariTopla, kartlariTopla, rolKartlari,
+  type AnaSayfaKaynagi, type AnaSayfaKarti,
+} from './ana-sayfa.ts';
 
 const Ekran = () => null;
 const kart = (anahtar: string, ek: Partial<AnaSayfaKarti> = {}): AnaSayfaKarti => ({ anahtar, sira: 100, ekran: Ekran, ...ek });
@@ -83,8 +87,57 @@ describe('rolKartlari', () => {
   });
 
   it('rol listelerindeki her kart anahtarı modüllerin bildirdiği bir karttır: adı değişen kart sessizce kaybolmasın', () => {
-    const var_ = new Set(anaSayfaKartlari.map((k) => k.anahtar));
+    const var_ = new Set([...anaSayfaKartlari, ...anaSayfaKaynaklari].map((k) => k.anahtar));
     const eksik = Object.entries(ROL_GORUNUMLERI).flatMap(([rol, g]) => g.kartlar.filter((a) => !var_.has(a)).map((a) => `${rol}: ${a}`));
     expect(eksik).toEqual([]);
+  });
+});
+
+const kaynak = (anahtar: string, ek: Partial<AnaSayfaKaynagi> = {}): AnaSayfaKaynagi =>
+  ({ anahtar, tur: 'is', baslik: 'Plan', simge: 'list', sira: 100, kaynak: Ekran, ...ek });
+const kaynakDosyasi = (ad: string, ...kaynaklar: AnaSayfaKaynagi[]) => ({ [`../../moduller/${ad}/ana-sayfa.tsx`]: { anaSayfaKartlari: [], anaSayfaKaynaklari: kaynaklar } });
+
+describe('kaynaklariTopla', () => {
+  it('kaynak dizisi isteğe bağlıdır; verilenleri toplar', () => {
+    expect(kaynaklariTopla(dosya(kart('a-kart')))).toEqual([]);
+    expect(kaynaklariTopla({ ...kaynakDosyasi('a', kaynak('a-is')), ...kaynakDosyasi('b', kaynak('b-olcu', { tur: 'gidisat' })) }).map((k) => k.anahtar))
+      .toEqual(['a-is', 'b-olcu']);
+  });
+
+  it('reddedilen: kartla ya da başka kaynakla aynı anahtar, tanımsız tür, kayıtsız işlem, dizi olmayan liste', () => {
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('ortak')), [kart('ortak')])).toThrow(/ortak \(kart, .*moduller\/a/);
+    expect(() => kaynaklariTopla({ ...kaynakDosyasi('a', kaynak('x')), ...kaynakDosyasi('b', kaynak('x')) })).toThrow(/x .*moduller\/a.*moduller\/b/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { tur: 'grafik' as 'is' })))).toThrow(/türü tanımsız: grafik/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { islem: 'boyle.islem-yok' as never })))).toThrow(/kayıtlı değil/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('X')))).toThrow(/biçime uymuyor/);
+    expect(() => kaynaklariTopla({ '../../moduller/a/ana-sayfa.tsx': { anaSayfaKaynaklari: {} } })).toThrow(/dizi değil/);
+  });
+});
+
+describe('gorunenKaynaklar', () => {
+  it('işlemi olana gösterir, sıraya göre dizer; işlemi olmayana göstermez', () => {
+    const k = [kaynak('b', { sira: 20 }), kaynak('a', { sira: 10, islem: 'satin-alma.talep-ac' })];
+    expect(gorunenKaynaklar(k, ['satin-alma.talep-ac']).map((x) => x.anahtar)).toEqual(['a', 'b']);
+    expect(gorunenKaynaklar(k, []).map((x) => x.anahtar)).toEqual(['b']);
+  });
+});
+
+describe('islerSirala', () => {
+  const kalem = (anahtar: string, aciliyet: IsKalemi['aciliyet'], sonTarih: string | null = null): IsKalemi =>
+    ({ anahtar, baslik: anahtar, ayrinti: null, aciliyet, sonTarih, yol: '/x', eylem: 'Aç', neden: null });
+
+  it('aciliyet önce; eşitte erken son tarih, tarihsiz sonda; sonra kaynak sırası', () => {
+    const plan = kaynak('plan', { sira: 10 });
+    const stok = kaynak('stok', { sira: 5 });
+    const sirali = islerSirala([
+      { kalem: kalem('hafta', 'hafta'), kaynak: stok },
+      { kalem: kalem('bugun-tarihsiz', 'bugun'), kaynak: stok },
+      { kalem: kalem('bugun-gec', 'bugun', '2026-11-02T15:00:00Z'), kaynak: plan },
+      { kalem: kalem('bugun-erken', 'bugun', '2026-11-02T09:00:00Z'), kaynak: plan },
+      { kalem: kalem('gecikmis', 'gecikmis'), kaynak: plan },
+      { kalem: kalem('bekliyor-plan', 'bekliyor'), kaynak: plan },
+      { kalem: kalem('bekliyor-stok', 'bekliyor'), kaynak: stok },
+    ]);
+    expect(sirali.map((s) => s.kalem.anahtar)).toEqual(['gecikmis', 'bekliyor-stok', 'bekliyor-plan', 'bugun-erken', 'bugun-gec', 'bugun-tarihsiz', 'hafta']);
   });
 });
