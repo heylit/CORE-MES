@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { AYAR_TANIMLARI, varsayilanDeger } from '#paylasilan/ayarlar.ts';
 import type { AyarAnahtari, AyarDegeri } from '#paylasilan/ayarlar.ts';
 import {
-  YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, type YedekTuru,
+  YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, type DosyaDeposuDurumu,
+  type YedekAlani, type YedekTuru,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { zamanSemasi } from '#paylasilan/zaman.ts';
@@ -252,6 +253,31 @@ export function yedekYeriEksigi(bos: number | null, sonYedekBoyu: number | null)
     + 'Yer açın; eski yedekler silinmedi.';
 }
 const GUN_MS = 24 * 60 * 60 * 1000;
+
+// Gece yedeği günde bir alınır ve 14 günden eskisi silinir; yeni yedek yazılırken eskisi henüz silinmemiştir. Aynı anda en çok
+// 14 + 1 gece yedeği durur (elle yedekler bunun üstüne eklenir; sayıları önceden bilinmez).
+export const YEDEK_SAKLANAN_ADET = Math.max(YEDEK_SAKLAMA_GUN + 1, YEDEK_EN_AZ_KALAN);
+
+export interface YedekAlaniGirdisi {
+  sonBoyut: number | null;
+  mevcut: number;
+  bosYer: number | null;
+}
+
+// Son yedek yoksa ya da boş yer okunamadıysa yer uydurulmaz: gereken ya da karşılaştırma bilinmiyor kalır.
+export function yedekAlaniHesapla(g: YedekAlaniGirdisi): YedekAlani {
+  const gereken = g.sonBoyut === null ? null : g.sonBoyut * YEDEK_SAKLANAN_ADET;
+  const yetmiyor = gereken !== null && g.bosYer !== null && g.bosYer + g.mevcut < gereken;
+  return { sonBoyut: g.sonBoyut, adet: YEDEK_SAKLANAN_ADET, gereken, mevcut: g.mevcut, bosYer: g.bosYer, yetmiyor };
+}
+
+// Dosya deposu yüzde 80'i geçince uyarılır: depo sınırına (yükleme reddi) yaklaşırken yedek de o kadar büyümüş olur.
+export const DOSYA_DEPOSU_UYARI_ORANI = 0.8;
+
+export function dosyaDeposuHesapla(bayt: number, sinir: number): DosyaDeposuDurumu {
+  const tam = Math.max(0, Math.round(bayt));
+  return { bayt: tam, sinir, uyari: tam >= sinir * DOSYA_DEPOSU_UYARI_ORANI };
+}
 
 export interface YedekDosyasi {
   ad: string;

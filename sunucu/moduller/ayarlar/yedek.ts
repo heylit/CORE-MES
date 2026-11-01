@@ -11,10 +11,11 @@ import { bulunamadi, cakisma, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { isBekliyor, type IsBekliyor } from '#cekirdek/zamanlayici.ts';
 import type {
-  Yedek, YedekAlCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedekTuru, YedeklerCevabi,
+  Yedek, YedekAlCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedekListesi, YedekTuru, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
+import { DOSYA_SINIRI, depoDolulugu } from '../dosya/disari.ts';
 import {
-  YEDEK_EN_AZ_KALAN, YEDEK_SAATI, YEDEK_SAKLAMA_GUN, geceYedegiGerekliMi, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
+  YEDEK_EN_AZ_KALAN, YEDEK_SAATI, YEDEK_SAKLAMA_GUN, dosyaDeposuHesapla, geceYedegiGerekliMi, yedekAlaniHesapla, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
   yedekYeriEksigi, type YedekAnahtari, type YedekDosyasi,
 } from './kurallar.ts';
 import { nabiz } from './sorgular.ts';
@@ -342,7 +343,7 @@ export async function geceYedegiTuru(db: Db, gunluk: Gunluk, ortam: YedekOrtami,
   await yedekleriTemizle(dizin, ortam.pg.veritabani, simdi, gunluk);
 }
 
-export async function yedekleriListele(ortam: YedekOrtami): Promise<YedeklerCevabi> {
+export async function yedekleriListele(ortam: YedekOrtami): Promise<YedekListesi> {
   const dizin = await acikDizin(ortam.dizin);
   const durum: YedekDurumu = dizin === null ? 'dizin-yok' : ortam.anahtar.durum !== 'tamam' ? 'anahtar-yok' : 'acik';
   const yedekler: Yedek[] = [];
@@ -362,6 +363,18 @@ export async function yedekleriListele(ortam: YedekOrtami): Promise<YedeklerCeva
     dizin: ortam.dizin,
     kaynak: ortam.kaynak,
   };
+}
+
+// Yedek ekranı listeye yer tahminini ve dosya deposunun doluluğunu ekler (kart 1763). Yedek kapalıysa yer tahmini yoktur.
+export async function yedekEkrani(db: Db, ortam: YedekOrtami, bosYer: BosYerOkuyucu = bosYerOku): Promise<YedeklerCevabi> {
+  const liste = await yedekleriListele(ortam);
+  const dizin = await acikDizin(ortam.dizin);
+  const alan = dizin === null ? null : yedekAlaniHesapla({
+    sonBoyut: liste.yedekler[0]?.boyut ?? null,
+    mevcut: liste.yedekler.reduce((t, y) => t + y.boyut, 0),
+    bosYer: await bosYer(dizin),
+  });
+  return { ...liste, alan, dosyaDeposu: dosyaDeposuHesapla(await depoDolulugu(db), DOSYA_SINIRI.depoBayt) };
 }
 
 // Elle yedek cevabı beklemez: pg_dump dakikalar sürebilir, istek transaction'ı o kadar açık kalamaz. Sonuç listede görünür.
