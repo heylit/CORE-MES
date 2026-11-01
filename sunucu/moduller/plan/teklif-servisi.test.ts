@@ -20,7 +20,8 @@ const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu
   `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
   [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 
-// Teklif denemesi servisi: kayıtlar veritabanından, tezgâh ve takvim sahiplerinden okunur; saatler tesis anına çevrilir. Çözücünün
+// Teklif denemesi servisi: kayıtlar veritabanından, tezgâh ve takvim sahiplerinden okunur (1769 a: iş merkezinin haftası Vardiya'dan,
+// Reçete ve Rota kaydındaki kopyadan değil); saatler tesis anına çevrilir. Çözücünün
 // kendisi teklif-denemesi.test.ts'te sınanır. Veriler uydurmadır.
 // Ürün, rota ve emir burada kayıttan gelir: kullanıcı onların sahiplerini okuyamaz, okunamayan dilim kayıttaki gibi kalır. Okuyabilseydi
 // sahiplerin (boş) kayıtları kaydın üstüne konurdu (13.1); o yol plan-girdisi-emirler.test.ts'te.
@@ -30,6 +31,8 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let kullanici: Kullanici;
   let makineId = 0;
+  let merkezId = 0;
+  let vardiyaId = 0;
   const SIMDI = Date.parse('2026-10-19T05:00:00Z');
   const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
   const girdi = (ek: Partial<TeklifDenemeGirdisi> = {}): TeklifDenemeGirdisi => ({
@@ -46,6 +49,9 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     const mk = await s.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id, aktif) VALUES ('TK-M1', 'Deneme torna 1', $1, true) RETURNING id", [ist!.id]);
     const v = await s.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis, aktif) VALUES ('Gunduz', '08:00', '16:00', true) RETURNING id");
     makineId = mk!.id;
+    merkezId = im!.id;
+    vardiyaId = v!.id;
+    await s.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT $1, g, $2 FROM generate_series(1, 5) g', [merkezId, vardiyaId]);
     const V = String(v!.id);
     const tezgah = { id: String(makineId), ad: 'Deneme torna 1', grup: String(ist!.id), ucret: 750, verim: 1, vardiyalar: [V], opOran: 0 };
     const kayit = {
@@ -121,6 +127,21 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     const taslak = (id: string, gecerlilik: string) => ({ id, gecerlilik, kalemler: [{ malzemeNo: 50, adet: 2, termin: '2026-11-06', yerlesim: { 10: yer } }] });
     const r = await vt().tx((db) => teklifDene(db, kullanici, girdi({ istenenTermin: '2026-10-22', taslaklar: [taslak('ST-1', '2026-10-25'), taslak('ST-2', '2026-10-18')] }), SIMDI));
     assert.deepEqual(r?.taslakYerlesimi, [{ taslakId: 'ST-1', kalem: 1, adim: '10', ...yer }]);
+  });
+
+  // 1769 a: Reçete ve Rota kaydındaki kopya pazartesi-cuma der; Vardiya'da merkezin pazartesisi kaldırılınca teklif salıya kayar.
+  // Eski yolda (takvim eki yok) aynı teklif kopyaya göre pazartesi biterdi.
+  test('teklif iş merkezinin haftasını Vardiya\'dan okur (1769 a)', async () => {
+    const once = (await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI)))?.kalemler[0];
+    assert.equal(once?.bitis?.slice(0, 10), '2026-10-19');
+    await ortam!.sahip.sorgu('DELETE FROM vardiya_matrisi WHERE is_merkezi_id = $1 AND gun = 1', [merkezId]);
+    try {
+      const sonra = (await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI)))?.kalemler[0];
+      assert.equal(sonra?.tamam, true);
+      assert.equal(sonra?.bitis?.slice(0, 10), '2026-10-20');
+    } finally {
+      await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) VALUES ($1, 1, $2)', [merkezId, vardiyaId]);
+    }
   });
 
   test('çalışma kaydı yoksa null', async () => {

@@ -67,8 +67,8 @@ Elle alanların sahibi (`sahip` sütunu) öneridir; kesin sahip 1719'un sahiplik
    `kaynaklar-vt.test.ts` KV-05 ve KV-06 bütün çalışma (S) ve motor girdisi (st) üzerinde sınar. Kayıt yokken açılan boş çalışma
    (`yeniCalisma`) eski yoldadır.
    İkinci parça "1720 değerlendirme": planlama değerlendirmesi ve satış teklifi denemesi kendi iş parçacıklarında koşar. Bayrak açıkken
-   `birlestirme.ts` oraya dinamik import ile yüklenir ve aynı sarma kurulur. Teklif yolunun okumasında takvim eki olmadığı için tipli dilim
-   de takvimsiz verilir; sonuç eski yolla aynı kalır. Tipli dilimle iş parçacığı hata verirse istek eski yolla, kalan sürede yeniden koşar.
+   `birlestirme.ts` oraya dinamik import ile yüklenir ve aynı sarma kurulur. Teklif yolu da takvim ekiyle okunur (bulgu 4, 1769 a); tipli
+   dilim takvimlidir. Tipli dilimle iş parçacığı hata verirse istek eski yolla, kalan sürede yeniden koşar.
    Sınama `degerlendirme-esdegerlik.test.ts`'tedir.
 
 ## 5. Eşdeğerlik düzeni
@@ -98,6 +98,8 @@ dövizli sipariş bedeli, kg fiyatından tahmini malzeme fiyatı.
 2. [Kesin] Tezgâhın verimi ve vardiya listesi yalnız ilk kurulumda istasyondan gelir (`rrCevir` `if (!a)`); sonra istasyonun verimi
    değişse de plan eskisiyle kurulur. Yeni yolda bu "karma" kural olarak korunur; sunucu alanına çevirmek davranış değişikliğidir.
 3. [Kesin] Fasoncunun kapasitesi elle girilmemişse 999'dur (`tmiFasoncular`): "sınırsız" ile "bilinmiyor" ayrılmaz. 1719'da sorulur.
+4. [Kesin] Satış teklifi denemesinin okumasında takvim eki yoktu: çalışma günleri Vardiya'dan değil Reçete ve Rota kaydındaki kopyadan,
+   o da yoksa boş kurulurdu. 1769 a ile düzeltildi; teklif planlama sayfasıyla aynı takvimi görür (`teklif-servisi.test.ts`).
 
 ## 7. Doğrulanmadı
 

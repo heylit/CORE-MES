@@ -27,7 +27,7 @@ const KAYIT = {
   ],
 };
 const HAFTA = { 1: ['3'], 2: ['3'], 3: ['3'], 4: ['3'], 5: ['3'] };
-const kaynak = (takvimli: boolean) => ({
+const kaynak = () => ({
   durum: {
     wcs: [{ id: '1', code: 'IM-1', name: 'Talasli', week: null, aktif: true }],
     stations: [{ id: '10', code: 'TOR', name: 'Torna', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }],
@@ -35,14 +35,14 @@ const kaynak = (takvimli: boolean) => ({
     people: [],
     cal: { shifts: [{ id: '3', name: 'Gunduz', start: '08:00', end: '16:00', breaks: [] }], holidays: [] },
   },
-  ek: { takvim: takvimli ? { hafta: { 1: HAFTA }, kisiVardiyasi: {} } : null, makineNotu: null, kisiGorevi: null },
+  ek: { takvim: { hafta: { 1: HAFTA }, kisiVardiyasi: {} }, makineNotu: null, kisiGorevi: null },
 });
 // Aynı kaynaklar tipli okuma olarak (kaynaklar.ts'in biçimi).
-const okuma = (takvimli: boolean): KaynakDilimiOkumasi => ({
+const okuma = (): KaynakDilimiOkumasi => ({
   vardiyalar: [{ id: 3, bas: '08:00', bit: '16:00', molalar: [] }],
   tatiller: [],
   istasyon: { merkezler: [{ id: 1 }], istasyonlar: [{ id: 10, merkezId: 1, verimYuzde: 100, operatorOrani: 1 }], makineler: [{ id: 100, ad: 'Torna 1', istasyonId: 10 }] },
-  takvim: takvimli ? { hafta: [1, 2, 3, 4, 5].map((gun) => ({ merkezId: 1, gun: gun as 1, vardiyaId: 3 })), kisiVardiyasi: [] } : null,
+  takvim: { hafta: [1, 2, 3, 4, 5].map((gun) => ({ merkezId: 1, gun: gun as 1, vardiyaId: 3 })), kisiVardiyasi: [] },
   istasyonMaliyeti: null,
   kisiler: [],
   izinler: null,
@@ -54,29 +54,29 @@ const calismaKur = (): Record<string, unknown> => ({
 });
 function planli(): Record<string, unknown> {
   const c = calismaKur();
-  const g = planGirdisi({ calisma: c, kayit: KAYIT, kaynak: kaynak(true), bugun: '2026-10-19' });
+  const g = planGirdisi({ calisma: c, kayit: KAYIT, kaynak: kaynak(), bugun: '2026-10-19' });
   assert.ok(g);
   const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
   const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
   return { ...c, plan: { ops: p.ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }])), dataVer: 1 } };
 }
 const AN = Date.parse('2026-10-19T06:00:00Z');
-const TATILLI = { ...okuma(true), tatiller: ['2026-10-19', '2026-10-20'] };
-const BOZUK = { ...okuma(true), vardiyalar: null } as unknown as KaynakDilimiOkumasi;
+const TATILLI = { ...okuma(), tatiller: ['2026-10-19', '2026-10-20'] };
+const BOZUK = { ...okuma(), vardiyalar: null } as unknown as KaynakDilimiOkumasi;
 
 describe('değerlendirme ve teklif denemesi tipli kaynakla (1720 değerlendirme)', () => {
   const calisma = planli();
   const degerlendir = (kaynakDilimi: KaynakDilimiOkumasi | null) =>
-    degerlendirmeYap({ calisma, kayit: KAYIT, kaynak: kaynak(true), bugun: '2026-10-19', istek: { tur: 'plan-kur' }, kaynakDilimi }, AN);
+    degerlendirmeYap({ calisma, kayit: KAYIT, kaynak: kaynak(), bugun: '2026-10-19', istek: { tur: 'plan-kur' }, kaynakDilimi }, AN);
 
   test('DE-00: iki biçim aynı kaynak alanlarını kurar (senaryonun ön koşulu)', () => {
-    const istek = { calisma, kayit: KAYIT, kaynak: kaynak(true), bugun: '2026-10-19' };
-    assert.equal(farkMetni(girdiFarki(planGirdisi(istek)?.S, planGirdisi({ ...istek, kaynakDilimi: okuma(true) })?.S)), '');
+    const istek = { calisma, kayit: KAYIT, kaynak: kaynak(), bugun: '2026-10-19' };
+    assert.equal(farkMetni(girdiFarki(planGirdisi(istek)?.S, planGirdisi({ ...istek, kaynakDilimi: okuma() })?.S)), '');
   });
 
   test('DE-01: değerlendirme tipli dilimle eski yolla aynı; dilim iş parçacığında gerçekten uygulanır', async () => {
     const eski = await degerlendir(null);
-    assert.equal(farkMetni(girdiFarki(eski, await degerlendir(okuma(true)))), '');
+    assert.equal(farkMetni(girdiFarki(eski, await degerlendir(okuma()))), '');
     assert.notEqual(farkMetni(girdiFarki(eski, await degerlendir(TATILLI))), '', 'tipli dilimdeki tatil sonucu değiştirmeli');
   });
 
@@ -84,29 +84,26 @@ describe('değerlendirme ve teklif denemesi tipli kaynakla (1720 değerlendirme)
     assert.equal(farkMetni(girdiFarki(await degerlendir(null), await degerlendir(BOZUK))), '');
   });
 
-  // Teklif yolunun okumasında takvim eki yoktur; servis tipli dilimi de takvimsiz verir (planlama-servis.ts teklifDene).
-  const teklif = (kaynakDilimi: KaynakDilimiOkumasi | null, takvimli = false) => {
+  // 1769 a: teklif yolu da takvim ekiyle okunur (planlama-servis.ts teklifDene); tipli dilim takvimlidir.
+  const teklif = (kaynakDilimi: KaynakDilimiOkumasi | null) => {
     const D = { ...(calisma['D'] as object), calismaGunleri: { pzt: ['3'], sal: ['3'], car: ['3'], per: ['3'], cum: ['3'], cmt: [], paz: [] } };
     const istek: DenemeIstegi = {
-      calisma: { ...calisma, D, rrSavedAt: 9 }, kayit: KAYIT, kaynak: kaynak(takvimli), bugun: '2026-10-19', kaynakDilimi,
+      calisma: { ...calisma, D, rrSavedAt: 9 }, kayit: KAYIT, kaynak: kaynak(), bugun: '2026-10-19', kaynakDilimi,
       kalemler: [{ id: 'TK-1', urun: '50', adet: 4 }], termin: null, taslaklar: [], haric: null, tamponGun: 0, gecerlilik: '2026-11-30',
     };
     return teklifDenemesi(istek, 30_000, AN);
   };
-  const takvimsiz = (o: KaynakDilimiOkumasi): KaynakDilimiOkumasi => ({ ...o, takvim: null });
 
-  test('DE-03: teklif denemesi takvimsiz tipli dilimle eski yolla aynı; hata verirse eski yolla sürer', async () => {
+  test('DE-03: teklif denemesi tipli dilimle eski yolla aynı; hata verirse eski yolla sürer', async () => {
     const eski = await teklif(null);
     assert.ok(eski);
-    assert.equal(farkMetni(girdiFarki(eski, await teklif(takvimsiz(okuma(true))))), '');
-    assert.equal(farkMetni(girdiFarki(eski, await teklif(takvimsiz(BOZUK)))), '');
+    assert.equal(farkMetni(girdiFarki(eski, await teklif(okuma()))), '');
+    assert.equal(farkMetni(girdiFarki(eski, await teklif(BOZUK))), '');
   });
 
-  // Takvim eki yokken eski yol çalışma günlerini boşaltır, teklif hiçbir gün çalışmaz (TASARIM.md bulgu 2); dilimin iş parçacığında
-  // uygulandığı bu yüzden takvimli okumayla görülür.
   test('DE-04: teklif denemesinde tipli dilim iş parçacığında gerçekten uygulanır', async () => {
-    const eski = await teklif(null, true);
-    assert.equal(farkMetni(girdiFarki(eski, await teklif(okuma(true), true))), '');
-    assert.notEqual(farkMetni(girdiFarki(eski, await teklif(TATILLI, true))), '', 'tipli dilimdeki tatil sonucu değiştirmeli');
+    const eski = await teklif(null);
+    assert.equal(farkMetni(girdiFarki(eski, await teklif(okuma()))), '');
+    assert.notEqual(farkMetni(girdiFarki(eski, await teklif(TATILLI))), '', 'tipli dilimdeki tatil sonucu değiştirmeli');
   });
 });
