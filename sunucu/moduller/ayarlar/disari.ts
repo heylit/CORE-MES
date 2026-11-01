@@ -11,6 +11,8 @@ export {
 export { saklananPaketiDogrula } from './guncelleme.ts';
 // Güvenlik Merkezi koruma durumu güncelleme imzasının kurulu olup olmadığını buradan okur.
 export { guncellemeKanaliDurumu } from './guncelleme.ts';
+// Sağlık ayrıntısı çalışan yayının adını buradan okur (1565 c).
+export { calisanYayinOku } from './guncelleme.ts';
 // Güncelleyici kurmadan önce aynı yedeği alır (kart #1205 kodu).
 export { yedekAl, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz, yedekYeriniDenetle, type YedekOrtami } from './yedek.ts';
 // Güncelleyici yedek klasörünü veritabanısız buradan okur (kart #1205 eki).

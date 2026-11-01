@@ -129,6 +129,23 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Sürüm notundaki satır karta başlıktaki parantezle bağlanır (1565 b; kural araclar/paket.ts kartNoVarMi). Başlık olay
+      # yükünden değil API'den okunur: başlık düzeltilince işi yeniden koşturmak yeter, yeni gönderim gerekmez.
+      - name: Çekme isteği başlığında kart numarası
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPO: ${{ github.repository }}
+          ISTEK: ${{ github.event.pull_request.number }}
+        run: |
+          BASLIK="$(gh api "repos/$DEPO/pulls/$ISTEK" --jq .title)" node --input-type=module -e '
+            const { kartNoVarMi } = await import("./araclar/paket.ts");
+            const baslik = process.env.BASLIK ?? "";
+            if (!kartNoVarMi(baslik)) {
+              console.error(`Başlığın sonunda parantez içinde kart numarası yok: "${baslik}". Örnek: "Fix stock search (1501)".`);
+              process.exit(1);
+            }
+            console.log(`Başlık kart numarası taşıyor: ${baslik}`);'
       - run: npm run sinir
       # Modülsüz sınır denetimi göç damgasına bakmaz. Değişenler birleştirme commit'inin ilk ebeveyninden, son göç ana
       # dalın güncel ucundan alınır; eski damgalı göç birleşirse kurulu sistemde göç durur.
@@ -140,6 +157,10 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "+refs/heads/$TABAN:refs/remotes/origin/$TABAN"
           node araclar/goc-damgasi.ts HEAD^1 "origin/$TABAN"
+      # Kural 4 (belgeler/adr/README.md): çapalı dosya değişip ADR ve dizin değişmediyse uyarı yazar, kırmaz (1565 d).
+      - name: ADR çapası değişti mi (uyarı)
+        if: github.event_name == 'pull_request'
+        run: node araclar/adr-denetimi.ts --capa HEAD^1
       # Ana dala gönderimde de: istek eski tabanla yeşil kalmış olabilir. Birleştirme commit'inin ilk ebeveyni gönderimden
       # önceki ana daldır; hem değişimin hem son göçün tabanı odur.
       - name: Göç damgası ve var olan göç (ana dala gönderim)

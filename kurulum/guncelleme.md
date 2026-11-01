@@ -35,8 +35,18 @@ kaçmasıdır; atlanan paketlerin notları ayrıca okunur.
 - Paketin değişiklik listesi bir önceki yayın etiketinden başlar; paket o yayının adını taşır. Çalışan sürüm o yayın değilse
   paket ayrıntısı ve Uygula onayı "aradaki yayınların değişiklikleri listede yok" der. Tam liste depoda:
   `git log --first-parent --merges --oneline yayin/<çalışan>..yayin/<yeni>`.
-- Güncelleyici derlerken yayın adını verir: Kurum Ayarları ve giriş ekranındaki "Sürüm" yayın adını gösterir. Elle kurulan
-  (güncelleyicinin kurmadığı) ağaçta `package.json` sürümü kalır.
+- Güncelleyici derlerken yayın adını verir: Kurum Ayarları ve giriş ekranındaki "Sürüm" yayın adını gösterir; Sistem Sağlığı
+  ayrıntısı (`/saglik/ayrinti`) da yayın adını verir. Elle kurulan (güncelleyicinin kurmadığı) ağaçta `package.json` sürümü
+  (`0.0.0-gelistirme`) görünür: o kurulum bir yayın değildir.
+
+## Yayın etiketi ve sürüm notu (1565)
+
+- `npm run paket` paketi yazınca yayın etiketini (`yayin/<yıl.ay.gün-sıra>`) yerelde atar ve paketin yanına
+  `<paket>.notlar.md` sürüm notunu yazar: elle adım, yalnız bu yayınla gelen göçler ve önceki yayından beri bütün birleşmeler
+  (bildirimdeki liste kırpılır, not kırpılmaz). Başlığında kart numarası olmayan birleşmeler notun sonunda listelenir.
+- Kuruma verilen her paketin etiketi gönderilir (`git push origin yayin/<ad>`); etiketi Birleştirici gönderir. Etiket
+  gönderilmezse sonraki paketin değişiklik listesi bu yayını da taşır ve "atlanan yayın" uyarısı yanlış çalışır.
+- Paket kuruma verilmeyecekse yerel etiket silinir: `git tag -d yayin/<ad>`.
 
 ## Kurulum (sunucuda bir kez)
 

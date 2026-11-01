@@ -132,7 +132,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
   for (const vt of [asili, bozukVt()]) {
     const { bellek, ...ayrinti } = await ayrintiTopla(vt, girdi('a'.repeat(40), null, 30));
     assert.deepEqual(ayrinti, {
-      veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
+      veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), yayin: null, calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
       uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
@@ -308,7 +308,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
       'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
-      'vtBaglantiSayisi', 'yedekDiski',
+      'vtBaglantiSayisi', 'yayin', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
     assert.equal(Number.isInteger(govde.calismaSuresiSn) && govde.calismaSuresiSn >= 0, true);
@@ -498,6 +498,21 @@ describe('sağlık (gerçek PostgreSQL)', () => {
       await zamanlayici.durdur(100);
     }
     assert.deepEqual((await ayrintiIste(app, yoneticiCerezi)).json().isler, []);
+  });
+
+  test('yayın: kaynak verince onun değeri; okunamaz ya da asılı kalırsa null', async () => {
+    const al = async (yayinOku: () => Promise<string | null>) =>
+      (await ayrintiTopla(acik().vt, { ...girdi(null, null, 30), yayinOku })).yayin;
+    assert.equal(await al(async () => '2026.11.01-1'), '2026.11.01-1');
+    assert.equal(await al(async () => null), null);
+    assert.equal(await al(() => Promise.reject(new Error('okunamadı'))), null);
+    assert.equal(await al(() => new Promise(() => undefined)), null);
+    const hedef = kaynakliUygulama({ ayarOku, gitOku: async () => null, yayinOku: async () => '2026.11.01-2' });
+    try {
+      assert.equal((await ayrintiIste(hedef, yoneticiCerezi)).json().yayin, '2026.11.01-2');
+    } finally {
+      await hedef.close();
+    }
   });
 
   test('commit: git değer verince o; git yoksa ortam değeri; ikisi de yoksa null', async () => {

@@ -221,6 +221,13 @@ async function calisanOku(o: GuncellemeOrtami, dizin: string | null): Promise<Ca
   return dosya ?? { commit: o.commit, surum: null, tarih: null };
 }
 
+// Sağlık ayrıntısı çalışan yayının adını Güncelleme sekmesiyle aynı dosyadan okur (1565 c). Kanal kapalıysa ya da sürüm
+// güncelleyiciyle kurulmadıysa yayın yoktur: null.
+export async function calisanYayinOku(o: GuncellemeOrtami = ortamdanOku()): Promise<string | null> {
+  const k = await kanal(o);
+  return (await calisanOku(o, k.durum === 'acik' ? k.dizin : null)).surum;
+}
+
 // Güncelleyici açılınca süreç numarasını dosyaya yazar. Ortam değişkeniyle bildirilemez: .env varken sunucu, dosyada olmayan
 // TMIV2_ değişkenini çelişki sayıp açılmaz (araclar/ortam.ts). Süreç yaşamıyorsa dosya artıktır.
 async function guncelleyiciVarMi(dizin: string | null): Promise<boolean> {

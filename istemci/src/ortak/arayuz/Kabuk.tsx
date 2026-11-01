@@ -360,7 +360,7 @@ export function Kabuk({
             <span className="tc-kabuk-marka-metin">CORE</span>
           </NavLink>
           <p className="tc-kabuk-surum mono" title={`Sürüm ${DERLEME.surum}, derleme ${derlemeTarihi(DERLEME.tarih, true)}`}>
-            v{DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}
+            {/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}
           </p>
           <button
             type="button"

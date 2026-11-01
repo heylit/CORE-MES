@@ -3,7 +3,7 @@ import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni, paketKur, platformlariOku, sunucuKurulumu, surumAdi,
+  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumNotu,
 } from './paket.ts';
 
 const kayit = (konu: string, govde: string): string => `${konu}\x1f${govde}\n\x1e\n`;
@@ -30,6 +30,40 @@ test('değişiklik listesi bildirim sınırlarını aşmaz', () => {
   const liste = degisiklikleriAyikla(cok);
   assert.equal(liste.length, AZAMI_DEGISIKLIK);
   assert.equal(liste.at(-1), 've 6 değişiklik daha');
+});
+
+test('PR başlığı sonundaki parantezde kart numarası taşır', () => {
+  for (const b of ['Fix stock search (1501)', 'Rounds (1527, 1518, 1520)', 'Type fixes (1443 A-E)', 'Old views (1418, round 1)', 'Split jobs (#1219)']) {
+    assert.equal(kartNoVarMi(b), true, b);
+  }
+  for (const b of ['Fix stock search', 'Fix (12)', 'Fix (abc)', 'Card 1501 fix', 'Fix (1501) stock', 'Fix (123456)', '']) {
+    assert.equal(kartNoVarMi(b), false, b);
+  }
+});
+
+test('sürüm notu bütün birleşmeleri, yeni göçleri ve elle adımı taşır; kartsız başlığı söyler', () => {
+  const cok = Array.from({ length: AZAMI_DEGISIKLIK + 5 }, (_, i) => kayit(`Merge pull request #${i + 1} from x/y`, `Is ${i + 1} (1565)`)).join('');
+  const gunluk = cok + kayit('Merge pull request #999 from x/y', 'Kartsiz is') + kayit('Merge #840 into batch', '');
+  const metin = surumNotu({
+    surum: '2026.11.01-1', commit: 'b'.repeat(40), tarih: '2026-11-01T10:00:00.000Z', oncekiYayin: '2026.10.28-3',
+    yeniGocler: ['20261101100000_ornek.sql'], not: '.env dosyasina yeni satir', gunluk,
+  });
+  assert.match(metin, /^# Yayın 2026\.11\.01-1\n/);
+  assert.match(metin, /Önceki yayın: 2026\.10\.28-3/);
+  assert.match(metin, /## Elle adım\n\n\.env dosyasina yeni satir\n/);
+  assert.match(metin, /## Göçler \(1\)\n\n- 20261101100000_ornek\.sql\n/);
+  assert.match(metin, new RegExp(`## Değişiklikler \\(${String(AZAMI_DEGISIKLIK + 6)}\\)`));
+  assert.match(metin, /- #999: Kartsiz is\n/);
+  assert.doesNotMatch(metin, /değişiklik daha/);
+  assert.match(metin, /Kart numarası olmayan başlık: #999\n$/);
+});
+
+test('sürüm notu ilk yayında ve boş listede "yok" yazar', () => {
+  const metin = surumNotu({ surum: '2026.11.01-1', commit: 'c'.repeat(40), tarih: '2026-11-01T10:00:00.000Z', oncekiYayin: null, yeniGocler: [], not: null, gunluk: '' });
+  assert.match(metin, /Önceki yayın: yok/);
+  assert.match(metin, /## Elle adım\n\nYok\.\n/);
+  assert.match(metin, /## Göçler \(0\)\n\nYok\.\n/);
+  assert.doesNotMatch(metin, /Kart numarası olmayan/);
 });
 
 test('üretilen paket sunucunun çözücüsünden geçer; başka anahtarla geçmez', () => {

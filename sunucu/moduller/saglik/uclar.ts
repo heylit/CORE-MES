@@ -12,7 +12,7 @@ import {
 } from './servis.ts';
 import type { DiskDizinleri, DiskOkuyucu, GitOkuyucu } from './servis.ts';
 import type { GorevSorgusu } from './kurallar.ts';
-import { yedekOrtaminiKur } from '../ayarlar/disari.ts';
+import { calisanYayinOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
 
 export interface SaglikKaynagi {
   ayarOku: () => Pick<Ayar, 'commit' | 'ortam'>;
@@ -26,6 +26,8 @@ export interface SaglikKaynagi {
   yedekOku?: (db: Db) => Promise<YedekBilgisi>;
   // Verilmezse otomatik açılış okunmaz (null); süreç kaynağında yalnız Windows'ta Görev Zamanlayıcı sorgulanır.
   gorevSorgula?: (gorevAdi: string) => Promise<GorevSorgusu>;
+  // Verilmezse güncelleyicinin yazdığı çalışan sürüm dosyasından (Sistem Ayarları > Güncelleme ile aynı kaynak).
+  yayinOku?: () => Promise<string | null>;
 }
 
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
@@ -77,6 +79,7 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
           ...(kaynak.diskOku === undefined ? {} : { diskOku: kaynak.diskOku }),
           yedekOku: () => (kaynak.yedekOku ?? surecYedegi)(db),
           olayDongusu,
+          yayinOku: kaynak.yayinOku ?? (() => calisanYayinOku()),
           ...(otomatikAcilisOku === undefined ? {} : { otomatikAcilisOku }),
         });
       },

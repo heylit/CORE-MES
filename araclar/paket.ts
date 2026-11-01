@@ -24,15 +24,22 @@ function kirp(metin: string): string {
 }
 
 // Yalnız GitHub'ın PR birleşmeleri sayılır; dal içi birleşmeler (`Merge #840 into batch`) değişiklik değildir.
-export function degisiklikleriAyikla(gunluk: string): string[] {
-  const satirlar: string[] = [];
+export function birlesmeleriAyikla(gunluk: string): { no: number; baslik: string }[] {
+  const birlesmeler: { no: number; baslik: string }[] = [];
   for (const kayit of gunluk.split('\x1e')) {
     const [konu = '', govde = ''] = kayit.split('\x1f');
     const eslesme = /^Merge pull request #(\d+) /.exec(konu.trim());
     if (eslesme === null) continue;
-    const baslik = govde.trim().split('\n')[0]?.trim() ?? '';
-    satirlar.push(kirp(baslik === '' ? `#${eslesme[1]}` : `#${eslesme[1]}: ${baslik}`));
+    birlesmeler.push({ no: Number(eslesme[1]), baslik: govde.trim().split('\n')[0]?.trim() ?? '' });
   }
+  return birlesmeler;
+}
+
+const birlesmeSatiri = (b: { no: number; baslik: string }): string => (b.baslik === '' ? `#${String(b.no)}` : `#${String(b.no)}: ${b.baslik}`);
+
+// Paket bildirimindeki liste sunucunun sınırlarına kırpılır; tam liste sürüm notundadır.
+export function degisiklikleriAyikla(gunluk: string): string[] {
+  const satirlar = birlesmeleriAyikla(gunluk).map((b) => kirp(birlesmeSatiri(b)));
   if (satirlar.length <= AZAMI_DEGISIKLIK) return satirlar;
   const kalan = satirlar.length - (AZAMI_DEGISIKLIK - 1);
   return [...satirlar.slice(0, AZAMI_DEGISIKLIK - 1), `ve ${kalan} değişiklik daha`];
@@ -47,6 +54,51 @@ export interface PaketGirdisi {
   degisiklikler: readonly string[];
   // degisiklikler'in başladığı yayın (YAYIN_ETIKETI öneksiz); ilk yayında null. Sunucu çalışan sürümle karşılaştırıp atlanan yayını söyler.
   oncekiYayin: string | null;
+}
+
+// PR başlığının sonundaki parantezde kart numarası beklenir (1565 b): sürüm notundaki satır karta böyle bağlanır.
+export const KART_NO_BASLIKTA = /\((?:[^()]*\D)?\d{3,5}(?:\D[^()]*)?\)\s*$/;
+
+export function kartNoVarMi(baslik: string): boolean {
+  return KART_NO_BASLIKTA.test(baslik.trim());
+}
+
+export interface SurumNotuGirdisi {
+  surum: string;
+  commit: string;
+  tarih: string;
+  oncekiYayin: string | null;
+  yeniGocler: readonly string[];
+  not: string | null;
+  gunluk: string;
+}
+
+// Paketle aynı anda yazılan sürüm notu: bildirimdeki kırpılmış liste yerine bütün birleşmeler ve yalnız bu yayınla gelen
+// göçler. Kurumdaki kişi elle adımı (`not`) ve göç sayısını kesinti öncesi buradan okur.
+export function surumNotu(g: SurumNotuGirdisi): string {
+  const birlesmeler = birlesmeleriAyikla(g.gunluk);
+  const satirlar = [
+    `# Yayın ${g.surum}`,
+    '',
+    `- Commit: ${g.commit}`,
+    `- Tarih: ${g.tarih}`,
+    `- Önceki yayın: ${g.oncekiYayin ?? 'yok (son 50 birleşme)'}`,
+    '',
+    '## Elle adım',
+    '',
+    g.not ?? 'Yok.',
+    '',
+    `## Göçler (${String(g.yeniGocler.length)})`,
+    '',
+    ...(g.yeniGocler.length === 0 ? ['Yok.'] : g.yeniGocler.map((ad) => `- ${ad}`)),
+    '',
+    `## Değişiklikler (${String(birlesmeler.length)})`,
+    '',
+    ...(birlesmeler.length === 0 ? ['Yok.'] : birlesmeler.map((b) => `- ${birlesmeSatiri(b)}`)),
+  ];
+  const kartsiz = birlesmeler.filter((b) => !kartNoVarMi(b.baslik));
+  if (kartsiz.length > 0) satirlar.push('', `Kart numarası olmayan başlık: ${kartsiz.map((b) => `#${String(b.no)}`).join(', ')}`);
+  return `${satirlar.join('\n')}\n`;
 }
 
 // İmza bildirim metninin baytları üzerindedir; doğrulayan aynı metni ayrıştırmadan önce denetler.
