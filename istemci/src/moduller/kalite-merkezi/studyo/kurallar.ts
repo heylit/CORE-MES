@@ -104,3 +104,25 @@ export const NUMUNE_DURUMU: Record<KmNumune['durum'], { ad: string; ton: 'bilgi'
   ret: { ad: 'Reddedildi', ton: 'hata' },
   sapma: { ad: 'Sapma onayı', ton: 'uyari' },
 };
+
+// CMM sonuç dosyası (1439 a): kodlama istemcide çözülür. Geçerli UTF-8 değilse Türkçe Windows kodlaması (1254) sayılır; sunucu metni alır.
+export function cmmMetniCoz(bayt: Uint8Array): string {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bayt); } catch { return new TextDecoder('windows-1254').decode(bayt); }
+}
+
+// Sunucunun sınırı (KM_CMM_METIN_SINIRI); büyük dosya gönderilmeden söylenir. Sözleşme değer olarak ithal edilmez (zod istemciye girmez).
+export const CMM_METIN_SINIRI = 900000;
+
+// Son seçilen sütun eşlemesi aynı başlıklı dosya için tarayıcıda hatırlanır (sunucuda biçim profili tutulmaz).
+export const CMM_ESLEME_ANAHTARI = 'km-cmm-esleme';
+export const cmmBaslikImzasi = (basliklar: readonly string[]): string => basliklar.map((b) => b.trim().toLowerCase()).join('␟');
+
+export const CMM_DURUMU = {
+  eslesti: { ad: 'Yazılacak', ton: 'tamam' },
+  nominalFarki: { ad: 'Nominal farklı', ton: 'uyari' },
+  eslesmedi: { ad: 'Balon yok', ton: 'pasif' },
+  belirsiz: { ad: 'Belirsiz', ton: 'uyari' },
+  yinelenen: { ad: 'Yinelenen', ton: 'uyari' },
+  degerYok: { ad: 'Değer yok', ton: 'pasif' },
+  nitelBalon: { ad: 'Geçer/geçmez', ton: 'pasif' },
+} as const satisfies Record<string, { ad: string; ton: 'tamam' | 'uyari' | 'pasif' }>;

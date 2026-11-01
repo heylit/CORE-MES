@@ -86,3 +86,9 @@
 | KM-A5 (1238, 1231 a): NCR no, parça, lot ya da emirde geçen metinle bulunur; no tam, sonra baştan tutan önce; silinmiş yok; joker düz metin; sorgu kısmi trigram indeksini kullanır | "KM-A5 NCR: ...", "KM-A5 NCR araması kısmi trigram indeksini kullanır ..." |
 | KM-A6 (1238): NCR kaynağı `kalite-merkezi.oku`, hatalı parça kaynağı `kalite-merkezi.onayla` ister; ikisi de olmayan kaynağı çağıramaz | "KM-A6 yetki: ..." |
 | KM-A7 (1238, 1230 a): Ctrl K komutu ve sonucu adresle gelir; `?ac=` kaydı açar, `?yeni=1` yeni kaydı açar, ön değer yalnız `tur` ve `kod`; yalnız okuyana pencere açılmaz; adres sorgusuz kalır | `komutlar.test.ts`, "Ctrl K kaydı adresle açar ...", "Ctrl K komutu yeni kaydı adresle açar ..." (`KaliteMerkeziYeni.test.tsx`) |
+| KM-C (1439 a): CMM sonuç dosyası sayıları ondalık virgül/nokta, üs ve birimle okunur, altı ondalığa yuvarlanır; formül ve metin sayı sayılmaz | "KM-C1 sayı okuma ..." |
+| KM-C (1439 a): CSV ayırıcı (; sekme ,) ve başlık sezilir, tırnaklı alan okunur, sütun eşlemesi başlıktan önerilir; 5000 satırdan fazlası okunmaz | "KM-C2 CSV ..." |
+| KM-C (1439 a): balon numarası karakteristik adından (12, B12, #12, Balon 12, "12 - ..."); sondaki sayı ve birden çok aday eşleşmez | "KM-C3 balon numarası ..." |
+| KM-C (1439 a): yalnız tek balona eşleşen, değeri olan, sınırlı balon satırı yazılır; yinelenen, belirsiz, nitel balon yazılmaz; nominal farkı satır satır onayla; en çok 500 | "KM-C4 satır kararları ...", "KM-C11 yazma ..." |
+| KM-C (1439 a): QIF 3.0 Results ölçümü karakteristik öğesine (tasarımcı numarası ya da ad) ve nominaline bağlanır | "KM-C5 QIF 3.0 Results ...", "KM-C12 QIF ..." |
+| KM-C (1439 a): ölçüm planı satırı özelliği simge ve türden önerir; dar toleransta (0,02 ve altı) nokta iki katı; diş mastarla | "KM-C7 ölçüm planı satırı ...", "KM-C13 ..." |

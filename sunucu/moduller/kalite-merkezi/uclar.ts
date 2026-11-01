@@ -14,6 +14,8 @@ import {
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi, kmBalonCevabi, kmBalonYeriGovdesi, kmStudyoBalonParametresi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
+import { kmCmmOnizlemeCevabi, kmCmmOnizleGovdesi, kmCmmPlaniCevabi, kmCmmYazCevabi, kmCmmYazGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-cmm.ts';
+import * as cmm from './cmm.ts';
 
 // Uygulamanın yerel sunucu sözleşmesinin (sunucu.py: sync, doc, files, restore) TMI karşılığı. Okuma tek akıştan, yazma
 // kayıt başına; kural sunucudadır (değişiklik izi yalnız eklenir), kaydın içeriği uygulamanındır.
@@ -387,6 +389,37 @@ export const uclar: Uc[] = [
     govde: kmOlcumGovdesi,
     cevap: kmOlcumlerCevabi,
     isle: async ({ db, kullanici, govde }) => ({ olcumler: await studyo.olcumYaz(db, kullanici.id, 'kalite', govde) }),
+  }),
+  // CMM sonuç dönüşü (1439 a): önizleme yazmaz (okuma yetkisi); yazma elle ölçüm girişiyle aynı işlemdir, kaynak `cmm`.
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/olcumler/cmm-onizle',
+    yetki: 'kalite-merkezi.oku',
+    // 1450 a: dosya metni deftere girmez.
+    denetim: 'govdesiz',
+    denetimOzeti: (g) => ({ uretimEmriId: g.uretimEmriId, resimId: g.resimId }),
+    govde: kmCmmOnizleGovdesi,
+    cevap: kmCmmOnizlemeCevabi,
+    isle: ({ db, govde }) => cmm.cmmOnizle(db, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/olcumler/cmm-yaz',
+    yetki: 'kalite-merkezi.yaz',
+    tekrarKorumali: true,
+    denetim: 'govdesiz',
+    denetimOzeti: (g) => ({ uretimEmriId: g.uretimEmriId, resimId: g.resimId, resimSurumu: g.resimSurumu, numuneId: g.numuneId ?? null, onaylanan: g.onaylananlar.length }),
+    govde: kmCmmYazGovdesi,
+    cevap: kmCmmYazCevabi,
+    isle: ({ db, kullanici, govde }) => cmm.cmmYaz(db, kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/cmm-plani',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoResimParametresi,
+    cevap: kmCmmPlaniCevabi,
+    isle: ({ db, parametre }) => cmm.cmmPlani(db, parametre.resimId),
   }),
   uc({
     yontem: 'POST',

@@ -4,6 +4,9 @@ import type {
   KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
   KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type {
+  KmCmmOnizlemeCevabi, KmCmmOnizleGovdesi, KmCmmPlaniCevabi, KmCmmYazCevabi, KmCmmYazGovdesi,
+} from '#paylasilan/sozlesme/kalite-merkezi-cmm.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 
@@ -168,5 +171,29 @@ export function useResimKaldir() {
     )),
     onSuccess: ({ resim }) => { parcayaKoy(istemci, resim); },
     onError: (_h, resim) => istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(resim.malzemeNo) }),
+  });
+}
+
+// CMM sonuç dönüşü (1439 a): önizleme yazmaz; yazma tekrar korumalıdır ve emrin ölçümlerini yeniler.
+export function useCmmOnizle() {
+  return useMutation({ mutationFn: (govde: KmCmmOnizleGovdesi) => api.post<KmCmmOnizlemeCevabi>('/kalite-merkezi/studyo/olcumler/cmm-onizle', govde) });
+}
+
+export function useCmmYaz() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (govde: KmCmmYazGovdesi) => tekrarKorumaliGonder((d) => api.post<KmCmmYazCevabi>(
+      '/kalite-merkezi/studyo/olcumler/cmm-yaz', govde,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSettled: (_c, _h, govde) => istemci.invalidateQueries({ queryKey: studyoAnahtari.emirOlcumleri(govde.uretimEmriId) }),
+  });
+}
+
+export function useCmmPlani(resimId: number | null, acik: boolean) {
+  return useQuery({
+    queryKey: ['kalite-merkezi', 'studyo', 'cmm-plani', resimId] as const,
+    queryFn: () => api.get<KmCmmPlaniCevabi>(`/kalite-merkezi/studyo/resimler/${String(resimId)}/cmm-plani`),
+    enabled: acik && resimId !== null,
   });
 }
