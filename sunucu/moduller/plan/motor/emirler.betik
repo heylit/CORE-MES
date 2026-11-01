@@ -69,6 +69,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   }
   fasonlariAdimaCevir(k, st.D);
   emirFasonlariniEkle(st.D, durum.emirler, k);
+  emirYerleriniEkle(st.D, durum.emirler, k);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
   fasonBeklemeleriniEkle(st.D, istek, opOf);
@@ -167,6 +168,40 @@ function emirFasonlariniEkle(D, emirler, k) {
     const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : FASON_VARSAYILAN_GUN;
     D.fasoncular = [...(D.fasoncular || []), { id, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
     u.rota[i] = Object.assign({}, u.rota[i], { fason: id, tezgahlar: [] });
+  }
+}
+/* 1567 a: kök adımın emirdeki istasyonu ve süresi (durum.emirler.opYer; stationId, setup, cycle) rotadakinden ayrıysa motor emrinkini
+   kullanır (planın TS tarafı süreyi zaten iş emrinden okur). Emre özel ürün kopyasında o istasyonun makineleri ilk aday olur ve emrin
+   süresini alır; rotadaki öteki istasyonlar kendi süreleriyle aday kalır. Rotada fason olup emirde içeri alınan adım iç adım olur. Boş
+   süre alanı rotanınkidir (sıfır uydurulmaz); istasyonu ya da makinesi olmayan adım ve kişi adımı değişmez. Eşleme 988 a gibi rotadaki sıradır. */
+function emirYerleriniEkle(D, emirler, k) {
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  const emir = new Map(((emirler && emirler.orders) || []).map(o => [String(o.id), o]));
+  const sayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
+  for (const [anahtar, y] of Object.entries((emirler && emirler.opYer) || {})) {
+    if (!y || y.fasonId != null) continue;
+    const [sid, , sira] = anahtar.split('|'), i = +sira - 1, s = sip.get(sid), o = emir.get(sid);
+    let u = s && urun.get(s.urun);
+    const a = o && rotaAdimlari(k, o.itemId)[i];
+    if (!u || !a || !u.rota || !u.rota[i]) continue;
+    const ist = y.stationId != null ? String(y.stationId) : a.stationId != null ? String(a.stationId) : null;
+    const ayar = sayi(y.setup) ?? sayi(a.setup) ?? 0, cevrim = sayi(y.cycle) ?? sayi(a.cycle) ?? 0;
+    const fason = !!u.rota[i].fason;
+    /* kişi adımı (rotada istasyonsuz, fasonsuz) kişinin istasyonunu taşır; makineye açılmaz */
+    if (!fason && a.stationId == null) continue;
+    if (ist == null || (!fason && ist === String(a.stationId) && ayar === (sayi(a.setup) ?? 0) && cevrim === (sayi(a.cycle) ?? 0))) continue;
+    const makineler = (D.tezgahlar || []).filter(m => String(m.grup) === ist);
+    if (!makineler.length) continue;
+    if (!u.emreOzel) {
+      u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
+      D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+    }
+    const grupOf = id => (D.tezgahlar.find(m => String(m.id) === String(id)) || {}).grup;
+    const oteki = fason ? [] : (u.rota[i].tezgahlar || []).filter(t => String(grupOf(t.id)) !== ist);
+    const r = Object.assign({}, u.rota[i], { tezgahlar: [...makineler.map(m => ({ id: m.id, ayar, cevrim })), ...oteki] });
+    delete r.fason;
+    u.rota[i] = r;
   }
 }
 /* 671 a (Motor A, H3): planlamacı işi rota dışı makineye elle koyabilir. O makine adımın adayları arasına rotadaki ilk tezgâhın
