@@ -20,6 +20,10 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
+  'kalite-durum': [
+    { anahtar: 'qr', ad: 'QR (LOT)' }, { anahtar: 'durum', ad: 'Kalite durumu' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme adı ve kodu' },
+    { anahtar: 'miktar', ad: 'Miktar, birim ve konum' },
+  ],
   'hatali-parca': [
     { anahtar: 'qr', ad: 'QR (UE, parçanın emri)' }, { anahtar: 'durum', ad: 'Durum (karar)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
     { anahtar: 'islem', ad: 'İşlem no ve adı' }, { anahtar: 'adetNeden', ad: 'Adet ve hurda nedeni' }, { anahtar: 'ayiran', ad: 'Ayıran ve zaman' },
@@ -67,6 +71,11 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
     qr(2, 2, 46), metin(50, 4, 48, 18, 7, 'kod', true), metin(50, 26, 48, 20, 5, 'ad'),
   ] },
+  // Durum en üstte ve büyük: kasa uzaktan ayrılır. Lot etiketiyle aynı rulo (100x50).
+  { anahtar: 'kalite-durum-100x50', ad: 'Kalite durumu 100x50', tur: 'kalite-durum', genislik: 100, yukseklik: 50, ogeler: [
+    metin(2, 2, 96, 9, 8, 'durum', true), kutu(2, 12, 96, 0.5, 0.5), qr(2, 14, 34),
+    metin(38, 14, 60, 7, 5, 'lotNo', true), metin(38, 23, 60, 9, 3.5, 'malzeme'), metin(38, 34, 60, 9, 3.5, 'miktar'),
+  ] },
   // Durum en üstte ve büyük: parça uzaktan ayrılır. Lot etiketiyle aynı rulo (100x50).
   { anahtar: 'hatali-parca-100x50', ad: 'Hatalı parça 100x50', tur: 'hatali-parca', genislik: 100, yukseklik: 50, ogeler: [
     metin(2, 2, 96, 7, 6, 'durum', true), kutu(2, 9.5, 96, 0.5, 0.5), qr(2, 11, 36),
@@ -99,6 +108,9 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
   },
   istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
+  'kalite-durum': {
+    qr: `${KOD_ONEKI.lot}:LT-000123`, durum: 'KARAR BEKLİYOR', lotNo: 'LT-000123', malzeme: 'Örnek çubuk Ø40 · ORN-HM-01', miktar: '120 kg · Konum ORN-A01',
+  },
   'hatali-parca': {
     qr: `${KOD_ONEKI['uretim-emri']}:4513`, durum: 'KARAR BEKLİYOR', emirNo: 'UE-004512 · kol UE-004513', parca: 'ORN-FL-01 · Örnek flanş', islem: 'OP 20 Örnek frezeleme',
     adetNeden: '2 adet · Örnek ölçü dışı', ayiran: 'Ayıran Örnek Operatör · 18.10.2026 10:42', karar: null,

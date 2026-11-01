@@ -42,3 +42,5 @@
 | Ekran: stok adresi seçili konumlarla açılır, çıkarma adresi günceller, bozuk adres örneğe döner | `EtiketMerkezi.test.tsx`, `kayit-secimi.test.ts` |
 | EM-21: hatalı parça etiketi kayıttan; durum karardan (yoksa "Karar bekliyor"); QR parçanın emri (`UE:`) | `kurallar.test.ts` EM-7, `EM-U18` |
 | Hatalı parça kaydı Üretim Emirleri'nden; olmayan eksikte; lot şablonu basmaz; deftere `hatali-parca` olarak kayıt kimliği; `oku` olmayan 403 | `EM-U18` |
+| EM-22: kalite durum etiketi bakiye satırından; durum satırdan, stok hal adlarıyla; QR lot (`LOT:`) | `kurallar.test.ts` EM-7, `EM-U19` |
+| Kalite durumu stoktan (`disari.ts kaliteEtiketleri`); olmayan, lotsuz, boş satır eksikte; lot şablonu basmaz; deftere `kalite-durum` olarak bakiye satırı; `oku` olmayan 403 | `EM-U19` |

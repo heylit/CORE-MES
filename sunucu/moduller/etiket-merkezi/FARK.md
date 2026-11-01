@@ -80,3 +80,10 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - QR emrin `UE:<kimlik>`i (parçanın bulunduğu emir: kol ya da emrin kendisi); yeni önek yok (UYUM-BORCU 19).
 - Deftere `kaynak_tur = 'hatali-parca'`, `kaynak_id` hatalı kayıt kimliği. Göç `20261031211000_etiket_merkezi_ilk_tur.sql` (1530): defter tür kısıtı genişler, etiket listesinde `hatali-parca` satırı `hazir` olur.
 - Uç, işlem ve rol değişmedi: kayıt çıktısı `etiket-merkezi.oku`, basma ve indirme mevcut işlemleriyle.
+
+## Kalite durum etiketi (kart 1525, 1286 a)
+- Yeni şablon türü ve kayıt türü `kalite-durum`; hazır şablon `kalite-durum-100x50` (lot etiketiyle aynı rulo). Kaynak stok `disari.ts kaliteEtiketleri` (ayrı stok yaması, 1525 adım 2c).
+- Kimlik stok bakiye satırıdır (kalite durumu lotta değil satırdadır; aynı lot iki konumda iki durumda olabilir). Olmayan, lotsuz ve boş satır eksik sayılır.
+- Basılan: durum (SERBEST, KARAR BEKLİYOR, ŞARTLI, RED; satırdan, elle seçilmez), lot no, malzeme adı ve kodu, miktar, birim ve konum. QR `LOT:<lot no>`. Karar tarihi, karar veren, GKK/NCR basılmaz (UYUM-BORCU 21).
+- Deftere `kaynak_tur = 'kalite-durum'`, `kaynak_id` bakiye satırı. Göç `20261031211100_etiket_merkezi_kalite_durum.sql` (1530): etiket listesinde `kalite-durum` satırı `hazir` olur; tür kısıtı 20261031211000'de açıldı. Dışarıdaki yol (KF-19) adım 4'te boşalır.
+- Uç, işlem ve rol değişmedi.

@@ -58,7 +58,7 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('EM-7: örnek QR içerikleri kod sözlüğünde şablon türünün kaydına çözülür', () => {
-    const beklenen = { konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', 'hatali-parca': 'uretim-emri', deneme: 'konum' } as const;
+    const beklenen = { konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', 'kalite-durum': 'lot', 'hatali-parca': 'uretim-emri', deneme: 'konum' } as const;
     for (const [tur, degerler] of Object.entries(ORNEK_DEGERLER)) {
       assert.equal(kodTuru(degerler.qr ?? '').tur, beklenen[tur as keyof typeof beklenen], tur);
     }

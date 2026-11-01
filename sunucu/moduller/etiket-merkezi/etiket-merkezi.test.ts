@@ -493,6 +493,43 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(kayitlar, [{ kaynak_tur: 'hatali-parca', kaynak_id: kayit }]);
   });
 
+  test('EM-U19 (1286 a): kalite durum etiketi stokun bakiye satırından çıkar; durum satırdan okunur; QR lot; deftere bakiye satırı yazılır; oku yetkisi olmayan göremez', async () => {
+    const parti = await partiAc('P-ETK-KD');
+    const sahip = ortam!.sahip;
+    const kart = (await sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
+    const konum = (await sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    // Bakiye stokun tablosudur; test kendi satırını doğrudan açar (karantina akışı stokun testindedir).
+    const bakiye = (await sahip.tek<{ id: number }>(
+      "INSERT INTO stok_bakiye (malzeme_id, konum_id, parti_id, kalite_durumu, miktar, ilk_giris) VALUES ($1, $2, $3, 'karar_bekliyor', 12.5, now()) RETURNING id",
+      [kart, konum, parti]))!.id;
+    const adres = (anahtar: string, id: string) => `/etiket-merkezi/sablonlar/${anahtar}/kayit-cikti?dil=zpl&dpi=203&tur=kalite-durum&id=${id}`;
+
+    const r = await al(yonetici, adres('kalite-durum-100x50', `${bakiye},2147483006`));
+    assert.equal(r.statusCode, 200, r.body);
+    const rc = r.json() as KayitCiktiCevabi;
+    assert.deepEqual(rc.kayitlar, [{ id: bakiye, baslik: 'LT-P-ETK-KD KABUL' }]);
+    assert.deepEqual(rc.eksikler, [2147483006]);
+    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'LOT:LT-P-ETK-KD');
+    const metinler = rc.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
+    assert.equal(metinler[0], 'KARAR BEKLİYOR');
+    assert.ok(metinler.some((m) => m.startsWith('12,5') && m.endsWith('Konum KABUL')), metinler.join(' | '));
+    assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=kalite-durum&id=${bakiye}`)).statusCode, 400, 'lot şablonu kalite durumu basmaz');
+    assert.equal((await al(yetkisiz, adres('kalite-durum-100x50', String(bakiye)))).statusCode, 403);
+
+    await sahip.sorgu("UPDATE stok_bakiye SET kalite_durumu = 'red' WHERE id = $1", [bakiye]);
+    const k = (await al(yonetici, adres('kalite-durum-100x50', String(bakiye)))).json() as KayitCiktiCevabi;
+    assert.equal(k.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []))[0], 'RED');
+
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const c = await yaz(yonetici, '/etiket-merkezi/sablonlar/kalite-durum-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'kalite-durum', idler: [bakiye] } });
+    assert.equal(c.statusCode, 200, c.body);
+    const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
+      'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
+    );
+    assert.deepEqual(kayitlar, [{ kaynak_tur: 'kalite-durum', kaynak_id: bakiye }]);
+  });
+
   test('EM-U14: malzeme etiketi karttan, mal kabul seçimi o kabulün bütün lotlarından çıkar; mal kabul lotları deftere lot olarak bağlanır', async () => {
     const parti = await partiAc('P-ETK-MK');
     const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
@@ -598,7 +635,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       assert.deepEqual(e.sablonlar, [], e.kod);
     }
     // 1285 a: ilk tur kalite durum, hatalı parça ve sevk koli etiketi; 1288: dışarıdaki dört baskı yolu listede.
-    assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), ['kalite-durum', 'sevk-koli']);
+    assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), ['sevk-koli']);
     assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['kalite-durum', 'konum', 'lot', 'malzeme', 'seri-no']);
     assert.equal((await al(yetkisiz, '/etiket-merkezi/etiketler')).statusCode, 403);
   });

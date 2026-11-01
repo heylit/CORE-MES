@@ -3,6 +3,7 @@ import { adresAraliktaMi, adresCoz, type AgAraligi } from '#paylasilan/ag-aralig
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
@@ -291,5 +292,20 @@ export function hataliParcaDegerleri(h: HataliKaydiOzeti): AlanDegerleri {
     karar: h.karar === null ? null : birlestir([
       h.kararKisi?.ad ? `Karar ${h.kararKisi.ad}` : null, h.kararZamani && anYazisi(h.kararZamani), h.ncrKimlik && `NCR ${h.ncrKimlik}`, h.kararNotu,
     ]),
+  };
+}
+
+// EM-22 (1286 a): kalite durum etiketi stokun bakiye satırını basar; durum satırdan okunur, elle seçilmez. Adlar stok ekranındaki
+// hal adlarıyla aynı (stok/ortak.tsx KALITE_ROZETI); ortak sözlük çekirdek isteği. QR lotu gösterir.
+export const KALITE_DURUM_ADLARI: Record<KaliteDurumu, string> = { serbest: 'SERBEST', karar_bekliyor: 'KARAR BEKLİYOR', sartli: 'ŞARTLI', red: 'RED' };
+export function kaliteDurumDegerleri(e: {
+  lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; birim: string | null; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu;
+}): AlanDegerleri {
+  return {
+    qr: `${KOD_ONEKI.lot}:${e.lotNo}`,
+    durum: KALITE_DURUM_ADLARI[e.kaliteDurumu],
+    lotNo: e.lotNo,
+    malzeme: birlestir([e.malzemeAd ?? `Kart ${e.malzemeId}`, e.malzemeKod]),
+    miktar: birlestir([[miktarYazisi(e.miktar), e.birim].filter(Boolean).join(' '), `Konum ${e.konumKod}`]),
   };
 }
