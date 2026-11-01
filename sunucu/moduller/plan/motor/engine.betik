@@ -1,5 +1,10 @@
 /* ================= Plan motoru v2: çekirdek ================= */
-const SL=0.25, HDAYS=63, NS=HDAYS*24/SL;
+/* 1477 a: ufuk (gün) ve dilim (saat) sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); sunucu çalışmanın w.ufukGun ve w.dilimDk alanlarıyla verir.
+   Verilmezse ya da sınır dışındaysa 63 gün ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
+const UFUK_VARSAYILAN=63,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30];
+let SL=0.25, HDAYS=UFUK_VARSAYILAN, NS=HDAYS*24/SL;
+function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
+  HDAYS=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
@@ -33,7 +38,7 @@ function workIn(W,a,b){let s=0;for(let i=wi(W,a);i<W.length&&W[i][0]<b;i++)s+=Ma
 function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.max(0,Math.ceil(a/SL-1e-9)),k1=Math.min(NS,Math.floor(b/SL+1e-9));for(let k=k0;k<k1;k++)m[k]=1;}return m;}
 
 /* ---- derleme: takvim, havuz, işlemler ---- */
-function compile(st){
+function compile(st){olcekKur(st.w);
   const D=st.D,A=D.ayarlar;
   const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit),mol:(v.molalar||[]).map(x=>[hm(x.bas),hm(x.bit)])}]));
   const tatil=new Set((D.tatiller||[]).map(s=>Math.floor(parseT(D,s)/24)));

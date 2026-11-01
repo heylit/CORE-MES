@@ -91,7 +91,8 @@ export interface IzSatiri { t: number; kim: string; rol: string; sayfa: string; 
 export interface GeriYama { yol: string[]; id?: string; once: unknown }
 export interface BekleyenDegisiklik { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null }
 
-export interface PlanAgirliklari extends ExtraAlanlar { dondurma: number; famK: number; mat: string; sure: number }
+// ufukGun ve dilimDk sunucunun yazdığı motor ölçeğidir (1477 a, sistem ayarı); sayfa değiştirmez.
+export interface PlanAgirliklari extends ExtraAlanlar { dondurma: number; famK: number; mat: string; sure: number; ufukGun?: number; dilimDk?: number }
 
 export interface PlanParametreleri extends ExtraAlanlar {
   tampon: boolean; tamponZ: number; acilPay: number; maxChg: number; chgTL: number;

@@ -1,5 +1,6 @@
 import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../tipler.ts';
 import type { Metin } from './ozet/veri.ts';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // P1'in saf hesapları. Plan saat eksenlidir: 0, D.meta.baslangic günü 00:00 duvar saatidir (engine.betik baseMs, parseT, fmtDT).
 // Motor burada koşmaz (357 b); kayıttaki çözülmüş plan okunur. Eski sayfanın tarayıcıda motorun derlemesinden (compile) aldığı takvim,
@@ -174,7 +175,6 @@ export function acikSaat(W: Pencere[], a: number, b: number): number {
 }
 
 // --- derleme (engine.betik compile'ın ekranın okuduğu kısmı) ---
-export const UFUK_GUN = 63;
 // `op` operatör oranı: bir kişinin bu tezgâha ayırdığı pay (0,5: bir kişi iki tezgâh).
 export interface DerlenenTezgah { id: string; grup: string; op: number; sw: Pencere[]; rw: Pencere[] }
 // `c` uygun tezgâhlar, fason `@fasoncu`; `aile` aile kısalması, `aparat` bağlama aparatı.
@@ -293,7 +293,7 @@ export function derle(g: Girdi): Derleme {
     const wd = gunKodu(D, d); const v = D.calismaGunleri?.[wd];
     return tatil.has(d) ? [] : Array.isArray(v) ? v.map(String) : [];
   };
-  const gunler = Array.from({ length: UFUK_GUN }, (_, d) => gunVardiyalari(d));
+  const gunler = Array.from({ length: ufukGunu() }, (_, d) => gunVardiyalari(d));
   // Başlangıç gününden önceki günün gece vardiyası gece yarısını aşar; 0'dan sonraki kısmı da çalışma saatidir (engine.betik, 741 a).
   const dun = gunVardiyalari(-1);
   const gunu = (d: number): string[] => (d < 0 ? dun : gunler[d] ?? []);
@@ -311,11 +311,11 @@ export function derle(g: Girdi): Derleme {
   for (const m of D.tezgahlar) {
     const kendi = Array.isArray(m.vardiyalar) && m.vardiyalar.length ? new Set(m.vardiyalar) : null;
     let sw: Pencere[] = [];
-    for (let d = -1; d < UFUK_GUN; d++) for (const sid of gunu(d)) if (!kendi || kendi.has(sid)) { const w = an(d, sid); if (w) sw.push(...cikar([w], molalar(d, sid))); }
+    for (let d = -1; d < ufukGunu(); d++) for (const sid of gunu(d)) if (!kendi || kendi.has(sid)) { const w = an(d, sid); if (w) sw.push(...cikar([w], molalar(d, sid))); }
     for (const e of ek) if (e.m === m.id) { const w = an(e.gun, e.vardiya); if (w) sw.push(...cikar([w], molalar(e.gun, e.vardiya))); }
     sw = birlestir(sw);
     let rw = sw;
-    if (m.isiksiz) { const t: Pencere[] = []; for (let d = 0; d < UFUK_GUN; d++) if (gunler[d]?.length) t.push([d * 24, d * 24 + 24]); rw = birlestir(t.concat(sw)); }
+    if (m.isiksiz) { const t: Pencere[] = []; for (let d = 0; d < ufukGunu(); d++) if (gunler[d]?.length) t.push([d * 24, d * 24 + 24]); rw = birlestir(t.concat(sw)); }
     const dn = down.filter((x) => x.m === m.id).map((x): Pencere => [x.from, x.to]);
     M[m.id] = { id: m.id, grup: m.grup ?? '', op: m.opOran == null ? 1 : Number(m.opOran), sw: cikar(sw, dn), rw: cikar(rw, dn) };
   }

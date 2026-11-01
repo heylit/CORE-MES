@@ -3,11 +3,12 @@ import { DurumKutusu, Dugme, IsaretKutusu, Kart, Rozet, Simge, Tablo, useBildiri
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  HDAYS, TALEP_GECMIS_ENAZ, gunAy, gunAyHafta, kullanilabilirlik, ufukAyarOku, ufukAyarYaz, ufukVerisi, yillikAyarOku, zamanKur,
+  TALEP_GECMIS_ENAZ, gunAy, gunAyHafta, kullanilabilirlik, ufukAyarOku, ufukAyarYaz, ufukVerisi, yillikAyarOku, zamanKur,
   type MalzemeHaftasi, type MalzemeSatiri, type UfukAyar, type UfukKatmani, type UfukVerisi, type Zaman,
 } from './kurallar.ts';
 import { GostergeSeridi, Not, SayiGirdisi, SecimDugmeleri, sayi, tl, type Gosterge } from './parcalar.tsx';
 import './ufuk.css';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // Ufuk (zz39-ufuk.betik): 26 ya da 52 haftaya plan, plan dışı sipariş ve öngörü yükü; malzeme netleştirmesi. Motoru çalıştırmaz: kayıtlı
 // planı okur (357 b; eski sayfanın önizlenen planı yeni ekranda yoktur). Sayfa yazmaz; yalnız kendi ayarları (`D.ufuk`) plan.yaz ile değişir.
@@ -75,7 +76,7 @@ export function Ufuk({ calisma, komut, yetki, git }: PlanlamaEkranOzellikleri) {
 function ufukNotlari(c: PlanlamaCalismasi, v: UfukVerisi, ongoru: boolean): string {
   const Y = yillikAyarOku(c.D);
   return [
-    `Kaynak: Atölyedeki plan; ilk ${Math.round(HDAYS / 7)} hafta ondan, ötesi kaba.`,
+    `Kaynak: Atölyedeki plan; ilk ${Math.round(ufukGunu() / 7)} hafta ondan, ötesi kaba.`,
     v.kaba.length ? `Planda olmayan ${v.kaba.length} sipariş (${v.kaba.filter((x) => x.havuz).length} havuzda) terminden geriye zamanlandı.` : 'Bütün siparişler planda.',
     v.failJ.size ? `Planda adımı planlanamayan ${v.failJ.size} sipariş var; o adımlar yüke girmedi.` : '',
     v.fasN ? `Fason işlemler (${v.fasN}) tezgâh yükü değildir, sayılmadı.` : '',
@@ -92,7 +93,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
   const enDolu = v.sat.map((s) => ({ g: s.g, ...s.w.reduce((b, c, i) => (c.o > b.o ? { o: c.o, i } : b), { o: -1, i: 0 }) })).sort((a, b) => b.o - a.o)[0];
   const gec = v.kaba.filter((x) => x.gec > 0.05);
   const kpi: Gosterge[] = [
-    { simge: 'gantt', ad: 'Plan yükü', deger: `${sayi(top('plan'), 0)} sa`, alt: `ilk ${Math.round(HDAYS / 7)} hafta, motorun planı` },
+    { simge: 'gantt', ad: 'Plan yükü', deger: `${sayi(top('plan'), 0)} sa`, alt: `ilk ${Math.round(ufukGunu() / 7)} hafta, motorun planı` },
     { simge: 'list', ad: 'Plan dışı sipariş', deger: `${sayi(top('kaba'), 0)} sa`, alt: `${v.kaba.length} sipariş, kaba` },
     ...(!ongoru ? [] : !elle && !v.gec.hiz
       ? [{ simge: 'chart' as const, ad: 'Öngörü', deger: 'giriş yok', alt: 'sipariş girişi yok; Yıllık planda elle girilebilir', ton: 'uyari' as const }]
@@ -151,7 +152,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
       </div>
       <ul className="tc-pyu-lejant">
         {katmanlar.map(([k, ad]) => <li key={k}><i className={`tc-pyu-kat-${k}`} />{ad}</li>)}
-        <li><i className="tc-pyu-kat-kaba-desen" />63. günden sonrası kaba</li>
+        <li><i className="tc-pyu-kat-kaba-desen" />{ufukGunu()}. günden sonrası kaba</li>
       </ul>
       <p className="tc-pyu-not">Hücre: haftanın yükü, kapasitenin %'si; alttaki çizgi katmanların payı. Taralı sütunlar motorun ufku dışıdır. Hücreye basınca o haftanın işleri aşağıda listelenir.</p>
     </>

@@ -17,12 +17,13 @@ import {
 import {
   malzemeGelisTarihleri, malzemeKgFiyatlari, ortalamaAlisFiyatlari, tedarikIhtiyaclariniYaz, tedarikTerminleri,
 } from '../satin-alma/disari.ts';
+import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
-import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
+import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
@@ -303,7 +304,7 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   if (g === null) return { calisma: null, surum: k.surum };
   // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
   const fin = await planFinansmanOrani(db, tesisGunu(simdi));
-  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler, fin) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
+  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler, fin, await motorOlcegi(db)) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
@@ -347,7 +348,12 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
   const { degerler } = await hedefMotorAyari(db, null);
   const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
-  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin), kayit, kaynak: { durum: kaynak.durum, ek } } };
+  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db)), kayit, kaynak: { durum: kaynak.durum, ek } } };
+}
+
+// 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
+async function motorOlcegi(db: Db): Promise<MotorOlcegi> {
+  return { ufukGun: (await sistemAyariOku(db, 'plan.motor-ufuk-gun')) ?? 63, dilimDk: Number(await sistemAyariOku(db, 'plan.motor-dilim-dk')) };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

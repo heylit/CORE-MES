@@ -8,12 +8,13 @@ import {
 import { Sihirbaz, SonKart, type SihirbazAlani, type SihirbazDegeri, type SihirbazTanimi } from '../ortak/sade/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  HDAYS, HS_DURUM, TALEP_GECMIS_ENAZ, YL_ACIL, bedelsizGruplar, darbogazlar, kullanilabilirlik, planUretimi, yillikAyarOku, yillikAyarYaz, yillikAylar,
+  HS_DURUM, TALEP_GECMIS_ENAZ, YL_ACIL, bedelsizGruplar, darbogazlar, kullanilabilirlik, planUretimi, yillikAyarOku, yillikAyarYaz, yillikAylar,
   yillikHedefKur, yillikOzet, yillikVeri, zamanKur, type Darbogaz, type YillikAyar, type Zaman,
 } from './kurallar.ts';
 import { GostergeSeridi, Not, SayiGirdisi, SecimDugmeleri, sayi, tl, type Gosterge } from './parcalar.tsx';
 import { COZUCU_YOK, useYillikDurum, yillikAnahtari, yillikCoz, type YillikDurum } from './yillik-durum.ts';
 import './ufuk.css';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // Yıllık plan (bugünkü çerçeve: zz30-isi ISI.yillik ısı haritası, altında "Tüm satırlar" olarak zz9-yillik.betik). Kaba kapasite planıdır: aile
 // ve tezgâh grubu düzeyinde, sırasız. Model sayfada kurulur, HiGHS sunucuda çözer (454/6 a; tarayıcıda çözücü yok, 357 b); sonuç yalnız ekranda
@@ -343,7 +344,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
   // Motor hedefi: motor ufkundaki haftalar, kümülatif adet.
   const h = A.hedef ?? yillikHedefKur(D, v, P, s);
   const verildi = A.hedef !== null;
-  const hw = P.map((p, t) => ({ p, t })).filter((x) => x.p.tur === 'hafta' && x.p.b <= HDAYS);
+  const hw = P.map((p, t) => ({ p, t })).filter((x) => x.p.tur === 'hafta' && x.p.b <= ufukGunu());
   const hedefAileleri = v.aileler.filter((f) => h.hedef.some((x) => x[0] === f));
   return (
     <>

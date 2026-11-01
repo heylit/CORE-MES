@@ -29,7 +29,10 @@ export const motorAyariEsit = (a: MotorAyarlari, b: MotorAyarlari): boolean =>
 // 1383 a: finansman oranı finansın TRY faizinden gelir (günlük yüzde, finansmanın tek tanımıyla); motor ve planlama sayfası onu
 // D.planAgirlik.fin'de okur (durum.betik agAyar). Finansta TRY faizi yoksa (null) çalışma kaydındaki oran kalır; plan bedel ayarının elle
 // finansman oranı 1448 a ile salt okunurdur ve buraya gelmez.
-export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null): unknown {
+// 1477 a: motorun ufku ve dilimi sistem ayarındandır; motor w.ufukGun ve w.dilimDk'yı okur (engine.betik olcekKur;
+// girdi birleşmesi D'yi yeniden kurar, w kalır). Verilmezse kayıttaki kalır.
+export interface MotorOlcegi { ufukGun: number; dilimDk: number }
+export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
   if (c.D === null || typeof c.D !== 'object') return calisma;
@@ -40,6 +43,6 @@ export function calismayaMotorAyari(calisma: unknown, ayar: MotorAyarlari, finan
   const w = (c as { w?: unknown }).w;
   return {
     ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
-    w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac },
+    w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
   };
 }
