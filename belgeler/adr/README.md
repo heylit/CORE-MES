@@ -41,16 +41,20 @@ Sütunlar araçla okunur: `Durum` sabit listedendir; `Değiştirir` ve `Değişt
    bağlantı, güvenlik sınırı, modüller arası yön ve sahiplik, çekirdek kalıbı. İş kuralı (`KURAL-TEST.md`), ekran, sayı ve anlık durum
    ADR'ye yazılmaz.
 2. **Durum:** ADR'nin "Durum:" satırı ve dizindeki `Durum` aynı değeri taşır: `öneri`, `kabul`, `ertelendi`, `kısmen yerine geçildi`,
-   `yerine geçildi`. CLAUDE.md "kabul" olmayan bir ADR'ye ancak satırda o durumu söyleyerek atıf yapar.
+   `yerine geçildi`, `kaldırıldı`. ADR silinmez: yerine yeni karar geldiyse `yerine geçildi` (yenisinin numarasıyla), karar yeni karar
+   olmadan geçersiz kaldıysa `kaldırıldı` (gerekçesi durum satırında) olur. CLAUDE.md "kabul" olmayan bir ADR'ye ancak satırda o durumu söyleyerek atıf yapar.
 3. **Değişmezlik:** kabul edilen kararın metni değişmez. Karar değişirse yeni ADR yazılır; yeni ADR "değiştirir: NNNN madde k" der, eskisinin
    durum satırına ve dizindeki `Değiştiren` sütununa yenisi yazılır. Çapa düzeltmesi, kalkmış koda atfın silinmesi ve dizin bakımı karar
    değişikliği sayılmaz; bunlar ADR'nin altına "Ek" ya da durum satırına tek cümle olarak girer.
 4. **Kodla bağ:** her ADR dizinde en az bir çapa taşır (karar kodsa). Kararı tutan test varsa çapaya eklenir: kod durduğu hâlde davranış
-   değişirse onu yalnız test yakalar. Kod tarafında yalnız "neden" yorumunda "ADR NNNN" yazılır. Çapası olan dosyayı değiştiren iş, ilgili
+   değişirse onu yalnız test yakalar. Kod tarafında yalnız "neden" yorumunda "ADR NNNN" yazılır; araç bu atıfları tarar: olmayan,
+   `yerine geçildi` ya da `kaldırıldı` durumundaki ADR'ye atıf `kontrol`ü kırar, kod yürürlükteki karara bağlanır. Çapası olan dosyayı değiştiren iş, ilgili
    ADR'yi aynı değişiklikte günceller ya da yeni ADR ister.
 5. **Anlık durum yok:** "bugün", "henüz", sayı ve liste ADR'ye yazılmaz; kaynağı yazılır (dosya ya da `npm run harita`).
 6. **Açık depo:** depo dışı yol, IP adresi (yalnız 127.0.0.1 ve 0.0.0.0), alan adı, gerçek ad, kapanmamış güvenlik açığı ayrıntısı ADR'ye
    girmez. Gerekçe özel takip deposundaki karar kaydındadır; ADR karar numarasına atıf yapar.
-7. **Numara ve onay:** numarayı koordinatör verir. ADR metni kullanıcının yazılı onayıyla girer; ADR değişikliği de öyle.
-8. **Bakım:** araç çapa, durum, iki yönlü bağ ve açık depo kurallarını her `kontrol`de denetler. Anlamsal çelişkiyi araç bulamaz; her ADR
+7. **Şablon:** yeni ADR `SABLON.md`'den başlar; 0025 ve sonrasında `## Bağlam`, `## Karar`, `## Sonuçlar` başlıkları araçla
+   istenir. Eski ADR'ler değişmezlik kuralı gereği yeniden biçimlenmez.
+8. **Numara ve onay:** numarayı koordinatör verir. ADR metni kullanıcının yazılı onayıyla girer; ADR değişikliği de öyle.
+9. **Bakım:** araç çapa, durum, iki yönlü bağ, koddaki atıf, şablon ve açık depo kurallarını her `kontrol`de denetler. Anlamsal çelişkiyi araç bulamaz; her ADR
    değişikliğinde "hangi ADR'lere dokunuyor" sorusu cevaplanır ve dönemsel taramayla bakılır.
