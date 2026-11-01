@@ -10,8 +10,10 @@ const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'
 const PW={1:4,2:2,3:1};
 /* 35 b: bölünen siparişin parçası siparişin adet payını taşır (pay); gecikmesi ve cezası o payla sayılır, parçalar siparişi birden çok saymaz */
 function isPayi(j){return j.pay>0&&j.pay<1?+j.pay:1;}
-/* 1461 a: siparişin gecikme cezası tutarın günlük yüzdesi (parçanın geliri zaten payıyla oranlıdır), tavan tutarın yüzdesi; tavan girilmemişse sınır yoktur */
-function siparisCezasi(j,T){const p=T/24*j.gelir*j.cezaOran/100;return j.cezaTavan!=null?Math.min(p,j.gelir*j.cezaTavan/100):p;}
+/* 1461 a: siparişin gecikme cezası tutarın günlük yüzdesi (parçanın geliri zaten payıyla oranlıdır), tavan tutarın yüzdesi.
+   1500 a: tavan girilmemişse tek varsayılan %10'dur; sayfanın bedel ayarı (durum.betik AG0.tavan) da bunu okur, iki taraf aynı cezayı verir. */
+const CEZA_TAVANI_VARSAYILAN=10;
+function siparisCezasi(j,T){const p=T/24*j.gelir*j.cezaOran/100,t=j.cezaTavan!=null?+j.cezaTavan:CEZA_TAVANI_VARSAYILAN;return Math.min(p,j.gelir*t/100);}
 function isAgirligi(j){return (PW[j.oncelik]||1)*isPayi(j);}
 const W0={amac:'sirali',rule:'atcs',alpha:.3,ceza:150,cezaPuan:10,ayarPuan:2,mu:15,lam:400,famK:.3,mat:'uyari',dondurma:4,
   k1:2,k2:.6,otoKabul:false,mesaiHafta:8,lnsMs:2000,iyiMs:3000,tampon:true,tamponZ:1.28,acilPay:.05,otoDegisim:6,mcN:40,mcSigma:.15,mcAriza:true,l2Ms:1500};
