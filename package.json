@@ -22,6 +22,7 @@
     "baslat": "node araclar/baslat.ts",
     "bekci": "node araclar/bekci.ts",
     "otomatik-baslat": "node araclar/bekci.ts otomatik-baslat",
+    "dis-bekci": "node araclar/dis-bekci.ts",
     "derle:arkon": "vite build --config arkon/vite.config.ts",
     "goc": "node --import ./araclar/ortam-yukle-goc.ts sunucu/cekirdek/goc-calistir.ts",
     "yonetici": "node --import ./araclar/ortam-yukle.ts araclar/yonetici-olustur.ts",
