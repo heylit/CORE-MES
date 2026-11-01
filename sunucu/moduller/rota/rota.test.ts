@@ -9,7 +9,7 @@ import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  AdimGirdisi, AgacCevabi, PatlatmaCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
+  AdimGirdisi, AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -703,9 +703,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await yururlugeAlinmisRota(alt, [yeniAdim({ bilesenler: [{ malzemeId: alt2, miktar: 3, fireYuzde: 0 }] }), yeniAdim()]);
     const id = await yururlugeAlinmisRota(ust, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [{ malzemeId: alt, miktar: 2, fireYuzde: 0 }] })]);
     const yol = `/rota/revizyonlar/${id}/emre-kopyala`;
+    // 1476-C: stok adımı düğümüyle okuduğundan çok katmanlı emir taslak olmadan da açılır.
     const plansiz = await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, cokKatmanli: true });
-    assert.notEqual(plansiz.statusCode, 200);
-    assert.match(plansiz.body, /yalnız taslak/);
+    assert.equal(plansiz.statusCode, 200, plansiz.body);
     assert.equal((await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, stoktanDugumler: ['0.1'] })).statusCode, 422);
     const k = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, taslak: true, cokKatmanli: true });
     assert.equal(k.isEmriIdleri.length, 5);
@@ -729,13 +729,16 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(bilesenler.some((b) => b.malzemeNo === alt || b.malzemeNo === alt2), false);
     const emir = await vt().tx((db) => db.tek<{ patlatmaId: number; surum: number }>('SELECT patlatma_id AS "patlatmaId", surum FROM uretim_emri WHERE id = $1', [k.uretimEmriId]));
     assert.ok(emir?.patlatmaId);
-    const p = await tamam<PatlatmaCevabi>(c.operator, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`);
+    // ADR 0022 madde 6 (1526-b): patlatmayı emri açabilen okur; yalnız oturumu olan reddedilir.
+    for (const cerez of [c.operator, c.cam]) assert.equal((await istek(cerez, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`)).statusCode, 403);
+    const p = await tamam<PatlatmaCevabi>(c.planlama, 'GET', `/rota/patlatmalar/${emir.patlatmaId}`);
     assert.deepEqual(p.satirlar.map((x) => [x.dugum, x.katman, x.kaynakOpNo, x.tuketenDugum, x.tuketenOpNo]), [
       ['0.1.1', 2, 10, '0.1', 10], ['0.1', 1, 10, '0', 20], ['0.1', 1, 20, '0', 20], ['0', 0, 10, null, null], ['0', 0, 20, null, null],
     ]);
-    assert.equal((await istek(c.operator, 'GET', '/rota/patlatmalar/999999')).statusCode, 404);
-    // Stok ve plan bağı gelene dek emir taslakta kalır; parti ve rota komutları reddedilir.
-    assert.equal((await istek(c.planlama, 'POST', `/adimli-emirler/${k.uretimEmriId}/plana-al`, { surum: emir.surum })).statusCode, 409);
+    assert.equal((await istek(c.planlama, 'GET', '/rota/patlatmalar/999999')).statusCode, 404);
+    // Taslak emir plana alınır (1476-C); parti ve rota komutları düğüm düzenini bozacağından reddedilir.
+    const planda = await istek(c.planlama, 'POST', `/adimli-emirler/${k.uretimEmriId}/plana-al`, { surum: emir.surum });
+    assert.equal(planda.statusCode, 200, planda.body);
     assert.equal((await istek(c.planlama, 'POST', `/rota/emirler/${k.uretimEmriId}/yururlukteki-rotayi-uygula`)).statusCode, 409);
     // Aynı revizyonlarla ikinci emir aynı patlatmayı kullanır (donmuş görüntü, 1481 a); stoktan karşılanan düğüm ve alt ağacı emre girmez (1483 a).
     const k2 = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', yol, {
@@ -750,6 +753,39 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 4, teslim: null, taslak: true, cokKatmanli: true, stoktanDugumler: ['0.9'] })).statusCode, 422);
     // Patlatma değişmez.
     await assert.rejects(vt().tx((db) => db.sorgu('DELETE FROM rota_patlamis_rota WHERE patlatma_id = $1', [emir.patlatmaId])));
+  });
+
+  test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {
+    const ust = await mamulAc();
+    const alt = await mamulAc();
+    const alt2 = await mamulAc();
+    const hm = await hammaddeAc();
+    await yururlugeAlinmisRota(alt2, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] })]);
+    await yururlugeAlinmisRota(alt, [yeniAdim({ bilesenler: [{ malzemeId: alt2, miktar: 3, fireYuzde: 0 }] }), yeniAdim()]);
+    const id = await yururlugeAlinmisRota(ust, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [{ malzemeId: alt, miktar: 2, fireYuzde: 0 }] })]);
+    const yol = `/rota/revizyonlar/${id}/patlatma-onizleme`;
+    for (const cerez of [c.operator, c.cam]) assert.equal((await istek(cerez, 'GET', yol)).statusCode, 403);
+    assert.equal((await istek(c.planlama, 'GET', '/rota/revizyonlar/999999/patlatma-onizleme')).statusCode, 404);
+    const sayac = () => vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_patlatma WHERE kok_rota_revizyonu_id = $1', [id]));
+    const o = await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', yol);
+    assert.equal((await sayac())?.n, 0);
+    assert.equal(o.ileti, null);
+    assert.equal(o.engel, null);
+    assert.deepEqual(o.dugumler.map((d) => [d.dugum, d.dal, d.katman, d.malzeme.id, d.kokBasina, d.tuketen && [d.tuketen.dal, d.tuketen.kaynakOpNo, d.tuketen.emirOpNo], d.adimlar.map((a) => [a.kaynakOpNo, a.emirOpNo])]), [
+      ['0.1.1', 'K1.1', 2, alt2, '6', ['K1', 10, 1020], [[10, 1010]]],
+      ['0.1', 'K1', 1, alt, '2', [null, 20, 20], [[10, 1020], [20, 1030]]],
+      ['0', null, 0, ust, '1', null, [[10, 10], [20, 20]]],
+    ]);
+    // Açılış önizlemedeki numaraları kullanır.
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 4, teslim: null, taslak: true, cokKatmanli: true });
+    const nolar = await vt().tx((db) => db.sorgu<{ opNo: number }>('SELECT op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [k.uretimEmriId]));
+    assert.deepEqual(nolar.map((x) => x.opNo), o.dugumler.flatMap((d) => d.adimlar.map((a) => a.emirOpNo)));
+    // Kesirli kök başına adet: düğümler görünür, çok katmanlı emir açılamaz.
+    const kok2 = await mamulAc();
+    const id2 = await yururlugeAlinmisRota(kok2, [yeniAdim({ bilesenler: [{ malzemeId: alt2, miktar: 0.5, fireYuzde: 0 }] })]);
+    const o2 = await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id2}/patlatma-onizleme`);
+    assert.match(String(o2.engel), /tam sayı/);
+    assert.deepEqual(o2.dugumler.map((d) => [d.dal, d.kokBasina]), [['K1', '0.5'], [null, '1']]);
   });
 
   test('RT-58: ağaç üstten aşağı toplam ihtiyacı fire paylarıyla döner; alt mamul kendi rotasıyla açılır', async () => {

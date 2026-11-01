@@ -221,9 +221,11 @@ function fasonBeklemeleriniEkle(D, istek, opOf) {
 function kuyrukMakineleriniEkle(k, D, istek, opOf) {
   const emir = new Map(((k && k.orders) || []).map(o => [String(o.id), o]));
   const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  /* 1476-D: alt düğüm siparişi emir listesinde yoktur; ürünü siparişindendir */
+  const sip = new Map((D.siparisler || []).filter(s => s.dugum).map(s => [String(s.id), s]));
   for (const q of istek.kuyruklar) for (const a of q.anahtarlar) {
     const id = opOf[a]; if (!id) continue;
-    const n = id.lastIndexOf('.'), o = emir.get(id.slice(0, n)), u = o && urun.get(o.itemId), key = id.slice(n + 1);
+    const n = id.lastIndexOf('.'), o = emir.get(id.slice(0, n)), ds = sip.get(id.slice(0, n)), u = o ? urun.get(o.itemId) : ds && urun.get(ds.urun), key = id.slice(n + 1);
     const r = u && (u.rota || []).find(x => String(x.k) === key);
     if (!r || r.fason || !(r.tezgahlar || []).length) continue;
     const m = String(q.makineId);

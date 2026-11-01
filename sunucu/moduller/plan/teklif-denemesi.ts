@@ -17,7 +17,8 @@ function denemeKodu(): string {
   return kod;
 }
 
-export interface TeklifKalemi { id: string; urun: string; adet: number }
+// adimAdetleri: adımın adedi ürün rotasının sırasıyla (dal çarpanı, 1257 a; 1527); verilmezse her adım kalem adedi.
+export interface TeklifKalemi { id: string; urun: string; adet: number; adimAdetleri?: number[] }
 export interface TeklifTaslagi { id: string; kalemler: Array<TeklifKalemi & { termin: string }>; yerlesim: Record<string, { m: string; S: number }> }
 export interface DenemeIstegi {
   calisma: unknown;

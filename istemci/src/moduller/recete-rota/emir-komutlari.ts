@@ -100,6 +100,13 @@ const terminGunu = (v: unknown): number | null => {
   return n;
 };
 
+// Düğüm yolu "0.1.2" biçimindedir; biçim ve varlık sahibinin ucunda denetlenir, burada yalnız dizi ve metin olduğu.
+const dugumYollari = (v: unknown): string[] => {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || !v.every((x): x is string => typeof x === 'string')) throw new Error('Geçersiz stoktan düğüm listesi.');
+  return v;
+};
+
 const emirOku = async (id: number): Promise<AdimliEmirAyrintisi> => (await api.get<AdimliEmirCevabi>(`/adimli-emirler/${String(id)}`)).emir;
 
 export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
@@ -137,6 +144,8 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
           adet, teslim: tarih(girdi['due'], 'teslim'), baslangic: tarih(girdi['start'], 'başlangıç'), aciklama: not,
           ...(oncelik === undefined ? {} : { oncelik }), ...(girdi['taslak'] === true ? { taslak: true } : {}),
           ...(girdi['rezerve'] === true ? { stoktanRezerve: true } : {}), ...(emirTuru === undefined ? {} : { emirTuru }), ...baglam,
+          // 1476-F: tek emir çok katmanlı reçetenin tamamını taşır; stoktan karşılanacak düğümler emre girmez (1483 a).
+          ...(girdi['cokKatmanli'] === true ? { cokKatmanli: true, stoktanDugumler: dugumYollari(girdi['stoktanDugumler']) } : {}),
         },
         tekrarKorumali: true,
       };

@@ -241,6 +241,10 @@ export interface EmirKaydi {
     kaynak?: { tur: string; id: number } | null; terminGun?: number | null;
     // Rotadan gelen adım 'rota'dır; kola konan rework, tamir ya da ek adım türünü taşır. Verilmezse rota adımı sayılır.
     tur?: 'rota' | 'rework' | 'tamir' | 'ek';
+    // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"), düğüm ürününün rotasındaki op numarası ve kök başına adedi; emir içindeki
+    // öncüller (op_no). Tek katmanlı emirde düğüm yoktur.
+    dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani?: string } | null;
+    onculler?: readonly { opNo: number }[] | null;
   }[];
 }
 
@@ -248,12 +252,47 @@ export interface EmirKaydi {
 // rotada yoktur ama iş emri sırası alır: rota adımının yeri, sırasından önündeki ek adımların sayısı düşülerek bulunur. Ek adımın yeri yoktur.
 // Rotasız emrin (revizyonsuz) bütün adımları kendi adımlarıdır (adim-ekle 'ek' yazar); orada sıra adımın yeridir (rotasizAdimlariCevir).
 const ekAdimMi = (i: EmirKaydi['isEmirleri'][number]): boolean => (i.tur ?? 'rota') !== 'rota';
+const kokAdimiMi = (i: EmirKaydi['isEmirleri'][number]): boolean => i.dugum == null || i.dugum.ad === '0';
 // 701: kolun iş emri sırası 1'den başlar, ilk adımı ise rotanın n+1. adımıdır (n: ayrıldığı yer, kolCevir); kolun yeri n kadar kayar.
+// 1476-D: çok katmanlı emirde alt düğüm adımları kökten önce sıralanır ve kökün rotasında yer almaz; kök adımın yeri yalnız kökün rota
+// adımları arasındaki sırasıdır. Alt düğüm adımı kendi düğümüyle gider (dugumleriCevir).
 function rotaYeri(e: EmirKaydi, sira: number, kolKaymasi = 0): number | null {
   if (e.kaynakRotaRevizyonId === null) return sira;
   const i = e.isEmirleri.find((x) => x.sira === sira);
-  if (i !== undefined && ekAdimMi(i)) return null;
+  if (i !== undefined && (ekAdimMi(i) || !kokAdimiMi(i))) return null;
+  if (e.isEmirleri.some((x) => !kokAdimiMi(x))) {
+    return kolKaymasi + e.isEmirleri.filter((x) => x.sira <= sira && kokAdimiMi(x) && !ekAdimMi(x)).length;
+  }
   return kolKaymasi + sira - e.isEmirleri.filter((x) => x.sira < sira && ekAdimMi(x)).length;
+}
+
+// 1476-D: çok katmanlı emrin alt düğümleri motorun montaj bağına (plan motor/girdi.betik): her düğüm kendi ürününün rotasıyla ayrı iş olur,
+// çıktısını tüketen üst adımı bekletir. Tüketen adım üst düğümde, öncülleri arasında bu düğümün bir adımı bulunan ilk adımdır (emrin kendi
+// kaydı; emir açılırken patlatmadan kurulur). carpan kök başına, birim üst düğüm başına adettir; okunamayan çarpan null (uydurulmaz).
+export function dugumleriCevir(e: EmirKaydi): NonNullable<DurumEmirleri['orders'][number]['dugumler']> | undefined {
+  const gruplar = new Map<string, EmirKaydi['isEmirleri'][number][]>();
+  for (const i of [...e.isEmirleri].sort((a, b) => a.sira - b.sira)) {
+    if (i.dugum == null || i.dugum.ad === '0' || ekAdimMi(i)) continue;
+    gruplar.set(i.dugum.ad, [...(gruplar.get(i.dugum.ad) ?? []), i]);
+  }
+  if (gruplar.size === 0) return undefined;
+  const carpan = (d: string): number | null => {
+    if (d === '0') return 1;
+    const n = Number(gruplar.get(d)?.[0]?.dugum?.birimCarpani);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const kok = [...e.isEmirleri].filter((i) => kokAdimiMi(i)).sort((a, b) => a.sira - b.sira);
+  return [...gruplar].map(([d, adimlar]) => {
+    const ust = d.slice(0, d.lastIndexOf('.'));
+    const kendi = new Set(adimlar.map((a) => a.opNo));
+    const tuketen = (ust === '0' ? kok : gruplar.get(ust) ?? []).find((a) => (a.onculler ?? []).some((o) => kendi.has(o.opNo)));
+    const c = carpan(d), uc = carpan(ust);
+    return {
+      dugum: d, itemId: String(adimlar[0]!.dugum!.malzemeNo), carpan: c, birim: c === null || uc === null ? null : c / uc, ust,
+      ustOpNo: tuketen === undefined ? null : tuketen.dugum?.kaynakOpNo ?? tuketen.opNo,
+      adimlar: adimlar.map((a) => ({ opNo: a.opNo, kaynakOpNo: a.dugum!.kaynakOpNo, durum: a.durum })),
+    };
+  });
 }
 function kolAyrilmaYeri(e: EmirKaydi, ana: EmirKaydi): number {
   // Bölünme sırası ana emrin sırasıdır; önündeki ek adımlar rotada yer tutmaz.
@@ -324,6 +363,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
         };
       }
     }
+    const dugumler = e.kaynakRotaRevizyonId === null ? undefined : dugumleriCevir(e);
     return {
       id: String(e.id), kayitNo: e.id, no: e.emirNo, itemId: String(e.malzemeNo), qty: e.adet, start: e.baslangic, due: e.teslim, priority: e.oncelik,
       note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), status: EMIR_DURUMU_PROTOTIP[e.durum],
@@ -331,6 +371,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       parentId: e.ustEmirId === null ? null : String(e.ustEmirId), kol,
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,
       ...(e.kaynakRotaRevizyonId === null ? { rotasiz: true, adimlar: rotasizAdimlariCevir(e.isEmirleri) } : {}),
+      ...(dugumler === undefined ? {} : { dugumler }),
       ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
     };
   });

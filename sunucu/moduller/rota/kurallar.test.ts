@@ -6,7 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { girdiEksigi, hazirlikBol, isEmriBagimliligi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
@@ -614,6 +614,11 @@ describe('1476 patlamış rota ve çok katmanlı emir', () => {
     const tek = cokKatmanaCevir(p.satirlar, girdiler, ['0.1']);
     assert.ok('girdiler' in tek);
     assert.deepEqual(tek.girdiler.map((g) => [g.opNo, g.onculler, g.dugum.ad]), [[10, null, '0']]);
+  });
+  test('1476-F önizleme numarası: kök numarası korunur, alt düğümler satır sırasıyla sonraki binlikten onar artar; dal adı kökte yok', () => {
+    const satirlar = [{ dugum: '0.1.1', kaynakOpNo: 10 }, { dugum: '0.1', kaynakOpNo: 10 }, { dugum: '0.1', kaynakOpNo: 20 }, { dugum: '0', kaynakOpNo: 10 }, { dugum: '0', kaynakOpNo: 1200 }];
+    assert.deepEqual([...emirOpNumaralari(satirlar)], [['0.1.1|10', 2010], ['0.1|10', 2020], ['0.1|20', 2030], ['0|10', 10], ['0|1200', 1200]]);
+    assert.deepEqual(['0', '0.1', '0.2.13'].map(dugumDalAdi), [null, 'K1', 'K2.13']);
   });
   test('dallı alt düğümün birleşmeyen son adımları tüketen adımın öncülü olur', () => {
     const p = rotaPatlat(1, new Map([[1, rota(10, [[10, [[2, 1]]]])], [2, rota(20, [[10, []], [20, []], [30, []]])]]));

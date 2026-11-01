@@ -1032,6 +1032,19 @@ export interface KatmanDugumu {
   birimCarpani: string;
 }
 
+// Düğümün emirdeki dal adı: "0.2.1" -> "K2.1"; kök dalsızdır.
+export const dugumDalAdi = (dugum: string): string | null => (dugum === '0' ? null : `K${dugum.slice(2)}`);
+
+// Patlamış satırların emirdeki op numaraları (1484 a): kök adımlar rotadaki numarayı korur, alt düğüm adımları satır sırasıyla kökün en
+// büyük numarasından sonraki binlikten onar artar. Emir açılışı (cokKatmanaCevir) ve önizleme aynı numarayı verir. Anahtar "düğüm|rota op no".
+export function emirOpNumaralari(satirlar: readonly Pick<PatlamisSatir, 'dugum' | 'kaynakOpNo'>[]): Map<string, number> {
+  const enBuyuk = Math.max(0, ...satirlar.filter((x) => x.dugum === '0').map((x) => x.kaynakOpNo));
+  let yeniNo = (Math.floor(enBuyuk / 1000) + 1) * 1000;
+  const numara = new Map<string, number>();
+  for (const x of satirlar) numara.set(`${x.dugum}|${x.kaynakOpNo}`, x.dugum === '0' ? x.kaynakOpNo : (yeniNo += 10));
+  return numara;
+}
+
 // Emir dal sütunu en çok 20 karakter; dal çarpanı 1-1000 tam sayı (uretim_emirleri_is_emri_dali kısıtları).
 const EMIR_DAL_AZAMI = 20;
 const DAL_CARPANI_AZAMI = 1000;
@@ -1054,22 +1067,16 @@ export function cokKatmanaCevir<T extends KatmanAdimi>(
   const disarida = (d: string) => stoktan.some((x) => d === x || d.startsWith(`${x}.`));
   const kalan = satirlar.filter((x) => !disarida(x.dugum));
   const sirali = [...new Set(kalan.map((x) => x.dugum))];
-  const kokAdimlari = dugumGirdileri.get('0') ?? [];
   const altVar = sirali.some((d) => d !== '0');
-  const enBuyuk = Math.max(0, ...kokAdimlari.map((a) => a.opNo));
-  let yeniNo = (Math.floor(enBuyuk / 1000) + 1) * 1000;
-  const numara = new Map<string, number>();
   const bilgi = new Map<string, PatlamisSatir>();
   const bas = new Map<string, PatlamisSatir>();
   for (const x of kalan) { bilgi.set(`${x.dugum}|${x.kaynakOpNo}`, x); if (!bas.has(x.dugum)) bas.set(x.dugum, x); }
   for (const d of sirali) {
-    const adimlar = [...(dugumGirdileri.get(d) ?? [])].sort((a, b) => a.sira - b.sira);
-    for (const a of adimlar) {
+    for (const a of dugumGirdileri.get(d) ?? []) {
       if (!bilgi.has(`${d}|${a.opNo}`)) return { ileti: `${d} düğümünün ${a.opNo} adımı patlatmada yok.`, alan: 'isEmirleri' };
-      if (d === '0') numara.set(`${d}|${a.opNo}`, a.opNo);
-      else { yeniNo += 10; numara.set(`${d}|${a.opNo}`, yeniNo); }
     }
   }
+  const numara = emirOpNumaralari(kalan);
   // Düğümün son adımları: düğüm içinde hiçbir adımın öncülü olmayanlar; tek hatlıda son sıradaki.
   const sonAdimlar = (d: string): number[] => {
     const adimlar = [...(dugumGirdileri.get(d) ?? [])].sort((a, b) => a.sira - b.sira);
@@ -1108,7 +1115,7 @@ export function cokKatmanaCevir<T extends KatmanAdimi>(
       let dal = a.dal ?? null;
       let adetCarpani = a.adetCarpani ?? null;
       if (d !== '0') {
-        dal = `K${d.slice(2)}${a.dal ? `/${a.dal}` : ''}`;
+        dal = `${dugumDalAdi(d)}${a.dal ? `/${a.dal}` : ''}`;
         const carpan = p.birimCarpani * (a.adetCarpani ?? 1);
         if (!Number.isInteger(carpan) || carpan < 1 || carpan > DAL_CARPANI_AZAMI) {
           return { ileti: `${d} düğümünün kök başına adedi (${carpan}) 1-${DAL_CARPANI_AZAMI} arası tam sayı olmalı.`, alan: 'isEmirleri' };

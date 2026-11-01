@@ -29,6 +29,7 @@ export async function coz(
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, string> }> {
   const g = cozumGirdisi({
     ...kaynak,
+    kaynak: sanalAdimAdetleriyle(kaynak.kaynak, istek.sanalEmirler),
     istek: {
       simdi: istek.simdi.toISOString(), kuyruklar: istek.kuyruklar, sabitler: istek.sabitler,
       calisanlar: istek.calisanlar.map((c) => ({ anahtar: c.anahtar, makineId: c.makineId, baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk })),
@@ -65,6 +66,15 @@ export async function coz(
     yerlesimler.push({ anahtar, makineId, baslangic: planAni(g.baslangic, r.S), bitis: planAni(g.baslangic, r.C) });
   }
   return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
+}
+
+// 1527: sanal emrin (deneme emri) adım adetleri kaynak okumasının adimAdetleri'ne gerçek emirdeki anahtarla ("emir no|OP no") eklenir;
+// motor dal adımını (1257 a) gerçek emirdeki gibi okur, çarpanı kendisi uygulamaz. Çağıranın nesnesi değişmez.
+export function sanalAdimAdetleriyle<K extends { durum: unknown; ek: unknown } | null>(kaynak: K, sanalEmirler: PlanBenzetimi['sanalEmirler']): K {
+  const ek = Object.fromEntries((sanalEmirler ?? []).flatMap((e) => Object.entries(e.adimAdetleri ?? {}).map(([op, n]) => [`${e.no}|${op}`, n])));
+  if (kaynak === null || Object.keys(ek).length === 0 || typeof kaynak.durum !== 'object' || kaynak.durum === null) return kaynak;
+  const durum = kaynak.durum as { adimAdetleri?: Record<string, number> | null };
+  return { ...kaynak, durum: { ...durum, adimAdetleri: { ...(durum.adimAdetleri ?? {}), ...ek } } };
 }
 
 // Motorda karşılığı olmayan kuyruk işi: adım ürünün yürürlükteki rotasında yok (983 b), emir ya da ürünü okunamadı.

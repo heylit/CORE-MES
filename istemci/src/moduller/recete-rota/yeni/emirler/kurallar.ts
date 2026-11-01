@@ -2,6 +2,7 @@ import type { DurumEmirleri, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-
 import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
 import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { PatlatmaOnizlemeCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
 import type { EkranYerlesimi } from '../veri.ts';
@@ -536,4 +537,30 @@ export function surectekiMalzeme(d: Pick<DurumCevabi, 'emirler' | 'routes' | 'ro
   }
   return [...satir.values()].map(({ emirMiktari, ...s }) => ({ ...s, emirler: [...emirMiktari].map(([no, q]) => `${no}: ${sayi(q)}`).join(', ') }))
     .sort((a, b) => a.urun.localeCompare(b.urun) || a.opNo - b.opNo);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Çok katmanlı emir (1476-F, 1483 a): stoktan karşılanan alt parça alt ağacıyla emre girmez. Seçim düğüm yoludur ("0.1"); gönderilen liste
+// en üstteki seçilenlerdir (altı zaten çıkar). Kök stoktan seçilemez.
+export const stoktanCikar = (dugum: string, stoktan: ReadonlySet<string>): boolean =>
+  [...stoktan].some((x) => x !== '0' && (dugum === x || dugum.startsWith(`${x}.`)));
+
+type OnizlemeDugumu = PatlatmaOnizlemeCevabi['dugumler'][number];
+// Emir yalnız ürünün yürürlükteki revizyonundan açılır (emir-ac komutu da onu bulur); yoksa null.
+export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {
+  const r = (d.routeRevs ?? []).find((x) => x.itemId === urunId && x.status === 'yururlukte');
+  return r === undefined ? null : Number(r.id);
+}
+
+export interface CokKatmanOzeti { parca: number; kokAdim: number; altAdim: number; stoktan: OnizlemeDugumu[]; gonderilecek: string[] }
+export function cokKatmanOzeti(dugumler: readonly OnizlemeDugumu[], stoktan: ReadonlySet<string>): CokKatmanOzeti {
+  const ustSecilen = dugumler.filter((d) => d.dugum !== '0' && stoktan.has(d.dugum) && !stoktanCikar(d.dugum.split('.').slice(0, -1).join('.'), stoktan));
+  const kalan = dugumler.filter((d) => !stoktanCikar(d.dugum, stoktan));
+  return {
+    parca: kalan.length,
+    kokAdim: kalan.filter((d) => d.dugum === '0').reduce((t, d) => t + d.adimlar.length, 0),
+    altAdim: kalan.filter((d) => d.dugum !== '0').reduce((t, d) => t + d.adimlar.length, 0),
+    stoktan: ustSecilen,
+    gonderilecek: ustSecilen.map((d) => d.dugum),
+  };
 }

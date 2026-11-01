@@ -20,7 +20,7 @@ import {
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
-import { planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
@@ -428,6 +428,23 @@ export interface TeklifPlani {
 
 const fasonMu = (m: string): boolean => m.startsWith('@');
 
+// 1527: teklif kaleminin adım adetleri, motorun ürün rotasıyla aynı sırada (seq): rota motora kaynak okumasından (yoksa kayıttan) gelir.
+// Dal adımı bir mamul için çarpan kadar parça işler (1257 a); adet gerçek emirdeki gibi uretim-emirleri'nin kuralından, plan çarpanı
+// kendisi uygulamaz. Rotası okunamayan ürünün kalemi alansız gider (motor her adımı kalem adedi sayar).
+type RotaAdimKaydi = { seq: number; opNo: number; adetCarpani?: number | null };
+type RotaKayitlari = Record<string, { steps?: RotaAdimKaydi[] } | undefined> | null | undefined;
+export function teklifAdimAdetleri(kaynak: KaynakOkumasi | null, kayit: unknown): (urun: string, adet: number) => { adimAdetleri?: number[] } {
+  const rotalar = (x: unknown): RotaKayitlari => (typeof x === 'object' && x !== null ? (x as { routes?: RotaKayitlari }).routes : null);
+  const kaynakta = rotalar(kaynak?.durum), kayitta = rotalar(kayit);
+  return (urun, adet) => {
+    const adimlar = (kaynakta?.[urun] ?? kayitta?.[urun])?.steps;
+    if (!adimlar?.length) return {};
+    const sirali = [...adimlar].sort((a, b) => a.seq - b.seq);
+    const n = rotadanAdimAdetleri(adet, sirali);
+    return { adimAdetleri: sirali.map((a) => n.get(a.opNo) ?? adet) };
+  };
+}
+
 // Çalışma yoksa null (planlama sayfası hiç açılıp kaydedilmemiş). Süre sınırı aşılırsa hata.
 export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGirdisi, simdi: number = Date.now()): Promise<TeklifDenemeSonucu | null> {
   const calisma = kayitDegeri(await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: { meta?: { baslangic?: unknown } } } | null;
@@ -437,14 +454,17 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
   const bugun = tesisGunu(simdi);
   const baslangic = typeof calisma.D.meta?.baslangic === 'string' ? calisma.D.meta.baslangic : bugun;
   const saat = (an: string): number => planSaati(baslangic, an);
+  const adimlar = teklifAdimAdetleri(kaynak, kayit);
   const taslaklar: TeklifTaslagi[] = g.taslaklar.filter((t) => t.gecerlilik >= bugun).map((t) => ({
     id: t.id,
-    kalemler: t.kalemler.map((k, i) => ({ id: `${t.id}-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, termin: `${k.termin} 23:00` })),
+    kalemler: t.kalemler.map((k, i) => ({
+      id: `${t.id}-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, termin: `${k.termin} 23:00`, ...adimlar(String(k.malzemeNo), k.adet),
+    })),
     yerlesim: Object.fromEntries(t.kalemler.flatMap((k, i) => Object.entries(k.yerlesim).map(([adim, y]) => [`${t.id}-${String(i + 1)}.${adim}`, { m: y.makineId, S: saat(y.baslangic) }]))),
   }));
   const r: DenemeSonucu | null = await teklifDenemesi({
     calisma, kayit, kaynak, bugun,
-    kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet })),
+    kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, ...adimlar(String(k.malzemeNo), k.adet) })),
     termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
     taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await sorgular.ayarOku(db, null)).tamponGun, gecerlilik: g.gecerlilik,
   });

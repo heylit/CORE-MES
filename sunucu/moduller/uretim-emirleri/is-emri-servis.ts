@@ -44,7 +44,6 @@ const TIP_YOK = 'Operasyon tipi bulunamadı.';
 const FASON_FIRMA_YOK = 'Fason firma bulunamadı, pasif ya da fason işaretli değil.';
 const KONTROL_LISTESI = `Kontrol listesi en çok ${AZAMI_ADIM} maddedir; madde adı boş olamaz, en çok 120 karakterdir.`;
 const URETILEBILIR_TURLER: readonly string[] = ['mamul', 'yarimamul'];
-const COK_KATMANLI_PLANA = 'Çok katmanlı emrin stok ve plan bağı henüz kurulmadı; emir taslakta kalır (kart 1476).';
 const COK_KATMANLI_DEGISMEZ = 'Çok katmanlı emir bölünmez, birleştirilmez ve rotası yeniden uygulanmaz (kart 1476).';
 
 // 1476: patlamış rotadan açılmış emirde parti ve rota komutları düğüm düzenini bozar; bu komutlar reddedilir.
@@ -252,7 +251,7 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
   const baslik = await basligiDenetle(db, g);
   girdiDenetle(g.isEmirleri);
-  const dugumIhlali = dugumGirdisiIhlali(g.patlatmaId ?? null, g.taslak === true, g.isEmirleri);
+  const dugumIhlali = dugumGirdisiIhlali(g.patlatmaId ?? null, g.isEmirleri);
   if (dugumIhlali !== null) throw dogrulama(dugumIhlali, 'isEmirleri');
   const tipler = await tipKimlikleri(db);
   const sirali = [...g.isEmirleri].sort((a, b) => a.sira - b.sira);
@@ -542,6 +541,10 @@ export interface EmirDilimiSatiri {
     ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null; bilesenler: { malzemeId: number; miktar: string; fireYuzde: string }[];
     // 697: ek adım (rework, tamir, ek) rotada yer tutmaz; Reçete ve Rota durum anahtarını rotadaki yerle kurar.
     tur: 'rota' | 'rework' | 'tamir' | 'ek';
+    // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"; rotadaki op numarası, kök başına adet) ve emir içindeki öncülleri (op no);
+    // plan motoru alt düğümü tüketen üst adıma bağlar. Tek katmanlı emirde düğüm null; dal satırı olmayan adımda öncüller null.
+    dugum: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
+    onculler: { opNo: number }[] | null;
   }[];
 }
 
@@ -553,6 +556,12 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
   const baslamislar = emirler.filter((e) => (emreGore.get(e.id) ?? []).some((i) => i.durum === 'calisiyor')).map((e) => e.id);
   const sayaclar = new Map((baslamislar.length === 0 ? [] : await s.sayaclariGetir(db, baslamislar)).map((x) => [x.emirId, x.saglam]));
   const bilesenler = await s.bilesenleriGetir(db, isEmirleri.map((i) => i.id));
+  const dugumler = new Map((await s.dugumleriGetir(db, emirler.map((e) => e.id))).map((d) => [d.isEmriId, d]));
+  const opNolari = new Map(isEmirleri.map((i) => [i.id, i.opNo]));
+  const dugumOf = (id: number): EmirDilimiSatiri['isEmirleri'][number]['dugum'] => {
+    const d = dugumler.get(id);
+    return d === undefined ? null : { ad: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani };
+  };
   return emirler.flatMap((e) => (e.malzemeNo === null ? [] : [{
     id: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, baslangic: e.baslangic, teslim: e.teslim, oncelik: e.oncelik, aciklama: e.aciklama,
     kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, acilma: e.acilma, bitis: e.bitis, ustEmirId: e.ustEmirId,
@@ -563,6 +572,8 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({ malzemeId: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde })),
       tur: i.tur,
+      dugum: dugumOf(i.id),
+      onculler: i.onculler === null ? null : i.onculler.flatMap((o) => { const op = opNolari.get(o.id); return op === undefined ? [] : [{ opNo: op }]; }),
     })),
   }]));
 }
@@ -640,7 +651,6 @@ export async function planaAl(db: Db, kullanici: Kullanici, id: number, surum?: 
   islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, surum);
-  await cokKatmanliDegil(db, id, COK_KATMANLI_PLANA);
   const ihlal = planaAlIhlali(e.durum, e.arsiv);
   if (ihlal !== null) throw cakisma(ihlal);
   await s.planaAlYaz(db, id, e.surum);
@@ -1607,6 +1617,7 @@ export async function emirlerinMalzemeIhtiyaci(db: Db, emirIdleri: readonly numb
   const ids = emirler.map((e) => e.id);
   const isEmirleri = await s.isEmirleriGetir(db, ids);
   const bilesenler = await s.bilesenleriGetir(db, isEmirleri.map((i) => i.id));
+  const carpanlar = new Map((await s.dugumleriGetir(db, ids)).map((d) => [d.isEmriId, Number(d.birimCarpani)]));
   // Birden çok kökten okunan ağaçta torun iki kez gelebilir (UNION ALL); tek kez sayılır.
   const agac = [...new Map((await s.altPartilerGetir(db, ids)).map((a) => [a.id, a])).values()];
   for (const e of emirler) {
@@ -1614,7 +1625,7 @@ export async function emirlerinMalzemeIhtiyaci(db: Db, emirIdleri: readonly numb
     const kendiIdleri = new Set(kendi.map((i) => i.id));
     sonuc.set(e.id, malzemeIhtiyaci(
       e.adet,
-      kendi.map((i) => ({ id: i.id, sira: i.sira, opNo: i.opNo, firePayiYuzde: Number(i.firePayiYuzde), onculler: i.onculler })),
+      kendi.map((i) => ({ id: i.id, sira: i.sira, opNo: i.opNo, firePayiYuzde: Number(i.firePayiYuzde), onculler: i.onculler, birimCarpani: carpanlar.get(i.id) ?? null })),
       bilesenler.filter((b) => kendiIdleri.has(b.isEmriId)).map((b) => ({ isEmriId: b.isEmriId, malzemeNo: b.malzemeNo, miktar: Number(b.miktar), fireYuzde: Number(b.fireYuzde) })),
       birlesmeSiralari(dogrudanAltPartiler(agac, e.id), kendi),
     ).map((m) => ({ malzemeNo: m.malzemeNo, opNo: m.opNo, brut: m.brut.toFixed(4) })));

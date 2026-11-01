@@ -487,6 +487,20 @@ export function partiKomutu(tur: ArkonKayitTuru, satir: Readonly<Record<string, 
   return satir['state'] === 'running' ? 'baslat' : satir['state'] === 'done' ? 'bitir' : null;
 }
 
+// 1476-E (1484 a): iş emrinin rota adımı (malzeme, revizyon, rotadaki op numarası). Tek katmanlı emirde emrin malzemesi, kaynak revizyonu ve
+// op_no'sudur; çok katmanlı emirde op_no yalnız emir içinde tekildir, adım düğümün malzemesi, patlatmadaki revizyonu ve kaynak_op_no ile bulunur.
+// Patlatmada bulunmayan düğümün revizyonu bilinmez (null): rotadan okunan seçim ve süre yerine iş emrinin kendi değeri kullanılır.
+export interface RotaAnahtari { malzemeNo: number; revizyonId: number | null; opNo: number }
+export function rotaAnahtari(
+  ie: { malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null | undefined },
+  dugum: { dugum: string; dugumMalzemeNo: number; kaynakOpNo: number; patlatmaId: number | null } | undefined,
+  patlatmalar: ReadonlyMap<number, ReadonlyMap<string, { revizyonId: number }>>,
+): RotaAnahtari {
+  if (dugum === undefined) return { malzemeNo: ie.malzemeNo, revizyonId: ie.kaynakRotaRevizyonId ?? null, opNo: ie.opNo };
+  const revizyonId = dugum.patlatmaId === null ? null : patlatmalar.get(dugum.patlatmaId)?.get(dugum.dugum)?.revizyonId ?? null;
+  return { malzemeNo: dugum.dugumMalzemeNo, revizyonId, opNo: dugum.kaynakOpNo };
+}
+
 // Şablon: aynı malzeme kartının aynı revizyon ve operasyon numaralı, en son yayınlanmış iş emri paketi. Revizyon değişince resim ve kontrol
 // planı eskisinden kopyalanmaz (revizyonu bilinmeyen emirde şablon yok).
 export function sablonPaket(kayitli: readonly unknown[], malzemeNo: number, opNo: number, revizyon: string | null): Record<string, unknown> | null {

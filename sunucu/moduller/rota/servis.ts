@@ -10,7 +10,7 @@ import { KATALOG_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KatalogMalzemeOzeti, KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimKaynakOzeti, AgacCevabi, PatlatmaCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
+  AdimKaynakOzeti, AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
   IsEmriSartnamesi, IsEmriSartnameleriCevabi, ParametreDegerleri, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameKapsami, SartnameOzeti, SartnameSurumu, SartnameTaslakGovdesiCikti,
   SartnamelerCevabi, StandartCevabi, TalimatAdimi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
@@ -29,7 +29,7 @@ import { malzemeAra as kartAra, malzemeOperasyonlari, malzemeOzetleri, operasyon
 import { adimliEmirAyrintisi, isEmirleriniYenile, isEmriSureOzeti, uretimEmriAc, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi, IsEmriKopyalandiOlayi } from '../uretim-emirleri/disari.ts';
 import {
-  YAZ, PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
+  YAZ, PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
   dalDenetle, hazirlikBol, isEmriBagimliligi, girdiEksigi, girdiOlabilirMi, oncullerCikar, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
   adimDegerleriDenetle, cozulmusDegerler, ekAdimSartnameIhlali, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
@@ -544,15 +544,19 @@ async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number): Promi
   return rotalar;
 }
 
+// Patlatma kurulamazsa ileti ürün kodlarıyla yolu gösterir (döngü ya da katman sınırı).
+async function patlatmaKur(db: Db, revizyonId: number, kokMalzemeId: number): Promise<{ satirlar: PatlamisSatir[] } | { ileti: string }> {
+  const p = rotaPatlat(kokMalzemeId, await patlatmaRotalari(db, kokMalzemeId, revizyonId));
+  if (!('ileti' in p)) return p;
+  if (p.yol === undefined) return { ileti: p.ileti };
+  const adlar = await urunOzetleri(db, p.yol);
+  return { ileti: `${p.ileti} ${p.yol.map((d) => adlar.get(d)?.stokKodu ?? adlar.get(d)?.ad ?? String(d)).join(' > ')}` };
+}
+
 // Patlatma kaydı emir açılışının parçasıdır (rota.emre-kopyala); ayrı yazma ucu yoktur. Aynı revizyon kümesi var olan kaydı döndürür.
 async function patlat(db: Db, kisiId: number, revizyonId: number, kokMalzemeId: number): Promise<{ id: number; satirlar: PatlamisSatir[] }> {
-  const rotalar = await patlatmaRotalari(db, kokMalzemeId, revizyonId);
-  const p = rotaPatlat(kokMalzemeId, rotalar);
-  if ('ileti' in p) {
-    if (p.yol === undefined) throw gecersiz(p.ileti);
-    const adlar = await urunOzetleri(db, p.yol);
-    throw gecersiz(`${p.ileti} ${p.yol.map((d) => adlar.get(d)?.stokKodu ?? adlar.get(d)?.ad ?? String(d)).join(' > ')}`);
-  }
+  const p = await patlatmaKur(db, revizyonId, kokMalzemeId);
+  if ('ileti' in p) throw gecersiz(p.ileti);
   const id = await s.patlatmaYaz(db, { kokMalzemeId, kokRevizyonId: revizyonId, ozet: patlatmaOzeti(p.satirlar), kisiId }, p.satirlar);
   return { id, satirlar: p.satirlar };
 }
@@ -581,6 +585,56 @@ export async function patlatmaGetir(db: Db, id: number): Promise<PatlatmaCevabi>
   const b = await s.patlatmaBasligiOku(db, id);
   if (b === null) throw bulunamadi('Patlatma bulunamadı.');
   return { id: b.id, kokMalzemeId: b.kokMalzemeId, kokRevizyonId: b.kokRevizyonId, zaman: b.zaman, satirlar: await s.patlatmaSatirlariOku(db, id) };
+}
+
+// Patlamış rota önizlemesi (1476-F): emir açılışıyla aynı kural ve numara, kayıt yazmadan. Kök verilen revizyondur, alt ürünler
+// yürürlükteki revizyonlarıyla açılır (emir yalnız yürürlükteki kök revizyondan açılır; ekran onu sorar).
+export async function patlatmaOnizlemesi(db: Db, revizyonId: number): Promise<PatlatmaOnizlemeCevabi> {
+  const kok = await revizyonGetir(db, revizyonId);
+  if (kok === null) throw bulunamadi('Rota revizyonu bulunamadı.');
+  const kokRevizyon = { id: kok.id, harf: kok.harf };
+  const p = await patlatmaKur(db, kok.id, kok.malzemeId);
+  if ('ileti' in p) return { kokRevizyon, ileti: p.ileti, engel: null, dugumler: [] };
+  const bas = [...new Map(p.satirlar.map((x) => [x.dugum, x])).values()];
+  const rotalar = new Map<string, RotaRevizyonu>();
+  const girdiler = new Map<string, Awaited<ReturnType<typeof isEmriGirdileri>>>();
+  for (const d of bas) {
+    const rota = d.dugum === '0' ? kok : await revizyonGetir(db, d.revizyonId);
+    if (rota === null) throw gecersiz('Alt parçanın rotası bulunamadı.');
+    rotalar.set(d.dugum, rota);
+    girdiler.set(d.dugum, await isEmriGirdileri(db, d.malzemeId, rota));
+  }
+  const c = cokKatmanaCevir(p.satirlar, girdiler, []);
+  const numara = emirOpNumaralari(p.satirlar);
+  const urunler = await urunOzetleri(db, bas.map((d) => d.malzemeId));
+  const b = await kaynakBaglami(db);
+  const yer = async (a: RotaAdimi): Promise<string | null> => {
+    if (a.fason) return (await kaynakOzetiAl(db, b, { tur: 'fason', id: a.fason.firmaId })).ad;
+    if (a.kaynak === null) return null;
+    const k = await kaynakOzetiAl(db, b, a.kaynak);
+    return k.istasyon?.ad ?? k.ad;
+  };
+  const dugumler: PatlatmaOnizlemeCevabi['dugumler'] = [];
+  for (const d of bas) {
+    const rota = rotalar.get(d.dugum)!;
+    const urun = urunler.get(d.malzemeId);
+    if (urun === undefined) throw gecersiz('Alt parçanın malzeme kartı bulunamadı.');
+    const satirlar = p.satirlar.filter((x) => x.dugum === d.dugum);
+    const adimlar = [];
+    for (const x of satirlar) {
+      const a = rota.adimlar.find((y) => y.opNo === x.kaynakOpNo);
+      adimlar.push({ kaynakOpNo: x.kaynakOpNo, emirOpNo: numara.get(`${d.dugum}|${x.kaynakOpNo}`)!, ad: a?.ad ?? '', yer: a ? await yer(a) : null });
+    }
+    dugumler.push({
+      dugum: d.dugum, dal: dugumDalAdi(d.dugum), katman: d.katman, malzeme: urun, revizyon: { id: rota.id, harf: rota.harf },
+      kokBasina: ondalikMetin(d.birimCarpani),
+      tuketen: d.tuketenDugum === null || d.tuketenOpNo === null ? null : {
+        dugum: d.tuketenDugum, dal: dugumDalAdi(d.tuketenDugum), kaynakOpNo: d.tuketenOpNo, emirOpNo: numara.get(`${d.tuketenDugum}|${d.tuketenOpNo}`)!,
+      },
+      adimlar,
+    });
+  }
+  return { kokRevizyon, ileti: null, engel: 'ileti' in c ? c.ileti : null, dugumler };
 }
 
 export async function agac(db: Db, id: number, miktar: number): Promise<AgacCevabi> {

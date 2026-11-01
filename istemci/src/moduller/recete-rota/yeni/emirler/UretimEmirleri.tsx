@@ -4,13 +4,14 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import type { RrDurumu } from '../veri.ts';
+import { usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
+import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
+  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
@@ -81,7 +82,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
       </div>
       {acabilir && yeniAcik && (
         <YeniEmirFormu
-          durum={d} yetki={yetki} komut={komut}
+          durum={d} yetki={yetki} komut={komut} git={git}
           acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setArama(''); setAcik(id); }}
         />
       )}
@@ -162,8 +163,8 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean }
 
-function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
-  durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void;
+function YeniEmirFormu({ durum: d, yetki, komut, acildi, git }: {
+  durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
 }) {
   // Emir yalnız mamul ya da yarı mamule açılır; rotası olan emre kopyalanır (rota.emre-kopyala), rotası olmayan rotasız açılır
   // (uretim-emirleri.yaz). İşlemi olmayan yolun ürünü listede yoktur.
@@ -176,13 +177,20 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
     urun: urunler[0]?.id ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true,
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
+  const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
   const [hata, setHata] = useState<string | null>(null);
+  // 1476-F: çok katmanlı seçim yalnız emri rotadan açabilene ve rotalı alt parçası olan ürüne görünür (önizleme sunucudan).
+  const kokRevizyon = yururlukteRevizyonId(d, f.urun);
+  const onizleme = usePatlatmaOnizlemesi(kokRevizyon, yetki.rotaEmreKopyala && uretilirMi(d, f.urun)).data;
+  const cokKatmanVar = onizleme !== undefined && onizleme.kokRevizyon.id === kokRevizyon && (onizleme.ileti !== null || onizleme.dugumler.length > 1);
+  const cokAcik = cokKatmanVar && cok.acik && onizleme.ileti === null && onizleme.engel === null;
   const yaz = (alan: Partial<YeniFormDurumu>) => { setF({ ...f, ...alan }); setHata(null); };
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
   }
   const rotali = uretilirMi(d, f.urun);
+  const cokOzet = cokAcik ? cokKatmanOzeti(onizleme.dugumler, cok.stoktan) : null;
   const adet = miktarOku(f.miktar);
   const sanal: Emir = {
     id: 'yeni', kayitNo: 0, no: 'Ana emir', itemId: f.urun, qty: adet.tamam && adet.deger !== null ? adet.deger : 0, start: f.baslangic, due: f.teslim,
@@ -194,13 +202,15 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
   const olustur = async () => {
     if (!adet.tamam || adet.deger === null || !(adet.deger > 0)) { setHata('Miktar sıfırdan büyük olmalı.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(f.teslim)) { setHata('Başlangıç ve teslim tarihini girin.'); return; }
-    const bolunur = bolme.tur === 'parti' || bolme.tur === 'kol';
+    // Çok katmanlı emir açılırken bölünmez (sunucu bölmeyi reddeder); taslak koşulu 1476-C ile kalktı.
+    const bolunur = !cokAcik && (bolme.tur === 'parti' || bolme.tur === 'kol');
     if (!rotali && bolunur) { setHata('Rotasız emir açılırken bölünmez; adımları ekledikten sonra bölün.'); return; }
     const b = bolunur ? bolmeSonucu(girdi, bolme) : null;
     if (b && !b.hazir) { setHata(b.ileti ?? b.ipucu ?? 'Bölmeyi tamamlayın.'); return; }
     const govde = {
       itemId: f.urun, qty: adet.deger, start: f.baslangic, due: f.teslim, priority: Number(f.oncelik), note: f.not.trim(), tur: f.tur, taslak: f.durum === 'taslak',
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
+      ...(cokOzet ? { cokKatmanli: true, stoktanDugumler: cokOzet.gonderilecek } : {}),
     };
     const c = await komut.calistir('emir-ac', govde);
     const id = acilanEmir(c.sonuc);
@@ -228,7 +238,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
       <h3>Yeni üretim emri</h3>
       <div className="tc-rr3-form">
         <Secim
-          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); }}
+          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
         <Girdi etiket="Miktar" inputMode="decimal" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
@@ -251,7 +261,11 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi }: {
           title="Girdiler serbest stoktan bu emre ayrılır; yetmeyen kısım mal kabulde öncelik sırasıyla gelir."
         />
       )}
-      {rotali && (
+      {cokKatmanVar && (
+        <CokKatmanPaneli onizleme={onizleme} durum={d} miktar={adet.tamam ? adet.deger : null} deger={cok} degistir={(s) => { setCok(s); setHata(null); }} git={git} />
+      )}
+      {rotali && cokAcik && <p className="tc-rr3-uyari" data-bilgi=""><Simge ad="alert" boyut="k" />Çok katmanlı emir açılırken bölünmez; sunucu bölmeyi bu emirde henüz kabul etmiyor.</p>}
+      {rotali && !cokAcik && (
         <BolmePaneli
           yeni girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
         />

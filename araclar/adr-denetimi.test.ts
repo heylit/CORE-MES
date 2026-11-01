@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { adrDenetle, depodanGirdi, dosyaDurumu, type Girdi } from './adr-denetimi.ts';
+import { adrDenetle, depodanGirdi, dosyaDurumu, kodAtiflariniBul, type Girdi } from './adr-denetimi.ts';
 
 const BASLIK = '| No | Başlık | Durum | Değiştirir | Değiştiren | Geçerli özet | Çapa |\n|---|---|---|---|---|---|---|\n';
 const satir = (no: string, durum: string, degistirir: string, degistiren: string, capa: string) =>
@@ -15,6 +15,7 @@ function girdi(ek: Partial<Girdi> = {}): Girdi {
     dizin: BASLIK + satir('0001', 'kabul', '-', '0002', 'sunucu/a.ts#birIs') + satir('0002', 'kabul', '0001', '-', '-'),
     adrler: [adr('0001', 'kabul edildi'), adr('0002', 'kabul', 'ADR 0001 madde 1\'i değiştirir.')],
     claude: 'İstisna (ADR 0001).\n',
+    kodAtiflari: [],
     yolVarMi: (yol) => yol in DOSYALAR || yol === 'sunucu',
     dosyaOku: (yol) => DOSYALAR[yol] ?? null,
     ...ek,
@@ -69,6 +70,41 @@ test('ADR denetimi: CLAUDE.md yürürlükte olmayan ADR\'ye durumu söylemeden a
     "CLAUDE.md:3: olmayan ADR'ye atıf: 0004",
   ]);
   assert.deepEqual(adrDenetle(girdi({ dizin, adrler, claude: 'Dış erişim askıda (ADR 0003 ertelendi).\r\n' })), []);
+});
+
+test('ADR denetimi: koddaki atıf bulunur; olmayan, yerine geçilmiş ve kaldırılmış ADR\'ye atıf reddedilir, kısmen yerine geçilmişe izin verilir', () => {
+  assert.deepEqual(kodAtiflariniBul('sunucu/b.ts', '// Neden: ADR 0002 karar 1.\nconst x = 1; // ADR-0003, ADR0004\nADR 00051 değil'), [
+    { yol: 'sunucu/b.ts', satir: 1, no: '0002' },
+    { yol: 'sunucu/b.ts', satir: 2, no: '0003' },
+    { yol: 'sunucu/b.ts', satir: 2, no: '0004' },
+  ]);
+  const dizin = BASLIK + satir('0001', 'kısmen yerine geçildi', '-', '0002', '-') + satir('0002', 'kabul', '0001, 0003', '-', '-')
+    + satir('0003', 'yerine geçildi', '-', '0002', '-') + satir('0004', 'kaldırıldı', '-', '-', '-');
+  const adrler = [adr('0001', 'kısmen yerine geçildi'), adr('0002', 'kabul'), adr('0003', 'yerine geçildi'), adr('0004', 'kaldırıldı')];
+  const kodAtiflari = ['0001', '0002', '0003', '0004', '0009'].map((no, i) => ({ yol: 'sunucu/b.ts', satir: i + 1, no }));
+  assert.deepEqual(adrDenetle(girdi({ dizin, adrler, claude: '', kodAtiflari })), [
+    'sunucu/b.ts:3: ADR 0003 "yerine geçildi"; kod yürürlükteki karara atıf yapmalı',
+    'sunucu/b.ts:4: ADR 0004 "kaldırıldı"; kod yürürlükteki karara atıf yapmalı',
+    "sunucu/b.ts:5: olmayan ADR'ye atıf: 0009",
+  ]);
+});
+
+test('ADR denetimi: 0025 ve sonrası şablon başlıklarını taşır; eski ADR\'den istenmez', () => {
+  const tam = '## Bağlam\n\nx\n\n## Karar\n\ny\n\n## Sonuçlar\n\nz\n';
+  const dizin = BASLIK + satir('0001', 'kabul', '-', '0002', '-') + satir('0002', 'kabul', '0001', '-', '-')
+    + satir('0025', 'kabul', '-', '-', '-') + satir('0026', 'kabul', '-', '-', '-');
+  const adrler = [adr('0001', 'kabul'), adr('0002', 'kabul'), adr('0025', 'kabul', tam), adr('0026', 'kabul', '## Bağlam\n\nx\n')];
+  assert.deepEqual(adrDenetle(girdi({ dizin, adrler })), ['ADR 0026: şablon başlığı yok: ## Karar', 'ADR 0026: şablon başlığı yok: ## Sonuçlar']);
+});
+
+test('ADR denetimi: yerine geçilmiş ADR Değiştiren sütununu boş bırakamaz', () => {
+  const dizin = BASLIK + satir('0001', 'kabul', '-', '0002', '-') + satir('0002', 'kabul', '0001', '-', '-')
+    + satir('0003', 'yerine geçildi', '-', '-', '-') + satir('0004', 'kısmen yerine geçildi', '-', '-', '-');
+  const adrler = [adr('0001', 'kabul'), adr('0002', 'kabul'), adr('0003', 'yerine geçildi'), adr('0004', 'kısmen yerine geçildi')];
+  assert.deepEqual(adrDenetle(girdi({ dizin, adrler, claude: '' })), [
+    'ADR 0003: "yerine geçildi" ama Değiştiren sütunu boş',
+    'ADR 0004: "kısmen yerine geçildi" ama Değiştiren sütunu boş',
+  ]);
 });
 
 test('ADR denetimi: depodaki ADR dizini, ADR dosyaları ve CLAUDE.md tutarlı', () => {

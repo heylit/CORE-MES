@@ -14,7 +14,7 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
@@ -405,6 +405,9 @@ export const emirNolari = isEmri.emirNolari;
 export const isEmriOzeti = isEmri.isEmriOzeti;
 // Plan, elle sırası olan ama artık planlanmayan iş emrinin silindiğini ya da fasona alındığını buradan anlar.
 export { isEmriVarliklari } from './sorgular.ts';
+// 1476-E: çok katmanlı emirde iş emrinin düğümü, düğüm malzemesi, rotadaki op numarası (kaynak_op_no) ve emrin patlatması; yetki denetlemez.
+export { isEmriDugumleri } from './sorgular.ts';
+export type { IsEmriDugumu } from './sorgular.ts';
 // CNC kurulum (266 a): açık iş emirleri; yetki denetlemez, çağıran korur.
 export { acikIsEmirleri, acikIsEmri } from './sorgular.ts';
 export type { AcikIsEmri } from './sorgular.ts';
@@ -531,8 +534,18 @@ export async function adimUretimBilgisi(db: Db, isEmriId: number): Promise<AdimU
   };
 }
 
+// 1476-C: çok katmanlı emirde adımın düğümü; stok statüyü ve çıktıyı emrin ürününün değil düğümün malzemesi ve rotadaki op numarasıyla
+// çözer. Anahtar emir içindeki op numarasıdır; tek katmanlı emirde harita boştur. Yetki denetlemez.
+// dugumSonu: alt düğümün son adımı; çıktısı düğümün malzemesidir ve tüketen üst adıma gider (1482 a).
+export interface AdimDugumu { dugum: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string; dugumSonu: boolean }
+export async function emirDugumleri(db: Db, uretimEmriId: number): Promise<Map<number, AdimDugumu>> {
+  return new Map((await dugumleriGetir(db, [uretimEmriId])).map((d) => [d.opNo, { dugum: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani, dugumSonu: d.dugumSonu }]));
+}
+
 // Plan, rotadan önizlediği emirde de aynı fason varsayılanını kullanır.
 export { FASON_VARSAYILAN_GUN } from './kurallar.ts';
+// 1527: emri açılmamış rotanın adım adetleri (planın deneme emri, satış teklifi); plan dal çarpanını kendisi uygulamaz.
+export { rotadanAdimAdetleri } from './kurallar.ts';
 
 // Kalite Merkezi emir numarasıyla gelen kaydı emre bağlar: numaradan kimlik; bulunamayan numara haritada yok.
 export { emirIdleri } from './sorgular.ts';

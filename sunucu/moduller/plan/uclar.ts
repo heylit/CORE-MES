@@ -4,7 +4,7 @@ import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
-  siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, planSagligiCevabi, veriSagligiCevabi,
+  siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
@@ -16,6 +16,7 @@ import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recet
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
+import { mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
 import { planSagligi } from './plan-sagligi.ts';
 import { projePlani } from './proje-plani.ts';
@@ -55,6 +56,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),
   // 1478: plan sağlığı; yalnız okur. Planlama sayfalarını gören (yönetici, müdür, planlama) okur.
   uc({ yontem: 'GET', yol: '/plan/plan-sagligi', yetki: PLANLAMA_OKUR, cevap: planSagligiCevabi, isle: ({ db, kullanici }) => planSagligi(db, kullanici) }),
+  // 1472 M1 (1522 a): açık emirlerin brüt ve net malzeme ihtiyacı; yalnız okur, yeni işlem açılmaz. Planlama sayfalarını gören okur;
+  // stok ve satın alma miktarı okuyanın kendi yetkisiyle (1545 a).
+  uc({ yontem: 'GET', yol: '/plan/mrp-ihtiyaci', yetki: PLANLAMA_OKUR, cevap: mrpIhtiyaciCevabi, isle: ({ db, kullanici }) => mrpIhtiyaci(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
