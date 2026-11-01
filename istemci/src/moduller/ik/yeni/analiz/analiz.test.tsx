@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { IkGecmis } from '#paylasilan/sozlesme/ik.ts';
 import { IK_OKUYAN, ikAc, ornekVeri } from '../test-ortak.tsx';
@@ -22,6 +22,9 @@ vi.mock('../motor.ts', async (asil) => {
   };
 });
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); durum.motorVar = true; gunlukSuzgeciniSifirla(); });
 
 const dugme = (ad: string) => screen.queryByRole('button', { name: ad });

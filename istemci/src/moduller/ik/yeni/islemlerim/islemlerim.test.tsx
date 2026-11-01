@@ -1,9 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IkBen, IkKayit, IkVeriCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { MOTOR_HAZIRLANIYOR, ikSabitleri } from '../motor.ts';
 import { CALISAN, IK_OKUYAN, IK_YONETICI, MUDUR, ikAc, ornekVeri } from '../test-ortak.tsx';
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 9, 23, 10, 0)); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 

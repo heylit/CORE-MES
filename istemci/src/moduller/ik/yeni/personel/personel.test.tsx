@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MOTOR_HAZIRLANIYOR } from '../motor.ts';
 import { IK_OKUYAN, ikAc, ornekVeri } from '../test-ortak.tsx';
 import { yeniBrut } from './UcretPenceresi.tsx';
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const dugme = (ad: string | RegExp) => screen.queryByRole('button', { name: ad });

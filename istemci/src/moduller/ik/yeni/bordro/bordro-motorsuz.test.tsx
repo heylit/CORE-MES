@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import type * as MotorModulu from '../motor.ts';
 import { MOTOR_HAZIRLANIYOR } from '../motor.ts';
@@ -6,6 +6,9 @@ import { ikAc } from '../test-ortak.tsx';
 
 vi.mock('../motor.ts', async (asil) => ({ ...await asil<typeof MotorModulu>(), motorKur: () => null, ikSabitleri: () => null }));
 
+// Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
+// modüller testlerden önce yüklenir.
+beforeAll(async () => { await Promise.all([import('../IkYeni.tsx'), import('./index.tsx')]); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('P3 motor yüklenmeden', () => {
