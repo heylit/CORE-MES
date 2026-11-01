@@ -28,6 +28,7 @@ export interface YetkiKaydi {
   butun_islemler: boolean;
   islemler: unknown[];
   acilis_sayfasi: string | null;
+  roller: string[];
 }
 
 // Oturumun açılışı kişinin "bundan önceki oturumlar geçersiz" zamanından eskiyse kişi yüklenmez. Koşul yalnız oturum
@@ -49,7 +50,9 @@ export function yetkiKaydiBul(db: Db, kisiId: number, oturumAcildi: string | nul
             (SELECT CASE WHEN bool_and(r.acilis_sayfasi IS NOT NULL) AND count(DISTINCT r.acilis_sayfasi) = 1
                          THEN min(r.acilis_sayfasi) END
                FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id
-              WHERE kr.kisi_id = k.id) AS acilis_sayfasi
+              WHERE kr.kisi_id = k.id) AS acilis_sayfasi,
+            -- Rol kodları yalnız istemcinin varsayılan görünümü içindir (1390 a); yetki işlem listesindedir.
+            ARRAY(SELECT r.kod FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id ORDER BY r.kod) AS roller
        FROM kisi k
       WHERE k.id = $1 AND k.aktif AND k.kullanici_adi IS NOT NULL${oturumAcildi === null ? '' : GECERSIZ_ONCE_SARTI}`,
     oturumAcildi === null ? [kisiId] : [kisiId, oturumAcildi],

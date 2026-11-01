@@ -278,8 +278,8 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Reddin nedeni işlemin olmamasıdır: başka veri işlemi de sayfa işlemi de bu ucu açmaz.
     // Kabulün nedeni işlemin olmasıdır: yönetici olmayan rol de aynı işlemle girer.
     assert.deepEqual([...operator.kullanici.islemler].sort(), [
-      'arkon.operator', 'cnc-kurulum.hazirlik-onayla', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'kisiler.oku', 'mesaj.oku', 'mesaj.yaz',
-      'sayfa.cnc-kurulum', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
+      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'kisiler.oku', 'mesaj.oku', 'mesaj.yaz',
+      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
     ]);
     assert.deepEqual(izleyen.kullanici.islemler, ['saglik.ayrinti-oku']);
     operatorCerezi = operator.cerez;

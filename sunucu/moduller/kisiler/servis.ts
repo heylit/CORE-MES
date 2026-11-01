@@ -59,6 +59,7 @@ export async function kullaniciYukle(db: Db, kisiId: number, oturumAcildi: strin
   if (kayit === null) return null;
   return {
     id: kayit.id, ad: kayit.ad, islemler: islemleriBirlestir(kayit.butun_islemler, kayit.islemler), acilisSayfasi: kayit.acilis_sayfasi,
+    roller: kayit.roller,
   };
 }
 
