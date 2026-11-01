@@ -49,7 +49,8 @@ Sütunlar araçla okunur: `Durum` sabit listedendir; `Değiştirir` ve `Değişt
 4. **Kodla bağ:** her ADR dizinde en az bir çapa taşır (karar kodsa). Kararı tutan test varsa çapaya eklenir: kod durduğu hâlde davranış
    değişirse onu yalnız test yakalar. Kod tarafında yalnız "neden" yorumunda "ADR NNNN" yazılır; araç bu atıfları tarar: olmayan,
    `yerine geçildi` ya da `kaldırıldı` durumundaki ADR'ye atıf `kontrol`ü kırar, kod yürürlükteki karara bağlanır. Çapası olan dosyayı değiştiren iş, ilgili
-   ADR'yi aynı değişiklikte günceller ya da yeni ADR ister.
+   ADR'yi aynı değişiklikte günceller ya da yeni ADR ister; çekme isteğinde çapalı dosya değişip ADR dosyası da dizin de
+   değişmediyse CI uyarı yazar, kırmaz (`node araclar/adr-denetimi.ts --capa <taban>`).
 5. **Anlık durum yok:** "bugün", "henüz", sayı ve liste ADR'ye yazılmaz; kaynağı yazılır (dosya ya da `npm run harita`).
 6. **Açık depo:** depo dışı yol, IP adresi (yalnız 127.0.0.1 ve 0.0.0.0), alan adı, gerçek ad, kapanmamış güvenlik açığı ayrıntısı ADR'ye
    girmez. Gerekçe özel takip deposundaki karar kaydındadır; ADR karar numarasına atıf yapar.

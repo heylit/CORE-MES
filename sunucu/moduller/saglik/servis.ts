@@ -154,6 +154,8 @@ export interface AyrintiGirdisi {
   bellekOku?: () => { rss: number; heapUsed: number };
   // Verilmezse (Windows dışı) null.
   otomatikAcilisOku?: OtomatikAcilisOkuyucu;
+  // Verilmezse ya da süresinde okunamazsa yayın bilinmiyor: null.
+  yayinOku?: () => Promise<string | null>;
   simdi?: Date;
 }
 
@@ -200,9 +202,11 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
   const { otomatikAcilisOku } = girdi;
   // Sorgunun kendi süre sınırı vardır; bu sınır yalnız asılı okuyucuya karşıdır.
   const otomatikAcilis = otomatikAcilisOku === undefined ? null : await sureliGuvenli(otomatikAcilisOku, GOREV_SORGU_SURESI_MS + 1000);
+  const { yayinOku } = girdi;
+  const yayin = yayinOku === undefined ? null : await sureliGuvenli(yayinOku, sureSiniri);
   const simdi = girdi.simdi ?? new Date();
   return {
-    veritabaniGecikmeMs, sonGoc, commit, calismaSuresiSn: girdi.calismaSuresiSn, ortam: girdi.ortam,
+    veritabaniGecikmeMs, sonGoc, commit, yayin, calismaSuresiSn: girdi.calismaSuresiSn, ortam: girdi.ortam,
     isler: isler.map(isDurumuOzeti),
     ...diskler,
     bellek: { rssBayt: bellek.rss, yiginBayt: bellek.heapUsed },

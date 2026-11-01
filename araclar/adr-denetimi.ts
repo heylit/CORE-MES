@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,6 +166,24 @@ function kodDosyalari(kok: string, goreli: string): string[] {
   return sonuc;
 }
 
+// Kural 4: çapalı dosyayı değiştiren iş ADR'yi aynı değişiklikte günceller ya da yeni ADR ister. Araç anlamı bilemez; yalnız
+// çapa değişip ADR dosyası da dizin de değişmediyse uyarır, kırmaz: çoğu değişiklik kararı değiştirmez.
+const DIZIN_YOLU = 'belgeler/adr/README.md';
+export function capaUyarilari(dizin: readonly DizinSatiri[], degisenler: readonly string[]): string[] {
+  if (degisenler.includes(DIZIN_YOLU)) return [];
+  const uyarilar: string[] = [];
+  for (const s of dizin) {
+    if (degisenler.some((y) => y.startsWith(`belgeler/adr/${s.no}-`))) continue;
+    const dokunan = s.capalar
+      .map((c) => c.split('#')[0] ?? '')
+      .filter((yol) => yol !== '' && degisenler.some((d) => d === yol || d.startsWith(`${yol}/`)));
+    for (const yol of new Set(dokunan)) {
+      uyarilar.push(`ADR ${s.no}: çapası değişti (${yol}); ADR ve dizin değişmedi. Karar değiştiyse ADR güncellenir ya da yeni ADR istenir.`);
+    }
+  }
+  return uyarilar;
+}
+
 export function depodanGirdi(kok: string): Girdi {
   const adrKlasoru = join(kok, 'belgeler', 'adr');
   const adrler = readdirSync(adrKlasoru)
@@ -182,7 +201,22 @@ export function depodanGirdi(kok: string): Girdi {
 }
 
 const dogrudanKosuyor = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (dogrudanKosuyor) {
+// Kullanım: node araclar/adr-denetimi.ts --capa <taban>  (taban..HEAD değişikliklerine çapa uyarısı; her zaman 0 ile çıkar)
+if (dogrudanKosuyor && process.argv[2] === '--capa') {
+  const kok = resolve(fileURLToPath(import.meta.url), '..', '..');
+  const taban = process.argv[3];
+  if (taban === undefined || process.argv.length !== 4) {
+    console.error('Kullanım: node araclar/adr-denetimi.ts --capa <taban>');
+    process.exit(1);
+  }
+  const degisenler = execFileSync('git', ['-c', 'core.quotePath=false', 'diff', '--name-only', taban, 'HEAD'], { cwd: kok, encoding: 'utf8' })
+    .split('\n').map((y) => y.trim()).filter((y) => y !== '');
+  const uyarilar = capaUyarilari(dizinOku(readFileSync(join(kok, ...DIZIN_YOLU.split('/')), 'utf8')), degisenler);
+  // GitHub Actions'ta uyarı satırı özet sayfasında görünür.
+  const onEk = process.env['GITHUB_ACTIONS'] === 'true' ? '::warning title=ADR çapası::' : 'Uyarı: ';
+  for (const u of uyarilar) console.log(`${onEk}${u}`);
+  if (uyarilar.length === 0) console.log('ADR çapa uyarısı yok.');
+} else if (dogrudanKosuyor) {
   const hatalar = adrDenetle(depodanGirdi(resolve(fileURLToPath(import.meta.url), '..', '..')));
   for (const h of hatalar) console.error(h);
   if (hatalar.length > 0) process.exit(1);

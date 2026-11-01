@@ -48,6 +48,9 @@ export const ayrintiCevabi = z.object({
   veritabaniGecikmeMs: z.number().int().nonnegative().nullable(),
   sonGoc: z.string().nullable(),
   commit: z.string().nullable(),
+  // Güncelleyicinin kurduğu yayının adı (`2026.11.01-1`); elle kurulumda ya da güncelleme kanalı kapalıyken null. Ekran
+  // okumadığı için isteğe bağlı.
+  yayin: z.string().nullable().optional(),
   calismaSuresiSn: z.number().int().nonnegative(),
   ortam: z.enum(ORTAMLAR),
   isler: z.array(isDurumuSemasi),

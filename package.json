@@ -1,6 +1,6 @@
 {
   "name": "tmi-core-v2",
-  "version": "0.1.0",
+  "version": "0.0.0-gelistirme",
   "private": true,
   "type": "module",
   "description": "TMI CORE V2 - CNC atolyesi uretim planlama ve izlenebilirlik (kurum ici)",

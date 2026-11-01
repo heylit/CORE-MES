@@ -9,14 +9,14 @@ import { gzipSync } from 'node:zlib';
 import { paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
   BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, SUNUCUDA_KURULMAYAN, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
-  paketKur, platformlariOku, sunucuKurulumu, surumAdi, type Kilit, type PaketJson, type Platform,
+  paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumNotu, type Kilit, type PaketJson, type Platform,
 } from './paket.ts';
 import { tarAc, tarOku, type TarGirdisi } from './tar-oku.ts';
 import { tarYaz } from './tar-yaz.ts';
 
 // İmzalı güncelleme paketi (.tmip) üretir (kart #886, #1562). Paket HEAD commit'inden çıkar ve npm bağımlılıklarını taşır;
 // gizli anahtar depo dışında durur.
-// Etiket atmaz, push etmez: yayın etiketinin komutunu yazar.
+// Yayın etiketini yerelde atar ve sürüm notunu paketin yanına yazar (1565 a); push etmez: etiketi Birleştirici gönderir.
 const KULLANIM = [
   'Kullanım: npm run paket -- anahtar-uret <gizli.pem>',
   '          npm run paket -- --anahtar <gizli.pem> --cikti <paket.tmip> [--yuk <dosya>] [--surum <ad>] [--not <metin>]',
@@ -24,6 +24,7 @@ const KULLANIM = [
   '  --yuk verilmezse yük HEAD commit\'inin `git archive` çıktısı ve lock dosyasındaki npm paketlerinin önbelleğidir (tar.gz).',
   '  --platform: sunucunun işletim sistemi ve işlemcisi (virgülle birkaç tane); yalnız onun ikilileri taşınır.',
   '  --klasor: yükü ayrıca bu klasöre açar (internetsiz kanala ilk geçiş, kurulum/guncelleme.md).',
+  '  Sürüm notu çıktının yanına <çıktı>.notlar.md olarak yazılır; yayın etiketi yerelde atılır, push edilmez.',
 ].join('\n');
 
 const KOK = fileURLToPath(new URL('../', import.meta.url));
@@ -127,6 +128,8 @@ interface PaketSecenekleri {
 
 function paketYap(s: PaketSecenekleri): void {
   if (existsSync(resolve(s.cikti))) dur(`Çıktı dosyası zaten var: ${resolve(s.cikti)}`);
+  const notDosyasi = `${resolve(s.cikti)}.notlar.md`;
+  if (existsSync(notDosyasi)) dur(`Sürüm notu dosyası zaten var: ${notDosyasi}`);
   if (s.klasor !== undefined && existsSync(resolve(s.klasor)) && readdirSync(resolve(s.klasor)).length > 0) dur(`Klasör boş değil: ${resolve(s.klasor)}`);
   const platformlar = platformlariOku(s.platform);
   if (satirlar(git(['status', '--porcelain', '--untracked-files=no'])).length > 0) dur('Çalışma ağacında commit\'lenmemiş değişiklik var; paket HEAD\'den çıkar.');
@@ -142,7 +145,10 @@ function paketYap(s: PaketSecenekleri): void {
   // Önceki yayın: HEAD'in geçmişindeki en yeni yayın etiketi. Yoksa son 50 birleşme yazılır.
   const onceki = satirlar(git(['tag', '--merged', 'HEAD', '--list', `${YAYIN_ETIKETI}*`, '--sort=-creatordate']))[0] ?? null;
   const aralik = onceki === null ? ['-n', '50', 'HEAD'] : [`${onceki}..HEAD`];
-  const degisiklikler = degisiklikleriAyikla(git(['log', '--first-parent', '--merges', `--format=${BIRLESME_BICIMI}`, ...aralik]));
+  const gunluk = git(['log', '--first-parent', '--merges', `--format=${BIRLESME_BICIMI}`, ...aralik]);
+  const degisiklikler = degisiklikleriAyikla(gunluk);
+  const oncekiGocler = new Set(onceki === null ? [] : satirlar(git(['ls-tree', '--name-only', onceki, 'sunucu/gocler/']))
+    .map((y) => y.slice('sunucu/gocler/'.length)));
   const kurulan = s.yuk === undefined ? yukKur(platformlar, new Date(tarih)) : null;
   const yuk = kurulan === null ? readFileSync(resolve(s.yuk ?? '')) : kurulan.yuk;
   const not = s.not === undefined || s.not.trim() === '' ? null : s.not.trim();
@@ -153,6 +159,10 @@ function paketYap(s: PaketSecenekleri): void {
   const cozum = paketBasliginiCoz(paket, createPublicKey(gizli));
   if ('red' in cozum) dur(`Üretilen paket doğrulanmadı (${cozum.red}); paket yazılmadı.`);
   writeFileSync(resolve(s.cikti), paket, { flag: 'wx' });
+  const yeniGocler = gocler.filter((ad) => !oncekiGocler.has(ad));
+  writeFileSync(notDosyasi, surumNotu({ surum, commit, tarih, oncekiYayin, yeniGocler, not, gunluk }), { flag: 'wx' });
+  // Etiket paketle aynı anda atılır: atılmazsa sonraki paketin değişiklik listesi ve sürüm notu bu yayını da taşır.
+  git(['tag', '-a', `${YAYIN_ETIKETI}${surum}`, commit, '-m', `Yayin ${surum}`]);
 
   console.log(`Paket: ${resolve(s.cikti)} (${paket.length} bayt)`);
   console.log(`Sürüm ${surum}, commit ${commit.slice(0, 7)}, ${gocler.length} göç, ${degisiklikler.length} değişiklik`
@@ -164,9 +174,11 @@ function paketYap(s: PaketSecenekleri): void {
   if (s.klasor !== undefined) {
     console.log(`Yük açıldı: ${resolve(s.klasor)} (${String(tarAc(yuk, resolve(s.klasor)))} dosya)`);
   }
+  console.log(`Sürüm notu: ${notDosyasi} (${String(yeniGocler.length)} yeni göç)`);
   console.log(`Ortak anahtar: ${ortakAnahtarMetni(createPublicKey(gizli))}`);
-  console.log('Yayın etiketi (paket kuruma verildikten sonra):');
-  console.log(`  git tag -a ${YAYIN_ETIKETI}${surum} ${commit} -m "Yayin ${surum}" && git push origin ${YAYIN_ETIKETI}${surum}`);
+  console.log(`Yayın etiketi yerelde atıldı: ${YAYIN_ETIKETI}${surum}. Paket kuruma verilince gönderilir:`);
+  console.log(`  git push origin ${YAYIN_ETIKETI}${surum}`);
+  console.log(`Paket verilmezse etiket silinir: git tag -d ${YAYIN_ETIKETI}${surum}`);
 }
 
 const { values, positionals } = parseArgs({

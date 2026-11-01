@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { adrDenetle, depodanGirdi, dosyaDurumu, kodAtiflariniBul, type Girdi } from './adr-denetimi.ts';
+import { adrDenetle, capaUyarilari, depodanGirdi, dizinOku, dosyaDurumu, kodAtiflariniBul, type Girdi } from './adr-denetimi.ts';
 
 const BASLIK = '| No | Başlık | Durum | Değiştirir | Değiştiren | Geçerli özet | Çapa |\n|---|---|---|---|---|---|---|\n';
 const satir = (no: string, durum: string, degistirir: string, degistiren: string, capa: string) =>
@@ -110,4 +110,21 @@ test('ADR denetimi: yerine geçilmiş ADR Değiştiren sütununu boş bırakamaz
 test('ADR denetimi: depodaki ADR dizini, ADR dosyaları ve CLAUDE.md tutarlı', () => {
   const kok = resolve(fileURLToPath(import.meta.url), '..', '..');
   assert.deepEqual(adrDenetle(depodanGirdi(kok)), []);
+});
+
+test('ADR çapa uyarısı: çapalı dosya ya da klasör değişip ADR ve dizin değişmediyse uyarır', () => {
+  const dizin = dizinOku(BASLIK + satir('0001', 'kabul', '-', '-', 'sunucu/a.ts#birIs, sunucu/motor') + satir('0002', 'kabul', '-', '-', '-'));
+  assert.deepEqual(capaUyarilari(dizin, ['istemci/b.ts']), []);
+  const uyarilar = capaUyarilari(dizin, ['sunucu/a.ts', 'sunucu/motor/x.ts', 'sunucu/motorlar.ts']);
+  assert.equal(uyarilar.length, 2);
+  assert.match(uyarilar[0] ?? '', /^ADR 0001: çapası değişti \(sunucu\/a\.ts\)/);
+  assert.match(uyarilar[1] ?? '', /\(sunucu\/motor\)/);
+});
+
+test('ADR çapa uyarısı: ADR dosyası ya da dizin aynı değişiklikteyse uyarmaz', () => {
+  const dizin = dizinOku(BASLIK + satir('0001', 'kabul', '-', '-', 'sunucu/a.ts') + satir('0002', 'kabul', '-', '-', 'sunucu/a.ts'));
+  assert.deepEqual(capaUyarilari(dizin, ['sunucu/a.ts', 'belgeler/adr/README.md']), []);
+  const uyarilar = capaUyarilari(dizin, ['sunucu/a.ts', 'belgeler/adr/0001-deneme.md']);
+  assert.equal(uyarilar.length, 1);
+  assert.match(uyarilar[0] ?? '', /^ADR 0002:/);
 });
