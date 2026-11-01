@@ -24,5 +24,8 @@ Her kuralın kabul ve ret testi vardır. Finanstan gelen kuralın eski numarası
 | MT-15 tam teslim termin + 2 gün içindeyse zamanında | kurallar "MT-15" | aynı test (3. gün, eksik teslim) |
 | MT-16 (1260 a) puan 40/40/20, hizmetsiz 50/50; lot kararı puanı; A-D; 3 teslim ve 3 lottan az veride puan ve sınıf null | kurallar "MT-16", karne "MT-16: olaylardan..." | kurallar "MT-16: 3 teslim...", karne "MT-16: yetersiz veride..." (aynı yıl CAKISMA) |
 | MT-17 karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır | kurallar "MT-17" | karne "MT-17" (422, kayıt açılmaz) |
+| MT-18 (kart 1474) gecikme günü = teslim günü - termin; erken eksi, tolerans uygulanmaz | gecikme "MT-18" | aynı test (aynı gün 0, ay ve yıl geçişi) |
+| MT-19 (kart 1474) gecikme özeti kaynak başına, yalnız tam teslimden, kayan 12 ay teslim gününe göre; %80 en yakın sıra | gecikme "MT-19", "firma ve kaynak başına..." | gecikme "MT-19 reddedilen" (örneksiz kaynak yok), eksik ve dönem dışı teslim sayılmaz |
+| Karne olayı kaldırma (kart 1474): geri alınan kaynak kaydının olayı kalkar, tekrar güvenli | gecikme "kaldırılan olay..." | gecikme "reddedilen kaldırma" (bilinmeyen kaynak, boş anahtar) |
 | Karne olayı (1259 c) kaynak ve anahtarla tektir, sonraki karar yerine geçer | karne "olay kaynak ve anahtarla tektir" | karne "reddedilen olay" (geçersiz karar, olmayan firma, `karne_olayi_alanlar` kısıtı) |
 | Yetki: karne okuma `musteri-tedarikci.oku`, hizmet puanı `satin-alma.yaz`, yıllık karne `kalite-merkezi.onayla` (V6) | karne "yetki" testleri | aynı testler (401, 403, kayıt açılmaz) |

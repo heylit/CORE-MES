@@ -2,7 +2,7 @@ import {
   ADRES_SINIRI, FIRMA_ARAMA_SINIRI, KARNE_AGIRLIKLARI, KARNE_DONEM_AYI, KARNE_EN_AZ_LOT, KARNE_EN_AZ_TESLIM, KARNE_SINIFLARI,
   KARNE_SINIF_ALT_SINIRLARI, LOT_KARARLARI, LOT_KARAR_PUANI, TESLIM_TOLERANS_GUNU,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { FirmaKimligi, FirmaTuru, KarneOzeti, KarneSinifi, LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { FirmaKimligi, FirmaTuru, KarneOlayKaynagi, KarneOzeti, KarneSinifi, LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Müşteri ve tedarikçi iş kuralları (saf). Numara (MT-n) KURAL-TEST.md ile aynıdır; finanstan gelenlerin eski numarası parantezde.
 
@@ -170,4 +170,55 @@ export function karneHesapla(s: KarneSayilari): Omit<KarneOzeti, 'firmaId' | 'do
 // MT-17: hizmet puanı ve yıllık karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır.
 export function karneYazmaHatasi(tur: FirmaTuru): string | null {
   return tur === 'musteri' ? 'Karne yalnız tedarikçi firmada tutulur.' : null;
+}
+
+// ---- Teslim gecikmesi (kart 1474) ----
+
+// MT-18: gecikme günü teslim günü eksi termindir (takvim günü; erken teslim eksi). Karnenin toleransı burada uygulanmaz:
+// plan ve malzeme planlaması gerçek kaymayı okur.
+export function teslimGecikmesi(termin: string, teslimGunu: string): number {
+  const gun = (t: string): number => Date.parse(`${t}T00:00:00Z`) / 86_400_000;
+  return Math.round(gun(teslimGunu) - gun(termin));
+}
+
+export interface GecikmeOrnegi { kaynak: KarneOlayKaynagi; termin: string; teslimGunu: string; sayi: number }
+export interface GecikmeOzeti {
+  kaynak: KarneOlayKaynagi;
+  teslimSayisi: number;
+  gecKalanSayisi: number;
+  // İşaretli ortalama: erken teslim eksi, geç teslim artı.
+  ortalamaFarkGun: number;
+  // Erken teslim 0 sayılarak; planın tampon payı buradan okunur.
+  ortalamaGecikmeGun: number;
+  yuzde80GecikmeGun: number;
+  enCokGecikmeGun: number;
+}
+
+// MT-19: özet kaynak başına (satın alma ile fason ayrı süreçtir) ve yalnız tam teslimden çıkar; eksik teslim sonucu belli
+// olmadığından sayılmaz. %80 değeri en yakın sıra yöntemiyle, erken teslim 0 sayılarak alınır. Örnek yoksa kaynak listede yoktur.
+export function gecikmeOzetleri(ornekler: readonly GecikmeOrnegi[]): GecikmeOzeti[] {
+  const kaynaklar = new Map<KarneOlayKaynagi, number[]>();
+  for (const o of ornekler) {
+    if (!(o.sayi > 0)) continue;
+    const fark = teslimGecikmesi(o.termin, o.teslimGunu);
+    if (!Number.isFinite(fark)) continue;
+    const l = kaynaklar.get(o.kaynak) ?? [];
+    for (let i = 0; i < o.sayi; i += 1) l.push(fark);
+    kaynaklar.set(o.kaynak, l);
+  }
+  return [...kaynaklar.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([kaynak, farklar]) => {
+      const gecikmeler = farklar.map((f) => Math.max(0, f)).sort((a, b) => a - b);
+      const n = farklar.length;
+      return {
+        kaynak,
+        teslimSayisi: n,
+        gecKalanSayisi: farklar.filter((f) => f > 0).length,
+        ortalamaFarkGun: ondalik1(farklar.reduce((t, f) => t + f, 0) / n),
+        ortalamaGecikmeGun: ondalik1(gecikmeler.reduce((t, f) => t + f, 0) / n),
+        yuzde80GecikmeGun: gecikmeler[Math.ceil(0.8 * n) - 1]!,
+        enCokGecikmeGun: gecikmeler[n - 1]!,
+      };
+    });
 }

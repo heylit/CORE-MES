@@ -6,9 +6,9 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
-import { HIZMET_PUANI_SINIRI, YILLIK_KARNE_SINIRI, karneOlayi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { HIZMET_PUANI_SINIRI, YILLIK_KARNE_SINIRI, karneOlayKaynagi, karneOlayi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
-  HizmetPuaniGovdesi, KarneCevabi, KarneOlayi, KarneOzeti, LotKarari, YillikKarneGovdesi,
+  HizmetPuaniGovdesi, KarneCevabi, KarneOlayKaynagi, KarneOlayi, KarneOzeti, LotKarari, YillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -19,9 +19,9 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
+  LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
 } from './kurallar.ts';
-import type { DefterSatiri, FirmaDurumu, KarneSayilari } from './kurallar.ts';
+import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Uç katmanının denetim eki (çekirdek `denetimEki`): komut başına bir kez çağrılır.
@@ -282,6 +282,27 @@ export async function karneOlayiYaz(db: Db, girdi: KarneOlayi): Promise<void> {
     termin: o.tur === 'teslim' ? o.termin : null, teslimGunu: o.tur === 'teslim' ? o.teslimGunu : null,
     tam: o.tur === 'teslim' ? o.tam : null, lotKarari: o.tur === 'lot' ? o.karar : null,
   });
+}
+
+// Kart 1474: kaynağın kaydı geri alınınca olay kalkar (ör. mal kabul düzeltmesiyle teslimin tamamı geri alındı). Çağıranın işlemindedir.
+const OLAY_ANAHTARI_EN_COK = 120;
+export async function karneOlayiKaldir(db: Db, girdi: { kaynak: KarneOlayKaynagi; anahtar: string }): Promise<void> {
+  const kaynak = karneOlayKaynagi.parse(girdi.kaynak);
+  const anahtar = girdi.anahtar.trim();
+  if (anahtar.length === 0 || anahtar.length > OLAY_ANAHTARI_EN_COK) throw gecersiz('Karne olayı anahtarı geçersiz.');
+  await sorgular.karneOlayiKaldir(db, kaynak, anahtar);
+}
+
+// Kart 1474: tedarikçinin teslim gecikmesi, kayan 12 ay (karneyle aynı dönem; teslim gününe göre). Plan motoru ve malzeme
+// planlaması okur. Tam teslimi olmayan firma haritada yoktur (sıfır uydurulmaz); kaynaklar ayrı özetlenir.
+export interface TeslimGecikmesi { firmaId: number; donemBasi: string; donemSonu: string; kaynaklar: GecikmeOzeti[] }
+export async function teslimGecikmeleri(db: Db, idler: readonly number[], an: number = Date.now()): Promise<Map<number, TeslimGecikmesi>> {
+  const tekil = [...new Set(idler)];
+  if (tekil.length === 0) return new Map();
+  const { donemBasi, donemSonu } = karneDonemi(tesisGunu(an));
+  const firmalar = new Map<number, GecikmeOrnegi[]>();
+  for (const { firmaId, ...o } of await sorgular.gecikmeGruplari(db, tekil, donemBasi, donemSonu)) firmalar.set(firmaId, [...(firmalar.get(firmaId) ?? []), o]);
+  return new Map([...firmalar].map(([firmaId, l]) => [firmaId, { firmaId, donemBasi, donemSonu, kaynaklar: gecikmeOzetleri(l) }]));
 }
 
 // Kayan 12 aylık karne; dönem sunucunun tesis gününde biter. Teklif kıyası ve firma kartı buradan okur.
