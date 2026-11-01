@@ -1398,6 +1398,22 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_onay SET notlar = 'x' WHERE talep_id = $1", [t.id])), /yalnız ekleme/);
   });
 
+  test('TMI A2: onay ve ret talebi açana bildirilir, ret gerekçesiyle; karar veren almaz', async () => {
+    const t = await kararli();
+    const bildirimler = async (cerez: string) => tamam<BildirimListeCevabi>(await istek(cerez, 'GET', '/bildirimler?sayfaBoyu=100')).satirlar
+      .filter((x) => (x.tur === 'satin-alma.talep-onaylandi' || x.tur === 'satin-alma.talep-reddedildi') && x.baslik.endsWith(`talep: ${t.no}`));
+    const ret = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'ret' as const, dortGozsuz: false, notlar: 'Vade kısa' };
+    const r = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [ret] }));
+    assert.deepEqual((await bildirimler(c.talep)).map((x) => [x.tur, x.baslik, x.metin, x.yol]),
+      [['satin-alma.talep-reddedildi', `Reddedilen talep: ${t.no}`, `${t.baslik}. Gerekçe: Vade kısa`, '/taleplerim']]);
+    assert.equal((await bildirimler(c.mudur)).length, 0);
+    const yeniden = tamam<Talep>(await kaydet(c.sa, { ...govde(r), durum: 'onayda' }));
+    const onay = { ...ret, id: randomUUID(), sonuc: 'onay' as const, notlar: '' };
+    tamam<Talep>(await kaydet(c.mudur, { ...govde(yeniden), onaylar: [...yeniden.onaylar, onay] }));
+    assert.deepEqual((await bildirimler(c.talep)).map((x) => x.tur).sort(), ['satin-alma.talep-onaylandi', 'satin-alma.talep-reddedildi']);
+    assert.equal((await bildirimler(c.mudur)).length, 0);
+  });
+
   test('SAT-66 SAT-67: yalnız taslak silinir; karar varken teklif silinmez', async () => {
     const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     assert.equal((await istek(c.talep2, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: t.surum })).statusCode, 403);

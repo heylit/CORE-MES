@@ -618,6 +618,17 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     if (sonuc === 'red') throw yetkiYok(ILETILER.dortGoz);
     await s.onayEkle(db, id, o, k.id, sonuc === 'dortGozsuz');
   }
+  // TMI A2: karar talebi açana ve talep edene haber verilir; ret gerekçesi metindedir. Karar veren kendisi almaz.
+  const sonOnay = yeniOnaylar.at(-1);
+  if (sonOnay !== undefined) {
+    const ret = sonOnay.sonuc === 'ret';
+    await bildirimGonder(db, {
+      tur: ret ? 'satin-alma.talep-reddedildi' : 'satin-alma.talep-onaylandi',
+      baslik: `${ret ? 'Reddedilen' : 'Onaylanan'} talep: ${eski.no}`, metin: ret && sonOnay.notlar ? `${yazilacak.baslik}. Gerekçe: ${sonOnay.notlar}` : yazilacak.baslik,
+      yol: '/taleplerim', kaynakKimlik: `${id}:${eski.onaylar.length + yeniOnaylar.length}`,
+      kisiler: [...new Set([eski.acanKisiId, ...(eski.talepEdenKisiId === null ? [] : [eski.talepEdenKisiId])])], haric: k.id,
+    });
+  }
   if (talepFisiGiderMi(eski.onaylar, yeniOnaylar, yazilacak.durum)) await s.talebiLogoyaIsaretle(db, id);
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') await s.talepIptaliniLogoyaIsaretle(db, id);
   const eskiHareketler = new Set(eski.hareketler.map((h) => h.id));
