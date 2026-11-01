@@ -8,12 +8,13 @@ import { PLANLAMA_ANAHTARI } from '../disari.ts';
 import { planGirdisi } from '../plan-girdisi.ts';
 import { planlamaGirdisi } from '../planlama-servis.ts';
 import * as sorgular from '../sorgular.ts';
-import { dilimFarki, farkMetni } from './esdegerlik.ts';
+import { dilimFarki, farkMetni, girdiFarki } from './esdegerlik.ts';
 import { kaynakDilimiOku } from './kaynaklar.ts';
-import { KAYNAK_ALANLARI, kaynakDilimiKur, type KaynakElleVerisi } from './kaynaklar-kurallar.ts';
+import { KAYNAK_ALANLARI, kapasitedenIzinler, kaynakDilimiKur, type KaynakElleVerisi } from './kaynaklar-kurallar.ts';
 
 // 1716: kaynak diliminin eşdeğerliği gerçek PostgreSQL'de. Aynı tohum veride eski yol (planlamaGirdisi -> planGirdisi, sayfanın açılışı)
-// ile yeni yol (kaynakDilimiOku + kaynakDilimiKur) aynı kaynak alanlarını vermeli; her biri tam yetkiyle ve kısıtlı yetkiyle. Veriler uydurmadır.
+// ile yeni yol (kaynakDilimiOku + kaynakDilimiKur) aynı kaynak alanlarını vermeli; her biri tam yetkiyle ve kısıtlı yetkiyle. 1720 kaynak:
+// bayrak (plan.tipli-girdi) açıkken planlamaGirdisi tipli okumayı verir, planGirdisi bütün çalışmayı bayraksızla aynı kurar. Veriler uydurmadır.
 
 const TAM: readonly string[] = [...new Set(Object.values(KAYNAK_OKUMA).flat())];
 
@@ -64,6 +65,7 @@ describe('kaynak dilimi eşdeğerliği (1716, gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
+  const izinler = (kaynak: { ek: unknown }) => kapasitedenIzinler((kaynak.ek as { kapasite?: Parameters<typeof kapasitedenIzinler>[0] }).kapasite);
   const karsilastir = async (islemler: readonly string[]): Promise<Record<string, unknown>> => {
     const k = kullanici(islemler);
     const simdi = Date.UTC(2026, 9, 19, 9);
@@ -72,7 +74,7 @@ describe('kaynak dilimi eşdeğerliği (1716, gerçek PostgreSQL)', () => {
     const eski = planGirdisi({ calisma: girdi.calisma, kayit: girdi.kayit, kaynak: girdi.kaynak, bugun: '2026-10-19' }, simdi);
     assert.ok(eski);
     const eskiD = eski.S['D'] as Record<string, unknown>;
-    const okuma = await vt().tx((db) => kaynakDilimiOku(db, k, simdi));
+    const okuma = await vt().tx((db) => kaynakDilimiOku(db, k, izinler(girdi.kaynak)));
     const elle = (girdi.calisma as { D: KaynakElleVerisi }).D;
     const yeni = kaynakDilimiKur(okuma, elle);
     assert.equal(farkMetni(dilimFarki(eskiD, yeni, KAYNAK_ALANLARI)), '');
@@ -98,9 +100,36 @@ describe('kaynak dilimi eşdeğerliği (1716, gerçek PostgreSQL)', () => {
     const { girdi } = await vt().tx((db) => planlamaGirdisi(db, k, Date.UTC(2026, 9, 19, 9)));
     assert.ok(girdi);
     const eski = planGirdisi({ calisma: girdi.calisma, kayit: girdi.kayit, kaynak: girdi.kaynak, bugun: '2026-10-19' });
-    const okuma = await vt().tx((db) => kaynakDilimiOku(db, k));
+    const okuma = await vt().tx((db) => kaynakDilimiOku(db, k, izinler(girdi.kaynak)));
     const yeni = kaynakDilimiKur(okuma, (girdi.calisma as { D: KaynakElleVerisi }).D);
     // İstasyon okunamayınca eski yol tezgâhı ve takvimi Reçete ve Rota kaydından kurar, yeni yol açık çalışmadakini korur (1720'de sorulur).
     assert.equal(farkMetni(dilimFarki(eski?.S['D'] as Record<string, unknown>, yeni, ['vardiyalar', 'tatiller', 'personel', 'devamsizlik'])), '');
+  });
+
+  // 1720 kaynak: bayrak açıkken bütün çalışma (S) ve motor girdisi (st) bayraksızla aynı; istasyon ya da kişi okunamayınca da (1744 a).
+  const bayrakla = async (islemler: readonly string[]): Promise<void> => {
+    const k = kullanici(islemler);
+    const simdi = Date.UTC(2026, 9, 19, 9);
+    const { girdi } = await vt().tx((db) => planlamaGirdisi(db, k, simdi));
+    assert.ok(girdi);
+    assert.ok(girdi.kaynakDilimi, 'bayrak açıkken tipli okuma gelir');
+    const istek = { calisma: girdi.calisma, kayit: girdi.kayit, kaynak: girdi.kaynak, bugun: '2026-10-19' };
+    const eski = planGirdisi(istek, simdi);
+    const yeni = planGirdisi({ ...istek, kaynakDilimi: girdi.kaynakDilimi }, simdi);
+    assert.equal(farkMetni(girdiFarki(eski?.S, yeni?.S)), '');
+    assert.equal(farkMetni(girdiFarki(eski?.st, yeni?.st)), '');
+  };
+  test('KV-04: bayrak kapalıyken tipli okuma yapılmaz', async () => {
+    const { girdi } = await vt().tx((db) => planlamaGirdisi(db, kullanici(TAM), Date.UTC(2026, 9, 19, 9)));
+    assert.equal(girdi?.kaynakDilimi, null);
+  });
+  test('KV-05: bayrak açıkken tam ve maliyetsiz yetkiyle çalışma ve motor girdisi eski yolla aynı', async () => {
+    await ortam!.sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('plan.tipli-girdi', 'true', $1)", [yoneticiId]);
+    await bayrakla(TAM);
+    await bayrakla(TAM.filter((i) => !KAYNAK_OKUMA.maliyet.includes(i as never)));
+  });
+  test('KV-06 (1744 a): bayrak açıkken istasyonu ya da kişiyi okumayan kullanıcıda da aynı', async () => {
+    await bayrakla(TAM.filter((i) => !KAYNAK_OKUMA.istasyon.includes(i as never)));
+    await bayrakla(TAM.filter((i) => !KAYNAK_OKUMA.kisi.includes(i as never)));
   });
 });

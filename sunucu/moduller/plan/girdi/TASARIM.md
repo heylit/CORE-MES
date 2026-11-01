@@ -59,6 +59,17 @@ Elle alanların sahibi (`sahip` sütunu) öneridir; kesin sahip 1719'un sahiplik
 5. **Birleştirme** (1720): `plan-girdisi.ts` dilimleri sırayla kurar, sayfa alanlarını açık çalışmadan taşır, `stTamKur` aynı kalır. Yeni
    yol bayrakla kapalıdır. Öneri (1720'de kesinleşir): bayrak açıkken eski yol da karşılaştırma için koşar ve fark günlüğe yazılır. Eski yol (girdi.betik birleştirme kısmı,
    emirler.betik) kullanıcının "tamam"ından sonra 1723'te silinir.
+   İlk parça "1720 kaynak" (yalnız kaynak dilimi): bayrak sistem ayarı `plan.tipli-girdi` (varsayılan kapalı). Açıkken `planlamaGirdisi`
+   tipli okumayı da verir; `plan-girdisi.ts` betik bağlamındaki `kaynakBirlestir`'i sarar (`birlestirme.ts`): eski birleştirme önce koşar,
+   dilimi okunan kaynak alanları sonra tipli kurulumla değişir. Okunamayan dilimin alanı eski yolunki kalır (1744 a: Reçete ve Rota kaydında
+   makine ya da kişi varsa oradan, yoksa açık çalışmadaki gibi, 1742). Tipli tezgâh listesi kimlik ya da istasyon olarak eskisinden ayrılırsa
+   ürünlerin adımları eski listeye kurulu olduğundan tezgâhlar eski yolunki kalır. Günlüğe yazan gölge koşu yapılmadı; eşdeğerliği
+   `kaynaklar-vt.test.ts` KV-05 ve KV-06 bütün çalışma (S) ve motor girdisi (st) üzerinde sınar. Kayıt yokken açılan boş çalışma
+   (`yeniCalisma`) eski yoldadır.
+   İkinci parça "1720 değerlendirme": planlama değerlendirmesi ve satış teklifi denemesi kendi iş parçacıklarında koşar. Bayrak açıkken
+   `birlestirme.ts` oraya dinamik import ile yüklenir ve aynı sarma kurulur. Teklif yolu da takvim ekiyle okunur (bulgu 4, 1769 a); tipli
+   dilim takvimlidir. Tipli dilimle iş parçacığı hata verirse istek eski yolla, kalan sürede yeniden koşar.
+   Sınama `degerlendirme-esdegerlik.test.ts`'tedir.
 
 ## 5. Eşdeğerlik düzeni
 
@@ -87,6 +98,8 @@ dövizli sipariş bedeli, kg fiyatından tahmini malzeme fiyatı.
 2. [Kesin] Tezgâhın verimi ve vardiya listesi yalnız ilk kurulumda istasyondan gelir (`rrCevir` `if (!a)`); sonra istasyonun verimi
    değişse de plan eskisiyle kurulur. Yeni yolda bu "karma" kural olarak korunur; sunucu alanına çevirmek davranış değişikliğidir.
 3. [Kesin] Fasoncunun kapasitesi elle girilmemişse 999'dur (`tmiFasoncular`): "sınırsız" ile "bilinmiyor" ayrılmaz. 1719'da sorulur.
+4. [Kesin] Satış teklifi denemesinin okumasında takvim eki yoktu: çalışma günleri Vardiya'dan değil Reçete ve Rota kaydındaki kopyadan,
+   o da yoksa boş kurulurdu. 1769 a ile düzeltildi; teklif planlama sayfasıyla aynı takvimi görür (`teklif-servisi.test.ts`).
 
 ## 7. Doğrulanmadı
 

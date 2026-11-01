@@ -8,11 +8,11 @@ import {
 import { kisiGorevleri, kisiSecenekleri } from '../../kisiler/disari.ts';
 import { KAYNAK_OKUMA } from '../../recete-rota/disari.ts';
 import { kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../../vardiya/disari.ts';
-import { kapasite } from '../planlama-servis.ts';
 import type { HaftaGunu, KaynakDilimiOkumasi } from './kaynaklar-kurallar.ts';
 
 // Kaynak diliminin okuması (1716): yalnız sahibi modüllerin disari.ts'i. Kapsam eski yolun kaynak okumasıyla aynıdır (Reçete ve Rota'nın
 // durumu ve planın kapasite okuması): istasyon, kişi ve maliyet dilimi çağıranın işlemiyle açılır, okunamayan dilim null'dır.
+// İzinli günler çağıranın kapasite okumasından verilir (kapasitedenIzinler): planlama-servis.ts bu dosyayı ithal eder, tersi döngü olurdu.
 const yetkili = (k: Kullanici, l: readonly Islem[]): boolean => l.some((i) => islemVarMi(k, i));
 const sayi = (x: string | null | undefined): number | null => {
   if (x === null || x === undefined || x.trim() === '') return null;
@@ -20,7 +20,7 @@ const sayi = (x: string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-export async function kaynakDilimiOku(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<KaynakDilimiOkumasi> {
+export async function kaynakDilimiOku(db: Db, kullanici: Kullanici, izinler: KaynakDilimiOkumasi['izinler']): Promise<KaynakDilimiOkumasi> {
   const istasyonOkur = yetkili(kullanici, KAYNAK_OKUMA.istasyon);
   const kisiOkur = yetkili(kullanici, KAYNAK_OKUMA.kisi);
 
@@ -69,9 +69,6 @@ export async function kaynakDilimiOku(db: Db, kullanici: Kullanici, simdi: numbe
       id: k.id, ad: k.ad, gorev: gorev.get(k.id) ?? null, yetkinlikler: yetkinlik.get(k.id) ?? [], makineler: makine.get(k.id) ?? [], enCok: sinir.get(k.id) ?? null,
     }));
   }
-
-  const kp = await kapasite(db, kullanici, simdi);
-  const izinler = kp.kisiler === null ? null : kp.kisiler.map((k) => ({ kisiId: k.id, gunler: k.izinli.slice() }));
 
   return { vardiyalar, tatiller, istasyon, takvim, istasyonMaliyeti, kisiler, izinler };
 }

@@ -22,6 +22,8 @@ import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
+import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
@@ -163,8 +165,7 @@ export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now())
 }
 
 // Satış teklifi denemesi (Y4). Planın girdisi çerçevenin açılışındaki gibi kurulur: ortak çalışma kaydı, Reçete ve Rota kaydı ve çağıranın
-// yetkisiyle kaynak okuması. Takvim eki (iş merkezi haftası, kişi vardiyası) sunucuda henüz okunamaz (vardiya modülü kişi vardiyalarını dışarı
-// vermiyor; BASKA-MODUL-ISTEKLERI.md): çerçevenin okuyamadığı durumdaki gibi null'dır, çalışmanın kayıtlı takvimi kullanılır.
+// yetkisiyle kaynak okuması. kaynakOku takvim eki taşımaz; ekleyen çağırandır (planlamaGirdisi, teklifDene: 1769 a).
 const PLANLAMA_SURUMU = 2;
 
 export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi> {
@@ -287,7 +288,7 @@ const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   id: 0, ad: 'plan motoru',
   islemler: [...new Set([...Object.values(KAYNAK_OKUMA).flat(), ...ACIK_SIPARIS_OKUMA, ...SIPARIS_FIYATI_OKUMA])],
 };
-export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
+export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi; kaynakDilimi?: KaynakDilimiOkumasi | null }
 // Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.
 // 1408: planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çözücü sayfanın ilk açılışında kuracağı boş çalışmayla (657 a)
 // bellekte çözer, kayıt yazılmaz: eski motor kalkınca motor yerleşimi, önizleme ve hızlı deneme sayfa kaydı olmadan da çalışır.
@@ -351,7 +352,18 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
   // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
   const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
-  return { surum, girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek } } };
+  const kaynakDilimi = await tipliKaynakOkumasi(db, kullanici, kaynak);
+  return {
+    surum,
+    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
+  };
+}
+
+// 1720 kaynak: bayrak (plan.tipli-girdi) açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts); kapalıyken okunmaz (null).
+// İzinli günler aynı kapasite okumasındandır.
+async function tipliKaynakOkumasi(db: Db, kullanici: Kullanici, kaynak: KaynakOkumasi): Promise<KaynakDilimiOkumasi | null> {
+  if (!(await sistemAyariOku(db, 'plan.tipli-girdi'))) return null;
+  return kaynakDilimiOku(db, kullanici, kapasitedenIzinler((kaynak.ek as { kapasite?: Parameters<typeof kapasitedenIzinler>[0] }).kapasite));
 }
 
 // 1477 a: motorun ufku ve dilimi (sistem ayarı); sayfa, değerlendirme ve sunucu motoru aynı ölçekle hesaplar.
@@ -453,7 +465,10 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
   const calisma = kayitDegeri(await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: { meta?: { baslangic?: unknown } } } | null;
   if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
   const kayit = kayitDegeri(await receteRotaDurumu(db)) as { orders?: Array<{ id: string; no?: string }> } | null;
-  const kaynak = await kaynakOku(db, kullanici);
+  // 1769 a: teklif planlama sayfasıyla aynı takvimi görür (Vardiya'nın iş merkezi haftası ve kişi vardiyası). Ek yokken çalışma günleri
+  // Reçete ve Rota kaydındaki kopyadan, o da yoksa boş kurulurdu.
+  const okunan = await kaynakOku(db, kullanici);
+  const kaynak = { ...okunan, ek: { ...(okunan.ek as Record<string, unknown>), takvim: await takvimEki(db) } };
   const bugun = tesisGunu(simdi);
   const baslangic = typeof calisma.D.meta?.baslangic === 'string' ? calisma.D.meta.baslangic : bugun;
   const saat = (an: string): number => planSaati(baslangic, an);
@@ -466,7 +481,7 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
     yerlesim: Object.fromEntries(t.kalemler.flatMap((k, i) => Object.entries(k.yerlesim).map(([adim, y]) => [`${t.id}-${String(i + 1)}.${adim}`, { m: y.makineId, S: saat(y.baslangic) }]))),
   }));
   const r: DenemeSonucu | null = await teklifDenemesi({
-    calisma, kayit, kaynak, bugun,
+    calisma, kayit, kaynak, bugun, kaynakDilimi: await tipliKaynakOkumasi(db, kullanici, kaynak),
     kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, ...adimlar(String(k.malzemeNo), k.adet) })),
     termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
     taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await sorgular.ayarOku(db, null)).tamponGun, gecerlilik: g.gecerlilik,

@@ -28,4 +28,13 @@ export const PLAN_AYARLARI = {
     baslik: 'Plan motorunun zaman dilimi',
     aciklama: 'Kapasite bu dilimlerle sayılır. 30 dakika uzun ufukta planı hızlandırır, kısa işlerde kapasiteyi daha kaba sayar.',
   },
+  // 1720 kaynak (1683 b): motor girdisinin kaynak alanları (vardiya, takvim, tezgâh, kişi, devamsızlık) sahibi modüllerden tipli kurulur.
+  // Kapalıyken eski yol aynen koşar. Kıyas setiyle denemek içindir; eski yol silinince (1723) kalkar.
+  'plan.tipli-girdi': {
+    modul: 'plan',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Plan girdisinin kaynakları tipli yoldan',
+    aciklama: 'Açıkken planın vardiya, takvim, tezgâh, kişi ve devamsızlık bilgisi doğrudan sahibi modüllerden kurulur. Kapalıyken (varsayılan) eski birleştirme kullanılır. Deneme içindir.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

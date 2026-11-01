@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { tipliKaynakBirlestir, type KaynakBirlestir } from './girdi/birlestirme.ts';
+import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { taslakEkMesaisi } from './planlama-kurallar.ts';
 import type { MotorDurumu, MotorPlani } from './plan-motoru.ts';
 
@@ -31,15 +33,28 @@ export interface GirdiIstegi {
   kaynak: KaynakOkumasi | null;
   // Başlangıcı olmayan çalışmanın başlangıç günü ('GGGG-AA-GG'); verilmezse tesisin bugünü.
   bugun?: string;
+  // 1720 kaynak: bayrak (plan.tipli-girdi) açıksa tipli kaynak dilimi okuması; kaynak alanlarını o kurar (girdi/birlestirme.ts).
+  kaynakDilimi?: KaynakDilimiOkumasi | null;
 }
 export interface PlanGirdisi { S: Record<string, unknown>; st: MotorDurumu }
+
+// Bağlam kurulur ve betikler yüklenir. Tipli dilim verilmişse bağlamın kaynakBirlestir'i onu da uygulayan sürümle değişir: betiğin
+// işlevleri bağlamın genel nesnesindedir, girdiKur onu adıyla çağırır. Betik dosyası değişmez; eski yol bayrak kapalıyken aynen koşar.
+function baglamla<T>(kod: string, dosya: string, kaynakDilimi: KaynakDilimiOkumasi | null | undefined): T {
+  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
+  const sonuc = vm.runInContext(kod, baglam, { filename: dosya }) as T;
+  if (kaynakDilimi) {
+    const g = baglam as { kaynakBirlestir: KaynakBirlestir };
+    g.kaynakBirlestir = tipliKaynakBirlestir(g.kaynakBirlestir, kaynakDilimi);
+  }
+  return sonuc;
+}
 
 type GirdiKur = (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null, bugun: string) => PlanGirdisi | null;
 
 // Her çağrı yeni bağlam kurar; girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function planGirdisi(istek: GirdiIstegi, simdi: number = Date.now()): PlanGirdisi | null {
-  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
-  const { girdiKur } = vm.runInContext(girdiKodu(), baglam, { filename: 'plan-girdisi.js' }) as { girdiKur: GirdiKur };
+  const { girdiKur } = baglamla<{ girdiKur: GirdiKur }>(girdiKodu(), 'plan-girdisi.js', istek.kaynakDilimi);
   const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
   const sonuc = girdiKur(kopya(istek.calisma), kopya(istek.kayit), kopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
   // Bağlamın nesneleri onun dizi ve nesne türlerindendir; sunucunun türlerine yapılandırılmış kopyayla geçer (sonsuz değer korunur).
@@ -118,10 +133,9 @@ export interface CalismaPlani {
 
 // Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function calismaPlani(istek: GirdiIstegi, simdi: number = Date.now()): CalismaPlani | null {
-  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
-  const { sunucuCalismaPlani } = vm.runInContext(calismaKodu(), baglam, { filename: 'calisma-plani.js' }) as {
+  const { sunucuCalismaPlani } = baglamla<{
     sunucuCalismaPlani: (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null, bugun: string) => CalismaPlani | null;
-  };
+  }>(calismaKodu(), 'calisma-plani.js', istek.kaynakDilimi);
   const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
   const sonuc = sunucuCalismaPlani(kopya(istek.calisma), kopya(istek.kayit), kopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
   return sonuc === null ? null : structuredClone(sonuc);
@@ -129,10 +143,9 @@ export function calismaPlani(istek: GirdiIstegi, simdi: number = Date.now()): Ca
 
 // Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function cozumGirdisi(g: Omit<GirdiIstegi, 'bugun'> & { istek: CozumIstegi }): CozumGirdisi | null {
-  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
-  const { sunucuCozumGirdisi } = vm.runInContext(cozumKodu(), baglam, { filename: 'plan-cozumu.js' }) as {
+  const { sunucuCozumGirdisi } = baglamla<{
     sunucuCozumGirdisi: (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null, istek: CozumIstegi, bugun: string) => CozumGirdisi | null;
-  };
+  }>(cozumKodu(), 'plan-cozumu.js', g.kaynakDilimi);
   const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
   const sonuc = sunucuCozumGirdisi(kopya(g.istek.ekMesai ? taslakEkMesaisi(g.calisma, g.istek.ekMesai) : g.calisma), kopya(g.kayit), kopya(g.kaynak), kopya(g.istek), tesisGunu(Date.parse(g.istek.simdi)));
   return sonuc === null ? null : structuredClone(sonuc);

@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
+import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { COZUM_SURESI_MS } from './plan-motoru.ts';
 
@@ -25,6 +27,8 @@ export interface DenemeIstegi {
   kayit: unknown;
   kaynak: KaynakOkumasi | null;
   bugun?: string;
+  // 1720: bayrak (plan.tipli-girdi) açıksa kaynak alanlarını tipli dilim kurar (girdi/birlestirme.ts).
+  kaynakDilimi?: KaynakDilimiOkumasi | null;
   kalemler: TeklifKalemi[];
   // İstenen termin planın duvar saatiyle ('GGGG-AA-GG SS:DD'); null: plan dondurulur, kalemler arkaya eklenir.
   termin: string | null;
@@ -70,13 +74,17 @@ export interface DenemePlani {
 const ISCI = `
 const { parentPort, workerData } = require('node:worker_threads');
 const vm = require('node:vm');
-const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
-b.self = b;
-const m = vm.runInContext(workerData.kod + '\\n;({ girdiKur, teklifDene, teklifTabani, stHazirla });', b, { filename: 'teklif-denemesi.js' });
-const i = workerData.istek;
-const g = m.girdiKur(i.calisma, i.kayit, i.kaynak, i.bugun);
-if (!g) parentPort.postMessage(null);
-else parentPort.postMessage({ baslangic: g.S.D.meta.baslangic, ...m.teklifDene(m.stHazirla(g.st), m.teklifTabani(g.S), i) });
+${ISCI_TIPLI_KAYNAK}
+(async () => {
+  const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
+  b.self = b;
+  const m = vm.runInContext(workerData.kod + '\\n;({ girdiKur, teklifDene, teklifTabani, stHazirla });', b, { filename: 'teklif-denemesi.js' });
+  const i = workerData.istek;
+  await tipliKaynakBagla(b, i.kaynakDilimi, workerData.birlestirmeAdresi);
+  const g = m.girdiKur(i.calisma, i.kayit, i.kaynak, i.bugun);
+  if (!g) parentPort.postMessage(null);
+  else parentPort.postMessage({ baslangic: g.S.D.meta.baslangic, ...m.teklifDene(m.stHazirla(g.st), m.teklifTabani(g.S), i) });
+})();
 `;
 
 // Aynı anda tek deneme: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir. Çalışma yoksa null.
@@ -89,13 +97,18 @@ export function teklifDenemesi(istek: DenemeIstegi, sureMs: number = COZUM_SURES
 }
 
 function calistir(istek: DenemeIstegi, sureMs: number): Promise<DenemeSonucu | null> {
+  const son = Date.now() + sureMs;
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { kod: denemeKodu(), dilim: TESIS_SAAT_DILIMI, istek } });
+    const isci = new Worker(ISCI, { eval: true, workerData: { kod: denemeKodu(), dilim: TESIS_SAAT_DILIMI, istek, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
     const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Teklif denemesi ${String(sureMs)} ms içinde bitmedi.`))), sureMs);
     isci.once('message', (s: DenemeSonucu | null) => sonlan(() => coz(s)));
-    isci.once('error', (e) => sonlan(() => reddet(e)));
+    // 1720: tipli dilimle iş parçacığı hata verirse aynı istek eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
+    isci.once('error', (e) => sonlan(() => {
+      if (istek.kaynakDilimi) calistir({ ...istek, kaynakDilimi: null }, Math.max(1, son - Date.now())).then(coz, reddet);
+      else reddet(e);
+    }));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Teklif denemesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
   });
 }
