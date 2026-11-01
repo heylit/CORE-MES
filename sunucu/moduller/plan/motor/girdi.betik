@@ -73,6 +73,8 @@ function rrCevir(st) {
   });
   const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
   const urunler = [];
+  /* 1473 a: ürünün rota adımı sırası (seq) -> motorun adım anahtarı (k); siparişin malzeme satırı tükettiği adımı bu anahtarla taşır */
+  const adimAnahtari = {};
   for (const it of items.filter(urunMu)) {
     const a = it.plan || null; const y = {};
     if (!a || a.id !== it.id) y.id = it.id;
@@ -132,6 +134,7 @@ function rrCevir(st) {
       if (!o0) z.aile = '';
       return rrKur(o0, z);
     });
+    adimAnahtari[it.id] = Object.fromEntries(steps.map((s, i) => [s.seq, rota[i].k]));
     for (const o of rota) if (Array.isArray(o.bag)) { const yeni = o.bag.filter(([k]) => k in kHarita || rota.some(x => x.k === k)).map(([k, t, ...e]) => [kHarita[k] || k, t, ...e]); if (!rrEsit(yeni, o.bag)) o.bag = yeni; }
     if (!a || 'rota' in a || rota.length) y.rota = (a && rrEsit(a.rota, rota)) ? a.rota : rota;
     const bil = [];
@@ -180,8 +183,13 @@ function rrCevir(st) {
     if (!a || a.oncelik !== oncSinifi(o.priority)) y.oncelik = oncSinifi(o.priority);
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
     if (!a || (a.ad || '') !== (o.note || '')) y.ad = o.note || o.no || o.id;
-    if (!a) { const r = st.routes && st.routes[o.itemId]; const s0 = r && (r.steps || []).slice().sort((p, q) => p.seq - q.seq)[0];
-      Object.assign(y, { gelir: null, cezaGun: null, malzeme: s0 ? (s0.ins || []).filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty })) : [] }); }
+    if (!a) Object.assign(y, { gelir: null, cezaGun: null });
+    /* 1473 a: siparişin malzemesi rotanın bütün adımlarının hammaddesidir (yalnız ilk adımınki değil); her satır tükettiği adımın anahtarını
+       (adim) taşır, motor malzemeyi o adımın başlangıcında bekler. Rota değişince kayıttaki liste de yenilenir. */
+    { const r = st.routes && st.routes[o.itemId], ak = adimAnahtari[o.itemId] || {};
+      const mal = (r ? (r.steps || []).slice().sort((p, q) => p.seq - q.seq) : []).flatMap(s => (s.ins || [])
+        .filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty, adim: ak[s.seq] ?? String(s.seq) })));
+      if (!a || !rrEsit(a.malzeme || [], mal)) y.malzeme = mal; }
     return rrKur(a, y);
   });
   /* takvim: vardiya, çalışma günü ve tatil değişmemişse asıl kayıt */
@@ -344,7 +352,8 @@ function tmiBitenler(emirler, D) {
 function bitenUygula(st, b) {
   if (!b || !st || !st.D) return st;
   if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
-  if (Object.keys(b.adim).length) st.bitti = Object.assign({}, st.bitti || {}, b.adim);
+  /* 1473 a: biten adımın malzemesi tüketilmiştir; siparişi verilmemiş eksik onsuz yeniden yazılır */
+  if (Object.keys(b.adim).length) { st.bitti = Object.assign({}, st.bitti || {}, b.adim); tmEksikYaz(st); }
   return st;
 }
 /* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine

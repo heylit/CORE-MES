@@ -143,7 +143,10 @@ const tmSaTermin = (D, kod) => { const m = (D.malzemeler || []).find(x => x.kod 
 function tmIhtiyac(D, p) {
   const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
   for (const id in p.ops) { const r = p.ops[id]; if (r.done || !isFinite(r.S)) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
-  for (const s of D.siparisler) { if (s.havuz || ilk[s.id] == null) continue; for (const r of s.malzeme || []) out[r.kod] = Math.min(out[r.kod] ?? Infinity, ilk[s.id]); }
+  /* 1473 a: adımı belli satırda ihtiyaç günü o adımın başlangıcıdır; adım bitmiş ya da planda yoksa satır ihtiyaç doğurmaz */
+  const adimBas = id => { const r = p.ops[id]; return r && !r.done && isFinite(r.S) ? r.S : null; };
+  for (const s of D.siparisler) { if (s.havuz) continue;
+    for (const r of s.malzeme || []) { const t = r.adim != null ? adimBas(s.id + '.' + r.adim) : ilk[s.id]; if (t == null) continue; out[r.kod] = Math.min(out[r.kod] ?? Infinity, t); } }
   return { kod: out, is: ilk };
 }
 /* tahmini gelişin tabanı (483/2): plan gününün ilk vardiyasının başı; o gün vardiya yoksa (tatil dahil) sonraki ilk çalışma gününün.
@@ -179,7 +182,8 @@ function tmUygula(st, S) {
 function tmEksikYaz(st) {
   const D = st.D, E = st.tmEk; if (!E) return st;
   D.satinalma = (D.satinalma || []).filter(p => p.tm !== 'siparis-yok');
-  const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
+  const bitti = st.bitti || {};
+  const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz) continue; for (const r of s.malzeme || []) { if (r.adim != null && bitti[s.id + '.' + r.adim]) continue; ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; } }
   for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
     const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue;
     const sat = tmSaTermin(D, kod);

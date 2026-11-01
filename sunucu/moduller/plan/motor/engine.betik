@@ -140,31 +140,38 @@ function matAlloc(st,jobs){
   for(const k in sup)sup[k].sort((a,b)=>a.t-b.t);
   const res={},summ={};
   const order=Object.values(jobs).sort((a,b)=>(a.oncelik-b.oncelik)||((a.due==null?1e9:a.due)-(b.due==null?1e9:b.due)));
-  for(const j of order){let ready=st.now;const det=[];
-    for(const r of j.malzeme||[]){const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
-      for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod});}
+  /* 1473 a: satır tükettiği adımı (adim) taşırsa malzeme o adımın başlangıcında beklenir (op: işlem -> hazır anı); biten adımın malzemesi
+     tüketilmiştir, dağıtılmaz. Adımsız (eski) satır öncülsüz adımlarda beklenir. ready siparişin bütün malzemesinin hazır anıdır. */
+  const bitti=st.bitti||{};
+  for(const j of order){let ready=st.now;const det=[],op={};
+    const kok=(j.ops||[]).filter(o=>!o.pr.length&&!o.matYok).map(o=>o.id);
+    for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&bitti[ad])continue;
+      const ops=ad?(j.ops||[]).some(o=>o.id===ad)?[ad]:[]:kok;
+      const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
+      for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod,ops});}
       const eksikQ=rem>1e-9?rem:0;const tt=eksikQ?null:Math.max(t,st.now);
       const kaynak=eksikQ?'eksik':tt<=st.now+1e-9&&!use.some(u=>u.k==='sa'&&po[u.i].tb)?'stok':'satın alma';
-      det.push({kod:r.kod,need,t:tt,kaynak,eksikQ,use,ad:mats[r.kod]?mats[r.kod].ad:r.kod,birim:mats[r.kod]?mats[r.kod].birim:''});
-      ready=tt==null?Infinity:Math.max(ready,tt);
+      det.push({kod:r.kod,need,t:tt,kaynak,eksikQ,use,ad:mats[r.kod]?mats[r.kod].ad:r.kod,birim:mats[r.kod]?mats[r.kod].birim:'',adim:r.adim??null,ops});
+      ready=tt==null?Infinity:Math.max(ready,tt);for(const id of ops)op[id]=tt==null?Infinity:Math.max(op[id]??st.now,tt);
       const sa=(sup[r.kod]||[]).filter(x=>x.k==='sa').reduce((a,x)=>a+x.q,0);
       summ[r.kod]=summ[r.kod]||{need:0,stok:mats[r.kod]?+mats[r.kod].stok||0:0,sa};summ[r.kod].need+=need;}
     let fiyat=0;for(const r of j.malzeme||[]){const m=mats[r.kod];if(!m||m.birimFiyat==null){fiyat=null;break;}fiyat+=m.birimFiyat*r.miktar*j.adet;}
-    res[j.id]={ready,det,fiyat};}
+    res[j.id]={ready,det,fiyat,op};}
   return {res,summ,po};
 }
 /* plandan satın almaya: gerekli tarih, hızlandır, ertele; siparişi olmayan eksik için en geç sipariş tarihi */
 function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m]));
   // plan: ilk işlemin planlanan başlangıcı; enGec: siparişi geciktirmeden en geç başlangıç (başlangıç + bolluk)
   // enGec yaklaşık: siparişin kendi bolluğu (termin − plan bitişi) kadar geç gelebilir; tezgâh sırası yok sayılır
-  const first=jid=>{const j=cx.jobs[jid];let s=Infinity,C=-Infinity;for(const o of j.ops){const r=plan.ops[o.id];if(!r)continue;C=Math.max(C,r.C);if(!o.pr.length&&!r.done&&!(r.S<st.now-1e-9))s=Math.min(s,r.S);}
+  // 1473 a: ilk işlem malzemeyi tüketen adımdır (ids); verilmezse öncülsüz adımlar
+  const first=(jid,ids)=>{const j=cx.jobs[jid];let s=Infinity,C=-Infinity;for(const o of j.ops){const r=plan.ops[o.id];if(!r)continue;C=Math.max(C,r.C);if((ids?ids.includes(o.id):!o.pr.length)&&!r.done&&!(r.S<st.now-1e-9))s=Math.min(s,r.S);}
     const fl=j.due==null||!isFinite(C)?0:Math.max(0,j.due-C);return {s,l:s+fl};};
   const ERT=10*24,out=[];
-  for(const x of cx.mat.po){const p=D.satinalma[x.i];const js=x.jobs.map(u=>({...u,...first(u.j)})).filter(u=>isFinite(u.s));
+  for(const x of cx.mat.po){const p=D.satinalma[x.i];const js=x.jobs.map(u=>({...u,...first(u.j,u.ops)})).filter(u=>isFinite(u.s));
     const pl=js.length?Math.min(...js.map(u=>u.s))-x.mu:null,lt=js.length?Math.min(...js.map(u=>u.l))-x.mu:null;const dock=x.soz==null?null:x.soz+x.gec;
     let durum='bağlı iş yok';if(pl!=null&&dock!=null)durum=dock>lt+1e-9?'hızlandır':dock>pl+1e-9?'plan önce istiyor':dock<pl-ERT?'ertelenebilir':'uygun';
     out.push({tur:'sa',kod:p.kod,miktar:+p.miktar||0,tedarikci:p.tedarikci||'',soz:x.soz,etkin:dock,plan:pl,enGec:lt,fark:lt!=null&&dock!=null?(lt-dock)/24:null,durum,jobs:js.map(u=>u.j)});}
-  for(const jid in cx.mat.res)for(const d of cx.mat.res[jid].det)if(d.eksikQ>0){const f=first(jid),m=mats[d.kod]||{};const mu=(+m.muayeneGun||0)*24;const lt=isFinite(f.l)?f.l-mu:null;
+  for(const jid in cx.mat.res)for(const d of cx.mat.res[jid].det)if(d.eksikQ>0){const f=first(jid,d.ops),m=mats[d.kod]||{};const mu=(+m.muayeneGun||0)*24;const lt=isFinite(f.l)?f.l-mu:null;
     const tg=m.tedarikGun==null?null:+m.tedarikGun;out.push({tur:'eksik',kod:d.kod,miktar:d.eksikQ,plan:isFinite(f.s)?f.s-mu:null,enGec:lt,siparisEnGec:lt!=null&&tg!=null?lt-tg*24:null,durum:'sipariş yok',jobs:[jid]});}
   return out;}
 /* ---- kaynak kullanımı ---- */
@@ -218,7 +225,7 @@ function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
   let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
   if(j.rel!=null&&j.rel>s){s=j.rel;why={t:'serbest'};}
-  if(!o.pr.length&&!o.matYok){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
+  {const mr=cx.mat.res[o.job],mt=mr&&mr.op?mr.op[o.id]:undefined;if(st.w.mat==='sert'&&mt!=null&&mt>s){s=mt;why={t:'malzeme'};}}
   if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
   const tas=+A.tasimaSaat||0;
   for(const [pid,ty] of o.pr){const p=P[pid];if(!p)return null;
@@ -445,7 +452,7 @@ function evaluate(plan,st,ref,fast){
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
-      if(!fast&&!o.pr.length&&!o.matYok&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      if(!fast&&!r.pin){const mr=cx.mat.res[jid],mt=mr&&mr.op?mr.op[o.id]:undefined;if(mt!=null&&r.S<mt-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mt)?`${jid}: malzeme ${fmtDT(cx.D,mt)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
