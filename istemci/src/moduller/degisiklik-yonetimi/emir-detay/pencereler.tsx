@@ -1,6 +1,6 @@
 import type { EmirCevabi, FaiSarti, KararSatiri, TalepCevabi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import {
-  IMZA_ANLAMLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, type GecerlilikTuru, type KararKodu,
+  IMZA_ANLAMLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, kapanisImzaAnlami, type GecerlilikTuru, type KararKodu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import { FormPenceresi, Girdi, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useForm } from '../../../ortak/veri/form.ts';
@@ -43,7 +43,7 @@ export function YayinPenceresi({ emir, kapat, yayinlandi }: Ortak & { yayinlandi
         : d.tur === 'tarih' ? { tur: 'tarih', tarih: d.tarih } : { tur: 'tum' },
       aciklama: d.aciklama, surum: emir.surum,
     }),
-    basarili: () => { bildir('tamam', `${emir.no} yayınlandı. Disposition önerileri üretildi.`); yayinlandi(); },
+    basarili: () => { bildir('tamam', `${emir.no} yayını kaydedildi.`); yayinlandi(); },
   });
   const d = form.degerler;
   return (
@@ -57,7 +57,7 @@ export function YayinPenceresi({ emir, kapat, yayinlandi }: Ortak & { yayinlandi
       </div>
       <h3 className="dy-ara-baslik">Yayının etkisi</h3>
       <YayinEtkisi talepId={emir.talep?.id ?? null} />
-      <p className="dy-not dy-not-uyari">Yayınlanan revizyonlar değiştirilemez. Eski revizyonlar geçersiz olur ya da yalnız yedek kalır.</p>
+      <p className="dy-not dy-not-uyari">Yayın bugün yalnız kayıttır: çizim ve rota revizyonu sahibi modülde yayınlanmaz, açık emirler eski revizyonda kalır (bağlı değil).</p>
       <ImzaKutusu anlam={IMZA_ANLAMLARI.yayinlandi} aciklama={d.aciklama} degistir={(aciklama) => form.degistir({ aciklama })} hata={form.hata('aciklama')} />
     </FormPenceresi>
   );
@@ -224,7 +224,7 @@ export function KapatPenceresi({ emir, kapat }: Ortak) {
     <FormPenceresi acik kapat={kapat} baslik={`Kapanış: ${emir.no}`} form={form} kaydetMetni="İmzala ve kapat">
       <KosulListesi emir={emir} />
       <p className="dy-not">Hurda {tutarMetni(emir.hurdaMaliyeti)}, rework {tutarMetni(emir.reworkMaliyeti)}.</p>
-      <ImzaKutusu anlam={IMZA_ANLAMLARI.kapandi} aciklama={form.degerler.aciklama}
+      <ImzaKutusu anlam={kapanisImzaAnlami(emir.kapanisKosullari)} aciklama={form.degerler.aciklama}
         degistir={(aciklama) => form.degistir({ aciklama })} hata={form.hata('aciklama')} />
     </FormPenceresi>
   );

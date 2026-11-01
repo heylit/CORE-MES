@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE, kapanisImzaAnlami } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
@@ -146,6 +147,9 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.equal(kapanisKosullari({ kaynakBagli: true, bekleyenKarar: 0, bekleyenFai: 0 })[0]?.durum, 'tamam');
     assert.equal(kapatilabilirMi(kapanisKosullari({ kaynakBagli: true, bekleyenKarar: 1, bekleyenFai: 0 })), false);
     assert.equal(kapatilabilirMi(kapanisKosullari({ kaynakBagli: false, bekleyenKarar: 0, bekleyenFai: 2 })), false);
+    // Bilinmeyen koşul varken imza uygulamayı ve doğrulamayı onaylamaz.
+    assert.equal(kapanisImzaAnlami(bagsiz), KAPANIS_IMZASI_BILINMEYENLE);
+    assert.equal(kapanisImzaAnlami([{ durum: 'tamam' }, { durum: 'tamam' }]), IMZA_ANLAMLARI.kapandi);
   });
 
   test('DY-16: seri uyumu', () => {

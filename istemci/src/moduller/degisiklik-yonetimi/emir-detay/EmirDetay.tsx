@@ -103,7 +103,7 @@ function Siradaki({ emir, sec, ac }: { emir: EmirCevabi; sec: (s: EmirSekmesi) =
     case 'acik':
       return (
         <SiradakiAdim baslik="Sıradaki adım: revizyon hazırlığını başlatın"
-          aciklama="Proses mühendisi veya tasarım. Yürürlükteki çizim ve rota revizyonları kaleme bağlanır; taslak yayınlanana kadar üretimi etkilemez.">
+          aciklama="Proses mühendisi veya tasarım. Yeni çizim ve rota revizyonu sahibi modülde açılır; burada kaleme yalnız kimliği yazılır, yayın üretimi henüz değiştirmez.">
           {hazirlayan && (
             <Dugme tur="birincil" simge="edit" yukleniyor={taslakAc.isPending}
               onClick={() => taslakAc.mutate({ surum: emir.surum }, { onSuccess: () => bildir('tamam', 'Revizyon hazırlığı başladı.'), onError: hata('Hazırlık başlatılamadı.') })}>

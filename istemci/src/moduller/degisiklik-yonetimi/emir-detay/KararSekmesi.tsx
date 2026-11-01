@@ -17,6 +17,8 @@ export function KararSekmesi({ emir }: { emir: EmirCevabi }) {
   const [pencere, pencereYaz] = useState<Pencere>(null);
   if (emir.kararlar.length === 0 && yayinOncesi(emir.durum)) return <TahminiEtki talepId={emir.talep?.id ?? null} />;
 
+  // Kaynak bağlı değilse boş liste "etkilenen yok" değil, bilinmiyor demektir (UYUM-BORCU 2).
+  const kaynakYok = emir.kapanisKosullari.some((k) => k.kosul === 'kararlar' && k.durum === 'bilinmiyor');
   const bekleyen = bekleyenKararlar(emir.kararlar).length;
   const otomatik = emir.kararlar.filter((k) => k.mod === 'otomatik' && k.verilenKod !== null).length;
   const toplu = yetki.var('degisiklik-yonetimi.karar-ver') ? topluOnaylanabilir(emir.kararlar).length : 0;
@@ -24,7 +26,7 @@ export function KararSekmesi({ emir }: { emir: EmirCevabi }) {
   return (
     <>
       <dl className="dy-metrikler">
-        <div><dt>Etkilenen hedef</dt><dd>{emir.kararlar.length}</dd></div>
+        <div><dt>Etkilenen hedef</dt><dd>{kaynakYok ? 'Bağlı değil' : emir.kararlar.length}</dd></div>
         <div><dt>Otomatik uygulandı</dt><dd>{otomatik}</dd></div>
         <div className={bekleyen ? 'dy-metrik-uyari' : undefined}><dt>Karar bekleyen</dt><dd>{bekleyen}</dd></div>
         <div><dt>Karantinadaki emir</dt><dd title="Üretim emirleri bağlanınca">—</dd></div>
@@ -40,7 +42,7 @@ export function KararSekmesi({ emir }: { emir: EmirCevabi }) {
           <table className="tc-tablo" aria-label="Disposition kararları">
             <thead><tr><th scope="col">Hedef</th><th scope="col">Durum</th><th scope="col">Sistem önerisi</th><th scope="col">Mod</th><th scope="col">Karar</th></tr></thead>
             <tbody>
-              {emir.kararlar.length === 0 && <tr><td colSpan={5} className="tc-tablo-yok">Etkilenen emir veya stok yok.</td></tr>}
+              {emir.kararlar.length === 0 && <tr><td colSpan={5} className="tc-tablo-yok">{kaynakYok ? 'Emir ve stok kaynağı bağlı değil; etkilenen hedef bilinmiyor.' : 'Etkilenen emir veya stok yok.'}</td></tr>}
               {emir.kararlar.map((k) => (
                 <tr key={k.id}>
                   <td><b>{k.hedef === 'stok' ? 'Stok' : 'Emir'}</b><div className="dy-kod">{k.hedefEtiketi ?? `#${k.hedefId}`}</div></td>

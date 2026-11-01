@@ -69,7 +69,7 @@ export function Siniflandirma({ talep }: { talep: TalepCevabi }) {
         {oneri === 'planlama' && (
           <p className="tc-dy-not tc-dy-not-uyari">
             Bu bir planlama parametresi değişikliği. ECO gerekmez; planlama parametresi olarak ilgili modülde sürümlenir.
-            Talebi yine de sınıflandırmak isterseniz sınıfı aşağıdan seçin.
+            Bu cevaplarla talep sınıflandırılamaz; cevaplar yanlışsa düzeltin.
           </p>
         )}
         {oneri !== null && oneri !== 'planlama' && <p className="tc-dy-not tc-dy-not-tamam">Önerilen sınıf: <strong>{SINIF_ADLARI[oneri]}</strong></p>}
@@ -77,7 +77,7 @@ export function Siniflandirma({ talep }: { talep: TalepCevabi }) {
           <Secim etiket="Sınıf" value={sinif} onChange={(e) => { secilenSinifYaz(e.target.value as Sinif); }} secenekler={SINIFLAR.map((s) => ({ deger: s, baslik: SINIF_ADLARI[s] }))} />
           <Secim etiket="Aciliyet" value={aciliyet} onChange={(e) => { aciliyetYaz(e.target.value as Aciliyet); }} secenekler={ACILIYETLER.map((a) => ({ deger: a, baslik: ACILIYET_ADLARI[a] }))} />
           <Girdi etiket="Not" value={not} onChange={(e) => { notYaz(e.target.value); }} placeholder="İsteğe bağlı" maxLength={1000} />
-          <Dugme tur="birincil" simge="check" yukleniyor={komut.yukleniyor} onClick={gonder}>Sınıflandır</Dugme>
+          <Dugme tur="birincil" simge="check" yukleniyor={komut.yukleniyor} disabled={oneri === 'planlama'} onClick={gonder}>Sınıflandır</Dugme>
         </div>
         {komut.hata && <p className="tc-dy-hata" role="alert">{komut.hata}</p>}
       </div>

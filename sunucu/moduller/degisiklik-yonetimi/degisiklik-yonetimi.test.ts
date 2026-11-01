@@ -9,7 +9,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
-import { IMZA_ANLAMLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   EmirCevabi, EmirListeCevabi, GorevlerimCevabi, IzlenebilirlikCevabi, KonfigurasyonCevabi, OlayListeCevabi, ParcaAdaylariCevabi, RaporCevabi,
   SeriListeCevabi, SonUrunlerCevabi, TalepCevabi, TalepListeCevabi,
@@ -233,9 +233,13 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     let p = await talepAc();
     p = await tamam(acan, 'POST', `${K}/talepler/${p.id}/siniflandir`, { sinif: 'P2', aciliyet: 'normal', cevaplar: { cizim: 'hayir', fff: null, proses: 'hayir', sure: 'hayir' }, surum: p.surum });
     p = await tamam(acan, 'POST', `${K}/talepler/${p.id}/etki-analizi`, { surum: p.surum });
-    const ret = await tamam<TalepCevabi>(onaylayan, 'POST', `${K}/talepler/${p.id}/ccb`, { karar: 'ret', surum: p.surum });
+    await kod(onaylayan, `${K}/talepler/${p.id}/ccb`, { karar: 'ret', surum: p.surum }, 400, /Ret gerekçesini/);
+    await kod(onaylayan, `${K}/talepler/${p.id}/ccb`, { karar: 'ret', aciklama: '  ', surum: p.surum }, 400, /Ret gerekçesini/);
+    const ret = await tamam<TalepCevabi>(onaylayan, 'POST', `${K}/talepler/${p.id}/ccb`, { karar: 'ret', aciklama: 'Gerek yok', surum: p.surum });
     assert.equal(ret.durum, 'reddedildi');
     assert.equal(ret.gecmis.at(-1)?.imzaAnlami, IMZA_ANLAMLARI.ccb_ret);
+    const retOlayi = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?tur=talep_reddedildi&ara=${ret.no}`);
+    assert.deepEqual(retOlayi.satirlar.map((o) => [o.kayitNo, o.alanlar.gerekce]), [[ret.no, 'Gerek yok']]);
     await kod(acan, `${K}/talepler/${p.id}/emir-ac`, { surum: ret.surum }, 409);
     // D2 onayı doğrudan onaylanır.
     let d2 = await talepAc();
@@ -295,6 +299,11 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/kapat`, { aciklama: 'Doğrulandı', surum: x.surum });
     assert.equal(x.durum, 'kapandi');
     assert.match(x.kapanis ?? '', /^\d{4}-\d{2}-\d{2}$/);
+    // Bağlı olmayan koşulla kapanış uygulandı ve doğrulandı imzası atmaz.
+    const kapanis = x.gecmis.at(-1);
+    assert.deepEqual([kapanis?.olay, kapanis?.imzaAnlami], ['kapandi', KAPANIS_IMZASI_BILINMEYENLE]);
+    assert.match(kapanis?.ozet ?? '', /3 koşul bilinmiyor/);
+    assert.match(x.gecmis.find((g) => g.olay === 'yayinlandi')?.ozet ?? '', /bağlı değil/);
     assert.deepEqual(x.gecmis.map((g) => g.olay), [
       'emir_acildi', 'taslak_acildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'yayina_gonderildi', 'geri_gonderildi',
       'yayina_gonderildi', 'yayinlandi', 'fai_onaylandi', 'fai_onaylandi', 'fai_tamam', 'kapandi',
