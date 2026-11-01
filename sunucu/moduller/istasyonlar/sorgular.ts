@@ -1,5 +1,6 @@
 import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
   EkipGuncellemesi, EkipKaydi, KapasiteKaynagi, MakineDurumuDegeri, SurumluEkip, IsMerkeziGuncellemesi, IsMerkeziKaydi, IstasyonGuncellemesi, IstasyonKaydi, MakineGuncellemesi, MakineKaydi, OperasyonTipi,
@@ -351,7 +352,7 @@ export function kisiAtamaSatirlari(db: Db, kisiId: number): Promise<AtamaSatiri[
 // Toplam kuralı satırlar arasıdır: aynı kişiye eşzamanlı iki atama ayrı ayrı geçip birlikte 100'ü aşabilir.
 // Kişi bazında transaction sonuna kadar sıraya sokulur; okuma bu kilitten sonra yapılmalıdır.
 export async function kisiAtamaKilidi(db: Db, kisiId: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('kisi_atama'), $1)", [kisiId]);
+  await islemKilidiAl(db, 'kisi_atama', kisiId);
 }
 
 // Aynı gün ikinci değişiklik o günün satırının üstüne yazar (gün içi geçmiş tutulmaz; kullanıcı kararı).

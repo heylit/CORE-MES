@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl, islemKilidiDene } from '#cekirdek/kilit.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { AnomaliOlayTuru, ArkonDeposu, ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
@@ -80,11 +81,8 @@ export async function yansimaYaz(
 }
 
 // Emir başına işleme kilidi (işlem sonuna kadar), bekletmeden yoklanır: başka işleyici tutuyorsa false.
-// Anahtara şema katılır: aynı veritabanındaki başka şema (paralel test) aynı kimlikli emrin kilidini tutup bu şemayı bekletmesin.
 export async function emirKilidiniDene(db: Db, emirId: number): Promise<boolean> {
-  return (await db.tek<{ alindi: boolean }>(
-    "SELECT pg_try_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text)) AS alindi", [emirId],
-  ))?.alindi === true;
+  return islemKilidiDene(db, `arkon-yansima-emir-${emirId}`);
 }
 
 export async function kisaBekle(db: Db): Promise<void> {
@@ -248,16 +246,16 @@ export async function seritParcaSayisi(db: Db, ozet: string, kisiId: number): Pr
 
 // Kişi başına işlem kilidi: eşzamanlı ilk parçalar kişi sınırını aşmaz. Özet kilidi yalnız tamamlamada alınır (önce kişi, sonra depo, sonra özet).
 export async function kisiKilitle(db: Db, kisiId: number): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`arkon-yukleme-kisi-${kisiId}`]);
+  await islemKilidiAl(db, `arkon-yukleme-kisi-${kisiId}`);
 }
 
 // Depo geneli kilit: farklı kişilerin eşzamanlı yüklemeleri depo toplam sınırını birlikte aşmasın. Sıra: kişi, depo, özet.
 export async function depoKilitle(db: Db): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', ['arkon-yukleme-depo']);
+  await islemKilidiAl(db, 'arkon-yukleme-depo');
 }
 
 export async function ozetKilitle(db: Db, ozet: string): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`arkon-yukleme-ozet-${ozet}`]);
+  await islemKilidiAl(db, `arkon-yukleme-ozet-${ozet}`);
 }
 
 export async function kisiAcikYuklemeleri(db: Db, kisiId: number): Promise<{ adet: number; bayt: number }> {
@@ -685,7 +683,7 @@ export function kuyrukSiralari(db: Db): Promise<KuyrukSirasiSatiri[]> {
 
 // Aynı istasyonun iki sıralaması sırayla yürür: ikincisi birincinin yazdığı sırayı görür ve eski ekranı reddeder.
 export async function kuyrukKilitle(db: Db, istasyonId: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('arkon_kuyruk_sirasi'), $1)", [istasyonId]);
+  await islemKilidiAl(db, 'arkon_kuyruk_sirasi', istasyonId);
 }
 
 // İstasyonun sırası baştan yazılır: listedeki işler 1'den numaralanır (başka istasyondaki eski satırları da buraya taşınır), listede olmayan

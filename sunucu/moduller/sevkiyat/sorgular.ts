@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 
 // Saatler "SS:DD" metni, numeric alanlar metin, tarih "YYYY-AA-GG" döner; dönüşüm burada, kural serviste.
@@ -288,7 +289,7 @@ export function planOlustur(db: Db, tarih: string, amac: string): Promise<PlanSa
 // Plan yazmaları günler arasında da sıraya girer: bir günün kaydı işi öteki günlerin taslaklarından çıkarır; iki gün
 // aynı anda kaydedilince ikisi de ötekinin yazmadığı hâli görür ve aynı iş iki taslağa, iki araca yazılırdı.
 export async function planKilitle(db: Db, tarih: string): Promise<PlanSatiri | null> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('sevkiyat-plan-yazma'))");
+  await islemKilidiAl(db, 'sevkiyat-plan-yazma');
   return db.tek<PlanSatiri>(`SELECT ${PLAN_ALANLARI} FROM sevkiyat_plani WHERE tarih = $1 FOR UPDATE`, [tarih]);
 }
 export async function planSurumunuArtir(db: Db, planId: number, amac: string): Promise<void> {

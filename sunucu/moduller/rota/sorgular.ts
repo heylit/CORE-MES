@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type {
   Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami,
 } from '#paylasilan/sozlesme/rota.ts';
@@ -755,7 +756,7 @@ export async function adimKunyesi(db: Db, adimId: number): Promise<{ revizyonId:
 
 // Aynı ürün ve OP için eşzamanlı iki yazma sırayla geçer: "son okunan satır" denetimi kilit altında yapılır.
 export async function gerceklesenKilitle(db: Db, malzemeId: number, opNo: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtextextended('rota_gerceklesen_sure:' || $1::text || ':' || $2::text, 0))", [malzemeId, opNo]);
+  await islemKilidiAl(db, `rota_gerceklesen_sure:${malzemeId}:${opNo}`);
 }
 
 export interface GerceklesenKaydi {
@@ -1054,7 +1055,7 @@ export async function isEmriSabitiniKopyala(db: Db, kaynakIsEmriId: number, yeni
 
 // Ek adımın şartnamesi silinip yeniden yazılır; aynı iş emrine gelen iki komut bu kilitle sıraya girer (satırı olmayan iş emri de).
 export async function isEmriSabitKilidi(db: Db, isEmriId: number): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('rota_is_emri_sartnamesi'), $1)", [isEmriId]);
+  await islemKilidiAl(db, 'rota_is_emri_sartnamesi', isEmriId);
 }
 
 // Yalnız başlamamış iş emri yeniden sabitlenir (yürürlükteki rotayı emre uygulama); satır değişmez, silinip yeniden yazılır.

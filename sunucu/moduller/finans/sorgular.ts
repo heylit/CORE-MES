@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { Dilim as ListeDilimi } from '#cekirdek/liste.ts';
 import { MALIYET_TABLOLARI } from './kurallar.ts';
@@ -572,7 +573,7 @@ export async function iadeToplami(db: Db, asilId: number, haricId: number): Prom
 
 // FNS-68: sevkin iptal edilmemiş satış faturası. Aynı sevke eşzamanlı iki fatura girmesin diye önce sevk kimliğiyle işlem kilidi alınır.
 export async function sevkFaturasi(db: Db, sevkiyatIsiId: number): Promise<{ id: number; belgeNo: string | null } | null> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('finans_sevk_faturasi'), $1)", [sevkiyatIsiId]);
+  await islemKilidiAl(db, 'finans_sevk_faturasi', sevkiyatIsiId);
   return db.tek<{ id: number; belgeNo: string | null }>(
     `SELECT id, belge_no AS "belgeNo" FROM finans_belge WHERE sevkiyat_isi_id = $1 AND tur = 'fatura' AND durum <> 'iptal' ORDER BY id LIMIT 1`, [sevkiyatIsiId]);
 }

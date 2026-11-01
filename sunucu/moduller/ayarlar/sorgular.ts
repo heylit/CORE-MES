@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 
 export interface SaklananDeger {
   deger: unknown;
@@ -11,7 +12,7 @@ export function ayarDegeriniOku(db: Db, anahtar: string): Promise<SaklananDeger 
 // Değiştirme eski değeri okumadan önce anahtarı kilitler: aynı ayarı aynı anda değiştiren ikinci komut birincinin bitmesini
 // bekler. Satır kilidi yetmez: hiç yazılmamış ayarda kilitlenecek satır yoktur.
 export async function ayarKilitle(db: Db, anahtar: string): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [`ayar-degistir-${anahtar}`]);
+  await islemKilidiAl(db, `ayar-degistir-${anahtar}`);
 }
 
 export function ayarDegerleriniOku(db: Db): Promise<(SaklananDeger & { anahtar: string })[]> {

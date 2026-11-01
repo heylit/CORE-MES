@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { IkTuru } from '#paylasilan/sozlesme/ik.ts';
 import type { Deger, SatirDegeri, Satirlar } from './eslesme.ts';
@@ -188,7 +189,7 @@ export async function kesinlesmisVarMi(db: Db, donem: string): Promise<boolean> 
 
 // Aynı ayı iki kişi aynı anda kesinleştiremez; ayarları iki kişi aynı anda yazamaz.
 export async function anahtarKilitle(db: Db, anahtar: string): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtext($1))', [anahtar]);
+  await islemKilidiAl(db, anahtar);
 }
 
 export async function parametreDonemiNo(db: Db, kod: string): Promise<number | null> {
