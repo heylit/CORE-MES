@@ -258,3 +258,101 @@ export function metrikDakikasi(g: DakikaGirdisi): MetrikDakikasi {
     veritabani: vtOzeti(g.vt?.onceki ?? null, g.vt?.simdiki ?? null, aralikSn),
   };
 }
+
+// Saklama (karar 1619 a): dakikalık ölçü 14 gün, saatlik özet 13 ay. Bir turda en çok bu kadar saat özetlenir (uzun kesinti sonrası tur kısa kalsın).
+export const DAKIKA_SAKLAMA_GUN = 14;
+export const SAAT_SAKLAMA_AY = 13;
+export const TURDA_EN_COK_SAAT = 48;
+const SAAT_MS = 3_600_000;
+
+export const saatBasi = (an: Date): Date => new Date(Math.floor(an.getTime() / SAAT_MS) * SAAT_MS);
+
+// Özetlenecek saatler: özetlenmemiş ilk dakikanın saatinden şimdiki saate dek bitmiş saatler. Başlangıç dolu bir saattir;
+// sunucunun kapalı kaldığı boş saatler atlanır ve uzun kesinti özeti takmaz.
+export function ozetlenecekSaatler(ilkDakika: Date | null, simdi: Date, enCok: number = TURDA_EN_COK_SAAT): Date[] {
+  if (ilkDakika === null) return [];
+  const bitis = saatBasi(simdi).getTime();
+  const sonuc: Date[] = [];
+  for (let t = saatBasi(ilkDakika).getTime(); t < bitis && sonuc.length < enCok; t += SAAT_MS) sonuc.push(new Date(t));
+  return sonuc;
+}
+
+export interface SaatOzeti {
+  saat: string;
+  // Saatte ölçülen dakika; sunucu kapalıyken eksilir, eksik dakika uydurulmaz.
+  dakikaSayisi: number;
+  istek: {
+    sayi: number; saniyede: number | null;
+    // Saatlik yüzdelik dakikalardan birleştirilemez: dakikalık p95/p99'ların en kötüsü yazılır.
+    p95MsEnCok: number | null; p99MsEnCok: number | null;
+    istemciHatasi: number; sunucuHatasi: number; mesgul: number;
+  };
+  havuz: { kullanimdaEnCok: number; bekleyenEnCok: number; mesgul: number } | null;
+  surecIslemciYuzde: { ort: number; enCok: number } | null;
+  makineIslemciYuzde: { ort: number; enCok: number } | null;
+  bellek: { rssBaytEnCok: number; makineBosBaytEnAz: number };
+  olayDongusuP99MsEnCok: number | null;
+  veritabani: {
+    boyutBayt: number; xidYasi: number | null; saniyedeIslem: number; geriAlma: number; deadlock: number;
+    onbellekIsabetiYuzdeEnAz: number | null; geciciBayt: number; baglantiEnCok: number; kilitBekleyenEnCok: number; enUzunTxSnEnCok: number | null;
+  } | null;
+}
+
+const dolu = <T>(d: readonly (T | null)[]): T[] => d.filter((x): x is T => x !== null);
+const enCok = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.max(...x); };
+const enAz = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.min(...x); };
+const topla = (d: readonly number[]): number => d.reduce((a, b) => a + b, 0);
+const yuvarla = (n: number): number => Math.round(n * 100) / 100;
+const ortVeEnCok = (d: readonly (number | null)[]): { ort: number; enCok: number } | null => {
+  const x = dolu(d);
+  return x.length === 0 ? null : { ort: yuvarla(topla(x) / x.length), enCok: Math.max(...x) };
+};
+
+// Saatin dakikalarından özet; dakika yoksa null (boş saat yazılmaz).
+export function saatOzeti(saat: Date, dakikalar: readonly MetrikDakikasi[]): SaatOzeti | null {
+  if (dakikalar.length === 0) return null;
+  const sayi = topla(dakikalar.map((d) => d.istek.sayi));
+  const sure = topla(dakikalar.map((d) => d.aralikSn));
+  const havuzlar = dolu(dakikalar.map((d) => d.havuz));
+  const vtDakikalari = dakikalar.flatMap((d) => (d.veritabani === null ? [] : [{ v: d.veritabani, sn: d.aralikSn }]));
+  const vtler = vtDakikalari.map((x) => x.v);
+  const sonVt = vtler.at(-1);
+  const vtSure = topla(vtDakikalari.map((x) => x.sn));
+  return {
+    saat: saat.toISOString(),
+    dakikaSayisi: dakikalar.length,
+    istek: {
+      sayi,
+      saniyede: sure > 0 ? yuvarla(sayi / sure) : null,
+      p95MsEnCok: enCok(dakikalar.map((d) => d.istek.p95Ms)),
+      p99MsEnCok: enCok(dakikalar.map((d) => d.istek.p99Ms)),
+      istemciHatasi: topla(dakikalar.map((d) => d.istek.istemciHatasi)),
+      sunucuHatasi: topla(dakikalar.map((d) => d.istek.sunucuHatasi)),
+      mesgul: topla(dakikalar.map((d) => d.istek.mesgul)),
+    },
+    havuz: havuzlar.length === 0 ? null : {
+      kullanimdaEnCok: Math.max(...havuzlar.map((h) => h.kullanimda)),
+      bekleyenEnCok: Math.max(...havuzlar.map((h) => h.bekleyen)),
+      mesgul: topla(havuzlar.map((h) => h.mesgul)),
+    },
+    surecIslemciYuzde: ortVeEnCok(dakikalar.map((d) => d.surecIslemciYuzde)),
+    makineIslemciYuzde: ortVeEnCok(dakikalar.map((d) => d.makineIslemciYuzde)),
+    bellek: {
+      rssBaytEnCok: Math.max(...dakikalar.map((d) => d.bellek.rssBayt)),
+      makineBosBaytEnAz: Math.min(...dakikalar.map((d) => d.bellek.makineBosBayt)),
+    },
+    olayDongusuP99MsEnCok: enCok(dakikalar.map((d) => d.olayDongusuP99Ms)),
+    veritabani: sonVt === undefined ? null : {
+      boyutBayt: sonVt.boyutBayt,
+      xidYasi: sonVt.xidYasi,
+      saniyedeIslem: vtSure > 0 ? yuvarla(topla(vtDakikalari.map((x) => x.v.saniyedeIslem * x.sn)) / vtSure) : 0,
+      geriAlma: topla(vtler.map((v) => v.geriAlma)),
+      deadlock: topla(vtler.map((v) => v.deadlock)),
+      onbellekIsabetiYuzdeEnAz: enAz(vtler.map((v) => v.onbellekIsabetiYuzde)),
+      geciciBayt: topla(vtler.map((v) => v.geciciBayt)),
+      baglantiEnCok: Math.max(...vtler.map((v) => v.baglanti.toplam)),
+      kilitBekleyenEnCok: Math.max(...vtler.map((v) => v.baglanti.kilitBekleyen)),
+      enUzunTxSnEnCok: enCok(vtler.map((v) => v.enUzunTxSn)),
+    },
+  };
+}

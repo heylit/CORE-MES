@@ -67,3 +67,40 @@ export async function vtIstatistigiOku(db: Db): Promise<VtIstatistigi | null> {
     enUzunTxSn: a?.en_uzun_tx_sn ?? null,
   };
 }
+
+// Metrik tabloları (kart 1662). Satırı yalnız dakikalık iş yazar; jsonb biçimi sözleşmedeki dakika ve kurallar.ts'teki saat özetidir.
+export async function metrikDakikasiYaz(db: Db, an: string, veri: unknown): Promise<void> {
+  await db.sorgu('INSERT INTO saglik_metrik_dakika (an, veri) VALUES ($1, $2) ON CONFLICT (an) DO NOTHING', [an, JSON.stringify(veri)]);
+}
+
+export async function metrikSaatiYaz(db: Db, saat: string, veri: unknown): Promise<void> {
+  await db.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2) ON CONFLICT (saat) DO NOTHING', [saat, JSON.stringify(veri)]);
+}
+
+// Özeti yazılmış son saatten sonraki ilk dakika; hiç özet yoksa en eski dakika.
+export async function ozetlenmemisIlkDakika(db: Db): Promise<Date | null> {
+  const s = await db.tek<{ an: Date | null }>(
+    `SELECT min(an) AS an FROM saglik_metrik_dakika
+      WHERE an >= coalesce((SELECT max(saat) FROM saglik_metrik_saat) + interval '1 hour', '-infinity'::timestamptz)`,
+  );
+  return s?.an ?? null;
+}
+
+// [baslangic, bitis) aralığının dakikaları, zamana göre.
+export async function metrikDakikalariOku<T>(db: Db, baslangic: Date, bitis: Date): Promise<T[]> {
+  const satirlar = await db.sorgu<{ veri: T }>(
+    'SELECT veri FROM saglik_metrik_dakika WHERE an >= $1 AND an < $2 ORDER BY an', [baslangic, bitis],
+  );
+  return satirlar.map((s) => s.veri);
+}
+
+// Saklama süresi geçen satırlar; yalnız bu iki tabloya dokunur.
+export async function suresiGecenMetrikleriSil(db: Db, simdi: Date, dakikaGun: number, saatAy: number): Promise<{ dakika: number; saat: number }> {
+  const d = await db.sorgu<{ an: Date }>(
+    "DELETE FROM saglik_metrik_dakika WHERE an < $1::timestamptz - make_interval(days => $2::int) RETURNING an", [simdi, dakikaGun],
+  );
+  const s = await db.sorgu<{ saat: Date }>(
+    "DELETE FROM saglik_metrik_saat WHERE saat < $1::timestamptz - make_interval(months => $2::int) RETURNING saat", [simdi, saatAy],
+  );
+  return { dakika: d.length, saat: s.length };
+}

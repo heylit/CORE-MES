@@ -11,11 +11,13 @@ import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { Ayrinti, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import {
-  BEKCI_GOREV_ADI, METRIK_PENCERESI, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
-  otomatikAcilisCoz, sayacFarki, surecIslemciYuzdesi, uyarilar,
+  BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
+  otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, uyarilar,
 } from './kurallar.ts';
 import type { GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
-import { sonGocAdi, veritabaniYokla, vtBaglantiSay } from './sorgular.ts';
+import {
+  metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay,
+} from './sorgular.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 
@@ -314,3 +316,18 @@ export class MetrikToplayici {
 }
 
 export const surecMetrikleri = new MetrikToplayici(SUREC_METRIK_KAYNAGI);
+
+// Dakikalık işin kalıcı kısmı (kart 1662, karar 1619 a): dakikayı yazar, bitmiş saatleri özetler, süresi geçeni siler.
+// Özetlenmemiş saatin dakikaları silinmeden önce özetlenir (silme en son). Tek transaction'dır: hata olursa hiçbiri yazılmaz.
+export async function metrikleriSakla(db: Db, dakika: MetrikDakikasi | null, simdi: Date): Promise<{ saat: number; silinen: { dakika: number; saat: number } }> {
+  if (dakika !== null) await metrikDakikasiYaz(db, dakika.an, dakika);
+  let saat = 0;
+  for (const bas of ozetlenecekSaatler(await ozetlenmemisIlkDakika(db), simdi)) {
+    const ozet = saatOzeti(bas, await metrikDakikalariOku<MetrikDakikasi>(db, bas, new Date(bas.getTime() + 3_600_000)));
+    if (ozet === null) continue;
+    await metrikSaatiYaz(db, ozet.saat, ozet);
+    saat += 1;
+  }
+  const silinen = await suresiGecenMetrikleriSil(db, simdi, DAKIKA_SAKLAMA_GUN, SAAT_SAKLAMA_AY);
+  return { saat, silinen };
+}

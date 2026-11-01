@@ -3,10 +3,11 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
+import type { MetrikDakikasi } from '#paylasilan/sozlesme/saglik.ts';
 
 const GIT = 'a'.repeat(40);
 
@@ -157,4 +158,54 @@ test('veritabanı özeti: istatistik sıfırlanırsa aralık sıfırdan sayılı
     an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
     bellek: { rss: 1, heapUsed: 1 }, makineBos: 1, makineToplam: 2, olayDongusuP99Ms: null, havuz: null, oncekiMesgulToplam: null,
   }).veritabani, null);
+});
+
+test('özetlenecek saatler: özetlenmemiş ilk dakikanın saatinden şimdiki saate dek; şimdiki saat bitmediği için yok; tur sınırlı', () => {
+  const s = (iso: string) => new Date(iso);
+  assert.deepEqual(ozetlenecekSaatler(null, s('2026-11-01T10:30:00Z')), []);
+  assert.deepEqual(ozetlenecekSaatler(s('2026-11-01T10:05:00Z'), s('2026-11-01T10:59:00Z')), []);
+  assert.deepEqual(ozetlenecekSaatler(s('2026-11-01T08:59:00Z'), s('2026-11-01T10:00:00Z')).map((d) => d.toISOString()),
+    ['2026-11-01T08:00:00.000Z', '2026-11-01T09:00:00.000Z']);
+  assert.equal(ozetlenecekSaatler(s('2026-10-01T00:00:00Z'), s('2026-11-01T00:00:00Z'), 48).length, 48);
+});
+
+const dakikaOrnegi = (y: Partial<MetrikDakikasi> = {}): MetrikDakikasi => ({
+  an: '2026-11-01T10:01:00.000Z', aralikSn: 60,
+  istek: { sayi: 60, saniyede: 1, p50Ms: 25, p95Ms: 100, p99Ms: 250, istemciHatasi: 1, sunucuHatasi: 0, mesgul: 0 },
+  uclar: [], havuz: { boyut: 30, kullanimda: 2, bekleyen: 0, mesgul: 0 },
+  surecIslemciYuzde: 10, makineIslemciYuzde: null,
+  bellek: { rssBayt: 100, yiginBayt: 50, makineBosBayt: 1000, makineToplamBayt: 2000 }, olayDongusuP99Ms: null,
+  veritabani: {
+    boyutBayt: 500, xidYasi: 10, saniyedeIslem: 2, geriAlma: 1, deadlock: 0, onbellekIsabetiYuzde: 99, geciciBayt: 0,
+    baglanti: { toplam: 5, aktif: 1, bosta: 4, bosTx: 0, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: null,
+  },
+  ...y,
+});
+
+test('saat özeti: toplamlar toplanır, uçlar en kötüsüyle, ortalamalar yalnız ölçülen dakikalardan; ölçü yoksa null', () => {
+  const saat = new Date('2026-11-01T10:00:00Z');
+  assert.equal(saatOzeti(saat, []), null);
+  const o = saatOzeti(saat, [
+    dakikaOrnegi(),
+    dakikaOrnegi({
+      istek: { sayi: 120, saniyede: 2, p50Ms: 25, p95Ms: 500, p99Ms: null, istemciHatasi: 0, sunucuHatasi: 2, mesgul: 3 },
+      havuz: null, surecIslemciYuzde: 30, bellek: { rssBayt: 300, yiginBayt: 50, makineBosBayt: 400, makineToplamBayt: 2000 },
+      veritabani: null,
+    }),
+    dakikaOrnegi({ surecIslemciYuzde: null, veritabani: { ...dakikaOrnegi().veritabani!, boyutBayt: 600, saniyedeIslem: 4, deadlock: 1, onbellekIsabetiYuzde: null } }),
+  ]);
+  assert.ok(o !== null);
+  assert.equal(o.saat, '2026-11-01T10:00:00.000Z');
+  assert.equal(o.dakikaSayisi, 3);
+  assert.deepEqual(o.istek, { sayi: 240, saniyede: 1.33, p95MsEnCok: 500, p99MsEnCok: 250, istemciHatasi: 2, sunucuHatasi: 2, mesgul: 3 });
+  assert.deepEqual(o.havuz, { kullanimdaEnCok: 2, bekleyenEnCok: 0, mesgul: 0 });
+  assert.deepEqual(o.surecIslemciYuzde, { ort: 20, enCok: 30 });
+  assert.equal(o.makineIslemciYuzde, null);
+  assert.deepEqual(o.bellek, { rssBaytEnCok: 300, makineBosBaytEnAz: 400 });
+  assert.equal(o.olayDongusuP99MsEnCok, null);
+  assert.equal(o.veritabani?.boyutBayt, 600);
+  assert.equal(o.veritabani?.saniyedeIslem, 3);
+  assert.equal(o.veritabani?.deadlock, 1);
+  assert.equal(o.veritabani?.onbellekIsabetiYuzdeEnAz, 99);
+  assert.equal(saatOzeti(saat, [dakikaOrnegi({ veritabani: null })])?.veritabani, null);
 });

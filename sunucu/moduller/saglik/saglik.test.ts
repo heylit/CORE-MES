@@ -20,7 +20,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  MetrikToplayici, ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, metrikleriSakla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
 import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
@@ -421,6 +421,40 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Diğer bağlantıların sayacı PostgreSQL'e gecikmeli yazılır (en çok ~1 sn); kesin artış beklenmez, azalma da olmaz.
     assert.equal(ikinci.islem >= ilk.islem, true);
     assert.equal(ikinci.enUzunTxSn === null || ikinci.enUzunTxSn < 60, true);
+  });
+
+  test('metrik saklama: dakika yazılır, bitmiş saat bir kez özetlenir, boş saat atlanır, süresi geçen yalnız metrik tablolarından silinir', async () => {
+    const vt = acik().vt;
+    await vt.sorgu('DELETE FROM saglik_metrik_dakika');
+    await vt.sorgu('DELETE FROM saglik_metrik_saat');
+    const dakika = (an: string, sayi: number) => ({
+      an, aralikSn: 60, istek: { sayi, saniyede: sayi / 60, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: 5, makineIslemciYuzde: 10,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+    });
+    const sakla = (d: ReturnType<typeof dakika> | null, simdi: string) => vt.tx((db) => metrikleriSakla(db, d, new Date(simdi)));
+    // 15 gün önceki dakika ve 14 ay önceki özet: süresi geçmiş.
+    await vt.sorgu("INSERT INTO saglik_metrik_dakika (an, veri) VALUES ('2026-10-17T09:00:00Z', '{}')");
+    await vt.sorgu("INSERT INTO saglik_metrik_saat (saat, veri) VALUES ('2025-09-01T00:00:00Z', '{}'), ('2026-10-17T09:00:00Z', '{}')");
+    assert.deepEqual(await sakla(null, '2026-11-01T06:00:00Z'), { saat: 0, silinen: { dakika: 1, saat: 1 } });
+
+    await sakla(dakika('2026-11-01T06:10:00.000Z', 60), '2026-11-01T06:10:00Z');
+    await sakla(dakika('2026-11-01T06:11:00.000Z', 120), '2026-11-01T06:11:00Z');
+    // 07 ve 08 saatleri boş (sunucu kapalı); 09'da yeniden açılır.
+    const sonuc = await sakla(dakika('2026-11-01T09:00:30.000Z', 30), '2026-11-01T09:00:30Z');
+    assert.equal(sonuc.saat, 1);
+    const saatler = await vt.sorgu<{ saat: Date; veri: { dakikaSayisi: number; istek: { sayi: number } } }>(
+      "SELECT saat, veri FROM saglik_metrik_saat WHERE saat > '2026-11-01' ORDER BY saat",
+    );
+    assert.deepEqual(saatler.map((s) => [s.saat.toISOString(), s.veri.dakikaSayisi, s.veri.istek.sayi]), [['2026-11-01T06:00:00.000Z', 2, 180]]);
+    // Aynı saat ikinci kez özetlenmez; 09 saati bitince özetlenir.
+    assert.equal((await sakla(null, '2026-11-01T09:30:00Z')).saat, 0);
+    assert.equal((await sakla(null, '2026-11-01T10:00:05Z')).saat, 1);
+    const dakikaSayisi = await vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM saglik_metrik_dakika');
+    assert.equal(dakikaSayisi?.n, 3);
+    // Sözleşmeye uyan dakika jsonb'den aynen geri okunur.
+    const geri = await vt.tek<{ veri: unknown }>("SELECT veri FROM saglik_metrik_dakika WHERE an = '2026-11-01T06:10:00Z'");
+    assert.deepEqual(geri?.veri, dakika('2026-11-01T06:10:00.000Z', 60));
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {

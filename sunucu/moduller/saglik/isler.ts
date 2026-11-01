@@ -1,15 +1,15 @@
 import { isTanimi } from '#cekirdek/zamanlayici.ts';
 import { METRIK_ARALIGI_MS } from './kurallar.ts';
-import { surecMetrikleri } from './servis.ts';
+import { metrikleriSakla, surecMetrikleri } from './servis.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
 
-// Dakikalık metrik turu (kart 1660): sayaçlar süreçtedir, veritabanına bu kartta yazılmaz (kalıcılık 1662).
+// Dakikalık metrik turu (kart 1660, 1661, 1662): ölçer, dakikayı ve bitmiş saatin özetini yazar, süresi geçeni siler.
 export const isler = [
   isTanimi({
     ad: 'saglik-metrik',
     aralikMs: METRIK_ARALIGI_MS,
     calis: async (db) => {
-      surecMetrikleri.tur(await vtIstatistigiOku(db));
+      await metrikleriSakla(db, surecMetrikleri.tur(await vtIstatistigiOku(db)), new Date());
     },
   }),
 ];
