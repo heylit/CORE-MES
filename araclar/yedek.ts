@@ -11,7 +11,7 @@ import { diskKunyeOzetleri } from '../sunucu/moduller/dosya/disari.ts';
 import {
   MEDYA_AYNA_KLASORU, dosyasiOlmayanlar, medyaAynala, medyaDiziniOku, medyaGeriYukle, yedekAl, yedekOrtamiOku, yedekSifresiniCoz, type YedekOrtami,
 } from '../sunucu/moduller/ayarlar/disari.ts';
-import { yedegiGeriYukle } from './guncelleyici.ts';
+import { geriYuklemeKilidiniDenetle, yedegiGeriYukle } from './guncelleyici.ts';
 
 // Komut satırından veritabanı yedeği ve geri yükleme: `npm run yedek`, `npm run geri-yukle -- <dosya>`; yeni yedek anahtarı
 // `npm run yedek-anahtari` (yalnız ekrana yazar, hiçbir yere kaydetmez: anahtarı bilgi işlem saklar). Elle pg_restore için şifreli
@@ -143,6 +143,9 @@ async function geriYukle(ortam: YedekOrtami, argumanlar: string[]): Promise<void
   } finally {
     await denetim.kapat();
   }
+  const goc = { kullanici: process.env['TMIV2_PG_GOC_USER']?.trim() ?? '', parola: process.env['TMIV2_PG_GOC_PASSWORD'] ?? '' };
+  // Kilit tablosu yetmeyecekse onay ve ön yedek beklenmeden söylenir; yedeğin kendi sayısıyla yükleme öncesinde yeniden bakılır.
+  await geriYuklemeKilidiniDenetle(ortam, goc, kok);
   if (!argumanlar.includes('--evet')) {
     console.log(`"${vt}" veritabanının bütün içeriği silinip ${yedek} yedeğiyle değiştirilecek. Sunucu kapalı olmalı.`);
     const satir = createInterface({ input: process.stdin, output: process.stdout });
@@ -153,7 +156,6 @@ async function geriYukle(ortam: YedekOrtami, argumanlar: string[]): Promise<void
   // Yanlış dosya seçilirse geri dönülebilsin: bugünkü hal önce yedeklenir.
   console.log('Önce bugünkü veritabanı yedekleniyor...');
   await al(ortam);
-  const goc = { kullanici: process.env['TMIV2_PG_GOC_USER']?.trim() ?? '', parola: process.env['TMIV2_PG_GOC_PASSWORD'] ?? '' };
   await yedegiGeriYukle(ortam, goc, yedek, kok);
   console.log(`Geri yüklendi: ${vt} <- ${yedek}`);
   // Önce veritabanı, sonra medya: geri gelen künyelerin dosyası aynadan tamamlanır. Dump elle başka yere kopyalanmış olabilir;

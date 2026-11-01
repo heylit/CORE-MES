@@ -8,7 +8,7 @@ import {
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
   Guncelleyici, UYGULAMA_DURUMU_DOSYASI, altSurecOrtami, derlemeOrtami, gecmisSatiri, npmKurulumArgumanlari, yarimKalaniKapat,
-  type UygulamaDurumu, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari,
+  type UygulamaDurumu, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari, geriYuklemeKilidi, kilitHatasiMi, kilitYetersizligi,
 } from './guncelleyici.ts';
 import { NPM_ONBELLEGI } from './paket.ts';
 
@@ -214,4 +214,32 @@ test('açılışta durum dosyası: geri yüklenemeyen, elle bekleyen ya da okuna
     console.error = hata;
     await rm(dizin, { recursive: true, force: true });
   }
+});
+
+test('geri yükleme kilit ihtiyacı ölçülen 499 göçlü şemanın üstünde tahmin edilir; şemadan ya da dökümden büyüğü alınır', () => {
+  // Ölçüm: 1783 pg_class satırı, 4529 döküm girdisi, tek transaction'da 19891 kilit (PostgreSQL 16).
+  assert.ok(geriYuklemeKilidi(1783, 0) >= 19891);
+  assert.ok(geriYuklemeKilidi(0, 4529) >= 19891);
+  assert.equal(geriYuklemeKilidi(10, 1000), 5000);
+  assert.equal(geriYuklemeKilidi(0, 0), 0);
+});
+
+test('kilit tablosu yetmezse veritabanına dokunmadan ayar önerilir; yetiyorsa engel yok', () => {
+  const varsayilan = { maxLocks: 64, baglanti: 100, hazirlanan: 0, kullanilan: 6 };
+  const ileti = kilitYetersizligi(22645, varsayilan) ?? '';
+  assert.match(ileti, /tahmini 22645 kilit gerekli, boş 6394/);
+  assert.match(ileti, /max_locks_per_transaction = 512 /);
+  assert.match(ileti, /Veritabanına dokunulmadı/);
+  assert.equal(kilitYetersizligi(22645, { ...varsayilan, maxLocks: 256 }), null);
+  assert.equal(kilitYetersizligi(6394, varsayilan), null, 'sınırda yeter');
+  assert.notEqual(kilitYetersizligi(6395, varsayilan), null);
+  // Öneri payla ve kullanılan kilitle birlikte sığmalı; hazırlanmış transaction yuvaları da sayılır.
+  assert.match(kilitYetersizligi(1000, { maxLocks: 1, baglanti: 5, hazirlanan: 5, kullanilan: 0 }) ?? '', /= 128 /);
+  assert.match(kilitYetersizligi(100000, { maxLocks: 64, baglanti: 100, hazirlanan: 0, kullanilan: 0 }) ?? '', /= 2048 /);
+});
+
+test('psql kilit tablosu hatası tanınır; başka hata tanınmaz', () => {
+  assert.equal(kilitHatasiMi('psql y.sql hata verdi (çıkış 3): HINT:  You might need to increase max_locks_per_transaction.'), true);
+  assert.equal(kilitHatasiMi('psql: ERROR:  out of shared memory'), true);
+  assert.equal(kilitHatasiMi('psql y.sql hata verdi (çıkış 3): ERROR:  relation "x" already exists'), false);
 });
