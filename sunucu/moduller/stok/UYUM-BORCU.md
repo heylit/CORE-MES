@@ -78,3 +78,8 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 
 ## Etiketler Etiket Merkezi'nde (kart 1525) - sonra
 53. SONRA: stok istemcisi lot ve konum etiketini artık kendisi basmaz; `GET /stok/mal-kabuller/:id/lot-etiketleri` ve `GET /stok/partiler/:id/etiket` uçları kullanılmıyor. Etiket Merkezi `disari.ts lotEtiketleri` ile okur. Uçların kaldırılması ayrı kart (sunucu stok dosyaları bu dalın kilidinde değildi). Refakat kartının tarayıcı "Yazdır" tuşu kalktı (1529 a); işlem tablosu ve "Bitti" kutuları Etiket Merkezi refakat şablonuna gelene kadar basılı kartta yoktur.
+
+## Kör sayım (1279 a, 1691 teyit) - sonra
+54. SONRA: körlük yalnız sayım kipindedir. `stok.sayim` taşıyan depo rolü konum, malzeme ve hareket ekranlarında miktarı görmeye devam eder; tam körlük okuma yetkisini daraltmayı ister (ayrı soru).
+55. SONRA: statülü ve kalite durumu serbest olmayan (karantina, red, şartlı) bakiye sayılamaz; sayım yalnız statüsüz serbest bakiyeyi sayar (1279 a "karantina/statülü satırlar ayrı").
+56. SONRA: Reçete ve Rota Stok sekmesindeki sayım hâlâ beklenen miktarla gider (BASKA-MODUL-ISTEKLERI "recete-rota: kör sayım"); eşik iki yolda da uygulanır.

@@ -87,3 +87,7 @@ Mal kabulde depocu kartı müşteri parça no, teknik resim no, tedarikçi kodu 
 ## uretim-emirleri: hurda sayımında stok uyarısı (iş 558)
 
 - Hurdanın payı istasyonda yoksa stok artık eksiye fire yazar; ama `hurdaSayimiYansit` `void` döner ve kablolamadaki `hurdaSayimDinle` sonuç okumaz, bu yüzden hurdada uyarı toplanmaz ve operatöre gitmez. İstenen: hurda bağı da sağlam sayımdaki gibi `{ uyari }` taşısın; stok tarafı hazırlanınca `disari.ts`'e `hurdaSayimiYansitUyarili` eklenir. Bugün aynı eksik başlatma ve sağlam sayım uyarısında görünür.
+
+## recete-rota: kör sayım (1279 a, 1691 teyit)
+
+- Reçete ve Rota'nın Stok sekmesindeki sayım (`istemci/src/moduller/recete-rota/yeni/emirler/Stok.tsx`, komut `stok-sayim`) bugün sistem miktarını gösterip `beklenenMiktar` gönderiyor; sunucu bunu kabul etmeyi sürdürür (eski 409 kuralıyla). İstenen: sayım kipinde sistem miktarı gizlensin, `beklenenMiktar` gönderilmesin; cevaptaki `onayaGiden` sıfırdan büyükse "fark onaya gitti" denilsin. Eşiği aşan fark iki yoldan da onaya gider.

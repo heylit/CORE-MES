@@ -31,6 +31,8 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Malzeme fişleri', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
+        // Eşiği aşan sayım farkı ikinci yetkilinin onayını bekler (1279 a); sayan da listeyi görür.
+        { anahtar: 'sayim-onaylari', baslik: 'Sayım onayları', yol: '/stok/sayim-onaylari', simge: 'check', islem: 'stok.sayim-onayla', veya: ['stok.sayim'] },
       ],
     },
     {

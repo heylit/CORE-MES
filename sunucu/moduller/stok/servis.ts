@@ -20,7 +20,7 @@ import type {
   AcikSiparisSatirlariCevabi, BakiyeSatiri, KaliteDurumu, CikisKomutu, CikisOnerisiCevabi, DepolarCevabi, Hareket, HareketCevabi, HareketlerListesi, IsKutusuCevabi, Konum, KonumAyrintiCevabi,
   KonumlarListesi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, MalzemeAyarKomutu,
   FasonIsleriCevabi, MalzemeAyrintiCevabi, RezervelerCevabi, RezerveEtKomutu, RezerveKaldirKomutu, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi, PartilerListesi, Raf,
-  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi, StokDegeriCevabi, DegerlemeYontemi,
+  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimFarklariCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi, StokDegeriCevabi, DegerlemeYontemi,
   FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu, StoktanDusKomutu, TeslimKomutu,
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
@@ -55,7 +55,7 @@ import {
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, ilkGirisBirlesik, kalanAmbalajAdedi, partiDenetimi, partiEtiketi, partiGereksinimi, statuAramasi, statuDegisimiEngeli, statuKirilimi, statuKodlari, stokDegeri, alisFiyatlari, DEGER_GRUPLARI, stoksuzStatuler, stoklanirMi,
-  bolmeNo, malKabulGozOnerisi, partiSec, rafGozleri, rotaSirala, sayimFarki, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, stokDurumu, tersYon,
+  bolmeNo, malKabulGozOnerisi, partiSec, rafGozleri, rotaSirala, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, stokDurumu, tersYon,
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar, kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
@@ -334,6 +334,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     'depo-sevk': null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
     malzemeler: null, hareketler: null, 'refakat-kartlari': null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
+    'sayim-onaylari': islemler.includes('stok.sayim-onayla') ? await sorgular.bekleyenSayimFarkiSayisi(db) : null,
   };
 }
 
@@ -1578,10 +1579,14 @@ export async function emirMalzemeFisleri(db: Db, emirIdler: readonly number[]): 
 }
 
 // ---- Sayım (DEP-16) ------------------------------------------------------------------------------------------------------------
+// Kör sayım (1279 a, 1691 teyit): beklenen verilmezse sistem miktarı kilit altında okunur. Fark deponun eşiğini aşarsa stoğa yazılmaz,
+// onaya gider (stok_sayim_farki); aynı gözde bekleyen fark varsa yeni sayım reddedilir. Eşik içi fark eskisi gibi hemen yazılır.
 export async function sayimYap(db: Db, kisiId: number, g: SayimKomutu): Promise<SayimCevabi> {
   const konumId = Number(g.konumId);
   await aktifKonum(db, konumId, 'konumId');
+  const esik = await sorgular.konumunSayimEsigi(db, konumId);
   const hareketIdler: number[] = [];
+  let onayaGiden = 0;
   await korumali(async () => {
     await siraliKilitle(db, ...g.satirlar.map((s) => ({ malzemeId: Number(s.malzemeId), konumId, partiId: s.partiId === null ? null : Number(s.partiId) })));
     for (const s of g.satirlar) {
@@ -1589,16 +1594,90 @@ export async function sayimYap(db: Db, kisiId: number, g: SayimKomutu): Promise<
       const partiId = s.partiId === null ? null : Number(s.partiId);
       const b = await sorgular.bakiyeKilitle(db, malzemeId, konumId, partiId);
       const sistem = b?.miktar ?? '0';
-      if (binde(sistem) !== binde(s.beklenenMiktar)) throw cakisma('Sayım sırasında bu gözün stoğu değişti; gözü yeniden açıp sayın.', { malzemeId, partiId, guncel: sistem });
+      if (s.beklenenMiktar !== undefined && binde(sistem) !== binde(s.beklenenMiktar)) {
+        throw cakisma('Sayım sırasında bu gözün stoğu değişti; gözü yeniden açıp sayın.', { malzemeId, partiId, guncel: sistem });
+      }
       const f = sayimFarki(sistem, s.sayilanMiktar);
       if (f.tur === 'yok') continue;
+      if (sayimOnayaGiderMi(sistem, s.sayilanMiktar, esik)) {
+        // Onayda yazılamayacak fark beklemeye alınmaz: hizmet kartı bakiye açmaz (KD-013).
+        if (b === null) {
+          const o = await malzemeOzeti(db, malzemeId);
+          if (o && !stoklanirMi(o.tur)) throw dogrulama(`${o.ad ?? o.kod}: hizmet stoklanmaz; hizmetten çıkan malzeme kendi kartıyla girer.`, 'malzemeId');
+        }
+        const id = await sorgular.sayimFarkiEkle(db, { konumId, malzemeId, partiId, sistemMiktar: bindenMetin(binde(sistem)), sayilanMiktar: bindenMetin(binde(s.sayilanMiktar)), sayanKisiId: kisiId });
+        if (id === null) throw cakisma('Bu gözde bu malzemenin onay bekleyen sayım farkı var; önce o karara bağlanır.', { malzemeId, partiId });
+        onayaGiden += 1;
+        continue;
+      }
       const yon = f.tur === 'sayim_fazla' ? { hedefKonumId: konumId } : { kaynakKonumId: konumId };
       hareketIdler.push(await sorgular.hareketYaz(db, hareket({ tur: f.tur, malzemeId, miktar: f.miktar, kisiId, partiId, partiSecimi: partiId === null ? null : 'kisi', ...yon })));
       await bakiyeDegistir(db, { malzemeId, konumId, partiId, fark: f.tur === 'sayim_fazla' ? binde(f.miktar) : -binde(f.miktar) });
     }
     await sorgular.konumSayildi(db, konumId);
   });
-  return { hareketIdler, farkSayisi: hareketIdler.length };
+  return { hareketIdler, farkSayisi: hareketIdler.length, onayaGiden };
+}
+
+// ---- Sayım farkı onayı (1279 a, 1691 teyit) ------------------------------------------------------------------------------
+export async function sayimFarklari(db: Db): Promise<SayimFarklariCevabi> {
+  const l = await sorgular.sayimFarklari(db);
+  const ad = await adlar(db, l.map((f) => f.malzemeId));
+  const kisiler = await kisiAdlari(db, [...new Set(l.flatMap((f) => (f.kararKisiId === null ? [f.sayanKisiId] : [f.sayanKisiId, f.kararKisiId])))]);
+  const nolar = await emirNoHaritasi(db, l.map((f) => f.partiEmirId));
+  return {
+    farklar: l.map((f) => ({
+      id: f.id, konumId: f.konumId, konumKod: f.konumKod, depoId: f.depoId, malzemeId: f.malzemeId, malzemeAd: ad.get(f.malzemeId) ?? null, partiId: f.partiId,
+      partiEtiketi: f.partiId === null ? null : partiEtiketi({ lotNo: f.lotNo, tedarikciPartiNo: f.tedarikciPartiNo, dokumNo: f.dokumNo, uretimEmriId: f.partiEmirId }, emirNoDe(nolar, f.partiEmirId)),
+      sistemMiktar: f.sistemMiktar, sayilanMiktar: f.sayilanMiktar, fark: bindenMetin(binde(f.sayilanMiktar) - binde(f.sistemMiktar)), guncelMiktar: f.guncelMiktar,
+      sayanKisiId: f.sayanKisiId, sayanAd: kisiler.get(f.sayanKisiId) ?? null, sayimZamani: f.sayimZamani, durum: f.durum,
+      kararAd: f.kararKisiId === null ? null : kisiler.get(f.kararKisiId) ?? null, kararZamani: f.kararZamani, kararNotu: f.kararNotu, hareketId: f.hareketId, surum: f.surum,
+    })),
+    esikler: await sorgular.sayimEsikleri(db),
+  };
+}
+async function bekleyenSayimFarki(db: Db, kisiId: number, id: number): Promise<sorgular.SayimFarkiHam> {
+  const f = await sorgular.sayimFarkiBul(db, id, true);
+  if (!f) throw bulunamadi('Sayım farkı bulunamadı.');
+  const engel = sayimKarariEngeli(f, kisiId);
+  if (engel !== null) throw f.sayanKisiId === kisiId && f.durum === 'bekliyor' ? yetkiYok(engel) : cakisma(engel);
+  return f;
+}
+// Onayda sayımdaki fark (sayılan - sistem) hareketle yazılır; sayım ile onay arasındaki hareketler korunur. Hareketin kişisi
+// onaylayandır; sayanı fark kaydı taşır.
+export async function sayimFarkiOnayla(db: Db, kisiId: number, id: number, g: { surum: number; not?: string | null | undefined }): Promise<SayimFarklariCevabi> {
+  await korumali(async () => {
+    const f = await bekleyenSayimFarki(db, kisiId, id);
+    await aktifKonum(db, f.konumId, 'id');
+    const fark = binde(f.sayilanMiktar) - binde(f.sistemMiktar);
+    await sorgular.bakiyeKilitle(db, f.malzemeId, f.konumId, f.partiId);
+    const yon = fark > 0n ? { tur: 'sayim_fazla' as const, hedefKonumId: f.konumId } : { tur: 'sayim_eksik' as const, kaynakKonumId: f.konumId };
+    const hareketId = await sorgular.hareketYaz(db, hareket({
+      ...yon, malzemeId: f.malzemeId, miktar: bindenMetin(fark < 0n ? -fark : fark), kisiId, partiId: f.partiId, partiSecimi: f.partiId === null ? null : 'kisi',
+      aciklama: `Sayım farkı #${f.id} onayı`,
+    }));
+    await bakiyeDegistir(db, { malzemeId: f.malzemeId, konumId: f.konumId, partiId: f.partiId, fark });
+    await surumluGuncelle({
+      guncelle: () => sorgular.sayimFarkiKarar(db, id, g.surum, { durum: 'onaylandi', kisiId, not: g.not ?? null, hareketId }),
+      varMi: () => sorgular.sayimFarkiVarMi(db, id), bulunamadiIletisi: 'Sayım farkı bulunamadı.',
+    });
+  });
+  return sayimFarklari(db);
+}
+export async function sayimFarkiReddet(db: Db, kisiId: number, id: number, g: { surum: number; neden: string }): Promise<SayimFarklariCevabi> {
+  await bekleyenSayimFarki(db, kisiId, id);
+  await surumluGuncelle({
+    guncelle: () => sorgular.sayimFarkiKarar(db, id, g.surum, { durum: 'reddedildi', kisiId, not: g.neden, hareketId: null }),
+    varMi: () => sorgular.sayimFarkiVarMi(db, id), bulunamadiIletisi: 'Sayım farkı bulunamadı.',
+  });
+  return sayimFarklari(db);
+}
+export async function sayimEsigiDegistir(db: Db, depoId: number, g: { surum: number; esikYuzde: string }): Promise<SayimFarklariCevabi> {
+  await surumluGuncelle({
+    guncelle: () => sorgular.sayimEsigiYaz(db, depoId, g.surum, g.esikYuzde),
+    varMi: () => sorgular.depoVarMi(db, depoId), bulunamadiIletisi: 'Depo bulunamadı.',
+  });
+  return sayimFarklari(db);
 }
 
 // ---- Geri alma (DEP-17, DEP-18, DEP-19, DEP-53) --------------------------------------------------------------------------------

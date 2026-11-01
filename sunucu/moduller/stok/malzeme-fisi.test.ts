@@ -129,6 +129,8 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
   });
 
   test('sayım fişi komut başına tektir, fazla ve eksik ayrı fiştir; numara önek ve kimliktir, aranır', async () => {
+    // Eşik içindeki fark eskisi gibi hemen yazılır; eşiği aşan farkın onaya gitmesi kor-sayim.test.ts'te (1279 a).
+    await o().sahip.sorgu('UPDATE stok_depo SET sayim_esik_yuzde = 100');
     const k1 = await kart();
     const k2 = await kart();
     const k3 = await kart();
