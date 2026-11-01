@@ -9,8 +9,8 @@ Yazar konular `kurulum/proje-talimati.md`'yi izler. CLAUDE.md'nin geri kalanı (
 ## Ajanlar
 - Kod yazımı Claude projesinde (dışarıda, GitHub bağlı) yapılır; dış yazarlar proje talimatını izler.
 - Bu oturumun işi yalnız gelen çekme isteğini incelemek ve birleştirmek, tam testi koşmak ve modülleri bağlamaktır; `sunucu/cekirdek`, `paylasilan`, `istemci/src/ortak` ve modül klasörlerine yazılmaz, kod yazımı için kart ya da ajan açılmaz.
-- Kartsız iş yok: her iş bir GitHub kartıdır; dal adı kart numarasıyla başlar (`23-kisa-ad`), son commit `Closes #n` taşır.
-  Kullanıcı kararı uygulanmadan önce karta yorum yazılır. İşe `npm run durum` ve `npm run harita` ile başla.
+- Kartsız iş yok: her işin koordinatörün verdiği kart numarası vardır; kararlar ve açık işler özel takip deposundadır, GitHub kartları arşivdir.
+  Dal adı kart numarasıyla başlar (`23-kisa-ad`). Kullanıcı kararı uygulanmadan önce takip deposundaki karar kaydına yazılır. İşe `npm run durum` ve `npm run harita` ile başla.
 - `kesif` yer bulur ve sayar (küçük istekte keşif turu yok; bulgu dosya yolu + metin çapasıyla, yazar yeniden aramaz);
   tek modül işi ve teslim oturtma `modul-yazari`; çekirdek, ortak, var olan göç ve yetki `cekirdek-yazari`. İki çekirdek şeridi vardır: sunucu çekirdeği ile `paylasilan` bir şerit,
   `istemci/src/ortak` ayrı şerit; iki `cekirdek-yazari` ayrı şeritlerde aynı anda çalışabilir, aynı şeritte tek.

@@ -3,11 +3,11 @@ TEMEL KURAL: Bilmediğini uydurma, eksikte sor.
    sayfasıyla), VARSAYIM (gerekçesiyle) ya da BİLMİYORUM. Kanıtı olmayan şeye "doğrulandı" denmez; tahmin olgu gibi sunulmaz.
 2. Varsayılan öneriyle ilerlemektir: ajan karar kartındaki önerilen seçenekle yazar, karta "Varsayım:" yazılır; kullanıcı yalnız itiraz ettiğini değiştirir.
    Sorulur (yalnız geri alması pahalı karar): dolu tabloyu değiştiren ya da silen şema işi, yetki modeli, kırmızı çizgi, yeni bağımlılık, onaylanmış kararla çelişme. Teknik ayrıntı sorulmaz.
-   Eski kurallar öneriyle ilerlemez; her biri kullanıcıya sorulur. `kurulum/eski-kurallar/` ve ondan açılan kartlardaki (#31-#43) madde, kullanıcı açıkça "kalsın" demeden onaylı sayılmaz ve koda girmez.
+   Eski kurallar öneriyle ilerlemez; her biri kullanıcıya sorulur. özel takip deposuna taşınan eski kurallar ve onlardan açılan kartlardaki (#31-#43) madde, kullanıcı açıkça "kalsın" demeden onaylı sayılmaz ve koda girmez.
    Konuyla ilgili eski kural uygulanmaz, sorulur: kural, gelen modülün yaptığı ve fark tek satırda; cevap "kalsın / gitsin / değişsin". Modül başına tek liste, en çok 10 madde; gelen modülle çelişmeyen ya da ilgisiz kural sorulmaz.
 3. Soru biçimi: tek soru, neden gerektiği, seçenekler ve önerin. Cevap gelene kadar o kart durum:onay-bekliyor olur;
    başka kartlarla devam edilir, bütün iş durmaz.
-4. Varsayımlar geri alma maliyetiyle karta yazılır; kararlar depoda değil karttadır, ajan görevinde kart numarası her zaman verilir.
+4. Varsayımlar geri alma maliyetiyle karta yazılır; kararlar ve açık işler bu depoda değil, özel takip deposundadır; ajan görevinde kart numarası her zaman verilir.
 5. Kullanıcının cevabındaki doldurulmamış yer tutucu (<…>), silinmemiş seçenekler ya da sessizlik onay değildir; yeniden sorulur.
 6. Dış araçların (Claude Code, GitHub, PostgreSQL) davranışına dair belgeden ya da denemeden doğrulanmamış iddia
    "doğrulanmadı" diye işaretlenir.
@@ -23,7 +23,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
   sorular, en çok 10 maddelik tek listede, tam metniyle (soru, neden, seçenekler, öneri; yalnız kod ya da kart numarasıyla atıf yapılmaz). Ayrıntı, doğrulananlar ve varsayımlar karta yazılır.
 - Odak: dışarıdan gelen modül esastır; depo çekirdek ve ortak parçaları taşır. Ana oturumun işi çekirdek, ortak arayüz, paylaşılan kalıplar, araçlar ve kurulumdur.
   Araçlara yalnız işi durduran hata için dokunulur. Askıda: bulut eşliği (#121-#126). Ters vekil yalnız `kurulum/canli.md` ve ADR 0021 kapsamında.
-- Arayüzde en az dokunuş; profesyonel ve gerçekçi; ikon kullan; role göre sadelik. Eski sistemden kod, şema, test, veri taşınmaz; `kurulum/eski-kurallar/` yalnız başvurudur, onaysız eski kural girmez.
+- Arayüzde en az dokunuş; profesyonel ve gerçekçi; ikon kullan; role göre sadelik. Eski sistemden kod, şema, test, veri taşınmaz; eski kurallar (özel takip deposunda) yalnız başvurudur, onaysız eski kural girmez.
 - Süreç ağırlaştırılmaz: sahiplik defteri, ders dosyası, kanca, durum dosyası kurulmaz. Hata iki kez olursa kural yazılmaz; tip, kısıt, ortak parça ya da test eklenir.
 
 ## Kırmızı çizgiler
