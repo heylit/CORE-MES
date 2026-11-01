@@ -14,11 +14,11 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
-  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, IsEmriZamanSatiri, KisiIsEmriSatiri, SayimKirilimi,
+  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiIsEmriSatiri, SayimKirilimi,
 } from './sorgular.ts';
 import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 
@@ -144,6 +144,13 @@ export async function emirMalzemeleri(db: Db, idler: readonly number[]): Promise
   const tekil = [...new Set(idler)];
   if (tekil.length === 0) return new Map();
   return new Map((await ustEmirlerBul(db, tekil)).map((r) => [r.id, { malzemeNo: r.malzemeNo, ustEmirId: r.ustEmirId }]));
+}
+
+// Değişiklik yönetimi (1644): malzemelerin taslak, planlı ve başlamış emirleri; yetki denetlemez, çağıran korur.
+export type { EtkilenenEmirSatiri as EtkilenenEmir } from './sorgular.ts';
+export async function malzemelerinAcikEmirleri(db: Db, malzemeNolari: readonly number[]): Promise<EtkilenenEmirSatiri[]> {
+  const tekil = [...new Set(malzemeNolari)];
+  return tekil.length === 0 ? [] : malzemelerinAcikEmirleriGetir(db, tekil);
 }
 
 // Satır başına bağlı emirler (iptal dahil, kimlik sırasıyla); emirsiz satır haritada yoktur (Sevkiyat, Finans).

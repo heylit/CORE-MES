@@ -818,6 +818,28 @@ export function emirNolariGetir(db: Db, idler: readonly number[]): Promise<{ id:
   return db.sorgu(`SELECT id, emir_no AS "emirNo" FROM uretim_emri WHERE id = ANY($1::int[])`, [[...idler]]);
 }
 
+// Değişiklik etkisi (1644): malzemenin bitmemiş emirleri. Başladı: emir ya da bir iş emri başladı. Fasonda: bir fason iş emrinde
+// gidenden dönmeyen (sağlam + hurda) adet var.
+export interface EtkilenenEmirSatiri {
+  id: number; emirNo: string; malzemeNo: number; durum: 'taslak' | 'planli' | 'basladi'; baslangic: string | null; basladi: boolean; fasonda: boolean;
+}
+export function malzemelerinAcikEmirleriGetir(db: Db, malzemeNolari: readonly number[]): Promise<EtkilenenEmirSatiri[]> {
+  return db.sorgu(
+    `SELECT e.id, e.emir_no AS "emirNo", e.malzeme_no AS "malzemeNo", e.durum, ${TARIH('e.baslangic')} AS baslangic,
+            (e.baslama IS NOT NULL OR EXISTS (
+              SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.baslama IS NOT NULL)) AS basladi,
+            EXISTS (
+              SELECT 1 FROM uretim_emirleri_is_emri i JOIN uretim_emirleri_fason_hareketi f ON f.is_emri_id = i.id
+               WHERE i.uretim_emri_id = e.id
+               GROUP BY i.id
+              HAVING sum(f.adet) FILTER (WHERE f.yon = 'gidis') > coalesce(sum(f.adet + f.hurda_adet) FILTER (WHERE f.yon = 'donus'), 0)) AS fasonda
+       FROM uretim_emri e
+      WHERE e.malzeme_no = ANY($1::int[]) AND e.durum IN ('taslak', 'planli', 'basladi')
+      ORDER BY e.id`,
+    [[...malzemeNolari]],
+  );
+}
+
 export interface IsEmriSatiri {
   id: number;
   uretimEmriId: number;
