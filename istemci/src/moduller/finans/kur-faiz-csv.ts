@@ -45,6 +45,9 @@ const ondalikSayisi = (n: number): number => { const m = String(n).split('.')[1]
 // Günlük faiz aylık faizin başka birimle yazılışıdır: aynı para birimi ve günde ikisi aynı kayıttır.
 const anahtar = (tur: string, pb: string, tarih: string) => `${tur === GUNLUK_FAIZ ? 'faiz' : tur}|${pb}|${tarih}`;
 
+// Aylık ve günlük faiz aynı anahtardadır; metin türü değil para birimi ve günü söyler ki iki farklı tür neden çakışıyor anlaşılsın.
+const IKINCI_FAIZ = 'Bu para birimi ve tarihte faiz dosyada ikinci kez var; aylık ve günlük faiz aynı oranın iki yazılışıdır, biri kalmalı.';
+
 // Başlık satırı atlanır; satır numarası dosyadaki satırdır (başlık 1).
 export function sablonuOku(metin: string, bugun: string): OkunanDosya {
   const ham = csvSatirlari(metin);
@@ -70,7 +73,7 @@ export function sablonuOku(metin: string, bugun: string): OkunanDosya {
     const aylik = r.tur === GUNLUK_FAIZ ? gunlukFaizdenAylik(deger) : null;
     if (aylik !== null && (deger < 0 || aylik > 100 || ondalikSayisi(deger) > 6)) return { ...hata('Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'), tarih, deger };
     const a = anahtar(r.tur, r.paraBirimi, tarih);
-    if (gorulen.has(a)) return { ...hata('Bu tür, para birimi ve tarih dosyada ikinci kez var.'), tarih, deger };
+    if (gorulen.has(a)) return { ...hata(r.tur === 'kur' ? 'Bu tür, para birimi ve tarih dosyada ikinci kez var.' : IKINCI_FAIZ), tarih, deger };
     gorulen.add(a);
     return { ...r, tarih, deger, aylik, durum: 'yeni' };
   });

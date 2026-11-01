@@ -72,10 +72,12 @@ describe('kur ve faiz şablonu (1083-1087)', () => {
     expect(o.satirlar.map((s) => [s.tur, s.paraBirimi, s.aylik, s.durum, s.neden])).toEqual([
       ['günlük faiz', 'TRY', 3.0417, 'yeni', null],
       ['günlük faiz', 'USD', 0.6083, 'yeni', null],
-      ['faiz', 'USD', null, 'hata', 'Bu tür, para birimi ve tarih dosyada ikinci kez var.'],
+      ['faiz', 'USD', null, 'hata', 'Bu para birimi ve tarihte faiz dosyada ikinci kez var; aylık ve günlük faiz aynı oranın iki yazılışıdır, biri kalmalı.'],
       ['günlük faiz', 'EUR', null, 'hata', 'Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'],
       ['günlük faiz', 'EUR', null, 'hata', 'Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'],
     ]);
+    const iki = sablonuOku(dosya('günlük faiz;TRY;01.10.2026;0,1', 'günlük faiz;TRY;01.10.2026;0,1', 'faiz;EUR;01.10.2026;0,5', 'faiz;EUR;01.10.2026;0,5'), BUGUN);
+    expect(iki.satirlar.map((s) => [s.durum, s.neden?.startsWith('Bu para birimi ve tarihte faiz') ?? null])).toEqual([['yeni', null], ['hata', true], ['yeni', null], ['hata', true]]);
     const k = kayitliylaKarsilastir(o.satirlar, { kurlar: [], faizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', aylikYuzde: '3.0417' }] });
     expect(k[0]?.durum).toBe('ayni');
   });
