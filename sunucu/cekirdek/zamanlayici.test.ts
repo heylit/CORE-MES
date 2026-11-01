@@ -10,7 +10,7 @@ import type { Db, Veritabani } from './db.ts';
 import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
 import {
-  EN_KISA_ARALIK_MS, NEDEN_EN_UZUN, OTURUMSUZ_VERITABANI, isBekliyor, isDurumlari, isTanimi, isiBirKezCalistir, modulIsleriniKesfet,
+  EN_KISA_ARALIK_MS, NEDEN_EN_UZUN, OTURUMSUZ_VERITABANI, isBekliyor, isDurumlari, isHavuzuBoyutu, isTanimi, isiBirKezCalistir, modulIsleriniKesfet,
   zamanlayiciKur,
 } from './zamanlayici.ts';
 import type { IsCalisi, IsTanimi, TxDisiIs } from './zamanlayici.ts';
@@ -356,6 +356,31 @@ describe('çalışma (gerçek PostgreSQL)', { timeout: 40_000 }, () => {
           AND l.objid::text::bigint = (hashtext($1)::bigint & 4294967295)`,
       [`${sema}:is-${ad}`],
     );
+
+  test('iş havuzu: bütün txDisi işleri aynı anda kilit oturumu tutup sorgu isteyince iş sayısı kadar havuz tıkanır; iş sayısı + 1 yeter', async () => {
+    if (!ayar) throw new Error('Test veritabanı açılamadı.');
+    const adet = 3;
+    // Her tur kilit oturumunu tutarken öteki turların da girmesini bekler, sonra ikinci bağlantıdan sorgu ister.
+    const kos = async (havuzBoyutu: number): Promise<Array<PromiseSettledResult<string>>> => {
+      const havuz = veritabaniAc({ pg: { ...ayar!.pg, baglantiSureMs: 300 } }, { sema, havuzBoyutu });
+      let giren = 0;
+      try {
+        const isler = Array.from({ length: adet }, (_, i) => isTanimi({
+          ad: `havuz-${String(havuzBoyutu)}-${String(i)}`, aralikMs: 5000,
+          txDisi: async (v) => { giren += 1; await olana(() => giren === adet, 2000); await v.tek('SELECT 1'); },
+        }));
+        assert.equal(isHavuzuBoyutu(isler), adet + 1);
+        return await Promise.allSettled(isler.map((is) => isiBirKezCalistir(havuz, is)));
+      } finally {
+        await havuz.kapat();
+      }
+    };
+    const tikali = await kos(adet);
+    // Boş bağlantı yokken turlar birbirini bekler; süresi dolan tur hata alıp oturumunu bırakınca ötekiler sürebilir.
+    assert.ok(tikali.some((s) => s.status === 'rejected'), 'iş sayısı kadar havuzda en az bir tur süre dolup hata alır');
+    const yeter = await kos(adet + 1);
+    assert.deepEqual(yeter.map((s) => (s.status === 'fulfilled' ? s.value : String(s.reason))), ['tamam', 'tamam', 'tamam']);
+  });
 
   test('txDisi: aynı işin eşzamanlı ikinci turu (iki biçimde de) atlanır; tur bitince kilit bırakılır, sonraki tur koşar', async () => {
     let cagri = 0;

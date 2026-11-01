@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import type { ArayuzKapisi } from '#cekirdek/arayuz.ts';
 import { ayarOku, dinlemeAdresi } from '#cekirdek/ayar.ts';
-import { mesgulGunlugu, uygulamaHavuzuAc } from '#cekirdek/db.ts';
+import { mesgulGunlugu, uygulamaHavuzuAc, type Veritabani } from '#cekirdek/db.ts';
 import { bekleyenGocler } from '#cekirdek/goc.ts';
 import { yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { modulIsleriniKesfet, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
+import { isHavuzuBoyutu, modulIsleriniKesfet, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { kablola } from './kablolama.ts';
 import { uygulamaSecenekleri } from './uygulama-secenekleri.ts';
 
@@ -42,6 +42,7 @@ const vt = await uygulamaHavuzuAc(ayar, { mesgulBildir: (bekleyen) => { mesgulYa
   process.exit(1);
 });
 const gocKlasoru = fileURLToPath(new URL('./gocler/', import.meta.url));
+let isVt: Veritabani | null = null;
 
 try {
   const hedef = await vt.tek<{ ad: string }>('SELECT current_database() AS ad');
@@ -56,7 +57,10 @@ try {
   const app = await uygulamaKur(uygulamaSecenekleri(vt, ayar));
   mesgulYaz = mesgulGunlugu(app.log);
   yakalanmamisRetiDinle(process, app.log);
-  const zamanlayici = zamanlayiciKur({ vt, gunluk: app.log, isler: await modulIsleriniKesfet(), kalici: true });
+  const isler = await modulIsleriniKesfet();
+  // İşlerin kendi havuzu vardır: isteklerin sırası dolsa da Logo ve yansıma işleri bağlantı bulur.
+  isVt = await uygulamaHavuzuAc(ayar, { havuzBoyutu: isHavuzuBoyutu(isler), mesgulBildir: (bekleyen) => { mesgulYaz(bekleyen); } });
+  const zamanlayici = zamanlayiciKur({ vt: isVt, gunluk: app.log, isler, kalici: true });
 
   let arayuz: ArayuzKapisi | null = null;
   let kapaniyor = false;
@@ -68,6 +72,7 @@ try {
       await zamanlayici.durdur(KAPANIS_IS_BEKLEMESI_MS);
       await arayuz?.kapat();
       await app.close();
+      await isVt?.kapat();
       await vt.kapat();
     } catch (hata) {
       console.error(`Kapanış hatası: ${hata instanceof Error ? hata.message : String(hata)}`);
@@ -87,6 +92,7 @@ try {
   console.log(`TMI CORE V2 dinliyor: port ${ayar.port}${arayuzMetni} | veritabanı: ${hedef?.ad ?? '?'} | ortam: ${ayar.ortam}`);
 } catch (hata) {
   console.error(`Sunucu açılamadı: ${hata instanceof Error ? hata.message : String(hata)}`);
+  await isVt?.kapat().catch(() => undefined);
   await vt.kapat().catch(() => undefined);
   process.exit(1);
 }
