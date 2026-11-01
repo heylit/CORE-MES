@@ -1,6 +1,6 @@
 # ADR 0002 — Oturum, yetki ve denetim
 
-Durum: kabul edildi (05.10.2026). ADR 0003 ile değişti: 2., 7. ve 8. maddeler ile 4. maddedeki
+Durum: kısmen yerine geçildi (kabul 05.10.2026). ADR 0003 ile değişti: 2., 7. ve 8. maddeler ile 4. maddedeki
 kilit kuralı geçersizdir; yetki işlem tabanlıdır, kilit yerine artan bekleme vardır, yetenek dosyası
 kalkmıştır ve giriş denemeleri 30 günde silinir (ADR 0003 eki ile 365 gün, karar 1373 a). ADR 0012 ile 3. madde değişti: yönetici dışındaki kullanıcı PIN ile girer. 4. maddedeki "çerezde `Secure` yoktur" hükmü kart #1278 ile kalktı: çerez HTTPS'te ve canlıda her zaman `Secure` konur (`sunucu/cekirdek/cerez.ts`; 1495 a, 01.11.2026).
 

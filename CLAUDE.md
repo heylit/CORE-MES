@@ -22,7 +22,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
 - Kısa yaz, emoji yok; soruda Türkçe karakterleri düz yaz. Rapor en çok 15 satır: önce sonuç (adım başına tek satır), sonra yalnız "sorulur" kademesindeki
   sorular, en çok 10 maddelik tek listede, tam metniyle (soru, neden, seçenekler, öneri; yalnız kod ya da kart numarasıyla atıf yapılmaz). Ayrıntı, doğrulananlar ve varsayımlar karta yazılır.
 - Odak: dışarıdan gelen modül esastır; depo çekirdek ve ortak parçaları taşır. Ana oturumun işi çekirdek, ortak arayüz, paylaşılan kalıplar, araçlar ve kurulumdur.
-  Araçlara yalnız işi durduran hata için dokunulur. Askıda: bulut eşliği (#121-#126). Ters vekil yalnız `kurulum/canli.md` ve ADR 0021 kapsamında.
+  Araçlara yalnız işi durduran hata için dokunulur. Askıda: bulut eşliği (#121-#126). Ters vekil yalnız `kurulum/canli.md` ve ADR 0021 (ertelendi) kapsamında.
 - Arayüzde en az dokunuş; profesyonel ve gerçekçi; ikon kullan; role göre sadelik. Eski sistemden kod, şema, test, veri taşınmaz; eski kurallar (özel takip deposunda) yalnız başvurudur, onaysız eski kural girmez.
 - Süreç ağırlaştırılmaz: sahiplik defteri, ders dosyası, kanca, durum dosyası kurulmaz. Hata iki kez olursa kural yazılmaz; tip, kısıt, ortak parça ya da test eklenir.
 
@@ -57,7 +57,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
 9. Çekirdek ya da ortakta her değişiklikten sonra kullanıcıya haber verilir (dışarıdaki yazıma yeni zip gider).
 
 ## Yapı ve kurallar (ithal sınırı, SQL'in yeri, renk ve inline stil araçla; gerisi denetçide)
-Dosya kalıpları `yapi-kaliplari` skill'inde; modül haritası `npm run harita` (tek modül: `-- --modul <ad>`).
+ADR: önce `belgeler/adr/README.md` (dizin ve kural), yalnız işin dokunduğu ADR açılır. Dosya kalıpları `yapi-kaliplari` skill'inde; modül haritası `npm run harita` (tek modül: `-- --modul <ad>`).
 1. Modül, başka modülün yalnız `disari.ts` dosyasını ithal eder; `cekirdek` modülleri, `paylasilan` sunucu ya da istemciyi ithal etmez.
 2. Tabloya yalnız sahibi modül yazar ve yalnız o SQL ile okur (başkası `disari.ts` ile alır). SQL yalnız `sorgular.ts`, iş kuralı yalnız `kurallar.ts` (saf).
 3. Uç, `uc({...})` tanımıyla yazılır: yol, yetki (işlem), şemalar, işleyici. Tanımsız uç yoktur.
