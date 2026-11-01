@@ -405,6 +405,9 @@ export const emirNolari = isEmri.emirNolari;
 export const isEmriOzeti = isEmri.isEmriOzeti;
 // Plan, elle sırası olan ama artık planlanmayan iş emrinin silindiğini ya da fasona alındığını buradan anlar.
 export { isEmriVarliklari } from './sorgular.ts';
+// 1476-E: çok katmanlı emirde iş emrinin düğümü, düğüm malzemesi, rotadaki op numarası (kaynak_op_no) ve emrin patlatması; yetki denetlemez.
+export { isEmriDugumleri } from './sorgular.ts';
+export type { IsEmriDugumu } from './sorgular.ts';
 // CNC kurulum (266 a): açık iş emirleri; yetki denetlemez, çağıran korur.
 export { acikIsEmirleri, acikIsEmri } from './sorgular.ts';
 export type { AcikIsEmri } from './sorgular.ts';

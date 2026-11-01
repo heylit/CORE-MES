@@ -2527,3 +2527,17 @@ export function takvimEmirSatirlari(db: Db, baslangic: string, bitis: string): P
     [baslangic, bitis],
   );
 }
+
+// 1476-E: çok katmanlı emirde iş emrinin düğümü (1484 a). Rota adımına giden bağ düğümün malzemesi, rotadaki op numarası ve emrin patlatmasıdır;
+// emir içindeki op_no yalnız emirde tekildir. Düğümsüz (tek katmanlı) iş emri haritada yoktur.
+export interface IsEmriDugumu { isEmriId: number; dugum: string; dugumMalzemeNo: number; kaynakOpNo: number; patlatmaId: number | null }
+export async function isEmriDugumleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, IsEmriDugumu>> {
+  if (isEmriIdleri.length === 0) return new Map();
+  const satirlar = await db.sorgu<IsEmriDugumu>(
+    `SELECT i.id AS "isEmriId", i.dugum, i.dugum_malzeme_id AS "dugumMalzemeNo", i.kaynak_op_no AS "kaynakOpNo", e.patlatma_id AS "patlatmaId"
+       FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
+      WHERE i.id = ANY($1::int[]) AND i.dugum IS NOT NULL`,
+    [[...new Set(isEmriIdleri)]],
+  );
+  return new Map(satirlar.map((s) => [s.isEmriId, s]));
+}
