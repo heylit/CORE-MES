@@ -26,21 +26,32 @@ before(async () => {
 });
 after(() => ortam.kaldir());
 
-// İlk komut transaction'ını açık tutar; ikinci komut iş satırının kilidini beklemeye başlayınca ilk biter.
+// İlk komut transaction'ını açık tutar; ikinci komut ilk komutun bağlantısını beklemeye başlayınca ilk biter. Bekleme yalnız
+// ilk bağlantının pid'iyle aranır: göç rolü uygulama oturumlarını göremez, başka şemadaki testler de karışmaz.
 async function yaris<T>(ilk: (db: Db) => Promise<unknown>, ikinci: () => Promise<T>): Promise<PromiseSettledResult<T>> {
   let birak!: () => void;
   const tutuluyor = new Promise<void>((r) => { birak = r; });
-  const ilkIs = vt.tx(async (db) => { await ilk(db); await tutuluyor; });
-  await new Promise((r) => setTimeout(r, 50));
-  const ikinciIs = ikinci();
-  for (let i = 0; i < 100; i += 1) {
-    const bekleyen = await ortam.sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%sevkiyat_isi%'");
-    if (bekleyen!.n > 0) break;
-    await new Promise((r) => setTimeout(r, 20));
+  let tuttu!: (pid: number) => void;
+  const kilitte = new Promise<number>((r) => { tuttu = r; });
+  const ilkIs = vt.tx(async (db) => {
+    await ilk(db);
+    tuttu((await db.tek<{ pid: number }>('SELECT pg_backend_pid() AS pid'))!.pid);
+    await tutuluyor;
+  });
+  // İlk komut düşerse bekleme sonsuza gitmez; hata aşağıdaki await'te görünür.
+  const pid = await Promise.race([kilitte, ilkIs.then(() => 0)]);
+  // Sonuç hemen yakalanır: ikinci komut ilk transaction kapanırken reddedilirse işlenmemiş red sayılıp test düşmesin.
+  const ikinciSonuc = Promise.allSettled([ikinci()]);
+  let bekliyor = false;
+  for (const sinir = Date.now() + 8000; pid !== 0 && !bekliyor && Date.now() < sinir;) {
+    const bekleyen = await vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [pid]);
+    bekliyor = bekleyen!.n > 0;
+    if (!bekliyor) await new Promise((r) => setTimeout(r, 20));
   }
   birak();
   await ilkIs;
-  return (await Promise.allSettled([ikinciIs]))[0]!;
+  assert.ok(bekliyor, 'ikinci komut ilk komutun kilidini beklemedi; yarış sınanmadı');
+  return (await ikinciSonuc)[0]!;
 }
 
 test('aynı iş aynı anda iki kez tamamlanamaz: ikinci istek "zaten tamamlandı" ile reddedilir', async () => {
