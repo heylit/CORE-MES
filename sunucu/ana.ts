@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { ArayuzKapisi } from '#cekirdek/arayuz.ts';
 import { ayarOku, dinlemeAdresi } from '#cekirdek/ayar.ts';
-import { mesgulGunlugu, uygulamaHavuzuAc, type Veritabani } from '#cekirdek/db.ts';
+import { baglantiHatasiniYaz, mesgulGunlugu, uygulamaHavuzuAc, type Veritabani } from '#cekirdek/db.ts';
 import { bekleyenGocler } from '#cekirdek/goc.ts';
 import { yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -37,7 +37,8 @@ try {
 const KAPANIS_IS_BEKLEMESI_MS = 10_000;
 // Günlükleyici uygulamayla doğar, uygulama veritabanını ister: bildirim uygulama kurulunca bağlanır.
 let mesgulYaz: (bekleyen: number) => void = () => undefined;
-const vt = await uygulamaHavuzuAc(ayar, { mesgulBildir: (bekleyen) => { mesgulYaz(bekleyen); } }).catch((hata: unknown) => {
+let baglantiHatasiYaz = baglantiHatasiniYaz;
+const vt = await uygulamaHavuzuAc(ayar, { mesgulBildir: (bekleyen) => { mesgulYaz(bekleyen); }, baglantiHatasiBildir: (hata) => { baglantiHatasiYaz(hata); } }).catch((hata: unknown) => {
   console.error(`Sunucu açılamadı: ${hata instanceof Error ? hata.message : String(hata)}`);
   process.exit(1);
 });
@@ -56,10 +57,13 @@ try {
 
   const app = await uygulamaKur(uygulamaSecenekleri(vt, ayar));
   mesgulYaz = mesgulGunlugu(app.log);
+  baglantiHatasiYaz = (hata) => { app.log.error({ err: hata }, 'Veritabanı bağlantı hatası'); };
   yakalanmamisRetiDinle(process, app.log);
   const isler = await modulIsleriniKesfet();
   // İşlerin kendi havuzu vardır: isteklerin sırası dolsa da Logo ve yansıma işleri bağlantı bulur.
-  isVt = await uygulamaHavuzuAc(ayar, { havuzBoyutu: isHavuzuBoyutu(isler), mesgulBildir: (bekleyen) => { mesgulYaz(bekleyen); } });
+  isVt = await uygulamaHavuzuAc(ayar, {
+    havuzBoyutu: isHavuzuBoyutu(isler), mesgulBildir: (bekleyen) => { mesgulYaz(bekleyen); }, baglantiHatasiBildir: (hata) => { baglantiHatasiYaz(hata); },
+  });
   const zamanlayici = zamanlayiciKur({ vt: isVt, gunluk: app.log, isler, kalici: true });
 
   let arayuz: ArayuzKapisi | null = null;

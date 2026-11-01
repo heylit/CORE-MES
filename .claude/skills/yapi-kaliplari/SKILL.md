@@ -18,7 +18,7 @@ Kalıp sabittir; liste değişir. Modül haritası (uç, işlem, tablo, göç, b
 | `kurallar.ts` | iş kuralı, saf fonksiyon ve sabitler; veritabanı ve saat yok |
 | `sorgular.ts` | SQL yalnız burada (`db.sorgu`, `db.tek`) |
 | `disari.ts` | başka modüllerin ithal edebildiği tek dosya |
-| `*.test.ts` | kural testi saf; akış testi gerçek PostgreSQL ile |
+| `*.test.ts` | kural testi saf; akış testi gerçek PostgreSQL ile. Kritik yazma ucu (stok hareketi, üretim kaydı, emir kapama, sevkiyat, finans hareketi) aynı kayda eşzamanlı iki yazmayı gerçek PostgreSQL'de koşan test taşır; `KURAL-TEST.md` satırı testi adıyla gösterir |
 | `NOTLAR.md` | koddan okunamayan notlar (karar, vazgeçilen yol, tuzak); en çok 30 satır |
 
 İstemci: `istemci/src/moduller/<ad>/`: ekran + css, `rotalar.tsx` (`export const rotalar`; uygulama klasörden bulur), `anahtarlar.ts` (modülün sorgu anahtarları). Göç: `sunucu/gocler/<zamanDamgasi>_<ad>.sql`.

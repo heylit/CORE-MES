@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +10,7 @@ import type { Ayar } from './ayar.ts';
 import { kisitIhlali, vtDiskDolu, vtGeciciCakisma, vtHataIzi, vtSureDoldu, vtUlasilamadi, vtVeriHatasi } from './db.ts';
 import type { KisitIhlali, Veritabani } from './db.ts';
 import { UygulamaHatasi, cokBuyuk, mesgul, veritabaniYok } from './hata.ts';
+import { istekIziniKur, istekIziUret, izKarisimi } from './istek-izi.ts';
 import { istekOlcumunuKur } from './istek-olcumu.ts';
 import { adresYokKaydet, isleyiciReddiniKaydet } from './red-kaydi.ts';
 import { genelAramaUcu, kaynaklariKesfet } from './kayit-aramasi.ts';
@@ -49,7 +49,7 @@ export function gunlukSecenegi(ortam: Ayar['ortam']): false | { redact: { paths:
 // Testte günlük kapalıdır; öteki ortamlarda konsola ve günlük dosyasına yazılır, Windows'ta hata satırı olay günlüğüne de gider.
 export function gunlukKur(
   ortam: Ayar['ortam'], dizin: string = varsayilanGunlukDizini(), platform: NodeJS.Platform = process.platform,
-): false | { redact: { paths: string[]; censor: string }; stream: GunlukYazici } {
+): false | { redact: { paths: string[]; censor: string }; stream: GunlukYazici; mixin: typeof izKarisimi } {
   const secenek = gunlukSecenegi(ortam);
   if (secenek === false) return false;
   const olay = platform === 'win32' ? surecOlayGunlugunuKur() : null;
@@ -58,14 +58,11 @@ export function gunlukKur(
     konsol: (satir) => { process.stdout.write(satir); },
     ...(olay === null ? {} : { hataBildir: (h) => { olay.bildir(h); } }),
   });
-  return { ...secenek, stream };
+  return { ...secenek, stream, mixin: izKarisimi };
 }
 
-// Her istek günlükte bu kimlikle görünür; 5xx cevabı aynı kimliği başlıkta taşır ki kullanıcının söylediği kod günlükte bulunsun.
-// Kimlik başlıktan alınmaz: istemci günlüğe istediği kimliği yazamasın. Kısa tutulur, kullanıcı okuyup söyler.
-export function istekIziUret(): string {
-  return randomUUID().slice(0, 8);
-}
+// Günlük dosyası testi ve eski çağıranlar izi buradan alır.
+export { istekIziUret };
 
 // Güvenilmeyen eşten gelen X-Forwarded-For, önde adresi tanımlanmamış bir vekil olduğunu gösterir (TMIV2_VEKIL_ADRESI boş):
 // başlık yok sayılır, bütün cihazlar vekilin IP'si sayılır ve cihaz başına giriş sınırı herkese ortak olur. Doğrudan gelen
@@ -222,6 +219,7 @@ export async function uygulamaKur(secenek: UygulamaSecenegi, gunlukDizini?: stri
   });
   vekilUyarisiniKur(app, guvenilen, (ileti) => { app.log.warn(ileti); });
   hataYonetiminiKur(app);
+  istekIziniKur(app);
   istekOlcumunuKur(app);
   const kapali = secenek.kapaliModuller ?? [];
   for (const { modul, uclar } of await modulBasinaUclar()) {

@@ -258,3 +258,7 @@ export const kapanisStokDurumu = (db: Db, uretimEmriId: number): Promise<Kapanis
 
 // Genel arama (Ctrl K, kart 1234): parti/lot ve depo konumu kaynakları; çekirdek bu adla bulur.
 export { kayitAramaKaynaklari } from './kayit-aramasi.ts';
+
+// Markalı kimlik pilotu (ADR 0025 kural 8, 1580): çağıran modül malzeme kimliğini bu dönüştürücüyle markalar.
+export type { MalzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
+export { malzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';

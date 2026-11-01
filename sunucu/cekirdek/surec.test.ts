@@ -26,10 +26,12 @@ test('yakalanmamış ret günlüğe bir kez, hata nesnesiyle yazılır ve fırla
 });
 
 test('günlükleyici hata verse de dışarı hata çıkmaz', (t) => {
-  const yazilan = t.mock.method(console, 'error', () => undefined);
+  const yazilan = t.mock.method(process.stderr, 'write', () => true);
   const bozuk = { error: (): void => { throw new Error('günlük kapalı'); } };
   assert.doesNotThrow(() => { yakalanmamisRetYaz(bozuk, new Error('unutulmuş söz')); });
+  yazilan.mock.restore();
   assert.equal(yazilan.mock.callCount(), 1);
+  assert.match(String(yazilan.mock.calls[0]?.arguments[0]), /günlük kapalı[\s\S]*unutulmuş söz/);
 });
 
 test('dinleyici yalnız yakalanmamış reddi dinler; yakalanmamış istisnaya dokunmaz', () => {

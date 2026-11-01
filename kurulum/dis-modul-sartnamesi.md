@@ -61,7 +61,7 @@ Kırmızı çizgiler ve çekirdek korumalarıdır; borca yazılarak geçilmez. A
 | `FARK.md` | depodaki sürüme göre eklenen, değişen, silinen; değişen onaylı kararlar |
 | `CEKIRDEK-ISTEKLERI.md` | çekirdek, ortak arayüz, toplayıcı satırı, menü grubu, yeni paket istekleri (yoksa "yok") |
 | `BASKA-MODUL-ISTEKLERI.md` | hangi modülün `disari.ts` dosyasından hangi fonksiyon, hangi imzayla (yoksa "yok") |
-| `KURAL-TEST.md` | her iş kuralı -> onu sınayan test adı (ters tırnak içinde); koşulmamış test "çalıştırılmadı" diye |
+| `KURAL-TEST.md` | her iş kuralı -> onu sınayan test adı (ters tırnak içinde); koşulmamış test "çalıştırılmadı" diye. Stok hareketi, üretim kaydı, emir kapama, sevkiyat ya da finans hareketi yazan uç ekleyen veya değiştiren teslimde o ucun satırı, aynı kayda eşzamanlı iki yazmayı gerçek PostgreSQL'de koşturup sonucun tek ve tutarlı olduğunu doğrulayan testi adıyla gösterir (ADR 0025 kural 6) |
 | `ON-PAKET-<ad>.md` | ad; sayfa ve ikinci menü; uç başına yetki ve önerilen rol dağılımı; tablolar; iş kuralları; `disari.ts` ile açılanlar; açık sorular |
 | `UYGULA.md` ya da `OKU.md` | uygulama notu: taban commit, uygulama ve derleme adımları, koştuğun denetimlerin son satırları, koşamadıkların |
 | `sunucu/moduller/<ad>/UYUM-BORCU.md` | bildiğin istisnalar; her madde: kural / istisna / nerede / nasıl uyumlanır |
