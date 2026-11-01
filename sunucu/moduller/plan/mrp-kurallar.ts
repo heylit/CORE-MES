@@ -47,7 +47,8 @@ export interface MrpSatiri {
   emniyetPayi: number | null;
   // İlk tüketimin tesis günü; tüketen adım planda değilse ve emir başlamamışsa null.
   ihtiyacTarihi: string | null;
-  // Karşılanamayan ilk tüketimin tesis günü; eksik yoksa ya da günü bilinmiyorsa null.
+  // Karşılanamayan ilk tüketimin tesis günü; eksik yoksa, günü bilinmiyorsa ya da net bilinmiyorsa null. Net bilinmezken gün stoğu sıfır,
+  // siparişi yok sayıp çıkar; görmeyene (1545 a) var olmayan bir eksik günü göstermesin diye boş gelir.
   eksikTarihi: string | null;
   emirler: string[];
   // Bu satırın ihtiyacını doğuran açılmış ürünler (doğrudan emirden gelen ihtiyaçta boş).
@@ -120,6 +121,7 @@ function netle(malzemeNo: number, talepler: readonly Talep[], g: MrpGirdisi, aci
   const emniyetPayi = kayit === undefined || kritik === undefined || g.gelisler === null
     ? null
     : Math.max(0, sayi(kritik) - stok - gelis.reduce((t, x) => t + x.kalan, 0));
+  const netBilinir = kayit !== undefined && g.gelisler !== null;
   const ilk = sirali[0]?.zaman ?? null;
   const emirler: string[] = [];
   for (const t of sirali) if (!emirler.includes(t.emirNo)) emirler.push(t.emirNo);
@@ -130,10 +132,10 @@ function netle(malzemeNo: number, talepler: readonly Talep[], g: MrpGirdisi, aci
       brut: yuvarla(sirali.reduce((t, x) => t + x.miktar, 0)),
       serbest: kayit === undefined ? null : yuvarla(sayi(kayit)),
       acikSiparis: g.gelisler === null ? null : yuvarla(acikSiparis),
-      net: kayit === undefined || g.gelisler === null ? null : yuvarla(eksik + (emniyetPayi ?? 0)),
+      net: !netBilinir ? null : yuvarla(eksik + (emniyetPayi ?? 0)),
       emniyetPayi: emniyetPayi === null ? null : yuvarla(emniyetPayi),
       ihtiyacTarihi: ilk === null ? null : tesisGunu(ilk),
-      eksikTarihi: eksikZaman === undefined || eksikZaman === null ? null : tesisGunu(eksikZaman),
+      eksikTarihi: !netBilinir || eksikZaman === undefined || eksikZaman === null ? null : tesisGunu(eksikZaman),
       emirler, acilanlar, acildi,
     },
     acik,

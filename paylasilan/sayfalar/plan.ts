@@ -27,11 +27,12 @@ export const PLAN_IKINCI_MENU = {
       { anahtar: 'ufuk', baslik: 'Ufuk', yol: '/plan/ufuk', simge: 'route', islem: 'plan.planlama-oku' },
       { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/plan/sevkiyat', simge: 'truck', islem: 'plan.planlama-oku' },
     ] },
-    // Planlama sayfasının görünümü değil, ayrı sayfalar: salt okunur rapor (782) ve motor ayarları (811); ilk grup görünüm kaydıdır
+    // Planlama sayfasının görünümü değil, ayrı sayfalar: salt okunur raporlar (782, 1560) ve motor ayarları (811); ilk grup görünüm kaydıdır
     // (planlama/gorunumler.ts).
     { baslik: 'Veri', maddeler: [
       { anahtar: 'veri-sagligi', baslik: 'Veri sağlığı', yol: '/plan/veri-sagligi', simge: 'alert', islem: 'plan.planlama-oku' },
       { anahtar: 'plan-sagligi', baslik: 'Plan sağlığı', yol: '/plan/plan-sagligi', simge: 'gauge', islem: 'plan.planlama-oku' },
+      { anahtar: 'mrp', baslik: 'Malzeme ihtiyacı', yol: '/plan/mrp', simge: 'box', islem: 'plan.planlama-oku' },
       { anahtar: 'motor-ayarlari', baslik: 'Motor ayarları', yol: '/plan/motor-ayarlari', simge: 'gear', islem: 'plan.planlama-oku' },
     ] },
   ],
