@@ -757,6 +757,29 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal((await plan('GET', '/uretim-emirleri?kapsam=bilinmeyen')).durum, 400);
   });
 
+  test('liste bitenGun: yalnız son N günde kapananlar; açık ve eski kapanan gelmez; yetki listeyle aynı; geçersiz 400 (karar 1613 a)', async () => {
+    const ist = await istasyonKur();
+    const acikEmir = await emirAc(ist);
+    const yeni = await emirAc(ist);
+    await iptalYaz(yeni.id);
+    const eski = await emirAc(ist);
+    await iptalYaz(eski.id);
+    await vt().tx((db) => db.sorgu(`UPDATE uretim_emri SET iptal = now() - interval '10 days' WHERE id = $1`, [eski.id]));
+    const liste = emirlerCevabi.parse((await plan('GET', '/uretim-emirleri?bitenGun=7')).govde).emirler;
+    const idler = liste.map((e) => e.id);
+    assert.ok(idler.includes(yeni.id), 'bugün iptal edilen gelir');
+    assert.ok(!idler.includes(eski.id), '10 gün önce kapanan gelmez');
+    assert.ok(!idler.includes(acikEmir.id), 'açık emir gelmez');
+    assert.ok(liste.every((e) => e.durum === 'bitti' || e.durum === 'iptal'));
+    assert.deepEqual(idler, [...idler].sort((x, y) => y - x));
+    const genis = emirlerCevabi.parse((await plan('GET', '/uretim-emirleri?bitenGun=31')).govde).emirler.map((e) => e.id);
+    assert.ok(genis.includes(eski.id), '31 günlük pencere eskiyi de verir');
+    for (const k of ['0', '32', '1.5', 'x', '']) assert.equal((await plan('GET', `/uretim-emirleri?bitenGun=${k}`)).durum, 400, `bitenGun=${k}`);
+    assert.equal((await istek(null, 'GET', '/uretim-emirleri?bitenGun=7')).durum, 401);
+    assert.equal((await istek(kisiCerezi('operator'), 'GET', '/uretim-emirleri?bitenGun=7')).durum, 403);
+    assert.equal((await istek(kisiCerezi('depo'), 'GET', '/uretim-emirleri?bitenGun=7')).durum, 200);
+  });
+
   test('bitenler: yalnız bitmiş ve iptal emirler, en yeni önce, sayfalı; durum ve arama süzer (kart #1323)', async () => {
     const ist = await istasyonKur();
     const etiket = `BT${randomUUID().slice(0, 8)}`;

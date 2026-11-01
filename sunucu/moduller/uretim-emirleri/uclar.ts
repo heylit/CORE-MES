@@ -17,7 +17,7 @@ import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
   adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
-  izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
+  izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
 const ADIMLI_OKUMA = { biri: ADIMLI_OKUMA_ISLEMLERI } as const;
@@ -35,7 +35,9 @@ const emirUclari = [
     yetki: LISTE_OKUMA,
     sorgu: emirlerSorgusu,
     cevap: izlemeListeCevabi,
-    isle: ({ db, sorgu }) => izlemeListesi(db, sorgu.durum, sorgu.istasyonsuz === '1', sorgu.kapsam === 'hepsi'),
+    isle: ({ db, sorgu }) => (sorgu.bitenGun === undefined
+      ? izlemeListesi(db, sorgu.durum, sorgu.istasyonsuz === '1', sorgu.kapsam === 'hepsi')
+      : yeniKapananlar(db, sorgu.bitenGun, sorgu.istasyonsuz === '1')),
   }),
   uc({
     yontem: 'GET',

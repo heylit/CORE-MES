@@ -397,6 +397,11 @@ export async function izlemeListesi(
   return { emirler: acikSuzgec ? emirler.filter((e) => e.durum === durum) : emirler };
 }
 
+// Son `gun` günde kapanan emirler, izleme biçiminde (Fabrika Haritası; karar 1613 a).
+export async function yeniKapananlar(db: Db, gun: number, istasyonsuzDahil: boolean): Promise<{ emirler: IzlemeEmri[] }> {
+  return { emirler: await izlemeyeCevir(db, await sorgular.yeniKapananEmirleriGetir(db, gun, !istasyonsuzDahil)) };
+}
+
 // Biten (bitmiş ya da iptal) emirler, en yeni önce, sayfalı (kart #1323).
 export function bitenEmirler(
   db: Db, suzgec: sorgular.BitenSuzgeci, istasyonsuzDahil: boolean, sayfa: { sayfa: number; sayfaBoyu?: number | undefined },

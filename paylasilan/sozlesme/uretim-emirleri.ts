@@ -46,7 +46,11 @@ export const BITEN_EMIR_DURUMLARI = ['bitti', 'iptal'] as const satisfies readon
 const listeKapsami = z.enum(LISTE_KAPSAMLARI).default('acik');
 // Emir no, parça no ya da parça adında geçen metin; büyük küçük harf ayrılmaz.
 const aramaMetni = z.string().trim().max(60).optional().transform((m) => (m === '' ? undefined : m));
-export const emirlerSorgusu = z.object({ durum: emirDurumu.optional(), istasyonsuz: z.literal('1').optional(), kapsam: listeKapsami });
+// bitenGun=N: yalnız son N günde kapanan (biten ya da iptal) emirler; durum ve kapsam o zaman bakılmaz.
+export const emirlerSorgusu = z.object({
+  durum: emirDurumu.optional(), istasyonsuz: z.literal('1').optional(), kapsam: listeKapsami,
+  bitenGun: z.coerce.number().int().min(1).max(31).optional(),
+});
 export const bitenEmirlerSorgusu = z.object({
   ...sayfaSorguAlanlari, durum: z.enum(BITEN_EMIR_DURUMLARI).optional(), istasyonsuz: z.literal('1').optional(), ara: aramaMetni,
 });
