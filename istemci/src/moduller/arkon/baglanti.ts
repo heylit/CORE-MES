@@ -373,11 +373,29 @@ export interface AnlikIletim {
   close(): void;
 }
 
+// Kalıcı hata: oturum bitti (401) ya da Arkon yetkisi yok (403). Yeniden denemek aynı cevabı alır; döngü durur.
+export type YoklamaDurdu = 401 | 403;
+export const YETKI_YOK = 'Arkon için yetkiniz yok; ileti akışı durduruldu.';
+// Geçici hatada (ağ, 5xx, öteki) bekleme her denemede ikiye katlanır, bu sınırda kalır; başarılı okuma aralığı başa döndürür.
+export const ILETI_AZAMI_ARALIK_MS = 30_000;
+
+export function yoklamaAraligi(ardisikHata: number): number {
+  if (ardisikHata <= 0) return ILETI_ARALIGI_MS;
+  return Math.min(ILETI_AZAMI_ARALIK_MS, ILETI_ARALIGI_MS * 2 ** Math.min(ardisikHata - 1, 30));
+}
+
+const kaliciHata = (hata: unknown): YoklamaDurdu | null =>
+  hata instanceof ApiHatasi && (hata.durum === 401 || hata.durum === 403) ? hata.durum : null;
+
 // Arkon'un EventSource beklentisi kısa aralıklı okumayla karşılanır: TMI uçları JSON'dur, akış tutmaz.
-export function anlikIletimKur(istemci: Istemci, kaynak: string, bekle = (ms: number) => new Promise((t) => setTimeout(t, ms))): AnlikIletim {
+// Arkon (store.ts openBus) hatada akışı yeniden açmaz; döngü durunca istek de kesilir. 401'de giriş ekranını api.ts açar.
+export function anlikIletimKur(
+  istemci: Istemci, kaynak: string, bekle = (ms: number) => new Promise((t) => setTimeout(t, ms)), durdu?: (durum: YoklamaDurdu) => void,
+): AnlikIletim {
   let son: number | undefined;
   let acik = true;
   let bagli = false;
+  let ardisikHata = 0;
   const iletim: AnlikIletim = {
     onopen: null, onmessage: null, onerror: null, readyState: 0,
     close() { acik = false; iletim.readyState = 2; },
@@ -389,15 +407,25 @@ export function anlikIletimKur(istemci: Istemci, kaynak: string, bekle = (ms: nu
         const cevap = await istemci.get<IletilerCevabi>(`/arkon/iletiler?${sorgu.toString()}`);
         if (!acik) break;
         son = cevap.son;
+        ardisikHata = 0;
         if (!bagli) { bagli = true; iletim.readyState = 1; iletim.onopen?.(new Event('open')); }
         for (const ileti of cevap.iletiler) iletim.onmessage?.(new MessageEvent('message', { data: JSON.stringify(ileti) }));
-      } catch {
+      } catch (hata) {
         if (!acik) break;
         bagli = false;
+        const kalici = kaliciHata(hata);
+        if (kalici !== null) {
+          acik = false;
+          iletim.readyState = 2;
+          iletim.onerror?.(new Event('error'));
+          durdu?.(kalici);
+          break;
+        }
+        ardisikHata += 1;
         iletim.readyState = 0;
         iletim.onerror?.(new Event('error'));
       }
-      await bekle(ILETI_ARALIGI_MS);
+      await bekle(yoklamaAraligi(ardisikHata));
     }
   })();
   return iletim;
@@ -565,7 +593,7 @@ export function bagla(
       return kapaliIletim();
     }
     if (!metin.startsWith(`${sunucu}/api/bus`)) return new AsilEventSource(adres, ayar);
-    const iletim = anlikIletimKur(istemci, new URL(metin).searchParams.get('c') ?? 'tmi');
+    const iletim = anlikIletimKur(istemci, new URL(metin).searchParams.get('c') ?? 'tmi', undefined, (durum) => { if (durum === 403) reddet(YETKI_YOK); });
     const kapat = iletim.close.bind(iletim);
     iletim.close = () => { acikIletimler.delete(iletim); kapat(); };
     acikIletimler.add(iletim);
