@@ -12,19 +12,30 @@ const ANAHTAR = ['satin-alma', 'tedarik-terminleri'] as const;
 const YAZAR_ISLEMLERI = ['satin-alma.yaz', 'plan.yaz'];
 const gun = (t: string | null) => (t === null ? '—' : `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`);
 
+// Açık siparişin en erken beklenen teslimi; tarihi olmayan sipariş tarih vermez.
+const ilkGelis = (x: Satir): string | null =>
+  x.siparisler.reduce<string | null>((en, s) => (s.tarih !== null && (en === null || s.tarih < en) ? s.tarih : en), null);
+const bekliyorMu = (x: Satir) => x.termin === null && x.gerekenTarih !== null && x.siparisler.length === 0;
+
 // Plan termin girilmemiş malzemeyi olması gereken tarihle hesaplar ve "termin bekleniyor" der; geç kalan termin katı kipte işi bekletir.
-function durum(x: Satir) {
-  if (x.termin === null) return x.gerekenTarih === null ? null : <Rozet ton="uyari">Termin bekleniyor</Rozet>;
-  if (x.gerekenTarih === null) return <Rozet>Plan istemiyor</Rozet>;
-  return x.termin > x.gerekenTarih ? <Rozet ton="hata">Geç kalıyor</Rozet> : <Rozet ton="tamam">Zamanında</Rozet>;
+// Sipariş verilmişse elle termin yerine siparişin beklenen teslimi karşılaştırılır; gereken tarihi geçmiş satır gecikmiştir.
+function durum(x: Satir, bugun: string | null) {
+  const tarih = x.termin ?? ilkGelis(x);
+  if (x.gerekenTarih === null) return x.termin !== null ? <Rozet>Plan istemiyor</Rozet> : x.siparisler.length > 0 ? <Rozet>Sipariş verildi</Rozet> : null;
+  if (bugun !== null && x.gerekenTarih < bugun) return <Rozet ton="hata">Gecikti</Rozet>;
+  if (tarih === null) return x.siparisler.length > 0 ? <Rozet ton="uyari">Sipariş verildi, teslim tarihi yok</Rozet> : <Rozet ton="uyari">Termin bekleniyor</Rozet>;
+  return tarih > x.gerekenTarih ? <Rozet ton="hata">Geç kalıyor</Rozet> : <Rozet ton="tamam">Zamanında</Rozet>;
 }
 
-const SUTUNLAR: Sutun<Satir>[] = [
+const siparisMetni = (x: Satir) => (x.siparisler.length === 0 ? '—' : x.siparisler.map((s) => `${s.siparisNo} · ${gun(s.tarih)}`).join(', '));
+
+const sutunlarKur = (bugun: string | null): Sutun<Satir>[] => [
   { anahtar: 'kod', baslik: 'Malzeme', mono: true, kirilmaz: true, hucre: (x) => x.malzemeKodu || `#${x.malzemeNo}` },
   { anahtar: 'ad', baslik: 'Ad', hucre: (x) => x.malzemeAdi || '—' },
   { anahtar: 'gereken', baslik: 'Olması gereken', kirilmaz: true, hucre: (x) => gun(x.gerekenTarih) },
   { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (x) => gun(x.termin) },
-  { anahtar: 'durum', baslik: 'Durum', hucre: (x) => durum(x) ?? '—' },
+  { anahtar: 'siparis', baslik: 'Açık sipariş', hucre: (x) => siparisMetni(x) },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (x) => durum(x, bugun) ?? '—' },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
   { anahtar: 'giren', baslik: 'Giren', hucre: (x) => x.kisiAdi ?? '—' },
 ];
@@ -71,8 +82,9 @@ export function TedarikTerminleri() {
   const l = useQuery({ queryKey: ANAHTAR, queryFn: () => cagri.get('/satin-alma-tedarik-terminleri', SURE) });
   const aranan = ara.trim().toLocaleUpperCase('tr-TR');
   const satirlar = (l.data?.terminler ?? []).filter((x) => aranan === '' || `${x.malzemeKodu} ${x.malzemeAdi}`.toLocaleUpperCase('tr-TR').includes(aranan));
-  const bekleyen = (l.data?.terminler ?? []).filter((x) => x.termin === null && x.gerekenTarih !== null).length;
-  const sutunlar: Sutun<Satir>[] = !yazar ? SUTUNLAR : [...SUTUNLAR, {
+  const bekleyen = (l.data?.terminler ?? []).filter(bekliyorMu).length;
+  const temel = sutunlarKur(l.data?.bugun ?? null);
+  const sutunlar: Sutun<Satir>[] = !yazar ? temel : [...temel, {
     anahtar: 'islem', baslik: 'İşlem', kirilmaz: true,
     hucre: (x) => <Dugme simge="edit" onClick={() => acikYaz(x)}>Termin gir</Dugme>,
   }];

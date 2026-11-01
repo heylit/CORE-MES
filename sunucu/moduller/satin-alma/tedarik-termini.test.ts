@@ -110,8 +110,12 @@ describe('satin-alma tedarik termini (533 a, gerçek PostgreSQL)', () => {
     assert.deepEqual({ ...h.get(m1)!, guncelleme: once.guncelleme }, { ...once, gerekenTarih: '2026-11-05' });
     assert.equal(h.get(m1)?.surum, once.surum, 'gereken tarih sürümü artırmaz');
     assert.deepEqual([h.get(m2)?.termin, h.get(m2)?.gerekenTarih, h.get(m2)?.surum], [null, '2026-11-08', 1]);
-    const liste = (await vt().tx((db) => tedarikTerminleriListesi(db))).terminler;
+    const cevap = await vt().tx((db) => tedarikTerminleriListesi(db));
+    const liste = cevap.terminler;
     assert.deepEqual(liste.map((t) => [t.malzemeNo, t.malzemeKodu, t.kisiAdi]), [[m1, 'HM-SAT-00001', 'Deneme Yönetici'], [m2, 'HM-SAT-00002', null]]);
+    // Açık siparişi olmayan malzemede sipariş listesi boştur; bugün sunucunun günüdür (TMI A3).
+    assert.deepEqual(liste.map((t) => t.siparisler), [[], []]);
+    assert.equal(cevap.bugun, (await vt().tx((db) => db.tek<{ g: string }>('SELECT current_date::text AS g')))?.g);
     // Planlama ekranının açık girişi plan yeniden yazınca bozulmaz: m2'nin sürümü hâlâ 1.
     const yaz = await vt().tx((db) => tedarikTerminiKaydet(db, yonetici, { malzemeNo: m2, termin: '2026-11-07', aciklama: '', surum: 1 }));
     assert.equal(yaz.termin.gerekenTarih, '2026-11-08');

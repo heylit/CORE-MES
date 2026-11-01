@@ -11,17 +11,18 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 // Malzeme kodları ve kişi uydurmadır.
 const satir = (ek: Partial<Satir>): Satir => ({
   malzemeNo: 11, malzemeKodu: 'HM-DEN-00001', malzemeAdi: 'Deneme mil', termin: null, gerekenTarih: '2026-11-05', aciklama: '', surum: 1,
-  guncelleme: '2026-10-25T08:00:00.000Z', kisiAdi: null, ...ek,
+  guncelleme: '2026-10-25T08:00:00.000Z', kisiAdi: null, siparisler: [], ...ek,
 });
 
 interface Istek { yontem: string; yol: string; govde: unknown }
+let bugun = '2026-10-30';
 function ac(terminler: Satir[], islemler: string[] = ['satin-alma.oku', 'satin-alma.yaz'], kaydet: () => Response = () => json(200, { termin: satir({}) })) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, i?: RequestInit) => {
     const yol = adres.replace('/api', '');
     istekler.push({ yontem: i?.method ?? 'GET', yol, govde: i?.body ? JSON.parse(String(i.body)) : undefined });
     if (yol === '/oturum') return json(200, { kullanici: { id: 9, ad: 'Deneme Alıcı', islemler } });
-    if (yol === '/satin-alma-tedarik-terminleri') return json(200, { terminler } satisfies TedarikTerminleriCevabi);
+    if (yol === '/satin-alma-tedarik-terminleri') return json(200, { terminler, bugun } satisfies TedarikTerminleriCevabi);
     return kaydet();
   }));
   render(
@@ -31,7 +32,7 @@ function ac(terminler: Satir[], islemler: string[] = ['satin-alma.oku', 'satin-a
   );
   return istekler;
 }
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); bugun = '2026-10-30'; });
 
 describe('Tedarik terminleri (533 a)', () => {
   it('satırda olması gereken, termin ve durum görünür: termin yoksa bekleniyor, geç termin "Geç kalıyor", erken termin "Zamanında"', async () => {
@@ -46,6 +47,28 @@ describe('Tedarik terminleri (533 a)', () => {
     expect(within(tablo).getByText('Zamanında')).toBeTruthy();
     expect(within(tablo).getAllByText('05.11.2026').length).toBe(3);
     expect(screen.getByText('1 termin bekleniyor')).toBeTruthy();
+  });
+
+  it('TMI A3: sipariş verilmiş malzeme "termin bekleniyor" sayılmaz; siparişin teslimi karşılaştırılır, gereken tarih geçmişse gecikti', async () => {
+    const siparis = (siparisNo: string, tarih: string | null) => ({ siparisNo, tarih, miktar: '500', birim: 'kg' });
+    ac([
+      satir({ siparisler: [siparis('SP-DEN-001', '2026-11-11')] }),
+      satir({ malzemeNo: 12, malzemeKodu: 'HM-DEN-00002', siparisler: [siparis('SP-DEN-002', '2026-11-08'), siparis('SP-DEN-003', '2026-11-03')] }),
+      satir({ malzemeNo: 13, malzemeKodu: 'HM-DEN-00003', siparisler: [siparis('SP-DEN-004', null)] }),
+    ]);
+    const tablo = await screen.findByRole('table', { name: 'Tedarik terminleri' });
+    expect(within(tablo).queryByText('Termin bekleniyor')).toBeNull();
+    expect(within(tablo).getByText('SP-DEN-001 · 11.11.2026')).toBeTruthy();
+    expect(within(tablo).getByText('Geç kalıyor')).toBeTruthy();
+    expect(within(tablo).getByText('Zamanında')).toBeTruthy();
+    expect(within(tablo).getByText('Sipariş verildi, teslim tarihi yok')).toBeTruthy();
+    expect(screen.queryByText(/termin bekleniyor$/)).toBeNull();
+    cleanup();
+
+    bugun = '2026-11-06';
+    ac([satir({ siparisler: [siparis('SP-DEN-001', '2026-11-11')] }), satir({ malzemeNo: 12, malzemeKodu: 'HM-DEN-00002', termin: '2026-11-04' })]);
+    const gecmis = await screen.findByRole('table', { name: 'Tedarik terminleri' });
+    expect(within(gecmis).getAllByText('Gecikti').length).toBe(2);
   });
 
   it('okuyan termin giremez (düğme yok); planı yazan girer', async () => {

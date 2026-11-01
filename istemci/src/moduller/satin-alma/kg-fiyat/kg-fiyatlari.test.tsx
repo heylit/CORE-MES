@@ -46,7 +46,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
 
   it('okuyan fiyat giremez: Yeni fiyat, Toplu giriş ve Fiyat gir düğmeleri yok', async () => {
     ac([satir({})], ['satin-alma.oku']);
-    expect(await screen.findByText('cubuk')).toBeTruthy();
+    expect(await screen.findByText('Çubuk')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Yeni fiyat/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Toplu giriş/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Fiyat gir/ })).toBeNull();
@@ -123,7 +123,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     expect(screen.getByText('1.250,50 TL')).toBeTruthy();
     cleanup();
     ac([satir({})]);
-    expect(await screen.findByText('cubuk')).toBeTruthy();
+    expect(await screen.findByText('Çubuk')).toBeTruthy();
     expect(screen.queryByText(/Stok değeri/)).toBeNull();
   });
 

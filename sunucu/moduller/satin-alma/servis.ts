@@ -618,6 +618,17 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     if (sonuc === 'red') throw yetkiYok(ILETILER.dortGoz);
     await s.onayEkle(db, id, o, k.id, sonuc === 'dortGozsuz');
   }
+  // TMI A2: karar talebi açana ve talep edene haber verilir; ret gerekçesi metindedir. Karar veren kendisi almaz.
+  const sonOnay = yeniOnaylar.at(-1);
+  if (sonOnay !== undefined) {
+    const ret = sonOnay.sonuc === 'ret';
+    await bildirimGonder(db, {
+      tur: ret ? 'satin-alma.talep-reddedildi' : 'satin-alma.talep-onaylandi',
+      baslik: `${ret ? 'Reddedilen' : 'Onaylanan'} talep: ${eski.no}`, metin: ret && sonOnay.notlar ? `${yazilacak.baslik}. Gerekçe: ${sonOnay.notlar}` : yazilacak.baslik,
+      yol: '/taleplerim', kaynakKimlik: `${id}:${eski.onaylar.length + yeniOnaylar.length}`,
+      kisiler: [...new Set([eski.acanKisiId, ...(eski.talepEdenKisiId === null ? [] : [eski.talepEdenKisiId])])], haric: k.id,
+    });
+  }
   if (talepFisiGiderMi(eski.onaylar, yeniOnaylar, yazilacak.durum)) await s.talebiLogoyaIsaretle(db, id);
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') await s.talepIptaliniLogoyaIsaretle(db, id);
   const eskiHareketler = new Set(eski.hareketler.map((h) => h.id));
@@ -1364,11 +1375,17 @@ export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminler
   const satirlar = await s.tedarikTerminleriOku(db, null);
   const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeNo));
   const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.kisiId === null ? [] : [t.kisiId])));
+  // Sipariş verilmiş malzeme "termin bekleniyor" görünmesin: açık siparişin beklenen teslimi satırda gösterilir (TMI A3).
+  const gelisler = await malzemeGelisTarihleri(db, satirlar.map((t) => t.malzemeNo));
   return {
     terminler: satirlar.map((t) => {
       const m = malzemeler.get(t.malzemeNo);
-      return { ...terminCikisi(t), malzemeKodu: m?.kod ?? '', malzemeAdi: m?.ad ?? '', kisiAdi: t.kisiId === null ? null : adlar.get(t.kisiId) ?? null };
+      return {
+        ...terminCikisi(t), malzemeKodu: m?.kod ?? '', malzemeAdi: m?.ad ?? '', kisiAdi: t.kisiId === null ? null : adlar.get(t.kisiId) ?? null,
+        siparisler: gelisler.get(t.malzemeNo) ?? [],
+      };
     }),
+    bugun: await s.bugun(db),
   };
 }
 // Plan okuması: satırı olmayan malzeme haritada yoktur (termin bekliyor, ilk giriş sürümsüz yazılır).

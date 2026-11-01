@@ -4,7 +4,7 @@
 import type { PurchaseRequest } from "./tipler.ts";
 import { OPEN, PRIO } from "./constants.ts";
 import { S, nameOf, settings } from "./store.ts";
-import { awardOrders, awardTotals, evaluate, orderDue, payText, requiredApprover, supName, type OrderInfo } from "./calc.ts";
+import { awardOrders, awardTotals, evaluate, orderDue, payText, requiredApprover, siparisEtiketi, supName, type OrderInfo } from "./calc.ts";
 import { esc, fmtDate, fmtTs, isNum, money, nf0, numIn, parseNum, todayStr } from "./util.ts";
 
 /* ---------------- onay formu ---------------- */
@@ -51,7 +51,7 @@ export function approvalFormHTML(r: PurchaseRequest): string {
 export function poText(r: PurchaseRequest, o: OrderInfo): string {
   const set = settings(), s = S.suppliers[o.supplierId];
   const L: string[] = [];
-  L.push(`Konu: Sipariş ${o.poNo || r.no}, ${r.title}`);
+  L.push(`Konu: Sipariş ${siparisEtiketi(o) || r.no}, ${r.title}`);
   L.push("");
   L.push(s?.contact ? `Sayın ${s.contact},` : `${supName(o.q)} yetkilisine,`);
   L.push("");

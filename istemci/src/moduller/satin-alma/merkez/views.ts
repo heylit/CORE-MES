@@ -421,9 +421,10 @@ function reqMenuHTML(r: PurchaseRequest): string {
     ...(open && (r.items || []).length ? [["rfq", "Teklif iste"] as [string, string]] : []),
     ...(r.award ? [["approval-form", "Onay formunu göster"] as [string, string]] : []),
     ["req-dup", "Tekrar talep et (kopyala)"],
-    ["req-status", "Durumu elle değiştir"],
-    ...(r.status !== "cancelled" ? [["req-cancel", "Talebi iptal et"] as [string, string]] : []),
-    ["req-delete", "Talebi sil", "danger"],
+    // Teslim alınan talebin durumu elle değişmez, yalnız taslak silinir (SAT-07, SAT-66); sunucunun reddedeceği işlem menüde durmaz.
+    ...(r.status !== "received" ? [["req-status", "Durumu elle değiştir"] as [string, string]] : []),
+    ...(r.status !== "cancelled" && r.status !== "received" ? [["req-cancel", "Talebi iptal et"] as [string, string]] : []),
+    ...(r.status === "draft" ? [["req-delete", "Talebi sil", "danger"] as [string, string, string]] : []),
   ];
   return `<div class="menu"><button class="btn" data-act="menu" aria-haspopup="menu" aria-expanded="false">İşlemler <span aria-hidden="true">▾</span></button>
     <div class="menu-list" role="menu" hidden>${items.map(([act, l, cls]) => `<button role="menuitem" class="${cls ?? ""}" data-act="${act}">${l}</button>`).join("")}</div></div>`;
@@ -480,7 +481,7 @@ export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: strin
   const aps = approvalState(r);
   if (aps.state === "rejected") return { cls: "bad", t: "Karar reddedildi", s: `${aps.last?.name || "Onaylayan"}: ${aps.last?.note || "gerekçe yazılmadı"}. Kararı gözden geçirip yeniden onaya gönderin.`, b: [["tab", "Kararı gözden geçir", 1, "compare"]] };
   if (a && ap && aps.state === "approved") return { cls: "", t: "Onaylandı, siparişi verin", s: `${ap.name || "Onaylayan"} onayladı. Sipariş verildiğinde kurlar sabitlenir.`, b: [["tab", "Sipariş ver", 1, "decision"]] };
-  if (a) { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return { cls: "warn", t: "Onay bekleniyor", s: `${req ? req.role + " onayı gerekli" : ""}${tt ? ", " + money(tt.totalTRY, "TRY", 0) : ""}. Karar özetini onaylayana gönderebilirsiniz.`, b: [["tab", "Onay ekranı", 1, "decision"], ["copy-summary", "Özeti kopyala", 0]] }; }
+  if (a) { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return { cls: "warn", t: "Onay bekleniyor", s: `${[req ? req.role + " onayı gerekli" : "", tt ? money(tt.totalTRY, "TRY", 0) : ""].filter(Boolean).join(", ")}. Karar özetini onaylayana gönderebilirsiniz.`.replace(/^\. /, ""), b: [["tab", "Onay ekranı", 1, "decision"], ["copy-summary", "Özeti kopyala", 0]] }; }
   if (!rfqs.length && !q) return { cls: "", t: "Tedarikçilerden teklif isteyin", s: "Hafıza bu kalemleri daha önce veren tedarikçileri önerir; hepsine aynı formatta soru gider.", b: [["rfq", "Teklif iste", 1], ["bulk", "Elimde teklifler var", 0]] };
   const ev = q ? evaluate(r) : null;
   if (!ev || !ev.elig.length) return { cls: "", t: pending.length ? `${pending.length} tedarikçiden cevap bekleniyor` : "Teklifleri girin", s: pending.length ? pending.map(x => (S.suppliers[x.supplierId] || {}).name).filter(Boolean).join(", ") : "", b: ([["bulk", "Teklifleri gir", 1], pending.length ? ["tab", "Hatırlat", 0, "quotes"] : null] as (NextBtn | null)[]).filter((x): x is NextBtn => !!x) };

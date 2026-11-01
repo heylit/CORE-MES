@@ -817,8 +817,13 @@ export const tedarikTerminiSemasi = z.object({
   surum: surumSemasi,
   guncelleme: zamanSemasi,
 });
+// Açık sipariş satırı: plan bunu ayrıca okur (525 1 a); ekran yalnız gösterir, termin tablosuna yazılmaz.
+export const terminSiparisiSemasi = z.object({ siparisNo: z.string(), tarih: tarihSemasi.nullable(), miktar: z.string(), birim: z.string() });
 export const tedarikTerminleriCevabi = z.object({
-  terminler: z.array(tedarikTerminiSemasi.extend({ malzemeKodu: z.string(), malzemeAdi: z.string(), kisiAdi: z.string().nullable() })),
+  terminler: z.array(tedarikTerminiSemasi.extend({
+    malzemeKodu: z.string(), malzemeAdi: z.string(), kisiAdi: z.string().nullable(), siparisler: z.array(terminSiparisiSemasi),
+  })),
+  bugun: tarihSemasi,
 });
 // surum null: malzemenin ilk termini (satır varsa 409). termin null: termin kaldırılır, malzeme yeniden termin bekler.
 export const tedarikTerminiKaydetGovdesi = z.object({
