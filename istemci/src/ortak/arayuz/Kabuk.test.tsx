@@ -352,7 +352,8 @@ describe('Kabuk', () => {
 
   it('sol üstte sürüm ve derleme tarihi yazar; logo verilince TMI işaretinin yerinde durur', () => {
     const { container, unmount } = ciz();
-    expect(container.querySelector('.tc-kabuk-surum')?.textContent).toMatch(/^v\d+\.\d+\.\d+ · \d{2}\.\d{2}\.\d{4}$/);
+    // Güncelleyicinin kurduğu derlemede yayın adı (2026.11.01-1), elle kurulumda package.json yer tutucusu yerine "geliştirme".
+    expect(container.querySelector('.tc-kabuk-surum')?.textContent).toMatch(/^(geliştirme|\d{4}\.\d{2}\.\d{2}-\d+) · \d{2}\.\d{2}\.\d{4}$/);
     expect(container.querySelector('.tc-kabuk-marka-logo')).toBeNull();
     unmount();
     const logo = 'data:image/png;base64,iVBORw0KGgo=';
