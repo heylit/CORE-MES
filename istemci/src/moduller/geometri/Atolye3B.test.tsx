@@ -55,7 +55,7 @@ const ANALIZ: GeometriAnalizCevabi = {
 };
 const HAM: GeometriHamCevabi = {
   revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null,
-  oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, kesimBoyuMm: 44, hamHacimMm3: 21598.4 }],
+  oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 21598.4 }],
 };
 const HAM_AYAR: GeometriHamCevabi = { ...HAM, payMm: 3, payKaynagi: 'ayar', enAz: { a: 46, b: 26, c: 16 } };
 const DOSYA = () => new Response(new Uint8Array([1, 2, 3]), { status: 200 });
@@ -87,14 +87,15 @@ describe('3D Atölyesi', () => {
     fireEvent.change(screen.getByLabelText('Kalite'), { target: { value: 'C45' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
     expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41')).toBe(true);
-    // 1446 a: yoğunluk yazılınca net ve ham ağırlık (8000 mm³ x 7,85 g/cm³; çubuğun ham hacmi x 7,85).
-    expect(screen.queryByText('Net ağırlık')).toBeNull();
-    fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '7,85' } });
-    expect(await screen.findByText('≈ 0,063 kg')).toBeTruthy();
+    // 1480: yoğunluk boşken önerinin kalitesinden (C45, Malzemeler tablosu 7,85); 1446 a: yazılan geçerlidir.
+    expect(await screen.findByText('Boş bırakılırsa C45 kalitesinin yoğunluğu: 7,85 g/cm³', undefined, { timeout: 15000 })).toBeTruthy();
+    expect(screen.getByText('≈ 0,063 kg')).toBeTruthy();
     expect(screen.getByText('Ham ağırlık ≈ 0,17 kg')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '2,7' } });
+    expect(await screen.findByText('≈ 0,022 kg')).toBeTruthy();
+    expect(screen.getByText('Ham ağırlık ≈ 0,058 kg')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '-1' } });
     expect(await screen.findByText('Pozitif bir sayı yazın.')).toBeTruthy();
-    expect(screen.queryByText('Net ağırlık')).toBeNull();
   });
 
   it('yeniden hesapla okunan sürümle ve istek kimliğiyle gider; kuyruğa alınınca durum değişir', async () => {

@@ -43,3 +43,4 @@ export const agirlikKg = (hacimMm3: number | null, yogunluk: number | null): num
   (hacimMm3 === null || yogunluk === null ? null : (hacimMm3 * yogunluk) / 1e6);
 const kg = bicim(3);
 export const agirlikMetni = (x: number): string => `${kg.format(x)} kg`;
+export const yogunlukBicimi = (x: number): string => kg.format(x);

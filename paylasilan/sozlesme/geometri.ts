@@ -97,6 +97,11 @@ export const hamStokOnerisi = z.object({
   form: z.enum(HAM_STOK_FORMLARI),
   // Kartın ölçüleri, Malzemeler'in form ölçü adlarıyla (çubuk d,l; altıgen s,l; lama a,b,l; levha t,w,l; blok a,b,h).
   olcu: z.record(z.string(), z.number()),
+  // 1480: kalitenin yoğunluğu (g/cm³). Sunucu yalnız özel ve ayarda eklenen kaliteyi bilir; null ise ekran aile ve kalite koduyla
+  // Malzemeler'in yerleşik kalite tablosundan bulur, orada da yoksa kullanıcı yazar.
+  aile: z.string().nullable(),
+  kaliteKodu: z.string().nullable(),
+  yogunluk: z.number().positive().nullable(),
   // Çubuk, altıgen, lama ve levhada kesilecek boy; blokta null.
   kesimBoyuMm: mm.nullable(),
   hamHacimMm3: mm,

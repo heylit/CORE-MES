@@ -9,4 +9,4 @@
 | Analiz kuyruğu ve durum listesi | `geometri_is.durum` (bekliyor, calisiyor, bitti, hata) | geometri | `paylasilan/sozlesme/geometri.ts` |
 | Stok ölçüsü (hammadde formu ve ölçüleri) | `malzeme_katalog_karti.kayit` (form, dims) | malzemeler | `hammaddeStokOlculeri` ile okunur (1469 a) |
 | İşleme payı | sistem ayarı `geometri.ham-payi-mm` | geometri | ayar tablosu |
-| Yoğunluk | (sunucuda yok) | malzemeler | 1446 / 1468 cevabıyla |
+| Yoğunluk (kalite) | özel kalite `kayit.custom.p.ro`, ayarda eklenen kalite `malzeme_katalog_ayari` 'malzeme'.kaliteler[].p.ro; yerleşik kalite yalnız istemci tablosu | malzemeler | sunucu `hammaddeStokOlculeri`, istemci `malzemeler/disari.ts` `yerlesikKaliteYogunlugu` (1480) |

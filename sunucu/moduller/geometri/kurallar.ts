@@ -291,9 +291,14 @@ export const STOK_FORMLARI = HAM_STOK_FORMLARI;
 export type StokFormu = (typeof HAM_STOK_FORMLARI)[number];
 const FORM_OLCULERI: Record<StokFormu, readonly string[]> = { cubuk: ['d', 'l'], altigen: ['s', 'l'], lama: ['a', 'b', 'l'], levha: ['t', 'w', 'l'], blok: ['a', 'b', 'h'] };
 
-export interface StokAdayi { malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Readonly<Record<string, unknown>> }
+export interface StokAdayi {
+  malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Readonly<Record<string, unknown>>;
+  aile?: string | null; kaliteKodu?: string | null; yogunluk?: number | null;
+}
 export interface StokOnerisi {
   malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: StokFormu; olcu: Record<string, number>;
+  // 1480: kalite yoğunluğu (g/cm³) sunucunun bildiği yerden; null ise ekran aile ve kalite koduyla Malzemeler tablosundan bulur.
+  aile: string | null; kaliteKodu: string | null; yogunluk: number | null;
   // Çubuk, altıgen, lama ve levhada kesilecek parça boyu (uzun eksen + pay); blokta null (blok bütün kullanılır).
   kesimBoyuMm: number | null;
   // Kullanılan ham parçanın hacmi; formlar arası sıra bununla (en az talaş önce).
@@ -347,6 +352,7 @@ export function stokEslestir(
     if (onceki !== undefined && onceki.hamHacimMm3 <= hacim) continue;
     enIyi.set(form, {
       malzemeNo: aday.malzemeNo, kod: aday.kod, ad: aday.ad, kalite: aday.kalite, form, olcu: o,
+      aile: aday.aile ?? null, kaliteKodu: aday.kaliteKodu ?? null, yogunluk: aday.yogunluk ?? null,
       kesimBoyuMm: kesim === null ? null : yuvarla(kesim), hamHacimMm3: yuvarla(hacim),
     });
   }

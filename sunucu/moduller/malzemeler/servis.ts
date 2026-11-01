@@ -23,7 +23,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -664,8 +664,18 @@ export async function olcuAletiSecenekleri(db: Db): Promise<OlcuAletiSecenekleri
 }
 
 // 1469 a: ham önerisinin stok listesi (aktif hammadde kartları, istenen formlarda). Yetki denetlemez.
-export type HammaddeStokOlcusu = Omit<s.HammaddeStokSatiri, 'no'> & { malzemeNo: number };
+// 1480: yogunluk (g/cm³) sunucunun bildiği yerden: kartın özel kalitesi, yoksa Malzeme ayarlarında eklenen kalite. Yerleşik kalitenin
+// yoğunluğu yalnız istemcinin Malzemeler tablosundadır: burada null, `aile` ve `kaliteKodu` ile istemci bulur.
+export interface HammaddeStokOlcusu {
+  malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Record<string, unknown>;
+  aile: string | null; kaliteKodu: string | null; yogunluk: number | null;
+}
 export async function hammaddeStokOlculeri(db: Db, formlar: readonly string[], kalite: string | null = null): Promise<HammaddeStokOlcusu[]> {
   if (formlar.length === 0) return [];
-  return (await s.hammaddeStokSatirlari(db, formlar, kalite)).map(({ no, ...r }) => ({ malzemeNo: no, ...r }));
+  const satirlar = await s.hammaddeStokSatirlari(db, formlar, kalite);
+  const eklenen = ayarKaliteYogunluklari(await katalogMalzemeAyari(db));
+  return satirlar.map(({ no, ozelYogunluk, ...r }) => ({
+    malzemeNo: no, ...r,
+    yogunluk: ozelYogunluk ?? (r.aile !== null && r.kaliteKodu !== null ? eklenen.get(`${r.aile}|${r.kaliteKodu}`) ?? null : null),
+  }));
 }

@@ -995,3 +995,18 @@ export function ayarKategorileri(
 export const ORNEK_MALZEME_ANAHTARLARI = ['mil', 'flans', 'burc', 'cubuk', 'levha', 'kesme-yagi', 'isil-islem'] as const;
 export type OrnekMalzemeAnahtari = (typeof ORNEK_MALZEME_ANAHTARLARI)[number];
 export const ornekKartKimligi = (anahtar: OrnekMalzemeAnahtari): string => `ornek-${anahtar}`;
+
+// 1480: Malzeme ayarlarında eklenen kalitelerin yoğunluğu (`kaliteler[].p.ro`, g/cm³), "aile|kod" anahtarıyla. Biçimi tutmayan ya da
+// pozitif olmayan değer alınmaz (uydurulmaz).
+export function ayarKaliteYogunluklari(ayar: Readonly<Record<string, unknown>> | null): Map<string, number> {
+  const m = new Map<string, number>();
+  const liste = ayar?.['kaliteler'];
+  if (!Array.isArray(liste)) return m;
+  for (const g of liste as unknown[]) {
+    if (typeof g !== 'object' || g === null) continue;
+    const { fam, kod, p } = g as { fam?: unknown; kod?: unknown; p?: unknown };
+    const ro = typeof p === 'object' && p !== null ? (p as { ro?: unknown }).ro : undefined;
+    if (typeof fam === 'string' && typeof kod === 'string' && typeof ro === 'number' && Number.isFinite(ro) && ro > 0 && !m.has(`${fam}|${kod}`)) m.set(`${fam}|${kod}`, ro);
+  }
+  return m;
+}
