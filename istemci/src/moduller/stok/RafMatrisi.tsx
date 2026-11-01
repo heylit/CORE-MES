@@ -8,7 +8,7 @@ import { doluluk } from './ambalaj.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { NUMARA, RAF_TURU, miktarMetni } from './gorunum.ts';
 import { hataMetni, useIslem } from './ortak.tsx';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { HaritaLinki } from './HaritaBagi.tsx';
 import './stok.css';
 
@@ -47,7 +47,6 @@ function Hucre({ g, gorunum, bolmeGenislikM }: { g: GozHucresi; gorunum: Gorunum
 export function RafMatrisiGovdesi({ id }: { id: number }) {
   const tanimlar = useIslem('stok.tanim');
   const [gorunum, setGorunum] = useState<Gorunum>('urunler');
-  const [etiket, setEtiket] = useState(false);
   const m = useQuery({ queryKey: anahtarlar.ayrinti('raf', id), queryFn: () => api.get<RafMatrisiCevabi>(`/stok/raflar/${id}`) });
   if (m.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (m.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(m.error)} yenile={() => void m.refetch()} />;
@@ -64,7 +63,7 @@ export function RafMatrisiGovdesi({ id }: { id: number }) {
         </div>
         <div className="tc-stok-eylem">
           <Link to={`/stok/konumlar?rafId=${raf.id}`}><Dugme>Gözler listesi</Dugme></Link>
-          <Dugme simge="scan" onClick={() => setEtiket(true)}>Etiketler</Dugme>
+          <EtiketMerkeziDugmesi tur="konum" simge="scan" idler={[...gozler].sort((a, b) => a.bolmeNo - b.bolmeNo || a.katNo - b.katNo).map((g) => g.konumId)}>Etiketler</EtiketMerkeziDugmesi>
           {tanimlar && <HaritaLinki metin="Haritada düzenle" />}
         </div>
       </div>
@@ -83,8 +82,6 @@ export function RafMatrisiGovdesi({ id }: { id: number }) {
         </table>
       </div>
       <p className="tc-stok-not">{ACIKLAMA[gorunum]} Ön yüzden bakış: soldan sağa.</p>
-      {etiket && <EtiketPenceresi baslik={`Raf ${raf.kod} etiketleri`} kapat={() => setEtiket(false)}
-        ogeler={[...gozler].sort((a, b) => a.bolmeNo - b.bolmeNo || a.katNo - b.katNo).map((g) => ({ tur: 'konum' as const, kod: g.kod, katNo: g.katNo, alt: `Raf ${raf.kod} · Bölme ${iki(g.bolmeNo)} · Kat ${g.katNo}` }))} />}
     </div>
   );
 }

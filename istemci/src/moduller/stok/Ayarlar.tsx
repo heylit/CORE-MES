@@ -8,12 +8,11 @@ import { anahtarlar } from './anahtarlar.ts';
 import { KonumAcPenceresi } from './Konumlar.tsx';
 import { SayfaBasi, hataMetni } from './ortak.tsx';
 import { HaritaLinki, HaritaOzeti } from './HaritaBagi.tsx';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import './stok.css';
 
 export function Ayarlar() {
-  const [ac, setAc] = useState<'konum' | 'etiket' | null>(null);
-  const gozler = useQuery({ queryKey: anahtarlar.liste('etiket-gozleri', {}), queryFn: () => api.get<KonumlarCevabi>('/stok/konumlar?tur=raf_gozu&sayfaBoyu=200'), enabled: ac === 'etiket' });
+  const [ac, setAc] = useState<'konum' | null>(null);
   const d = useQuery({ queryKey: anahtarlar.depolar, queryFn: () => api.get<DepolarCevabi>('/stok/depolar') });
   return (
     <section className="tc-stok">
@@ -24,7 +23,7 @@ export function Ayarlar() {
       <HaritaOzeti />
       <Kart baslik="Etiketler">
         <p className="tc-stok-not">Raf gözü etiketleri QR'lıdır (LOC:kod); Okut ekranı tanır. Malzeme etiketleri malzeme sayfasından, kare etiketleri Konumlar'dan basılır.</p>
-        <Dugme simge="scan" onClick={() => setAc('etiket')}>Bütün raf gözü etiketleri</Dugme>
+        <EtiketMerkeziDugmesi tur="konum" simge="scan" idler={async () => (await api.get<KonumlarCevabi>('/stok/konumlar?tur=raf_gozu&sayfaBoyu=200')).satirlar.map((g) => g.id)}>Bütün raf gözü etiketleri</EtiketMerkeziDugmesi>
       </Kart>
       <Kart baslik="Depolar">
         {d.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(d.error)} /> : (
@@ -44,7 +43,6 @@ export function Ayarlar() {
         </ul>
       </Kart>
       {ac === 'konum' && <KonumAcPenceresi kapat={() => setAc(null)} />}
-      {ac === 'etiket' && <EtiketPenceresi baslik="Raf gözü etiketleri" kapat={() => setAc(null)} ogeler={(gozler.data?.satirlar ?? []).map((g) => ({ tur: 'konum' as const, kod: g.kod, katNo: g.katNo, alt: g.rafId !== null ? `Bölme ${String(g.bolmeNo ?? 0).padStart(2, '0')} · Kat ${g.katNo ?? ''}` : g.ad ?? '' }))} />}
     </section>
   );
 }

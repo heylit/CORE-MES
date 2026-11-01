@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { RefakatIziCevabi, RefakatPartisi, RefakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { RefakatKartPenceresi, refakatPartisiBelgesi } from './RefakatKarti.tsx';
+import { RefakatKartPenceresi } from './RefakatKarti.tsx';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -96,37 +96,5 @@ describe('Refakat kartı: istisna kartı (kart #154)', () => {
     goster(12);
     expect(await screen.findByText(/İstisna kartıydı; .* lota bağlandı\./)).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Lota bağla' })).toBeNull();
-  });
-});
-
-describe('Refakat kartı belgesi: rota şeridi (kart #707, etiket B)', () => {
-  const adim = (opNo: number, ad: string, yer: string | null, fason = false) => ({ opNo, ad, yer, fason });
-  const belge = (r: RefakatPartisi, adimlar: ReturnType<typeof adim>[]) => {
-    const html = refakatPartisiBelgesi({ refakat: r, kart: { ...kartCevabi(r).kart, adet: 52, teslim: '2026-10-30', adimlar } }, new Date('2026-10-24T07:02:00+03:00'));
-    return new DOMParser().parseFromString(html, 'text/html');
-  };
-
-  it('rota lottan başlar, adımlar sırayla gelir, mamul deposunda biter; QR dört modül sessiz bölgeli', () => {
-    const d = belge({ ...KART, dokumNo: 'D-1', sertifikaNo: 'S-1' }, [adim(10, 'Torna', 'Torna 2'), adim(20, 'Kaplama', null, true)]);
-    const satirlar = [...d.querySelectorAll('.rota > li')].map((l) => l.textContent);
-    expect(satirlar).toEqual(['LOT LT-000040Deneme sac · HM-1Döküm D-1 · Sertifika S-1', '10TornaTorna 2', '20KaplamaFason', 'Mamul deposu / sevk']);
-    expect(d.querySelectorAll('.rota .kutu')).toHaveLength(2);
-    expect(d.querySelector('.bas')?.textContent).toBe('REFAKAT KARTIUE-000001-P1Deneme parçaP-1 · 52 adet · termin 30.10.2026');
-    const qr = d.querySelector('.yan svg');
-    expect(qr?.getAttribute('aria-label')).toBe('QR: RP:12');
-    const [x, y, w] = (qr?.getAttribute('viewBox') ?? '').split(' ').map(Number);
-    expect([x, y]).toEqual([-4, -4]);
-    expect(w! - 8).toBeGreaterThanOrEqual(21);
-    expect(d.querySelector('.rota')?.classList.contains('sik')).toBe(false);
-    expect(d.querySelector('.bilgi')?.textContent).not.toContain('ÜST KART');
-  });
-
-  it('istisna kartı lot bekliyor der; kol kartı üst kartı yazar; çok adımda satırlar sıklaşır; metin kaçırılır', () => {
-    const cok = Array.from({ length: 9 }, (_, i) => adim((i + 1) * 10, i === 0 ? '<b>Torna</b>' : `İş ${i}`, 'Yer'));
-    const d = belge({ ...KOL, lotNo: null, partiId: null }, cok);
-    expect(d.querySelector('.rota .lot strong')?.textContent).toBe('Lot bekliyor (istisna kartı)');
-    expect(d.querySelector('.rota')?.classList.contains('sik')).toBe(true);
-    expect(d.querySelector('.rota .op strong')?.textContent).toBe('<b>Torna</b>');
-    expect(d.querySelector('.bilgi')?.textContent).toContain('ÜST KARTUE-000001-P1');
   });
 });

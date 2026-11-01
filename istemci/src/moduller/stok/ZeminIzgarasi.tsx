@@ -7,7 +7,7 @@ import { Dugme, DurumKutusu, Kart, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { ALAN_TURU_ADI, ZeminSimgesi } from '../atolye/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { KONUM_ETIKETI, miktarMetni } from './gorunum.ts';
 import { hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -134,26 +134,21 @@ function KarePaneli({ bolum, hucre, istasyonlar, atayabilir, eslesin }: {
 // Karedeki konumun stoğu ve etiketi panelde görünür: depocu ayrıntıya gitmeden gözde ne olduğunu görür, etiketi buradan basar.
 const KAREDE_EN_COK = 5;
 function KareKonumu({ konum }: { konum: Bolum['konumlar'][number] }) {
-  const [etiket, setEtiket] = useState(false);
   const a = useQuery({
-    queryKey: anahtarlar.ayrinti('konum', konum.id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${konum.id}`), enabled: konum.satirSayisi > 0 || etiket,
+    queryKey: anahtarlar.ayrinti('konum', konum.id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${konum.id}`), enabled: konum.satirSayisi > 0,
   });
   const bakiyeler = a.data?.bakiyeler ?? [];
   return (
     <li>
       <Link to={`/stok/konumlar/${konum.id}`} className="tc-stok-mono">{konum.kod}</Link>
       <small>{KONUM_ETIKETI[konum.tur]} · {konum.satirSayisi ? `${konum.satirSayisi} stok satırı` : 'boş'}</small>
-      <Dugme simge="scan" onClick={() => setEtiket(true)}>Etiket</Dugme>
+      <EtiketMerkeziDugmesi tur="konum" simge="scan" idler={[konum.id]}>Etiket</EtiketMerkeziDugmesi>
       {konum.satirSayisi > 0 && (a.isError ? <small>{hataMetni(a.error)}</small> : a.isPending ? <small>Stok okunuyor</small> : (
         <ul className="tc-stok-zemin-stok" aria-label={`${konum.kod} stoğu`}>
           {bakiyeler.slice(0, KAREDE_EN_COK).map((b) => <li key={b.id}><span>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</span><strong>{miktarMetni(b.miktar)}</strong></li>)}
           {bakiyeler.length > KAREDE_EN_COK && <li><Link to={`/stok/konumlar/${konum.id}`}>+{bakiyeler.length - KAREDE_EN_COK} satır daha</Link></li>}
         </ul>
       ))}
-      {etiket && a.data && (
-        <EtiketPenceresi baslik="Konum etiketi" kapat={() => setEtiket(false)}
-          ogeler={[{ tur: 'konum', kod: a.data.konum.kod, katNo: a.data.konum.katNo, alt: a.data.konum.ad ?? KONUM_ETIKETI[a.data.konum.tur] }]} />
-      )}
     </li>
   );
 }

@@ -5,12 +5,12 @@ import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { miktarMetni } from './gorunum.ts';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { CikisFormu, TasimaFormu } from './MalzemeAyrinti.tsx';
 import { hataMetni, useIslem } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 
-export type HizliIslemTuru = 'tasima' | 'cikis' | 'sepet' | 'etiket';
+export type HizliIslemTuru = 'tasima' | 'cikis' | 'sepet';
 
 // Listedeki satırın eylem düğmeleri; satır seçimi (ayrıntıya gitme) tetiklenmez.
 export function SatirEylemleri({ m, sec }: { m: MalzemeStokSatiri; sec: (t: HizliIslemTuru) => void }) {
@@ -24,7 +24,7 @@ export function SatirEylemleri({ m, sec }: { m: MalzemeStokSatiri; sec: (t: Hizl
       {tasiyabilir && stoklu && <Dugme simge="sort" aria-label={`Taşı: ${ad}`} title="Taşı" onClick={tikla('tasima')}>Taşı</Dugme>}
       {cikabilir && stoklu && <Dugme simge="truck" aria-label={`Çıkış: ${ad}`} title="Çıkış" onClick={tikla('cikis')}>Çıkış</Dugme>}
       {tasiyabilir && stoklu && <Dugme simge="box" aria-label={`Sepete ekle: ${ad}`} title="Sepete ekle" onClick={tikla('sepet')}>Sepete</Dugme>}
-      <Dugme simge="scan" aria-label={`QR etiketi: ${ad}`} title="QR etiketi" onClick={tikla('etiket')}>QR</Dugme>
+      <EtiketMerkeziDugmesi tur="malzeme" simge="scan" ad={`QR etiketi: ${ad}`} idler={[m.malzemeId]}>QR</EtiketMerkeziDugmesi>
     </span>
   );
 }
@@ -45,8 +45,7 @@ function GozSecimi({ ad, bakiyeler, sec, kapat }: { ad: string; bakiyeler: Bakiy
 export function HizliIslem({ tur, m, kapat }: { tur: HizliIslemTuru; m: MalzemeStokSatiri; kapat: () => void }) {
   const ad = m.ad ?? `Kart ${m.malzemeId}`;
   const [goz, setGoz] = useState<BakiyeSatiri | null>(null);
-  const a = useQuery({ queryKey: anahtarlar.ayrinti('malzeme', m.malzemeId), queryFn: () => api.get<MalzemeAyrintiCevabi>(`/stok/malzemeler/${m.malzemeId}`), enabled: tur !== 'etiket' });
-  if (tur === 'etiket') return <EtiketPenceresi baslik="Malzeme etiketi" kapat={kapat} ogeler={[{ tur: 'malzeme', no: m.malzemeId, ad, kod: m.stokKodu ?? '' }]} />;
+  const a = useQuery({ queryKey: anahtarlar.ayrinti('malzeme', m.malzemeId), queryFn: () => api.get<MalzemeAyrintiCevabi>(`/stok/malzemeler/${m.malzemeId}`) });
   if (a.isPending || a.isError) {
     return (
       <Pencere acik kapat={kapat} baslik={ad} tur="yan">

@@ -199,29 +199,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-zemin-stok li { display: flex; justify-content: space-between; gap: var(--b-2); }
 @media (max-width: 1023px) { .tc-stok-dama-duzen { grid-template-columns: 1fr; } }
 
-/* Etiketler (önizlemedeki plabel) */
-.tc-stok-etk-onizleme { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--b-2); max-block-size: 52vh; overflow: auto; }
-.tc-stok-etk { position: relative; display: flex; gap: var(--b-2); align-items: center; padding: var(--b-2) var(--b-2) var(--b-2) var(--b-4); border: thin dashed var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); overflow: hidden; break-inside: avoid; }
-.tc-stok-etk-cubuk { position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: var(--b-2); border-radius: 0; margin: 0; block-size: auto; }
-.tc-stok-etk-zemin { background: var(--muted); }
-.tc-stok-etk-buyuk { font-weight: 800; font-size: var(--yazi-xl); font-family: var(--font-mono); }
-.tc-stok-etk-kod { font-weight: 700; font-family: var(--font-mono); }
-.tc-stok-etk-alt { font-size: var(--yazi-xs); color: var(--muted); }
-.tc-stok-etk-baski { display: none; }
-/* Lot etiketi önizlemesi (#1060): 100x50 mm oranında, siyah beyaz; basım ayrı belgede yapılır. */
-.tc-stok-lot-etk-satir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(4rem, 6rem); gap: var(--b-2); align-items: end; }
-.tc-stok-lot-etk { display: flex; gap: var(--b-2); align-items: center; aspect-ratio: 2 / 1; max-inline-size: 30rem; padding: var(--b-2); border: thin dashed var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); overflow: hidden; }
-.tc-stok-lot-etk .tc-stok-qr { inline-size: 40%; block-size: auto; }
-.tc-stok-lot-etk-metin { min-inline-size: 0; font-size: var(--yazi-xs); line-height: 1.3; overflow-wrap: anywhere; }
-.tc-stok-lot-etk-no { font-family: var(--font-mono); font-weight: 800; font-size: var(--yazi-l); }
-.tc-stok-gizli-cerceve { position: fixed; inline-size: 0; block-size: 0; border: 0; visibility: hidden; }
-@media print {
-  body * { visibility: hidden; }
-  .tc-stok-etk-baski, .tc-stok-etk-baski * { visibility: visible; }
-  .tc-stok-etk-baski { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; position: absolute; inset: 0; padding: 10mm; }
-  .tc-stok-etk-baski .tc-stok-etk { border-color: var(--muted); background: var(--panel-solid); color: var(--ink); }
-}
-
 /* Ekran modu ve depocu (önizlemedeki worker) */
 .tc-stok-depocu { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .tc-stok-depocu-kutu { display: grid; gap: var(--b-1); padding: var(--b-5) var(--b-4); border: thin solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); text-decoration: none; font: inherit; text-align: start; cursor: pointer; }

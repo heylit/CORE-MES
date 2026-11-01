@@ -7,7 +7,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { LOGO_ETIKETI, miktarMetni, zamanMetni } from './gorunum.ts';
 import { SatirListesi, bosSatir, satirGovdesi, type Satir } from './MalKabul.tsx';
-import { LotEtiketPenceresi } from './LotEtiketi.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
 import { SayfaBasi, hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -33,9 +33,7 @@ const SUTUNLAR: Sutun<Satiri>[] = [
 export function MalKabulAyrinti() {
   const id = Number(useParams().id);
   const duzeltebilir = useIslem('stok.geri-al');
-  const merkez = useIslem('sayfa.etiket-merkezi');
   const [acik, setAcik] = useState(false);
-  const [etiket, setEtiket] = useState(false);
   const [satirlar, setSatirlar] = useState<Satir[]>([]);
   const b = useQuery({ queryKey: anahtarlar.ayrinti('mal-kabul', id), queryFn: () => api.get<MalKabulAyrintiCevabi>(`/stok/mal-kabuller/${id}`) });
   const { komut, onayPenceresi } = useStokKomutu(
@@ -55,9 +53,7 @@ export function MalKabulAyrinti() {
     <section className="tc-stok">
       <SayfaBasi baslik={`Mal kabul ${belge.no}`} alt={`${zamanMetni(belge.zaman)} · ${belge.kisiAd ?? '—'}${belge.irsaliyeNo ? ` · irsaliye ${belge.irsaliyeNo}` : ''}`}
         sag={<>
-          {b.data.satirlar.some((s) => s.partiId !== null) && (merkez
-            ? <Link to={`/etiket-merkezi?tur=mal-kabul&id=${id}`}><Dugme tur="ikincil" simge="tag">Lot etiketlerini bas</Dugme></Link>
-            : <Dugme tur="ikincil" simge="tag" onClick={() => setEtiket(true)}>Lot etiketlerini bas</Dugme>)}
+          {b.data.satirlar.some((s) => s.partiId !== null) && <EtiketMerkeziDugmesi tur="mal-kabul" idler={[id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi>}
           {duzeltebilir && belge.duzeltenId === null && <Dugme simge="edit" onClick={duzeltAc}>Düzelt</Dugme>}
         </>} />
       {belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge düzeltildi: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>düzeltme belgesine git</Link>. Hareketleri ters çevrildi.</p>}
@@ -71,7 +67,6 @@ export function MalKabulAyrinti() {
         <p className="tc-stok-not">Belge değişmez. Eski belgenin bütün hareketleri ters çevrilir ve doğru satırlarla yeni belge açılır. Gelmeyen kalemin miktarını 0 yazın; tamamen iptalde yeni belge satırsız açılır. Eski satırların Logo durumu olduğu gibi kalır.</p>
         <div className="tc-stok-form"><SatirListesi satirlar={satirlar} setSatirlar={setSatirlar} /></div>
       </Pencere>
-      {etiket && <LotEtiketPenceresi baslik={`${belge.no} lot etiketleri`} yol={`/stok/mal-kabuller/${id}/lot-etiketleri`} kapat={() => setEtiket(false)} />}
       {onayPenceresi}
     </section>
   );

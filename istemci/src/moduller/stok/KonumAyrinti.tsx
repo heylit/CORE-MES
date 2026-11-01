@@ -7,7 +7,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { RafaYerlestirPenceresi } from './RafaYerlestir.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -45,7 +45,6 @@ export function KonumAyrinti() {
   const id = Number(useParams().id);
   const sayabilir = useIslem('stok.sayim');
   const [sayilan, setSayilan] = useState<Record<number, string>>({});
-  const [etiket, setEtiket] = useState(false);
   const [yerlestir, setYerlestir] = useState<BakiyeSatiri | null>(null);
   const tasiyabilir = useIslem('stok.transfer');
   const tanimlar = useIslem('stok.tanim');
@@ -73,8 +72,7 @@ export function KonumAyrinti() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik={konum.kod} alt={`${KONUM_ETIKETI[konum.tur]}${konum.ad ? ` · ${konum.ad}` : ''} · ${konum.depoKod} · son sayım ${zamanMetni(konum.sonSayim)} · ${haritaYeri ? `haritada ${haritaYeri}` : 'haritada yok'}${zemin ? ` · zemin ${zemin}` : ''}`}
-        sag={<>{!konum.aktif && <Rozet ton="pasif">Pasif</Rozet>}{tanimlar && elleTurMu(konum) && <Dugme simge="tool" onClick={() => setTurAc(true)}>Türü değiştir</Dugme>}{tanimlar && konum.aktif && elleTurMu(konum) && <Dugme simge="x" onClick={() => setPasifAc(true)}>Pasife al</Dugme>}<Dugme simge="scan" onClick={() => setEtiket(true)}>Etiket</Dugme><GecmisDugmesi kayitlar={[{ tablo: 'stok_konum', anahtar: { id: konum.id } }]} />{konum.rafId !== null && <Link to={`/stok/raflar/${konum.rafId}`}><Dugme simge="grid">Raf matrisi</Dugme></Link>}{haritaYeri !== null && <Link to="/atolye"><Dugme simge="layers">Haritada gör</Dugme></Link>}</>} />
-      {etiket && <EtiketPenceresi baslik="Konum etiketi" kapat={() => setEtiket(false)} ogeler={[{ tur: 'konum', kod: konum.kod, katNo: konum.katNo, alt: konum.ad ?? KONUM_ETIKETI[konum.tur] }]} />}
+        sag={<>{!konum.aktif && <Rozet ton="pasif">Pasif</Rozet>}{tanimlar && elleTurMu(konum) && <Dugme simge="tool" onClick={() => setTurAc(true)}>Türü değiştir</Dugme>}{tanimlar && konum.aktif && elleTurMu(konum) && <Dugme simge="x" onClick={() => setPasifAc(true)}>Pasife al</Dugme>}<EtiketMerkeziDugmesi tur="konum" simge="scan" idler={[konum.id]}>Etiket</EtiketMerkeziDugmesi><GecmisDugmesi kayitlar={[{ tablo: 'stok_konum', anahtar: { id: konum.id } }]} />{konum.rafId !== null && <Link to={`/stok/raflar/${konum.rafId}`}><Dugme simge="grid">Raf matrisi</Dugme></Link>}{haritaYeri !== null && <Link to="/atolye"><Dugme simge="layers">Haritada gör</Dugme></Link>}</>} />
       <Kart baslik="Gözdeki stok" sag={sayabilir && bakiyeler.length > 0 && <Dugme tur="birincil" yukleniyor={komut.isPending} onClick={gonder}>Sayımı kaydet</Dugme>}>
         <Tablo etiket="Gözdeki stok" sutunlar={sutunlar} satirlar={bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş." />
       </Kart>

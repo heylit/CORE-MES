@@ -11,17 +11,16 @@ import { useKonumSecenekleri } from './MalKabul.tsx';
 import { hataMetni, KaliteRozeti, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { GecmisDugmesi } from '../denetim/disari.ts';
-import { EtiketPenceresi } from './Etiketler.tsx';
+import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { EmirSecici } from './EmirSecici.tsx';
-import { LotEtiketPenceresi } from './LotEtiketi.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
 import { PartiIziPenceresi } from './PartiIzi.tsx';
 import { useStatuAdi } from './statu.ts';
 import './stok.css';
 
 type Rezerve = MalzemeAyrintiCevabi['rezerveler'][number];
-type Islem = { tur: 'cikis' | 'tasima'; b: BakiyeSatiri } | { tur: 'uretim' } | { tur: 'ayar' } | { tur: 'sepet'; konumId?: number } | { tur: 'etiket' }
+type Islem = { tur: 'cikis' | 'tasima'; b: BakiyeSatiri } | { tur: 'uretim' } | { tur: 'ayar' } | { tur: 'sepet'; konumId?: number }
   | { tur: 'rezerve-et' } | { tur: 'rezerve-kaldir'; r: Rezerve };
 
 type SonParti = SonPartilerCevabi['partiler'][number];
@@ -38,18 +37,16 @@ const PARTI_SUTUNLARI: Sutun<SonParti>[] = [
 function SonPartiler({ malzemeId }: { malzemeId: number }) {
   const p = useQuery({ queryKey: [...anahtarlar.hepsi, 'son-partiler', malzemeId], queryFn: () => api.get<SonPartilerCevabi>(`/stok/malzemeler/${malzemeId}/son-partiler`) });
   // Kaybolan ya da yıpranan etiket buradan yeniden basılır (#1060).
-  const [etiket, setEtiket] = useState<SonParti | null>(null);
   const [iz, setIz] = useState<SonParti | null>(null);
   const sutunlar: Sutun<SonParti>[] = [...PARTI_SUTUNLARI, { anahtar: 'etiket', baslik: '', hucre: (x) => <>
     <Dugme tur="ikincil" simge="truck" onClick={() => setIz(x)}>İz</Dugme>
-    <Dugme tur="ikincil" simge="tag" onClick={() => setEtiket(x)}>Lot etiketi</Dugme>
+    <EtiketMerkeziDugmesi tur="lot" idler={[x.partiId]}>Lot etiketi</EtiketMerkeziDugmesi>
   </> }];
   if (p.isError) return <Kart baslik="Partiler ve sertifikalar"><DurumKutusu durum="hata" mesaj={hataMetni(p.error)} yenile={() => void p.refetch()} /></Kart>;
   if (p.data && p.data.partiler.length === 0) return null;
   return (
     <Kart baslik="Partiler ve sertifikalar">
       <Tablo etiket="Partiler ve sertifikalar" sutunlar={sutunlar} satirlar={p.data?.partiler ?? []} satirAnahtari={(x) => x.partiId} mesgul={p.isPending} />
-      {etiket && <LotEtiketPenceresi baslik={`${etiket.lotNo} lot etiketi`} yol={`/stok/partiler/${etiket.partiId}/etiket`} kapat={() => setEtiket(null)} />}
       {iz && <PartiIziPenceresi partiId={iz.partiId} lotNo={iz.lotNo} kapat={() => setIz(null)} />}
     </Kart>
   );
@@ -237,7 +234,7 @@ export function MalzemeAyrinti() {
         sag={<>
           {girebilir && (s.tur === 'mamul' || s.tur === 'yarimamul') && <Dugme tur="birincil" onClick={() => setIslem({ tur: 'uretim' })}>Üretimden giriş</Dugme>}
           {sepetYetkisi && <Dugme simge="box" onClick={() => setIslem({ tur: 'sepet' })}>Sepete ekle</Dugme>}
-          <Dugme simge="scan" onClick={() => setIslem({ tur: 'etiket' })}>QR etiketi</Dugme>
+          <EtiketMerkeziDugmesi tur="malzeme" simge="scan" idler={[id]}>QR etiketi</EtiketMerkeziDugmesi>
           {tanimlar && <Dugme simge="tool" onClick={() => setIslem({ tur: 'ayar' })}>Stok ayarı</Dugme>}
           <GecmisDugmesi kayitlar={[{ tablo: 'stok_malzeme_ayari', anahtar: { malzeme_id: s.malzemeId } }]} />
         </>} />
@@ -267,7 +264,6 @@ export function MalzemeAyrinti() {
       {islem?.tur === 'cikis' && <CikisFormu b={islem.b} kapat={() => setIslem(null)} />}
       {islem?.tur === 'tasima' && <TasimaFormu b={islem.b} kapat={() => setIslem(null)} />}
       {islem?.tur === 'uretim' && <UretimGirisiFormu malzemeId={id} kapat={() => setIslem(null)} />}
-      {islem?.tur === 'etiket' && <EtiketPenceresi baslik="Malzeme etiketi" kapat={() => setIslem(null)} ogeler={[{ tur: 'malzeme', no: id, ad: s.ad ?? `Kart ${id}`, kod: s.stokKodu ?? '' }]} />}
       {islem?.tur === 'ayar' && <AyarFormu id={id} ayar={m.data.ayar} kapat={() => setIslem(null)} />}
       {islem?.tur === 'sepet' && <SepeteEklePenceresi malzemeId={id} ad={s.ad ?? `Kart ${id}`} bakiyeler={serbestBakiyeler} {...(islem.konumId ? { kaynakKonumId: islem.konumId } : {})} kapat={() => setIslem(null)} />}
     </section>
