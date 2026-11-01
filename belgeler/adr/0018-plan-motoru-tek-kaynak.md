@@ -1,7 +1,7 @@
 # ADR 0018 — Plan motoru tek kaynak, son söz sunucuda
 
 Durum: kısmen yerine geçildi (kabul: kullanıcı kararı 21.10.2026: "ADR 0018 a onaylı, yaz"; seçenek a: motor `sunucu/moduller/recete-rota/motor/` altında).
-Motorun yeri ADR 0020 ile değişti (26.10.2026): motor ve planlama kodu `sunucu/moduller/plan/motor/` altında, plan modülünündür; öteki
+Madde 5'in "motorun girdisini Reçete ve Rota kurar" cümlesi ADR 0028 ile değişti (01.11.2026, 1728 a). Motorun yeri ADR 0020 ile değişti (26.10.2026): motor ve planlama kodu `sunucu/moduller/plan/motor/` altında, plan modülünündür; öteki
 maddeler aynen sürer. 01.11.2026 bakımı (1495 a): A motoru (`oner`, `/plan/oner`, `/plan/karsilastir`) 1381 a ile kalktı;
 motor JavaScript'te kalır (364 a, sunucuda çözüm süre sınırı 60 sn, `plan-motoru.ts` `COZUM_SURESI_MS`); yıllık çözücü HiGHS kullanır (361 b).
 Dayandığı kararlar: 354 (asıl plan motoru sunucuda; denemeler ve stüdyodaki asıl plan öncesi değişiklikler tarayıcıda), 391 a (başlamış adımın

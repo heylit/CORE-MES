@@ -12,6 +12,9 @@
 
 Eklenti açık değilse uygulama aynı şekilde çalışır. Bu durumda araç yalnız eklentinin açık olmadığını söyler.
 
+Tek bir yavaş sorgunun kendisini PostgreSQL günlüğünde görmek için `log_min_duration_statement` (250 ms) ve öteki günlük ayarları
+`kurulum/izleme.md` "PostgreSQL günlük ayarları" bölümündedir; ikisi aynı `postgresql.conf` düzenlemesinde birlikte yapılabilir.
+
 ## Açmak (Windows, bir kez)
 
 PostgreSQL'i yeniden başlatmak ve ilk SQL adımı yönetici hakkı ister. Bu adımları PostgreSQL'i kuran kişi ya da bilgi işlem yapar.
