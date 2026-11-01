@@ -28,7 +28,7 @@ describe('plan (gerçek PostgreSQL): eski rota revizyonundan açılmış emir (9
     const p0 = await planOku();
     const is = (id: number) => p0.yerlesmemis.find((x) => x.isEmriId === id)!;
     const emirNo = is(op10!).emirNo;
-    assert.ok(p0.uyarilar.includes(`${emirNo}: emir eski rota revizyonundan açıldı; plan ürünün yürürlükteki rotasının süreleriyle kuruldu.`), p0.uyarilar.join('\n'));
+    assert.ok(p0.uyarilar.includes(`${emirNo}: emir eski rota revizyonundan açıldı; plan ürünün yürürlükteki rotasının adımlarıyla kuruldu, istasyon ve süreler emirdendir.`), p0.uyarilar.join('\n'));
     const y = await tamam<KuyrukYazCevabi>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
       planSurumu: p0.surum,
       kuyruklar: [{ kaynak: { tur: 'makine', id: makineA }, baslangic: new Date().toISOString(), isler: [op10!, op20!].map((x) => ({ emirNo, opNo: is(x).opNo, dondurulmus: false, elle: false })) }],

@@ -251,9 +251,11 @@ async function isKur(
   const adim = rotalar.get(i.kaynakRotaRevizyonId)?.adimlar.find((a) => a.opNo === i.opNo);
   const ayar = i.ayarSuresiDk === null ? null : Number(i.ayarSuresiDk);
   const birim = i.birimSureDk === null ? null : Number(i.birimSureDk);
+  // 1567 a: rotada fason olup emirde içeri alınan adım (fason iş emri plana gelmez) emrin istasyonunda yapılır; istasyonu yoksa kaynaksız kalır.
+  const adimKaynagi = adim?.fason ? (i.istasyonId == null ? null : { tur: 'istasyon' as const, id: i.istasyonId }) : adim?.kaynak ?? null;
   return {
     ...i, durum: i.durum === 'taslak' ? 'planli' : i.durum, taslakEmir: i.durum === 'taslak', urunKodu: urunler.get(i.malzemeNo)!.kod, urunAdi: urunler.get(i.malzemeNo)!.ad,
-    rotaKaynaklari: adim ? await planKaynaklari(db, [...(adim.kaynak ? [adim.kaynak] : []), ...adim.adaylar.map((x) => x.kaynak)], istasyonMakineleri) : [],
+    rotaKaynaklari: adim ? await planKaynaklari(db, [...(adimKaynagi ? [adimKaynagi] : []), ...adim.adaylar.map((x) => x.kaynak)], istasyonMakineleri) : [],
     sureDk: isSuresi(ayar, birim, i.adimAdedi ?? i.adet), ayarDk: ayar, devirDk: null, devirAyarDk: null, devirSonDk: null,
   };
 }
@@ -653,8 +655,9 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
 
 // 168 b: sunucu motoru kayıtlıyken vardiyası tanımsız tezgâhın işi yerleşmez (motor sürekli çalışma varsaymaz).
 const VARDIYASIZ = 'Tezgâhın vardiyası tanımsız.';
-// 983 b: sunucu motoru emri yürürlükteki rotayla dizer; emir eski revizyondan açıldıysa süre ve adımlar emirdekinden farklı olabilir.
-const ESKI_ROTA = 'emir eski rota revizyonundan açıldı; plan ürünün yürürlükteki rotasının süreleriyle kuruldu.';
+// 983 b (geçici; 1609 a ile emir açıldığı revizyonla planlanacak): sunucu motoru emri bugün yürürlükteki rotayla dizer, emir eski revizyondan
+// açıldıysa adımlar emirdekinden farklı olabilir. 1567 a: istasyon ve süre, adım rotadaki sırasında eşleşirse emirdendir.
+const ESKI_ROTA = 'emir eski rota revizyonundan açıldı; plan ürünün yürürlükteki rotasının adımlarıyla kuruldu, istasyon ve süreler emirdendir.';
 // 981 a-1: sunucu motoru kayıtlıyken öncülü yerleşmeyen adım da yerleşmez (bekler). Sıra: kaynağı kullanımda değil, yürürlükteki
 // rotada yok (983 b), önceki adımı yerleşmedi.
 function yerlesmemeNedeni(b: Baglam, i: Is, yerlesmis: ReadonlySet<number>): string {
