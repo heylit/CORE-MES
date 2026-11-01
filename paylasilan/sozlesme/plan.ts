@@ -517,3 +517,28 @@ export const planSagligiCevabi = z.object({
   })).max(PLAN_SAGLIGI_SATIR),
 });
 export type PlanSagligiCevabi = z.output<typeof planSagligiCevabi>;
+
+// 1472 M1 (1522 a): açık emirlerin malzeme ihtiyacı, brüt ve net; yalnız okur. Miktarlar kartın stok biriminde, dört haneye yuvarlanmış.
+// serbest ve net stok kaydı olmayan malzemede null (sıfır uydurulmaz); günler tesis günüdür. 1545 a: stok ya da satın alma okuma yetkisi
+// olmayana o alanlar ve net null gelir. 1543 a: emniyet payı stoğun kritik seviyesinden, net ihtiyaca eklenmiştir.
+export const mrpIhtiyaciCevabi = z.object({
+  hesaplanan: zaman,
+  stokGorunur: z.boolean(),
+  satinAlmaGorunur: z.boolean(),
+  // Ürünü olmayan (iş emirsiz) açık emir sayısı: malzeme ihtiyacı hesaplanamaz.
+  urunsuzEmir: z.number().int().nonnegative(),
+  satirlar: z.array(z.object({
+    malzeme: z.object({ id: KIMLIK, kod: z.string().nullable(), ad: z.string().nullable(), tur: z.string().nullable(), birim: z.string().nullable() }),
+    brut: z.number(),
+    serbest: z.number().nullable(),
+    acikSiparis: z.number().nullable(),
+    net: z.number().nullable(),
+    emniyetPayi: z.number().nullable(),
+    ihtiyacTarihi: tarih.nullable(),
+    eksikTarihi: tarih.nullable(),
+    emirler: z.array(z.string()),
+    acilanlar: z.array(z.object({ id: KIMLIK, kod: z.string().nullable() })),
+    acildi: z.boolean(),
+  })),
+});
+export type MrpIhtiyaciCevabi = z.output<typeof mrpIhtiyaciCevabi>;
