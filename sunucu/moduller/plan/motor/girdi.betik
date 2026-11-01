@@ -565,7 +565,15 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
     agHazirla(Object.assign({}, D0, ...TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined).map(a => ({ [a]: D[a] }))));
     D0k = rrKopya(D0); agHazirla(D0k);
   }
-  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !rrEsit(D[a], D0k[a]));
+  /* Okuyanın göremediği dilim (yetki yok: null) boş liste sayılırsa tezgâh ve kişinin plan ayarları (verim, vardiya, ...) ve adımların tezgâh
+     süreleri açık çalışmadan silinir, sayfa kaydedince kalıcı olur. O dilimden kurulan alan çalışmadaki gibi kalır; görebilen açınca yenilenir. */
+  const d = (kaynak && kaynak.durum) || {};
+  const kayittaVar = k => !!kayit && Array.isArray(kayit[k]) && kayit[k].length > 0;
+  const okunamayan = new Set([
+    ...(Array.isArray(d.machines) && Array.isArray(d.stations) || kayittaVar('machines') ? [] : ['tezgahlar', 'urunler']),
+    ...(Array.isArray(d.people) || kayittaVar('people') ? [] : ['personel']),
+  ].filter(a => Array.isArray(D0[a])));
+  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
   for (const a of alanlar) D0[a] = D[a];
   if (alanlar.length) tmiTabanKur(D0, bugun);
   return alanlar;
