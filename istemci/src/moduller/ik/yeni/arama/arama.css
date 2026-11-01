@@ -1,0 +1,12 @@
+/* İK'da ara penceresi (bugünkü ekranın arama kutusu): kutu, sonuç listesi, tür etiketi. */
+.tc-ik-ara { display: grid; gap: var(--b-2); }
+.tc-ik-ara-liste { display: grid; gap: var(--b-1); max-height: 60vh; overflow: auto; }
+.tc-ik-ara-satir {
+  display: flex; align-items: baseline; gap: var(--b-3); width: 100%; padding: var(--b-2) var(--b-3); text-align: left;
+  border: var(--cizgi-ince) solid transparent; border-radius: var(--yari-1); background: none; color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-ik-ara-satir[aria-selected="true"], .tc-ik-ara-satir:hover { border-color: var(--edge2); background: var(--panel2); }
+.tc-ik-ara-tur { flex: none; min-width: 10ch; color: var(--grafik); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-ik-ara-metin { display: grid; min-width: 0; }
+.tc-ik-ara-metin small { color: var(--muted); font-size: var(--yazi-s); }
+.tc-ik-ara-bos, .tc-ik-ara-yardim { margin: 0; color: var(--muted); font-size: var(--yazi-s); }

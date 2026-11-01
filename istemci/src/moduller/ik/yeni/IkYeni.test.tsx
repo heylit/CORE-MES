@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { rotalar } from '../rotalar.tsx';
@@ -114,5 +114,45 @@ describe('İK yeni ekran: salt okunur', () => {
     ikAc('/ik/yeni', { kullanici: IK_YONETICI });
     expect(await screen.findByRole('tab', { name: 'Pano', selected: true })).toBeTruthy();
     expect(screen.queryByText('Bu kayıtları yalnızca görüntüleyebilirsiniz.')).toBeNull();
+  });
+});
+
+describe('İK yeni ekran: eski ekrandan taşınan araçlar (1614)', () => {
+  it('kişi sayfasındaki izin talebi gerçek formu açar, yer tutucu kalmadı', async () => {
+    ikAc('/ik/yeni/calisan/emp_b');
+    fireEvent.click(await screen.findByRole('button', { name: 'İzin talebi' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni izin' });
+    expect(within(pencere).queryByText('Bu görünüm hazırlanıyor')).toBeNull();
+    expect(await within(pencere).findByLabelText(/İzin türü/)).toBeTruthy();
+  });
+
+  it('Ara kişiyi bulur, Enter kişi sayfasını açar', async () => {
+    ikAc('/ik/yeni');
+    fireEvent.click(await screen.findByRole('button', { name: 'Ara' }));
+    const kutu = within(await screen.findByRole('dialog', { name: 'Ara' })).getByRole('combobox');
+    fireEvent.change(kutu, { target: { value: 'mehmet' } });
+    expect(screen.getByRole('option', { name: /Mehmet Deneme/ })).toBeTruthy();
+    fireEvent.keyDown(kutu, { key: 'Enter' });
+    expect(await screen.findByRole('tab', { name: 'Personel', selected: true })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Ara' })).toBeNull();
+  });
+
+  it('reddedilen: salt okuyan aramada personel ekle görmez', async () => {
+    ikAc('/ik/yeni', { kullanici: IK_OKUYAN, veri: ornekVeri({ saltOkunur: true }) });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ara' }));
+    fireEvent.change(within(await screen.findByRole('dialog', { name: 'Ara' })).getByRole('combobox'), { target: { value: 'ekle' } });
+    const islemler = screen.getAllByRole('option').map((o) => o.textContent).filter((t) => t?.startsWith('İşlem'));
+    expect(islemler).toEqual(['İşlemAday ekle']);
+  });
+
+  it('Yardım ve F1 kılavuzu açar; görünümün konusu başta gelir', async () => {
+    ikAc('/ik/yeni/yapilacaklar');
+    fireEvent.click(await screen.findByRole('button', { name: /Yardım/ }));
+    const kilavuz = await screen.findByRole('dialog', { name: 'Kullanım kılavuzu' });
+    expect(within(kilavuz).getByText('Bu sayfa hakkında')).toBeTruthy();
+    fireEvent.click(within(kilavuz).getByRole('button', { name: 'Kılavuzu kapat' }));
+    expect(screen.queryByRole('dialog', { name: 'Kullanım kılavuzu' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'F1' });
+    expect(await screen.findByRole('dialog', { name: 'Kullanım kılavuzu' })).toBeTruthy();
   });
 });
