@@ -238,6 +238,8 @@ export interface HazirlikAdimi {
   // null: kaynağı henüz atanmamış adım.
   kaynakAktif: boolean | null;
   adaylarAktif: readonly boolean[];
+  // 1737 c: aday kaynakların kendi süreleri, adaylarAktif ile aynı sırada. Verilmezse aday süresi denetlenmez (eski çağıran).
+  adaySureleri?: readonly { ayarSuresiDk: number | null; birimSureDk: number | null }[];
   fason: boolean;
   makineKullanimi: MakineKullanimi;
   ayarSuresiDk: number | null;
@@ -288,6 +290,11 @@ export function onayaHazirMi(adimlar: readonly HazirlikAdimi[]): string | null {
     if (a.birimSureDk === null) return `OP ${a.opNo}: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.`;
     if (a.ayarSuresiDk === null) return `OP ${a.opNo}: hazırlık süresi girilmeli; yoksa 0 yazın.`;
     if (a.ayar === true && (a.ayarDk ?? null) === null) return `OP ${a.opNo}: ayar işaretli; ayar süresi girilmeli.`;
+    // 1737 c: aday kaynakta süre boşsa plan adımın süresini kullanıyordu (kaynaktakiSure); onayda adayın kendi süresi zorunludur.
+    for (const x of a.adaySureleri ?? []) {
+      if (x.birimSureDk === null) return `OP ${a.opNo}: aday kaynağın işlem süresi girilmeli.`;
+      if (x.ayarSuresiDk === null) return `OP ${a.opNo}: aday kaynağın hazırlık süresi girilmeli; yoksa 0 yazın.`;
+    }
   }
   return null;
 }

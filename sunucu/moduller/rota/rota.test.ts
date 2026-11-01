@@ -493,6 +493,26 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       [['makine', 'RT-MB', 'RT-B', '1.5000'], ['kisi', 'Deneme operator', null, '3.0000']]);
   });
 
+  test('1737 c: aday kaynağın işlem ve hazırlık süresi onaya göndermede zorunlu; taslakta boş kalabilir, hazırlık 0 yeterli', async () => {
+    const urun = await mamulAc();
+    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
+    const aday = (ayar: number | null, birim: number | null) => [yeniAdim({ adaylar: [{ kaynak: { tur: 'makine', id: makineB }, ayarSuresiDk: ayar, birimSureDk: birim }] })];
+    const k1 = await kaydet(id, 1, aday(null, null));
+    assert.equal(k1.statusCode, 200, k1.body);
+    const g1 = await komut(id, 'onaya-gonder', { surum: k1.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(g1.statusCode, 422);
+    assert.match(g1.body, /aday kaynağın işlem süresi/);
+    const k2 = await kaydet(id, k1.json<KomutCevabi>().surum, aday(null, 2));
+    assert.equal(k2.statusCode, 200, k2.body);
+    const g2 = await komut(id, 'onaya-gonder', { surum: k2.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(g2.statusCode, 422);
+    assert.match(g2.body, /aday kaynağın hazırlık süresi/);
+    const k3 = await kaydet(id, k2.json<KomutCevabi>().surum, aday(0, 2));
+    assert.equal(k3.statusCode, 200, k3.body);
+    const g3 = await komut(id, 'onaya-gonder', { surum: k3.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(g3.statusCode, 200, g3.body);
+  });
+
   test('RT-08, RT-09, RT-38: adımsız ve süresiz revizyon onaya gitmez; pasif makine kaydedilmez, sonradan pasifleşen makineyle onaya gitmez; kaynağı atanmamış adımla gider', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();
@@ -1071,7 +1091,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const hm = ortakHammadde;
     const adaylar = [
       { kaynak: { tur: 'makine' as const, id: makineB }, ayarSuresiDk: 20, birimSureDk: 3 },
-      { kaynak: { tur: 'istasyon' as const, id: istasyonB }, ayarSuresiDk: null, birimSureDk: null },
+      { kaynak: { tur: 'istasyon' as const, id: istasyonB }, ayarSuresiDk: 0, birimSureDk: 4 },
     ];
     const yid = await yururlugeAlinmisRota(await mamulAc(), [
       yeniAdim({ firePayiYuzde: 20, makineKullanimi: 'paralel', enKucukParca: 4, yenidenAyar: false, adaylar, bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }),
