@@ -70,6 +70,16 @@ export function emirleriGetir(db: Db, durum: EmirDurumu | null, yalnizIstasyonlu
   );
 }
 
+// Son `gun` günde kapanan (biten ya da iptal) emirler, en yeni üstte. Sınır sunucu saatine göredir; kapanış anı
+// olmayan kapalı emir gelmez. Fabrika Haritası açık emirleri ayrıca okur; bütün geçmiş her yoklamada taşınmaz (karar 1613 a).
+export function yeniKapananEmirleriGetir(db: Db, gun: number, yalnizIstasyonlu: boolean): Promise<EmirSatiri[]> {
+  return db.sorgu<EmirSatiri>(
+    `SELECT ${EMIR} FROM uretim_emri e WHERE ${KAPALI} AND (NOT $2::boolean OR e.istasyon_id IS NOT NULL)
+        AND COALESCE(e.bitis, e.iptal) >= now() - make_interval(days => $1::int) ORDER BY e.id DESC`,
+    [gun, yalnizIstasyonlu],
+  );
+}
+
 export interface BitenSuzgeci {
   durum: EmirDurumu | null;
   ara: string | null;
