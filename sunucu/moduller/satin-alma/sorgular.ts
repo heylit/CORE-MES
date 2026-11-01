@@ -807,6 +807,22 @@ export async function teslimEkle(db: Db, siparisSatirId: number, malKabulSatirId
     [siparisSatirId, malKabulSatirId, miktar, kisiId]);
 }
 
+// Kart 1474: tedarikçi karnesine giden teslim olayının kaynağı. Firma siparişin teklifinden (kayıtsız tedarikçide null), termin
+// siparişin beklenen teslimi; net teslim ve artı kayıtların son zamanı satırın bütün teslimlerinden.
+export interface KarneTeslimBilgisi { firmaId: number | null; termin: string | null; miktar: string; net: string; sonZaman: string | null }
+export function karneTeslimBilgisi(db: Db, siparisSatirId: number): Promise<KarneTeslimBilgisi | null> {
+  return db.tek<KarneTeslimBilgisi>(
+    `SELECT q.firma_id AS "firmaId", p.beklenen_teslim::text AS termin, s.miktar::text AS miktar,
+            coalesce((SELECT sum(miktar) FROM satin_alma_teslim WHERE siparis_satiri_id = s.id), 0)::text AS net,
+            ${ISO('(SELECT max(zaman) FROM satin_alma_teslim WHERE siparis_satiri_id = s.id AND miktar > 0)')} AS "sonZaman"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
+      WHERE s.id = $1`,
+    [siparisSatirId],
+  );
+}
+
 // ---- İkinci menü sayıları (madde başına tek sorgu; yetki serviste süzülür)
 export async function menuSayilari(db: Db): Promise<{ acik: number; onayda: number; katalog: number; tedarikci: number }> {
   return (await db.tek<{ acik: number; onayda: number; katalog: number; tedarikci: number }>(

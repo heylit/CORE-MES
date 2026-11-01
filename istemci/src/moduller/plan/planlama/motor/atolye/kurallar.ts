@@ -2,7 +2,8 @@ import type { CanliyaAlmaGecmisiCevabi, PlanCevabi, SenaryolarCevabi } from '#pa
 import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
-import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, saatOku, tabanMs, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { ufukGunu } from '../../ufuk-olcegi.ts';
 
 // Planlama atölyesinin saf hesapları (cerceve/planlama/parca/zz36-tezgah-panosu.betik). Motor burada koşmaz (357 b): kayıttaki çözülmüş plan
 // okunur; eski panonun motorla hesapladığı çözüm yolları, öne alma ve bölme burada yoktur.
@@ -149,11 +150,11 @@ export function satirlar(D: PlanVerisi, p: OkunanPlan): PanoSatiri[] {
   R.forEach((r, i) => { r.son = R[i + 1]?.grup !== r.grup; });
   return R;
 }
-export const UFUK_SAAT = UFUK_GUN * 24;
-// Son bitişten bir gün sonrası; motorun ufku en çok 63 gündür. Ay ve yıl ölçeği en az ölçek kadar uzanır.
+export const ufukSaati = (): number => ufukGunu() * 24;
+// Son bitişten bir gün sonrası; motorun ufku en çok ufukGunu() gündür. Ay ve yıl ölçeği en az ölçek kadar uzanır.
 export function ufuk(p: OkunanPlan, olcek: AtolyeOlcegi): number {
   let mx = 0; for (const r of Object.values(p.ops)) if (Number.isFinite(r.C)) mx = Math.max(mx, r.C);
-  const h = Math.min(UFUK_SAAT, Math.ceil((mx + 24) / 24) * 24 + 24);
+  const h = Math.min(ufukSaati(), Math.ceil((mx + 24) / 24) * 24 + 24);
   return olcek > 168 ? Math.max(h, olcek) : h;
 }
 // Saat başına piksel: görünen genişlik ölçeğe sığar; hafta ve altında saat en az 4 piksel.
@@ -218,7 +219,7 @@ export function kapaliAraliklar(cx: Derleme, m: string, H: number): [number, num
 export interface HaftaHucresi { w0: number; oran: number }
 export function haftaHucreleri(cx: Derleme, m: string, ops: PlanIslemi[], H: number): HaftaHucresi[] {
   const M = cx.M[m]; const o: HaftaHucresi[] = [];
-  for (let w0 = 0; w0 < Math.min(H, UFUK_SAAT); w0 += 168) {
+  for (let w0 = 0; w0 < Math.min(H, ufukSaati()); w0 += 168) {
     const w1 = w0 + 168, ac = M ? acikSaat(M.rw, w0, w1) : 168;
     let is = 0; for (const r of ops) is += Math.max(0, Math.min(r.C, w1) - Math.max(r.S, w0));
     if (is < 0.05) continue;

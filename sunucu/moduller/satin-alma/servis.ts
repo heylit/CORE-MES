@@ -12,7 +12,7 @@ import type {
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
-import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
+import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
 import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
@@ -28,7 +28,7 @@ import {
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
-  askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
+  askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
@@ -931,6 +931,7 @@ export async function teslimIsle(db: Db, k: Kullanici, g: { siparisSatirId: numb
   if (hedef.kapali && !(await s.buIslemdeGeriAlindiMi(db, g.siparisSatirId))) throw gecersiz(ILETILER.kapaliSipariseTeslim);
   if ((await s.malKabulNetleri(db, g.malKabulSatirId)).length > 0) throw cakisma(ILETILER.teslimTekrar);
   await s.teslimEkle(db, g.siparisSatirId, g.malKabulSatirId, g.miktar, k.id);
+  await karneTesliminiYenile(db, g.siparisSatirId);
 }
 
 // Mal kabul düzeltilince (stok DEP-53) eski satırın teslimi ters kayıtla geri alınır; kayıt silinmez.
@@ -940,7 +941,19 @@ export async function teslimGeriAl(db: Db, k: Kullanici, g: { malKabulSatirId: n
   for (const n of netler) {
     await s.teslimHedefiKilitle(db, n.siparisSatiriId);
     await s.teslimEkle(db, n.siparisSatiriId, g.malKabulSatirId, n.net.startsWith('-') ? n.net.slice(1) : `-${n.net}`, k.id);
+    await karneTesliminiYenile(db, n.siparisSatiriId);
   }
+}
+
+// Kart 1474 (1259 c): sipariş satırının teslimi tedarikçi karnesine olay olarak, aynı işlemde gider; olay satır başına tektir ve
+// her teslimde yeniden yazılır. Termin teslim anındaki beklenen teslimdir. Termini olmayan, kayıtsız tedarikçili ya da net teslimi
+// kalmamış satırın olayı yoktur (varsa kalkar). Teslim günü son artı teslimin tesis günüdür; net miktar sipariş miktarına ulaştıysa tamdır.
+async function karneTesliminiYenile(db: Db, siparisSatirId: number): Promise<void> {
+  const anahtar = `siparis-satiri:${siparisSatirId}`;
+  const b = await s.karneTeslimBilgisi(db, siparisSatirId);
+  const olay = b === null ? null : karneTeslimOlayi(b);
+  if (b === null || olay === null) { await karneOlayiKaldir(db, { kaynak: 'satin-alma', anahtar }); return; }
+  await karneOlayiYaz(db, { kaynak: 'satin-alma', anahtar, firmaId: olay.firmaId, zaman: olay.zaman, tur: 'teslim', termin: olay.termin, teslimGunu: tesisGunu(Date.parse(olay.zaman)), tam: olay.tam });
 }
 
 // Stok değeri için (stok isteği): malzeme no -> son alış fiyatı; teslimi olmayan malzeme haritada yoktur.

@@ -22,9 +22,10 @@ import {
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
 import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
-import { ILETILER } from './kurallar.ts';
+import { ILETILER, karneTeslimOlayi } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
 import { takvimKayitlari } from './disari.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -875,6 +876,48 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [])), new Map());
     await geriAl(7901);
     assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [7901])), new Map([[7901, '7.2']]), 'geri alınan satırın fiyatı stokun geri almasında kullanılır');
+  });
+
+  test('kart 1474: teslim tedarikçi karnesine satır başına tek olay yazar; termin beklenen teslim, tam net miktarla; geri alma olayı yeniler ya da kaldırır; terminsiz satır olay yazmaz', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const g = tamam<Talep>(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: s.karar!.siparisler.map((x) =>
+      ({ teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.teklifId === a ? '2026-11-05' : null })) } }));
+    const satirA = siparisi(g, a).satirlar[0]!.id, satirB = siparisi(g, b).satirlar[0]!.id;
+    const olaylar = () => vt().tx((db) => db.sorgu<{ firma: number; anahtar: string; termin: string; gun: string; tam: boolean }>(
+      `SELECT firma_id AS firma, anahtar, termin::text AS termin, teslim_gunu::text AS gun, tam FROM musteri_tedarikci_karne_olayi
+        WHERE kaynak = 'satin-alma' AND anahtar = ANY($1::text[]) ORDER BY anahtar`, [[`siparis-satiri:${satirA}`, `siparis-satiri:${satirB}`]]));
+    const bugun = tesisGunu(Date.now());
+    await teslimEt(satirA, '1', 7951);
+    assert.deepEqual(await olaylar(), [{ firma: firmaA, anahtar: `siparis-satiri:${satirA}`, termin: '2026-11-05', gun: bugun, tam: false }]);
+    await teslimEt(satirA, '3', 7952);
+    assert.deepEqual((await olaylar()).map((x) => x.tam), [true], 'satırın kalanı gelince aynı olay tam olur, ikinci olay açılmaz');
+    await teslimEt(satirB, '10', 7953);
+    assert.equal((await olaylar()).length, 1, 'beklenen teslimi olmayan siparişin teslimi olay yazmaz');
+    await geriAl(7952);
+    assert.deepEqual((await olaylar()).map((x) => x.tam), [false], 'geri alınan teslim olayı eksik teslime döndürür');
+    await geriAl(7951);
+    assert.deepEqual(await olaylar(), [], 'net teslimi kalmayan satırın olayı kalkar');
+  });
+
+  test('kart 1474 kural: termin, firma ya da artı teslim yoksa ya da net sıfırsa olay yok; fazla teslim tamdır', () => {
+    const b = { firmaId: 7, termin: '2026-11-05', miktar: '4', net: '4', sonZaman: '2026-11-06T08:00:00+00:00' };
+    assert.deepEqual(karneTeslimOlayi(b), { firmaId: 7, termin: '2026-11-05', zaman: b.sonZaman, tam: true });
+    assert.equal(karneTeslimOlayi({ ...b, net: '5.5' })?.tam, true);
+    assert.equal(karneTeslimOlayi({ ...b, net: '3.9999' })?.tam, false);
+    for (const x of [{ termin: null }, { firmaId: null }, { sonZaman: null }, { net: '0' }, { net: '-1' }]) assert.equal(karneTeslimOlayi({ ...b, ...x }), null);
+  });
+
+  test('kart 1474 reddedilen: geçersiz teslim olay yazmaz', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const g = tamam<Talep>(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: s.karar!.siparisler.map((x) =>
+      ({ teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: '2026-11-05' })) } }));
+    const satirA = siparisi(g, a).satirlar[0]!.id;
+    await assert.rejects(teslimEt(satirA, '0', 7961), hataKodu('GECERSIZ'));
+    await teslimEt(satirA, '1', 7962);
+    await assert.rejects(teslimEt(satirA, '1', 7962), hataKodu('CAKISMA'));
+    const n = await vt().tx((db) => db.tek<{ n: number; tam: boolean }>(
+      "SELECT count(*)::int AS n, bool_and(tam) AS tam FROM musteri_tedarikci_karne_olayi WHERE kaynak = 'satin-alma' AND anahtar = $1", [`siparis-satiri:${satirA}`]));
+    assert.deepEqual(n, { n: 1, tam: false });
   });
 
   test('plan: açık siparişteki malzemenin kalan miktarı ve beklenen gelişi termin sırasıyla; tarihsiz en sonda; teslim düşer, biten satır çıkar', async () => {

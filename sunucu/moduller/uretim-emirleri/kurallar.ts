@@ -1385,3 +1385,23 @@ export function kapanisMuafIhlali(durum: 'acik' | 'tamam', hal: KapanisMaddeHali
   return hal === 'eksik' ? null : KAPANIS_MUAF_EKSIK_DEGIL;
 }
 export const kapanisGeriAcIhlali = (durum: 'acik' | 'tamam'): string | null => (durum === 'tamam' ? null : KAPANIS_TAMAM_DEGIL);
+
+// Kart 1474 (1259 c): fason dönüşü tedarikçi karnesine iş emri başına tek teslim olayıdır. Termin ilk gidişin tesis günü artı termin
+// günüdür; teslim günü son dönüşün tesis günü. Dönen sağlam ve hurda gönderilene ulaşınca tamdır. Fason firması, termin günü,
+// gidişi ya da dönüşü olmayan iş emrinde olay yoktur (null; söz yoksa gecikme uydurulmaz).
+export function fasonKarneOlayi(
+  isEmri: { fasonFirmaId: number | null; terminGun: number | null },
+  hareketler: readonly { yon: 'gidis' | 'donus'; adet: number; hurdaAdet: number | null; zaman: string }[],
+  gunu: (zaman: string) => string,
+): { firmaId: number; termin: string; zaman: string; tam: boolean } | null {
+  if (isEmri.fasonFirmaId === null || isEmri.terminGun === null) return null;
+  const gidisler = hareketler.filter((h) => h.yon === 'gidis');
+  const donusler = hareketler.filter((h) => h.yon === 'donus');
+  if (gidisler.length === 0 || donusler.length === 0) return null;
+  const ilk = gidisler.reduce((a, h) => (Date.parse(h.zaman) < Date.parse(a.zaman) ? h : a));
+  const son = donusler.reduce((a, h) => (Date.parse(h.zaman) >= Date.parse(a.zaman) ? h : a));
+  const gonderilen = gidisler.reduce((t, h) => t + h.adet, 0);
+  const donen = donusler.reduce((t, h) => t + h.adet + (h.hurdaAdet ?? 0), 0);
+  const termin = new Date(Date.parse(`${gunu(ilk.zaman)}T00:00:00Z`) + isEmri.terminGun * 86_400_000).toISOString().slice(0, 10);
+  return { firmaId: isEmri.fasonFirmaId, termin, zaman: son.zaman, tam: donen >= gonderilen };
+}

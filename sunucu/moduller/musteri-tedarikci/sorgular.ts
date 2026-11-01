@@ -4,7 +4,7 @@ import type { Dilim, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type {
-  Adres, AdresKimligi, Firma, FirmaKimligi, FirmaSatiri, FirmaTuru, KarneSinifi, LotKarari, MusteriSinifi,
+  Adres, AdresKimligi, Firma, FirmaKimligi, FirmaSatiri, FirmaTuru, KarneOlayKaynagi, KarneSinifi, LotKarari, MusteriSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Koordinat numeric(9,6) sütunudur; ekrana ve sözleşmeye sayı gider (altı ondalık float8'de kaybolmaz).
@@ -219,6 +219,23 @@ export function teslimGruplari(db: Db, idler: readonly number[], donemBasi: stri
        FROM musteri_tedarikci_karne_olayi
       WHERE tur = 'teslim' AND firma_id = ANY($1::int[]) AND termin BETWEEN $2::date AND $3::date
       GROUP BY firma_id, termin, teslim_gunu, tam`,
+    [idler, donemBasi, donemSonu],
+  );
+}
+
+// Kart 1474: kaynağın kaydı geri alınınca (mal kabul düzeltmesi) olay da kalkar; yoksa sessizce geçer.
+export async function karneOlayiKaldir(db: Db, kaynak: string, anahtar: string): Promise<void> {
+  await db.sorgu('DELETE FROM musteri_tedarikci_karne_olayi WHERE kaynak = $1 AND anahtar = $2', [kaynak, anahtar]);
+}
+
+// Kart 1474: gecikme dönemi teslim gününe göre seçilir (geçmiş, gerçekleşen teslimdir); yalnız tam teslim.
+export interface GecikmeGrubu { firmaId: number; kaynak: KarneOlayKaynagi; termin: string; teslimGunu: string; sayi: number }
+export function gecikmeGruplari(db: Db, idler: readonly number[], donemBasi: string, donemSonu: string): Promise<GecikmeGrubu[]> {
+  return db.sorgu<GecikmeGrubu>(
+    `SELECT firma_id AS "firmaId", kaynak, termin::text AS termin, teslim_gunu::text AS "teslimGunu", count(*)::int AS sayi
+       FROM musteri_tedarikci_karne_olayi
+      WHERE tur = 'teslim' AND tam AND firma_id = ANY($1::int[]) AND teslim_gunu BETWEEN $2::date AND $3::date
+      GROUP BY firma_id, kaynak, termin, teslim_gunu`,
     [idler, donemBasi, donemSonu],
   );
 }

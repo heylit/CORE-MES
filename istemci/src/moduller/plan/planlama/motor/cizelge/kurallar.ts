@@ -2,7 +2,8 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
-import { acikSaat, AY_AD, hm, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, AY_AD, hm, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { ufukGunu } from '../../ufuk-olcegi.ts';
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
@@ -172,7 +173,7 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
   const D = c.D; const px = ZAMAN_PX[olcek];
   const ops = Object.values(p.ops);
   const Cmax = Math.max(p.ozet.Cmax ?? 24, ...ops.map((r) => r.C).filter(Number.isFinite));
-  const gunN = Math.min(UFUK_GUN, Math.ceil(Cmax / 24) + 1); const son = gunN * 24;
+  const gunN = Math.min(ufukGunu(), Math.ceil(Cmax / 24) + 1); const son = gunN * 24;
   const gec = new Set(Object.entries(p.J).filter(([, x]) => x.T == null || x.T > 0.01).map(([j]) => j));
   const tatil = new Set((D.tatiller ?? []).map((s) => Math.floor((saatOku(D, s) ?? Number.NaN) / 24)));
   const durus = c.down.flatMap((d) => (typeof d.m === 'string' && typeof d.from === 'number' && typeof d.to === 'number' ? [{ m: d.m, from: d.from, to: d.to }] : []));
@@ -376,7 +377,7 @@ export function matrisSutunlari(D: PlanVerisi, cx: Derleme, olcek: DonemOlcegi, 
     return saat(olcek === 'yil' ? new Date(Date.UTC(y + 1, 0, 1)) : olcek === 'ay' ? new Date(Date.UTC(y, m + 1, 1)) : new Date(Date.UTC(y, m, g + 7)));
   };
   const ad = (k: number) => (olcek === 'yil' ? String(tarih(k).getUTCFullYear()) : olcek === 'ay' ? AY_AD[tarih(k).getUTCMonth()] ?? '' : saatYaz(D, k).slice(0, 5));
-  const gunSon = d0 + UFUK_GUN; const l: MatrisSutunu[] = [];
+  const gunSon = d0 + ufukGunu(); const l: MatrisSutunu[] = [];
   for (let k = kova(d0 * 24 + 1); k < gunSon * 24 && l.length < 60; k = sonraki(k)) {
     const a = Math.max(d0, Math.floor(k / 24)), b = Math.min(gunSon, Math.ceil(sonraki(k) / 24));
     if (b > a) l.push({ a, b, gun: '', tarih: ad(k), kapali: !acik(a, b) });

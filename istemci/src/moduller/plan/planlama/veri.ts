@@ -4,6 +4,7 @@ import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota
 import type { DurumCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
+import { ufukKur } from './ufuk-olcegi.ts';
 import type { PlanlamaCalismasi } from './tipler.ts';
 
 // Açılış okumaları. Eski ekranın köprüsüyle aynı uçlar (kopru.ts: ben, kayitlar, durum-oku, plan-surum; motor uyarıları) doğrudan okunur;
@@ -52,6 +53,8 @@ export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
   ]);
   const kayit = (anahtar: string) => kayitlar.kayitlar.find((k) => k.anahtar === anahtar && k.bicim === 'json') ?? null;
   const calisma = calismaCevabi.calisma === null ? null : calismaOku(calismaCevabi.calisma);
+  // 1477 a: ekranların ufku sunucunun motor ölçeğidir
+  ufukKur(calisma?.w);
   const dilimler = { durum, planSurumu, senaryolar, motorUyarilari: uyari };
   return {
     ben,

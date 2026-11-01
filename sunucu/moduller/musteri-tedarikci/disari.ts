@@ -10,6 +10,10 @@ export {
 export type { FirmaKonumu, FirmaOzeti } from './servis.ts';
 // Tedarikçi karnesi (1259 c): satın alma ve Kalite Merkezi olayı kendi transaction'ında iter; teklif kıyası karneyi okur.
 export { karneOlayiYaz, karneOzetleri } from './servis.ts';
+// Kart 1474: geri alınan teslimin olayı kalkar; plan ve malzeme planlaması tedarikçi gecikmesini buradan okur.
+export { karneOlayiKaldir, teslimGecikmeleri } from './servis.ts';
+export type { TeslimGecikmesi } from './servis.ts';
+export type { GecikmeOzeti } from './kurallar.ts';
 export type { FirmaDurumu } from './kurallar.ts';
 export { ORNEK_FIRMA_ANAHTARLARI, ornekFirmaNo } from './ornek-veri.ts';
 export type { OrnekFirmaAnahtari } from './ornek-veri.ts';

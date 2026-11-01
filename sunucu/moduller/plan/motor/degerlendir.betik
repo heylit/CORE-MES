@@ -82,9 +82,12 @@ function mlSatir(D, m) {
 const tlSatir = (D, kalite) => (D.talasFiyat || []).find(t => mlNorm(t.kalite) === mlNorm(kalite)) || null;
 /* talaş kredisi: hammadde ağırlığı (fire dahil) − parçanın net ağırlığı, kalitenin talaş fiyatıyla; net ağırlık ya da talaş fiyatı yoksa hesaplanmaz */
 function ymTalas(D, s) {
-  const u = D.urunler.find(x => x.id === s.urun); if (!u || u.netKg == null || !(s.malzeme || []).length) return null;
+  const u = D.urunler.find(x => x.id === s.urun); if (!u || u.netKg == null) return null;
+  /* 1473 a: talaş yalnız işlenen hammaddeden çıkar: öncülsüz (ilk) adımın malzemesi; sonraki adımın malzemesi (bağlantı elemanı vb.) sayılmaz */
+  const kok = new Set((u.rota || []).filter(o => !(o.bag || []).length).map(o => String(o.k)));
+  const sat = (s.malzeme || []).filter(r => r.adim == null || kok.has(String(r.adim))); if (!sat.length) return null;
   let kg = 0, tl = 0;
-  for (const r of s.malzeme) { const m = D.malzemeler.find(x => x.kod === r.kod); if (!m) return null; const kb = m.birim === 'kg' ? 1 : +m.kgBirim; const ks = mlSatir(D, m);
+  for (const r of sat) { const m = D.malzemeler.find(x => x.kod === r.kod); if (!m) return null; const kb = m.birim === 'kg' ? 1 : +m.kgBirim; const ks = mlSatir(D, m);
     const tf = tlSatir(D, m.kalite); if (!(kb > 0) || !tf || tf.fiyat == null) return null; const h = +r.miktar * kb * (1 + (+m.fire || 0) / 100); kg += h; tl += h * +tf.fiyat; void ks; }
   const t = (kg - +u.netKg) * s.adet; if (!(t > 0)) return { kg: 0, tl: 0 };
   return { kg: t, tl: tl / kg * t };

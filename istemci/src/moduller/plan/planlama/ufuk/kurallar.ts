@@ -1,4 +1,5 @@
 import type { Fasoncu, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis, Tezgah, Urun } from '../tipler.ts';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // Yıllık plan ve Ufuk'un saf hesapları (205 a). Ölçüt bugünkü sayfadır: cerceve/planlama/parca/zz9-yillik.betik ve zz39-ufuk.betik; hesaplar
 // oradaki sırayla ve aynı yuvarlamayla taşındı. Saat ekseni planın başlangıç günü 00:00'dan saattir (motor engine.betik parseT).
@@ -6,7 +7,6 @@ import type { Fasoncu, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis, Tezgah
 // mesaiVarsayilan) kurulmaz; bu ayarlar yoksa mesai saat bedeli ve yatırım bedeli bilinmez (null). Motorun derlenmiş takvimi yerine aynı
 // takvim kuralı (engine.betik compile: vardiya, mola, ek mesai, ışıksız tezgâh, arıza) burada yeniden kurulur.
 
-export const HDAYS = 63;
 export const GUN = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'] as const;
 const GUN_AD: Record<string, string> = { pzt: 'Pzt', sal: 'Sal', car: 'Çar', per: 'Per', cum: 'Cum', cmt: 'Cmt', paz: 'Paz' };
 export const OL_AY = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
@@ -202,12 +202,12 @@ const tatilGunleri = (D: PlanVerisi, z: Zaman): Set<number> =>
   new Set((D.tatiller ?? []).map((s) => saatOku(z, s)).filter((t): t is number => t !== null).map((t) => Math.floor(t / 24)));
 const gunVardiyalari = (D: PlanVerisi, gun: string): string[] => diziOku<unknown>(D.calismaGunleri?.[gun]).map(String);
 
-// Tezgâh başına açık pencereler (plan başından HDAYS gün): vardiya eksi kendi molası, ek mesai, ışıksız tezgâhta bütün çalışma günü, eksi arıza.
+// Tezgâh başına açık pencereler (plan başından ufukGunu() gün): vardiya eksi kendi molası, ek mesai, ışıksız tezgâhta bütün çalışma günü, eksi arıza.
 export function tezgahPencereleri(c: PlanlamaCalismasi, z: Zaman): Record<string, Pencere[]> {
   const D = c.D;
   const vs = vardiyalar(D);
   const tatil = tatilGunleri(D, z);
-  const gunler = Array.from({ length: HDAYS }, (_, d) => (tatil.has(d) ? [] : gunVardiyalari(D, haftaGunu(z, d))));
+  const gunler = Array.from({ length: ufukGunu() }, (_, d) => (tatil.has(d) ? [] : gunVardiyalari(D, haftaGunu(z, d))));
   const ornek = (d: number, sid: string): Pencere | null => {
     const v = vs[sid]; if (!v) return null;
     const a = d * 24 + v.bas; let b = d * 24 + v.bit; if (b <= a) b += 24;
@@ -222,7 +222,7 @@ export function tezgahPencereleri(c: PlanlamaCalismasi, z: Zaman): Record<string
   for (const m of D.tezgahlar) {
     const kendi = m.vardiyalar?.length ? new Set(m.vardiyalar) : null;
     let sw: Pencere[] = [];
-    for (let d = 0; d < HDAYS; d++) for (const sid of gunler[d] ?? []) {
+    for (let d = 0; d < ufukGunu(); d++) for (const sid of gunler[d] ?? []) {
       if (kendi && !kendi.has(sid)) continue;
       const w = ornek(d, sid); if (w) sw.push(...cikar([w], molalar(d, sid)));
     }
@@ -233,7 +233,7 @@ export function tezgahPencereleri(c: PlanlamaCalismasi, z: Zaman): Record<string
     let rw = birlestir(sw);
     if (m.isiksiz) {
       const tam: Pencere[] = [];
-      for (let d = 0; d < HDAYS; d++) if (gunler[d]?.length) tam.push([d * 24, d * 24 + 24]);
+      for (let d = 0; d < ufukGunu(); d++) if (gunler[d]?.length) tam.push([d * 24, d * 24 + 24]);
       rw = birlestir(tam.concat(rw));
     }
     const ariza = (c.down as Nesne[]).filter((x) => x.m === m.id).map((x): Pencere => [n(x.from), n(x.to)]);
@@ -391,7 +391,7 @@ export function yillikVeri(c: PlanlamaCalismasi, z: Zaman, A: YillikAyar): Yilli
   const kapH: Record<string, number> = {}; const tezH: Record<string, number> = {}; const tezN: Record<string, number> = {};
   for (const m of D.tezgahlar) {
     const g = grupOf[m.id] ?? m.id;
-    const h = pencereSaati(pencere[m.id] ?? [], 0, HDAYS * 24) / (HDAYS / 7);
+    const h = pencereSaati(pencere[m.id] ?? [], 0, ufukGunu() * 24) / (ufukGunu() / 7);
     kapH[g] = (kapH[g] ?? 0) + h * verim; tezH[g] = (tezH[g] ?? 0) + h * verim; tezN[g] = (tezN[g] ?? 0) + 1;
   }
   const yeniH = Object.fromEntries(Object.keys(tezH).map((g) => [g, (tezH[g] ?? 0) / (tezN[g] ?? 1)]));
@@ -574,7 +574,7 @@ export function yillikHedefKur(D: PlanVerisi, v: YillikVeri, P: readonly Donem[]
     let fir = 0; let enC = 0;
     const top = toplam(D.siparisler.filter((x) => v.urunAile[x.urun] === f).map((x) => n(x.adet)));
     P.forEach((p, t) => {
-      if (p.tur !== 'hafta' || p.b > HDAYS) return;
+      if (p.tur !== 'hafta' || p.b > ufukGunu()) return;
       const x = s.aile[f]?.[t]; if (!x) return;
       fir += x.fir;
       if (x.I > 0.5) { enC = Math.max(enC, Math.min(top, Math.round(fir + x.I))); H.push([f, p.b * 24 - 0.01, enC]); }
@@ -726,7 +726,7 @@ export function ufukVerisi(c: PlanlamaCalismasi, z: Zaman, ongoruGoster: boolean
   // Haftalar bugünün haftasının pazartesisinden.
   const g0 = Math.floor(now / 24);
   const pzt = g0 - ((new Date(z.base + g0 * 864e5).getUTCDay() + 6) % 7);
-  const H: UfukHaftasi[] = Array.from({ length: A.hafta }, (_, k) => { const a = (pzt + 7 * k) * 24; return { k, a, b: a + 168, ad: gunAy(z, a), plan: a < HDAYS * 24 }; });
+  const H: UfukHaftasi[] = Array.from({ length: A.hafta }, (_, k) => { const a = (pzt + 7 * k) * 24; return { k, a, b: a + 168, ad: gunAy(z, a), plan: a < ufukGunu() * 24 }; });
   const ilkA = H[0]?.a ?? 0;
   const son = H[H.length - 1]?.b ?? ilkA;
   const wOf = (t: number): number => (t < ilkA ? 0 : Math.min(H.length - 1, Math.floor((t - ilkA) / 168)));

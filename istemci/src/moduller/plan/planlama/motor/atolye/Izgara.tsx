@@ -4,7 +4,7 @@ import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
   secKacis, akis, cubukYazisi, darbogaz, doluluklar, gercekOku, haftaHucreleri, ilerleme, kapaliAraliklar, sabitMi, satirlar, saatPiksel, sure, suzUyar, tezGrup, tz,
-  ufuk, UFUK_SAAT, zamanBasliklari, type PanoSatiri, duruslar,
+  ufuk, ufukSaati, zamanBasliklari, type PanoSatiri, duruslar,
 } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
@@ -117,9 +117,9 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
         {R.map(satir)}
         <div className="tc-pym-tp-donuk" ref={degisken({ '--x': `${now * k}px`, '--w': `${donuk * k}px` })} />
         <div className="tc-pym-tp-simdi" title="Şimdi" ref={degisken({ '--x': `${now * k}px` })} />
-        {H > UFUK_SAAT && (
-          <div className="tc-pym-tp-ufuk" ref={degisken({ '--x': `${UFUK_SAAT * k}px` })}>
-            <span><Simge ad="alert" boyut="k" />{`Motor ${UFUK_SAAT / 24 / 7} hafta planlar; ötesi için talep tahmini gerekir`}</span>
+        {H > ufukSaati() && (
+          <div className="tc-pym-tp-ufuk" ref={degisken({ '--x': `${ufukSaati() * k}px` })}>
+            <span><Simge ad="alert" boyut="k" />{`Motor ${Math.round(ufukSaati() / 24 / 7)} hafta planlar; ötesi için talep tahmini gerekir`}</span>
           </div>
         )}
         {oklar && (

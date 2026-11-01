@@ -1,5 +1,6 @@
 import { bitenler, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi, PlanVerisi, Siparis, Tezgah } from '../tipler.ts';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // P3'ün saf hesapları (205 a): maliyet, genel gider, ek mesai ve fason. Bugünkü sayfanın hesaplarının aynısıdır (cerceve/planlama/parca
 // zu-yan-sayfalar, zz6-maliyet-mesai, zv-termin; motor/durum.betik ymAyar, wipAyar, agBedel; motor/engine.betik compile ve matAlloc'un
@@ -220,7 +221,6 @@ export const aktifSiparisler = (D: PlanVerisi): Siparis[] => D.siparisler.filter
 
 // ---------- takvim: tezgâhın çalışabilir pencereleri (engine.betik compile) ----------
 export type Aralik = [number, number];
-export const UFUK_GUN = 63;
 function birlestir(W: Aralik[]): Aralik[] {
   const s = [...W].sort((a, b) => a[0] - b[0]);
   const o: Aralik[] = [];
@@ -279,7 +279,7 @@ export function takvimKur(c: PlanlamaCalismasi, ek: EkMesai[] = ekMesailer(c)): 
   const vs = new Map(vardiyalar(D).map((v) => [v.id, { bas: hm(v.bas), bit: hm(v.bit), mol: v.molalar.map((x) => [hm(x.bas), hm(x.bit)] as const) }]));
   const tatil = new Set((D.tatiller ?? []).map((s) => saatOku(D, s)).filter((t): t is number => t !== null).map((t) => Math.floor(t / 24)));
   const gunler: Takvim['gunler'] = [];
-  for (let d = 0; d < UFUK_GUN; d++) {
+  for (let d = 0; d < ufukGunu(); d++) {
     const wd = haftaGunu(D, d);
     const cg = D.calismaGunleri?.[wd];
     gunler.push({ wd, vard: tatil.has(d) ? [] : (Array.isArray(cg) ? cg.map(metin) : []) });

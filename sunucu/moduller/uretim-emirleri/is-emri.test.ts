@@ -26,7 +26,7 @@ import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, f
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
-  FASON_DISARIDA, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
+  FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
 } from './kurallar.ts';
@@ -341,7 +341,12 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await fason('fason-donus', { saglamAdet: 1, hurdaAdet: 0 })).durum, 404, 'Dış operasyonlardan dönüş ucu kaldırıldı');
     const donus = (saglam: number, hurda: number) => o().vt.tx((db) => fasonDonusuKaydet(db, yoneticiId, id, ie2, saglam, hurda));
     await assert.rejects(donus(9, 1), { message: FASON_DONUS_ASIMI });
+    const karneOlayi = () => o().vt.tek<{ firma: number; termin: string; gun: string; tam: boolean }>(
+      `SELECT firma_id AS firma, termin::text AS termin, teslim_gunu::text AS gun, tam FROM musteri_tedarikci_karne_olayi
+        WHERE kaynak = 'uretim-emirleri' AND anahtar = $1`, [`is-emri:${ie2}`]);
+    assert.equal(await karneOlayi(), null, 'kart 1474: reddedilen dönüş karneye olay yazmaz');
     const d1 = await donus(4, 1);
+    assert.equal((await karneOlayi())?.tam, false, 'kart 1474: dönen 5 < gönderilen 9, eksik teslim');
     assert.equal((await fason('fason-tamamla')).govde.mesaj, FASON_DISARIDA);
     await donus(4, 0);
     e = await ayrinti(id);
@@ -356,6 +361,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const beklenenTermin = new Date(`${ilkGun}T00:00:00Z`);
     beklenenTermin.setUTCDate(beklenenTermin.getUTCDate() + 5);
     assert.equal(disarida?.termin, beklenenTermin.toISOString().slice(0, 10), 'termin: ilk gidiş günü + termin günü');
+    // Kart 1474: fason dönüşü karneye iş emri başına tek olay; termin ilk gidiş + termin günü, teslim günü son dönüşün tesis günü.
+    assert.deepEqual(await karneOlayi(), { firma: firmaId, termin: disarida!.termin, gun: tesisGunu(Date.parse(disarida!.sonDonus!)), tam: true });
     assert.ok(disarida?.ilkDonus && disarida.sonDonus && disarida.ilkDonus <= disarida.sonDonus);
     // Fason geçmişi (satın alma süre tahmini): gidişi ve dönüşü olan iş emri; adet gönderilen toplam, süre ilk gidişten son dönüşe.
     const gecmis = (await fasonGecmisi(o().vt, { firmaId })).find((x) => x.isEmriId === ie2);
@@ -2016,5 +2023,22 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       assert.deepEqual(await kisininGunlukIsEmirleri(db, ornek.kisi_id, []), []);
       assert.deepEqual(await gunlukAralikAdetleri(db, 'kisi', [], sinirlar), sinirlar.slice(1).map(() => new Map()));
     });
+  });
+});
+
+describe('fason karne olayı kuralı (kart 1474)', () => {
+  const gun = (z: string): string => z.slice(0, 10);
+  const h = (yon: 'gidis' | 'donus', adet: number, zaman: string, hurdaAdet: number | null = null) => ({ yon, adet, hurdaAdet, zaman });
+  test('termin ilk gidiş günü + termin günü; teslim son dönüş; sağlam ve hurda gönderilene ulaşınca tam', () => {
+    const l = [h('gidis', 5, '2026-03-10T08:00:00Z'), h('gidis', 5, '2026-03-09T08:00:00Z'), h('donus', 6, '2026-03-20T08:00:00Z'), h('donus', 3, '2026-03-22T08:00:00Z', 1)];
+    assert.deepEqual(fasonKarneOlayi({ fasonFirmaId: 3, terminGun: 10 }, l, gun), { firmaId: 3, termin: '2026-03-19', zaman: '2026-03-22T08:00:00Z', tam: true });
+    assert.equal(fasonKarneOlayi({ fasonFirmaId: 3, terminGun: 10 }, l.slice(0, 3), gun)?.tam, false);
+  });
+  test('reddedilen: firma, termin günü, gidiş ya da dönüş yoksa olay yok', () => {
+    const l = [h('gidis', 5, '2026-03-10T08:00:00Z'), h('donus', 5, '2026-03-20T08:00:00Z')];
+    assert.equal(fasonKarneOlayi({ fasonFirmaId: null, terminGun: 10 }, l, gun), null);
+    assert.equal(fasonKarneOlayi({ fasonFirmaId: 3, terminGun: null }, l, gun), null);
+    assert.equal(fasonKarneOlayi({ fasonFirmaId: 3, terminGun: 10 }, l.slice(0, 1), gun), null);
+    assert.equal(fasonKarneOlayi({ fasonFirmaId: 3, terminGun: 10 }, l.slice(1), gun), null);
   });
 });

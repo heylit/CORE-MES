@@ -1,6 +1,7 @@
 import type { ExtraAlanlar, PlanVerisi, PlanlamaCalismasi, Siparis } from '../../tipler.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import { saatOku, tabanMs, UFUK_GUN, type Derleme } from '../../motor/kurallar.ts';
+import { saatOku, tabanMs, type Derleme } from '../../motor/kurallar.ts';
+import { ufukGunu } from '../../ufuk-olcegi.ts';
 
 // "Veri ve kısıtlar" ekranının saf hesapları (bugünkü sayfa: cerceve/planlama/parca/02-orta.betik, d-kisitlar.betik, 05-olaylar.betik).
 // Görünümler yalnız okur ve çalışma komutuna değişiklik işlevi verir; burada yazma yoktur.
@@ -328,7 +329,7 @@ export function durusDenetle(a: number | null, b: number | null): string | null 
   return null;
 }
 export function ekMesaiDenetle(c: PlanlamaCalismasi, e: { m: string; gun: number | null; vardiya: string }): string | null {
-  if (e.gun === null || !(e.gun >= 0 && e.gun < UFUK_GUN)) return 'Gün plan ufku içinde olmalı.';
+  if (e.gun === null || !(e.gun >= 0 && e.gun < ufukGunu())) return 'Gün plan ufku içinde olmalı.';
   if (ekMesailer(c).some((x) => x.m === e.m && x.gun === e.gun && x.vardiya === e.vardiya)) return 'Bu ek mesai zaten var.';
   return null;
 }

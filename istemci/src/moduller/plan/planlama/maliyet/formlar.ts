@@ -1,6 +1,6 @@
 import type { PlanlamaCalismasi, PlanVerisi } from '../tipler.ts';
 import {
-  fasonTalasId, gunNo, isoGun, kalemTutari, kgFiyatlari, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM, MS_ANAHTAR, sayi, tl, UFUK_GUN, vardiyalar, vardiyaSaati, ymAyar, ekMesailer,
+  fasonTalasId, gunNo, isoGun, kalemTutari, kgFiyatlari, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM, MS_ANAHTAR, sayi, tl, vardiyalar, vardiyaSaati, ymAyar, ekMesailer,
   type FasonIsi, type IsTanimi, type TezgahGideri,
 } from './kurallar.ts';
 import { degisti, metinYaz, sayiAl, type Degerler, type FormTanimi } from './ortak.tsx';
@@ -8,6 +8,7 @@ import {
   ayarlar, fasonAlanYaz, fasonFiyatAlani, fasonTerminYaz, kalemYaz, kgAlanYaz, kgEkleYaz,
   kgVarMi, siparisFiyatYaz, maliyetAyariYaz, nesneMi, tezGiderYaz, tezUcretYaz, ucretYaz, type Yaz,
 } from './yazmalar.ts';
+import { ufukGunu } from '../ufuk-olcegi.ts';
 
 export type { Yaz } from './yazmalar.ts';
 
@@ -296,7 +297,7 @@ export function ekMesaiFormu(c: PlanlamaCalismasi, yaz: Yaz, gun0: number): Form
     kontrol: (d, i) => {
       if (i === 0) return null;
       const g = gunNo(D, d.gun ?? '');
-      if (g === null || g < 0 || g >= UFUK_GUN) return 'Gün plan ufku içinde olmalı.';
+      if (g === null || g < 0 || g >= ufukGunu()) return 'Gün plan ufku içinde olmalı.';
       return ekMesailer(c).some((e) => e.m === d.m && e.gun === g && e.vardiya === d.vardiya) ? 'Bu ek mesai zaten var.' : null;
     },
     sonuc: 'ek vardiya listeye "Elle girildi" olarak eklenir; plan yeniden kurulunca kullanılır.',

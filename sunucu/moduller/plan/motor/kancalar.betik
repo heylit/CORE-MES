@@ -114,7 +114,7 @@ function matKarmaUygula() {
     /* 533 a: Satın Alma termini belli gelişdir (1650 4 c, sert); termini beklenen satır (tb) motorda zaten bekletmez */
     if (st && st.w && st.w.matKarma && cx && cx.mat) for (const j in cx.mat.res) { const r = cx.mat.res[j];
       const belli = r.det.every(d => !d.eksikQ && d.use.every(u => { const p = u.k === 'sa' ? (st.D.satinalma || [])[u.i] || {} : null; return !p || !p.tm || p.tm === 'sa-termin' || !!p.saTermin || !!p.tb; }));
-      if (!belli && r.ready > st.now) { r.readyU = r.ready; r.ready = st.now; } }
+      if (!belli && r.ready > st.now) { r.readyU = r.ready; r.ready = st.now; r.opU = { ...r.op }; for (const id in r.op) if (r.op[id] > st.now) r.op[id] = st.now; } }
     /* tezgâh seçimi TL ile: motorun puanı (1−α)·bitiş·1000 + α·maliyet + λ; α ve λ, bir saatin değeri siparişlerin ortanca gecikme bedeli (× denge katsayısı)
        ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */
     if (st && st.w && !st.w.tezgahEski && st.tlAmac && st.tlAmac.ac && cx && cx.jobs) {
@@ -131,10 +131,12 @@ function matKarmaUygula() {
   evaluate = function (plan, st, ref, fast) {
     const e = e0(plan, st, ref, fast);
     if (fast || !st || !st.w || !st.w.matKarma || !e.warn) return e;
-    const cx = plan.cx || compile(st); const ilk = {};
-    for (const id in plan.ops) { const r = plan.ops[id], o = cx.byId[id]; if (!o || o.pr.length || r.pin) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
-    for (const j in cx.mat.res) { const m = cx.mat.res[j]; if (m.readyU == null || ilk[j] == null || ilk[j] >= m.readyU - 1e-9) continue;
-      e.warn.push({ t: 'malzeme', j, txt: isFinite(m.readyU) ? `${j}: malzeme tahminen ${fmtDT(cx.D, m.readyU)} geliyor, iş ${fmtDT(cx.D, ilk[j])} başlıyor` : `${j}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D, ilk[j])} başlıyor` }); }
+    const cx = plan.cx || compile(st);
+    /* 1473 a: malzemeyi tüketen adım (opU) malzemenin tahmini gelişinden önce başlıyorsa siparişte bir kez, en erken böyle adımla uyarılır */
+    for (const j in cx.mat.res) { const m = cx.mat.res[j]; if (m.readyU == null || !m.opU) continue; let S = null, T = null;
+      for (const id in m.opU) { const r = plan.ops[id]; if (!r || r.pin || r.S >= m.opU[id] - 1e-9) continue; if (S == null || r.S < S) { S = r.S; T = m.opU[id]; } }
+      if (S == null) continue;
+      e.warn.push({ t: 'malzeme', j, txt: isFinite(T) ? `${j}: malzeme tahminen ${fmtDT(cx.D, T)} geliyor, iş ${fmtDT(cx.D, S)} başlıyor` : `${j}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D, S)} başlıyor` }); }
     return e;
   };
 }
@@ -404,4 +406,4 @@ function kayanPencereKur() {
 }
 kayanPencereKur();
 /* sayfanın işçisi her girdide ağırlıkları ve TL amacını girdiden alır (zu TL_ISCI, zw PD_ISCI); sunucunun çözücüsü ve değerlendirmesi de */
-function stHazirla(st) { if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); } return st; }
+function stHazirla(st) { olcekKur(st && st.w); if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); } return st; }

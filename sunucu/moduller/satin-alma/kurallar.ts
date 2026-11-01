@@ -808,3 +808,11 @@ export function tedarikciyeGidenAyrinti(a: KartAyrintisi | null): { ad: string; 
   ];
   return satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }]));
 }
+
+// Kart 1474: karneye gidecek teslim olayı (saf). Termin, firma ya da artı teslim yoksa ya da net teslim sıfır ya da eksiyse olay yoktur
+// (null; yoksa sıfır uydurulmuş olur). Net teslim sipariş miktarına ulaşınca tamdır; fazla teslim de tamdır.
+export function karneTeslimOlayi(b: { firmaId: number | null; termin: string | null; miktar: string; net: string; sonZaman: string | null }):
+  { firmaId: number; termin: string; zaman: string; tam: boolean } | null {
+  if (b.firmaId === null || b.termin === null || b.sonZaman === null || ondalikKiyas(b.net, '0') <= 0) return null;
+  return { firmaId: b.firmaId, termin: b.termin, zaman: b.sonZaman, tam: ondalikKiyas(b.net, b.miktar) >= 0 };
+}
