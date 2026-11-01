@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 
 // Varsayılan yasaktır: listeye yazılmamış yeni paylasilan dosyası kırmızı kalır, unutulan zod dosyası pakete sızmaz.
 // Liste zod taşımadığı bilinen dosyalardır. Yol çözülmez, belirteç metni sınanır: serbest olan yalnız düz yazımdır.
-const ZODSUZ = ['sayfalar', 'hata', 'islemler', 'ortam', 'istek-kimligi', 'tesis-zamani', 'atolye-sabitleri', 'islem-adlari', 'numara', 'sayfa-tanimi', 'kayit-aramasi', 'ag-araligi', 'sozlesme/kalibrasyon-kurali', 'sozlesme/rota-dal-kurali', 'sozlesme/nizamiye-sabitleri', 'sozlesme/emir-turleri', 'sozlesme/emir-durumu', 'sozlesme/finansman', 'sozlesme/degisiklik-yonetimi-sabitleri', 'test-fiksturleri/plan-golge', 'ik-motor/arayuz', 'ik-motor/motor', 'ik-motor/sabitler', 'ik-motor/bicim', 'rol-gorunumleri', 'finans-motor/motor', 'finans-motor/donustur'];
+const ZODSUZ = ['sayfalar', 'hata', 'islemler', 'ortam', 'istek-kimligi', 'tesis-zamani', 'atolye-sabitleri', 'islem-adlari', 'numara', 'sayfa-tanimi', 'kayit-aramasi', 'ag-araligi', 'durum-gecis', 'sozlesme/kalibrasyon-kurali', 'sozlesme/rota-dal-kurali', 'sozlesme/nizamiye-sabitleri', 'sozlesme/emir-turleri', 'sozlesme/emir-durumu', 'sozlesme/finansman', 'sozlesme/degisiklik-yonetimi-sabitleri', 'test-fiksturleri/plan-golge', 'ik-motor/arayuz', 'ik-motor/motor', 'ik-motor/sabitler', 'ik-motor/bicim', 'rol-gorunumleri', 'finans-motor/motor', 'finans-motor/donustur'];
 const PAYLASILAN_DEGERI = String.raw`^(?:#paylasilan|\..*/paylasilan)/(?!(?:${ZODSUZ.join('|')})\.ts$)`;
 const SOZLESME_MESAJI =
   "istemci paylasilan'ı yalnız tip olarak ithal eder: değer ithali zod'u istemci paketine sokabilir, import type kullan; " +
@@ -81,7 +81,19 @@ export default [
       ],
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      // Durum ya da tür eklenince unutulan dal derlemede değil lintte görünür. Var olan 28 ihlal düzelene kadar uyarıdır (kart 1551).
+      '@typescript-eslint/switch-exhaustiveness-check': 'warn',
     },
+  },
+  // Ayrıştırıcı project listesini sırayla dener ve geçtiği programları da bellekte kurar; ortak listede istemci dosyası için
+  // önce bütün sunucu programı kurulur ve lint parçası yığın sınırına dayanır. Her ağaç yalnız kendi programını alır.
+  {
+    files: ['istemci/**/*.ts', 'istemci/**/*.tsx', 'arkon/**/*.ts'],
+    languageOptions: { parserOptions: { project: ['istemci/tsconfig.json'] } },
+  },
+  {
+    files: ['ekran-testleri/**/*.ts'],
+    languageOptions: { parserOptions: { project: ['ekran-testleri/tsconfig.json'] } },
   },
   {
     files: ['istemci/**/*.ts', 'istemci/**/*.tsx'],
