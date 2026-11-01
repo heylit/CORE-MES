@@ -1010,3 +1010,28 @@ export function ayarKaliteYogunluklari(ayar: Readonly<Record<string, unknown>> |
   }
   return m;
 }
+
+/* ---------------- Demirbaş teknik bilgisi (1595) ---------------- */
+// İlk kayıt sürümsüz gelir, sonrakiler okunan sürümle; ikisi karışırsa kayıt sessizce ezilmez.
+export function demirbasTeknikYazimi(mevcutSurum: number | null, istenenSurum: number | null): 'ekle' | 'guncelle' | 'eski-surum' {
+  if (mevcutSurum === null) return istenenSurum === null ? 'ekle' : 'eski-surum';
+  return istenenSurum === mevcutSurum ? 'guncelle' : 'eski-surum';
+}
+
+// Teknik bilgi yalnız demirbaş kartına yazılır; iptal edilmiş karta yazılmaz.
+export function demirbasTeknikYazilabilirMi(tur: string, onayDurumu: string): string | null {
+  if (tur !== 'demirbas') return 'Teknik bilgi yalnız demirbaş kartına girilir.';
+  if (onayDurumu === 'iptal') return 'Silinmiş karta teknik bilgi girilmez.';
+  return null;
+}
+
+// Aynı adlı iki özellik ayırt edilemez; ad büyük-küçük harf ve Türkçe harf farkı gözetmeden karşılaştırılır.
+export function tekrarlananOzellik(adlar: readonly string[]): string | null {
+  const gorulen = new Set<string>();
+  for (const ad of adlar) {
+    const anahtar = ad.trim().toLocaleLowerCase('tr-TR');
+    if (gorulen.has(anahtar)) return ad;
+    gorulen.add(anahtar);
+  }
+  return null;
+}

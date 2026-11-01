@@ -6,11 +6,12 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
-import { operasyonTipleri } from '../istasyonlar/disari.ts';
+import { makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { KATALOG_TURLERI, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
+  DemirbasMakineSecenekleriCevabi, DemirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
@@ -26,6 +27,7 @@ import {
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
+import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -678,4 +680,54 @@ export async function hammaddeStokOlculeri(db: Db, formlar: readonly string[], k
     malzemeNo: no, ...r,
     yogunluk: ozelYogunluk ?? (r.aile !== null && r.kaliteKodu !== null ? eklenen.get(`${r.aile}|${r.kaliteKodu}`) ?? null : null),
   }));
+}
+
+/* ---------------- Demirbaş teknik bilgisi (1595) ---------------- */
+const DEMIRBAS_KISITLARI = {
+  malzemeler_demirbas_teknik_makine_tek: { ileti: 'Bu makine başka bir demirbaş kartına bağlı.', alan: 'makineId' },
+  malzemeler_demirbas_teknik_makine: { ileti: 'Makine bulunamadı.', alan: 'makineId' },
+} as const;
+
+async function demirbasMakinesi(db: Db, makineId: number | null): Promise<{ id: number; kod: string; ad: string; aktif: boolean } | null> {
+  if (makineId === null) return null;
+  const m = await makineGetir(db, makineId);
+  return m ? { id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif } : null;
+}
+
+export async function demirbasTeknikOku(db: Db, kimlik: string): Promise<DemirbasTeknikCevabi> {
+  if (!(await s.katalogKartTuru(db, kimlik))) throw bulunamadi('Malzeme kataloğu kartı bulunamadı.');
+  const t = await s.demirbasTeknikGetir(db, kimlik);
+  if (!t) return { teknik: null };
+  return {
+    teknik: {
+      surum: t.surum, alanlar: t.alanlar, ozellikler: await s.demirbasOzellikleri(db, kimlik),
+      makine: await demirbasMakinesi(db, t.makineId), guncelleme: t.guncelleme,
+    },
+  };
+}
+
+// Teknik kayıt ve özellik listesi birlikte yazılır; kart satırı kilitlenir ki kart aynı anda iptal edilemesin.
+export function demirbasTeknikKaydet(db: Db, kullanici: Kullanici, kimlik: string, g: z.output<typeof demirbasTeknikKaydetGovdesi>): Promise<DemirbasTeknikCevabi> {
+  return kisitKorumali(DEMIRBAS_KISITLARI, async () => {
+    const kart = await s.katalogKartiKilitle(db, kimlik);
+    if (!kart) throw bulunamadi('Malzeme kataloğu kartı bulunamadı.');
+    const red = demirbasTeknikYazilabilirMi(kart.tur, kart.onayDurumu);
+    if (red) throw gecersiz(red);
+    const tekrar = tekrarlananOzellik(g.ozellikler.map((o) => o.ad));
+    if (tekrar !== null) throw dogrulama(`"${tekrar}" özelliği iki kez yazılmış.`, 'ozellikler');
+    if (g.makineId !== null && !(await makineGetir(db, g.makineId))) throw dogrulama('Makine bulunamadı.', 'makineId');
+    const mevcut = await s.demirbasTeknikGetir(db, kimlik, true);
+    const yazim = demirbasTeknikYazimi(mevcut?.surum ?? null, g.surum);
+    if (yazim === 'eski-surum') throw eskiSurum();
+    if (yazim === 'ekle') await s.demirbasTeknikEkle(db, kimlik, g.makineId, g.alanlar, kullanici.id);
+    else if ((await s.demirbasTeknikGuncelle(db, kimlik, g.surum!, g.makineId, g.alanlar, kullanici.id)) === null) throw eskiSurum();
+    await s.demirbasOzellikleriYaz(db, kimlik, g.ozellikler);
+    return demirbasTeknikOku(db, kimlik);
+  });
+}
+
+export async function demirbasMakineSecenekleri(db: Db): Promise<DemirbasMakineSecenekleriCevabi> {
+  const liste = await makineler(db, { pasiflerDahil: true });
+  const bagli = await s.makineBagliKartlari(db);
+  return { makineler: liste.map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, bagliKart: bagli.get(m.id) ?? null })) };
 }

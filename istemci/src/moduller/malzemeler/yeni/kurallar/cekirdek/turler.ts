@@ -38,7 +38,6 @@ export interface TurTaslagi extends Taslak { g: TurDegerleri; docs?: Belge[] }
 export type DuzSatir = [string, string, string];
 export interface BomSatiri extends ReceteSatiri { it: Taslak | null | undefined; q: number; birimFiyat: number | null; tutar: number | null; pb: unknown; kg: number | null }
 export interface Maliyet { malzeme: number; iscilik: number; toplam: number; dakika: number; eksikFiyat: number; paraBirimleri: unknown[]; bomKg: number }
-export interface Amortisman { bedel: number; omur: number; oran: number; yillik: number; gecenYil: number; net: number; birikmis: number; yontem: string }
 export interface TakvimKaydi { ad: string; son?: Date; sonraki: Date; kalanGun: number; bitis?: boolean }
 
 export function birimFarki(onceki: Taslak | null | undefined, yeni: Taslak | null | undefined): RevizyonFarki | null {
@@ -193,25 +192,6 @@ export function gMaliyet(d: TurTaslagi = D, derin = 0): Maliyet {
     const isc = isNum(su) ? dk / 60 * su : 0;
     const pbs = [...new Set(rows.map(r => r.pb).filter(Boolean))];
     return { malzeme: malz, iscilik: isc, toplam: malz + isc, dakika: dk, eksikFiyat: eksik, paraBirimleri: pbs, bomKg: rows.reduce((a, r) => a + (isNum(r.kg) ? r.kg : 0), 0) };
-}
-export function gAmortisman(d: TurTaslagi = D): Amortisman | null {
-    const g: TurDegerleri = d.g || {};
-    const bedel = _gnum(d.com && d.com.fiyat);
-    const t = _tarih(g.alis);
-    const k = dbKat(d);
-    const omur = _gnum(g.omur) || (k && k.omur) || null;
-    if (!isNum(bedel) || !t || !omur)
-        return null;
-    const azalan = (g.yontem || '').startsWith('Azalan');
-    const oran = azalan ? Math.min(2 / omur, 0.5) : 1 / omur;
-    const yil = Math.max(0, (Date.now() - +t) / (365.25 * 86400000));
-    let net: number;
-    if (!azalan)
-        net = Math.max(0, bedel * (1 - Math.min(yil, omur) / omur));
-    else {
-        net = yil >= omur ? 0 : bedel * Math.pow(1 - oran, Math.floor(yil));
-    }
-    return { bedel, omur, oran, yillik: azalan ? bedel * oran : bedel / omur, gecenYil: yil, net, birikmis: bedel - net, yontem: azalan ? 'Azalan bakiyeler' : 'Normal' };
 }
 export function gTarihler(d: TurTaslagi = D): TakvimKaydi[] {
     const g: TurDegerleri = d.g || {};
@@ -370,7 +350,6 @@ export function gFlat(d: TurTaslagi): DuzSatir[] {
 export function gStokOzeti(d: TurTaslagi): Nesne {
     const g: TurDegerleri = d.g || {};
     const c = (d.tur === 'yarimamul' || d.tur === 'mamul') ? gMaliyet(d) : null;
-    const am = d.tur === 'demirbas' ? gAmortisman(d) : null;
     const k = turKat(d);
     const o: Nesne = { stok_kodu: d.com.kod || finalKod(d), stok_adi: d.com.ad || finalAd(d), tur: d.tur, tur_adi: (TURLER[d.tur] || {} as Partial<Tur>).ad, kategori: g.kat || null, kategori_adi: k ? k.ad : null,
         stok_birimi: finalBirim(d), fiyat: isNum(d.com.fiyat) ? d.com.fiyat : null, para_birimi: d.com.pb, tedarikci: d.com.ted || '', min_siparis: isNum(d.com.moq) ? d.com.moq : null,
@@ -379,9 +358,10 @@ export function gStokOzeti(d: TurTaslagi): Nesne {
         Object.assign(o, { resim_no: g.resim || '', revizyon: g.rev || '', net_agirlik_kg: _gnum(g.net) ?? (c.bomKg ? r4(c.bomKg) : null), malzeme_maliyeti: r4(c.malzeme), iscilik_maliyeti: r4(c.iscilik), toplam_maliyet: r4(c.toplam),
             recete: bomSatirlari(d).map(r => ({ stok_kodu: r.it ? r.it.com.kod : null, ad: r.it ? r.it.com.ad : r.ad, miktar: _gnum(r.miktar), birim: r.birim, fire_yuzde: _gnum(r.fire) || 0 })),
             rota: (d.ops || []).map((x, i) => ({ sira: i + 1, operasyon: x.ad, istasyon: x.merkez || '', sure_dk: _gnum(x.sure) })), gtin: g.gtin || null, gtip: g.gtip || null });
+    // Amortisman finansın sabit kıymet kaydındadır (1596 teyit a); kart kendi kaba hesabını yazmaz, değer yoksa null.
     if (d.tur === 'demirbas')
         Object.assign(o, { demirbas_no: d.com.kod || finalKod(d), seri_no: g.seri || '', konum: g.konum || '', zimmet: g.sorumlu || '', durum: g.durum || '', alis_tarihi: g.alis || null,
-            net_defter_degeri: am ? r4(am.net) : null, yillik_amortisman: am ? r4(am.yillik) : null, takvim: gTarihler(d).map(x => ({ ad: x.ad, tarih: _isoGun(x.sonraki), kalan_gun: x.kalanGun })) });
+            net_defter_degeri: null, yillik_amortisman: null, takvim: gTarihler(d).map(x => ({ ad: x.ad, tarih: _isoGun(x.sonraki), kalan_gun: x.kalanGun })) });
     return o;
 }
 export function gSablonOzet(t: TurTaslagi): string {

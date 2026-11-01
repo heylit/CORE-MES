@@ -353,7 +353,6 @@ export function gEksik(i: Parameters<Cekirdek['gEksik']>[0], d: KartKaydi, b: Ku
 export function gAlanGorunur(d: Parameters<Cekirdek['gAlanGorunur']>[0], a: Parameters<Cekirdek['gAlanGorunur']>[1], b: KuralBaglami): ReturnType<Cekirdek['gAlanGorunur']> { return cekirdek(b).gAlanGorunur(d, a); }
 export function alanZorunlu(d: Parameters<Cekirdek['alanZorunlu']>[0], a: Parameters<Cekirdek['alanZorunlu']>[1], b: KuralBaglami): ReturnType<Cekirdek['alanZorunlu']> { return cekirdek(b).alanZorunlu(d, a); }
 export function hzAlanlari(d: Parameters<Cekirdek['hzAlanlari']>[0], b: KuralBaglami): ReturnType<Cekirdek['hzAlanlari']> { return cekirdek(b).hzAlanlari(d); }
-export function gAmortisman(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['gAmortisman']> { return taslakla(b, d, (m, d) => m.gAmortisman(d)); }
 export function gTarihler(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['gTarihler']> { return taslakla(b, d, (m, d) => m.gTarihler(d)); }
 export function gtinGecerli(s: Parameters<Cekirdek['gtinGecerli']>[0], b: KuralBaglami): ReturnType<Cekirdek['gtinGecerli']> { return cekirdek(b).gtinGecerli(s); }
 export function bomSatirlari(b: KuralBaglami): ReturnType<Cekirdek['bomSatirlari']> { return cekirdek(b).bomSatirlari(); }

@@ -5,6 +5,7 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 
 ## Tablolar
 - `malzeme_katalog_karti`: `kimlik` (metin, birincil), `no` (sayı kimlik, tekil, değişmez), `tur`, `onek`, `sira_no`, `stok_kodu` (üretilmiş), `benzersiz_anahtar`, `mukerrer_gerekcesi`, `onay_durumu`, `kayit` (jsonb: kartın bütünü), `surum`, kişi ve zaman sütunları, `aktif_oldu`.
+- `malzemeler_demirbas_teknik` (1595): `kart_kimlik` (birincil, kart), `makine_id` (istasyonlar `makine`, tekil), tipli CNC sınırları ve enerji; `malzemeler_demirbas_ozellik`: serbest ad, değer, birim. Fiyat ve amortisman finans `finans_sabit_kiymet`'tedir (makine kimliğiyle).
 - `malzeme_katalog_kod_sirasi` (`onek`, `son_sira`), `malzeme_katalog_sablonu` (`kimlik`, `sablon` jsonb), `malzeme_katalog_ayari` (`anahtar`: malzeme, operasyonlar, genel; `deger` jsonb).
 
 ## Kavramlar

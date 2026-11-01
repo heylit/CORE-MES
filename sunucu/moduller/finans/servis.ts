@@ -22,11 +22,11 @@ import * as sorgular from './sorgular.ts';
 import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, aylikFaizdenGunluk, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
 import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { makineler } from '../istasyonlar/disari.ts';
+import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
-  kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
+  kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import {
@@ -906,20 +906,57 @@ const sabitKiymetOku = async (db: Db, id: number): Promise<SabitKiymetSatiri> =>
   return sabitKiymetHesapla(k, buAy());
 };
 
+// Kur boşsa alış gününün kuru alınır; TRY'de kur 1'dir.
+async function sabitKiymetKuru(db: Db, paraBirimi: string, kur: string | null, alisTarihi: string): Promise<string> {
+  if (paraBirimi === 'TRY') return '1';
+  if (kur !== null) return kur;
+  const gecerli = await kurGetir(db, paraBirimi, alisTarihi);
+  if (!gecerli) throw dogrulama(`${paraBirimi} için alış gününe kadar girilmiş kur yok; kuru elle girin ya da önce kuru kaydedin.`, 'kur');
+  return gecerli.kur;
+}
+
+// Makine bağı: kimlik verilmişse makine bulunmalı ve kodu kıymete yazılır; yalnız kod verilmişse 312 b'deki gibi
+// istasyonlardaki karşılığı aranır, karşılığı olmayan kod kabul edilir, bağ boş kalır.
+async function sabitKiymetMakinesi(db: Db, makineId: number | null, makineKodu: string | null): Promise<{ makineId: number | null; makineKodu: string | null }> {
+  if (makineId !== null) {
+    const m = await makineGetir(db, makineId);
+    if (!m) throw dogrulama('Makine bulunamadı.', 'makineId');
+    if (makineKodu !== null && makineKodu !== m.kod) throw dogrulama('Makine kodu seçilen makinenin koduyla aynı olmalı.', 'makineKodu');
+    return { makineId, makineKodu: m.kod };
+  }
+  if (makineKodu === null) return { makineId: null, makineKodu: null };
+  return { makineKodu, makineId: (await makineler(db, { pasiflerDahil: true })).find((m) => m.kod === makineKodu)?.id ?? null };
+}
+
 export function sabitKiymetEkle(db: Db, k: Kullanici, g: G<typeof sabitKiymetEkleGovdesi>): Promise<SabitKiymetSatiri> {
   return kisitKorumali(SABIT_KIYMET_KISITLARI, async () => {
-    let kur = g.paraBirimi === 'TRY' ? '1' : g.kur;
-    if (kur === null) {
-      const gecerli = await kurGetir(db, g.paraBirimi, g.alisTarihi);
-      if (!gecerli) throw dogrulama(`${g.paraBirimi} için alış gününe kadar girilmiş kur yok; kuru elle girin ya da önce kuru kaydedin.`, 'kur');
-      kur = gecerli.kur;
-    }
+    const kur = await sabitKiymetKuru(db, g.paraBirimi, g.kur, g.alisTarihi);
     if (g.devirTarihi !== null && g.devirTarihi < g.alisTarihi) throw dogrulama('Devir tarihi alıştan önce olamaz.', 'devirTarihi');
-    // 312 b: kodun istasyonlardaki karşılığı yabancı anahtara yazılır; karşılığı olmayan kod bugünkü gibi kabul edilir, bağ boş kalır.
-    const makineId = g.makineKodu === null ? null : (await makineler(db, { pasiflerDahil: true })).find((m) => m.kod === g.makineKodu)?.id ?? null;
-    const s = await sorgular.sabitKiymetEkle(db, { ...g, kur, makineId }, k.id);
+    const bag = await sabitKiymetMakinesi(db, g.makineId, g.makineKodu);
+    const s = await sorgular.sabitKiymetEkle(db, { ...g, kur, ...bag }, k.id);
     return sabitKiymetOku(db, s!.id);
   });
+}
+
+// Düzeltme (1598 a): girilen her alan yeniden yazılır, amortisman planı yeni değerlerle baştan hesaplanır. Pasif kıymet düzeltilmez.
+export function sabitKiymetGuncelle(db: Db, _k: Kullanici, id: number, g: G<typeof sabitKiymetGuncelleGovdesi>, ek: DefterEki): Promise<SabitKiymetSatiri> {
+  return kisitKorumali(SABIT_KIYMET_KISITLARI, async () => {
+    const eski = await kilitli(() => sorgular.sabitKiymetGetir(db, id, true), g.surum, 'Sabit kıymet bulunamadı.');
+    if (eski.pasifTarihi !== null) throw gecersiz('Pasif sabit kıymet düzeltilemez.');
+    if (g.devirTarihi !== null && g.devirTarihi < g.alisTarihi) throw dogrulama('Devir tarihi alıştan önce olamaz.', 'devirTarihi');
+    const kur = await sabitKiymetKuru(db, g.paraBirimi, g.kur, g.alisTarihi);
+    const bag = await sabitKiymetMakinesi(db, g.makineId, g.makineKodu);
+    await kosulluYaz(() => sorgular.sabitKiymetGuncelle(db, id, g.surum, { ...g, kur, ...bag }));
+    const yeni = await sorgular.sabitKiymetGetir(db, id);
+    farkYaz(ek, [`sabit-kiymet:${id}`, eski, yeni ?? {}]);
+    return sabitKiymetOku(db, id);
+  });
+}
+
+// Makine kartındaki demirbaş bölümü: makineye kimlikle bağlı kıymetler, bugünün ayına göre hesaplanmış.
+export async function makineSabitKiymetleri(db: Db, makineId: number): Promise<SabitKiymetSatiri[]> {
+  const ay = buAy();
+  return (await sorgular.makineIdSabitKiymetleri(db, makineId)).map((k) => sabitKiymetHesapla(k, ay));
 }
 
 export function sabitKiymetPasif(db: Db, _k: Kullanici, id: number, g: G<typeof sabitKiymetPasifGovdesi>, ek: DefterEki): Promise<SabitKiymetSatiri> {

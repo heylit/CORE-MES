@@ -201,7 +201,7 @@ export const genelGiderOraniSatiri = z.object({
 });
 // Sabit kıymet yönetim amaçlıdır (Logo'ya gitmez). Kur boşsa sunucu alış gününün kurunu alır; devir tarihi ve birikmiş amortisman birlikte girilir.
 export const AMORTISMAN_YONTEMLERI = ['normal', 'azalan'] as const;
-export const sabitKiymetEkleGovdesi = z.object({
+const sabitKiymetAlanlari = {
   ad: z.string().trim().min(1, 'Ad boş olamaz.').max(200, 'En çok 200 karakter.'),
   makineKodu: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9._-]{0,23}$/, 'Makine kodu harf, rakam, nokta, alt çizgi ve tireden oluşur (en çok 24).')
     .nullish().or(z.literal('')).transform((v) => (v === undefined || v === null || v === '' ? null : v)),
@@ -210,19 +210,32 @@ export const sabitKiymetEkleGovdesi = z.object({
   yontem: z.enum(AMORTISMAN_YONTEMLERI).default('normal'), kalintiDegeri: negatifOlmayanTutar.default(0),
   devirTarihi: tarihSemasi.nullish().transform((v) => v ?? null), devirBirikmisTl: negatifOlmayanTutar.nullish().transform((v) => v ?? null),
   aciklama: metin(500),
-}).refine((g) => (g.devirTarihi === null) === (g.devirBirikmisTl === null), { message: 'Devir tarihi ve birikmiş amortisman birlikte girilir.', path: ['devirBirikmisTl'] });
+  // Makineye kimlikle bağlanır (Malzemeler demirbaş kartı, 1596); verilirse makine kodu makinenin kodundan alınır.
+  makineId: z.number().int().positive().nullish().transform((v) => v ?? null),
+};
+const devirBirlikte = { message: 'Devir tarihi ve birikmiş amortisman birlikte girilir.', path: ['devirBirikmisTl'] };
+export const sabitKiymetEkleGovdesi = z.object(sabitKiymetAlanlari)
+  .refine((g) => (g.devirTarihi === null) === (g.devirBirikmisTl === null), devirBirlikte);
+// Düzeltme bütün alanları sürümle taşır; para yazdığı için bilinmeyen alan reddedilir (ADR 0025 kural 10).
+export const sabitKiymetGuncelleGovdesi = z.object({ ...sabitKiymetAlanlari, ...beklenenSurum }).strict()
+  .refine((g) => (g.devirTarihi === null) === (g.devirBirikmisTl === null), devirBirlikte);
+export const makineIdParametresi = z.object({ makineId: z.coerce.number().int().positive() });
 export const sabitKiymetPasifGovdesi = z.object({ pasifTarihi: tarihSemasi, ...beklenenSurum });
 // Hesaplanan alanlar (TL) bugünün ayına göredir: buAyTl bu ayın amortismanı, birikmisTl ay sonu dahil birikmiş, netTl bedel eksi birikmiş.
 export const sabitKiymetSatiri = z.object({
   id: z.number().int(), ad: z.string(), makineKodu: z.string().nullable(), paraBirimi: z.string(), bedel: numerik, kur: numerik,
   alisTarihi: tarihSemasi, omurAy: z.number().int(), yontem: z.enum(AMORTISMAN_YONTEMLERI), kalintiDegeri: numerik,
   devirTarihi: tarihSemasi.nullable(), devirBirikmisTl: numerik.nullable(), pasifTarihi: tarihSemasi.nullable(), aciklama: z.string().nullable(),
-  surum: surumSemasi, olusturma: zamanSemasi,
+  surum: surumSemasi, olusturma: zamanSemasi, makineId: z.number().int().nullable(),
   bedelTl: numerik, buAyTl: numerik, birikmisTl: numerik, netTl: numerik,
 });
 export type SabitKiymetSatiri = z.output<typeof sabitKiymetSatiri>;
 export const sabitKiymetCevabi = z.object({ sabitKiymet: sabitKiymetSatiri });
 export const sabitKiymetListesiCevabi = listeCevapSemasi(sabitKiymetSatiri);
+export const makineSabitKiymetleriCevabi = z.object({ sabitKiymetler: z.array(sabitKiymetSatiri) });
+export type MakineSabitKiymetleriCevabi = z.output<typeof makineSabitKiymetleriCevabi>;
+export type SabitKiymetGuncelleGovdesi = z.input<typeof sabitKiymetGuncelleGovdesi>;
+export type SabitKiymetEkleGovdesi = z.input<typeof sabitKiymetEkleGovdesi>;
 // Aylık toplam amortisman (TL), eskiden yeniye; gelir tablosunda nakit dışı gider satırıdır.
 export const amortismanCevabi = z.object({ aylar: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), tutarTl: numerik })) });
 // Kur ve faiz şeridi: bugüne kadar geçerli son kur ve faiz, kimin ne zaman girdiğiyle; sonGiris ileri tarihli giriş dahil en son yazılandır.
