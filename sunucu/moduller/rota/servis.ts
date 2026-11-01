@@ -13,11 +13,12 @@ import type {
   AdimKaynakOzeti, AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, IlkParcaSecimi, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
   IsEmriSartnamesi, IsEmriSartnameleriCevabi, ParametreDegerleri, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameKapsami, SartnameOzeti, SartnameSurumu, SartnameTaslakGovdesiCikti,
-  SartnamelerCevabi, StandartCevabi, TalimatAdimi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
+  SartnamelerCevabi, StandartCevabi, TalimatAdimi, TalimatSablonlariCevabi, TalimatSablonuCevabi, HamOnerisiCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
-import { AZAMI_AGAC_DERINLIGI, MEDYA_SINIRI } from '#paylasilan/sozlesme/rota.ts';
+import { AZAMI_AGAC_DERINLIGI, HAM_ONERI_SAYISI, MEDYA_SINIRI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { malzemeGeometrisi } from '../geometri/disari.ts';
 import { firmaAdlari, firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
 import {
   aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri,
@@ -2174,4 +2175,17 @@ export async function ekAdimSartnameleriSabitle(db: Db, kullanici: Kullanici, em
   await s.isEmriSabitleriniSil(db, [isEmriId]);
   if (sabitler.length > 0) await s.isEmriSabitle(db, isEmriId, sabitler, kullanici.id);
   return isEmriSartnameleriCevabi(db, [isEmriId]);
+}
+
+// Rota bileşeninde hammadde önerisi (1709): ölçü ve stok eşleşmesi geometri modülünündür; burada yalnız ilk öneriler seçilir.
+// Pay sistem ayarından (geometri.ham-payi-mm) gelir. Kaydetmez: girdiyi kullanıcı ekler.
+export async function hamOnerisi(db: Db, urunId: number): Promise<HamOnerisiCevabi> {
+  const g = await malzemeGeometrisi(db, urunId);
+  if (g === null) return { model: null, payMm: null, oneriler: [], neden: 'model-yok' };
+  return {
+    model: { belgeAdi: g.belgeAdi, harf: g.harf },
+    payMm: g.ham.payMm,
+    oneriler: g.ham.oneriler.slice(0, HAM_ONERI_SAYISI),
+    neden: g.ham.neden,
+  };
 }
