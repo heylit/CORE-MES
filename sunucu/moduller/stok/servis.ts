@@ -50,7 +50,7 @@ import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, dep
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
-  uretimEmriOzeti, emirNolari, refakatKarti, kapanisSonuclari,
+  uretimEmriOzeti, emirDugumleri, emirNolari, refakatKarti, kapanisSonuclari,
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
@@ -3712,11 +3712,21 @@ const kartOnce = <T extends { partiId: number | null; konumId?: number }>(l: rea
   return [...l].sort((a, b) => sira(a) - sira(b));
 };
 export type AdimStatusuCozucusu = (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }) => Promise<number | null>;
+// 1476-C: çok katmanlı emirde alt düğümün adımı emrin ürününün rotasında değil, düğümün malzemesinin rotasında kaynak op numarasıyladır.
+// Çözücüye düğümün malzemesi ve rotadaki numarası gider; emir verilmez, çünkü Reçete ve Rota emrin (kök) revizyonunu okur, alt parçanın
+// revizyonu o değildir; alt parça yürürlükteki revizyonundan çözülür. Düğümün son adımının çıktısı düğümün malzemesidir: alt parça stoğa
+// girmeden tüketen adıma akar (1482 a). Kök düğümde ve tek katmanlı emirde çağrı olduğu gibi geçer.
+const dugumlu = (cozucu: AdimStatusuCozucusu, cikti: boolean): AdimStatusuCozucusu => async (db, g) => {
+  const d = g.uretimEmriId == null ? undefined : (await emirDugumleri(db, g.uretimEmriId)).get(g.opNo);
+  if (d === undefined || d.dugum === '0') return cozucu(db, g);
+  if (cikti && d.dugumSonu) return d.malzemeNo;
+  return cozucu(db, { malzemeNo: d.malzemeNo, opNo: d.kaynakOpNo, uretimEmriId: null });
+};
 let adimStatusu: AdimStatusuCozucusu | null = null;
-export function adimStatusuCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimStatusu = cozucu; }
+export function adimStatusuCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimStatusu = dugumlu(cozucu, false); }
 // Adımın çıktı kartı da Reçete ve Rota'dadır (rotanın "çıkan" kalemi); kayıt yokken her adım çıktısız sayılır.
 let adimCiktisi: AdimStatusuCozucusu | null = null;
-export function adimCiktisiCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimCiktisi = cozucu; }
+export function adimCiktisiCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimCiktisi = dugumlu(cozucu, true); }
 // Statü adları Reçete ve Rota'nındır; stok depocuya kendi ucundan verir (depocunun reçete-rota okuması yok). Kayıt yokken liste boştur
 // (kablolama eksik bağda süreci zaten açmaz).
 export type StatuListesiCozucusu = (db: Db) => Promise<StatulerCevabi['statuler']>;
@@ -3750,7 +3760,8 @@ async function dalliTasima(
   db: Db, malzemeNo: number, bilgi: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, uretimEmriId: number,
 ): Promise<DalliTasima | null> {
   if (bilgi.onculOpNolari === null) return null;
-  const zincir = bilgi.emirAdimlari;
+  const dugumler = await emirDugumleri(db, uretimEmriId);
+  const zincir = bilgi.emirAdimlari.map((a) => ({ ...a, dugum: dugumler.get(a.opNo)?.dugum ?? null }));
   const cikti = async (opNo: number) => (adimCiktisi === null ? null : adimCiktisi(db, { malzemeNo, opNo, uretimEmriId }));
   const statu = async (opNo: number) => (adimStatusu === null ? null : adimStatusu(db, { malzemeNo, opNo, uretimEmriId }));
   const tasinanlar = new Map<number, { malzemeNo: number; miktar: string } | null>();
@@ -3765,7 +3776,7 @@ async function dalliTasima(
     const k = tasimaKaynagi(zincir, opNo);
     let t: { malzemeNo: number; miktar: string } | null = null;
     if (k?.tur === 'ilk') t = k.girdi;
-    else if (k?.tur === 'birlesme') t = { malzemeNo, miktar: '1' };
+    else if (k?.tur === 'birlesme') t = { malzemeNo: dugumler.get(opNo)?.malzemeNo ?? malzemeNo, miktar: '1' };
     else if (k?.tur === 'oncul') { const p = await parca(k.opNo); t = p === null ? null : { malzemeNo: p.malzemeId, miktar: p.miktar }; }
     tasinanlar.set(opNo, t);
     return t;

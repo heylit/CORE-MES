@@ -873,8 +873,11 @@ export function uretimAdimPlani(g: {
 // geçen ve kendi girdisi olan adım ise kendi girdisini (ilk); birlesme: dalların parçası tüketilir, adım emrin ürününü taşır. Aynı öncülden
 // ayrılıp onun parçasını devralacak birden çok dal varsa parçayı yalnız ilki taşır, ötekiler taşımasızdır (yok): bir parça iki kez
 // tüketilmez. Listesi olmayan adım (1248 öncesi) için null.
+// Çok katmanlı emirde (1476-C) başka düğümden (alt parçadan) gelen öncül, tüketen adımın montajıdır: adım birleşmedir, alt parçalar
+// tüketilir ve adım kendi düğümünün malzemesini taşır (1482 a). dugum: emirdeki düğüm yolu; tek katmanlı emirde yok.
 export interface ZincirAdimi {
   opNo: number; dal: string | null; adetCarpani?: number | null; onculOpNolari: readonly number[] | null; girdiler: readonly { malzemeNo: number; miktar: string }[];
+  dugum?: string | null;
 }
 // 1360 (1257 a): öncülden gelen parça adedi = adım adedi x öncül çarpanı / adım çarpanı (uretim-emirleri onculdenGelen'in tersi; boş çarpan 1).
 // Bindelik adet tam sayıya aşağı yuvarlanır.
@@ -910,7 +913,8 @@ export function tasimaKaynagi(zincir: readonly ZincirAdimi[], opNo: number): Tas
   if (adim === undefined || liste === null || liste === undefined) return null;
   const ilkGirdi = (a: ZincirAdimi) => a.girdiler[0] ?? null;
   if (liste.length === 0) return { tur: 'ilk', girdi: ilkGirdi(adim) };
-  if (liste.length > 1) return { tur: 'birlesme', opNolari: liste };
+  const altParcadan = adim.dugum != null && liste.some((o) => (zincir.find((x) => x.opNo === o)?.dugum ?? adim.dugum) !== adim.dugum);
+  if (liste.length > 1 || altParcadan) return { tur: 'birlesme', opNolari: liste };
   const oncul = liste[0]!;
   const dalDegisti = (a: ZincirAdimi) => a.dal !== (zincir.find((x) => x.opNo === oncul)?.dal ?? null) && a.girdiler.length > 0;
   if (dalDegisti(adim)) return { tur: 'ilk', girdi: ilkGirdi(adim) };

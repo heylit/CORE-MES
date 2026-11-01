@@ -484,6 +484,16 @@ describe('stok kuralları: terminal üretim girişi', () => {
     assert.equal(tasimaKaynagi(dalli, 99), null);
     assert.deepEqual(tasimaKaynagi([z(10, [99, 20]), z(20, [])], 10), { tur: 'ilk', girdi: null }, 'bilinmeyen ve sonraki öncül atlanır');
   });
+  test('1476-C düğüm: alt parçadan gelen tek öncül montajdır (birleşme); aynı düğümde devam ve düğümsüz emir değişmez', () => {
+    const d = (opNo: number, onculler: number[], dugum: string, ek: Partial<ZincirAdimi> = {}) => z(opNo, onculler, { dugum, ...ek });
+    const emir = [d(1010, [], '0.1', { dal: 'K1', girdiler: [g2] }), d(1020, [1010], '0.1', { dal: 'K1' }), d(10, [1020], '0', { girdiler: [g1] }), d(20, [10], '0')];
+    assert.deepEqual(tasimaKaynagi(emir, 1010), { tur: 'ilk', girdi: g2 });
+    assert.deepEqual(tasimaKaynagi(emir, 1020), { tur: 'oncul', opNo: 1010 });
+    assert.deepEqual(tasimaKaynagi(emir, 10), { tur: 'birlesme', opNolari: [1020] }, 'kendi girdisi olsa da alt parçayı tüketir');
+    assert.deepEqual(tasimaKaynagi(emir, 20), { tur: 'oncul', opNo: 10 });
+    const dugumsuz = emir.map(({ dugum: _d, ...a }) => a);
+    assert.deepEqual(tasimaKaynagi(dugumsuz, 10), { tur: 'ilk', girdi: g1 }, 'düğümsüz dallı emirde eski kural');
+  });
   test('1348 a çatal: kendi girdisiyle başka dala geçen kendi girdisini taşır; aynı öncülü devralan ikinci dal taşımasızdır', () => {
     const catal = [z(10, [], { girdiler: [g1] }), z(20, [10], { dal: 'A' }), z(30, [10], { dal: 'B', girdiler: [g2] }), z(40, [10], { dal: 'C' }), z(50, [20, 30, 40])];
     assert.deepEqual(tasimaKaynagi(catal, 20), { tur: 'oncul', opNo: 10 });
