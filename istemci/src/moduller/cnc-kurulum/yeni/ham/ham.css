@@ -15,6 +15,14 @@
 .tc-ch-gorus { position: absolute; top: var(--b-3); right: var(--b-3); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-1); }
 /* Sahne koyu zeminli: ikincil düğme panel zeminiyle okunur. */
 .tc-ch-gorus .tc-dugme-ikincil { background: var(--panel); }
+/* Ham Malzeme'de bilgi kutusu ve araç çubuğu sahnenin üstünde sarılan tek sıradır: araç çubuğu uzayınca kutunun altına iner,
+   üstüne binmez. G-Kod sayfası aynı sınıfları kendi yerleşimiyle kullanır; kural yalnız bu sayfadadır. */
+.tc-ch[data-page="stock"] > .tc-ch-sahne {
+  display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; justify-content: space-between;
+  gap: var(--b-2); padding: var(--b-3);
+}
+.tc-ch[data-page="stock"] .tc-ch-bilgi { position: relative; top: auto; left: auto; max-width: 100%; }
+.tc-ch[data-page="stock"] .tc-ch-gorus { position: relative; top: auto; right: auto; margin-left: auto; }
 .tc-ch-ipucu { position: absolute; bottom: var(--b-2); left: var(--b-3); font-size: var(--yazi-xs); color: var(--muted); pointer-events: none; }
 .tc-ch-mesgul {
   position: absolute; inset: auto 0 var(--b-6) 0; margin: 0 auto; width: max-content; max-width: calc(100% - 2 * var(--b-4));
