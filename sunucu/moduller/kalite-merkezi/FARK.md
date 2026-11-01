@@ -95,3 +95,8 @@ Yok.
 - Terminaldeki "Hatalı" girişi üretim emrinde kalite adımlı kol açar (uretim-emirleri). Kararı Kalite Merkezi verir: `GET /kalite-merkezi/hatali/bekleyenler`, `POST /kalite-merkezi/hatali/:kayitId/karar` (`kalite-merkezi.onayla`, tekrar korumalı).
 - Karar rework, hurda ya da red; aynı işlemde uygunsuzluk kaydı (NCR, kaynak "Proses muayene") yazılır. Kalite kararını uretim-emirleri `disari.ts` ile yazar; NCR yazılamazsa karar da geri alınır.
 - Bugün ekranında "Hatalı parça kararı" kartı (onaylayabilende): karar, ciddiyet (varsayılan Majör), gerekçe.
+
+## Ürün durum etiketi Etiket Merkezi'nden (kart 1525, 1286 a, 1288 teyitli, 1548)
+- Etiket formunun (KF-19) kayıt satırına "Etiket Merkezi'nde bas" eklendi (Görüntüle'nin yanında); yalnız `sayfa.etiket-merkezi` olan ve kaydında lot dolu olan görür. Formdaki lot `/stok/kod-coz` (`LOT:<lot>`) ile çözülür, lotun stok satırları `/etiket-merkezi?tur=kalite-durum&id=...` ile açılır; durum stoktan basılır, baskı deftere yazılır.
+- Form kalite kaydı olarak kalır; kayıt görünümü, önizleme ve yazdırılan belge değişmedi (tasarım koruma). Formdaki durum seçimi etikete gitmez.
+- Stokta olmayan lot için bilgi iletisi; Etiket Merkezi açılmaz. Stok okuması olmayan kullanıcıya hata iletisi.

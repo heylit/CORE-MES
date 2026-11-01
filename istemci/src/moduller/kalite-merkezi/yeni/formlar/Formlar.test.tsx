@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { kayitYazmalari, kmAc, MUAYENECI, MUHENDIS, OKUYAN, YONETICI } from '../test-ortak.tsx';
+import { kayitYazmalari, kmAc, kmAdresi, MUAYENECI, MUHENDIS, OKUYAN, YONETICI } from '../test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
@@ -133,5 +133,41 @@ describe('Form kayıtları', () => {
     kmAc('formlar', MUHENDIS);
     fireEvent.click((await kart('KF-01')).getByRole('button', { name: /Doldur/ }));
     expect(await screen.findByRole('heading', { name: /Uygunsuzluk kaydet/ })).toBeTruthy();
+  });
+});
+
+describe('Ürün durum etiketi Etiket Merkezi\'nden (1288, 1548)', () => {
+  const ETIKET = {
+    _id: 'e1', kod: 'KF-19', ad: 'Ürün durum etiketi', rev: '00', tarih: '2026-10-01', dolduran: 'Deneme Dolduran', durum: 'Taslak', etiket: true,
+    dsl: '# Etiket\nDurum * | seçim: KABUL, RET\nParça no *\nLot / seri no', veri: { '0_0': 'RET', '0_1': 'ORN-1', '0_2': 'LT-000040' },
+  };
+  const ETIKETCI = { ...MUHENDIS, kullanici: { ...MUHENDIS.kullanici, islemler: [...MUHENDIS.kullanici.islemler, 'sayfa.etiket-merkezi' as const] } };
+  const lotCoz = (f: ReturnType<typeof kmAc>['fetch'], bakiyeler: number[]) => {
+    const onceki = f.getMockImplementation()!;
+    f.mockImplementation(async (adres: string, istek?: RequestInit) => (adres.includes('/stok/kod-coz')
+      ? new Response(JSON.stringify(bakiyeler.length ? { tur: 'lot', bakiyeler: bakiyeler.map((id) => ({ id })) } : { tur: 'bilinmiyor', kod: 'LOT:LT-000040' }), { status: 200 })
+      : onceki(adres, istek)));
+  };
+
+  it('etiket formunun kaydı lotun stok satırlarını Etiket Merkezi\'nde kalite durum etiketi olarak açar', async () => {
+    const { fetch } = kmAc('formlar', ETIKETCI, { frm: [ETIKET] });
+    lotCoz(fetch, [31, 32]);
+    fireEvent.click((await satir()).getByRole('button', { name: /Etiket Merkezi'nde bas/ }));
+    await waitFor(() => expect(kmAdresi()).toBe('/etiket-merkezi'));
+    expect(fetch.mock.calls.some(([a]) => String(a).includes(`/stok/kod-coz?kod=${encodeURIComponent('LOT:LT-000040')}`))).toBe(true);
+  });
+
+  it('stokta olmayan lot için bilgi verir, sayfa değişmez; Etiket Merkezi\'ni açamayan ve lotsuz kayıtta düğme yok', async () => {
+    const { fetch } = kmAc('formlar', ETIKETCI, { frm: [ETIKET] });
+    lotCoz(fetch, []);
+    fireEvent.click((await satir()).getByRole('button', { name: /Etiket Merkezi'nde bas/ }));
+    expect(await screen.findByText(/LT-000040 stokta yok/)).toBeTruthy();
+    expect(kmAdresi()).toBe('/kalite-merkezi/formlar');
+    cleanup(); vi.unstubAllGlobals();
+    kmAc('formlar', MUHENDIS, { frm: [ETIKET] });
+    expect((await satir()).queryByRole('button', { name: /Etiket Merkezi'nde bas/ })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    kmAc('formlar', ETIKETCI, { frm: [{ ...ETIKET, veri: { '0_0': 'RET' } }] });
+    expect((await satir()).queryByRole('button', { name: /Etiket Merkezi'nde bas/ })).toBeNull();
   });
 });
