@@ -75,6 +75,7 @@ const kayitMetni = (k: KayitSatiri) => Object.entries(k.kimlikler).map(([ad, deg
 const islemMetni = (k: KayitSatiri): string => {
   if (k.yetki === null) return komut(k);
   if (k.yetki === 'oturum') return 'Kendi hesabında işlem';
+  if (k.yetki === 'acik') return 'Oturumsuz işlem';
   const ilk = k.yetki.startsWith('biri:') ? k.yetki.slice('biri:'.length).split('|')[0] ?? k.yetki : k.yetki;
   const ad = islemAdi(ilk);
   return k.yontem === 'GET' ? `Dosya açma (${ad})` : ad;
@@ -103,6 +104,10 @@ const DEGISIKLIK_SUTUNLARI: readonly Sutun<DegisiklikSatiri>[] = [
   { anahtar: 'islem', baslik: 'İşlem', hucre: (d) => ISLEM_ADLARI[d.islem] },
   { anahtar: 'alanlar', baslik: 'Alanlar', hucre: (d) => d.alanAdlari.join(', ') },
 ];
+
+// Sunucu ters aralığı 400 ile reddeder; istek gönderilmez, alan hatası söylenir (tarih alanının min/max'ı elle yazımı durdurmaz).
+const TERS_TARIH = 'Bitiş tarihi başlangıçtan önce olamaz.';
+const tersTarihMi = (s: Suzgec) => s.baslangic !== '' && s.bitis !== '' && s.baslangic > s.bitis;
 
 const tarihSuzgeci = (s: Suzgec) => ({
   ...(s.kisi === '' ? {} : { kisi: Number(s.kisi) }),
@@ -159,6 +164,7 @@ export function DenetimKaydi() {
   const [secili, seciliYaz] = useState<KayitSatiri | null>(null);
   const [seciliDegisiklik, seciliDegisiklikYaz] = useState<DegisiklikSatiri | null>(null);
   const komutlar = gorunum === 'komutlar';
+  const tersTarih = tersTarihMi(suzgec);
   const sorgu = sorguKur(suzgec, sayfa);
   const dSorgu = degisiklikSorgusuKur(suzgec, sayfa, komutlar ? null : kayitSuzgeci?.metin ?? null);
   const secenekler = useQuery({ queryKey: anahtarlar.suzgecler, queryFn: () => cagri.get('/denetim-kayitlari/suzgecler'), enabled: komutlar });
@@ -169,13 +175,13 @@ export function DenetimKaydi() {
     queryKey: anahtarlar.liste(sorgu),
     queryFn: () => cagri.get('/denetim-kayitlari', { sorgu }),
     placeholderData: keepPreviousData,
-    enabled: komutlar,
+    enabled: komutlar && !tersTarih,
   });
   const dListe = useQuery({
     queryKey: anahtarlar.degisiklikler(dSorgu),
     queryFn: () => cagri.get('/denetim-degisiklikleri', { sorgu: dSorgu }),
     placeholderData: keepPreviousData,
-    enabled: !komutlar,
+    enabled: !komutlar && !tersTarih,
   });
   const degistir = (degisen: Partial<Suzgec>) => { suzgecYaz((s) => ({ ...s, ...degisen })); sayfaYaz(1); };
   // Oturum gelmeden yetki bilinmez; o sürede "yetkiniz yok" yazılmaz.
@@ -203,7 +209,7 @@ export function DenetimKaydi() {
             secenekler={kisiSecenekleri.map((k) => ({ deger: String(k.id), baslik: k.ad }))}
           />
           <Girdi etiket="Başlangıç" type="date" value={suzgec.baslangic} max={suzgec.bitis || undefined} onChange={(e) => degistir({ baslangic: e.target.value })} />
-          <Girdi etiket="Bitiş" type="date" value={suzgec.bitis} min={suzgec.baslangic || undefined} onChange={(e) => degistir({ bitis: e.target.value })} />
+          <Girdi etiket="Bitiş" type="date" value={suzgec.bitis} min={suzgec.baslangic || undefined} hata={tersTarih ? TERS_TARIH : undefined} onChange={(e) => degistir({ bitis: e.target.value })} />
           {komutlar && (
             <Secim
               etiket="Modül" bosSecenek="Hepsi" value={suzgec.modul} onChange={(e) => degistir({ modul: e.target.value })}
@@ -225,7 +231,7 @@ export function DenetimKaydi() {
             <Simge ad="x" boyut="k" />Temizle
           </Dugme>
         </div>
-        {komutlar ? (
+        {tersTarih ? null : komutlar ? (
           <>
             {liste.isPending && <DurumKutusu durum="yukleniyor" />}
             {liste.isError && <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />}
