@@ -903,7 +903,10 @@ test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdı
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('duraklamis')), 'katil', 'öteki ayrılmış, iş sürüyor');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('acik')), 'degisiklik-yok', 'başka ekrandan başlatılmış kendi işi');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('acik', 'Ali')), 'degisiklik-yok');
-  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('yok', 'Ali')), 'emir', 'katılımsız kişi: TMI reddeder');
+  const baskasi = katilimYolu('basla-ya-da-devam', 'basladi', 'makine', calisan('yok', 'Ali'));
+  assert.ok(baskasi.yol === 'ret' && baskasi.neden.includes('Ali adına çalışıyor'), 'katılımsız kişi: kimin çalıştığı söylenir');
+  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('yok')), 'emir', 'katılım satırı olmayan eski iş: TMI kuralı');
+  assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('yok', 'Ali')), 'katil', 'insanlı: katılım');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', { benim: 'duraklamis', digerleriAcik: [], emirCalisiyor: false }), 'emir', 'iş duraklamış: devam emre');
   // Duraklatma ve kuyruğa alma.
   for (const komut of ['duraklat', 'kuyruga-al'] as const) {
