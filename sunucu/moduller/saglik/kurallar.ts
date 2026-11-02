@@ -217,6 +217,12 @@ export function surecIslemciYuzdesi(cpuFarkiUs: number | null, gecenMs: number, 
   return Math.round(Math.min(100, (cpuFarkiUs / 1000 / gecenMs / cekirdek) * 100) * 10) / 10;
 }
 
+// Olay döngüsü kullanımı (0-1) yüzdeye; ölçü yoksa null.
+export function anaIsParcacigiYuzdesi(kullanim: number | null): number | null {
+  if (kullanim === null || !Number.isFinite(kullanim) || kullanim < 0) return null;
+  return Math.round(Math.min(1, kullanim) * 1000) / 10;
+}
+
 export interface DakikaGirdisi {
   an: Date;
   aralikMs: number;
@@ -229,6 +235,7 @@ export interface DakikaGirdisi {
   makineBos: number;
   makineToplam: number;
   olayDongusuP99Ms: number | null;
+  anaIsParcacigiYuzde?: number | null;
   // Bu turda ve önceki turda okunan veritabanı ölçüsü; biri yoksa farkı alınamaz.
   vt?: { onceki: VtIstatistigi | null; simdiki: VtIstatistigi | null };
 }
@@ -268,6 +275,7 @@ export function metrikDakikasi(g: DakikaGirdisi): MetrikDakikasi {
     makineIslemciYuzde: g.makineIslemciYuzde,
     bellek: { rssBayt: g.bellek.rss, yiginBayt: g.bellek.heapUsed, makineBosBayt: g.makineBos, makineToplamBayt: g.makineToplam },
     olayDongusuP99Ms: g.olayDongusuP99Ms,
+    anaIsParcacigiYuzde: g.anaIsParcacigiYuzde ?? null,
     veritabani: vtOzeti(g.vt?.onceki ?? null, g.vt?.simdiki ?? null, aralikSn),
   };
 }
@@ -334,6 +342,7 @@ export function saatOzeti(saat: Date, dakikalar: readonly MetrikDakikasi[]): Saa
       makineBosBaytEnAz: Math.min(...dakikalar.map((d) => d.bellek.makineBosBayt)),
     },
     olayDongusuP99MsEnCok: enCok(dakikalar.map((d) => d.olayDongusuP99Ms)),
+    anaIsParcacigiYuzde: ortVeEnCok(dakikalar.map((d) => d.anaIsParcacigiYuzde ?? null)),
     veritabani: sonVt === undefined ? null : {
       boyutBayt: sonVt.boyutBayt,
       xidYasi: sonVt.xidYasi,

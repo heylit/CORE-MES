@@ -145,6 +145,9 @@ export const metrikDakikasiSemasi = z.object({
   makineIslemciYuzde: sure,
   bellek: z.object({ rssBayt: sayi, yiginBayt: sayi, makineBosBayt: sayi, makineToplamBayt: sayi }),
   olayDongusuP99Ms: sure,
+  // Ana iş parçacığının dolu geçen payı (olay döngüsü kullanımı, yüzde, tek çekirdek 100). Node istekleri tek iş parçacığında
+  // işler; süreç işlemcisi bütün çekirdeklere bölündüğünden bu doluluğu göstermez. Alan eklenmeden önce yazılmış dakikada yoktur.
+  anaIsParcacigiYuzde: sure.optional(),
   // Okunamadıysa null. Sayaç alanları bu aralıktaki farktır; boyut ve xid yaşı o anki değerdir.
   veritabani: z.object({
     boyutBayt: sayi,
@@ -179,6 +182,7 @@ export const saatOzetiSemasi = z.object({
   makineIslemciYuzde: ortVeEnCok,
   bellek: z.object({ rssBaytEnCok: sayi, makineBosBaytEnAz: sayi }),
   olayDongusuP99MsEnCok: sure,
+  anaIsParcacigiYuzde: ortVeEnCok.optional(),
   veritabani: z.object({
     boyutBayt: sayi, xidYasi: z.number().int().nonnegative().nullable(), saniyedeIslem: z.number().nonnegative(), geriAlma: sayi, deadlock: sayi,
     onbellekIsabetiYuzdeEnAz: sure, geciciBayt: sayi, baglantiEnCok: sayi, kilitBekleyenEnCok: sayi, enUzunTxSnEnCok: sure,

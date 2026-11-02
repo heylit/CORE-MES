@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { readFile, statfs } from 'node:fs/promises';
 import { cpus, freemem, totalmem } from 'node:os';
 import path from 'node:path';
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
+import type { EventLoopUtilization } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 import { surecHavuzDurumu } from '#cekirdek/db.ts';
 import type { Db, HavuzDurumu } from '#cekirdek/db.ts';
@@ -14,7 +15,7 @@ import { geriYuklemeDenemesiSemasi } from '#paylasilan/sozlesme/saglik.ts';
 import type { Ayrinti, GeriYuklemeDenemesi, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import {
   BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, DENEME_KAYDI_DOSYASI, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
-  ESIK_KURALLARI, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar, veritabaniBuyumesi,
+  ESIK_KURALLARI, anaIsParcacigiYuzdesi, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar, veritabaniBuyumesi,
 } from './kurallar.ts';
 import type { EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import {
@@ -262,6 +263,8 @@ export interface MetrikKaynagi {
   bellek: () => { rss: number; heapUsed: number };
   makineBellek: () => { bos: number; toplam: number };
   olayDongusu: OlayDongusuOlcer;
+  // Açılıştan beri birikmiş olay döngüsü kullanımı; tur farkı iki okuma arasındaki dolu paydır.
+  olayDongusuKullanimi: () => EventLoopUtilization;
 }
 
 function makineIslemciZamani(): IslemciZamani {
@@ -284,10 +287,19 @@ export const SUREC_METRIK_KAYNAGI: MetrikKaynagi = {
   bellek: () => process.memoryUsage(),
   makineBellek: () => ({ bos: freemem(), toplam: totalmem() }),
   olayDongusu: olayDongusuOlceri(),
+  olayDongusuKullanimi: () => performance.eventLoopUtilization(),
 };
 
 interface Taban {
   an: number; istek: UcSayaci[]; mesgulToplam: number | null; surecCpu: NodeJS.CpuUsage; makineCpu: IslemciZamani; vt: VtIstatistigi | null;
+  elu: EventLoopUtilization;
+}
+
+// Kullanım oranı iki birikmiş okumanın farkından: dolu süre / (dolu + boş). Aralıkta hiç süre yoksa null.
+function eluFarki(onceki: EventLoopUtilization, simdiki: EventLoopUtilization): number | null {
+  const dolu = simdiki.active - onceki.active;
+  const toplam = dolu + (simdiki.idle - onceki.idle);
+  return toplam > 0 ? dolu / toplam : null;
 }
 
 // Dakikalık tur: ilk tur yalnız taban alır, sonraki her tur bir önceki turdan bu yana olanı yazar. Son METRIK_PENCERESI dakika bellekte.
@@ -308,8 +320,9 @@ export class MetrikToplayici {
     const surecCpu = this.k.surecIslemci();
     const makineCpu = this.k.makineIslemci();
     const olayDongusuP99Ms = this.k.olayDongusu();
+    const elu = this.k.olayDongusuKullanimi();
     const onceki = this.taban;
-    this.taban = { an, istek, mesgulToplam: havuz?.mesgulToplam ?? null, surecCpu, makineCpu, vt };
+    this.taban = { an, istek, mesgulToplam: havuz?.mesgulToplam ?? null, surecCpu, makineCpu, vt, elu };
     if (onceki === null || an <= onceki.an) return null;
     const gecenMs = an - onceki.an;
     const cpuFarki = surecCpu.user + surecCpu.system - (onceki.surecCpu.user + onceki.surecCpu.system);
@@ -326,6 +339,7 @@ export class MetrikToplayici {
       makineBos: makine.bos,
       makineToplam: makine.toplam,
       olayDongusuP99Ms,
+      anaIsParcacigiYuzde: anaIsParcacigiYuzdesi(eluFarki(onceki.elu, elu)),
       vt: { onceki: onceki.vt, simdiki: vt },
     });
     this.pencere.push(dakika);

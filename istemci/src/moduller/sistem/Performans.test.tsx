@@ -5,11 +5,11 @@ import type { MetrikDakikasi, MetriklerCevabi, SaatlikCevabi } from '#paylasilan
 import { Performans } from './Performans.tsx';
 
 const ISTEK = { sayi: 120, saniyede: 2, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 };
-const dakika = (an: string, p95Ms: number): MetrikDakikasi => ({
+const dakika = (an: string, p95Ms: number, y: Partial<MetrikDakikasi> = {}): MetrikDakikasi => ({
   an, aralikSn: 60, istek: { ...ISTEK, p95Ms },
   uclar: [{ yontem: 'GET', yol: '/uretim-emirleri', ...ISTEK, p95Ms }],
   havuz: { boyut: 30, kullanimda: 4, bekleyen: 0, mesgul: 0 }, surecIslemciYuzde: 6, makineIslemciYuzde: 20,
-  bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+  bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null, ...y,
 });
 
 const json = (govde: unknown) => new Response(JSON.stringify(govde), { status: 200 });
@@ -20,7 +20,7 @@ function sunucuKur() {
     const yol = adres.replace('/api', '');
     yollar.push(yol);
     if (yol === '/saglik/metrikler') {
-      return json({ dakikalar: [dakika('2026-11-01T10:00:00Z', 50), dakika('2026-11-01T10:01:00Z', 1000)] } satisfies MetriklerCevabi);
+      return json({ dakikalar: [dakika('2026-11-01T10:00:00Z', 50), dakika('2026-11-01T10:01:00Z', 1000, { olayDongusuP99Ms: 640, anaIsParcacigiYuzde: 88 })] } satisfies MetriklerCevabi);
     }
     if (yol.startsWith('/saglik/metrikler/saatlik')) return json({ saatler: [] } satisfies SaatlikCevabi);
     return new Response('{}', { status: 404 });
@@ -41,6 +41,11 @@ describe('Performans', () => {
     await waitFor(() => expect(screen.getByText('Yanıt süresi p95')).toBeTruthy());
     expect(screen.getByText('Yanıt süresi p95').nextElementSibling?.textContent).toBe('1.000 ms');
     expect(screen.getByText('4 / 30')).toBeTruthy();
+    // Uygulama işlemcisi çekirdeklere bölündüğü için düşük (%6) görünür; tıkanma ana iş parçacığında ve olay döngüsünde okunur.
+    expect(screen.getByText('Olay döngüsü p99').nextElementSibling?.textContent).toBe('640 ms');
+    expect(screen.getByText('Ana iş parçacığı').nextElementSibling?.textContent).toBe('88%');
+    expect(within(screen.getByRole('table', { name: 'Olay döngüsü p99 (ms)' })).getAllByRole('row')).toHaveLength(3);
+    expect(screen.getByRole('table', { name: 'Ana iş parçacığı (%)' })).toBeTruthy();
     const p95Tablosu = screen.getByRole('table', { name: 'Yanıt süresi p95 (ms)' });
     expect(within(p95Tablosu).getAllByRole('row')).toHaveLength(3);
     const uclar = screen.getByRole('table', { name: 'En yavaş uçlar' });
@@ -54,7 +59,7 @@ describe('Performans', () => {
     await waitFor(() => expect(screen.getByText('Yanıt süresi p95')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: '13 ay' }));
     await waitFor(() => expect(yollar).toContain('/saglik/metrikler/saatlik?aralik=yil'));
-    await waitFor(() => expect(screen.getAllByText('Bu aralıkta ölçü yok.')).toHaveLength(4));
+    await waitFor(() => expect(screen.getAllByText('Bu aralıkta ölçü yok.')).toHaveLength(6));
     expect(screen.getByRole('button', { name: '13 ay' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
