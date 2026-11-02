@@ -23,6 +23,15 @@ describe('makine devralma sorusu', () => {
     expect([onayla.mock.calls.length, vazgec.mock.calls.length]).toEqual([1, 1]);
   });
 
+  it('ARK-5 b: aynı işte başkası çalışıyorsa kimin çalıştığını söyler ve işi durdurmadan devralmayı sorar', () => {
+    const onayla = vi.fn();
+    render(<MakineDevralPenceresi red={{ tur: 'calisma', cid: 'c2', ileti: 'x', emirId: 9, isEmriId: 3, adlar: ['Deneme Ali'] }} yukleniyor={false} onayla={onayla} vazgec={vi.fn()} />);
+    expect(screen.getByText('Bu iş makinede Deneme Ali adına çalışıyor.')).toBeTruthy();
+    expect(screen.getByText(/iş durmaz/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Devral' }));
+    expect(onayla).toHaveBeenCalledTimes(1);
+  });
+
   it('red yokken hiçbir şey çizilmez; makinesiz işte yer istasyondur', () => {
     render(<MakineDevralPenceresi red={null} yukleniyor={false} onayla={vi.fn()} vazgec={vi.fn()} />);
     expect(screen.queryByRole('dialog')).toBeNull();
