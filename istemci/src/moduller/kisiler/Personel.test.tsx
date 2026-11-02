@@ -127,6 +127,31 @@ describe('Personel', () => {
     expect(screen.queryByRole('button', { name: 'Zeki Deneme yeniden aktif yap' })).toBeNull();
   });
 
+  it('KIS-7: arama ve durum süzgeci listeyi daraltır; sonuç yoksa boş iletisi', async () => {
+    sunucuKur({ kullanici: OKUYUCU });
+    ac();
+    await screen.findByText('Ayşe Deneme');
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'AYSE' } });
+    expect(screen.queryByText('Mehmet Deneme')).toBeNull();
+    expect(screen.getByText('Ayşe Deneme')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /Pasif/ }));
+    expect(screen.queryByText('Ayşe Deneme')).toBeNull();
+    expect(screen.getByText('Mehmet Deneme')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'yok böyle' } });
+    expect(screen.getByText('Bu aramada kişi yok')).toBeTruthy();
+  });
+
+  it('KIS-7: aynı adla ikinci kişi eklenirken uyarılır, kayıt engellenmez', async () => {
+    sunucuKur({ kullanici: YAZAR });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Kişi ekle' }));
+    const pencere = within(await screen.findByRole('dialog'));
+    fireEvent.change(pencere.getByLabelText('Ad', { exact: false }), { target: { value: '  ayşe  deneme ' } });
+    expect(pencere.getByText(/Bu adla kayıtlı kişi var: Ayşe Deneme/)).toBeTruthy();
+    expect((pencere.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('atama: seçilen rol sunucuya gider, liste yeni rolle güncellenir, seçeneklerden düşer', async () => {
     const istekler = sunucuKur({
       kullanici: YONETICI,

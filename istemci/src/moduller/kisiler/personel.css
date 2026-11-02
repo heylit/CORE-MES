@@ -40,3 +40,5 @@
 }
 .tc-personel-matris-grup th > span { display: inline-block; position: sticky; left: var(--b-3); }
 .tc-personel-var { display: inline-flex; color: var(--run); }
+/* Yalnız okuyan kişide satırın işlemi yoktur; kart kipinde boş "İşlem" satırı çizilmez. */
+[data-kip="kart"] td:has(> .tc-personel-satir-islem:empty) { display: none; }

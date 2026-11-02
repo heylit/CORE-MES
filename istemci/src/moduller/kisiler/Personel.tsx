@@ -14,6 +14,7 @@ import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { YetkiMatrisi } from './YetkiMatrisi.tsx';
 import { HesapPenceresi, KisiFormu, ParolaPenceresi, PinPenceresi, eskiyseYenile, listeyeYaz } from './KisiPencereleri.tsx';
+import { kisileriSuz, type DurumSuzgeci } from './suzme.ts';
 import './personel.css';
 
 type Islem = 'rol-ata' | 'rol-al';
@@ -131,6 +132,12 @@ const ISTEK_ANAHTARLARI = ['yeni', 'kisi', 'gorunum'] as const;
 
 // Bayrak yalnız kisiler.rol-yonet sahibine görünür; bilinmiyorsa düğme kalır, sunucu reddeder. Bayraklı kişinin kaydını
 // yalnız bayraklı kullanıcı düzenler.
+const DURUM_SECENEKLERI = [
+  { deger: 'tumu', baslik: 'Tümü' },
+  { deger: 'aktif', baslik: 'Aktif', simge: 'check' },
+  { deger: 'pasif', baslik: 'Pasif', simge: 'stop' },
+] as const;
+
 const bayrakli = (k: KisiOzeti): boolean => k.roller.some((r) => r.yonetici === true);
 
 export function Personel() {
@@ -145,6 +152,8 @@ export function Personel() {
   const [acik, acikYaz] = useState<Pencere | null>(null);
   const [gorunum, gorunumYaz] = useState<Gorunum>('kisiler');
   const [pasifeAlinacak, pasifeAlinacakYaz] = useState<KisiOzeti | null>(null);
+  const [ara, araYaz] = useState('');
+  const [durum, durumYaz] = useState<DurumSuzgeci>('tumu');
 
   const secili = acik?.kisiId == null ? null : kisiler.data?.kisiler.find((k) => k.id === acik.kisiId) ?? null;
   const kapat = () => acikYaz(null);
@@ -293,9 +302,21 @@ export function Personel() {
         <DurumKutusu durum="hata" mesaj={hataIletisi(kisiler.error, 'Kişiler alınamadı')} yenile={() => { void kisiler.refetch(); }} />
       )}
       {gorunum === 'kisiler' && kisiler.data && (
-        <Tablo etiket="Kişiler" sutunlar={sutunlar} satirlar={kisiler.data.kisiler} satirAnahtari={(k) => k.id} bosMesaj="Kişi yok" />
+        <Tablo
+          etiket="Kişiler"
+          sutunlar={sutunlar}
+          satirlar={kisileriSuz(kisiler.data.kisiler, ara, durum)}
+          satirAnahtari={(k) => k.id}
+          bosMesaj={ara.trim() === '' && durum === 'tumu' ? 'Kişi yok' : 'Bu aramada kişi yok'}
+          arac={{
+            arama: { deger: ara, degistir: araYaz, etiket: 'Ara', yerTutucu: 'Ad, sicil no, görev ara' },
+            suzgec: { etiket: 'Durum', secenekler: DURUM_SECENEKLERI, secili: durum, sec: (d) => durumYaz(d as DurumSuzgeci) },
+          }}
+        />
       )}
-      {yazabilir && acik?.tur === 'form' && (acik.kisiId === null || secili !== null) && <KisiFormu kisi={secili} kapat={kapat} />}
+      {yazabilir && acik?.tur === 'form' && (acik.kisiId === null || secili !== null) && (
+        <KisiFormu kisi={secili} kisiler={kisiler.data?.kisiler ?? []} kapat={kapat} />
+      )}
       {yonetebilir && acik?.tur === 'hesap' && secili !== null && <HesapPenceresi kisi={secili} kapat={kapat} />}
       {acik?.tur === 'parola' && secili !== null && (
         <ParolaPenceresi kisi={secili} kendi={secili.id === oturum.data?.id} kapat={kapat} />
