@@ -83,6 +83,7 @@ export const siniflandirmaCevaplari = z.object({
 }).strict();
 export const siniflandirGovdesi = z.object({ sinif, aciliyet, cevaplar: siniflandirmaCevaplari, not: aciklama, surum: surumSemasi }).strict();
 export const ccbGovdesi = z.object({ karar: z.enum(['onay', 'ret']), aciklama, surum: surumSemasi }).strict();
+export const geriCekGovdesi = z.object({ aciklama: metin(1000, 'Geri çekme gerekçesini yazın.'), surum: surumSemasi }).strict();
 export const musteriOnayiGovdesi = z.object({ referans: metin(80, 'Müşteri onay numarasını yazın.'), aciklama, surum: surumSemasi }).strict();
 // Kalem: talepteki her parça için eski ve yeni revizyon bağı. Yeni çizim ve rota revizyonu sahibi modülde taslak olarak açılır,
 // burada kimliğiyle bağlanır (1121 a). Değiştirilebilirlik iki yönde de evet değilse yeni parça numarası gerekir (D sınıfında).
@@ -385,6 +386,7 @@ export const olayListeCevabi = listeCevapSemasi(olaySatiri);
 export type TalepAcGovdesi = z.input<typeof talepAcGovdesi>;
 export type SiniflandirGovdesi = z.input<typeof siniflandirGovdesi>;
 export type CcbGovdesi = z.input<typeof ccbGovdesi>;
+export type GeriCekGovdesi = z.input<typeof geriCekGovdesi>;
 export type MusteriOnayiGovdesi = z.input<typeof musteriOnayiGovdesi>;
 export type KalemKaydetGovdesi = z.input<typeof kalemKaydetGovdesi>;
 export type GeriGonderGovdesi = z.input<typeof geriGonderGovdesi>;

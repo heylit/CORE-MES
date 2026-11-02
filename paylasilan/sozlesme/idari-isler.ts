@@ -238,11 +238,15 @@ export const VARIS_EN_UZUN = 120;
 export const GOREV_EN_UZUN_GUN = 30;
 export const GOREV_ILERI_GUN = 60;
 
+// Gün içi saat "SS:DD"; boşsa görev bütün günü tutar.
+const gorevSaatiSemasi = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Saat SS:DD biçiminde girilir.');
 export const aracTalebiAcGovdesi = z.object({
   amac: z.string().trim().min(1, 'Amaç boş olamaz.').max(AMAC_EN_UZUN, `En çok ${AMAC_EN_UZUN} karakter.`),
   varis: z.string().trim().min(1, 'Gidilecek yer boş olamaz.').max(VARIS_EN_UZUN, `En çok ${VARIS_EN_UZUN} karakter.`),
   tarih: tarihSemasi,
   donusTarihi: tarihSemasi,
+  cikisSaati: gorevSaatiSemasi.nullish().transform((s) => s ?? null),
+  donusSaati: gorevSaatiSemasi.nullish().transform((s) => s ?? null),
   aciklama: istege(NOT_EN_UZUN),
 });
 export const gorevOnaylaGovdesi = z.object({ ...beklenenSurum, aracId: kimlik });
@@ -256,6 +260,8 @@ export const aracGoreviSemasi = z.object({
   varis: z.string(),
   tarih: tarihSemasi,
   donusTarihi: tarihSemasi,
+  cikisSaati: z.string().nullable(),
+  donusSaati: z.string().nullable(),
   aciklama: z.string().nullable(),
   durum: gorevDurumuSemasi,
   talep: zamanSemasi,

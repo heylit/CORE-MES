@@ -428,6 +428,8 @@ export interface GorevSatiri {
   varis: string;
   tarih: string;
   donus_tarihi: string;
+  cikis_saati: string | null;
+  donus_saati: string | null;
   aciklama: string | null;
   durum: GorevDurumu;
   talep: string;
@@ -444,7 +446,8 @@ export interface GorevSatiri {
   surum: number;
 }
 
-const GOREV_SECIM = `SELECT g.id, g.talep_eden_kisi_id, g.amac, g.varis, g.tarih, g.donus_tarihi, g.aciklama, g.durum, ${zamanMetni('g.talep')} AS talep,
+const GOREV_SECIM = `SELECT g.id, g.talep_eden_kisi_id, g.amac, g.varis, g.tarih, g.donus_tarihi,
+                            to_char(g.cikis_saati, 'HH24:MI') AS cikis_saati, to_char(g.donus_saati, 'HH24:MI') AS donus_saati, g.aciklama, g.durum, ${zamanMetni('g.talep')} AS talep,
                             g.arac_id, a.plaka, g.onaylayan_kisi_id, ${zamanMetni('g.onay')} AS onay, g.red_nedeni, g.cikis_km,
                             ${zamanMetni('g.cikis')} AS cikis, g.donus_km, ${zamanMetni('g.donus')} AS donus, ${zamanMetni('g.kapanma')} AS kapanma,
                             g.surum
@@ -452,9 +455,9 @@ const GOREV_SECIM = `SELECT g.id, g.talep_eden_kisi_id, g.amac, g.varis, g.tarih
 
 export async function gorevEkle(db: Db, g: AracTalebiAcVerisi, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO idari_isler_arac_gorevi (talep_eden_kisi_id, amac, varis, tarih, donus_tarihi, aciklama)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [kisiId, g.amac, g.varis, g.tarih, g.donusTarihi, g.aciklama],
+    `INSERT INTO idari_isler_arac_gorevi (talep_eden_kisi_id, amac, varis, tarih, donus_tarihi, cikis_saati, donus_saati, aciklama)
+     VALUES ($1, $2, $3, $4, $5, $6::time, $7::time, $8) RETURNING id`,
+    [kisiId, g.amac, g.varis, g.tarih, g.donusTarihi, g.cikisSaati, g.donusSaati, g.aciklama],
   );
   if (satir === null) throw new Error('Araç görevi yazılamadı');
   return satir.id;
@@ -466,10 +469,12 @@ export function gorevGetir(db: Db, id: number): Promise<GorevSatiri | null> {
 
 export interface GorevKilidi {
   durum: GorevDurumu; talep_eden_kisi_id: number; arac_id: number | null; cikis_km: number | null; tarih: string; donus_tarihi: string;
+  cikis_saati: string | null; donus_saati: string | null;
 }
 export function gorevKilitle(db: Db, id: number): Promise<GorevKilidi | null> {
   return db.tek<GorevKilidi>(
-    'SELECT durum, talep_eden_kisi_id, arac_id, cikis_km, tarih, donus_tarihi FROM idari_isler_arac_gorevi WHERE id = $1 FOR UPDATE',
+    `SELECT durum, talep_eden_kisi_id, arac_id, cikis_km, tarih, donus_tarihi, cikis_saati::text, donus_saati::text
+       FROM idari_isler_arac_gorevi WHERE id = $1 FOR UPDATE`,
     [id],
   );
 }
@@ -514,14 +519,19 @@ export function gorevDonusYaz(db: Db, id: number, surum: number, km: number, kis
   );
 }
 
-// IDR-25: aracın bu tarihlerle kesişen başka onaylı ya da yoldaki görevi.
-export async function aracCakisiyorMu(db: Db, aracId: number, tarih: string, donusTarihi: string, haric: number): Promise<boolean> {
+// IDR-25: aracın bu zaman aralığıyla kesişen başka onaylı ya da yoldaki görevi. Saatsiz uç günün başı ya da sonudur; bitişik aralıklar
+// (biri 12:00'de dönüp öteki 12:00'de çıkan) kesişmez.
+export async function aracCakisiyorMu(
+  db: Db, aracId: number, g: { tarih: string; donusTarihi: string; cikisSaati: string | null; donusSaati: string | null }, haric: number,
+): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(
     `SELECT EXISTS (
        SELECT 1 FROM idari_isler_arac_gorevi
         WHERE arac_id = $1 AND durum IN ('onaylandi', 'yolda') AND id <> $4 AND tarih <= $3::date AND donus_tarihi >= $2::date
+          AND tarih + coalesce(cikis_saati, time '00:00') < $3::date + coalesce($6::time, time '24:00')
+          AND $2::date + coalesce($5::time, time '00:00') < donus_tarihi + coalesce(donus_saati, time '24:00')
      ) AS var`,
-    [aracId, tarih, donusTarihi, haric],
+    [aracId, g.tarih, g.donusTarihi, haric, g.cikisSaati, g.donusSaati],
   );
   return satir?.var ?? false;
 }

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { kapatilabilirMi, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import { kapatilabilirMi, sinifGerekcesiGerekir, geriCekilebilirMi } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, siparisKarariOner, stokKarariOner, talepAdimiUygunMu,
-  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon,
+  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, rotaOgesiEksigi,
 } from './kurallar.ts';
 import type { EtkilenenEmir, KalemTaslagi, Konfigurasyon } from './kurallar.ts';
 
@@ -199,6 +199,7 @@ describe('degisiklik-yonetimi kuralları', () => {
     const ccb = talepGorevi('ccb_bekliyor');
     assert.equal(ccb?.islem, 'degisiklik-yonetimi.ccb-karar');
     assert.equal(talepGorevi('reddedildi'), null);
+    assert.equal(talepGorevi('geri_cekildi'), null);
     // Ekipte görünür, ama açana kendi talebinin CCB adımı düşmez; öteki adım işlemi olanındır.
     const islemler = ['degisiklik-yonetimi.ccb-karar', 'degisiklik-yonetimi.siniflandir'];
     if (ccb === null) throw new Error('CCB adımı yok');
@@ -212,6 +213,10 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.deepEqual(emirGorevleri({ durum: 'uygulamada', bekleyenKarar: 0, bekleyenMrb: 0, bekleyenFai: 1 }).map((g) => g.islem), ['degisiklik-yonetimi.fai-onayla']);
     assert.deepEqual(emirGorevleri({ durum: 'kapandi', bekleyenKarar: 0, bekleyenMrb: 0, bekleyenFai: 0 }), []);
     assert.equal(talepHatti('emir_acildi'), null);
+    assert.equal(talepHatti('geri_cekildi'), null);
+    // DY-26: geri çekme yalnız CCB kararından önce.
+    assert.deepEqual(['gonderildi', 'analizde', 'ccb_bekliyor', 'musteri_onayi_bekliyor', 'onaylandi', 'emir_acildi', 'reddedildi', 'geri_cekildi'].map((d) => geriCekilebilirMi(d as 'gonderildi')),
+      [true, true, true, false, false, false, false, false]);
     assert.equal(emirHatti('uygulamada'), 'fai');
     assert.equal(emirHatti('kapandi'), null);
   });
@@ -251,5 +256,13 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.deepEqual([ilk.konfigurasyon.parcaRevizyonu, ilk.konfigurasyon.prosesSurumu], ['A', 1]);
     const ilkProses = yeniKonfigurasyon(null, { ogeler: [{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 10 }], yeniParcaRevizyonu: null, tasarimMi: false });
     assert.ok('konfigurasyon' in ilkProses && ilkProses.konfigurasyon.parcaRevizyonu === null && ilkProses.konfigurasyon.prosesSurumu === 1);
+  });
+
+  test('DY-25: rota öğesinin revizyonları rotada var ve kalemin parçasının; diğer türler denetlenmez', () => {
+    const kunyeler = [{ id: 21, malzemeId: 1 }, { id: 22, malzemeId: 1 }, { id: 31, malzemeId: 2 }];
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: 21, yeniRevizyonId: 22 }], kunyeler, 1), null);
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 99 }], kunyeler, 1), 'Rota revizyonu bulunamadı.');
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: 21, yeniRevizyonId: 31 }], kunyeler, 1), 'Rota revizyonu bu kalemin parçasına ait değil.');
+    assert.equal(rotaOgesiEksigi([{ tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 99 }], kunyeler, 1), null);
   });
 });

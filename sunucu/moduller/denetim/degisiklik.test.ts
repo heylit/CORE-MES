@@ -19,7 +19,7 @@ interface Satir { kisi_id: number | null; tablo: string; anahtar: unknown; islem
 
 // Deneme tabloları modül tablosunun yerine geçer: tetik işlevi tabloya bağlı değildir, modüller kendi göçüyle aynı kalıpla bağlar.
 const FIKSTUR = [
-  `CREATE TABLE deneme_kart (id int PRIMARY KEY, ad text NOT NULL, adet int, kayit jsonb, parola text, surum int NOT NULL DEFAULT 1)`,
+  `CREATE TABLE deneme_kart (id int PRIMARY KEY, ad text NOT NULL, adet int, kayit jsonb, parola text, pin_ozeti text, surum int NOT NULL DEFAULT 1)`,
   `CREATE TRIGGER deneme_kart_degisiklik AFTER UPDATE OR DELETE ON deneme_kart
      FOR EACH ROW EXECUTE FUNCTION denetim_degisiklik_yaz('id', 'surum')`,
   `CREATE TABLE deneme_yetki (kisi_id int, rol_id int, PRIMARY KEY (kisi_id, rol_id))`,
@@ -106,6 +106,19 @@ describe('eski/yeni değer defteri (gerçek PostgreSQL)', () => {
     await o().vt.sorgu('UPDATE deneme_kart SET surum = surum + 1 WHERE id = 2');
     const satirlar = await defter('deneme_kart');
     assert.equal(satirlar.some((s) => (s.anahtar as { id: number }).id === 2), false);
+  });
+
+  test('reddedilen: sır özeti (_ozeti ile biten sütun) deftere hiç girmez; yalnız özet değişirse satır yazılmaz', async () => {
+    await o().vt.sorgu("INSERT INTO deneme_kart (id, ad, adet, pin_ozeti) VALUES (9, 'Pim', 1, 'ozet-eski')");
+    await o().vt.sorgu("UPDATE deneme_kart SET pin_ozeti = 'ozet-yeni' WHERE id = 9");
+    await o().vt.sorgu("UPDATE deneme_kart SET pin_ozeti = 'ozet-son', adet = 2 WHERE id = 9");
+    await o().vt.sorgu('DELETE FROM deneme_kart WHERE id = 9');
+    const satirlar = (await defter('deneme_kart')).filter((s) => (s.anahtar as { id: number }).id === 9);
+    assert.deepEqual(satirlar.map((s) => [s.islem, s.alanlar]), [
+      ['guncelle', { adet: { eski: 1, yeni: 2 } }],
+      ['sil', { id: { eski: 9, yeni: null }, ad: { eski: 'Pim', yeni: null }, adet: { eski: 2, yeni: null } }],
+    ]);
+    assert.equal(JSON.stringify(satirlar).includes('ozet-'), false);
   });
 
   test('jsonb nesne sütununda fark üst anahtar düzeyindedir: değişmeyen anahtar yazılmaz', async () => {

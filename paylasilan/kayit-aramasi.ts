@@ -20,6 +20,7 @@ export const KAYIT_TURLERI = {
   rota: { onek: 'r', ad: 'Reçete ve rota', modul: 'recete-rota' },
   olcuAleti: { onek: 'ol', ad: 'Ölçü aleti', modul: 'kalibrasyon' },
   istasyon: { onek: 'i', ad: 'İstasyon', modul: 'istasyonlar' },
+  seri: { onek: 'sr', ad: 'Seri no', modul: 'markalama' },
 } as const satisfies Record<string, { onek: string; ad: string; modul: string }>;
 
 export type KayitTuru = keyof typeof KAYIT_TURLERI;

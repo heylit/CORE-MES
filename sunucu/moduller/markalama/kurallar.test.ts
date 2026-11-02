@@ -28,6 +28,9 @@ describe('markalama kuralları', () => {
     assert.equal(alanHatasi([alan(), alan({ icerik: 'sabit', sabitMetin: 'C' })]), null);
     assert.match(alanHatasi([alan({ icerik: 'sabit' })]) ?? '', /sabit metni boş/);
     assert.match(alanHatasi([alan({ sabitMetin: 'C' })]) ?? '', /sabit metin yazılmaz/);
+    assert.equal(alanHatasi([alan(), alan({ icerik: 'sabit', sabitMetin: 'REV C-1/2.0_A' })]), null);
+    assert.match(alanHatasi([alan({ icerik: 'sabit', sabitMetin: 'ÇĞŞ' })]) ?? '', /yalnız İngilizce harf/);
+    assert.match(alanHatasi([alan({ icerik: 'sabit', sabitMetin: 'A<b>' })]) ?? '', /yalnız İngilizce harf/);
     assert.equal(seriAlaniVarMi([alan({ icerik: 'sabit', sabitMetin: 'C' })]), false);
     assert.equal(seriAlaniVarMi([alan({ icerik: 'sabit', sabitMetin: 'C' }), alan()]), true);
   });

@@ -130,6 +130,10 @@ describe('kişi yönetimi (gerçek PostgreSQL, gerçek giriş)', () => {
     const cakisan = await istek(ikCerezi, '/kisiler', { ad: 'Başka', sicilNo: 'S-1' });
     assert.equal(cakisan.statusCode, 409);
     assert.deepEqual(cakisan.json(), { kod: 'CAKISMA', mesaj: ILETILER.sicilVar });
+    // KIS-2: sicil harf farkıyla da çakışır.
+    const harfFarkli = await istek(ikCerezi, '/kisiler', { ad: 'Başka', sicilNo: 's-1' });
+    assert.equal(harfFarkli.statusCode, 409);
+    assert.deepEqual(harfFarkli.json(), { kod: 'CAKISMA', mesaj: ILETILER.sicilVar });
 
     assert.equal((await istek(ikCerezi, '/kisiler', { ad: '   ' })).statusCode, 400);
     assert.equal((await istek(ikCerezi, '/kisiler', { ad: 'Uzun', sicilNo: 's'.repeat(31) })).statusCode, 400);

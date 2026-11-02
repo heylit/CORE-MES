@@ -18,7 +18,7 @@ export const HAT_ADLARI: Readonly<Record<HatAsamasi, string>> = {
 };
 
 const TALEP_TONU: Readonly<Record<TalepDurumu, RozetTonu>> = {
-  gonderildi: 'bilgi', analizde: 'bilgi', ccb_bekliyor: 'bilgi', musteri_onayi_bekliyor: 'bilgi', onaylandi: 'tamam', emir_acildi: 'pasif', reddedildi: 'pasif',
+  gonderildi: 'bilgi', analizde: 'bilgi', ccb_bekliyor: 'bilgi', musteri_onayi_bekliyor: 'bilgi', onaylandi: 'tamam', emir_acildi: 'pasif', reddedildi: 'pasif', geri_cekildi: 'pasif',
 };
 const MOD_TONU: Readonly<Record<KararModu, RozetTonu>> = { otomatik: 'tamam', onayli: 'bilgi', mrb: 'hata' };
 

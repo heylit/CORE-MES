@@ -142,6 +142,16 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
       cubuk = (await ornekMalzemeNo(db, 'cubuk')) ?? 0;
     });
     assert.ok(mil > 0 && flans > 0 && cubuk > 0);
+    // DY-25: kalem rota revizyonunu rota modülünde arar. Testin kullandığı sabit kimlikler gerçek (iptal) revizyon olarak yazılır;
+    // şema bu teste özeldir, kimlikler çakışmaz.
+    const rotaRevizyonlari: [number, number, string][] = [[mil, 5, 'A'], [mil, 21, 'B'], [mil, 41, 'C'], [flans, 900001, 'A'], [flans, 900002, 'B'], [flans, 900003, 'C']];
+    for (const [malzemeId, id, harf] of rotaRevizyonlari) {
+      await vt().sorgu(
+        `INSERT INTO rota_revizyonu (id, malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+         OVERRIDING SYSTEM VALUE VALUES ($1, $2, 'mamul', $3, 'iptal', $4, $4, now())`,
+        [id, malzemeId, harf, acanId],
+      );
+    }
   });
 
   after(async () => {
@@ -152,7 +162,7 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const komutlar: [string, Islem][] = [
       ['/talepler/ac', 'degisiklik-yonetimi.talep-ac'], ['/talepler/999999/siniflandir', 'degisiklik-yonetimi.siniflandir'],
       ['/talepler/999999/etki-analizi', 'degisiklik-yonetimi.siniflandir'], ['/talepler/999999/ccb', 'degisiklik-yonetimi.ccb-karar'],
-      ['/talepler/999999/musteri-onayi', 'degisiklik-yonetimi.musteri-onayi'], ['/talepler/999999/emir-ac', 'degisiklik-yonetimi.emir-ac'],
+      ['/talepler/999999/geri-cek', 'degisiklik-yonetimi.talep-ac'], ['/talepler/999999/musteri-onayi', 'degisiklik-yonetimi.musteri-onayi'], ['/talepler/999999/emir-ac', 'degisiklik-yonetimi.emir-ac'],
       ['/emirler/999999/taslak-ac', 'degisiklik-yonetimi.revizyon-hazirla'], ['/emirler/999999/kalem-kaydet', 'degisiklik-yonetimi.revizyon-hazirla'],
       ['/emirler/999999/yayina-gonder', 'degisiklik-yonetimi.revizyon-hazirla'], ['/emirler/999999/geri-gonder', 'degisiklik-yonetimi.yayinla'],
       ['/emirler/999999/yayinla', 'degisiklik-yonetimi.yayinla'], ['/emirler/999999/karar', 'degisiklik-yonetimi.karar-ver'],
@@ -249,6 +259,22 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const retOlayi = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?tur=talep_reddedildi&ara=${ret.no}`);
     assert.deepEqual(retOlayi.satirlar.map((o) => [o.kayitNo, o.alanlar.gerekce]), [[ret.no, 'Gerek yok']]);
     await kod(acan, `${K}/talepler/${p.id}/emir-ac`, { surum: ret.surum }, 409);
+    // DY-26: yalnız açan, CCB kararından önce ve gerekçeyle geri çeker; geri çekilen talep kapanır, olay günlüğüne düşer.
+    await kod(acan, `${K}/talepler/${p.id}/geri-cek`, { aciklama: 'Vazgeçildi', surum: ret.surum }, 409, /geri çekilemez/);
+    let g = await talepAc();
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { surum: g.surum }, 400);
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: '  ', surum: g.surum }, 400, /gerekçesini/);
+    await kod(onaylayan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Başkası', surum: g.surum }, 403, /yalnız açan/);
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Eski sürüm', surum: g.surum + 1 }, 409);
+    g = await tamam(acan, 'POST', `${K}/talepler/${g.id}/siniflandir`, { sinif: 'D1', aciliyet: 'normal', cevaplar, surum: g.surum });
+    const geri = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Yanlış parça seçildi', surum: g.surum });
+    assert.equal(geri.durum, 'geri_cekildi');
+    assert.deepEqual([geri.gecmis.at(-1)?.olay, geri.gecmis.at(-1)?.aciklama, geri.gecmis.at(-1)?.imzaAnlami], ['geri_cekildi', 'Yanlış parça seçildi', null]);
+    const geriOlayi = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?tur=talep_geri_cekildi&ara=${geri.no}`);
+    assert.deepEqual(geriOlayi.satirlar.map((o) => [o.kayitNo, o.alanlar.gerekce]), [[geri.no, 'Yanlış parça seçildi']]);
+    await kod(acan, `${K}/talepler/${g.id}/etki-analizi`, { surum: geri.surum }, 409);
+    assert.ok(!(await tamam<TalepListeCevabi>(acan, 'GET', `${K}/talepler`)).satirlar.some((s) => s.id === g.id));
+    assert.ok((await tamam<TalepListeCevabi>(acan, 'GET', `${K}/talepler?kapsam=kapali`)).satirlar.some((s) => s.id === g.id));
     // D2 onayı doğrudan onaylanır.
     let d2 = await talepAc();
     d2 = await tamam(acan, 'POST', `${K}/talepler/${d2.id}/siniflandir`, { sinif: 'D2', aciliyet: 'normal', cevaplar: { ...cevaplar, fff: 'hayir' }, surum: d2.surum });
@@ -273,6 +299,13 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(acan, 'POST', `${K}/emirler/${e.id}/kalem-kaydet`, {
       kalemId: k2.id, yeniCizimRevizyonuId: 12, yeniRotaRevizyonuId: null, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', ozet: 'Pah eklendi', surum: x.surum,
     });
+    // DY-25: olmayan rota revizyonu ve başka parçanın revizyonu reddedilir.
+    await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, {
+      kalemId: k1.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: 2147480000, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', surum: x.surum,
+    }, 400, /Rota revizyonu bulunamadı/);
+    await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, {
+      kalemId: k1.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: 900001, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', surum: x.surum,
+    }, 400, /parçasına ait değil/);
     await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, { kalemId: 2147480000, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: null, eskiYeniyeUyar: null, yeniEskiyeUyar: null, surum: x.surum }, 404);
     await kod(acan, `${K}/emirler/${e.id}/yayina-gonder`, { surum: x.surum }, 400, /yeni parça numarası/);
     x = await tamam(acan, 'POST', `${K}/emirler/${e.id}/kalem-kaydet`, {
@@ -585,7 +618,13 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     await sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) SELECT $1, id, '5', now() FROM stok_konum WHERE kod = 'KABUL'", [parca]);
     const emirNo = async (id: number) => (await sahip.tek<{ no: string }>('SELECT emir_no AS no FROM uretim_emri WHERE id = $1', [id]))!.no;
 
-    const e = await yayinaHazir(await emreKadar('P1', [parca]));
+    // DY-25: kalemin rota revizyonu bu parçanındır.
+    await vt().sorgu(
+      `INSERT INTO rota_revizyonu (id, malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+       OVERRIDING SYSTEM VALUE VALUES (900101, $1, 'mamul', 'A', 'iptal', $2, $2, now())`,
+      [parca, acanId],
+    );
+    const e = await yayinaHazir(await emreKadar('P1', [parca]), { yeniRotaRevizyonuId: 900101 });
     const x = await tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'tarih', tarih: '2026-12-01' }, surum: e.surum });
     const hedef = (h: KararHedefi, id: number) => x.kararlar.find((k) => k.hedef === h && k.hedefId === id);
     assert.equal(x.kararlar.length, 3);

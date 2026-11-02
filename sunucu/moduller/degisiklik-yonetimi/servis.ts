@@ -4,22 +4,23 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI, KAPANIS_ENGELI, kapatilabilirMi, SINIF_GEREKCESI_ILETISI, onerilenSinif, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI, KAPANIS_ENGELI, kapatilabilirMi, SINIF_GEREKCESI_ILETISI, onerilenSinif, sinifGerekcesiGerekir, geriCekilebilirMi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
   GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
-  KararGovdesi, KararHedefi, KonfigurasyonCevabi, MusteriOnayiGovdesi, OgeTuru, OlayListeCevabi, OlaylarSorgusu, ParcaAdaylariCevabi, RaporCevabi,
+  KararGovdesi, KararHedefi, KonfigurasyonCevabi, MusteriOnayiGovdesi, OgeTuru, OlayListeCevabi, OlaylarSorgusu, ParcaAdaylariCevabi, RaporCevabi, GeriCekGovdesi,
   RaporSorgusu, SeriListeCevabi, SerilerSorgusu, SiniflandirGovdesi, SonUrunlerCevabi, TalepAcGovdesi, TalepCevabi, TalepListeCevabi, TaleplerSorgusu, YayinlaGovdesi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { revizyonKunyeleri as rotaRevizyonKunyeleri } from '../rota/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { malzemePartiBakiyeleri, partiGirisZamanlari } from '../stok/disari.ts';
 import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
 import type { EtkilenenEmir as UretimdekiEmir } from '../uretim-emirleri/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
-  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, siparisKarariOner, stokKarariOner,
+  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, siparisKarariOner, stokKarariOner, rotaOgesiEksigi,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
 import type { EMIR_ADIMLARI, EtkilenenEmir, TALEP_ADIMLARI } from './kurallar.ts';
@@ -186,6 +187,19 @@ export async function ccbKarari(db: Db, kullanici: Kullanici, id: number, g: Ccb
   return talepCevabi(db, id);
 }
 
+// DY-26: açan kişi kararsız talebini gerekçeyle geri çeker; talep kapanır, geçmiş ve olay günlüğü kalır. Yeni işlem yoktur: talep açma işlemi.
+export async function geriCek(db: Db, kullanici: Kullanici, id: number, g: GeriCekGovdesi): Promise<TalepCevabi> {
+  const t = await s.talepKilitle(db, id);
+  if (t === null) throw bulunamadi(TALEP_YOK);
+  if (t.surum !== g.surum) throw eskiSurum();
+  if (!kendiTalebiMi(t.acanKisiId, kullanici.id)) throw yetkiYok('Talebi yalnız açan kişi geri çekebilir.');
+  if (!geriCekilebilirMi(t.durum)) throw cakisma(`Talep bu aşamada (${TALEP_DURUM_ADLARI[t.durum]}) geri çekilemez; CCB kararından sonra geri çekme yoktur.`);
+  await talepYaz(db, t, g.surum, { durum: 'geri_cekildi' });
+  await s.gecmisEkle(db, { talepId: id, olay: 'geri_cekildi', kisiId: kullanici.id, imzaAnlami: null, aciklama: g.aciklama, ozet: 'Talep geri çekildi' });
+  await s.olayEkle(db, { tur: 'talep_geri_cekildi', ilgili: null, kayitNo: t.no, alanlar: { gerekce: g.aciklama } });
+  return talepCevabi(db, id);
+}
+
 export async function musteriOnayi(db: Db, kullanici: Kullanici, id: number, g: MusteriOnayiGovdesi): Promise<TalepCevabi> {
   const t = await talepAdimi(db, id, g.surum, 'musteriOnayi');
   await talepYaz(db, t, g.surum, { durum: 'onaylandi', musteriReferansi: g.referans });
@@ -342,6 +356,10 @@ export async function kalemKaydet(db: Db, kullanici: Kullanici, id: number, g: K
   const { turler, ogeler } = kalemOgeleri(g, mevcut);
   const eksik = ogeEksigi(ogeler, mevcut);
   if (eksik !== null) throw dogrulama(eksik, 'ogeler');
+  const rotaIdleri = ogeler.filter((o) => o.tur === 'rota').flatMap((o) => [o.eskiRevizyonId, o.yeniRevizyonId].filter((x): x is number => x !== null));
+  const kunyeler = rotaIdleri.length === 0 ? [] : (await rotaRevizyonKunyeleri(db, rotaIdleri)).revizyonlar;
+  const rotaEksigi = rotaOgesiEksigi(ogeler, kunyeler, kalem.malzemeId);
+  if (rotaEksigi !== null) throw dogrulama(rotaEksigi, g.ogeler === undefined ? 'yeniRotaRevizyonuId' : 'ogeler');
   await s.kalemYaz(db, id, g.kalemId, {
     eskiYeniyeUyar: prosesMi ? null : g.eskiYeniyeUyar, yeniEskiyeUyar: prosesMi ? null : g.yeniEskiyeUyar,
     yeniParcaNo: g.yeniParcaNo ?? null, yeniParcaAdi: g.yeniParcaAdi ?? null, yeniParcaRevizyonu: g.yeniParcaRevizyonu ?? null, ozet: g.ozet ?? '',

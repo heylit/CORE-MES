@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Vector3 } from 'three';
 import type {
-  AlanGovdesi, MarkalamaTanimi, OnizlemeCevabi, SayacKapsami, TanimEkleGovdesi, TanimKaydetGovdesi, TanimlarCevabi,
+  AlanGovdesi, MarkalamaTanimi, OnizlemeCevabi, SayacKapsami, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import type { MalzemeAraCevabi } from '#paylasilan/sozlesme/rota.ts';
 import {
@@ -30,6 +30,7 @@ interface Taslak {
   sayacKapsami: SayacKapsami;
   baslangicSirasi: string;
   dogrulama: boolean;
+  aktif: boolean;
   model: MarkalamaTanimi['model'];
   alanlar: AlanGovdesi[];
 }
@@ -41,12 +42,12 @@ const yeniAlan = (sira: number): AlanGovdesi => ({
 
 const YENI: Taslak = {
   id: null, surum: null, malzemeId: null, malzemeKodu: null, opNo: '', seriSablonu: '{PARCA}-{YY}{WW}-{SEQ:5}', sayacKapsami: 'malzeme',
-  baslangicSirasi: '1', dogrulama: true, model: null, alanlar: [yeniAlan(0)],
+  baslangicSirasi: '1', dogrulama: true, aktif: true, model: null, alanlar: [yeniAlan(0)],
 };
 
 const taslakYap = (t: MarkalamaTanimi): Taslak => ({
   id: t.id, surum: t.surum, malzemeId: t.malzemeId, malzemeKodu: t.malzemeKodu, opNo: String(t.opNo), seriSablonu: t.seriSablonu,
-  sayacKapsami: t.sayacKapsami, baslangicSirasi: String(t.baslangicSirasi), dogrulama: t.dogrulama, model: t.model,
+  sayacKapsami: t.sayacKapsami, baslangicSirasi: String(t.baslangicSirasi), dogrulama: t.dogrulama, aktif: t.aktif, model: t.model,
   alanlar: t.alanlar.map(({ sira: _sira, ...a }) => a),
 });
 
@@ -60,6 +61,7 @@ const SUTUNLAR: readonly Sutun<MarkalamaTanimi>[] = [
   { anahtar: 'sablon', baslik: 'Seri şablonu', mono: true, hucre: (t) => t.seriSablonu },
   { anahtar: 'marka', baslik: 'Marka', hucre: (t) => t.alanlar.length },
   { anahtar: 'model', baslik: '3B', hucre: (t) => (t.model ? <Rozet ton="tamam">Rev {t.model.revizyon}</Rozet> : <Rozet ton="pasif">Yok</Rozet>) },
+  { anahtar: 'aktif', baslik: 'Durum', hucre: (t) => (t.aktif ? <Rozet ton="tamam">Etkin</Rozet> : <Rozet ton="pasif">Pasif</Rozet>) },
 ];
 
 function MalzemeSecici({ sec }: { sec: (id: number, kod: string) => void }) {
@@ -212,6 +214,18 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
       kaydedildi(kayit.id);
     },
   });
+  // Pasif tanım seri vermez ve istasyonda görünmez; listede kalır, geri etkinleştirilebilir.
+  const aktiflik = useMutation({
+    mutationFn: (aktif: boolean) => {
+      const govde: TanimAktiflikGovdesi = { aktif, surum: t.surum ?? 0 };
+      return api.post<MarkalamaTanimi>(`/markalama/tanimlar/${t.id}/aktiflik`, govde);
+    },
+    onSuccess: async (kayit) => {
+      tYaz(taslakYap(kayit));
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+      bildir('tamam', kayit.aktif ? 'Tanım etkinleştirildi' : 'Tanım pasif yapıldı');
+    },
+  });
   const sahneMarkalari = t.alanlar.flatMap((a, i) => (a.yer === null ? [] : [{
     sira: i, yer: a.yer, metin: a.icerik === 'sabit' ? a.sabitMetin ?? '' : t.seriSablonu,
   }]));
@@ -224,7 +238,11 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
 
   return (
     <div className="tc-mrk-duzen">
-      <Kart baslik={t.id === null ? 'Yeni markalama tanımı' : `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}`} simge="tag">
+      <Kart
+        baslik={t.id === null ? 'Yeni markalama tanımı' : `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}`}
+        simge="tag"
+        {...(t.aktif ? {} : { sag: <Rozet ton="pasif">Pasif</Rozet> })}
+      >
         <fieldset className="tc-mrk-form" disabled={!yazabilir}>
           {t.id === null && (
             <>
@@ -276,6 +294,7 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
           )}
           {denetim !== null && <p className="tc-mrk-hata" role="alert">{denetim}</p>}
           {denetim === null && kaydet.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(kaydet.error, 'Tanım kaydedilemedi')}</p>}
+          {aktiflik.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(aktiflik.error, 'Tanımın durumu değiştirilemedi')}</p>}
         </fieldset>
         {yazabilir && (
           <div className="tc-mrk-arac">
@@ -287,6 +306,11 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
             >
               Kaydet
             </Dugme>
+            {t.id !== null && (
+              <Dugme simge={t.aktif ? 'x' : 'check'} yukleniyor={aktiflik.isPending} onClick={() => aktiflik.mutate(!t.aktif)}>
+                {t.aktif ? 'Pasif yap' : 'Etkinleştir'}
+              </Dugme>
+            )}
           </div>
         )}
       </Kart>

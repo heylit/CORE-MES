@@ -118,8 +118,14 @@ export const GOREV_DURUMU: Record<GorevDurumu, { etiket: string; ton: RozetTonu 
   geri_cekildi: { etiket: 'Geri çekildi', ton: 'pasif' },
 };
 export const gorevAcikMi = (d: GorevDurumu): boolean => d === 'bekliyor' || d === 'onaylandi' || d === 'yolda';
-export const gorevTarihleri = (g: { tarih: string; donusTarihi: string }): string =>
-  g.tarih === g.donusTarihi ? tarihMetni(g.tarih) : `${tarihMetni(g.tarih)} – ${tarihMetni(g.donusTarihi)}`;
+// Saat yazılmışsa tarihin yanında görünür; saatsiz görev bütün günü tutar.
+export function gorevTarihleri(g: { tarih: string; donusTarihi: string; cikisSaati?: string | null; donusSaati?: string | null }): string {
+  const cikis = g.cikisSaati == null ? '' : ` ${g.cikisSaati}`;
+  const donus = g.donusSaati == null ? '' : ` ${g.donusSaati}`;
+  if (g.tarih !== g.donusTarihi) return `${tarihMetni(g.tarih)}${cikis} – ${tarihMetni(g.donusTarihi)}${donus}`;
+  if (cikis === '' && donus === '') return tarihMetni(g.tarih);
+  return `${tarihMetni(g.tarih)}${cikis === '' ? ' 00:00' : cikis} – ${donus === '' ? '24:00' : donus.trim()}`;
+}
 
 export const MASRAF_TURU: Record<MasrafTuru, string> = {
   yakit: 'Yakıt', bakim: 'Bakım', onarim: 'Onarım', lastik: 'Lastik', muayene: 'Muayene', sigorta: 'Sigorta', ceza: 'Trafik cezası',

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { BirimAyrintisi, BirimDurumu, BirimlerCevabi, DurumGovdesi, DurumKomutu, MarkalamaBirimi } from '#paylasilan/sozlesme/markalama.ts';
@@ -96,7 +97,8 @@ function BirimKarti({ id, yazabilir }: { id: number; yazabilir: boolean }) {
         {b.olaylar.map((o) => (
           <li key={o.id}>
             <b>{OLAY_ADLARI[o.olay]}</b>
-            <span className="tc-mrk-ipucu">{zamanMetni(o.zaman)}</span>
+            <span className="tc-mrk-ipucu">{[zamanMetni(o.zaman), o.kisiAd].filter(Boolean).join(' · ')}</span>
+            {o.hurdaNedeni && <span>Neden: {o.hurdaNedeni}</span>}
             {o.aciklama && <span>{o.aciklama}</span>}
           </li>
         ))}
@@ -118,9 +120,17 @@ function BirimKarti({ id, yazabilir }: { id: number; yazabilir: boolean }) {
 export function Izleme() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('markalama.durum-yaz') === true;
-  const [seri, seriYaz] = useState<string | null>(null);
+  // Genel aramadan gelen seri adresle açılır (`?seri=`); sayfa açıkken yeni arama da aynı yoldan gelir.
+  const [adres] = useSearchParams();
+  const adrestekiSeri = adres.get('seri');
+  const [seri, seriYaz] = useState<string | null>(adrestekiSeri);
   const [durum, durumYaz] = useState<BirimDurumu | ''>('');
   const [secili, seciliYaz] = useState<number | null>(null);
+  useEffect(() => {
+    if (adrestekiSeri === null) return;
+    seriYaz(adrestekiSeri);
+    seciliYaz(null);
+  }, [adrestekiSeri]);
   const sorgu = new URLSearchParams();
   if (seri !== null) sorgu.set('seriNo', seri);
   if (durum !== '') sorgu.set('durum', durum);
@@ -128,13 +138,15 @@ export function Izleme() {
     queryKey: anahtarlar.birimler(sorgu.toString()),
     queryFn: () => api.get<BirimlerCevabi>(`/markalama/birimler${sorgu.toString() === '' ? '' : `?${sorgu.toString()}`}`),
   });
-  const tek = seri !== null && liste.data?.birimler.length === 1 ? liste.data.birimler[0]!.id : null;
+  // Okutulan tam numara listede önde gelir; tek sonuç ya da tam eşleşme doğrudan açılır.
+  const ilk = liste.data?.birimler[0];
+  const tek = seri !== null && ilk !== undefined && (liste.data?.birimler.length === 1 || ilk.seriNo.toUpperCase() === seri.toUpperCase()) ? ilk.id : null;
   const gosterilen = secili ?? tek;
   return (
     <div className="tc-mrk-sayfa">
       <Kart baslik="Seri izleme" simge="scan">
         <div className="tc-mrk-form">
-          <KodOkuyucu sik okundu={(kod) => { seriYaz(kod); seciliYaz(null); }} ipucu="Parçadaki seri no ya da kodu okutun" dokunmatikteOdakYok />
+          <KodOkuyucu sik okundu={(kod) => { seriYaz(kod); seciliYaz(null); }} ipucu="Parçadaki seri no ya da kodu okutun; numaranın bir parçası da yazılabilir" dokunmatikteOdakYok />
           <div className="tc-mrk-satir">
             <Secim
               etiket="Durum"
@@ -155,7 +167,7 @@ export function Izleme() {
             satirlar={liste.data.birimler}
             satirAnahtari={(b) => b.id}
             satirSec={(b) => seciliYaz(b.id)}
-            bosMesaj={seri !== null ? 'Bu seri no ile markalı birim yok' : 'Markalı birim yok'}
+            bosMesaj={seri !== null ? 'Bu numarayı içeren markalı birim yok' : 'Markalı birim yok'}
           />
         )}
       </Kart>

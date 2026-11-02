@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, TALEP_DURUM_ADLARI, type GecmisOlayi, type TalepDurumu } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
-import type { CcbGovdesi, EmirCevabi, GecmisSatiri, MusteriOnayiGovdesi, TalepCevabi, TalepMalzemesi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, SayfaBasligi, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, TALEP_DURUM_ADLARI, geriCekilebilirMi, type GecmisOlayi, type TalepDurumu } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import type { CcbGovdesi, EmirCevabi, GecmisSatiri, GeriCekGovdesi, MusteriOnayiGovdesi, TalepCevabi, TalepMalzemesi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, SayfaBasligi, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { tarihMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
@@ -22,7 +22,7 @@ import './degisiklik-yonetimi.css';
 const ASAMALAR = ['Sınıflandırma', 'Etki analizi', 'CCB kararı', 'Müşteri onayı', 'ECO açılışı'] as const;
 // Ret CCB aşamasında durur.
 const ASAMA_SIRASI: Readonly<Record<TalepDurumu, number>> = {
-  gonderildi: 0, analizde: 1, ccb_bekliyor: 2, musteri_onayi_bekliyor: 3, onaylandi: 4, emir_acildi: 5, reddedildi: 2,
+  gonderildi: 0, analizde: 1, ccb_bekliyor: 2, musteri_onayi_bekliyor: 3, onaylandi: 4, emir_acildi: 5, reddedildi: 2, geri_cekildi: 0,
 };
 const ASAMA_OLAYLARI: readonly (readonly GecmisOlayi[])[] = [['siniflandirildi'], ['etki_analizi'], ['ccb_onay', 'ccb_ret'], ['musteri_onayi'], ['emir_acildi']];
 
@@ -93,10 +93,41 @@ function ImzaPenceresi({ talep, tur, referans, kapat }: { talep: TalepCevabi; tu
   );
 }
 
+function GeriCekPenceresi({ talep, kapat }: { talep: TalepCevabi; kapat: () => void }) {
+  const { bildir } = useBildirim();
+  const [aciklama, aciklamaYaz] = useState('');
+  const [yerelHata, yerelHataYaz] = useState<string | undefined>(undefined);
+  const komut = useKomut(`${KOK}/talepler/${talep.id}/geri-cek`, () => { bildir('tamam', `${talep.no} geri çekildi.`); kapat(); }, 'Talep geri çekilemedi');
+  const gonder = () => {
+    if (aciklama.trim() === '') { yerelHataYaz('Geri çekme gerekçesini yazın.'); return; }
+    yerelHataYaz(undefined);
+    const govde: GeriCekGovdesi = { aciklama, surum: talep.surum };
+    komut.gonder(govde);
+  };
+  return (
+    <Pencere
+      acik kapat={kapat} baslik={`Geri çek: ${talep.no}`}
+      alt={(
+        <>
+          <Dugme onClick={kapat}>Vazgeç</Dugme>
+          <Dugme tur="tehlike" yukleniyor={komut.yukleniyor} onClick={gonder}>Talebi geri çek</Dugme>
+        </>
+      )}
+    >
+      <div className="tc-dy-form">
+        <p className="tc-dy-kucuk tc-dy-soluk">Talep kapanır; kayıt ve geçmiş silinmez.</p>
+        <CokSatir etiket="Gerekçe" value={aciklama} onChange={(e) => { aciklamaYaz(e.target.value); }} maxLength={1000} required hata={yerelHata} />
+        {komut.hata && <p className="tc-dy-hata" role="alert">{komut.hata}</p>}
+      </div>
+    </Pencere>
+  );
+}
+
 function Adim({ talep, islemler, kisiId }: { talep: TalepCevabi; islemler: readonly string[]; kisiId: number | undefined }) {
   const gezin = useNavigate();
   const { bildir } = useBildirim();
   const [imza, imzaYaz] = useState<Imza | null>(null);
+  const [geriCek, geriCekYaz] = useState(false);
   const [referans, referansYaz] = useState('');
   const yapabilir = (islem: string) => islemler.includes(`degisiklik-yonetimi.${islem}`);
   const etki = useKomut(`${KOK}/talepler/${talep.id}/etki-analizi`, () => { bildir('tamam', 'Etki analizi tamamlandı.'); }, 'Etki analizi çalıştırılamadı');
@@ -182,10 +213,22 @@ function Adim({ talep, islemler, kisiId }: { talep: TalepCevabi; islemler: reado
       adim = <SiradakiAdim tur="durdu" baslik="Talep reddedildi" aciklama={ret?.aciklama ? `Gerekçe: ${ret.aciklama}` : 'Gerekçe kayıtlı değil.'} />;
       break;
     }
+    case 'geri_cekildi': {
+      const geri = talep.gecmis.find((g) => g.olay === 'geri_cekildi');
+      adim = <SiradakiAdim tur="durdu" baslik="Talep geri çekildi" aciklama={`${geri?.kisiAdi ?? 'Açan'}${geri?.aciklama ? `: ${geri.aciklama}` : ''}`} />;
+      break;
+    }
   }
+  const geriCekebilir = yapabilir('talep-ac') && kisiId !== undefined && talep.acan.kisiId === kisiId && geriCekilebilirMi(talep.durum);
   return (
     <>
       {adim}
+      {geriCekebilir && (
+        <div className="tc-dy-satir-sonu">
+          <Dugme simge="x" onClick={() => { geriCekYaz(true); }}>Talebi geri çek</Dugme>
+        </div>
+      )}
+      {geriCek && <GeriCekPenceresi talep={talep} kapat={() => { geriCekYaz(false); }} />}
       {hata && <p className="tc-dy-hata" role="alert">{hata}</p>}
       {imza && <ImzaPenceresi talep={talep} tur={imza} referans={referans.trim()} kapat={() => { imzaYaz(null); }} />}
     </>

@@ -387,7 +387,7 @@ async function gorevCevir(db: Db, satirlar: GorevSatiri[]): Promise<AracGorevi[]
   const adlar = await kisiAdlari(db, satirlar.flatMap((s) => [s.talep_eden_kisi_id, s.onaylayan_kisi_id]).filter((k): k is number => k !== null));
   return satirlar.map((s) => ({
     id: s.id, talepEdenKisiId: s.talep_eden_kisi_id, talepEdenAd: adlar.get(s.talep_eden_kisi_id) ?? null, amac: s.amac, varis: s.varis,
-    tarih: s.tarih, donusTarihi: s.donus_tarihi, aciklama: s.aciklama, durum: s.durum, talep: s.talep, aracId: s.arac_id, plaka: s.plaka,
+    tarih: s.tarih, donusTarihi: s.donus_tarihi, cikisSaati: s.cikis_saati, donusSaati: s.donus_saati, aciklama: s.aciklama, durum: s.durum, talep: s.talep, aracId: s.arac_id, plaka: s.plaka,
     onaylayanAd: s.onaylayan_kisi_id === null ? null : adlar.get(s.onaylayan_kisi_id) ?? null, onay: s.onay, redNedeni: s.red_nedeni,
     cikisKm: s.cikis_km, cikis: s.cikis, donusKm: s.donus_km, donus: s.donus, kapanma: s.kapanma, surum: s.surum,
   }));
@@ -437,7 +437,8 @@ export async function gorevOnayla(db: Db, kullanici: Kullanici, id: number, suru
   if (aracVerilemezMi(a.durum)) throw dogrulama(ARAC_VERILEMEZ, 'aracId');
   const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
   if (belge !== null) throw dogrulama(belge, 'aracId');
-  if (await sorgular.aracCakisiyorMu(db, aracId, mevcut.tarih, mevcut.donus_tarihi, id)) throw dogrulama(ARAC_DOLU, 'aracId');
+  const aralik = { tarih: mevcut.tarih, donusTarihi: mevcut.donus_tarihi, cikisSaati: mevcut.cikis_saati, donusSaati: mevcut.donus_saati };
+  if (await sorgular.aracCakisiyorMu(db, aracId, aralik, id)) throw dogrulama(ARAC_DOLU, 'aracId');
   await gorevSurumlu(db, id, () => sorgular.gorevOnayYaz(db, id, surum, aracId, kullanici.id));
   return gorev(db, id);
 }

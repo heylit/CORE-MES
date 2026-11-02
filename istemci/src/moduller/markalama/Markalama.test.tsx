@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
@@ -24,7 +25,7 @@ const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.m
 const IZLEYICI: Kullanici = { id: 2, ad: 'Deneme İzleyici', islemler: ['sayfa.markalama'] };
 
 const TANIM: MarkalamaTanimi = {
-  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true,
+  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true, aktif: true,
   model: null, surum: 3, degismeZamani: '2026-10-27T08:00:00Z',
   alanlar: [{
     sira: 1, ad: 'Seri no', icerik: 'seri', sabitMetin: null, kodTuru: 'datamatrix', yontem: 'lazer', yaziYuksekligiMm: 2, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: 'Flanş yüzü', yer: null,
@@ -59,11 +60,12 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
     cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, kimlik: basliklar.get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/istasyonlar/secim') return json(200, istasyonlar);
-    if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM] } satisfies TanimlarCevabi);
+    if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM, { ...TANIM, id: 8, opNo: 50, seriSablonu: '{PARCA}-{SEQ:6}', aktif: false }] } satisfies TanimlarCevabi);
+    if (yol === '/markalama/tanimlar/7/aktiflik') return json(200, { ...TANIM, aktif: false, surum: 4 });
     if (yol.startsWith('/markalama/tanimlar/7/onizleme')) return json(200, { numaralar: ['ORN-A-00005', 'ORN-A-00006'] } satisfies OnizlemeCevabi);
     if (yol === '/markalama/tanimlar/7/emirler') return json(200, { emirler: [{ id: 5, emirNo: 'UE-DNM-1', adet: 10, durum: 'acik' }] } satisfies TanimEmirleriCevabi);
     if (yol === '/markalama/tanimlar/7/kaydet') return json(200, { ...TANIM, surum: 4 });
-    if (yol === '/markalama/emirler/5/ozet') {
+    if (yol === '/markalama/emirler/5/ozet?tanimId=7') {
       return json(200, { uretimEmriId: 5, sayilar: { saglam: 4, red: 0, rework: 0, hurda: 1 }, dogrulanan: 3 } satisfies EmirOzetiCevabi);
     }
     if (yol.startsWith('/markalama/birimler?') || yol === '/markalama/birimler') return json(200, { birimler: [birim({ durum: birimDurumu })] } satisfies BirimlerCevabi);
@@ -71,7 +73,13 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
     if (yol === '/markalama/birimler/31') {
       return json(200, {
         ...birim({ durum: birimDurumu }), emirNo: 'UE-DNM-1',
-        olaylar: [{ id: 1, olay: 'markalandi', hurdaNedeniId: null, aciklama: null, kisiId: 1, zaman: '2026-10-27T09:00:00Z' }],
+        olaylar: [
+          { id: 1, olay: 'markalandi', hurdaNedeniId: null, hurdaNedeni: null, aciklama: null, kisiId: 1, kisiAd: 'Deneme Operatör', zaman: '2026-10-27T09:00:00Z' },
+          { id: 2, olay: 'red', hurdaNedeniId: null, hurdaNedeni: null, aciklama: 'Deneme açıklama', kisiId: 2, kisiAd: 'Deneme Kalite', zaman: '2026-10-27T09:10:00Z' },
+          ...(birimDurumu === 'hurda'
+            ? [{ id: 3, olay: 'hurda' as const, hurdaNedeniId: 9, hurdaNedeni: 'H-01 · Deneme hurda', aciklama: null, kisiId: 2, kisiAd: 'Deneme Kalite', zaman: '2026-10-27T09:20:00Z' }]
+            : []),
+        ],
       } satisfies BirimAyrintisi);
     }
     if (yol === '/markalama/birimler/31/durum') return json(200, birim({ durum: 'hurda', surum: 2 }));
@@ -84,9 +92,13 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
   return cagrilar;
 }
 
-function ac(ekran: ReactNode) {
+function ac(ekran: ReactNode, adres = '/markalama') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}</BildirimSaglayici></QueryClientProvider>);
+  render(
+    <MemoryRouter initialEntries={[adres]}>
+      <QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}</BildirimSaglayici></QueryClientProvider>
+    </MemoryRouter>,
+  );
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -106,6 +118,17 @@ describe('Markalama tanımları', () => {
     const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/kaydet')!.govde as { surum: number; alanlar: { icerik: string; yontem: string; sabitMetin: string | null }[] };
     expect(govde.surum).toBe(3);
     expect(govde.alanlar.map((a) => [a.icerik, a.yontem, a.sabitMetin])).toEqual([['seri', 'lazer', null], ['sabit', 'nokta_vurus', 'C']]);
+  });
+
+  it('kayıtlı tanım pasif yapılır; listede durum rozeti görünür', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    expect(await screen.findByText('Pasif')).toBeTruthy();
+    fireEvent.click(await screen.findByText('{PARCA}-{SEQ:5}'));
+    fireEvent.click(await screen.findByRole('button', { name: /Pasif yap/ }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/7/aktiflik')).toBe(true));
+    expect(cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/aktiflik')!.govde).toEqual({ aktif: false, surum: 3 });
+    expect(await screen.findByRole('button', { name: /Etkinleştir/ })).toBeTruthy();
   });
 
   it('yükseklik ve derinlik virgülle ondalık girilir, yazı tipi seçilir ve kayda gider', async () => {
@@ -164,6 +187,9 @@ describe('Markalama istasyonu', () => {
     const c = cagrilar.find((x) => x.yol === '/markalama/birimler/markala')!;
     expect(c.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: 21, sonuc: 'iyi' });
     expect(c.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+    expect(screen.queryByRole('option', { name: /Op 50/ })).toBeNull();
+    expect(cagrilar.some((x) => x.yol === '/markalama/birimler?emirId=5&tanimId=7')).toBe(true);
+    expect(await screen.findByText('4')).toBeTruthy();
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-bolum .mono' })).toBeTruthy();
   });
 });
@@ -248,6 +274,22 @@ describe('Seri izleme', () => {
     fireEvent.click(gonder);
     await waitFor(() => expect(cagrilar.some((x) => x.yol === '/markalama/birimler/31/durum')).toBe(true));
     expect(cagrilar.find((x) => x.yol === '/markalama/birimler/31/durum')!.govde).toEqual({ komut: 'hurda', hurdaNedeniId: 9, aciklama: null, surum: 1 });
+  });
+
+  it('genel aramadan gelen seri adresle aranır ve tam eşleşme açılır', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Izleme />, '/markalama/izleme?seri=ORN-A-00005');
+    expect(await screen.findByText('UE-DNM-1')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/markalama/birimler?seriNo=ORN-A-00005')).toBe(true);
+  });
+
+  it('geçmişte kişi adı ve hurda nedeni görünür', async () => {
+    sunucuKur(YONETICI, 'hurda');
+    ac(<Izleme />);
+    fireEvent.click(await screen.findByText('ORN-A-00005'));
+    expect(await screen.findByText('Neden: H-01 · Deneme hurda')).toBeTruthy();
+    expect(screen.getAllByText(/Deneme Kalite/).length).toBe(2);
+    expect(screen.getByText(/Deneme Operatör/)).toBeTruthy();
   });
 
   it('durum yazma yetkisi yoksa komut düğmesi yoktur', async () => {

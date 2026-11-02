@@ -6,14 +6,16 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   BirimAyrintisi, BirimDurumu, BirimlerCevabi, DogrulaGovdesi, DurumGovdesi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi,
-  MarkalamaTanimi, OnizlemeCevabi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
+  MarkalamaTanimi, OnizlemeCevabi, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
+import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { hurdaNedeniGetir } from '../durus-nedenleri/disari.ts';
 import { istasyonGetir } from '../istasyonlar/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirNolari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
@@ -28,7 +30,7 @@ async function tanimlariKur(db: Db, satirlar: s.TanimSatiri[]): Promise<Markalam
   const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeId));
   return satirlar.map((t) => ({
     id: t.id, malzemeId: t.malzemeId, malzemeKodu: malzemeler.get(t.malzemeId)?.kod ?? null, opNo: t.opNo,
-    seriSablonu: t.seriSablonu, sayacKapsami: t.sayacKapsami, baslangicSirasi: t.baslangicSirasi, dogrulama: t.dogrulama,
+    seriSablonu: t.seriSablonu, sayacKapsami: t.sayacKapsami, baslangicSirasi: t.baslangicSirasi, dogrulama: t.dogrulama, aktif: t.aktif,
     model: t.modelBelgeId === null || t.modelRevizyon === null ? null : { belgeId: t.modelBelgeId, revizyon: t.modelRevizyon },
     alanlar: alanlar.get(t.id) ?? [], surum: t.surum, degismeZamani: t.degismeZamani,
   }));
@@ -83,10 +85,18 @@ async function seriUzunluguDenetle(db: Db, malzemeId: number, g: TanimKaydetGovd
   if (hata !== null) throw dogrulama(hata, 'seriSablonu');
 }
 
+// MRK-2 (karar a): aynı malzemede aynı şablonlu iki tanım farklı sayaçla aynı numarayı üretir ve markalama 409'da takılır;
+// ikinci tanım kayıtta reddedilir, kullanıcı var olanı düzenler. Pasif tanım da sayılır: verdiği numaralar duruyor.
+async function ayniSablonDenetle(db: Db, malzemeId: number, seriSablonu: string, haricId: number | null): Promise<void> {
+  const onceki = (await s.tanimlariOku(db, malzemeId)).find((t) => t.id !== haricId && t.seriSablonu === seriSablonu);
+  if (onceki !== undefined) throw dogrulama(`Bu malzemede bu seri şablonuyla tanım var (op ${onceki.opNo}); onu düzenleyin.`, 'seriSablonu');
+}
+
 export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
+  await ayniSablonDenetle(db, g.malzemeId, g.seriSablonu, null);
   await modelDenetle(db, g.malzemeId, g.model);
   await seriUzunluguDenetle(db, g.malzemeId, g);
   const id = await kisitKorumali(
@@ -116,6 +126,7 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
   if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
     await modelDenetle(db, eski.malzemeId, g.model);
   }
+  if (g.seriSablonu !== eski.seriSablonu) await ayniSablonDenetle(db, eski.malzemeId, g.seriSablonu, id);
   await seriUzunluguDenetle(db, eski.malzemeId, g);
   if (g.baslangicSirasi !== eski.baslangicSirasi) await baslangiciUygula(db, eski.malzemeId, g);
   await surumluGuncelle({
@@ -124,6 +135,15 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
     bulunamadiIletisi: TANIM_YOK,
   });
   await s.alanlariYaz(db, id, g.alanlar);
+  return tanimGetir(db, id);
+}
+
+export async function tanimAktiflik(db: Db, kullanici: Kullanici, id: number, g: TanimAktiflikGovdesi): Promise<MarkalamaTanimi> {
+  await surumluGuncelle({
+    guncelle: () => s.tanimAktiflikYaz(db, id, g.aktif, g.surum, kullanici.id),
+    varMi: () => s.tanimVarMi(db, id),
+    bulunamadiIletisi: TANIM_YOK,
+  });
   return tanimGetir(db, id);
 }
 
@@ -164,6 +184,7 @@ export async function onizleme(db: Db, tanimId: number, emirId: number | null): 
 
 export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): Promise<MarkalamaBirimi> {
   const t = await varOlanTanim(db, g.tanimId);
+  if (!t.aktif) throw gecersiz('Bu markalama tanımı pasif; seri verilmez.');
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
@@ -228,19 +249,51 @@ export async function birimGetir(db: Db, id: number): Promise<BirimAyrintisi> {
   const birim = await s.birimOku(db, id);
   if (birim === null) throw bulunamadi(BIRIM_YOK);
   const emir = await uretimEmriOzeti(db, birim.uretimEmriId);
-  return { ...birim, emirNo: emir?.emirNo ?? null, olaylar: await s.olaylariOku(db, id) };
+  const olaylar = await s.olaylariOku(db, id);
+  const kisiler = await kisiAdlari(db, olaylar.map((o) => o.kisiId));
+  const nedenIdleri = [...new Set(olaylar.flatMap((o) => (o.hurdaNedeniId === null ? [] : [o.hurdaNedeniId])))];
+  const nedenler = new Map<number, string>();
+  for (const nid of nedenIdleri) {
+    const n = await hurdaNedeniGetir(db, nid);
+    if (n !== null) nedenler.set(nid, `${n.kod} · ${n.ad}`);
+  }
+  return {
+    ...birim, emirNo: emir?.emirNo ?? null,
+    olaylar: olaylar.map((o) => ({
+      ...o, kisiAd: kisiler.get(o.kisiId) ?? null, hurdaNedeni: o.hurdaNedeniId === null ? null : nedenler.get(o.hurdaNedeniId) ?? null,
+    })),
+  };
 }
 
 export async function birimler(
-  db: Db, q: { seriNo?: string | undefined; emirId?: number | undefined; durum?: BirimDurumu | undefined },
+  db: Db, q: { seriNo?: string | undefined; emirId?: number | undefined; tanimId?: number | undefined; durum?: BirimDurumu | undefined },
 ): Promise<BirimlerCevabi> {
-  return { birimler: await s.birimleriOku(db, { seriNo: q.seriNo ?? null, emirId: q.emirId ?? null, durum: q.durum ?? null }, BIRIM_LISTE_SINIRI) };
+  return {
+    birimler: await s.birimleriOku(
+      db, { seriNo: q.seriNo ?? null, emirId: q.emirId ?? null, tanimId: q.tanimId ?? null, durum: q.durum ?? null }, BIRIM_LISTE_SINIRI,
+    ),
+  };
 }
 
-export async function emirOzeti(db: Db, emirId: number): Promise<EmirOzetiCevabi> {
-  const satirlar = await s.emirSayilari(db, emirId);
+// Olmayan emrin özeti sıfırlarla dönmez: sıfır "hiç markalanmadı" demektir, emrin yokluğu bulunamadıdır.
+export async function emirOzeti(db: Db, emirId: number, tanimId: number | null): Promise<EmirOzetiCevabi> {
+  if ((await uretimEmriOzeti(db, emirId)) === null) throw bulunamadi('Üretim emri bulunamadı.');
+  const satirlar = await s.emirSayilari(db, emirId, tanimId);
   const sayilar = { saglam: 0, red: 0, rework: 0, hurda: 0 };
   let dogrulanan = 0;
   for (const r of satirlar) { sayilar[r.durum] = r.adet; dogrulanan += r.dogrulanan; }
   return { uretimEmriId: emirId, sayilar, dogrulanan };
+}
+
+const DURUM_ACIKLAMASI: Readonly<Record<BirimDurumu, string>> = { saglam: 'Sağlam', red: 'Red', rework: 'Rework', hurda: 'Hurda' };
+
+export async function seriKayitAra(db: Db, q: string, sinir: number): Promise<KayitAramaSonucu[]> {
+  const birimler = await s.seriKayitAra(db, q, sinir);
+  const nolar = await emirNolari(db, [...new Set(birimler.map((b) => b.uretimEmriId))]);
+  return birimler.map((b) => ({
+    anahtar: String(b.id),
+    baslik: b.seriNo,
+    aciklama: [nolar.get(b.uretimEmriId), DURUM_ACIKLAMASI[b.durum]].filter((x) => x !== undefined).join(' · '),
+    yol: `/markalama/izleme?seri=${encodeURIComponent(b.seriNo)}`,
+  }));
 }

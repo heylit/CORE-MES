@@ -84,7 +84,7 @@ export async function talepMalzemeleri(db: Db, talepIdleri: readonly number[]): 
   );
 }
 
-const TALEP_ACIK = `t.durum NOT IN ('emir_acildi', 'reddedildi')`;
+const TALEP_ACIK = `t.durum NOT IN ('emir_acildi', 'reddedildi', 'geri_cekildi')`;
 const kapsamKosulu = (kapsam: ListeKapsami, acik: string): string => (kapsam === 'acik' ? acik : kapsam === 'kapali' ? `NOT (${acik})` : 'true');
 
 export interface TalepSuzgeci { kapsam: ListeKapsami; durum?: TalepDurumu | undefined; sinif?: Sinif | undefined; ara?: string | undefined }

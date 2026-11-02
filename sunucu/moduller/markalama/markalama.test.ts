@@ -6,6 +6,8 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { aramaSade, basDeseni, icindeDeseni, KAYIT_TURLERI } from '#paylasilan/kayit-aramasi.ts';
+import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import { birimAyrintisiCevabi, birimSemasi, emirOzetiCevabi, tanimSemasi } from '#paylasilan/sozlesme/markalama.ts';
 import type { MarkalamaBirimi, MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -13,6 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kayitAramaKaynaklari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -192,7 +195,7 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await istasyonlu(makine!.istasyonId)).durum, 400, 'pasif istasyon');
     // Bağı sonradan kalkan modelli tanımın başka alanı kaydedilebilir.
     const belge = await malzemeBelgesi(m);
-    const modelli = tanimSemasi.parse((await ekle({ opNo: 41, model: { belgeId: belge, revizyon: 'A' } })).govde);
+    const modelli = tanimSemasi.parse((await ekle({ opNo: 41, seriSablonu: 'M{PARCA}-{SEQ}', model: { belgeId: belge, revizyon: 'A' } })).govde);
     await o().sahip.sorgu("DELETE FROM belge_merkezi_bag WHERE belge_id = $1", [belge]);
     const k = await istek('yonetici', 'POST', `/markalama/tanimlar/${modelli.id}/kaydet`, {
       seriSablonu: '{PARCA}-{SEQ:6}', alanlar: [seriAlani], model: modelli.model, surum: modelli.surum,
@@ -262,6 +265,102 @@ describe('markalama (gerçek PostgreSQL)', () => {
     const emirli = await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme?emirId=${emir}`);
     assert.equal(emirli.govde.numaralar[0], `${kod}-${emirNo}-002`);
     assert.equal((await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme`)).govde.numaralar[0], `${kod}-{EMIR}-001`, 'yeni emir baştan başlar');
+  });
+
+  test('MRK-U12: pasif tanım seri vermez ve geri etkinleşir; sürüm ve yetki denetlenir', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    const aktiflik = (aktif: boolean, surum: number, ad = 'yonetici') => istek<MarkalamaTanimi>(ad, 'POST', `/markalama/tanimlar/${t.id}/aktiflik`, { aktif, surum });
+    assert.equal((await aktiflik(false, t.surum, 'operator')).durum, 403);
+    const pasif = await aktiflik(false, t.surum);
+    assert.equal(pasif.durum, 200, JSON.stringify(pasif.govde));
+    assert.equal(pasif.govde.aktif, false);
+    assert.equal((await aktiflik(true, t.surum)).durum, 409, 'eski sürüm');
+    const red = await istek<{ mesaj?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, sonuc: 'iyi' });
+    assert.equal(red.durum, 422);
+    assert.match(red.govde.mesaj ?? '', /pasif/);
+    const liste = (await istek<{ tanimlar: MarkalamaTanimi[] }>('operator', 'GET', `/markalama/tanimlar?malzemeId=${m}`)).govde.tanimlar;
+    assert.deepEqual(liste.map((x) => [x.id, x.aktif]), [[t.id, false]], 'pasif tanım listede kalır');
+    const etkin = await aktiflik(true, pasif.govde.surum);
+    assert.equal(etkin.govde.aktif, true);
+    assert.equal((await markala('operator', t.id, emir)).durum, 200);
+  });
+
+  test('MRK-U13: seri parçasıyla arama, tanım süzgeci, olay kişi adı ve hurda nedeni; olmayan emrin özeti 404', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const t2 = tanimSemasi.parse((await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 70, seriSablonu: 'B{PARCA}-{SEQ:5}', alanlar: [seriAlani],
+    })).govde);
+    const emir = await emirAc(m);
+    const a = (await markala('operator', t.id, emir)).govde;
+    await markala('operator', t.id, emir);
+    await markala('operator', t2.id, emir);
+    const ara = async (q: string) => (await istek<{ birimler: MarkalamaBirimi[] }>('kalite', 'GET', `/markalama/birimler?${q}`)).govde.birimler;
+    const parca = a.seriNo.slice(2, 10).toLowerCase();
+    assert.equal((await ara(`seriNo=${encodeURIComponent(parca)}&emirId=${emir}`)).length, 3, 'parça, harften bağımsız');
+    assert.equal((await ara(`seriNo=${encodeURIComponent(a.seriNo)}`))[0]?.id, a.id, 'tam eşleşme önde');
+    assert.deepEqual((await ara('seriNo=%25')).length, 0, 'joker karakter kaçırılır');
+    assert.equal((await ara(`emirId=${emir}&tanimId=${t.id}`)).length, 2);
+    const oz = emirOzetiCevabi.parse((await istek('kalite', 'GET', `/markalama/emirler/${emir}/ozet?tanimId=${t2.id}`)).govde);
+    assert.deepEqual(oz.sayilar, { saglam: 1, red: 0, rework: 0, hurda: 0 });
+    assert.equal((await istek('kalite', 'GET', '/markalama/emirler/2147483647/ozet')).durum, 404);
+    const neden = await o().vt.tek<{ id: number; kod: string; ad: string }>('SELECT id, kod, ad FROM hurda_nedeni ORDER BY id LIMIT 1');
+    const h = await istek<MarkalamaBirimi>('kalite', 'POST', `/markalama/birimler/${a.id}/durum`, { komut: 'hurda', hurdaNedeniId: neden!.id, surum: a.surum });
+    assert.equal(h.durum, 200, JSON.stringify(h.govde));
+    const ayr = birimAyrintisiCevabi.parse((await istek('kalite', 'GET', `/markalama/birimler/${a.id}`)).govde);
+    assert.deepEqual(ayr.olaylar.map((x) => x.kisiAd), ['Deneme operator', 'Deneme kalite']);
+    assert.equal(ayr.olaylar[1]?.hurdaNedeni, `${neden!.kod} · ${neden!.ad}`);
+  });
+
+  test('MRK-U14: genel arama seri noyu parçasından bulur; tam eşleşme önde, yol Seri izleme', async () => {
+    const [kaynak] = kayitAramaKaynaklari;
+    assert.ok(kaynak);
+    assert.equal(KAYIT_TURLERI[kaynak.tur].modul, 'markalama');
+    assert.deepEqual(kaynak.yetki, ['sayfa.markalama']);
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    const a = (await markala('operator', t.id, emir)).govde;
+    await markala('operator', t.id, emir);
+    const ara = (q: string) => o().vt.tx((db) => kaynak.ara(db, {
+      q, sade: aramaSade(q), icindeDeseni: icindeDeseni(q), basDeseni: basDeseni(q), sinir: 10, kullanici: { id: yoneticiId, islemler: [] },
+    }));
+    const tam = await ara(a.seriNo.toLowerCase());
+    assert.equal(tam[0]?.baslik, a.seriNo);
+    assert.ok(tam.every((x) => kayitYoluMu(x.yol)), JSON.stringify(tam));
+    assert.equal(tam[0]?.yol, `/markalama/izleme?seri=${encodeURIComponent(a.seriNo)}`);
+    assert.match(tam[0]?.aciklama ?? '', /Sağlam/);
+    assert.ok((await ara(a.seriNo.slice(0, -2))).length >= 2, 'parça');
+    assert.equal((await ara('%%')).length, 0, 'joker karakter kaçırılır');
+  });
+
+  test('MRK-U15: aynı malzemede aynı şablonlu ikinci tanım eklenemez ve kayıtta o şablona çevrilemez; pasif tanım da sayılır', async () => {
+    const m = await malzemeAc();
+    const ilk = await tanimAc(m);
+    const ekle = (govde: Record<string, unknown>) => istek<{ alan?: string; mesaj?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 70, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', alanlar: [seriAlani], ...govde,
+    });
+    const ayni = await ekle({});
+    assert.equal(ayni.durum, 400, JSON.stringify(ayni.govde));
+    assert.equal(ayni.govde.alan, 'seriSablonu');
+    assert.match(ayni.govde.mesaj ?? JSON.stringify(ayni.govde), /op 40.*düzenleyin/);
+    const ikinci = tanimSemasi.parse((await ekle({ seriSablonu: 'B{PARCA}-{SEQ:5}' })).govde);
+    const kaydet = (seriSablonu: string, surum: number) => istek<{ alan?: string }>('yonetici', 'POST', `/markalama/tanimlar/${ikinci.id}/kaydet`, {
+      seriSablonu, sayacKapsami: 'malzeme', alanlar: [seriAlani], surum,
+    });
+    const cevir = await kaydet('{PARCA}-{SEQ:5}', ikinci.surum);
+    assert.equal(cevir.durum, 400);
+    assert.equal(cevir.govde.alan, 'seriSablonu');
+    const kendi = await kaydet('B{PARCA}-{SEQ:5}', ikinci.surum);
+    assert.equal(kendi.durum, 200, 'kendi şablonunu yeniden kaydetmek engellenmez');
+    const pasif = await istek('yonetici', 'POST', `/markalama/tanimlar/${ilk.id}/aktiflik`, { aktif: false, surum: ilk.surum });
+    assert.equal(pasif.durum, 200);
+    assert.equal((await ekle({ opNo: 71 })).durum, 400, 'pasif tanımın şablonu da dolu');
+    assert.equal((await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: await malzemeAc(), opNo: 70, seriSablonu: '{PARCA}-{SEQ:5}', alanlar: [seriAlani],
+    })).durum, 200, 'başka malzemede aynı şablon serbest');
   });
 
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {

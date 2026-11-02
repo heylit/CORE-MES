@@ -39,10 +39,14 @@ function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
     queryKey: anahtarlar.onizleme(tanim.id, emirId),
     queryFn: () => api.get<OnizlemeCevabi>(`/markalama/tanimlar/${tanim.id}/onizleme?emirId=${emirId}`),
   });
-  const ozet = useQuery({ queryKey: anahtarlar.emirOzeti(emirId), queryFn: () => api.get<EmirOzetiCevabi>(`/markalama/emirler/${emirId}/ozet`) });
+  // Sayılar ve son seriler yalnız bu tanımın markalarıdır: aynı emirde başka operasyonun markası karışmasın.
+  const ozet = useQuery({
+    queryKey: anahtarlar.emirOzeti(emirId, tanim.id),
+    queryFn: () => api.get<EmirOzetiCevabi>(`/markalama/emirler/${emirId}/ozet?tanimId=${tanim.id}`),
+  });
   const birimler = useQuery({
-    queryKey: anahtarlar.birimler(`emir:${emirId}`),
-    queryFn: () => api.get<BirimlerCevabi>(`/markalama/birimler?emirId=${emirId}`),
+    queryKey: anahtarlar.birimler(`emir:${emirId}:tanim:${tanim.id}`),
+    queryFn: () => api.get<BirimlerCevabi>(`/markalama/birimler?emirId=${emirId}&tanimId=${tanim.id}`),
   });
   const yenile = () => istemci.invalidateQueries({ queryKey: anahtarlar.kok });
 
@@ -123,7 +127,7 @@ function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
           </div>
         )}
       </Kart>
-      <Kart baslik="Bu emirde" simge="chart">
+      <Kart baslik="Bu emirde, bu operasyonda" simge="chart">
         {ozet.data ? (
           <div className="tc-mrk-sayilar">
             {BIRIM_DURUMLARI.map((d) => (
@@ -172,21 +176,22 @@ export function Istasyon() {
   const [secim, secimYaz] = useState<{ tanimId: number | null; emirId: number | null }>({ tanimId: null, emirId: null });
   const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.tanimlar, queryFn: () => api.get<TanimlarCevabi>('/markalama/tanimlar') });
-  const istasyonlar = useQuery({ queryKey: [...anahtarlar.kok, 'istasyonlar'], queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim') });
+  const istasyonlar = useQuery({ queryKey: anahtarlar.istasyonlar, queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim') });
   const istasyonSecenekleri = (istasyonlar.data?.gruplar ?? []).flatMap((g) => g.istasyonlar.filter((i) => i.aktif).map((i) => ({
     deger: String(i.id), baslik: `${g.isMerkeziAd} · ${i.ad}`,
   })));
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
-  const tanim = liste.data.tanimlar.find((t) => t.id === secim.tanimId);
+  const etkinler = liste.data.tanimlar.filter((t) => t.aktif);
+  const tanim = etkinler.find((t) => t.id === secim.tanimId);
   return (
     <div className="tc-mrk-sayfa">
       <Kart baslik="Markalama istasyonu" simge="tag">
         <div className="tc-mrk-satir">
           <Secim
             etiket="Parça ve operasyon"
-            secenekler={liste.data.tanimlar.map((t) => ({ deger: String(t.id), baslik: `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}` }))}
-            bosSecenek={liste.data.tanimlar.length === 0 ? 'Markalama tanımı yok' : 'Seçin'}
+            secenekler={etkinler.map((t) => ({ deger: String(t.id), baslik: `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}` }))}
+            bosSecenek={etkinler.length === 0 ? 'Markalama tanımı yok' : 'Seçin'}
             value={secim.tanimId === null ? '' : String(secim.tanimId)}
             onChange={(o) => secimYaz({ tanimId: o.target.value === '' ? null : Number(o.target.value), emirId: null })}
           />

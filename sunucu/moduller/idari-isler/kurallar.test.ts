@@ -247,6 +247,9 @@ describe('idari-isler kuralları', () => {
   test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km; çıkış görev gününden önce olmaz', () => {
     assert.equal(cikisKmReddi(1000, 999), CIKIS_KM_GERI);
     assert.equal(cikisGunuReddi('2026-10-20', '2026-10-19'), CIKIS_ERKEN);
+    assert.equal(gorevTarihReddi({ tarih: '2026-10-19', donusTarihi: '2026-10-19', cikisSaati: '15:00', donusSaati: '09:00' }, '2026-10-19')?.alan, 'donusSaati');
+    assert.equal(gorevTarihReddi({ tarih: '2026-10-19', donusTarihi: '2026-10-20', cikisSaati: '15:00', donusSaati: '09:00' }, '2026-10-19'), null);
+    assert.equal(gorevTarihReddi({ tarih: '2026-10-19', donusTarihi: '2026-10-19', cikisSaati: '08:00', donusSaati: null }, '2026-10-19'), null);
     assert.equal(cikisGunuReddi('2026-10-19', '2026-10-19'), null);
     assert.equal(cikisGunuReddi('2026-10-18', '2026-10-19'), null);
     assert.equal(cikisKmReddi(1000, 1000), null);

@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  birimAyrintisiCevabi, birimSemasi, birimSorgusu, birimlerCevabi, dogrulaGovdesi, durumGovdesi, emirOzetiCevabi, emirParametresi,
-  idParametresi, markalaGovdesi, onizlemeCevabi, onizlemeSorgusu, tanimEkleGovdesi, tanimKaydetGovdesi, tanimSemasi, tanimSorgusu,
+  birimAyrintisiCevabi, birimSemasi, birimSorgusu, birimlerCevabi, dogrulaGovdesi, durumGovdesi, emirOzetiCevabi, emirOzetiSorgusu, emirParametresi,
+  idParametresi, markalaGovdesi, onizlemeCevabi, onizlemeSorgusu, tanimAktiflikGovdesi, tanimEkleGovdesi, tanimKaydetGovdesi, tanimSemasi, tanimSorgusu,
   tanimEmirleriCevabi, tanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  birimGetir, birimler, dogrula, durumDegistir, emirOzeti, markala, onizleme, tanimEkle, tanimEmirleri, tanimGetir, tanimKaydet,
+  birimGetir, birimler, dogrula, durumDegistir, emirOzeti, markala, onizleme, tanimAktiflik, tanimEkle, tanimEmirleri, tanimGetir, tanimKaydet,
   tanimlar,
 } from './servis.ts';
 
@@ -39,6 +39,11 @@ export const uclar = [
     govde: tanimKaydetGovdesi, cevap: tanimSemasi,
     isle: ({ db, kullanici, parametre, govde }) => tanimKaydet(db, kullanici, parametre.id, govde),
   }),
+  uc({
+    yontem: 'POST', yol: '/markalama/tanimlar/:id/aktiflik', yetki: 'markalama.tanim-yaz', parametre: idParametresi,
+    govde: tanimAktiflikGovdesi, cevap: tanimSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => tanimAktiflik(db, kullanici, parametre.id, govde),
+  }),
   // Aynı dokunuşun yinelenmesi ikinci numara yakmasın: istek kimliğiyle tek kez uygulanır.
   uc({
     yontem: 'POST', yol: '/markalama/birimler/markala', yetki: 'markalama.seri-ver', tekrarKorumali: true, govde: markalaGovdesi,
@@ -63,7 +68,8 @@ export const uclar = [
     isle: ({ db, parametre }) => birimGetir(db, parametre.id),
   }),
   uc({
-    yontem: 'GET', yol: '/markalama/emirler/:emirId/ozet', yetki: OKUMA, parametre: emirParametresi, cevap: emirOzetiCevabi,
-    isle: ({ db, parametre }) => emirOzeti(db, parametre.emirId),
+    yontem: 'GET', yol: '/markalama/emirler/:emirId/ozet', yetki: OKUMA, parametre: emirParametresi, sorgu: emirOzetiSorgusu,
+    cevap: emirOzetiCevabi,
+    isle: ({ db, parametre, sorgu }) => emirOzeti(db, parametre.emirId, sorgu.tanimId ?? null),
   }),
 ];

@@ -272,7 +272,7 @@ export function talepGorevi(durum: TalepDurumu): GorevAdimi | null {
     case 'ccb_bekliyor': return { adim: 'CCB kararı ver', islem: 'degisiklik-yonetimi.ccb-karar' };
     case 'musteri_onayi_bekliyor': return { adim: 'Müşteri onayını kaydet', islem: 'degisiklik-yonetimi.musteri-onayi' };
     case 'onaylandi': return { adim: 'ECO aç', islem: 'degisiklik-yonetimi.emir-ac' };
-    case 'emir_acildi': case 'reddedildi':
+    case 'emir_acildi': case 'reddedildi': case 'geri_cekildi':
     default: return null;
   }
 }
@@ -302,7 +302,7 @@ export function benimGorevimMi(g: GorevAdimi, islemler: readonly string[], kendi
 
 // Değişiklik hattının aşaması: açık talep, revizyon, yayın, karar, ilk parça, kapanış. Kapanmış emir ve kapanmış talep hatta yoktur.
 export function talepHatti(durum: TalepDurumu): HatAsamasi | null {
-  return durum === 'emir_acildi' || durum === 'reddedildi' ? null : 'talep';
+  return durum === 'emir_acildi' || durum === 'reddedildi' || durum === 'geri_cekildi' ? null : 'talep';
 }
 export function emirHatti(durum: EmirDurumu): HatAsamasi | null {
   const esleme: Record<EmirDurumu, HatAsamasi | null> = {
@@ -335,6 +335,24 @@ export function ogeEksigi(ogeler: readonly OgeDegisikligi[], mevcut: readonly Ko
     if (tekilMi(o.tur) && ogeler.filter((x) => x.tur === o.tur).length > 1) return `${ad}: parçada tek ${ad.toLocaleLowerCase('tr')} değişir.`;
     if (o.eskiRevizyonId !== null && mevcut !== null && !mevcut.some((m) => ayniOge(m, o.tur, o.eskiRevizyonId as number))) {
       return `${ad}: eski revizyon parçanın yürürlükteki konfigürasyonunda yok.`;
+    }
+  }
+  return null;
+}
+
+// DY-25: rota öğesinin revizyonları rota modülünde vardır ve kalemin parçasınındır. Künyesi gelmeyen kimlik yoktur.
+// Diğer türlerin sahibi modülde okuması yoktur (UYUM-BORCU 14); onlar denetlenmez. İlk eksikle döner.
+export function rotaOgesiEksigi(
+  ogeler: readonly OgeDegisikligi[], kunyeler: readonly { id: number; malzemeId: number }[], malzemeId: number,
+): string | null {
+  const bulunan = new Map(kunyeler.map((k) => [k.id, k.malzemeId]));
+  for (const o of ogeler) {
+    if (o.tur !== 'rota') continue;
+    for (const id of [o.eskiRevizyonId, o.yeniRevizyonId]) {
+      if (id === null) continue;
+      const sahibi = bulunan.get(id);
+      if (sahibi === undefined) return 'Rota revizyonu bulunamadı.';
+      if (sahibi !== malzemeId) return 'Rota revizyonu bu kalemin parçasına ait değil.';
     }
   }
   return null;
