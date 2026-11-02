@@ -52,6 +52,8 @@ const kimlikSayisi = z.number().int().positive();
 const metin = (azami: number) => z.string().trim().max(azami, `En çok ${azami} karakter.`).nullish()
   .transform((m) => (m === undefined || m === null || m === '' ? null : m));
 const numerik = z.string();
+// Dövizli kayıtta kur verilmezse sunucu o güne kadar girilmiş son kuru alır, yoksa reddeder; varsayılan 1 dövizi TL sayardı.
+const kurBos = kurSemasi.nullish().transform((v) => v ?? null);
 const iptalGovdesi = z.object({ ...beklenenSurum, neden: metin(300) });
 export { iptalGovdesi };
 
@@ -67,7 +69,7 @@ export const belgeAlanlari = z.object({
   belgeTarihi: tarihSemasi,
   vade: tarihSemasi,
   paraBirimi: paraBirimiSemasi.default('TRY'),
-  kur: kurSemasi.default(1),
+  kur: kurBos,
   tutar: tutarSemasi,
   kdvOrani: oranSemasi,
   ...tevkifat,
@@ -106,7 +108,7 @@ export const dagitimSatiri = z.object({ belgeId: kimlikSayisi, belgeTutari: tuta
 export const dagitimlarSemasi = z.array(dagitimSatiri).max(200, 'Tek seferde en çok 200 belgeye dağıtılır.').default([]);
 export const odemeEkleGovdesi = z.object({
   yon: z.enum(YONLER), firmaId: kimlikSayisi.nullish().transform((v) => v ?? null), tarih: tarihSemasi,
-  yontem: z.enum(NAKIT_YONTEMLERI), hesapId: kimlikSayisi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurSemasi.default(1),
+  yontem: z.enum(NAKIT_YONTEMLERI), hesapId: kimlikSayisi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos,
   tutar: tutarSemasi, aciklama: metin(500), dagitimlar: dagitimlarSemasi,
 });
 export type OdemeEkleGovdesi = z.input<typeof odemeEkleGovdesi>;
@@ -138,7 +140,7 @@ export const mahsupCevabi = z.object({ mahsup: mahsupSemasi });
 // ---- Çek ve senet ----
 export const cekEkleGovdesi = z.object({
   yon: z.enum(CEK_YONLERI), tur: z.enum(CEK_TURLERI), firmaId: kimlikSayisi, banka: metin(100), seriNo: metin(40),
-  duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurSemasi.default(1), tutar: tutarSemasi,
+  duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos, tutar: tutarSemasi,
   dagitimlar: dagitimlarSemasi,
 });
 export type CekEkleGovdesi = z.input<typeof cekEkleGovdesi>;
@@ -355,7 +357,7 @@ export const skorSatiri = z.object({ gun: tarihSemasi, skor: z.number().int(), n
 export const topluSatir = z.object({
   belgeTarihi: tarihSemasi, yon: z.enum(YONLER), kategori: z.enum(KATEGORILER), firma: z.string().trim().min(1, 'Firma boş olamaz.').max(200),
   belgeNo: metin(16), aciklama: metin(500), tutar: tutarSemasi, kdvOrani: oranSemasi, vade: tarihSemasi,
-  paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurSemasi.default(1),
+  paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos,
 });
 export const topluAktarGovdesi = z.object({ satirlar: z.array(topluSatir).min(1).max(TOPLU_AKTARIM_SINIRI, `Tek seferde en çok ${TOPLU_AKTARIM_SINIRI} satır.`) });
 export const topluAktarCevabi = z.object({ eklenen: z.number().int() });
