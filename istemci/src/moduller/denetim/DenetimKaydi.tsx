@@ -42,6 +42,7 @@ const TABLO_ADLARI: Readonly<Record<string, string>> = {
   kisi: 'Kişi kartı',
   stok_malzeme_ayari: 'Stok ayarı',
   stok_konum: 'Stok konumu',
+  stok_bakiye: 'Stok bakiyesi',
   ayar: 'Sistem ayarı',
 };
 // Yol parametresinden önceki kesimin ekrandaki karşılığı (`/uretim-emirleri/:id` -> "Üretim emri 13"); listede olmayan "Kayıt" olur.
