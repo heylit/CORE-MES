@@ -116,9 +116,12 @@ export const kayitSorgusu = z.object({
   paketId: z.string().max(200).optional(),
   madde: sayi('Madde').optional(),
   sinir: z.coerce.number().int().min(1).max(20000).optional(),
+  // Artımlı okuma: yalnız sunucuya bu andan (ms) sonra varan kayıtlar döner; varış anı bilinmeyen eski kayıt dönmez.
+  varisSonra: sayi('Varış').optional(),
 });
 // kesildi: liste sınıra ulaştı (en yeniler döner); ekran daha eskisi için aralığı daraltmalıdır.
-export const kayitlarCevabi = z.object({ satirlar: z.array(kayitSatiri), kesildi: z.boolean().optional() });
+// okumaAni: sunucu saatiyle okumanın anı (ms); sonraki artımlı okuma `varisSonra`yı bundan kurar.
+export const kayitlarCevabi = z.object({ satirlar: z.array(kayitSatiri), kesildi: z.boolean().optional(), okumaAni: z.number().int().optional() });
 
 export const eksikDosyaGovdesi = z.object({ ozetler: z.array(ozet).max(1000) });
 export const eksikDosyaCevabi = z.object({ eksikler: z.array(z.string()) });

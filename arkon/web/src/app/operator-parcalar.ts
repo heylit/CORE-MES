@@ -2,6 +2,7 @@ import { AKStore, type TmiAdim } from '../data/store';
 import { adimCevabiUygula, adimYaz } from '../data/tmi-adim';
 import { NEDEN_YOK, nedenAdi } from '../data/durus-nedeni';
 import { kayitIlgili, seyrelt } from '../data/log-tepki';
+import { artimliVaris, bellegiGuncelle, type VardiyaBellegi } from '../data/artimli-kayit';
 import { yuzdeMetni } from '../data/yuzde';
 import { isSatiri, malzemeSatiri, modelDosyasi, saatMetni } from '../data/buyuk-ekran';
 import { Step3D, processModel } from './model-3b';
@@ -92,13 +93,22 @@ export function Scope({ state }) {
     <div style=${{ textAlign: 'right' }}><span className="over">Devir</span><br /><b style=${{ color: 'var(--ink)', fontSize: 26 }}>${fmt(rpm)}<small> dev/dk</small></b></div></div><canvas ref=${cv}></canvas></div>`;
 }
 /* ── Vardiya verisi: durum kayıtları + sayımlar → kullanılabilirlik, performans, kalite (OEE), duruşlar ── */
+// Okumalar sırayla koşar (artımlı birleştirme her zaman son belleğin üstüne yapılsın); arada gelen tetiklemeler seyrelt ile toplanır.
 export function useShiftLog(machine, off) {
   const [d, setD] = useState<any>({ ev: [], cn: [], sh: currentShift(Date.now()), ok: false });
-  const load = useCallback(async () => {
+  const bellek = useRef<VardiyaBellegi | null>(null), sira = useRef<Promise<void>>(Promise.resolve());
+  const load = useCallback(() => { sira.current = sira.current.then(async () => {
     if (off) return;
-    const sh = currentShift(Date.now()), L = AKStore.Log;
-    try { const [ev, cn] = await Promise.all([L.query('events', { machine, from: sh.s - 7 * 864e5, to: sh.e }), L.query('counts', { machine, from: sh.s, to: sh.e })]); setD({ ev, cn, sh, machine, ok: true }); } catch (e) { console.warn(e); }
-  }, [machine, off]);
+    const simdi = Date.now(), sh = currentShift(simdi), L = AKStore.Log, a = { machine, vardiyaBasi: sh.s };
+    const evS = { machine, from: sh.s - 7 * 864e5, to: sh.e }, cnS = { machine, from: sh.s, to: sh.e };
+    try {
+      const since = artimliVaris(bellek.current, a, simdi);
+      const [ev, cn] = await Promise.all([L.imlecli('events', evS, since), L.imlecli('counts', cnS, since)]);
+      const b = bellek.current = bellegiGuncelle(bellek.current, a, simdi, since !== null, ev, cn);
+      if (b !== null) { setD({ ev: b.ev, cn: b.cn, sh, machine, ok: true }); return; }
+      const [evT, cnT] = await Promise.all([L.query('events', evS), L.query('counts', cnS)]); setD({ ev: evT, cn: cnT, sh, machine, ok: true });
+    } catch (e) { bellek.current = null; console.warn(e); }
+  }); }, [machine, off]);
   useEffect(() => { load(); const s = seyrelt(load, 250); const offL = AKStore.Log.on((k, r) => { if (kayitIlgili(k, r, ['events', 'counts'], machine)) s.tetikle(); }); const t = setInterval(load, 30000); return () => { offL(); s.birak(); clearInterval(t); }; }, [load, machine]);
   return d;
 }
