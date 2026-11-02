@@ -1,7 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { hesaplariSec, yukHesabi } from './hazirla.ts';
 import {
-  VARSAYILAN_SENARYO, adresDenetle, agirlikliSec, dusunmeSuresiMs, ortamDenetle, profilDagit, sayiOku, senaryoSemasi, tohumluUretec, yolKalibi,
+  VARSAYILAN_SENARYO, adresDenetle, agirlikliSec, dusunmeSuresiMs, karmaUygula, ortamDenetle, profilDagit, sayiOku, senaryoCoz, senaryoSemasi,
+  tohumluUretec, yolKalibi,
 } from './senaryo.ts';
 
 describe('yük senaryosu', () => {
@@ -81,5 +84,44 @@ describe('yük senaryosu', () => {
     const bozuk = [{ ...VARSAYILAN_SENARYO[0], sayfalar: [{ yol: 'http://disari', agirlik: 1 }] }];
     assert.equal(senaryoSemasi.safeParse(bozuk).success, false);
     assert.equal(senaryoSemasi.safeParse([]).success, false);
+  });
+
+  it('senaryo dosyası düz liste ya da istasyonlu nesnedir; depodaki cihaz senaryosu geçerlidir', () => {
+    assert.deepEqual(senaryoCoz(VARSAYILAN_SENARYO).istasyonlar, []);
+    const cihaz = senaryoCoz(JSON.parse(readFileSync(new URL('./cihaz-senaryosu.json', import.meta.url), 'utf8')));
+    assert.equal(cihaz.istasyonlar, 'kesfet');
+    assert.deepEqual(cihaz.profiller.map((p) => p.ad), ['terminal', 'ofis', 'pano']);
+    assert.ok(cihaz.profiller[0]?.yazma !== undefined);
+    const elle = senaryoCoz({ istasyonlar: [{ id: 1, kod: 'K' }], profiller: VARSAYILAN_SENARYO });
+    assert.deepEqual(elle.istasyonlar, [{ id: 1, kod: 'K' }]);
+  });
+
+  it('profil rolü ya örnek hesaptan ya rol adından gelir; ikisi birden ya da hiçbiri reddedilir', () => {
+    const { ornekHesap: _, ...rolsuz } = VARSAYILAN_SENARYO[0] ?? { ornekHesap: '' };
+    assert.equal(senaryoSemasi.safeParse([{ ...rolsuz, rol: 'Operatör' }]).success, true);
+    assert.equal(senaryoSemasi.safeParse([rolsuz]).success, false);
+    assert.equal(senaryoSemasi.safeParse([{ ...VARSAYILAN_SENARYO[0], rol: 'Operatör' }]).success, false);
+  });
+
+  it('bilinmeyen yer tutucu ve hesap adına girmeyen profil adı senaryo okunurken reddedilir', () => {
+    const p = VARSAYILAN_SENARYO[0];
+    assert.equal(senaryoSemasi.safeParse([{ ...p, sayfalar: [{ yol: '/a?b={istasyon.kod}', agirlik: 1 }] }]).success, true);
+    assert.equal(senaryoSemasi.safeParse([{ ...p, sayfalar: [{ yol: '/a?b={baska}', agirlik: 1 }] }]).success, false);
+    assert.equal(senaryoSemasi.safeParse([{ ...p, yazma: { ortalamaSn: 5, secenekler: [{ yol: '/a', govde: { x: '{bilinmez}' }, agirlik: 1 }] } }]).success, false);
+    assert.equal(senaryoSemasi.safeParse([{ ...p, ad: 'Operator.1' }]).success, false);
+  });
+
+  it('karma payları ezer, adı geçmeyeni çıkarır, senaryoda olmayanı reddeder', () => {
+    const k = karmaUygula(VARSAYILAN_SENARYO, new Map([['operator', 120], ['mudur', 20]]));
+    assert.deepEqual(k.map((p) => [p.ad, p.pay]), [['operator', 120], ['mudur', 20]]);
+    assert.deepEqual(profilDagit(140, k).filter((d) => d === 'mudur').length, 20);
+    assert.equal(karmaUygula(VARSAYILAN_SENARYO, null).length, VARSAYILAN_SENARYO.length);
+    assert.throws(() => karmaUygula(VARSAYILAN_SENARYO, new Map([['terminal', 1]])), /terminal/);
+  });
+
+  it('hesap seçimi karmaya göre profil başına alır, eksikte ne kadar eksik olduğunu söyler', () => {
+    const hesaplar = { parola: 'x', kisiler: [1, 2, 3].map((n) => ({ kullaniciAdi: yukHesabi('ofis', n), profil: 'ofis' })).concat([{ kullaniciAdi: yukHesabi('pano', 1), profil: 'pano' }]) };
+    assert.deepEqual(hesaplariSec(hesaplar, ['ofis', 'pano', 'ofis']).map((k) => k.kullaniciAdi), ['yuk.ofis.0001', 'yuk.ofis.0002', 'yuk.pano.0001']);
+    assert.throws(() => hesaplariSec(hesaplar, ['pano', 'pano']), /pano 1\/2/);
   });
 });
