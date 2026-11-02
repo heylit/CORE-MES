@@ -235,6 +235,44 @@ describe('Ctrl K ile gelen istek (kart 1235)', () => {
 });
 
 describe('Yazma akışları', () => {
+  it('aynı ad uyarısı (kart 1829): Türkçe harf ve büyük/küçük farkı gözetmeden eşleşen kart koduyla gösterilir; kayıt engellenmez', async () => {
+    const istekler = sunucuKur(YAZAR, () => json(200, { firma: { ...FIRMA_A, id: 12, kod: null } }));
+    ac('/musteri-tedarikci?yeni=1');
+    const form = await screen.findByRole('dialog', { name: 'Yeni firma' });
+    fireEvent.change(within(form).getByLabelText(/^Ad( \*)?$/), { target: { value: '  ORNEK müşteri ltd ' } });
+    expect(await within(form).findByText('Bu adla kayıtlı firma var: M-001', {}, { timeout: 2000 })).toBeTruthy();
+    expect(listeIstekleri(istekler).some((i) => i.yol.includes('ara=ORNEK'))).toBe(true);
+    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+  });
+
+  it('aynı ad uyarısı: düzeltilen kartın kendi adı uyarı vermez; benzeyen ama farklı ad da vermez', async () => {
+    sunucuKur(YAZAR);
+    ac('/musteri-tedarikci?firma=10');
+    const panel = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Düzenle' }));
+    const form = await screen.findByRole('dialog', { name: 'Düzenle: Ornek Musteri Ltd' });
+    await new Promise((coz) => setTimeout(coz, 600));
+    expect(within(form).queryByText(/Bu adla kayıtlı firma var/)).toBeNull();
+    fireEvent.change(within(form).getByLabelText(/^Ad( \*)?$/), { target: { value: 'Ornek Fason' } });
+    await new Promise((coz) => setTimeout(coz, 600));
+    expect(within(form).queryByText(/Bu adla kayıtlı firma var/)).toBeNull();
+  });
+
+  it('para birimi (kart 1829): sunucunun reddettiği kod alanın altında gösterilir, form açık kalır', async () => {
+    const istekler = sunucuKur(YAZAR, () => json(400, {
+      kod: 'DOGRULAMA', mesaj: 'Geçerli bir para birimi kodu girin (TRY, USD, EUR gibi).', alan: 'paraBirimi',
+    } satisfies HataGovdesi));
+    ac('/musteri-tedarikci?yeni=1');
+    const form = await screen.findByRole('dialog', { name: 'Yeni firma' });
+    fireEvent.change(within(form).getByLabelText(/^Ad( \*)?$/), { target: { value: 'Ornek Para' } });
+    fireEvent.change(within(form).getByLabelText('Para birimi'), { target: { value: 'XYZ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
+    expect(await within(form).findByText('Geçerli bir para birimi kodu girin (TRY, USD, EUR gibi).')).toBeTruthy();
+    expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ paraBirimi: 'XYZ' });
+    expect(screen.getByRole('dialog', { name: 'Yeni firma' })).toBeTruthy();
+  });
+
   it('adres eklerken yapıştırılan konum kutuları doldurur; gövde kartın sürümünü ve koordinatı taşır, istek kimliği gider', async () => {
     const istekler = sunucuKur(YAZAR, () => json(200, { firma: { ...FIRMA_A, surum: 4 }, adresler: [ADRES_1] } satisfies FirmaAyrintiCevabi));
     ac('/musteri-tedarikci');

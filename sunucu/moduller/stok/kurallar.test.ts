@@ -11,7 +11,7 @@ import {
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
-  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, SAYIM_DISI_KONUMLAR, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -932,5 +932,12 @@ describe('STK-8: mal kabul konum türü', () => {
   test('depo, istasyon, fason ve karantina izinli; üretim çıkışı, hurda, yolda, sevkiyat reddedilir', () => {
     for (const t of ['kabul', 'raf_gozu', 'depo_zemini', 'ara_alan', 'karantina', 'palet', 'istasyon', 'fason'] as const) assert.equal(malKabulKonumuEngeli(t), null, t);
     for (const t of ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const) assert.ok(malKabulKonumuEngeli(t), t);
+  });
+});
+
+describe('STK-9 a: sayım vadesi konumları', () => {
+  test('yalnız fason ve yolda vadeye girmez; zemin, karantina, kabul ve raf gözü girer', () => {
+    assert.deepEqual([...SAYIM_DISI_KONUMLAR].sort(), ['fason', 'yolda']);
+    for (const t of ['raf_gozu', 'depo_zemini', 'karantina', 'kabul'] as const) assert.equal((SAYIM_DISI_KONUMLAR as readonly string[]).includes(t), false, t);
   });
 });

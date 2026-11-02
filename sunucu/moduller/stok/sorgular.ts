@@ -6,7 +6,7 @@ import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { aramaSade, basDeseni, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
-import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
+import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, SAYIM_DISI_KONUMLAR, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
 
 // Sabit tür adları; kullanıcı girdisi değildir.
 const AYRILMIS_SQL = AYRILMIS_KONUM_TURLERI.map((t) => `'${t}'`).join(', ');
@@ -1254,12 +1254,12 @@ export const konumKayitAra = (db: Db, d: AramaDesenleri): Promise<KonumKaydi[]> 
    (SELECT r.id, r.kod, NULL, 0, r.tur FROM stok_raf r WHERE r.aktif AND (public.arama_sade(r.kod) LIKE $2 OR public.arama_sade('RAF ' || r.kod) LIKE $2)
     ORDER BY (public.arama_sade(r.kod) = $1) DESC, (public.arama_sade(r.kod) LIKE $3) DESC, r.kod LIMIT $4)`, [d.sade, d.icindeDeseni, d.basDeseni, d.sinir]);
 
-// Sayım bekleyen dolu raf gözü: hiç sayılmamış ya da son sayımı süreden eski (DEP-15).
+// Sayım bekleyen dolu konum: hiç sayılmamış ya da son sayımı süreden eski (DEP-15, STK-9 a).
 export const sayimBekleyenGozler = (db: Db, gun: number): Promise<{ konumId: number; kod: string; sonSayim: string | null }[]> => db.sorgu(
   `SELECT k.id AS "konumId", k.kod, ${zamanMetni('k.son_sayim')} AS "sonSayim" FROM stok_konum k
-   WHERE k.tur = 'raf_gozu' AND k.aktif AND EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id)
+   WHERE k.tur <> ALL($2::text[]) AND k.aktif AND EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id)
      AND (k.son_sayim IS NULL OR k.son_sayim < now() - make_interval(days => $1::int))
-   ORDER BY k.son_sayim NULLS FIRST, k.kod LIMIT 200`, [gun]);
+   ORDER BY k.son_sayim NULLS FIRST, k.kod LIMIT 200`, [gun, SAYIM_DISI_KONUMLAR]);
 
 // Kart #1124: sipariş satırlarına bağlı mal kabul belgeleri; düzeltilmiş (yerine yenisi gelmiş) belge listede yoktur.
 export const siparisIrsaliyeleri = (db: Db, siparisSatirIdler: readonly number[]): Promise<{ siparisSatirId: number; malKabulId: number; malKabulNo: string; irsaliyeNo: string | null; zaman: string }[]> => db.sorgu(

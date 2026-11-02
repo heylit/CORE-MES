@@ -1811,6 +1811,19 @@ describe('stok (gerçek PostgreSQL)', () => {
     void raf;
   });
 
+  test('STK-9 a: sayım vadesi raf dışındaki stoklu konumları da kapsar; fason ve yolda girmez; boş konum girmez', async () => {
+    const k = await kart('sarf');
+    const ac = async (tur: string, kod: string) => {
+      const c = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur, kod: `STK9-${kod}-${kartSira}`, ad: null });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.konum.id;
+    };
+    const [zemin, ara, fason, bos] = [await ac('depo_zemini', 'Z'), await ac('ara_alan', 'A'), await ac('fason', 'F'), await ac('depo_zemini', 'B')];
+    for (const konumId of [zemin, ara, fason]) assert.equal((await malKabul(k, '1', { konumId })).durum, 200);
+    const l = (await depo<{ gozler: { konumId: number }[] }>('GET', '/stok/sayim-bekleyenler')).govde.gozler.map((x) => x.konumId);
+    assert.deepEqual([zemin, ara, fason, bos].map((x) => l.includes(x)), [true, true, false, false]);
+  });
+
   test('DEP-15 sayım bekleyen: dolu ve süreden uzun sayılmamış göz listelenir; sayılınca düşer; fiş hareketlerde bağlıdır', async () => {
     const raf = await rafAc('V', 1, 1);
     const g = (await mudur<{ gozler: { konumId: number }[] }>('GET', `/stok/raflar/${raf.id}`)).govde.gozler[0]!.konumId;
