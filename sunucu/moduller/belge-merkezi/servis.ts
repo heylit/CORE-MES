@@ -195,6 +195,7 @@ export async function bagEkle(
   if (red !== null) throw dogrulama(red, 'hedefModul');
   etkinOlmali(b);
   if (g.hedefModul === 'istasyonlar' && (await istasyonGetir(db, g.hedefId)) === null) throw dogrulama(ILETILER.hedefYok, 'hedefId');
+  if (g.hedefModul === 'malzemeler' && !(await malzemeOzetleri(db, [g.hedefId])).has(g.hedefId)) throw dogrulama(ILETILER.hedefYok, 'hedefId');
   await surumuIlerlet(db, id, g.surum);
   await bagYaz(db, kullanici, id, g.hedefModul, g.hedefId);
   if (g.hedefModul === 'istasyonlar') {

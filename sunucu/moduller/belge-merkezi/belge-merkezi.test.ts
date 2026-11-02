@@ -57,6 +57,19 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     return { cerez: String(c.headers['set-cookie']).split(';')[0] ?? '', id };
   }
 
+  // Merkezden bağ yalnız var olan malzeme kartına kurulur; bağ testleri kartı kendisi açar.
+  async function denemeKarti(ad: string): Promise<number> {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('CZ-BAG-', 0) ON CONFLICT (onek) DO NOTHING");
+    sayac += 1;
+    const r = await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'mamul', 'CZ-BAG-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [`cz-bag-${sayac}`, sayac, JSON.stringify({ id: `cz-bag-${sayac}`, com: { ad } }), yonetici.id],
+    );
+    assert.ok(r);
+    return r.no;
+  }
+
   const gonder = (o: Oturum, yol: string, govde: unknown, istekKimligi: string | null = randomUUID()): Promise<LightMyRequestResponse> =>
     app.inject({
       method: 'POST', url: `/api${yol}`, payload: govde as object,
@@ -303,18 +316,23 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(c.statusCode, 200, c.body);
   });
 
-  test('CZ-09 merkezden malzeme kartına bağ kurulur, ikinci kez kurulmaz; başka modüle merkezden bağ kurulmaz', async () => {
+  test('CZ-09 merkezden malzeme kartına bağ kurulur, ikinci kez kurulmaz; olmayan karta ve başka modüle merkezden bağ kurulmaz', async () => {
+    const kart = await denemeKarti('Deneme bağ kartı');
     let b = await belgeAc(yonetici, '3b-model', step(), 'Bağlı model');
-    let c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: 41, surum: b.surum });
+    let c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: 2_000_000_001, surum: b.surum });
+    assert.equal(c.statusCode, 400, c.body);
+    assert.equal(c.json().mesaj, 'Bağlanacak kayıt bulunamadı.');
+    assert.equal((await oku(yonetici, `/cizimler/${b.id}`)).json<BelgeAyrintisi>().surum, b.surum, 'reddedilen bağ sürümü ilerletmez');
+    c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: kart, surum: b.surum });
     assert.equal(c.statusCode, 200, c.body);
     b = c.json<BelgeAyrintisi>();
-    assert.deepEqual(b.baglar.map((g) => [g.hedefModul, g.hedefId]), [['malzemeler', 41]]);
-    c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: 41, surum: b.surum });
+    assert.deepEqual(b.baglar.map((g) => [g.hedefModul, g.hedefId]), [['malzemeler', kart]]);
+    c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: kart, surum: b.surum });
     assert.equal(c.statusCode, 409, c.body);
     assert.equal(c.json().mesaj, 'Bu kayıt zaten bağlı.');
     c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'stok', hedefId: 3, surum: b.surum });
     assert.equal(c.statusCode, 400, c.body);
-    c = await gonder(yonetici, `/cizimler/${b.id}/bag-kaldir`, { hedefModul: 'malzemeler', hedefId: 41, surum: b.surum });
+    c = await gonder(yonetici, `/cizimler/${b.id}/bag-kaldir`, { hedefModul: 'malzemeler', hedefId: kart, surum: b.surum });
     assert.equal(c.statusCode, 200, c.body);
     assert.deepEqual(c.json<BelgeAyrintisi>().baglar, []);
   });
@@ -357,7 +375,7 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       'INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ($1, $2, $3, true) RETURNING id', [`CZIS${sayac}`, 'Deneme Adlı Tezgah', im?.id],
     );
     let b = await belgeAc(yonetici, '3b-model', glb(), 'Adlı bağ modeli');
-    for (const [hedefModul, hedefId] of [['malzemeler', kart!.no], ['malzemeler', 2_000_000_001], ['istasyonlar', ist!.id]] as const) {
+    for (const [hedefModul, hedefId] of [['malzemeler', kart!.no], ['istasyonlar', ist!.id]] as const) {
       const c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul, hedefId, surum: b.surum });
       assert.equal(c.statusCode, 200, c.body);
       b = c.json<BelgeAyrintisi>();
@@ -366,7 +384,6 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(ayrinti.baglar.map((g) => [g.hedefModul, g.hedefId, g.hedefAdi]).sort((x, y) => Number(x[1]) - Number(y[1])), [
       ['istasyonlar', ist!.id, 'Deneme Adlı Tezgah'],
       ['malzemeler', kart!.no, `${kart!.kod} Deneme bağlı mil`],
-      ['malzemeler', 2_000_000_001, null],
     ].sort((x, y) => Number(x[1]) - Number(y[1])));
   });
 
@@ -408,7 +425,8 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(yonetici, `/cizimler/${makine.id}/bag-ekle`, { hedefModul: 'istasyonlar', hedefId: ist?.id, surum: makine.surum })).statusCode, 200);
     const bagsiz = await belgeAc(yonetici, '3b-model', glb(), 'Ayrim bagsiz model');
     const parca = await belgeAc(yonetici, '3b-model', glb(), 'Ayrim parca model');
-    assert.equal((await gonder(yonetici, `/cizimler/${parca.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: 41, surum: parca.surum })).statusCode, 200);
+    const parcaKarti = await denemeKarti('Ayrim parca karti');
+    assert.equal((await gonder(yonetici, `/cizimler/${parca.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: parcaKarti, surum: parca.surum })).statusCode, 200);
     const liste = async (ek: string): Promise<string[]> => {
       const c = await oku(yonetici, `/cizimler?tur=3b-model&ara=Ayrim${ek}&siralama=ad`);
       assert.equal(c.statusCode, 200, c.body);
