@@ -37,6 +37,10 @@ describe('kod önerisi (DN-09)', () => {
   test('iki haneyi aşan sayı da büyür', () => {
     assert.equal(kodOner('D', ['D-99']), 'D-100');
   });
+
+  test('dokuz haneyi aşan var olan kod da sayılır; öneri onunla çakışmaz', () => {
+    assert.equal(kodOner('D', ['D-999999999', 'D-1000000000']), 'D-1000000001');
+  });
 });
 
 describe('sabit hatalı türleri (1207 c)', () => {

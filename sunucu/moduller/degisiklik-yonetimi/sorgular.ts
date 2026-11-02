@@ -3,7 +3,7 @@ import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
   Aciliyet, EmirDurumu, EtkiAnalizi, FaiDurumu, FaiTuru, GecerlilikTuru, GecmisOlayi, KararHedefi, KararKodu, KararModu, ListeKapsami,
-  OlayIlgilisi, OlayTuru, Sinif, TalepDurumu,
+  OgeTuru, OlayIlgilisi, OlayTuru, Sinif, TalepDurumu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type { Cevaplar } from './kurallar.ts';
 
@@ -231,15 +231,15 @@ export function emirListesi(db: Db, s: EmirSuzgeci, dilim: Dilim): Promise<EmirL
 
 /* ---------------- Kalem ---------------- */
 
+// Çizim ve rota revizyonu artık öğe tablosundadır (1642); kalemin eski dört sütunu okunmaz ve yazılmaz.
 export interface KalemSatiri {
-  id: number; emirId: number; malzemeId: number; eskiCizimRevizyonuId: number | null; yeniCizimRevizyonuId: number | null;
-  eskiRotaRevizyonuId: number | null; yeniRotaRevizyonuId: number | null; eskiYeniyeUyar: 'evet' | 'hayir' | null;
-  yeniEskiyeUyar: 'evet' | 'hayir' | null; yeniParcaNo: string | null; yeniParcaAdi: string | null; ozet: string;
+  id: number; emirId: number; malzemeId: number; eskiYeniyeUyar: 'evet' | 'hayir' | null;
+  yeniEskiyeUyar: 'evet' | 'hayir' | null; yeniParcaNo: string | null; yeniParcaAdi: string | null; yeniParcaRevizyonu: string | null; ozet: string;
 }
 
-const KALEM_SECIMI = `id, emir_id AS "emirId", malzeme_id AS "malzemeId", eski_cizim_revizyonu_id AS "eskiCizimRevizyonuId",
-  yeni_cizim_revizyonu_id AS "yeniCizimRevizyonuId", eski_rota_revizyonu_id AS "eskiRotaRevizyonuId", yeni_rota_revizyonu_id AS "yeniRotaRevizyonuId",
-  eski_yeniye_uyar AS "eskiYeniyeUyar", yeni_eskiye_uyar AS "yeniEskiyeUyar", yeni_parca_no AS "yeniParcaNo", yeni_parca_adi AS "yeniParcaAdi", ozet`;
+const KALEM_SECIMI = `id, emir_id AS "emirId", malzeme_id AS "malzemeId",
+  eski_yeniye_uyar AS "eskiYeniyeUyar", yeni_eskiye_uyar AS "yeniEskiyeUyar", yeni_parca_no AS "yeniParcaNo", yeni_parca_adi AS "yeniParcaAdi",
+  yeni_parca_revizyonu AS "yeniParcaRevizyonu", ozet`;
 
 export function emirKalemleri(db: Db, emirId: number): Promise<KalemSatiri[]> {
   return db.sorgu<KalemSatiri>(`SELECT ${KALEM_SECIMI} FROM degisiklik_yonetimi_emir_kalemi WHERE emir_id = $1 ORDER BY sira`, [emirId]);
@@ -247,16 +247,76 @@ export function emirKalemleri(db: Db, emirId: number): Promise<KalemSatiri[]> {
 
 export function kalemYaz(
   db: Db, emirId: number, kalemId: number,
-  k: Omit<KalemSatiri, 'id' | 'emirId' | 'malzemeId' | 'eskiCizimRevizyonuId' | 'eskiRotaRevizyonuId'>,
+  k: Omit<KalemSatiri, 'id' | 'emirId' | 'malzemeId'>,
 ): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE degisiklik_yonetimi_emir_kalemi
-        SET yeni_cizim_revizyonu_id = $3, yeni_rota_revizyonu_id = $4, eski_yeniye_uyar = $5, yeni_eskiye_uyar = $6, yeni_parca_no = $7,
-            yeni_parca_adi = $8, ozet = $9
+        SET eski_yeniye_uyar = $3, yeni_eskiye_uyar = $4, yeni_parca_no = $5, yeni_parca_adi = $6, yeni_parca_revizyonu = $7, ozet = $8
       WHERE id = $2 AND emir_id = $1
       RETURNING id`,
-    [emirId, kalemId, k.yeniCizimRevizyonuId, k.yeniRotaRevizyonuId, k.eskiYeniyeUyar, k.yeniEskiyeUyar, k.yeniParcaNo, k.yeniParcaAdi, k.ozet],
+    [emirId, kalemId, k.eskiYeniyeUyar, k.yeniEskiyeUyar, k.yeniParcaNo, k.yeniParcaAdi, k.yeniParcaRevizyonu, k.ozet],
   );
+}
+
+/* ---------------- Öğe ve konfigürasyon ---------------- */
+
+export interface OgeSatiri { kalemId: number; tur: OgeTuru; eskiRevizyonId: number | null; yeniRevizyonId: number | null }
+
+export function emirOgeleri(db: Db, emirId: number): Promise<OgeSatiri[]> {
+  return db.sorgu<OgeSatiri>(
+    `SELECT o.kalem_id AS "kalemId", o.tur, o.eski_revizyon_id AS "eskiRevizyonId", o.yeni_revizyon_id AS "yeniRevizyonId"
+       FROM degisiklik_yonetimi_emir_ogesi o JOIN degisiklik_yonetimi_emir_kalemi k ON k.id = o.kalem_id
+      WHERE k.emir_id = $1 ORDER BY o.kalem_id, o.tur, o.id`,
+    [emirId],
+  );
+}
+
+// Kalemin öğeleri yeniden yazılır; yalnız `turler` içindeki türler silinip yazılır, öbürleri kalır.
+export async function ogeleriYaz(
+  db: Db, kalemId: number, turler: readonly OgeTuru[], ogeler: readonly Omit<OgeSatiri, 'kalemId'>[],
+): Promise<void> {
+  await db.sorgu('DELETE FROM degisiklik_yonetimi_emir_ogesi WHERE kalem_id = $1 AND tur = ANY ($2::text[])', [kalemId, turler]);
+  for (const o of ogeler) {
+    await db.sorgu(
+      'INSERT INTO degisiklik_yonetimi_emir_ogesi (kalem_id, tur, eski_revizyon_id, yeni_revizyon_id) VALUES ($1, $2, $3, $4)',
+      [kalemId, o.tur, o.eskiRevizyonId, o.yeniRevizyonId],
+    );
+  }
+}
+
+export interface KonfigurasyonSatiri {
+  id: number; malzemeId: number; sira: number; parcaRevizyonu: string | null; prosesSurumu: number; emirNo: string; zaman: string;
+  ogeler: { tur: OgeTuru; revizyonId: number }[];
+}
+
+// Malzemenin yürürlükteki (en büyük sıralı) konfigürasyonu; yoksa null.
+export function sonKonfigurasyon(db: Db, malzemeId: number): Promise<KonfigurasyonSatiri | null> {
+  return db.tek<KonfigurasyonSatiri>(
+    `SELECT c.id, c.malzeme_id AS "malzemeId", c.sira, c.parca_revizyonu AS "parcaRevizyonu", c.proses_surumu AS "prosesSurumu",
+            e.no AS "emirNo", ${zamanMetni('c.zaman')} AS zaman,
+            COALESCE((SELECT json_agg(json_build_object('tur', o.tur, 'revizyonId', o.revizyon_id) ORDER BY o.tur, o.revizyon_id)
+                        FROM degisiklik_yonetimi_konfigurasyon_ogesi o WHERE o.konfigurasyon_id = c.id), '[]'::json) AS ogeler
+       FROM degisiklik_yonetimi_konfigurasyon c JOIN degisiklik_yonetimi_emir e ON e.id = c.emir_id
+      WHERE c.malzeme_id = $1
+      ORDER BY c.sira DESC LIMIT 1`,
+    [malzemeId],
+  );
+}
+
+// Sıra çağıranın okuduğu son sıranın bir fazlasıdır; aynı anda iki yayın aynı sırayı yazarsa tekil kısıt ikincisini durdurur.
+export async function konfigurasyonEkle(
+  db: Db, g: { malzemeId: number; sira: number; parcaRevizyonu: string | null; prosesSurumu: number; emirId: number; kisiId: number;
+    ogeler: readonly { tur: OgeTuru; revizyonId: number }[] },
+): Promise<void> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO degisiklik_yonetimi_konfigurasyon (malzeme_id, sira, parca_revizyonu, proses_surumu, emir_id, kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [g.malzemeId, g.sira, g.parcaRevizyonu, g.prosesSurumu, g.emirId, g.kisiId],
+  );
+  if (satir === null) throw new Error('Konfigürasyon yazılamadı.');
+  for (const o of g.ogeler) {
+    await db.sorgu('INSERT INTO degisiklik_yonetimi_konfigurasyon_ogesi (konfigurasyon_id, tur, revizyon_id) VALUES ($1, $2, $3)', [satir.id, o.tur, o.revizyonId]);
+  }
 }
 
 /* ---------------- Karar ---------------- */

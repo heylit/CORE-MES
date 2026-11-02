@@ -230,4 +230,68 @@ describe('oee (gerçek PostgreSQL)', () => {
     assert.equal(ist.red, 3);
     assert.equal(ist.vardiyaDisi.saglam, 30);
   });
+
+  test('OE-17: gece yarısında biten vardiyanın son anındaki sayım o güne girer, ertesi güne vardiya dışı olarak geçmez', async () => {
+    const sahip = ortam!.sahip;
+    // B merkezinde pazartesi 16:00-24:00 akşam vardiyası; makine B 23:00-24:00 çalışır, sayım tam 24:00'te.
+    const t = await tamam<TakvimCevabi>(c.yonetici, 'POST', '/vardiyalar', { ad: 'OE-Akşam', baslangic: '16:00', bitis: '00:00', molalar: [] }, { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() });
+    const aksam = t.vardiyalar.find((v) => v.ad === 'OE-Akşam')!.id;
+    await tamam(c.yonetici, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezB, gun: 1, vardiyaId: aksam, acik: true });
+    const istasyonB = (await sahip.tek<{ id: number }>('SELECT istasyon_id AS id FROM makine WHERE id = $1', [makineB]))!.id;
+    const tip = (await sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('OE-T2', 'Deneme tipi 2', 'TAL') RETURNING id"))!.id;
+    const emir = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum) VALUES ('P-OE2', 'Deneme parça 2', 100, $1, $2, 'planli') RETURNING id",
+      [istasyonB, yoneticiId]))!.id;
+    const isEmri = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id, makine_id, birim_sure_dk) VALUES ($1, 1, 10, $2, 'Tornalama', $3, $4, 2) RETURNING id",
+      [emir, tip, istasyonB, makineB]))!.id;
+    const geceYarisi = `${GELECEK_SALI}T00:00:00+03:00`;
+    await sahip.sorgu(
+      `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $5)`, [emir, isEmri, istasyonB, makineB, yoneticiId, `${GELECEK_PAZARTESI}T23:00:00+03:00`, geceYarisi]);
+    await sahip.sorgu(
+      `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, zaman, is_emri_id) VALUES ($1, $2, $3, 'saglam', 10, $4::timestamptz, $5)`,
+      [emir, yoneticiId, istasyonB, geceYarisi, isEmri]);
+    const oku = async (baslangic: string, bitis: string) => vt().tx(async (db) =>
+      (await oee(db, (await kullaniciYukle(db, yoneticiId))!, { baslangic, bitis }, SONRA)).makineler.find((m) => m.id === makineB)!);
+    const pzt = await oku(GELECEK_PAZARTESI, GELECEK_PAZARTESI);
+    assert.equal(pzt.planliDk, 480);
+    assert.equal(pzt.calismaDk, 60);
+    assert.equal(pzt.saglam, 10);
+    assert.equal(pzt.standartDk, 20);
+    assert.equal(pzt.vardiyaDisi.saglam, 0);
+    const sali = await oku(GELECEK_SALI, GELECEK_SALI);
+    assert.equal(sali.saglam, 0);
+    assert.equal(sali.vardiyaDisi.saglam, 0, 'ertesi gün aynı sayımı vardiya dışı olarak almaz');
+    const ikisi = await oku(GELECEK_PAZARTESI, GELECEK_SALI);
+    assert.equal(ikisi.saglam, pzt.saglam + sali.saglam);
+    assert.equal(ikisi.planliDk, 480, 'önceki gün okunsa da planlı süre pencereyle kırpılır');
+  });
+
+  test('OE-18: pasif makine yalnız pencerede izi varsa listelenir, aktif: false taşır ve toplama girer', async () => {
+    const sahip = ortam!.sahip;
+    const mp = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'OE-MP', ad: 'Deneme pasif makine', istasyonId: istasyonA })).id;
+    await sahip.sorgu('UPDATE makine SET aktif = false WHERE id = $1', [mp]);
+    const oku = async () => vt().tx(async (db) => oee(db, (await kullaniciYukle(db, yoneticiId))!, { baslangic: GELECEK_PAZARTESI, bitis: GELECEK_PAZARTESI }, SONRA));
+    const once = await oku();
+    assert.equal(once.makineler.some((m) => m.id === mp), false, 'izi olmayan pasif makine listelenmez');
+    assert.ok(once.makineler.every((m) => m.aktif));
+    const tip = (await sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('OE-T3', 'Deneme tipi 3', 'TAL') RETURNING id"))!.id;
+    const emir = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum) VALUES ('P-OE3', 'Deneme parça 3', 10, $1, $2, 'planli') RETURNING id",
+      [istasyonA, yoneticiId]))!.id;
+    const isEmri = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id, makine_id, birim_sure_dk) VALUES ($1, 1, 10, $2, 'Frezeleme', $3, $4, 1) RETURNING id",
+      [emir, tip, istasyonA, mp]))!.id;
+    await sahip.sorgu(
+      `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $5)`,
+      [emir, isEmri, istasyonA, mp, yoneticiId, `${GELECEK_PAZARTESI}T09:00:00+03:00`, `${GELECEK_PAZARTESI}T10:00:00+03:00`]);
+    const sonra = await oku();
+    const m = sonra.makineler.find((x) => x.id === mp)!;
+    assert.equal(m.aktif, false);
+    assert.equal(m.calismaDk, 60);
+    const ist = (g: typeof once) => g.istasyonlar.find((i) => i.id === istasyonA)!;
+    assert.equal(ist(sonra).calismaDk, ist(once).calismaDk + 60, 'pasif makinenin o dönemki çalışması istasyon toplamına girer');
+  });
 });

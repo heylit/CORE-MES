@@ -5,7 +5,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { KATEGORI_AD, saatYaz, saKisa, type SureKategorisi } from '../kurallar.ts';
 import { degisken, HAZIRLANIYOR, MetinYaz, yuzde } from '../ortak.tsx';
 import {
-  anOzeti, beklemeler, grupAdi, gunOrtalamasi, konum, sureToplami, sutunAni, type BolgeKimligi, type Gosterge, type Metin, type OzetSecimi, type OzetVerisi,
+  anOzeti, beklemeler, grupAdi, gunOrtalamasi, tezgahKodu, konum, sureToplami, sutunAni, type BolgeKimligi, type Gosterge, type Metin, type OzetSecimi, type OzetVerisi,
   type Yorum,
 } from './veri.ts';
 
@@ -105,7 +105,7 @@ export function Bekleme({ c, v, sec, acikGrup, grupAc, sipSec, kartAc }: {
           const enCok = Object.entries(x.sip).filter(([, b]) => b > 0.5).sort((a, b) => b[1] - a[1]).slice(0, 5);
           return (
             <div key={x.id} className="tc-pym-br-bk-s" data-hedef="" data-ilgili={sec?.grup.has(x.id) ? '' : undefined} data-acik={acik ? '' : undefined}>
-              <button type="button" className="tc-pym-br-bk-ad" aria-expanded={acik} title="Bu grupta en çok bekleyen siparişler" onClick={() => grupAc(x.id)}>{grupAdi(x.id)}</button>
+              <button type="button" className="tc-pym-br-bk-ad" aria-expanded={acik} title="Bu grupta en çok bekleyen siparişler" onClick={() => grupAc(x.id)}>{grupAdi(x.id, v.grupAd)}</button>
               <div className="tc-pym-br-bk-cubuk" title={`İşleme ${saKisa(x.isl)} · ayar ${saKisa(x.ayar)} · bekleme ${saKisa(x.bek)}${x.bekG ? ` (geç siparişler ${saKisa(x.bekG)})` : ''}`}>
                 <i data-k="isl" ref={degisken({ '--w': pay(x.isl, mx) })} /><i data-k="ayar" ref={degisken({ '--w': pay(x.ayar, mx) })} />
                 <i data-k="bek" ref={degisken({ '--w': pay(x.bek - x.bekG, mx) })} /><i data-k="bekg" ref={degisken({ '--w': pay(x.bekG, mx) })} />
@@ -137,7 +137,7 @@ function Yolculuk({ c, v, sec, kartAc }: { c: PlanlamaCalismasi; v: OzetVerisi; 
     if (a.S > son + 0.05) par.push(<i key={`b${i}`} className="tc-pym-br-yc-bek" data-gec={s.gec ? '' : undefined} ref={degisken({ '--x': yuzde(x(son)), '--w': yuzde(x(a.S) - x(son)) })} title={`Bekleme ${saKisa(a.S - son)} (${a.m} öncesi)`} />);
     par.push(
       <i key={`i${i}`} className="tc-pym-br-yc-is" ref={degisken({ '--x': yuzde(x(a.S)), '--w': yuzde(Math.max(0.004, x(a.C) - x(a.S))) })}
-        title={`${a.m}: ayar ${saKisa(a.su)}, işleme ${saKisa(a.run)} · ${saatYaz(c.D, a.S)} – ${saatYaz(c.D, a.C)}`}><em>{a.m.startsWith('@') ? a.m.slice(1) : a.m}</em></i>,
+        title={`${a.m}: ayar ${saKisa(a.su)}, işleme ${saKisa(a.run)} · ${saatYaz(c.D, a.S)} – ${saatYaz(c.D, a.C)}`}><em>{a.m.startsWith('@') ? a.m.slice(1) : tezgahKodu(a.m, v.tezKod)}</em></i>,
     );
     son = Math.max(son, a.C);
   });
@@ -175,7 +175,7 @@ export function Yuk({ c, v, sec, gun, gunSec, tezSec, tezGrup }: {
             const ilk = y.grup !== son; son = y.grup; const ilgT = !!sec?.tez.has(y.m);
             return (
               <tr key={y.m} data-ilk={ilk ? '' : undefined} data-ilgili={ilgT ? '' : undefined}>
-                <th className="tc-pym-mono"><button type="button" title={`${grupAdi(tezGrup(y.m))}: bu tezgâhı kullanan siparişleri göster`} onClick={() => tezSec(y.m)}>{y.m}</button></th>
+                <th className="tc-pym-mono"><button type="button" title={`${grupAdi(tezGrup(y.m), v.grupAd)}: bu tezgâhı kullanan siparişleri göster`} onClick={() => tezSec(y.m)}>{tezgahKodu(y.m, v.tezKod)}</button></th>
                 {y.g.map((x, d) => {
                   const ilg = sec && (sec.s ? sec.hucre.has(`${y.m}|${d}`) : ilgT) ? '' : undefined;
                   return x == null

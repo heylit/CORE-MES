@@ -85,6 +85,13 @@ describe('plan girdisi (sunucu)', () => {
     assert.deepEqual([kapali?.makineler, kapali?.enCok], [undefined, undefined]);
   });
 
+  // 1786 (PLN-7): ekran tezgâhı kimlik yerine koduyla, grubu istasyonun kodu ve adıyla yazar.
+  test('tezgâh kodu ile istasyon kodu ve adı girdiye taşınır', () => {
+    const r = planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak: KAYNAK });
+    const t = (r?.st as { D: { tezgahlar: Array<Record<string, unknown>> } }).D.tezgahlar[0];
+    assert.deepEqual([t?.id, t?.kod, t?.grup, t?.grupKod, t?.grupAd], ['100', 'T1', '10', 'TOR', 'Torna']);
+  });
+
   test('çalışma yoksa null', () => {
     assert.equal(planGirdisi({ calisma: null, kayit: KAYIT, kaynak: null }), null);
   });

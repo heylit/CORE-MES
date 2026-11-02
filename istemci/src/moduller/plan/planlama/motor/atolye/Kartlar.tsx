@@ -3,11 +3,13 @@ import { createPortal } from 'react-dom';
 import { Simge, type useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { planGuncel } from '../../durum.ts';
+import { bekleyenListesi } from '../../kayit.ts';
+import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -146,6 +148,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       };
     case 'gonder': {
       const sv = o.depo.senaryolar; const canli = o.depo.planSurumu?.planSurumu ?? null;
+      const engel = gonderEngeli(ort.c);
       return {
         ad: 'Onaya gönder', simge: 'upload', ic: (
           <>
@@ -153,12 +156,13 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             {canli ? (
               <>
                 <Satir a="Canlı sürüm" b={canli} />
-                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${p.ozet.late}`} />
+                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${gecikenSay(ort.liste)}`} />
                 <Satir a="Toplam gecikme" b={`— → ${sure(p.ozet.wT)}`} />
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
+            {engel && <Not uyari>{engel}</Not>}
             <div className="tc-pym-tp-eylem">
-              <GonderDugmesi ort={ort} bildir={bildir} />
+              <GonderDugmesi ort={ort} bildir={bildir} engel={engel} />
               <button type="button" className="tc-dugme" onClick={ort.kartKapat}>Vazgeç</button>
             </div>
           </>
@@ -328,10 +332,22 @@ function gunOzeti(ort: Ortam): Govde {
 
 // Eski gonderOnay: kart doğrudan onaya gönderir (canlıya alma ayrı düğmedir, Onay sekmesinde). Eski veriyle çözülmüş plan gönderilmez, Onay
 // sekmesindeki kontrole gidilir. Ret ve yarıda kalma sunucunun iletisiyle gösterilir; kart açık kalır.
-function GonderDugmesi({ ort, bildir }: { ort: Ortam; bildir: Bildir }) {
+// 1786 (PLN-1): plan veriden eskiyse gönderilmez; neden diyalogda önceden yazılır ve düğme kişiyi engelin kalktığı Onay sekmesine götürür
+// (önceden Gönder açıktı, basınca sekme değişip kısa bir bildirim çıkıyordu; gönderilmediği fark edilmiyordu).
+export function gonderEngeli(c: PlanlamaCalismasi): string | null {
+  if (planGuncel(c)) return null;
+  const n = bekleyenListesi(c).length;
+  return n > 0
+    ? `Gönderilemez: ${String(n)} bekleyen değişiklik plana uygulanmadı. Onay ve canlı sekmesinde uygulayın ya da reddedin, sonra gönderin.`
+    : 'Gönderilemez: veri plandan sonra değişti. Önce planı yeniden çözün.';
+}
+
+function GonderDugmesi({ ort, bildir, engel }: { ort: Ortam; bildir: Bildir; engel: string | null }) {
   const [gidiyor, setGidiyor] = useState(false);
+  if (engel !== null) {
+    return <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" onClick={() => { ort.kartKapat(); ort.sekSec('onay'); }}><Simge ad="check" boyut="k" />Onay sekmesine git</button>;
+  }
   const gonder = async () => {
-    if (!planGuncel(ort.c)) { ort.kartKapat(); ort.sekSec('onay'); bildir('hata', 'Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.'); return; }
     setGidiyor(true);
     try {
       const g = await calismayiYolla({ o: ort.o, c: ort.c, sen: ort.sen, hedef: 'onay', not: null });

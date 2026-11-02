@@ -26,7 +26,9 @@ interface Kayit {
 }
 
 interface Baglam {
-  bildir: (ton: BildirimTonu, mesaj: string, secenek?: BildirimSecenegi) => void;
+  // Dönen numara, sonradan geçersiz kalan bildirimi (reddedilen iyimser kayıt gibi) kaldırmak içindir.
+  bildir: (ton: BildirimTonu, mesaj: string, secenek?: BildirimSecenegi) => number;
+  kaldir: (no: number) => void;
 }
 
 const BildirimBaglami = createContext<Baglam | null>(null);
@@ -56,6 +58,7 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
     kayitYaz((onceki) => [...onceki, { no, ton, mesaj, eylem }]);
     const sure = eylem ? EYLEMLI_BILDIRIM_SURESI_MS : BILDIRIM_SURESI_MS;
     if (ton !== 'hata') zamanlayicilar.current.set(no, setTimeout(() => kaldir(no), sure));
+    return no;
   }, [kaldir]);
 
   // Hata, onu üreten sayfaya aittir: başka sayfada kalırsa o sayfanın hatası sanılır.
@@ -68,7 +71,7 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
     return () => { for (const z of acik.values()) clearTimeout(z); };
   }, []);
 
-  const deger = useMemo(() => ({ bildir }), [bildir]);
+  const deger = useMemo(() => ({ bildir, kaldir }), [bildir, kaldir]);
 
   return (
     <BildirimBaglami.Provider value={deger}>

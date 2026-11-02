@@ -14,9 +14,9 @@
   Uygulamanın genel iletisi Aşama 2'de (koordinatör kararı 17.10.2026, kullanıcı kartı yok).
 - Saklama ikinci adımı (kullanıcı kararı 12.10.2026): `dev`, `sup`, `parca`, `ncr`, `capa` sırayla tam ayrıştırılır ve ilgili modüle
   bağlanır (ORTAKLIK); kalan koleksiyonlar jsonb'de, sorgulanan alanlara üretilmiş sütun ve dizin.
-- Rol x işlem: kalite rolü sayfayı görür ve okur (`sayfa.kalite-merkezi`, `kalite-merkezi.oku`; kullanıcı kararı 15.10.2026,
-  göç `20261015180508_kisiler_rota_canli_kalite_merkezi.sql`, `oturum/oturum.test.ts` rol matrisi). `.yaz`, `.geri-yukle` ve `.onayla`
-  hiçbir role verilmedi; Aşama 1'de yalnız yönetici.
+- Rol x işlem: kalite rolü sayfayı görür, okur, yazar ve onaylar (`sayfa.kalite-merkezi`, `kalite-merkezi.oku`, `.yaz`, `.onayla`).
+  Müdür görür, okur ve onaylar. Kaynak: `20261015180508` ve `20261019083500_kisiler_rol_matrisi_139` göçleri (139 a, 160 a, 186 a).
+  `.geri-yukle` hiçbir role verilmedi, yalnız yönetici.
 - Giriş TMI oturumudur (PIN kalktı, 2026-10-16). Uygulamanın rolleri (Muayeneci, Kalite mühendisi, Kalite yöneticisi) kendi
   kullanıcı kaydındadır ve yalnız çerçevede denetlenir; sunucu yalnız okuma, yazma, geri yükleme işlemini ve kullanıcı/ayar
   kaydının yöneticiden geldiğini denetler. Rolün ortak yetki matrisine bağlanması bağlamada. "Son giriş" sütunu artık dolmaz

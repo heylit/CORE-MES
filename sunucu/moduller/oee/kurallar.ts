@@ -60,6 +60,19 @@ export function vardiyaIleAyir(plan: readonly Aralik[] | null, kullanimlar: read
   return { ici, disi };
 }
 
+// OE-17: pencere sınırına (tesis gece yarısı) tam denk gelen sayım tek pencereye düşer. Sınırda biten vardiya varsa sayım o vardiyanındır
+// (OE-16: son anda bitirilen parça vardiyanındır): bitişteki sayım bu pencereye girer, başlangıçtaki önceki pencerenindir. Biten vardiya
+// yoksa sayım başlayan pencerenindir. Böylece günlerin toplamı aralığın sonucuna eşittir. Takvim bilinmiyorsa sınırda biten vardiya da yoktur.
+export function penceredekiSayimlar<S extends { an: number }>(plan: readonly Aralik[] | null, sayimlar: readonly S[], bas: number, bit: number): S[] {
+  const vardiyaBiterMi = (an: number) => plan !== null && plan.some((a) => a.bit === an);
+  return sayimlar.filter((s) => {
+    if (s.an < bas || s.an > bit) return false;
+    if (s.an === bas) return !vardiyaBiterMi(bas);
+    if (s.an === bit) return vardiyaBiterMi(bit);
+    return true;
+  });
+}
+
 export interface Iscilik { pay: number; mesaiDk: number | null; saatMaliyeti: number | null }
 
 export interface HamOlcu {

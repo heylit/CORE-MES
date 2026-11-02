@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, DurumKutusu, Kart, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
-import { api, hataIletisi } from '../../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { AYAR_SECENEKLERI, degerAdi, secilebilir, surumMetni } from './kurallar.ts';
 
@@ -24,7 +24,7 @@ export function MotorAyarlari() {
         : q.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Motor ayarları alınamadı')} yenile={() => { void q.refetch(); }} />
           : <Kart baslik="Güncel ayarlar" simge="gear">
             <p role="status">{surumMetni(q.data.guncel)}</p>
-            {yazabilir ? <AyarFormu key={q.data.guncel.surumId ?? 0} degerler={q.data.guncel.degerler} /> : (
+            {yazabilir ? <AyarFormu key={q.data.guncel.surumId ?? 0} surumId={q.data.guncel.surumId} degerler={q.data.guncel.degerler} /> : (
               <dl>
                 {ANAHTARLAR.map((k) => <div key={k}><dt>{AYAR_SECENEKLERI[k].baslik}</dt><dd>{degerAdi(k, q.data.guncel.degerler[k])}</dd></div>)}
               </dl>
@@ -35,15 +35,19 @@ export function MotorAyarlari() {
   );
 }
 
-function AyarFormu({ degerler }: { degerler: Ayarlar }) {
+// 1786 (PLN-9): okunan sürümle yazılır; arada başkası yazdıysa sunucu reddeder, ekran güncel ayarı yeniden okur.
+function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number | null }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [f, setF] = useState<Ayarlar>(degerler);
   const degisti = ANAHTARLAR.some((k) => f[k] !== degerler[k]);
   const yaz = useMutation({
-    mutationFn: () => api.post<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU, f),
+    mutationFn: () => api.post<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU, { ...f, surumId }),
     onSuccess: (c) => { istemci.setQueryData(ANAHTAR, c); bildir('tamam', 'Motor ayarları kaydedildi.'); },
-    onError: (h) => bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.')),
+    onError: (h) => {
+      bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.'));
+      if (h instanceof ApiHatasi && h.durum === 409) void istemci.invalidateQueries({ queryKey: ANAHTAR });
+    },
   });
   const gonder = (e: FormEvent) => { e.preventDefault(); yaz.mutate(); };
   return (

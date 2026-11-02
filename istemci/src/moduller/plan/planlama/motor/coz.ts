@@ -1,7 +1,7 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { DegerlendirmeCevabi, DegerlendirmeIstegi } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
-import { bekleyenler, type CalismaKomutu } from '../kayit.ts';
+import { bekleyenler, bekleyenListesi, type CalismaKomutu } from '../kayit.ts';
 import type { BekleyenDegisiklik, CozulmusPlan, PlanlamaCalismasi } from '../tipler.ts';
 import { degerlendirmeHatasi, degerlendirmeIste } from '../siparis/degerlendirme.ts';
 
@@ -118,6 +118,21 @@ export function useBekleyenKarari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
   }, [komut, kim, uyar]);
   const reddet = useCallback((idler: readonly string[]) => { komut?.bekleyeniReddet?.(idler); }, [komut]);
   return komut && calisma && o.yetki.planYaz ? { uygula, reddet, suruyor: s } : null;
+}
+
+// 1786 (PLN-2): plan varken açılan emir ve öteki değişiklikler bekleyen olur; plan çubuğu hepsini tek düğmeyle uygular (önceden tek yol
+// Onay sekmesindeki satırdı). Uygula sunucuda yalnız etkilenen işleri yeniden dizer; elle kararlar korunur. Plan güncelse ya da kişi
+// yazamıyorsa null.
+export interface BekleyenUygulayici { uygula: () => void; suruyor: boolean; say: number }
+export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void): BekleyenUygulayici | null {
+  const s = useSyncExternalStore(abone, () => suruyor);
+  const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
+  const liste = useMemo(() => (calisma && calisma.plan !== null && calisma.plan.dataVer !== calisma.dataVer ? bekleyenListesi(calisma) : []), [calisma]);
+  const uygula = useCallback(() => {
+    if (!komut || liste.length === 0) return;
+    void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id) }).then((h) => { if (h) uyar(h); });
+  }, [komut, kim, liste, uyar]);
+  return komut && calisma && o.yetki.planYaz && liste.length > 0 ? { uygula, suruyor: s, say: liste.length } : null;
 }
 
 // Testler için: modüldeki durumu boşaltır.

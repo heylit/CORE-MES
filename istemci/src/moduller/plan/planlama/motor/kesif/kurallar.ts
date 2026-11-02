@@ -84,14 +84,14 @@ export function hatDuzeni(v: OzetVerisi, olcu: number): HatDuzeni {
     // Durakta bekleme: o bölümdeki adımların beklemesi toplanır.
     const bek: Record<string, number> = {}; for (const a of s.adim) bek[a.g] = (bek[a.g] ?? 0) + a.bek;
     return {
-      id: s.id, y, ton, yol, ad: s.yol.map(grupAdi).join(', '), i,
-      duraklar: s.yol.map((g) => { const b = bek[g] ?? 0; return { g, ad: grupAdi(g), x: cx(g), r: 4 + Math.sqrt(b / bekMax) * 8, bek: b }; }),
+      id: s.id, y, ton, yol, ad: s.yol.map((g) => grupAdi(g, v.grupAd)).join(', '), i,
+      duraklar: s.yol.map((g) => { const b = bek[g] ?? 0; return { g, ad: grupAdi(g, v.grupAd), x: cx(g), r: 4 + Math.sqrt(b / bekMax) * 8, bek: b }; }),
       son: p == null ? '—' : p < 0 ? `+${saKisa(-p)} geç` : `${saKisa(p)} pay`,
     };
   });
   return {
-    W, H, sol, sag, ust, ara, sutunlar: gr.map((g) => ({ g, ad: grupAdi(g), x: cx(g) })), satirlar,
-    yolSayisi: Object.keys(say).length, enSik: enSik0 ? { yol: enSik0[0].split('>').map(grupAdi).join(' › '), n: enSik0[1] } : null,
+    W, H, sol, sag, ust, ara, sutunlar: gr.map((g) => ({ g, ad: grupAdi(g, v.grupAd), x: cx(g) })), satirlar,
+    yolSayisi: Object.keys(say).length, enSik: enSik0 ? { yol: enSik0[0].split('>').map((g) => grupAdi(g, v.grupAd)).join(' › '), n: enSik0[1] } : null,
   };
 }
 type OzetSiparisiK = OzetVerisi['sip'][number];

@@ -12,7 +12,7 @@ import { Brif, Bugun } from './Bugun.tsx';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
+  gecikenIpucu, gecikenSay, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 
@@ -169,8 +169,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <button type="button" className="tc-pym-tp-durum" data-ton="onayda" title="Onay sekmesini aç" onClick={() => sekSec('onay')}><Simge ad="clock" boyut="k" />{`${onayda} onayda`}</button>
       )}
       <div className="tc-pym-tp-olc">
-        <span title="Geciken sipariş"><b data-ton={ozet.late ? 'kotu' : 'iyi'}>{ozet.late}</b> <span data-ad="">geciken</span></span>
-        <span><b>{sure(ozet.wT)}</b> <span data-ad="">gecikme</span></span>
+        <span title={gecikenIpucu(liste)}><b data-ton={gecikenSay(liste) ? 'kotu' : 'iyi'}>{gecikenSay(liste)}</b> <span data-ad="">geciken</span></span>
+        <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır."><b>{sure(ozet.wT)}</b> <span data-ad="">ağırlıklı gecikme</span></span>
         {yetki.maliyetOku && <span data-kar="" title="Kâr kayıtlı planda yok"><b>—</b> <span data-ad="">kâr</span></span>}
       </div>
       <span className="tc-pym-tp-bosluk" />

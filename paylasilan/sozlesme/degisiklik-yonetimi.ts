@@ -5,7 +5,7 @@ import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import {
   ACILIYETLER, CEVAPLAR, EMIR_DURUMLARI, FAI_DURUMLARI, FAI_TURLERI, GECMIS_OLAYLARI, GOREV_ISLEMLERI, GOREV_KAPSAMLARI, HAT_ASAMALARI, IPLIK_HALLERI, IPLIK_KATMANLARI, KAPANIS_KOSULLARI,
-  KARAR_HEDEFLERI, KARAR_KODLARI, KARAR_MODLARI, KOSUL_HALLERI, LISTE_KAPSAMLARI, OLAY_ILGILILERI, OLAY_TURLERI, PARCA_HALLERI, SERI_DURUMLARI,
+  KARAR_HEDEFLERI, KARAR_KODLARI, KARAR_MODLARI, KOSUL_HALLERI, LISTE_KAPSAMLARI, OGE_TURLERI, OLAY_ILGILILERI, OLAY_TURLERI, PARCA_HALLERI, SERI_DURUMLARI,
   SINIFLAR, STOK_HALLERI, TALEP_DURUMLARI, TASARIM_OTORITELERI, UYUM_HALLERI,
 } from './degisiklik-yonetimi-sabitleri.ts';
 
@@ -62,6 +62,7 @@ export const talepDurumu = z.enum(TALEP_DURUMLARI);
 export const emirDurumu = z.enum(EMIR_DURUMLARI);
 export const kararKodu = z.enum(KARAR_KODLARI);
 export const kararModu = z.enum(KARAR_MODLARI);
+export const ogeTuru = z.enum(OGE_TURLERI);
 
 export const idParametresi = z.object({ id: yolKimligi });
 const listeKapsami = z.enum(LISTE_KAPSAMLARI).default('acik');
@@ -85,17 +86,28 @@ export const ccbGovdesi = z.object({ karar: z.enum(['onay', 'ret']), aciklama, s
 export const musteriOnayiGovdesi = z.object({ referans: metin(80, 'Müşteri onay numarasını yazın.'), aciklama, surum: surumSemasi }).strict();
 // Kalem: talepteki her parça için eski ve yeni revizyon bağı. Yeni çizim ve rota revizyonu sahibi modülde taslak olarak açılır,
 // burada kimliğiyle bağlanır (1121 a). Değiştirilebilirlik iki yönde de evet değilse yeni parça numarası gerekir (D sınıfında).
+// Öğe (1642): eski boşsa konfigürasyona eklenir, yeni boşsa çıkar. Eski, parçanın yürürlükteki konfigürasyonunda olmalıdır.
+export const ogeGovdesi = z.object({ tur: ogeTuru, eskiRevizyonId: KIMLIK.nullable(), yeniRevizyonId: KIMLIK.nullable() }).strict()
+  .refine((o) => o.eskiRevizyonId !== null || o.yeniRevizyonId !== null, 'Öğede eski ya da yeni revizyon olmalı.')
+  .refine((o) => o.eskiRevizyonId !== o.yeniRevizyonId, 'Eski ve yeni revizyon aynı olamaz.');
+// `ogeler` verilirse kalemin bütün öğe listesidir ve yeni çizim/rota alanları boş kalır; verilmezse yalnız bu iki alan çizim ve rota
+// öğesini yazar, eskisi konfigürasyondan okunur.
 export const kalemKaydetGovdesi = z.object({
   kalemId: KIMLIK,
   yeniCizimRevizyonuId: KIMLIK.nullable(),
   yeniRotaRevizyonuId: KIMLIK.nullable(),
+  ogeler: z.array(ogeGovdesi).max(50).optional(),
   eskiYeniyeUyar: cevap.nullable(),
   yeniEskiyeUyar: cevap.nullable(),
   yeniParcaNo: z.string().trim().max(60).nullish().transform((d) => (d ? d : null)),
   yeniParcaAdi: z.string().trim().max(160).nullish().transform((d) => (d ? d : null)),
+  // Tasarım sınıfında tasarım otoritesinin revizyonu (müşteri parçasında antet revizyonu, 1608 a); proseste verilmez.
+  yeniParcaRevizyonu: z.string().trim().max(20).nullish().transform((d) => (d ? d : null)),
   ozet: z.string().trim().max(1000).default(''),
   surum: surumSemasi,
-}).strict();
+}).strict().refine((g) => g.ogeler === undefined || (g.yeniCizimRevizyonuId === null && g.yeniRotaRevizyonuId === null), {
+  message: 'Öğe listesi verilince yeni çizim ve rota alanları boş kalır.', path: ['ogeler'],
+});
 export const geriGonderGovdesi = z.object({ aciklama: metin(1000, 'Geri gönderme gerekçesini yazın.'), surum: surumSemasi }).strict();
 export const gecerlilikSemasi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('seri'), sonUrunMalzemeId: KIMLIK, ilkSeri: z.number().int().positive().max(TAM_SAYI_UST) }).strict(),
@@ -185,6 +197,9 @@ export const emirKalemi = z.object({
   // Kurallar.ts değiştirilebilirlikten hesaplar; yeni parça kartını malzemeler açar (Aşama 2).
   yeniParcaNoGerekir: z.boolean().nullable(),
   yeniParcaNo: z.string().nullable(), yeniParcaAdi: z.string().nullable(),
+  yeniParcaRevizyonu: z.string().nullable(),
+  // Bütün etkilenen öğeler (çizim ve rota yukarıda da gösterilir); etiket sahibi modülden (bağlı değilse null).
+  ogeler: z.array(z.object({ tur: ogeTuru, eski: revizyonBagi, yeni: revizyonBagi })),
   ozet: z.string(),
 });
 export const gecerlilikCevabi = z.discriminatedUnion('tur', [
@@ -272,9 +287,13 @@ export const seriListeCevabi = listeCevapSemasi(seriListeSatiri);
 // Son ürün seçicisi. Aşama 1'de kalem ve geçerliliklerde geçen malzemeler; seri izlenip izlenmediği malzemelerden (bağlı değilse null).
 export const sonUrunlerCevabi = z.object({ sonUrunler: z.array(malzemeOzeti.extend({ seriIzlenir: z.boolean().nullable() })) });
 // Yürürlükteki konfigürasyon: parça başına yayımlı çizim ve rota revizyonu, NC programları; sahibi modül bağlı değilse null.
+// Konfigürasyon kaydı (1642) parça revizyonunu, proses sürümünü ve öğe kimliklerini verir; etiketler sahibi modül bağlanınca dolar.
 export const baselineSatiri = z.object({
   malzeme: malzemeOzeti, cizimRevizyonu: z.string().nullable(), rotaRevizyonu: z.string().nullable(),
   ncProgramlari: z.array(z.string()).nullable(), tasarimOtoritesi: z.enum(TASARIM_OTORITELERI).nullable(), durum: z.enum(PARCA_HALLERI).nullable(),
+  parcaRevizyonu: z.string().nullable(), prosesSurumu: z.number().int().positive(),
+  ogeler: z.array(z.object({ tur: ogeTuru, revizyonId: KIMLIK, etiket: z.string().nullable() })),
+  degisiklikNo: z.string(), yururluk: zamanSemasi,
 });
 export const acikDegisiklik = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('talep'), id: KIMLIK, no: z.string(), baslik: z.string(), sinif: sinif.nullable(), durum: talepDurumu }),

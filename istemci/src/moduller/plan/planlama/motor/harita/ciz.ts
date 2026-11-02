@@ -1,6 +1,7 @@
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanVerisi } from '../../tipler.ts';
 import { saatYaz, saatYazi, type PlanIslemi } from '../kurallar.ts';
+import { grupKodlari, tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
 import {
   dilimAdi, dilimNo, DURUM_ETIKETI, ekrana, KH, kilavuzNoktalari, kubik, KW, tezgahDurumu, yay, yoldakiParcalar,
   type Aralik, type GecikmeEtkisi, type Kamera, type Nokta, type Sahne,
@@ -54,7 +55,7 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     g.fillStyle = rgba(R.bp, 0.04); yuvarlak(g, x, y, w, h, 14 * k); g.fill(); g.strokeStyle = rgba(R.bp, 0.3); g.lineWidth = 1; g.setLineDash([5, 5]); g.stroke(); g.setLineDash([]);
     const v = b.ms.map((m) => s.dol[m]?.[gT]).filter((z): z is number => z != null); const ort = v.length ? v.reduce((a, c) => a + c, 0) / v.length : null;
     g.textBaseline = 'alphabetic'; const fs = Math.max(10, Math.min(15, 14 * k));
-    g.font = `800 ${fs}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; const ad2 = b.g.toLocaleUpperCase('tr-TR'); g.fillText(ad2, x + 12 * k, y + 14 + 14 * k);
+    g.font = `800 ${fs}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; const ad2 = (b.g === 'fason' ? b.g : grupKodlari(o.D)[b.g] ?? b.g).toLocaleUpperCase('tr-TR'); g.fillText(ad2, x + 12 * k, y + 14 + 14 * k);
     if (w > 120) {
       const aw = g.measureText(ad2).width; g.font = `500 ${fs * 0.78}px ${R.mono}`; g.fillStyle = rgba(ort != null && ort > 0.97 ? R.stop : R.muted);
       g.fillText(`${b.n} tezgâh${ort != null ? ` · ${dilimAdi(o.D, o.olcek, o.r, gT)} %${Math.round(ort * 100)}` : ''}`, x + 12 * k + aw + 8, y + 14 + 14 * k);
@@ -122,7 +123,7 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     // üst durum şeridi
     g.save(); yuvarlak(g, ox(x0), oy(y0), w, h, 10 * k); g.clip(); g.fillStyle = rgba(dr); g.fillRect(ox(x0), oy(y0), w, 5 * k); g.restore();
     g.textBaseline = 'alphabetic';
-    const adi = fas ? a.m.slice(1) : a.m;
+    const adi = fas ? a.m.slice(1) : tezgahKodu(a.m, tezgahKodlari(o.D));
     if (k * 168 < 50) {
       // uzak görünüm: yalnız ad ve durum rengi
       g.fillStyle = rgba(dr, 0.25); yuvarlak(g, ox(x0), oy(y0), w, h, 10 * k); g.fill(); g.font = `800 ${Math.max(9, 26 * k)}px ${R.mono}`; g.fillStyle = rgba(R.ink);

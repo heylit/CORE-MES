@@ -123,11 +123,11 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 }
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
-  const { depo, kisi, ayarlar, yetkiVar, git, acilabilir } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, git, acilabilir, tmiRetiniUstlen } = useArkon();
   // 1339 a, 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; dosya indirilmez, resim yerine ölçü listesi açılır.
   const telefon = useOturum().data?.cihazProfili === 'telefon';
   const { tema, degistir: temaDegistir } = useTema();
-  const { bildir } = useBildirim();
+  const { bildir, kaldir } = useBildirim();
   const dar = useDarEkran();
   const pv = onizleme !== null;
   const tesis = ayarlar.tesis;
@@ -193,12 +193,14 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
 
   /* bildirimler: tek bildirim düzeninde en son bildirimin "Geri al"ı geçerlidir (eskisi gibi yeni ileti eskisinin yerini alır) */
   const sonBildirim = useRef(0);
+  // Geri alınabilir son işlemin bildirimi iyimserdir (TMI cevabından önce verilir): TMI işlemi reddederse kaldırılır.
+  const sonIyimser = useRef<number | null>(null);
   const say = useCallback((m: string, _simge: SimgeAdi = 'check', ton: Ton = 'run', ek?: Ek) => {
     const no = ++sonBildirim.current;
     const tur: BildirimTonu = ek?.undo ? (ton === 'run' ? 'tamam' : 'bilgi') : ton === 'stop' ? 'hata' : ton === 'run' ? 'tamam' : 'bilgi';
     if (ek?.undo) {
       const geri = ek.undo;
-      bildir(tur, m, { eylem: { etiket: 'Geri al', yap: () => { if (no === sonBildirim.current) geri(); else bildir('bilgi', 'Bu işlem artık geri alınamaz; sonraki işlem kaydedildi.'); } } });
+      sonIyimser.current = bildir(tur, m, { eylem: { etiket: 'Geri al', yap: () => { if (no === sonBildirim.current) geri(); else bildir('bilgi', 'Bu işlem artık geri alınamaz; sonraki işlem kaydedildi.'); } } });
     } else if (ek?.action) {
       const a = ek.action;
       bildir(tur, m, { eylem: { etiket: a.l, yap: a.fn } });
@@ -206,6 +208,14 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }, [bildir]);
   const sayRef = useRef(say);
   sayRef.current = say;
+  // TMI reddi ekranın kendi iletisiyle söylenir, köprünün aynı ret için verdiği genel bildirim kalkar. Reddedilen durum değişikliğinde
+  // iyimser "kaydedildi" bildirimi de kalkar (sayımda kalkmaz: art arda sayımlarda son bildirim reddedilen sayımın olmayabilir).
+  const retSoyleRef = useRef<(ileti: string, msg: string | undefined, iyimserKalksin: boolean) => void>(() => undefined);
+  retSoyleRef.current = (ileti, msg, iyimserKalksin) => {
+    if (iyimserKalksin && sonIyimser.current !== null) { kaldir(sonIyimser.current); sonIyimser.current = null; }
+    if (msg) tmiRetiniUstlen(msg);
+    say(ileti, 'alert', 'stop');
+  };
   useEffect(() => {
     const f = (e: Event) => sayRef.current((e as CustomEvent<{ msg?: string }>).detail?.msg || CAKISMA_ILETISI, 'alert', 'hold');
     window.addEventListener(CAKISMA_OLAYI, f);
@@ -801,7 +811,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const a = live.current.o;
         if (a && a.state !== es.state && geriAlinacakIs(a, { ...es, pkgId: es.pkgId ?? null, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => durumEsitle(l, es));
-        bip('nok'); sayRef.current(`TMI kabul etmedi · ${detay?.msg || ''}`, 'alert', 'stop');
+        bip('nok'); retSoyleRef.current(`TMI kabul etmedi · ${detay?.msg || ''}`, detay?.msg, true);
         return;
       }
       const b = baslatmaGeriAlma(detay);
@@ -810,7 +820,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const a = live.current.o;
         if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => baslatmaGeriUygula(l, b));
-        bip('nok'); sayRef.current(`İş başlamadı · ${detay?.msg || 'TMI kabul etmedi'}`, 'alert', 'stop');
+        bip('nok'); retSoyleRef.current(`İş başlamadı · ${detay?.msg || 'TMI kabul etmedi'}`, detay?.msg, true);
         return;
       }
       const g = sayimGeriAlma(detay);
@@ -818,7 +828,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       const a = live.current.o;
       if (a && geriAlinacakIs(a, g) && Math.max(0, a[g.alan] + g.fark) !== a[g.alan]) autoRef.current.cnt = true;
       islerYaz((l) => sayimGeriUygula(l, g));
-      bip('nok'); sayRef.current(`Sayım işlenmedi, sayı geri alındı · ${detay?.msg || ''}`, 'alert', 'stop');
+      bip('nok'); retSoyleRef.current(`Sayım işlenmedi, sayı geri alındı · ${detay?.msg || ''}`, detay?.msg, false);
     };
     window.addEventListener('arkon-rejected', f);
     return () => window.removeEventListener('arkon-rejected', f);

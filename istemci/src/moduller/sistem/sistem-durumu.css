@@ -14,3 +14,34 @@
   min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2);
   background: var(--hazard); color: var(--on-hazard); font-size: var(--yazi-xs); font-weight: 700; line-height: var(--b-5); text-align: center;
 }
+/* Performans (1664, prototip 1673 a): aralık seçimi, kutular, çizgi grafikleri. */
+.tc-sistem-baslik:has(.tc-simge) { display: flex; align-items: center; gap: var(--b-2); }
+.tc-sistem-baslik .tc-simge { color: var(--muted); }
+.tc-sistem-soluk { color: var(--faint); font-size: var(--yazi-xs); margin: 0; }
+.tc-sistem-aralik { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--edge2); border-radius: var(--yari-1); overflow: hidden; margin-block-end: var(--b-3); }
+.tc-sistem-aralik button {
+  border: 0; background: transparent; color: var(--muted); font: inherit; font-size: var(--yazi-s);
+  padding: var(--b-1) var(--b-3); min-block-size: var(--b-6); cursor: pointer;
+}
+.tc-sistem-aralik button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
+.tc-sistem-aralik button:focus-visible { outline: 2px solid var(--grafik); outline-offset: -2px; }
+.tc-sistem-kutular { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); margin: 0; }
+.tc-sistem-kutu { border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); min-inline-size: 0; }
+.tc-sistem-kutu dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-sistem-kutu dd { margin: 0; overflow-wrap: anywhere; }
+.tc-sistem-kutu-deger { font-size: var(--yazi-l); font-weight: 700; font-variant-numeric: tabular-nums; }
+.tc-sistem-grafik { margin: var(--b-4) 0 0; }
+.tc-sistem-grafik-baslik { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--b-2); font-size: var(--yazi-s); }
+.tc-sistem-lejant { display: flex; flex-wrap: wrap; gap: var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-sistem-lejant-cizgi, .tc-sistem-lejant-esik { display: inline-block; inline-size: var(--b-3); margin-inline-end: var(--b-1); vertical-align: middle; }
+.tc-sistem-lejant-cizgi { border-block-start: 2px solid var(--grafik); }
+.tc-sistem-lejant-cizgi[data-ton="ikinci"] { border-block-start-color: var(--grafik-2); }
+.tc-sistem-lejant-esik { border-block-start: 2px dashed var(--hold); }
+.tc-sistem-cizim svg { display: block; inline-size: 100%; block-size: auto; overflow: visible; touch-action: pan-y; }
+.tc-sistem-izgara { stroke: var(--grid); stroke-width: 1; }
+.tc-sistem-eksen { fill: var(--faint); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-sistem-esik { stroke: var(--hold); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.tc-sistem-seri { fill: none; stroke: var(--grafik); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tc-sistem-seri[data-ton="ikinci"] { stroke: var(--grafik-2); }
+.tc-sistem-imlec { stroke: var(--edge2); stroke-width: 1; }
+.tc-sistem-okuma { color: var(--muted); font-size: var(--yazi-xs); margin: var(--b-1) 0 0; min-block-size: var(--b-4); overflow-wrap: anywhere; }

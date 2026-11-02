@@ -23,7 +23,7 @@ describe('plan: motor ayarı kuralı', () => {
 });
 
 describe('plan (gerçek PostgreSQL): motor ayarı', () => {
-  const { c, istek, tamam, durum } = planTestOrtami();
+  const { c, istek, tamam, motorAyariYaz, durum } = planTestOrtami();
   let ortam: TestVeritabani | undefined;
   before(() => { ({ ortam } = durum()); });
   const taslakAc = async (ad: string) => {
@@ -38,11 +38,17 @@ describe('plan (gerçek PostgreSQL): motor ayarı', () => {
     assert.deepEqual([bos.guncel.surumId, bos.guncel.degerler, bos.taslak], [null, MOTOR_AYARI_VARSAYILAN, null]);
     const a = await taslakAc('Motor ayarı A');
 
-    const yazildi = await tamam<MotorAyarlariCevabi>(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'edd' });
+    const yazildi = await motorAyariYaz<MotorAyarlariCevabi>(c.planlama, { kural: 'edd' });
     assert.deepEqual([yazildi.guncel.degerler, yazildi.guncel.yazan], [{ ...MOTOR_AYARI_VARSAYILAN, kural: 'edd' }, 'Deneme planlama']);
     const n = await surumSayisi();
-    await tamam(c.mudur, 'POST', '/plan/motor-ayarlari', { kural: 'edd', amac: 'sirali' });
+    await motorAyariYaz(c.mudur, { kural: 'edd', amac: 'sirali' });
     assert.equal(await surumSayisi(), n, 'değişmeyen değer sürüm yazmaz');
+    // 1786 (PLN-9): arada başkası yazdıysa eski sürümle yazma reddedilir; hiç sürüm yokken okunan null da eskidir.
+    for (const surumId of [bos.guncel.surumId, (await oku()).guncel.surumId! - 1 || null]) {
+      const r = await istek(c.mudur, 'POST', '/plan/motor-ayarlari', { kural: 'cr', surumId });
+      assert.equal(r.statusCode, 409, r.body);
+    }
+    assert.equal(await surumSayisi(), n);
 
     const ta = (await oku(a.id)).taslak!;
     assert.deepEqual([ta.surum.surumId, ta.surum.degerler.kural, ta.farkli], [null, 'atcs', true]);
@@ -80,21 +86,21 @@ describe('plan (gerçek PostgreSQL): motor ayarı', () => {
 
     const kopya = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${t.id}/cogalt`)).senaryolar.find((x) => x.ad === 'Motor kuralı (kopya)')!;
     assert.equal(await kural(kopya.id), 'spt');
-    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
+    await motorAyariYaz(c.planlama, { eksikStok: 'dur' });
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${t.id}/motor-ayari-guncelle`, { surum: t.surum + 1 });
     assert.deepEqual([(await oku(t.id)).taslak!.surum.degerler.eksikStok, await kural(t.id)], ['dur', 'spt']);
-    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { eksikStok: 'varsay' });
+    await motorAyariYaz(c.planlama, { eksikStok: 'varsay' });
 
     await tamam(c.planlama, 'POST', yol, { surum: t.surum + 2, kural: null });
     assert.deepEqual([(await oku(t.id)).taslak!.kural, await kural(t.id)], [null, (await oku(t.id)).taslak!.surum.degerler.kural]);
   });
 
   test('775 b: değiştirmek plan.motor-ayari ister (yönetici, müdür, planlama); planı görmeyen okuyamaz; sürüm satırı değiştirilemez', async () => {
-    assert.equal((await istek(c.kalite, 'POST', '/plan/motor-ayarlari', { kural: 'cr' })).statusCode, 403);
+    assert.equal((await istek(c.kalite, 'POST', '/plan/motor-ayarlari', { kural: 'cr', surumId: null })).statusCode, 403);
     assert.equal((await istek(c.operator, 'GET', '/plan/motor-ayarlari')).statusCode, 403);
-    assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'yok' })).statusCode, 400);
-    assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { amac: 'tl' })).statusCode, 400, '832 a: TL ayarda kapalı');
-    await tamam(c.yonetici, 'POST', '/plan/motor-ayarlari', { eksikStok: 'dur' });
+    assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'yok', surumId: null })).statusCode, 400);
+    assert.equal((await istek(c.planlama, 'POST', '/plan/motor-ayarlari', { amac: 'tl', surumId: null })).statusCode, 400, '832 a: TL ayarda kapalı');
+    await motorAyariYaz(c.yonetici, { eksikStok: 'dur' });
     assert.equal((await oku()).guncel.degerler.eksikStok, 'dur');
     await assert.rejects(ortam!.sahip.sorgu("UPDATE plan_motor_ayar_surumu SET degerler = '{}'"));
     await assert.rejects(ortam!.sahip.sorgu('DELETE FROM plan_motor_ayar_surumu'));

@@ -31,7 +31,7 @@ const EMIR: EmirCevabi = {
   kalemler: [{
     id: 11, malzeme: { malzemeId: 41, kod: 'PRC-001', ad: 'Örnek parça' },
     eskiCizimRevizyonu: { id: 5, etiket: 'B' }, yeniCizimRevizyonu: null, eskiRotaRevizyonu: { id: 6, etiket: 'R2' }, yeniRotaRevizyonu: null,
-    eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', yeniParcaNoGerekir: false, yeniParcaNo: null, yeniParcaAdi: null, ozet: 'Delik büyüdü.',
+    eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', yeniParcaNoGerekir: false, yeniParcaNo: null, yeniParcaAdi: null, yeniParcaRevizyonu: null, ogeler: [], ozet: 'Delik büyüdü.',
   }],
   gecerlilik: null, kararlar: [], fai: [], kapanisKosullari: [], hurdaMaliyeti: null, reworkMaliyeti: null,
   koordinator: kisi, kapanis: null,

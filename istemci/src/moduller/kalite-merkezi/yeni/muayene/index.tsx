@@ -13,7 +13,7 @@ import { CubukGrafigi } from '../spc/Grafik.tsx';
 import { FaiPaketi, faiIcerigi } from './FaiPaketi.tsx';
 import { kayitCsvIndir, type CsvSutunlari } from './csv.ts';
 import { ilkGecis, muayeneAranan, muayeneSirasi, retNcrOnDegeri, sonucTonu, type MuayeneDegeri } from './hesap.ts';
-import { KILIT_YASAK, KilitPenceresi, kilitKarari } from './Kilit.tsx';
+import { KILIT_YASAK, kilitKarari } from './Kilit.tsx';
 import { MuayeneBelgesi } from './MuayeneBelgesi.tsx';
 import { MuayeneFormu } from './MuayeneFormu.tsx';
 import './muayene.css';
@@ -34,15 +34,12 @@ export function Muayeneler({ veri, yetki, gecis, gecisTamam, git }: EkranOzellik
   const { bildir } = useBildirim();
   const onizle = useOnizleme();
   const [form, formYaz] = useState<Form>(null);
-  const [kilit, kilitYaz] = useState<Muayene | null>(null);
   const [ret, retYaz] = useState<MuayeneDegeri | null>(null);
   const [silinecek, silinecekYaz] = useState<Muayene | null>(null);
 
-  // Kilitli (sonuçlu) muayene düzenlenmeden önce gerekçe sorulur; yetkisi olmayana ileti verilir.
+  // Kilitli (sonuçlu) muayene düzenlenmez; düzeltme yeni kayıtla yapılır.
   const duzenle = (i: Muayene) => {
-    const k = kilitKarari('insp', i, yetki);
-    if (k === 'yasak') { bildir('hata', KILIT_YASAK); return; }
-    if (k === 'sor') { kilitYaz(i); return; }
+    if (kilitKarari('insp', i) === 'yasak') { bildir('hata', KILIT_YASAK); return; }
     formYaz({ kayit: i });
   };
 
@@ -128,12 +125,6 @@ export function Muayeneler({ veri, yetki, gecis, gecisTamam, git }: EkranOzellik
         <MuayeneFormu
           veri={veri} yetki={yetki} kayit={form.kayit} on={form.on} kapat={() => { formYaz(null); }}
           retOldu={retYaz}
-        />
-      )}
-      {kilit && (
-        <KilitPenceresi
-          yetki={yetki} kol="insp" kimlik={kilit._id} no={kilit.no ?? ''}
-          devam={() => { const k = kilit; kilitYaz(null); formYaz({ kayit: k }); }} vazgec={() => { kilitYaz(null); }}
         />
       )}
       <OnayPenceresi

@@ -25,3 +25,6 @@ Kural, saf işlev (`kurallar.ts`), test (`kurallar.test.ts` ve `degisiklik-yonet
 | DY-19 | görev adımları, kimin olduğu (benim/ekip) ve hat | `talepGorevi`, `emirGorevleri`, `benimGorevimMi`, `talepHatti`, `emirHatti` | "DY-19: görev adımları", "listeler" | |
 | DY-20 | talep yalnız aktif mamul ya da yarı mamul kartına | servis `talepParcalariniDenetle` (malzemeler `disari.ts`) | "DY-20: talep yalnız" | `_talep_kalemi_tek` |
 | DY-21 | parça kimliği malzeme kartına bağlı (1305 a); göç bağsız satırda durur | göç `20261029151000` | `malzeme-fk.test.ts` | `_talep_kalemi_malzeme`, `_emir_kalemi_malzeme`, `_emir_son_urun` |
+| DY-22 | kalem öğe listesi tutarlı; eski revizyon yürürlükteki konfigürasyonda (1642) | `ogeEksigi` | "DY-22: öğe listesi", "DY-22 - DY-24" | `degisiklik_yonetimi_emir_ogesi_eski_tek`, `_yeni_tek`, `_dolu`, `_degisir` |
+| DY-23 | eski alanla yazılan öğenin eskisi konfigürasyondan | `eskiRevizyonuBul` | "DY-23: eski alanla", "DY-22 - DY-24" | |
+| DY-24 | yayında yeni konfigürasyon; parça revizyonu yalnız tasarımda (1608 a), proses sürümü; araya giren yayında 409 | `yeniKonfigurasyon`, servis `konfigurasyonlariYaz` | "DY-24: yeni konfigürasyon", "DY-22 - DY-24" | `degisiklik_yonetimi_konfigurasyon_sira_tek`, `_emir_tek`, `_konfigurasyon_ogesi_tek_rota`, yalnız ekleme tetikleri |

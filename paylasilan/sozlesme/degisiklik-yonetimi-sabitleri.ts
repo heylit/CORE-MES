@@ -31,6 +31,15 @@ export const EMIR_DURUM_ADLARI: Readonly<Record<(typeof EMIR_DURUMLARI)[number],
   uygulamada: 'Uygulama ve FAI', dogrulama: 'Doğrulama', kapandi: 'Kapandı',
 };
 
+// Değişiklik emrinin etkilenebilen öğe türleri (1642, 1607 a): ürün tanımına giren ve revizyonu sahibi modülde tutulan nesneler.
+// Rota reçeteyi de taşır (reçete rota adımının bileşenidir). Parçanın tek rotası vardır (TEKIL_OGE_TURLERI).
+export const OGE_TURLERI = ['cizim', 'model-3b', 'rota', 'islem-sartnamesi', 'kontrol-plani', 'nc-programi', 'markalama-tanimi'] as const;
+export const OGE_TURU_ADLARI: Readonly<Record<(typeof OGE_TURLERI)[number], string>> = {
+  cizim: 'Teknik resim', 'model-3b': '3B model', rota: 'Rota ve reçete', 'islem-sartnamesi': 'İşlem şartnamesi',
+  'kontrol-plani': 'Kontrol planı', 'nc-programi': 'NC programı', 'markalama-tanimi': 'Markalama tanımı',
+};
+export const TEKIL_OGE_TURLERI = ['rota'] as const satisfies readonly (typeof OGE_TURLERI)[number][];
+
 // Geçerlilik: seri (son ürünün ilk seri numarasından), tarih (o günden sonra başlayan emirler) ya da bütün açık emirler.
 export const GECERLILIK_TURLERI = ['seri', 'tarih', 'tum'] as const;
 
@@ -128,6 +137,7 @@ export type Sinif = (typeof SINIFLAR)[number];
 export type Aciliyet = (typeof ACILIYETLER)[number];
 export type SiniflandirmaSorusu = (typeof SINIFLANDIRMA_SORULARI)[number];
 export type Cevap = (typeof CEVAPLAR)[number];
+export type OgeTuru = (typeof OGE_TURLERI)[number];
 export type TalepDurumu = (typeof TALEP_DURUMLARI)[number];
 export type EmirDurumu = (typeof EMIR_DURUMLARI)[number];
 export type GecerlilikTuru = (typeof GECERLILIK_TURLERI)[number];

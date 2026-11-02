@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { MOTOR_KURALLARI, type MotorAyariGovdesi, type MotorAyarlari, type MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -42,6 +42,7 @@ export async function motorAyariYaz(db: Db, k: Kullanici, g: MotorAyariGovdesi):
   if (g.amac === 'tl') throw dogrulama('TL amacı şimdilik kapalı; para verisi dolunca açılır.', 'amac');
   await s.motorAyarYazmaKilidi(db);
   const guncel = await s.motorAyarGuncelSurumu(db);
+  if ((guncel?.id ?? null) !== g.surumId) throw eskiSurum();
   const yeni = motorAyariBirlestir(motorAyariCoz(guncel?.degerler ?? null), g);
   if (yeni !== null) await s.motorAyarSurumuYaz(db, yeni, k.id);
   return motorAyarlari(db);

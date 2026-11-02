@@ -153,7 +153,8 @@ describe('PlanlamaAtolyesi', () => {
     await waitFor(() => expect(screen.getByText('1 tezgâh, 0 saat, 0 yeni')).toBeTruthy());
     expect(get).toHaveBeenCalledWith('/plan?taslak=1');
     expect(screen.getByText('Başlamış işler yerinde')).toBeTruthy();
-    expect(screen.getByText('Ağırlıklı gecikme')).toBeTruthy();
+    // 1786b: canlı kutusundaki gecikme de ağırlıklıdır ve adıyla yazılır.
+    expect(screen.getAllByText('Ağırlıklı gecikme').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('4,0 → 6,0 sa')).toBeTruthy();
     expect(screen.getByText('3,5 sa')).toBeTruthy();
     expect(document.querySelectorAll('.tc-pym-pa-aday')).toHaveLength(3);
@@ -236,6 +237,24 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('planda yeri olmayan sipariş çubukta, onaya gönder kartında ve kontrolde listeyle aynı sayılır (1786 PLN-3)', () => {
+    // İş emri durumu okunmadığı için (depo boş) planda olmayan adım bitmiş sayılır; siparişin adımları motorun yerleştiremedikleri listesindedir.
+    const c = guncel(); const plan = c.plan as unknown as { J: Record<string, unknown>; ops: Record<string, { job?: string }>; fail: string[] };
+    delete plan.J['3'];
+    for (const [id, o] of Object.entries(plan.ops)) if (o.job === '3') { delete plan.ops[id]; plan.fail.push(id); }
+    ac({ c });
+    const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
+    const say = within(ust).getByTitle(/^Geciken sipariş/);
+    expect(say.textContent).toBe('2 geciken');
+    expect(say.getAttribute('title')).toBe('Geciken sipariş; 1 tanesi planda yerleşmedi (bitişi bilinmiyor)');
+    fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
+    expect(within(kart()).getByText('1 → 2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi$/)).toBeTruthy();
+    expect(screen.queryByText('Bütün işler yerleşti')).toBeNull();
+  });
+
   it('onaya gönder kartı: sunucu reddederse iletisi gösterilir, kart açık kalır, taslaktan vazgeçilir', async () => {
     ac({ c: guncel() });
     fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
@@ -268,14 +287,15 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez, Onay sekmesindeki kontrole gidilir', () => {
+  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez; neden kartta önceden yazılır, düğme Onay sekmesine götürür (1786 PLN-1)', () => {
     ac();
     const post = vi.spyOn(api, 'post');
     fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
-    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
+    expect(within(kart()).queryByRole('button', { name: 'Gönder' })).toBeNull();
+    expect(within(kart()).getByText(/^Gönderilemez: 1 bekleyen değişiklik plana uygulanmadı/)).toBeTruthy();
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Onay sekmesine git' }));
     expect(post).not.toHaveBeenCalled();
     expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.')).toBeTruthy();
     post.mockRestore();
   });
 

@@ -44,11 +44,15 @@ export interface Siparis extends ExtraAlanlar {
   malzeme?: { kod: string; miktar: number }[];
 }
 
-// Tezgâh (makine). `grup` istasyondur; ücret okunamazsa null (69 a: sıfır uydurulmaz).
+// Tezgâh (makine). `grup` istasyondur; ücret okunamazsa null (69 a: sıfır uydurulmaz). Kimlik veritabanı anahtarıdır: ekran tezgâhı
+// `kod`, grubu `grupKod` ve `grupAd` ile yazar (1786 PLN-7); eski kayıtta yoksa kimlik yazılır.
 export interface Tezgah extends ExtraAlanlar {
   id: string;
   ad?: string;
+  kod?: string;
   grup?: string;
+  grupKod?: string;
+  grupAd?: string;
   ucret?: number | null;
   verim?: number;
   vardiyalar?: string[];

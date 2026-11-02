@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
@@ -93,5 +94,39 @@ describe('Bildirim ve sayfa değişimi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sil' }));
     fireEvent.click(screen.getByRole('button', { name: 'terminal' }));
     expect(screen.getByText('Kayıt silindi')).toBeTruthy();
+  });
+});
+
+function Geri() {
+  const { bildir, kaldir } = useBildirim();
+  const no = useRef<number | null>(null);
+  return (
+    <>
+      <button type="button" onClick={() => { no.current = bildir('tamam', 'Duruş kaydedildi'); }}>kaydet</button>
+      <button type="button" onClick={() => { if (no.current !== null) kaldir(no.current); }}>reddedildi</button>
+      <button type="button" onClick={() => { bildir('bilgi', 'Başka ileti'); }}>baska</button>
+    </>
+  );
+}
+
+describe('Bildirimi numarasıyla kaldırma', () => {
+  it('bildir numara döndürür, kaldir yalnız o bildirimi kapatır', () => {
+    render(<BildirimSaglayici><Geri /></BildirimSaglayici>);
+    fireEvent.click(screen.getByRole('button', { name: 'kaydet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'baska' }));
+    expect(screen.getByText('Duruş kaydedildi')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'reddedildi' }));
+    expect(screen.queryByText('Duruş kaydedildi')).toBeNull();
+    expect(screen.getByText('Başka ileti')).toBeTruthy();
+  });
+
+  it('süresi dolup kalkmış bildirimi kaldırmak hata vermez', () => {
+    vi.useFakeTimers();
+    render(<BildirimSaglayici><Geri /></BildirimSaglayici>);
+    fireEvent.click(screen.getByRole('button', { name: 'kaydet' }));
+    act(() => { vi.advanceTimersByTime(BILDIRIM_SURESI_MS + 1); });
+    expect(screen.queryByText('Duruş kaydedildi')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'reddedildi' }));
+    expect(screen.queryByText('Duruş kaydedildi')).toBeNull();
   });
 });

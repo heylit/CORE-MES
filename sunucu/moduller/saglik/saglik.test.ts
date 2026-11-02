@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -17,10 +17,10 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
+import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, oluOraniYuzde, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  MetrikToplayici, ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, denemeKaydiOku, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
 import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
@@ -135,6 +135,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
     assert.deepEqual(ayrinti, {
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), yayin: null, calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
       uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
+      geriYuklemeDenemesi: null, veritabaniBuyumesi: null,
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
@@ -366,7 +367,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
-      'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniBuyumesi', 'veritabaniDiski', 'veritabaniGecikmeMs',
       'vtBaglantiSayisi', 'yayin', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
@@ -383,6 +384,48 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     await new Promise((coz) => setTimeout(coz, 120));
     const ikinci = (await ayrintiIste(app, yoneticiCerezi)).json();
     assert.equal(typeof ikinci.olayDongusuGecikmeMs === 'number' && ikinci.olayDongusuGecikmeMs >= 0, true);
+  });
+
+  test('/saglik/ayrinti veritabanı büyümesi: boyut ve en büyük tablolar gerçek istatistikten; tablo listesi sınırlı ve büyükten küçüğe', async () => {
+    // Tabloyu sahibi kurar; uç uygulama kullanıcısıyla okur: boyut ve istatistik ek yetki istemez.
+    const asil = acik().sahip;
+    await asil.sorgu('CREATE TABLE vt_buyume_deneme (id int PRIMARY KEY, metin text NOT NULL)');
+    await asil.sorgu("INSERT INTO vt_buyume_deneme SELECT g, repeat('x', 200) FROM generate_series(1, 20000) g");
+    await asil.sorgu('DELETE FROM vt_buyume_deneme WHERE id <= 5000');
+    await asil.sorgu('ANALYZE vt_buyume_deneme');
+    try {
+      const cevap = await ayrintiIste(app, izleyenCerezi);
+      assert.equal(cevap.statusCode, 200);
+      const b = cevap.json().veritabaniBuyumesi;
+      assert.equal(Number.isInteger(b.boyutBayt) && b.boyutBayt > 0, true);
+      assert.equal(Number.isInteger(b.xidYasi) && b.xidYasi >= 0, true);
+      assert.equal(b.tablolar.length > 0 && b.tablolar.length <= 10, true);
+      const boyutlar = b.tablolar.map((t: { toplamBayt: number }) => t.toplamBayt);
+      assert.deepEqual(boyutlar, [...boyutlar].sort((x, y) => y - x));
+      // Test şemasının en büyük tablosu budur; başka şemanın tablosu listeye girmez.
+      const t = b.tablolar[0];
+      assert.equal(t.ad, 'vt_buyume_deneme');
+      assert.equal(t.toplamBayt > t.dizinBayt && t.dizinBayt > 0, true);
+      // Sayılar istatistik tahminidir ve başka bağlantının sayacı gecikmeli yazılır: kesin değer değil tutarlılık beklenir.
+      assert.equal(Number.isInteger(t.canliSatir) && t.canliSatir > 0, true);
+      assert.equal(Number.isInteger(t.oluSatir) && t.oluSatir >= 0, true);
+      assert.equal(t.oluOraniYuzde, oluOraniYuzde(t.canliSatir, t.oluSatir));
+      assert.equal(t.sonAutoanalyze === null || typeof t.sonAutoanalyze === 'string', true);
+      sizdirmaYok(cevap.body);
+    } finally {
+      await asil.sorgu('DROP TABLE vt_buyume_deneme');
+    }
+  });
+
+  test('/saglik/ayrinti veritabanı büyümesi: tablo istatistiği okunamazsa sıfır değil null', async () => {
+    const asil = acik().vt;
+    const tabloOkumaz: Veritabani = {
+      ...asil,
+      sorgu: <T>(sql: string, p?: readonly unknown[]) => (sql.includes('pg_stat_user_tables') ? Promise.reject(new Error('yetki yok')) : asil.sorgu<T>(sql, p)),
+    };
+    const ayrinti = await ayrintiTopla(tabloOkumaz, girdi(null, null));
+    assert.equal(ayrinti.veritabaniBuyumesi, null);
+    assert.equal(Number.isInteger(ayrinti.veritabaniGecikmeMs), true);
   });
 
   test('/saglik/metrikler: kimliksiz 401, işlemi olmayan 403, işlemi olan toplayıcının dakikalarını görür', async () => {
@@ -421,6 +464,106 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Diğer bağlantıların sayacı PostgreSQL'e gecikmeli yazılır (en çok ~1 sn); kesin artış beklenmez, azalma da olmaz.
     assert.equal(ikinci.islem >= ilk.islem, true);
     assert.equal(ikinci.enUzunTxSn === null || ikinci.enUzunTxSn < 60, true);
+  });
+
+  test('metrik saklama: dakika yazılır, bitmiş saat bir kez özetlenir, boş saat atlanır, süresi geçen yalnız metrik tablolarından silinir', async () => {
+    const vt = acik().vt;
+    await vt.sorgu('DELETE FROM saglik_metrik_dakika');
+    await vt.sorgu('DELETE FROM saglik_metrik_saat');
+    const dakika = (an: string, sayi: number) => ({
+      an, aralikSn: 60, istek: { sayi, saniyede: sayi / 60, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: 5, makineIslemciYuzde: 10,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+    });
+    const sakla = (d: ReturnType<typeof dakika> | null, simdi: string) => vt.tx((db) => metrikleriSakla(db, d, new Date(simdi)));
+    // 15 gün önceki dakika ve 14 ay önceki özet: süresi geçmiş.
+    await vt.sorgu("INSERT INTO saglik_metrik_dakika (an, veri) VALUES ('2026-10-17T09:00:00Z', '{}')");
+    await vt.sorgu("INSERT INTO saglik_metrik_saat (saat, veri) VALUES ('2025-09-01T00:00:00Z', '{}'), ('2026-10-17T09:00:00Z', '{}')");
+    assert.deepEqual(await sakla(null, '2026-11-01T06:00:00Z'), { saat: 0, silinen: { dakika: 1, saat: 1 } });
+
+    await sakla(dakika('2026-11-01T06:10:00.000Z', 60), '2026-11-01T06:10:00Z');
+    await sakla(dakika('2026-11-01T06:11:00.000Z', 120), '2026-11-01T06:11:00Z');
+    // 07 ve 08 saatleri boş (sunucu kapalı); 09'da yeniden açılır.
+    const sonuc = await sakla(dakika('2026-11-01T09:00:30.000Z', 30), '2026-11-01T09:00:30Z');
+    assert.equal(sonuc.saat, 1);
+    const saatler = await vt.sorgu<{ saat: Date; veri: { dakikaSayisi: number; istek: { sayi: number } } }>(
+      "SELECT saat, veri FROM saglik_metrik_saat WHERE saat > '2026-11-01' ORDER BY saat",
+    );
+    assert.deepEqual(saatler.map((s) => [s.saat.toISOString(), s.veri.dakikaSayisi, s.veri.istek.sayi]), [['2026-11-01T06:00:00.000Z', 2, 180]]);
+    // Aynı saat ikinci kez özetlenmez; 09 saati bitince özetlenir.
+    assert.equal((await sakla(null, '2026-11-01T09:30:00Z')).saat, 0);
+    assert.equal((await sakla(null, '2026-11-01T10:00:05Z')).saat, 1);
+    const dakikaSayisi = await vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM saglik_metrik_dakika');
+    assert.equal(dakikaSayisi?.n, 3);
+    // Sözleşmeye uyan dakika jsonb'den aynen geri okunur.
+    const geri = await vt.tek<{ veri: unknown }>("SELECT veri FROM saglik_metrik_dakika WHERE an = '2026-11-01T06:10:00Z'");
+    assert.deepEqual(geri?.veri, dakika('2026-11-01T06:10:00.000Z', 60));
+  });
+
+  test('eşik: aşılınca sistem durumunu okuyanlara bir bildirim ve olay 400; sürerken yinelenmez; düzelince olay 401; ayrıntıda uyarı görünür', async () => {
+    const vt = acik().vt;
+    // Süreç izleyicisi: ayrıntı ucu onu okur. Test sonunda kural kapanır, izleyici boş kalır.
+    const izleyici = surecEsikleri;
+    const olaylar: string[] = [];
+    const cikis = { olay: (tur: 'asildi' | 'duzeldi', metin: string) => { olaylar.push(`${tur}:${metin}`); } };
+    const dakika = (p95Ms: number) => ({
+      an: '2026-11-01T10:00:00.000Z', aralikSn: 60,
+      istek: { sayi: 100, saniyede: 1.67, p50Ms: 25, p95Ms, p99Ms: p95Ms, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: null, makineIslemciYuzde: null,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1000, makineToplamBayt: 2000 }, olayDongusuP99Ms: null, veritabani: null,
+    });
+    const isle = (d: ReturnType<typeof dakika>[]) => vt.tx((db) => esikleriIsle(db, izleyici, d, cikis));
+    const sayi = async () => (await vt.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'saglik.esik-uyarisi' AND tekil_anahtar = 'saglik.esik-uyarisi:yanit-suresi'",
+    ))?.n;
+    const yavas = Array.from({ length: 5 }, () => dakika(2500));
+    assert.deepEqual(await isle(yavas), { acilan: ['yanit-suresi'], kapanan: [] });
+    const ilk = await sayi();
+    assert.equal((ilk ?? 0) >= 1, true);
+    assert.deepEqual(await isle(yavas), { acilan: [], kapanan: [] });
+    assert.equal(await sayi(), ilk);
+    assert.deepEqual(olaylar, ['asildi:Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.']);
+    const govde = (await ayrintiIste(app, yoneticiCerezi)).json();
+    assert.deepEqual(govde.uyarilar.filter((u: { tur: string }) => u.tur === 'esik').map((u: { ileti: string }) => u.ileti),
+      ['Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.']);
+    assert.deepEqual(await isle([...yavas, ...Array.from({ length: 5 }, () => dakika(50))]), { acilan: [], kapanan: ['yanit-suresi'] });
+    assert.equal(olaylar.at(-1), 'duzeldi:Düzeldi: Yanıt süresi yüksek.');
+    assert.deepEqual(izleyici.iletiler(), []);
+  });
+
+  test('/saglik/metrikler/saatlik: kimliksiz 401, işlemi olmayan 403; aralığa göre saatlik özetler zamana göre; geçersiz aralık 400', async () => {
+    const vt = acik().vt;
+    await vt.sorgu('DELETE FROM saglik_metrik_saat');
+    const dakika = {
+      an: '2026-11-01T10:00:00.000Z', aralikSn: 60,
+      istek: { sayi: 60, saniyede: 1, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: null, surecIslemciYuzde: 5, makineIslemciYuzde: 10,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+    };
+    const simdi = Date.now();
+    const saatBasi = (geri: number) => new Date(Math.floor(simdi / 3_600_000) * 3_600_000 - geri * 3_600_000);
+    const ekle = async (geriSaat: number) => {
+      const ozet = saatOzeti(saatBasi(geriSaat), [dakika]);
+      await vt.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2)', [ozet?.saat, JSON.stringify(ozet)]);
+    };
+    for (const g of [2, 30, 24 * 30]) await ekle(g);
+    // Biçimi sözleşmeye uymayan eski satır atlanır, grafiği düşürmez.
+    await vt.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2)', [saatBasi(3), JSON.stringify({ saat: saatBasi(3).toISOString() })]);
+    const iste = (aralik: string, cerez?: string) => app.inject({
+      method: 'GET', url: `/api/saglik/metrikler/saatlik?aralik=${aralik}`, ...(cerez === undefined ? {} : { headers: { cookie: cerez } }),
+    });
+    assert.equal((await iste('gun')).statusCode, 401);
+    assert.equal((await iste('gun', operatorCerezi)).statusCode, 403);
+    assert.equal((await iste('bilmem', izleyenCerezi)).statusCode, 400);
+    const saatler = async (aralik: string) => {
+      const c = await iste(aralik, izleyenCerezi);
+      assert.equal(c.statusCode, 200, c.body);
+      sizdirmaYok(c.body);
+      return (c.json() as { saatler: { saat: string }[] }).saatler.map((x) => x.saat);
+    };
+    assert.deepEqual(await saatler('gun'), [saatBasi(2).toISOString()]);
+    assert.deepEqual(await saatler('hafta'), [saatBasi(30).toISOString(), saatBasi(2).toISOString()]);
+    assert.deepEqual(await saatler('yil'), [saatBasi(24 * 30).toISOString(), saatBasi(30).toISOString(), saatBasi(2).toISOString()]);
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {
@@ -525,6 +668,44 @@ describe('sağlık (gerçek PostgreSQL)', () => {
       { tur: 'is', ileti: 'bozuk işi son turda hata verdi (Veritabanı hatası 23514).' },
       { tur: 'disk', ileti: 'Yedek diskinde 2,0 GB boş yer kaldı.' },
     ]);
+  });
+
+  test('/saglik/ayrinti geri yükleme denemesi: son kayıt ayrıntıda görünür; başarısız ya da hiç yoksa yedek uyarısı; okunmadıysa uyarı yok', async () => {
+    const simdi = Date.now();
+    const deneme = {
+      zaman: new Date(simdi - 3 * 86_400_000).toISOString(), yedek: 'tmiv2-elle-1.tmiv2y', sonuc: 'basarisiz' as const, sureSn: 3.1,
+      kisiSayisi: null, gocSayisi: null, hata: 'Yedek şifreli; anahtar yok.',
+    };
+    const ayrinti = async (sonDeneme: typeof deneme | null | undefined) => {
+      const hedef = kaynakliUygulama({
+        ayarOku: () => ({ commit: null, ortam: 'test' }), gitOku: async () => null, isDurumlari: () => [],
+        yedekOku: async () => ({ durum: 'acik', sonYedek: new Date(simdi - 3_600_000), ...(sonDeneme === undefined ? {} : { sonDeneme }) }),
+      });
+      const c = await ayrintiIste(hedef, izleyenCerezi);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json() as { geriYuklemeDenemesi: unknown; uyarilar: { tur: string; ileti: string }[] };
+    };
+    const kotu = await ayrinti(deneme);
+    assert.deepEqual(kotu.geriYuklemeDenemesi, deneme);
+    assert.deepEqual(kotu.uyarilar, [{ tur: 'yedek', ileti: 'Son geri yükleme denemesi başarısız oldu (Yedek şifreli; anahtar yok.).' }]);
+    assert.deepEqual((await ayrinti(null)).uyarilar, [{ tur: 'yedek', ileti: 'Yedek hiç geri yüklenerek denenmemiş (npm run geri-yukle-deneme).' }]);
+    assert.deepEqual((await ayrinti({ ...deneme, sonuc: 'basarili', kisiSayisi: 3, gocSayisi: 9, hata: null } as never)).uyarilar, []);
+    const bilinmiyor = await ayrinti(undefined);
+    assert.deepEqual(bilinmiyor.uyarilar, []);
+    assert.equal(bilinmiyor.geriYuklemeDenemesi, null);
+  });
+
+  test('geri yükleme denemesi kaydı: klasördeki dosyanın son geçerli satırı okunur; yarım satır atlanır; dosya ya da klasör yoksa null', async () => {
+    const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-deneme-'));
+    try {
+      assert.equal(await denemeKaydiOku(null), null);
+      assert.equal(await denemeKaydiOku(dizin), null);
+      const satir = (yedek: string) => JSON.stringify({ zaman: '2026-11-01T10:00:00.000Z', yedek, sonuc: 'basarili', sureSn: 1, kisiSayisi: 1, gocSayisi: 1, hata: null });
+      await writeFile(join(dizin, DENEME_KAYDI_DOSYASI), `${satir('a')}\n${satir('b')}\n{"zaman":"2026-11-0`);
+      assert.equal((await denemeKaydiOku(dizin))?.yedek, 'b');
+    } finally {
+      await rm(dizin, { recursive: true, force: true });
+    }
   });
 
   test('/saglik/ayrinti git başarısızken de onu bir kez dener; commit ortam değerinden gelir', async () => {

@@ -67,3 +67,79 @@ export async function vtIstatistigiOku(db: Db): Promise<VtIstatistigi | null> {
     enUzunTxSn: a?.en_uzun_tx_sn ?? null,
   };
 }
+
+// Metrik tabloları (kart 1662). Satırı yalnız dakikalık iş yazar; jsonb biçimi sözleşmedeki dakika ve kurallar.ts'teki saat özetidir.
+export async function metrikDakikasiYaz(db: Db, an: string, veri: unknown): Promise<void> {
+  await db.sorgu('INSERT INTO saglik_metrik_dakika (an, veri) VALUES ($1, $2) ON CONFLICT (an) DO NOTHING', [an, JSON.stringify(veri)]);
+}
+
+export async function metrikSaatiYaz(db: Db, saat: string, veri: unknown): Promise<void> {
+  await db.sorgu('INSERT INTO saglik_metrik_saat (saat, veri) VALUES ($1, $2) ON CONFLICT (saat) DO NOTHING', [saat, JSON.stringify(veri)]);
+}
+
+// Özeti yazılmış son saatten sonraki ilk dakika; hiç özet yoksa en eski dakika.
+export async function ozetlenmemisIlkDakika(db: Db): Promise<Date | null> {
+  const s = await db.tek<{ an: Date | null }>(
+    `SELECT min(an) AS an FROM saglik_metrik_dakika
+      WHERE an >= coalesce((SELECT max(saat) FROM saglik_metrik_saat) + interval '1 hour', '-infinity'::timestamptz)`,
+  );
+  return s?.an ?? null;
+}
+
+// [baslangic, bitis) aralığının dakikaları, zamana göre.
+export async function metrikDakikalariOku<T>(db: Db, baslangic: Date, bitis: Date): Promise<T[]> {
+  const satirlar = await db.sorgu<{ veri: T }>(
+    'SELECT veri FROM saglik_metrik_dakika WHERE an >= $1 AND an < $2 ORDER BY an', [baslangic, bitis],
+  );
+  return satirlar.map((s) => s.veri);
+}
+
+// Saklama süresi geçen satırlar; yalnız bu iki tabloya dokunur.
+export async function suresiGecenMetrikleriSil(db: Db, simdi: Date, dakikaGun: number, saatAy: number): Promise<{ dakika: number; saat: number }> {
+  const d = await db.sorgu<{ an: Date }>(
+    "DELETE FROM saglik_metrik_dakika WHERE an < $1::timestamptz - make_interval(days => $2::int) RETURNING an", [simdi, dakikaGun],
+  );
+  const s = await db.sorgu<{ saat: Date }>(
+    "DELETE FROM saglik_metrik_saat WHERE saat < $1::timestamptz - make_interval(months => $2::int) RETURNING saat", [simdi, saatAy],
+  );
+  return { dakika: d.length, saat: s.length };
+}
+
+// [baslangic, şimdi] aralığının saatlik özetleri, zamana göre. 13 ayda en çok ~9.500 satır.
+export async function metrikSaatleriOku<T>(db: Db, baslangic: Date): Promise<T[]> {
+  const satirlar = await db.sorgu<{ veri: T }>('SELECT veri FROM saglik_metrik_saat WHERE saat >= $1 ORDER BY saat', [baslangic]);
+  return satirlar.map((s) => s.veri);
+}
+
+// Veritabanı büyümesi (kart 1761): en büyük tablolar, ölü satır ve son autovacuum. Kaynak pg_stat_user_tables ve boyut
+// fonksiyonları; süper kullanıcı ya da pg_monitor istemez. Satır sayıları istatistik tahminidir (ANALYZE ile güncellenir).
+// Yalnız arama yolundaki şemalar: testler kendi şemasında koşar, canlı `public`'tedir.
+export interface TabloOlcusu {
+  ad: string;
+  toplamBayt: number;
+  dizinBayt: number;
+  canliSatir: number;
+  oluSatir: number;
+  sonAutovacuum: Date | null;
+  sonAutoanalyze: Date | null;
+}
+
+export const EN_BUYUK_TABLO_SAYISI = 10;
+
+export async function enBuyukTablolariOku(db: Db, enCok: number = EN_BUYUK_TABLO_SAYISI): Promise<TabloOlcusu[]> {
+  const satirlar = await db.sorgu<{
+    ad: string; toplam: number; dizin: number; canli: number; olu: number; son_autovacuum: Date | null; son_autoanalyze: Date | null;
+  }>(
+    `SELECT relname AS ad, pg_total_relation_size(relid)::float8 AS toplam, pg_indexes_size(relid)::float8 AS dizin,
+            n_live_tup::float8 AS canli, n_dead_tup::float8 AS olu, last_autovacuum AS son_autovacuum, last_autoanalyze AS son_autoanalyze
+       FROM pg_stat_user_tables
+      WHERE schemaname = ANY (current_schemas(false))
+      ORDER BY pg_total_relation_size(relid) DESC, relname
+      LIMIT $1`,
+    [enCok],
+  );
+  return satirlar.map((s) => ({
+    ad: s.ad, toplamBayt: s.toplam, dizinBayt: s.dizin, canliSatir: s.canli, oluSatir: s.olu,
+    sonAutovacuum: s.son_autovacuum, sonAutoanalyze: s.son_autoanalyze,
+  }));
+}

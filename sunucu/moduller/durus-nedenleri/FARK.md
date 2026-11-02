@@ -10,7 +10,7 @@ Taban: `main` 1b74736. Göç yok, tablo değişmedi, `disari.ts` imzaları deği
 - Belgeler: `UYUM-BORCU.md`, `ORTAKLIK-durus-nedenleri.md`, `GUVENLIK-DENETIMI.md`, bu dosya.
 
 ## Değişen
-- `GET /durus-nedenleri`, `GET /hurda-nedenleri`: `yetki: 'oturum'` -> `{ biri: ['sayfa.durus-nedenleri', 'sayfa.terminal'] }`.
+- `GET /durus-nedenleri`, `GET /hurda-nedenleri`: `yetki: 'oturum'` -> `{ biri: ['sayfa.durus-nedenleri', 'sayfa.terminal'] }`. Sonradan `sayfa.vardiya` eklendi (195 a, planlı duruş ekranı); güncel liste `uclar.ts` ve `GUVENLIK-DENETIMI.md`'de.
 - Ekran: kendi sekme şeridi kalktı; bölüm adresten gelir. Tablo, form ve düzen aynı.
 - Testler: DN-S3 başlığı "okuma oturumlu herkese açık" -> "oturumsuz okuma 401"; liste yardımcıları yönetici oturumuyla okur (eski oturum ölçüsü DN-S4'e geçti).
 
@@ -20,6 +20,7 @@ Taban: `main` 1b74736. Göç yok, tablo değişmedi, `disari.ts` imzaları deği
 ## Onaylı kararlar
 - Değişmedi: #73 (bağ `id` ile, yalnız yönetici düzenler, silme yok), #96 (hazır nedenler çağrısız, simge adları onaylı).
 - Yeni (kullanıcı, 08.10.2026, #247): okuma sayfa ya da terminal yetkisine bağlı; rol satırı şimdilik yok; sürüm denetimi ve tablo adları borçta.
+  Sonraki durum: rol satırları rol matrisi 139 göçüyle geldi (müdür, planlama), sürüm denetimi #369 ile kapandı (UYUM-BORCU 1 ve 3); tablo adları borçta.
 
 ## Varsayımlar
 - Nedenleri HTTP ile okuyan başka ekran yok (grep: yalnız kendi sayfası ve terminal). Yeni okuyan sayfa listeye eklenir. Geri alma: tek satır.

@@ -4,8 +4,10 @@ import type { Db } from '#cekirdek/db.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { isDurumlari } from '#cekirdek/zamanlayici.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import { ayrintiCevabi, metriklerCevabi, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
-import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
+import { ayrintiCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import type { SaatOzeti } from '#paylasilan/sozlesme/saglik.ts';
+import { YOKLAMA_SURE_SINIRI_MS, saatlikBaslangic } from './kurallar.ts';
+import { metrikSaatleriOku } from './sorgular.ts';
 import type { YedekBilgisi } from './kurallar.ts';
 import {
   ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, saglikliMi, surecMetrikleri, surecYedegi,
@@ -95,6 +97,18 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
       txDisi: true,
       cevap: metriklerCevabi,
       isle: () => ({ dakikalar: (kaynak.metrikler ?? surecMetrikleri).dakikalar() }),
+    }),
+    // Sistem durumu grafiklerinin 24 saat, 7 gün ve 13 ay görünümü (1664): dakikalık işin yazdığı saatlik özetler.
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/metrikler/saatlik',
+      yetki: 'saglik.ayrinti-oku',
+      sorgu: saatlikSorgusu,
+      cevap: saatlikCevabi,
+      // Sözleşme değişmeden önce yazılmış (biçimi uymayan) satır bütün grafiği düşürmesin: o saat boş kalır.
+      isle: async ({ db, sorgu }) => ({
+        saatler: (await metrikSaatleriOku<SaatOzeti>(db, saatlikBaslangic(sorgu.aralik, new Date()))).filter((s) => saatOzetiSemasi.safeParse(s).success),
+      }),
     }),
   ];
 }

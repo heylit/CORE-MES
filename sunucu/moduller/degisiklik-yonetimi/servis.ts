@@ -4,23 +4,23 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, kapanisImzaAnlami, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, kapanisImzaAnlami, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
   GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
-  KararGovdesi, KararHedefi, KonfigurasyonCevabi, MusteriOnayiGovdesi, OlayListeCevabi, OlaylarSorgusu, ParcaAdaylariCevabi, RaporCevabi,
+  KararGovdesi, KararHedefi, KonfigurasyonCevabi, MusteriOnayiGovdesi, OgeTuru, OlayListeCevabi, OlaylarSorgusu, ParcaAdaylariCevabi, RaporCevabi,
   RaporSorgusu, SeriListeCevabi, SerilerSorgusu, SiniflandirGovdesi, SonUrunlerCevabi, TalepAcGovdesi, TalepCevabi, TalepListeCevabi, TaleplerSorgusu, YayinlaGovdesi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
+  MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
   cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
 import type { EMIR_ADIMLARI, EtkilenenEmir, TALEP_ADIMLARI } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import type { EmirSatiri, GecmisSatiriHam, KararSatiriHam, TalepSatiri } from './sorgular.ts';
+import type { EmirSatiri, GecmisSatiriHam, KararSatiriHam, OgeSatiri, TalepSatiri } from './sorgular.ts';
 
 // Akış: yetkiyi uç verir; burada kilit, sürüm, durum kuralı, yazma, imzalı geçmiş ve iç olay aynı transaction'da. Kişi ve zaman sunucudan.
 
@@ -225,6 +225,7 @@ export async function emirCevabi(db: Db, id: number): Promise<EmirCevabi> {
   const e = await s.emirGetir(db, id);
   if (e === null) throw bulunamadi(EMIR_YOK);
   const kalemler = await s.emirKalemleri(db, id);
+  const ogeler = await s.emirOgeleri(db, id);
   const kararlar = await s.emirKararlari(db, id);
   const fai = await s.emirIlkParcalari(db, id);
   const gecmis = await s.emirGecmisi(db, id);
@@ -235,14 +236,20 @@ export async function emirCevabi(db: Db, id: number): Promise<EmirCevabi> {
     id: e.id, no: e.no, baslik: e.baslik, sinif: e.sinif, durum: e.durum,
     talep: e.talepId === null || e.talepNo === null ? null : { id: e.talepId, no: e.talepNo },
     musteriReferansi: e.musteriReferansi,
-    kalemler: kalemler.map((k) => ({
-      id: k.id, malzeme: ozet(k.malzemeId),
-      eskiCizimRevizyonu: revizyonBagi(k.eskiCizimRevizyonuId), yeniCizimRevizyonu: revizyonBagi(k.yeniCizimRevizyonuId),
-      eskiRotaRevizyonu: revizyonBagi(k.eskiRotaRevizyonuId), yeniRotaRevizyonu: revizyonBagi(k.yeniRotaRevizyonuId),
-      eskiYeniyeUyar: k.eskiYeniyeUyar, yeniEskiyeUyar: k.yeniEskiyeUyar,
-      yeniParcaNoGerekir: yeniParcaNoGerekirMi(e.sinif, k.eskiYeniyeUyar, k.yeniEskiyeUyar),
-      yeniParcaNo: k.yeniParcaNo, yeniParcaAdi: k.yeniParcaAdi, ozet: k.ozet,
-    })),
+    kalemler: kalemler.map((k) => {
+      const kendi = ogeler.filter((o) => o.kalemId === k.id);
+      const ilk = (tur: OgeTuru) => kendi.find((o) => o.tur === tur);
+      return {
+        id: k.id, malzeme: ozet(k.malzemeId),
+        eskiCizimRevizyonu: revizyonBagi(ilk('cizim')?.eskiRevizyonId ?? null), yeniCizimRevizyonu: revizyonBagi(ilk('cizim')?.yeniRevizyonId ?? null),
+        eskiRotaRevizyonu: revizyonBagi(ilk('rota')?.eskiRevizyonId ?? null), yeniRotaRevizyonu: revizyonBagi(ilk('rota')?.yeniRevizyonId ?? null),
+        eskiYeniyeUyar: k.eskiYeniyeUyar, yeniEskiyeUyar: k.yeniEskiyeUyar,
+        yeniParcaNoGerekir: yeniParcaNoGerekirMi(e.sinif, k.eskiYeniyeUyar, k.yeniEskiyeUyar),
+        yeniParcaNo: k.yeniParcaNo, yeniParcaAdi: k.yeniParcaAdi, yeniParcaRevizyonu: k.yeniParcaRevizyonu,
+        ogeler: kendi.map((o) => ({ tur: o.tur, eski: revizyonBagi(o.eskiRevizyonId), yeni: revizyonBagi(o.yeniRevizyonId) })),
+        ozet: k.ozet,
+      };
+    }),
     gecerlilik: gecerlilikCevabi(e, ozet),
     kararlar: kararlar.map((k) => ({
       id: k.id, hedef: k.hedef, hedefId: k.hedefId, hedefEtiketi: null, onerilenKod: k.onerilenKod, mod: k.mod, gerekce: k.gerekce,
@@ -307,17 +314,38 @@ export async function kalemKaydet(db: Db, kullanici: Kullanici, id: number, g: K
   const e = await emirAdimi(db, id, g.surum, 'kalemKaydet');
   const prosesMi = e.sinif === 'P1' || e.sinif === 'P2';
   if (prosesMi && (g.yeniParcaNo != null || g.yeniParcaAdi != null)) throw dogrulama('Proses değişikliğinde yeni parça numarası verilmez.', 'yeniParcaNo');
-  const yazilan = await s.kalemYaz(db, id, g.kalemId, {
-    yeniCizimRevizyonuId: g.yeniCizimRevizyonuId, yeniRotaRevizyonuId: g.yeniRotaRevizyonuId,
-    eskiYeniyeUyar: prosesMi ? null : g.eskiYeniyeUyar, yeniEskiyeUyar: prosesMi ? null : g.yeniEskiyeUyar,
-    yeniParcaNo: g.yeniParcaNo ?? null, yeniParcaAdi: g.yeniParcaAdi ?? null, ozet: g.ozet ?? '',
-  });
-  if (yazilan === null) throw bulunamadi('Kalem bu değişiklik emrinde yok.');
-  await emirYaz(db, e, g.surum, { durum: e.durum });
+  // 1608 a: proses değişikliği parça revizyonunu değiştirmez, proses sürümünü artırır.
+  if (prosesMi && g.yeniParcaRevizyonu != null) throw dogrulama('Proses değişikliğinde parça revizyonu değişmez.', 'yeniParcaRevizyonu');
   const kalem = (await s.emirKalemleri(db, id)).find((k) => k.id === g.kalemId);
-  const ad = kalem === undefined ? null : (await malzemeOzetHaritasi(db, [kalem.malzemeId]))(kalem.malzemeId).kod;
+  if (kalem === undefined) throw bulunamadi('Kalem bu değişiklik emrinde yok.');
+  const mevcut = (await s.sonKonfigurasyon(db, kalem.malzemeId))?.ogeler ?? null;
+  const { turler, ogeler } = kalemOgeleri(g, mevcut);
+  const eksik = ogeEksigi(ogeler, mevcut);
+  if (eksik !== null) throw dogrulama(eksik, 'ogeler');
+  await s.kalemYaz(db, id, g.kalemId, {
+    eskiYeniyeUyar: prosesMi ? null : g.eskiYeniyeUyar, yeniEskiyeUyar: prosesMi ? null : g.yeniEskiyeUyar,
+    yeniParcaNo: g.yeniParcaNo ?? null, yeniParcaAdi: g.yeniParcaAdi ?? null, yeniParcaRevizyonu: g.yeniParcaRevizyonu ?? null, ozet: g.ozet ?? '',
+  });
+  await s.ogeleriYaz(db, g.kalemId, turler, ogeler);
+  await emirYaz(db, e, g.surum, { durum: e.durum });
+  const ad = (await malzemeOzetHaritasi(db, [kalem.malzemeId]))(kalem.malzemeId).kod;
   await emirGecmisiYaz(db, id, kullanici.id, 'kalem_kaydedildi', `${ad ?? 'Kalem'}: taslak kaydedildi`);
   return emirCevabi(db, id);
+}
+
+// Öğe listesi verilmişse bütün türler onunla yazılır. Verilmemişse yalnız çizim ve rota yeni alanlardan yazılır (DY-23: eskisi
+// konfigürasyondan); boş alan o türde değişiklik yok demektir.
+function kalemOgeleri(
+  g: KalemKaydetGovdesi, mevcut: readonly { tur: OgeTuru; revizyonId: number }[] | null,
+): { turler: readonly OgeTuru[]; ogeler: Omit<OgeSatiri, 'kalemId'>[] } {
+  if (g.ogeler !== undefined) return { turler: OGE_TURLERI, ogeler: g.ogeler };
+  const ogeler: Omit<OgeSatiri, 'kalemId'>[] = [];
+  for (const [tur, yeni] of [['cizim', g.yeniCizimRevizyonuId], ['rota', g.yeniRotaRevizyonuId]] as const) {
+    if (yeni === null) continue;
+    const eski = eskiRevizyonuBul(mevcut, tur);
+    if (eski !== yeni) ogeler.push({ tur, eskiRevizyonId: eski, yeniRevizyonId: yeni });
+  }
+  return { turler: ['cizim', 'rota'], ogeler };
 }
 
 export async function yayinaGonder(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<EmirCevabi> {
@@ -371,6 +399,7 @@ export async function yayinla(
     const tur = ilkParcaTuru(e.sinif, k.yeniParcaNo);
     if (tur !== null) await s.ilkParcaEkle(db, id, k.id, tur);
   }
+  const konfigurasyonlar = await konfigurasyonlariYaz(db, e, kalemler, kullanici.id);
   const kaynak = await etkiCozucusu(db, { malzemeIdleri: kalemler.map((k) => k.malzemeId), gecerlilik });
   const kararlar = kaynak === null ? [] : await kararlariOner(db, e, kalemler, gecerlilik, kaynak, kullanici.id);
   const bekleyenKarar = kararlar.filter((k) => !k.verildi).length;
@@ -390,9 +419,14 @@ export async function yayinla(
   if (kararlar.length > 0 && bekleyenKarar === 0) await emirGecmisiYaz(db, id, kullanici.id, 'kararlar_tamam', 'Tüm disposition kararları uygulandı');
   if (durum === 'dogrulama' && bekleyenFai === 0 && kalemler.length > 0) await emirGecmisiYaz(db, id, kullanici.id, 'fai_tamam', 'İlk parça kontrolü gerekmiyor');
   for (const k of kalemler) {
+    const c = konfigurasyonlar.get(k.id);
     await s.olayEkle(db, {
       tur: 'revizyon_yayinlandi', ilgili: 'rota', kayitNo: e.no,
-      alanlar: { malzemeId: String(k.malzemeId), yeniCizimRevizyonuId: String(k.yeniCizimRevizyonuId ?? ''), yeniRotaRevizyonuId: String(k.yeniRotaRevizyonuId ?? ''), yeniParcaNo: k.yeniParcaNo ?? '' },
+      alanlar: {
+        malzemeId: String(k.malzemeId), yeniParcaNo: k.yeniParcaNo ?? '',
+        ogeler: (c?.degisen ?? []).map((o) => `${o.tur}:${o.eskiRevizyonId ?? '-'}>${o.yeniRevizyonId ?? '-'}`).join(' '),
+        parcaRevizyonu: c?.parcaRevizyonu ?? '', prosesSurumu: c === undefined ? '' : String(c.prosesSurumu),
+      },
     });
   }
   await s.olayEkle(db, { tur: 'gecerlilik', ilgili: 'plan', kayitNo: e.no, alanlar: { gecerlilik: ozetMetni } });
@@ -400,6 +434,32 @@ export async function yayinla(
     await s.olayEkle(db, { tur: 'karar_onerildi', ilgili: 'uretim-emirleri', kayitNo: e.no, alanlar: { toplam: String(kararlar.length), bekleyen: String(bekleyenKarar) } });
   }
   return emirCevabi(db, id);
+}
+
+// DY-24: yayında her kalemin parçası yeni konfigürasyon alır (öğe değişikliği ya da yeni parça revizyonu varsa). Yeni parça numarası
+// alan kalemde kart henüz yok (malzemeler açar, Aşama 2): konfigürasyon yazılmaz. Eski revizyon araya giren yayınla konfigürasyondan
+// çıktıysa yayın durur (409); hepsi aynı transaction'da.
+async function konfigurasyonlariYaz(
+  db: Db, e: EmirSatiri, kalemler: s.KalemSatiri[], kisiId: number,
+): Promise<Map<number, { parcaRevizyonu: string | null; prosesSurumu: number; degisen: Omit<OgeSatiri, 'kalemId'>[] }>> {
+  const ogeler = await s.emirOgeleri(db, e.id);
+  const sonuc = new Map<number, { parcaRevizyonu: string | null; prosesSurumu: number; degisen: Omit<OgeSatiri, 'kalemId'>[] }>();
+  const tasarimMi = e.sinif === 'D1' || e.sinif === 'D2';
+  for (const k of kalemler) {
+    if (k.yeniParcaNo !== null) continue;
+    const degisen = ogeler.filter((o) => o.kalemId === k.id).map(({ tur, eskiRevizyonId, yeniRevizyonId }) => ({ tur, eskiRevizyonId, yeniRevizyonId }));
+    const onceki = await s.sonKonfigurasyon(db, k.malzemeId);
+    const revizyonDegisir = tasarimMi && k.yeniParcaRevizyonu !== null && k.yeniParcaRevizyonu !== (onceki?.parcaRevizyonu ?? null);
+    if (degisen.length === 0 && !revizyonDegisir) continue;
+    const r = yeniKonfigurasyon(onceki, { ogeler: degisen, yeniParcaRevizyonu: k.yeniParcaRevizyonu, tasarimMi });
+    if ('hata' in r) throw cakisma(`${r.hata} Kalemi yürürlükteki konfigürasyona göre yeniden kaydedin.`);
+    await s.konfigurasyonEkle(db, {
+      malzemeId: k.malzemeId, sira: (onceki?.sira ?? 0) + 1, parcaRevizyonu: r.konfigurasyon.parcaRevizyonu,
+      prosesSurumu: r.konfigurasyon.prosesSurumu, emirId: e.id, kisiId, ogeler: r.konfigurasyon.ogeler,
+    });
+    sonuc.set(k.id, { parcaRevizyonu: r.konfigurasyon.parcaRevizyonu, prosesSurumu: r.konfigurasyon.prosesSurumu, degisen });
+  }
+  return sonuc;
 }
 
 // DY-9, DY-10, DY-11: her etkilenen hedefe öneri ve izinli kodlar yazılır; otomatik öneri yayını imzalayanın adıyla hemen uygulanır.
@@ -589,9 +649,15 @@ async function sonUrunOzeti(db: Db, malzemeId: number): Promise<MalzemeOzeti> {
 export async function konfigurasyon(db: Db, malzemeId: number): Promise<KonfigurasyonCevabi> {
   const sonUrun = await sonUrunOzeti(db, malzemeId);
   const acik = await s.malzemeninAcikDegisiklikleri(db, malzemeId);
+  const c = await s.sonKonfigurasyon(db, malzemeId);
+  // Konfigürasyon bu modülün kaydıdır (1642): yoksa boş liste. Revizyon etiketleri, NC adları ve parça hali sahibi modüllerden gelir (bağlı değil).
   return {
     sonUrun,
-    baseline: null,
+    baseline: c === null ? [] : [{
+      malzeme: sonUrun, cizimRevizyonu: null, rotaRevizyonu: null, ncProgramlari: null, tasarimOtoritesi: null, durum: null,
+      parcaRevizyonu: c.parcaRevizyonu, prosesSurumu: c.prosesSurumu, ogeler: c.ogeler.map((o) => ({ ...o, etiket: null })),
+      degisiklikNo: c.emirNo, yururluk: c.zaman,
+    }],
     acikDegisiklikler: acik.map((a) => a as AcikDegisiklik),
     seriler: null,
     revizyonStogu: null,

@@ -17,16 +17,16 @@ const OKUMA: KaynakDilimiOkumasi = {
   istasyon: {
     merkezler: [{ id: 5 }, { id: 6 }],
     istasyonlar: [
-      { id: 10, merkezId: 5, verimYuzde: 90, operatorOrani: 0.5 },
-      { id: 11, merkezId: 5, verimYuzde: 100, operatorOrani: 1 },
-      { id: 12, merkezId: 7, verimYuzde: null, operatorOrani: null },
+      { id: 10, kod: 'TOR', ad: 'Torna', merkezId: 5, verimYuzde: 90, operatorOrani: 0.5 },
+      { id: 11, kod: 'FRZ', ad: 'Freze', merkezId: 5, verimYuzde: 100, operatorOrani: 1 },
+      { id: 12, kod: '', ad: 'Taslama', merkezId: 7, verimYuzde: null, operatorOrani: null },
     ],
     makineler: [
-      { id: 100, ad: 'Torna 1', istasyonId: 10 },
-      { id: 101, ad: 'Torna 2', istasyonId: 10 },
-      { id: 110, ad: 'Freze 1', istasyonId: 11 },
-      { id: 120, ad: 'Taslama 1', istasyonId: 12 },
-      { id: 130, ad: 'Bagsiz', istasyonId: null },
+      { id: 100, kod: 'T1', ad: 'Torna 1', istasyonId: 10 },
+      { id: 101, kod: 'T2', ad: 'Torna 2', istasyonId: 10 },
+      { id: 110, kod: 'F1', ad: 'Freze 1', istasyonId: 11 },
+      { id: 120, kod: '', ad: 'Taslama 1', istasyonId: 12 },
+      { id: 130, kod: 'B1', ad: 'Bagsiz', istasyonId: null },
     ],
   },
   takvim: {
@@ -67,8 +67,8 @@ function eskiKaynak(o: KaynakDilimiOkumasi): { durum: Record<string, unknown>; e
     durum: {
       cal: { shifts: o.vardiyalar.map((v) => ({ id: String(v.id), name: 'V', start: v.bas, end: v.bit, breaks: v.molalar.map((m) => ({ start: m.bas, end: m.bit })) })), holidays: o.tatiller },
       wcs: o.istasyon?.merkezler.map((m) => ({ id: String(m.id), code: 'IM', name: 'Merkez', week: null, aktif: true })) ?? null,
-      stations: o.istasyon?.istasyonlar.map((i) => ({ id: String(i.id), code: 'IS', name: 'Istasyon', wcId: String(i.merkezId), eff: i.verimYuzde, opPer: i.operatorOrani, count: 1, cost: null, aktif: true })) ?? null,
-      machines: o.istasyon?.makineler.map((m) => ({ id: String(m.id), code: 'M', name: m.ad, stationId: m.istasyonId === null ? null : String(m.istasyonId), status: 'aktif', aktif: true })) ?? null,
+      stations: o.istasyon?.istasyonlar.map((i) => ({ id: String(i.id), code: i.kod, name: i.ad, wcId: String(i.merkezId), eff: i.verimYuzde, opPer: i.operatorOrani, count: 1, cost: null, aktif: true })) ?? null,
+      machines: o.istasyon?.makineler.map((m) => ({ id: String(m.id), code: m.kod, name: m.ad, stationId: m.istasyonId === null ? null : String(m.istasyonId), status: 'aktif', aktif: true })) ?? null,
       people: o.kisiler?.map((k) => ({ id: String(k.id), name: k.ad, code: null, role: null, stationId: null, wcId: null, shiftId: null, skills: k.yetkinlikler.map(String), cost: null, active: true, machines: k.makineler.map(String), maxMachines: k.enCok })) ?? null,
       maliyet,
     },

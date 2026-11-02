@@ -10,7 +10,7 @@ const ROLLER: readonly KmRolu[] = ['Muayeneci', 'Kalite mühendisi', 'Kalite yö
 export const ROL_TABLOSU: readonly [string, number][] = [
   ['Muayene, ölçüm, lot kabul, NCR bildirme, form doldurma', 1],
   ['Onaylama, NCR kapatma, MRB kararı, DÖF kapatma', 2],
-  ['Kilitli kaydı gerekçeyle açma', 2],
+  ['Tamamlanmış kaydı düzeltme: kayıt kilitli kalır, düzeltme yeni kayıtla yapılır', 1],
   ['Cihaz, tedarikçi ve form şablonu düzenleme', 2],
   ['Kayıt silme, arşivleme, ayarlar, kullanıcı yönetimi', 3],
 ];

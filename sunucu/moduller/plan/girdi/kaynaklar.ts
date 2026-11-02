@@ -36,9 +36,9 @@ export async function kaynakDilimiOku(db: Db, kullanici: Kullanici, izinler: Kay
       // Plan ayarı satırı olmayan istasyon sahibinin kuralıyla verim %100, operatör 1 (istasyonlar/disari.ts planAyarlari).
       istasyonlar: (await istasyonlar(db, { pasiflerDahil: false })).filter((i) => i.aktif).map((i) => {
         const a = ayar.get(i.id);
-        return { id: i.id, merkezId: i.isMerkeziId, verimYuzde: a === undefined ? 100 : sayi(a.verimYuzde), operatorOrani: a === undefined ? 1 : sayi(a.operatorIhtiyaci) };
+        return { id: i.id, kod: i.kod, ad: i.ad, merkezId: i.isMerkeziId, verimYuzde: a === undefined ? 100 : sayi(a.verimYuzde), operatorOrani: a === undefined ? 1 : sayi(a.operatorIhtiyaci) };
       }),
-      makineler: (await aktifMakineler(db)).filter((m) => m.aktif).map((m) => ({ id: m.id, ad: m.ad, istasyonId: m.istasyonId })),
+      makineler: (await aktifMakineler(db)).filter((m) => m.aktif).map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, istasyonId: m.istasyonId })),
     };
   }
 

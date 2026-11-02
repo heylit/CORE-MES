@@ -391,3 +391,50 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
   }, 40000);
 });
+
+describe('A1 Üretim Terminali TMI reddi bildirimi', () => {
+  const RET = 'Bu işte Deneme Kişi de çalışıyor.';
+  const reddet = (durum: string, tmiDurum?: string) => (tur: string, satirlar: Record<string, unknown>[]) => {
+    const red = tur === 'events' ? satirlar.filter((r) => r.state === durum) : [];
+    return { eklenen: satirlar.length - red.length, reddedilen: red.map((r) => ({ cid: r.cid, ileti: RET, ...(tmiDurum ? { tmiDurum } : {}) })) };
+  };
+  const hazir = async () => {
+    expect(await within(await ekran()).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 700));
+  };
+  const bildirimler = () => Array.from(within(screen.getByRole('region', { name: 'Bildirimler' })).queryAllByText(/./, { selector: '.tc-bildirim-mesaj' })).map((p) => p.textContent);
+
+  it('reddedilen duruşta yalnız ekranın ret iletisi kalır: "kaydedildi" ve köprünün aynı reti gösterilmez', async () => {
+    // Telefonda Durdur dokunuşla neden sorar (genişte basılı tutulur).
+    Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+    try {
+      const nedenler = { kimlik: 'reasons', surum: 1, govde: { v: [{ code: 'D-01', l: 'Malzeme bekleniyor', i: 'truck', cat: 'u' }] } };
+      sunucuKur(ISTASYONLU, { ...sunucu([nedenler]), kayitEkle: reddet('stopped', 'running') });
+      arkonAc('/uretim-terminali');
+      const cubuk = () => screen.getByRole('group', { name: 'İş eylemleri' });
+      await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
+      await new Promise((r) => setTimeout(r, 700));
+      fireEvent.click(within(cubuk()).getByRole('button', { name: /İşi Başlat/ }));
+      fireEvent.click(await within(cubuk()).findByRole('button', { name: /Durdur/ }, { timeout: 10000 }));
+      const pencere = await screen.findByRole('dialog', { name: 'Neden durdu?' });
+      const neden = pencere.querySelector('.tc-ay1-neden');
+      expect(neden).not.toBeNull();
+      fireEvent.click(neden!);
+      await waitFor(() => { expect(bildirimler()).toContain(`TMI kabul etmedi · ${RET}`); }, { timeout: 10000 });
+      expect(bildirimler().filter((m) => m?.includes(RET))).toHaveLength(1);
+      expect(bildirimler().some((m) => m?.startsWith('Duruş kaydedildi'))).toBe(false);
+    } finally {
+      Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight');
+    }
+  }, 40000);
+
+  it('reddedilen başlatmada yalnız "İş başlamadı" kalır', async () => {
+    sunucuKur(ISTASYONLU, { ...sunucu(), kayitEkle: reddet('running') });
+    arkonAc('/uretim-terminali');
+    await hazir();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(bildirimler()).toContain(`İş başlamadı · ${RET}`); }, { timeout: 10000 });
+    expect(bildirimler()).toEqual([`İş başlamadı · ${RET}`]);
+  }, 40000);
+});

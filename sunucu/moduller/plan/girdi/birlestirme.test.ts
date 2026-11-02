@@ -11,7 +11,7 @@ import { kaynakDilimiKapsami, kaynakDilimiKur, type KaynakDilimiOkumasi, type Ka
 const OKUMA: KaynakDilimiOkumasi = {
   vardiyalar: [{ id: 1, bas: '08:00', bit: '16:00', molalar: [] }],
   tatiller: ['2026-10-29'],
-  istasyon: { merkezler: [{ id: 5 }], istasyonlar: [{ id: 10, merkezId: 5, verimYuzde: 90, operatorOrani: 1 }], makineler: [{ id: 100, ad: 'Torna 1', istasyonId: 10 }] },
+  istasyon: { merkezler: [{ id: 5 }], istasyonlar: [{ id: 10, kod: 'TOR', ad: 'Torna', merkezId: 5, verimYuzde: 90, operatorOrani: 1 }], makineler: [{ id: 100, kod: 'T1', ad: 'Torna 1', istasyonId: 10 }] },
   takvim: { hafta: [{ merkezId: 5, gun: 1, vardiyaId: 1 }], kisiVardiyasi: [] },
   istasyonMaliyeti: new Map([[10, 900]]),
   kisiler: [{ id: 7, ad: 'Ornek Operator', gorev: null, yetkinlikler: [10], makineler: [], enCok: null }],

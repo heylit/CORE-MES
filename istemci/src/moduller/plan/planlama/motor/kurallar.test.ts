@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
-import { derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi } from './kurallar.ts';
+import { bitenler, derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
@@ -72,6 +72,35 @@ describe('planlama motoru hesapları', () => {
     ]);
   });
 
+  it('termini olmayan sipariş zamanında sayılmaz; hiç termin yoksa Zamanında boştur (1786 PLN-4)', () => {
+    const { c, p, cx, tg } = kur();
+    const biri = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((s) => (s.id === '3' ? { ...s, termin: null } : s)) } };
+    const cx1 = derle(girdiKur(biri, plandanBitenler(biri, p)));
+    const v1 = ozetVerisi(biri, p, cx1, 'hafta', 0);
+    expect(v1.terminsiz).toBe(1);
+    expect(gostergeler(biri, v1, tg).find((g) => g.ad === 'Zamanında')).toMatchObject({ deger: 0, alt: 'termininden önce biter; 1 terminsiz' });
+    expect(html(cevap(biri, v1, 'ozet', yorumlar(biri, v1, tg)))).toMatch(/^1 siparişin <b>0<\/b>'ı zamanında, <b>1<\/b>'i geç \(toplam 73 sa\)\. Termini olmayan <b>1<\/b> sipariş sayılmadı\./);
+    const hic = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((s) => ({ ...s, termin: null })) } };
+    const cx2 = derle(girdiKur(hic, plandanBitenler(hic, p)));
+    const v2 = ozetVerisi(hic, p, cx2, 'hafta', 0);
+    expect(v2.sip.some((s) => s.gec)).toBe(false);
+    expect(gostergeler(hic, v2, tg).find((g) => g.ad === 'Zamanında')).toMatchObject({ deger: null, alt: 'termini olan sipariş yok' });
+    expect(html(cevap(hic, v2, 'ozet', yorumlar(hic, v2, tg)))).toMatch(/^2 siparişin termini yok; zamanında olup olmadığı ölçülmez\./);
+    expect(html(cevap(hic, v2, 'yaris', []))).toBe('Termini olan sipariş yok.');
+    void cx;
+  });
+
+  it('tezgâh kodu ve istasyon adı varsa Özet kimlik yerine onları yazar (1786 PLN-7)', () => {
+    const { c, p, cx, tg } = kur();
+    const adli = { ...c, D: { ...c.D, tezgahlar: c.D.tezgahlar.map((t) => ({ ...t, kod: `KOD-${t.id}`, grupKod: `IST-${t.grup ?? ''}`, grupAd: `İstasyon ${t.grup ?? ''}` })) } };
+    const v = ozetVerisi(adli, p, cx, 'hafta', 0);
+    expect(gostergeler(adli, v, tg).find((g) => g.ad === 'En yoğun tezgâh')?.deger).toBe('KOD-1');
+    const yor = yorumlar(adli, v, tg).map((x) => html(x.m));
+    expect(yor.find((x) => x.startsWith('En boş grup'))).toBe('En boş grup <b>İstasyon 3</b> (%0), en dolu <b>İstasyon 1</b> (%2). Dolu gruptaki adımlara boş gruptan alternatif tezgâh tanımlamak yükü dengeler.');
+    expect(html(cevap(adli, v, 'bekle', []))).toMatch(/^En çok bekleme <b>İstasyon 3<\/b> grubunda/);
+    expect(html(cevap(adli, v, 'yuk', []))).toMatch(/en dolu tezgâh <b>KOD-1<\/b>/);
+  });
+
   it('dönem değişince Özet o dönemi gösterir; günde üçer saatlik sekiz sütun, yılda sütun haftadır', () => {
     const { c, p, cx } = kur();
     const gun = ozetVerisi(c, p, cx, 'gun', 0);
@@ -102,5 +131,20 @@ describe('planlama motoru hesapları', () => {
     const ad = c.D.urunler.find((x) => x.id === u)?.ad ?? String(u); const n = c.D.siparisler.filter((x) => !x.havuz && x.urun === u).length;
     expect(olayAdi(c, { tip: 'sure', urun: u, k: '20', oran: 1.5 })).toBe(`${ad}, adım 20: süre ×1,5 (${String(n)} sipariş)`);
     expect(olayAdi(c, { tip: 'sureOp', id: '2.20', oran: 0.8 })).toBe('2.20: süre ×0,8');
+  });
+});
+
+// 1786 (PLN-3): plandan sonra gelen sipariş planda yoktur; iş emri durumu okununca biten sayılmaz, yerleşmeyen sayılır.
+describe('yerleşmeyen siparişler', () => {
+  it('planda olmayan açık sipariş sayılır; biten ve havuzdaki sayılmaz', () => {
+    const c = ornekCalisma(); const p = planOku(c);
+    if (!p) throw new Error('plan yok');
+    delete p.J['3'];
+    // Örnekte 1 bitmiş emirdir (bütün adımları planın dışında).
+    const acik = { orders: c.D.siparisler.map((s) => ({ id: s.id, status: s.id === '1' ? 'tamam' : 'uretimde' })), opStatus: {} };
+    expect(yerlesmeyenSiparisler(c, p, bitenler(acik, c.D))).toEqual(['3']);
+    expect(yerlesmeyenSiparisler(c, p, bitenler({ ...acik, orders: [{ id: '1', status: 'tamam' }, { id: '3', status: 'tamam' }] }, c.D))).toEqual([]);
+    const h = structuredClone(c); h.D.siparisler.find((s) => s.id === '3')!.havuz = true;
+    expect(yerlesmeyenSiparisler(h, p, bitenler(acik, h.D))).toEqual([]);
   });
 });

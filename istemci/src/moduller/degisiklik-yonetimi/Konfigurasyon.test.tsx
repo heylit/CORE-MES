@@ -22,7 +22,8 @@ const konfig = (o: Partial<KonfigurasyonCevabi> = {}): KonfigurasyonCevabi => ({
     { seriNo: 'SN-0005', revizyon: 'B', mod: 2, durum: 'planli', uyum: 'bilinmiyor', emirNo: null, sapmaReferansi: null, karantinada: null },
   ],
   gecerlilikler: [{ emirId: 3, emirNo: 'ECO-0003', ilkSeri: 4, durum: 'uygulamada' }],
-  baseline: [{ malzeme: { malzemeId: 7, kod: 'DENEME-3', ad: 'Deneme braket' }, cizimRevizyonu: 'B', rotaRevizyonu: 'R2', ncProgramlari: ['P100 r3'], tasarimOtoritesi: 'musteri', durum: 'aktif' }],
+  baseline: [{ malzeme: { malzemeId: 7, kod: 'DENEME-3', ad: 'Deneme braket' }, cizimRevizyonu: 'B', rotaRevizyonu: 'R2', ncProgramlari: ['P100 r3'], tasarimOtoritesi: 'musteri', durum: 'aktif',
+    parcaRevizyonu: 'B', prosesSurumu: 1, ogeler: [], degisiklikNo: 'ECO-0001', yururluk: '2026-11-01T08:00:00.000Z' }],
   acikDegisiklikler: [
     { tur: 'talep', id: 11, no: 'ECR-0011', baslik: 'Braket deliği', sinif: 'D1', durum: 'ccb_bekliyor' },
     { tur: 'emir', id: 3, no: 'ECO-0003', baslik: 'Kaynak sırası', sinif: 'P1', durum: 'uygulamada' },

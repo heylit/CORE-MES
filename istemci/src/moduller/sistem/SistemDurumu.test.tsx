@@ -149,6 +149,18 @@ describe('SistemDurumu ayrinti', () => {
     expect(komsu('Commit')).toBe('yok');
     expect(komsu('Veritabanı')).toContain('yok');
     expect(komsu('Veritabanı')).not.toContain('ms');
+    expect(komsu('Son geri yükleme denemesi')).toBe('yok');
+  });
+
+  it('son geri yukleme denemesi sonucu ve tarihiyle gosterilir (1670)', async () => {
+    const deneme = {
+      zaman: '2026-10-20T10:00:00.000Z', yedek: 'tmiv2-elle-1.tmiv2y', sonuc: 'basarisiz' as const, sureSn: 2, kisiSayisi: null, gocSayisi: null, hata: 'x',
+    };
+    sunucuKur({ kullanici: YONETICI, ayrinti: ayrintiVer({ ...AYRINTI, geriYuklemeDenemesi: deneme }) });
+    ac();
+    await screen.findByText('Son geri yükleme denemesi');
+    expect(komsu('Son geri yükleme denemesi')).toContain('Başarısız');
+    expect(komsu('Son geri yükleme denemesi')).toContain(new Date(deneme.zaman).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }));
   });
 
   it('veritabani durumu saglik cevabindan gelir: ok "Calisiyor"; saglik hata iken ayrinti gelse de "Sorun var"', async () => {
@@ -343,5 +355,55 @@ describe('SistemDurumu uyarilar', () => {
     ac();
     await screen.findByRole('table', { name: 'Zamanlanmış işler' }).catch(() => screen.findByText('İş yok'));
     expect(screen.queryByRole('region', { name: 'Uyarılar' })).toBeNull();
+  });
+});
+
+describe('SistemDurumu veritabani buyumesi (1761)', () => {
+  const BUYUME = {
+    boyutBayt: 3 * 1024 ** 3, xidYasi: 125000, enUzunTxSn: 4.5,
+    tablolar: [
+      {
+        ad: 'denetim_kaydi', toplamBayt: 1536 * 1024 ** 2, dizinBayt: 512 * 1024 ** 2, canliSatir: 5000000, oluSatir: 1000,
+        oluOraniYuzde: 0, sonAutovacuum: '2026-11-01T02:00:00.000Z', sonAutoanalyze: null,
+      },
+      {
+        ad: 'bos_tablo', toplamBayt: 8192, dizinBayt: 8192, canliSatir: 0, oluSatir: 0,
+        oluOraniYuzde: null, sonAutovacuum: null, sonAutoanalyze: null,
+      },
+    ],
+  };
+
+  it('yonetici boyutu, xid yasini ve en buyuk tablolari gorur; olculmeyen deger "yok"', async () => {
+    sunucuKur({ kullanici: YONETICI, ayrinti: ayrintiVer({ ...AYRINTI, veritabaniBuyumesi: BUYUME }) });
+    ac();
+    expect(await screen.findByRole('heading', { name: 'Veritabanı büyümesi' })).toBeTruthy();
+    expect(komsu('Veritabanı boyutu')).toBe('3 GB');
+    expect(komsu('XID yaşı')).toBe((125000).toLocaleString('tr-TR'));
+    expect(komsu('En uzun açık işlem')).toBe(`${(4.5).toLocaleString('tr-TR')} sn`);
+    const tablo = screen.getByRole('table', { name: 'En büyük tablolar' });
+    const satirlar = within(tablo).getAllByRole('row');
+    expect(satirlar).toHaveLength(3);
+    const ilk = satirlar[1]?.textContent ?? '';
+    expect(ilk).toContain('denetim_kaydi');
+    expect(ilk).toContain(`${(1.5).toLocaleString('tr-TR')} GB`);
+    expect(ilk).toContain('512 MB');
+    expect(ilk).toContain('%0');
+    expect(ilk).toContain(new Date('2026-11-01T02:00:00.000Z').toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }));
+    const bos = satirlar[2]?.textContent ?? '';
+    expect(bos).toContain('8 KB');
+    expect(bos.match(/yok/g)).toHaveLength(2);
+  });
+
+  it('olcu yoksa "Olcu yok" yazar; yonetici olmayan bolumu gormez', async () => {
+    sunucuKur({ kullanici: YONETICI, ayrinti: ayrintiVer({ ...AYRINTI, veritabaniBuyumesi: null }) });
+    ac();
+    await screen.findByRole('heading', { name: 'Veritabanı büyümesi' });
+    expect(screen.getByText('Ölçü yok', { selector: 'section[aria-labelledby="tc-sistem-vt-buyume"] p' })).toBeTruthy();
+    cleanup();
+
+    sunucuKur({ kullanici: OPERATOR });
+    ac();
+    await durumBekle('Sistem çalışıyor');
+    expect(screen.queryByRole('heading', { name: 'Veritabanı büyümesi' })).toBeNull();
   });
 });

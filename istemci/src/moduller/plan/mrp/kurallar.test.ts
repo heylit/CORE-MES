@@ -31,6 +31,8 @@ describe('malzeme ihtiyacı kuralları', () => {
   it('özet: ağaçla açılan yarı mamul eksik sayılmaz; ilk eksik günü satın alınacaklardan', () => {
     expect(mrpOzeti(RAPOR)).toEqual({ malzeme: 4, eksik: 2, ilkEksikGunu: '2026-11-04' });
     expect(mrpOzeti({ ...RAPOR, satirlar: [satir(4, 'X')] })).toEqual({ malzeme: 1, eksik: 0, ilkEksikGunu: 'yok' });
+    // 1786 (PLN-3): eksik var ama günü yoksa "Eksik yok" denmez.
+    expect(mrpOzeti({ ...RAPOR, satirlar: RAPOR.satirlar.map((x) => ({ ...x, eksikTarihi: null })) }).ilkEksikGunu).toBe('bilinmiyor');
   });
 
   it('1545 a: stok ya da satın alma görünmezse eksik ve ilk gün bilinmez, not hangi alanların gizli olduğunu söyler', () => {

@@ -104,6 +104,11 @@ export const BILDIRIM_TURLERI = {
   'guvenlik.kritik-alarm': {
     baslik: 'Kritik güvenlik alarmı', onem: 'acil', alanIslemler: ['guvenlik.oku'], yol: '/guvenlik', varsayilan: { mesaj: false, eposta: false },
   },
+  // 1663 (1618 a): ölçü eşiği aşılınca sistem durumunu okuyanlara uygulama içinde; e-posta yok (1061 a). Sistem durumu ayrı
+  // sayfa değil, Hesap menüsündeki penceredir; yol bu yüzden yönetimin sayfasıdır.
+  'saglik.esik-uyarisi': {
+    baslik: 'Sistem ölçüsü eşiği aştı', onem: 'uyari', alanIslemler: ['saglik.ayrinti-oku'], yol: '/ayarlar', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;

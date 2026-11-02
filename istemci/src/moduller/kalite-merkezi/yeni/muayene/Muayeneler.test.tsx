@@ -43,16 +43,16 @@ describe('Muayeneler', () => {
     expect(screen.queryByRole('button', { name: /Düzenle/ })).toBeNull();
   });
 
-  it('kilitli kaydı muayeneci düzenleyemez, mühendis gerekçeyle açar', async () => {
-    kmAc('muayeneler', MUAYENECI, KAYITLAR);
-    await screen.findByText('MUA-2026-0001');
-    fireEvent.click(screen.getAllByRole('button', { name: /Düzenle/ })[1]!);
-    expect(await screen.findByText(/kilitli/)).toBeTruthy();
-    cleanup();
-    kmAc('muayeneler', MUHENDIS, KAYITLAR);
-    await screen.findByText('MUA-2026-0001');
-    fireEvent.click(screen.getAllByRole('button', { name: /Düzenle/ })[1]!);
-    expect(await screen.findByText(/Gerekçe/)).toBeTruthy();
+  // 1835: sunucu kapanmış kaydı kimse için değiştirmez; ekran kilit açtırmaz, yeni kayıt ister.
+  it('kilitli kaydı muayeneci de mühendis de düzenleyemez; gerekçe sorulmaz', async () => {
+    for (const kisi of [MUAYENECI, MUHENDIS]) {
+      kmAc('muayeneler', kisi, KAYITLAR);
+      await screen.findByText('MUA-2026-0001');
+      fireEvent.click(screen.getAllByRole('button', { name: /Düzenle/ })[1]!);
+      expect(await screen.findByText(/kilitli; değiştirilemez/)).toBeTruthy();
+      expect(screen.queryByText(/Gerekçe/)).toBeNull();
+      cleanup();
+    }
   });
 
   it('yeni muayeneyi ölçümle kaydeder (tüm alanlar kipi)', async () => {

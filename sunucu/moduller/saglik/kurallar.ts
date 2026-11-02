@@ -1,10 +1,12 @@
 import { SURE_KOVALARI_MS } from '#cekirdek/istek-olcumu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { HavuzDurumu } from '#cekirdek/db.ts';
-import type { VtIstatistigi } from './sorgular.ts';
+import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { DiskDurumu, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, UcOzeti, Uyari } from '#paylasilan/sozlesme/saglik.ts';
+import type {
+  DiskDurumu, GeriYuklemeDenemesi, VeritabaniBuyumesi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+} from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
 
@@ -47,7 +49,12 @@ export const YEDEK_EN_ESKI_SAAT = 26;
 export const IS_ASILMA_SINIRI_MS = 30 * 60_000;
 const IS_ARALIK_KATSAYISI = 3;
 
-export interface YedekBilgisi { durum: YedekDurumu; sonYedek: Date | null }
+export interface YedekBilgisi {
+  durum: YedekDurumu;
+  sonYedek: Date | null;
+  // Yedek klasöründeki deneme kaydının son satırı (1670): kayıt yoksa null, okunmadıysa verilmez.
+  sonDeneme?: GeriYuklemeDenemesi | null;
+}
 
 export interface UyariGirdisi {
   simdi: Date;
@@ -57,6 +64,8 @@ export interface UyariGirdisi {
   yedek: YedekBilgisi | null;
   yedekDiski: DiskDurumu | null | undefined;
   veritabaniDiski: DiskDurumu | null | undefined;
+  // Açık eşik uyarılarının iletileri (1663).
+  esikler?: readonly string[];
 }
 
 const dakika = (ms: number): number => Math.floor(ms / 60_000);
@@ -95,6 +104,10 @@ export function uyarilar(g: UyariGirdisi): Uyari[] {
   }
   if (g.yedekDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Yedek diskinde ${gbMetni(g.yedekDiski.bosBayt)} GB boş yer kaldı.` });
   if (g.veritabaniDiski?.az === true) sonuc.push({ tur: 'disk', ileti: `Veritabanı diskinde ${gbMetni(g.veritabaniDiski.bosBayt)} GB boş yer kaldı.` });
+  // Kayıt okunmadıysa (undefined) bilinmez, uyarı yok; okunup yoksa (null) hiç denenmemiştir.
+  const deneme = g.yedek === null || g.yedek.durum !== 'acik' || g.yedek.sonDeneme === undefined ? null : denemeUyarisi(g.yedek.sonDeneme, g.simdi);
+  if (deneme !== null) sonuc.push({ tur: 'yedek', ileti: deneme });
+  for (const ileti of g.esikler ?? []) sonuc.push({ tur: 'esik', ileti });
   return sonuc;
 }
 
@@ -256,5 +269,223 @@ export function metrikDakikasi(g: DakikaGirdisi): MetrikDakikasi {
     bellek: { rssBayt: g.bellek.rss, yiginBayt: g.bellek.heapUsed, makineBosBayt: g.makineBos, makineToplamBayt: g.makineToplam },
     olayDongusuP99Ms: g.olayDongusuP99Ms,
     veritabani: vtOzeti(g.vt?.onceki ?? null, g.vt?.simdiki ?? null, aralikSn),
+  };
+}
+
+// Saklama (karar 1619 a): dakikalık ölçü 14 gün, saatlik özet 13 ay. Bir turda en çok bu kadar saat özetlenir (uzun kesinti sonrası tur kısa kalsın).
+export const DAKIKA_SAKLAMA_GUN = 14;
+export const SAAT_SAKLAMA_AY = 13;
+export const TURDA_EN_COK_SAAT = 48;
+const SAAT_MS = 3_600_000;
+
+export const saatBasi = (an: Date): Date => new Date(Math.floor(an.getTime() / SAAT_MS) * SAAT_MS);
+
+// Özetlenecek saatler: özetlenmemiş ilk dakikanın saatinden şimdiki saate dek bitmiş saatler. Başlangıç dolu bir saattir;
+// sunucunun kapalı kaldığı boş saatler atlanır ve uzun kesinti özeti takmaz.
+export function ozetlenecekSaatler(ilkDakika: Date | null, simdi: Date, enCok: number = TURDA_EN_COK_SAAT): Date[] {
+  if (ilkDakika === null) return [];
+  const bitis = saatBasi(simdi).getTime();
+  const sonuc: Date[] = [];
+  for (let t = saatBasi(ilkDakika).getTime(); t < bitis && sonuc.length < enCok; t += SAAT_MS) sonuc.push(new Date(t));
+  return sonuc;
+}
+
+const dolu = <T>(d: readonly (T | null)[]): T[] => d.filter((x): x is T => x !== null);
+const enCok = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.max(...x); };
+const enAz = (d: readonly (number | null)[]): number | null => { const x = dolu(d); return x.length === 0 ? null : Math.min(...x); };
+const topla = (d: readonly number[]): number => d.reduce((a, b) => a + b, 0);
+const yuvarla = (n: number): number => Math.round(n * 100) / 100;
+const ortVeEnCok = (d: readonly (number | null)[]): { ort: number; enCok: number } | null => {
+  const x = dolu(d);
+  return x.length === 0 ? null : { ort: yuvarla(topla(x) / x.length), enCok: Math.max(...x) };
+};
+
+// Saatin dakikalarından özet; dakika yoksa null (boş saat yazılmaz).
+export function saatOzeti(saat: Date, dakikalar: readonly MetrikDakikasi[]): SaatOzeti | null {
+  if (dakikalar.length === 0) return null;
+  const sayi = topla(dakikalar.map((d) => d.istek.sayi));
+  const sure = topla(dakikalar.map((d) => d.aralikSn));
+  const havuzlar = dolu(dakikalar.map((d) => d.havuz));
+  const vtDakikalari = dakikalar.flatMap((d) => (d.veritabani === null ? [] : [{ v: d.veritabani, sn: d.aralikSn }]));
+  const vtler = vtDakikalari.map((x) => x.v);
+  const sonVt = vtler.at(-1);
+  const vtSure = topla(vtDakikalari.map((x) => x.sn));
+  return {
+    saat: saat.toISOString(),
+    dakikaSayisi: dakikalar.length,
+    istek: {
+      sayi,
+      saniyede: sure > 0 ? yuvarla(sayi / sure) : null,
+      p95MsEnCok: enCok(dakikalar.map((d) => d.istek.p95Ms)),
+      p99MsEnCok: enCok(dakikalar.map((d) => d.istek.p99Ms)),
+      istemciHatasi: topla(dakikalar.map((d) => d.istek.istemciHatasi)),
+      sunucuHatasi: topla(dakikalar.map((d) => d.istek.sunucuHatasi)),
+      mesgul: topla(dakikalar.map((d) => d.istek.mesgul)),
+    },
+    havuz: havuzlar.length === 0 ? null : {
+      kullanimdaEnCok: Math.max(...havuzlar.map((h) => h.kullanimda)),
+      bekleyenEnCok: Math.max(...havuzlar.map((h) => h.bekleyen)),
+      mesgul: topla(havuzlar.map((h) => h.mesgul)),
+    },
+    surecIslemciYuzde: ortVeEnCok(dakikalar.map((d) => d.surecIslemciYuzde)),
+    makineIslemciYuzde: ortVeEnCok(dakikalar.map((d) => d.makineIslemciYuzde)),
+    bellek: {
+      rssBaytEnCok: Math.max(...dakikalar.map((d) => d.bellek.rssBayt)),
+      makineBosBaytEnAz: Math.min(...dakikalar.map((d) => d.bellek.makineBosBayt)),
+    },
+    olayDongusuP99MsEnCok: enCok(dakikalar.map((d) => d.olayDongusuP99Ms)),
+    veritabani: sonVt === undefined ? null : {
+      boyutBayt: sonVt.boyutBayt,
+      xidYasi: sonVt.xidYasi,
+      saniyedeIslem: vtSure > 0 ? yuvarla(topla(vtDakikalari.map((x) => x.v.saniyedeIslem * x.sn)) / vtSure) : 0,
+      geriAlma: topla(vtler.map((v) => v.geriAlma)),
+      deadlock: topla(vtler.map((v) => v.deadlock)),
+      onbellekIsabetiYuzdeEnAz: enAz(vtler.map((v) => v.onbellekIsabetiYuzde)),
+      geciciBayt: topla(vtler.map((v) => v.geciciBayt)),
+      baglantiEnCok: Math.max(...vtler.map((v) => v.baglanti.toplam)),
+      kilitBekleyenEnCok: Math.max(...vtler.map((v) => v.baglanti.kilitBekleyen)),
+      enUzunTxSnEnCok: enCok(vtler.map((v) => v.enUzunTxSn)),
+    },
+  };
+}
+
+// Eşik kuralları (kart 1663, karar 1618 a). Kural, son `sure` dakikanın hepsinde aşılınca açılır; son `kapanis` dakikanın hiçbirinde
+// aşılmayınca kapanır (tek dakikalık dalgalanma uyarı açıp kapatmasın). Ölçülemeyen dakika (null) ne açar ne kapatır.
+// Değerler VARSAYIM: ölçümle ayarlanır (DEVIR 1663 tablosu).
+export interface EsikKurali {
+  kod: string;
+  baslik: string;
+  sure: number;
+  asildi: (d: MetrikDakikasi) => boolean | null;
+  ileti: string;
+}
+
+const EN_AZ_ISTEK = 20;
+const vtAlani = <T>(d: MetrikDakikasi, oku: (v: NonNullable<MetrikDakikasi['veritabani']>) => T | null): T | null =>
+  d.veritabani === null ? null : oku(d.veritabani);
+
+export const ESIK_KURALLARI: readonly EsikKurali[] = [
+  {
+    kod: 'yanit-suresi', baslik: 'Yanıt süresi yüksek', sure: 5, ileti: 'Yanıt süresi yüksek: son 5 dakikada p95 1.000 ms üzerinde.',
+    asildi: (d) => (d.istek.sayi < EN_AZ_ISTEK || d.istek.p95Ms === null ? null : d.istek.p95Ms > 1000),
+  },
+  {
+    kod: 'sunucu-hatasi', baslik: 'Sunucu hatası artıyor', sure: 3, ileti: 'Sunucu hatası artıyor: son 3 dakikada isteklerin yüzde 5\'inden fazlası 5xx.',
+    asildi: (d) => (d.istek.sayi < EN_AZ_ISTEK ? null : d.istek.sunucuHatasi >= 5 && d.istek.sunucuHatasi / d.istek.sayi >= 0.05),
+  },
+  {
+    kod: 'havuz-dolu', baslik: 'Veritabanı bağlantıları yetmiyor', sure: 3, ileti: 'Veritabanı bağlantıları yetmiyor: son 3 dakikada istek bağlantı bekledi ya da reddedildi.',
+    asildi: (d) => (d.havuz === null ? null : d.havuz.bekleyen > 0 || d.havuz.mesgul > 0),
+  },
+  {
+    kod: 'islemci', baslik: 'İşlemci dolu', sure: 10, ileti: 'İşlemci dolu: makine son 10 dakikada yüzde 90 üzerinde çalıştı.',
+    asildi: (d) => (d.makineIslemciYuzde === null ? null : d.makineIslemciYuzde >= 90),
+  },
+  {
+    kod: 'bellek', baslik: 'Bellek az', sure: 10, ileti: 'Bellek az: makinede son 10 dakikada belleğin yüzde 10\'undan azı boş.',
+    asildi: (d) => (d.bellek.makineToplamBayt <= 0 ? null : d.bellek.makineBosBayt / d.bellek.makineToplamBayt < 0.1),
+  },
+  {
+    kod: 'olay-dongusu', baslik: 'Sunucu tıkanıyor', sure: 5, ileti: 'Sunucu tıkanıyor: olay döngüsü gecikmesi son 5 dakikada 500 ms üzerinde.',
+    asildi: (d) => (d.olayDongusuP99Ms === null ? null : d.olayDongusuP99Ms > 500),
+  },
+  {
+    kod: 'kilit-bekleme', baslik: 'Veritabanında kilit bekleniyor', sure: 5, ileti: 'Veritabanında kilit bekleniyor: son 5 dakikada en az 5 bağlantı kilit bekledi.',
+    asildi: (d) => vtAlani(d, (v) => v.baglanti.kilitBekleyen >= 5),
+  },
+  {
+    kod: 'uzun-islem', baslik: 'Uzun süren veritabanı işlemi', sure: 1, ileti: 'Uzun süren veritabanı işlemi: 10 dakikadan uzun açık transaction var.',
+    asildi: (d) => vtAlani(d, (v) => (v.enUzunTxSn === null ? false : v.enUzunTxSn >= 600)),
+  },
+  {
+    kod: 'deadlock', baslik: 'Veritabanında kilitlenme', sure: 1, ileti: 'Veritabanında kilitlenme (deadlock) oldu; bir işlem geri alındı.',
+    asildi: (d) => vtAlani(d, (v) => v.deadlock > 0),
+  },
+  {
+    kod: 'xid-yasi', baslik: 'Veritabanı bakımı gecikti', sure: 1, ileti: 'Veritabanı bakımı gecikti: işlem numarası yaşı 1 milyarı geçti (vacuum gerekli).',
+    asildi: (d) => vtAlani(d, (v) => (v.xidYasi === null ? null : v.xidYasi >= 1_000_000_000)),
+  },
+];
+
+export const kapanisSuresi = (k: EsikKurali): number => Math.max(3, k.sure);
+
+// Açık kurallar ve son dakikalar verilince bu turdaki geçişler. Dakikalar zamana göre sıralıdır.
+export function esikGecisleri(
+  dakikalar: readonly MetrikDakikasi[], acik: ReadonlySet<string>, kurallar: readonly EsikKurali[] = ESIK_KURALLARI,
+): { acilan: EsikKurali[]; kapanan: EsikKurali[] } {
+  const acilan: EsikKurali[] = [];
+  const kapanan: EsikKurali[] = [];
+  for (const k of kurallar) {
+    if (acik.has(k.kod)) {
+      const son = dakikalar.slice(-kapanisSuresi(k));
+      if (son.length === kapanisSuresi(k) && son.every((d) => k.asildi(d) === false)) kapanan.push(k);
+    } else {
+      const son = dakikalar.slice(-k.sure);
+      if (son.length === k.sure && son.every((d) => k.asildi(d) === true)) acilan.push(k);
+    }
+  }
+  return { acilan, kapanan };
+}
+
+// Saatlik aralığın başlangıcı: 24 saat, 7 gün, 13 ay (saklama süresi kadar).
+export function saatlikBaslangic(aralik: SaatlikAralik, simdi: Date): Date {
+  if (aralik === 'gun') return new Date(simdi.getTime() - 24 * SAAT_MS);
+  if (aralik === 'hafta') return new Date(simdi.getTime() - 7 * 24 * SAAT_MS);
+  const t = new Date(simdi);
+  t.setUTCMonth(t.getUTCMonth() - SAAT_SAKLAMA_AY);
+  return t;
+}
+
+// Geri yükleme denemesi (1670, 1743 a). Kaydı araç yazar (araclar/geri-yukleme-denemesi.ts), sunucu okur: biçim burada tektir.
+// Ayda bir önerilir (kurulum/yedek.md); 35 gün bir ayın kaydırılmış gününü de kapsar (VARSAYIM).
+export const DENEME_KAYDI_DOSYASI = 'geri-yukleme-denemesi.jsonl';
+export const DENEME_EN_ESKI_GUN = 35;
+
+export const denemeSatiri = (d: GeriYuklemeDenemesi): string => `${JSON.stringify(d)}\n`;
+
+// Son geçerli satır; bozuk ya da yarım satır atlanır (yazım kesilmiş olabilir). Kayıt yoksa null.
+export function sonDeneme(metin: string, gecerli: (deger: unknown) => deger is GeriYuklemeDenemesi): GeriYuklemeDenemesi | null {
+  const satirlar = metin.split(/\r?\n/).filter((s) => s.trim() !== '');
+  for (let i = satirlar.length - 1; i >= 0; i -= 1) {
+    try {
+      const deger: unknown = JSON.parse(satirlar[i] ?? '');
+      if (gecerli(deger)) return deger;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export function denemeUyarisi(d: GeriYuklemeDenemesi | null, simdi: Date): string | null {
+  if (d === null) return 'Yedek hiç geri yüklenerek denenmemiş (npm run geri-yukle-deneme).';
+  if (d.sonuc === 'basarisiz') return `Son geri yükleme denemesi başarısız oldu (${d.hata ?? 'ayrıntı yok'}).`;
+  const gun = Math.floor((simdi.getTime() - new Date(d.zaman).getTime()) / 86_400_000);
+  return gun > DENEME_EN_ESKI_GUN ? `Son geri yükleme denemesi ${gun} gün önce yapıldı.` : null;
+}
+
+// Veritabanı büyümesi (1761). Ölü satır oranı tablodaki ölü satırın payıdır; tablo boşsa (ikisi de sıfır) ölçü yok, null.
+export function oluOraniYuzde(canli: number, olu: number): number | null {
+  const toplam = canli + olu;
+  return toplam <= 0 ? null : Math.round((olu / toplam) * 1000) / 10;
+}
+
+// Veritabanı ölçüsü okunamadıysa büyüme de bilinmiyor: null. Tablo listesi okunamazsa boş liste değil, bütün ölçü null.
+export function veritabaniBuyumesi(vt: VtIstatistigi | null, tablolar: readonly TabloOlcusu[] | null): VeritabaniBuyumesi | null {
+  if (vt === null || tablolar === null) return null;
+  return {
+    boyutBayt: Math.round(vt.boyutBayt),
+    xidYasi: vt.xidYasi,
+    enUzunTxSn: vt.enUzunTxSn === null ? null : Math.round(vt.enUzunTxSn * 10) / 10,
+    tablolar: tablolar.map((t) => ({
+      ad: t.ad,
+      toplamBayt: Math.round(t.toplamBayt),
+      dizinBayt: Math.round(t.dizinBayt),
+      canliSatir: Math.round(t.canliSatir),
+      oluSatir: Math.round(t.oluSatir),
+      oluOraniYuzde: oluOraniYuzde(t.canliSatir, t.oluSatir),
+      sonAutovacuum: zamanMetni(t.sonAutovacuum),
+      sonAutoanalyze: zamanMetni(t.sonAutoanalyze),
+    })),
   };
 }

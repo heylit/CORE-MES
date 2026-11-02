@@ -15,7 +15,11 @@ export interface MotorVardiyasi { id: MotorKimligi; bas: string; bit: string; mo
 export interface MotorTezgahi {
   id: MotorKimligi;
   ad: string;
+  // 1786 (PLN-7): ekranın yazdığı tezgâh kodu ile istasyonun kodu ve adı; motor okumaz.
+  kod?: string;
   grup: MotorKimligi;
+  grupKod?: string;
+  grupAd?: string;
   // Saat ücreti (TL). Okunamazsa null: motor tutarı bilinmez sayar, sıfır uydurulmaz.
   ucret: number | null;
   ucretIst?: number | null;
@@ -162,7 +166,7 @@ export interface AlanKaynagi {
   // Verinin sahibi modül (klasör adı); sayfa alanında 'plan'. elle alanda önerilen sahiptir: kesin sahip 1719'un sahiplik sorusuyla belli olur.
   sahip: string;
   // Yeni yolu kuran kart (1683 b planı).
-  kart: 1716 | 1717 | 1718 | 1719 | 1720;
+  kart: 1716 | 1717 | 1718 | 1719 | 1720 | 1786;
 }
 
 // Üst düzey alanların kaynak tablosu; satisfies her MotorVerisi alanının yazılmasını zorlar (TASARIM.md 3).
@@ -201,6 +205,9 @@ export const TEZGAH_ALANLARI = {
   id: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
   ad: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
   grup: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
+  kod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
+  grupKod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
+  grupAd: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
   ucret: { kaynak: 'karma', sahip: 'finans', kart: 1716 },
   ucretIst: { kaynak: 'sunucu', sahip: 'finans', kart: 1716 },
   verim: { kaynak: 'karma', sahip: 'istasyonlar', kart: 1716 },

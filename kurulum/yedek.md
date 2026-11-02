@@ -144,20 +144,31 @@ Düz kopya bütün veriyi şifresiz taşır: yedek klasörüne koymayın, iş bi
 Kesinti süresini ve kodla birlikte geri dönüşü de ölçen tam tatbikat: `kurulum/geri-donus-tatbikati.md`.
 
 Yedeğin gerçekten açıldığını görmek için asıl veritabanına dokunmadan ayrı bir veritabanına yüklenir. Bu deneme anahtarın da
-elde ve doğru olduğunu gösterir. `<yedek>`, `npm.cmd run yedek-coz -- <şifreli yedek> <yedek>` ile açılmış düz kopyadır; sonda silinir.
+elde ve doğru olduğunu gösterir. Sonuç yedek klasöründeki `geri-yukleme-denemesi.jsonl` dosyasına bir satır olarak yazılır;
+Sistem durumu "Son geri yükleme denemesi" satırında gösterir. Hiç deneme yoksa, son deneme başarısızsa ya da 35 günden eskiyse
+Sistem durumunda yedek uyarısı çıkar.
+
+Bir kez (deneme veritabanını açmak; PostgreSQL süper kullanıcısı gerekir, uygulama ve göç kullanıcısında veritabanı açma yetkisi yoktur):
 
 ```
 psql -U postgres -d postgres -c "CREATE DATABASE tmiv2_deneme OWNER tmiv2_goc"
 psql -1 -U postgres -d tmiv2_deneme -f araclar/vt/kurulum.sql
-pg_restore -U tmiv2_goc -d tmiv2_deneme --no-owner --single-transaction --exit-on-error <yedek>
-psql -U tmiv2_uygulama -d tmiv2_deneme -c "SELECT count(*) FROM kisi"
-psql -U postgres -d postgres -c "DROP DATABASE tmiv2_deneme"
-del <yedek>
 ```
 
-Bu adımlar geliştirme ortamında PostgreSQL 16 ile denendi (2026-10-14): uygulamanın aldığı yedek boş veritabanına yüklendi, kişi,
-malzeme ve göç kaydı sayıları kaynakla aynı çıktı, `npm run goc` "Uygulanacak göç yok" dedi ve göç kaydı yazma hakkını geri aldı,
-sunucu geri yüklenen veritabanıyla açıldı. Windows sunucuda ve PostgreSQL 18'de denenmedi.
+ve `.env` dosyasına `TMIV2_PG_DENEME_DATABASE=tmiv2_deneme` satırı. Bu ad asıl (`TMIV2_PG_DATABASE`) ve test
+(`TMIV2_PG_TEST_DATABASE`) veritabanından farklı olmalıdır; aynıysa araç hiçbir şeye dokunmadan durur. Deneme, deneme
+veritabanının içeriğini her seferinde siler ve yedekle değiştirir.
+
+Her ay:
+
+```
+npm.cmd run geri-yukle-deneme -- <şifreli yedek>
+```
+
+Sunucu açıkken de çalışır; asıl veritabanı değişmez. Araç yedeği yükler, kişi ve göç kaydı sayılarını yazar; göç kaydı yoksa
+deneme başarısız sayılır. Kayıt satırı yedeğin adını, süreyi ve sayıları taşır; kişi verisi taşımaz.
+
+Bu komut geliştirme ortamında PostgreSQL 16 ile denendi (2026-11-01). Windows sunucuda ve PostgreSQL 18'de denenmedi.
 
 ## Talimat medyası aynası (1004 a, 1005 a)
 

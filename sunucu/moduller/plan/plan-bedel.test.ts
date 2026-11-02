@@ -9,7 +9,7 @@ import { anSabit, gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
-  const { c, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
+  const { c, istek, tamam, motorAyariYaz, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
   // 148 a: bedel ayarı taslağa yazılır; yazan taslağı onaya gönderir, müdür canlıya alır.
   const canliyaGecir = async (yazan: string, p: PlanCevabi) => {
     const s = (await tamam<SenaryolarCevabi>(yazan, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
@@ -25,7 +25,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
   // 1408: sıranın kuralı motor ayarındandır; öncelik kuralında önce öncelik sınıfı, sonra teslim (776 b). Varsayılan ATCS'de teslimi uzak
   // emirler arasında öncelik farkı sırayı değiştirmeyebilir.
   test('815: öncelik kuralında motor aynı makinede, aynı teslimde emrin önceliğine göre sıralar; öncelik değişince sıra değişir', async () => {
-    await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'oncelik' });
+    await motorAyariYaz(c.planlama, { kural: 'oncelik' });
     try { await gunduzde(async () => {
       const [a] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
       const [b] = await isEmirleriAc([yeniAdim()], 10, '2030-01-10');
@@ -40,7 +40,7 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       await once(b!, a!);
       await oncelikVer(a!, 1); await oncelikVer(b!, 4);
       await once(a!, b!);
-    }); } finally { await tamam(c.planlama, 'POST', '/plan/motor-ayarlari', { kural: 'atcs' }); }
+    }); } finally { await motorAyariYaz(c.planlama, { kural: 'atcs' }); }
   });
 
   test('815: çarpan yazma ve bant uçları yok; çarpan geçmişi okunur, tabloya yazılmaz', async () => {

@@ -41,7 +41,7 @@ const kaynak = () => ({
 const okuma = (): KaynakDilimiOkumasi => ({
   vardiyalar: [{ id: 3, bas: '08:00', bit: '16:00', molalar: [] }],
   tatiller: [],
-  istasyon: { merkezler: [{ id: 1 }], istasyonlar: [{ id: 10, merkezId: 1, verimYuzde: 100, operatorOrani: 1 }], makineler: [{ id: 100, ad: 'Torna 1', istasyonId: 10 }] },
+  istasyon: { merkezler: [{ id: 1 }], istasyonlar: [{ id: 10, kod: 'TOR', ad: 'Torna', merkezId: 1, verimYuzde: 100, operatorOrani: 1 }], makineler: [{ id: 100, kod: 'T1', ad: 'Torna 1', istasyonId: 10 }] },
   takvim: { hafta: [1, 2, 3, 4, 5].map((gun) => ({ merkezId: 1, gun: gun as 1, vardiyaId: 3 })), kisiVardiyasi: [] },
   istasyonMaliyeti: null,
   kisiler: [],

@@ -25,4 +25,4 @@ Yazma uçları gövdeyi denetime tam yazar ("yazma denetim kaydına düşer" tes
 - İkinci menü maddeleri yalnız görünürlüktür.
 
 ## Açık konular
-Rol satırı yok (UYUM-BORCU 1); sürüm denetimi yok (UYUM-BORCU 3). Kayıt kişi ve zaman tutmaz; değişiklik denetim kaydındadır.
+Rol satırları ve sürüm denetimi kapandı (UYUM-BORCU 1 ve 3; sürüm testi DN-S6). Kayıt kişi ve zaman tutmaz; değişiklik denetim kaydındadır.

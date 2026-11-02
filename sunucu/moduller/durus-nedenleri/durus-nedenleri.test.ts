@@ -411,6 +411,15 @@ describe('durus-nedenleri (gerçek PostgreSQL)', () => {
     assert.equal((await vt().sorgu<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'hurda_nedeni' AND table_schema = current_schema()")).some((s) => ['kategori', 'cagri_ekibi', 'simge'].includes(s.column_name)), false);
   });
 
+  test('aynı anda açılan nedenler ayrı sıra alır (duruş ve hurda)', async () => {
+    const durus = await Promise.all(Array.from({ length: 6 }, () => durusYaz({ kod: yeniKod(), ad: 'Eşzamanlı duruş', kategori: 'plansiz' })));
+    const hurda = await Promise.all(Array.from({ length: 6 }, () => hurdaYaz({ kod: yeniKod(), ad: 'Eşzamanlı hurda' })));
+    for (const c of [...durus, ...hurda]) assert.equal(c.statusCode, 200, c.body);
+    const siralar = (cevaplar: typeof durus) => new Set(cevaplar.map((c) => (c.json() as { sira: number }).sira)).size;
+    assert.equal(siralar(durus), 6);
+    assert.equal(siralar(hurda), 6);
+  });
+
   test('DN-S6: düzenleme okunan sürümü ister; eski sürümle yazan 409 alır ve kayıt değişmez, sürümsüz gövde 400', async () => {
     const neden = await durusAc();
     assert.equal(neden.surum, 1);

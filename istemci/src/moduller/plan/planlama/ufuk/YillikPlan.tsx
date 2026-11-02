@@ -7,6 +7,7 @@ import {
 } from '../ortak/isi/index.ts';
 import { Sihirbaz, SonKart, type SihirbazAlani, type SihirbazDegeri, type SihirbazTanimi } from '../ortak/sade/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
+import { grupAdlari, type Adlar } from '../motor/ozet/veri.ts';
 import {
   HS_DURUM, TALEP_GECMIS_ENAZ, YL_ACIL, bedelsizGruplar, darbogazlar, kullanilabilirlik, planUretimi, yillikAyarOku, yillikAyarYaz, yillikAylar,
   yillikHedefKur, yillikOzet, yillikVeri, zamanKur, type Darbogaz, type YillikAyar, type Zaman,
@@ -47,7 +48,7 @@ export function YillikPlan({ calisma, komut, yetki }: PlanlamaEkranOzellikleri) 
   };
   const ortak: Ortak = { calisma, z, yaz, fg, durum, y, bayat, yok, coz, ayarDegistir, bildir: (m: string) => { bildir('hata', m); } };
   const b = y?.durum === 'bitti' ? y : null;
-  const H = b ? isiVerisi(b) : null;
+  const H = b ? isiVerisi(b, grupAdlari(calisma.D)) : null;
   const secili = H && secim && H.satirlar.some((r) => r.k === secim.satir) ? secim : null;
   const varsayim = yaz ? varsayimFormu(calisma, fg, ayarDegistir) : null;
   const sonKart = son !== null ? <SonKart metin={son} kapat={() => { sonYaz(null); }} /> : null;
@@ -93,7 +94,7 @@ const saat = (x: number): string => `${sayi(x, 1)} sa`;
 const ESIK = [50, 75, 90, 100] as const;
 type YillikSatiri = IsiSatiri & { mx: number };
 
-function isiVerisi(b: Bitti): { sutunlar: IsiSutunu[]; satirlar: YillikSatiri[]; ust: IsiUstDurumu } {
+function isiVerisi(b: Bitti, adlar: Adlar): { sutunlar: IsiSutunu[]; satirlar: YillikSatiri[]; ust: IsiUstDurumu } {
   const { v, P, sonuc } = b;
   const o = yillikOzet(v, sonuc);
   const sutunlar: IsiSutunu[] = P.map((x, i) => ({ k: `p${i}`, ad: x.ad, alt: x.tur === 'hafta' ? 'hafta' : 'ay', uzun: x.uzun }));
@@ -107,7 +108,7 @@ function isiVerisi(b: Bitti): { sutunlar: IsiSutunu[]; satirlar: YillikSatiri[];
         etiket: `%${Math.round(pct)} dolu (${saat(x.yuk)} / ${saat(x.kap)})${x.o > 0.5 ? `, ${saat(x.o)} ek mesai` : ''}${x.e > 0.5 ? `, ${saat(x.e)} karşılanamıyor` : ''}`,
       });
     });
-    return { k: g, ad: grupAdi(g), alt: v.sinir[g] === 'kisi' ? 'kişi sınırlı' : 'tezgâh sınırlı', simge: 'layers' as const, ton: mx >= 100 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, h, mx };
+    return { k: g, ad: grupAdi(g, adlar), alt: v.sinir[g] === 'kisi' ? 'kişi sınırlı' : 'tezgâh sınırlı', simge: 'layers' as const, ton: mx >= 100 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, h, mx };
   }).sort((p, q) => q.mx - p.mx);
   const en = satirlar[0];
   const esik = en ? Math.min(4, oranKademesi(en.mx, ESIK) ?? 0) : 0;

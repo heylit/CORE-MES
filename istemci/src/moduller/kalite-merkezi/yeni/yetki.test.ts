@@ -29,16 +29,16 @@ describe('kmYetkisiKur', () => {
 
   it('yazma yetkisi olmayan hiçbir şey yapamaz; geri yükleme yalnız yöneticide', () => {
     expect(okuyan.kaynak('ncr') || okuyan.silebilir('belge') || okuyan.arsiv || okuyan.kapat || okuyan.geriYukle).toBe(false);
-    expect(muhendis.kapat && muhendis.kilitAc).toBe(true);
-    expect(muayeneci.kapat || muayeneci.kilitAc).toBe(false);
+    expect(muhendis.kapat).toBe(true);
+    expect(muayeneci.kapat).toBe(false);
     expect(yonetici.geriYukle).toBe(true);
     expect(kmYetkisiKur({ oku: true, yaz: true, onayla: true, geriYukle: true }, false).geriYukle).toBe(false);
   });
 
-  it('yazamayan onay sahibi mühendis görünmez; kayıt kapatamaz, kilit açamaz (KM-5, 1779d)', () => {
+  it('yazamayan onay sahibi mühendis görünmez; kayıt kapatamaz (KM-5, 1779d)', () => {
     expect(yazamayanOnaylayan.rol).toBe('İzleyici');
     expect(okuyan.rol).toBe('İzleyici');
-    expect(yazamayanOnaylayan.kapat || yazamayanOnaylayan.kilitAc || yazamayanOnaylayan.kaynak('sup')).toBe(false);
+    expect(yazamayanOnaylayan.kapat || yazamayanOnaylayan.kaynak('sup')).toBe(false);
     expect(yazamayanOnaylayan.onayla).toBe(true);
   });
 });

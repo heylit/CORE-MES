@@ -16,7 +16,6 @@ export interface KmYetkisi {
   ayar: boolean;
   kaynak: (kol: KmKoleksiyonu) => boolean;
   kapat: boolean;
-  kilitAc: boolean;
   geriYukle: boolean;
 }
 
@@ -29,7 +28,7 @@ const KAYNAK: ReadonlySet<KmKoleksiyonu> = new Set(['sup', 'tpl']);
 // Ekran yalnız gizler; asıl denetim sunucudadır (229 a, 260 a, 261 a: silme ve arşiv yönetici, muayeneci bunları yapamaz).
 export function kmYetkisiKur(islemler: { oku: boolean; yaz: boolean; onayla: boolean; geriYukle: boolean }, yonetici: boolean, hazir = true): KmYetkisi {
   const { oku, yaz, onayla, geriYukle } = islemler;
-  // Kayıt onayı (kapatma, MRB, form onayı, kilit açma) sunucuda onay ve yazma işlemini birlikte ister (K3 a): yazamayan onay sahibi
+  // Kayıt onayı (kapatma, MRB, form onayı) sunucuda onay ve yazma işlemini birlikte ister (K3 a): yazamayan onay sahibi
   // mühendis sayılmaz; onay işlemi ona yalnız ilk parça, hatalı parça ve giriş kontrolü kararlarını açar.
   const muhendis = onayla && yaz;
   const rol: KmRolu = yonetici ? 'Kalite yöneticisi' : muhendis ? 'Kalite mühendisi' : yaz ? 'Muayeneci' : 'İzleyici';
@@ -40,7 +39,6 @@ export function kmYetkisiKur(islemler: { oku: boolean; yaz: boolean; onayla: boo
     ayar: yaz && yonetici,
     kaynak: (kol) => yaz && (KAYNAK.has(kol) ? onayla || yonetici : kol !== 'dev'),
     kapat: muhendis,
-    kilitAc: muhendis,
     geriYukle: geriYukle && yonetici,
   };
 }

@@ -26,9 +26,9 @@ export const diskDurumuSemasi = z.object({
   az: z.boolean(),
 });
 
-export const UYARI_TURLERI = ['yedek', 'is', 'disk'] as const;
+export const UYARI_TURLERI = ['yedek', 'is', 'disk', 'esik'] as const;
 
-// Sunucunun hesapladığı uyarı: yedek alınmadı, iş asıldı ya da hata verdi, disk az. Eşikler sunucu kuralıdır.
+// Sunucunun hesapladığı uyarı: yedek alınmadı, iş asıldı ya da hata verdi, disk az, ölçü eşiği aşıldı (1663). Eşikler sunucu kuralıdır.
 export const uyariSemasi = z.object({
   tur: z.enum(UYARI_TURLERI),
   ileti: z.string(),
@@ -41,6 +41,43 @@ export const OTOMATIK_ACILIS_DURUMLARI = ['kurulu', 'kapali', 'kurulu-degil', 'b
 export const otomatikAcilisSemasi = z.object({
   durum: z.enum(OTOMATIK_ACILIS_DURUMLARI),
   gorevAdi: z.string(),
+});
+
+// Yedeğin ayrı veritabanına yüklenerek denenmesi (1670, 1743 a): `npm run geri-yukle-deneme` yedek klasörüne yazar, sunucu son kaydı okur.
+export const GERI_YUKLEME_SONUCLARI = ['basarili', 'basarisiz'] as const;
+export const geriYuklemeDenemesiSemasi = z.object({
+  zaman: zamanSemasi,
+  // Denenen yedek dosyasının adı (klasörsüz).
+  yedek: z.string(),
+  sonuc: z.enum(GERI_YUKLEME_SONUCLARI),
+  sureSn: z.number().nonnegative(),
+  // Yüklenen veritabanındaki kişi ve göç kaydı sayısı; başarısız denemede null.
+  kisiSayisi: z.number().int().nonnegative().nullable(),
+  gocSayisi: z.number().int().nonnegative().nullable(),
+  hata: z.string().nullable(),
+});
+
+// Veritabanı büyümesi (1761): saklama kararı (1764 a) üç ay bu ölçüyle verilecek. Satır sayıları PostgreSQL istatistik
+// tahminidir; ölü satır oranı canlı ve ölü toplamı sıfırsa null. Hiç autovacuum ya da autoanalyze koşmamışsa zaman null.
+export const tabloBuyukluguSemasi = z.object({
+  ad: z.string(),
+  toplamBayt: z.number().int().nonnegative(),
+  dizinBayt: z.number().int().nonnegative(),
+  canliSatir: z.number().int().nonnegative(),
+  oluSatir: z.number().int().nonnegative(),
+  oluOraniYuzde: z.number().nonnegative().nullable(),
+  sonAutovacuum: zamanSemasi.nullable(),
+  sonAutoanalyze: zamanSemasi.nullable(),
+});
+
+export const veritabaniBuyumesiSemasi = z.object({
+  boyutBayt: z.number().int().nonnegative(),
+  // Wraparound'a uzaklık (2 milyara yaklaşınca PostgreSQL yazmayı durdurur); okunamazsa null.
+  xidYasi: z.number().int().nonnegative().nullable(),
+  // Görünen en uzun açık transaction (sn): uzun açık transaction autovacuum'un ölü satırı temizlemesini engeller; yoksa null.
+  enUzunTxSn: z.number().nonnegative().nullable(),
+  // En büyükten küçüğe, en çok 10 tablo (dizin ve TOAST dahil boyut).
+  tablolar: z.array(tabloBuyukluguSemasi),
 });
 
 export const ayrintiCevabi = z.object({
@@ -65,6 +102,10 @@ export const ayrintiCevabi = z.object({
   vtBaglantiSayisi: z.number().int().nonnegative().nullable().optional(),
   // Windows dışında null.
   otomatikAcilis: otomatikAcilisSemasi.nullable().optional(),
+  // Son geri yükleme denemesi; hiç yapılmamışsa ya da yedek klasörü okunamazsa null. Eski istemci kırılmasın diye isteğe bağlı.
+  geriYuklemeDenemesi: geriYuklemeDenemesiSemasi.nullable().optional(),
+  // Veritabanı okunamadıysa null. Eski istemci kırılmasın diye isteğe bağlı.
+  veritabaniBuyumesi: veritabaniBuyumesiSemasi.nullable().optional(),
 });
 
 const sayi = z.number().int().nonnegative();
@@ -124,6 +165,31 @@ export const metrikDakikasiSemasi = z.object({
 
 export const metriklerCevabi = z.object({ dakikalar: z.array(metrikDakikasiSemasi) });
 
+// Saatlik özet (1662): dakikalardan çıkar; yüzdelikler birleştirilemediği için saatin en kötü dakikası yazılır.
+const ortVeEnCok = z.object({ ort: z.number().nonnegative(), enCok: z.number().nonnegative() }).nullable();
+export const saatOzetiSemasi = z.object({
+  saat: zamanSemasi,
+  // Saatte ölçülen dakika; sunucu kapalıyken eksilir.
+  dakikaSayisi: sayi,
+  istek: z.object({
+    sayi, saniyede: sure, p95MsEnCok: sure, p99MsEnCok: sure, istemciHatasi: sayi, sunucuHatasi: sayi, mesgul: sayi,
+  }),
+  havuz: z.object({ kullanimdaEnCok: sayi, bekleyenEnCok: sayi, mesgul: sayi }).nullable(),
+  surecIslemciYuzde: ortVeEnCok,
+  makineIslemciYuzde: ortVeEnCok,
+  bellek: z.object({ rssBaytEnCok: sayi, makineBosBaytEnAz: sayi }),
+  olayDongusuP99MsEnCok: sure,
+  veritabani: z.object({
+    boyutBayt: sayi, xidYasi: z.number().int().nonnegative().nullable(), saniyedeIslem: z.number().nonnegative(), geriAlma: sayi, deadlock: sayi,
+    onbellekIsabetiYuzdeEnAz: sure, geciciBayt: sayi, baglantiEnCok: sayi, kilitBekleyenEnCok: sayi, enUzunTxSnEnCok: sure,
+  }).nullable(),
+});
+
+// Sistem durumu grafiklerinin aralıkları: 24 saat, 7 gün, 13 ay (saatlik özetin saklama süresi, 1619 a).
+export const SAATLIK_ARALIKLAR = ['gun', 'hafta', 'yil'] as const;
+export const saatlikSorgusu = z.object({ aralik: z.enum(SAATLIK_ARALIKLAR) });
+export const saatlikCevabi = z.object({ saatler: z.array(saatOzetiSemasi) });
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;
@@ -132,5 +198,11 @@ export type Uyari = z.output<typeof uyariSemasi>;
 export type OtomatikAcilis = z.output<typeof otomatikAcilisSemasi>;
 export type IstekOzeti = z.output<typeof istekOzetiSemasi>;
 export type UcOzeti = z.output<typeof ucOzetiSemasi>;
+export type SaatOzeti = z.output<typeof saatOzetiSemasi>;
+export type TabloBuyuklugu = z.output<typeof tabloBuyukluguSemasi>;
+export type VeritabaniBuyumesi = z.output<typeof veritabaniBuyumesiSemasi>;
+export type GeriYuklemeDenemesi = z.output<typeof geriYuklemeDenemesiSemasi>;
+export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
+export type SaatlikCevabi = z.output<typeof saatlikCevabi>;
 export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;
 export type MetriklerCevabi = z.output<typeof metriklerCevabi>;

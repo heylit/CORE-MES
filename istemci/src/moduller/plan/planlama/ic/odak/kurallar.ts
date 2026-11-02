@@ -1,13 +1,13 @@
 import { haritaGruplari } from '../../motor/harita/kurallar.ts';
 import { saatYaz, type Derleme, type OkunanPlan, type Pencere, type PlanIslemi } from '../../motor/kurallar.ts';
-import { beklemeler, type OzetVerisi } from '../../motor/ozet/veri.ts';
+import { beklemeler, type Adlar, type OzetVerisi } from '../../motor/ozet/veri.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 
 // Odak tahtası (zg-odak.betik): tahtanın bir bölümüne (tezgâh grubu) ya da tek tezgâha girip orada çalışmak. Bölümde her tezgâh bir şerittir,
 // tezgâhta her gün bir şerittir. Taşıma, sıra ve ek mesai motor ister (357 b); hesaplar kayıttaki plandandır.
 
 export interface OdakYeri { g: string; m: string | null }
-export const odakAdi = (m: string): string => (m.startsWith('@') ? `${m.slice(1)} (fason)` : m);
+export const odakAdi = (m: string, kodlar?: Adlar): string => (m.startsWith('@') ? `${m.slice(1)} (fason)` : kodlar?.[m] ?? m);
 export const tezgahGrubu = (D: PlanVerisi, m: string): string => (m.startsWith('@') ? 'fason' : D.tezgahlar.find((t) => t.id === m)?.grup ?? 'diger');
 
 export function odakTezgahlari(c: PlanlamaCalismasi, p: OkunanPlan, g: string): string[] {

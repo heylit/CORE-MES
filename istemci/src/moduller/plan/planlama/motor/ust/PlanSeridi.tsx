@@ -5,7 +5,7 @@ import type { PlanlamaEkranOzellikleri, PlanlamaGorunumu } from '../../gorunumle
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaYetkisi } from '../../yetki.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { usePlanKur } from '../coz.ts';
+import { useBekleyenUygula, usePlanKur } from '../coz.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { Cubuk } from './Cubuk.tsx';
 import { nabizDurumu, sabitReferans, type NabizDurumu } from './nabiz.ts';
@@ -36,13 +36,15 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const nabiz = useMemo(() => (c && p && cx ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
   const y = c ? nabizYazmalari(c, o.komut, o.yetki, p, nabiz) : { refSec: null, sabitle: null, sabitAd: null };
   const { bildir } = useBildirim();
-  const planKur = usePlanKur(o, useCallback((ileti: string) => bildir('hata', ileti), [bildir]));
+  const hata = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
+  const planKur = usePlanKur(o, hata);
+  const bekleyenUygula = useBekleyenUygula(o, hata);
   const ekran = o.gorunum === 'plan' ? o.alt?.ekran ?? 'tahta' : null;
   return (
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
         etkin={ekran === 'veri' ? 'veri' : ekran === 'gecmis' ? 'gecmis' : ekran !== null ? 'plan' : o.gorunum === 'studio' ? 'studyo' : null} planaGit={() => o.git('plan')} studyo={() => o.git('studio')} ozeteGit={() => o.git('plan')}
-        veri={o.altSec ? () => o.altSec?.({ ekran: 'veri', bolum: null }) : null} gecmis={o.altSec ? () => o.altSec?.({ ekran: 'gecmis', bolum: null }) : null} planKur={planKur} {...y} />
+        veri={o.altSec ? () => o.altSec?.({ ekran: 'veri', bolum: null }) : null} gecmis={o.altSec ? () => o.altSec?.({ ekran: 'gecmis', bolum: null }) : null} planKur={planKur} bekleyenUygula={bekleyenUygula} {...y} />
     </div>
   );
 }

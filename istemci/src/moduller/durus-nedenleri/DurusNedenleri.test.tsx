@@ -55,7 +55,7 @@ describe('DurusNedenleri', () => {
     ac();
     expect(await screen.findByText('Deneme arıza')).toBeTruthy();
     expect(screen.getByText('Deneme mola')).toBeTruthy();
-    expect(screen.getByText('Pasif')).toBeTruthy();
+    expect(within(screen.getByRole('table')).getByText('Pasif')).toBeTruthy();
     expect(screen.getByText('0 dk')).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
   });
@@ -228,5 +228,47 @@ describe('DurusNedenleri', () => {
     expect((within(pencere).getByLabelText(/Kod/) as HTMLInputElement).readOnly).toBe(false);
     fireEvent.click(within(pencere).getByRole('checkbox'));
     expect(within(pencere).queryByRole('note')).toBeNull();
+  });
+
+  it('kart başlığı bölümü söyler; arama kod ya da adı Türkçe harfle süzer, durum süzgeci aktif ve pasifi ayırır', async () => {
+    sunucuKur(YONETICI);
+    ac();
+    await screen.findByText('Deneme arıza');
+    expect(screen.getByRole('heading', { name: 'Duruş nedenleri' })).toBeTruthy();
+    const ara = screen.getByLabelText('Duruş nedeni ara');
+    fireEvent.change(ara, { target: { value: 'ARIZA' } });
+    expect(screen.getByText('Deneme arıza')).toBeTruthy();
+    expect(screen.queryByText('Deneme mola')).toBeNull();
+    fireEvent.change(ara, { target: { value: 'd-02' } });
+    expect(screen.getByText('Deneme mola')).toBeTruthy();
+    expect(screen.queryByText('Deneme arıza')).toBeNull();
+    fireEvent.change(ara, { target: { value: 'yok böyle' } });
+    expect(screen.getByText('Aramaya uyan duruş nedeni yok')).toBeTruthy();
+    fireEvent.change(ara, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pasif' }));
+    expect(screen.getByText('Deneme mola')).toBeTruthy();
+    expect(screen.queryByText('Deneme arıza')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Aktif' }));
+    expect(screen.getByText('Deneme arıza')).toBeTruthy();
+    expect(screen.queryByText('Deneme mola')).toBeNull();
+  });
+
+  it('hurda bölümünün kart başlığı hurda nedenleridir', async () => {
+    sunucuKur(YONETICI);
+    ac('hurda');
+    await screen.findByText('Deneme hurda');
+    expect(screen.getByRole('heading', { name: 'Hurda nedenleri' })).toBeTruthy();
+  });
+
+  it('çağrı ekibi seçilince gecikme zorunlu olur; ekip yokken zorunlu değildir', async () => {
+    sunucuKur(YONETICI);
+    ac();
+    await screen.findByText('Deneme arıza');
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni duruş nedeni' }));
+    const pencere = await screen.findByRole('dialog');
+    const gecikme = within(pencere).getByLabelText(/Çağrı gecikmesi/) as HTMLInputElement;
+    expect(gecikme.required).toBe(false);
+    fireEvent.change(within(pencere).getByLabelText('Çağrı ekibi'), { target: { value: 'bakim' } });
+    expect(gecikme.required).toBe(true);
   });
 });

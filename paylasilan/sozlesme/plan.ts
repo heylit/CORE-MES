@@ -432,8 +432,9 @@ export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
 });
 export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
-// Yazarken verilmeyen alan güncel sürümdekinden kalır.
-export const motorAyariGovdesi = motorAyarlari.partial();
+// Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
+// arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.
+export const motorAyariGovdesi = motorAyarlari.partial().extend({ surumId: KIMLIK.nullable() });
 // Sürüm kimliği boşsa koddaki varsayılandır (henüz sürüm yazılmamış).
 const motorAyarSurumu = z.object({ surumId: KIMLIK.nullable(), degerler: motorAyarlari, yazan: z.string().nullable(), zaman: zaman.nullable() });
 // Taslak verilirse taslağın sürümü ve güncelden farklı mı; verilmezse taslak boş.
