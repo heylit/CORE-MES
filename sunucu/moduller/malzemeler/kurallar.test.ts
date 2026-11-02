@@ -4,7 +4,7 @@ import {
   kartBilesenKimlikleri, kartHizmetYonu, katalogAnahtarZorunluMu, katalogGecisiDenetle, katalogIcerigiDegistiMi, katalogIptalEdilirMi, katalogKodDegisebilirMi, katalogKodOneki,
   katalogOnayAkisiAcikMi, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogStokKodu, katalogSurumUyarMi, katalogTalebiBas,
   katalogTalepDenetle, katalogKaydiAlanlari, katalogFirmaKoduGecerliMi, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIptalYetkiliMi, katalogFarki, katalogTalepUygulamaDenetle,
-  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
+  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
@@ -287,6 +287,17 @@ test('MKL-4 (kart #232): eksikler sabit sırada; boşluktan ibaret değer eksikt
   // Hizmet tür karşılığına girmez: eksik sayılmaz; birim karşılığı yine gerekir (kart #163).
   assert.deepEqual(logoEksikleri({ ...tam, tur: 'hizmet', logoKartTuru: null }), []);
   assert.deepEqual(logoEksikleri({ ...tam, tur: 'hizmet', logoKartTuru: null, logoBirimSeti: null }), ['birim_karsiligi']);
+});
+
+test('LOG-1 a: listede olmayan birim karşılığı eksik sayılır ve yazılamaz; liste verilmezse denetlenmez', () => {
+  const tam = { tur: 'hammadde', stokKodu: 'HM-PAS-00001', ad: 'Ad', birim: 'kg', logoKartTuru: '10', logoBirimSeti: 'B1' };
+  assert.deepEqual(logoEksikleri(tam, new Set(['B1'])), []);
+  assert.deepEqual(logoEksikleri(tam, new Set(['B2'])), ['birim_karsiligi']);
+  assert.deepEqual(logoEksikleri({ ...tam, logoBirimSeti: null }, new Set(['B1'])), ['birim_karsiligi'], 'boş karşılık tek eksik');
+  assert.deepEqual(logoEksikleri(tam, null), []);
+  assert.equal(logoBirimSetiGecersizHatasi('B1', new Set(['B1'])), null);
+  assert.equal(logoBirimSetiGecersizHatasi('YOKKOD', new Set(['B1'])), 'Birim seti YOKKOD Logo birim seti listesinde yok.');
+  assert.match(logoBirimSetiGecersizHatasi('B1', new Set()) ?? '', /liste boş/);
 });
 
 test('MKL-3 (kart #232): birim değişimi kartın com.birim alanından okunur; başka alan değişimi birim değişimi değildir', () => {

@@ -11,7 +11,7 @@ import { acilSiparisOnaylandi, canliMakineAyrimlari, malzemeMaliyetiCozucusu, pl
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, kaliteDurumuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
-import { rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
+import { logoBirimSetiCozucusu, rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -61,6 +61,7 @@ export function sunucununBaglari(): Bag[] {
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
     bag('emir bitti -> sevkiyat', uretimEmirleri.emirBittiDinle, sevkiyat.emirBittiYansit),
     bag('logo durumu -> stok malzeme fişi', stok.malzemeFisiLogoCozucusu, logo.malzemeFisiLogoDurumlari),
+    bag('logo birim setleri -> malzemeler karşılık', logoBirimSetiCozucusu, logo.gecerliBirimSetiKodlari),
     bag('emir bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.emirBittiDinle, rotaEmirBittiYansit),
     bag('iş emri kopyalandı -> rota şartname sabiti', uretimEmirleri.isEmriKopyalandiDinle, isEmriKopyalandiYansit),
     bag('fason hareketi -> sevkiyat', uretimEmirleri.fasonHareketiDinle, sevkiyat.fasonHareketiYansit),

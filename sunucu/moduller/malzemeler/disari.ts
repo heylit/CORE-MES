@@ -44,6 +44,8 @@ export type { KullanilanKaliteSatiri as KullanilanKalite } from './sorgular.ts';
 // 233 a: Rota kartın revizyonlarını veren işlevi kaydeder (Malzemeler Rota'yı ithal edemez); bağ sunucu/kablolama.ts'te.
 export type { RotaRevizyonlariCozucusu } from './servis.ts';
 export { rotaRevizyonlariCozucusuKaydet as rotaRevizyonlariCozucusu } from './servis.ts';
+export type { LogoBirimSetiCozucusu } from './servis.ts';
+export { logoBirimSetiCozucusuKaydet as logoBirimSetiCozucusu } from './servis.ts';
 // 1104 a: satın almanın talep, teklif ve siparişte gösterdiği kart ayrıntısı (kalite, standart, tolerans, durum, yüzey, sertifikalar, en az sipariş ...).
 // Kartın sürümü de döner: satın alma siparişteki kopyanın karttan geri kaldığını bununla bilir (1105 a). İptal ve olmayan kart haritada yok.
 export { malzemeSatinAlmaAyrintilari } from './servis.ts';

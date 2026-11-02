@@ -119,6 +119,9 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     cerez = String(c.headers['set-cookie']).split(';')[0] ?? '';
     await tamam('/malzeme-katalogu-ayarlari/genel/kaydet', { deger: { onayAkisi: false } });
     await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'tur', tmiDegeri: 'hammadde', logoDegeri: '10' });
+    // LOG-1 a: birim karşılığı yalnız geçerli birim setinden yazılır; liste okunmamışken elle eklenen geçerlidir.
+    await tamam('/logo/birim-setleri/ekle', { kod: '06', ad: null });
+    await tamam('/logo/birim-setleri/ekle', { kod: '05', ad: null });
     await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' });
     await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'saat', logoDegeri: '05' });
     await tamam('/ayarlar/logo.baglanti/degistir', { deger: true });
@@ -643,7 +646,12 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
   });
 
   test('LGB-10 geçersiz karşılık: birim seti Logo listesinde yoksa niyet ve istek yok, kart "hata: Geçersiz karşılık"', async () => {
-    await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '99' });
+    // Karşılık yazımı listede olmayan kodu reddeder (LOG-1 a); ret burada sınanır. Gönderim tarafının savunması için karşılık,
+    // liste sonradan değişmiş gibi doğrudan yazılır.
+    const ret = await istek('POST', '/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '99' });
+    assert.equal(ret.statusCode, 422, ret.body);
+    assert.match(ret.body, /Birim seti 99 Logo birim seti listesinde yok/);
+    await vt().sorgu("UPDATE malzeme_logo_karsiligi SET logo_degeri = '99' WHERE cesit = 'birim' AND tmi_degeri = 'kg'");
     try {
       const k = await aktifKart();
       assert.deepEqual(await tur(turOrtami(yeniSurecBellegi())), { tur: 'gonderim', no: k.no, sonuc: 'reddedildi' });

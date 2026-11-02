@@ -829,7 +829,8 @@ export interface LogoHazirlikAlanlari {
 }
 
 // MKL-4: kartın Logo'ya gidebilmesi için eksik olanlar, sabit sırada. Eksik kart aktif olmayı engellemez; "bekliyor" kalır, gönderilmez.
-export function logoEksikleri(k: LogoHazirlikAlanlari): LogoEksik[] {
+// `gecerliBirimler` verilirse listede olmayan birim karşılığı da eksik sayılır (LOG-1 a): Logo onu reddeder, kart "hazır" görünmemeli.
+export function logoEksikleri(k: LogoHazirlikAlanlari, gecerliBirimler: ReadonlySet<string> | null = null): LogoEksik[] {
   const dolu = (d: string | null): boolean => d !== null && d.trim() !== '';
   const eksikler: LogoEksik[] = [];
   if (!dolu(k.stokKodu)) eksikler.push('stok_kodu');
@@ -838,7 +839,7 @@ export function logoEksikleri(k: LogoHazirlikAlanlari): LogoEksik[] {
   // Hizmet tür karşılığına girmez (Logo'da ayrı hizmet kartıdır); eksik sayılmaz.
   if (k.tur !== 'hizmet' && !dolu(k.logoKartTuru)) eksikler.push('tur_karsiligi');
   // Birimi olmayan kartın birim karşılığı da yoktur; iki eksik ayrı görünür.
-  if (!dolu(k.logoBirimSeti)) eksikler.push('birim_karsiligi');
+  if (!dolu(k.logoBirimSeti) || (gecerliBirimler !== null && !gecerliBirimler.has(k.logoBirimSeti!.trim()))) eksikler.push('birim_karsiligi');
   return eksikler;
 }
 
@@ -890,6 +891,14 @@ export function logoDurumSirasi(a: { id: number; durum: keyof typeof DURUM_SIRAS
 const LOGO_TICARI_MAL_KODU = '1';
 // LB7 (kart #232): karşılık yalnız Logo'nun kabul ettiği değer. Tür: dört Logo kart türü kodu, demirbaşın karşılığı boş (LB2 a); birim: boşluksuz kod
 // (Logo listesinde olup olmadığına Logo modülü gönderimde bakar). Boş değer her zaman geçer. Veritabanı kısıtı `malzeme_logo_karsiligi_izinli` aynısı.
+// LOG-1 a: birim karşılığı yalnız geçerli Logo birim setlerinden biri olabilir; boş liste de hiçbir koda izin vermez.
+export function logoBirimSetiGecersizHatasi(kod: string, gecerli: ReadonlySet<string>): string | null {
+  if (gecerli.has(kod)) return null;
+  return gecerli.size === 0
+    ? `Birim seti ${kod} Logo birim seti listesinde yok; liste boş. Önce Logo birim setleri kartından ekleyin.`
+    : `Birim seti ${kod} Logo birim seti listesinde yok.`;
+}
+
 export function logoKarsiligiHatasi(k: { cesit: 'tur' | 'birim'; tmiDegeri: string; logoDegeri: string | null }): string | null {
   if (k.logoDegeri === null) return null;
   if (k.cesit === 'birim') return /^\S+$/.test(k.logoDegeri) ? null : 'Logo birim seti kodu boşluk taşımaz.';
