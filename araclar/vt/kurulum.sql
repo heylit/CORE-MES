@@ -67,6 +67,18 @@ ALTER DEFAULT PRIVILEGES FOR ROLE tmiv2_goc GRANT USAGE, SELECT ON SEQUENCES TO 
 ALTER DEFAULT PRIVILEGES FOR ROLE tmiv2_goc REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE tmiv2_goc GRANT EXECUTE ON FUNCTIONS TO tmiv2_uygulama;
 
+-- Geri yükleme şemayı tek transaction'da boşaltıp yükler ve her nesneyi kilitler; 64'lük varsayılanla kilit tablosu
+-- yetmez (kurulum/yedek.md, Kurulum 5). Ayar sunucu yeniden başlatılınca değişir ve ALTER SYSTEM transaction içinde
+-- koşmaz; betik bu yüzden yalnız uyarır, test ve CI veritabanlarında kurulumu durdurmaz.
+DO $$
+BEGIN
+  IF current_setting('max_locks_per_transaction')::int < 512 THEN
+    RAISE WARNING 'max_locks_per_transaction = %: bu değerle geri yükleme çalışmaz.', current_setting('max_locks_per_transaction')
+      USING HINT = format('%s dosyasına "max_locks_per_transaction = 512" yazıp PostgreSQL servisini yeniden başlatın (kurulum/yedek.md, Kurulum 5).',
+                          current_setting('config_file'));
+  END IF;
+END $$;
+
 -- Taşımanın içinden koşarken susar: taşıma sonradan hata verirse geri alınmış kurulum "tamam" dememiş olsun.
 \if :{?tasima_icinden}
 \else

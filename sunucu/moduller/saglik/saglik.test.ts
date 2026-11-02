@@ -310,10 +310,10 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     hedef.inject({ method: 'GET', url: '/api/saglik/ayrinti', ...(cerez === undefined ? {} : { headers: { cookie: cerez } }) });
 
   // Kendi kaynağıyla kurulan sağlık uçları; kimlik aynı veritabanındaki gerçek oturumdan çözülür.
-  const kaynakliUygulama = (kaynak: SaglikKaynagi): FastifyInstance => {
+  const kaynakliUygulama = (kaynak: SaglikKaynagi, sureSiniriMs: number = YOKLAMA_SURE_SINIRI_MS): FastifyInstance => {
     const hedef = Fastify();
     hataYonetiminiKur(hedef);
-    uclariKaydet(hedef, saglikUclari(YOKLAMA_SURE_SINIRI_MS, kaynak), { vt: acik().vt, kimlik: kimlikCozucu(acik().vt) });
+    uclariKaydet(hedef, saglikUclari(sureSiniriMs, kaynak), { vt: acik().vt, kimlik: kimlikCozucu(acik().vt) });
     return hedef;
   };
 
@@ -393,8 +393,11 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     await asil.sorgu("INSERT INTO vt_buyume_deneme SELECT g, repeat('x', 200) FROM generate_series(1, 20000) g");
     await asil.sorgu('DELETE FROM vt_buyume_deneme WHERE id <= 5000');
     await asil.sorgu('ANALYZE vt_buyume_deneme');
+    // Canlıdaki 2 sn sınırı burada ölçülmez (sınır aşımı ayrı testte): CI'da eşzamanlı göç kuran dosyalar boyut sorgusunu
+    // yavaşlatır ve ölçü null düşerdi. Gerçek istatistiğin doğruluğuna bakılır.
+    const hedef = kaynakliUygulama({ ayarOku, gitOku: () => Promise.resolve(null) }, 15_000);
     try {
-      const cevap = await ayrintiIste(app, izleyenCerezi);
+      const cevap = await ayrintiIste(hedef, izleyenCerezi);
       assert.equal(cevap.statusCode, 200);
       const b = cevap.json().veritabaniBuyumesi;
       assert.equal(Number.isInteger(b.boyutBayt) && b.boyutBayt > 0, true);
@@ -464,6 +467,37 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Diğer bağlantıların sayacı PostgreSQL'e gecikmeli yazılır (en çok ~1 sn); kesin artış beklenmez, azalma da olmaz.
     assert.equal(ikinci.islem >= ilk.islem, true);
     assert.equal(ikinci.enUzunTxSn === null || ikinci.enUzunTxSn < 60, true);
+  });
+
+  // Dakikalık iş ölçüyü kendi transaction'ı içinde okur; o transaction'dan sonra başlayan işlem, işlem başı saatine göre
+  // eksi süre verirdi ve /saglik/metrikler cevap şemasında 500 olurdu.
+  test('veritabanı ölçüsü: okuyan transaction\'dan sonra başlayan açık işlem eksi süre vermez', async () => {
+    const { vt } = acik();
+    let birak!: () => void;
+    let basladi!: () => void;
+    const basladiSoz = new Promise<void>((r) => { basladi = r; });
+    const birakSoz = new Promise<void>((r) => { birak = r; });
+    let sonradan: Promise<unknown> = Promise.resolve();
+    const olcu = await vt.tx(async (db) => {
+      await db.sorgu('SELECT 1');
+      await new Promise((r) => setTimeout(r, 300));
+      sonradan = vt.tx(async (db2) => {
+        await db2.sorgu('SELECT 1');
+        basladi();
+        await birakSoz;
+      });
+      await basladiSoz;
+      try {
+        return await vtIstatistigiOku(db);
+      } finally {
+        birak();
+      }
+    });
+    await sonradan;
+    assert.ok(olcu !== null);
+    assert.equal(olcu.baglanti.bosTx >= 1, true);
+    assert.ok(olcu.enUzunTxSn !== null);
+    assert.equal(olcu.enUzunTxSn >= 0, true, `en uzun işlem ${String(olcu.enUzunTxSn)} sn`);
   });
 
   test('metrik saklama: dakika yazılır, bitmiş saat bir kez özetlenir, boş saat atlanır, süresi geçen yalnız metrik tablolarından silinir', async () => {

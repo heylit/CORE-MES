@@ -82,5 +82,7 @@ describe('A5 Çizim', () => {
     const pk = istekler.find((i) => i.yol === '/arkon/belgeler/pkgs/p-deneme/yaz');
     expect((pk?.govde as { govde: { dirty: boolean; readCfg: unknown } }).govde).toMatchObject({ dirty: true });
     expect((pk?.govde as { govde: { readCfg: unknown } }).govde.readCfg).toBeTruthy();
+    // Paketteki PDF'in okunması test bitince de sürer; bitmeden ortam kapanırsa geç gelen bildirim işlenmemiş hata olur.
+    await waitFor(() => { expect(document.querySelector('.tc-ay5-mesgul')).toBeNull(); }, { timeout: 10000 });
   }, 30000);
 });
