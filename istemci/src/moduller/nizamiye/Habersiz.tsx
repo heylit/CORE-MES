@@ -7,7 +7,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EvetHayir } from './EvetHayir.tsx';
-import { useKomut } from './komut.ts';
+import { alanHatasi, useKomut } from './komut.ts';
 import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDENLER, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir } from './gorunum.ts';
 import './nizamiye.css';
 
@@ -54,7 +54,7 @@ export function Habersiz() {
         <div className="tc-nz-bitti" role="status">
           <span className="tc-nz-bitti-simge"><Simge ad="check" boyut="b" /></span>
           <strong>İçeri alındı</strong>
-          <span>Kart <b className="tc-nz-kartno">{bitti.kartNo}</b> verildi. {bitti.evSahibiAd ?? 'Ev sahibi'} ziyaretçisini görecek.</span>
+          <span>Kart <b className="tc-nz-kartno">{bitti.kartNo}</b> verildi. {bitti.evSahibiAd ?? 'Ev sahibi'} ziyaretçisini Ziyaretçilerim listesinde görür.</span>
           <Link to="/nizamiye" className="tc-dugme tc-dugme-birincil tc-dugme-ana"><Simge ad="building" />Kapıya dön</Link>
         </div>
       </Kart>
@@ -77,11 +77,10 @@ export function Habersiz() {
   const kisiler = evler.data.kisiler;
   const onde = kisiler.slice(0, ONDE_KISI);
   const secilenKisi = kisiler.find((k) => k.id === evSahibi);
-  // Son dört hane yazıldıysa türü de seçilir (K24 a): hane türsüz okunamaz, sunucu da reddeder.
-  const turZorunlu = son4.trim() !== '';
+  // Görülen kimliğin türü yazılır (NZM-5 a; K24 a'yı kapsar): iz kalır, sunucu da reddeder. Son dört hane isteğe bağlı.
   const eksik = [
     aranan === '' && 'ad', neden === null && 'neden', evSahibi === null && 'ziyaret edilen kişi', !kimlik && 'kimlik',
-    turZorunlu && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
+    kimlik && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
   ].filter(Boolean);
 
   const gonder = (o: FormEvent) => {
@@ -102,10 +101,10 @@ export function Habersiz() {
         <section className="tc-nz-bolum">
           <Adim no={1} tamam={aranan !== ''} baslik="Kim geldi?" />
           <div className="tc-nz-iki">
-            <Girdi etiket="Ad soyad" required value={ad} onChange={(o) => adYaz(o.target.value)} list="tc-nz-oneriler" autoComplete="off" />
-            <Girdi etiket="Firma (boş bırakılabilir)" value={firma} onChange={(o) => firmaYaz(o.target.value)} />
-            <Girdi etiket="Telefon (isteğe bağlı)" inputMode="tel" value={telefon} onChange={(o) => telefonYaz(o.target.value)} />
-            <Girdi etiket="Araç plakası (isteğe bağlı)" value={plaka} onChange={(o) => plakaYaz(o.target.value)} />
+            <Girdi etiket="Ad soyad" required hata={alanHatasi(kaydet.error, 'ad')} value={ad} onChange={(o) => adYaz(o.target.value)} list="tc-nz-oneriler" autoComplete="off" />
+            <Girdi etiket="Firma (boş bırakılabilir)" hata={alanHatasi(kaydet.error, 'firmaAdi')} value={firma} onChange={(o) => firmaYaz(o.target.value)} />
+            <Girdi etiket="Telefon (isteğe bağlı)" inputMode="tel" hata={alanHatasi(kaydet.error, 'telefon')} value={telefon} onChange={(o) => telefonYaz(o.target.value)} />
+            <Girdi etiket="Araç plakası (isteğe bağlı)" hata={alanHatasi(kaydet.error, 'plaka')} value={plaka} onChange={(o) => plakaYaz(o.target.value)} />
           </div>
           {(oneri.data?.oneriler.length ?? 0) > 0 && (
             <div className="tc-nz-oneriler">
@@ -147,9 +146,9 @@ export function Habersiz() {
           <EvetHayir simge="user" ad="Kimlik görüldü" zorunlu deger={kimlik} degistir={kimlikYaz} />
           {kimlik && (
             <div className="tc-nz-iki">
-              <Secim etiket={turZorunlu ? 'Kimlik türü' : 'Kimlik türü (isteğe bağlı)'} required={turZorunlu} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
+              <Secim etiket="Kimlik türü" required hata={alanHatasi(kaydet.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
                 secenekler={[{ deger: '', baslik: 'Seçilmedi' }, ...KIMLIK_TURLERI.map((t) => ({ deger: t, baslik: KIMLIK_TURU_ADLARI[t] }))]} />
-              <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} value={son4} onChange={(o) => son4Yaz(o.target.value)} ipucu="Tam numara yazılmaz." />
+              <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} hata={alanHatasi(kaydet.error, 'kimlikSon4')} value={son4} onChange={(o) => son4Yaz(o.target.value)} ipucu="İsteğe bağlı; tam numara yazılmaz." />
             </div>
           )}
           {atolyeZorunlu && <EvetHayir simge="wrench" ad="Atölyeye girecek: kask ve gözlük verildi" zorunlu deger={atolye} degistir={atolyeYaz} />}

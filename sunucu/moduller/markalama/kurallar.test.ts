@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, sablonHatasi, seriAlaniVarMi, seriNoUret,
+  alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
@@ -60,5 +60,32 @@ describe('markalama kuralları', () => {
     assert.equal(hurdaNedeniHatasi('red', null), null);
     assert.match(hurdaNedeniHatasi('hurda', null) ?? '', /neden/);
     assert.match(hurdaNedeniHatasi('red', 3) ?? '', /yalnız hurda/);
+  });
+
+  test('MRK-12: işaretlenen yerin yüzey yönü sıfır olamaz; yeri olmayan marka denetlenmez', () => {
+    const yer = (normal: [number, number, number]) => ({ merkez: [0, 0, 0] as [number, number, number], normal, enMm: 5, boyMm: 2, aciDerece: 0 });
+    assert.equal(normalHatasi([alan(), alan({ yer: yer([0, 0, 1]) })]), null);
+    assert.deepEqual(normalHatasi([alan(), alan({ yer: yer([0, 0, 0]) })])?.alan, 'alanlar.1.yer.normal');
+  });
+
+  test('MRK-10: sıfıra yuvarlanan ölçü ve sınır dışı yer markanın sırasıyla reddedilir', () => {
+    const yer = { merkez: [0, 0, 0] as [number, number, number], normal: [0, 0, 1] as [number, number, number], enMm: 5, boyMm: 2, aciDerece: 0 };
+    assert.equal(olcuHatasi([alan({ yaziYuksekligiMm: 0.01, yaziDerinligiMm: 0.001, yer })]), null);
+    assert.equal(olcuHatasi([alan(), alan({ yaziYuksekligiMm: 0.004 })])?.alan, 'alanlar.1.yaziYuksekligiMm');
+    assert.equal(olcuHatasi([alan({ yaziDerinligiMm: 0.0004 })])?.alan, 'alanlar.0.yaziDerinligiMm');
+    assert.equal(olcuHatasi([alan({ yer: { ...yer, merkez: [0, -1e7, 0] } })])?.alan, 'alanlar.0.yer.merkez');
+    assert.equal(olcuHatasi([alan({ yer: { ...yer, enMm: 0.001 } })])?.alan, 'alanlar.0.yer.enMm');
+    assert.equal(olcuHatasi([alan({ yer: { ...yer, aciDerece: 359.999 } })])?.alan, 'alanlar.0.yer.aciDerece');
+  });
+
+  test('MRK-11: seri no en çok 80 karakter', () => {
+    assert.equal(seriUzunlukHatasi('A'.repeat(80)), null);
+    assert.match(seriUzunlukHatasi('A'.repeat(81)) ?? '', /81 karakter/);
+  });
+
+  test('MRK-09: başlangıç sırası sayacın ilerisine alınabilir', () => {
+    assert.equal(baslangicHatasi(5, null), null);
+    assert.equal(baslangicHatasi(13, 12), null);
+    assert.match(baslangicHatasi(12, 12) ?? '', /en az 13/);
   });
 });

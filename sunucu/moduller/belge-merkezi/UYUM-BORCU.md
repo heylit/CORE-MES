@@ -5,8 +5,10 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 ## Bağlamada kapanacak
 1. TUTAN. Rol x işlem satırı yok: `sayfa.cizimler`, `belge-merkezi.oku`, `belge-merkezi.yaz`, `belge-merkezi.yayinla` yalnız yöneticide (Aşama 1 kuralı).
    Uyum: ortak yetki matrisinden rol dağılımı (öneri: okuma herkese, yazma teknik ofis, yayınlama kalite ya da üretim şefi).
-2. TUTAN. `belge_merkezi_bag.hedef_id` doğrulanmıyor: merkez malzemeler modülünü ithal etmez (ADR 0006; malzemeler merkezi ithal edecek, döngü olur).
-   Var olmayan kart numarasına bağ kurulabilir. DOĞRULANDI: `servis.ts` `bagEkle`. Uyum: Aşama 2'de yabancı anahtar ya da malzemelerin kendi ucundan bağ.
+2. KISMEN KAPANDI (kart 1793). Merkezden kurulan bağda kart varlığı denetlenir: `servis.ts` `bagEkle` kartı `malzemeler/disari.ts`
+   `malzemeOzetleri` ile okur (merkez malzemelerin `disari.ts`'ini zaten ithal ediyor; ADR 0006 yönü bozulmaz), olmayan karta 400.
+   Kalan: `belge_merkezi_bag.hedef_id` yabancı anahtar değildir; başka modülün `disari.ts` `kaydaBagla` çağrısında hedef denetlenmez.
+   Uyum: Aşama 2'de yabancı anahtar.
 3. TUTAN. Kullanan ekranlar henüz merkezden okumuyor: malzeme kartı, istasyon, atölye, Arkon, kalibrasyon. `disari.ts` hazır
    (`kaydaBagla`, `kaydaBagliBelgeler`, `kayittakiBelgeDosyasi`, `kayittanKaldir`); istekler `BASKA-MODUL-ISTEKLERI.md`.
 4. ETKİLEYEN. Arkon (`draws`, `pkgs` dosyaları) ve atölye krokileri tek seferlik göçle kopyalandı (kart #746,
@@ -28,3 +30,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 12. SONRA (kart #688). PDF ve foto karesi tarayıcıda üretilir; sunucu içeriğin belgeye benzediğini denetleyemez (CZ-15 ile aynı). Kare üretmeyen eski tarayıcıda belge resimsiz kalır, "Resim üret" ile yeniden denenir.
 13. KAPANDI (kart 1240). Genel arama Türkçe harfi dil ayarına bırakmaz: sütun ve sorgu `public.arama_sade` ile sadeleşir (1233 sözleşmesi);
     İ/I, ı/i ve Ş/ş eşlemesi `arama.test.ts`'te sınanır.
+14. TUTAN (K17 a, Aşama 2). Yayında dört göz yok: hem `belge-merkezi.yaz` hem `belge-merkezi.yayinla` taşıyan rol (bugün Planlama)
+    kendi yüklediği revizyonu yayınlayabilir. DOĞRULANDI: modül testi 2026-11-01, `servis.ts` `revizyonYayinla` yükleyeni denetlemez.
+    Taslak revizyonu okuma yetkisi olan her rol indirebilir. Uyum: Aşama 2'de yetki matrisiyle birlikte (yükleyen yayınlamasın, taslak
+    indirme yalnız yazana); karar ve göç o turda.

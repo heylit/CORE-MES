@@ -56,7 +56,8 @@ describe('ECO detay ekran kuralları', () => {
   });
 
   it('eksik koşul kapatmayı engeller; bağlı olmayan (bilinmiyor) koşul engellemez', () => {
-    expect(kapatilabilir({ kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'fai', durum: 'bilinmiyor', ayrinti: null }] })).toBe(true);
+    expect(kapatilabilir({ kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'fai', durum: 'bilinmiyor', ayrinti: null }] })).toBe(false);
+    expect(kapatilabilir({ kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'fai', durum: 'tamam', ayrinti: null }] })).toBe(true);
     expect(kapatilabilir({ kapanisKosullari: [{ kosul: 'kararlar', durum: 'eksik', ayrinti: '1 karar' }] })).toBe(false);
   });
 

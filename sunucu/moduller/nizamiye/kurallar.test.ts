@@ -11,11 +11,12 @@ const dk = (n: number) => n * 60_000;
 
 describe('nizamiye kuralları', () => {
   test('NZ-01/02 giriş: yalnız beklenen, kimlik görülmüş; atölyeye girecek nedende kask işareti zorunlu', () => {
-    assert.equal(girisHatasi({ durum: 'beklenen', neden: 'toplanti', kimlikGoruldu: true, atolye: false }), null);
-    assert.equal(girisHatasi({ durum: 'beklenen', neden: 'servis', kimlikGoruldu: true, atolye: true }), null);
-    assert.match(girisHatasi({ durum: 'iceride', neden: 'toplanti', kimlikGoruldu: true, atolye: false }) ?? '', /beklenen/);
-    assert.match(girisHatasi({ durum: 'beklenen', neden: 'toplanti', kimlikGoruldu: false, atolye: false }) ?? '', /Kimlik/);
-    assert.match(girisHatasi({ durum: 'beklenen', neden: 'denetim', kimlikGoruldu: true, atolye: false }) ?? '', /kask/);
+    assert.equal(girisHatasi({ durum: 'beklenen', neden: 'toplanti', kimlikGoruldu: true, kimlikTuru: 'ehliyet', atolye: false }), null);
+    assert.equal(girisHatasi({ durum: 'beklenen', neden: 'servis', kimlikGoruldu: true, kimlikTuru: 'ehliyet', atolye: true }), null);
+    assert.match(girisHatasi({ durum: 'iceride', neden: 'toplanti', kimlikGoruldu: true, kimlikTuru: 'ehliyet', atolye: false }) ?? '', /beklenen/);
+    assert.match(girisHatasi({ durum: 'beklenen', neden: 'toplanti', kimlikGoruldu: false, kimlikTuru: 'ehliyet', atolye: false }) ?? '', /Kimlik/);
+    assert.match(girisHatasi({ durum: 'beklenen', neden: 'denetim', kimlikGoruldu: true, kimlikTuru: 'ehliyet', atolye: false }) ?? '', /kask/);
+    assert.match(girisHatasi({ durum: 'beklenen', neden: 'toplanti', kimlikGoruldu: true, kimlikTuru: null, atolye: false }) ?? '', /türü/);
   });
 
   test('NZ-03 kart yalnız boş ve kimsede değilse verilir', () => {

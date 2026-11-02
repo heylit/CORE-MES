@@ -7,7 +7,7 @@ import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { useKomut } from './komut.ts';
+import { alanHatasi, useKomut } from './komut.ts';
 import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir, kapiZamani, sureMetni, uyari } from './gorunum.ts';
 import { EvetHayir } from './EvetHayir.tsx';
 import './nizamiye.css';
@@ -45,10 +45,9 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
   const giris = useKomut<GirisGovdesi, Ziyaret>('Giriş kaydedilemedi.');
   const atolyeZorunlu = atolyeGerekir(ziyaret.neden);
   const kart = bosKartlar.length === 0 ? null : bosKartlar[kartSira % bosKartlar.length]!;
-  // Son dört hane yazıldıysa türü de seçilir (K24 a): hane türsüz okunamaz, sunucu da reddeder.
-  const turZorunlu = son4.trim() !== '';
+  // Görülen kimliğin türü yazılır (NZM-5 a; K24 a'yı kapsar): iz kalır, sunucu da reddeder. Son dört hane isteğe bağlı.
   const eksik = [
-    !kimlik && 'kimlik', turZorunlu && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
+    !kimlik && 'kimlik', kimlik && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
   ].filter(Boolean);
 
   const gonder = (o: FormEvent) => {
@@ -61,7 +60,7 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
         atolye, dizustu, kvkkOnayi: kvkk, ogleYemegi: yemek,
       },
     }, {
-      onSuccess: (z) => bitti({ mesaj: `${adi(z)} içeri alındı, kart ${z.kartNo ?? ''}. ${z.evSahibiAd ?? 'Ev sahibi'} görecek.`, ziyaretId: z.id, surum: z.surum }),
+      onSuccess: (z) => bitti({ mesaj: `${adi(z)} içeri alındı, kart ${z.kartNo ?? ''}. ${z.evSahibiAd ?? 'Ev sahibi'} Ziyaretçilerim listesinde görür.`, ziyaretId: z.id, surum: z.surum }),
     });
   };
 
@@ -72,10 +71,10 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
       <EvetHayir simge="user" ad="Kimlik görüldü" zorunlu deger={kimlik} degistir={kimlikYaz} />
       {kimlik && (
         <div className="tc-nz-iki">
-          <Secim etiket={turZorunlu ? 'Kimlik türü' : 'Kimlik türü (isteğe bağlı)'} required={turZorunlu} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
+          <Secim etiket="Kimlik türü" required hata={alanHatasi(giris.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
             secenekler={[{ deger: '', baslik: 'Seçilmedi' }, ...KIMLIK_TURLERI.map((t) => ({ deger: t, baslik: KIMLIK_TURU_ADLARI[t] }))]} />
-          <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} value={son4} onChange={(o) => son4Yaz(o.target.value)}
-            ipucu="Tam numara yazılmaz." />
+          <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} hata={alanHatasi(giris.error, 'kimlikSon4')} value={son4} onChange={(o) => son4Yaz(o.target.value)}
+            ipucu="İsteğe bağlı; tam numara yazılmaz." />
         </div>
       )}
       <EvetHayir simge="wrench" ad="Atölyeye girecek: kask ve gözlük verildi" zorunlu={atolyeZorunlu} deger={atolye} degistir={atolyeYaz} />
@@ -193,7 +192,7 @@ export function Kapi() {
       )}
 
       <div className="tc-nz-govde">
-        <main className="tc-nz-liste">
+        <section className="tc-nz-liste" aria-label="Ziyaretçiler">
           <div className="tc-nz-arama">
             <label className="tc-nz-arama-kutu">
               <Simge ad="scan" />
@@ -229,7 +228,7 @@ export function Kapi() {
               </article>
             );
           })}
-        </main>
+        </section>
         <aside ref={panelYeri} className="tc-nz-panel" aria-label="İşlem paneli">
           {panel?.tur === 'giris' && <GirisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} bosKartlar={bosKartlar.filter((k) => k.tur === 'ziyaretci')} kapat={() => panelYaz(null)} bitti={bitti} />}
           {panel?.tur === 'cikis' && <CikisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} kapat={() => panelYaz(null)} bitti={bitti} />}

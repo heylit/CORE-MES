@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EmirAkisiCevabi, EmirListesiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import { AkisEmirleri, EmirYolculugu } from './Akis.tsx';
-import { sureMetni } from './gorunum.ts';
+import { aramaMetni, sureMetni } from './gorunum.ts';
 
 const LISTE: EmirListesiCevabi = {
   emirler: [
@@ -42,12 +42,16 @@ const AKIS: EmirAkisiCevabi = {
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 function sunucuKur() {
+  const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
     const yol = adres.replace('/api', '');
+    istekler.push(yol);
     if (yol === '/akis/emirler') return json(200, LISTE);
     if (yol === '/akis/emirler/5') return json(200, AKIS);
+    if (yol === '/akis/emirler/8') return json(500, { kod: 'SUNUCU', mesaj: 'Sunucu hatası.' });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Üretim emri bulunamadı.' });
   }));
+  return istekler;
 }
 
 function ac(adres: string) {
@@ -76,6 +80,17 @@ describe('Akış Süresi', () => {
     expect(screen.getByText('UE-000006')).toBeTruthy();
   });
 
+  it('arama Türkçe harfi düz harfle eşler: "FLANS" ve "flans" "flanş"ı bulur', async () => {
+    sunucuKur();
+    ac('/akis');
+    expect(await screen.findByText('UE-000005')).toBeTruthy();
+    for (const aranan of ['FLANS', 'flans', 'FLANŞ']) {
+      fireEvent.change(screen.getByLabelText('Emir ya da ürün ara'), { target: { value: aranan } });
+      expect(screen.queryByText('UE-000005')).toBeNull();
+      expect(screen.getByText('UE-000006')).toBeTruthy();
+    }
+  });
+
   it('emir yolculuğu: ölçüler, şerit, adım ve statü tabloları; ölçülemeyen değer "Veri yok" kalır', async () => {
     sunucuKur();
     ac('/akis/5');
@@ -90,12 +105,36 @@ describe('Akış Süresi', () => {
     expect(within(adimlar).getByText('50 dk')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Statüde kalış' })).getByText('1 sa 30 dk')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Hammadde partileri' })).getByText('LT-000007')).toBeTruthy();
+    // Ortak pano grafiğinin .tc-akis / .tc-akis-alt kuralları (flex-wrap) sayfayı dar ekranda yana taşırıyordu.
+    expect(document.querySelector('.tc-akis, .tc-akis-alt')).toBeNull();
   });
 
-  it('olmayan emirde hata kutusu gösterilir', async () => {
+  it('olmayan emirde sunucunun iletisi ve listeye dönüş çıkar; yeniden dene sunulmaz', async () => {
     sunucuKur();
     ac('/akis/9');
+    expect(await screen.findByText('Üretim emri bulunamadı.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Emir listesi' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+  });
+
+  it('sunucu hatasında yeniden dene sunulur', async () => {
+    sunucuKur();
+    ac('/akis/8');
     expect(await screen.findByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
+  });
+
+  it('sayı olmayan adres istek atmadan "bulunamadı" der', async () => {
+    const istekler = sunucuKur();
+    ac('/akis/abc');
+    expect(await screen.findByText('Üretim emri bulunamadı.')).toBeTruthy();
+    expect(istekler.some((y) => y.startsWith('/akis/emirler/'))).toBe(false);
+  });
+});
+
+describe('aramaMetni', () => {
+  it('Türkçe küçük harfe çevirir, ç ğ ı ö ş ü düz harfe iner', () => {
+    expect(aramaMetni('Burç IŞIK İğne Ölçü')).toBe('burc isik igne olcu');
+    expect(aramaMetni('burc')).toBe('burc');
   });
 });
 

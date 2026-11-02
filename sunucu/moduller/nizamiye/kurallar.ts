@@ -16,13 +16,16 @@ interface GirisDurumu {
   durum: ZiyaretDurumu;
   neden: Neden;
   kimlikGoruldu: boolean;
+  kimlikTuru: string | null;
   atolye: boolean;
 }
 
-// NZ-01 yalnız beklenen ziyaret içeri alınır; NZ-02 kimlik görülmeden ve atölyeye girecek nedende kask ve gözlük verilmeden alınmaz.
+// NZ-01 yalnız beklenen ziyaret içeri alınır; NZ-02 kimlik görülmeden (ve türü yazılmadan) ve atölyeye girecek nedende kask ve gözlük verilmeden alınmaz.
 export function girisHatasi(z: GirisDurumu): string | null {
   if (z.durum !== 'beklenen') return 'Bu ziyaret beklenen durumda değil; içeri alınamaz.';
   if (!z.kimlikGoruldu) return 'Kimlik görülmeden içeri alınmaz.';
+  // Görülen kimlikten iz kalır (NZM-5 a): en az türü yazılır; son dört hane isteğe bağlıdır.
+  if (z.kimlikTuru === null) return 'Görülen kimliğin türü seçilmeli.';
   if (ATOLYE_NEDENLERI.includes(z.neden) && !z.atolye) return 'Atölyeye girecek: kask ve gözlük verildiği işaretlenmeli.';
   return null;
 }

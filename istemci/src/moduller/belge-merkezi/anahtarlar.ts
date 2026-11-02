@@ -2,6 +2,7 @@ import type { BagModulu, BelgeListesiSorgusu } from '#paylasilan/sozlesme/belge-
 
 export const anahtarlar = {
   kok: ['belge-merkezi'] as const,
+  menuSayaclari: ['belge-merkezi', 'menu-sayaclari'] as const,
   liste: (sorgu: BelgeListesiSorgusu) => ['belge-merkezi', 'liste', sorgu] as const,
   ayrinti: (id: number) => ['belge-merkezi', 'ayrinti', id] as const,
   dosya: (id: number, revizyonId: number) => ['belge-merkezi', 'dosya', id, revizyonId] as const,

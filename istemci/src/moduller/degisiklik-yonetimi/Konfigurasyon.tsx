@@ -22,7 +22,7 @@ function hedefYolu(urunId: number, h: NonNullable<AileDugumu['hedef']>): string 
   if (h.tur === 'seri') return izlenebilirlikYolu(urunId, h.seriNo);
   return null;
 }
-const degisiklikYolu = (d: AcikDegisiklik): string => `${KOK}/${d.tur === 'talep' ? 'talepler' : 'emirler'}/${d.id}`;
+const degisiklikYolu = (d: AcikDegisiklik): string => `${KOK}/degisiklikler/${d.tur === 'talep' ? 'talepler' : 'emirler'}/${d.id}`;
 
 // Adresteki kimlik tam sayı değilse sorgu atılmaz; sunucu da aynı biçimi ister.
 export function kimlikOku(deger: string | null | undefined): number | null {

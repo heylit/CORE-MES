@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 // 1710 (1704 a): net ağırlık 3B analizinden yalnız düğmeyle forma yazılır. Veriler uydurmadır.
 const YOL = 'GET /geometri/malzemeler/42/agirlik-ozeti';
 const OZET: AgirlikOzetiCevabi = {
-  model: { belgeAdi: 'Model braket.step', harf: 'B' }, hacimMm3: 100_000, neden: null,
+  model: { belgeAdi: 'Model braket.step', harf: 'B', kapak: false }, modelSayisi: 1, hacimMm3: 100_000, neden: null,
   kalite: { ad: 'Özel çelik', aile: null, kaliteKodu: null, yogunluk: 7.85 },
 };
 
@@ -43,6 +43,18 @@ describe('1710 kartta 3B analizden net ağırlık', () => {
     fireEvent.blur(screen.getByLabelText(/Yoğunluk/));
     fireEvent.click(await screen.findByRole('button', { name: /Net ağırlığa yaz/ }));
     expect(yazilanlar.at(-1)).toBe(0.27);
+  });
+
+  it('GEO-2: karta iki model bağlıysa hangi modelin alındığı yazılır; tek modelde uyarı yok', async () => {
+    ac({ cevap: { ...OZET, model: { ...OZET.model!, kapak: true }, modelSayisi: 2 } });
+    expect(await screen.findByText('Karta bağlı 2 3B model var; ağırlık kapak modelinden alındı: Model braket.step (B).')).toBeTruthy();
+    cleanup();
+    ac({ cevap: { ...OZET, modelSayisi: 3 } });
+    expect(await screen.findByText(/3 3B model var ve kapak seçilmemiş; ağırlık en son yayınlanan modelden alındı/)).toBeTruthy();
+    cleanup();
+    ac();
+    expect(await screen.findByText('≈ 0,785 kg')).toBeTruthy();
+    expect(screen.queryByText(/3B model var/)).toBeNull();
   });
 
   it('kapalı olmayan modelde ağırlık hesaplanmaz, neden söylenir', async () => {

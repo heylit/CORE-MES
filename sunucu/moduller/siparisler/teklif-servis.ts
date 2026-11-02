@@ -5,6 +5,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
@@ -15,7 +16,7 @@ import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
-  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
+  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -81,13 +82,18 @@ async function firmayiDenetle(db: Db, firmaId: number, mevcut: number | null): P
   if (ret !== null) throw dogrulama(ret, 'firmaId');
 }
 
-// Talepte kart isteğe bağlıdır; verilen kart SIP-02'ye uymalı.
-async function kartlariDenetle(db: Db, nolar: (number | null)[], alan: (i: number) => string): Promise<void> {
-  const kartlar = await malzemeOzetleri(db, nolar.flatMap((m) => (m === null ? [] : [m])));
-  nolar.forEach((m, i) => {
-    if (m === null) return;
-    const ret = malzemeReddi(kartlar.get(m) ?? null);
-    if (ret !== null) throw dogrulama(ret, alan(i));
+// Talepte kart isteğe bağlıdır; verilen kart SIP-02'ye uymalı ve adet birimli kartta miktar tam sayıdır (SIP-4 a).
+async function kartlariDenetle(
+  db: Db, satirlar: readonly { malzemeNo: number | null; miktar: string }[], alan: (i: number, ad: 'malzemeNo' | 'miktar') => string,
+): Promise<void> {
+  const kartlar = await malzemeOzetleri(db, satirlar.flatMap((s) => (s.malzemeNo === null ? [] : [s.malzemeNo])));
+  satirlar.forEach((s, i) => {
+    if (s.malzemeNo === null) return;
+    const kart = kartlar.get(s.malzemeNo) ?? null;
+    const ret = malzemeReddi(kart);
+    if (ret !== null) throw dogrulama(ret, alan(i, 'malzemeNo'));
+    const miktar = miktarReddi(kart?.birim ?? null, s.miktar);
+    if (miktar !== null) throw dogrulama(miktar, alan(i, 'miktar'));
   });
 }
 
@@ -97,7 +103,7 @@ const alanlar = (g: TeklifEkleVerisi): TeklifAlanlari => ({
 
 export async function teklifEkle(db: Db, kullanici: Kullanici, g: TeklifEkleVerisi): Promise<TeklifAyrintisi> {
   await firmayiDenetle(db, g.firmaId, null);
-  await kartlariDenetle(db, g.satirlar.map((s) => s.malzemeNo), (i) => `satirlar.${i}.malzemeNo`);
+  await kartlariDenetle(db, g.satirlar, (i, ad) => `satirlar.${i}.${ad}`);
   const no = await numaraAl(db, 'siparisler.teklif-no', { varMi: (n) => sorgular.teklifNoVarMi(db, n) });
   const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, no, alanlar(g), kullanici.id));
   await sorgular.talepSatirlariniYaz(db, id, g.satirlar);
@@ -123,7 +129,7 @@ export async function teklifGuncelle(db: Db, kullanici: Kullanici, id: number, g
   const ret = talepDuzenlemeReddi(mevcut.durum);
   if (ret !== null) throw gecersiz(ret);
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
-  await kartlariDenetle(db, g.satirlar.map((s) => s.malzemeNo), (i) => `satirlar.${i}.malzemeNo`);
+  await kartlariDenetle(db, g.satirlar, (i, ad) => `satirlar.${i}.${ad}`);
   await surumluYaz(db, id, () => sorgular.teklifGuncelle(db, id, alanlar(g), g.surum, kullanici.id));
   await sorgular.talepSatirlariniYaz(db, id, g.satirlar);
   return teklifAyrintisi(db, id);
@@ -234,7 +240,9 @@ export async function kartBagla(
   const mevcut = await kilitle(db, id);
   const ret = kartBaglamaReddi(mevcut.durum);
   if (ret !== null) throw gecersiz(ret);
-  await kartlariDenetle(db, [g.malzemeNo], () => 'malzemeNo');
+  const satir = (await sorgular.talepSatirlari(db, id)).find((t) => t.id === satirId);
+  if (satir === undefined) throw bulunamadi('Teklif satırı bulunamadı.');
+  await kartlariDenetle(db, [{ malzemeNo: g.malzemeNo, miktar: satir.miktar }], (_, ad) => ad);
   await surumluYaz(db, id, () => sorgular.teklifSurumuArtir(db, id, g.surum, kullanici.id));
   if ((await kisitKorumali(KISITLAR, () => sorgular.kartBagla(db, id, satirId, g.malzemeNo))) === null) throw bulunamadi('Teklif satırı bulunamadı.');
   return teklifAyrintisi(db, id);
@@ -252,9 +260,12 @@ export async function siparisDonustur(
   const kabul = teklif.surumler.find((v) => v.surumNo === teklif.kabulSurumu);
   if (kabul === undefined) throw new Error('Kabul edilen sürüm bulunamadı');
   const fiyat = new Map(kabul.fiyatlar.map((f) => [f.satirId, f.iskontoluFiyat]));
+  // Liste kuralından (SIP-4 a) önce açılmış teklif listede olmayan kodla kalmış olabilir; sipariş o kodla açılmaz.
+  const paraBirimi = paraBirimiSemasi.safeParse(mevcut.para_birimi);
+  if (!paraBirimi.success) throw dogrulama(PARA_BIRIMI_LISTEDE_YOK, 'paraBirimi');
   const siparis = await siparisEkle(db, kullanici, {
     firmaId: mevcut.firma_id, musteriSiparisNo: g.musteriSiparisNo, siparisTarihi: g.siparisTarihi, termin: g.termin,
-    paraBirimi: mevcut.para_birimi, kdvOrani: g.kdvOrani, odemeKosulu: kabul.odemeKosulu, aciklama: `${teklif.no} teklifinden (sürüm ${kabul.surumNo}).`,
+    paraBirimi: paraBirimi.data, kdvOrani: g.kdvOrani, odemeKosulu: kabul.odemeKosulu, aciklama: `${teklif.no} teklifinden (sürüm ${kabul.surumNo}).`,
     cezaOraniGun: g.cezaOraniGun, cezaTavaniOrani: g.cezaTavaniOrani, odemeVadesiGun: g.odemeVadesiGun,
     satirlar: teklif.satirlar.map((s) => ({
       malzemeNo: s.malzemeNo ?? 0, miktar: s.miktar, birimFiyat: fiyat.get(s.id) ?? null, termin: null, aciklama: null,

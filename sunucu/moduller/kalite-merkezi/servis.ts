@@ -23,13 +23,13 @@ import { malzemeAra, malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disa
 import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
-import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
+import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
 import {
   acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
 } from '../uretim-emirleri/disari.ts';
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
-  HATALI_NCR_KAYNAGI, HATALI_NCR_TANIM_ONEKI, kaynakEmirBagi, ncrAcikMi, ncrKapanisMaddesi, olcumKapanisMaddesi, onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
+  HATALI_NCR_KAYNAGI, bindeMetni, ncrKarantinaMiktari, HATALI_NCR_TANIM_ONEKI, kaynakEmirBagi, ncrAcikMi, ncrKapanisMaddesi, olcumKapanisMaddesi, onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
@@ -272,12 +272,18 @@ async function kayitYaz(
 }
 
 
-// NCR'nin lotu ya da emrinin stoktaki partileri. Bulunamayan emir numarası yok sayılır (lot varsa lotla aranır).
-async function ncrPartileri(db: Db, anahtar: { lotNo: string | null; emirNo: string | null }): Promise<{ partiler: number[]; uretimEmriId: number | null }> {
+// NCR'nin lotu ya da emrinin stoktaki partileri. Bulunamayan emir numarası yok sayılır (lot varsa lotla aranır). KM-11 a (kart 1848):
+// NCR'nin parça nosu Malzemeler'de bir karta denk geliyorsa yalnız o malzemenin partileri; parça no boş ya da kartsızsa süzülmez.
+type NcrAnahtari = { lotNo: string | null; emirNo: string | null; parcaNo?: string | null };
+async function ncrPartileri(db: Db, anahtar: NcrAnahtari): Promise<{ partiler: number[]; uretimEmriId: number | null }> {
   const uretimEmriId = anahtar.emirNo === null ? undefined : (await emirIdleri(db, [anahtar.emirNo])).get(anahtar.emirNo);
   const lotNo = anahtar.lotNo ?? undefined;
   if (uretimEmriId === undefined && lotNo === undefined) return { partiler: [], uretimEmriId: null };
-  return { partiler: await partileriBul(db, { lotNo, uretimEmriId }), uretimEmriId: uretimEmriId ?? null };
+  const bulunan = await partileriBul(db, { lotNo, uretimEmriId });
+  const malzemeNo = anahtar.parcaNo ? await malzemeNoKoddan(db, anahtar.parcaNo) : null;
+  if (malzemeNo === null || bulunan.length === 0) return { partiler: bulunan, uretimEmriId: uretimEmriId ?? null };
+  const malzemeler = await partilerinMalzemeleri(db, bulunan);
+  return { partiler: bulunan.filter((p) => malzemeler.get(p) === malzemeNo), uretimEmriId: uretimEmriId ?? null };
 }
 
 // 1222 a: verilen partilerden açık NCR'nin lotuna ya da emrine uyanlar; stok bunları sevk etmez (bağ kablolama.ts'de).
@@ -293,15 +299,23 @@ export async function acikNcrPartileri(db: Db, partiIdler: readonly number[]): P
 
 const ncrNo = (kimlik: string, govde: Govde): string => (typeof govde.no === 'string' && govde.no.trim() !== '' ? govde.no.trim() : kimlik);
 
-// 229 a: açık NCR'nin lotu ya da emri stokta partiye uyarsa partinin bütün bakiyesi red olur, parça yerinde kalır (135); her
-// hareket defterde NCR'ye bağlanır. Hiç parti uymazsa stok değişmez.
+// 229 a, KM-11 a (kart 1848): açık NCR'nin lotu ya da emri (ve parça nosu) stokta partiye uyarsa NCR'deki etkilenen miktar red olur,
+// partiler sırayla; miktar yoksa partinin bütün bakiyesi. Parça yerinde kalır (135); her hareket defterde NCR'ye bağlanır. Hiç parti
+// uymazsa stok değişmez.
 async function karantinayaAl(
   db: Db, kisiId: number, kimlik: string, govde: Govde, istek: { lotNo: string | null; emirNo: string | null },
 ): Promise<void> {
-  const { partiler, uretimEmriId } = await ncrPartileri(db, istek);
+  const { partiler, uretimEmriId } = await ncrPartileri(db, { ...istek, parcaNo: metinAlani(govde.parcaNo) });
+  let kalan = ncrKarantinaMiktari(govde.miktar);
   for (const partiId of partiler) {
-    const degisen = await partiKaliteDurumuYap(db, kisiId, { partiId, hedef: 'red', aciklama: `Uygunsuzluk ${ncrNo(kimlik, govde)} karantinası`, uretimEmriId });
-    for (const d of degisen) await sorgular.karantinaYaz(db, kimlik, d.hareketId, kisiId);
+    if (kalan !== null && kalan <= 0n) break;
+    const degisen = await partiKaliteDurumuYap(db, kisiId, {
+      partiId, hedef: 'red', aciklama: `Uygunsuzluk ${ncrNo(kimlik, govde)} karantinası`, uretimEmriId, ...(kalan === null ? {} : { enCok: bindeMetni(kalan) }),
+    });
+    for (const d of degisen) {
+      await sorgular.karantinaYaz(db, kimlik, d.hareketId, kisiId);
+      if (kalan !== null) kalan -= ncrKarantinaMiktari(d.miktar) ?? 0n;
+    }
   }
 }
 
@@ -337,7 +351,7 @@ async function karantinadanSerbestBirak(
 async function birakilacakPartiler(db: Db, kimlik: string, govde: Govde): Promise<{ partiler: number[]; kalanlar: Set<string> }> {
   const defter = await sorgular.karantinaDefteri(db);
   const kendi = new Set((await hareketPartileri(db, defter.filter((d) => d.ncrKimlik === kimlik).map((d) => d.hareketId))).values());
-  const anahtar = { lotNo: metinAlani(govde.lot), emirNo: metinAlani(govde.emir) };
+  const anahtar = { lotNo: metinAlani(govde.lot), emirNo: metinAlani(govde.emir), parcaNo: metinAlani(govde.parcaNo) };
   const adaylar = [...new Set([...kendi, ...(await ncrPartileri(db, anahtar)).partiler])].sort((x, y) => x - y);
   const kalanlar = new Set<string>();
   if (adaylar.length === 0) return { partiler: [], kalanlar };

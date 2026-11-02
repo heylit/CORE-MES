@@ -9,7 +9,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
-import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { IMZA_ANLAMLARI, KAPANIS_ENGELI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   EmirCevabi, EmirListeCevabi, GorevlerimCevabi, IzlenebilirlikCevabi, KonfigurasyonCevabi, OlayListeCevabi, ParcaAdaylariCevabi, RaporCevabi,
   SeriListeCevabi, SonUrunlerCevabi, TalepCevabi, TalepListeCevabi,
@@ -206,9 +206,17 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     await kod(acan, `${K}/talepler/${t.id}/siniflandir`, {
       sinif: 'P2', aciliyet: 'normal', cevaplar: { cizim: 'hayir', fff: null, proses: 'hayir', sure: 'evet' }, surum: t.surum,
     }, 400, /planlama parametresi/);
+    // Cevaplar D1 önerirken başka sınıf gerekçesiz seçilemez; gerekçeyle seçilir ve geçmişe öneriyle yazılır.
+    await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'P1', aciliyet: 'acil', cevaplar, surum: t.surum }, 400, /farklı sınıf/);
+    await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'P1', aciliyet: 'acil', cevaplar, not: '  ', surum: t.surum }, 400, /farklı sınıf/);
     const s = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${t.id}/siniflandir`, { sinif: 'D1', aciliyet: 'acil', cevaplar, not: 'Müşteri isteği', surum: t.surum });
     assert.deepEqual([s.durum, s.sinif, s.aciliyet, s.surum], ['analizde', 'D1', 'acil', t.surum + 1]);
     assert.equal(s.gecmis.at(-1)?.aciklama, 'Müşteri isteği');
+    assert.doesNotMatch(s.gecmis.at(-1)?.ozet ?? '', /yerine/);
+    const f = await talepAc();
+    const fs = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${f.id}/siniflandir`, { sinif: 'D2', aciliyet: 'normal', cevaplar, not: 'Uyum bozulmuyor', surum: f.surum });
+    assert.equal(fs.sinif, 'D2');
+    assert.match(fs.gecmis.at(-1)?.ozet ?? '', /önerilen D1 Tasarım, Class I yerine/);
     await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'D1', aciliyet: 'acil', cevaplar, surum: t.surum }, 409);
     const e = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${t.id}/etki-analizi`, { surum: s.surum });
     assert.equal(e.durum, 'ccb_bekliyor');
@@ -296,18 +304,19 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/fai-onayla`, { faiId: f2.id, surum: x.surum });
     assert.equal(x.durum, 'dogrulama');
     assert.equal(x.fai[1]?.onaylayan?.kisiId, onaylayanId);
-    x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/kapat`, { aciklama: 'Doğrulandı', surum: x.surum });
-    assert.equal(x.durum, 'kapandi');
-    assert.match(x.kapanis ?? '', /^\d{4}-\d{2}-\d{2}$/);
-    // Bağlı olmayan koşulla kapanış uygulandı ve doğrulandı imzası atmaz.
-    const kapanis = x.gecmis.at(-1);
-    assert.deepEqual([kapanis?.olay, kapanis?.imzaAnlami], ['kapandi', KAPANIS_IMZASI_BILINMEYENLE]);
-    assert.match(kapanis?.ozet ?? '', /3 koşul bilinmiyor/);
+    // K16 a: bağlı olmayan koşul (bilinmiyor) kapanışı engeller; emir doğrulamada kalır, imza atılmaz.
+    assert.ok(x.kapanisKosullari.some((k) => k.durum === 'bilinmiyor'));
+    await kod(onaylayan, `${K}/emirler/${e.id}/kapat`, { aciklama: 'Doğrulandı', surum: x.surum }, 409, new RegExp(KAPANIS_ENGELI.slice(0, 30)));
+    x = await tamam(onaylayan, 'GET', `${K}/emirler/${e.id}`);
+    assert.equal(x.durum, 'dogrulama');
+    assert.equal(x.kapanis, null);
     assert.match(x.gecmis.find((g) => g.olay === 'yayinlandi')?.ozet ?? '', /bağlı değil/);
     assert.deepEqual(x.gecmis.map((g) => g.olay), [
       'emir_acildi', 'taslak_acildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'yayina_gonderildi', 'geri_gonderildi',
-      'yayina_gonderildi', 'yayinlandi', 'fai_onaylandi', 'fai_onaylandi', 'fai_tamam', 'kapandi',
+      'yayina_gonderildi', 'yayinlandi', 'fai_onaylandi', 'fai_onaylandi', 'fai_tamam',
     ]);
+    // Kapanmış ECO bugün API ile üretilemez; listeler ve raporlar için bağlama sonrasındaki hâl doğrudan yazılır.
+    await vt().sorgu(`UPDATE degisiklik_yonetimi_emir SET durum = 'kapandi', kapanis = current_date, surum = surum + 1 WHERE id = $1`, [e.id]);
     const olaylar = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?ilgili=rota`);
     assert.ok(olaylar.satirlar.some((o) => o.kayitNo === x.no && o.tur === 'revizyon_yayinlandi' && o.alanlar.yeniParcaNo === 'YENI-PARCA-1'));
     // 1175 a: arama kayıt numarasında ve veri alanlarının değerlerinde; joker karakter düz metindir.

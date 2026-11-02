@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { TeklifAyrintiCevabi, TeklifEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
-import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, sayiGirdisi } from './gorunum.ts';
+import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, paraBirimiSecenekleri, sayiGirdisi } from './gorunum.ts';
 import { MalzemeSecici, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useKorumaliGonderim } from './yazma.ts';
@@ -123,7 +123,7 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
             <FirmaSecici etiket="Müşteri" zorunlu deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
             <Girdi etiket="Konu" required autoComplete="off" placeholder="Örnek: 2027 yılı braket ihtiyacı" {...form.alan('baslik')} />
             <Girdi etiket="İstenen teslim tarihi" type="date" {...form.alan('istenenTarih')} />
-            <Girdi etiket="Para birimi" required autoComplete="off" maxLength={3} {...form.alan('paraBirimi')} />
+            <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
           </div>
           <CokSatir etiket="Açıklama" placeholder="Teknik resim revizyonu, malzeme, kaplama, teslim yeri" {...form.alan('aciklama')} />
         </Kart>

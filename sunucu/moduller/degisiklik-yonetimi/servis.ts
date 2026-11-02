@@ -4,7 +4,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, kapanisImzaAnlami, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI, KAPANIS_ENGELI, kapatilabilirMi, SINIF_GEREKCESI_ILETISI, onerilenSinif, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
   GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
@@ -15,7 +15,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
-  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
+  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, stokKarariOner,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
 import type { EMIR_ADIMLARI, EtkilenenEmir, TALEP_ADIMLARI } from './kurallar.ts';
@@ -134,10 +134,14 @@ async function talepYaz(db: Db, t: TalepSatiri, surum: number, y: s.TalepYazimi)
 export async function siniflandir(db: Db, kullanici: Kullanici, id: number, g: SiniflandirGovdesi): Promise<TalepCevabi> {
   const t = await talepAdimi(db, id, g.surum, 'siniflandir');
   if (talepGerekmezMi(g.cevaplar)) throw dogrulama(PARAMETRE_ILETISI, 'cevaplar');
+  const farkli = sinifGerekcesiGerekir(g.cevaplar, g.sinif);
+  if (farkli && (g.not ?? null) === null) throw dogrulama(SINIF_GEREKCESI_ILETISI, 'not');
+  const oneri = onerilenSinif(g.cevaplar);
   await talepYaz(db, t, g.surum, { durum: 'analizde', sinif: g.sinif, aciliyet: g.aciliyet, cevaplar: g.cevaplar });
   await s.gecmisEkle(db, {
     talepId: id, olay: 'siniflandirildi', kisiId: kullanici.id, imzaAnlami: null, aciklama: g.not ?? null,
-    ozet: `Sınıflandırıldı: ${SINIF_ADLARI[g.sinif]}, aciliyet ${ACILIYET_ADLARI[g.aciliyet]}`,
+    ozet: `Sınıflandırıldı: ${SINIF_ADLARI[g.sinif]}, aciliyet ${ACILIYET_ADLARI[g.aciliyet]}`
+      + (farkli && oneri !== null && oneri !== 'planlama' ? ` (önerilen ${SINIF_ADLARI[oneri]} yerine)` : ''),
   });
   return talepCevabi(db, id);
 }
@@ -572,13 +576,9 @@ export async function kapat(db: Db, kullanici: Kullanici, id: number, g: KapatGo
     kaynakBagli: e.kararKaynagiBagli === true, bekleyenKarar: kararlar.filter((k) => k.verilenKod === null).length,
     bekleyenFai: fai.filter((f) => f.durum === 'bekliyor').length,
   });
-  if (!kapatilabilirMi(kosullar)) throw cakisma('Kapanış koşulları sağlanmadı.');
+  if (!kapatilabilirMi(kosullar)) throw cakisma(KAPANIS_ENGELI);
   await emirYaz(db, e, g.surum, { durum: 'kapandi', kapandi: true });
-  const bilinmeyen = kosullar.filter((k) => k.durum === 'bilinmiyor').length;
-  await s.gecmisEkle(db, {
-    emirId: id, olay: 'kapandi', kisiId: kullanici.id, imzaAnlami: kapanisImzaAnlami(kosullar), aciklama: g.aciklama ?? null,
-    ozet: bilinmeyen > 0 ? `ECO kapandı; ${bilinmeyen} koşul bilinmiyor (bağlı değil)` : 'ECO kapandı',
-  });
+  await emirGecmisiYaz(db, id, kullanici.id, 'kapandi', 'ECO kapandı', g.aciklama ?? null);
   await s.olayEkle(db, { tur: 'emir_kapandi', ilgili: null, kayitNo: e.no, alanlar: {} });
   return emirCevabi(db, id);
 }

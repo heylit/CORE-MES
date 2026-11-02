@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
-import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, sayiGirdisi } from './gorunum.ts';
+import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
 import { MalzemeSecici, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useFiyatGorur, useKorumaliGonderim } from './yazma.ts';
@@ -169,7 +169,7 @@ function Form({ siparis }: FormOzellikleri) {
             <Girdi etiket="Müşteri sipariş no" autoComplete="off" {...form.alan('musteriSiparisNo')} />
             <Girdi etiket="Sipariş tarihi" type="date" required {...form.alan('siparisTarihi')} />
             <Girdi etiket="Termin" type="date" required {...form.alan('termin')} />
-            <Girdi etiket="Para birimi" required autoComplete="off" maxLength={3} {...form.alan('paraBirimi')} />
+            <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
             <Girdi etiket="Gecikme cezası (%/gün)" inputMode="decimal" autoComplete="off" ipucu="Boş: sözleşmede ceza yok." {...form.alan('cezaOraniGun')} />
             <Girdi etiket="Ceza tavanı (%)" inputMode="decimal" autoComplete="off" {...form.alan('cezaTavaniOrani')} />
@@ -210,7 +210,7 @@ function Form({ siparis }: FormOzellikleri) {
                       etiket={`Kalem ${i + 1} birim fiyat`}
                       inputMode="decimal"
                       autoComplete="off"
-                      ipucu="Boşsa fiyat sonra girilir; fiyatsız sipariş onaylanmaz."
+                      ipucu={sifirFiyat(s.birimFiyat) ? 'Fiyat 0: kalem bedelsiz kaydedilir. Bedelsizse doğru; değilse fiyatı girin.' : 'Boşsa fiyat sonra girilir; fiyatsız sipariş onaylanmaz.'}
                       value={s.birimFiyat}
                       onChange={(o) => satirDegistir(i, { birimFiyat: o.target.value })}
                       {...(form.hata(`satirlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.birimFiyat`) })}

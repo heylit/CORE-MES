@@ -9,11 +9,13 @@ import type {
   MarkalamaTanimi, OnizlemeCevabi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { hurdaNedeniGetir } from '../durus-nedenleri/disari.ts';
+import { istasyonGetir } from '../istasyonlar/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, sablonHatasi, seriAlaniVarMi, seriNoUret,
+  alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -53,16 +55,40 @@ function tanimYazimi(g: TanimKaydetGovdesi | TanimEkleGovdesi): s.TanimYazimi {
   if (sablon !== null) throw dogrulama(sablon, 'seriSablonu');
   const alan = alanHatasi(g.alanlar);
   if (alan !== null) throw dogrulama(alan, 'alanlar');
+  const normal = normalHatasi(g.alanlar);
+  if (normal !== null) throw dogrulama(normal.ileti, normal.alan);
+  const olcu = olcuHatasi(g.alanlar);
+  if (olcu !== null) throw dogrulama(olcu.ileti, olcu.alan);
   return {
     seriSablonu: g.seriSablonu, sayacKapsami: g.sayacKapsami, baslangicSirasi: g.baslangicSirasi, dogrulama: g.dogrulama,
     modelBelgeId: g.model?.belgeId ?? null, modelRevizyon: g.model?.revizyon ?? null,
   };
 }
 
+// MRK-12: 3B model, tanımın malzemesine bağlı çizim belgesidir (yabancı anahtar Aşama 2'de). Revizyon harfi denetlenmez:
+// merkez yalnız yayındaki revizyonu dışa veriyor, ekran taslak revizyonu da seçebiliyor.
+async function modelDenetle(db: Db, malzemeId: number, model: TanimEkleGovdesi['model']): Promise<void> {
+  if (model === null) return;
+  const bagli = await kaydaBagliBelgeler(db, 'malzemeler', malzemeId);
+  if (!bagli.some((b) => b.id === model.belgeId)) throw dogrulama('3B model bu malzemeye bağlı bir çizim belgesi değil.', 'model');
+}
+
+// MRK-11: kayıtta en uzun açık emrin numarasıyla denenir; emir sonradan uzarsa markalamadaki denetim yakalar.
+async function seriUzunluguDenetle(db: Db, malzemeId: number, g: TanimKaydetGovdesi | TanimEkleGovdesi): Promise<void> {
+  const malzeme = await malzemeOzeti(db, malzemeId);
+  if (malzeme === null) return;
+  const emir = (await acikEmirler(db)).filter((e) => e.malzemeNo === malzemeId).reduce((en, e) => (e.emirNo.length > en.length ? e.emirNo : en), '');
+  const seriNo = seriNoUret(g.seriSablonu, { parca: malzeme.kod, emir, gun: tesisGunu(Date.now()) }, g.baslangicSirasi);
+  const hata = seriUzunlukHatasi(seriNo);
+  if (hata !== null) throw dogrulama(hata, 'seriSablonu');
+}
+
 export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
+  await modelDenetle(db, g.malzemeId, g.model);
+  await seriUzunluguDenetle(db, g.malzemeId, g);
   const id = await kisitKorumali(
     { markalama_tanimi_adim_tekil: 'Bu rota adımının markalama tanımı zaten var.' },
     () => s.tanimEkle(db, g.malzemeId, g.opNo, yazim, kullanici.id),
@@ -71,8 +97,27 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
   return tanimGetir(db, id);
 }
 
+// MRK-09: başlangıç sırası her yeni sayacın ilk numarasıdır. Malzeme ve yıl kapsamında bugünkü sayaç zaten başlamışsa
+// değişiklik sessizce yok sayılmasın: ileri alınırsa sayaç oraya taşınır, geri alınırsa reddedilir. Emir kapsamında sayaç
+// emir başınadır; yeni değer bundan sonra açılan emirlerde geçer.
+async function baslangiciUygula(db: Db, malzemeId: number, g: TanimKaydetGovdesi): Promise<void> {
+  if (g.sayacKapsami === 'emir') return;
+  const anahtar = kapsamAnahtari(g.sayacKapsami, 0, tesisGunu(Date.now()));
+  const son = await s.sonSira(db, malzemeId, anahtar);
+  const hata = baslangicHatasi(g.baslangicSirasi, son);
+  if (hata !== null) throw dogrulama(hata, 'baslangicSirasi');
+  if (son !== null) await s.sayaciIlerlet(db, malzemeId, anahtar, g.baslangicSirasi - 1);
+}
+
 export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: TanimKaydetGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
+  const eski = await varOlanTanim(db, id);
+  // Değişmeyen model yeniden denetlenmez: belge bağı sonradan kalkmış tanımın başka alanı kaydedilebilsin.
+  if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
+    await modelDenetle(db, eski.malzemeId, g.model);
+  }
+  await seriUzunluguDenetle(db, eski.malzemeId, g);
+  if (g.baslangicSirasi !== eski.baslangicSirasi) await baslangiciUygula(db, eski.malzemeId, g);
   await surumluGuncelle({
     guncelle: () => s.tanimGuncelle(db, id, { ...yazim, surum: g.surum }, kullanici.id),
     varMi: () => s.tanimVarMi(db, id),
@@ -84,10 +129,13 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
 
 interface SeriKaynagi { parca: string; emirNo: string }
 
+// Emirsiz önizlemede emir no bilinmez; boş bırakılırsa numara gerçeğe benzer ama yanlış görünür, yer tutucu yazılır.
+const EMIR_YER_TUTUCUSU = '{EMIR}';
+
 async function seriKaynagi(db: Db, t: s.TanimSatiri, emirId: number | null): Promise<SeriKaynagi> {
   const malzeme = await malzemeOzeti(db, t.malzemeId);
   if (malzeme === null) throw gecersiz('Tanımın malzemesi bulunamadı.');
-  if (emirId === null) return { parca: malzeme.kod, emirNo: '' };
+  if (emirId === null) return { parca: malzeme.kod, emirNo: EMIR_YER_TUTUCUSU };
   const emir = await uretimEmriOzeti(db, emirId);
   if (emir === null) throw bulunamadi('Üretim emri bulunamadı.');
   // MRK-07: seri yalnız açık emirde ve tanımın malzemesinin emrinde verilir.
@@ -107,8 +155,9 @@ export async function onizleme(db: Db, tanimId: number, emirId: number | null): 
   const t = await varOlanTanim(db, tanimId);
   const k = await seriKaynagi(db, t, emirId);
   const gun = tesisGunu(Date.now());
-  const anahtar = kapsamAnahtari(t.sayacKapsami, emirId ?? 0, gun);
-  const son = await s.sonSira(db, t.malzemeId, anahtar);
+  // Emir kapsamında emirsiz önizleme, yeni açılacak bir emrin ilk numaralarıdır.
+  const yeniEmir = emirId === null && t.sayacKapsami === 'emir';
+  const son = yeniEmir ? null : await s.sonSira(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, emirId ?? 0, gun));
   const ilk = son === null ? t.baslangicSirasi : son + 1;
   return { numaralar: [0, 1, 2].map((i) => seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, ilk + i)) };
 }
@@ -118,9 +167,17 @@ export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): 
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
+  // MRK-12: istasyon varsa kayıtlı ve aktif olmalı (yabancı anahtar Aşama 2'de).
+  if (g.istasyonId !== null) {
+    const istasyon = await istasyonGetir(db, g.istasyonId);
+    if (istasyon === null) throw dogrulama('İstasyon bulunamadı.', 'istasyonId');
+    if (!istasyon.aktif) throw dogrulama('İstasyon pasif; seri verilmez.', 'istasyonId');
+  }
   const gun = tesisGunu(Date.now());
   const sira = await s.sayaciArtir(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, g.uretimEmriId, gun), t.baslangicSirasi);
   const seriNo = seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, sira);
+  const uzunluk = seriUzunlukHatasi(seriNo);
+  if (uzunluk !== null) throw gecersiz(uzunluk);
   const iyi = g.sonuc === 'iyi';
   const birim = await kisitKorumali(
     { markalama_birimi_seri_tekil: 'Bu seri no daha önce verilmiş; şablonu ya da başlangıç sırasını denetleyin.' },

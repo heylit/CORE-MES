@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { KisiGovdesi } from '#paylasilan/sozlesme/kisiler.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -290,7 +291,9 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
           <div className="tc-ist-kisi-satir" role="group" aria-label={`${k.ad} yetkinlik ayrıntısı`}>
             <span className="tc-ist-kisi-etiket">{duzenlenen.baslik}</span>
             <span className="tc-ist-ata-satir">
-              <Girdi etiket="Geçerlilik bitişi" type="date" value={duzenlenen.bitis} onChange={(o) => duzenlenenYaz({ ...duzenlenen, bitis: o.target.value })} ipucu="Boşsa süresiz." />
+              {/* Geçmiş bitiş belgelenmiş eski yetkinliği kayda geçirmek için açıktır; yazan, kaydın hemen süresi dolmuş sayılacağını bilsin (IST-5). */}
+              <Girdi etiket="Geçerlilik bitişi" type="date" value={duzenlenen.bitis} onChange={(o) => duzenlenenYaz({ ...duzenlenen, bitis: o.target.value })}
+                ipucu={duzenlenen.bitis !== '' && duzenlenen.bitis < tesisGunu(Date.now()) ? 'Tarih geçmişte: kaydedilince yetkinlik hemen "süresi doldu" olur, iş başlatmaz.' : 'Boşsa süresiz.'} />
               <Girdi etiket="Dayanak" value={duzenlenen.dayanak} maxLength={300} onChange={(o) => duzenlenenYaz({ ...duzenlenen, dayanak: o.target.value })} ipucu="Eğitim ya da sertifika." />
               <Dugme simge="check" disabled={kapali} onClick={ayrintiKaydet}>Kaydet</Dugme>
               <Dugme simge="x" disabled={kapali} onClick={() => duzenlenenYaz(null)}>Vazgeç</Dugme>

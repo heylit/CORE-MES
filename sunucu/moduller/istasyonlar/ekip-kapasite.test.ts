@@ -338,7 +338,8 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
       const yanit = await ata(tur, hedef, ileri, '20', g10);
       assert.equal(yanit.durum, 200, tur);
       const ozet = (l: AtamaCevabi['kisiler']) => l.map((k) => [k.kisiId, k.yuzde, k.baslangic, k.baslayacak]);
-      assert.deepEqual(ozet(yanit.govde.kisiler), [[ileri, '20.00', g10, false]], tur);
+      // Yazma cevabı liste gibi bugünün görünümüdür (IST-5): ileri tarihli atama "başlayacak" döner.
+      assert.deepEqual(ozet(yanit.govde.kisiler), [[ileri, '20.00', g10, true]], tur);
       assert.deepEqual(ozet(await tumListe(tur, hedef)), [[ileri, '20.00', g10, true]], tur);
       assert.deepEqual((await tumListe(tur, hedef, g10)).map((k) => [k.kisiId, k.baslayacak]), [[ileri, false]], tur);
       assert.equal((await cikar(tur, hedef, ileri)).durum, 200, tur);
@@ -417,7 +418,9 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
     const ekip = await ekipKur({ istasyonId: ist.id });
     assert.equal((await yaz('/ekipler', { kod: ekip.kod, ad: 'Aynı Kod' })).durum, 409);
     assert.equal(hataKodu(await yaz('/ekipler', { kod: yeniKod('ET'), ad: ' ' })), 'DOGRULAMA');
-    assert.equal((await yaz('/ekipler', { kod: yeniKod('ET'), ad: 'Hayalet', istasyonId: 999999 })).durum, 409);
+    const hayalet = await yaz<{ mesaj: string; alan: string }>('/ekipler', { kod: yeniKod('ET'), ad: 'Hayalet', istasyonId: 999999 });
+    assert.deepEqual([hayalet.durum, hayalet.govde.mesaj, hayalet.govde.alan], [400, 'İstasyon bulunamadı.', 'istasyonId'], 'olmayan istasyon açık iletiyle reddedilir (IST-5)');
+    assert.equal((await yaz(`/ekipler/${ekip.id}/guncelle`, { kod: ekip.kod, ad: 'Deneme Ekibi', istasyonId: 999999, surum: ekip.surum })).durum, 400);
     const pasife = await yaz<{ aktif: boolean; surum: number; istasyonId: number | null }>(
       `/ekipler/${ekip.id}/guncelle`, { kod: ekip.kod, ad: 'Deneme Ekibi', istasyonId: null, aktif: false, surum: ekip.surum },
     );

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
+  MIKTAR_TAM_SAYI, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
   duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
@@ -46,6 +47,34 @@ describe('siparisler kuralları (saf)', () => {
     assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '2', null)]).map((x) => x.birimFiyat), ['20.0000']);
     assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '5', null)]).map((x) => x.birimFiyat), [null]);
     assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '1', null), s(1, '7', null)]).map((x) => x.birimFiyat), ['10.0000', '20.0000']);
+  });
+
+  test('SIP-4 a: adet birimli kartta miktar tam sayı; öteki birim ve birimsiz kart ondalık alır', () => {
+    assert.equal(miktarReddi('adet', '3.5'), MIKTAR_TAM_SAYI);
+    assert.equal(miktarReddi(' Adet ', '0.001'), MIKTAR_TAM_SAYI);
+    assert.equal(miktarReddi('adet', '12'), null);
+    assert.equal(miktarReddi('adet', '12.000'), null);
+    assert.equal(miktarReddi('kg', '3.5'), null);
+    assert.equal(miktarReddi(null, '3.5'), null);
+  });
+
+  test('SIP-4 a: sipariş tarihi bugünden iki yıl geri, bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra', () => {
+    const g = (siparisTarihi: string, termin: string, satir: string | null = null) => ({ siparisTarihi, termin, satirlar: [{ termin: satir }] });
+    const bugun = '2026-11-02';
+    assert.equal(tarihAraligiReddi(bugun, g('2026-11-02', '2026-12-01')), null);
+    assert.equal(tarihAraligiReddi(bugun, g('2024-11-02', '2024-12-01')), null);
+    assert.equal(tarihAraligiReddi(bugun, g('2027-11-02', '2027-12-01')), null);
+    assert.deepEqual(tarihAraligiReddi(bugun, g('2024-11-01', '2024-12-01')), { mesaj: SIPARIS_TARIHI_ARALIK_DISI, alan: 'siparisTarihi' });
+    assert.deepEqual(tarihAraligiReddi(bugun, g('2027-11-03', '2027-12-01')), { mesaj: SIPARIS_TARIHI_ARALIK_DISI, alan: 'siparisTarihi' });
+    assert.equal(tarihAraligiReddi(bugun, g('2026-11-02', '2031-11-02')), null);
+    assert.deepEqual(tarihAraligiReddi(bugun, g('2026-11-02', '2031-11-03')), { mesaj: TERMIN_COK_UZAK, alan: 'termin' });
+    assert.deepEqual(tarihAraligiReddi(bugun, g('2026-11-02', '2026-12-01', '2040-01-01')), { mesaj: TERMIN_COK_UZAK, alan: 'satirlar.0.termin' });
+  });
+
+  test('SIP-4 a: KDV dahil toplamı numeric(20,2) aşan sipariş alanıyla reddedilir; fiyatsız satır toplamaz', () => {
+    assert.equal(tutarTasmaReddi('20', [{ miktar: '10', birimFiyat: '125.5' }, { miktar: '5', birimFiyat: null }]), null);
+    assert.deepEqual(tutarTasmaReddi('20', [{ miktar: '1', birimFiyat: '1' }, { miktar: '99999999999.999', birimFiyat: '9999999999999.9999' }]),
+      { mesaj: TUTAR_COK_BUYUK, alan: 'satirlar.1.birimFiyat' });
   });
 
   test('SIP-03 yalnız taslak düzenlenir', () => {

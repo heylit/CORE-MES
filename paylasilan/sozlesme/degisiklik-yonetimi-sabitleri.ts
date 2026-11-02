@@ -74,6 +74,13 @@ export function onerilenSinif(c: Readonly<Record<(typeof SINIFLANDIRMA_SORULARI)
   return c.sure === 'evet' ? 'planlama' : c.sure === 'hayir' ? 'P2' : null;
 }
 
+// Cevaplardan çıkan önerinin dışında sınıf seçilirse gerekçe zorunludur; seçim izlenebilir kalsın. Eksik cevapta öneri yoktur, gerekçe istenmez.
+export function sinifGerekcesiGerekir(c: Readonly<Record<(typeof SINIFLANDIRMA_SORULARI)[number], SoruCevabi>>, sinif: (typeof SINIFLAR)[number]): boolean {
+  const oneri = onerilenSinif(c);
+  return oneri !== null && oneri !== 'planlama' && oneri !== sinif;
+}
+export const SINIF_GEREKCESI_ILETISI = 'Önerilen sınıftan farklı sınıf seçildi; gerekçeyi Not alanına yazın.';
+
 export const FAI_TURLERI = ['tam', 'kismi'] as const;
 export const FAI_DURUMLARI = ['bekliyor', 'onaylandi'] as const;
 // Kapanış koşulu sahibi modül bağlı değilse 'bilinmiyor' döner (Aşama 1).
@@ -99,9 +106,10 @@ export const IMZA_ANLAMLARI = {
 } as const satisfies Partial<Record<(typeof GECMIS_OLAYLARI)[number], string>>;
 // Bağlı olmayan kapanış koşulu varken imza uygulamayı ve doğrulamayı onaylayamaz; kanıtı sistemde olmayanı onaylatmamak için
 // kapatanın bilinmeyeni kabul ettiğini söyler (UYUM-BORCU 2, 5).
-export const KAPANIS_IMZASI_BILINMEYENLE = 'Bağlı olmayan koşulları bilerek kapatıyorum; uygulama ve doğrulama sistemde kanıtlanmadı';
-export const kapanisImzaAnlami = (kosullar: readonly { durum: (typeof KOSUL_HALLERI)[number] }[]): string =>
-  kosullar.some((k) => k.durum === 'bilinmiyor') ? KAPANIS_IMZASI_BILINMEYENLE : IMZA_ANLAMLARI.kapandi;
+// ECO yalnız bütün koşullar kanıtlıyken kapanır (K16 a): bağlı olmayan koşul ('bilinmiyor') kapanışı da engeller,
+// yoksa imza sistemde kanıtı olmayan uygulamayı onaylamış olur. İstemci düğmesi ve sunucu aynı kuralı kullanır.
+export const kapatilabilirMi = (kosullar: readonly { durum: (typeof KOSUL_HALLERI)[number] }[]): boolean => kosullar.every((k) => k.durum === 'tamam');
+export const KAPANIS_ENGELI = 'Kapanış koşullarının hepsi tamam olmadan ECO kapanmaz. Bilinmeyen koşul, sahibi modül bağlanınca kapanır.';
 
 // İç olay günlüğü (1124 a): salt okunur, dışarı gönderilmez. `ilgili`, Aşama 2'de olayı işleyecek modüldür.
 export const OLAY_TURLERI = [

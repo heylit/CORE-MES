@@ -58,11 +58,11 @@ function sunucuKur(emir: EmirCevabi, kullanici: Kullanici = YONETICI, komut: (yo
   }));
   return istekler;
 }
-function ac(adres = '/degisiklik-yonetimi/emirler/7') {
+function ac(adres = '/degisiklik-yonetimi/degisiklikler/emirler/7') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}>
-      <Routes><Route path="/degisiklik-yonetimi/emirler/:id" element={<EmirDetay />} /></Routes>
+      <Routes><Route path="/degisiklik-yonetimi/degisiklikler/emirler/:id" element={<EmirDetay />} /></Routes>
     </MemoryRouter></BildirimSaglayici></QueryClientProvider>,
   );
 }
@@ -188,7 +188,7 @@ describe('ECO detay', () => {
     expect(screen.getByText('Bağlı değil')).toBeTruthy();
   });
 
-  it('eksik kapanış koşulu kapatmayı kapatır; bağlı olmayan koşul kapatmaya izin verir', async () => {
+  it('eksik ya da bağlı olmayan kapanış koşulu kapatmayı kapatır; hepsi tamamsa imzayla kapanır (K16 a)', async () => {
     const kosullar = [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'fai', durum: 'eksik', ayrinti: '1 FAI bekliyor' }] as const;
     sunucuKur({ ...EMIR, durum: 'dogrulama', kapanisKosullari: [...kosullar] });
     ac();
@@ -197,14 +197,20 @@ describe('ECO detay', () => {
     expect(screen.getByText('Açık')).toBeTruthy();
     cleanup();
 
-    const istekler = sunucuKur({ ...EMIR, durum: 'dogrulama', kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'uyumsuz_seri', durum: 'bilinmiyor', ayrinti: null }] });
+    sunucuKur({ ...EMIR, durum: 'dogrulama', kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'uyumsuz_seri', durum: 'bilinmiyor', ayrinti: null }] });
+    ac();
+    const bagsiz = await screen.findAllByRole('button', { name: 'ECO’yu kapat' });
+    expect(bagsiz.every((d) => (d as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.getByText(/değişiklik yönetimi bağlanana kadar ECO kapanmaz/)).toBeTruthy();
+    cleanup();
+
+    const istekler = sunucuKur({ ...EMIR, durum: 'dogrulama', kapanisKosullari: [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'uyumsuz_seri', durum: 'tamam', ayrinti: null }] });
     ac();
     const [ilk] = await screen.findAllByRole('button', { name: 'ECO’yu kapat' });
     expect((ilk as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(ilk!);
     const pencere = await screen.findByRole('dialog', { name: 'Kapanış: ECO-0007' });
-    expect(within(pencere).getByText('Bilinmiyor')).toBeTruthy();
-    expect(within(pencere).getByText(/Bağlı olmayan koşulları bilerek kapatıyorum/)).toBeTruthy();
+    expect(within(pencere).getByText(/Değişikliğin uygulandığını ve doğrulandığını onaylıyorum/)).toBeTruthy();
     expect(within(pencere).getByText('Hurda —, rework —.')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'İmzala ve kapat' }));
     await waitFor(() => expect(komutlar(istekler)).toEqual([{ yol: '/degisiklik-yonetimi/emirler/7/kapat', yontem: 'POST', govde: { aciklama: '', surum: 4 } }]));
@@ -238,7 +244,7 @@ describe('ECO detay', () => {
     sunucuKur({ ...EMIR, gecmis: [...EMIR.gecmis, { ...kisi, zaman: '2026-10-03T09:00:00+03:00', olay: 'yayina_gonderildi', imzaAnlami: null, aciklama: null, ozet: 'Yayın onayına gönderildi' }] });
     const eski = globalThis.fetch as unknown as (adres: string, s?: RequestInit) => Promise<Response>;
     vi.stubGlobal('fetch', vi.fn(async (adres: string, s?: RequestInit) => (adres.includes('/olaylar') ? json(200, olaylar) : eski(adres, s))));
-    ac('/degisiklik-yonetimi/emirler/7?sekme=kayit');
+    ac('/degisiklik-yonetimi/degisiklikler/emirler/7?sekme=kayit');
     const iz = await screen.findByRole('list', { name: 'Denetim izi' });
     const satirlar = within(iz).getAllByRole('listitem');
     expect(satirlar[0]!.textContent).toContain('Yayın onayına gönderildi');

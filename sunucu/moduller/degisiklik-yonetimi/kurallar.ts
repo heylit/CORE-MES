@@ -209,8 +209,6 @@ export function kapanisKosullari(g: KapanisGirdisi): { kosul: KapanisKosulu; dur
   ];
 }
 
-export const kapatilabilirMi = (kosullar: readonly { durum: KosulHali }[]): boolean => kosullar.every((k) => k.durum !== 'eksik');
-
 // DY-16: seri uyumu. Sapmalı seri sapmayla kabul edilir; geçerlilik kuralı yoksa uyumludur; yeni revizyonla yapılıp yapılmadığı bilinmiyorsa
 // bilinmiyor; ilk seriden itibaren yeni, öncesinde eski revizyon beklenir.
 export function seriUyumu(g: { sapmali: boolean; ilkSeri: number | null; seri: number; yeniRevizyonla: boolean | null }): UyumHali {

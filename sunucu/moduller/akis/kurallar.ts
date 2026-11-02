@@ -39,8 +39,11 @@ export interface AkisSayimi { isEmriId: number | null; zaman: string; tur: 'sagl
 
 export interface AkisGirdisi {
   simdi: string;
+  // baslama Üretim Emirleri'nin emir başlamasıdır (ilk başlatma); "Üretim başladı" damgası odur (AKS-4 a).
   emir: { id: number; emirNo: string; malzemeNo: number | null; adet: number; durum: string; baslama: string | null; teslim: string | null };
   adimlar: readonly AkisAdimi[];
+  // İş emri başına Üretim Emirleri süre özetinin net birim süresi (dk); çevrim bu tanımdan okunur, burada yeniden hesaplanmaz (AKS-4 a).
+  birimSureler: ReadonlyMap<number, number | null>;
   olaylar: readonly AkisOlayi[];
   sayimlar: readonly AkisSayimi[];
   fason: readonly { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number }[];
@@ -246,7 +249,7 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
     }
   }
   const ilkOlay = (id: number): number | null => enKucuk((araliklar.get(id) ?? []).filter((x) => x.tur !== 'bekleme').map((x) => x.bas));
-  const uretimBasladi = enKucuk([...adimlar.map((a) => ilkOlay(a.id)), g.emir.baslama === null ? null : an(g.emir.baslama)]);
+  const uretimBasladi = g.emir.baslama === null ? null : an(g.emir.baslama);
   const son = adimlar.at(-1);
   const uretimBitti = son?.bitis === null || son === undefined ? null : an(son.bitis);
   const saglamlar = (id: number) => g.sayimlar.filter((s) => s.isEmriId === id && s.tur === 'saglam');
@@ -341,7 +344,7 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
       durusDk: basladi && !a.fason ? dk(toplam(ar, 'durus')) : null,
       fasonDk: a.fason && basladi ? dk(toplam(ar, 'fason')) : null,
       saglamAdet: Math.max(0, saglam),
-      cevrimBirimDk: !a.fason && saglam > 0 ? dk(isleme / saglam) : null,
+      cevrimBirimDk: a.fason ? null : g.birimSureler.get(a.id) ?? null,
       standartBirimDk: a.birimSureDk,
       standartHazirlikDk: a.ayarSuresiDk,
       terminGun: a.terminGun,

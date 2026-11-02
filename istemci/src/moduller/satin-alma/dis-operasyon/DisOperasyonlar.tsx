@@ -84,7 +84,7 @@ export function DisOperasyonlar() {
   const sutunlar: Sutun<DisOperasyon>[] = !yazar ? SUTUNLAR : [...SUTUNLAR, {
     anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, hucre: (x) => (
       <>
-        <Dugme simge="truck" disabled={x.firmaId === null} title={x.firmaId === null ? 'Önce fason firması seçilmeli' : undefined} onClick={() => acikYaz({ x, islem: 'gidis' })}>Gönder</Dugme>
+        <Dugme simge="truck" disabled={x.firmaId === null || !x.sirada} title={x.firmaId === null ? 'Önce fason firması seçilmeli' : !x.sirada ? 'Önceki iş emirleri bitmeden fasona gönderilmez.' : undefined} onClick={() => acikYaz({ x, islem: 'gidis' })}>Gönder</Dugme>
         <Dugme simge="box" disabled={disarida(x) <= 0} title="Dönüş (sağlam ve hurda) mal kabulden girilir" onClick={() => { void git('/stok/mal-kabul'); }}>Mal kabulde gir</Dugme>
         <Dugme simge="check" disabled={!(x.gonderilen && disarida(x) <= 0)} onClick={() => acikYaz({ x, islem: 'tamamla' })}>Tamamla</Dugme>
       </>

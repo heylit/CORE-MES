@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { BagModulu, BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 
@@ -197,11 +198,12 @@ export interface BelgeSuzgeci {
   makine: boolean | null;
 }
 
-// Arama adda (büyük-küçük harf duyarsız) geçer; joker karakterler düz metin sayılır.
+// Arama adda ya da resim numarasında geçer; genel aramayla aynı Türkçe sadeleştirmeden geçer ("flans" "Flanş"ı bulur) ve
+// aynı trigram ifade indeksine düşer (göç 20261029132000). Joker karakterler düz metin sayılır.
 const KOSUL = `WHERE b.aktif = $1 AND ($2::text IS NULL OR b.tur = $2)
-    AND ($3::text IS NULL OR b.ad ILIKE '%' || $3 || '%' ESCAPE '\\')
+    AND ($3::text IS NULL OR public.arama_sade(b.ad) LIKE $3 OR public.arama_sade(b.resim_no) LIKE $3)
     AND ($4::boolean IS NULL OR $4 = EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id AND g.hedef_modul = 'istasyonlar'))`;
-const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : s.ara.replace(/[\\%_]/g, (c) => `\\${c}`), s.makine];
+const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : icindeDeseni(s.ara), s.makine];
 
 export async function belgeSay(db: Db, s: BelgeSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM belge_merkezi_belge b ${KOSUL}`, kosulParametreleri(s));
@@ -291,9 +293,9 @@ export function yayindakiBelgeler(db: Db, s: { tur: BelgeTuru | null; ara: strin
 // belge gelmez. Kayıt kimliği bilinmeden çağrılır: listeyi bağı olan kayıtlar oluşturur.
 export function bagliYayindakiBelgeler(
   db: Db, hedefModul: BagModulu, dosyaTurleri: readonly DosyaTuru[],
-): Promise<(YayindakiBelgeSatiri & { hedefId: number })[]> {
-  return db.sorgu<YayindakiBelgeSatiri & { hedefId: number }>(
-    `SELECT g.hedef_id AS "hedefId", b.id, b.ad, b.tur, y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
+): Promise<(YayindakiBelgeSatiri & { hedefId: number; kapak: boolean })[]> {
+  return db.sorgu<YayindakiBelgeSatiri & { hedefId: number; kapak: boolean }>(
+    `SELECT g.hedef_id AS "hedefId", g.kapak, b.id, b.ad, b.tur, y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
        FROM belge_merkezi_bag g
        JOIN belge_merkezi_belge b ON b.id = g.belge_id AND b.aktif
        JOIN belge_merkezi_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'

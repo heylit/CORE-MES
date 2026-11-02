@@ -100,31 +100,46 @@ describe('Kapı konsolu', () => {
     expect((al as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Eksik: kimlik/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Kimlik görüldü/ }));
+    expect(screen.getByText(/Eksik: kimlik türü/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Kimlik türü/), { target: { value: 'pasaport' } });
     fireEvent.click(screen.getByRole('button', { name: 'Başka kart' }));
     fireEvent.click(screen.getByRole('button', { name: /İçeri al · Z-011/ }));
     await waitFor(() => expect(gonderilen).toHaveLength(1));
-    expect(gonderilen[0]).toMatchObject({ yol: '/nizamiye/ziyaretler/1/giris', govde: { surum: 1, kartId: 11, kimlikGoruldu: true } });
+    expect(gonderilen[0]).toMatchObject({ yol: '/nizamiye/ziyaretler/1/giris', govde: { surum: 1, kartId: 11, kimlikGoruldu: true, kimlikTuru: 'pasaport' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
     await waitFor(() => expect(gonderilen[1]).toMatchObject({ yol: '/nizamiye/ziyaretler/1/geri-al', govde: { surum: 2 } }));
   });
 
-  it('son dört hane yazılınca kimlik türü zorunlu olur; tür seçilmeden giriş kapalı kalır (K24 a)', async () => {
+  it('kimlik görülünce türü zorunludur, son dört hane isteğe bağlıdır; tür seçilmeden giriş kapalı kalır (NZM-5 a, K24 a)', async () => {
     const gonderilen = sunucuKur(GOREVLI);
     ac(<Kapi />);
     await screen.findByText('Servis Teknisyeni');
     fireEvent.click(screen.getAllByRole('button', { name: 'Giriş' })[0]!);
     fireEvent.click(screen.getByRole('button', { name: /Kimlik görüldü/ }));
-    expect(screen.getByLabelText(/Kimlik türü \(isteğe bağlı\)/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Son 4 hane'), { target: { value: '1234' } });
     const tur = screen.getByLabelText(/^Kimlik türü/) as HTMLSelectElement;
     expect(tur.required).toBe(true);
     expect(screen.queryByLabelText(/isteğe bağlı\)/)).toBeNull();
     expect(screen.getByText(/Eksik: kimlik türü/)).toBeTruthy();
     expect((screen.getByRole('button', { name: /İçeri al/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Son 4 hane'), { target: { value: '1234' } });
+    expect((screen.getByRole('button', { name: /İçeri al/ }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(tur, { target: { value: 'ehliyet' } });
     fireEvent.click(screen.getByRole('button', { name: /İçeri al/ }));
     await waitFor(() => expect(gonderilen).toHaveLength(1));
     expect(gonderilen[0]!.govde).toMatchObject({ kimlikTuru: 'ehliyet', kimlikSon4: '1234' });
+  });
+
+  it('kapı listesi kabuğun ana bölgesi içinde ikinci bir main açmaz; giriş iletisi bildirimin nerede görüneceğini söyler', async () => {
+    sunucuKur(GOREVLI);
+    ac(<Kapi />);
+    await screen.findByText('Servis Teknisyeni');
+    expect(document.querySelectorAll('main')).toHaveLength(0);
+    expect(screen.getByRole('region', { name: 'Ziyaretçiler' })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Giriş' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /Kimlik görüldü/ }));
+    fireEvent.change(screen.getByLabelText(/^Kimlik türü/), { target: { value: 'pasaport' } });
+    fireEvent.click(screen.getByRole('button', { name: /İçeri al/ }));
+    expect(await screen.findByText(/Ziyaretçilerim listesinde görür/)).toBeTruthy();
   });
 
   it('atölyeye girecek nedende kask ve gözlük işaretlenmeden giriş kapalı kalır', async () => {
@@ -133,6 +148,7 @@ describe('Kapı konsolu', () => {
     await screen.findByText('Servis Teknisyeni');
     fireEvent.click(screen.getAllByRole('button', { name: 'Giriş' })[1]!);
     fireEvent.click(screen.getByRole('button', { name: /Kimlik görüldü/ }));
+    fireEvent.change(screen.getByLabelText(/^Kimlik türü/), { target: { value: 'pasaport' } });
     expect(screen.getByText(/Eksik: kask ve gözlük/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /kask ve gözlük verildi/ }));
     expect((screen.getByRole('button', { name: /İçeri al/ }) as HTMLButtonElement).disabled).toBe(false);
@@ -217,6 +233,21 @@ describe('Kart rafı', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Rafa al' }));
     await waitFor(() => expect(gonderilen[0]).toMatchObject({ yol: '/nizamiye/kartlar/12/rafa-al', govde: { surum: 3 } }));
     expect(screen.getByRole('button', { name: 'Kart ekle' })).toBeTruthy();
+  });
+
+  it('sunucunun alan adını verdiği hata o alanda görünür (NZM-5 a)', async () => {
+    sunucuKur(['nizamiye.oku', 'nizamiye.kart-yonet']);
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => (init?.method === 'POST'
+      ? json(409, { kod: 'CAKISMA', mesaj: 'Bu kart numarası rafta zaten var.', alan: 'kartNo' } satisfies HataGovdesi)
+      : asil(adres, init))));
+    ac(<KartRafi />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kart ekle' }));
+    fireEvent.change(screen.getByLabelText(/Kart no/), { target: { value: 'Z-010' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ekle' }));
+    await waitFor(() => expect(screen.getByLabelText(/Kart no/).getAttribute('aria-invalid')).toBe('true'));
+    expect(screen.getAllByText('Bu kart numarası rafta zaten var.').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/İzinli bölge/).getAttribute('aria-invalid')).toBeNull();
   });
 });
 

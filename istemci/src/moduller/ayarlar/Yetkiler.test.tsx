@@ -91,6 +91,13 @@ describe('Yetkiler', () => {
     expect(grupla(MATRIS.islemler).map((g) => g.ad)).toEqual(['Personel', 'Stok']);
   });
 
+  it('kapali modulun (portal, mesaj) islemleri listelenmez; acik modulunkiler kalir', () => {
+    const islemler = [...MATRIS.islemler, 'sayfa.portal', 'portal.oku', 'portal.satis', 'sayfa.mesaj', 'mesaj.oku', 'mesaj.yonet'];
+    const gruplar = grupla(islemler);
+    expect(gruplar.map((g) => g.anahtar)).toEqual(['kisiler', 'stok']);
+    expect(gruplar.flatMap((g) => g.islemler)).toHaveLength(MATRIS.islemler.length);
+  });
+
   it('duzenleme isareti olmayan kullanici hucreyi degistiremez', async () => {
     ac(200, ['kisiler.rol-yonet']);
     const tablo = await screen.findByRole('table', { name: 'Yetki matrisi' });

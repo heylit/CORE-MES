@@ -586,7 +586,11 @@ const FORMS: Sozluk<Form> = {
     granul: { ad: 'Granül / toz', kod: 'GR', dims: [['kg', 'Ambalaj', 'kg']], mass: d => d.kg, def: { kg: 25 } },
     kumas: { ad: 'Kumaş / prepreg', kod: 'KM', dims: [['g', 'Gramaj', 'g/m²'], ['w', 'En'], ['L', 'Rulo boyu', 'm']], mass: d => d.g * d.w / 1000 * d.L / 1000, perM2mass: d => d.g / 1000, def: { g: 200, w: 1000, L: 50 } }
 };
-const DEFBIRIM: Sozluk<string> = { granul: 'torba', tel: 'm', kord: 'm', rulo: 'rulo', kumas: 'rulo' };
+// MLZ-7 a (G9): çubuk, levha, profil ve blok ağırlıkla alınır; yeni hammadde kg ile açılır. Listede olmayan form (O-ring) adet kalır.
+const DEFBIRIM: Sozluk<string> = {
+    granul: 'torba', tel: 'm', kord: 'm', rulo: 'rulo', kumas: 'rulo',
+    levha: 'kg', cubuk: 'kg', altigen: 'kg', lama: 'kg', boru: 'kg', kutu: 'kg', kosebent: 'kg', blok: 'kg', disk: 'kg'
+};
 const BIRIMLER = ['adet', 'kg', 'm', 'm²', 'levha', 'rulo', 'torba'];
 const SERTIFIKA = ['EN 10204 2.1', 'EN 10204 2.2', 'EN 10204 3.1', 'EN 10204 3.2', 'NACE MR0175', 'PED 2014/68/EU', 'AD 2000 W0', 'RoHS', 'REACH', 'FDA', 'EU 10/2011', 'EU 1935/2004', 'USP Class VI', 'ISO 10993', 'WRAS', 'NSF 61', 'UL', 'FSC', 'PEFC', 'CE'];
 (() => {

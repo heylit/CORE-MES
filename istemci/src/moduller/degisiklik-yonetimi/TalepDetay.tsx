@@ -177,9 +177,11 @@ function Adim({ talep, islemler, kisiId }: { talep: TalepCevabi; islemler: reado
         </SiradakiAdim>
       );
       break;
-    case 'reddedildi':
-      adim = <SiradakiAdim tur="bitti" baslik="Talep reddedildi" aciklama="Gerekçe kayıt bölümünde." />;
+    case 'reddedildi': {
+      const ret = talep.gecmis.find((g) => g.olay === 'ccb_ret');
+      adim = <SiradakiAdim tur="durdu" baslik="Talep reddedildi" aciklama={ret?.aciklama ? `Gerekçe: ${ret.aciklama}` : 'Gerekçe kayıtlı değil.'} />;
       break;
+    }
   }
   return (
     <>
@@ -225,7 +227,7 @@ export function TalepDetay() {
           ['Durum', TALEP_DURUM_ADLARI[t.durum]],
         ]}
       />
-      <AsamaSeridi etiket="Talep aşamaları" asamalar={ASAMALAR} sira={Math.min(sira, ASAMALAR.length)} bilgi={asamaBilgisi(t.gecmis)} atlanan={musteriAtlandi ? [3] : []} />
+      <AsamaSeridi etiket="Talep aşamaları" asamalar={ASAMALAR} sira={Math.min(sira, ASAMALAR.length)} bilgi={asamaBilgisi(t.gecmis)} atlanan={musteriAtlandi ? [3] : []} durdu={t.durum === 'reddedildi' ? sira : null} />
       <Adim talep={t} islemler={islemler} kisiId={oturum.data?.id} />
       <div className="tc-dy-iki-bir">
         <div className="tc-dy-yan">

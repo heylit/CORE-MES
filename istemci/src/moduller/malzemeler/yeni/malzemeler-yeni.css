@@ -34,6 +34,14 @@
   .tc-myeni-not { text-align: left; }
 }
 
+/* MLZ-7 a (G11): telefonda başlık ve açıklama ekranın yarısını alıyordu; kabuk sayfa adını zaten gösterir. Başlık küçülür,
+   açıklama ve kayıt yeri notu gizlenir; araç düğmeleri kalır. */
+@media (width < 480px) {
+  .tc-myeni-ust { gap: var(--b-2); }
+  .tc-myeni-ust h1 { font-size: var(--yazi-xl); }
+  .tc-myeni-ust-aciklama, .tc-myeni-not { display: none; }
+}
+
 /* Tür ve aile rengi: parça yalnız `data-tur` / `data-aile` niteliğini yazar; prototipin sabit renkleri yerine tasarım değişkeni (203 a). */
 [data-tur] { --tur-renk: var(--muted); }
 [data-tur="hammadde"] { --tur-renk: var(--done); }

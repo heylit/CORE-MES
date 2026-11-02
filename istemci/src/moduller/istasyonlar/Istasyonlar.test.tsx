@@ -541,6 +541,31 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/is-merkezleri', govde: { kod: 'IM-1', ad: 'Yeni iş merkezi', aciklama: null } });
   });
 
+  it('IST-5: tek istasyon adresi (?istasyon=<id>) satırı işaretler; pasif istasyonda pasifler açılır; bilinmeyen kimlik bir şey işaretlemez', async () => {
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />, '/istasyonlar/is-merkezleri?istasyon=11');
+    const satir = await screen.findByRole('row', { name: 'K-01' });
+    await waitFor(() => { expect(satir.getAttribute('aria-current')).toBe('true'); });
+    expect((screen.getByLabelText('Pasifleri göster') as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('row', { name: 'T-01' }).getAttribute('aria-current')).toBeNull();
+    cleanup();
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />, '/istasyonlar/is-merkezleri?istasyon=999');
+    await screen.findByRole('row', { name: 'T-01' });
+    expect(document.querySelector('[aria-current="true"]')).toBeNull();
+  });
+
+  it('IST-5: tek tıkla açılan iş merkezi düzenleme kipinde gelir, adı seçili olur', async () => {
+    const yeni = { id: 9, kod: 'IM-1', ad: 'Yeni iş merkezi', aciklama: null, aktif: true, surum: 1 };
+    sunucuKur(YONETICI, { '/is-merkezleri': yeni, '/is-merkezleri?pasifler=true': { isMerkezleri: [...IS_MERKEZLERI.isMerkezleri, yeni] } });
+    goster(<Istasyonlar />);
+    await screen.findByRole('region', { name: 'TORNA iş merkezi' });
+    fireEvent.click(screen.getByRole('button', { name: 'İş merkezi' }));
+    const ad = await screen.findByLabelText('IM-1 iş merkezi adı');
+    await waitFor(() => { expect(document.activeElement).toBe(ad); });
+    expect((ad as HTMLInputElement).selectionEnd).toBe('Yeni iş merkezi'.length);
+  });
+
   it('arama kod, ad ya da sorumluda bulur; CSV görünen satırları plan ayarı ve makine sayısıyla aktarır', async () => {
     sunucuKur(OKUYUCU, {
       '/istasyonlar?pasifler=true': { istasyonlar: [...ISTASYONLAR.istasyonlar, { ...ISTASYONLAR.istasyonlar[0]!, id: 12, kod: 'F-01', ad: 'Freze', sorumluAd: 'Deneme Şef' }] },
@@ -791,6 +816,30 @@ describe('makineler bölümü (#1109, IS25)', () => {
     goster(<Istasyonlar />, '/istasyonlar/makineler');
     await screen.findByRole('table', { name: 'Makineler' });
     await waitFor(() => { expect(screen.getAllByText('Alınamadı')).toHaveLength(2); });
+  });
+
+  it('IST-2: pasif iş merkezinde ya da pasif istasyonda kalmış aktif makine ağaçta soluk dalına düşer; "Tümü" listedeki sayıdır', async () => {
+    const eskiIstasyon = { ...ISTASYONLAR.istasyonlar[0], id: 12, kod: 'E-01', ad: 'Eski Tezgah Yeri', isMerkeziId: 2 };
+    const makine = (id: number, kod: string, istasyonId: number) => ({ ...MAKINELER.makineler[0], id, kod, ad: `Deneme ${kod}`, istasyonId });
+    sunucuKur(OKUYUCU, {
+      '/istasyonlar?pasifler=true': { istasyonlar: [...ISTASYONLAR.istasyonlar, eskiIstasyon] },
+      '/makineler?pasifler=true': { makineler: [...MAKINELER.makineler, makine(22, 'M-03', 12), makine(23, 'M-04', 11)] },
+    });
+    goster(<Istasyonlar />, '/istasyonlar/makineler');
+    const tablo = await screen.findByRole('table', { name: 'Makineler' });
+    await waitFor(() => { expect(within(tablo).getByRole('row', { name: 'M-03' })).toBeTruthy(); });
+    const agac = screen.getByRole('navigation', { name: 'İş merkezleri ve istasyonlar' });
+    const sayi = (etiket: string) => within(agac).getByRole('button', { name: etiket }).querySelector('.tc-ist-calc')?.textContent;
+    expect(sayi('Tümü')).toBe('4');
+    expect(sayi('ESKI Eski Hat')).toBe('1');
+    expect(sayi('TORNA Torna Hattı')).toBe('2');
+    expect(within(agac).getByRole('button', { name: 'ESKI Eski Hat' }).className).toContain('tc-ist-soluk');
+    fireEvent.click(within(agac).getByRole('button', { name: 'ESKI Eski Hat' }));
+    expect(screen.getByRole('row', { name: 'M-03' })).toBeTruthy();
+    expect(screen.queryByRole('row', { name: 'M-04' })).toBeNull();
+    fireEvent.click(within(agac).getByRole('button', { name: 'TORNA istasyonlarını göster' }));
+    fireEvent.click(within(agac).getByRole('button', { name: 'K-01 Kalite Masası' }));
+    expect(screen.getByRole('row', { name: 'M-04' })).toBeTruthy();
   });
 
   it('süzgeç durumları ayırır, ağaçta arızalı sayısı görünür; okuma kipindeki satır "Düzenle" ile açılır', async () => {
@@ -1159,7 +1208,11 @@ describe('personel bölümü (#1109, IS25)', () => {
     await waitFor(() => { expect((duzenle as HTMLButtonElement).disabled).toBe(false); });
     fireEvent.click(duzenle);
     const ayrinti = within(usta).getByRole('group', { name: 'Deneme Usta yetkinlik ayrıntısı' });
+    // Geçmiş bitiş girilebilir ama yazan uyarılır (IST-5); ileri tarihte uyarı yoktur.
+    fireEvent.change(within(ayrinti).getByLabelText('Geçerlilik bitişi'), { target: { value: '2020-01-01' } });
+    expect(within(ayrinti).getByText(/Tarih geçmişte/)).toBeTruthy();
     fireEvent.change(within(ayrinti).getByLabelText('Geçerlilik bitişi'), { target: { value: '2027-12-31' } });
+    expect(within(ayrinti).queryByText(/Tarih geçmişte/)).toBeNull();
     fireEvent.change(within(ayrinti).getByLabelText('Dayanak'), { target: { value: 'Torna eğitimi' } });
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });

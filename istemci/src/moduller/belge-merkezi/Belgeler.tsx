@@ -7,6 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useYetki } from './komut.ts';
+import { useMenuSayaclari } from './menu-sayaclari.ts';
 import { YeniBelge } from './formlar.tsx';
 import { TUR_ADI, TUR_SIMGESI, zamanMetni } from './gosterim.ts';
 import './belge-merkezi.css';
@@ -39,6 +40,7 @@ const UC_B_SEKMELERI: Sekme<UcBSekmesi>[] = [
 export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: boolean }) {
   const yonlendir = useNavigate();
   const { yazar } = useYetki();
+  useMenuSayaclari();
   const [yeni, yeniYaz] = useState(false);
   // Ctrl K komutu (komutlar.ts) `?yeni=1` ile gelir: pencere yalnız yazara ve arşiv dışında açılır. Kapatınca parametre
   // adresten düşer ki geri tuşu ve yenileme pencereyi yeniden açmasın.
@@ -76,7 +78,7 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
     >
       <div className="tc-cz-icerik">
         {ucBGorunumu && <Sekmeler etiket="3B modeller" sekmeler={UC_B_SEKMELERI} secili={ucB} sec={(s) => { ucBYaz(s); liste.sayfaDegistir(1); }} />}
-        <Girdi etiket="Ara" type="search" placeholder="Belge adı" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
+        <Girdi etiket="Ara" type="search" placeholder="Belge adı ya da resim no" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
         {l.isError
           ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, 'Belgeler alınamadı')} yenile={() => { void l.refetch(); }} />
           : (

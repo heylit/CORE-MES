@@ -27,3 +27,7 @@ export function eksen(araliklar: readonly { baslangic: string; bitis: string }[]
   const genislik = Math.max(1, bit - bas);
   return { bas, bit, x: (z: string) => ((Date.parse(z) - bas) / genislik) * 100 };
 }
+
+// Arama Türkçe harfi düz harfle eşler ("burc" "Burç"u bulur); büyük-küçük harf Türkçe kuralıyla (I -> ı, İ -> i).
+const DUZ_HARF: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+export const aramaMetni = (s: string): string => s.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (h) => DUZ_HARF[h] ?? h);

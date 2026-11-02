@@ -5,14 +5,14 @@ import './ortak.css';
 interface Ozellikler {
   baslik: string;
   aciklama?: string | null;
-  // sirada: kullanıcının işi; bekliyor: başka adımı bekliyor; bitti: süreç kapandı.
-  tur?: 'sirada' | 'bekliyor' | 'bitti';
+  // sirada: kullanıcının işi; bekliyor: başka adımı bekliyor; bitti: süreç kapandı; durdu: süreç olumsuz bitti (ret).
+  tur?: 'sirada' | 'bekliyor' | 'bitti' | 'durdu';
   children?: ReactNode;
 }
 
 // Prototipin nextBar'ı: kaydın sıradaki adımı ve o adımın düğmeleri.
 export function SiradakiAdim({ baslik, aciklama, tur = 'sirada', children }: Ozellikler) {
-  const simge = tur === 'bitti' ? 'check' : tur === 'bekliyor' ? 'clock' : 'next';
+  const simge = tur === 'bitti' ? 'check' : tur === 'durdu' ? 'x' : tur === 'bekliyor' ? 'clock' : 'next';
   return (
     <section className={`dy-siradaki dy-siradaki-${tur}`} aria-label="Sıradaki adım">
       <Simge ad={simge} />

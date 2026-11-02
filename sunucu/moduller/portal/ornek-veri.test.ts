@@ -21,7 +21,7 @@ describe('portal örnek verisi (gerçek PostgreSQL)', () => {
   before(async () => {
     ortam = await testVeritabaniKur('portal_ornek');
     // Gerekir zinciri keşiften kurulur: portal ve gerektirdikleri (başka modülün dosyası ithal edilmez).
-    const hepsi = await modulOrnekVerileriniKesfet();
+    const hepsi = await modulOrnekVerileriniKesfet(undefined, { kapaliDahil: true });
     const adla = new Map(hepsi.map((t) => [t.modul, t]));
     const gerekli = new Set<string>();
     const ekle = (ad: string): void => {

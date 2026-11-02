@@ -9,13 +9,14 @@ import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
 const agirlikOzeti = (g: MalzemeGeometrisi | null): AgirlikOzetiCevabi => {
-  if (g === null) return { model: null, hacimMm3: null, neden: 'model-yok', kalite: null };
-  const model = { belgeAdi: g.belgeAdi, harf: g.harf };
+  if (g === null) return { model: null, modelSayisi: 0, hacimMm3: null, neden: 'model-yok', kalite: null };
+  const model = { belgeAdi: g.belgeAdi, harf: g.harf, kapak: g.kapak };
+  const modelSayisi = g.modelSayisi;
   const a = g.analiz.analiz;
   const o = g.ham.oneriler[0];
   const kalite = o === undefined ? null : { ad: o.kalite, aile: o.aile, kaliteKodu: o.kaliteKodu, yogunluk: o.yogunluk };
-  if (a === null) return { model, hacimMm3: null, neden: 'analiz-yok', kalite };
-  return { model, hacimMm3: a.hacimMm3, neden: a.hacimMm3 === null ? 'hacim-yok' : null, kalite };
+  if (a === null) return { model, modelSayisi, hacimMm3: null, neden: 'analiz-yok', kalite };
+  return { model, modelSayisi, hacimMm3: a.hacimMm3, neden: a.hacimMm3 === null ? 'hacim-yok' : null, kalite };
 };
 
 // Okuma geometri.oku ister (sayfa yalnız menü görünürlüğüdür). Yeniden hesaplatma ayrı işlemdir; uç yalnız kuyruğa yazar,

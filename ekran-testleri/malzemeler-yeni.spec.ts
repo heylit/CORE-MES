@@ -32,7 +32,9 @@ test.describe('M1 yeni kart sihirbazı', () => {
   // Eski düzen (TASARIM KORUMA): üst baş, adımlar, adım ve föy; dar alanda adımlar yatay kayar, föy 780 altında gizlenir.
   test('sihirbaz taşmadan açılır; üst baş, adımlar, gövde ve alt çubuk görünür, katalogda ara kutusu ilk adımda', async ({ page, ag, ac }) => {
     await ac('/malzemeler/yeni');
-    await expect(page.getByText(/Her kayıt kodlu bir katalog kalemine dönüşür/)).toBeVisible();
+    // Telefonda (480 altı) açıklama gizlidir (MLZ-7 a).
+    const aciklama = page.getByText(/Her kayıt kodlu bir katalog kalemine dönüşür/);
+    if ((page.viewportSize()?.width ?? 0) < 480) await expect(aciklama).toBeHidden(); else await expect(aciklama).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Tür ve aile' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Adımlar' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Sihirbaz' })).toBeVisible();
@@ -121,7 +123,9 @@ test.describe('M2 katalog', () => {
 
   test('liste ve arama: örnek kart bulunur, sayfa yatay taşmaz', async ({ page, ac }) => {
     await ac('/malzemeler');
-    await expect(page.getByText(/Her kayıt kodlu bir katalog kalemine dönüşür/)).toBeVisible();
+    // Telefonda (480 altı) açıklama gizlidir (MLZ-7 a).
+    const aciklama = page.getByText(/Her kayıt kodlu bir katalog kalemine dönüşür/);
+    if ((page.viewportSize()?.width ?? 0) < 480) await expect(aciklama).toBeHidden(); else await expect(aciklama).toBeVisible();
     await expect(page.getByRole('button', { name: 'Excel: şablon, dışa ve içe aktar' })).toBeVisible();
     await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK Yuvarlak');
     await expect(page.getByText('ORNEK Yuvarlak çubuk Ø50').first()).toBeVisible();

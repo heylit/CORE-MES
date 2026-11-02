@@ -19,7 +19,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Talep detayı: sınıflandırma', () => {
   it('sorular cevaba göre açılır, önerilen sınıf seçilir ve gizli dalın cevabı boş gider', async () => {
     const cagrilar = kur(talep());
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     const soru1 = await screen.findByRole('radiogroup', { name: 'Çizim, model veya malzeme şartı değişiyor mu?' });
     expect(screen.queryByRole('radiogroup', { name: /Form, uyum/ })).toBeNull();
     fireEvent.click(within(soru1).getByLabelText('Evet'));
@@ -35,7 +35,7 @@ describe('Talep detayı: sınıflandırma', () => {
 
   it('yalnız süre değişikliğinde planlama notu çıkar; sınıf açanın ön tipinde kalır', async () => {
     kur(talep());
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     fireEvent.click(within(await screen.findByRole('radiogroup', { name: /Çizim, model/ })).getByLabelText('Hayır'));
     fireEvent.click(within(screen.getByRole('radiogroup', { name: /NC programı/ })).getByLabelText('Hayır'));
     fireEvent.click(within(screen.getByRole('radiogroup', { name: /yalnızca süre/ })).getByLabelText('Evet'));
@@ -43,9 +43,24 @@ describe('Talep detayı: sınıflandırma', () => {
     expect((screen.getByLabelText('Sınıf') as HTMLSelectElement).value).toBe('P1');
   });
 
+  it('önerilenden farklı sınıf gerekçesiz gönderilmez; gerekçeyle gider', async () => {
+    const cagrilar = kur(talep());
+    ac('/degisiklik-yonetimi/talepler/7');
+    fireEvent.click(within(await screen.findByRole('radiogroup', { name: /Çizim, model/ })).getByLabelText('Evet'));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: /Form, uyum/ })).getByLabelText('Evet'));
+    fireEvent.change(screen.getByLabelText('Sınıf'), { target: { value: 'D2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sınıflandır' }));
+    expect(await screen.findByText(/Önerilen sınıftan farklı sınıf seçildi/)).toBeTruthy();
+    expect(postlar(cagrilar)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/Gerekçe/), { target: { value: 'Uyum bozulmuyor' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sınıflandır' }));
+    await waitFor(() => { expect(postlar(cagrilar)).toHaveLength(1); });
+    expect(postlar(cagrilar)[0]).toMatchObject({ govde: { sinif: 'D2', not: 'Uyum bozulmuyor' } });
+  });
+
   it('işlemi olmayan kişi sınıflandırma formunu görmez', async () => {
     kur(talep(), OKUR);
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     await screen.findByText('Sıradaki adım: talebi sınıflandırın');
     expect(screen.queryByRole('button', { name: 'Sınıflandır' })).toBeNull();
   });
@@ -54,7 +69,7 @@ describe('Talep detayı: sınıflandırma', () => {
 describe('Talep detayı: CCB ve müşteri onayı', () => {
   it('talebi açan kişi kendi talebine CCB kararı veremez; pencere açılmaz', async () => {
     const cagrilar = kur(talep({ durum: 'ccb_bekliyor', sinif: 'P1', acan: { kisiId: YONETICI.id, kisiAdi: YONETICI.ad, zaman: '2026-10-20T07:30:00Z' } }));
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
     expect(await screen.findByText(/talebi açan kişi kendi talebine CCB kararı veremez/)).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -63,7 +78,7 @@ describe('Talep detayı: CCB ve müşteri onayı', () => {
 
   it('ret gerekçe ister; imzayla gönderilir', async () => {
     const cagrilar = kur(talep({ durum: 'ccb_bekliyor', sinif: 'D1' }));
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     expect(await screen.findByText(/haftalık CCB toplantısında/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Reddet' }));
     const pencere = await screen.findByRole('dialog', { name: 'CCB reddi: ECR-0007' });
@@ -76,9 +91,25 @@ describe('Talep detayı: CCB ve müşteri onayı', () => {
     expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/degisiklik-yonetimi/talepler/7/ccb', govde: { karar: 'ret', aciklama: 'Maliyet yüksek', surum: 4 } });
   });
 
+  it('reddedilen talep seritte durdu olarak görünür, gerekçe sıradaki adımda yazar', async () => {
+    kur(talep({
+      durum: 'reddedildi', sinif: 'P1',
+      gecmis: [{ olay: 'ccb_ret', kisiId: 2, kisiAdi: 'Örnek Müdür', zaman: '2026-10-21T08:00:00Z', imzaAnlami: 'Reddediyorum', aciklama: 'Maliyet yüksek', ozet: 'CCB reddetti' }],
+    }));
+    ac('/degisiklik-yonetimi/talepler/7');
+    const adim = await screen.findByRole('region', { name: 'Sıradaki adım' });
+    expect(within(adim).getByText('Gerekçe: Maliyet yüksek')).toBeTruthy();
+    expect(adim.className).toContain('dy-siradaki-durdu');
+    const serit = screen.getByRole('list', { name: 'Talep aşamaları' });
+    const [, , ccb, musteri] = within(serit).getAllByRole('listitem');
+    expect(ccb?.className).toContain('dy-asama-durdu');
+    expect(ccb?.getAttribute('aria-current')).toBe('step');
+    expect(musteri?.textContent).toContain('Yapılmadı');
+  });
+
   it('müşteri onayı numarasız açılmaz; numarayla imzalanıp kaydedilir', async () => {
     const cagrilar = kur(talep({ durum: 'musteri_onayi_bekliyor', sinif: 'D1' }));
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayı kaydet' }));
     expect(await screen.findByText('Müşteri onay numarasını yazın.')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Onay numarası'), { target: { value: 'ONAY-1' } });
@@ -91,9 +122,9 @@ describe('Talep detayı: CCB ve müşteri onayı', () => {
 
   it('onaylanan talepte ECO açılır ve emre geçilir', async () => {
     kur(talep({ durum: 'onaylandi', sinif: 'P1' }));
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     fireEvent.click(await screen.findByRole('button', { name: 'ECO aç' }));
-    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/emirler/40'); });
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/degisiklikler/emirler/40'); });
   });
 });
 
@@ -109,7 +140,7 @@ describe('Talep detayı: etki analizi', () => {
 
   it('bağlı olmayan bölüm "bilinmiyor" yazar; müşteri onayı gerekmezse aşama atlanır', async () => {
     kur(talep({ durum: 'ccb_bekliyor', sinif: 'P1', etki: ETKI }));
-    ac('/degisiklik-yonetimi/talepler/7');
+    ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
     const tablo = await screen.findByRole('table', { name: 'Etkilenen emirler' });
     expect(within(tablo).getByText('Kalanları yeni revizyona geçir')).toBeTruthy();
     expect(within(tablo).getByText('Frozen')).toBeTruthy();

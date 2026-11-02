@@ -27,6 +27,7 @@ interface Model {
   harf: string;
   ozet: string;
   dosyaTuru: GeometriDosyaTuru;
+  kapak: boolean;
 }
 
 // Malzeme kartına bağlı, yayındaki STEP/IGES modeller. Aynı belge iki karta bağlıysa iki satırdır (iş ve analiz revizyon başına tektir).
@@ -35,7 +36,7 @@ async function modeller(db: Db): Promise<Model[]> {
   for (const [malzemeNo, belgeler] of await kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', DOSYA_TURLERI)) {
     for (const b of belgeler) {
       if (!geometriTuruMu(b.dosyaTuru)) continue;
-      sonuc.push({ malzemeNo, belgeId: b.id, belgeAdi: b.ad, revizyonId: b.revizyonId, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru });
+      sonuc.push({ malzemeNo, belgeId: b.id, belgeAdi: b.ad, revizyonId: b.revizyonId, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru, kapak: b.kapak });
     }
   }
   return sonuc;
@@ -122,12 +123,15 @@ export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: nu
 }
 
 // Malzemenin yayındaki 3B modeli, analizi ve ham önerisi: başka modül (CNC Kurulum ham ekranı) `disari.ts` ile okur (1703 a).
-// Malzemeye bağlı birden çok yayındaki model varsa en son yayına gireni (en büyük revizyon kimliği) alınır.
+// Malzemeye bağlı birden çok yayındaki model varsa kartta kapak seçilen model esastır (GEO-2 a); kapak yoksa en son yayına giren
+// (en büyük revizyon kimliği). modelSayisi birden büyükse okuyan ekran hangi modelin alındığını söyler.
 // Model yoksa null; model var ama analiz henüz yoksa analiz null ve öneri 'analiz-yok' nedeniyle boştur. Yetki denetlemez.
 export interface MalzemeGeometrisi {
   malzemeNo: number;
   belgeAdi: string;
   harf: string;
+  kapak: boolean;
+  modelSayisi: number;
   analiz: GeometriAnalizCevabi;
   ham: GeometriHamCevabi;
 }
@@ -135,9 +139,14 @@ export interface MalzemeGeometrisi {
 export async function malzemeGeometrisi(
   db: Db, malzemeNo: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined } = {},
 ): Promise<MalzemeGeometrisi | null> {
-  const m = (await modeller(db)).filter((x) => x.malzemeNo === malzemeNo).sort((a, b) => b.revizyonId - a.revizyonId)[0];
+  const liste = (await modeller(db)).filter((x) => x.malzemeNo === malzemeNo)
+    .sort((a, b) => Number(b.kapak) - Number(a.kapak) || b.revizyonId - a.revizyonId);
+  const m = liste[0];
   if (m === undefined) return null;
-  return { malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu) };
+  return {
+    malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, kapak: m.kapak, modelSayisi: liste.length,
+    analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu),
+  };
 }
 
 // İş yoksa (tarama yakalamadı) açılır; varsa sürüm koşuluyla yeniden kuyruğa girer. Süren iş de yeniden kuyruğa alınabilir:

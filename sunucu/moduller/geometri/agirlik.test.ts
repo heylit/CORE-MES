@@ -87,10 +87,10 @@ describe('geometri ağırlık özeti: malzeme kartının net ağırlığı için
   after(async () => { await ortam?.kaldir(); });
 
   test('model yokken ve analiz bitmemişken hacim gelmez, neden söylenir', async () => {
-    assert.deepEqual(await ozet(mil), { model: null, hacimMm3: null, neden: 'model-yok', kalite: null });
+    assert.deepEqual(await ozet(mil), { model: null, modelSayisi: 0, hacimMm3: null, neden: 'model-yok', kalite: null });
     const m = await modelEkle(mil, 'kup.step');
     const r = await ozet(mil);
-    assert.deepEqual([r.model?.belgeAdi, r.hacimMm3, r.neden], ['Model kup.step', null, 'analiz-yok']);
+    assert.deepEqual([r.model?.belgeAdi, r.model?.kapak, r.modelSayisi, r.hacimMm3, r.neden], ['Model kup.step', false, 1, null, 'analiz-yok']);
     await analizYaz(m);
   });
 

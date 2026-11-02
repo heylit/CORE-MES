@@ -78,14 +78,14 @@ describe('Görevlerim', () => {
     kur();
     ac('/degisiklik-yonetimi');
     fireEvent.click(await screen.findByText('Geçerliliği belirle ve yayınla'));
-    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/emirler/9'); });
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/degisiklikler/emirler/9'); });
   });
 
   it('son kayıtta e-imza belirtilir ve kayda bağlanır', async () => {
     kur();
     ac('/degisiklik-yonetimi');
     const bag = await screen.findByRole('link', { name: /Yayınlandı/ });
-    expect(bag.getAttribute('href')).toBe('/degisiklik-yonetimi/emirler/9');
+    expect(bag.getAttribute('href')).toBe('/degisiklik-yonetimi/degisiklikler/emirler/9');
     expect(within(bag).getByText(/e-imzalı/)).toBeTruthy();
   });
 
@@ -119,7 +119,7 @@ describe('Yeni değişiklik talebi', () => {
     fireEvent.change(within(pencere).getByLabelText('Ön tip'), { target: { value: 'P1' } });
     fireEvent.change(within(pencere).getByLabelText('Aciliyet'), { target: { value: 'yuksek' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Talebi gönder' }));
-    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/talepler/21'); });
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/degisiklikler/talepler/21'); });
     const gonderim = cagrilar.find((c) => c.yontem === 'POST');
     expect(gonderim?.yol).toBe('/degisiklik-yonetimi/talepler/ac');
     expect(gonderim?.govde).toEqual({ baslik: 'Pah ekle', onSinif: 'P1', aciliyet: 'yuksek', malzemeIdleri: [11], aciklama: '' });
@@ -136,7 +136,7 @@ describe('Yeni değişiklik talebi', () => {
     const dugme = within(pencere).getByRole('button', { name: 'Talebi gönder' });
     fireEvent.click(dugme);
     fireEvent.click(dugme);
-    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/talepler/21'); });
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/degisiklikler/talepler/21'); });
     expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1);
   });
 });

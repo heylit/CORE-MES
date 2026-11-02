@@ -74,6 +74,16 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(kod.closest('.tc-my-alan')?.querySelector('button')).toBeNull();
   });
 
+  test('MLZ-7 a (G8): teknik özellikler adımı kaliteden dolan değeri "tipik" diye işaretler ve sertifika değeri olmadığını söyler', async () => {
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('heading', { name: 'Özet ve kayıt' });
+    fireEvent.click(screen.getByRole('button', { name: /Teknik/ }));
+    expect(await screen.findByText(/sertifika değeri değildir/)).toBeTruthy();
+    expect(screen.getAllByText('Tipik · kaliteden').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Kaliteden')).toBeNull();
+  });
+
   test('onaylı kartta değişiklik yoksa istek gitmez, "Kartta değişiklik yok." denir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac('?kart=mornek1');

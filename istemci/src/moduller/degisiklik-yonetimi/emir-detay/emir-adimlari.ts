@@ -1,6 +1,6 @@
 import type { EmirCevabi, KararSatiri } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import {
-  mrbKarariMi, type Cevap, type EmirDurumu, type GecmisOlayi, type KapanisKosulu, type KararKodu,
+  kapatilabilirMi, mrbKarariMi, type Cevap, type EmirDurumu, type GecmisOlayi, type KapanisKosulu, type KararKodu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 
 // ECO detayının ekran kuralları (prototipin pEco ve ecoDefaultTab'ı). İş kuralı sunucudadır; burada yalnız gösterim.
@@ -48,8 +48,9 @@ export function topluOnaylanabilir(kararlar: readonly KararSatiri[]): KararSatir
     && k.onerilenKod !== 'beklet' && k.onerilenKod !== 'eskiyle_tamamla_sapma' && k.izinliKodlar.includes(k.onerilenKod));
 }
 
-// Kapatma düğmesi: eksik koşul varsa kapalı. Sahibi bağlı olmayan koşul ('bilinmiyor', Aşama 1) düğmeyi kapatmaz; karar sunucunundur.
-export const kapatilabilir = (emir: Pick<EmirCevabi, 'kapanisKosullari'>): boolean => emir.kapanisKosullari.every((k) => k.durum !== 'eksik');
+// Kapatma düğmesi sunucuyla aynı kuralla açılır: bütün koşullar tamam olmalı (K16 a).
+export const kapatilabilir = (emir: Pick<EmirCevabi, 'kapanisKosullari'>): boolean => kapatilabilirMi(emir.kapanisKosullari);
+export const bilinmeyenKosulVar = (emir: Pick<EmirCevabi, 'kapanisKosullari'>): boolean => emir.kapanisKosullari.some((k) => k.durum === 'bilinmiyor');
 
 export function kosulMetni(kosul: KapanisKosulu, emir: Pick<EmirCevabi, 'gecerlilik'>): string {
   switch (kosul) {

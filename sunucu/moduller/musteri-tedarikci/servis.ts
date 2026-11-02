@@ -19,7 +19,7 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
+  FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -85,7 +85,8 @@ function kimligiDenetle(k: FirmaKimligi): void {
 }
 
 // Kayıt zamanı ve kişi sunucudan yazılır (MT-4): gövdede gelse de şema onları geçirmez.
-export async function firmaEkle(db: Db, kullanici: Kullanici, k: FirmaKimligi): Promise<Firma> {
+export async function firmaEkle(db: Db, kullanici: Kullanici, govde: FirmaKimligi): Promise<Firma> {
+  const k = { ...govde, musteriSinifi: musteriSinifiTuru(govde.tur, govde.musteriSinifi) };
   kimligiDenetle(k);
   const firma = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaEkle(db, k, kullanici.id));
   if (!firma) throw new Error('Firma eklenemedi.');
@@ -105,7 +106,7 @@ export async function firmaGuncelle(db: Db, kullanici: Kullanici, id: number, d:
   const koordinatYok = d.enlem === undefined && d.boylam === undefined;
   const k = {
     ...d, enlem: koordinatYok ? eski.enlem : (d.enlem ?? null), boylam: koordinatYok ? eski.boylam : (d.boylam ?? null),
-    musteriSinifi: d.musteriSinifi === undefined ? (eski.musteriSinifi ?? null) : d.musteriSinifi,
+    musteriSinifi: musteriSinifiTuru(d.tur, d.musteriSinifi === undefined ? (eski.musteriSinifi ?? null) : d.musteriSinifi),
   };
   kimligiDenetle(k);
   if (logoKilidiIhlali(eski, k)) throw gecersiz(LOGO_KILIDI_ILETISI);
@@ -208,6 +209,12 @@ export async function firmaAra(
     metin: metin === '' ? null : metin, turler: turKapsami(secenek.tur), yalnizAktif: secenek.yalnizAktif ?? true, sinir: aramaSiniri(secenek.sinir),
     fason: secenek.fason ?? null,
   });
+  return satirlar.map(({ id, ad, kod }) => ({ id, ad, kod }));
+}
+
+// MT-22: fason seçicisinin listesi. Yalnız aktif, fason işaretli ve tedarikçi ya da ikisi türündeki firmalar; ad sırasıyla.
+export async function fasonFirmalari(db: Db): Promise<{ id: number; ad: string; kod: string | null }[]> {
+  const satirlar = await sorgular.firmaAra(db, { metin: null, turler: turKapsami('tedarikci'), yalnizAktif: true, sinir: FASON_SECIM_SINIRI, fason: true });
   return satirlar.map(({ id, ad, kod }) => ({ id, ad, kod }));
 }
 

@@ -26,10 +26,13 @@ export function TesisAgaci({ merkezler, istasyonlar, pasifler, say, secim, sec, 
 }) {
   const [acik, acikYaz] = useState<ReadonlySet<number>>(new Set());
   const [ara, araYaz] = useState('');
-  const gorunur = <T extends { aktif: boolean }>(k: T) => pasifler || k.aktif;
-  const altlari = (m: SurumluIsMerkezi) => istasyonlar.filter((i) => i.isMerkeziId === m.id && gorunur(i));
+  // Pasif dal, altında listede görünen kayıt varsa da durur (soluk): pasif iş merkezinde ya da pasif istasyonda kalmış aktif kayıt
+  // ağaçta bir dala düşer ve "Tümü" listedeki sayıyla aynı olur (IST-2).
+  const istasyonGorunur = (i: SurumluIstasyon) => pasifler || i.aktif || say(i.id).toplam > 0;
+  const altlari = (m: SurumluIsMerkezi) => istasyonlar.filter((i) => i.isMerkeziId === m.id && istasyonGorunur(i));
+  const merkezGorunur = (m: SurumluIsMerkezi) => pasifler || m.aktif || altlari(m).length > 0;
   const topla = (sayilar: AgacSayisi[]): AgacSayisi => sayilar.reduce((t, s) => ({ toplam: t.toplam + s.toplam, uyari: t.uyari + s.uyari }), { toplam: 0, uyari: 0 });
-  const tumSayi = topla([...istasyonlar.filter(gorunur).map((i) => say(i.id)), ...(istasyonsuzVar ? [say(null)] : [])]);
+  const tumSayi = topla([...istasyonlar.filter(istasyonGorunur).map((i) => say(i.id)), ...(istasyonsuzVar ? [say(null)] : [])]);
 
   const dal = (s: AgacSecimi, metin: ReactNode, sayi: AgacSayisi, etiket: string, ek = '') => (
     <button type="button" className={`tc-ist-dal ${ek}`} aria-pressed={ayni(s, secim)} aria-label={etiket} onClick={() => sec(s)}>
@@ -44,7 +47,7 @@ export function TesisAgaci({ merkezler, istasyonlar, pasifler, say, secim, sec, 
       <Girdi etiket="Ağaçta ara" type="search" placeholder="İş merkezi ya da istasyon" value={ara} onChange={(o) => araYaz(o.target.value)} />
       <div className="tc-ist-agac-liste">
         {dal(TUMU, 'Tümü', tumSayi, 'Tümü')}
-        {merkezler.filter(gorunur).map((m) => {
+        {merkezler.filter(merkezGorunur).map((m) => {
           const merkezUyar = aramayaUyar(ara, [m.kod, m.ad]);
           const alt = altlari(m).filter((i) => merkezUyar || aramayaUyar(ara, [i.kod, i.ad]));
           if (!merkezUyar && alt.length === 0) return null;
@@ -56,7 +59,7 @@ export function TesisAgaci({ merkezler, istasyonlar, pasifler, say, secim, sec, 
                   onClick={() => acikYaz((a) => { const y = new Set(a); if (y.has(m.id)) y.delete(m.id); else y.add(m.id); return y; })}>
                   <Simge ad={acikMi ? 'down' : 'chev-right'} boyut="k" />
                 </button>
-                {dal({ tur: 'merkez', id: m.id }, <><span className="tc-ist-mono">{m.kod}</span> {m.ad}</>, topla(altlari(m).map((i) => say(i.id))), `${m.kod} ${m.ad}`)}
+                {dal({ tur: 'merkez', id: m.id }, <><span className="tc-ist-mono">{m.kod}</span> {m.ad}</>, topla(altlari(m).map((i) => say(i.id))), `${m.kod} ${m.ad}`, m.aktif ? '' : 'tc-ist-soluk')}
               </div>
               {acikMi && alt.map((i) => (
                 <div key={i.id} className="tc-ist-agac-satir tc-ist-agac-alt">

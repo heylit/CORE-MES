@@ -10,7 +10,7 @@ import { AsamaSeridi } from '../ortak/AsamaSeridi.tsx';
 import { Kunye } from '../ortak/Kunye.tsx';
 import { SiradakiAdim } from '../ortak/SiradakiAdim.tsx';
 import {
-  ASAMALAR, asamaBilgileri, asamaSirasi, bekleyenKararlar, gecerlilikMetni, kapatilabilir, sekmeMi, tutarMetni, varsayilanSekme, yayinOncesi,
+  ASAMALAR, asamaBilgileri, asamaSirasi, bekleyenKararlar, bilinmeyenKosulVar, gecerlilikMetni, kapatilabilir, sekmeMi, tutarMetni, varsayilanSekme, yayinOncesi,
   type EmirSekmesi,
 } from './emir-adimlari.ts';
 import { useEmir, useEmirKomutu } from './emir-veri.ts';
@@ -23,7 +23,7 @@ import './emir-detay.css';
 
 // Yollar P2'nin rotalarıyla aynı olmalı (DEVIR isteği).
 export const DEGISIKLIKLER_YOLU = '/degisiklik-yonetimi/degisiklikler';
-export const talepYolu = (id: number) => `/degisiklik-yonetimi/talepler/${id}`;
+export const talepYolu = (id: number) => `${DEGISIKLIKLER_YOLU}/talepler/${id}`;
 
 type Pencere = 'yayin' | 'geri' | 'kapat' | null;
 
@@ -152,7 +152,9 @@ function Siradaki({ emir, sec, ac }: { emir: EmirCevabi; sec: (s: EmirSekmesi) =
       const hazir = kapatilabilir(emir);
       return (
         <SiradakiAdim tur={hazir ? 'sirada' : 'bekliyor'} baslik={hazir ? 'Sıradaki adım: ECO’yu kapatın' : 'Doğrulama sürüyor'}
-          aciklama={hazir ? 'Eksik kapanış koşulu yok.' : 'Kapanış koşulları için İlk parça ve kapanış sekmesine bakın.'}>
+          aciklama={hazir ? 'Bütün kapanış koşulları tamam.' : bilinmeyenKosulVar(emir)
+            ? 'Bağlı olmayan koşul var; değişiklik yönetimi bağlanana kadar ECO kapanmaz.'
+            : 'Kapanış koşulları için İlk parça ve kapanış sekmesine bakın.'}>
           {yetki.var('degisiklik-yonetimi.kapat') && <Dugme tur="birincil" simge="check" disabled={!hazir} onClick={() => ac('kapat')}>ECO’yu kapat</Dugme>}
         </SiradakiAdim>
       );

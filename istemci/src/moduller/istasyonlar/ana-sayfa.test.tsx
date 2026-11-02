@@ -44,6 +44,17 @@ describe('istasyonlar ana sayfa kartları (#483)', () => {
     expect(yollar.filter((y) => y === '/istasyonlar/pano-ozeti')).toHaveLength(1);
   });
 
+  it('IST-4: durumu girilmemiş makine çalışana katılmaz, kartta ayrı yazılır; hepsi girilmişse ek yazı yoktur', async () => {
+    const yeniKurulum = { makine: { toplam: 7, calisir: 0, ariza: 1, bakim: 0 }, personel: { kisi: 0, isMerkezi: 0 } } satisfies PanoOzetiCevabi;
+    kur(['sayfa.istasyonlar'], new Response(JSON.stringify(yeniKurulum)));
+    await waitFor(() => expect(kart('Çalışan makine')?.textContent).toContain('durumu girilmemiş 6'));
+    expect(kart('Çalışan makine')?.textContent).toContain('07 makineden');
+    cleanup();
+    kur(['sayfa.istasyonlar']);
+    await waitFor(() => expect(kart('Çalışan makine')?.textContent).toContain('912 makineden'));
+    expect(kart('Çalışan makine')?.textContent).not.toContain('girilmemiş');
+  });
+
   it('sayfası olan için kart bağlantıdır, olmayan için değildir', async () => {
     kur(['sayfa.terminal', 'sayfa.personel']);
     await waitFor(() => expect(kart('Duran makine')?.textContent).toContain('3'));

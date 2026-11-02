@@ -69,6 +69,7 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
   const kalite = async (emirId: number) => (await o().vt.sorgu<{ q: string; m: string }>(
     `SELECT b.kalite_durumu AS q, sum(b.miktar)::text AS m FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id
      WHERE p.uretim_emri_id = $1 AND b.miktar > 0 GROUP BY 1 ORDER BY 1`, [emirId])).map((r) => [r.q, r.m]);
+  const parti = async (emirId: number) => (await o().vt.tek<{ id: number }>('SELECT id FROM stok_parti WHERE uretim_emri_id = $1', [emirId]))!.id;
   const defter = async (ncr: string) => (await o().vt.tek<{ n: number }>(
     'SELECT count(*)::int AS n FROM kalite_merkezi_karantina WHERE ncr_kimlik = $1', [ncr]))!.n;
   const ncr = (kimlik: string, govde: Record<string, unknown>, surum: number | null = null) =>
@@ -89,6 +90,11 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
        VALUES ('kmn-dnm-1', 'mamul', 'KMN-DNM-', 1, 'aktif', $1, $2, $2) RETURNING no`,
       [JSON.stringify({ id: 'kmn-dnm-1', com: { ad: 'Deneme mamul' } }), yoneticiId],
     ))!.no;
+    await ortam.sahip.sorgu(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('kmn-dnm-2', 'mamul', 'KMN-DNM-', 2, 'aktif', $1, $2, $2)`,
+      [JSON.stringify({ id: 'kmn-dnm-2', com: { ad: 'Başka mamul' } }), yoneticiId],
+    );
     // Emrin kaynak revizyonu gerçek bir rota revizyonu olmalıdır; iptal durumu açık revizyonun tekil dizinine çakışmaz.
     revizyonId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
@@ -122,6 +128,28 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
 
   const kapat = (kimlik: string, govde: Record<string, unknown>, surum: number, karantinaHedefKonumId?: number) =>
     o().vt.tx((db) => servis.onayla(db, yonetici, 'ncr', kimlik, { no: kimlik, durum: 'Kapalı', ...govde }, surum, karantinaHedefKonumId));
+
+  // KM-11 a (kart 1848): NCR'deki etkilenen miktar karantinanın üst sınırıdır; parça no Malzemeler'deki bir karta denk geliyorsa
+  // yalnız o malzemenin partisi alınır, kartsız parça no süzmez.
+  test('KM-11 a karantina miktarı ve parça eşlemesi: yalnız NCR miktarı redde gider; başka malzemenin parça nosu partiye dokunmaz', async () => {
+    const a = await stokluEmir(5);
+    await ncr('ncr_m1', { emir: a.no, lot: '', miktar: 2 });
+    assert.deepEqual(await kalite(a.id), [['red', '2.000'], ['serbest', '3.000']]);
+    assert.equal(await defter('ncr_m1'), 1);
+
+    const b = await stokluEmir(4);
+    await ncr('ncr_m2', { emir: '', lot: b.lot, parcaNo: 'KMN-DNM-00002', miktar: '1' });
+    assert.deepEqual(await kalite(b.id), [['serbest', '4.000']], 'başka malzemenin NCR\'si partiye dokunmaz');
+    assert.equal(await defter('ncr_m2'), 0);
+    await ncr('ncr_m3', { emir: '', lot: b.lot, parcaNo: 'kmn-dnm-00001 ', miktar: '10' });
+    assert.deepEqual(await kalite(b.id), [['red', '4.000']], 'miktar bakiyeyi aşarsa bütün parti');
+
+    const c = await stokluEmir(3);
+    await ncr('ncr_m4', { emir: c.no, lot: '', parcaNo: 'KARTSIZ-PARCA', miktar: '0' });
+    assert.deepEqual(await kalite(c.id), [['red', '3.000']], 'kartsız parça no ve sıfır miktar bütün partiyi alır');
+    const bParti = await parti(b.id);
+    assert.deepEqual([...(await o().vt.tx((db) => servis.acikNcrPartileri(db, [bParti])))], [bParti], 'eşleşen açık NCR sevki tutar');
+  });
 
   // KM-K90 (koordinatör kararı 19.10.2026): MRB "Olduğu gibi kullan" ya da "Tamir" ile kapanan NCR'nin partisi serbest kalır.
   test('KM-K90 serbest bırakma: Tamir ile kapanan NCR partiyi serbest bırakır; başka açık NCR tutuyorsa ve Hurda kararında parti redde kalır', async () => {

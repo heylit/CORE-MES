@@ -26,7 +26,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri } from './disari.ts';
+import { statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, partilerinMalzemeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { cikisYap, kaliteDegistir } from './servis.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
@@ -274,6 +274,27 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await depo('POST', `/stok/hareketler/${red.govde.hareketIdler[0]}/geri-al`, {})).durum, 200);
     assert.deepEqual(await durumlar(), [['karar_bekliyor', '2.000'], ['red', '4.000'], ['serbest', '3.000']]);
     assert.deepEqual((await o().vt.tx((db) => sorgular.bakiyeDefterFarki(db))).filter((f) => f.malzemeId === k), []);
+  });
+
+  // KM-11 a (kart 1848): NCR'nin etkilenen miktarı kadar; bakiyeler sırayla, en çok bakiye kadar. Satırla birlikte verilmez.
+  test('KM-11 a kalite kararında en çok miktar: bakiyeler sırayla o toplama kadar redde geçer; malzeme haritası partinin kartını verir', async () => {
+    const k = await kart('sarf');
+    assert.equal((await malKabul(k, '5')).durum, 200);
+    const p = (await o().vt.tek<{ id: number }>('SELECT p.id FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id WHERE b.malzeme_id = $1', [k]))!;
+    const kisi = kisiler.get('depo')!;
+    const ilk = await o().vt.tx((db) => partiKaliteDurumuYap(db, kisi, { partiId: p.id, hedef: 'red', aciklama: 'NCR deneme', enCok: '1.5' }));
+    assert.deepEqual(ilk.map((d) => d.miktar), ['1.5']);
+    const durum = async () => (await o().vt.sorgu<{ q: string; m: string }>(
+      'SELECT kalite_durumu AS q, sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND miktar > 0 GROUP BY 1 ORDER BY 1', [k])).map((r) => [r.q, r.m]);
+    assert.deepEqual(await durum(), [['red', '1.500'], ['serbest', '3.500']]);
+    await o().vt.tx((db) => partiKaliteDurumuYap(db, kisi, { partiId: p.id, hedef: 'red', aciklama: 'NCR deneme', enCok: '99' }));
+    assert.deepEqual(await durum(), [['red', '5.000']]);
+    await assert.rejects(o().vt.tx((db) => partiKaliteDurumuYap(db, kisi, { partiId: p.id, hedef: 'serbest', aciklama: 'NCR deneme', enCok: '0' })));
+    const kabul = await konumId('KABUL');
+    await assert.rejects(o().vt.tx((db) => partiKaliteDurumuYap(db, kisi, {
+      partiId: p.id, hedef: 'serbest', aciklama: 'NCR deneme', enCok: '1', satirlar: [{ konumId: kabul, statuId: null, kaliteDurumu: 'red', miktar: '1' }],
+    })));
+    assert.deepEqual(await o().vt.tx((db) => partilerinMalzemeleri(db, [p.id, p.id, 2147483647])), new Map([[p.id, k]]));
   });
 
   test('229 a Kalite Merkezi parti kararı: lot ya da emirle parti bulunur; partinin bütün konumlardaki bakiyesi hedef kaliteye geçer, ikinci karar boş döner', async () => {

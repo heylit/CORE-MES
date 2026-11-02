@@ -98,6 +98,11 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
 
   const hataKodu = (c: Cevap): unknown => (c.govde as { kod?: unknown }).kod;
 
+  // Aktif istasyonu olan pasif iş merkezi bugün uçtan açılamaz (IST-1); kural gelmeden önce kalmış veri okumada denensin diye SQL'le kurulur.
+  async function eskiVerideMerkeziKapat(isMerkeziId: number): Promise<void> {
+    await vt().sorgu('UPDATE is_merkezi SET aktif = false, surum = surum + 1 WHERE id = $1', [isMerkeziId]);
+  }
+
   // Kişi yönetici rolüyle doğar; istenen rol kisiler modülünün atama ve alma işleviyle verilir.
   async function girisliKisiEkle(kullaniciAdi: string, rolId: number): Promise<number> {
     const yoneticiRolu = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
@@ -363,14 +368,14 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const im = await isMerkeziKur();
     const ist = await istasyonKur(im.id);
     assert.equal((await yaz('/istasyonlar', { kod: yeniKod('IS'), ad: 'Merkezsiz' })).durum, 400);
-    assert.equal((await yaz('/istasyonlar', { kod: yeniKod('IS'), ad: 'Hayalet', isMerkeziId: 999999 })).durum, 409);
+    assert.equal((await yaz('/istasyonlar', { kod: yeniKod('IS'), ad: 'Hayalet', isMerkeziId: 999999 })).durum, 400);
 
     const istasyonsuz = await yaz<{ istasyonId: number | null }>('/makineler', { kod: yeniKod('MK'), ad: 'Yeni Gelen' });
     assert.equal(istasyonsuz.durum, 200);
     assert.equal(istasyonsuz.govde.istasyonId, null);
     const bagli = await yaz<{ istasyonId: number | null }>('/makineler', { kod: yeniKod('MK'), ad: 'Bağlı', istasyonId: ist.id });
     assert.equal(bagli.govde.istasyonId, ist.id);
-    assert.equal((await yaz('/makineler', { kod: yeniKod('MK'), ad: 'Hayalet', istasyonId: 999999 })).durum, 409);
+    assert.equal((await yaz('/makineler', { kod: yeniKod('MK'), ad: 'Hayalet', istasyonId: 999999 })).durum, 400);
   });
 
   test('ARK-IST-02: istasyon tipi altı değerden biridir, varsayılan talaşlıdır; veritabanı da başka değeri reddeder', async () => {
@@ -544,7 +549,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       const red = await yaz('/operasyon-tipleri', { kod: yeniKod('OP'), ad: 'Red', grup: 'TAL', [alan]: deger });
       assert.deepEqual([red.durum, hataKodu(red)], [400, 'DOGRULAMA'], `${alan}=${String(deger)}`);
     }
-    assert.equal((await yaz('/operasyon-tipleri', { kod: yeniKod('OP'), ad: 'Hayalet', grup: 'TAL', varsayilanIstasyonId: 999999 })).durum, 409);
+    assert.equal((await yaz('/operasyon-tipleri', { kod: yeniKod('OP'), ad: 'Hayalet', grup: 'TAL', varsayilanIstasyonId: 999999 })).durum, 400);
   });
 
   type VarsayilanliTip = { id: number; surum: number; ad: string; kisaltma: string | null; varsayilanAyarDk: string | null; varsayilanBirimDk: string | null; varsayilanIstasyonId: number | null };
@@ -603,10 +608,11 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
 
   test('UA1 (dışarı): uretimAlanlari yalnız işaretlileri verir, varsayılan yalnız aktif; aktifUretimAlaniMi konum açmadan önce denetler', async () => {
     const im = await isMerkeziKur();
-    const pasifMerkez = await isMerkeziKur({ aktif: false });
+    const pasifMerkez = await isMerkeziKur();
     const alan = await istasyonKur(im.id, { uretimAlani: true });
     const pasifAlan = await istasyonKur(im.id, { uretimAlani: true, aktif: false });
     const pasifMerkezdeki = await istasyonKur(pasifMerkez.id, { uretimAlani: true });
+    await eskiVerideMerkeziKapat(pasifMerkez.id);
     const isaretsiz = await istasyonKur(im.id);
     const kimlikler = (l: { id: number }[]) => l.map((i) => i.id).filter((id) => [alan.id, pasifAlan.id, pasifMerkezdeki.id, isaretsiz.id].includes(id)).sort();
     assert.deepEqual(kimlikler(await uretimAlanlari(vt())), [alan.id]);
@@ -908,7 +914,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     let yoneticininki = await secimKodlari(yonetici);
     assert.ok(yoneticininki.includes(acikIst.kod) && yoneticininki.includes(kapananIst.kod));
 
-    assert.equal((await surumluYaz(`/is-merkezleri/${kapanacak.id}/guncelle`, { kod: kapanacak.kod, ad: 'Kapandı', aktif: false })).durum, 200);
+    await eskiVerideMerkeziKapat(kapanacak.id);
     yoneticininki = await secimKodlari(yonetici);
     assert.ok(yoneticininki.includes(acikIst.kod));
     assert.equal(yoneticininki.includes(kapananIst.kod), false);
@@ -934,10 +940,11 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const durumAyarla = async (aktif: boolean): Promise<void> => {
       assert.equal((await surumluYaz(`/is-merkezleri/${kapanacak.id}/guncelle`, { kod: kapanacak.kod, ad: 'Deneme Merkezi', aktif })).durum, 200);
     };
+    assert.equal((await yaz(`/is-merkezleri/${kapanacak.id}/guncelle`, { kod: kapanacak.kod, ad: 'Deneme Merkezi', aktif: false, surum: 1 })).durum, 409, 'aktif istasyonu olan merkez pasife alınmaz');
 
     for (const liste of await aktifListeler()) assert.ok(liste.includes(acikIst.kod) && liste.includes(kapananIst.kod));
 
-    await durumAyarla(false);
+    await eskiVerideMerkeziKapat(kapanacak.id);
     for (const liste of await aktifListeler()) {
       assert.ok(liste.includes(acikIst.kod));
       assert.equal(liste.includes(kapananIst.kod), false);
@@ -1188,5 +1195,50 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     });
     assert.equal(istKabul.durum, 200, JSON.stringify(istKabul.govde));
     assert.deepEqual(istKabul.govde.istasyonlar.map((i) => [i.isMerkeziId, i.kapasiteKaynagi, i.tip]), [[im.id, 'insan', 'talasli'], [im.id, 'insan', 'talasli']]);
+  });
+  test('IST-1: tek kayıt uçları da pasif üste bağlamaz (toplu uçlarla aynı kural); önceden kalmış kayıt düzenlenir; aktif istasyonu olan merkez pasife alınmaz', async () => {
+    const im = await isMerkeziKur();
+    const ist = await istasyonKur(im.id);
+    const pasifMerkez = await isMerkeziKur({ aktif: false });
+    const pasifIst = await istasyonKur(im.id, { aktif: false });
+
+    const istRed = await yaz('/istasyonlar', { kod: yeniKod('IS'), ad: 'Pasif merkezde', isMerkeziId: pasifMerkez.id, kapasiteKaynagi: 'insan' });
+    assert.deepEqual([istRed.durum, hataKodu(istRed), (istRed.govde as { alan?: string }).alan], [400, 'DOGRULAMA', 'isMerkeziId']);
+    assert.equal((await istasyonKur(pasifMerkez.id, { aktif: false })).kod.length > 0, true, 'pasif istasyon pasif merkezde açılabilir');
+    const tasimaRed = await surumluYaz(`/istasyonlar/${ist.id}/guncelle`, { kod: ist.kod, ad: 'Taşınan', isMerkeziId: pasifMerkez.id, aktif: true });
+    assert.equal(tasimaRed.durum, 400);
+
+    const mkRed = await yaz('/makineler', { kod: yeniKod('MK'), ad: 'Pasif istasyonda', istasyonId: pasifIst.id });
+    assert.deepEqual([mkRed.durum, (mkRed.govde as { alan?: string }).alan], [400, 'istasyonId']);
+    const mk = await makineKur({ istasyonId: ist.id });
+    assert.equal((await surumluYaz(`/makineler/${mk.id}/guncelle`, { kod: mk.kod, ad: 'Taşınan', istasyonId: pasifIst.id })).durum, 400);
+    assert.equal((await surumluYaz(`/makineler/${mk.id}/guncelle`, { kod: mk.kod, ad: 'İstasyonsuz', istasyonId: null })).durum, 200, 'istasyonsuz bırakılabilir');
+
+    const merkezRed = await surumluYaz<{ kod: string; mesaj: string }>(`/is-merkezleri/${im.id}/guncelle`, { kod: im.kod, ad: 'Kapanmak isteyen', aktif: false });
+    assert.deepEqual([merkezRed.durum, merkezRed.govde.kod], [409, 'BAGIMLI_KAYIT']);
+    assert.equal((await yaz(`/istasyonlar/${ist.id}/sil`)).durum, 204);
+    assert.equal((await surumluYaz(`/is-merkezleri/${im.id}/guncelle`, { kod: im.kod, ad: 'Boşaldı', aktif: false })).durum, 200, 'aktif istasyonu kalmayınca kapanır');
+
+    const pasifMk = await makineKur({ aktif: false });
+    const durumRed = await yaz(`/makineler/${pasifMk.id}/durum`, { durum: 'ariza' });
+    assert.equal(durumRed.durum, 400);
+    assert.equal((await yaz(`/makineler/${mk.id}/durum`, { durum: 'ariza' })).durum, 200);
+
+    const opRed = await yaz('/operasyon-tipleri', { kod: yeniKod('OP'), ad: 'Pasif varsayılan', grup: 'TAL', varsayilanIstasyonId: pasifIst.id });
+    assert.deepEqual([opRed.durum, (opRed.govde as { alan?: string }).alan], [400, 'varsayilanIstasyonId']);
+  });
+
+  test('IST-1: pasif merkezin altında önceden kalmış aktif istasyon düzenlenir ve pasife alınır; aktife dönen ya da yeni bağlanan reddedilir', async () => {
+    const merkez = await isMerkeziKur();
+    const eski = await istasyonKur(merkez.id);
+    const kapali = await istasyonKur(merkez.id, { aktif: false });
+    const mk = await makineKur({ istasyonId: eski.id });
+    await eskiVerideMerkeziKapat(merkez.id);
+
+    const duzen = await surumluYaz<{ ad: string }>(`/istasyonlar/${eski.id}/guncelle`, { kod: eski.kod, ad: 'Yeni ad', isMerkeziId: merkez.id, aktif: true });
+    assert.deepEqual([duzen.durum, duzen.govde.ad], [200, 'Yeni ad']);
+    assert.equal((await surumluYaz(`/makineler/${mk.id}/guncelle`, { kod: mk.kod, ad: 'Yerinde kalan', istasyonId: eski.id })).durum, 200, 'istasyonu değişmeyen makine düzenlenir');
+    assert.equal((await surumluYaz(`/istasyonlar/${kapali.id}/guncelle`, { kod: kapali.kod, ad: 'Açılmak isteyen', isMerkeziId: merkez.id, aktif: true })).durum, 400);
+    assert.equal((await surumluYaz(`/istasyonlar/${eski.id}/guncelle`, { kod: eski.kod, ad: 'Kapanan', isMerkeziId: merkez.id, aktif: false })).durum, 200);
   });
 });

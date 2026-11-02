@@ -135,7 +135,9 @@ export const yenidenHesaplaCevabi = geometriAnalizCevabi;
 // zamanki kaydetmeyle yazılır. neden: model-yok, analiz-yok, hacim-yok (ağ kapalı değil); hacim varsa null.
 export const malzemeParametresi = z.object({ malzemeNo: z.coerce.number().int().min(1) });
 export const agirlikOzetiCevabi = z.object({
-  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  // kapak: model kartta kapak seçili olduğu için alındı (GEO-2 a); değilse en son yayınlanan. modelSayisi: karta bağlı yayındaki 3B model sayısı.
+  model: z.object({ belgeAdi: z.string(), harf: z.string(), kapak: z.boolean() }).nullable(),
+  modelSayisi: z.number().int().min(0),
   hacimMm3: z.number().positive().nullable(),
   neden: z.enum(['model-yok', 'analiz-yok', 'hacim-yok']).nullable(),
   kalite: z.object({ ad: z.string().nullable(), aile: z.string().nullable(), kaliteKodu: z.string().nullable(), yogunluk: z.number().positive().nullable() }).nullable(),

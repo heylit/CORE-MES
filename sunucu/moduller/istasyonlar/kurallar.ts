@@ -9,6 +9,22 @@ export const arizayaGectiMi = (onceki: string | null, yeni: string): boolean => 
 
 export const KULLANIMDA_ILETISI = 'Kullanımdaki kayıt silinemez; pasife alın.';
 
+// Aktif kayıt yalnız aktif üste bağlanır (istasyon iş merkezine, makine istasyona); toplu uçlar ve tek kayıt uçları aynı kuralı uygular.
+// Üst yalnız kayıt yeni açılırken, başka üste geçerken ya da aktife dönerken denetlenir: pasif üstün altında önceden kalmış kayıt
+// düzenlenebilir ve pasife alınabilir.
+export interface UsteBagliKayit { ustId: number | null; aktif: boolean }
+export function ustDenetlenirMi(onceki: UsteBagliKayit | null, yeni: UsteBagliKayit): boolean {
+  if (!yeni.aktif || yeni.ustId === null) return false;
+  return onceki === null || onceki.ustId !== yeni.ustId || !onceki.aktif;
+}
+export const PASIF_IS_MERKEZI = 'İş merkezi var olan, aktif bir kayıt olmalı; pasif iş merkezine istasyon bağlanmaz.';
+export const PASIF_ISTASYON = 'İstasyon var olan, aktif bir kayıt olmalı; pasif istasyona makine bağlanmaz.';
+
+// Aktif istasyonu kalan iş merkezi pasife alınmaz; yoksa aktif istasyon seçim listesinden ve makine ağacından düşer. İstasyon,
+// makinesi varken pasife alınabilir (KAY-07); makinesi seçimde istasyonuyla birlikte görünmez.
+export const pasifeAliniyorMu = (oncekiAktif: boolean, yeniAktif: boolean): boolean => oncekiAktif && !yeniAktif;
+export const AKTIF_ISTASYONU_VAR = 'Bu iş merkezinde aktif istasyon var; önce istasyonları başka iş merkezine taşıyın ya da pasife alın.';
+
 // Kısıt listesi boşsa kişi her iş merkezinde çalışır (null: kısıt yok).
 export function isMerkeziIzinliMi(izinli: readonly number[] | null, isMerkeziId: number): boolean {
   return izinli === null || izinli.length === 0 || izinli.includes(isMerkeziId);

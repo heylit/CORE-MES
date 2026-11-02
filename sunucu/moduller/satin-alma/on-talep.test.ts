@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { FasonOnTalep, OnTalepleriCevabi, PlanOnTalep, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { DisOperasyonlarCevabi, FasonOnTalep, OnTalepleriCevabi, PlanOnTalep, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -217,5 +217,20 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     await ortam!.vt.tx((db) => planIhtiyaclariniYaz(db, []));
     assert.deepEqual(await planlar(), []);
     assert.equal((await tumu()).yoksayilanlar.some((x) => x.kaynak === 'plan'), false);
+  });
+
+  test('1849 (C17): dış operasyon satırı fason adımının sırada olup olmadığını taşır; önceki adım bitmemişse sırada değildir', async () => {
+    const sahip = ortam!.sahip;
+    const e = (await sahip.tek<{ id: number }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum, malzeme_no) VALUES ('P-OT', 'Deneme parça', 12, $1, $2, 'planli', $3) RETURNING id`,
+      [istasyonId, yoneticiId, parcaNo]))!;
+    await sahip.sorgu("INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme tornalama')", [e.id, tipId]);
+    const sonra = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, fason_firma_id) VALUES ($1, 2, 20, $2, 'Deneme kaplama', $3) RETURNING id",
+      [e.id, tipId, firmaId]))!.id;
+    const l = await istek(cerezYonetici, 'GET', '/satin-alma-dis-operasyonlar');
+    assert.equal(l.statusCode, 200, l.body);
+    const sira = new Map((l.json() as DisOperasyonlarCevabi).operasyonlar.map((x) => [x.isEmriId, x.sirada]));
+    assert.deepEqual([sira.get(acik), sira.get(sonra)], [true, false]);
   });
 });

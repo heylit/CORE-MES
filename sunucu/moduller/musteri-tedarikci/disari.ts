@@ -5,7 +5,7 @@ import { firmaKayitKaynagi } from './servis.ts';
 // Başka modüller (finans, satın alma, stok, sevkiyat, projeler, rota, üretim emirleri, Logo, portal) firmayı buradan alır.
 // Fonksiyonlar çağıranın db'sini kullanır, transaction açmaz ve yetki denetlemez (denetim çağıran modülün ucundadır).
 export {
-  firmaAdlari, firmaAra, firmaDurumuDegistir, firmaKonumlari, firmaNoKoddan, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari, tumFirmalar,
+  fasonFirmalari, firmaAdlari, firmaAra, firmaDurumuDegistir, firmaKonumlari, firmaNoKoddan, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari, tumFirmalar,
 } from './servis.ts';
 export type { FirmaKonumu, FirmaOzeti } from './servis.ts';
 // Tedarikçi karnesi (1259 c): satın alma ve Kalite Merkezi olayı kendi transaction'ında iter; teklif kıyası karneyi okur.

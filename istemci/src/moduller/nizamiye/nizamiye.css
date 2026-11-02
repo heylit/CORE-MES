@@ -1,7 +1,7 @@
 .tc-nz { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-nz-soluk { color: var(--muted); }
 .tc-nz-bos { margin: 0; padding: var(--b-4); border: thin dashed var(--edge2); border-radius: var(--yari-1); color: var(--muted); }
-.tc-nz-kartno { font-family: var(--font-mono); font-weight: 700; }
+.tc-nz-kartno { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
 .tc-nz-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--b-3); align-items: end; }
 .tc-nz-baslik-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
 .tc-nz-sayfa-baslik { display: inline-flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); }

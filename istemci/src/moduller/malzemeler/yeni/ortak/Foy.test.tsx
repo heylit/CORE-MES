@@ -36,6 +36,13 @@ describe('foyVerisi', () => {
     expect(v.bolumler.find((x) => x.baslik === 'Eşdeğerler ve diğer adlar')?.not).toMatch(/yakın eşdeğer/);
   });
 
+  test('MLZ-7 a (G8): kaliteden dolan teknik özellikler "tipik değer" notuyla gelir', () => {
+    const b = baglam();
+    const teknik = foyVerisi(c45(b), b).bolumler.find((x) => x.baslik === 'Teknik özellikler');
+    expect(teknik?.satirlar.length).toBeGreaterThan(0);
+    expect(teknik?.not).toMatch(/tipik değer.*sertifika değeri değildir/);
+  });
+
   test('kısa föy tek bölüm ve ağırlık kutuları; girdi taslağı değişmez', () => {
     const b = baglam();
     const d = c45(b);

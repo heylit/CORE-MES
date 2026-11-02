@@ -107,7 +107,7 @@ export function Firmalar() {
           <Girdi
             etiket="Ara"
             type="search"
-            placeholder="Kod, ad, vergi no ya da il"
+            placeholder="Kod, ad ya da vergi no"
             value={arama}
             onChange={(o) => aramaYaz(o.target.value)}
             autoComplete="off"
@@ -143,7 +143,7 @@ export function Firmalar() {
       {yazabilir && yeni && (
         <FirmaFormu
           firma={null}
-          varsayilanTur={menu.tur ?? 'musteri'}
+          varsayilanTur={menu.tur ?? (menu.fason ? 'tedarikci' : 'musteri')}
           varsayilanFason={menu.fason === true}
           kapat={() => yeniYaz(false)}
           kaydedildi={(f) => { yeniYaz(false); seciliYaz(f.id); }}

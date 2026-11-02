@@ -9,6 +9,7 @@ import { ikiliOku, kaydet } from './dosya-aktarimi.ts';
 import { BelgeDuzenle, IstasyonaBagla, MalzemeBagla, RevizyonEkle } from './formlar.tsx';
 import { BAG_ADI, DURUM_ADI, DURUM_TONU, TUR_ADI, TUR_SIMGESI, boyutMetni, zamanMetni } from './gosterim.ts';
 import { useKomut, useYetki } from './komut.ts';
+import { useMenuSayaclari } from './menu-sayaclari.ts';
 import { onizlemeTuruMu } from './onizleme-kurallari.ts';
 import { useOnizleme } from './onizleme-akisi.ts';
 import './belge-merkezi.css';
@@ -82,6 +83,7 @@ export function BelgeSayfasi() {
   const gecerli = Number.isSafeInteger(id) && id > 0;
   const yonlendir = useNavigate();
   const { yazar, yayinlar } = useYetki();
+  useMenuSayaclari();
   const [acik, acikYaz] = useState<Acik>(null);
   const [seciliId, seciliYaz] = useState<number | null>(null);
   const onizleme = useOnizleme();

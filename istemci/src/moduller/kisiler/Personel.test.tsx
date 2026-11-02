@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
@@ -53,7 +53,14 @@ function ac(adres = '/personel') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
-      <MemoryRouter initialEntries={[adres]}><BildirimSaglayici><Personel /></BildirimSaglayici></MemoryRouter>
+      <MemoryRouter initialEntries={[adres]}>
+        <BildirimSaglayici>
+          <Routes>
+            <Route path="/personel" element={<Personel />} />
+            <Route path="/ayarlar/yetkiler" element={<p>Yetkiler sayfası</p>} />
+          </Routes>
+        </BildirimSaglayici>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -355,11 +362,33 @@ describe('Personel', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
-    it('?gorunum=matris yalnız rol yönetene matrisi açar', async () => {
+    it('KIS-8: eski ?gorunum=matris bağlantısı rol yöneteni Ayarlar > Yetkiler\'e götürür; ötekinde liste kalır', async () => {
+      sunucuKur({ kullanici: YONETICI });
+      ac('/personel?gorunum=matris');
+      expect(await screen.findByText('Yetkiler sayfası')).toBeTruthy();
+      cleanup();
+      vi.unstubAllGlobals();
+
       sunucuKur({ kullanici: OKUYUCU });
       ac('/personel?gorunum=matris');
       await screen.findByText('Ayşe Deneme');
+      expect(screen.queryByText('Yetkiler sayfası')).toBeNull();
+    });
+
+    it('KIS-8: Personel\'de yetki matrisi sekmesi yok; rol yönetene Yetkiler bağlantısı var, ötekine yok', async () => {
+      sunucuKur({ kullanici: YONETICI });
+      ac();
+      await screen.findByText('Ayşe Deneme');
       expect(screen.queryByRole('tab', { name: /Yetki matrisi/ })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Yetkiler' }));
+      expect(await screen.findByText('Yetkiler sayfası')).toBeTruthy();
+      cleanup();
+      vi.unstubAllGlobals();
+
+      sunucuKur({ kullanici: OKUYUCU });
+      ac();
+      await screen.findByText('Ayşe Deneme');
+      expect(screen.queryByRole('button', { name: 'Yetkiler' })).toBeNull();
     });
   });
 });

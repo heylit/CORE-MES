@@ -3,6 +3,7 @@ import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { PARA_BIRIMLERI } from './satin-alma.ts';
 
 // Satış siparişi (soru 144 a, karar 56): sipariş başlığı ve satırları ilişkisel tutulur; üretim emri ve sevk satırı sipariş satırına bağlanır.
 
@@ -28,7 +29,9 @@ export const cezaTavaniSemasi = z.string().trim().regex(ORAN, 'Ceza tavanı en �
   .refine((v) => Number(v) <= 100, 'Ceza tavanı 0 ile 100 arasındadır.');
 // 205 a: plan finansman bedeli için; boşsa plan sabit oranı kullanır.
 export const odemeVadesiSemasi = z.number().int('Ödeme vadesi tam gün olmalı.').min(0, 'Ödeme vadesi 0 ile 365 gün arasındadır.').max(365, 'Ödeme vadesi 0 ile 365 gün arasındadır.');
-export const paraBirimiSemasi = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Para birimi üç harfli koddur (TRY gibi).');
+// SIP-4 a: para birimi kur tutulan listeden seçilir (satın almayla aynı liste); serbest kod raporda çevrilemezdi.
+export const PARA_BIRIMI_LISTEDE_YOK = `Para birimi şunlardan biri olmalı: ${PARA_BIRIMLERI.join(', ')}.`;
+export const paraBirimiSemasi = z.string().trim().toUpperCase().pipe(z.enum(PARA_BIRIMLERI, { errorMap: () => ({ message: PARA_BIRIMI_LISTEDE_YOK }) }));
 
 // Boş ya da yalnız boşluk "yok" demektir; boş dizgi saklanmaz.
 const istege = (azami: number) =>

@@ -55,6 +55,15 @@ describe('keşif', () => {
     assert.deepEqual(adlar(await modulOrnekVerileriniKesfet(kok)), ['kisiler']);
   });
 
+  test('kapalı modülün örnek verisi atlanır; yalnız kapaliDahil ile bulunur', async () => {
+    const kok = join(klasor, 'kapali');
+    await yaz(kok, 'kisiler', tekTanim('kisiler'));
+    await yaz(kok, 'mesaj', tekTanim('mesaj'));
+    await yaz(kok, 'portal', tekTanim('portal'));
+    assert.deepEqual(adlar(await modulOrnekVerileriniKesfet(kok)), ['kisiler']);
+    assert.deepEqual(adlar(await modulOrnekVerileriniKesfet(kok, { kapaliDahil: true })), ['kisiler', 'mesaj', 'portal']);
+  });
+
   test('tanım vermeyen dosya ve klasörle uyuşmayan ad hata', async () => {
     const bozuk = join(klasor, 'bozuk');
     await yaz(bozuk, 'tek', 'export const ornekVeri = { modul: "tek" };\n');

@@ -134,6 +134,14 @@ export async function sayaciArtir(db: Db, malzemeId: number, anahtar: string, ba
   return satir.sira;
 }
 
+// Sayaç yalnız ileri alınır: aynı anda verilen numara sayacı zaten geçtiyse dokunulmaz.
+export async function sayaciIlerlet(db: Db, malzemeId: number, anahtar: string, sonSira: number): Promise<void> {
+  await db.sorgu(
+    'UPDATE markalama_sayaci SET son_sira = $3 WHERE malzeme_id = $1 AND kapsam_anahtari = $2 AND son_sira < $3',
+    [malzemeId, anahtar, sonSira],
+  );
+}
+
 export async function sonSira(db: Db, malzemeId: number, anahtar: string): Promise<number | null> {
   return (await db.tek<{ sira: number }>(
     'SELECT son_sira AS sira FROM markalama_sayaci WHERE malzeme_id = $1 AND kapsam_anahtari = $2', [malzemeId, anahtar],

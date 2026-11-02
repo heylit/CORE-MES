@@ -133,6 +133,13 @@ describe('Firma listesi', () => {
     await waitFor(() => expect(listeIstekleri(istekler).some((i) => i.yol.includes('ara=ornek'))).toBe(true));
   });
 
+  it('arama kutusu yalnız sunucunun aradığı alanları söyler (kod, ad, vergi no)', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(screen.getByLabelText('Ara').getAttribute('placeholder')).toBe('Kod, ad ya da vergi no');
+  });
+
   it('Durum süzgeci Tümü seçilince aktif parametresi gitmez', async () => {
     const istekler = sunucuKur(OKUYUCU);
     ac('/musteri-tedarikci');
@@ -194,6 +201,20 @@ describe('Ctrl K ile gelen istek (kart 1235)', () => {
     expect((within(form).getByLabelText('Tür') as HTMLSelectElement).value).toBe(tur);
     fireEvent.click(within(form).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yeni firma' })).toBeNull());
+  });
+
+  it('Yeni fason firma formu tedarikçi türüyle ve fason işaretli açar; müşteriye dönünce işaret gizlenir ve fason gitmez (MT-20)', async () => {
+    const istekler = sunucuKur(YAZAR, () => json(200, { firma: { ...FIRMA_A, id: 12, ad: 'Ornek Yeni', fason: false } }));
+    ac('/musteri-tedarikci/fason?yeni=1');
+    const form = await screen.findByRole('dialog', { name: 'Yeni firma' });
+    expect((within(form).getByLabelText('Tür') as HTMLSelectElement).value).toBe('tedarikci');
+    expect((within(form).getByLabelText('Fason firma') as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(within(form).getByLabelText('Tür'), { target: { value: 'musteri' } });
+    expect(within(form).queryByLabelText('Fason firma')).toBeNull();
+    fireEvent.change(within(form).getByLabelText(/^Ad( \*)?$/), { target: { value: 'Ornek Yeni' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    expect(istekler.find((i) => i.yontem === 'POST')!.govde).toMatchObject({ tur: 'musteri', fason: false });
   });
 
   it('yazamayana form açılmaz, istek gitmez', async () => {
