@@ -200,6 +200,33 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal(k.durum, 200, JSON.stringify(k.govde));
   });
 
+  test('MRK-U9: veritabanında sıfıra yuvarlanan ölçü ve 80 karakteri aşan seri no alan adıyla reddedilir', async () => {
+    const m = await malzemeAc();
+    const ekle = (govde: Record<string, unknown>) => istek<{ alan?: string; mesaj?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 60, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani], ...govde,
+    });
+    const kucuk = await ekle({ alanlar: [{ ...seriAlani, yaziYuksekligiMm: 0.001 }] });
+    assert.equal(kucuk.durum, 400, JSON.stringify(kucuk.govde));
+    assert.equal(kucuk.govde.alan, 'alanlar.0.yaziYuksekligiMm');
+    const uzak = await ekle({ alanlar: [{ ...seriAlani, yer: { merkez: [1e9, 0, 0], normal: [0, 0, 1], enMm: 5, boyMm: 2, aciDerece: 0 } }] });
+    assert.equal(uzak.durum, 400);
+    assert.equal(uzak.govde.alan, 'alanlar.0.yer.merkez');
+    const t0 = await tanimAc(m);
+    const kod = t0.malzemeKodu ?? '';
+    const kat = Math.floor(76 / kod.length);
+    const sablon = '{PARCA}'.repeat(kat) + 'X'.repeat(76 - kat * kod.length) + '{SEQ:4}';
+    assert.ok(sablon.length <= 60, sablon);
+    assert.equal((await ekle({ opNo: 61, seriSablonu: `${sablon}X` })).durum, 400, 'kayıtta 81 karakter');
+    const t = tanimSemasi.parse((await ekle({ opNo: 62, seriSablonu: sablon, baslangicSirasi: 9999 })).govde);
+    const emir = await emirAc(m);
+    const ilk = await markala('operator', t.id, emir);
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.equal(ilk.govde.seriNo.length, 80);
+    const tasan = await istek<{ mesaj?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, sonuc: 'iyi' });
+    assert.equal(tasan.durum, 422);
+    assert.match(tasan.govde.mesaj ?? '', /80 karakteri aşıyor/);
+  });
+
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
     const m = await malzemeAc();
     const t = await tanimAc(m, { yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });

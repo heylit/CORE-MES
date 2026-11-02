@@ -31,6 +31,38 @@ export function alanHatasi(alanlar: readonly AlanGovdesi[]): string | null {
   return null;
 }
 
+// MRK-10: ölçüler veritabanında sabit ondalıkla saklanır (yükseklik, en, boy, açı 2; derinlik ve merkez 3 hane): yuvarlanınca 0'a
+// ya da sınırın dışına düşen değer kısıtta genel hatayla reddedilmesin, markanın sırası ve alan adıyla burada reddedilsin.
+const yuvarla = (d: number, hane: number): number => Math.round(d * 10 ** hane) / 10 ** hane;
+
+export function olcuHatasi(alanlar: readonly AlanGovdesi[]): { ileti: string; alan: string } | null {
+  for (const [i, a] of alanlar.entries()) {
+    const yol = `alanlar.${i}`;
+    const no = `${i + 1}. marka`;
+    if (a.yaziYuksekligiMm !== null && yuvarla(a.yaziYuksekligiMm, 2) <= 0) {
+      return { ileti: `${no}: yazı yüksekliği en az 0,01 mm olmalı.`, alan: `${yol}.yaziYuksekligiMm` };
+    }
+    if (a.yaziDerinligiMm !== null && yuvarla(a.yaziDerinligiMm, 3) <= 0) {
+      return { ileti: `${no}: yazı derinliği en az 0,001 mm olmalı.`, alan: `${yol}.yaziDerinligiMm` };
+    }
+    const y = a.yer;
+    if (y === null) continue;
+    if (y.merkez.some((d) => Math.abs(yuvarla(d, 3)) >= 1e7)) return { ileti: `${no}: yer koordinatı modelin dışında.`, alan: `${yol}.yer.merkez` };
+    if (yuvarla(y.enMm, 2) <= 0) return { ileti: `${no}: en en az 0,01 mm olmalı.`, alan: `${yol}.yer.enMm` };
+    if (yuvarla(y.boyMm, 2) <= 0) return { ileti: `${no}: boy en az 0,01 mm olmalı.`, alan: `${yol}.yer.boyMm` };
+    if (Math.abs(yuvarla(y.aciDerece, 2)) >= 360) return { ileti: `${no}: açı -360 ile 360 arasında olmalı.`, alan: `${yol}.yer.aciDerece` };
+  }
+  return null;
+}
+
+// MRK-11: seri no sütunu en çok 80 karakterdir; şablon parça kodu ve emir no ile uzar, sıra taşınca da uzar.
+export const AZAMI_SERI_UZUNLUGU = 80;
+
+export function seriUzunlukHatasi(seriNo: string): string | null {
+  if (seriNo.length <= AZAMI_SERI_UZUNLUGU) return null;
+  return `Seri no ${AZAMI_SERI_UZUNLUGU} karakteri aşıyor (${seriNo.length} karakter); şablonu kısaltın.`;
+}
+
 // MRK-12: işaretlenen yerin yüzey yönü sıfır olamaz; yönü olmayan marka 3B sahnede yere oturmaz.
 export function normalHatasi(alanlar: readonly AlanGovdesi[]): { ileti: string; alan: string } | null {
   for (const [i, a] of alanlar.entries()) {

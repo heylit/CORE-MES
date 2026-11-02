@@ -15,7 +15,7 @@ import { istasyonGetir } from '../istasyonlar/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret,
+  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -57,6 +57,8 @@ function tanimYazimi(g: TanimKaydetGovdesi | TanimEkleGovdesi): s.TanimYazimi {
   if (alan !== null) throw dogrulama(alan, 'alanlar');
   const normal = normalHatasi(g.alanlar);
   if (normal !== null) throw dogrulama(normal.ileti, normal.alan);
+  const olcu = olcuHatasi(g.alanlar);
+  if (olcu !== null) throw dogrulama(olcu.ileti, olcu.alan);
   return {
     seriSablonu: g.seriSablonu, sayacKapsami: g.sayacKapsami, baslangicSirasi: g.baslangicSirasi, dogrulama: g.dogrulama,
     modelBelgeId: g.model?.belgeId ?? null, modelRevizyon: g.model?.revizyon ?? null,
@@ -71,11 +73,22 @@ async function modelDenetle(db: Db, malzemeId: number, model: TanimEkleGovdesi['
   if (!bagli.some((b) => b.id === model.belgeId)) throw dogrulama('3B model bu malzemeye bağlı bir çizim belgesi değil.', 'model');
 }
 
+// MRK-11: kayıtta en uzun açık emrin numarasıyla denenir; emir sonradan uzarsa markalamadaki denetim yakalar.
+async function seriUzunluguDenetle(db: Db, malzemeId: number, g: TanimKaydetGovdesi | TanimEkleGovdesi): Promise<void> {
+  const malzeme = await malzemeOzeti(db, malzemeId);
+  if (malzeme === null) return;
+  const emir = (await acikEmirler(db)).filter((e) => e.malzemeNo === malzemeId).reduce((en, e) => (e.emirNo.length > en.length ? e.emirNo : en), '');
+  const seriNo = seriNoUret(g.seriSablonu, { parca: malzeme.kod, emir, gun: tesisGunu(Date.now()) }, g.baslangicSirasi);
+  const hata = seriUzunlukHatasi(seriNo);
+  if (hata !== null) throw dogrulama(hata, 'seriSablonu');
+}
+
 export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
   await modelDenetle(db, g.malzemeId, g.model);
+  await seriUzunluguDenetle(db, g.malzemeId, g);
   const id = await kisitKorumali(
     { markalama_tanimi_adim_tekil: 'Bu rota adımının markalama tanımı zaten var.' },
     () => s.tanimEkle(db, g.malzemeId, g.opNo, yazim, kullanici.id),
@@ -91,6 +104,7 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
   if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
     await modelDenetle(db, eski.malzemeId, g.model);
   }
+  await seriUzunluguDenetle(db, eski.malzemeId, g);
   await surumluGuncelle({
     guncelle: () => s.tanimGuncelle(db, id, { ...yazim, surum: g.surum }, kullanici.id),
     varMi: () => s.tanimVarMi(db, id),
@@ -145,6 +159,8 @@ export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): 
   const gun = tesisGunu(Date.now());
   const sira = await s.sayaciArtir(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, g.uretimEmriId, gun), t.baslangicSirasi);
   const seriNo = seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, sira);
+  const uzunluk = seriUzunlukHatasi(seriNo);
+  if (uzunluk !== null) throw gecersiz(uzunluk);
   const iyi = g.sonuc === 'iyi';
   const birim = await kisitKorumali(
     { markalama_birimi_seri_tekil: 'Bu seri no daha önce verilmiş; şablonu ya da başlangıç sırasını denetleyin.' },
