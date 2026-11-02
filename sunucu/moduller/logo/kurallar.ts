@@ -951,11 +951,11 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'birim-setleri', yon: 'logo-tmi', baslik: 'Birim seti listesi', kaynak: 'bagli', ayarlar: [], belgeTurleri: [],
     aciklama: 'Saatte bir Lookup/unitsets okunur; malzeme gönderiminde birim karşılığı buna göre denetlenir.' },
   { anahtar: 'mal-kabul', yon: 'logo-tmi', baslik: 'Mal kabul (irsaliye satırları)', kaynak: 'bagli', ayarlar: ['logo.mal-kabul-okumasi'], belgeTurleri: [], okuma: 'mal-kabul',
-    aciklama: 'Dakikada bir PurchaseOrder/receipts okunur (since imleciyle); satırlar yalnız saklanır, stoka ya da satın almaya işlenmez. Gönderilen sütunu okunan satır sayısıdır.' },
+    aciklama: 'Dakikada bir PurchaseOrder/receipts okunur (since imleciyle); satırlar yalnız saklanır, stoka ya da satın almaya işlenmez. Sayı okunan satır sayısıdır.' },
   { anahtar: 'cari-depo', yon: 'logo-tmi', baslik: 'Cari ve ambar listeleri', kaynak: 'bagli', ayarlar: ['logo.liste-okumasi'], belgeTurleri: [], okuma: 'cari-ambar',
-    aciklama: 'Saatte bir Arp/list ve Lookup/warehouses okunup önbelleğe (kod, ad) yazılır. Gönderilen sütunu okunan kayıt sayısıdır.' },
+    aciklama: 'Saatte bir Arp/list ve Lookup/warehouses okunup önbelleğe (kod, ad) yazılır. Sayı okunan kayıt sayısıdır.' },
   { anahtar: 'fatura', yon: 'logo-tmi', baslik: 'Fatura ve irsaliye', kaynak: 'bagli', ayarlar: ['logo.fatura-okumasi'], belgeTurleri: [], okuma: 'fatura',
-    aciklama: 'Logo\'ya giden satın alma siparişlerinin faturaları (PurchaseOrder/{no}/invoices) sırayla okunup saklanır; Logo\'ya hiç yazılmaz. Okunacak sipariş, bu sürümden sonra Logo\'da açılan satın alma siparişleridir. Gönderilen sütunu okunan fatura sayısıdır.' },
+    aciklama: 'Logo\'ya giden satın alma siparişlerinin faturaları (PurchaseOrder/{no}/invoices) sırayla okunup saklanır; Logo\'ya hiç yazılmaz. Okunacak sipariş, bu sürümden sonra Logo\'da açılan satın alma siparişleridir. Sayı okunan fatura sayısıdır.' },
 ];
 
 export type LogoAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi' | 'kodda-yok';

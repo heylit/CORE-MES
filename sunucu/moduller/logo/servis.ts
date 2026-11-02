@@ -34,7 +34,8 @@ export const yeniSurecBellegi = (): SurecBellegi => ({ niyetler: new Map(), acma
 
 // İş "bekliyor" dönerken sağlık ayrıntısında görünen nedenler: sabit metin, değer taşımaz.
 export const BEKLEME_NEDENLERI = {
-  kapali: 'Logo bağlantısı Sistem Ayarları\'nda kapalı; kartlar birikiyor, istek atılmıyor.',
+  // Gönderim ve okuma işleri aynı nedeni paylaşır: okuma işinde biriken kayıt yoktur, metin ikisine de doğru olmalı.
+  kapali: 'Logo bağlantısı Sistem Ayarları\'nda kapalı; istek atılmıyor. Logo\'ya gidecek kayıtlar birikir, Logo\'dan okuma yapılmaz.',
   'satin-alma-kapali': 'Logo satın alma gönderimi Sistem Ayarları\'nda kapalı; talep ve siparişler birikiyor, istek atılmıyor.',
   'satis-kapali': 'Logo satış gönderimi Sistem Ayarları\'nda kapalı; teklif ve siparişler birikiyor, istek atılmıyor.',
   'mal-kabul-kapali': 'Logo mal kabul okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',

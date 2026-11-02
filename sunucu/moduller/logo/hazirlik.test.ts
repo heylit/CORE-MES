@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import type { LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -11,7 +12,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import { kontrolAdiminiYorumla, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
-import { hazirlik, kontrol } from './servis.ts';
+import { BEKLEME_NEDENLERI, hazirlik, kontrol } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -35,6 +36,23 @@ describe('LOGO-H1 akış durumu', () => {
     const ayarlar = { 'logo.baglanti': true, 'logo.hizmet-alinan-gonderimi': false, 'logo.hizmet-verilen-gonderimi': true };
     assert.equal(logoAkisDurumu(t, { ortamVar: true, ayarlar }), 'hazir');
     assert.equal(logoAkisDurumu(t, { ortamVar: true, ayarlar: { ...ayarlar, 'logo.hizmet-verilen-gonderimi': false } }), 'kapali');
+  });
+  // Ekran okuma akışında sütun çizmez, "N okundu" yazar; açıklama ekranda olmayan sütuna atıf yapmamalı.
+  test('okuma akışlarının açıklaması ekranda olmayan sütuna atıf yapmaz', () => {
+    for (const a of LOGO_AKISLARI.filter((x) => x.yon === 'logo-tmi')) assert.doesNotMatch(a.aciklama, /sütun/i, a.anahtar);
+  });
+});
+
+describe('LOGO bekleme nedenleri', () => {
+  // "Logo bağlantısı kapalı" nedeni okuma işlerinde de görünür; okuma işinde biriken kart yoktur.
+  test('bağlantı kapalı nedeni okuma işine de doğrudur: "kartlar birikiyor" demez', () => {
+    assert.doesNotMatch(BEKLEME_NEDENLERI.kapali, /kartlar birikiyor/);
+    assert.match(BEKLEME_NEDENLERI.kapali, /okuma yapılmaz/);
+  });
+  test('satış gönderimi ayarı kaynağı Siparişler olarak anlatır, kapalı portalı anmaz', () => {
+    const aciklama = LOGO_AYARLARI['logo.satis-gonderimi'].aciklama;
+    assert.doesNotMatch(aciklama, /portal/i);
+    assert.match(aciklama, /Siparişler/);
   });
 });
 
