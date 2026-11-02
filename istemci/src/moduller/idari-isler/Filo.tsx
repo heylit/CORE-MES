@@ -56,9 +56,8 @@ export function Filo() {
             <table className="tc-ii-tablo tc-ii-filo">
               <thead>
                 <tr>
-                  <th scope="col">Plaka</th><th scope="col">Araç</th><th scope="col">Sahiplik</th><th scope="col">Durum</th><th scope="col">Km</th>
+                  <th scope="col">Plaka</th><th scope="col"><span className="tc-gizli-etiket">Masraf</span></th><th scope="col">Araç</th><th scope="col">Sahiplik</th><th scope="col">Durum</th><th scope="col">Km</th>
                   <th scope="col">Sonraki bakım</th><th scope="col">Muayene</th><th scope="col">Sigorta</th><th scope="col">Sevkiyatta</th>
-                  <th scope="col"><span className="tc-gizli-etiket">Masraf</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -69,6 +68,7 @@ export function Filo() {
                         ? <button type="button" className="tc-ii-bag" onClick={() => formYaz({ arac: a })}>{a.plaka}</button>
                         : a.plaka}
                     </td>
+                    <td><Dugme simge="lira" aria-label={`${a.plaka} masrafları`} onClick={() => masrafYaz(a)} /></td>
                     <td>{aracAdi(a)}</td>
                     <td>{SAHIPLIK[a.sahiplik]}</td>
                     <td><Rozet ton={ARAC_DURUMU[a.durum].ton}>{ARAC_DURUMU[a.durum].etiket}</Rozet></td>
@@ -77,7 +77,6 @@ export function Filo() {
                     <td className="mono">{a.muayeneTarihi === null ? '—' : tarihMetni(a.muayeneTarihi)}</td>
                     <td className="mono">{a.sigortaTarihi === null ? '—' : tarihMetni(a.sigortaTarihi)}</td>
                     <td>{a.sevkiyatta ? 'Evet' : 'Hayır'}</td>
-                    <td><Dugme simge="lira" aria-label={`${a.plaka} masrafları`} onClick={() => masrafYaz(a)} /></td>
                   </tr>
                 ))}
               </tbody>

@@ -49,7 +49,7 @@ export function TalepPenceresi({ talep, kapat }: { talep: Talep | null; kapat: (
       {talep.durum === 'yeni' && <Dugme tur="birincil" simge="user" yukleniyor={bekliyor} onClick={() => void gonder('ustlen', {}, `${talep.no} üstlenildi`)}>Üstlen</Dugme>}
       {talep.durum === 'yeni' && <Dugme simge="users" onClick={() => kipYaz('ata')}>Ata</Dugme>}
       {talep.durum === 'yapiliyor' && <Dugme simge="back" yukleniyor={bekliyor} onClick={() => void gonder('birak', {}, `${talep.no} bırakıldı`)}>Bırak</Dugme>}
-      <Dugme tur={talep.durum === 'yapiliyor' ? 'birincil' : 'ikincil'} simge="check" onClick={() => kipYaz('kapat')}>Kapat</Dugme>
+      <Dugme tur={talep.durum === 'yapiliyor' ? 'birincil' : 'ikincil'} simge="check" onClick={() => kipYaz('kapat')}>Talebi kapat</Dugme>
       <Dugme tur="tehlike" simge="x" onClick={() => kipYaz('reddet')}>Reddet</Dugme>
     </span>
   ) : (
@@ -61,7 +61,7 @@ export function TalepPenceresi({ talep, kapat }: { talep: Talep | null; kapat: (
       )}
       {kip === 'kapat' && (
         <Dugme tur="birincil" simge="check" yukleniyor={bekliyor}
-          onClick={() => void gonder('kapat', metin.trim() === '' ? {} : { sonucNotu: metin.trim() }, `${talep.no} kapandı`)}>Kapat</Dugme>
+          onClick={() => void gonder('kapat', metin.trim() === '' ? {} : { sonucNotu: metin.trim() }, `${talep.no} kapandı`)}>Talebi kapat</Dugme>
       )}
       {kip === 'reddet' && (
         <Dugme tur="tehlike" simge="x" disabled={metin.trim() === ''} yukleniyor={bekliyor}

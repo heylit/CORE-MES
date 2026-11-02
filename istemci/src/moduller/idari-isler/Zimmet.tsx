@@ -74,8 +74,9 @@ export function Zimmet() {
               </thead>
               <tbody>
                 {gorunen.map((d) => (
-                  <tr key={d.id} data-uyari={d.acikZimmet !== null && d.acikZimmet.kisiId === null ? 'yakin' : undefined}>
-                    <td className="mono"><button type="button" className="tc-ii-bag" onClick={() => seciliYaz(d.id)}>{d.no}</button></td>
+                  <tr key={d.id} className="tc-ii-tiklanir" onClick={() => seciliYaz(d.id)}
+                    data-uyari={d.acikZimmet !== null && d.acikZimmet.kisiId === null ? 'yakin' : undefined}>
+                    <td className="mono"><button type="button" className="tc-ii-bag" onClick={(o) => { o.stopPropagation(); seciliYaz(d.id); }}>{d.no}</button></td>
                     <td><Simge ad={DEMIRBAS_TURU[d.tur].simge} /> {DEMIRBAS_TURU[d.tur].etiket}</td>
                     <td>{d.markaModel ?? '—'}</td>
                     <td className="mono">{d.seriNo ?? '—'}</td>

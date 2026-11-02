@@ -140,7 +140,9 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
               ? `Aracın kayıtlı km'si: ${kmMetni(verilen?.km ?? null)}`
               : `Çıkış km: ${kmMetni(gorev.cikisKm)}`} />
         )}
-        <p className="tc-ii-soluk">{gorevTarihleri(gorev)} · Aynı araç kesişen tarihlerde iki göreve verilmez.</p>
+        <p className="tc-ii-soluk">
+          {gorevTarihleri(gorev)}{gorev.durum === 'bekliyor' && !red ? ' · Aynı araç kesişen tarihlerde iki göreve verilmez.' : ''}
+        </p>
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
       </div>
     </Pencere>

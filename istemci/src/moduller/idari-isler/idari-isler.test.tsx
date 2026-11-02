@@ -165,6 +165,9 @@ describe('Tesis talepleri panosu', () => {
     ac('/idari-isler/talepler');
     fireEvent.click(await screen.findByRole('button', { name: /TT-2026-001/ }));
     const pencere = within(await screen.findByRole('dialog'));
+    // Pencereyi kapatan simgeyle karışmasın: talebi kapatan düğmenin adı ayrı.
+    expect(pencere.getAllByRole('button', { name: 'Kapat' })).toHaveLength(1);
+    expect(pencere.getByRole('button', { name: 'Talebi kapat' })).toBeTruthy();
     fireEvent.click(pencere.getByRole('button', { name: 'Reddet' }));
     const reddet = pencere.getByRole('button', { name: 'Reddet' });
     expect((reddet as HTMLButtonElement).disabled).toBe(true);
@@ -332,7 +335,10 @@ describe('Yemek sayısı', () => {
     fireEvent.change(screen.getByLabelText('Yemeğe kalacak ziyaretçi'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Elle düzeltme'), { target: { value: '2' } });
     expect(screen.getByText(/Eksik: düzeltme gerekçesi/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Düzeltme gerekçesi'), { target: { value: 'Deneme eğitmen' } });
+    expect(screen.getByText('88')).toBeTruthy();
+    expect(screen.getByText('Düzeltme girildiği için zorunlu')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Bildirildi olarak kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Düzeltme gerekçesi/), { target: { value: 'Deneme eğitmen' } });
     fireEvent.click(screen.getByRole('button', { name: '88 bildirildi olarak kaydet' }));
     await screen.findByText('88 bildirildi olarak kaydedildi');
     const [yazma] = yazmalar(istekler);
@@ -480,7 +486,7 @@ describe('Demirbaş ve zimmet', () => {
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'dnm-mn' } });
     expect(screen.queryByText('Deneme Operator')).toBeNull();
     expect(screen.getByText('DB-00053')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'DB-00053' }));
+    fireEvent.click(screen.getByText('DB-00053').closest('tr')!);
     const pencere = await screen.findByRole('dialog', { name: /DB-00053/ });
     expect(await within(pencere).findByText('Deneme Planlama')).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: 'Zimmetle' })).toBeNull();
@@ -584,11 +590,13 @@ describe('Araç görevleri', () => {
     // Kamyonun sigortası görev bitmeden bitiyor (IDR-25): listede yok, plakası ipucunda.
     await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(2));
     expect(within(pencere).getByText(/görev bitmeden biten araçlar listede yok: 34 DNM 101/)).toBeTruthy();
+    expect(within(pencere).getByText(/kesişen tarihlerde iki göreve verilmez/)).toBeTruthy();
     fireEvent.change(secim, { target: { value: '22' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
     await screen.findByText('Araç görevi onaylandı');
     fireEvent.click(screen.getByRole('button', { name: 'Dönüş' }));
     const donus = await screen.findByRole('dialog', { name: /Deneme liman/ });
+    expect(within(donus).queryByText(/kesişen tarihlerde/)).toBeNull();
     fireEvent.change(within(donus).getByLabelText('Dönüş km'), { target: { value: '89310' } });
     fireEvent.click(within(donus).getByRole('button', { name: 'Dönüşü yaz' }));
     await screen.findByText('Dönüş yazıldı');

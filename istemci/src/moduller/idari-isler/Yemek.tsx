@@ -67,7 +67,11 @@ function YemekHesabi({ gun, yenile }: { gun: YemekGunuCevabi; yenile: () => void
     ...(duzeltmeSayi === null ? ['düzeltme sayısı'] : []),
     ...(duzeltmeSayi !== null && duzeltmeSayi !== 0 && neden.trim() === '' ? ['düzeltme gerekçesi'] : []),
   ];
-  const sayi = eksik.length === 0 ? gun.kadro - gun.izinli + gun.fazlaMesai + Number(ziyaretci) + (duzeltmeSayi ?? 0) : null;
+  // Gerekçe eksik olsa da sayı gösterilir; kayıt yalnız eksik kalmayınca açılır.
+  const hesap = ADET.test(ziyaretci.trim()) && duzeltmeSayi !== null
+    ? gun.kadro - gun.izinli + gun.fazlaMesai + Number(ziyaretci) + duzeltmeSayi : null;
+  const sayi = eksik.length === 0 ? hesap : null;
+  const gerekceGerekli = duzeltmeSayi !== null && duzeltmeSayi !== 0;
   const gecmisGun = gun.tarih < gun.bugun;
 
   const gonder = async () => {
@@ -103,12 +107,12 @@ function YemekHesabi({ gun, yenile }: { gun: YemekGunuCevabi; yenile: () => void
           onChange={(e) => ziyaretciYaz(e.target.value)} />
         <div className="tc-ii-duzeltme">
           <Girdi etiket="Elle düzeltme" inputMode="numeric" value={duzeltme} disabled={!yazar} onChange={(e) => duzeltmeYaz(e.target.value)} ipucu="Eksi olabilir" />
-          <Girdi etiket="Düzeltme gerekçesi" value={neden} maxLength={SINIR.duzeltmeNedeni} disabled={!yazar}
-            onChange={(e) => nedenYaz(e.target.value)} />
+          <Girdi etiket="Düzeltme gerekçesi" value={neden} maxLength={SINIR.duzeltmeNedeni} disabled={!yazar} required={gerekceGerekli}
+            ipucu={gerekceGerekli ? 'Düzeltme girildiği için zorunlu' : undefined} onChange={(e) => nedenYaz(e.target.value)} />
         </div>
         <p className="tc-ii-toplam">
           <span>Bildirilecek sayı</span>
-          <span className="mono tc-ii-buyuk">{sayi ?? '—'}</span>
+          <span className="mono tc-ii-buyuk">{hesap ?? '—'}</span>
         </p>
         <p className="tc-ii-soluk">Tahmindir: personel giriş sistemi bağlanınca kadro yerine günün gerçek giriş sayısı kullanılır.</p>
       </section>

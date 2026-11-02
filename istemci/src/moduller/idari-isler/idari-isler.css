@@ -99,6 +99,8 @@ button.tc-ii-talep:hover { border-color: var(--ink); }
 .tc-ii-filo td { padding-top: var(--b-2); padding-bottom: var(--b-2); border-top: 1px solid var(--edge); }
 .tc-ii-filo tr[data-uyari='gecti'] td:first-child { border-left: var(--ikinci-vurgu) solid var(--stop); padding-left: var(--b-2); }
 .tc-ii-filo tr[data-uyari='yakin'] td:first-child { border-left: var(--ikinci-vurgu) solid var(--hazard); padding-left: var(--b-2); }
+.tc-ii-tiklanir { cursor: pointer; }
+.tc-ii-tiklanir:hover td { background: var(--panel); }
 .tc-ii-bag {
   min-height: var(--dokunma); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 700;
   text-decoration: underline; cursor: pointer;
