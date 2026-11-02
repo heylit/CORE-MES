@@ -266,7 +266,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const yari = await kart('yarimamul', 'aktif', 'RRD yarı mamul', 'adet');
     await kart('mamul', 'taslak', 'RRD taslak', 'adet');
     const kabul = await vt().tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'");
-    await vt().sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, '12.5', now())", [hammadde, kabul?.id]);
+    // Stok bakiyesi hareketsiz yalnız tablo sahibiyle açılır (stokun bakiye-defter tetiği).
+    await ortam!.sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, '12.5', now())", [hammadde, kabul?.id]);
     await vt().sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id, kritik_seviye) VALUES ($1, 5), ($2, 2)', [hammadde, yari]);
     const merkez = await vt().tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('RRD2-IM', 'Kişi merkezi') RETURNING id");
     const ist1 = await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('RRD2-1', 'Birinci', $1, true) RETURNING id", [merkez?.id]);

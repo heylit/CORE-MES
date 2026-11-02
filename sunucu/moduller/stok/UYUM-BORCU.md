@@ -83,3 +83,5 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 54. SONRA: körlük yalnız sayım kipindedir. `stok.sayim` taşıyan depo rolü konum, malzeme ve hareket ekranlarında miktarı görmeye devam eder; tam körlük okuma yetkisini daraltmayı ister (ayrı soru).
 55. SONRA: statülü ve kalite durumu serbest olmayan (karantina, red, şartlı) bakiye sayılamaz; sayım yalnız statüsüz serbest bakiyeyi sayar (1279 a "karantina/statülü satırlar ayrı").
 56. SONRA: Reçete ve Rota Stok sekmesindeki sayım hâlâ beklenen miktarla gider (BASKA-MODUL-ISTEKLERI "recete-rota: kör sayım"); eşik iki yolda da uygulanır.
+## Bakiye-defter tetiği (1692 b) - bilgi
+57. BİLGİ: tetik yalnız yeni yazımı denetler (işlem içi fark); geçmişte bakiye ile defter arasında oluşmuş fark kalır ve 1692 a'nın gece karşılaştırmasıyla görünür. Tablo sahibi (göç kullanıcısı) muaftır; düzeltme göçü ve test fikstürü sahiple yazar.

@@ -824,7 +824,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const op10 = (await o().sahip.tek<{ id: number }>(
       'INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, $3) RETURNING id', [e, tip!.id, 'OP 10']))!.id;
     const kabul = await kabulKonumu();
-    await o().vt.tx((db) => sorgular.hareketYaz(db, {
+    // Bakiyesiz hareket yalnız tablo sahibiyle yazılır; uygulama kullanıcısında bakiye-defter tetiği reddeder (1692 b).
+    await o().sahip.tx((db) => sorgular.hareketYaz(db, {
       tur: 'cikis', malzemeId: hm, partiId: null, partiSecimi: null, kaynakKonumId: kabul, hedefKonumId: null, miktar: '1', onayliEksi: false,
       girisKaynagi: null, cikisNedeni: 'uretime_sarf', uretimEmriId: e, geriAlinanId: null, kisiId: kisiler.get('yonetici')!, aciklama: null,
       kaynakStatuId: null, hedefStatuId: null, kaynakKaliteDurumu: 'serbest', hedefKaliteDurumu: null, isEmriId: op10,
