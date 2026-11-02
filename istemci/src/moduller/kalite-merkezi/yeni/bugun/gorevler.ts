@@ -25,8 +25,9 @@ export const yarimMi = (i: { adimli?: boolean; sonuc?: string }): boolean => !!i
 
 const dolu = (v: unknown): boolean => String(v ?? '').trim() !== '';
 
-// Form onayı mühendis işidir; onaylayamayan kişi aynı satırda kaydı görüntüler.
-export function bugunGorevleri(veri: KmVerisi, onaylayabilir: boolean): Gorev[] {
+// Form onayı mühendis işidir; onaylayamayan kişi aynı satırda kaydı görüntüler. Yazamayan kişiye NCR açtıran eylem verilmez:
+// form onda açılmaz, satır yalnız ilgili görünüme götürür.
+export function bugunGorevleri(veri: KmVerisi, onaylayabilir: boolean, yazabilir = true): Gorev[] {
   const T: Gorev[] = [];
   for (const i of veri.insp.filter(yarimMi)) {
     const kar = i.chars ?? [];
@@ -41,7 +42,9 @@ export function bugunGorevleri(veri: KmVerisi, onaylayabilir: boolean): Gorev[] 
     T.push({
       oncelik: q.ton === 'kotu' ? 0 : 2, grup: 'Karar bekleyen ürünler', baslik: `${q.parcaNo}: ${q.baslik}`,
       alt: `${q.ref}${q.lot ? ` | lot ${q.lot}` : ''} | ${sayiMetni(q.miktar)} adet | ${String(q.yas)} gündür bekliyor`,
-      eylemMetni: q.eylem, eylem: { tur: 'gorunum', gorunum: q.hedef, gecis: q.gecis },
+      ...(yazabilir
+        ? { eylemMetni: q.eylem, eylem: { tur: 'gorunum', gorunum: q.hedef, gecis: q.gecis } }
+        : { eylemMetni: 'Görüntüle', eylem: { tur: 'gorunum', gorunum: q.hedef } }),
     });
   }
   for (const c of veri.capa) {

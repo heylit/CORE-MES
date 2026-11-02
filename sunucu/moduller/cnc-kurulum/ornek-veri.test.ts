@@ -5,7 +5,8 @@ import { modulOrnekVerileriniKesfet, ornekVeriYukle } from '#cekirdek/ornek-veri
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import { kisiNoKullaniciAdindan } from '../kisiler/disari.ts';
 import { cncKurulumDurumu, DURUM_ANAHTARI } from './disari.ts';
-import { ORNEK_DURUM, ORNEK_YAZAN } from './ornek-veri.ts';
+import { ORNEK_DURUM, ORNEK_TEZGAH_AYARLARI, ORNEK_YAZAN } from './ornek-veri.ts';
+import { tezgahlar } from './servis.ts';
 import { kayitGuncelle } from './sorgular.ts';
 import type { OrnekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 
@@ -23,20 +24,25 @@ describe('cnc-kurulum örnek verisi', { timeout: 60_000 }, () => {
   let liste: OrnekVeriTanimi[] = [];
   before(async () => {
     ({ vt, kaldir } = await testVeritabaniKur('cnc_kurulum_ornek'));
-    liste = (await modulOrnekVerileriniKesfet()).filter((t) => t.modul === 'kisiler' || t.modul === 'cnc-kurulum');
+    liste = (await modulOrnekVerileriniKesfet()).filter((t) => ['kisiler', 'istasyonlar', 'cnc-kurulum'].includes(t.modul));
   });
   after(async () => { await kaldir?.(); });
 
-  test('kişilerden sonra örnek kurulum kaydı tek anahtara json olarak girer', async () => {
-    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklendi', moduller: ['kisiler', 'cnc-kurulum'] });
+  test('kişi ve istasyonlardan sonra örnek kurulum kaydı tek anahtara json olarak girer; örnek makinelerin üçü ayarlı, biri ayarsız', async () => {
+    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklendi', moduller: ['kisiler', 'istasyonlar', 'cnc-kurulum'] });
     const kayit = await acik().tx((db) => cncKurulumDurumu(db));
     assert.equal(kayit?.bicim, 'json');
     assert.deepEqual(kayit?.deger, ORNEK_DURUM);
+    const liste2 = (await acik().tx((db) => tezgahlar(db))).tezgahlar;
+    assert.deepEqual(
+      Object.fromEntries(liste2.filter((t) => t.kod.startsWith('ORN-CNC-')).map((t) => [t.kod, t.ayar])),
+      { ...ORNEK_TEZGAH_AYARLARI, 'ORN-CNC-T2': null },
+    );
   });
 
   test('ikinci koşu bir şey yazmaz', async () => {
     const once = await acik().tx((db) => cncKurulumDurumu(db));
-    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklu', moduller: ['kisiler', 'cnc-kurulum'] });
+    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklu', moduller: ['kisiler', 'istasyonlar', 'cnc-kurulum'] });
     assert.equal((await acik().tx((db) => cncKurulumDurumu(db)))?.surum, once?.surum);
   });
 
@@ -48,7 +54,7 @@ describe('cnc-kurulum örnek verisi', { timeout: 60_000 }, () => {
       await kayitGuncelle(db, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: bos, kisiId: kisiId ?? 0 });
     });
     const once = await acik().tx((db) => cncKurulumDurumu(db));
-    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklu', moduller: ['kisiler', 'cnc-kurulum'] });
+    assert.deepEqual(await ornekVeriYukle(acik(), liste, secenek), { durum: 'yuklu', moduller: ['kisiler', 'istasyonlar', 'cnc-kurulum'] });
     const sonra = await acik().tx((db) => cncKurulumDurumu(db));
     assert.equal(sonra?.surum, once?.surum);
     assert.deepEqual(sonra?.deger, bos);

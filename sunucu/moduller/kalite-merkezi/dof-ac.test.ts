@@ -86,7 +86,7 @@ describe('Kalite Merkezi DÖF açma ve durumu (gerçek PostgreSQL)', () => {
     const kapanacak = await ac(istek('audits.a3.b1'));
     const silinecek = await ac(istek('audits.a3.b2'));
     const k = await govde(kapanacak.kimlik);
-    await o().vt.tx((db) => servis.onayla(db, kisi, 'capa', kapanacak.kimlik, { ...k.govde, durum: 'Kapalı', adim: 8, kapanis: '2026-10-23' }, k.surum));
+    await o().vt.tx((db) => servis.onayla(db, kisi, 'capa', kapanacak.kimlik, { ...k.govde, durum: 'Kapalı', adim: 8, kokNeden: 'Bağlama', etkinlik: 'Etkin', kapanis: '2026-10-23' }, k.surum));
     await o().vt.tx(async (db) => servis.sil(db, kisi, 'capa', silinecek.kimlik, (await govde(silinecek.kimlik)).surum));
 
     const d = await durumlar(['audits.a3.b0', 'audits.a3.b1', 'audits.a3.b2', 'audits.a3.yok', 'boşluklu anahtar']);

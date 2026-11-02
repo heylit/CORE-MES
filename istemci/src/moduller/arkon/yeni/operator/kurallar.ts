@@ -77,6 +77,9 @@ export const ilkParcaKalemleri = (o: Pick<Is, 'pkg'>): PlanItem[] =>
   (o.pkg && isTuru(o.pkg) === 'cnc' ? numunePlani(o.pkg).filter((r) => r.when === 'first' && r.gate).flatMap((r) => numuneOlculeri(o.pkg!, r)) : []);
 const gecti = (m: Meas | undefined): boolean => !!(m && (m.ok || m.dev));
 export const ilkParcaKapisi = (o: Pick<Is, 'pkg' | 'meas'>): PlanItem[] => ilkParcaKalemleri(o).filter((b) => !gecti((o.meas || {})[b.id]));
+// TMI'nin adımdaki ilk parça kapısı (sunucu `ilkParcaGereksinimi`): kontrol planı boş olsa da sağlam sayım kalite kararına kadar bekler.
+export const tmiIlkParcaGerekli = (p: { tmi?: unknown } | null | undefined): boolean =>
+  !!p && !!p.tmi && typeof p.tmi === 'object' && (p.tmi as { ilkParcaGerekli?: unknown }).ilkParcaGerekli === true;
 
 // Numune çizgisi (664): sayıyla tekrarlanan kuralda aralığın başından bu yana sayılan parça ve sıradaki numunenin parça sırası, süreli
 // kuralda geçen dakika. Hesap kontrolTakvimi ile aynıdır (taban: işe dönüşte sayılmış parçalar); ilk, son ve vardiya kuralında çizgi yok.
@@ -224,6 +227,7 @@ export function siradakiGorev(o: GorevIsi | null | undefined, D: KontrolTakvimi,
     const kritik = qd.some((x) => x.crit);
     return { tone: kritik ? 'stop' : 'hazard', icon: 'target', t: `${ilkKapi.some((x) => x.id === b.id) ? 'İlk parça numunesi · ' : 'Numune zamanı · '}${ilkUc(qd)}`, d: `${kritik ? 'KRİTİK · ' : ''}Parçayı al, kaliteye gönder · ${qd.length} ölçü`, act: 'sample', btn: 'Kaliteye gönder', pulse: true, key: 'due' };
   }
+  if (ilk && ilk.tmi && ilk.sayilan > 0 && o.state === 'running') return { tone: 'hazard', icon: 'target', t: ILK_PARCA_KARAR_BEKLIYOR_ILETISI, d: `Üretim sürer · ilk parça kararı Kalite Merkezi'nde verilir${kararBekleyenEki(ilk)}`, act: null, quiet: true, key: 'kbt' };
   if (ilk && ilk.acik && !ilk.yeniden && ilk.sayilan > 1 && o.state === 'running') return { tone: 'hazard', icon: 'target', t: ILK_PARCA_KARAR_BEKLIYOR_ILETISI, d: `Üretim sürer · kalite kararıyla sağlama ya da redde geçer${kararBekleyenEki(ilk)}`, act: null, quiet: true, key: 'kb' };
   if (o.state === 'paused') return { tone: 'hold', icon: 'play', t: 'İş duraklatıldı', d: `Hazır olduğunda devam et${nx ? ` · ${nx}` : ''}`, act: 'resume', btn: 'Devam et' };
   if (o.state === 'queued') {
@@ -403,6 +407,17 @@ export const sonucBelgesi = (x: Is): Result & { kart: number | null } => ({
 // Toplu ve tek sayımda dokunulmayan iyi parça oranı (DoneOv).
 export const kaliteYuzdesi = (o: Pick<Is, 'good' | 'scrap'>): string => (100 * o.good / (o.good + o.scrap || 1)).toFixed(1);
 
+// Bitiş özetinin sayıları. TMI işinde operatör hurda yazmaz, hatalıyı kaliteye ayırır (1034): satır "Hatalı" olur, sayısı sunucunun
+// adım toplamıdır ve kalite oranına girer. Toplam bilinmiyorsa (null) sayı da oran da "—" kalır; sıfır uydurulmaz.
+export interface OzetSatiri { etiket: string; deger: string; ton?: 'durdu' }
+export function bitisOzeti(o: Pick<Is, 'good' | 'scrap'>, hatali: number | null | undefined, sayi: (n: number) => string, kararBekleyen = 0): OzetSatiri[] {
+  // Karar bekleyen sağlam TMI'de henüz sağlam değildir (ilk parça kapısı): iyi parçanın kaçının beklediği aynı satırda söylenir.
+  const iyi = { etiket: 'İyi parça', deger: kararBekleyen > 0 ? `${sayi(o.good)} (${sayi(kararBekleyen)} karar bekliyor)` : sayi(o.good) };
+  if (hatali === undefined) return [iyi, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }];
+  if (hatali === null) return [iyi, { etiket: 'Hatalı', deger: '—', ton: 'durdu' }, { etiket: 'Kalite', deger: '—' }];
+  return [iyi, { etiket: 'Hatalı', deger: String(hatali), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi({ good: o.good, scrap: hatali })}` }];
+}
+
 
 // Ton adı -> ortak arayüzün durum adı (renk data-durum ile seçilir).
 const TON_DURUMU: Readonly<Record<Ton, MakineDurumu>> = { run: 'calisiyor', hold: 'durakli', stop: 'durdu', done: 'bitti', hazard: 'ayar', idle: 'sirada' };
@@ -484,4 +499,12 @@ export function lotKarariOku(sonuc: unknown): LotKarari | null {
   if (!lk || typeof lk !== 'object') return null;
   const k = lk as Partial<LotKarari>;
   return (k.karar === 'kabul' || k.karar === 'ret') && k.bulunan && typeof k.at === 'number' ? k as LotKarari : null;
+}
+
+// Eksik adette bitirme: hedefe varmadan Bitir basılı tutulunca iş sorulmadan "tamamlandı" oluyor, kalan adet sonraki adımda kayıp
+// sayılıyordu. Kalan varsa onay istenir; hatalıya ayrılanlar kalana girmez (kaliteye gitti, adımda üretimdir). Yalnız talaşlı işte: kalite,
+// depo ve öteki istasyonların bitişi lot kararı ya da toplama listesiyle gelir, adet hedefi orada aynı anlamı taşımaz.
+export function bitirmeEksigi(o: Pick<Is, 'target' | 'good' | 'pkg'>, hatali: number | null | undefined): number {
+  if (!o.pkg || isTuru(o.pkg) !== 'cnc') return 0;
+  return Math.max(0, kalanAdet(o.target, o.good) - (hatali ?? 0));
 }

@@ -51,8 +51,12 @@ const IS_EMRI_SUTUNLARI: Sutun<SapanIsEmri>[] = [
   { anahtar: 'neden', baslik: 'Neden', hucre: (s) => KALEM_ADI[s.neden] },
 ];
 
+// Plan sayfasını görmeyene bağlantı çizilmez: "yetkiniz yok" sayfasına götürürdü.
+const PLAN_SAYFASI = 'sayfa.plan';
+
 function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
   const { gecikmeGunu, gunlukOran, tutar, ceza } = m.karRiski;
+  const planGorur = useOturum().data?.islemler.includes(PLAN_SAYFASI) === true;
   const oranMetni = `%${gunlukOran.toLocaleString('tr-TR')}/gün`;
   return (
     <Kart baslik="Gecikme kâr riski">
@@ -75,7 +79,7 @@ function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
             )}
           </>
         )}
-        <Link className="tc-pm-risk-git" to="/plan"><Simge ad="gantt" /> Plana git</Link>
+        {planGorur && <Link className="tc-pm-risk-git" to="/plan"><Simge ad="gantt" /> Plana git</Link>}
       </div>
     </Kart>
   );

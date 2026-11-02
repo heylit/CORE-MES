@@ -86,6 +86,14 @@ describe('Bugün görev listesi', () => {
     });
   });
 
+  it('yazamayana NCR açtırmaz: karar bekleyen ürün yalnız görünüme götürür (KM-5, 1779d)', () => {
+    const veri = veriKur({ lot: [{ _id: 'l1', no: 'LOT-1', parcaNo: 'DNM-01', lotNo: 'L-1', karar: 'Ret', N: 50, tarih: gunSonra(-1) }] });
+    expect(bugunGorevleri(veri, true)[0]).toMatchObject({ eylemMetni: 'NCR aç', eylem: { gecis: { ac: 'yeni' } } });
+    const g = bugunGorevleri(veri, true, false)[0];
+    expect(g).toMatchObject({ eylemMetni: 'Görüntüle', eylem: { tur: 'gorunum', gorunum: 'uygunsuzluklar' } });
+    expect(g?.eylem).not.toHaveProperty('gecis');
+  });
+
   it('geçersiz kalibrasyonlu cihaz Kalibrasyon sayfasına gönderir; kullanım dışı cihaz listede yok', () => {
     const veri = veriKur({
       dev: [{ _id: 'd1', kod: 'CH-1', ad: 'Kumpas', sonKal: ayEkle(bugun(), -24), periyot: 12 }, { _id: 'd2', kod: 'CH-2', ad: 'Mikrometre', kullanimDisi: true }],

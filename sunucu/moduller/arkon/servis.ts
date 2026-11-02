@@ -327,7 +327,9 @@ async function isEmriTaslaklari(
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = g.istasyon?.tip === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
-      ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)), girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
+      ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)),
+      ilkParcaGerekli: ilkParcaGereksinimi(ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)) ?? 'her_kurulum', g.istasyon?.tip ?? null) === 'gerekli',
+      girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     const kimlik = String(yayinli['id']);

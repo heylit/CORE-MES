@@ -1,6 +1,6 @@
 import { DOSYA_TURLERI } from '#paylasilan/sozlesme/dosya.ts';
 import { createHash } from 'node:crypto';
-import { KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
@@ -53,6 +53,25 @@ export const ILETILER = {
   lotAyari: 'Lot planının muayene seviyesi ya da AQL değeri geçersiz.',
   lotSayisi: 'Lot kararı için en az bir sınıfın bulunan uygunsuz sayısı gerekli; sayı 0 ile parti büyüklüğü arasında olmalı.',
   lotDurduruldu: 'Bu parça için kabul muayenesi durduruldu; Kalite Merkezi\'nde sıkılık geçiş tablosundan yeniden başlatılmalı.',
+  lotKarari: 'Lot kararı plan ve bulunan uygunsuz sayılarıyla uyuşmuyor.',
+  lotPlani: 'Lot planı parti büyüklüğü, seviye, AQL ve sıkılıkla uyuşmuyor.',
+  lotSikiligi: 'Bu parça sıkılaştırılmış muayenede; lot normal sıkılıkla kaydedilemez.',
+  karakteristikSonucu: 'Karakteristik sonucu ölçülen değer ve toleransla uyuşmuyor.',
+  muayeneSonucu: 'Muayene sonucu karakteristiklerle ve belge kontrolüyle uyuşmuyor.',
+  partiMiktari: 'Parti miktarı sıfırdan büyük bir sayı olmalı.',
+  numuneSayisi: 'Numune sayısı 0 ile parti miktarı arasında olmalı.',
+  ileriTarih: 'Kayıt tarihi bugünden ileri olamaz.',
+  ciftNumara: 'Bu numarayla başka bir kayıt var.',
+  parcaYok: 'Parça no Malzemeler\'de bulunamadı.',
+  muayeneci: 'Muayeneci oturumdaki kişidir; başkası adına kayıt yalnız yöneticidedir.',
+  izIslemi: 'Değişiklik izinin işlemi ya da kaydı geçersiz.',
+  izYetkisi: 'Bu değişiklik izi işlemi için yetkiniz yok.',
+  dofKapanisAdimi: 'Kapatmak için 8 adımın tamamı işaretlenmeli.',
+  dofKapanisEtkinlik: 'Etkinlik doğrulanmadan DÖF kapatılamaz.',
+  dofKapanisKokNeden: 'Kök neden girilmeden DÖF kapatılamaz.',
+  dofTermini: 'DÖF termini açılış gününden önce olamaz.',
+  ncrMrbKarari: 'MRB kararı verilmeden NCR kapatılamaz.',
+  ncrOnayReferansi: 'Müşteri onaylı kararda onay referansı gerekli.',
 } as const;
 
 // Uygulamanın rolleri ve ayarları bu kayıtlardadır; giriş TMI oturumu olduğu için onları yalnız yönetici değiştirir.
@@ -1148,4 +1167,155 @@ export function girisNcrGovdesi(
     tanim: `Hatalı giriş: ${s.malKabulNo}, lot ${s.partiEtiketi ?? '-'}, ${s.hataliMiktar} hatalı${tedarikci}.${not}`,
     mrb: GIRIS_MRB[g.karar], mrbGerekce: g.not ?? '',
   };
+}
+
+/* ---------------- kayıt içeriği denetimi (K2 a; KM-1..4, kart 1779e) ---------------- */
+// Kalite kararları ekranda hesaplanır ama sunucu da aynı kuralla yeniden hesaplar: istemciden gelen karar, sonuç ve kapanış koşulu
+// uymuyorsa yazma reddedilir. Kurallar ekranın saf kurallarının kopyasıdır (`istemci/.../yeni/kurallar.ts karakteristikSonucu`,
+// `muayene/hesap.ts muayeneTopla`, `dof/dof-kurallari.ts kapanisHatasi`, `ncr/ncr-kurallari.ts ncrSorunlari`); eşitliği testler korur.
+export type IcerikReddi = { ileti: keyof typeof ILETILER; alan: string };
+type G = Record<string, unknown>;
+
+const sayiOku = (v: unknown): number => parseFloat(String(v ?? '').replace(',', '.'));
+// Ekranın `karakteristikSonucu`: nitel seçim, nicel değer nominal ± tolerans içinde mi; değer yoksa boş.
+export function karakteristikSonucu(c: G): 'OK' | 'NOK' | '' {
+  if (c.tip === 'Nitel') return c.olcum === 'Uygun' ? 'OK' : c.olcum === 'Uygun değil' ? 'NOK' : '';
+  const m = sayiOku(c.olcum);
+  const n = sayiOku(c.nominal);
+  const alt = Math.abs(sayiOku(c.alt || 0) || 0);
+  const ust = Math.abs(sayiOku(c.ust || 0) || 0);
+  if (Number.isNaN(m) || Number.isNaN(n)) return '';
+  return m >= n - alt - 1e-9 && m <= n + ust + 1e-9 ? 'OK' : 'NOK';
+}
+// Ekranın belge kontrolü madde sayıları (`sabitler.ts` GIRIS_CHK, FAI_CHK).
+export const GIRIS_KONTROL_SAYISI = 5;
+export const FAI_KONTROL_SAYISI = 3;
+const dizi = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+// Ekranın `muayeneTopla` sonucu: karakteristik yok ya da sonucu eksikse "Devam ediyor", uygunsuz varsa "Ret", belge kontrolü eksikse
+// "Beklemede", yoksa "Kabul".
+export function muayeneSonucu(g: G): string {
+  const chars = dizi(g.chars) as G[];
+  if (chars.length === 0 || chars.some((c) => karakteristikSonucu(c) === '')) return 'Devam ediyor';
+  if (chars.some((c) => karakteristikSonucu(c) === 'NOK')) return 'Ret';
+  const belgeEksik = (g.tur === 'Giriş' && dizi(g.gchk).length < GIRIS_KONTROL_SAYISI) || (g.tur === 'FAI' && dizi(g.fchk).length < FAI_KONTROL_SAYISI);
+  return belgeEksik ? 'Beklemede' : 'Kabul';
+}
+
+const doluMu = (v: unknown): boolean => v !== undefined && v !== null && String(v).trim() !== '';
+const degisti = (onceki: G | null, g: G, alan: string): boolean => onceki === null || JSON.stringify(onceki[alan] ?? null) !== JSON.stringify(g[alan] ?? null);
+const tamSayi = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : null);
+const LOT_SAYI_ALANLARI: Readonly<Record<AqlSinifi, 'bKr' | 'bMj' | 'bMn'>> = { Kritik: 'bKr', Majör: 'bMj', Minör: 'bMn' };
+const LOT_KARARLARI: readonly unknown[] = ['Kabul', 'Ret'];
+
+function lotReddi(g: G): IcerikReddi | null {
+  if (g.tip === 'reset') return null;
+  const karar = LOT_KARARLARI.includes(g.karar);
+  const N = tamSayi(g.N);
+  if ((karar || doluMu(g.N)) && (N === null || N < 2)) return { ileti: 'lotBuyuklugu', alan: 'N' };
+  const bulunan = {} as LotBulunani;
+  for (const s of AQL_SINIFLARI) {
+    const v = g[LOT_SAYI_ALANLARI[s]];
+    if (!doluMu(v)) { bulunan[s] = null; continue; }
+    const b = tamSayi(v);
+    if (b === null || b < 0 || (N !== null && b > N)) return { ileti: 'lotSayisi', alan: LOT_SAYI_ALANLARI[s] };
+    bulunan[s] = b;
+  }
+  if (!karar) return null;
+  if (g.siddet !== AQL_NORMAL && g.siddet !== AQL_SIKI) return { ileti: 'lotAyari', alan: 'siddet' };
+  const ayar: MuayeneAqlAyari = { seviye: metin(g.seviye), kr: metin(g.kr), mj: metin(g.mj), mn: metin(g.mn) };
+  const plan = muayenePlani(N!, ayar, g.siddet);
+  if (plan === null) return { ileti: 'lotAyari', alan: 'plan' };
+  const yazilan = g.plan;
+  if (yazilan !== undefined && yazilan !== null) {
+    if (typeof yazilan !== 'object') return { ileti: 'lotPlani', alan: 'plan' };
+    for (const s of plan.siniflar) {
+      const p = (yazilan as G)[s.sinif] as G | undefined;
+      if (p !== undefined && (p.n !== s.n || p.ac !== s.ac || p.re !== s.re)) return { ileti: 'lotPlani', alan: 'plan' };
+    }
+  }
+  const hesap = lotKarari(plan, bulunan);
+  if (hesap === null) return { ileti: 'lotSayisi', alan: 'bMj' };
+  return hesap === g.karar ? null : { ileti: 'lotKarari', alan: 'karar' };
+}
+
+function muayeneReddi(g: G): IcerikReddi | null {
+  for (const c of dizi(g.chars) as G[]) {
+    // Satırın yazılmış sonucu hesapla uymalı; sonucu yazılmamış satır genel sonucun hesabına zaten girer.
+    if (doluMu(c.sonuc) && c.sonuc !== karakteristikSonucu(c)) return { ileti: 'karakteristikSonucu', alan: 'chars' };
+  }
+  if ((g.sonuc ?? '') !== '' && g.sonuc !== muayeneSonucu(g)) return { ileti: 'muayeneSonucu', alan: 'sonuc' };
+  const miktar = doluMu(g.miktar) ? sayiOku(g.miktar) : null;
+  if (miktar !== null && !(miktar > 0)) return { ileti: 'partiMiktari', alan: 'miktar' };
+  if (doluMu(g.numune)) {
+    const n = sayiOku(g.numune);
+    if (!(n >= 0) || (miktar !== null && n > miktar)) return { ileti: 'numuneSayisi', alan: 'numune' };
+  }
+  return null;
+}
+
+function dofReddi(onceki: G | null, g: G): IcerikReddi | null {
+  if ((degisti(onceki, g, 'termin') || degisti(onceki, g, 'acilis')) && doluMu(g.termin) && doluMu(g.acilis) && metin(g.termin) < metin(g.acilis)) {
+    return { ileti: 'dofTermini', alan: 'termin' };
+  }
+  if (g.durum !== 'Kapalı' || onceki?.durum === 'Kapalı') return null;
+  if ((Number(g.adim ?? 0) || 0) < 8) return { ileti: 'dofKapanisAdimi', alan: 'adim' };
+  if (g.etkinlik !== 'Etkin') return { ileti: 'dofKapanisEtkinlik', alan: 'etkinlik' };
+  if (!doluMu(g.kokNeden)) return { ileti: 'dofKapanisKokNeden', alan: 'kokNeden' };
+  return null;
+}
+
+const MRB_KARAR_BEKLIYOR = 'Karar bekliyor';
+function ncrReddi(onceki: G | null, g: G): IcerikReddi | null {
+  const kapaniyor = g.durum === UYGUNSUZLUK_KAPALI && onceki?.durum !== UYGUNSUZLUK_KAPALI;
+  if (kapaniyor && (!doluMu(g.mrb) || g.mrb === MRB_KARAR_BEKLIYOR)) return { ileti: 'ncrMrbKarari', alan: 'mrb' };
+  if ((kapaniyor || degisti(onceki, g, 'mrb')) && metin(g.mrb).includes('müşteri onaylı') && !doluMu(g.mrbGerekce)) {
+    return { ileti: 'ncrOnayReferansi', alan: 'mrbGerekce' };
+  }
+  return null;
+}
+
+// Durumsuz içerik kuralları; veritabanına bakanlar (sıkılık, çift numara, parça, muayeneci) servistedir. Yalnız arşiv bayrağı değişen
+// yazma içeriğe dokunmaz, denetlenmez. Kayıt tarihi yalnız değiştiğinde bugünle karşılaştırılır (eski kayıt düzenlenebilsin).
+export function icerikReddi(koleksiyon: string, onceki: G | null, g: G, bugun: string): IcerikReddi | null {
+  if (yalnizArsivDegisiyor(onceki, g)) return null;
+  if ((koleksiyon === MUAYENE_KOLEKSIYONU || koleksiyon === LOT_KOLEKSIYONU || koleksiyon === UYGUNSUZLUK_KOLEKSIYONU)
+    && degisti(onceki, g, 'tarih') && doluMu(g.tarih) && metin(g.tarih).slice(0, 10) > bugun) return { ileti: 'ileriTarih', alan: 'tarih' };
+  if (koleksiyon === LOT_KOLEKSIYONU) return lotReddi(g);
+  if (koleksiyon === MUAYENE_KOLEKSIYONU) return muayeneReddi(g);
+  if (koleksiyon === DOF_KOLEKSIYONU) return dofReddi(onceki, g);
+  if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU) return ncrReddi(onceki, g);
+  return null;
+}
+
+// Numarası tek olması gereken kayıtlar; numara yeni ya da değiştiyse aynı koleksiyonda başka kimlikte aranır.
+export const NUMARALI_KOLEKSIYONLAR: readonly string[] = [MUAYENE_KOLEKSIYONU, LOT_KOLEKSIYONU, UYGUNSUZLUK_KOLEKSIYONU, DOF_KOLEKSIYONU];
+export const numaraDenetlenirMi = (koleksiyon: string, onceki: G | null, g: G): boolean =>
+  NUMARALI_KOLEKSIYONLAR.includes(koleksiyon) && g.tip !== 'reset' && doluMu(g.no) && degisti(onceki, g, 'no') && !yalnizArsivDegisiyor(onceki, g);
+// Muayene ve lot kabulünde parça Malzemeler'de, muayeneci oturumdaki kişidir (yönetici başkası adına yazabilir); yalnız alan yeni
+// ya da değiştiyse denetlenir.
+export const KISILI_KOLEKSIYONLAR: readonly string[] = [MUAYENE_KOLEKSIYONU, LOT_KOLEKSIYONU];
+export const parcaDenetlenirMi = (koleksiyon: string, onceki: G | null, g: G): boolean =>
+  KISILI_KOLEKSIYONLAR.includes(koleksiyon) && g.tip !== 'reset' && doluMu(g.parcaNo) && degisti(onceki, g, 'parcaNo');
+export const muayeneciReddi = (koleksiyon: string, onceki: G | null, g: G, kisiAdi: string, yonetici: boolean): boolean =>
+  KISILI_KOLEKSIYONLAR.includes(koleksiyon) && g.tip !== 'reset' && !yonetici && doluMu(g.muayeneci) && degisti(onceki, g, 'muayeneci')
+  && metin(g.muayeneci) !== kisiAdi.trim();
+// Lot sıkılığı: kayıt sunucunun hesapladığından gevşek olamaz (sıkılaştırılmışta normal yazılamaz, durdurulmuşta karar yazılamaz).
+export function lotSikilikReddi(g: G, hesap: AqlSiddeti | typeof AQL_DURDURULDU): 'lotSikiligi' | 'lotDurduruldu' | null {
+  if (g.tip === 'reset' || !LOT_KARARLARI.includes(g.karar)) return null;
+  if (hesap === AQL_DURDURULDU) return 'lotDurduruldu';
+  return hesap === AQL_SIKI && g.siddet !== AQL_SIKI ? 'lotSikiligi' : null;
+}
+
+// KM-3: değişiklik izinin kişi, rol ve zamanı sunucudandır; işlem ekranın işlemlerinden biridir ve yetkisi olanındır.
+export const IZ_ISLEMLERI = ['oluşturma', 'değişiklik', 'silme', 'kilit açma', 'FAI paketi oluşturma', 'arşivleme'] as const;
+export type IzRolu = 'Kalite yöneticisi' | 'Kalite mühendisi' | 'Muayeneci';
+export const izRolu = (yonetici: boolean, onayla: boolean): IzRolu => (yonetici ? 'Kalite yöneticisi' : onayla ? 'Kalite mühendisi' : 'Muayeneci');
+export function izGovdesi(g: G, k: { ad: string; rol: IzRolu; zaman: string; yonetici: boolean; onayla: boolean }): { govde: G } | { ret: IcerikReddi } {
+  const islem = g.islem;
+  if (!(IZ_ISLEMLERI as readonly unknown[]).includes(islem)) return { ret: { ileti: 'izIslemi', alan: 'islem' } };
+  if (typeof g.col !== 'string' || !(KALITE_MERKEZI_KOLEKSIYONLARI as readonly string[]).includes(g.col) || g.col === IZ_KOLEKSIYONU) return { ret: { ileti: 'izIslemi', alan: 'col' } };
+  if (typeof g.id !== 'string' || g.id === '') return { ret: { ileti: 'izIslemi', alan: 'id' } };
+  if (islem === 'kilit açma' && !k.onayla) return { ret: { ileti: 'izYetkisi', alan: 'islem' } };
+  if (islem === 'arşivleme' && !k.yonetici) return { ret: { ileti: 'izYetkisi', alan: 'islem' } };
+  return { govde: { ...g, t: k.zaman, kim: k.ad, rol: k.rol } };
 }

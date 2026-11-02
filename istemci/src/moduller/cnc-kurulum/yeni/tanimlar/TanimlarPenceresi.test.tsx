@@ -26,13 +26,19 @@ afterEach(cleanup);
 beforeEach(() => { sifirla(); yetki.yazabilir = true; sunucu.yaz.mockReset(); });
 
 describe('Tanımlar penceresi', () => {
-  it('1137 a: yeni tezgâh eklenmez; kayıttaki özel tezgâh salt okunurdur; liste yoksa gömülü listenin uyarısı görünür', () => {
+  it('1137 a, CNC-6: yeni tezgâh eklenmez; kayıttaki özel tezgâh salt okunurdur; ayarı tam tezgâh yoksa uyarı görünür, gömülü liste yoktur', () => {
+    tezgahlariKur([]);
+    render(<TanimlarPenceresi sekme="mach" kapat={() => undefined} />);
+    expect(screen.getAllByRole('status').map((d) => d.textContent ?? '').join(' ')).toContain('talaşlı istasyonda makine yok');
+    cleanup();
+    tezgahlariKur([makine(5, 'Z-01', null)]);
     state.customMachines.push({ id: 'um_1', name: 'Elle eklenen', type: 'mill', ctrl: 'iso', taper: 'BT40', pockets: 20, rpm: 8000, kind: 'm_vmc' });
     render(<TanimlarPenceresi sekme="mach" kapat={() => undefined} />);
     expect(screen.queryByRole('button', { name: 'Yeni tezgâh' })).toBeNull();
-    expect(screen.getByRole('status').textContent).toContain('gömülü tezgâh listesini kullanıyor');
-    const satir = screen.getByText('Elle eklenen').closest('tr') as HTMLElement;
-    expect(satir.querySelector('button')).toBeNull();
+    expect(screen.getAllByRole('status').map((d) => d.textContent ?? '').join(' ')).toContain('Ayarı tamamlanmış tezgâh yok');
+    const not = screen.getByRole('note');
+    expect(not.textContent).toContain('Elle eklenen');
+    expect(not.querySelector('button')).toBeNull();
   });
 
   it('1091 a: makineler İstasyonlar\'dan gelir; ayarı eksik olan işaretlenir, düzenlenen ayar sunucuya yazılır', async () => {

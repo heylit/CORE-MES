@@ -158,12 +158,12 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
   });
 
   test('değişiklik izi: ilk yazım kabul, aynı kimliğe ikinci yazım 409, silme 403; satır veritabanında da değişmez', async () => {
-    await yaz(c.kal, 'iz', 'iz_1', { islem: 'kayıt', col: 'ncr' });
-    await ret(409, 'CAKISMA', c.kal, 'POST', '/kalite-merkezi/kayitlar/iz/iz_1/yaz', { govde: { islem: 'değişti' }, surum: null });
+    await yaz(c.kal, 'iz', 'iz_1', { islem: 'oluşturma', col: 'ncr', id: 'n1' });
+    await ret(409, 'CAKISMA', c.kal, 'POST', '/kalite-merkezi/kayitlar/iz/iz_1/yaz', { govde: { islem: 'değişiklik', col: 'ncr', id: 'n1' }, surum: null });
     await ret(403, 'YETKI_YOK', c.kal, 'POST', '/kalite-merkezi/kayitlar/iz/iz_1/sil', { surum: null });
     await assert.rejects(vt().sorgu("UPDATE kalite_merkezi_belge SET govde = '{}' WHERE koleksiyon = 'iz' AND kimlik = 'iz_1'"), /değiştirilemez/);
     await assert.rejects(vt().sorgu("DELETE FROM kalite_merkezi_belge WHERE koleksiyon = 'iz' AND kimlik = 'iz_1'"), /değiştirilemez/);
-    assert.deepEqual(govdesi(await akis(c.kal), 'iz', 'iz_1'), [{ islem: 'kayıt', col: 'ncr' }]);
+    assert.deepEqual(govdesi(await akis(c.kal), 'iz', 'iz_1').map((g) => [g?.['islem'], g?.['col'], g?.['id']]), [['oluşturma', 'ncr', 'n1']]);
   });
 
   test('biçim: tanınmayan koleksiyon, bozuk kimlik ve nesne olmayan gövde 400; kısıt da veritabanında durur', async () => {
@@ -182,7 +182,7 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
   });
 
   test('geri yükleme: ayrı işlem ister; son parçaya kadar eski kayıt silinmez, son parça yedekte olmayanı siler, iz korunur, yedekteki iz alınmaz', async () => {
-    await yaz(c.kal, 'iz', 'iz_gy', { islem: 'önce' });
+    await yaz(c.kal, 'iz', 'iz_gy', { islem: 'oluşturma', col: 'sup', id: 's_eski' });
     await yaz(c.kal, 'sup', 's_eski', { ad: 'Eski tedarikçi' });
     const govde = { baslangic: null, son: false, belgeler: [{ koleksiyon: 'sup', kimlik: 's_yeni', govde: { ad: 'Yeni' } }, { koleksiyon: 'iz', kimlik: 'iz_gy', govde: { islem: 'sahte' } }] };
     await ret(403, 'YETKI_YOK', c.kal, 'POST', '/kalite-merkezi/geri-yukle', govde);
@@ -195,7 +195,7 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const a = await akis(c.kal);
     const dolu = a.degisiklikler.filter((d) => d.govde !== null).map((d) => `${d.koleksiyon}/${d.kimlik}`).sort();
     assert.deepEqual(dolu.filter((k) => !k.startsWith('iz/')), ['ncr/n_yeni', 'sup/s_arada', 'sup/s_yeni']);
-    assert.deepEqual(govdesi(a, 'iz', 'iz_gy'), [{ islem: 'önce' }]);
+    assert.deepEqual(govdesi(a, 'iz', 'iz_gy').map((g) => g?.['islem']), ['oluşturma']);
     assert.deepEqual(govdesi(a, 'sup', 's_eski'), [null]);
   });
 
@@ -242,7 +242,7 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const basla = performance.now();
     const cevaplar = await Promise.all(Array.from({ length: 100 }, async (_, i) => {
       const t0 = performance.now();
-      const r = await yaz(c.kal, 'lot', `yuz_${i}`, { no: i, not: 'x'.repeat(2000) });
+      const r = await yaz(c.kal, 'lot', `yuz_${i}`, { no: `YUZ-${i}`, not: 'x'.repeat(2000) });
       await akis(c.kal, once);
       sureler.push(performance.now() - t0);
       return r.surum;
@@ -264,13 +264,13 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const oz1 = await yaz(c.kal, 'ncr', 'ncr_oz1', { no: 'NCR-OZ1', durum: 'Açık' });
     await yaz(c.kal, 'ncr', 'ncr_oz2', { no: 'NCR-OZ2', durum: 'DÖF açıldı' });
     await yaz(c.kal, 'ncr', 'ncr_oz3', { no: 'NCR-OZ3' });
-    await onayla(c.yon, 'ncr', 'ncr_oz4', { no: 'NCR-OZ4', durum: 'Kapalı' });
+    await onayla(c.yon, 'ncr', 'ncr_oz4', { no: 'NCR-OZ4', durum: 'Kapalı', mrb: 'Hurda' });
     const oz5 = await yaz(c.kal, 'ncr', 'ncr_oz5', { no: 'NCR-OZ5', durum: 'Açık' });
     await sil(c.yon, 'ncr', 'ncr_oz5', oz5.surum);
     await yaz(c.kal, 'capa', 'capa_oz1', { no: 'DOF-OZ1', durum: 'Açık' });
     const sonra = await tamam<KmOzetCevabi>(c.mud, 'GET', '/kalite-merkezi/ozet');
     assert.equal(sonra.acikUygunsuzluk - once, 3);
-    await onayla(c.yon, 'ncr', 'ncr_oz1', { no: 'NCR-OZ1', durum: 'Kapalı' }, oz1.surum);
+    await onayla(c.yon, 'ncr', 'ncr_oz1', { no: 'NCR-OZ1', durum: 'Kapalı', mrb: 'Hurda' }, oz1.surum);
     assert.equal((await tamam<KmOzetCevabi>(c.yon, 'GET', '/kalite-merkezi/ozet')).acikUygunsuzluk - once, 2);
     assert.deepEqual(await disaridanOzet(vt()), { acikUygunsuzluk: once + 2 });
   });
@@ -340,11 +340,11 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(d?.govde, onayGovdesi);
     // Kapanış ve tedarikçi onayı aynı uçtan; beklenen sürüm kuralı aynıdır.
     const n = await yaz(c.kal, 'ncr', 'ncr_o3', { no: 'NCR-O3', durum: 'Açık' });
-    await tamam(c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/ncr_o3/onayla', { govde: { no: 'NCR-O3', durum: 'Kapalı' }, surum: n.surum });
+    await tamam(c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/ncr_o3/onayla', { govde: { no: 'NCR-O3', durum: 'Kapalı', mrb: 'Hurda' }, surum: n.surum });
     await ret(409, 'CAKISMA', c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/ncr_o3/onayla', { govde: { no: 'NCR-O3', durum: 'Açık' }, surum: n.surum });
     await tamam(c.yon, 'POST', '/kalite-merkezi/kayitlar/sup/sup_o3/onayla', { govde: { kod: 'TED-3', onay: 'Onaylı' }, surum: null });
     const a = await akis(c.kal);
-    assert.deepEqual([govdesi(a, 'ncr', 'ncr_o3'), govdesi(a, 'sup', 'sup_o3')], [[{ no: 'NCR-O3', durum: 'Kapalı' }], [{ kod: 'TED-3', onay: 'Onaylı' }]]);
+    assert.deepEqual([govdesi(a, 'ncr', 'ncr_o3'), govdesi(a, 'sup', 'sup_o3')], [[{ no: 'NCR-O3', durum: 'Kapalı', mrb: 'Hurda' }], [{ kod: 'TED-3', onay: 'Onaylı' }]]);
   });
 
   // Kullanıcı kararı 16.10.2026 ("Kilitle"): onaylı form değişmez ve silinmez; değişiklik onay geri alınarak yapılır.

@@ -39,7 +39,9 @@ export interface Gorev {
   pulse?: boolean; quiet?: boolean; key?: string; dismiss?: boolean; toolId?: string; id?: number;
 }
 
-export interface IlkParcaDurumu { acik: boolean; yeniden?: boolean; sayilan: number; kararBekleyen?: number | null }
+// tmi: kontrol planında ilk parça ölçüsü yok ama TMI adımda ilk parça kararı istiyor (paketin `tmi.ilkParcaGerekli`); sağlam sayım TMI'de
+// karar bekler, tablet ölçü istemez, yalnız söyler.
+export interface IlkParcaDurumu { acik: boolean; yeniden?: boolean; sayilan: number; kararBekleyen?: number | null; tmi?: boolean }
 
 // Çağrı takibi (Andon): aşama 0 çağrıldı, 1 alındı, 2 yolda, 3 geldi.
 export interface CagriIletisi { from: 'sys' | 'me' | 'them'; text: string; at: number }

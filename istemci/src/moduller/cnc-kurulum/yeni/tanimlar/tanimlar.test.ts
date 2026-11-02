@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from '../depo.ts';
 import { D, defaults } from '../durum.ts';
 import type { Tezgah as SunucuTezgahi, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
-import { allMachines, allMaterials, byId, dirtyUsage, machine, machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, tezgahlariKur } from '../secici.ts';
+import { allMachines, allMaterials, byId, dirtyUsage, machine, machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, tezgahlariKur, tezgahYok } from '../secici.ts';
 import {
   AYAR_EKSIK_ILETISI, deleteMachine, deleteMat, isCustomMachine, malzemeAlanlari, saveMachine, saveMat, sayi, setMachineNo, sunucuTezgahiKaydet, tezgahAlanlari,
   YENI_TEZGAH, type Malzeme, type Tezgah,
@@ -120,12 +120,20 @@ describe('iş malzemesi tanımı', () => {
 describe('tezgâh listesi İstasyonlar\'dan (1091 a, 1139 b, 1192 a)', () => {
   beforeEach(sifirla);
 
-  it('liste yoksa ya da hiçbir makinenin ayarı tam değilse gömülü liste kullanılır', () => {
+  it('CNC-6: liste kurulduktan sonra gömülü liste kullanılmaz; ayarı tam makine yoksa tezgâh yoktur (gömülü yalnız kabuksuz testte)', () => {
     expect(tezgahKaynagi()).toBe('gomulu');
+    expect(tezgahYok()).toBe(false);
     tezgahlariKur([makine(7, 'X-01', null)]);
-    expect(tezgahKaynagi()).toBe('gomulu');
-    expect(allMachines().length).toBe(D.MACHINES.length);
+    expect(tezgahKaynagi()).toBe('sunucu');
+    expect(allMachines()).toEqual([]);
+    expect(tezgahYok()).toBe(true);
     expect(sunucuTezgahSatirlari()?.map((x) => [x.tezgah.id, x.tam])).toEqual([['mk7', false]]);
+    tezgahlariKur([]);
+    expect(sunucuTezgahSatirlari()).toEqual([]);
+    expect(tezgahYok()).toBe(true);
+    tezgahlariKur([makine(7, 'X-01', AYAR)]);
+    expect(allMachines().map((m) => m.id)).toEqual(['mk7']);
+    expect(tezgahYok()).toBe(false);
   });
 
   it('kodu gömülü numarayla aynı makine gömülü kimliği ve değerleri alır; kayıttaki seçim ve düzeltme ona okunur; ad İstasyonlar\'dandır', () => {

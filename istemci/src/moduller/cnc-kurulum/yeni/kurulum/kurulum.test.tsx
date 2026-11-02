@@ -26,7 +26,7 @@ vi.mock('../veri.ts', () => ({
 }));
 
 const { Kurulum } = await import('./Kurulum.tsx');
-const { etiket, operasyon, saat } = await import('./secim.ts');
+const { emirAdaylari, etiket, operasyon, saat } = await import('./secim.ts');
 const { esc } = await import('./disa-aktarim.ts');
 
 const EMIR: EmirSecenegi = { id: 7, uretimEmriId: 3, emirNo: 'UE-0001', opNo: 10, ad: 'Frezeleme', parcaNo: 'P-1', parcaAd: 'Ornek parca', adet: 5, istasyon: 'CNC-1' } as EmirSecenegi;
@@ -66,6 +66,16 @@ describe('saf yardımcılar', () => {
   it('emir etiketi köprüdekiyle aynıdır', () => {
     expect(operasyon(EMIR)).toBe('UE-0001 · OP10 Frezeleme');
     expect(etiket(EMIR)).toBe('UE-0001 · OP10 Frezeleme · P-1 Ornek parca · 5 adet · CNC-1');
+  });
+  it('CNC-6: emir alanına yazılan metin tam etiketle ya da etiketin bir parçasıyla eşleşir (Türkçe harf farkı yok)', () => {
+    const ikinci = { ...EMIR, id: 8, emirNo: 'UE-0002', opNo: 20, ad: 'Ikinci islem' } as EmirSecenegi;
+    const liste = [EMIR, ikinci];
+    expect(emirAdaylari(liste, etiket(ikinci))).toEqual([ikinci]);
+    expect(emirAdaylari(liste, ' ue-0001 ')).toEqual([EMIR]);
+    expect(emirAdaylari(liste, 'FREZELEME')).toEqual([EMIR, ikinci].filter((e) => e.ad === 'Frezeleme'));
+    expect(emirAdaylari(liste, 'p-1')).toEqual(liste);
+    expect(emirAdaylari(liste, 'yok')).toEqual([]);
+    expect(emirAdaylari(liste, '  ')).toEqual([]);
   });
   it('saat geçersiz zamanda boştur, saat dilimine göre yazılır', () => {
     expect(saat('yok')).toBe('');

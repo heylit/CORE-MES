@@ -43,6 +43,7 @@ import {
   EMIR_KOLEKSIYONU, EMIR_TIPI, PARCA_KOLEKSIYONU, satinAlmaKaynagi, PARCA_TURLERI, emirBaglari, emirKaynakSirasi, emirKimligi, eskiEmirNo, eskiEmirTipi, parcaKartiMalzemeNo, parcaKartiNo, sayiMetni,
 } from './kurallar.ts';
 import { hataliAramaSonuclari, ncrAramaSonucu } from './kurallar.ts';
+import { IZ_KOLEKSIYONU, icerikReddi, izGovdesi, izRolu, lotSikilikReddi, muayeneciReddi, numaraDenetlenirMi, parcaDenetlenirMi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const dosyaTutamak = dosyaTutamagi(KM_MODULU);
@@ -190,9 +191,44 @@ export async function kalibrasyonHazirlikDurumlari(db: Db, emirIdler: readonly n
   return new Map([...emirBasina].map(([id, ids]) => [id, kalibrasyonHazirligi(ids, cihazlar, durumlar)]));
 }
 
+// KM-3 (K2 a): değişiklik izinin kişisi, rolü ve zamanı oturumdan ve sunucu saatinden yazılır; istemcinin gönderdiği değerler sayılmaz.
+async function izDamgala(db: Db, kullanici: Kullanici, govde: Govde): Promise<Govde> {
+  const yonetici = await kisiBayrakliMi(db, kullanici.id);
+  const onayla = islemVarMi(kullanici, 'kalite-merkezi.onayla');
+  const sonuc = izGovdesi(govde, { ad: kullanici.ad, rol: izRolu(yonetici, onayla), zaman: new Date().toISOString(), yonetici, onayla });
+  if ('ret' in sonuc) throw dogrulama(ILETILER[sonuc.ret.ileti], sonuc.ret.alan);
+  return sonuc.govde;
+}
+
+// KM-1, KM-2, KM-4 (K2 a): kalite kararları ve kapanış koşulları sunucuda yeniden denetlenir (kurallar.ts `icerikReddi`); numara tekliği,
+// parçanın Malzemeler'de olması, muayenecinin oturumdaki kişi olması ve lot sıkılığı veritabanıyla denetlenir.
+async function icerigiDenetle(db: Db, kullanici: Kullanici, koleksiyon: string, kimlik: string, onceki: Govde | null, govde: Govde): Promise<void> {
+  const ret = icerikReddi(koleksiyon, onceki, govde, tesisGunu(Date.now()));
+  if (ret !== null) throw dogrulama(ILETILER[ret.ileti], ret.alan);
+  if (muayeneciReddi(koleksiyon, onceki, govde, kullanici.ad, false) && !(await kisiBayrakliMi(db, kullanici.id))) {
+    throw dogrulama(ILETILER.muayeneci, 'muayeneci');
+  }
+  if (parcaDenetlenirMi(koleksiyon, onceki, govde) && (await malzemeNoKoddan(db, String(govde.parcaNo))) === null) {
+    throw dogrulama(ILETILER.parcaYok, 'parcaNo');
+  }
+  if (numaraDenetlenirMi(koleksiyon, onceki, govde)) {
+    const no = String(govde.no).trim();
+    const kayitlar = await sorgular.koleksiyonKayitlari(db, koleksiyon);
+    if (kayitlar.some((k) => k.kimlik !== kimlik && String(k.govde.no ?? '').trim() === no)) throw dogrulama(ILETILER.ciftNumara, 'no');
+  }
+  if (koleksiyon === LOT_KOLEKSIYONU && onceki?.karar !== govde.karar) {
+    const lotlar = (await sorgular.koleksiyonKayitlari(db, LOT_KOLEKSIYONU)).filter((l) => l.kimlik !== kimlik).map((l) => l.govde);
+    const sikilik = lotSikilikReddi(govde, lotSikiligi(lotlar, lotAnahtari(govde.parcaNo, govde.tedarikci)));
+    if (sikilik === 'lotDurduruldu') throw cakisma(ILETILER.lotDurduruldu);
+    if (sikilik !== null) throw dogrulama(ILETILER[sikilik], 'siddet');
+  }
+}
+
 async function kayitYaz(
   db: Db, kullanici: Kullanici, koleksiyon: string, kimlik: string, govde: Govde, beklenen: number | null, onay: boolean,
   karantinaHedefKonumId: number | null = null, serbestMiktarlar: SerbestMiktarlar = [], kaynakEmirId: number | null = null,
+  // Sunucunun kendi kurduğu gövde (Arkon lot kararı, denetim hazırlığının DÖF'ü) istemci içeriği değildir; içerik denetimi istemciden gelene.
+  istemciden = true,
 ): Promise<KmOnaylaCevabi> {
   await yoneticiKoleksiyonunuDenetle(db, kullanici, koleksiyon);
   if (kaynakKoleksiyonuMu(koleksiyon) && !islemVarMi(kullanici, 'kalite-merkezi.onayla')) throw yetkiYok(ILETILER.kaynakOnay);
@@ -207,10 +243,12 @@ async function kayitYaz(
   const kilitliArsiv = (onayliFormMu(koleksiyon, onceki) || kapanmisKayitMi(koleksiyon, onceki)) && yalnizArsivDegisiyor(onceki, govde);
   if (!kilitliArsiv && onayliFormReddi(koleksiyon, onceki, govde)) throw cakisma(ILETILER.onayliForm);
   if (!kilitliArsiv && kapanmisKayitMi(koleksiyon, onceki)) throw cakisma(ILETILER.kapanmisKayit);
+  if (istemciden && koleksiyon === IZ_KOLEKSIYONU) govde = await izDamgala(db, kullanici, govde);
   const degisen = onayDegisiklikleri(koleksiyon, onceki, govde);
   if (!onay && degisen.length > 0) {
     throw new UygulamaHatasi('YETKI_YOK', ILETILER.onayUcu, { alan: ONAY_ALANI_HATASI, ayrinti: { alanlar: degisen } });
   }
+  if (istemciden) await icerigiDenetle(db, kullanici, koleksiyon, kimlik, onceki, govde);
   if (onay && degisen.length > 0) govde = sunucuOnayi(koleksiyon, onceki, govde, onayKisisi(kullanici));
   await olcumCihazlariniDenetle(db, koleksiyon, onceki, govde);
   await tedarikciFirmasiniDenetle(db, koleksiyon, onceki, govde);
@@ -616,7 +654,7 @@ export async function dofAc(
     return { kimlik, no: d.no, durum: d.durum, yeni: false };
   }
   const no = await numaraAl(db, 'kalite-merkezi.dof-no', { varMi: (n) => sorgular.noVarMi(db, DOF_KOLEKSIYONU, n) });
-  await kayitYaz(db, kullanici, DOF_KOLEKSIYONU, kimlik, dofGovdesi(istek, no, tesisGunu(Date.now())), null, false);
+  await kayitYaz(db, kullanici, DOF_KOLEKSIYONU, kimlik, dofGovdesi(istek, no, tesisGunu(Date.now())), null, false, null, [], null, false);
   return { kimlik, no, durum: 'Açık', yeni: true };
 }
 
@@ -666,7 +704,7 @@ export async function lotKarariYaz(
   const no = siradakiLotNo(lotlar, Number(gun.slice(0, 4)));
   const emirNo = (await emirNolari(db, [istek.uretimEmriId])).get(istek.uretimEmriId) ?? null;
   const govde = lotGovdesi(istek, { no, gun, emirNo, muayeneci: kullanici.ad, plan: sonuc.plan, karar });
-  await kayitYaz(db, kullanici, LOT_KOLEKSIYONU, kimlik, govde, null, false);
+  await kayitYaz(db, kullanici, LOT_KOLEKSIYONU, kimlik, govde, null, false, null, [], null, false);
   return { kimlik, no, karar, plan: sonuc.plan, yeni: true };
 }
 

@@ -93,7 +93,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Proje maliyet sekmesi', () => {
   it('fiyat yetkilisine dört göstergeyi, kâr riskini, grafikleri ve sapan iş emirlerini gösterir', async () => {
-    const yollar = sunucuKur(() => json(200, cevap(true)));
+    const yollar = sunucuKur(() => json(200, cevap(true)), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku', 'sayfa.plan'] });
     cizdir();
     expect(await screen.findByText('Tahmini katkı payı')).toBeTruthy();
     // 236 a: ekran yalnız okur, deftere yazmaz.
@@ -101,9 +101,17 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.getByText('Sipariş tutarı')).toBeTruthy();
     expect(screen.getByText('Bugüne kadarki sapma')).toBeTruthy();
     expect(screen.getByText('5 gün')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Plana git/ }).getAttribute('href')).toBe('/plan');
+    expect((await screen.findByRole('link', { name: /Plana git/ })).getAttribute('href')).toBe('/plan');
     expect(screen.getByRole('table', { name: 'En çok sapan iş emirleri' })).toBeTruthy();
     expect(screen.getByText(/Toplamlara girmeyen kalemler.*Fason/)).toBeTruthy();
+  });
+
+  it('plan sayfasını görmeyene "Plana git" bağlantısı çizilmez (yetkisiz sayfaya götürürdü)', async () => {
+    sunucuKur(() => json(200, cevap(true)), { id: 2, ad: 'Deneme Muhasebe', islemler: ['finans.maliyet-oku'] });
+    cizdir();
+    expect(await screen.findByText('Gecikme kâr riski')).toBeTruthy();
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/oturum')).toBe(true); });
+    expect(screen.queryByRole('link', { name: /Plana git/ })).toBeNull();
   });
 
   it('1398 a: döviz siparişinde kur farkı ayrı kartta, işaretiyle; TL siparişinde kart yok', async () => {

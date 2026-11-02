@@ -9,6 +9,16 @@ import { GENEL_ADIM, K, adimdanAyrilinca, kurulumYenile } from './satirlar.ts';
 export const operasyon = (e: EmirSecenegi): string => `${e.emirNo} · OP${String(e.opNo)} ${e.ad}`;
 export const etiket = (e: EmirSecenegi): string => `${operasyon(e)} · ${e.parcaNo} ${e.parcaAd} · ${String(e.adet)} adet · ${e.istasyon}`;
 
+// Yazılan metne uyan emirler: tam etiket önce; değilse etiketin içinde geçenler (Türkçe büyük-küçük harf farkı yok).
+export function emirAdaylari(liste: readonly EmirSecenegi[], metin: string): EmirSecenegi[] {
+  const t = metin.trim();
+  if (t === '') return [];
+  const tam = liste.filter((o) => etiket(o) === t);
+  if (tam.length > 0) return tam;
+  const k = t.toLocaleLowerCase('tr-TR');
+  return liste.filter((o) => etiket(o).toLocaleLowerCase('tr-TR').includes(k));
+}
+
 // Seçili emrin "kurulum tamam" kaydı hazırlık okumasıyla gelir.
 export const S = {
   kurulum: null as KurulumDurumu | null,

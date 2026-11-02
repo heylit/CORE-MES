@@ -287,6 +287,9 @@ export interface IsEmriPaketGirdisi {
   ilkParca?: { karar: 'onay' | 'ret'; zaman: string } | null | undefined;
   // Adımın rotadaki ilk parça seçimi (744 a): "yok" taslağın ilk parça kuralını kapatır; kayıtlı paketin kuralı paketindir.
   ilkParcaSecimi?: IlkParcaSecimi | undefined;
+  // Adımda TMI'nin ilk parça kapısı var mı (rotadaki seçim ve istasyon türü, `ilkParcaGereksinimi`): sağlam sayım TMI'de karar bekler. Kontrol
+  // planı boş pakette tablet kapıyı kendi planından göremez; terminal karar bekleyeni buradan söyler.
+  ilkParcaGerekli?: boolean | undefined;
   // Kalite istasyonunun AQL lot planı (564 2 a): Kalite Merkezi'nin hesabı; sıkılık durdurulmuşsa `durduruldu`.
   aql?: TmiAqlPlani | null | undefined;
   // Adımın rotadaki girenleri (521 3 a): kayıtsız taslağın Malzeme alanına yazılır (`girenMetni`); kayıtlı paket ve dolu şablon değişmez.
@@ -352,7 +355,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
-    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.aql ? { aql: g.aql } : {}),
+    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
 }

@@ -26,7 +26,7 @@ const tarihMetni = (): string => new Date().toLocaleDateString('tr-TR', { weekda
 export function Bugun({ veri, yetki, git, atolye }: EkranOzellikleri) {
   const gezin = useNavigate();
   const [onaylanan, onaylananYaz] = useState<FormKaydi | null>(null);
-  const gorevler = bugunGorevleri(veri, yetki.kapat);
+  const gorevler = bugunGorevleri(veri, yetki.kapat, yetki.yaz);
   const gruplar = gruplara(gorevler);
   const ozet = bugunOzeti(veri);
   const sinir = atolye ? ATOLYE_GRUP_SINIRI : GRUP_SINIRI;

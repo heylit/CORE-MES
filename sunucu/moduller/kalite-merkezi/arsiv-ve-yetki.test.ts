@@ -62,11 +62,11 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
     const ncr = { ...ncrAcik, durum: 'Kapalı', mrb: 'Hurda' };
     const ncr2 = await tamam(c.yon, `ncr/${on}_ncr/onayla`, { govde: ncr, surum: ncr1.surum });
     const capa1 = await tamam(c.yon, `capa/${on}_capa/yaz`, { govde: { no: `${on}-DOF`, durum: 'Açık', adim: 8 }, surum: null });
-    const capa = { no: `${on}-DOF`, durum: 'Kapalı', adim: 8, acilis: '2024-01-01' };
+    const capa = { no: `${on}-DOF`, durum: 'Kapalı', adim: 8, kokNeden: 'Bağlama', etkinlik: 'Etkin', acilis: '2024-01-01' };
     const capa2 = await tamam(c.yon, `capa/${on}_capa/onayla`, { govde: capa, surum: capa1.surum });
-    const insp = { no: `${on}-MUA`, sonuc: 'Ret', tarih: '2024-01-01', chars: [{ ad: 'Çap', olcum: '10.02' }] };
+    const insp = { no: `${on}-MUA`, sonuc: 'Ret', tarih: '2024-01-01', chars: [{ ad: 'Çap', nominal: '10', alt: '0.01', ust: '0.01', olcum: '10.02', sonuc: 'NOK' }] };
     const insp1 = await tamam(c.kal, `insp/${on}_insp/yaz`, { govde: insp, surum: null });
-    const lot = { no: `${on}-LOT`, karar: 'Kabul', tarih: '2024-01-01' };
+    const lot = { no: `${on}-LOT`, N: 500, seviye: 'II', kr: '0.65', mj: '1.0', mn: '2.5', siddet: 'Normal', bKr: 0, bMj: 0, bMn: 0, karar: 'Kabul', tarih: '2024-01-01' };
     const lot1 = await tamam(c.kal, `lot/${on}_lot/yaz`, { govde: lot, surum: null });
     const frm1 = await tamam(c.kal, `frm/${on}_frm/yaz`, { govde: { kod: 'KF-01', durum: 'Onay bekliyor', cevaplar: { a: 1 } }, surum: null });
     await tamam(c.yon, `frm/${on}_frm/onayla`, { govde: { kod: 'KF-01', durum: 'Onaylandı', cevaplar: { a: 1 } }, surum: frm1.surum });
@@ -121,7 +121,7 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
 
   test('Soru 229 a silme: yalnız yönetici siler; onay yetkili kalite personeli ve yalnız yazan 403 alır, kayıt yerinde kalır', async () => {
     const kayitlar: [string, string, Govde][] = [
-      ['ncr', 's_ncr', { no: 'S-NCR', durum: 'Açık' }], ['insp', 's_insp', { no: 'S-MUA', sonuc: 'Beklemede' }],
+      ['ncr', 's_ncr', { no: 'S-NCR', durum: 'Açık' }], ['insp', 's_insp', { no: 'S-MUA', tur: 'Giriş', chars: [{ ad: 'Çap', nominal: '10', olcum: '10', sonuc: 'OK' }], sonuc: 'Beklemede' }],
       ['cizim', 's_cizim', { parcaNo: 'DENEME-1' }], ['sup', 's_sup', { kod: 'TED-S', ad: 'Deneme tedarikçi' }],
     ];
     for (const [koleksiyon, kimlik, govde] of kayitlar) {
