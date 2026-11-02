@@ -52,6 +52,14 @@ export async function girisDogrula(db: Db, kullaniciAdi: string, sir: GirisSirri
   return { kisiId: kayit.id, pinBelirlenecek: yontem === 'pin' && kayit.pin_belirlenecek };
 }
 
+// Kartla giriş (1897 b): istasyonda kart PIN'siz geçer. Yalnız PIN'le giren (bayraksız, PIN'i olan) etkin hesap uygundur; parolayla
+// giren yönetici kartla giremez. Kişi henüz geçici PIN'deyse önce kendi PIN'ini belirler. Sır doğrulanmaz: kartın sahibi çağıranın işidir.
+export async function kartGirisDurumu(db: Db, kullaniciAdi: string): Promise<'uygun' | 'pin-belirlenecek' | null> {
+  const kayit = await girisKaydiBul(db, kullaniciAdiniDuzelt(kullaniciAdi));
+  if (kayit === null || girisYontemi({ bayrakli: kayit.bayrakli, pinVar: kayit.pin_ozeti !== null }) !== 'pin') return null;
+  return kayit.pin_belirlenecek ? 'pin-belirlenecek' : 'uygun';
+}
+
 // oturumAcildi: oturumun açılış zamanı (veritabanının verdiği metin). Kişinin "bundan önceki oturumlar geçersiz"
 // zamanından eskiyse kullanıcı yüklenmez.
 export async function kullaniciYukle(db: Db, kisiId: number, oturumAcildi: string | null = null): Promise<Kullanici | null> {
