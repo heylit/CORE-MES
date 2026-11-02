@@ -5,7 +5,7 @@ import { CokSatir, Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Simge } fro
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { useKomut } from './komut.ts';
+import { alanHatasi, useKomut } from './komut.ts';
 import { KART_DURUM_ADLARI, KART_DURUM_TONLARI, KART_TURLERI, KART_TURU_ADLARI, adi, saat } from './gorunum.ts';
 import './nizamiye.css';
 
@@ -21,11 +21,11 @@ function KartEkle({ kapat }: { kapat: () => void }) {
   return (
     <Pencere acik baslik="Kart ekle" kapat={kapat}>
       <form className="tc-nz-panel-form" onSubmit={gonder}>
-        <Girdi etiket="Kart no" required maxLength={12} value={kartNo} onChange={(o) => kartNoYaz(o.target.value.toUpperCase())}
+        <Girdi etiket="Kart no" required maxLength={12} hata={alanHatasi(ekle.error, 'kartNo')} value={kartNo} onChange={(o) => kartNoYaz(o.target.value.toUpperCase())}
           ipucu="Kartın üstündeki yazı; büyük harf, rakam ve tire." />
         <Secim etiket="Tür" value={tur} onChange={(o) => turYaz(o.target.value as KartTuru)}
           secenekler={KART_TURLERI.map((t) => ({ deger: t, baslik: KART_TURU_ADLARI[t] }))} />
-        <Girdi etiket="İzinli bölge (isteğe bağlı)" maxLength={120} value={bolge} onChange={(o) => bolgeYaz(o.target.value)} />
+        <Girdi etiket="İzinli bölge (isteğe bağlı)" maxLength={120} hata={alanHatasi(ekle.error, 'izinliBolge')} value={bolge} onChange={(o) => bolgeYaz(o.target.value)} />
         <div className="tc-nz-panel-alt">
           <Dugme onClick={kapat}>Vazgeç</Dugme>
           <Dugme tur="birincil" type="submit" simge="plus" disabled={kartNo.trim() === ''} yukleniyor={ekle.isPending}>Ekle</Dugme>

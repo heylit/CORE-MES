@@ -32,3 +32,4 @@
 | Personel kartı (1326): yalnız PDKS aktaran kaydeder; kişi başına bir etkin kart, kart bir kişide; numara düz saklanmaz; kaldırılan kart kimseyi bulmaz | `personel-kart.test.ts` (3 test) |
 | Ekran: personel kartı kart okuyucu ekranında; kişi seçilmeden kart alanı kapalı; kaldırma önce sorar | `Nizamiye.test.tsx` `personel kartı` |
 | Ekran: Giriş/Çıkış işlem paneli açılınca görünür alana gelir (dar ekranda liste altında) | `Nizamiye.test.tsx` `Giriş ve Çıkış işlem panelini` |
+| Ekran: sunucunun adını verdiği hata o alanda görünür; kapı listesi ikinci main açmaz; giriş iletisi bildirimin yerini söyler (NZM-5 a) | `Nizamiye.test.tsx` `sunucunun alan adını`, `kapı listesi kabuğun` |
