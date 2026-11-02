@@ -103,7 +103,7 @@ describe('Kalite Merkezi açık NCR\'li parti sevki (gerçek PostgreSQL)', () =>
     const a = await stokluEmir(2), b = await stokluEmir(2), c = await stokluEmir(2), d = await stokluEmir(2);
     await ncr('nsv_emir', { emir: a.no, lot: '' });
     await ncr('nsv_lot', { emir: '', lot: b.lot });
-    await o().vt.tx((db) => servis.onayla(db, yonetici, 'ncr', 'nsv_kapali', { no: 'nsv_kapali', durum: 'Kapalı', emir: c.no, lot: '' }, null));
+    await o().vt.tx((db) => servis.onayla(db, yonetici, 'ncr', 'nsv_kapali', { no: 'nsv_kapali', durum: 'Kapalı', mrb: 'Hurda', emir: c.no, lot: '' }, null));
     const [pa, pb, pc, pd] = [await parti(a.id), await parti(b.id), await parti(c.id), await parti(d.id)];
     assert.deepEqual([...await o().vt.tx((db) => servis.acikNcrPartileri(db, [pa, pc, pd]))], [pa]);
     assert.deepEqual([...await o().vt.tx((db) => servis.acikNcrPartileri(db, [pb, pa]))].sort((x, y) => x - y), [pa, pb].sort((x, y) => x - y));

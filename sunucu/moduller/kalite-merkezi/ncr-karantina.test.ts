@@ -115,7 +115,7 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
 
     const c = await stokluEmir(2);
     await ncr('ncr_yok', { emir: 'YOK-EMIR', lot: 'YOK-LOT' });
-    await o().vt.tx((db) => servis.onayla(db, yonetici, 'ncr', 'ncr_kapali', { no: 'ncr_kapali', durum: 'Kapalı', emir: c.no, lot: '' }, null));
+    await o().vt.tx((db) => servis.onayla(db, yonetici, 'ncr', 'ncr_kapali', { no: 'ncr_kapali', durum: 'Kapalı', mrb: 'Hurda', emir: c.no, lot: '' }, null));
     assert.deepEqual(await kalite(c.id), [['serbest', '2.000']], 'bulunamayan ve kapalı NCR stoğa dokunmaz');
     assert.equal(await defter('ncr_yok') + await defter('ncr_kapali'), 0);
   });
@@ -128,13 +128,13 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     const a = await stokluEmir(4);
     const n1 = await ncr('ncr_s1', { emir: a.no, lot: '' });
     assert.deepEqual(await kalite(a.id), [['red', '4.000']]);
-    assert.equal((await kapat('ncr_s1', { emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n1.surum)).uyari, undefined);
+    assert.equal((await kapat('ncr_s1', { emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n1.surum)).uyari, undefined);
     assert.deepEqual(await kalite(a.id), [['serbest', '4.000']]);
 
     const b = await stokluEmir(3);
     const n2 = await ncr('ncr_s2', { emir: '', lot: b.lot });
     const n3 = await ncr('ncr_s3', { emir: b.no, lot: '' });
-    const k2 = await kapat('ncr_s2', { emir: '', lot: b.lot, mrb: 'Olduğu gibi kullan (müşteri onaylı)' }, n2.surum);
+    const k2 = await kapat('ncr_s2', { emir: '', lot: b.lot, mrb: 'Olduğu gibi kullan (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n2.surum);
     assert.match(k2.uyari ?? '', /başka açık NCR/);
     assert.deepEqual(await kalite(b.id), [['red', '3.000']], 'başka açık NCR partiyi tutuyor');
     await kapat('ncr_s3', { emir: b.no, lot: '', mrb: 'Hurda' }, n3.surum);
@@ -145,16 +145,16 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     const n5 = await ncr('ncr_s5', { emir: d.no, lot: '' });
     const n6 = await ncr('ncr_s6', { emir: '', lot: d.lot });
     assert.equal(await defter('ncr_s6'), 0);
-    await kapat('ncr_s5', { emir: d.no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n5.surum);
+    await kapat('ncr_s5', { emir: d.no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n5.surum);
     assert.deepEqual(await kalite(d.id), [['red', '5.000']]);
-    await kapat('ncr_s6', { emir: '', lot: d.lot, mrb: 'Olduğu gibi kullan (müşteri onaylı)' }, n6.surum);
+    await kapat('ncr_s6', { emir: '', lot: d.lot, mrb: 'Olduğu gibi kullan (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n6.surum);
     assert.deepEqual(await kalite(d.id), [['serbest', '5.000']]);
     // Kalitesi NCR dışında bir nedenle red olan parti (hiçbir NCR defterinde yok) NCR kapanışıyla serbest kalmaz.
     const e = await stokluEmir(2);
     const partiId = (await o().vt.tek<{ id: number }>('SELECT id FROM stok_parti WHERE uretim_emri_id = $1', [e.id]))!.id;
     await o().vt.tx((db) => partiKaliteDurumuYap(db, yoneticiId, { partiId, hedef: 'red', aciklama: 'Deneme dışı red' }));
     const n7 = await ncr('ncr_s7', { emir: e.no, lot: '' });
-    assert.match((await kapat('ncr_s7', { emir: e.no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n7.surum)).uyari ?? '', /NCR dışı red/);
+    assert.match((await kapat('ncr_s7', { emir: e.no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n7.surum)).uyari ?? '', /NCR dışı red/);
     assert.deepEqual(await kalite(e.id), [['red', '2.000']]);
   });
 
@@ -177,7 +177,7 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     assert.deepEqual(await o().vt.tx((db) => servis.karantinaPartileri(db, 'ncr_k1')), { partiler: [{ partiId, lotNo: a.lot, redMiktar: '5' }] });
     assert.deepEqual(await o().vt.tx((db) => servis.karantinaPartileri(db, 'ncr_yok_k')), { partiler: [] });
     const kapatMiktarla = (miktarlar: { partiId: number; miktar: string }[]) => o().vt.tx((db) => servis.onayla(
-      db, yonetici, 'ncr', 'ncr_k1', { no: 'ncr_k1', durum: 'Kapalı', emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n.surum, null, miktarlar));
+      db, yonetici, 'ncr', 'ncr_k1', { no: 'ncr_k1', durum: 'Kapalı', emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n.surum, null, miktarlar));
     await assert.rejects(kapatMiktarla([{ partiId, miktar: '5.001' }]), /aşıyor/);
     await assert.rejects(kapatMiktarla([{ partiId: partiId + 1000, miktar: '1' }]), /bırakabileceği bir partiye ait değil/);
     const durum = await o().vt.tek<{ d: string }>("SELECT govde->>'durum' AS d FROM kalite_merkezi_belge WHERE kimlik = 'ncr_k1'");
@@ -205,7 +205,7 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
        SELECT malzeme_id, $2, parti_id, 2, ilk_giris, statu_id, kalite_durumu FROM stok_bakiye WHERE id = $1`, [b.id, krn]);
     assert.deepEqual(await o().vt.tx((db) => servis.karantinaPartileri(db, 'ncr_k2')), { partiler: [{ partiId: b.parti, lotNo: a.lot, redMiktar: '5' }] });
     await o().vt.tx((db) => servis.onayla(
-      db, yonetici, 'ncr', 'ncr_k2', { no: 'ncr_k2', durum: 'Kapalı', emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n.surum, b.konum, [{ partiId: b.parti, miktar: '4' }]));
+      db, yonetici, 'ncr', 'ncr_k2', { no: 'ncr_k2', durum: 'Kapalı', emir: a.no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n.surum, b.konum, [{ partiId: b.parti, miktar: '4' }]));
     const yerler = await o().vt.sorgu<{ k: number; q: string; m: string }>(
       'SELECT konum_id AS k, kalite_durumu AS q, sum(miktar)::text AS m FROM stok_bakiye WHERE parti_id = $1 AND miktar > 0 GROUP BY 1, 2 ORDER BY 1, 2', [b.parti]);
     assert.deepEqual(yerler.map((r) => [r.k, r.q, r.m]), [[b.konum, 'red', '1.000'], [b.konum, 'serbest', '4.000'], [krn, 'serbest', '1.000']]);
@@ -223,7 +223,7 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     assert.deepEqual(await kalite(id), [['red', '2.000'], ['serbest', '3.000']]);
     const n = await ncr('ncr_s8', { emir: no, lot: '' });
     assert.deepEqual(await kalite(id), [['red', '5.000']]);
-    const sonuc = await kapat('ncr_s8', { emir: no, lot: '', mrb: 'Tamir (müşteri onaylı)' }, n.surum);
+    const sonuc = await kapat('ncr_s8', { emir: no, lot: '', mrb: 'Tamir (müşteri onaylı)', mrbGerekce: 'Müşteri onayı MO-1' }, n.surum);
     assert.deepEqual(await kalite(id), [['red', '5.000']]);
     assert.match(sonuc.uyari ?? '', /NCR dışı red/);
   });

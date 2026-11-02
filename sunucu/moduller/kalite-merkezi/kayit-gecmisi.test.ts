@@ -66,31 +66,35 @@ describe('Kalite Merkezi kayıt geçmişi ve kilit (gerçek PostgreSQL)', () => 
 
   test('KM-K89 kilit: kapalı NCR ve Kabul ya da Ret sonuçlu muayene yazılamaz ve silinemez (409); düzeltme yeni kayıtla yapılır', async () => {
     const acik = await yaz(birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Açık' });
-    const kapali = await o().vt.tx((db) => servis.onayla(db, birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Kapalı' }, acik.surum));
-    await reddedilir(yaz(birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Kapalı', not: 'ek' }, kapali.surum), 'CAKISMA');
-    await reddedilir(o().vt.tx((db) => servis.onayla(db, birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Açık' }, kapali.surum)), 'CAKISMA');
+    const kapali = await o().vt.tx((db) => servis.onayla(db, birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Kapalı', mrb: 'Hurda' }, acik.surum));
+    await reddedilir(yaz(birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Kapalı', mrb: 'Hurda', not: 'ek' }, kapali.surum), 'CAKISMA');
+    await reddedilir(o().vt.tx((db) => servis.onayla(db, birinci, 'ncr', 'ncr_k1', { no: 'NCR-K1', durum: 'Açık', mrb: 'Hurda' }, kapali.surum)), 'CAKISMA');
     await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'ncr', 'ncr_k1', kapali.surum)), 'CAKISMA');
 
-    const mua = await yaz(birinci, 'insp', 'insp_k1', { no: 'MUA-K1', sonuc: 'Beklemede' });
-    const sonuclu = await yaz(birinci, 'insp', 'insp_k1', { no: 'MUA-K1', sonuc: 'Ret' }, mua.surum);
-    await reddedilir(yaz(birinci, 'insp', 'insp_k1', { no: 'MUA-K1', sonuc: 'Kabul' }, sonuclu.surum), 'CAKISMA');
+    const kar = (olcum: string, sonuc: string) => ({ ad: 'Çap', nominal: '10', alt: '0.1', ust: '0.1', olcum, sonuc });
+    const bekleyen = { no: 'MUA-K1', tur: 'Giriş', chars: [kar('10', 'OK')], sonuc: 'Beklemede' };
+    const mua = await yaz(birinci, 'insp', 'insp_k1', bekleyen);
+    const sonuclu = await yaz(birinci, 'insp', 'insp_k1', { no: 'MUA-K1', tur: 'Giriş', chars: [kar('10.5', 'NOK')], sonuc: 'Ret' }, mua.surum);
+    await reddedilir(yaz(birinci, 'insp', 'insp_k1', { no: 'MUA-K1', chars: [kar('10', 'OK')], sonuc: 'Kabul' }, sonuclu.surum), 'CAKISMA');
     await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'insp', 'insp_k1', sonuclu.surum)), 'CAKISMA');
-    await yaz(birinci, 'insp', 'insp_k2', { no: 'MUA-K2', sonuc: 'Kabul', duzeltilen: 'insp_k1' });
-    assert.deepEqual(await gecmis('insp_k1'), [{ surum: mua.surum, govde: { no: 'MUA-K1', sonuc: 'Beklemede' }, yazan: birinci.id, degistiren: birinci.id }]);
+    await yaz(birinci, 'insp', 'insp_k2', { no: 'MUA-K2', chars: [kar('10', 'OK')], sonuc: 'Kabul', duzeltilen: 'insp_k1' });
+    assert.deepEqual(await gecmis('insp_k1'), [{ surum: mua.surum, govde: bekleyen, yazan: birinci.id, degistiren: birinci.id }]);
   });
 
   test('B16 kilit: kapalı DÖF ve kararı verilmiş lot kabul kaydı yazılamaz, onaylanamaz ve silinemez (409); açık DÖF ve yeniden başlatma yazılır', async () => {
     const dof = await yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 3 });
-    const ilerledi = await yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 8 }, dof.surum);
-    const kapali = await o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Kapalı', adim: 8 }, ilerledi.surum));
-    await reddedilir(yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Kapalı', adim: 8, aksiyon: 'ek' }, kapali.surum), 'CAKISMA');
-    await reddedilir(o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 8 }, kapali.surum)), 'CAKISMA');
+    const dofKapanisi = { no: 'DOF-K1', adim: 8, kokNeden: 'Bağlama', etkinlik: 'Etkin' };
+    const ilerledi = await yaz(birinci, 'capa', 'capa_k1', { ...dofKapanisi, durum: 'Açık' }, dof.surum);
+    const kapali = await o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { ...dofKapanisi, durum: 'Kapalı' }, ilerledi.surum));
+    await reddedilir(yaz(birinci, 'capa', 'capa_k1', { ...dofKapanisi, durum: 'Kapalı', aksiyon: 'ek' }, kapali.surum), 'CAKISMA');
+    await reddedilir(o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { ...dofKapanisi, durum: 'Açık' }, kapali.surum)), 'CAKISMA');
     await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'capa', 'capa_k1', kapali.surum)), 'CAKISMA');
 
-    const lot = await yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', karar: 'Ret' });
-    await reddedilir(yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', karar: 'Kabul' }, lot.surum), 'CAKISMA');
+    const plan = { N: 500, seviye: 'II', kr: '0.65', mj: '1.0', mn: '2.5', siddet: 'Normal', bKr: 0, bMn: 0 };
+    const lot = await yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', ...plan, bMj: 2, karar: 'Ret' });
+    await reddedilir(yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', ...plan, bMj: 0, karar: 'Kabul' }, lot.surum), 'CAKISMA');
     await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'lot', 'lot_k1', lot.surum)), 'CAKISMA');
-    await yaz(birinci, 'lot', 'lot_k2', { no: 'LOT-K2', karar: 'Kabul', yenidenSunum: true });
+    await yaz(birinci, 'lot', 'lot_k2', { no: 'LOT-K2', ...plan, bMj: 0, karar: 'Kabul', yenidenSunum: true });
     const reset = await yaz(birinci, 'lot', 'lot_r1', { no: 'RESET-1', tip: 'reset', anahtar: 'a' });
     await yaz(birinci, 'lot', 'lot_r1', { no: 'RESET-1', tip: 'reset', anahtar: 'b' }, reset.surum);
   });

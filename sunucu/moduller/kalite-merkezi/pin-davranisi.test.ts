@@ -127,13 +127,13 @@ describe('Kalite Merkezi PIN yok, TMI oturumu (gerçek PostgreSQL, gerçek giri�
   test('Geri yüklemenin son parçası yedekte olmayan "kullanici" ve "settings" kayıtlarını siler (yalnız "iz" korunur)', async () => {
     await yaz(c.yon, 'kullanici', 'u_eski', { ad: 'Eski Kullanıcı' });
     await yaz(c.yon, 'settings', 'ayar_eski', { firma: 'Eski' });
-    await yaz(c.kal, 'iz', 'iz_pin', { islem: 'kayıt' });
+    await yaz(c.kal, 'iz', 'iz_pin', { islem: 'oluşturma', col: 'ncr', id: 'n_pin' });
     await tamam(c.yon, 'POST', '/kalite-merkezi/geri-yukle', { baslangic: null, son: true, belgeler: [{ koleksiyon: 'ncr', kimlik: 'n_pin', govde: { no: 'NCR-P1' } }] });
     const a = await akis(c.mud);
     assert.deepEqual(govdesi(a, 'ncr', 'n_pin'), [{ no: 'NCR-P1' }]);
     assert.deepEqual(govdesi(a, 'kullanici', 'u_eski'), [null]);
     assert.deepEqual(govdesi(a, 'settings', 'ayar_eski'), [null]);
-    assert.deepEqual(govdesi(a, 'iz', 'iz_pin'), [{ islem: 'kayıt' }]);
+    assert.deepEqual(govdesi(a, 'iz', 'iz_pin').map((g) => g?.['islem']), ['oluşturma']);
   });
 
   test('Kimlik: uygulama girişi TMI oturumundandır; yönetici bayrağı ve kişi listesi yalnız yöneticiye', async () => {
