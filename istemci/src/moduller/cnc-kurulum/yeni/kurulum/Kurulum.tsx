@@ -19,7 +19,7 @@ import { onizlemeBirak, onizlemeCiz, onizlemeSurukle } from './onizleme.ts';
 import {
   GENEL_ADIM, K, focusIdx, goRow, isSel, kurulumDinle, kurulumSifirla, kurulumYenile, metaYaz, moveOpt, rebuildAll, tezgahDuzelt, toggle, type CarkAdimi,
 } from './satirlar.ts';
-import { S, etiket, isaretle, isaretlemeyiKur, isaretler, kurulumKaydi, saat, tamamDurumu } from './secim.ts';
+import { S, emirAdaylari, etiket, isaretle, isaretlemeyiKur, isaretler, kurulumKaydi, saat, tamamDurumu } from './secim.ts';
 import { Kv, StokMetni, useOran } from './parcalar.tsx';
 import './kurulum.css';
 
@@ -207,9 +207,15 @@ function EmirCubugu({ tamamla, tur }: { tamamla: () => void; tur: boolean }) {
   }, [yetki.emirGorebilir]);
   useEffect(() => { degerYaz(gorunen()); }, [gorunen]);
   const sec = (metin: string) => {
-    const x = (secenekler ?? []).find((o) => etiket(o) === metin.trim());
-    // Listede olmayan metin, boş alan ve aynı emir seçim değildir: alan önceki seçime döner. Emirsiz kuruluma dönülmez.
     if (seciliyor) return;
+    // Yazılan metin tek bir emre uyuyorsa (emir no, parça no ya da etiketin bir parçası) o seçilir; listeden tam seçmek gerekmez.
+    // Uymayan ya da birden çok emre uyan metin seçim değildir: alan önceki seçime döner ve neden söylenir. Boş alan ve aynı emir
+    // seçim değildir; emirsiz kuruluma dönülmez.
+    const adaylar = emirAdaylari(secenekler ?? [], metin);
+    const x = adaylar.length === 1 ? adaylar[0] : undefined;
+    if (x === undefined && metin.trim() !== '' && metin.trim() !== gorunen()) {
+      bildir('bilgi', adaylar.length === 0 ? 'Bu metne uyan açık iş emri yok; listeden seçin.' : `${String(adaylar.length)} iş emri uyuyor; listeden birini seçin.`);
+    }
     if (x === undefined || x.id === e?.id) { degerYaz(gorunen()); return; }
     seciliyorYaz(true);
     degerYaz(`${etiket(x)} · açılıyor`);
@@ -232,7 +238,7 @@ function EmirCubugu({ tamamla, tur }: { tamamla: () => void; tur: boolean }) {
         <input
           list="tc-ck-emirler" autoComplete="off" placeholder={yer} readOnly={!yetki.yazabilir || !yetki.emirGorebilir} disabled={seciliyor}
           value={deger} onChange={(o) => { degerYaz(o.target.value); if ((secenekler ?? []).some((x) => etiket(x) === o.target.value)) sec(o.target.value); }}
-          onBlur={() => { sec(deger); }}
+          onBlur={() => { sec(deger); }} onKeyDown={(o) => { if (o.key === 'Enter') { o.preventDefault(); sec(deger); } }}
         />
         <datalist id="tc-ck-emirler">{(secenekler ?? []).map((x) => <option key={x.id} value={etiket(x)} />)}</datalist>
       </label>

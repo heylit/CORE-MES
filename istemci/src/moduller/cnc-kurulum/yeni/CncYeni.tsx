@@ -6,12 +6,12 @@ import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { kopruKur } from '../kopru.ts';
-import { durumKur } from './depo.ts';
+import { durumKur, useCncSurum } from './depo.ts';
 import { DURUM_ANAHTARI } from './durum.ts';
 import { closeDefs, gorunumAdresi, openDefs, useGorunum, useTanimlar, type Gorunum } from './gorunum.ts';
 import { KayitYazici } from './kayit.ts';
 import { sahneAlaniKur } from './sahne/Sahne.tsx';
-import { tezgahlariKur } from './secici.ts';
+import { tezgahlariKur, tezgahYok } from './secici.ts';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
@@ -23,7 +23,7 @@ const OKUMA_ISLEMLERI = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.ya
 // Görünüm şeridine dokunmak eylem sayılmaz: yalnız bakan kişi kayıt yazmaz.
 const SERIT = 'data-cnc-serit';
 
-interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi; tezgahlar: TezgahlarCevabi['tezgahlar'] | null }
+interface Acilis { yetki: CncYetkisi; kayitlar: KayitlarCevabi; tezgahlar: TezgahlarCevabi['tezgahlar'] }
 
 export function CncYeni() {
   const oturum = useOturum();
@@ -34,6 +34,8 @@ export function CncYeni() {
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
   const ekranGorunur = useEkranGorunur();
+  // Tanımlar'da ayar girilince tezgâh listesi değişir; boş liste uyarısı kalkar.
+  useCncSurum();
   const alan = useRef<HTMLDivElement>(null);
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
@@ -43,11 +45,11 @@ export function CncYeni() {
     let bitti = false;
     void (async () => {
       try {
-        // Tezgâh listesi okunamazsa ekran gömülü listeyle açılır (secici.ts).
+        // Tezgâh listesi İstasyonlar'dandır (CNC-6): okunamazsa ekran açılmaz, yeniden denenir; gömülü listeye düşülmez.
         const [ben, kayitlar, tezgahlar] = await Promise.all([
           api.get<BenCevabi>('/cnc-kurulum/ben'),
           api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar'),
-          api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar').then((c) => c.tezgahlar, () => null),
+          api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar').then((c) => c.tezgahlar),
         ]);
         if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar, tezgahlar });
       } catch (e) {
@@ -134,9 +136,22 @@ export function CncYeni() {
           )}
         </div>
         <div className="tc-cy-gorunum" ref={alan}>
-          <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-            {Bilesen && <Bilesen />}
-          </Suspense>
+          {tezgahYok() ? (
+            <div className="tc-cy-durum">
+              <DurumKutusu
+                durum="bos"
+                mesaj={yetki.saltOnay
+                  ? 'Kurulum için ayarı tamamlanmış CNC tezgâhı yok. Tezgâh ayarlarını kurulumu yapan kişi Tanımlar\'dan girer.'
+                  : 'Kurulum için ayarı tamamlanmış CNC tezgâhı yok. Tezgâhlar İstasyonlar\'daki makinelerdir; Tanımlar > Tezgâhlar\'dan tip, kontrol, bağlantı, cep sayısı ve devri girin.'}
+              >
+                {!yetki.saltOnay && <Dugme simge="edit" onClick={() => { openDefs(); }}>Tanımlar</Dugme>}
+              </DurumKutusu>
+            </div>
+          ) : (
+            <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+              {Bilesen && <Bilesen />}
+            </Suspense>
+          )}
         </div>
         {tanimlar.acik && !yetki.saltOnay && <TanimlarPenceresi sekme={tanimlar.sekme} kapat={closeDefs} />}
       </div>

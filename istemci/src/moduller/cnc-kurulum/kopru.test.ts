@@ -54,6 +54,29 @@ describe('CNC köprüsü: hazırlık onaylayıcısı', () => {
       { yol: '/cnc-kurulum/kayitlar/yaz', govde: { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { ...DURUM, machine: 'nlx' }, beklenenSurum: 4 } },
     ]);
   });
+
+  it('KP-04b: tek onay tek istek (CNC-6): onaylayıcıda yalnız adım değişimi istek göndermez, onay bir kez gider; yazanda onay ucu aynı durumu dönerse kayıt ucuna gidilmez', async () => {
+    const istekler = sunucuKur();
+    const ilk = { prep: { done: { machine: 'm1' }, fin: null, at: 1 } };
+    const isle = kopruKur(true, JSON.stringify(ilk));
+    const gezin = await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { prep: { ...ilk.prep, at: 2 } }, beklenenSurum: 3 });
+    expect(gezin).toEqual({ kayit: { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { prep: { ...ilk.prep, at: 2 } }, surum: 3 } });
+    const onay = { prep: { done: { machine: 'm1', fixture: 'm1' }, fin: null, at: 3 } };
+    await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: onay, beklenenSurum: 3 });
+    await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { prep: { ...onay.prep, at: 4 } }, beklenenSurum: 4 });
+    expect(istekler.map((i) => i.yol)).toEqual(['/cnc-kurulum/hazirlik/onayla']);
+    expect(istekler[0]?.govde).toEqual({ hazirlik: onay.prep, beklenenSurum: 3 });
+
+    const yazan: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      yazan.push(adres.replace('/api', ''));
+      const govde = JSON.parse(String(secenek?.body)) as { hazirlik?: unknown };
+      return new Response(JSON.stringify({ kayit: { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { prep: govde.hazirlik }, surum: 4 } }), { status: 200 });
+    }));
+    const cevap = await kopruKur(false, JSON.stringify(ilk))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: onay, beklenenSurum: 3 });
+    expect(yazan).toEqual(['/cnc-kurulum/hazirlik/yazar-onayla']);
+    expect(cevap).toEqual({ kayit: { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: onay, surum: 4 } });
+  });
 });
 
 describe('CNC köprüsü: emir başına kurulum', () => {
@@ -116,7 +139,7 @@ describe('CNC köprüsü: takım değişimi (300 a)', () => {
     expect(istekler[1]?.govde).toEqual({ olaylar: [{ tur: 'degisim', cep: 0, takimKimligi: 't-a' }] });
     const onaylayici = sunucuKur();
     await kopruKur(true, JSON.stringify(ILK), undefined, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
-    expect(onaylayici.map((i) => i.yol)).toEqual(['/cnc-kurulum/hazirlik/onayla', '/cnc-kurulum/takimlar/olaylar']);
+    expect(onaylayici.map((i) => i.yol)).toEqual(['/cnc-kurulum/takimlar/olaylar']);
     const digerleri = sunucuKur();
     await kopruKur(false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: DEGISIM, beklenenSurum: 3 });
     expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz']);
@@ -195,7 +218,7 @@ describe('CNC köprüsü: takım stoğu (164 b)', () => {
     const digerleri = sunucuKur();
     await kopruKur(false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
     await kopruKur(true, JSON.stringify(ILK), undefined, false, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
-    expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/hazirlik/onayla']);
+    expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz']);
   });
 
   it('KP-12: durum reddedilirse düşüş gitmez; uç reddederse (yetersiz stok) bırakılır, ağ hatasında aynı kimlikle yeniden denenir', async () => {

@@ -24,7 +24,9 @@ function ilk<T>(list: readonly T[]): T {
 // (1192) gömülü kimliği alır: kayıttaki seçim, magazin, el takımları ve düzeltmeler (`mo`) ona okunur, kayıt değişmez. Öteki
 // makinenin kimliği `mk<makine id>`dir. Alan sırası: gömülü değer, sunucudaki ayar, `mo` (Kurulum ve Hazırlık'taki düzeltmeler
 // hâlâ kayda yazılır); kod ve ad yalnız İstasyonlar'dandır. Tip, kontrol, bağlantı, cep ya da devri bilinmeyen makine listeye
-// girmez, Tanımlar'da "ayarı eksik" görünür. Liste boşsa ya da okunamadıysa gömülü liste ve elle eklenenler kullanılır.
+// girmez, Tanımlar'da "ayarı eksik" görünür. Liste kurulduktan sonra gömülü liste kullanılmaz (CNC-6): ayarı tam makine yoksa
+// tezgâh listesi boştur ve kabuk görünümler yerine Tanımlar'a yönlendirir. Gömülü liste yalnız liste hiç kurulmamışken (kabuksuz
+// birim testleri) kalır.
 let sunucuTezgahlari: readonly SunucuTezgahi[] | null = null;
 export function tezgahlariKur(liste: readonly SunucuTezgahi[] | null): void { sunucuTezgahlari = liste; dirtyUsage(); }
 export function sunucuTezgahiGuncelle(t: SunucuTezgahi): void {
@@ -72,12 +74,13 @@ function sunucudan(t: SunucuTezgahi): TezgahSatiri {
   return { sunucu: t, tezgah: r, tam };
 }
 
-// Tanımlar'ın tezgâh satırları; null: liste okunamadı ya da İstasyonlar'da makine yok.
+// Tanımlar'ın tezgâh satırları; null: liste kurulmadı.
 export function sunucuTezgahSatirlari(): TezgahSatiri[] | null {
-  return sunucuTezgahlari === null || sunucuTezgahlari.length === 0 ? null : sunucuTezgahlari.map(sunucudan);
+  return sunucuTezgahlari === null ? null : sunucuTezgahlari.map(sunucudan);
 }
-// Ayarı tam makine yoksa ekran gömülü listeyle sürer (Tanımlar'da makineler yine görünür, ayarları girilir).
-export const tezgahKaynagi = (): 'sunucu' | 'gomulu' => (sunucuTezgahSatirlari()?.some((x) => x.tam) ? 'sunucu' : 'gomulu');
+export const tezgahKaynagi = (): 'sunucu' | 'gomulu' => (sunucuTezgahlari === null ? 'gomulu' : 'sunucu');
+// Ekranın kullanabileceği tezgâh yok: liste kuruldu ama ayarı tam (aktif ya da seçili) makine yok.
+export const tezgahYok = (): boolean => allMachines().length === 0;
 
 export function allMachines(): Tezgah[] {
   const satirlar = tezgahKaynagi() === 'sunucu' ? sunucuTezgahSatirlari() : null;

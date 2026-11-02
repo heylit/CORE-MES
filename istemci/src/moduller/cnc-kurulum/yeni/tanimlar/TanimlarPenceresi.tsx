@@ -228,12 +228,12 @@ export function TanimlarPenceresi({ sekme, kapat }: Ozellikler) {
                 ? 'Atölyedeki tezgâhlar İstasyonlar\'daki makine kayıtlarıdır; yeni tezgâh orada makine olarak açılır. Burada motorun ayarı girilir; ayarı tamamlanan tezgâh Kurulum çarkına, Kütüphanedeki tezgâh atamalarına, G-kod ve Takım Ömrü sayfalarına otomatik eklenir.'
                 : 'Atölyedeki tezgâhlar. Yeni tezgâh İstasyonlar\'da makine olarak açılır.'}
             </p>
-            {kaynak === 'gomulu' && (
+            {kaynak === 'sunucu' && !sunucuSatirlari?.some((x) => x.tam && x.sunucu.aktif) && (
               <div className="tc-cl-uyari" role="status">
                 <Simge ad="alert" boyut="k" />
-                {sunucuSatirlari === null
-                  ? ' İstasyonlar\'da makine kaydı yok ya da liste alınamadı; ekran gömülü tezgâh listesini kullanıyor.'
-                  : ' Ayarı tamamlanmış makine yok; ekran gömülü tezgâh listesini kullanıyor. Makinenin ayarını girin.'}
+                {sunucuSatirlari?.length === 0
+                  ? ' İstasyonlar\'da talaşlı istasyonda makine yok; kurulum için önce makine orada açılır.'
+                  : ' Ayarı tamamlanmış tezgâh yok; kurulum sayfaları bir tezgâhın ayarı girilince açılır.'}
               </div>
             )}
             {duzen?.tur === 'mach' && (

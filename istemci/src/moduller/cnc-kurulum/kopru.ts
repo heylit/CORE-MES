@@ -43,6 +43,7 @@ function onayIzi(durum: unknown): string {
   const fin = h['fin'] !== null && typeof h['fin'] === 'object' && !Array.isArray(h['fin']) ? h['fin'] : null;
   return JSON.stringify(sirali({ done: Object.fromEntries(done), fin }));
 }
+const ayniDurumMu = (a: unknown, b: unknown): boolean => a !== undefined && JSON.stringify(sirali(a)) === JSON.stringify(sirali(b));
 const ayristir = (metinDeger: string | undefined): unknown => {
   try { return metinDeger === undefined ? null : JSON.parse(metinDeger) as unknown; } catch { return null; }
 };
@@ -163,16 +164,29 @@ export function kopruKur(
       bekleyenDusus.shift();
     }
   }
+  // Tek onay tek istek (CNC-6): onaylayıcıda yalnız kalınan adım (`at`) değiştiyse istek gitmez, adım bir sonraki onayla gider
+  // (adımlar arasında gezinmek ortak kaydı yazmazdı ama her tıklama bir istekti). Yazanda onay ucu bütün durumu döner; dönen durum
+  // gönderilecekle aynıysa kayıt ucuna ikinci istek gitmez.
   async function durumuYaz(v: Nesne): Promise<YazCevabi> {
-    if (yalnizHazirlik) return api.post<YazCevabi>('/cnc-kurulum/hazirlik/onayla', hazirlikGovdesi(v));
+    if (yalnizHazirlik) {
+      const govde = hazirlikGovdesi(v), iz = onayIzi(v['deger']);
+      if (iz === sonOnay && govde.beklenenSurum !== null) {
+        return { kayit: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: v['deger'] ?? null, surum: govde.beklenenSurum } };
+      }
+      const cevap = await api.post<YazCevabi>('/cnc-kurulum/hazirlik/onayla', govde);
+      sonOnay = iz;
+      return cevap;
+    }
     const anahtar = metin(v['anahtar'], 'anahtar');
     const bicim = v['bicim'] === 'metin' ? 'metin' : 'json';
     let beklenenSurum = surum(v['beklenenSurum']);
     const durumMu = anahtar === DURUM_ANAHTARI && bicim === 'json';
     const iz = durumMu ? onayIzi(v['deger']) : sonOnay;
     if (durumMu && beklenenSurum !== null && iz !== sonOnay) {
-      beklenenSurum = (await api.post<YazCevabi>('/cnc-kurulum/hazirlik/yazar-onayla', hazirlikGovdesi(v))).kayit.surum;
+      const onay = await api.post<YazCevabi>('/cnc-kurulum/hazirlik/yazar-onayla', hazirlikGovdesi(v));
       sonOnay = iz;
+      if (ayniDurumMu(onay.kayit.deger, v['deger'])) return onay;
+      beklenenSurum = onay.kayit.surum;
     }
     const cevap = await api.post<YazCevabi>('/cnc-kurulum/kayitlar/yaz', { anahtar, bicim, deger: v['deger'] ?? null, beklenenSurum });
     if (durumMu) sonOnay = iz;

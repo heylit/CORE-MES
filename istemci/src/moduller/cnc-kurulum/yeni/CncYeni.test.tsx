@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { BenCevabi, KayitlarCevabi, TezgahlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { YENI_EKRAN_ILETISI, YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
@@ -15,10 +15,16 @@ const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: ['sayfa.cn
 const KULLANICI: Kullanici = { id: 2, ad: 'Deneme Kullanici', islemler: ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz'] };
 const OKUMASIZ: Kullanici = { id: 3, ad: 'Deneme Okumasiz', islemler: [YENI_EKRAN_ISLEMI] };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
+// Tezgâh listesi İstasyonlar'dandır (CNC-6); makine kodu ve adı uydurmadır.
+const TEZGAHLAR: TezgahlarCevabi['tezgahlar'] = [{
+  makineId: 7, kod: 'X-01', ad: 'Deneme X-01', istasyonId: 3, aktif: true, surum: 1,
+  ayar: { tur: 'mill', kontrol: 'iso', konik: 'BT40', cepSayisi: 24, devir: 10000, isMiliDevri: null, canliTakim: false, canliDevir: null, elle: null, modelTuru: 'm_vmc' },
+}];
 
 function sunucuKur(
   kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitlar'] = [],
   yetki: Pick<BenCevabi, 'yazabilir' | 'hazirlikOnaylayabilir'> = { yazabilir: true, hazirlikOnaylayabilir: false },
+  tezgahlar: TezgahlarCevabi['tezgahlar'] | null = TEZGAHLAR,
 ): string[] {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
@@ -30,6 +36,9 @@ function sunucuKur(
       kisi: { id: kullanici.id, ad: kullanici.ad }, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, emirGorebilir: true, ...yetki,
     } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/cnc-kurulum/kayitlar') return json(200, { kayitlar } satisfies KayitlarCevabi);
+    if (yontem === 'GET' && yol === '/cnc-kurulum/tezgahlar') {
+      return tezgahlar === null ? json(500, { kod: 'SUNUCU_HATASI', mesaj: 'Sunucu hatası.' }) : json(200, { tezgahlar } satisfies TezgahlarCevabi);
+    }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
@@ -107,6 +116,27 @@ describe('CncYeni', () => {
     expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
     expect(istekler.some((i) => i.includes('/cnc-kurulum/'))).toBe(true);
+  }, 20000);
+
+  it('CNC-6: ayarı tam tezgâh yoksa gömülü listeye düşülmez; görünüm yerine Tanımlar\'a yönlendirilir, onaylayıcıya düğme çıkmaz', async () => {
+    sunucuKur(YONETICI, [], undefined, [{ ...TEZGAHLAR[0]!, ayar: null, surum: 0 }]);
+    ac('/cnc-kurulum/yeni/kurulum');
+    expect(await screen.findByText(/ayarı tamamlanmış CNC tezgâhı yok/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('tabpanel')).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: /Tanımlar/ }).at(-1)!);
+    expect(await screen.findByRole('dialog', { name: 'Tanımlar' })).toBeTruthy();
+    cleanup();
+    sunucuKur(YONETICI, [], { yazabilir: false, hazirlikOnaylayabilir: true }, []);
+    ac('/cnc-kurulum/yeni/hazirlik');
+    expect(await screen.findByText(/kurulumu yapan kişi Tanımlar/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Tanımlar/ })).toBeNull();
+  }, 20000);
+
+  it('CNC-6: tezgâh listesi okunamazsa ekran açılmaz, hata gösterilir', async () => {
+    sunucuKur(YONETICI, [], undefined, null);
+    ac('/cnc-kurulum/yeni/ana-sayfa');
+    expect(await screen.findByText(/Sunucu hatası/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Ana Sayfa' })).toBeNull();
   }, 20000);
 
   it('okuma işlemi olmayan kişide yetki iletisi gösterir', async () => {
