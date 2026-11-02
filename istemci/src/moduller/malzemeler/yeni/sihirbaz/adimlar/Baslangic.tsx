@@ -61,15 +61,16 @@ export function Baslangic() {
   );
 }
 
-// Prototipte `turKartlari` ve tür seçimi: tür değişince taslak sıfırlanır, düzenlenen kartın kimliği kalır.
+// Prototipte `turKartlari` ve tür seçimi: tür değişince taslak sıfırlanır. 1882 a: kayıtlı kartın türü değişmez; düzenlenen
+// kartta tür değişince kart bırakılır (adresi de) ve yeni kart başlar, kayıt eski karta değişiklik talebi olarak gitmez.
 export function TurKartlari() {
-  const { taslak: d, b, yenisiniKur, kurVeGit } = useSihirbaz();
+  const { taslak: d, b, yenisiniKur, kurVeGit, sifirla } = useSihirbaz();
   const cur = d.tur || 'hammadde';
   const sec = (k: string) => {
     let y: Taslak = d;
     if (cur !== k) {
       y = { ...K.newDraft(b), tur: k as Taslak['tur'] };
-      if (d.id) y.id = d.id;
+      if (d.id) sifirla();
     }
     if (k === 'yarimamul' || k === 'mamul') kurVeGit(y, 1);
     else yenisiniKur(y);

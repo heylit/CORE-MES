@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
+import { rotalar } from '../../rotalar.tsx';
 import type { KatalogKartlariCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ORNEK_AYAR, ORNEK_KARTLAR, ornekKayit } from '../ornek-veri.ts';
-import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, type Yanit } from '../test-ortak.tsx';
+import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, yeniIstemci, type Yanit } from '../test-ortak.tsx';
 
 // Çizim merkezinin paneli kendi testlerinde sınanır; burada yalnız hangi kart no ile ve nerede açıldığı ölçülür.
 vi.mock('../../../cizimler/disari.ts', async (asil) => ({
@@ -327,5 +331,72 @@ describe('M1 yeni kart sihirbazı', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Ticari bilgiler/ }));
     expect(((await screen.findByLabelText('Alış birimi')) as HTMLSelectElement).value).toBe('kutu');
     expect((screen.getByLabelText('1 alış birimi = kaç adet') as HTMLInputElement).value).toBe('12,5');
+  });
+});
+
+// 1882: düz "Yeni kart" adresi kayıtlı kartın kimliğini taşıyan taslağı sürdürmez; sürdürürse yeni malzeme o karta değişiklik talebi olarak gider.
+describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
+  const yarimTaslak = () => JSON.parse(localStorage.getItem('tmi-malzemeler-yarim-taslak') ?? 'null') as { d: { id?: string; tur?: string } } | null;
+  const sihirbazdaAdim = (ad: RegExp) => { fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: ad })); };
+
+  test('kart düzenlenirken bırakılır, "Yeni kart" açılınca boş kart başlar; aynı kartın düzenlemesi kendi adresinde sürer', async () => {
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    sihirbazdaAdim(/Ticari/);
+    await waitFor(() => { expect(yarimTaslak()?.d.id).toBe('mornek1'); });
+    cleanup();
+    ac();
+    expect(await screen.findByRole('heading', { name: 'Tür ve aile' })).toBeTruthy();
+    expect(screen.queryByText('HM-MET-C45-0001')).toBeNull();
+    cleanup();
+    ac('?kart=mornek1');
+    expect(await screen.findByRole('heading', { name: 'Ticari bilgiler' })).toBeTruthy();
+  });
+
+  test('düzenleme bırakıldıktan sonra "Yeni kart"ta seçilen mamul kimlik taşımaz (bildirilen hata)', async () => {
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    sihirbazdaAdim(/Ticari/);
+    await waitFor(() => { expect(yarimTaslak()?.d.id).toBe('mornek1'); });
+    cleanup();
+    ac();
+    await screen.findByRole('heading', { name: 'Tür ve aile' });
+    expect(screen.queryByRole('button', { name: 'Değişiklikleri kaydet' })).toBeNull();
+    fireEvent.click(document.querySelector('[data-tur="mamul"]')!);
+    await waitFor(() => { expect(yarimTaslak()?.d.tur).toBe('mamul'); });
+    expect(yarimTaslak()?.d.id).toBeUndefined();
+  });
+
+  test('sihirbaz açıkken menüdeki "Yeni kart" düzenlenen kartı bırakır, boş kart açar', async () => {
+    sunucuKur(YAZAN);
+    render(
+      <QueryClientProvider client={yeniIstemci()}>
+        <BildirimSaglayici>
+          <MemoryRouter initialEntries={['/malzemeler/yeni?kart=mornek1']}>
+            <Link to="/malzemeler/yeni">Menü: Yeni kart</Link>
+            <Routes>{rotalar.map((e) => <Route key={e.yol} path={e.yol} element={<e.ekran />} />)}</Routes>
+          </MemoryRouter>
+        </BildirimSaglayici>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    fireEvent.click(screen.getByRole('link', { name: 'Menü: Yeni kart' }));
+    expect(await screen.findByRole('heading', { name: 'Tür ve aile' })).toBeTruthy();
+    fireEvent.click(document.querySelector('[data-tur="mamul"]')!);
+    await waitFor(() => { expect(yarimTaslak()?.d.tur).toBe('mamul'); });
+    expect(yarimTaslak()?.d.id).toBeUndefined();
+  });
+
+  test('1882 a: kayıtlı kart düzenlenirken tür değişirse kimlik düşer, kayıt yeni kart olur', async () => {
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    sihirbazdaAdim(/Tür ve aile/);
+    fireEvent.click(await waitFor(() => document.querySelector('[data-tur="mamul"]')!));
+    await waitFor(() => { expect(yarimTaslak()?.d.tur).toBe('mamul'); });
+    expect(yarimTaslak()?.d.id).toBeUndefined();
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler/yeni'); });
   });
 });
