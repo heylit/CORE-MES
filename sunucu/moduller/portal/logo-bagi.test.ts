@@ -30,7 +30,7 @@ describe('portal Logo satış bağı (gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('portal_logo');
-    const hepsi = await modulOrnekVerileriniKesfet();
+    const hepsi = await modulOrnekVerileriniKesfet(undefined, { kapaliDahil: true });
     const gerekli = new Set<string>();
     const ekle = (ad: string): void => {
       const t = hepsi.find((x) => x.modul === ad);

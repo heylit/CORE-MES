@@ -72,7 +72,7 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('portal');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    const hepsi = await modulOrnekVerileriniKesfet();
+    const hepsi = await modulOrnekVerileriniKesfet(undefined, { kapaliDahil: true });
     await ornekVeriYukle(ortam.vt, hepsi.filter((t) => t.modul === 'kisiler' || t.modul === 'musteri-tedarikci'), { ortam: 'test', bildir: () => undefined });
     firmaKodu = (await ortam.vt.tx(async (db) => firmaOzeti(db, (await ornekFirmaNo(db, 'musteriA')) ?? 0)))?.kod ?? '';
     assert.ok(firmaKodu !== '');

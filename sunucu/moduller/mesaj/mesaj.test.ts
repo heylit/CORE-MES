@@ -283,7 +283,7 @@ describe('mesaj belge deposu (gerçek PostgreSQL)', () => {
 
   test('BD-15: örnek veri kisiler zinciriyle kanal ve iki ileti kurar, başlangıç kanallarını kurmaz; ikinci koşu yüklü der', async () => {
     for (const yol of ['channels/genel', 'channels/duyurular']) await istek(yonetici, 'POST', '/mesaj/belge/sil', { yol });
-    const liste = (await modulOrnekVerileriniKesfet()).filter((t) => t.modul === 'kisiler' || t.modul === 'mesaj');
+    const liste = (await modulOrnekVerileriniKesfet(undefined, { kapaliDahil: true })).filter((t) => t.modul === 'kisiler' || t.modul === 'mesaj');
     const secenek = { ortam: 'test' as const, bildir: () => undefined };
     assert.deepEqual(await ornekVeriYukle(vt(), liste, secenek), { durum: 'yuklendi', moduller: ['kisiler', 'mesaj'] });
     const iletiler = await sorgu(okur, `${ORNEK_KANAL}/msgs`);

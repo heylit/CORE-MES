@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { modulKapaliMi } from '#paylasilan/kapali-moduller.ts';
 import type { Ortam } from '#paylasilan/ortam.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { Db, Veritabani } from './db.ts';
@@ -57,11 +58,17 @@ export function ornekVeriTanimi(tanim: OrnekVeriTanimi): OrnekVeriTanimi {
   return donmus;
 }
 
+export interface KesifSecenegi {
+  // Kapalı modül (`KAPALI_MODULLER`) uygulamada yoktur; tablosuna örnek veri yazılmaz. Yalnız modülün kendi testleri ister.
+  readonly kapaliDahil?: boolean;
+}
+
 // İş keşfiyle aynı kalıp: çekirdek modülü ithal etmez, klasörden bulur; toplayıcı dosya yoktur.
-export async function modulOrnekVerileriniKesfet(klasor: string = MODUL_KLASORU): Promise<OrnekVeriTanimi[]> {
+export async function modulOrnekVerileriniKesfet(klasor: string = MODUL_KLASORU, secenek: KesifSecenegi = {}): Promise<OrnekVeriTanimi[]> {
   if (!existsSync(klasor)) return [];
   const girdiler = await readdir(klasor, { withFileTypes: true });
-  const adlar = girdiler.filter((g) => g.isDirectory()).map((g) => g.name).sort();
+  const adlar = girdiler.filter((g) => g.isDirectory()).map((g) => g.name)
+    .filter((ad) => secenek.kapaliDahil === true || !modulKapaliMi(ad)).sort();
   const sonuc: OrnekVeriTanimi[] = [];
   for (const ad of adlar) {
     const dosya = join(klasor, ad, 'ornek-veri.ts');
