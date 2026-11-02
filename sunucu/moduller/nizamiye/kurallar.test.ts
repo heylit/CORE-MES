@@ -19,10 +19,11 @@ describe('nizamiye kuralları', () => {
   });
 
   test('NZ-03 kart yalnız boş ve kimsede değilse verilir', () => {
-    assert.equal(kartVerilemezse({ durum: 'bos', icerideMi: false }), null);
-    assert.notEqual(kartVerilemezse({ durum: 'bos', icerideMi: true }), null);
-    assert.notEqual(kartVerilemezse({ durum: 'kayip', icerideMi: false }), null);
-    assert.notEqual(kartVerilemezse({ durum: 'hasarli', icerideMi: false }), null);
+    assert.equal(kartVerilemezse({ durum: 'bos', icerideMi: false, tur: 'ziyaretci' }), null);
+    assert.notEqual(kartVerilemezse({ durum: 'bos', icerideMi: true, tur: 'ziyaretci' }), null);
+    assert.notEqual(kartVerilemezse({ durum: 'kayip', icerideMi: false, tur: 'ziyaretci' }), null);
+    assert.notEqual(kartVerilemezse({ durum: 'hasarli', icerideMi: false, tur: 'ziyaretci' }), null);
+    assert.notEqual(kartVerilemezse({ durum: 'bos', icerideMi: false, tur: 'taseron' }), null);
     assert.notEqual(kartVerilemezse(null), null);
   });
 

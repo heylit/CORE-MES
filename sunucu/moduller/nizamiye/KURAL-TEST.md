@@ -4,7 +4,7 @@
 |---|---|
 | NZ-01 yalnız beklenen ziyaret içeri alınır; habersiz gelen kayıt ve giriş tek komut | `NZ-01/02 giriş` (kurallar.test.ts), `NZ-01` (dört test, nizamiye.test.ts) |
 | NZ-02 kimlik görülmeden girilmez; atölye nedeninde (servis, denetim) kask ve gözlük işareti zorunlu; kimlikten yalnız son dört hane | `NZ-01/02 giriş`, `NZ-02` (iki test) |
-| NZ-03 kart yalnız rafta boşsa ve kimsede değilse verilir (kısmi tekil indeks) | `NZ-03` (kurallar ve nizamiye.test.ts) |
+| NZ-03 kart yalnız rafta boşsa ve kimsede değilse verilir (kısmi tekil indeks); ziyaretçiye yalnız ziyaretçi kartı | `NZ-03` (kurallar ve nizamiye.test.ts, taşeron kartı testi dahil) |
 | NZ-04 yalnız içerideki çıkar; NZ-05 dizüstüyle girende çıkışta eşya kontrolü; teslim edilmeyen kart kayıp | `NZ-04/05` (iki test) |
 | NZ-06 yalnız beklenen iptal edilir | `NZ-06` (iki test) |
 | NZ-07 son giriş ya da çıkış 10 dakika içinde geri alınır; habersiz girişin geri alınması iptal; kart rafa ya da ziyaretçiye döner | `NZ-07` (dört test) |

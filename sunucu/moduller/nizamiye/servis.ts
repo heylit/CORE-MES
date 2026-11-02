@@ -73,7 +73,7 @@ function kartGorunumu(k: KartSatiri): Kart {
 
 async function kartiVer(db: Db, kartId: number): Promise<void> {
   const kart = await sorgu.kartKilitle(db, kartId);
-  const hata = kartVerilemezse(kart === null ? null : { durum: kart.kayitDurumu, icerideMi: kart.ziyaretId !== null });
+  const hata = kartVerilemezse(kart === null ? null : { durum: kart.kayitDurumu, icerideMi: kart.ziyaretId !== null, tur: kart.tur });
   if (hata !== null) throw gecersiz(hata);
 }
 

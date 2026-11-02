@@ -162,6 +162,20 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id))).statusCode, 422);
   });
 
+  test('NZ-03 taşeron kartı ziyaretçiye verilmez: habersiz ve ön kayıtlı girişte reddedilir, kart rafta boş kalır', async () => {
+    const taseron = await kartAc('taseron');
+    const habersizRet = await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(taseron.id));
+    assert.equal(habersizRet.statusCode, 422, habersizRet.body);
+    assert.match(habersizRet.json().mesaj, /ziyaretçi kartı değil/);
+    const id = await beklenen();
+    const z = (await kapi()).beklenen.find((s) => s.id === id);
+    assert.ok(z);
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: taseron.id, kimlikGoruldu: true })).statusCode, 422);
+    assert.ok((await kapi()).bosKartlar.some((k) => k.id === taseron.id));
+    const ziyaretci = await kartAc();
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: ziyaretci.id, kimlikGoruldu: true })).statusCode, 200);
+  });
+
   test('NZ-01 habersiz giriş tekrar korumalıdır: aynı istek kimliği ikinci ziyaret açmaz, başlıksız istek reddedilir', async () => {
     const kart = await kartAc();
     const kimlik = randomUUID();

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ATOLYE_NEDENLERI } from '#paylasilan/sozlesme/nizamiye.ts';
-import type { Neden, ZiyaretDurumu } from '#paylasilan/sozlesme/nizamiye.ts';
+import type { KartTuru, Neden, ZiyaretDurumu } from '#paylasilan/sozlesme/nizamiye.ts';
 import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
 
 // Son giriş ya da çıkış bu süre içinde geri alınabilir (NZ-07): yanlış satıra basan görevli hemen düzeltir, eski kayıt değişmez.
@@ -27,9 +27,10 @@ export function girisHatasi(z: GirisDurumu): string | null {
   return null;
 }
 
-// NZ-03 kart yalnız rafta boşsa verilir.
-export function kartVerilemezse(kart: { durum: string; icerideMi: boolean } | null): string | null {
+// NZ-03 kart yalnız rafta boşsa verilir; ziyaretçiye yalnız ziyaretçi kartı verilir (taşeron kartının izinli bölgesi başkadır).
+export function kartVerilemezse(kart: { durum: string; icerideMi: boolean; tur: KartTuru } | null): string | null {
   if (kart === null) return 'Kart bulunamadı.';
+  if (kart.tur !== 'ziyaretci') return 'Bu kart ziyaretçi kartı değil; ziyaretçiye verilmez.';
   if (kart.icerideMi) return 'Bu kart içerideki başka bir ziyaretçide.';
   if (kart.durum === 'kayip') return 'Bu kart kayıp; rafa alınmadan verilmez.';
   if (kart.durum === 'hasarli') return 'Bu kart hasarlı; rafa alınmadan verilmez.';
