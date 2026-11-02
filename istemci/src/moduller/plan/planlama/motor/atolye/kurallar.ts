@@ -70,6 +70,13 @@ export function elleSira(c: PlanlamaCalismasi): string[] {
   const kayitli = new Set(c.D.siparisler.map((x) => x.id));
   return s.filter((j): j is string => typeof j === 'string' && kayitli.has(j));
 }
+// 1786 (PLN-3): çubuk ve onaya gönder geciken sayısını listenin "Geciken" grubuyla aynı sayar: planda yeri olmayan sipariş de bitişi
+// bilinmediği için oradadır (önceden çubuk planın kayıtlı özetini yazıyordu: "0 geciken" yanında "GECİKEN 3").
+export const gecikenSay = (L: readonly SiparisBilgisi[]): number => L.filter((s) => s.durum === 'gec').length;
+export function gecikenIpucu(L: readonly SiparisBilgisi[]): string {
+  const yok = L.filter((s) => s.durum === 'gec' && s.C == null).length;
+  return yok ? `Geciken sipariş; ${String(yok)} tanesi planda yerleşmedi (bitişi bilinmiyor)` : 'Geciken sipariş';
+}
 export const SIPARIS_GRUPLARI = [['gec', 'Geciken', 'alert'], ['risk', `Riskli · ${RISK_PAYI} sa’ten az pay`, 'clock'], ['iyi', 'Zamanında', 'check']] as const;
 // Malzeme tahmini üretim başlangıcından sonra.
 export const malzemeGec = (s: SiparisBilgisi): boolean => s.ur != null && s.bas > s.ur + 0.25;
@@ -563,11 +570,13 @@ export function ekMesaiFarki(a: PlanCevabi, b: PlanCevabi | null): ['clock' | 'm
 
 // Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); bekleyen değişiklik uygulanmalı ya da reddedilmeli (755 a).
 // Yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
-export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0): KontrolMaddesi[] {
+// 1786 (PLN-3): planda yeri olmayan sipariş (plandan sonra gelen) de yerleşmemiş sayılır; yoksa "Bütün işler yerleşti" yanlış olurdu.
+export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0, planDisi = 0): KontrolMaddesi[] {
+  const eksik = [...(yerlesmeyen ? [`${yerlesmeyen} iş`] : []), ...(planDisi ? [`${planDisi} sipariş`] : [])];
   const K: KontrolMaddesi[] = [
     guncel ? ['ok', 'Plan güncel veriyle çözülmüş']
       : ['red', bekleyen > 0 ? `${String(bekleyen)} bekleyen değişiklik var; aşağıda uygulayın ya da reddedin` : 'Veri plandan sonra değişti; önce planı yeniden çözün'],
-    yerlesmeyen ? ['uyari', `${yerlesmeyen} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
+    eksik.length ? ['uyari', `${eksik.join(', ')} yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
   ];
   if (!farkli) K.push(['uyari', 'Canlı plandan farkı yok']);
   return K;

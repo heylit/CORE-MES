@@ -47,8 +47,9 @@ function Rapor({ c }: { c: MrpIhtiyaciCevabi }) {
         <SayiKarti baslik="Malzeme" simge="box" sayi={ozet.malzeme} altMetin="Açık emirlerde ihtiyacı olan malzeme" />
         <SayiKarti baslik="Eksik malzeme" simge="alert" sayi={ozet.eksik} ton="uyari"
           altMetin={ozet.eksik === null ? 'Stok ve satın alma okuma yetkisi gerekir' : 'Stok ve zamanında gelen siparişle karşılanmayan'} />
-        {ozet.ilkEksikGunu === null
-          ? <SayiKarti baslik="İlk eksik günü" simge="calendar" sayi={null} altMetin="Karşılanamayan ilk tüketim" />
+        {ozet.ilkEksikGunu === null || ozet.ilkEksikGunu === 'bilinmiyor'
+          ? <SayiKarti baslik="İlk eksik günü" simge="calendar" sayi={null}
+            altMetin={ozet.ilkEksikGunu === null ? 'Karşılanamayan ilk tüketim' : 'Eksik var; tüketim günü bilinmiyor (planda yer yok)'} />
           : <SayiKarti baslik="İlk eksik günü" simge="calendar" metin={ozet.ilkEksikGunu === 'yok' ? 'Eksik yok' : gunMetni(ozet.ilkEksikGunu)!}
             altMetin="Karşılanamayan ilk tüketim" />}
         <SayiKarti baslik="Ürünsüz emir" simge="flag" sayi={c.urunsuzEmir} ton="uyari" altMetin="İhtiyacı hesaplanamayan açık emir" />

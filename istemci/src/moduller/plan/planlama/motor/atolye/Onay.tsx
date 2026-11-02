@@ -12,7 +12,7 @@ import { bekleyenListesi } from '../../kayit.ts';
 import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
 import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
-import type { OkunanPlan } from '../kurallar.ts';
+import { bitenler, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
@@ -220,7 +220,9 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const sira = PA_ADIM.map((x) => x[0]);
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
   const bekleyen = c ? bekleyenListesi(c) : [];
-  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli, bekleyen.length), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
+  const emirler = o.depo.durum?.emirler ?? null;
+  const planDisi = c && p ? yerlesmeyenSiparisler(c, p, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p)).length : 0;
+  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli, bekleyen.length, planDisi), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
   const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, planK(sor.id)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">

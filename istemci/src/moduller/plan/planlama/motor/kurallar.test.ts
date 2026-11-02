@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
-import { derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi } from './kurallar.ts';
+import { bitenler, derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
@@ -131,5 +131,20 @@ describe('planlama motoru hesapları', () => {
     const ad = c.D.urunler.find((x) => x.id === u)?.ad ?? String(u); const n = c.D.siparisler.filter((x) => !x.havuz && x.urun === u).length;
     expect(olayAdi(c, { tip: 'sure', urun: u, k: '20', oran: 1.5 })).toBe(`${ad}, adım 20: süre ×1,5 (${String(n)} sipariş)`);
     expect(olayAdi(c, { tip: 'sureOp', id: '2.20', oran: 0.8 })).toBe('2.20: süre ×0,8');
+  });
+});
+
+// 1786 (PLN-3): plandan sonra gelen sipariş planda yoktur; iş emri durumu okununca biten sayılmaz, yerleşmeyen sayılır.
+describe('yerleşmeyen siparişler', () => {
+  it('planda olmayan açık sipariş sayılır; biten ve havuzdaki sayılmaz', () => {
+    const c = ornekCalisma(); const p = planOku(c);
+    if (!p) throw new Error('plan yok');
+    delete p.J['3'];
+    // Örnekte 1 bitmiş emirdir (bütün adımları planın dışında).
+    const acik = { orders: c.D.siparisler.map((s) => ({ id: s.id, status: s.id === '1' ? 'tamam' : 'uretimde' })), opStatus: {} };
+    expect(yerlesmeyenSiparisler(c, p, bitenler(acik, c.D))).toEqual(['3']);
+    expect(yerlesmeyenSiparisler(c, p, bitenler({ ...acik, orders: [{ id: '1', status: 'tamam' }, { id: '3', status: 'tamam' }] }, c.D))).toEqual([]);
+    const h = structuredClone(c); h.D.siparisler.find((s) => s.id === '3')!.havuz = true;
+    expect(yerlesmeyenSiparisler(h, p, bitenler(acik, h.D))).toEqual([]);
   });
 });

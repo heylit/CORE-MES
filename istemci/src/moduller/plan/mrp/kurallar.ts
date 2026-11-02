@@ -30,15 +30,15 @@ export interface MrpOzeti {
   malzeme: number;
   // Görmeyene null (kart "Veri yok" der).
   eksik: number | null;
-  // Görmeyene null; görüp eksiği olmayana 'yok'.
-  ilkEksikGunu: string | 'yok' | null;
+  // Görmeyene null; görüp eksiği olmayana 'yok'; eksik var ama hiçbirinin tüketim günü bilinmiyorsa 'bilinmiyor' (1786 PLN-3: "Eksik yok" denmez).
+  ilkEksikGunu: string | 'yok' | 'bilinmiyor' | null;
 }
 
 export function mrpOzeti(c: MrpIhtiyaciCevabi): MrpOzeti {
   if (!netGorunur(c)) return { malzeme: c.satirlar.length, eksik: null, ilkEksikGunu: null };
   const eksikler = c.satirlar.filter(eksikMi);
   const gunler = eksikler.flatMap((s) => (s.eksikTarihi === null ? [] : [s.eksikTarihi])).sort();
-  return { malzeme: c.satirlar.length, eksik: eksikler.length, ilkEksikGunu: gunler[0] ?? 'yok' };
+  return { malzeme: c.satirlar.length, eksik: eksikler.length, ilkEksikGunu: gunler[0] ?? (eksikler.length ? 'bilinmiyor' : 'yok') };
 }
 
 // Görünmeyen alanların notu; hepsi görünürse null.

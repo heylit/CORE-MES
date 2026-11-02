@@ -7,7 +7,7 @@ import { degisken, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -153,7 +153,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             {canli ? (
               <>
                 <Satir a="Canlı sürüm" b={canli} />
-                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${p.ozet.late}`} />
+                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${gecikenSay(ort.liste)}`} />
                 <Satir a="Toplam gecikme" b={`— → ${sure(p.ozet.wT)}`} />
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}

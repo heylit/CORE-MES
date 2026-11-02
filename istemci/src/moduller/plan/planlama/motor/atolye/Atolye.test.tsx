@@ -237,6 +237,24 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('planda yeri olmayan sipariş çubukta, onaya gönder kartında ve kontrolde listeyle aynı sayılır (1786 PLN-3)', () => {
+    // İş emri durumu okunmadığı için (depo boş) planda olmayan adım bitmiş sayılır; siparişin adımları motorun yerleştiremedikleri listesindedir.
+    const c = guncel(); const plan = c.plan as unknown as { J: Record<string, unknown>; ops: Record<string, { job?: string }>; fail: string[] };
+    delete plan.J['3'];
+    for (const [id, o] of Object.entries(plan.ops)) if (o.job === '3') { delete plan.ops[id]; plan.fail.push(id); }
+    ac({ c });
+    const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
+    const say = within(ust).getByTitle(/^Geciken sipariş/);
+    expect(say.textContent).toBe('2 geciken');
+    expect(say.getAttribute('title')).toBe('Geciken sipariş; 1 tanesi planda yerleşmedi (bitişi bilinmiyor)');
+    fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
+    expect(within(kart()).getByText('1 → 2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi$/)).toBeTruthy();
+    expect(screen.queryByText('Bütün işler yerleşti')).toBeNull();
+  });
+
   it('onaya gönder kartı: sunucu reddederse iletisi gösterilir, kart açık kalır, taslaktan vazgeçilir', async () => {
     ac({ c: guncel() });
     fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));

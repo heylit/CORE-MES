@@ -220,6 +220,12 @@ export function plandanBitenler(c: PlanlamaCalismasi, p: OkunanPlan | null): Bit
   return y;
 }
 
+// 1786 (PLN-3): planda yeri olmayan açık siparişler (plan kurulduktan sonra gelen ya da motorun yerleştiremediği); havuzdaki ve biten düşer.
+// Atölye listesi bunları "geç" satırı gösterir; sayılar (çubuk, kontrol, onaya gönder) aynı tanımla sayar.
+export function yerlesmeyenSiparisler(c: PlanlamaCalismasi, p: OkunanPlan, bit: Bitenler): string[] {
+  return c.D.siparisler.filter((s) => !s.havuz && !bit.siparis.has(s.id) && p.J[s.id]?.C == null).map((s) => s.id);
+}
+
 // Planın girdisi (girdi.betik stKur, simdiUygula): verinin kopyası; havuzdaki ve biten sipariş düşer, kapalı kısıtın gevşetmesi ve olaylar
 // uygulanır. Ekranın okuduğu alanlar: takvim, duruş, ek mesai, sipariş, personel, aparat, fason, ayar matrisi, satın alma gecikmesi.
 export interface Girdi {
