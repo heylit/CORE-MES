@@ -71,7 +71,7 @@ export function EmirAyrintisi() {
     <Kart
       baslik="Üretim emri"
       sag={(
-        <div className="tc-emir-ust">
+        <div className="tc-emir-ust tc-emir-ust-sag">
           <Dugme simge="list" onClick={() => { void yonlendir('/uretim-emirleri'); }}>Listeye dön</Dugme>
           {emir && <Dugme simge="scan" aria-pressed={iplikAcik} onClick={izle}>Parçayı izle</Dugme>}
           {emir && <GecmisDugmesi kayitlar={[{ tablo: 'uretim_emri', anahtar: { id: emir.id } }]} />}

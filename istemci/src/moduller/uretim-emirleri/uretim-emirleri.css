@@ -5,6 +5,13 @@
 .tc-emir-form { display: grid; gap: var(--b-4); }
 .tc-emir-hata { color: var(--stop); margin: 0; overflow-wrap: anywhere; }
 .tc-emir-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+/* Kart başlığı sarmaz; başlıktaki eylemler daralır ve dar ekranda düğme yazısı alt satıra geçer (kart dışına taşmaz). */
+.tc-emir-ust-sag { min-width: 0; justify-content: flex-end; }
+@media (max-width: 767px) {
+  .tc-emir-ust-sag .tc-dugme { white-space: normal; text-align: start; max-width: 100%; }
+  .tc-emir-kod { white-space: normal; overflow-wrap: anywhere; }
+  .tc-emir-liste dd .tc-rozet { white-space: normal; }
+}
 .tc-emir-liste {
   display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   gap: var(--b-2) var(--b-5); margin: 0 0 var(--b-4);

@@ -85,7 +85,11 @@ export function UretimEmirleri() {
   return (
     <Kart
       baslik="Üretim Emirleri"
-      sag={receteRotaGorur && <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da emir aç</Dugme>}
+      sag={receteRotaGorur && (
+        <div className="tc-emir-ust tc-emir-ust-sag">
+          <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da emir aç</Dugme>
+        </div>
+      )}
     >
       <p className="tc-emir-sayac">Emirler Reçete ve Rota'da açılır ve yönetilir; bu sayfa yalnız izleme içindir.</p>
       <Sekmeler etiket="Liste" sekmeler={GORUNUMLER} secili={gorunum} sec={gorunumSec} />
