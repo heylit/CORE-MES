@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { api } from '../veri/api.ts';
+import { AgHatasi, api, ApiHatasi } from '../veri/api.ts';
 import { DurumKutusu } from './DurumKutusu.tsx';
 
 afterEach(() => {
@@ -36,5 +36,39 @@ describe('DurumKutusu', () => {
     vi.setSystemTime(new Date('2026-10-28T10:01:01Z'));
     render(<DurumKutusu durum="hata" />);
     expect(screen.queryByText('c9d0e1f2')).toBeNull();
+  });
+
+  it('404 hatasında "bulunamadı" der, yeniden deneme sunmaz', () => {
+    const yenile = vi.fn();
+    render(<DurumKutusu durum="hata" hata={new ApiHatasi(404, { kod: 'BULUNAMADI', mesaj: '' })} yenile={yenile} />);
+    expect(screen.getByText('Kayıt bulunamadı')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+    cleanup();
+    render(<DurumKutusu durum="hata" hata={new ApiHatasi(404, { kod: 'BULUNAMADI', mesaj: 'Emir bulunamadı.' })} yenile={yenile} />);
+    expect(screen.getByText('Emir bulunamadı.')).toBeTruthy();
+  });
+
+  it('400 hatasında sunucu iletisini gösterir, ekran iletisinin önüne geçer; yeniden deneme yok', () => {
+    render(<DurumKutusu durum="hata" mesaj="Veri alınamadı" hata={new ApiHatasi(400, { kod: 'DOGRULAMA', mesaj: 'Arama en çok 100 karakter olabilir.' })} yenile={() => undefined} />);
+    expect(screen.getByText('Arama en çok 100 karakter olabilir.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+  });
+
+  it('ağ hatası ve 5xx yeniden deneme sunar; başka ekranın son hata kodu yapıştırılmaz', async () => {
+    await sunucuHatasi('b1b2b3b4');
+    render(<DurumKutusu durum="hata" hata={new AgHatasi(new TypeError('Failed to fetch'))} yenile={() => undefined} />);
+    expect(screen.getByText(/Sunucuya şu an ulaşılamıyor/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
+    expect(screen.queryByText('b1b2b3b4')).toBeNull();
+    cleanup();
+    render(<DurumKutusu durum="hata" hata={new ApiHatasi(503, null, 'c1c2c3c4')} yenile={() => undefined} />);
+    expect(screen.getByText('Veri alınamadı')).toBeTruthy();
+    expect(screen.getByText('c1c2c3c4')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
+  });
+
+  it('hata verilmezse bugünkü gibi: yenile varsa düğme çıkar', () => {
+    render(<DurumKutusu durum="hata" yenile={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
   });
 });
