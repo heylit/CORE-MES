@@ -713,6 +713,12 @@ export function birlesmePlaniYaz(db: Db, id: number, opNo: number | null, surum:
   return db.tek('UPDATE uretim_emri SET birlesme_op_no = $2, surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING id', [id, opNo, surum]);
 }
 
+// Adımın durumu emrin görünen durumunu değiştirir (ör. ilk fason gidişi emri "başladı" gösterir); eski sürümü tutan ekran bunu
+// sürüm çakışması olarak görsün diye emrin sürümü de artar.
+export function emirSurumunuArtir(db: Db, id: number): Promise<unknown> {
+  return db.sorgu('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1', [id]);
+}
+
 export function surumArtir(db: Db, id: number, surum: number): Promise<{ id: number } | null> {
   return db.tek('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum]);
 }

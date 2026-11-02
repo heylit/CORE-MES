@@ -307,13 +307,16 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     });
     assert.ok(s0.govde.fason!.firma, 'fason firmasının adı okunur');
     assert.equal((await istek('depo', 'GET', '/adimli-emirler/2147483647/siradaki-fason')).durum, 404);
-    assert.equal((await istek('depo', 'GET', `/adimli-emirler/${id}`)).durum, 200, 'depo fason için emri okur');
+    const gidisOncesi = await istek<{ emir: AdimliEmirAyrintisi }>('depo', 'GET', `/adimli-emirler/${id}`);
+    assert.equal(gidisOncesi.durum, 200, 'depo fason için emri okur');
     assert.equal((await fason('fason-gidis', { adet: 10 })).govde.mesaj, FASON_GIDIS_ASIMI, 'önceki iş emrinden 9 sağlam çıktı');
     const olaylar: FasonHareketiOlayi[] = [];
     const birakFason = fasonHareketiDinle(async (_db, olay) => { olaylar.push(olay); });
     const tekrar = randomUUID();
     const g1 = await fason('fason-gidis', { adet: 5 }, tekrar);
     assert.equal(g1.durum, 200, JSON.stringify(g1.govde));
+    // 1787d: ilk gidiş fason adımını başlatır; emrin sürümü artar, eski sürümle yazan ekran çakışma alır.
+    assert.ok(g1.govde.emir.surum > gidisOncesi.govde.emir.surum, 'ilk fason gidişi emrin sürümünü artırır');
     assert.equal((await fason('fason-gidis', { adet: 5 }, tekrar)).govde.hareketId, g1.govde.hareketId, 'aynı istek kimliği ikinci kez yazmaz');
     // Sevkiyat Tüm işler (960): depo çıkışı gidişi yetkisiz iç çağrıyla yazar; kurallar elle gidişle aynı, olay sevk kalemini taşır.
     const depoGidisi = (adet: number) => (db: Db) => fasonGidisYaz(db, yoneticiId, { uretimEmriId: id, isEmriId: ie2, adet, sevkKalemiId: 4242 });

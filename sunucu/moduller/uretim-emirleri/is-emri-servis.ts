@@ -888,7 +888,10 @@ async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriI
   if (isEmri.durum === 'bekliyor') await kolAdimiBaslarMi(db, e, isEmri);
   const an = await s.anAl(db);
   // İlk gidiş fason iş emrini başlatır.
-  if (isEmri.durum === 'bekliyor') await s.isEmriBaslat(db, isEmriId, an);
+  if (isEmri.durum === 'bekliyor') {
+    await s.isEmriBaslat(db, isEmriId, an);
+    await s.emirSurumunuArtir(db, emirId);
+  }
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'gidis', adet, hurdaAdet: null, kisiId, an });
   await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId, sevkKalemiId });
   return { hareketId };
