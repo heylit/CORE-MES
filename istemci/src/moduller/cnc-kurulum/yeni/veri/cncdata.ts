@@ -9,16 +9,10 @@ export const ISO: Record<IsoGrubu, string> = { P: '#3d7be0', M: '#e8c33a', K: '#
 function fmtD(x: number | string | undefined): string { return String(x).replace('.', ','); }
 
 export const MACHINES: Tezgah[] = [
-  { id: 'f5a', no: 'F-01', name: '5 Eksen Freze A', code: '5 eksen · döner-devrilir tabla · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5ax' },
-  { id: 'f5b', no: 'F-02', name: '5 Eksen Freze B', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-  { id: 'f5c', no: 'F-03', name: '5 Eksen Freze C', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-  { id: 'f5d', no: 'F-04', name: '5 Eksen Freze D', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-  { id: 'fgk', no: 'F-05', name: 'Gezer Kolon Freze', code: 'Gezer kolon · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_gk' },
-  { id: 'yim', no: 'F-06', name: 'Yatay İşleme Merkezi', code: 'Yatay işleme merkezi · B döner tabla · palet değiştirici', type: 'mill', ctrl: 'iso', taper: 'BT40', pockets: 60, rpm: 14000, kind: 'm_hmc' },
-  { id: 'tfm', no: 'T-01', name: 'Torna-Freze Merkezi', code: 'Torna-freze · B ekseni · karşı iş mili · Capto C6', type: 'millturn', ctrl: 'iso', taper: 'Capto C6', pockets: 38, rpm: 12000, spindle: 3000, kind: 'm_tf' },
-  { id: 'tcy', no: 'T-02', name: 'CNC Torna Y', code: 'CNC torna · Y ekseni · canlı takımlı taret', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 4000, live: true, liveRpm: 6000, kind: 'm_lathe' },
-  { id: 'tby', no: 'T-03', name: 'Büyük CNC Torna', code: 'Büyük torna · Y ekseni + canlı takım · punta', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 1500, spindle: 1500, live: true, liveRpm: 2500, kind: 'm_lathe' },
-  { id: 'ulathe', no: 'T-04', name: 'Üniversal Torna', code: 'Konvansiyonel · elle kumanda · 4\'lü kalemlik', type: 'lathe', ctrl: 'iso', manual: true, taper: 'Taret', pockets: 4, rpm: 2000, spindle: 2000, kind: 'm_ulathe' }
+  { id: 'f5a', no: 'OR-F1', name: 'Örnek 5 Eksen Freze', code: '5 eksen · döner-devrilir tabla · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5ax' },
+  { id: 'tfm', no: 'OR-TF1', name: 'Örnek Torna-Freze', code: 'Torna-freze · B ekseni · karşı iş mili · Capto C6', type: 'millturn', ctrl: 'iso', taper: 'Capto C6', pockets: 40, rpm: 12000, spindle: 4000, kind: 'm_tf' },
+  { id: 'tcy', no: 'OR-T1', name: 'Örnek CNC Torna', code: 'CNC torna · Y ekseni · canlı takımlı taret', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 4000, live: true, liveRpm: 6000, kind: 'm_lathe' },
+  { id: 'ulathe', no: 'OR-T2', name: 'Örnek Üniversal Torna', code: 'Konvansiyonel · elle kumanda · 4\'lü kalemlik', type: 'lathe', ctrl: 'iso', manual: true, taper: 'Taret', pockets: 4, rpm: 2000, spindle: 2000, kind: 'm_ulathe' }
 ];
 
 function mat(id: string, name: string, iso: IsoGrubu, vcK: number, vcH: number, fk: number, color: number, desc: string, extra?: Partial<IsMalzemesi>): IsMalzemesi { return Object.assign({ id: id, name: name, code: 'ISO ' + iso, iso: iso, vcK: vcK, vcH: vcH, fk: fk, color: color, isoCol: ISO[iso], col: ISO[iso], kind: 'mat', desc: desc, tags: 'Vc karbür ≈ ' + vcK + ' m/dk' }, extra || {}); }

@@ -5,9 +5,9 @@ import { stepOkuyucuYukle } from './prototip.ts';
 
 const sha256 = (metin: string): string => createHash('sha256').update(metin, 'utf8').digest('hex');
 
-// Bu iki sabit prototipin onaysız değişmesini yakalar; prototip ancak onayla değişir ve değer o onayla yenilenir (son: 352,
-// tekrar eden tezgâhlar teke indi; WASM metni değişmedi).
-const PROTOTIP_SHA256 = '9b4dcc28a5a5f6b094e83acddf5cd3a67bc5af5b64c8d9eb9cfdaadd2b2e81cd';
+// Bu iki sabit prototipin onaysız değişmesini yakalar; prototip ancak onayla değişir ve değer o onayla yenilenir (son: 1899,
+// gömülü tezgâh listesi dört genel örneğe indi; WASM metni değişmedi).
+const PROTOTIP_SHA256 = 'fe6d81b8ae5f708d9cfae4298162f1cbd6b3b1b3eb7a442aff757f8393a868fa';
 const WASM_SHA256 = 'a3842f57deb86a1351d4c1bcdaec642bded355c8fc56bd0586d917344ab5f610';
 
 describe('CNC prototipi', () => {

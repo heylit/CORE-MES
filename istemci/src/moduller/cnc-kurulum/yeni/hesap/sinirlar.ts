@@ -10,16 +10,10 @@ export interface KapasiteDegerleri {
 }
 
 export const CAP_DEF: Record<string, KapasiteDegerleri> = {
-  tfm: { maxD: 668, maxL: 1549, bar: 101, subBar: 78, chuck: 12, xT: 673, yT: 300, zT: 1524 },
-  tcy: { maxD: 366, maxL: 705, bar: 80, chuck: 10, yT: 100 },
-  f5a: { xT: 650, yT: 520, zT: 475, zDay: 625, tbl: 'Ø630', load: 300, viseW: 160 },
-  f5b: { xT: 630, yT: 560, zT: 560, zDay: 710, tbl: '840×600', load: 500, viseW: 160 },
-  f5c: { xT: 750, yT: 650, zT: 560, zDay: 710, tbl: '840×650', load: 600, viseW: 200 },
-  f5d: { xT: 950, yT: 850, zT: 650, zDay: 800, tbl: '1250×850', load: 1000, viseW: 200 },
-  fgk: { xT: 3600, yT: 700, zT: 750, zDay: 900, tbl: '4000×750', load: 4000, viseW: 200 },
-  yim: { xT: 730, yT: 730, zT: 880, zDay: 1000, tbl: '500×500', load: 500, viseW: 200 },
-  tby: { maxD: 920, maxL: 5100, bar: 164, chuck: 16, xT: 485, yT: 220 },
-  ulathe: { maxD: 460, maxL: 1500, bar: 52, chuck: 8 },
+  tfm: { maxD: 600, maxL: 1500, bar: 100, subBar: 80, chuck: 12, xT: 650, yT: 300, zT: 1500 },
+  tcy: { maxD: 350, maxL: 700, bar: 80, chuck: 10, yT: 100 },
+  f5a: { xT: 600, yT: 500, zT: 450, zDay: 600, tbl: 'Ø600', load: 300, viseW: 160 },
+  ulathe: { maxD: 450, maxL: 1500, bar: 50, chuck: 8 },
 };
 
 // Kopya tezgâh (`f5a_2` gibi) aslının katalog değerini alır.
