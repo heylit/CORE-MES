@@ -39,6 +39,8 @@ export const BILDIRIM_TURLERI = {
   'satin-alma.talep-reddedildi': {
     baslik: 'Satın alma talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/taleplerim', varsayilan: { mesaj: false, eposta: false },
   },
+  'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
+  'malzemeler.kart-reddedildi': { baslik: 'Malzeme kartın reddedildi', onem: 'uyari', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {
     baslik: 'Sipariş onay bekliyor', onem: 'uyari', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
   },

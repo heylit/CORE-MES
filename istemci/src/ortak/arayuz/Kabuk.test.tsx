@@ -127,7 +127,7 @@ describe('Kabuk', () => {
 
   it('bekletilen sayfanin ana menude, alt gezinmede ve Tumu listesinde baglantisi yoktur; adresinde basligi gorunur', () => {
     const bekletilen = SAYFALAR.filter((s) => !menudeGorunur(s));
-    expect(bekletilen.map((s) => s.yol)).toEqual(['/emirler', '/terminal', '/cizelge', '/matris', '/mesai', '/rota', '/smartes']);
+    expect(bekletilen.map((s) => s.yol)).toEqual(['/emirler', '/terminal', '/cizelge', '/matris', '/mesai', '/rota']);
     // Yalnız bekletilen ve bir görünür sayfa verilir: alt gezinmenin ilk dört yeri bekletileni dışarıda bırakamaz.
     ciz(SAYFALAR.filter((s) => s.yol === '/terminal' || s.yol === '/kuyruk'), undefined, '/terminal');
     const adresler = (kutu: HTMLElement) => within(kutu).getAllByRole('link').map((b) => b.getAttribute('href'));

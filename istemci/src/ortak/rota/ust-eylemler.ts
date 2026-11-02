@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
-import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
 
 // Bütün sayfaların üst çubuğundaki modül düğmesi (istemci/src/moduller/<ad>/ust-eylem.tsx).
@@ -70,5 +70,5 @@ export function gorunenUstEylemler(eylemler: readonly UstEylem[], islemler: read
 }
 
 export const ustEylemler: readonly UstEylem[] = ustEylemleriTopla(
-  import.meta.glob('../../moduller/*/ust-eylem.tsx', { eager: true }),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/ust-eylem.tsx', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

@@ -3,7 +3,7 @@ import { AZAMI_CEVAP_UZUNLUGU, skalerSonucuOku, soapIstegiKur, tabloSatirlariniO
 import type { CevapYorumu, Parametreler, SkalerSonuc, TabloSatiri } from './soap.ts';
 
 // SmartES ile yalnız bu dosya konuşur (kart #778). Adres ayardan gelir; hata metnine ve günlüğe girmez.
-// Üretim kodunda bugün hiçbir iş ya da uç bu istemciyi kurmaz: bağlantı kararı (kart #778 karar 1) bekleniyor.
+// İstemci `baglanti.ts`'te ortam değişkeninden bir kez kurulur; adres yoksa kurulmaz ve hiçbir iş istek atmaz.
 
 // Brief 2: tekil istek 30 sn, liste metotları 60 sn.
 export const ISTEK_SURESI_MS = 30_000;

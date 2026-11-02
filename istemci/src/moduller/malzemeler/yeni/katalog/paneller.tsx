@@ -8,8 +8,9 @@ import type { KuralBaglami } from '../kurallar/index.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
 import type { KartKaydi, Kisi, OnayBilgisi } from '../tipler.ts';
 import { kimlikOf } from './liste.ts';
+import { farkAlanAdi, farkDegeri } from './talep-fark.ts';
 
-export type OnayIslemi = 'onayla' | 'reddet' | 'gonder' | 'pasif' | 'aktif';
+export type OnayIslemi = 'onayla' | 'reddet' | 'gonder' | 'pasif' | 'aktif' | 'geri';
 export type TalepIslemi = 'onayla' | 'reddet' | 'geri';
 
 const DURUM_TONU: Record<string, RozetTonu> = { taslak: 'pasif', onayda: 'uyari', aktif: 'tamam', pasif: 'pasif' };
@@ -28,6 +29,7 @@ export function onayBilgisi(x: KartKaydi, b: KuralBaglami): string {
   const pasif = o['pasif'] as (Kisi & { neden?: string }) | undefined;
   if (k === 'onayda') return `${o.degisiklik ? 'Değişiklik onayı bekliyor' : 'Onay bekliyor'}${o.talep ? ` (gönderen: ${kimMetni(o.talep)})` : ''}`;
   if (k === 'aktif' && o.onay) return `Onaylayan: ${kimMetni(o.onay)}`;
+  if (k === 'taslak' && o.red?.geri) return `Onaydan geri çekildi (${kimMetni(o.red)})`;
   if (k === 'taslak' && o.red) return `Reddedildi (${kimMetni(o.red)})${o.red.neden ? `: ${o.red.neden}` : ''}`;
   if (k === 'pasif' && pasif) return `Pasife alındı (${kimMetni(pasif)})${pasif.neden ? `: ${pasif.neden}` : ''}`;
   return '';
@@ -74,6 +76,7 @@ export function OnayPaneli({ x, yetki, b, mesgul, islem }: {
                 <Dugme onClick={() => nedenYaz('reddet')}>Reddet</Dugme>
               </>
             )}
+            {K.geriCekebilir(x, b) && <Dugme yukleniyor={mesgul} onClick={() => islem('geri')}>Onaydan geri çek</Dugme>}
             {k === 'onayda' && !yetkili && (
               <span className="tc-mk-ipucu">
                 {!yetki.onayla ? 'Onay ana veri sorumlusu ya da yöneticidedir.' : b.genel.dortGoz ? 'Kendi gönderdiğin kartı onaylayamazsın.' : 'Onay yetkin yok.'}
@@ -81,7 +84,8 @@ export function OnayPaneli({ x, yetki, b, mesgul, islem }: {
             )}
             {k === 'taslak' && <Dugme tur="birincil" yukleniyor={mesgul} onClick={() => islem('gonder')}>{b.genel.onayAkisi ? 'Onaya gönder' : 'Aktifleştir'}</Dugme>}
             {k === 'aktif' && yetki.onayla && <Dugme onClick={() => nedenYaz('pasif')}>Pasife al</Dugme>}
-            {k === 'pasif' && yetki.onayla && <Dugme yukleniyor={mesgul} onClick={() => islem('aktif')}>Yeniden aktifleştir</Dugme>}
+            {/* Onay akışı açıkken pasiften dönen kart onaydan geçer (MKK-4); düğme sonucu söyler. */}
+            {k === 'pasif' && yetki.onayla && <Dugme yukleniyor={mesgul} onClick={() => islem('aktif')}>{b.genel.onayAkisi ? 'Yeniden onaya gönder' : 'Yeniden aktifleştir'}</Dugme>}
           </span>
         )}
       </div>
@@ -108,7 +112,13 @@ export function TalepPaneli({ x, yetki, b, mesgul, islem }: {
       <div className="tc-mk-tablo-kap">
         <table className="tc-mk-tablo">
           <thead><tr><th scope="col">Alan</th><th scope="col">Mevcut</th><th scope="col">Önerilen</th></tr></thead>
-          <tbody>{farklar.map((f, i) => <tr key={i}><td>{f.f}</td><td className="tc-mk-soluk">{f.a}</td><td><b>{f.b}</b></td></tr>)}</tbody>
+          <tbody>
+            {farklar.map((f, i) => (
+              <tr key={i}>
+                <td title={f.f}>{farkAlanAdi(f.f, x, b)}</td><td className="tc-mk-soluk">{farkDegeri(f.f, f.a)}</td><td><b>{farkDegeri(f.f, f.b)}</b></td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
       {yetki.yaz && (

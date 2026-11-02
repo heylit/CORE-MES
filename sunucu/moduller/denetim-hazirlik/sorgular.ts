@@ -109,6 +109,23 @@ export async function ekBaytlari(db: Db, kisiId: number): Promise<{ kisiBayt: nu
   return { kisiBayt: Number(s?.kisi ?? 0), toplamBayt: Number(s?.toplam ?? 0) };
 }
 
+export async function ekYukleyeni(db: Db, id: string): Promise<number | null> {
+  return (await db.tek<{ kisi: number }>('SELECT yukleyen_kisi_id AS kisi FROM denetim_hazirlik_ek WHERE id = $1', [id]))?.kisi ?? null;
+}
+
+// Yeni belge açmalar kota denetimiyle ekleme arasında sıraya girer (açma seyrektir).
+export async function belgeKotaKilidi(db: Db): Promise<void> {
+  await islemKilidiAl(db, 'denetim_hazirlik_belge');
+}
+
+export async function belgeSayilari(db: Db, kisiId: number): Promise<{ kisiBelge: number; toplamBelge: number }> {
+  const s = await db.tek<{ kisi: number; toplam: number }>(
+    'SELECT (count(*) FILTER (WHERE olusturan_kisi_id = $1))::int AS kisi, count(*)::int AS toplam FROM denetim_hazirlik_belge',
+    [kisiId],
+  );
+  return { kisiBelge: s?.kisi ?? 0, toplamBelge: s?.toplam ?? 0 };
+}
+
 // Eki anan belgeler: belge gövdesi yorumlanmaz, metninde ekin adresi aranır.
 export async function ekiAnanYollar(db: Db, anma: string): Promise<string[]> {
   return (await db.sorgu<{ yol: string }>('SELECT yol FROM denetim_hazirlik_belge WHERE strpos(veri::text, $1) > 0', [anma])).map((s) => s.yol);

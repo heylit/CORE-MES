@@ -318,6 +318,37 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
     assert.deepEqual((await satirlar()).map(({ deger, kisi }) => ({ deger, kisi })), [{ deger: !VARSAYILAN, kisi: yoneticiId }]);
   });
 
+  test('beklenen değer verilirse saklanan ondan farklıysa 409 döner ve değer değişmez; aynı değere yazmak çakışma sayılmaz', async () => {
+    const yaz = (deger: unknown, beklenen: unknown, cerez = yonetici) => istek(cerez, 'POST', `/ayarlar/${DORT_GOZ}/degistir`, { deger, beklenen });
+    // İki yönetici aynı ekranı açtı; ikisi de varsayılanı gördü.
+    assert.equal((await yaz(!VARSAYILAN, VARSAYILAN)).statusCode, 200);
+    const onceki = (await degisiklikKayitlari()).length;
+    const ikinci = await yaz(VARSAYILAN, VARSAYILAN, ikinciYonetici);
+    assert.equal(ikinci.statusCode, 409, ikinci.body);
+    assert.deepEqual((ikinci.json() as { ayrinti: unknown }).ayrinti, { neden: 'eski-surum' });
+    assert.equal((await listedeki())?.deger, !VARSAYILAN);
+    assert.equal((await degisiklikKayitlari()).length, onceki);
+    // Ekranı yenileyen ikinci yönetici güncel değeri görür ve yazar.
+    assert.equal((await yaz(VARSAYILAN, !VARSAYILAN, ikinciYonetici)).statusCode, 200);
+    // Hedef değer zaten yazılmışsa (çift tıklama, yinelenen istek) eski beklenen çakışma değildir.
+    assert.equal((await yaz(VARSAYILAN, !VARSAYILAN)).statusCode, 200);
+    // Beklenensiz komut eskisi gibi yazar.
+    assert.equal((await degistir(!VARSAYILAN)).statusCode, 200);
+  });
+
+  test('beklenen değer boş sayı ayarında null ile karşılaştırılır; türe uymayan saklanan değer listedeki gibi null sayılır', async () => {
+    const SAYI = 'arkon.anomali-giris-yok-dk';
+    const yaz = (deger: unknown, beklenen: unknown) => istek(yonetici, 'POST', `/ayarlar/${SAYI}/degistir`, { deger, beklenen });
+    const ilk = (await listedeki(SAYI))?.deger;
+    assert.equal((await yaz(null, ilk)).statusCode, 200);
+    assert.equal((await yaz(30, 60)).statusCode, 409);
+    assert.equal((await yaz(30, null)).statusCode, 200);
+    await vt().sorgu("UPDATE ayar SET deger = '\"bozuk\"' WHERE anahtar = $1", [SAYI]);
+    assert.equal((await listedeki(SAYI))?.deger, null);
+    assert.equal((await yaz(45, 30)).statusCode, 409);
+    assert.equal((await yaz(45, null)).statusCode, 200);
+  });
+
   test('geri alınan komut iz bırakmaz: değer, satır ve değişiklik kaydı birlikte geri alınır', async () => {
     const onceki = (await degisiklikKayitlari()).length;
     const yarida = new Error('komut yarıda kaldı');

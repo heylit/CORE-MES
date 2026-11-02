@@ -4,7 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { TakvimCevabi } from '#paylasilan/sozlesme/takvim.ts';
+import { GECIKEN_GERI_GUN } from '#paylasilan/sozlesme/takvim.ts';
+import type { TakvimCevabi, TakvimGecikenCevabi } from '#paylasilan/sozlesme/takvim.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -37,6 +39,13 @@ describe('takvim (gerçek PostgreSQL)', () => {
     return cevap.govde;
   };
   const oku = (cerez: string, a = MART) => istek<TakvimCevabi>(cerez, 'GET', `/takvim?baslangic=${a.baslangic}&bitis=${a.bitis}`);
+  // Bugünden en az `gun` gün önceki ilk iş günü: İK hafta sonu izni reddeder.
+  const gunOnce = (gun: number): string => {
+    let an = Date.parse(`${tesisGunu(Date.now())}T00:00:00Z`) - gun * 86_400_000;
+    while ([0, 6].includes(new Date(an).getUTCDay())) an -= 86_400_000;
+    return new Date(an).toISOString().slice(0, 10);
+  };
+  const gecikenOku = (cerez: string) => istek<TakvimGecikenCevabi>(cerez, 'GET', '/takvim/gecikenler');
   const islemVer = (ad: string, islem: string) => tamam(c.yonetici, 'POST', `/kisiler/${kisiler[ad]!}/ek-islem-degistir`, { islem, verildi: true });
 
   async function girisCerezi(kullaniciAdi: string): Promise<string> {
@@ -70,6 +79,14 @@ describe('takvim (gerçek PostgreSQL)', () => {
       });
       await tamam(c.yonetici, 'POST', `/ik/izinler/leave_${ad}/kaydet`, {
         govde: { id: `leave_${ad}`, kind: 'leave', empId: `emp_${ad}`, tur: 'Yıllık izin', baslangic: '2031-03-10', bitis: '2031-03-11', gun: 2, durum: 'Onaylandı' }, surum: null,
+      });
+    }
+    // Geciken taraması (1816): 200 gün önce bekleyen (geciken), 200 gün önce onaylanmış (kapanmış), taramanın dışında bekleyen ve bugünden önceki son iş günü bekleyen izin.
+    const gecmis: [string, number, string][] = [['eski_bekleyen', -200, 'Beklemede'], ['eski_onayli', -201, 'Onaylandı'], ['cok_eski', -GECIKEN_GERI_GUN - 5, 'Beklemede'], ['dun', -1, 'Beklemede']];
+    for (const [ad, gun, durum] of gecmis) {
+      const t = gunOnce(-gun);
+      await tamam(c.yonetici, 'POST', `/ik/izinler/leave_${ad}/kaydet`, {
+        govde: { id: `leave_${ad}`, kind: 'leave', empId: 'emp_operator', tur: 'Mazeret izni', baslangic: t, bitis: t, gun: 1, durum }, surum: null,
       });
     }
   });
@@ -108,5 +125,20 @@ describe('takvim (gerçek PostgreSQL)', () => {
     assert.deepEqual(await izinler(), ['leave_izleyici', 'leave_operator']);
     const y = (await oku(c.yonetici)).govde.kayitlar.filter((k) => k.kaynak === 'izin');
     assert.equal(y.length, 2);
+  });
+
+  test('TK-05 (1816): geciken okuması pencereden eski kapanmamış kaydı verir; kapanmışı, bugünü ve taramadan eskiyi vermez', async () => {
+    assert.equal((await gecikenOku(c.operator)).durum, 403);
+    const y = (await gecikenOku(c.yonetici)).govde;
+    const izin = y.kayitlar.filter((k) => k.kaynak === 'izin').map((k) => [k.kimlik, k.tarih]);
+    assert.deepEqual(izin, [['leave_eski_bekleyen', gunOnce(200)], ['leave_dun', gunOnce(1)]]);
+    assert.ok(y.kayitlar.every((k) => !k.bitti && k.tarih < tesisGunu(Date.now())));
+    assert.deepEqual(y.kayitlar.map((k) => k.tarih), [...y.kayitlar.map((k) => k.tarih)].sort());
+  });
+
+  test('TK-06 (1816): geciken okuması kaynak yetkisine uyar (izleyici TK-03 ve TK-04 sonrası finans.oku ve ik.izin-oku taşır)', async () => {
+    const z = (await gecikenOku(c.izleyici)).govde;
+    assert.ok(z.kayitlar.every((k) => ['izin', 'vergi', 'planli-durus'].includes(k.kaynak)));
+    assert.deepEqual(z.kayitlar.filter((k) => k.kaynak === 'izin').map((k) => k.kimlik).sort(), ['leave_dun', 'leave_eski_bekleyen']);
   });
 });

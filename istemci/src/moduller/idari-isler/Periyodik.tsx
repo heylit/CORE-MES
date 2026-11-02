@@ -4,7 +4,7 @@ import type { Kontrol, KontrolTuru, KontrollerCevabi } from '#paylasilan/sozlesm
 import { Dugme, DurumKutusu, Kart, Sekmeler, Simge } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KONTROL_GRUBU, KONTROL_GRUPLARI, KONTROL_TURLERI, KONTROL_TURU } from './gorunum.ts';
+import { KONTROL_GRUBU, KONTROL_GRUPLARI, KONTROL_TURLERI, KONTROL_TURU, tarihMetni } from './gorunum.ts';
 import { KontrolKarti } from './KontrolKarti.tsx';
 import { KontrolAyrinti, KontrolFormu, YapildiPenceresi } from './KontrolPencereleri.tsx';
 import { useIslemVar } from './yazma.ts';
@@ -19,6 +19,12 @@ export function Periyodik() {
   const [secili, seciliYaz] = useState<Kontrol | null>(null);
   const [yapilan, yapilanYaz] = useState<Kontrol | null>(null);
   const [form, formYaz] = useState<{ kontrol: Kontrol | null } | null>(null);
+  const [bitenAcik, bitenAcikYaz] = useState(false);
+  const bitenler = useQuery({
+    queryKey: anahtarlar.bitenKontroller,
+    queryFn: () => api.get<KontrollerCevabi>('/idari-isler/kontroller/bitenler'),
+    enabled: bitenAcik,
+  });
   const liste = useQuery({ queryKey: anahtarlar.kontroller, queryFn: () => api.get<KontrollerCevabi>('/idari-isler/kontroller') });
   const kontroller = liste.data?.kontroller ?? [];
   const sekmeler = [
@@ -36,6 +42,7 @@ export function Periyodik() {
         sag={(
           <span className="tc-ii-dugmeler">
             {yazar && <Dugme tur="birincil" simge="plus" onClick={() => formYaz({ kontrol: null })}>Kalem ekle</Dugme>}
+            <Dugme simge="list" aria-pressed={bitenAcik} onClick={() => bitenAcikYaz((a) => !a)}>Biten kalemler</Dugme>
             <Dugme simge="rotate" aria-label="Yenile" onClick={() => { void liste.refetch(); }} yukleniyor={liste.isFetching} />
           </span>
         )}
@@ -64,6 +71,27 @@ export function Periyodik() {
               );
             })}
           </div>
+        )}
+        {bitenAcik && (
+          <section className="tc-ii-yigin" aria-label="Biten kalemler">
+            <h3 className="tc-ii-ara-baslik">Biten kalemler</h3>
+            {bitenler.isError ? (
+              <DurumKutusu durum="hata" mesaj={hataIletisi(bitenler.error, 'Biten kalemler alınamadı')} yenile={() => { void bitenler.refetch(); }} />
+            ) : bitenler.isPending ? (
+              <DurumKutusu durum="yukleniyor" />
+            ) : bitenler.data.kontroller.length === 0 ? (
+              <p className="tc-ii-soluk">Biten kalem yok.</p>
+            ) : (
+              <ul className="tc-ii-kayitlar">
+                {bitenler.data.kontroller.filter((k) => suzgec === 'hepsi' || k.tur === suzgec).map((k) => (
+                  <li key={k.id}>
+                    <button type="button" className="tc-ii-bag" onClick={() => seciliYaz(k)}>{k.ad}</button>
+                    <span className="tc-ii-soluk"> · {KONTROL_TURU[k.tur].etiket} · son tarih {tarihMetni(k.sonrakiTarih)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
         <p className="tc-ii-soluk">
           Kayıt tarihi ve belge no saklanır, sonraki tarih sıklıktan hesaplanır. Tezgah bakımı Arkon'da, ölçü aleti kalibrasyonu Kalibrasyon'da kalır.

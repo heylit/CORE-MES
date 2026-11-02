@@ -3,7 +3,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, KAYIT_GECMISI_SINIRI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { KayitGecmisiCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
   KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
@@ -43,6 +44,9 @@ const URETIM_ADEDI_ILETISI = 'Üretim adedi yalnız Üretim Terminali\'nden giri
 const SIRA_ILETISI = 'Son onay için hazırlığın bütün adımları onaylanmış olmalıdır.';
 const KURULUM_EKSIK_ILETISI = 'Kurulum tamam için kurulum kartındaki bütün adımlar seçilmiş olmalıdır.';
 const EMIR_ILETISI = 'Üretim emri ve emirlerin kurulumları yalnız emir seçimiyle değişir.';
+const KART_ILETISI = 'Takımı stok kartına bağlamak için malzeme kartı yazma yetkisi gerekir.';
+// CNC-7 a: bağ, CNC kaydını yazan ve kartı yazan kişidedir (uç cnc-kurulum.yaz ister; kart yazma burada).
+const kartBaglayabilirMi = (k: Kullanici): boolean => k.islemler.includes(ISLEM_YAZ) && k.islemler.includes(ISLEM_KART_YAZ);
 // Emir ve emirlerin saklanan kurulumları genel uçtan yazılmaz, silinmez: emir değişince kurulum emre saklanmadan değişirdi.
 const emirKaydiMi = (anahtar: string): boolean => anahtar === EMIR_ANAHTARI || anahtar.startsWith(EMIR_ANLIK_ONEKI);
 
@@ -51,7 +55,7 @@ export function ben(kullanici: Kullanici): BenCevabi {
   return {
     kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir, hazirlikOnaylayabilir: !yazabilir && kullanici.islemler.includes(ISLEM_HAZIRLIK),
     takimDegistirebilir: kullanici.islemler.includes(ISLEM_TAKIM),
-    stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kullanici.islemler.includes(ISLEM_KART_YAZ),
+    stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kartBaglayabilirMi(kullanici),
     emirGorebilir: emirGorebilirMi(kullanici),
   };
 }
@@ -87,13 +91,15 @@ export async function stokDus(db: Db, kullanici: Kullanici, g: StokDusGovdesi): 
 }
 
 // Bağlanabilen kartlar: aktif sarf ve demirbaş (takım, tutucu, bağlama).
-export async function stokKartlari(db: Db, s: StokKartlariSorgusu): Promise<StokKartlariCevabi> {
+export async function stokKartlari(db: Db, kullanici: Kullanici, s: StokKartlariSorgusu): Promise<StokKartlariCevabi> {
+  if (!kartBaglayabilirMi(kullanici)) throw yetkiYok(KART_ILETISI);
   const r = await malzemeAra(db, { metin: s.metin ?? null, turler: ['sarf', 'demirbas'], yalnizAktif: true, sayfa: s.sayfa, sayfaBoyu: 20 });
   return { kartlar: r.satirlar.map((k) => stokKarti({ malzemeId: k.id, kod: k.kod, ad: k.ad, birim: k.birim })), toplam: r.toplam };
 }
 
 // Bağ kart verisidir (malzemeler.yaz); kim, ne zaman uç denetiminde.
-export async function stokKartiBagla(db: Db, g: StokKartiBaglaGovdesi): Promise<StokKartiBaglaCevabi> {
+export async function stokKartiBagla(db: Db, kullanici: Kullanici, g: StokKartiBaglaGovdesi): Promise<StokKartiBaglaCevabi> {
+  if (!kartBaglayabilirMi(kullanici)) throw yetkiYok(KART_ILETISI);
   if (g.malzemeId === null) {
     const kart = (await cncKimlikliMalzemeler(db, [g.kimlik])).get(g.kimlik);
     if (kart !== undefined) await cncKimligiBagla(db, kart.malzemeId, null);
@@ -405,4 +411,24 @@ export async function hamAnalizi(db: Db): Promise<HamAnaliziCevabi> {
   const a = g.analiz.analiz;
   if (a === null) return bos('analiz-yok', model);
   return { neden: null, model, olcu: { a: a.obb.a, b: a.obb.b, c: a.obb.c, hacimMm3: a.hacimMm3 } };
+}
+
+// Kayıt geçmişi (CNC-7 a): anahtar verilmezse ana durum kaydı.
+export async function kayitGecmisi(db: Db, anahtar: string = DURUM_ANAHTARI): Promise<KayitGecmisiCevabi> {
+  const anahtarlar = await sorgular.gecmisAnahtarlari(db);
+  const satirlar = await sorgular.kayitGecmisi(db, anahtar, KAYIT_GECMISI_SINIRI);
+  const guncel = await sorgular.kayitUstBilgisi(db, anahtar);
+  const idler = satirlar.flatMap((s) => (s.degistirenId === null ? [s.yazanId] : [s.yazanId, s.degistirenId]));
+  if (guncel !== null) idler.push(guncel.yazanId);
+  const adlar = await kisiAdlari(db, idler);
+  const kisi = (id: number) => ({ id, ad: adlar.get(id) ?? null });
+  return {
+    anahtarlar,
+    anahtar,
+    guncel: guncel === null ? null : { surum: guncel.surum, yazan: kisi(guncel.yazanId), yazildi: guncel.yazildi },
+    satirlar: satirlar.map((s) => ({
+      surum: s.surum, yazan: kisi(s.yazanId), yazildi: s.yazildi, degistiren: s.degistirenId === null ? null : kisi(s.degistirenId),
+      degisti: s.degisti, silindi: s.degistirenId === null, alanlar: s.alanlar,
+    })),
+  };
 }

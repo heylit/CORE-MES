@@ -60,7 +60,9 @@ export function MaliyetTabani({ projeId, ozet, kalemler, yazabilir }: {
           />
           <SayiKarti
             baslik="Son gerçekleşen" simge="chart" metin={tl(ozet.sonGerceklesen)}
-            altMetin={ozet.masraflar.length === 0 ? 'Bağlı üretim dışı masraf yok' : `Üretim dışı masraf dahil: ${tl(ozet.masrafToplami)}`}
+            altMetin={ozet.masraflar.length === 0 ? 'Bağlı üretim dışı masraf yok'
+              : ozet.sonGerceklesen === null ? `Üretim dışı masraf ${tl(ozet.masrafToplami)}; üretim gerçekleşeni bilinmiyor`
+                : `Üretim dışı masraf dahil: ${tl(ozet.masrafToplami)}`}
           />
           <SayiKarti
             baslik="Fark (tahmini son - taban)" simge="gauge" metin={isaretli(ozet.fark)}

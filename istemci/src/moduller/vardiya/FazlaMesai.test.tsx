@@ -92,6 +92,19 @@ describe('Fazla mesai', () => {
     });
   });
 
+  it('VRD-1: Kaydet çift tıklamada tek istek gönderir', async () => {
+    const { postlar } = sunucuKur(YAZAN);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: '15.10.2026 17:00 düzenle' }));
+    await screen.findByRole('group', { name: /Çalışacak personel/ });
+    const kaydet = screen.getByRole('button', { name: 'Kaydet' });
+    fireEvent.click(kaydet);
+    fireEvent.click(kaydet);
+    await waitFor(() => expect(postlar).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull());
+    expect(postlar).toHaveLength(1);
+  });
+
   it('başka istasyondakiler istenince görünür; iptal onaydan sonra sürümle gider; iptal edilen satırda işlem yok', async () => {
     const { postlar } = sunucuKur(YAZAN);
     ac();

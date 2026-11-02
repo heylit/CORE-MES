@@ -89,7 +89,12 @@ function sunucuKur(kullanici: Kullanici, ozel: (yontem: string, yol: string, gov
       if (yol.startsWith('/idari-isler/taleplerim/son-yerler')) return json(200, { yerler: ['Salon 1', 'Kompresör odası'] });
       if (yol.startsWith('/idari-isler/taleplerim')) return json(200, TALEPLERIM);
       if (yol === '/idari-isler/kisi-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
+      if (yol === '/idari-isler/talep-atanabilir') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/kontroller') return json(200, KONTROLLER);
+      if (yol === '/idari-isler/zimmetlerim') {
+        return json(200, { zimmetler: [{ demirbasNo: 'DB-00051', tur: 'dizustu', markaModel: 'Deneme dizüstü', seriNo: 'DNM-SN-1', verilis: '2026-10-01' }] });
+      }
+      if (yol === '/idari-isler/kontroller/bitenler') return json(200, { kontroller: [{ ...SIGORTA, id: 99, ad: 'Eski temizlik sözleşmesi', aktif: false }] });
       if (/^\/idari-isler\/kontroller\/\d+\/kayitlar$/.test(yol)) return json(200, { kayitlar: [] });
       if (yol.startsWith('/idari-isler/yemek?')) return json(200, YEMEK);
       if (yol === '/idari-isler/demirbaslar') return json(200, { demirbaslar: [LAPTOP, ANAHTAR, MONITOR] } satisfies DemirbaslarCevabi);
@@ -129,6 +134,8 @@ describe('Bugün', () => {
     ac('/idari-isler');
     await screen.findByRole('heading', { name: 'Taleplerim' });
     expect(istekler.some((i) => i.yol.startsWith('/idari-isler/taleplerim'))).toBe(true);
+    expect(await screen.findByText('DB-00051')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Üzerimdeki demirbaşlar' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/idari-isler/bugun')).toBe(false);
   });
 
@@ -164,6 +171,9 @@ describe('Tesis talepleri panosu', () => {
     ac('/idari-isler/talepler');
     fireEvent.click(await screen.findByRole('button', { name: /TT-2026-001/ }));
     const pencere = within(await screen.findByRole('dialog'));
+    // Pencereyi kapatan simgeyle karışmasın: talebi kapatan düğmenin adı ayrı.
+    expect(pencere.getAllByRole('button', { name: 'Kapat' })).toHaveLength(1);
+    expect(pencere.getByRole('button', { name: 'Talebi kapat' })).toBeTruthy();
     fireEvent.click(pencere.getByRole('button', { name: 'Reddet' }));
     const reddet = pencere.getByRole('button', { name: 'Reddet' });
     expect((reddet as HTMLButtonElement).disabled).toBe(true);
@@ -222,6 +232,19 @@ describe('Taleplerim', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/idari-isler/talepler/1/geri-cek', govde: { surum: 1 } });
   });
+
+  it('Kapandı sekmesi sonuçlananları ister; red nedeni ve sonuç notu görünür', async () => {
+    const REDDEDILEN = { ...YENI, id: 5, no: 'TT-2026-005', durum: 'reddedildi', sonucNotu: 'Deneme kapsam dışı', surum: 2 } satisfies Talep;
+    const KAPANAN = { ...YENI, id: 6, no: 'TT-2026-006', durum: 'kapandi', sonucNotu: 'Deneme priz değişti', surum: 3 } satisfies Talep;
+    const istekler = sunucuKur(PERSONEL, (yontem, yol) => (yontem === 'GET' && yol.startsWith('/idari-isler/taleplerim?')
+      ? json(200, { satirlar: [REDDEDILEN, KAPANAN], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies TaleplerimCevabi)
+      : undefined));
+    ac('/idari-isler/taleplerim');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kapandı' }));
+    expect(await screen.findByText('Red nedeni: Deneme kapsam dışı')).toBeTruthy();
+    expect(screen.getByText('Sonuç: Deneme priz değişti')).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol.includes('durum=sonuclanan'))).toBe(true));
+  });
 });
 
 describe('Periyodik kontroller', () => {
@@ -238,6 +261,19 @@ describe('Periyodik kontroller', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Atık/ }));
     expect(screen.queryByText('Bina sigortası')).toBeNull();
     expect(screen.getByText('Talaş ve kesme yağı teslimi')).toBeTruthy();
+  });
+
+  it('biten kalemler istenince listelenir; ayrıntısı geçmişle açılır, işlem düğmesi yoktur', async () => {
+    sunucuKur(IDARI);
+    ac('/idari-isler/periyodik');
+    await screen.findByRole('region', { name: 'Süresi geçti' });
+    expect(screen.queryByText('Eski temizlik sözleşmesi')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Biten kalemler' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eski temizlik sözleşmesi' }));
+    const pencere = within(await screen.findByRole('dialog', { name: 'Eski temizlik sözleşmesi' }));
+    expect(pencere.getByText('Bitti')).toBeTruthy();
+    expect(await pencere.findByText('Henüz kayıt yok.')).toBeTruthy();
+    expect(pencere.queryByRole('button', { name: 'Bitir' })).toBeNull();
   });
 
   it('atık teslimi miktar ve birim ister; sürümle gider', async () => {
@@ -318,7 +354,10 @@ describe('Yemek sayısı', () => {
     fireEvent.change(screen.getByLabelText('Yemeğe kalacak ziyaretçi'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Elle düzeltme'), { target: { value: '2' } });
     expect(screen.getByText(/Eksik: düzeltme gerekçesi/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Düzeltme gerekçesi'), { target: { value: 'Deneme eğitmen' } });
+    expect(screen.getByText('88')).toBeTruthy();
+    expect(screen.getByText('Düzeltme girildiği için zorunlu')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Bildirildi olarak kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Düzeltme gerekçesi/), { target: { value: 'Deneme eğitmen' } });
     fireEvent.click(screen.getByRole('button', { name: '88 bildirildi olarak kaydet' }));
     await screen.findByText('88 bildirildi olarak kaydedildi');
     const [yazma] = yazmalar(istekler);
@@ -357,6 +396,8 @@ describe('Filo', () => {
     fireEvent.change(screen.getByLabelText(/Plaka/), { target: { value: '34dnm103' } });
     fireEvent.click(screen.getByRole('radio', { name: 'Kiralık' }));
     fireEvent.change(screen.getByLabelText('Km'), { target: { value: '1200' } });
+    // IDR-33: araç formunda görevde seçilmez; durumu görevin çıkışı yazar.
+    expect(within(screen.getByLabelText('Durum')).queryByRole('option', { name: 'Görevde' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await screen.findByText('34 DNM 103 eklendi');
     const [yazma] = yazmalar(istekler);
@@ -410,13 +451,13 @@ describe('Araç masrafları', () => {
     ac('/idari-isler/filo');
     fireEvent.click(await screen.findByRole('button', { name: '34 DNM 101 masrafları' }));
     const pencere = await screen.findByRole('dialog', { name: '34 DNM 101 masrafları' });
-    fireEvent.change(within(pencere).getByLabelText(/Tutar/), { target: { value: '980,5' } });
+    fireEvent.change(within(pencere).getByLabelText(/Tutar/), { target: { value: '1.250,5' } });
     fireEvent.change(within(pencere).getByLabelText(/Tarih/), { target: { value: '2026-10-17' } });
-    fireEvent.change(within(pencere).getByLabelText(/Km/), { target: { value: '89150' } });
+    fireEvent.change(within(pencere).getByLabelText(/Km/), { target: { value: '89.150' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Masrafı kaydet' }));
     await screen.findByText('Masraf kaydedildi');
     const [yazma] = yazmalar(istekler);
-    expect(yazma?.govde).toEqual({ tarih: '2026-10-17', tur: 'yakit', tutar: '980.5', km: 89_150 });
+    expect(yazma?.govde).toEqual({ tarih: '2026-10-17', tur: 'yakit', tutar: '1250.5', km: 89_150 });
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
   });
 
@@ -464,7 +505,7 @@ describe('Demirbaş ve zimmet', () => {
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'dnm-mn' } });
     expect(screen.queryByText('Deneme Operator')).toBeNull();
     expect(screen.getByText('DB-00053')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'DB-00053' }));
+    fireEvent.click(screen.getByText('DB-00053').closest('tr')!);
     const pencere = await screen.findByRole('dialog', { name: /DB-00053/ });
     expect(await within(pencere).findByText('Deneme Planlama')).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: 'Zimmetle' })).toBeNull();
@@ -553,7 +594,7 @@ describe('Araç görevleri', () => {
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
   });
 
-  it('idari işler uygun araçla onaylar, yoldaki göreve dönüş km yazar', async () => {
+  it('idari işler uygun araçla onaylar (belgesi geçen araç listede yok), yoldaki göreve dönüş km yazar', async () => {
     const istekler = sunucuKur(FILOCU, (yontem, yol) => {
       if (yontem === 'POST' && yol === '/idari-isler/arac-gorevleri/41/onayla') return json(200, { gorev: { ...GOREV, durum: 'onaylandi', surum: 2 } });
       if (yontem === 'POST' && yol === '/idari-isler/arac-gorevleri/42/donus') return json(200, { gorev: { ...YOLDA, durum: 'tamamlandi', surum: 4 } });
@@ -565,18 +606,44 @@ describe('Araç görevleri', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Onayla' }));
     const pencere = await screen.findByRole('dialog', { name: /Deneme OSB/ });
     const secim = await within(pencere).findByLabelText('Verilecek araç');
-    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(3));
+    // Kamyonun sigortası görev bitmeden bitiyor (IDR-25): listede yok, plakası ipucunda.
+    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(2));
+    expect(within(pencere).getByText(/görev bitmeden biten araçlar listede yok: 34 DNM 101/)).toBeTruthy();
+    expect(within(pencere).getByText(/kesişen tarihlerde iki göreve verilmez/)).toBeTruthy();
     fireEvent.change(secim, { target: { value: '22' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
     await screen.findByText('Araç görevi onaylandı');
     fireEvent.click(screen.getByRole('button', { name: 'Dönüş' }));
     const donus = await screen.findByRole('dialog', { name: /Deneme liman/ });
+    expect(within(donus).queryByText(/kesişen tarihlerde/)).toBeNull();
     fireEvent.change(within(donus).getByLabelText('Dönüş km'), { target: { value: '89310' } });
     fireEvent.click(within(donus).getByRole('button', { name: 'Dönüşü yaz' }));
     await screen.findByText('Dönüş yazıldı');
     const [onay, donusYazma] = yazmalar(istekler);
     expect(onay?.govde).toEqual({ surum: 1, aracId: 22 });
     expect(donusYazma?.govde).toEqual({ surum: 3, km: 89_310 });
+  });
+
+  it('onay ve çıkış penceresi aracın Filo uyarısını gösterir, engellemez', async () => {
+    const BAKIMLI = { ...BINEK, uyarilar: [{ tur: 'bakim', gecti: false, kalanGun: null, kalanKm: 300 }] } satisfies Arac;
+    sunucuKur(FILOCU, (yontem, yol) => (yontem === 'GET' && yol === '/idari-isler/araclar'
+      ? json(200, { araclar: [KAMYON, BAKIMLI] } satisfies AraclarCevabi)
+      : yontem === 'GET' && yol === '/idari-isler/arac-gorevleri'
+        ? json(200, { gorevler: [GOREV, { ...GOREV, id: 43, varis: 'Deneme fuar', durum: 'onaylandi', aracId: 22, plaka: '34 DNM 102', surum: 2 }] } satisfies AracGorevleriCevabi)
+        : undefined));
+    ac('/idari-isler/arac-gorevleri');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: /Deneme OSB/ });
+    const secim = await within(pencere).findByLabelText('Verilecek araç');
+    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(2));
+    expect(within(pencere).queryByRole('status')).toBeNull();
+    fireEvent.change(secim, { target: { value: '22' } });
+    expect(within(pencere).getByRole('status').textContent).toMatch(/34 DNM 102.*bakım/i);
+    expect((within(pencere).getByRole('button', { name: 'Onayla' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Çıkış' }));
+    const cikis = await screen.findByRole('dialog', { name: /Deneme fuar/ });
+    expect(within(cikis).getByRole('status').textContent).toMatch(/bakım/i);
   });
 
   it('müdür görevleri görür, işlem düğmesi görmez', async () => {

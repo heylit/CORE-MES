@@ -4,7 +4,7 @@ Tabloları `proje_maliyet_defteri` (199 a; proje_id, is_emri_id, plan, gercek, u
 
 | Kavram | Sahibi | Okunan | Durum |
 |---|---|---|---|
-| proje, projenin siparişi, bütçe (198 a) | projeler | `projeGetir` (bütçe alanı bekleniyor) | var / istek |
+| proje, projenin siparişi, bütçe (198 a) | projeler | `projeGetir` | var |
 | sipariş tutarı, termin, para birimi, ceza | siparisler | `siparisAyrintisi` | var |
 | kur | finans | `kurGetir` | var |
 | istasyon, kişi, malzeme birim maliyeti | finans | `birimMaliyetleri` | var, bağlanmadı |

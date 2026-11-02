@@ -247,4 +247,29 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     assert.equal(isler.length, 1);
     assert.equal(await isiBirKezCalistir(o().vt, isler[0]!), 'tamam');
   });
+
+  test('G-A7 eski bağlantı: yeni revizyon yayınlanınca eski revizyon aynı belgenin yayındaki revizyonunu verir; arşivde null; işlemsiz 403', async () => {
+    const eski = await satir(mil);
+    await tur();
+    const guncel = async (rev: number, ad: string | null = 'yonetici'): Promise<LightMyRequestResponse> => istek(ad, 'GET', `/geometri/modeller/${String(rev)}/guncel`);
+    assert.deepEqual(tamam(await guncel(eski.revizyonId)), { revizyonId: eski.revizyonId });
+    const yeniIcerik = Buffer.from(kutuStep(45, 20, 10));
+    const ozet = createHash('sha256').update(yeniIcerik).digest('hex');
+    tamam(await istek('yonetici', 'POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: yeniIcerik.toString('base64') }));
+    const belge = tamam(await istek('yonetici', 'GET', `/cizimler/${String(eski.belgeId)}`)) as { surum: number };
+    const eklendi = tamam(await istek('yonetici', 'POST', `/cizimler/${String(eski.belgeId)}/revizyon-ekle`, { ozet, dosyaAdi: 'kup-b.step', surum: belge.surum })) as
+      { surum: number; revizyonlar: { id: number; durum: string }[] };
+    const taslak = eklendi.revizyonlar.find((r) => r.durum === 'taslak');
+    assert.ok(taslak);
+    tamam(await istek('yonetici', 'POST', `/cizimler/${String(eski.belgeId)}/revizyonlar/${String(taslak.id)}/yayinla`, { surum: eklendi.surum }));
+    assert.equal((await istek('yonetici', 'GET', `/geometri/analizler/${String(eski.revizyonId)}`)).statusCode, 404);
+    assert.deepEqual(tamam(await guncel(eski.revizyonId)), { revizyonId: taslak.id });
+    assert.deepEqual(tamam(await guncel(eski.revizyonId, 'okur')), { revizyonId: taslak.id });
+    assert.equal((await guncel(eski.revizyonId, 'yetkisiz')).statusCode, 403);
+    assert.equal((await guncel(eski.revizyonId, null)).statusCode, 401);
+    assert.deepEqual(tamam(await guncel(999999)), { revizyonId: null }, 'kuyrukta kaydı olmayan revizyon');
+    const son = tamam(await istek('yonetici', 'GET', `/cizimler/${String(eski.belgeId)}`)) as { surum: number };
+    tamam(await istek('yonetici', 'POST', `/cizimler/${String(eski.belgeId)}/arsivle`, { surum: son.surum }));
+    assert.deepEqual(tamam(await guncel(eski.revizyonId)), { revizyonId: null }, 'belge arşivde');
+  });
 });

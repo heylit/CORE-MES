@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { BosKart, CikisGovdesi, GirisGovdesi, KapiCevabi, KimlikTuru, Ziyaret } from '#paylasilan/sozlesme/nizamiye.ts';
@@ -8,7 +8,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useKomut } from './komut.ts';
-import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir, saat, sureMetni, uyari } from './gorunum.ts';
+import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir, kapiZamani, sureMetni, uyari } from './gorunum.ts';
 import { EvetHayir } from './EvetHayir.tsx';
 import './nizamiye.css';
 
@@ -45,7 +45,11 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
   const giris = useKomut<GirisGovdesi, Ziyaret>('Giriş kaydedilemedi.');
   const atolyeZorunlu = atolyeGerekir(ziyaret.neden);
   const kart = bosKartlar.length === 0 ? null : bosKartlar[kartSira % bosKartlar.length]!;
-  const eksik = [!kimlik && 'kimlik', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart'].filter(Boolean);
+  // Son dört hane yazıldıysa türü de seçilir (K24 a): hane türsüz okunamaz, sunucu da reddeder.
+  const turZorunlu = son4.trim() !== '';
+  const eksik = [
+    !kimlik && 'kimlik', turZorunlu && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
+  ].filter(Boolean);
 
   const gonder = (o: FormEvent) => {
     o.preventDefault();
@@ -68,7 +72,7 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
       <EvetHayir simge="user" ad="Kimlik görüldü" zorunlu deger={kimlik} degistir={kimlikYaz} />
       {kimlik && (
         <div className="tc-nz-iki">
-          <Secim etiket="Kimlik türü (isteğe bağlı)" value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
+          <Secim etiket={turZorunlu ? 'Kimlik türü' : 'Kimlik türü (isteğe bağlı)'} required={turZorunlu} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
             secenekler={[{ deger: '', baslik: 'Seçilmedi' }, ...KIMLIK_TURLERI.map((t) => ({ deger: t, baslik: KIMLIK_TURU_ADLARI[t] }))]} />
           <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} value={son4} onChange={(o) => son4Yaz(o.target.value)}
             ipucu="Tam numara yazılmaz." />
@@ -132,6 +136,13 @@ export function Kapi() {
   const [panel, panelYaz] = useState<Panel>(null);
   const [son, sonYaz] = useState<SonIslem | null>(null);
   const geriAl = useKomut<{ surum: number }, Ziyaret>('Geri alınamadı.');
+  const panelYeri = useRef<HTMLElement>(null);
+  // Dar ekranda panel listenin altındadır: Giriş/Çıkış'a basınca görünür alana gelir, yoksa dokunuş boşa gitmiş gibi görünür.
+  // Geniş ekranda panel zaten görünürdür; 'nearest' o zaman kaydırmaz.
+  const panelAnahtari = panel === null ? null : `${panel.tur}-${String(panel.ziyaret.id)}`;
+  useEffect(() => {
+    if (panelAnahtari !== null) panelYeri.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [panelAnahtari]);
 
   const simdi = veri.data ? Date.parse(veri.data.simdi) : 0;
   const q = ara.trim().toLocaleLowerCase('tr');
@@ -209,7 +220,7 @@ export function Kapi() {
                   {u && <span className="tc-nz-uyari"><Simge ad="alert" boyut="k" />{u}</span>}
                 </div>
                 <div className="tc-nz-satir-zaman">
-                  <span className="tc-nz-kartno">{ic ? z.kartNo : saat(z.beklenenZaman)}</span>
+                  <span className="tc-nz-kartno">{ic ? z.kartNo : kapiZamani(z.beklenenZaman, simdi)}</span>
                   <span className="tc-nz-soluk">{ic && z.giris ? sureMetni(z.giris, simdi) : 'bekleniyor'}</span>
                 </div>
                 {yazabilir && (
@@ -219,7 +230,7 @@ export function Kapi() {
             );
           })}
         </main>
-        <aside className="tc-nz-panel" aria-label="İşlem paneli">
+        <aside ref={panelYeri} className="tc-nz-panel" aria-label="İşlem paneli">
           {panel?.tur === 'giris' && <GirisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} bosKartlar={bosKartlar.filter((k) => k.tur === 'ziyaretci')} kapat={() => panelYaz(null)} bitti={bitti} />}
           {panel?.tur === 'cikis' && <CikisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} kapat={() => panelYaz(null)} bitti={bitti} />}
           {panel === null && (

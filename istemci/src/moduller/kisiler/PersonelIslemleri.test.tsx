@@ -25,7 +25,7 @@ const ROLLER = {
 } satisfies RollerCevabi;
 
 const kisi = (ozet: Partial<KisiOzeti> & Pick<KisiOzeti, 'id' | 'ad'>): KisiOzeti => ({
-  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ozlukIk: false, ozlukCikisTarihi: null, ...ozet,
+  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false, ...ozet,
 });
 const AYSE = kisi({ id: 10, ad: 'Ayşe Deneme', roller: [{ id: 2, ad: 'Operatör', yonetici: false }] });
 const MEHMET = kisi({ id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false });
@@ -219,6 +219,8 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     expect(dugme('Ayşe Deneme hesap aç')).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Mehmet Deneme hesap aç' }));
     await screen.findByRole('dialog', { name: 'Hesap aç: Mehmet Deneme' });
+    // Mehmet pasif: hesap açılır ama uyarılır (KIS-7).
+    expect(screen.getByText(/Kişi pasif: hesap açılır/)).toBeTruthy();
     const secim = await screen.findByLabelText(etiketli('Rol'));
     await within(secim).findByRole('option', { name: 'Operatör' });
     expect((screen.getByRole('button', { name: 'Hesabı aç' }) as HTMLButtonElement).disabled).toBe(true);
@@ -226,6 +228,12 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     expect((screen.getByLabelText(etiketli('Kullanıcı adı')) as HTMLInputElement).value).toBe('mehmet.deneme');
     yaz('Kullanıcı adı', 'mehmet.d');
     yaz('İlk parola', 'gizli-parola-1');
+    yaz('Parola tekrarı', 'gizli-parola-2');
+    fireEvent.change(secim, { target: { value: '2' } });
+    // Tekrar tutmazsa düğme kapalı kalır ve alan uyarır.
+    expect((screen.getByRole('button', { name: 'Hesabı aç' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Parolalar aynı değil.')).toBeTruthy();
+    yaz('Parola tekrarı', 'gizli-parola-1');
     fireEvent.change(secim, { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Hesabı aç' }));
 
@@ -244,6 +252,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     expect(screen.queryByLabelText(etiketli('Eski parola'))).toBeNull();
     expect(dugme('Mehmet Deneme parolasını değiştir')).toBeNull();
     yaz('Yeni parola', 'yeni-parola-9');
+    yaz('Parola tekrarı', 'yeni-parola-9');
     fireEvent.click(screen.getByRole('button', { name: 'Parolayı değiştir' }));
 
     expect(await screen.findByText('Parola değiştirildi.')).toBeTruthy();
@@ -256,6 +265,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Ayşe Deneme için PIN ver' }));
     await screen.findByRole('dialog', { name: 'PIN ver: Ayşe Deneme' });
+    expect(screen.getByText(/PIN verilince parolası çalışmaz/)).toBeTruthy();
     for (const ad of ['Mehmet Deneme için PIN ver', 'Veli Deneme için PIN ver', 'Deneme Yönetici için PIN ver']) {
       expect(dugme(ad), ad).toBeNull();
     }
@@ -288,6 +298,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     await screen.findByRole('dialog', { name: 'Parolamı değiştir' });
     yaz('Eski parola', 'eski-parola-1');
     yaz('Yeni parola', 'yeni-parola-9');
+    yaz('Parola tekrarı', 'yeni-parola-9');
     fireEvent.click(screen.getByRole('button', { name: 'Parolayı değiştir' }));
 
     expect(await screen.findByText('Parola değiştirildi.')).toBeTruthy();
@@ -307,6 +318,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     await screen.findByRole('dialog', { name: 'Parolamı değiştir' });
     yaz('Eski parola', 'eski-parola-1');
     yaz('Yeni parola', 'yeni-parola-9');
+    yaz('Parola tekrarı', 'yeni-parola-9');
     fireEvent.click(screen.getByRole('button', { name: 'Parolayı değiştir' }));
 
     expect((await screen.findByRole('alert')).textContent).toBe(red.mesaj);
@@ -314,7 +326,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     window.removeEventListener('oturum:bitti', bitti);
   });
 
-  it('bayraklı kişinin satırında düzenle yalnız bayraklı kullanıcıya görünür; sıradan satırda herkese', async () => {
+  it('bayraklı kişinin satırında düzenle yalnız sunucu korumalı demezse görünür; sıradan satırda herkese', async () => {
     const ben = kisi({ id: TAM.id, ad: TAM.ad, roller: [{ id: 3, ad: 'Yönetici', yonetici: true }] });
     sunucuKur(TAM, [AYSE, YETKILI, ben]);
     ac();
@@ -323,14 +335,14 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     cleanup();
     vi.unstubAllGlobals();
 
-    // Kullanıcının kendi satırında bayraklı rol yoksa bayraklı satırın düğmesi gizlenir; sıradan satırınki durur.
-    sunucuKur(TAM, [AYSE, YETKILI, kisi({ id: TAM.id, ad: TAM.ad })]);
+    // Okuyan bayraklı değilse sunucu bayraklı satırı korumalı işaretler: düğmesi gizlenir, sıradan satırınki durur.
+    sunucuKur(TAM, [AYSE, { ...YETKILI, korumali: true }, kisi({ id: TAM.id, ad: TAM.ad })]);
     ac();
     expect(await screen.findByRole('button', { name: 'Ayşe Deneme düzenle' })).toBeTruthy();
     expect(dugme('Veli Deneme düzenle')).toBeNull();
   });
 
-  it('bayrak bilinmiyorsa (null) düzenle düğmesi durur; sunucunun 403 iletisi görünür, form açık kalır', async () => {
+  it('korumalı işareti yoksa bayrak bilinmese de (null) düzenle düğmesi durur; sunucunun 403 iletisi görünür, form açık kalır', async () => {
     const gizli = kisi({ id: 12, ad: 'Veli Deneme', roller: [{ id: 3, ad: 'Yönetici', yonetici: null }] });
     const red = { kod: 'YETKI_YOK', mesaj: 'Tüm yetkileri veren role sahip kişinin kaydını yalnızca bu role sahip bir kişi düzenleyebilir.' } satisfies HataGovdesi;
     sunucuKur(IK, [AYSE, gizli], () => json(403, red));

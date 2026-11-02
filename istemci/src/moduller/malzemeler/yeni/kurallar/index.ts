@@ -403,6 +403,7 @@ export function gFlat(d: Parameters<Cekirdek['gFlat']>[0], b: KuralBaglami): Ret
 export function eqText(eq: Parameters<Cekirdek['eqText']>[0], b: KuralBaglami): ReturnType<Cekirdek['eqText']> { return cekirdek(b).eqText(eq); }
 export function onayYetkili(x: Parameters<Cekirdek['onayYetkili']>[0], b: KuralBaglami): ReturnType<Cekirdek['onayYetkili']> { return cekirdek(b).onayYetkili(x); }
 export function pasifKilitli(x: Parameters<Cekirdek['pasifKilitli']>[0], b: KuralBaglami): ReturnType<Cekirdek['pasifKilitli']> { return cekirdek(b).pasifKilitli(x); }
+export function geriCekebilir(x: Parameters<Cekirdek['geriCekebilir']>[0], b: KuralBaglami): ReturnType<Cekirdek['geriCekebilir']> { return cekirdek(b).geriCekebilir(x); }
 export function onayUygula(x: Parameters<Cekirdek['onayUygula']>[0], islem: Parameters<Cekirdek['onayUygula']>[1], neden: Parameters<Cekirdek['onayUygula']>[2], b: KuralBaglami): ReturnType<Cekirdek['onayUygula']> { return cekirdek(b).onayUygula(x, islem, neden); }
 export function talepYetkili(x: Parameters<Cekirdek['talepYetkili']>[0], b: KuralBaglami): ReturnType<Cekirdek['talepYetkili']> { return cekirdek(b).talepYetkili(x); }
 export function talepUygula(kart: Parameters<Cekirdek['talepUygula']>[0], islem: Parameters<Cekirdek['talepUygula']>[1], neden: Parameters<Cekirdek['talepUygula']>[2], b: KuralBaglami): ReturnType<Cekirdek['talepUygula']> { return cekirdek(b).talepUygula(kart, islem, neden); }

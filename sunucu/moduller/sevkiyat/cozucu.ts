@@ -1,7 +1,7 @@
 // Filo planı: teslimat, alım ve al-bırak işlerini araçlara paylaştırır ve sıralar. Kapasite (kg, palet), zaman
 // penceresi, araç müsaitlik aralığı, sefer sınırı ve "aynı seferde önce al, sonra bırak" sağlanır.
 // Yöntem: zamana bağlı süre matrisi, pişmanlık (regret-2) ekleme, büyük komşuluk araması (LNS) ve sefer başına kesin sıra.
-// Saf ve belirlenimci: süre yerine yineleme sınırı, rastgelelik tohumlu.
+// Saf; yineleme sınırı ve tohumla belirlenimci. Süre sınırı verilirse arama o süre dolunca en iyi çözümle durur.
 import {
   ARAC_BEDELI_DAKIKA, ARAC_BEDELI_KILOMETRE, ARAC_HIZ_KATSAYISI, BEKLEME_AGIRLIGI, BOSALTMA_DAKIKA, EN_COK_SEFER, RAMPA_HIZI, SEFER_BEDELI_DAKIKA,
   SEFER_BEDELI_KILOMETRE, SERBEST_HIZ, VARSAYILAN_MALIYET, YUKLEME_DAKIKA,
@@ -43,9 +43,14 @@ export interface FiloSecenegi {
   baslangic?: readonly AracRotasi[];
   kilitliAraclar?: readonly string[];
   yinelemeSiniri?: number; tohum?: number;
+  // Arama için duvar saati sınırı (ms): hesap Node'un tek iş parçacığında koşar, uzarsa bütün sunucu bekler.
+  sureSiniriMs?: number;
 }
 
 export const VARSAYILAN_YINELEME = 3000;
+export const NOKTA_YOLA_BAGLANMIYOR = 'Nokta yol ağına bağlanamıyor (harita alanının dışında); konumunu düzeltin';
+export const FABRIKA_YOLA_BAGLANMIYOR = 'Fabrika konumu yol ağına bağlanamıyor; Sistem Ayarları\'ndaki firma konumunu düzeltin';
+export const YOL_BAGLANTISI_NEDENLERI: ReadonlySet<string> = new Set([NOKTA_YOLA_BAGLANMIYOR, FABRIKA_YOLA_BAGLANMIYOR]);
 
 export interface FiloDuragi {
   // null: fabrikaya ara dönüş (boşaltma ve yeniden yükleme)
@@ -138,7 +143,7 @@ export function matrisKur(ag: YolAgi, noktalar: CozucuNoktasi[], gun: GunTipi): 
   const enHizli = new Float32Array(n * n * ornekSayisi), enKisaSure = new Float32Array(n * n * ornekSayisi), enUcuzSure = new Float32Array(n * n * ornekSayisi), secilen = new Uint8Array(n * n * ornekSayisi);
   const yollar: (Int32Array | null)[] = new Array(n * n * yolSecenegiSayisi).fill(null), metre = new Float32Array(n * n * yolSecenegiSayisi);
   for (let i = 0; i < n; i++) {
-    const agaclar = [...KAYNAK_SAATLER.map((d) => agac(ag, dugum[i]!, kenarSuresi, d)), agac(ag, dugum[i]!, kenarMesafesi, 0), agac(ag, dugum[i]!, kenarTlBedeli, 0)];
+    const agaclar = dugum[i]! < 0 ? [] : [...KAYNAK_SAATLER.map((d) => agac(ag, dugum[i]!, kenarSuresi, d)), agac(ag, dugum[i]!, kenarMesafesi, 0), agac(ag, dugum[i]!, kenarTlBedeli, 0)];
     for (let j = 0; j < n; j++) {
       const matrisBasi = (i * n + j) * ornekSayisi;
       if (i === j || dugum[i] === dugum[j]) { // aynı düğüm: yalnız sokak bağlantısı
@@ -147,6 +152,7 @@ export function matrisKur(ag: YolAgi, noktalar: CozucuNoktasi[], gun: GunTipi): 
       }
       const gorulen: string[] = [];
       for (let v = 0; v < yolSecenegiSayisi; v++) {
+        if (dugum[i]! < 0 || dugum[j]! < 0) break; // ağa bağlanmayan nokta: yol yok, süre sonsuz kalır
         const { onceki, onceYon } = agaclar[v]!; if (onceki[dugum[j]!]! < 0) continue;
         const liste: number[] = []; let x = dugum[j]!, yolMetresi = 0;
         while (x !== dugum[i]) { const e = onceki[x]!, y = onceYon[x]!; liste.push(e * 2 + (y === 1 ? 0 : 1)); yolMetresi += ag.kenarMetre[e]!; x = y === 1 ? ag.kenarA[e]! : ag.kenarB[e]!; }
@@ -219,6 +225,7 @@ const cozumKopyasi = (s: Cozum): Cozum => ({ ...s, rotalar: s.rotalar.map((r) =>
 export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly CozucuNoktasi[], isler: readonly CozucuIsi[], araclar: readonly CozucuAraci[], secenek: FiloSecenegi, oncekiMatris?: Matris): FiloPlani & { matris: Matris } {
   const amac = secenek.amac, kisa = amac === 'mesafe', ucuz = amac === 'maliyet';
   const yinelemeSiniri = secenek.yinelemeSiniri ?? VARSAYILAN_YINELEME;
+  const bitisAni = secenek.sureSiniriMs === undefined ? Infinity : performance.now() + secenek.sureSiniriMs;
   const oranBellegi = new Map<CozucuAraci, MaliyetOranlari>();
   const oranOf = (a: CozucuAraci) => { let o = oranBellegi.get(a); if (!o) { o = aracOranlari(a); oranBellegi.set(a, o); } return o; };
 
@@ -226,9 +233,19 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   const kullanilan = new Set<string>([fabrika.anahtar]);
   const noktasiz: { is: string; neden: string }[] = [];
   const gecerli: CozucuIsi[] = [];
+  // Yol ağına bağlanamayan nokta (harita alanının dışı) süre matrisine girmez; işi atanamayan olur, bütün gün düşmez.
+  const baglanti = new Map<string, boolean>();
+  const yolaBaglanir = (p: CozucuNoktasi) => {
+    let bagli = baglanti.get(p.anahtar);
+    if (bagli === undefined) { bagli = enYakinDugum(ag, [p.boylam, p.enlem]).dugum >= 0; baglanti.set(p.anahtar, bagli); }
+    return bagli;
+  };
+  const fabrikaBaglanir = yolaBaglanir(fabrika);
   for (const is of isler) {
     const gereken = is.tur === 'teslimat' ? [is.birakisNoktasi] : is.tur === 'alim' ? [is.alisNoktasi] : [is.alisNoktasi, is.birakisNoktasi];
     if (gereken.some((x) => !x || !noktaBul.has(x))) { noktasiz.push({ is: is.anahtar, neden: 'Nokta seçilmemiş ya da pasif' }); continue; }
+    if (!fabrikaBaglanir) { noktasiz.push({ is: is.anahtar, neden: FABRIKA_YOLA_BAGLANMIYOR }); continue; }
+    if (gereken.some((x) => !yolaBaglanir(noktaBul.get(x!)!))) { noktasiz.push({ is: is.anahtar, neden: NOKTA_YOLA_BAGLANMIYOR }); continue; }
     gereken.forEach((x) => kullanilan.add(x!)); gecerli.push(is);
   }
   const siteler = [...kullanilan].map((a) => noktaBul.get(a)!);
@@ -242,6 +259,8 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
     : [{ is: j, alis: true, nokta: siraNo(is.alisNoktasi!) }, { is: j, alis: false, nokta: siraNo(is.birakisNoktasi!) }]));
   // Noktanın süresi güncel girdiden okunur (önbellekteki matris yalnız konum için kullanılır).
   const durakSuresi = (v: Ziyaret) => isListesi[v.is]!.durakSuresiDakika ?? noktaBul.get(matris.noktalar[v.nokta]!.anahtar)!.durakSuresiDakika;
+  // Aynı noktada art arda yapılan işler tek yanaşmadır: toplam durak en uzun işin süresi kadardır, her iş için ayrıca eklenmez.
+  const durakEki = (v: Ziyaret, oncekiNokta: number, buradaGecen: number) => (v.nokta === oncekiNokta ? Math.max(0, durakSuresi(v) - buradaGecen) : durakSuresi(v));
   const pencere = (v: Ziyaret) => (v.alis ? isListesi[v.is]!.alisPenceresi : isListesi[v.is]!.birakisPenceresi) ?? null;
   const araDonusu = (): Ziyaret => ({ is: -1, alis: false, nokta: fabrikaSirasi });
   // Ardışık, baştaki ve sondaki ara dönüşleri temizler.
@@ -267,7 +286,7 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   // Kurallara bakan değerlendirme: ihlalde uygun değil.
   const degerlendir = (a: CozucuAraci, ziyaretDizisi: Ziyaret[], cikis: number): Degerlendirme => {
     if (!ziyaretDizisi.length) return { uygun: true, bedel: 0, bitis: cikis };
-    let t = cikis, bulunulanNokta = fabrikaSirasi, i = 0, seferSayisi = 0, toplamKilometre = 0, surus = 0, bekleme = 0, ertelemePayi = Infinity; // pay: çıkış en çok ne kadar ertelenebilir
+    let t = cikis, bulunulanNokta = fabrikaSirasi, buradaGecen = 0, i = 0, seferSayisi = 0, toplamKilometre = 0, surus = 0, bekleme = 0, ertelemePayi = Infinity; // pay: çıkış en çok ne kadar ertelenebilir
     while (i < ziyaretDizisi.length) {
       let seferSonu = i; while (seferSonu < ziyaretDizisi.length && ziyaretDizisi[seferSonu]!.is >= 0) seferSonu++; // [i, e) bir sefer
       if (++seferSayisi > EN_COK_SEFER) return { uygun: false, bedel: Infinity, bitis: 0, neden: 'musaitlik' };
@@ -284,7 +303,7 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
           if (t > zamanPenceresi[1] + 0.01) return { uygun: false, bedel: Infinity, bitis: 0, neden: 'zaman' };
           ertelemePayi = Math.min(ertelemePayi, bekleme + zamanPenceresi[1] - t);
         }
-        t += durakSuresi(v);
+        const ek = durakEki(v, bulunulanNokta, buradaGecen); buradaGecen = v.nokta === bulunulanNokta ? buradaGecen + ek : ek; t += ek;
         if (v.alis) { yukKilogrami += is.kilogram; yukPaleti += is.palet; if (is.tur === 'aktarma') acikAktarma++; }
         else if (is.tur !== 'alim') { yukKilogrami -= is.kilogram; yukPaleti -= is.palet; if (is.tur === 'aktarma') acikAktarma--; }
         if (yukKilogrami > a.kapasiteKilogram + 1e-6 || yukPaleti > a.kapasitePalet + 1e-6) return { uygun: false, bedel: Infinity, bitis: 0, neden: 'kapasite' };
@@ -325,7 +344,7 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   // İhlalde durmayan değerlendirme: elle dizilmiş rotanın çizelgesi ve uyarıları.
   const ayrintili = (a: CozucuAraci, ziyaretDizisi: Ziyaret[], cikis: number) => {
     const duraklar: FiloDuragi[] = [], seferler: Sefer[] = [], uyarilar: string[] = [];
-    let t = cikis, bulunulanNokta = fabrikaSirasi, i = 0, seferSayisi = 0;
+    let t = cikis, bulunulanNokta = fabrikaSirasi, buradaGecen = 0, i = 0, seferSayisi = 0;
     while (i < ziyaretDizisi.length) {
       let seferSonu = i; while (seferSonu < ziyaretDizisi.length && ziyaretDizisi[seferSonu]!.is >= 0) seferSonu++;
       seferSayisi++;
@@ -340,14 +359,15 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
         ayak(a, bulunulanNokta, v.nokta, t); t += ayakDakikasi; const varis = t;
         const zamanPenceresi = pencere(v); let beklemeDakikasi = 0;
         if (zamanPenceresi) { if (t < zamanPenceresi[0]) { beklemeDakikasi = zamanPenceresi[0] - t; t = zamanPenceresi[0]; } else if (t > zamanPenceresi[1] + 0.01) uyari.push(`Geç kalıyor: ${saatMetni(t)} (pencere ${saatMetni(zamanPenceresi[0])}-${saatMetni(zamanPenceresi[1])})`); }
-        const baslama = t; t += durakSuresi(v);
+        const ek = durakEki(v, bulunulanNokta, buradaGecen); buradaGecen = v.nokta === bulunulanNokta ? buradaGecen + ek : ek;
+        const baslama = t; t += ek;
         if (v.alis) { yukKilogrami += is.kilogram; yukPaleti += is.palet; alinan.add(v.is); }
         else if (is.tur !== 'alim') { yukKilogrami -= is.kilogram; yukPaleti -= is.palet; if (is.tur === 'aktarma' && !alinan.has(v.is)) uyari.push('Önce alınmalı: aynı seferde alış bırakıştan önce gelmeli'); }
         if (v.alis && is.tur === 'aktarma' && !ziyaretDizisi.slice(q + 1, seferSonu).some((x) => x.is === v.is && !x.alis)) uyari.push('Bırakış aynı seferde değil');
         if (yukKilogrami > a.kapasiteKilogram + 1e-6 || yukPaleti > a.kapasitePalet + 1e-6) uyari.push(`Kapasite aşılıyor: araçta ${yukKilogrami}/${a.kapasiteKilogram} kg, ${yukPaleti}/${a.kapasitePalet} palet`);
         duraklar.push({ is: is.anahtar, alis: v.alis, nokta: matris.noktalar[v.nokta]!.anahtar, varis, bekleme: beklemeDakikasi, baslama, ayrilis: t, yukKilogram: yukKilogrami, yukPalet: yukPaleti, uyarilar: uyari });
         const noktaAnahtari = matris.noktalar[v.nokta]!.anahtar;
-        if (sira[sira.length - 1] !== noktaAnahtari) { sira.push(noktaAnahtari); sureler.push(durakSuresi(v)); } else sureler[sureler.length - 1]! += durakSuresi(v);
+        if (sira[sira.length - 1] !== noktaAnahtari) { sira.push(noktaAnahtari); sureler.push(ek); } else sureler[sureler.length - 1]! += ek;
         bulunulanNokta = v.nokta;
       }
       ayak(a, bulunulanNokta, fabrikaSirasi, t); t += ayakDakikasi; bulunulanNokta = fabrikaSirasi; const donus = t;
@@ -423,6 +443,7 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   const ilkSicaklik = ucuz ? 40 : 8; let sicaklik = ilkSicaklik, durgun = 0, yenidenBaslama = 0;
   const tasinabilirVar = isListesi.some((_, j) => tasinabilir(j));
   while (kip !== 'degerlendir' && tasinabilirVar && isListesi.length > 1 && aracListesi.length && yineleme < yinelemeSiniri) {
+    if (yineleme % 16 === 0 && performance.now() >= bitisAni) break;
     yineleme++;
     const aday = cozumKopyasi(mevcutCozum);
     const atanan = isListesi.map((_, j) => j).filter((j) => !aday.atanamayan.includes(j) && tasinabilir(j));

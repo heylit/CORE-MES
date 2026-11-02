@@ -24,11 +24,12 @@ function sunucu(durum: number, govde: unknown) {
 
 const pencere = () => screen.getByRole('dialog', { name: 'Parolamı değiştir' });
 
-function doldurGonder(eski: string, yeni: string) {
+function doldurGonder(eski: string, yeni: string, tekrar = yeni) {
   fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Parolamı değiştir' }));
   fireEvent.change(within(pencere()).getByLabelText(/Eski parola/), { target: { value: eski } });
-  fireEvent.change(within(pencere()).getByLabelText(/Yeni parola/), { target: { value: yeni } });
+  fireEvent.change(within(pencere()).getByLabelText(/^Yeni parola(?! \(tekrar\))/), { target: { value: yeni } });
+  fireEvent.change(within(pencere()).getByLabelText(/^Yeni parola \(tekrar\)/), { target: { value: tekrar } });
   fireEvent.click(within(pencere()).getByRole('button', { name: 'Parolayı değiştir' }));
 }
 
@@ -89,6 +90,17 @@ describe('Kabuk: Parolamı değiştir', () => {
 
     expect(await within(pencere()).findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('Çok sık deneme'));
     expect(oturumBitti).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['tekrar uyuşmaz', 'eski-parola-1', 'yeni-parola-1', 'yeni-parola-2', 'Yeni parola ile tekrarı aynı değil.'],
+    ['eskisiyle aynı', 'eski-parola-1', 'eski-parola-1', 'eski-parola-1', 'Yeni parola eskisiyle aynı olamaz.'],
+  ])('reddedilen: %s ise istek gitmez, alan nedenini söyler', (_ad, eski, yeni, tekrar, ileti) => {
+    const sahte = sunucu(200, { tamam: true });
+    ciz();
+    doldurGonder(eski, yeni, tekrar);
+    expect(sahte).not.toHaveBeenCalled();
+    expect(within(pencere()).getByText(ileti)).toBeTruthy();
   });
 
   it.each([

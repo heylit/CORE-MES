@@ -264,7 +264,7 @@ export function SevkiyatPlani() {
       </OnayPenceresi>
       <Pencere acik={yapilamadi !== null} kapat={() => setYapilamadi(null)} baslik="Yapılamadı"
         alt={<><Dugme onClick={() => setYapilamadi(null)}>Vazgeç</Dugme><Dugme tur="birincil" yukleniyor={isKomutu.isPending}
-          onClick={() => { if (yapilamadi) durumGonder(yapilamadi.is, 'yapilamadi', yapilamadi.not.trim() || null); }}>Havuza geri al</Dugme></>}>
+          onClick={() => { if (yapilamadi) durumGonder(yapilamadi.is, 'yapilamadi', yapilamadi.not.trim() || null); }}>Yapılamadı olarak işaretle</Dugme></>}>
         <p><b>{yapilamadi ? isBasligi(yapilamadi.is, noktalar) : ''}</b> bu sefer yapılamadı olarak işaretlenir ve ertesi günün sevkiyat havuzuna geçer.</p>
         <CokSatir etiket="Neden (isteğe bağlı)" maxLength={400} value={yapilamadi?.not ?? ''} placeholder="Ör. müşteri kapalı, yük hazır değil"
           onChange={(e) => setYapilamadi((x) => (x ? { ...x, not: e.target.value } : x))} />

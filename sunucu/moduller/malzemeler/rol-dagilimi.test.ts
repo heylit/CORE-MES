@@ -103,6 +103,28 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
   });
 
   // Kart #713 (kullanıcı kararı 12.10.2026): operatör malzeme sayfasını görmez.
+  test('MLZ-5 a: kartı açan depo onaya gönderdiği kartı geri çeker (izinli); başka yazan ve onaylanmış kart çekemez (reddedilen)', async () => {
+    const depo = await girisYap('r-geri-depo', 'depo');
+    const satinAlma = await girisYap('r-geri-sa', 'satin_alma');
+    const kalite = await girisYap('r-geri-kalite', 'kalite');
+    const k = await onayBekleyenKart(depo);
+    const baskasi = await gonder(satinAlma, kaydetYolu(k), govde(k, 'taslak'));
+    assert.deepEqual({ durum: baskasi.statusCode, kod: baskasi.json().kod }, { durum: 403, kod: 'YETKI_YOK' }, baskasi.body);
+    assert.equal(await kaydet(depo, k, 'taslak'), 200);
+    assert.equal(await durumu(k), 'taslak');
+    const red = (await vt().tek<{ red: Nesne }>("SELECT kayit->'onay'->'red' AS red FROM malzeme_katalog_karti WHERE kimlik = $1", [k.kimlik]))!.red;
+    assert.equal(red['by'], depo.id, 'geri çeken sunucuda damgalanır');
+
+    // Onaylanıp pasiften yeniden onaya gönderilen kart kullanılmış karttır: açan geri çekemez.
+    assert.equal(await kaydet(depo, k, 'onayda'), 200);
+    assert.equal(await kaydet(kalite, k, 'aktif'), 200);
+    assert.equal(await kaydet(kalite, k, 'pasif'), 200);
+    assert.equal(await kaydet(kalite, k, 'onayda'), 200);
+    const kullanilmis = await gonder(depo, kaydetYolu(k), govde(k, 'taslak'));
+    assert.deepEqual({ durum: kullanilmis.statusCode, kod: kullanilmis.json().kod }, { durum: 403, kod: 'YETKI_YOK' }, kullanilmis.body);
+    assert.equal(await durumu(k), 'onayda');
+  });
+
   test('operatör listeyi okuyamaz, yazamaz', async () => {
     const operator = await girisYap('r-operator', 'operator');
     const liste = await oku(operator);

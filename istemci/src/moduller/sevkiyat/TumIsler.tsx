@@ -388,7 +388,7 @@ export function TumIsler() {
 
         <div className="tc-ti-ozet" role="group" aria-label="Özet süzgeci">
           {OZETLER.map((o) => (
-            <button key={o.kod} type="button" className="tc-ti-sayac" data-ton={o.ton ?? undefined} aria-pressed={ozet === o.kod}
+            <button key={o.kod} type="button" className="tc-ti-sayac" data-ton={o.ton ?? undefined} aria-pressed={ozet === o.kod} title={o.baslik}
               onClick={() => { const yeni = ozet === o.kod ? null : o.kod; setOzet(yeni); if (yeni) setGorunum(o.gorunum); setSecili(new Set()); }}>
               <span className="tc-ti-sayac-deger mono">{temel.filter((r) => o.suz(r, bugun)).length}</span><span className="tc-ti-sayac-ad">{o.ad}</span>
             </button>

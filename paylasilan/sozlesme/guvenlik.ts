@@ -107,7 +107,12 @@ export const oturumSatiri = z.object({
   tarayici: z.string().nullable(),
   buOturum: z.boolean(),
 });
-export const oturumlarCevabi = z.object({ oturumlar: z.array(oturumSatiri) });
+// Açık oturumlar sayfalıdır; arama kişi adı, cihaz adresi ya da tarayıcıda geçer (GUV-4).
+export const oturumListeSorgusu = z.object({
+  ...sayfaSorguAlanlari,
+  ara: z.string().trim().max(80).optional(),
+});
+export const oturumlarCevabi = listeCevapSemasi(oturumSatiri);
 
 // Reddedilen istekler (1370 a): en yeni önce; süzgeç nedene göre ya da metinle (yol ya da cihaz adresi).
 export const retListeSorgusu = z.object({
@@ -131,6 +136,9 @@ export const retListeCevabi = listeCevapSemasi(retSatiri);
 export const kilitListeSorgusu = z.object({ ...sayfaSorguAlanlari });
 export const kilitSatiri = z.object({ id: z.number().int(), kullaniciAdi: z.string(), kilitlendi: zamanSemasi, bitis: zamanSemasi });
 export const kilitListeCevabi = listeCevapSemasi(kilitSatiri);
+// Kilit açma ve oturum kapatma durum komutudur, alan taşımaz; gövde yine şemadan geçer ve tanınmayan alan reddedilir (GUV-5).
+export const kilitAcGovdesi = z.object({}).strict();
+export const oturumKapatGovdesi = z.object({}).strict();
 export const kilitAcCevabi = z.object({ acilan: z.number().int().positive() });
 export const oturumKapatCevabi = z.object({ id: z.number().int() });
 
@@ -180,8 +188,11 @@ export type AlarmKapatGovdesi = z.input<typeof alarmKapatGovdesi>;
 export type OzetCevabi = z.output<typeof ozetCevabi>;
 export type GirisListeSorgusu = z.input<typeof girisListeSorgusu>;
 export type GirisListeCevabi = z.output<typeof girisListeCevabi>;
+export type OturumListeSorgusu = z.input<typeof oturumListeSorgusu>;
 export type OturumlarCevabi = z.output<typeof oturumlarCevabi>;
 export type KilitListeCevabi = z.output<typeof kilitListeCevabi>;
+export type KilitAcGovdesi = z.input<typeof kilitAcGovdesi>;
+export type OturumKapatGovdesi = z.input<typeof oturumKapatGovdesi>;
 export type KilitAcCevabi = z.output<typeof kilitAcCevabi>;
 export type KorumaCevabi = z.output<typeof korumaCevabi>;
 export type SunucuDurumuCevabi = z.output<typeof sunucuDurumuCevabi>;

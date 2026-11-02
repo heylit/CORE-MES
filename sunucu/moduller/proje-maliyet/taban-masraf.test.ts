@@ -92,8 +92,8 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     return b!.id;
   }
 
-  async function projeAc(kod: string): Promise<Proje> {
-    return tamam<Proje>(gonder(yonetici, '/projeler', { kod, ad: 'Deneme projesi', siparisId: siparis.id }));
+  async function projeAc(kod: string, ek: Record<string, unknown> = {}): Promise<Proje> {
+    return tamam<Proje>(gonder(yonetici, '/projeler', { kod, ad: 'Deneme projesi', siparisId: siparis.id, ...ek }));
   }
   const maliyet = (projeId: number) => tamam<ProjeMaliyetCevabi>(oku(yonetici, `/proje-maliyet/${projeId}`));
 
@@ -219,5 +219,28 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     assert.equal((await istek()).statusCode, 200);
     const sayi = await sahip().tek<{ n: number }>('SELECT count(*)::int AS n FROM proje_maliyet_taban WHERE proje_id = $1', [p.id]);
     assert.equal(sayi?.n, 1);
+  });
+
+  test('PM-43 bütçe: girilen bütçe hedeftir; döviz bütçe bugünün kuruyla TRY, kuru yoksa bilinmez ve bildirilir; bütçesiz projede hedef plan', async () => {
+    const tl = await projeAc('PMT.6', { butceTutari: '2500.00', butceParaBirimi: 'TRY' });
+    await isEmriAc(tl.id);
+    let c = await maliyet(tl.id);
+    assert.deepEqual([c.butce, c.hedef, c.plan], [2500, 2500, 900]);
+    assert.ok(!c.eksikler.includes('butce_kuru_yok'));
+
+    const doviz = await projeAc('PMT.7', { butceTutari: '100.00', butceParaBirimi: 'CHF' });
+    await isEmriAc(doviz.id);
+    c = await maliyet(doviz.id);
+    assert.deepEqual([c.butce, c.hedef], [null, 900]);
+    assert.ok(c.eksikler.includes('butce_kuru_yok'));
+    await tamam(gonder(yonetici, '/finans/kurlar/ekle', { paraBirimi: 'CHF', tarih: '2026-01-01', kur: 40 }));
+    c = await maliyet(doviz.id);
+    assert.deepEqual([c.butce, c.hedef], [4000, 4000]);
+    assert.ok(!c.eksikler.includes('butce_kuru_yok'));
+
+    const butcesiz = await projeAc('PMT.8');
+    await isEmriAc(butcesiz.id);
+    c = await maliyet(butcesiz.id);
+    assert.deepEqual([c.butce, c.hedef], [null, 900]);
   });
 });

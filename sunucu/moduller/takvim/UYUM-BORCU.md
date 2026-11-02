@@ -6,4 +6,4 @@
 - `takvim.oku`, `sayfa.takvim` ve `ik.izin-oku` yalnız yönetici rolünde (göç yok, 1163 teyitli). Rol dağılımı ortak yetki matrisinden verilir.
 - İzin (1191 a): `ik.oku` ya da `ik.izin-oku` olan bütün izinleri, öteki kişi yalnız kendi personel kaydının iznini görür; kullanıcıya bağlı personel kaydı olmayan izin görmez.
 - Planlı duruş oturumla okunur (`/planli-duruslar` gibi). Varsayım.
-- Sipariş ayrıntısına `/siparisler/:id`, emir ayrıntısına `/uretim-emirleri/:id` ile gidilir; öteki kaynaklarda (sevk, satın alma dahil) kaydın kendi ekranı yerine modülün liste ekranı açılır (kayda doğrudan adres yok).
+- Sipariş ayrıntısına `/siparisler/:id`, emir ayrıntısına `/uretim-emirleri/:id`, ölçü aletine `/kalibrasyon?alet=:id` ile gidilir (TKV-4). Sevk, satın alma, denetim, izin, vergi ve planlı duruşta kaydın kendi ekranı yerine modülün liste ekranı açılır: o modüllerde kayda doğrudan adres yok (sevk aramasında irsaliye no yok, satın alma adresi talep açar, İK izin ekranı kimliği okumaz).

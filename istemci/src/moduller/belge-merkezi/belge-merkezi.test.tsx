@@ -297,6 +297,19 @@ describe('cizimler ekranları', () => {
     });
   });
 
+  it('CIZ-4: yayınla onayına çift tıklama tek istek gönderir', async () => {
+    const cagrilar = sunucuKur(YAYINCI);
+    ac('/cizimler/belge/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yayınla' }));
+    const pencere = await screen.findByRole('dialog');
+    const onay = Array.from(pencere.querySelectorAll('button')).find((b) => b.textContent === 'Yayınla')!;
+    fireEvent.click(onay);
+    fireEvent.click(onay);
+    await waitFor(() => { expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1); });
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1);
+  });
+
   it('CZ-14: 3B model sistemdeki istasyonla eşleştirilir; teknik resimde eşleştirme düğmesi yok', async () => {
     const cagrilar = sunucuKur(YAZAR);
     ac('/cizimler/belge/7');

@@ -7,13 +7,23 @@ const ZAMAN = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 
 export const zamanMetni = (iso: string | null): string => (iso === null ? YOK : ZAMAN.format(new Date(iso)));
 export const sayiMetni = (n: number | null): string => (n === null ? YOK : n.toLocaleString('tr-TR'));
 
-export const BAGLANTI: Record<DurumCevabi['baglanti'], { metin: string; ton: RozetTonu; aciklama: string }> = {
-  kapali: { metin: 'Kapalı', ton: 'pasif', aciklama: 'Bağlantı Sistem Ayarları’ndaki “SmartES bağlantısı” anahtarıyla açılır.' },
+// Açıklama role göredir: Sistem Ayarları'nı yalnız ayar yazan görür; öbürüne açamayacağı yer gösterilmez.
+export const BAGLANTI: Record<DurumCevabi['baglanti'], { metin: string; ton: RozetTonu; aciklama: { ayarYazan: string; diger: string } }> = {
+  kapali: {
+    metin: 'Kapalı', ton: 'pasif',
+    aciklama: {
+      ayarYazan: 'Bağlantı Sistem Ayarları’ndaki “SmartES bağlantısı” anahtarıyla açılır.',
+      diger: 'Bağlantı kapalı; SmartES’ten okuma ve iş emri gönderimi yapılmıyor. Açılması için yöneticiye başvurun.',
+    },
+  },
   'ortam-degiskeni-yok': {
     metin: 'Adres yok', ton: 'uyari',
-    aciklama: 'Anahtar açık, ama sunucuda TMIV2_SMARTES_ADRESI tanımlı değil. Kurulum belgesine bakın (kurulum/smartes.md).',
+    aciklama: {
+      ayarYazan: 'Anahtar açık, ama sunucuda TMIV2_SMARTES_ADRESI tanımlı değil. Kurulum belgesine bakın (kurulum/smartes.md).',
+      diger: 'Bağlantı açık, ama sunucuda SmartES adresi tanımlı değil; okuma ve gönderim yapılmıyor. Yöneticiye bildirin.',
+    },
   },
-  acik: { metin: 'Açık', ton: 'tamam', aciklama: 'Okuma ve iş emri gönderimi çalışır.' },
+  acik: { metin: 'Açık', ton: 'tamam', aciklama: { ayarYazan: 'Okuma ve iş emri gönderimi çalışır.', diger: 'Okuma ve iş emri gönderimi çalışır.' } },
 };
 
 export const KAYNAK_ADI: Record<DurumCevabi['okumalar'][number]['kaynak'], string> = {

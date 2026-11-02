@@ -72,3 +72,12 @@ export function zamanOku(metin: string): string | null {
 }
 
 export const zamanMetni = (yerel: string): string => (yerel === '' ? '' : `${tarihMetni(yerel.slice(0, 10))} ${yerel.slice(11, 16)}`);
+
+// Yeni vardiyanın önerilen adı: "Vardiya N"in ilk boştaki numarası. Vardiya silinmediği için sayı + 1 bir kez alınmışsa
+// hep alınmış kalır. Sunucunun ad tekilliği gibi tam eşleşmedir.
+export function yeniVardiyaAdi(adlar: readonly string[]): string {
+  const alinmis = new Set(adlar.map((a) => a.trim()));
+  let n = adlar.length + 1;
+  while (alinmis.has(`Vardiya ${String(n)}`)) n += 1;
+  return `Vardiya ${String(n)}`;
+}

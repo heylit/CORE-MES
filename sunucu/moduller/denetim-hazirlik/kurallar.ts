@@ -1,7 +1,7 @@
 import { AZAMI_SINIR } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { Filtre, OlcuAletleriCevabi, Sira } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 
-// Belge deposunun kuralları: yol, kişiye özel alan, birleştirme, sorgu, kilit, oda. Saf; veritabanı ve saat yok.
+// Belge deposunun kuralları: yol, kişiye özel alan, birleştirme, sorgu, kilit. Saf; veritabanı ve saat yok.
 
 export type Veri = Record<string, unknown>;
 export interface DepoBelgesi { yol: string; kimlik: string; veri: Veri; surum: number }
@@ -32,6 +32,34 @@ export function ekKotaReddi(
 
 // Prototip eki belgede `/_blob/<kimlik>` adresiyle anar (köprü bu adresi çevirir).
 export const ekAnmasi = (id: string): string => `/_blob/${id}`;
+
+// Yazmanın belgeye yeni soktuğu ek anmaları (eskide olmayanlar). Anma eki okutur (`ekOkunurMu`); kişi okuyamadığı eki anarak
+// kendine açamasın diye yeni anmalar yazmadan önce denetlenir. Gövde yorumlanmaz, metninde adres aranır (`ekiAnanYollar` gibi).
+const ANMA = /\/_blob\/([0-9a-f]{32})/g;
+const anmalar = (veri: Veri | null): Set<string> =>
+  new Set(veri === null ? [] : [...JSON.stringify(veri).matchAll(ANMA)].map((m) => m[1] ?? ''));
+export const AZAMI_YENI_ANMA = 50;
+export function yeniAnmalar(eski: Veri | null, yeni: Veri): string[] {
+  const once = anmalar(eski);
+  return [...anmalar(yeni)].filter((id) => !once.has(id));
+}
+
+// Belge kotası (1809, DH-3). Her belge gövde sınırıyla 1 MB'ın altındadır; sınır yalnız yeni belge açmayı keser, var olanın
+// güncellenmesi etkilenmez. Ekran tek ortak belge yazar; sınır yalnız uca doğrudan yazmayla veritabanının doldurulmasını keser.
+// VARSAYIM (geri alma ucuz): kişi başına 20, modülde 500 belge.
+export const BELGE_SINIRI = { kisiBelge: 20, toplamBelge: 500 } as const;
+
+export function belgeKotaReddi(
+  d: { kisiBelge: number; toplamBelge: number }, sinir: { kisiBelge: number; toplamBelge: number } = BELGE_SINIRI,
+): 'kisi' | 'toplam' | null {
+  if (d.kisiBelge + 1 > sinir.kisiBelge) return 'kisi';
+  if (d.toplamBelge + 1 > sinir.toplamBelge) return 'toplam';
+  return null;
+}
+
+// Kilit sahibi kişiye bağlıdır: istemcinin verdiği sahip adı (sekme) kişi kimliğiyle saklanır; başka kişi aynı adı vererek
+// kilidi alamaz.
+export const kilitSahibi = (kisiId: number, sahip: string): string => `${String(kisiId)}:${sahip}`;
 
 // Ekin okunması belgeye bağlıdır (GG-1): yükleyen ya da eki anan ve okuyanın açabildiği bir belge. Kimliği bilmek yetmez.
 export function ekOkunurMu(yukleyenKisiId: number, ananYollar: readonly string[], kisiId: number): boolean {
@@ -178,26 +206,6 @@ export function sorgula<T extends DepoBelgesi>(belgeler: readonly T[], kosul: So
 // Kilit kısa süreli ve işbirliğine dayalıdır: süresi geçmiş ya da aynı sahibin kilidi yeniden alınır.
 export function kilitAlinirMi(mevcut: { sahip: string | null; bitis: number | null }, sahip: string, simdi: number): boolean {
   return mevcut.sahip === null || mevcut.bitis === null || mevcut.bitis <= simdi || mevcut.sahip === sahip;
-}
-
-// Oda: sayfası o an açık olanlar. Durum yaması birleşir; null değer alanı siler. Son görülmeden bu yana süre geçen düşer.
-export const ODA_SURESI_MS = 45_000;
-export interface OdaKaydi { durum: Veri; guncellendi: number }
-
-export function durumYamala(eski: Veri, yama: Veri): Veri {
-  const yeni: Veri = { ...eski };
-  for (const [anahtar, deger] of Object.entries(yama)) {
-    if (deger === null) delete yeni[anahtar];
-    else yeni[anahtar] = deger;
-  }
-  return yeni;
-}
-
-export function canliEsler(oda: ReadonlyMap<number, OdaKaydi>, simdi: number): { kisiId: number; durum: Veri; guncellendi: number }[] {
-  return [...oda.entries()]
-    .filter(([, k]) => simdi - k.guncellendi < ODA_SURESI_MS)
-    .map(([kisiId, k]) => ({ kisiId, durum: k.durum, guncellendi: k.guncellendi }))
-    .sort((a, b) => a.kisiId - b.kisiId);
 }
 
 // Boş depoda prototipin açılabilmesi için gereken yapısal belgeler (gerçek veri değil, prototipin varsayılanları).

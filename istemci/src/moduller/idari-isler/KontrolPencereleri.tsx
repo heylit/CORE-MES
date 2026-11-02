@@ -198,7 +198,7 @@ export function KontrolAyrinti({ kontrol, kapat, duzenle }: { kontrol: Kontrol |
     }
   };
 
-  const alt = !yazar ? undefined : bitirKip ? (
+  const alt = !yazar || !kontrol.aktif ? undefined : bitirKip ? (
     <span className="tc-ii-dugmeler">
       <Dugme onClick={() => bitirKipYaz(false)}>Vazgeç</Dugme>
       <Dugme tur="tehlike" simge="x" onClick={() => void bitir()}>Bitir</Dugme>
@@ -214,11 +214,13 @@ export function KontrolAyrinti({ kontrol, kapat, duzenle }: { kontrol: Kontrol |
     <Pencere acik kapat={kapat} baslik={kontrol.ad} tur="yan" {...(alt ? { alt } : {})}>
       <div className="tc-ii-yigin">
         <span className="tc-ii-satir">
-          <Rozet ton={KONTROL_GRUBU[kontrol.grup].ton}>{KONTROL_GRUBU[kontrol.grup].etiket}</Rozet>
+          {kontrol.aktif
+            ? <Rozet ton={KONTROL_GRUBU[kontrol.grup].ton}>{KONTROL_GRUBU[kontrol.grup].etiket}</Rozet>
+            : <Rozet ton="pasif">Bitti</Rozet>}
           <span className="tc-ii-soluk">{KONTROL_TURU[kontrol.tur].etiket}</span>
         </span>
         <dl className="tc-ii-ozellikler">
-          <div><dt>{kontrol.tur === 'sozlesme' ? 'Bitiş' : 'Sonraki tarih'}</dt><dd>{tarihMetni(kontrol.sonrakiTarih)} · {kalanMetni(kontrol.kalanGun)}</dd></div>
+          <div><dt>{kontrol.tur === 'sozlesme' ? 'Bitiş' : 'Sonraki tarih'}</dt><dd>{tarihMetni(kontrol.sonrakiTarih)}{kontrol.aktif && <> · {kalanMetni(kontrol.kalanGun)}</>}</dd></div>
           <div><dt>Sıklık</dt><dd>{siklikMetni(kontrol)}</dd></div>
           <div><dt>Firma</dt><dd>{kontrol.firmaAd ?? '—'}</dd></div>
         </dl>

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { AracGorevi, AracGorevleriCevabi, AraclarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { Arac, AracGorevi, AracGorevleriCevabi, AraclarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GorevKarti } from './GorevKarti.tsx';
-import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni } from './gorunum.ts';
+import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni, tamSayiGirdisi, uyariMetni } from './gorunum.ts';
 import { useGorevKomutu, useIslemVar, yazmaIletisi } from './yazma.ts';
 import './idari-isler.css';
 
@@ -58,13 +58,17 @@ export function AracGorevleri() {
 }
 
 const KOMUT_ADI: Partial<Record<AracGorevi['durum'], string>> = { bekliyor: 'Onayla', onaylandi: 'Çıkış', yolda: 'Dönüş' };
-const KM = /^\d{1,7}$/;
+const belgesiGeciyor = (a: Arac, sonGun: string): boolean =>
+  (a.muayeneTarihi !== null && a.muayeneTarihi < sonGun) || (a.sigortaTarihi !== null && a.sigortaTarihi < sonGun);
 
 function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void }) {
   const komut = useGorevKomutu();
   const { bildir } = useBildirim();
   const araclar = useQuery({ queryKey: anahtarlar.araclar, queryFn: () => api.get<AraclarCevabi>('/idari-isler/araclar') });
-  const uygun = (araclar.data?.araclar ?? []).filter((a) => a.durum !== 'pasif' && a.durum !== 'serviste');
+  const verilebilir = (araclar.data?.araclar ?? []).filter((a) => a.durum !== 'pasif' && a.durum !== 'serviste');
+  // Sunucu kuralıyla aynı (IDR-25): muayenesi ya da sigortası görevin son gününden önce biten araç listede yer almaz, adı ipucunda yazar.
+  const belgesiGecen = verilebilir.filter((a) => belgesiGeciyor(a, gorev.donusTarihi));
+  const uygun = verilebilir.filter((a) => !belgesiGeciyor(a, gorev.donusTarihi));
   const verilen = araclar.data?.araclar.find((a) => a.id === gorev.aracId) ?? null;
   const [aracId, aracIdYaz] = useState('');
   const [km, kmYaz] = useState('');
@@ -72,6 +76,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
   const [neden, nedenYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
+  // Filo uyarıları (yaklaşan muayene, sigorta, bakım km'si) aracı verirken ve çıkışta da görünür; engel değildir.
+  const ilgili = gorev.durum === 'bekliyor' ? uygun.find((a) => String(a.id) === aracId) ?? null : verilen;
 
   const calistir = async (ad: 'onayla' | 'reddet' | 'cikis' | 'donus', ek: object, ileti: string) => {
     bekliyorYaz(true);
@@ -87,7 +93,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
     }
   };
 
-  const kmGecerli = KM.test(km.trim());
+  // Km "20.010" gibi binlik noktalı da yazılır.
+  const kmSayi = tamSayiGirdisi(km, 7);
   const ana = red ? (
     <Dugme tur="tehlike" simge="x" disabled={neden.trim() === ''} yukleniyor={bekliyor}
       onClick={() => void calistir('reddet', { neden: neden.trim() }, 'Araç talebi reddedildi')}>Reddet</Dugme>
@@ -95,8 +102,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
     <Dugme tur="birincil" simge="check" disabled={aracId === ''} yukleniyor={bekliyor}
       onClick={() => void calistir('onayla', { aracId: Number(aracId) }, 'Araç görevi onaylandı')}>Onayla</Dugme>
   ) : (
-    <Dugme tur="birincil" simge="check" disabled={!kmGecerli} yukleniyor={bekliyor}
-      onClick={() => void calistir(gorev.durum === 'onaylandi' ? 'cikis' : 'donus', { km: Number(km.trim()) },
+    <Dugme tur="birincil" simge="check" disabled={kmSayi === null} yukleniyor={bekliyor}
+      onClick={() => void calistir(gorev.durum === 'onaylandi' ? 'cikis' : 'donus', { km: kmSayi ?? 0 },
         gorev.durum === 'onaylandi' ? 'Çıkış yazıldı' : 'Dönüş yazıldı')}>
       {gorev.durum === 'onaylandi' ? 'Çıkışı yaz' : 'Dönüşü yaz'}
     </Dugme>
@@ -122,6 +129,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
             <DurumKutusu durum="hata" mesaj={hataIletisi(araclar.error, 'Araçlar alınamadı')} yenile={() => { void araclar.refetch(); }} />
           ) : (
             <Secim etiket="Verilecek araç" value={aracId} onChange={(o) => aracIdYaz(o.target.value)}
+              ipucu={belgesiGecen.length === 0 ? undefined
+                : `Muayenesi ya da sigortası görev bitmeden biten araçlar listede yok: ${belgesiGecen.map((a) => a.plaka).join(', ')}`}
               secenekler={[
                 { deger: '', baslik: uygun.length === 0 ? 'Uygun araç yok' : 'Araç seç' },
                 ...uygun.map((a) => ({ deger: String(a.id), baslik: `${a.plaka} · ${aracAdi(a)} · ${ARAC_DURUMU[a.durum].etiket}` })),
@@ -133,7 +142,15 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
               ? `Aracın kayıtlı km'si: ${kmMetni(verilen?.km ?? null)}`
               : `Çıkış km: ${kmMetni(gorev.cikisKm)}`} />
         )}
-        <p className="tc-ii-soluk">{gorevTarihleri(gorev)} · Aynı araç kesişen tarihlerde iki göreve verilmez.</p>
+        <p className="tc-ii-soluk">
+          {gorevTarihleri(gorev)}{gorev.durum === 'bekliyor' && !red ? ' · Aynı araç kesişen tarihlerde iki göreve verilmez.' : ''}
+        </p>
+        {!red && ilgili !== null && ilgili.uyarilar.length > 0 && (
+          <p className="tc-ii-uyari" role="status">
+            <Simge ad="alert" />
+            <span><strong className="mono">{ilgili.plaka}</strong> {ilgili.uyarilar.map(uyariMetni).join(', ')}</span>
+          </p>
+        )}
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
       </div>
     </Pencere>

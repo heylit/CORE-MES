@@ -34,5 +34,5 @@ export function SmartesAyarlari() {
 }
 
 export const ayarEkranlari: AyarEkrani[] = [
-  { anahtar: 'smartes', baslik: 'SmartES', simge: 'bolt', sira: 60, islem: 'sayfa.smartes', ekran: SmartesAyarlari, bolum: 'baglanti' },
+  { anahtar: 'smartes', baslik: 'SmartES', simge: 'laptop', sira: 60, islem: 'sayfa.smartes', ekran: SmartesAyarlari, bolum: 'baglanti' },
 ];

@@ -381,6 +381,8 @@ export async function yedekEkrani(db: Db, ortam: YedekOrtami, bosYer: BosYerOkuy
 export async function elleYedekBaslat(ortam: YedekOrtami, gunluk: Gunluk, simdi: Date): Promise<YedekAlCevabi> {
   const dizin = await dizinIste(ortam);
   anahtarIste(ortam);
+  // Cevap yedeği beklemez; çakışma bu yüzden burada, yedekAl'ın reddi yutulmadan önce, kullanıcıya döner.
+  if (suren !== null) throw cakisma('Bir yedek zaten alınıyor; bitince yeniden deneyin.');
   const is = yedekAl(ortam, dizin, 'elle', simdi);
   void is
     .then(() => yedekleriTemizle(dizin, ortam.pg.veritabani, new Date(), gunluk))

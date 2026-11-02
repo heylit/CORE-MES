@@ -159,5 +159,5 @@ export function rehberAra(
 }
 
 export const sayfaRehberleri: readonly SayfaRehberi[] = rehberleriTopla(
-  acikModulDosyalari(import.meta.glob('../../moduller/*/rehber.ts', { eager: true })),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/rehber.ts', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

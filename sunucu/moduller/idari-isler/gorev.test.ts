@@ -107,18 +107,37 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     const onayli = onay.json<AracGoreviCevabi>().gorev;
     assert.equal(onayli.plaka, arac.plaka);
     assert.equal((await komut(idari.cerez, onayli, 'cikis', { km: 4999 })).statusCode, 400);
+    assert.equal((await komut(idari.cerez, onayli, 'cikis', { km: 15_001 })).statusCode, 400);
     const cikis = await komut(idari.cerez, onayli, 'cikis', { km: 5010 });
     assert.equal(cikis.statusCode, 200, cikis.body);
     const yolda = cikis.json<AracGoreviCevabi>().gorev;
     assert.equal((await aracOku(arac.id))?.durum, 'gorevde');
     assert.equal((await aracOku(arac.id))?.km, 5010);
+    const yoldakiArac = (await aracOku(arac.id))!;
+    const elle = await gonder(idari.cerez, `/idari-isler/araclar/${arac.id}/guncelle`, {
+      surum: yoldakiArac.surum, plaka: yoldakiArac.plaka, tur: 'binek', sahiplik: 'sirket', km: 5010, durum: 'musait',
+    });
+    assert.equal(elle.statusCode, 400);
+    assert.match(elle.body, /Görevde durumu/);
     assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 5000 })).statusCode, 400);
+    assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 9_999_999 })).statusCode, 400);
     const donus = await komut(idari.cerez, yolda, 'donus', { km: 5130 });
     assert.equal(donus.statusCode, 200, donus.body);
     assert.equal(donus.json<AracGoreviCevabi>().gorev.durum, 'tamamlandi');
     const son = await aracOku(arac.id);
     assert.equal(son?.durum, 'musait');
     assert.equal(son?.km, 5130);
+  });
+
+  test('IDR-33: görevde durumu elle girilmez', async () => {
+    const c = await gonder(idari.cerez, '/idari-isler/araclar/ekle', { plaka: yeniPlaka(), tur: 'binek', sahiplik: 'sirket', durum: 'gorevde' });
+    assert.equal(c.statusCode, 400);
+    const arac = await aracEkle();
+    const g = await gonder(idari.cerez, `/idari-isler/araclar/${arac.id}/guncelle`, {
+      surum: arac.surum, plaka: arac.plaka, tur: 'binek', sahiplik: 'sirket', km: 1000, durum: 'gorevde',
+    });
+    assert.equal(g.statusCode, 400);
+    assert.equal((await aracOku(arac.id))?.durum, 'musait');
   });
 
   test('IDR-25: pasif ya da serviste araç verilmez; aynı araç kesişen tarihlerde ikinci göreve verilmez', async () => {
@@ -133,6 +152,40 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     assert.match(dolu.body, /başka bir görevde/);
     const g3 = await ac({ tarih: gunSonra(3), donusTarihi: gunSonra(3) });
     assert.equal((await komut(idari.cerez, g3, 'onayla', { aracId: arac.id })).statusCode, 200);
+  });
+
+  test('IDR-25: muayenesi ya da sigortası görev bitmeden biten araç verilmez; onaydan sonra biterse çıkamaz', async () => {
+    const g = await ac({ tarih: gunSonra(1), donusTarihi: gunSonra(4) });
+    const muayenesiGecmis = await aracEkle({ muayeneTarihi: gunSonra(-1) });
+    const muayene = await komut(idari.cerez, g, 'onayla', { aracId: muayenesiGecmis.id });
+    assert.equal(muayene.statusCode, 400);
+    assert.match(muayene.body, /muayenesi/);
+    const sigortaYolda = await aracEkle({ sigortaTarihi: gunSonra(3) });
+    const sigorta = await komut(idari.cerez, g, 'onayla', { aracId: sigortaYolda.id });
+    assert.equal(sigorta.statusCode, 400);
+    assert.match(sigorta.body, /sigortası/);
+    const gecerli = await aracEkle({ muayeneTarihi: gunSonra(4), sigortaTarihi: gunSonra(30) });
+    const onay = await komut(idari.cerez, g, 'onayla', { aracId: gecerli.id });
+    assert.equal(onay.statusCode, 200, onay.body);
+    const guncel = await gonder(idari.cerez, `/idari-isler/araclar/${gecerli.id}/guncelle`, {
+      surum: gecerli.surum, plaka: gecerli.plaka, tur: 'binek', sahiplik: 'sirket', km: 1000, muayeneTarihi: gunSonra(2), sigortaTarihi: gunSonra(30),
+    });
+    assert.equal(guncel.statusCode, 200, guncel.body);
+    const cikis = await komut(idari.cerez, onay.json<AracGoreviCevabi>().gorev, 'cikis', { km: 1000 });
+    assert.equal(cikis.statusCode, 422);
+    assert.match(cikis.body, /muayenesi/);
+  });
+
+  test('IDR-26: görev günü gelmeden çıkış yazılmaz; kayıt ve araç değişmez', async () => {
+    const g = await ac({ tarih: gunSonra(1), donusTarihi: gunSonra(1) });
+    const arac = await aracEkle({});
+    const onay = await komut(idari.cerez, g, 'onayla', { aracId: arac.id });
+    assert.equal(onay.statusCode, 200, onay.body);
+    const cikis = await komut(idari.cerez, onay.json<AracGoreviCevabi>().gorev, 'cikis', { km: arac.km ?? 0 });
+    assert.equal(cikis.statusCode, 422);
+    assert.match(cikis.body, /Görev günü gelmeden/);
+    const satir = await o().sahip.tek<{ durum: string }>('SELECT durum FROM idari_isler_arac_gorevi WHERE id = $1', [g.id]);
+    assert.equal(satir?.durum, 'onaylandi');
   });
 
   test('IDR-24 ve IDR-23 ret: geçmiş gün, dönüş önce; yanlış durumdan geçiş 422; red nedeni zorunlu; kayıt yazılmaz', async () => {

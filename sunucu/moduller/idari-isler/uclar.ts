@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   demirbasCevabi, demirbasEkleGovdesi, demirbasGuncelleGovdesi, demirbaslarCevabi, iadeGovdesi, kisiyeBaglaGovdesi, zimmetCevabi, zimmetleGovdesi,
-  zimmetlerCevabi,
+  zimmetlerCevabi, zimmetlerimCevabi,
   aracCevabi, aracEkleGovdesi, aracGoreviCevabi, aracGorevleriCevabi, aracGuncelleGovdesi, aracTalebiAcGovdesi, araclarCevabi, bitirGovdesi, bugunCevabi, durumGovdesi, firmaSecenekleriCevabi, firmaSecimSorgusu, idParametresi, kapatGovdesi, kisiSecenekleriCevabi,
   gorevKmGovdesi, gorevOnaylaGovdesi, kontrolCevabi, masrafCevabi, masrafEkleGovdesi, masrafIptalGovdesi, masraflarCevabi, kontrolEkleGovdesi, kontrolGuncelleGovdesi, kontrolKayitlariCevabi, kontrollerCevabi, reddetGovdesi, sonYerlerCevabi,
   talepAcGovdesi, talepCevabi, talepPanosuCevabi, taleplerimCevabi, taleplerimSorgusu, ustlenGovdesi, yapildiGovdesi, yemekBildirGovdesi, yemekGunuCevabi,
@@ -11,8 +11,8 @@ import {
 import * as servis from './servis.ts';
 
 // Talebi her personel kendi adına açar ve yalnız kendi taleplerini görür (talep-ac); bütün talepleri idari işler ve müdür okur (oku);
-// üstlenme, bırakma, kapatma ve red idari işlerindir (talep-yonet). Periyodik kontrolleri oku okur, kontrol-yaz yazar; yemek sayısını
-// oku okur, yemek-yaz bildirir; araç kartını oku okur, filo-yaz yazar. Araç görev talebini her çalışan kendi adına açar, görür ve geri
+// üstlenme, bırakma, kapatma ve red idari işlerindir (talep-yonet); talep yalnız talep-yonet işlemi olan kişiye atanır.
+// Periyodik kontrolleri oku okur, kontrol-yaz yazar; yemek sayısını oku okur, yemek-yaz bildirir; araç kartını oku okur, filo-yaz yazar. Araç görev talebini her çalışan kendi adına açar, görür ve geri
 // çeker (arac-talebi-ac); bütün görevleri oku okur; onay, red, çıkış ve dönüş km'si filo-yaz'dır. Araç masrafını ve tutarını oku okur,
 // filo-yaz yazar ve iptal eder. Demirbaşı ve zimmet geçmişini oku okur; demirbaş kaydı, zimmetleme, iade ve kişiye bağlama zimmet-yaz'dır.
 export const uclar = [
@@ -39,6 +39,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/idari-isler/kisi-secenekleri', yetki: { biri: ['idari-isler.talep-yonet', 'idari-isler.zimmet-yaz'] }, cevap: kisiSecenekleriCevabi,
     isle: ({ db }) => servis.atanabilirKisiler(db),
+  }),
+  uc({
+    yontem: 'GET', yol: '/idari-isler/talep-atanabilir', yetki: 'idari-isler.talep-yonet', cevap: kisiSecenekleriCevabi,
+    isle: ({ db }) => servis.talepAtanabilirKisiler(db),
   }),
   uc({
     yontem: 'POST', yol: '/idari-isler/talepler/ac', yetki: 'idari-isler.talep-ac', tekrarKorumali: true, govde: talepAcGovdesi, cevap: talepCevabi,
@@ -69,6 +73,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/idari-isler/kontroller', yetki: 'idari-isler.oku', cevap: kontrollerCevabi,
     isle: async ({ db }) => ({ kontroller: await servis.kontroller(db) }),
+  }),
+  uc({
+    yontem: 'GET', yol: '/idari-isler/kontroller/bitenler', yetki: 'idari-isler.oku', cevap: kontrollerCevabi,
+    isle: async ({ db }) => ({ kontroller: await servis.bitenKontroller(db) }),
   }),
   uc({
     yontem: 'GET', yol: '/idari-isler/kontroller/:id/kayitlar', yetki: 'idari-isler.oku', parametre: idParametresi, cevap: kontrolKayitlariCevabi,
@@ -120,6 +128,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/idari-isler/arac-gorevleri', yetki: 'idari-isler.oku', cevap: aracGorevleriCevabi,
     isle: async ({ db }) => ({ gorevler: await servis.aracGorevleri(db) }),
+  }),
+  uc({
+    yontem: 'GET', yol: '/idari-isler/zimmetlerim', yetki: 'idari-isler.talep-ac', cevap: zimmetlerimCevabi,
+    isle: ({ db, kullanici }) => servis.zimmetlerim(db, kullanici),
   }),
   uc({
     yontem: 'GET', yol: '/idari-isler/arac-taleplerim', yetki: 'idari-isler.arac-talebi-ac', cevap: aracGorevleriCevabi,

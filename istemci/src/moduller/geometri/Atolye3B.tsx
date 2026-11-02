@@ -1,12 +1,12 @@
 import { lazy, Suspense, useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type {
   GeometriAnalizCevabi, GeometriDurumu, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
-import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { agirlikKg, agirlikMetni, buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, stokOlcuMetni, suruyorMu, uzunluk, yogunlukBicimi, yogunlukOku } from './gorunum.ts';
@@ -52,7 +52,9 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
       {sorgu.isPending ? <DurumKutusu durum="yukleniyor" mesaj="Modeller okunuyor" />
         : sorgu.isError ? <DurumKutusu durum="hata" mesaj={yetkiyse(sorgu.error, 'Model listesi okunamadı.')} yenile={() => { void sorgu.refetch(); }} />
           : sorgu.data.satirlar.length === 0
-            ? <DurumKutusu durum="bos" mesaj="3B modeli olan malzeme yok. Malzeme kartına STEP ya da IGES ekleyip Çizim Merkezi'nde yayınlayın." />
+            ? <DurumKutusu durum="bos" mesaj={ara.trim() !== '' || durum !== ''
+              ? 'Aramaya ya da süzgece uyan model yok.'
+              : "3B modeli olan malzeme yok. Malzeme kartına STEP ya da IGES ekleyip Çizim Merkezi'nde yayınlayın."} />
             : (
               <>
                 <ul className="tc-g3b-satirlar">
@@ -80,12 +82,8 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
 function AnalizKarti({ revizyonId, cevap }: { revizyonId: number; cevap: GeometriAnalizCevabi }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [kimlik] = useState(yeniIstekKimligi);
-  const yeniden = useMutation({
-    mutationFn: () => tekrarKorumaliGonder(
-      (d) => api.post<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}/yeniden-hesapla`, { surum: cevap.is?.surum ?? null }, d),
-      { istekKimligi: kimlik },
-    ),
+  const yeniden = useKorumaliKomut<void, GeometriAnalizCevabi>({
+    gonder: (_g, d) => api.post<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}/yeniden-hesapla`, { surum: cevap.is?.surum ?? null }, d),
     onSuccess: (c) => {
       istemci.setQueryData(anahtarlar.analiz(revizyonId), c);
       void istemci.invalidateQueries({ queryKey: ['geometri', 'modeller'] });

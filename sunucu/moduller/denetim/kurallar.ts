@@ -54,3 +54,6 @@ export function degisiklikAlanlari(alanlar: Record<string, { eski?: unknown; yen
       return { alan, eski: gizli && eski !== null ? '[gizli]' : gizle(eski), yeni: gizli && yeni !== null ? '[gizli]' : gizle(yeni) };
     });
 }
+
+// Yol araması parça eşleşmesidir; kullanıcının yazdığı `%` ve `_` joker değil harf sayılır (ESCAPE '\').
+export const icerenKalibi = (metin: string): string => `%${metin.replace(/[\\%_]/g, (h) => `\\${h}`)}%`;

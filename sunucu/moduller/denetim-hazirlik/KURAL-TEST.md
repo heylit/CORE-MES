@@ -19,8 +19,11 @@ istemci: `istemci/src/moduller/denetim-hazirlik/yeni/**/*.test.ts(x)`. Eski çer
 | BD-17 (GG-1) Ek türü içerikten bulunur (`dosya` `ekMime`), bildirilen tür saklanmaz; HTML, SVG ve tanınmayan içerik `application/octet-stream`; okurken de içerikten (eski satırlar). Köprü (1418'de kalktı) Blob'a yalnız güvenli türü verirdi | servis, `dosya/kurallar.ts` | `ek türü içerikten bulunur ...`, `BD-10`, `BD-10c` |
 | BD-18 (GG-1) Kişi başına ek toplamı 50 MB, modül toplamı 1 GiB (VARSAYIM); denetim ve ekleme tek kilit altında | servis (`ekKotaReddi`), `pg_advisory_xact_lock` | `BD-K12`, `BD-10e` |
 | BD-19 (GG-1) Eki yükleyen ya da eki (`/_blob/<kimlik>`) anan ve okuyanın açabildiği prototip belgesi okutur; okunamayan ek olmayan ek gibi 404 | servis (`ekOkunurMu`) | `BD-K13`, `BD-10d` |
+| BD-20 (1809, DH-3) Yeni belge açma kotası: kişi başına 20, modülde 500 belge (VARSAYIM); var olanın güncellenmesi sayılmaz; denetim ve ekleme tek kilit altında; aşan 413 | servis (`belgeKotaReddi`), `pg_advisory_xact_lock` | `BD-K15`, `BD-20` |
+| BD-21 (1809, DH-3) Yazma (ve kilit gövdesi) belgeye yalnız kişinin okuyabildiği eki yeni anma olarak sokabilir; okunamayan ya da olmayan ek 404; belgede zaten olan anma denetlenmez; bir yazmada en çok 50 yeni anma | servis (`yeniAnmalar`, `ekOkunurMu`) | `BD-K14`, `BD-10f` |
+| BD-22 (1809, DH-3) Kilit sahibi kişi kimliğiyle saklanır; başka kişi aynı sahip adını vererek geçerli kilidi alamaz | servis (`kilitSahibi`) | `BD-K16`, `BD-08b` |
 | BD-10 Başlangıç belgeleri yalnız işaret belgesi yokken bir kez | servis | `BD-K8`, `BD-11` |
-| BD-11 Oda yalnız son 45 sn içinde görülenleri döner | servis (`canliEsler`) | `BD-K7`, `BD-12` |
+| KAPANDI (1809, DH-6) BD-11 Oda ucu kaldırıldı: TS ekranı kullanmıyordu ve okuma ucunda süreç belleğine yazıyordu | - | - |
 | KAPANDI (1418) BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | çerçeve kalktı; TS ekranı yalnız modülün uçlarına gider | - |
 | BD-13 Kayıt sürüm denetimiyle yazılır; çatışmada yazma durur ve kişiye söylenir | `yeni/veri.ts` | `başkası yazdıysa yazma durur ve kişiye söylenir` |
 | BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `okuma yetkisi olan kişide de açılır; giriş işlemi olmayana yetki iletisi, uca istek gitmez` |

@@ -11,7 +11,7 @@ import type {
   kayitListesiSorgusu,
 } from '#paylasilan/sozlesme/denetim.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { type DegisiklikAlani, degisiklikAlanlari, gizle, kimlikParametreleri } from './kurallar.ts';
+import { type DegisiklikAlani, degisiklikAlanlari, gizle, icerenKalibi, kimlikParametreleri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 type KayitListesiSorgusuCikti = z.output<typeof kayitListesiSorgusu>;
@@ -56,7 +56,9 @@ export const denetimYaz: Denetle = (db, girdi) => {
 };
 
 const suzgec = (s: KayitListesiSorgusuCikti): sorgular.KayitSuzgeci => ({
-  kisi: s.kisi ?? null, baslangic: s.baslangic ?? null, bitis: s.bitis ?? null, yontem: s.yontem ?? null, yol: s.yol ?? null, modul: s.modul ?? null,
+  kisi: s.kisi ?? null, baslangic: s.baslangic ?? null, bitis: s.bitis ?? null, yontem: s.yontem ?? null, modul: s.modul ?? null,
+  yol: s.yol !== undefined && s.yolTam ? s.yol : null,
+  yolKalibi: s.yol !== undefined && !s.yolTam ? icerenKalibi(s.yol) : null,
 });
 
 export async function kayitListesi(db: Db, sorgu: KayitListesiSorgusuCikti): Promise<SayfaliListe<KayitSatiri>> {

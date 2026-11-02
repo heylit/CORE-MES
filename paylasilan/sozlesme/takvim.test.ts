@@ -20,3 +20,19 @@ test('kayıt bilinmeyen kaynağı ve boş başlığı kabul etmez; no ve ilgili 
   assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, baslik: '' }).success, false);
   assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, kimlik: '' }).success, false);
 });
+
+test('çok günlük kayıt (1816): son gün ilk günden sonra olur; tek günlük kayıtta son gün yoktur', () => {
+  const kayit = { kaynak: 'izin', kimlik: 'leave_1', tarih: '2026-11-09', no: null, baslik: 'Yıllık izin (3 gün)', ilgili: null, durum: 'Onaylandı', bitti: false };
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-11' }).success, true);
+  assert.equal(takvimKaydiSemasi.safeParse(kayit).success, true);
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-09' }).success, false);
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-08' }).success, false);
+});
+
+test('biçimi bozuk tarihte yalnız biçim iletisi döner; aralık iletisi eklenmez (TKV-4)', () => {
+  const sonuc = takvimSorgusu.safeParse({ baslangic: '26-11-01', bitis: '2026-11-02' });
+  assert.equal(sonuc.success, false);
+  assert.deepEqual([...new Set(sonuc.error?.issues.map((i) => i.path.join('.')))], ['baslangic']);
+  const subat = takvimSorgusu.safeParse({ baslangic: '2026-02-30', bitis: '2026-03-01' });
+  assert.deepEqual(subat.error?.issues.map((i) => i.message), ['Geçerli bir tarih girin.']);
+});

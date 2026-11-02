@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmKapatGovdesi, alarmListeCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
-  guvenlikKimligi, kilitAcCevabi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumlarCevabi,
+  guvenlikKimligi, kilitAcCevabi, kilitAcGovdesi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumKapatGovdesi, oturumListeSorgusu, oturumlarCevabi,
   ozetCevabi, retListeCevabi, retListeSorgusu, sunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import * as servis from './servis.ts';
@@ -38,11 +38,12 @@ export const uclar = [
     isle: ({ db, sorgu }) => servis.girisler(db, sorgu),
   }),
   uc({
-    yontem: 'GET', yol: '/guvenlik/oturumlar', yetki: 'guvenlik.oku', cevap: oturumlarCevabi,
-    isle: ({ db, istek }) => servis.oturumlar(db, istek),
+    yontem: 'GET', yol: '/guvenlik/oturumlar', yetki: 'guvenlik.oku', sorgu: oturumListeSorgusu, cevap: oturumlarCevabi,
+    isle: ({ db, istek, sorgu }) => servis.oturumlar(db, istek, sorgu),
   }),
   uc({
-    yontem: 'POST', yol: '/guvenlik/oturumlar/:id/kapat', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, cevap: oturumKapatCevabi,
+    yontem: 'POST', yol: '/guvenlik/oturumlar/:id/kapat', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, govde: oturumKapatGovdesi,
+    cevap: oturumKapatCevabi,
     isle: ({ db, parametre, istek }) => servis.oturumKapat(db, parametre.id, istek),
   }),
   // Reddedilen istekler (1363 a, 1370 a): yetkisiz, oturumsuz ve var olmayan adrese gelen istekler; en yeni önce.
@@ -50,14 +51,14 @@ export const uclar = [
     yontem: 'GET', yol: '/guvenlik/reddedilen-istekler', yetki: 'guvenlik.oku', sorgu: retListeSorgusu, cevap: retListeCevabi,
     isle: ({ db, sorgu }) => servis.reddedilenIstekler(db, sorgu),
   }),
-  // Hesap kilitleri: oturum ucu rol yönetenindir (kisiler.rol-yonet); Güvenlik Merkezi kendi işlemiyle okur ve açar.
+  // Hesap kilitleri yalnız Güvenlik Merkezi işlemiyle okunur ve açılır (kullanıcı kararı 17.10.2026; oturum kapısı 1778'de kalktı).
   uc({
     yontem: 'GET', yol: '/guvenlik/kilitler', yetki: 'guvenlik.oku', sorgu: kilitListeSorgusu, cevap: kilitListeCevabi,
     isle: ({ db, sorgu }) => servis.kilitler(db, sorgu),
   }),
   // Açma durum komutudur: yinelenen istek açacak kilit bulamaz, 404 alır.
   uc({
-    yontem: 'POST', yol: '/guvenlik/kilitler/:id/ac', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, cevap: kilitAcCevabi,
+    yontem: 'POST', yol: '/guvenlik/kilitler/:id/ac', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, govde: kilitAcGovdesi, cevap: kilitAcCevabi,
     isle: ({ db, kullanici, parametre }) => servis.kilitAc(db, kullanici.id, parametre.id),
   }),
   uc({ yontem: 'GET', yol: '/guvenlik/koruma', yetki: 'guvenlik.oku', cevap: korumaCevabi, isle: ({ db }) => servis.koruma(db) }),

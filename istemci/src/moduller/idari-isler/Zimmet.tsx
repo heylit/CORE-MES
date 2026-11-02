@@ -8,15 +8,14 @@ import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Simge
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
-  DEMIRBAS_DURUMLARI, DEMIRBAS_DURUMU, DEMIRBAS_TURLERI, DEMIRBAS_TURU, IADE_DURUMLARI, IADE_DURUMU, SINIR, bugunTarihi, tarihMetni, tlMetni, zimmetSahibi,
+  DEMIRBAS_DURUMLARI, DEMIRBAS_DURUMU, DEMIRBAS_TURLERI, DEMIRBAS_TURU, IADE_DURUMLARI, IADE_DURUMU, SINIR, bugunTarihi, tarihMetni, tlMetni, tutarGirdisi,
+  zimmetSahibi,
 } from './gorunum.ts';
 import { useIslemVar, useKorumaliGonderim, yazmaIletisi } from './yazma.ts';
 import './idari-isler.css';
 
 const TURLER = DEMIRBAS_TURLERI.map((t) => ({ deger: t, baslik: DEMIRBAS_TURU[t].etiket }));
 const ELLE_DURUMLAR: readonly ElleDurum[] = ['bosta', 'bakimda', 'kayip', 'hurda'];
-// Virgül ya da nokta kuruş ayırıcısıdır; binlik ayırıcı yazılmaz.
-const TUTAR = /^\d{1,12}([.,]\d{1,2})?$/;
 const kucuk = (m: string) => m.toLocaleLowerCase('tr-TR');
 
 // Demirbaş ve zimmet (170 a, 244 a): seri numaralı eşya, kimde olduğu, zimmetleme ve iade. İK'dan taşınan ve kişiye bağlanmamış zimmet
@@ -75,8 +74,9 @@ export function Zimmet() {
               </thead>
               <tbody>
                 {gorunen.map((d) => (
-                  <tr key={d.id} data-uyari={d.acikZimmet !== null && d.acikZimmet.kisiId === null ? 'yakin' : undefined}>
-                    <td className="mono"><button type="button" className="tc-ii-bag" onClick={() => seciliYaz(d.id)}>{d.no}</button></td>
+                  <tr key={d.id} className="tc-ii-tiklanir" onClick={() => seciliYaz(d.id)}
+                    data-uyari={d.acikZimmet !== null && d.acikZimmet.kisiId === null ? 'yakin' : undefined}>
+                    <td className="mono"><button type="button" className="tc-ii-bag" onClick={(o) => { o.stopPropagation(); seciliYaz(d.id); }}>{d.no}</button></td>
                     <td><Simge ad={DEMIRBAS_TURU[d.tur].simge} /> {DEMIRBAS_TURU[d.tur].etiket}</td>
                     <td>{d.markaModel ?? '—'}</td>
                     <td className="mono">{d.seriNo ?? '—'}</td>
@@ -267,14 +267,16 @@ function DemirbasFormu({ demirbas: d, kapat }: { demirbas: Demirbas | null; kapa
   const [aciklama, aciklamaYaz] = useState(d?.aciklama ?? '');
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
-  const eksik = deger.trim() !== '' && !TUTAR.test(deger.trim()) ? ['değer'] : [];
+  // Değer "30.000,50" gibi binlik noktalı da yazılır.
+  const degerMetni = tutarGirdisi(deger, 12);
+  const hatali = deger.trim() !== '' && degerMetni === null ? ['değer'] : [];
 
   const gonder = async () => {
     bekliyorYaz(true);
     hataYaz(null);
     const govde: DemirbasEkleGovdesi = {
       tur, markaModel: markaModel.trim() === '' ? null : markaModel.trim(), seriNo: seriNo.trim() === '' ? null : seriNo.trim(),
-      deger: deger.trim() === '' ? null : deger.trim().replace(',', '.'), aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+      deger: deger.trim() === '' ? null : degerMetni, aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
     };
     try {
       const sonuc = d === null
@@ -295,7 +297,7 @@ function DemirbasFormu({ demirbas: d, kapat }: { demirbas: Demirbas | null; kapa
       alt={(
         <span className="tc-ii-dugmeler">
           <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="check" disabled={eksik.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Kaydet</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={hatali.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Kaydet</Dugme>
         </span>
       )}
     >
@@ -313,7 +315,7 @@ function DemirbasFormu({ demirbas: d, kapat }: { demirbas: Demirbas | null; kapa
               secenekler={ELLE_DURUMLAR.map((s) => ({ deger: s, baslik: DEMIRBAS_DURUMU[s].etiket }))} />
           ))}
         <CokSatir etiket="Açıklama (isteğe bağlı)" maxLength={SINIR.not} value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)} />
-        {eksik.length > 0 && <p className="tc-ii-soluk">Eksik: {eksik.join(', ')}</p>}
+        {hatali.length > 0 && <p className="tc-ii-soluk">Okunamadı: {hatali.join(', ')} (örnek 30.000,50)</p>}
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
       </div>
     </Pencere>

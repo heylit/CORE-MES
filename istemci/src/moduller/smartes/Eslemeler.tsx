@@ -23,6 +23,8 @@ function EslemeFormu({ tur, satir, kapat }: { tur: SmartesEslemeTuru; satir: Sat
   const { bildir } = useBildirim();
   const [kod, kodYaz] = useState(satir.smartesKod ?? '');
   const [hata, hataYaz] = useState<string | null>(null);
+  // Kaldırma iş emri gönderimini durdurur: tek tıkla değil, aynı pencerede ikinci onayla yapılır.
+  const [kaldirSor, kaldirSorYaz] = useState(false);
   const bitti = async (mesaj: string) => {
     await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
     bildir('tamam', mesaj);
@@ -48,22 +50,37 @@ function EslemeFormu({ tur, satir, kapat }: { tur: SmartesEslemeTuru; satir: Sat
       acik
       kapat={kapat}
       baslik={`${TUR_ADLARI[tur]}: ${satir.tmiKod}`}
-      alt={(
+      alt={kaldirSor && surum !== null ? (
+        <>
+          <Dugme disabled={kaldir.isPending} onClick={() => { kaldirSorYaz(false); }} autoFocus>Vazgeç</Dugme>
+          <Dugme tur="tehlike" simge="trash" yukleniyor={kaldir.isPending}
+            onClick={() => { kaldir.mutate({ tur, tmiId: satir.tmiId, surum }); }}>Evet, kaldır</Dugme>
+        </>
+      ) : (
         <>
           {surum !== null && (
-            <Dugme tur="tehlike" simge="trash" yukleniyor={kaldir.isPending} disabled={ata.isPending}
-              onClick={() => { kaldir.mutate({ tur, tmiId: satir.tmiId, surum }); }}>Eşlemeyi kaldır</Dugme>
+            <Dugme tur="tehlike" simge="trash" disabled={ata.isPending} onClick={() => { hataYaz(null); kaldirSorYaz(true); }}>Eşlemeyi kaldır</Dugme>
           )}
-          <Dugme tur="birincil" simge="check" yukleniyor={ata.isPending} disabled={kaldir.isPending || kod.trim() === ''} onClick={kaydet}>Kaydet</Dugme>
+          <Dugme tur="birincil" simge="check" yukleniyor={ata.isPending} disabled={kod.trim() === ''} onClick={kaydet}>Kaydet</Dugme>
         </>
       )}
     >
+      {kaldirSor && surum !== null ? (
+        <div className="tc-smartes-form">
+          <p className="tc-smartes-aciklama">{satir.tmiAd}</p>
+          <p role="alert" className="tc-smartes-aciklama">
+            {`“${satir.smartesKod ?? ''}” eşlemesi kaldırılsın mı? ${tur === 'istasyon' ? 'Bu istasyonun iş emirleri SmartES’e gönderilmez; ' : ''}okunan kayıtlar bu koda bağlanmaz.`}
+          </p>
+          {hata !== null && <p role="alert" className="tc-smartes-hata">{hata}</p>}
+        </div>
+      ) : (
       <form className="tc-smartes-form" onSubmit={(o) => { o.preventDefault(); if (kod.trim() !== '') kaydet(); }}>
         <p className="tc-smartes-aciklama">{satir.tmiAd}</p>
         <Girdi etiket="SmartES kodu" ipucu="SmartES’te bu kaydın kodu; aynı kod iki kayda verilemez." maxLength={50}
           value={kod} onChange={(o) => { kodYaz(o.target.value); }} autoFocus />
         {hata !== null && <p role="alert" className="tc-smartes-hata">{hata}</p>}
       </form>
+      )}
     </Pencere>
   );
 }

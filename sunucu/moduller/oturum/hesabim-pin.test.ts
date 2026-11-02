@@ -9,6 +9,7 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from './disari.ts';
+import { beklemeIletisi } from './kurallar.ts';
 import { oturumUclari } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -152,7 +153,7 @@ describe('kendi PIN\'ini değiştirme (gerçek PostgreSQL, gerçek giriş, saat 
 
     const beklemede = await degistir(kisi.cerez, KENDI, YENI);
     assert.equal(beklemede.statusCode, 401);
-    assert.equal(beklemede.json().mesaj, 'Çok sık deneme. 1 sn sonra yeniden deneyin.');
+    assert.equal(beklemede.json().mesaj, beklemeIletisi(1));
     assert.equal((await giris(kisi.ad, { pin: KENDI })).statusCode, 401);
     assert.equal(await acikMi(kisi.cerez), true, 'bekleme yanıtı oturumu bitirmemeli');
 

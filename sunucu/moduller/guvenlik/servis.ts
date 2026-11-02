@@ -20,18 +20,18 @@ import type { GuncellemeKanali } from '#paylasilan/sozlesme/ayarlar.ts';
 import { guncellemeKanaliDurumu, sistemAyariOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { denetimDurumu } from '../denetim/disari.ts';
-import { kisiAdlari } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import {
   acikOturumlar, acikOturumlariSay, etkinHesapKilidiSay, etkinHesapKilitleri, girisDenemeleriListesi, girisDenemeleriniOzetle, hesapKilidiniKaldir,
   oturumuKapat, saatlikGirisDenemeleri, sonHesapKilitleri,
 } from '../oturum/disari.ts';
 import {
-  ADRES_TARAMASI, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
+  ADRES_TARAMASI, KAPANAN_ALARM_PENCERESI_SN, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
   yetkiReddiBulgulari, type Bulgu,
   DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
-  onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
+  onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari, yeniOlayliBulgular,
 } from './kurallar.ts';
 import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
@@ -72,11 +72,13 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
     ),
   ];
   const acik = new Map((await s.kapanmamisAlarmlar(db)).map((a) => [kaynakAnahtari(a), a]));
+  const acilabilir = new Set(yeniOlayliBulgular(bulgular, await s.kapanmisAlarmlar(db, KAPANAN_ALARM_PENCERESI_SN)));
   let yeniAlarm = 0;
   let guncellenenAlarm = 0;
   for (const b of bulgular) {
     const mevcut = acik.get(kaynakAnahtari(b));
     if (mevcut === undefined) {
+      if (!acilabilir.has(b)) continue;
       const id = await s.alarmAc(db, b);
       if (id === null) continue;
       yeniAlarm += 1;
@@ -197,12 +199,20 @@ export function girisler(
   return girisDenemeleriListesi(db, sorgu);
 }
 
-export async function oturumlar(db: Db, istek: { cerez(ad: string): string | null }): Promise<OturumlarCevabi> {
+// Açık oturumlar oturum modülünden tek parça gelir (sayısı kişi başına sınırlı); arama ve sayfa burada uygulanır.
+export async function oturumlar(
+  db: Db, istek: { cerez(ad: string): string | null }, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; ara?: string | undefined },
+): Promise<OturumlarCevabi> {
   const liste = await acikOturumlar(db, istek);
   const adlar = await kisiAdlari(db, liste.map((o) => o.kisiId));
-  return {
-    oturumlar: liste.map((o) => ({ ...o, kisiAdi: adlar.get(o.kisiId) ?? `Kişi ${o.kisiId}` })),
-  };
+  const satirlar = liste.map((o) => ({ ...o, kisiAdi: adlar.get(o.kisiId) ?? `Kişi ${o.kisiId}` }));
+  const aranan = sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara.toLocaleLowerCase('tr-TR');
+  const suzulmus = aranan === null ? satirlar
+    : satirlar.filter((o) => [o.kisiAdi, o.ip ?? '', o.tarayici ?? ''].some((m) => m.toLocaleLowerCase('tr-TR').includes(aranan)));
+  return sayfaliListe(sorgu, {
+    say: () => Promise.resolve(suzulmus.length),
+    satirlar: (dilim) => Promise.resolve(suzulmus.slice(dilim.atla, dilim.atla + dilim.sinir)),
+  });
 }
 
 export function kilitler(db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined }): Promise<KilitListeCevabi> {
@@ -220,10 +230,18 @@ export async function oturumKapat(db: Db, id: number, istek: { cerez(ad: string)
   return { id };
 }
 
+// Arama kişi adında da geçer (GUV-4): adlar kişiler modülündedir, eşleşen kişilerin kimliği süzgece verilir. Türkçe büyük-küçük harf
+// (İ/i, I/ı) aynı sayılır.
+async function adiUyanKisiler(db: Db, ara: string): Promise<number[]> {
+  const aranan = ara.toLocaleLowerCase('tr-TR');
+  return (await kisiSecenekleri(db)).filter((k) => k.ad.toLocaleLowerCase('tr-TR').includes(aranan)).map((k) => k.id);
+}
+
 export async function reddedilenIstekler(
   db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; neden?: RetNedeni | undefined; ara?: string | undefined },
 ): Promise<RetListeCevabi> {
-  const suzgec = { neden: sorgu.neden ?? null, ara: sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara };
+  const ara = sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara;
+  const suzgec = { neden: sorgu.neden ?? null, ara, kisiIdleri: ara === null ? [] : await adiUyanKisiler(db, ara) };
   return sayfaliListe(sorgu, {
     say: () => s.retSay(db, suzgec),
     satirlar: async (dilim) => {

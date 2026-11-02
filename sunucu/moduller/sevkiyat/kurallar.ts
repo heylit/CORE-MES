@@ -279,6 +279,8 @@ export function tekRotaIhlalleri(duraklar: readonly TekRotaDuragiGirdisi[]): Kur
 
 // Çözücü bütçesi: iş sayısıyla artar, üst sınırlı (istek süresini sınırlar).
 export const yinelemeButcesi = (isSayisi: number): number => Math.min(4000, 1500 + 150 * isSayisi);
+// Otomatik dağıtımda aramanın en çok süresi (ms): kalabalık günde yineleme bütçesi saniyelerce sürebilir ve o sürede bütün sunucu bekler.
+export const COZUCU_SURE_SINIRI_MS = 2000;
 
 // ---------- iş durumu ----------
 // Havuzda: araca verilmemiş (yapılamayıp dönen de buradadır). Planlandı: taslak plandadır. Yolda: onaylı plandadır.

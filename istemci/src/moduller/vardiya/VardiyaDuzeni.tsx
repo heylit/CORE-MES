@@ -5,7 +5,7 @@ import { AcKapa, Dugme, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BosVardiya } from './BosVardiya.tsx';
 import { SaatGirdisi, TarihGirdisi } from './ZamanAlani.tsx';
-import { GUNLER, kisaAdlar, saat, tarihMetni } from './gosterim.ts';
+import { GUNLER, kisaAdlar, saat, tarihMetni, yeniVardiyaAdi } from './gosterim.ts';
 import { IkiAdimli } from './IkiAdimli.tsx';
 import type { useVardiyaYaz } from './komut.ts';
 import { aramaUyar, degistir, hepsiniDegistir } from './secim.ts';
@@ -183,7 +183,7 @@ function Saatler({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
       </div>
       {yaz && (
         <div>
-          <Dugme simge="plus" onClick={() => y.mutate({ yol: '/vardiyalar', tekrar: true, govde: { ad: `Vardiya ${String(t.vardiyalar.length + 1)}`, baslangic: '08:00', bitis: '16:00', molalar: [] } })}>
+          <Dugme simge="plus" onClick={() => y.mutate({ yol: '/vardiyalar', tekrar: true, govde: { ad: yeniVardiyaAdi(t.vardiyalar.map((v) => v.ad)), baslangic: '08:00', bitis: '16:00', molalar: [] } })}>
             Vardiya
           </Dugme>
         </div>

@@ -19,12 +19,12 @@ import { talepNolari } from '../satin-alma/disari.ts';
 import type { AlimOlayi } from '../satin-alma/disari.ts';
 import { ara, aramaDiziniKur, konumCoz } from './arama.ts';
 import type { AramaDizini, AramaVerisi } from './arama.ts';
-import { filoPlani } from './cozucu.ts';
+import { filoPlani, YOL_BAGLANTISI_NEDENLERI } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
   AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
   ADRES_FIRMADA_YOK, ADRES_FIRMASIZ, NOKTA_FIRMASI_GEREKIR, isNoktasiIhlali, noktaFirmasizMi, noktaKonumuSec, onayEngelleri, plandanCikarilmali, surumGuncel,
-  planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
+  planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar, COZUCU_SURE_SINIRI_MS,
 } from './kurallar.ts';
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
@@ -79,7 +79,8 @@ function matrisSakla(paket: HaritaPaketi, gun: string, m: Matris) {
 
 // ---------- dönüşümler ----------
 
-const ihlalHatasi = (ihlal: KuralIhlali[]) => dogrulama(ihlal[0]!.ileti, ihlal[0]!.alan, ihlal);
+// Ayrıntı, şema doğrulamasıyla aynı biçimde ({ alan, mesaj }) döner.
+const ihlalHatasi = (ihlal: KuralIhlali[]) => dogrulama(ihlal[0]!.ileti, ihlal[0]!.alan, ihlal.map((x) => ({ alan: x.alan, mesaj: x.ileti })));
 
 type KonumluNokta = NoktaSatiri & { konumlar?: FirmaKonumu[] };
 function noktaCevabi(n: KonumluNokta): Nokta {
@@ -251,8 +252,15 @@ export const ORNEK_MALIYETLER = VARSAYILAN_MALIYET;
 export async function araclariListele(db: Db): Promise<Arac[]> {
   return (await sorgu.araclariGetir(db)).map(aracCevabi);
 }
+// Benzersiz dizin yalnız genel "aynı bilgiler" iletisini verir; kullanıcı hangi alanı değiştireceğini bilsin.
+async function aracCakismasiDenetle(db: Db, govde: { ad: string; plaka: string | null }, kendiId: number | null): Promise<void> {
+  const c = await sorgu.aracCakismasi(db, govde.ad, govde.plaka, kendiId);
+  if (c.plaka) throw cakisma(`${govde.plaka} plakası başka bir aktif araçta kayıtlı.`);
+  if (c.ad) throw cakisma(`“${govde.ad}” adında aktif bir araç zaten var.`);
+}
 export async function aracEkle(db: Db, govde: AracGovdesi & { plaka: string | null }): Promise<Arac> {
   const ihlal = aracIhlalleri(govde); if (ihlal.length) throw ihlalHatasi(ihlal);
+  await aracCakismasiDenetle(db, govde, null);
   return aracCevabi(await sorgu.aracEkle(db, govde));
 }
 export async function aracGuncelle(db: Db, id: number, gelen: AracGovdesi & { plaka: string | null; surum: number }, oranlariKoru = false): Promise<Arac> {
@@ -262,6 +270,7 @@ export async function aracGuncelle(db: Db, id: number, gelen: AracGovdesi & { pl
   const ihlal = aracIhlalleri(govde); if (ihlal.length) throw ihlalHatasi(ihlal);
   surumDenetle(onceki.surum, govde.surum);
   await onayliPlanDenetle(db, { aracId: id });
+  await aracCakismasiDenetle(db, govde, id);
   return aracCevabi(surumluYazildi(await sorgu.aracGuncelle(db, id, govde.surum, govde)));
 }
 export async function aracPasiflestir(db: Db, id: number): Promise<Arac> {
@@ -576,7 +585,7 @@ function cozucuGirdisi(v: GunVerisi) {
 function coz(paket: HaritaPaketi, v: GunVerisi, amac: Amac, kip: CozumKipi, kilitli: readonly number[]): FiloPlani {
   const girdi = cozucuGirdisi(v), gun = gunTipi(v.tarih);
   const sonuc = filoPlani(paket.ag, girdi.fabrika, girdi.noktalar, girdi.isler, girdi.araclar, {
-    gun, amac, kip, baslangic: girdi.baslangic, kilitliAraclar: kilitli.map(String), yinelemeSiniri: yinelemeButcesi(v.isler.length),
+    gun, amac, kip, baslangic: girdi.baslangic, kilitliAraclar: kilitli.map(String), yinelemeSiniri: yinelemeButcesi(v.isler.length), sureSiniriMs: COZUCU_SURE_SINIRI_MS,
   }, matrisAl(paket, gun));
   matrisSakla(paket, gun, sonuc.matris);
   return sonuc;
@@ -624,9 +633,12 @@ async function gunPlaniCevabi(v: GunVerisi, kaynak: HaritaKaynagi): Promise<GunP
     return { aracId: a.id, kilitli: kilitli.get(a.id) ?? false, ogeler: ogeler.get(a.id) ?? [], hesap: h && paket ? rotaHesabi(paket, v, h) : null, onaySaatleri: v.onaySaatleri.get(a.id) ?? null };
   });
   const isNoktalari = new Map(v.noktalar.map((n) => [n.id, n]));
+  const pasifNoktali = (i: IsSatiri) => [i.alisNoktasiId, i.birakisNoktasiId].some((n) => n !== null && !isNoktalari.get(n)?.aktif);
+  // Araca konmuş ama noktası yol ağına bağlanmayan iş rotada hesaplanmaz; onayı engellesin diye burada da sayılır.
+  const yolsuz = new Map((hesap?.atanamayan ?? []).filter((a) => YOL_BAGLANTISI_NEDENLERI.has(a.neden)).map((a) => [Number(a.is), a.neden]));
   const atanamayan = v.isler
-    .filter((i) => yerdekiler.has(i.id) && [i.alisNoktasiId, i.birakisNoktasiId].some((n) => n !== null && !isNoktalari.get(n)?.aktif))
-    .map((i) => ({ isId: i.id, neden: 'Noktası pasifleştirilmiş; işi güncelleyin ya da iptal edin.' }));
+    .filter((i) => yerdekiler.has(i.id) && (pasifNoktali(i) || yolsuz.has(i.id)))
+    .map((i) => ({ isId: i.id, neden: pasifNoktali(i) ? 'Noktası pasifleştirilmiş; işi güncelleyin ya da iptal edin.' : `${yolsuz.get(i.id)!}.` }));
   return {
     tarih: v.tarih, gunTipi: gunTipi(v.tarih), amac, surum: v.plan?.surum ?? null, onaylandi: v.plan?.onaylandi ?? null,
     fabrika: v.fabrika ? noktaCevabi(v.fabrika) : null, haritaVar: paket !== null,

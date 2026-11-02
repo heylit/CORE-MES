@@ -71,4 +71,26 @@ describe('CNC Kurulum kayıt geçmişi (gerçek PostgreSQL)', () => {
     assert.deepEqual(kalan.at(-1)?.deger, { n: 51 });
     assert.deepEqual((await gecmis(b)).map((g) => g.deger), [{ n: 0 }]);
   });
+
+  test('CK-G4 geçmiş okuması (CNC-7 a): yeniden eskiye sürüm, yazan, yerine yazan, değişen üst alanlar; silme işaretlenir, değer gitmez', async () => {
+    const a = 'cnc-kurulum-motoru.gecmis5';
+    const v1 = await yaz(birinci, a, { machine: 'm1', at: 1, qty: 3 }, null);
+    const v2 = await yaz(ikinci, a, { machine: 'm2', at: 1, qty: 3 }, v1);
+    const v3 = await yaz(birinci, a, { machine: 'm2', at: 2, yeni: true }, v2);
+    const c = await o().vt.tx((db) => servis.kayitGecmisi(db, a));
+    assert.equal(c.anahtar, a);
+    assert.deepEqual(c.guncel && { surum: c.guncel.surum, yazan: c.guncel.yazan }, { surum: v3, yazan: { id: birinci.id, ad: 'Deneme birinci' } });
+    assert.deepEqual(c.satirlar.map((s) => [s.surum, s.yazan.id, s.degistiren?.id, s.silindi, s.alanlar]), [
+      [v2, ikinci.id, birinci.id, false, ['at', 'qty', 'yeni']],
+      [v1, birinci.id, ikinci.id, false, ['machine']],
+    ]);
+    assert.ok(!JSON.stringify(c).includes('m1'), 'değer sunucudan çıkmaz');
+    assert.ok(c.anahtarlar.some((x) => x.anahtar === a && x.surumSayisi === 2));
+    await o().vt.tx((db) => servis.sil(db, a, v3));
+    const s = await o().vt.tx((db) => servis.kayitGecmisi(db, a));
+    assert.equal(s.guncel, null);
+    assert.deepEqual(s.satirlar.map((x) => [x.surum, x.silindi, x.degistiren, x.alanlar]), [[v3, true, null, null], [v2, false, { id: birinci.id, ad: 'Deneme birinci' }, ['at', 'qty', 'yeni']], [v1, false, { id: ikinci.id, ad: 'Deneme ikinci' }, ['machine']]]);
+    const bos = await o().vt.tx((db) => servis.kayitGecmisi(db, 'cnc-kurulum-motoru.hic-yok'));
+    assert.deepEqual([bos.guncel, bos.satirlar], [null, []]);
+  });
 });

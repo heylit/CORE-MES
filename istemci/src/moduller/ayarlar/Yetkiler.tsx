@@ -75,7 +75,7 @@ export function Yetkiler() {
     <Kart baslik="Yetkiler">
       <p className="tc-yetki-aciklama">
         Hangi rolün neyi yapabildiği. Bir grubu açınca işlemleri görünür; kapalıyken her rolün o gruptaki işlemlerden kaçına sahip olduğu yazar.
-        {duzenler && ' Bir hücreye basınca o rol o işlemi alır ya da bırakır; değişiklik rolün bir sonraki girişinde geçerli olur. Bütün yetkileri veren rol değiştirilmez.'}
+        {duzenler && ' Bir hücreye basınca o rol o işlemi alır ya da bırakır; değişiklik o roldeki kişilerin açık oturumunda da hemen geçerli olur. Bütün yetkileri veren rol değiştirilmez.'}
       </p>
       <div className="tc-yetki-arac">
         <Girdi etiket="İşlem ara" type="search" value={arama} onChange={(o) => aramaYaz(o.target.value)} placeholder="Örnek: stok girişi" />

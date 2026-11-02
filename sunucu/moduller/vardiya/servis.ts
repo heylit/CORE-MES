@@ -23,7 +23,7 @@ import {
   makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
-  aralik, araliklardanCikar, atamaPayi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
+  aralik, araliklardanCikar, araliklarCakisir, atamaPayi, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
   kisininIstasyonu, molaDenetle, netDakika, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
 import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
@@ -119,8 +119,11 @@ export async function takvim(db: Db): Promise<TakvimCevabi> {
   const vardiyalar = await vardiyaListesi(db);
   const matris = await s.matris(db);
   const harita = new Map(vardiyalar.map((v) => [v.id, v]));
-  const haftalik = (isMerkeziId: number) =>
-    matris.filter((x) => x.isMerkeziId === isMerkeziId).reduce((t, x) => { const v = harita.get(x.vardiyaId); return v?.aktif ? t + v.netDakika : t; }, 0);
+  // Gün gün örtüşen vardiyaların aynı dakikası bir kez sayılır (gunNetDakikasi): hafta toplamı takvimle aynı olur.
+  const haftalik = (isMerkeziId: number) => [1, 2, 3, 4, 5, 6, 7].reduce((t, gun) => t + gunNetDakikasi(0, matris
+    .filter((x) => x.isMerkeziId === isMerkeziId && x.gun === gun)
+    .map((x) => harita.get(x.vardiyaId))
+    .filter((v): v is Vardiya => v?.aktif === true), []), 0);
   return {
     vardiyalar,
     matris,
@@ -715,7 +718,8 @@ async function mesailereAdVer(db: Db, satirlar: readonly s.FazlaMesaiSatiri[]): 
 
 export async function fazlaMesaiListesi(db: Db, baslangic: string, bitis: string): Promise<FazlaMesai[]> {
   if (bitis < baslangic) throw dogrulama('Bitiş başlangıçtan önce olamaz.', 'bitis');
-  if (gunFarki(baslangic, bitis) + 1 > AZAMI_TAKVIM_GUNU) throw dogrulama(`Aralık en çok ${AZAMI_TAKVIM_GUNU} gün olur.`, 'bitis');
+  // gunFarki iki ucu da sayar: takvim okumasıyla aynı sınır.
+  if (gunFarki(baslangic, bitis) > AZAMI_TAKVIM_GUNU) throw dogrulama(`Aralık en çok ${AZAMI_TAKVIM_GUNU} gün olur.`, 'bitis');
   return mesailereAdVer(db, await s.fazlaMesailer(db, baslangic, bitis, true));
 }
 
@@ -741,13 +745,50 @@ async function fazlaMesaiKapsamiDenetle(db: Db, kullanici: Kullanici, f: { isMer
   if (disi.length) throw topluKapsamDisi({ kisiIdleri: disi });
 }
 
-// VR-21 kural, VR-22 kapsam, VR-23 geçmiş tarih (VR-03 gibi), VR-29 ayrılmış ya da pasif kişi.
-async function fazlaMesaiDenetle(db: Db, kullanici: Kullanici, g: FazlaMesaiGirdisi): Promise<void> {
+// VR-30: listedeki kişi (1) bir istasyona bağlı olmalı (istasyon, makine ya da ekip ataması; takvimi olmayan kişiye fazla mesai yazılmaz),
+// (2) aynı saatlerde iptal edilmemiş başka bir fazla mesaide olmamalı, (3) kendi vardiyasının (molalar dahil) içinde olmamalı: vardiyayla
+// örtüşen dakika takvime girmez, kayıt planlanmış saati yanlış gösterir. Vardiyası seçilmeyen kişi iş merkezinin açık vardiyalarıyla denetlenir
+// (takvimdeki gibi); kapalı ya da tatil günü vardiya yoktur. Reddedilen kişiler ayrıntıda döner.
+async function fazlaMesaiKisileriDenetle(db: Db, g: FazlaMesaiGirdisi, haricId: number | null): Promise<void> {
+  if (g.kisiIdleri.length === 0) return;
+  const atamalar = await kisiAtamalari(db);
+  const istasyonMerkezi = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.isMerkeziId]));
+  const istasyonu = new Map(g.kisiIdleri.map((k) => [k, kisininIstasyonu(kisininAtamalari(atamalar, k))]));
+  // Olmayan kişi burada sayılmaz: yazımda yabancı anahtar 409 "Kişi bulunamadı." verir.
+  const varolan = await kisiAdlari(db, g.kisiIdleri);
+  const atamasiz = g.kisiIdleri.filter((k) => varolan.has(k) && istasyonu.get(k) === null);
+  if (atamasiz.length) throw dogrulama('İstasyon ataması olmayan kişiye fazla mesai yazılamaz.', 'kisiIdleri', { kisiIdleri: atamasiz } satisfies TopluRetAyrintisi);
+
+  const bu = fazlaMesaiDakikaAraligi(g);
+  const mevcut = (await s.fazlaMesailer(db, tarihEkle(g.tarih, -1), tarihEkle(g.tarih, 1), false)).filter((f) => f.id !== haricId);
+  const mukerrer = g.kisiIdleri.filter((k) => mevcut.some((f) => f.kisiIdleri.includes(k)
+    && araliklarCakisir(bu, fazlaMesaiDakikaAraligi(f, gunFarki(g.tarih, f.tarih) - 1))));
+  if (mukerrer.length) throw dogrulama('Kişinin bu saatlerde başka bir fazla mesaisi var.', 'kisiIdleri', { kisiIdleri: mukerrer } satisfies TopluRetAyrintisi);
+
+  const vardiyalar = new Map((await vardiyaListesi(db)).map((v) => [v.id, v]));
+  const matris = await s.matris(db);
+  const kapali = new Set((await gunleriOku(db, tarihEkle(g.tarih, -1), tarihEkle(g.tarih, 1))).map((x) => x.tarih));
+  const kisiVardiyasi = new Map((await s.kisiVardiyalari(db)).map((k) => [k.kisiId, k.vardiyaId]));
+  const vardiyada = g.kisiIdleri.filter((k) => {
+    const istasyonId = istasyonu.get(k) ?? null;
+    const isMerkeziId = istasyonId === null ? null : istasyonMerkezi.get(istasyonId) ?? null;
+    if (isMerkeziId === null) return false;
+    return [-1, 0, 1].some((i) => gununVardiyalari(tarihEkle(g.tarih, i), isMerkeziId, matris, vardiyalar, kapali, kisiVardiyasi.get(k) ?? null)
+      .some((v) => araliklarCakisir(bu, vardiyaDakikaAraligi(v, i))));
+  });
+  if (vardiyada.length) {
+    throw dogrulama('Fazla mesai kişinin vardiya saatleriyle çakışıyor; vardiya dışındaki saatleri girin.', 'kisiIdleri', { kisiIdleri: vardiyada } satisfies TopluRetAyrintisi);
+  }
+}
+
+// VR-21 kural, VR-22 kapsam, VR-23 geçmiş tarih (VR-03 gibi), VR-29 ayrılmış ya da pasif kişi, VR-30 kişi çakışması.
+async function fazlaMesaiDenetle(db: Db, kullanici: Kullanici, g: FazlaMesaiGirdisi, haricId: number | null = null): Promise<void> {
   const sonGunler = await sonCalismaGunleri(db, g.kisiIdleri);
   const hata = fazlaMesaiHatasi(g) ?? fazlaMesaiKisiHatasi(g.tarih, g.kisiIdleri.map((kisiId) => ({ kisiId, sonGun: sonGunler.get(kisiId) ?? null })));
   if (hata) throw dogrulama(hata.ileti, hata.alan);
   await gecmisDenetle(db, kullanici, g.tarih);
   await fazlaMesaiKapsamiDenetle(db, kullanici, g);
+  await fazlaMesaiKisileriDenetle(db, g, haricId);
 }
 
 const fazlaMesaiYazimi = (g: FazlaMesaiGirdisi): s.FazlaMesaiYazimi => ({
@@ -776,7 +817,7 @@ async function kilitliFazlaMesai(db: Db, kullanici: Kullanici, id: number): Prom
 
 export async function fazlaMesaiDegistir(db: Db, kullanici: Kullanici, id: number, g: FazlaMesaiGirdisi & { surum: number }): Promise<FazlaMesai> {
   await kilitliFazlaMesai(db, kullanici, id);
-  await fazlaMesaiDenetle(db, kullanici, g);
+  await fazlaMesaiDenetle(db, kullanici, g, id);
   await kisitKorumali(FAZLA_MESAI_KISITLARI, async () => {
     await surumluGuncelle({
       guncelle: () => s.fazlaMesaiGuncelle(db, id, fazlaMesaiYazimi(g), g.surum, kullanici.id),

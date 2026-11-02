@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { EslesmeHatasi, kur, parcala } from './eslesme.ts';
 import type { SatirDegeri, Satirlar } from './eslesme.ts';
-import { TUR_TANIMLARI } from './sema.ts';
+import { METIN_AZAMI, TUR_TANIMLARI, UZUN_METIN_AZAMI } from './sema.ts';
 import type { Alan, TurTanimi } from './sema.ts';
 
 // Veritabanının döndürdüğü biçim: sayısal sütun metin, saat saniyeli (sunucu/cekirdek/db.ts tip ayrıştırıcıları).
@@ -95,5 +95,16 @@ describe('İK kayıt eşlemesi (tam ayrıştırma)', () => {
     hata('leave', { id: 'l', kind: 'leave', empId: 'emp 1', tur: 'Yıllık izin', baslangic: '2026-01-01', bitis: '2026-01-02', durum: 'Beklemede' }, /empId/);
     hata('pay', { id: 'p', kind: 'pay', empId: 'e', donem: '2026-13' }, /donem/);
     hata('intv', { id: 'i', kind: 'intv', candId: 'c', saat: '25:00' }, /saat/);
+  });
+
+  test('1806 IK-4: metin alanı sınırlıdır; uzun metin alanının sınırı daha geniştir', () => {
+    const izin = (aciklama: string) => ({ id: 'l', kind: 'leave', empId: 'e', tur: 'Yıllık izin', baslangic: '2026-01-01', bitis: '2026-01-02', durum: 'Beklemede', aciklama });
+    assert.equal(parcala(TUR_TANIMLARI.leave, izin('x'.repeat(METIN_AZAMI))).ana['aciklama'], 'x'.repeat(METIN_AZAMI));
+    hata('leave', izin('x'.repeat(METIN_AZAMI + 1)), /aciklama/);
+    hata('leave', izin('x'.repeat(20_000)), /aciklama/);
+    const aday = (notlar: string) => ({ id: 'c', kind: 'cand', ad: 'A', notlar });
+    assert.equal(parcala(TUR_TANIMLARI.cand, aday('x'.repeat(UZUN_METIN_AZAMI))).ana['notlar'], 'x'.repeat(UZUN_METIN_AZAMI));
+    hata('cand', aday('x'.repeat(UZUN_METIN_AZAMI + 1)), /notlar/);
+    hata('emp', { id: 'e', kind: 'emp', ad: 'A', soyad: 'B', isMerkeziId: 1, notlar: [{ t: '2026-01-01T00:00:00Z', m: 'x'.repeat(UZUN_METIN_AZAMI + 1) }] }, /notlar/);
   });
 });

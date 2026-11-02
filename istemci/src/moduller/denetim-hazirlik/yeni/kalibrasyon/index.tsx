@@ -194,7 +194,8 @@ function TabloGorunumu({ araclar }: { araclar: ReactNode }) {
       anahtar: 'sonraki', baslik: 'Sonraki', kirilmaz: true,
       hucre: (x) => {
         const n = cihazVadesi(x);
-        return <span className="tc-dhd-iki"><b>{n ? tarihMetni(n) : '–'}</b><small>{x.nx ? 'elle girildi' : `${String(x.per)} ay · ${{ dis: 'dış lab', ic: 'iç', dog: 'doğrulama' }[x.tur]}`}</small></span>;
+        // 329 a: `nx` Kalibrasyon modülünün vadesidir; kullanıcı burada elle girmez.
+        return <span className="tc-dhd-iki"><b>{n ? tarihMetni(n) : '–'}</b><small>{x.nx ? 'Kalibrasyondan' : `${String(x.per)} ay · ${{ dis: 'dış lab', ic: 'iç', dog: 'doğrulama' }[x.tur]}`}</small></span>;
       },
     },
     { anahtar: 'eylem', baslik: 'İşlem', csv: false, hucre: () => <KalibrasyondaAc /> },

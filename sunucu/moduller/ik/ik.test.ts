@@ -500,6 +500,24 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(kisitlar, [{ conname: 'ik_departman_butce_eksi_degil', convalidated: true }, { conname: 'ik_devam_saat_eksi_degil', convalidated: true }]);
   });
 
+  test('1806 IK-3, IK-4: günden uzun devam kaydı ve sınırı aşan metin sunucuda reddedilir', async () => {
+    const devam = (id: string, saat: number, aciklama?: string) => ({ id, kind: 'att', empId: 'emp_a', tarih: '2026-10-07', tur: 'Fazla mesai', saat, ...(aciklama === undefined ? {} : { aciklama }) });
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_g1/kaydet', { govde: devam('att_g1', 30), surum: null });
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_g2/kaydet', { govde: devam('att_g2', 2, 'x'.repeat(20_000)), surum: null });
+    await kaydet(c.uzm, 'devam', devam('att_g3', 24, 'x'.repeat(1000)));
+  });
+
+  test('1806 IK-1, IK-2: aynı kişinin çakışan izni ve gelecek ayın bordrosu sunucuda reddedilir', async () => {
+    await kaydet(c.yon, 'personel', personel('emp_ck1'));
+    const l = (id: string, baslangic: string, bitis: string, gun: number) => ({ id, kind: 'leave', empId: 'emp_ck1', tur: 'Ücretsiz izin', baslangic, bitis, gun, durum: 'Beklemede' });
+    await kaydet(c.uzm, 'izinler', l('leave_ck1', '2026-12-07', '2026-12-09', 3));
+    await ret(422, 'GECERSIZ', c.uzm, 'POST', '/ik/izinler/leave_ck2/kaydet', { govde: l('leave_ck2', '2026-12-09', '2026-12-10', 2), surum: null });
+    await kaydet(c.uzm, 'izinler', l('leave_ck3', '2026-12-10', '2026-12-10', 1));
+    const gelecek = new Date(); gelecek.setUTCMonth(gelecek.getUTCMonth() + 2);
+    const donem = gelecek.toISOString().slice(0, 7);
+    await ret(422, 'GECERSIZ', c.uzm, 'POST', `/ik/bordro/${donem}/kesinlestir`, { girdiler: { emp_ck1: { brut: 40000, gun: 30, ek: 0, mesaiSaat: 0, tatilSaat: 0, kesinti: 0 } } });
+  });
+
   test('IK-82: T.C. kimlik ve IBAN biçimi sunucuda denetlenir; tek kayıt ve toplu aktarım aynı kurala girer, kayıtlı eski değer kilitlenmez', async () => {
     // Uydurma, algoritmadan geçen değerler; gerçek kişi ya da hesap değildir.
     await kaydet(c.uzm, 'personel', personel('emp_k1', { tckn: '10000003048', iban: 'TR200000000000000000000001' }));

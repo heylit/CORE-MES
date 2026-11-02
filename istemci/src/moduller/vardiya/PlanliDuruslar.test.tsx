@@ -83,6 +83,19 @@ describe('Planlı duruşlar', () => {
     await waitFor(() => expect(postlar).toEqual([{ yol: '/planli-duruslar/5/kaldir', govde: { surum: 3 } }]));
   });
 
+  it('VRD-1: Kaydet çift tıklamada tek istek gönderir', async () => {
+    const postlar = sunucuKur(YAZAN);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Deneme bakım düzenle' }));
+    await screen.findByLabelText(/Başlık/);
+    const kaydet = screen.getByRole('button', { name: 'Kaydet' });
+    fireEvent.click(kaydet);
+    fireEvent.click(kaydet);
+    await waitFor(() => expect(postlar).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull());
+    expect(postlar).toHaveLength(1);
+  });
+
   it('düzenleme formu kaydı sürümüyle ve ISO günleriyle günceller', async () => {
     const postlar = sunucuKur(YAZAN);
     ac();

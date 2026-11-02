@@ -162,6 +162,20 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id))).statusCode, 422);
   });
 
+  test('NZ-03 taşeron kartı ziyaretçiye verilmez: habersiz ve ön kayıtlı girişte reddedilir, kart rafta boş kalır', async () => {
+    const taseron = await kartAc('taseron');
+    const habersizRet = await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(taseron.id));
+    assert.equal(habersizRet.statusCode, 422, habersizRet.body);
+    assert.match(habersizRet.json().mesaj, /ziyaretçi kartı değil/);
+    const id = await beklenen();
+    const z = (await kapi()).beklenen.find((s) => s.id === id);
+    assert.ok(z);
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: taseron.id, kimlikGoruldu: true })).statusCode, 422);
+    assert.ok((await kapi()).bosKartlar.some((k) => k.id === taseron.id));
+    const ziyaretci = await kartAc();
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: ziyaretci.id, kimlikGoruldu: true })).statusCode, 200);
+  });
+
   test('NZ-01 habersiz giriş tekrar korumalıdır: aynı istek kimliği ikinci ziyaret açmaz, başlıksız istek reddedilir', async () => {
     const kart = await kartAc();
     const kimlik = randomUUID();
@@ -170,6 +184,22 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     assert.equal(ilk.statusCode, 200, ilk.body);
     assert.equal(ikinci.json().id, ilk.json().id);
     assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id), null)).statusCode, 400);
+  });
+
+  test('gelmeyen ön kayıt kapıda en çok bir gün kalır; kayıt silinmez, geçmişte beklenen görünür', async () => {
+    const ekle = async (saatOnce: number): Promise<number> => (await vt().tek<{ id: number }>(
+      `INSERT INTO nizamiye_ziyaret (ziyaret_no, ad, neden, ev_sahibi_kisi_id, beklenen_zaman, durum, olusturan_kisi_id)
+       VALUES ($1, 'Misafir Gec', 'toplanti', $2, now() - make_interval(hours => $3), 'beklenen', $2) RETURNING id`,
+      [`T-${String(++sayac)}`, evSahibiId, saatOnce],
+    ))!.id;
+    const yakin = await ekle(2);
+    const eski = await ekle(25);
+    const ids = (await kapi()).beklenen.map((z) => z.id);
+    assert.ok(ids.includes(yakin));
+    assert.ok(!ids.includes(eski));
+    const gun = (await vt().tek<{ gun: string }>('SELECT to_char((now() - interval \'25 hours\')::date, \'YYYY-MM-DD\') AS gun'))!.gun;
+    const gecmis = (await oku(gorevli, `/nizamiye/gecmis?gun=${gun}`)).json() as { ziyaretler: Ziyaret[] };
+    assert.equal(gecmis.ziyaretler.find((z) => z.id === eski)?.durum, 'beklenen');
   });
 
   test('NZ-01 beklenen ziyaret kapı listesinde görünür ve girişle içeri alınır; eski sürüm reddedilir', async () => {

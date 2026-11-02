@@ -5,11 +5,12 @@ import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
 import { ayarEkranlari, gorunenAyarEkranlari, type AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { gorulenDeger } from './gorulen.ts';
 import { BaglantiHazirligi } from './BaglantiHazirligi.tsx';
 import { GORUNUM_ANAHTARLARI, GorunumAyarlari } from './GorunumAyarlari.tsx';
 import { Guncelleme } from './Guncelleme.tsx';
@@ -228,10 +229,11 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
   const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.liste, queryFn: () => api.get<AyarlarCevabi>('/ayarlar') });
 
-  // Anahtar sunucunun kabul ettiği değeri gösterir: cevap gelene kadar yerinde kalır.
+  // Anahtar sunucunun kabul ettiği değeri gösterir: cevap gelene kadar yerinde kalır. Ekranın gördüğü değer `beklenen` olarak
+  // gider; başka yönetici arada değiştirdiyse sunucu 409 verir ve liste yenilenir.
   const degistir = useMutation({
     mutationFn: ({ anahtar, deger }: { anahtar: string; deger: AyarDegeri }) =>
-      api.post<Ayar>(`/ayarlar/${encodeURIComponent(anahtar)}/degistir`, { deger } satisfies AyarDegistirGovdesi),
+      api.post<Ayar>(`/ayarlar/${encodeURIComponent(anahtar)}/degistir`, { deger, beklenen: gorulenDeger(istemci, anahtar) } satisfies AyarDegistirGovdesi),
     onSuccess: (guncel) => {
       istemci.setQueryData<AyarlarCevabi>(anahtarlar.liste, (onceki) =>
         onceki && { ayarlar: onceki.ayarlar.map((a) => (a.anahtar === guncel.anahtar ? guncel : a)) });
@@ -239,7 +241,10 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
       if (guncel.anahtar === 'kabuk.kurum-adi') void istemci.invalidateQueries({ queryKey: ortakAnahtarlar.kurum });
       bildir('tamam', 'Ayar kaydedildi.');
     },
-    onError: (hata) => { bildir('hata', hataIletisi(hata, 'Ayar kaydedilemedi.')); },
+    onError: (hata) => {
+      bildir('hata', hataIletisi(hata, 'Ayar kaydedilemedi.'));
+      if (hata instanceof ApiHatasi && hata.durum === 409) void istemci.invalidateQueries({ queryKey: anahtarlar.liste });
+    },
   });
 
   const ayarlar = liste.data?.ayarlar.filter((a) => ayarKategorisi(a) === kategori);

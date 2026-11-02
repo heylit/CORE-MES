@@ -7,6 +7,7 @@ import {
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
+import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ---------------- */
 
@@ -34,7 +35,7 @@ test('MKK-2: stok kodu beş haneye doldurulur, 99999 sonrası kesilmez', () => {
 
 const gecis = (g: Partial<KatalogGecisi>): KatalogGecisi => ({
   onceki: null, yeni: 'taslak', islemler: ['malzemeler.yaz'], kisiId: 1, acanKisiId: null, gonderenKisiId: null, dortGozAcik: true, onayAkisiAcik: true,
-  icerikDegisti: false, onaysizIcerikDegisti: false, ...g,
+  icerikDegisti: false, onaysizIcerikDegisti: false, hicOnaylanmadi: true, ...g,
 });
 
 test('MKK-3: onay akışı açıkken kart ancak onay yetkisiyle aktif olur; akış kapalıyken yazma yetkisi yeter', () => {
@@ -90,6 +91,16 @@ test('MKK-12 (kart #163): aktif ya da onaydaki kartı taslağa çekmek onay yetk
   assert.equal(katalogGecisiDenetle(gecis({ onceki: 'onayda', yeni: 'taslak', islemler: ['malzemeler.onayla'] })), null);
   assert.equal(katalogGecisiDenetle(gecis({ onceki: 'taslak', yeni: 'taslak' })), null);
   assert.equal(katalogGecisiDenetle(gecis({ onceki: null, yeni: 'pasif', islemler: ['malzemeler.onayla'] }))?.kod, 'GECERSIZ');
+});
+
+test('MLZ-5 a: hiç onaylanmamış kartı açan ya da gönderen onaydan geri çeker; içerik değişmez, başkası ve onaylanmış kart geri çekilmez', () => {
+  const geri = (g: Partial<KatalogGecisi>) => katalogGecisiDenetle(gecis({ onceki: 'onayda', yeni: 'taslak', ...g }));
+  assert.equal(geri({ acanKisiId: 1 }), null);
+  assert.equal(geri({ gonderenKisiId: 1, acanKisiId: 2 }), null);
+  assert.equal(geri({ acanKisiId: 2, gonderenKisiId: 2 })?.kod, 'YETKI_YOK');
+  assert.equal(geri({ acanKisiId: 1, hicOnaylanmadi: false })?.kod, 'YETKI_YOK');
+  assert.equal(geri({ acanKisiId: 1, onaysizIcerikDegisti: true })?.kod, 'GECERSIZ');
+  assert.equal(katalogGecisiDenetle(gecis({ onceki: 'aktif', yeni: 'taslak', acanKisiId: 1 }))?.kod, 'YETKI_YOK');
 });
 
 test('MKK-4 (kart #163): onay akışı açıkken aktife yalnız onaydan geçilir; kartı açan da onaylayamaz; akış kapalıyken eskisi gibi', () => {
@@ -413,4 +424,13 @@ test('1247 d katalogGkkAyari: gelmeyen ayar korunur, gelen yazılır; demirbaş 
   assert.deepEqual(katalogGkkAyari('demirbas', true), { hata: GKK_TURU_ILETISI });
   assert.deepEqual(katalogGkkAyari('hizmet', false), { yaz: true, deger: null });
   assert.deepEqual(katalogGkkAyari('hizmet', undefined), { yaz: true, deger: null });
+});
+
+test('MLZ-5 a: bildirim metni kartın kırpılmış adını alır; geri çekme ret damgasındaki `geri` ile ayrılır', () => {
+  assert.equal(katalogKartAdi({ com: { ad: '  Mil  ' } }), 'Mil');
+  assert.equal(katalogKartAdi({ com: { ad: '   ' } }), null);
+  assert.equal(katalogKartAdi({ com: null }), null);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, geri: true } } }), true);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, neden: 'eksik' } } }), false);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak' } }), false);
 });

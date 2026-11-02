@@ -148,7 +148,7 @@ function sorguKur(s: Suzgec, sayfa: number): KayitListesiSorgusu {
     sayfaBoyu: SAYFA_BOYU,
     ...tarihSuzgeci(s),
     ...(s.modul === '' ? {} : { modul: s.modul }),
-    ...(bosluk < 0 ? {} : { yontem: s.komut.slice(0, bosluk) as NonNullable<KayitListesiSorgusu['yontem']>, yol: s.komut.slice(bosluk + 1) }),
+    ...(bosluk < 0 ? {} : { yontem: s.komut.slice(0, bosluk) as NonNullable<KayitListesiSorgusu['yontem']>, yol: s.komut.slice(bosluk + 1), yolTam: 'true' }),
   };
 }
 

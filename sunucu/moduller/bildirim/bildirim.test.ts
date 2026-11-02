@@ -10,7 +10,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { bildirimGonder, type BildirimOlayi } from './disari.ts';
+import { bildirimGonder, bildirimKapat, type BildirimOlayi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -178,6 +178,22 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await sayac('bakim')).okunmamis, 1);
   });
 
+  test('kaynağa bağlı açık bildirim kapatılınca okunur; başka kaynak ve kimliksiz kapanış etkilenmez', async () => {
+    await bosalt();
+    await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu 9', kaynakKimlik: '9' });
+    await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu 10', kaynakKimlik: '10' });
+    assert.equal((await sayac('bakim')).okunmamis, 2);
+    const kapanan = await o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '9' }));
+    assert.ok(kapanan >= 1);
+    assert.equal((await sayac('bakim')).okunmamis, 1);
+    const satirlar = (await liste('bakim')).satirlar;
+    assert.equal(satirlar.find((b) => b.baslik === 'Durdu 9')?.okundu !== null, true);
+    assert.equal(satirlar.find((b) => b.baslik === 'Durdu 10')?.okundu, null);
+    // İkinci kapanış okunmuş satıra dokunmaz.
+    assert.equal(await o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '9' })), 0);
+    await assert.rejects(o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '' })));
+  });
+
   test('geçersiz yol ve boş başlık olayı yazmaz', async () => {
     await assert.rejects(gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'x', yol: '//dis-site' as `/${string}` }));
     await assert.rejects(gonder({ tur: 'istasyonlar.makine-durdu', baslik: '   ' }));
@@ -191,7 +207,7 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(t.satirlar[0]?.varsayilan, true);
     // CAM rolü Arkon hazırlığını taşır: zaman anomalisinin hazırlık türleri (kart 764) de gelir.
     assert.deepEqual((await tercihler('cam')).satirlar.map((s) => s.tur), ['cnc-kurulum.takim-omru', 'arkon.gec-giris', 'arkon.gec-teslim', 'arkon.toplu-tutarsiz']);
-    assert.equal((await tercihler('yonetici')).satirlar.length, 14);
+    assert.equal((await tercihler('yonetici')).satirlar.length, 15);
 
     const d = await istek<BildirimTercihleriCevabi>('bakim', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: true });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
@@ -202,13 +218,23 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await tercihler('yonetici')).satirlar.find((s) => s.tur === 'istasyonlar.makine-durdu')?.varsayilan, true);
   });
 
-  test('operatör e-posta seçemez: alan null, gönderilen değer kapalı saklanır', async () => {
+  test('operatör e-posta seçemez ve tercih listesi boştur: alan null; listede olmayan türe tercih 400, satır açılmaz', async () => {
     const t = await tercihler('operator');
     assert.equal(t.epostaSecilebilir, false);
-    const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta: true });
-    assert.equal(d.durum, 200);
-    const satir = await o().vt.tek<{ eposta: boolean }>('SELECT eposta FROM bildirim_tercihi WHERE kisi_id = $1', [kim('operator')]);
-    assert.equal(satir?.eposta, false);
+    assert.deepEqual(t.satirlar, []);
+    for (const eposta of [true, false]) {
+      const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta });
+      assert.equal(d.durum, 400);
+    }
+    assert.equal(await o().vt.tek('SELECT 1 FROM bildirim_tercihi WHERE kisi_id = $1', [kim('operator')]), null);
+  });
+
+  test('alamadığı türe tercih yazılamaz: 400, satır açılmaz', async () => {
+    assert.equal((await tercihler('cam')).satirlar.some((s) => s.tur === 'istasyonlar.makine-durdu'), false);
+    const d = await istek<{ alan?: string }>('cam', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: false });
+    assert.equal(d.durum, 400);
+    assert.equal(d.govde.alan, 'tur');
+    assert.equal(await o().vt.tek('SELECT 1 FROM bildirim_tercihi WHERE kisi_id = $1 AND tur = $2', [kim('cam'), 'istasyonlar.makine-durdu']), null);
   });
 
   test('bilinmeyen olay türü ve fazla alan reddedilir', async () => {

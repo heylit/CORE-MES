@@ -1,7 +1,7 @@
 import { crc32 } from 'node:zlib';
 import type { Db } from '#cekirdek/db.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
-import { bulunamadi, dogrulama } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { AYAR_ANAHTARLARI, AYAR_TANIMLARI, ayarAnahtariMi, ayarTanimi } from '#paylasilan/ayarlar.ts';
 import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
@@ -9,7 +9,7 @@ import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
 import { gorunumCevabi, kurumLogosuSemasi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayar, AyarlarCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
+import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
 import { ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarKilitle, sayacArtir, simdikiYilAy } from './sorgular.ts';
 
 const DEGISTIR_YOLU = '/ayarlar/:anahtar/degistir';
@@ -127,16 +127,20 @@ export async function kapaliSayfalariDegistir(db: Db, kisiId: number, yol: strin
   return { kapali: yeni };
 }
 
-export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham: unknown): Promise<Ayar> {
+export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham: unknown, beklenen?: unknown): Promise<Ayar> {
   if (!ayarAnahtariMi(anahtar)) throw bulunamadi('Ayar bulunamadı.');
   const sonuc = degeriDogrula(anahtar, ham);
   if ('hata' in sonuc) throw dogrulama(sonuc.hata, 'deger');
   const yeni = sonuc.deger;
   // Eski değer kilitten sonra okunur: aynı anda iki değiştirmede ikincinin kaydı birincinin yazdığını eski değer olarak taşır.
   await ayarKilitle(db, anahtar);
-  const eski = oncekiDeger(anahtar, await ayarDegeriniOku(db, anahtar));
+  const saklanan = await ayarDegeriniOku(db, anahtar);
+  const eski = oncekiDeger(anahtar, saklanan);
   // Değişmeyen değer değişiklik değildir: satır da değişiklik kaydı da yazılmaz.
   if (eski !== yeni) {
+    // Ekran listede gördüğünü gönderir; karşılaştırma da listenin göstereceği değerle yapılır.
+    const liste = listeDegeri(anahtar, saklanan);
+    if (!beklenenTutarMi(ayarGorunumu(anahtar, liste.deger, liste.gecersiz).deger, beklenen)) throw eskiSurum();
     await ayarDegeriniYaz(db, anahtar, yeni, kisiId);
     // Uç katmanının kendi kaydı yalnız komutu ve yeni değeri taşır; eski değer burada bilinir.
     await denetimYaz(db, {

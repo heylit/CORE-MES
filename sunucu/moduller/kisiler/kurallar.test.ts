@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import {
   GOREV_EN_FAZLA, PAROLA_EN_AZ, SICIL_EN_FAZLA, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, parolaBaskasiReddi,
-  ILETILER, PIN_UZUNLUK, bayrakliKisiReddi, girisYontemi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
+  ILETILER, PIN_UZUNLUK, bayrakliKisiReddi, girisYontemi, korumaliMi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
 } from './kurallar.ts';
 
 test('rollerden gelen işlemler birleşir; kayıtlı olmayan işlem yetki vermez', () => {
@@ -75,7 +75,11 @@ describe('başkasının parolası', () => {
 
 describe('giriş bilgisi', () => {
   test('kullanıcı adı ve parola kuralı sınırda sınanır', () => {
-    assert.equal(parolaHatasi('p'.repeat(PAROLA_EN_AZ)), null);
+    assert.equal(parolaHatasi('pq'.repeat(PAROLA_EN_AZ / 2)), null);
+    for (const zayif of ['p'.repeat(PAROLA_EN_AZ), '11111111', '12345678', '987654321', 'abcdefgh', 'ABCDEFGH', 'hgfedcba']) {
+      assert.match(parolaHatasi(zayif) ?? '', /tekrarı ya da sıralı/, zayif);
+    }
+    for (const yeterli of ['12345679', 'abcdefgi', 'dogru-parola-1', '11111112']) assert.equal(parolaHatasi(yeterli), null, yeterli);
     assert.notEqual(parolaHatasi('p'.repeat(PAROLA_EN_AZ - 1)), null);
     assert.equal(kullaniciAdiHatasi('abc'), null);
     assert.notEqual(kullaniciAdiHatasi('ab'), null);
@@ -93,6 +97,9 @@ describe('giriş bilgisi', () => {
 describe('bayraklı kişi üzerinde işlem', () => {
   test('bayraklı hedefe yalnız bayraklı aktör dokunur; sıradan hedefe herkes', () => {
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: false, aktorBayrakli: false }), null);
+    assert.equal(korumaliMi({ hedefBayrakli: true, aktorBayrakli: false }), true);
+    assert.equal(korumaliMi({ hedefBayrakli: true, aktorBayrakli: true }), false);
+    assert.equal(korumaliMi({ hedefBayrakli: false, aktorBayrakli: false }), false);
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: true, aktorBayrakli: false })?.tur, 'yetki');
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: true, aktorBayrakli: true }), null);
   });

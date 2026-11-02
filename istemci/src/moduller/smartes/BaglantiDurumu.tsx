@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { DurumCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BAGLANTI, KAYNAK_ADI, YOK, sayiMetni, zamanMetni } from './gosterim.ts';
 import './smartes.css';
@@ -23,6 +24,7 @@ const OKUMA_SUTUNLARI: readonly Sutun<Okuma>[] = [
 ];
 
 export function BaglantiDurumu() {
+  const ayarYazan = useOturum().data?.islemler.includes('ayarlar.yaz') === true;
   const durum = useQuery({ queryKey: anahtarlar.durum, queryFn: () => api.get<DurumCevabi>('/smartes/durum') });
   const d = durum.data;
   const baglanti = d ? BAGLANTI[d.baglanti] : null;
@@ -38,7 +40,7 @@ export function BaglantiDurumu() {
         {d && baglanti && (
           <>
             <p role="status" className="tc-smartes-ozet"><Rozet ton={baglanti.ton}>{baglanti.metin}</Rozet></p>
-            <p className="tc-smartes-aciklama">{baglanti.aciklama}</p>
+            <p className="tc-smartes-aciklama">{ayarYazan ? baglanti.aciklama.ayarYazan : baglanti.aciklama.diger}</p>
             <dl className="tc-smartes-liste">
               <dt>Okunan üretim kaydı</dt><dd>{sayiMetni(d.sayilar.isEmriDurumu)}</dd>
               <dt>Okunan duruş</dt><dd>{sayiMetni(d.sayilar.durus)}</dd>

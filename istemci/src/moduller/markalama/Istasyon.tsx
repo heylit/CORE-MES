@@ -7,7 +7,7 @@ import {
   Dugme, DurumKutusu, Kart, KodOkuyucu, OnayPenceresi, Qr, Rozet, Secim, Tablo, useBildirim, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { BIRIM_DURUMLARI, DURUM_ADLARI, DURUM_TONLARI, YONTEM_ADLARI } from './adlar.ts';
@@ -42,11 +42,12 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
   });
   const yenile = () => istemci.invalidateQueries({ queryKey: anahtarlar.kok });
 
-  // Seri sunucuda sayaçtan doğar; ağ koparsa aynı istek kimliğiyle yeniden gönderilir, ikinci numara yanmaz.
-  const markala = useMutation({
-    mutationFn: (sonuc: MarkalaGovdesi['sonuc']) => {
+  // Seri sunucuda sayaçtan doğar; ağ koparsa aynı istek kimliğiyle yeniden gönderilir, çift dokunuş tek istek gönderir:
+  // ikinci numara yanmaz.
+  const markala = useKorumaliKomut<MarkalaGovdesi['sonuc'], MarkalamaBirimi>({
+    gonder: (sonuc, deneme) => {
       const govde: MarkalaGovdesi = { tanimId: tanim.id, uretimEmriId: emirId, istasyonId: null, sonuc };
-      return tekrarKorumaliGonder((deneme) => api.post<MarkalamaBirimi>('/markalama/birimler/markala', govde, deneme));
+      return api.post<MarkalamaBirimi>('/markalama/birimler/markala', govde, deneme);
     },
     onSettled: () => hataliOnayiYaz(false),
     onSuccess: async (b) => {

@@ -33,6 +33,7 @@
 .tc-profil-gb-metin { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tc-profil-form { display: flex; flex-direction: column; gap: var(--b-3); }
 .tc-profil-hata { margin: 0; color: var(--stop); }
+.tc-profil-eksik { margin: 0; color: var(--muted); }
 .tc-profil-gonderildi { display: flex; align-items: center; gap: var(--b-3); }
 .tc-profil-gonderildi p { margin: 0; }
 .tc-profil-gonderildi-isaret {

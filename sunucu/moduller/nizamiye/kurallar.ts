@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ATOLYE_NEDENLERI } from '#paylasilan/sozlesme/nizamiye.ts';
-import type { Neden, ZiyaretDurumu } from '#paylasilan/sozlesme/nizamiye.ts';
+import type { KartTuru, Neden, ZiyaretDurumu } from '#paylasilan/sozlesme/nizamiye.ts';
 import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
 
 // Son giriş ya da çıkış bu süre içinde geri alınabilir (NZ-07): yanlış satıra basan görevli hemen düzeltir, eski kayıt değişmez.
@@ -8,6 +8,9 @@ export const GERI_ALMA_SURESI_DK = 10;
 // Ön kayıt bu kadar geçmişe ya da ileriye açılamaz (NZ-09).
 export const ON_KAYIT_GECMIS_DK = 60;
 export const ON_KAYIT_ILERI_GUN = 90;
+// Gelmeyen ön kayıt kapı listesinde bu kadar kalır: liste ve "dikkat" sayacı günlerce birikmesin. Kayıt silinmez; günün geçmişinde
+// ve ev sahibinin listesinde "beklenen" olarak kalır, geç gelen ziyaretçi habersiz girişle alınır.
+export const KAPIDA_GECIKEN_EN_COK_SAAT = 24;
 
 interface GirisDurumu {
   durum: ZiyaretDurumu;
@@ -24,9 +27,10 @@ export function girisHatasi(z: GirisDurumu): string | null {
   return null;
 }
 
-// NZ-03 kart yalnız rafta boşsa verilir.
-export function kartVerilemezse(kart: { durum: string; icerideMi: boolean } | null): string | null {
+// NZ-03 kart yalnız rafta boşsa verilir; ziyaretçiye yalnız ziyaretçi kartı verilir (taşeron kartının izinli bölgesi başkadır).
+export function kartVerilemezse(kart: { durum: string; icerideMi: boolean; tur: KartTuru } | null): string | null {
   if (kart === null) return 'Kart bulunamadı.';
+  if (kart.tur !== 'ziyaretci') return 'Bu kart ziyaretçi kartı değil; ziyaretçiye verilmez.';
   if (kart.icerideMi) return 'Bu kart içerideki başka bir ziyaretçide.';
   if (kart.durum === 'kayip') return 'Bu kart kayıp; rafa alınmadan verilmez.';
   if (kart.durum === 'hasarli') return 'Bu kart hasarlı; rafa alınmadan verilmez.';

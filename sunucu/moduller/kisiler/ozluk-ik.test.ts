@@ -119,7 +119,7 @@ describe('İK özlük itmesi (gerçek PostgreSQL)', () => {
       { ik: (await satir(kisi))!.ozluk_ik, ad: (await satir(kisi))!.ad, sicil: (await satir(kisi))!.sicil_no, gorev: (await satir(kisi))!.gorev },
       { ik: false, ad: 'Ayşe Deneme', sicil: null, gorev: 'Ayarcı' },
     );
-    assert.equal((await duzenle({ ad: 'Başka Ad', surum: (await satir(kisi))!.surum })).statusCode, 200);
+    assert.equal((await duzenle({ ad: 'Başka Ad', sicilNo: null, gorev: 'Ayarcı', surum: (await satir(kisi))!.surum })).statusCode, 200);
   });
 
   test('geçmiş çıkış tarihi kişiyi hemen pasife alır ve oturumunu kapatır; aktif yap reddedilir; çıkış kalkınca aktif yapılabilir', async () => {

@@ -22,22 +22,26 @@ const CEVAP: TakvimCevabi = {
   tatiller: [{ tarih: '2031-03-20', ad: 'Deneme tatili' }],
 };
 
+// Pencere 2031-01-10'da başlar: S-1 pencerede de olduğu için ikinci kez sayılmamalı, S-90 yalnız bu okumadan gelir.
+const ESKI_GECIKENLER = { kayitlar: [kayit({ kimlik: '90', tarih: '2030-11-20', no: 'S-90', baslik: 'Sipariş S-90' }), kayit({ kimlik: '7', tarih: '2031-03-05', no: 'S-7', baslik: 'Sipariş S-7' })] };
+
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function sunucuKur(yanit: () => Response = () => json(200, CEVAP)) {
+function sunucuKur(yanit: () => Response = () => json(200, CEVAP), gecikenler: unknown = { kayitlar: [] }) {
   const yollar: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
     const yol = adres.replace('/api', '');
     yollar.push(yol);
     if (yol.startsWith('/takvim?')) return yanit();
+    if (yol === '/takvim/gecikenler') return json(200, gecikenler);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
   return yollar;
 }
 
-function cizdir(ekran: React.ReactNode) {
+function cizdir(ekran: React.ReactNode, adres = '/takvim') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={istemci}><MemoryRouter>{ekran}</MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={istemci}><MemoryRouter initialEntries={[adres]}>{ekran}</MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2031-03-12T09:00:00Z')); });
@@ -98,5 +102,72 @@ describe('Takvim ekranı', () => {
     sunucuKur(() => json(500, { kod: 'SUNUCU', mesaj: 'Hata.' }));
     cizdir(<Takvim />);
     expect(await screen.findByRole('button', { name: /yeniden|Tekrar/i })).toBeTruthy();
+  });
+
+  it('pencereden eski geciken kayıt (1816) özette, gündemde ve kanbanda sayılır; pencerede olan iki kez sayılmaz', async () => {
+    const yollar = sunucuKur(undefined, ESKI_GECIKENLER);
+    cizdir(<Takvim />);
+    const ozet = await screen.findByRole('group', { name: 'Özet' });
+    expect(within(within(ozet).getByText('Geciken').closest('button')!).getByText('2')).toBeTruthy();
+    expect(yollar).toContain('/takvim/gecikenler');
+    fireEvent.click(within(ozet).getByText('Geciken'));
+    expect(screen.getByText('Sipariş S-90')).toBeTruthy();
+    expect(screen.getAllByText('Sipariş S-7')).toHaveLength(1);
+    cleanup();
+    sunucuKur(undefined, ESKI_GECIKENLER);
+    cizdir(<TakvimKanban />);
+    const gec = await screen.findByRole('region', { name: 'Geciken' });
+    expect(within(gec).getByText('Sipariş S-90')).toBeTruthy();
+  });
+
+  it('çok günlük izin (1816) ızgarada her gününde görünür; süren izin gecikmiş değil, bugündedir', async () => {
+    const izin = (o: Partial<TakvimKaydi>) => kayit({ kaynak: 'izin', no: null, ilgili: 'Deneme Kişi', durum: 'Onaylandı', ...o });
+    sunucuKur(() => json(200, {
+      ...CEVAP, kaynaklar: ['izin'], bekleyenler: [],
+      kayitlar: [
+        izin({ kimlik: 'leave_uc', tarih: '2031-03-17', bitis: '2031-03-19', baslik: 'Yıllık izin (3 gün)' }),
+        izin({ kimlik: 'leave_suren', tarih: '2031-03-10', bitis: '2031-03-13', baslik: 'Mazeret izni (4 gün)' }),
+      ],
+    }));
+    cizdir(<Takvim />);
+    expect(await screen.findByText('Mart 2031')).toBeTruthy();
+    for (const g of ['17 Mar Pzt', '18 Mar Sal', '19 Mar Çar']) {
+      expect(within(screen.getByLabelText(g)).getByText(/Deneme Kişi/)).toBeTruthy();
+    }
+    expect(within(screen.getByLabelText('20 Mar Per')).queryByText(/Deneme Kişi/)).toBeNull();
+    const ozet = screen.getByRole('group', { name: 'Özet' });
+    expect(within(within(ozet).getByText('Geciken').closest('button')!).getByText('0')).toBeTruthy();
+    expect(within(within(ozet).getByText('Bugün').closest('button')!).getByText('1')).toBeTruthy();
+    fireEvent.click(screen.getAllByText(/Mazeret izni|Deneme Kişi/)[0]!);
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText('Sürüyor')).toBeTruthy();
+  });
+
+  it('TKV-4: kip ve dönem adresten açılır; kaynak sayısı yalnız açık kayıtları sayar; arama Türkçe harfi yok sayar', async () => {
+    const yollar = sunucuKur(() => json(200, { ...CEVAP, kayitlar: [...CEVAP.kayitlar, kayit({ kimlik: '8', tarih: '2031-03-14', no: 'S-8', baslik: 'Sipariş S-8', ilgili: 'Çağrı Şirketi' })] }));
+    cizdir(<Takvim />, '/takvim?kip=hafta&donem=2031-04-09');
+    expect(await screen.findByText('7 Nis – 13 Nis')).toBeTruthy();
+    expect(yollar).toContain('/takvim?baslangic=2031-04-07&bitis=2031-04-13');
+    const kaynaklar = screen.getByRole('group', { name: 'Kaynaklar' });
+    expect(within(within(kaynaklar).getByText('Planlı duruş').closest('button')!).getByText('0')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gündem'));
+    fireEvent.change(screen.getByPlaceholderText('No, firma, kişi ara'), { target: { value: 'CAGRI sirketi' } });
+    expect(screen.getByText('Sipariş S-8')).toBeTruthy();
+    expect(screen.queryByText('Sipariş S-1')).toBeNull();
+  });
+
+  it('TKV-4: tablo metni Türkçe harf ve sayı sırasıyla dizer', async () => {
+    sunucuKur(() => json(200, { ...CEVAP, kaynaklar: ['siparis'], kayitlar: [
+      kayit({ kimlik: '10', no: 'S-10', baslik: 'Sipariş S-10', ilgili: 'Zeta' }),
+      kayit({ kimlik: '9', no: 'S-9', baslik: 'Sipariş S-9', ilgili: 'Çınar' }),
+      kayit({ kimlik: '11', no: 'S-11', baslik: 'Sipariş S-11', ilgili: 'Can' }),
+    ] }));
+    cizdir(<TakvimTablo />, '/takvim/tablo');
+    await screen.findByRole('table', { name: 'Takvim kayıtları' });
+    fireEvent.click(screen.getByRole('button', { name: /İlgili/ }));
+    const ilgili = () => screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[3]!.textContent);
+    expect(ilgili()).toEqual(['Can', 'Çınar', 'Zeta']);
+    fireEvent.click(screen.getByRole('button', { name: /Kayıt/ }));
+    expect(screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[2]!.textContent)).toEqual(['Sipariş S-9', 'Sipariş S-10', 'Sipariş S-11']);
   });
 });

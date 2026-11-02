@@ -25,7 +25,6 @@ Boş depo: Gerekmez; boş depoda prototip kendi boş durumuyla açılır.
 | POST /denetim-hazirlik/belge/kilitle | `denetim-hazirlik.yaz` | süreli kilit (tek sefer koşan işler) |
 | GET /denetim-hazirlik/kisiler | `denetim-hazirlik.oku` ya da `.yaz` | etkin kişiler (no, ad) |
 | POST /denetim-hazirlik/kurulum | `denetim-hazirlik.yonet` | boş depoda başlangıç belgeleri |
-| GET /denetim-hazirlik/oda | `denetim-hazirlik.oku` ya da `.yaz` | açık olanlar ve durumları |
 | POST /denetim-hazirlik/ekler/yukle | `denetim-hazirlik.yaz` | ek yükleme (gövdesiz denetim) |
 | GET /denetim-hazirlik/ekler/:id | `denetim-hazirlik.oku` ya da `.yaz` | ek okuma |
 

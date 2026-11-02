@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { AcikSiparisSatirlariCevabi, AmbalajTuru, KodCozCevabi, MalKabulCevabi, MalKabulGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_KATALOGU } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
@@ -65,10 +66,12 @@ export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme
   const [siparis, setSiparis] = useState('');
   const ad = malzeme.ad ?? malzeme.kod;
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => { bitti(c.belge.id, kopyaSayisi(sayi)); return c; }), `Mal kabul edildi: ${ad}`);
+  // Çift tık tek istek ve tek bildirim (STK-7).
+  const kilitli = useGonderimKilidi();
   const giris = (): BekleyenGiris => ({ malzemeId: malzeme.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi, siparisSatirId: siparis === SIPARISSIZ ? null : Number(siparis) });
   const secildi = siparis !== '';
   return (
-    <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (secildi) komut.mutate(kabulGovdesi(giris(), konumId)); }}>
+    <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (secildi) { const g = kabulGovdesi(giris(), konumId); kilitli(() => komut.mutateAsync(g)); } }}>
       <SiparisSecimi malzemeId={malzeme.id} secim={siparis} sec={setSiparis} />
       <div className="tc-stok-ambalajlar" role="group" aria-label="Ambalaj">
         <button type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === 'oto'} onClick={() => setAmbalaj('oto')}><AmbalajIkonu tur="oto" /><strong>Otomatik</strong><span>Malzemenin kayıtlı ambalajı</span></button>

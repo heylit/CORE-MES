@@ -87,7 +87,12 @@ export function isleyiciReddiniKaydet(istek: RetIstegi & { readonly method: stri
   istekReddiniKaydet(istek, { neden: kapsam ? 'kapsam' : 'yetki', kisiId, yontem: istek.method, yol: yol ?? yoluTemizle(istek.url) });
 }
 
-// Var olmayan adres (adres taraması): kişi bilinmez, istenen yol temizlenerek yazılır.
+// Var olmayan adres (adres taraması): kişi bilinmez, istenen yol temizlenerek yazılır. Uç kalıpları gibi /api öneksiz yazılır:
+// listede bütün nedenler aynı biçimde görünür ve aynı aramayla bulunur (arayüz kapısı uygulamaya yalnız /api altını verir).
 export function adresYokKaydet(istek: RetIstegi & { readonly method: string }): void {
-  istekReddiniKaydet(istek, { neden: 'adres-yok', kisiId: null, yontem: istek.method, yol: yoluTemizle(istek.url) });
+  istekReddiniKaydet(istek, { neden: 'adres-yok', kisiId: null, yontem: istek.method, yol: apiOnekiniAt(yoluTemizle(istek.url)) });
+}
+
+export function apiOnekiniAt(yol: string): string {
+  return yol.replace(/^\/api(?=\/)/, '');
 }

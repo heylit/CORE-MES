@@ -5,11 +5,12 @@ import type { YemekBildirVerisi } from '#paylasilan/sozlesme/idari-isler.ts';
 import {
   KM_GERI, aracBugundeMi, aracUyarilari, kmReddi, plakaBicimle,
   HESAP_DEGISTI, NEDEN_GEREK, SAYI_EKSI, YEMEK_GECMIS, YEMEK_ILERI, yemekBildirimReddi, yemekKadrosu, yemekSayisi,
-  ATIK_MIKTARI, MIKTAR_ARTI, SONRAKI_GEREK, SONRAKI_ONCE, YALNIZ_ATIK_MIKTARI, YAPILMA_GELECEK, bugundeMi, bugunSirasi, gecisHedefi, gecisReddi,
+  ATIK_MIKTARI, MIKTAR_ARTI, SONRAKI_GEREK, SONRAKI_ONCE, YALNIZ_ATIK_MIKTARI, YAPILMA_GELECEK, TARIH_ESKI, bugundeMi, bugunSirasi, gecisHedefi, gecisReddi,
   geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, tarihEkle, yapildiSonucu,
 } from './kurallar.ts';
 import {
-  CIKIS_KM_GERI, DONUS_KM_GERI, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN, aracVerilemezMi, cikisKmReddi, donusKmReddi,
+  CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN,
+  aracBelgeReddi, aracVerilemezMi, CIKIS_ERKEN, cikisGunuReddi, cikisKmReddi, elleAracDurumReddi, GOREVDE_ELLE, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
 import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
@@ -108,6 +109,8 @@ describe('idari-isler kuralları', () => {
     assert.deepEqual(yapildiSonucu(yasal, g, bugun), { sonraki: '2027-04-19' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, sonrakiTarih: '2027-01-01' }, bugun), { sonraki: '2027-01-01' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '2026-10-20' }, bugun), { ileti: YAPILMA_GELECEK, alan: 'yapilma' });
+    assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '1990-01-01' }, bugun), { ileti: TARIH_ESKI, alan: 'yapilma' });
+    assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '2000-01-01', sonrakiTarih: '2001-01-01' }, bugun), { sonraki: '2001-01-01' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, miktar: '5', birim: 'kg' }, bugun), { ileti: YALNIZ_ATIK_MIKTARI, alan: 'miktar' });
     assert.deepEqual(yapildiSonucu(atik, g, bugun), { ileti: ATIK_MIKTARI, alan: 'miktar' });
     assert.deepEqual(yapildiSonucu(atik, { ...g, miktar: '5' }, bugun), { ileti: ATIK_MIKTARI, alan: 'birim' });
@@ -223,12 +226,37 @@ describe('idari-isler kuralları', () => {
     assert.equal(aracVerilemezMi('gorevde'), false);
   });
 
-  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz', () => {
+  test('IDR-25: muayenesi ya da sigortası görevin son gününden önce biten araç verilmez; tarihsiz belge engel değil', () => {
+    const bos = { muayeneTarihi: null, sigortaTarihi: null };
+    assert.equal(aracBelgeReddi(bos, '2026-11-10'), null);
+    assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-09' }, '2026-11-10'), MUAYENE_GECIYOR);
+    assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-10' }, '2026-11-10'), null);
+    assert.equal(aracBelgeReddi({ ...bos, sigortaTarihi: '2026-10-01' }, '2026-11-10'), SIGORTA_GECIYOR);
+  });
+
+  test('IDR-33: görevde elle seçilmez; yoldaki aracın durumu elle değişmez; görevsiz eski görevde kaydı değişir', () => {
+    assert.equal(elleAracDurumReddi(null, 'gorevde', false), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('musait', 'gorevde', false), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'musait', true), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'pasif', true), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'gorevde', true), null);
+    assert.equal(elleAracDurumReddi('gorevde', 'musait', false), null);
+    assert.equal(elleAracDurumReddi('musait', 'serviste', false), null);
+  });
+
+  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km; çıkış görev gününden önce olmaz', () => {
     assert.equal(cikisKmReddi(1000, 999), CIKIS_KM_GERI);
+    assert.equal(cikisGunuReddi('2026-10-20', '2026-10-19'), CIKIS_ERKEN);
+    assert.equal(cikisGunuReddi('2026-10-19', '2026-10-19'), null);
+    assert.equal(cikisGunuReddi('2026-10-18', '2026-10-19'), null);
     assert.equal(cikisKmReddi(1000, 1000), null);
     assert.equal(cikisKmReddi(null, 0), null);
     assert.equal(donusKmReddi(1000, 999), DONUS_KM_GERI);
     assert.equal(donusKmReddi(1000, 1000), null);
+    assert.equal(cikisKmReddi(1000, 1000 + YOL_KM_EN_COK), null);
+    assert.equal(cikisKmReddi(1000, 1001 + YOL_KM_EN_COK), CIKIS_KM_ASIRI);
+    assert.equal(donusKmReddi(1000, 1000 + YOL_KM_EN_COK), null);
+    assert.equal(donusKmReddi(1000, 1001 + YOL_KM_EN_COK), DONUS_KM_ASIRI);
   });
 
   test('IDR-27: tutar sıfırdan büyük, en çok iki kuruş basamaklı ve sınır içinde; tarih bugünden ileri değil', () => {
@@ -237,6 +265,7 @@ describe('idari-isler kuralları', () => {
     assert.equal(masrafReddi({ tutar: '0.01', tarih: '2025-01-01' }, b), null);
     assert.equal(masrafReddi({ tutar: '9999999999.99', tarih: b }, b), null);
     assert.deepEqual(masrafReddi({ tutar: '10', tarih: '2026-10-20' }, b), { ileti: MASRAF_GELECEK, alan: 'tarih' });
+    assert.deepEqual(masrafReddi({ tutar: '10', tarih: '1900-01-01' }, b), { ileti: TARIH_ESKI, alan: 'tarih' });
     for (const tutar of ['0', '0.00', '-5', '1.234', '10000000000']) {
       assert.deepEqual(masrafReddi({ tutar, tarih: b }, b), { ileti: TUTAR_GECERSIZ, alan: 'tutar' }, tutar);
     }
@@ -261,6 +290,7 @@ describe('idari-isler kuralları', () => {
     assert.equal(zimmetlemeReddi('bakimda', b, b)?.ileti, ZIMMETLENEMEZ);
     assert.equal(zimmetlemeReddi('zimmetli', b, b)?.ileti, ZIMMETLENEMEZ);
     assert.deepEqual(zimmetlemeReddi('bosta', '2026-10-20', b), { ileti: VERILIS_GELECEK, alan: 'verilis' });
+    assert.deepEqual(zimmetlemeReddi('bosta', '1900-01-01', b), { ileti: TARIH_ESKI, alan: 'verilis' });
   });
 
   test('IDR-31: iade ileri ve verilişten önce olmaz; sağlam boşa, hasarlı bakıma, kayıp kayba', () => {

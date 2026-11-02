@@ -73,9 +73,11 @@ export const PANO_EN_COK = 200;
 const panoSutunu = z.object({ talepler: z.array(talepSemasi), toplam: z.number().int().nonnegative() });
 export const talepPanosuCevabi = z.object({ yeni: panoSutunu, yapiliyor: panoSutunu, kapanan: panoSutunu });
 
+// Taleplerim süzgeci tek durum ya da "sonuclanan"dır: kapanan, reddedilen ve geri çekilen birlikte (personelin "Kapandı" sekmesi).
+export const TALEPLERIM_SUZGECLERI = [...TALEP_DURUMLARI, 'sonuclanan'] as const;
 export const taleplerimSorgusu = z.object({
   ...listeSorguAlanlari(['acilma', 'no']),
-  durum: talepDurumuSemasi.optional(),
+  durum: z.enum(TALEPLERIM_SUZGECLERI).optional(),
 });
 export const taleplerimCevabi = listeCevapSemasi(talepSemasi);
 
@@ -337,8 +339,23 @@ const demirbasAlanlari = {
   aciklama: istege(NOT_EN_UZUN),
 };
 export const demirbasEkleGovdesi = z.object(demirbasAlanlari);
-// Durum yoksa değişmez; zimmetli demirbaşın öteki alanları durumsuz düzenlenir.
-export const demirbasGuncelleGovdesi = z.object({ ...beklenenSurum, ...demirbasAlanlari, durum: elleDurumSemasi.nullish().transform((d) => d ?? null) });
+// Kısmi güncelleme: gönderilmeyen alan değişmez, null ya da boş metin alanı siler. Durum yoksa değişmez; zimmetli demirbaşın öteki
+// alanları durumsuz düzenlenir.
+const korunur = (azami: number) =>
+  z.string().max(azami, `En çok ${azami} karakter.`).nullable().optional().transform((m) => {
+    if (m === undefined) return undefined;
+    const kirpik = m?.trim();
+    return kirpik ? kirpik : null;
+  });
+export const demirbasGuncelleGovdesi = z.object({
+  ...beklenenSurum,
+  tur: demirbasTuruSemasi.optional(),
+  markaModel: korunur(MARKA_MODEL_EN_UZUN),
+  seriNo: korunur(SERI_NO_EN_UZUN),
+  deger: ondalikMetinSemasi.nullable().optional(),
+  aciklama: korunur(NOT_EN_UZUN),
+  durum: elleDurumSemasi.nullish().transform((d) => d ?? null),
+});
 // Zimmetleme demirbaşın sürümüyle; iade ve kişiye bağlama zimmetin sürümüyle gider.
 export const zimmetleGovdesi = z.object({ ...beklenenSurum, kisiId: kimlik, verilis: tarihSemasi, aciklama: istege(NOT_EN_UZUN) });
 export const iadeGovdesi = z.object({ ...beklenenSurum, iade: tarihSemasi, iadeDurumu: iadeDurumuSemasi, iadeNotu: istege(NOT_EN_UZUN) });
@@ -376,6 +393,15 @@ export const demirbasSemasi = z.object({
   surum: surumSemasi,
 });
 export const demirbasCevabi = z.object({ demirbas: demirbasSemasi });
+// Kişinin kendi üzerindeki (iade edilmemiş) zimmetler; değer ve durum gibi yönetim alanları yoktur.
+export const zimmetimSemasi = z.object({
+  demirbasNo: z.string(),
+  tur: demirbasTuruSemasi,
+  markaModel: z.string().nullable(),
+  seriNo: z.string().nullable(),
+  verilis: tarihSemasi.nullable(),
+});
+export const zimmetlerimCevabi = z.object({ zimmetler: z.array(zimmetimSemasi) });
 export const DEMIRBAS_EN_COK = 1000;
 export const demirbaslarCevabi = z.object({ demirbaslar: z.array(demirbasSemasi) });
 
@@ -459,6 +485,7 @@ export type TalepCevabi = z.output<typeof talepCevabi>;
 export type TalepPanosuCevabi = z.output<typeof talepPanosuCevabi>;
 export type TaleplerimSorgusu = z.input<typeof taleplerimSorgusu>;
 export type TaleplerimSuzgeci = z.output<typeof taleplerimSorgusu>;
+export type TaleplerimDurumSuzgeci = (typeof TALEPLERIM_SUZGECLERI)[number];
 export type TaleplerimCevabi = z.output<typeof taleplerimCevabi>;
 export type SonYerlerCevabi = z.output<typeof sonYerlerCevabi>;
 export type KisiSecenekleriCevabi = z.output<typeof kisiSecenekleriCevabi>;
@@ -517,6 +544,7 @@ export type IadeVerisi = z.output<typeof iadeGovdesi>;
 export type Zimmet = z.output<typeof zimmetSemasi>;
 export type ZimmetCevabi = z.output<typeof zimmetCevabi>;
 export type ZimmetlerCevabi = z.output<typeof zimmetlerCevabi>;
+export type ZimmetlerimCevabi = z.output<typeof zimmetlerimCevabi>;
 export type Demirbas = z.output<typeof demirbasSemasi>;
 export type DemirbasCevabi = z.output<typeof demirbasCevabi>;
 export type DemirbaslarCevabi = z.output<typeof demirbaslarCevabi>;

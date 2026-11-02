@@ -121,6 +121,18 @@ describe('Sistem Ayarları, ortak cihazlar', () => {
     expect(await screen.findByText(/artık ortak cihaz değil/)).toBeTruthy();
   });
 
+  it('Tam dışı profil seçiliyken kayıt formu bu tarayıcıda yetkinin daralacağını söyler; Tam seçilince uyarı kalkar', async () => {
+    sunucuKur([TERMINAL]);
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Ortak cihazlar' }));
+    const uyari = /sizin yetkiniz de daralır/;
+    expect((await screen.findByRole('note')).textContent).toMatch(uyari);
+    fireEvent.change(screen.getByLabelText('Profil'), { target: { value: 'tam' } });
+    expect(screen.queryByText(uyari)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Profil'), { target: { value: 'telefon' } });
+    expect(screen.getByRole('note').textContent).toMatch(uyari);
+  });
+
   it('Tam cihazda profil satırdan atanır; okunan atama sürümü gider (1358)', async () => {
     const istekler = sunucuKur([TERMINAL]);
     ac(YONETICI);

@@ -136,6 +136,9 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(c.kalemler.every((k) => k.plan === null && k.gerceklesen === null));
     assert.deepEqual(c.sapanIsEmirleri, []);
     assert.equal(c.karRiski.gunlukOran, 0.3);
+    // PM-44: emirsiz projede asıl eksik iş emridir; hesaplanmayan finansman için vade uyarısı çıkmaz.
+    assert.ok(c.eksikler.includes('is_emri_yok'));
+    assert.ok(!c.eksikler.includes('vade_yok'));
 
     const s = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparissiz.id, SIMDI));
     assert.deepEqual([s.siparis, s.gelir], [null, null]);
@@ -257,7 +260,10 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
   });
 
   test('PM-30 bekleme finansmanı (PM-29): TL faizi yoksa bildirilir; vadesiz siparişte vade eksik; plan tarihi yoksa plan bilinmez, başlamamış işte gerçek 0', async () => {
-    const vadesiz = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparisli.id, SIMDI));
+    // Vade uyarısı yalnız hesaplanan iş varken (PM-44): aynı vadesiz siparişten açılan iş emirli proje.
+    const vadesizProje = await tamam<Proje>(gonder(yonetici, `/projeler/siparisten/${siparis.id}/ac`, { kod: 'PM.30', ad: 'Vadesiz' }));
+    await isEmriAc(vadesizProje.id);
+    const vadesiz = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), vadesizProje.id, SIMDI));
     assert.ok(vadesiz.eksikler.includes('vade_yok'));
     await isEmriAc(siparissiz.id);
     await ortam!.sahip.sorgu("INSERT INTO finans_faiz (para_birimi, gecerlilik_baslangic, aylik_yuzde, olusturan_id) VALUES ('TRY', '2026-01-01', 3, $1)", [yoneticiId]);
@@ -266,6 +272,8 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!c.eksikler.includes('vade_yok'));
     const kalem = c.kalemler.find((x) => x.kalem === 'finansman')!;
     assert.deepEqual([kalem.plan, kalem.gerceklesen], [null, 0]);
+    // PM-47: canlı planda olmayan iş için plan tarihi eksik olarak bildirilir.
+    assert.ok(c.eksikler.includes('plan_tarihi_yok'));
   });
 
   test('PM-32 amortisman (E-9): genel gider oranı amortismanı içermiyorsa ekranda bildirilir', async () => {

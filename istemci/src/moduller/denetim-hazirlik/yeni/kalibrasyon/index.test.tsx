@@ -26,6 +26,15 @@ describe('Kalibrasyon (salt okunur, 329 a)', () => {
     expect(screen.getByText('10 gün gecikti')).toBeTruthy();
   });
 
+  it('vadesi Kalibrasyondan gelen cihazda "elle girildi" yazmaz', async () => {
+    const vade = gunEkle(t, 40);
+    sahteSunucu({ depo: ornekDepo(), aletler: [{ ...alet('OC-9', ayEkle(vade, -12)), nx: vade }] });
+    await baglamlaAc(<Kalibrasyon />, 'kalib');
+    const tablo = await screen.findByRole('table', { name: 'Cihazlar' });
+    expect(within(tablo).getByText('Kalibrasyondan')).toBeTruthy();
+    expect(within(tablo).queryByText('elle girildi')).toBeNull();
+  });
+
   it('sayı kartı ve süzgeç listeyi daraltır; takvim görünümü ayı çizer', async () => {
     sahteSunucu({ depo: ornekDepo(), aletler });
     await baglamlaAc(<Kalibrasyon />, 'kalib');

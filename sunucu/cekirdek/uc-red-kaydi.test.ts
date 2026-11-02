@@ -78,5 +78,5 @@ test('var olmayan adres sorgu dizgesi olmadan yazılır; cevap yine 404 ve aynı
   assert.equal(cevap.statusCode, 404);
   assert.deepEqual(cevap.json(), { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   const { olaylar } = retOlaylariniBosalt();
-  assert.deepEqual(olaylar.map((o) => [o.neden, o.kisiId, o.yol]), [['adres-yok', null, '/api/yonetim/yedek']]);
+  assert.deepEqual(olaylar.map((o) => [o.neden, o.kisiId, o.yol]), [['adres-yok', null, '/yonetim/yedek']]);
 });

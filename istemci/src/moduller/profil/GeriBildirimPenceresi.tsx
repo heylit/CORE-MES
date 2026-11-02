@@ -28,6 +28,12 @@ export function GeriBildirimPenceresi({ kapat }: { kapat: () => void }) {
 
   const kisa = metin.trim().length < METIN_EN_AZ;
   const hazir = konu !== null && tur !== null && !kisa;
+  // Gönder kapalıyken nedeni söylenir; kişi hangi seçimin eksik olduğunu aramaz.
+  const eksikler = [
+    ...(konu === null ? ['konuyu seçin'] : []),
+    ...(tur === null ? ['türü seçin'] : []),
+    ...(kisa ? [`en az ${METIN_EN_AZ} karakter yazın`] : []),
+  ];
 
   const gonder = async (o: FormEvent) => {
     o.preventDefault();
@@ -81,6 +87,7 @@ export function GeriBildirimPenceresi({ kapat }: { kapat: () => void }) {
           ipucu={`Adınızla kaydedilir. ${metin.length}/${METIN_EN_COK}`}
           required
         />
+        {eksikler.length > 0 && <p className="tc-profil-eksik" role="status">Göndermek için {eksikler.join(', ')}.</p>}
         {hata !== null && <p className="tc-profil-hata" role="alert">{hata}</p>}
       </form>
     </Pencere>

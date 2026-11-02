@@ -1,4 +1,7 @@
+import { SABIT_HURDA_KODLARI } from '#paylasilan/sozlesme/durus-nedenleri-sabitleri.ts';
 import type { CagriEkibi, Kategori } from '#paylasilan/sozlesme/durus-nedenleri.ts';
+
+export { FIRMADA_HURDA_KODU, FIRMADAN_GELMEDI_KODU, SABIT_HURDA_KODLARI } from '#paylasilan/sozlesme/durus-nedenleri-sabitleri.ts';
 
 export const DURUS_ONEKI = 'D';
 export const HURDA_ONEKI = 'H';
@@ -31,11 +34,6 @@ export function kodOner(onek: string, kodlar: readonly string[]): string {
   return `${onek}-${String(enBuyuk + 1).padStart(2, '0')}`;
 }
 
-// 1207 c: fasonda hurdaya ayrılan ve firmadan gelmeyen parça için hatalı türleri (göç 20261029116000). GKK bu kodlarla gelen parçayı
-// firmada sayar; kod bu yüzden sabittir, adı ve aktifliği yöneticinindir.
-export const FIRMADA_HURDA_KODU = 'FSN-HURDA';
-export const FIRMADAN_GELMEDI_KODU = 'FSN-GELMEDI';
-export const SABIT_HURDA_KODLARI: readonly string[] = [FIRMADA_HURDA_KODU, FIRMADAN_GELMEDI_KODU];
 export const SABIT_KOD_DEGISMEZ = 'Bu hatalı türünün kodu sabittir (fason dönüşü); adı ve aktifliği değişebilir.';
 export const sabitKodEngeli = (eskiKod: string, yeniKod: string): string | null =>
   SABIT_HURDA_KODLARI.includes(eskiKod) && eskiKod !== yeniKod ? SABIT_KOD_DEGISMEZ : null;

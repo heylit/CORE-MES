@@ -6,6 +6,7 @@ import {
 
 export const TALEP_YOK = 'Talep bulunamadı.';
 export const KISI_YOK = 'Kişi bulunamadı ya da pasif.';
+export const ATANAMAZ = 'Talep yalnız tesis taleplerini yönetebilen etkin kişiye atanır.';
 export const YALNIZ_ACAN = 'Talebi yalnız açan kişi geri çekebilir.';
 
 // IDR-02: durum geçişleri. Kapanan, reddedilen ve geri çekilen talep son durumdadır.
@@ -67,6 +68,9 @@ export const KONTROL_YOK = 'Kontrol kalemi bulunamadı.';
 export const KONTROL_BITTI = 'Biten kalem değiştirilemez.';
 export const FIRMA_YOK = 'Firma bulunamadı ya da pasif.';
 export const YAPILMA_GELECEK = 'Yapılma tarihi bugünden sonra olamaz.';
+// Yanlış yazılan yıl (1900, 1990) kalemi "13.000 gün geçti" gösterir; bu tarihten önceki kayıt elle girilmez.
+export const TARIH_EN_ERKEN = '2000-01-01';
+export const TARIH_ESKI = 'Tarih 01.01.2000\'den önce olamaz; yılı kontrol edin.';
 export const ATIK_MIKTARI = 'Atık tesliminde miktar ve birim zorunlu.';
 export const YALNIZ_ATIK_MIKTARI = 'Miktar yalnız atık tesliminde yazılır.';
 export const MIKTAR_ARTI = 'Miktar sıfırdan büyük olmalı.';
@@ -112,6 +116,7 @@ export function yapildiSonucu(
   k: KontrolOzu, g: Pick<YapildiVerisi, 'yapilma' | 'sonrakiTarih' | 'miktar' | 'birim'>, bugun: string,
 ): { sonraki: string } | { ileti: string; alan: string } {
   if (g.yapilma > bugun) return { ileti: YAPILMA_GELECEK, alan: 'yapilma' };
+  if (g.yapilma < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'yapilma' };
   if (k.tur === 'atik' && (g.miktar === null || g.birim === null)) return { ileti: ATIK_MIKTARI, alan: g.miktar === null ? 'miktar' : 'birim' };
   if (k.tur !== 'atik' && (g.miktar !== null || g.birim !== null)) return { ileti: YALNIZ_ATIK_MIKTARI, alan: 'miktar' };
   if (g.miktar !== null && !(Number(g.miktar) > 0)) return { ileti: MIKTAR_ARTI, alan: 'miktar' };
@@ -183,6 +188,13 @@ export function kmReddi(eski: number | null, yeni: number | null): string | null
   return eski !== null && yeni !== null && yeni < eski ? KM_GERI : null;
 }
 
+export const GOREVDE_ELLE = 'Görevde durumu yalnız araç göreve çıkınca yazılır; yoldaki aracın durumu dönüş yazılınca değişir.';
+// IDR-33: "görevde" yalnız görevin çıkışıyla başlar ve dönüşüyle biter: elle seçilmez, yolda görevi olan aracın durumu elle değişmez.
+// Görevsiz kalmış eski "görevde" kaydı elle başka duruma alınabilir.
+export function elleAracDurumReddi(mevcut: AracDurumu | null, yeni: AracDurumu, yolda: boolean): string | null {
+  if (yolda) return yeni === 'gorevde' ? null : GOREVDE_ELLE;
+  return yeni === 'gorevde' && mevcut !== 'gorevde' ? GOREVDE_ELLE : null;
+}
 // IDR-19: muayene ve sigorta 30 gün içinde ya da geçmişse, bakıma 1000 km ya da daha az kaldıysa uyarı; pasif araçta uyarı yok.
 export const ARAC_UYARI_GUN = 30;
 export const BAKIM_UYARI_KM = 1000;
@@ -217,6 +229,11 @@ export const ARAC_VERILEMEZ = 'Pasif ya da serviste olan araç göreve verilmez.
 export const ARAC_DOLU = 'Araç bu tarihlerde başka bir görevde.';
 export const CIKIS_KM_GERI = 'Çıkış km\'si aracın kayıtlı km\'sinden küçük olamaz.';
 export const DONUS_KM_GERI = 'Dönüş km\'si çıkış km\'sinden küçük olamaz.';
+// Km geriye yazılmadığı için yanlış yazılan büyük değer düzeltilemez; tek adımda en çok bu kadar ilerlenir. Daha uzun yol önce Filo'da
+// aracın km'si güncellenerek yazılır.
+export const YOL_KM_EN_COK = 10_000;
+export const CIKIS_KM_ASIRI = `Çıkış km'si aracın kayıtlı km'sinden en çok ${YOL_KM_EN_COK.toLocaleString('tr-TR')} fazla olabilir; araç km'si farklıysa önce Filo'da güncelleyin.`;
+export const DONUS_KM_ASIRI = `Dönüş km'si çıkış km'sinden en çok ${YOL_KM_EN_COK.toLocaleString('tr-TR')} fazla olabilir.`;
 
 // IDR-23: görev durum geçişleri. Onaylı görev de reddedilebilir ve geri çekilebilir (araç çıkmadan); yoldaki görev yalnız dönüşle kapanır.
 export type GorevKomutu = 'onayla' | 'reddet' | 'geri-cek' | 'cikis' | 'donus';
@@ -256,13 +273,29 @@ export function gorevTarihReddi(g: { tarih: string; donusTarihi: string }, bugun
 export function aracVerilemezMi(durum: AracDurumu): boolean {
   return durum === 'pasif' || durum === 'serviste';
 }
+export const MUAYENE_GECIYOR = 'Aracın muayenesi görev bitmeden sona eriyor; muayene tarihi Filo\'da güncellenmeden göreve verilmez.';
+export const SIGORTA_GECIYOR = 'Aracın sigortası görev bitmeden sona eriyor; sigorta tarihi Filo\'da güncellenmeden göreve verilmez.';
+// IDR-25: muayenesi ya da sigortası görevin son gününden önce biten araç göreve verilmez ve çıkamaz. Tarihi girilmemiş belge bilinmez,
+// engel sayılmaz (Filo uyarısı yalnız girilen tarihten çıkar).
+export function aracBelgeReddi(a: { muayeneTarihi: string | null; sigortaTarihi: string | null }, sonGun: string): string | null {
+  if (a.muayeneTarihi !== null && a.muayeneTarihi < sonGun) return MUAYENE_GECIYOR;
+  if (a.sigortaTarihi !== null && a.sigortaTarihi < sonGun) return SIGORTA_GECIYOR;
+  return null;
+}
 
-// IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz.
+// IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz; ikisi de bir öncekinden en çok YOL_KM_EN_COK ilerler.
+export const CIKIS_ERKEN = 'Görev günü gelmeden çıkış yazılmaz; görev tarihi değiştiyse talebi yeniden açın.';
+// IDR-26: çıkış görevin gidiş gününden önce yazılmaz (erken yazılan çıkış aracı başka görevde gösterir). Geç çıkış serbesttir.
+export function cikisGunuReddi(gorevTarihi: string, bugun: string): string | null {
+  return bugun < gorevTarihi ? CIKIS_ERKEN : null;
+}
+
 export function cikisKmReddi(aracKm: number | null, km: number): string | null {
-  return aracKm !== null && km < aracKm ? CIKIS_KM_GERI : null;
+  if (aracKm === null) return null;
+  return km < aracKm ? CIKIS_KM_GERI : km - aracKm > YOL_KM_EN_COK ? CIKIS_KM_ASIRI : null;
 }
 export function donusKmReddi(cikisKm: number, km: number): string | null {
-  return km < cikisKm ? DONUS_KM_GERI : null;
+  return km < cikisKm ? DONUS_KM_GERI : km - cikisKm > YOL_KM_EN_COK ? DONUS_KM_ASIRI : null;
 }
 
 export const MASRAF_YOK = 'Masraf kaydı bulunamadı.';
@@ -273,6 +306,7 @@ export const TUTAR_GECERSIZ = 'Tutar sıfırdan büyük, en çok iki kuruş basa
 // IDR-27: tutar sıfırdan büyük, en çok iki kuruş basamaklı ve sınır içinde; masraf tarihi bugünden ileri değil.
 export function masrafReddi(g: { tutar: string; tarih: string }, bugun: string): { ileti: string; alan: string } | null {
   if (g.tarih > bugun) return { ileti: MASRAF_GELECEK, alan: 'tarih' };
+  if (g.tarih < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'tarih' };
   return tutarGecerliMi(g.tutar, TUTAR_EN_COK) ? null : { ileti: TUTAR_GECERSIZ, alan: 'tutar' };
 }
 
@@ -312,6 +346,7 @@ export function elleDurumReddi(mevcut: DemirbasDurumu, yeni: ElleDurum): string 
 export function zimmetlemeReddi(durum: DemirbasDurumu, verilis: string, bugun: string): { ileti: string; alan: string } | null {
   if (durum !== 'bosta') return { ileti: ZIMMETLENEMEZ, alan: 'kisiId' };
   if (verilis > bugun) return { ileti: VERILIS_GELECEK, alan: 'verilis' };
+  if (verilis < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'verilis' };
   return null;
 }
 

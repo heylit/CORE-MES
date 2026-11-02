@@ -43,7 +43,7 @@ export const uclar = [
     parametre: ayarParametresi,
     govde: ayarDegistirGovdesi,
     cevap: ayarSemasi,
-    isle: ({ db, parametre, govde, kullanici }) => ayarDegistir(db, kullanici.id, parametre.anahtar, govde.deger),
+    isle: ({ db, parametre, govde, kullanici }) => ayarDegistir(db, kullanici.id, parametre.anahtar, govde.deger, govde.beklenen),
   }),
   uc({
     yontem: 'GET',

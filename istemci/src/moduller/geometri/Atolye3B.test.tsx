@@ -113,6 +113,26 @@ describe('3D Atölyesi', () => {
     expect(post?.basliklar['istek-kimligi']).toBeTruthy();
   });
 
+  it('GEO-1: ikinci "Yeniden hesapla" yeni kimlikle gider; çift tık tek istek', async () => {
+    const istekler = sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'POST /geometri/analizler/41/yeniden-hesapla': () => json(200, ANALIZ),
+    });
+    ac('/geometri?rev=41');
+    const dugme = await screen.findByRole('button', { name: /Yeniden hesapla/ });
+    fireEvent.click(dugme);
+    fireEvent.click(dugme);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Yeniden hesapla/ }).hasAttribute('disabled')).toBe(false));
+    expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Yeniden hesapla/ }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+    const [ilk, ikinci] = istekler.filter((i) => i.yontem === 'POST').map((i) => i.basliklar['istek-kimligi']);
+    expect(ikinci).toBeTruthy();
+    expect(ikinci).not.toBe(ilk);
+  });
+
   it('yetkisiz kullanıcıya yetki iletisi, boş listede yol gösteren ileti', async () => {
     sunucuKur({ 'GET /geometri/modeller': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) });
     ac();
@@ -121,6 +141,9 @@ describe('3D Atölyesi', () => {
     sunucuKur({ 'GET /geometri/modeller': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 }) });
     ac();
     expect(await screen.findByText(/3B modeli olan malzeme yok/)).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'yok' } });
+    expect(await screen.findByText('Aramaya ya da süzgece uyan model yok.')).toBeTruthy();
+    expect(screen.queryByText(/3B modeli olan malzeme yok/)).toBeNull();
   });
 
   it('hesaplanamayan modelde hata metni ve kapalı olmayan modelde hacim yerine açıklama', async () => {

@@ -8,7 +8,7 @@ import {
   CokSatir, DurumKutusu, Dugme, IsaretKutusu, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
-import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { IstasyonSecimi } from '../istasyonlar/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { haftaGunuAdi, saat, tarihEkle, tarihMetni } from './gosterim.ts';
@@ -64,11 +64,11 @@ function Alanli({ etiket, children }: { etiket: string; children: (kimlik: strin
 function useMesaiYaz(kapat: () => void, reddedildi: (idler: number[]) => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  return useMutation({
-    mutationFn: ({ f, govde }: { f: Form; govde: FazlaMesaiGovdesi }) => (f.id === null
-      ? tekrarKorumaliGonder((d) => api.post<FazlaMesaiCevabi>('/fazla-mesai', govde, {
-        istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}),
-      }))
+  // Yeni kayıt tekrar korumalıdır: çift tık tek istek, kimlik başarıya ya da sunucunun reddine dek aynı (VRD-1).
+  return useKorumaliKomut<{ f: Form; govde: FazlaMesaiGovdesi }, FazlaMesaiCevabi>({
+    korumali: ({ f }) => f.id === null,
+    gonder: ({ f, govde }, deneme) => (f.id === null
+      ? api.post<FazlaMesaiCevabi>('/fazla-mesai', govde, deneme)
       : api.post<FazlaMesaiCevabi>(`/fazla-mesai/${String(f.id)}/guncelle`, { ...govde, surum: f.surum })),
     onSuccess: async () => {
       kapat();

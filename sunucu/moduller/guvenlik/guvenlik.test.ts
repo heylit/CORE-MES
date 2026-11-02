@@ -171,7 +171,7 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.deepEqual([alarm?.onem, alarm?.gozlenenSayi, alarm?.kisiAdi], ['orta', 4, 'Deneme cok-oturum']);
   });
 
-  test('G-08, G-09: koşulu biten alarm kendiliğinden kapanmaz; kapanan alarmın koşulu sürerse yeni alarm açılır', async () => {
+  test('G-08, G-09: koşulu biten alarm kendiliğinden kapanmaz; kapanan alarm yeni olay yoksa yeniden açılmaz, yeni olayla açılır (K27 a)', async () => {
     await o().vt.sorgu("INSERT INTO guvenlik_alarmi (sinyal, onem, kullanici_adi, gozlenen_sayi) VALUES ('hatali-giris-serisi', 'orta', 'g09-sessiz', 10)");
     await tara();
     assert.deepEqual((await alarmBul({ kullaniciAdi: 'g09-sessiz' })).map((a) => a.durum), ['acik']);
@@ -182,6 +182,10 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.ok(ilk);
     const kapat = await istek<Alarm>('yonetici', 'POST', `/guvenlik-alarmlari/${ilk.id}/kapat`, { surum: ilk.surum, not: 'Kişi parolasını unutmuş.' });
     assert.equal(kapat.durum, 200, JSON.stringify(kapat.govde));
+    await tara();
+    assert.deepEqual((await alarmBul({ kullaniciAdi: 'g08-ad' })).map((a) => a.durum), ['kapandi']);
+
+    await deneme('g08-ad', '10.8.0.1', 1, 0);
     const yeni = await tara();
     assert.ok((yeni?.yeniAlarm ?? 0) >= 1);
     assert.deepEqual((await alarmBul({ kullaniciAdi: 'g08-ad' })).map((a) => a.durum).sort(), ['acik', 'kapandi']);
@@ -428,26 +432,47 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
   test('oturumlar: yönetici açık oturumları kişi adıyla görür; başkasının oturumunu kapatır, kendininkini kapatamaz; müdür kapatamaz', async () => {
     await giris('mudur', 'mudur-ikinci');
     const liste = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde);
-    const kendi = liste.oturumlar.find((x) => x.buOturum);
+    const kendi = liste.satirlar.find((x) => x.buOturum);
     assert.equal(kendi?.kisiAdi, 'Deneme Yönetici');
-    const mudurunkiler = liste.oturumlar.filter((x) => x.kisiAdi === 'Deneme mudur');
+    const mudurunkiler = liste.satirlar.filter((x) => x.kisiAdi === 'Deneme mudur');
     assert.ok(mudurunkiler.length >= 2);
     const hedef = mudurunkiler[0];
     if (!hedef || !kendi) throw new Error('oturum yok');
-    assert.equal((await istek('mudur', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 403);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${kendi.id}/kapat`)).durum, 422);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 200);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 404);
+    assert.equal((await istek('mudur', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 403);
+    // GUV-5: komut gövdesi şemadan geçer; tanınmayan alan ve gövdesiz istek 400, oturum kapanmaz.
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, { x: 1 })).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${kendi.id}/kapat`, {})).durum, 422);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 200);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 404);
     const sonra = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde);
-    assert.equal(sonra.oturumlar.some((x) => x.id === hedef.id), false);
-    assert.equal(sonra.oturumlar.some((x) => x.id === kendi.id), true);
+    assert.equal(sonra.satirlar.some((x) => x.id === hedef.id), false);
+    assert.equal(sonra.satirlar.some((x) => x.id === kendi.id), true);
+  });
+
+  test('oturumlar (GUV-4): sayfalıdır; arama kişi adında (Türkçe büyük harf dahil), cihazda ve tarayıcıda geçer', async () => {
+    await giris('mudur', 'mudur-sayfa-1');
+    await giris('mudur', 'mudur-sayfa-2');
+    const hepsi = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde);
+    assert.ok((hepsi.toplam ?? 0) >= 3);
+    const ilkSayfa = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar?sayfaBoyu=1')).govde);
+    assert.deepEqual([ilkSayfa.satirlar.length, ilkSayfa.toplam], [1, hepsi.toplam]);
+    const ikinci = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar?sayfaBoyu=1&sayfa=2')).govde);
+    assert.notEqual(ikinci.satirlar[0]?.id, ilkSayfa.satirlar[0]?.id);
+    const aranan = oturumlarCevabi.parse((await istek('yonetici', 'GET', `/guvenlik/oturumlar?ara=${encodeURIComponent('DENEME MUDUR')}`)).govde);
+    assert.ok(aranan.satirlar.length >= 2);
+    assert.equal(aranan.satirlar.every((x) => x.kisiAdi === 'Deneme mudur'), true);
+    const yonetici = oturumlarCevabi.parse((await istek('yonetici', 'GET', `/guvenlik/oturumlar?ara=${encodeURIComponent('YÖNETİCİ')}`)).govde);
+    assert.ok(yonetici.satirlar.length >= 1);
+    assert.equal(yonetici.satirlar.every((x) => x.kisiAdi === 'Deneme Yönetici'), true);
+    assert.equal((await istek('yonetici', 'GET', `/guvenlik/oturumlar?ara=${'a'.repeat(81)}`)).durum, 400);
   });
 
   test('oturumlar: girişteki adres ve tarayıcı oturumla saklanır ve listede görünür; tarayıcı 300 karakterde kesilir, yoksa boştur', async () => {
     await giris('mudur', 'mudur-tarayicili', 'Deneme/1.0 (Windows NT 10.0; Win64; x64) Chrome/130.0');
     await giris('mudur', 'mudur-uzun', `Deneme/2.0 ${'x'.repeat(400)}`);
     await giris('mudur', 'mudur-tarayicisiz', '');
-    const liste = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde).oturumlar;
+    const liste = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde).satirlar;
     const bul = (onek: string) => liste.find((x) => x.tarayici?.startsWith(onek));
     const tarayicili = bul('Deneme/1.0');
     assert.equal(tarayicili?.ip, '127.0.0.1');
@@ -473,9 +498,10 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     const liste = kilitListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/kilitler')).govde);
     assert.deepEqual(liste.satirlar.filter((k) => k.kullaniciAdi === 'kilit-ad').map((k) => k.id), [ilk?.id]);
     assert.equal(ozetCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/ozet')).govde).kilitliHesap >= 1, true);
-    assert.equal((await istek('mudur', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`)).durum, 403);
-    assert.deepEqual(await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`), { durum: 200, govde: { acilan: 1 } });
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`)).durum, 404);
+    assert.equal((await istek('mudur', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {})).durum, 403);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, { x: 1 })).durum, 400);
+    assert.deepEqual(await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {}), { durum: 200, govde: { acilan: 1 } });
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {})).durum, 404);
     const acan = await o().vt.tek<{ acan: number }>('SELECT acan_kisi_id AS acan FROM oturum_hesap_kilidi WHERE id = $1', [ilk?.id]);
     assert.equal(acan?.acan, yoneticiId);
 

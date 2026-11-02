@@ -13,13 +13,16 @@ const FORM_KIMLIGI = 'tc-parola-formu';
 // beklemesi 401 döner ama oturum bitmemiştir (oturumBitirmez). Sonuç pencerede kalır: kabuk bildirim sağlayıcısı istemez.
 export function ParolaPenceresi({ kapat }: { kapat: () => void }) {
   const [degisti, degistiYaz] = useState(false);
-  const form = useForm<KendiParolaGovdesi>({
-    ilk: { eskiParola: '', yeniParola: '' },
+  // Tekrar alanı yalnız ekrandadır: yazım hatası kişiyi kendi hesabının dışında bırakmasın; sunucuya gitmez.
+  const form = useForm<KendiParolaGovdesi & { yeniTekrar: string }>({
+    ilk: { eskiParola: '', yeniParola: '', yeniTekrar: '' },
     dogrula: (d) => ({
       ...(d.eskiParola === '' ? { eskiParola: 'Eski parola zorunlu.' } : {}),
-      ...(d.yeniParola === '' ? { yeniParola: 'Yeni parola zorunlu.' } : {}),
+      ...(d.yeniParola === '' ? { yeniParola: 'Yeni parola zorunlu.' }
+        : d.yeniParola === d.eskiParola ? { yeniParola: 'Yeni parola eskisiyle aynı olamaz.' } : {}),
+      ...(d.yeniParola !== '' && d.yeniTekrar !== d.yeniParola ? { yeniTekrar: 'Yeni parola ile tekrarı aynı değil.' } : {}),
     }),
-    kaydet: (d) => api.post<unknown>('/hesabim/parola-degistir', d, { oturumBitirmez: true }),
+    kaydet: ({ eskiParola, yeniParola }) => api.post<unknown>('/hesabim/parola-degistir', { eskiParola, yeniParola }, { oturumBitirmez: true }),
     basarili: () => { degistiYaz(true); },
     hataIletisi: 'Parola değiştirilemedi.',
   });
@@ -48,6 +51,9 @@ export function ParolaPenceresi({ kapat }: { kapat: () => void }) {
             </div>
             <div className="tc-form-tam">
               <Girdi etiket="Yeni parola" type="password" required autoComplete="new-password" {...form.alan('yeniParola')} />
+            </div>
+            <div className="tc-form-tam">
+              <Girdi etiket="Yeni parola (tekrar)" type="password" required autoComplete="new-password" {...form.alan('yeniTekrar')} />
             </div>
           </form>
         )}

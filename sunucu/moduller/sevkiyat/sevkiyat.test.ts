@@ -9,6 +9,7 @@ import type { HaritaKaynagi } from './servis.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
 import { izgaraKaynagi } from './test-agi.ts';
+import { NOKTA_YOLA_BAGLANMIYOR } from './cozucu.ts';
 import { gunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 
 let ortam: TestVeritabani;
@@ -31,6 +32,7 @@ const BOS_IS = { alisNoktasiId: null, birakisNoktasiId: null, agirlikKilogram: 1
 // Taslakta kaydedilmiş saat yoktur.
 const taslakSaatleri = (p: { rotalar: { onaySaatleri: unknown }[] }) => p.rotalar.every((r) => r.onaySaatleri === null);
 const hata = (kod: string) => (h: unknown) => h instanceof UygulamaHatasi && h.kod === kod;
+const iletili = (kod: string, mesaj: string) => (h: unknown) => h instanceof UygulamaHatasi && h.kod === kod && h.message === mesaj;
 const kisit = (ad: string) => (h: unknown) => (h as { constraint?: string }).constraint === ad;
 // Güncelleme o anki sürümle gelir (kart #1323); sürüm çakışması ayrı testte.
 const surumu = async (db: Db, tablo: 'sevkiyat_noktasi' | 'sevkiyat_araci' | 'sevkiyat_isi', id: number) =>
@@ -61,9 +63,16 @@ test('SVK-1: aktif fabrika tektir: servis çakışma verir, veritabanı da redde
 
 test('SVK-2: aktif nokta ve araç adı tektir; aktif araçta plaka tektir (büyük/küçük harf duyarsız)', async () => {
   await assert.rejects(nokta('nokta a', 3, 3), kisit('sevkiyat_noktasi_ad'));
-  await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'ARAÇ 1' })), kisit('sevkiyat_araci_ad'));
+  await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'ARAÇ 1' })), iletili('CAKISMA', '“ARAÇ 1” adında aktif bir araç zaten var.'));
+  await assert.rejects(tx((db) => sorgu.aracEkle(db, { ...ARAC, ad: 'ARAÇ 1' })), kisit('sevkiyat_araci_ad'));
   const plakali = await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakalı', plaka: '06 DNM 01' }));
-  await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakalı 2', plaka: '06 dnm 01' })), kisit('sevkiyat_araci_plaka'));
+  await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakalı 2', plaka: '06 dnm 01' })), iletili('CAKISMA', '06 dnm 01 plakası başka bir aktif araçta kayıtlı.'));
+  await assert.rejects(tx((db) => sorgu.aracEkle(db, { ...ARAC, ad: 'Plakalı 2', plaka: '06 dnm 01' })), kisit('sevkiyat_araci_plaka'));
+  const ikinci = await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakasız İkinci' }));
+  await assert.rejects(tx(async (db) => servis.aracGuncelle(db, ikinci.id, { ...ARAC, ad: 'Plakasız İkinci', plaka: '06 DNM 01', surum: await surumu(db, 'sevkiyat_araci', ikinci.id) })),
+    iletili('CAKISMA', '06 DNM 01 plakası başka bir aktif araçta kayıtlı.'));
+  await tx(async (db) => servis.aracGuncelle(db, ikinci.id, { ...ARAC, ad: 'Plakasız İkinci', plaka: null, surum: await surumu(db, 'sevkiyat_araci', ikinci.id) }));
+  await tx((db) => servis.aracPasiflestir(db, ikinci.id));
   await tx((db) => servis.aracPasiflestir(db, plakali.id));
   const yeni = await tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Plakalı 3', plaka: '06 DNM 01' }));
   await tx((db) => servis.aracPasiflestir(db, yeni.id)); // sonraki testlerin araç sayısı değişmesin
@@ -197,6 +206,14 @@ test('SVK-3: noktanın durak süresi 0-240 dakikadır (veritabanı)', async () =
 test('araç müsaitliği: bitiş başlangıçtan sonra; kural servis ve veritabanında', async () => {
   await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Ters', musaitBaslangic: '18:00', musaitBitis: '08:00' })), hata('DOGRULAMA'));
   await assert.rejects(tx((db) => sorgu.aracEkle(db, { ...ARAC, ad: 'Ters', musaitBaslangic: '18:00', musaitBitis: '08:00' })), kisit('sevkiyat_araci_musaitlik'));
+});
+
+test('kural ihlalinin ayrıntısı şema doğrulamasıyla aynı biçimdedir: { alan, mesaj }', async () => {
+  await assert.rejects(tx((db) => servis.aracEkle(db, { ...ARAC, ad: 'Ters Müsaitlik', musaitBaslangic: '18:00', musaitBitis: '08:00' })), (h: unknown) => {
+    assert.ok(h instanceof UygulamaHatasi);
+    assert.deepEqual(h.ayrinti, [{ alan: 'musaitBitis', mesaj: h.message }]);
+    return true;
+  });
 });
 
 test('SVK-12: iş: fabrika nokta olarak seçilmez; tür ile nokta uyumu ve yük kuralı veritabanında da korunur', async () => {
@@ -458,6 +475,24 @@ test('yerleşemeyen iş nedeniyle döner, bekleyende kalır; okuma cevabında bu
   assert.deepEqual((await tx((db) => servis.gunPlani(db, T, kaynak))).yerlesemeyen, []);
 });
 
+test('SEV-1 (1780a): yol ağına bağlanamayan noktanın işi günü düşürmez; dağıtımda nedeniyle kalır, araca konmuşsa onayı engeller', async () => {
+  const T = '2026-10-23';
+  await havuzuBosalt();
+  const uzak = await tx((db) => servis.noktaEkle(db, { ad: 'Ağ Dışı Nokta', tur: 'diger', enlem: 41.0, boylam: 29.0, adres: null, durakSuresiDakika: 10, firmaId: null }));
+  const disari = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: uzak.id }));
+  const icerde = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: a }));
+  const okuma = await tx((db) => servis.gunPlani(db, T, kaynak));
+  assert.deepEqual(okuma.bekleyen.sort(), [disari.id, icerde.id].sort());
+  const p = await tx((db) => servis.dagit(db, T, { amac: 'sure', kilitliAraclar: [], surum: null }, 'dagit', kaynak));
+  assert.deepEqual(p.yerlesemeyen, [{ isId: disari.id, neden: NOKTA_YOLA_BAGLANMIYOR }]);
+  assert.deepEqual(p.bekleyen, [disari.id]);
+  const q = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: p.surum, rotalar: [{ aracId: k1, kilitli: false, ogeler: [{ isId: disari.id, alis: false }, { isId: icerde.id, alis: false }] }] }, kaynak));
+  assert.deepEqual(q.atanamayan.map((x) => x.isId), [disari.id]);
+  assert.ok(q.onayEngelleri.length > 0);
+  await assert.rejects(tx((db) => servis.onayla(db, T, q.surum!, kaynak)), hata('GECERSIZ'));
+  await tx((db) => servis.noktaPasiflestir(db, uzak.id));
+});
+
 test('yol ağı yoksa plan kaydedilir ama saat hesaplanmaz, dağıtma ve onay yapılamaz', async () => {
   const T = '2026-10-13';
   const is = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: a }));
@@ -561,8 +596,11 @@ test('SVK-40: gece yarısını aşan elle rota uyarıyla döner; cevap sözleşm
   const T = '2026-10-21';
   const uzun = await nokta('Uzun Duraklı Müşteri', 8, 8);
   await tx(async (db) => servis.noktaGuncelle(db, uzun.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun.id), ad: 'Uzun Duraklı Müşteri', tur: 'musteri', ...konum(8, 8), adres: null, durakSuresiDakika: 240, firmaId: uzun.firmaId }));
+  const uzun2 = await nokta('Uzun Duraklı Müşteri 2', 7, 7);
+  await tx(async (db) => servis.noktaGuncelle(db, uzun2.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun2.id), ad: 'Uzun Duraklı Müşteri 2', tur: 'musteri', ...konum(7, 7), adres: null, durakSuresiDakika: 240, firmaId: uzun2.firmaId }));
+  // Aynı noktada art arda duraklar tek yanaşma sayılır; süre birikmesi için iki nokta sırayla gezilir.
   const isler: { id: number }[] = [];
-  for (let i = 0; i < 12; i++) isler.push(await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: uzun.id })));
+  for (let i = 0; i < 12; i++) isler.push(await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: i % 2 ? uzun2.id : uzun.id })));
   const p = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: null, rotalar: [{ aracId: k2, kilitli: false, ogeler: isler.map((i) => ({ isId: i.id, alis: false })) }] }, kaynak));
   const r = p.rotalar.find((x) => x.aracId === k2)!;
   assert.ok(r.hesap!.donus > 2880);

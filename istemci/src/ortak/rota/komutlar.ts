@@ -1,6 +1,6 @@
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
-import { IKINCI_MENULER, SAYFALAR, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { IKINCI_MENULER, SAYFALAR, acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
 import { sadelestir } from './arama-dizini.ts';
 import { maddeyiBul, sayfasiniBul, type MenuKaynagi, type SayfaKaynagi } from './hizli-isler.ts';
@@ -97,5 +97,5 @@ export function komutAra<K extends { baslik: string; sozcukler?: readonly string
 }
 
 export const komutlar: readonly Komut[] = komutlariTopla(
-  import.meta.glob('../../moduller/*/komutlar.ts', { eager: true }),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/komutlar.ts', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 ).sort((a, b) => a.sira - b.sira || a.anahtar.localeCompare(b.anahtar));

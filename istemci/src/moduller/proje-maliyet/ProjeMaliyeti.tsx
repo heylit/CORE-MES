@@ -25,6 +25,9 @@ const EKSIK_METNI: Record<EksikVeri, string> = {
   vade_yok: 'Siparişte ödeme vadesi girilmemiş; bekleme finansmanı üretim bitişine kadar hesaplandı.',
   amortisman_dahil_degil: 'Finanstaki genel gider oranı amortismanı içermiyor; makine amortismanı henüz hesaba girmez.',
   satirsiz_emir: 'Bazı üretim emirleri sipariş satırına bağlı değil; bu emirlerin geliri hesaba girmez.',
+  butce_kuru_yok: 'Proje bütçesinin para birimi için kur girilmemiş; hedef plan maliyetidir.',
+  is_emri_yok: 'Projenin üretim emri yok; maliyet ve gelir emir açılınca hesaplanır.',
+  plan_tarihi_yok: 'Bazı iş emirleri canlı planda değil; bu işlerin bekleme finansmanı planı hesaplanmadı.',
 };
 
 const yuzde = (x: number | null): string => (x === null ? '—' : `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
@@ -116,7 +119,7 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
       )}
       <div className="tc-pm-kartlar">
         {m.fiyatGorunur && (
-          <SayiKarti baslik="Sipariş tutarı" simge="lira" metin={tl(m.gelir)}
+          <SayiKarti baslik="Proje geliri" simge="lira" metin={tl(m.gelir)}
             altMetin={m.siparis === null ? 'Siparişe bağlı değil' : `${m.siparis.no} · termin ${gunAy(m.siparis.termin)}`} />
         )}
         {m.fiyatGorunur && m.siparis !== null && m.siparis.paraBirimi !== 'TRY' && (

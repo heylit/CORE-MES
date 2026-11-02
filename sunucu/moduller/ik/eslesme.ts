@@ -1,5 +1,5 @@
 import type { Alan, Liste, Nesne, TurTanimi } from './sema.ts';
-import { ATLANAN_ALANLAR } from './sema.ts';
+import { ATLANAN_ALANLAR, METIN_AZAMI, UZUN_METIN_AZAMI } from './sema.ts';
 
 /* Uygulamanın kaydı <-> tablo satırları (saf). Bağ alanları (başka İK kaydı) burada metin kimlik olarak kalır; sayı kimliğe
    çevirme sorgular.ts'tedir. Boş değer (undefined, null, '') sütunda NULL'dur; kurarken NULL alan kayda yazılmaz. */
@@ -42,6 +42,8 @@ export function yazimDegeri(a: Alan, v: unknown, yol: string): Deger {
       if (typeof v === 'number' && Number.isFinite(v)) return String(v);
       if (typeof v !== 'string') throw new EslesmeHatasi(`${yol}: metin bekleniyor.`, yol);
       if (a.secenek && !a.secenek.includes(v)) throw new EslesmeHatasi(`${yol}: "${v}" geçerli bir seçenek değil.`, yol);
+      const azami = a.uzun ? UZUN_METIN_AZAMI : METIN_AZAMI;
+      if (v.length > azami) throw new EslesmeHatasi(`${yol}: en çok ${azami} karakter olabilir.`, yol);
       return v;
     }
     case 'tarih':

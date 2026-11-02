@@ -7,7 +7,7 @@ import { useDenetim } from './baglam.tsx';
 import { depoOku, yeniDenetim } from './normalize.ts';
 import { bugunTarihi, gunEkle } from './tarih.ts';
 import { baglamlaAc, ekraniAc, ornekDepo, sahteSunucu, YONETICI } from './test-ortak.tsx';
-import { CATISMA_ILETISI, YAZMA_GECIKMESI_MS } from './veri.ts';
+import { BUYUK_ILETISI, CATISMA_ILETISI, YAZMA_GECIKMESI_MS } from './veri.ts';
 import { yikiciIzinli } from './yonetim.ts';
 
 // Kabuk testi parçaların içeriğinden bağımsızdır: parça ekranları kendi adını yazan sahte bileşenle değiştirilir; parça dosyasını
@@ -181,6 +181,41 @@ describe('veri katmanı', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS * 4); });
     expect(screen.getByText('yetkisiz')).toBeTruthy();
     expect(sunucu.yazilanlar).toHaveLength(1);
+  });
+
+  it('reddedilen değişiklik ekranda kalmaz; sonraki değişiklik ondan bağımsız yazılır ve her ret söylenir', async () => {
+    const secenek: Parameters<typeof sahteSunucu>[0] = { depo: ornekDepo(), yazmaDurumu: 403 };
+    const sunucu = sahteSunucu(secenek);
+    await baglamlaAc(<Yazici etiket={null} />);
+    await screen.findByText('adsız');
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText('yaz'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS * 2); });
+    expect(screen.getByText('adsız')).toBeTruthy();
+    expect(screen.queryByText('Yeni Ad')).toBeNull();
+    fireEvent.click(screen.getByText('yaz'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS * 2); });
+    expect(sunucu.yazilanlar).toHaveLength(2);
+    expect(screen.getAllByText('Yetkiniz yok.')).toHaveLength(2);
+    secenek.yazmaDurumu = undefined;
+    fireEvent.click(screen.getByText('yaz'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS * 2); });
+    expect(sunucu.yazilanlar).toHaveLength(3);
+    expect(screen.getByText('kayitli')).toBeTruthy();
+    expect(screen.getByText('Yeni Ad')).toBeTruthy();
+  });
+
+  it('kayıt sunucu sınırını aşarsa (413) yeniden denenmez, boyut söylenir, ekran son kaydedilen hâle döner', async () => {
+    const sunucu = sahteSunucu({ depo: ornekDepo(), yazmaDurumu: 413 });
+    await baglamlaAc(<Yazici etiket={null} />);
+    await screen.findByText('adsız');
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText('yaz'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(sunucu.yazilanlar).toHaveLength(1);
+    expect(screen.getByText('yetkisiz')).toBeTruthy();
+    expect(screen.getByText(BUYUK_ILETISI)).toBeTruthy();
+    expect(screen.getByText('adsız')).toBeTruthy();
   });
 });
 

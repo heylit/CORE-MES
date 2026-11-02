@@ -4,6 +4,7 @@ import type { AdimliEmirCevabi, FasonFirmalariCevabi, IsEmri, UretimYeri, Uretim
 import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
@@ -18,6 +19,14 @@ export function degisimEngeli(a: Pick<IsEmri, 'durum' | 'fason'>): string | null
 // 1208: fasonun arkasına sunucunun koyduğu GKK ek adımı; sunucu ek açıklamayı bu metinle yazar.
 const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur === 'ek' && a.ekAciklama === 'Otomatik GKK';
 
+const dalMetni = (d: NonNullable<IsEmri['dal']>): string => `${d.malzeme.kod ?? d.malzeme.ad} · rotada OP ${String(d.kaynakOpNo)}`;
+
+// Sağlam yoksa "yok"; ilk parça kararı bekleyen sayım sağlama girmez, yanında ayrı yazılır (sıfır uydurulmaz).
+export function saglamMetni(a: Pick<IsEmri, 'saglamAdet' | 'kararBekliyor'>): string {
+  const saglam = a.saglamAdet === null ? 'yok' : String(a.saglamAdet);
+  return a.kararBekliyor ? `${saglam} · karar bekleyen ${String(a.kararBekliyor)}` : saglam;
+}
+
 const yerMetni = (a: IsEmri): string => (a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim');
 
 // Üretim Emirleri salt okumadır (1391 a): değiştirme yalnız emrin evinde (Reçete ve Rota) açılır; orası `duzenlenir` verir.
@@ -26,10 +35,12 @@ export function UretimYerleri({ emir, duzenlenir = false }: { emir: { id: number
   const gorur = emir.malzemeNo != null && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   if (!gorur) return null;
   const yetkili = islemler.includes('uretim-emirleri.yaz');
-  return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} evdeYazilir={!duzenlenir && yetkili} />;
+  return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} evdeYazilir={!duzenlenir && yetkili} izleme={!duzenlenir} />;
 }
 
-function Adimlar({ emirId, yazar, evdeYazilir }: { emirId: number; yazar: boolean; evdeYazilir: boolean }) {
+// İzleme sayfası (1787c): adımın durumu, sağlamı, karar bekleyeni ve çok katmanlı emirde hangi alt parçaya ait olduğu da görünür.
+// Emrin evi (Reçete ve Rota) bunları kendi plan bölümünde gösterir; orada tablo değişmez.
+function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar: boolean; evdeYazilir: boolean; izleme: boolean }) {
   const [secili, seciliYaz] = useState<IsEmri | null>(null);
   const d = useQuery({
     queryKey: anahtarlar.adimli(emirId),
@@ -42,9 +53,18 @@ function Adimlar({ emirId, yazar, evdeYazilir }: { emirId: number; yazar: boolea
         <>
           {a.ad}
           {otomatikGkkMi(a) && <> <Rozet ton="bilgi">Otomatik GKK</Rozet></>}
+          {izleme && a.dal && <> <Rozet ton="bilgi">{a.dal.ad}</Rozet> <small>{dalMetni(a.dal)}</small></>}
+          {/* K21 a: adım alt parça bitmeden de başlar; eksik alt parça engel değil uyarıdır. */}
+          {izleme && (a.eksikAltParcalar ?? []).map((p) => (
+            <span key={p.ad}> <Rozet ton="uyari">{`Alt parça bekleniyor: ${p.ad} ${p.malzeme.kod ?? p.malzeme.ad}`}</Rozet></span>
+          ))}
         </>
       ),
     },
+    ...(izleme ? [
+      { anahtar: 'durum', baslik: 'Durum', hucre: (a: IsEmri) => <Rozet ton={IS_EMRI_DURUMU[a.durum].ton}>{IS_EMRI_DURUMU[a.durum].etiket}</Rozet> },
+      { anahtar: 'saglam', baslik: 'Sağlam', hizala: 'sag' as const, hucre: saglamMetni },
+    ] : []),
     {
       anahtar: 'yer', baslik: 'Nerede yapılır', hucre: (a) => (
         <>

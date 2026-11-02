@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  EK_SINIRI, KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
+  BELGE_SINIRI, EK_SINIRI, KURULUM_ISARETI, belgeKotaReddi, kilitSahibi, yeniAnmalar, baslangicBelgeleri, ekKotaReddi, ekOkunurMu, degistirebilirMi, derinBirlestir, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -54,12 +54,6 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
     assert.equal(kilitAlinirMi({ sahip: 's2', bitis: 100 }, 's1', 100), true);
     assert.equal(kilitAlinirMi({ sahip: 's1', bitis: 500 }, 's1', 100), true);
     assert.equal(kilitAlinirMi({ sahip: 's2', bitis: 500 }, 's1', 100), false);
-  });
-
-  test('BD-K7: oda durumu yamayla birleşir, null alanı siler; süresi geçen eş düşer', () => {
-    assert.deepEqual(durumYamala({ a: 1, b: 2 }, { b: null, c: 3 }), { a: 1, c: 3 });
-    const oda = new Map([[1, { durum: {}, guncellendi: 1000 }], [2, { durum: { yaziyor: 'genel' }, guncellendi: 1000 + ODA_SURESI_MS }]]);
-    assert.deepEqual(canliEsler(oda, 1000 + ODA_SURESI_MS).map((e) => e.kisiId), [2]);
   });
 
   test('BD-K8: başlangıç belgeleri belge yoludur ve kurulum işareti varsa aralarındadır', () => {
@@ -173,6 +167,28 @@ describe('denetim-hazirlik ekleri (GG-1)', () => {
     assert.equal(ekKotaReddi({ kisiBayt: 60, toplamBayt: 500, yeniBayt: 41 }, sinir), 'kisi');
     assert.equal(ekKotaReddi({ kisiBayt: 0, toplamBayt: 950, yeniBayt: 51 }, sinir), 'toplam');
     assert.equal(EK_SINIRI.kisiBayt < EK_SINIRI.toplamBayt, true);
+  });
+
+  test('BD-K14 (1809): yazmanın yeni soktuğu anmalar; eskide olan sayılmaz, gövde metninin içindeki de bulunur', () => {
+    const a = 'a'.repeat(32);
+    const b = 'b'.repeat(32);
+    assert.deepEqual(yeniAnmalar(null, { deger: JSON.stringify({ logo: `/_blob/${a}` }) }), [a]);
+    assert.deepEqual(yeniAnmalar({ x: `/_blob/${a}` }, { x: `/_blob/${a}`, y: `/_blob/${b}` }), [b]);
+    assert.deepEqual(yeniAnmalar({ x: `/_blob/${a}` }, { x: 'yok' }), []);
+  });
+
+  test('BD-K15 (1809): belge kotası; sınıra kadar açılır, sınırda kişi önce gelir', () => {
+    const sinir = { kisiBelge: 2, toplamBelge: 5 };
+    assert.equal(belgeKotaReddi({ kisiBelge: 1, toplamBelge: 4 }, sinir), null);
+    assert.equal(belgeKotaReddi({ kisiBelge: 2, toplamBelge: 2 }, sinir), 'kisi');
+    assert.equal(belgeKotaReddi({ kisiBelge: 0, toplamBelge: 5 }, sinir), 'toplam');
+    assert.equal(BELGE_SINIRI.kisiBelge < BELGE_SINIRI.toplamBelge, true);
+  });
+
+  test('BD-K16 (1809): kilit sahibi kişiyle saklanır; aynı sekme adını veren başka kişi geçerli kilidi alamaz', () => {
+    const kilit = { sahip: kilitSahibi(7, 'sekme-A'), bitis: 500 };
+    assert.equal(kilitAlinirMi(kilit, kilitSahibi(7, 'sekme-A'), 100), true);
+    assert.equal(kilitAlinirMi(kilit, kilitSahibi(8, 'sekme-A'), 100), false);
   });
 
   test('BD-K13: eki yükleyen ya da eki anan ve okuyanın açabildiği belge okutur; kimlik tek başına yetmez', () => {

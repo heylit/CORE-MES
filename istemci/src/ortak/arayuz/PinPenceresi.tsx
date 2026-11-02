@@ -13,13 +13,16 @@ const FORM_KIMLIGI = 'tc-pin-formu';
 // Bekleme 401 döner ama oturum bitmemiştir (oturumBitirmez).
 export function PinPenceresi({ kapat }: { kapat: () => void }) {
   const [degisti, degistiYaz] = useState(false);
-  const form = useForm<KendiPinGovdesi>({
-    ilk: { eski: '', yeniPin: '' },
+  // Tekrar alanı yalnız ekrandadır: yazım hatası kişiyi terminalin dışında bırakmasın; sunucuya gitmez.
+  const form = useForm<KendiPinGovdesi & { yeniTekrar: string }>({
+    ilk: { eski: '', yeniPin: '', yeniTekrar: '' },
     dogrula: (d) => ({
       ...(d.eski === '' ? { eski: 'Eski PIN ya da parola zorunlu.' } : {}),
-      ...(d.yeniPin === '' ? { yeniPin: 'Yeni PIN zorunlu.' } : {}),
+      ...(d.yeniPin === '' ? { yeniPin: 'Yeni PIN zorunlu.' }
+        : d.yeniPin === d.eski ? { yeniPin: 'Yeni PIN eskisiyle aynı olamaz.' } : {}),
+      ...(d.yeniPin !== '' && d.yeniTekrar !== d.yeniPin ? { yeniTekrar: 'Yeni PIN ile tekrarı aynı değil.' } : {}),
     }),
-    kaydet: (d) => api.post<unknown>('/hesabim/pin-degistir', d, { oturumBitirmez: true }),
+    kaydet: ({ eski, yeniPin }) => api.post<unknown>('/hesabim/pin-degistir', { eski, yeniPin }, { oturumBitirmez: true }),
     basarili: () => { degistiYaz(true); },
     hataIletisi: 'PIN değiştirilemedi.',
   });
@@ -50,6 +53,12 @@ export function PinPenceresi({ kapat }: { kapat: () => void }) {
               <Girdi
                 etiket="Yeni PIN (6 rakam)" type="password" inputMode="numeric" maxLength={6} required autoComplete="new-password"
                 {...form.alan('yeniPin')}
+              />
+            </div>
+            <div className="tc-form-tam">
+              <Girdi
+                etiket="Yeni PIN (tekrar)" type="password" inputMode="numeric" maxLength={6} required autoComplete="new-password"
+                {...form.alan('yeniTekrar')}
               />
             </div>
           </form>

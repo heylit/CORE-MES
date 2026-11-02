@@ -91,6 +91,16 @@ async function analizCevabi(db: Db, m: Model): Promise<GeometriAnalizCevabi> {
   };
 }
 
+// Bağlantıdaki revizyon listede yoksa (yeni revizyon yayınlandı) aynı belgenin listedeki revizyonu. Belge kimliği kuyruğun kaydındandır;
+// belge arşivdeyse ya da bağı kalktıysa null.
+export async function guncelRevizyon(db: Db, revizyonId: number): Promise<{ revizyonId: number | null }> {
+  const liste = await modeller(db);
+  if (liste.some((m) => m.revizyonId === revizyonId)) return { revizyonId };
+  const is = await sorgular.is(db, revizyonId);
+  const guncel = is === null ? undefined : liste.find((m) => m.belgeId === is.belgeId);
+  return { revizyonId: guncel?.revizyonId ?? null };
+}
+
 export async function analizOku(db: Db, revizyonId: number): Promise<GeometriAnalizCevabi> {
   return analizCevabi(db, await model(db, revizyonId));
 }

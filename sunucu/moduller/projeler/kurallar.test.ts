@@ -40,6 +40,8 @@ describe('projeler kuralları (saf)', () => {
     assert.deepEqual(butce(false, '99', 'USD', null), { butceTutari: null, butceParaBirimi: null });
     assert.deepEqual(butce(true, '99', null, mevcut), { butceTutari: '99', butceParaBirimi: 'TRY' });
     assert.deepEqual(butce(true, null, 'USD', mevcut), { butceTutari: null, butceParaBirimi: null });
+    assert.deepEqual(butce(true, undefined, undefined, mevcut), mevcut, 'PRJ-16: gönderilmeyen bütçe var olanı korur');
+    assert.deepEqual(butce(true, undefined, undefined, null), { butceTutari: null, butceParaBirimi: null });
   });
 
   test('arama kalıbı: boş arama süzmez; joker karakterler kaçırılır', () => {

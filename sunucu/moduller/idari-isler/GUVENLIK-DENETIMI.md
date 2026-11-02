@@ -6,7 +6,8 @@
 | `GET /idari-isler/bugun` | `idari-isler.oku` | IDR-10 | `IDR-10 Bugün` | `IDR-05 pano ve Bugün` (403) |
 | `GET /idari-isler/talepler/pano` | `idari-isler.oku` | sütun başına en çok 200 | `IDR-05 pano ve Bugün` | `IDR-05 pano ve Bugün` (403) |
 | `GET /idari-isler/taleplerim`, `/son-yerler` | `idari-isler.talep-ac` | yalnız açanın kayıtları (sorguda `acan_kisi_id`) | `IDR-05` | `IDR-05` (başkasının talebi listede yok) |
-| `GET /idari-isler/kisi-secenekleri` | `idari-isler.talep-yonet` | yalnız etkin kişiler, ad ve id | `IDR-07` | `IDR-02 red` |
+| `GET /idari-isler/kisi-secenekleri` | `idari-isler.talep-yonet` ya da `idari-isler.zimmet-yaz` | yalnız etkin kişiler, ad ve id (zimmet seçimi) | `IDR-07` | `IDR-07` (okuyan 403) |
+| `GET /idari-isler/talep-atanabilir` | `idari-isler.talep-yonet` | yalnız `talep-yonet` işlemi olan etkin kişiler, ad ve id (IDR-07) | `IDR-07` | `IDR-07` (okuyan 403) |
 | `POST /idari-isler/talepler/ac` | `idari-isler.talep-ac` | tekrar korumalı; açan ve zaman sunucudan; şema sınırları | `IDR-01` | `IDR-01 red` (401, 403, 400) |
 | `POST .../:id/geri-cek` | `idari-isler.talep-ac` | satır kilidi; başkasının talebi 404 (varlığı sızmaz); IDR-02; sürüm | `IDR-03` | `IDR-03` (404, 422) |
 | `POST .../:id/ustlen` | `idari-isler.talep-yonet` | kilit, IDR-02, IDR-07, sürüm | `IDR-02 akış`, `IDR-07` | `IDR-02 red` (403), `IDR-07` (400), `IDR-02 akış` (409) |
@@ -21,6 +22,7 @@ Periyodik kontroller (2. parça):
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
 | `GET /idari-isler/kontroller`, `/:id/kayitlar` | `idari-isler.oku` | etkin kalemler en çok 500; kayıt en çok 100; olmayan kalem 404 | `IDR-12`, `IDR-13 yapıldı` | `ekleme reddi` (personel 403) |
+| `GET /idari-isler/kontroller/bitenler` | `idari-isler.oku` | yalnız bitirilen kalemler, en yeni biten önce, en çok 200 | `IDR-15 bitir` | - |
 | `GET /idari-isler/firma-secenekleri` | `idari-isler.kontrol-yaz` | yalnız etkin tedarikçi, en çok 30 | `firma seçenekleri` | `ekleme reddi` (okuyan 403) |
 | `POST /idari-isler/kontroller/ekle` | `idari-isler.kontrol-yaz` | tekrar korumalı; firma etkin; sıklık bütün; açan sunucudan | `IDR-12` | `ekleme reddi` (400, 403, kayıt sayısı değişmez) |
 | `POST .../:id/guncelle` | `idari-isler.kontrol-yaz` | kilit, etkin kalem, sürüm | `güncelleme` | `güncelleme` (409, 404) |
@@ -68,9 +70,10 @@ Demirbaş ve zimmet (7. parça):
 |---|---|---|---|---|
 | `GET /idari-isler/demirbaslar` | `idari-isler.oku` | en çok 1000; açık zimmetle | `IDR-30 ve IDR-31 akış` | `yetki` (talep açan 403) |
 | `GET /idari-isler/demirbaslar/:id/zimmetler` | `idari-isler.oku` | yok demirbaş 404 | `IDR-30 ve IDR-31 akış` | - |
+| `GET /idari-isler/zimmetlerim` | `idari-isler.talep-ac` | yalnız oturumdaki kişinin açık zimmetleri (sorguda `kisi_id`); değer ve durum dönmez | `zimmetlerim` | `zimmetlerim` (okuyan 403) |
 | `GET /idari-isler/kisi-secenekleri` | `talep-yonet` ya da `zimmet-yaz` | yalnız etkin kişiler, ad | `yetki` | `yetki` (okuyan 403) |
 | `POST /idari-isler/demirbaslar/ekle` | `idari-isler.zimmet-yaz` | tekrar korumalı; IDR-29; açan sunucudan | `IDR-30 ve IDR-31 akış` | `IDR-29, IDR-30 ve IDR-31 ret` (400), `yetki` (okuyan 403) |
-| `POST .../demirbaslar/:id/guncelle` | `idari-isler.zimmet-yaz` | kilit, IDR-29, IDR-30, sürüm | `IDR-30: zimmetli ...` | `IDR-30: zimmetli ...` (422) |
+| `POST .../demirbaslar/:id/guncelle` | `idari-isler.zimmet-yaz` | kilit, IDR-29, IDR-30, sürüm; kısmi (gönderilmeyen alan korunur, null siler) | `IDR-30: zimmetli ...` | `IDR-30: zimmetli ...` (422) |
 | `POST .../demirbaslar/:id/zimmetle` | `idari-isler.zimmet-yaz` | kilit, IDR-30, etkin kişi, sürüm; veren sunucudan | `IDR-30 ve IDR-31 akış` | `IDR-29, IDR-30 ve IDR-31 ret` (400, 409, kayıt yazılmaz), `yetki` (403) |
 | `POST /idari-isler/zimmetler/:id/iade` | `idari-isler.zimmet-yaz` | kilit, IDR-31, sürüm; alan sunucudan | `IDR-31 ...` | `IDR-31 ...` (422), `IDR-29, IDR-30 ve IDR-31 ret` (400) |
 | `POST /idari-isler/zimmetler/:id/kisiye-bagla` | `idari-isler.zimmet-yaz` | kilit, yalnız kişisiz zimmet, etkin kişi, sürüm | `IDR-32: kişisiz (adla) zimmet ...` | `IDR-32: kişisiz (adla) zimmet ...` (403, 409, 422) |

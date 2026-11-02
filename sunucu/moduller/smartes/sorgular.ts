@@ -36,10 +36,16 @@ export async function eslemeEkle(db: Db, tur: EslemeTuru, tmiId: number, kod: st
   return r?.surum ?? 0;
 }
 
+// Kod değişmediyse satıra yazılmaz, sürüm artmaz: açık başka formlar boşuna 409 almasın. Sürüm yine denetlenir.
 export async function eslemeGuncelle(db: Db, tur: EslemeTuru, tmiId: number, kod: string, kisiId: number, surum: number): Promise<number | null> {
-  const r = await db.tek<{ surum: number }>(
-    `UPDATE smartes_esleme SET smartes_kod = $3, guncelleyen_kisi_id = $4, guncelleme = now(), surum = surum + 1
-     WHERE tur = $1 AND tmi_id = $2 AND surum = $5 RETURNING surum`,
+  const r = await db.tek<{ surum: number | null }>(
+    `WITH hedef AS (
+       SELECT surum, smartes_kod FROM smartes_esleme WHERE tur = $1 AND tmi_id = $2 AND surum = $5 FOR UPDATE
+     ), guncel AS (
+       UPDATE smartes_esleme e SET smartes_kod = $3, guncelleyen_kisi_id = $4, guncelleme = now(), surum = e.surum + 1
+       FROM hedef WHERE e.tur = $1 AND e.tmi_id = $2 AND hedef.smartes_kod <> $3 RETURNING e.surum
+     )
+     SELECT COALESCE((SELECT surum FROM guncel), (SELECT surum FROM hedef)) AS surum`,
     [tur, tmiId, kod, kisiId, surum],
   );
   return r?.surum ?? null;

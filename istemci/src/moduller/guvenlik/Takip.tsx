@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, OturumlarCevabi, RetListeCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import type {
+  GirisListeCevabi, KilitAcCevabi, KilitAcGovdesi, KilitListeCevabi, OturumKapatGovdesi, OturumlarCevabi, RetListeCevabi,
+} from '#paylasilan/sozlesme/guvenlik.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -9,7 +11,7 @@ import { BOS, RET_NEDENI_ADI, RET_NEDENI_TONU, SONUC_ADI, tarayiciOzeti, zamanMe
 import './guvenlik.css';
 
 type GirisSatiri = GirisListeCevabi['satirlar'][number];
-type OturumSatiri = OturumlarCevabi['oturumlar'][number];
+type OturumSatiri = OturumlarCevabi['satirlar'][number];
 type KilitSatiri = KilitListeCevabi['satirlar'][number];
 
 const GIRIS_SUTUNLARI: readonly Sutun<GirisSatiri>[] = [
@@ -90,7 +92,7 @@ export function GuvenlikReddedilenler() {
     <div className="tc-guvenlik">
       <p className="tc-guvenlik-not">Sistemin reddettiği istekler 90 gün saklanır; adresteki kayıt numarası ve sorgu yazılmaz.</p>
       <div className="tc-guvenlik-suzgec">
-        <Girdi etiket="Ara" type="search" placeholder="Adres ya da cihaz" value={ara} maxLength={80}
+        <Girdi etiket="Ara" type="search" placeholder="Adres, cihaz ya da kişi" value={ara} maxLength={80}
           onChange={(o) => { araYaz(o.target.value); sayfaYaz(1); }} />
         <Secim etiket="Neden" value={neden} bosSecenek="Hepsi" onChange={(o) => { nedenYaz(o.target.value); sayfaYaz(1); }}
           secenekler={RET_NEDENLERI.map((n) => ({ deger: n, baslik: RET_NEDENI_ADI[n] }))} />
@@ -118,9 +120,19 @@ export function GuvenlikOturumlar() {
   const oturum = useOturum();
   const yonetir = oturum.data?.islemler.includes('guvenlik.yonet') ?? false;
   const [kapanacak, kapanacakYaz] = useState<OturumSatiri | null>(null);
-  const sorgu = useQuery({ queryKey: anahtarlar.oturumlar, queryFn: () => api.get<OturumlarCevabi>('/guvenlik/oturumlar') });
+  const [sayfa, sayfaYaz] = useState(1);
+  const [ara, araYaz] = useState('');
+  const sorgu = useQuery({
+    queryKey: anahtarlar.oturumListesi(sayfa, ara.trim()),
+    queryFn: () => {
+      const q = new URLSearchParams({ sayfa: String(sayfa) });
+      if (ara.trim()) q.set('ara', ara.trim());
+      return api.get<OturumlarCevabi>(`/guvenlik/oturumlar?${q.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+  });
   const kapat = useMutation({
-    mutationFn: (id: number) => api.post<{ id: number }>(`/guvenlik/oturumlar/${id}/kapat`),
+    mutationFn: (id: number) => api.post<{ id: number }>(`/guvenlik/oturumlar/${id}/kapat`, {} satisfies OturumKapatGovdesi),
     onSuccess: async () => { bildir('tamam', 'Oturum kapatıldı.'); kapanacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
     onError: async (h) => { bildir('hata', hataIletisi(h, 'Oturum kapatılamadı.')); kapanacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.oturumlar }); },
   });
@@ -137,19 +149,26 @@ export function GuvenlikOturumlar() {
       hucre: (o: OturumSatiri) => (o.buOturum ? BOS : <Dugme simge="x" onClick={() => kapanacakYaz(o)}>Kapat</Dugme>),
     }] : []),
   ];
-  if (sorgu.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (sorgu.isError) return <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />;
-  const { oturumlar } = sorgu.data;
   return (
     <div className="tc-guvenlik">
       <KilitliHesaplar yonetir={yonetir} />
-      <Tablo
-        etiket="Açık oturumlar"
-        sutunlar={sutunlar}
-        satirlar={oturumlar}
-        satirAnahtari={(o) => o.id}
-        bosMesaj="Açık oturum yok"
-      />
+      <div className="tc-guvenlik-suzgec">
+        <Girdi etiket="Ara" type="search" placeholder="Kişi, cihaz ya da tarayıcı" value={ara} maxLength={80}
+          onChange={(o) => { araYaz(o.target.value); sayfaYaz(1); }} />
+      </div>
+      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+        : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
+          : (
+            <Tablo
+              etiket="Açık oturumlar"
+              sutunlar={sutunlar}
+              satirlar={sorgu.data.satirlar}
+              satirAnahtari={(o) => o.id}
+              bosMesaj={ara.trim() ? 'Bu aramada açık oturum yok' : 'Açık oturum yok'}
+              mesgul={sorgu.isPlaceholderData}
+              sayfalama={{ sayfa: sorgu.data.sayfa, sayfaBoyu: sorgu.data.sayfaBoyu, toplam: sorgu.data.toplam, degistir: sayfaYaz }}
+            />
+          )}
       <OnayPenceresi
         acik={kapanacak !== null}
         baslik="Oturum kapatılsın mı?"
@@ -177,7 +196,7 @@ function KilitliHesaplar({ yonetir }: { yonetir: boolean }) {
     placeholderData: keepPreviousData,
   });
   const ac = useMutation({
-    mutationFn: (id: number) => api.post<KilitAcCevabi>(`/guvenlik/kilitler/${id}/ac`),
+    mutationFn: (id: number) => api.post<KilitAcCevabi>(`/guvenlik/kilitler/${id}/ac`, {} satisfies KilitAcGovdesi),
     onSuccess: async () => { bildir('tamam', 'Kilit açıldı.'); acilacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
     onError: async (h) => { bildir('hata', hataIletisi(h, 'Kilit açılamadı.')); acilacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
   });

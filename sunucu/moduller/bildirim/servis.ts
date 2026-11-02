@@ -11,7 +11,7 @@ import {
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, yolTureUyar,
+  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, tercihHatasi, yolTureUyar,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -54,6 +54,20 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
     });
   }
   return alicilar.length;
+}
+
+export interface BildirimKapanisi {
+  tur: BildirimTuru;
+  // `bildirimGonder`'e verilen kaynak kimliğinin aynısı; kimliksiz açılan bildirim kaynağa bağlanamaz, kapatılamaz.
+  kaynakKimlik: string;
+}
+
+// "Onay bekliyor" türü bildirim, karar verilince (onay, ret, iptal) kendiliğinden kapanır: kararı yazan modül kendi
+// transaction'ında çağırır, karar geri alınırsa kapanış da kalmaz. Kapatılan satır sayısını döner.
+export async function bildirimKapat(db: Db, k: BildirimKapanisi): Promise<number> {
+  const anahtar = tekilAnahtar(k.tur, k.kaynakKimlik);
+  if (anahtar === null) throw new Error(`Bildirim kapatmak için kaynak kimliği gerekir: ${k.tur}`);
+  return s.kaynaktanOkunduIsaretle(db, anahtar);
 }
 
 export function bildirimListesi(
@@ -109,10 +123,12 @@ export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimT
   return { kanallar: { ...ACIK_KANALLAR }, epostaSecilebilir: eposta, satirlar };
 }
 
-// E-posta seçemeyen kişinin e-posta tercihi kapalı saklanır: gövdedeki değer yok sayılır.
+// Tercih yalnız kişinin alabildiği türe yazılır; e-posta seçemeyenin e-posta isteği reddedilir, sessizce kapatılmaz.
 export async function tercihDegistir(db: Db, kullanici: Kullanici, govde: BildirimTercihDegistirGovdesi): Promise<BildirimTercihleriCevabi> {
-  const eposta = epostaSecilebilir(kullanici.islemler) && govde.eposta;
-  await s.tercihYaz(db, kullanici.id, { tur: govde.tur, mesaj: govde.mesaj, eposta });
+  const mevcut = await tercihler(db, kullanici);
+  const hata = tercihHatasi(mevcut.satirlar.map((t) => t.tur), mevcut.epostaSecilebilir, govde);
+  if (hata !== null) throw dogrulama(hata.mesaj, hata.alan);
+  await s.tercihYaz(db, kullanici.id, { tur: govde.tur, mesaj: govde.mesaj, eposta: govde.eposta });
   return tercihler(db, kullanici);
 }
 

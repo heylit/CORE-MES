@@ -8,6 +8,7 @@ import { uclariKaydet } from '#cekirdek/uc.ts';
 import { hataYonetiminiKur } from '#cekirdek/uygulama.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from './disari.ts';
+import { beklemeIletisi } from './kurallar.ts';
 import { oturumUclari } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -100,6 +101,19 @@ describe('kendi parolasını değiştirme (gerçek PostgreSQL, gerçek giriş, s
     await oturumAc(ad, PAROLA);
   });
 
+  test('yeni parola eskisiyle aynı olamaz: 400 alan yeniParola, parola ve oturumlar değişmez, deneme sayılmaz', async () => {
+    const ad = await kisi();
+    const cerez = await oturumAc(ad);
+    const oteki = await oturumAc(ad);
+    const ayni = await degistir(cerez, PAROLA, PAROLA);
+    assert.equal(ayni.statusCode, 400);
+    assert.equal(ayni.json().alan, 'yeniParola');
+    assert.equal(ayni.json().mesaj, 'Yeni parola eskisiyle aynı olamaz.');
+    assert.equal(await acikMi(oteki), true);
+    // Deneme sayılmadı: hemen ardından doğru değişim beklemeye takılmaz.
+    assert.equal((await degistir(cerez, PAROLA, YENI)).statusCode, 200);
+  });
+
   test('yanlış eski parola girişteki beklemeyi başlatır: bekleme dolmadan doğru parola da reddedilir, dolunca kabul edilir', async () => {
     const ad = await kisi();
     const cerez = await oturumAc(ad);
@@ -107,11 +121,11 @@ describe('kendi parolasını değiştirme (gerçek PostgreSQL, gerçek giriş, s
     assert.equal((await degistir(cerez, 'yanlis-parola-1', YENI)).statusCode, 400);
     const beklemede = await degistir(cerez, PAROLA, YENI);
     assert.equal(beklemede.statusCode, 401);
-    assert.equal(beklemede.json().mesaj, 'Çok sık deneme. 1 sn sonra yeniden deneyin.');
+    assert.equal(beklemede.json().mesaj, beklemeIletisi(1));
     // Aynı sayaç girişi de bekletir.
     const girisBekleme = await giris(ad, PAROLA);
     assert.equal(girisBekleme.statusCode, 401);
-    assert.equal(girisBekleme.json().mesaj, 'Çok sık deneme. 1 sn sonra yeniden deneyin.');
+    assert.equal(girisBekleme.json().mesaj, beklemeIletisi(1));
     assert.equal(await acikMi(cerez), true, 'bekleme yanıtı oturumu bitirmemeli');
 
     ilerle(1);

@@ -134,12 +134,32 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
     assert.deepEqual(aralik.govde.satirlar.map((s) => s.yol), ['/deneme/:token/:id', '/malzeme-katalogu-kartlari/:kimlik/kaydet']);
     assert.equal((await oku<KayitListesiCevabi>(mudur, tarihte('2020-03-05'))).govde.toplam, 0);
     const yol = encodeURIComponent('/malzeme-katalogu-kartlari/:kimlik/kaydet');
-    const komut = await oku<KayitListesiCevabi>(mudur, `/denetim-kayitlari?yontem=POST&yol=${yol}`);
+    const komut = await oku<KayitListesiCevabi>(mudur, `/denetim-kayitlari?yontem=POST&yol=${yol}&yolTam=true`);
     assert.deepEqual(komut.govde.satirlar.map((s) => s.zaman.slice(0, 4)), ['2020']);
-    assert.equal((await oku<KayitListesiCevabi>(mudur, `/denetim-kayitlari?yontem=DELETE&yol=${yol}`)).govde.toplam, 0);
+    assert.equal((await oku<KayitListesiCevabi>(mudur, `/denetim-kayitlari?yontem=DELETE&yol=${yol}&yolTam=true`)).govde.toplam, 0);
     const ters = await oku<{ kod: string }>(mudur, '/denetim-kayitlari?baslangic=2020-03-03&bitis=2020-03-02');
     assert.equal(ters.durum, 400);
     assert.equal((await oku(mudur, '/denetim-kayitlari?kisi=2147483648')).durum, 400);
+  });
+
+  test('yol araması parça eşleşmesidir, büyük-küçük harf ayırmaz; % ve _ joker sayılmaz; tam yol yalnız yolTam ile', async () => {
+    const yollar = async (sorgu: string): Promise<string[]> => {
+      const cevap = await oku<KayitListesiCevabi>(mudur, `/denetim-kayitlari?baslangic=2020-01-01&bitis=2020-12-31&${sorgu}`);
+      assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
+      return cevap.govde.satirlar.map((s) => s.yol);
+    };
+    assert.deepEqual(await yollar('yol=KATALOGU'), ['/malzeme-katalogu-kartlari/:kimlik/kaydet']);
+    assert.deepEqual(await yollar(`yol=${encodeURIComponent('/adimlar/')}`), ['/uretim-emirleri/:id/adimlar/:adimId/tamamla']);
+    assert.deepEqual(await yollar(`yol=${encodeURIComponent('%')}`), []);
+    assert.deepEqual(await yollar('yol=malzeme_katalogu'), []);
+    assert.deepEqual(await yollar('yol=katalogu&yolTam=true'), []);
+  });
+
+  test('tanınmayan sorgu parametresi 400 olur, sessizce atılmaz (iki liste ucu)', async () => {
+    assert.equal((await oku(mudur, '/denetim-kayitlari?ara=parola')).durum, 400);
+    assert.equal((await oku(mudur, '/denetim-kayitlari?yolTam=evet')).durum, 400);
+    assert.equal((await oku(mudur, '/denetim-degisiklikleri?ara=parola')).durum, 400);
+    assert.equal((await oku(mudur, '/denetim-kayitlari?sayfa=1&sayfaBoyu=10')).durum, 200);
   });
 
   // 1371 a: ekran işlemi yetki adıyla, modülü adıyla gösterir; modülü boş eski satır süzgeçte seçilmez.

@@ -588,10 +588,31 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
   const bilesenler = await s.bilesenleriGetir(db, idler);
   const hareketler = await s.fasonHareketleriGetir(db, idler);
   const yerDegisimleri = await s.uretimYeriDegisimleriGetir(db, idler);
-  const ad = await adlariAl(db, kendi, adaylar, bilesenler.map((b) => b.malzemeNo));
+  const tumDugumler = await s.dugumleriGetir(db, [id]);
+  const dugumler = new Map(tumDugumler.filter((d) => d.dugum !== '0').map((d) => [d.isEmriId, d]));
+  const dugumOf = new Map(tumDugumler.map((d) => [d.isEmriId, d.dugum]));
+  const kararlar = new Map((await s.adimKararSayaclariGetir(db, [id])).flatMap((k) => (k.isEmriId === null ? [] : [[k.isEmriId, k.kararBekliyor]])));
+  const ad = await adlariAl(db, kendi, adaylar, [...bilesenler.map((b) => b.malzemeNo), ...[...dugumler.values()].map((d) => d.malzemeNo)]);
   const kisi = await kisiAdlari(db, [...hareketler.map((h) => h.kisiId), ...yerDegisimleri.map((d) => d.kisiId)]);
   const eski = e.arsiv ? await s.arsivSatiri(db, id) : null;
   const eksikler = await adimEksikHaritasi(db, id, kendi);
+  const dalOf = (isEmriId: number): IsEmri['dal'] => {
+    const d = dugumler.get(isEmriId);
+    if (d === undefined) return null;
+    // Dal adı rota modülünün kuralıyla aynıdır: "0.1.2" -> "K1.2".
+    return { ad: `K${d.dugum.slice(2)}`, malzeme: ad.malzeme.get(d.malzemeNo) ?? { id: d.malzemeNo, kod: null, ad: `#${d.malzemeNo}` }, kaynakOpNo: d.kaynakOpNo };
+  };
+  // Başka düğümün son adımı bu adımın öncülüyse o alt parça bu adıma girer; o adım bitmemişse alt parça eksiktir.
+  const durumOf = new Map(kendi.map((i) => [i.id, i.durum]));
+  const eksikAltParcalar = (i: IsEmriSatiri): NonNullable<IsEmri['eksikAltParcalar']> => {
+    if (i.durum === 'tamam') return [];
+    return (i.onculler ?? []).flatMap((o) => {
+      const alt = dugumler.get(o.id);
+      if (alt === undefined || !alt.dugumSonu || alt.dugum === dugumOf.get(i.id) || durumOf.get(o.id) === 'tamam') return [];
+      const d = dalOf(o.id);
+      return d ? [{ ad: d.ad, malzeme: d.malzeme }] : [];
+    });
+  };
   const isEmirleri: IsEmri[] = kendi.map((i) => {
     const kendiHareketleri = hareketler.filter((h) => h.isEmriId === i.id);
     const sonYer = yerDegisimleri.filter((d) => d.isEmriId === i.id).at(-1);
@@ -617,6 +638,9 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
       uretimYeriDegisimi: sonYer === undefined ? null : {
         yer: sonYer.yeniFasonFirmaId === null ? 'ic' : 'fason', kisi: { id: sonYer.kisiId, ad: kisi.get(sonYer.kisiId) ?? `#${sonYer.kisiId}` }, zaman: sonYer.zaman,
       },
+      kararBekliyor: kararlar.get(i.id) ?? 0,
+      dal: dalOf(i.id),
+      eksikAltParcalar: eksikAltParcalar(i),
     };
   });
   const altEmirIdleri = (await s.altPartilerGetir(db, [id])).filter((a) => a.ustEmirId === id && a.durum !== 'iptal').map((a) => a.id);
@@ -888,7 +912,10 @@ async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriI
   if (isEmri.durum === 'bekliyor') await kolAdimiBaslarMi(db, e, isEmri);
   const an = await s.anAl(db);
   // İlk gidiş fason iş emrini başlatır.
-  if (isEmri.durum === 'bekliyor') await s.isEmriBaslat(db, isEmriId, an);
+  if (isEmri.durum === 'bekliyor') {
+    await s.isEmriBaslat(db, isEmriId, an);
+    await s.emirSurumunuArtir(db, emirId);
+  }
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'gidis', adet, hurdaAdet: null, kisiId, an });
   await fasonHareketiBildir(db, { hareketId, oncekiIsEmriId, kisiId, sevkKalemiId });
   return { hareketId };

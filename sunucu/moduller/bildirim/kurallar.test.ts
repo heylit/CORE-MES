@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
-import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, yolTureUyar } from './kurallar.ts';
+import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, TERCIH_ILETILERI, tercihHatasi, yolTureUyar } from './kurallar.ts';
 
 describe('bildirim kuralları', () => {
   const kisiler = new Map<number, readonly Islem[]>([
@@ -60,7 +60,7 @@ describe('bildirim kuralları', () => {
   });
 
   test('her olay türünün kaynak modülü anahtarın başıdır', () => {
-    assert.deepEqual(BILDIRIM_TUR_ANAHTARLARI.map(kaynakModulu), ['satin-alma', 'satin-alma', 'satin-alma', 'siparisler', 'siparisler', 'siparisler', 'ik', 'istasyonlar', 'cnc-kurulum', 'arkon', 'stok', 'stok', 'stok', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'guvenlik']);
+    assert.deepEqual(BILDIRIM_TUR_ANAHTARLARI.map(kaynakModulu), ['satin-alma', 'satin-alma', 'satin-alma', 'malzemeler', 'malzemeler', 'siparisler', 'siparisler', 'siparisler', 'ik', 'istasyonlar', 'cnc-kurulum', 'arkon', 'stok', 'stok', 'stok', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'guvenlik']);
   });
 
   test('BIL-6: gönderilen yol türün yolu ya da altıdır; yolsuz bildirim geçer', () => {
@@ -79,4 +79,13 @@ describe('BIL-8: yönlendirmeye yalnız var olan rol yazılır', () => {
     assert.deepEqual(olmayanKimlikler([1, 2, 9], [1, 2, 3]), [9]);
     assert.deepEqual(olmayanKimlikler([], [1]), []);
   });
+});
+
+test('tercih kuralı: listede olmayan tür ve seçemeyenin e-posta isteği reddedilir; izinli istek geçer', () => {
+  const liste = ['istasyonlar.makine-durdu'];
+  assert.equal(tercihHatasi(liste, true, { tur: 'istasyonlar.makine-durdu', eposta: true }), null);
+  assert.equal(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: false }), null);
+  assert.deepEqual(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' });
+  assert.deepEqual(tercihHatasi(liste, true, { tur: 'cnc-kurulum.takim-omru', eposta: false }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });
+  assert.deepEqual(tercihHatasi([], false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });
 });

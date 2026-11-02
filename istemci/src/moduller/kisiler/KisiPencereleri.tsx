@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { eskiSurumMu } from '#paylasilan/hata.ts';
 import type {
-  HesapGovdesi, KisiDuzenleGovdesi, KisiGovdesi, KisiOzeti, PersonelCevabi, ParolaGovdesi, PinVerGovdesi, RollerCevabi,
+  HesapGovdesi, KisiDuzenleGovdesi, KisiOzeti, PersonelCevabi, ParolaGovdesi, PinVerGovdesi, RollerCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import type { KendiParolaGovdesi } from '#paylasilan/sozlesme/oturum.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -11,6 +11,7 @@ import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { kullaniciAdiOner } from './kullanici-adi.ts';
+import { ayniAdliKisiler } from './suzme.ts';
 
 // Yazma cevabındaki kişi listede yerine konur (yoksa eklenir): ikinci bir okuma beklenmez.
 export function listeyeYaz(istemci: ReturnType<typeof useQueryClient>, guncel: KisiOzeti): void {
@@ -58,7 +59,7 @@ function Form({ baslik, gonder, kapat, gonderiliyor, hazir, onGonder, children }
   );
 }
 
-export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () => void }) {
+export function KisiFormu({ kisi, kisiler, kapat }: { kisi: KisiOzeti | null; kisiler: readonly KisiOzeti[]; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [ad, adYaz] = useState(kisi?.ad ?? '');
@@ -69,10 +70,16 @@ export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () =
   const ozlukIpucu = ozlukIk
     ? `Ad, sicil no ve görev İK personel kartından gelir; İK'da değiştirin.${kisi?.ozlukCikisTarihi ? ` Çıkış: ${kisi.ozlukCikisTarihi}.` : ''}`
     : undefined;
+  // Aynı ad yasak değildir; çift kayıt fark edilsin diye yalnız uyarılır.
+  const ayniAdlilar = ozlukIk ? [] : ayniAdliKisiler(kisiler, ad, kisi?.id ?? null);
+  const ayniAdUyarisi = ayniAdlilar.length === 0
+    ? undefined
+    : `Bu adla kayıtlı kişi var: ${ayniAdlilar.map((k) => (k.sicilNo === null ? k.ad : `${k.ad} (${k.sicilNo})`)).join(', ')}. Aynı kişi değilse sicil no ile ayırın.`;
 
   const kaydet = useMutation({
     // Ekleme tekrar korumalıdır: cevabı yitirilen gönderim aynı kimlikle yinelenir, ikinci kişi açılmaz.
-    mutationFn: (govde: KisiGovdesi) => (kisi === null
+    // Form her alanı gönderir: düzenleme gövdesi eksik alanı kabul etmez (KIS-9).
+    mutationFn: (govde: Omit<KisiDuzenleGovdesi, 'surum'>) => (kisi === null
       ? tekrarKorumaliGonder((deneme) => api.post<KisiOzeti>('/kisiler', govde, deneme))
       : api.post<KisiOzeti>(`/kisiler/${kisi.id}/duzenle`, { ...govde, surum: kisi.surum } satisfies KisiDuzenleGovdesi)),
     onSuccess: (guncel) => {
@@ -95,7 +102,7 @@ export function KisiFormu({ kisi, kapat }: { kisi: KisiOzeti | null; kapat: () =
       hazir={ad.trim() !== ''}
       onGonder={() => kaydet.mutate({ ad, sicilNo, gorev })}
     >
-      <Girdi etiket="Ad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} ipucu={ozlukIpucu} />
+      <Girdi etiket="Ad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} ipucu={ozlukIpucu ?? ayniAdUyarisi} />
       <Girdi etiket="Sicil no" value={sicilNo} onChange={(o) => sicilYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
       <Girdi etiket="Görev" value={gorev} onChange={(o) => gorevYaz(o.target.value)} autoComplete="off" readOnly={ozlukIk} />
       {kisi !== null && (
@@ -114,6 +121,7 @@ export function HesapPenceresi({ kisi, kapat }: { kisi: KisiOzeti; kapat: () => 
   const { bildir } = useBildirim();
   const [kullaniciAdi, adYaz] = useState(() => kullaniciAdiOner(kisi.ad));
   const [parola, parolaYaz] = useState('');
+  const [parolaTekrar, parolaTekrarYaz] = useState('');
   const [rolId, rolYaz] = useState('');
   const roller = useQuery({ queryKey: anahtarlar.roller, queryFn: () => api.get<RollerCevabi>('/roller') });
 
@@ -136,12 +144,13 @@ export function HesapPenceresi({ kisi, kapat }: { kisi: KisiOzeti; kapat: () => 
       gonder="Hesabı aç"
       kapat={kapat}
       gonderiliyor={ac.isPending}
-      hazir={kullaniciAdi.trim() !== '' && parola !== '' && rolId !== ''}
+      hazir={kullaniciAdi.trim() !== '' && parola !== '' && parola === parolaTekrar && rolId !== ''}
       onGonder={() => ac.mutate({ kullaniciAdi, parola, rolId: Number(rolId), surum: kisi.surum })}
     >
       {roller.isError && (
         <DurumKutusu durum="hata" mesaj={hataIletisi(roller.error, 'Roller alınamadı')} yenile={() => { void roller.refetch(); }} />
       )}
+      {!kisi.aktif && <p className="tc-personel-not">Kişi pasif: hesap açılır ama kişi yeniden aktif yapılana kadar giriş yapamaz.</p>}
       <Girdi etiket="Kullanıcı adı" required value={kullaniciAdi} onChange={(o) => adYaz(o.target.value)} autoComplete="off" />
       <Girdi
         etiket="İlk parola"
@@ -150,6 +159,15 @@ export function HesapPenceresi({ kisi, kapat }: { kisi: KisiOzeti; kapat: () => 
         value={parola}
         onChange={(o) => parolaYaz(o.target.value)}
         autoComplete="new-password"
+      />
+      <Girdi
+        etiket="Parola tekrarı"
+        type="password"
+        required
+        value={parolaTekrar}
+        onChange={(o) => parolaTekrarYaz(o.target.value)}
+        autoComplete="new-password"
+        hata={tekrarHatasi(parola, parolaTekrar)}
       />
       <Secim
         etiket="Rol"
@@ -161,6 +179,11 @@ export function HesapPenceresi({ kisi, kapat }: { kisi: KisiOzeti; kapat: () => 
       />
     </Form>
   );
+}
+
+// Tekrar alanı yalnız yazılmaya başlanınca uyarır: boş alan henüz hata değildir.
+function tekrarHatasi(parola: string, tekrar: string): string | undefined {
+  return tekrar !== '' && tekrar !== parola ? 'Parolalar aynı değil.' : undefined;
 }
 
 // Verilen PIN geçicidir: kişi ilk girişte kendi PIN'ini belirler. Açık oturumları kapanır.
@@ -191,6 +214,11 @@ export function PinPenceresi({ kisi, kapat }: { kisi: KisiOzeti; kapat: () => vo
       hazir={/^[0-9]{6}$/.test(pin)}
       onGonder={() => ver.mutate()}
     >
+      {!kisi.pinVar && (
+        <p className="tc-personel-not">
+          Bu kişi şu an parolayla giriyor. PIN verilince parolası çalışmaz; giriş ekranında PIN ile girer ve ilk girişte kendi PIN'ini belirler.
+        </p>
+      )}
       <Girdi
         etiket="Geçici PIN"
         ipucu="6 rakam. Kişiye iletin; ilk girişte kendi PIN'ini belirleyecek. Bundan sonra parolayla giremez."
@@ -213,6 +241,7 @@ export function ParolaPenceresi({ kisi, kendi, kapat }: { kisi: KisiOzeti; kendi
   const { bildir } = useBildirim();
   const [eski, eskiYaz] = useState('');
   const [yeni, yeniYaz] = useState('');
+  const [yeniTekrar, yeniTekrarYaz] = useState('');
 
   const degistir = useMutation({
     mutationFn: () => (kendi
@@ -236,7 +265,7 @@ export function ParolaPenceresi({ kisi, kendi, kapat }: { kisi: KisiOzeti; kendi
       gonder="Parolayı değiştir"
       kapat={kapat}
       gonderiliyor={degistir.isPending}
-      hazir={yeni !== '' && (!kendi || eski !== '')}
+      hazir={yeni !== '' && yeni === yeniTekrar && (!kendi || eski !== '')}
       onGonder={() => degistir.mutate()}
     >
       {kendi && (
@@ -256,6 +285,15 @@ export function ParolaPenceresi({ kisi, kendi, kapat }: { kisi: KisiOzeti; kendi
         value={yeni}
         onChange={(o) => yeniYaz(o.target.value)}
         autoComplete="new-password"
+      />
+      <Girdi
+        etiket="Parola tekrarı"
+        type="password"
+        required
+        value={yeniTekrar}
+        onChange={(o) => yeniTekrarYaz(o.target.value)}
+        autoComplete="new-password"
+        hata={tekrarHatasi(yeni, yeniTekrar)}
       />
     </Form>
   );

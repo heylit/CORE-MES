@@ -89,6 +89,14 @@ export interface AracYazisi {
   kilometreMaliyeti: number | null; saatMaliyeti: number | null; gunlukMaliyet: number | null;
 }
 const aracDegerleri = (a: AracYazisi) => [a.ad, a.tur, a.plaka, a.kapasiteKilogram, a.kapasitePalet, a.musaitBaslangic, a.musaitBitis, a.kilometreMaliyeti, a.saatMaliyeti, a.gunlukMaliyet];
+// Benzersiz dizinlerle (sevkiyat_araci_ad, sevkiyat_araci_plaka) aynı karşılaştırma; hangi alanın çakıştığını söylemek için.
+export async function aracCakismasi(db: Db, ad: string, plaka: string | null, haricId: number | null): Promise<{ ad: boolean; plaka: boolean }> {
+  return (await db.tek<{ ad: boolean; plaka: boolean }>(
+    `SELECT COALESCE(bool_or(lower(ad) = lower($1)), false) AS ad, COALESCE(bool_or(plaka IS NOT NULL AND upper(plaka) = upper($2)), false) AS plaka
+     FROM sevkiyat_araci WHERE aktif AND ($3::int IS NULL OR id <> $3)`,
+    [ad, plaka, haricId],
+  ))!;
+}
 export async function aracEkle(db: Db, a: AracYazisi): Promise<AracSatiri> {
   const satir = await db.tek<AracSatiri>(
     `INSERT INTO sevkiyat_araci (ad, tur, plaka, kapasite_kilogram, kapasite_palet, musait_baslangic, musait_bitis, kilometre_maliyeti, saat_maliyeti, gunluk_maliyet)

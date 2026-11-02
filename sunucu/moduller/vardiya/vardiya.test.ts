@@ -145,6 +145,12 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 5, vardiyaId: v.id, acik: false });
     assert.equal(t.isMerkezleri.find((m) => m.id === merkezA)?.haftalikDakika, 1800);
     assert.deepEqual(await vt().tx((db) => vardiyaMatrisi(db)), t.matris, 'dışarıya açılan okuma takvimin matrisidir');
+    // Örtüşen ikinci vardiya (06-14, çarşamba) örtüşmeyen 06:00-08:00'ı ve öbürünün molasını (12:00-12:30) ekler: gün ve hafta takvim aralığıyla aynı süreyi verir.
+    const sabah = await vardiyaAc({ baslangic: '06:00', bitis: '14:00' });
+    t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 3, vardiyaId: sabah.id, acik: true });
+    assert.equal(t.isMerkezleri.find((m) => m.id === merkezA)?.haftalikDakika, 1800 + 150);
+    assert.equal(await vt().tx((db) => calismaSuresi(db, merkezA, CARSAMBA)), 450 + 150);
+    await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 3, vardiyaId: sabah.id, acik: false });
     assert.equal((await istek(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: OLMAYAN_ID, gun: 1, vardiyaId: v.id, acik: true })).durum, 409);
     // Kısıtlı planlamacı kendi merkezine yazar, başkasına ve tesis geneline yazamaz.
     assert.equal((await istek(c.kisitli, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 6, vardiyaId: v.id, acik: true })).durum, 200);
@@ -669,6 +675,10 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       assert.equal((await istek(c.operator, 'GET', '/fazla-mesai?baslangic=2000-01-01&bitis=2000-01-31')).durum, 403);
       assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2000-01-31&bitis=2000-01-01')).durum, 400);
       assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2099-01-01&bitis=2100-01-05')).durum, 400);
+      // Sınır takvim okumasıyla aynıdır: iki ucu dahil 366 gün geçer, 367 reddedilir.
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2096-01-01&bitis=2096-12-31')).durum, 200);
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2095-01-01&bitis=2096-01-01')).durum, 200);
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2095-01-01&bitis=2096-01-02')).durum, 400);
     });
 
     test('VR-24, VR-25, VR-26: fazla mesai kapsamındaki makine, istasyon ve iş merkezine, kişiye yalnız listedeyse eklenir; onaylı izinli kişi 0; pay yüzdesi', async () => {
@@ -716,6 +726,50 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       const liste = await tamam<FazlaMesaiListeCevabi>(c.planlama, 'GET', `/fazla-mesai?baslangic=${GUN}&bitis=${GUN}`);
       assert.deepEqual(liste.fazlaMesailer.map((f) => [f.id, f.iptal]), [[k1.id, false], [f2.id, true]]);
       await tamam(c.planlama, 'POST', `/fazla-mesai/${k1.id}/iptal`, { surum: 2 });
+    });
+
+    test('VR-30: fazla mesai istasyonsuz kişiye, aynı kişiye aynı saatlerde ikinci kez ve kişinin vardiyasının içine yazılmaz; kişisiz kayıt vardiyayla örtüşebilir', async () => {
+      // 2099-11-12 perşembe; personelin iş merkezi B'dir (en büyük yüzde). Vardiya 08:00-16:00.
+      const PERSEMBE = '2099-11-12';
+      const ONCEKI = '2099-11-11';
+      const personel = kisiler['personel']!;
+      const v = await vardiyaAc();
+      await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezB, gun: 4, vardiyaId: v.id, acik: true });
+      const yaz = (tarih: string, govde: Record<string, unknown>) => istek<FazlaMesaiCevabi & { mesaj?: string; ayrinti?: unknown }>(c.planlama, 'POST', '/fazla-mesai',
+        { tarih, kapsam: 'istasyon', istasyonId: istasyonA, ...govde }, kimlikli());
+
+      const icinde = await yaz(PERSEMBE, { baslangic: '14:00', bitis: '18:00', kisiIdleri: [personel] });
+      assert.equal(icinde.durum, 400);
+      assert.deepEqual(icinde.govde.ayrinti, { kisiIdleri: [personel] });
+      // Önceki günün gece yarısını geçen kaydı ertesi sabahın vardiyasına taşarsa da reddedilir.
+      assert.equal((await yaz(ONCEKI, { baslangic: '22:00', bitis: '09:00', kisiIdleri: [personel] })).durum, 400);
+      const kisisiz = await yaz(PERSEMBE, { baslangic: '14:00', bitis: '18:00' });
+      assert.equal(kisisiz.durum, 200, 'kişisiz kayıt yalnız istasyon kapasitesidir (VR-24)');
+
+      const ilk = await yaz(PERSEMBE, { baslangic: '16:00', bitis: '18:00', kisiIdleri: [personel] });
+      assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+      const ikinci = await yaz(PERSEMBE, { baslangic: '17:00', bitis: '19:00', kisiIdleri: [personel] });
+      assert.equal(ikinci.durum, 400);
+      assert.deepEqual(ikinci.govde.ayrinti, { kisiIdleri: [personel] });
+      // Bitişik kayıt çakışmaz; kayıt kendisiyle çakışmaz (güncelleme).
+      const bitisik = await yaz(PERSEMBE, { baslangic: '18:00', bitis: '19:00', kisiIdleri: [personel] });
+      assert.equal(bitisik.durum, 200);
+      const k = ilk.govde.fazlaMesai;
+      const guncel = await tamam<FazlaMesaiCevabi>(c.planlama, 'POST', `/fazla-mesai/${k.id}/guncelle`,
+        { tarih: PERSEMBE, baslangic: '16:30', bitis: '18:00', kapsam: 'istasyon', istasyonId: istasyonA, kisiIdleri: [personel], surum: k.surum });
+      assert.equal(guncel.fazlaMesai.dakika, 90);
+
+      const atamasiz = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme atamasız', kullaniciAdi: 'vr30-atamasiz', parola: PAROLA }));
+      const red = await yaz(PERSEMBE, { baslangic: '20:00', bitis: '21:00', kisiIdleri: [atamasiz] });
+      assert.equal(red.durum, 400);
+      assert.deepEqual(red.govde.ayrinti, { kisiIdleri: [atamasiz] });
+
+      for (const f of [guncel.fazlaMesai, bitisik.govde.fazlaMesai, kisisiz.govde.fazlaMesai]) await tamam(c.planlama, 'POST', `/fazla-mesai/${f.id}/iptal`, { surum: f.surum });
+      // İptal edilen kayıt çakışma sayılmaz.
+      const yeniden = await yaz(PERSEMBE, { baslangic: '16:00', bitis: '18:00', kisiIdleri: [personel] });
+      assert.equal(yeniden.durum, 200);
+      await tamam(c.planlama, 'POST', `/fazla-mesai/${yeniden.govde.fazlaMesai.id}/iptal`, { surum: yeniden.govde.fazlaMesai.surum });
+      await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezB, gun: 4, vardiyaId: v.id, acik: false });
     });
 
     test('soru 54: yarım gün izin oranlı düşer; yalnız izinli saatler (günün sonundan) vardiyadan çıkar', async () => {

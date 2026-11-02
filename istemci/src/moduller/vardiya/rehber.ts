@@ -5,7 +5,7 @@ export const rehber: readonly SayfaRehberi[] = [
     yol: '/vardiya',
     ozet: 'Vardiya saatleri, tatiller, kimin hangi vardiyada olduğu, fazla mesai ve planlı duruşlar.',
     nasil: [
-      '"Vardiyalar ve tatiller"de gün ve vardiyayı seçip saatleri düzenleyin; "Resmî tatilleri ekle" ile tatilleri girin.',
+      '"Vardiyalar ve tatiller"de gün ve vardiyayı seçip saatleri düzenleyin; "Tarih ekle" ile kapalı günleri girin.',
       '"Vardiya başına personel"de kişileri seçip vardiyayı belirleyin, "Uygula"ya basın.',
       '"Fazla mesai"de "Fazla mesai ekle" ile kayıt açın.',
       '"Planlı duruşlar"da bakım gibi planlı duruşları girin; kapasiteden düşülür.',
@@ -14,7 +14,7 @@ export const rehber: readonly SayfaRehberi[] = [
     sinirlar: [
       'Düzenleme vardiya yetkisi, planlı duruş girme ayrı yetki ister.',
       'Geçmiş tarihli takvim değişikliği yalnız geçmişi düzeltme yetkisiyle yapılır.',
-      'Bayramlar her yıl elle eklenir.',
+      'Resmî tatiller ve bayramlar İK ayarlarından girilir; burada görünür, değişmez.',
     ],
     sozcukler: ['vardiya', 'mesai', 'fazla mesai', 'tatil', 'bayram', 'planlı duruş', 'takvim'],
   },

@@ -78,13 +78,30 @@ describe('Sistem Ayarları', () => {
     fireEvent.click(dortGoz);
     await waitFor(() => expect(acikMi(dortGoz)).toBe(false));
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
-      { yontem: 'POST', yol: '/ayarlar/malzemeler.dort-goz/degistir', govde: { deger: false } },
+      { yontem: 'POST', yol: '/ayarlar/malzemeler.dort-goz/degistir', govde: { deger: false, beklenen: true } },
     ]);
     // Başarı bildirimi durum olarak duyurulur, uyarı olarak değil; metni ekrana aittir.
     expect(((await screen.findByRole('status')).textContent ?? '').trim()).not.toBe('');
     expect(screen.queryByRole('alert')).toBeNull();
     // Öteki ayar yerinde kalır.
     expect(acikMi(await anahtar(OTEKI))).toBe(false);
+  });
+
+  it('başka yönetici arada değiştirdiyse sunucunun 409 iletisi uyarı olarak çıkar ve liste yeniden okunur', async () => {
+    let okuma = 0;
+    const istekler = sunucuKur({
+      liste: () => {
+        okuma += 1;
+        return json(200, { ayarlar: [okuma === 1 ? DORT_GOZ : { ...DORT_GOZ, deger: false }, OTEKI] } satisfies AyarlarCevabi);
+      },
+      yazma: () => json(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } }),
+    });
+    ac();
+    const dortGoz = await anahtar(DORT_GOZ);
+    fireEvent.click(dortGoz);
+    expect(((await screen.findByRole('alert')).textContent ?? '')).toMatch(/siz açtıktan sonra değiştirildi/);
+    await waitFor(() => expect(acikMi(dortGoz)).toBe(false));
+    expect(istekler.filter((i) => i.yontem === 'GET' && i.yol === '/ayarlar')).toHaveLength(2);
   });
 
   it('kayıtlı değeri okunamayan ayar işaretli gelir, öteki ayarlar çalışır; seçilen değer kaydedilince anahtar geri gelir', async () => {
@@ -106,7 +123,7 @@ describe('Sistem Ayarları', () => {
     expect(acikMi(dortGoz)).toBe(false);
     expect(screen.queryByText(/Kayıtlı değer okunamıyor/)).toBeNull();
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
-      { yontem: 'POST', yol: '/ayarlar/malzemeler.dort-goz/degistir', govde: { deger: false } },
+      { yontem: 'POST', yol: '/ayarlar/malzemeler.dort-goz/degistir', govde: { deger: false, beklenen: null } },
     ]);
   });
 
@@ -171,7 +188,7 @@ describe('Sistem Ayarları', () => {
       fireEvent.change(await kutu(), { target: { value: '18,5' } });
       fireEvent.click(kaydet());
       await screen.findByText('Ayar kaydedildi.');
-      expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([{ yontem: 'POST', yol: '/ayarlar/logo.deneme-kdv/degistir', govde: { deger: 18.5 } }]);
+      expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([{ yontem: 'POST', yol: '/ayarlar/logo.deneme-kdv/degistir', govde: { deger: 18.5, beklenen: null } }]);
       expect((await kutu() as HTMLInputElement).value).toBe('18,5');
       expect((kaydet() as HTMLButtonElement).disabled).toBe(true);
     });
@@ -194,7 +211,7 @@ describe('Sistem Ayarları', () => {
       fireEvent.change(await kutu(), { target: { value: ' ' } });
       fireEvent.click(kaydet());
       await screen.findByText('Ayar kaydedildi.');
-      expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde)).toEqual([{ deger: 150 }, { deger: null }]);
+      expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde)).toEqual([{ deger: 150, beklenen: 20 }, { deger: null, beklenen: 20 }]);
     });
 
     it('kayıtlı değeri okunamayan sayı ayarı işaretli gelir; boş kutu da kaydedilebilir ve işaret kalkar', async () => {
@@ -211,7 +228,7 @@ describe('Sistem Ayarları', () => {
       await screen.findByText('Ayar kaydedildi.');
       expect(screen.queryByText(/Kayıtlı değer okunamıyor/)).toBeNull();
       expect((kaydet() as HTMLButtonElement).disabled).toBe(true);
-      expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde)).toEqual([{ deger: null }]);
+      expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde)).toEqual([{ deger: null, beklenen: null }]);
     });
 
     it('metin çözümü: boş null, virgül ve nokta ondalık, başka her şey hata', () => {
@@ -447,7 +464,7 @@ describe('Sistem Ayarları: numara kuralları', () => {
     fireEvent.click(kaydet());
     await screen.findByText('Ayar kaydedildi.');
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
-      { yontem: 'POST', yol: '/ayarlar/deneme.emir-no/degistir', govde: { deger: 'UE-{YY}-{SAYAC:4}' } },
+      { yontem: 'POST', yol: '/ayarlar/deneme.emir-no/degistir', govde: { deger: 'UE-{YY}-{SAYAC:4}', beklenen: 'UE-{SAYAC:6}' } },
     ]);
   });
 });
@@ -474,7 +491,7 @@ describe('Sistem Ayarları: metin ayarı', () => {
     fireEvent.click(kaydet());
     await screen.findByText('Ayar kaydedildi.');
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
-      { yontem: 'POST', yol: '/ayarlar/kabuk.karsilama-metni/degistir', govde: { deger: 'İyi mesailer' } },
+      { yontem: 'POST', yol: '/ayarlar/kabuk.karsilama-metni/degistir', govde: { deger: 'İyi mesailer', beklenen: 'Hoş geldin' } },
     ]);
     expect((await kutu() as HTMLInputElement).value).toBe('İyi mesailer');
     expect((kaydet() as HTMLButtonElement).disabled).toBe(true);

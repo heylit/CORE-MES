@@ -32,6 +32,11 @@ describe('canlı gösterim', () => {
     expect(durumGosterimi({ durum: 'iptal', canli: null, kapanisSonucu: 'tamamlandi' }).etiket).toBe('İptal');
   });
 
+  it('birleşen parti iptal görünmez; birleştiği emri gösterir', () => {
+    expect(durumGosterimi({ durum: 'iptal', canli: null, birlestigiEmir: { id: 3, emirNo: 'EM-3' } })).toEqual({ etiket: 'Birleşti: EM-3', ton: 'pasif' });
+    expect(durumGosterimi({ durum: 'iptal', canli: null, birlestigiEmir: null }).etiket).toBe('İptal');
+  });
+
   it('sağlam sayı: başlamışta sayaç, bitmişte kapanış, planlıda yok', () => {
     expect(saglamSayisi({ durum: 'basladi', canli, saglamAdet: null })).toBe(4);
     expect(saglamSayisi({ durum: 'bitti', canli: null, saglamAdet: 0 })).toBe(0);

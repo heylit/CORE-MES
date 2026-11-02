@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { aracOranlari, filoPlani, rotaMaliyeti } from './cozucu.ts';
+import { aracOranlari, FABRIKA_YOLA_BAGLANMIYOR, filoPlani, NOKTA_YOLA_BAGLANMIYOR, rotaMaliyeti } from './cozucu.ts';
 import { EN_COK_SEFER } from './kurallar.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, FiloSecenegi } from './cozucu.ts';
 import { izgaraYolVerisi } from './test-agi.ts';
@@ -28,6 +28,23 @@ test('hiçbir aracın kapasitesine sığmayan iş atanamaz, nedeni yazılır', (
   const p = coz([is('agir', { kilogram: 5000 }), is('hafif')], [arac('K1')]);
   assert.deepEqual(p.atanamayan, [{ is: 'agir', neden: 'Hiçbir aracın kapasitesi yetmiyor' }]);
   assert.deepEqual(islerOf(p, 'K1'), ['hafif']);
+});
+
+test('süre sınırı dolunca arama durur, eldeki geçerli çözüm döner; sınır yoksa yineleme bütçesi kullanılır', () => {
+  const isler = [is('t1'), is('t2', { birakisNoktasi: 'B' }), is('t3', { birakisNoktasi: 'C' }), is('t4', { birakisNoktasi: 'D' })];
+  const sinirli = coz(isler, [arac('K1'), arac('K2')], { sureSiniriMs: 0 });
+  assert.equal(sinirli.yineleme, 0);
+  assert.deepEqual(sinirli.atanamayan, []);
+  assert.equal(sinirli.rotalar.flatMap((r) => r.duraklar.filter((d) => d.is !== null)).length, 4);
+  assert.equal(coz(isler, [arac('K1'), arac('K2')]).yineleme, SECENEK.yinelemeSiniri);
+});
+
+test('aynı noktada art arda iki iş tek yanaşmadır: durak en uzun işin süresi kadar sürer', () => {
+  const p = coz([is('t1', { birakisNoktasi: 'C' }), is('t2', { birakisNoktasi: 'C', durakSuresiDakika: 25 })], [arac('K1')]);
+  const r = rotasi(p, 'K1')!, [ilk, ikinci] = r.duraklar.filter((d) => d.is !== null);
+  assert.equal(ilk!.nokta, ikinci!.nokta);
+  assert.equal(ikinci!.ayrilis - ilk!.baslama, 25, 'toplam 10 + 25 değil, en uzunu 25');
+  assert.deepEqual(r.seferler[0]!.durakSureleri, [25]);
 });
 
 test('palet kapasitesi de sınırdır: sefer yükü kapasiteyi aşmaz, gerekirse ara dönüşle ikinci sefer açılır', () => {
@@ -149,4 +166,28 @@ test('çözücü bir araca günde en çok 3 sefer verir; dördüncü seferlik i�
   const p = coz(isler, [arac('K1', { musaitBaslangic: 300, musaitBitis: 1440 })]);
   assert.equal(rotasi(p, 'K1')!.seferler.length, 3);
   assert.equal(p.atanamayan.length, 1);
+});
+
+// Izgaranın çok dışındaki nokta en yakın düğümü bulamaz (dugum -1); çözücü bunu matrise sokmamalı.
+const UZAK = { anahtar: 'U', ad: 'U', boylam: 29.0, enlem: 41.0, durakSuresiDakika: 10 } satisfies CozucuNoktasi;
+
+test('yol ağına bağlanamayan noktanın işi atanamaz, nedeni yazılır; öbür işler planlanır', () => {
+  for (const kip of ['dagit', 'degerlendir'] as const) {
+    const p = filoPlani(ag, FABRIKA, [...NOKTALAR, UZAK], [is('uzak', { birakisNoktasi: 'U' }), is('yakin')], [arac('K1')], { ...SECENEK, kip,
+      baslangic: kip === 'degerlendir' ? [{ arac: 'K1', ogeler: [{ is: 'uzak', alis: false }, { is: 'yakin', alis: false }] }] : [] });
+    assert.deepEqual(p.atanamayan, [{ is: 'uzak', neden: NOKTA_YOLA_BAGLANMIYOR }], kip);
+    assert.deepEqual(islerOf(p as ReturnType<typeof coz>, 'K1'), ['yakin'], kip);
+  }
+});
+
+test('al-bırak işinin bir ucu ağa bağlanamıyorsa iş atanamaz', () => {
+  const p = filoPlani(ag, FABRIKA, [...NOKTALAR, UZAK], [is('ab', { tur: 'aktarma', alisNoktasi: 'A', birakisNoktasi: 'U' })], [arac('K1')], SECENEK);
+  assert.deepEqual(p.atanamayan, [{ is: 'ab', neden: NOKTA_YOLA_BAGLANMIYOR }]);
+  assert.equal(p.rotalar.length, 0);
+});
+
+test('fabrika ağa bağlanamıyorsa bütün işler atanamaz ve çözücü çökmez', () => {
+  const p = filoPlani(ag, { ...UZAK, anahtar: 'F' }, NOKTALAR, [is('t1'), is('t2', { birakisNoktasi: 'C' })], [arac('K1')], SECENEK);
+  assert.deepEqual(p.atanamayan.map((a) => a.neden), [FABRIKA_YOLA_BAGLANMIYOR, FABRIKA_YOLA_BAGLANMIYOR]);
+  assert.equal(p.rotalar.length, 0);
 });

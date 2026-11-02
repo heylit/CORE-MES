@@ -17,7 +17,7 @@ export interface OnayYazimi {
     durum?: KatalogOnayDurumu;
     talep?: Kisi;
     onay?: Kisi | null;
-    red?: (Kisi & { neden?: string }) | null;
+    red?: (Kisi & { neden?: string; geri?: boolean }) | null;
     pasif?: (Kisi & { neden?: string }) | null;
     [alan: string]: unknown;
 }
@@ -58,6 +58,14 @@ export function onayAta(item: Taslak, prev: Taslak | null | undefined): Taslak {
     item.onay = { durum: 'onayda', talep: _kim(), degisiklik: pd === 'aktif', sonOnay: (prev.onay && prev.onay.onay) || null };
     return item;
 }
+// MLZ-5 a: hiç onaylanmamış kartı onaya gönderen ya da açan onaydan geri çekebilir (sunucu `katalogGecisiDenetle`).
+export function geriCekebilir(x: Taslak | null | undefined): boolean {
+    if (!x || onayDurum(x) !== 'onayda' || (x.onay && x.onay.onay))
+        return false;
+    const ben = (typeof myUid !== 'undefined' && myUid) || null;
+    const acan = Array.isArray(x.rev) && x.rev[0] ? x.rev[0].by : null;
+    return ben !== null && ((x.onay && x.onay.talep && x.onay.talep.by === ben) || acan === ben);
+}
 export function onayYetkili(x: Taslak | null | undefined): boolean {
     if (!AYAR.onayYetkisi || !yetki('onay'))
         return false;
@@ -65,7 +73,7 @@ export function onayYetkili(x: Taslak | null | undefined): boolean {
         return false;
     return true;
 }
-const ONAY_ISLEMLERI = ['onayla', 'reddet', 'gonder', 'pasif', 'aktif'];
+const ONAY_ISLEMLERI = ['onayla', 'reddet', 'gonder', 'pasif', 'aktif', 'geri'];
 // Tanımsız işlem kartı değiştirmez; yoksa onay durumu boş kalır ve onay listesi çizilemez.
 export function onayUygula(x: Taslak, islem: string, neden?: string): Taslak {
     if (!ONAY_ISLEMLERI.includes(islem))
@@ -82,6 +90,11 @@ export function onayUygula(x: Taslak, islem: string, neden?: string): Taslak {
     else if (islem === 'reddet') {
         o.durum = 'taslak';
         o.red = { ...k, neden: neden || '' };
+    }
+    else if (islem === 'geri') {
+        // MLZ-5 a: gönderen kartı onaydan taslağa geri çeker; damgayı (kim, ne zaman) sunucu basar.
+        o.durum = 'taslak';
+        o.red = { ...k, neden: '', geri: true };
     }
     else if (islem === 'gonder') {
         o.durum = AYAR.onayAkisi ? 'onayda' : 'aktif';

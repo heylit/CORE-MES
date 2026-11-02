@@ -5,6 +5,7 @@ import type { RozetTonu, Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { isAdi, ortamAdi } from './is-adlari.ts';
 import { sureMetni } from './sure.ts';
 import './sistem-durumu.css';
 
@@ -27,7 +28,7 @@ function AyrintiListesi({ ayrinti, saglikli }: { ayrinti: Ayrinti; saglikli: boo
       <dt>Çalışma süresi</dt>
       <dd>{sureMetni(ayrinti.calismaSuresiSn)}</dd>
       <dt>Ortam</dt>
-      <dd>{ayrinti.ortam}</dd>
+      <dd>{ortamAdi(ayrinti.ortam)}</dd>
     </dl>
   );
 }
@@ -44,7 +45,7 @@ const zamanMetni = (iso: string | null): string =>
 
 // Süren turda sonuç önceki turundur; son çalışma bu yüzden başlama anıdır.
 const IS_SUTUNLARI: readonly Sutun<IsDurumuOzeti>[] = [
-  { anahtar: 'ad', baslik: 'İş', hucre: (i) => i.ad, mono: true },
+  { anahtar: 'ad', baslik: 'İş', hucre: (i) => <span title={i.ad}>{isAdi(i.ad)}</span> },
   { anahtar: 'sonBaslama', baslik: 'Son çalışma', hucre: (i) => zamanMetni(i.sonBaslama), kirilmaz: true },
   {
     anahtar: 'sonSonuc', baslik: 'Sonuç',

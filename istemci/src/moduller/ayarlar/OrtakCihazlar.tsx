@@ -4,7 +4,7 @@ import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import type {
   CihazDurumu, OrtakCihaz, OrtakCihazKapatCevabi, OrtakCihazKaydetCevabi, OrtakCihazlarCevabi, ProfilAtaCevabi,
 } from '#paylasilan/sozlesme/oturum.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { derlemeTarihi } from '../../ortak/veri/surum.ts';
 import { CIHAZ_PROFILI_ANAHTARI, CihazProfilleri, PROFIL_ADLARI, PROFIL_SECENEKLERI } from './CihazProfilleri.tsx';
@@ -34,6 +34,8 @@ function BuCihaziKaydet({ profilSecer }: { profilSecer: boolean }) {
     ]),
   });
   const temiz = ad.trim();
+  // Tam profil yetkiyi daraltmaz; öteki profiller ve profilsiz kayıt (kayıtsız cihaz profili) daraltabilir (739 a, 1358).
+  const daralir = !profilSecer || profil !== 'tam';
   const gonder = (olay: FormEvent) => {
     olay.preventDefault();
     if (temiz !== '') kaydet.mutate(temiz);
@@ -46,6 +48,12 @@ function BuCihaziKaydet({ profilSecer }: { profilSecer: boolean }) {
           Kişisel cihaz çizim ve modelleri yalnız açıkken tutar; kapanınca hiçbiri kalmaz. Atölyedeki ortak terminal ya da tablet için
           bu cihazı ortak yapın: çizimler çıkıştan sonra da cihazda kalır, sonraki açılış hızlı olur.
         </p>
+        {daralir && (
+          <p className="tc-ayar-aciklama tc-cihaz-daralma" role="note">
+            <Simge ad="alert" boyut="k" /> Ortak yapılınca bu tarayıcıda sizin yetkiniz de daralır: rolünüzle cihaz profilinin ortak
+            kısmı kalır, yönetici de dahil. Yönetim işini kişisel cihazdan yapın.
+          </p>
+        )}
       </div>
       <form className="tc-ayar-sayi" onSubmit={gonder}>
         <Girdi

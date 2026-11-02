@@ -32,7 +32,7 @@ export function YeniTalep({ kapat }: { kapat: () => void }) {
     bildir('tamam', `${t.no} gönderildi.`);
     kapat();
     void gezin(talepYolu(t.id));
-  }, 'Talep gönderilemedi');
+  }, 'Talep gönderilemedi', true);
 
   const degistir = (id: number, acik: boolean) => { seciliYaz((s) => (acik ? [...s, id] : s.filter((x) => x !== id))); };
   const gonder = () => {

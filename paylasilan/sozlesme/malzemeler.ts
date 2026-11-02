@@ -75,8 +75,24 @@ export const katalogMalzemeOzeti = z.object({
 export const olcuBirimleriCevabi = z.object({ birimler: z.array(z.object({ kod: z.string(), aktif: z.boolean() })) });
 export type OlcuBirimleriCevabi = z.output<typeof olcuBirimleriCevabi>;
 
+// Kartın adı (`com.ad`) ve bekleyen değişiklik talebinin önerdiği ad: kart bütün olarak saklandığı için sınır burada; ekranın
+// kurduğu ad bunun çok altındadır, sınır yalnız elle ya da uçtan gelen aşırı uzun adı keser.
+export const KATALOG_KART_ADI_EN_COK = 200;
+const nesneMi = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+const kartAdi = (kayit: unknown): unknown => (nesneMi(kayit) && nesneMi(kayit['com']) ? kayit['com']['ad'] : undefined);
+const kartKaydi = katalogNesnesi.superRefine((kayit, ctx) => {
+  const talep = kayit['talep'];
+  const adlar: [unknown, (string | number)[]][] = [[kartAdi(kayit), ['com', 'ad']]];
+  if (nesneMi(talep)) adlar.push([kartAdi(talep['yeni']), ['talep', 'yeni', 'com', 'ad']]);
+  for (const [ad, yol] of adlar) {
+    if (typeof ad === 'string' && ad.trim().length > KATALOG_KART_ADI_EN_COK) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: yol, message: `Kart adı en çok ${KATALOG_KART_ADI_EN_COK} karakter olabilir.` });
+    }
+  }
+});
+
 export const katalogKartiKaydetGovdesi = z.object({
-  kayit: katalogNesnesi,
+  kayit: kartKaydi,
   ozet: katalogKartiOzeti,
   // Yeni kartta null; kayıtlı kartta okunan sürüm (iki kişi aynı kartı yazarsa ikincisi 409 alır).
   surum: z.number().int().positive().nullable(),

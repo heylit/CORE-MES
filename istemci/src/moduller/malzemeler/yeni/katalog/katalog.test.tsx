@@ -181,6 +181,28 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     expect(p.queryByRole('button', { name: 'Sil' })).toBeNull();
   });
 
+  test('MLZ-5 a: onaya gönderen yazan kartı onaydan geri çeker; başkasının kartında ve onaylanmış kartta düğme yok', async () => {
+    const onaylanmis = { ...onayda('m3', 'HM-C', YAZAN.id), onay: { durum: 'onayda', talep: { by: YAZAN.id, byAd: 'Ben', t: 1 }, onay: { by: 3, byAd: 'Biri', t: 1 } } };
+    for (const [kimlik, kayit] of [['m2', onayda('m2', 'HM-B', 3)], ['m3', onaylanmis]] as const) {
+      cleanup();
+      kur(YAZAN, kartlar(satir(kimlik, 1, kayit)));
+      yeniEkranAc(`${KOK}?kart=${kimlik}`);
+      expect(within(await screen.findByRole('dialog')).queryByRole('button', { name: 'Onaydan geri çek' }), kimlik).toBeNull();
+    }
+    cleanup();
+    const istekler = kur(YAZAN, {
+      ...kartlar(satir('m1', 1, onayda('m1', 'HM-A', YAZAN.id))),
+      'POST /malzeme-katalogu-kartlari/m1/kaydet': () => json(200, { id: 'm1', stok_kodu: 'HM-A', surum: 2 }),
+    });
+    yeniEkranAc(`${KOK}?kart=m1`);
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Onaydan geri çek' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    const govde = istekler.find((i) => i.yontem === 'POST')!.govde as { kayit: { onay: { durum: string; red: { geri?: boolean } } }; ozet: { onay_durumu: string } };
+    expect(govde.kayit.onay.durum).toBe('taslak');
+    expect(govde.kayit.onay.red.geri).toBe(true);
+    expect(govde.ozet.onay_durumu).toBe('taslak');
+  });
+
   test('sorumlu onaylar: kart aktif durumla ve özetle kaydet ucuna gider', async () => {
     const istekler = kur(SORUMLU, {
       ...kartlar(satir('m1', 1, onayda('m1', 'HM-A', 3))),
@@ -237,7 +259,24 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     yeniEkranAc(`${KOK}?kart=m1`);
     p = within(await screen.findByRole('dialog'));
     expect(p.getByRole('button', { name: 'Düzenle' })).toBeTruthy();
-    expect(p.getByRole('button', { name: 'Yeniden aktifleştir' })).toBeTruthy();
+    // Onay akışı açıkken (varsayılan) pasiften dönen kart onaya gider; düğme bunu söyler.
+    expect(p.getByRole('button', { name: 'Yeniden onaya gönder' })).toBeTruthy();
+    expect(p.queryByRole('button', { name: 'Yeniden aktifleştir' })).toBeNull();
+  });
+
+  test('talep farkı ham alan yolunu okunur adla gösterir; bayrak Evet/Hayır, bilinmeyen yol olduğu gibi kalır, satır atlanmaz', async () => {
+    const x = talepli('m1', 'HM-T', YAZAN.id);
+    x.talep.farklar = [
+      { f: 'com.ad', a: 'Eski', b: 'Yeni' }, { f: 'com.ac1', a: 'a', b: 'b' }, { f: 'kodManual', a: 'false', b: 'true' },
+      { f: 'grade', a: 'C45', b: 'S355' }, { f: 'bilinmeyen.yol', a: '1', b: '2' },
+    ];
+    kur(YONETICI, kartlar(satir('m1', 1, x)));
+    yeniEkranAc(`${KOK}?kart=m1`);
+    const tablo = within(within(await screen.findByRole('dialog')).getByRole('region', { name: 'Değişiklik talebi' }));
+    const satirlar = tablo.getAllByRole('row').slice(1).map((r) => [...r.querySelectorAll('td')].map((td) => td.textContent));
+    expect(satirlar).toEqual([
+      ['Ad', 'Eski', 'Yeni'], ['Açıklama 1', 'a', 'b'], ['Kod elle girildi', 'Hayır', 'Evet'], ['Kalite', 'C45', 'S355'], ['bilinmeyen.yol', '1', '2'],
+    ]);
   });
 
   test('290: "Talebi geri çek" talebin sahibine ve onay yetkilisine görünür, başka yazara görünmez', async () => {

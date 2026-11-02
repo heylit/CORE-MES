@@ -60,5 +60,5 @@ export function rotaPlani(rotalar: readonly ModulRotasi[], gorunur: readonly Say
 }
 
 export const modulRotalari: readonly ModulRotasi[] = rotalariTopla(
-  acikModulDosyalari(import.meta.glob('../../moduller/*/rotalar.tsx', { eager: true })),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/rotalar.tsx', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

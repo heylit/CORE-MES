@@ -16,6 +16,7 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Kalıcı hata bir denemede biter; geçici hata 3 denemeye kadar, aynı turda yinelenmez | `G-K7`, `G-A2`, `G-A5` |
 | Süre aşımında süreç öldürülür ve yeniden açılır | `G-A5` |
 | Öksüz 'calisiyor' iş sonraki turda kuyruğa döner | `G-A6` |
+| Eski bağlantı aynı belgenin yayındaki revizyonuna gider; belge arşivdeyse null | `G-A7`, istemci `Atolye3B.test.tsx` |
 | Yeni yayın en geç bir turda kuyruğa girer; bitmiş iş yeniden hesaplanmaz | `G-A1` |
 | Yeniden hesaplatma sürümlü; iş yokken açılır | `G-A3`, `G-A4` |
 | Yetki: okuma ve hesaplatma ayrı işlem | `G-A3` |

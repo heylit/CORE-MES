@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BelgeAyrintisi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yenidenDenenebilirMi, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
+import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DosyaHatasi, dosyaYukle } from './dosya-aktarimi.ts';
@@ -12,11 +13,11 @@ export function useYetki() {
   return { yazar: islemler.includes('belge-merkezi.yaz'), yayinlar: islemler.includes('belge-merkezi.yayinla') };
 }
 
-// Belgeyi döndüren yazma komutu: gönder, modül verisini tazele, hatada iletiyi forma bırak.
+// Belgeyi döndüren yazma komutu: gönder, modül verisini tazele, hatada iletiyi forma bırak. Çift tık tek istek gönderir (CIZ-4).
 export function useKomut(yol: string, tamam: (cevap: BelgeAyrintisi) => void, hataMetni = 'İşlem yapılamadı') {
   const istemci = useQueryClient();
   const [hata, hataYaz] = useState<string | null>(null);
-  const komut = useMutation({
+  const komut = useTekGonderim({
     mutationFn: (govde: unknown) => api.post<BelgeAyrintisi>(yol, govde),
     onMutate: () => { hataYaz(null); },
     onSuccess: async (cevap) => {

@@ -229,8 +229,9 @@ describe('İK puantaj (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await izin('leave_ig2', 'emp_b', 11, 14, 1.5)).statusCode, 200);
     // İş günü olmayan aralığa yıllık izin girilmez; takvim günüyle sayılan tür girilir.
     assert.equal((await izin('leave_ig3', 'emp_b', 12, 13, 1)).statusCode, 400);
+    // Sonraki hafta sonu: aynı kişinin 11-14 yıllık izniyle çakışan izin girilmez.
     const rapor = await istek(c.yon, 'POST', '/ik/izinler/leave_ig4/kaydet', {
-      govde: { id: 'leave_ig4', kind: 'leave', empId: 'emp_b', tur: 'Hastalık / rapor', baslangic: gun(12), bitis: gun(13), gun: 2, durum: 'Beklemede' }, surum: null,
+      govde: { id: 'leave_ig4', kind: 'leave', empId: 'emp_b', tur: 'Hastalık / rapor', baslangic: gun(19), bitis: gun(20), gun: 2, durum: 'Beklemede' }, surum: null,
     });
     assert.equal(rapor.statusCode, 200, rapor.body);
   });

@@ -58,6 +58,7 @@ export function istemciAlanlariniAyikla(tur: IkTuru, govde: Govde): Govde {
 }
 
 // IK-4: türün zorunlu alanları; kalan alanları ekran belirler.
+export const GUNLUK_AZAMI_SAAT = 24;
 const eksiMi = (v: unknown): boolean => v !== null && v !== undefined && v !== '' && Number(v) < 0;
 
 export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
@@ -90,6 +91,8 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
       if (!dolu(g['empId'])) return dogrulama('Kayıt bir personele bağlı olmalı.', 'govde.empId');
       // IK-79: eksi süre fazla mesaiyi düşürür ve bordroya öyle geçer (Soru 112 b; veritabanında da kısıt).
       if (tur === 'att' && eksiMi(g['saat'])) return dogrulama('Süre eksi olamaz.', 'govde.saat');
+      // Bir devam kaydı tek günündür; günden uzun süre bordroya fazla mesai diye geçerdi.
+      if (tur === 'att' && Number(g['saat']) > GUNLUK_AZAMI_SAAT) return dogrulama(`Süre bir günde en çok ${GUNLUK_AZAMI_SAAT} saat olabilir.`, 'govde.saat');
       break;
     case 'job':
       if (!dolu(g['baslik'])) return dogrulama('Pozisyon adı boş olamaz.', 'govde.baslik');
@@ -165,6 +168,21 @@ export interface IzinGecisi {
 
 const IZIN_ICERIGI = ['empId', 'tur', 'baslangic', 'bitis', 'gun'] as const;
 export const izinIcerigiDegistiMi = (a: Govde, b: Govde): boolean => IZIN_ICERIGI.some((k) => esitMi(a[k] ?? null, b[k] ?? null) === false);
+
+// 1806 IK-1: aynı kişinin etkin (bekleyen ya da onaylı) iki izni aynı güne düşmez; bakiye ve puantaj iki kez sayardı. Ekran formu da
+// aynı kuralla uyarır; denetim yeni talepte, içerik değişince ve etkin olmayan izin etkinleşince (karar) yapılır.
+const ETKIN_IZIN: readonly string[] = ['Beklemede', 'Onaylandı'];
+const gunAyYil = (t: string): string => (TARIH.test(t) ? `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}` : t);
+export function izinCakismasiDenetle(onceki: Govde | null, yeni: Govde, izinler: readonly Govde[]): KuralHatasi | null {
+  if (!ETKIN_IZIN.includes(metin(yeni['durum']))) return null;
+  if (onceki && metin(onceki['durum']) === metin(yeni['durum']) && !izinIcerigiDegistiMi(onceki, yeni)) return null;
+  const b = metin(yeni['baslangic']); const s = metin(yeni['bitis']);
+  const c = izinler.find((l) => metin(l['id']) !== metin(yeni['id']) && metin(l['empId']) === metin(yeni['empId'])
+    && ETKIN_IZIN.includes(metin(l['durum'])) && metin(l['baslangic']) <= s && metin(l['bitis']) >= b);
+  return c
+    ? gecersiz(`Bu tarihlerle çakışan bir izin var: ${metin(c['tur'])}, ${gunAyYil(metin(c['baslangic']))} – ${gunAyYil(metin(c['bitis']))} (${metin(c['durum'])}).`)
+    : null;
+}
 
 export function izinGecisiDenetle(g: IzinGecisi): KuralHatasi | null {
   const onay = g.islemler.includes('ik.izin-onay');
@@ -328,7 +346,9 @@ export function iletisimDenetle(kimlik: string, benimPersonel: string | null): K
 /* ---------------- bordro: IK-15..IK-17 ---------------- */
 
 // IK-16: kesinleşmiş ay yeniden kesinleştirmek kilit açma yetkisi ister.
-export function kesinlestirmeDenetle(kesinlesmisVar: boolean, islemler: readonly string[]): KuralHatasi | null {
+// 1806 IK-2: henüz gelmemiş ayın bordrosu kesinleşmez (girdisi, devamı ve izni belli değil); içinde bulunulan ay kesinleşir.
+export function kesinlestirmeDenetle(kesinlesmisVar: boolean, islemler: readonly string[], donem: string, bugun: string): KuralHatasi | null {
+  if (donem > bugun.slice(0, 7)) return gecersiz('Gelecek ayın bordrosu kesinleştirilemez.');
   return kesinlesmisVar && !islemler.includes('ik.bordro-kilit-ac') ? yetki('Bu ayın bordrosu kesinleşmiş; yeniden kesinleştirmek için kilit açma yetkisi gerekir.') : null;
 }
 

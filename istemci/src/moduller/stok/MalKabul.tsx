@@ -6,6 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
@@ -384,6 +385,8 @@ export function MalKabul() {
     setEtiket({ id: c.belge.id, no: c.belge.no });
     return c;
   }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); });
+  // Çift tık tek istek ve tek bildirim (STK-7).
+  const kilitli = useGonderimKilidi();
   const liste = useListeDurumu({ suzgecler: { logoDurumu: '' as '' | (typeof LOGO_ESLESME_DURUMLARI)[number] }, suzgecDegerleri: { logoDurumu: LOGO_ESLESME_DURUMLARI }, siralamaAlanlari: ['zaman'], adres: true });
   const l = useQuery({ queryKey: anahtarlar.liste('mal-kabuller', liste.sorgu), queryFn: () => api.get<MalKabullerCevabi>(`/stok/mal-kabuller${sorguMetni(liste.sorgu)}`) });
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
@@ -392,7 +395,7 @@ export function MalKabul() {
       <SayfaBasi baslik="Mal kabul" alt="Depo malı sayarak teslim alır; hammaddede parti o anda girilir. Fasondan dönen malzeme hizmet siparişiyle alınır. Logo irsaliyesiyle eşleme ayrıca yapılır." />
       {yazabilir && (
         <Kart baslik="Yeni mal kabul">
-          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); komut.mutate({ tur, irsaliyeNo: irsaliye, satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }); }}>
+          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} />

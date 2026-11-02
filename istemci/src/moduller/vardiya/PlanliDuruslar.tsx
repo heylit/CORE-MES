@@ -9,7 +9,7 @@ import {
   CokSatir, DurumKutusu, Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
-import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { IstasyonSecimi } from '../istasyonlar/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -73,11 +73,11 @@ function govdeOf(f: Form): PlanliDurusGovdesi {
 function useDurusYaz(kapat: () => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  return useMutation({
-    mutationFn: (f: Form) => (f.id === null
-      ? tekrarKorumaliGonder((d) => api.post<PlanliDurusCevabi>('/planli-duruslar', govdeOf(f), {
-        istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}),
-      }))
+  // Yeni kayıt tekrar korumalıdır: çift tık tek istek, kimlik başarıya ya da sunucunun reddine dek aynı (VRD-1).
+  return useKorumaliKomut<Form, PlanliDurusCevabi>({
+    korumali: (f) => f.id === null,
+    gonder: (f, deneme) => (f.id === null
+      ? api.post<PlanliDurusCevabi>('/planli-duruslar', govdeOf(f), deneme)
       : api.post<PlanliDurusCevabi>(`/planli-duruslar/${String(f.id)}/guncelle`, { ...govdeOf(f), surum: f.surum })),
     onSuccess: async () => {
       kapat();

@@ -73,9 +73,13 @@ export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }
   return (
     <div className="tc-kapanis">
       <Kart baslik="Kapanış onayları" simge="clipboard-check"
-        sag={onayci && !duzenlenir
-          ? <Dugme simge="tool" onClick={evdeAc}>Reçete ve Rota'da onayla</Dugme>
-          : <span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>}>
+        sag={(
+          <div className="tc-emir-ust tc-emir-ust-sag">
+            {onayci && !duzenlenir
+              ? <Dugme simge="tool" onClick={evdeAc}>Reçete ve Rota'da onayla</Dugme>
+              : <span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>}
+          </div>
+        )}>
         {liste.isPending && <DurumKutusu durum="yukleniyor" />}
         {liste.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Kapanışlar alınamadı.')} yenile={() => { void liste.refetch(); }} />}
         {liste.data && (

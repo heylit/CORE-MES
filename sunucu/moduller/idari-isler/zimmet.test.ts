@@ -5,7 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { Demirbas, DemirbasCevabi, DemirbaslarCevabi, Zimmet, ZimmetCevabi, ZimmetlerCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
+import type { Demirbas, DemirbasCevabi, DemirbaslarCevabi, Zimmet, ZimmetCevabi, ZimmetlerCevabi, ZimmetlerimCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -111,6 +111,29 @@ describe('idari-isler demirbaş ve zimmet (gerçek PostgreSQL, gerçek giriş)',
     const gecmis = (await oku(okuyan.cerez, `/idari-isler/demirbaslar/${d.id}/zimmetler`)).json<ZimmetlerCevabi>().zimmetler;
     assert.equal(gecmis.length, 1);
     assert.equal(gecmis[0]?.iadeDurumu, 'saglam');
+  });
+
+  test('demirbaş güncelleme kısmidir: gönderilmeyen alan korunur, null siler; değer yine denetlenir', async () => {
+    const d = await demirbasEkle({ markaModel: 'Deneme monitör', seriNo: 'DNM-MN-9', deger: '4500', aciklama: 'Deneme not' });
+    const g1 = await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: d.surum, durum: 'hurda' });
+    assert.equal(g1.statusCode, 200, g1.body);
+    const h = g1.json<DemirbasCevabi>().demirbas;
+    assert.deepEqual([h.durum, h.tur, h.markaModel, h.seriNo, h.deger, h.aciklama], ['hurda', 'dizustu', 'Deneme monitör', 'DNM-MN-9', '4500.00', 'Deneme not']);
+    const g2 = await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: h.surum, seriNo: null, aciklama: '' });
+    assert.equal(g2.statusCode, 200, g2.body);
+    const s = g2.json<DemirbasCevabi>().demirbas;
+    assert.deepEqual([s.markaModel, s.seriNo, s.deger, s.aciklama], ['Deneme monitör', null, '4500.00', null]);
+    assert.equal((await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: s.surum, deger: '0' })).statusCode, 400);
+  });
+
+  test('zimmetlerim: kişi yalnız kendi açık zimmetini görür; iade edilen düşer; talep açamayan 403', async () => {
+    const d = await zimmetle(await demirbasEkle({ tur: 'telefon', seriNo: 'DNM-TEL-1' }), { kisiId: calisan.id });
+    const benim = async () => (await oku(calisan.cerez, '/idari-isler/zimmetlerim')).json<ZimmetlerimCevabi>().zimmetler;
+    const liste = await benim();
+    assert.deepEqual(liste.find((z) => z.demirbasNo === d.no), { demirbasNo: d.no, tur: 'telefon', markaModel: 'Deneme dizüstü', seriNo: 'DNM-TEL-1', verilis: bugun });
+    assert.equal((await oku(okuyan.cerez, '/idari-isler/zimmetlerim')).statusCode, 403);
+    assert.equal((await iade(idari.cerez, d.acikZimmet!)).statusCode, 200);
+    assert.ok(!(await benim()).some((z) => z.demirbasNo === d.no));
   });
 
   test('IDR-31: hasarlı iade bakıma, kayıp iade kayba düşürür; iade edilmiş zimmet ikinci kez iade edilmez (422)', async () => {

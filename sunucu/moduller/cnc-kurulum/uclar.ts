@@ -4,11 +4,11 @@ import {
   kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
   stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, tezgahAyarCevabi, tezgahAyarGovdesi, tezgahlarCevabi, tezgahParametresi, yazCevabi,
   yazGovdesi, modelBaglaCevabi, modelBaglaGovdesi, modellerCevabi, modelParametresi, modelSecenekleriCevabi, modelSecenekleriSorgusu,
-  hamAnaliziCevabi,
+  hamAnaliziCevabi, kayitGecmisiCevabi, kayitGecmisiSorgusu,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, tezgahAyarYaz,
-  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri, hamAnalizi,
+  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri, hamAnalizi, kayitGecmisi,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
@@ -110,19 +110,20 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/cnc-kurulum/takimlar/stok-kartlari',
-    yetki: 'malzemeler.yaz',
+    // CNC-7 a: CNC kaydını yazan ve kartı yazan kişi (malzemeler.yaz serviste denetlenir); yalnız kart yazan CNC'ye giremez.
+    yetki: 'cnc-kurulum.yaz',
     sorgu: stokKartlariSorgusu,
     cevap: stokKartlariCevabi,
-    isle: ({ db, sorgu }) => stokKartlari(db, sorgu),
+    isle: ({ db, kullanici, sorgu }) => stokKartlari(db, kullanici, sorgu),
   }),
   uc({
     yontem: 'POST',
     yol: '/cnc-kurulum/takimlar/stok-karti',
-    // 163 b: kalemin stok kartı bağı kart verisidir; kartı yazan kurar.
-    yetki: 'malzemeler.yaz',
+    // 163 b: kalemin stok kartı bağı kart verisidir; kartı yazan kurar. CNC-7 a: o kişi CNC kaydını da yazar (malzemeler.yaz serviste).
+    yetki: 'cnc-kurulum.yaz',
     govde: stokKartiBaglaGovdesi,
     cevap: stokKartiBaglaCevabi,
-    isle: ({ db, govde }) => stokKartiBagla(db, govde),
+    isle: ({ db, kullanici, govde }) => stokKartiBagla(db, kullanici, govde),
   }),
   uc({
     yontem: 'GET',
@@ -196,5 +197,14 @@ export const uclar = [
     yetki: OKUMA,
     cevap: hamAnaliziCevabi,
     isle: ({ db }) => hamAnalizi(db),
+  }),
+  // Kayıt geçmişi (CNC-7 a): okuma işlemiyle açılır; rol dağılımı rol x işlem göçünde (5.6) verilir.
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/kayitlar/gecmis',
+    yetki: 'cnc-kurulum.oku',
+    sorgu: kayitGecmisiSorgusu,
+    cevap: kayitGecmisiCevabi,
+    isle: ({ db, sorgu }) => kayitGecmisi(db, sorgu.anahtar),
   }),
 ];

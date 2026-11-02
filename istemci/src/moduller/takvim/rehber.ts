@@ -13,7 +13,7 @@ export const rehber: readonly SayfaRehberi[] = [
     sinirlar: [
       'Yalnız okur; tarih kaydın kendi ekranında değiştirilir.',
       'Yalnız okuma yetkiniz olan kaynaklar görünür; izinlerde yetkiniz yoksa yalnız kendi izniniz görünür.',
-      'Gündem, tablo ve kanban son 61 günü ve gelecek 31 günü gösterir; daha eskisi ay görünümünde gezilerek görülür.',
+      'Gündem, tablo ve kanban son 61 günü ve gelecek 31 günü gösterir; daha eskisi ay görünümünde gezilerek görülür. Kapanmamış geciken kayıtlar son iki yıldan da gelir.',
       'Üretim emrinin günleri emrin kendi başlangıç ve teslim tarihidir; plan çizelgesindeki adım saatleri gösterilmez.',
     ],
     sozcukler: ['termin', 'vade', 'ajanda', 'gündem', 'tarih'],

@@ -1,6 +1,6 @@
 /* Denetim Hazırlığı P3: takvim bölümü ve denetim formu. Yalnız tasarım değişkenleri. */
 .tc-dhd-p-iso9001 { --tc-dhd-pr: var(--grafik); }
-.tc-dhd-p-as9100 { --tc-dhd-pr: var(--ikinci-vurgu); }
+.tc-dhd-p-as9100 { --tc-dhd-pr: var(--done); }
 .tc-dhd-p-eydep { --tc-dhd-pr: var(--grafik-2); }
 .tc-dhd-k-kotu { --tc-dhd-pr: var(--stop); }
 .tc-dhd-k-uyari { --tc-dhd-pr: var(--hold); }

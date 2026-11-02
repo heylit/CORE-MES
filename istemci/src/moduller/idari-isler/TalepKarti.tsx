@@ -2,8 +2,10 @@ import type { Talep } from '#paylasilan/sozlesme/idari-isler.ts';
 import { Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { DURUM, KATEGORI, gecenSure } from './gorunum.ts';
 
-// Pano, Bugün ve Taleplerim'deki talep satırı: konu simgesi, yer, açan ve süre; acil talep işaretlidir.
-export function TalepKarti({ talep, sec, durumGoster = false }: { talep: Talep; sec?: () => void; durumGoster?: boolean }) {
+// Pano, Bugün ve Taleplerim'deki talep satırı: konu simgesi, yer, açan ve süre; acil talep işaretlidir. Taleplerim'de sonuç notu da yazar.
+export function TalepKarti({ talep, sec, durumGoster = false, sonucGoster = false }: {
+  talep: Talep; sec?: () => void; durumGoster?: boolean; sonucGoster?: boolean;
+}) {
   const icerik = (
     <>
       <span className="tc-ii-konu" aria-hidden="true"><Simge ad={KATEGORI[talep.kategori].simge} /></span>
@@ -18,6 +20,9 @@ export function TalepKarti({ talep, sec, durumGoster = false }: { talep: Talep; 
           <span className="mono">{talep.no}</span> · {talep.acanAd ?? 'Bilinmeyen kişi'} · {gecenSure(talep.acilma)}
           {talep.ustlenenAd !== null && talep.durum === 'yapiliyor' && <> · Üstlenen: {talep.ustlenenAd}</>}
         </span>
+        {sonucGoster && talep.sonucNotu !== null && (
+          <span className="tc-ii-soluk">{talep.durum === 'reddedildi' ? 'Red nedeni' : 'Sonuç'}: {talep.sonucNotu}</span>
+        )}
       </span>
     </>
   );

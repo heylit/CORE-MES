@@ -189,7 +189,7 @@ describe('Oturumlar ve koruma', () => {
   it('kilitli hesap listelenir; yönetici onayla kilidi açar, okuyan açma düğmesi görmez', async () => {
     const satir = { id: 9, kullaniciAdi: 'deneme-kilit', kilitlendi: T, bitis: T };
     const cagrilar = sunucuKur({
-      'GET /guvenlik/oturumlar': () => json(200, { oturumlar: [] } satisfies OturumlarCevabi),
+      'GET /guvenlik/oturumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 } satisfies OturumlarCevabi),
       'GET /guvenlik/kilitler': () => json(200, kilitler([satir])),
       'POST /guvenlik/kilitler/9/ac': () => json(200, { acilan: 1 }),
     });
@@ -198,9 +198,9 @@ describe('Oturumlar ve koruma', () => {
     fireEvent.click(within(tablo).getByRole('button', { name: 'Kilidi aç' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kilidi aç' }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/kilitler/9/ac')).toBe(true));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/kilitler/9/ac' && JSON.stringify(c.govde) === '{}')).toBe(true));
     cleanup();
-    sunucuKur({ 'GET /guvenlik/oturumlar': () => json(200, { oturumlar: [] }), 'GET /guvenlik/kilitler': () => json(200, kilitler([satir])) });
+    sunucuKur({ 'GET /guvenlik/oturumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 }), 'GET /guvenlik/kilitler': () => json(200, kilitler([satir])) });
     cizdir(<GuvenlikOturumlar />, ['sayfa.guvenlik', 'guvenlik.oku']);
     const okunan = await screen.findByRole('table', { name: 'Kilitli hesaplar' });
     expect(within(okunan).getByText('deneme-kilit')).toBeTruthy();
@@ -220,7 +220,8 @@ describe('Oturumlar ve koruma', () => {
 
   it('kilit yokken boş durum gösterir; kendi oturumunu kapatma düğmesi yoktur', async () => {
     const cevap: OturumlarCevabi = {
-      oturumlar: [
+      toplam: 2, sayfa: 1, sayfaBoyu: 50,
+      satirlar: [
         { id: 1, kisiId: 1, kisiAdi: 'Deneme bir', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: true },
         { id: 2, kisiId: 2, kisiAdi: 'Deneme iki', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: false },
       ],
@@ -235,13 +236,24 @@ describe('Oturumlar ve koruma', () => {
     expect(within(within(tablo).getByText(/Deneme bir/).closest('tr')!).queryByRole('button', { name: 'Kapat' })).toBeNull();
     fireEvent.click(within(within(tablo).getByText(/Deneme iki/).closest('tr')!).getByRole('button', { name: 'Kapat' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Oturumu kapat' }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/oturumlar/2/kapat')).toBe(true));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/oturumlar/2/kapat' && JSON.stringify(c.govde) === '{}')).toBe(true));
+  });
+
+  it('oturum listesi arama kutusu sunucuya gider (GUV-4)', async () => {
+    const cagrilar = sunucuKur({
+      'GET /guvenlik/oturumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 } satisfies OturumlarCevabi),
+      'GET /guvenlik/kilitler': () => json(200, kilitler([])),
+    });
+    cizdir(<GuvenlikOturumlar />);
+    fireEvent.change(await screen.findByPlaceholderText('Kişi, cihaz ya da tarayıcı'), { target: { value: 'deneme' } });
+    await waitFor(() => expect(cagrilar.some((c) => c.yol.includes('/guvenlik/oturumlar') && c.yol.includes('ara=deneme'))).toBe(true));
   });
 
   it('oturum girişteki cihaz adresi ve tarayıcı özetiyle görünür; bilinmeyen boş çizgidir (386 a)', async () => {
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0';
     const cevap: OturumlarCevabi = {
-      oturumlar: [
+      toplam: 2, sayfa: 1, sayfaBoyu: 50,
+      satirlar: [
         { id: 1, kisiId: 1, kisiAdi: 'Deneme bir', acildi: T, sonGorulme: T, ip: '192.0.2.5', tarayici: ua, buOturum: true },
         { id: 2, kisiId: 2, kisiAdi: 'Deneme iki', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: false },
       ],
@@ -265,7 +277,7 @@ describe('Oturumlar ve koruma', () => {
   it('okunamayan koruma maddesi "Bilinmiyor" görünür, açık sayılmaz', async () => {
     const cevap: KorumaCevabi = {
       maddeler: [
-        { anahtar: 'tarama', baslik: 'Güvenlik taraması', aciklama: 'Deneme', durum: 'acik', deger: null },
+        { anahtar: 'tarama', baslik: 'Güvenlik taraması', aciklama: 'Deneme', durum: 'acik', deger: T },
         { anahtar: 'yedek', baslik: 'Yedek', aciklama: 'Deneme', durum: 'bilinmiyor', deger: null },
       ],
     };
@@ -273,6 +285,9 @@ describe('Oturumlar ve koruma', () => {
     cizdir(<GuvenlikKoruma />);
     expect(await screen.findByText('Bilinmiyor')).toBeTruthy();
     expect(screen.getAllByText('Açık')).toHaveLength(1);
+    // GUV-4: zaman değeri ham ISO değil, okunur biçimde ve yılıyla.
+    expect(screen.queryByText(T)).toBeNull();
+    expect(screen.getByText(/2099/)).toBeTruthy();
   });
 });
 

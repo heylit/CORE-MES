@@ -4,6 +4,7 @@ import type {
   CagriEkibi, DurusNedeni, DurusNedeniGuncelleGovdesi, DurusNedeniOlusturGovdesi, HurdaNedeni,
   HurdaNedeniGuncelleGovdesi, HurdaNedeniOlusturGovdesi, Kategori,
 } from '#paylasilan/sozlesme/durus-nedenleri.ts';
+import { SABIT_HURDA_KODLARI } from '#paylasilan/sozlesme/durus-nedenleri-sabitleri.ts';
 import { Dugme, Girdi, IsaretKutusu, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { SIMGELER, type SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -15,6 +16,10 @@ export const KATEGORI_ADLARI: Record<Kategori, string> = { plansiz: 'Plansız', 
 
 const EKIPLER = (Object.keys(EKIP_ADLARI) as CagriEkibi[]).map((deger) => ({ deger, baslik: EKIP_ADLARI[deger] }));
 const KATEGORILER = (Object.keys(KATEGORI_ADLARI) as Kategori[]).map((deger) => ({ deger, baslik: KATEGORI_ADLARI[deger] }));
+const KOD_IPUCU = 'Büyük harf, rakam ve tire; en çok 12 karakter.';
+const SABIT_KOD_IPUCU = 'Fason dönüşünde kullanılan sabit tür; kodu değişmez, adı ve aktifliği değişebilir.';
+const SABIT_PASIF_UYARISI = 'Pasif kalırsa GKK adımında bu türle hatalı parça girilemez.';
+
 const SIMGE_SECENEKLERI = (Object.keys(SIMGELER) as SimgeAdi[])
   .map((deger) => ({ deger, baslik: SIMGE_ADLARI[deger] }))
   .sort((a, b) => a.baslik.localeCompare(b.baslik, 'tr'));
@@ -91,7 +96,7 @@ export function DurusNedeniFormu({ neden, onerilenKod, kapat }: Ortak<DurusNeden
       alt={<FormAltlik formKimligi="durus-formu" kapat={kapat} bekliyor={kaydet.isPending} />}
     >
       <form id="durus-formu" className="tc-form" onSubmit={gonder}>
-        <Girdi etiket="Kod" required maxLength={12} value={kod} onChange={(o) => kodYaz(o.target.value)} ipucu="Büyük harf, rakam ve tire; en çok 12 karakter." />
+        <Girdi etiket="Kod" required maxLength={12} value={kod} onChange={(o) => kodYaz(o.target.value)} ipucu={KOD_IPUCU} />
         <Girdi etiket="Ad" required maxLength={80} value={ad} onChange={(o) => adYaz(o.target.value)} />
         <Secim etiket="Kategori" secenekler={KATEGORILER} value={kategori} onChange={(o) => kategoriSec(o.target.value as Kategori)} />
         <Secim etiket="Simge" secenekler={SIMGE_SECENEKLERI} bosSecenek="Yok" value={simge} onChange={(o) => simgeYaz(o.target.value)} />
@@ -120,6 +125,8 @@ export function HurdaNedeniFormu({ neden, onerilenKod, kapat }: Ortak<HurdaNeden
   const [aktif, aktifYaz] = useState(neden?.aktif ?? true);
   const yol = neden === null ? '/hurda-nedenleri' : `/hurda-nedenleri/${neden.id}/guncelle`;
   const kaydet = useKaydet<HurdaNedeniOlusturGovdesi | HurdaNedeniGuncelleGovdesi, HurdaNedeni>(yol, anahtarlar.hurda, kapat);
+  // Sunucu sabit türün kod değişikliğini 409 ile reddeder; alan baştan kilitli olunca kullanıcı Kaydet'ten sonra şaşırmaz.
+  const sabit = neden !== null && SABIT_HURDA_KODLARI.includes(neden.kod);
 
   const gonder = (o: FormEvent) => {
     o.preventDefault();
@@ -134,11 +141,15 @@ export function HurdaNedeniFormu({ neden, onerilenKod, kapat }: Ortak<HurdaNeden
       alt={<FormAltlik formKimligi="hurda-formu" kapat={kapat} bekliyor={kaydet.isPending} />}
     >
       <form id="hurda-formu" className="tc-form" onSubmit={gonder}>
-        <Girdi etiket="Kod" required maxLength={12} value={kod} onChange={(o) => kodYaz(o.target.value)} ipucu="Büyük harf, rakam ve tire; en çok 12 karakter." />
+        <Girdi
+          etiket="Kod" required maxLength={12} value={kod} onChange={(o) => kodYaz(o.target.value)} readOnly={sabit}
+          ipucu={sabit ? SABIT_KOD_IPUCU : KOD_IPUCU}
+        />
         <Girdi etiket="Ad" required maxLength={80} value={ad} onChange={(o) => adYaz(o.target.value)} />
         {neden !== null && (
           <div className="tc-form-tam"><IsaretKutusu etiket="Aktif (operatör listesinde görünür)" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} /></div>
         )}
+        {sabit && !aktif && <p className="tc-form-tam" role="note">{SABIT_PASIF_UYARISI}</p>}
         {kaydet.isError && <p className="tc-form-tam" role="alert">{hataIletisi(kaydet.error, 'Kaydedilemedi')}</p>}
       </form>
     </Pencere>

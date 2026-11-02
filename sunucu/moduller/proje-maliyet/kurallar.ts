@@ -540,6 +540,18 @@ export function maliyetFarki(
   return { masrafToplami, sonGerceklesen, tahminiSon, fark };
 }
 
+// PM-43 (198 a): proje bütçesi TRY'ye bugünün kuruyla çevrilir; bütçe yoksa null (hedef plan maliyetidir), kuru yoksa bilinmez.
+export function butceTl(tutar: string | null, paraBirimi: string | null, kur: number | null): { butce: number | null; kurYok: boolean } {
+  if (tutar === null) return { butce: null, kurYok: false };
+  if (paraBirimi === null || paraBirimi === 'TRY') return { butce: Number(tutar), kurYok: false };
+  return kur === null ? { butce: null, kurYok: true } : { butce: Number(tutar) * kur, kurYok: false };
+}
+
+// PM-47: projenin üretim kayıtlarından biri canlı planda değilse (plan tarihi yok) bekleme finansmanının planı eksiktir.
+export function planTarihiEksik(kayitlar: readonly MaliyetKaydi[]): boolean {
+  return kayitlar.some((k) => k.planTarihi === null);
+}
+
 // Seçici araması: joker karakterler kaçırılır; boş arama süzmez.
 export function aramaKalibi(ara: string): string | null {
   const m = ara.trim();

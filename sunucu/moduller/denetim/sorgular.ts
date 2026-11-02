@@ -18,6 +18,8 @@ export interface KayitSuzgeci {
   bitis: string | null;
   yontem: string | null;
   yol: string | null;
+  // Yolun içinde geçen parça için ILIKE kalıbı (kaçışlı, `kurallar.icerenKalibi`).
+  yolKalibi: string | null;
   modul: string | null;
 }
 
@@ -28,9 +30,10 @@ const SUZGEC = `FROM denetim_kaydi d
     AND ($3::date IS NULL OR d.zaman < $3::date + 1)
     AND ($4::text IS NULL OR d.yontem = $4)
     AND ($5::text IS NULL OR d.yol = $5)
-    AND ($6::text IS NULL OR d.modul = $6)`;
+    AND ($6::text IS NULL OR d.modul = $6)
+    AND ($7::text IS NULL OR d.yol ILIKE $7 ESCAPE '\\')`;
 
-const suzgecDegerleri = (s: KayitSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.yontem, s.yol, s.modul];
+const suzgecDegerleri = (s: KayitSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.yontem, s.yol, s.modul, s.yolKalibi];
 
 export async function kayitSay(db: Db, s: KayitSuzgeci): Promise<number> {
   return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${SUZGEC}`, suzgecDegerleri(s)))?.toplam ?? 0;
@@ -51,7 +54,7 @@ export interface KayitSatiriHam {
 export function kayitlar(db: Db, s: KayitSuzgeci, dilim: Dilim): Promise<KayitSatiriHam[]> {
   return db.sorgu<KayitSatiriHam>(
     `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.yontem, d.yol, d.modul, d.yetki, d.parametre ${SUZGEC}
-      ORDER BY d.zaman DESC, d.id DESC LIMIT $7 OFFSET $8`,
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $8 OFFSET $9`,
     [...suzgecDegerleri(s), dilim.sinir, dilim.atla],
   );
 }

@@ -6,7 +6,7 @@ import {
   hesapKilidiBulgulari, kapatilabilirMi, onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
   SERTIFIKA_UYARI_GUN, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, ADRES_TARAMASI, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni,
-  duyurulurMu, yetkiReddiBulgulari,
+  duyurulurMu, yetkiReddiBulgulari, yeniOlayliBulgular,
 } from './kurallar.ts';
 import type { Bulgu, DenemeOzeti } from './kurallar.ts';
 
@@ -16,6 +16,20 @@ const ozet = (kullaniciAdi: string, ip: string | null, hataliSayi: number, sonHa
   ({ kullaniciAdi, ip, hataliSayi, sonHatali: hataliSayi > 0 ? sonHatali : null });
 
 describe('guvenlik kuralları (saf)', () => {
+  test('K27 a: kapanan alarmın kaynağında yeni olay yoksa bulgu düşer; yeni olay anı ya da oturumda büyüyen sayı açar', () => {
+    const giris: Bulgu = { sinyal: 'hatali-giris-serisi', onem: 'orta', kullaniciAdi: 'a', ip: '10.0.0.1', kisiId: null, sayi: 10, sonOlay: T0 };
+    const oturum: Bulgu = { sinyal: 'cok-oturum', onem: 'orta', kullaniciAdi: null, ip: null, kisiId: 7, sayi: 4, sonOlay: T1 };
+    const kapanan = [
+      { sinyal: 'hatali-giris-serisi' as const, kullaniciAdi: 'a', ip: '10.0.0.1', kisiId: null, gozlenenSayi: 10, sonGoruldu: T0 },
+      { sinyal: 'cok-oturum' as const, kullaniciAdi: null, ip: null, kisiId: 7, gozlenenSayi: 4, sonGoruldu: T0 },
+    ];
+    assert.deepEqual(yeniOlayliBulgular([giris, oturum], kapanan), []);
+    assert.deepEqual(yeniOlayliBulgular([{ ...giris, sonOlay: T1 }], kapanan).length, 1);
+    assert.deepEqual(yeniOlayliBulgular([{ ...oturum, sayi: 5 }], kapanan).length, 1);
+    assert.deepEqual(yeniOlayliBulgular([{ ...giris, ip: '10.0.0.2' }], kapanan).length, 1);
+    assert.deepEqual(yeniOlayliBulgular([giris], []).length, 1);
+  });
+
   test('G-02: aynı ad ve cihazdan 10 hatalı alarm (orta); 9 açmaz', () => {
     assert.deepEqual(hataliSeriBulgulari([ozet('a', '10.0.0.1', HATALI_SERI.esik - 1)]), []);
     assert.deepEqual(hataliSeriBulgulari([ozet('a', '10.0.0.1', HATALI_SERI.esik)]), [

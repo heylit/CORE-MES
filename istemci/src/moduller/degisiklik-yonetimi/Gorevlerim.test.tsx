@@ -123,5 +123,20 @@ describe('Yeni değişiklik talebi', () => {
     const gonderim = cagrilar.find((c) => c.yontem === 'POST');
     expect(gonderim?.yol).toBe('/degisiklik-yonetimi/talepler/ac');
     expect(gonderim?.govde).toEqual({ baslik: 'Pah ekle', onSinif: 'P1', aciliyet: 'yuksek', malzemeIdleri: [11], aciklama: '' });
+    // Uç tekrar korumalıdır: kimliksiz istek 400 alır (DY-1).
+    expect(gonderim?.istekKimligi).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('çift tıklamada tek talep isteği gider', async () => {
+    const cagrilar = kur();
+    ac('/degisiklik-yonetimi');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni değişiklik talebi' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni değişiklik talebi' });
+    fireEvent.change(within(pencere).getByLabelText(/Başlık/), { target: { value: 'Pah ekle' } });
+    const dugme = within(pencere).getByRole('button', { name: 'Talebi gönder' });
+    fireEvent.click(dugme);
+    fireEvent.click(dugme);
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/talepler/21'); });
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1);
   });
 });

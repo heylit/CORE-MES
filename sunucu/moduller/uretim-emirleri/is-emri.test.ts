@@ -307,13 +307,16 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     });
     assert.ok(s0.govde.fason!.firma, 'fason firmasının adı okunur');
     assert.equal((await istek('depo', 'GET', '/adimli-emirler/2147483647/siradaki-fason')).durum, 404);
-    assert.equal((await istek('depo', 'GET', `/adimli-emirler/${id}`)).durum, 200, 'depo fason için emri okur');
+    const gidisOncesi = await istek<{ emir: AdimliEmirAyrintisi }>('depo', 'GET', `/adimli-emirler/${id}`);
+    assert.equal(gidisOncesi.durum, 200, 'depo fason için emri okur');
     assert.equal((await fason('fason-gidis', { adet: 10 })).govde.mesaj, FASON_GIDIS_ASIMI, 'önceki iş emrinden 9 sağlam çıktı');
     const olaylar: FasonHareketiOlayi[] = [];
     const birakFason = fasonHareketiDinle(async (_db, olay) => { olaylar.push(olay); });
     const tekrar = randomUUID();
     const g1 = await fason('fason-gidis', { adet: 5 }, tekrar);
     assert.equal(g1.durum, 200, JSON.stringify(g1.govde));
+    // 1787d: ilk gidiş fason adımını başlatır; emrin sürümü artar, eski sürümle yazan ekran çakışma alır.
+    assert.ok(g1.govde.emir.surum > gidisOncesi.govde.emir.surum, 'ilk fason gidişi emrin sürümünü artırır');
     assert.equal((await fason('fason-gidis', { adet: 5 }, tekrar)).govde.hareketId, g1.govde.hareketId, 'aynı istek kimliği ikinci kez yazmaz');
     // Sevkiyat Tüm işler (960): depo çıkışı gidişi yetkisiz iç çağrıyla yazar; kurallar elle gidişle aynı, olay sevk kalemini taşır.
     const depoGidisi = (adet: number) => (db: Db) => fasonGidisYaz(db, yoneticiId, { uretimEmriId: id, isEmriId: ie2, adet, sevkKalemiId: 4242 });
@@ -442,6 +445,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     await say(3, 'gerekli');
     assert.deepEqual(await bekleyen(), [[ie1, 10, 3]], 'Op10 ilk parçası kararı bekler');
+    // 1787c: emir ayrıntısı adımın karar bekleyenini ayrı verir; sağlama katmaz.
+    const ayr = (await istek<{ emir: AdimliEmirAyrintisi }>('planlama_proje', 'GET', `/adimli-emirler/${id}`)).govde.emir.isEmirleri;
+    assert.deepEqual(ayr.map((i) => [i.opNo, i.kararBekliyor, i.dal]), [[10, 3, null], [20, 0, null]]);
     assert.equal((await karar(ie1)).adet, 3);
     await say(1, 'gerekli');
     assert.deepEqual(await bekleyen(), [[ie1, 10, 0]], 'onaylı adımda sayım sağlamdır');
@@ -1095,6 +1101,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await ayrinti(b2.govde.altEmirId)).emirNo, `${ustNo}/2`, 'katılan kolun numarası yeniden verilmez');
     const geri = await yaz(`${id}/birlestir`, { kaynakEmirId: b2.govde.altEmirId, surum: (await ayrinti(id)).surum, kaynakSurum: (await ayrinti(b2.govde.altEmirId)).surum });
     assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
+    const biten = await istek<{ satirlar: { id: number; durum: string; birlestigiEmir?: { id: number; emirNo: string } | null }[] }>(
+      'planlama_proje', 'GET', `/uretim-emirleri/bitenler?ara=${encodeURIComponent(ustNo)}&istasyonsuz=1`);
+    const satir = (eid: number) => biten.govde.satirlar.find((s) => s.id === eid);
+    assert.deepEqual([satir(b2.govde.altEmirId)?.durum, satir(b2.govde.altEmirId)?.birlestigiEmir], ['iptal', { id, emirNo: ustNo }], 'birleşen parti hedefini taşır');
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200, 'kol katılınca birleşme adımı başlar');
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlesme_op_no = 30 WHERE id = $1', [id]), /uretim_emri_birlesme_kolda/);
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlesme_op_no = 0 WHERE id = $1', [kol]), /uretim_emri_birlesme_op_pozitif/);
@@ -1231,6 +1241,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null }, 'operator')).durum, 403);
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null }, 'planlama_proje', null)).durum, 400, 'istek kimliği zorunlu');
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: hammaddeNo, adet: 3, teslim: null })).durum, 400, 'yalnız mamul ya da yarı mamul');
+    const takvimDisi = await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: '2026-13-45' });
+    assert.deepEqual([takvimDisi.durum, takvimDisi.govde.mesaj], [400, 'Teslim takvimde olmayan bir gün.'], 'genel tarih hatasına düşmez');
     const acilan = await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null, aciklama: 'Rotasız deneme' });
     assert.equal(acilan.durum, 200, JSON.stringify(acilan.govde));
     const id = acilan.govde.uretimEmriId;

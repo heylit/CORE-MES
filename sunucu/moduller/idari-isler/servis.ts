@@ -7,22 +7,23 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import {
   ARAC_EN_COK, DEMIRBAS_EN_COK, GOREV_EN_COK, GOREV_KAPANAN_GUN, KONTROL_EN_COK, MASRAF_EN_COK, PANO_EN_COK, SON_YER_EN_COK, YEMEK_GECMIS_GUN,
   type Arac, type AracEkleVerisi, type AracGorevi, type AracTalebiAcVerisi, type BugunCevabi,
-  type Demirbas, type DemirbasEkleVerisi, type DemirbasGuncelleVerisi, type IadeVerisi, type Zimmet, type ZimmetleVerisi,
+  type Demirbas, type DemirbasEkleVerisi, type DemirbasGuncelleVerisi, type IadeVerisi, type Zimmet, type ZimmetleVerisi, type ZimmetlerimCevabi,
   type Masraf, type MasrafEkleVerisi, type MasraflarCevabi, type BugunIsi, type FirmaSecenekleriCevabi, type KisiSecenekleriCevabi, type Kontrol, type KontrolEkleVerisi,
   type KontrolGuncelleVerisi, type KontrolKaydi, type Talep, type TalepAcVerisi, type TalepPanosuCevabi, type TaleplerimSuzgeci,
   type YapildiVerisi, type YemekBildirVerisi, type YemekGunuCevabi,
 } from '#paylasilan/sozlesme/idari-isler.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { gununFazlaMesaisi, izinliKisiler } from '../ik/disari.ts';
-import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
 import { basladigiGunTakvimleri, vardiyaKadrosu } from '../vardiya/disari.ts';
 import {
   DEGER_GECERSIZ, DEMIRBAS_YOK, ZIMMET_BAGLI, ZIMMET_IADE_EDILMIS, ZIMMET_YOK, degerReddi, demirbasNo, elleDurumReddi, iadeReddi, iadeSonrasiDurum,
   zimmetlemeReddi,
-  ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
+  ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, ATANAMAZ, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
-  TALEP_YOK, YAKIN_GUN, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, gecisHedefi, gecisReddi,
+  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisGunuReddi, cikisKmReddi, donusKmReddi, elleAracDurumReddi,
+  gecisHedefi, gecisReddi,
   geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, yapildiSonucu,
   yemekBildirimReddi, yemekKadrosu, yemekSayisi, type GorevKomutu, type TalepKomutu, type YemekHesabi,
 } from './kurallar.ts';
@@ -68,15 +69,21 @@ async function kilitle(db: Db, id: number, komut: TalepKomutu): Promise<{ acan_k
 const surumlu = (db: Db, id: number, guncelle: () => Promise<{ id: number } | null>) =>
   surumluGuncelle({ guncelle, varMi: () => sorgular.talepVarMi(db, id), bulunamadiIletisi: TALEP_YOK });
 
-// IDR-07: başkasına atanan kişi etkin olmalı.
+// IDR-30: zimmet etkin kişiye verilir.
 async function atanabilirMi(db: Db, kisiId: number): Promise<boolean> {
   return (await kisiSecenekleri(db)).some((k) => k.id === kisiId);
+}
+
+// IDR-07: talep yalnız talebi yönetebilen etkin kişiye atanır; başkası pano ve Bugün'ü görmediği için atanan talebi bulamazdı.
+async function talepAtanabilirler(db: Db): Promise<{ id: number; ad: string }[]> {
+  const islemler = await kisilerinIslemleri(db);
+  return (await kisiSecenekleri(db)).filter((k) => islemler.get(k.id)?.includes('idari-isler.talep-yonet') ?? false);
 }
 
 export async function ustlen(db: Db, kullanici: Kullanici, id: number, surum: number, kisiId: number | null): Promise<Talep> {
   await kilitle(db, id, 'ustlen');
   const ustlenen = kisiId ?? kullanici.id;
-  if (ustlenen !== kullanici.id && !(await atanabilirMi(db, ustlenen))) throw dogrulama(KISI_YOK, 'kisiId');
+  if (ustlenen !== kullanici.id && !(await talepAtanabilirler(db)).some((k) => k.id === ustlenen)) throw dogrulama(ATANAMAZ, 'kisiId');
   await surumlu(db, id, () => sorgular.ustlenmeYaz(db, id, surum, ustlenen));
   return talep(db, id);
 }
@@ -131,6 +138,10 @@ export async function sonYerler(db: Db, kullanici: Kullanici): Promise<string[]>
 
 export async function atanabilirKisiler(db: Db): Promise<KisiSecenekleriCevabi> {
   return { kisiler: (await kisiSecenekleri(db)).map((k) => ({ id: k.id, ad: k.ad })) };
+}
+
+export async function talepAtanabilirKisiler(db: Db): Promise<KisiSecenekleriCevabi> {
+  return { kisiler: (await talepAtanabilirler(db)).map((k) => ({ id: k.id, ad: k.ad })) };
 }
 
 export async function bugun(db: Db, kullanici: Kullanici): Promise<BugunCevabi> {
@@ -247,6 +258,12 @@ export async function kontroller(db: Db): Promise<Kontrol[]> {
   return kontrolCevir(db, await sorgular.etkinKontroller(db, KONTROL_EN_COK));
 }
 
+// Bitirilen kalem listeden düşer; geçmişine bu listeden ulaşılır (en yeni biten önce).
+const BITEN_EN_COK = 200;
+export async function bitenKontroller(db: Db): Promise<Kontrol[]> {
+  return kontrolCevir(db, await sorgular.bitenKontroller(db, BITEN_EN_COK));
+}
+
 const KAYIT_EN_COK = 100;
 export async function kontrolKayitlari(db: Db, id: number): Promise<KontrolKaydi[]> {
   if (!(await sorgular.kontrolVarMi(db, id))) throw bulunamadi(KONTROL_YOK);
@@ -343,14 +360,18 @@ async function plakaDenetle(db: Db, plaka: string, haric: number | null): Promis
 }
 
 export async function aracEkle(db: Db, kullanici: Kullanici, g: AracEkleVerisi): Promise<Arac> {
+  const durumReddi = elleAracDurumReddi(null, g.durum, false);
+  if (durumReddi !== null) throw dogrulama(durumReddi, 'durum');
   const plaka = await plakaDenetle(db, g.plaka, null);
   return arac(db, await sorgular.aracEkle(db, { ...g, plaka }, kullanici.id));
 }
 
-// IDR-21: km geriye yazılmaz.
+// IDR-21: km geriye yazılmaz. IDR-33: görevde durumu elle girilmez ve yoldaki aracın durumu elle değişmez.
 export async function aracGuncelle(db: Db, id: number, g: AracEkleVerisi & { surum: number }): Promise<Arac> {
   const mevcut = await sorgular.aracKilitle(db, id);
   if (mevcut === null) throw bulunamadi(ARAC_YOK);
+  const durumReddi = elleAracDurumReddi(mevcut.durum, g.durum, await sorgular.aracYoldaBaskaGorevVarMi(db, id, 0));
+  if (durumReddi !== null) throw dogrulama(durumReddi, 'durum');
   const plaka = await plakaDenetle(db, g.plaka, id);
   const ret = kmReddi(mevcut.km, g.km);
   if (ret !== null) throw dogrulama(ret, 'km');
@@ -407,12 +428,15 @@ export async function gorevGeriCek(db: Db, kullanici: Kullanici, id: number, sur
   return gorev(db, id);
 }
 
-// IDR-25: verilen araç var, pasif ya da serviste değil ve bu tarihlerde başka onaylı ya da yoldaki görevde değil.
+// IDR-25: verilen araç var, pasif ya da serviste değil, muayenesi ve sigortası görev bitmeden bitmiyor ve bu tarihlerde başka onaylı ya da
+// yoldaki görevde değil.
 export async function gorevOnayla(db: Db, kullanici: Kullanici, id: number, surum: number, aracId: number): Promise<AracGorevi> {
   const mevcut = await gorevKilitle(db, id, 'onayla');
   const a = await sorgular.aracKilitle(db, aracId);
   if (a === null) throw dogrulama(ARAC_YOK, 'aracId');
   if (aracVerilemezMi(a.durum)) throw dogrulama(ARAC_VERILEMEZ, 'aracId');
+  const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
+  if (belge !== null) throw dogrulama(belge, 'aracId');
   if (await sorgular.aracCakisiyorMu(db, aracId, mevcut.tarih, mevcut.donus_tarihi, id)) throw dogrulama(ARAC_DOLU, 'aracId');
   await gorevSurumlu(db, id, () => sorgular.gorevOnayYaz(db, id, surum, aracId, kullanici.id));
   return gorev(db, id);
@@ -424,7 +448,8 @@ export async function gorevReddet(db: Db, kullanici: Kullanici, id: number, suru
   return gorev(db, id);
 }
 
-// IDR-26: çıkışta araç görevde olur ve km'si çıkış km'sine çıkar; çıkış km'si aracın km'sinden küçük olmaz.
+// IDR-26: çıkışta araç görevde olur ve km'si çıkış km'sine çıkar; çıkış km'si aracın km'sinden küçük olmaz. Onaydan sonra Filo'da
+// değişen muayene ve sigorta tarihi çıkışta yeniden denetlenir (IDR-25).
 export async function gorevCikis(db: Db, id: number, surum: number, km: number): Promise<AracGorevi> {
   const mevcut = await gorevKilitle(db, id, 'cikis');
   const aracId = mevcut.arac_id;
@@ -432,6 +457,10 @@ export async function gorevCikis(db: Db, id: number, surum: number, km: number):
   const a = await sorgular.aracKilitle(db, aracId);
   if (a === null) throw bulunamadi(ARAC_YOK);
   if (aracVerilemezMi(a.durum)) throw gecersiz(ARAC_VERILEMEZ);
+  const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
+  if (belge !== null) throw gecersiz(belge);
+  const erken = cikisGunuReddi(mevcut.tarih, await sorgular.bugunTarihi(db));
+  if (erken !== null) throw gecersiz(erken);
   const ret = cikisKmReddi(a.km, km);
   if (ret !== null) throw dogrulama(ret, 'km');
   await gorevSurumlu(db, id, () => sorgular.gorevCikisYaz(db, id, surum, km));
@@ -561,15 +590,31 @@ export async function demirbasEkle(db: Db, kullanici: Kullanici, g: DemirbasEkle
 export async function demirbasGuncelle(db: Db, id: number, g: DemirbasGuncelleVerisi): Promise<Demirbas> {
   const mevcut = await sorgular.demirbasKilitle(db, id);
   if (mevcut === null) throw bulunamadi(DEMIRBAS_YOK);
-  if (degerReddi(g.deger) !== null) throw dogrulama(DEGER_GECERSIZ, 'deger');
+  const yeni = {
+    tur: g.tur ?? mevcut.tur,
+    markaModel: g.markaModel === undefined ? mevcut.marka_model : g.markaModel,
+    seriNo: g.seriNo === undefined ? mevcut.seri_no : g.seriNo,
+    deger: g.deger === undefined ? mevcut.deger : g.deger,
+    aciklama: g.aciklama === undefined ? mevcut.aciklama : g.aciklama,
+    durum: g.durum ?? mevcut.durum,
+  };
+  if (g.deger !== undefined && degerReddi(g.deger) !== null) throw dogrulama(DEGER_GECERSIZ, 'deger');
   const ret = g.durum === null ? null : elleDurumReddi(mevcut.durum, g.durum);
   if (ret !== null) throw gecersiz(ret);
   await surumluGuncelle({
-    guncelle: () => sorgular.demirbasGuncelle(db, id, g.surum, { ...g, durum: g.durum ?? mevcut.durum }),
+    guncelle: () => sorgular.demirbasGuncelle(db, id, g.surum, yeni),
     varMi: () => sorgular.demirbasVarMi(db, id),
     bulunamadiIletisi: DEMIRBAS_YOK,
   });
   return demirbas(db, id);
+}
+
+// Personel kendi üzerindeki demirbaşları görür; kapsam oturumdaki kişidir, başka kişi sorgulanamaz.
+export async function zimmetlerim(db: Db, kullanici: Kullanici): Promise<ZimmetlerimCevabi> {
+  const satirlar = await sorgular.kisilerinAcikZimmetleri(db, [kullanici.id]);
+  return {
+    zimmetler: satirlar.map((s) => ({ demirbasNo: demirbasNo(s.demirbas_id), tur: s.tur, markaModel: s.marka_model, seriNo: s.seri_no, verilis: s.verilis })),
+  };
 }
 
 // IDR-30: yalnız boştaki demirbaş, etkin bir kişiye zimmetlenir; demirbaş aynı işlemde zimmetli olur.
