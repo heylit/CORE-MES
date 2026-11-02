@@ -478,7 +478,8 @@ export function Kabuk({
         )}
 
         <span className="tc-kabuk-tarama" aria-hidden="true" />
-        <main className="tc-kabuk-icerik" data-cerceveli={cerceveli && !kapaliAdres ? '' : undefined}>
+        {/* Davet köşede sabit durur; içerik altına onun payı kadar boşluk alır ki son düğmeler davetin üstüne kaydırılabilsin (TMI A7). */}
+        <main className="tc-kabuk-icerik" data-cerceveli={cerceveli && !kapaliAdres ? '' : undefined} data-davet={davet && !tanitimAcik ? '' : undefined}>
           {kapaliAdres
             ? <DurumKutusu durum="bos" mesaj="Bu sayfa şu an kapalı" />
             : (

@@ -1,5 +1,8 @@
 # Uyum borcu (ik)
 
+Eski çerçeve (`IkCercevesi`, `kopru`, `acilis`, `sayfa`, `uygulama/`) 1614 ile kalktı; ekran `istemci/src/moduller/ik/yeni/`dir.
+Aşağıda o dosyalara atıf veren KAPANDI satırları kayıttır.
+
 ## SUNUCUDA ZORUNLU listesinden eksik ya da kısmi kalanlar
 - Veri kapsamı (iş merkezi) v2'de uygulandı (IK-27). Okuma süzgeci SQL'de değil serviste (`kapsamdaMi`, bütün kayıtlar okunup
   süzülür): İK kayıtları birbirine bağlı (izin -> personel -> iş merkezi) ve ekran bütün listeyi bir kerede alır. Kayıt sayısı
@@ -46,8 +49,8 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
   kullanır. Üç dosyada `// @ts-nocheck` sürer (ik-modulu kaynağının JavaScript'i); tipli yüz `paylasilan/ik-motor/arayuz.ts`.
   Bağlamada kapanacak: iç tipleme (motor tiplenince `@ts-nocheck` kalkar, `arayuz.ts`'teki `unknown` dönüşler daralır).
   Motor "bugün"ü kendisi okur (dönem durumu, güncel ücret); kural fonksiyonları saat okumaz.
-  Eski çerçevenin paketi (`istemci/src/moduller/ik/uygulama/paket.ts`) alıma kadar kendi derlemesini taşır; ayrışmadığını
-  `motor-esitlik.test.ts` ölçer (borç 186). Alımda paket kalkınca test de kalkar.
+  KAPANDI (1614): eski çerçeve ve paketi kalktı. `motor-esitlik.test.ts` artık motoru eski paketin aynı girdideki sonuçlarına
+  (`motor-esitlik.beklenen.ts`) karşı ölçer (borç 186).
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): paket dinamik ithalle yalnız sayfada yüklenir (`IkCercevesi.tsx:30` `import('./uygulama/paket.ts')`). Üretilmiş büyük dosyalar: `paket.ts` (yaklaşık 0,55 MB), `yazi.ts` (yaklaşık 0,13 MB). Yalnız İK sayfası açılınca yüklenir.
 
 ## Kapalı özellikler (TMI içinde)

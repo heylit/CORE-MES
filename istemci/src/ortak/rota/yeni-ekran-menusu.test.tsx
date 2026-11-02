@@ -25,13 +25,13 @@ describe('yeni ekran menü satırları', () => {
     for (const yol of YENI_EKRAN_YOLLARI) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
   });
 
-  it('yönetici her yeni ekran için ayrı satır görür', () => {
+  it('açık modülde deneme satırı kalmadı: İK de alındı (1614), Mesaj ve Portal kapalı', () => {
+    expect(YENI_EKRAN_YOLLARI).toEqual([]);
+    expect(yeniEkranBaglantilari(SAYFALAR, [YENI_EKRAN_ISLEMI])).toEqual([]);
     ciz([YENI_EKRAN_ISLEMI]);
     const menu = anaMenu();
-    expect(within(menu).getByText(YENI_EKRAN_GRUBU)).toBeTruthy();
-    const adresler = within(menu).getAllByRole('link').map((a) => a.getAttribute('href'));
-    for (const yol of YENI_EKRAN_YOLLARI) expect(adresler, yol).toContain(yol);
-    expect(within(menu).getByRole('link', { name: 'İnsan Kaynakları (yeni)' }).getAttribute('href')).toBe('/ik/yeni');
+    expect(within(menu).queryByText(YENI_EKRAN_GRUBU)).toBeNull();
+    for (const ad of ['İnsan Kaynakları (yeni)', 'İK İşlemlerim (yeni)']) expect(within(menu).queryByRole('link', { name: ad }), ad).toBeNull();
     // Eski ekranı kalkanların (1392 a) deneme satırı yoktur.
     for (const ad of ['Finans ve Muhasebe (yeni)', 'Denetim Hazırlığı (yeni)']) expect(within(menu).queryByRole('link', { name: ad }), ad).toBeNull();
     // Eski adresine geçenlerin (541) deneme satırı yoktur, ana menüdeki satır yeni ekranı açar.
@@ -49,14 +49,6 @@ describe('yeni ekran menü satırları', () => {
     for (const yol of YENI_EKRAN_YOLLARI) expect(adresler).not.toContain(yol);
   });
 
-  it('kişiye görünmeyen ya da kapatılan sayfanın yeni ekranı listelenmez', () => {
-    const iksiz = SAYFALAR.filter((s) => s.yol !== '/ik');
-    const yollar = yeniEkranBaglantilari(iksiz, [YENI_EKRAN_ISLEMI]).map((b) => b.yol);
-    expect(yollar).not.toContain('/ik/yeni');
-    expect(yollar).toContain('/ik-islemlerim/yeni');
-    ciz([YENI_EKRAN_ISLEMI], ['/ik']);
-    expect(within(anaMenu()).queryByRole('link', { name: 'İnsan Kaynakları (yeni)' })).toBeNull();
-  });
 });
 
 describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
@@ -69,9 +61,10 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
 
   it('yeni ekran adresi ve alt yolları sayılır; benzer adlı ya da eski adres sayılmaz', () => {
     for (const yol of YENI_EKRAN_YOLLARI) expect(yeniEkranAdresiMi(yol), yol).toBe(true);
-    expect(yeniEkranAdresiMi('/ik/yeni/izinler')).toBe(true);
-    expect(yeniEkranAdresiMi('/ik')).toBe(false);
-    expect(yeniEkranAdresiMi('/ik/yenilik')).toBe(false);
+    // İK ve İK İşlemlerim eski çerçevesi kalkınca kendi kökünde açılır (1614); PDKS aktarımı Nizamiye ekranıdır, şerit durur.
+    for (const yol of ['/ik', '/ik/izinler', '/ik/calisan/emp_b', '/ik-islemlerim', '/ik-islemlerim/onaylar']) expect(yeniEkranAdresiMi(yol), yol).toBe(true);
+    expect(yeniEkranAdresiMi('/ik/pdks')).toBe(false);
+    expect(yeniEkranAdresiMi('/iklim')).toBe(false);
     expect(yeniEkranAdresiMi('/recete-rota/plan')).toBe(false);
     expect(yeniEkranAdresiMi('/plan/studio')).toBe(false);
     expect(yeniEkranAdresiMi('/malzemeler/yeni')).toBe(false);
@@ -88,7 +81,7 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
   });
 
   it('yeni ekranda şerit çizilmez, çerçeveli düzen ve tam ekran kalır', () => {
-    const { container } = adreste('/ik/yeni/izinler');
+    const { container } = adreste('/ik/izinler');
     expect(serit('İnsan Kaynakları')).toBeNull();
     const kabuk = container.querySelector('.tc-kabuk');
     expect(kabuk?.hasAttribute('data-cerceveli')).toBe(true);
@@ -103,8 +96,8 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(within(menu as HTMLElement).getByRole('link', { name: /^Planlama atölyesi/ }).getAttribute('aria-current')).toBe('page');
   });
 
-  it('eski ekranda şerit durur', () => {
-    adreste('/ik');
+  it('kökün altındaki başka modül ekranında (PDKS aktar) şerit durur', () => {
+    adreste('/ik/pdks');
     expect(serit('İnsan Kaynakları')).not.toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 # TS IK: P1-P6 parca sozlesmesi (Y0 iskelet uzerine)
 
-Kok: `istemci/src/moduller/ik/yeni/`. Adres: `/ik/yeni/<gorunum>[/<kimlik>]` ve `/ik-islemlerim/yeni/<gorunum>[/<kimlik>]`;
-kok adres (`/ik/yeni`, `/ik-islemlerim/yeni`) Pano ve Benim sayfam'dir. Alimda yalniz `yeni/` adres parcasi duser.
+Kok: `istemci/src/moduller/ik/yeni/`. Adres: `/ik/<gorunum>[/<kimlik>]` ve `/ik-islemlerim/<gorunum>[/<kimlik>]`;
+kok adres (`/ik`, `/ik-islemlerim`) Pano ve Benim sayfam'dir. Alimda (1614) `yeni/` adres parcasi dustu; eski adres yonlenir.
 Gorunum adres parcalari ikinci menudeki yollarla aynidir (`paylasilan/sayfalar/ik.ts`); ayrinti sayfalari `calisan`, `aday`, `pozisyon`, `uye`.
 
 | Parca | Klasor | Disari verilen bilesen (adi degismez; gorunumler.ts ithal eder) | Gorunum anahtari | CSS oneki |
@@ -49,7 +49,7 @@ Baska parca yalniz bu adlari ithal eder (`../personel/index.tsx`, `../isealim/in
 - `bicim.ts`: `para(v)`, `paraKisa(v)`, `tarih(v)`, `kisaTarih(v)`, `ayAdi(ay)`, `adSoyad(p)`, `YOK` ("—"; veri yoksa sifir yazilmaz).
 - `ortak/`: `KisiHucresi { personel }` (bas harf + ad, renk tasarim degiskeninden), `DurumCipi { tur: 'izin' | 'personel'; deger }`,
   `AySecici { ay; degistir }`, `BelgeYazdir { baslik; children; kapat }` (izin formu, calisma belgesi, pusula, tazminat dokumu; `window.print`).
-- `test-ortak.tsx`: `ikAc(adres, { kullanici, veri })`, `ornekVeri()` (uydurma ornek, gercek veri yok), kullanicilar `IK_YONETICI`, `IK_OKUYAN`, `MUDUR`, `CALISAN`, `KAPISIZ`.
+- `test-ortak.tsx`: `ikAc(adres, { kullanici, veri })`, `ornekVeri()` (uydurma ornek, gercek veri yok), kullanicilar `IK_YONETICI`, `IK_OKUYAN`, `MUDUR`, `CALISAN`.
 
 ## Kurallar (her parca)
 - TASARIM KORUMA (2026-10-24, kullanici; 20:22 duzeltilmis okuma teyitli; 203 a kalkti): HTML'den TS'ye gecen sayfalarda amac TypeScript'e gecis ve

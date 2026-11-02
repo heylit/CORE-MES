@@ -1,5 +1,7 @@
 # İK modülü notları
 
+Ekran 1614 ile `istemci/src/moduller/ik/yeni/`dir (TS); çerçeve, köprü ve uygulama paketi kalktı. Çerçeveyi anlatan maddeler kayıttır.
+
 - Ekran yol A: uygulama (ik-modulu paketi) değiştirilmeden çerçevede açılır. Menüyü kabuk çizer; uygulama gömülü kipte kendi
   yan menüsünü ve alt şeridini gizler, aramayı üst çubuğa alır. Görünüm adı = ikinci menü madde anahtarı = uygulamanın görünümü.
 - Çerçeve srcDoc'tur ve yalıtılmıştır (YalitilmisCerceve, opak köken; kullanıcı kararı 12.10.2026), içerik politikası dışarıya her isteği kapatır. Veri `tmi-ik-veri` iletileriyle kabuğa gider; köprü

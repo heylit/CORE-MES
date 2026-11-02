@@ -14,7 +14,7 @@ afterEach(cleanup);
 
 describe('P2 motorsuz', () => {
   it('bakiye ve form "hazırlanıyor" der, sıfır yazmaz', async () => {
-    ikAc('/ik/yeni/izinler');
+    ikAc('/ik/izinler');
     await screen.findByText('Mehmet Deneme');
     fireEvent.click(screen.getByRole('tab', { name: 'Bakiyeler' }));
     expect(await screen.findByText(MOTOR_HAZIRLANIYOR)).toBeTruthy();

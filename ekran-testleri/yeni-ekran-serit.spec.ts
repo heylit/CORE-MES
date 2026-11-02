@@ -7,7 +7,7 @@ test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
   '/finans',
-  '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni', '/cnc-kurulum',
+  '/ik', '/ik-islemlerim', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik', '/cnc-kurulum/yeni', '/cnc-kurulum',
 ].filter((yol) => !kapaliModulYoluMu(yol));
 
 // Ekran başına ayrı test: her açılış kendi süresini alır (tek testte art arda açılış 360'ta sınırı aşıyordu).
@@ -29,8 +29,9 @@ test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görün
   await expect(page.locator('.tc-ikinci')).toHaveCount(1);
 });
 
+// /ik yeni ekrandır (1614); İK'nın eski sayfası PDKS aktarma kabuk şeridiyle açılır.
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
-  await ac('/ik');
+  await ac('/ik/pdks');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
 });
 

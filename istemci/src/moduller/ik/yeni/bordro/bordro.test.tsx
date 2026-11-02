@@ -13,7 +13,7 @@ const govdesi = (g: unknown) => g as Record<string, unknown>;
 
 describe('P3 bordro', () => {
   it('ayın çalışanları listelenir; çıkmış kişi yoktur', async () => {
-    ikAc('/ik/yeni/bordro/2026-09');
+    ikAc('/ik/bordro/2026-09');
     const tablo = await screen.findByRole('table', { name: 'Eylül 2026 bordrosu' });
     expect(within(tablo).getByText('Mehmet Deneme')).toBeTruthy();
     expect(within(tablo).getByText('Ayşe Örnek')).toBeTruthy();
@@ -22,7 +22,7 @@ describe('P3 bordro', () => {
   });
 
   it('izinli: kesinleştirmede yalnız girdiler sunucuya gider', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/bordro/2026-09');
+    const { yazmalar } = ikAc('/ik/bordro/2026-09');
     fireEvent.click(await screen.findByRole('button', { name: 'Dönemi kesinleştir' }));
     await waitFor(() => { expect(yazmalar).toHaveLength(1); });
     expect(yazmalar[0]?.yol).toBe('/ik/bordro/2026-09/kesinlestir');
@@ -33,7 +33,7 @@ describe('P3 bordro', () => {
   });
 
   it('izinli: hücre değişince taslak rozeti çıkar, geri alınca kalkar', async () => {
-    ikAc('/ik/yeni/bordro/2026-09');
+    ikAc('/ik/bordro/2026-09');
     const hucre = await screen.findByRole('spinbutton', { name: 'Mehmet Deneme ek ödeme' });
     fireEvent.change(hucre, { target: { value: '1000' } });
     fireEvent.blur(hucre);
@@ -43,7 +43,7 @@ describe('P3 bordro', () => {
   });
 
   it('reddedilen: salt okuyan yazma düğmelerini görmez, hücreler kapalıdır', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/bordro/2026-09', { kullanici: IK_OKUYAN });
+    const { yazmalar } = ikAc('/ik/bordro/2026-09', { kullanici: IK_OKUYAN });
     expect(await screen.findByRole('table', { name: 'Eylül 2026 bordrosu' })).toBeTruthy();
     expect(dugme('Dönemi kesinleştir')).toBeNull();
     expect(dugme('Toplu ücret güncelle')).toBeNull();
@@ -54,14 +54,14 @@ describe('P3 bordro', () => {
 
 describe('P3 hesaplamalar ve maliyet planı', () => {
   it('brüt → net sonucu motordan gelir; sekme adresten açılır', async () => {
-    ikAc('/ik/yeni/hesaplamalar/netbrut');
+    ikAc('/ik/hesaplamalar/netbrut');
     expect(await screen.findByRole('button', { name: 'Net → brüt', pressed: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Brüt → net' }));
     expect(await screen.findAllByText('Toplam işveren maliyeti')).not.toHaveLength(0);
   });
 
   it('maliyet planı kişileri ve yükümlülükleri gösterir', async () => {
-    ikAc('/ik/yeni/maliyet-plani');
+    ikAc('/ik/maliyet-plani');
     expect(await screen.findByRole('heading', { name: 'Maliyet planı', level: 2 })).toBeTruthy();
     expect(await screen.findByText('Kıdem tazminatı karşılığı')).toBeTruthy();
   });
@@ -69,7 +69,7 @@ describe('P3 hesaplamalar ve maliyet planı', () => {
 
 describe('P3 ayarlar', () => {
   it('izinli: genel ayar kaydı sürümle gider', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/ayarlar');
+    const { yazmalar } = ikAc('/ik/ayarlar');
     const alan = await screen.findByRole('textbox', { name: 'Şirket adı' });
     fireEvent.change(alan, { target: { value: 'Yeni Atölye' } });
     expect(screen.getByText('1 kaydedilmemiş değişiklik')).toBeTruthy();
@@ -82,7 +82,7 @@ describe('P3 ayarlar', () => {
   });
 
   it('izinli: dönemli değer seçili dönemin parametresine yazılır', async () => {
-    const { yazmalar } = ikAc('/ik/yeni/ayarlar');
+    const { yazmalar } = ikAc('/ik/ayarlar');
     fireEvent.click(await screen.findByRole('button', { name: 'Ücret, vergi ve SGK' }));
     fireEvent.change(await screen.findByRole('spinbutton', { name: /Brüt asgari ücret/ }), { target: { value: '12345' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ayarları kaydet' }));
@@ -93,7 +93,7 @@ describe('P3 ayarlar', () => {
   });
 
   it('reddedilen: salt okuyan kaydet ve dönem düğmelerini görmez, alanlar kapalıdır', async () => {
-    ikAc('/ik/yeni/ayarlar', { kullanici: IK_OKUYAN });
+    ikAc('/ik/ayarlar', { kullanici: IK_OKUYAN });
     expect((await screen.findByRole('textbox', { name: 'Şirket adı' }) as HTMLInputElement).disabled).toBe(true);
     expect(dugme('Ayarları kaydet')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Ücret, vergi ve SGK' }));
@@ -105,7 +105,7 @@ describe('P3 ayarlar', () => {
 
 describe('P3 kişi sayfası parçaları', () => {
   it('ücret sekmesinde bu ayın bordro tahmini görünür', async () => {
-    ikAc('/ik/yeni/calisan/emp_b');
+    ikAc('/ik/calisan/emp_b');
     fireEvent.click(await screen.findByRole('tab', { name: 'Ücret' }));
     expect(await screen.findByRole('region', { name: /bordro tahmini$/ })).toBeTruthy();
   });

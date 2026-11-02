@@ -71,11 +71,9 @@ export const GORUNUMLER: Readonly<Record<IkGorunum, GorunumTanimi>> = {
   ekiptakvim: { kok: '/ik-islemlerim', adres: 'ekip-takvimi', ekran: parca(islemlerim, 'EkipTakvimi') },
 };
 
-export const YENI = 'yeni';
-
 export function gorunumAdresi(gorunum: IkGorunum, kimlik?: string): string {
   const t = GORUNUMLER[gorunum];
-  const parcalar = [t.kok, YENI, t.adres, kimlik === undefined ? '' : encodeURIComponent(kimlik)].filter((p) => p !== '');
+  const parcalar = [t.kok, t.adres, kimlik === undefined ? '' : encodeURIComponent(kimlik)].filter((p) => p !== '');
   return parcalar.join('/');
 }
 

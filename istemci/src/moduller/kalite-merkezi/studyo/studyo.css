@@ -58,6 +58,15 @@
   .km-st-sag { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--acilir-encok), 1fr)); overflow: visible; }
 }
 
+/* Yan paneller katlanınca resim tam genişliktedir (1738 c); telefonda sekmeler geçerlidir, düğme görünmez. */
+.km-st-orta-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.km-st-orta-ust .km-st-soluk { min-width: 0; overflow-wrap: anywhere; }
+.km-st-orta-ust .km-st-kod { font-size: var(--yazi-s); }
+@media (min-width: 768px) {
+  .km-st-genis { grid-template-columns: minmax(0, 1fr); }
+  .km-st-genis .km-st-sol, .km-st-genis .km-st-sag { display: none; }
+}
+
 /* 360: tek sütun; Parça, Resim, Plan sekmeyle değişir (Arkon mseg). */
 @media (max-width: 767px) {
   .km-st { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; min-height: 0; }
@@ -68,6 +77,7 @@
     flex: 1; min-height: var(--dokunma); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer;
   }
   .km-st-mseg button.on { background: var(--hazard); color: var(--on-hazard); }
+  .km-st-orta-ust { display: none; }
   .km-st-sag { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
   .km-st-orta { height: calc(100dvh - var(--ust-cubuk) - var(--alt-cubuk) - var(--b-6) * 3); min-height: var(--pencere-genis); }
   .km-st-m-dosya .km-st-orta, .km-st-m-dosya .km-st-sag,

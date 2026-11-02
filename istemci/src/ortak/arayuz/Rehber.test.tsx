@@ -46,12 +46,17 @@ describe('Yardim ve tanitim', () => {
 
   it('ilk giriste tanitim onerilir; "Simdi degil" bir daha onermez', () => {
     const ilk = ciz('/stok', 7);
+    // Davet açıkken içerik altına pay alır (TMI A7); kapanınca pay kalkar.
+    expect(screen.getByRole('main').hasAttribute('data-davet')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Şimdi değil' }));
+    expect(screen.getByRole('main').hasAttribute('data-davet')).toBe(false);
     expect(screen.queryByRole('complementary', { name: 'Tanıtım önerisi' })).toBeNull();
     expect(tanitimGorulduMu(7)).toBe(true);
     ilk.unmount();
     ciz('/stok', 7);
     expect(screen.queryByRole('complementary', { name: 'Tanıtım önerisi' })).toBeNull();
+    // Davet yokken içerik alanı eskisi gibidir: pay işareti hiç konmaz.
+    expect(screen.getByRole('main').hasAttribute('data-davet')).toBe(false);
   });
 
   it('tanitim kisinin sayfalarini anlatir ve sonuna kadar ilerler', () => {

@@ -37,7 +37,7 @@ Taban: TMICOREV2 ana dal 640bebf (#696 birleşmesi). Ekran ve kullanım v2 ile a
 Yok. ON-PAKET'teki IK-33 varsayımı ("onaysız kayıt bordroya girmez") bugünkü kurala uymuyor; ekrana bugünkü kural yazıldı
 (NOTLAR.md madde 1). Kural değişmedi (kullanıcı kararı "2a").
 
-## 5. Paket yaması
+## 5. Paket yaması (paket 1614 ile kalktı; kayıt)
 `istemci/src/moduller/ik/uygulama/paket.ts` derlenmiş paketin üstüne `yama/ik_v3_uygulama_yamasi.py` ile yamalandı (ik-modulu
 kaynağı teslimde yok). Kaynak yeniden derlenirse aynı değişiklik kaynağa taşınmalı (NOTLAR.md madde 4).
 
