@@ -13,13 +13,15 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisiler/disari.ts';
 import type { AtamaTuru } from './kurallar.ts';
 import {
-  KULLANIMDA_ILETISI, YUZDE_TAVANI_SENT, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
+  AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
   ayarListesi, ayarYetkinligiReddi, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AyarYetkinligiSatiri, YetkinlikAyrintiSatiri } from './sorgular.ts';
 
 const KOD_KULLANILIYOR = 'Bu kod kullanılıyor.';
+// Tek makine ve toplu durum aynı kuralı uygular (IS27, IST-1).
+const PASIF_MAKINEYE_DURUM = 'Pasif makineye durum verilmez.';
 
 // Benzersizliği kısıt tutar: önce bakıp sonra yazmak eşzamanlı iki çağrıyı ayıramaz.
 // Bu yazılarda çakışabilecek tek değer koddur.
@@ -57,8 +59,13 @@ export async function isMerkeziEkle(db: Db, kayit: IsMerkeziKaydi): Promise<IsMe
   return varOlan(await kodKorumali(() => sorgular.isMerkeziEkle(db, kayit)), 'İş merkezi bulunamadı.');
 }
 
-export const isMerkeziGuncelle = (db: Db, id: number, kayit: IsMerkeziGuncellemesi): Promise<IsMerkezi> =>
-  kodKorumali(() => surumluGuncelle({
+// Aktif istasyonu olan iş merkezi pasife alınmaz (IST-1).
+export async function isMerkeziGuncelle(db: Db, id: number, kayit: IsMerkeziGuncellemesi): Promise<IsMerkezi> {
+  const oncekiAktif = await sorgular.isMerkeziAktifMi(db, id);
+  if (oncekiAktif !== null && pasifeAliniyorMu(oncekiAktif, kayit.aktif) && (await sorgular.aktifIstasyonuVarMi(db, id))) {
+    throw bagimliKayit(AKTIF_ISTASYONU_VAR);
+  }
+  return kodKorumali(() => surumluGuncelle({
     guncelle: async () => {
       await sorgular.eskiKoduYaz(db, 'is_merkezi', id, kayit);
       return sorgular.isMerkeziGuncelle(db, id, kayit);
@@ -66,6 +73,7 @@ export const isMerkeziGuncelle = (db: Db, id: number, kayit: IsMerkeziGuncelleme
     varMi: () => sorgular.isMerkeziVarMi(db, id),
     bulunamadiIletisi: 'İş merkezi bulunamadı.',
   }));
+}
 
 export const isMerkeziSil = (db: Db, id: number): Promise<void> =>
   silmeKorumali(() => sorgular.isMerkeziSil(db, id), 'İş merkezi bulunamadı.');
@@ -90,14 +98,29 @@ const tekIstasyon = async (db: Db, satir: sorgular.Istasyon): Promise<SurumluIst
 export const istasyonKayitlari = async (db: Db, pasiflerDahil: boolean): Promise<SurumluIstasyon[]> =>
   sorumluAdiyla(db, await sorgular.istasyonlariListele(db, pasiflerDahil));
 
-// İş merkezi yoksa yabancı anahtar 409 verir; iletiyi yazan çekirdektir.
+// Pasif üst kuralı (IST-1): aktif istasyon yalnız var olan, aktif iş merkezine bağlanır; ekran pasif hedefi zaten sunmaz (IS25).
+async function isMerkeziAktifOlmali(db: Db, onceki: { isMerkeziId: number; aktif: boolean } | null, yeni: { isMerkeziId: number; aktif: boolean }): Promise<void> {
+  const denetle = ustDenetlenirMi(onceki && { ustId: onceki.isMerkeziId, aktif: onceki.aktif }, { ustId: yeni.isMerkeziId, aktif: yeni.aktif });
+  if (denetle && (await sorgular.aktifIsMerkeziIdleri(db, [yeni.isMerkeziId])).length === 0) throw dogrulama(PASIF_IS_MERKEZI, 'isMerkeziId');
+}
+
+// Aktif makine yalnız var olan, aktif istasyona (iş merkezi de aktif) bağlanır.
+async function istasyonAktifOlmali(db: Db, onceki: { istasyonId: number | null; aktif: boolean } | null, yeni: { istasyonId: number | null; aktif: boolean }): Promise<void> {
+  const denetle = ustDenetlenirMi(onceki && { ustId: onceki.istasyonId, aktif: onceki.aktif }, { ustId: yeni.istasyonId, aktif: yeni.aktif });
+  if (denetle && yeni.istasyonId !== null && (await sorgular.aktifIstasyonIdleri(db, [yeni.istasyonId])).length === 0) {
+    throw dogrulama(PASIF_ISTASYON, 'istasyonId');
+  }
+}
+
 export async function istasyonEkle(db: Db, kayit: IstasyonKaydi): Promise<SurumluIstasyon> {
+  await isMerkeziAktifOlmali(db, null, kayit);
   if (kayit.sorumluKisiId !== null) await atanacakKisiyiDogrula(db, kayit.sorumluKisiId, 'sorumluKisiId');
   return tekIstasyon(db, varOlan(await kodKorumali(() => sorgular.istasyonEkle(db, kayit)), 'İstasyon bulunamadı.'));
 }
 
 export async function istasyonGuncelle(db: Db, id: number, kayit: IstasyonGuncellemesi): Promise<SurumluIstasyon> {
   const mevcut = await sorgular.istasyonBul(db, id);
+  if (mevcut !== null) await isMerkeziAktifOlmali(db, mevcut, kayit);
   if (mevcut !== null && kayit.sorumluKisiId !== null && kayit.sorumluKisiId !== mevcut.sorumluKisiId) {
     await atanacakKisiyiDogrula(db, kayit.sorumluKisiId, 'sorumluKisiId');
   }
@@ -115,11 +138,14 @@ export const istasyonSil = (db: Db, id: number): Promise<void> =>
   silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
 
 export async function makineEkle(db: Db, kayit: MakineKaydi): Promise<Makine> {
+  await istasyonAktifOlmali(db, null, kayit);
   return varOlan(await kodKorumali(() => sorgular.makineEkle(db, kayit)), 'Makine bulunamadı.');
 }
 
-export const makineGuncelle = (db: Db, id: number, kayit: MakineGuncellemesi): Promise<Makine> =>
-  kodKorumali(() => surumluGuncelle({
+export async function makineGuncelle(db: Db, id: number, kayit: MakineGuncellemesi): Promise<Makine> {
+  const mevcut = await sorgular.makineBul(db, id);
+  if (mevcut !== null) await istasyonAktifOlmali(db, mevcut, kayit);
+  return kodKorumali(() => surumluGuncelle({
     guncelle: async () => {
       await sorgular.eskiKoduYaz(db, 'makine', id, kayit);
       return sorgular.makineGuncelle(db, id, kayit);
@@ -127,6 +153,7 @@ export const makineGuncelle = (db: Db, id: number, kayit: MakineGuncellemesi): P
     varMi: () => sorgular.makineVarMi(db, id),
     bulunamadiIletisi: 'Makine bulunamadı.',
   }));
+}
 
 export const makineSil = (db: Db, id: number): Promise<void> =>
   silmeKorumali(() => sorgular.makineSil(db, id), 'Makine bulunamadı.');
@@ -192,7 +219,7 @@ export async function makineDurumlariniYaz(db: Db, kullanici: Kullanici, g: Maki
     const mevcut = await sorgular.makineBul(db, k.id);
     if (mevcut === null) throw new UygulamaHatasi('BULUNAMADI', `Makine ${k.id}: Makine bulunamadı.`, { ayrinti: { kayitId: k.id } });
     await kayittaReddet(mevcut.kod, k.id, async () => {
-      if (!mevcut.aktif) throw dogrulama('Pasif makineye durum verilmez.');
+      if (!mevcut.aktif) throw dogrulama(PASIF_MAKINEYE_DURUM);
       const onceki = await sorgular.makineDurumuBul(db, k.id);
       if (!(await sorgular.makineDurumuYaz(db, k.id, { durum: g.durum, aciklama: g.aciklama ?? null, surum: k.surum }, kullanici.id))) throw eskiSurum();
       if (arizayaGectiMi(onceki, g.durum)) await arizaBildir(db, kullanici, mevcut, g.aciklama ?? null);
@@ -271,13 +298,21 @@ export async function istasyonSecimi(db: Db, kullanici: Kullanici): Promise<Seci
 
 export const operasyonTipiKayitlari = sorgular.operasyonTipiKayitlari;
 
+// Varsayılan istasyon yalnız aktif istasyondan seçilir; önceden seçilmiş, sonradan pasife dönen istasyon kalabilir (IST-1).
+async function varsayilanIstasyonAktifOlmali(db: Db, onceki: number | null, yeni: number | null | undefined): Promise<void> {
+  if (yeni === undefined || yeni === null || yeni === onceki) return;
+  if ((await sorgular.aktifIstasyonIdleri(db, [yeni])).length === 0) throw dogrulama(PASIF_ISTASYON, 'varsayilanIstasyonId');
+}
+
 export async function operasyonTipiEkle(db: Db, kayit: OperasyonTipiKaydi): Promise<SurumluOperasyonTipi> {
+  await varsayilanIstasyonAktifOlmali(db, null, kayit.varsayilanIstasyonId);
   return varOlan(await kodKorumali(() => sorgular.operasyonTipiEkle(db, kayit)), 'Operasyon tipi bulunamadı.');
 }
 
 // Gönderilmeyen kod değişmez; başka tipin kodu verilirse 409. Rotada ya da iş emrinde kullanılmış tipin kodu değişmez
 // (#544, kullanıcı kararı); kullanılmamış tipin kodu değişebilir.
 export async function operasyonTipiGuncelle(db: Db, id: number, kayit: OperasyonTipiGuncellemesi): Promise<SurumluOperasyonTipi> {
+  await varsayilanIstasyonAktifOlmali(db, await sorgular.operasyonTipiVarsayilanIstasyonu(db, id), kayit.varsayilanIstasyonId);
   if (kayit.kod !== undefined) {
     const simdiki = await sorgular.operasyonTipiKodu(db, id);
     if (simdiki !== null && simdiki !== kayit.kod && (await sorgular.operasyonTipiBagliMi(db, id))) {
@@ -444,6 +479,7 @@ const arizaBildir = (db: Db, kullanici: Kullanici, makine: { id: number; kod: st
 export async function makineDurumuYaz(db: Db, kullanici: Kullanici, makineId: number, g: MakineDurumuGovdesi): Promise<MakineDurumu[]> {
   const makine = await sorgular.makineBul(db, makineId);
   if (makine === null) throw bulunamadi('Makine bulunamadı.');
+  if (!makine.aktif) throw dogrulama(PASIF_MAKINEYE_DURUM);
   const aciklama = g.aciklama?.trim() ? g.aciklama.trim() : null;
   const onceki = await sorgular.makineDurumuBul(db, makineId);
   if (!(await sorgular.makineDurumuYaz(db, makineId, { durum: g.durum, aciklama, surum: g.surum ?? null }, kullanici.id))) throw eskiSurum();

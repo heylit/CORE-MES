@@ -29,6 +29,14 @@ export function isMerkeziEkle(db: Db, g: IsMerkeziKaydi): Promise<IsMerkezi | nu
 }
 
 // Sürüm tutmazsa satır dönmez; çağıran çekirdeğin surumluGuncelle'si ile 404/409 ayırır.
+export async function isMerkeziAktifMi(db: Db, id: number): Promise<boolean | null> {
+  return (await db.tek<{ aktif: boolean }>('SELECT aktif FROM is_merkezi WHERE id = $1', [id]))?.aktif ?? null;
+}
+
+export async function aktifIstasyonuVarMi(db: Db, isMerkeziId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM istasyon WHERE is_merkezi_id = $1 AND aktif LIMIT 1', [isMerkeziId])) !== null;
+}
+
 export function isMerkeziGuncelle(db: Db, id: number, g: IsMerkeziGuncellemesi): Promise<IsMerkezi | null> {
   return db.tek<IsMerkezi>(
     `UPDATE is_merkezi SET kod = $2, ad = $3, aciklama = $4, aktif = $5, surum = surum + 1
@@ -270,6 +278,10 @@ export function operasyonTipiGuncelle(db: Db, id: number, g: OperasyonTipiGuncel
 
 export async function operasyonTipiVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM istasyonlar_operasyon_tipi WHERE id = $1', [id])) !== null;
+}
+
+export async function operasyonTipiVarsayilanIstasyonu(db: Db, id: number): Promise<number | null> {
+  return (await db.tek<{ id: number | null }>('SELECT varsayilan_istasyon_id AS id FROM istasyonlar_operasyon_tipi WHERE id = $1', [id]))?.id ?? null;
 }
 
 export async function operasyonTipiKodu(db: Db, id: number): Promise<string | null> {
