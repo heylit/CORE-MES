@@ -287,14 +287,15 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez, Onay sekmesindeki kontrole gidilir', () => {
+  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez; neden kartta önceden yazılır, düğme Onay sekmesine götürür (1786 PLN-1)', () => {
     ac();
     const post = vi.spyOn(api, 'post');
     fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
-    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
+    expect(within(kart()).queryByRole('button', { name: 'Gönder' })).toBeNull();
+    expect(within(kart()).getByText(/^Gönderilemez: 1 bekleyen değişiklik plana uygulanmadı/)).toBeTruthy();
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Onay sekmesine git' }));
     expect(post).not.toHaveBeenCalled();
     expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.')).toBeTruthy();
     post.mockRestore();
   });
 
