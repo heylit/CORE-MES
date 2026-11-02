@@ -267,4 +267,31 @@ describe('oee (gerçek PostgreSQL)', () => {
     assert.equal(ikisi.saglam, pzt.saglam + sali.saglam);
     assert.equal(ikisi.planliDk, 480, 'önceki gün okunsa da planlı süre pencereyle kırpılır');
   });
+
+  test('OE-18: pasif makine yalnız pencerede izi varsa listelenir, aktif: false taşır ve toplama girer', async () => {
+    const sahip = ortam!.sahip;
+    const mp = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'OE-MP', ad: 'Deneme pasif makine', istasyonId: istasyonA })).id;
+    await sahip.sorgu('UPDATE makine SET aktif = false WHERE id = $1', [mp]);
+    const oku = async () => vt().tx(async (db) => oee(db, (await kullaniciYukle(db, yoneticiId))!, { baslangic: GELECEK_PAZARTESI, bitis: GELECEK_PAZARTESI }, SONRA));
+    const once = await oku();
+    assert.equal(once.makineler.some((m) => m.id === mp), false, 'izi olmayan pasif makine listelenmez');
+    assert.ok(once.makineler.every((m) => m.aktif));
+    const tip = (await sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('OE-T3', 'Deneme tipi 3', 'TAL') RETURNING id"))!.id;
+    const emir = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum) VALUES ('P-OE3', 'Deneme parça 3', 10, $1, $2, 'planli') RETURNING id",
+      [istasyonA, yoneticiId]))!.id;
+    const isEmri = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id, makine_id, birim_sure_dk) VALUES ($1, 1, 10, $2, 'Frezeleme', $3, $4, 1) RETURNING id",
+      [emir, tip, istasyonA, mp]))!.id;
+    await sahip.sorgu(
+      `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $5)`,
+      [emir, isEmri, istasyonA, mp, yoneticiId, `${GELECEK_PAZARTESI}T09:00:00+03:00`, `${GELECEK_PAZARTESI}T10:00:00+03:00`]);
+    const sonra = await oku();
+    const m = sonra.makineler.find((x) => x.id === mp)!;
+    assert.equal(m.aktif, false);
+    assert.equal(m.calismaDk, 60);
+    const ist = (g: typeof once) => g.istasyonlar.find((i) => i.id === istasyonA)!;
+    assert.equal(ist(sonra).calismaDk, ist(once).calismaDk + 60, 'pasif makinenin o dönemki çalışması istasyon toplamına girer');
+  });
 });

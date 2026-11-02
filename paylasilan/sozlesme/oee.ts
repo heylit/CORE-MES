@@ -59,8 +59,9 @@ export const oeeCevabi = z.object({
   tesis: oeeOlcusuSemasi,
   isMerkezleri: z.array(oeeOlcusuSemasi.extend({ id: kimlik, kod: z.string(), ad: z.string() })),
   istasyonlar: z.array(oeeOlcusuSemasi.extend({ id: kimlik, kod: z.string(), ad: z.string(), isMerkeziId: kimlik })),
+  // Pasif makine yalnız pencerede çalışması ya da sayımı varsa listelenir (aktif: false); o dönem çalıştığından toplamlara girer.
   makineler: z.array(oeeOlcusuSemasi.extend({
-    id: kimlik, kod: z.string(), ad: z.string(), istasyonId: kimlik, isMerkeziId: kimlik,
+    id: kimlik, kod: z.string(), ad: z.string(), istasyonId: kimlik, isMerkeziId: kimlik, aktif: z.boolean(),
   })),
 });
 export type OeeCevabi = z.output<typeof oeeCevabi>;

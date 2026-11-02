@@ -19,8 +19,8 @@ const cevap = (maliyetGorunur: boolean): OeeCevabi => ({
   isMerkezleri: [{ id: 1, kod: 'IM-A', ad: 'Deneme merkez', ...olcu() }],
   istasyonlar: [{ id: 2, kod: 'IS-A', ad: 'Deneme istasyon', isMerkeziId: 1, ...olcu({ suresizSaglam: 4 }) }],
   makineler: [
-    { id: 3, kod: 'M-1', ad: 'Deneme makine 1', istasyonId: 2, isMerkeziId: 1, ...olcu({ oee: 0.5 }) },
-    { id: 4, kod: 'M-2', ad: 'Deneme makine 2', istasyonId: 2, isMerkeziId: 1, ...olcu({ planliDk: null, oee: null, kisiPayi: null }) },
+    { id: 3, kod: 'M-1', ad: 'Deneme makine 1', istasyonId: 2, isMerkeziId: 1, aktif: true, ...olcu({ oee: 0.5 }) },
+    { id: 4, kod: 'M-2', ad: 'Deneme makine 2', istasyonId: 2, isMerkeziId: 1, aktif: true, ...olcu({ planliDk: null, oee: null, kisiPayi: null }) },
   ],
 });
 
@@ -79,11 +79,16 @@ describe('OEE ekranı', () => {
     cizdir(<OeeMakineler />);
     const tablo = await screen.findByRole('table', { name: 'Makineler' });
     const satir = within(tablo).getByText('M-1').closest('tr')!;
-    expect(within(satir).getAllByText('Veri eksik')).toHaveLength(2);
+    expect(within(satir).getAllByText('Veri eksik')).toHaveLength(1);
     cleanup();
     sunucuKur(() => json(200, c));
     cizdir(<Oee />);
     expect(await screen.findByText(/1 makine veri eksik, girmedi/)).toBeTruthy();
+    // Üst satırlar tire gösterir; nedeni adın yanında yazılır.
+    const istasyon = within(screen.getByRole('table', { name: 'İstasyonlar' })).getByText('IS-A').closest('tr')!;
+    expect(within(istasyon).getByText('Veri eksik: 1')).toBeTruthy();
+    const merkez = within(screen.getByRole('table', { name: 'İş merkezleri' })).getByText('IM-A').closest('tr')!;
+    expect(within(merkez).getByText('Veri eksik: 1')).toBeTruthy();
   });
 
   it('red adedi rozetle, vardiya dışı çalışma ayrı kartta ve sütunda görünür; vardiya dışı yoksa kart çıkmaz', async () => {
@@ -97,7 +102,8 @@ describe('OEE ekranı', () => {
     expect(screen.getByText(/98 sağlam, 2 hurda, 3 red/)).toBeTruthy();
     const satir = within(screen.getByRole('table', { name: 'Makineler' })).getByText('M-1').closest('tr')!;
     expect(within(satir).getByText('3 red')).toBeTruthy();
-    expect(within(satir).getByText('2 sa · 30 adet')).toBeTruthy();
+    expect(within(satir).getByText('2 sa')).toBeTruthy();
+    expect(within(satir).getByText('30 adet')).toBeTruthy();
     cleanup();
     sunucuKur(() => json(200, cevap(true)));
     cizdir(<Oee />);
@@ -145,5 +151,37 @@ describe('OEE ekranı', () => {
     cizdir(<Oee />);
     expect(await screen.findByText('En çok 92 gün okunur.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+  });
+
+  it('pasif makine adının yanında "Pasif" rozetiyle görünür', async () => {
+    const c = cevap(true);
+    c.makineler[1] = { ...c.makineler[1]!, aktif: false };
+    sunucuKur(() => json(200, c));
+    cizdir(<OeeMakineler />);
+    const tablo = await screen.findByRole('table', { name: 'Makineler' });
+    expect(within(within(tablo).getByText('M-2').closest('tr')!).getByText('Pasif')).toBeTruthy();
+    expect(within(within(tablo).getByText('M-1').closest('tr')!).queryByText('Pasif')).toBeNull();
+  });
+
+  it('tesis maliyeti bilinmezse maliyeti eksik makineler yazılır; özet süreleri makine-saattir', async () => {
+    const c = cevap(true);
+    c.tesis = { ...c.tesis, makineMaliyeti: null, birimMaliyet: null };
+    c.makineler[1] = { ...c.makineler[1]!, makineMaliyeti: null, birimMaliyet: null };
+    sunucuKur(() => json(200, c));
+    cizdir(<Oee />);
+    expect(await screen.findByText(/Maliyeti eksik: M-2 \(/)).toBeTruthy();
+    expect(screen.getByText('Planlı 8 makine-sa')).toBeTruthy();
+    expect(screen.getByText('Takvim 48 makine-sa')).toBeTruthy();
+  });
+
+  it('tarih seçici bugünden ileri gün sunmaz', async () => {
+    sunucuKur(() => json(200, cevap(true)));
+    cizdir(<Oee />);
+    await screen.findByText('OEE (vardiyaya göre)');
+    fireEvent.click(screen.getByText('Tarih seç'));
+    const bitis = screen.getByLabelText('Bitiş') as HTMLInputElement;
+    expect(bitis.max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(bitis.max).toBe(bitis.value);
+    expect((screen.getByLabelText('Başlangıç') as HTMLInputElement).max).toBe(bitis.value);
   });
 });
