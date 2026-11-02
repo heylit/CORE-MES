@@ -112,7 +112,7 @@ describe('TMI taşıyıcısı', () => {
   });
 
   it('D6 b: sipariş faturaları siparişin anahtarıyla okunur; bağ istek kimliğiyle gider, ağ kopunca aynı kimlikle yinelenir; sunucu reddederse null döner', async () => {
-    const LISTE = { faturalar: [{ id: 7, belgeNo: 'DN-1', belgeTarihi: '2026-10-09', aciklama: null, bagli: true, baskaSipariste: false }] };
+    const LISTE = { faturalar: [{ id: 7, belgeNo: 'DN-1', belgeTarihi: '2026-10-09', aciklama: null, bagli: true, baskaSipariste: false }], uyarilar: [] };
     const cevap = (govde: unknown, durum = 200) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
     const fetchSahte = vi.fn(async () => cevap(LISTE));
     vi.stubGlobal('fetch', fetchSahte);
@@ -121,7 +121,7 @@ describe('TMI taşıyıcısı', () => {
       expect(String((fetchSahte.mock.calls[0] as unknown as [string])[0])).toBe(`/api/satin-alma-siparis-faturalari?talepId=${TALEP.id}&teklifId=${QA}`);
       fetchSahte.mockReset();
       fetchSahte.mockImplementationOnce(async () => { throw new TypeError('ağ koptu'); }).mockImplementation(async () => cevap(LISTE));
-      expect(await backend.siparisFaturasiBagla(TALEP.id, QA, 7, true)).toEqual(LISTE.faturalar);
+      expect(await backend.siparisFaturasiBagla(TALEP.id, QA, 7, true)).toEqual({ liste: LISTE.faturalar, uyarilar: [] });
       const istekler = fetchSahte.mock.calls.map((c) => c as unknown as [string, RequestInit]);
       expect(istekler.length).toBe(2);
       expect(istekler[0]![0]).toBe(`/api/satin-alma-talepleri/${TALEP.id}/siparis-faturasi`);
@@ -129,6 +129,8 @@ describe('TMI taşıyıcısı', () => {
       const kimlikler = istekler.map(([, i]) => new Headers(i.headers).get(ISTEK_KIMLIGI_BASLIGI));
       expect(kimlikler[0]).toBeTruthy();
       expect(kimlikler[1]).toBe(kimlikler[0]);
+      fetchSahte.mockImplementation(async () => cevap({ ...LISTE, uyarilar: ['Siparişin tamamı henüz teslim alınmadı.'] }));
+      expect((await backend.siparisFaturasiBagla(TALEP.id, QA, 7, true))?.uyarilar).toEqual(['Siparişin tamamı henüz teslim alınmadı.']);
       fetchSahte.mockImplementation(async () => cevap({ hata: { kod: 'GECERSIZ', ileti: 'Fatura başka bir siparişe bağlı; önce oradan kaldırın.' } }, 422));
       expect(await backend.siparisFaturasiBagla(TALEP.id, QA, 7, true)).toBeNull();
       expect(await backend.siparisFaturalari(TALEP.id, QA)).toBeNull();

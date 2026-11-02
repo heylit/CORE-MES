@@ -511,7 +511,7 @@ const backend: Backend = {
   async siparisFaturasiBagla(talepId, teklifId, belgeId, bagla) {
     try {
       const c = await korumali((deneme) => uc.post('/satin-alma-talepleri/:id/siparis-faturasi', { ...deneme, parametre: { id: talepId }, govde: { teklifId, belgeId, bagla } }));
-      return c.faturalar;
+      return { liste: c.faturalar, uyarilar: c.uyarilar };
     } catch (h) {
       await hata(h);
       return null;

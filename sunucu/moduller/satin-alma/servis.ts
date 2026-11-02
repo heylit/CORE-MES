@@ -16,7 +16,7 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
-import { alisBelgeleri, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
+import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
@@ -25,7 +25,7 @@ import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -688,6 +688,8 @@ async function faturaListesi(db: Db, firmaId: number, talepId: string, teklifId:
       const bagli = b.satinAlmaSiparisi?.talepId === talepId && b.satinAlmaSiparisi.teklifId === teklifId;
       return { id: b.id, belgeNo: b.belgeNo, belgeTarihi: b.belgeTarihi, aciklama: b.aciklama, bagli, baskaSipariste: b.satinAlmaSiparisi !== null && !bagli };
     }),
+
+    uyarilar: [],
   };
 }
 export async function siparisFaturalari(db: Db, talepId: string, teklifId: string): Promise<SiparisFaturalariCevabi> {
@@ -705,9 +707,18 @@ export async function siparisFaturasiYaz(db: Db, k: Kullanici, talepId: string, 
   if (g.bagla && mevcut?.bagli) return faturaListesi(db, firmaId, talepId, g.teklifId);
   await belgeSiparisBagla(db, k.id, { belgeId: g.belgeId, siparisFirmaId: firmaId, siparis: g.bagla ? { talepId, teklifId: g.teklifId } : null });
   const ad = mevcut?.belgeNo ?? `#${g.belgeId}`;
-  const tedarikci = talep.teklifler.find((x) => x.id === g.teklifId)?.tedarikciAdi ?? '';
-  await s.hareketEkle(db, talepId, randomUUID(), `${g.bagla ? 'Fatura bağlandı' : 'Fatura bağı kaldırıldı'}: ${ad}${tedarikci ? ` (${tedarikci})` : ''}`, k.id);
-  return faturaListesi(db, firmaId, talepId, g.teklifId);
+  const teklif = talep.teklifler.find((x) => x.id === g.teklifId);
+  const tedarikci = teklif?.tedarikciAdi ?? '';
+  const uyarilar = g.bagla ? await faturaUyarilari(db, talep, g.teklifId, g.belgeId, firmaId) : [];
+  // Uyarı geçmişe de yazılır: toast kaybolur, eşleşme farkı sonradan da görülmelidir.
+  await s.hareketEkle(db, talepId, randomUUID(), `${g.bagla ? 'Fatura bağlandı' : 'Fatura bağı kaldırıldı'}: ${ad}${tedarikci ? ` (${tedarikci})` : ''}${uyarilar.length > 0 ? `. ${uyarilar.join(' ')}` : ''}`, k.id);
+  return { ...(await faturaListesi(db, firmaId, talepId, g.teklifId)), uyarilar };
+}
+async function faturaUyarilari(db: Db, talep: Talep, teklifId: string, belgeId: number, firmaId: number): Promise<string[]> {
+  const sip = talep.karar?.siparisler.find((x) => x.teklifId === teklifId);
+  const toplam = (await s.siparisOdemeKosullari(db, talep.id)).find((x) => x.teklifId === teklifId)?.toplam ?? null;
+  const paraBirimi = talep.teklifler.find((x) => x.id === teklifId)?.paraBirimi ?? '';
+  return faturaEslesmeUyarilari({ toplam, paraBirimi, satirlar: sip?.satirlar ?? [] }, await alisBelgesiEslesmeTutari(db, belgeId, firmaId));
 }
 
 // Kart #1124: siparişin ödeme planı ve takip satırları. Plan finanstadır (beklenen ödeme); fatura finansta girilir, siparişe bağlanır.

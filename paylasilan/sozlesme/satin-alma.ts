@@ -391,7 +391,8 @@ export const siparisFaturasiSemasi = z.object({
   bagli: z.boolean(),
   baskaSipariste: z.boolean(),
 });
-export const siparisFaturalariCevabi = z.object({ faturalar: z.array(siparisFaturasiSemasi) });
+// 1839: bağlama cevabındaki üç yollu eşleşme uyarıları (rakamsız); liste okumasında boş.
+export const siparisFaturalariCevabi = z.object({ faturalar: z.array(siparisFaturasiSemasi), uyarilar: z.array(z.string()) });
 export const siparisFaturasiGovdesi = z.object({ teklifId: uuid, belgeId: z.number().int().positive().max(2147483647), bagla: z.boolean() });
 export const firmaSecenekleriCevabi = z.object({
   firmalar: z.array(z.object({ id: firmaKimligi, ad: z.string(), tedarikci: z.boolean() })),

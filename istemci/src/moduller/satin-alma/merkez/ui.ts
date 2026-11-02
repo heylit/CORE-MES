@@ -1430,11 +1430,12 @@ ACTIONS["invoice-link"] = (el) => {
   const fs = faturaSiparisi; if (!fs || !canWrite()) return;
   const bagla = el.dataset.bagla === "1";
   $$("#fi-list button").forEach(b => { b.disabled = true; });
-  void backend.siparisFaturasiBagla(fs.talepId, fs.teklifId, Number(el.dataset.id), bagla).then(liste => {
+  void backend.siparisFaturasiBagla(fs.talepId, fs.teklifId, Number(el.dataset.id), bagla).then(c => {
     if (faturaSiparisi !== fs || !$("#fi-list")) return;
-    if (liste === null) { void faturalariYukle(); return; }
-    $("#fi-list").innerHTML = faturaListesiHTML(liste);
-    toast(bagla ? "Fatura siparişe bağlandı, geçmişe yazıldı" : "Fatura bağı kaldırıldı, geçmişe yazıldı");
+    if (c === null) { void faturalariYukle(); return; }
+    $("#fi-list").innerHTML = faturaListesiHTML(c.liste);
+    toast(!bagla ? "Fatura bağı kaldırıldı, geçmişe yazıldı"
+      : c.uyarilar.length > 0 ? `Fatura bağlandı; eşleşme farkı: ${c.uyarilar.join(" ")}` : "Fatura siparişe bağlandı, geçmişe yazıldı");
   });
 };
 document.addEventListener("change", (e) => {
