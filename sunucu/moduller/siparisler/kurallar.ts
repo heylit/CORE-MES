@@ -54,6 +54,44 @@ export function malzemeReddi(kart: { tur: string; onayDurumu: string } | null): 
   return null;
 }
 
+// SIP-4 a (02.11.2026): adet birimli kart parçayla satılır; kesirli adet siparişe girmez. Yalnız "adet" (karar metni); öteki sayılabilir
+// birimler (takım, kutu) ayrı karar ister.
+export const MIKTAR_TAM_SAYI = 'Bu kartın birimi adet; miktar tam sayı olmalı.';
+export function miktarReddi(birim: string | null, miktar: string): string | null {
+  return birim?.trim().toLocaleLowerCase('tr') === 'adet' && !/^\d+(\.0*)?$/.test(miktar.trim()) ? MIKTAR_TAM_SAYI : null;
+}
+
+// SIP-4 a: yanlış yıl girişini yakalayan makul aralık (bugün sunucudan, tesis günü). Geç girilen eski sipariş için iki yıl geri,
+// önceden alınan sipariş için bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra (VARSAYIM: çerçeve sözleşmesi bu kadar uzun).
+export const SIPARIS_TARIHI_ARALIK_DISI = 'Sipariş tarihi bugünden en çok iki yıl önce, en çok bir yıl sonra olabilir.';
+export const TERMIN_COK_UZAK = 'Termin sipariş tarihinden en çok beş yıl sonra olabilir.';
+const yilEkle = (tarih: string, yil: number): string => `${String(Number(tarih.slice(0, 4)) + yil).padStart(4, '0')}${tarih.slice(4)}`;
+export function tarihAraligiReddi(
+  bugun: string, g: { siparisTarihi: string; termin: string; satirlar: readonly { termin: string | null }[] },
+): { mesaj: string; alan: string } | null {
+  if (g.siparisTarihi < yilEkle(bugun, -2) || g.siparisTarihi > yilEkle(bugun, 1)) return { mesaj: SIPARIS_TARIHI_ARALIK_DISI, alan: 'siparisTarihi' };
+  const sinir = yilEkle(g.siparisTarihi, 5);
+  if (g.termin > sinir) return { mesaj: TERMIN_COK_UZAK, alan: 'termin' };
+  const i = g.satirlar.findIndex((r) => r.termin !== null && r.termin > sinir);
+  return i < 0 ? null : { mesaj: TERMIN_COK_UZAK, alan: `satirlar.${i}.termin` };
+}
+
+// SIP-4 a: toplamlar numeric(20,2) hesaplanır (sorgular.ts); KDV dahil genel toplam sığmazsa veritabanı alan adsız hata verirdi.
+// Toplamı aşıran ilk satır gösterilir.
+export const TUTAR_COK_BUYUK = 'Sipariş toplamı çok büyük; miktar ve birim fiyatı kontrol edin.';
+const TUTAR_UST = 1e18;
+export function tutarTasmaReddi(
+  kdvOrani: string, satirlar: readonly { miktar: string; birimFiyat: string | null }[],
+): { mesaj: string; alan: string } | null {
+  const carpan = 1 + Number(kdvOrani) / 100;
+  let toplam = 0;
+  const i = satirlar.findIndex((r) => {
+    toplam += r.birimFiyat === null ? 0 : Number(r.miktar) * Number(r.birimFiyat);
+    return toplam * carpan >= TUTAR_UST;
+  });
+  return i < 0 ? null : { mesaj: TUTAR_COK_BUYUK, alan: `satirlar.${i}.birimFiyat` };
+}
+
 // SIP-04: durum geçişleri. Taslak onaylanır; onaylı kapanır; taslak ve onaylı iptal edilir. Kapanmış ve iptal son durumdur.
 export type DurumKomutu = 'onayla' | 'kapat' | 'iptal';
 const GECISLER: Readonly<Record<DurumKomutu, { kaynak: readonly SiparisDurumu[]; hedef: SiparisDurumu }>> = {

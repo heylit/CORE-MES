@@ -12,6 +12,18 @@ export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetT
 // 291 a: sözleşmedeki ISKONTO_ONAY_ESIGI (istemci sözleşmeden değer ithal etmez); sınırı sunucu uygular, ekran yalnız haber verir.
 export const ISKONTO_ONAY_ESIGI = 10;
 
+// SIP-4 a: sözleşmedeki para birimi listesi (satın almayla aynı); denetimi sunucu yapar. Liste öncesi kayıtta duran kod, kullanıcı
+// görüp değiştirsin diye seçenekte kalır.
+// SIP-4 a: 0 fiyat engellenmez (bedelsiz kalem olabilir), yalnız uyarılır.
+export const sifirFiyat = (metin: string): boolean => /^0+([.,]0*)?$/.test(metin.trim());
+
+export const PARA_BIRIMLERI = ['TRY', 'USD', 'EUR', 'GBP'] as const;
+export function paraBirimiSecenekleri(deger: string): { deger: string; baslik: string }[] {
+  const liste: string[] = [...PARA_BIRIMLERI];
+  if (deger !== '' && !liste.includes(deger)) liste.push(deger);
+  return liste.map((k) => ({ deger: k, baslik: k }));
+}
+
 export const TEKLIF_DURUMU: Record<TeklifDurumu, { etiket: string; ton: RozetTonu }> = {
   yeni: { etiket: 'Fiyat bekliyor', ton: 'uyari' },
   'onay-bekliyor': { etiket: 'Onay bekliyor', ton: 'uyari' },

@@ -17,7 +17,7 @@ import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, malzemeReddi, terminDagilimi as terminAraliklari,
+  TAKVIM_SIPARIS_DURUMU, malzemeReddi, miktarReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
@@ -77,9 +77,16 @@ async function firmayiDenetle(db: Db, firmaId: number, mevcut: number | null): P
 async function kalemleriDenetle(db: Db, g: SiparisEkleVerisi): Promise<void> {
   const kartlar = await malzemeOzetleri(db, g.satirlar.map((s) => s.malzemeNo));
   g.satirlar.forEach((s, i) => {
-    const ret = malzemeReddi(kartlar.get(s.malzemeNo) ?? null);
+    const kart = kartlar.get(s.malzemeNo) ?? null;
+    const ret = malzemeReddi(kart);
     if (ret !== null) throw dogrulama(ret, `satirlar.${i}.malzemeNo`);
+    const miktar = miktarReddi(kart?.birim ?? null, s.miktar);
+    if (miktar !== null) throw dogrulama(miktar, `satirlar.${i}.miktar`);
   });
+  const tarih = tarihAraligiReddi(tesisGunu(Date.now()), g);
+  if (tarih !== null) throw dogrulama(tarih.mesaj, tarih.alan);
+  const tasma = tutarTasmaReddi(g.kdvOrani, g.satirlar);
+  if (tasma !== null) throw dogrulama(tasma.mesaj, tasma.alan);
 }
 
 const baslik = (g: SiparisEkleVerisi): BaslikAlanlari => ({
@@ -145,7 +152,7 @@ export async function siparisGuncelle(
   }));
   const satirlar = fiyatYazar ? g.satirlar : fiyatlariKoru(onceki, g.satirlar);
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
-  await kalemleriDenetle(db, g);
+  await kalemleriDenetle(db, { ...g, satirlar });
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
     guncelle: () => sorgular.siparisGuncelle(db, id, baslik(g), g.surum, kullanici.id),
     varMi: () => sorgular.siparisVarMi(db, id),

@@ -178,6 +178,31 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(mudur, `/siparisler/${s.id}/onayla`, { surum: s.surum })).statusCode, 200);
   });
 
+  test('SIP-4 a: para birimi listeden, adet kartında kesirli miktar ve yanlış yıllı tarih alanıyla 400; taşan toplam alanıyla 400', async () => {
+    const adetNo = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('sip-adet', 'mamul', 'SIP-DNM-', $3, 'aktif', $1, $2, $2) RETURNING no`,
+      [JSON.stringify({ id: 'sip-adet', com: { ad: 'Deneme adet', birim: 'adet' } }), yoneticiId, (sayac += 1)],
+    ))!.no;
+    const alan = async (g: Record<string, unknown>) => {
+      const c = await gonder(yonetici, '/siparisler/ekle', govde(g));
+      assert.equal(c.statusCode, 400, c.body);
+      return c.json<{ alan: string; mesaj: string }>();
+    };
+    assert.equal((await alan({ paraBirimi: 'XYZ' })).alan, 'paraBirimi');
+    assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ paraBirimi: 'usd' }))).statusCode, 200);
+    const adet = await alan({ satirlar: [{ malzemeNo: adetNo, miktar: '3.5', birimFiyat: '1' }] });
+    assert.deepEqual([adet.alan, adet.mesaj], ['satirlar.0.miktar', 'Bu kartın birimi adet; miktar tam sayı olmalı.']);
+    assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ satirlar: [{ malzemeNo: adetNo, miktar: '3', birimFiyat: '1' }] }))).statusCode, 200);
+    assert.equal((await alan({ siparisTarihi: '2020-01-01', termin: '2020-02-01' })).alan, 'siparisTarihi');
+    assert.equal((await alan({ satirlar: [{ malzemeNo: mamulNo, miktar: '99999999999.999', birimFiyat: '9999999999999.9999' }] })).alan, 'satirlar.0.birimFiyat');
+    const t = await gonder(yonetici, '/siparisler/teklifler/ekle', {
+      firmaId: musteriId, baslik: 'Adet', satirlar: [{ malzemeNo: adetNo, tanim: 'Adet', miktar: '2.5' }],
+    });
+    assert.equal(t.statusCode, 400, t.body);
+    assert.equal(t.json<{ alan: string }>().alan, 'satirlar.0.miktar');
+  });
+
   test('SIP-11: planlama üstteki satırı silince alttaki satırın fiyatı korunur', async () => {
     const planlama = (await girisYap('planlama_proje')).cerez;
     const satir = (miktar: string, birimFiyat: string | null) => ({ malzemeNo: mamulNo, miktar, birimFiyat, termin: null, aciklama: null });

@@ -17,7 +17,7 @@ type Komut = 'onayla' | 'kapat' | 'iptal';
 
 const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string; govde: string }> = {
   onayla: { baslik: 'Siparişi onayla', dugme: 'Onayla', basari: 'Sipariş onaylandı.', govde: 'Onaylanınca satırlar ve tutarlar değişmez.' },
-  kapat: { baslik: 'Siparişi kapat', dugme: 'Siparişi kapat', basari: 'Sipariş kapandı.', govde: 'Kapanan sipariş yeniden açılmaz.' },
+  kapat: { baslik: 'Siparişi kapat', dugme: 'Siparişi kapat', basari: 'Sipariş kapandı.', govde: 'Kapanan sipariş yeniden açılmaz. Teslimatın ve faturanın bittiğini kontrol edip kapatın.' },
   iptal: { baslik: 'Siparişi iptal et', dugme: 'İptal et', basari: 'Sipariş iptal edildi.', govde: 'İptal edilen sipariş yeniden açılmaz. Nedeni yazın.' },
 };
 
@@ -83,6 +83,7 @@ export function SiparisAyrinti() {
   ];
   const sutunlar = fiyatGorur ? tumSutunlar : tumSutunlar.filter((k) => k.anahtar !== 'fiyat' && k.anahtar !== 'tutar');
   const fiyatsizKalem = s.satirlar.filter((m) => m.birimFiyat === null).length;
+  const sifirFiyatliKalem = s.satirlar.filter((m) => m.birimFiyat !== null && Number(m.birimFiyat) === 0).length;
 
   const duzenlenebilir = yazabilir && s.durum === 'taslak';
   const islemler = (
@@ -107,6 +108,9 @@ export function SiparisAyrinti() {
 
       {s.durum === 'taslak' && (
         <p className="tc-sp-bildirim" role="status"><strong>Taslak sipariş</strong> Onaylanana kadar düzenlenebilir; onaylanınca satırlar değişmez.</p>
+      )}
+      {fiyatGorur && s.durum === 'taslak' && sifirFiyatliKalem > 0 && (
+        <p className="tc-sp-bildirim" role="status"><strong>{`${sifirFiyatliKalem} kalemin fiyatı 0`}</strong> Onaylamadan önce kalemin bedelsiz olduğunu doğrulayın.</p>
       )}
       {fiyatGorur && s.durum === 'taslak' && fiyatsizKalem > 0 && (
         <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status"><strong>{`${fiyatsizKalem} kalemin fiyatı yok`}</strong> Fiyatlar girilmeden sipariş onaylanamaz.</p>
