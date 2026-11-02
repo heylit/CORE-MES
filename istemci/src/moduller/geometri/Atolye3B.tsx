@@ -52,7 +52,9 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
       {sorgu.isPending ? <DurumKutusu durum="yukleniyor" mesaj="Modeller okunuyor" />
         : sorgu.isError ? <DurumKutusu durum="hata" mesaj={yetkiyse(sorgu.error, 'Model listesi okunamadı.')} yenile={() => { void sorgu.refetch(); }} />
           : sorgu.data.satirlar.length === 0
-            ? <DurumKutusu durum="bos" mesaj="3B modeli olan malzeme yok. Malzeme kartına STEP ya da IGES ekleyip Çizim Merkezi'nde yayınlayın." />
+            ? <DurumKutusu durum="bos" mesaj={ara.trim() !== '' || durum !== ''
+              ? 'Aramaya ya da süzgece uyan model yok.'
+              : "3B modeli olan malzeme yok. Malzeme kartına STEP ya da IGES ekleyip Çizim Merkezi'nde yayınlayın."} />
             : (
               <>
                 <ul className="tc-g3b-satirlar">

@@ -141,6 +141,9 @@ describe('3D Atölyesi', () => {
     sunucuKur({ 'GET /geometri/modeller': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 }) });
     ac();
     expect(await screen.findByText(/3B modeli olan malzeme yok/)).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'yok' } });
+    expect(await screen.findByText('Aramaya ya da süzgece uyan model yok.')).toBeTruthy();
+    expect(screen.queryByText(/3B modeli olan malzeme yok/)).toBeNull();
   });
 
   it('hesaplanamayan modelde hata metni ve kapalı olmayan modelde hacim yerine açıklama', async () => {
