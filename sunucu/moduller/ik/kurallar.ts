@@ -249,7 +249,26 @@ export function izinIsGunu(baslangic: string, bitis: string, cumartesiIsGunu: bo
 export function izinGunuDenetle(gun: number, isGunu: number): KuralHatasi | null {
   if (isGunu === 0) return dogrulama('Seçilen tarihlerde iş günü yok (hafta sonu ya da tatil).', 'govde.baslangic');
   if (gun > isGunu) return dogrulama(`İzin günü tarih aralığındaki ${isGunu} iş gününden fazla olamaz.`, 'govde.gun');
+  // IK-9 (karar a): eksik gün bakiyeden az düşer; her iş günü en az yarım gün sayılır. Takvim günlü türlerde alt sınır yok
+  // (süt izni gibi günün bir kısmı olan izinler uzun aralığa az gün yazar).
+  if (gun < isGunu / 2) return dogrulama(`İzin günü tarih aralığındaki ${isGunu} iş gününün yarısından az olamaz.`, 'govde.gun');
   return null;
+}
+
+// IK-9 (karar a): çalışan geçmiş tarihli izin talep edemez; geriye dönük izni (rapor dahil) İK kendi ucundan girer.
+export function izinTarihiDenetle(onceki: Govde | null, yeni: Govde, uc: IzinUcu, bugun: string): KuralHatasi | null {
+  if (uc !== 'talep' || metin(yeni['durum']) !== 'Beklemede') return null;
+  if (onceki && !izinIcerigiDegistiMi(onceki, yeni)) return null;
+  return metin(yeni['baslangic']) < bugun ? gecersiz('Geçmiş tarihli izin talep edilemez; geriye dönük izni İK girer.') : null;
+}
+
+// IK-7 (karar b): yıllık izin kalanı aşarsa talep sürer, yazan uyarılır. Önceden onaylı aynı iznin günü kalana geri eklenir (ekrandaki bakiyeAsimi ile aynı).
+const sayiMetni = (n: number): string => String(Math.round(n * 10) / 10).replace('.', ',');
+export function izinBakiyeUyarisi(onceki: Govde | null, yeni: Govde, kalan: number, ad: string): string | null {
+  if (metin(yeni['tur']) !== 'Yıllık izin' || !ETKIN_IZIN.includes(metin(yeni['durum']))) return null;
+  const geri = onceki && metin(onceki['tur']) === 'Yıllık izin' && metin(onceki['durum']) === 'Onaylandı' ? Number(onceki['gun']) || 0 : 0;
+  const gun = Number(yeni['gun']) || 0;
+  return gun > kalan + geri ? `Uyarı: ${ad} için kalan yıllık izin ${sayiMetni(kalan + geri)} gün; bu izin ${sayiMetni(gun)} gün.` : null;
 }
 
 // IK-80 (soru 142 b): resmî tatil listesinin sahibi İK'dır; Vardiya takvimi ve izin sayımı bu listeyi okur. Yılı boş satır her yıl
@@ -289,6 +308,39 @@ export function haftalikVardiyaPlani(
 }
 
 /* ---------------- pozisyonlar (kadro talebi): IK-10..IK-12 ---------------- */
+
+/* ---------------- aday ve görüşme: IK-9 (karar a) ---------------- */
+
+// KVKK aydınlatma onayı olmayan aday başvuruda ya da rette kalır; ön görüşme dahil sürece alınmaz, görüşme planlanmaz.
+export const KVKK_GEREKEN_ASAMALAR: readonly string[] = ['Ön görüşme', 'Mülakat', 'Teklif', 'İşe alındı'];
+const ISE_ALINDI = 'İşe alındı';
+const asamaDegisti = (onceki: Govde | null, yeni: Govde): boolean => onceki === null || metin(onceki['asama']) !== metin(yeni['asama']);
+
+// Yalnız aşama değişirken (ya da yeni adayda) denetlenir: onay sonradan geri çekilirse kayıt düzenlenebilir kalır.
+export function adayGecisiDenetle(onceki: Govde | null, yeni: Govde): KuralHatasi | null {
+  if (!asamaDegisti(onceki, yeni)) return null;
+  const asama = metin(yeni['asama']);
+  if (KVKK_GEREKEN_ASAMALAR.includes(asama) && yeni['kvkk'] !== true) return gecersiz(`KVKK aydınlatma onayı alınmamış aday "${asama}" aşamasına alınamaz.`);
+  // "İşe alındı" personel kartıyla olur: aday açılan personel kaydına bağlanır (bağın varlığı yazmada denetlenir).
+  if (asama === ISE_ALINDI && !dolu(yeni['empId'])) return gecersiz('Aday işe alınırken personel kartı açılmalı; aday personel kaydına bağlanır.');
+  return null;
+}
+
+export function gorusmeAdayiDenetle(onceki: Govde | null, yeni: Govde, aday: Govde | null): KuralHatasi | null {
+  if (onceki !== null && metin(onceki['candId']) === metin(yeni['candId'])) return null;
+  return aday !== null && aday['kvkk'] !== true ? gecersiz('KVKK aydınlatma onayı alınmamış adayla görüşme planlanamaz.') : null;
+}
+
+// Görüşmeci (İK dışı) yalnız kendisinin görüşmeci olduğu, iptal edilmemiş görüşmeleri ve o adayın değerlendirmeye yeten alanlarını görür;
+// iletişim, ücret beklentisi, teklif ve İK notu görmez. KVKK onayı olmayan aday hiç görünmez.
+export const GORUSMECI_ADAY_ALANLARI = [
+  'id', 'kind', 'ad', 'soyad', 'jobId', 'asama', 'mevcutSirket', 'mevcutPozisyon', 'tecrubeYil', 'egitim', 'okul', 'yabanciDil', 'cvLink', 'ozet',
+] as const;
+export const GORUSMECI_POZISYON_ALANLARI = ['id', 'kind', 'baslik'] as const;
+export function gorusmeciMi(gorusme: Govde, benimPersonel: string | null): boolean {
+  if (benimPersonel === null || metin(gorusme['durum']) === 'İptal') return false;
+  return Array.isArray(gorusme['gorusmeciler']) && gorusme['gorusmeciler'].includes(benimPersonel);
+}
 
 export interface PozisyonGecisi {
   onceki: Govde | null;

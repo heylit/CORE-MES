@@ -518,6 +518,56 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     await ret(422, 'GECERSIZ', c.uzm, 'POST', `/ik/bordro/${donem}/kesinlestir`, { girdiler: { emp_ck1: { brut: 40000, gun: 30, ek: 0, mesaiSaat: 0, tatilSaat: 0, kesinti: 0 } } });
   });
 
+  test('1844 IK-7 b, IK-9 a: bakiye aşımı uyarır; KVKK onaysız aday sürece girmez; işe alım personel kartıyla; görüşmeci adayı görür; geçmiş talep ve eksik gün reddedilir', async () => {
+    // IK-7 b: yıllık izin kalanı aşarsa kayıt sürer, cevap uyarı taşır; kalan içindeki talep uyarısızdır.
+    await kaydet(c.yon, 'personel', personel('emp_bk1'));
+    const yillik = (id: string, baslangic: string, bitis: string, gun: number, durum = 'Beklemede') => ({ id, kind: 'leave', empId: 'emp_bk1', tur: 'Yıllık izin', baslangic, bitis, gun, durum });
+    assert.equal((await kaydet(c.uzm, 'izinler', yillik('leave_bk1', '2027-01-11', '2027-01-13', 3))).uyari, undefined);
+    const asim = await kaydet(c.uzm, 'izinler', yillik('leave_bk2', '2027-02-01', '2027-03-12', 30));
+    assert.match(asim.uyari ?? '', /kalan yıllık izin .* gün; bu izin 30 gün/);
+    // IK-9 a, gün alt sınırı: iş günlü türde her iş günü en az yarım gün; takvim günlü türde (süt izni gibi) alt sınır yok.
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/izinler/leave_bk3/kaydet', { govde: yillik('leave_bk3', '2027-04-05', '2027-04-09', 2), surum: null });
+    await kaydet(c.uzm, 'izinler', yillik('leave_bk3', '2027-04-05', '2027-04-09', 2.5));
+    const ucretsiz = { id: 'leave_bk4', kind: 'leave', empId: 'emp_bk1', tur: 'Ücretsiz izin', baslangic: '2027-05-03', bitis: '2027-05-06', gun: 1, durum: 'Beklemede' };
+    await kaydet(c.uzm, 'izinler', ucretsiz);
+    // Geçmiş tarih: çalışan talep edemez; İK geriye dönük girer.
+    const dun = new Date(Date.parse(`${tesisGunu(new Date())}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    await ret(422, 'GECERSIZ', c.opr, 'POST', '/ik/izinler/leave_gc1/talep', { govde: izin('leave_gc1', 'emp_a', 'Beklemede', { tur: 'Ücretsiz izin', baslangic: dun, bitis: dun, gun: 1 }), surum: null });
+    await kaydet(c.uzm, 'izinler', { ...ucretsiz, id: 'leave_gc2', baslangic: dun, bitis: dun, gun: 1 });
+
+    // KVKK: onaysız aday başvuruda kalır, görüşme planlanmaz.
+    await kaydet(c.uzm, 'pozisyonlar', { id: 'job_kv', kind: 'job', baslik: 'Torna operatörü', durum: 'Taslak', isMerkeziId: im1, ucretMin: 30000 });
+    const aday: Govde = { id: 'cand_kv', kind: 'cand', ad: 'Aday', soyad: 'Deneme', jobId: 'job_kv', asama: 'Başvuru', kvkk: false, eposta: 'aday@ornek.invalid', telefon: '0500 000 00 44', maasBeklentisi: 45000, notlar: 'İK notu' };
+    await kaydet(c.uzm, 'adaylar', aday);
+    await ret(422, 'GECERSIZ', c.uzm, 'POST', '/ik/adaylar/cand_kv/kaydet', kaydetGovdesi({ ...aday, asama: 'Mülakat' }));
+    const gorusme = { id: 'intv_kv', kind: 'intv', candId: 'cand_kv', tur: 'Teknik mülakat', tarih: '2027-01-20', durum: 'Planlandı', gorusmeciler: ['emp_m'] };
+    await ret(422, 'GECERSIZ', c.uzm, 'POST', '/ik/gorusmeler/intv_kv/kaydet', { govde: gorusme, surum: null });
+    await kaydet(c.uzm, 'adaylar', { ...aday, kvkk: true, asama: 'Mülakat' });
+    await kaydet(c.uzm, 'gorusmeler', gorusme);
+
+    // Görüşmeci müdür görüşmeyi, adayın değerlendirme alanlarını ve pozisyon adını görür; görüşmeci olmayan müdür görmez (KVKK görünürlüğü).
+    const mud = (await tamam<IkVeriCevabi>(c.mud, 'GET', '/ik/veri')).kayitlar;
+    assert.ok(mud.some((k) => k.kimlik === 'intv_kv'), 'görüşmeci görüşmeyi görür');
+    const ca = mud.find((k) => k.kimlik === 'cand_kv');
+    assert.deepEqual(ca && { ad: ca.govde['ad'], asama: ca.govde['asama'] }, { ad: 'Aday', asama: 'Mülakat' });
+    for (const alan of ['eposta', 'telefon', 'maasBeklentisi', 'notlar', 'kvkk']) assert.equal(alan in ca!.govde, false, alan);
+    assert.deepEqual(mud.find((k) => k.kimlik === 'job_kv')?.govde, { id: 'job_kv', kind: 'job', baslik: 'Torna operatörü' });
+    const mud2 = await girisYap('ik-mud2', 'mudur', kim.yon);
+    await kaydet(c.yon, 'personel', personel('emp_m2', { kisiId: mud2.id }));
+    const baska = (await tamam<IkVeriCevabi>(mud2.cerez, 'GET', '/ik/veri')).kayitlar.map((k) => k.kimlik);
+    assert.equal(['intv_kv', 'cand_kv', 'job_kv'].some((k) => baska.includes(k)), false, 'görüşmeci olmayan müdür görmez');
+    const opr = (await tamam<IkVeriCevabi>(c.opr, 'GET', '/ik/veri')).kayitlar.map((k) => k.kimlik);
+    assert.equal(opr.includes('cand_kv'), false);
+    // Görüşme iptal edilince görüşmeci de görmez.
+    await kaydet(c.uzm, 'gorusmeler', { ...gorusme, durum: 'İptal' });
+    assert.equal((await tamam<IkVeriCevabi>(c.mud, 'GET', '/ik/veri')).kayitlar.some((k) => k.kimlik === 'cand_kv'), false);
+
+    // İşe alım personel kartıyla: bağsız "İşe alındı" reddedilir; açılan personele bağlanınca geçer.
+    await ret(422, 'GECERSIZ', c.uzm, 'POST', '/ik/adaylar/cand_kv/kaydet', kaydetGovdesi({ ...aday, kvkk: true, asama: 'İşe alındı' }));
+    await kaydet(c.uzm, 'personel', personel('emp_kv', { ad: 'Aday' }));
+    await kaydet(c.uzm, 'adaylar', { ...aday, kvkk: true, asama: 'İşe alındı', empId: 'emp_kv' });
+  });
+
   test('IK-82: T.C. kimlik ve IBAN biçimi sunucuda denetlenir; tek kayıt ve toplu aktarım aynı kurala girer, kayıtlı eski değer kilitlenmez', async () => {
     // Uydurma, algoritmadan geçen değerler; gerçek kişi ya da hesap değildir.
     await kaydet(c.uzm, 'personel', personel('emp_k1', { tckn: '10000003048', iban: 'TR200000000000000000000001' }));
