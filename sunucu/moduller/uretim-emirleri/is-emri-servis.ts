@@ -691,7 +691,9 @@ export async function adimliIptal(db: Db, kullanici: Kullanici, id: number, suru
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, surum);
-  const ihlal = adimliIptalIhlali(e.durum, e.arsiv, (await s.isEmirleriGetir(db, [id])).some((i) => i.durum !== 'bekliyor'));
+  const baslamis = (await s.isEmirleriGetir(db, [id])).some((i) => i.durum !== 'bekliyor');
+  const acikKol = (await s.altPartilerGetir(db, [id])).some((k) => k.ustEmirId === id && acikEmirIhlali(k.durum, false) === null);
+  const ihlal = adimliIptalIhlali(e.durum, e.arsiv, baslamis, acikKol);
   if (ihlal !== null) throw cakisma(ihlal);
   await s.ustIptalYaz(db, id, e.surum);
   await emirIptalBildir(db, { uretimEmriId: id, kisiId });
