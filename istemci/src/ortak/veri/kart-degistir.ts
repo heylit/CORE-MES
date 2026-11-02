@@ -27,6 +27,8 @@ export function kartNumarasiGibi(ham: string): boolean {
   return KART_BICIMI.test(k) && !gtinMi(k);
 }
 
+const DEGISTIRICI = new Set(['Shift', 'CapsLock', 'AltGraph']);
+
 export interface OkuyucuDurumu { metin: string; son: number }
 export const OKUYUCU_BASI: OkuyucuDurumu = { metin: '', son: 0 };
 
@@ -37,6 +39,8 @@ export function kartTusu(d: OkuyucuDurumu, tus: string, zaman: number): { durum:
     const kart = hizli && d.metin.length >= EN_KISA_KART && kartNumarasiGibi(d.metin) ? d.metin : null;
     return { durum: OKUYUCU_BASI, kart };
   }
+  // Okuyucu büyük harf için Shift basar (A-F); değiştirici tuş biriktirileni silmez, karakter getirmez.
+  if (DEGISTIRICI.has(tus)) return { durum: d, kart: null };
   if (tus.length !== 1) return { durum: OKUYUCU_BASI, kart: null };
   return { durum: { metin: hizli ? d.metin + tus : tus, son: zaman }, kart: null };
 }
