@@ -9,7 +9,7 @@ import { useIkDeposu, useIkKomutu, yeniKimlik } from '../veri.ts';
 import {
   ADAY_ALANLARI, bolumAlanlari, EGITIM_ALANLARI, GORUSME_ALANLARI, PERFORMANS_ALANLARI, POZISYON_ALANLARI, type AdayBolumu, type GorusmeBolumu,
 } from './alanlar.ts';
-import { adayAdi, gorusmeSonrasiAsama, gunEkle, ISE_ALINDI, iseGirisTaslagi, kisaGorusmeZamani, REDDEDILDI, satirlar } from './kurallar.ts';
+import { adayAdi, gorusmeSonrasiAsama, gunEkle, ISE_ALINDI, iseGirisTaslagi, kisaGorusmeZamani, kvkkEngeli, REDDEDILDI, satirlar } from './kurallar.ts';
 import { adayBul, bugun, KayitFormu, pozisyonBul, type FormBaglami } from './parcalar.tsx';
 
 /* ---------------- Performans ---------------- */
@@ -169,5 +169,11 @@ export function useIseAlim(o: IkEkranOzellikleri): { baslat: (a: Aday) => void; 
       }}
     />
   ) : null;
-  return { baslat: adayYaz, pencere };
+  // Personel kartı açılıp aday sonra reddedilirse kart boşta kalırdı: KVKK engeli formdan önce söylenir.
+  const baslat = (a: Aday) => {
+    const engel = kvkkEngeli(a, ISE_ALINDI);
+    if (engel) { bildir('hata', engel); return; }
+    adayYaz(a);
+  };
+  return { baslat, pencere };
 }

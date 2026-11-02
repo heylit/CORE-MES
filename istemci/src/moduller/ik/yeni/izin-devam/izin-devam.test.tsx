@@ -47,6 +47,16 @@ describe('P2 izinler', () => {
     expect(await screen.findByText('İzin onaylandı.')).toBeTruthy();
   });
 
+  it('1844 IK-7 b: kalanı aşan yıllık izni onaylayan uyarılır, onay yine yazılır', async () => {
+    const v = ornekVeri();
+    const veri = { ...v, kayitlar: v.kayitlar.map((k) => (k.kimlik === 'leave_1' ? { ...k, govde: { ...k.govde, gun: 200 } } : k)) };
+    const { yazmalar } = ikAc('/ik/izinler', { veri });
+    const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;
+    fireEvent.click(within(satir).getByRole('button', { name: 'Onayla' }));
+    expect(await screen.findByText(/Uyarı: Mehmet Deneme için kalan yıllık izin/)).toBeTruthy();
+    await waitFor(() => { expect(yazmalar.map((y) => y.yol)).toEqual(['/ik/izinler/leave_1/kaydet']); });
+  });
+
   it('okuyan kişi listeyi görür; talep, onay ve düzenleme düğmesi yoktur', async () => {
     const { yazmalar } = ikAc('/ik/izinler', { kullanici: IK_OKUYAN });
     const satir = (await screen.findByText('Mehmet Deneme')).closest('tr') as HTMLElement;

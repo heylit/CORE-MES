@@ -8,8 +8,9 @@ import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
 import type { Izin } from '../tipler.ts';
 import { useIkKomutu } from '../veri.ts';
 import { IzinBelgesi } from './IzinBelgesi.tsx';
+import { bakiye } from './hesap.ts';
 import { IzinFormu } from './IzinFormu.tsx';
-import { sayi, sayiYaz } from './kurallar.ts';
+import { bakiyeAsimi, sayi, sayiYaz } from './kurallar.ts';
 import './izin-devam.css';
 
 export interface IzinTablosuOzellikleri { o: IkEkranOzellikleri; izinler: readonly Izin[]; kisiSutunu: boolean; arac?: TabloAraci<Izin> }
@@ -24,6 +25,10 @@ export function IzinTablosu({ o, izinler, kisiSutunu, arac }: IzinTablosuOzellik
   const departman = (id: string | undefined) => o.depo.tur('dept').find((d) => d.id === id)?.ad;
 
   const karar = async (l: Izin, durum: 'Onaylandı' | 'Reddedildi') => {
+    // IK-7 (karar b): yıllık izin kalanı aşıyorsa onaylayan uyarılır, onay sürer (izin formundaki uyarıyla aynı).
+    const p = personel(l.empId);
+    const kalan = durum === 'Onaylandı' && o.motor && p ? bakiyeAsimi({ ...l, durum }, l, bakiye(o.motor, p).kalan) : null;
+    if (kalan !== null && p) bildir('hata', `Uyarı: ${adSoyad(p)} için kalan yıllık izin ${sayiYaz(kalan)} gün.`);
     try {
       await komut.kaydet({ ...l, durum });
       bildir('tamam', durum === 'Onaylandı' ? 'İzin onaylandı.' : 'İzin reddedildi.');

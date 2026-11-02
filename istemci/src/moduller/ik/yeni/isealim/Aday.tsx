@@ -9,7 +9,7 @@ import { ADAY_ALANLARI, type AdayBolumu } from './alanlar.ts';
 import { AdayFormu, GorusmeFormu, useIseAlim } from './formlar.tsx';
 import { GorusmeOgesi } from './IseAlim.tsx';
 import {
-  adayAdi, adayGorusmeleri, adayPuani, asamasi, gunFarki, ISE_ALINDI, kisaGorusmeZamani, kriterOrtalamasi, oneriSayilari, puanMetni,
+  adayAdi, adayGorusmeleri, adayPuani, asamasi, gunFarki, ISE_ALINDI, kisaGorusmeZamani, kriterOrtalamasi, kvkkEngeli, oneriSayilari, puanMetni,
   puanOrtalamasi, REDDEDILDI, satirlar, sayi, sonrakiGorusme, surecteMi, tamamlandiMi, TEKLIF,
 } from './kurallar.ts';
 import { adayBul, Baslik, Bolum, bugun, mulakatKriterleri, Not, OneriRozeti, Puan, pozisyonBul, Tanimlar } from './parcalar.tsx';
@@ -57,6 +57,8 @@ export function AdaySayfasi(o: IkEkranOzellikleri) {
 
   const asamaYaz = (s: string) => {
     if (s === asama) return;
+    const engel = kvkkEngeli(a, s);
+    if (engel) { bildir('hata', engel); return; }
     if (s === ISE_ALINDI) { iseAl.baslat(a); return; }
     void komut.kaydet({ ...a, asama: s }).then(() => { bildir('tamam', `${adayAdi(a)}: ${s}`); });
   };
