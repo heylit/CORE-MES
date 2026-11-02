@@ -31,11 +31,13 @@ export function gorulenKaynaklar(islemler: readonly string[]): { okunan: TakvimK
 // İzin (1191 a): ik.oku ya da ik.izin-oku olan bütün personelin iznini, öteki kişi yalnız kendi iznini görür.
 export const butunIzinleriGorurMu = (islemler: readonly string[]): boolean => islemler.includes('ik.oku') || islemler.includes('ik.izin-oku');
 
-// Aynı gün içinde kaynak sırası sabittir: ekran ve CSV her okumada aynı sırayı görür.
+// Aynı gün içinde kaynak sırası sabittir: ekran ve CSV her okumada aynı sırayı görür. Kaynak içinde kimlik sayı gibi sıralanır
+// ("4" "10"dan önce); ay görünümünde "+N daha"ya eski kayıt değil yenisi kalır (TKV-4).
+const KIMLIK_SIRASI = new Intl.Collator('tr', { numeric: true });
 export function kayitlariSirala(kayitlar: readonly TakvimKaydi[]): TakvimKaydi[] {
   const sira = (k: TakvimKaynagi): number => TAKVIM_KAYNAKLARI.indexOf(k);
   return [...kayitlar].sort((a, b) => (a.tarih !== b.tarih ? (a.tarih < b.tarih ? -1 : 1)
-    : a.kaynak !== b.kaynak ? sira(a.kaynak) - sira(b.kaynak) : a.kimlik < b.kimlik ? -1 : a.kimlik > b.kimlik ? 1 : 0));
+    : a.kaynak !== b.kaynak ? sira(a.kaynak) - sira(b.kaynak) : KIMLIK_SIRASI.compare(a.kimlik, b.kimlik)));
 }
 
 const GUN_MS = 86_400_000;

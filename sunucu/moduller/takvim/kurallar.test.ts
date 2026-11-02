@@ -13,12 +13,12 @@ test('TK-K1: yetkisi olmayan kaynak hiç görünmez; emir kaynakları emir liste
   });
 });
 
-test('TK-K2: kayıtlar tarihe, aynı günde kaynak sırasına, sonra kimliğe göre dizilir', () => {
+test('TK-K2: kayıtlar tarihe, aynı günde kaynak sırasına, sonra kimliğe sayı gibi göre dizilir (TKV-4: 9, 10dan önce)', () => {
   const k = (kaynak: TakvimKaydi['kaynak'], tarih: string, kimlik: string): TakvimKaydi =>
     ({ kaynak, kimlik, tarih, no: null, baslik: 'B', ilgili: null, durum: 'D', bitti: false });
   const sirali = kayitlariSirala([k('vergi', '2031-03-02', '1'), k('siparis', '2031-03-02', '9'), k('siparis', '2031-03-02', '10'), k('izin', '2031-03-01', '5')]);
   assert.deepEqual(sirali.map((x) => `${x.tarih} ${x.kaynak} ${x.kimlik}`), [
-    '2031-03-01 izin 5', '2031-03-02 siparis 10', '2031-03-02 siparis 9', '2031-03-02 vergi 1',
+    '2031-03-01 izin 5', '2031-03-02 siparis 9', '2031-03-02 siparis 10', '2031-03-02 vergi 1',
   ]);
 });
 

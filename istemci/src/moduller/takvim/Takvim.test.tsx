@@ -39,9 +39,9 @@ function sunucuKur(yanit: () => Response = () => json(200, CEVAP), gecikenler: u
   return yollar;
 }
 
-function cizdir(ekran: React.ReactNode) {
+function cizdir(ekran: React.ReactNode, adres = '/takvim') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={istemci}><MemoryRouter>{ekran}</MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={istemci}><MemoryRouter initialEntries={[adres]}>{ekran}</MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2031-03-12T09:00:00Z')); });
@@ -141,5 +141,33 @@ describe('Takvim ekranı', () => {
     fireEvent.click(screen.getAllByText(/Mazeret izni|Deneme Kişi/)[0]!);
     const pencere = await screen.findByRole('dialog');
     expect(within(pencere).getByText('Sürüyor')).toBeTruthy();
+  });
+
+  it('TKV-4: kip ve dönem adresten açılır; kaynak sayısı yalnız açık kayıtları sayar; arama Türkçe harfi yok sayar', async () => {
+    const yollar = sunucuKur(() => json(200, { ...CEVAP, kayitlar: [...CEVAP.kayitlar, kayit({ kimlik: '8', tarih: '2031-03-14', no: 'S-8', baslik: 'Sipariş S-8', ilgili: 'Çağrı Şirketi' })] }));
+    cizdir(<Takvim />, '/takvim?kip=hafta&donem=2031-04-09');
+    expect(await screen.findByText('7 Nis – 13 Nis')).toBeTruthy();
+    expect(yollar).toContain('/takvim?baslangic=2031-04-07&bitis=2031-04-13');
+    const kaynaklar = screen.getByRole('group', { name: 'Kaynaklar' });
+    expect(within(within(kaynaklar).getByText('Planlı duruş').closest('button')!).getByText('0')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gündem'));
+    fireEvent.change(screen.getByPlaceholderText('No, firma, kişi ara'), { target: { value: 'CAGRI sirketi' } });
+    expect(screen.getByText('Sipariş S-8')).toBeTruthy();
+    expect(screen.queryByText('Sipariş S-1')).toBeNull();
+  });
+
+  it('TKV-4: tablo metni Türkçe harf ve sayı sırasıyla dizer', async () => {
+    sunucuKur(() => json(200, { ...CEVAP, kaynaklar: ['siparis'], kayitlar: [
+      kayit({ kimlik: '10', no: 'S-10', baslik: 'Sipariş S-10', ilgili: 'Zeta' }),
+      kayit({ kimlik: '9', no: 'S-9', baslik: 'Sipariş S-9', ilgili: 'Çınar' }),
+      kayit({ kimlik: '11', no: 'S-11', baslik: 'Sipariş S-11', ilgili: 'Can' }),
+    ] }));
+    cizdir(<TakvimTablo />, '/takvim/tablo');
+    await screen.findByRole('table', { name: 'Takvim kayıtları' });
+    fireEvent.click(screen.getByRole('button', { name: /İlgili/ }));
+    const ilgili = () => screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[3]!.textContent);
+    expect(ilgili()).toEqual(['Can', 'Çınar', 'Zeta']);
+    fireEvent.click(screen.getByRole('button', { name: /Kayıt/ }));
+    expect(screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[2]!.textContent)).toEqual(['Sipariş S-9', 'Sipariş S-10', 'Sipariş S-11']);
   });
 });

@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { TakvimCevabi, TakvimGecikenCevabi, TakvimKaydi, TakvimKaynagi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Sekmeler, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import type { Siralama } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KAYNAK_BILGISI, aramayaUyar, gecikti, gorunenGun, kalanMetni, ozeteUyar, type OzetSuzgeci } from './kaynaklar.ts';
+import { KAYNAK_BILGISI, aramayaUyar, gecikti, gorunenGun, kalanMetni, ozeteUyar, turkceKarsilastir, type OzetSuzgeci } from './kaynaklar.ts';
 import {
   GUN_ADLARI, ayBasi, ayBasligi, ayEkle, ayIzgarasi, gunEkle, gunler, gunNo, haftaBasi, haftaBasligi, haftaGunu, tarihMetni,
 } from './tarih.ts';
@@ -68,12 +68,13 @@ function Ozet({ kayitlar, bugun, secili, sec }: { kayitlar: TakvimKaydi[]; bugun
 }
 
 function KaynakSeridi({ veri, kapali, degistir }: { veri: TakvimCevabi; kapali: ReadonlySet<TakvimKaynagi>; degistir: (k: TakvimKaynagi) => void }) {
+  // Sayı açık kayıtlardır; özet, gündem ve kanbanla aynı sayılır (TKV-4). Bitenler tabloda "Bitenleri göster" ile görülür.
   const sayilar = new Map<TakvimKaynagi, number>();
-  for (const k of veri.kayitlar) sayilar.set(k.kaynak, (sayilar.get(k.kaynak) ?? 0) + 1);
+  for (const k of veri.kayitlar) if (!k.bitti) sayilar.set(k.kaynak, (sayilar.get(k.kaynak) ?? 0) + 1);
   return (
     <div className="tc-takvim-kaynaklar" role="group" aria-label="Kaynaklar">
       {veri.kaynaklar.map((k) => (
-        <button key={k} type="button" className="tc-takvim-cip" data-kaynak={k} aria-pressed={!kapali.has(k)} onClick={() => degistir(k)}>
+        <button key={k} type="button" className="tc-takvim-cip" data-kaynak={k} aria-pressed={!kapali.has(k)} title={`${KAYNAK_BILGISI[k].ad}: açık kayıt sayısı`} onClick={() => degistir(k)}>
           <span className="tc-takvim-nokta" aria-hidden="true" />{KAYNAK_BILGISI[k].ad}<span className="mono">{sayilar.get(k) ?? 0}</span>
         </button>
       ))}
@@ -88,10 +89,12 @@ function KaynakSeridi({ veri, kapali, degistir }: { veri: TakvimCevabi; kapali: 
 
 function OlayDugmesi({ kayit, bugun, ac }: { kayit: TakvimKaydi; bugun: string; ac: (k: TakvimKaydi) => void }) {
   const b = KAYNAK_BILGISI[kayit.kaynak];
+  // Emrin başlangıcı ve teslimi aynı emir numarasını taşır; ızgarada simgeyle ayrılır (TKV-4).
+  const simgeli = kayit.kaynak === 'emir-plan' || kayit.kaynak === 'emir-bitis';
   return (
     <button type="button" className="tc-takvim-olay" data-kaynak={kayit.kaynak} data-gec={gecikti(kayit, bugun) || undefined} data-bitti={kayit.bitti || undefined}
-      title={`${b.ad}: ${kayit.baslik}${kayit.ilgili ? ` · ${kayit.ilgili}` : ''}`} onClick={() => ac(kayit)}>
-      <span className="tc-takvim-nokta" aria-hidden="true" />
+      title={`${b.ad}: ${kayit.baslik}${kayit.ilgili ? ` · ${kayit.ilgili}` : ''}`} aria-label={`${b.ad}: ${kayit.no ?? kayit.baslik}`} onClick={() => ac(kayit)}>
+      {simgeli ? <Simge ad={b.simge} boyut="k" /> : <span className="tc-takvim-nokta" aria-hidden="true" />}
       <span className="tc-takvim-olay-metin">{kayit.no ?? kayit.baslik}{kayit.ilgili ? ` ${kayit.ilgili}` : ''}</span>
     </button>
   );
@@ -180,13 +183,16 @@ function Gundem({ kayitlar, bugun, ac }: { kayitlar: TakvimKaydi[]; bugun: strin
 
 type SiralamaAlani = 'tarih' | 'kaynak' | 'no' | 'ilgili' | 'durum';
 const KAYNAK_SIRASI = Object.keys(KAYNAK_BILGISI);
+// "Kayıt" sütunu başlığı gösterir, başlığa göre sıralanır; metinler Türkçe harf sırasıyla (TKV-4).
 const SIRALAMA_DEGERI: Record<SiralamaAlani, (k: TakvimKaydi) => string | number> = {
   tarih: (k) => k.tarih,
   kaynak: (k) => KAYNAK_SIRASI.indexOf(k.kaynak),
-  no: (k) => k.no ?? k.baslik,
+  no: (k) => k.baslik,
   ilgili: (k) => k.ilgili ?? '',
   durum: (k) => k.durum,
 };
+const karsilastir = (x: string | number, y: string | number): number =>
+  (typeof x === 'string' && typeof y === 'string' ? turkceKarsilastir(x, y) : x < y ? -1 : x > y ? 1 : 0);
 
 function TabloGorunumu({ kayitlar, bugun, ac, ara, araYaz }: { kayitlar: TakvimKaydi[]; bugun: string; ac: (k: TakvimKaydi) => void; ara: string; araYaz: (a: string) => void }) {
   const [bitenler, bitenlerYaz] = useState(false);
@@ -197,9 +203,7 @@ function TabloGorunumu({ kayitlar, bugun, ac, ara, araYaz }: { kayitlar: TakvimK
     const deger = SIRALAMA_DEGERI[s.alan as SiralamaAlani] ?? SIRALAMA_DEGERI.tarih;
     const yon = s.yon === 'artan' ? 1 : -1;
     return [...l].sort((a, b) => {
-      const x = deger(a);
-      const y = deger(b);
-      return (x < y ? -1 : x > y ? 1 : siraliTarih(a, b)) * yon;
+      return (karsilastir(deger(a), deger(b)) || siraliTarih(a, b)) * yon;
     });
   }, [kayitlar, bitenler, siralama]);
   const sutunlar: Sutun<TakvimKaydi>[] = [
@@ -297,12 +301,27 @@ function Ayrinti({ kayit, bugun, kapat }: { kayit: TakvimKaydi | null; bugun: st
 
 const KIPLER = [{ anahtar: 'ay', baslik: 'Ay' }, { anahtar: 'hafta', baslik: 'Hafta' }, { anahtar: 'gundem', baslik: 'Gündem' }] as const;
 const ilkKip = (): Kip => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'gundem' : 'ay');
+// Kip ve dönem adreste durur (`?kip=hafta&donem=2026-11-02`): kaydın ekranından geri gelince takvim aynı yerde açılır (TKV-4).
+const adrestenKip = (d: string | null): Kip | null => (d === 'ay' || d === 'hafta' || d === 'gundem' ? d : null);
+const adrestenGun = (d: string | null): string | null => (d !== null && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) ? d : null);
 
 export function Takvim({ gorunum = 'takvim' }: { gorunum?: Gorunum }) {
   const bugun = tesisGunu(Date.now());
-  const [kip, kipYaz] = useState<Kip>(ilkKip);
-  const [ay, ayYaz] = useState(() => ayBasi(bugun));
-  const [hafta, haftaYaz] = useState(() => haftaBasi(bugun));
+  const [adres, adresYaz] = useSearchParams();
+  const kip = adrestenKip(adres.get('kip')) ?? ilkKip();
+  const donem = adrestenGun(adres.get('donem')) ?? bugun;
+  const ay = ayBasi(donem);
+  const hafta = haftaBasi(donem);
+  const adresiDegistir = (yeniKip: Kip, yeniDonem: string) => {
+    adresYaz((onceki) => {
+      const a = new URLSearchParams(onceki);
+      a.set('kip', yeniKip);
+      if (yeniDonem === bugun) a.delete('donem'); else a.set('donem', yeniDonem);
+      return a;
+    }, { replace: true });
+  };
+  const kipYaz = (k: Kip) => { adresiDegistir(k, donem); };
+
   const [kapali, kapaliYaz] = useState<ReadonlySet<TakvimKaynagi>>(new Set());
   const [ara, araYaz] = useState('');
   const [ozet, ozetYaz] = useState<OzetSuzgeci | null>(null);
@@ -334,10 +353,9 @@ export function Takvim({ gorunum = 'takvim' }: { gorunum?: Gorunum }) {
     if (s !== null && gorunum === 'takvim') kipYaz('gundem');
   };
   const git = (n: number) => {
-    if (kip === 'ay') ayYaz(n === 0 ? ayBasi(bugun) : ayEkle(ay, n));
-    else haftaYaz(n === 0 ? haftaBasi(bugun) : gunEkle(hafta, 7 * n));
+    adresiDegistir(kip, n === 0 ? bugun : kip === 'ay' ? ayEkle(ay, n) : gunEkle(hafta, 7 * n));
   };
-  const haftayaGec = (g: string) => { haftaYaz(haftaBasi(g)); kipYaz('hafta'); };
+  const haftayaGec = (g: string) => { adresiDegistir('hafta', haftaBasi(g)); };
 
   if (pencere.isPending || eskiGecikenler.isPending) return <Kart baslik="Takvim"><DurumKutusu durum="yukleniyor" /></Kart>;
   if (pencere.isError || eskiGecikenler.isError) {

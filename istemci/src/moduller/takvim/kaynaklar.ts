@@ -1,6 +1,7 @@
 import type { TakvimKaydi, TakvimKaynagi } from '#paylasilan/sozlesme/takvim.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
+import { sadelestir } from '../../ortak/rota/arama-dizini.ts';
 import { gunFarki } from './tarih.ts';
 
 // Renk takvim.css'te kaynağa göre verilir (data-kaynak); yol kaydın kendi ekranıdır, takvim tarihi değiştirmez (1161 a).
@@ -10,7 +11,8 @@ export const KAYNAK_BILGISI: Readonly<Record<TakvimKaynagi, { ad: string; simge:
   'emir-bitis': { ad: 'Emir teslimi', simge: 'flag', modul: 'Üretim Emirleri', yol: (k) => `/uretim-emirleri/${k.kimlik}` },
   'sevk': { ad: 'Sevk', simge: 'truck', modul: 'Sevkiyat', yol: () => '/sevkiyat/tum-isler' },
   'satin-alma': { ad: 'Satın alma teslimi', simge: 'box', modul: 'Satın Alma', yol: () => '/satin-alma/talepler' },
-  'kalibrasyon': { ad: 'Kalibrasyon vadesi', simge: 'ruler', modul: 'Ölçü Aletleri', yol: () => '/kalibrasyon' },
+  // Ölçü aletleri ekranı aleti adresten açar (`?alet=`); öteki kaynakların kayda doğrudan adresi yok, liste ekranı açılır (UYUM-BORCU).
+  'kalibrasyon': { ad: 'Kalibrasyon vadesi', simge: 'ruler', modul: 'Ölçü Aletleri', yol: (k) => `/kalibrasyon?alet=${encodeURIComponent(k.kimlik)}` },
   'denetim': { ad: 'Denetim', simge: 'file', modul: 'Denetim Hazırlığı', yol: () => '/denetim-hazirlik' },
   'izin': { ad: 'İzin', simge: 'user', modul: 'İnsan Kaynakları', yol: () => '/ik/izinler' },
   'vergi': { ad: 'Vergi beyanı', simge: 'lira', modul: 'Finans', yol: () => '/finans/vergi' },
@@ -43,7 +45,12 @@ export function ozeteUyar(k: TakvimKaydi, s: OzetSuzgeci, bugun: string): boolea
   return s === 'bugun' ? g === 0 : s === 'hafta' ? g >= 0 && g <= 6 : g >= 0 && g <= 29;
 }
 
+// Arama Türkçe harfleri ve büyük-küçük farkını yok sayar (kabuğun arama kuralı): "musteri" "Müşteri"yi, "MÜŞTERİ" "Musteri"yi bulur.
 export const aramayaUyar = (k: TakvimKaydi, ara: string): boolean => {
-  const q = ara.trim().toLocaleLowerCase('tr');
-  return q === '' || [k.no, k.baslik, k.ilgili, k.durum, KAYNAK_BILGISI[k.kaynak].ad].join(' ').toLocaleLowerCase('tr').includes(q);
+  const q = sadelestir(ara);
+  return q === '' || sadelestir([k.no, k.baslik, k.ilgili, k.durum, KAYNAK_BILGISI[k.kaynak].ad].join(' ')).includes(q);
 };
+
+// Tablo sıralaması Türkçe harf sırasıyla, sayılar sayı gibi ("SS-9" "SS-10"dan önce).
+const TURKCE = new Intl.Collator('tr', { numeric: true, sensitivity: 'base' });
+export const turkceKarsilastir = (a: string, b: string): number => TURKCE.compare(a, b);

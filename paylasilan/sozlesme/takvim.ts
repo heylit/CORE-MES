@@ -15,9 +15,11 @@ export const AZAMI_TAKVIM_GUNU = 93;
 const gunFarki = (a: string, b: string): number => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000;
 
 // Aralık tesis günüyle verilir, iki uç dahil.
+// Aralık denetimi iki tarih de geçerliyse yapılır; biçim hatasının yanına yanıltıcı aralık iletisi eklenmez (TKV-4).
+const ikisiGecerli = (s: { baslangic: string; bitis: string }): boolean => tarihSemasi.safeParse(s.baslangic).success && tarihSemasi.safeParse(s.bitis).success;
 export const takvimSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi })
-  .refine((s) => gunFarki(s.baslangic, s.bitis) >= 0, { message: 'Bitiş başlangıçtan önce olamaz.', path: ['bitis'] })
-  .refine((s) => gunFarki(s.baslangic, s.bitis) < AZAMI_TAKVIM_GUNU, { message: `En çok ${AZAMI_TAKVIM_GUNU} gün okunur.`, path: ['bitis'] });
+  .refine((s) => !ikisiGecerli(s) || gunFarki(s.baslangic, s.bitis) >= 0, { message: 'Bitiş başlangıçtan önce olamaz.', path: ['bitis'] })
+  .refine((s) => !ikisiGecerli(s) || gunFarki(s.baslangic, s.bitis) < AZAMI_TAKVIM_GUNU, { message: `En çok ${AZAMI_TAKVIM_GUNU} gün okunur.`, path: ['bitis'] });
 export type TakvimSorgusu = z.output<typeof takvimSorgusu>;
 
 // kimlik kaynağın içinde tekildir ve kaynağın kendi ekranını açar (sipariş id'si, alet no ...). no ekranda gösterilen belge numarasıdır.
