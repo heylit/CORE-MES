@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { IkPuantajCevabi } from '#paylasilan/sozlesme/ik.ts';
-import type { Bordro, Devam, Izin, Personel } from '../tipler.ts';
+import type { Bordro, Devam, Gorusme, Izin, Personel } from '../tipler.ts';
 import {
   izinGunuMetni,
   aydaCalisiyor, ayinGunleri, bekleyenTalepler, bordroAlani, bordroYillari, bugunIzinde, cakisanEkipIzinleri, calisiyorMu,
-  denemede, enFazlaAyniGun, kesinBordrolar, kisininIzinleri, mesaiOzeti, performansEtiketi, performansOrtalamasi, puantajHucresi,
+  denemede, enFazlaAyniGun, gorusmecininGorusmeleri, kesinBordrolar, kisininIzinleri, mesaiOzeti, performansEtiketi, performansOrtalamasi, puantajHucresi,
   puantajToplami, sonKararlar, sonrakiIzin, sureMetni, takvimGunu, talepDenetimi, yilToplami,
 } from './kurallar.ts';
 
@@ -224,5 +224,24 @@ describe('puantaj takvimi', () => {
   it('toplam: devamsız gün puantaj ve devam kaydının birleşimi, aynı gün bir kez', () => {
     expect(puantajToplami(k, 'a', '2026-10', devam)).toEqual({ calismaDakika: 540, fazlaDakika: 120, izinGun: 1, devamsizGun: 1 });
     expect(puantajToplami(null, 'a', '2026-10', [])).toEqual({ calismaDakika: 0, fazlaDakika: 0, izinGun: 0, devamsizGun: 0 });
+  });
+});
+
+describe('1854 Görüşmelerim', () => {
+  const g = (id: string, o: Partial<Gorusme>): Gorusme => ({ id, kind: 'intv', candId: 'c', gorusmeciler: ['emp_a'], ...o });
+  it('yalnız görüşmecinin iptal edilmemiş görüşmeleri; önce yaklaşan planlılar yakından uzağa, sonra geçmiş yeniden eskiye', () => {
+    const liste = [
+      g('gecmis_eski', { tarih: '2026-10-01', durum: 'Tamamlandı' }),
+      g('uzak', { tarih: '2026-11-20', saat: '10:00', durum: 'Planlandı' }),
+      g('iptal', { tarih: '2026-11-03', durum: 'İptal' }),
+      g('baskasi', { tarih: '2026-11-03', gorusmeciler: ['emp_b'] }),
+      g('yakin_ogle', { tarih: '2026-11-03', saat: '14:00' }),
+      g('yakin_sabah', { tarih: '2026-11-03', saat: '09:00', durum: 'Planlandı' }),
+      g('gecmis_yeni', { tarih: '2026-10-20', durum: 'Aday gelmedi' }),
+      g('gecmis_planli', { tarih: '2026-10-30', durum: 'Planlandı' }),
+    ];
+    expect(gorusmecininGorusmeleri(liste, 'emp_a', '2026-11-02').map((x) => x.id))
+      .toEqual(['yakin_sabah', 'yakin_ogle', 'uzak', 'gecmis_planli', 'gecmis_yeni', 'gecmis_eski']);
+    expect(gorusmecininGorusmeleri(liste, 'emp_c', '2026-11-02')).toEqual([]);
   });
 });

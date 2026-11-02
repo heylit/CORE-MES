@@ -7,6 +7,7 @@ import { IzinCipi } from '../ortak/DurumCipi.tsx';
 import { ekipKimlikleri } from '../rol.ts';
 import { CalismaBelgesi, BordroPusulasi } from './belgeler.tsx';
 import { IletisimPenceresi } from './iletisim.tsx';
+import { GorusmelerimKarti } from './gorusmelerim.tsx';
 import { IzinTalebi } from './izin-talebi.tsx';
 import {
   izinGunuMetni,
@@ -58,6 +59,7 @@ export function BenimSayfam(o: IkEkranOzellikleri) {
             </KartAlti>
           </Kart>
         )}
+        <GorusmelerimKarti o={o} personel={e.id} />
         <Kart baslik="Yıllık izin">
           {!bakiye ? <DurumKutusu durum="yukleniyor" mesaj="Hesap motoru hazırlanıyor" /> : (
             <>

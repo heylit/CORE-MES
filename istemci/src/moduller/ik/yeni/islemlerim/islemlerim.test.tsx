@@ -53,6 +53,26 @@ describe('P6 Benim sayfam', () => {
     expect(screen.getByRole('button', { name: '1 talep onay bekliyor' })).toBeTruthy();
   });
 
+  it('1854: görüşmeci Görüşmelerim kartında kendi görüşmesini ve adayın ayrıntısını görür; görüşmesi olmayanda kart yok', async () => {
+    // Uydurma aday ve görüşme; sunucunun görüşmeciye verdiği daraltılmış alanlar (iletişim ve ücret yok).
+    const ek: IkKayit[] = [
+      { kimlik: 'job_g', tur: 'job', surum: 1, govde: { id: 'job_g', kind: 'job', baslik: 'Kalite teknisyeni' } },
+      { kimlik: 'cand_g', tur: 'cand', surum: 1, govde: { id: 'cand_g', kind: 'cand', ad: 'Deniz', soyad: 'Aday', jobId: 'job_g', asama: 'Mülakat', tecrubeYil: 4, ozet: 'CNC torna deneyimi' } },
+      { kimlik: 'intv_g', tur: 'intv', surum: 1, govde: { id: 'intv_g', kind: 'intv', candId: 'cand_g', tur: 'Teknik mülakat', tarih: '2026-10-28', saat: '10:00', durum: 'Planlandı', gorusmeciler: ['emp_a'] } },
+    ];
+    ikAc('/ik-islemlerim', { kullanici: MUDUR, veri: veri({ rol: 'yonetici', personelKimlik: 'emp_a', kisi: { id: 3, ad: 'Deneme Mudur' } }, ek) });
+    expect(await screen.findByRole('heading', { name: 'Görüşmelerim' })).toBeTruthy();
+    expect(screen.getByText('Kalite teknisyeni, Teknik mülakat, 28.10.2026, 10:00')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Deniz Aday görüşmesinin ayrıntısı' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Görüşme: Deniz Aday' });
+    expect(within(pencere).getByText('4 yıl')).toBeTruthy();
+    expect(within(pencere).getByText('CNC torna deneyimi')).toBeTruthy();
+    cleanup();
+    ikAc('/ik-islemlerim', { kullanici: CALISAN, veri: veri({ rol: 'calisan', personelKimlik: 'emp_b', kisi: { id: 4, ad: 'Deneme Calisan' } }, ek) });
+    expect(await screen.findByRole('heading', { name: 'Merhaba, Mehmet' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Görüşmelerim' })).toBeNull();
+  });
+
   it('iletişim bilgisini kendi ucuyla yazar (IK-14)', async () => {
     const { yazmalar } = ikAc('/ik-islemlerim', { kullanici: CALISAN, veri: calisan() });
     fireEvent.click(await screen.findByRole('button', { name: 'Güncelle' }));

@@ -108,3 +108,8 @@
 .tc-ikm-pusula tr[data-toplam] td { font-weight: 700; }
 .tc-ikm-imzalar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-5); margin-top: var(--b-6); text-align: center; }
 .tc-ikm-belge-dip { margin-top: var(--b-5); font-size: var(--yazi-xs); color: var(--muted); }
+
+/* Görüşmelerim: satır sağında durum ve ayrıntı düğmesi; dar ekranda alta kırılır. Aday özeti boşluksuz metinde de taşmaz. */
+.tc-ikm-gorusme-sag { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+.tc-ikm-ara-baslik { margin: var(--b-4) 0 var(--b-2); font-size: var(--yazi-s); font-weight: 600; color: var(--muted); }
+.tc-ikm-gorusme-ozet { white-space: pre-line; overflow-wrap: anywhere; }

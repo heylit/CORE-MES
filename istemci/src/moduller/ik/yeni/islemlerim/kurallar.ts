@@ -1,5 +1,5 @@
 import type { IkPuantajCevabi, IkPuantajKaydi, PuantajDurumu } from '#paylasilan/sozlesme/ik.ts';
-import type { Bordro, Devam, Egitim, Izin, Performans, Personel } from '../tipler.ts';
+import type { Bordro, Devam, Egitim, Gorusme, Izin, Performans, Personel } from '../tipler.ts';
 
 // IK İşlemlerim ekranlarının saf hesapları. Tarih 'GGGG-AA-GG' metnidir; karşılaştırma metin sırasıyla yapılır.
 // Kaynak: ik-modulu app.js (viewMe, viewMyLeaves, viewMyPays, viewApprovals, viewTeam, viewTeamMember, viewTeamCal)
@@ -269,6 +269,20 @@ export function performansEtiketi(ortalama: number | null): { etiket: string; to
 
 export function kisininEgitimleri(egitimler: readonly Egitim[], personel: string): Egitim[] {
   return egitimler.filter((x) => (x.katilimcilar ?? []).includes(personel)).sort((a, b) => (b.tarih ?? '').localeCompare(a.tarih ?? ''));
+}
+
+/* ---------- Görüşmelerim (1844 IK-9 a): görüşmecinin kendi görüşmeleri ---------- */
+
+// Sunucu İK dışındakine yalnız görüşmeci olduğu, iptal edilmemiş görüşmeleri verir; İK hepsini aldığı için süzgeç burada da durur.
+// Sıra: bugün ve sonrası planlı olanlar yakından uzağa, ardından geçmişler yeniden eskiye.
+const GORUSME_IPTAL = 'İptal';
+const zaman = (g: Gorusme): string => `${g.tarih ?? ''} ${g.saat ?? ''}`;
+export const gorusmeYaklasanMi = (g: Gorusme, bugun: string): boolean => (g.durum ?? 'Planlandı') === 'Planlandı' && (g.tarih ?? '') >= bugun;
+export function gorusmecininGorusmeleri(gorusmeler: readonly Gorusme[], personel: string, bugun: string): Gorusme[] {
+  const benim = gorusmeler.filter((g) => g.durum !== GORUSME_IPTAL && (g.gorusmeciler ?? []).includes(personel));
+  const yaklasan = benim.filter((g) => gorusmeYaklasanMi(g, bugun)).sort((a, b) => zaman(a).localeCompare(zaman(b)));
+  const gecmis = benim.filter((g) => !gorusmeYaklasanMi(g, bugun)).sort((a, b) => zaman(b).localeCompare(zaman(a)));
+  return [...yaklasan, ...gecmis];
 }
 
 /* ---------- Mesailerim: salt okunur puantaj takvimi (ik_puantaj_ekran.js TmiKisiTakvim, TmiPuHucre, TmiPuToplam) ---------- */
