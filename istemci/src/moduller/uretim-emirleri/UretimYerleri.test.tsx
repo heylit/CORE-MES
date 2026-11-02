@@ -132,6 +132,19 @@ describe('İzleme ayrıntısında adım durumu (1787c)', () => {
     expect(within(satirlar[2]!).queryByText(/karar bekleyen/)).toBeNull();
   });
 
+  it('K21 a: alt parçası bitmemiş montaj adımı uyarı taşır; eksik yoksa uyarı yok', async () => {
+    const alt = { ad: 'K1', malzeme: { id: 77, kod: 'DNM-ALT', ad: 'Deneme burç' } };
+    sunucuKur(OKUYUCU, yollar([
+      adim(1020, { dal: { ...alt, kaynakOpNo: 20 }, eksikAltParcalar: [] }),
+      adim(40, { durum: 'calisiyor', eksikAltParcalar: [alt] }),
+    ]));
+    ac(ekran, '/uretim-emirleri/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    expect(within(satirlar[1]!).getByText('Alt parça bekleniyor: K1 DNM-ALT')).toBeTruthy();
+    expect(within(satirlar[0]!).queryByText(/Alt parça bekleniyor/)).toBeNull();
+  });
+
   it('emrin evinde (Reçete ve Rota) tablo değişmez: durum ve sağlam sütunu, dal etiketi yok', async () => {
     sunucuKur(YAZAR, yollar([adim(1010, { dal: { ad: 'K1', malzeme: { id: 77, kod: 'DNM-ALT', ad: 'Deneme burç' }, kaynakOpNo: 10 }, kararBekliyor: 2 })]));
     ac(ev, '/ev/3');

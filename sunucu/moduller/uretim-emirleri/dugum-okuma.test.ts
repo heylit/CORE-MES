@@ -83,6 +83,13 @@ describe('uretim-emirleri: iş emri düğümü okuması (gerçek PostgreSQL)', (
     const dallar = async (emirId: number) => (await o().vt.tx((db) => adimliAyrinti(db, emirId))).isEmirleri.map((i) => [i.opNo, i.dal?.ad ?? null, i.dal?.malzeme.id ?? null, i.dal?.kaynakOpNo ?? null]);
     assert.deepEqual(await dallar(cok.uretimEmriId), [[1010, 'K1', alt, 10], [10, null, null, null]]);
     assert.deepEqual(await dallar(tek.uretimEmriId), [[10, null, null, null]]);
+    // K21 a: alt parça dalının son adımı tüketen adımın öncülüyse ve bitmemişse tüketen adım eksik alt parça uyarısı taşır.
+    await o().sahip.sorgu('INSERT INTO uretim_emirleri_is_emri_dali (is_emri_id, dal) VALUES ($1, NULL) ON CONFLICT DO NOTHING', [kokAdim]);
+    await o().sahip.sorgu("INSERT INTO uretim_emirleri_is_emri_onculu (is_emri_id, oncul_is_emri_id, tur, devir_adedi) VALUES ($1, $2, 'bekleyen', NULL)", [kokAdim, altAdim]);
+    const eksikler = async () => (await o().vt.tx((db) => adimliAyrinti(db, cok.uretimEmriId))).isEmirleri.map((i) => [i.opNo, (i.eksikAltParcalar ?? []).map((p) => [p.ad, p.malzeme.id])]);
+    assert.deepEqual(await eksikler(), [[1010, []], [10, [['K1', alt]]]]);
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 4 WHERE id = $1", [altAdim]);
+    assert.deepEqual(await eksikler(), [[1010, []], [10, []]], 'alt parça dalı bitince uyarı kalkar');
     assert.equal((await o().vt.tx((db) => isEmriDugumleri(db, []))).size, 0);
   });
 });

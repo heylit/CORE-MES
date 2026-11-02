@@ -560,6 +560,9 @@ export const isEmriSemasi = z.object({
   // Çok katmanlı emirde alt parçanın adımı (1476): dal adı ("K1"), alt parça ve kendi rotasındaki op no; kök adımında ya da tek
   // katmanlı emirde null. İsteğe bağlı: sunucu her zaman yazar.
   dal: z.object({ ad: z.string(), malzeme: kodluKayit, kaynakOpNo: z.number().int() }).nullable().optional(),
+  // K21 a: adım alt parça bitmeden de başlar (626 a); bu adıma giren ve son adımı bitmemiş alt parça dalları uyarı olarak gösterilir.
+  // Bitmiş adımda boştur. İsteğe bağlı: sunucu her zaman yazar.
+  eksikAltParcalar: z.array(z.object({ ad: z.string(), malzeme: kodluKayit })).optional(),
 });
 
 export const adimliEmirAyrintisi = adimliEmirOzeti.extend({

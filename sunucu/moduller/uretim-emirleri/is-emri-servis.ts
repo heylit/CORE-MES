@@ -588,7 +588,9 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
   const bilesenler = await s.bilesenleriGetir(db, idler);
   const hareketler = await s.fasonHareketleriGetir(db, idler);
   const yerDegisimleri = await s.uretimYeriDegisimleriGetir(db, idler);
-  const dugumler = new Map((await s.dugumleriGetir(db, [id])).filter((d) => d.dugum !== '0').map((d) => [d.isEmriId, d]));
+  const tumDugumler = await s.dugumleriGetir(db, [id]);
+  const dugumler = new Map(tumDugumler.filter((d) => d.dugum !== '0').map((d) => [d.isEmriId, d]));
+  const dugumOf = new Map(tumDugumler.map((d) => [d.isEmriId, d.dugum]));
   const kararlar = new Map((await s.adimKararSayaclariGetir(db, [id])).flatMap((k) => (k.isEmriId === null ? [] : [[k.isEmriId, k.kararBekliyor]])));
   const ad = await adlariAl(db, kendi, adaylar, [...bilesenler.map((b) => b.malzemeNo), ...[...dugumler.values()].map((d) => d.malzemeNo)]);
   const kisi = await kisiAdlari(db, [...hareketler.map((h) => h.kisiId), ...yerDegisimleri.map((d) => d.kisiId)]);
@@ -599,6 +601,17 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     if (d === undefined) return null;
     // Dal adı rota modülünün kuralıyla aynıdır: "0.1.2" -> "K1.2".
     return { ad: `K${d.dugum.slice(2)}`, malzeme: ad.malzeme.get(d.malzemeNo) ?? { id: d.malzemeNo, kod: null, ad: `#${d.malzemeNo}` }, kaynakOpNo: d.kaynakOpNo };
+  };
+  // Başka düğümün son adımı bu adımın öncülüyse o alt parça bu adıma girer; o adım bitmemişse alt parça eksiktir.
+  const durumOf = new Map(kendi.map((i) => [i.id, i.durum]));
+  const eksikAltParcalar = (i: IsEmriSatiri): NonNullable<IsEmri['eksikAltParcalar']> => {
+    if (i.durum === 'tamam') return [];
+    return (i.onculler ?? []).flatMap((o) => {
+      const alt = dugumler.get(o.id);
+      if (alt === undefined || !alt.dugumSonu || alt.dugum === dugumOf.get(i.id) || durumOf.get(o.id) === 'tamam') return [];
+      const d = dalOf(o.id);
+      return d ? [{ ad: d.ad, malzeme: d.malzeme }] : [];
+    });
   };
   const isEmirleri: IsEmri[] = kendi.map((i) => {
     const kendiHareketleri = hareketler.filter((h) => h.isEmriId === i.id);
@@ -627,6 +640,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
       },
       kararBekliyor: kararlar.get(i.id) ?? 0,
       dal: dalOf(i.id),
+      eksikAltParcalar: eksikAltParcalar(i),
     };
   });
   const altEmirIdleri = (await s.altPartilerGetir(db, [id])).filter((a) => a.ustEmirId === id && a.durum !== 'iptal').map((a) => a.id);

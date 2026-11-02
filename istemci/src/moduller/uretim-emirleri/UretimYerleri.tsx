@@ -54,6 +54,10 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
           {a.ad}
           {otomatikGkkMi(a) && <> <Rozet ton="bilgi">Otomatik GKK</Rozet></>}
           {izleme && a.dal && <> <Rozet ton="bilgi">{a.dal.ad}</Rozet> <small>{dalMetni(a.dal)}</small></>}
+          {/* K21 a: adım alt parça bitmeden de başlar; eksik alt parça engel değil uyarıdır. */}
+          {izleme && (a.eksikAltParcalar ?? []).map((p) => (
+            <span key={p.ad}> <Rozet ton="uyari">{`Alt parça bekleniyor: ${p.ad} ${p.malzeme.kod ?? p.malzeme.ad}`}</Rozet></span>
+          ))}
         </>
       ),
     },
