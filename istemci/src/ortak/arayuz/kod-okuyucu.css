@@ -12,3 +12,21 @@
 .tc-kod-okuyucu-satir .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-kod-okuyucu-satir .tc-dugme { inline-size: var(--alan-boy); block-size: var(--alan-boy); padding: 0; justify-content: center; }
 .tc-kod-okuyucu-sik .tc-kod-okuyucu-kamera[hidden] { display: none; }
+/* 1906: okutma sonucu. Çerçeve bir an tonun rengini alır; son beş okutma kod alanının altında şerittir. */
+.tc-kod-okuyucu[data-ton] .tc-alan-kutu { transition: border-color .15s, box-shadow .15s; }
+.tc-kod-okuyucu[data-ton="tamam"] .tc-alan-kutu { border-color: var(--run); box-shadow: 0 0 0 var(--b-1) color-mix(in srgb, var(--run) 35%, transparent); }
+.tc-kod-okuyucu[data-ton="uyari"] .tc-alan-kutu { border-color: var(--hold); box-shadow: 0 0 0 var(--b-1) color-mix(in srgb, var(--hold) 35%, transparent); }
+.tc-kod-okuyucu[data-ton="hata"] .tc-alan-kutu { border-color: var(--stop); box-shadow: 0 0 0 var(--b-1) color-mix(in srgb, var(--stop) 45%, transparent); }
+.tc-kod-okuyucu-serit { display: grid; gap: var(--b-2); min-inline-size: 0; }
+.tc-kod-okuyucu-serit-ust { display: flex; justify-content: space-between; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-s); }
+.tc-kod-okuyucu-ses[aria-pressed="false"] { color: var(--muted); }
+.tc-kod-okuyucu-serit-bos { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-kod-okuyucu-serit ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-kod-okuyucu-serit li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: center; padding: var(--b-1) var(--b-2);
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); flex: 1 1 12rem; max-inline-size: 16rem; min-inline-size: 0; font-size: var(--yazi-xs); }
+.tc-kod-okuyucu-serit li b { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-kod-okuyucu-serit li > span:last-child { grid-column: 2; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-kod-okuyucu-nokta { grid-row: span 2; inline-size: var(--b-2); block-size: var(--b-2); border-radius: var(--yari-tam); background: var(--run); }
+.tc-kod-okuyucu-serit li[data-ton="uyari"] .tc-kod-okuyucu-nokta { background: var(--hold); }
+.tc-kod-okuyucu-serit li[data-ton="hata"] .tc-kod-okuyucu-nokta { background: var(--stop); }
+@media (prefers-reduced-motion: reduce) { .tc-kod-okuyucu[data-ton] .tc-alan-kutu { transition: none; } }

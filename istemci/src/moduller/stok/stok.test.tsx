@@ -829,21 +829,56 @@ describe('Hazırlık listesi', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/toplamalar/3/adimlar/11/topla')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/toplamalar/3/adimlar/11/topla')!.govde).toEqual({ surum: 1 });
   });
-  it('azı kısmi toplamadır ve miktarla gider; okutulan kod gözle ya da lotla eşleşmezse toplanmaz', async () => {
-    const istekler = sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, T), 'POST /stok/toplamalar/3/adimlar/11/topla': () => json(200, T) });
+  // 1907 a: okutma isteğe bağlıdır; okutulan göz ve lot denetlenir. Lot etiketi `LOT:` önekiyle gelir ve stok çözümüyle partiye çevrilir.
+  const lotCozumu = (partiId: number, lotNo: string, malzemeId = 901) => ({ tur: 'lot', parti: { id: partiId, lotNo, etiket: lotNo }, ozet: { id: malzemeId, tur: 'sarf', kod: 'SR-001', ad: 'Eldiven', onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' }, toplam: '2', bakiyeler: [] });
+  const lotYolu = (kod: string) => `GET /stok/kod-coz?kod=${encodeURIComponent(kod)}`;
+  const lotlar = {
+    [lotYolu('LOT:LT-000041')]: () => json(200, lotCozumu(4, 'LT-000041')),
+    [lotYolu('LOT:LT-000042')]: () => json(200, lotCozumu(5, 'LT-000042')),
+    [lotYolu('LOT:LT-000077')]: () => json(200, lotCozumu(7, 'LT-000077', 902)),
+  };
+  const okut = (kod: string) => {
+    fireEvent.change(screen.getByLabelText('Kod'), { target: { value: kod } });
+    fireEvent.submit(screen.getByLabelText('Kod').closest('form')!);
+  };
+  it('azı kısmi toplamadır ve miktarla gider; okutulan göz eşleşmezse toplanmaz, doğru göz ve lot etiketi (LOT: önekli) toplatır', async () => {
+    const LOTLU = { ...T, adimlar: [{ ...T.adimlar[0], partiId: 4 }, T.adimlar[1]] };
+    const istekler = sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, LOTLU), ...lotlar, 'POST /stok/toplamalar/3/adimlar/11/topla': () => json(200, LOTLU) });
     ac('/stok/hazirlik/3');
     const dugme = await screen.findByRole('button', { name: 'Toplandı' }) as HTMLButtonElement;
-    fireEvent.change(screen.getByLabelText(/Okut/), { target: { value: 'A-09-09' } });
+    const denetim = screen.getByRole('status', { name: 'Okutma denetimi' });
+    expect(denetim.textContent).toContain('Göz: okutulmadı');
+    okut('LOC:A-09-09');
     expect(screen.getByText(/eşleşmiyor/)).toBeTruthy();
+    expect(denetim.textContent).toContain('A-09-09 okutuldu, beklenen A-01-02');
     expect(dugme.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/Okut/), { target: { value: 'loc:a-01-02' } });
+    okut('loc:a-01-02');
+    expect(denetim.textContent).toContain('Göz: A-01-02 doğru');
     expect(dugme.disabled).toBe(false);
-    fireEvent.change(screen.getByLabelText(/Okut/), { target: { value: 'LT-000041' } });
+    okut('LOT:LT-000041');
+    await waitFor(() => expect(denetim.textContent).toContain('Lot: LT-000041 doğru'));
     expect(dugme.disabled).toBe(false);
+    expect([...screen.getByRole('list', { name: 'Son okutmalar' }).querySelectorAll('li')].map((l) => l.getAttribute('data-ton'))).toEqual(['tamam', 'tamam', 'hata']);
     fireEvent.change(screen.getByLabelText(/Alınan miktar/), { target: { value: '1,5' } });
     fireEvent.click(dugme);
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/toplamalar/3/adimlar/11/topla')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/toplamalar/3/adimlar/11/topla')!.govde).toEqual({ surum: 1, miktar: '1.5' });
+  });
+  it('aynı malzemenin başka lotu ve başka malzemenin lotu toplatmaz; malzeme etiketi lotu denetlemez, uyarır', async () => {
+    const LOTLU = { ...T, adimlar: [{ ...T.adimlar[0], partiId: 4 }, T.adimlar[1]] };
+    sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, LOTLU), ...lotlar });
+    ac('/stok/hazirlik/3');
+    const dugme = await screen.findByRole('button', { name: 'Toplandı' }) as HTMLButtonElement;
+    const denetim = screen.getByRole('status', { name: 'Okutma denetimi' });
+    okut('LOT:LT-000042');
+    await waitFor(() => expect(denetim.textContent).toContain('Aynı malzeme, başka lot: LT-000042'));
+    expect(dugme.disabled).toBe(true);
+    okut('LOT:LT-000077');
+    await waitFor(() => expect(denetim.textContent).toContain('LT-000077 başka malzemenin; beklenen Eldiven'));
+    expect(dugme.disabled).toBe(true);
+    okut('MLZ:901');
+    expect(denetim.textContent).toContain('Malzeme doğru, lot denetlenmedi');
+    expect(dugme.disabled).toBe(false);
   });
   it('eski sipariş toplama adresi hazırlığa yönlenir', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, T) });

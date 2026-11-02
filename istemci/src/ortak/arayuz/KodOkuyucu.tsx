@@ -3,6 +3,7 @@ import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { useKamera } from '../veri/kamera.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
+import type { OkutmaGecmisi, OkutmaTonu } from './okutma-geribildirimi.ts';
 import './kod-okuyucu.css';
 
 // Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin `okundu`ya gider, ne olduğuna çağıran karar verir. Klavyeden gelen metin
@@ -10,6 +11,8 @@ import './kod-okuyucu.css';
 // El okuyucu klavye gibi yazar ve Enter gönderir; kamerasız bilgisayarda da yalnız bu alan yeter.
 // `kendiliginden` kamerayı açılışta başlatır (okutmak için açılan ekranlar); varsayılan dokunmayla açılıştır.
 // `sik` okuyucuyu tek satıra indirir (kamera, kod, bul, fotoğraf); kamera görüntüsü yalnız açıkken yer kaplar, ipucu alanın açıklaması olur.
+// `geribildirim` (1906, `useOkutmaGecmisi`): çağıranın bildirdiği sonuçla alan bir an yeşil, turuncu ya da kırmızı yanar; son beş okutma
+// altta şerittir, ses oradan kapatılır.
 // Kod alanı açılışta odak alır; pencere içindeyse de (pencere ilk odağı `data-ilk-odak`a verir). `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
@@ -17,9 +20,51 @@ function inceIsaretci(): boolean {
 function yaziAlaniMi(hedef: EventTarget | null): boolean {
   return hedef instanceof HTMLElement && (hedef.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(hedef.tagName));
 }
-export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false }: {
+const PARLAMA_MS = 1200;
+const TON_ADI: Readonly<Record<OkutmaTonu, string>> = { tamam: 'doğru', uyari: 'uyarı', hata: 'yanlış' };
+
+function OkutmaSeridi({ g }: { g: OkutmaGecmisi }) {
+  return (
+    <div className="tc-kod-okuyucu-serit">
+      <div className="tc-kod-okuyucu-serit-ust">
+        <span>Son okutmalar</span>
+        <Dugme className="tc-kod-okuyucu-ses" simge="bell" aria-pressed={g.sesAcik} onClick={g.sesDegistir}>{g.sesAcik ? 'Ses açık' : 'Ses kapalı'}</Dugme>
+      </div>
+      {g.son.length === 0
+        ? <p className="tc-kod-okuyucu-serit-bos">Henüz okutma yok.</p>
+        : (
+          <ol aria-label="Son okutmalar">
+            {g.son.map((k) => (
+              <li key={k.kimlik} data-ton={k.ton}>
+                <span className="tc-kod-okuyucu-nokta" aria-label={TON_ADI[k.ton]} role="img" />
+                <b>{k.kod}</b>
+                <span>{k.zaman} · {k.metin}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+    </div>
+  );
+}
+
+function useParlama(g: OkutmaGecmisi | undefined): OkutmaTonu | null {
+  const ilk = g?.son[0];
+  const [parlak, setParlak] = useState<{ kimlik: number; ton: OkutmaTonu } | null>(null);
+  useEffect(() => {
+    if (!ilk) return;
+    setParlak({ kimlik: ilk.kimlik, ton: ilk.ton });
+    const z = window.setTimeout(() => setParlak((p) => (p?.kimlik === ilk.kimlik ? null : p)), PARLAMA_MS);
+    return () => window.clearTimeout(z);
+  }, [ilk]);
+  return parlak?.ton ?? null;
+}
+
+export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false, geribildirim }: {
   okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean; dokunmatikteOdakYok?: boolean; sik?: boolean;
+  geribildirim?: OkutmaGecmisi;
 }) {
+  const parlak = useParlama(geribildirim);
+  const tonu = parlak ? { 'data-ton': parlak } : {};
   const [elle, setElleDurumu] = useState('');
   const elleSon = useRef('');
   const setElle = (deger: string) => { elleSon.current = deger; setElleDurumu(deger); };
@@ -67,7 +112,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
   );
   if (sik) {
     return (
-      <div className="tc-kod-okuyucu tc-kod-okuyucu-sik">
+      <div className="tc-kod-okuyucu tc-kod-okuyucu-sik" {...tonu}>
         <form ref={form} className="tc-kod-okuyucu-satir" onSubmit={gonder}>
           {kamera.acik
             ? <Dugme simge="x" aria-label="Kamerayı kapat" title="Kamerayı kapat" onClick={kamera.kapat} />
@@ -82,12 +127,13 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
           <span className="tc-kod-okuyucu-cerceve" aria-hidden="true" />
         </div>
         {kamera.hata && <p className="tc-kod-okuyucu-hata" role="status">{kamera.hata}</p>}
+        {geribildirim && <OkutmaSeridi g={geribildirim} />}
         {dosyaGirdisi}
       </div>
     );
   }
   return (
-    <div className="tc-kod-okuyucu">
+    <div className="tc-kod-okuyucu" {...tonu}>
       <div className="tc-kod-okuyucu-kamera" data-acik={kamera.acik ? '' : undefined}>
         <video ref={kamera.video} muted playsInline aria-label="Kamera görüntüsü" />
         <canvas ref={kamera.tuval} hidden />
@@ -102,6 +148,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
         <Dugme tur="birincil" type="submit" yukleniyor={bekliyor}>Bul</Dugme>
       </form>
       <Dugme simge="upload" onClick={() => dosya.current?.click()}>Fotoğraftan oku</Dugme>
+      {geribildirim && <OkutmaSeridi g={geribildirim} />}
       {dosyaGirdisi}
     </div>
   );

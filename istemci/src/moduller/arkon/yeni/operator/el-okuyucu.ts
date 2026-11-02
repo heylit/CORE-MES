@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
+import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 
 // 1337 a: el okuyucu klavye gibi yazar ve Enter ile bitirir. Terminal kod alanı odakta olmasa da onu dinler; dokunmatik ekranda
 // odaksız kalan alana yazılan okutma kaybolmasın. Okuyucuyu insan yazısından ayıran hızdır: tuşlar arası kısa, kod en az üç karakter.
@@ -20,12 +20,15 @@ export function tusEkle(d: OkuyucuDurumu, tus: string, zaman: number): { durum: 
   return { durum: { metin: hizli ? d.metin + tus : tus, son: zaman }, kod: null };
 }
 
-// Terminalin anladığı tek okutma refakat kartıdır (RP:<kimlik>); malzeme ve lot üst çubuktaki Malzeme · Teslim panelinde okutulur.
+// Terminal refakat kartını (RP:<kimlik>) işi açmak için okur. Lot ve malzeme etiketi (1908 a) çalışan işin rota girdisiyle
+// karşılaştırılır; alma ve teslim yine üst çubuktaki Malzeme · Teslim panelindedir.
 // Önek ve biçim paylasilan/kod-sozlugu.ts ile aynıdır (test eşliği sabitler); okutma buraya `okutmaDuzelt`ten geçmiş gelir.
-export type TerminalOkutmasi = { tur: 'kart'; kartId: number } | { tur: 'baska'; kod: string };
+export type TerminalOkutmasi = { tur: 'kart'; kartId: number } | { tur: 'etiket'; kod: string } | { tur: 'baska'; kod: string };
 export function terminalOkutmasi(ham: string): TerminalOkutmasi {
   const k = /^RP:(\d{1,9})$/.exec(ham.replace(/\s+/g, '').toUpperCase());
-  return k ? { tur: 'kart', kartId: Number(k[1]) } : { tur: 'baska', kod: ham.trim() };
+  if (k) return { tur: 'kart', kartId: Number(k[1]) };
+  const t = kodTuru(ham);
+  return t.tur === 'lot' || t.tur === 'malzeme' ? { tur: 'etiket', kod: ham.trim() } : { tur: 'baska', kod: ham.trim() };
 }
 export const KART_DEGIL_ILETISI = 'Refakat kartı değil; malzeme ve lot üst çubuktaki Malzeme · Teslim panelinde okutulur';
 export const KART_YOK_ILETISI = 'Bu kart bu istasyondaki işlerin kartı değil';

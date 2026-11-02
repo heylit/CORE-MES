@@ -86,6 +86,8 @@ import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
+import { lotEslesmesi } from './lot-eslesmesi.ts';
+import { okutulanKoduCoz, useIsGirdileri } from '../../../stok/disari.ts';
 import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
@@ -502,10 +504,21 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.
   // Kişi kartı terminalin değildir: istasyonda kişiyi kabuk değiştirir (1898 a).
+  // 1908 a: lot ya da malzeme etiketi çalışan işin rota girdisiyle karşılaştırılır; yalnız gösterilir, kayıt yazılmaz. Girdisi
+  // bilinmeyen iş (rota girdisiz, yetkisiz ya da ağ yok) bugünkü gibi panele yönlendirir.
+  const { girdiler, istasyonId: girdiIstasyonu } = useIsGirdileri(pv ? null : MACHINE, tmiEmirId(o.pkg));
+  const etiketOkutuldu = (kod: string) => {
+    if (!girdiler || girdiler.length === 0 || girdiIstasyonu === null) { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return; }
+    okutulanKoduCoz(kod).then(
+      (c) => { const e = lotEslesmesi(girdiler, c, girdiIstasyonu); bip(e.ton === 'run' ? 'ok' : 'nok'); say(e.metin, e.ton === 'run' ? 'check' : 'alert', e.ton); },
+      () => { bip('nok'); say('Etiket çözülemedi; bağlantıyı denetle', 'alert', 'stop'); },
+    );
+  };
   const kartOkutuldu = (kod: string): boolean => {
     const t = terminalOkutmasi(kod);
     if (t.tur !== 'kart' && kartNumarasiGibi(kod)) return false;
     awayYaz(false);
+    if (t.tur === 'etiket') { etiketOkutuldu(t.kod); return true; }
     if (t.tur !== 'kart') { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return true; }
     const k = kartlar.find((x) => x.id === t.kartId);
     if (!k) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return true; }

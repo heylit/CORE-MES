@@ -178,6 +178,9 @@ describe('Okutma sonucu', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent('LOC:A1-02-01')}`)).toBe(true));
     await okut(panel, 'UE:7');
     expect(await within(panel).findByText('Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.')).toBeTruthy();
+    // 1906: son okutmalar şeridi; raf doğru okutmadır, eski kart uyarıdır. Seçilen göz bu örnekte tanımsızdır, yanlıştır.
+    const serit = within(panel).getByRole('list', { name: 'Son okutmalar' });
+    expect([...serit.querySelectorAll('li')].map((l) => [l.querySelector('b')?.textContent, l.getAttribute('data-ton')])).toEqual([['UE:7', 'uyari'], ['LOC:A1-02-01', 'hata'], ['RAF:A1', 'tamam']]);
   });
 
   it('tanınmayan kodu söyler, sonuç kartı açmaz', async () => {
@@ -186,6 +189,9 @@ describe('Okutma sonucu', () => {
     await okut(panel, 'XYZ');
     expect(await within(panel).findByText('Kod tanınmadı: XYZ')).toBeTruthy();
     expect(within(panel).queryByRole('region', { name: 'Okutma sonucu' })).toBeNull();
+    const son = within(within(panel).getByRole('list', { name: 'Son okutmalar' })).getAllByRole('listitem');
+    expect(son.map((l) => l.getAttribute('data-ton'))).toEqual(['hata']);
+    expect(son[0]!.textContent).toContain('Kod tanınmadı');
   });
 
   it('yalnız istek yetkisi olan gözleri görmez, stok çözümü istenmez; başka istasyondaki miktarı görür, okutarak alır (soru 93 a, 96 b)', async () => {

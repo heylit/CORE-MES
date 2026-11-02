@@ -23,6 +23,7 @@ export { CokSatir, Girdi, IsaretKutusu, Secim, type Secenek } from './Alan.tsx';
 export { AcKapa } from './AcKapa.tsx';
 export { Pencere } from './Pencere.tsx';
 export { KodOkuyucu } from './KodOkuyucu.tsx';
+export { useOkutmaGecmisi, okutmaSesi, type OkutmaGecmisi, type OkutmaKaydi, type OkutmaTonu } from './okutma-geribildirimi.ts';
 export { ParolaPenceresi } from './ParolaPenceresi.tsx';
 export { Menu, type MenuOgesi } from './Menu.tsx';
 export { OnayPenceresi } from './OnayPenceresi.tsx';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { GozOnerisiCevabi, KodCozCevabi, MalKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, KodOkuyucu, Pencere } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, KodOkuyucu, Pencere, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar } from './gorunum.ts';
@@ -48,16 +48,23 @@ function RafOkut({ b, kapat, bitti }: { b: BekleyenGiris; kapat: () => void; bit
     },
     onSuccess: (c) => { void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); bitti(c.belge.id, `${b.ad} × ${b.miktar} rafa girdi (${c.belge.no}).`); },
   });
+  const gecmis = useOkutmaGecmisi();
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<KodCozCevabi>(`/stok/kod-coz?kod=${encodeURIComponent(kod)}`),
-    onSuccess: (c) => { if (c.tur === 'konum') yaz.mutate(c.konum.id); else setIleti('Rafın ya da gözün etiketini okutun.'); },
+    onError: (e, kod) => gecmis.bildir(kod, 'hata', hataMetni(e)),
+    onSuccess: (c, kod) => {
+      if (c.tur === 'konum') { gecmis.bildir(kod, 'tamam', c.konum.kod); yaz.mutate(c.konum.id); return; }
+      const ileti = 'Rafın ya da gözün etiketini okutun.';
+      gecmis.bildir(kod, 'hata', ileti);
+      setIleti(ileti);
+    },
   });
   const hata = coz.error ?? yaz.error;
   return (
     <Pencere acik kapat={kapat} baslik="Rafı okut">
       <div className="tc-stok-form">
         <p className="tc-stok-not"><strong>{b.ad}</strong> × {b.miktar} için rafı okut.</p>
-        <KodOkuyucu okundu={(kod) => { setIleti(null); coz.mutate(kod.trim()); }} bekliyor={coz.isPending || yaz.isPending} ipucu="Rafın ya da gözün etiketi." />
+        <KodOkuyucu okundu={(kod) => { setIleti(null); coz.mutate(kod.trim()); }} bekliyor={coz.isPending || yaz.isPending} ipucu="Rafın ya da gözün etiketi." geribildirim={gecmis} />
         {oneri.data?.oneri && <Dugme tur="ikincil" yukleniyor={yaz.isPending} onClick={() => yaz.mutate(oneri.data.oneri!.konumId)}>Önerilen: {oneri.data.oneri.kod}</Dugme>}
         {ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{ileti}</p>}
         {hata && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(hata)}</p>}

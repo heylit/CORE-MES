@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Girdi, KodOkuyucu } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, KodOkuyucu, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
@@ -17,6 +17,17 @@ import './stok.css';
 
 const yerMetni = (y: OkutYeri): string => `${y.ad ?? y.kod}${y.ad ? ` (${y.kod})` : ''} · ${KONUM_ETIKETI[y.tur]}`;
 const hedefMetni = (h: OkutHedefi): string => (kisiHedefiMi(h) ? `${h.alici.ad ?? 'Okutulan kişi'} · ${h.istasyon.ad} (${h.istasyon.kod})` : yerMetni(h));
+// 1906: okuyucunun rengi ve son okutmalar şeridi için kısa ad; ayrıntı panelde kalır.
+function okutmaAdi(c: OkutCozCevabi): string {
+  switch (c.tur) {
+    case 'yer': return c.yer.ad ?? c.yer.kod;
+    case 'raf': return `Raf ${c.raf.kod}`;
+    case 'malzeme': return c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;
+    case 'kisi': return c.kisi.ad ?? 'Kişi kodu';
+    case 'eski-kart': return 'Eski refakat kartı';
+    case 'bilinmiyor': return 'Kod tanınmadı';
+  }
+}
 const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.istasyon.ad : h.ad ?? h.kod);
 
 // Malzeme penceresinin üstündeki okuyucu (372 a; eski ayrı QR tuşu, karar 91 a): pencere açılınca hazır bekler. Okutma yoksa altındaki
@@ -39,22 +50,28 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
   const at = (k: OkutKaynagi) => { sepeteAt.komut.mutate(sepetEkleGovdesi(k)); setDurum(OKUT_BASI); setSonuc(`${k.malzemeAd} · ${miktarMetni(k.miktar)} sepete atıldı. Sıradakini okut ya da bırakacağın yeri okut.`); };
   useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); setRaf(null); setBirakHedefi(null); setSonCevap(null); } }, [sifir]);
   const sorgu = useQueryClient();
+  const gecmis = useOkutmaGecmisi();
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
+    onError: (e, kod) => gecmis.bildir(kod, 'hata', hataMetni(e)),
     onSuccess: (c, kod) => {
       setSonuc(null);
+      const ad = okutmaAdi(c);
       setSonCevap(c);
       setRaf(c.tur === 'raf' ? c : null);
       // Stok okuması olana tam çözüm aynı cevapla gelir; Mal kabul ve Sevk bölümleri ikinci kez istemez.
       if ((c.tur === 'malzeme' || c.tur === 'yer') && c.stok) sorgu.setQueryData(stokKodCozAnahtari(kod), c.stok);
       if (sepetli && durum.adim === 'ne') {
         const x = sepetliOkutuldu(durum, c, sepetSatirlari.length > 0);
-        if (x.tur === 'birak') { setRaf(null); setBirakHedefi(x.hedef); return; }
+        if (x.tur === 'birak') { gecmis.bildir(kod, 'tamam', ad); setRaf(null); setBirakHedefi(x.hedef); return; }
         setBirakHedefi(null);
         okundu?.(kod, c);
-        if (x.tur === 'sepete-at') { at(x.kaynak); return; }
+        if (x.tur === 'sepete-at') { gecmis.bildir(kod, 'tamam', ad); at(x.kaynak); return; }
       } else if (durum.adim === 'ne') okundu?.(kod, c);
       const p = panelOkutuldu(durum, c);
+      const ileti = p.tur === 'akis' && 'ileti' in p.durum ? p.durum.ileti : null;
+      // Raf okutması göz seçtirir: iletisi bir sonraki adımı söyler, yanlış değildir.
+      gecmis.bildir(kod, c.tur === 'bilinmiyor' ? 'hata' : ileti && c.tur !== 'raf' ? 'uyari' : 'tamam', ileti ?? ad);
       if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
     },
   });
@@ -69,8 +86,8 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
         {sepetli && sonCevap && sonCevap.tur !== 'raf' && <BaskaSepetler c={sonCevap} />}
         {durum.adim !== 'onay' && (kamerali
-          ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />
-          : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />)}
+          ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} />
+          : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} />)}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {raf && raf.gozler.length > 0 && (sepetli
