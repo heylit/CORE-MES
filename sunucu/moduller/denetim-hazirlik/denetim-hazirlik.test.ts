@@ -8,7 +8,7 @@ import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { KURULUM_ISARETI } from './kurallar.ts';
+import { BELGE_SINIRI, KURULUM_ISARETI } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -170,6 +170,15 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual((okunan.json() as { belge: Belge }).belge.veri, { durum: 'isleniyor' });
   });
 
+  test('BD-08b (1809): kilit kişiye bağlı; başka kişi aynı sahip adını vererek geçerli kilidi alamaz', async () => {
+    const yol = yeniBelge();
+    const al = (cerez: string) =>
+      istek(cerez, 'POST', '/denetim-hazirlik/belge/kilitle', { yol, sahip: 'ortak-sekme', sureMs: 30_000 }).then((c) => c.json() as { alindi: boolean });
+    assert.equal((await al(yazar)).alindi, true);
+    assert.equal((await al(ikinciYazar)).alindi, false);
+    assert.equal((await al(yazar)).alindi, true);
+  });
+
   test('BD-09: geçersiz yol (tek parçalı belge, izinsiz karakter) 400 ile döner', async () => {
     assert.equal((await yaz(yazar, { yol: 'tek', kip: 'tam', veri: {} })).statusCode, 400);
     assert.equal((await yaz(yazar, { yol: 'a/b c', kip: 'tam', veri: {} })).statusCode, 400);
@@ -212,6 +221,45 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: { metin: JSON.stringify({ logo: `/_blob/${id}` }) } })).statusCode, 200);
     assert.equal(await okuDurumu(), 200);
     assert.equal((await istek(yetkisiz, 'GET', `/denetim-hazirlik/ekler/${id}`)).statusCode, 403);
+  });
+
+  test('BD-10f (1809): kişi okuyamadığı eki belgeye anarak kendine açamaz; okuyabildiği eki anabilir; var olan anma yazmayı durdurmaz', async () => {
+    const yukle = await istek(yazar, 'POST', '/denetim-hazirlik/ekler/yukle', { ad: 'g.png', tur: 'image/png', veri: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 2]).toString('base64') });
+    const { id } = yukle.json() as { id: string };
+    const anma = { metin: `/_blob/${id}` };
+    const ozel = `data/users/${String(ikinciYazarId)}/yerel/anahtarlar/kalite-denetim-ek${String(++sayac)}`;
+    for (const yol of [yeniBelge(), ozel]) {
+      const red = await yaz(ikinciYazar, { yol, kip: 'tam', veri: anma });
+      assert.equal(red.statusCode, 404, red.body);
+      assert.equal((await istek(ikinciYazar, 'GET', `/denetim-hazirlik/belge?yol=${yol}`)).json().belge, null);
+    }
+    const kilitRed = await istek(ikinciYazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol: yeniBelge(), sahip: 's', veri: anma });
+    assert.equal(kilitRed.statusCode, 404, kilitRed.body);
+    assert.equal((await istek(ikinciYazar, 'GET', `/denetim-hazirlik/ekler/${id}`)).statusCode, 404);
+    const ortak = yeniBelge();
+    assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: anma })).statusCode, 200);
+    assert.equal((await yaz(ikinciYazar, { yol: ortak, kip: 'birlestir', veri: { not: 'ek' } })).statusCode, 200);
+    assert.equal((await yaz(ikinciYazar, { yol: ozel, kip: 'tam', veri: anma })).statusCode, 200);
+    assert.equal((await yaz(ikinciYazar, { yol: yeniBelge(), kip: 'tam', veri: { metin: `/_blob/${'0'.repeat(32)}` } })).statusCode, 404);
+  });
+
+  test('BD-20 (1809): kişi belge sınırında yeni belge açamaz (413), var olanı günceller; başka kişi etkilenmez', async () => {
+    const { kisiBelge } = (await vt().tek<{ kisiBelge: number }>(
+      'SELECT count(*)::int AS "kisiBelge" FROM denetim_hazirlik_belge WHERE olusturan_kisi_id = $1', [ikinciYazarId],
+    )) ?? { kisiBelge: 0 };
+    await vt().sorgu(
+      `INSERT INTO denetim_hazirlik_belge (yol, ust, kimlik, veri, surum, olusturan_kisi_id, guncelleyen_kisi_id)
+       SELECT 'yerel/kalite-denetim-dolgu' || n, 'yerel', 'kalite-denetim-dolgu' || n, '{}'::jsonb, nextval('denetim_hazirlik_surum'), $1, $1
+       FROM generate_series(1, $2::int) AS n`,
+      [ikinciYazarId, BELGE_SINIRI.kisiBelge - kisiBelge],
+    );
+    const red = await yaz(ikinciYazar, { yol: yeniBelge(), kip: 'tam', veri: { a: 1 } });
+    assert.equal(red.statusCode, 413, red.body);
+    assert.match((red.json() as { mesaj: string }).mesaj, /kişi sınırına/);
+    assert.equal((await istek(ikinciYazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol: yeniBelge(), sahip: 's' })).statusCode, 413);
+    assert.equal((await yaz(ikinciYazar, { yol: 'yerel/kalite-denetim-dolgu1', kip: 'tam', veri: { a: 2 } })).statusCode, 200);
+    assert.equal((await yaz(yazar, { yol: yeniBelge(), kip: 'tam', veri: { a: 1 } })).statusCode, 200);
+    await vt().sorgu("DELETE FROM denetim_hazirlik_belge WHERE kimlik LIKE 'kalite-denetim-dolgu%'");
   });
 
   test('BD-10e (GG-1): kişinin ek toplamı kişi sınırını aşınca yükleme reddedilir, başka kişi etkilenmez', async () => {

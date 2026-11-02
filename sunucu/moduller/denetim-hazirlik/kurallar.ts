@@ -33,6 +33,34 @@ export function ekKotaReddi(
 // Prototip eki belgede `/_blob/<kimlik>` adresiyle anar (köprü bu adresi çevirir).
 export const ekAnmasi = (id: string): string => `/_blob/${id}`;
 
+// Yazmanın belgeye yeni soktuğu ek anmaları (eskide olmayanlar). Anma eki okutur (`ekOkunurMu`); kişi okuyamadığı eki anarak
+// kendine açamasın diye yeni anmalar yazmadan önce denetlenir. Gövde yorumlanmaz, metninde adres aranır (`ekiAnanYollar` gibi).
+const ANMA = /\/_blob\/([0-9a-f]{32})/g;
+const anmalar = (veri: Veri | null): Set<string> =>
+  new Set(veri === null ? [] : [...JSON.stringify(veri).matchAll(ANMA)].map((m) => m[1] ?? ''));
+export const AZAMI_YENI_ANMA = 50;
+export function yeniAnmalar(eski: Veri | null, yeni: Veri): string[] {
+  const once = anmalar(eski);
+  return [...anmalar(yeni)].filter((id) => !once.has(id));
+}
+
+// Belge kotası (1809, DH-3). Her belge gövde sınırıyla 1 MB'ın altındadır; sınır yalnız yeni belge açmayı keser, var olanın
+// güncellenmesi etkilenmez. Ekran tek ortak belge yazar; sınır yalnız uca doğrudan yazmayla veritabanının doldurulmasını keser.
+// VARSAYIM (geri alma ucuz): kişi başına 20, modülde 500 belge.
+export const BELGE_SINIRI = { kisiBelge: 20, toplamBelge: 500 } as const;
+
+export function belgeKotaReddi(
+  d: { kisiBelge: number; toplamBelge: number }, sinir: { kisiBelge: number; toplamBelge: number } = BELGE_SINIRI,
+): 'kisi' | 'toplam' | null {
+  if (d.kisiBelge + 1 > sinir.kisiBelge) return 'kisi';
+  if (d.toplamBelge + 1 > sinir.toplamBelge) return 'toplam';
+  return null;
+}
+
+// Kilit sahibi kişiye bağlıdır: istemcinin verdiği sahip adı (sekme) kişi kimliğiyle saklanır; başka kişi aynı adı vererek
+// kilidi alamaz.
+export const kilitSahibi = (kisiId: number, sahip: string): string => `${String(kisiId)}:${sahip}`;
+
 // Ekin okunması belgeye bağlıdır (GG-1): yükleyen ya da eki anan ve okuyanın açabildiği bir belge. Kimliği bilmek yetmez.
 export function ekOkunurMu(yukleyenKisiId: number, ananYollar: readonly string[], kisiId: number): boolean {
   return yukleyenKisiId === kisiId || ananYollar.some((yol) => izinliBelgeMi(yol) && erisebilirMi(yol, kisiId));

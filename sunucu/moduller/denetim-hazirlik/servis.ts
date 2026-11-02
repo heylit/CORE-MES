@@ -9,7 +9,7 @@ import { ekMime } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
-  OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
+  OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi, AZAMI_YENI_ANMA, belgeKotaReddi, kilitSahibi, yeniAnmalar,
   KURULUM_ISARETI, baslangicBelgeleri, ekAnmasi, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
   yonetimGerekirMi, ORTAK_KAYIT_YOLU, takvimDenetimleri,
 } from './kurallar.ts';
@@ -46,6 +46,28 @@ function yonetimDenetle(kullanici: Kullanici, yol: string, eski: Veri | null, ye
   }
 }
 
+// Yeni belge kotası (DH-3): yalnız belge yokken; var olanın güncellenmesi sayılmaz.
+async function belgeKotaDenetle(db: Db, kullanici: Kullanici, mevcut: KilitliBelge | null): Promise<void> {
+  if (mevcut !== null) return;
+  await sorgular.belgeKotaKilidi(db);
+  const ret = belgeKotaReddi(await sorgular.belgeSayilari(db, kullanici.id));
+  if (ret === 'kisi') throw cokBuyuk('Açtığınız denetim hazırlığı kayıtlarının sayısı kişi sınırına ulaştı.');
+  if (ret === 'toplam') throw cokBuyuk('Denetim Hazırlığı kayıt deposu dolu.');
+}
+
+// Yazma, kişinin okuyamadığı eki belgeye anarak kendine açamaz (DH-3); anma eki okutur. Olmayan ek ile okunamayan ek aynı
+// cevabı alır (`ekOku` gibi): kimlik yoklanamaz.
+async function anmaDenetle(db: Db, kullanici: Kullanici, eski: Veri | null, yeni: Veri): Promise<void> {
+  const yeniler = yeniAnmalar(eski, yeni);
+  if (yeniler.length > AZAMI_YENI_ANMA) throw dogrulama(`Bir yazmada en çok ${String(AZAMI_YENI_ANMA)} yeni ek anılabilir.`, 'veri');
+  for (const id of yeniler) {
+    const yukleyen = await sorgular.ekYukleyeni(db, id);
+    if (yukleyen === null || !ekOkunurMu(yukleyen, await sorgular.ekiAnanYollar(db, ekAnmasi(id)), kullanici.id)) {
+      throw bulunamadi('Dosya bulunamadı.');
+    }
+  }
+}
+
 export async function sorgu(
   db: Db, kullanici: Kullanici, k: { koleksiyon: string; filtreler?: Filtre[] | undefined; sira?: Sira | undefined; sinir?: number | undefined },
 ): Promise<SorguCevabi> {
@@ -77,6 +99,8 @@ export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Pro
     veri = derinBirlestir(mevcut.veri, g.veri);
   }
   yonetimDenetle(kullanici, g.yol, mevcut?.veri ?? null, veri);
+  await anmaDenetle(db, kullanici, mevcut?.veri ?? null, veri);
+  await belgeKotaDenetle(db, kullanici, mevcut);
   const belge = await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
   return { belge, damga: belge.surum };
 }
@@ -96,15 +120,18 @@ export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sa
   const mevcut = await sorgular.belgeKilitle(db, g.yol);
   sahiplikDenetle(kullanici, g.yol, mevcut);
   const simdi = await sorgular.simdiMs(db);
-  if (mevcut !== null && !kilitAlinirMi({ sahip: mevcut.kilitSahibi, bitis: mevcut.kilitBitis }, g.sahip, simdi)) {
+  const sahip = kilitSahibi(kullanici.id, g.sahip);
+  if (mevcut !== null && !kilitAlinirMi({ sahip: mevcut.kilitSahibi, bitis: mevcut.kilitBitis }, sahip, simdi)) {
     return { alindi: false, surum: null, bitis: await sorgular.kilitBitisi(db, g.yol) };
   }
   if (mevcut === null || g.veri !== undefined) {
     const veri = derinBirlestir(mevcut?.veri ?? {}, g.veri ?? {});
     yonetimDenetle(kullanici, g.yol, mevcut?.veri ?? null, veri);
+    await anmaDenetle(db, kullanici, mevcut?.veri ?? null, veri);
+    await belgeKotaDenetle(db, kullanici, mevcut);
     await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
   }
-  const kilit = await sorgular.kilitYaz(db, g.yol, g.sahip, g.sureMs);
+  const kilit = await sorgular.kilitYaz(db, g.yol, sahip, g.sureMs);
   return { alindi: true, surum: kilit.surum, bitis: kilit.bitis };
 }
 
