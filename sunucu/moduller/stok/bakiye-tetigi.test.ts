@@ -96,9 +96,13 @@ describe('stok bakiyesi ve hareket defteri tetiği (gerçek PostgreSQL)', () => 
     assert.deepEqual(await bakiye(m), [{ konumId: kabul, miktar: '2.000' }]);
   });
 
-  test('uygulama kullanıcısı ara toplamı okuyamaz ve yazamaz; tablo sahibi muaftır (sahip tetiği zaten kapatabilir)', async () => {
-    await assert.rejects(o().vt.sorgu('SELECT * FROM stok_bakiye_defter_bekleyen'), izinYok);
+  // Okuma yedek (pg_dump) içindir; işlem bitince ara toplam silinir, başka işlemin ara toplamı görünmez.
+  test('uygulama kullanıcısı ara toplamı okur (boştur) ama yazamaz; tablo sahibi muaftır (sahip tetiği zaten kapatabilir)', async () => {
+    assert.deepEqual(await o().vt.sorgu('SELECT * FROM stok_bakiye_defter_bekleyen'), []);
     await assert.rejects(o().vt.sorgu("INSERT INTO stok_bakiye_defter_bekleyen VALUES (txid_current(), 1, 1, NULL, NULL, 'serbest', 1)"), izinYok);
+    await assert.rejects(o().vt.sorgu('UPDATE stok_bakiye_defter_bekleyen SET fark = 0'), izinYok);
+    await assert.rejects(o().vt.sorgu('DELETE FROM stok_bakiye_defter_bekleyen'), izinYok);
+    await assert.rejects(o().vt.sorgu('TRUNCATE stok_bakiye_defter_bekleyen'), izinYok);
     const m = await kart();
     await o().sahip.tx((db) => bakiyeAc(db, m, kabul, '7'));
     assert.deepEqual(await bakiye(m), [{ konumId: kabul, miktar: '7.000' }]);
