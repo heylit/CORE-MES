@@ -88,11 +88,17 @@ export const IMZA_ANLAMLARI = {
   fai_onaylandi: 'İlk parçanın tasarıma uygunluğunu onaylıyorum',
   kapandi: 'Değişikliğin uygulandığını ve doğrulandığını onaylıyorum',
 } as const satisfies Partial<Record<(typeof GECMIS_OLAYLARI)[number], string>>;
+// Bağlı olmayan kapanış koşulu varken imza uygulamayı ve doğrulamayı onaylayamaz; kanıtı sistemde olmayanı onaylatmamak için
+// kapatanın bilinmeyeni kabul ettiğini söyler (UYUM-BORCU 2, 5).
+export const KAPANIS_IMZASI_BILINMEYENLE = 'Bağlı olmayan koşulları bilerek kapatıyorum; uygulama ve doğrulama sistemde kanıtlanmadı';
+export const kapanisImzaAnlami = (kosullar: readonly { durum: (typeof KOSUL_HALLERI)[number] }[]): string =>
+  kosullar.some((k) => k.durum === 'bilinmiyor') ? KAPANIS_IMZASI_BILINMEYENLE : IMZA_ANLAMLARI.kapandi;
 
 // İç olay günlüğü (1124 a): salt okunur, dışarı gönderilmez. `ilgili`, Aşama 2'de olayı işleyecek modüldür.
 export const OLAY_TURLERI = [
   'talep_gonderildi', 'etki_analizi', 'musteri_onayi_istendi', 'emir_acildi', 'revizyon_yayinlandi', 'gecerlilik', 'karar_onerildi',
   'emir_karari', 'stok_karari', 'emir_karantinada', 'rework_istendi', 'sapma_acildi', 'fai_onaylandi', 'emir_kapandi',
+  'talep_reddedildi',
 ] as const;
 export const OLAY_ILGILILERI = ['uretim-emirleri', 'rota', 'belge-merkezi', 'malzemeler', 'stok', 'plan', 'kalite-merkezi', 'sevkiyat'] as const;
 

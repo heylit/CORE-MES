@@ -179,6 +179,15 @@ describe('ECO detay', () => {
     expect(screen.queryByRole('button', { name: /Yetkimdeki önerileri onayla/ })).toBeNull();
   });
 
+  it('etki kaynağı bağlı değilken boş karar listesi "etkilenen yok" demez', async () => {
+    sunucuKur({ ...EMIR, durum: 'karar', kararlar: [], kapanisKosullari: [{ kosul: 'kararlar', durum: 'bilinmiyor', ayrinti: null }] });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Disposition kararları' });
+    expect(within(tablo).getByText('Emir ve stok kaynağı bağlı değil; etkilenen hedef bilinmiyor.')).toBeTruthy();
+    expect(within(tablo).queryByText('Etkilenen emir veya stok yok.')).toBeNull();
+    expect(screen.getByText('Bağlı değil')).toBeTruthy();
+  });
+
   it('eksik kapanış koşulu kapatmayı kapatır; bağlı olmayan koşul kapatmaya izin verir', async () => {
     const kosullar = [{ kosul: 'kararlar', durum: 'tamam', ayrinti: null }, { kosul: 'fai', durum: 'eksik', ayrinti: '1 FAI bekliyor' }] as const;
     sunucuKur({ ...EMIR, durum: 'dogrulama', kapanisKosullari: [...kosullar] });
@@ -195,6 +204,7 @@ describe('ECO detay', () => {
     fireEvent.click(ilk!);
     const pencere = await screen.findByRole('dialog', { name: 'Kapanış: ECO-0007' });
     expect(within(pencere).getByText('Bilinmiyor')).toBeTruthy();
+    expect(within(pencere).getByText(/Bağlı olmayan koşulları bilerek kapatıyorum/)).toBeTruthy();
     expect(within(pencere).getByText('Hurda —, rework —.')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'İmzala ve kapat' }));
     await waitFor(() => expect(komutlar(istekler)).toEqual([{ yol: '/degisiklik-yonetimi/emirler/7/kapat', yontem: 'POST', govde: { aciklama: '', surum: 4 } }]));

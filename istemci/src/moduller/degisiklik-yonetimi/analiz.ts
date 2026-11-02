@@ -211,7 +211,7 @@ export const OLAY_TURU_ADLARI: Readonly<Record<OlayTuru, string>> = {
   talep_gonderildi: 'Talep gönderildi', etki_analizi: 'Etki analizi', musteri_onayi_istendi: 'Müşteri onayı istendi',
   emir_acildi: 'ECO açıldı', revizyon_yayinlandi: 'Revizyon yayınlandı', gecerlilik: 'Geçerlilik', karar_onerildi: 'Karar önerildi',
   emir_karari: 'Emir kararı', stok_karari: 'Stok kararı', emir_karantinada: 'Emir karantinada', rework_istendi: 'Rework istendi',
-  sapma_acildi: 'Sapma açıldı', fai_onaylandi: 'FAI onaylandı', emir_kapandi: 'ECO kapandı',
+  sapma_acildi: 'Sapma açıldı', fai_onaylandi: 'FAI onaylandı', emir_kapandi: 'ECO kapandı', talep_reddedildi: 'Talep reddedildi',
 };
 export const OLAY_ILGILI_ADLARI: Readonly<Record<OlayIlgilisi, string>> = {
   'uretim-emirleri': 'Üretim emirleri', rota: 'Rota', 'belge-merkezi': 'Belge Merkezi', malzemeler: 'Malzemeler', stok: 'Stok',

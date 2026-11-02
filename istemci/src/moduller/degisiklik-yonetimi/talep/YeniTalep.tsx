@@ -57,7 +57,7 @@ export function YeniTalep({ kapat }: { kapat: () => void }) {
       )}
     >
       <div className="tc-dy-form">
-        <p className="tc-dy-soluk">Talep herkes tarafından açılabilir. Sınıflandırmayı proses mühendisi yapar.</p>
+        <p className="tc-dy-soluk">Talebi yetkisi olan açar. Sınıflandırmayı proses mühendisi yapar.</p>
         <Girdi etiket="Başlık" value={baslik} onChange={(e) => { baslikYaz(e.target.value); }} maxLength={160} required />
         <fieldset className="tc-dy-parcalar">
           <legend>Etkilenen parçalar</legend>

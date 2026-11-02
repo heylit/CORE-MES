@@ -4,7 +4,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, kapanisImzaAnlami, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
   GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
@@ -112,7 +112,9 @@ export async function talepAc(db: Db, kullanici: Kullanici, g: TalepAcGovdesi): 
   const t = await s.talepGetir(db, id);
   if (t === null) throw new Error('Yazılan talep okunamadı.');
   await s.gecmisEkle(db, { talepId: id, olay: 'talep_gonderildi', kisiId: kullanici.id, imzaAnlami: null, aciklama: null, ozet: 'Talep gönderildi' });
-  await s.olayEkle(db, { tur: 'talep_gonderildi', ilgili: null, kayitNo: t.no, alanlar: { onSinif: t.onSinif ?? '', aciliyet: t.aciliyet } });
+  await s.olayEkle(db, { tur: 'talep_gonderildi', ilgili: null, kayitNo: t.no, alanlar: {
+    ...(t.onSinif === null ? {} : { onSinif: SINIF_ADLARI[t.onSinif] }), aciliyet: ACILIYET_ADLARI[t.aciliyet],
+  } });
   return talepCevabi(db, id);
 }
 
@@ -159,8 +161,11 @@ export async function ccbKarari(db: Db, kullanici: Kullanici, id: number, g: Ccb
   if (t.sinif === null || t.etki === null) throw new Error('CCB bekleyen talebin sınıfı ya da etki analizi yok.');
   const aciklama = g.aciklama ?? null;
   if (g.karar === 'ret') {
+    // Gerekçesiz ret izlenemez; ekranın zorunlu alanı tek başına yetmez.
+    if (aciklama === null) throw dogrulama('Ret gerekçesini yazın.', 'aciklama');
     await talepYaz(db, t, g.surum, { durum: 'reddedildi' });
     await s.gecmisEkle(db, { talepId: id, olay: 'ccb_ret', kisiId: kullanici.id, imzaAnlami: imza('ccb_ret'), aciklama, ozet: 'CCB reddetti' });
+    await s.olayEkle(db, { tur: 'talep_reddedildi', ilgili: null, kayitNo: t.no, alanlar: { gerekce: aciklama } });
     return talepCevabi(db, id);
   }
   const musteri = musteriOnayiIstenirMi(t.sinif, t.etki.musteriOnayiGerekir);
@@ -380,9 +385,10 @@ export async function yayinla(
     kararKaynagiBagli: kaynak !== null, yayinlandi: true,
   });
   const ozetMetni = yayinOzeti(gecerlilik, sonUrunKodu);
-  await emirGecmisiYaz(db, id, kullanici.id, 'yayinlandi', `Revizyonlar yayınlandı. Geçerlilik: ${ozetMetni}`, g.aciklama ?? null);
+  // Yayın bugün yalnız kayıttır: çizim ve rota revizyonu sahibi modülde yayınlanmaz (UYUM-BORCU 3, 6); metin olmayanı söylemesin.
+  await emirGecmisiYaz(db, id, kullanici.id, 'yayinlandi', `Yayın kaydedildi; çizim ve rota revizyonu sahibi modülde ayrıca yayınlanır (bağlı değil). Geçerlilik: ${ozetMetni}`, g.aciklama ?? null);
   if (kararlar.length > 0 && bekleyenKarar === 0) await emirGecmisiYaz(db, id, kullanici.id, 'kararlar_tamam', 'Tüm disposition kararları uygulandı');
-  if (durum === 'dogrulama' && bekleyenFai === 0 && kalemler.length > 0) await emirGecmisiYaz(db, id, kullanici.id, 'fai_tamam', 'İlk parça kontrolleri tamamlandı');
+  if (durum === 'dogrulama' && bekleyenFai === 0 && kalemler.length > 0) await emirGecmisiYaz(db, id, kullanici.id, 'fai_tamam', 'İlk parça kontrolü gerekmiyor');
   for (const k of kalemler) {
     await s.olayEkle(db, {
       tur: 'revizyon_yayinlandi', ilgili: 'rota', kayitNo: e.no,
@@ -427,7 +433,9 @@ async function kararSonrasi(db: Db, e: EmirSatiri, surum: number, kisiId: number
   const durum = emirIlerler(e.durum, kararlarTamam, faiTamam);
   await emirYaz(db, e, surum, { durum });
   if (e.durum === 'karar' && durum !== 'karar') await emirGecmisiYaz(db, e.id, kisiId, 'kararlar_tamam', 'Tüm disposition kararları uygulandı');
-  if (durum === 'dogrulama' && e.durum !== 'dogrulama') await emirGecmisiYaz(db, e.id, kisiId, 'fai_tamam', 'İlk parça kontrolleri tamamlandı');
+  if (durum === 'dogrulama' && e.durum !== 'dogrulama') {
+    await emirGecmisiYaz(db, e.id, kisiId, 'fai_tamam', fai.length > 0 ? 'İlk parça kontrolleri tamamlandı' : 'İlk parça kontrolü gerekmiyor');
+  }
 }
 
 async function kararOlayi(db: Db, e: EmirSatiri, k: KararSatiriHam, kod: KararGovdesi['kod'], kisiAdi: string): Promise<void> {
@@ -506,7 +514,11 @@ export async function kapat(db: Db, kullanici: Kullanici, id: number, g: KapatGo
   });
   if (!kapatilabilirMi(kosullar)) throw cakisma('Kapanış koşulları sağlanmadı.');
   await emirYaz(db, e, g.surum, { durum: 'kapandi', kapandi: true });
-  await emirGecmisiYaz(db, id, kullanici.id, 'kapandi', 'ECO kapandı', g.aciklama ?? null);
+  const bilinmeyen = kosullar.filter((k) => k.durum === 'bilinmiyor').length;
+  await s.gecmisEkle(db, {
+    emirId: id, olay: 'kapandi', kisiId: kullanici.id, imzaAnlami: kapanisImzaAnlami(kosullar), aciklama: g.aciklama ?? null,
+    ozet: bilinmeyen > 0 ? `ECO kapandı; ${bilinmeyen} koşul bilinmiyor (bağlı değil)` : 'ECO kapandı',
+  });
   await s.olayEkle(db, { tur: 'emir_kapandi', ilgili: null, kayitNo: e.no, alanlar: {} });
   return emirCevabi(db, id);
 }

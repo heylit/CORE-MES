@@ -125,7 +125,7 @@ function Adim({ talep, islemler, kisiId }: { talep: TalepCevabi; islemler: reado
       break;
     case 'analizde':
       adim = (
-        <SiradakiAdim baslik="Sıradaki adım: etki analizini çalıştırın" aciklama="Açık emirler, stok, saha ve kullanım yeri otomatik taranır.">
+        <SiradakiAdim baslik="Sıradaki adım: etki analizini çalıştırın" aciklama="Etki kaynağı henüz bağlı değil; analiz sınıf kurallarından kurulur, açık emir ve stok taranmaz.">
           {yapabilir('siniflandir') && <Dugme tur="birincil" simge="search" yukleniyor={etki.yukleniyor} onClick={() => { etki.gonder({ surum: talep.surum }); }}>Etki analizini çalıştır</Dugme>}
         </SiradakiAdim>
       );

@@ -16,3 +16,9 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 11. Ekran (P4 isteği): bağlı olmayan veri ekranda "bağlı değil / Veri yok" yazar; İzlenebilirlik'te "Sevk et" düğmesi yok (sevkiyat, Aşama 2).
 12. Parça kutusundaki "Kaydı aç" (malzeme ekranı yolu) Aşama 2'de bağlanır; o zamana kadar gizli (1177 a).
 13. Kural, sürüm ve sunucu kuralları akış akış kapanır; kabul kullanıcı deneyince.
+14. Kalem revizyon denetimi (1735, TMI B6): `kalemKaydet` yeni çizim ve rota revizyon kimliğinin var olduğunu ve kalemin malzemesine ait olduğunu denetlemez; cizimler ve rota `disari.ts` okumasıyla kapanır. Ekran o zamana kadar etiket yerine kimlik gösterebilir.
+15. Rota bağı ekranda (1735, TMI B7): yürürlükteki ve yeni rota revizyonu için seçim alanı yok; rota bağlanınca gelir. Metin bugün yalnız kimliğin yazıldığını söyler.
+16. Bildirim (1735, TMI B9): CCB, ret ve FAI işleri kişiye bildirim olarak gitmez; yalnız Görevlerim. Rollerle birlikte bağlanır.
+17. Rol önerisi (1735, TMI B10): talep açma herkese, sınıflandırma planlama ve kaliteye, CCB müdür ve kaliteye; ortak yetki matrisinde kullanıcıya sorulur.
+18. Talebi geri çekme ya da iptal (1735, TMI B12): uç yok; yeni uç ve işlem olarak kullanıcıya sorulur.
+19. Kapanış imzası (1735): bilinmeyen koşul varken imza "bağlı olmayan koşulları bilerek kapatıyorum" der (`kapanisImzaAnlami`); kaynaklar bağlanınca bilinmeyen kalmaz ve eski imza döner.
