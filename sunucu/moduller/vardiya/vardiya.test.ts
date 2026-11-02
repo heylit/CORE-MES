@@ -675,6 +675,10 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       assert.equal((await istek(c.operator, 'GET', '/fazla-mesai?baslangic=2000-01-01&bitis=2000-01-31')).durum, 403);
       assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2000-01-31&bitis=2000-01-01')).durum, 400);
       assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2099-01-01&bitis=2100-01-05')).durum, 400);
+      // Sınır takvim okumasıyla aynıdır: iki ucu dahil 366 gün geçer, 367 reddedilir.
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2096-01-01&bitis=2096-12-31')).durum, 200);
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2095-01-01&bitis=2096-01-01')).durum, 200);
+      assert.equal((await istek(c.planlama, 'GET', '/fazla-mesai?baslangic=2095-01-01&bitis=2096-01-02')).durum, 400);
     });
 
     test('VR-24, VR-25, VR-26: fazla mesai kapsamındaki makine, istasyon ve iş merkezine, kişiye yalnız listedeyse eklenir; onaylı izinli kişi 0; pay yüzdesi', async () => {

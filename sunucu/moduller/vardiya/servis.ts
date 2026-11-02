@@ -718,7 +718,8 @@ async function mesailereAdVer(db: Db, satirlar: readonly s.FazlaMesaiSatiri[]): 
 
 export async function fazlaMesaiListesi(db: Db, baslangic: string, bitis: string): Promise<FazlaMesai[]> {
   if (bitis < baslangic) throw dogrulama('Bitiş başlangıçtan önce olamaz.', 'bitis');
-  if (gunFarki(baslangic, bitis) + 1 > AZAMI_TAKVIM_GUNU) throw dogrulama(`Aralık en çok ${AZAMI_TAKVIM_GUNU} gün olur.`, 'bitis');
+  // gunFarki iki ucu da sayar: takvim okumasıyla aynı sınır.
+  if (gunFarki(baslangic, bitis) > AZAMI_TAKVIM_GUNU) throw dogrulama(`Aralık en çok ${AZAMI_TAKVIM_GUNU} gün olur.`, 'bitis');
   return mesailereAdVer(db, await s.fazlaMesailer(db, baslangic, bitis, true));
 }
 
