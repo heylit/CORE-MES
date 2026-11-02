@@ -23,9 +23,10 @@ export function cagriyiDuzenle({ kategori, cagriEkibi, cagriGecikmeDk }: CagriDe
   return { cagriEkibi, cagriGecikmeDk };
 }
 
-// Önek artı var olan en büyük sayının bir fazlası (DN-09); biçime uymayan kod sayılmaz.
+// Önek artı var olan en büyük sayının bir fazlası (DN-09); biçime uymayan kod sayılmaz. Hane sınırı yok: kod 12 karakterle sınırlı
+// olduğundan sayı güvenli tamsayıya sığar; sınır konursa sınırı aşan var olan kod sayılmaz ve öneri onunla çakışır.
 export function kodOner(onek: string, kodlar: readonly string[]): string {
-  const desen = new RegExp(`^${onek}-(\\d{1,9})$`);
+  const desen = new RegExp(`^${onek}-(\\d+)$`);
   let enBuyuk = 0;
   for (const kod of kodlar) {
     const sayi = desen.exec(kod)?.[1];

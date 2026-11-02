@@ -105,7 +105,7 @@ export function DurusNedeniFormu({ neden, onerilenKod, kapat }: Ortak<DurusNeden
             <Secim etiket="Çağrı ekibi" secenekler={EKIPLER} bosSecenek="Çağrı yok" value={ekip} onChange={(o) => ekipSec(o.target.value)} />
             <Girdi
               etiket="Çağrı gecikmesi (dk)" type="number" min={0} max={1440} inputMode="numeric"
-              value={gecikme} onChange={(o) => gecikmeYaz(o.target.value)} disabled={ekip === ''}
+              value={gecikme} onChange={(o) => gecikmeYaz(o.target.value)} disabled={ekip === ''} required={ekip !== ''}
               ipucu="Ekip seçilince girilir."
             />
           </>

@@ -29,7 +29,10 @@ export interface DurusYazimi {
   cagriGecikmeDk: number | null;
 }
 
-export function durusNedeniEkle(db: Db, y: DurusYazimi): Promise<DurusNedeni | null> {
+// Sıra en büyüğün bir fazlasıdır; aynı anda gelen iki ekleme aynı en büyüğü okumasın diye ekleme tabloyu yazmaya kilitler
+// (okuma serbest kalır). Kilit yazma ucunun transaction'ı bitince kalkar.
+export async function durusNedeniEkle(db: Db, y: DurusYazimi): Promise<DurusNedeni | null> {
+  await db.sorgu('LOCK TABLE durus_nedeni IN SHARE ROW EXCLUSIVE MODE');
   return db.tek<DurusNedeni>(
     `INSERT INTO durus_nedeni (kod, ad, simge, kategori, cagri_ekibi, cagri_gecikme_dk, sira)
      VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(sira), 0) + 1 FROM durus_nedeni))
@@ -71,7 +74,8 @@ export async function hurdaKodlariniOku(db: Db): Promise<string[]> {
   return (await db.sorgu<{ kod: string }>('SELECT kod FROM hurda_nedeni')).map((s) => s.kod);
 }
 
-export function hurdaNedeniEkle(db: Db, kod: string, ad: string): Promise<HurdaNedeni | null> {
+export async function hurdaNedeniEkle(db: Db, kod: string, ad: string): Promise<HurdaNedeni | null> {
+  await db.sorgu('LOCK TABLE hurda_nedeni IN SHARE ROW EXCLUSIVE MODE');
   return db.tek<HurdaNedeni>(
     `INSERT INTO hurda_nedeni (kod, ad, sira)
      VALUES ($1, $2, (SELECT COALESCE(MAX(sira), 0) + 1 FROM hurda_nedeni))

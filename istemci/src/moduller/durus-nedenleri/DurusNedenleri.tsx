@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { DurusNedeni, DurusNedenleriCevabi, HurdaNedeni, HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo, type Sutun, type TabloAraci, type TabloSuzgeci } from '../../ortak/arayuz/index.ts';
 import { SIMGELER, type SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -34,12 +34,38 @@ const HURDA_SUTUNLARI: readonly Sutun<HurdaNedeni>[] = [
   { anahtar: 'durum', baslik: 'Durum', hucre: (n) => durumRozeti(n.aktif) },
 ];
 
+type DurumSuzgeci = 'hepsi' | 'aktif' | 'pasif';
+const DURUM_SUZGECLERI: readonly TabloSuzgeci[] = [
+  { deger: 'hepsi', baslik: 'Tümü' },
+  { deger: 'aktif', baslik: 'Aktif' },
+  { deger: 'pasif', baslik: 'Pasif' },
+];
+
+const kucuk = (metin: string) => metin.toLocaleLowerCase('tr');
+
+// Liste küçüktür ve tamamı gelir; arama (kod ya da ad) ve durum süzgeci istemcide uygulanır.
+function useSuzulmus<N extends { kod: string; ad: string; aktif: boolean }>(nedenler: readonly N[] | undefined, aramaEtiketi: string) {
+  const [ara, araYaz] = useState('');
+  const [durum, durumYaz] = useState<DurumSuzgeci>('hepsi');
+  const aranan = kucuk(ara.trim());
+  const satirlar = (nedenler ?? []).filter((n) =>
+    (durum === 'hepsi' || n.aktif === (durum === 'aktif'))
+    && (aranan === '' || kucuk(n.kod).includes(aranan) || kucuk(n.ad).includes(aranan)));
+  const arac: TabloAraci<N> = {
+    arama: { deger: ara, degistir: araYaz, etiket: aramaEtiketi, yerTutucu: 'Kod ya da ad' },
+    suzgec: { etiket: 'Durum', secenekler: DURUM_SUZGECLERI, secili: durum, sec: (d) => durumYaz(d as DurumSuzgeci) },
+  };
+  const bos = ara.trim() !== '' || durum !== 'hepsi';
+  return { satirlar, arac, bos };
+}
+
 // null: pencere kapalı; { neden: null }: yeni kayıt.
 type Duzenlenen<N> = { neden: N | null } | null;
 
 function DurusBolumu({ yazabilir }: { yazabilir: boolean }) {
   const [duzenlenen, duzenlenenYaz] = useState<Duzenlenen<DurusNedeni>>(null);
   const liste = useQuery({ queryKey: anahtarlar.durus, queryFn: () => api.get<DurusNedenleriCevabi>('/durus-nedenleri') });
+  const suzulmus = useSuzulmus(liste.data?.nedenler, 'Duruş nedeni ara');
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   return (
@@ -48,10 +74,11 @@ function DurusBolumu({ yazabilir }: { yazabilir: boolean }) {
       <Tablo
         etiket="Duruş nedenleri"
         sutunlar={DURUS_SUTUNLARI}
-        satirlar={liste.data.nedenler}
+        satirlar={suzulmus.satirlar}
         satirAnahtari={(n) => n.id}
         satirSec={yazabilir ? (n) => duzenlenenYaz({ neden: n }) : undefined}
-        bosMesaj="Duruş nedeni yok"
+        bosMesaj={suzulmus.bos ? 'Aramaya uyan duruş nedeni yok' : 'Duruş nedeni yok'}
+        arac={suzulmus.arac}
       />
       {duzenlenen && (
         <DurusNedeniFormu key={duzenlenen.neden?.id ?? 'yeni'} neden={duzenlenen.neden} onerilenKod={liste.data.onerilenKod} kapat={() => duzenlenenYaz(null)} />
@@ -63,6 +90,7 @@ function DurusBolumu({ yazabilir }: { yazabilir: boolean }) {
 function HurdaBolumu({ yazabilir }: { yazabilir: boolean }) {
   const [duzenlenen, duzenlenenYaz] = useState<Duzenlenen<HurdaNedeni>>(null);
   const liste = useQuery({ queryKey: anahtarlar.hurda, queryFn: () => api.get<HurdaNedenleriCevabi>('/hurda-nedenleri') });
+  const suzulmus = useSuzulmus(liste.data?.nedenler, 'Hurda nedeni ara');
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   return (
@@ -71,10 +99,11 @@ function HurdaBolumu({ yazabilir }: { yazabilir: boolean }) {
       <Tablo
         etiket="Hurda nedenleri"
         sutunlar={HURDA_SUTUNLARI}
-        satirlar={liste.data.nedenler}
+        satirlar={suzulmus.satirlar}
         satirAnahtari={(n) => n.id}
         satirSec={yazabilir ? (n) => duzenlenenYaz({ neden: n }) : undefined}
-        bosMesaj="Hurda nedeni yok"
+        bosMesaj={suzulmus.bos ? 'Aramaya uyan hurda nedeni yok' : 'Hurda nedeni yok'}
+        arac={suzulmus.arac}
       />
       {duzenlenen && (
         <HurdaNedeniFormu key={duzenlenen.neden?.id ?? 'yeni'} neden={duzenlenen.neden} onerilenKod={liste.data.onerilenKod} kapat={() => duzenlenenYaz(null)} />
@@ -87,7 +116,7 @@ export function DurusNedenleri({ bolum = 'durus' }: { bolum?: Bolum }) {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('durus-nedenleri.yaz') === true;
   return (
-    <Kart baslik="Duruş ve Hurda Nedenleri">
+    <Kart baslik={bolum === 'durus' ? 'Duruş nedenleri' : 'Hurda nedenleri'}>
       <div className="tc-nedenler-liste">
         {bolum === 'durus' ? <DurusBolumu yazabilir={yazabilir} /> : <HurdaBolumu yazabilir={yazabilir} />}
       </div>
