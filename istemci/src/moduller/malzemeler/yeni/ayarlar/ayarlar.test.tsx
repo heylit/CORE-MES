@@ -128,6 +128,20 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     expect((kayitlar(istekler, 'genel')[0]?.govde as { deger: Record<string, unknown> }).deger).toMatchObject({ firmaKodu: 'ABC', kodYapisi: 'standart', acUzunluk: 40 });
   });
 
+  test('1879: hammaddede kalite, form, ölçü, durum ve yüzey çakışma alanı olarak seçilebilir; varsayılan kural seçili görünür', async () => {
+    const istekler = sunucuKur(YONETICI, { [yaz('malzeme')]: tamam });
+    yeniEkranAc(`${KOK}?bolum=kural`);
+    await screen.findByRole('textbox', { name: 'Kart adı' });
+    fireEvent.click(screen.getByRole('button', { name: 'Hammadde' }));
+    const bolge = within(screen.getByRole('region', { name: 'Çakışma kontrolü' }));
+    const adlar = bolge.getAllByRole('checkbox').map((x) => x.getAttribute('aria-label') ?? x.closest('label')?.textContent ?? '');
+    expect(adlar[0]).toMatch(/^Varsayılan kural \(önerilen\): aynı kalite .*form ve ölçü/);
+    for (const ad of ['Kart adı', 'Açıklama 1, 2, 3', 'Kalite', 'Form', 'Ölçü (formuyla)', 'Durum', 'Yüzey']) expect(adlar).toContain(ad);
+    fireEvent.click(bolge.getByRole('checkbox', { name: 'Kalite' }));
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(1));
+    expect((kayitlar(istekler, 'malzeme')[0]?.govde as { deger: { kurallar: Record<string, { cakisma?: string[] }> } }).deger.kurallar['hammadde']?.cakisma).toEqual(['_varsayilan', '_kalite']);
+  });
+
   test('tür kuralı: ad kalıbı, zorunlu alan ve çakışma alanı türün kuralına yazılır', async () => {
     const istekler = sunucuKur(YONETICI, { [yaz('malzeme')]: tamam });
     yeniEkranAc(`${KOK}?bolum=kural`);
@@ -144,11 +158,22 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(2));
     expect(Object.values(kural(1)?.['zorunlu'] as Record<string, boolean>)).toEqual([true]);
 
-    const cakisma = within(screen.getByRole('region', { name: 'Çakışma kontrolü' })).getAllByRole('checkbox')[0];
+    // 1879: varsayılan kural listenin başında seçili durur; alan seçilince kapanır ve ekran bunu söyler.
+    const bolge = within(screen.getByRole('region', { name: 'Çakışma kontrolü' }));
+    const varsayilan = bolge.getByRole('checkbox', { name: /^Varsayılan kural \(önerilen\)/ }) as HTMLInputElement;
+    expect(varsayilan.checked).toBe(true);
+    expect(bolge.queryByRole('status')).toBeNull();
+    const cakisma = bolge.getAllByRole('checkbox')[1];
     if (!cakisma) throw new Error('çakışma alanı yok');
     fireEvent.click(cakisma);
     await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(3));
-    expect(kural(2)?.['cakisma']).toHaveLength(1);
+    expect(kural(2)?.['cakisma']).toEqual(['_varsayilan', '_ad']);
+    await waitFor(() => expect(bolge.getByRole('status').textContent).toMatch(/Varsayılan kural ve Kart adı birlikte aranır.*boş olan kart hiç denetlenmez/));
+    expect((bolge.getByRole('checkbox', { name: /^Varsayılan kural/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(bolge.getByRole('checkbox', { name: /^Varsayılan kural/ }));
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(4));
+    expect(kural(3)?.['cakisma']).toEqual(['_ad']);
+    await waitFor(() => expect(bolge.getByRole('status').textContent).toMatch(/Varsayılan kural kapalı: yalnız Kart adı/));
   });
 
   test('üst baştaki Ayarlar penceresi sunucunun ayarlarını kilitli gösterir; mükerrer tarama yapılır', async () => {

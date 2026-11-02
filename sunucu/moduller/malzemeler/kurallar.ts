@@ -567,6 +567,10 @@ export function katalogSunucuAnahtari(tur: string, kayit: Nesne): string | null 
 // Liste varsa benzersiz anahtarı sunucu o alanlardan kurar; alanlardan biri boşsa kartın anahtarı yoktur (denetlenmez).
 // Liste yoksa ekranın türe göre kurduğu varsayılan anahtar geçerlidir. Değerler ekranla aynı biçimde karşılaştırılır: harf, boşluk, noktalama yok sayılır.
 const CAKISMA_ALAN_DESENI = /^[A-Za-z0-9_]{1,40}$/;
+// 1879 (kullanıcı 02.11): türün varsayılan kuralı da bir seçimdir; seçilen alanlarla birlikte tek kural olur (hepsi aynıysa çakışma).
+// Değeri sunucunun varsayılan anahtarıdır, olduğu gibi (normlanmaz: parçaları zaten normlu, ayırıcıları anlamlı). Kurulamayan
+// varsayılan anahtar boş sayılır: kart denetlenmez, ekran bunu söyler. Yalnız varsayılan seçiliyse liste yok sayılır.
+const CAKISMA_VARSAYILAN_ALANI = '_varsayilan';
 export function katalogCakismaListesiGecerliMi(deger: unknown): boolean {
   if (deger === undefined || deger === null) return true;
   return Array.isArray(deger) && deger.length <= 40 && deger.every((k) => typeof k === 'string' && CAKISMA_ALAN_DESENI.test(k));
@@ -582,20 +586,45 @@ export function katalogCakismaAlanlari(malzemeAyari: Record<string, unknown> | n
   const kural = nesneMi(kurallar) ? kurallar[tur] : undefined;
   const liste = nesneMi(kural) ? kural['cakisma'] : undefined;
   if (!Array.isArray(liste) || !liste.length || !katalogCakismaListesiGecerliMi(liste)) return null;
-  return [...new Set(liste as string[])].sort();
+  const alanlar = [...new Set(liste as string[])].sort();
+  return alanlar.length === 1 && alanlar[0] === CAKISMA_VARSAYILAN_ALANI ? null : alanlar;
 }
 const cakismaNormu = (s: string): string => s.toLocaleLowerCase('tr').replace(/[^a-z0-9çğıöşü]/g, '');
 const metin = (v: unknown): string => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
+const coklu = (v: unknown): string => (Array.isArray(v) ? v.map(metin).sort().join(',') : metin(v));
+// Hammaddenin kalite, form, ölçü, durum ve yüzeyi `g` dışında, kartın kendisindedir (ekranın `cakismaDegeri` ile aynı kural; 1879).
+// Ölçü formla birlikte okunur ve binde bire yuvarlanmış tam sayıyla yazılır: noktalama yok sayıldığında 12,5 ile 1,25 karışmasın.
+// Ölçülerden biri sıfırdan büyük sayı değilse değer boştur (kart bu kuralla denetlenmez).
+function hammaddeCakismaDegeri(kayit: Nesne, alan: string): string | undefined {
+  const opts = nesneMi(kayit['opts']) ? kayit['opts'] : {};
+  if (alan === '_kalite') {
+    if (kayit['grade'] !== '__ozel') return metin(kayit['grade']);
+    const ozel = nesneMi(kayit['custom']) ? kayit['custom'] : {};
+    return metin(varMi(ozel['kod']) ? ozel['kod'] : ozel['ad']);
+  }
+  if (alan === '_form') return metin(kayit['form']);
+  if (alan === '_olcu') {
+    const form = kayit['form'];
+    if (typeof form !== 'string' || !Object.hasOwn(HAMMADDE_FORMLARI, form)) return '';
+    const dims = nesneMi(kayit['dims']) ? kayit['dims'] : {};
+    const olculer = HAMMADDE_FORMLARI[form]!.olculer.map((k) => dims[k]);
+    if (!olculer.every((v) => typeof v === 'number' && Number.isFinite(v) && v > 0)) return '';
+    return `${form}:${olculer.map((v) => String(Math.round((v as number) * 1000))).join('x')}`;
+  }
+  if (alan === '_durum' || alan === '_yuzey') return coklu(opts[alan.slice(1)]);
+  return undefined;
+}
 function cakismaDegeri(kayit: Nesne, alan: string): string {
   const com = nesneMi(kayit['com']) ? kayit['com'] : {};
   if (alan === '_ad') return metin(com['ad']);
   if (alan === '_ac') return [1, 2, 3].map((i) => metin(com[`ac${i}`])).join('|');
+  const hm = hammaddeMi(kayit) ? hammaddeCakismaDegeri(kayit, alan) : undefined;
+  if (hm !== undefined) return hm;
   const g = nesneMi(kayit['g']) ? kayit['g'] : {};
-  const v = g[alan];
-  return Array.isArray(v) ? v.map(metin).sort().join(',') : metin(v);
+  return coklu(g[alan]);
 }
 export function katalogKuralAnahtari(tur: string, alanlar: readonly string[], kayit: Nesne): string | null {
-  const parcalar = alanlar.map((k) => [k, cakismaNormu(cakismaDegeri(kayit, k))] as const);
+  const parcalar = alanlar.map((k) => [k, k === CAKISMA_VARSAYILAN_ALANI ? katalogSunucuAnahtari(tur, kayit) ?? '' : cakismaNormu(cakismaDegeri(kayit, k))] as const);
   if (parcalar.some(([, v]) => v === '')) return null;
   return `K|${tur}|${parcalar.map(([k, v]) => `${k}=${v}`).join('|')}`;
 }

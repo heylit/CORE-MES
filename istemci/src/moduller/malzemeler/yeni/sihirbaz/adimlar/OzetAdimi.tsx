@@ -24,12 +24,26 @@ function KayitBandi({ metin }: { metin: string }) {
 }
 
 // Prototipte `dupBoxHTML`: aynı kart varsa yeni kart ancak gerekçeyle kaydedilir (sunucu gerekçe >= 10 ister).
+// 1879: türde çakışma alanı seçiliyse ve bu kartta biri boşsa kart o kuralla denetlenmez; sessiz geçmesin diye söylenir.
+function DenetimsizKutusu() {
+  const { taslak: d, b } = useSihirbaz();
+  const bos = K.cakismaBosAlanlari(d, b);
+  if (!bos.length) return null;
+  return (
+    <Uyari kimlik="tc-my-cakisma-bos">
+      Bu kart çakışma kontrolünden geçmiyor: türün çakışma kuralındaki {bos.join(', ')} boş. Aynı kart katalogda olsa da uyarı ve engel çıkmaz.
+    </Uyari>
+  );
+}
+
 export function MukerrerKutusu() {
   const { taslak: d, b, degistir, kartiAc } = useSihirbaz();
   const l = K.benzerKartlar(d, undefined, b);
-  if (!l.length) return null;
+  if (!l.length) return <DenetimsizKutusu />;
   const ayni = l.some((r) => r.seviye === 'ayni');
   return (
+    <>
+    <DenetimsizKutusu />
     <Uyari ton={ayni ? 'uyumsuz' : 'dikkat'} kimlik="tc-my-mukerrer">
       <b>{ayni ? 'Bu kart katalogda zaten var gibi görünüyor' : 'Benzer kartlar var'}</b>
       <ul>
@@ -55,6 +69,7 @@ export function MukerrerKutusu() {
         </>
       )}
     </Uyari>
+    </>
   );
 }
 

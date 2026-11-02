@@ -6,6 +6,7 @@ import { Host } from './ortam.ts';
 import { yetki } from './roller-talep.ts';
 import { clsObj, finalAd, grade } from './taslak.ts';
 import { _katalog } from './turler.ts';
+import { kartAnahtari } from './hizli-arama.ts';
 import { clsKeyFor } from './uyumluluk.ts';
 import type { Kalite, Sinif, Taslak } from './tipler.ts';
 import { clone, isNum, tlc } from './yardimcilar.ts';
@@ -132,22 +133,64 @@ export function gradeKimlik(d: Taslak): Set<string> {
 export function olcuEsit(a: Taslak, b: Taslak): boolean { const fa = FORMS[String(a.form)]; if (!fa || a.form !== b.form)
     return false; return fa.dims.every(([k]) => { const x = a.dims && a.dims[k], y = b.dims && b.dims[k]; return isNum(x) && isNum(y) && Math.abs(x - y) <= Math.max(0.01, Math.abs(x) * 0.005); }); }
 export function _gImza(d: Taslak, haric: string[]): string { const g = d.g || {}; return JSON.stringify(Object.keys(g).filter(k => !haric.includes(k)).sort().map(k => [k, Array.isArray(g[k]) ? [...g[k]].sort() : _nm(g[k])])); }
+function _cMetin(v: unknown): string { return typeof v === 'string' || typeof v === 'number' ? String(v) : ''; }
+function _cCoklu(v: unknown): string { return Array.isArray(v) ? v.map(_cMetin).sort().join(',') : _cMetin(v); }
+// Hammaddenin kalite, form, ölçü, durum ve yüzeyi kartın kendisindedir; sunucunun `cakismaDegeri` ile aynı kural (1879).
+// Ölçü formla birlikte, binde bire yuvarlanmış tam sayıyla: noktalama yok sayıldığında 12,5 ile 1,25 karışmasın.
+function _hmCakismaDegeri(x: Taslak, k: string): string | undefined {
+    if (k === '_kalite') {
+        if (x.grade !== '__ozel')
+            return _cMetin(x.grade);
+        const c = (x.custom || {}) as unknown as Record<string, unknown>;
+        return _cMetin(c.kod !== undefined && c.kod !== null && c.kod !== '' && c.kod !== 0 && c.kod !== false ? c.kod : c.ad);
+    }
+    if (k === '_form')
+        return _cMetin(x.form);
+    if (k === '_olcu') {
+        const f = typeof x.form === 'string' && Object.hasOwn(FORMS, x.form) ? FORMS[x.form] : undefined;
+        if (!f)
+            return '';
+        const dims = (x.dims || {}) as Record<string, unknown>;
+        const l = f.dims.map(([d]) => dims[d]);
+        if (!l.every(v => typeof v === 'number' && Number.isFinite(v) && v > 0))
+            return '';
+        return `${x.form}:${l.map(v => String(Math.round((v as number) * 1000))).join('x')}`;
+    }
+    if (k === '_durum' || k === '_yuzey')
+        return _cCoklu(x.opts && (x.opts as Record<string, unknown>)[k.slice(1)]);
+    return undefined;
+}
+// Varsayılan kural seçim olarak listede olabilir (1879): değeri kartın varsayılan anahtarıdır, olduğu gibi karşılaştırılır.
+export function cakismaAlanlariOku(tur: string): string[] {
+    const l = Array.isArray(turKurali(tur).cakisma) ? turKurali(tur).cakisma as string[] : [];
+    return l.length === 1 && l[0] === '_varsayilan' ? [] : l;
+}
+function _cNorm(k: string, v: string): string { return k === '_varsayilan' ? v : _nm(v); }
 export function cakismaDegeri(x: Taslak, k: string): string {
+    if (k === '_varsayilan')
+        return kartAnahtari(x);
     if (k === '_ad')
         return (x.com && x.com.ad) || finalAd(x);
     if (k === '_ac')
         return [0, 1, 2].map(i => finalAc(x, i)).join('|');
-    const v = x.g && x.g[k];
-    return v === undefined || v === null ? '' : Array.isArray(v) ? [...v].sort().join(',') : String(v);
+    const hm = (x.tur || 'hammadde') === 'hammadde' ? _hmCakismaDegeri(x, k) : undefined;
+    if (hm !== undefined)
+        return hm;
+    return _cCoklu(x.g && x.g[k]);
 }
 export function cakismaAlanAdi(t: string, k: string): string { return CAKISMA_OZEL[k] || (turAlanlari(t).find(a => a.k === k) || { ad: k }).ad; }
+// Türde çakışma alanı seçiliyse kartın boş kalan alanlarının adları: bu kart o kuralla denetlenmez, ekran bunu söyler (1879).
+export function cakismaBosAlanlari(x: Taslak): string[] {
+    const tur = x.tur || 'hammadde';
+    return cakismaAlanlariOku(tur).filter(k => !_cNorm(k, cakismaDegeri(x, k))).map(k => cakismaAlanAdi(tur, k));
+}
 export function benzerKartlar(d: Taslak = D, liste?: readonly Taslak[] | null): BenzerKart[] {
     liste = liste || _katalog();
     const out: BenzerKart[] = [];
     const tur = d.tur || 'hammadde';
     const ekle = (x: Taslak, seviye: BenzerKart['seviye'], neden: string): number => out.push({ x, seviye, neden });
     const adN = _nm(d.com && d.com.ad ? d.com.ad : finalAd(d));
-    const cakismaAlanlari = Array.isArray(turKurali(tur).cakisma) ? turKurali(tur).cakisma as string[] : [];
+    const cakismaAlanlari = cakismaAlanlariOku(tur);
     let ids: Set<string> | null = null;
     for (const x of liste) {
         if (!x || x.id === d.id || x.yerine)
@@ -159,8 +202,8 @@ export function benzerKartlar(d: Taslak = D, liste?: readonly Taslak[] | null): 
         if ((x.tur || 'hammadde') !== tur)
             continue;
         if (cakismaAlanlari.length) {
-            const dv = cakismaAlanlari.map(k => _nm(cakismaDegeri(d, k)));
-            if (dv.every(Boolean) && cakismaAlanlari.every((k, i) => _nm(cakismaDegeri(x, k)) === dv[i]))
+            const dv = cakismaAlanlari.map(k => _cNorm(k, cakismaDegeri(d, k)));
+            if (dv.every(Boolean) && cakismaAlanlari.every((k, i) => _cNorm(k, cakismaDegeri(x, k)) === dv[i]))
                 ekle(x, 'ayni', 'Aynı ' + cakismaAlanlari.map(k => cakismaAlanAdi(tur, k).toLocaleLowerCase('tr')).join(', '));
             continue;
         }
