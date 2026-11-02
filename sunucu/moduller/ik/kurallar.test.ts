@@ -4,7 +4,7 @@ import {
   haftalikVardiyaPlani, izinGunuDenetle, izinIsGunu,
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
-  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinOnayBildirimi,
+  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinOnayBildirimi,
   GUNLUK_AZAMI_SAAT, ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
   ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
@@ -172,9 +172,9 @@ describe('İK kuralları', () => {
   });
 
   test('IK-16: kesinleşmiş ayı yeniden kesinleştirmek kilit açma yetkisi ister', () => {
-    assert.equal(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir']), null);
-    assert.equal(kod(kesinlestirmeDenetle(true, ['ik.bordro-kesinlestir'])), 'YETKI_YOK');
-    assert.equal(kesinlestirmeDenetle(true, ['ik.bordro-kesinlestir', 'ik.bordro-kilit-ac']), null);
+    assert.equal(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2026-10', '2026-11-02'), null);
+    assert.equal(kod(kesinlestirmeDenetle(true, ['ik.bordro-kesinlestir'], '2026-10', '2026-11-02')), 'YETKI_YOK');
+    assert.equal(kesinlestirmeDenetle(true, ['ik.bordro-kesinlestir', 'ik.bordro-kilit-ac'], '2026-10', '2026-11-02'), null);
   });
 
   test('IK-20: kilitli dönem değişmez ve silinmez; yeni dönem geçmişe dönük açılamaz', () => {
@@ -384,5 +384,37 @@ describe('1806 IK-3: devam kaydı bir günden uzun olamaz', () => {
     assert.equal(kod(h), 'DOGRULAMA');
     assert.equal(h?.alan, 'govde.saat');
     assert.equal(kod(turDenetle('att', devam(24.5))), 'DOGRULAMA');
+  });
+});
+
+describe('1806 IK-1: aynı kişinin etkin izinleri çakışmaz', () => {
+  const l = (id: string, baslangic: string, bitis: string, durum = 'Beklemede', empId = 'emp_1'): Govde => ({ id, kind: 'leave', empId, tur: 'Yıllık izin', baslangic, bitis, gun: 1, durum });
+  const var_ = [l('a', '2026-12-07', '2026-12-09', 'Onaylandı'), l('r', '2026-12-14', '2026-12-14', 'Reddedildi'), l('o', '2026-12-08', '2026-12-08', 'Onaylandı', 'emp_2')];
+  test('kesişen etkin izin reddedilir; kenar günü de kesişir', () => {
+    assert.equal(kod(izinCakismasiDenetle(null, l('y', '2026-12-08', '2026-12-08'), var_)), 'GECERSIZ');
+    assert.equal(kod(izinCakismasiDenetle(null, l('y', '2026-12-09', '2026-12-11'), var_)), 'GECERSIZ');
+    assert.match(izinCakismasiDenetle(null, l('y', '2026-12-01', '2026-12-31'), var_)?.mesaj ?? '', /07\.12\.2026 – 09\.12\.2026 \(Onaylandı\)/);
+  });
+  test('reddedilmiş izin, başka kişi, kendi kaydı ve bitişik gün çakışmaz', () => {
+    assert.equal(izinCakismasiDenetle(null, l('y', '2026-12-14', '2026-12-14'), var_), null);
+    assert.equal(izinCakismasiDenetle(null, l('y', '2026-12-10', '2026-12-11'), var_), null);
+    assert.equal(izinCakismasiDenetle(null, l('y', '2026-12-08', '2026-12-08', 'Beklemede', 'emp_3'), var_), null);
+    assert.equal(izinCakismasiDenetle(var_[0]!, { ...var_[0]!, bitis: '2026-12-10' }, var_), null);
+  });
+  test('geri çekme ve ret denetlenmez; değişmeyen kayıt kilitlenmez; karar (etkinleşme) denetlenir', () => {
+    const bekleyen = l('y', '2026-12-08', '2026-12-08');
+    assert.equal(izinCakismasiDenetle(bekleyen, { ...bekleyen, durum: 'İptal' }, var_), null);
+    assert.equal(izinCakismasiDenetle(bekleyen, { ...bekleyen, durum: 'Reddedildi' }, var_), null);
+    assert.equal(izinCakismasiDenetle(bekleyen, { ...bekleyen, aciklama: 'not' }, var_), null, 'önceden kalan çakışma açıklama düzeltmesini engellemez');
+    assert.equal(kod(izinCakismasiDenetle(bekleyen, { ...bekleyen, durum: 'Onaylandı' }, var_)), 'GECERSIZ');
+  });
+});
+
+describe('1806 IK-2: gelecek ayın bordrosu kesinleşmez', () => {
+  test('içinde bulunulan ay ve geçmiş geçer, sonraki ay reddedilir', () => {
+    assert.equal(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2026-11', '2026-11-30'), null);
+    assert.equal(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2025-12', '2026-11-02'), null);
+    assert.equal(kod(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2026-12', '2026-11-30')), 'GECERSIZ');
+    assert.equal(kod(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir', 'ik.bordro-kilit-ac'], '2030-01', '2026-11-02')), 'GECERSIZ');
   });
 });

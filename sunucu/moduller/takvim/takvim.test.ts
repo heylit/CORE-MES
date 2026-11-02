@@ -82,7 +82,7 @@ describe('takvim (gerçek PostgreSQL)', () => {
       });
     }
     // Geciken taraması (1816): 200 gün önce bekleyen (geciken), 200 gün önce onaylanmış (kapanmış), taramanın dışında bekleyen ve bugünden önceki son iş günü bekleyen izin.
-    const gecmis: [string, number, string][] = [['eski_bekleyen', -200, 'Beklemede'], ['eski_onayli', -200, 'Onaylandı'], ['cok_eski', -GECIKEN_GERI_GUN - 5, 'Beklemede'], ['dun', -1, 'Beklemede']];
+    const gecmis: [string, number, string][] = [['eski_bekleyen', -200, 'Beklemede'], ['eski_onayli', -201, 'Onaylandı'], ['cok_eski', -GECIKEN_GERI_GUN - 5, 'Beklemede'], ['dun', -1, 'Beklemede']];
     for (const [ad, gun, durum] of gecmis) {
       const t = gunOnce(-gun);
       await tamam(c.yonetici, 'POST', `/ik/izinler/leave_${ad}/kaydet`, {

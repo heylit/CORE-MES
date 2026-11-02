@@ -22,7 +22,7 @@ import type { Govde, IzinUcu, KuralHatasi } from './kurallar.ts';
 import {
   EKIP_ALANLARI, FAZLA_MESAI_TURLERI, IS_GUNU_IZIN_TURLERI, GIZLI_AYARLAR, IK_ALANLARI, IK_YAZMA_ISLEMLERI, ILETISIM_ALANLARI, YONETICI_ALANLARI, alanlariSec, ayarDegisikligiDenetle,
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
-  iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
+  iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinCakismasiDenetle, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
   OZLUK_SON_YONETICI_UYARISI, ozlukItmesi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
@@ -287,6 +287,10 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     if (IS_GUNU_IZIN_TURLERI.includes(String(yeni['tur'])) && yeni['durum'] !== 'İptal' && (onceki === null || izinIcerigiDegistiMi(onceki, yeni))) {
       await izinIsGunuDenetle(db, d, yeni);
     }
+    // Aynı kişinin eşzamanlı iki talebi birbirini görmeden geçmesin: kişi başına kilit, sonra taze okuma.
+    await s.anahtarKilitle(db, `ik-izin-${String(yeni['empId'])}`);
+    const izinler = (await s.kayitlar(db, ['leave'])).map(kayitKur).filter((k) => !k.iptal).map((k) => k.govde);
+    firlat(izinCakismasiDenetle(onceki, yeni, izinler));
     yeni['talepTarihi'] = onceki?.['talepTarihi'] ?? gun;
     const once = onceki ? String(onceki['durum']) : null;
     if (yeni['durum'] !== once && yeni['durum'] !== 'Beklemede') {
@@ -438,7 +442,7 @@ export async function iletisimGuncelle(db: Db, kullanici: Kullanici, kimlik: str
 
 export async function bordroKesinlestir(db: Db, kullanici: Kullanici, donem: string, girdiler: Record<string, IkBordroGirdisi>): Promise<IkTopluCevabi> {
   await s.anahtarKilitle(db, `ik-bordro-${donem}`);
-  firlat(kesinlestirmeDenetle(await s.kesinlesmisVarMi(db, donem), kullanici.islemler));
+  firlat(kesinlestirmeDenetle(await s.kesinlesmisVarMi(db, donem), kullanici.islemler, donem, bugun()));
   const d = await durumOku(db, kullanici);
   const ayar = await ayarGovdesi(db);
   const govdeler = d.kayitlar.filter((k) => !k.iptal).map((k) => k.govde);
