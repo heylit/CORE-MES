@@ -58,11 +58,11 @@ function sunucuKur(emir: EmirCevabi, kullanici: Kullanici = YONETICI, komut: (yo
   }));
   return istekler;
 }
-function ac(adres = '/degisiklik-yonetimi/emirler/7') {
+function ac(adres = '/degisiklik-yonetimi/degisiklikler/emirler/7') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}>
-      <Routes><Route path="/degisiklik-yonetimi/emirler/:id" element={<EmirDetay />} /></Routes>
+      <Routes><Route path="/degisiklik-yonetimi/degisiklikler/emirler/:id" element={<EmirDetay />} /></Routes>
     </MemoryRouter></BildirimSaglayici></QueryClientProvider>,
   );
 }
@@ -244,7 +244,7 @@ describe('ECO detay', () => {
     sunucuKur({ ...EMIR, gecmis: [...EMIR.gecmis, { ...kisi, zaman: '2026-10-03T09:00:00+03:00', olay: 'yayina_gonderildi', imzaAnlami: null, aciklama: null, ozet: 'Yayın onayına gönderildi' }] });
     const eski = globalThis.fetch as unknown as (adres: string, s?: RequestInit) => Promise<Response>;
     vi.stubGlobal('fetch', vi.fn(async (adres: string, s?: RequestInit) => (adres.includes('/olaylar') ? json(200, olaylar) : eski(adres, s))));
-    ac('/degisiklik-yonetimi/emirler/7?sekme=kayit');
+    ac('/degisiklik-yonetimi/degisiklikler/emirler/7?sekme=kayit');
     const iz = await screen.findByRole('list', { name: 'Denetim izi' });
     const satirlar = within(iz).getAllByRole('listitem');
     expect(satirlar[0]!.textContent).toContain('Yayın onayına gönderildi');

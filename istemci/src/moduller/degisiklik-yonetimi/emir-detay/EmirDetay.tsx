@@ -23,7 +23,7 @@ import './emir-detay.css';
 
 // Yollar P2'nin rotalarıyla aynı olmalı (DEVIR isteği).
 export const DEGISIKLIKLER_YOLU = '/degisiklik-yonetimi/degisiklikler';
-export const talepYolu = (id: number) => `/degisiklik-yonetimi/talepler/${id}`;
+export const talepYolu = (id: number) => `${DEGISIKLIKLER_YOLU}/talepler/${id}`;
 
 type Pencere = 'yayin' | 'geri' | 'kapat' | null;
 

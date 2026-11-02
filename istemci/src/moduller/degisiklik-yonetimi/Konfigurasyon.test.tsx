@@ -102,7 +102,7 @@ describe('Konfigürasyon', () => {
     const baseline = screen.getByRole('table', { name: 'Yürürlükteki baseline' });
     expect(within(baseline).getByText('DENEME-3 Deneme braket')).toBeTruthy();
     expect(within(baseline).getByText('Müşteri')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /ECO-0003/ }).getAttribute('href')).toBe('/degisiklik-yonetimi/emirler/3');
+    expect(screen.getByRole('link', { name: /ECO-0003/ }).getAttribute('href')).toBe('/degisiklik-yonetimi/degisiklikler/emirler/3');
     // Class I talep yayınlanmadığı için şeridin üstünde uyarı olarak durur.
     expect(screen.getByText(/Yayınlandığında geçerlilik sınırı şeritte görünür/)).toBeTruthy();
   });

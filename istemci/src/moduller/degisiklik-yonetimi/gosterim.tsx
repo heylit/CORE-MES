@@ -4,8 +4,9 @@ import { Rozet, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 
 export const KOK = '/degisiklik-yonetimi';
-export const talepYolu = (id: number): string => `${KOK}/talepler/${id}`;
-export const emirYolu = (id: number): string => `${KOK}/emirler/${id}`;
+// Kayıt sayfaları Değişiklikler'in altındadır: ikinci menü en uzun yol önekiyle seçildiğinden ayrıntıda Değişiklikler seçili kalır.
+export const talepYolu = (id: number): string => `${KOK}/degisiklikler/talepler/${id}`;
+export const emirYolu = (id: number): string => `${KOK}/degisiklikler/emirler/${id}`;
 export const kayitYolu = (tur: 'talep' | 'emir', id: number): string => (tur === 'talep' ? talepYolu(id) : emirYolu(id));
 
 // Listelerdeki kısa sınıf adı; uzun ad (SINIF_ADLARI) form ve künyededir.
