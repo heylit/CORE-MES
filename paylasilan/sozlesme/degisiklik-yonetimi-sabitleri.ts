@@ -99,9 +99,10 @@ export const IMZA_ANLAMLARI = {
 } as const satisfies Partial<Record<(typeof GECMIS_OLAYLARI)[number], string>>;
 // Bağlı olmayan kapanış koşulu varken imza uygulamayı ve doğrulamayı onaylayamaz; kanıtı sistemde olmayanı onaylatmamak için
 // kapatanın bilinmeyeni kabul ettiğini söyler (UYUM-BORCU 2, 5).
-export const KAPANIS_IMZASI_BILINMEYENLE = 'Bağlı olmayan koşulları bilerek kapatıyorum; uygulama ve doğrulama sistemde kanıtlanmadı';
-export const kapanisImzaAnlami = (kosullar: readonly { durum: (typeof KOSUL_HALLERI)[number] }[]): string =>
-  kosullar.some((k) => k.durum === 'bilinmiyor') ? KAPANIS_IMZASI_BILINMEYENLE : IMZA_ANLAMLARI.kapandi;
+// ECO yalnız bütün koşullar kanıtlıyken kapanır (K16 a): bağlı olmayan koşul ('bilinmiyor') kapanışı da engeller,
+// yoksa imza sistemde kanıtı olmayan uygulamayı onaylamış olur. İstemci düğmesi ve sunucu aynı kuralı kullanır.
+export const kapatilabilirMi = (kosullar: readonly { durum: (typeof KOSUL_HALLERI)[number] }[]): boolean => kosullar.every((k) => k.durum === 'tamam');
+export const KAPANIS_ENGELI = 'Kapanış koşullarının hepsi tamam olmadan ECO kapanmaz. Bilinmeyen koşul, sahibi modül bağlanınca kapanır.';
 
 // İç olay günlüğü (1124 a): salt okunur, dışarı gönderilmez. `ilgili`, Aşama 2'de olayı işleyecek modüldür.
 export const OLAY_TURLERI = [

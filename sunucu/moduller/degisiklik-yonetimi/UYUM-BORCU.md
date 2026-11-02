@@ -27,3 +27,4 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 22. Yeni parça numarası alan kalemde (D1, değiştirilemez) konfigürasyon yazılmaz: kartı malzemeler açar (Aşama 2); kart açılınca yeni parçanın ilk konfigürasyonu yazılır.
 23. Kalemin eski dört revizyon sütunu (`eski_/yeni_cizim_revizyonu_id`, `eski_/yeni_rota_revizyonu_id`) 1642 göçüyle öğe tablosuna kopyalandı ve okunmuyor; silinmesi dolu tabloyu değiştiren göçtür, kullanıcı onayıyla ayrı kart.
 24. Öğe revizyon kimlikleri sahibi modülde var mı ve kalemin parçasına mı ait, denetlenmez (14 ile aynı); sahibi modüllerin `disari.ts` okumasıyla kapanır.
+19. Kapanış (K16 a, kart 1819): bilinmeyen koşul varken ECO kapanmaz (`kapatilabilirMi`, sunucu ve düğme aynı kural). Seri ve yeni revizyonla üretim koşulları bugün hep bilinmiyor olduğundan hiçbir ECO kapanamaz; etki çözücü, seri ve rota-üretim kaynakları bağlanınca kapanış açılır.

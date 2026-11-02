@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE, kapanisImzaAnlami } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import { kapatilabilirMi } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
-  izinliKodlar, kapanisKosullari, kapatilabilirMi, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
+  izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
   talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon,
 } from './kurallar.ts';
 import type { EtkilenenEmir, KalemTaslagi, Konfigurasyon } from './kurallar.ts';
@@ -140,16 +140,15 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.equal(emirIlerler('uygulamada', false, true), 'dogrulama');
   });
 
-  test('DY-15: eksik koşul kapanışı durdurur, bilinmeyen durdurmaz', () => {
+  test('DY-15: eksik ve bilinmeyen koşul kapanışı durdurur (K16 a)', () => {
     const bagsiz = kapanisKosullari({ kaynakBagli: false, bekleyenKarar: 0, bekleyenFai: 0 });
     assert.equal(bagsiz.find((k) => k.kosul === 'kararlar')?.durum, 'bilinmiyor');
-    assert.equal(kapatilabilirMi(bagsiz), true);
+    assert.equal(kapatilabilirMi(bagsiz), false);
+    assert.equal(kapatilabilirMi([{ durum: 'tamam' }, { durum: 'tamam' }]), true);
+    assert.equal(kapatilabilirMi([{ durum: 'tamam' }, { durum: 'bilinmiyor' }]), false);
     assert.equal(kapanisKosullari({ kaynakBagli: true, bekleyenKarar: 0, bekleyenFai: 0 })[0]?.durum, 'tamam');
     assert.equal(kapatilabilirMi(kapanisKosullari({ kaynakBagli: true, bekleyenKarar: 1, bekleyenFai: 0 })), false);
     assert.equal(kapatilabilirMi(kapanisKosullari({ kaynakBagli: false, bekleyenKarar: 0, bekleyenFai: 2 })), false);
-    // Bilinmeyen koşul varken imza uygulamayı ve doğrulamayı onaylamaz.
-    assert.equal(kapanisImzaAnlami(bagsiz), KAPANIS_IMZASI_BILINMEYENLE);
-    assert.equal(kapanisImzaAnlami([{ durum: 'tamam' }, { durum: 'tamam' }]), IMZA_ANLAMLARI.kapandi);
   });
 
   test('DY-16: seri uyumu', () => {

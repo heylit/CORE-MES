@@ -1,6 +1,6 @@
 import type { EmirCevabi, FaiSarti, KararSatiri, TalepCevabi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import {
-  IMZA_ANLAMLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, kapanisImzaAnlami, type GecerlilikTuru, type KararKodu,
+  IMZA_ANLAMLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, type GecerlilikTuru, type KararKodu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import { FormPenceresi, Girdi, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useForm } from '../../../ortak/veri/form.ts';
@@ -224,7 +224,7 @@ export function KapatPenceresi({ emir, kapat }: Ortak) {
     <FormPenceresi acik kapat={kapat} baslik={`Kapanış: ${emir.no}`} form={form} kaydetMetni="İmzala ve kapat">
       <KosulListesi emir={emir} />
       <p className="dy-not">Hurda {tutarMetni(emir.hurdaMaliyeti)}, rework {tutarMetni(emir.reworkMaliyeti)}.</p>
-      <ImzaKutusu anlam={kapanisImzaAnlami(emir.kapanisKosullari)} aciklama={form.degerler.aciklama}
+      <ImzaKutusu anlam={IMZA_ANLAMLARI.kapandi} aciklama={form.degerler.aciklama}
         degistir={(aciklama) => form.degistir({ aciklama })} hata={form.hata('aciklama')} />
     </FormPenceresi>
   );

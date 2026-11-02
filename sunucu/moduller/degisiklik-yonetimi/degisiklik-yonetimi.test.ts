@@ -9,7 +9,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
-import { IMZA_ANLAMLARI, KAPANIS_IMZASI_BILINMEYENLE } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { IMZA_ANLAMLARI, KAPANIS_ENGELI } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   EmirCevabi, EmirListeCevabi, GorevlerimCevabi, IzlenebilirlikCevabi, KonfigurasyonCevabi, OlayListeCevabi, ParcaAdaylariCevabi, RaporCevabi,
   SeriListeCevabi, SonUrunlerCevabi, TalepCevabi, TalepListeCevabi,
@@ -296,18 +296,19 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/fai-onayla`, { faiId: f2.id, surum: x.surum });
     assert.equal(x.durum, 'dogrulama');
     assert.equal(x.fai[1]?.onaylayan?.kisiId, onaylayanId);
-    x = await tamam(onaylayan, 'POST', `${K}/emirler/${e.id}/kapat`, { aciklama: 'Doğrulandı', surum: x.surum });
-    assert.equal(x.durum, 'kapandi');
-    assert.match(x.kapanis ?? '', /^\d{4}-\d{2}-\d{2}$/);
-    // Bağlı olmayan koşulla kapanış uygulandı ve doğrulandı imzası atmaz.
-    const kapanis = x.gecmis.at(-1);
-    assert.deepEqual([kapanis?.olay, kapanis?.imzaAnlami], ['kapandi', KAPANIS_IMZASI_BILINMEYENLE]);
-    assert.match(kapanis?.ozet ?? '', /3 koşul bilinmiyor/);
+    // K16 a: bağlı olmayan koşul (bilinmiyor) kapanışı engeller; emir doğrulamada kalır, imza atılmaz.
+    assert.ok(x.kapanisKosullari.some((k) => k.durum === 'bilinmiyor'));
+    await kod(onaylayan, `${K}/emirler/${e.id}/kapat`, { aciklama: 'Doğrulandı', surum: x.surum }, 409, new RegExp(KAPANIS_ENGELI.slice(0, 30)));
+    x = await tamam(onaylayan, 'GET', `${K}/emirler/${e.id}`);
+    assert.equal(x.durum, 'dogrulama');
+    assert.equal(x.kapanis, null);
     assert.match(x.gecmis.find((g) => g.olay === 'yayinlandi')?.ozet ?? '', /bağlı değil/);
     assert.deepEqual(x.gecmis.map((g) => g.olay), [
       'emir_acildi', 'taslak_acildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'kalem_kaydedildi', 'yayina_gonderildi', 'geri_gonderildi',
-      'yayina_gonderildi', 'yayinlandi', 'fai_onaylandi', 'fai_onaylandi', 'fai_tamam', 'kapandi',
+      'yayina_gonderildi', 'yayinlandi', 'fai_onaylandi', 'fai_onaylandi', 'fai_tamam',
     ]);
+    // Kapanmış ECO bugün API ile üretilemez; listeler ve raporlar için bağlama sonrasındaki hâl doğrudan yazılır.
+    await vt().sorgu(`UPDATE degisiklik_yonetimi_emir SET durum = 'kapandi', kapanis = current_date, surum = surum + 1 WHERE id = $1`, [e.id]);
     const olaylar = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?ilgili=rota`);
     assert.ok(olaylar.satirlar.some((o) => o.kayitNo === x.no && o.tur === 'revizyon_yayinlandi' && o.alanlar.yeniParcaNo === 'YENI-PARCA-1'));
     // 1175 a: arama kayıt numarasında ve veri alanlarının değerlerinde; joker karakter düz metindir.
