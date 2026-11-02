@@ -5,6 +5,8 @@ import type { AlanGovdesi, BirimDurumu, DurumKomutu, SayacKapsami } from '#payla
 // Sabit karakterler markalanabilir ASCII ile sınırlıdır.
 const PARCA_DESENI = /\{([A-Z]+)(?::(\d))?\}/g;
 const SABIT_DESENI = /^[A-Za-z0-9._/-]*$/;
+// Sabit marka metni de markalanabilir ASCII'dir; okunaklık için tek boşluk da girer (ör. "REV C").
+const SABIT_METIN_DESENI = /^[A-Za-z0-9._/ -]+$/;
 const BILINEN = new Set(['PARCA', 'EMIR', 'YY', 'YYYY', 'WW', 'MM', 'DD', 'SEQ']);
 
 export function sablonHatasi(sablon: string, kapsam: SayacKapsami): string | null {
@@ -27,6 +29,9 @@ export function alanHatasi(alanlar: readonly AlanGovdesi[]): string | null {
   for (const [i, a] of alanlar.entries()) {
     if (a.icerik === 'sabit' && a.sabitMetin === null) return `${i + 1}. markanın sabit metni boş.`;
     if (a.icerik === 'seri' && a.sabitMetin !== null) return `${i + 1}. marka seri no taşır; sabit metin yazılmaz.`;
+    if (a.sabitMetin !== null && !SABIT_METIN_DESENI.test(a.sabitMetin)) {
+      return `${i + 1}. markanın sabit metninde yalnız İngilizce harf, rakam, boşluk ve - _ . / kullanılır.`;
+    }
   }
   return null;
 }

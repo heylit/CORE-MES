@@ -65,6 +65,9 @@ export const tanimKaydetGovdesi = tanimAlanlari.extend(beklenenSurum);
 
 export const tanimSorgusu = z.object({ malzemeId: id.optional() });
 
+// Pasif tanım listede kalır, seri vermez (istasyon seçiminde görünmez); geri etkinleştirilebilir.
+export const tanimAktiflikGovdesi = z.object({ aktif: z.boolean(), ...beklenenSurum });
+
 export const alanSemasi = z.object({
   sira: z.number().int(),
   ad: z.string(),
@@ -90,6 +93,7 @@ export const tanimSemasi = z.object({
   sayacKapsami: z.enum(SAYAC_KAPSAMLARI),
   baslangicSirasi: z.number().int(),
   dogrulama: z.boolean(),
+  aktif: z.boolean(),
   model: z.object({ belgeId: z.number().int(), revizyon: z.string() }).nullable(),
   alanlar: z.array(alanSemasi),
   surum: surumSemasi,
@@ -141,20 +145,28 @@ export const olaySemasi = z.object({
   id: z.number().int(),
   olay: z.enum(BIRIM_OLAYLARI),
   hurdaNedeniId: z.number().int().nullable(),
+  // Okunur ad; neden ya da kişi kaydı silinmişse boş.
+  hurdaNedeni: z.string().nullable(),
   aciklama: z.string().nullable(),
   kisiId: z.number().int(),
+  kisiAd: z.string().nullable(),
   zaman: zamanSemasi,
 });
 
 // Emir no okunur ad içindir; emir silinmişse boş.
 export const birimAyrintisiCevabi = birimSemasi.extend({ emirNo: z.string().nullable(), olaylar: z.array(olaySemasi) });
 
+// Seri no parçası: numaranın herhangi bir yerinde geçen birimler, tam eşleşen önde.
 export const birimSorgusu = z.object({
   seriNo: z.string().trim().min(1).max(80).optional(),
   emirId: id.optional(),
+  tanimId: id.optional(),
   durum: z.enum(BIRIM_DURUMLARI).optional(),
 });
 export const birimlerCevabi = z.object({ birimler: z.array(birimSemasi) });
+
+// Özet bir tanımla sınırlanabilir (istasyon yalnız kendi işini sayar); verilmezse emrin bütün markaları.
+export const emirOzetiSorgusu = z.object({ tanimId: id.optional() });
 
 export const emirOzetiCevabi = z.object({
   uretimEmriId: z.number().int(),
@@ -174,6 +186,7 @@ export type MarkalamaAlani = z.output<typeof alanSemasi>;
 export type MarkalamaTanimi = z.output<typeof tanimSemasi>;
 export type TanimEkleGovdesi = z.output<typeof tanimEkleGovdesi>;
 export type TanimKaydetGovdesi = z.output<typeof tanimKaydetGovdesi>;
+export type TanimAktiflikGovdesi = z.output<typeof tanimAktiflikGovdesi>;
 export type TanimlarCevabi = z.output<typeof tanimlarCevabi>;
 export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;
 export type TanimEmirleriCevabi = z.output<typeof tanimEmirleriCevabi>;

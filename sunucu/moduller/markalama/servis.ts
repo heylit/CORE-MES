@@ -6,12 +6,13 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   BirimAyrintisi, BirimDurumu, BirimlerCevabi, DogrulaGovdesi, DurumGovdesi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi,
-  MarkalamaTanimi, OnizlemeCevabi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
+  MarkalamaTanimi, OnizlemeCevabi, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { hurdaNedeniGetir } from '../durus-nedenleri/disari.ts';
 import { istasyonGetir } from '../istasyonlar/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
@@ -28,7 +29,7 @@ async function tanimlariKur(db: Db, satirlar: s.TanimSatiri[]): Promise<Markalam
   const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeId));
   return satirlar.map((t) => ({
     id: t.id, malzemeId: t.malzemeId, malzemeKodu: malzemeler.get(t.malzemeId)?.kod ?? null, opNo: t.opNo,
-    seriSablonu: t.seriSablonu, sayacKapsami: t.sayacKapsami, baslangicSirasi: t.baslangicSirasi, dogrulama: t.dogrulama,
+    seriSablonu: t.seriSablonu, sayacKapsami: t.sayacKapsami, baslangicSirasi: t.baslangicSirasi, dogrulama: t.dogrulama, aktif: t.aktif,
     model: t.modelBelgeId === null || t.modelRevizyon === null ? null : { belgeId: t.modelBelgeId, revizyon: t.modelRevizyon },
     alanlar: alanlar.get(t.id) ?? [], surum: t.surum, degismeZamani: t.degismeZamani,
   }));
@@ -127,6 +128,15 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
   return tanimGetir(db, id);
 }
 
+export async function tanimAktiflik(db: Db, kullanici: Kullanici, id: number, g: TanimAktiflikGovdesi): Promise<MarkalamaTanimi> {
+  await surumluGuncelle({
+    guncelle: () => s.tanimAktiflikYaz(db, id, g.aktif, g.surum, kullanici.id),
+    varMi: () => s.tanimVarMi(db, id),
+    bulunamadiIletisi: TANIM_YOK,
+  });
+  return tanimGetir(db, id);
+}
+
 interface SeriKaynagi { parca: string; emirNo: string }
 
 // Emirsiz önizlemede emir no bilinmez; boş bırakılırsa numara gerçeğe benzer ama yanlış görünür, yer tutucu yazılır.
@@ -164,6 +174,7 @@ export async function onizleme(db: Db, tanimId: number, emirId: number | null): 
 
 export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): Promise<MarkalamaBirimi> {
   const t = await varOlanTanim(db, g.tanimId);
+  if (!t.aktif) throw gecersiz('Bu markalama tanımı pasif; seri verilmez.');
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
@@ -228,17 +239,36 @@ export async function birimGetir(db: Db, id: number): Promise<BirimAyrintisi> {
   const birim = await s.birimOku(db, id);
   if (birim === null) throw bulunamadi(BIRIM_YOK);
   const emir = await uretimEmriOzeti(db, birim.uretimEmriId);
-  return { ...birim, emirNo: emir?.emirNo ?? null, olaylar: await s.olaylariOku(db, id) };
+  const olaylar = await s.olaylariOku(db, id);
+  const kisiler = await kisiAdlari(db, olaylar.map((o) => o.kisiId));
+  const nedenIdleri = [...new Set(olaylar.flatMap((o) => (o.hurdaNedeniId === null ? [] : [o.hurdaNedeniId])))];
+  const nedenler = new Map<number, string>();
+  for (const nid of nedenIdleri) {
+    const n = await hurdaNedeniGetir(db, nid);
+    if (n !== null) nedenler.set(nid, `${n.kod} · ${n.ad}`);
+  }
+  return {
+    ...birim, emirNo: emir?.emirNo ?? null,
+    olaylar: olaylar.map((o) => ({
+      ...o, kisiAd: kisiler.get(o.kisiId) ?? null, hurdaNedeni: o.hurdaNedeniId === null ? null : nedenler.get(o.hurdaNedeniId) ?? null,
+    })),
+  };
 }
 
 export async function birimler(
-  db: Db, q: { seriNo?: string | undefined; emirId?: number | undefined; durum?: BirimDurumu | undefined },
+  db: Db, q: { seriNo?: string | undefined; emirId?: number | undefined; tanimId?: number | undefined; durum?: BirimDurumu | undefined },
 ): Promise<BirimlerCevabi> {
-  return { birimler: await s.birimleriOku(db, { seriNo: q.seriNo ?? null, emirId: q.emirId ?? null, durum: q.durum ?? null }, BIRIM_LISTE_SINIRI) };
+  return {
+    birimler: await s.birimleriOku(
+      db, { seriNo: q.seriNo ?? null, emirId: q.emirId ?? null, tanimId: q.tanimId ?? null, durum: q.durum ?? null }, BIRIM_LISTE_SINIRI,
+    ),
+  };
 }
 
-export async function emirOzeti(db: Db, emirId: number): Promise<EmirOzetiCevabi> {
-  const satirlar = await s.emirSayilari(db, emirId);
+// Olmayan emrin özeti sıfırlarla dönmez: sıfır "hiç markalanmadı" demektir, emrin yokluğu bulunamadıdır.
+export async function emirOzeti(db: Db, emirId: number, tanimId: number | null): Promise<EmirOzetiCevabi> {
+  if ((await uretimEmriOzeti(db, emirId)) === null) throw bulunamadi('Üretim emri bulunamadı.');
+  const satirlar = await s.emirSayilari(db, emirId, tanimId);
   const sayilar = { saglam: 0, red: 0, rework: 0, hurda: 0 };
   let dogrulanan = 0;
   for (const r of satirlar) { sayilar[r.durum] = r.adet; dogrulanan += r.dogrulanan; }

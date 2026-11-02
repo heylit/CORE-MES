@@ -12,6 +12,7 @@ export interface TanimSatiri {
   sayacKapsami: SayacKapsami;
   baslangicSirasi: number;
   dogrulama: boolean;
+  aktif: boolean;
   modelBelgeId: number | null;
   modelRevizyon: string | null;
   surum: number;
@@ -19,7 +20,7 @@ export interface TanimSatiri {
 }
 
 const TANIM_SUTUNLARI = `id, malzeme_id AS "malzemeId", op_no AS "opNo", seri_sablonu AS "seriSablonu", sayac_kapsami AS "sayacKapsami",
-  baslangic_sirasi AS "baslangicSirasi", dogrulama, model_belge_id AS "modelBelgeId", model_revizyon AS "modelRevizyon", surum,
+  baslangic_sirasi AS "baslangicSirasi", dogrulama, aktif, model_belge_id AS "modelBelgeId", model_revizyon AS "modelRevizyon", surum,
   ${zamanMetni('degisme_zamani')} AS "degismeZamani"`;
 
 export function tanimlariOku(db: Db, malzemeId: number | null): Promise<TanimSatiri[]> {
@@ -62,6 +63,15 @@ export function tanimGuncelle(db: Db, id: number, y: TanimYazimi & { surum: numb
       WHERE id = $1 AND surum = $9
       RETURNING id`,
     [id, y.seriSablonu, y.sayacKapsami, y.baslangicSirasi, y.dogrulama, y.modelBelgeId, y.modelRevizyon, kisiId, y.surum],
+  );
+}
+
+// Sürüm tutmazsa satır dönmez; çağıran surumluGuncelle ile 404/409 ayırır.
+export function tanimAktiflikYaz(db: Db, id: number, aktif: boolean, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE markalama_tanimi SET aktif = $2, degistiren_kisi_id = $3, degisme_zamani = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $4 RETURNING id`,
+    [id, aktif, kisiId, surum],
   );
 }
 
@@ -181,14 +191,18 @@ export function seridenBirimOku(db: Db, seriNo: string, kilitle = false): Promis
   );
 }
 
+// Seri no parçası büyük-küçük harften bağımsız, numaranın içinde aranır; okutulan tam numara önde gelir.
+const likeKacir = (q: string): string => q.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 export function birimleriOku(
-  db: Db, s: { seriNo: string | null; emirId: number | null; durum: BirimDurumu | null }, sinir: number,
+  db: Db, s: { seriNo: string | null; emirId: number | null; tanimId: number | null; durum: BirimDurumu | null }, sinir: number,
 ): Promise<MarkalamaBirimi[]> {
   return db.sorgu<MarkalamaBirimi>(
     `SELECT ${BIRIM_SUTUNLARI} FROM markalama_birimi
-      WHERE ($1::text IS NULL OR seri_no = $1) AND ($2::int IS NULL OR uretim_emri_id = $2) AND ($3::text IS NULL OR durum = $3)
-      ORDER BY id DESC LIMIT $4`,
-    [s.seriNo, s.emirId, s.durum, sinir],
+      WHERE ($1::text IS NULL OR upper(seri_no) LIKE $2) AND ($3::int IS NULL OR uretim_emri_id = $3) AND ($4::text IS NULL OR durum = $4)
+        AND ($5::int IS NULL OR tanim_id = $5)
+      ORDER BY (upper(seri_no) = upper($1)) DESC NULLS LAST, id DESC LIMIT $6`,
+    [s.seriNo, s.seriNo === null ? null : `%${likeKacir(s.seriNo.toUpperCase())}%`, s.emirId, s.durum, s.tanimId, sinir],
   );
 }
 
@@ -213,18 +227,20 @@ export async function olayYaz(
   );
 }
 
-export function olaylariOku(db: Db, birimId: number): Promise<BirimOlayKaydi[]> {
-  return db.sorgu<BirimOlayKaydi>(
+export function olaylariOku(db: Db, birimId: number): Promise<Omit<BirimOlayKaydi, 'hurdaNedeni' | 'kisiAd'>[]> {
+  return db.sorgu<Omit<BirimOlayKaydi, 'hurdaNedeni' | 'kisiAd'>>(
     `SELECT id::int AS id, olay, hurda_nedeni_id AS "hurdaNedeniId", aciklama, kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman
        FROM markalama_birim_olayi WHERE birim_id = $1 ORDER BY id`,
     [birimId],
   );
 }
 
-export async function emirSayilari(db: Db, emirId: number): Promise<{ durum: BirimDurumu; adet: number; dogrulanan: number }[]> {
+export async function emirSayilari(
+  db: Db, emirId: number, tanimId: number | null,
+): Promise<{ durum: BirimDurumu; adet: number; dogrulanan: number }[]> {
   return db.sorgu<{ durum: BirimDurumu; adet: number; dogrulanan: number }>(
     `SELECT durum, count(*)::int AS adet, count(dogrulama_zamani)::int AS dogrulanan
-       FROM markalama_birimi WHERE uretim_emri_id = $1 GROUP BY durum`,
-    [emirId],
+       FROM markalama_birimi WHERE uretim_emri_id = $1 AND ($2::int IS NULL OR tanim_id = $2) GROUP BY durum`,
+    [emirId, tanimId],
   );
 }

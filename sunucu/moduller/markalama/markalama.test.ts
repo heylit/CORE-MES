@@ -264,6 +264,53 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme`)).govde.numaralar[0], `${kod}-{EMIR}-001`, 'yeni emir baştan başlar');
   });
 
+  test('MRK-U12: pasif tanım seri vermez ve geri etkinleşir; sürüm ve yetki denetlenir', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    const aktiflik = (aktif: boolean, surum: number, ad = 'yonetici') => istek<MarkalamaTanimi>(ad, 'POST', `/markalama/tanimlar/${t.id}/aktiflik`, { aktif, surum });
+    assert.equal((await aktiflik(false, t.surum, 'operator')).durum, 403);
+    const pasif = await aktiflik(false, t.surum);
+    assert.equal(pasif.durum, 200, JSON.stringify(pasif.govde));
+    assert.equal(pasif.govde.aktif, false);
+    assert.equal((await aktiflik(true, t.surum)).durum, 409, 'eski sürüm');
+    const red = await istek<{ mesaj?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, sonuc: 'iyi' });
+    assert.equal(red.durum, 422);
+    assert.match(red.govde.mesaj ?? '', /pasif/);
+    const liste = (await istek<{ tanimlar: MarkalamaTanimi[] }>('operator', 'GET', `/markalama/tanimlar?malzemeId=${m}`)).govde.tanimlar;
+    assert.deepEqual(liste.map((x) => [x.id, x.aktif]), [[t.id, false]], 'pasif tanım listede kalır');
+    const etkin = await aktiflik(true, pasif.govde.surum);
+    assert.equal(etkin.govde.aktif, true);
+    assert.equal((await markala('operator', t.id, emir)).durum, 200);
+  });
+
+  test('MRK-U13: seri parçasıyla arama, tanım süzgeci, olay kişi adı ve hurda nedeni; olmayan emrin özeti 404', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const t2 = tanimSemasi.parse((await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 70, seriSablonu: 'B{PARCA}-{SEQ:5}', alanlar: [seriAlani],
+    })).govde);
+    const emir = await emirAc(m);
+    const a = (await markala('operator', t.id, emir)).govde;
+    await markala('operator', t.id, emir);
+    await markala('operator', t2.id, emir);
+    const ara = async (q: string) => (await istek<{ birimler: MarkalamaBirimi[] }>('kalite', 'GET', `/markalama/birimler?${q}`)).govde.birimler;
+    const parca = a.seriNo.slice(2, 10).toLowerCase();
+    assert.equal((await ara(`seriNo=${encodeURIComponent(parca)}&emirId=${emir}`)).length, 3, 'parça, harften bağımsız');
+    assert.equal((await ara(`seriNo=${encodeURIComponent(a.seriNo)}`))[0]?.id, a.id, 'tam eşleşme önde');
+    assert.deepEqual((await ara('seriNo=%25')).length, 0, 'joker karakter kaçırılır');
+    assert.equal((await ara(`emirId=${emir}&tanimId=${t.id}`)).length, 2);
+    const oz = emirOzetiCevabi.parse((await istek('kalite', 'GET', `/markalama/emirler/${emir}/ozet?tanimId=${t2.id}`)).govde);
+    assert.deepEqual(oz.sayilar, { saglam: 1, red: 0, rework: 0, hurda: 0 });
+    assert.equal((await istek('kalite', 'GET', '/markalama/emirler/2147483647/ozet')).durum, 404);
+    const neden = await o().vt.tek<{ id: number; kod: string; ad: string }>('SELECT id, kod, ad FROM hurda_nedeni ORDER BY id LIMIT 1');
+    const h = await istek<MarkalamaBirimi>('kalite', 'POST', `/markalama/birimler/${a.id}/durum`, { komut: 'hurda', hurdaNedeniId: neden!.id, surum: a.surum });
+    assert.equal(h.durum, 200, JSON.stringify(h.govde));
+    const ayr = birimAyrintisiCevabi.parse((await istek('kalite', 'GET', `/markalama/birimler/${a.id}`)).govde);
+    assert.deepEqual(ayr.olaylar.map((x) => x.kisiAd), ['Deneme operator', 'Deneme kalite']);
+    assert.equal(ayr.olaylar[1]?.hurdaNedeni, `${neden!.kod} · ${neden!.ad}`);
+  });
+
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
     const m = await malzemeAc();
     const t = await tanimAc(m, { yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });
