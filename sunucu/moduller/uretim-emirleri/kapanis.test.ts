@@ -209,6 +209,25 @@ describe('uretim-emirleri onaylı kapanış (1072 a, 1074-1080, 1064; gerçek Po
     assert.equal(biten?.kapanisSonucu, 'tamamlandi');
   });
 
+  test('1884: kapanışı tamamlanan emre planlama ve sayım komutları yazmaz (1080 a)', async () => {
+    const id = await bitmisEmir();
+    let k = await basarili('kalite', id, 'kalite-onay', { surum: (await oku(id)).surum });
+    k = await basarili('mudur', id, 'mudur-onay', { surum: k.surum });
+    assert.equal(k.asama, 'tamam');
+    const surum = async () => adimliEmirCevabi.parse((await istek('planlama', 'GET', `/adimli-emirler/${id}`)).govde).emir.surum;
+    const once = await surum();
+    const komutlar: [string, Record<string, unknown>][] = [
+      ['iptal', {}], ['plana-al', {}], ['bol', { adimSira: 1, adet: 1 }], ['oncelik', { oncelik: 1 }],
+    ];
+    for (const [eylem, govde] of komutlar) {
+      const c = await istek<{ mesaj?: string }>('planlama', 'POST', `/adimli-emirler/${id}/${eylem}`, { ...govde, surum: once });
+      assert.equal(c.durum, 409, `${eylem}: ${JSON.stringify(c.govde)}`);
+    }
+    await assert.rejects(tx((db) => emirSayim(db, op(), id, { tur: 'saglam', adet: 1 })), UygulamaHatasi);
+    await red(tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay')), KAPANIS_KILITLI);
+    assert.equal(await surum(), once, 'reddedilen komutlar emre yazmaz');
+  });
+
   test('1077 b: iki işlemi olan aynı kişi iki onayı da verir', async () => {
     const id = await bitmisEmir();
     const k1 = await basarili('ikili', id, 'kalite-onay', { surum: (await oku(id)).surum });
