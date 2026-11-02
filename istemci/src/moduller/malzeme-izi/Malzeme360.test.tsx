@@ -75,6 +75,19 @@ describe('Malzeme 360 (kart 1296)', () => {
     expect(screen.getByRole('link', { name: /Stok/ }).getAttribute('href')).toBe('/stok/malzemeler/9');
   });
 
+  it('farklı birimdeki sipariş satırları toplanmaz: her birim ayrı kutu, kartın birimi önce', async () => {
+    sunucuKur({ ...V360, gelecek: [
+      { siparisNo: 'SA-000501', tarih: '2026-11-04', miktar: '3', birim: 'boy' },
+      { siparisNo: 'SA-000502', tarih: null, miktar: '0.1', birim: 'kg' },
+      { siparisNo: 'SA-000503', tarih: null, miktar: '0.2', birim: 'kg' },
+      { siparisNo: 'SA-000504', tarih: null, miktar: '2', birim: 'boy' },
+    ] });
+    ac('/malzeme-izi/9');
+    const serit = await screen.findByRole('list', { name: 'Malzemenin hâli' });
+    const kutular = within(serit).getAllByText('Siparişte (gelecek)').map((r) => r.closest('li')?.querySelector('strong')?.textContent);
+    expect(kutular).toEqual(['0,3 kg', '5 boy']);
+  });
+
   it('fiyat yoksa "—", sıfır yazılmaz; finans yetkisi yoksa fiyat bölümü yerine not', async () => {
     sunucuKur();
     ac('/malzeme-izi/9');

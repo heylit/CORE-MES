@@ -1,4 +1,4 @@
-import type { StokGrubu } from '#paylasilan/sozlesme/malzeme-izi.ts';
+import type { GelecekSatiri, StokGrubu } from '#paylasilan/sozlesme/malzeme-izi.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 // Stok'un değer grupları (228 a); ad ve ton ekranda tek yerde.
@@ -29,3 +29,17 @@ export const paraMetni = (m: string | null, birim = 'TL'): string => (m === null
 // Tarih 'GGGG-AA-GG' gelir; saat dilimi kaymasın diye öğlen alınır.
 export const tarihMetni = (t: string | null): string => (t === null ? 'Tarihsiz' : TARIH.format(new Date(`${t}T12:00:00`)));
 export const zamanMetni = (z: string): string => ZAMAN.format(new Date(z));
+
+// Sipariş satırı alış birimiyle gelir; stok biriminden farklı olabilir ve katsayı burada bilinmez. Birimler toplanmaz:
+// her birim kendi toplamıyla, kartın biriminki önce. Toplam binde üç basamağa yuvarlanır (kayan nokta artığı yazılmaz).
+export function siparisToplamlari(gelecek: readonly GelecekSatiri[], kartBirimi: string | null): { birim: string | null; miktar: string }[] {
+  const toplam = new Map<string | null, number>();
+  for (const g of gelecek) {
+    const b = g.birim.trim() === '' ? kartBirimi : g.birim;
+    toplam.set(b, (toplam.get(b) ?? 0) + Number(g.miktar));
+  }
+  return [...toplam]
+    .filter(([, m]) => m > 0)
+    .sort(([a], [b]) => (a === kartBirimi ? -1 : b === kartBirimi ? 1 : 0))
+    .map(([birim, m]) => ({ birim, miktar: String(Math.round(m * 1000) / 1000) }));
+}

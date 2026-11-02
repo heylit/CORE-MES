@@ -5,7 +5,7 @@ import type { GelecekSatiri, Malzeme360Cevabi, MalzemeAramaCevabi, MalzemeAramaS
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { GRUP, ONAY_ADI, TUR_ADI, miktarMetni, paraMetni, tarihMetni, zamanMetni } from './gorunum.ts';
+import { GRUP, ONAY_ADI, TUR_ADI, miktarMetni, paraMetni, siparisToplamlari, tarihMetni, zamanMetni } from './gorunum.ts';
 import './malzeme-izi.css';
 
 const ARAMA_SUTUNLARI: readonly Sutun<MalzemeAramaSatiri>[] = [
@@ -43,16 +43,15 @@ export function MalzemeSec() {
 
 function Serit({ v }: { v: Malzeme360Cevabi }) {
   const birim = v.kart.birim;
-  const siparis = v.gelecek.reduce((t, g) => t + Number(g.miktar), 0);
   const kutular = [
-    ...(v.stok?.gruplar ?? []).map((g) => ({ anahtar: g.grup, ad: GRUP[g.grup].ad, ton: GRUP[g.grup].ton, miktar: g.miktar })),
-    ...(siparis > 0 ? [{ anahtar: 'siparis', ad: 'Siparişte (gelecek)', ton: 'bilgi' as const, miktar: String(siparis) }] : []),
+    ...(v.stok?.gruplar ?? []).map((g) => ({ anahtar: g.grup, ad: GRUP[g.grup].ad, ton: GRUP[g.grup].ton, miktar: g.miktar, birim })),
+    ...siparisToplamlari(v.gelecek, birim).map((s) => ({ anahtar: `siparis-${s.birim ?? ''}`, ad: 'Siparişte (gelecek)', ton: 'bilgi' as const, miktar: s.miktar, birim: s.birim })),
   ];
   if (kutular.length === 0) return <p className="tc-miz-not">Stokta bakiye ve açık sipariş yok.</p>;
   return (
     <ul className="tc-miz-serit" aria-label="Malzemenin hâli">
       {kutular.map((k) => (
-        <li key={k.anahtar} className="tc-miz-hal"><strong>{miktarMetni(k.miktar, birim)}</strong><Rozet ton={k.ton}>{k.ad}</Rozet></li>
+        <li key={k.anahtar} className="tc-miz-hal"><strong>{miktarMetni(k.miktar, k.birim)}</strong><Rozet ton={k.ton}>{k.ad}</Rozet></li>
       ))}
     </ul>
   );
