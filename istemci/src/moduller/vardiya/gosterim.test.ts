@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kisaAdlar, saatOku, tarihOku, zamanMetni, zamanOku } from './gosterim.ts';
+import { kisaAdlar, saatOku, tarihOku, yeniVardiyaAdi, zamanMetni, zamanOku } from './gosterim.ts';
 
 describe('kisaAdlar', () => {
   it('baş harfi aynı vardiyalar ayrışana kadar harf ekler; tek olan tek harf kalır', () => {
@@ -38,5 +38,13 @@ describe('yerel ayardan bağımsız saat ve tarih okuma', () => {
     expect(zamanOku('29.10.2026')).toBeNull();
     expect(zamanMetni('2026-10-29T08:00')).toBe('29.10.2026 08:00');
     expect(zamanMetni('')).toBe('');
+  });
+});
+
+describe('yeniVardiyaAdi', () => {
+  it('sayı + 1 alınmışsa ilk boştaki numarayı verir', () => {
+    expect(yeniVardiyaAdi(['Gündüz', 'Akşam'])).toBe('Vardiya 3');
+    expect(yeniVardiyaAdi(['Gündüz', 'Vardiya 3'])).toBe('Vardiya 4');
+    expect(yeniVardiyaAdi(['Vardiya 4 ', 'Vardiya 5', 'Gece'])).toBe('Vardiya 6');
   });
 });
