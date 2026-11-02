@@ -5,7 +5,7 @@ import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, useBildirim 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GorevKarti } from './GorevKarti.tsx';
-import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni } from './gorunum.ts';
+import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni, tamSayiGirdisi } from './gorunum.ts';
 import { useGorevKomutu, useIslemVar, yazmaIletisi } from './yazma.ts';
 import './idari-isler.css';
 
@@ -58,7 +58,6 @@ export function AracGorevleri() {
 }
 
 const KOMUT_ADI: Partial<Record<AracGorevi['durum'], string>> = { bekliyor: 'Onayla', onaylandi: 'Çıkış', yolda: 'Dönüş' };
-const KM = /^\d{1,7}$/;
 const belgesiGeciyor = (a: Arac, sonGun: string): boolean =>
   (a.muayeneTarihi !== null && a.muayeneTarihi < sonGun) || (a.sigortaTarihi !== null && a.sigortaTarihi < sonGun);
 
@@ -92,7 +91,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
     }
   };
 
-  const kmGecerli = KM.test(km.trim());
+  // Km "20.010" gibi binlik noktalı da yazılır.
+  const kmSayi = tamSayiGirdisi(km, 7);
   const ana = red ? (
     <Dugme tur="tehlike" simge="x" disabled={neden.trim() === ''} yukleniyor={bekliyor}
       onClick={() => void calistir('reddet', { neden: neden.trim() }, 'Araç talebi reddedildi')}>Reddet</Dugme>
@@ -100,8 +100,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
     <Dugme tur="birincil" simge="check" disabled={aracId === ''} yukleniyor={bekliyor}
       onClick={() => void calistir('onayla', { aracId: Number(aracId) }, 'Araç görevi onaylandı')}>Onayla</Dugme>
   ) : (
-    <Dugme tur="birincil" simge="check" disabled={!kmGecerli} yukleniyor={bekliyor}
-      onClick={() => void calistir(gorev.durum === 'onaylandi' ? 'cikis' : 'donus', { km: Number(km.trim()) },
+    <Dugme tur="birincil" simge="check" disabled={kmSayi === null} yukleniyor={bekliyor}
+      onClick={() => void calistir(gorev.durum === 'onaylandi' ? 'cikis' : 'donus', { km: kmSayi ?? 0 },
         gorev.durum === 'onaylandi' ? 'Çıkış yazıldı' : 'Dönüş yazıldı')}>
       {gorev.durum === 'onaylandi' ? 'Çıkışı yaz' : 'Dönüşü yaz'}
     </Dugme>

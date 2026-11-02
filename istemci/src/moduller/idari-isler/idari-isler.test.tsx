@@ -426,13 +426,13 @@ describe('Araç masrafları', () => {
     ac('/idari-isler/filo');
     fireEvent.click(await screen.findByRole('button', { name: '34 DNM 101 masrafları' }));
     const pencere = await screen.findByRole('dialog', { name: '34 DNM 101 masrafları' });
-    fireEvent.change(within(pencere).getByLabelText(/Tutar/), { target: { value: '980,5' } });
+    fireEvent.change(within(pencere).getByLabelText(/Tutar/), { target: { value: '1.250,5' } });
     fireEvent.change(within(pencere).getByLabelText(/Tarih/), { target: { value: '2026-10-17' } });
-    fireEvent.change(within(pencere).getByLabelText(/Km/), { target: { value: '89150' } });
+    fireEvent.change(within(pencere).getByLabelText(/Km/), { target: { value: '89.150' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Masrafı kaydet' }));
     await screen.findByText('Masraf kaydedildi');
     const [yazma] = yazmalar(istekler);
-    expect(yazma?.govde).toEqual({ tarih: '2026-10-17', tur: 'yakit', tutar: '980.5', km: 89_150 });
+    expect(yazma?.govde).toEqual({ tarih: '2026-10-17', tur: 'yakit', tutar: '1250.5', km: 89_150 });
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
   });
 

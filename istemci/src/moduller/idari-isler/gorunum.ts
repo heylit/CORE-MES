@@ -126,6 +126,22 @@ export const MASRAF_TURU: Record<MasrafTuru, string> = {
   otoyol: 'Otoyol ve köprü', kira: 'Kira', diger: 'Diğer',
 };
 export const MASRAF_TURLERI = Object.keys(MASRAF_TURU) as MasrafTuru[];
+// Ekran tutarı ve km'yi binlik noktayla gösterdiği için ("1.250,50 TL", "20.000") kullanıcı da öyle yazar. Kuruş en çok iki basamak
+// olduğundan virgülsüz "1.250" ancak binlik okunur; "12.5" ondalıktır. Sonuç sunucunun beklediği noktalı metin, okunamazsa null.
+const BINLIKLI = /^\d{1,3}(\.\d{3})+$/;
+export function tutarGirdisi(v: string, tamBasamak: number): string | null {
+  const t = v.trim();
+  const sade = t.includes(',')
+    ? (/^(\d{1,3}(\.\d{3})+|\d+),\d{1,2}$/.test(t) ? t.replace(/\./g, '').replace(',', '.') : null)
+    : BINLIKLI.test(t) ? t.replace(/\./g, '') : t;
+  return sade !== null && new RegExp(`^\\d{1,${tamBasamak}}(\\.\\d{1,2})?$`).test(sade) ? sade : null;
+}
+export function tamSayiGirdisi(v: string, basamak: number): number | null {
+  const t = v.trim();
+  const sade = BINLIKLI.test(t) ? t.replace(/\./g, '') : t;
+  return new RegExp(`^\\d{1,${basamak}}$`).test(sade) ? Number(sade) : null;
+}
+
 const TL = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Boş tutar "—"; sıfır uydurulmaz. Gösterim için Number'a çevrilir (12 basamakta kayıp yok).
 export const tlMetni = (tutar: string | null): string => (tutar === null ? '—' : `${TL.format(Number(tutar))} TL`);

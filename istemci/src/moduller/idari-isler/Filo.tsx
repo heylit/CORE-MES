@@ -7,7 +7,8 @@ import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
-  ARAC_DURUMLARI, ARAC_DURUMU, ARAC_TURLERI, ARAC_TURU, SAHIPLIK, SAHIPLIKLER, SINIR, aracAdi, kmMetni, tarihMetni, uyariMetni,
+  ARAC_DURUMLARI, ARAC_DURUMU, ARAC_TURLERI, ARAC_TURU, SAHIPLIK, SAHIPLIKLER, SINIR, aracAdi, kmMetni, tamSayiGirdisi, tarihMetni,
+  uyariMetni,
 } from './gorunum.ts';
 import { MasrafPenceresi } from './Masraflar.tsx';
 import { useIslemVar, useKorumaliGonderim, yazmaIletisi } from './yazma.ts';
@@ -94,8 +95,8 @@ export function Filo() {
 const TURLER = ARAC_TURLERI.map((t) => ({ deger: t, baslik: ARAC_TURU[t] }));
 // Görevde durumunu görevin çıkışı yazar (IDR-33); formda yalnız zaten görevde olan araçta görünür.
 const DURUMLAR = ARAC_DURUMLARI.map((d) => ({ deger: d, baslik: ARAC_DURUMU[d].etiket }));
-const KM = /^\d{1,7}$/;
-const kmSayi = (m: string): number | null => (m.trim() === '' ? null : Number(m.trim()));
+// Km "20.000" gibi binlik noktalı da yazılır; boşsa null, okunamazsa undefined.
+const kmSayi = (m: string): number | null | undefined => (m.trim() === '' ? null : tamSayiGirdisi(m, 7) ?? undefined);
 
 function AracFormu({ arac, kapat }: { arac: Arac | null; kapat: () => void }) {
   const istemci = useQueryClient();
@@ -115,17 +116,14 @@ function AracFormu({ arac, kapat }: { arac: Arac | null; kapat: () => void }) {
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
 
-  const eksik = [
-    ...(plaka.trim() === '' ? ['plaka'] : []),
-    ...(km.trim() !== '' && !KM.test(km.trim()) ? ['km'] : []),
-    ...(bakimKm.trim() !== '' && !KM.test(bakimKm.trim()) ? ['sonraki bakım km'] : []),
-  ];
+  const eksik = plaka.trim() === '' ? ['plaka'] : [];
+  const hatali = [...(kmSayi(km) === undefined ? ['km'] : []), ...(kmSayi(bakimKm) === undefined ? ['sonraki bakım km'] : [])];
 
   const gonder = async () => {
     bekliyorYaz(true);
     hataYaz(null);
     const govde: AracEkleGovdesi = {
-      plaka: plaka.trim(), tur, sahiplik, durum, km: kmSayi(km), sonrakiBakimKm: kmSayi(bakimKm),
+      plaka: plaka.trim(), tur, sahiplik, durum, km: kmSayi(km) ?? null, sonrakiBakimKm: kmSayi(bakimKm) ?? null,
       muayeneTarihi: muayene === '' ? null : muayene, sigortaTarihi: sigorta === '' ? null : sigorta, sevkiyatta,
       markaModel: markaModel.trim() === '' ? null : markaModel.trim(), aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
     };
@@ -148,7 +146,9 @@ function AracFormu({ arac, kapat }: { arac: Arac | null; kapat: () => void }) {
       alt={(
         <span className="tc-ii-dugmeler">
           <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="check" disabled={eksik.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Kaydet</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={eksik.length > 0 || hatali.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>
+            Kaydet
+          </Dugme>
         </span>
       )}
     >
@@ -179,6 +179,7 @@ function AracFormu({ arac, kapat }: { arac: Arac | null; kapat: () => void }) {
         <IsaretKutusu etiket="Sevkiyatta kullanılır" checked={sevkiyatta} onChange={(o) => sevkiyattaYaz(o.target.checked)} />
         <CokSatir etiket="Açıklama (isteğe bağlı)" maxLength={SINIR.not} value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)} />
         {eksik.length > 0 && <p className="tc-ii-soluk">Eksik: {eksik.join(', ')}</p>}
+        {hatali.length > 0 && <p className="tc-ii-soluk">Okunamadı: {hatali.join(', ')} (örnek 20.000)</p>}
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
       </div>
     </Pencere>

@@ -4,13 +4,10 @@ import type { Arac, Masraf, MasrafCevabi, MasrafEkleGovdesi, MasraflarCevabi, Ma
 import { CokSatir, Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { MASRAF_TURLERI, MASRAF_TURU, SINIR, bugunTarihi, kmMetni, tarihMetni, tlMetni } from './gorunum.ts';
+import { MASRAF_TURLERI, MASRAF_TURU, SINIR, bugunTarihi, kmMetni, tamSayiGirdisi, tarihMetni, tlMetni, tutarGirdisi } from './gorunum.ts';
 import { useIslemVar, useKorumaliGonderim, yazmaIletisi } from './yazma.ts';
 
 const TURLER = MASRAF_TURLERI.map((t) => ({ deger: t, baslik: MASRAF_TURU[t] }));
-// Virgül ya da nokta kuruş ayırıcısıdır; binlik ayırıcı yazılmaz.
-const TUTAR = /^\d{1,10}([.,]\d{1,2})?$/;
-const KM = /^\d{1,7}$/;
 
 // Araç masrafları (172 a): kayıt değişmez, yanlışı gerekçeyle iptal edilir. Tutar TL; yıl toplamı iptal edilmemiş kayıtlardan.
 export function MasrafPenceresi({ arac, kapat }: { arac: Arac; kapat: () => void }) {
@@ -82,17 +79,17 @@ function MasrafFormu({ arac }: { arac: Arac }) {
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
 
-  const eksik = [
-    ...(tarih === '' ? ['tarih'] : []),
-    ...(TUTAR.test(tutar.trim()) ? [] : ['tutar']),
-    ...(km.trim() !== '' && !KM.test(km.trim()) ? ['km'] : []),
-  ];
+  // Tutar "1.250,50", "1250,50" ya da "1250.50" yazılır; km binlik noktalı da olabilir.
+  const tutarMetni = tutarGirdisi(tutar, 10);
+  const kmSayi = km.trim() === '' ? null : tamSayiGirdisi(km, 7);
+  const eksik = [...(tarih === '' ? ['tarih'] : []), ...(tutar.trim() === '' ? ['tutar'] : [])];
+  const hatali = [...(tutar.trim() !== '' && tutarMetni === null ? ['tutar'] : []), ...(km.trim() !== '' && kmSayi === null ? ['km'] : [])];
 
   const gonder = async () => {
     bekliyorYaz(true);
     hataYaz(null);
     const govde: MasrafEkleGovdesi = {
-      tarih, tur, tutar: tutar.trim().replace(',', '.'), km: km.trim() === '' ? null : Number(km.trim()),
+      tarih, tur, tutar: tutarMetni ?? '', km: kmSayi,
       ...(belgeNo.trim() === '' ? {} : { belgeNo: belgeNo.trim() }), ...(aciklama.trim() === '' ? {} : { aciklama: aciklama.trim() }),
     };
     try {
@@ -121,8 +118,9 @@ function MasrafFormu({ arac }: { arac: Arac }) {
       <Girdi etiket="Belge no (isteğe bağlı)" maxLength={SINIR.belgeNo} value={belgeNo} onChange={(o) => belgeNoYaz(o.target.value)} />
       <CokSatir etiket="Açıklama (isteğe bağlı)" maxLength={SINIR.not} value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)} />
       {eksik.length > 0 && <p className="tc-ii-soluk">Eksik: {eksik.join(', ')}</p>}
+      {hatali.length > 0 && <p className="tc-ii-soluk">Okunamadı: {hatali.join(', ')} (örnek 1.250,50)</p>}
       {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
-      <Dugme tur="birincil" simge="check" disabled={eksik.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Masrafı kaydet</Dugme>
+      <Dugme tur="birincil" simge="check" disabled={eksik.length > 0 || hatali.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Masrafı kaydet</Dugme>
     </section>
   );
 }
