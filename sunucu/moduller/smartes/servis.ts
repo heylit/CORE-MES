@@ -11,7 +11,7 @@ import type {
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
-import { aktifMakineler, istasyonlar, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriOzeti, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
@@ -561,7 +561,7 @@ interface TmiKaydi {
 async function tmiKayitlari(db: Db, tur: EslemeTuru): Promise<TmiKaydi[]> {
   switch (tur) {
     case 'istasyon': return istasyonlar(db, { pasiflerDahil: true });
-    case 'makine': return aktifMakineler(db);
+    case 'makine': return makineler(db, { pasiflerDahil: true });
     case 'operasyon-tipi': return operasyonTipleri(db, { pasiflerDahil: true });
     case 'durus-nedeni': return durusNedenleriniListele(db, { yalnizAktif: false });
   }
