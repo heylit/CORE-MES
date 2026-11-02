@@ -20,8 +20,14 @@ export function Kullanicilar({ yetki }: EkranOzellikleri) {
     <div className="tc-km4">
       <SayfaBasligi baslik="Kullanıcılar" simge="users" alt="Kim hangi işlemi yapabilir. Giriş TMI oturumuyla yapılır; kayıtlardaki &quot;kim yaptı&quot; bilgisi oturumdaki kişidir." />
       <div className="tc-km-not">
-        <p><b>Rol TMI yetkisinden gelir.</b> TMI yöneticisi Kalite yöneticisi, kalite onay yetkisi olan Kalite mühendisi, öteki kişiler Muayenecidir. Yetki Personel sayfasında rolle verilir.</p>
+        <p><b>Rol TMI yetkisinden gelir.</b> TMI yöneticisi Kalite yöneticisi, kalite onay ve yazma yetkisi olan Kalite mühendisi, yalnız yazma yetkisi olan Muayeneci, yazma yetkisi olmayan İzleyicidir. Yetki Personel sayfasında rolle verilir.</p>
         <p className="tc-km-soluk">Sizin rolünüz: <b>{yetki.rol}</b></p>
+        {!yetki.yaz && (
+          <p className="tc-km-soluk">
+            Kalite kaydı yazma yetkiniz yok; kayıtları görüntülersiniz.
+            {yetki.onayla && ' Onay yetkinizle Bugün ekranındaki ilk parça, hatalı parça ve giriş kontrolü kararlarını verirsiniz.'}
+          </p>
+        )}
       </div>
       <Panel baslik="Rollerin yetkileri">
         <div className="tc-km-tablo-kap">

@@ -5,6 +5,8 @@ const yonetici = kmYetkisiKur({ oku: true, yaz: true, onayla: true, geriYukle: t
 const muhendis = kmYetkisiKur({ oku: true, yaz: true, onayla: true, geriYukle: false }, false);
 const muayeneci = kmYetkisiKur({ oku: true, yaz: true, onayla: false, geriYukle: false }, false);
 const okuyan = kmYetkisiKur({ oku: true, yaz: false, onayla: false, geriYukle: false }, false);
+// Müdür: onay işlemi var, yazma yok (K3 a: yetki değişmez, ekran gerçeği gösterir).
+const yazamayanOnaylayan = kmYetkisiKur({ oku: true, yaz: false, onayla: true, geriYukle: false }, false);
 
 describe('kmYetkisiKur', () => {
   it('rolü TMI yetkisinden çıkarır', () => {
@@ -31,5 +33,12 @@ describe('kmYetkisiKur', () => {
     expect(muayeneci.kapat || muayeneci.kilitAc).toBe(false);
     expect(yonetici.geriYukle).toBe(true);
     expect(kmYetkisiKur({ oku: true, yaz: true, onayla: true, geriYukle: true }, false).geriYukle).toBe(false);
+  });
+
+  it('yazamayan onay sahibi mühendis görünmez; kayıt kapatamaz, kilit açamaz (KM-5, 1779d)', () => {
+    expect(yazamayanOnaylayan.rol).toBe('İzleyici');
+    expect(okuyan.rol).toBe('İzleyici');
+    expect(yazamayanOnaylayan.kapat || yazamayanOnaylayan.kilitAc || yazamayanOnaylayan.kaynak('sup')).toBe(false);
+    expect(yazamayanOnaylayan.onayla).toBe(true);
   });
 });

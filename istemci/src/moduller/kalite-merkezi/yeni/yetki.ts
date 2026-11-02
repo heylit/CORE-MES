@@ -2,7 +2,7 @@ import { useYetki } from '../../../ortak/veri/yetki.ts';
 import type { KmKoleksiyonu } from './tipler.ts';
 import { useKmKimligi } from './veri.ts';
 
-export type KmRolu = 'Muayeneci' | 'Kalite mühendisi' | 'Kalite yöneticisi';
+export type KmRolu = 'İzleyici' | 'Muayeneci' | 'Kalite mühendisi' | 'Kalite yöneticisi';
 
 export interface KmYetkisi {
   hazir: boolean;
@@ -29,15 +29,18 @@ const KAYNAK: ReadonlySet<KmKoleksiyonu> = new Set(['sup', 'tpl']);
 // Ekran yalnız gizler; asıl denetim sunucudadır (229 a, 260 a, 261 a: silme ve arşiv yönetici, muayeneci bunları yapamaz).
 export function kmYetkisiKur(islemler: { oku: boolean; yaz: boolean; onayla: boolean; geriYukle: boolean }, yonetici: boolean, hazir = true): KmYetkisi {
   const { oku, yaz, onayla, geriYukle } = islemler;
-  const rol: KmRolu = yonetici ? 'Kalite yöneticisi' : onayla ? 'Kalite mühendisi' : 'Muayeneci';
+  // Kayıt onayı (kapatma, MRB, form onayı, kilit açma) sunucuda onay ve yazma işlemini birlikte ister (K3 a): yazamayan onay sahibi
+  // mühendis sayılmaz; onay işlemi ona yalnız ilk parça, hatalı parça ve giriş kontrolü kararlarını açar.
+  const muhendis = onayla && yaz;
+  const rol: KmRolu = yonetici ? 'Kalite yöneticisi' : muhendis ? 'Kalite mühendisi' : yaz ? 'Muayeneci' : 'İzleyici';
   return {
     hazir, oku, yaz, onayla, yonetici, rol,
     silebilir: (kol) => yaz && (yonetici || (onayla && ONAYLA_SILINEN.has(kol))),
     arsiv: yaz && yonetici,
     ayar: yaz && yonetici,
     kaynak: (kol) => yaz && (KAYNAK.has(kol) ? onayla || yonetici : kol !== 'dev'),
-    kapat: onayla,
-    kilitAc: onayla,
+    kapat: muhendis,
+    kilitAc: muhendis,
     geriYukle: geriYukle && yonetici,
   };
 }
