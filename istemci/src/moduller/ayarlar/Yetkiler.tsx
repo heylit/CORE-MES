@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RolIslemiGovdesi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { grupAdi, islemAdi, islemGrubu } from '#paylasilan/islem-adlari.ts';
+import { kapaliModulYoluMu } from '#paylasilan/sayfalar.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -12,10 +13,12 @@ import './yetkiler.css';
 interface Grup { anahtar: string; ad: string; islemler: string[] }
 
 // Grup adı sırası okunur sıradır; grup içinde sayfayı görme işlemi önce, sonra modülün kendi işlemleri.
+// Kapalı modülün işlemi listelenmez: verilse de uygulamada etkisi yoktur; rol satırı sunucuda olduğu gibi kalır.
 export function grupla(islemler: readonly string[]): Grup[] {
   const gruplar = new Map<string, string[]>();
   for (const islem of islemler) {
     const anahtar = islemGrubu(islem);
+    if (kapaliModulYoluMu(`/${anahtar}`)) continue;
     gruplar.set(anahtar, [...(gruplar.get(anahtar) ?? []), islem]);
   }
   return [...gruplar]
