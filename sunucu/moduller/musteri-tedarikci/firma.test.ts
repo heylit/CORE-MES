@@ -276,7 +276,7 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
   });
 
   test('disari.ts: firmaOzetleri tek sorguda pasifi de iletişim, adres ve sürümle döndürür; yineleneni tek, olmayanı yok sayar', async () => {
-    const a = await firmaKur({ ad: 'Ozetler Deneme A', telefon: '0212 000 00 00', ePosta: 'deneme@ornek.test', il: 'Deneme', fason: true,
+    const a = await firmaKur({ ad: 'Ozetler Deneme A', telefon: '0212 000 00 00', ePosta: 'deneme@ornek.test', il: 'Deneme', tur: 'tedarikci', fason: true,
       adres: 'Deneme Sokak 1', ilce: 'Merkez', postaKodu: '00000' });
     const b = await firmaKur({ ad: 'Ozetler Deneme B' });
     await istek('yazan', 'POST', `/finans/firmalar/${b.id}/pasif`, { surum: b.surum });
@@ -299,9 +299,9 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
   });
 
   test('disari.ts: firmaAra fason süzgeci yalnız fason işaretlileri, varsayılan olarak yalnız aktifleri döndürür; süzgeçsiz arama değişmez', async () => {
-    const f = await firmaKur({ ad: 'Fasonsuz Deneme A', fason: true });
+    const f = await firmaKur({ ad: 'Fasonsuz Deneme A', tur: 'tedarikci', fason: true });
     const n = await firmaKur({ ad: 'Fasonsuz Deneme B' });
-    const p = await firmaKur({ ad: 'Fasonsuz Deneme C', fason: true });
+    const p = await firmaKur({ ad: 'Fasonsuz Deneme C', tur: 'tedarikci', fason: true });
     await istek('yazan', 'POST', `/finans/firmalar/${p.id}/pasif`, { surum: p.surum });
     const ara = (s: { fason?: boolean; yalnizAktif?: boolean }) => vt().tx(async (db) => (await firmaAra(db, { metin: 'Fasonsuz Deneme', sinir: 10, ...s })).map((x) => x.id));
     assert.deepEqual(await ara({ fason: true }), [f.id]);
@@ -487,5 +487,35 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
     const sayanDb = { sorgu: async () => { sorgu += 1; return []; }, tek: async () => { sorgu += 1; return null; } };
     assert.equal((await musteriSiniflari(sayanDb, [])).size, 0);
     assert.equal(sorgu, 0);
+  });
+
+  test('MT-20: müşteri türünde fason işareti 400 (alan fason), kayıt açılmaz ve değişmez; tedarikçi ve ikisi türünde geçer', async () => {
+    const once = await firmaSayisi();
+    const ret = await ekle('yazan', yeniFirma({ tur: 'musteri', fason: true }));
+    assert.equal(ret.durum, 400);
+    assert.deepEqual([kodu(ret), (ret.govde as { alan?: string }).alan], ['DOGRULAMA', 'fason']);
+    assert.equal(await firmaSayisi(), once);
+    const t = await firmaKur({ tur: 'tedarikci', fason: true });
+    const i = await firmaKur({ tur: 'ikisi', fason: true });
+    assert.deepEqual([t.fason, i.fason], [true, true]);
+    const { id: _id, olusturma: _o, guncelleme: _g, aktif: _a, logoKayitNo: _l, logoGonderimDurumu: _d, ...govde } = t;
+    const tureDonen = await istek('yazan', 'POST', `/musteri-tedarikci/firmalar/${t.id}/guncelle`, { ...govde, tur: 'musteri' });
+    assert.equal(tureDonen.durum, 400);
+    assert.deepEqual([(await getir('okuyan', t.id)).govde.firma.tur, (await getir('okuyan', t.id)).govde.firma.surum], ['tedarikci', t.surum]);
+    const fasonsuz = await istek<FirmaCevabi>('yazan', 'POST', `/musteri-tedarikci/firmalar/${t.id}/guncelle`, { ...govde, tur: 'musteri', fason: false });
+    assert.equal(fasonsuz.durum, 200, JSON.stringify(fasonsuz.govde));
+  });
+
+  test('MT-21: tedarikçide müşteri sınıfı boş tutulur; müşteri tedarikçiye dönünce sınıf silinir, ikisi türünde kalır', async () => {
+    const t = await firmaKur({ tur: 'tedarikci', musteriSinifi: 'B' });
+    assert.equal(t.musteriSinifi, null);
+    const ikisi = await firmaKur({ tur: 'ikisi', musteriSinifi: 'B' });
+    assert.equal(ikisi.musteriSinifi, 'B');
+    const m = await firmaKur({ tur: 'musteri', musteriSinifi: 'A' });
+    const { id: _id, olusturma: _o, guncelleme: _g, aktif: _a, logoKayitNo: _l, logoGonderimDurumu: _d, musteriSinifi: _s, ...govde } = m;
+    const donen = await istek<FirmaCevabi>('yazan', 'POST', `/musteri-tedarikci/firmalar/${m.id}/guncelle`, { ...govde, tur: 'tedarikci' });
+    assert.equal(donen.durum, 200, JSON.stringify(donen.govde));
+    assert.equal(donen.govde.firma.musteriSinifi, null);
+    assert.equal((await vt().tx((db) => musteriSiniflari(db, [m.id]))).get(m.id), null);
   });
 });

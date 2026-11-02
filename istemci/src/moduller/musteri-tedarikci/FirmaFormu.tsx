@@ -101,7 +101,8 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
         kod: bosYap(d.kod),
         ad: d.ad.trim(),
         tur: d.tur,
-        fason: d.fason,
+        // Fason yalnız tedarikçi ve ikisi türündedir (MT-20); müşteriye dönen formdaki gizli işaret gitmez.
+        fason: d.tur !== 'musteri' && d.fason,
         ulkeKodu: d.ulkeKodu.trim().toUpperCase(),
         vergiNo: bosYap(d.vergiNo),
         vergiDairesi: bosYap(d.vergiDairesi),
@@ -158,7 +159,9 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
             onChange={(o) => { const s = o.target.value; form.degistir({ musteriSinifi: sinifMi(s) ? s : '' }); }}
           />
         )}
-        <IsaretKutusu etiket="Fason firma" checked={d.fason} onChange={(o) => form.degistir({ fason: o.target.checked })} />
+        {d.tur !== 'musteri' && (
+          <IsaretKutusu etiket="Fason firma" checked={d.fason} onChange={(o) => form.degistir({ fason: o.target.checked })} />
+        )}
         <div className="tc-mt-ikili">
           <Girdi etiket="Vergi no" autoComplete="off" {...form.alan('vergiNo')} />
           <Girdi etiket="Vergi dairesi" autoComplete="off" {...form.alan('vergiDairesi')} />

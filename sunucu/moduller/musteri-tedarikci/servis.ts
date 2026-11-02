@@ -19,7 +19,7 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami,
+  LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -85,7 +85,8 @@ function kimligiDenetle(k: FirmaKimligi): void {
 }
 
 // Kayıt zamanı ve kişi sunucudan yazılır (MT-4): gövdede gelse de şema onları geçirmez.
-export async function firmaEkle(db: Db, kullanici: Kullanici, k: FirmaKimligi): Promise<Firma> {
+export async function firmaEkle(db: Db, kullanici: Kullanici, govde: FirmaKimligi): Promise<Firma> {
+  const k = { ...govde, musteriSinifi: musteriSinifiTuru(govde.tur, govde.musteriSinifi) };
   kimligiDenetle(k);
   const firma = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaEkle(db, k, kullanici.id));
   if (!firma) throw new Error('Firma eklenemedi.');
@@ -105,7 +106,7 @@ export async function firmaGuncelle(db: Db, kullanici: Kullanici, id: number, d:
   const koordinatYok = d.enlem === undefined && d.boylam === undefined;
   const k = {
     ...d, enlem: koordinatYok ? eski.enlem : (d.enlem ?? null), boylam: koordinatYok ? eski.boylam : (d.boylam ?? null),
-    musteriSinifi: d.musteriSinifi === undefined ? (eski.musteriSinifi ?? null) : d.musteriSinifi,
+    musteriSinifi: musteriSinifiTuru(d.tur, d.musteriSinifi === undefined ? (eski.musteriSinifi ?? null) : d.musteriSinifi),
   };
   kimligiDenetle(k);
   if (logoKilidiIhlali(eski, k)) throw gecersiz(LOGO_KILIDI_ILETISI);

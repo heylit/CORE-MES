@@ -143,7 +143,7 @@ export function Firmalar() {
       {yazabilir && yeni && (
         <FirmaFormu
           firma={null}
-          varsayilanTur={menu.tur ?? 'musteri'}
+          varsayilanTur={menu.tur ?? (menu.fason ? 'tedarikci' : 'musteri')}
           varsayilanFason={menu.fason === true}
           kapat={() => yeniYaz(false)}
           kaydedildi={(f) => { yeniYaz(false); seciliYaz(f.id); }}

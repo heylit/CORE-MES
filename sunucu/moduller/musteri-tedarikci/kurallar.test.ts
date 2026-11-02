@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { ADRES_SINIRI, FIRMA_ARAMA_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
   adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, karneDonemi, karneHesapla, karneSinifiBul,
-  karneYazmaHatasi, koordinatHatasi, logoKilidiIhlali, turKapsami, vergiNoHatasi, zamanindaMi,
+  fasonTuruHatasi, karneYazmaHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami, vergiNoHatasi, zamanindaMi,
 } from './kurallar.ts';
 import type { KarneSayilari } from './kurallar.ts';
 
@@ -20,8 +20,8 @@ test('MT-1 (D-9): yabancı firmada vergi numarası serbest metindir; yalnız 30 
   assert.equal(vergiNoHatasi('DE', 'DE-999 000 111'), null);
   assert.equal(vergiNoHatasi('DE', 'X'.repeat(30)), null);
   assert.notEqual(vergiNoHatasi('DE', 'X'.repeat(31)), null);
-  assert.deepEqual(firmaKaydiHatasi({ ulkeKodu: 'TR', vergiNo: '12', enlem: null, boylam: null })?.alan, 'vergiNo');
-  assert.equal(firmaKaydiHatasi({ ulkeKodu: 'DE', vergiNo: '12', enlem: null, boylam: null }), null);
+  assert.deepEqual(firmaKaydiHatasi({ ulkeKodu: 'TR', vergiNo: '12', enlem: null, boylam: null, tur: 'musteri', fason: false })?.alan, 'vergiNo');
+  assert.equal(firmaKaydiHatasi({ ulkeKodu: 'DE', vergiNo: '12', enlem: null, boylam: null, tur: 'musteri', fason: false }), null);
 });
 
 test('MT-5 (FNS-45): Logo kayıt numarası dolu firmanın kodu ve Logo cari kodu değişemez; numarası boş firmada değişebilir', () => {
@@ -59,7 +59,22 @@ test('MT-7: enlem ve boylam birlikte verilir; yalnız biri dolu koordinat redded
   assert.equal(koordinatHatasi({ enlem: null, boylam: null }), null);
   assert.equal(koordinatHatasi({ enlem: 39.9, boylam: null })?.alan, 'boylam');
   assert.equal(koordinatHatasi({ enlem: null, boylam: 32.8 })?.alan, 'enlem');
-  assert.equal(firmaKaydiHatasi({ ulkeKodu: 'TR', vergiNo: null, enlem: 39.9, boylam: null })?.alan, 'boylam');
+  assert.equal(firmaKaydiHatasi({ ulkeKodu: 'TR', vergiNo: null, enlem: 39.9, boylam: null, tur: 'musteri', fason: false })?.alan, 'boylam');
+});
+
+test('MT-20: fason işareti tedarikçi ve ikisi türünde geçer; müşteri türünde alan adıyla reddedilir', () => {
+  assert.equal(fasonTuruHatasi({ tur: 'tedarikci', fason: true }), null);
+  assert.equal(fasonTuruHatasi({ tur: 'ikisi', fason: true }), null);
+  assert.equal(fasonTuruHatasi({ tur: 'musteri', fason: false }), null);
+  assert.equal(fasonTuruHatasi({ tur: 'musteri', fason: true })?.alan, 'fason');
+  assert.equal(firmaKaydiHatasi({ ulkeKodu: 'TR', vergiNo: null, enlem: null, boylam: null, tur: 'musteri', fason: true })?.alan, 'fason');
+});
+
+test('MT-21: müşteri sınıfı müşteri ve ikisi türünde kalır; tedarikçide boşa çekilir', () => {
+  assert.equal(musteriSinifiTuru('musteri', 'A'), 'A');
+  assert.equal(musteriSinifiTuru('ikisi', 'B'), 'B');
+  assert.equal(musteriSinifiTuru('tedarikci', 'C'), null);
+  assert.equal(musteriSinifiTuru('tedarikci', null), null);
 });
 
 test('MT-10: bir firmaya en çok ADRES_SINIRI adres eklenir', () => {

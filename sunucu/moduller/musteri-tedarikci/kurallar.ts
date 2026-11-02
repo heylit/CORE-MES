@@ -25,9 +25,23 @@ export function koordinatHatasi(k: { enlem: number | null; boylam: number | null
   return { alan: k.enlem === null ? 'enlem' : 'boylam', ileti: 'Enlem ve boylam birlikte girilir.' };
 }
 
-export function firmaKaydiHatasi(k: Pick<FirmaKimligi, 'ulkeKodu' | 'vergiNo' | 'enlem' | 'boylam'>): AlanHatasi | null {
+// MT-20: fason işi yaptırılan firmadır; yalnız tedarikçi ya da ikisi türünde olur. Müşteri kartındaki işaret onu fason
+// seçicilerine sokardı.
+export const FASON_TUR_ILETISI = 'Fason işareti yalnız tedarikçi ya da müşteri ve tedarikçi türündeki firmada olur.';
+export function fasonTuruHatasi(k: { tur: FirmaTuru; fason: boolean }): AlanHatasi | null {
+  return k.fason && k.tur === 'musteri' ? { alan: 'fason', ileti: FASON_TUR_ILETISI } : null;
+}
+
+// MT-21: müşteri sınıfı plan bedelinin çarpanıdır; tedarikçide anlamı yoktur, boş tutulur (tür değişince de silinir).
+export function musteriSinifiTuru<T>(tur: FirmaTuru, sinif: T | null): T | null {
+  return tur === 'tedarikci' ? null : sinif;
+}
+
+export function firmaKaydiHatasi(k: Pick<FirmaKimligi, 'ulkeKodu' | 'vergiNo' | 'enlem' | 'boylam' | 'tur' | 'fason'>): AlanHatasi | null {
   const vergi = vergiNoHatasi(k.ulkeKodu, k.vergiNo);
   if (vergi !== null) return { alan: 'vergiNo', ileti: vergi };
+  const fason = fasonTuruHatasi(k);
+  if (fason !== null) return fason;
   return koordinatHatasi(k);
 }
 

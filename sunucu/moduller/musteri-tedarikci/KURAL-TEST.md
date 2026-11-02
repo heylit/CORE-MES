@@ -16,6 +16,8 @@ Her kuralın kabul ve ret testi vardır. Finanstan gelen kuralın eski numarası
 | MT-10 firma başına en çok 50 adres | kurallar "MT-10", firma "MT-10 adres" (49'dan 50'ye) | aynı test (GECERSIZ, sayı 50 kalır) |
 | MT-12 düzeltmede gönderilmeyen koordinat korunur, null siler | firma "MT-12 koordinat" (korunur, null siler) | aynı test (yarım koordinat DOGRULAMA) |
 | MT-13 (265 a) müşteri sınıfı A, B, C ya da boş (`musteri_tedarikci_firma_musteri_sinifi`); düzeltmede gönderilmezse korunur, null siler; disari `musteriSiniflari` boşu null verir | firma "MT-13 ..." | aynı test (D sınıfı DOGRULAMA ve kısıt; okuyan 403) |
+| MT-20 (kart 1812) fason işareti yalnız tedarikçi ya da ikisi türünde | kurallar "MT-20", firma "MT-20" (tedarikçi ve ikisi geçer, işaretsiz müşteriye dönüş geçer) | aynı testler (müşteri + fason 400 alan fason, kayıt açılmaz ve değişmez) |
+| MT-21 (kart 1812) müşteri sınıfı tedarikçide boş tutulur; müşteri tedarikçiye dönünce silinir | kurallar "MT-21", firma "MT-21" (ikisi türünde kalır) | aynı testler (tedarikçiye gelen sınıf null yazılır) |
 | MT-11 adres yazması kartın sürümünü artırır; eski sürüm 409 | firma "adres: yazan ekler..." | firma "adres sürüm" (adres değişmez) |
 | Yetki: okuma `musteri-tedarikci.oku`, yazma `.yaz` | firma "yetki", "adres yetki" | aynı testler (401, 403, kayıt değişmez) |
 | FNS-48 finans rakamı dönmez | firma "FNS-48" | aynı test (alan listesi sabit) |
