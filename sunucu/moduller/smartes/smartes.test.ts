@@ -296,6 +296,11 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     const r2 = await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIB', surum: 1 });
     assert.equal(r2.statusCode, 200, r2.body);
     assert.equal((await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIC', surum: 1 })).statusCode, 409);
+    // Kod değişmeden kaydetmek sürümü artırmaz; eski sürümle aynı kod yine reddedilir.
+    const ayni = await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIB', surum: 2 });
+    assert.equal(ayni.statusCode, 200, ayni.body);
+    assert.deepEqual(ayni.json(), { tmiId: a, smartesKod: 'TIB', surum: 2 });
+    assert.equal((await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIB', surum: 1 })).statusCode, 409);
     // Olmayan TMI kaydı, boş kod.
     assert.equal((await ata({ tur: 'istasyon', tmiId: 999999, smartesKod: 'X', surum: null })).statusCode, 404);
     assert.equal((await ata({ tur: 'istasyon', tmiId: b, smartesKod: '  ', surum: null })).statusCode, 400);

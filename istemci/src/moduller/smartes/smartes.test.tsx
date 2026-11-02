@@ -12,7 +12,7 @@ import { Eslemeler } from './Eslemeler.tsx';
 import { Giden, UretimSayilari } from './Listeler.tsx';
 import { SmartesAyarlari, ayarEkranlari } from './ayar-ekranlari.tsx';
 
-const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.smartes', 'smartes.esleme-yaz'] };
+const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.smartes', 'smartes.esleme-yaz', 'ayarlar.yaz'] };
 const IZLEYICI: Kullanici = { id: 2, ad: 'Deneme İzleyici', islemler: ['sayfa.smartes'] };
 
 const SAYILAR: DurumCevabi['sayilar'] = {
@@ -42,6 +42,7 @@ function sunucuKur(kullanici: Kullanici, ozel: (yol: string, yontem: string) => 
     if (yol.startsWith('/smartes/eslemeler?tur=istasyon')) return json(200, ESLEMELER);
     if (yol.startsWith('/smartes/eslemeler?tur=')) return json(200, { tur: yol.split('=')[1], satirlar: [] });
     if (yol === '/smartes/eslemeler/ata') return json(200, { tmiId: 2, smartesKod: 'S-02', surum: 1 });
+    if (yol === '/smartes/eslemeler/kaldir') return json(200, { tmiId: 1, smartesKod: null, surum: null });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
   return cagrilar;
@@ -77,6 +78,14 @@ describe('SmartES bağlantı durumu', () => {
     expect(await screen.findByText('Adres yok')).toBeTruthy();
     expect(screen.getByText(/TMIV2_SMARTES_ADRESI/)).toBeTruthy();
     expect(screen.getByText('Henüz okuma yapılmadı.')).toBeTruthy();
+  });
+  it('(ret) Sistem Ayarları\'nı göremeyen role açamayacağı anahtar gösterilmez; yöneticiye başvurması söylenir', async () => {
+    sunucuKur(IZLEYICI, (yol) => (yol === '/smartes/durum'
+      ? json(200, { baglanti: 'kapali', sayilar: SAYILAR, okumalar: [] } satisfies DurumCevabi)
+      : null));
+    ac(<BaglantiDurumu />);
+    expect(await screen.findByText(/yöneticiye başvurun/)).toBeTruthy();
+    expect(screen.queryByText(/Sistem Ayarları/)).toBeNull();
   });
 });
 
@@ -115,6 +124,23 @@ describe('SmartES kod eşlemeleri', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     expect(await within(pencere).findByRole('alert')).toBeTruthy();
     expect(within(pencere).getByText('Bu SmartES kodu başka kayda verilmiş.')).toBeTruthy();
+  });
+
+  it('eşlemeyi kaldırma onay ister: Vazgeç istek atmaz, onayla kaldırma ucu çağrılır', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Eslemeler />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Değiştir' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Eşlemeyi kaldır' }));
+    expect(within(pencere).getByText(/“S-01” eşlemesi kaldırılsın mı/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Eşlemeyi kaldır' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Evet, kaldır' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toEqual([
+      { yol: '/smartes/eslemeler/kaldir', yontem: 'POST', govde: { tur: 'istasyon', tmiId: 1, surum: 2 } },
+    ]);
   });
 
   it('tür sekmesi değişince o türün listesi istenir', async () => {
