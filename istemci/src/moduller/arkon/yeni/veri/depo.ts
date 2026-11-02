@@ -28,7 +28,7 @@ export interface KayitSorgusu {
 }
 
 // store.ts'deki tanımlarla aynı (orada dışa verilmiş ama istemci derlemesi o dosyayı tip için izlemez).
-export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string }
+export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
 export interface TmiAdim { id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean }
 
 export interface ArkonDeposu {
@@ -49,7 +49,7 @@ export interface ArkonDeposu {
   Server: {
     flush(): Promise<void>;
     materials(q: string): Promise<{ id: number; kod: string; ad: string | null; birim: string | null }[]>;
-    merkezBelgeleri(q: string): Promise<MerkezBelgesi[]>;
+    merkezBelgeleri(q: string, malzeme?: number | null): Promise<MerkezBelgesi[]>;
     merkezdenAl(belgeId: number): Promise<PkgFile & { bytes: Uint8Array }>;
     merkezKontrol(dosyalar: { belgeId: number; ozet: string }[]): Promise<MerkezDurumu[]>;
     anomaliler(): Promise<Anomaliler>;

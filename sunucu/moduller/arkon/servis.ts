@@ -2069,14 +2069,16 @@ async function merkezRoluGerekli(db: Db, kullanici: Kullanici): Promise<void> {
 }
 
 // Yalnız yayındaki ve Arkon'un okuyabildiği türdeki (PDF, 3B model) belgeler listelenir; taslak ve arşiv merkezde zaten dışarıdadır.
-export async function merkezBelgeleri(db: Db, kullanici: Kullanici, ara: string | null): Promise<MerkezBelgelerCevabi> {
+// Malzeme verilirse satır o malzemeye bağlı mı diye işaretlenir: Hazırlık başka parçanın resmini eklemeden önce sorar.
+export async function merkezBelgeleri(db: Db, kullanici: Kullanici, ara: string | null, malzemeNo: number | null = null): Promise<MerkezBelgelerCevabi> {
   await merkezRoluGerekli(db, kullanici);
   const belgeler = await yayindakiBelgeler(db, ara === null ? {} : { ara });
+  const bagli = malzemeNo === null ? null : new Set((await kayitlaraBagliBelgeler(db, 'malzemeler', [malzemeNo])).get(malzemeNo)?.map((b) => b.id) ?? []);
   return {
     belgeler: belgeler.flatMap((b) => {
       const tip = merkezDosyaTipi(b.dosyaTuru);
       if (tip === null || !merkezTuruMu(b.dosyaTuru)) return [];
-      return [{ id: b.id, ad: b.ad, tur: b.tur, harf: b.harf, tip, dosyaAdi: merkezDosyaAdi(b.ad, b.dosyaTuru), ozet: b.ozet }];
+      return [{ id: b.id, ad: b.ad, tur: b.tur, harf: b.harf, tip, dosyaAdi: merkezDosyaAdi(b.ad, b.dosyaTuru), ozet: b.ozet, ...(bagli === null ? {} : { malzemeninMi: bagli.has(b.id) }) }];
     }),
   };
 }

@@ -195,7 +195,9 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   // Çizim Merkezi (kart #800): yalnız merkezden ALMA vardır; Arkon'da yüklenen dosya merkeze gitmez.
   if (ilk === 'merkez' && ikinci === 'belgeler' && g.yontem === 'GET' && p[2] === undefined) {
     const ara = g.sorgu.get('q')?.trim() ?? '';
-    return tamam((await istemci.get<MerkezBelgelerCevabi>(`/arkon/cizim-merkezi/belgeler${ara === '' ? '' : `?ara=${encodeURIComponent(ara)}`}`)).belgeler);
+    const malzeme = g.sorgu.get('malzeme') ?? '';
+    const sorgu = new URLSearchParams({ ...(ara === '' ? {} : { ara }), ...(/^[1-9]\d*$/.test(malzeme) ? { malzeme } : {}) }).toString();
+    return tamam((await istemci.get<MerkezBelgelerCevabi>(`/arkon/cizim-merkezi/belgeler${sorgu === '' ? '' : `?${sorgu}`}`)).belgeler);
   }
   if (ilk === 'merkez' && ikinci === 'belgeler' && g.yontem === 'POST' && p[3] === 'al') {
     return tamam(await istemci.post<MerkezEkleCevabi>(`/arkon/cizim-merkezi/belgeler/${yolParcasi(p[2] ?? '')}/ekle`, {}));

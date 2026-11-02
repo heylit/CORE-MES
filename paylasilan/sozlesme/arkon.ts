@@ -522,7 +522,8 @@ export type KuyrukPlanaDonCevabi = z.output<typeof kuyrukPlanaDonCevabi>;
 // Çizim Merkezi'nden dosya alma (kart #800): Arkon yalnız yayındaki belgeyi, yalnız okuyabildiği türde (PDF, 3B model) alır.
 // Alınan dosya Arkon'un kendi dosya deposuna kopyalanır (özetle tekil); paketin dosya kaydını ekran kurar.
 export const MERKEZ_DOSYA_TIPLERI = ['pdf', 'model'] as const;
-export const merkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
+// malzeme: paketin malzeme kartı; verilirse her satır o malzemeye bağlı mı diye işaretlenir (başka parçanın resmi uyarısı).
+export const merkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzeme: z.coerce.number().int().positive().optional() });
 export const merkezBelgeSatiri = z.object({
   id: z.number().int().positive(),
   ad: z.string(),
@@ -531,6 +532,7 @@ export const merkezBelgeSatiri = z.object({
   tip: z.enum(MERKEZ_DOSYA_TIPLERI),
   dosyaAdi: z.string(),
   ozet,
+  malzemeninMi: z.boolean().optional(),
 });
 export const merkezBelgelerCevabi = z.object({ belgeler: z.array(merkezBelgeSatiri) });
 export const merkezBelgeParametresi = z.object({ belgeId: z.coerce.number().int().positive() });

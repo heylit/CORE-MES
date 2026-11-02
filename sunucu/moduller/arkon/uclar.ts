@@ -194,7 +194,7 @@ export const uclar = [
     yetki: ARKON_SAYFASI,
     sorgu: merkezBelgeSorgusu,
     cevap: merkezBelgelerCevabi,
-    isle: ({ db, kullanici, sorgu }) => servis.merkezBelgeleri(db, kullanici, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara),
+    isle: ({ db, kullanici, sorgu }) => servis.merkezBelgeleri(db, kullanici, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara, sorgu.malzeme ?? null),
   }),
   uc({
     yontem: 'GET',

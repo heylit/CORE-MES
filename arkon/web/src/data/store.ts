@@ -28,7 +28,7 @@ type Bytes = Uint8Array;
 export type CihazKipi = 'ortak' | 'kisisel';
 /** gelen anlık ileti: bilinen alanlar + sayfaya özgü alanlar */
 export type BusIn = BusMsg & Record<string, any>;
-export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string }
+export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
 export interface ApiOpts { timeout?: number; noAuth?: boolean; raw?: boolean }
 export interface LogQuery { machine?: string | null; wc?: string | null; from?: number | null; to?: number | null; order?: string | null; pkg?: string | null; item?: number | string | null; limit?: number | null }
 type OutboxItem = { at?: number; uid?: string } & ({ op: 'put'; store: string; id: string } | { op: 'del'; store: string; id: string; base?: number } | { op: 'log'; kind: string; row: Record<string, unknown> });
@@ -525,7 +525,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     /** sunuculu kipte malzeme isteği seçicisi: stoklanan aktif malzeme kartları */
     async materials(q: string): Promise<{ id: number; kod: string; ad: string | null; birim: string | null }[]> { return api('GET', '/materials?q=' + encodeURIComponent(q)); },
     /** Çizim Merkezi (kart #800): yayındaki belgeler; Arkon'dan yüklenen dosya merkeze gitmez, yalnız merkezden alınır */
-    async merkezBelgeleri(q: string): Promise<MerkezBelgesi[]> { return api('GET', '/merkez/belgeler?q=' + encodeURIComponent(q)); },
+    async merkezBelgeleri(q: string, malzeme?: number | null): Promise<MerkezBelgesi[]> { return api('GET', '/merkez/belgeler?q=' + encodeURIComponent(q) + (malzeme ? '&malzeme=' + malzeme : '')); },
     /** merkezdeki yayındaki dosyayı Arkon deposuna kopyalatır ve paket dosya kaydını (bayt dahil) döner */
     async merkezdenAl(belgeId: number): Promise<PkgFile & { bytes: Bytes }> {
       const r = await api('POST', '/merkez/belgeler/' + belgeId + '/al');

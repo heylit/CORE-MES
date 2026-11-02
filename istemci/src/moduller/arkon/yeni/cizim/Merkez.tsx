@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { merkezBagi, merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
-import { Dugme, Girdi, Pencere, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, OnayPenceresi, Pencere, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useArkon } from '../veri/baglam.ts';
 import type { MerkezBelgesi } from '../veri/depo.ts';
 import '../../../../ortak/cizim/cizim.css';
@@ -55,39 +55,48 @@ export function MerkezRozeti({ f, uyari, mesgul, guncelle }: {
   return <Rozet ton="bilgi">Çizim Merkezi</Rozet>;
 }
 
-export function MerkezSecici({ sec, kapat }: { sec: (b: MerkezBelgesi) => Promise<void>; kapat: () => void }) {
+// malzeme: paketin malzeme kartı. Verilirse o malzemeye bağlı olmayan resim seçilince önce sorulur (başka parçanın resmi pakete girmesin).
+export function MerkezSecici({ sec, kapat, malzeme = null }: { sec: (b: MerkezBelgesi) => Promise<void>; kapat: () => void; malzeme?: number | null }) {
   const { depo } = useArkon();
   const [q, qYaz] = useState(''), [satirlar, satirlarYaz] = useState<MerkezBelgesi[] | null>(null), [hata, hataYaz] = useState(''), [mesgul, mesgulYaz] = useState(0);
+  const [soru, soruYaz] = useState<MerkezBelgesi | null>(null);
   useEffect(() => {
     let canli = true;
     const t = setTimeout(() => {
-      depo.Server.merkezBelgeleri(q).then((r) => { if (canli) { satirlarYaz(r || []); hataYaz(''); } }, (e: unknown) => {
+      depo.Server.merkezBelgeleri(q, malzeme).then((r) => { if (canli) { satirlarYaz(r || []); hataYaz(''); } }, (e: unknown) => {
         if (canli) { satirlarYaz([]); hataYaz((e instanceof Error && e.message) || 'Çizim Merkezi listesi alınamadı'); }
       });
     }, 250);
     return () => { canli = false; clearTimeout(t); };
-  }, [depo, q]);
-  const al = async (b: MerkezBelgesi) => { mesgulYaz(b.id); try { await sec(b); } finally { mesgulYaz(0); } };
+  }, [depo, q, malzeme]);
+  const al = async (b: MerkezBelgesi) => { soruYaz(null); mesgulYaz(b.id); try { await sec(b); } finally { mesgulYaz(0); } };
+  const tikla = (b: MerkezBelgesi) => { if (b.malzemeninMi === false) soruYaz(b); else void al(b); };
   return (
-    <Pencere acik kapat={kapat} baslik="Çizim Merkezi'nden ekle">
-      <div className="tc-ay5-secici">
-        <p className="tc-ay5-soluk">Yalnız yayındaki PDF ve 3B modeller listelenir. Seçilen dosya pakete kopyalanır.</p>
-        <Girdi etiket="Belge ara" value={q} onChange={(e) => qYaz(e.target.value)} placeholder="Belge adı ile ara" />
-        <ul className="tc-ay5-liste" aria-label="Yayındaki çizimler">
-          {(satirlar || []).map((b) => (
-            <li key={b.id}>
-              <button type="button" className="tc-ay5-satir" disabled={mesgul !== 0} onClick={() => { void al(b); }}>
-                <span className={`tc-ay5-tur tc-ay5-tur-${b.tip === 'pdf' ? 'pdf' : 'model'}`}>{b.tip === 'pdf' ? 'PDF' : '3B'}</span>
-                <span className="tc-ay5-metin"><b>{b.ad}</b><small>Rev {b.harf} · {b.dosyaAdi}</small></span>
-                <Simge ad={mesgul === b.id ? 'rotate' : 'plus'} />
-              </button>
-            </li>
-          ))}
-        </ul>
-        {hata ? <small className="tc-ay5-soluk" role="alert">{hata}</small>
-          : satirlar === null ? <small className="tc-ay5-soluk">Yükleniyor…</small>
-          : !satirlar.length ? <small className="tc-ay5-soluk">Yayında uygun belge yok.</small> : null}
-      </div>
-    </Pencere>
+    <>
+      <Pencere acik kapat={kapat} baslik="Çizim Merkezi'nden ekle">
+        <div className="tc-ay5-secici">
+          <p className="tc-ay5-soluk">Yalnız yayındaki PDF ve 3B modeller listelenir. Seçilen dosya pakete kopyalanır.</p>
+          <Girdi etiket="Belge ara" value={q} onChange={(e) => qYaz(e.target.value)} placeholder="Belge adı ile ara" />
+          <ul className="tc-ay5-liste" aria-label="Yayındaki çizimler">
+            {(satirlar || []).map((b) => (
+              <li key={b.id}>
+                <button type="button" className="tc-ay5-satir" disabled={mesgul !== 0} onClick={() => tikla(b)}>
+                  <span className={`tc-ay5-tur tc-ay5-tur-${b.tip === 'pdf' ? 'pdf' : 'model'}`}>{b.tip === 'pdf' ? 'PDF' : '3B'}</span>
+                  <span className="tc-ay5-metin"><b>{b.ad}</b><small>Rev {b.harf} · {b.dosyaAdi}{b.malzemeninMi === false ? ' · bu parçanın malzemesine bağlı değil' : ''}</small></span>
+                  <Simge ad={mesgul === b.id ? 'rotate' : 'plus'} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          {hata ? <small className="tc-ay5-soluk" role="alert">{hata}</small>
+            : satirlar === null ? <small className="tc-ay5-soluk">Yükleniyor…</small>
+            : !satirlar.length ? <small className="tc-ay5-soluk">Yayında uygun belge yok.</small> : null}
+        </div>
+      </Pencere>
+      <OnayPenceresi acik={soru !== null} baslik="Bu resim bu parçanın değil" onayMetni="Yine de ekle" tehlikeli
+        onayla={() => { if (soru) void al(soru); }} vazgec={() => soruYaz(null)}>
+        <p>{soru?.ad} bu parçanın malzemesine bağlı değil; başka parçanın resmi olabilir. Operatör bu resme göre üretir.</p>
+      </OnayPenceresi>
+    </>
   );
 }

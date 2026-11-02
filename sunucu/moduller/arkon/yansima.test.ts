@@ -1969,6 +1969,11 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await korumali(`/cizimler/${belgeId}/revizyonlar/${belge.revizyonlar[0]?.id}/yayinla`, { surum: belge.surum });
     const taslak = (await paketler()).get(kimlik)!.govde;
     assert.deepEqual(taslak['malzemeCizimleri'], [{ belgeId, ad: 'Deneme 732 resmi', tip: 'pdf' }]);
+    // Seçici paketin malzemesini verince satır o malzemeye bağlı mı diye işaretlenir; başka malzemede bağlı değildir, malzemesiz sorguda alan yok.
+    const secici = async (sorgu: string) => (await istek<{ belgeler: { id: number; malzemeninMi?: boolean }[] }>(yonetici, 'GET', `/arkon/cizim-merkezi/belgeler${sorgu}`)).govde.belgeler.find((b) => b.id === belgeId);
+    assert.equal((await secici(`?malzeme=${r.kart}`))?.malzemeninMi, true);
+    assert.equal((await secici(`?malzeme=${r.kart + 100000}`))?.malzemeninMi, false);
+    assert.equal((await secici(''))?.malzemeninMi, undefined);
 
     const ekle = await istek<{ kayit: Record<string, unknown> }>(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${belgeId}/ekle`);
     assert.equal(ekle.durum, 200, JSON.stringify(ekle.govde));

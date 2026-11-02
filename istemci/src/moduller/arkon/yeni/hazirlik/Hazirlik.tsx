@@ -637,7 +637,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                       </div>
                     </section>
                   ) : null}
-                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} /></Suspense> : null}
+                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} malzeme={p.malzemeNo ?? null} /></Suspense> : null}
                   {([['pdf', 'PDF', 'Teknik resim', "CAD'den çıkmış PDF · ölçüler otomatik okunur", pdfF], ['model', '3B', '3B model', 'STEP önerilir · IGES, STL de olur', mdlF]] as const).map(([k, kisa, ad, acik, f]) => (
                     <section key={k} className="tc-ay2-kart" aria-label={ad}>
                       <div className="tc-ay2-kb"><span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span><div><b>{ad}</b><small>{acik}</small></div></div>
