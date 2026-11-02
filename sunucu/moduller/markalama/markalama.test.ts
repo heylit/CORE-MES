@@ -227,6 +227,28 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.match(tasan.govde.mesaj ?? '', /80 karakteri aşıyor/);
   });
 
+  test('MRK-U10: başlamış sayaçta başlangıç sırası ileri alınırsa sayaç taşınır, geri alınırsa reddedilir', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    for (let i = 0; i < 3; i += 1) await markala('operator', t.id, emir);
+    const kaydet = (baslangicSirasi: number, surum: number, ek: Record<string, unknown> = {}) => istek<MarkalamaTanimi & { alan?: string }>(
+      'yonetici', 'POST', `/markalama/tanimlar/${t.id}/kaydet`, { seriSablonu: t.seriSablonu, alanlar: [seriAlani], baslangicSirasi, surum, ...ek },
+    );
+    const geri = await kaydet(3, t.surum);
+    assert.equal(geri.durum, 400, JSON.stringify(geri.govde));
+    assert.equal(geri.govde.alan, 'baslangicSirasi');
+    const ileri = await kaydet(1000, t.surum);
+    assert.equal(ileri.durum, 200, JSON.stringify(ileri.govde));
+    const kod = t.malzemeKodu ?? '';
+    const on = await istek<{ numaralar: string[] }>('operator', 'GET', `/markalama/tanimlar/${t.id}/onizleme?emirId=${emir}`);
+    assert.equal(on.govde.numaralar[0], `${kod}-01000`);
+    assert.equal((await markala('operator', t.id, emir)).govde.seriNo, `${kod}-01000`);
+    // Emir kapsamında sayaç emir başınadır: değişiklik reddedilmez, yeni emirde geçer.
+    const emirli = await kaydet(500, ileri.govde.surum, { seriSablonu: '{PARCA}-{EMIR}-{SEQ}', sayacKapsami: 'emir' });
+    assert.equal(emirli.durum, 200, JSON.stringify(emirli.govde));
+  });
+
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
     const m = await malzemeAc();
     const t = await tanimAc(m, { yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });

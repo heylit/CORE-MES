@@ -15,7 +15,7 @@ import { istasyonGetir } from '../istasyonlar/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
+  alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -97,6 +97,18 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
   return tanimGetir(db, id);
 }
 
+// MRK-09: başlangıç sırası her yeni sayacın ilk numarasıdır. Malzeme ve yıl kapsamında bugünkü sayaç zaten başlamışsa
+// değişiklik sessizce yok sayılmasın: ileri alınırsa sayaç oraya taşınır, geri alınırsa reddedilir. Emir kapsamında sayaç
+// emir başınadır; yeni değer bundan sonra açılan emirlerde geçer.
+async function baslangiciUygula(db: Db, malzemeId: number, g: TanimKaydetGovdesi): Promise<void> {
+  if (g.sayacKapsami === 'emir') return;
+  const anahtar = kapsamAnahtari(g.sayacKapsami, 0, tesisGunu(Date.now()));
+  const son = await s.sonSira(db, malzemeId, anahtar);
+  const hata = baslangicHatasi(g.baslangicSirasi, son);
+  if (hata !== null) throw dogrulama(hata, 'baslangicSirasi');
+  if (son !== null) await s.sayaciIlerlet(db, malzemeId, anahtar, g.baslangicSirasi - 1);
+}
+
 export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: TanimKaydetGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   const eski = await varOlanTanim(db, id);
@@ -105,6 +117,7 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
     await modelDenetle(db, eski.malzemeId, g.model);
   }
   await seriUzunluguDenetle(db, eski.malzemeId, g);
+  if (g.baslangicSirasi !== eski.baslangicSirasi) await baslangiciUygula(db, eski.malzemeId, g);
   await surumluGuncelle({
     guncelle: () => s.tanimGuncelle(db, id, { ...yazim, surum: g.surum }, kullanici.id),
     varMi: () => s.tanimVarMi(db, id),

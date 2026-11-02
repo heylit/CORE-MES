@@ -63,6 +63,12 @@ export function seriUzunlukHatasi(seriNo: string): string | null {
   return `Seri no ${AZAMI_SERI_UZUNLUGU} karakteri aşıyor (${seriNo.length} karakter); şablonu kısaltın.`;
 }
 
+// MRK-09: başlangıç sırası sayacın ilerisine alınabilir; sayacın verdiği numaraya ya da gerisine alınırsa numara yinelenir.
+export function baslangicHatasi(yeni: number, sonSira: number | null): string | null {
+  if (sonSira === null || yeni > sonSira) return null;
+  return `Sayaç ${sonSira} numarasına ulaştı; başlangıç sırası en az ${sonSira + 1} olabilir.`;
+}
+
 // MRK-12: işaretlenen yerin yüzey yönü sıfır olamaz; yönü olmayan marka 3B sahnede yere oturmaz.
 export function normalHatasi(alanlar: readonly AlanGovdesi[]): { ileti: string; alan: string } | null {
   for (const [i, a] of alanlar.entries()) {

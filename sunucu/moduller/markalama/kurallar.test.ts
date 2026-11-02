@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
+  alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
@@ -81,5 +81,11 @@ describe('markalama kuralları', () => {
   test('MRK-11: seri no en çok 80 karakter', () => {
     assert.equal(seriUzunlukHatasi('A'.repeat(80)), null);
     assert.match(seriUzunlukHatasi('A'.repeat(81)) ?? '', /81 karakter/);
+  });
+
+  test('MRK-09: başlangıç sırası sayacın ilerisine alınabilir', () => {
+    assert.equal(baslangicHatasi(5, null), null);
+    assert.equal(baslangicHatasi(13, 12), null);
+    assert.match(baslangicHatasi(12, 12) ?? '', /en az 13/);
   });
 });
