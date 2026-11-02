@@ -87,7 +87,7 @@ describe('hesap kilidi (gerçek PostgreSQL, gerçek giriş)', () => {
     (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM giris_denemesi WHERE kullanici_adi = $1', [kullaniciAdi]))?.n ?? 0;
   const kilitler = (cerez: string) => app.inject({ method: 'GET', url: '/api/guvenlik/kilitler', headers: { cookie: cerez } });
   const kilitAc = (cerez: string, id: number) =>
-    app.inject({ method: 'POST', url: `/api/guvenlik/kilitler/${id}/ac`, headers: { cookie: cerez } });
+    app.inject({ method: 'POST', url: `/api/guvenlik/kilitler/${id}/ac`, headers: { cookie: cerez }, payload: {} });
   const kilitKimligi = async (kullaniciAdi: string): Promise<number> => {
     const satir = await vt().tek<{ id: number }>('SELECT id FROM oturum_hesap_kilidi WHERE kullanici_adi = $1 ORDER BY id DESC LIMIT 1', [kullaniciAdi]);
     if (!satir) throw new Error(`kilit yok: ${kullaniciAdi}`);
