@@ -22,7 +22,7 @@ import {
   zimmetlemeReddi,
   ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
-  TALEP_YOK, YAKIN_GUN, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, gecisHedefi, gecisReddi,
+  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, gecisHedefi, gecisReddi,
   geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, yapildiSonucu,
   yemekBildirimReddi, yemekKadrosu, yemekSayisi, type GorevKomutu, type TalepKomutu, type YemekHesabi,
 } from './kurallar.ts';
@@ -407,12 +407,15 @@ export async function gorevGeriCek(db: Db, kullanici: Kullanici, id: number, sur
   return gorev(db, id);
 }
 
-// IDR-25: verilen araç var, pasif ya da serviste değil ve bu tarihlerde başka onaylı ya da yoldaki görevde değil.
+// IDR-25: verilen araç var, pasif ya da serviste değil, muayenesi ve sigortası görev bitmeden bitmiyor ve bu tarihlerde başka onaylı ya da
+// yoldaki görevde değil.
 export async function gorevOnayla(db: Db, kullanici: Kullanici, id: number, surum: number, aracId: number): Promise<AracGorevi> {
   const mevcut = await gorevKilitle(db, id, 'onayla');
   const a = await sorgular.aracKilitle(db, aracId);
   if (a === null) throw dogrulama(ARAC_YOK, 'aracId');
   if (aracVerilemezMi(a.durum)) throw dogrulama(ARAC_VERILEMEZ, 'aracId');
+  const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
+  if (belge !== null) throw dogrulama(belge, 'aracId');
   if (await sorgular.aracCakisiyorMu(db, aracId, mevcut.tarih, mevcut.donus_tarihi, id)) throw dogrulama(ARAC_DOLU, 'aracId');
   await gorevSurumlu(db, id, () => sorgular.gorevOnayYaz(db, id, surum, aracId, kullanici.id));
   return gorev(db, id);
@@ -424,7 +427,8 @@ export async function gorevReddet(db: Db, kullanici: Kullanici, id: number, suru
   return gorev(db, id);
 }
 
-// IDR-26: çıkışta araç görevde olur ve km'si çıkış km'sine çıkar; çıkış km'si aracın km'sinden küçük olmaz.
+// IDR-26: çıkışta araç görevde olur ve km'si çıkış km'sine çıkar; çıkış km'si aracın km'sinden küçük olmaz. Onaydan sonra Filo'da
+// değişen muayene ve sigorta tarihi çıkışta yeniden denetlenir (IDR-25).
 export async function gorevCikis(db: Db, id: number, surum: number, km: number): Promise<AracGorevi> {
   const mevcut = await gorevKilitle(db, id, 'cikis');
   const aracId = mevcut.arac_id;
@@ -432,6 +436,8 @@ export async function gorevCikis(db: Db, id: number, surum: number, km: number):
   const a = await sorgular.aracKilitle(db, aracId);
   if (a === null) throw bulunamadi(ARAC_YOK);
   if (aracVerilemezMi(a.durum)) throw gecersiz(ARAC_VERILEMEZ);
+  const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
+  if (belge !== null) throw gecersiz(belge);
   const ret = cikisKmReddi(a.km, km);
   if (ret !== null) throw dogrulama(ret, 'km');
   await gorevSurumlu(db, id, () => sorgular.gorevCikisYaz(db, id, surum, km));

@@ -261,6 +261,15 @@ export function gorevTarihReddi(g: { tarih: string; donusTarihi: string }, bugun
 export function aracVerilemezMi(durum: AracDurumu): boolean {
   return durum === 'pasif' || durum === 'serviste';
 }
+export const MUAYENE_GECIYOR = 'Aracın muayenesi görev bitmeden sona eriyor; muayene tarihi Filo\'da güncellenmeden göreve verilmez.';
+export const SIGORTA_GECIYOR = 'Aracın sigortası görev bitmeden sona eriyor; sigorta tarihi Filo\'da güncellenmeden göreve verilmez.';
+// IDR-25: muayenesi ya da sigortası görevin son gününden önce biten araç göreve verilmez ve çıkamaz. Tarihi girilmemiş belge bilinmez,
+// engel sayılmaz (Filo uyarısı yalnız girilen tarihten çıkar).
+export function aracBelgeReddi(a: { muayeneTarihi: string | null; sigortaTarihi: string | null }, sonGun: string): string | null {
+  if (a.muayeneTarihi !== null && a.muayeneTarihi < sonGun) return MUAYENE_GECIYOR;
+  if (a.sigortaTarihi !== null && a.sigortaTarihi < sonGun) return SIGORTA_GECIYOR;
+  return null;
+}
 
 // IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz; ikisi de bir öncekinden en çok YOL_KM_EN_COK ilerler.
 export function cikisKmReddi(aracKm: number | null, km: number): string | null {

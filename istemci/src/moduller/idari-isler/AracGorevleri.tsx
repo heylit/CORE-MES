@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { AracGorevi, AracGorevleriCevabi, AraclarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
+import type { Arac, AracGorevi, AracGorevleriCevabi, AraclarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -59,12 +59,17 @@ export function AracGorevleri() {
 
 const KOMUT_ADI: Partial<Record<AracGorevi['durum'], string>> = { bekliyor: 'Onayla', onaylandi: 'Çıkış', yolda: 'Dönüş' };
 const KM = /^\d{1,7}$/;
+const belgesiGeciyor = (a: Arac, sonGun: string): boolean =>
+  (a.muayeneTarihi !== null && a.muayeneTarihi < sonGun) || (a.sigortaTarihi !== null && a.sigortaTarihi < sonGun);
 
 function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void }) {
   const komut = useGorevKomutu();
   const { bildir } = useBildirim();
   const araclar = useQuery({ queryKey: anahtarlar.araclar, queryFn: () => api.get<AraclarCevabi>('/idari-isler/araclar') });
-  const uygun = (araclar.data?.araclar ?? []).filter((a) => a.durum !== 'pasif' && a.durum !== 'serviste');
+  const verilebilir = (araclar.data?.araclar ?? []).filter((a) => a.durum !== 'pasif' && a.durum !== 'serviste');
+  // Sunucu kuralıyla aynı (IDR-25): muayenesi ya da sigortası görevin son gününden önce biten araç listede yer almaz, adı ipucunda yazar.
+  const belgesiGecen = verilebilir.filter((a) => belgesiGeciyor(a, gorev.donusTarihi));
+  const uygun = verilebilir.filter((a) => !belgesiGeciyor(a, gorev.donusTarihi));
   const verilen = araclar.data?.araclar.find((a) => a.id === gorev.aracId) ?? null;
   const [aracId, aracIdYaz] = useState('');
   const [km, kmYaz] = useState('');
@@ -122,6 +127,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
             <DurumKutusu durum="hata" mesaj={hataIletisi(araclar.error, 'Araçlar alınamadı')} yenile={() => { void araclar.refetch(); }} />
           ) : (
             <Secim etiket="Verilecek araç" value={aracId} onChange={(o) => aracIdYaz(o.target.value)}
+              ipucu={belgesiGecen.length === 0 ? undefined
+                : `Muayenesi ya da sigortası görev bitmeden biten araçlar listede yok: ${belgesiGecen.map((a) => a.plaka).join(', ')}`}
               secenekler={[
                 { deger: '', baslik: uygun.length === 0 ? 'Uygun araç yok' : 'Araç seç' },
                 ...uygun.map((a) => ({ deger: String(a.id), baslik: `${a.plaka} · ${aracAdi(a)} · ${ARAC_DURUMU[a.durum].etiket}` })),

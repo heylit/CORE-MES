@@ -137,6 +137,28 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     assert.equal((await komut(idari.cerez, g3, 'onayla', { aracId: arac.id })).statusCode, 200);
   });
 
+  test('IDR-25: muayenesi ya da sigortası görev bitmeden biten araç verilmez; onaydan sonra biterse çıkamaz', async () => {
+    const g = await ac({ tarih: gunSonra(1), donusTarihi: gunSonra(4) });
+    const muayenesiGecmis = await aracEkle({ muayeneTarihi: gunSonra(-1) });
+    const muayene = await komut(idari.cerez, g, 'onayla', { aracId: muayenesiGecmis.id });
+    assert.equal(muayene.statusCode, 400);
+    assert.match(muayene.body, /muayenesi/);
+    const sigortaYolda = await aracEkle({ sigortaTarihi: gunSonra(3) });
+    const sigorta = await komut(idari.cerez, g, 'onayla', { aracId: sigortaYolda.id });
+    assert.equal(sigorta.statusCode, 400);
+    assert.match(sigorta.body, /sigortası/);
+    const gecerli = await aracEkle({ muayeneTarihi: gunSonra(4), sigortaTarihi: gunSonra(30) });
+    const onay = await komut(idari.cerez, g, 'onayla', { aracId: gecerli.id });
+    assert.equal(onay.statusCode, 200, onay.body);
+    const guncel = await gonder(idari.cerez, `/idari-isler/araclar/${gecerli.id}/guncelle`, {
+      surum: gecerli.surum, plaka: gecerli.plaka, tur: 'binek', sahiplik: 'sirket', km: 1000, muayeneTarihi: gunSonra(2), sigortaTarihi: gunSonra(30),
+    });
+    assert.equal(guncel.statusCode, 200, guncel.body);
+    const cikis = await komut(idari.cerez, onay.json<AracGoreviCevabi>().gorev, 'cikis', { km: 1000 });
+    assert.equal(cikis.statusCode, 422);
+    assert.match(cikis.body, /muayenesi/);
+  });
+
   test('IDR-24 ve IDR-23 ret: geçmiş gün, dönüş önce; yanlış durumdan geçiş 422; red nedeni zorunlu; kayıt yazılmaz', async () => {
     const say = async () => (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM idari_isler_arac_gorevi'))!.n;
     const n = await say();

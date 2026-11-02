@@ -553,7 +553,7 @@ describe('Araç görevleri', () => {
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
   });
 
-  it('idari işler uygun araçla onaylar, yoldaki göreve dönüş km yazar', async () => {
+  it('idari işler uygun araçla onaylar (belgesi geçen araç listede yok), yoldaki göreve dönüş km yazar', async () => {
     const istekler = sunucuKur(FILOCU, (yontem, yol) => {
       if (yontem === 'POST' && yol === '/idari-isler/arac-gorevleri/41/onayla') return json(200, { gorev: { ...GOREV, durum: 'onaylandi', surum: 2 } });
       if (yontem === 'POST' && yol === '/idari-isler/arac-gorevleri/42/donus') return json(200, { gorev: { ...YOLDA, durum: 'tamamlandi', surum: 4 } });
@@ -565,7 +565,9 @@ describe('Araç görevleri', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Onayla' }));
     const pencere = await screen.findByRole('dialog', { name: /Deneme OSB/ });
     const secim = await within(pencere).findByLabelText('Verilecek araç');
-    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(3));
+    // Kamyonun sigortası görev bitmeden bitiyor (IDR-25): listede yok, plakası ipucunda.
+    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(2));
+    expect(within(pencere).getByText(/görev bitmeden biten araçlar listede yok: 34 DNM 101/)).toBeTruthy();
     fireEvent.change(secim, { target: { value: '22' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
     await screen.findByText('Araç görevi onaylandı');

@@ -9,7 +9,8 @@ import {
   geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, tarihEkle, yapildiSonucu,
 } from './kurallar.ts';
 import {
-  CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN, aracVerilemezMi, cikisKmReddi, donusKmReddi,
+  CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN,
+  aracBelgeReddi, aracVerilemezMi, cikisKmReddi, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
 import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
@@ -221,6 +222,14 @@ describe('idari-isler kuralları', () => {
     assert.equal(aracVerilemezMi('serviste'), true);
     assert.equal(aracVerilemezMi('musait'), false);
     assert.equal(aracVerilemezMi('gorevde'), false);
+  });
+
+  test('IDR-25: muayenesi ya da sigortası görevin son gününden önce biten araç verilmez; tarihsiz belge engel değil', () => {
+    const bos = { muayeneTarihi: null, sigortaTarihi: null };
+    assert.equal(aracBelgeReddi(bos, '2026-11-10'), null);
+    assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-09' }, '2026-11-10'), MUAYENE_GECIYOR);
+    assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-10' }, '2026-11-10'), null);
+    assert.equal(aracBelgeReddi({ ...bos, sigortaTarihi: '2026-10-01' }, '2026-11-10'), SIGORTA_GECIYOR);
   });
 
   test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km', () => {
