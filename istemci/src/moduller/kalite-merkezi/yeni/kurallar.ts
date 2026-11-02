@@ -259,3 +259,31 @@ export function izFarki(once: Record<string, unknown> | null, sonra: Record<stri
 
 export const izNo = (r: Record<string, unknown> | null | undefined): string =>
   r ? String(r.no || r.kod || r.ad || r.parcaNo || '') : '';
+
+// Onay ve kapanış alanının değişip değişmediği (sunucudaki `onayDegisiklikleri` kuralının kopyası; istemci sunucuyu ithal edemez,
+// eşitliği `sunucu/moduller/kalite-merkezi/kurallar.test.ts` korur). Değişen kayıt genel yazmayı denemeden onay ucuna gider: genel uç
+// onu zaten reddeder ve her kapanış Güvenlik Merkezi'ne gereksiz bir reddedilen istek yazar.
+type OnayDegeri = unknown;
+const FORM_SERBEST: readonly OnayDegeri[] = [undefined, 'Taslak', 'Onay bekliyor'];
+const MRB_KARARSIZ: readonly OnayDegeri[] = [undefined, null, '', MRB_KARAR_BEKLIYOR];
+const kapanmamis = (kapali: string) => (o: OnayDegeri, y: OnayDegeri): boolean => o !== kapali && y !== kapali;
+const serbestDegil = (): boolean => false;
+const ONAY_ALANLARI: Readonly<Partial<Record<KmKoleksiyonu, Readonly<Record<string, (o: OnayDegeri, y: OnayDegeri) => boolean>>>>> = {
+  frm: {
+    durum: (o, y) => FORM_SERBEST.includes(o) && y !== undefined && FORM_SERBEST.includes(y),
+    onaylayan: serbestDegil, onayTarih: serbestDegil, onayNot: serbestDegil, onayGeriAlan: serbestDegil, onayGeriAlmaZamani: serbestDegil,
+  },
+  ncr: { durum: kapanmamis(KAPALI), mrb: (o, y) => MRB_KARARSIZ.includes(o) && MRB_KARARSIZ.includes(y) },
+  capa: { durum: kapanmamis(KAPALI) },
+  sup: { onay: serbestDegil },
+};
+const ayniDeger = (a: OnayDegeri, b: OnayDegeri): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+export function onayAlaniDegisiyor(kol: string, onceki: Readonly<Record<string, unknown>> | null, yeni: Readonly<Record<string, unknown>>): boolean {
+  const alanlar = ONAY_ALANLARI[kol as KmKoleksiyonu] ?? {};
+  return Object.entries(alanlar).some(([ad, serbest]) => {
+    const o = onceki?.[ad];
+    const y = yeni[ad];
+    return !ayniDeger(o, y) && !serbest(o, y);
+  });
+}
