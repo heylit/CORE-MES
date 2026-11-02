@@ -45,3 +45,15 @@ var olan satırlara dokunulmaz (3a); PIN'i yönetici geçici olarak verir, kişi
   ilk PIN'ini belirlememiş kişi kartla giremez.
 - Kod: `sunucu/moduller/oturum/uclar.ts` (`/hesabim/pin-degistir`, `/oturum/kart-giris`), `sunucu/moduller/kisiler/servis.ts` `kendiPininiDegistir`.
 - DOĞRULANMADI: kendi PIN değiştirmenin hangi kullanıcı kararıyla geldiği (özel takip deposunda bulunamadı); davranış koddan yazıldı.
+
+## Ek: istasyonda PIN'siz kart (1897 b, 02.11.2026)
+
+- **Kart tek başına girer.** `POST /oturum/kart-giris` gövdesi yalnız kart numarasıdır; PIN sorulmaz ve gövdede kabul edilmez. Yol yalnız
+  İstasyon profilli ortak cihazda açıktır (başka cihazda 403, hiçbir şey yazılmaz); orada yetki rol ile cihaz profilinin kesişimidir.
+  Yukarıdaki "Kart + PIN girişi" maddesinin PIN kısmının yerine geçer; geri kalanı sürer.
+- **Uygun hesap.** Yalnız PIN'le giren (bayraksız, PIN'i olan) etkin hesap; parolalı yönetici ve kayıtsız ya da kaldırılmış kart aynı
+  iletiyle reddedilir ve hatalı deneme sayılır. Bekleme, hesap kilidi ve cihaz sınırı kullanıcı adı yoluyla ortak sayaçtır; kilitli hesap
+  kartla da giremez. İlk PIN'ini belirlememiş kişi önce kullanıcı adıyla PIN'ini belirler.
+- **Kabul edilen risk.** Kaybolan ya da kopyalanan kart, istasyonda kişinin yetkisini (İstasyon profili kesişimi) açar. Karşılık: kart
+  Personel kartları'ndan hemen kaldırılır; istasyon oturumu boşta 15 dk'da kapanır.
+- Kod: `sunucu/moduller/oturum/servis.ts` `kartlaGirisYap`, `sunucu/moduller/kisiler/servis.ts` `kartGirisDurumu`, `paylasilan/sozlesme/oturum.ts` `kartGirisGovdesi`.
