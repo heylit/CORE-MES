@@ -224,6 +224,7 @@ export const GOREV_YOK = 'Araç görevi bulunamadı.';
 export const GOREV_TARIH_GECMIS = 'Geçmiş güne araç talebi açılmaz.';
 export const GOREV_TARIH_ILERI = `En çok ${GOREV_ILERI_GUN} gün sonrasına talep açılır.`;
 export const DONUS_ONCE = 'Dönüş tarihi gidiş tarihinden önce olamaz.';
+export const DONUS_SAATI_ONCE = 'Aynı gün dönen görevde dönüş saati çıkış saatinden sonra olmalı.';
 export const GOREV_UZUN = `Görev en çok ${GOREV_EN_UZUN_GUN} gün sürer.`;
 export const ARAC_VERILEMEZ = 'Pasif ya da serviste olan araç göreve verilmez.';
 export const ARAC_DOLU = 'Araç bu tarihlerde başka bir görevde.';
@@ -261,10 +262,16 @@ export function gorevGecisReddi(durum: GorevDurumu, komut: GorevKomutu): string 
 }
 
 // IDR-24: talep bugün ile 60 gün sonrası arasında açılır; dönüş gidişten önce olmaz; görev en çok 30 gün sürer.
-export function gorevTarihReddi(g: { tarih: string; donusTarihi: string }, bugun: string): { ileti: string; alan: string } | null {
+export function gorevTarihReddi(
+  g: { tarih: string; donusTarihi: string; cikisSaati?: string | null; donusSaati?: string | null }, bugun: string,
+): { ileti: string; alan: string } | null {
   if (g.tarih < bugun) return { ileti: GOREV_TARIH_GECMIS, alan: 'tarih' };
   if (gunFarki(g.tarih, bugun) > GOREV_ILERI_GUN) return { ileti: GOREV_TARIH_ILERI, alan: 'tarih' };
   if (g.donusTarihi < g.tarih) return { ileti: DONUS_ONCE, alan: 'donusTarihi' };
+  // IDR-24: saat isteğe bağlıdır; ikisi de yazılan aynı günlük görevde dönüş çıkıştan sonradır (SS:DD metni sırayla karşılaştırılır).
+  if (g.tarih === g.donusTarihi && g.cikisSaati != null && g.donusSaati != null && g.donusSaati <= g.cikisSaati) {
+    return { ileti: DONUS_SAATI_ONCE, alan: 'donusSaati' };
+  }
   if (gunFarki(g.donusTarihi, g.tarih) > GOREV_EN_UZUN_GUN) return { ileti: GOREV_UZUN, alan: 'donusTarihi' };
   return null;
 }

@@ -60,7 +60,7 @@ const YEMEKCI: Kullanici = { ...IDARI, islemler: [...IDARI.islemler, 'idari-isle
 const TALEPLERIM = { satirlar: [YENI], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies TaleplerimCevabi;
 const GOREV = {
   id: 41, talepEdenKisiId: 4, talepEdenAd: 'Deneme Personel', amac: 'Deneme tedarikçi ziyareti', varis: 'Deneme OSB', tarih: '2026-10-20',
-  donusTarihi: '2026-10-20', aciklama: null, durum: 'bekliyor', talep: '2026-10-19T08:00:00.000+03:00', aracId: null, plaka: null, onaylayanAd: null,
+  donusTarihi: '2026-10-20', cikisSaati: null, donusSaati: null, aciklama: null, durum: 'bekliyor', talep: '2026-10-19T08:00:00.000+03:00', aracId: null, plaka: null, onaylayanAd: null,
   onay: null, redNedeni: null, cikisKm: null, cikis: null, donusKm: null, donus: null, kapanma: null, surum: 1,
 } satisfies AracGorevi;
 const YOLDA = {
@@ -586,11 +586,13 @@ describe('Araç görevleri', () => {
     fireEvent.change(screen.getByLabelText(/Gidilecek yer/), { target: { value: 'Deneme depo' } });
     fireEvent.change(screen.getByLabelText(/Amaç/), { target: { value: 'Deneme numune teslimi' } });
     fireEvent.change(screen.getByLabelText(/Gidiş/), { target: { value: '2026-10-21' } });
-    fireEvent.change(screen.getByLabelText(/Dönüş/), { target: { value: '2026-10-22' } });
+    fireEvent.change(screen.getByLabelText(/^Dönüş(?! saati)/), { target: { value: '2026-10-22' } });
+    fireEvent.change(screen.getByLabelText(/Çıkış saati/), { target: { value: '08:30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Talep gönder' }));
     await screen.findByText('Araç talebin iletildi');
     const [yazma] = yazmalar(istekler);
-    expect(yazma?.govde).toEqual({ amac: 'Deneme numune teslimi', varis: 'Deneme depo', tarih: '2026-10-21', donusTarihi: '2026-10-22' });
+    // Boş bırakılan dönüş saati gönderilmez (görev o gün bitene kadar tutar).
+    expect(yazma?.govde).toEqual({ amac: 'Deneme numune teslimi', varis: 'Deneme depo', tarih: '2026-10-21', donusTarihi: '2026-10-22', cikisSaati: '08:30' });
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
   });
 

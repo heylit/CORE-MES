@@ -64,6 +64,8 @@ function TalepFormu() {
   const [varis, varisYaz] = useState('');
   const [tarih, tarihYaz] = useState(bugunTarihi);
   const [donus, donusYaz] = useState(bugunTarihi);
+  const [cikisSaati, cikisSaatiYaz] = useState('');
+  const [donusSaati, donusSaatiYaz] = useState('');
   const [aciklama, aciklamaYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
@@ -80,11 +82,12 @@ function TalepFormu() {
     hataYaz(null);
     const govde: AracTalebiAcGovdesi = {
       amac: amac.trim(), varis: varis.trim(), tarih, donusTarihi: donus, ...(aciklama.trim() === '' ? {} : { aciklama: aciklama.trim() }),
+      ...(cikisSaati === '' ? {} : { cikisSaati }), ...(donusSaati === '' ? {} : { donusSaati }),
     };
     try {
       await gonderim<AracGoreviCevabi>('/idari-isler/arac-gorevleri/ac', govde);
       bildir('tamam', 'Araç talebin iletildi');
-      amacYaz(''); varisYaz(''); aciklamaYaz('');
+      amacYaz(''); varisYaz(''); aciklamaYaz(''); cikisSaatiYaz(''); donusSaatiYaz('');
       void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
     } catch (h) {
       hataYaz(yazmaIletisi(h, 'Talep gönderilemedi'));
@@ -103,8 +106,13 @@ function TalepFormu() {
           <Girdi etiket="Gidiş" type="date" required value={tarih} onChange={(o) => tarihYaz(o.target.value)} />
           <Girdi etiket="Dönüş" type="date" required value={donus} onChange={(o) => donusYaz(o.target.value)} />
         </div>
+        <div className="tc-ii-iki">
+          <Girdi etiket="Çıkış saati (isteğe bağlı)" type="time" value={cikisSaati} onChange={(o) => cikisSaatiYaz(o.target.value)} />
+          <Girdi etiket="Dönüş saati (isteğe bağlı)" type="time" value={donusSaati} onChange={(o) => donusSaatiYaz(o.target.value)}
+            ipucu="Saatsiz talep bütün günü tutar" />
+        </div>
         <CokSatir etiket="Açıklama (isteğe bağlı)" maxLength={SINIR.not} value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)}
-          ipucu="Saat, yolcu sayısı, yük" />
+          ipucu="Yolcu sayısı, yük" />
         {eksik.length > 0 && <p className="tc-ii-soluk">Eksik: {eksik.join(', ')}</p>}
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
         <Dugme tur="birincil" simge="check" disabled={eksik.length > 0} yukleniyor={bekliyor} onClick={() => void gonder()}>Talep gönder</Dugme>

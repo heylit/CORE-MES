@@ -176,6 +176,29 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     assert.match(cikis.body, /muayenesi/);
   });
 
+  test('IDR-24 ve IDR-25 saat: aynı gün ayrı saatlerdeki iki göreve aynı araç verilir; kesişen saat ve saatsiz görev verilmez', async () => {
+    const arac = await aracEkle({});
+    const sabah = await ac({ tarih: gunSonra(2), donusTarihi: gunSonra(2), cikisSaati: '08:00', donusSaati: '12:00' });
+    assert.deepEqual([sabah.cikisSaati, sabah.donusSaati], ['08:00', '12:00']);
+    assert.equal((await komut(idari.cerez, sabah, 'onayla', { aracId: arac.id })).statusCode, 200);
+    const ogle = await ac({ tarih: gunSonra(2), donusTarihi: gunSonra(2), cikisSaati: '12:00', donusSaati: '17:00' });
+    const ogleOnay = await komut(idari.cerez, ogle, 'onayla', { aracId: arac.id });
+    assert.equal(ogleOnay.statusCode, 200, ogleOnay.body);
+    const kesisen = await ac({ tarih: gunSonra(2), donusTarihi: gunSonra(2), cikisSaati: '11:00', donusSaati: '13:00' });
+    assert.equal((await komut(idari.cerez, kesisen, 'onayla', { aracId: arac.id })).statusCode, 400);
+    const saatsiz = await ac({ tarih: gunSonra(2), donusTarihi: gunSonra(2) });
+    assert.deepEqual([saatsiz.cikisSaati, saatsiz.donusSaati], [null, null]);
+    assert.equal((await komut(idari.cerez, saatsiz, 'onayla', { aracId: arac.id })).statusCode, 400);
+    const ters = await talepAc(calisan.cerez, { tarih: gunSonra(2), donusTarihi: gunSonra(2), cikisSaati: '15:00', donusSaati: '09:00' });
+    assert.equal(ters.statusCode, 400);
+    assert.match(ters.body, /dönüş saati/);
+    assert.equal((await talepAc(calisan.cerez, { cikisSaati: '25:00' })).statusCode, 400);
+    await assert.rejects(
+      o().sahip.sorgu(`UPDATE idari_isler_arac_gorevi SET cikis_saati = '18:00' WHERE id = $1`, [ogle.id]),
+      /idari_isler_arac_gorevi_saat_sirasi/,
+    );
+  });
+
   test('IDR-26: görev günü gelmeden çıkış yazılmaz; kayıt ve araç değişmez', async () => {
     const g = await ac({ tarih: gunSonra(1), donusTarihi: gunSonra(1) });
     const arac = await aracEkle({});
