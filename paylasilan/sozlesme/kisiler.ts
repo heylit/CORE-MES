@@ -64,8 +64,14 @@ export const kisiGovdesi = z.object({
   gorev: z.string().max(200).nullish(),
 });
 
-// Kişi ekleme sürüm taşımaz (kayıt yeni açılır); düzenleme taşır.
-export const kisiDuzenleGovdesi = kisiGovdesi.extend(beklenenSurum);
+// Kişi ekleme sürüm taşımaz (kayıt yeni açılır); düzenleme taşır. Düzenleme kaydı bütünüyle yeniden yazar: gönderilmeyen alan
+// boşaltılırdı, bu yüzden sicil no ve görev açıkça gelir (boşaltmak için null ya da boş metin).
+export const kisiDuzenleGovdesi = z.object({
+  ...beklenenSurum,
+  ad: z.string().max(200),
+  sicilNo: z.string().max(200).nullable(),
+  gorev: z.string().max(200).nullable(),
+});
 
 export const hesapGovdesi = z.object({
   ...beklenenSurum,

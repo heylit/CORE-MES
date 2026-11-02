@@ -90,6 +90,8 @@ describe('kişi yönetimi (gerçek PostgreSQL, gerçek giriş)', () => {
       const satir = await vt().tek<{ surum: number }>('SELECT surum FROM kisi WHERE id = $1', [Number(hedef[1])]);
       yuk = { ...govde, surum: satir?.surum ?? 1 };
     }
+    // Düzenleme bütün alanları ister (ekranın gönderdiği gibi); alanı vermeyen test onu boşaltmak ister.
+    if (yontem === 'POST' && yol.endsWith('/duzenle') && typeof yuk === 'object' && yuk !== null) yuk = { sicilNo: null, gorev: null, ...yuk };
     const kimlik = yontem === 'POST' && yol === '/kisiler' ? { 'istek-kimligi': randomUUID() } : {};
     return app().inject({ method: yontem, url: `/api${yol}`, headers: { cookie: cerezi, ...kimlik }, ...(yuk === undefined ? {} : { payload: yuk as object }) });
   };
@@ -549,6 +551,25 @@ describe('kişi yönetimi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await istek(ikinci, '/kisiler', undefined, 'GET')).statusCode, 401);
     // Parolayı değiştiren kendi oturumunu yitirmez.
     assert.equal((await istek(await cerez('parola-degistiren3'), '/oturum', undefined, 'GET')).statusCode, 200);
+  });
+
+  test('KIS-9: düzenleme gövdesi sicil no ve görevi açıkça taşır; eksik alanlı gövde 400 alır, kayıt değişmez', async () => {
+    await kullanici('ik-kismi', await rolId('insan_kaynaklari'));
+    const hedef = await vt().tx((db) => kisiEkle(db, { ad: 'Kısmi Deneme', sicilNo: 'K-1', gorev: 'Depo' }));
+    const cerezi = await cerez('ik-kismi');
+    const surum = async (): Promise<number> => (await vt().tek<{ surum: number }>('SELECT surum FROM kisi WHERE id = $1', [hedef]))?.surum ?? 0;
+    const gonder = async (govde: object) => app().inject({ method: 'POST', url: `/api/kisiler/${hedef}/duzenle`, headers: { cookie: cerezi }, payload: { ...govde, surum: await surum() } });
+
+    for (const eksik of [{ ad: 'Yeni Ad' }, { ad: 'Yeni Ad', sicilNo: 'K-1' }, { ad: 'Yeni Ad', gorev: 'Depo' }]) {
+      const cevap = await gonder(eksik);
+      assert.equal(cevap.statusCode, 400, cevap.body);
+    }
+    const once = await vt().tek('SELECT ad, sicil_no, gorev FROM kisi WHERE id = $1', [hedef]);
+    assert.deepEqual(once, { ad: 'Kısmi Deneme', sicil_no: 'K-1', gorev: 'Depo' });
+
+    const tam = await gonder({ ad: 'Yeni Ad', sicilNo: 'K-1', gorev: null });
+    assert.equal(tam.statusCode, 200, tam.body);
+    assert.deepEqual([tam.json().ad, tam.json().sicilNo, tam.json().gorev], ['Yeni Ad', 'K-1', null]);
   });
 
   test('KS-2: aynı istek kimliğiyle ikinci kişi ekleme ikinci kişi açmaz, aynı cevabı döner; farklı kimlik ikinci kişiyi açar', async () => {

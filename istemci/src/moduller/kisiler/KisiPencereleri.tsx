@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { eskiSurumMu } from '#paylasilan/hata.ts';
 import type {
-  HesapGovdesi, KisiDuzenleGovdesi, KisiGovdesi, KisiOzeti, PersonelCevabi, ParolaGovdesi, PinVerGovdesi, RollerCevabi,
+  HesapGovdesi, KisiDuzenleGovdesi, KisiOzeti, PersonelCevabi, ParolaGovdesi, PinVerGovdesi, RollerCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import type { KendiParolaGovdesi } from '#paylasilan/sozlesme/oturum.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -78,7 +78,8 @@ export function KisiFormu({ kisi, kisiler, kapat }: { kisi: KisiOzeti | null; ki
 
   const kaydet = useMutation({
     // Ekleme tekrar korumalıdır: cevabı yitirilen gönderim aynı kimlikle yinelenir, ikinci kişi açılmaz.
-    mutationFn: (govde: KisiGovdesi) => (kisi === null
+    // Form her alanı gönderir: düzenleme gövdesi eksik alanı kabul etmez (KIS-9).
+    mutationFn: (govde: Omit<KisiDuzenleGovdesi, 'surum'>) => (kisi === null
       ? tekrarKorumaliGonder((deneme) => api.post<KisiOzeti>('/kisiler', govde, deneme))
       : api.post<KisiOzeti>(`/kisiler/${kisi.id}/duzenle`, { ...govde, surum: kisi.surum } satisfies KisiDuzenleGovdesi)),
     onSuccess: (guncel) => {
