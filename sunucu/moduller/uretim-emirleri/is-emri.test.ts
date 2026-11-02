@@ -27,7 +27,7 @@ import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi }
 import {
   ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
-  ISTASYONSUZ_ADIM, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
+  ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
 } from './kurallar.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
@@ -695,6 +695,35 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     e = await ayrinti(id);
     assert.equal((await yaz(10, null, e.surum)).govde.mesaj, KAYNAK_BEKLEYENDE);
+  });
+
+  test('1890 a: istasyonu boş kişi adımı başlatanın istasyonunda başlar; başlatanın ataması yoksa reddedilir', async () => {
+    await kisiEkle('kisi_op', 'operator');
+    const ist = await istasyonKur();
+    const kisi = { tur: 'kisi' as const, id: kim('kisi_op').id };
+    const { uretimEmriId: id } = await ac([adim(1, kisi)]);
+    const { uretimEmriId: id2 } = await ac([adim(1, kisi)]);
+    assert.equal((await ayrinti(id)).isEmirleri[0]?.istasyon, null, 'emir açılırken kişinin istasyon ataması yok');
+    const atamasiz = await terminal(`/${id}/baslat`, undefined, 'kisi_op');
+    assert.deepEqual([atamasiz.durum, atamasiz.govde.mesaj], [409, ISTASYONSUZ_KISI]);
+    assert.equal((await terminal(`/${id}/ayar`, undefined, 'kisi_op')).govde.mesaj, ISTASYONSUZ_KISI, 'ayar da aynı kuralla');
+    assert.equal((await ayrinti(id)).isEmirleri[0]?.istasyon, null, 'reddedilen başlatma istasyon yazmaz');
+
+    await o().sahip.sorgu('INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, $3::date, 100)', [ist, kisi.id, tesisGunu(Date.now())]);
+    const basla = await terminal(`/${id}/baslat`, undefined, 'kisi_op');
+    assert.equal(basla.durum, 200, JSON.stringify(basla.govde));
+    const e = await ayrinti(id);
+    assert.deepEqual([e.isEmirleri[0]?.istasyon?.id, e.isEmirleri[0]?.durum], [ist, 'calisiyor']);
+    assert.equal((await emirOzeti(o().vt, id))?.istasyonId, ist, 'emir de adımın istasyonunda başlar');
+    assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1 }, 'kisi_op')).durum, 200, 'sonraki komut adımın istasyonunu okur');
+
+    // Adım verilerek başlatma (paralel adım yolu) aynı kuralı izler; makinesiz istasyonda aynı anda tek iş açıktır.
+    const ie2 = (await ayrinti(id2)).isEmirleri[0]?.id ?? 0;
+    const ikinci = await terminal(`/${id2}/baslat`, undefined, 'kisi_op');
+    assert.equal(ikinci.durum, 409, 'istasyonun makinesiz yeri dolu');
+    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 1 }, 'kisi_op')).durum, 200);
+    await o().vt.tx((db) => emirBaslat(db, kim('kisi_op'), id2, undefined, undefined, ie2));
+    assert.equal((await ayrinti(id2)).isEmirleri[0]?.istasyon?.id, ist);
   });
 
   test('plana al ve iptal: taslak plana alınır, planlı tekrar alınmaz; iş emri başlamış emir iptal edilmez (yeni ve eski uçta)', async () => {

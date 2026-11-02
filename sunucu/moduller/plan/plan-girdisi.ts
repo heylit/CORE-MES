@@ -84,6 +84,11 @@ export interface CozumIstegi extends PlanBenzetimi {
   ekAdimlar?: EkAdim[];
   // 1202: kuyruk işinin önündeki bitmemiş fasonun kalan süresi (gün; Üretim Emirleri'nin fasonBekleGun'u). Motor öncülü fason değilse uygular.
   fasonBekleme?: { anahtar: string; gun: number }[];
+  // 1888 b: kişiye yerleşen işler kişinin el tezgâhında dizilir. kisiAdaylari: anahtarın aday kişileri (yoksa yalnız kuyruğun kişisi);
+  // kisiSabitleri kişinin yeri sabit işleridir (el tezgâhı o aralıkta doludur).
+  kisiKuyruklari?: { kisiId: number; anahtarlar: string[] }[];
+  kisiAdaylari?: { anahtar: string; kisiIdler: number[] }[];
+  kisiSabitleri?: { anahtar: string; kisiId: number; baslangic: string; bitis: string }[];
 }
 // 1408: taslağın denemesi ve emir önizlemesi (eski motorun yerine). Sanal emrin adımları kuyrukta "no|OP no" anahtarıyla geçer; makine
 // kimliği ve günler metin değil sayı ve 'GGGG-AA-GG'.

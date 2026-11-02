@@ -175,7 +175,14 @@ export type IsEmriDurumu = 'bekliyor' | 'calisiyor' | 'tamam';
 export type IsEmriKaynakTuru = 'makine' | 'kisi' | 'fason';
 
 export const ISTASYONSUZ_ADIM = 'Sıradaki iş emrinin kaynağı yok (tezgahsız) ya da fason; plan kaynak atayınca başlatılır.';
+export const ISTASYONSUZ_KISI = 'Kişiye atanan adımın istasyonu yok ve başlatanın da istasyon ataması yok; önce kişiye istasyon atanır.';
 export const IS_EMRI_YOK = 'İş emri bulunamadı.';
+
+// 1890 a: kişiye atanan adımın istasyonu emir açılırken kişinin o günkü atamasından gelir; atama yoksa boş kalır. Böyle bekleyen
+// adım terminalde başlatanın o günkü istasyonunda başlar.
+export function baslatanIstasyonuGerekirMi(a: { durum: IsEmriDurumu; kisiId: number | null; makineId: number | null; fasonFirmaId: number | null; istasyonId: number | null }): boolean {
+  return a.durum === 'bekliyor' && a.istasyonId === null && a.kisiId !== null && a.makineId === null && a.fasonFirmaId === null;
+}
 export const IS_EMIRSIZ = 'Üretim emrinde en az bir iş emri olmalı.';
 export const OP_YINELENDI = 'Aynı operasyon numarası iki iş emrinde olamaz.';
 export const SIRA_YINELENDI = 'Aynı sıra iki iş emrinde olamaz.';

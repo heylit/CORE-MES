@@ -1194,6 +1194,16 @@ export async function uretimYeriDegisimiEkle(
   );
 }
 
+// 1890 a: yalnız istasyonu boş, kişiye atanmış bekleyen adım; makineli ya da fason adıma yazılmaz.
+export function kisiAdimiIstasyonunuYaz(db: Db, id: number, istasyonId: number): Promise<{ id: number } | null> {
+  return db.tek(
+    `UPDATE uretim_emirleri_is_emri SET istasyon_id = $2, surum = surum + 1
+      WHERE id = $1 AND durum = 'bekliyor' AND istasyon_id IS NULL AND kisi_id IS NOT NULL AND makine_id IS NULL AND fason_firma_id IS NULL
+      RETURNING id`,
+    [id, istasyonId],
+  );
+}
+
 export function isEmriBaslat(db: Db, id: number, an: string): Promise<unknown> {
   return db.sorgu(
     `UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2::timestamptz, surum = surum + 1 WHERE id = $1 AND durum = 'bekliyor'`,

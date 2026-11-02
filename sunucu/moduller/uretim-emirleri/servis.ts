@@ -10,7 +10,7 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
-  aktifIstasyonlar, calisirMakineler, ekipler, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
+  aktifIstasyonlar, calisirMakineler, ekipler, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
@@ -21,7 +21,7 @@ import {
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
-  KAPANIS_KILITLI, kapanisSonucu,
+  KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -316,6 +316,20 @@ async function adimCalismasi(db: Db, emirId: number, adim: IsEmriSatiri | null) 
   return calismaDurumu(olay?.olay ?? null);
 }
 
+// 1890 a: istasyonu boş kişi adımı başlatanın o günkü istasyonunu alır; sonraki komutlar (sayım, duruş, bitiş) adımın istasyonunu okur.
+// Adımsız komutta emrin istasyonu da boştur (sıradaki adımdan türer), o yüzden emre de yazılır.
+async function baslatanIstasyonunuVer(
+  db: Db, kisiId: number, emir: EmirSatiri, isEmri: IsEmriSatiri | null, isEmriId: number | undefined,
+): Promise<{ emir: EmirSatiri; isEmri: IsEmriSatiri | null }> {
+  if (isEmri === null || !baslatanIstasyonuGerekirMi(isEmri)) return { emir, isEmri };
+  const istasyonId = kisininIstasyonu(await istasyonKisiAtamalari(db, { kisiId }), kisiId);
+  if (istasyonId === null) throw cakisma(ISTASYONSUZ_KISI);
+  await sorgular.kisiAdimiIstasyonunuYaz(db, isEmri.id, istasyonId);
+  if (isEmriId !== undefined || emir.istasyonId !== null) return { emir, isEmri: { ...isEmri, istasyonId } };
+  await sorgular.emirIstasyonuYaz(db, emir.id, istasyonId);
+  return { emir: { ...emir, istasyonId }, isEmri: { ...isEmri, istasyonId } };
+}
+
 // Kilit, kapsam ve (kilit altında okunan) çalışma durumu: sayım ve duruş komutlarının ortak girişi. Adımı verilen komut çalışan adımda olur.
 async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number) {
   const emir = await kilitliEmir(db, id);
@@ -538,11 +552,12 @@ async function yeriTut(db: Db, emirId: number, isEmriId: number | null, yer: Yer
 export async function emirBaslat(
   db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number,
 ): Promise<{ emir: Emir; uyari: string | null }> {
-  const emir = await kilitliEmir(db, id);
-  const hepsi = emir.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
+  const kilitli = await kilitliEmir(db, id);
+  const hepsi = kilitli.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
   const verilen = isEmriId === undefined ? null : (hepsi.find((i) => i.id === isEmriId) ?? null);
   if (isEmriId !== undefined && verilen === null) throw bulunamadi(IS_EMRI_YOK);
-  const isEmri = isEmriId === undefined ? (emir.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const secilen = isEmriId === undefined ? (kilitli.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
   const yetkinlikIhlali = baslatmaYetkinlikIhlali(await yetkinMi(db, kisiId, istasyonId), await kisiBayrakliMi(db, kisiId));
@@ -586,11 +601,12 @@ export async function emirBaslat(
 // Başlatmanın iş emri denetimleri aynen geçerlidir (sıradaki iş emri yoksa ya da fasonsa ayar yoktur). Adım verilirse o bekleyen
 // adımın ayarıdır; emir başlamışken de yazılır (paralel adım, 639).
 export async function emirAyar(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<{ emir: Emir }> {
-  const emir = await kilitliEmir(db, id);
-  const hepsi = emir.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
+  const kilitli = await kilitliEmir(db, id);
+  const hepsi = kilitli.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
   const verilen = isEmriId === undefined ? null : (hepsi.find((i) => i.id === isEmriId) ?? null);
   if (isEmriId !== undefined && verilen === null) throw bulunamadi(IS_EMRI_YOK);
-  const isEmri = isEmriId === undefined ? (emir.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const secilen = isEmriId === undefined ? (kilitli.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
