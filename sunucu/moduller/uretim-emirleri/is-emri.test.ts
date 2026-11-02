@@ -809,10 +809,21 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       kaynakRotaRevizyonId: rev2,
       isEmirleri: [adim(1, { tur: 'makine', id: makine }, { ad: 'Değişti' }), adim(2, null, { ad: 'Yeni ad' }), adim(4, null)],
     }));
-    assert.deepEqual(sonuc.degisenler, ['OP 30 çıkarıldı', 'OP 40 eklendi']);
+    assert.deepEqual(sonuc.degisenler, ['OP 30 çıkarıldı', 'OP 20 güncellendi (ad)', 'OP 40 eklendi']);
     const e = await ayrinti(id);
     assert.deepEqual(e.isEmirleri.map((i) => [i.opNo, i.sira, i.ad, i.durum]), [[10, 1, 'Adım 1', 'calisiyor'], [20, 2, 'Yeni ad', 'bekliyor'], [40, 3, 'Adım 4', 'bekliyor']]);
     assert.equal(e.kaynakRotaRevizyonId, 2);
+  });
+
+  test('ROT-2 emirlere uygula: güncellenen iş emrinin süre ve kaynak değişikliği yazılır; değişmeyen iş emri listeye girmez', async () => {
+    const ist = await istasyonKur();
+    const makine = await makineKur(ist);
+    const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
+    const sonuc = await o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, {
+      kaynakRotaRevizyonId: rev2,
+      isEmirleri: [adim(1, null), adim(2, { tur: 'makine', id: makine }, { ayarSuresiDk: '25', birimSureDk: '2.25' })],
+    }));
+    assert.deepEqual(sonuc.degisenler, ['OP 20 güncellendi (kaynak; istasyon; hazırlık 10 dk → 25 dk; birim süre 1,5 dk → 2,25 dk)']);
   });
 
   test('279 a: iş emri silinince canlı plan satırı ve parçaları da silinir; kalan iş emrinin plan satırı kalır', async () => {
@@ -847,7 +858,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const kisi = (await o().sahip.tek<{ id: number }>('SELECT id FROM kisi ORDER BY id LIMIT 1'))!.id;
     await o().sahip.sorgu("INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay) SELECT id, $2, 'tamamla' FROM emir_adimi WHERE is_emri_id = $1", [ie1, kisi]);
     const sonuc = await uygula([adim(1, mk, liste('Çapak al')), adim(2, mk, { ...liste('Yeni ölçü'), ad: 'Yeni ad' })]);
-    assert.deepEqual(sonuc.degisenler, ['OP 30 çıkarıldı']);
+    assert.deepEqual(sonuc.degisenler, ['OP 30 çıkarıldı', 'OP 20 güncellendi (ad)']);
     assert.deepEqual(await listeler(), [[ie1, 'Çapak al'], [ie2, 'Yeni ölçü']], 'başlamış iş emrinin işaretli listesi kalır; bekleyenin listesi yenilenir, çıkanın listesi gider');
     assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => [i.opNo, i.ad]), [[10, 'Adım 1'], [20, 'Yeni ad']]);
 

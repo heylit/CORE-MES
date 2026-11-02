@@ -6,7 +6,7 @@ import {
   ACIK_DEGIL, ADIMLI_IPTAL_DURUMU, DEVIR_TUTARSIZ, FASON_BITTI, FASON_DEGIL, FASON_DISARIDA, FASON_DONUSSUZ, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI,
   FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ, IS_EMIRSIZ, KAYNAK_BEKLEYENDE, OP_YINELENDI, PLANA_AL_DURUMU, SIRA_YINELENDI,
   TERMIN_FASON_DISI, TESLIM_ONCE, acikEmirIhlali, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali, gorunenDurum,
-  guvenliUygula, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
+  guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESTIRME_ADIM, BIRLESTIRME_ADIMLAR_FARKLI, BIRLESTIRME_AKRABA_DEGIL, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KENDISI, BIRLESTIRME_KOK,
   BIRLESTIRME_TASLAK, BOLME_ADET, BOLME_ADIM_YOK, BOLME_BASLAMIS, BOLME_URETILMIS, birlestirmeIhlali, bolmeIhlali, eldekiAdet,
   BIRLESME_ADIMI_BASLAMIS, BIRLESME_ADIMI_YOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESME_KOL_ILERLEDI, BIRLESME_PLANI_KOLDA,
@@ -139,6 +139,18 @@ describe('uretim-emirleri iş emri kuralları', () => {
     const calisan = [{ opNo: 10, sira: 1, durum: 'tamam' as const }, { opNo: 20, sira: 2, durum: 'calisiyor' as const }, { opNo: 30, sira: 3, durum: 'bekliyor' as const }];
     assert.deepEqual(onde(rota(10, 15, 20, 30, 40), calisan), [15], 'çalışan adımın önüne');
     assert.deepEqual(onde(rota(10, 20, 25, 30), calisan), []);
+  });
+
+  test('ROT-2 iş emri farkı: değişmeyen alan yazılmaz, ondalık yazımı fark sayılmaz; süreler eski ve yeni değeriyle gelir', () => {
+    const eski = {
+      opNo: 20, operasyonTipiId: 1, ad: 'Frezeleme', makineId: 3, kisiId: null, fasonFirmaId: null, istasyonId: 2, ayarSuresiDk: '30.00',
+      birimSureDk: '4.50', terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: '0.00', makineKullanimi: 'tek',
+      enKucukParca: null, yenidenAyar: true, talimatSurumu: 2,
+    };
+    assert.equal(isEmriFarki(eski, { ...eski, ayarSuresiDk: '30', birimSureDk: '4.5', firePayiYuzde: '0' }), null);
+    assert.equal(isEmriFarki(eski, { ...eski, birimSureDk: '5', makineId: 4 }), 'OP 20 güncellendi (kaynak; birim süre 4,5 dk → 5 dk)');
+    assert.equal(isEmriFarki(eski, { ...eski, ayarSuresiDk: null, talimatSurumu: 3, bagimlilik: 'akisli', devirAdedi: 5 }),
+      'OP 20 güncellendi (hazırlık 30 dk → boş; bağımlılık; talimat)');
   });
 
   test('malzeme ihtiyacı: adım miktarı sonraki fire paylarıyla büyür, bileşen firesi eklenir; iş emri olmayan bileşen sayılmaz', () => {
