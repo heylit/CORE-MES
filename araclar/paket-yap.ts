@@ -8,8 +8,8 @@ import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
 import { paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, SUNUCUDA_KURULMAYAN, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
-  paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumNotu, type Kilit, type PaketJson, type Platform,
+  BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, SUNUCUDA_KURULMAYAN, SURUM_DOSYASI, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
+  paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu, type Kilit, type PaketJson, type Platform,
 } from './paket.ts';
 import { tarAc, tarOku, type TarGirdisi } from './tar-oku.ts';
 import { tarYaz } from './tar-yaz.ts';
@@ -76,8 +76,12 @@ function klasorGirdileri(kok: string, onEk: string): TarGirdisi[] {
 // Yük: HEAD'in ağacı, sunucuya göre budanmış package.json ve lock, lock'taki npm paketlerinin önbelleği (kart #1562).
 // Önbellek bu makinede npm kayıt adresinden toplanır; sunucu internete çıkmaz. Her tarball'ın içeriği lock'taki bütünlük
 // değeriyle önbellekte bulunmazsa paket yazılmaz.
-function yukKur(platformlar: readonly Platform[], zaman: Date): { yuk: Buffer; tarball: number; onbellekBayt: number; cikan: string[] } {
+function yukKur(
+  platformlar: readonly Platform[], kimlik: { commit: string; surum: string; tarih: string },
+): { yuk: Buffer; tarball: number; onbellekBayt: number; cikan: string[] } {
+  const zaman = new Date(kimlik.tarih);
   const agac = tarOku(execFileSync('git', ['archive', '--format=tar.gz', 'HEAD'], { cwd: KOK, maxBuffer: 1024 * 1024 * 1024 }));
+  if (agac.some((g) => g.yol === SURUM_DOSYASI)) dur(`HEAD'de ${SURUM_DOSYASI} var; bu ad paketin sürüm kaydına ayrılmıştır.`);
   const oku = (yol: string): unknown => {
     const g = agac.find((x) => x.yol === yol);
     if (g === undefined) dur(`HEAD'de ${yol} yok.`);
@@ -98,6 +102,7 @@ function yukKur(platformlar: readonly Platform[], zaman: Date): { yuk: Buffer; t
     const json = (deger: unknown): Buffer => Buffer.from(`${JSON.stringify(deger, null, 2)}\n`, 'utf8');
     const girdiler = [
       ...agac.map((g) => (g.yol === 'package.json' ? { ...g, veri: json(paketJson) } : g.yol === 'package-lock.json' ? { ...g, veri: json(kilit) } : g)),
+      { yol: SURUM_DOSYASI, tur: 'dosya' as const, veri: surumDosyasi(kimlik) },
       { yol: NPM_ONBELLEGI, tur: 'klasor' as const, veri: Buffer.alloc(0) },
       ...onbellekGirdileri,
     ];
@@ -149,7 +154,7 @@ function paketYap(s: PaketSecenekleri): void {
   const degisiklikler = degisiklikleriAyikla(gunluk);
   const oncekiGocler = new Set(onceki === null ? [] : satirlar(git(['ls-tree', '--name-only', onceki, 'sunucu/gocler/']))
     .map((y) => y.slice('sunucu/gocler/'.length)));
-  const kurulan = s.yuk === undefined ? yukKur(platformlar, new Date(tarih)) : null;
+  const kurulan = s.yuk === undefined ? yukKur(platformlar, { commit, surum, tarih }) : null;
   const yuk = kurulan === null ? readFileSync(resolve(s.yuk ?? '')) : kurulan.yuk;
   const not = s.not === undefined || s.not.trim() === '' ? null : s.not.trim();
 

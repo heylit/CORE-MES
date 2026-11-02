@@ -100,6 +100,7 @@ Sonuç Güncelleme sekmesinde "Son uygulama" ve "Uygulama geçmişi"nde görün�
 - Paket boyutu çoğunu npm önbelleği tutar: 2026-10-16'da Windows x64 için 143 MB (önbellek 118 MB, 662 npm paketi).
   Yükleme sınırı 200 MB'tır (`AZAMI_GUNCELLEME`); paket bunu aşarsa ekran yüklemeyi reddeder, sınır çekirdek işidir.
 - Kurulum sırasında paket bellekte açılır; sunucuda paket boyutunun birkaç katı boş bellek gerekir (doğrulanmadı, ölçülmedi).
+- İlk kurulumun sürümü kökteki `surum.json`'dan (paket yazar), yoksa git'ten okunur; ikisi de yoksa bilinmez.
 - İlk kurulum git ağacıysa güncelleyici, kurduğu sürümü (`calisan.json`) ağaçtaki koddan önce açar. Ağacı git ile güncelleyip
   o kodu açmak için `calisan.json` silinir.
 - Güncelleyicinin kendi kodu ilk kurulum klasöründendir; paketle gelen güncelleyici değişikliği ancak ilk kurulum güncellenince gelir.
@@ -127,7 +128,8 @@ Sunucuda:
 6. Sunucuyu kapatın (`npm.cmd run baslat` penceresinde Ctrl+C).
 7. Yeni klasörde: `npm.cmd run yedek`, sonra `npm.cmd run goc`.
 8. Güncelleme klasöründeki `calisan.json`'u silin (yoksa güncelleyici eski kurulu sürümü açar).
-9. Yeni klasörde `npm.cmd run baslat`. Beklenen satır: `Güncelleyici: D:\TMIV2\tmiv2-<sürüm> açılıyor (commit bilinmiyor).`
+9. Yeni klasörde `npm.cmd run baslat`. Beklenen satır: `Güncelleyici: D:\TMIV2\tmiv2-<sürüm> açılıyor (<commit>).`
+   Giriş ekranı ve Sağlık paketin sürüm adını gösterir. `commit bilinmiyor` yazıyorsa klasörde `surum.json` yoktur (eski paket).
    Bu klasör artık ilk kurulum klasörüdür; Windows'ta başlatma kısayolu ya da zamanlanmış görev varsa yolu buna çevrilir.
 10. Uygulamada Sistem Ayarları > Güncelleme açılır. Eski ilk kurulum klasörü, yeni sürüm bir gün sorunsuz çalışınca silinebilir;
     geri dönmek için 6. adımdan önceki duruma: yeni klasörü kapatın, yedeği geri yükleyin (kurulum/yedek.md), eski klasörde

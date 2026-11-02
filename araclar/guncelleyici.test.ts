@@ -7,10 +7,10 @@ import {
   CALISAN_SURUM_DOSYASI, UYGULAMA_GECMISI_DOSYASI, UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  Guncelleyici, UYGULAMA_DURUMU_DOSYASI, altSurecOrtami, derlemeOrtami, gecmisSatiri, npmKurulumArgumanlari, yarimKalaniKapat,
+  Guncelleyici, UYGULAMA_DURUMU_DOSYASI, altSurecOrtami, derlemeOrtami, gecmisSatiri, kokSurumDosyasi, npmKurulumArgumanlari, yarimKalaniKapat,
   type UygulamaDurumu, paketiUygula, SUNUCU_ARGUMANLARI, pgAraci, type UygulamaAdimlari, geriYuklemeKilidi, kilitHatasiMi, kilitYetersizligi,
 } from './guncelleyici.ts';
-import { NPM_ONBELLEGI } from './paket.ts';
+import { NPM_ONBELLEGI, SURUM_DOSYASI, surumDosyasi } from './paket.ts';
 
 const ISTEK = { commit: 'a'.repeat(40), isteyenId: 1, istenme: '2026-10-14T08:00:00.000Z' };
 const saat = () => new Date('2026-10-14T08:00:00.000Z');
@@ -242,4 +242,32 @@ test('psql kilit tablosu hatası tanınır; başka hata tanınmaz', () => {
   assert.equal(kilitHatasiMi('psql y.sql hata verdi (çıkış 3): HINT:  You might need to increase max_locks_per_transaction.'), true);
   assert.equal(kilitHatasiMi('psql: ERROR:  out of shared memory'), true);
   assert.equal(kilitHatasiMi('psql y.sql hata verdi (çıkış 3): ERROR:  relation "x" already exists'), false);
+});
+
+test('paketten açılan ilk kurulum sürümünü paketin sürüm dosyasından okur (1876)', async () => {
+  const kok = await mkdtemp(join(tmpdir(), 'tmiv2-kok-'));
+  const dizin = await mkdtemp(join(tmpdir(), 'tmiv2-guncelleme-'));
+  try {
+    const kimlik = { commit: 'b'.repeat(40), surum: '2026.11.02-1', tarih: '2026-11-02T08:00:00.000Z' };
+    await writeFile(join(kok, SURUM_DOSYASI), surumDosyasi(kimlik));
+    const g = new Guncelleyici({ kok, dizin, anahtar: '', port: 0 }, null);
+    assert.deepEqual(await g.aktif(), { klasor: kok, surum: kimlik });
+    assert.deepEqual(derlemeOrtami((await g.aktif()).surum), { TMIV2_COMMIT: kimlik.commit, TMIV2_SURUM: kimlik.surum });
+  } finally {
+    await rm(kok, { recursive: true, force: true });
+    await rm(dizin, { recursive: true, force: true });
+  }
+});
+
+test('sürüm dosyası yoksa ya da bozuksa okunmaz; sürüm uydurulmaz', async () => {
+  const kok = await mkdtemp(join(tmpdir(), 'tmiv2-kok-'));
+  try {
+    assert.equal(kokSurumDosyasi(kok), null);
+    await writeFile(join(kok, SURUM_DOSYASI), '{bozuk');
+    assert.equal(kokSurumDosyasi(kok), null);
+    await writeFile(join(kok, SURUM_DOSYASI), JSON.stringify({ commit: 'kisa', surum: 'x', tarih: null }));
+    assert.equal(kokSurumDosyasi(kok), null);
+  } finally {
+    await rm(kok, { recursive: true, force: true });
+  }
 });
