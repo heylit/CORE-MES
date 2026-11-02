@@ -15,13 +15,13 @@ import { kimlikCozucu } from './disari.ts';
 import { CIHAZ_CEREZI, HESAP_KILIDI_ESIGI } from './kurallar.ts';
 import { oturumUclari } from './uclar.ts';
 
-// Kart #1326 (kararlar 1327 a, 1328 a): istasyonda kart + kişinin kendi PIN'i. Kişi, kart ve cihaz adları uydurmadır.
+// Kart #1326, 1897 b: istasyonda kart tek başına girer, PIN sorulmaz. Kişi, kart ve cihaz adları uydurmadır.
 const PAROLA = 'dogru-parola-1';
 const GECICI = '482913';
 const PIN = '730514';
 const YOL = '/api/oturum/kart-giris';
 
-describe('istasyonda kart + PIN girişi (gerçek PostgreSQL, saat elde)', () => {
+describe('istasyonda PIN\'siz kart girişi (gerçek PostgreSQL, saat elde)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let saatli: FastifyInstance;
@@ -61,9 +61,9 @@ describe('istasyonda kart + PIN girişi (gerçek PostgreSQL, saat elde)', () => 
     assert.equal(k.statusCode, 200, k.body);
     return { id, ad, kart };
   }
-  const kartGiris = (kart: string, pin: string, cihaz: string | null = istasyon, ip = '10.8.0.1') =>
+  const kartGiris = (kart: string, cihaz: string | null = istasyon, ip = '10.8.0.1') =>
     saatli.inject({
-      method: 'POST', url: YOL, payload: { kart, pin }, remoteAddress: ip, ...(cihaz === null ? {} : { headers: { cookie: `${CIHAZ_CEREZI}=${cihaz}` } }),
+      method: 'POST', url: YOL, payload: { kart }, remoteAddress: ip, ...(cihaz === null ? {} : { headers: { cookie: `${CIHAZ_CEREZI}=${cihaz}` } }),
     });
 
   before(async () => {
@@ -86,61 +86,64 @@ describe('istasyonda kart + PIN girişi (gerçek PostgreSQL, saat elde)', () => 
     await ortam?.kaldir();
   });
 
-  test('ortak cihazda kayıtlı kart ve kişinin PIN\'i oturum açar; kişisel cihazda kart yolu kapalı ve hiçbir şey yazılmaz', async () => {
+  test('ortak cihazda kayıtlı kart PIN\'siz oturum açar; kişisel cihazda kart yolu kapalı ve hiçbir şey yazılmaz', async () => {
     const kisi = await kartliOperator();
     const once = (await vt().tek<{ sayi: number }>('SELECT count(*)::int AS sayi FROM giris_denemesi'))!.sayi;
-    const kisisel = await kartGiris(kisi.kart, PIN, null);
+    const kisisel = await kartGiris(kisi.kart, null);
     assert.equal(kisisel.statusCode, 403);
     assert.match(kisisel.json().mesaj, /istasyon olarak kayıtlı cihazda/);
-    assert.equal((await kartGiris(kisi.kart, PIN, 'x'.repeat(43))).statusCode, 403);
+    assert.equal((await kartGiris(kisi.kart, 'x'.repeat(43))).statusCode, 403);
     assert.equal((await vt().tek<{ sayi: number }>('SELECT count(*)::int AS sayi FROM giris_denemesi'))!.sayi, once);
 
-    const cevap = await kartGiris(` ${kisi.kart} `, PIN);
+    const cevap = await kartGiris(` ${kisi.kart} `);
     assert.equal(cevap.statusCode, 200, cevap.body);
     assert.equal(cevap.json().kullanici.id, kisi.id);
     const oturum = await saatli.inject({ method: 'GET', url: '/api/oturum', headers: { cookie: cerezAl(cevap) } });
     assert.equal(oturum.json().kullanici.id, kisi.id);
   });
 
-  test('kart tek başına yetmez: yanlış PIN ile kayıtsız kart aynı cevabı alır; kart ve PIN denetim kaydına girmez', async () => {
+  test('PIN gövdede kabul edilmez; kayıtsız kart reddedilir ve kart numarası denetim kaydına girmez', async () => {
     const kisi = await kartliOperator();
-    const yanlis = await kartGiris(kisi.kart, '111111');
-    ilerle(120);
-    const kayitsiz = await kartGiris('99999999', PIN);
-    assert.equal(yanlis.statusCode, 401);
+    const pinli = await saatli.inject({
+      method: 'POST', url: YOL, payload: { kart: kisi.kart, pin: PIN }, remoteAddress: '10.8.0.9', headers: { cookie: `${CIHAZ_CEREZI}=${istasyon}` },
+    });
+    assert.equal(pinli.statusCode, 400);
+    const kayitsiz = await kartGiris('99999999');
     assert.equal(kayitsiz.statusCode, 401);
-    assert.equal(yanlis.json().mesaj, kayitsiz.json().mesaj);
+    assert.match(kayitsiz.json().mesaj, /Kart tanınmadı/);
     const metin = (await vt().tek<{ metin: string | null }>(
       "SELECT string_agg(govde::text, ' ') AS metin FROM denetim_kaydi WHERE yol = '/oturum/kart-giris'"))!.metin ?? '';
-    assert.doesNotMatch(metin, new RegExp(`${kisi.kart}|111111|99999999`));
+    assert.doesNotMatch(metin, new RegExp(`${kisi.kart}|99999999`));
   });
 
-  test('kart ve kullanıcı adı yolu tek sayaçtır: kartla art arda hatalı PIN hesabı kilitler, doğru PIN de geçmez', async () => {
+  test('kart ve kullanıcı adı yolu tek sayaçtır: kilitli hesap kartla da giremez', async () => {
     const kisi = await kartliOperator();
     for (let i = 0; i < HESAP_KILIDI_ESIGI; i += 1) {
-      assert.equal((await kartGiris(kisi.kart, '111111', istasyon, `10.8.1.${String(i + 1)}`)).statusCode, 401);
+      const c = await saatli.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: kisi.ad, pin: '111111' }, remoteAddress: `10.8.1.${String(i + 1)}` });
+      assert.equal(c.statusCode, 401);
       ilerle(120);
     }
-    assert.equal((await kartGiris(kisi.kart, PIN, istasyon, '10.8.2.1')).statusCode, 401);
-    const adla = await saatli.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: kisi.ad, pin: PIN }, remoteAddress: '10.8.2.2' });
-    assert.equal(adla.statusCode, 401);
-    assert.match(adla.json().mesaj, /Çok sayıda hatalı deneme/);
+    const kartla = await kartGiris(kisi.kart, istasyon, '10.8.2.1');
+    assert.equal(kartla.statusCode, 401);
+    assert.match(kartla.json().mesaj, /Çok sayıda hatalı deneme/);
   });
 
   test('ilk PIN\'ini belirlememiş kişi, parolayla giren yönetici ve kartı kaldırılan kişi kartla giremez', async () => {
     const gecici = await kartliOperator(false);
-    const c = await kartGiris(gecici.kart, GECICI);
+    const c = await kartGiris(gecici.kart);
     assert.equal(c.statusCode, 401);
     assert.match(c.json().mesaj, /İlk PIN/);
 
     ilerle(120);
     assert.equal((await yonetici('/nizamiye/personel-kartlari', { kisiId: yoneticiId, kartNo: 'ABCDEF01' })).statusCode, 200);
-    assert.equal((await kartGiris('ABCDEF01', PAROLA, istasyon, '10.8.3.1')).statusCode, 401);
+    const yoneticiKarti = await kartGiris('ABCDEF01', istasyon, '10.8.3.1');
+    assert.equal(yoneticiKarti.statusCode, 401);
+    assert.match(yoneticiKarti.json().mesaj, /Kart tanınmadı/);
 
     const kisi = await kartliOperator();
     const kart = (await app.inject({ method: 'GET', url: '/api/nizamiye/personel-kartlari', headers: { cookie: yoneticiCerezi } }))
       .json().kartlar.find((k: { kisiId: number }) => k.kisiId === kisi.id) as { id: number; surum: number };
     assert.equal((await yonetici(`/nizamiye/personel-kartlari/${kart.id}/kaldir`, { surum: kart.surum })).statusCode, 200);
-    assert.equal((await kartGiris(kisi.kart, PIN, istasyon, '10.8.3.2')).statusCode, 401);
+    assert.equal((await kartGiris(kisi.kart, istasyon, '10.8.3.2')).statusCode, 401);
   });
 });

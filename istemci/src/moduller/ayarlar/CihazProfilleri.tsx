@@ -14,7 +14,7 @@ export const PROFIL_ADLARI: Readonly<Record<CihazProfili, string>> = { tam: 'Tam
 export const PROFIL_SECENEKLERI: readonly Secenek[] = (['tam', 'istasyon', 'telefon'] as const).map((p) => ({ deger: p, baslik: PROFIL_ADLARI[p] }));
 
 const PROFIL_ACIKLAMASI: Readonly<Record<'istasyon' | 'telefon', string>> = {
-  istasyon: 'Ortak cihaz: kart ve PIN ile giriş, çizimler çıkıştan sonra da cihazda kalır, 15 dk boşta kalan oturum kapanır.',
+  istasyon: 'Ortak cihaz: kartla PIN\'siz giriş, çizimler çıkıştan sonra da cihazda kalır, 15 dk boşta kalan oturum kapanır.',
   telefon: 'Çizim, PDF ve 3B dosyaları açılmaz; talimat fotoğraf ve videoları görüntülenir. Kayıtsız cihaz bu profili alabilir.',
 };
 

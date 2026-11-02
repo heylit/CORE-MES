@@ -99,6 +99,34 @@ describe('KodOkuyucu', () => {
       expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
     });
 
+    it('secenekle dokunmatikte alan odaksizken el okuyucunun tuslari koda yazilir, Enter bildirir, odaktaki dugmeye basilmaz', () => {
+      isaretci(false);
+      const okundu = vi.fn();
+      const kapat = vi.fn();
+      render(<Pencere acik kapat={kapat} baslik="Okut"><KodOkuyucu okundu={okundu} dokunmatikteOdakYok /></Pencere>);
+      const alan = screen.getByLabelText('Kod') as HTMLInputElement;
+      const dugme = screen.getByRole('button', { name: 'Kamerayı aç' });
+      dugme.focus();
+      for (const t of 'LOT:12') fireEvent.keyDown(dugme, { key: t });
+      expect(alan.value).toBe('LOT:12');
+      expect(document.activeElement).toBe(dugme);
+      expect(fireEvent.keyDown(dugme, { key: 'Enter' })).toBe(false);
+      expect(okundu).toHaveBeenCalledWith('LOT:12');
+      expect(alan.value).toBe('');
+      fireEvent.keyDown(document.body, { key: 'Enter' });
+      expect(okundu).toHaveBeenCalledTimes(1);
+    });
+
+    it('alan odaktayken ya da fareli cihazda tuslar ayrica yakalanmaz', () => {
+      isaretci(true);
+      const okundu = vi.fn();
+      render(<KodOkuyucu okundu={okundu} dokunmatikteOdakYok />);
+      fireEvent.keyDown(document.body, { key: 'A' });
+      fireEvent.keyDown(document.body, { key: 'Enter' });
+      expect((screen.getByLabelText('Kod') as HTMLInputElement).value).toBe('');
+      expect(okundu).not.toHaveBeenCalled();
+    });
+
     it('secenekle dokunmatikte acilista odak almaz, kamera hata verince alir', async () => {
       isaretci(false);
       render(<KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok />);

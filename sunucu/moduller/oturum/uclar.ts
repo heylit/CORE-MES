@@ -44,7 +44,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         return { kullanici: await cihazaGoreKullanici(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
-    // Kart + PIN yalnız yöneticinin ortak olarak kaydettiği cihazda (istasyon) açıktır; kişisel cihazda kart yolu yoktur ve hiçbir şey yazılmaz.
+    // Kartla giriş (PIN'siz, 1897 b) yalnız yöneticinin ortak olarak kaydettiği cihazda (istasyon) açıktır; kişisel cihazda kart yolu yoktur ve hiçbir şey yazılmaz.
     uc({
       yontem: 'POST',
       yol: '/oturum/kart-giris',

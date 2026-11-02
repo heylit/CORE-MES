@@ -9,7 +9,7 @@ import {
 
 export { kullaniciAdiniDuzelt } from './kurallar.ts';
 export {
-  girisDogrula, ilkPiniYaz, kendiParolasiniDegistir, kendiPininiDegistir, kisiBayrakliMi, kisileriListele, kisiKullaniciAdi, kisiVarMi, kullaniciYukle, yoneticiOlustur, yeniPinHatasi,
+  girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir, kendiPininiDegistir, kisiBayrakliMi, kisileriListele, kisiKullaniciAdi, kisiVarMi, kullaniciYukle, yoneticiOlustur, yeniPinHatasi,
 } from './servis.ts';
 export type { CikisSonucu, GirisSirri } from './servis.ts';
 // İK personel kartının itmesi (1302 a, 1315): ad, sicil no, görev ve çıkış tarihi bağlı kişiye yazılır, kişi kartında salt okunur

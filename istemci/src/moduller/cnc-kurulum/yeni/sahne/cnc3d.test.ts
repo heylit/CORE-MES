@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Box3, Mesh, Vector3, type Object3D } from 'three';
 import { COOL, CONS, EMPTY, FIX, GAUGES, INSERTS, JAWS, LATHE, LHOLD, LIVE, MACHINES, MILL, WCS, ZERO } from '../veri/cncdata.ts';
 import type { Kalem } from '../veri/tipler.ts';
+import { GOVDE_ALANI, KATALOG } from '../veri/tezgah-katalogu.ts';
 import { assembly, build, dispose, fit, M } from './cnc3d.ts';
 
 // Prototipin her kalemi ve tezgâhı çizilebilir bir model vermeli: hata atmaz, kutusu sonlu ve boş değildir.
@@ -32,6 +33,26 @@ describe('cnc3d', () => {
       expect(sonlu(b), t.id).toBe(true);
       dispose(o);
     }
+  });
+
+  it('katalogdaki her model ve yeni gövdeler çizilir; bilinmeyen model türü boş gruptur (1893 a)', () => {
+    for (const kind of ['m_swiss', 'm_cmm', ...KATALOG.map((m) => m.anahtar)]) {
+      const o = build({ id: kind, name: kind, kind } as Kalem), b = kutu(o);
+      expect(b.isEmpty(), kind).toBe(false);
+      expect(sonlu(b), kind).toBe(true);
+      dispose(o);
+    }
+    const bos = build({ id: 'x', name: 'x', kind: 'm_yok' } as Kalem);
+    expect(kutu(bos).isEmpty()).toBe(true);
+  });
+
+  it('büyük çalışma alanlı model gövdesinden uzundur (1893 a)', () => {
+    const m = KATALOG.find((k) => k.govde === 'm_gk' && k.alan.x > GOVDE_ALANI.m_gk.x);
+    expect(m).toBeDefined();
+    if (!m) return;
+    const govde = build({ id: 'g', name: 'g', kind: 'm_gk' } as Kalem), model = build({ id: 'k', name: 'k', kind: m.anahtar } as Kalem);
+    expect(kutu(model).getSize(new Vector3()).x).toBeGreaterThan(kutu(govde).getSize(new Vector3()).x);
+    dispose(govde); dispose(model);
   });
 
   it('takım montajı tezgâh türüne göre kurulur', () => {

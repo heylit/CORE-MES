@@ -5,6 +5,7 @@ Madde 5'in "motorun girdisini Reçete ve Rota kurar" cümlesi ADR 0028 ile deği
 maddeler aynen sürer. 01.11.2026 bakımı (1495 a): A motoru (`oner`, `/plan/oner`, `/plan/karsilastir`) 1381 a ile kalktı;
 motor JavaScript'te kalır (364 a, sunucuda çözüm süre sınırı 60 sn, `plan-motoru.ts` `COZUM_SURESI_MS`); yıllık çözücü HiGHS kullanır (361 b).
 02.11.2026 bakımı (1888 b, 1888 teyit): madde 7 eklendi; kişiye yerleşen işi motor dizer (1409 a'daki "motor kişi işini dizmez" kısıtı kalktı).
+02.11.2026 bakımı (1891 A b, 1891 B a, 1891 teyit-2 a): madde 7'de insanlı istasyon kapasite kaynağıyla tanınır ve işleri yetkin kişilere paralel dizilir.
 Dayandığı kararlar: 354 (asıl plan motoru sunucuda; denemeler ve stüdyodaki asıl plan öncesi değişiklikler tarayıcıda), 391 a (başlamış adımın
 kalanını sunucu adetten hesaplar, motor kullanır), 396 a, 397 a, 338 a (tek plan motoru; yeri ADR 0020 ile plan modülü),
 364 a (motor JS kalır), 1381 a (A motoru kalktı). Canlıya alma (356 b) bu belgenin kapsamında değildir.
@@ -44,9 +45,11 @@ kalanını sunucu adetten hesaplar, motor kullanır), 396 a, 397 a, 338 a (tek p
    Reçete ve Rota kurar, iç biçimi dışarı açılmaz.
 6. **Kıyas.** `oner` kalktığı için (1381 a) iki motor kıyası yoktur; motor değişikliği kıyas setiyle denenir (kart 1475).
 7. **Kişi işi (1888 b).** Motor önerisinde (`yeni` kip) kişiye yerleşen adım da dizilir: rotada kaynağı kişi olan adım ve makinesi olmayan
-   istasyonun adımı. Plan "insanlı istasyon"u makinesizlikle anlar (istasyonun `kapasite_kaynagi` alanı okunmaz). Makinesiz istasyon,
-   terminalin iş başlatmayı kabul ettiği kişilere (istasyonda bugün yetkin olanlar) açılır; terminal böyle istasyonda aynı anda tek iş açtığı
-   için istasyonun işleri tek kişide (vardiyası olan ilk yetkin kişi) sırayla dizilir. Motor girdisinde her aday kişiye kendi vardiyasıyla çalışan bir "el tezgâhı"
+   istasyonun adımı. İnsanlı istasyon, istasyon kartında kapasite kaynağı "insan" olan istasyondur (1891 A b); alanı boş istasyon makine
+   sayılır. İnsanlı istasyon makineleri olsa da kişilere açılır: istasyonda bugün yetkin ve vardiyası olan kişiler, yani terminalin iş
+   başlatmayı kabul ettiği kişiler (1891 B a). Kapasite kaynağı insan olmayan ve makinesi olmayan istasyonun adımı adaysız kalır. Terminal
+   makinesiz istasyonda aynı anda birden çok el işi açtırır (1891 teyit-2 a); bu yüzden istasyonun işleri yetkin kişilerin el
+   tezgâhlarına paralel dizilir, istasyonun kapasitesi bu kişilerin vardiyalarının toplamıdır. Motor girdisinde her aday kişiye kendi vardiyasıyla çalışan bir "el tezgâhı"
    kurulur (`motor/emirler.betik`); personel kısıtı açıkken tezgâhın tek operatörü o kişidir, böylece kişi aynı saatte hem baktığı makinede
    hem el işinde gösterilmez ve devamsızlığı sayılır. Sonuç plana kişi kaynağıyla yazılır; şema ve ortak sözleşme değişmez. Bölünmüş ve elle
    sıralı iş motorla dizilmez (1409 a sürer): yeri varsa yerinde kalır, yoksa nedeniyle yerleşmez. Kuyruk yazımı (`sabit` kip) değişmez.

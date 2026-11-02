@@ -23,11 +23,10 @@ export const pinBelirleGovdesi = z.object({
   yeniPin: gizli(z.string().max(20)),
 });
 
-// İstasyonda kart + PIN (kart #1326, kararlar 1327 a, 1328 a): okuyucunun yazdığı kart numarası kişiyi bulur, kişinin kendi PIN'i doğrular.
-// Yalnız ortak cihazda geçer; ikisi de denetim kaydına girmez. Kart numarasının biçimini sunucu denetler (okuyucuya göre değişir).
+// İstasyonda kartla giriş (kart #1326, 1897 b): okuyucunun yazdığı kart numarası kişiyi bulur; PIN sorulmaz.
+// Yalnız İstasyon profilli ortak cihazda geçer; kart numarası denetim kaydına girmez. Kart numarasının biçimini sunucu denetler (okuyucuya göre değişir).
 export const kartGirisGovdesi = z.object({
   kart: gizli(z.string().min(1, 'Kartı okutun.').max(64)),
-  pin: gizli(z.string().min(1, 'PIN zorunlu.').max(20)),
 }).strict();
 
 // Kişinin kendi parolasını değiştirmesi: eski parola girişle aynı bekleme kuralına tabidir.

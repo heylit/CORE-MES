@@ -12,16 +12,48 @@ import './kod-okuyucu.css';
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
 }
+function yaziAlaniMi(hedef: EventTarget | null): boolean {
+  return hedef instanceof HTMLElement && (hedef.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(hedef.tagName));
+}
 export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false }: {
   okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean; dokunmatikteOdakYok?: boolean; sik?: boolean;
 }) {
-  const [elle, setElle] = useState('');
+  const [elle, setElleDurumu] = useState('');
+  const elleSon = useRef('');
+  const setElle = (deger: string) => { elleSon.current = deger; setElleDurumu(deger); };
   const kamera = useKamera(okundu);
   const { ac } = kamera;
   useEffect(() => { if (kendiliginden) void ac(); }, [kendiliginden, ac]);
   const [acilistaOdak] = useState(() => !dokunmatikteOdakYok || inceIsaretci());
   const form = useRef<HTMLFormElement | null>(null);
   useEffect(() => { if (dokunmatikteOdakYok && kamera.hata) form.current?.querySelector('input')?.focus(); }, [dokunmatikteOdakYok, kamera.hata]);
+  // Alan odaksızken (tablet) el okuyucunun fiziksel tuşları hiçbir yere yazılmazdı. Odak bir yazı alanında değilse yazdırılabilir tuşlar
+  // koda eklenir, Enter gönderir; alan odak almadığı için ekran klavyesi yine açılmaz. Yakalama aşamasında dinlenir: odaktaki düğme
+  // okutmanın tuşlarıyla tıklanmasın.
+  const sonOkundu = useRef(okundu);
+  useEffect(() => { sonOkundu.current = okundu; });
+  useEffect(() => {
+    if (acilistaOdak) return;
+    const tus = (o: KeyboardEvent) => {
+      if (o.defaultPrevented || o.ctrlKey || o.altKey || o.metaKey || yaziAlaniMi(o.target)) return;
+      if (o.key === 'Enter') {
+        const kod = elleSon.current.trim();
+        if (kod === '') return;
+        o.preventDefault();
+        o.stopPropagation();
+        elleSon.current = '';
+        setElleDurumu('');
+        sonOkundu.current(kod);
+        return;
+      }
+      if (o.key.length !== 1) return;
+      o.preventDefault();
+      elleSon.current += o.key;
+      setElleDurumu(elleSon.current);
+    };
+    window.addEventListener('keydown', tus, true);
+    return () => window.removeEventListener('keydown', tus, true);
+  }, [acilistaOdak]);
   const dosya = useRef<HTMLInputElement | null>(null);
   const gonder = (o: FormEvent) => { o.preventDefault(); if (elle.trim() !== '') { okundu(elle.trim()); setElle(''); } };
   const kodAlani = (

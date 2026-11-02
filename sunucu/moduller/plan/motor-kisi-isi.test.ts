@@ -97,7 +97,7 @@ describe('plan motoru: kişi işi (1888 b)', () => {
   });
 });
 
-// Uçtan uca: motor yerleşimi (Reçete ve Rota > Plan) kişi işini kişiye, makinesiz istasyonun işini istasyonun kişisine yerleştirir.
+// Uçtan uca: motor yerleşimi (Reçete ve Rota > Plan) kişi işini kişiye, insanlı istasyonun işini istasyonun kişilerine yerleştirir (1888 b, 1891).
 describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', () => {
   const o = planTestOrtami();
 
@@ -105,8 +105,10 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     const { operatorId, merkezId } = o.durum();
     const istasyon = async (kod: string) => (await o.tamam<{ id: number }>(o.c.yonetici, 'POST', '/istasyonlar', { kod, ad: `Deneme ${kod}`, isMerkeziId: merkezId })).id;
     const insanli = await istasyon('RT-EL'), bos = await istasyon('RT-BOS');
-    // Terminal makinesiz istasyonda işi istasyonda yetkin kişiye başlatır: aday kişiler yetkinlikten.
-    await o.durum().ortam!.sahip.sorgu("INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi WHERE ad IN ('Deneme operator', 'Deneme planlama')", [insanli]);
+    // 1891 A b: insanlı istasyon kapasite kaynağı "insan" olandır; kaynağı boş makinesiz istasyon makine sayılır ve adaysız kalır.
+    // Terminal insanlı istasyonda işi istasyonda yetkin kişiye başlatır: aday kişiler yetkinlikten.
+    await o.durum().ortam!.sahip.sorgu("UPDATE istasyon SET kapasite_kaynagi = 'insan' WHERE id = $1", [insanli]);
+    await o.durum().ortam!.sahip.sorgu("INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, i FROM kisi, unnest($1::int[]) i WHERE ad IN ('Deneme operator', 'Deneme planlama')", [[insanli, bos]]);
     const [kisiIsi, elIsi, adaysiz] = await o.isEmirleriAc([
       o.yeniAdim({ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 10, birimSureDk: 1 }),
       o.yeniAdim({ kaynak: { tur: 'istasyon', id: insanli }, ayarSuresiDk: 0, birimSureDk: 2, bilesenler: [] }),
@@ -121,10 +123,11 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     assert.ok(e?.kaynak.tur === 'kisi' && yetkinler.includes(e.kaynak.id), `istasyonun işi yetkin kişiye: ${JSON.stringify(e?.kaynak)}`);
     assert.equal((Date.parse(k!.bitis) - Date.parse(k!.baslangic)) / 60_000, 20, 'ayar ve parça başı süre rotadandır');
     assert.ok(Date.parse(e!.baslangic) >= Date.parse(k!.bitis), 'ardıl adım öncülünü bekler, aynı kişide üst üste binmez');
-    // Makinesiz istasyonda terminal aynı anda tek iş açar: istasyonun iki işi aynı kişide sırayla dizilir, iki kişiye paralel değil.
+    // 1891 B a: insanlı istasyon yetkin ve vardiyalı kişilerin havuzudur; öncülü beklemeyen ikinci iş boş olan kişiye, öteki işle paralel dizilir.
     const e2 = yeri(elIsi2!);
-    assert.deepEqual(e2?.kaynak, e!.kaynak, JSON.stringify(m.yerlesmeyen));
-    assert.ok(Date.parse(e2!.baslangic) >= Date.parse(e!.bitis) || Date.parse(e!.baslangic) >= Date.parse(e2!.bitis), 'istasyonun işleri üst üste binmez');
+    assert.ok(e2?.kaynak.tur === 'kisi' && yetkinler.includes(e2.kaynak.id), JSON.stringify(m.yerlesmeyen));
+    assert.ok(Date.parse(e2!.baslangic) < Date.parse(e!.bitis), `havuzdaki ikinci iş ilkini beklemez: ${e2!.baslangic} / ${e!.baslangic}-${e!.bitis}`);
+    if (e2!.kaynak.id === e!.kaynak.id) assert.ok(Date.parse(e2!.bitis) <= Date.parse(e!.baslangic), 'aynı kişide üst üste binmez');
     assert.match(m.yerlesmeyen.find((y) => y.isEmriId === adaysiz)?.neden ?? '', /kullanılabilir makinesi ya da kişisi yok/);
     assert.equal(m.yerlesmeyen.some((y) => /dizilmez/.test(y.neden)), false);
   });

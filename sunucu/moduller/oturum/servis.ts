@@ -11,7 +11,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
-  girisDogrula, ilkPiniYaz, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
+  girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
@@ -71,14 +71,15 @@ async function oturumAc(db: Db, kisiId: number, girdi: { ip: string; tarayici?: 
   return anahtar;
 }
 
-const HATALI_KART = 'Kart ya da PIN hatalı.';
+const HATALI_KART = 'Kart tanınmadı ya da bu kartla giriş kapalı.';
 
-// İstasyonda kart + PIN (kart #1326, kararlar 1327 a, 1328 a). Kart tek başına yetmez: kişinin kendi PIN'i girişle aynı bekleme, hesap
-// kilidi ve cihaz sınırıyla doğrulanır. Yalnız ortak cihazda geçer (çağıran denetler). Kayıtsız kart da bir PIN doğrulaması kadar sürer ve
-// aynı iletiyi alır: cevap kartın kayıtlı olup olmadığını ele vermez. Parolayla giren kişi ve ilk PIN'ini belirlememiş kişi kartla giremez.
+// İstasyonda PIN'siz kart (kart #1326, 1897 b). Yalnız İstasyon profilli ortak cihazda geçer (çağıran
+// denetler); orada yetki rol ile cihaz profilinin kesişimidir. Kayıtsız kart, kaldırılmış kart ve kartla girişi kapalı hesap (parolalı
+// yönetici, pasif kişi) aynı iletiyle reddedilir ve hatalı deneme sayılır: kart ve kullanıcı adı yolu tek sayaçtır, kilitli hesap kartla
+// da giremez. İlk PIN'ini belirlememiş kişi önce kullanıcı adıyla PIN'ini belirler.
 export async function kartlaGirisYap(
   db: Db,
-  girdi: { kart: string; pin: string; ip: string; tarayici?: string | null | undefined; gunluk?: Gunluk | undefined },
+  girdi: { kart: string; ip: string; tarayici?: string | null | undefined; gunluk?: Gunluk | undefined },
   simdi: Simdi = null,
 ): Promise<{ anahtar: string; kullanici: Kullanici }> {
   const kisiId = await personelKartSahibi(db, girdi.kart);
@@ -87,14 +88,13 @@ export async function kartlaGirisYap(
 
   await girisDenemesiniDenetle(db, ad, girdi.ip, simdi);
 
-  // Kayıtsız kartta sahte ad bulunmaz; doğrulama yine aynı süreyi harcar.
-  const sonuc = await girisDogrula(db, ad, { pin: girdi.pin });
-  const kullanici = sonuc === null || sonuc.kisiId !== kisiId ? null : await kimlikYukle(db, sonuc.kisiId);
-  if (sonuc === null || kullanici === null) {
+  const durum = kullaniciAdi === null ? null : await kartGirisDurumu(db, ad);
+  if (durum === 'pin-belirlenecek') throw oturumYok('İlk PIN\'inizi giriş ekranında kullanıcı adınızla belirleyin; sonra kartla girin.');
+  const kullanici = durum === 'uygun' && kisiId !== null ? await kimlikYukle(db, kisiId) : null;
+  if (kullanici === null) {
     await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
     throw new UygulamaHatasi('OTURUM_YOK', HATALI_KART, { yazilarKalir: true });
   }
-  if (sonuc.pinBelirlenecek) throw oturumYok('İlk PIN\'inizi giriş ekranında kullanıcı adınızla belirleyin; sonra kartla girin.');
   await denemeyiSifirla(db, ad, girdi.ip, simdi);
   return { anahtar: await oturumAc(db, kullanici.id, girdi), kullanici };
 }

@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { htype, isLatheTool, isMillTool } from '../veri/takim-turu.ts';
 import type { Kalem, Tezgah } from '../veri/tipler.ts';
 import { kutuyaOturt, modelDinlemeyiBirak, modelIste, modelKopyasi, type ModelDurumu } from './glb-yukle.ts';
+import { govdesi, type GovdeTipi } from '../veri/tezgah-katalogu.ts';
+import { katalogOrani, type Oran } from './tezgah-govdeleri.ts';
 import { sahneRengi3 } from './renkler.ts';
 
 // Prototipin CNC 3B model kütüphanesi (CNC3D): takım, tutucu, aparat, çene, ölçüm, sarf ve tezgâh modelleri koddan çizilir, dış
@@ -1012,6 +1014,50 @@ function machTFnew(): THREE.Group {
   return g;
 }
 
+// Kayar otomat (1893 a): uzun dar kabin, solda çubuk sürücü, kılavuz burç, kayar ana iş mili, tarak takım tablası, karşı iş mili.
+function machSwiss(): THREE.Group {
+  const W = 2.3, H = 1.8, D = 1.25, fl = 0.85, g = enclosure({ W, H, D, floor: fl, slope: 0.25, slopeWin: true, win: { x0: -0.7, x1: 0.6, y0: 1.0, y1: 1.45 }, doors: [[-0.8, 0.7]] });
+  add(g, bx(0.6, 0.45, 0.55, M.cab2, -0.75, fl + 0.22, -0.2), cyX(0.07, 0.07, -0.45, -0.25, M.steel, 1.2, -0.15, 28), cyX(0.03, 0.03, -0.25, -0.18, M.steel, 1.2, -0.15, 20));
+  add(g, cyX(0.012, 0.012, -0.18, 0.05, M.alu, 1.2, -0.15, 16));
+  const tarak = G(); add(tarak, bx(0.3, 0.06, 0.36, M.anth, 0, 0, 0));
+  for (let i = 0; i < 5; i++) tarak.add(bx(0.03, 0.12, 0.03, M.carb, -0.1 + i * 0.05, -0.08, 0.06));
+  yerlestir(g, tarak, -0.02, 1.38, -0.12);
+  add(g, bx(0.4, 0.38, 0.45, M.cab2, 0.6, fl + 0.19, -0.2)); const ks = cyX(0.05, 0.05, 0.4, 0.22, M.steel, 1.2, -0.15, 24); g.add(ks);
+  yerlestir(g, ctrlPanel(-0.35), W / 2 - 0.2, 0, D / 2 + 0.3);
+  yerlestir(g, stackLight(), W / 2 - 0.25, H, -D / 2 + 0.25);
+  yerlestir(g, chipConveyor(0.8, 1), W / 2 - 0.1, 0.35, -D / 2 + 0.35);
+  const surucu = G(); add(surucu, bx(1.6, 0.5, 0.4, M.cab, 0, 0.75, 0), cyX(0.03, 0.03, -0.8, 0.8, M.steel, 1.05, 0, 16), bx(0.08, 0.75, 0.3, M.anth, -0.7, 0.375, 0), bx(0.08, 0.75, 0.3, M.anth, 0.7, 0.375, 0));
+  yerlestir(g, surucu, -W / 2 - 0.85, 0, -0.15);
+  return g;
+}
+// Köprü tipi CMM (1893 a): granit tabla, iki ayaklı gezer köprü, Z kolu ve yakut uçlu prob, yanda ölçüm masası.
+function machCMM(): THREE.Group {
+  const g = G(), Tw = 1.4, Td = 2.0, Ty = 0.8;
+  add(g, bx(Tw + 0.2, 0.7, Td + 0.1, M.anth, 0, 0.35, 0), bx(Tw, 0.2, Td, M.dark, 0, Ty - 0.1, 0));
+  const kopru = G(), by = Ty + 1.05;
+  add(kopru, bx(0.16, 1.05, 0.22, M.white, -Tw / 2 + 0.05, Ty + 0.525, 0), bx(0.12, 1.05, 0.2, M.white, Tw / 2 - 0.05, Ty + 0.525, 0), bx(Tw + 0.1, 0.18, 0.24, M.white, 0, by, 0));
+  const kol = G(); add(kol, bx(0.2, 0.26, 0.3, M.white, 0, 0, 0), bx(0.08, 0.8, 0.08, M.alu, 0, -0.45, 0.12), cy(0.02, 0.02, -0.85, -0.95, M.steel), cy(0.006, 0.006, -0.95, -1.03, M.carb));
+  const yakut = mesh(new THREE.SphereGeometry(0.012, 16, 12), M.ruby); yakut.position.y = -1.04; kol.add(yakut);
+  yerlestir(kopru, kol, 0.15, by, 0.1);
+  yerlestir(g, kopru, 0, 0, -0.2);
+  yerlestir(g, partBlock(0.3, 0.12, 0.24), 0.1, Ty, 0.2);
+  const masa = G(); add(masa, bx(0.8, 0.04, 0.6, M.cab2, 0, 0.75, 0), bx(0.05, 0.75, 0.5, M.anth, -0.35, 0.375, 0), bx(0.05, 0.75, 0.5, M.anth, 0.35, 0.375, 0), bx(0.5, 0.35, 0.03, M.scr2, 0, 1.0, -0.15));
+  yerlestir(g, masa, Tw / 2 + 0.7, 0, 0.4);
+  return g;
+}
+
+// Tezgâh gövdesi: katalog modeli gövdesinin oranıyla (tezgah-govdeleri.ts) iç grupta uzar; çağıranın ölçeği dışta kalır.
+function tezgahGovdesi(govde: GovdeTipi, o: Oran): THREE.Group {
+  const govdeler: Record<GovdeTipi, () => THREE.Group> = {
+    m_vmc: machVMC, m_5ax: machTrunnion, m_5axh: machSwivel, m_gk: machGKnew, m_lathe: machLatheNew, m_tf: machTFnew, m_hmc: machHMC,
+    m_ulathe: machULathe, m_swiss: machSwiss, m_cmm: machCMM,
+  };
+  const ic = govdeler[govde]();
+  if (o.x === 1 && o.y === 1 && o.z === 1) return ic;
+  ic.scale.set(o.x, o.y, o.z);
+  return add(G(), ic);
+}
+
 function emptyPocket(): THREE.Group {
   const g = G(), geo = new THREE.EdgesGeometry(new THREE.CylinderGeometry(1.2, 1.2, 5, 16, 1));
   g.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: sahneRengi3('bos-cep') })));
@@ -1073,9 +1119,9 @@ function cizilen(it: Kalem): THREE.Object3D {
   if (k === 'empty') return emptyPocket();
   const takim = TOOL[k] ?? LATHE[k];
   if (takim) return takim(it);
+  const govde = govdesi(k);
+  if (govde !== null) return tezgahGovdesi(govde, katalogOrani(k));
   switch (k) {
-    case 'm_vmc': return machVMC(); case 'm_5ax': return machTrunnion(); case 'm_5axh': return machSwivel(); case 'm_gk': return machGKnew();
-    case 'm_lathe': return machLatheNew(); case 'm_tf': return machTFnew(); case 'm_hmc': return machHMC(); case 'm_ulathe': return machULathe();
     case 'insert': return insertItem(it); case 'lholder': return lholder(it);
     case 'f_cvise': return cvise(); case 'f_tomb': return tomb(); case 'f_angle': return anglePlate(); case 'f_vblock': return vblock(); case 'f_ch6': return chuck(6);
     case 'f_mandrel': return mandrel(); case 'f_drive': return faceDriver();
