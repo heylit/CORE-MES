@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { KapasiteKaynagi, SurumluIsMerkezi, SurumluIstasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { AranabilirSecim } from './AranabilirSecim.tsx';
@@ -69,7 +69,34 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
   const [secili, seciliYaz] = useState<ReadonlySet<number>>(new Set());
   const [duzenlenen, duzenlenenYaz] = useState<ReadonlySet<string>>(new Set());
   const [cokluMerkez, cokluMerkezYaz] = useState<SurumluIsMerkezi | null>(null);
+  // Tek tıkla açılan iş merkezi düzenleme kipinde gelir ve adı seçili olur (IST-5): kullanıcı "Yeni iş merkezi" adını hemen değiştirir.
+  const [odak, odakYaz] = useState<string | null>(null);
+  // Tek istasyonun adresi (IST-5): /istasyonlar/is-merkezleri?istasyon=<id>. Başka ekran (Kaynak 360) bu adresle istasyonu açar:
+  // satır işaretlenir ve görünür kaydırılır; pasif istasyon için pasifler açılır.
+  const [adres] = useSearchParams();
+  const hedefIstasyon = Number(adres.get('istasyon')) || null;
+  const [hedefeGidildi, hedefeGidildiYaz] = useState(false);
   const t = useTopluYaz();
+  useEffect(() => {
+    if (odak === null) return;
+    const alan = [...document.querySelectorAll<HTMLInputElement>('input[aria-label]')].find((g) => g.getAttribute('aria-label') === odak);
+    if (alan === undefined) return;
+    alan.focus();
+    alan.select();
+    odakYaz(null);
+  });
+  useEffect(() => {
+    if (hedefIstasyon === null || hedefeGidildi || v.yukleniyor) return;
+    const hedef = v.istasyonlar.find((i) => i.id === hedefIstasyon);
+    if (hedef === undefined) { hedefeGidildiYaz(true); return; }
+    const merkezPasif = v.merkezler.find((m) => m.id === hedef.isMerkeziId)?.aktif === false;
+    if ((!hedef.aktif || merkezPasif) && !pasifler) { pasiflerYaz(true); return; }
+    if (kapaliMerkezler.has(hedef.isMerkeziId)) { kapaliMerkezlerYaz((k) => degistir(k, hedef.isMerkeziId, false)); return; }
+    const satir = [...document.querySelectorAll<HTMLElement>('[role="row"][aria-current="true"]')][0];
+    if (satir === undefined) return;
+    satir.scrollIntoView?.({ block: 'center' });
+    hedefeGidildiYaz(true);
+  });
   if (v.yukleniyor) return <DurumKutusu durum="yukleniyor" />;
   if (v.hata) return <DurumKutusu durum="hata" yenile={v.yenile} />;
 
@@ -125,7 +152,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
     const planOkunamadi = <span className="tc-ist-calc">Alınamadı</span>;
     return (
       <div key={s.id} className={`tc-ist-satir-kap${reddedildi ? ' tc-ist-satir-red' : ''}`}>
-        <div className={`tc-ist-tablo-satir${s.aktif ? '' : ' tc-ist-soluk'}`} role="row" aria-label={s.kod} aria-selected={yazabilir ? secili.has(s.id) : undefined}>
+        <div className={`tc-ist-tablo-satir${s.aktif ? '' : ' tc-ist-soluk'}`} role="row" aria-label={s.kod} aria-selected={yazabilir ? secili.has(s.id) : undefined}
+          aria-current={s.id === hedefIstasyon ? 'true' : undefined}>
           <span role="cell" className="tc-ist-sec-hucre">
             {yazabilir && <SecimKutusu etiket={`${s.kod} seç`} secili={secili.has(s.id)} degistir={(d) => seciliYaz((k) => degistir(k, s.id, d))} />}
           </span>
@@ -203,7 +231,14 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
           <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
           {yazabilir && (
             <Dugme tur="birincil" simge="plus" disabled={y.mesgul}
-              onClick={() => y.gonder({ yol: '/is-merkezleri', govde: { kod: yeniKod('IM', v.merkezler.map((m) => m.kod)), ad: 'Yeni iş merkezi', aciklama: null }, satir: 'yeni-im' })}>
+              onClick={() => y.gonder(
+                { yol: '/is-merkezleri', govde: { kod: yeniKod('IM', v.merkezler.map((m) => m.kod)), ad: 'Yeni iş merkezi', aciklama: null }, satir: 'yeni-im' },
+                { onSuccess: (c) => {
+                  const yeni = c as SurumluIsMerkezi;
+                  duzenlenenYaz((k) => degistir(k, `im:${yeni.id}`, true));
+                  odakYaz(`${yeni.kod} iş merkezi adı`);
+                } },
+              )}>
               İş merkezi
             </Dugme>
           )}

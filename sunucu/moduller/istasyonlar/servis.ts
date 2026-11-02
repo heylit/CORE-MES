@@ -334,16 +334,24 @@ export async function operasyonTipiGuncelle(db: Db, id: number, kayit: Operasyon
 // Ekip silinmez, pasife alınır (IK7).
 export const ekipler = sorgular.ekipleriListele;
 
+// Olmayan istasyon yabancı anahtarın belirsiz iletisine düşmesin; pasif istasyon ekipte kalabilir (IK7, ekip silinmez).
+async function ekipIstasyonuVarOlmali(db: Db, istasyonId: number | null): Promise<void> {
+  if (istasyonId !== null && !(await sorgular.istasyonVarMi(db, istasyonId))) throw dogrulama('İstasyon bulunamadı.', 'istasyonId');
+}
+
 export async function ekipEkle(db: Db, kayit: EkipKaydi): Promise<SurumluEkip> {
+  await ekipIstasyonuVarOlmali(db, kayit.istasyonId);
   return varOlan(await kodKorumali(() => sorgular.ekipEkle(db, kayit)), 'Ekip bulunamadı.');
 }
 
-export const ekipGuncelle = (db: Db, id: number, kayit: EkipGuncellemesi): Promise<SurumluEkip> =>
-  kodKorumali(() => surumluGuncelle({
+export async function ekipGuncelle(db: Db, id: number, kayit: EkipGuncellemesi): Promise<SurumluEkip> {
+  await ekipIstasyonuVarOlmali(db, kayit.istasyonId);
+  return kodKorumali(() => surumluGuncelle({
     guncelle: () => sorgular.ekipGuncelle(db, id, kayit),
     varMi: () => sorgular.ekipVarMi(db, id),
     bulunamadiIletisi: 'Ekip bulunamadı.',
   }));
+}
 
 export const kisiSecenekleri = kisileriListele;
 
@@ -394,6 +402,7 @@ async function yazmaTarihi(db: Db, baslangic: string | undefined): Promise<strin
 }
 
 // Pasif kişiye atama yapılmaz; kişinin istasyon, makine ve ekip atamalarının toplamı hiçbir gün 100'ü geçmez (IK1).
+// Cevap, liste ucu gibi bugünün görünümüdür: ileri tarihli atama "başlayacak" diye döner (IST-5); yazılan tarihin görünümü değil.
 export async function atamaYap(
   db: Db,
   tur: AtamaTuru,
@@ -420,7 +429,7 @@ export async function atamaYap(
     }
   }
   await sorgular.atamaYaz(db, tur, { hedefId, kisiId: g.kisiId, baslangic: tarih, sent });
-  return atamalar(db, tur, { hedefId, kisiId: null, tarih });
+  return atamalar(db, tur, { hedefId, kisiId: null, tarih: undefined });
 }
 
 // Çıkarma da yeni satırdır (yüzde boş): kişi o tarihten itibaren düşer, geçmiş günler değişmez. Aynı hedefteki daha ileri
@@ -439,7 +448,7 @@ export async function atamaKaldir(
   const iptalEdilen = await sorgular.ileriAtamalariIptalEt(db, tur, { hedefId, kisiId, tarih });
   if (!gecerli && iptalEdilen === 0) throw bulunamadi(KISI_YOK_HEDEFTE[tur]);
   if (gecerli) await sorgular.atamaYaz(db, tur, { hedefId, kisiId, baslangic: tarih, sent: null });
-  return atamalar(db, tur, { hedefId, kisiId: null, tarih });
+  return atamalar(db, tur, { hedefId, kisiId: null, tarih: undefined });
 }
 
 // Çıkarmadan önce ekranın göstereceği önizleme: bu tarihten çıkarılınca iptal olacak ileri tarihli satırlar.
