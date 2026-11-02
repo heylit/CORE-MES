@@ -30,7 +30,7 @@ export const uclar = [
     yol: '/kisiler',
     yetki: 'kisiler.oku',
     cevap: kisilerCevabi,
-    isle: async ({ db, kullanici }) => ({ kisiler: await kisileriGetir(db, bayrakGorur(kullanici)) }),
+    isle: async ({ db, kullanici }) => ({ kisiler: await kisileriGetir(db, bayrakGorur(kullanici), kullanici.id) }),
   }),
   // Ana sayfa kartı: listeyi okuyabilen sayısını da okur.
   uc({

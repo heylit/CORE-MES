@@ -8,7 +8,7 @@ import { aramaSade, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
 import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  DEVREDILMEZ_ISLEMLER, ILETILER, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
+  DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
   cikisliAktiflikReddi, cikisPasifiReddi, ozlukDuzenlemeReddi, ozlukItmeReddi,
 } from './kurallar.ts';
@@ -69,7 +69,7 @@ function rolOzeti(rol: RolSatiri, bayrakGorur: boolean): RolOzeti {
   return { id: rol.id, ad: rol.ad, yonetici: bayrakGorur ? rol.yonetici : null };
 }
 
-function kisiOzeti(satir: KisiSatiri, bayrakGorur = true): KisiOzeti {
+function kisiOzeti(satir: KisiSatiri, bayrakGorur = true, aktorBayrakli = true): KisiOzeti {
   return {
     id: satir.id,
     ad: satir.ad,
@@ -83,11 +83,13 @@ function kisiOzeti(satir: KisiSatiri, bayrakGorur = true): KisiOzeti {
     surum: satir.surum,
     ozlukIk: satir.ozluk_ik,
     ozlukCikisTarihi: satir.ozluk_cikis_tarihi,
+    korumali: korumaliMi({ hedefBayrakli: satir.roller.some((r) => r.yonetici), aktorBayrakli }),
   };
 }
 
-export async function kisileriGetir(db: Db, bayrakGorur: boolean): Promise<KisiOzeti[]> {
-  return (await kisiSatirlari(db)).map((s) => kisiOzeti(s, bayrakGorur));
+export async function kisileriGetir(db: Db, bayrakGorur: boolean, aktorId: number): Promise<KisiOzeti[]> {
+  const aktorBayrakli = await kisiBayrakliMi(db, aktorId);
+  return (await kisiSatirlari(db)).map((s) => kisiOzeti(s, bayrakGorur, aktorBayrakli));
 }
 
 export function eksikBilgiOzeti(db: Db): Promise<EksikBilgiOzetiCevabi> {
@@ -203,6 +205,7 @@ export async function rolAl(db: Db, aktorId: number, kisiId: number, rolId: numb
   return kisiyiGetir(db, kisiId);
 }
 
+// Yazma komutunun döndürdüğü satır: bayraklı kişide komut yalnız bayraklı aktörle geçer, satır okuyana korumalı değildir.
 async function kisiyiGetir(db: Db, kisiId: number, bayrakGorur = true): Promise<KisiOzeti> {
   const [satir] = await kisiSatirlari(db, kisiId);
   if (satir === undefined) throw bulunamadi(ILETILER.kisiYok);

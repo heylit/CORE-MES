@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import {
   GOREV_EN_FAZLA, PAROLA_EN_AZ, SICIL_EN_FAZLA, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, parolaBaskasiReddi,
-  ILETILER, PIN_UZUNLUK, bayrakliKisiReddi, girisYontemi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
+  ILETILER, PIN_UZUNLUK, bayrakliKisiReddi, girisYontemi, korumaliMi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
 } from './kurallar.ts';
 
 test('rollerden gelen işlemler birleşir; kayıtlı olmayan işlem yetki vermez', () => {
@@ -93,6 +93,9 @@ describe('giriş bilgisi', () => {
 describe('bayraklı kişi üzerinde işlem', () => {
   test('bayraklı hedefe yalnız bayraklı aktör dokunur; sıradan hedefe herkes', () => {
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: false, aktorBayrakli: false }), null);
+    assert.equal(korumaliMi({ hedefBayrakli: true, aktorBayrakli: false }), true);
+    assert.equal(korumaliMi({ hedefBayrakli: true, aktorBayrakli: true }), false);
+    assert.equal(korumaliMi({ hedefBayrakli: false, aktorBayrakli: false }), false);
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: true, aktorBayrakli: false })?.tur, 'yetki');
     assert.equal(bayrakliKisiReddi({ hedefBayrakli: true, aktorBayrakli: true }), null);
   });

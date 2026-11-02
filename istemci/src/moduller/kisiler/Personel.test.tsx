@@ -22,8 +22,8 @@ const ROLLER = {
   ],
 } satisfies RollerCevabi;
 
-const AYSE: KisiOzeti = { id: 10, ad: 'Ayşe Deneme', aktif: true, girisVar: true, kullaniciAdi: 'ayse.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, roller: [{ id: 2, ad: 'Operatör', yonetici: false }] };
-const MEHMET: KisiOzeti = { id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, roller: [] };
+const AYSE: KisiOzeti = { id: 10, ad: 'Ayşe Deneme', aktif: true, girisVar: true, kullaniciAdi: 'ayse.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false, roller: [{ id: 2, ad: 'Operatör', yonetici: false }] };
+const MEHMET: KisiOzeti = { id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false, roller: [] };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -113,6 +113,20 @@ describe('Personel', () => {
     expect(pencere.queryByText(/İK personel kartından gelir/)).toBeNull();
   });
 
+  it('KIS-3: korumalı satırda düzenle, pasife al ve aktif yap düğmesi yok; ötekinde var', async () => {
+    const KORUMALI: KisiOzeti = { ...AYSE, id: 12, ad: 'Veli Deneme', korumali: true, roller: [{ id: 3, ad: 'Yönetici', yonetici: null }] };
+    const KORUMALI_PASIF: KisiOzeti = { ...MEHMET, id: 13, ad: 'Zeki Deneme', korumali: true };
+    sunucuKur({ kullanici: YAZAR, kisiler: [AYSE, KORUMALI, KORUMALI_PASIF, MEHMET] });
+    ac();
+    expect(await screen.findByRole('button', { name: 'Ayşe Deneme düzenle' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ayşe Deneme pasife al' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mehmet Deneme yeniden aktif yap' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Veli Deneme düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Veli Deneme pasife al' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Zeki Deneme düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Zeki Deneme yeniden aktif yap' })).toBeNull();
+  });
+
   it('atama: seçilen rol sunucuya gider, liste yeni rolle güncellenir, seçeneklerden düşer', async () => {
     const istekler = sunucuKur({
       kullanici: YONETICI,
@@ -163,7 +177,7 @@ describe('Personel', () => {
   });
 
   const BEN: KisiOzeti = {
-    id: YONETICI.id, ad: 'Deneme Yönetici', aktif: true, girisVar: true, kullaniciAdi: 'deneme.yonetici', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null,
+    id: YONETICI.id, ad: 'Deneme Yönetici', aktif: true, girisVar: true, kullaniciAdi: 'deneme.yonetici', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false,
     roller: [{ id: 2, ad: 'Operatör', yonetici: false }, { id: 4, ad: 'Rol Yönetimi', yonetici: false }],
   };
   const sayac = (istekler: { yol: string }[], yol: string) => istekler.filter((i) => i.yol === yol).length;
@@ -208,7 +222,7 @@ describe('Personel', () => {
 
   describe('bayraklı rol alma onayı', () => {
     const MUDUR: KisiOzeti = {
-      id: 12, ad: 'Veli Deneme', aktif: true, girisVar: true, kullaniciAdi: 'veli.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null,
+      id: 12, ad: 'Veli Deneme', aktif: true, girisVar: true, kullaniciAdi: 'veli.deneme', pinVar: false, sicilNo: null, gorev: null, surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false,
       roller: [{ id: 3, ad: 'Yönetici', yonetici: true }, { id: 2, ad: 'Operatör', yonetici: false }],
     };
     const ONAY = 'Rol alınsın mı?';

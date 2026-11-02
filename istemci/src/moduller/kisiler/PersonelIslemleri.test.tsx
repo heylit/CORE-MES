@@ -25,7 +25,7 @@ const ROLLER = {
 } satisfies RollerCevabi;
 
 const kisi = (ozet: Partial<KisiOzeti> & Pick<KisiOzeti, 'id' | 'ad'>): KisiOzeti => ({
-  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ozlukIk: false, ozlukCikisTarihi: null, ...ozet,
+  aktif: true, girisVar: true, kullaniciAdi: null, pinVar: false, sicilNo: null, gorev: null, roller: [], surum: 1, ozlukIk: false, ozlukCikisTarihi: null, korumali: false, ...ozet,
 });
 const AYSE = kisi({ id: 10, ad: 'Ayşe Deneme', roller: [{ id: 2, ad: 'Operatör', yonetici: false }] });
 const MEHMET = kisi({ id: 11, ad: 'Mehmet Deneme', aktif: false, girisVar: false });
@@ -314,7 +314,7 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     window.removeEventListener('oturum:bitti', bitti);
   });
 
-  it('bayraklı kişinin satırında düzenle yalnız bayraklı kullanıcıya görünür; sıradan satırda herkese', async () => {
+  it('bayraklı kişinin satırında düzenle yalnız sunucu korumalı demezse görünür; sıradan satırda herkese', async () => {
     const ben = kisi({ id: TAM.id, ad: TAM.ad, roller: [{ id: 3, ad: 'Yönetici', yonetici: true }] });
     sunucuKur(TAM, [AYSE, YETKILI, ben]);
     ac();
@@ -323,14 +323,14 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     cleanup();
     vi.unstubAllGlobals();
 
-    // Kullanıcının kendi satırında bayraklı rol yoksa bayraklı satırın düğmesi gizlenir; sıradan satırınki durur.
-    sunucuKur(TAM, [AYSE, YETKILI, kisi({ id: TAM.id, ad: TAM.ad })]);
+    // Okuyan bayraklı değilse sunucu bayraklı satırı korumalı işaretler: düğmesi gizlenir, sıradan satırınki durur.
+    sunucuKur(TAM, [AYSE, { ...YETKILI, korumali: true }, kisi({ id: TAM.id, ad: TAM.ad })]);
     ac();
     expect(await screen.findByRole('button', { name: 'Ayşe Deneme düzenle' })).toBeTruthy();
     expect(dugme('Veli Deneme düzenle')).toBeNull();
   });
 
-  it('bayrak bilinmiyorsa (null) düzenle düğmesi durur; sunucunun 403 iletisi görünür, form açık kalır', async () => {
+  it('korumalı işareti yoksa bayrak bilinmese de (null) düzenle düğmesi durur; sunucunun 403 iletisi görünür, form açık kalır', async () => {
     const gizli = kisi({ id: 12, ad: 'Veli Deneme', roller: [{ id: 3, ad: 'Yönetici', yonetici: null }] });
     const red = { kod: 'YETKI_YOK', mesaj: 'Tüm yetkileri veren role sahip kişinin kaydını yalnızca bu role sahip bir kişi düzenleyebilir.' } satisfies HataGovdesi;
     sunucuKur(IK, [AYSE, gizli], () => json(403, red));

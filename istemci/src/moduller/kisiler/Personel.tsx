@@ -146,7 +146,6 @@ export function Personel() {
   const [gorunum, gorunumYaz] = useState<Gorunum>('kisiler');
   const [pasifeAlinacak, pasifeAlinacakYaz] = useState<KisiOzeti | null>(null);
 
-  const benBayrakli = kisiler.data?.kisiler.some((k) => k.id === oturum.data?.id && bayrakli(k)) === true;
   const secili = acik?.kisiId == null ? null : kisiler.data?.kisiler.find((k) => k.id === acik.kisiId) ?? null;
   const kapat = () => acikYaz(null);
 
@@ -157,10 +156,10 @@ export function Personel() {
     const hedef = Number.isInteger(kisiId) && kisiId > 0 ? kisiler.data.kisiler.find((k) => k.id === kisiId) : undefined;
     if (istek.get('gorunum') === 'matris' && yonetebilir) gorunumYaz('matris');
     else if (istek.get('yeni') === '1' && yazabilir) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: null }); }
-    else if (hedef !== undefined && yazabilir && (benBayrakli || !bayrakli(hedef))) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: hedef.id }); }
+    else if (hedef !== undefined && yazabilir && !hedef.korumali) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: hedef.id }); }
     // İstek bir kez uygulanır; geri tuşu ya da yenileme pencereyi yeniden açmaz.
     istekYaz((o) => { const y = new URLSearchParams(o); for (const a of ISTEK_ANAHTARLARI) y.delete(a); return y; }, { replace: true });
-  }, [istek, istekYaz, oturum.data, kisiler.data, yazabilir, yonetebilir, benBayrakli]);
+  }, [istek, istekYaz, oturum.data, kisiler.data, yazabilir, yonetebilir]);
 
   const durumDegistir = useMutation({
     mutationFn: ({ kisi, islem }: { kisi: KisiOzeti; islem: 'pasife-al' | 'aktif-yap' }) =>
@@ -225,10 +224,11 @@ export function Personel() {
       const kendisi = k.id === oturum.data?.id;
       return (
         <span className="tc-personel-satir-islem">
-          {yazabilir && (benBayrakli || !bayrakli(k)) && (
+          {/* Bayraklı kişinin kaydında yapılamayan işlemin düğmesi gösterilmez; sunucu korumalı satırı işaretler. */}
+          {yazabilir && !k.korumali && (
             <Dugme simge="edit" aria-label={`${k.ad} düzenle`} title="Düzenle" onClick={() => acikYaz({ tur: 'form', kisiId: k.id })} />
           )}
-          {yazabilir && k.aktif && !kendisi && (
+          {yazabilir && k.aktif && !kendisi && !k.korumali && (
             <Dugme
               simge="stop"
               aria-label={`${k.ad} pasife al`}
@@ -237,7 +237,7 @@ export function Personel() {
               onClick={() => pasifeAl(k)}
             />
           )}
-          {yazabilir && !k.aktif && (
+          {yazabilir && !k.aktif && !k.korumali && (
             <Dugme
               simge="check"
               aria-label={`${k.ad} yeniden aktif yap`}
@@ -249,7 +249,7 @@ export function Personel() {
           {yonetebilir && !k.girisVar && (
             <Dugme simge="plus" aria-label={`${k.ad} hesap aç`} title="Hesap aç" onClick={() => acikYaz({ tur: 'hesap', kisiId: k.id })} />
           )}
-          {k.girisVar && (kendisi || parolaDegistirebilir) && (
+          {k.girisVar && (kendisi || (parolaDegistirebilir && !k.korumali)) && (
             <Dugme
               simge="lock"
               aria-label={kendisi ? 'Parolamı değiştir' : `${k.ad} parolasını değiştir`}

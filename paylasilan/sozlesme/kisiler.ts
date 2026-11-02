@@ -28,6 +28,8 @@ export const kisiSemasi = z.object({
   ozlukIk: z.boolean(),
   // İK'daki çıkış tarihi (GGGG-AA-GG); yoksa null (1315).
   ozlukCikisTarihi: tarihSemasi.nullable(),
+  // true: kişi tüm yetkileri veren role sahip, okuyan değil; kaydına düzenleme ve durum değişikliği yapamaz (sunucu da reddeder).
+  korumali: z.boolean(),
 });
 
 export const kisilerCevabi = z.object({ kisiler: z.array(kisiSemasi) });

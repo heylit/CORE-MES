@@ -181,6 +181,25 @@ describe('kişi yönetimi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(ikinci > 0);
   });
 
+  test('KIS-3: listede bayraklı kişi bayraksız okuyana korumalı işaretlenir; bayraklı okuyana ve ötekilere korumalı değildir', async () => {
+    await kullanici('ik-koru', await rolId('insan_kaynaklari'));
+    const ikinci = await yoneticiKisi('koru-ikinci-yonetici');
+    const operator = await kullanici('koru-operator', await rolId('operator'));
+    const ikCerezi = await cerez('ik-koru');
+    const yoneticiCerezi = await cerez('yonetici');
+
+    assert.deepEqual(
+      [(await kisi(ikCerezi, adminId)).korumali, (await kisi(ikCerezi, ikinci)).korumali, (await kisi(ikCerezi, operator)).korumali],
+      [true, true, false],
+    );
+    assert.deepEqual(
+      [(await kisi(yoneticiCerezi, adminId)).korumali, (await kisi(yoneticiCerezi, ikinci)).korumali, (await kisi(yoneticiCerezi, operator)).korumali],
+      [false, false, false],
+    );
+    // İşaret sunucunun reddiyle aynı kuraldan gelir: korumalı satırdaki işlem gerçekten reddedilir.
+    assert.equal((await istek(ikCerezi, `/kisiler/${ikinci}/pasife-al`, {})).statusCode, 403);
+  });
+
   test('düzenleme cevabı bayrak bilgisini ve kullanıcı adını kisiler.rol-yonet olmayana vermez', async () => {
     await kullanici('ik-bayrak', await rolId('insan_kaynaklari'));
     const hedef = await kullanici('bayraksiz-hedef', await rolId('operator'));

@@ -144,6 +144,11 @@ export function kisiAlanlariniDuzelt(ham: { ad: string; sicilNo?: string | null;
 // Bayraklı rolü taşıyan kişi üzerinde (pasife alma, yeniden aktif yapma, parola, hesap açma, kaydı düzenleme) yalnız
 // bayraklı rolü taşıyan biri işlem yapar; aksi halde yetkili biri bayraklı kişiyi kilitleyebilir ya da hesabını ele geçirebilir.
 // Düzenlemede kişi kendi kaydını da düzenler; başkası şartı olan işlemlerin iletisi bu yüzden ayrıdır.
+// Ekran bayraklı kişinin satırında yapılamayacak işlemi göstermesin; bayrağı görmeyen okuyucu kendisi çıkaramaz.
+export function korumaliMi(girdi: { hedefBayrakli: boolean; aktorBayrakli: boolean }): boolean {
+  return bayrakliKisiReddi(girdi) !== null;
+}
+
 export function bayrakliKisiReddi(
   girdi: { hedefBayrakli: boolean; aktorBayrakli: boolean },
   ileti: string = ILETILER.bayrakliKisiYetkisiz,
