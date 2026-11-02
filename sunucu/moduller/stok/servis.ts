@@ -321,8 +321,10 @@ async function eksikEmirSayisi(db: Db): Promise<number> {
 export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId: number): Promise<IkinciMenuSayaclari> {
   const k = await isKutusu(db, islemler, kisiId);
   const kapsamliIstasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
-  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı).
-  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0].filter((n) => n > 0).length;
+  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran tanım yetkilisine eşlenmemiş
+  // harita yerini de iş olarak gösterir; sayaç da sayar.
+  const eslenmemis = islemler.includes('stok.tanim') ? (await haritaOzeti(db)).eslenmemis : 0;
+  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0, eslenmemis].filter((n) => n > 0).length;
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,
     'mal-kabul': islemler.includes('stok.giris') ? k.logoFarki : null,

@@ -2300,6 +2300,14 @@ describe('stok (gerçek PostgreSQL)', () => {
       { kod: 'H1-02-1-1', tur: 'raf_gozu', aktif: true, depoKod: 'HB1', alanId: null },
     ]);
     assert.deepEqual((await mudur('POST', '/stok/konumlar/haritadan-esle')).govde, { eklenen: 0, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] });
+    // 1784c: eşlenmemiş harita yeri ekranda iş satırıdır; tanım yetkilisinin menü sayacı da onu sayar, tanımsız kişininki saymaz.
+    const sayac = async (kim: string) => (await istek<Record<string, number | null>>(kim, 'GET', '/stok/menu-sayaclari')).govde['is-kutusu'];
+    const onceDepo = await sayac('depo'), onceSatin = await sayac('satin_alma');
+    const yeniAlan = (await alan('kabul', 'Eşlenmemiş kabul'))!.id;
+    assert.equal((await mudur<HaritaOzetiCevabi>('GET', '/stok/harita-ozeti')).govde.eslenmemis, 1);
+    assert.equal(await sayac('depo'), onceDepo! + 1, 'tanım yetkilisi eşlenmemiş yeri iş sayar');
+    assert.equal(await sayac('satin_alma'), onceSatin, 'tanım yetkisi olmayanın ekranında bu iş yok');
+    await vt.sorgu('DELETE FROM atolye_alan WHERE id = $1', [yeniAlan]);
 
     // Stoklu göz haritada silinebilir (kullanıcı kararı 12.10, #711): konum bağsız kalır, eşleme kapatmaz, özette listelenir.
     const gozIdleri = (await vt.sorgu<{ id: number }>('SELECT id FROM atolye_goz WHERE raf_id = $1 ORDER BY bolme', [raf!.id])).map((g) => g.id);
