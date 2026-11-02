@@ -207,6 +207,8 @@ export interface FoyVerisi {
   bolumler: FoyBolumu[];
 }
 
+// MLZ-7 a (G8): kaliteden dolan değer tablodaki tipik değerdir; sertifikadaki ölçülmüş değer sanılmasın.
+export const TIPIK_DEGER_NOTU = 'Değiştirilmemiş değerler kalite tablosundaki tipik değerlerdir; sertifika değeri değildir.';
 const ESDEGER_NOTU = '≈ işareti yakın eşdeğeri gösterir; bileşim ve mekanik sınırlar normlar arasında birebir aynı olmayabilir.';
 
 function doluMu(v: unknown): boolean { return v === 0 || (v !== undefined && v !== null && v !== '' && v !== false); }
@@ -256,7 +258,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
       bolumler.push({ baslik: 'Form ve ölçüler', satirlar: satirlar([['Form', s.fm.ad], ['Ölçüler', m.dimsStr(d)], ['Tolerans', d.tol], ...agir] as [string, unknown][]) });
     }
     if (s.opts.length) bolumler.push({ baslik: 'Durum ve işlem', satirlar: satirlar((s.opts as { ad: string; v: string }[]).map((o) => [o.ad, o.v] as const)) });
-    if (props.length) bolumler.push({ baslik: 'Teknik özellikler', satirlar: satirlar(props) });
+    if (props.length) bolumler.push({ baslik: 'Teknik özellikler', satirlar: satirlar(props), not: TIPIK_DEGER_NOTU });
     const ekler = ((d.extra ?? []) as { ad?: string; v?: unknown; u?: string }[]).filter((e) => e.ad);
     if (ekler.length) bolumler.push({ baslik: 'Ek özellikler', satirlar: satirlar(ekler.map((e) => [String(e.ad), `${String(e.v)}${e.u ? ` ${e.u}` : ''}`] as const)) });
     const cm = (d.com ?? {}) as { ted?: string; sertifika?: string[]; not?: string };

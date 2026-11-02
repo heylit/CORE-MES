@@ -52,7 +52,7 @@ function OzellikSatiri({ p }: { p: Ozellik }) {
       </>
     );
   } else if (hesap !== undefined && hesap !== '' && hesap !== null) {
-    kaynak = <span className="tc-my-etiket-k">{K.modded(p.k, d, b) ? 'İşlemden' : 'Kaliteden'}</span>;
+    kaynak = <span className="tc-my-etiket-k" title="Tablodaki tipik değer; sertifika değeri varsa üstüne yaz.">{K.modded(p.k, d, b) ? 'Tipik · işlemden' : 'Tipik · kaliteden'}</span>;
   } else kaynak = <span className="tc-my-etiket-k">Boş</span>;
   return (
     <div className={degisti ? 'tc-my-ozellik tc-my-ozellik-degisti' : 'tc-my-ozellik'}>
@@ -77,6 +77,7 @@ export function TeknikAdimi() {
   };
   return (
     <>
+      <Yardim>{K.TIPIK_DEGER_NOTU} Sertifikadaki değeri biliyorsan üstüne yaz; değiştirilen değer işaretlenir.</Yardim>
       <div className="tc-my-ozellikler">{K.propsFor(d.fam, b).map((p) => <OzellikSatiri key={p.k} p={p} />)}</div>
       <Kutu baslik="Ek özellikler">
         <Yardim>Sürtünme katsayısı, renk kodu, test sonucu gibi listede olmayan her şey.</Yardim>
