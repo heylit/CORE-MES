@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { onayAlaniDegisiyor as ekranOnayDegisiyor } from '../../../istemci/src/moduller/kalite-merkezi/yeni/kurallar.ts';
 import { KM_DOSYA_SINIRI, arsivDegisiyor, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
@@ -313,5 +314,25 @@ describe('Kalite Merkezi kuralları', () => {
       assert.deepEqual(kalibrasyonCihazi(aletler, 2), { kod: 'OC-2' });
       assert.equal(kalibrasyonCihazi(aletler, 9), null);
     });
+  });
+
+  test('1779b: ekranın onay alanı kuralı sunucununkiyle aynı karar verir (genel yazma mı, onay ucu mu)', () => {
+    const durumlar: [string, Record<string, unknown> | null, Record<string, unknown>][] = [];
+    const ncrDurum = [undefined, 'Açık', 'MRB değerlendirmesinde', 'DÖF açıldı', 'Kapalı'];
+    const mrb = [undefined, '', 'Karar bekliyor', 'Hurda', 'Yeniden işle'];
+    for (const od of ncrDurum) for (const yd of ncrDurum) for (const om of mrb) for (const ym of mrb) {
+      durumlar.push(['ncr', od === undefined && om === undefined ? null : { durum: od, mrb: om }, { durum: yd, mrb: ym, tanim: 'x' }]);
+    }
+    for (const o of [undefined, 'Açık', 'Kapalı']) for (const y of ['Açık', 'Kapalı']) durumlar.push(['capa', o === undefined ? null : { durum: o }, { durum: y }]);
+    const formDurum = [undefined, 'Taslak', 'Onay bekliyor', 'Onaylandı'];
+    for (const o of formDurum) for (const y of formDurum) {
+      durumlar.push(['frm', o === undefined ? null : { durum: o }, { durum: y }]);
+      durumlar.push(['frm', { durum: o, onaylayan: 'A' }, { durum: y, onaylayan: 'B' }]);
+    }
+    for (const o of [undefined, 'Aday', 'Onaylı']) for (const y of ['Aday', 'Onaylı', 'Askıda']) durumlar.push(['sup', o === undefined ? null : { onay: o }, { onay: y }]);
+    durumlar.push(['insp', { sonuc: '' }, { sonuc: 'Kabul' }], ['lot', null, { karar: 'Ret' }]);
+    for (const [kol, onceki, yeni] of durumlar) {
+      assert.equal(ekranOnayDegisiyor(kol, onceki, yeni), onayDegisiklikleri(kol, onceki, yeni).length > 0, `${kol} ${JSON.stringify(onceki)} -> ${JSON.stringify(yeni)}`);
+    }
   });
 });

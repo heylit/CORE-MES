@@ -477,12 +477,13 @@ export function kurulumMetni(e: EmirSecenegi | null, k: KurulumDurumu | null): s
 }
 
 // Hazırlıkta emir seçilmez; hangi emrin hazırlığı olduğu ve kurulumunun durumu okunur.
-export function EmirKarti({ emir, acik, kurulum }: { emir: EmirSecenegi | null; acik: boolean; kurulum: KurulumDurumu | null }) {
+// secebilir: emri Kurulum'da seçebilen kişi (yazar ve emir listesini gören); öteki kişiye seçimi kimin yaptığı söylenir.
+export function EmirKarti({ emir, acik, kurulum, secebilir = true }: { emir: EmirSecenegi | null; acik: boolean; kurulum: KurulumDurumu | null; secebilir?: boolean }) {
   return (
     <div className="tc-ck-hz-emir">
       <small>Üretim emri</small>
       <b>{emir === null ? 'Seçilmedi' : `${operasyon(emir)}${acik ? '' : ' (açık değil)'}`}</b>
-      <span>{emir === null ? 'Emri Kurulum ekranında seçin; hazırlık o emrin kurulumuyla açılır.' : `${emir.parcaNo} ${emir.parcaAd} · ${String(emir.adet)} adet · ${emir.istasyon}`}</span>
+      <span>{emir === null ? `${secebilir ? 'Emri Kurulum ekranında seçin' : 'Emri kurulumu yapan kişi Kurulum ekranında seçer'}; hazırlık o emrin kurulumuyla açılır.` : `${emir.parcaNo} ${emir.parcaAd} · ${String(emir.adet)} adet · ${emir.istasyon}`}</span>
       {emir !== null && <em className={kurulum?.gecerli === true ? 'tamam' : undefined}>{kurulumMetni(emir, kurulum)}</em>}
     </div>
   );

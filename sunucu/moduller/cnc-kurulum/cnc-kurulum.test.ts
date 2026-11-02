@@ -211,6 +211,13 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
       id: op10, uretimEmriId: acik, emirNo: `UE-${String(acik).padStart(6, '0')}`, opNo: 10, ad: 'OP10', parcaNo: 'P-CNC', parcaAd: 'Deneme mil', adet: 12, istasyon: 'Deneme torna',
     });
     assert.equal(emirler.some((e) => e.id === op20 || e.id === kapaliOp), false);
+    // Talaşlı olmayan (kalite) istasyondaki operasyon listede yoktur ve seçilemez.
+    const kaliteIst = await ortam!.sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif, tip) VALUES ('TEIKAL', 'Deneme kontrol', $1, true, 'kalite') RETURNING id", [im!.id]);
+    const kaliteOp = await isEmriEkle(acik, 30, kaliteIst!.id);
+    const ikinciListe = (await istek(planlayan, 'GET', '/cnc-kurulum/emirler')).json() as { emirler: { id: number }[] };
+    assert.deepEqual([ikinciListe.emirler.some((e) => e.id === op10), ikinciListe.emirler.some((e) => e.id === kaliteOp)], [true, false]);
+    const kaliteSec = await istek(yazar, 'POST', '/cnc-kurulum/emir-sec', { isEmriId: kaliteOp, beklenenSurum: (await kayit(okur, DURUM_ANAHTARI))?.surum ?? null });
+    assert.deepEqual([kaliteSec.statusCode, (kaliteSec.json() as { alan?: string }).alan], [400, 'isEmriId']);
     assert.equal((await istek(okur, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
     assert.equal((await istek(yetkisiz, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
   });
@@ -248,6 +255,15 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
   }
   const acikEmirAc = async (parcaNo = 'P-KUR'): Promise<number> => isEmriEkle(await ustEmirAc(parcaNo), 10);
   const emirSec = async (cerez: string, isEmriId: number) => istek(cerez, 'POST', '/cnc-kurulum/emir-sec', { isEmriId, beklenenSurum: await durumSurumu() });
+  // "Kurulum tamam" kurulum kartındaki bütün adımların işaretli olmasını ister (K13 a): testler genel adımları, ölçüm, sarf ve
+  // olası her cebi işaretler; fazladan işaret şartı bozmaz.
+  const TUM_ADIMLAR = ['machine', 'material', 'fixture', 'jaw', 'zero', 'wcs', 'coolant', 'gauges', 'cons', ...Array.from({ length: 40 }, (_, i) => `T${String(i + 1)}`)];
+  async function secimIsaretle(adimlar: readonly string[] = TUM_ADIMLAR): Promise<void> {
+    const c = await yaz(yazar, {
+      anahtar: SECIM, bicim: 'json', deger: { adimlar: Object.fromEntries(adimlar.map((a) => [a, true])) }, beklenenSurum: (await kayit(okur, SECIM))?.surum ?? null,
+    });
+    assert.equal(c.statusCode, 200, c.body);
+  }
 
   // Prototipin durumu ortaktır: hazırlık testleri durum anahtarını sırayla kullanır, her biri son sürümden devam eder.
   const durumSurumu = async (): Promise<number | null> => (await kayit(okur, DURUM_ANAHTARI))?.surum ?? null;
@@ -441,6 +457,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await emirSec(yazar, emirId)).statusCode, 200);
     const kurulumu = async () => ((await istek(okur, 'GET', '/cnc-kurulum/hazirlik')).json() as { kurulum: { kisi: { id: number }; zaman: string; gecerli: boolean } | null }).kurulum;
     assert.equal(await kurulumu(), null);
+    await secimIsaretle();
     const c = await istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() });
     assert.equal(c.statusCode, 200, c.body);
     const k = (c.json() as { kurulum: { kisi: { id: number; ad: string }; zaman: string; gecerli: boolean } }).kurulum;
@@ -488,6 +505,35 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, eskiOp))).secildi, false);
     assert.equal((await istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() })).statusCode, 400);
   });
+  test('CK-24 (K13 a): "kurulum tamam" kurulum kartındaki bütün adımlar işaretlenmeden 422; aynı seçimlerle ikinci istek ikinci satır yazmaz', async () => {
+    const emirId = await acikEmirAc('P-SART');
+    assert.equal((await emirSec(yazar, emirId)).statusCode, 200);
+    const durum = (await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown>;
+    // Seçili tezgâhın magazininde iki dolu cep ve bir boş cep: cep adımları T1 ve T3, boş cep (T2) gerekmez.
+    assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: { ...durum, machine: 'm1', tools: { m1: ['t1', 'empty', 'probe'] } }, beklenenSurum: await durumSurumu() })).statusCode, 200);
+    const tamam = async () => istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() });
+    const satirSayisi = async () => Number((await ortam!.sahip.tek<{ n: string }>("SELECT count(*) AS n FROM cnc_kurulum_hazirlik_olayi WHERE is_emri_id = $1 AND adim = 'kurulum'", [emirId]))!.n);
+    const genel = ['machine', 'material', 'fixture', 'jaw', 'zero', 'wcs', 'coolant', 'gauges', 'cons'];
+    for (const isaretler of [[], genel, [...genel, 'T1'], [...genel.filter((a) => a !== 'cons'), 'T1', 'T3']]) {
+      await secimIsaretle(isaretler);
+      const c = await tamam();
+      assert.deepEqual([c.statusCode, (c.json() as { kod?: string }).kod], [422, 'GECERSIZ'], `${isaretler.join(',')}: ${c.body}`);
+    }
+    assert.equal(await satirSayisi(), 0);
+    await secimIsaretle([...genel, 'T1', 'T3']);
+    const ilk = await tamam();
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    const ikinci = await tamam();
+    assert.equal(ikinci.statusCode, 200, ikinci.body);
+    assert.deepEqual((ikinci.json() as { kurulum: unknown }).kurulum, (ilk.json() as { kurulum: unknown }).kurulum);
+    assert.equal(await satirSayisi(), 1);
+    // Seçim değişince yeni kayıt yazılır (eski kayıt eskimişti).
+    const d2 = (await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown>;
+    assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: { ...d2, coolant: 'baska' }, beklenenSurum: await durumSurumu() })).statusCode, 200);
+    assert.equal((await tamam()).statusCode, 200);
+    assert.equal(await satirSayisi(), 2);
+  });
+
   test('CK-22: son onay bütün adımlar aynı imzayla onaylanmadan verilmez (hazırlık sırası); kayıt ve defter değişmez, geri alma geçer', async () => {
     const emirId = await acikEmirAc('P-SIRA');
     assert.equal((await emirSec(yazar, emirId)).statusCode, 200);
@@ -595,6 +641,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
       const durum = (await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown>;
       const deger = { ...durum, machine: 'm1', tools: { m1: magazin }, gsim: { machine: 'm1', perTool } };
       assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: await durumSurumu() })).statusCode, 200);
+      await secimIsaretle();
       const c = await istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() });
       assert.equal(c.statusCode, 200, c.body);
     };
@@ -645,6 +692,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     const durum = (await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown>;
     const deger = { ...durum, machine: 'm1', tools: { m1: ['t-a', 'empty'] }, gsim: { machine: 'm1', perTool: { 1: { id: 't-a', name: 'Freze A', t: 0.5 } } } };
     assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: await durumSurumu() })).statusCode, 200);
+    await secimIsaretle();
     assert.equal((await istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() })).statusCode, 200);
     const uretimEmriId = (await ortam!.sahip.tek<{ uretim_emri_id: number }>('SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.uretim_emri_id;
     await vt().tx((db) => takimSayimiYansit(db, { uretimEmriId, isEmriId, istasyonId: ist, kisiId: yazarId, fark: '6' }));
