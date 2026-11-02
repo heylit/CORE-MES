@@ -206,6 +206,18 @@ export function birimleriOku(
   );
 }
 
+// Genel arama: seri noda geçen birimler, tam eşleşme ve baştan eşleşme önde. Seri yalnız markalanabilir ASCII'dir;
+// sadeleştirme gerekmez, büyük harfe çevrilir.
+export function seriKayitAra(db: Db, q: string, sinir: number): Promise<{ id: number; seriNo: string; durum: BirimDurumu; uretimEmriId: number }[]> {
+  const u = q.toUpperCase();
+  return db.sorgu<{ id: number; seriNo: string; durum: BirimDurumu; uretimEmriId: number }>(
+    `SELECT id, seri_no AS "seriNo", durum, uretim_emri_id AS "uretimEmriId" FROM markalama_birimi
+      WHERE upper(seri_no) LIKE $2
+      ORDER BY (upper(seri_no) = $1) DESC, (upper(seri_no) LIKE $3) DESC, id DESC LIMIT $4`,
+    [u, `%${likeKacir(u)}%`, `${likeKacir(u)}%`, sinir],
+  );
+}
+
 export function birimDurumuYaz(db: Db, id: number, durum: BirimDurumu): Promise<MarkalamaBirimi | null> {
   return db.tek<MarkalamaBirimi>(
     `UPDATE markalama_birimi SET durum = $2, surum = surum + 1 WHERE id = $1 RETURNING ${BIRIM_SUTUNLARI}`, [id, durum],

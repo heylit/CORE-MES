@@ -58,6 +58,7 @@ const SON_YER_GRUBU = 'Son yerler';
 const KAYIT_SIMGESI: Record<KayitTuru, SimgeAdi> = {
   emir: 'list', malzeme: 'tag', parti: 'box', konum: 'target', firma: 'building', kisi: 'user', talep: 'edit', alim: 'truck',
   siparis: 'download', sevk: 'route', ncr: 'alert', hatali: 'wrench', cizim: 'fit', rota: 'tool', olcuAleti: 'ruler', istasyon: 'cpu',
+  seri: 'pin',
 };
 
 const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt', komut: 'Komut', 'sayfa-komutu': 'Bu sayfanın komutu', 'son-yer': 'Son yer' };

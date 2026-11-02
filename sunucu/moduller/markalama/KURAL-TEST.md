@@ -19,6 +19,7 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | MRK-12 Model tanımın malzemesine bağlı belge; istasyon kayıtlı ve aktif; yer normali sıfır değil | `MRK-12`; `MRK-U8` (400) |
 | Pasif tanım seri vermez, listede kalır, geri etkinleşir | `MRK-U12` |
 | İzleme: seri parçası (harften bağımsız, tam eşleşme önde), tanım süzgeci, olayda kişi adı ve hurda nedeni; olmayan emrin özeti 404 | `MRK-U13` |
+| Genel arama (Ctrl K) `seri` türü: parçayla, harften bağımsız, tam eşleşme önde; yol Seri izleme | `MRK-U14` |
 | Seri tekil, sayaç tekrar korumalı | `MRK-U3`; kısıt `markalama_birimi_seri_tekil` |
 | Olay defteri yalnız eklenir | `MRK-U6` (UPDATE, DELETE, TRUNCATE reddedilir) |
 | 3B yer: nokta ve normal yere, düzlem normale döner, açı normal çevresinde | `sahne.test.ts` |

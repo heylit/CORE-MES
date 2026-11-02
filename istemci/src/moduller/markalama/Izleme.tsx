@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { BirimAyrintisi, BirimDurumu, BirimlerCevabi, DurumGovdesi, DurumKomutu, MarkalamaBirimi } from '#paylasilan/sozlesme/markalama.ts';
@@ -119,9 +120,17 @@ function BirimKarti({ id, yazabilir }: { id: number; yazabilir: boolean }) {
 export function Izleme() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('markalama.durum-yaz') === true;
-  const [seri, seriYaz] = useState<string | null>(null);
+  // Genel aramadan gelen seri adresle açılır (`?seri=`); sayfa açıkken yeni arama da aynı yoldan gelir.
+  const [adres] = useSearchParams();
+  const adrestekiSeri = adres.get('seri');
+  const [seri, seriYaz] = useState<string | null>(adrestekiSeri);
   const [durum, durumYaz] = useState<BirimDurumu | ''>('');
   const [secili, seciliYaz] = useState<number | null>(null);
+  useEffect(() => {
+    if (adrestekiSeri === null) return;
+    seriYaz(adrestekiSeri);
+    seciliYaz(null);
+  }, [adrestekiSeri]);
   const sorgu = new URLSearchParams();
   if (seri !== null) sorgu.set('seriNo', seri);
   if (durum !== '') sorgu.set('durum', durum);

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
@@ -91,9 +92,13 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
   return cagrilar;
 }
 
-function ac(ekran: ReactNode) {
+function ac(ekran: ReactNode, adres = '/markalama') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}</BildirimSaglayici></QueryClientProvider>);
+  render(
+    <MemoryRouter initialEntries={[adres]}>
+      <QueryClientProvider client={istemci}><BildirimSaglayici>{ekran}</BildirimSaglayici></QueryClientProvider>
+    </MemoryRouter>,
+  );
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -269,6 +274,13 @@ describe('Seri izleme', () => {
     fireEvent.click(gonder);
     await waitFor(() => expect(cagrilar.some((x) => x.yol === '/markalama/birimler/31/durum')).toBe(true));
     expect(cagrilar.find((x) => x.yol === '/markalama/birimler/31/durum')!.govde).toEqual({ komut: 'hurda', hurdaNedeniId: 9, aciklama: null, surum: 1 });
+  });
+
+  it('genel aramadan gelen seri adresle aranır ve tam eşleşme açılır', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Izleme />, '/markalama/izleme?seri=ORN-A-00005');
+    expect(await screen.findByText('UE-DNM-1')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/markalama/birimler?seriNo=ORN-A-00005')).toBe(true);
   });
 
   it('geçmişte kişi adı ve hurda nedeni görünür', async () => {

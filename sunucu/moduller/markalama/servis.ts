@@ -8,13 +8,14 @@ import type {
   BirimAyrintisi, BirimDurumu, BirimlerCevabi, DogrulaGovdesi, DurumGovdesi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi,
   MarkalamaTanimi, OnizlemeCevabi, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
+import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { hurdaNedeniGetir } from '../durus-nedenleri/disari.ts';
 import { istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirNolari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
 } from './kurallar.ts';
@@ -273,4 +274,17 @@ export async function emirOzeti(db: Db, emirId: number, tanimId: number | null):
   let dogrulanan = 0;
   for (const r of satirlar) { sayilar[r.durum] = r.adet; dogrulanan += r.dogrulanan; }
   return { uretimEmriId: emirId, sayilar, dogrulanan };
+}
+
+const DURUM_ACIKLAMASI: Readonly<Record<BirimDurumu, string>> = { saglam: 'Sağlam', red: 'Red', rework: 'Rework', hurda: 'Hurda' };
+
+export async function seriKayitAra(db: Db, q: string, sinir: number): Promise<KayitAramaSonucu[]> {
+  const birimler = await s.seriKayitAra(db, q, sinir);
+  const nolar = await emirNolari(db, [...new Set(birimler.map((b) => b.uretimEmriId))]);
+  return birimler.map((b) => ({
+    anahtar: String(b.id),
+    baslik: b.seriNo,
+    aciklama: [nolar.get(b.uretimEmriId), DURUM_ACIKLAMASI[b.durum]].filter((x) => x !== undefined).join(' · '),
+    yol: `/markalama/izleme?seri=${encodeURIComponent(b.seriNo)}`,
+  }));
 }

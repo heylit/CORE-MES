@@ -6,6 +6,8 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { aramaSade, basDeseni, icindeDeseni, KAYIT_TURLERI } from '#paylasilan/kayit-aramasi.ts';
+import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import { birimAyrintisiCevabi, birimSemasi, emirOzetiCevabi, tanimSemasi } from '#paylasilan/sozlesme/markalama.ts';
 import type { MarkalamaBirimi, MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -13,6 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kayitAramaKaynaklari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -309,6 +312,28 @@ describe('markalama (gerçek PostgreSQL)', () => {
     const ayr = birimAyrintisiCevabi.parse((await istek('kalite', 'GET', `/markalama/birimler/${a.id}`)).govde);
     assert.deepEqual(ayr.olaylar.map((x) => x.kisiAd), ['Deneme operator', 'Deneme kalite']);
     assert.equal(ayr.olaylar[1]?.hurdaNedeni, `${neden!.kod} · ${neden!.ad}`);
+  });
+
+  test('MRK-U14: genel arama seri noyu parçasından bulur; tam eşleşme önde, yol Seri izleme', async () => {
+    const [kaynak] = kayitAramaKaynaklari;
+    assert.ok(kaynak);
+    assert.equal(KAYIT_TURLERI[kaynak.tur].modul, 'markalama');
+    assert.deepEqual(kaynak.yetki, ['sayfa.markalama']);
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    const a = (await markala('operator', t.id, emir)).govde;
+    await markala('operator', t.id, emir);
+    const ara = (q: string) => o().vt.tx((db) => kaynak.ara(db, {
+      q, sade: aramaSade(q), icindeDeseni: icindeDeseni(q), basDeseni: basDeseni(q), sinir: 10, kullanici: { id: yoneticiId, islemler: [] },
+    }));
+    const tam = await ara(a.seriNo.toLowerCase());
+    assert.equal(tam[0]?.baslik, a.seriNo);
+    assert.ok(tam.every((x) => kayitYoluMu(x.yol)), JSON.stringify(tam));
+    assert.equal(tam[0]?.yol, `/markalama/izleme?seri=${encodeURIComponent(a.seriNo)}`);
+    assert.match(tam[0]?.aciklama ?? '', /Sağlam/);
+    assert.ok((await ara(a.seriNo.slice(0, -2))).length >= 2, 'parça');
+    assert.equal((await ara('%%')).length, 0, 'joker karakter kaçırılır');
   });
 
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
