@@ -511,3 +511,12 @@ export const siparisOzetiCevabi = z.object({
   aylik: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), sayi: z.number().int().nonnegative() })),
 });
 export type SiparisOzetiCevabi = z.output<typeof siparisOzetiCevabi>;
+
+// Yönetim panosu (kart 1773): açık (onaylı) siparişlerin termine kalan güne göre dağılımı; tesis gününe göre, fiyat taşımaz.
+// Aralıklar sabit ve sıralıdır; boş aralık da sıfırla gelir (sayım gerçek sıfırdır, uydurma değil).
+export const TERMIN_ARALIKLARI = ['gecikmis', '0-3', '4-7', '8-14', '15+'] as const;
+export type TerminAraligi = (typeof TERMIN_ARALIKLARI)[number];
+export const terminDagilimiCevabi = z.object({
+  araliklar: z.array(z.object({ aralik: z.enum(TERMIN_ARALIKLARI), sayi: z.number().int().nonnegative() })),
+});
+export type TerminDagilimiCevabi = z.output<typeof terminDagilimiCevabi>;

@@ -3,7 +3,7 @@ import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
   adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
-  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, teklifEkleGovdesi,
+  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
@@ -58,6 +58,14 @@ export const uclar = [
     yetki: 'siparisler.oku',
     cevap: siparisOzetiCevabi,
     isle: ({ db }) => servis.siparisOzeti(db),
+  }),
+  // Yönetim panosu (kart 1773): özet gibi yalnız sayı, fiyat taşımaz; listeyi okuyan görür.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/termin-dagilimi',
+    yetki: 'siparisler.oku',
+    cevap: terminDagilimiCevabi,
+    isle: ({ db }) => servis.terminDagilimi(db),
   }),
   // Kart seçimi yalnız sipariş ve teklif yazanın işidir.
   uc({

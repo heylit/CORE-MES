@@ -9,7 +9,7 @@ import { SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#payl
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
-  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
+  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
@@ -17,7 +17,7 @@ import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, malzemeReddi,
+  TAKVIM_SIPARIS_DURUMU, malzemeReddi, terminDagilimi as terminAraliklari,
 } from './kurallar.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
@@ -226,6 +226,8 @@ export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise
 }
 
 export const siparisOzeti = (db: Db): Promise<SiparisOzetiCevabi> => sorgular.siparisOzetiSay(db, YAKLASAN_TERMIN_GUN, SIPARIS_OZETI_AY);
+
+export const terminDagilimi = async (db: Db): Promise<TerminDagilimiCevabi> => ({ araliklar: terminAraliklari(await sorgular.terminKalanlari(db)) });
 
 // Takvim (891): termini [baslangic, bitis] içindeki siparişler, firma adıyla. Yetki denetlemez; çağıran siparisler.oku'yu denetler.
 export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {

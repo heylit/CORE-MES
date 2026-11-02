@@ -178,11 +178,11 @@ describe('AnaSayfa rol panosu (kart 1585)', () => {
   it('eski is, uyari ve ozet bolumleri cizilmez (1594 a); sirket ozeti altta kapali, bolumsuz kart yerinde', () => {
     const kartlar: AnaSayfaKarti[] = [
       ...KARTLAR,
-      { anahtar: 'eski-is', sira: 10, bolum: 'is', ekran: ekran('Eski iş kartı') },
+      { anahtar: 'eski-is', sira: 10, bolum: 'is', modul: 'plan', ekran: ekran('Eski iş kartı') },
       { anahtar: 'eski-ozet', sira: 20, bolum: 'ozet', ekran: ekran('Eski özet kartı') },
       { anahtar: 'yonetim-kart', sira: 30, bolum: 'yonetim', ekran: ekran('Yönetim kartı') },
     ];
-    const k = isKaynagi('plan-is', 'Plan', () => [kalem('a', 'bugun')]);
+    const k = isKaynagi('plan-is', 'Plan', () => [kalem('a', 'bugun')], { modul: 'plan' });
     render(<MemoryRouter><AnaSayfa kartlar={kartlar} kaynaklar={[k]} islemler={['pano.sirket-ozeti']} /></MemoryRouter>);
     expect(screen.queryByText('Eski iş kartı')).toBeNull();
     expect(screen.queryByText('Eski özet kartı')).toBeNull();
@@ -190,6 +190,39 @@ describe('AnaSayfa rol panosu (kart 1585)', () => {
     expect(ozet?.open).toBe(false);
     expect(ozet?.textContent).toContain('Yönetim kartı');
     expect(screen.getByRole('region', { name: 'Sistem kartı' })).toBeTruthy();
+  });
+});
+
+describe('AnaSayfa grafikli pano (kart 1773)', () => {
+  const grafik = (anahtar: string, metin: string, ek: Partial<AnaSayfaKaynagi> = {}): AnaSayfaKaynagi =>
+    ({ anahtar, tur: 'grafik', baslik: metin, simge: 'chart', sira: 100, bolum: 'uretim', kaynak: ekran(metin), ...ek });
+
+  it('grafik kaynagi gorunende gidisat bir bakista kutularina doner; ana sayfa grafikleri acik bolgede, digerleri yalniz panoda', () => {
+    const kaynaklar = [
+      grafik('uretim-grafik', 'Üretim grafiği', { anaSayfada: true }),
+      grafik('bilesen-grafik', 'Bileşen grafiği'),
+      { anahtar: 'uretim-olcu', tur: 'gidisat', baslik: 'Üretim', simge: 'gauge', sira: 1, kaynak: bildiren(() => [olcu({ kiyas: { etiket: 'dün', deger: 40, iyiYon: 'artis' } })]) } satisfies AnaSayfaKaynagi,
+    ];
+    render(<MemoryRouter><AnaSayfa kartlar={[]} kaynaklar={kaynaklar} islemler={[]} /></MemoryRouter>);
+    const bakis = screen.getByRole('list', { name: 'Bir bakışta' });
+    expect(within(bakis).getByText('46 adet')).toBeTruthy();
+    expect(within(bakis).getByText('dün 40 adet').getAttribute('data-yon')).toBe('iyi');
+    expect(screen.queryByRole('region', { name: 'Gidişat' })).toBeNull();
+    const bolge = screen.getByRole('region', { name: 'Gidişat grafikleri' });
+    expect(within(bolge).getByText('Üretim grafiği')).toBeTruthy();
+    expect(screen.queryByText('Bileşen grafiği')).toBeNull();
+    expect(screen.getByRole('link', { name: /Yönetim panosu/ }).getAttribute('href')).toBe('/pano');
+  });
+
+  it('kademeli gecis: kaynagi olmayan modulun is karti eski bolumuyle kalir, kaynagi olaninki duser', () => {
+    const kartlar: AnaSayfaKarti[] = [
+      { anahtar: 'stok-is', sira: 10, bolum: 'is', modul: 'stok', ekran: ekran('Stok iş kartı') },
+      { anahtar: 'plan-eski', sira: 20, bolum: 'uyari', modul: 'plan', ekran: ekran('Plan uyarı kartı') },
+    ];
+    const k = isKaynagi('plan-is', 'Plan', () => [kalem('a', 'bugun')], { modul: 'plan' });
+    render(<MemoryRouter><AnaSayfa kartlar={kartlar} kaynaklar={[k]} islemler={[]} /></MemoryRouter>);
+    expect(within(screen.getByRole('region', { name: 'Bana düşen işler' })).getByText('Stok iş kartı')).toBeTruthy();
+    expect(screen.queryByText('Plan uyarı kartı')).toBeNull();
   });
 });
 

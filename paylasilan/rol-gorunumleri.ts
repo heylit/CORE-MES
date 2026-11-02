@@ -99,10 +99,17 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
     sayfalar: ['/nizamiye', '/idari-isler', KISISEL],
     kartlar: ['nizamiye-beklenen', 'nizamiye-iceride', 'nizamiye-bos-kart'],
   },
-  // Müdürün ana sayfası (şirket özeti) bugünkü haliyle kalır: kart süzgeci yok, yalnız menü daralır.
+  // Müdür (kart 1773, 1772 ikisi birden): yönlendirme, bir bakışta, işler ve açık grafik bölgesi; ayrıntı Yönetim panosunda.
+  // Kart süzgeci yok: kaynağı henüz olmayan modülün iş ve uyarı kartları eski bölümleriyle kalır, şirket özeti altta kapalı (1593 c).
   mudur: {
     sayfalar: ['/uretim-emirleri', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans'],
     kartlar: [],
+    kaynaklar: [
+      'istasyonlar-duran-is', 'siparisler-termin-is', 'uretim-emirleri-planlanacak-is', 'sevkiyat-is', 'malzemeler-onay-is', 'kalibrasyon-is',
+      'uretim-emirleri-uretim-olcu', 'oee-olcu', 'istasyonlar-makine-olcu', 'siparisler-aylik-olcu',
+      'uretim-emirleri-uretim-grafik', 'istasyonlar-makine-grafik', 'oee-is-merkezi-grafik', 'uretim-emirleri-durus-grafik', 'siparisler-termin-grafik',
+      'oee-bilesen-grafik', 'oee-makine-grafik', 'uretim-emirleri-hurda-grafik', 'siparisler-aylik-grafik',
+    ],
   },
 };
 

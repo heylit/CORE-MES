@@ -5,7 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { SiparisAyrintisi, SiparisListesiCevabi, SiparisOzetiCevabi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisAyrintisi, SiparisListesiCevabi, SiparisOzetiCevabi, TeklifAyrintisi, TerminDagilimiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -387,6 +387,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
       return c.json<SiparisOzetiCevabi>();
     };
     const once = await ozet();
+    const oncekiDagilim = (await oku(yonetici, '/siparisler/termin-dagilimi')).json<TerminDagilimiCevabi>();
     const gun = (fark: number): string => tesisGunu(Date.now() + fark * 86_400_000);
     const onayla = async (fark: number): Promise<number> => {
       const s = await siparisAc();
@@ -413,6 +414,10 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     await o().sahip.sorgu("UPDATE siparisler_teklif SET durum = 'red', not_metni = 'Deneme reddi' WHERE id = $1", [red.json<TeklifAyrintisi>().id]);
 
     const sonra = await ozet();
+    // Yönetim panosu (kart 1773): aynı siparişler termin aralığına düşer; -1 gecikmiş, 0 ve 6 ile 7 ilk iki aralıkta.
+    const dagilimFarki = (await oku(yonetici, '/siparisler/termin-dagilimi')).json<TerminDagilimiCevabi>().araliklar.map((a) => [a.aralik, a.sayi] as const);
+    const dagilimOnce = new Map(oncekiDagilim.araliklar.map((a) => [a.aralik, a.sayi]));
+    assert.deepEqual(dagilimFarki.map(([a, n]) => [a, n - (dagilimOnce.get(a) ?? 0)]), [['gecikmis', 1], ['0-3', 1], ['4-7', 2], ['8-14', 0], ['15+', 0]]);
     assert.deepEqual(
       [sonra.acikTeklif - once.acikTeklif, sonra.yaklasanTermin - once.yaklasanTermin, sonra.gecikenSiparis - once.gecikenSiparis],
       [1, 2, 1],
@@ -428,5 +433,8 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(satis, '/siparisler/ozet')).statusCode, 200);
     assert.equal((await oku(operator, '/siparisler/ozet')).statusCode, 403);
     assert.equal((await app.inject({ method: 'GET', url: '/api/siparisler/ozet' })).statusCode, 401);
+    assert.equal((await oku(satis, '/siparisler/termin-dagilimi')).statusCode, 200);
+    assert.equal((await oku(operator, '/siparisler/termin-dagilimi')).statusCode, 403);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/siparisler/termin-dagilimi' })).statusCode, 401);
   });
 });

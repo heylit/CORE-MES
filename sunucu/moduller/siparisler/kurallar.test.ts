@@ -4,12 +4,19 @@ import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
   duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
-  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
+  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
 describe('siparisler kuralları (saf)', () => {
+  test('termin dağılımı (kart 1773): eksi gecikmiş, sınırlar kapalı; her aralık sırayla ve boşu sıfırla gelir', () => {
+    assert.deepEqual([-1, 0, 3, 4, 7, 8, 14, 15].map(terminAraligi), ['gecikmis', '0-3', '0-3', '4-7', '4-7', '8-14', '8-14', '15+']);
+    assert.deepEqual(terminDagilimi([{ kalan: -5, sayi: 2 }, { kalan: -1, sayi: 1 }, { kalan: 20, sayi: 4 }]), [
+      { aralik: 'gecikmis', sayi: 3 }, { aralik: '0-3', sayi: 0 }, { aralik: '4-7', sayi: 0 }, { aralik: '8-14', sayi: 0 }, { aralik: '15+', sayi: 4 },
+    ]);
+  });
+
   test('SIP-01 müşteri ve iki yönlü firma geçer; tedarikçi, olmayan ve yeni seçilen pasif firma reddedilir', () => {
     assert.equal(firmaReddi({ tur: 'musteri', aktif: true }, 1, null), null);
     assert.equal(firmaReddi({ tur: 'ikisi', aktif: true }, 1, null), null);
