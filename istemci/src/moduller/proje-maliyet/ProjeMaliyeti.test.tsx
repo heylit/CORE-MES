@@ -98,7 +98,7 @@ describe('Proje maliyet sekmesi', () => {
     expect(await screen.findByText('Tahmini katkı payı')).toBeTruthy();
     // 236 a: ekran yalnız okur, deftere yazmaz.
     expect(yollar.filter((y) => y.includes('/proje-maliyet/7'))).toEqual(['GET /proje-maliyet/7']);
-    expect(screen.getByText('Sipariş tutarı')).toBeTruthy();
+    expect(screen.getByText('Proje geliri')).toBeTruthy();
     expect(screen.getByText('Bugüne kadarki sapma')).toBeTruthy();
     expect(screen.getByText('5 gün')).toBeTruthy();
     expect((await screen.findByRole('link', { name: /Plana git/ })).getAttribute('href')).toBe('/plan');
@@ -122,7 +122,7 @@ describe('Proje maliyet sekmesi', () => {
     cleanup();
     sunucuKur(() => json(200, cevap(true)));
     cizdir();
-    expect(await screen.findByText('Sipariş tutarı')).toBeTruthy();
+    expect(await screen.findByText('Proje geliri')).toBeTruthy();
     expect(screen.queryByText('Kur farkı')).toBeNull();
   });
 
@@ -130,7 +130,7 @@ describe('Proje maliyet sekmesi', () => {
     sunucuKur(() => json(200, cevap(false)));
     cizdir();
     expect(await screen.findByText('Gerçekleşen maliyet')).toBeTruthy();
-    expect(screen.queryByText('Sipariş tutarı')).toBeNull();
+    expect(screen.queryByText('Proje geliri')).toBeNull();
     expect(screen.queryByText('Tahmini katkı payı')).toBeNull();
     expect(screen.queryByText('Bugüne kadarki sapma')).toBeNull();
     expect(screen.queryByText(/Kâr riski/)).toBeNull();
@@ -187,6 +187,17 @@ describe('Proje maliyet sekmesi', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /GDR-41.*bağı kaldır/ }));
     await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/proje-maliyet/masraflar/4/kaldir')).toBe(true); });
+  });
+
+  it('emirsiz projede asıl eksik iş emri olarak yazılır; masraf varken bilinmeyen gerçekleşen "dahil" diye gösterilmez', async () => {
+    sunucuKur(() => json(200, cevap(true, {
+      plan: null, gerceklesen: null, bugunePlan: null, kalanPlan: null, sapma: null, katkiPayi: null, haftalar: [], sapanIsEmirleri: [], eksikKalemler: [],
+      eksikler: ['is_emri_yok'], ozet: { ...BOS_OZET, masraflar: TABANLI.masraflar, masrafToplami: 150, sonGerceklesen: null, tahminiSon: null },
+    })));
+    cizdir();
+    expect(await screen.findByText(/Projenin üretim emri yok/)).toBeTruthy();
+    expect(screen.getByText(/Üretim dışı masraf 150 TL; üretim gerçekleşeni bilinmiyor/)).toBeTruthy();
+    expect(screen.queryByText(/masraf dahil/)).toBeNull();
   });
 
   it('sunucu hatasında iletiyi gösterir', async () => {

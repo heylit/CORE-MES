@@ -262,7 +262,9 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
   // 212 a, 213 a: bekleme finansmanı TL faiziyle, tahsilata (bitiş + sipariş vadesi) kadar; vade girilmemişse bitişe kadar.
   const faiz = isKayitlari.length === 0 ? null : await faizGetir(db, 'TRY', bugun);
   if (isKayitlari.length > 0 && faiz === null) eksikler.push('faiz_yok');
-  if (siparis !== null && siparis.odemeVadesiGun === null) eksikler.push('vade_yok');
+  // Vade uyarısı yalnız hesaplanan finansman varken anlamlıdır; iş emri yoksa asıl eksik odur.
+  if (isler.length === 0) eksikler.push('is_emri_yok');
+  if (isKayitlari.length > 0 && siparis !== null && siparis.odemeVadesiGun === null) eksikler.push('vade_yok');
   const tabanEksik = eksikKalemler(isKayitlari);
   const finansman = beklemeFinansmani(
     isKayitlari, MALIYET_KALEMLERI.filter((k) => !tabanEksik.includes(k)), gunlukFaizOrani(faiz === null ? null : Number(faiz.aylikYuzde)),
