@@ -27,6 +27,8 @@ export const OPERATOR: Deneme = {
 export interface SahteSunucu {
   belgeler?: Record<string, { kimlik: string; surum: number; govde: unknown }[]>;
   kayitlar?: Record<string, unknown[]>;
+  // Kayıt ekleme cevabı (TMI reddi gibi); verilmezse kayıt sessizce kabul edilir.
+  kayitEkle?: (tur: string, satirlar: Record<string, unknown>[]) => unknown;
 }
 
 export interface Istek { yontem: string; yol: string; govde: unknown }
@@ -61,7 +63,11 @@ export function sunucuKur(d: Deneme, s: SahteSunucu = {}): Istek[] {
     if (yontem === 'POST' && /^\/arkon\/belgeler\/[^/]+\/[^/]+\/yaz$/.test(yol)) return json(200, { sonuc: 'yazildi', surum: 1 });
     const kayit = /^\/arkon\/kayitlar\/([^/]+)$/.exec(yol);
     if (yontem === 'GET' && kayit) return json(200, { satirlar: s.kayitlar?.[kayit[1] ?? ''] ?? [] });
-    if (yontem === 'POST' && /^\/arkon\/kayitlar\/[^/]+\/ekle$/.test(yol)) return json(200, { eklenen: 0 });
+    const ekle = /^\/arkon\/kayitlar\/([^/]+)\/ekle$/.exec(yol);
+    if (yontem === 'POST' && ekle) {
+      const satirlar = (istekler[istekler.length - 1]?.govde as { satirlar?: Record<string, unknown>[] } | null)?.satirlar ?? [];
+      return json(200, s.kayitEkle?.(ekle[1] ?? '', satirlar) ?? { eklenen: 0 });
+    }
     if (yontem === 'POST' && yol === '/arkon/iletiler') return json(200, {});
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));

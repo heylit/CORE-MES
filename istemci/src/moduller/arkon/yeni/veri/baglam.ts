@@ -27,6 +27,8 @@ export interface ArkonBaglami {
   onizle(paketId: string): void;
   // Önizlemede ("Operatör gözüyle") yazma yoktur; taşıyıcı da yazmayı TMI'ye iletmez.
   saltOkunur: boolean;
+  // Ekran bir TMI reddini kendi iletisiyle söylediğinde köprünün aynı ret için verdiği genel bildirim kalkar: aynı ret iki kez okunmaz.
+  tmiRetiniUstlen(ileti: string): void;
 }
 
 export const ArkonBaglamiKaynagi = createContext<ArkonBaglami | null>(null);

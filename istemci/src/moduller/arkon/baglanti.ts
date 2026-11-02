@@ -341,11 +341,15 @@ export function reddiBildirimi(yontem: string, yol: string, cevap: Cevap): strin
 // Kayıt sunucuda yazılır ama TMI üretim kuralı yansımasını reddedebilir (ör. kol önceki adım bitmeden, birleşme adımı parti gelmeden): ekran bunu
 // görmez, kaydı tamam sanır. Sunucunun TMI kuralı metni operatöre olduğu gibi söylenir.
 // devralinabilir: makine dolu retleri ayrıca sorulur (`makineDoluRetleri`), burada bildirim olmaz.
+export function tmiRetMetni(ileti: string): string {
+  return `İşlem reddedildi: ${ileti}`;
+}
+
 export function tmiReddiBildirimleri(cevap: Cevap, devralinabilir = false): string[] {
   const liste = (cevap.govde as { reddedilen?: unknown } | undefined)?.reddedilen;
   if (cevap.durum >= 400 || !Array.isArray(liste)) return [];
   return liste.flatMap((r: { ileti?: unknown; makineDolu?: unknown } | null) => (
-    typeof r?.ileti === 'string' && !(devralinabilir && r.makineDolu !== undefined) ? [`İşlem reddedildi: ${r.ileti}`] : []));
+    typeof r?.ileti === 'string' && !(devralinabilir && r.makineDolu !== undefined) ? [tmiRetMetni(r.ileti)] : []));
 }
 
 export interface MakineDoluRedi extends MakineDoluRedAyrintisi { cid: string; ileti: string }

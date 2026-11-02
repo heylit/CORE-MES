@@ -10,7 +10,7 @@ import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
 import { useTema } from '../../../ortak/veri/tema.ts';
 import { anahtarlar } from '../anahtarlar.ts';
-import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, type MakineDoluRedi } from '../baglanti.ts';
+import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, tmiRetMetni, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
 import { ArkonCizimOrtami } from './cizim/ortam.tsx';
@@ -44,13 +44,14 @@ export function ArkonAyarBolumu() {
 }
 
 type SabitSayfa = TasinanSayfa | 'ayarlar';
+const RET_BILDIRIMI_SINIRI = 20;
 
 function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
   const oturum = useOturum();
   const islemler = useMemo(() => oturum.data?.islemler ?? [], [oturum.data]);
   const ben = useQuery({ queryKey: anahtarlar.ben, queryFn: () => api.get<ArkonBenCevabi>('/arkon/ben') });
   const { tema } = useTema();
-  const { bildir } = useBildirim();
+  const { bildir, kaldir } = useBildirim();
   const cikis = useCikis();
   const { sayfa: adresSayfasi } = useParams();
   const saltOkunur = (sabitSayfa ?? adresSayfasi) === 'onizle';
@@ -68,6 +69,15 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
   temaRef.current = tema;
   const benRef = useRef({ cevap: ben.data, zaman: ben.dataUpdatedAt });
   benRef.current = { cevap: ben.data, zaman: ben.dataUpdatedAt };
+  // Köprünün ret bildirimleri metnine göre: ekran aynı reddi kendi iletisiyle söyleyince köprününki kaldırılır.
+  const retBildirimleri = useRef(new Map<string, number>());
+  const tmiRetiniUstlen = useCallback((ileti: string) => {
+    const metin = tmiRetMetni(ileti);
+    const no = retBildirimleri.current.get(metin);
+    if (no === undefined) return;
+    retBildirimleri.current.delete(metin);
+    kaldir(no);
+  }, [kaldir]);
 
   // Makine başka işte doluyken reddedilen başlatmalar sırayla sorulur (çerçevedeki gibi).
   const [devralmalar, devralmalarYaz] = useState<MakineDoluRedi[]>([]);
@@ -84,7 +94,15 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
       koken: window.location.origin,
       ...(benVerisi.cevap === undefined ? {} : { ben: { cevap: benVerisi.cevap, zaman: benVerisi.zaman } }),
       cikis: () => cikisRef.current(),
-      reddedildi: (ileti) => bildirRef.current('hata', `TMI CORE: ${ileti}`),
+      reddedildi: (ileti) => {
+        const no = bildirRef.current('hata', `TMI CORE: ${ileti}`);
+        const retler = retBildirimleri.current;
+        retler.delete(ileti);
+        retler.set(ileti, no);
+        // Üstlenilmeyen retler birikmesin: en eskisi düşer (bildirim yerinde kalır, yalnız kaldırılamaz).
+        const eski = retler.keys().next().value;
+        if (retler.size > RET_BILDIRIMI_SINIRI && eski !== undefined) retler.delete(eski);
+      },
       uyari: (ileti) => bildirRef.current('bilgi', `TMI CORE: ${ileti}`),
       makineDolu: (red) => devralmalarYaz((l) => [...l, red]),
       saltOkunur: () => saltOkunurRef.current,
@@ -111,6 +129,7 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
       onizlemeYaz={onizlemeYaz}
       devralmalar={devralmalar}
       siradakiniKapat={() => devralmalarYaz((l) => l.slice(1))}
+      tmiRetiniUstlen={tmiRetiniUstlen}
     />
   );
 }
@@ -125,9 +144,10 @@ interface AcikEkranOzellikleri {
   onizlemeYaz: (paketId: string | null) => void;
   devralmalar: readonly MakineDoluRedi[];
   siradakiniKapat: () => void;
+  tmiRetiniUstlen: (ileti: string) => void;
 }
 
-function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYaz, devralmalar, siradakiniKapat }: AcikEkranOzellikleri) {
+function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYaz, devralmalar, siradakiniKapat, tmiRetiniUstlen }: AcikEkranOzellikleri) {
   const parametreler = useParams();
   const adres = sabitSayfa ?? parametreler.sayfa;
   const kimlik = sabitSayfa === undefined ? parametreler.kimlik : undefined;
@@ -182,8 +202,9 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
       git: (s: string, k?: string) => { void gezin(sayfaAdresi(s, k)); },
       tmiyeGit: (h: TmiHedefi) => { const yol = TMI_HEDEFLERI[h]; if (yol !== undefined) void gezin(yol); },
       onizle: (paketId: string) => onizlemeYaz(paketId),
+      tmiRetiniUstlen,
     };
-  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz, maddeler, islemler]);
+  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz, maddeler, islemler, tmiRetiniUstlen]);
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
   // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur. Dar düzeni de
   // pencere genişliğine bakar (705 b): 1024 tablette menü açıkken alan 900'ün altına düşse de geniş düzen kalır.
