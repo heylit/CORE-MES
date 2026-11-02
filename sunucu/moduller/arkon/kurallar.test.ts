@@ -442,6 +442,14 @@ const girdi = (ek: Partial<Parameters<typeof isEmrindenTaslakPaket>[0]> = {}): P
   istasyon: ISTASYON, makineKodu: 'M-5', revizyon: 'C', talimat: 'Pensi kontrol et\r\n\r\n  Ofseti doğrula ', sablon: null, plan: PLANSIZ, ...ek,
 });
 
+// Kontrol planı boşken terminal TMI'nin ilk parça kapısını paketten okur: alan yalnız kapı varken yazılır.
+test('TMI ilk parça kapısı paketin tmi alanında', () => {
+  const tmi = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['tmi'] as Record<string, unknown>;
+  assert.equal(tmi(girdi({ ilkParcaGerekli: true }))['ilkParcaGerekli'], true);
+  assert.equal('ilkParcaGerekli' in tmi(girdi({ ilkParcaGerekli: false })), false);
+  assert.equal('ilkParcaGerekli' in tmi(girdi()), false);
+});
+
 // 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
 // yalnız "her kurulumda" ve talaşlı (ya da istasyonsuz) adımdadır.
 test('744 a: adımın ilk parça seçimi taslak kuralına ve TMI kilidine', () => {

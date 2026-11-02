@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  bitisOzeti,
+  bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
@@ -159,5 +159,35 @@ describe('bitiş özeti', () => {
   });
   it('TMI dışı işte hurda satırı kalır', () => {
     expect(bitisOzeti({ good: 9, scrap: 1 }, undefined, sayi).slice(1)).toEqual([{ etiket: 'Hurda', deger: '1', ton: 'durdu' }, { etiket: 'Kalite', deger: '%90.0' }]);
+  });
+});
+
+describe('TMI ilk parça kapısı ve eksik adette bitirme', () => {
+  const sayi = (n: number) => String(n);
+  const cnc = { opType: 'cnc', plan: [], tmi: { ilkParcaGerekli: true } } as unknown as Is['pkg'];
+  it('paketin tmi.ilkParcaGerekli alanı okunur; yoksa ya da başka değerse kapı yok', () => {
+    expect(tmiIlkParcaGerekli(cnc)).toBe(true);
+    expect(tmiIlkParcaGerekli({ tmi: { ilkParcaGerekli: 'evet' } })).toBe(false);
+    expect(tmiIlkParcaGerekli({ tmi: null })).toBe(false);
+    expect(tmiIlkParcaGerekli(null)).toBe(false);
+  });
+  it('kontrol planı boşken TMI kapısında çalışan iş karar bekleyeni söyler', () => {
+    const o = is({ pkg: cnc, good: 3 });
+    const g = siradakiGorev(o, kontrolTakvimi(o, 0, 0), null, { acik: false, sayilan: 3, kararBekleyen: 3, tmi: true }, 0);
+    expect(g).toMatchObject({ tone: 'hazard', key: 'kbt' });
+    expect(g?.t).toMatch(/karar/);
+    expect(g?.d).toMatch(/3/);
+    expect(siradakiGorev(o, kontrolTakvimi(o, 0, 0), null, { acik: false, sayilan: 3, kararBekleyen: 0 }, 0)?.key).not.toBe('kbt');
+  });
+  it('bitiş özetinde karar bekleyen iyi parçanın yanında yazılır', () => {
+    expect(bitisOzeti({ good: 3, scrap: 0 }, 0, sayi, 3)[0]).toEqual({ etiket: 'İyi parça', deger: '3 (3 karar bekliyor)' });
+    expect(bitisOzeti({ good: 3, scrap: 0 }, 0, sayi)[0]).toEqual({ etiket: 'İyi parça', deger: '3' });
+  });
+  it('talaşlı işte hedefe varmadan bitirmenin eksiği hatalıyı düşerek hesaplanır; başka iş türünde sorulmaz', () => {
+    expect(bitirmeEksigi(is({ pkg: cnc, target: 30, good: 3 }), 1)).toBe(26);
+    expect(bitirmeEksigi(is({ pkg: cnc, target: 30, good: 30 }), 0)).toBe(0);
+    expect(bitirmeEksigi(is({ pkg: cnc, target: 30, good: 3 }), null)).toBe(27);
+    expect(bitirmeEksigi(is({ pkg: { opType: 'kalite' } as unknown as Is['pkg'], target: 30, good: 3 }), 0)).toBe(0);
+    expect(bitirmeEksigi(is({ pkg: null as unknown as Is['pkg'], target: 30, good: 3 }), 0)).toBe(0);
   });
 });

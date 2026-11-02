@@ -65,7 +65,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
   ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec,
-  sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti,
+  sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
@@ -103,7 +103,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler';
+type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -600,10 +600,13 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const yenidenAcik = !!o.pkg && POLICY.fpRestart !== false && ilkParcaKalemleri(o).length > 0 && yenidenIlkParcaAcik(o.pkg);
   const ilkKarari = ilkParcaKarari(o.pkg);
   const ilkAcik = !!o.pkg && !pv && ilkParcaKalemleri(o).length > 0 && ilkKarari !== 'onay';
-  const ilkSayilan = o.good - (o.baseGood ?? 0) - (ilkAcik ? 0 : yenidenIlkParcaTabani(o.pkg));
+  // Kontrol planı boşken de TMI adımın ilk parça kararını isteyebilir: sağlam sayım orada karar bekler, terminal bunu söyler.
+  const tmiKapi = !!o.pkg && !pv && !ilkAcik && tmiIlkParcaGerekli(o.pkg) && ilkKarari !== 'onay';
+  const kapiAcik = ilkAcik || tmiKapi;
+  const ilkSayilan = o.good - (o.baseGood ?? 0) - (kapiAcik ? 0 : yenidenIlkParcaTabani(o.pkg));
   const ilk = {
     acik: ilkAcik || (!pv && yenidenAcik), yeniden: !ilkAcik && !pv && yenidenAcik, sayilan: ilkSayilan,
-    kararBekleyen: kararBekleyenSayisi(ilkAcik, ilkSayilan, ilkAcik && ilkKarari === 'ret'),
+    kararBekleyen: kararBekleyenSayisi(kapiAcik, ilkSayilan, kapiAcik && ilkKarari === 'ret'), tmi: tmiKapi,
   };
   // 19.1: paketin merkez çizimi eskiyse başlatma görevi uyarıya döner.
   const mUyari = useMerkezUyarilari((o.pkg ? o.pkg.files : null) as MerkezDosyasi[] | null);
@@ -893,6 +896,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'prepnext') { ovYaz('prepnext'); return; }
     if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
     if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
+    if (a === 'finish' && !warned && bitirmeEksigi(o, hataliSayisi) > 0) { ovYaz('bitir'); return; }
     if (a === 'finish') { sonBildirim.current++; bitenEmirYaz(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
     if (a === 'next') {
       const n = isler.findIndex((x, i) => i !== ai && x.state === 'queued');
@@ -1291,10 +1295,19 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <VardiyaPenceresi ozet={shiftStats()} vardiyaEtiketi={vardiya.label} kapat={() => ovYaz(null)}
           devret={(not) => { ovYaz(null); if (not && !pv) void depo.DB.put('kv', { note: not, by: `${ME} · ${vardiyaMetni}`, at: Date.now() }, 'handover'); say(`Vardiya devredildi${not ? ' · not sonraki vardiyaya iletildi' : ''}`, 'check', 'run'); }} />
       ) : null}
+      {ov === 'bitir' ? (
+        <Pencere acik kapat={() => ovYaz(null)} baslik="Hedefe ulaşılmadı" alt={<>
+          <Dugme tur="ikincil" onClick={() => ovYaz(null)}>Vazgeç</Dugme>
+          <Dugme simge="flag" onClick={() => { ovYaz(null); act('finish', undefined, true); }}>Yine de bitir</Dugme>
+        </>}>
+          <p>{`${sayi(o.good)} / ${sayi(o.target || 0)} adet · ${sayi(bitirmeEksigi(o, hataliSayisi))} adet eksik.`}</p>
+          <p>Bitirilen adımın eksiği sonraki adımda eksik adet olarak görünür.</p>
+        </Pencere>
+      ) : null}
       {ov === 'ozetim' ? <Pencere acik kapat={() => ovYaz(null)} baslik="Özetim" tur="tam"><Ozetim /></Pencere> : null}
       {ov === 'done' ? <Konfeti /> : null}
       <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
-        satirlar={bitisOzeti(o, hataliSayisi, sayi)}
+        satirlar={bitisOzeti(o, hataliSayisi, sayi, ilk.kararBekleyen ?? 0)}
         {...(!pv && bitenEmir !== null ? { ek: <BitenSepet istasyon={MACHINE} emirId={bitenEmir} /> } : {})}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
       {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
