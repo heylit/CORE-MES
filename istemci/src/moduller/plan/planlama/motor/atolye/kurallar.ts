@@ -49,6 +49,8 @@ export function sipBilgi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, hazir
   const ur = ops.length ? Math.min(...ops.map((r) => r.S)) : null;
   let bas = cx.now; if (j.rel != null) bas = Math.max(bas, j.rel);
   const mr = hazir[jid]; if (mr != null && Number.isFinite(mr)) bas = Math.max(bas, mr);
+  // 1786 (PLN-9): şimdiden önce başlamış işlemi olan siparişin başlangıcı gerçek başlangıçtır; yoksa "başlangıç 07:00, üretim 01:26" çıkıyordu.
+  if (ur != null && ur < cx.now) bas = ur;
   const J = p.J[jid]; const C = J?.C ?? null; const due = j.due;
   const pay = due != null && C != null ? due - C : null;
   const T = J?.T ?? null;

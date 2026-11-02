@@ -29,6 +29,16 @@ describe('atölye kuralları', () => {
     expect(parcaAyir('2/3')).toEqual(['2', '/3']);
   });
 
+  it('başlamış siparişin başlangıcı ilk işlemin gerçek başlangıcıdır; başlamamışınki şimdi, serbest ya da malzeme (1786 PLN-9)', () => {
+    const { c, p, cx, h } = kur();
+    const ilk = (id: string) => Math.min(...Object.values(p.ops).filter((r) => r.job === id).map((r) => r.S));
+    const bas = (L: ReturnType<typeof siparisler>, id: string) => L.find((s) => s.id === id)?.bas;
+    const once = siparisler(c, p, cx, h);
+    const kaydir = { ...cx, now: ilk('2') + 1 };
+    expect(bas(siparisler(c, p, kaydir, h), '2')).toBe(ilk('2'));
+    expect(bas(once, '2')).toBeGreaterThanOrEqual(cx.now);
+  });
+
   it('akış: rota sırası, bekleme ve nedeni, bitişi belirleyen zincir', () => {
     const { p, cx, h } = kur();
     const A = akis(p, cx, h, '2');

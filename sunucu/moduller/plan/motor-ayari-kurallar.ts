@@ -1,4 +1,4 @@
-import { MOTOR_AYARI_VARSAYILAN, motorAyarlari, type MotorAyariGovdesi, type MotorAyarlari } from '#paylasilan/sozlesme/plan.ts';
+import { MOTOR_AYARI_VARSAYILAN, motorAyarlari, type MotorAyarlari } from '#paylasilan/sozlesme/plan.ts';
 import type { OgrenilenSure } from './ogrenme-kurallar.ts';
 
 // Plan motoru ayarları (kart 811), saf. Sürüm satırının değerleri jsonb'dir: sonradan eklenen anahtar eski satırda yoktur, o anahtar
@@ -14,7 +14,7 @@ export function motorAyariCoz(degerler: Record<string, unknown> | null): MotorAy
 }
 
 // Verilen alanlar güncelin üstüne yazılır; değişen yoksa boş (yeni sürüm yazılmaz).
-export function motorAyariBirlestir(guncel: MotorAyarlari, g: MotorAyariGovdesi): MotorAyarlari | null {
+export function motorAyariBirlestir(guncel: MotorAyarlari, g: Partial<MotorAyarlari>): MotorAyarlari | null {
   const yeni = { ...guncel };
   for (const k of Object.keys(guncel) as (keyof MotorAyarlari)[]) if (g[k] !== undefined) Object.assign(yeni, { [k]: g[k] });
   return motorAyariEsit(guncel, yeni) ? null : yeni;

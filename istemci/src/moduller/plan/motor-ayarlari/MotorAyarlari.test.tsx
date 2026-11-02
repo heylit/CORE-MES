@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
-import { api } from '../../../ortak/veri/api.ts';
+import { api, ApiHatasi } from '../../../ortak/veri/api.ts';
 import * as oturum from '../../../ortak/veri/oturum.ts';
 import { secilebilir, surumMetni } from './kurallar.ts';
 import { MotorAyarlari } from './MotorAyarlari.tsx';
@@ -45,7 +45,18 @@ describe('motor ayarları', () => {
     expect((kaydet as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Sıralama kuralı'), { target: { value: 'edd' } });
     fireEvent.click(kaydet);
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd' }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd', surumId: null }); });
+  });
+
+  it('1786: arada başkası yazdıysa ret iletisi gösterilir ve güncel ayar yeniden okunur', async () => {
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ ...BOS, guncel: { ...BOS.guncel, surumId: 4 } });
+    vi.spyOn(api, 'post').mockRejectedValue(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' }));
+    ciz();
+    fireEvent.change(await screen.findByLabelText('Sıralama kuralı'), { target: { value: 'edd' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    expect(await screen.findByText('Kayıt başkası tarafından değiştirildi.')).toBeTruthy();
+    await vi.waitFor(() => { expect(get).toHaveBeenCalledTimes(2); });
   });
 
   it('1714: süre öğrenmesi varsayılan kapalı; açılınca gönderilir', async () => {
@@ -57,6 +68,6 @@ describe('motor ayarları', () => {
     expect((secim as HTMLSelectElement).value).toBe('kapali');
     fireEvent.change(secim, { target: { value: 'acik' } });
     fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik' }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik', surumId: null }); });
   });
 });

@@ -77,6 +77,12 @@ export function planTestOrtami() {
     return cevap.json();
   }
 
+  // 1786: motor ayarı okunan güncel sürümle yazılır.
+  async function motorAyariYaz<T = unknown>(cerez: string, govde: Record<string, unknown>): Promise<T> {
+    const { guncel } = await tamam<{ guncel: { surumId: number | null } }>(cerez, 'GET', '/plan/motor-ayarlari');
+    return tamam<T>(cerez, 'POST', '/plan/motor-ayarlari', { ...govde, surumId: guncel.surumId });
+  }
+
   async function kisiEkle(kullaniciAdi: string, rolId: number): Promise<void> {
     await vt().tx(async (db) => {
       const id = await yoneticiOlustur(db, { ad: `Deneme ${kullaniciAdi}`, kullaniciAdi, parola: PAROLA });
@@ -282,5 +288,5 @@ export function planTestOrtami() {
 
   // İlkel değerler before'dan sonra dolar: test dosyası kendi before'unda okur.
   const durum = () => ({ ortam, app, yoneticiId, denemeProjeId, istasyonA, istasyonB, makineA, makineB, operatorId, merkezId, tamGun });
-  return { c, vt, girisCerezi, istek, tamam, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
+  return { c, vt, girisCerezi, istek, tamam, motorAyariYaz, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
 }

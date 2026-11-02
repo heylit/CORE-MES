@@ -46,7 +46,7 @@ function Rapor({ c, tablolar }: { c: PlanSagligiCevabi; tablolar: boolean }) {
             : `${String(termin.emir)} emirden ${String(termin.gecKalan)} geç bitti${termin.ortancaGecikmeGun === null ? '' : `, ortanca ${String(termin.ortancaGecikmeGun)} gün`}. Müşteriye verilen tarihin tutma oranı.`} />
         <GrafikKarti baslik="Söz tutarlılığı" simge="target" tur="egri" birim="saat" noktalar={egilimNoktalari(c, soz.egilim)}
           ozet={saatMetni(soz.ortancaKaymaSaat)}
-          altMetin={`${String(soz.izlenenEmir)} emirden ${String(soz.kayanEmir)} tahmini bitişi kaydı. İlk tahmine göre ortanca kayma; eğri canlıya almalar arası ortanca oynama.`} />
+          altMetin={`İzlenen ${String(soz.izlenenEmir)} emirden ${String(soz.kayanEmir)} tanesinin tahmini bitişi değişti. İlk tahmine göre ortanca kayma; eğri canlıya almalar arası ortanca oynama.`} />
         <GrafikKarti baslik="Plan tutarlılığı" simge="rotate" tur="egri" birim="%" noktalar={egilimNoktalari(c, tutarlilik.egilim)}
           ozet={yuzdeMetni(tutarlilik.yuzde)}
           altMetin={`Son 7 gün, ${String(tutarlilik.canliyaAlma)} canlıya almada yeri değişen işlerin oranı${tutarlilik.yakinDegisen === null ? '' : `; ${String(tutarlilik.yakinDegisen)} iş önümüzdeki 72 saatteydi`}. Atölyede "plan sürekli değişiyor" ölçüsü.`} />
