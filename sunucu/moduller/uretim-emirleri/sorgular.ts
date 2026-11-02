@@ -1467,7 +1467,7 @@ export function acikKullanimlar(db: Db, istasyonId: number, makineIdleri: readon
   const makineli = makineIdleri.length > 0;
   return db.sorgu<KullanimSatiri>(
     `SELECT ${KULLANIM} FROM uretim_emirleri_makine_kullanimi k JOIN uretim_emri e ON e.id = k.emir_id
-      WHERE ${makineli ? 'k.makine_id = ANY($1::int[])' : 'k.istasyon_id = $1 AND k.makine_id IS NULL'} AND k.bitis IS NULL
+      WHERE ${makineli ? 'k.makine_id = ANY($1::int[])' : 'k.istasyon_id = $1 AND k.makine_id IS NULL AND NOT k.havuz'} AND k.bitis IS NULL
       ORDER BY k.makine_id${kilit ? ' FOR UPDATE OF k' : ''}`,
     [makineli ? [...makineIdleri] : istasyonId],
   );
@@ -1499,13 +1499,14 @@ export async function emrinAcikKullanimSayisi(db: Db, emirId: number, isEmriId: 
   return satir?.n ?? 0;
 }
 
+// havuz: insanlı istasyondaki makinesiz kullanım istasyonu kilitlemez (1891); dizin yalnız havuz olmayan makinesiz yeri tekil tutar.
 export function kullanimAc(
-  db: Db, emirId: number, isEmriId: number | null, istasyonId: number, makineId: number | null, kisiId: number, an: string,
+  db: Db, emirId: number, isEmriId: number | null, istasyonId: number, makineId: number | null, kisiId: number, an: string, havuz = false,
 ): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama)
-     VALUES ($1, $2, $3, $4, $5, $6::timestamptz)`,
-    [emirId, isEmriId, istasyonId, makineId, kisiId, an],
+    `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, havuz)
+     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7)`,
+    [emirId, isEmriId, istasyonId, makineId, kisiId, an, havuz],
   );
 }
 
