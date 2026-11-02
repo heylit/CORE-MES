@@ -5,7 +5,7 @@ import type {
   BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -128,6 +128,8 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
     queryKey: anahtarlar.cikti(sablon.anahtar, sorgu),
     queryFn: () => api.get<CiktiCevabi | KayitCiktiCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/${kayit ? 'kayit-cikti' : 'cikti'}?${sorgu}`),
   });
+  // EM-2: 4xx yeniden denemeyle değişmez (ör. mal kabulün lot sayısı x adet sınırı aşar); sunucu iletisi gösterilir, basma kapanır.
+  const kaliciHata = c.isError && c.error instanceof ApiHatasi && c.error.durum >= 400 && c.error.durum < 500;
   const kayitlar = c.data && 'kayitlar' in c.data ? c.data : null;
   // Sevk kolisinde bir kalemin her kolisi ayrı etikettir; çip kalem başına birdir.
   const cipler = kayitlar ? [...new Map(kayitlar.kayitlar.map((k) => [k.id, k])).values()] : [];
@@ -150,7 +152,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
         <IsaretKutusu etiket="Türkçe harfleri sadeleştir (ş -> s)" checked={sade} onChange={(e) => setSade(e.target.checked)} />
       </div>
       {c.isPending && <DurumKutusu durum="yukleniyor" />}
-      {c.isError && <DurumKutusu durum="hata" yenile={() => { void c.refetch(); }} />}
+      {c.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(c.error, 'Önizleme alınamadı.')} yenile={kaliciHata ? undefined : () => { void c.refetch(); }} />}
       {kayitlar && (
         <div className="tc-etk-kayitlar">
           <ul className="tc-etk-ciplar" aria-label="Seçili kayıtlar">
@@ -186,7 +188,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
         </>
       )}
       {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. */}
-      {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli ? adetSayi : null} kayit={secim} />}
+      {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
     </div>
   );
 }
