@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla, vardiyaIleAyir,
+  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, penceredekiSayimlar, topla,
+  vardiyaIleAyir,
 } from './kurallar.ts';
 import type { HamOlcu } from './kurallar.ts';
 
@@ -156,5 +157,21 @@ describe('oee kuralları', () => {
     const t = topla([ham({ vardiyaDisi: disi }), ham({ vardiyaDisi: disi })]);
     assert.equal(t.vardiyaDisi.saglam, 54);
     assert.equal(t.vardiyaDisi.calismaDk, 480);
+  });
+
+  test('OE-17: sınırdaki sayım tek pencereye düşer; sınırda biten vardiya varsa o vardiyanın penceresine', () => {
+    const an = (dk: number) => ({ an: dk * DK });
+    const gun = 1440;
+    // Akşam vardiyası 16:00-24:00, ertesi gün 08:00-16:00 (dakika ekseni, gün 0 ve gün 1).
+    const plan = [{ bas: 960 * DK, bit: gun * DK }, { bas: (gun + 480) * DK, bit: (gun + 960) * DK }];
+    const sayimlar = [an(900), an(gun), an(gun + 600), an(2 * gun)];
+    const dk = (l: { an: number }[]) => l.map((s) => s.an / DK);
+    assert.deepEqual(dk(penceredekiSayimlar(plan, sayimlar, 0, gun * DK)), [900, gun], 'gece yarısında biten vardiyanın sayımı o güne girer');
+    assert.deepEqual(dk(penceredekiSayimlar(plan, sayimlar, gun * DK, 2 * gun * DK)), [gun + 600], 'ertesi gün aynı sayımı almaz');
+    assert.deepEqual(dk(penceredekiSayimlar(plan, sayimlar, 0, 2 * gun * DK)), [900, gun, gun + 600], 'iki gün birlikte günlerin toplamıdır');
+    // Sınırda biten vardiya yoksa sayım başlayan pencerenindir; takvim bilinmiyorsa da öyle.
+    assert.deepEqual(dk(penceredekiSayimlar(plan, sayimlar, 2 * gun * DK, 3 * gun * DK)), [2 * gun]);
+    assert.deepEqual(dk(penceredekiSayimlar(null, sayimlar, 0, gun * DK)), [900]);
+    assert.deepEqual(dk(penceredekiSayimlar(null, sayimlar, gun * DK, 2 * gun * DK)), [gun, gun + 600]);
   });
 });

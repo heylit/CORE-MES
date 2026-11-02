@@ -8,7 +8,8 @@ import { aktifMakineler, isMerkezleri, istasyonlar, kisininIzinliIsMerkezleri, m
 import { makineKullanimAraliklari, makineSayimAnlari } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import {
-  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla, vardiyaIleAyir,
+  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, penceredekiSayimlar, topla,
+  vardiyaIleAyir,
 } from './kurallar.ts';
 import type { Aralik, HamOlcu, Iscilik } from './kurallar.ts';
 
@@ -51,7 +52,8 @@ export async function oee(db: Db, kullanici: Kullanici, sorgu: OeeSorgusu, simdi
   const paylar = kisiPaylari(atamalar.map((a) => ({ kisiId: a.kisiId, makineId: a.makineId, yuzde: Number(a.yuzde) })));
   const kisiIdleri = [...new Set(atamalar.map((a) => a.kisiId))];
 
-  const takvimAraligi = { baslangic: sorgu.baslangic, bitis: gunEkle(sorgu.bitis, 1) };
+  // Önceki gün de okunur: pencere başında biten vardiya (OE-17) ancak öyle görülür. Dakikalar pencereyle kırpıldığından planlı süre değişmez.
+  const takvimAraligi = { baslangic: gunEkle(sorgu.baslangic, -1), bitis: gunEkle(sorgu.bitis, 1) };
   const takvimler = await calismaTakvimleri(db, [
     ...makineIdleri.map((id) => ({ tur: 'makine' as const, id })),
     ...kisiIdleri.map((id) => ({ tur: 'kisi' as const, id })),
@@ -66,7 +68,8 @@ export async function oee(db: Db, kullanici: Kullanici, sorgu: OeeSorgusu, simdi
   };
 
   const kullanimlar = await makineKullanimAraliklari(db, makineIdleri, basIso, bitIso);
-  const sayimlar = await makineSayimAnlari(db, makineIdleri, basIso, bitIso);
+  // Bitiş anındaki sayım da okunur (okuma bitişi hariç tutar); hangi pencereye düştüğüne OE-17 karar verir.
+  const sayimlar = await makineSayimAnlari(db, makineIdleri, basIso, new Date(bit + 1).toISOString());
   const istasyonMaliyeti = await saatMaliyetleri(db, 'istasyon');
   const kisiMaliyeti = await saatMaliyetleri(db, 'kisi');
   const kisiMesaisi = new Map(kisiIdleri.map((k) => [k, pencereDk(`kisi:${k}`)]));
@@ -77,10 +80,11 @@ export async function oee(db: Db, kullanici: Kullanici, sorgu: OeeSorgusu, simdi
     const kisiler: Iscilik[] = (paylar.get(m.id) ?? []).map((p) => ({
       pay: p.pay, mesaiDk: kisiMesaisi.get(p.kisiId) ?? null, saatMaliyeti: kisiMaliyeti.get(p.kisiId) ?? null,
     }));
+    const plan = planAraliklari(`makine:${m.id}`);
     const { ici, disi } = vardiyaIleAyir(
-      planAraliklari(`makine:${m.id}`),
+      plan,
       (kullanimlar.get(m.id) ?? []).map(aralikMs),
-      (sayimlar.get(m.id) ?? []).map(({ zaman, ...a }) => ({ an: Date.parse(zaman), ...a })),
+      penceredekiSayimlar(plan, (sayimlar.get(m.id) ?? []).map(({ zaman, ...a }) => ({ an: Date.parse(zaman), ...a })), bas, bit),
     );
     return [m.id, {
       planliDk,
