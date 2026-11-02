@@ -30,8 +30,8 @@ const yaziAlani = (h: EventTarget | null): boolean =>
   h instanceof HTMLElement && (h.isContentEditable || h.tagName === 'INPUT' || h.tagName === 'TEXTAREA' || h.tagName === 'SELECT');
 
 // Yazı alanındaki tuşlar alanındır (pencere içi kod alanı kendi okuyucusudur). Yakalama aşamasında dinlenir: odaktaki düğme
-// okutmanın Enter'ıyla tıklanmasın.
-export function useElOkuyucu(etkin: boolean, okundu: (kod: string) => void): void {
+// okutmanın Enter'ıyla tıklanmasın. `okundu` false dönerse okutma terminalin değildir (kişi kartı, 1898) ve Enter kabuğa geçer.
+export function useElOkuyucu(etkin: boolean, okundu: (kod: string) => boolean | void): void {
   const durum = useRef(OKUYUCU_BASI);
   const okunduRef = useRef(okundu);
   okunduRef.current = okundu;
@@ -42,9 +42,9 @@ export function useElOkuyucu(etkin: boolean, okundu: (kod: string) => void): voi
       const r = tusEkle(durum.current, o.key, o.timeStamp);
       durum.current = r.durum;
       if (r.kod === null) return;
+      if (okunduRef.current(r.kod) === false) return;
       o.preventDefault();
       o.stopPropagation();
-      okunduRef.current(r.kod);
     };
     window.addEventListener('keydown', f, true);
     return () => { window.removeEventListener('keydown', f, true); durum.current = OKUYUCU_BASI; };

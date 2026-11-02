@@ -41,7 +41,7 @@ describe('1337 a el okuyucu', () => {
   });
 });
 
-function Deneme({ etkin, okundu }: { etkin: boolean; okundu: (k: string) => void }) {
+function Deneme({ etkin, okundu }: { etkin: boolean; okundu: (k: string) => boolean | void }) {
   useElOkuyucu(etkin, okundu);
   return <><input aria-label="alan" /><button type="button">dugme</button></>;
 }
@@ -67,5 +67,15 @@ describe('useElOkuyucu', () => {
     rerender(<Deneme etkin={false} okundu={okundu} />);
     okut(document.body, 'RP:7');
     expect(okundu).not.toHaveBeenCalled();
+  });
+  it('okundu false dönerse okutma terminalin değildir: Enter durdurulmaz, kabuk alır (1898)', () => {
+    const kabuk = vi.fn();
+    window.addEventListener('keydown', kabuk);
+    const okundu = vi.fn(() => false);
+    render(<Deneme etkin okundu={okundu} />);
+    okut(document.body, '0004123456');
+    window.removeEventListener('keydown', kabuk);
+    expect(okundu).toHaveBeenCalledWith('0004123456');
+    expect(kabuk.mock.calls.at(-1)?.[0]).toMatchObject({ key: 'Enter', defaultPrevented: false });
   });
 });

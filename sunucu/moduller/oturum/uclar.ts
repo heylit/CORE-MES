@@ -54,6 +54,8 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       isle: async ({ db, govde, istek, gunluk }) => {
         if (!(await cihazDurumu(db, istek.cerez(CIHAZ_CEREZI))).ortak) throw yetkiYok('Kartla giriş yalnız istasyon olarak kayıtlı cihazda yapılır.');
         const { anahtar, kullanici } = await kartlaGirisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
+        // Oturum açıkken okutulan kart kişiyi değiştirir (1898 a): öncekinin oturumu kapanır, istasyonda iki oturum kalmaz.
+        await cikisYap(db, istek.cerez(CEREZ_ADI));
         istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },

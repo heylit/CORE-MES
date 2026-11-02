@@ -62,6 +62,7 @@ import { OlcuListesi } from './OlcuListesi.tsx';
 import { Analiz } from './Analiz.tsx';
 import { useDarEkran, useMerkezUyarilari, useVardiyaKaydi } from './kancalar.ts';
 import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } from './el-okuyucu.ts';
+import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
   ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec,
@@ -500,17 +501,20 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     });
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.
-  const kartOkutuldu = (kod: string) => {
-    awayYaz(false);
+  // Kişi kartı terminalin değildir: istasyonda kişiyi kabuk değiştirir (1898 a).
+  const kartOkutuldu = (kod: string): boolean => {
     const t = terminalOkutmasi(kod);
-    if (t.tur !== 'kart') { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return; }
+    if (t.tur !== 'kart' && kartNumarasiGibi(kod)) return false;
+    awayYaz(false);
+    if (t.tur !== 'kart') { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return true; }
     const k = kartlar.find((x) => x.id === t.kartId);
-    if (!k) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return; }
+    if (!k) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return true; }
     const r = refakatIsi(k.uretimEmriId, isler, Object.values(pkgsRef.current));
-    if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return; }
+    if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return true; }
     bip('ok');
     if (ov === 'done') ovYaz(null);
     kartlaAc(r.sira, k);
+    return true;
   };
   useElOkuyucu(!pv && scan === null && (ov === null || ov === 'done'), kartOkutuldu);
 

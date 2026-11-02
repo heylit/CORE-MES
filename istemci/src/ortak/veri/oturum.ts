@@ -90,7 +90,7 @@ export function cikistaCalistir(kanca: CikisKancasi): () => void {
   return () => { cikisKancalari.delete(kanca); };
 }
 
-function cikisKancalariniCalistir(): void {
+export function cikisKancalariniCalistir(): void {
   for (const kanca of [...cikisKancalari]) {
     try {
       void Promise.resolve(kanca()).catch(() => undefined);
