@@ -23,7 +23,17 @@ describe('sunucu verisinin motor biçimine çevrilmesi', () => {
     const m = finansMotoru(BUGUN);
     const V = verileriHazirla(ornekHamVeri(), BUGUN);
     const s = durumKur(V, m);
-    expect(JSON.parse(JSON.stringify({ state: s, toplam: hesapToplamiTl(V) }))).toEqual(eskiDurum());
+    const yeni = JSON.parse(JSON.stringify({ state: s, toplam: hesapToplamiTl(V) })) as { state: { tx: { id: string; desc: string }[] } };
+    // Bilinçli tek fark (FIN-6): açıklamasız faturasız belge prototipte "Alış faturası", burada "Faturasız gider" adını alır.
+    const eski = eskiDurum() as typeof yeni;
+    const farkli = yeni.state.tx.filter((t) => t.desc.startsWith('Faturasız gider'));
+    expect(farkli.length).toBeGreaterThan(0);
+    for (const t of farkli) {
+      const e = eski.state.tx.find((x) => x.id === t.id)!;
+      expect(e.desc).toBe(t.desc.replace('Faturasız gider', 'Alış faturası'));
+      e.desc = t.desc;
+    }
+    expect(yeni).toEqual(eski);
   });
 
   it('bugünkü nakit hesap toplamına eşittir (FNS-29)', () => {

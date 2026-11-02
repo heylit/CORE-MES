@@ -37,7 +37,7 @@ export function Kayitlar({ finans, yetki }: EkranOzellikleri) {
   return (
     <div className="tc-fk">
       <div className="tc-fk-bas">
-        <p className="tc-fk-not">Girilen tüm satış, alış, tahsilat ve ödemeler. Düzeltmek için satıra tıklayın.</p>
+        <p className="tc-fk-not">Girilen tüm satış, alış, tahsilat ve ödemeler. {yetki.yaz ? 'Düzeltmek için satıra tıklayın.' : 'Ayrıntı için satıra tıklayın.'}</p>
         <Dugme simge="download" disabled={tx.length === 0} onClick={() => csvIndir('finans-kayitlar', CSV_BASLIKLARI, kayitCsvSatirlari(tx))}>
           Excel'e aktar
         </Dugme>
