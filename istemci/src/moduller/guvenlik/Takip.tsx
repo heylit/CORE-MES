@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, OturumlarCevabi, RetListeCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import type {
+  GirisListeCevabi, KilitAcCevabi, KilitAcGovdesi, KilitListeCevabi, OturumKapatGovdesi, OturumlarCevabi, RetListeCevabi,
+} from '#paylasilan/sozlesme/guvenlik.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -130,7 +132,7 @@ export function GuvenlikOturumlar() {
     placeholderData: keepPreviousData,
   });
   const kapat = useMutation({
-    mutationFn: (id: number) => api.post<{ id: number }>(`/guvenlik/oturumlar/${id}/kapat`),
+    mutationFn: (id: number) => api.post<{ id: number }>(`/guvenlik/oturumlar/${id}/kapat`, {} satisfies OturumKapatGovdesi),
     onSuccess: async () => { bildir('tamam', 'Oturum kapatıldı.'); kapanacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
     onError: async (h) => { bildir('hata', hataIletisi(h, 'Oturum kapatılamadı.')); kapanacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.oturumlar }); },
   });
@@ -194,7 +196,7 @@ function KilitliHesaplar({ yonetir }: { yonetir: boolean }) {
     placeholderData: keepPreviousData,
   });
   const ac = useMutation({
-    mutationFn: (id: number) => api.post<KilitAcCevabi>(`/guvenlik/kilitler/${id}/ac`),
+    mutationFn: (id: number) => api.post<KilitAcCevabi>(`/guvenlik/kilitler/${id}/ac`, {} satisfies KilitAcGovdesi),
     onSuccess: async () => { bildir('tamam', 'Kilit açıldı.'); acilacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
     onError: async (h) => { bildir('hata', hataIletisi(h, 'Kilit açılamadı.')); acilacakYaz(null); await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); },
   });

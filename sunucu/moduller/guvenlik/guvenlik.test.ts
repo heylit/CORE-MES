@@ -438,10 +438,13 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.ok(mudurunkiler.length >= 2);
     const hedef = mudurunkiler[0];
     if (!hedef || !kendi) throw new Error('oturum yok');
-    assert.equal((await istek('mudur', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 403);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${kendi.id}/kapat`)).durum, 422);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 200);
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 404);
+    assert.equal((await istek('mudur', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 403);
+    // GUV-5: komut gövdesi şemadan geçer; tanınmayan alan ve gövdesiz istek 400, oturum kapanmaz.
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, { x: 1 })).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`)).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${kendi.id}/kapat`, {})).durum, 422);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 200);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/oturumlar/${hedef.id}/kapat`, {})).durum, 404);
     const sonra = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde);
     assert.equal(sonra.satirlar.some((x) => x.id === hedef.id), false);
     assert.equal(sonra.satirlar.some((x) => x.id === kendi.id), true);
@@ -495,9 +498,10 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     const liste = kilitListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/kilitler')).govde);
     assert.deepEqual(liste.satirlar.filter((k) => k.kullaniciAdi === 'kilit-ad').map((k) => k.id), [ilk?.id]);
     assert.equal(ozetCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/ozet')).govde).kilitliHesap >= 1, true);
-    assert.equal((await istek('mudur', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`)).durum, 403);
-    assert.deepEqual(await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`), { durum: 200, govde: { acilan: 1 } });
-    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`)).durum, 404);
+    assert.equal((await istek('mudur', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {})).durum, 403);
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, { x: 1 })).durum, 400);
+    assert.deepEqual(await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {}), { durum: 200, govde: { acilan: 1 } });
+    assert.equal((await istek('yonetici', 'POST', `/guvenlik/kilitler/${String(ilk?.id)}/ac`, {})).durum, 404);
     const acan = await o().vt.tek<{ acan: number }>('SELECT acan_kisi_id AS acan FROM oturum_hesap_kilidi WHERE id = $1', [ilk?.id]);
     assert.equal(acan?.acan, yoneticiId);
 

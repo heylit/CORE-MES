@@ -198,7 +198,7 @@ describe('Oturumlar ve koruma', () => {
     fireEvent.click(within(tablo).getByRole('button', { name: 'Kilidi aç' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kilidi aç' }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/kilitler/9/ac')).toBe(true));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/kilitler/9/ac' && JSON.stringify(c.govde) === '{}')).toBe(true));
     cleanup();
     sunucuKur({ 'GET /guvenlik/oturumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 }), 'GET /guvenlik/kilitler': () => json(200, kilitler([satir])) });
     cizdir(<GuvenlikOturumlar />, ['sayfa.guvenlik', 'guvenlik.oku']);
@@ -236,7 +236,7 @@ describe('Oturumlar ve koruma', () => {
     expect(within(within(tablo).getByText(/Deneme bir/).closest('tr')!).queryByRole('button', { name: 'Kapat' })).toBeNull();
     fireEvent.click(within(within(tablo).getByText(/Deneme iki/).closest('tr')!).getByRole('button', { name: 'Kapat' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Oturumu kapat' }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/oturumlar/2/kapat')).toBe(true));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/oturumlar/2/kapat' && JSON.stringify(c.govde) === '{}')).toBe(true));
   });
 
   it('oturum listesi arama kutusu sunucuya gider (GUV-4)', async () => {
