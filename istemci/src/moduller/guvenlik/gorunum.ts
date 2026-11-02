@@ -12,6 +12,17 @@ export function zamanMetni(iso: string | null): string {
   return Number.isNaN(an.getTime()) ? iso : an.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+// Koruma ve sunucu durumu maddelerinin değeri ya zaman (ISO) ya da düz metindir; zaman okunur biçimde ve yılıyla yazılır
+// (sertifika bitişi gibi değerler yıl ötesine düşer).
+const ZAMAN_BICIMI = /^\d{4}-\d{2}-\d{2}T/;
+export function degerMetni(deger: string): string {
+  if (!ZAMAN_BICIMI.test(deger)) return deger;
+  const an = new Date(deger);
+  return Number.isNaN(an.getTime())
+    ? deger
+    : an.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 // Ham tarayıcı başlığı okunmaz; tabloda kısa ad görünür, tamamı ipucundadır. Sıra önemli: Edge ve Chrome başlığı Safari'yi de anar.
 const TARAYICILAR: readonly [RegExp, string][] = [[/Edg\//, 'Edge'], [/OPR\//, 'Opera'], [/Firefox\//, 'Firefox'], [/Chrome\//, 'Chrome'], [/Safari\//, 'Safari']];
 const SISTEMLER: readonly [RegExp, string][] = [[/Windows/, 'Windows'], [/Android/, 'Android'], [/iPhone|iPad/, 'iOS'], [/Mac OS X/, 'macOS'], [/Linux/, 'Linux']];

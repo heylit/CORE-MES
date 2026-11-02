@@ -242,22 +242,23 @@ export async function eskiRetleriSil(db: Db, gun: number): Promise<number> {
 }
 
 export interface RetListeSatiri { id: number; zaman: string; neden: RetNedeni; kisiId: number | null; yontem: string; yol: string; ip: string | null }
-export interface RetSuzgeci { neden: RetNedeni | null; ara: string | null }
+export interface RetSuzgeci { neden: RetNedeni | null; ara: string | null; kisiIdleri: number[] }
 
 // Arama metni joker karakter taşımasın diye LIKE yerine konum aranır (giriş listesiyle aynı).
 const RET_SUZGECI = `FROM guvenlik_red_olayi r
   WHERE ($1::text IS NULL OR r.neden = $1)
-    AND ($2::text IS NULL OR strpos(lower(r.yol), lower($2)) > 0 OR strpos(lower(coalesce(r.ip, '')), lower($2)) > 0)`;
+    AND ($2::text IS NULL OR strpos(lower(r.yol), lower($2)) > 0 OR strpos(lower(coalesce(r.ip, '')), lower($2)) > 0
+      OR r.kisi_id = ANY($3::int[]))`;
 
 export async function retSay(db: Db, s: RetSuzgeci): Promise<number> {
-  const r = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${RET_SUZGECI}`, [s.neden, s.ara]);
+  const r = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${RET_SUZGECI}`, [s.neden, s.ara, s.kisiIdleri]);
   return r?.toplam ?? 0;
 }
 
 export function retSatirlari(db: Db, s: RetSuzgeci, dilim: Dilim): Promise<RetListeSatiri[]> {
   return db.sorgu<RetListeSatiri>(
     `SELECT r.id::int AS id, ${zamanMetni('r.zaman')} AS zaman, r.neden, r.kisi_id AS "kisiId", r.yontem, r.yol, r.ip ${RET_SUZGECI}
-      ORDER BY r.zaman DESC, r.id DESC LIMIT $3 OFFSET $4`,
-    [s.neden, s.ara, dilim.sinir, dilim.atla],
+      ORDER BY r.zaman DESC, r.id DESC LIMIT $4 OFFSET $5`,
+    [s.neden, s.ara, s.kisiIdleri, dilim.sinir, dilim.atla],
   );
 }

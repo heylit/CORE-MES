@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmKapatGovdesi, alarmListeCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
-  guvenlikKimligi, kilitAcCevabi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumlarCevabi,
+  guvenlikKimligi, kilitAcCevabi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumListeSorgusu, oturumlarCevabi,
   ozetCevabi, retListeCevabi, retListeSorgusu, sunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import * as servis from './servis.ts';
@@ -38,8 +38,8 @@ export const uclar = [
     isle: ({ db, sorgu }) => servis.girisler(db, sorgu),
   }),
   uc({
-    yontem: 'GET', yol: '/guvenlik/oturumlar', yetki: 'guvenlik.oku', cevap: oturumlarCevabi,
-    isle: ({ db, istek }) => servis.oturumlar(db, istek),
+    yontem: 'GET', yol: '/guvenlik/oturumlar', yetki: 'guvenlik.oku', sorgu: oturumListeSorgusu, cevap: oturumlarCevabi,
+    isle: ({ db, istek, sorgu }) => servis.oturumlar(db, istek, sorgu),
   }),
   uc({
     yontem: 'POST', yol: '/guvenlik/oturumlar/:id/kapat', yetki: 'guvenlik.yonet', parametre: guvenlikKimligi, cevap: oturumKapatCevabi,

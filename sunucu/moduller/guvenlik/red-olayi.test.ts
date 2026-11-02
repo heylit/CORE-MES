@@ -106,6 +106,10 @@ describe('guvenlik: reddedilen istekler, yeni sinyaller ve kritik alarm duyurusu
     assert.equal(yolAramasi.satirlar.some((r) => r.neden === 'yetki'), true);
     const adresAramasi = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?ara=/yok-boyle')).govde);
     assert.deepEqual(adresAramasi.satirlar.map((r) => r.yol), ['/yok-boyle-bir-adres']);
+    // GUV-4: arama kişi adında da geçer; Türkçe büyük harf aynı sayılır.
+    const kisiAramasi = retListeCevabi.parse((await istek('yonetici', 'GET', `/guvenlik/reddedilen-istekler?ara=${encodeURIComponent('MÜDÜR')}`)).govde);
+    assert.ok(kisiAramasi.satirlar.length > 0);
+    assert.equal(kisiAramasi.satirlar.every((r) => r.kisiAdi === 'Deneme Müdür'), true);
     const aranan = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?ara=10.0.0.30')).govde);
     assert.deepEqual(aranan.satirlar.map((r) => r.ip), ['10.0.0.30']);
     assert.equal((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?neden=uydurma')).durum, 400);

@@ -5,7 +5,7 @@ import { Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { BOS, KORUMA_ADI, KORUMA_TONU, ONEM_ADI, ONEM_TONU } from './gorunum.ts';
+import { BOS, KORUMA_ADI, degerMetni, KORUMA_TONU, ONEM_ADI, ONEM_TONU } from './gorunum.ts';
 import './guvenlik.css';
 
 export function GuvenlikKoruma() {
@@ -19,7 +19,7 @@ export function GuvenlikKoruma() {
         {sorgu.data.maddeler.map((m) => (
           <Kart key={m.anahtar} baslik={m.baslik} sag={<Rozet ton={KORUMA_TONU[m.durum]}>{KORUMA_ADI[m.durum]}</Rozet>}>
             <p>{m.aciklama}</p>
-            {m.deger !== null && <div className="tc-guvenlik-deger">{m.deger}</div>}
+            {m.deger !== null && <div className="tc-guvenlik-deger">{degerMetni(m.deger)}</div>}
           </Kart>
         ))}
       </div>

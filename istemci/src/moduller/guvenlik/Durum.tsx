@@ -4,7 +4,7 @@ import type { OzetCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenl
 import { Dugme, DurumKutusu, IkiSeriKarti, Kart, Rozet, SayiKarti, Simge } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { DURUM_ADI, DURUM_TONU, KORUMA_ADI, KORUMA_TONU, ONEM_ADI, SINYAL_ADI, kaynakMetni, saatMetni, zamanMetni } from './gorunum.ts';
+import { DURUM_ADI, DURUM_TONU, KORUMA_ADI, KORUMA_TONU, ONEM_ADI, SINYAL_ADI, degerMetni, kaynakMetni, saatMetni, zamanMetni } from './gorunum.ts';
 import './guvenlik.css';
 
 // Panoya bakan elle yenilemek zorunda kalmasın; tarama dakikada bir koşar.
@@ -35,7 +35,6 @@ function altMetin(o: OzetCevabi): string {
   return parcalar.length > 0 ? parcalar.join(' ') : 'Açık alarm yok; tarama çalışıyor.';
 }
 
-const ZAMAN_BICIMI = /^\d{4}-\d{2}-\d{2}T/;
 
 // Günlük, olay günlüğü, yedek, disk ve sertifika; altında günlük dosyasındaki son sunucu hataları. Okunamazsa yalnız bu kart hata gösterir.
 function SunucuDurumuKarti() {
@@ -56,7 +55,7 @@ function SunucuDurumuKarti() {
                     <Rozet ton={KORUMA_TONU[m.durum]}>{KORUMA_ADI[m.durum]}</Rozet>
                     <span className="tc-guvenlik-olay-metin">
                       <b>{m.baslik}</b> · {m.aciklama}
-                      {m.deger !== null && <> · <span className="mono">{ZAMAN_BICIMI.test(m.deger) ? zamanMetni(m.deger) : m.deger}</span></>}
+                      {m.deger !== null && <> · <span className="mono">{degerMetni(m.deger)}</span></>}
                     </span>
                   </li>
                 ))}
