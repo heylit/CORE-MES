@@ -3,7 +3,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, KAYIT_GECMISI_SINIRI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { KayitGecmisiCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
   KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
@@ -405,4 +406,24 @@ export async function hamAnalizi(db: Db): Promise<HamAnaliziCevabi> {
   const a = g.analiz.analiz;
   if (a === null) return bos('analiz-yok', model);
   return { neden: null, model, olcu: { a: a.obb.a, b: a.obb.b, c: a.obb.c, hacimMm3: a.hacimMm3 } };
+}
+
+// Kayıt geçmişi (CNC-7 a): anahtar verilmezse ana durum kaydı.
+export async function kayitGecmisi(db: Db, anahtar: string = DURUM_ANAHTARI): Promise<KayitGecmisiCevabi> {
+  const anahtarlar = await sorgular.gecmisAnahtarlari(db);
+  const satirlar = await sorgular.kayitGecmisi(db, anahtar, KAYIT_GECMISI_SINIRI);
+  const guncel = await sorgular.kayitUstBilgisi(db, anahtar);
+  const idler = satirlar.flatMap((s) => (s.degistirenId === null ? [s.yazanId] : [s.yazanId, s.degistirenId]));
+  if (guncel !== null) idler.push(guncel.yazanId);
+  const adlar = await kisiAdlari(db, idler);
+  const kisi = (id: number) => ({ id, ad: adlar.get(id) ?? null });
+  return {
+    anahtarlar,
+    anahtar,
+    guncel: guncel === null ? null : { surum: guncel.surum, yazan: kisi(guncel.yazanId), yazildi: guncel.yazildi },
+    satirlar: satirlar.map((s) => ({
+      surum: s.surum, yazan: kisi(s.yazanId), yazildi: s.yazildi, degistiren: s.degistirenId === null ? null : kisi(s.degistirenId),
+      degisti: s.degisti, silindi: s.degistirenId === null, alanlar: s.alanlar,
+    })),
+  };
 }

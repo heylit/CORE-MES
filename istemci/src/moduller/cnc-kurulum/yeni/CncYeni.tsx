@@ -14,6 +14,7 @@ import { sahneAlaniKur } from './sahne/Sahne.tsx';
 import { tezgahlariKur, tezgahYok } from './secici.ts';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
+import { KayitGecmisiPenceresi } from './gecmis/KayitGecmisiPenceresi.tsx';
 import { baglantiKur, CncYetkiBaglami, EMIR, kayitYazildi, ONEK, yerelDegerler, yetkiKur, type CncYetkisi } from './veri.ts';
 import './cnc-yeni.css';
 
@@ -39,6 +40,9 @@ export function CncYeni() {
   const alan = useRef<HTMLDivElement>(null);
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
+  // Kayıt geçmişi (CNC-7 a) yalnız okuma işlemiyle açılır (uçla aynı).
+  const gecmisGorebilir = kullanici?.islemler.includes('cnc-kurulum.oku') ?? false;
+  const [gecmisAcik, gecmisAcikYaz] = useState(false);
 
   useEffect(() => {
     if (!kullanici || !girebilir) return undefined;
@@ -131,6 +135,9 @@ export function CncYeni() {
           <div className="tc-cy-serit" {...{ [SERIT]: '' }}>
             <Sekmeler etiket="CNC Kurulum görünümleri" sekmeler={kayitlar} secili={gorunum} sec={(g) => { git(g); }} />
           </div>
+          {gecmisGorebilir && (
+            <Dugme simge="clock" onClick={() => { gecmisAcikYaz(true); }} title="Kim neyi ne zaman değiştirdi">Geçmiş</Dugme>
+          )}
           {!yetki.saltOnay && (
             <Dugme simge="edit" onClick={() => { openDefs(); }} title="Tezgâh ve malzeme tanımları">Tanımlar</Dugme>
           )}
@@ -154,6 +161,7 @@ export function CncYeni() {
           )}
         </div>
         {tanimlar.acik && !yetki.saltOnay && <TanimlarPenceresi sekme={tanimlar.sekme} kapat={closeDefs} />}
+        {gecmisAcik && gecmisGorebilir && <KayitGecmisiPenceresi kapat={() => { gecmisAcikYaz(false); }} />}
       </div>
     </CncYetkiBaglami.Provider>
   );

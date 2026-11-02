@@ -4,11 +4,11 @@ import {
   kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
   stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, tezgahAyarCevabi, tezgahAyarGovdesi, tezgahlarCevabi, tezgahParametresi, yazCevabi,
   yazGovdesi, modelBaglaCevabi, modelBaglaGovdesi, modellerCevabi, modelParametresi, modelSecenekleriCevabi, modelSecenekleriSorgusu,
-  hamAnaliziCevabi,
+  hamAnaliziCevabi, kayitGecmisiCevabi, kayitGecmisiSorgusu,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, tezgahAyarYaz,
-  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri, hamAnalizi,
+  tezgahlar, yaz, modelBagla, modelDosyasi, modeller, modelSecenekleri, hamAnalizi, kayitGecmisi,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
@@ -196,5 +196,14 @@ export const uclar = [
     yetki: OKUMA,
     cevap: hamAnaliziCevabi,
     isle: ({ db }) => hamAnalizi(db),
+  }),
+  // Kayıt geçmişi (CNC-7 a): okuma işlemiyle açılır; rol dağılımı rol x işlem göçünde (5.6) verilir.
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/kayitlar/gecmis',
+    yetki: 'cnc-kurulum.oku',
+    sorgu: kayitGecmisiSorgusu,
+    cevap: kayitGecmisiCevabi,
+    isle: ({ db, sorgu }) => kayitGecmisi(db, sorgu.anahtar),
   }),
 ];

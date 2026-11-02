@@ -238,3 +238,38 @@ export async function modelSurumuIlerlet(db: Db, id: number, kisiId: number): Pr
     [id, kisiId],
   );
 }
+
+// Kayıt geçmişi (CNC-7 a). Bir sürümün yerine gelen değer: sonraki geçmiş satırı, yoksa güncel kayıt. Değişen üst alanlar burada
+// çıkarılır; değerler sunucudan çıkmaz.
+export interface GecmisSatiri {
+  surum: number; yazanId: number; yazildi: string; degistirenId: number | null; degisti: string; alanlar: string[] | null;
+}
+export async function kayitGecmisi(db: Db, anahtar: string, sinir: number): Promise<GecmisSatiri[]> {
+  return db.sorgu<GecmisSatiri>(
+    `SELECT g.surum::int AS surum, g.yazan_kisi_id AS "yazanId", ${ISO('g.yazildi')} AS yazildi, g.degistiren_kisi_id AS "degistirenId",
+            ${ISO('g.degisti')} AS degisti,
+            CASE WHEN g.degistiren_kisi_id IS NULL OR jsonb_typeof(g.deger) <> 'object' OR jsonb_typeof(n.deger) IS DISTINCT FROM 'object' THEN NULL
+                 ELSE ARRAY(SELECT a FROM (SELECT jsonb_object_keys(g.deger) AS a UNION SELECT jsonb_object_keys(n.deger)) t
+                            WHERE g.deger -> a IS DISTINCT FROM n.deger -> a ORDER BY a) END AS alanlar
+       FROM (SELECT *, lead(deger) OVER (ORDER BY id) AS sonraki, lead(id) OVER (ORDER BY id) AS sonraki_id
+               FROM cnc_kurulum_kayit_gecmisi WHERE anahtar = $1) g
+       LEFT JOIN cnc_kurulum_kayit k ON k.anahtar = $1
+       CROSS JOIN LATERAL (SELECT CASE WHEN g.sonraki_id IS NULL THEN k.deger ELSE g.sonraki END AS deger) n
+      ORDER BY g.id DESC LIMIT $2`,
+    [anahtar, sinir],
+  );
+}
+
+export async function gecmisAnahtarlari(db: Db): Promise<{ anahtar: string; surumSayisi: number; son: string }[]> {
+  return db.sorgu(
+    `SELECT anahtar, count(*)::int AS "surumSayisi", ${ISO('max(degisti)')} AS son FROM cnc_kurulum_kayit_gecmisi
+      GROUP BY anahtar ORDER BY max(degisti) DESC, anahtar`,
+  );
+}
+
+export async function kayitUstBilgisi(db: Db, anahtar: string): Promise<{ surum: number; yazanId: number; yazildi: string } | null> {
+  return db.tek(
+    `SELECT surum::int AS surum, guncelleyen_kisi_id AS "yazanId", ${ISO('guncellendi')} AS yazildi FROM cnc_kurulum_kayit WHERE anahtar = $1`,
+    [anahtar],
+  );
+}

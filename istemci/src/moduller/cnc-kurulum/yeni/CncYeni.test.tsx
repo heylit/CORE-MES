@@ -90,6 +90,18 @@ describe('CncYeni', () => {
     expect(await screen.findByRole('dialog', { name: 'Tanımlar' })).toBeTruthy();
   }, 20000);
 
+  it('CNC-7 a: kayıt geçmişi düğmesi yalnız cnc-kurulum.oku işlemi olan kişide görünür ve pencereyi açar', async () => {
+    sunucuKur(KULLANICI);
+    ac('/cnc-kurulum/yeni/ana-sayfa');
+    fireEvent.click(await screen.findByRole('button', { name: /Geçmiş/ }, { timeout: 10000 }));
+    expect(await screen.findByRole('dialog', { name: 'Kayıt geçmişi' })).toBeTruthy();
+    cleanup();
+    sunucuKur({ ...KULLANICI, islemler: ['sayfa.cnc-kurulum', 'cnc-kurulum.yaz'] });
+    ac('/cnc-kurulum/yeni/ana-sayfa');
+    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Geçmiş/ })).toBeNull();
+  }, 20000);
+
   it('yalnız hazırlık onayı olan kişi Hazırlık görünümünde açılır, öteki görünümler ve Tanımlar yoktur', async () => {
     sunucuKur(YONETICI, [], { yazabilir: false, hazirlikOnaylayabilir: true });
     ac('/cnc-kurulum/yeni/kurulum');

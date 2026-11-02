@@ -171,6 +171,18 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(okur, 'POST', '/cnc-kurulum/kayitlar/sil', { anahtar: a, beklenenSurum: 1 })).statusCode, 403);
   });
 
+  test('CK-07b: kayıt geçmişi (CNC-7 a) yalnız cnc-kurulum.oku ile okunur; geçersiz anahtar 400', async () => {
+    const a = yeniAnahtar();
+    const k = (await yaz(yazar, { anahtar: a, bicim: 'json', deger: { n: 1 }, beklenenSurum: null })).json() as { kayit: Kayit };
+    await yaz(yazar, { anahtar: a, bicim: 'json', deger: { n: 2 }, beklenenSurum: k.kayit.surum });
+    const c = await istek(okur, 'GET', `/cnc-kurulum/kayitlar/gecmis?anahtar=${a}`);
+    assert.equal(c.statusCode, 200, c.body);
+    assert.deepEqual((c.json() as { satirlar: { surum: number; alanlar: string[] }[] }).satirlar.map((x) => [x.surum, x.alanlar]), [[k.kayit.surum, ['n']]]);
+    assert.equal((await istek(onaylayan, 'GET', '/cnc-kurulum/kayitlar/gecmis')).statusCode, 200);
+    for (const kisi of [yazar, sayfali, yetkisiz]) assert.equal((await istek(kisi, 'GET', '/cnc-kurulum/kayitlar/gecmis')).statusCode, 403);
+    assert.equal((await istek(okur, 'GET', '/cnc-kurulum/kayitlar/gecmis?anahtar=baska.anahtar')).statusCode, 400);
+  });
+
   test('CK-08: ben kişiyi ve yazma bayrağını döner', async () => {
     assert.deepEqual((await istek(yazar, 'GET', '/cnc-kurulum/ben')).json(), { kisi: { id: yazarId, ad: 'Deneme yazar' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, emirGorebilir: false });
     assert.equal(((await istek(okur, 'GET', '/cnc-kurulum/ben')).json() as { yazabilir: boolean }).yazabilir, false);

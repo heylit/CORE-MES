@@ -230,3 +230,24 @@ export type ModelBaglaGovdesi = z.output<typeof modelBaglaGovdesi>;
 export type ModelBaglaCevabi = z.output<typeof modelBaglaCevabi>;
 export type ModelSecenekleriCevabi = z.output<typeof modelSecenekleriCevabi>;
 export type HamAnaliziCevabi = z.output<typeof hamAnaliziCevabi>;
+
+// Kayıt geçmişi (CNC-7 a, 1269 a): anahtar başına son sürümler (geçmiş tablosunda en çok 50 tutulur). Değer gönderilmez (her biri
+// 1 MB'a kadar); yalnız o sürümün yerine gelen sürümde değişen üst alanlar. alanlar null: silme, ya da iki değerden biri nesne değil.
+// Kişi adı null: kişi kaydı bulunamadı (ad uydurulmaz). silindi: kayıt silinmiş, silen bilinmez (tetikleyici kişi taşımaz).
+export const KAYIT_GECMISI_SINIRI = 50;
+export const kayitGecmisiSorgusu = z.object({ anahtar: anahtar.optional() });
+const gecmisKisisi = z.object({ id: z.number().int(), ad: z.string().nullable() });
+export const kayitGecmisiAnahtariSemasi = z.object({ anahtar: z.string(), surumSayisi: z.number().int(), son: z.string() });
+export const kayitGecmisiSatiriSemasi = z.object({
+  surum: z.number().int(), yazan: gecmisKisisi, yazildi: z.string(), degistiren: gecmisKisisi.nullable(), degisti: z.string(),
+  silindi: z.boolean(), alanlar: z.array(z.string()).nullable(),
+});
+export const kayitGecmisiCevabi = z.object({
+  anahtarlar: z.array(kayitGecmisiAnahtariSemasi),
+  anahtar: z.string(),
+  guncel: z.object({ surum: z.number().int(), yazan: gecmisKisisi, yazildi: z.string() }).nullable(),
+  satirlar: z.array(kayitGecmisiSatiriSemasi),
+});
+export type KayitGecmisiSorgusu = z.output<typeof kayitGecmisiSorgusu>;
+export type KayitGecmisiSatiri = z.output<typeof kayitGecmisiSatiriSemasi>;
+export type KayitGecmisiCevabi = z.output<typeof kayitGecmisiCevabi>;
