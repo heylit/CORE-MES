@@ -83,8 +83,8 @@ describe('Satın alma pano kartları (#489)', () => {
     // #1085: şirket özeti kartlarını satın almayı okuyan görür.
     expect(k['satin-alma-yonetim-ozet']).toMatchObject({ bolum: 'yonetim', islem: 'satin-alma.oku', veya: ['satin-alma.yaz'] });
     expect(k['satin-alma-yonetim-akis']).toMatchObject({ bolum: 'yonetim', genis: true, islem: 'satin-alma.oku', veya: ['satin-alma.yaz'] });
-    expect(k['satin-alma-talep']).toMatchObject({ islem: 'satin-alma.talep-ac' });
-    expect(k['satin-alma-taleplerim']).toMatchObject({ islem: 'satin-alma.talep-ac' });
+    // 1841: talep formu ve Taleplerim ana sayfa kartı değildir; talep menüdeki Taleplerim sayfasından açılır.
+    expect([k['satin-alma-talep'], k['satin-alma-taleplerim']]).toEqual([undefined, undefined]);
   });
 
   it('#1085: tedarik akışı talepten teslime dört adım; görülmeyen sayı "–", onay bekleyen uyarı tonunda', async () => {

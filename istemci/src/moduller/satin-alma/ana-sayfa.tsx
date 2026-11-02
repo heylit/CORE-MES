@@ -2,8 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AkisKarti } from '../../ortak/arayuz/PanoGrafikleri.tsx';
 import { SayiKarti } from '../../ortak/arayuz/SayiKarti.tsx';
 import type { AnaSayfaKarti } from '../../ortak/rota/ana-sayfa.ts';
-import { TalepAc } from './talep/TalepAc.tsx';
-import { Taleplerim } from './talep/Taleplerim.tsx';
 import { SURE, anahtarlar, cagri } from './talep/ortak.ts';
 
 // Pano kartları tek özet ucunu paylaşır (aynı sorgu anahtarı, tek istek); yetkisiz sayı uçta null gelir (kart #489).
@@ -60,7 +58,7 @@ function TedarikAkisi() {
   );
 }
 
-// Talep ana sayfadan açılır (kart #375); satın alma ekranının menüsüne "Taleplerim" eklenmez.
+// Talep ana sayfa kartı değildir (1841, kullanıcı kararı 02.11): menüdeki Taleplerim sayfasından açılır.
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
   // Şirket özeti kartlarını satın almayı okuyan görür (kart #1085).
   { anahtar: 'satin-alma-yonetim-ozet', sira: 150, bolum: 'yonetim', islem: 'satin-alma.oku', veya: ['satin-alma.yaz'], ekran: SirketOzeti },
@@ -70,6 +68,4 @@ export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'satin-alma-teslim-bekleyen', sira: 320, bolum: 'is', islem: 'satin-alma.yaz', ekran: TeslimBekleyen },
   { anahtar: 'satin-alma-mal-kabul-bekleyen', sira: 330, bolum: 'is', islem: 'stok.giris', ekran: MalKabulBekleyen },
   { anahtar: 'satin-alma-acik-siparis', sira: 300, bolum: 'ozet', islem: 'satin-alma.oku', veya: ['satin-alma.yaz'], ekran: AcikSiparisler },
-  { anahtar: 'satin-alma-talep', sira: 100, islem: 'satin-alma.talep-ac', ekran: TalepAc },
-  { anahtar: 'satin-alma-taleplerim', sira: 110, islem: 'satin-alma.talep-ac', ekran: Taleplerim },
 ];
