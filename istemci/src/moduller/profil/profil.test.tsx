@@ -147,10 +147,13 @@ describe('Şikayet, istek ve öneri düğmesi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Şikayet, istek ve öneri' }));
     const gonder = screen.getByRole('button', { name: 'Gönder' }) as HTMLButtonElement;
     expect(gonder.disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toBe('Göndermek için konuyu seçin, türü seçin, en az 3 karakter yazın.');
     fireEvent.click(screen.getByRole('button', { name: /Şirket/ }));
     fireEvent.click(screen.getByRole('button', { name: /İstek/ }));
+    expect(screen.getByRole('status').textContent).toBe('Göndermek için en az 3 karakter yazın.');
     fireEvent.change(screen.getByLabelText(/Yazınız/), { target: { value: '  Yemek saatleri ' } });
     expect(gonder.disabled).toBe(false);
+    expect(screen.queryByText(/Göndermek için/)).toBeNull();
     fireEvent.click(gonder);
     expect(await screen.findByText(/İstek kaydınız alındı/)).toBeTruthy();
     const post = istekler.find((i) => i.yontem === 'POST');
