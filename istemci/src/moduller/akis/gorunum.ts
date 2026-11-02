@@ -16,8 +16,6 @@ export function sureMetni(dk: number | null): string {
   return gun > 0 ? `${String(gun)} g ${String(saat)} sa` : `${String(saat)} sa ${String(dakika)} dk`;
 }
 
-export const zamanMetni = (z: string | null): string =>
-  z === null ? '–' : new Date(z).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 // Şeridin zaman ekseni: bütün bölümlerin en erken başı ve en geç sonu; yüzdeye çevirir.
 export function eksen(araliklar: readonly { baslangic: string; bitis: string }[]): { bas: number; bit: number; x: (z: string) => number } | null {
@@ -28,6 +26,3 @@ export function eksen(araliklar: readonly { baslangic: string; bitis: string }[]
   return { bas, bit, x: (z: string) => ((Date.parse(z) - bas) / genislik) * 100 };
 }
 
-// Arama Türkçe harfi düz harfle eşler ("burc" "Burç"u bulur); büyük-küçük harf Türkçe kuralıyla (I -> ı, İ -> i).
-const DUZ_HARF: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
-export const aramaMetni = (s: string): string => s.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (h) => DUZ_HARF[h] ?? h);

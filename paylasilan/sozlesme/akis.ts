@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { emirDurumu } from './uretim-emirleri.ts';
 
 // Akış Süresi (kart #1338): üretim emrinin hammadde kabulünden sevke kadar geçen zamanı, bekleme dahil, kaynak modüllerin
 // kayıtlarından okur ve hesaplar. Yalnız okur; süreler dakikadır (takvim saati), ölçülemeyen değer null döner.
@@ -84,7 +86,7 @@ export const emirAkisiCevabi = z.object({
     id: KIMLIK,
     emirNo: z.string(),
     adet: z.number().int().positive(),
-    durum: z.string(),
+    durum: emirDurumu,
     teslim: tarihSemasi.nullable(),
   }),
   simdi: zamanSemasi,
@@ -103,6 +105,11 @@ export const emirAkisiCevabi = z.object({
     islemeToplamDk: dakika.nullable(),
     // İşleme toplamı ÷ üretim akış süresi (0-1); ölçülemezse null.
     akisVerimi: z.number().min(0).max(1).nullable(),
+    // Bekleme ve akış ölçüleri vardiya saatiyle mi (1852 a); takvimi tanımlı istasyon yoksa takvim saatiyledir. Sunucu her zaman yazar;
+    // isteğe bağlı olması bu sözleşmeyi kuran öteki modüllerin örnek verisini bozmamak içindir (yoksa takvim saati sayılır).
+    vardiyaSaatiyle: z.boolean().optional(),
+    // İşleme toplamının çalışma saatine düşen kısmı (verimin payı); vardiya saatiyle ölçülmediyse işleme toplamıyla aynıdır.
+    islemeVardiyaDk: dakika.nullable().optional(),
   }),
   seritler: z.array(seritSemasi),
   adimlar: z.array(adimOlcusuSemasi),
@@ -213,16 +220,17 @@ export const kartOzetleriCevabi = z.object({
   kartlar: z.array(z.object({ id: KIMLIK, konum: kartKonumuSemasi, rota: kartRotasiSemasi, sonAn: kartAniSemasi.nullable(), lead: olcuSemasi })),
 });
 
-export const emirListesiCevabi = z.object({
-  emirler: z.array(z.object({
-    id: KIMLIK,
-    emirNo: z.string(),
-    urun: z.string(),
-    adet: z.number().int().positive(),
-    durum: z.string(),
-    teslim: tarihSemasi.nullable(),
-  })),
-});
+export const EMIR_ARAMA_SINIRI = 100;
+// Sayfalı emir listesi (AKS-5 a); ara emir no ve ürün metninde Türkçe harfi düz harfle eşleyerek arar.
+export const emirListesiSorgusu = z.object({ ...sayfaSorguAlanlari, ara: z.string().trim().max(EMIR_ARAMA_SINIRI).optional() });
+export const emirListesiCevabi = listeCevapSemasi(z.object({
+  id: KIMLIK,
+  emirNo: z.string(),
+  urun: z.string(),
+  adet: z.number().int().positive(),
+  durum: emirDurumu,
+  teslim: tarihSemasi.nullable(),
+}));
 
 export type Bolum = z.output<typeof bolumSemasi>;
 export type Serit = z.output<typeof seritSemasi>;
@@ -232,6 +240,7 @@ export type HammaddePartisi = z.output<typeof hammaddePartisiSemasi>;
 export type Olcu = z.output<typeof olcuSemasi>;
 export type EmirAkisiCevabi = z.output<typeof emirAkisiCevabi>;
 export type EmirListesiCevabi = z.output<typeof emirListesiCevabi>;
+export type EmirListesiSorgusu = z.input<typeof emirListesiSorgusu>;
 export type KartAni = z.output<typeof kartAniSemasi>;
 export type KartAkisiCevabi = z.output<typeof kartAkisiCevabi>;
 export type KartKonumu = z.output<typeof kartKonumuSemasi>;

@@ -1,40 +1,59 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
   AdimOlcusu, EmirAkisiCevabi, EmirListesiCevabi, HammaddePartisi, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
-import { DurumKutusu, Girdi, Kart, Rozet, SayiKarti, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Girdi, Kart, Rozet, Sayfalama, SayiKarti, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
+import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
+import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { aramaMetni, BOLUM_ADLARI, BOLUM_SIRASI, eksen, sureMetni, zamanMetni } from './gorunum.ts';
+import { tarihMetni, tarihSaatMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
+import { BOLUM_ADLARI, BOLUM_SIRASI, eksen, sureMetni } from './gorunum.ts';
 import './akis.css';
 
-type EmirSatiri = EmirListesiCevabi['emirler'][number];
+type EmirSatiri = EmirListesiCevabi['satirlar'][number];
 
 const EMIR_SUTUNLARI: readonly Sutun<EmirSatiri>[] = [
   { anahtar: 'no', baslik: 'Emir', mono: true, kirilmaz: true, hucre: (e) => <Link to={`/akis/${String(e.id)}`}>{e.emirNo}</Link> },
   { anahtar: 'urun', baslik: 'Ürün', hucre: (e) => e.urun },
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (e) => e.adet },
-  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => e.durum },
-  { anahtar: 'teslim', baslik: 'Teslim', kirilmaz: true, hucre: (e) => e.teslim ?? '–' },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={EMIR_DURUMU[e.durum].ton}>{EMIR_DURUMU[e.durum].etiket}</Rozet> },
+  { anahtar: 'teslim', baslik: 'Teslim', kirilmaz: true, hucre: (e) => tarihMetni(e.teslim) },
 ];
 
+// Sözleşmedeki EMIR_ARAMA_SINIRI; sözleşme zod taşıdığı için istemci değer olarak ithal edemez.
+const ARAMA_SINIRI = 100;
+
+// Liste sunucuda sayfalanır ve aranır (AKS-5 a); sayfa ve arama adreste durur, geri tuşu listeyi olduğu yere getirir.
 export function AkisEmirleri() {
-  const [ara, araYaz] = useState('');
   const git = useNavigate();
-  const liste = useQuery({ queryKey: anahtarlar.emirler, queryFn: () => api.get<EmirListesiCevabi>('/akis/emirler') });
-  if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (liste.isError) return <Hata hata={liste.error} ekranIletisi="Emir listesi alınamadı." yenile={() => { void liste.refetch(); }} />;
-  const aranan = aramaMetni(ara.trim());
-  const satirlar = aranan === '' ? liste.data.emirler
-    : liste.data.emirler.filter((e) => aramaMetni(`${e.emirNo} ${e.urun}`).includes(aranan));
+  const liste = useListeDurumu({ suzgecler: { ara: '' }, adres: true });
+  const [ara, araYaz] = useState(liste.suzgecler.ara);
+  useEffect(() => {
+    const t = setTimeout(() => { if (ara !== liste.suzgecler.ara) liste.suzgecDegistir({ ara }); }, 300);
+    return () => clearTimeout(t);
+  }, [ara]);
+  const l = useQuery({
+    queryKey: [...anahtarlar.emirler, liste.sorgu],
+    queryFn: () => api.get<EmirListesiCevabi>(`/akis/emirler${sorguMetni(liste.sorgu)}`),
+    placeholderData: keepPreviousData,
+  });
+  useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
     <div className="tc-akis-sayfa">
       <p className="tc-akis-aciklama">Bir emri seçin: hammaddenin gelişinden sevke kadar her adımın bekleme, hazırlık, işleme ve duruş süreleri.</p>
-      <Girdi etiket="Emir ya da ürün ara" value={ara} onChange={(e) => araYaz(e.target.value)} />
-      <Tablo etiket="Üretim emirleri" sutunlar={EMIR_SUTUNLARI} satirlar={satirlar} satirAnahtari={(e) => e.id}
-        satirSec={(e) => { void git(`/akis/${String(e.id)}`); }} bosMesaj="Emir yok" />
+      <Girdi etiket="Emir ya da ürün ara" value={ara} maxLength={ARAMA_SINIRI} onChange={(e) => araYaz(e.target.value)} />
+      {l.isPending && <DurumKutusu durum="yukleniyor" />}
+      {l.isError && <Hata hata={l.error} ekranIletisi="Emir listesi alınamadı." yenile={() => { void l.refetch(); }} />}
+      {l.data && (
+        <>
+          <Tablo etiket="Üretim emirleri" sutunlar={EMIR_SUTUNLARI} satirlar={l.data.satirlar} satirAnahtari={(e) => e.id}
+            satirSec={(e) => { void git(`/akis/${String(e.id)}`); }} bosMesaj="Emir yok" />
+          <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={liste.sayfaDegistir} satirSayisi={l.data.satirlar.length} />
+        </>
+      )}
     </div>
   );
 }
@@ -102,8 +121,8 @@ const STATU_SUTUNLARI: readonly Sutun<StatuKalisi>[] = [
 
 const HAMMADDE_SUTUNLARI: readonly Sutun<HammaddePartisi>[] = [
   { anahtar: 'lot', baslik: 'Lot', mono: true, hucre: (h) => h.lotNo ?? `Parti ${String(h.partiId)}` },
-  { anahtar: 'kabul', baslik: 'Mal kabul', kirilmaz: true, hucre: (h) => zamanMetni(h.malKabul) },
-  { anahtar: 'kullanim', baslik: 'İlk kullanım', kirilmaz: true, hucre: (h) => zamanMetni(h.kullanim) },
+  { anahtar: 'kabul', baslik: 'Mal kabul', kirilmaz: true, hucre: (h) => tarihSaatMetni(h.malKabul) },
+  { anahtar: 'kullanim', baslik: 'İlk kullanım', kirilmaz: true, hucre: (h) => tarihSaatMetni(h.kullanim) },
   { anahtar: 'bekleme', baslik: 'Depoda bekleme', hizala: 'sag', hucre: (h) => sureMetni(h.beklemeDk) },
 ];
 
@@ -113,7 +132,7 @@ function Yolculuk({ a }: { a: EmirAkisiCevabi }) {
     <div className="tc-akis-sayfa">
       <div className="tc-akis-bas">
         <h2 className="tc-akis-baslik">{a.emir.emirNo}</h2>
-        <span className="tc-akis-aciklama">{a.emir.adet} adet · {a.emir.durum}{a.emir.teslim !== null ? ` · teslim ${a.emir.teslim}` : ''}</span>
+        <span className="tc-akis-aciklama">{a.emir.adet} adet · {EMIR_DURUMU[a.emir.durum].etiket}{a.emir.teslim !== null ? ` · teslim ${tarihMetni(a.emir.teslim)}` : ''}</span>
         <Link to="/akis">Emir listesi</Link>
       </div>
       <div className="tc-akis-olculer">
@@ -123,19 +142,26 @@ function Yolculuk({ a }: { a: EmirAkisiCevabi }) {
         <SayiKarti baslik="Sevk bekleme" simge="clock" metin={olcuMetni(o.sevkBekleme)} />
         <SayiKarti baslik="Akış verimi" simge="gauge"
           metin={o.akisVerimi === null ? 'Veri yok' : `%${(o.akisVerimi * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`}
-          altMetin={`İşleme toplamı ${sureMetni(o.islemeToplamDk)}`} />
+          altMetin={o.vardiyaSaatiyle === true
+            ? `Vardiyadaki işleme ${sureMetni(o.islemeVardiyaDk ?? null)}`
+            : `İşleme toplamı ${sureMetni(o.islemeToplamDk)}`} />
       </div>
       <Kart baslik="Yolculuk">
         <dl className="tc-akis-damgalar">
-          <div><dt>Mal kabul</dt><dd>{zamanMetni(d.malKabul)}</dd></div>
-          <div><dt>Üretim başladı</dt><dd>{zamanMetni(d.uretimBasladi)}</dd></div>
-          <div><dt>Üretim bitti</dt><dd>{zamanMetni(d.uretimBitti)}</dd></div>
-          <div><dt>Sevke hazır</dt><dd>{zamanMetni(d.sevkeHazir)}</dd></div>
-          <div><dt>Sevk</dt><dd>{zamanMetni(d.sevk)}</dd></div>
+          <div><dt>Mal kabul</dt><dd>{tarihSaatMetni(d.malKabul)}</dd></div>
+          <div><dt>Üretim başladı</dt><dd>{tarihSaatMetni(d.uretimBasladi)}</dd></div>
+          <div><dt>Üretim bitti</dt><dd>{tarihSaatMetni(d.uretimBitti)}</dd></div>
+          <div><dt>Sevke hazır</dt><dd>{tarihSaatMetni(d.sevkeHazir)}</dd></div>
+          <div><dt>Sevk</dt><dd>{tarihSaatMetni(d.sevk)}</dd></div>
         </dl>
         <Seritler seritler={a.seritler} />
         <Lejant />
-        <p className="tc-akis-not">Süreler takvim saatiyle (gece ve hafta sonu dahil). Soluk bölüm sürüyor demektir.</p>
+        <p className="tc-akis-not">
+          {o.vardiyaSaatiyle === true
+            ? 'Bekleme ve akış süreleri vardiya saatiyle; işleme, çevrim ve uçtan uca takvim saatiyle. Şerit takvim saatiyle çizilir.'
+            : 'Vardiya takvimi tanımlı değil: süreler takvim saatiyle (gece ve hafta sonu dahil).'}
+          {' '}Soluk bölüm sürüyor demektir.
+        </p>
       </Kart>
       <Kart baslik="Adımlar">
         <Tablo etiket="Adım süreleri" sutunlar={ADIM_SUTUNLARI} satirlar={a.adimlar} satirAnahtari={(x) => x.isEmriId} bosMesaj="Emirde adım yok" />

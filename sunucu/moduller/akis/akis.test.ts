@@ -144,9 +144,31 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'GET', '/akis/emirler')).durum, 403);
     const liste = await istek('yonetici', 'GET', '/akis/emirler');
     assert.equal(liste.durum, 200, JSON.stringify(liste.govde));
-    assert.ok(emirListesiCevabi.parse(liste.govde).emirler.some((e) => e.id === id));
+    assert.ok(emirListesiCevabi.parse(liste.govde).satirlar.some((e) => e.id === id));
     assert.equal((await istek('planlama_proje', 'GET', `/akis/emirler/${id}`)).durum, 200, 'rol göçü sayfa.akis verir');
     assert.equal((await istek('yonetici', 'GET', '/akis/emirler/2147483647')).durum, 404);
+  });
+
+  test('AKS-U4 (AKS-5 a): liste sunucuda sayfalanır, durum kodu sözleşmeden geçer; arama Türkçe harfi düz harfle eşler', async () => {
+    const a = await fasonluEmir();
+    const b = await fasonluEmir();
+    const ilk = await istek('yonetici', 'GET', '/akis/emirler?sayfa=1&sayfaBoyu=1');
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    const s1 = emirListesiCevabi.parse(ilk.govde);
+    assert.equal(s1.satirlar.length, 1);
+    assert.equal(s1.sayfaBoyu, 1);
+    assert.ok(s1.toplam !== null && s1.toplam >= 2);
+    assert.equal(s1.satirlar[0]?.id, b.id, 'en yeni emir önce');
+    const s2 = emirListesiCevabi.parse((await istek('yonetici', 'GET', '/akis/emirler?sayfa=2&sayfaBoyu=1')).govde);
+    assert.equal(s2.satirlar[0]?.id, a.id);
+    assert.equal(s2.satirlar[0]?.durum, 'planli');
+    const no = s1.satirlar[0]!.emirNo;
+    const bul = emirListesiCevabi.parse((await istek('yonetici', 'GET', `/akis/emirler?ara=${encodeURIComponent(no.toLocaleLowerCase('tr-TR'))}`)).govde);
+    assert.deepEqual(bul.satirlar.map((e) => e.id), [b.id]);
+    const turkce = emirListesiCevabi.parse((await istek('yonetici', 'GET', `/akis/emirler?ara=${encodeURIComponent('MAMÜL')}`)).govde);
+    assert.ok(turkce.satirlar.some((e) => e.id === a.id), '"MAMÜL" "Deneme mamul"ü bulur');
+    assert.equal((await istek('yonetici', 'GET', `/akis/emirler?ara=${'x'.repeat(101)}`)).durum, 400);
+    assert.equal((await istek('operator', 'GET', '/akis/emirler?sayfa=2')).durum, 403);
   });
 
   test('AKS-U2: emir yolculuğu adımların, fasonun ve sevke hazırın gerçek kayıtlarından kurulur', async () => {
@@ -263,5 +285,24 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'GET', `/akis/refakat-kartlari?idler=${String(kart.id)}`)).durum, 403);
     assert.equal((await istek('yonetici', 'GET', '/akis/refakat-kartlari?idler=1,x')).durum, 400);
     assert.equal((await istek('yonetici', 'GET', `/akis/refakat-kartlari?idler=${Array.from({ length: 51 }, (_, i) => i + 1).join(',')}`)).durum, 400, 'en çok 50 kart');
+  });
+  // Son test: eklenen vardiya bütün iş merkezlerine yazılır, önceki testlerin takvimsiz ölçüsünü etkilemesin.
+  test('AKS-U5 (1852 a): takvim yoksa ölçüler takvim saatiyle; istasyonun vardiyası tanımlanınca akış vardiya saatiyle ölçülür', async () => {
+    const { id, isEmriIdleri } = await fasonluEmir();
+    assert.equal((await terminal(id, 'baslat')).durum, 200);
+    // Başlama iki gün geriye alınır: akış gece yarısı dakikalarını içerir.
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET baslama = baslama - interval '2 days' WHERE id = $1", [isEmriIdleri[0]]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET baslama = baslama - interval '2 days' WHERE id = $1", [id]);
+    const oku = async () => emirAkisiCevabi.parse((await istek('yonetici', 'GET', `/akis/emirler/${id}`)).govde);
+    const takvimle = await oku();
+    assert.equal(takvimle.olculer.vardiyaSaatiyle, false, 'vardiya tanımlı değil');
+    const vardiya = (await o().sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('AK gunduz', '00:00', '23:59') RETURNING id"))!.id;
+    await o().sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g', [vardiya]);
+    const vardiyayla = await oku();
+    assert.equal(vardiyayla.olculer.vardiyaSaatiyle, true);
+    const takvimDk = takvimle.olculer.uretimAkis.dk!;
+    const vardiyaDk = vardiyayla.olculer.uretimAkis.dk!;
+    assert.ok(takvimDk >= 2 * 24 * 60, String(takvimDk));
+    assert.ok(vardiyaDk < takvimDk && vardiyaDk > takvimDk - 5, `gece yarısı dakikaları düşer: ${String(vardiyaDk)} / ${String(takvimDk)}`);
   });
 });

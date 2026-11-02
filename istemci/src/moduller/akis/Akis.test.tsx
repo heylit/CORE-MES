@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EmirAkisiCevabi, EmirListesiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import { AkisEmirleri, EmirYolculugu } from './Akis.tsx';
-import { aramaMetni, sureMetni } from './gorunum.ts';
+import { sureMetni } from './gorunum.ts';
 
 const LISTE: EmirListesiCevabi = {
-  emirler: [
+  toplam: 2, sayfa: 1, sayfaBoyu: 50,
+  satirlar: [
     { id: 5, emirNo: 'UE-000005', urun: 'DNM-1 Deneme mamul', adet: 10, durum: 'basladi', teslim: null },
     { id: 6, emirNo: 'UE-000006', urun: 'DNM-2 Deneme flanş', adet: 4, durum: 'bitti', teslim: '2026-01-20' },
   ],
@@ -24,6 +25,8 @@ const AKIS: EmirAkisiCevabi = {
     sevkBekleme: { dk: null, acik: false },
     islemeToplamDk: 300,
     akisVerimi: 0.208,
+    vardiyaSaatiyle: true,
+    islemeVardiyaDk: 240,
   },
   seritler: [
     { anahtar: 'hammadde', tur: 'hammadde', baslik: 'Hammadde', altBaslik: null,
@@ -47,6 +50,10 @@ function sunucuKur() {
     const yol = adres.replace('/api', '');
     istekler.push(yol);
     if (yol === '/akis/emirler') return json(200, LISTE);
+    if (yol.startsWith('/akis/emirler?')) {
+      const ara = new URLSearchParams(yol.split('?')[1]).get('ara') ?? '';
+      return json(200, { ...LISTE, toplam: 1, satirlar: LISTE.satirlar.filter((e) => ara === '' || e.urun.includes('flanş')) });
+    }
     if (yol === '/akis/emirler/5') return json(200, AKIS);
     if (yol === '/akis/emirler/8') return json(500, { kod: 'SUNUCU', mesaj: 'Sunucu hatası.' });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Üretim emri bulunamadı.' });
@@ -71,24 +78,18 @@ function ac(adres: string) {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Akış Süresi', () => {
-  it('emir listesi gelir ve aramayla süzülür', async () => {
-    sunucuKur();
+  it('emir listesi gelir; durum adıyla ve teslim tarihi gün.ay.yıl yazılır; arama sunucuya gider, liste sunucunun cevabıdır', async () => {
+    const istekler = sunucuKur();
     ac('/akis');
     expect(await screen.findByText('UE-000005')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Emir ya da ürün ara'), { target: { value: 'flanş' } });
-    expect(screen.queryByText('UE-000005')).toBeNull();
+    expect(screen.getByText('Başladı')).toBeTruthy();
+    expect(screen.getByText('Üretimi bitti')).toBeTruthy();
+    expect(screen.getByText('20.01.2026')).toBeTruthy();
+    expect(screen.queryByText('basladi')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Emir ya da ürün ara'), { target: { value: 'FLANS' } });
+    await waitFor(() => expect(screen.queryByText('UE-000005')).toBeNull(), { timeout: 2000 });
     expect(screen.getByText('UE-000006')).toBeTruthy();
-  });
-
-  it('arama Türkçe harfi düz harfle eşler: "FLANS" ve "flans" "flanş"ı bulur', async () => {
-    sunucuKur();
-    ac('/akis');
-    expect(await screen.findByText('UE-000005')).toBeTruthy();
-    for (const aranan of ['FLANS', 'flans', 'FLANŞ']) {
-      fireEvent.change(screen.getByLabelText('Emir ya da ürün ara'), { target: { value: aranan } });
-      expect(screen.queryByText('UE-000005')).toBeNull();
-      expect(screen.getByText('UE-000006')).toBeTruthy();
-    }
+    expect(istekler.some((y) => y.startsWith('/akis/emirler?') && new URLSearchParams(y.split('?')[1]).get('ara') === 'FLANS')).toBe(true);
   });
 
   it('emir yolculuğu: ölçüler, şerit, adım ve statü tabloları; ölçülemeyen değer "Veri yok" kalır', async () => {
@@ -97,7 +98,12 @@ describe('Akış Süresi', () => {
     expect(await screen.findByRole('heading', { name: 'UE-000005' })).toBeTruthy();
     expect(screen.getAllByText('Veri yok').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('1 g 0 sa (sürüyor)')).toBeTruthy();
+    // Damga tesis saatiyle ve yılıyla, durum adıyla (AKS-5 a).
+    expect(screen.getAllByText('06.01.2026 11:00').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('10 adet · Başladı')).toBeTruthy();
     expect(screen.getByText('%20,8')).toBeTruthy();
+    expect(screen.getByText('Vardiyadaki işleme 4 sa 0 dk')).toBeTruthy();
+    expect(screen.getByText(/Bekleme ve akış süreleri vardiya saatiyle/)).toBeTruthy();
     const serit = screen.getByRole('group', { name: 'Emir yolculuğu şeridi' });
     expect(within(serit).getByText('OP10')).toBeTruthy();
     expect(within(serit).getByRole('img', { name: 'OP10: İşleme' })).toBeTruthy();
@@ -128,13 +134,6 @@ describe('Akış Süresi', () => {
     ac('/akis/abc');
     expect(await screen.findByText('Üretim emri bulunamadı.')).toBeTruthy();
     expect(istekler.some((y) => y.startsWith('/akis/emirler/'))).toBe(false);
-  });
-});
-
-describe('aramaMetni', () => {
-  it('Türkçe küçük harfe çevirir, ç ğ ı ö ş ü düz harfe iner', () => {
-    expect(aramaMetni('Burç IŞIK İğne Ölçü')).toBe('burc isik igne olcu');
-    expect(aramaMetni('burc')).toBe('burc');
   });
 });
 
