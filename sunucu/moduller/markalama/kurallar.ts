@@ -31,6 +31,16 @@ export function alanHatasi(alanlar: readonly AlanGovdesi[]): string | null {
   return null;
 }
 
+// MRK-12: işaretlenen yerin yüzey yönü sıfır olamaz; yönü olmayan marka 3B sahnede yere oturmaz.
+export function normalHatasi(alanlar: readonly AlanGovdesi[]): { ileti: string; alan: string } | null {
+  for (const [i, a] of alanlar.entries()) {
+    if (a.yer !== null && Math.hypot(...a.yer.normal) < 1e-3) {
+      return { ileti: `${i + 1}. marka: yüzey yönü (normal) sıfır olamaz.`, alan: `alanlar.${i}.yer.normal` };
+    }
+  }
+  return null;
+}
+
 export const seriAlaniVarMi = (alanlar: readonly { icerik: string }[]): boolean => alanlar.some((a) => a.icerik === 'seri');
 
 export interface SeriBaglami {

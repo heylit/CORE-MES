@@ -9,11 +9,13 @@ import type {
   MarkalamaTanimi, OnizlemeCevabi, TanimEkleGovdesi, TanimEmirleriCevabi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { hurdaNedeniGetir } from '../durus-nedenleri/disari.ts';
+import { istasyonGetir } from '../istasyonlar/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, sablonHatasi, seriAlaniVarMi, seriNoUret,
+  alanHatasi, durumGecisi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -53,16 +55,27 @@ function tanimYazimi(g: TanimKaydetGovdesi | TanimEkleGovdesi): s.TanimYazimi {
   if (sablon !== null) throw dogrulama(sablon, 'seriSablonu');
   const alan = alanHatasi(g.alanlar);
   if (alan !== null) throw dogrulama(alan, 'alanlar');
+  const normal = normalHatasi(g.alanlar);
+  if (normal !== null) throw dogrulama(normal.ileti, normal.alan);
   return {
     seriSablonu: g.seriSablonu, sayacKapsami: g.sayacKapsami, baslangicSirasi: g.baslangicSirasi, dogrulama: g.dogrulama,
     modelBelgeId: g.model?.belgeId ?? null, modelRevizyon: g.model?.revizyon ?? null,
   };
 }
 
+// MRK-12: 3B model, tanımın malzemesine bağlı çizim belgesidir (yabancı anahtar Aşama 2'de). Revizyon harfi denetlenmez:
+// merkez yalnız yayındaki revizyonu dışa veriyor, ekran taslak revizyonu da seçebiliyor.
+async function modelDenetle(db: Db, malzemeId: number, model: TanimEkleGovdesi['model']): Promise<void> {
+  if (model === null) return;
+  const bagli = await kaydaBagliBelgeler(db, 'malzemeler', malzemeId);
+  if (!bagli.some((b) => b.id === model.belgeId)) throw dogrulama('3B model bu malzemeye bağlı bir çizim belgesi değil.', 'model');
+}
+
 export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
+  await modelDenetle(db, g.malzemeId, g.model);
   const id = await kisitKorumali(
     { markalama_tanimi_adim_tekil: 'Bu rota adımının markalama tanımı zaten var.' },
     () => s.tanimEkle(db, g.malzemeId, g.opNo, yazim, kullanici.id),
@@ -73,6 +86,11 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
 
 export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: TanimKaydetGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
+  const eski = await varOlanTanim(db, id);
+  // Değişmeyen model yeniden denetlenmez: belge bağı sonradan kalkmış tanımın başka alanı kaydedilebilsin.
+  if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
+    await modelDenetle(db, eski.malzemeId, g.model);
+  }
   await surumluGuncelle({
     guncelle: () => s.tanimGuncelle(db, id, { ...yazim, surum: g.surum }, kullanici.id),
     varMi: () => s.tanimVarMi(db, id),
@@ -118,6 +136,12 @@ export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): 
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
+  // MRK-12: istasyon varsa kayıtlı ve aktif olmalı (yabancı anahtar Aşama 2'de).
+  if (g.istasyonId !== null) {
+    const istasyon = await istasyonGetir(db, g.istasyonId);
+    if (istasyon === null) throw dogrulama('İstasyon bulunamadı.', 'istasyonId');
+    if (!istasyon.aktif) throw dogrulama('İstasyon pasif; seri verilmez.', 'istasyonId');
+  }
   const gun = tesisGunu(Date.now());
   const sira = await s.sayaciArtir(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, g.uretimEmriId, gun), t.baslangicSirasi);
   const seriNo = seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, sira);

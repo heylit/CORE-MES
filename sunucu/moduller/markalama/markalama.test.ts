@@ -74,6 +74,14 @@ describe('markalama (gerçek PostgreSQL)', () => {
     return (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`MKK${sayac}`, 'Lazer', ist?.id]))!.id;
   }
 
+  async function malzemeBelgesi(malzemeNo: number): Promise<number> {
+    const b = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ('Deneme model', 'teknik-resim', $1) RETURNING id", [yoneticiId]))!.id;
+    await o().sahip.sorgu(
+      "INSERT INTO belge_merkezi_bag (belge_id, hedef_modul, hedef_id, ekleyen_id) VALUES ($1, 'malzemeler', $2, $3)", [b, malzemeNo, yoneticiId]);
+    return b;
+  }
+
   async function emirAc(malzemeNo: number): Promise<number> {
     const revizyonId = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
@@ -141,9 +149,10 @@ describe('markalama (gerçek PostgreSQL)', () => {
       malzemeId: 2147483647, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani],
     })).durum, 400, 'olmayan malzeme');
     const yer = { merkez: [-62, -31.5, 18], normal: [0, 0, 1], enMm: 42, boyMm: 8, aciDerece: 17 };
-    const t = await tanimAc(m, { yer, yuzey: 'Flanş üst yüzü' }, { model: { belgeId: 5, revizyon: 'C' } });
+    const belge = await malzemeBelgesi(m);
+    const t = await tanimAc(m, { yer, yuzey: 'Flanş üst yüzü' }, { model: { belgeId: belge, revizyon: 'C' } });
     assert.deepEqual(t.alanlar[0]?.yer, yer);
-    assert.deepEqual(t.model, { belgeId: 5, revizyon: 'C' });
+    assert.deepEqual(t.model, { belgeId: belge, revizyon: 'C' });
     assert.ok(t.malzemeKodu?.startsWith('MK-DNM-'), 'kod malzemeden okunur');
     const ikinci = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani] });
     assert.equal(ikinci.durum, 409);
@@ -157,6 +166,38 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.deepEqual(yeni.alanlar.map((a) => a.ad), ['Seri no', 'Revizyon']);
     assert.equal(yeni.alanlar[0]?.yer, null, 'kaydette verilmeyen yer boşalır');
     assert.equal((await kaydet(t.surum)).durum, 409, 'eski sürüm');
+  });
+
+  test('MRK-U8: model malzemeye bağlı belge, istasyon kayıtlı ve aktif olmalı; yüzey yönü sıfır olamaz', async () => {
+    const m = await malzemeAc();
+    const ekle = (govde: Record<string, unknown>) => istek<{ alan?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani], ...govde,
+    });
+    const baskaBelge = await malzemeBelgesi(await malzemeAc());
+    const bagsiz = await ekle({ model: { belgeId: baskaBelge, revizyon: 'A' } });
+    assert.equal(bagsiz.durum, 400, 'başka malzemenin belgesi');
+    assert.equal(bagsiz.govde.alan, 'model');
+    const sifir = await ekle({ alanlar: [{ ...seriAlani, yer: { merkez: [0, 0, 0], normal: [0, 0, 0], enMm: 5, boyMm: 2, aciDerece: 0 } }] });
+    assert.equal(sifir.durum, 400);
+    assert.equal(sifir.govde.alan, 'alanlar.0.yer.normal');
+    const t = tanimSemasi.parse((await ekle({})).govde);
+    const emir = await emirAc(m);
+    const makine = await o().sahip.tek<{ istasyonId: number }>('SELECT istasyon_id AS "istasyonId" FROM makine ORDER BY id DESC LIMIT 1');
+    const istasyonlu = (istasyonId: number) => istek<MarkalamaBirimi>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, istasyonId, sonuc: 'iyi' });
+    assert.equal((await istasyonlu(2147483647)).durum, 400, 'olmayan istasyon');
+    const iyi = await istasyonlu(makine!.istasyonId);
+    assert.equal(iyi.durum, 200, JSON.stringify(iyi.govde));
+    assert.equal(iyi.govde.istasyonId, makine!.istasyonId);
+    await o().sahip.sorgu('UPDATE istasyon SET aktif = false WHERE id = $1', [makine!.istasyonId]);
+    assert.equal((await istasyonlu(makine!.istasyonId)).durum, 400, 'pasif istasyon');
+    // Bağı sonradan kalkan modelli tanımın başka alanı kaydedilebilir.
+    const belge = await malzemeBelgesi(m);
+    const modelli = tanimSemasi.parse((await ekle({ opNo: 41, model: { belgeId: belge, revizyon: 'A' } })).govde);
+    await o().sahip.sorgu("DELETE FROM belge_merkezi_bag WHERE belge_id = $1", [belge]);
+    const k = await istek('yonetici', 'POST', `/markalama/tanimlar/${modelli.id}/kaydet`, {
+      seriSablonu: '{PARCA}-{SEQ:6}', alanlar: [seriAlani], model: modelli.model, surum: modelli.surum,
+    });
+    assert.equal(k.durum, 200, JSON.stringify(k.govde));
   });
 
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {

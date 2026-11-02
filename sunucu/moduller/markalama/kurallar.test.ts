@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, sablonHatasi, seriAlaniVarMi, seriNoUret,
+  alanHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret,
 } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
@@ -60,5 +60,11 @@ describe('markalama kuralları', () => {
     assert.equal(hurdaNedeniHatasi('red', null), null);
     assert.match(hurdaNedeniHatasi('hurda', null) ?? '', /neden/);
     assert.match(hurdaNedeniHatasi('red', 3) ?? '', /yalnız hurda/);
+  });
+
+  test('MRK-12: işaretlenen yerin yüzey yönü sıfır olamaz; yeri olmayan marka denetlenmez', () => {
+    const yer = (normal: [number, number, number]) => ({ merkez: [0, 0, 0] as [number, number, number], normal, enMm: 5, boyMm: 2, aciDerece: 0 });
+    assert.equal(normalHatasi([alan(), alan({ yer: yer([0, 0, 1]) })]), null);
+    assert.deepEqual(normalHatasi([alan(), alan({ yer: yer([0, 0, 0]) })])?.alan, 'alanlar.1.yer.normal');
   });
 });
