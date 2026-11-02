@@ -7,6 +7,7 @@ import {
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
+import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ---------------- */
 
@@ -423,4 +424,13 @@ test('1247 d katalogGkkAyari: gelmeyen ayar korunur, gelen yazılır; demirbaş 
   assert.deepEqual(katalogGkkAyari('demirbas', true), { hata: GKK_TURU_ILETISI });
   assert.deepEqual(katalogGkkAyari('hizmet', false), { yaz: true, deger: null });
   assert.deepEqual(katalogGkkAyari('hizmet', undefined), { yaz: true, deger: null });
+});
+
+test('MLZ-5 a: bildirim metni kartın kırpılmış adını alır; geri çekme ret damgasındaki `geri` ile ayrılır', () => {
+  assert.equal(katalogKartAdi({ com: { ad: '  Mil  ' } }), 'Mil');
+  assert.equal(katalogKartAdi({ com: { ad: '   ' } }), null);
+  assert.equal(katalogKartAdi({ com: null }), null);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, geri: true } } }), true);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, neden: 'eksik' } } }), false);
+  assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak' } }), false);
 });

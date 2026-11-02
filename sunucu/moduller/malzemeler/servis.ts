@@ -19,6 +19,7 @@ import type {
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { z } from 'zod';
+import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
@@ -28,6 +29,7 @@ import {
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
+import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -542,17 +544,41 @@ export async function katalogKartiKaydet(
   // Firma kodlu türde önek ayardan gelir, gelen kod okunmaz.
   const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await katalogGenelAyari(db), tur) === null
     && katalogYeniOnek({ durum: kayitli.onayDurumu, aktifOlmus: kayitli.aktifOlmus, kayitliOnek: kayitli.onek, tur, gelenKod: alanlar.stokKodu }) !== null;
+  let r: { stokKodu: string; surum: number };
   if (kayitli && !turDegisti && !onekDegisti) {
-    const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, null));
-    return { id: kimlik, stok_kodu: r.stokKodu, surum: r.surum };
+    r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, null));
+  } else {
+    const { onek, sira, stokKodu } = await yeniStokKodu(db, alanlar.stokKodu, tur);
+    r = kayitli
+      ? await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, { tur: tur, onek, sira, stokKodu }))
+      : await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, onek, sira));
   }
-  const { onek, sira, stokKodu } = await yeniStokKodu(db, alanlar.stokKodu, tur);
-  if (kayitli) {
-    const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, { tur: tur, onek, sira, stokKodu }));
-    return { id: kimlik, stok_kodu: r.stokKodu, surum: r.surum };
-  }
-  const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, onek, sira));
+  await kartOnayiBildir(db, {
+    kimlik, stokKodu: r.stokKodu, ad: katalogKartAdi(kayit), gonderildi, onceki, yeni: yeniDurum,
+    geriCekildi: katalogGeriCekildiMi(kayit), gonderenKisiId: kayitli?.gonderenKisiId ?? null, kisiId: kullanici.id,
+  });
   return { id: kimlik, stok_kodu: r.stokKodu, surum: r.surum };
+}
+
+// MLZ-5 a: onaya gönderilen kart onaycılara, reddedilen kart gönderene bildirilir; yazımla aynı transaction'da (ADR 0006).
+// Yol türün yolunda kalır: kartın derin bağı (`?kart=`) tür yolu denetimine uymaz. Kaynak kimlik kartın kimliğidir; okunmamış bildirim yinelenmez.
+async function kartOnayiBildir(db: Db, g: {
+  kimlik: string; stokKodu: string; ad: string | null; gonderildi: boolean; onceki: string | null; yeni: string;
+  geriCekildi: boolean; gonderenKisiId: number | null; kisiId: number;
+}): Promise<void> {
+  const metin = g.ad ? `${g.stokKodu} · ${g.ad}` : g.stokKodu;
+  if (g.gonderildi) {
+    await bildirimGonder(db, {
+      tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: '/malzemeler', kaynakKimlik: g.kimlik, haric: g.kisiId,
+    });
+  }
+  // Geri çekme (ret damgasında `geri`) ret değildir; gönderen kendi kartını taslağa aldıysa `haric` onu düşürür.
+  if (g.onceki === 'onayda' && g.yeni === 'taslak' && !g.geriCekildi && g.gonderenKisiId !== null) {
+    await bildirimGonder(db, {
+      tur: 'malzemeler.kart-reddedildi', baslik: `Malzeme kartın reddedildi: ${g.stokKodu}`, metin, yol: '/malzemeler', kaynakKimlik: g.kimlik,
+      kisiler: [g.gonderenKisiId], haric: g.kisiId,
+    });
+  }
 }
 
 export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: string): Promise<{ id: string }> {

@@ -232,6 +232,18 @@ export function kartBilesenKimlikleri(kayit: Nesne): string[] {
   return [...new Set([...refler(kayit['bom']), ...ops.flatMap((o) => refler(o['sarf']))])];
 }
 
+// Bildirim metni için kartın adı (`com.ad`); boş ya da yoksa null.
+export function katalogKartAdi(kayit: Nesne): string | null {
+  const com = kayit['com'];
+  return nesneMi(com) && typeof com['ad'] === 'string' && com['ad'].trim() !== '' ? com['ad'].trim() : null;
+}
+
+// MLZ-5 a: ekran onaydan geri çekmeyi ret damgasına `geri: true` ile yazar; geri çekme gönderene ret bildirimi doğurmaz.
+export function katalogGeriCekildiMi(kayit: Nesne): boolean {
+  const onay = kayit['onay'];
+  return nesneMi(onay) && nesneMi(onay['red']) && onay['red']['geri'] === true;
+}
+
 // Kart #688: kartın Operasyonlar adımı (`ops[]`) rotaya taslak olarak aktarılır. Kodu boş satır alınmaz; ad yoksa null (kod uydurulmaz).
 // Numara ekranın kuralıyla verilir (`katalog.html` `opNoDuzenle`, `opSirala`): numarası olmayan satır kendinden öncekinin 10 fazlasını alır,
 // sonra numaraya göre sıralanır (eşitler kart sırasını korur). Rota adım numarası tekil ve artan olmalı: eşit numara bir öncekinin 1 fazlasını alır.
