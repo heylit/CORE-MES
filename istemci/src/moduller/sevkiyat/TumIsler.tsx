@@ -100,6 +100,7 @@ export function TumIsler() {
   const herhangiBirakir = yetki.isYaz || KAYNAKLAR.some((k) => yetki.sahip(KALEM_SAHIBI[k.kod]));
   const cikisYapar = yetki.sahip('stok.cikis');
   const kabulYapar = yetki.sahip('stok.giris');
+  const etiketBasar = yetki.sahip('sayfa.etiket-merkezi');
 
   const suzgec: Suzgec = { gorunum, ara, ozet, aralik, hazirlik, asamalar, kaynaklar, yonler };
   const liste = suz(hepsi, suzgec, bugun);
@@ -148,6 +149,9 @@ export function TumIsler() {
     });
   };
   const kabulEt = (r: TumIsSatiri) => { if (r.kalemId !== null) void yonlendir(kabulYolu(r.kalemId)); };
+  // EM-6 (kart 1842): müşteriye giden ürün ve elle kalemin koli etiketi Etiket Merkezi'nde basılır (koli sayısı orada girilir).
+  const koliEtiketi = (r: TumIsSatiri) => { if (r.kalemId !== null) void yonlendir(`/etiket-merkezi?tur=sevk-koli&id=${String(r.kalemId)}`); };
+  const koliEtiketliMi = (r: TumIsSatiri) => etiketBasar && r.kalemId !== null && r.yon === 'gidis' && (r.kaynak === 'urun' || r.kaynak === 'elle') && r.asama !== 'tamamlandi';
 
   // ---------- hücreler ----------
   function depoHucresi(r: TumIsSatiri, dugmeli: boolean) {
@@ -163,6 +167,9 @@ export function TumIsler() {
         {dugmeli && r.asama === 'depoda' && r.yon === 'gelis' && kabulYapar && (
           <Dugme tur="birincil" simge="download" className="tc-ti-depo-dugme" title={r.kaynak === 'fason-donus' ? 'Sarf, fire ve üretimden giriş' : 'Giriş fişi'}
             onClick={durdur(() => kabulEt(r))}>Kabul et</Dugme>
+        )}
+        {dugmeli && koliEtiketliMi(r) && (
+          <Dugme simge="printer" className="tc-ti-depo-dugme" title="Etiket Merkezi'nde koli etiketi bas" onClick={durdur(() => koliEtiketi(r))}>Koli etiketi</Dugme>
         )}
       </span>
     );
