@@ -284,6 +284,12 @@ export function aracBelgeReddi(a: { muayeneTarihi: string | null; sigortaTarihi:
 }
 
 // IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz; ikisi de bir öncekinden en çok YOL_KM_EN_COK ilerler.
+export const CIKIS_ERKEN = 'Görev günü gelmeden çıkış yazılmaz; görev tarihi değiştiyse talebi yeniden açın.';
+// IDR-26: çıkış görevin gidiş gününden önce yazılmaz (erken yazılan çıkış aracı başka görevde gösterir). Geç çıkış serbesttir.
+export function cikisGunuReddi(gorevTarihi: string, bugun: string): string | null {
+  return bugun < gorevTarihi ? CIKIS_ERKEN : null;
+}
+
 export function cikisKmReddi(aracKm: number | null, km: number): string | null {
   if (aracKm === null) return null;
   return km < aracKm ? CIKIS_KM_GERI : km - aracKm > YOL_KM_EN_COK ? CIKIS_KM_ASIRI : null;

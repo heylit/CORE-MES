@@ -31,7 +31,7 @@
 | IDR-23 görev geçişleri: bekliyor -> onaylandi -> yolda -> tamamlandi; red ve geri çekme araç çıkmadan; durum bütünlüğü kısıtlarla | `kurallar.test.ts` `IDR-23 ...`, `gorev.test.ts` `IDR-23 akış ...`, `IDR-24 ve IDR-23 ret ...`, `tutarlılık kısıtları ...` |
 | IDR-24 talep bugün ile 60 gün sonrası arasında; dönüş gidişten önce değil; en çok 30 gün | `kurallar.test.ts` `IDR-24 ...`, `gorev.test.ts` `IDR-24 ve IDR-23 ret ...` |
 | IDR-25 pasif ya da serviste araç verilmez; muayenesi ya da sigortası görevin son gününden önce biten araç verilmez ve çıkamaz; aynı araç kesişen tarihlerde iki onaylı ya da yoldaki görevde olmaz | `kurallar.test.ts` `IDR-25 ...`, `gorev.test.ts` `IDR-25 ...` |
-| IDR-26 çıkış km aracın km'sinden, dönüş km çıkıştan küçük değil ve en çok 10.000 km ileride; araç km'si ve durumu görevle yazılır | `kurallar.test.ts` `IDR-26 ...`, `gorev.test.ts` `IDR-23 akış ...` |
+| IDR-26 çıkış km aracın km'sinden, dönüş km çıkıştan küçük değil ve en çok 10.000 km ileride; çıkış görev gününden önce yazılmaz; araç km'si ve durumu görevle yazılır | `kurallar.test.ts` `IDR-26 ...`, `gorev.test.ts` `IDR-23 akış ...`, `IDR-26: görev günü ...` |
 | Görev sayaçları: onay bekleyen (oku), kişinin açık talepleri (arac-talebi-ac) | `gorev.test.ts` `IDR-23 akış ...`; `idari-isler.test.ts` `menü sayaçları ...` |
 | IDR-27 masraf tutarı sıfırdan büyük, en çok iki kuruş basamaklı, en çok 9.999.999.999,99; tarih bugünden ileri ve 01.01.2000'den önce değil | `kurallar.test.ts` `IDR-27 ...`, `masraf.test.ts` `IDR-27 akış ...`, `IDR-27 ret ...`, `tablo kısıtı ...` |
 | IDR-28 masraf değişmez; gerekçeyle bir kez iptal edilir, iptal yıl toplamına girmez; iptal alanları birlikte | `masraf.test.ts` `IDR-28 ...`, `tablo kısıtı ...` |

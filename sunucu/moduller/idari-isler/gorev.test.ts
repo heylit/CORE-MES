@@ -176,6 +176,18 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     assert.match(cikis.body, /muayenesi/);
   });
 
+  test('IDR-26: görev günü gelmeden çıkış yazılmaz; kayıt ve araç değişmez', async () => {
+    const g = await ac({ tarih: gunSonra(1), donusTarihi: gunSonra(1) });
+    const arac = await aracEkle({});
+    const onay = await komut(idari.cerez, g, 'onayla', { aracId: arac.id });
+    assert.equal(onay.statusCode, 200, onay.body);
+    const cikis = await komut(idari.cerez, onay.json<AracGoreviCevabi>().gorev, 'cikis', { km: arac.km ?? 0 });
+    assert.equal(cikis.statusCode, 422);
+    assert.match(cikis.body, /Görev günü gelmeden/);
+    const satir = await o().sahip.tek<{ durum: string }>('SELECT durum FROM idari_isler_arac_gorevi WHERE id = $1', [g.id]);
+    assert.equal(satir?.durum, 'onaylandi');
+  });
+
   test('IDR-24 ve IDR-23 ret: geçmiş gün, dönüş önce; yanlış durumdan geçiş 422; red nedeni zorunlu; kayıt yazılmaz', async () => {
     const say = async () => (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM idari_isler_arac_gorevi'))!.n;
     const n = await say();

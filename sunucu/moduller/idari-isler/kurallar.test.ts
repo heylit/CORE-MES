@@ -10,7 +10,7 @@ import {
 } from './kurallar.ts';
 import {
   CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN,
-  aracBelgeReddi, aracVerilemezMi, cikisKmReddi, elleAracDurumReddi, GOREVDE_ELLE, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
+  aracBelgeReddi, aracVerilemezMi, CIKIS_ERKEN, cikisGunuReddi, cikisKmReddi, elleAracDurumReddi, GOREVDE_ELLE, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
 import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
@@ -244,8 +244,11 @@ describe('idari-isler kuralları', () => {
     assert.equal(elleAracDurumReddi('musait', 'serviste', false), null);
   });
 
-  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km', () => {
+  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km; çıkış görev gününden önce olmaz', () => {
     assert.equal(cikisKmReddi(1000, 999), CIKIS_KM_GERI);
+    assert.equal(cikisGunuReddi('2026-10-20', '2026-10-19'), CIKIS_ERKEN);
+    assert.equal(cikisGunuReddi('2026-10-19', '2026-10-19'), null);
+    assert.equal(cikisGunuReddi('2026-10-18', '2026-10-19'), null);
     assert.equal(cikisKmReddi(1000, 1000), null);
     assert.equal(cikisKmReddi(null, 0), null);
     assert.equal(donusKmReddi(1000, 999), DONUS_KM_GERI);

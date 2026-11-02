@@ -22,7 +22,7 @@ import {
   zimmetlemeReddi,
   ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, ATANAMAZ, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
-  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, elleAracDurumReddi,
+  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisGunuReddi, cikisKmReddi, donusKmReddi, elleAracDurumReddi,
   gecisHedefi, gecisReddi,
   geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, yapildiSonucu,
   yemekBildirimReddi, yemekKadrosu, yemekSayisi, type GorevKomutu, type TalepKomutu, type YemekHesabi,
@@ -453,6 +453,8 @@ export async function gorevCikis(db: Db, id: number, surum: number, km: number):
   if (aracVerilemezMi(a.durum)) throw gecersiz(ARAC_VERILEMEZ);
   const belge = aracBelgeReddi({ muayeneTarihi: a.muayene_tarihi, sigortaTarihi: a.sigorta_tarihi }, mevcut.donus_tarihi);
   if (belge !== null) throw gecersiz(belge);
+  const erken = cikisGunuReddi(mevcut.tarih, await sorgular.bugunTarihi(db));
+  if (erken !== null) throw gecersiz(erken);
   const ret = cikisKmReddi(a.km, km);
   if (ret !== null) throw dogrulama(ret, 'km');
   await gorevSurumlu(db, id, () => sorgular.gorevCikisYaz(db, id, surum, km));
