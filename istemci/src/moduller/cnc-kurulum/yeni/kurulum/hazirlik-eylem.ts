@@ -226,7 +226,7 @@ export const MF: readonly TezgahAlani[] = [
   A('seri', 'Seri no', 'text', 0, ''), A('yil', 'Üretim yılı', 'num', 0, 'ör. 2019'), A('loc', 'Konum / hücre', 'text', 0, 'ör. Hol 2 · Hücre B'), A('note', 'Not', 'text', 0, ''),
 ];
 // Prototipin TAPER_OPTS'u (18310); katalogdaki bağlantılara tareti ekler.
-export const TAPER_OPTS = ['HSK-A63', 'HSK-A100', 'BT40', 'SK40', 'BT50', 'Capto C6', 'Taret'];
+export const TAPER_OPTS = ['HSK-A63', 'HSK-A100', 'BT30', 'BT40', 'SK40', 'BT50', 'Capto C6', 'Taret'];
 
 export function prMachMain(m: Tezgah): string {
   const I = prInfo(m), b = I['model'] ? [I['marka'] || I['marka0'], I['model']].filter(Boolean).join(' ') : (m.baseName ?? m.name);
