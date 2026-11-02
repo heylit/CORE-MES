@@ -457,7 +457,8 @@
   .tc-rr1-body, .tc-rr1-body.tc-rr1-adimli { grid-template-columns: minmax(0, 1fr); }
   .tc-rr1-insp {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-katman); max-height: var(--ekran-boy-62); border-radius: var(--yari-3) var(--yari-3) 0 0;
-    box-shadow: var(--shadow);
+    /* Şemanın üstüne binen panel saydam olursa altındaki kutular metnin içinden görünür. */
+    background: var(--panel-solid); box-shadow: var(--shadow);
   }
   .tc-rr1-insp.tc-rr1-kapali { display: none; }
 }

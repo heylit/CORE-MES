@@ -8,6 +8,8 @@ import {
 import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz, dalliRota, dalYaz } from './kurallar.ts';
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
+import { turKisa, yerelTur } from './kurallar.ts';
+import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
 
 // Uydurma kartlar ve operasyonlar (gerçek veri değil).
@@ -216,6 +218,34 @@ describe('ağaç, fark ve seçici', () => {
     expect(f).toContain('Silinen adım: OP 20 op21');
     expect(f.some((x) => x.includes('hazırlık'))).toBe(true);
     expect(rotaFarki(A, A, ad)).toEqual([]);
+  });
+
+  it('fark adımı sıra numarasıyla değil OP numarasıyla anar (RR-6)', () => {
+    const ad = { op: (id: string) => `op${id}`, istasyon: (id: string | null) => id ?? 'yok', malzeme: (id: string) => `m${id}` };
+    // Şema OP 40 gösterir; sıra numarası 10 olsa da fark aynı numarayı yazmalı.
+    const A = [adim('a', 10, { opNo: 40, proc: 4 })];
+    const B = [adim('a', 10, { opNo: 40, proc: 5 })];
+    const f = rotaFarki(A, B, ad);
+    expect(f.length).toBe(1);
+    expect(f[0]).toMatch(/^OP 40 op21: /);
+  });
+
+  it('sunucunun katalog türü (yarimamul, hammadde) kısa ada ve yerel türe çevrilir; bilinmeyen tür olduğu gibi kalır (RR-6)', () => {
+    expect(turKisa('yarimamul')).toBe('YM');
+    expect(turKisa('hammadde')).toBe('HM');
+    expect(turKisa('mamul')).toBe('MM');
+    expect(turKisa('yari')).toBe('YM');
+    expect(yerelTur('yarimamul')).toBe('yari');
+    expect(turKisa('sarf')).toBe('sarf');
+  });
+
+  it('sayı alanı eksi, sayı olmayan ve üst sınırı aşan girdiyi nedeniyle reddeder; boş ve geçerli girdi geçer (RR-3)', () => {
+    expect(sayiAlaniHatasi('-3')).toBe('Eksi olamaz.');
+    expect(sayiAlaniHatasi('abc')).toBe('Sayı girin.');
+    expect(sayiAlaniHatasi('99999999', SURE_EN_COK)).toBe('En çok 99.999 olabilir.');
+    expect(sayiAlaniHatasi('')).toBeNull();
+    expect(sayiAlaniHatasi('5,5', SURE_EN_COK)).toBeNull();
+    expect(sayiAlaniHatasi('0')).toBeNull();
   });
 
   it('seçici koda ve ada göre süzer, koduyla başlayan önce gelir, girdi olamayanı ve kendini atlar', () => {
