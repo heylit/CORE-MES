@@ -1103,7 +1103,11 @@ export async function birimSetleriniGetir(db: Db, kopru: KopruIstemcisi | null):
   };
 }
 
+// Harfi farklı ikinci kod reddedilir: "ADET" ve "adet" iki ayrı set görünür, karşılık seçerken karışır (LOG-4).
+// Tekil dizin yok (dolu tablo); eşzamanlı iki farklı harfli ekleme ikisini de yazabilir, tek yönetici işi olduğu için kabul.
 export async function birimSetiEkle(db: Db, kisiId: number, kod: string, ad: string | null): Promise<{ kod: string }> {
+  const farkli = await s.birimSetiHarfFarkliKod(db, kod);
+  if (farkli) throw gecersiz(`Birim seti ${farkli.kod} zaten var; kod yalnız büyük/küçük harfle ayrılamaz.`);
   await s.birimSetiElleYaz(db, kod, ad, kisiId);
   return { kod };
 }

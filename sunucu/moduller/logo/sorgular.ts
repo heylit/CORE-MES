@@ -98,6 +98,11 @@ export async function birimSetiElleYaz(db: Db, kod: string, ad: string | null, k
   );
 }
 
+// Aynı kodun yalnız büyük/küçük harfi farklı başka bir kaydı (elle ya da köprü listesinden); yoksa null.
+export function birimSetiHarfFarkliKod(db: Db, kod: string): Promise<{ kod: string } | null> {
+  return db.tek<{ kod: string }>('SELECT kod FROM logo_birim_seti WHERE lower(kod) = lower($1) AND kod <> $1 ORDER BY kod LIMIT 1', [kod]);
+}
+
 export function birimSetiKilitle(db: Db, kod: string): Promise<BirimSetiSatiri | null> {
   return db.tek<BirimSetiSatiri>(
     'SELECT kod, ad, elle, kopru_listesinde AS "kopruListesinde" FROM logo_birim_seti WHERE kod = $1 FOR UPDATE',
