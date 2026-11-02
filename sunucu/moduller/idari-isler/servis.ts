@@ -590,11 +590,19 @@ export async function demirbasEkle(db: Db, kullanici: Kullanici, g: DemirbasEkle
 export async function demirbasGuncelle(db: Db, id: number, g: DemirbasGuncelleVerisi): Promise<Demirbas> {
   const mevcut = await sorgular.demirbasKilitle(db, id);
   if (mevcut === null) throw bulunamadi(DEMIRBAS_YOK);
-  if (degerReddi(g.deger) !== null) throw dogrulama(DEGER_GECERSIZ, 'deger');
+  const yeni = {
+    tur: g.tur ?? mevcut.tur,
+    markaModel: g.markaModel === undefined ? mevcut.marka_model : g.markaModel,
+    seriNo: g.seriNo === undefined ? mevcut.seri_no : g.seriNo,
+    deger: g.deger === undefined ? mevcut.deger : g.deger,
+    aciklama: g.aciklama === undefined ? mevcut.aciklama : g.aciklama,
+    durum: g.durum ?? mevcut.durum,
+  };
+  if (g.deger !== undefined && degerReddi(g.deger) !== null) throw dogrulama(DEGER_GECERSIZ, 'deger');
   const ret = g.durum === null ? null : elleDurumReddi(mevcut.durum, g.durum);
   if (ret !== null) throw gecersiz(ret);
   await surumluGuncelle({
-    guncelle: () => sorgular.demirbasGuncelle(db, id, g.surum, { ...g, durum: g.durum ?? mevcut.durum }),
+    guncelle: () => sorgular.demirbasGuncelle(db, id, g.surum, yeni),
     varMi: () => sorgular.demirbasVarMi(db, id),
     bulunamadiIletisi: DEMIRBAS_YOK,
   });

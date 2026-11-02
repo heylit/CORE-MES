@@ -675,8 +675,10 @@ export function demirbasGetir(db: Db, id: number): Promise<DemirbasSatiri | null
   return db.tek<DemirbasSatiri>(`${DEMIRBAS_SECIM} WHERE id = $1`, [id]);
 }
 
-export function demirbasKilitle(db: Db, id: number): Promise<{ durum: DemirbasDurumu } | null> {
-  return db.tek<{ durum: DemirbasDurumu }>('SELECT durum FROM idari_isler_demirbas WHERE id = $1 FOR UPDATE', [id]);
+export function demirbasKilitle(db: Db, id: number): Promise<Omit<DemirbasSatiri, 'id' | 'surum'> | null> {
+  return db.tek<Omit<DemirbasSatiri, 'id' | 'surum'>>(
+    'SELECT tur, marka_model, seri_no, deger::text AS deger, durum, aciklama FROM idari_isler_demirbas WHERE id = $1 FOR UPDATE', [id],
+  );
 }
 
 export async function demirbasVarMi(db: Db, id: number): Promise<boolean> {

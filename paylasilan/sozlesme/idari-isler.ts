@@ -339,8 +339,23 @@ const demirbasAlanlari = {
   aciklama: istege(NOT_EN_UZUN),
 };
 export const demirbasEkleGovdesi = z.object(demirbasAlanlari);
-// Durum yoksa değişmez; zimmetli demirbaşın öteki alanları durumsuz düzenlenir.
-export const demirbasGuncelleGovdesi = z.object({ ...beklenenSurum, ...demirbasAlanlari, durum: elleDurumSemasi.nullish().transform((d) => d ?? null) });
+// Kısmi güncelleme: gönderilmeyen alan değişmez, null ya da boş metin alanı siler. Durum yoksa değişmez; zimmetli demirbaşın öteki
+// alanları durumsuz düzenlenir.
+const korunur = (azami: number) =>
+  z.string().max(azami, `En çok ${azami} karakter.`).nullable().optional().transform((m) => {
+    if (m === undefined) return undefined;
+    const kirpik = m?.trim();
+    return kirpik ? kirpik : null;
+  });
+export const demirbasGuncelleGovdesi = z.object({
+  ...beklenenSurum,
+  tur: demirbasTuruSemasi.optional(),
+  markaModel: korunur(MARKA_MODEL_EN_UZUN),
+  seriNo: korunur(SERI_NO_EN_UZUN),
+  deger: ondalikMetinSemasi.nullable().optional(),
+  aciklama: korunur(NOT_EN_UZUN),
+  durum: elleDurumSemasi.nullish().transform((d) => d ?? null),
+});
 // Zimmetleme demirbaşın sürümüyle; iade ve kişiye bağlama zimmetin sürümüyle gider.
 export const zimmetleGovdesi = z.object({ ...beklenenSurum, kisiId: kimlik, verilis: tarihSemasi, aciklama: istege(NOT_EN_UZUN) });
 export const iadeGovdesi = z.object({ ...beklenenSurum, iade: tarihSemasi, iadeDurumu: iadeDurumuSemasi, iadeNotu: istege(NOT_EN_UZUN) });

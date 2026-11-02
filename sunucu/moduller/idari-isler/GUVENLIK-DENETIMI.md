@@ -73,7 +73,7 @@ Demirbaş ve zimmet (7. parça):
 | `GET /idari-isler/zimmetlerim` | `idari-isler.talep-ac` | yalnız oturumdaki kişinin açık zimmetleri (sorguda `kisi_id`); değer ve durum dönmez | `zimmetlerim` | `zimmetlerim` (okuyan 403) |
 | `GET /idari-isler/kisi-secenekleri` | `talep-yonet` ya da `zimmet-yaz` | yalnız etkin kişiler, ad | `yetki` | `yetki` (okuyan 403) |
 | `POST /idari-isler/demirbaslar/ekle` | `idari-isler.zimmet-yaz` | tekrar korumalı; IDR-29; açan sunucudan | `IDR-30 ve IDR-31 akış` | `IDR-29, IDR-30 ve IDR-31 ret` (400), `yetki` (okuyan 403) |
-| `POST .../demirbaslar/:id/guncelle` | `idari-isler.zimmet-yaz` | kilit, IDR-29, IDR-30, sürüm | `IDR-30: zimmetli ...` | `IDR-30: zimmetli ...` (422) |
+| `POST .../demirbaslar/:id/guncelle` | `idari-isler.zimmet-yaz` | kilit, IDR-29, IDR-30, sürüm; kısmi (gönderilmeyen alan korunur, null siler) | `IDR-30: zimmetli ...` | `IDR-30: zimmetli ...` (422) |
 | `POST .../demirbaslar/:id/zimmetle` | `idari-isler.zimmet-yaz` | kilit, IDR-30, etkin kişi, sürüm; veren sunucudan | `IDR-30 ve IDR-31 akış` | `IDR-29, IDR-30 ve IDR-31 ret` (400, 409, kayıt yazılmaz), `yetki` (403) |
 | `POST /idari-isler/zimmetler/:id/iade` | `idari-isler.zimmet-yaz` | kilit, IDR-31, sürüm; alan sunucudan | `IDR-31 ...` | `IDR-31 ...` (422), `IDR-29, IDR-30 ve IDR-31 ret` (400) |
 | `POST /idari-isler/zimmetler/:id/kisiye-bagla` | `idari-isler.zimmet-yaz` | kilit, yalnız kişisiz zimmet, etkin kişi, sürüm | `IDR-32: kişisiz (adla) zimmet ...` | `IDR-32: kişisiz (adla) zimmet ...` (403, 409, 422) |

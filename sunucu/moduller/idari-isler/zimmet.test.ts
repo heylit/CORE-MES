@@ -113,6 +113,19 @@ describe('idari-isler demirbaş ve zimmet (gerçek PostgreSQL, gerçek giriş)',
     assert.equal(gecmis[0]?.iadeDurumu, 'saglam');
   });
 
+  test('demirbaş güncelleme kısmidir: gönderilmeyen alan korunur, null siler; değer yine denetlenir', async () => {
+    const d = await demirbasEkle({ markaModel: 'Deneme monitör', seriNo: 'DNM-MN-9', deger: '4500', aciklama: 'Deneme not' });
+    const g1 = await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: d.surum, durum: 'hurda' });
+    assert.equal(g1.statusCode, 200, g1.body);
+    const h = g1.json<DemirbasCevabi>().demirbas;
+    assert.deepEqual([h.durum, h.tur, h.markaModel, h.seriNo, h.deger, h.aciklama], ['hurda', 'dizustu', 'Deneme monitör', 'DNM-MN-9', '4500.00', 'Deneme not']);
+    const g2 = await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: h.surum, seriNo: null, aciklama: '' });
+    assert.equal(g2.statusCode, 200, g2.body);
+    const s = g2.json<DemirbasCevabi>().demirbas;
+    assert.deepEqual([s.markaModel, s.seriNo, s.deger, s.aciklama], ['Deneme monitör', null, '4500.00', null]);
+    assert.equal((await gonder(idari.cerez, `/idari-isler/demirbaslar/${d.id}/guncelle`, { surum: s.surum, deger: '0' })).statusCode, 400);
+  });
+
   test('zimmetlerim: kişi yalnız kendi açık zimmetini görür; iade edilen düşer; talep açamayan 403', async () => {
     const d = await zimmetle(await demirbasEkle({ tur: 'telefon', seriNo: 'DNM-TEL-1' }), { kisiId: calisan.id });
     const benim = async () => (await oku(calisan.cerez, '/idari-isler/zimmetlerim')).json<ZimmetlerimCevabi>().zimmetler;
