@@ -62,10 +62,12 @@ export function RafSeridi({ raf, ozetler, bolme, sec }: {
   );
 }
 
-export function BolmeCephesi({ raf, bolme, ozetler, secili, sec }: {
+export function BolmeCephesi({ raf, bolme, ozetler, stoklu, secili, sec }: {
   raf: RafBoyu;
   bolme: number;
   ozetler: ReadonlyMap<string, GozOzeti>;
+  // Stoğu olan gözler (hücre anahtarı); doluluğu girilmemiş stoklu göz "boş" değil "stokta" yazar (ATL-3).
+  stoklu?: ReadonlySet<string>;
   secili: { kat: number; goz: number } | null;
   sec: (kat: number, goz: number) => void;
 }) {
@@ -94,10 +96,11 @@ export function BolmeCephesi({ raf, bolme, ozetler, secili, sec }: {
               const o = ozetler.get(hucreAnahtari(bolme, kat, goz));
               const toplam = o?.toplam ?? 0;
               const baskin = o?.kalemler[0];
+              const stokta = toplam === 0 && stoklu?.has(hucreAnahtari(bolme, kat, goz)) === true;
               const x = SOL + DIK + gi * GE;
               const etiket = baskin
                 ? `Kat ${kat} göz ${goz}: ${o?.kalemler.map((k) => `${k.kod} %${k.doluluk}`).join(', ')}`
-                : `Kat ${kat} göz ${goz}: boş`;
+                : `Kat ${kat} göz ${goz}: ${stokta ? 'stokta, doluluk girilmedi' : 'boş'}`;
               const doluBoy = (KB - 26) * Math.min(1, toplam / 100);
               return (
                 <g
@@ -116,7 +119,7 @@ export function BolmeCephesi({ raf, bolme, ozetler, secili, sec }: {
                   <rect className="tc-atolye-cephe-bosluk" x={x + 3} y={y + 3} width={GE - 6} height={KB - 12} rx={3} />
                   {toplam > 0 && <rect className="tc-atolye-cephe-dolu" x={x + 8} y={y + KB - 9 - doluBoy} width={GE - 16} height={doluBoy} rx={2} />}
                   {baskin && <text className="tc-atolye-cephe-kod" x={x + GE / 2} y={y + 22}>{kisalt(baskin.kod, 12)}{(o?.kalemler.length ?? 0) > 1 ? ` +${(o?.kalemler.length ?? 1) - 1}` : ''}</text>}
-                  <text className="tc-atolye-cephe-yuzde" x={x + GE / 2} y={y + KB - 16}>{toplam > 0 ? `%${toplam}` : 'boş'}</text>
+                  <text className="tc-atolye-cephe-yuzde" x={x + GE / 2} y={y + KB - 16}>{toplam > 0 ? `%${toplam}` : stokta ? 'stokta' : 'boş'}</text>
                   <rect className="tc-atolye-cephe-cerceve" x={x + 1.5} y={y + 1.5} width={GE - 3} height={KB - 9} rx={4} />
                 </g>
               );

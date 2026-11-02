@@ -50,6 +50,8 @@ function sunucuKur(kullanici: Kullanici, yazmaCevabi: () => Response = () => jso
     if (yontem === 'GET' && yol.startsWith('/projeler/siparis-secenekleri')) return json(200, SIPARISLER);
     if (yontem === 'GET' && yol === '/projeler/1') return json(200, P1);
     if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
+    if (yontem === 'GET' && yol === '/projeler/2') return json(200, P2);
+    if (yontem === 'GET' && yol === '/projeler/2/yonetim') return json(200, YONETIM);
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
     if (yontem === 'GET' && yol === '/adimli-emirler?projeId=1') return json(200, EMIRLER);
     if (yontem === 'GET' && yol.startsWith('/projeler')) return json(200, LISTE);
@@ -92,7 +94,7 @@ describe('Projeler', () => {
     expect(screen.queryByRole('button', { name: /Düzenle/ })).toBeNull();
   });
 
-  it('yazan yeni proje açar: sipariş seçmeden kaydetmez (224); kod büyük harfle, sipariş ile gider, firma gitmez', async () => {
+  it('yazan yeni proje açar: sipariş seçmeden kaydetmez (224); kod büyük harfle, sipariş ile gider, firma gitmez; kayıttan sonra ayrıntıya geçer', async () => {
     const cagrilar = sunucuKur(YAZAR);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: /Proje ekle/ }));
@@ -110,6 +112,7 @@ describe('Projeler', () => {
     const yazma = cagrilar.find((c) => c.yontem === 'POST');
     expect(yazma?.yol).toBe('/projeler');
     expect(yazma?.govde).toEqual({ kod: 'YENI.1', ad: 'Yeni proje', siparisId: 21, baslangic: null, bitis: null, aciklama: '' });
+    expect(await screen.findByRole('heading', { name: 'PRJ.02 · İkinci proje' })).toBeTruthy();
   });
 
   it('düzenlemede kod kilitlidir; sürüm ve durum gider; sunucu hatası pencerede görünür', async () => {

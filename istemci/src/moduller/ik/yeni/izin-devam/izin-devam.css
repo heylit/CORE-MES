@@ -31,7 +31,7 @@
 .tc-iki-tablo [data-sag] { text-align: right; font-variant-numeric: tabular-nums; }
 .tc-iki-tablo tr[data-secilir] { cursor: pointer; }
 .tc-iki-tablo tr[data-secilir]:hover, .tc-iki-tablo tr[data-secilir]:focus-visible { background: var(--panel2); outline: none; }
-.tc-iki-kirilmaz, .tc-iki-tablo .tc-ik-kisi-ad { white-space: nowrap; }
+.tc-iki-kirilmaz, .tc-iki-tablo .tc-ik-kisi-ad, .tc-iki-tablo .tc-ik-kisi-ad b { white-space: nowrap; }
 .tc-iki-ikili { display: grid; gap: var(--b-4); min-width: 0; }
 .tc-iki-kutu { display: grid; gap: var(--b-3); min-width: 0; padding: var(--b-4); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-iki-kutu h3 { margin: 0; font-size: var(--yazi-m); }

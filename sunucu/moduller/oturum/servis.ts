@@ -28,7 +28,7 @@ import {
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
-  cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz,
+  cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz, defterKisisiniYaz,
 } from './sorgular.ts';
 import type { CihazProfiliSatiri, OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
 
@@ -115,6 +115,8 @@ export async function ilkPiniBelirle(
     await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
     throw new UygulamaHatasi('OTURUM_YOK', 'Kullanıcı adı ya da geçici PIN hatalı.', { yazilarKalir: true });
   }
+  // Uç oturumsuzdur; kişi geçici PIN'le kanıtlandı, defterde "Sistem" değil kendisi görünür.
+  await defterKisisiniYaz(db, kullanici.id);
   await ilkPiniYaz(db, kullanici.id, girdi.yeniPin);
   await denemeyiSifirla(db, ad, girdi.ip, simdi);
   return { anahtar: await oturumAc(db, kullanici.id, girdi), kullanici };

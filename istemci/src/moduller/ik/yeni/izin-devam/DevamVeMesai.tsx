@@ -105,7 +105,7 @@ function DevamListesi({ o, kayitlar }: { o: IkEkranOzellikleri; kayitlar: readon
                   <td>{a.tur ?? YOK}</td>
                   <td data-sag="">{a.saat === undefined ? YOK : sayiYaz(sayi(a.saat))}</td>
                   <td><OnayCipi onay={a.onay} /></td>
-                  <td>{a.aciklama ?? ''}</td>
+                  <td className="tc-ik-uzun-metin">{a.aciklama ?? ''}</td>
                 </tr>
               );
             })}
@@ -133,7 +133,7 @@ export function DevamTablosu({ o, kayitlar, kisiSutunu, arac }: DevamTablosuOzel
     { anahtar: 'tur', baslik: 'Tür', hucre: (a) => a.tur ?? '—' },
     { anahtar: 'saat', baslik: 'Saat', hizala: 'sag', hucre: (a) => (a.saat === undefined ? YOK : sayiYaz(sayi(a.saat))), csv: (a) => (a.saat === undefined ? null : sayi(a.saat)) },
     { anahtar: 'onay', baslik: 'Onay', hucre: (a) => <OnayCipi onay={a.onay} />, csv: (a) => a.onay ?? 'Onaylandı' },
-    { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (a) => a.aciklama ?? '' },
+    { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (a) => <span className="tc-ik-uzun-metin">{a.aciklama ?? ''}</span> },
   ];
   return (
     <>

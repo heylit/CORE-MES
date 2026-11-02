@@ -37,6 +37,7 @@ const kaydetYanit = (): Record<string, Yanit> => ({
 });
 
 const onayda = (kimlik: string, kod: string, by: number) => ({ ...ornekKayit(kimlik, kod, 'Bekleyen çubuk'), onay: { durum: 'onayda', talep: { by, byAd: 'Biri', t: 1 } } });
+const taslak = (kimlik: string, kod: string) => ({ ...ornekKayit(kimlik, kod, 'Taslak çubuk'), onay: { durum: 'taslak' } });
 const pasif = (kimlik: string, kod: string) => ({ ...ornekKayit(kimlik, kod, 'Pasif çubuk'), onay: { durum: 'pasif', pasif: { by: 3, byAd: 'Biri', t: 1 } } });
 const talepli = (kimlik: string, kod: string, by: number) => ({
   ...ornekKayit(kimlik, kod, 'Talepli çubuk'),
@@ -143,15 +144,23 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
     const p = within(await kartiAc('HM-MET-C45-0001'));
-    for (const ad of ['Düzenle', 'Kopyasını oluştur', 'Şablon yap', "Etiket Merkezi'nde bas", 'Sil', 'Saha görünümü']) {
+    for (const ad of ['Düzenle', 'Kopyasını oluştur', 'Şablon yap', "Etiket Merkezi'nde bas", 'Saha görünümü']) {
       expect(p.getByRole('button', { name: ad })).toBeTruthy();
     }
   });
 
-  test('derin bağlantı: ?kart= ile açılan adres kartı pencerede açar', async () => {
-    kur(YONETICI);
-    yeniEkranAc(`${KOK}?kart=mornek1`);
-    expect(await screen.findByRole('dialog')).toBeTruthy();
+  test('Sil yalnız taslakta görünür; aktif, onaydaki ve pasif kartta yoktur (sunucu yalnız taslağı iptal eder)', async () => {
+    const satirlar = [
+      satir('m1', 1, taslak('m1', 'HM-T')), satir('m2', 2, ornekKayit('m2', 'HM-AK', 'Aktif çubuk')),
+      satir('m3', 3, onayda('m3', 'HM-O', 3)), satir('m4', 4, pasif('m4', 'HM-P')),
+    ];
+    for (const [kimlik, gorunur] of [['m1', true], ['m2', false], ['m3', false], ['m4', false]] as const) {
+      cleanup();
+      kur(YONETICI, kartlar(...satirlar));
+      yeniEkranAc(`${KOK}?kart=${kimlik}`);
+      const p = within(await screen.findByRole('dialog'));
+      expect(p.queryByRole('button', { name: 'Sil' }) !== null, kimlik).toBe(gorunur);
+    }
   });
 
   test('okuyan yalnız görür: düzenleme, kopya, şablon, silme ve onay düğmesi yok (reddedilen)', async () => {
@@ -256,13 +265,13 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
   });
 
   test('Sil onay sorar; onaylanınca iptal ucuna gider ve pencere kapanır', async () => {
-    const istekler = kur(YONETICI, { 'POST /malzeme-katalogu-kartlari/mornek1/iptal': () => json(200, {}) });
+    const istekler = kur(YONETICI, { ...kartlar(satir('m1', 1, taslak('m1', 'HM-T'))), 'POST /malzeme-katalogu-kartlari/m1/iptal': () => json(200, {}) });
     yeniEkranAc(KOK);
-    const p = within(await kartiAc('HM-MET-C45-0001'));
+    const p = within(await kartiAc('HM-T'));
     fireEvent.click(p.getByRole('button', { name: 'Sil' }));
     const soru = await screen.findByRole('dialog', { name: /silinsin mi/ });
     fireEvent.click(within(soru).getByRole('button', { name: 'Sil' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-katalogu-kartlari/mornek1/iptal')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-katalogu-kartlari/m1/iptal')).toBe(true));
   });
 
   test('sunucunun ret iletisi olduğu gibi gösterilir', async () => {

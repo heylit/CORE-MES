@@ -161,6 +161,12 @@ function SablonFormu() {
   );
 }
 
+// Onaylı kartta yazanın değişikliği talep olarak bekler, kart değişmez; bant bunu "kaydedildi" diye söylemez.
+function kayitMetni(talep: boolean, durum: ReturnType<typeof K.onayDurum>): string {
+  if (talep) return 'Değişiklik talebi onaya gönderildi; kart onaylanana kadar mevcut hâliyle kullanımda.';
+  return durum === 'onayda' ? 'Kataloğa kaydedildi; onaya gönderildi.' : 'Kataloğa kaydedildi.';
+}
+
 // Son adım (prototipte `s6` ve `gOzetHTML`).
 export function OzetAdimi() {
   const { taslak: d, b, yetki, secim, secimYaz, adimaGec, kartlar } = useSihirbaz();
@@ -171,7 +177,7 @@ export function OzetAdimi() {
   const g = K.grade(d, b);
   return (
     <>
-      {kaydedildi && <KayitBandi metin="Kataloğa kaydedildi." />}
+      {kaydedildi && <KayitBandi metin={kayitMetni(d.talepGonderildi !== undefined, K.onayDurum(d, b))} />}
       {/* Yeni kartın no'su kayıtla doğar: resim, PDF ve 3B model kayıttan hemen sonra buradan eklenir. */}
       {kaydedildi && <ResimAlani tur={d.tur} no={kartlar.find((k) => k.kimlik === d.id)?.no} />}
       {!yetki.yaz && <p className="tc-my-hata">Bu katalogda değişiklik yapma iznin yok.</p>}

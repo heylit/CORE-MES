@@ -8,7 +8,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useDepoYazimi } from './depo-yazimi.ts';
 import { KalemGorunumuFormu, kalemBul } from './KalemGorunumu.tsx';
 import { AMBALAJ_ADI, dolulukKademesi } from './kurallar.ts';
-import { gozKalemiSil, gozKalemiYaz, useGozStogu, useGozler, useKalemGorunumleri } from './veri.ts';
+import { gozKalemiSil, gozKalemiYaz, stokOkurMu, useGozStogu, useGozler, useKalemGorunumleri } from './veri.ts';
 
 // Bir gözün içi: hangi kalem, gözün yüzde kaçını dolduruyor. Kalem eklenir, doluluğu düzeltilir, kaldırılır; kalemin
 // rafta görünümü (ambalaj ya da 3B model) buradan seçilir. Adet ve hareket stok modülünündür; burada yalnız yer.
@@ -123,8 +123,7 @@ function KalemEkle({ gozId, bos, kapat }: { gozId: number; bos: number; kapat: (
 }
 
 // Gözdeki stok (adet ve hareket stok modülünde): kalem sayısı, ilk malzeme ve stok konumuna bağlantı. Stok okuma
-// yetkisi (stok sayfası ya da bir stok işlemi; sunucu aynısını ister) yoksa satır yoktur.
-const stokOkurMu = (i: string): boolean => i === 'sayfa.stok' || i.startsWith('stok.');
+// yetkisi yoksa satır yoktur.
 
 function GozStogu({ gozId }: { gozId: number | null }) {
   const oturum = useOturum();
@@ -157,6 +156,10 @@ export function GozPaneli({ rafId, bolme, kat, goz, kalemler, yazabilir, rafAkti
   const kayit = gozler.data?.satirlar.find((s) => s.kat === kat && s.goz === goz);
   const toplam = kalemler.reduce((t, k) => t + k.doluluk, 0);
   const bos = 100 - toplam;
+  const oturum = useOturum();
+  // ATL-3: doluluk elle girilir; stoğu olan gözde doluluk yoksa "boş" denmez (sorgu GozStogu ile aynı, önbellekten).
+  const stok = useGozStogu(kayit?.id ?? null, oturum.data?.islemler.some(stokOkurMu) === true);
+  const stokVar = (stok.data?.kalemSayisi ?? 0) > 0;
   return (
     <section className="tc-atolye-goz-paneli" aria-label={`Göz ${kayit?.adres ?? ''}`}>
       <header className="tc-atolye-goz-paneli-ust">
@@ -170,7 +173,7 @@ export function GozPaneli({ rafId, bolme, kat, goz, kalemler, yazabilir, rafAkti
       <DolulukCubugu yuzde={toplam} />
       <GozStogu gozId={kayit?.id ?? null} />
       {gozler.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(gozler.error, 'Göz alınamadı')} yenile={() => { void gozler.refetch(); }} />}
-      {kalemler.length === 0 && <p className="tc-atolye-ipucu">Göz boş.</p>}
+      {kalemler.length === 0 && <p className="tc-atolye-ipucu">{stokVar ? 'Gözde stok var; doluluk girilmedi.' : 'Göz boş.'}</p>}
       {kalemler.length > 0 && (
         <ul className="tc-atolye-goz-kalemler">
           {kalemler.map((k) => (

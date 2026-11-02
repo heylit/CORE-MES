@@ -380,8 +380,10 @@ export interface ParcaSatiri {
   // Göz kaydındaki ya da emirdeki ad; ikisi de yoksa null.
   ad: string | null;
   gorunum: KalemGorunumu | null;
-  // Kodun eşleştiği malzeme kartı (ATL-36); null: kart yok, ekranda uyarı.
+  // Kodun eşleştiği malzeme kartı (ATL-36); null: kodla eşleşen kart yok.
   malzeme: KalemMalzemesi | null;
+  // Üretim emrinin bağlı olduğu kart: kod stok koduyla eşleşmese de parçanın kartı vardır; ikisi de null ise ekranda uyarı.
+  emirKartiNo: number | null;
   gozler: GozKalemi[];
   makineler: ParcaMakinesi[];
 }
@@ -392,7 +394,7 @@ export function parcaListesi(gozKalemleri: readonly GozKalemi[], gorunumler: rea
     const a = parcaAnahtari(kod);
     const var_ = satirlar.get(a);
     if (var_) return var_;
-    const yeni: ParcaSatiri = { anahtar: a, kod: kod.trim(), ad: null, gorunum: null, malzeme: null, gozler: [], makineler: [] };
+    const yeni: ParcaSatiri = { anahtar: a, kod: kod.trim(), ad: null, gorunum: null, malzeme: null, emirKartiNo: null, gozler: [], makineler: [] };
     satirlar.set(a, yeni);
     return yeni;
   };
@@ -411,6 +413,7 @@ export function parcaListesi(gozKalemleri: readonly GozKalemi[], gorunumler: rea
     if (e.durum === 'iptal') continue;
     const s = satir(e.parcaNo);
     s.ad ??= e.parcaAd;
+    s.emirKartiNo ??= e.malzemeNo ?? null;
     const zaman = e.baslama ?? e.acilma;
     const m = s.makineler.find((x) => x.id === e.istasyon.id);
     if (m) {

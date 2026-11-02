@@ -8,6 +8,7 @@ import { RAF_TURU_ADI, gozOzetleri, hucreAnahtari, sayiMetni } from './kurallar.
 import type { GozOzeti } from './kurallar.ts';
 import { OgeSimgesi, rafSimgesi } from './plan-simgeleri.tsx';
 import { BolmeCephesi, RafSeridi } from './RafCephesi.tsx';
+import { useBolmeStoklari } from './veri.ts';
 
 // Depo: raflar, bölmeler ve gözler; gözün içi (kalem ve doluluk) burada düzenlenir. Raf listeden seçilir, şeritten
 // bölme seçilir; bölme önden çizilir, göze basınca içi açılır. "3B" düğmesi aynı bölmeyi sahnede tam karşıdan gösterir.
@@ -46,6 +47,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
   }, [gozKalemleri]);
   const raf = raflar.find((r) => r.id === secim?.rafId) ?? raflar[0];
   const ozetler = useMemo(() => (raf ? rafOzetleri(gozKalemleri ?? [], raf.id) : new Map<string, GozOzeti>()), [gozKalemleri, raf]);
+  const stoklu = useBolmeStoklari(raf?.id ?? null, raf ? Math.min(raf.bolmeSayisi, Math.max(1, secim?.rafId === raf.id ? secim.bolme : 1)) : null);
 
   if (raflar.length === 0) return <DurumKutusu durum="bos" mesaj="Bu bölümde raf yok. Rafı yerleşim düzenleyicisinde ekleyin." />;
   if (!raf) return null;
@@ -108,6 +110,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
               raf={raf}
               bolme={bolme}
               ozetler={ozetler}
+              stoklu={stoklu}
               secili={kat !== null && goz !== null ? { kat, goz } : null}
               sec={(k, g) => secimYaz({ rafId: raf.id, bolme, kat: k, goz: g })}
             />

@@ -73,21 +73,23 @@ export function Projeler() {
         {l.isError
           ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, 'Projeler alınamadı')} yenile={() => { void l.refetch(); }} />
           : (
-            <Tablo
-              etiket="Projeler"
-              sutunlar={SUTUNLAR}
-              satirlar={l.data?.satirlar ?? []}
-              satirAnahtari={(p) => p.id}
-              mesgul={l.isPending}
-              satirSec={(p) => { void yonlendir(`/projeler/${p.id}`); }}
-              siralama={liste.siralama}
-              siralamaDegistir={liste.siralamaDegistir}
-              bosMesaj={suzulu ? 'Süzgece uyan proje yok' : 'Henüz proje yok'}
-              {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})}
-            />
+            <div className="tc-prj-liste-tablo">
+              <Tablo
+                etiket="Projeler"
+                sutunlar={SUTUNLAR}
+                satirlar={l.data?.satirlar ?? []}
+                satirAnahtari={(p) => p.id}
+                mesgul={l.isPending}
+                satirSec={(p) => { void yonlendir(`/projeler/${p.id}`); }}
+                siralama={liste.siralama}
+                siralamaDegistir={liste.siralamaDegistir}
+                bosMesaj={suzulu ? 'Süzgece uyan proje yok' : 'Henüz proje yok'}
+                {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})}
+              />
+            </div>
           )}
       </div>
-      {yeni && <ProjeFormu proje={null} kapat={() => { yeniYaz(false); }} />}
+      {yeni && <ProjeFormu proje={null} kapat={() => { yeniYaz(false); }} acildi={(p) => { void yonlendir(`/projeler/${p.id}`); }} />}
     </Kart>
   );
 }

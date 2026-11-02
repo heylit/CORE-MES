@@ -65,7 +65,7 @@ export function Onaylar(o: IkEkranOzellikleri) {
             ].filter(Boolean).join(' ');
             return (
               <li key={l.id} id={`tc-ikm-talep-${l.id}`} tabIndex={-1} className="tc-ikm-talep" data-gecikti={(l.baslangic ?? '') < t ? '' : undefined}>
-                <div className="tc-ikm-talep-govde">
+                <div className="tc-ikm-talep-govde tc-ik-uzun-metin">
                   <KisiHucresi personel={kisi} alt={kisi?.pozisyon} />
                   <b>{l.tur}: {tarih(l.baslangic)} – {tarih(l.bitis)}, {izinGunuMetni(l.gun)}</b>
                   {alt && <small className="tc-ikm-soluk">{alt}</small>}

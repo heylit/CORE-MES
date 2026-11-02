@@ -88,6 +88,17 @@ describe('kendi PIN\'ini değiştirme (gerçek PostgreSQL, gerçek giriş, saat 
     await ortam?.kaldir();
   });
 
+  test('ilk PIN belirleme değişiklik defterine kişinin kendisiyle yazılır, "Sistem" (boş kişi) değil', async () => {
+    const { id } = await pinliOperator();
+    const satirlar = await vt().sorgu<{ kisi_id: number | null; alanlar: Record<string, unknown> }>(
+      "SELECT kisi_id, alanlar FROM denetim_degisiklik WHERE tablo = 'kisi' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY id",
+      [id],
+    );
+    const belirleme = satirlar.filter((s) => 'pin_belirlenecek' in s.alanlar).at(-1);
+    assert.ok(belirleme, 'PIN belirleme satırı yok');
+    assert.equal(belirleme.kisi_id, id);
+  });
+
   test('oturum ister; eski PIN ile değişir, yalnız yeni PIN geçerli olur', async () => {
     const kisi = await pinliOperator();
     assert.equal((await degistir(null, KENDI, YENI)).statusCode, 401);

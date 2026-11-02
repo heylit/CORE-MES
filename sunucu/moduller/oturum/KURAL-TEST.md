@@ -36,3 +36,4 @@ Test adları dosyalardan okundu; uç başına ayrıntı `GUVENLIK-DENETIMI.md`.
 | Profil yönetimi yalnız Tam profilli cihazdan; telefondan kendini kaydeden profil seçemez | cihaz-profili.test.ts "telefondan kendini kaydeden yönetici ...": ofisten atama kabul | "telefondan profil, atama ve kayıtsız ayarı değişmez ..." 403; seçimli kayıt 403 |
 | İstasyonda 15 dk boşta oturum geçersiz (1356 a) | cihaz-profili.test.ts "istasyonda 15 dk boşta ...": Tam cihazda aynı oturum geçerli | aynı test: istasyon çereziyle oturum yok |
 | Göç dolu ortak cihaz tablosuna yazmaz; açık cihazlar istasyon olur | goc.test.ts "açık cihaz istasyon olur, ..." | aynı test: kapanmış cihaza atama yok, satırlar değişmez |
+| İlk PIN belirleme (oturumsuz uç) değişiklik defterine kişinin kendisiyle yazılır (ALT-4) | hesabim-pin.test.ts "ilk PIN belirleme değişiklik defterine kişinin kendisiyle yazılır, ..." | aynı test: kişi boş ("Sistem") olmaz |

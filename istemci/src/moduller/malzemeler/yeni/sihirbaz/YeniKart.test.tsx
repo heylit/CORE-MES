@@ -82,6 +82,25 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
+  test('onaylı kartta yazanın değişikliği talep olarak gider; bant "kaydedildi" değil "talep onaya gönderildi" der', async () => {
+    const istekler = sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm2', kayit: sarfKarti('mdnm2', { onay: { durum: 'aktif' } }) }),
+      'POST /malzeme-katalogu-kartlari/mdnm2/kaydet': () => json(200, { id: 'mdnm2', stok_kodu: 'SF-DNM-00001', surum: 2 }),
+    });
+    ac('?kart=mdnm2');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    const adimlar = within(screen.getByRole('navigation', { name: 'Adımlar' }));
+    fireEvent.click(adimlar.getByRole('button', { name: /Ticari/ }));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Marka' }), { target: { value: 'Başka marka' } });
+    fireEvent.click(adimlar.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText(/^Değişiklik talebi onaya gönderildi/)).toBeTruthy();
+    expect(screen.queryByText('Kataloğa kaydedildi.')).toBeNull();
+    const govde = istekler.find((i) => i.yontem === 'POST')?.govde as { kayit: { talep?: { durum: string }; onay: { durum: string } } };
+    expect(govde.kayit.talep?.durum).toBe('beklemede');
+    expect(govde.kayit.onay.durum).toBe('aktif');
+  });
+
   test('kayıt kartı ve özeti gönderir; sunucunun ret iletisi olduğu gibi gösterilir (madde 18)', async () => {
     const istekler = sunucuKur(YAZAN, {
       'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm1', kayit: sarfKarti('mdnm1') }),
@@ -253,7 +272,7 @@ describe('M1 yeni kart sihirbazı', () => {
     expect((await screen.findByTestId('resim-paneli')).textContent).toBe('100');
     fireEvent.click(screen.getByRole('button', { name: /Özet/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
-    await screen.findByText('Kataloğa kaydedildi.');
+    await screen.findByText(/^Kataloğa kaydedildi/);
     expect(screen.getByTestId('resim-paneli').textContent).toBe('100');
     cleanup();
     vi.unstubAllGlobals();

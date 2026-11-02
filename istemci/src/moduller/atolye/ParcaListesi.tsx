@@ -34,9 +34,11 @@ const gorunumMetni = (g: KalemGorunumu | null): string => {
   return g.model ? `${AMBALAJ_ADI[g.ambalaj]} · model: ${g.model.ad}` : AMBALAJ_ADI[g.ambalaj];
 };
 
-// ATL-36: kod malzeme kartıyla eşleşmediyse uyarı; kayıt engellenmez, kartı Malzemeler ve Hizmetler'de açılır.
-function MalzemeKarti({ m }: { m: KalemMalzemesi | null }) {
-  return m ? <span className="mono">{m.stokKodu}</span> : <Rozet ton="uyari">Kartta yok</Rozet>;
+// ATL-36: kod malzeme kartıyla eşleşmediyse ve üretim emri de bir karta bağlı değilse uyarı; kayıt engellenmez,
+// kartı Malzemeler ve Hizmetler'de açılır.
+function MalzemeKarti({ m, emirKartiNo }: { m: KalemMalzemesi | null; emirKartiNo: number | null }) {
+  if (m) return <span className="mono">{m.stokKodu}</span>;
+  return emirKartiNo !== null ? <Rozet ton="tamam">Emirde kartlı</Rozet> : <Rozet ton="uyari">Kartta yok</Rozet>;
 }
 
 function ParcaModeli({ g }: { g: KalemGorunumu }) {
@@ -75,7 +77,7 @@ export function ParcaListesi({ gozKalemleri, gorunumler, emirler, emirHatasi, go
   const sutunlar: readonly Sutun<ParcaSatiri>[] = [
     { anahtar: 'kod', baslik: 'Kod', hucre: (r) => r.kod, mono: true, kirilmaz: true },
     { anahtar: 'ad', baslik: 'Ad', hucre: (r) => r.malzeme?.ad ?? r.ad ?? '—' },
-    { anahtar: 'kart', baslik: 'Malzeme kartı', hucre: (r) => <MalzemeKarti m={r.malzeme} /> },
+    { anahtar: 'kart', baslik: 'Malzeme kartı', hucre: (r) => <MalzemeKarti m={r.malzeme} emirKartiNo={r.emirKartiNo} /> },
     { anahtar: 'gorunum', baslik: 'Rafta', hucre: (r) => gorunumMetni(r.gorunum) },
     {
       anahtar: 'depo', baslik: 'Depoda', hucre: (r) => (gozHatasi ? 'bilinmiyor' : r.gozler.length === 0 ? '—' : (
@@ -123,6 +125,7 @@ export function ParcaListesi({ gozKalemleri, gorunumler, emirler, emirHatasi, go
               <p className="tc-atolye-ust-baslik">Kalem</p>
               <h3><span className="mono">{s.kod}</span>{(s.malzeme?.ad ?? s.ad) ? ` · ${s.malzeme?.ad ?? s.ad}` : ''}</h3>
               {s.malzeme ? <p className="tc-atolye-ipucu">Malzeme kartı <span className="mono">{s.malzeme.stokKodu}</span></p>
+                : s.emirKartiNo !== null ? <p className="tc-atolye-ipucu">Malzeme kartı bu parçanın üretim emrine bağlı.</p>
                 : <p className="tc-atolye-ipucu"><Rozet ton="uyari">Kartta yok</Rozet> Bu kod Malzemeler ve Hizmetler'deki bir stok koduyla eşleşmiyor.</p>}
             </div>
             <Dugme simge="x" aria-label="Ayrıntıyı kapat" onClick={() => seciliYaz(null)} />
