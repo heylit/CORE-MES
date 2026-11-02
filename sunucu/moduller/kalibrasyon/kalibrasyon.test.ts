@@ -272,6 +272,11 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     assert.deepEqual([yeni.tur, yeni.ad, yeni.periyotGun], ['CMM', 'Yeni ad', 180]);
     assert.equal((await cagir(yonetici, 'POST', '/olcu-aletleri/99999/guncelle', { no: 'X', turId: 1, periyotGun: 365, surum: 1 })).statusCode, 404);
     assert.equal((await cagir(yonetici, 'GET', '/olcu-aletleri/99999')).statusCode, 404);
+    // KAL-4: int sınırını aşan kimlik veritabanına gitmeden 400 alır.
+    const buyuk = await cagir(yonetici, 'GET', '/olcu-aletleri/2147483648');
+    assert.deepEqual([buyuk.statusCode, buyuk.json().kod, buyuk.json().alan], [400, 'DOGRULAMA', 'id'], buyuk.body);
+    assert.equal((await cagir(yonetici, 'GET', '/olcu-aletleri/2147483647')).statusCode, 404);
+    assert.equal((await cagir(yonetici, 'POST', `/olcu-aletleri/${alet.id}/kayitlar/2147483648/iptal`, { neden: 'x' })).statusCode, 400);
   });
 
   test('KLB-S9: düzenleme okunan sürümü ister; eski sürümle yazan 409 alır ve alet değişmez; kalibrasyon kaydı da sürümü ilerletir', async () => {

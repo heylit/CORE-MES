@@ -16,6 +16,6 @@ describe('vade gösterimi', () => {
     expect(vadeMetni(disi)).toBeNull();
     expect(vadeMetni({ durum: 'gecerli', vade: '2027-05-01' })).toBe('01.05.2027');
     expect(vadeMetni({ durum: 'kayit-yok', vade: null })).toBeNull();
-    expect(aletlerCsv([disi]).slice(1).split('\r\n')[1]).toBe('"DNM-9";"Kumpas";"";"";"";"180";"02.11.2026";"";"Kullanım dışı"');
+    expect(aletlerCsv([disi]).slice(1).split('\r\n')[1]).toBe('"DNM-9";"Kumpas";"";"";"";"180";"02.11.2026";"";"Kullanım dışı";""');
   });
 });

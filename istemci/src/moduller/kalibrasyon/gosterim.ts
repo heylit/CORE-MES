@@ -18,7 +18,7 @@ export function durumMetni(alet: Pick<Alet, 'durum' | 'kalanGun'>): string {
   switch (alet.durum) {
     case 'kullanim-disi': return 'Kullanım dışı';
     case 'kayit-yok': return 'Kalibrasyon kaydı yok';
-    case 'gecmis': return 'Kalibrasyonu geçmiş';
+    case 'gecmis': return alet.kalanGun === null ? 'Kalibrasyonu geçmiş' : `${-alet.kalanGun} gün geçti`;
     // Kalan gün bilinmiyorsa sayı yazılmaz; durumun kendisi yine gösterilir.
     case 'yaklasan': return alet.kalanGun === null ? 'Vadesi yaklaşıyor' : `${alet.kalanGun} gün kaldı`;
     case 'gecerli': return 'Geçerli';
@@ -39,8 +39,10 @@ export const SONUC_METNI: Record<Sonuc, string> = { uygun: 'Uygun', uygunsuz: 'U
 export function aletlerCsv(aletler: readonly Alet[]): string {
   // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın).
   const alan = (v: string | number | null) => `"${(typeof v === 'string' ? formulKoru(v, { sayiSerbest: true }) : String(v ?? '')).replace(/"/g, '""')}"`;
-  const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum'];
-  const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), vadeMetni(a), durumMetni(a)]);
+  const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum', 'Kullanım dışı nedeni'];
+  const satirlar = aletler.map((a) => [
+    a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), vadeMetni(a), durumMetni(a), a.kullanimDisiNedeni,
+  ]);
   return '﻿' + [baslik, ...satirlar].map((s) => s.map(alan).join(';')).join('\r\n');
 }
 

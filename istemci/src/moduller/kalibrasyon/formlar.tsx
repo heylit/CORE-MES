@@ -157,7 +157,15 @@ export function AletFormu({ alet, turler, kapat }: { alet: AletDuzenlemesi | nul
   // Pasif tür yalnız aletin kendi türüyse listede kalır: yeni seçim yapılamaz, mevcut atama bozulmaz.
   const secenekler = turler.filter((t) => t.aktif || t.id === alet?.turId).map((t) => ({ deger: String(t.id), baslik: t.ad }));
 
+  // Boş alan sayıya çevrilince 0 olur; kullanıcı "en az 1 gün" değil "zorunlu" iletisini görsün.
+  const [periyotHatasi, periyotHatasiYaz] = useState<string | null>(null);
+
   const gonder = () => {
+    if (periyot.trim() === '') {
+      periyotHatasiYaz('Kalibrasyon periyodu zorunlu.');
+      return;
+    }
+    periyotHatasiYaz(null);
     const alanlar = { no, turId: Number(turId), ad, olcmeAraligi: aralik, yer, periyotGun: Number(periyot) };
     if (alet !== null) {
       komut.gonder({ ...alanlar, surum: alet.surum } satisfies AletGuncelleGovdesi);
@@ -167,7 +175,7 @@ export function AletFormu({ alet, turler, kapat }: { alet: AletDuzenlemesi | nul
   };
 
   return (
-    <FormKabugu baslik={alet === null ? 'Alet ekle' : `Aleti düzenle: ${alet.no}`} kapat={kapat} gonder={gonder} yukleniyor={komut.yukleniyor} hata={komut.hata} onayMetni="Kaydet">
+    <FormKabugu baslik={alet === null ? 'Alet ekle' : `Aleti düzenle: ${alet.no}`} kapat={kapat} gonder={gonder} yukleniyor={komut.yukleniyor} hata={periyotHatasi ?? komut.hata} onayMetni="Kaydet">
       <Girdi etiket="Alet no" required value={no} maxLength={60} onChange={(e) => noYaz(e.target.value)} />
       <Secim etiket="Tür" required bosSecenek="Seçiniz" value={turId} secenekler={secenekler} onChange={(e) => turYaz(e.target.value)} />
       <Girdi etiket="Ad" value={ad} maxLength={120} onChange={(e) => adYaz(e.target.value)} />

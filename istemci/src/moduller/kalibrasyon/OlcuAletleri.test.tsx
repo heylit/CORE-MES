@@ -106,7 +106,7 @@ describe('Ölçü aletleri listesi', () => {
     await listeBekle();
     const hucre = (satir: HTMLElement, baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
     const [gecmis, yaklasan, kayitsiz] = satirlar() as [HTMLElement, HTMLElement, HTMLElement];
-    expect(hucre(gecmis, 'Durum')).toBe('Kalibrasyonu geçmiş');
+    expect(hucre(gecmis, 'Durum')).toBe('270 gün geçti');
     expect(hucre(gecmis, 'Vade')).toBe('10.01.2026');
     expect(hucre(yaklasan, 'Durum')).toBe('14 gün kaldı');
     expect(hucre(kayitsiz, 'Durum')).toBe('Kalibrasyon kaydı yok');
@@ -154,14 +154,16 @@ describe('Ölçü aletleri listesi', () => {
 });
 
 describe('CSV dışa aktarma', () => {
-  it('sütunlar Arkon karşılığıyla aynı; tarih ve durum ekrandaki gibi, boş alan boş kalır, tırnak kaçar', () => {
+  it('sütunlar Arkon karşılığıyla aynı, sonda kullanım dışı nedeni; tarih ve durum ekrandaki gibi, boş alan boş kalır, tırnak kaçar', () => {
     const tirnakli = alet({ id: 5, no: 'DNM-5', ad: 'İç "çap"' });
-    const csv = aletlerCsv([GECMIS, tirnakli]);
+    const disi = alet({ id: 6, no: 'DNM-6', durum: 'kullanim-disi', kullanimDisi: true, kullanimDisiNedeni: 'Düşürüldü' });
+    const csv = aletlerCsv([GECMIS, tirnakli, disi]);
     expect(csv.startsWith('﻿')).toBe(true);
-    const [baslik, gecmis, ikinci] = csv.slice(1).split('\r\n');
-    expect(baslik).toBe('"Alet no";"Tür";"Ad";"Ölçme aralığı";"Yer";"Periyot (gün)";"Son kalibrasyon";"Vade";"Durum"');
-    expect(gecmis).toBe('"DNM-1";"Kumpas";"Dış çap";"0-25";"Dolap A";"365";"10.01.2025";"10.01.2026";"Kalibrasyonu geçmiş"');
-    expect(ikinci).toBe('"DNM-5";"Kumpas";"İç ""çap""";"";"";"365";"";"";"Kalibrasyon kaydı yok"');
+    const [baslik, gecmis, ikinci, ucuncu] = csv.slice(1).split('\r\n');
+    expect(baslik).toBe('"Alet no";"Tür";"Ad";"Ölçme aralığı";"Yer";"Periyot (gün)";"Son kalibrasyon";"Vade";"Durum";"Kullanım dışı nedeni"');
+    expect(gecmis).toBe('"DNM-1";"Kumpas";"Dış çap";"0-25";"Dolap A";"365";"10.01.2025";"10.01.2026";"270 gün geçti";""');
+    expect(ikinci).toBe('"DNM-5";"Kumpas";"İç ""çap""";"";"";"365";"";"";"Kalibrasyon kaydı yok";""');
+    expect(ucuncu).toBe('"DNM-6";"Kumpas";"";"";"";"365";"";"";"Kullanım dışı";"Düşürüldü"');
   });
 
   it('okuma yetkisi olan ekrandaki satırları indirir; liste boşken düğme kapalı', async () => {
@@ -213,6 +215,36 @@ describe('yetki', () => {
       no: 'yeni-1', turId: 1, ad: '', olcmeAraligi: '', yer: '', periyotGun: 365,
     }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('KAL-4 ekran iletileri', () => {
+  it('boş periyotla kayıt gönderilmez, "zorunlu" iletisi çıkar', async () => {
+    const cagrilar = sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(screen.getByRole('button', { name: 'Alet ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Alet ekle' });
+    fireEvent.change(within(pencere).getByLabelText(/Alet no/), { target: { value: 'yeni-2' } });
+    fireEvent.change(within(pencere).getByLabelText(/Kalibrasyon periyodu/), { target: { value: '' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect((await within(pencere).findByRole('alert')).textContent).toBe('Kalibrasyon periyodu zorunlu.');
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+  });
+
+  it('Türler bölümünün başlığı "Alet türleri"dir', async () => {
+    sunucuKur(OKUR);
+    ac('turler');
+    expect(await screen.findByText('Alet türleri')).toBeTruthy();
+    expect(screen.queryByText('Ölçü aletleri')).toBeNull();
+  });
+
+  it('kalan günü bilinmeyen geçmiş alette gün sayısı uydurulmaz', async () => {
+    const sayisiz = alet({ id: 7, no: 'DNM-7', sonKalibrasyon: '2025-01-10', vade: '2026-01-10', kalanGun: null, durum: 'gecmis' });
+    sunucuKur(OKUR, { aletler: [sayisiz], ozet: { vadesiGecen: 1, yaklasan: 0 } });
+    ac();
+    await listeBekle();
+    expect(within(satirlar()[0] as HTMLElement).getByText('Kalibrasyonu geçmiş')).toBeTruthy();
   });
 });
 

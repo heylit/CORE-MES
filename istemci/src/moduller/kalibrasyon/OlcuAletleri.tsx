@@ -77,7 +77,7 @@ export function OlcuAletleri({ sekme = 'aletler' }: { sekme?: SekmeAnahtari }) {
 
   return (
     <Kart
-      baslik="Ölçü aletleri"
+      baslik={sekme === 'turler' ? 'Alet türleri' : 'Ölçü aletleri'}
       sag={sekme === 'aletler' && (
         <>
           <Dugme simge="download" disabled={!liste.data?.aletler.length} onClick={() => { if (liste.data) csvIndir(liste.data.aletler); }}>CSV</Dugme>

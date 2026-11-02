@@ -26,8 +26,10 @@ export const DURUMLAR = ['kullanim-disi', 'kayit-yok', 'gecmis', 'yaklasan', 'ge
 export const sonucSemasi = z.enum(SONUCLAR);
 export const durumSemasi = z.enum(DURUMLAR);
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive() });
-export const kayitParametresi = z.object({ id: z.coerce.number().int().positive(), kayitId: z.coerce.number().int().positive() });
+// Kimlikler veritabanında int'tir; sınırı aşan sayı veritabanına gitmeden 400 alır.
+const kimlik = z.coerce.number().int().positive().max(2_147_483_647);
+export const idParametresi = z.object({ id: kimlik });
+export const kayitParametresi = z.object({ id: kimlik, kayitId: kimlik });
 export const listeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
 
 export const kalibrasyonGovdesi = z.object({
