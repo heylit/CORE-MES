@@ -894,9 +894,11 @@ export const katilmaIhlali = (durum: EmirDurumu, calisma: CalismaDurumu, acikVar
 // adımın hedefi hurdayı düşmüyor": OP10 40'tan 39 sağlam çıkınca OP20 39 parça işler).
 // 1257 a: dallı adımda taban çarpanla büyür (bir mamul için o daldan kaç adet) ve kayıp mamul birimiyle öncüllerden gelir; birleştirmede en
 // çok kaybeden dal belirler. Listesi olmayan (eski) adımın öncülü sırası bir küçük olan adımdır.
+// İlk parça kararı bekleyen adet (kararBekleyen) kayıp değildir: karar gelince sağlam ya da red olur; o zamana kadar sonraki adıma sayılır.
 export function adimAdetleri(
   adimlar: readonly {
     sira: number; durum: string; saglamAdet: number | null; id?: number; onculler?: readonly { id: number }[] | null; adetCarpani?: number | null;
+    kararBekleyen?: number | null;
   }[],
   taban: (sira: number) => number,
 ): Map<number, number> {
@@ -912,7 +914,7 @@ export function adimAdetleri(
       : a.onculler.flatMap((o) => { const s = sirasi.get(o.id); return s === undefined ? [] : [s]; });
     const kayip = Math.max(0, ...onculSiralari.map((s) => kayipCikan.get(s) ?? 0));
     sonuc.set(a.sira, Math.min(t, Math.max(0, Math.floor(t - kayip * carpan + 1e-9))));
-    kayipCikan.set(a.sira, a.durum === 'tamam' && a.saglamAdet !== null ? (t - a.saglamAdet) / carpan : kayip);
+    kayipCikan.set(a.sira, a.durum === 'tamam' && a.saglamAdet !== null ? Math.max(0, t - a.saglamAdet - (a.kararBekleyen ?? 0)) / carpan : kayip);
   }
   return sonuc;
 }
