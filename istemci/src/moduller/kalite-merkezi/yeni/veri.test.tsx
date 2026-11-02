@@ -52,7 +52,15 @@ describe('useKmKomutu.kaydet', () => {
     expect(iz[0]?.govde).toMatchObject({ govde: { islem: 'oluşturma', col: 'ncr', id: kimlik, rol: 'Muayeneci' } });
   });
 
-  it('onay alanı reddedilince aynı gövdeyi onay ucuna gönderir', async () => {
+  it('onay alanını değiştiren yazma genel ucu denemeden onay ucuna gider (1779b)', async () => {
+    const { yazmalar } = sunucuKur(MUAYENECI);
+    const { result } = kanca();
+    await waitFor(() => expect(result.current).toBeTruthy());
+    await result.current.kaydet('ncr', { _id: 'n2', durum: 'Kapalı' });
+    expect(kayitYazmalari(yazmalar, 'ncr').map((y) => y.yol)).toEqual(['/kalite-merkezi/kayitlar/ncr/n2/onayla']);
+  });
+
+  it('önbellek eskiyken onay alanı reddedilirse aynı gövdeyi onay ucuna gönderir', async () => {
     const { yazmalar, fetch } = sunucuKur(MUAYENECI);
     const asil = fetch.getMockImplementation()!;
     fetch.mockImplementation(async (adres: string, istek?: RequestInit) => {
@@ -64,7 +72,7 @@ describe('useKmKomutu.kaydet', () => {
     });
     const { result } = kanca();
     await waitFor(() => expect(result.current).toBeTruthy());
-    await result.current.kaydet('ncr', { _id: 'n1', durum: 'Kapalı' });
+    await result.current.kaydet('ncr', { _id: 'n1', durum: 'Açık' });
     const yollar = kayitYazmalari(yazmalar, 'ncr').map((y) => y.yol);
     expect(yollar).toEqual(['/kalite-merkezi/kayitlar/ncr/n1/yaz', '/kalite-merkezi/kayitlar/ncr/n1/onayla']);
   });

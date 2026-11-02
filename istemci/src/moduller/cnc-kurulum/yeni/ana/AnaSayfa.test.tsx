@@ -41,6 +41,20 @@ describe('Ana sayfa tezgâh durumu', () => {
   });
 });
 
+describe('Bugünkü üretim kartı', () => {
+  // Adet Üretim Terminali'nden girilir (311 a): bugün satır yoksa sıfır değil "Veri yok" görünür.
+  it('bugün kayıt yokken sıfır göstermez; bugünkü satırların adedini toplar', () => {
+    state.wearLog = [{ ts: new Date(2000, 0, 1).getTime(), mid: 'x', n: 7 }];
+    ac();
+    expect(screen.getByText('bugün kayıt yok')).toBeTruthy();
+    cleanup();
+    state.wearLog = [{ ts: Date.now(), mid: 'x', n: 3 }, { ts: Date.now(), mid: 'x', n: 4 }];
+    ac();
+    expect(screen.getByText('adet kaydedildi')).toBeTruthy();
+    expect(screen.getByText('7')).toBeTruthy();
+  });
+});
+
 describe('Program ve ham malzeme kartı', () => {
   it('Ham Malzeme sayfası satırı yalnız ham hesabı varken görünür', () => {
     ac();

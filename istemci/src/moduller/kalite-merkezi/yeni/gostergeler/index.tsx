@@ -62,7 +62,7 @@ export function Gostergeler({ veri, yetki, git }: EkranOzellikleri) {
         <Kutucuk ton={oranTonu(g.ilkGecis)} deger={g.ilkGecis === null ? YOK : `%${g.ilkGecis}`} baslik="İlk geçiş oranı" alt={`Son 30 gün, ${g.ilkGecisSayisi} muayene`} />
         <Kutucuk ton={oranTonu(g.lotKabul)} deger={g.lotKabul === null ? YOK : `%${g.lotKabul}`} baslik="Lot kabul oranı" alt={`Son 90 gün, ${g.lotSayisi} lot`} />
         <Kutucuk ton={ppmTonu(g.ppm.toplam)} deger={sayiMetni(g.ppm.toplam)} baslik="Tedarikçi PPM" alt={`${sayiMetni(g.ppm.b)} uygunsuz / ${sayiMetni(g.ppm.r)} alınan, 90 gün`} />
-        <Kutucuk ton={g.karantinaTonu} deger={String(g.karantinaSayisi)} baslik="Karantinada bekleyen" alt={`${sayiMetni(g.karantinaMiktari)} adet ürün`} />
+        <Kutucuk ton={g.karantinaTonu} deger={String(g.karantinaSayisi)} baslik="Kalite kararı bekleyen" alt={`${sayiMetni(g.karantinaMiktari)} adet ürün`} />
         <Kutucuk ton={g.kritikNcr ? 'kotu' : g.acikNcr ? 'uyari' : 'iyi'} deger={String(g.acikNcr)} baslik="Açık uygunsuzluk" alt={`${g.kritikNcr} kritik`} />
         <Kutucuk ton={g.gecersizCihaz ? 'kotu' : g.yaklasanCihaz ? 'uyari' : 'iyi'} deger={String(g.gecersizCihaz)} baslik="Geçersiz cihaz" alt={`${g.yaklasanCihaz} cihaz 30 gün içinde`} />
       </section>
@@ -149,7 +149,7 @@ export function Gostergeler({ veri, yetki, git }: EkranOzellikleri) {
   );
 }
 
-// Uygulamanın alt sekme sayacı: karantinada bekleyen ürün.
+// Uygulamanın alt sekme sayacı: kalite kararı bekleyen ürün.
 export const GostergelerSayaci: KmSayaci = (v) => {
   const q = karantina(v);
   return { n: q.length, kotu: q.some((x) => x.ton === 'kotu') };

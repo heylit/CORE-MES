@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Pkg, PlannedDown } from '../../../../../../arkon/shared/model.ts';
+import type { LogEvent, Pkg, Plant, PlannedDown } from '../../../../../../arkon/shared/model.ts';
 import { ILK_AYARLAR } from '../cekirdek/ayarlar.ts';
 import {
-  csvDosyaAdi, csvMetni, durusHatasi, enCokUretim, enDusukOee, halkaYaylari, kartDurumu, karoSinifi, karoSiniflari, onayBekliyor, seritKonumu,
+  csvDosyaAdi, csvMetni, panoOzeti, durusHatasi, enCokUretim, enDusukOee, halkaYaylari, kartDurumu, karoSinifi, karoSiniflari, onayBekliyor, seritKonumu,
   tasimaPlani, yeniDurus, type PanoKarosu,
 } from './kurallar.ts';
 
@@ -78,5 +78,25 @@ describe('A3 kuralları', () => {
     const liste = [k('a', 0.8, 10), k('b', null, 0), k('c', 0.4, 30), k('d', 0.6, 20), k('e', 0.9, 5)];
     expect(enDusukOee(liste).map((x) => x.s.id)).toEqual(['c', 'd', 'a']);
     expect(enCokUretim(liste, 2).map((x) => x.s.id)).toEqual(['c', 'd']);
+  });
+});
+
+describe('pano özeti: veri yokken kullanılabilirlik', () => {
+  const tesis = { wcs: [{ id: 'W1', name: 'Merkez' }], sts: [{ id: 'S1', name: 'Tezgah', wc: 'W1' }], mcs: [] } as unknown as Plant;
+  const ayar = { ...ILK_AYARLAR, tesis };
+  const sh = { s: 0, e: 8 * 3_600_000, name: 'A', breaks: [], label: 'A', tanimsiz: false };
+  const veri = (ev: LogEvent[]) => ({ ev, cn: [], calls: [], pk: [], rs: {}, mt: [], sh, at: 0 });
+  const olay = (at: number, state: LogEvent['state']): LogEvent => ({ at, machine: 'S1', state } as unknown as LogEvent);
+
+  it('hiçbir istasyonun durum kaydı yoksa kullanılabilirlik boştur, sıfır değil', () => {
+    const o = panoOzeti(veri([]), 3_600_000, ayar, '');
+    expect(o.toplam.planned).toBeGreaterThan(0);
+    expect(o.A).toBeNull();
+    expect(o.oee).toBeNull();
+  });
+
+  it('durum kaydı varsa kullanılabilirlik hesaplanır; hiç çalışmadıysa sıfırdır', () => {
+    expect(panoOzeti(veri([olay(1, 'stopped')]), 3_600_000, ayar, '').A).toBe(0);
+    expect(panoOzeti(veri([olay(1, 'running')]), 3_600_000, ayar, '').A).toBeGreaterThan(0.99);
   });
 });

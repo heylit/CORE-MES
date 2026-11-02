@@ -34,7 +34,8 @@ export interface AnaVeri {
   depot: DepoKarti[];
   tot: Sayac;
   dep: { short: number; low: number; ok: number };
-  today: number;
+  // Bugün yazılmış üretim satırı yoksa null: adet Üretim Terminali'nden girilir (311 a), sıfır uydurulmaz.
+  today: number | null;
 }
 
 // Hesap hatası tek kartı düşürmesin diye prototipte try/catch vardı; aynı korunur.
@@ -65,7 +66,8 @@ export function hData(simdi: Date = new Date()): AnaVeri {
   }));
   D0.depot.sort((a, b) => (a.stock.st === 'short' ? -1 : 0) - (b.stock.st === 'short' ? -1 : 0) || (a.stock.avail ?? 0) - (b.stock.avail ?? 0));
   const t0 = new Date(simdi); t0.setHours(0, 0, 0, 0);
-  D0.today = ((state.wearLog ?? []) as { ts: number; n?: number }[]).filter((l) => l.ts >= t0.getTime()).reduce((a, l) => a + (l.n || 0), 0);
+  const bugun = ((state.wearLog ?? []) as { ts: number; n?: number }[]).filter((l) => l.ts >= t0.getTime());
+  D0.today = bugun.length === 0 ? null : bugun.reduce((a, l) => a + (l.n || 0), 0);
   return D0;
 }
 

@@ -79,7 +79,7 @@ export function Bugun({ veri, yetki, git, atolye }: EkranOzellikleri) {
         ))
         : (
           <DurumKutusu durum="bos" mesaj="Bekleyen iş yok">
-            <p>Karantinada ürün, geciken DÖF, yarım ölçüm ya da geçersiz cihaz bulunmuyor.</p>
+            <p>Karar bekleyen ürün, geciken DÖF, yarım ölçüm ya da geçersiz cihaz bulunmuyor.</p>
           </DurumKutusu>
         )}
       {onaylanan && <FormOnayi kayit={onaylanan} rol={yetki.rol} kapat={() => { onaylananYaz(null); }} />}
@@ -104,7 +104,7 @@ function GorevSatiri({ gorev, uygula }: { gorev: Gorev; uygula: (e: GorevEylemi)
 function OzetSeridi({ ozet, git }: { ozet: BugunOzeti; git: EkranOzellikleri['git'] }) {
   const ogeler = [
     { anahtar: 'ncr', sayi: ozet.acikNcr, metin: 'Açık uygunsuzluk', ton: ozet.acikNcr ? 'uyari' : undefined, yap: () => { git('uygunsuzluklar'); } },
-    { anahtar: 'karantina', sayi: ozet.karantinada, metin: 'Karantinada bekleyen', ton: ozet.karantinada ? 'hata' : undefined, yap: () => { git('gostergeler'); } },
+    { anahtar: 'karantina', sayi: ozet.karantinada, metin: 'Kalite kararı bekleyen', ton: ozet.karantinada ? 'hata' : undefined, yap: () => { git('gostergeler'); } },
     { anahtar: 'yarim', sayi: ozet.yarim, metin: 'Yarım ölçüm', ton: undefined, yap: () => { git('muayeneler'); } },
     { anahtar: 'cihaz', sayi: ozet.gecersizCihaz, metin: 'Geçersiz cihaz', ton: ozet.gecersizCihaz ? 'hata' : undefined, yap: () => { git('cihazlar'); } },
   ] as const;

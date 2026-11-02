@@ -21,6 +21,8 @@
 .tc-km-baglanti { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--done); }
 
 .tc-km-form { display: grid; gap: var(--b-3); }
+/* Izgara ve esnek öğe içeriğinin genişliğine uzar; soru şeridi kendi içinde kaysın, pencere gövdesi yana taşmasın. */
+.tc-km-form > * { min-width: 0; }
 .tc-km-form-ust { display: grid; gap: var(--b-2); }
 .tc-km-ilerleme { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-km-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
@@ -102,7 +104,7 @@
 .tc-km-fq-sayi { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-km-fq-kotu { color: var(--stop); }
 .tc-km-fq-kip { padding: 0; border: 0; background: none; color: var(--done); font: inherit; font-size: var(--yazi-s); text-decoration: underline; cursor: pointer; }
-.tc-km-fq-noktalar { display: flex; gap: var(--b-1); width: 100%; padding-bottom: var(--b-1); overflow-x: auto; }
+.tc-km-fq-noktalar { display: flex; gap: var(--b-1); width: 100%; min-width: 0; padding-bottom: var(--b-1); overflow-x: auto; }
 .tc-km-fq-noktalar button {
   flex: none; min-width: var(--b-6); height: var(--b-6); padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam);
   background: var(--panel); color: var(--muted); font: inherit; font-size: var(--yazi-xs); font-weight: 700; cursor: pointer;

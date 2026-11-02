@@ -103,7 +103,9 @@ export function panoOzeti(d: PanoVerisi, simdi: number, a: TakvimAyarlari & Pick
   const toplam = karolar.reduce((t, k) => ({
     run: t.run + k.c.run, planned: t.planned + k.c.planned, ideal: t.ideal + k.c.ideal, good: t.good + k.c.good, scrap: t.scrap + k.c.scrap, stop: t.stop + k.c.stopMs,
   }), { run: 0, planned: 0, ideal: 0, good: 0, scrap: 0, stop: 0 });
-  const A = toplam.planned ? Math.min(1, toplam.run / toplam.planned) : null;
+  // Hiçbir istasyonun durum kaydı yoksa çalışma süresi bilinmiyor: kullanılabilirlik 0 değil, boştur (CLAUDE.md kural 5).
+  const durumBilinen = karolar.some((k) => k.last !== null);
+  const A = durumBilinen && toplam.planned ? Math.min(1, toplam.run / toplam.planned) : null;
   const P = toplam.run && toplam.ideal ? Math.min(1, toplam.ideal / toplam.run) : null;
   const Q = toplam.good + toplam.scrap ? toplam.good / (toplam.good + toplam.scrap) : null;
   const wcOf = (m: string | null | undefined) => istasyonBul(a.tesis, m ?? '').wc;

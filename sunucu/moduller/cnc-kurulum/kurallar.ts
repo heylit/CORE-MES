@@ -221,6 +221,24 @@ export function kurulumYukleri(durum: unknown): TakimYuku[] {
   return yukler;
 }
 
+// "Kurulum tamam" şartı (K13 a): kurulum kartındaki her adım "seçildi" işaretli olmalıdır; ekrandaki düğmenin şartının sunucudaki
+// karşılığı. Adımlar ekranın kurulum kartıyla aynıdır: yedi genel adım, seçili tezgâhın magazinindeki dolu her cep (T<n>, boş cep
+// gerekmez) ve ölçüm ile sarf. Magazini kayıtta olmayan tezgâhta cep adımı aranmaz: ekran varsayılan yükü kayda yazmadan gösterir.
+const KURULUM_GENEL_ADIMLARI = ['machine', 'material', 'fixture', 'jaw', 'zero', 'wcs', 'coolant'] as const;
+const KURULUM_COKLU_ADIMLARI = ['gauges', 'cons'] as const;
+const BOS_CEP = 'empty';
+
+export function kurulumEksikAdimlari(durum: unknown, secim: unknown): string[] {
+  const d = nesneMi(durum) ? durum : {};
+  const tezgah = d['machine'];
+  const magazin = typeof tezgah === 'string' && nesneMi(d['tools']) ? d['tools'][tezgah] : undefined;
+  const cepler = Array.isArray(magazin)
+    ? magazin.slice(0, AZAMI_CEP + 1).flatMap((kimlik, cep) => (typeof kimlik === 'string' && kimlik !== '' && kimlik !== BOS_CEP ? [`T${String(cep + 1)}`] : []))
+    : [];
+  const isaretler = nesneMi(secim) && nesneMi(secim['adimlar']) ? secim['adimlar'] : {};
+  return [...KURULUM_GENEL_ADIMLARI, ...cepler, ...KURULUM_COKLU_ADIMLARI].filter((a) => isaretler[a] !== true);
+}
+
 // Bir sayım farkının cep başına kullanımı: sağlam ve hurda parça takımı aynı tüketir; eksi fark geri alır.
 export function sayimKullanimi(yuk: Pick<TakimYuku, 'parcaBasiDk'>, fark: number): { dk: number; adet: number } {
   return { dk: yuk.parcaBasiDk === null ? 0 : yuk.parcaBasiDk * fark, adet: fark };

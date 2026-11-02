@@ -249,10 +249,12 @@ describe('A2 Hazırlık ekranı', () => {
       return asil(adres, ayar);
     }));
   }
+  // Kalite Merkezi'ni okuyabilen roller (yönetici bütün işlemleri taşır; hazırlıkta kalite ve CAM).
+  const kmOkur = (d: Deneme): Deneme => ({ ...d, kullanici: { ...d.kullanici, islemler: [...d.kullanici.islemler, 'kalite-merkezi.oku'] } });
   const kmPaketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${KM_PAKETI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
 
   it('TMI paketinde Dokümanlar parçanın Kalite Merkezi resmini listeler; Pakete al dosyayı ve balonları kimlikleriyle getirir, plan salt okunur', async () => {
-    const istekler = sunucuKur(YONETICI, kmSunucusu());
+    const istekler = sunucuKur(kmOkur(YONETICI), kmSunucusu());
     merkezKur(istekler);
     kmKur([KM_RESMI, { ...KM_RESMI, id: 13, ad: 'Kaldırılmış resim', aktif: false }]);
     arkonAc('/arkon/hazirlik');
@@ -278,7 +280,7 @@ describe('A2 Hazırlık ekranı', () => {
   it('Kalite Merkezi resmi değişince paket "değişti" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {
     // Önceki denemenin cihazda kalan paketiyle karışmasın diye ayrı kimlik.
     const BAGLI = { ...KM_PAKETI, id: 'tmi-ue-10', no: 'IE-DENEME-4', kmResim: { id: 12, surum: 3 } };
-    const istekler = sunucuKur(HAZIRLIKCI, {
+    const istekler = sunucuKur(kmOkur(HAZIRLIKCI), {
       belgeler: { pkgs: [{ kimlik: BAGLI.id, surum: 1, govde: BAGLI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, { kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }] },
     });
     merkezKur(istekler);
@@ -290,6 +292,24 @@ describe('A2 Hazırlık ekranı', () => {
     expect(await within(km).findByText('Kalite Merkezi’nde değişti', undefined, { timeout: 10000 })).toBeTruthy();
     expect(within(km).queryByRole('button', { name: /Güncelle|Pakete al/ })).toBeNull();
     expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('Kalite Merkezi okuma yetkisi olmayan rol için resimler istenmez; bölüm yetkisizliği söyler', async () => {
+    const OKUMAYAN = { ...KM_PAKETI, id: 'tmi-ue-11', no: 'IE-DENEME-5' };
+    sunucuKur(HAZIRLIKCI, { belgeler: { pkgs: [{ kimlik: OKUMAYAN.id, surum: 1, govde: OKUMAYAN }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const km: string[] = [];
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
+      if (yol.startsWith('/kalite-merkezi/')) km.push(yol);
+      return asil(adres, ayar);
+    }));
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const bolum = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    expect(await within(bolum).findByText('Kalite Merkezi’ni okuma yetkin yok.', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(km).toEqual([]);
   }, 40000);
 
   it('malzemesi olmayan eski pakette Kalite Merkezi okunmaz ve plan düzenlenir', async () => {

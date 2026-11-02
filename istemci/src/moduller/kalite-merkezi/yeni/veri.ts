@@ -6,7 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { api, ApiHatasi } from '../../../ortak/veri/api.ts';
 import { emirSatirlari } from './emirler/kaynak.ts';
-import { izFarki, izNo } from './kurallar.ts';
+import { izFarki, izNo, onayAlaniDegisiyor } from './kurallar.ts';
 import type { Emir, IzDegisikligi, IzKaydi, KmAyarlari, KmKayit, KmKoleksiyonTipleri, KmKoleksiyonu } from './tipler.ts';
 
 // Uygulamanın `S`i: koleksiyon başına kayıtlar (kimlik `_id`'de), ayarlar ve oturumdaki kişinin adı. Kayıt sunucuda yorumlanmaz.
@@ -232,17 +232,25 @@ export function useKmKomutu(rol = ''): KmKomutu {
     async function govdeYaz(kol: string, id: string, govde: Govde, secenek: KaydetSecenegi = {}): Promise<KmOnaylaCevabi> {
       const yol = `/kalite-merkezi/kayitlar/${parca(kol)}/${parca(id)}`;
       const istek: KmYazGovdesi = { govde, surum: d.beklenen(kol, id) };
-      let cevap: KmOnaylaCevabi;
-      try {
-        cevap = await api.post<KmSurumCevabi>(`${yol}/yaz`, istek);
-      } catch (e) {
-        if (!onayReddiMi(e)) throw e;
+      const onayla = (): Promise<KmOnaylaCevabi> => {
         const onay: KmOnaylaGovdesi = {
           ...istek,
           ...(secenek.karantinaHedefKonumId === undefined ? {} : { karantinaHedefKonumId: secenek.karantinaHedefKonumId }),
           ...(secenek.serbestMiktarlar === undefined ? {} : { serbestMiktarlar: secenek.serbestMiktarlar }),
         };
-        cevap = await api.post<KmOnaylaCevabi>(`${yol}/onayla`, onay);
+        return api.post<KmOnaylaCevabi>(`${yol}/onayla`, onay);
+      };
+      let cevap: KmOnaylaCevabi;
+      if (onayAlaniDegisiyor(kol, d.govde(kol, id), govde)) {
+        cevap = await onayla();
+      } else {
+        // Önbellek eskiyse kural sunucunun gördüğü kayda göre karar verir: genel uçtan onay reddi gelirse onay ucu denenir.
+        try {
+          cevap = await api.post<KmSurumCevabi>(`${yol}/yaz`, istek);
+        } catch (e) {
+          if (!onayReddiMi(e)) throw e;
+          cevap = await onayla();
+        }
       }
       d.hatirla(kol, id, { govde, surum: cevap.surum });
       return cevap;

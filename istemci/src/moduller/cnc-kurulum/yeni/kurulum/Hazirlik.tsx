@@ -155,9 +155,15 @@ export function Hazirlik() {
   useEffect(() => {
     const g = gecisSecenegiAl('prep') as HazirlikGecisi | undefined;
     prEnter(g?.adim);
-    emirler().then(acikEmirlerYaz, () => { /* liste alınamazsa açıklık bilinmez, uyarı gösterilmez */ });
     return () => { PRT.playing = false; hazirlikBirak(); };
   }, []);
+  // Emir listesini göremeyen kişide (vardiya sorumlusu) liste hiç istenmez: açıklık bilinmez, "açık değil" denmez.
+  useEffect(() => {
+    if (!yetki.emirGorebilir) return;
+    let iptal = false;
+    emirler().then((l) => { if (!iptal) acikEmirlerYaz(l); }, () => { /* liste alınamazsa açıklık bilinmez, uyarı gösterilmez */ });
+    return () => { iptal = true; };
+  }, [yetki.emirGorebilir]);
 
   const st = prCurStep(), S = prStep(st), kapali = kilitli(yetki), fin = prFinalDone();
   const onayla = useCallback(() => { if (!izinli(yetki, 'ok')) return; if (prConfirm() === 'dosya') dosya.current?.click(); }, [yetki]);
@@ -210,6 +216,7 @@ export function Hazirlik() {
   }, []);
 
   const emir = seciliEmir(), acik = emir === null || acikEmirler === null || acikEmirler.some((x) => x.id === emir.id);
+  const emirSecebilir = yetki.yazabilir && yetki.emirGorebilir;
   const kurulum = kayit?.kurulum ?? null;
   let alt = '';
   if (st) alt = st.g === 'trial' ? 'Enter: başlat / durdur · ◀ ▶ hız · sürükle: döndür' : prIsDone(st) ? '✓ Onaylandı — Enter ile sonraki adım' : st.g === 'final' ? 'Kontrol listesini inceleyin' : '◀ ▶ seç · Enter onayla · ▲ ▼ adım';
@@ -244,7 +251,7 @@ export function Hazirlik() {
           <div className="tc-ck-hz-baslik">{st ? prTitleOf(st) : ''}</div>
           <div className="tc-ck-hz-alt">{alt}</div>
           <div className="tc-ck-hz-emirsatir">
-            {emir === null ? 'Üretim emri seçilmedi · Kurulum ekranında seçin'
+            {emir === null ? `Üretim emri seçilmedi · ${emirSecebilir ? 'Kurulum ekranında seçin' : 'kurulumu yapan kişi seçer'}`
               : <><b>{operasyon(emir)}</b> · {emir.parcaNo} {emir.parcaAd} · {emir.adet} adet{acik ? '' : ' (açık değil)'}</>}
           </div>
         </div>
@@ -284,7 +291,7 @@ export function Hazirlik() {
       </div>
       <aside className={`tc-ck-yan tc-ck-hz-yan${cekmece ? ' tc-ck-acik' : ''}`}>
         <button type="button" className="tc-ck-cekmece" onClick={() => { cekmeceYaz(!cekmece); }}><Simge ad={cekmece ? 'down' : 'up'} boyut="k" /> Hazırlık paneli</button>
-        <EmirKarti emir={emir} acik={acik} kurulum={kurulum} />
+        <EmirKarti emir={emir} acik={acik} kurulum={kurulum} secebilir={emirSecebilir} />
         <div className="tc-ck-yan-kaydir">
           <HazirlikPaneli yetki={yetki} eylem={eylem} kayit={kayit} emir={emir} />
         </div>

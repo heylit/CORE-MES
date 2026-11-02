@@ -110,7 +110,7 @@ export function AnaSayfa() {
           baslik={`Hazırlık · ${pm.name}`} simge={fin ? 'check' : 'clipboard-check'} metin={fin ? 'HAZIR' : `%${String(hPct(pr.pct))}`}
           altMetin={fin ? 'tamamlandı' : `${String(pr.d)} / ${String(pr.n)} adım`} yol={yol('prep')}
         />
-        <SayiKarti baslik="Bugünkü üretim" simge="chart" sayi={D0.today} altMetin="adet kaydedildi" yol={yol('life')} />
+        <SayiKarti baslik="Bugünkü üretim" simge="chart" sayi={D0.today} altMetin={D0.today === null ? 'bugün kayıt yok' : 'adet kaydedildi'} yol={yol('life')} />
       </div>
 
       <Kart baslik="Tezgâhlar" sag={<span className="tc-cl-soluk">{`${String(D0.machines.length)} tezgâh · durumları elle seçin`}</span>}>
