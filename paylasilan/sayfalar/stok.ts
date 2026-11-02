@@ -31,6 +31,8 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Malzeme fişleri', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
+        // Göz ve etiket okutarak kör sayım; okuyucunun hafızasından aktarım da buradan (1905).
+        { anahtar: 'okutarak-sayim', baslik: 'Okutarak say', yol: '/stok/okutarak-sayim', simge: 'scan', islem: 'stok.sayim' },
         // Eşiği aşan sayım farkı ikinci yetkilinin onayını bekler (1279 a); sayan da listeyi görür.
         { anahtar: 'sayim-onaylari', baslik: 'Sayım onayları', yol: '/stok/sayim-onaylari', simge: 'check', islem: 'stok.sayim-onayla', veya: ['stok.sayim'] },
         { anahtar: 'defter-farklari', baslik: 'Defter farkları', yol: '/stok/defter-farklari', simge: 'alert', islem: 'stok.eksi-onayla' },

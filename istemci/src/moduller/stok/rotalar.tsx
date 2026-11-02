@@ -14,6 +14,7 @@ import { MalKabul } from './MalKabul.tsx';
 import { MalKabulAyrinti } from './MalKabulAyrinti.tsx';
 import { MalzemeAyrinti } from './MalzemeAyrinti.tsx';
 import { OkutYonlendir } from './OkutYonlendir.tsx';
+import { OkutarakSayim } from './OkutarakSayim.tsx';
 import { Malzemeler } from './Malzemeler.tsx';
 import { Raflar } from './Raflar.tsx';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
@@ -44,6 +45,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/refakat-kartlari', ekran: RefakatKartlari },
   { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },
   { yol: '/stok/malzeme-fisleri/:id', ekran: MalzemeFisi },
+  { yol: '/stok/okutarak-sayim', ekran: OkutarakSayim },
   { yol: '/stok/sayim-onaylari', ekran: SayimOnaylari },
   { yol: '/stok/defter-farklari', ekran: DefterFarklari },
   { yol: '/stok/konumlar', ekran: Konumlar },
