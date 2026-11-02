@@ -153,6 +153,23 @@ export function hesapKilidiBulgulari(kilitler: readonly KilitOzeti[], kapanmisSo
     .map((k) => bulgu('hesap-kilidi', { kullaniciAdi: k.kullaniciAdi, ip: null, kisiId: null }, k.kilitSayisi, k.sonKilit));
 }
 
+// K27 a: kapatılan alarmın kaynağında kapanıştan sonra yeni olay yoksa alarm yeniden açılmaz. Olaylar kural penceresinde
+// kaldıkça tarama aynı bulguyu üretir; yeni olay, kapanan alarmın son gördüğünden yeni bir olay anı ya da (oturum sayısı gibi
+// olay anı olmayan sinyalde) daha büyük sayıdır. Kapanış bu süreden eskiyse koşul sürüyor demektir, alarm yeniden açılır.
+export const KAPANAN_ALARM_PENCERESI_SN = 24 * 60 * 60;
+
+export function yeniOlayliBulgular(
+  bulgular: readonly Bulgu[],
+  kapananlar: readonly (Pick<Bulgu, 'sinyal' | 'kullaniciAdi' | 'ip' | 'kisiId'> & { gozlenenSayi: number; sonGoruldu: string })[],
+): Bulgu[] {
+  const kapanan = new Map(kapananlar.map((k) => [kaynakAnahtari(k), k]));
+  return bulgular.filter((b) => {
+    const k = kapanan.get(kaynakAnahtari(b));
+    if (k === undefined) return true;
+    return b.sinyal === 'cok-oturum' ? b.sayi > k.gozlenenSayi : an(b.sonOlay) > an(k.sonGoruldu);
+  });
+}
+
 // VPN muafiyeti: aralıktaki cihazdan gelen satır cihaza bağlı kurallara (G-03, G-20) girmeden ayıklanır. G-02 ad + cihaz
 // çiftine baktığı için etkilenmez.
 export function vpnDisindakiler(satirlar: readonly DenemeOzeti[], araliklar: readonly AgAraligi[]): DenemeOzeti[] {

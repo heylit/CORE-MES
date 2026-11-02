@@ -12,7 +12,7 @@ Her kural için izin verilen ve reddedilen durum aynı testte sınanır.
 | G-05 çok oturum (4, orta) | 4 açar | 3 açmaz | `G-05: ...` (saf ve akış) |
 | G-06 kaynak başına tek kapanmamış alarm | ikinci tarama yeni satır açmaz | elle ikinci satır `guvenlik_alarmi_acik_tekil` | `veritabanı kısıtları` |
 | G-07 süren koşul sayaç günceller | yeni hatalı ya da büyüyen sayı günceller | aynı veri dokunmaz | `G-07: ...` |
-| G-08 kapanan alarm yeniden açılır | kapanmış kaynağa yeni alarm | açık varken yeni yok | `G-08, G-09: ...` |
+| G-08 kapanan alarm yalnız yeni olayla yeniden açılır (K27 a) | kapanıştan sonra yeni olay gelen kaynağa yeni alarm | açık varken yeni yok; kapanan alarmın olayları pencerede kaldıkça yeni alarm yok | `G-08, G-09: ...`, `K27 a: ...` |
 | G-09 kendiliğinden kapanmaz | insan kapatır | tarama koşul bitince kapatmaz | `G-08, G-09: ...` |
 | G-10 durum yalnız ileri | açık->onaylandı->kapandı, açık->kapandı | geri dönüş tetikleyicide red, servis 422 | `G-10: ...` (saf); `G-10, G-13: ...`; `onay ve kapanış` |
 | G-11 onay ve kapanış kişi ve zamanla | sunucu yazar | kişisiz onay `guvenlik_alarmi_onay_butun`, `_kapanis_butun` | `veritabanı kısıtları`; `onay ve kapanış` (gövde kişi seçemez) |

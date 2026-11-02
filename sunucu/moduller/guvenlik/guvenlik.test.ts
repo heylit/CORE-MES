@@ -171,7 +171,7 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.deepEqual([alarm?.onem, alarm?.gozlenenSayi, alarm?.kisiAdi], ['orta', 4, 'Deneme cok-oturum']);
   });
 
-  test('G-08, G-09: koşulu biten alarm kendiliğinden kapanmaz; kapanan alarmın koşulu sürerse yeni alarm açılır', async () => {
+  test('G-08, G-09: koşulu biten alarm kendiliğinden kapanmaz; kapanan alarm yeni olay yoksa yeniden açılmaz, yeni olayla açılır (K27 a)', async () => {
     await o().vt.sorgu("INSERT INTO guvenlik_alarmi (sinyal, onem, kullanici_adi, gozlenen_sayi) VALUES ('hatali-giris-serisi', 'orta', 'g09-sessiz', 10)");
     await tara();
     assert.deepEqual((await alarmBul({ kullaniciAdi: 'g09-sessiz' })).map((a) => a.durum), ['acik']);
@@ -182,6 +182,10 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.ok(ilk);
     const kapat = await istek<Alarm>('yonetici', 'POST', `/guvenlik-alarmlari/${ilk.id}/kapat`, { surum: ilk.surum, not: 'Kişi parolasını unutmuş.' });
     assert.equal(kapat.durum, 200, JSON.stringify(kapat.govde));
+    await tara();
+    assert.deepEqual((await alarmBul({ kullaniciAdi: 'g08-ad' })).map((a) => a.durum), ['kapandi']);
+
+    await deneme('g08-ad', '10.8.0.1', 1, 0);
     const yeni = await tara();
     assert.ok((yeni?.yeniAlarm ?? 0) >= 1);
     assert.deepEqual((await alarmBul({ kullaniciAdi: 'g08-ad' })).map((a) => a.durum).sort(), ['acik', 'kapandi']);

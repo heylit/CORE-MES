@@ -26,12 +26,12 @@ import {
   oturumuKapat, saatlikGirisDenemeleri, sonHesapKilitleri,
 } from '../oturum/disari.ts';
 import {
-  ADRES_TARAMASI, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
+  ADRES_TARAMASI, KAPANAN_ALARM_PENCERESI_SN, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
   yetkiReddiBulgulari, type Bulgu,
   DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
-  onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
+  onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari, yeniOlayliBulgular,
 } from './kurallar.ts';
 import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
@@ -72,11 +72,13 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
     ),
   ];
   const acik = new Map((await s.kapanmamisAlarmlar(db)).map((a) => [kaynakAnahtari(a), a]));
+  const acilabilir = new Set(yeniOlayliBulgular(bulgular, await s.kapanmisAlarmlar(db, KAPANAN_ALARM_PENCERESI_SN)));
   let yeniAlarm = 0;
   let guncellenenAlarm = 0;
   for (const b of bulgular) {
     const mevcut = acik.get(kaynakAnahtari(b));
     if (mevcut === undefined) {
+      if (!acilabilir.has(b)) continue;
       const id = await s.alarmAc(db, b);
       if (id === null) continue;
       yeniAlarm += 1;

@@ -55,6 +55,21 @@ export function kapanmamisAlarmlar(db: Db): Promise<AcikAlarm[]> {
   );
 }
 
+export interface KapanmisAlarm { sinyal: Sinyal; kullaniciAdi: string | null; ip: string | null; kisiId: number | null; gozlenenSayi: number; sonGoruldu: string }
+
+// Pencere içinde kapanmış alarmların kaynağa göre en yeni son görülmesi ve en büyük sayısı (K27 a): kapanıştan sonra yeni olay
+// yoksa aynı kaynağa alarm açılmaz.
+export function kapanmisAlarmlar(db: Db, pencereSn: number): Promise<KapanmisAlarm[]> {
+  return db.sorgu<KapanmisAlarm>(
+    `SELECT sinyal, kullanici_adi AS "kullaniciAdi", ip, kisi_id AS "kisiId", max(gozlenen_sayi)::int AS "gozlenenSayi",
+            ${zamanMetni('max(son_goruldu)')} AS "sonGoruldu"
+       FROM guvenlik_alarmi
+      WHERE durum = 'kapandi' AND kapandi > now() - make_interval(secs => $1)
+      GROUP BY sinyal, kullanici_adi, ip, kisi_id`,
+    [pencereSn],
+  );
+}
+
 // Kapanmış hesap-kilidi alarmlarının ada göre en yeni son görülmesi; yalnız pencere içindeki kilitlerle karşılaştırılır.
 export async function kapanmisKilitAlarmlari(db: Db, pencereSn: number): Promise<Map<string, string>> {
   const satirlar = await db.sorgu<{ kullaniciAdi: string; sonGoruldu: string }>(
