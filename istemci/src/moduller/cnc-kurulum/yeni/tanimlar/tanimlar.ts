@@ -7,12 +7,16 @@ import { D, defaults } from '../durum.ts';
 import { clamp } from '../bicim.ts';
 import { allMachines, allMaterials, byId, dirtyUsage, material, MOTOR_ALANLARI, sunucuTezgahiGuncelle, type TezgahSatiri } from '../secici.ts';
 import { tezgahAyarYaz } from '../veri.ts';
+import { KATALOG, katalogEtiketi } from '../veri/tezgah-katalogu.ts';
 import type { IsMalzemesi, IsoGrubu, Kontrol, Tezgah, TezgahTuru } from '../veri/tipler.ts';
 
+// Önce genel gövdeler (prototipin sırası), sonra genel katalog (1893 a). CMM modelleri tezgâh seçiminde yoktur (1894 a): CMM
+// makinesi CNC Kurulum'un tezgâhı değildir, eşleştirmesi ayrı karttadır.
 export const MODEL_OPTS: readonly [string, string][] = [
   ['m_vmc', 'Dikey işleme merkezi (3 eksen)'], ['m_5ax', '5 eksen · döner-devrilir tabla'], ['m_5axh', '5 eksen · döner kafa + döner tabla'],
   ['m_gk', 'Gezer kolonlu işleme merkezi'], ['m_lathe', 'CNC torna'], ['m_tf', 'Torna-freze'], ['m_hmc', 'Yatay işleme merkezi'],
-  ['m_ulathe', 'Üniversal (konvansiyonel) torna'],
+  ['m_ulathe', 'Üniversal (konvansiyonel) torna'], ['m_swiss', 'Kayar otomat'],
+  ...KATALOG.filter((m) => m.tur !== 'cmm').map((m): [string, string] => [m.anahtar, katalogEtiketi(m)]),
 ];
 export const TAPER_OPTS: readonly string[] = ['HSK-A63', 'HSK-A100', 'BT40', 'SK40', 'BT50', 'Capto C6', 'Taret'];
 export const TIP_OPTS: readonly [string, string][] = [['mill', 'Freze / işleme merkezi'], ['lathe', 'CNC torna'], ['millturn', 'Torna-freze']];
