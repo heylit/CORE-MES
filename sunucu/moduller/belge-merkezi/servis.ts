@@ -1,9 +1,10 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { KayitAramaIstegi } from '#paylasilan/kayit-aramasi.ts';
@@ -19,7 +20,7 @@ import { istasyonAdlari, istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
-  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi,
+  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi,
   onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
@@ -293,6 +294,15 @@ export async function menuSayaclari(db: Db): Promise<Record<string, number>> {
 }
 
 // Revizyonun dosyası: yalnız o belgeye bağlı dosya akar (dosya modülü kaydı ve özeti birlikte denetler).
+// Okuyucunun indirme ucu: yayında olmayan revizyonu yalnız yazan ve yayınlamadan önce inceleyen yayıncı indirir (1885 b).
+export async function revizyonDosyasiIndir(db: Db, kullanici: Kullanici, id: number, revizyonId: number): Promise<IkiliCevap> {
+  const r = await sorgular.revizyon(db, id, revizyonId);
+  if (r === null) throw bulunamadi('Revizyon bulunamadı.');
+  const ret = indirmeReddi(r.durum, islemVarMi(kullanici, 'belge-merkezi.yaz') || islemVarMi(kullanici, 'belge-merkezi.yayinla'));
+  if (ret !== null) throw yetkiYok(ILETILER[ret]);
+  return revizyonDosyasi(db, id, revizyonId);
+}
+
 export async function revizyonDosyasi(db: Db, id: number, revizyonId: number): Promise<IkiliCevap> {
   const r = await sorgular.revizyon(db, id, revizyonId);
   if (r === null) throw bulunamadi('Revizyon bulunamadı.');

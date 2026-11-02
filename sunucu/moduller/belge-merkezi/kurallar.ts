@@ -6,6 +6,7 @@ export const ILETILER = {
   arsivde: 'Arşivdeki belge değişmez; önce arşivden çıkarın.',
   yayindaYok: 'Yayınlanacak revizyon yok.',
   zatenYayinda: 'Bu revizyon zaten yayında.',
+  yayindaDegilIndirme: 'Yayında olmayan revizyonun dosyasını yalnız belge yazma ya da yayınlama yetkisi olan indirir.',
   taslakDegil: 'Yalnız taslak revizyon silinir.',
   sonRevizyon: 'Belgenin tek revizyonu silinemez; belgeyi arşivleyin.',
   ayniDosya: 'Bu dosya bu belgede zaten bir revizyon.',
@@ -67,6 +68,11 @@ export function revizyonHarfi(sira: number): string {
 // CZ-05: yayınlanabilen revizyon taslak ya da eskidir (eski revizyon yeniden yayına alınabilir); yayındaki yeniden yayınlanmaz.
 export function yayinReddi(durum: RevizyonDurumu): keyof typeof ILETILER | null {
   return durum === 'yayinda' ? 'zatenYayinda' : null;
+}
+
+// 1885 b: taslak ve eski revizyonun dosyası yalnız yazana ve yayıncıya gider; okuyucu yalnız yayındakini indirir.
+export function indirmeReddi(durum: RevizyonDurumu, yazanYaDaYayinci: boolean): keyof typeof ILETILER | null {
+  return durum === 'yayinda' || yazanYaDaYayinci ? null : 'yayindaDegilIndirme';
 }
 
 // CZ-07: yalnız taslak silinir ve belgenin son kalan revizyonu silinmez (belge dosyasız kalmasın).
