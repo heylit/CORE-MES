@@ -10,7 +10,7 @@ import { DisOperasyonlar } from './DisOperasyonlar.tsx';
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 const satir = (ek: Partial<DisOperasyon>): DisOperasyon => ({
   isEmriId: 1, uretimEmriId: 11, emirNo: 'UE-2026-001', urun: 'Deneme flanş', opNo: 30, adim: 'Kaplama', firmaId: 3, firmaAdi: 'Deneme Kaplama', planlananGidis: '2026-10-05',
-  gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, ...ek,
+  gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, sirada: true, ...ek,
 });
 
 interface Istek { yontem: string; yol: string; govde: unknown; kimlik: string | null }
@@ -82,6 +82,14 @@ describe('Dış operasyonlarda gidiş ve tamamla (#995); dönüş mal kabulde', 
     expect([dugme('UE-2026-001', /Mal kabulde gir/).disabled, dugme('UE-2026-001', /Tamamla/).disabled]).toEqual([false, true]);
     expect([dugme('UE-2026-002', /Mal kabulde gir/).disabled, dugme('UE-2026-002', /Tamamla/).disabled]).toEqual([true, false]);
     expect([dugme('UE-2026-003', /Mal kabulde gir/).disabled, dugme('UE-2026-003', /Tamamla/).disabled]).toEqual([true, true]);
+  });
+
+  it('1849 (C17): sırası gelmemiş fason adımında Gönder kapalıdır ve nedenini söyler', async () => {
+    ac(liste(satir({}), satir({ isEmriId: 4, emirNo: 'UE-2026-004', sirada: false, gonderilen: null, gerceklesenGidis: null })), ['uretim-emirleri.fason']);
+    const gonder = (emirNo: string) => within(satirOf(emirNo)).getByRole('button', { name: /Gönder/ }) as HTMLButtonElement;
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Gönder/ })).toHaveLength(2));
+    expect([gonder('UE-2026-001').disabled, gonder('UE-2026-004').disabled]).toEqual([false, true]);
+    expect(gonder('UE-2026-004').title).toBe('Önceki iş emirleri bitmeden fasona gönderilmez.');
   });
 
   it('gönder, emir ve iş emri kimliğiyle üretim emirlerinin ucuna adedi istek kimliğiyle yazar; yeniden basış aynı kimlikle gider', async () => {

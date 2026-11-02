@@ -20,7 +20,7 @@ import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, ku
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
-import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
@@ -1071,11 +1071,13 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   const liste = await fasonIsEmirleri(db);
   const firmalar = await firmaOzetleri(db, [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
   const gun = await s.bugun(db);
+  // 1849 (C17): gidiş kaydıyla aynı sıra kuralı; ekran sırası gelmemiş adımda "Gönder"i kapatır, sunucu yine reddeder.
+  const gonderim = await fasonGonderimleri(db, liste.map((x) => ({ isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, adet: x.adet })));
   return {
     hazir: true,
     operasyonlar: liste.map(({ ilkGidis, ...x }) => ({
       ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
-      gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun),
+      gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
     })),
   };
 }

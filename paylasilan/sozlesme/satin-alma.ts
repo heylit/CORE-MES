@@ -690,6 +690,8 @@ export const disOperasyonSemasi = z.object({
   donen: z.number().int().nullable(),
   hurda: z.number().int().nullable(),
   gecikmeGun: z.number().int().nullable(),
+  // 1849: önceki iş emirleri bitti mi (fasona gönderilebilir mi); gidiş kaydıyla aynı kural.
+  sirada: z.boolean(),
 });
 // hazir: üretim emirlerinin fason listesi bağlı mı (bağlanana kadar liste boş, ekran bunu söyler).
 export const disOperasyonlarCevabi = z.object({ hazir: z.boolean(), operasyonlar: z.array(disOperasyonSemasi) });
