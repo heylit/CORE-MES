@@ -12,6 +12,24 @@ export const ADRES_SINIRI = 50;
 // Plan bedelinin müşteri sınıfı (265 a); çarpanları plan tutar, boş sınıf 1,0 sayılır.
 export const MUSTERI_SINIFLARI = ['A', 'B', 'C'] as const;
 
+// Firmanın varsayılan para birimi (kart 1829): yürürlükteki ISO 4217 ödeme para birimleri. Fon, maden ve deneme kodları
+// (XAU, XDR, XXX gibi) ile yürürlükten kalkanlar (BGN, ANG, SLL, ZWL) yoktur. Veritabanı kısıtı yalnız üç büyük harfe bakar;
+// liste değişirse kayıtlı firma bozulmaz, yalnız yeni yazma denetlenir.
+export const PARA_BIRIMI_KODLARI = [
+  'AED', 'AFN', 'ALL', 'AMD', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT', 'BHD', 'BIF', 'BMD', 'BND', 'BOB', 'BRL', 'BSD',
+  'BTN', 'BWP', 'BYN', 'BZD', 'CAD', 'CDF', 'CHF', 'CLP', 'CNY', 'COP', 'CRC', 'CUP', 'CVE', 'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP',
+  'ERN', 'ETB', 'EUR', 'FJD', 'FKP', 'GBP', 'GEL', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HTG', 'HUF', 'IDR', 'ILS',
+  'INR', 'IQD', 'IRR', 'ISK', 'JMD', 'JOD', 'JPY', 'KES', 'KGS', 'KHR', 'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR',
+  'LRD', 'LSL', 'LYD', 'MAD', 'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MYR', 'MZN', 'NAD', 'NGN',
+  'NIO', 'NOK', 'NPR', 'NZD', 'OMR', 'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF', 'SAR', 'SBD',
+  'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SOS', 'SRD', 'SSP', 'STN', 'SVC', 'SYP', 'SZL', 'THB', 'TJS', 'TMT', 'TND', 'TOP', 'TRY',
+  'TTD', 'TWD', 'TZS', 'UAH', 'UGX', 'USD', 'UYU', 'UZS', 'VES', 'VND', 'VUV', 'WST', 'XAF', 'XCD', 'XCG', 'XOF', 'XPF', 'YER', 'ZAR',
+  'ZMW', 'ZWG',
+] as const;
+const PARA_BIRIMI_KUMESI: ReadonlySet<string> = new Set(PARA_BIRIMI_KODLARI);
+export const PARA_BIRIMI_ILETISI = 'Geçerli bir para birimi kodu girin (TRY, USD, EUR gibi).';
+export const paraBirimiGecerliMi = (kod: string): boolean => PARA_BIRIMI_KUMESI.has(kod);
+
 export const firmaTuru = z.enum(FIRMA_TURLERI);
 export type FirmaTuru = z.output<typeof firmaTuru>;
 export const adresTuru = z.enum(ADRES_TURLERI);
@@ -46,7 +64,7 @@ export const firmaKimligi = z.object({
   ulkeKodu: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Ülke kodu iki harftir (TR gibi).').default('TR'),
   vergiNo: istegeBagli(30),
   vergiDairesi: istegeBagli(100),
-  paraBirimi: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Para birimi üç harfli koddur (TRY gibi).').default('TRY'),
+  paraBirimi: z.string().trim().toUpperCase().refine(paraBirimiGecerliMi, PARA_BIRIMI_ILETISI).default('TRY'),
   vadeGunu: z.number().int().min(0, 'Vade günü 0 ile 365 arasındadır.').max(365, 'Vade günü 0 ile 365 arasındadır.').nullish()
     .transform((v) => v ?? null),
   adres: istegeBagli(500),

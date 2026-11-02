@@ -32,3 +32,4 @@ Her kuralın kabul ve ret testi vardır. Finanstan gelen kuralın eski numarası
 | Karne olayı kaldırma (kart 1474): geri alınan kaynak kaydının olayı kalkar, tekrar güvenli | gecikme "kaldırılan olay..." | gecikme "reddedilen kaldırma" (bilinmeyen kaynak, boş anahtar) |
 | Karne olayı (1259 c) kaynak ve anahtarla tektir, sonraki karar yerine geçer | karne "olay kaynak ve anahtarla tektir" | karne "reddedilen olay" (geçersiz karar, olmayan firma, `karne_olayi_alanlar` kısıtı) |
 | Yetki: karne okuma `musteri-tedarikci.oku`, hizmet puanı `satin-alma.yaz`, yıllık karne `kalite-merkezi.onayla` (V6) | karne "yetki" testleri | aynı testler (401, 403, kayıt açılmaz) |
+| MT-23 (kart 1829) para birimi yürürlükteki ISO 4217 kodu (`PARA_BIRIMI_KODLARI`); aynı ad yalnız uyarıdır (ekran) | firma "MT-23" (küçük harf büyür, CHF geçer); istemci "aynı ad uyarısı" | aynı testler (XYZ, XAU, BGN 400 alan paraBirimi, kayıt değişmez; kendi adı uyarı vermez) |

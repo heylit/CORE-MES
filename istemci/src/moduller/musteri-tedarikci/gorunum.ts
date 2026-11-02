@@ -46,3 +46,9 @@ export function menuSuzgeci(yol: string): MenuSuzgeci {
   if (yol.endsWith('/fason')) return { baslik: 'Fason firmalar', fason: true };
   return { baslik: 'Müşteriler ve Tedarikçiler' };
 }
+
+// Aynı ad uyarısı (kart 1829): sunucu araması Türkçe harfi ve aksanı sadeleştirerek eşler (arama_sade); karşılaştırma da öyle
+// yapılır ki "Çelik A.Ş." ile "celik a.s." aynı ad sayılsın.
+export function adSade(ad: string): string {
+  return ad.toLocaleLowerCase('tr').replace(/ı/g, 'i').normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, ' ').trim();
+}

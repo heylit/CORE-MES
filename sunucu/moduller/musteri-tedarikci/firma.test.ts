@@ -6,6 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { PARA_BIRIMI_KODLARI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { Firma, FirmaAyrintiCevabi, FirmaCevabi, FirmaEkleGovdesi, FirmaListesiCevabi, FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -163,6 +164,25 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
     assert.equal((await ekle('yazan', yeniFirma({ ulkeKodu: 'DE', vergiNo: 'X'.repeat(31) }))).durum, 400);
     assert.equal(await kisitAdi("INSERT INTO musteri_tedarikci_firma (ad, tur, ulke_kodu, vergi_no, olusturan_id) VALUES ('Kisit Deneme', 'musteri', 'TR', 'ABC', $1)", [yazanId]),
       'musteri_tedarikci_firma_vergi_no_bicim');
+  });
+
+  test('MT-23 (kart 1829): para birimi yürürlükteki ISO 4217 kodudur; bilinmeyen kod eklemede ve düzeltmede 400, kayıt değişmez', async () => {
+    assert.equal(new Set(PARA_BIRIMI_KODLARI).size, PARA_BIRIMI_KODLARI.length);
+    assert.ok(PARA_BIRIMI_KODLARI.every((k) => /^[A-Z]{3}$/.test(k)));
+    for (const kod of ['TRY', 'USD', 'EUR', 'GBP', 'CHF']) assert.ok((PARA_BIRIMI_KODLARI as readonly string[]).includes(kod), kod);
+    const once = await firmaSayisi();
+    for (const kod of ['XYZ', 'XAU', 'BGN', 'TR', 'TRYY']) {
+      const ret = await ekle('yazan', yeniFirma({ paraBirimi: kod }));
+      assert.equal(ret.durum, 400, kod);
+      assert.deepEqual([kodu(ret), (ret.govde as { alan?: string }).alan], ['DOGRULAMA', 'paraBirimi'], kod);
+    }
+    assert.equal(await firmaSayisi(), once);
+    const f = await firmaKur({ paraBirimi: 'chf' });
+    assert.equal(f.paraBirimi, 'CHF');
+    const { id: _id, olusturma: _o, guncelleme: _g, aktif: _a, logoKayitNo: _l, logoGonderimDurumu: _d, ...govde } = f;
+    const ret = await istek('yazan', 'POST', `/musteri-tedarikci/firmalar/${f.id}/guncelle`, { ...govde, paraBirimi: 'ABC' });
+    assert.equal(ret.durum, 400);
+    assert.deepEqual([(await getir('okuyan', f.id)).govde.firma.paraBirimi, (await getir('okuyan', f.id)).govde.firma.surum], ['CHF', f.surum]);
   });
 
   test('FNS-45: Logo\'ya gönderilmiş firmanın kodu ve Logo cari kodu değişmez; öteki alanları değişir', async () => {

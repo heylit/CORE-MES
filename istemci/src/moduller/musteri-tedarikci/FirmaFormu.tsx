@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  Firma, FirmaCevabi, FirmaEkleGovdesi, FirmaGuncelleGovdesi, FirmaTuru, MusteriSinifi,
+  Firma, FirmaCevabi, FirmaEkleGovdesi, FirmaGuncelleGovdesi, FirmaListesiCevabi, FirmaTuru, MusteriSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { Girdi, IsaretKutusu, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
+import { sorguMetni } from '../../ortak/veri/liste-durumu.ts';
+import { anahtarlar } from './anahtarlar.ts';
 import { FormPenceresi } from './FormPenceresi.tsx';
 import { KonumGirisi } from './KonumGirisi.tsx';
-import { SINIF_SECENEKLERI, TUR_SECENEKLERI, sinifMi, turMu } from './gorunum.ts';
+import { SINIF_SECENEKLERI, TUR_SECENEKLERI, adSade, sinifMi, turMu } from './gorunum.ts';
 import { koordinatiDenetle } from './koordinat.ts';
 import { cevabiYaz, eskiyseYenile, useKorumaliEkleme } from './yazma.ts';
 
@@ -63,6 +65,7 @@ function dogrula(d: Degerler): AlanHatalari {
   const hata: AlanHatalari = {};
   if (d.ad.trim() === '') hata['ad'] = 'Firma adı boş olamaz.';
   if (!/^[A-Za-z]{2}$/.test(d.ulkeKodu.trim())) hata['ulkeKodu'] = 'Ülke kodu iki harftir (TR gibi).';
+  // Kodun listede olup olmadığına sunucu bakar (kart 1829, sözleşmedeki liste); istemci sözleşmeyi değer olarak ithal etmez.
   if (!/^[A-Za-z]{3}$/.test(d.paraBirimi.trim())) hata['paraBirimi'] = 'Para birimi üç harfli koddur (TRY gibi).';
   const vade = d.vadeGunu.trim();
   if (vade !== '' && (!/^\d+$/.test(vade) || Number(vade) > 365)) hata['vadeGunu'] = 'Vade günü 0 ile 365 arasındadır.';
@@ -136,6 +139,7 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
   });
 
   const d = form.degerler;
+  const ayniAdlar = useAyniAdliFirmalar(d.ad, firma?.id ?? null);
   return (
     <FormPenceresi baslik={firma === null ? 'Yeni firma' : `Düzenle: ${firma.ad}`} kimlik="tc-mt-firma-form" kapat={kapat} form={form}>
       <section className="tc-mt-bolum" aria-label="Firma kartı">
@@ -148,7 +152,13 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
             onChange={(o) => { if (turMu(o.target.value)) form.degistir({ tur: o.target.value }); }}
           />
         </div>
-        <Girdi etiket="Ad" required autoComplete="off" {...form.alan('ad')} />
+        <Girdi
+          etiket="Ad"
+          required
+          autoComplete="off"
+          ipucu={ayniAdlar.length > 0 ? `Bu adla kayıtlı firma var: ${ayniAdlar.map((f) => f.kod ?? f.ad).join(', ')}` : undefined}
+          {...form.alan('ad')}
+        />
         {d.tur !== 'tedarikci' && (
           <Secim
             etiket="Müşteri sınıfı"
@@ -194,4 +204,24 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
       </section>
     </FormPenceresi>
   );
+}
+
+// Aynı ad engel değildir (aynı adlı iki şube olabilir), yalnız uyarıdır: yazarken mevcut kartlar aranır, kendisi sayılmaz.
+const AD_ARAMA_BEKLEMESI_MS = 400;
+const AD_ARAMA_SATIRI = 20;
+function useAyniAdliFirmalar(ad: string, kendisi: number | null): { id: number; kod: string | null; ad: string }[] {
+  const [aranan, arananYaz] = useState('');
+  useEffect(() => {
+    const sayac = setTimeout(() => arananYaz(ad.trim()), AD_ARAMA_BEKLEMESI_MS);
+    return () => clearTimeout(sayac);
+  }, [ad]);
+  const sorgu = { ara: aranan, sayfaBoyu: AD_ARAMA_SATIRI };
+  const cevap = useQuery({
+    queryKey: anahtarlar.liste(sorgu),
+    queryFn: () => api.get<FirmaListesiCevabi>(`/musteri-tedarikci/firmalar${sorguMetni(sorgu)}`),
+    enabled: aranan.length >= 2,
+  });
+  if (aranan.length < 2 || !cevap.data) return [];
+  const hedef = adSade(aranan);
+  return cevap.data.satirlar.filter((f) => f.id !== kendisi && adSade(f.ad) === hedef);
 }
