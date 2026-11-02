@@ -126,6 +126,10 @@ export const ayarGetir = <T>(db: Db, kilit = false) => db.tek<T>(`SELECT ${AYAR}
 export const dagilimGetir = (db: Db, id: number) => db.tek<{ id: number; odemeId: number; belgeId: number; iptal: boolean }>(`SELECT ${DAGILIM} FROM finans_odeme_dagilimi WHERE id = $1 FOR UPDATE`, [id]);
 export const kdvOranlari = (db: Db) => db.sorgu<{ oran: string; gecerlilikBaslangic: string; gecerlilikBitis: string | null }>(
   `SELECT oran, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", ${tarihMetni('gecerlilik_bitis')} AS "gecerlilikBitis" FROM finans_kdv_orani`);
+// Belge no harf farkı gözetmeden aranır; iptal belge sayılmaz (finans_belge_no_tekil dizininin kapsamı).
+export const belgeNoVarMi = async (db: Db, firmaId: number, yon: string, belgeNo: string, haricId: number | null) => (await db.tek<{ v: boolean }>(
+  `SELECT EXISTS (SELECT 1 FROM finans_belge WHERE firma_id = $1 AND yon = $2 AND lower(belge_no) = lower($3) AND durum <> 'iptal' AND id IS DISTINCT FROM $4) AS v`,
+  [firmaId, yon, belgeNo, haricId]))?.v ?? false;
 export const hesapHareketiVarMi = async (db: Db, id: number) => (await db.tek<{ v: boolean }>(
   `SELECT EXISTS (SELECT 1 FROM finans_odeme WHERE hesap_id = $1) OR EXISTS (SELECT 1 FROM finans_cek WHERE sonuc_hesap_id = $1)
      OR EXISTS (SELECT 1 FROM finans_virman WHERE kaynak_hesap_id = $1 OR hedef_hesap_id = $1)

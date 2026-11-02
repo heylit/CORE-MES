@@ -32,6 +32,13 @@ const kurus = (tutar: string | number): number => Math.round(Number(tutar) * 100
 export function kasaBakiyesiHatasi(tur: string, bakiye: string): string | null {
   return tur === 'kasa' && kurus(bakiye) < 0 ? `Kasa eksiye düşemez (işlemden sonra bakiye ${bakiye}). Önce kasaya para girin ya da ödemeyi bankadan yapın.` : null;
 }
+// FIN-9 a: olmamış para hareketi (ödeme, tahsil, virman, çek sonucu, eşitleme) bugünden ileri tarihle girilmez; belge ve çek düzenleme tarihi
+// en çok ILERI_BELGE_GUNU ileri olabilir (önceden gelen kira faturası gibi). bugun ve sinir YYYY-AA-GG metnidir.
+export const ILERI_BELGE_GUNU = 31;
+export function ileriTarihHatasi(tarih: string, bugun: string, belgeSiniri: string, tur: 'hareket' | 'belge'): string | null {
+  if (tur === 'hareket') return tarih > bugun ? 'Para hareketi bugünden ileri tarihle girilemez; hareket gerçekleşince girin.' : null;
+  return tarih > belgeSiniri ? `Belge ve çek tarihi bugünden en çok ${ILERI_BELGE_GUNU} gün ileri olabilir.` : null;
+}
 // Çekin vadesi düzenleme tarihinden önce olamaz (belgedeki vade kuralının karşılığı).
 export const cekVadeHatasi = (duzenlemeTarihi: string, vade: string): string | null =>
   vade < duzenlemeTarihi ? 'Çekin vadesi düzenleme tarihinden önce olamaz.' : null;
