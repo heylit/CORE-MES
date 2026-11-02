@@ -191,6 +191,30 @@ describe('uretim-emirleri hatalı parça (1034, 1036 a, 4 a; gerçek PostgreSQL)
     assert.equal(kalite.id > 0, true);
   });
 
+  test('1825 a+b: hatalı parça kolu varsayılan olarak ana kola katılır; ayrı ilerlerse ana rotanın kalanı kopyalanır, yeniden katılabilir; emir sayısı değişmez', async () => {
+    const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
+    const { id } = await ikinciAdimda(10, [a.makine, b.makine, c.makine]);
+    const h = hataliCevabi.parse((await hatali(id, { hurdaNedeniKodu: 'HP-TK', adet: 2 })).govde);
+    const kolId = h.hedefEmir.id;
+    const aile = async () => (await o().sahip.tek<{ n: number }>(
+      'SELECT count(*)::int AS n FROM uretim_emri WHERE id = $1 OR ust_emir_id = $1', [id]))?.n;
+    const emirSayisi = await aile();
+    const plan = async (birlesmeOpNo: number | null) =>
+      istek('planlama_proje', 'POST', `/adimli-emirler/${kolId}/birlesme-plani`, { birlesmeOpNo, surum: (await ayrinti(kolId)).surum });
+    assert.equal((await ayrinti(kolId)).parti?.birlesmeOpNo, 30, 'varsayılan: ana kola katılır');
+
+    const ayri = await plan(null);
+    assert.equal(ayri.durum, 200, JSON.stringify(ayri.govde));
+    assert.equal((await ayrinti(kolId)).parti?.birlesmeOpNo, null);
+    assert.deepEqual((await adimlari(kolId)).map((x) => [x.op, x.tur]), [[15, 'ek'], [16, 'rework'], [20, 'rota'], [30, 'rota']], 'ana rotanın kalanı kola kopyalanır');
+
+    const geri = await plan(30);
+    assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
+    assert.equal((await ayrinti(kolId)).parti?.birlesmeOpNo, 30);
+    assert.deepEqual((await adimlari(kolId)).map((x) => x.op), [15, 16, 20], 'yeniden katılınca kopya adımlar kalkar');
+    assert.equal(await aile(), emirSayisi, 'kol seçimi yeni emir açmaz');
+  });
+
   test('kol hurda kararıyla kapanır ve adedi üste katılır; fason rework termini girilmezse 7 gün', async () => {
     const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
     const { id } = await ikinciAdimda(10, [a.makine, b.makine, c.makine]);
