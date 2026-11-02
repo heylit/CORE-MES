@@ -57,7 +57,7 @@ function SiparisSecimi({ siparisId, hata, degistir }: { siparisId: string; hata:
   );
 }
 
-export function ProjeFormu({ proje, kapat }: { proje: Proje | null; kapat: () => void }) {
+export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapat: () => void; acildi?: (p: Proje) => void }) {
   const kimlik = useId();
   const istemci = useQueryClient();
   const [kod, kodYaz] = useState(proje?.kod ?? '');
@@ -84,9 +84,11 @@ export function ProjeFormu({ proje, kapat }: { proje: Proje | null; kapat: () =>
       : api.post<Proje>(`/projeler/${proje.id}/guncelle`, {
         ...ortak, firmaId: firmaId === '' ? null : Number(firmaId), durum, surum: proje.surum,
       } satisfies ProjeGuncelleGovdesi)),
-    onSuccess: async () => {
+    onSuccess: async (kayit) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
       kapat();
+      // Yeni projede ilk iş görev ve kilometre taşı yazmaktır; kullanıcı listede aramadan ayrıntıya geçer.
+      if (proje === null) acildi?.(kayit);
     },
   });
   const ilet = (o: FormEvent) => {
