@@ -736,6 +736,8 @@ describe('stok (gerçek PostgreSQL)', () => {
   });
 
   test('DEP-16 sayım: beklenen değiştiyse 409; fark yönüyle yazılır; göz son sayımı alır', async () => {
+    // Eşik içindeki fark eskisi gibi hemen yazılır; eşiği aşan farkın onaya gitmesi kor-sayim.test.ts'te (1279 a).
+    await o().sahip.sorgu('UPDATE stok_depo SET sayim_esik_yuzde = 100');
     const k = await kart('sarf');
     const zemin = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur: 'depo_zemini', kod: 'D-S1' });
     const z = zemin.govde.konum.id;
@@ -1964,6 +1966,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(await hareketler(h), [[20, 'Mal kabul girişi', '']]);
 
     // Sayım düzeltmesi: eksik sayım eksi hareket olur.
+    // Eşik içindeki fark eskisi gibi hemen yazılır; eşiği aşan farkın onaya gitmesi kor-sayim.test.ts'te (1279 a).
+    await o().sahip.sorgu('UPDATE stok_depo SET sayim_esik_yuzde = 100');
     const bak = (await o().vt.tek<{ parti: number | null }>('SELECT parti_id AS parti FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [h, kabul]))!;
     const sayimGirdisi = { konumId: kabul, satirlar: [{ malzemeId: h, partiId: bak.parti, beklenenMiktar: '20', sayilanMiktar: '18' }] };
     assert.equal((await komut('stok-sayim', sayimGirdisi, 'mudur')).durum, 200);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import type { BakiyeSatiri, ElleKonumTuru, Konum, KonumAyrintiCevabi, KonumDuzenleGovdesi, SayimCevabi, SayimGovdesi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
@@ -40,18 +40,25 @@ function PasifePencere({ konum, kapat }: { konum: Konum; kapat: () => void }) {
   );
 }
 
-// Sayım: her satırın sistem miktarı beklenen olarak gider; arada stok değiştiyse sunucu 409 verir (DEP-16).
+// Kör sayım (1279 a): sayım kipinde sistem miktarı gizlenir ve sunucuya gitmez; sunucu kendisi okur. Deponun eşiğini aşan fark stoğa
+// yazılmaz, Sayım onaylarında ikinci yetkiliyi bekler.
 export function KonumAyrinti() {
   const id = Number(useParams().id);
   const sayabilir = useIslem('stok.sayim');
   const [sayilan, setSayilan] = useState<Record<number, string>>({});
+  const [sayiyor, setSayiyor] = useState(false);
+  const { bildir } = useBildirim();
   const [yerlestir, setYerlestir] = useState<BakiyeSatiri | null>(null);
   const tasiyabilir = useIslem('stok.transfer');
   const tanimlar = useIslem('stok.tanim');
   const [turAc, setTurAc] = useState(false);
   const [pasifAc, setPasifAc] = useState(false);
   const k = useQuery({ queryKey: anahtarlar.ayrinti('konum', id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${id}`) });
-  const { komut } = useStokKomutu((g: SayimGovdesi) => korumaliPost<SayimCevabi>('/stok/sayim', g), 'Sayım kaydedildi.', () => setSayilan({}));
+  const { komut } = useStokKomutu(async (g: SayimGovdesi) => {
+    const c = await korumaliPost<SayimCevabi>('/stok/sayim', g);
+    if (c.onayaGiden > 0) bildir('bilgi', `${c.onayaGiden} fark eşiği aştı; ikinci yetkilinin onayını bekliyor.`);
+    return c;
+  }, 'Sayım kaydedildi.', () => { setSayilan({}); setSayiyor(false); });
   if (k.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (k.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(k.error)} yenile={() => void k.refetch()} />;
   const { konum, bakiyeler, haritaYeri, zemin } = k.data;
@@ -59,21 +66,23 @@ export function KonumAyrinti() {
     { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (b) => <Link to={`/stok/malzemeler/${b.malzemeId}`}>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</Link> },
     { anahtar: 'parti', baslik: 'Parti', hucre: (b) => b.partiEtiketi ?? 'Parti bilinmiyor' },
     { anahtar: 'giris', baslik: 'İlk giriş', kirilmaz: true, hucre: (b) => zamanMetni(b.ilkGiris) },
-    { anahtar: 'miktar', baslik: 'Sistemde', hizala: 'sag', hucre: (b) => <strong>{miktarMetni(b.miktar)}</strong> },
+    ...(sayiyor ? [] : [{ anahtar: 'miktar', baslik: 'Sistemde', hizala: 'sag' as const, hucre: (b: BakiyeSatiri) => <strong>{miktarMetni(b.miktar)}</strong> }]),
     ...(tasiyabilir && konum.tur === 'kabul' ? [{ anahtar: 'yerlestir', baslik: '', hucre: (b: BakiyeSatiri) => (b.miktar.startsWith('-') ? <span /> : <Dugme onClick={() => setYerlestir(b)}>Rafa yerleştir</Dugme>) }] : []),
-    ...(sayabilir ? [{ anahtar: 'sayilan', baslik: 'Sayılan', hucre: (b: BakiyeSatiri) => (
+    ...(sayabilir && sayiyor ? [{ anahtar: 'sayilan', baslik: 'Sayılan', hucre: (b: BakiyeSatiri) => (
       <Girdi etiket={`Sayılan ${b.malzemeAd ?? b.malzemeId}`} inputMode="decimal" value={sayilan[b.id] ?? ''} onChange={(e) => setSayilan((s) => ({ ...s, [b.id]: e.target.value }))} />
     ) }] : []),
   ];
   const gonder = () => komut.mutate({
     konumId: id,
-    satirlar: bakiyeler.filter((b) => (sayilan[b.id] ?? '') !== '').map((b) => ({ malzemeId: b.malzemeId, partiId: b.partiId, beklenenMiktar: b.miktar, sayilanMiktar: miktarGirdisi(sayilan[b.id] ?? '') })),
+    satirlar: bakiyeler.filter((b) => (sayilan[b.id] ?? '') !== '').map((b) => ({ malzemeId: b.malzemeId, partiId: b.partiId, sayilanMiktar: miktarGirdisi(sayilan[b.id] ?? '') })),
   });
   return (
     <section className="tc-stok">
       <SayfaBasi baslik={konum.kod} alt={`${KONUM_ETIKETI[konum.tur]}${konum.ad ? ` · ${konum.ad}` : ''} · ${konum.depoKod} · son sayım ${zamanMetni(konum.sonSayim)} · ${haritaYeri ? `haritada ${haritaYeri}` : 'haritada yok'}${zemin ? ` · zemin ${zemin}` : ''}`}
         sag={<>{!konum.aktif && <Rozet ton="pasif">Pasif</Rozet>}{tanimlar && elleTurMu(konum) && <Dugme simge="tool" onClick={() => setTurAc(true)}>Türü değiştir</Dugme>}{tanimlar && konum.aktif && elleTurMu(konum) && <Dugme simge="x" onClick={() => setPasifAc(true)}>Pasife al</Dugme>}<EtiketMerkeziDugmesi tur="konum" simge="scan" idler={[konum.id]}>Etiket</EtiketMerkeziDugmesi><GecmisDugmesi kayitlar={[{ tablo: 'stok_konum', anahtar: { id: konum.id } }]} />{konum.rafId !== null && <Link to={`/stok/raflar/${konum.rafId}`}><Dugme simge="grid">Raf matrisi</Dugme></Link>}{haritaYeri !== null && <Link to="/atolye"><Dugme simge="layers">Haritada gör</Dugme></Link>}</>} />
-      <Kart baslik="Gözdeki stok" sag={sayabilir && bakiyeler.length > 0 && <Dugme tur="birincil" yukleniyor={komut.isPending} onClick={gonder}>Sayımı kaydet</Dugme>}>
+      <Kart baslik="Gözdeki stok" sag={sayabilir && bakiyeler.length > 0 && (sayiyor
+        ? <><Dugme simge="x" onClick={() => { setSayilan({}); setSayiyor(false); }}>Vazgeç</Dugme><Dugme tur="birincil" simge="check" yukleniyor={komut.isPending} onClick={gonder}>Sayımı kaydet</Dugme></>
+        : <Dugme simge="list" onClick={() => setSayiyor(true)}>Kör sayım</Dugme>)}>
         <Tablo etiket="Gözdeki stok" sutunlar={sutunlar} satirlar={bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş." />
       </Kart>
       <Link to={`/stok/hareketler?konumId=${id}`}>Bu konumun hareketleri</Link>

@@ -6,7 +6,7 @@ import {
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
-  logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
+  logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
@@ -172,6 +172,20 @@ describe('stok kuralları (saf)', () => {
     assert.deepEqual(sayimFarki('10', '12.5'), { tur: 'sayim_fazla', miktar: '2.5' });
     assert.deepEqual(sayimFarki('10', '7'), { tur: 'sayim_eksik', miktar: '3' });
     assert.deepEqual(sayimFarki('10', '10.000'), { tur: 'yok' });
+  });
+
+  test('1279 a sayım farkı eşiği ve ikinci yetkili', () => {
+    assert.equal(sayimOnayaGiderMi('10', '10', '0'), false, 'fark yoksa onay yok');
+    assert.equal(sayimOnayaGiderMi('10', '9.999', '0'), true, 'eşik 0 her farkı onaya gönderir');
+    assert.equal(sayimOnayaGiderMi('10', '9', '10'), false, 'eşiğe eşit fark yazılır');
+    assert.equal(sayimOnayaGiderMi('10', '11.001', '10'), true);
+    assert.equal(sayimOnayaGiderMi('200', '195', '2.5'), false);
+    assert.equal(sayimOnayaGiderMi('200', '194.9', '2.5'), true);
+    assert.equal(sayimOnayaGiderMi('0', '1', '100'), true, 'sistemde stok yoksa oran tanımsız');
+    assert.equal(sayimOnayaGiderMi('-2', '0', '100'), true);
+    assert.equal(sayimKarariEngeli({ durum: 'bekliyor', sayanKisiId: 5 }, 7), null);
+    assert.match(sayimKarariEngeli({ durum: 'bekliyor', sayanKisiId: 5 }, 5) ?? '', /kendi farkını/);
+    assert.match(sayimKarariEngeli({ durum: 'onaylandi', sayanKisiId: 5 }, 7) ?? '', /karara bağlanmış/);
   });
 
   test('DEP-17/18/19/53 geri alma engelleri ve ters yön', () => {

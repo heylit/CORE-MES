@@ -723,7 +723,9 @@ export const cikisGovdesi = z.object({
 export type CikisGovdesi = z.input<typeof cikisGovdesi>;
 export const sayimGovdesi = z.object({
   konumId: kimlik,
-  satirlar: z.array(z.object({ malzemeId: kimlik, partiId: buyukKimlik.nullable(), beklenenMiktar: z.string().trim().regex(/^-?\d{1,11}(\.\d{1,3})?$/), sayilanMiktar: sifirOlabilirMiktar })).max(200),
+  // Kör sayım (1279 a): beklenen miktar verilmezse sayan sistem miktarını görmeden saymıştır; sunucu kilit altında kendisi okur.
+  // Verilirse arada stok değiştiyse 409 (DEP-16).
+  satirlar: z.array(z.object({ malzemeId: kimlik, partiId: buyukKimlik.nullable(), beklenenMiktar: z.string().trim().regex(/^-?\d{1,11}(\.\d{1,3})?$/).optional(), sayilanMiktar: sifirOlabilirMiktar })).max(200),
 });
 export type SayimGovdesi = z.input<typeof sayimGovdesi>;
 export const geriAlGovdesi = z.object({ eksiOnay: z.boolean().optional(), aciklama: bosOlabilir(200) });
@@ -739,8 +741,33 @@ export const hareketCevabi = z.object({ hareketIdler: z.array(z.number().int()),
 export type HareketCevabi = z.output<typeof hareketCevabi>;
 export const malKabulCevabi = z.object({ belge: malKabulOzeti, hareketIdler: z.array(z.number().int()) });
 export type MalKabulCevabi = z.output<typeof malKabulCevabi>;
-export const sayimCevabi = z.object({ hareketIdler: z.array(z.number().int()), farkSayisi: z.number().int() });
+// farkSayisi: stoğa yazılan fark; onayaGiden: deponun eşiğini aştığı için ikinci yetkiliyi bekleyen fark (1279 a).
+export const sayimCevabi = z.object({ hareketIdler: z.array(z.number().int()), farkSayisi: z.number().int(), onayaGiden: z.number().int() });
 export type SayimCevabi = z.output<typeof sayimCevabi>;
+export const SAYIM_FARKI_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
+export const sayimFarki = z.object({
+  id: z.number().int(), konumId: z.number().int(), konumKod: z.string(), depoId: z.number().int(), malzemeId: z.number().int(), malzemeAd: z.string().nullable(),
+  partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), sistemMiktar: ondalikMetinSemasi, sayilanMiktar: ondalikMetinSemasi,
+  // Onayda stoğa yazılacak fark (sayılan - sistem); bugünkü bakiye sayımdan sonra değişmiş olabilir.
+  fark: ondalikMetinSemasi, guncelMiktar: ondalikMetinSemasi, sayanKisiId: z.number().int(), sayanAd: z.string().nullable(), sayimZamani: zamanSemasi,
+  durum: z.enum(SAYIM_FARKI_DURUMLARI), kararAd: z.string().nullable(), kararZamani: zamanSemasi.nullable(), kararNotu: z.string().nullable(),
+  hareketId: z.number().int().nullable(), surum: surumSemasi,
+});
+export type SayimFarki = z.output<typeof sayimFarki>;
+export const sayimFarklariCevabi = z.object({
+  farklar: z.array(sayimFarki),
+  esikler: z.array(z.object({ depoId: z.number().int(), depoKod: z.string(), depoAd: z.string(), esikYuzde: ondalikMetinSemasi, surum: surumSemasi })),
+});
+export type SayimFarklariCevabi = z.output<typeof sayimFarklariCevabi>;
+export const sayimFarkiOnayGovdesi = z.object({ ...beklenenSurum, not: bosOlabilir(200) });
+export type SayimFarkiOnayGovdesi = z.input<typeof sayimFarkiOnayGovdesi>;
+export const sayimFarkiRedGovdesi = z.object({ ...beklenenSurum, neden: z.string().trim().min(1, 'Red nedeni yazın.').max(200) });
+export type SayimFarkiRedGovdesi = z.input<typeof sayimFarkiRedGovdesi>;
+export const sayimEsigiGovdesi = z.object({
+  ...beklenenSurum, esikYuzde: z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, 'Eşik en çok iki ondalıklı yüzde olmalı (örnek: 2.5).')
+    .refine((v) => Number(v) <= 100, 'Eşik 100\'ü aşamaz.'),
+});
+export type SayimEsigiGovdesi = z.input<typeof sayimEsigiGovdesi>;
 
 export const hareketlerSorgusu = z.object({
   ...listeSorguAlanlari(['zaman']),

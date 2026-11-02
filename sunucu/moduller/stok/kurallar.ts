@@ -229,6 +229,22 @@ export function sayimFarki(sistem: string, sayilan: string): SayimFarki {
   if (fark === 0n) return { tur: 'yok' };
   return fark > 0n ? { tur: 'sayim_fazla', miktar: bindenMetin(fark) } : { tur: 'sayim_eksik', miktar: bindenMetin(-fark) };
 }
+// 1279 a: farkın sistem miktarına oranı deponun eşiğini (yüzde, iki ondalık) aşarsa fark onaya gider. Sistemde artı stok yoksa oran
+// tanımsızdır: her fark onaya gider. Eşik 0 her farkı onaya gönderir; eşiğe eşit fark onaysız yazılır.
+export function sayimOnayaGiderMi(sistem: string, sayilan: string, esikYuzde: string): boolean {
+  const s = binde(sistem);
+  const fark = binde(sayilan) - s;
+  if (fark === 0n) return false;
+  if (s <= 0n) return true;
+  const esikOnBinde = binde(esikYuzde) / 10n;
+  return (fark < 0n ? -fark : fark) * 10000n > esikOnBinde * s;
+}
+// İkinci yetkili kuralı: bekleyen farkı yalnız sayandan başka kişi onaylar ya da reddeder.
+export function sayimKarariEngeli(f: { durum: string; sayanKisiId: number }, kisiId: number): string | null {
+  if (f.durum !== 'bekliyor') return 'Bu sayım farkı karara bağlanmış.';
+  if (f.sayanKisiId === kisiId) return 'Sayımı yapan kişi kendi farkını onaylayamaz; ikinci yetkili onaylar.';
+  return null;
+}
 
 // ---- Geri alma (DEP-17, DEP-18, DEP-19, DEP-53) -------------------------------------------------------------------------
 // elleAkis: Stok Merkezi'nden elle geri almada hareketi yazan akış (1388 a); akışın kendi geri alması ve elle hareket null verir.
