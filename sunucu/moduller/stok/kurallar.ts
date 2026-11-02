@@ -250,6 +250,13 @@ export function sayimBekliyorMu(sonSayim: string | null, simdi: string, sureGun:
 
 // ---- Sayım farkı (DEP-16) ----------------------------------------------------------------------------------------------
 export type SayimFarki = { tur: 'yok' } | { tur: 'sayim_fazla' | 'sayim_eksik'; miktar: string };
+// STK-3 a: kısmi sayım serbesttir, ama göz yalnız içindeki her dolu bakiye satırı (malzeme ve parti) sayılınca "sayıldı" olur;
+// sayılmayan satır kalırsa göz sayım vadesinde kalır.
+export function gozTamSayildiMi(bakiyeler: readonly { malzemeId: number; partiId: number | null; miktar: string }[], sayilanlar: readonly { malzemeId: number; partiId: number | null }[]): boolean {
+  const anahtar = (x: { malzemeId: number; partiId: number | null }) => `${x.malzemeId}:${x.partiId ?? ''}`;
+  const sayilan = new Set(sayilanlar.map(anahtar));
+  return bakiyeler.every((b) => binde(b.miktar) === 0n || sayilan.has(anahtar(b)));
+}
 export function sayimFarki(sistem: string, sayilan: string): SayimFarki {
   const fark = binde(sayilan) - binde(sistem);
   if (fark === 0n) return { tur: 'yok' };

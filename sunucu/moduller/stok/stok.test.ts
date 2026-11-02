@@ -1824,6 +1824,26 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual([zemin, ara, fason, bos].map((x) => l.includes(x)), [true, true, false, false]);
   });
 
+  test('STK-3 a: boş ya da kısmi sayım gözü sayıldı yapmaz; her dolu satır sayılınca vadeden düşer', async () => {
+    const raf = await rafAc('S3', 1, 1);
+    const g = (await mudur<{ gozler: { konumId: number }[] }>('GET', `/stok/raflar/${raf.id}`)).govde.gozler[0]!.konumId;
+    const [k1, k2] = [await kart('sarf'), await kart('sarf')];
+    await malKabul(k1, '2', { konumId: g });
+    await malKabul(k2, '3', { konumId: g });
+    const parti = async (k: number) => (await o().vt.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1', [k]))!.id;
+    const [p1, p2] = [await parti(k1), await parti(k2)];
+    const bekliyor = async () => (await depo<{ gozler: { konumId: number }[] }>('GET', '/stok/sayim-bekleyenler')).govde.gozler.some((x) => x.konumId === g);
+    const say = (satirlar: unknown[]) => depo<{ farkSayisi: number }>('POST', '/stok/sayim', { konumId: g, satirlar });
+    assert.equal((await say([])).durum, 200);
+    assert.equal(await bekliyor(), true, 'boş sayım gözü kapatmaz');
+    assert.equal((await say([{ malzemeId: k1, partiId: p1, beklenenMiktar: '2', sayilanMiktar: '2' }])).durum, 200);
+    assert.equal(await bekliyor(), true, 'kısmi sayım gözü kapatmaz');
+    assert.equal((await say([{ malzemeId: k2, partiId: p2, beklenenMiktar: '3', sayilanMiktar: '3' }])).durum, 200);
+    assert.equal(await bekliyor(), true, 'ayrı komutlarla parça parça sayım da tek seferde tamamlanmalı');
+    assert.equal((await say([{ malzemeId: k1, partiId: p1, sayilanMiktar: '2' }, { malzemeId: k2, partiId: p2, sayilanMiktar: '3' }])).durum, 200);
+    assert.equal(await bekliyor(), false, 'her satır sayılınca göz düşer');
+  });
+
   test('DEP-15 sayım bekleyen: dolu ve süreden uzun sayılmamış göz listelenir; sayılınca düşer; fiş hareketlerde bağlıdır', async () => {
     const raf = await rafAc('V', 1, 1);
     const g = (await mudur<{ gozler: { konumId: number }[] }>('GET', `/stok/raflar/${raf.id}`)).govde.gozler[0]!.konumId;
