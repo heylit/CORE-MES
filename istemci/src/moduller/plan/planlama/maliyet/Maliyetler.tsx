@@ -26,7 +26,11 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
   const satirlar: IsiSatiri<Satir>[] = L.map(({ s, m }) => {
     const h: Record<string, Hucre> = {};
     const top = m.top || null;
-    const deg: Record<Exclude<Kalem, 'kar'>, number | null> = { mal: m.mal === null ? null : m.mal - m.talas, isl: m.isl, ayar: m.ayar, gg: m.gg, fas: m.fas, mes: m.mes, gec: m.gec };
+    // Saat maliyeti ya da fason fiyatı eksik bir adım varsa o kalemin toplamı eksiktir; sıfır ya da yarım toplam yazılmaz (kural 5).
+    const tezEksik = m.eksik.some((e) => e.endsWith(' saat maliyeti')); const fasEksik = m.eksik.includes('fason fiyatı');
+    const deg: Record<Exclude<Kalem, 'kar'>, number | null> = {
+      mal: m.mal === null ? null : m.mal - m.talas, isl: tezEksik ? null : m.isl, ayar: tezEksik ? null : m.ayar, gg: m.gg, fas: fasEksik ? null : m.fas, mes: m.mes, gec: m.gec,
+    };
     for (const [k, ad] of SUTUN) {
       if (k === 'kar') {
         const v = m.net ?? m.kar;
@@ -37,6 +41,8 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
       if (v === null) {
         const eks = k === 'mal' ? m.eksik.includes('malzeme kg fiyatı') : false;
         if (eks) hucreKoy(h, k, { sm: 'alert', v: '?', etiket: `${ad} fiyatı eksik` });
+        else if (k === 'isl' || k === 'ayar') hucreKoy(h, k, { sm: 'alert', v: '?', etiket: `${ad}: tezgâh saat maliyeti eksik` });
+        else if (k === 'fas') hucreKoy(h, k, { sm: 'alert', v: '?', etiket: `${ad} fiyatı eksik` });
         // Amortismanı bilinmeyen tezgâhta çalışan siparişin genel gideri bilinmez; sıfır yazılmaz.
         else if (k === 'gg') hucreKoy(h, k, { v: YOK, etiket: GG_BILINMEZ });
         continue;

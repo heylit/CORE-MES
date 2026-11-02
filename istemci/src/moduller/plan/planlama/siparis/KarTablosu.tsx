@@ -3,7 +3,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { planGuncel } from '../durum.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi, Siparis } from '../tipler.ts';
-import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
+import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, YOK, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import { KAR_ORANLARI, hedefKarOrani, onerilenFiyat, saat, sayi, tl, urunAdi, type KayitliPlan } from './kurallar.ts';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
@@ -27,6 +27,8 @@ function Gostergeler({ l }: { l: readonly Gosterge[] }) {
 }
 
 interface Satir { s: Siparis; x: SiparisMaliyeti | null }
+// Saat maliyeti eksik bir adım varsa işleme ve ayar toplamı eksiktir; sıfır yazılmaz (kural 5).
+const tezEksik = (x: SiparisMaliyeti): boolean => x.eksik.some((e) => e.endsWith(' saat maliyeti'));
 
 // emirler: sunucunun iş emri durumu; biten adımların maliyeti ondan bulunur (1410 a).
 export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; fg: boolean; komut: CalismaKomutu | null; emirler?: unknown }) {
@@ -60,7 +62,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
       return (
         <><b className="mono">{x.eksik.length ? '—' : tl(x.top)}</b>
           <small className="tc-pys-dok">
-            <span>malzeme {tl(x.mal)}</span>{x.talas ? <span>talaş −{tl(x.talas)}</span> : null}<span>işleme {tl(x.isl)}</span><span>ayar {tl(x.ayar)}</span>
+            <span>malzeme {tl(x.mal)}</span>{x.talas ? <span>talaş −{tl(x.talas)}</span> : null}<span>işleme {tezEksik(x) ? YOK : tl(x.isl)}</span><span>ayar {tezEksik(x) ? YOK : tl(x.ayar)}</span>
             {x.gg === null ? <span>genel gider —</span> : x.gg ? <span>genel gider {tl(x.gg)}</span> : null}{x.mes ? <span>ek mesai {tl(x.mes)}</span> : null}{x.fas ? <span>fason {tl(x.fas)}</span> : null}
           </small>
           {x.eksik.length > 0 && <span className="tc-pys-uyari"><Simge ad="alert" boyut="k" />{x.eksik.join(', ')} yok</span>}</>
