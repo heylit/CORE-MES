@@ -378,6 +378,15 @@ export const demirbasSemasi = z.object({
   surum: surumSemasi,
 });
 export const demirbasCevabi = z.object({ demirbas: demirbasSemasi });
+// Kişinin kendi üzerindeki (iade edilmemiş) zimmetler; değer ve durum gibi yönetim alanları yoktur.
+export const zimmetimSemasi = z.object({
+  demirbasNo: z.string(),
+  tur: demirbasTuruSemasi,
+  markaModel: z.string().nullable(),
+  seriNo: z.string().nullable(),
+  verilis: tarihSemasi.nullable(),
+});
+export const zimmetlerimCevabi = z.object({ zimmetler: z.array(zimmetimSemasi) });
 export const DEMIRBAS_EN_COK = 1000;
 export const demirbaslarCevabi = z.object({ demirbaslar: z.array(demirbasSemasi) });
 
@@ -520,6 +529,7 @@ export type IadeVerisi = z.output<typeof iadeGovdesi>;
 export type Zimmet = z.output<typeof zimmetSemasi>;
 export type ZimmetCevabi = z.output<typeof zimmetCevabi>;
 export type ZimmetlerCevabi = z.output<typeof zimmetlerCevabi>;
+export type ZimmetlerimCevabi = z.output<typeof zimmetlerimCevabi>;
 export type Demirbas = z.output<typeof demirbasSemasi>;
 export type DemirbasCevabi = z.output<typeof demirbasCevabi>;
 export type DemirbaslarCevabi = z.output<typeof demirbaslarCevabi>;

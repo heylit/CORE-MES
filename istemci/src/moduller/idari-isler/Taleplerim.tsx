@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { TaleplerimCevabi, TaleplerimDurumSuzgeci, TaleplerimSorgusu } from '#paylasilan/sozlesme/idari-isler.ts';
-import { Dugme, DurumKutusu, Kart, Sayfalama, Sekmeler, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { TaleplerimCevabi, TaleplerimDurumSuzgeci, TaleplerimSorgusu, ZimmetlerimCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
+import { Dugme, DurumKutusu, Kart, Sayfalama, Sekmeler, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { DEMIRBAS_TURU, tarihMetni } from './gorunum.ts';
 import { TalepKarti } from './TalepKarti.tsx';
 import { useIslemVar, useTalepKomutu, yazmaIletisi } from './yazma.ts';
 import './idari-isler.css';
@@ -88,6 +89,35 @@ export function Taleplerim() {
           </>
         )}
       </Kart>
+      {acabilir && <Zimmetlerim />}
     </section>
+  );
+}
+
+// Kişinin üzerindeki demirbaşlar: iade ve değişiklik İdari İşler'dedir, burada yalnız görülür.
+function Zimmetlerim() {
+  const liste = useQuery({ queryKey: anahtarlar.zimmetlerim, queryFn: () => api.get<ZimmetlerimCevabi>('/idari-isler/zimmetlerim') });
+  return (
+    <Kart baslik="Üzerimdeki demirbaşlar">
+      {liste.isError ? (
+        <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Zimmetler alınamadı')} yenile={() => { void liste.refetch(); }} />
+      ) : liste.isPending ? (
+        <DurumKutusu durum="yukleniyor" />
+      ) : liste.data.zimmetler.length === 0 ? (
+        <p className="tc-ii-soluk">Üzerinize zimmetli demirbaş yok.</p>
+      ) : (
+        <ul className="tc-ii-kayitlar">
+          {liste.data.zimmetler.map((z) => (
+            <li key={z.demirbasNo}>
+              <Simge ad={DEMIRBAS_TURU[z.tur].simge} /> <strong className="mono">{z.demirbasNo}</strong> · {DEMIRBAS_TURU[z.tur].etiket}
+              {z.markaModel !== null && <> · {z.markaModel}</>}
+              {z.seriNo !== null && <span className="mono"> · {z.seriNo}</span>}
+              <span className="tc-ii-soluk"> · {z.verilis === null ? 'veriliş tarihi yok' : `${tarihMetni(z.verilis)} tarihinde verildi`}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="tc-ii-soluk">Eksik ya da yanlış kayıt için İdari İşler'e talep açın.</p>
+    </Kart>
   );
 }

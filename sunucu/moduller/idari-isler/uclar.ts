@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   demirbasCevabi, demirbasEkleGovdesi, demirbasGuncelleGovdesi, demirbaslarCevabi, iadeGovdesi, kisiyeBaglaGovdesi, zimmetCevabi, zimmetleGovdesi,
-  zimmetlerCevabi,
+  zimmetlerCevabi, zimmetlerimCevabi,
   aracCevabi, aracEkleGovdesi, aracGoreviCevabi, aracGorevleriCevabi, aracGuncelleGovdesi, aracTalebiAcGovdesi, araclarCevabi, bitirGovdesi, bugunCevabi, durumGovdesi, firmaSecenekleriCevabi, firmaSecimSorgusu, idParametresi, kapatGovdesi, kisiSecenekleriCevabi,
   gorevKmGovdesi, gorevOnaylaGovdesi, kontrolCevabi, masrafCevabi, masrafEkleGovdesi, masrafIptalGovdesi, masraflarCevabi, kontrolEkleGovdesi, kontrolGuncelleGovdesi, kontrolKayitlariCevabi, kontrollerCevabi, reddetGovdesi, sonYerlerCevabi,
   talepAcGovdesi, talepCevabi, talepPanosuCevabi, taleplerimCevabi, taleplerimSorgusu, ustlenGovdesi, yapildiGovdesi, yemekBildirGovdesi, yemekGunuCevabi,
@@ -128,6 +128,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/idari-isler/arac-gorevleri', yetki: 'idari-isler.oku', cevap: aracGorevleriCevabi,
     isle: async ({ db }) => ({ gorevler: await servis.aracGorevleri(db) }),
+  }),
+  uc({
+    yontem: 'GET', yol: '/idari-isler/zimmetlerim', yetki: 'idari-isler.talep-ac', cevap: zimmetlerimCevabi,
+    isle: ({ db, kullanici }) => servis.zimmetlerim(db, kullanici),
   }),
   uc({
     yontem: 'GET', yol: '/idari-isler/arac-taleplerim', yetki: 'idari-isler.arac-talebi-ac', cevap: aracGorevleriCevabi,

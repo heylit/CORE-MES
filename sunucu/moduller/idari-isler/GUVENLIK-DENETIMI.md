@@ -70,6 +70,7 @@ Demirbaş ve zimmet (7. parça):
 |---|---|---|---|---|
 | `GET /idari-isler/demirbaslar` | `idari-isler.oku` | en çok 1000; açık zimmetle | `IDR-30 ve IDR-31 akış` | `yetki` (talep açan 403) |
 | `GET /idari-isler/demirbaslar/:id/zimmetler` | `idari-isler.oku` | yok demirbaş 404 | `IDR-30 ve IDR-31 akış` | - |
+| `GET /idari-isler/zimmetlerim` | `idari-isler.talep-ac` | yalnız oturumdaki kişinin açık zimmetleri (sorguda `kisi_id`); değer ve durum dönmez | `zimmetlerim` | `zimmetlerim` (okuyan 403) |
 | `GET /idari-isler/kisi-secenekleri` | `talep-yonet` ya da `zimmet-yaz` | yalnız etkin kişiler, ad | `yetki` | `yetki` (okuyan 403) |
 | `POST /idari-isler/demirbaslar/ekle` | `idari-isler.zimmet-yaz` | tekrar korumalı; IDR-29; açan sunucudan | `IDR-30 ve IDR-31 akış` | `IDR-29, IDR-30 ve IDR-31 ret` (400), `yetki` (okuyan 403) |
 | `POST .../demirbaslar/:id/guncelle` | `idari-isler.zimmet-yaz` | kilit, IDR-29, IDR-30, sürüm | `IDR-30: zimmetli ...` | `IDR-30: zimmetli ...` (422) |

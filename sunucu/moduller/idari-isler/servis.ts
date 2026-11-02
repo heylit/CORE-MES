@@ -7,7 +7,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import {
   ARAC_EN_COK, DEMIRBAS_EN_COK, GOREV_EN_COK, GOREV_KAPANAN_GUN, KONTROL_EN_COK, MASRAF_EN_COK, PANO_EN_COK, SON_YER_EN_COK, YEMEK_GECMIS_GUN,
   type Arac, type AracEkleVerisi, type AracGorevi, type AracTalebiAcVerisi, type BugunCevabi,
-  type Demirbas, type DemirbasEkleVerisi, type DemirbasGuncelleVerisi, type IadeVerisi, type Zimmet, type ZimmetleVerisi,
+  type Demirbas, type DemirbasEkleVerisi, type DemirbasGuncelleVerisi, type IadeVerisi, type Zimmet, type ZimmetleVerisi, type ZimmetlerimCevabi,
   type Masraf, type MasrafEkleVerisi, type MasraflarCevabi, type BugunIsi, type FirmaSecenekleriCevabi, type KisiSecenekleriCevabi, type Kontrol, type KontrolEkleVerisi,
   type KontrolGuncelleVerisi, type KontrolKaydi, type Talep, type TalepAcVerisi, type TalepPanosuCevabi, type TaleplerimSuzgeci,
   type YapildiVerisi, type YemekBildirVerisi, type YemekGunuCevabi,
@@ -599,6 +599,14 @@ export async function demirbasGuncelle(db: Db, id: number, g: DemirbasGuncelleVe
     bulunamadiIletisi: DEMIRBAS_YOK,
   });
   return demirbas(db, id);
+}
+
+// Personel kendi üzerindeki demirbaşları görür; kapsam oturumdaki kişidir, başka kişi sorgulanamaz.
+export async function zimmetlerim(db: Db, kullanici: Kullanici): Promise<ZimmetlerimCevabi> {
+  const satirlar = await sorgular.kisilerinAcikZimmetleri(db, [kullanici.id]);
+  return {
+    zimmetler: satirlar.map((s) => ({ demirbasNo: demirbasNo(s.demirbas_id), tur: s.tur, markaModel: s.marka_model, seriNo: s.seri_no, verilis: s.verilis })),
+  };
 }
 
 // IDR-30: yalnız boştaki demirbaş, etkin bir kişiye zimmetlenir; demirbaş aynı işlemde zimmetli olur.

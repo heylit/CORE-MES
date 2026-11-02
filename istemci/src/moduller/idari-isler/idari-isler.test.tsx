@@ -91,6 +91,9 @@ function sunucuKur(kullanici: Kullanici, ozel: (yontem: string, yol: string, gov
       if (yol === '/idari-isler/kisi-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/talep-atanabilir') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/kontroller') return json(200, KONTROLLER);
+      if (yol === '/idari-isler/zimmetlerim') {
+        return json(200, { zimmetler: [{ demirbasNo: 'DB-00051', tur: 'dizustu', markaModel: 'Deneme dizüstü', seriNo: 'DNM-SN-1', verilis: '2026-10-01' }] });
+      }
       if (yol === '/idari-isler/kontroller/bitenler') return json(200, { kontroller: [{ ...SIGORTA, id: 99, ad: 'Eski temizlik sözleşmesi', aktif: false }] });
       if (/^\/idari-isler\/kontroller\/\d+\/kayitlar$/.test(yol)) return json(200, { kayitlar: [] });
       if (yol.startsWith('/idari-isler/yemek?')) return json(200, YEMEK);
@@ -131,6 +134,8 @@ describe('Bugün', () => {
     ac('/idari-isler');
     await screen.findByRole('heading', { name: 'Taleplerim' });
     expect(istekler.some((i) => i.yol.startsWith('/idari-isler/taleplerim'))).toBe(true);
+    expect(await screen.findByText('DB-00051')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Üzerimdeki demirbaşlar' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/idari-isler/bugun')).toBe(false);
   });
 

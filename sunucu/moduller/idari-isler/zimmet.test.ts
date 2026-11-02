@@ -5,7 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { Demirbas, DemirbasCevabi, DemirbaslarCevabi, Zimmet, ZimmetCevabi, ZimmetlerCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
+import type { Demirbas, DemirbasCevabi, DemirbaslarCevabi, Zimmet, ZimmetCevabi, ZimmetlerCevabi, ZimmetlerimCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -111,6 +111,16 @@ describe('idari-isler demirbaş ve zimmet (gerçek PostgreSQL, gerçek giriş)',
     const gecmis = (await oku(okuyan.cerez, `/idari-isler/demirbaslar/${d.id}/zimmetler`)).json<ZimmetlerCevabi>().zimmetler;
     assert.equal(gecmis.length, 1);
     assert.equal(gecmis[0]?.iadeDurumu, 'saglam');
+  });
+
+  test('zimmetlerim: kişi yalnız kendi açık zimmetini görür; iade edilen düşer; talep açamayan 403', async () => {
+    const d = await zimmetle(await demirbasEkle({ tur: 'telefon', seriNo: 'DNM-TEL-1' }), { kisiId: calisan.id });
+    const benim = async () => (await oku(calisan.cerez, '/idari-isler/zimmetlerim')).json<ZimmetlerimCevabi>().zimmetler;
+    const liste = await benim();
+    assert.deepEqual(liste.find((z) => z.demirbasNo === d.no), { demirbasNo: d.no, tur: 'telefon', markaModel: 'Deneme dizüstü', seriNo: 'DNM-TEL-1', verilis: bugun });
+    assert.equal((await oku(okuyan.cerez, '/idari-isler/zimmetlerim')).statusCode, 403);
+    assert.equal((await iade(idari.cerez, d.acikZimmet!)).statusCode, 200);
+    assert.ok(!(await benim()).some((z) => z.demirbasNo === d.no));
   });
 
   test('IDR-31: hasarlı iade bakıma, kayıp iade kayba düşürür; iade edilmiş zimmet ikinci kez iade edilmez (422)', async () => {

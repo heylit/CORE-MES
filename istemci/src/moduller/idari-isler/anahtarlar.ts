@@ -9,6 +9,7 @@ export const anahtarlar = {
   talepAtanabilir: ['idari-isler', 'talep-atanabilir'] as const,
   kontroller: ['idari-isler', 'kontroller'] as const,
   bitenKontroller: ['idari-isler', 'kontroller', 'bitenler'] as const,
+  zimmetlerim: ['idari-isler', 'zimmetlerim'] as const,
   kayitlar: (id: number) => ['idari-isler', 'kontroller', id, 'kayitlar'] as const,
   firmalar: (ara: string) => ['idari-isler', 'firma-secenekleri', ara] as const,
   yemek: (tarih: string) => ['idari-isler', 'yemek', tarih] as const,
