@@ -1,15 +1,15 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
-// Ana menüde görünmez: SmartES Sistem Ayarları > Bağlantılar'dan açılır; kayıt yetki ve adres için kalır.
+// Menüde görünür (K25 a): sayfayı gören müdür ve planlama Sistem Ayarları'na giremez; yönetici ayrıca Sistem Ayarları > Bağlantılar'dan da açar.
 export const SMARTES_SAYFALARI = [
-  { yol: '/smartes', islem: 'sayfa.smartes', baslik: 'SmartES', simge: 'bolt', grup: 'Yönetim', sira: 9, menudeGizli: true },
+  { yol: '/smartes', islem: 'sayfa.smartes', baslik: 'SmartES', simge: 'laptop', grup: 'Yönetim', sira: 9 },
 ] as const satisfies readonly SayfaTanimi[];
 
 // Bütün maddeler sayfayı gören herkese açık okumadır; eşleme yazmak ayrıca `smartes.esleme-yaz` ister.
 export const SMARTES_IKINCI_MENU = {
   kok: '/smartes',
   baslik: 'SmartES',
-  simge: 'bolt',
+  simge: 'laptop',
   sayacUcu: '/smartes/menu-sayaclari',
   gruplar: [
     { maddeler: [
