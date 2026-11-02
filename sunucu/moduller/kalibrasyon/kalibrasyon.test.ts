@@ -13,7 +13,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  aletGetir, aletKimlikleri, aletNoIleGetir, aletTurleri, gecerliAletVarMi, olcumAletiGecerliMi, takvimKayitlari, vadesiGecenAletSayisi,
+  aletGetir, aletKimlikleri, aletNoIleGetir, aletTurleri, aletlerVeKayitlari, gecerliAletVarMi, olcumAletiGecerliMi, takvimKayitlari,
+  vadesiGecenAletSayisi,
 } from './disari.ts';
 import { gunEkle } from './kurallar.ts';
 import { aletOlustur, kalibrasyonKaydet } from './servis.ts';
@@ -193,6 +194,7 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
       ['GET', '/olcu-aletleri'], ['GET', '/olcu-aletleri/ozet'], ['GET', '/olcu-aletleri/1'], ['GET', '/olcu-aleti-turleri'],
       ['POST', '/olcu-aletleri', {}], ['POST', '/olcu-aletleri/1/guncelle', {}], ['POST', '/olcu-aletleri/1/sil'],
       ['POST', '/olcu-aletleri/1/kalibrasyon-kaydet', {}], ['POST', '/olcu-aletleri/1/kullanim-disi', {}],
+      ['POST', '/olcu-aletleri/1/kayitlar/1/iptal', {}],
       ['POST', '/olcu-aleti-turleri', {}], ['POST', '/olcu-aleti-turleri/1/guncelle', {}],
     ];
     for (const [yontem, url, govde] of uclar) {
@@ -449,6 +451,64 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     assert.equal((await ayrinti(alet.id)).kayitSayisi, 1);
   });
 
+  test('KAL-1: 10 yıldan (3650 gün) eski kalibrasyon tarihi reddedilir, sınır günü kabul edilir; ilk kalibrasyon da aynı kuraldan geçer', async () => {
+    const alet = await aletAc();
+    const eski = await cagir(yonetici, 'POST', `/olcu-aletleri/${alet.id}/kalibrasyon-kaydet`, { tarih: gun(-3651), sonuc: 'uygun' });
+    assert.equal(eski.statusCode, 400, eski.body);
+    assert.deepEqual([eski.json().kod, eski.json().alan, eski.json().mesaj], ['DOGRULAMA', 'tarih', 'Kalibrasyon tarihi 10 yıldan eski olamaz.']);
+    const cokEski = await cagir(yonetici, 'POST', `/olcu-aletleri/${alet.id}/kalibrasyon-kaydet`, { tarih: '0001-01-01', sonuc: 'uygun' });
+    assert.equal(cokEski.statusCode, 400, cokEski.body);
+    assert.equal((await ayrinti(alet.id)).kayitSayisi, 0);
+    assert.equal((await kayitAt(alet.id, { tarih: gun(-3650), sonuc: 'uygun' })).kayitSayisi, 1);
+
+    const no = benzersiz('ESK');
+    const ilk = await cagir(yonetici, 'POST', '/olcu-aletleri', { no, turId: await turId('Kumpas'), ilkKalibrasyon: { tarih: '1900-01-01', sonuc: 'uygun' } });
+    assert.equal(ilk.statusCode, 400, ilk.body);
+    assert.equal((await cagir(yonetici, 'GET', `/olcu-aletleri?ara=${no}`)).json<ListeCevabi>().aletler.length, 0);
+  });
+
+  test('KAL-1: yanlış kayıt iptal edilir; defterde kalır, vade ve belirleyen kayıttan çıkar, kullanım durumunu değiştirmez', async () => {
+    const alet = await aletAc({ periyotGun: 100 });
+    const dogru = await kayitAt(alet.id, { tarih: gun(-150), sonuc: 'uygun' });
+    assert.equal(dogru.durum, 'gecmis');
+    const yanlis = await kayitAt(alet.id, { tarih: gun(-5), sonuc: 'uygun', sertifikaNo: 'YANLIS-1' });
+    assert.deepEqual([yanlis.durum, yanlis.vade], ['gecerli', gun(95)]);
+    const yanlisId = yanlis.sonKayitlar[0]?.id ?? 0;
+    const iptalYolu = (kayitId: number, aletId = alet.id) => `/olcu-aletleri/${aletId}/kayitlar/${kayitId}/iptal`;
+
+    assert.equal((await cagir(yonetici, 'POST', iptalYolu(yanlisId), { neden: '  ' })).statusCode, 400);
+    const iptal = await cagir(yonetici, 'POST', iptalYolu(yanlisId), { neden: 'Tarih yanlış girildi' });
+    assert.equal(iptal.statusCode, 200, iptal.body);
+    const sonra = iptal.json<AletAyrintiCevabi>();
+    assert.deepEqual([sonra.durum, sonra.sonKalibrasyon, sonra.vade, sonra.kayitSayisi, sonra.kullanimDisi], ['gecmis', gun(-150), gun(-50), 2, false]);
+    assert.deepEqual(sonra.sonKayitlar[0]?.iptal, { neden: 'Tarih yanlış girildi', kisiAd: 'Deneme yonetici' });
+    assert.equal(sonra.sonKayitlar[1]?.iptal, null);
+    assert.equal(sonra.surum > yanlis.surum, true);
+
+    const tekrar = await cagir(yonetici, 'POST', iptalYolu(yanlisId), { neden: 'Yine' });
+    assert.deepEqual([tekrar.statusCode, tekrar.json().mesaj], [409, 'Bu kayıt zaten iptal edilmiş.']);
+    const baska = await aletAc();
+    assert.equal((await cagir(yonetici, 'POST', iptalYolu(yanlisId, baska.id), { neden: 'Başka alet' })).statusCode, 404);
+    assert.equal((await cagir(yonetici, 'POST', iptalYolu(yanlisId, 999999), { neden: 'Yok' })).statusCode, 404);
+    assert.equal((await cagir(okur, 'POST', iptalYolu(dogru.sonKayitlar[0]?.id ?? 0), { neden: 'Okur' })).statusCode, 403);
+
+    // İptal edilen kayıt belirleyen sayılmaz: ondan eski tarihli uygunsuz kayıt artık en yenisidir ve aleti kullanım dışı bırakır.
+    const uygunsuz = await kayitAt(alet.id, { tarih: gun(-10), sonuc: 'uygunsuz' });
+    assert.deepEqual([uygunsuz.kullanimDisi, uygunsuz.kullanimDisiNedeni], [true, 'Kalibrasyon sonucu uygunsuz.']);
+    // Uygunsuz kaydın iptali aleti kendiliğinden kullanıma döndürmez; doğru kayıt ayrıca girilir.
+    const uygunsuzId = uygunsuz.sonKayitlar.find((k) => k.sonuc === 'uygunsuz')?.id ?? 0;
+    const uygunsuzIptal = await cagir(yonetici, 'POST', iptalYolu(uygunsuzId), { neden: 'Yanlış alet' });
+    assert.equal(uygunsuzIptal.statusCode, 200, uygunsuzIptal.body);
+    assert.equal(uygunsuzIptal.json<AletAyrintiCevabi>().kullanimDisi, true);
+
+    // Arkon'un okuduğu geçmişte iptal edilen kayıt yoktur.
+    const arkon = (await vt().tx((db) => aletlerVeKayitlari(db, 10))).find((a) => a.id === alet.id);
+    assert.deepEqual(arkon?.kayitlar.map((k) => k.tarih), [gun(-150)]);
+
+    assert.match(await kisit('UPDATE kalibrasyon_kaydi_iptal SET neden = $2 WHERE kayit_id = $1', [yanlisId, 'değişti']), /yalnız ekleme/);
+    assert.match(await kisit('DELETE FROM kalibrasyon_kaydi_iptal WHERE kayit_id = $1', [yanlisId]), /yalnız ekleme/);
+  });
+
   test('KL1: kalibrasyon kaydı girmiş kişinin satırı silinemez; kaydı olmayan kişi silinir', async () => {
     const kayitliAdi = benzersiz('kayitli');
     const kayitli = await kisiAc(kayitliAdi);
@@ -539,7 +599,8 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
       await assert.rejects(baglanti.sorgu(sil, [alet.id]), /yalnız ekleme/, `DELETE (${kim})`);
     }
     await assert.rejects(vt().sorgu('TRUNCATE kalibrasyon_kaydi'), izinYok, 'TRUNCATE (uygulama)');
-    await assert.rejects(sahip().sorgu('TRUNCATE kalibrasyon_kaydi'), /yalnız ekleme/, 'TRUNCATE (sahip)');
+    // İptal tablosu deftere başvurur; CASCADE'siz boşaltma yabancı anahtarda, CASCADE'li tetikleyicide durur.
+    await assert.rejects(sahip().sorgu('TRUNCATE kalibrasyon_kaydi CASCADE'), /yalnız ekleme/, 'TRUNCATE (sahip)');
     assert.equal((await ayrinti(alet.id)).kayitSayisi, 8);
     assert.deepEqual(
       await sahip().sorgu('SELECT DISTINCT aciklama FROM kalibrasyon_kaydi WHERE alet_id = $1', [alet.id]),

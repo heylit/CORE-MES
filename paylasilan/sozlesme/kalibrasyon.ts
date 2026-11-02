@@ -27,6 +27,7 @@ export const sonucSemasi = z.enum(SONUCLAR);
 export const durumSemasi = z.enum(DURUMLAR);
 
 export const idParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const kayitParametresi = z.object({ id: z.coerce.number().int().positive(), kayitId: z.coerce.number().int().positive() });
 export const listeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
 
 export const kalibrasyonGovdesi = z.object({
@@ -54,6 +55,7 @@ export const aletOlusturGovdesi = z.object({
 // Güncelleme gövdesi tam kayıttır: varsayılan yalnız eklemede geçerlidir, yoksa eksik periyot vadeyi kaydırır.
 export const aletGuncelleGovdesi = z.object({ ...aletAlanlari, ...beklenenSurum });
 export const kullanimDisiGovdesi = z.object({ neden: zorunluMetin('Neden zorunlu.', 300) });
+export const kayitIptalGovdesi = z.object({ neden: zorunluMetin('İptal nedeni zorunlu.', 300) });
 
 export const turOlusturGovdesi = z.object({ ad: zorunluMetin('Tür adı zorunlu.', 80) });
 export const turGuncelleGovdesi = z.object({ ad: zorunluMetin('Tür adı zorunlu.', 80), aktif: z.boolean(), ...beklenenSurum });
@@ -84,6 +86,8 @@ export const kayitSemasi = z.object({
   sertifikaNo: z.string().nullable(),
   aciklama: z.string().nullable(),
   kisiAd: z.string(),
+  // İptal edilen kayıt defterde görünür ama vade ve durum hesabına girmez.
+  iptal: z.object({ neden: z.string(), kisiAd: z.string() }).nullable(),
 });
 
 // Ana sayfa kartı listeyi taşımadan yalnız özeti okur.
@@ -116,6 +120,7 @@ export type KalibrasyonGovdesi = z.input<typeof kalibrasyonGovdesi>;
 export type AletOlusturGovdesi = z.input<typeof aletOlusturGovdesi>;
 export type AletGuncelleGovdesi = z.input<typeof aletGuncelleGovdesi>;
 export type KullanimDisiGovdesi = z.input<typeof kullanimDisiGovdesi>;
+export type KayitIptalGovdesi = z.input<typeof kayitIptalGovdesi>;
 export type TurOlusturGovdesi = z.input<typeof turOlusturGovdesi>;
 export type TurGuncelleGovdesi = z.input<typeof turGuncelleGovdesi>;
 export type Alet = z.output<typeof aletSemasi>;

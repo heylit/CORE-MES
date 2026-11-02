@@ -8,7 +8,8 @@ import type { Alet, AletAyrintiCevabi, ListeCevabi, Tur, TurListesiCevabi } from
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { AletTurleri, OlcuAletleri } from './OlcuAletleri.tsx';
-import { aletlerCsv } from './gosterim.ts';
+import { aletlerCsv, gunOncesi } from './gosterim.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 
 const YAZAR: Kullanici = { id: 1, ad: 'Deneme Kalite', islemler: ['kalibrasyon.oku', 'kalibrasyon.yaz'] };
 const OKUR: Kullanici = { id: 2, ad: 'Deneme Müdür', islemler: ['kalibrasyon.oku'] };
@@ -37,7 +38,7 @@ const TURLER: Tur[] = [
 
 const AYRINTI_KAYITLI = {
   ...GECMIS,
-  sonKayitlar: [{ id: 9, tarih: '2025-01-10', sonuc: 'uygun', sertifikaNo: 'C-1', aciklama: null, kisiAd: 'Deneme Kalite' }],
+  sonKayitlar: [{ id: 9, tarih: '2025-01-10', sonuc: 'uygun', sertifikaNo: 'C-1', aciklama: null, kisiAd: 'Deneme Kalite', iptal: null }],
   kayitSayisi: 1,
 } satisfies AletAyrintiCevabi;
 const AYRINTI_BOS = { ...KAYITSIZ, sonKayitlar: [], kayitSayisi: 0 } satisfies AletAyrintiCevabi;
@@ -65,6 +66,7 @@ function sunucuKur(kullanici: Kullanici, liste: ListeCevabi = LISTE, kayitCevabi
     if (yol === '/olcu-aleti-turleri' && yontem === 'GET') return json(200, { turler: TURLER } satisfies TurListesiCevabi);
     if (yontem === 'POST' && yol === '/olcu-aletleri') return json(200, AYRINTI_BOS);
     if (yontem === 'POST' && yol === '/olcu-aletleri/1/kalibrasyon-kaydet') return kayitCevabi();
+    if (yontem === 'POST' && yol === '/olcu-aletleri/1/kayitlar/9/iptal') return json(200, AYRINTI_KAYITLI);
     if (yontem === 'POST' && yol === '/olcu-aleti-turleri/2/guncelle') return json(200, { turler: TURLER } satisfies TurListesiCevabi);
     if (yontem === 'POST' && yol === '/olcu-aleti-turleri') {
       return json(409, { kod: 'CAKISMA', mesaj: 'Bu tür adı kullanılıyor.' });
@@ -192,6 +194,7 @@ describe('yetki', () => {
     await screen.findByText('Son kalibrasyon kayıtları');
     expect(screen.queryByRole('button', { name: 'Kalibrasyon kaydet' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
 
   it('yazma yetkisi olan alet ekleyebilir; tür listesinde pasif tür seçilemez', async () => {
@@ -230,6 +233,40 @@ describe('alet ayrıntısı', () => {
     await waitFor(() => expect(cagrilar.find((c) => c.yol === '/olcu-aletleri/1/kalibrasyon-kaydet')?.govde).toEqual({
       sonuc: 'uygun', sertifikaNo: 'C-2', aciklama: '',
     }));
+  });
+
+  it('kalibrasyon tarihi seçicisi bugünden ileri ve 10 yıldan eskiye gitmez', async () => {
+    sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(satirlar()[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kalibrasyon kaydet' }));
+    const tarih = within(await screen.findByRole('dialog', { name: 'Kalibrasyon kaydet: DNM-1' })).getByLabelText(/Tarih/);
+    const bugun = tesisGunu(Date.now());
+    expect(tarih.getAttribute('max')).toBe(bugun);
+    expect(tarih.getAttribute('min')).toBe(gunOncesi(bugun, 3650));
+  });
+
+  it('yanlış kayıt nedeniyle iptal edilir; iptal edilen kayıt işaretli ve nedeniyle görünür, düğmesi kalkar', async () => {
+    const cagrilar = sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(satirlar()[0] as HTMLElement);
+    await screen.findByText('Son kalibrasyon kayıtları');
+    fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
+    const form = await screen.findByRole('dialog', { name: 'Kaydı iptal et: DNM-1 · 10.01.2025' });
+    fireEvent.change(within(form).getByLabelText(/İptal nedeni/), { target: { value: 'Tarih yanlış' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'İptal et' }));
+    await waitFor(() => expect(cagrilar.find((c) => c.yol === '/olcu-aletleri/1/kayitlar/9/iptal')?.govde).toEqual({ neden: 'Tarih yanlış' }));
+    cleanup();
+
+    const iptalli = { ...AYRINTI_KAYITLI, sonKayitlar: [{ ...AYRINTI_KAYITLI.sonKayitlar[0], iptal: { neden: 'Tarih yanlış', kisiAd: 'Deneme Kalite' } }] };
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => json(200,
+      adres.endsWith('/oturum') ? { kullanici: YAZAR } : adres.endsWith('/olcu-aletleri/1') ? iptalli : adres.endsWith('/olcu-aleti-turleri') ? { turler: TURLER } : LISTE)));
+    ac('aletler', '?alet=1');
+    expect(await screen.findByText('İptal edildi')).toBeTruthy();
+    expect(screen.getByText('İptal nedeni: Tarih yanlış · Deneme Kalite')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
 
   it('kalibrasyon kaydı istek kimliğiyle gider; hatadan sonra yeniden kaydetme aynı kimliği kullanır', async () => {

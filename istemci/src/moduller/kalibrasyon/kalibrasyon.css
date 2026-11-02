@@ -17,6 +17,8 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3);
   padding: var(--b-3) 0; border-bottom: 1px solid var(--edge);
 }
+.tc-kal-kayit-dugme { margin-left: auto; }
+.tc-kal-kayit-iptal > .mono { text-decoration: line-through; color: var(--muted); }
 .tc-kal-kayit-ek { flex-basis: 100%; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 /* `anywhere` en dar genişliği tek harfe indirir ve tablo tür adını harf harf böler; `break-word` yalnız sığmayan tek sözcüğü böler. */
 .tc-kal-tur { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: break-word; }

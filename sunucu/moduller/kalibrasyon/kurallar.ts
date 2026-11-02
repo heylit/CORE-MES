@@ -44,6 +44,10 @@ export function kalibrasyonEtkisi(sonuc: Sonuc): KalibrasyonEtkisi {
 // Bugünün kaydı kabul edilir; yapılmamış kalibrasyon deftere girmez.
 export const gelecekTarihMi = (tarih: string, bugun: string): boolean => gunFarki(bugun, tarih) > 0;
 
+// En uzun periyot (3650 gün) kadar geriye gidilir: daha eski kayıt hiçbir aletin vadesini taşımaz, yıl yazım yanlışıdır (KAL-1).
+export const ESKI_TARIH_SINIRI_GUN = 3650;
+export const cokEskiTarihMi = (tarih: string, bugun: string): boolean => gunFarki(tarih, bugun) > ESKI_TARIH_SINIRI_GUN;
+
 export interface KayitSirasi {
   id: number;
   tarih: string;

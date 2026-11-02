@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { kalibrasyonDurumu } from '#paylasilan/sozlesme/kalibrasyon-kurali.ts';
 import {
-  UYGUNSUZ_NEDENI, aramayaUyar, belirleyenKayit, gelecekTarihMi, gunEkle, gunFarki, kalibrasyonEtkisi, ozetSay,
+  UYGUNSUZ_NEDENI, aramayaUyar, belirleyenKayit, cokEskiTarihMi, gelecekTarihMi, gunEkle, gunFarki, kalibrasyonEtkisi, ozetSay,
   olcumdeKullanilabilirMi, takvimdeMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
 } from './kurallar.ts';
 import type { Alet } from '#paylasilan/sozlesme/kalibrasyon.ts';
@@ -150,4 +150,13 @@ test('takvim (891): yalnız vadesi bilinen ve kullanımdaki alet, aralığın ik
   assert.equal(takvimdeMi(a('yaklasan', '2026-04-01'), '2026-03-01', '2026-03-31'), false);
   assert.equal(takvimdeMi(a('kullanim-disi', '2026-03-10'), '2026-03-01', '2026-03-31'), false);
   assert.equal(takvimdeMi(a('kayit-yok', null), '2026-03-01', '2026-03-31'), false);
+});
+
+describe('KAL-1: eski tarih sınırı', () => {
+  test('bugünden 3650 gün öncesi kabul, bir gün daha eskisi ret', () => {
+    assert.equal(cokEskiTarihMi(gunEkle(BUGUN, -3650), BUGUN), false);
+    assert.equal(cokEskiTarihMi(gunEkle(BUGUN, -3651), BUGUN), true);
+    assert.equal(cokEskiTarihMi('0001-01-01', BUGUN), true);
+    assert.equal(cokEskiTarihMi(BUGUN, BUGUN), false);
+  });
 });

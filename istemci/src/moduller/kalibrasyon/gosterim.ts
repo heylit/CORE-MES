@@ -43,3 +43,8 @@ export function aletlerCsv(aletler: readonly Alet[]): string {
   const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), vadeMetni(a), durumMetni(a)]);
   return '﻿' + [baslik, ...satirlar].map((s) => s.map(alan).join(';')).join('\r\n');
 }
+
+// GGGG-AA-GG tarihinden `gun` gün öncesi.
+export function gunOncesi(tarih: string, gun: number): string {
+  return new Date(Date.parse(`${tarih}T00:00:00Z`) - gun * 86_400_000).toISOString().slice(0, 10);
+}

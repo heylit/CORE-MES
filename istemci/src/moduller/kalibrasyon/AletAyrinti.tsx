@@ -5,7 +5,7 @@ import { Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet } from '../../ortak/a
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { AletTuru } from './alet-simgeleri.tsx';
 import { anahtarlar } from './anahtarlar.ts';
-import { AletFormu, KalibrasyonFormu, KullanimDisiFormu } from './formlar.tsx';
+import { AletFormu, KalibrasyonFormu, KayitIptalFormu, KullanimDisiFormu } from './formlar.tsx';
 import { DURUM_TONU, SONUC_METNI, durumMetni, tarihMetni } from './gosterim.ts';
 import { useKomut } from './komut.ts';
 
@@ -29,6 +29,7 @@ export function AletAyrinti({ id, yazabilir, turler, kapat, form = null, formKap
   id: number; yazabilir: boolean; turler: readonly Tur[]; kapat: () => void; form?: AdresFormu | null; formKapandi?: () => void;
 }) {
   const [acik, acikYaz] = useState<Acik>(null);
+  const [iptalEdilecek, iptalEdilecekYaz] = useState<{ id: number; tarih: string } | null>(null);
   useEffect(() => { if (form !== null && yazabilir) acikYaz(form); }, [form, yazabilir]);
   const sorgu = useQuery({
     queryKey: anahtarlar.ayrinti(id),
@@ -77,12 +78,17 @@ export function AletAyrinti({ id, yazabilir, turler, kapat, form = null, formKap
               : (
                 <ul className="tc-kal-kayitlar">
                   {alet.sonKayitlar.map((k) => (
-                    <li key={k.id}>
+                    <li key={k.id} className={k.iptal === null ? undefined : 'tc-kal-kayit-iptal'}>
                       <span className="mono">{tarihMetni(k.tarih)}</span>
-                      <Rozet ton={k.sonuc === 'uygun' ? 'tamam' : 'hata'}>{SONUC_METNI[k.sonuc]}</Rozet>
+                      <Rozet ton={k.iptal !== null ? 'pasif' : k.sonuc === 'uygun' ? 'tamam' : 'hata'}>{SONUC_METNI[k.sonuc]}</Rozet>
+                      {k.iptal !== null && <Rozet ton="pasif">İptal edildi</Rozet>}
+                      {k.iptal === null && yazabilir && (
+                        <Dugme simge="x" className="tc-kal-kayit-dugme" onClick={() => { iptalEdilecekYaz({ id: k.id, tarih: k.tarih }); }}>İptal et</Dugme>
+                      )}
                       <span className="tc-kal-kayit-ek">
                         {[k.sertifikaNo, k.aciklama, k.kisiAd].filter((m) => m !== null && m !== '').join(' · ')}
                       </span>
+                      {k.iptal !== null && <span className="tc-kal-kayit-ek">İptal nedeni: {k.iptal.neden} · {k.iptal.kisiAd}</span>}
                     </li>
                   ))}
                 </ul>
@@ -98,6 +104,9 @@ export function AletAyrinti({ id, yazabilir, turler, kapat, form = null, formKap
       {alet && acik === 'disi' && <KullanimDisiFormu aletId={alet.id} aletNo={alet.no} kapat={kapatForm} />}
       {alet && acik === 'duzenle' && <AletFormu alet={alet} turler={turler} kapat={kapatForm} />}
       {alet && acik === 'sil' && <Silme alet={alet} kapat={kapatForm} bitti={kapat} />}
+      {alet && iptalEdilecek !== null && (
+        <KayitIptalFormu aletId={alet.id} kayitId={iptalEdilecek.id} baslik={`${alet.no} · ${tarihMetni(iptalEdilecek.tarih) ?? ''}`} kapat={() => { iptalEdilecekYaz(null); }} />
+      )}
     </>
   );
 }

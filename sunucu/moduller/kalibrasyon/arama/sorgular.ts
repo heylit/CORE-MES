@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { IPTAL_EDILMEMIS } from '../sorgular.ts';
 import type { AletSatiri } from '../sorgular.ts';
 
 export interface AletAramaSatiri extends AletSatiri {
@@ -17,7 +18,8 @@ export function aletAra(db: Db, d: { sade: string; icinde: string; bas: string; 
   return db.sorgu<AletAramaSatiri>(
     `SELECT a.id, a.no, a.tur_id, t.ad AS tur, a.ad, a.olcme_araligi, a.yer, a.periyot_gun,
             a.kullanim_disi, a.kullanim_disi_nedeni, a.surum,
-            (SELECT max(k.tarih) FROM kalibrasyon_kaydi k WHERE k.alet_id = a.id AND k.sonuc = 'uygun')::text AS son_uygun,
+            (SELECT max(k.tarih) FROM kalibrasyon_kaydi k
+              WHERE k.alet_id = a.id AND k.sonuc = 'uygun' AND ${IPTAL_EDILMEMIS})::text AS son_uygun,
             current_date::text AS bugun,
             CASE WHEN ${ALET_UYAR} THEN NULL
                  ELSE (SELECT k.sertifika_no FROM kalibrasyon_kaydi k
