@@ -3,11 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { Istasyon360Cevabi, KaynakAramaCevabi, KaynakTuru, Kisi360Cevabi, Makine360Cevabi } from '#paylasilan/sozlesme/kaynak-izi.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import './kaynak-izi.css';
 
 type AramaSatiri = KaynakAramaCevabi['satirlar'][number];
+const KAYNAK_YOK = 'Kaynak bulunamadı.';
+const VERI_YOK = 'Veri alınamadı';
+// Sözleşmedeki kaynakAramaSorgusu sınırı; istemci paylasilan'dan değer ithal etmez (zod). Aşan metin sunucuda 400 olur.
+const ARAMA_METNI_EN_COK = 60;
 const TUR_ADI: Record<KaynakTuru, string> = { istasyon: 'İstasyon', makine: 'Makine', kisi: 'Kişi' };
 const UC: Record<KaynakTuru, string> = { istasyon: 'istasyonlar', makine: 'makineler', kisi: 'kisiler' };
 const DURUM: Record<string, { ad: string; ton: RozetTonu }> = {
@@ -39,8 +43,8 @@ export function KaynakSec() {
   return (
     <section className="tc-kiz">
       <p className="tc-kiz-alt">Bir istasyon, makine ya da kişi seçin: atama, yetkinlik, durum ve üretim tek ekranda. Bu sayfa yalnız okur.</p>
-      <div className="tc-kiz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} onChange={(e) => araYaz(e.target.value)} /></div>
-      {l.isError ? <DurumKutusu durum="hata" yenile={() => { void l.refetch(); }} /> : (
+      <div className="tc-kiz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} maxLength={ARAMA_METNI_EN_COK} onChange={(e) => araYaz(e.target.value)} /></div>
+      {l.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, VERI_YOK)} yenile={() => { void l.refetch(); }} /> : (
         <Kart>
           <Tablo etiket="Kaynaklar" sutunlar={ARAMA_SUTUNLARI} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => `${s.tur}-${String(s.id)}`} mesgul={l.isPending}
             satirSec={(s) => { void git(adres(s.tur, s.id)); }} bosMesaj="Bu aramaya uyan kaynak yok." />
@@ -60,9 +64,11 @@ function useKaynak<T>(tur: KaynakTuru) {
 }
 
 function Durum<T>({ q, gecerli, cocuk }: { q: ReturnType<typeof useKaynak<T>>['v']; gecerli: boolean; cocuk: (d: T) => ReactNode }) {
-  if (!gecerli) return <DurumKutusu durum="bos" mesaj="Kaynak bulunamadı." />;
+  if (!gecerli) return <DurumKutusu durum="bos" mesaj={KAYNAK_YOK} />;
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (q.isError) return <DurumKutusu durum="hata" yenile={() => { void q.refetch(); }} />;
+  // Olmayan kaynak yükleme hatası değildir: yeniden denemek aynı cevabı verir.
+  if (q.isError && q.error instanceof ApiHatasi && q.error.durum === 404) return <DurumKutusu durum="bos" mesaj={q.error.sunucuIletisi ?? KAYNAK_YOK} />;
+  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, VERI_YOK)} yenile={() => { void q.refetch(); }} />;
   return <>{cocuk(q.data)}</>;
 }
 
