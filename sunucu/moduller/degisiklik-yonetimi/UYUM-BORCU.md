@@ -16,7 +16,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 11. Ekran (P4 isteği): bağlı olmayan veri ekranda "bağlı değil / Veri yok" yazar; İzlenebilirlik'te "Sevk et" düğmesi yok (sevkiyat, Aşama 2).
 12. Parça kutusundaki "Kaydı aç" (malzeme ekranı yolu) Aşama 2'de bağlanır; o zamana kadar gizli (1177 a).
 13. Kural, sürüm ve sunucu kuralları akış akış kapanır; kabul kullanıcı deneyince.
-14. Kalem revizyon denetimi (1735, TMI B6): `kalemKaydet` yeni çizim ve rota revizyon kimliğinin var olduğunu ve kalemin malzemesine ait olduğunu denetlemez; cizimler ve rota `disari.ts` okumasıyla kapanır. Ekran o zamana kadar etiket yerine kimlik gösterebilir.
+14. Kalem revizyon denetimi (1735, TMI B6): rota öğesi kapandı (1819, DY-25: `rota/disari.ts` `revizyonKunyeleri` ile var olma ve parçaya aitlik). Çizim ve diğer öğe türleri denetlenmez: belge merkezinde revizyonun sahibi parçayı veren `disari.ts` okuması yok; o okuma gelince kapanır. Ekran o zamana kadar etiket yerine kimlik gösterebilir.
 15. Rota bağı ekranda (1735, TMI B7): yürürlükteki ve yeni rota revizyonu için seçim alanı yok; rota bağlanınca gelir. Metin bugün yalnız kimliğin yazıldığını söyler.
 16. Bildirim (1735, TMI B9): CCB, ret ve FAI işleri kişiye bildirim olarak gitmez; yalnız Görevlerim. Rollerle birlikte bağlanır.
 17. Rol önerisi (1735, TMI B10): talep açma herkese, sınıflandırma planlama ve kaliteye, CCB müdür ve kaliteye; ortak yetki matrisinde kullanıcıya sorulur.
@@ -34,3 +34,4 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 28. Etki analizi adımı (talep aşaması) kaynak okumaz; etkilenenler yalnız yayında hesaplanır. Talep ekranında etkilenen sayısı göstermek ayrı iş.
 29. Revizyonun dolması (1647): parti ve sipariş satırı açılışta yürürlükteki parça revizyonunu `disari.ts yururluktekiParcaRevizyonlari` ile alır (kablolama); siparişli mal kabulde parti sipariş satırının revizyonunu alır. Üretim partisinin revizyonu emrin sabit revizyonundan gelmeli; emre sabitleme (1645) gelene kadar açılış anındaki yürürlükteki revizyondur.
 30. Sipariş satırı kararı (1647): olay ilgili listesinde satın alma yok; `stok_karari` olayı ilgilisiz ve `hedef` alanıyla yazılır. "Tedarikçiye iade" ve "stok bitince kullan" kodu yok (1606 raporu); bugün D1'de öneri "Karantinada beklet" (MRB) adıyla görünür. İkisi ayrı kart (sabit listesi ve göç).
+24. Öğe revizyon kimlikleri sahibi modülde var mı ve kalemin parçasına mı ait: rota denetlenir (1819, DY-25); diğer türler 14 ile aynı, sahibi modüllerin `disari.ts` okumasıyla kapanır.

@@ -142,6 +142,16 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
       cubuk = (await ornekMalzemeNo(db, 'cubuk')) ?? 0;
     });
     assert.ok(mil > 0 && flans > 0 && cubuk > 0);
+    // DY-25: kalem rota revizyonunu rota modülünde arar. Testin kullandığı sabit kimlikler gerçek (iptal) revizyon olarak yazılır;
+    // şema bu teste özeldir, kimlikler çakışmaz.
+    const rotaRevizyonlari: [number, number, string][] = [[mil, 5, 'A'], [mil, 21, 'B'], [mil, 41, 'C'], [flans, 900001, 'A'], [flans, 900002, 'B'], [flans, 900003, 'C']];
+    for (const [malzemeId, id, harf] of rotaRevizyonlari) {
+      await vt().sorgu(
+        `INSERT INTO rota_revizyonu (id, malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+         OVERRIDING SYSTEM VALUE VALUES ($1, $2, 'mamul', $3, 'iptal', $4, $4, now())`,
+        [id, malzemeId, harf, acanId],
+      );
+    }
   });
 
   after(async () => {
@@ -289,6 +299,13 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     x = await tamam(acan, 'POST', `${K}/emirler/${e.id}/kalem-kaydet`, {
       kalemId: k2.id, yeniCizimRevizyonuId: 12, yeniRotaRevizyonuId: null, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', ozet: 'Pah eklendi', surum: x.surum,
     });
+    // DY-25: olmayan rota revizyonu ve başka parçanın revizyonu reddedilir.
+    await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, {
+      kalemId: k1.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: 2147480000, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', surum: x.surum,
+    }, 400, /Rota revizyonu bulunamadı/);
+    await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, {
+      kalemId: k1.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: 900001, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', surum: x.surum,
+    }, 400, /parçasına ait değil/);
     await kod(acan, `${K}/emirler/${e.id}/kalem-kaydet`, { kalemId: 2147480000, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: null, eskiYeniyeUyar: null, yeniEskiyeUyar: null, surum: x.surum }, 404);
     await kod(acan, `${K}/emirler/${e.id}/yayina-gonder`, { surum: x.surum }, 400, /yeni parça numarası/);
     x = await tamam(acan, 'POST', `${K}/emirler/${e.id}/kalem-kaydet`, {

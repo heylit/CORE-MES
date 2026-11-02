@@ -4,7 +4,7 @@ import { kapatilabilirMi, sinifGerekcesiGerekir, geriCekilebilirMi } from '#payl
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, siparisKarariOner, stokKarariOner, talepAdimiUygunMu,
-  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon,
+  talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, rotaOgesiEksigi,
 } from './kurallar.ts';
 import type { EtkilenenEmir, KalemTaslagi, Konfigurasyon } from './kurallar.ts';
 
@@ -256,5 +256,13 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.deepEqual([ilk.konfigurasyon.parcaRevizyonu, ilk.konfigurasyon.prosesSurumu], ['A', 1]);
     const ilkProses = yeniKonfigurasyon(null, { ogeler: [{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 10 }], yeniParcaRevizyonu: null, tasarimMi: false });
     assert.ok('konfigurasyon' in ilkProses && ilkProses.konfigurasyon.parcaRevizyonu === null && ilkProses.konfigurasyon.prosesSurumu === 1);
+  });
+
+  test('DY-25: rota öğesinin revizyonları rotada var ve kalemin parçasının; diğer türler denetlenmez', () => {
+    const kunyeler = [{ id: 21, malzemeId: 1 }, { id: 22, malzemeId: 1 }, { id: 31, malzemeId: 2 }];
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: 21, yeniRevizyonId: 22 }], kunyeler, 1), null);
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: 99 }], kunyeler, 1), 'Rota revizyonu bulunamadı.');
+    assert.equal(rotaOgesiEksigi([{ tur: 'rota', eskiRevizyonId: 21, yeniRevizyonId: 31 }], kunyeler, 1), 'Rota revizyonu bu kalemin parçasına ait değil.');
+    assert.equal(rotaOgesiEksigi([{ tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: 99 }], kunyeler, 1), null);
   });
 });

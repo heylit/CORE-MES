@@ -13,13 +13,14 @@ import type {
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { revizyonKunyeleri as rotaRevizyonKunyeleri } from '../rota/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { malzemePartiBakiyeleri, partiGirisZamanlari } from '../stok/disari.ts';
 import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
 import type { EtkilenenEmir as UretimdekiEmir } from '../uretim-emirleri/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
-  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, siparisKarariOner, stokKarariOner,
+  cevrimIsGunu, ilkParcaTuru, izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, siparisKarariOner, stokKarariOner, rotaOgesiEksigi,
   talepAdimiUygunMu, talepGerekmezMi, talepGorevi, talepHatti, topluUygulanirMi, yayinaGonderimEksigi, yeniParcaNoGerekirMi,
 } from './kurallar.ts';
 import type { EMIR_ADIMLARI, EtkilenenEmir, TALEP_ADIMLARI } from './kurallar.ts';
@@ -355,6 +356,10 @@ export async function kalemKaydet(db: Db, kullanici: Kullanici, id: number, g: K
   const { turler, ogeler } = kalemOgeleri(g, mevcut);
   const eksik = ogeEksigi(ogeler, mevcut);
   if (eksik !== null) throw dogrulama(eksik, 'ogeler');
+  const rotaIdleri = ogeler.filter((o) => o.tur === 'rota').flatMap((o) => [o.eskiRevizyonId, o.yeniRevizyonId].filter((x): x is number => x !== null));
+  const kunyeler = rotaIdleri.length === 0 ? [] : (await rotaRevizyonKunyeleri(db, rotaIdleri)).revizyonlar;
+  const rotaEksigi = rotaOgesiEksigi(ogeler, kunyeler, kalem.malzemeId);
+  if (rotaEksigi !== null) throw dogrulama(rotaEksigi, g.ogeler === undefined ? 'yeniRotaRevizyonuId' : 'ogeler');
   await s.kalemYaz(db, id, g.kalemId, {
     eskiYeniyeUyar: prosesMi ? null : g.eskiYeniyeUyar, yeniEskiyeUyar: prosesMi ? null : g.yeniEskiyeUyar,
     yeniParcaNo: g.yeniParcaNo ?? null, yeniParcaAdi: g.yeniParcaAdi ?? null, yeniParcaRevizyonu: g.yeniParcaRevizyonu ?? null, ozet: g.ozet ?? '',

@@ -340,6 +340,24 @@ export function ogeEksigi(ogeler: readonly OgeDegisikligi[], mevcut: readonly Ko
   return null;
 }
 
+// DY-25: rota öğesinin revizyonları rota modülünde vardır ve kalemin parçasınındır. Künyesi gelmeyen kimlik yoktur.
+// Diğer türlerin sahibi modülde okuması yoktur (UYUM-BORCU 14); onlar denetlenmez. İlk eksikle döner.
+export function rotaOgesiEksigi(
+  ogeler: readonly OgeDegisikligi[], kunyeler: readonly { id: number; malzemeId: number }[], malzemeId: number,
+): string | null {
+  const bulunan = new Map(kunyeler.map((k) => [k.id, k.malzemeId]));
+  for (const o of ogeler) {
+    if (o.tur !== 'rota') continue;
+    for (const id of [o.eskiRevizyonId, o.yeniRevizyonId]) {
+      if (id === null) continue;
+      const sahibi = bulunan.get(id);
+      if (sahibi === undefined) return 'Rota revizyonu bulunamadı.';
+      if (sahibi !== malzemeId) return 'Rota revizyonu bu kalemin parçasına ait değil.';
+    }
+  }
+  return null;
+}
+
 // DY-23: eski alanla (yalnız yeni revizyon verilerek) yazılan öğenin eskisi konfigürasyondan okunur: tekil türde yürürlükteki tek öğe,
 // başka türde o türden tek öğe varsa o; yoksa öğe eklenir (eski boş).
 export function eskiRevizyonuBul(mevcut: readonly KonfigurasyonOgesi[] | null, tur: OgeTuru): number | null {
