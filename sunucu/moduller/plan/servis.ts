@@ -9,7 +9,7 @@ import type {
 import { DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import {
-  aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
+  aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { gunlukFaizGetir, kurlar } from '../finans/disari.ts';
@@ -135,15 +135,16 @@ async function kaynaklariOku(db: Db, istasyonMakineleri: IstasyonMakineleri): Pr
   for (const m of await makineListesi(db, { pasiflerDahil: true })) {
     if (m.istasyonId !== null) istasyonunMakineleri.set(m.istasyonId, [...(istasyonunMakineleri.get(m.istasyonId) ?? []), m]);
   }
-  // 1888 b: makinesi olmayan (insanlı) istasyon, terminalin iş başlatmayı kabul ettiği kişilere (istasyonda bugün yetkin olanlar) açılır,
-  // kimlik sırasıyla. Makineleri pasif olan istasyon kişiye açılmaz. Plan "insanlı"yı makinesizlikle anlar.
+  // 1888 b, 1891: insanlı istasyon (kapasite kaynağı "insan", 1891 A b) makineleri olsa da terminalin iş başlatmayı kabul ettiği kişilere
+  // (istasyonda bugün yetkin olanlar) açılır, kimlik sırasıyla; öteki istasyon yalnız aktif makinelerine. Kaynağı girilmemiş istasyon makine sayılır.
   const istasyonunKisileri = new Map<number, Kaynak[]>();
   for (const a of [...await istasyonYetkinlikleri(db)].sort((x, y) => x.kisiId - y.kisiId)) {
     istasyonunKisileri.set(a.istasyonId, [...(istasyonunKisileri.get(a.istasyonId) ?? []), { tur: 'kisi', id: a.kisiId }]);
   }
+  const kapasite = await kapasiteKaynaklari(db, ist.map((i) => i.id));
   for (const i of ist) {
     const makineler = istasyonunMakineleri.get(i.id) ?? [];
-    istasyonMakineleri.set(i.id, makineler.length === 0 ? istasyonunKisileri.get(i.id) ?? [] : makineler.filter((m) => m.aktif).map((m) => ({ tur: 'makine', id: m.id })));
+    istasyonMakineleri.set(i.id, kapasite.get(i.id) === 'insan' ? istasyonunKisileri.get(i.id) ?? [] : makineler.filter((m) => m.aktif).map((m) => ({ tur: 'makine', id: m.id })));
     for (const m of makineler) {
       harita.set(`makine:${m.id}`, { tur: 'makine', id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif && aktif.has(i.id) && !durmus.has(m.id),
         istasyon: { id: i.id, kod: i.kod, ad: i.ad }, isMerkeziId: i.isMerkeziId, verim: verim.get(i.id) ?? 1 });
@@ -1900,7 +1901,7 @@ function sabitYerleri(sabitler: readonly Sabit[]): Yerlesim[] {
 // tezgâhında dizilir; makine adayı olan iş makinede kalır. Sıranın kuralı ve ağırlıkları motor ayarındandır (plan ayarının kuralı motora girmez).
 const BOLUNMUS_IS = 'Bölünmüş iş motorla dizilmez; parçalarını planda elle yerleştirin.';
 const ELLE_SIRALI_IS = 'Elle sıralı iş motorla dizilmez; planda elle yerleştirin.';
-const ADAYSIZ_IS = 'Adımın kullanılabilir makinesi ya da kişisi yok (istasyonda aktif makine ya da kişi tanımlı değil, ya da yetkiniz dışında).';
+const ADAYSIZ_IS = 'Adımın kullanılabilir makinesi ya da kişisi yok (istasyonda aktif makine yok, insanlı istasyonda yetkin kişi yok ya da yetkiniz dışında).';
 const MALZEME_BEKLER = 'Malzemesi planlama ufkunda karşılanmıyor.';
 async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[], korunanYerler: readonly PlanYeri[] = []) {
   const { sabitler, isler } = motorGirdisi(b, satirlar, new Set(korunanYerler.map((p) => p.isEmriId)));
@@ -1916,11 +1917,11 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
     const makineId = makinesi(i.kaynak) ?? makinesi(y?.kaynak) ?? i.adaylar.find((a) => a.tur === 'makine')?.id ?? null;
     const kisisi = (k: Kaynak | null | undefined) => (k?.tur === 'kisi' && (i.adaylar.length === 0 || i.adaylar.some((a) => ayniKaynak(a, k))) ? k.id : null);
     const adayKisiler = i.adaylar.filter((a) => a.tur === 'kisi').map((a) => a.id);
-    // Makinesiz istasyonun işi tek kişinin el tezgâhında dizilir (vardiyası olan ilk aday): terminal makinesiz istasyonda aynı anda tek iş
-    // açar (uretim_emirleri_makine_kullanimi_istasyonda_tek), iki kişiye paralel dizilen ikinci iş başlatılamazdı.
+    // 1891 B a: insanlı istasyon yetkin ve vardiyası olan kişilerin havuzudur; iş bu kişilerin el tezgâhlarına aday olur, motor birini seçer.
+    // Terminal insanlı istasyonda aynı anda birden çok el işi açar (1891 teyit-2 a), paralel dizilen işler başlatılabilir.
     const istasyonIsi = i.kaynak === null || i.kaynak.tur !== 'kisi';
-    const vardiyali = adayKisiler.find((id) => (b.takvimler.get(kaynakAnahtari({ tur: 'kisi', id })) ?? null) !== null);
-    const kisiId = makineId !== null ? null : istasyonIsi ? vardiyali ?? adayKisiler[0] ?? null : kisisi(i.kaynak) ?? kisisi(y?.kaynak) ?? adayKisiler[0] ?? null;
+    const vardiyalilar = adayKisiler.filter((id) => (b.takvimler.get(kaynakAnahtari({ tur: 'kisi', id })) ?? null) !== null);
+    const kisiId = makineId !== null ? null : istasyonIsi ? vardiyalilar[0] ?? adayKisiler[0] ?? null : kisisi(i.kaynak) ?? kisisi(y?.kaynak) ?? adayKisiler[0] ?? null;
     if (i.parcalar?.length || i.elleSira != null || (makineId === null && kisiId === null)) {
       if (y) { const { isEmriId, kaynak, baslangic, bitis, parcalar } = yerOf(b, y); yerinde.push({ isEmriId, kaynak, baslangic, bitis, ...(parcalar ? { parcalar } : {}) }); } else {
         yerlesmeyen.push({ isEmriId: i.id, neden: i.parcalar?.length ? BOLUNMUS_IS : i.elleSira != null ? ELLE_SIRALI_IS : ADAYSIZ_IS });
@@ -1929,7 +1930,8 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
     }
     if (kisiId !== null) {
       kisiKuyrugu.set(kisiId, [...(kisiKuyrugu.get(kisiId) ?? []), { isId: i.id }]);
-      if (!istasyonIsi && adayKisiler.length > 0) kisiAdaylari.set(i.id, [...new Set([kisiId, ...adayKisiler])]);
+      const adaylar = istasyonIsi ? vardiyalilar : adayKisiler;
+      if (adaylar.length > 0) kisiAdaylari.set(i.id, [...new Set([kisiId, ...adaylar])]);
       continue;
     }
     kuyruk.set(makineId!, [...(kuyruk.get(makineId!) ?? []), { isId: i.id, onizleme: null }]);
