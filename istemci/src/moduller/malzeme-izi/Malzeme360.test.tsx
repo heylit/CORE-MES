@@ -102,9 +102,24 @@ describe('Malzeme 360 (kart 1296)', () => {
     expect(screen.getByText('Bu kartın stok bakiyesi yok.')).toBeTruthy();
   });
 
-  it('olmayan kart hata kutusu gösterir', async () => {
+  it('olmayan ya da hizmet kartı (404) "bulunamadı" der, yeniden dene sunmaz', async () => {
     sunucuKur();
     ac('/malzeme-izi/77');
-    expect(await screen.findByRole('button', { name: /Yeniden|Yenile/ })).toBeTruthy();
+    expect(await screen.findByText('Malzeme bulunamadı.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeniden/ })).toBeNull();
+  });
+
+  it('sunucu hatası (5xx) genel kutu ve yeniden dene gösterir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(500, { kod: 'SUNUCU', mesaj: 'Beklenmeyen hata' })));
+    ac('/malzeme-izi/9');
+    expect(await screen.findByRole('button', { name: /Yeniden/ })).toBeTruthy();
+  });
+
+  it('arama kutusu sözleşmedeki 60 sınırını taşır; 400 iletisi gösterilir, yeniden dene yok', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(400, { kod: 'DOGRULAMA', mesaj: 'En çok 60 karakter olabilir.', alan: 'metin' })));
+    ac('/malzeme-izi');
+    expect(screen.getByLabelText('Kod ya da ad ara').getAttribute('maxlength')).toBe('60');
+    expect(await screen.findByText('En çok 60 karakter olabilir.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeniden/ })).toBeNull();
   });
 });

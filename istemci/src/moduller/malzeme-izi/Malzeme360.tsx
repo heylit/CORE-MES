@@ -3,10 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { GelecekSatiri, Malzeme360Cevabi, MalzemeAramaCevabi, MalzemeAramaSatiri, PartiSatiri } from '#paylasilan/sozlesme/malzeme-izi.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GRUP, ONAY_ADI, TUR_ADI, miktarMetni, paraMetni, siparisToplamlari, tarihMetni, zamanMetni } from './gorunum.ts';
 import './malzeme-izi.css';
+
+// Sözleşmedeki arama sınırıyla aynı (malzemeAramaSorgusu.metin; istemci zod şemasını değer olarak ithal etmez): kutu fazlasını
+// almaz, sunucu 400 dönmez.
+const ARAMA_SINIRI = 60;
+// 4xx girdiden ya da olmayan kayıttan gelir: sunucunun iletisi gösterilir, yeniden denemek düzeltmediği için düğme yok.
+// Ağ ve sunucu hatası eskisi gibi genel kutu ve yeniden dene.
+function YuklemeHatasi({ hata, yenile }: { hata: unknown; yenile: () => void }) {
+  if (hata instanceof ApiHatasi && hata.durum >= 400 && hata.durum < 500) return <DurumKutusu durum="hata" mesaj={hataIletisi(hata, 'İstek geçersiz.')} />;
+  return <DurumKutusu durum="hata" yenile={yenile} />;
+}
 
 const ARAMA_SUTUNLARI: readonly Sutun<MalzemeAramaSatiri>[] = [
   { anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true, hucre: (m) => <Link to={`/malzeme-izi/${String(m.id)}`}>{m.kod}</Link> },
@@ -29,8 +39,8 @@ export function MalzemeSec() {
   return (
     <section className="tc-miz">
       <p className="tc-miz-alt">Bir malzeme seçin: elde, gelecek, para ve kalite tek ekranda. Bu sayfa yalnız okur; her işlem sahibinin ekranında yapılır.</p>
-      <div className="tc-miz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} onChange={(e) => araYaz(e.target.value)} /></div>
-      {l.isError ? <DurumKutusu durum="hata" yenile={() => { void l.refetch(); }} /> : (
+      <div className="tc-miz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} maxLength={ARAMA_SINIRI} onChange={(e) => araYaz(e.target.value)} /></div>
+      {l.isError ? <YuklemeHatasi hata={l.error} yenile={() => { void l.refetch(); }} /> : (
         <Kart>
           <Tablo etiket="Malzemeler" sutunlar={ARAMA_SUTUNLARI} satirlar={l.data?.satirlar ?? []} satirAnahtari={(m) => m.id} mesgul={l.isPending}
             satirSec={(m) => { void git(`/malzeme-izi/${String(m.id)}`); }} bosMesaj="Bu aramaya uyan stoklanan malzeme yok." />
@@ -88,7 +98,8 @@ export function Malzeme360() {
   const v = useQuery({ queryKey: anahtarlar.malzeme(no), queryFn: () => api.get<Malzeme360Cevabi>(`/malzeme-izi/malzemeler/${String(no)}`), enabled: Number.isInteger(no) && no > 0 });
   if (!Number.isInteger(no) || no <= 0) return <DurumKutusu durum="bos" mesaj="Malzeme bulunamadı." />;
   if (v.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (v.isError) return <DurumKutusu durum="hata" yenile={() => { void v.refetch(); }} />;
+  if (v.isError && v.error instanceof ApiHatasi && v.error.durum === 404) return <DurumKutusu durum="bos" mesaj="Malzeme bulunamadı." />;
+  if (v.isError) return <YuklemeHatasi hata={v.error} yenile={() => { void v.refetch(); }} />;
   const d = v.data, k = d.kart, onay = ONAY_ADI[k.onayDurumu];
   return (
     <section className="tc-miz">
