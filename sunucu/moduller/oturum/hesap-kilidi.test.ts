@@ -85,9 +85,9 @@ describe('hesap kilidi (gerçek PostgreSQL, gerçek giriş)', () => {
   };
   const denemeSayisi = async (kullaniciAdi: string): Promise<number> =>
     (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM giris_denemesi WHERE kullanici_adi = $1', [kullaniciAdi]))?.n ?? 0;
-  const kilitler = (cerez: string) => app.inject({ method: 'GET', url: '/api/oturum/kilitler', headers: { cookie: cerez } });
+  const kilitler = (cerez: string) => app.inject({ method: 'GET', url: '/api/guvenlik/kilitler', headers: { cookie: cerez } });
   const kilitAc = (cerez: string, id: number) =>
-    app.inject({ method: 'POST', url: `/api/oturum/kilitler/${id}/ac`, headers: { cookie: cerez } });
+    app.inject({ method: 'POST', url: `/api/guvenlik/kilitler/${id}/ac`, headers: { cookie: cerez } });
   const kilitKimligi = async (kullaniciAdi: string): Promise<number> => {
     const satir = await vt().tek<{ id: number }>('SELECT id FROM oturum_hesap_kilidi WHERE kullanici_adi = $1 ORDER BY id DESC LIMIT 1', [kullaniciAdi]);
     if (!satir) throw new Error(`kilit yok: ${kullaniciAdi}`);
@@ -202,7 +202,7 @@ describe('hesap kilidi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await giris(ad, { parola: PAROLA }, yeniIp(), saatliApp)).statusCode, 200);
   });
 
-  test('kilitler listesi ve açma rol yönetenindir: operatöre 403 ve kilit kalır; yönetici açar, açan ve an sunucudan yazılır, ikinci açma 404', async () => {
+  test('kilitler listesi ve açma yalnız Güvenlik Merkezi kapısından (guvenlik.yonet): operatöre 403 ve kilit kalır; yönetici açar, açan ve an sunucudan yazılır, ikinci açma 404; oturum kapısı yoktur', async () => {
     const kisi = await pinliOperator();
     const baska = await operatorEkle();
     const baskaCerezi = cerezAl(await giris(baska.ad, { parola: PAROLA }));
@@ -211,7 +211,10 @@ describe('hesap kilidi (gerçek PostgreSQL, gerçek giriş)', () => {
 
     assert.equal((await kilitler(baskaCerezi)).statusCode, 403);
     assert.equal((await kilitAc(baskaCerezi, id)).statusCode, 403);
-    assert.equal((await app.inject({ method: 'GET', url: '/api/oturum/kilitler' })).statusCode, 401);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/guvenlik/kilitler' })).statusCode, 401);
+    // 17.10.2026 kararı: kilit tek işlemle açılır; eski oturum kapısı yöneticiye de kapalıdır.
+    assert.equal((await app.inject({ method: 'GET', url: '/api/oturum/kilitler', headers: { cookie: yoneticiCerezi } })).statusCode, 404);
+    assert.equal((await app.inject({ method: 'POST', url: `/api/oturum/kilitler/${id}/ac`, headers: { cookie: yoneticiCerezi } })).statusCode, 404);
     assert.equal((await giris(kisi.ad, { pin: KENDI })).json().mesaj, kilitIletisi(15));
 
     const liste = await kilitler(yoneticiCerezi);

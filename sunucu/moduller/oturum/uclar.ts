@@ -1,7 +1,7 @@
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import {
-  cikisCevabi, girisCevabi, girisGovdesi, hesapKilidiAcCevabi, hesapKilidiParametresi, hesapKilitleriCevabi, hesapKilitleriSorgusu,
+  cikisCevabi, girisCevabi, girisGovdesi,
   kartGirisGovdesi, kendiParolaGovdesi, kendiPinGovdesi, oturumCevabi, parolaCevabi, pinBelirleGovdesi, saatCihaziKapatCevabi, saatCihaziParametresi,
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
@@ -10,7 +10,7 @@ import {
 } from '#paylasilan/sozlesme/oturum.ts';
 import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
 import {
-  cikisYap, girisYap, hesapKilidiniAc, kartlaGirisYap, hesapKilitleri, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
+  cikisYap, girisYap, kartlaGirisYap, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
   cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz,
@@ -86,24 +86,6 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         return { tamam: true as const };
       },
     }),
-    // Hesap kilitleri rol yönetenindir (kullanıcı kararı, 14.10.2026): ayrı güvenlik sayfası gelene dek yeni işlem açılmaz.
-    uc({
-      yontem: 'GET',
-      yol: '/oturum/kilitler',
-      yetki: 'kisiler.rol-yonet',
-      sorgu: hesapKilitleriSorgusu,
-      cevap: hesapKilitleriCevabi,
-      isle: ({ db, sorgu }) => hesapKilitleri(db, sorgu, simdi()),
-    }),
-    // Açma durum komutudur: yinelenen istek açacak kilit bulamaz, 404 alır; tekrar koruması gerekmez.
-    uc({
-      yontem: 'POST',
-      yol: '/oturum/kilitler/:id/ac',
-      yetki: 'kisiler.rol-yonet',
-      parametre: hesapKilidiParametresi,
-      cevap: hesapKilidiAcCevabi,
-      isle: ({ db, kullanici, parametre }) => hesapKilidiniAc(db, parametre.id, kullanici.id, simdi()),
-    }),
     uc({
       yontem: 'POST',
       yol: '/hesabim/pin-degistir',
@@ -121,7 +103,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       },
     }),
     // Akıllı saat (kart #1632). Saatin oturumu yoktur: isteği açma ve sorma oturumsuzdur, onay oturumu açık kişinindir.
-    // Kişi kendi saatini, rol yöneten herkesinkini kapatır (hesap kilitleriyle aynı yetki).
+    // Kişi kendi saatini, rol yöneten herkesinkini kapatır.
     uc({
       yontem: 'POST',
       yol: '/oturum/saat-istegi',

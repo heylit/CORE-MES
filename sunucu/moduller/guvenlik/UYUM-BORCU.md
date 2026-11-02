@@ -2,9 +2,8 @@
 
 ## Bağlamada kapanacak
 
-1. Hesap kilidi kapandı (ek teslim): liste, açma, alarm ve sayı geldi. Kalan: oturum ucu (`kisiler.rol-yonet`) ile Güvenlik Merkezi
-   (`guvenlik.yonet`) aynı kilidi iki ayrı işlemle açar; tek sahibe indirilmesi bağlamada kullanıcıya sorulur.
-   Karar (kullanıcı, proje sohbeti 17.10.2026 18:53: 'Hesap kilidinin yalnız guvenlik.yonet yetkisiyle açılmasını onaylıyorum.'): kilit yalnız guvenlik.yonet ile açılır; oturum ucu kalkar ya da aynı işleme geçer; modüller bağlanırken yazılır.
+1. KAPANDI (1778): hesap kilidi yalnız Güvenlik Merkezi kapısından (`guvenlik.yonet`) okunur ve açılır; oturum modülünün
+   `/oturum/kilitler` ve `/oturum/kilitler/:id/ac` uçları kalktı. Karar: kullanıcı, proje sohbeti 17.10.2026 18:53.
 2. Koruma maddeleri "bilinmiyor": yedek, güncelleme imzası, HTTPS, sertifika, denetim kaydı durumu. Okuyacak `disari.ts`
    yok; istekler `CEKIRDEK-ISTEKLERI.md` ve `BASKA-MODUL-ISTEKLERI.md`.
 3. Yönetici işlemleri bölümü yalnız `/denetim` sayfasına bağlantıdır; denetim `disari.ts` okuyucu vermiyor.
