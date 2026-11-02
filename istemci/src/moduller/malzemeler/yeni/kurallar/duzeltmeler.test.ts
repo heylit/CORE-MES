@@ -3,7 +3,7 @@ import { ORNEK_AYAR } from '../ornek-veri.ts';
 import type { KartKaydi } from '../tipler.ts';
 import { ortamKur } from '../veri.ts';
 import { malzemeYetkisi } from '../yetki.ts';
-import { cekirdek, kuralBaglami, newDraft, type KuralBaglami } from './index.ts';
+import { cekirdek, finalBirim, kuralBaglami, newDraft, type KuralBaglami } from './index.ts';
 
 // Prototipten gelen ve kullanıcının düzeltilmesini istediği kenar durumları (soru 286 a).
 
@@ -86,5 +86,17 @@ describe('prototip kenar durumları', () => {
     for (const tur of ['hammadde', 'yarimamul', 'mamul', 'sarf', 'demirbas'] as const) expect(() => m.xlOrnek(tur)).not.toThrow();
     expect(() => m.xlSatir(comsuz(cubuk(b)), 'hammadde')).not.toThrow();
     expect(() => m.xlSatirdanKart('hammadde', { islem: 'Güncelle', 'com.ad': 'Deneme' }, comsuz(cubuk(b)))).not.toThrow();
+  });
+});
+
+describe('MLZ-7 a (G9): yeni hammaddenin stok birimi', () => {
+  test('çubuk, levha, profil ve blok kg ile açılır; O-ring adet kalır; seçilen birim korunur', () => {
+    const b = baglam();
+    const d = cubuk(b);
+    expect(finalBirim(d, b)).toBe('kg');
+    for (const form of ['levha', 'altigen', 'lama', 'boru', 'kutu', 'kosebent', 'blok', 'disk']) expect(finalBirim({ ...d, form }, b), form).toBe('kg');
+    expect(finalBirim({ ...d, form: 'oring' }, b)).toBe('adet');
+    expect(finalBirim({ ...d, form: 'tel' }, b)).toBe('m');
+    expect(finalBirim({ ...d, com: { ...d.com, birim: 'adet' } }, b)).toBe('adet');
   });
 });
