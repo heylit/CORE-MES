@@ -485,10 +485,15 @@ test.describe('Motordan sonra öteki sayfalar', () => {
     for (const ad of ['Maliyetler', 'Genel gider', 'Ek mesai planı', 'Fason planı']) {
       await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();
       const baslik = page.locator('.tc-py-gorunum').getByRole('heading', { level: 2 }).first();
+      const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
       await expect(baslik).toBeVisible({ timeout: 20_000 });
-      const cubuk = await page.getByRole('toolbar', { name: 'Plan çubuğu' }).boundingBox();
-      const b = await baslik.boundingBox();
-      expect(cubuk && b ? b.y - (cubuk.y + cubuk.height) : -1).toBeGreaterThanOrEqual(0);
+      await expect(cubuk).toBeVisible();
+      // Görünüm değişirken çubuk ve başlık bir an yeniden çizilir; tek anlık ölçüm o anda boş kutu okuyabilir.
+      await expect.poll(async () => {
+        const c = await cubuk.boundingBox();
+        const b = await baslik.boundingBox();
+        return c && b ? b.y - (c.y + c.height) : null;
+      }).toBeGreaterThanOrEqual(0);
       await expect(baslik).not.toHaveCSS('pointer-events', 'none');
     }
   });
