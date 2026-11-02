@@ -187,11 +187,31 @@ export function fiyatYazmaReddi(fiyatYazar: boolean, satirlar: readonly { birimF
   return !fiyatYazar && satirlar.some((s) => s.birimFiyat !== null) ? FIYAT_YETKISI_YOK : null;
 }
 
-// Fiyatı görmeyen düzenlemede satır, aynı sırada aynı kart duruyorsa önceki fiyatını korur; yeni ya da yeri değişen kalem fiyatsızdır.
-export function fiyatlariKoru<T extends { malzemeNo: number; birimFiyat: string | null }>(
-  onceki: readonly { malzemeNo: number; birimFiyat: string | null }[], yeni: readonly T[],
-): T[] {
-  return yeni.map((s, i) => (onceki[i]?.malzemeNo === s.malzemeNo ? { ...s, birimFiyat: onceki[i]?.birimFiyat ?? null } : s));
+// Fiyatı görmeyen düzenlemede gövde satır kimliği taşımaz; önceki fiyat satırın içeriğinden eşlenir, sıradan değil (sıra silme ve
+// eklemede kayar). Önce kart, miktar, termin ve açıklaması aynı satır; sonra kartta tek aday kalırsa o (miktar ya da termin değişmiştir).
+// Aynı kartta birden çok aday kalırsa fiyat boş kalır: yanlış satırın fiyatını taşımaktansa yeniden girilsin (onay fiyatsız geçmez).
+type KorunanSatir = { malzemeNo: number; miktar: string; birimFiyat: string | null; termin: string | null; aciklama: string | null };
+const ayniSatir = (a: Omit<KorunanSatir, 'birimFiyat'>, b: Omit<KorunanSatir, 'birimFiyat'>): boolean =>
+  a.malzemeNo === b.malzemeNo && Number(a.miktar) === Number(b.miktar) && a.termin === b.termin && a.aciklama === b.aciklama;
+
+export function fiyatlariKoru<T extends KorunanSatir>(onceki: readonly KorunanSatir[], yeni: readonly T[]): T[] {
+  const kullanildi = new Set<number>();
+  const eslesen = new Map<number, number>();
+  yeni.forEach((s, i) => {
+    const j = onceki.findIndex((o, k) => !kullanildi.has(k) && ayniSatir(o, s));
+    if (j >= 0) { kullanildi.add(j); eslesen.set(i, j); }
+  });
+  const kalanYeni = (kart: number) => yeni.filter((s, i) => !eslesen.has(i) && s.malzemeNo === kart).length;
+  yeni.forEach((s, i) => {
+    if (eslesen.has(i) || kalanYeni(s.malzemeNo) !== 1) return;
+    const adaylar = onceki.flatMap((o, k) => (!kullanildi.has(k) && o.malzemeNo === s.malzemeNo ? [k] : []));
+    const tek = adaylar[0];
+    if (adaylar.length === 1 && tek !== undefined) { kullanildi.add(tek); eslesen.set(i, tek); }
+  });
+  return yeni.map((s, i) => {
+    const j = eslesen.get(i);
+    return { ...s, birimFiyat: j === undefined ? null : onceki[j]?.birimFiyat ?? null };
+  });
 }
 
 export function fiyatEksikReddi(satirlar: readonly { birimFiyat: string | null }[]): string | null {

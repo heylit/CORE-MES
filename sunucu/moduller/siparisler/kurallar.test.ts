@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
-  duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi,
+  duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
@@ -32,6 +32,20 @@ describe('siparisler kuralları (saf)', () => {
     assert.equal(malzemeReddi({ tur: 'sarf', onayDurumu: 'aktif' }), MALZEME_SATILMAZ);
     assert.equal(malzemeReddi({ tur: 'mamul', onayDurumu: 'taslak' }), MALZEME_AKTIF_DEGIL);
     assert.equal(malzemeReddi(null), MALZEME_YOK);
+  });
+
+  test('SIP-11 fiyatı görmeyenin düzenlemesi fiyatı satır içeriğinden korur: silme ve sıra kayması fiyat kaybettirmez, belirsiz aday fiyatsız kalır', () => {
+    const s = (malzemeNo: number, miktar: string, birimFiyat: string | null, termin: string | null = null) => ({ malzemeNo, miktar, birimFiyat, termin, aciklama: null });
+    const onceki = [s(1, '10.000', '250.0000'), s(2, '4.000', '75.0000')];
+    const fiyat = (y: ReturnType<typeof s>[]) => fiyatlariKoru(onceki, y).map((x) => x.birimFiyat);
+    assert.deepEqual(fiyat([s(2, '4', null)]), ['75.0000']);
+    assert.deepEqual(fiyat([s(2, '8', null), s(3, '2', null)]), ['75.0000', null]);
+    assert.deepEqual(fiyat([s(2, '4', null), s(1, '10', null)]), ['75.0000', '250.0000']);
+    assert.deepEqual(fiyat([s(1, '12', null, '2026-12-20')]), ['250.0000']);
+    const ikiz = [s(1, '1.000', '10.0000'), s(1, '2.000', '20.0000')];
+    assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '2', null)]).map((x) => x.birimFiyat), ['20.0000']);
+    assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '5', null)]).map((x) => x.birimFiyat), [null]);
+    assert.deepEqual(fiyatlariKoru(ikiz, [s(1, '1', null), s(1, '7', null)]).map((x) => x.birimFiyat), ['10.0000', '20.0000']);
   });
 
   test('SIP-03 yalnız taslak düzenlenir', () => {

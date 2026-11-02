@@ -140,7 +140,9 @@ export async function siparisGuncelle(
   const mevcut = await kilitle(db, id);
   const ret = duzenlemeReddi(mevcut.durum);
   if (ret !== null) throw gecersiz(ret);
-  const onceki = (await sorgular.kalemler(db, id)).map((k) => ({ malzemeNo: k.malzeme_no, birimFiyat: k.birim_fiyat }));
+  const onceki = (await sorgular.kalemler(db, id)).map((k) => ({
+    malzemeNo: k.malzeme_no, miktar: k.miktar, birimFiyat: k.birim_fiyat, termin: k.termin, aciklama: k.aciklama,
+  }));
   const satirlar = fiyatYazar ? g.satirlar : fiyatlariKoru(onceki, g.satirlar);
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
   await kalemleriDenetle(db, g);
