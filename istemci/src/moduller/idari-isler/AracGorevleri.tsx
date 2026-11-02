@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Arac, AracGorevi, AracGorevleriCevabi, AraclarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GorevKarti } from './GorevKarti.tsx';
-import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni, tamSayiGirdisi } from './gorunum.ts';
+import { ARAC_DURUMU, SINIR, aracAdi, gorevAcikMi, gorevTarihleri, kmMetni, tamSayiGirdisi, uyariMetni } from './gorunum.ts';
 import { useGorevKomutu, useIslemVar, yazmaIletisi } from './yazma.ts';
 import './idari-isler.css';
 
@@ -76,6 +76,8 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
   const [neden, nedenYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
+  // Filo uyarıları (yaklaşan muayene, sigorta, bakım km'si) aracı verirken ve çıkışta da görünür; engel değildir.
+  const ilgili = gorev.durum === 'bekliyor' ? uygun.find((a) => String(a.id) === aracId) ?? null : verilen;
 
   const calistir = async (ad: 'onayla' | 'reddet' | 'cikis' | 'donus', ek: object, ileti: string) => {
     bekliyorYaz(true);
@@ -143,6 +145,12 @@ function GorevPenceresi({ gorev, kapat }: { gorev: AracGorevi; kapat: () => void
         <p className="tc-ii-soluk">
           {gorevTarihleri(gorev)}{gorev.durum === 'bekliyor' && !red ? ' · Aynı araç kesişen tarihlerde iki göreve verilmez.' : ''}
         </p>
+        {!red && ilgili !== null && ilgili.uyarilar.length > 0 && (
+          <p className="tc-ii-uyari" role="status">
+            <Simge ad="alert" />
+            <span><strong className="mono">{ilgili.plaka}</strong> {ilgili.uyarilar.map(uyariMetni).join(', ')}</span>
+          </p>
+        )}
         {hata !== null && <p className="tc-ii-hata" role="alert">{hata}</p>}
       </div>
     </Pencere>

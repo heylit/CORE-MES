@@ -624,6 +624,28 @@ describe('Araç görevleri', () => {
     expect(donusYazma?.govde).toEqual({ surum: 3, km: 89_310 });
   });
 
+  it('onay ve çıkış penceresi aracın Filo uyarısını gösterir, engellemez', async () => {
+    const BAKIMLI = { ...BINEK, uyarilar: [{ tur: 'bakim', gecti: false, kalanGun: null, kalanKm: 300 }] } satisfies Arac;
+    sunucuKur(FILOCU, (yontem, yol) => (yontem === 'GET' && yol === '/idari-isler/araclar'
+      ? json(200, { araclar: [KAMYON, BAKIMLI] } satisfies AraclarCevabi)
+      : yontem === 'GET' && yol === '/idari-isler/arac-gorevleri'
+        ? json(200, { gorevler: [GOREV, { ...GOREV, id: 43, varis: 'Deneme fuar', durum: 'onaylandi', aracId: 22, plaka: '34 DNM 102', surum: 2 }] } satisfies AracGorevleriCevabi)
+        : undefined));
+    ac('/idari-isler/arac-gorevleri');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: /Deneme OSB/ });
+    const secim = await within(pencere).findByLabelText('Verilecek araç');
+    await waitFor(() => expect(within(secim).getAllByRole('option')).toHaveLength(2));
+    expect(within(pencere).queryByRole('status')).toBeNull();
+    fireEvent.change(secim, { target: { value: '22' } });
+    expect(within(pencere).getByRole('status').textContent).toMatch(/34 DNM 102.*bakım/i);
+    expect((within(pencere).getByRole('button', { name: 'Onayla' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Çıkış' }));
+    const cikis = await screen.findByRole('dialog', { name: /Deneme fuar/ });
+    expect(within(cikis).getByRole('status').textContent).toMatch(/bakım/i);
+  });
+
   it('müdür görevleri görür, işlem düğmesi görmez', async () => {
     sunucuKur(MUDUR);
     ac('/idari-isler/arac-gorevleri');
