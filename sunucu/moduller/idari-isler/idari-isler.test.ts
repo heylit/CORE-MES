@@ -133,6 +133,25 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
     assert.equal((await oku(yetkisiz.cerez, '/idari-isler/taleplerim')).statusCode, 403);
   });
 
+  test('IDR-05 sonuclanan: kapanan, reddedilen ve geri çekilen birlikte gelir; açanı sonuç notunu ve red nedenini görür', async () => {
+    const kisi = await girisYap(['idari-isler.talep-ac']);
+    const acik = await talepAc(kisi);
+    const kapanan = await talepAc(kisi);
+    const reddedilen = await talepAc(kisi);
+    const cekilen = await talepAc(kisi);
+    assert.equal((await komut(idari, kapanan, 'kapat', { sonucNotu: 'Deneme priz değişti' })).statusCode, 200);
+    assert.equal((await komut(idari, reddedilen, 'reddet', { neden: 'Deneme kapsam dışı' })).statusCode, 200);
+    assert.equal((await komut(kisi, cekilen, 'geri-cek')).statusCode, 200);
+    const son = (await oku(kisi.cerez, '/idari-isler/taleplerim?durum=sonuclanan')).json<TaleplerimCevabi>();
+    assert.equal(son.toplam, 3);
+    assert.deepEqual(son.satirlar.map((t) => t.id).sort((a, b) => a - b), [kapanan.id, reddedilen.id, cekilen.id].sort((a, b) => a - b));
+    assert.ok(!son.satirlar.some((t) => t.id === acik.id));
+    assert.equal(son.satirlar.find((t) => t.id === reddedilen.id)?.sonucNotu, 'Deneme kapsam dışı');
+    assert.equal(son.satirlar.find((t) => t.id === kapanan.id)?.sonucNotu, 'Deneme priz değişti');
+    assert.equal((await oku(kisi.cerez, '/idari-isler/taleplerim?durum=kapandi')).json<TaleplerimCevabi>().toplam, 1);
+    assert.equal((await oku(kisi.cerez, '/idari-isler/taleplerim?durum=bilinmeyen')).statusCode, 400);
+  });
+
   test('IDR-05 pano ve Bugün: yalnız oku işlemi olan görür; personel 403', async () => {
     const t = await talepAc();
     assert.equal((await oku(personel.cerez, '/idari-isler/talepler/pano')).statusCode, 403);

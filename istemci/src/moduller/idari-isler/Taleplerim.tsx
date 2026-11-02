@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { TalepDurumu, TaleplerimCevabi, TaleplerimSorgusu } from '#paylasilan/sozlesme/idari-isler.ts';
+import type { TaleplerimCevabi, TaleplerimDurumSuzgeci, TaleplerimSorgusu } from '#paylasilan/sozlesme/idari-isler.ts';
 import { Dugme, DurumKutusu, Kart, Sayfalama, Sekmeler, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -14,11 +14,14 @@ const SEKMELER = [
   { anahtar: 'tumu', baslik: 'Hepsi' },
   { anahtar: 'yeni', baslik: 'Yeni' },
   { anahtar: 'yapiliyor', baslik: 'Yapılıyor' },
-  { anahtar: 'kapandi', baslik: 'Kapandı' },
+  // Kapandı: kapanan, reddedilen ve geri çekilen birlikte (sunucuda "sonuclanan").
+  { anahtar: 'sonuclanan', baslik: 'Kapandı' },
 ] as const;
 type Sekme = (typeof SEKMELER)[number]['anahtar'];
+// Sözleşmedeki TALEPLERIM_SUZGECLERI ile aynı; istemci sözleşmeden yalnız tip alır.
+const SUZGECLER = ['yeni', 'yapiliyor', 'kapandi', 'reddedildi', 'geri_cekildi', 'sonuclanan'] as const satisfies readonly TaleplerimDurumSuzgeci[];
 
-// Personelin kendi talepleri; yeni talep geri çekilebilir.
+// Personelin kendi talepleri; yeni talep geri çekilebilir. Kapanan ve reddedilen talepte sonuç notu ya da red nedeni görünür.
 export function Taleplerim() {
   const gezin = useNavigate();
   const acabilir = useIslemVar('idari-isler.talep-ac');
@@ -26,8 +29,8 @@ export function Taleplerim() {
   const { bildir } = useBildirim();
   const [bekleyen, bekleyenYaz] = useState<number | null>(null);
   const liste = useListeDurumu({
-    suzgecler: { durum: '' as TalepDurumu | '' },
-    suzgecDegerleri: { durum: ['yeni', 'yapiliyor', 'kapandi', 'reddedildi', 'geri_cekildi'] },
+    suzgecler: { durum: '' as TaleplerimDurumSuzgeci | '' },
+    suzgecDegerleri: { durum: SUZGECLER },
     siralamaAlanlari: ['acilma', 'no'] as const,
     adres: true,
   });
@@ -74,7 +77,7 @@ export function Taleplerim() {
             <ul className="tc-ii-liste">
               {talepler.data.satirlar.map((t) => (
                 <li key={t.id} className="tc-ii-is">
-                  <TalepKarti talep={t} durumGoster />
+                  <TalepKarti talep={t} durumGoster sonucGoster />
                   {t.durum === 'yeni' && (
                     <Dugme simge="x" yukleniyor={bekleyen === t.id} onClick={() => void geriCek(t.id, t.surum)}>Geri çek</Dugme>
                   )}

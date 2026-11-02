@@ -223,6 +223,19 @@ describe('Taleplerim', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/idari-isler/talepler/1/geri-cek', govde: { surum: 1 } });
   });
+
+  it('Kapandı sekmesi sonuçlananları ister; red nedeni ve sonuç notu görünür', async () => {
+    const REDDEDILEN = { ...YENI, id: 5, no: 'TT-2026-005', durum: 'reddedildi', sonucNotu: 'Deneme kapsam dışı', surum: 2 } satisfies Talep;
+    const KAPANAN = { ...YENI, id: 6, no: 'TT-2026-006', durum: 'kapandi', sonucNotu: 'Deneme priz değişti', surum: 3 } satisfies Talep;
+    const istekler = sunucuKur(PERSONEL, (yontem, yol) => (yontem === 'GET' && yol.startsWith('/idari-isler/taleplerim?')
+      ? json(200, { satirlar: [REDDEDILEN, KAPANAN], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies TaleplerimCevabi)
+      : undefined));
+    ac('/idari-isler/taleplerim');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kapandı' }));
+    expect(await screen.findByText('Red nedeni: Deneme kapsam dışı')).toBeTruthy();
+    expect(screen.getByText('Sonuç: Deneme priz değişti')).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol.includes('durum=sonuclanan'))).toBe(true));
+  });
 });
 
 describe('Periyodik kontroller', () => {

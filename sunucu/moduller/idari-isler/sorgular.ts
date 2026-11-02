@@ -3,7 +3,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
-  AracDurumu, AracEkleVerisi, AracTalebiAcVerisi, AracTuru, DemirbasDurumu, DemirbasEkleVerisi, DemirbasTuru, IadeDurumu, ZimmetleVerisi, GorevDurumu, MasrafEkleVerisi, MasrafTuru, Sahiplik, AtikBirimi, KontrolEkleVerisi, KontrolGuncelleVerisi, KontrolTuru, SiklikBirimi, TalepAcVerisi, TalepAciliyeti, TalepDurumu, TalepKategorisi,
+  AracDurumu, AracEkleVerisi, AracTalebiAcVerisi, AracTuru, DemirbasDurumu, DemirbasEkleVerisi, DemirbasTuru, IadeDurumu, ZimmetleVerisi, GorevDurumu, MasrafEkleVerisi, MasrafTuru, Sahiplik, AtikBirimi, KontrolEkleVerisi, KontrolGuncelleVerisi, KontrolTuru, SiklikBirimi, TalepAcVerisi, TalepAciliyeti, TalepDurumu, TalepKategorisi, TaleplerimDurumSuzgeci,
 } from '#paylasilan/sozlesme/idari-isler.ts';
 
 export interface TalepSatiri {
@@ -132,15 +132,17 @@ export const TALEPLERIM_SIRALAMASI: SiralamaTanimi<TaleplerimSiralamasi> = {
   varsayilan: { sutun: 't.acilma', yon: 'azalan' },
 };
 
-const KENDI_KOSULU = 'WHERE t.acan_kisi_id = $1 AND ($2::text IS NULL OR t.durum = $2)';
+// "sonuclanan" süzgeci son durumların üçünü birlikte verir.
+const KENDI_KOSULU = `WHERE t.acan_kisi_id = $1
+  AND ($2::text IS NULL OR t.durum = $2 OR ($2 = 'sonuclanan' AND t.durum IN ('kapandi', 'reddedildi', 'geri_cekildi')))`;
 
-export async function kendiTalepSayisi(db: Db, kisiId: number, durum: TalepDurumu | null): Promise<number> {
+export async function kendiTalepSayisi(db: Db, kisiId: number, durum: TaleplerimDurumSuzgeci | null): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM idari_isler_talep t ${KENDI_KOSULU}`, [kisiId, durum]);
   return satir?.toplam ?? 0;
 }
 
 export function kendiTalepleri(
-  db: Db, kisiId: number, durum: TalepDurumu | null, siralama: SiralamaIstegi<TaleplerimSiralamasi>, dilim: Dilim,
+  db: Db, kisiId: number, durum: TaleplerimDurumSuzgeci | null, siralama: SiralamaIstegi<TaleplerimSiralamasi>, dilim: Dilim,
 ): Promise<TalepSatiri[]> {
   return db.sorgu<TalepSatiri>(
     `${SECIM} ${KENDI_KOSULU} ORDER BY ${siralamaSql(TALEPLERIM_SIRALAMASI, siralama)} LIMIT $3 OFFSET $4`,

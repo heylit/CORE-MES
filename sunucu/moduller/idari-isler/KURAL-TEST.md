@@ -6,7 +6,7 @@
 | IDR-02 durum geçişleri: yeni -> yapılıyor (üstlen) -> yeni (bırak); yeni ya da yapılıyor -> kapandı / reddedildi; son durumdan geçiş yok; sürüm 409 | `kurallar.test.ts` `IDR-02 ...`, `idari-isler.test.ts` `IDR-02 akış ...`, `IDR-02 red ...` |
 | IDR-03 yalnız açan, yalnız yeni talebi geri çeker | `kurallar.test.ts` `IDR-03 ...`, `idari-isler.test.ts` `IDR-03 ...`; istemci `yeni talep geri çekilir` |
 | IDR-04 red nedeni zorunlu (`idari_isler_talep_red_nedeni`) | `IDR-04 ...`, `kısıtlar ...`; istemci `reddetmek neden ister ...` |
-| IDR-05 personel yalnız kendi taleplerini görür; pano ve Bugün yalnız `oku` | `IDR-05 ...`, `IDR-05 pano ve Bugün ...`; istemci `... kökte kendi taleplerini görür` |
+| IDR-05 personel yalnız kendi taleplerini görür; "sonuclanan" süzgeci kapanan, reddedilen ve geri çekileni birlikte verir, sonuç notu ve red nedeni açanına görünür; pano ve Bugün yalnız `oku` | `IDR-05 ...`, `IDR-05 sonuclanan ...`, `IDR-05 pano ve Bugün ...`; istemci `... kökte kendi taleplerini görür`, `Kapandı sekmesi ...` |
 | IDR-07 başkasına atama yalnız talebi yönetebilen (`idari-isler.talep-yonet`) etkin kişiye; seçenekler `talep-atanabilir` ucundan | `IDR-07 ...` |
 | IDR-08 numara Sistem Ayarları kalıbından (varsayılan TT-yıl-sıra), ortak sayaç, dolu numara atlanır, tekil | `idari-isler.test.ts` `IDR-08 ...` |
 | IDR-09 Bugün sırası: acil, yeni, yapılan; grupta eski önce | `kurallar.test.ts` `IDR-09 ...` |

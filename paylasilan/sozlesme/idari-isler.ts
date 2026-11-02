@@ -73,9 +73,11 @@ export const PANO_EN_COK = 200;
 const panoSutunu = z.object({ talepler: z.array(talepSemasi), toplam: z.number().int().nonnegative() });
 export const talepPanosuCevabi = z.object({ yeni: panoSutunu, yapiliyor: panoSutunu, kapanan: panoSutunu });
 
+// Taleplerim süzgeci tek durum ya da "sonuclanan"dır: kapanan, reddedilen ve geri çekilen birlikte (personelin "Kapandı" sekmesi).
+export const TALEPLERIM_SUZGECLERI = [...TALEP_DURUMLARI, 'sonuclanan'] as const;
 export const taleplerimSorgusu = z.object({
   ...listeSorguAlanlari(['acilma', 'no']),
-  durum: talepDurumuSemasi.optional(),
+  durum: z.enum(TALEPLERIM_SUZGECLERI).optional(),
 });
 export const taleplerimCevabi = listeCevapSemasi(talepSemasi);
 
@@ -459,6 +461,7 @@ export type TalepCevabi = z.output<typeof talepCevabi>;
 export type TalepPanosuCevabi = z.output<typeof talepPanosuCevabi>;
 export type TaleplerimSorgusu = z.input<typeof taleplerimSorgusu>;
 export type TaleplerimSuzgeci = z.output<typeof taleplerimSorgusu>;
+export type TaleplerimDurumSuzgeci = (typeof TALEPLERIM_SUZGECLERI)[number];
 export type TaleplerimCevabi = z.output<typeof taleplerimCevabi>;
 export type SonYerlerCevabi = z.output<typeof sonYerlerCevabi>;
 export type KisiSecenekleriCevabi = z.output<typeof kisiSecenekleriCevabi>;
