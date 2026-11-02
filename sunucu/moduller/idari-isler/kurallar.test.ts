@@ -10,7 +10,7 @@ import {
 } from './kurallar.ts';
 import {
   CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN,
-  aracBelgeReddi, aracVerilemezMi, cikisKmReddi, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
+  aracBelgeReddi, aracVerilemezMi, cikisKmReddi, elleAracDurumReddi, GOREVDE_ELLE, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
 import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
@@ -230,6 +230,16 @@ describe('idari-isler kuralları', () => {
     assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-09' }, '2026-11-10'), MUAYENE_GECIYOR);
     assert.equal(aracBelgeReddi({ ...bos, muayeneTarihi: '2026-11-10' }, '2026-11-10'), null);
     assert.equal(aracBelgeReddi({ ...bos, sigortaTarihi: '2026-10-01' }, '2026-11-10'), SIGORTA_GECIYOR);
+  });
+
+  test('IDR-33: görevde elle seçilmez; yoldaki aracın durumu elle değişmez; görevsiz eski görevde kaydı değişir', () => {
+    assert.equal(elleAracDurumReddi(null, 'gorevde', false), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('musait', 'gorevde', false), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'musait', true), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'pasif', true), GOREVDE_ELLE);
+    assert.equal(elleAracDurumReddi('gorevde', 'gorevde', true), null);
+    assert.equal(elleAracDurumReddi('gorevde', 'musait', false), null);
+    assert.equal(elleAracDurumReddi('musait', 'serviste', false), null);
   });
 
   test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km', () => {

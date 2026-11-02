@@ -113,6 +113,12 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     const yolda = cikis.json<AracGoreviCevabi>().gorev;
     assert.equal((await aracOku(arac.id))?.durum, 'gorevde');
     assert.equal((await aracOku(arac.id))?.km, 5010);
+    const yoldakiArac = (await aracOku(arac.id))!;
+    const elle = await gonder(idari.cerez, `/idari-isler/araclar/${arac.id}/guncelle`, {
+      surum: yoldakiArac.surum, plaka: yoldakiArac.plaka, tur: 'binek', sahiplik: 'sirket', km: 5010, durum: 'musait',
+    });
+    assert.equal(elle.statusCode, 400);
+    assert.match(elle.body, /Görevde durumu/);
     assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 5000 })).statusCode, 400);
     assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 9_999_999 })).statusCode, 400);
     const donus = await komut(idari.cerez, yolda, 'donus', { km: 5130 });
@@ -121,6 +127,17 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     const son = await aracOku(arac.id);
     assert.equal(son?.durum, 'musait');
     assert.equal(son?.km, 5130);
+  });
+
+  test('IDR-33: görevde durumu elle girilmez', async () => {
+    const c = await gonder(idari.cerez, '/idari-isler/araclar/ekle', { plaka: yeniPlaka(), tur: 'binek', sahiplik: 'sirket', durum: 'gorevde' });
+    assert.equal(c.statusCode, 400);
+    const arac = await aracEkle();
+    const g = await gonder(idari.cerez, `/idari-isler/araclar/${arac.id}/guncelle`, {
+      surum: arac.surum, plaka: arac.plaka, tur: 'binek', sahiplik: 'sirket', km: 1000, durum: 'gorevde',
+    });
+    assert.equal(g.statusCode, 400);
+    assert.equal((await aracOku(arac.id))?.durum, 'musait');
   });
 
   test('IDR-25: pasif ya da serviste araç verilmez; aynı araç kesişen tarihlerde ikinci göreve verilmez', async () => {

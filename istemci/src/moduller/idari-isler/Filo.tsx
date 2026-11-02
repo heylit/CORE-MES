@@ -92,6 +92,7 @@ export function Filo() {
 }
 
 const TURLER = ARAC_TURLERI.map((t) => ({ deger: t, baslik: ARAC_TURU[t] }));
+// Görevde durumunu görevin çıkışı yazar (IDR-33); formda yalnız zaten görevde olan araçta görünür.
 const DURUMLAR = ARAC_DURUMLARI.map((d) => ({ deger: d, baslik: ARAC_DURUMU[d].etiket }));
 const KM = /^\d{1,7}$/;
 const kmSayi = (m: string): number | null => (m.trim() === '' ? null : Number(m.trim()));
@@ -164,7 +165,9 @@ function AracFormu({ arac, kapat }: { arac: Arac | null; kapat: () => void }) {
             </button>
           ))}
         </div>
-        <Secim etiket="Durum" value={durum} secenekler={DURUMLAR} onChange={(o) => durumYaz(o.target.value as AracDurumu)} />
+        <Secim etiket="Durum" value={durum} onChange={(o) => durumYaz(o.target.value as AracDurumu)}
+          secenekler={arac?.durum === 'gorevde' ? DURUMLAR : DURUMLAR.filter((d) => d.deger !== 'gorevde')}
+          ipucu={arac?.durum === 'gorevde' ? 'Yoldaki aracın durumu dönüş yazılınca değişir.' : undefined} />
         <div className="tc-ii-iki">
           <Girdi etiket="Km" inputMode="numeric" value={km} onChange={(o) => kmYaz(o.target.value)} ipucu={arac?.km != null ? 'Geriye yazılmaz' : undefined} />
           <Girdi etiket="Sonraki bakım km" inputMode="numeric" value={bakimKm} onChange={(o) => bakimKmYaz(o.target.value)} />

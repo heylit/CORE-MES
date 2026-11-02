@@ -357,6 +357,8 @@ describe('Filo', () => {
     fireEvent.change(screen.getByLabelText(/Plaka/), { target: { value: '34dnm103' } });
     fireEvent.click(screen.getByRole('radio', { name: 'Kiralık' }));
     fireEvent.change(screen.getByLabelText('Km'), { target: { value: '1200' } });
+    // IDR-33: araç formunda görevde seçilmez; durumu görevin çıkışı yazar.
+    expect(within(screen.getByLabelText('Durum')).queryByRole('option', { name: 'Görevde' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await screen.findByText('34 DNM 103 eklendi');
     const [yazma] = yazmalar(istekler);

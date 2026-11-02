@@ -183,6 +183,13 @@ export function kmReddi(eski: number | null, yeni: number | null): string | null
   return eski !== null && yeni !== null && yeni < eski ? KM_GERI : null;
 }
 
+export const GOREVDE_ELLE = 'Görevde durumu yalnız araç göreve çıkınca yazılır; yoldaki aracın durumu dönüş yazılınca değişir.';
+// IDR-33: "görevde" yalnız görevin çıkışıyla başlar ve dönüşüyle biter: elle seçilmez, yolda görevi olan aracın durumu elle değişmez.
+// Görevsiz kalmış eski "görevde" kaydı elle başka duruma alınabilir.
+export function elleAracDurumReddi(mevcut: AracDurumu | null, yeni: AracDurumu, yolda: boolean): string | null {
+  if (yolda) return yeni === 'gorevde' ? null : GOREVDE_ELLE;
+  return yeni === 'gorevde' && mevcut !== 'gorevde' ? GOREVDE_ELLE : null;
+}
 // IDR-19: muayene ve sigorta 30 gün içinde ya da geçmişse, bakıma 1000 km ya da daha az kaldıysa uyarı; pasif araçta uyarı yok.
 export const ARAC_UYARI_GUN = 30;
 export const BAKIM_UYARI_KM = 1000;

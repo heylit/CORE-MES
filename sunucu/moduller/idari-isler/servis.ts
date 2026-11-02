@@ -22,7 +22,8 @@ import {
   zimmetlemeReddi,
   ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
-  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, gecisHedefi, gecisReddi,
+  TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, elleAracDurumReddi,
+  gecisHedefi, gecisReddi,
   geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, yapildiSonucu,
   yemekBildirimReddi, yemekKadrosu, yemekSayisi, type GorevKomutu, type TalepKomutu, type YemekHesabi,
 } from './kurallar.ts';
@@ -343,14 +344,18 @@ async function plakaDenetle(db: Db, plaka: string, haric: number | null): Promis
 }
 
 export async function aracEkle(db: Db, kullanici: Kullanici, g: AracEkleVerisi): Promise<Arac> {
+  const durumReddi = elleAracDurumReddi(null, g.durum, false);
+  if (durumReddi !== null) throw dogrulama(durumReddi, 'durum');
   const plaka = await plakaDenetle(db, g.plaka, null);
   return arac(db, await sorgular.aracEkle(db, { ...g, plaka }, kullanici.id));
 }
 
-// IDR-21: km geriye yazılmaz.
+// IDR-21: km geriye yazılmaz. IDR-33: görevde durumu elle girilmez ve yoldaki aracın durumu elle değişmez.
 export async function aracGuncelle(db: Db, id: number, g: AracEkleVerisi & { surum: number }): Promise<Arac> {
   const mevcut = await sorgular.aracKilitle(db, id);
   if (mevcut === null) throw bulunamadi(ARAC_YOK);
+  const durumReddi = elleAracDurumReddi(mevcut.durum, g.durum, await sorgular.aracYoldaBaskaGorevVarMi(db, id, 0));
+  if (durumReddi !== null) throw dogrulama(durumReddi, 'durum');
   const plaka = await plakaDenetle(db, g.plaka, id);
   const ret = kmReddi(mevcut.km, g.km);
   if (ret !== null) throw dogrulama(ret, 'km');
