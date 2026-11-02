@@ -1,8 +1,8 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type {
-  GeometriAnalizCevabi, GeometriDurumu, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, HamStokOnerisi,
+  GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
@@ -65,7 +65,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                         <span className="tc-g3b-satir-metin">
                           <strong>{s.malzemeKodu}</strong>
                           <span>{s.malzemeAdi ?? s.belgeAdi}</span>
-                          <span className="tc-g3b-soluk">Rev {s.harf} · {s.dosyaTuru.toUpperCase()}</span>
+                          <span className="tc-g3b-soluk">Rev {s.harf} · {s.dosyaTuru.toUpperCase()}{s.malzemeAdi === null ? '' : ` · ${s.belgeAdi}`}</span>
                         </span>
                         <Rozet ton={DURUM_TONU[s.durum]}>{DURUM_ADI[s.durum]}</Rozet>
                       </button>
@@ -75,6 +75,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                 <Sayfalama sayfa={sorgu.data.sayfa} sayfaBoyu={sorgu.data.sayfaBoyu} toplam={sorgu.data.toplam} degistir={sayfaYaz} />
               </>
             )}
+      <p className="tc-g3b-soluk">Yalnız STEP ve IGES modelleri ölçülür; STL, GLB ve GLTF yüzey ağıdır, bu listede yer almaz.</p>
     </section>
   );
 }
@@ -209,7 +210,24 @@ function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; ana
   );
 }
 
-function ModelAyrintisi({ satir, revizyonId }: { satir: GeometriModelSatiri | null; revizyonId: number }) {
+// Bağlantıdaki revizyon yayından düştüyse (yeni revizyon yayınlandı) aynı belgenin yayındaki revizyonuna geçilir.
+function EskiRevizyon({ revizyonId, yonlendir }: { revizyonId: number; yonlendir: (rev: number) => void }) {
+  const { bildir } = useBildirim();
+  const guncel = useQuery({
+    queryKey: anahtarlar.guncel(revizyonId),
+    queryFn: () => api.get<GeometriGuncelRevizyonCevabi>(`/geometri/modeller/${String(revizyonId)}/guncel`),
+  });
+  const yeni = guncel.data?.revizyonId ?? null;
+  useEffect(() => {
+    if (yeni === null || yeni === revizyonId) return;
+    bildir('bilgi', 'Bağlantıdaki revizyon artık yayında değil; aynı belgenin yayındaki revizyonu açıldı.');
+    yonlendir(yeni);
+  }, [yeni, revizyonId, yonlendir, bildir]);
+  if (guncel.isPending || (yeni !== null && yeni !== revizyonId)) return <DurumKutusu durum="yukleniyor" mesaj="Yayındaki revizyon aranıyor" />;
+  return <DurumKutusu durum="bos" mesaj="Bu model artık listede değil: belge arşivde ya da malzeme kartından kaldırılmış." />;
+}
+
+function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModelSatiri | null; revizyonId: number; yonlendir: (rev: number) => void }) {
   const analiz = useQuery({
     queryKey: anahtarlar.analiz(revizyonId),
     queryFn: () => api.get<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}`),
@@ -222,7 +240,10 @@ function ModelAyrintisi({ satir, revizyonId }: { satir: GeometriModelSatiri | nu
     retry: false,
   });
   if (analiz.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Analiz okunuyor" />;
-  if (analiz.isError) return <DurumKutusu durum="hata" mesaj={yetkiyse(analiz.error, 'Analiz okunamadı.')} />;
+  if (analiz.isError) {
+    if (analiz.error instanceof ApiHatasi && analiz.error.durum === 404) return <EskiRevizyon revizyonId={revizyonId} yonlendir={yonlendir} />;
+    return <DurumKutusu durum="hata" mesaj={yetkiyse(analiz.error, 'Analiz okunamadı.')} />;
+  }
   return (
     <div className="tc-g3b-ayrinti">
       {satir && (
@@ -253,6 +274,7 @@ export function Atolye3B() {
   const revizyonId = Number.isSafeInteger(rev) && rev > 0 ? rev : null;
   const [satir, satirYaz] = useState<GeometriModelSatiri | null>(null);
   const sec = (s: GeometriModelSatiri) => { satirYaz(s); adresYaz({ rev: String(s.revizyonId) }); };
+  const yonlendir = useCallback((rev: number) => { satirYaz(null); adresYaz({ rev: String(rev) }, { replace: true }); }, [adresYaz]);
   return (
     <div className="tc-g3b">
       <SayfaBasligi baslik="3D Atölyesi" simge="expand" alt="STEP ve IGES modellerinin ölçüsü ve ham önerisi" />
@@ -262,7 +284,7 @@ export function Atolye3B() {
           {revizyonId === null ? <DurumKutusu durum="bos" mesaj="Soldan bir model seçin." /> : (
             <>
               <Dugme tur="ikincil" simge="chev-left" className="tc-g3b-geri" onClick={() => { satirYaz(null); adresYaz({}); }}>Listeye dön</Dugme>
-              <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} />
+              <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} yonlendir={yonlendir} />
             </>
           )}
         </section>

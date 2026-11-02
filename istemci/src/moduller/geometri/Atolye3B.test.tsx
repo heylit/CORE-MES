@@ -72,6 +72,10 @@ describe('3D Atölyesi', () => {
     expect(await screen.findByText('MLZ-0007')).toBeTruthy();
     expect(screen.getAllByText('Hesaplandı').length).toBeGreaterThan(0);
     expect(screen.getByText('Model flanş.step')).toBeTruthy();
+    // Aynı malzemede birden çok model ayırt edilsin: malzeme adı varken belge adı da satırda.
+    expect(screen.getByText('Rev B · STEP · Model mil.step')).toBeTruthy();
+    expect(screen.getByText('Rev A · STEP')).toBeTruthy();
+    expect(screen.getByText(/STL, GLB ve GLTF yüzey ağıdır/)).toBeTruthy();
     expect(screen.getByText('Soldan bir model seçin.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /MLZ-0007/ }));
     expect(await screen.findAllByText('40 x 20 x 10 mm')).toHaveLength(2);
@@ -131,6 +135,27 @@ describe('3D Atölyesi', () => {
     const [ilk, ikinci] = istekler.filter((i) => i.yontem === 'POST').map((i) => i.basliklar['istek-kimligi']);
     expect(ikinci).toBeTruthy();
     expect(ikinci).not.toBe(ilk);
+  });
+
+  it('yayından düşen revizyon bağlantısı aynı belgenin yayındaki revizyonuna gider; bulunamazsa açıklar', async () => {
+    const istekler = sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/40': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' }),
+      'GET /geometri/modeller/40/dosya': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' }),
+      'GET /geometri/modeller/40/guncel': () => json(200, { revizyonId: 41 }),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/analizler/39': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' }),
+      'GET /geometri/modeller/39/dosya': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' }),
+      'GET /geometri/modeller/39/guncel': () => json(200, { revizyonId: null }),
+    });
+    ac('/geometri?rev=40');
+    expect(await screen.findByText(/aynı belgenin yayındaki revizyonu açıldı/)).toBeTruthy();
+    expect(await screen.findByText('8.000 mm³')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/geometri/analizler/41')).toBe(true);
+    cleanup();
+    ac('/geometri?rev=39');
+    expect(await screen.findByText(/Bu model artık listede değil/)).toBeTruthy();
   });
 
   it('yetkisiz kullanıcıya yetki iletisi, boş listede yol gösteren ileti', async () => {
