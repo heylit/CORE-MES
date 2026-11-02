@@ -77,11 +77,10 @@ export function Habersiz() {
   const kisiler = evler.data.kisiler;
   const onde = kisiler.slice(0, ONDE_KISI);
   const secilenKisi = kisiler.find((k) => k.id === evSahibi);
-  // Son dört hane yazıldıysa türü de seçilir (K24 a): hane türsüz okunamaz, sunucu da reddeder.
-  const turZorunlu = son4.trim() !== '';
+  // Görülen kimliğin türü yazılır (NZM-5 a; K24 a'yı kapsar): iz kalır, sunucu da reddeder. Son dört hane isteğe bağlı.
   const eksik = [
     aranan === '' && 'ad', neden === null && 'neden', evSahibi === null && 'ziyaret edilen kişi', !kimlik && 'kimlik',
-    turZorunlu && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
+    kimlik && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
   ].filter(Boolean);
 
   const gonder = (o: FormEvent) => {
@@ -147,9 +146,9 @@ export function Habersiz() {
           <EvetHayir simge="user" ad="Kimlik görüldü" zorunlu deger={kimlik} degistir={kimlikYaz} />
           {kimlik && (
             <div className="tc-nz-iki">
-              <Secim etiket={turZorunlu ? 'Kimlik türü' : 'Kimlik türü (isteğe bağlı)'} required={turZorunlu} hata={alanHatasi(kaydet.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
+              <Secim etiket="Kimlik türü" required hata={alanHatasi(kaydet.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
                 secenekler={[{ deger: '', baslik: 'Seçilmedi' }, ...KIMLIK_TURLERI.map((t) => ({ deger: t, baslik: KIMLIK_TURU_ADLARI[t] }))]} />
-              <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} hata={alanHatasi(kaydet.error, 'kimlikSon4')} value={son4} onChange={(o) => son4Yaz(o.target.value)} ipucu="Tam numara yazılmaz." />
+              <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} hata={alanHatasi(kaydet.error, 'kimlikSon4')} value={son4} onChange={(o) => son4Yaz(o.target.value)} ipucu="İsteğe bağlı; tam numara yazılmaz." />
             </div>
           )}
           {atolyeZorunlu && <EvetHayir simge="wrench" ad="Atölyeye girecek: kask ve gözlük verildi" zorunlu deger={atolye} degistir={atolyeYaz} />}

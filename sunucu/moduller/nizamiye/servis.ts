@@ -277,7 +277,7 @@ export async function kendiZiyaretiniIptalEt(db: Db, kullanici: Kullanici, id: n
 
 export async function girisYap(db: Db, kullanici: Kullanici, id: number, g: Govde<typeof girisGovdesi>): Promise<Ziyaret> {
   const z = await kilitliZiyaret(db, id, g.surum);
-  const hata = girisHatasi({ durum: z.durum, neden: z.neden, kimlikGoruldu: g.kimlikGoruldu, atolye: g.atolye });
+  const hata = girisHatasi({ durum: z.durum, neden: z.neden, kimlikGoruldu: g.kimlikGoruldu, kimlikTuru: g.kimlikTuru, atolye: g.atolye });
   if (hata !== null) throw gecersiz(hata);
   await kartiVer(db, g.kartId);
   await kisitKorumali(KART_KISITLARI, () => sorgu.girisYaz(db, id, { ...g, girenKisiId: kullanici.id }));
@@ -285,7 +285,7 @@ export async function girisYap(db: Db, kullanici: Kullanici, id: number, g: Govd
 }
 
 export async function habersizGiris(db: Db, kullanici: Kullanici, g: Govde<typeof habersizGovdesi>): Promise<Ziyaret> {
-  const hata = girisHatasi({ durum: 'beklenen', neden: g.neden, kimlikGoruldu: g.kimlikGoruldu, atolye: g.atolye });
+  const hata = girisHatasi({ durum: 'beklenen', neden: g.neden, kimlikGoruldu: g.kimlikGoruldu, kimlikTuru: g.kimlikTuru, atolye: g.atolye });
   if (hata !== null) throw gecersiz(hata);
   if (!(await kisiSecenekleri(db)).some((k) => k.id === g.evSahibiKisiId)) throw gecersiz('Ziyaret edilecek kişi bulunamadı ya da pasif.');
   await kartiVer(db, g.kartId);

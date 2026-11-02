@@ -70,7 +70,7 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
   }
 
   const habersizGovde = (kartId: number, ek: Record<string, unknown> = {}) => ({
-    ad: 'Misafir Bir', firmaAdi: 'Firma A', neden: 'toplanti', evSahibiKisiId: evSahibiId, kartId, kimlikGoruldu: true, ...ek,
+    ad: 'Misafir Bir', firmaAdi: 'Firma A', neden: 'toplanti', evSahibiKisiId: evSahibiId, kartId, kimlikGoruldu: true, kimlikTuru: 'ehliyet', ...ek,
   });
 
   async function habersiz(ek: Record<string, unknown> = {}): Promise<Ziyaret> {
@@ -147,9 +147,23 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     assert.equal(kask.statusCode, 200, kask.body);
   });
 
+  test('NZ-02 görülen kimliğin türü yazılmadan girilmez (NZM-5 a); son dört hane isteğe bağlı', async () => {
+    const kart = await kartAc();
+    const tursuz = await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id, { kimlikTuru: null }));
+    assert.equal(tursuz.statusCode, 422, tursuz.body);
+    assert.match(tursuz.json().mesaj, /türü/);
+    const id = await beklenen();
+    const z = (await kapi()).beklenen.find((s) => s.id === id);
+    assert.ok(z);
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: kart.id, kimlikGoruldu: true })).statusCode, 422);
+    const tamam = await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id, { kimlikTuru: 'pasaport' }));
+    assert.equal(tamam.statusCode, 200, tamam.body);
+    assert.equal(tamam.json().kimlikSon4, null);
+  });
+
   test('NZ-02 kimlik hanesi türsüz yazılmaz; tam numara kabul edilmez', async () => {
     const kart = await kartAc();
-    assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id, { kimlikSon4: '1234' }))).statusCode, 422);
+    assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id, { kimlikTuru: null, kimlikSon4: '1234' }))).statusCode, 422);
     assert.equal((await yaz(gorevli, '/nizamiye/ziyaretler/habersiz', habersizGovde(kart.id, { kimlikTuru: 'tc_kimlik', kimlikSon4: '12345678901' }))).statusCode, 400);
   });
 
@@ -170,10 +184,10 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     const id = await beklenen();
     const z = (await kapi()).beklenen.find((s) => s.id === id);
     assert.ok(z);
-    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: taseron.id, kimlikGoruldu: true })).statusCode, 422);
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: taseron.id, kimlikGoruldu: true, kimlikTuru: 'ehliyet' })).statusCode, 422);
     assert.ok((await kapi()).bosKartlar.some((k) => k.id === taseron.id));
     const ziyaretci = await kartAc();
-    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: ziyaretci.id, kimlikGoruldu: true })).statusCode, 200);
+    assert.equal((await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: z.surum, kartId: ziyaretci.id, kimlikGoruldu: true, kimlikTuru: 'ehliyet' })).statusCode, 200);
   });
 
   test('NZ-01 habersiz giriş tekrar korumalıdır: aynı istek kimliği ikinci ziyaret açmaz, başlıksız istek reddedilir', async () => {
@@ -207,7 +221,7 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
     const z = (await kapi()).beklenen.find((s) => s.id === id);
     assert.ok(z);
     const kart = await kartAc();
-    const giris = { surum: z.surum, kartId: kart.id, kimlikGoruldu: true };
+    const giris = { surum: z.surum, kartId: kart.id, kimlikGoruldu: true, kimlikTuru: 'ehliyet' };
     const cevap = await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, giris);
     assert.equal(cevap.statusCode, 200, cevap.body);
     assert.equal(cevap.json().durum, 'iceride');
@@ -243,7 +257,7 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
 
     const id = await beklenen();
     const kart = await kartAc();
-    const girdi: Ziyaret = (await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: 1, kartId: kart.id, kimlikGoruldu: true })).json();
+    const girdi: Ziyaret = (await yaz(gorevli, `/nizamiye/ziyaretler/${id}/giris`, { surum: 1, kartId: kart.id, kimlikGoruldu: true, kimlikTuru: 'ehliyet' })).json();
     const donen: Ziyaret = (await yaz(gorevli, `/nizamiye/ziyaretler/${id}/geri-al`, { surum: girdi.surum })).json();
     assert.equal(donen.durum, 'beklenen');
     assert.equal(donen.kartId, null);
@@ -362,7 +376,7 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
 
     const gelen: BenimZiyaretcim = (await onKayit(yetkisiz)).json();
     const kart = await kartAc();
-    const giris = await yaz(gorevli, `/nizamiye/ziyaretler/${String(gelen.id)}/giris`, { surum: gelen.surum, kartId: kart.id, kimlikGoruldu: true });
+    const giris = await yaz(gorevli, `/nizamiye/ziyaretler/${String(gelen.id)}/giris`, { surum: gelen.surum, kartId: kart.id, kimlikGoruldu: true, kimlikTuru: 'ehliyet' });
     assert.equal(giris.statusCode, 200, giris.body);
     const icerdeki = (await benimkiler(yetkisiz)).find((b) => b.id === gelen.id);
     assert.equal(icerdeki?.durum, 'iceride');

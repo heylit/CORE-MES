@@ -45,10 +45,9 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
   const giris = useKomut<GirisGovdesi, Ziyaret>('Giriş kaydedilemedi.');
   const atolyeZorunlu = atolyeGerekir(ziyaret.neden);
   const kart = bosKartlar.length === 0 ? null : bosKartlar[kartSira % bosKartlar.length]!;
-  // Son dört hane yazıldıysa türü de seçilir (K24 a): hane türsüz okunamaz, sunucu da reddeder.
-  const turZorunlu = son4.trim() !== '';
+  // Görülen kimliğin türü yazılır (NZM-5 a; K24 a'yı kapsar): iz kalır, sunucu da reddeder. Son dört hane isteğe bağlı.
   const eksik = [
-    !kimlik && 'kimlik', turZorunlu && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
+    !kimlik && 'kimlik', kimlik && kimlikTuru === '' && 'kimlik türü', atolyeZorunlu && !atolye && 'kask ve gözlük', kart === null && 'boş kart',
   ].filter(Boolean);
 
   const gonder = (o: FormEvent) => {
@@ -72,10 +71,10 @@ function GirisPaneli({ ziyaret, bosKartlar, kapat, bitti }: {
       <EvetHayir simge="user" ad="Kimlik görüldü" zorunlu deger={kimlik} degistir={kimlikYaz} />
       {kimlik && (
         <div className="tc-nz-iki">
-          <Secim etiket={turZorunlu ? 'Kimlik türü' : 'Kimlik türü (isteğe bağlı)'} required={turZorunlu} hata={alanHatasi(giris.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
+          <Secim etiket="Kimlik türü" required hata={alanHatasi(giris.error, 'kimlikTuru')} value={kimlikTuru} onChange={(o) => kimlikTuruYaz(o.target.value as KimlikTuru | '')}
             secenekler={[{ deger: '', baslik: 'Seçilmedi' }, ...KIMLIK_TURLERI.map((t) => ({ deger: t, baslik: KIMLIK_TURU_ADLARI[t] }))]} />
           <Girdi etiket="Son 4 hane" inputMode="numeric" maxLength={4} hata={alanHatasi(giris.error, 'kimlikSon4')} value={son4} onChange={(o) => son4Yaz(o.target.value)}
-            ipucu="Tam numara yazılmaz." />
+            ipucu="İsteğe bağlı; tam numara yazılmaz." />
         </div>
       )}
       <EvetHayir simge="wrench" ad="Atölyeye girecek: kask ve gözlük verildi" zorunlu={atolyeZorunlu} deger={atolye} degistir={atolyeYaz} />

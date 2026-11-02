@@ -3,7 +3,7 @@
 | Kural | Test |
 |---|---|
 | NZ-01 yalnız beklenen ziyaret içeri alınır; habersiz gelen kayıt ve giriş tek komut | `NZ-01/02 giriş` (kurallar.test.ts), `NZ-01` (dört test, nizamiye.test.ts) |
-| NZ-02 kimlik görülmeden girilmez; atölye nedeninde (servis, denetim) kask ve gözlük işareti zorunlu; kimlikten yalnız son dört hane | `NZ-01/02 giriş`, `NZ-02` (iki test) |
+| NZ-02 kimlik görülmeden girilmez; görülen kimliğin türü yazılır, son dört hane isteğe bağlı (NZM-5 a); atölye nedeninde (servis, denetim) kask ve gözlük işareti zorunlu; kimlikten yalnız son dört hane | `NZ-01/02 giriş`, `NZ-02` (üç test) |
 | NZ-03 kart yalnız rafta boşsa ve kimsede değilse verilir (kısmi tekil indeks); ziyaretçiye yalnız ziyaretçi kartı | `NZ-03` (kurallar ve nizamiye.test.ts, taşeron kartı testi dahil) |
 | NZ-04 yalnız içerideki çıkar; NZ-05 dizüstüyle girende çıkışta eşya kontrolü; teslim edilmeyen kart kayıp | `NZ-04/05` (iki test) |
 | NZ-06 yalnız beklenen iptal edilir | `NZ-06` (iki test) |
@@ -18,7 +18,7 @@
 | Geçmiş araması düz metin (LIKE işaretleri kaçırılır) | `geçmiş günün kayıtlarını verir` |
 | Acil durum listesi içeridekiler ve yazdıran | `acil durum listesi` |
 | Menü sayacı okumayana boş | `menü sayacı` |
-| Ekran: kimlik EVET denmeden giriş kapalı, seçili kart gider, geri al; son dört hane yazılınca tür zorunlu (K24 a); atölye kask; kart okutunca çıkış, eşya kontrolü; yetkiye göre düğmeler; kart rafı; acil durum yazdır | `Nizamiye.test.tsx` (8 test) |
+| Ekran: kimlik EVET denmeden giriş kapalı, seçili kart gider, geri al; kimlik görülünce tür zorunlu (NZM-5 a, K24 a'yı kapsar); atölye kask; kart okutunca çıkış, eşya kontrolü; yetkiye göre düğmeler; kart rafı; acil durum yazdır | `Nizamiye.test.tsx` (8 test) |
 | Ekran: Ziyaretçilerim üst çubukta oturuma açık; yalnız beklenen iptal; ön kayıt tesis saatiyle, ev sahibi alanı olmadan, istek kimliğiyle | `Ziyaretcilerim.test.tsx` (3 test) |
 | PDKS dosyası: başlık, boş satır, tesis saati; bozuk ve ileri zamanlı satır hatada | `kurallar.test.ts` `PDKS dosyası` |
 | PDKS: son hareketi giriş olan içeride, 24 saatten eski giriş sayılmaz | `kurallar.test.ts` `PDKS: son hareketi` |
