@@ -9,8 +9,9 @@ import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozl
 import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Emir, EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { emirlerIstasyonaGore } from './kurallar.ts';
+import { emirlerIstasyonaGore, hucreAnahtari } from './kurallar.ts';
 import type { MakineArizasi } from './kurallar.ts';
 import { base64Oku, base64Yaz, parcala, sha256 } from './model-dosyasi.ts';
 
@@ -131,6 +132,27 @@ export function useGozler(rafId: number | null, sayfa: number, bolme: number | n
 
 // Gözdeki stok stok modülünün okuma ucundan (sunucuda atölye stoku ithal edemez: stok atölyeye bağlı). Stoksuz göz
 // cevapta yoktur: null. Yetki yoksa istek atılmaz.
+// Stok okuma yetkisi: stok sayfası ya da bir stok işlemi (sunucu aynısını ister).
+export const stokOkurMu = (i: string): boolean => i === 'sayfa.stok' || i.startsWith('stok.');
+
+// ATL-3: bölmenin stoğu olan gözleri (hücre anahtarı: bölme-kat-göz). Doluluk elle girilir; stoğu olan ama doluluğu
+// girilmemiş göz cephede "boş" görünmesin diye. Stok okuma yetkisi yoksa istek atılmaz, küme boştur.
+export function useBolmeStoklari(rafId: number | null, bolme: number | null): ReadonlySet<string> {
+  const oturum = useOturum();
+  const okur = oturum.data?.islemler.some(stokOkurMu) === true;
+  const gozler = useGozler(okur ? rafId : null, 1, bolme);
+  const idler = (gozler.data?.satirlar ?? []).map((s) => s.id).slice(0, 500).join(',');
+  const stok = useQuery({
+    queryKey: anahtarlar.bolmeStoklari(idler),
+    queryFn: async () => (await api.get<GozStoklariCevabi>(`/stok/goz-stoklari?gozIdler=${idler}`)).gozler,
+    enabled: okur && idler !== '',
+  });
+  return useMemo(() => {
+    const stoklu = new Set((stok.data ?? []).filter((g) => g.kalemSayisi > 0).map((g) => g.gozId));
+    return new Set((gozler.data?.satirlar ?? []).filter((s) => stoklu.has(s.id)).map((s) => hucreAnahtari(s.bolme, s.kat, s.goz)));
+  }, [stok.data, gozler.data]);
+}
+
 export function useGozStogu(gozId: number | null, acik: boolean) {
   return useQuery({
     queryKey: anahtarlar.gozStogu(gozId ?? 0),

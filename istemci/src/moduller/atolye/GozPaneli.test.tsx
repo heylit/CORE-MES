@@ -8,6 +8,7 @@ import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { GozStoklariCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { GozPaneli } from './GozPaneli.tsx';
+import { BolmeCephesi } from './RafCephesi.tsx';
 
 const GOZLER = {
   raf: { id: 7, kod: 'R1', ad: 'Palet rafı', aktif: true },
@@ -57,6 +58,32 @@ describe('göz panelinde stok', () => {
     expect((await screen.findByText('3 kalem')).closest('p')?.textContent).toContain('(ilk: Çelik çubuk)');
     expect(screen.getByRole('link', { name: 'Stok konumu' }).getAttribute('href')).toBe('/stok/konumlar/55');
     expect(yollar).toContain('/stok/goz-stoklari?gozIdler=100');
+  });
+
+  it('ATL-3 doluluğu girilmemiş stoklu göz "boş" denmez; stoksuz göz boştur', async () => {
+    sunucuKur({ id: 1, ad: 'Depocu', islemler: ['sayfa.stok'] });
+    goster(1);
+    expect(await screen.findByText('Gözde stok var; doluluk girilmedi.')).toBeTruthy();
+    expect(screen.queryByText('Göz boş.')).toBeNull();
+    cleanup();
+    goster(2);
+    expect(await screen.findByText('Stokta yok.')).toBeTruthy();
+    expect(screen.getByText('Göz boş.')).toBeTruthy();
+  });
+
+  it('ATL-3 cephede doluluğu girilmemiş stoklu göz "stokta" yazar', () => {
+    render(
+      <BolmeCephesi
+        raf={{ kod: 'R1', bolmeSayisi: 1, katSayisi: 2, gozSayisi: 1 }}
+        bolme={1}
+        ozetler={new Map()}
+        stoklu={new Set(['1-1-1'])}
+        secili={null}
+        sec={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Kat 1 göz 1: stokta, doluluk girilmedi' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kat 2 göz 1: boş' })).toBeTruthy();
   });
 
   it('stoksuz gözde "Stokta yok" yazar', async () => {
