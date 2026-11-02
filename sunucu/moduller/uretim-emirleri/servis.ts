@@ -894,6 +894,30 @@ export async function makineDevral(db: Db, kisiId: number, id: number, kullanimI
   return baslatilacak ? emirBaslat(db, kisiId, id, makineler, isEmriId) : emirDevam(db, kisiId, id, makineler, isEmriId);
 }
 
+// ARK-5 b: makineli istasyonda aynı iş başkasının açık çalışmasıyla sürerken kişi işi devralır. İş durmaz, adım ve sayaçlar aynen
+// kalır; ötekilerin çalışması duraklatılmış olarak kapanır (sonra kendi çalışmasına dönebilir), makine kullanımı ve çalışma kişiye geçer.
+// Denetim katılımla aynıdır (kapsam ve istasyon ekibi); bu işte duraklattığı çalışması olan kişi ekip denetimine girmez (katılımdaki dönüş gibi).
+const DEVRALINACAK_CALISMA_YOK = 'Bu işte devralınacak başka bir çalışma yok.';
+export async function calismaDevral(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<KatilimCevabi> {
+  const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
+  const acik = (await sorgular.katilimlarGetir(db, id)).filter((k) => k.cikis === null && (adim === null || k.isEmriId === adim.id));
+  const ihlal = katilmaIhlali(emir.durum, calisma, acik.some((k) => k.kisiId === kisiId));
+  if (ihlal !== null) throw cakisma(ihlal);
+  const otekiler = acik.filter((k) => k.kisiId !== kisiId);
+  if (otekiler.length === 0) throw cakisma(DEVRALINACAK_CALISMA_YOK);
+  const donus = (await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null))?.kapanis === 'duraklat';
+  if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId))) throw yetkiYok(EKIP_DISI);
+  const an = await komutAni(db, id);
+  for (const k of otekiler) await sorgular.katilimKapat(db, k.id, 'duraklat', an);
+  const adimId = adim?.id ?? null;
+  if ((await sorgular.emrinAcikKullanimSayisi(db, id, adimId)) > 0) {
+    await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adimId);
+    await yeriTut(db, id, adimId, { istasyonId, makineler: await sorgular.sonKapananMakineler(db, id, adimId) }, kisiId, an);
+  }
+  await sorgular.katilimAc(db, id, adimId, kisiId, istasyonId, an);
+  return katilimlariCevir(db, id);
+}
+
 // Sıra zorunlu değildir, işaret geri alınabilir, adımlar bitirmeyi engellemez. Aynı duruma yeniden ayarlama olay yazmaz.
 export async function adimTamamla(db: Db, kisiId: number, emirId: number, adimId: number, tamam: boolean): Promise<AdimCevabi> {
   const emir = await kilitliEmir(db, emirId);

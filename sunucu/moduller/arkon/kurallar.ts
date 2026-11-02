@@ -1773,7 +1773,7 @@ export type KatilimYolu =
   | { yol: 'katilim-duraklat' }
   | { yol: 'katilim-ayril' }
   | { yol: 'degisiklik-yok' }
-  | { yol: 'ret'; neden: string };
+  | { yol: 'ret'; neden: string; devralinabilir?: readonly string[] };
 
 // Kişinin kendi çalışması TMI'de zaten açıkken gelen başlatma (iş başka ekrandan, ör. Fabrika Haritası'ndan başlatılmış): yapılacak değişiklik yoktur, ret değildir.
 export const ZATEN_CALISIYOR = 'İş zaten çalışıyor; sizin çalışmanız açık, başlatma TMI\'de değişiklik yapmadı.';
@@ -1797,7 +1797,7 @@ export function katilimYolu(
     if (emirDurumu === 'basladi' && k.emirCalisiyor === true && k.benim === 'duraklamis') return { yol: 'katil' };
     if (emirDurumu === 'basladi' && k.emirCalisiyor === true && k.benim === 'acik') return { yol: 'degisiklik-yok' };
     if (emirDurumu === 'basladi' && k.emirCalisiyor === true && kaynak === 'makine' && k.benim === 'yok' && k.digerleriAcik.length > 0) {
-      return { yol: 'ret', neden: BASKASI_CALISIYOR_BASLATMA(k.digerleriAcik) };
+      return { yol: 'ret', neden: BASKASI_CALISIYOR_BASLATMA(k.digerleriAcik), devralinabilir: k.digerleriAcik };
     }
     return emirDurumu === 'basladi' && kaynak === 'insan' && (k.digerleriAcik.length > 0 || k.benim === 'acik') ? { yol: 'katil' } : { yol: 'emir' };
   }

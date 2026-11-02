@@ -109,6 +109,8 @@ export const katilimDuraklat = (db: Db, kullanici: Kullanici, id: number, an?: s
   servis.kayitAniyla(db, an, () => servis.katilimDuraklat(db, uretenKisi(kullanici), id, isEmriId));
 export const katilimAyril = (db: Db, kullanici: Kullanici, id: number, an?: string, isEmriId?: number): Promise<KatilimCevabi> =>
   servis.kayitAniyla(db, an, () => servis.katilimAyril(db, uretenKisi(kullanici), id, isEmriId));
+export const calismaDevral = (db: Db, kullanici: Kullanici, id: number, an?: string, isEmriId?: number): Promise<KatilimCevabi> =>
+  servis.kayitAniyla(db, an, () => servis.calismaDevral(db, uretenKisi(kullanici), id, isEmriId));
 // 647 a: adımın sayım aşımı izi; salt okuma.
 export const asimlar = (db: Db, emirId: number, isEmriId: number): Promise<AsimlarCevabi> => servis.asimlar(db, emirId, isEmriId);
 export const katilimlar = (db: Db, id: number): Promise<KatilimCevabi> => servis.katilimlar(db, id);

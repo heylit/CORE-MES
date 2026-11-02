@@ -905,6 +905,9 @@ test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdı
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('acik', 'Ali')), 'degisiklik-yok');
   const baskasi = katilimYolu('basla-ya-da-devam', 'basladi', 'makine', calisan('yok', 'Ali'));
   assert.ok(baskasi.yol === 'ret' && baskasi.neden.includes('Ali adına çalışıyor'), 'katılımsız kişi: kimin çalıştığı söylenir');
+  assert.deepEqual(baskasi.yol === 'ret' ? baskasi.devralinabilir : null, ['Ali'], 'ARK-5 b: devralma önerilir');
+  const durdurma = katilimYolu('durdur', 'basladi', 'makine', calisan('acik', 'Ali'));
+  assert.equal(durdurma.yol === 'ret' ? durdurma.devralinabilir : null, undefined, 'yalnız başlatma reddi devralma önerir');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('yok')), 'emir', 'katılım satırı olmayan eski iş: TMI kuralı');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('yok', 'Ali')), 'katil', 'insanlı: katılım');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', { benim: 'duraklamis', digerleriAcik: [], emirCalisiyor: false }), 'emir', 'iş duraklamış: devam emre');

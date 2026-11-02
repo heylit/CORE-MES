@@ -300,13 +300,15 @@ export async function planCozumKaynagi(db: Db, simdi: number = Date.now()): Prom
 // birleştirirdi; aynı betik burada aynı girdiyle koşar, sayfa birleşmiş çalışmayı okur. Kaynak okuması çağıranın yetkisiyledir (çerçevedeki
 // gibi: okuyamadığı dilim kayıttaki gibi kalır). Takvim eki çerçevenin okuduğu vardiya takviminden kurulur (o uç yalnız oturum ister).
 export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
-  const k = await planlamaGirdisi(db, kullanici);
+  const k = await planlamaGirdisiOkumasi(db, kullanici);
   if (k.girdi === null) return { calisma: null, surum: k.surum };
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
   if (g === null) return { calisma: null, surum: k.surum };
   // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
-  const fin = await planFinansmanOrani(db, tesisGunu(simdi));
-  return { calisma: calismayaMotorAyari(g.S, (await hedefMotorAyari(db, null)).degerler, fin, await motorOlcegi(db)) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
+  // Motor ayarı, ölçek ve finansman oranı girdi kurulurken aynı istekte okundu; oran gününe bağlıdır, gün başkaysa yeniden okunur.
+  const { degerler, olcek, finansman } = k.okunan!;
+  const fin = finansman.gun === tesisGunu(simdi) ? finansman.oran : await planFinansmanOrani(db, tesisGunu(simdi));
+  return { calisma: calismayaMotorAyari(g.S, degerler, fin, olcek) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
@@ -339,6 +341,16 @@ export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now())
 // Plan amacı kayıttan değil güncel motor ayarından gelir (kart 811, 771 a): sayfa, değerlendirme ve sunucu motoru aynı amaçla hesaplar.
 // bosCalismaAni verilirse kayıt yokken girdi null olmaz: çalışma o günün boş çalışmasıdır (yalnız bellekte).
 export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAni?: number): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null }> {
+  const { surum, girdi } = await planlamaGirdisiOkumasi(db, kullanici, bosCalismaAni);
+  return { surum, girdi };
+}
+
+interface GirdiOkumasi {
+  degerler: Awaited<ReturnType<typeof hedefMotorAyari>>['degerler'];
+  olcek: MotorOlcegi;
+  finansman: { gun: string; oran: Awaited<ReturnType<typeof planFinansmanOrani>> };
+}
+async function planlamaGirdisiOkumasi(db: Db, kullanici: Kullanici, bosCalismaAni?: number): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null; okunan?: GirdiOkumasi }> {
   const satir = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   const kayitli = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
   const surum = satir?.surum ?? null;
@@ -349,13 +361,16 @@ export async function planlamaGirdisi(db: Db, kullanici: Kullanici, bosCalismaAn
   const calisma = gecerli ? kayitli : yeniCalisma(kayit, kaynak, tesisGunu(bosCalismaAni!));
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
   const { degerler } = await hedefMotorAyari(db, null);
-  const fin = await planFinansmanOrani(db, tesisGunu(bosCalismaAni ?? Date.now()));
+  const finGunu = tesisGunu(bosCalismaAni ?? Date.now());
+  const fin = await planFinansmanOrani(db, finGunu);
   // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
   const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
   const kaynakDilimi = await tipliKaynakOkumasi(db, kullanici, kaynak);
+  const olcek = await motorOlcegi(db);
   return {
     surum,
-    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, await motorOlcegi(db), ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
+    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, olcek, ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
+    okunan: { degerler, olcek, finansman: { gun: finGunu, oran: fin } },
   };
 }
 

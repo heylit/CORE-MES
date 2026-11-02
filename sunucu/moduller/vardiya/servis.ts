@@ -23,7 +23,7 @@ import {
   makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
-  aralik, araliklardanCikar, araliklarCakisir, atamaPayi, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
+  aralik, araliklardanCikar, araliklarCakisir, atamaPayi, birlestir, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
   kisininIstasyonu, molaDenetle, netDakika, netSureHatasi, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
 import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
@@ -402,8 +402,10 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
   }
 
   // Dakikalar bütün kaynaklar için tek sorguda ana çevrilir: önce her kaynağın dakikaları toplanır, sonra sonuç kurulur.
-  const kurulacaklar: { anahtar: string; dakikaSayisi: number; kur: (anlar: readonly string[]) => TakvimHesabi }[] = [];
-  const tumDakikalar: number[] = [];
+  const kurulacaklar: { anahtar: string; dakikalar: readonly number[]; kur: (anlar: readonly string[]) => TakvimHesabi }[] = [];
+  // Kişi olmayan kaynağın hesabı yalnız bağından (iş merkezi, istasyon, vardiya) bellidir: aynı istasyonun makineleri ve istasyonun
+  // kendisi aynı takvimi verir, bir kez hesaplanır. Kişide izin ve son gün kişiye özeldir, ortak hesap yoktur.
+  const ortakHesaplar = new Map<string, ReturnType<typeof hesapla>>();
   for (const k of kaynaklar) {
     const anahtar = kaynakAnahtari(k);
     if (sonuc.has(anahtar)) continue;
@@ -412,6 +414,49 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
     const bag = await merkezVeVardiya(k);
     if (bag === null) continue;
     const kisiId = k.tur === 'kisi' ? k.id : null;
+    const ortakAnahtar = kisiId === null ? `${bag.isMerkeziId}:${String(bag.istasyonId)}:${String(bag.vardiyaId)}` : null;
+    let h = ortakAnahtar === null ? undefined : ortakHesaplar.get(ortakAnahtar);
+    if (h === undefined) {
+      h = hesapla(bag, kisiId);
+      if (ortakAnahtar !== null) ortakHesaplar.set(ortakAnahtar, h);
+    }
+    const { izinli, ayrildi, dakikalar, gunluk, gunDakikalari } = h;
+    // Kaynağın anları, bütün kaynakların tek çevirisinden kendi payıyla gelir.
+    const kur = (anlar: readonly string[]): TakvimHesabi => {
+      const cevir = (i: number): TakvimAraligi => ({ baslangic: anlar[2 * i]!, bitis: anlar[2 * i + 1]! });
+      let sira = 2 * dakikalar.length;
+      const basladigiGunler = gunluk.map((g): BasladigiGun => {
+        const al = () => { sira += 2; return { baslangic: anlar[sira - 2]!, bitis: anlar[sira - 1]! }; };
+        const araliklar = g.araliklar.map(al);
+        const molalar = g.molalar.map(al);
+        const bitis = g.son === null ? null : anlar[sira++]!;
+        return { araliklar, molalar, bitis };
+      });
+      const gunHesabi = gunDakikalari();
+      return { basladigiGunler, takvim: {
+        isMerkeziId: bag.isMerkeziId,
+        vardiyaId: bag.vardiyaId,
+        gunler: Array.from({ length: gunSayisi }, (_, i) => {
+          const tarih = tarihEkle(aralik.baslangic, i);
+          const g = gunler.get(tarih);
+          const { dakika, fazlaMesaiDakika } = gunHesabi[i]!;
+          return {
+            tarih, dakika, kapali: g ? { tur: g.tur, ad: g.ad } : null,
+            ...(izinli(tarih) ? { izinli: true } : {}),
+            ...(ayrildi(tarih) ? { ayrildi: true } : {}),
+            ...(fazlaMesaiDakika > 0 ? { fazlaMesaiDakika } : {}),
+          };
+        }),
+        araliklar: dakikalar.map((_, i) => cevir(i)),
+        // VR-26: kişinin çalışma payı; kapasite hesabı tam zamanla çarpar.
+        ...(kisiId !== null ? { yuzde: atamaPayi(kisininAtamalari(atamalar, kisiId)) } : {}),
+      } };
+    };
+    kurulacaklar.push({ anahtar, dakikalar: h.kaynaginDakikalari, kur });
+  }
+
+  // Bir kaynağın (ya da ortak bağın) takvim hesabı, anlara çevrilmeden önce: dakika ekseninde aralıklar ve gün dakikaları.
+  function hesapla(bag: Bag, kisiId: number | null) {
     // VR-25: kişi tam gün onaylı izindeyse o gün çalışmaz (vardiya da fazla mesai de); kısmi izin (soru 54) aşağıda düşülür.
     const izinOranlari = kisiId === null ? new Map<string, number>() : izinliler.get(kisiId) ?? new Map<string, number>();
     const izinli = (tarih: string) => izinOranlari.get(tarih) === 1;
@@ -427,7 +472,8 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
     // Soru 54: kısmi izinli saatler duruş gibi çıkar; fazla mesai izinden etkilenmez (izinli kısım yalnız vardiyanın içindedir).
     const kisiIzinleri = [...izinOranlari].filter(([, oran]) => oran < 1).flatMap(([tarih, oran]) =>
       izinliKisim(gununCalismaAraliklari(gunFarki(aralik.baslangic, tarih) - 1, gununVardiyalariniVer(tarih), planliDuruslar), oran));
-    const durusDakikalari = [...planliDuruslar, ...kisiIzinleri];
+    // Duruşlar yalnız çıkarılır: bir kez birleştirilmiş liste her gün yeniden sıralanmaz, çıkan dakikalar aynıdır.
+    const durusDakikalari = birlestir([...planliDuruslar, ...kisiIzinleri]);
     const dakikalar = araliklardanCikar(takvimAraliklari(aralik.baslangic, gunSayisi, hepsiniVer), durusDakikalari);
     const gunluk = Array.from({ length: basladigiGunSayisi }, (_, i) => {
       const vardiyasi = hepsiniVer(tarihEkle(aralik.baslangic, i));
@@ -437,47 +483,21 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
       ...dakikalar.flatMap((a) => [a.bas, a.bit]),
       ...gunluk.flatMap((g) => [...g.araliklar.flatMap((a) => [a.bas, a.bit]), ...g.molalar.flatMap((a) => [a.bas, a.bit]), ...(g.son === null ? [] : [g.son])]),
     ];
-    tumDakikalar.push(...kaynaginDakikalari);
-    // Kaynağın anları, bütün kaynakların tek çevirisinden kendi payıyla gelir.
-    const kur = (anlar: readonly string[]): TakvimHesabi => {
-      const cevir = (i: number): TakvimAraligi => ({ baslangic: anlar[2 * i]!, bitis: anlar[2 * i + 1]! });
-      let sira = 2 * dakikalar.length;
-      const basladigiGunler = gunluk.map((g): BasladigiGun => {
-        const al = () => { sira += 2; return { baslangic: anlar[sira - 2]!, bitis: anlar[sira - 1]! }; };
-        const araliklar = g.araliklar.map(al);
-        const molalar = g.molalar.map(al);
-        const bitis = g.son === null ? null : anlar[sira++]!;
-        return { araliklar, molalar, bitis };
-      });
-      return { basladigiGunler, takvim: {
-        isMerkeziId: bag.isMerkeziId,
-        vardiyaId: bag.vardiyaId,
-        gunler: Array.from({ length: gunSayisi }, (_, i) => {
-          const tarih = tarihEkle(aralik.baslangic, i);
-          const g = gunler.get(tarih);
-          const vardiyasi = gununVardiyalariniVer(tarih);
-          const dakika = gunNetDakikasiEk(i, vardiyasi, gununMesaileriniVer(tarih), durusDakikalari);
-          const fazlaMesaiDakika = dakika - gunNetDakikasi(i, vardiyasi, durusDakikalari);
-          return {
-            tarih, dakika, kapali: g ? { tur: g.tur, ad: g.ad } : null,
-            ...(izinli(tarih) ? { izinli: true } : {}),
-            ...(ayrildi(tarih) ? { ayrildi: true } : {}),
-            ...(fazlaMesaiDakika > 0 ? { fazlaMesaiDakika } : {}),
-          };
-        }),
-        araliklar: dakikalar.map((_, i) => cevir(i)),
-        // VR-26: kişinin çalışma payı; kapasite hesabı tam zamanla çarpar.
-        ...(kisiId !== null ? { yuzde: atamaPayi(kisininAtamalari(atamalar, kisiId)) } : {}),
-      } };
-    };
-    kurulacaklar.push({ anahtar, dakikaSayisi: kaynaginDakikalari.length, kur });
+    let gunHesabi: { dakika: number; fazlaMesaiDakika: number }[] | null = null;
+    const gunDakikalari = () => (gunHesabi ??= Array.from({ length: gunSayisi }, (_, i) => {
+      const tarih = tarihEkle(aralik.baslangic, i);
+      const vardiyasi = gununVardiyalariniVer(tarih);
+      const dakika = gunNetDakikasiEk(i, vardiyasi, gununMesaileriniVer(tarih), durusDakikalari);
+      return { dakika, fazlaMesaiDakika: dakika - gunNetDakikasi(i, vardiyasi, durusDakikalari) };
+    }));
+    return { izinli, ayrildi, dakikalar, gunluk, kaynaginDakikalari, gunDakikalari };
   }
-  const tumAnlar = await s.anlaraCevir(db, aralik.baslangic, tumDakikalar);
-  let bas = 0;
-  for (const k of kurulacaklar) {
-    sonuc.set(k.anahtar, k.kur(tumAnlar.slice(bas, bas + k.dakikaSayisi)));
-    bas += k.dakikaSayisi;
-  }
+
+  // Aynı dakika aynı ana çevrilir: veritabanına her dakika bir kez gider, kaynaklar kendi sıralarıyla geri alır.
+  const tekDakikalar = [...new Set(kurulacaklar.flatMap((k) => k.dakikalar))];
+  const anlar = new Map(tekDakikalar.map((d, i) => [d, i]));
+  const tumAnlar = await s.anlaraCevir(db, aralik.baslangic, tekDakikalar);
+  for (const k of kurulacaklar) sonuc.set(k.anahtar, k.kur(k.dakikalar.map((d) => tumAnlar[anlar.get(d)!]!)));
   return sonuc;
 }
 

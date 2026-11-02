@@ -410,34 +410,59 @@ function emirSatiri(b: Pick<Baglam, 'siparisSatirlari' | 'kurlar'>, i: Pick<Is, 
 // müşteri sınıfı girmez.
 const emirCarpani = (b: Pick<Baglam, 'bedelAyari'>, i: Pick<Is, 'oncelik'> | null): number => oncelikCarpani(i?.oncelik ?? null, b.bedelAyari);
 
-async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Promise<Baglam> {
-  const simdi = Date.now();
+// Aynı istekte birden çok bağlam kurulurken (senaryo listesi: canlı ve her açık senaryo) hedefe bağlı olmayan okumalar bir kez yapılır
+// ve bağlamlar aynı anı paylaşır. Hedefe bağlı olanlar (değişiklik defteri, plan ve bedel ayarı, bölmeler, ek mesai) her bağlamda okunur.
+// Paylaşılan okumayı değiştiren bağlam kendi kopyasını alır (senaryodaki makine arızası kaynak haritasını değiştirir).
+interface BaglamOrtak {
+  simdi: number;
+  okumalar: Map<string, Promise<unknown>>;
+  rotalar: RotaOnbellek;
+  urunler: Map<number, { kod: string; ad: string }>;
+  dugumler: DugumOnbellek;
+  istasyonMakineleri: IstasyonMakineleri;
+}
+const baglamOrtagi = (): BaglamOrtak =>
+  ({ simdi: Date.now(), okumalar: new Map(), rotalar: new Map(), urunler: new Map(), dugumler: new Map(), istasyonMakineleri: new Map() });
+function ortakOku<T>(ortak: BaglamOrtak | undefined, anahtar: string, oku: () => Promise<T>): Promise<T> {
+  if (ortak === undefined) return oku();
+  if (!ortak.okumalar.has(anahtar)) ortak.okumalar.set(anahtar, oku());
+  return ortak.okumalar.get(anahtar) as Promise<T>;
+}
+
+async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, ortak?: BaglamOrtak): Promise<Baglam> {
+  const simdi = ortak?.simdi ?? Date.now();
+  const bir = <T>(anahtar: string, oku: () => Promise<T>): Promise<T> => ortakOku(ortak, anahtar, oku);
   const gun0 = (tesisGunBasi(tesisGunu(simdi)) - simdi) / DK;
   const defter = hedef === null ? [] : await s.degisiklikler(db, [hedef]);
   const isler: Baglam['isler'] = new Map();
-  const rotalar: RotaOnbellek = new Map();
-  const urunler = new Map<number, { kod: string; ad: string }>();
+  const rotalar: RotaOnbellek = ortak?.rotalar ?? new Map();
+  const urunler = ortak?.urunler ?? new Map<number, { kod: string; ad: string }>();
   const ayar = await s.ayarOku(db, hedef);
+  // Açık işler ve onlardan türeyen okumalar yalnız "taslak emirleri de planla" ayarına bağlıdır.
+  const t = String(ayar.taslakEmirler);
   // Termini girilmemiş fason adım: satın almanın geçmiş teslim tahmini, yoksa FASON_VARSAYILAN_GUN (CA-2).
-  const acik = await planlanacakIsEmirleri(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: (q) => fasonSuresiTahminleri(db, q) });
-  const eksikRevizyon = await girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId));
-  const siparisSatirlari = await siparisSatiriOzetleri(db, acik.flatMap((i) => (i.siparisSatiriId == null ? [] : [i.siparisSatiriId])));
+  const acik = await bir(`acik:${t}`, () => planlanacakIsEmirleri(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: (q) => fasonSuresiTahminleri(db, q) }));
+  const eksikRevizyon = await bir(`eksik:${t}`, () => girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId)));
+  const siparisSatirlari = await bir(`siparis:${t}`, () => siparisSatiriOzetleri(db, acik.flatMap((i) => (i.siparisSatiriId == null ? [] : [i.siparisSatiriId]))));
   // Kaynaklar ve ürün adları işlerden önce tek turda okunur: iş başına okuma olmasın.
-  const istasyonMakineleri: IstasyonMakineleri = new Map();
-  const kaynaklar = await kaynaklariOku(db, istasyonMakineleri);
-  const ozetler = await malzemeOzetleri(db, acik.map((i) => i.malzemeNo));
+  const istasyonMakineleri: IstasyonMakineleri = ortak?.istasyonMakineleri ?? new Map();
+  const okunanKaynaklar = await bir('kaynaklar', () => kaynaklariOku(db, istasyonMakineleri));
+  const kaynaklar = new Map(okunanKaynaklar);
+  const ozetler = await bir(`ozet:${t}`, () => malzemeOzetleri(db, acik.map((i) => i.malzemeNo)));
   for (const no of new Set(acik.map((i) => i.malzemeNo))) { const o = ozetler.get(no); urunler.set(no, { kod: o?.kod ?? '?', ad: o?.ad ?? o?.kod ?? '?' }); }
   const rotaEksik = new Map<string, string>();
-  const dugumler: DugumOnbellek = new Map();
+  const dugumler: DugumOnbellek = ortak?.dugumler ?? new Map();
   for (const i of acik) {
     const neden = eksikRevizyon.get(i.kaynakRotaRevizyonId);
     if (neden) rotaEksik.set(i.emirNo, neden);
     else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri, dugumler));
   }
   const b: Baglam = {
-    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(simdi)), kurlar: await planKurlari(db, tesisGunu(simdi)), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
-    ...await ekMesaiTakvimde(db, hedef, simdi, await vardiyaOku(db, simdi, kaynaklar)),
-    izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
+    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef),
+    finansmanOraniGun: await bir('finansman', () => planFinansmanOrani(db, tesisGunu(simdi))), kurlar: await bir('kurlar', () => planKurlari(db, tesisGunu(simdi))),
+    yetkinlik: await bir('yetkinlik', () => yetkinlikOku(db)), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
+    ...await ekMesaiTakvimde(db, hedef, simdi, await bir('vardiya', () => vardiyaOku(db, simdi, okunanKaynaklar))),
+    izinli: kullanici ? await bir('izinli', () => kisininIzinliIsMerkezleri(db, kullanici.id)) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
   };
   if (tahminiMaliyet && malzemeMaliyeti) {
@@ -445,8 +470,11 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     for (const i of isler.values()) { const satir = emirSatiri(b, i); if (satir && !emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, satir); }
     // 1379 a: katkı emrin bütün iş emrinin maliyetiyle hesaplanır (bitmiş ve fason dahil); yalnız plandaki kalan iş düşülürse yarı bitmiş
     // emir tam tutarına karşı kalan maliyetle kârlı görünür.
-    const bagli = [...await emirlerinIsEmriIdleri(db, [...emirler.keys()])].flatMap(([uretimEmriId, idler]) => idler.map((id) => ({ id, uretimEmriId })));
-    b.katkilar = katkiPaylari(emirler, bagli, await tahminiMaliyet(db, bagli.map((i) => i.id)), await malzemeMaliyeti(db, [...emirler.keys()]));
+    // Defterden önceki işlerden kurulur: aynı ayarla her bağlamda aynıdır.
+    b.katkilar = await bir(`katki:${t}`, async () => {
+      const bagli = [...await emirlerinIsEmriIdleri(db, [...emirler.keys()])].flatMap(([uretimEmriId, idler]) => idler.map((id) => ({ id, uretimEmriId })));
+      return katkiPaylari(emirler, bagli, await tahminiMaliyet!(db, bagli.map((i) => i.id)), await malzemeMaliyeti!(db, [...emirler.keys()]));
+    });
   }
   // Taslaktaki denemeler (P6): sahibi modülün verisi değişmeden plan girdisine uygulanır.
   for (const d of defter.filter((x) => BENZETIM.has(x.tur))) {
@@ -463,14 +491,15 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     if (d.tur === 'acil_emir') for (const i of await denemeIsleri(db, d, rotalar, urunler, istasyonMakineleri)) isler.set(i.id, i);
   }
   devirleriKur(isler);
-  b.eskiRota = await eskiRotaliEmirler(db, isler, rotalar);
+  b.eskiRota = await eskiRotaliEmirler(db, isler, rotalar, ortak);
   return b;
 }
 
-async function eskiRotaliEmirler(db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek): Promise<Baglam['eskiRota']> {
+async function eskiRotaliEmirler(db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek, ortak?: BaglamOrtak): Promise<Baglam['eskiRota']> {
   const h: Baglam['eskiRota'] = new Map();
   if (planMotoru === null) return h;
-  const yururlukte = await yururluktekiRevizyonIdleri(db, [...new Set([...isler.values()].map((i) => i.malzemeNo))]);
+  const nolar = [...new Set([...isler.values()].map((i) => i.malzemeNo))];
+  const yururlukte = await ortakOku(ortak, `yururlukte:${[...nolar].sort((a, c) => a - c).join(',')}`, () => yururluktekiRevizyonIdleri(db, nolar));
   for (const i of isler.values()) {
     const r = yururlukte.get(i.malzemeNo);
     if (r === undefined || r === i.kaynakRotaRevizyonId || h.has(i.uretimEmriId)) continue;
@@ -2118,7 +2147,8 @@ async function acikTaslak(db: Db, k: Kullanici, id: number, surum: number) {
 const zamanFarki = (a: string | null, c: string | null) => (a ?? '') !== (c ?? '');
 
 export async function senaryolar(db: Db, k: Kullanici): Promise<SenaryolarCevabi> {
-  const canliB = await baglamKur(db, k, null);
+  const ortak = baglamOrtagi();
+  const canliB = await baglamKur(db, k, null, ortak);
   const canliSatir = await s.yerlesimler(db, null);
   const canli = cevapKur(canliB, canliSatir);
   const surum = await s.planSurumu(db);
@@ -2134,7 +2164,7 @@ export async function senaryolar(db: Db, k: Kullanici): Promise<SenaryolarCevabi
     let etki: SenaryolarCevabi['senaryolar'][number]['etki'] = null;
     const acikMi = x.durum === 'acik' || x.durum === 'onayda';
     if (acikMi) {
-      const b = await baglamKur(db, k, x.id);
+      const b = await baglamKur(db, k, x.id, ortak);
       const c = cevapKur(b, await s.yerlesimler(db, x.id));
       gostergeler = gosterge(b, c.yerler);
       const canliEmir = new Map(canli.emirler.map((e) => [e.uretimEmriId, e]));

@@ -8,9 +8,17 @@ export interface MatrisSatiri { isMerkeziId: number; gun: number; vardiyaId: num
 // Dakika ekseni: aralığın ilk gününün 00:00'ı sıfırdır.
 export interface DakikaAraligi { bas: number; bit: number }
 
+// Takvim hesabı aynı birkaç saat metnini kaynak x gün kez çevirir; sonuç metnin kendisinden bellidir, tablo yalnız tekrarı keser.
+const SAAT_TABLOSU_SINIRI = 4096;
+const saatDakikalari = new Map<string, number>();
 export const dakika = (saat: string): number => {
+  const bilinen = saatDakikalari.get(saat);
+  if (bilinen !== undefined) return bilinen;
   const [s, d] = saat.split(':').map(Number);
-  return (s ?? 0) * 60 + (d ?? 0);
+  const sonuc = (s ?? 0) * 60 + (d ?? 0);
+  if (saatDakikalari.size >= SAAT_TABLOSU_SINIRI) saatDakikalari.clear();
+  saatDakikalari.set(saat, sonuc);
+  return sonuc;
 };
 
 // Başlangıçtan bitişe süre; bitiş önceyse gece yarısını geçer.
@@ -111,7 +119,8 @@ export function vardiyaParcalari(v: Pick<VardiyaTanimi, 'baslangic' | 'bitis' | 
   return parcalar;
 }
 
-function birlestir(liste: DakikaAraligi[]): DakikaAraligi[] {
+// Sıralı, örtüşen ve bitişik parçaları birleşmiş liste (yeni nesneler).
+export function birlestir(liste: DakikaAraligi[]): DakikaAraligi[] {
   const sirali = [...liste].sort((x, y) => x.bas - y.bas);
   const sonuc: DakikaAraligi[] = [];
   for (const a of sirali) {
@@ -219,12 +228,35 @@ export function durusAraliklari(d: DurusTanimi, baslangic: string, gunSayisi: nu
 }
 
 // Aralıklardan çıkarılacakların düştüğü parçalar; sıra korunur.
-export function araliklardanCikar(araliklar: readonly DakikaAraligi[], cikarilacak: readonly DakikaAraligi[]): DakikaAraligi[] {
-  const kesik = birlestir([...cikarilacak]);
-  return araliklar.flatMap((a) => kesik.reduce<DakikaAraligi[]>((parcalar, k) => parcalar.flatMap((p) => {
+// Takvim hesabı bu işlevi kaynak x gün kez, bir yıllık duruş listesiyle çağırır: liste zaten sıralı ve birleşikse yeniden sıralanmaz.
+const birlesikMi = (l: readonly DakikaAraligi[]): boolean => l.every((a, i) => a.bit >= a.bas && (i === 0 || a.bas > l[i - 1]!.bit));
+// Ters (bitişi başından önce) parça varsa sıralı tarama geçerli değildir: her kesik her parçaya tek tek uygulanır.
+const tekTekCikar = (araliklar: readonly DakikaAraligi[], kesik: readonly DakikaAraligi[]): DakikaAraligi[] =>
+  araliklar.flatMap((a) => kesik.reduce<DakikaAraligi[]>((parcalar, k) => parcalar.flatMap((p) => {
     if (k.bit <= p.bas || k.bas >= p.bit) return [p];
     return [...(k.bas > p.bas ? [{ bas: p.bas, bit: k.bas }] : []), ...(k.bit < p.bit ? [{ bas: k.bit, bit: p.bit }] : [])];
   }), [{ ...a }]));
+// kesik sıralı ve birleşik olduğundan aralığa değmeyen ilk kısım ikili aramayla atlanır, değenler sırayla kesilir. Önceki kesilenler
+// yalnız son parçaya değebilir (her kesik, öncekinin bitişinden sonra başlar); sonuç her kesiği bütün parçalara uygulamakla aynıdır.
+export function araliklardanCikar(araliklar: readonly DakikaAraligi[], cikarilacak: readonly DakikaAraligi[]): DakikaAraligi[] {
+  const kesik = birlesikMi(cikarilacak) ? cikarilacak : birlestir([...cikarilacak]);
+  if (!kesik.every((k) => k.bit >= k.bas)) return tekTekCikar(araliklar, kesik);
+  return araliklar.flatMap((a) => {
+    let alt = 0;
+    let ust = kesik.length;
+    while (alt < ust) { const orta = (alt + ust) >> 1; if (kesik[orta]!.bit <= a.bas) alt = orta + 1; else ust = orta; }
+    const parcalar: DakikaAraligi[] = [];
+    let p: DakikaAraligi | null = { ...a };
+    for (let i = alt; i < kesik.length && p !== null; i += 1) {
+      const k = kesik[i]!;
+      if (k.bas >= a.bit) break;
+      if (k.bit <= p.bas || k.bas >= p.bit) continue;
+      if (k.bas > p.bas) parcalar.push({ bas: p.bas, bit: k.bas });
+      p = k.bit < p.bit ? { bas: k.bit, bit: p.bit } : null;
+    }
+    if (p !== null) parcalar.push(p);
+    return parcalar;
+  });
 }
 
 // Günlük mesai: o gün (gün sırası) başlayan vardiyaların net çalışma aralıkları; molalar ve duruşlar dışarıda, gece yarısını geçen kısım
@@ -386,7 +418,8 @@ export function gunNetDakikasiEk(
 ): number {
   const kaydir = (v: Pick<VardiyaTanimi, 'baslangic' | 'bitis' | 'molalar'>) =>
     vardiyaParcalari(v).map((p) => ({ bas: p.bas + gunSirasi * GUN_DK, bit: p.bit + gunSirasi * GUN_DK }));
-  const ek = araliklardanCikar(birlestir(ekler.flatMap(kaydir)), [...vardiyalar.flatMap(kaydir), ...duruslar]);
+  // Önce duruşlar sonra vardiyalar çıkar: kalan dakikalar aynıdır, uzun duruş listesi her gün yeniden sıralanmaz.
+  const ek = araliklardanCikar(araliklardanCikar(birlestir(ekler.flatMap(kaydir)), duruslar), vardiyalar.flatMap(kaydir));
   return gunNetDakikasi(gunSirasi, vardiyalar, duruslar) + ek.reduce((t, p) => t + p.bit - p.bas, 0);
 }
 

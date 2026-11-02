@@ -2,7 +2,7 @@
 // adresine gider, bu katman onları TMI'nin /api/arkon uçlarına çevirir. Oturum TMI'nindir (çerez); Arkon'a ayrı giriş yoktur.
 import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, AnomaliOlaylariCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
-  EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
+  CalismaDevralRedAyrintisi, EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
   RefakatKartlariCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import type { CagriEkiplerimCevabi } from '#paylasilan/sozlesme/bildirim.ts';
@@ -342,7 +342,7 @@ export function reddiBildirimi(yontem: string, yol: string, cevap: Cevap): strin
 
 // Kayıt sunucuda yazılır ama TMI üretim kuralı yansımasını reddedebilir (ör. kol önceki adım bitmeden, birleşme adımı parti gelmeden): ekran bunu
 // görmez, kaydı tamam sanır. Sunucunun TMI kuralı metni operatöre olduğu gibi söylenir.
-// devralinabilir: makine dolu retleri ayrıca sorulur (`makineDoluRetleri`), burada bildirim olmaz.
+// devralinabilir: devralma soran retler (makine dolu, ARK-5 b başkasının çalışması) ayrıca sorulur (`makineDoluRetleri`), burada bildirim olmaz.
 export function tmiRetMetni(ileti: string): string {
   return `İşlem reddedildi: ${ileti}`;
 }
@@ -350,18 +350,25 @@ export function tmiRetMetni(ileti: string): string {
 export function tmiReddiBildirimleri(cevap: Cevap, devralinabilir = false): string[] {
   const liste = (cevap.govde as { reddedilen?: unknown } | undefined)?.reddedilen;
   if (cevap.durum >= 400 || !Array.isArray(liste)) return [];
-  return liste.flatMap((r: { ileti?: unknown; makineDolu?: unknown } | null) => (
-    typeof r?.ileti === 'string' && !(devralinabilir && r.makineDolu !== undefined) ? [tmiRetMetni(r.ileti)] : []));
+  return liste.flatMap((r: { ileti?: unknown; makineDolu?: unknown; calismaDevral?: unknown } | null) => (
+    typeof r?.ileti === 'string' && !(devralinabilir && (r.makineDolu !== undefined || r.calismaDevral !== undefined)) ? [tmiRetMetni(r.ileti)] : []));
 }
 
-export interface MakineDoluRedi extends MakineDoluRedAyrintisi { cid: string; ileti: string }
+export interface MakineDevralRedi extends MakineDoluRedAyrintisi { tur?: 'makine'; cid: string; ileti: string }
+export interface CalismaDevralRedi extends CalismaDevralRedAyrintisi { tur: 'calisma'; cid: string; ileti: string }
+// Devralma sorusu doğuran retler; ad, taşıyıcının ve çerçevenin kullandığı adla aynı kalır.
+export type MakineDoluRedi = MakineDevralRedi | CalismaDevralRedi;
 
-// Makine başka işte doluyken reddedilen başlatmalar: kullanıcıya "önce durdurulmalı, devralınsın mı" diye sorulur.
+// Makine başka işte doluyken ya da (ARK-5 b) aynı iş makinede başkasının çalışmasıyla sürerken reddedilen başlatmalar: kullanıcıya
+// "devralınsın mı" diye sorulur.
 export function makineDoluRetleri(cevap: Cevap): MakineDoluRedi[] {
   const liste = (cevap.govde as { reddedilen?: unknown } | undefined)?.reddedilen;
   if (cevap.durum >= 400 || !Array.isArray(liste)) return [];
-  return liste.flatMap((r: { cid?: unknown; ileti?: unknown; makineDolu?: MakineDoluRedAyrintisi } | null) => (
-    typeof r?.cid === 'string' && typeof r.ileti === 'string' && r.makineDolu !== undefined ? [{ cid: r.cid, ileti: r.ileti, ...r.makineDolu }] : []));
+  return liste.flatMap((r: { cid?: unknown; ileti?: unknown; makineDolu?: MakineDoluRedAyrintisi; calismaDevral?: CalismaDevralRedAyrintisi } | null): MakineDoluRedi[] => {
+    if (typeof r?.cid !== 'string' || typeof r.ileti !== 'string') return [];
+    if (r.makineDolu !== undefined) return [{ cid: r.cid, ileti: r.ileti, ...r.makineDolu }];
+    return r.calismaDevral === undefined ? [] : [{ tur: 'calisma', cid: r.cid, ileti: r.ileti, ...r.calismaDevral }];
+  });
 }
 
 // TMI'nin yazdığı ama söylenmesi gereken kayıtlar (insanlı istasyonda başkası da çalışıyor): ret değil uyarıdır.

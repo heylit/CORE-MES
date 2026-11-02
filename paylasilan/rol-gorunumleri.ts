@@ -38,28 +38,28 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
     kartlar: [
       'uretim-emirleri-planlanacak', 'uretim-emirleri-acik', 'plan-geciken-emir', 'plan-girmeyen-emir', 'plan-istasyon-dolulugu',
       'rota-acik-revizyon', 'rota-onay-bekleyen', 'siparisler-geciken', 'siparisler-yaklasan-termin', 'stok-eksik-emir',
-      'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'arkon-hazirlik', 'satin-alma-talep', 'satin-alma-taleplerim',
+      'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'arkon-hazirlik',
     ],
   },
   kalite: {
     sayfalar: ['/kalite-merkezi', '/kalibrasyon', '/denetim-hazirlik', '/cizimler', '/recete-rota', '/uretim-emirleri', '/malzemeler', KISISEL],
     kartlar: [
       'kalite-merkezi-ilk-parca', 'kalite-merkezi-uygunsuzluk', 'kalibrasyon-vadesi-gecen', 'arkon-kalite', 'rota-onay-bekleyen',
-      'malzemeler-onay-bekleyen', 'satin-alma-talep', 'satin-alma-taleplerim',
+      'malzemeler-onay-bekleyen',
     ],
   },
   depo: {
     sayfalar: ['/stok', '/malzemeler', '/etiket-merkezi', '/sevkiyat', '/taleplerim', KISISEL],
     kartlar: [
       'stok-acik-istekler', 'stok-dusuk', 'stok-eksik-emir', 'stok-sayim', 'satin-alma-mal-kabul-bekleyen', 'sevkiyat-bekleyen',
-      'sevkiyat-gecikmis', 'satin-alma-talep', 'satin-alma-taleplerim',
+      'sevkiyat-gecikmis',
     ],
   },
   satin_alma: {
     sayfalar: ['/satin-alma', '/malzemeler', '/musteri-tedarikci', '/stok', KISISEL],
     kartlar: [
       'satin-alma-onay-bekleyen', 'satin-alma-acik-talep', 'satin-alma-teslim-bekleyen', 'satin-alma-mal-kabul-bekleyen',
-      'satin-alma-acik-siparis', 'stok-dusuk', 'stok-eksik-emir', 'malzemeler-onay-bekleyen', 'satin-alma-talep', 'satin-alma-taleplerim',
+      'satin-alma-acik-siparis', 'stok-dusuk', 'stok-eksik-emir', 'malzemeler-onay-bekleyen',
     ],
   },
   muhasebe_finans: {
@@ -81,14 +81,12 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
     sayfalar: ['/cnc-kurulum', '/cizimler', '/recete-rota', '/malzemeler', '/arkon', '/uretim-emirleri', KISISEL],
     kartlar: [
       'rota-acik-revizyon', 'rota-onay-bekleyen', 'arkon-hazirlik', 'uretim-emirleri-acik', 'malzemeler-onay-bekleyen',
-      'satin-alma-talep', 'satin-alma-taleplerim',
     ],
   },
   bakim: {
     sayfalar: ['/arkon', '/istasyonlar', '/cnc-kurulum', '/stok', '/taleplerim', KISISEL],
     kartlar: [
       'arkon-bakim', 'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'kalibrasyon-vadesi-gecen', 'idari-isler-acik-talep',
-      'satin-alma-talep', 'satin-alma-taleplerim',
     ],
   },
   insan_kaynaklari: {

@@ -62,6 +62,7 @@ export interface AkisDegerleri {
   cat: string;
   date: string;
   desc: string;
+  fno: string;
   amount: string;
   kdv: string;
   incl: boolean;
@@ -105,7 +106,7 @@ export const OLAY_KATEGORILERI: Record<'satis' | 'alis' | 'sabit', readonly (rea
 export function bosDegerler(tur: OlayTuru, bugun: string): AkisDegerleri {
   const kat = tur === 'satis' ? OLAY_KATEGORILERI.satis : tur === 'alis' ? OLAY_KATEGORILERI.alis : tur === 'sabit' ? OLAY_KATEGORILERI.sabit : null;
   return {
-    party: '', cat: kat?.[0]?.[0] ?? '', date: bugun, desc: '', amount: '', kdv: '20', incl: false,
+    party: '', cat: kat?.[0]?.[0] ?? '', date: bugun, desc: '', fno: '', amount: '', kdv: '20', incl: false,
     method: tur === 'satis' || tur === 'alis' ? 'vadeli' : tur === 'cekal' || tur === 'cekver' ? 'cek' : 'banka',
     due: addDays(bugun, 30), cbank: '', cno: '', cdue: addDays(bugun, 30), ckind: 'Çek', pb: 'TRY', pbKur: '', tevk: '', hesap: '', siparis: '', sevk: '',
     capraz: '', secili: [], principal: '', interest: '', gercek: '', kaynak: '', hedef: '', aciklama: '', satis: '', alis: '', satisTutari: '', alisTutari: '',
@@ -198,7 +199,7 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
     const [tp, tpd] = (d.tevk || '').split('/').map(Number);
     const tutar = yuvarla(d.incl ? a / (1 + k / 100) : a);
     const govde: Record<string, unknown> = {
-      yon: side, tur: 'fatura', kategori: KAT_KOD[d.cat], firmaId: fr.id, aciklama: d.desc.trim() || null, belgeTarihi: date,
+      yon: side, tur: 'fatura', kategori: KAT_KOD[d.cat], firmaId: fr.id, belgeNo: d.fno.trim() || null, aciklama: d.desc.trim() || null, belgeTarihi: date,
       vade: d.method === 'vadeli' ? (d.due || date) : date, paraBirimi: pb, kur, tutar, kdvOrani: k, ...(tp ? { tevkifatPay: tp, tevkifatPayda: tpd } : {}),
     };
     if (tur === 'satis' && d.siparis) govde['siparisId'] = Number(d.siparis);
@@ -297,7 +298,7 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
       uc: 'POST /finans/belgeler/ekle', tekrar: true, basari: 'İade kaydedildi.',
       govde: {
         yon: a.yon === 'gelir' ? 'gider' : 'gelir', tur: 'iade', kategori: a.yon === 'gelir' ? 'satis_iadesi' : 'alis_iadesi', firmaId: a.firmaId, iadeBelgeId: a.id,
-        aciklama: d.aciklama.trim() || null, belgeTarihi: date, vade: date, paraBirimi: a.paraBirimi, kur: sayi(a.kur), tutar: sayi(d.amount), kdvOrani: sayi(a.kdvOrani),
+        belgeNo: d.fno.trim() || null, aciklama: d.aciklama.trim() || null, belgeTarihi: date, vade: date, paraBirimi: a.paraBirimi, kur: sayi(a.kur), tutar: sayi(d.amount), kdvOrani: sayi(a.kdvOrani),
         ...(a.tevkifatPay ? { tevkifatPay: a.tevkifatPay, tevkifatPayda: a.tevkifatPayda } : {}),
       },
     });

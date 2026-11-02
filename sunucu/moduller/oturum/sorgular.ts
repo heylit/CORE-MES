@@ -21,21 +21,50 @@ export interface GecerliOturum {
   // Açılış zamanı veritabanının verdiği metin olarak taşınır: yuvarlanmadan geri karşılaştırılır.
   acildi_metin: string;
   bayat: boolean;
+  // Son görülmeden bu yana geçen süre: hareketsizlik sınırı cihaz profiline bağlıdır, sınırı kurallar verir.
+  bosta_gecen_sn: number;
 }
 
-export function gecerliOturumBul(
+export interface OturumVeProfil {
+  profil: CihazProfiliCozumu;
+  // Kapanmamış ve azami süresi dolmamış oturum; hareketsizlik sınırı burada uygulanmaz.
+  oturum: GecerliOturum | null;
+}
+
+interface OturumVeProfilSatiri extends CihazProfiliCozumu {
+  oturum_id: number | null;
+  kisi_id: number | null;
+  acildi_metin: string | null;
+  bayat: boolean | null;
+  bosta_gecen_sn: number | null;
+}
+
+// Kimlik her istekte koşar: cihaz profili ve oturum tek gidiş-dönüşte okunur (1874 a).
+export async function oturumVeProfilBul(
   db: Db,
-  ozet: string,
-  sure: { bostaSn: number; azamiSn: number; gorulmeAraligiSn: number },
-): Promise<GecerliOturum | null> {
-  return db.tek<GecerliOturum>(
-    `SELECT id, kisi_id, acildi::text AS acildi_metin, son_gorulme < now() - make_interval(secs => $4) AS bayat
-       FROM oturum
-      WHERE anahtar_ozeti = $1 AND kapandi IS NULL
-        AND son_gorulme > now() - make_interval(secs => $2)
-        AND acildi > now() - make_interval(secs => $3)`,
-    [ozet, sure.bostaSn, sure.azamiSn, sure.gorulmeAraligiSn],
+  oturumOzeti: string,
+  cihazOzeti: string | null,
+  sure: { azamiSn: number; gorulmeAraligiSn: number },
+): Promise<OturumVeProfil> {
+  const satir = await db.tek<OturumVeProfilSatiri>(
+    `WITH ${CIHAZ_CTE},
+     o AS (
+       SELECT id, kisi_id, acildi::text AS acildi_metin, son_gorulme < now() - make_interval(secs => $4) AS bayat,
+              extract(epoch FROM now() - son_gorulme)::float8 AS bosta_gecen_sn
+         FROM oturum
+        WHERE anahtar_ozeti = $2 AND kapandi IS NULL AND acildi > now() - make_interval(secs => $3)
+     )
+     SELECT ${PROFIL_ALANLARI_COZUM}, o.id AS oturum_id, o.kisi_id, o.acildi_metin, o.bayat, o.bosta_gecen_sn
+       ${PROFIL_KAYNAGI}
+       LEFT JOIN o ON true`,
+    [cihazOzeti, oturumOzeti, sure.azamiSn, sure.gorulmeAraligiSn],
   );
+  if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
+  const { oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, ...profil } = satir;
+  const oturum = oturum_id === null || kisi_id === null || acildi_metin === null || bayat === null || bosta_gecen_sn === null
+    ? null
+    : { id: oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn };
+  return { profil, oturum };
 }
 
 export async function gorulduYaz(db: Db, oturumId: number): Promise<void> {
@@ -118,7 +147,7 @@ export async function cihazHataliBul(
   return { sayi: satir?.sayi ?? 0, kalanSn: satir?.kalan_sn ?? null };
 }
 
-// Kapanış anı: kapatıldıysa kapandi; kapatılmadıysa hareketsizlik ya da azami sürenin önce dolduğu an (gecerliOturumBul ile aynı süreler).
+// Kapanış anı: kapatıldıysa kapandi; kapatılmadıysa hareketsizlik ya da azami sürenin önce dolduğu an (oturumVeProfilBul ve kurallardaki hareketsizlik süresiyle aynı).
 export async function eskiOturumCihaziniBosalt(db: Db, gun: number, sure: OturumSuresi, simdi: Simdi): Promise<void> {
   await db.sorgu(
     `UPDATE oturum SET ip = NULL, tarayici = NULL
@@ -323,7 +352,7 @@ export interface AcikOturumSatiri {
 
 export interface OturumSuresi { bostaSn: number; azamiSn: number }
 
-// Geçerlilik gecerliOturumBul ile aynı sürelerledir; kişinin sonradan pasife alınması burada sayılmaz (kisiler'in kararıdır).
+// Geçerlilik kimlik çözümüyle (oturumVeProfilBul) aynı sürelerledir; kişinin sonradan pasife alınması burada sayılmaz (kisiler'in kararıdır).
 const ACIK_OTURUM = `FROM oturum
   WHERE kapandi IS NULL AND son_gorulme > now() - make_interval(secs => $1) AND acildi > now() - make_interval(secs => $2)`;
 
@@ -539,18 +568,17 @@ export interface CihazProfiliCozumu {
   cihazAd: string | null;
 }
 
-// Tek sorgu: kayıtlı açık cihazın atanmış profili, yoksa kayıtsız cihaz ayarındaki profil. Her istekte koşar.
-export async function cihazProfiliCoz(db: Db, ozet: string | null): Promise<CihazProfiliCozumu> {
-  const satir = await db.tek<CihazProfiliCozumu>(
-    `WITH c AS (
+// Kayıtlı açık cihazın atanmış profili, yoksa kayıtsız cihaz ayarındaki profil ($1: cihaz belirteci özeti).
+const CIHAZ_CTE = `c AS (
        SELECT oc.id, oc.ad, a.profil FROM oturum_ortak_cihaz oc LEFT JOIN oturum_cihaz_profil_atamasi a ON a.cihaz_id = oc.id
         WHERE oc.belirtec_ozeti = $1 AND oc.kapandi IS NULL
-     )
-     SELECT p.kod, p.sayfalar, c.id::int AS "cihazId", c.ad AS "cihazAd"
-       FROM oturum_cihaz_ayari ay LEFT JOIN c ON true
-       JOIN oturum_cihaz_profili p ON p.kod = COALESCE(c.profil, ay.kayitsiz_profil)`,
-    [ozet],
-  );
+     )`;
+const PROFIL_ALANLARI_COZUM = 'p.kod, p.sayfalar, c.id::int AS "cihazId", c.ad AS "cihazAd"';
+const PROFIL_KAYNAGI = `FROM oturum_cihaz_ayari ay LEFT JOIN c ON true
+       JOIN oturum_cihaz_profili p ON p.kod = COALESCE(c.profil, ay.kayitsiz_profil)`;
+
+export async function cihazProfiliCoz(db: Db, ozet: string | null): Promise<CihazProfiliCozumu> {
+  const satir = await db.tek<CihazProfiliCozumu>(`WITH ${CIHAZ_CTE} SELECT ${PROFIL_ALANLARI_COZUM} ${PROFIL_KAYNAGI}`, [ozet]);
   if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
   return satir;
 }

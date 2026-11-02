@@ -514,6 +514,11 @@ describe('terminal: makine dolu ve katılım uyarısı', () => {
     expect(tmiReddiBildirimleri(cevap)).toEqual([`İşlem reddedildi: ${DOLU.ileti}`]);
     expect(tmiUyarilari(cevap)).toEqual(['Bu işte Deneme Ali de çalışıyor.']);
     expect(makineDoluRetleri({ durum: 200, govde: { eklenen: 1, reddedilen: [{ cid: 'a', ileti: 'x' }] } })).toEqual([]);
+    // ARK-5 b: başkasının çalışmasıyla süren işte reddedilen başlatma da devralma sorusudur, bildirim değil.
+    const calisma = { durum: 200, govde: { eklenen: 1, reddedilen: [{ cid: 'b2', ileti: 'Ali adına çalışıyor.', calismaDevral: { emirId: 9, isEmriId: null, adlar: ['Ali'] } }] } };
+    expect(makineDoluRetleri(calisma)).toEqual([{ tur: 'calisma', cid: 'b2', ileti: 'Ali adına çalışıyor.', emirId: 9, isEmriId: null, adlar: ['Ali'] }]);
+    expect(tmiReddiBildirimleri(calisma, true)).toEqual([]);
+    expect(tmiReddiBildirimleri(calisma)).toEqual(['İşlem reddedildi: Ali adına çalışıyor.']);
     for (const hata of [{ durum: 403, govde: kayitCevabi }, { durum: 200, govde: { ok: true } }, { durum: 200 }]) {
       expect([makineDoluRetleri(hata), tmiUyarilari(hata), tmiReddiBildirimleri(hata, true)]).toEqual([[], [], []]);
     }

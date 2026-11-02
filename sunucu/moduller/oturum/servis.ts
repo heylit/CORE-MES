@@ -25,7 +25,7 @@ import {
 } from './kurallar.ts';
 import type { NabizDurumu } from './kurallar.ts';
 import {
-  cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
+  cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, oturumVeProfilBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
@@ -268,11 +268,10 @@ async function kimlikYukle(db: Db, kisiId: number, oturumAcildi: string | null =
 // Cihazın profili oturumdan değil her istekte cihaz çerezinden okunur (kart #1358): cihazın profili değişince ya da kişi aynı oturum
 // çereziyle başka cihaza geçince bir sonraki istekte geçerlidir. İstasyonda boşta süre kısadır (1356 a).
 export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirteci: string | null): Promise<Kullanici | null> {
-  const profil = await cihazProfiliCoz(db, cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null);
-  const oturum = await gecerliOturumBul(db, anahtarOzeti(anahtar), {
-    bostaSn: bostaSuresiSn(profil.kod), azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
+  const { profil, oturum } = await oturumVeProfilBul(db, anahtarOzeti(anahtar), cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null, {
+    azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
   });
-  if (oturum === null) return null;
+  if (oturum === null || oturum.bosta_gecen_sn >= bostaSuresiSn(profil.kod)) return null;
   if (oturum.bayat) await gorulduYaz(db, oturum.id);
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
   const kullanici = await kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);

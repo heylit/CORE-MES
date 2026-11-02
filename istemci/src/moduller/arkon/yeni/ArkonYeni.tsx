@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
-import type { ArkonBenCevabi, ArkonRolu, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
+import type { ArkonBenCevabi, ArkonRolu, CalismaDevralGovdesi, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
 import { Dugme, DurumKutusu, Pencere, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useCerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
@@ -183,11 +183,18 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   }, [kisi, durum.baskasi, saltOkunur, bildir]);
 
   const devral = useMutation({
-    mutationFn: (red: MakineDoluRedi) => api.post<{ tamam: true }>('/arkon/makine-devral', {
-      emirId: red.devralEmirId, kullanimId: red.doluOlan.kullanimId, cid: red.cid, durdurulanEmirId: red.doluOlan.emir.id,
-    } satisfies MakineDevralGovdesi),
-    onSuccess: (_c, red) => { bildir('tamam', `${red.doluOlan.emir.emirNo} durduruldu; işiniz başlatıldı.`); siradakiniKapat(); },
-    onError: (hata) => { bildir('hata', `TMI CORE: ${hataIletisi(hata, 'Makine devralınamadı.')}`); siradakiniKapat(); },
+    mutationFn: (red: MakineDoluRedi) => (red.tur === 'calisma'
+      ? api.post<{ tamam: true }>('/arkon/calisma-devral', {
+        emirId: red.emirId, ...(red.isEmriId === null ? {} : { isEmriId: red.isEmriId }), cid: red.cid,
+      } satisfies CalismaDevralGovdesi)
+      : api.post<{ tamam: true }>('/arkon/makine-devral', {
+        emirId: red.devralEmirId, kullanimId: red.doluOlan.kullanimId, cid: red.cid, durdurulanEmirId: red.doluOlan.emir.id,
+      } satisfies MakineDevralGovdesi)),
+    onSuccess: (_c, red) => {
+      bildir('tamam', red.tur === 'calisma' ? 'İş devralındı; çalışma sizin adınıza sürüyor.' : `${red.doluOlan.emir.emirNo} durduruldu; işiniz başlatıldı.`);
+      siradakiniKapat();
+    },
+    onError: (hata) => { bildir('hata', `TMI CORE: ${hataIletisi(hata, 'Devralınamadı.')}`); siradakiniKapat(); },
   });
   const siradaki = devralmalar[0] ?? null;
 

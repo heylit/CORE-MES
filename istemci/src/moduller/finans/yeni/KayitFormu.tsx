@@ -19,7 +19,7 @@ import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, useFinansYetkis
 
 // Sunucunun alan adı formdakiyle aynı değil: hata ilgili alanın altına düşsün diye çevrilir.
 const SUNUCU_ALANLARI: Record<string, keyof AkisDegerleri> = {
-  firmaId: 'party', tutar: 'amount', belgeTarihi: 'date', tarih: 'date', vade: 'due', kdvOrani: 'kdv', hesapId: 'hesap', kur: 'pbKur', aciklama: 'desc',
+  firmaId: 'party', tutar: 'amount', belgeTarihi: 'date', tarih: 'date', vade: 'due', kdvOrani: 'kdv', hesapId: 'hesap', kur: 'pbKur', aciklama: 'desc', belgeNo: 'fno',
   siparisId: 'siparis', sevkiyatIsiId: 'sevk', gercekBakiye: 'gercek', kaynakHesapId: 'kaynak', hedefHesapId: 'hedef', satisTutari: 'satisTutari', alisTutari: 'alisTutari',
 };
 
@@ -214,7 +214,8 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
       <FirmaIpucu {...p} />
       <Serit etiket={side === 'gelir' ? 'Ne sattınız?' : 'Ne için?'} secenekler={kategoriler} secili={d.cat} sec={(cat) => dg({ cat })} />
       <Girdi etiket="Fatura tarihi" type="date" required value={d.date} hata={hata('date')} onChange={(e) => dg({ date: e.target.value })} />
-      <Girdi etiket="Fatura no / not" value={d.desc} placeholder="İsteğe bağlı" onChange={(e) => dg({ desc: e.target.value })} />
+      <Girdi etiket="Fatura no" maxLength={16} value={d.fno} hata={hata('fno')} placeholder="İsteğe bağlı" onChange={(e) => dg({ fno: e.target.value })} />
+      <Girdi etiket="Not" value={d.desc} placeholder="İsteğe bağlı" onChange={(e) => dg({ desc: e.target.value })} />
       {tur === 'satis' && <SiparisAlanlari {...p} />}
       <Girdi etiket="Tutar" type="number" min="0" step="0.01" inputMode="decimal" required value={d.amount} hata={hata('amount')} placeholder="0,00"
         onChange={(e) => dg({ amount: e.target.value })} />
@@ -457,7 +458,8 @@ function IadeAlanlari({ d, dg, hata, V, tur }: GovdeOzellikleri) {
         secenekler={faturalar.map((b) => ({ deger: String(b.id), baslik: `${firmaEtiketi(V, b.firmaId) ?? ''} · ${kisaTarih(b.belgeTarihi)} · ${b.belgeNo || b.aciklama || '#' + b.id} · toplam ${paraMetni(b.toplam, b.paraBirimi)}` }))} />
       <Girdi etiket="İade tutarı (KDV hariç)" type="number" min="0" step="0.01" inputMode="decimal" required value={d.amount} hata={hata('amount')} onChange={(e) => dg({ amount: e.target.value })} />
       <Girdi etiket="Tarih" type="date" value={d.date} hata={hata('date')} onChange={(e) => dg({ date: e.target.value })} />
-      <CokSatir etiket="İade fatura no / not" maxLength={500} rows={2} value={d.aciklama} placeholder="İsteğe bağlı" onChange={(e) => dg({ aciklama: e.target.value })} />
+      <Girdi etiket="İade fatura no" maxLength={16} value={d.fno} hata={hata('fno')} placeholder="İsteğe bağlı" onChange={(e) => dg({ fno: e.target.value })} />
+      <CokSatir etiket="Not" maxLength={500} rows={2} value={d.aciklama} placeholder="İsteğe bağlı" onChange={(e) => dg({ aciklama: e.target.value })} />
     </div>
   );
 }

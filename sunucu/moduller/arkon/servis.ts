@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  ArkonDeposu, ArkonRefakatKarti, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
+  ArkonDeposu, ArkonRefakatKarti, CalismaDevralGovdesi, CalismaDevralRedAyrintisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -44,7 +44,7 @@ import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
-  hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
+  calismaDevral, hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
 } from '../uretim-emirleri/disari.ts';
@@ -1053,7 +1053,7 @@ const SUPURME_EMIR_SAYISI = 10;
 
 // Kullanıcıya o istekte söylenecek ekler: yazılan komutun uyarısı (katılımda başkası çalışıyor) ve makine dolu retinde devralma ayrıntısı.
 // Satıra yazılmaz (yazıldı satırı nedensiz olmalıdır, kısıt); yalnız istekte bekleyen kullanıcıya dönen cevaba girer.
-interface YansimaEki { uyari?: string | null; makineDolu?: MakineDoluRedAyrintisi }
+interface YansimaEki { uyari?: string | null; makineDolu?: MakineDoluRedAyrintisi; calismaDevral?: CalismaDevralRedAyrintisi }
 type EkToplayici = Map<string, YansimaEki>;
 type YansimaSonucu =
   | ({ sonuc: 'yazildi' | 'reddedildi' | 'eslenemedi'; neden: string | null } & YansimaEki)
@@ -1195,7 +1195,10 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
   if (emir.durum === 'basladi' && (komut.komut === 'basla-ya-da-devam' || komut.komut === 'duraklat' || komut.komut === 'kuyruga-al' || komut.komut === 'durdur' || komut.komut === 'bitir')) {
     const kaynak = komut.komut === 'basla-ya-da-devam' ? ((await onbellek.oku(`istasyonKapasitesi:${emir.istasyonId}`, () => istasyonKapasitesi(db, emir.istasyonId)))?.kaynak ?? 'makine') : 'makine';
     yol = katilimYolu(komut.komut, emir.durum, kaynak, await katilimDurumu(db, kullanici.id, emir.id, undefined, adimKimligi));
-    if (yol.yol === 'ret') return { sonuc: 'reddedildi', neden: yol.neden };
+    if (yol.yol === 'ret') {
+      const calismaDevral = yol.devralinabilir === undefined ? undefined : { emirId: emir.id, isEmriId: adimKimligi, adlar: [...yol.devralinabilir] };
+      return { sonuc: 'reddedildi', neden: yol.neden, ...(calismaDevral === undefined ? {} : { calismaDevral }) };
+    }
     if (yol.yol === 'degisiklik-yok') return { sonuc: 'eslenemedi', neden: ZATEN_CALISIYOR };
   }
   const ek: YansimaEki = {};
@@ -1621,7 +1624,12 @@ async function bekleyeniDene(
   }
   await sorgular.yansimaSonuclandir(db, y.id, sonuc.sonuc, sonuc.neden === null ? null : sonuc.neden.slice(0, NEDEN_SINIRI));
   await gecikmeliRetBildir(db, y, sonuc.sonuc, sonuc.neden, buIstek);
-  if (ekler !== undefined && (sonuc.uyari != null || sonuc.makineDolu !== undefined)) ekler.set(y.cid, { uyari: sonuc.uyari ?? null, ...(sonuc.makineDolu === undefined ? {} : { makineDolu: sonuc.makineDolu }) });
+  if (ekler !== undefined && (sonuc.uyari != null || sonuc.makineDolu !== undefined || sonuc.calismaDevral !== undefined)) {
+    ekler.set(y.cid, {
+      uyari: sonuc.uyari ?? null, ...(sonuc.makineDolu === undefined ? {} : { makineDolu: sonuc.makineDolu }),
+      ...(sonuc.calismaDevral === undefined ? {} : { calismaDevral: sonuc.calismaDevral }),
+    });
+  }
   return sonuc.sonuc === 'yazildi' && karar.komut?.komut === 'basla-ya-da-devam' ? 'basladi' : 'devam';
 }
 
@@ -1960,9 +1968,12 @@ export async function kayitEkle(
   for (const r of await sorgular.reddedilenYansimalar(db, yazilanlar)) {
     // Eşlenemeyen sayımın adedi TMI'ye girmedi: ekran onu geri çevirsin diye ret olarak döner; sıfır sayım gibi beklenenler dönmez.
     if (r.sonuc === 'eslenemedi' && gizliYansimaTuru(r.sonuc, r.neden) !== null) continue;
-    const makineDolu = ekler.get(r.cid)?.makineDolu;
+    const { makineDolu, calismaDevral } = ekler.get(r.cid) ?? {};
     const tmiDurum = r.tur === 'events' && r.emirId !== null ? await tmidekiHal(db, kullanici.id, r.emirId, onbellek) : null;
-    reddedilen.push({ cid: r.cid, ileti: r.neden, ...(makineDolu === undefined ? {} : { makineDolu }), ...(tmiDurum === null ? {} : { tmiDurum }) });
+    reddedilen.push({
+      cid: r.cid, ileti: r.neden, ...(makineDolu === undefined ? {} : { makineDolu }), ...(calismaDevral === undefined ? {} : { calismaDevral }),
+      ...(tmiDurum === null ? {} : { tmiDurum }),
+    });
   }
   const uyarilar = [...ekler].flatMap(([cid, e]) => (yazilanCidler.has(cid) && typeof e.uyari === 'string' ? [{ cid, ileti: e.uyari }] : []));
   return { eklenen, reddedilen, uyarilar };
@@ -1975,6 +1986,14 @@ export async function makineDevralOnayla(db: Db, kullanici: Kullanici, g: Makine
   await makineDevral(db, kullanici, g.emirId, g.kullanimId);
   if (g.cid !== undefined) await sorgular.yansimaDevralindi(db, g.cid, kullanici.id, g.emirId);
   await devralmaHaliniYay(db, g.emirId, g.durdurulanEmirId);
+}
+
+// ARK-5 b: aynı iş başkasının açık çalışmasıyla sürerken reddedilen başlatmadan sonra kullanıcının onayı. Rol ve yansıma çözümü makine
+// devralmadaki gibidir; kapsam ve durum kuralı TMI komutundadır. İşin hâli değişmez (çalışıyor kalır), bu yüzden `$durum` yayılmaz.
+export async function calismaDevralOnayla(db: Db, kullanici: Kullanici, g: CalismaDevralGovdesi): Promise<void> {
+  if (kayitRoluReddi('events', {}, await rolGerekli(db, kullanici)) !== null) throw yetkiYok(ILETILER.kayitRolYetmez);
+  await calismaDevral(db, kullanici, g.emirId, undefined, g.isEmriId);
+  if (g.cid !== undefined) await sorgular.yansimaDevralindi(db, g.cid, kullanici.id, g.emirId);
 }
 
 // Devralma iki işin hâlini TMI'de değiştirir; istasyonun tabletleri (durdurulan işin tableti dahil) kendiliğinden eşitlensin diye hâl
