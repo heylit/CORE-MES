@@ -145,6 +145,12 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 5, vardiyaId: v.id, acik: false });
     assert.equal(t.isMerkezleri.find((m) => m.id === merkezA)?.haftalikDakika, 1800);
     assert.deepEqual(await vt().tx((db) => vardiyaMatrisi(db)), t.matris, 'dışarıya açılan okuma takvimin matrisidir');
+    // Örtüşen ikinci vardiya (06-14, çarşamba) örtüşmeyen 06:00-08:00'ı ve öbürünün molasını (12:00-12:30) ekler: gün ve hafta takvim aralığıyla aynı süreyi verir.
+    const sabah = await vardiyaAc({ baslangic: '06:00', bitis: '14:00' });
+    t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 3, vardiyaId: sabah.id, acik: true });
+    assert.equal(t.isMerkezleri.find((m) => m.id === merkezA)?.haftalikDakika, 1800 + 150);
+    assert.equal(await vt().tx((db) => calismaSuresi(db, merkezA, CARSAMBA)), 450 + 150);
+    await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 3, vardiyaId: sabah.id, acik: false });
     assert.equal((await istek(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: OLMAYAN_ID, gun: 1, vardiyaId: v.id, acik: true })).durum, 409);
     // Kısıtlı planlamacı kendi merkezine yazar, başkasına ve tesis geneline yazamaz.
     assert.equal((await istek(c.kisitli, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 6, vardiyaId: v.id, acik: true })).durum, 200);

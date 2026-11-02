@@ -163,6 +163,10 @@ describe('vardiya kuralları', () => {
       assert.equal(gunNetDakikasi(0, [GUNDUZ], [{ bas: 700, bit: 760 }]), 450 - 30);
       assert.equal(gunNetDakikasi(1, [GUNDUZ], [{ bas: 600, bit: 660 }]), 450);
       assert.equal(gunNetDakikasi(0, [GUNDUZ, GECE], [{ bas: 1440, bit: 1500 }]), 450 + 450 - 60);
+      // Örtüşen vardiyalar (06-14 ve 08-16) aynı dakikayı bir kez sayar; takvim aralığı da 06:00-16:00 (600 dakika) olur.
+      const SABAH = { baslangic: '06:00', bitis: '14:00', molalar: [{ baslangic: '10:00', bitis: '10:30' }] };
+      assert.equal(gunNetDakikasi(0, [SABAH, GUNDUZ], []), 600);
+      assert.deepEqual(takvimAraliklari('2026-10-07', 1, () => [SABAH, GUNDUZ]), [{ bas: 360, bit: 960 }]);
       // Günlük mesai: o gün başlayan vardiyaların aralıkları; gece vardiyası ertesi sabaha uzanır, mola ve duruş dışarıda.
       assert.deepEqual(gununCalismaAraliklari(1, [GECE], [{ bas: 1440 + 1700, bit: 1440 + 1800 }]), [{ bas: 2760, bit: 3000 }, { bas: 3030, bit: 3140 }]);
       assert.deepEqual(gununCalismaAraliklari(0, [GUNDUZ, { ...GUNDUZ, baslangic: '16:00', bitis: '20:00', molalar: [] }], []),

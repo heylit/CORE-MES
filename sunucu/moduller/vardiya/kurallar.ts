@@ -244,13 +244,11 @@ export function gununSonDakikasi(gunSirasi: number, vardiyalar: readonly Pick<Va
   return Math.max(...vardiyalar.map((v) => dakika(v.baslangic) + aralik(v.baslangic, v.bitis))) + gunSirasi * GUN_DK;
 }
 
-// VR-01, VR-15: o gün (gün sırası, ilk gün 0) başlayan vardiyaların net dakikası, planlı duruşlar düşülmüş. Duruş yoksa net dakikaların
-// toplamıdır (vardiyalar ayrı sayılır).
+// VR-01, VR-15: o gün (gün sırası, ilk gün 0) başlayan vardiyaların net dakikası, planlı duruşlar düşülmüş. Örtüşen vardiyaların aynı
+// dakikası bir kez sayılır: gün dakikası takvim aralıklarıyla aynı süreyi verir (iki ekip aynı tezgahı aynı dakikada iki kez çalıştıramaz).
 export function gunNetDakikasi(gunSirasi: number, vardiyalar: readonly Pick<VardiyaTanimi, 'baslangic' | 'bitis' | 'molalar'>[], duruslar: readonly DakikaAraligi[]): number {
-  return vardiyalar.reduce((t, v) => {
-    const parcalar = vardiyaParcalari(v).map((p) => ({ bas: p.bas + gunSirasi * GUN_DK, bit: p.bit + gunSirasi * GUN_DK }));
-    return t + araliklardanCikar(parcalar, duruslar).reduce((u, p) => u + p.bit - p.bas, 0);
-  }, 0);
+  const parcalar = birlestir(vardiyalar.flatMap((v) => vardiyaParcalari(v).map((p) => ({ bas: p.bas + gunSirasi * GUN_DK, bit: p.bit + gunSirasi * GUN_DK }))));
+  return araliklardanCikar(parcalar, duruslar).reduce((t, p) => t + p.bit - p.bas, 0);
 }
 
 // VR-06: haftayı uygula: kaynak iş merkezinin satırları hedeflerin her birine kopyalanır; hedefin eski satırları gider.

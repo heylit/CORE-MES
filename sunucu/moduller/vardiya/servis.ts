@@ -119,8 +119,11 @@ export async function takvim(db: Db): Promise<TakvimCevabi> {
   const vardiyalar = await vardiyaListesi(db);
   const matris = await s.matris(db);
   const harita = new Map(vardiyalar.map((v) => [v.id, v]));
-  const haftalik = (isMerkeziId: number) =>
-    matris.filter((x) => x.isMerkeziId === isMerkeziId).reduce((t, x) => { const v = harita.get(x.vardiyaId); return v?.aktif ? t + v.netDakika : t; }, 0);
+  // Gün gün örtüşen vardiyaların aynı dakikası bir kez sayılır (gunNetDakikasi): hafta toplamı takvimle aynı olur.
+  const haftalik = (isMerkeziId: number) => [1, 2, 3, 4, 5, 6, 7].reduce((t, gun) => t + gunNetDakikasi(0, matris
+    .filter((x) => x.isMerkeziId === isMerkeziId && x.gun === gun)
+    .map((x) => harita.get(x.vardiyaId))
+    .filter((v): v is Vardiya => v?.aktif === true), []), 0);
   return {
     vardiyalar,
     matris,
