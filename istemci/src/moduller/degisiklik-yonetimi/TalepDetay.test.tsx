@@ -91,6 +91,22 @@ describe('Talep detayı: CCB ve müşteri onayı', () => {
     expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/degisiklik-yonetimi/talepler/7/ccb', govde: { karar: 'ret', aciklama: 'Maliyet yüksek', surum: 4 } });
   });
 
+  it('reddedilen talep seritte durdu olarak görünür, gerekçe sıradaki adımda yazar', async () => {
+    kur(talep({
+      durum: 'reddedildi', sinif: 'P1',
+      gecmis: [{ olay: 'ccb_ret', kisiId: 2, kisiAdi: 'Örnek Müdür', zaman: '2026-10-21T08:00:00Z', imzaAnlami: 'Reddediyorum', aciklama: 'Maliyet yüksek', ozet: 'CCB reddetti' }],
+    }));
+    ac('/degisiklik-yonetimi/talepler/7');
+    const adim = await screen.findByRole('region', { name: 'Sıradaki adım' });
+    expect(within(adim).getByText('Gerekçe: Maliyet yüksek')).toBeTruthy();
+    expect(adim.className).toContain('dy-siradaki-durdu');
+    const serit = screen.getByRole('list', { name: 'Talep aşamaları' });
+    const [, , ccb, musteri] = within(serit).getAllByRole('listitem');
+    expect(ccb?.className).toContain('dy-asama-durdu');
+    expect(ccb?.getAttribute('aria-current')).toBe('step');
+    expect(musteri?.textContent).toContain('Yapılmadı');
+  });
+
   it('müşteri onayı numarasız açılmaz; numarayla imzalanıp kaydedilir', async () => {
     const cagrilar = kur(talep({ durum: 'musteri_onayi_bekliyor', sinif: 'D1' }));
     ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
