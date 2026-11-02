@@ -126,8 +126,6 @@
 @media (max-width: 767px) {
   .tc-ist-panel { padding: var(--b-3); }
   .tc-ist-panel-bas > .tc-ist-islemler { margin-left: 0; }
-  .tc-ist-duzen { grid-template-columns: minmax(0, 1fr); }
-  .tc-ist-agac-liste { max-block-size: calc(var(--b-6) * 7); }
   .tc-ist-tablo-bas { display: none; }
   .tc-ist-tablo-satir, .tc-ist-g-st .tc-ist-tablo-satir, .tc-ist-g-mk .tc-ist-tablo-satir { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .tc-ist-tablo-satir > * { grid-column: 1 / -1; }
@@ -159,6 +157,13 @@
 .tc-ist-agac-grup { display: flex; flex-direction: column; gap: var(--pay-ince); border-left: var(--pay-ince) solid var(--ist-renk); }
 .tc-ist-agac-satir { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
 .tc-ist-agac-alt { padding-left: var(--b-5); }
+/* Dar ekranda ağaç listenin üstüne iner (IST-3). Temel kuraldan sonra durur: önce yazılınca temel kural onu eziyordu ve 360'ta ağaç
+   listeyi sıkıştırıp düğmeleri kesiyordu. */
+@media (max-width: 767px) {
+  .tc-ist-duzen { grid-template-columns: minmax(0, 1fr); }
+  .tc-ist-agac { position: static; }
+  .tc-ist-agac-liste { max-block-size: calc(var(--b-6) * 7); }
+}
 .tc-ist-dal { display: flex; flex: 1 1 auto; align-items: center; gap: var(--b-2); min-width: 0; min-block-size: calc(var(--b-5) + var(--b-1)); padding: 0 var(--b-2); font: inherit; font-size: var(--yazi-s); color: inherit; text-align: start; background: transparent; border: 1px solid transparent; border-radius: var(--b-1); cursor: pointer; }
 .tc-ist-dal:hover { background: var(--panel2); }
 .tc-ist-dal[aria-pressed='true'] { background: var(--panel2); border-color: var(--edge2); font-weight: 700; }

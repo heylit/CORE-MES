@@ -31,11 +31,15 @@ function DuranMakine() {
   );
 }
 
+const girilmemis = (m: PanoOzetiCevabi['makine']): number => Math.max(0, m.toplam - m.calisir - m.bakim - m.ariza);
+
+// Durumu girilmemiş makine çalışana katılmaz, ayrı yazılır (IST-4, kullanıcı kararı): "0 çalışan" tek başına "hiçbiri çalışmıyor" okunmasın.
 function CalisanMakine() {
   const ozet = usePanoOzeti();
   const yol = useYol(['sayfa.istasyonlar', '/istasyonlar/makineler']);
   const m = ozet.data?.makine;
-  return <SayiKarti baslik="Çalışan makine" simge="cpu" yol={yol} hata={ozet.isError} sayi={m?.calisir} altMetin={m && `${m.toplam} makineden`} />;
+  const alt = m && (girilmemis(m) > 0 ? `${m.toplam} makineden; durumu girilmemiş ${girilmemis(m)}` : `${m.toplam} makineden`);
+  return <SayiKarti baslik="Çalışan makine" simge="cpu" yol={yol} hata={ozet.isError} sayi={m?.calisir} altMetin={alt} />;
 }
 
 // Şirket özeti: makinelerin durum dağılımı. Durum satırı olmayan makine çalışır sayılmaz, "Durumu girilmemiş" diliminde kalır.
@@ -47,7 +51,7 @@ function MakineDurumu() {
     { etiket: 'Çalışıyor', deger: m.calisir, durum: 'calisiyor' },
     { etiket: 'Bakımda', deger: m.bakim, durum: 'durakli' },
     { etiket: 'Arızada', deger: m.ariza, durum: 'durdu' },
-    { etiket: 'Durumu girilmemiş', deger: Math.max(0, m.toplam - m.calisir - m.bakim - m.ariza), durum: 'sirada' },
+    { etiket: 'Durumu girilmemiş', deger: girilmemis(m), durum: 'sirada' },
   ];
   return (
     <ParcaCubuguKarti
