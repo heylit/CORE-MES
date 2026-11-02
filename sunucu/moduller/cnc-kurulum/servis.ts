@@ -44,6 +44,9 @@ const URETIM_ADEDI_ILETISI = 'Üretim adedi yalnız Üretim Terminali\'nden giri
 const SIRA_ILETISI = 'Son onay için hazırlığın bütün adımları onaylanmış olmalıdır.';
 const KURULUM_EKSIK_ILETISI = 'Kurulum tamam için kurulum kartındaki bütün adımlar seçilmiş olmalıdır.';
 const EMIR_ILETISI = 'Üretim emri ve emirlerin kurulumları yalnız emir seçimiyle değişir.';
+const KART_ILETISI = 'Takımı stok kartına bağlamak için malzeme kartı yazma yetkisi gerekir.';
+// CNC-7 a: bağ, CNC kaydını yazan ve kartı yazan kişidedir (uç cnc-kurulum.yaz ister; kart yazma burada).
+const kartBaglayabilirMi = (k: Kullanici): boolean => k.islemler.includes(ISLEM_YAZ) && k.islemler.includes(ISLEM_KART_YAZ);
 // Emir ve emirlerin saklanan kurulumları genel uçtan yazılmaz, silinmez: emir değişince kurulum emre saklanmadan değişirdi.
 const emirKaydiMi = (anahtar: string): boolean => anahtar === EMIR_ANAHTARI || anahtar.startsWith(EMIR_ANLIK_ONEKI);
 
@@ -52,7 +55,7 @@ export function ben(kullanici: Kullanici): BenCevabi {
   return {
     kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir, hazirlikOnaylayabilir: !yazabilir && kullanici.islemler.includes(ISLEM_HAZIRLIK),
     takimDegistirebilir: kullanici.islemler.includes(ISLEM_TAKIM),
-    stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kullanici.islemler.includes(ISLEM_KART_YAZ),
+    stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kartBaglayabilirMi(kullanici),
     emirGorebilir: emirGorebilirMi(kullanici),
   };
 }
@@ -88,13 +91,15 @@ export async function stokDus(db: Db, kullanici: Kullanici, g: StokDusGovdesi): 
 }
 
 // Bağlanabilen kartlar: aktif sarf ve demirbaş (takım, tutucu, bağlama).
-export async function stokKartlari(db: Db, s: StokKartlariSorgusu): Promise<StokKartlariCevabi> {
+export async function stokKartlari(db: Db, kullanici: Kullanici, s: StokKartlariSorgusu): Promise<StokKartlariCevabi> {
+  if (!kartBaglayabilirMi(kullanici)) throw yetkiYok(KART_ILETISI);
   const r = await malzemeAra(db, { metin: s.metin ?? null, turler: ['sarf', 'demirbas'], yalnizAktif: true, sayfa: s.sayfa, sayfaBoyu: 20 });
   return { kartlar: r.satirlar.map((k) => stokKarti({ malzemeId: k.id, kod: k.kod, ad: k.ad, birim: k.birim })), toplam: r.toplam };
 }
 
 // Bağ kart verisidir (malzemeler.yaz); kim, ne zaman uç denetiminde.
-export async function stokKartiBagla(db: Db, g: StokKartiBaglaGovdesi): Promise<StokKartiBaglaCevabi> {
+export async function stokKartiBagla(db: Db, kullanici: Kullanici, g: StokKartiBaglaGovdesi): Promise<StokKartiBaglaCevabi> {
+  if (!kartBaglayabilirMi(kullanici)) throw yetkiYok(KART_ILETISI);
   if (g.malzemeId === null) {
     const kart = (await cncKimlikliMalzemeler(db, [g.kimlik])).get(g.kimlik);
     if (kart !== undefined) await cncKimligiBagla(db, kart.malzemeId, null);

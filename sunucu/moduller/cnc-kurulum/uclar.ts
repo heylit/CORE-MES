@@ -110,19 +110,20 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/cnc-kurulum/takimlar/stok-kartlari',
-    yetki: 'malzemeler.yaz',
+    // CNC-7 a: CNC kaydını yazan ve kartı yazan kişi (malzemeler.yaz serviste denetlenir); yalnız kart yazan CNC'ye giremez.
+    yetki: 'cnc-kurulum.yaz',
     sorgu: stokKartlariSorgusu,
     cevap: stokKartlariCevabi,
-    isle: ({ db, sorgu }) => stokKartlari(db, sorgu),
+    isle: ({ db, kullanici, sorgu }) => stokKartlari(db, kullanici, sorgu),
   }),
   uc({
     yontem: 'POST',
     yol: '/cnc-kurulum/takimlar/stok-karti',
-    // 163 b: kalemin stok kartı bağı kart verisidir; kartı yazan kurar.
-    yetki: 'malzemeler.yaz',
+    // 163 b: kalemin stok kartı bağı kart verisidir; kartı yazan kurar. CNC-7 a: o kişi CNC kaydını da yazar (malzemeler.yaz serviste).
+    yetki: 'cnc-kurulum.yaz',
     govde: stokKartiBaglaGovdesi,
     cevap: stokKartiBaglaCevabi,
-    isle: ({ db, govde }) => stokKartiBagla(db, govde),
+    isle: ({ db, kullanici, govde }) => stokKartiBagla(db, kullanici, govde),
   }),
   uc({
     yontem: 'GET',
