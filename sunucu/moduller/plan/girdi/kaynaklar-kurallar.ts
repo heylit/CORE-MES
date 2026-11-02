@@ -18,8 +18,8 @@ export interface KaynakDilimiOkumasi {
   // İstasyon okunamazsa (yetki yok) null.
   istasyon: {
     merkezler: { id: number }[];
-    istasyonlar: { id: number; merkezId: number | null; verimYuzde: number | null; operatorOrani: number | null }[];
-    makineler: { id: number; ad: string; istasyonId: number | null }[];
+    istasyonlar: { id: number; kod: string; ad: string; merkezId: number | null; verimYuzde: number | null; operatorOrani: number | null }[];
+    makineler: { id: number; kod: string; ad: string; istasyonId: number | null }[];
   } | null;
   // İş merkezi haftası ve kişinin vardiyası; okunmadıysa null (takvim bilinmez).
   takvim: { hafta: { merkezId: number; gun: HaftaGunu; vardiyaId: number }[]; kisiVardiyasi: { kisiId: number; vardiyaId: number }[] } | null;
@@ -93,7 +93,9 @@ function tezgahlar(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: Readonl
       : {};
     // 561 1 b: operatör oranı istasyonun plan ayarıdır; yoksa 1.
     const opOran = ist.operatorOrani === null || !Number.isFinite(ist.operatorOrani) ? 1 : ist.operatorOrani;
-    return [ustuneYaz<MotorTezgahi>(a, { id, ad: m.ad, grup: String(ist.id), ...ilk, hafta: merkezHaftasi(o, ist.merkezId, sira), opOran })];
+    // 1786 (PLN-7): ekran tezgâhı ve grubunu kimlikle değil kodu ve istasyonun adıyla yazar; boş kod yazılmaz (eski yol gibi).
+    const adlar = { kod: m.kod || undefined, grupKod: ist.kod || undefined, grupAd: ist.ad || undefined };
+    return [ustuneYaz<MotorTezgahi>(a, { id, ad: m.ad, ...adlar, grup: String(ist.id), ...ilk, hafta: merkezHaftasi(o, ist.merkezId, sira), opOran })];
   });
 }
 

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { grupAdlari } from '../motor/ozet/veri.ts';
 import { planGuncel } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
@@ -22,7 +23,8 @@ export function giderIsisi(c: PlanlamaCalismasi, v: GenelGiderHesabi): IsiVerisi
   if (!D.tezgahlar.length) return { bos: 'Tezgâh ve gider bilgisi girilince dağılım burada görünür.' };
   const M = maliyetSistemi(D); const ms = mesaiSistemi(D);
   const gr = [...new Set(D.tezgahlar.map((t) => t.grup ?? ''))];
-  const sutunlar = gr.map((g) => ({ k: g, ad: g || YOK, alt: `${String(D.tezgahlar.filter((t) => (t.grup ?? '') === g).length)} tezgâh` }));
+  const ga = grupAdlari(D);
+  const sutunlar = gr.map((g) => ({ k: g, ad: g ? ga[g] ?? g : YOK, alt: `${String(D.tezgahlar.filter((t) => (t.grup ?? '') === g).length)} tezgâh` }));
   const top = (f: Satir['f'], g: string): number | null => {
     const l = v.tez.filter((z) => (z.tezgah.grup ?? '') === g).map(f).filter((x): x is number => x !== null);
     return l.length ? l.reduce((a, b) => a + b, 0) : null;

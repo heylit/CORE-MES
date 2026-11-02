@@ -47,6 +47,7 @@ export const hucreBos = (h: IsiHucresi | undefined): boolean => !h || (h.kd == n
 const GRUP_ADI: Record<string, string> = {
   testere: 'Testere', torna: 'Torna', freze: 'Freze', '5eksen': '5 eksen', taslama: 'Taşlama', tesviye: 'Tesviye', yikama: 'Yıkama', olcum: 'Ölçüm', fason: 'Fason', montaj: 'Montaj',
 };
-export const grupAdi = (g: string): string => GRUP_ADI[g] ?? g;
+// adlar: kayıttaki istasyon adları (grup kimliği -> ad, 1786 PLN-7); verilmezse ya da yoksa kimlik.
+export const grupAdi = (g: string, adlar?: Readonly<Record<string, string>>): string => GRUP_ADI[g] ?? adlar?.[g] ?? g;
 
 export const KADEME_ADI: Record<number, string> = { 1: 'Az', 2: 'Orta', 3: 'Çok', 4: 'Termini kaydırır' };

@@ -3,6 +3,7 @@ import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
+import { tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
 import { bul, ciz, type Kutu } from './ciz.ts';
 import {
   bekleme, dilimNo, durusOku, gecikmeEtkisi, gecMetin, haritaGruplari, KH, KW, sahneKur, siparisRengi, sigdir, tezgahDurumu,
@@ -245,7 +246,7 @@ function ipucuIcerik(h: Kutu, o: HaritaOzellikleri, s: Sahne, durus: ReturnType<
     const st = tezgahDurumu(s, durus, h.m, t); const v = s.dol[h.m]?.[dilimNo(o.r, t)];
     return (
       <>
-        <b className="tc-pym-mono">{h.m}</b>
+        <b className="tc-pym-mono">{tezgahKodu(h.m, tezgahKodlari(o.c.D))}</b>
         <span>{st.dur === 'ariza' ? 'Arıza ya da bakım' : st.cal ? `Çalışıyor: ${st.cal.id}` : 'Boşta'}</span>
         <span>Bu dilimde doluluk {v == null ? 'kapalı' : `%${Math.round(v * 100)}`} · sırada {st.sira.length}{st.sira.length >= 5 ? '+' : ''}</span>
         <span className="tc-pym-kucuk-yazi">Tıklayın: ayrıntı · çift tıklayın: gün planı</span>

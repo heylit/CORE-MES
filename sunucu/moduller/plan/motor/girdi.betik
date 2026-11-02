@@ -70,6 +70,12 @@ function rrCevir(st) {
     if (!a || a.id !== m.id) y.id = m.id;
     if (!a || a.ad !== m.name) y.ad = m.name;
     if (!a || a.grup !== m.stationId) y.grup = m.stationId;
+    /* 1786 (PLN-7): ekran tezgâhı ve grubunu kimlikle değil kodu ve istasyon adıyla yazar; kimlik anahtar olarak kalır */
+    const ist = (st.stations || []).find(x => x.id === m.stationId);
+    const kod = m.code || undefined, grupKod = (ist && ist.code) || undefined, grupAd = (ist && ist.name) || undefined;
+    if (!a || a.kod !== kod) y.kod = kod;
+    if (!a || a.grupKod !== grupKod) y.grupKod = grupKod;
+    if (!a || a.grupAd !== grupAd) y.grupAd = grupAd;
     /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
     if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
     const hafta = merkezHaftasi(m);

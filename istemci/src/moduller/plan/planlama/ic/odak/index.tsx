@@ -6,7 +6,7 @@ import { Dg } from '../../motor/cizelge/Dugme.tsx';
 import '../../motor/cizelge/cizelge.css';
 import { ONCELIK_AD, saatYaz, saatYazi, type Derleme, type OkunanPlan } from '../../motor/kurallar.ts';
 import { degisken, MOTOR_NOTU, yuzde } from '../../motor/ortak.tsx';
-import { grupAdi, type OzetVerisi } from '../../motor/ozet/veri.ts';
+import { grupAdi, grupAdlari, tezgahKodlari, type OzetVerisi } from '../../motor/ozet/veri.ts';
 import { mesaiAdaylari } from '../../motor/secim/kurallar.ts';
 import { TakvimSekmesi } from '../../motor/secim/Sekmeler.tsx';
 import '../../motor/secim/secim.css';
@@ -40,7 +40,7 @@ export function OdakTahtasi(o: OdakOzellikleri) {
   const pen = pencere(now, gun, kay);
   const secJob = o.secim.adim && p.ops[o.secim.adim] ? p.ops[o.secim.adim]?.job ?? null : o.secim.siparis;
   const isSec = (id: string) => o.sec({ adim: o.secim.adim === id ? null : id, siparis: null, tezgah: null });
-  const ad = m ? odakAdi(m) : grupAdi(g);
+  const ad = m ? odakAdi(m, tezgahKodlari(o.c.D)) : grupAdi(g, grupAdlari(o.c.D));
   const kardes = m ? odakTezgahlari(c, p, g) : odakGruplari(c, p, cx);
   const secenek = (m ? GUN_SECENEKLERI.tez : GUN_SECENEKLERI.grup).slice(0, dar ? 3 : 4);
   const ozet = p.ozet;
@@ -59,8 +59,8 @@ export function OdakTahtasi(o: OdakOzellikleri) {
       const d = odakDolulugu(cx, p, x, pen.a, pen.b); const n = kuyruk(p, x, now).length; const T = D.tezgahlar.find((t) => t.id === x);
       return (
         <div key={x} className="tc-pyo-satir" data-secili={o.secim.tezgah === x ? '' : undefined}>
-          <button type="button" className="tc-pyo-tez" title={`${odakAdi(x)} tezgâhına odaklan`} onClick={() => o.ac({ g, m: x })}>
-            <b className="tc-pym-mono">{odakAdi(x)}</b><small>{T?.ad ?? ''}</small><small className="tc-pym-mono">{`${d == null ? 'kapalı' : `%${Math.round(d * 100)} dolu`} · ${n} iş`}</small>
+          <button type="button" className="tc-pyo-tez" title={`${odakAdi(x, tezgahKodlari(o.c.D))} tezgâhına odaklan`} onClick={() => o.ac({ g, m: x })}>
+            <b className="tc-pym-mono">{odakAdi(x, tezgahKodlari(o.c.D))}</b><small>{T?.ad ?? ''}</small><small className="tc-pym-mono">{`${d == null ? 'kapalı' : `%${Math.round(d * 100)} dolu`} · ${n} iş`}</small>
           </button>
           <Serit o={o} m={x} a={pen.a} b={pen.b} secJob={secJob} isSec={isSec} />
         </div>
@@ -78,12 +78,12 @@ export function OdakTahtasi(o: OdakOzellikleri) {
           <button type="button" title="Bütün tahtaya dön" onClick={() => o.ac(null)}><Simge ad="home" boyut="k" /><span>Fabrika</span></button>
           <span aria-hidden="true">›</span>
           {m ? (
-            <><button type="button" onClick={() => o.ac({ g, m: null })}>{grupAdi(g)}</button><span aria-hidden="true">›</span><b className="tc-pym-mono" aria-current="page">{odakAdi(m)}</b></>
-          ) : <b aria-current="page">{grupAdi(g)}</b>}
+            <><button type="button" onClick={() => o.ac({ g, m: null })}>{grupAdi(g, grupAdlari(o.c.D))}</button><span aria-hidden="true">›</span><b className="tc-pym-mono" aria-current="page">{odakAdi(m, tezgahKodlari(o.c.D))}</b></>
+          ) : <b aria-current="page">{grupAdi(g, grupAdlari(o.c.D))}</b>}
         </nav>
         <label className="tc-pyo-kardes">
           <select className="tc-alan-kutu" aria-label={m ? 'Başka tezgâh' : 'Başka bölüm'} value={m ?? g} onChange={(e) => o.ac(m ? { g, m: e.target.value } : { g: e.target.value, m: null })}>
-            {kardes.map((x) => <option key={x} value={x}>{m ? odakAdi(x) : grupAdi(x)}</option>)}
+            {kardes.map((x) => <option key={x} value={x}>{m ? odakAdi(x, tezgahKodlari(o.c.D)) : grupAdi(x, grupAdlari(o.c.D))}</option>)}
           </select>
         </label>
         <div className="tc-pyo-zaman" role="group" aria-label="Görünen süre">
@@ -166,12 +166,12 @@ function SeciliIs({ o, izin }: { o: OdakOzellikleri; izin: (m: string) => boolea
     <section className="tc-pyo-blok tc-pyo-secili" aria-label={`Seçili iş ${id}`}>
       <h4><Simge ad="target" boyut="k" /><span className="tc-pym-mono">{id}</span></h4>
       <p className="tc-pyo-k">{`${D.urunler.find((u) => u.id === s?.urun)?.ad ?? s?.urun ?? '—'}${s ? `, ${ONCELIK_AD[Number(s.oncelik)] ?? ''} öncelik` : ''}`}</p>
-      <p><span className="tc-pym-mono">{odakAdi(r.m)}</span>{' · '}<span className="tc-pym-mono">{`${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`}</span></p>
+      <p><span className="tc-pym-mono">{odakAdi(r.m, tezgahKodlari(o.c.D))}</span>{' · '}<span className="tc-pym-mono">{`${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`}</span></p>
       <p className="tc-pyo-k">{`ayar ${saatYazi(r.su)}, işleme ${saatYazi(r.run)}${J?.T != null && J.T > 0.05 ? ` · sipariş ${saatYazi(J.T)} geç` : ' · sipariş termine yetişiyor'}`}</p>
       <div className="tc-pyo-dugmeler">
         <Dg ad="Sırada öne" simge="up" not={pasif} />
         <Dg ad="Sırada geriye" simge="down" not={pasif} />
-        {o.yer.m !== r.m && <Dg ad={`${odakAdi(r.m)} tezgâhına odaklan`} simge="zin" hayalet yap={() => o.ac({ g: o.yer.g, m: r.m })} />}
+        {o.yer.m !== r.m && <Dg ad={`${odakAdi(r.m, tezgahKodlari(o.c.D))} tezgâhına odaklan`} simge="zin" hayalet yap={() => o.ac({ g: o.yer.g, m: r.m })} />}
       </div>
     </section>
   );
@@ -189,7 +189,7 @@ function Bekleyenler({ o, g, secJob }: { o: OdakOzellikleri; g: string; secJob: 
           {l.slice(0, 8).map((x) => (
             <li key={`${x.j}-${x.m}`} data-gec={x.gec ? '' : undefined} data-secili={secJob === x.j ? '' : undefined}>
               <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => o.sec({ siparis: secJob === x.j ? null : x.j, adim: null, tezgah: null })}>{x.j}</button>
-              <span><span className="tc-pym-mono">{odakAdi(x.m)}</span>{' · bekler '}<b className="tc-pym-mono">{saatYazi(x.bek)}</b>{x.gec && <>{' · '}<b data-ton="hata">{`${saatYazi(x.T)} geç`}</b></>}</span>
+              <span><span className="tc-pym-mono">{odakAdi(x.m, tezgahKodlari(o.c.D))}</span>{' · bekler '}<b className="tc-pym-mono">{saatYazi(x.bek)}</b>{x.gec && <>{' · '}<b data-ton="hata">{`${saatYazi(x.T)} geç`}</b></>}</span>
               <Dg ad="Öne al" simge="flag" hayalet={!x.gec} not={pasif} />
             </li>
           ))}

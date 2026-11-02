@@ -90,6 +90,17 @@ describe('planlama motoru hesapları', () => {
     void cx;
   });
 
+  it('tezgâh kodu ve istasyon adı varsa Özet kimlik yerine onları yazar (1786 PLN-7)', () => {
+    const { c, p, cx, tg } = kur();
+    const adli = { ...c, D: { ...c.D, tezgahlar: c.D.tezgahlar.map((t) => ({ ...t, kod: `KOD-${t.id}`, grupKod: `IST-${t.grup ?? ''}`, grupAd: `İstasyon ${t.grup ?? ''}` })) } };
+    const v = ozetVerisi(adli, p, cx, 'hafta', 0);
+    expect(gostergeler(adli, v, tg).find((g) => g.ad === 'En yoğun tezgâh')?.deger).toBe('KOD-1');
+    const yor = yorumlar(adli, v, tg).map((x) => html(x.m));
+    expect(yor.find((x) => x.startsWith('En boş grup'))).toBe('En boş grup <b>İstasyon 3</b> (%0), en dolu <b>İstasyon 1</b> (%2). Dolu gruptaki adımlara boş gruptan alternatif tezgâh tanımlamak yükü dengeler.');
+    expect(html(cevap(adli, v, 'bekle', []))).toMatch(/^En çok bekleme <b>İstasyon 3<\/b> grubunda/);
+    expect(html(cevap(adli, v, 'yuk', []))).toMatch(/en dolu tezgâh <b>KOD-1<\/b>/);
+  });
+
   it('dönem değişince Özet o dönemi gösterir; günde üçer saatlik sekiz sütun, yılda sütun haftadır', () => {
     const { c, p, cx } = kur();
     const gun = ozetVerisi(c, p, cx, 'gun', 0);

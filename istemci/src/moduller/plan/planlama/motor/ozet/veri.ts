@@ -1,4 +1,4 @@
-import type { PlanlamaCalismasi } from '../../tipler.ts';
+import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import {
   ayristir, donemAraligi, KATEGORI_AD, nabizOlc, saatYaz, saKisa, sayiEki, type Derleme, type Donem, type OkunanPlan, type PlanIslemi, type SureKategorisi,
 } from '../kurallar.ts';
@@ -11,7 +11,15 @@ export type Metin = Parca[];
 const GRUP_AD: Record<string, string> = {
   testere: 'Testere', torna: 'Torna', freze: 'Freze', '5eksen': '5 eksen', taslama: 'Taşlama', tesviye: 'Tesviye', yikama: 'Yıkama', olcum: 'Ölçüm', fason: 'Fason',
 };
-export const grupAdi = (g: string): string => GRUP_AD[g] ?? g;
+// Grup (istasyon) ve tezgâhın ekrandaki adı: kayıttaki istasyon adı ve tezgâh kodu; yoksa kimlik (1786 PLN-7).
+export type Adlar = Readonly<Record<string, string>>;
+export const grupAdi = (g: string, adlar?: Adlar): string => GRUP_AD[g] ?? adlar?.[g] ?? g;
+export const grupAdlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar =>
+  Object.fromEntries(D.tezgahlar.flatMap((t) => (t.grup != null && t.grupAd ? [[String(t.grup), t.grupAd]] : [])));
+export const grupKodlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar =>
+  Object.fromEntries(D.tezgahlar.flatMap((t) => (t.grup != null && t.grupKod ? [[String(t.grup), t.grupKod]] : [])));
+export const tezgahKodlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar => Object.fromEntries(D.tezgahlar.flatMap((t) => (t.kod ? [[t.id, t.kod]] : [])));
+export const tezgahKodu = (m: string, kodlar?: Adlar): string => kodlar?.[m] ?? m;
 
 export interface OzetAdimi { j: string; m: string; g: string; S: number; C: number; su: number; run: number; bek: number }
 export interface OzetSiparisi {
@@ -27,6 +35,7 @@ export interface OzetVerisi {
   u: [string, number][];
   ops: { m: string; job: string; S: number; C: number; su: number }[];
   oz: { suH: number | null; suN: number; famN: number | null; Cmax: number | null };
+  grupAd: Adlar; tezKod: Adlar;
 }
 
 export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number): OzetVerisi {
@@ -83,6 +92,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
     u: Object.entries(w.util),
     ops: ops.map((o) => ({ m: o.m, job: o.job, S: o.S, C: o.C, su: o.su })),
     oz: { suH: w.suH, suN: ops.filter((o) => o.su > 0 && o.S >= r.a && o.S < r.b).length, famN: null, Cmax: p.ozet.Cmax },
+    grupAd: grupAdlari(D), tezKod: tezgahKodlari(D),
   };
 }
 export const ACIK_TEZGAH_YOK = 'Bu dönemde açık tezgâh yok.';
@@ -111,7 +121,7 @@ export function gostergeler(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: st
       : { simge: 'check', ad: 'Zamanında', deger: null, ek: '', alt: 'termini olan sipariş yok', ton: '' },
     { simge: 'alert', ad: 'Geç', deger: gec.length, ek: saKisa(top), alt: 'toplam gecikme', ton: gec.length ? 'hata' : 'tamam' },
     { simge: 'gauge', ad: 'Ortalama doluluk', deger: ort == null ? null : Math.round(ort * 100), ek: '%', alt: 'çalışan tezgâhlarda', ton: '' },
-    { simge: 'cpu', ad: 'En yoğun tezgâh', deger: dar ? dar[0] : '—', ek: dar ? `%${Math.round(dar[1] * 100)}` : '', alt: dar ? GRUP_AD[tezGrup(dar[0])] ?? '' : '', ton: 'uyari' },
+    { simge: 'cpu', ad: 'En yoğun tezgâh', deger: dar ? tezgahKodu(dar[0], v.tezKod) : '—', ek: dar ? `%${Math.round(dar[1] * 100)}` : '', alt: dar ? GRUP_AD[tezGrup(dar[0])] ?? v.grupAd[tezGrup(dar[0])] ?? '' : '', ton: 'uyari' },
     { simge: 'wrench', ad: 'Ayar', deger: Math.round(v.oz.suH ?? 0), ek: 'sa', alt: `${v.oz.suN} ayar${v.oz.famN != null ? `; aile ${v.oz.famN} kez kısalttı` : ' bu dönemde'}`, ton: '' },
     { simge: 'flag', ad: 'Son iş biter', deger: saatYaz(c.D, v.oz.Cmax).slice(6), ek: '', alt: 'planın sonu', ton: '' },
   ];
@@ -191,7 +201,7 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
     const tz = D.tezgahlar.find((t) => t.id === b0[0]);
     l.push({
       simge: 'target', ton: 'uyari',
-      m: ['Geç siparişleri en çok ', { b: b0[0] }, ' bekletiyor: toplam ', { b: saKisa(b0[1]) }, `.${b1 ? ` Sonra ${b1[0]} (${saKisa(b1[1])}).` : ''} Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.`],
+      m: ['Geç siparişleri en çok ', { b: tezgahKodu(b0[0], v.tezKod) }, ' bekletiyor: toplam ', { b: saKisa(b0[1]) }, `.${b1 ? ` Sonra ${tezgahKodu(b1[0], v.tezKod)} (${saKisa(b1[1])}).` : ''} Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.`],
       ...(tz ? { eylem: { tur: 'br-git-tez', v: tz.id, ad: 'Tezgâha git' } as const } : {}),
     });
   }
@@ -213,7 +223,7 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
   if (gl.length > 1 && ilk && son) {
     l.push({
       simge: 'gauge', ton: 'bilgi',
-      m: ['En boş grup ', { b: grupAdi(ilk[0]) }, ` (%${Math.round(ilk[1] * 100)}), en dolu `, { b: grupAdi(son[0]) }, ` (%${Math.round(son[1] * 100)}). Dolu gruptaki adımlara boş gruptan alternatif tezgâh tanımlamak yükü dengeler.`],
+      m: ['En boş grup ', { b: grupAdi(ilk[0], v.grupAd) }, ` (%${Math.round(ilk[1] * 100)}), en dolu `, { b: grupAdi(son[0], v.grupAd) }, ` (%${Math.round(son[1] * 100)}). Dolu gruptaki adımlara boş gruptan alternatif tezgâh tanımlamak yükü dengeler.`],
       eylem: { tur: 'br-rota', v: null, ad: 'Reçete ve Rota' },
     });
   }
@@ -237,12 +247,12 @@ export function cevap(c: PlanlamaCalismasi, v: OzetVerisi, id: BolgeKimligi, yor
         ...(gec.length ? [', ', { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç (toplam ${saKisa(top)})`] : []), '.', ...terminsizMetni(v), ' Son işin bitişi: ', { b: saatYaz(D, v.oz.Cmax) }, '.'];
     case 'bekle': {
       const x = [...beklemeler(v)].sort((a, b) => b.bek - a.bek)[0];
-      return x && x.bek > 0.5 ? ['En çok bekleme ', { b: grupAdi(x.id) }, ` grubunda: ${saKisa(x.bek)}`, ...(x.bekG > 0.5 ? [', bunun ', { b: saKisa(x.bekG) }, "'i geç siparişlerin"] : []), '.'] : ['Belirgin bir bekleme yok.'];
+      return x && x.bek > 0.5 ? ['En çok bekleme ', { b: grupAdi(x.id, v.grupAd) }, ` grubunda: ${saKisa(x.bek)}`, ...(x.bekG > 0.5 ? [', bunun ', { b: saKisa(x.bekG) }, "'i geç siparişlerin"] : []), '.'] : ['Belirgin bir bekleme yok.'];
     }
     case 'yuk': {
       const gt = gunOrtalamasi(v).map((x) => x ?? -1); const d = gt.indexOf(Math.max(...gt)); const enT = [...v.u].sort((a, b) => b[1] - a[1])[0];
       const ilk: Metin = d < 0 || (gt[d] ?? -1) < 0 ? [`${ACIK_TEZGAH_YOK} `] : ['En yoğun gün ', { b: `${v.gunAd[d] ?? ''} ${saatYaz(D, sutunAni(v, d)).slice(0, 5)}` }, ` (ortalama %${Math.round((gt[d] ?? 0) * 100)}). `];
-      return [...ilk, 'Plan boyunca en dolu tezgâh ', { b: enT ? enT[0] : '—' }, `${enT ? ` (%${Math.round(enT[1] * 100)})` : ''}.`];
+      return [...ilk, 'Plan boyunca en dolu tezgâh ', { b: enT ? tezgahKodu(enT[0], v.tezKod) : '—' }, `${enT ? ` (%${Math.round(enT[1] * 100)})` : ''}.`];
     }
     case 'sure': return yor.find((x) => x.simge === 'clock')?.m ?? [];
     case 'yaris': {

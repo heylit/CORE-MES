@@ -8,7 +8,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { planGuncel } from '../../durum.ts';
 import type { PlanKurucu } from '../../motor/coz.ts';
 import { eylemYapisi } from '../../motor/eylem.ts';
-import { grupAdi } from '../../motor/ozet/veri.ts';
+import { grupAdi, grupAdlari } from '../../motor/ozet/veri.ts';
 import { GOSTERGE_SATIRLARI, gostergeFarki, SENARYO_DURUM_ADI, senaryoSirasi, senaryoZamani } from '../gecmis/kurallar.ts';
 import { ParametreGirdisi } from '../veri/Kisitlar.tsx';
 import { bedelOku, duruslar, ekMesailer, KATALOG, kisitDegistir, parametreDegeri, parametreOku, parametreYaz, type Durus, type EkMesai, type Parametre } from '../veri/kurallar.ts';
@@ -426,8 +426,8 @@ function HesapGovdesi({ b }: { b: KartBaglami }) {
       <Bolum baslik="Grup doluluğu" simge="gauge">
         <ul className="tc-pyt-dolu">
           {gl.map((g) => (
-            <li key={g.ad}><span>{grupAdi(g.ad)}</span>
-              <span className="tc-pyt-bar" role="img" aria-label={`${grupAdi(g.ad)} doluluk ${yuzdeYaz(g.u)}`}><i data-ton={g.u > 0.9 ? 'hata' : undefined} ref={degisken({ '--w': `${Math.min(100, g.u * 100).toFixed(1)}%` })} /></span>
+            <li key={g.ad}><span>{grupAdi(g.ad, grupAdlari(c.D))}</span>
+              <span className="tc-pyt-bar" role="img" aria-label={`${grupAdi(g.ad, grupAdlari(c.D))} doluluk ${yuzdeYaz(g.u)}`}><i data-ton={g.u > 0.9 ? 'hata' : undefined} ref={degisken({ '--w': `${Math.min(100, g.u * 100).toFixed(1)}%` })} /></span>
               <small className="tc-pym-mono">{yuzdeYaz(g.u)}</small>
             </li>
           ))}
@@ -482,7 +482,7 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
               <span className="tc-pyt-ok" data-tip={t}><Simge ad={t === 'x' ? 'layers' : 'down'} boyut="k" />{i > 0 && <span>{GECIS_AD[t]}{bag.length && t !== 'x' ? ` · öncül: ${bag.join(', ')}` : ''}</span>}</span>
               <div className="tc-pyt-dugum" data-tur="adim" data-fason={o.fason ? '' : undefined} onPointerEnter={ust(o.k, null)}>
                 <header><b className="tc-pym-mono">{o.k}</b><span>{o.ad ?? ''}</span></header>
-                <div className="tc-pyt-sat"><small>İstasyon</small><span>{o.fason ? `Fason · ${fason(o.fason)}` : gr.map(grupAdi).join(', ') || '—'}</span></div>
+                <div className="tc-pyt-sat"><small>İstasyon</small><span>{o.fason ? `Fason · ${fason(o.fason)}` : gr.map((g) => grupAdi(g, grupAdlari(b.c.D))).join(', ') || '—'}</span></div>
                 {o.fason ? <p className="tc-pym-kucuk-yazi"><Simge ad="truck" boyut="k" /> Dış tedarikçide; kapasite ve çıkış günleri Fason bölümünde.</p> : (
                   <ul className="tc-pyt-tezler" aria-label="Makineler">
                     {aday.map((m) => {

@@ -26,6 +26,7 @@ describe('ısı haritası yardımcıları (zz30-isi)', () => {
   });
 
   it('grup adı eski adlandırmayla; bilinmeyen kimlik olduğu gibi', () => {
-    expect(['torna', '5eksen', 'montaj', 'olcum', 'G7'].map(grupAdi)).toEqual(['Torna', '5 eksen', 'Montaj', 'Ölçüm', 'G7']);
+    expect(['torna', '5eksen', 'montaj', 'olcum', 'G7'].map((g) => grupAdi(g))).toEqual(['Torna', '5 eksen', 'Montaj', 'Ölçüm', 'G7']);
+    expect(grupAdi('7', { 7: 'Freze istasyonu' })).toBe('Freze istasyonu');
   });
 });
