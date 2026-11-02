@@ -82,8 +82,16 @@ export function almaReddi(girdi: {
   return null;
 }
 
+// Uzunluğu tutan ama tek karakterin tekrarı ya da art arda artan/azalan dizi olan parola ("11111111", "12345678", "abcdefgh")
+// ilk denenenlerdendir; PIN kuralıyla aynı ölçü. Harfin büyüklüğü diziyi bozmaz.
 export function parolaHatasi(parola: string): string | null {
-  return parola.length < PAROLA_EN_AZ ? `Parola en az ${PAROLA_EN_AZ} karakter olmalı.` : null;
+  if (parola.length < PAROLA_EN_AZ) return `Parola en az ${PAROLA_EN_AZ} karakter olmalı.`;
+  const kodlar = [...parola.toLocaleLowerCase('tr')].map((h) => h.codePointAt(0) as number);
+  const farklar = new Set(kodlar.slice(1).map((k, i) => k - (kodlar[i] as number)));
+  if (farklar.size === 1 && [0, 1, -1].includes([...farklar][0] as number)) {
+    return 'Parola tek karakterin tekrarı ya da sıralı karakterler (12345678, abcdefgh gibi) olamaz.';
+  }
+  return null;
 }
 
 // Altı rakam yaklaşık bir milyon olasılıktır; giriş beklemesi (ADR 0003) denemeyi yavaşlatır. Tek rakamın tekrarı ve

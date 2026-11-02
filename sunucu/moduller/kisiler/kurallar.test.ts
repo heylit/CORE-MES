@@ -75,7 +75,11 @@ describe('başkasının parolası', () => {
 
 describe('giriş bilgisi', () => {
   test('kullanıcı adı ve parola kuralı sınırda sınanır', () => {
-    assert.equal(parolaHatasi('p'.repeat(PAROLA_EN_AZ)), null);
+    assert.equal(parolaHatasi('pq'.repeat(PAROLA_EN_AZ / 2)), null);
+    for (const zayif of ['p'.repeat(PAROLA_EN_AZ), '11111111', '12345678', '987654321', 'abcdefgh', 'ABCDEFGH', 'hgfedcba']) {
+      assert.match(parolaHatasi(zayif) ?? '', /tekrarı ya da sıralı/, zayif);
+    }
+    for (const yeterli of ['12345679', 'abcdefgi', 'dogru-parola-1', '11111112']) assert.equal(parolaHatasi(yeterli), null, yeterli);
     assert.notEqual(parolaHatasi('p'.repeat(PAROLA_EN_AZ - 1)), null);
     assert.equal(kullaniciAdiHatasi('abc'), null);
     assert.notEqual(kullaniciAdiHatasi('ab'), null);
