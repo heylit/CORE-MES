@@ -5,7 +5,7 @@ import {
   faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
-import { butceTl, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
+import { butceTl, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 
@@ -355,4 +355,10 @@ test('PM-43 bütçe TRY: TRY ya da para birimsiz bütçe olduğu gibi; döviz ku
   assert.deepEqual(butceTl('100.00', 'EUR', 35), { butce: 3500, kurYok: false });
   assert.deepEqual(butceTl('100.00', 'EUR', null), { butce: null, kurYok: true });
   assert.deepEqual(butceTl(null, 'EUR', null), { butce: null, kurYok: false });
+});
+
+test('PM-47: planı olmayan kayıt varsa finansman planı eksik bildirilir', () => {
+  assert.equal(planTarihiEksik([]), false);
+  assert.equal(planTarihiEksik([kayit({ planTarihi: '2026-11-05' })]), false);
+  assert.equal(planTarihiEksik([kayit({ planTarihi: '2026-11-05' }), kayit({ planTarihi: null })]), true);
 });

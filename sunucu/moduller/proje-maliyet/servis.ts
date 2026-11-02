@@ -12,17 +12,17 @@ import { birimMaliyetleri, faizGetir, genelGiderOrani, giderBelgeleri, giderBelg
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
-import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
+import { projeGetir } from '../projeler/disari.ts';
 import { malzemeMaliyetBilgileri } from '../malzemeler/disari.ts';
 import { isEmriFasonTutarlari, malzemeKgFiyatlari } from '../satin-alma/disari.ts';
 import { emirlerinNetSarfi } from '../stok/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
-import { emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { bitenIsEmirleri, emirlerinMalzemeIhtiyaci, emirlerinProjeleri, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
 import { defterdekiIsEmirleri, defterOku, defterYaz } from './sorgular.ts';
 import * as sorgular from './sorgular.ts';
 import {
-  beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
+  beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
 import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
 import { faturaDurumu } from './kurallar.ts';
@@ -31,6 +31,10 @@ import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKayd
 // Sipariş tutarı ve kâr için ayrıca bu işlem gerekir (180 cevabı: yalnız yönetici ve müdür). İşlem Çekirdek'in göçüyle gelir;
 // listede yokken kimse fiyatı görmez.
 export const FIYAT_ISLEMI = 'siparisler.fiyat-oku';
+
+// Defter işinin bitiş penceresi: bütün kayıtlar (sistemde 2000'den önce iş emri yoktur).
+const DEFTER_TARAMA_BASI = '2000-01-01T00:00:00Z';
+const DEFTER_TARAMA_SONU = '9999-12-31T00:00:00Z';
 
 // Projenin iş emri kayıtları (PM-B1, PM-B2 kapandı) ve emir başına malzeme kaydı. Ücretler ve fason tutarı bugünün kuruyla TRY'ye çevrilir;
 // kuru olmayan tutar bilinmez sayılır.
@@ -265,6 +269,8 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
   // Vade uyarısı yalnız hesaplanan finansman varken anlamlıdır; iş emri yoksa asıl eksik odur.
   if (isler.length === 0) eksikler.push('is_emri_yok');
   if (isKayitlari.length > 0 && siparis !== null && siparis.odemeVadesiGun === null) eksikler.push('vade_yok');
+  // PM-47: planı bilinmeyen kayıt bekleme finansmanının planında sayılmaz (PM-29); kullanıcı bunu görmeli.
+  if (planTarihiEksik(isKayitlari)) eksikler.push('plan_tarihi_yok');
   const tabanEksik = eksikKalemler(isKayitlari);
   const finansman = beklemeFinansmani(
     isKayitlari, MALIYET_KALEMLERI.filter((k) => !tabanEksik.includes(k)), gunlukFaizOrani(faiz === null ? null : Number(faiz.aylikYuzde)),
@@ -321,12 +327,15 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
 export async function bitenleriDondur(db: Db, simdi = Date.now()): Promise<number> {
   const defterde = await defterdekiIsEmirleri(db);
   const bugun = tesisGunu(simdi);
+  // PM-47: yalnız defterde olmayan biten iş emri olan projeler hesaplanır. Pencere sınırsızdır: çevrimdışı kuyruktan geriye tarihli
+  // gelen bitiş de, saat farkıyla ileri tarihli olan da kaçmaz.
+  const yeniler = (await bitenIsEmirleri(db, DEFTER_TARAMA_BASI, DEFTER_TARAMA_SONU)).filter((i) => !defterde.has(i.isEmriId));
+  if (yeniler.length === 0) return 0;
+  const projeler = new Set((await emirlerinProjeleri(db, yeniler.map((i) => i.uretimEmriId))).values());
   let yazilan = 0;
-  for (const p of await projeSecenekleri(db, { yalnizAktif: false })) {
-    const isler = await projeninIsEmirleri(db, p.id);
-    if (!isler.some((i) => i.durum === 'tamam' && i.bitis !== null && !defterde.has(i.isEmriId))) continue;
-    const { kayitlar } = await maliyetKayitlari(db, p.id, bugun);
-    yazilan += await defterYaz(db, p.id, null, dondurulacaklar(kayitlar, defterde));
+  for (const projeId of projeler) {
+    const { kayitlar } = await maliyetKayitlari(db, projeId, bugun);
+    yazilan += await defterYaz(db, projeId, null, dondurulacaklar(kayitlar, defterde));
   }
   return yazilan;
 }

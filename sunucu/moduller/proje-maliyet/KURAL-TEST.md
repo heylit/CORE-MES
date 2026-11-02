@@ -47,4 +47,5 @@
 | PM-42 | Son gerçekleşen = üretim gerçekleşeni + iptal dışı masraf (KDV hariç TL); tahmini son = son gerçekleşen + kalan plan; fark = tahmini son - taban planı; bilinmeyen taraf null; bağdan sonra iptal edilen belge listede kalır, toplama girmez | kurallar.test.ts "PM-42"; taban-masraf.test.ts "PM-40", "PM-41" |
 | PM-43 | Bütçe (198 a) hedeftir: TRY olduğu gibi, döviz bugünün kuruyla; kuru yoksa bütçe bilinmez, `butce_kuru_yok`, hedef plan | kurallar.test.ts "PM-43"; taban-masraf.test.ts "PM-43" |
 | PM-44 | İş emri olmayan projede `is_emri_yok` bildirilir; vade uyarısı yalnız hesaplanan iş varken çıkar | proje-maliyet.test.ts "PM-15"; ProjeMaliyeti.test.tsx |
+| PM-47 | Canlı planda olmayan kayıt varsa `plan_tarihi_yok` bildirilir; defter işi yalnız defterde olmayan biten iş emri olan projeleri hesaplar | kurallar.test.ts "PM-47"; proje-maliyet.test.ts "PM-30", "PM-35" |
 | 940 c yetki | Taban, masraf bağı ve seçici `projeler.yaz`; seçicide tutar yalnız `finans.maliyet-oku` olana; maliyet okuması `finans.maliyet-oku` | taban-masraf.test.ts "940 c yetki" |

@@ -547,6 +547,11 @@ export function butceTl(tutar: string | null, paraBirimi: string | null, kur: nu
   return kur === null ? { butce: null, kurYok: true } : { butce: Number(tutar) * kur, kurYok: false };
 }
 
+// PM-47: projenin üretim kayıtlarından biri canlı planda değilse (plan tarihi yok) bekleme finansmanının planı eksiktir.
+export function planTarihiEksik(kayitlar: readonly MaliyetKaydi[]): boolean {
+  return kayitlar.some((k) => k.planTarihi === null);
+}
+
 // Seçici araması: joker karakterler kaçırılır; boş arama süzmez.
 export function aramaKalibi(ara: string): string | null {
   const m = ara.trim();

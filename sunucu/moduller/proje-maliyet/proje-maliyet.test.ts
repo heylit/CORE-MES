@@ -272,6 +272,8 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!c.eksikler.includes('vade_yok'));
     const kalem = c.kalemler.find((x) => x.kalem === 'finansman')!;
     assert.deepEqual([kalem.plan, kalem.gerceklesen], [null, 0]);
+    // PM-47: canlı planda olmayan iş için plan tarihi eksik olarak bildirilir.
+    assert.ok(c.eksikler.includes('plan_tarihi_yok'));
   });
 
   test('PM-32 amortisman (E-9): genel gider oranı amortismanı içermiyorsa ekranda bildirilir', async () => {

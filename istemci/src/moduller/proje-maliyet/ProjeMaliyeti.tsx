@@ -27,6 +27,7 @@ const EKSIK_METNI: Record<EksikVeri, string> = {
   satirsiz_emir: 'Bazı üretim emirleri sipariş satırına bağlı değil; bu emirlerin geliri hesaba girmez.',
   butce_kuru_yok: 'Proje bütçesinin para birimi için kur girilmemiş; hedef plan maliyetidir.',
   is_emri_yok: 'Projenin üretim emri yok; maliyet ve gelir emir açılınca hesaplanır.',
+  plan_tarihi_yok: 'Bazı iş emirleri canlı planda değil; bu işlerin bekleme finansmanı planı hesaplanmadı.',
 };
 
 const yuzde = (x: number | null): string => (x === null ? '—' : `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
