@@ -618,7 +618,13 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     await sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) SELECT $1, id, '5', now() FROM stok_konum WHERE kod = 'KABUL'", [parca]);
     const emirNo = async (id: number) => (await sahip.tek<{ no: string }>('SELECT emir_no AS no FROM uretim_emri WHERE id = $1', [id]))!.no;
 
-    const e = await yayinaHazir(await emreKadar('P1', [parca]));
+    // DY-25: kalemin rota revizyonu bu parçanındır.
+    await vt().sorgu(
+      `INSERT INTO rota_revizyonu (id, malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+       OVERRIDING SYSTEM VALUE VALUES (900101, $1, 'mamul', 'A', 'iptal', $2, $2, now())`,
+      [parca, acanId],
+    );
+    const e = await yayinaHazir(await emreKadar('P1', [parca]), { yeniRotaRevizyonuId: 900101 });
     const x = await tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'tarih', tarih: '2026-12-01' }, surum: e.surum });
     const hedef = (h: KararHedefi, id: number) => x.kararlar.find((k) => k.hedef === h && k.hedefId === id);
     assert.equal(x.kararlar.length, 3);
