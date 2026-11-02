@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { kapsamdaMi, kapsamDisiysaReddet, kisininKapsami } from '#cekirdek/kapsam.ts';
 import type { Kapsam } from '#cekirdek/kapsam.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
@@ -14,7 +14,7 @@ import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { isMerkezleri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
-import { kisiAdlari, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
+import { ikKisisiAc, kisiAdlari, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
 import { ayarKur, ayarParcala } from './ayar-eslesme.ts';
 import { EslesmeHatasi, kur, parcala } from './eslesme.ts';
 import type { Deger, Satirlar } from './eslesme.ts';
@@ -24,7 +24,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  OZLUK_SON_YONETICI_UYARISI, ozlukItmesi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -287,6 +287,9 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     firlat(ozelVeriDenetle(onceki, yeni, islemler));
     Object.assign(yeni, ozelVeriyiKoru(onceki, yeni, islemler));
   }
+  // 1878 a: kişi kart yazılmadan açılır ki bağ (kisi_id) kartla aynı satırda yazılsın; alanları aşağıdaki itme yazar.
+  const kisiAcilacak = g.tur === 'emp' ? yeniPersonelKisiAdi(kayitli !== null, yeni, gun) : null;
+  if (kisiAcilacak !== null) yeni['kisiId'] = await ikKisisiAc(db, kisiAcilacak);
   if (g.tur === 'leave') {
     firlat(izinGecisiDenetle({
       onceki, yeni, islemler, benimPersonel: d.ben.personelKimlik, uc: g.uc === 'iletisim' ? 'kaydet' : g.uc, ekipte: d.ekip.has(String(yeni['empId'])),
@@ -352,7 +355,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: '/ik-islemlerim/onaylar', kaynakKimlik: g.kimlik, haric: kullanici.id });
   }
-  const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde) : null;
+  const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde, kisiAcilacak !== null) : null;
   const uyari = g.tur === 'emp'
     ? [cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)), ozlukUyarisi].filter((u) => u !== null).join(' ') || null
     : devamUyarisi ?? izinUyarisi;
@@ -372,12 +375,18 @@ async function izinBakiyeUyarisiOku(db: Db, d: Durum, onceki: Govde | null, yeni
 
 // IK-84: bağlı kişinin özlük alanları Kişiler'e itilir; bağı kalkan kişi serbest kalır. Aynı transaction'da: itme reddedilirse
 // (sicil başka kişide, yönetici hesabına yönetici olmayan) personel kaydı da yazılmaz.
-async function ozluguKisiyeIt(db: Db, kullanici: Kullanici, onceki: Govde | null, yeni: Govde | null): Promise<string | null> {
+async function ozluguKisiyeIt(db: Db, kullanici: Kullanici, onceki: Govde | null, yeni: Govde | null, yeniKisi = false): Promise<string | null> {
   const { birak, it } = ozlukItmesi(onceki, yeni);
   if (birak !== null) await ozlukBaginiKaldir(db, birak);
   if (it === null) return null;
   const { kisiId, ...alanlar } = it;
-  return (await ozluguIkdenYaz(db, kullanici.id, kisiId, alanlar)) === 'son-yonetici' ? OZLUK_SON_YONETICI_UYARISI : null;
+  try {
+    return (await ozluguIkdenYaz(db, kullanici.id, kisiId, alanlar)) === 'son-yonetici' ? OZLUK_SON_YONETICI_UYARISI : null;
+  } catch (hata) {
+    // Yeni açılan kişide sürüm ya da yetki çakışması olamaz: çakışma yalnız sicil no'nun başka kişide olmasıdır.
+    if (yeniKisi && hata instanceof UygulamaHatasi && hata.kod === 'CAKISMA') throw cakisma(YENI_KISI_SICIL_CAKISMASI);
+    throw hata;
+  }
 }
 
 function adHaritasi(d: Durum): Map<string, string> {

@@ -5,7 +5,9 @@ import type { Duzen } from '../duzen.ts';
 import {
   CAKISMA_OZEL, CAKISMA_VARSAYILAN, FIRMA_KODU_DESEN, KOD_TUR, TURLER, alanZorunlu, cakismaAlanAdi, firmaKodluTurler, turAlanlari, type Alan,
 } from '../kaynak.ts';
-import { asc, cakismaYaz, kalipYaz, kuralVarsayilanaDon, turKurali, zorunluYaz } from '../islemler.ts';
+import {
+  CAKISMA_VARSAYILAN_ALANI, asc, cakismaVarsayilanaDon, cakismaYaz, kalipYaz, kuralVarsayilanaDon, turKurali, varsayilanBirlesirMi, zorunluYaz,
+} from '../islemler.ts';
 import { BolumBasligi, Kutu, Secici } from '../parcalar.tsx';
 
 const turAdi = (t: string) => TURLER[t]?.ad ?? t;
@@ -63,7 +65,16 @@ export function TurKurallari({ d }: { d: Duzen }) {
   const firmaKodu = String((d.genel as { firmaKodu?: string }).firmaKodu ?? '');
   const ornekKod = firmaKodu && fk ? `${firmaKodu}-${KOD_TUR[t]}-00001` : `${KOD_TUR[t]}-GRP-00001`;
   const cs = new Set(Array.isArray(K.cakisma) ? K.cakisma : []);
-  const csSecenek = [...Object.keys(CAKISMA_OZEL), ...alanlar.map((a) => a.k)];
+  // Kart adı ve açıklama her türde; kalite, form, ölçü, durum ve yüzey yalnız hammaddede (kartın kendi alanları, 1879).
+  const csSecenek = [...Object.keys(CAKISMA_OZEL).filter((k) => k === '_ad' || k === '_ac' || (t === 'hammadde' && k !== CAKISMA_VARSAYILAN_ALANI)), ...alanlar.map((a) => a.k)];
+  const csVarsayilan = CAKISMA_VARSAYILAN[t] ?? '';
+  const birlesir = varsayilanBirlesirMi(t);
+  const varsayilanSecili = !cs.size || cs.has(CAKISMA_VARSAYILAN_ALANI);
+  const seciliAdlar = [...cs].filter((k) => k !== CAKISMA_VARSAYILAN_ALANI).map((k) => cakismaAlanAdi(t, k, d.b)).join(', ');
+  const varsayilanYaz = (secili: boolean) => {
+    if (birlesir) d.degis(cakismaYaz(d.v, t, CAKISMA_VARSAYILAN_ALANI, secili));
+    else if (secili) d.degis(cakismaVarsayilanaDon(d.v, t));
+  };
   const jetonlar = [['OTO', 'bu yerin otomatik değeri'], ['AD', 'kartın adı'], ...alanlar.map((a) => [a.k, a.ad])] as const;
 
   const firmaTuru = (secili: boolean) => {
@@ -128,15 +139,26 @@ export function TurKurallari({ d }: { d: Duzen }) {
       </Kutu>
       <Kutu baslik="Çakışma kontrolü">
         <p className="tc-ma-yardim">
-          Yeni kartta seçilen alanların hepsi başka bir kartla aynıysa kart "aynı" sayılır ve kaydetmek için gerekçe istenir; harf, boşluk ve noktalama farkı yok sayılır.
-          Eski / ERP kodu her zaman denetlenir. Hiçbiri seçili değilse varsayılan kural: {CAKISMA_VARSAYILAN[t] ?? ''}. Seçim hem ekran uyarısını hem sunucunun mükerrer engelini belirler;
-          kaydedince bu türün kartları yeni kurala göre yeniden denetlenir ve birbirine çakışan etkin kart varsa ayar kaydedilmez.
+          Seçilenlerin hepsi başka bir kartla aynıysa kart "aynı" sayılır ve kaydetmek için gerekçe istenir; harf, boşluk ve noktalama farkı yok sayılır. Eski / ERP kodu her zaman denetlenir.
+          Seçim hem ekran uyarısını hem sunucunun mükerrer engelini belirler; kaydedince bu türün kartları yeni kurala göre yeniden denetlenir ve birbirine çakışan etkin kart varsa ayar kaydedilmez.
         </p>
         <div className="tc-ma-isaretler">
+          <IsaretKutusu
+            etiket={`Varsayılan kural (önerilen): ${csVarsayilan}`} checked={varsayilanSecili} disabled={d.ro || !cs.size}
+            onChange={(e) => { varsayilanYaz(e.target.checked); }}
+          />
           {csSecenek.map((k) => (
             <IsaretKutusu key={k} etiket={cakismaAlanAdi(t, k, d.b)} checked={cs.has(k)} disabled={d.ro} onChange={(e) => d.degis(cakismaYaz(d.v, t, k, e.target.checked))} />
           ))}
         </div>
+        {cs.size > 0 && (
+          <p className="tc-ma-uyari" role="status">
+            {varsayilanSecili
+              ? `Varsayılan kural ve ${seciliAdlar} birlikte aranır: hepsi aynı olan kart çakışır.`
+              : `Varsayılan kural kapalı: yalnız ${seciliAdlar} aynı olan kartlar çakışır.`}
+            {' '}Seçilenlerden biri boş olan kart hiç denetlenmez; kart sihirbazı bunu kayıttan önce gösterir.
+          </p>
+        )}
       </Kutu>
     </>
   );

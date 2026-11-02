@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MOTOR_HAZIRLANIYOR } from '../motor.ts';
-import { IK_OKUYAN, ikAc, ornekVeri } from '../test-ortak.tsx';
+import { IK_OKUYAN, IK_YONETICI, ikAc, ornekVeri } from '../test-ortak.tsx';
 import { yeniBrut } from './UcretPenceresi.tsx';
 
 // Rota IkYeni'yi, IkYeni de parçayı tembel yükler; ilk testin findBy beklemesi (1 sn) soğuk dönüşümü de ödemesin diye
@@ -22,10 +22,47 @@ describe('P1 personel listesi', () => {
     expect(await screen.findByText('Can Sınama')).toBeTruthy();
   });
 
+  it('1878 a: TMI kullanıcısına bağlı olmayan aktif çalışan işaretlenir', async () => {
+    ikAc('/ik/personel');
+    const satir = async (ad: string) => (await screen.findByText(ad)).closest('tr') as HTMLElement;
+    expect(within(await satir('Mehmet Deneme')).getByText('Kullanıcı bağı yok')).toBeTruthy();
+    expect(within(await satir('Ayşe Örnek')).queryByText('Kullanıcı bağı yok')).toBeNull();
+  });
+
   it('izinli: personel yazabilen Personel ekle görür ve formu açar', async () => {
     ikAc('/ik/personel');
     fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));
     expect(await screen.findByRole('dialog', { name: 'Yeni personel' })).toBeTruthy();
+  });
+
+  // 1878 a: kişisiz yeni kart kişisini sunucuda açar; hesap adımı yalnız rol yönetene, Personel'in kendi penceresinde.
+  const yeniKartiKaydet = async (islemler: typeof IK_YONETICI.islemler) => {
+    // Tek iş merkezi formda kendiliğinden seçilir.
+    ikAc('/ik/personel', { kullanici: { ...IK_YONETICI, islemler }, veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }) });
+    const onceki = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      const cevap = await onceki(adres, istek);
+      if (istek?.method !== 'POST' || !/\/ik\/personel\/[^/]+\/kaydet$/.test(adres)) return cevap;
+      const g = (await cevap.json()) as { kayit: { govde: Record<string, unknown> } };
+      return new Response(JSON.stringify({ ...g, kayit: { ...g.kayit, govde: { ...g.kayit.govde, kisiId: 77 } } }), { status: 200 });
+    }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni personel' });
+    const yaz = (etiket: RegExp, deger: string) => { fireEvent.change(within(pencere).getByLabelText(etiket), { target: { value: deger } }); };
+    yaz(/^Ad( \*)?$/, 'Yeni'); yaz(/^Soyad/, 'Deneme'); yaz(/^Pozisyon/, 'Ayarcı'); yaz(/^İşe giriş tarihi/, '2026-11-02');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+  };
+
+  it('izinli: rol yöneten yeni kartı kaydedince giriş hesabı düğmesini görür', async () => {
+    await yeniKartiKaydet([...IK_YONETICI.islemler, 'kisiler.rol-yonet']);
+    expect(await screen.findByRole('button', { name: 'Giriş hesabı aç' })).toBeTruthy();
+    expect(screen.getByText("Kaydedildi. Kişi Personel'de açıldı.")).toBeTruthy();
+  });
+
+  it('reddedilen: rol yönetmeyen İK kullanıcısı hesap adımını görmez', async () => {
+    await yeniKartiKaydet(IK_YONETICI.islemler.filter((i) => i !== 'kisiler.rol-yonet'));
+    expect(await screen.findByText("Kaydedildi. Kişi Personel'de açıldı; giriş hesabını Personel yöneticisi açar.")).toBeTruthy();
+    expect(dugme('Giriş hesabı aç')).toBeNull();
   });
 
   it('reddedilen: salt okuyan Personel ekle görmez', async () => {

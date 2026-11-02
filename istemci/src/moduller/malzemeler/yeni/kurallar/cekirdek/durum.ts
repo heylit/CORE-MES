@@ -1600,9 +1600,10 @@ try {
 }
 catch (e) { }
 const ONAY: Record<KatalogOnayDurumu, OnayGorunumu> = { taslak: { ad: 'Taslak', c: '#7D8580' }, onayda: { ad: 'Onay bekliyor', c: '#B9861F' }, aktif: { ad: 'Aktif', c: '#2E7D74' }, pasif: { ad: 'Pasif', c: '#8E979B' } };
-const CAKISMA_OZEL: Sozluk<string> = { _ad: 'Kart adı', _ac: 'Açıklama 1, 2, 3' };
+// `_varsayilan` türün varsayılan kuralı (seçilenlerle birlikte tek kural); `_ad` ve `_ac` her türde; ötekiler yalnız hammaddede (1879).
+const CAKISMA_OZEL: Sozluk<string> = { _varsayilan: 'Varsayılan kural', _ad: 'Kart adı', _ac: 'Açıklama 1, 2, 3', _kalite: 'Kalite', _form: 'Form', _olcu: 'Ölçü (formuyla)', _durum: 'Durum', _yuzey: 'Yüzey' };
 const CAKISMA_VARSAYILAN: Sozluk<string> = {
-    hammadde: 'aynı kalite, form ve ölçü; yoksa aynı ad',
+    hammadde: 'aynı kalite (muadiller dahil), form ve ölçü; durum ya da yüzey farkı "benzer"; yoksa aynı ad',
     yarimamul: 'aynı teknik resim ve revizyon ya da aynı müşteri kodu; aynı ad yalnız "benzer"',
     mamul: 'aynı teknik resim ve revizyon ya da aynı müşteri kodu; aynı ad yalnız "benzer"',
     sarf: 'aynı kategori ve özellikler (ambalaj hariç); yoksa aynı ad',

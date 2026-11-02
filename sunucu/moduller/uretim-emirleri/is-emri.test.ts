@@ -25,7 +25,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIMLI_IPTAL_DURUMU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
+  ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -612,6 +612,20 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(ip.durum, 200, JSON.stringify(ip.govde));
     assert.deepEqual([(await kart(iptalId)).durum, (await kart(iptalId)).govde.mesaj], [409, REFAKAT_IPTAL]);
     assert.equal((await kart(2147483647)).durum, 404);
+  });
+
+  test('1883: açık kolu olan üst emir iptal edilmez; kol iptal edilince üst iptal edilir', async () => {
+    const ist = await istasyonKur();
+    const { uretimEmriId: ust } = await ac([adim(1, { tur: 'makine', id: await makineKur(ist) }), adim(2, null)]);
+    const iptal = async (id: number) => istek<Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/iptal`, { surum: (await ayrinti(id)).surum }, randomUUID());
+    const b = await istek<PartiBolCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${ust}/bol`, { adimSira: 1, adet: 4, surum: (await ayrinti(ust)).surum }, randomUUID());
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const red = await iptal(ust);
+    assert.deepEqual([red.durum, red.govde.mesaj], [409, ADIMLI_IPTAL_KOLLU]);
+    assert.equal((await ayrinti(ust)).durum, 'planli', 'reddedilen iptal emre yazmaz');
+    assert.equal((await iptal(b.govde.altEmirId)).durum, 200);
+    assert.equal((await iptal(ust)).durum, 200);
+    assert.equal((await ayrinti(ust)).durum, 'iptal');
   });
 
   test('fason sırası: önceki iş emri bitmeden gidiş yazılmaz; fason olmayan iş emrine gidiş yazılmaz', async () => {

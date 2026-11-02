@@ -937,6 +937,25 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(hareket.length, 1, 'reddedilen girişler hareket yazmaz');
   });
 
+  test('1886: kapanışı onaylanmış emre sarf yazılmaz; kapanış açıkken yazılır', async () => {
+    const h = await kart('hammadde');
+    await malKabul(h, '10');
+    const kabul = await konumId('KABUL');
+    const e = await emir();
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = now(), bitis = now(), saglam_adet = 10 WHERE id = $1", [e]);
+    await o().sahip.sorgu('INSERT INTO uretim_emirleri_kapanis (uretim_emri_id) VALUES ($1)', [e]);
+    const sarf = () => depo<Hata>('POST', '/stok/cikis', { malzemeId: h, konumId: kabul, miktar: '1', cikisNedeni: 'uretime_sarf', uretimEmriId: e });
+    assert.equal((await sarf()).durum, 200, 'kapanış onayı beklerken sarf açık');
+    await o().sahip.sorgu("UPDATE uretim_emirleri_kapanis SET durum = 'tamam', tamamlanma = now(), kalite_kisi_id = $2, kalite_zamani = now(), mudur_kisi_id = $2, mudur_zamani = now() WHERE uretim_emri_id = $1", [e, kisiler.get('yonetici')]);
+    const red = await sarf();
+    assert.deepEqual([red.durum, red.govde.mesaj], [409, 'Emrin kapanışı onaylanmış; bu emre sarf yazılmaz.'], JSON.stringify(red.govde));
+    assert.equal((await depo('POST', '/stok/sepet/satir-ekle', { malzemeId: h, miktar: '1' })).durum, 200);
+    const sepet = await depo<Hata>('POST', '/stok/sepet/stoktan-dus', { cikisNedeni: 'uretime_sarf', uretimEmriId: e });
+    assert.equal(sepet.durum, 409, JSON.stringify(sepet.govde));
+    await o().sahip.sorgu('DELETE FROM stok_sepet_satiri WHERE malzeme_id = $1', [h]);
+    assert.equal(await bakiye(h, 'KABUL'), '9.000', 'reddedilen sarflar stoktan düşmez');
+  });
+
   test('kart #1338 akış süresi okumaları: emrin, partisinin ve tesliminin hareketleri tekrarsız ve sıralı; parti giriş zamanı', async () => {
     const e = await emir();
     const m = await kart('mamul');

@@ -134,7 +134,12 @@ describe('sınıf varsayılanı ve tür kuralları', () => {
     v = zorunluYaz(v, 'mamul', { k: 'ad', gerekli: true }, true);
     expect(v.kurallar?.['mamul']?.zorunlu).toEqual({ musteri: true });
     v = cakismaYaz(v, 'mamul', '_ad', true);
-    expect(v.kurallar?.['mamul']?.cakisma).toEqual(['_ad']);
+    // 1879: varsayılan kural seçili kalır, kart adı onun yanına eklenir; yalnız varsayılan kalırsa liste boşalır.
+    expect(v.kurallar?.['mamul']?.cakisma).toEqual(['_varsayilan', '_ad']);
+    expect(cakismaYaz(v, 'mamul', '_ad', false).kurallar?.['mamul']?.cakisma).toBeUndefined();
+    expect(cakismaYaz(v, 'mamul', '_varsayilan', false).kurallar?.['mamul']?.cakisma).toEqual(['_ad']);
+    expect(cakismaYaz(cakismaYaz(v, 'mamul', '_varsayilan', false), 'mamul', '_varsayilan', true).kurallar?.['mamul']?.cakisma).toEqual(['_ad', '_varsayilan']);
+    expect(cakismaYaz(bosAyar(), 'hizmet', '_ad', true).kurallar?.['hizmet']?.cakisma).toEqual(['_ad']);
     expect(kalipYaz(kalipYaz(bosAyar(), 'mamul', 'ad', 'X'), 'mamul', 'ad', '').kurallar).toEqual({});
     expect(kuralVarsayilanaDon(v, 'mamul').kurallar).toEqual({});
   });

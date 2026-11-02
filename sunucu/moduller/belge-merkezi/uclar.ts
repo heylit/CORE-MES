@@ -55,7 +55,7 @@ export const uclar = [
     yetki: OKUMA,
     parametre: revizyonParametresi,
     cevap: ikiliCevap,
-    isle: ({ db, parametre }) => servis.revizyonDosyasi(db, parametre.id, parametre.revizyonId),
+    isle: ({ db, kullanici, parametre }) => servis.revizyonDosyasiIndir(db, kullanici, parametre.id, parametre.revizyonId),
   }),
   uc({
     yontem: 'GET',

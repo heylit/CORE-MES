@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FormPenceresi } from '../../../../ortak/arayuz/FormPenceresi.tsx';
 import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
 import { useForm } from '../../../../ortak/veri/form.ts';
+import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { ikSabitleri, motorKur, type IkMotoru } from '../motor.ts';
 import type { Personel } from '../tipler.ts';
 import { useIkDeposu, useIkKomutu, yeniKimlik, type IkDeposu } from '../veri.ts';
@@ -41,6 +43,10 @@ function ilkDegerler(kayit: Personel | null, bolumler: readonly PersonelBolumu[]
 export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu = {}, baslik, kapat, kaydedildi }: Ozellikler) {
   const komut = useIkKomutu();
   const { bildir } = useBildirim();
+  const yetki = useYetki();
+  const git = useNavigate();
+  // Kartla kendiliğinden açılan kişi (1878 a); elle seçilen kişi buraya girmez.
+  const acilanKisi = useRef<number | null>(null);
   const bolumler = bolum ? [bolum] : YENI_PERSONEL_BOLUMLERI;
   const alanlar = useMemo(() => bolumAlanlari(bolumler), [bolum]);
   const personeller = depo.tur('emp');
@@ -60,7 +66,9 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
         yakaTahmini: sabitler?.inferCollar, kademeTahmini: sabitler?.inferLevel,
       });
       // Sunucunun uyarısını (IK-74) komut kendisi gösterir.
-      await komut.kaydet(yeni);
+      const yazilan = await komut.kaydet(yeni);
+      const kisiId = yazilan?.govde['kisiId'];
+      acilanKisi.current = !kayit && !yeni.kisiId && typeof kisiId === 'number' ? kisiId : null;
       return yeni;
     },
     basarili: (p) => {
@@ -68,6 +76,12 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
       if (bolum === 'Ayrılış' && kayit && !kayit.cikisTarihi && p.cikisTarihi) {
         const sonra = cikistanSonrakiIzinler(p, izinler);
         bildir(sonra ? 'hata' : 'tamam', `Çıkış kaydedildi. Kontrol listesini tamamlayın${sonra ? `: çıkış tarihinden sonra ${sonra} izin kaydı var.` : '.'}`);
+      } else if (acilanKisi.current !== null) {
+        // 1878 a: kişi kartla açıldı; giriş hesabı ve rol Kişiler'in kendi penceresinde, yalnız rol yönetene.
+        const kisiId = acilanKisi.current;
+        if (yetki.var('kisiler.rol-yonet')) {
+          bildir('tamam', 'Kaydedildi. Kişi Personel\'de açıldı.', { eylem: { etiket: 'Giriş hesabı aç', yap: () => { void git(`/personel?kisi=${kisiId}&hesap=1`); } } });
+        } else bildir('tamam', 'Kaydedildi. Kişi Personel\'de açıldı; giriş hesabını Personel yöneticisi açar.');
       } else bildir('tamam', kayit ? 'Değişiklikler kaydedildi.' : 'Kaydedildi.');
       kaydedildi?.(p);
     },

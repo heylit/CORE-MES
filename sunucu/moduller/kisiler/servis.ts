@@ -363,6 +363,12 @@ export async function ozluguIkdenYaz(
   return cikistanPasifeAl(db, kisiId);
 }
 
+// İK'da açılan yeni personelin kişisi (1878 a): kişi girişsiz ve rolsüz açılır; ad, sicil no, görev ve çıkışı aynı transaction'da
+// ozluguIkdenYaz yazar ve kişiyi İK'ya bağlar. Hesap, rol ve durum yalnız Kişiler uçlarından değişir.
+export async function ikKisisiAc(db: Db, ad: string): Promise<number> {
+  return kisiYaz(db, alanlar({ ad }));
+}
+
 // İK personel kartından bağ kalkınca (başka kişiye bağlandı, boşaltıldı ya da iptal edildi) alanlar yeniden Kişiler'de düzenlenir;
 // sicil no kişiden düşer (İK'nındır, kartla birlikte gider).
 export async function ozlukBaginiKaldir(db: Db, kisiId: number): Promise<void> {

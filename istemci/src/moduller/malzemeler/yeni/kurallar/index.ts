@@ -436,6 +436,7 @@ export function kartAnahtari(d: Parameters<Cekirdek['kartAnahtari']>[0], b: Kura
 export function turAlanlari(t: Parameters<Cekirdek['turAlanlari']>[0], b: KuralBaglami): ReturnType<Cekirdek['turAlanlari']> { return cekirdek(b).turAlanlari(t); }
 export function turKurali(t: Parameters<Cekirdek['turKurali']>[0], b: KuralBaglami): ReturnType<Cekirdek['turKurali']> { return cekirdek(b).turKurali(t); }
 export function cakismaAlanAdi(t: Parameters<Cekirdek['cakismaAlanAdi']>[0], k: Parameters<Cekirdek['cakismaAlanAdi']>[1], b: KuralBaglami): ReturnType<Cekirdek['cakismaAlanAdi']> { return cekirdek(b).cakismaAlanAdi(t, k); }
+export function cakismaBosAlanlari(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['cakismaBosAlanlari']> { return taslakla(b, d, (m, d) => m.cakismaBosAlanlari(d)); }
 export function firmaKodluTurler(b: KuralBaglami): ReturnType<Cekirdek['firmaKodluTurler']> { return cekirdek(b).firmaKodluTurler(); }
 export function katIkon(tur: Parameters<Cekirdek['katIkon']>[0], kat: Parameters<Cekirdek['katIkon']>[1], b: KuralBaglami): ReturnType<Cekirdek['katIkon']> { return cekirdek(b).katIkon(tur, kat); }
 export function optIcon(fam: Parameters<Cekirdek['optIcon']>[0], o: Parameters<Cekirdek['optIcon']>[1], b: KuralBaglami): ReturnType<Cekirdek['optIcon']> { return cekirdek(b).optIcon(fam, o); }

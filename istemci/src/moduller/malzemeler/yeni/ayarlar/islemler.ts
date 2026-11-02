@@ -326,11 +326,20 @@ export const zorunluYaz = (v: AyarVerisi, tur: string, alan: { k: string; gerekl
   k.zorunlu = z;
 });
 
+// 1879 (kullanıcı 02.11): varsayılan kural da bir seçimdir; seçilenlerin hepsi birlikte tek kuraldır. Boş liste varsayılan kuraldır,
+// o yüzden boş listeye alan eklenince varsayılan seçili kalır; yalnız varsayılan kalırsa liste boşalır. Hizmetin varsayılanı
+// (yalnız eski / ERP kodu) sunucuda anahtar değildir: orada seçim varsayılanın yerine geçer.
+export const CAKISMA_VARSAYILAN_ALANI = '_varsayilan';
+export const varsayilanBirlesirMi = (tur: string): boolean => tur !== 'hizmet';
 export const cakismaYaz = (v: AyarVerisi, tur: string, alan: string, secili: boolean) => kuralDegistir(v, tur, (k) => {
-  const l = (Array.isArray(k.cakisma) ? k.cakisma : []).filter((x) => x !== alan);
+  const once = Array.isArray(k.cakisma) ? k.cakisma : [];
+  const taban = !once.length && secili && alan !== CAKISMA_VARSAYILAN_ALANI && varsayilanBirlesirMi(tur) ? [CAKISMA_VARSAYILAN_ALANI] : once;
+  const l = taban.filter((x) => x !== alan);
   if (secili) l.push(alan);
-  k.cakisma = l;
+  k.cakisma = l.length === 1 && l[0] === CAKISMA_VARSAYILAN_ALANI ? [] : l;
 });
+
+export const cakismaVarsayilanaDon = (v: AyarVerisi, tur: string) => kuralDegistir(v, tur, (k) => { delete k.cakisma; });
 
 export const kuralVarsayilanaDon = (v: AyarVerisi, tur: string) => kuralDegistir(v, tur, (k) => { delete k.ad; delete k.ac; delete k.zorunlu; delete k.cakisma; });
 

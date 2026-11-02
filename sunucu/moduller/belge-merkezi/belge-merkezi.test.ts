@@ -16,6 +16,8 @@ import {
   belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
   kayitlarinKucukResimleri, yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './disari.ts';
+import { ILETILER } from './kurallar.ts';
+import { revizyonDosyasiIndir } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -543,6 +545,19 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(c.headers['content-type'], 'application/pdf');
     assert.deepEqual(c.rawPayload, icerik);
     assert.equal((await oku(yonetici, `/cizimler/${b.id}/revizyonlar/${baska.revizyonlar[0]?.id}/dosya`)).statusCode, 404);
+  });
+
+  test('1885 b: yayında olmayan revizyonu yalnız yazan ve yayıncı indirir; okuyucu yalnız yayındakini indirir', async () => {
+    const b = await belgeAc(yonetici, 'teknik-resim', pdf());
+    const rev = b.revizyonlar[0]?.id ?? 0;
+    const kisi = (islemler: string[]) => ({ id: yonetici.id, ad: 'deneme', islemler }) as Parameters<typeof revizyonDosyasiIndir>[1];
+    const indir = (islemler: string[]) => vt().tx((db) => revizyonDosyasiIndir(db, kisi(islemler), b.id, rev));
+    await assert.rejects(indir(['belge-merkezi.oku']), { kod: 'YETKI_YOK', message: ILETILER.yayindaDegilIndirme });
+    await indir(['belge-merkezi.oku', 'belge-merkezi.yaz']);
+    await indir(['belge-merkezi.oku', 'belge-merkezi.yayinla']);
+    const c = await gonder(yonetici, `/cizimler/${b.id}/revizyonlar/${rev}/yayinla`, { surum: b.surum });
+    assert.equal(c.statusCode, 200, c.body);
+    await indir(['belge-merkezi.oku']);
   });
 
   test('CZ-12 belge açma tekrar korumalıdır: aynı istek kimliği ikinci belge açmaz, başlıksız istek reddedilir', async () => {

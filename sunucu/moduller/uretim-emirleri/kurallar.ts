@@ -185,6 +185,7 @@ export const DEVIR_TUTARSIZ = 'Devir adedi yalnız akışlı iş emrinde ve sıf
 export const TESLIM_ONCE = 'Teslim başlangıçtan önce olamaz.';
 export const PLANA_AL_DURUMU = 'Yalnız taslak emir plana alınır.';
 export const ADIMLI_IPTAL_DURUMU = 'Yalnız hiç iş emri başlamamış taslak ya da planlı emir iptal edilir.';
+export const ADIMLI_IPTAL_KOLLU = 'Açık kolu olan emir iptal edilmez; önce kolları birleştirin ya da iptal edin.';
 export const ACIK_DEGIL = 'Bitmiş, iptal edilmiş ya da arşivdeki emir değişmez.';
 export const SIPARIS_SATIRI_YOK = 'Sipariş satırı bulunamadı.';
 export const SIPARIS_SATIRI_PROJESIZ = 'Sipariş satırına bağlanan emir, o siparişten açılmış bir projeye bağlı olmalı.';
@@ -287,10 +288,12 @@ export const teslimIhlali = (baslangic: string | null, teslim: string | null): s
 export const planaAlIhlali = (durum: EmirDurumu, arsiv: boolean): string | null =>
   !arsiv && durum === 'taslak' ? null : PLANA_AL_DURUMU;
 
-// UE-06: emir silinmez; yalnız hiçbir iş emri başlamamış taslak ya da planlı emir iptal edilir.
-export function adimliIptalIhlali(durum: EmirDurumu, arsiv: boolean, baslamisIsEmriVar: boolean): string | null {
+// UE-06: emir silinmez; yalnız hiçbir iş emri başlamamış taslak ya da planlı emir iptal edilir. 1883: açık kolu olan emir iptal
+// edilmez; kol iptal edilmiş üste bağlı kalırdı.
+export function adimliIptalIhlali(durum: EmirDurumu, arsiv: boolean, baslamisIsEmriVar: boolean, acikKolVar: boolean): string | null {
   if (arsiv || baslamisIsEmriVar) return ADIMLI_IPTAL_DURUMU;
-  return durum === 'taslak' || durum === 'planli' ? null : ADIMLI_IPTAL_DURUMU;
+  if (durum !== 'taslak' && durum !== 'planli') return ADIMLI_IPTAL_DURUMU;
+  return acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
 }
 
 // Plan bilgisi (öncelik, başlangıç, teslim) ve kaynak yalnız açık emirde değişir.

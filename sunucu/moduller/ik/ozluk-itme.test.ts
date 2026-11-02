@@ -6,7 +6,7 @@ import { sifirlamaHazirla, testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
-import { OZLUK_SON_YONETICI_UYARISI, ozlukItmesi } from './kurallar.ts';
+import { OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ozlukItmesi, yeniPersonelKisiAdi } from './kurallar.ts';
 import { iptalEt, kaydet } from './servis.ts';
 
 type Govde = Record<string, unknown>;
@@ -28,6 +28,18 @@ describe('IK-84 özlük itmesi kuralı (saf)', () => {
     assert.deepEqual(ozlukItmesi(p({ kisiId: 5 }), p({})), { birak: 5, it: null });
     assert.deepEqual(ozlukItmesi(p({ kisiId: 5 }), null), { birak: 5, it: null });
     assert.deepEqual(ozlukItmesi(p({}), p({ ad: 'Başka' })), { birak: null, it: null });
+  });
+});
+
+describe('1878 a: yeni personel kartının kişisi (saf)', () => {
+  const p = (ek: Govde): Govde => ({ ad: 'Ayşe', soyad: 'Deneme', sicilNo: 'S-1', ...ek });
+  test('yalnız yeni, kişisiz, adlı ve çıkışı ileride ya da boş kart kişi açar', () => {
+    assert.equal(yeniPersonelKisiAdi(false, p({}), '2026-11-02'), 'Ayşe Deneme');
+    assert.equal(yeniPersonelKisiAdi(false, p({ cikisTarihi: '2026-11-03' }), '2026-11-02'), 'Ayşe Deneme');
+    assert.equal(yeniPersonelKisiAdi(true, p({}), '2026-11-02'), null);
+    assert.equal(yeniPersonelKisiAdi(false, p({ kisiId: 5 }), '2026-11-02'), null);
+    assert.equal(yeniPersonelKisiAdi(false, p({ ad: ' ', soyad: undefined }), '2026-11-02'), null);
+    assert.equal(yeniPersonelKisiAdi(false, p({ cikisTarihi: '2026-11-02' }), '2026-11-02'), null);
   });
 });
 
@@ -108,5 +120,43 @@ describe('İK personel kaydı kişiye iter (gerçek PostgreSQL)', () => {
     await assert.rejects(yaz({ kisiId: k }, null), (h: unknown) => h instanceof UygulamaHatasi && h.durum === 409);
     assert.equal(await o().sahip.tek("SELECT 1 FROM ik_personel WHERE kimlik = 'emp_a'"), null);
     assert.equal((await kisi(k))!.ad, 'Hedef');
+  });
+
+  // 1878 a: elle bağ kurulmadan yeni kart kişisini açar; kişi girişsiz, rolsüz ve İK'ya bağlıdır.
+  const kartinKisisi = async (kimlik = 'emp_a'): Promise<number | null> =>
+    (await o().sahip.tek<{ kisi_id: number | null }>('SELECT kisi_id FROM ik_personel WHERE kimlik = $1', [kimlik]))?.kisi_id ?? null;
+  const hesap = (id: number) => o().sahip.tek<{ giris: boolean; rol: number }>(
+    'SELECT kullanici_adi IS NOT NULL AS giris, (SELECT count(*)::int FROM kisi_rolu WHERE kisi_id = $1) AS rol FROM kisi WHERE id = $1', [id],
+  );
+
+  test('kişisiz yeni kart kişiyi açar ve bağlar; kişide ad, sicil, görev İK\'dan, giriş ve rol yok', async () => {
+    const ikci = await kisiAc('İK Uzmanı');
+    const ik: Kullanici = { ...yon, id: ikci, ad: 'İK Uzmanı', islemler: ['ik.oku', 'ik.personel-yaz'] };
+    const r = await yaz({}, null, ik);
+    const id = await kartinKisisi();
+    assert.ok(id !== null);
+    assert.equal(r.kayit.govde['kisiId'], id);
+    assert.deepEqual({ ...(await kisi(id)), surum: 0 }, { ad: 'Ayşe Deneme', sicil_no: 'S-10', gorev: 'Ayarcı', aktif: true, ozluk_ik: true, cikis: null, surum: 0 });
+    assert.deepEqual(await hesap(id), { giris: false, rol: 0 });
+  });
+
+  test('var olan bağsız kart düzenlenince ve çıkışı geçmiş yeni kartta kişi açılmaz', async () => {
+    const say = async () => (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kisi'))!.n;
+    const k = await kisiAc('Elle');
+    const ilk = await yaz({ kisiId: k }, null);
+    const once = await say();
+    const bagsiz = await yaz({}, ilk.kayit.surum);
+    await yaz({ telefon: '0000' }, bagsiz.kayit.surum);
+    await o().vt.tx((db) => kaydet(db, yon, 'personel', 'emp_b', personel({ id: 'emp_b', sicilNo: 'S-11', cikisTarihi: '2026-01-31' }), null));
+    assert.equal(await say(), once);
+    assert.deepEqual([await kartinKisisi(), await kartinKisisi('emp_b')], [null, null]);
+  });
+
+  test('sicil başka kişideyse kart da kişi de yazılmaz; ileti var olan kişiyi seçmeyi söyler', async () => {
+    await o().vt.tx((db) => db.sorgu("INSERT INTO kisi (ad, sicil_no) VALUES ('Sicilli', 's-10')"));
+    const once = (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kisi'))!.n;
+    await assert.rejects(yaz({}, null), (h: unknown) => h instanceof UygulamaHatasi && h.durum === 409 && h.message === YENI_KISI_SICIL_CAKISMASI);
+    assert.equal(await o().sahip.tek("SELECT 1 FROM ik_personel WHERE kimlik = 'emp_a'"), null);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kisi'))!.n, once);
   });
 });

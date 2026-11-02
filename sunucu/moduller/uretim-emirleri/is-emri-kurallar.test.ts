@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
   kolEmirNo,
-  ACIK_DEGIL, ADIMLI_IPTAL_DURUMU, DEVIR_TUTARSIZ, FASON_BITTI, FASON_DEGIL, FASON_DISARIDA, FASON_DONUSSUZ, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI,
+  ACIK_DEGIL, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, DEVIR_TUTARSIZ, FASON_BITTI, FASON_DEGIL, FASON_DISARIDA, FASON_DONUSSUZ, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI,
   FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ, IS_EMIRSIZ, KAYNAK_BEKLEYENDE, OP_YINELENDI, PLANA_AL_DURUMU, SIRA_YINELENDI,
   TERMIN_FASON_DISI, TESLIM_ONCE, acikEmirIhlali, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali, gorunenDurum,
   guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
@@ -67,12 +67,14 @@ describe('uretim-emirleri iş emri kuralları', () => {
     for (const d of EMIR_DURUMLARI.filter((x) => x !== 'taslak')) assert.equal(planaAlIhlali(d, false), PLANA_AL_DURUMU, d);
   });
 
-  test('iptal yalnız hiç iş emri başlamamış taslak ya da planlı emirde', () => {
-    assert.equal(adimliIptalIhlali('taslak', false, false), null);
-    assert.equal(adimliIptalIhlali('planli', false, false), null);
-    assert.equal(adimliIptalIhlali('planli', false, true), ADIMLI_IPTAL_DURUMU);
-    assert.equal(adimliIptalIhlali('planli', true, false), ADIMLI_IPTAL_DURUMU);
-    for (const d of ['basladi', 'bitti', 'iptal'] as const) assert.equal(adimliIptalIhlali(d, false, false), ADIMLI_IPTAL_DURUMU, d);
+  test('iptal yalnız hiç iş emri başlamamış, açık kolu olmayan taslak ya da planlı emirde', () => {
+    assert.equal(adimliIptalIhlali('taslak', false, false, false), null);
+    assert.equal(adimliIptalIhlali('planli', false, false, false), null);
+    assert.equal(adimliIptalIhlali('planli', false, true, false), ADIMLI_IPTAL_DURUMU);
+    assert.equal(adimliIptalIhlali('planli', true, false, false), ADIMLI_IPTAL_DURUMU);
+    for (const d of ['basladi', 'bitti', 'iptal'] as const) assert.equal(adimliIptalIhlali(d, false, false, false), ADIMLI_IPTAL_DURUMU, d);
+    assert.equal(adimliIptalIhlali('planli', false, false, true), ADIMLI_IPTAL_KOLLU);
+    assert.equal(adimliIptalIhlali('taslak', false, false, true), ADIMLI_IPTAL_KOLLU);
   });
 
   test('açık emir: taslak, planlı ve başlamış; bitmiş, iptal ve arşiv değil', () => {

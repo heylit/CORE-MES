@@ -88,6 +88,10 @@ export function malKabulKonumuEngeli(tur: KonumTuru): string | null {
   return (MAL_KABUL_DISI_KONUMLAR as readonly string[]).includes(tur) ? 'Mal kabul bu konuma yazılmaz; üretim çıkışı, hurda, yolda ve sevkiyat konumları kendi akışlarıyla dolar.' : null;
 }
 
+// 1080 a, 1886: onaylı kapanışı tamamlanmış emre sarf yazılmaz; emrin kayıtları değişmez, müdür geri açınca yeniden yazılır.
+export const sarfKapanisEngeli = (kapanisTamam: boolean): string | null =>
+  kapanisTamam ? 'Emrin kapanışı onaylanmış; bu emre sarf yazılmaz.' : null;
+
 // Elle üretim girişi yalnız açık ya da üretimi bitmiş emre yazılır: iptal, taslak ve onaylı kapanışı tamamlanmış emrin (1080 a:
 // kayıtları değişmez) stoğu üretimden gelmez. Bitmiş emir tamamlama ve kapanış öncesi düzeltme için açık kalır.
 export const URETIM_GIRISI_EMIR_DURUMLARI = ['planli', 'basladi', 'bitti'] as const;

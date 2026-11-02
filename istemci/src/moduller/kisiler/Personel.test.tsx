@@ -111,6 +111,16 @@ describe('Personel', () => {
     expect(pencere.getByText(/İK personel kartından gelir.*Çıkış: 2026-11-30/)).toBeTruthy();
   });
 
+  it('1878 a: hesabı olup İK kartına bağlı olmayan aktif kişi işaretlenir; İK\'ya bağlı ve hesapsız kişi işaretlenmez', async () => {
+    sunucuKur({ kullanici: OKUYUCU, kisiler: [AYSE, { ...MEHMET, aktif: true }, { ...AYSE, id: 12, ad: 'Veli Deneme', ozlukIk: true }] });
+    ac();
+    await screen.findByText('Veli Deneme');
+    const satir = (ad: string) => screen.getByText(ad).closest('tr') as HTMLElement;
+    expect(within(satir('Ayşe Deneme')).getByText('İK kartı yok')).toBeTruthy();
+    expect(within(satir('Mehmet Deneme')).queryByText('İK kartı yok')).toBeNull();
+    expect(within(satir('Veli Deneme')).queryByText('İK kartı yok')).toBeNull();
+  });
+
   it('İK\'ya bağlı olmayan kişide alanlar düzenlenir', async () => {
     sunucuKur({ kullanici: YAZAR });
     ac();
@@ -351,6 +361,25 @@ describe('Personel', () => {
       cleanup();
       sunucuKur({ kullanici: OKUYUCU });
       ac('/personel?yeni=1');
+      await screen.findByText('Ayşe Deneme');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    // 1878 a: İK'da açılan kişinin "Giriş hesabı aç" bağlantısı.
+    it('?kisi=<id>&hesap=1 rol yönetene girişsiz kişinin hesap penceresini açar', async () => {
+      sunucuKur({ kullanici: YONETICI, kisiler: [AYSE, { ...MEHMET, aktif: true, ozlukIk: true }] });
+      ac('/personel?kisi=11&hesap=1');
+      expect(await screen.findByRole('dialog', { name: 'Hesap aç: Mehmet Deneme' })).toBeTruthy();
+    });
+
+    it('reddedilen: rol yönetmeyene ve hesabı olan kişide hesap penceresi açılmaz', async () => {
+      sunucuKur({ kullanici: OKUYUCU });
+      ac('/personel?kisi=11&hesap=1');
+      await screen.findByText('Mehmet Deneme');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      cleanup();
+      sunucuKur({ kullanici: YONETICI });
+      ac('/personel?kisi=10&hesap=1');
       await screen.findByText('Ayşe Deneme');
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
