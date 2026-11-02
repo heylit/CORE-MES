@@ -417,6 +417,7 @@ describe('Vardiya', () => {
     const okunan = () => cagrilar.filter((c) => c.yol.startsWith('/calisma-takvimi')).length;
     await waitFor(() => expect(okunan()).toBeGreaterThan(0));
     const once = okunan();
+    alan.focus();
     fireEvent.change(alan, { target: { value: '2.1.2026' } });
     expect(okunan()).toBe(once);
     fireEvent.keyDown(alan, { key: 'Enter' });
@@ -425,6 +426,23 @@ describe('Vardiya', () => {
     fireEvent.change(alan, { target: { value: '' } });
     fireEvent.blur(alan);
     expect(alan.value).toBe('02.01.2026');
+  });
+
+  it('VRD-7: reddedilen saat Enter ve sonraki odak çıkışlarında tek istek gönderir', async () => {
+    const cagrilar = sunucuKur(PLANLAMA, {
+      'POST /vardiyalar/1/guncelle': () => json(400, { kod: 'GECERSIZ', mesaj: 'Başlangıç ve bitiş aynı olamaz.' } satisfies HataGovdesi),
+    });
+    ac();
+    const alan = await screen.findByLabelText('Gündüz bitiş') as HTMLInputElement;
+    alan.focus();
+    fireEvent.change(alan, { target: { value: '08:00' } });
+    fireEvent.keyDown(alan, { key: 'Enter' });
+    expect(document.activeElement).not.toBe(alan);
+    fireEvent.blur(alan);
+    alan.focus();
+    alan.blur();
+    expect(await screen.findAllByText('Başlangıç ve bitiş aynı olamaz.')).toHaveLength(1);
+    expect(postlar(cagrilar)).toHaveLength(1);
   });
 
   it('vardiya saatinde bir hane silip düzeltmek değeri kaydırmaz; boşaltılan saat eski değere döner', async () => {
