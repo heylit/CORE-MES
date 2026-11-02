@@ -27,7 +27,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   baslangicTazele(S0, Date.parse(istek.simdi));
   Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
   const nolar = new Set();
-  for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
+  for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...(istek.kisiKuyruklari || []).flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar),
+    ...(istek.kisiSabitleri || []).map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
   /* 1408: taslağın denemesi (P6) ve emir önizlemesi girdiye uygulanır, sahibi modülün verisi değişmez. Sanal emir (acil sipariş, önizlenen
      emir) sunucunun emirlerine ürünün yürürlükteki rotasıyla eklenir; öncelik ve teslim denemesi emrin kendisine. */
   const sanal = (istek.sanalEmirler || []).map(x => ({ id: 'sanal-' + x.no, no: x.no, itemId: String(x.malzemeId), qty: x.adet, start: x.baslangic || null, due: x.teslim || null, priority: x.oncelik, status: 'serbest' }));
@@ -70,6 +71,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   fasonlariAdimaCevir(k, st.D);
   emirFasonlariniEkle(st.D, durum.emirler, k);
   emirYerleriniEkle(st.D, durum.emirler, k);
+  kisiTezgahlariniEkle(k, st.D, istek, opOf, durum.emirler);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
   fasonBeklemeleriniEkle(st.D, istek, opOf);
@@ -87,18 +89,20 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   /* arıza denemesindeki makine vardiyasız değildir: 'yeni' kipte işi başka adaya gider, 'sabit' kipte yerleşmez */
   const arizali = new Set((istek.kapaliMakineler || []).map(String));
   const takvimsiz = m => { const M = cx.M[String(m)]; return !arizali.has(String(m)) && !!M && M.rw.length === 0; };
-  istek.kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
+  const kuyruklar = [...istek.kuyruklar.map(q => ({ m: String(q.makineId), anahtarlar: q.anahtarlar })),
+    ...(istek.kisiKuyruklari || []).map(q => ({ m: kisiTezgahi(q.kisiId), anahtarlar: q.anahtarlar }))];
+  kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
     const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
-    if (takvimsiz(q.makineId)) { vardiyasiz.push(a); return; }
+    if (takvimsiz(q.m)) { vardiyasiz.push(a); return; }
     const S = frz + 1 + i * 1e-3 + mi * 1e-7;
-    ops[id] = { id, job: cx.byId[id].job, m: String(q.makineId), S, C: S + 1e-7 };
+    ops[id] = { id, job: cx.byId[id].job, m: q.m, S, C: S + 1e-7 };
     sira.add(id);
   }));
   const calisan = new Set(Object.keys(st.gercek || {}));
   /* 669 a (Motor A gibi): ileride yeri sabit iş (kilitli, dondurulmuş, bölünmüş parça) sabitYer'dedir: tezgâhın boş anını ilerletmez, önüne
      sığan kuyruk işi önce yapılır, ardılı onun bitişini bekler. Bölünmüş işin en geç biten parçası işin yeridir, öteki parçalar tezgâhı kapatır. */
   const sabitYer = {};
-  for (const x of istek.sabitler) {
+  for (const x of [...istek.sabitler, ...(istek.kisiSabitleri || []).map(y => Object.assign({}, y, { makineId: kisiTezgahi(y.kisiId) }))]) {
     const id = opOf[x.anahtar], m = String(x.makineId), S = tmiSaat(D, x.baslangic), C = tmiSaat(D, dakikaSonu(x.bitis));
     if (S == null || C == null || !cx.M[m]) continue;
     if (!id || !cx.byId[id] || sira.has(id) || calisan.has(id)) { st.down.push({ id: 'sabit-' + st.down.length, m, from: S, to: C, neden: 'sabit' }); continue; }
@@ -213,6 +217,7 @@ function emirYerleriniEkle(D, emirler, k) {
 function ekAdimlariEkle(k, D, istek, opOf) {
   const ekler = istek.ekAdimlar || []; if (!ekler.length) return;
   const makine = {}; for (const q of istek.kuyruklar) for (const a of q.anahtarlar) makine[a] = String(q.makineId);
+  for (const q of istek.kisiKuyruklari || []) for (const a of q.anahtarlar) makine[a] = kisiTezgahi(q.kisiId);
   const urun = new Map((D.urunler || []).map(u => [u.id, u]));
   const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
   const emirId = new Map(((k && k.orders) || []).map(o => [o.no, String(o.id)]));
@@ -257,6 +262,47 @@ function fasonBeklemeleriniEkle(D, istek, opOf) {
     D.fasoncular = [...(D.fasoncular || []), { id: fid, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
     u.rota.splice(i, 0, { k: fk, ad: 'fason', bag: (u.rota[i].bag || []).map(b => b.slice()), aile: '', fason: fid, tezgahlar: [] });
     u.rota[i + 1] = Object.assign({}, u.rota[i + 1], { bag: [[fk, 'b']] });
+  }
+}
+/* 1888 b: kişiye yerleşen adım (rotada kişi ya da makinesiz istasyon) motorda kişinin "el tezgâhında" dizilir. Her aday kişiye kendi
+   vardiyasıyla çalışan bir tezgâh kurulur; kimliği makine kimlikleriyle çakışmasın diye "kisi-" önekini taşır. Personel kısıtı açıksa
+   tezgâhın tek operatörü o kişidir: motorun kişi paylaştırması (kisiDagit) kişiyi aynı saatte hem makinede hem el işinde göstermez,
+   devamsızlığı da sayar. Kısıt kapalıysa (opOran 0) tezgâh yalnız kişinin vardiyasıyla çalışır. Adımın adayları istekteki kişilerdir;
+   süre emirdeki (opYer) ya da rotadaki ayar ve parça başı süredir. Adım bulunamazsa aday eklenmez: motor onu yerleştiremez, nedeni döner.
+   Ek adımlardan ve fason beklemelerinden önce koşar: ürünün adım dizisi rotadaki sırasıyla durur. */
+const kisiTezgahi = id => 'kisi-' + id;
+function kisiTezgahlariniEkle(k, D, istek, opOf, emirler) {
+  const kuyruk = istek.kisiKuyruklari || [];
+  if (!kuyruk.length && !(istek.kisiSabitleri || []).length) return;
+  const adaylar = new Map((istek.kisiAdaylari || []).map(x => [x.anahtar, x.kisiIdler]));
+  const kisiler = new Set([...kuyruk.map(q => q.kisiId), ...(istek.kisiSabitleri || []).map(x => x.kisiId), ...[...adaylar.values()].flat()].map(String));
+  const kisitli = (D.tezgahlar || []).some(m => +m.opOran > 0);
+  const vardiyalar = (D.vardiyalar || []).map(v => v.id);
+  const personel = new Map((D.personel || []).map(p => [String(p.id), p]));
+  D.tezgahlar = (D.tezgahlar || []).slice();
+  for (const id of kisiler) {
+    const m = kisiTezgahi(id), p = personel.get(id), bagli = kisitli && !!p && !!p.vardiya;
+    if (D.tezgahlar.some(t => String(t.id) === m)) continue;
+    D.tezgahlar.push({ id: m, ad: (p && p.ad) || m, grup: m, vardiyalar: p && p.vardiya ? [p.vardiya] : vardiyalar.slice(), opOran: bagli ? 1 : 0, verim: 1, ucret: null, ucretIst: null });
+    if (bagli) p.makineler = [...(p.makineler || []), m];
+  }
+  const emir = new Map(((k && k.orders) || []).map(o => [String(o.id), o]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const opYer = (emirler && emirler.opYer) || {};
+  const sayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
+  for (const q of kuyruk) for (const a of q.anahtarlar) {
+    const id = opOf[a]; if (!id) continue;
+    const n = id.lastIndexOf('.'), sid = id.slice(0, n), key = id.slice(n + 1), s = sip.get(sid), o = emir.get(sid);
+    const u = s && urun.get(s.urun), i = u ? (u.rota || []).findIndex(r => String(r.k) === key) : -1;
+    if (!u || i < 0 || u.rota[i].fason) continue;
+    const t = rotaAdimlari(k, o ? o.itemId : String(s.urun).split('#')[0])[i];
+    if (!t) continue;
+    const y = Object.entries(opYer).find(([x]) => { const [e, , sira] = x.split('|'); return e === sid && +sira - 1 === i; });
+    const ayar = sayi(y && y[1].setup) ?? sayi(t.setup) ?? 0, cevrim = sayi(y && y[1].cycle) ?? sayi(t.cycle);
+    if (cevrim === null) continue;
+    const kimler = (adaylar.get(a) || [q.kisiId]).map(String);
+    u.rota[i] = Object.assign({}, u.rota[i], { tezgahlar: [...new Set([String(q.kisiId), ...kimler])].map(x => ({ id: kisiTezgahi(x), ayar, cevrim })) });
   }
 }
 function kuyrukMakineleriniEkle(k, D, istek, opOf) {

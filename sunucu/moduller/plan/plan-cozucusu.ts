@@ -32,6 +32,9 @@ export async function coz(
     kaynak: sanalAdimAdetleriyle(kaynak.kaynak, istek.sanalEmirler),
     istek: {
       simdi: istek.simdi.toISOString(), kuyruklar: istek.kuyruklar, sabitler: istek.sabitler,
+      ...(istek.kisiKuyruklari?.length ? { kisiKuyruklari: istek.kisiKuyruklari.map((q) => ({ kisiId: q.kisiId, anahtarlar: [...q.anahtarlar] })) } : {}),
+      ...(istek.kisiAdaylari?.length ? { kisiAdaylari: istek.kisiAdaylari.map((x) => ({ anahtar: x.anahtar, kisiIdler: [...x.kisiIdler] })) } : {}),
+      ...(istek.kisiSabitleri?.length ? { kisiSabitleri: istek.kisiSabitleri.map((x) => ({ ...x })) } : {}),
       calisanlar: istek.calisanlar.map((c) => ({ anahtar: c.anahtar, makineId: c.makineId, baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk })),
       ...(istek.ekMesai ? { ekMesai: istek.ekMesai.map((e) => ({ makineId: e.makineId, gun: e.gun, vardiyaId: e.vardiyaId })) } : {}),
       ...(istek.baglar ? { baglar: istek.baglar.map((x) => ({ anahtar: x.anahtar, oncul: x.oncul })) } : {}),
@@ -48,6 +51,7 @@ export async function coz(
   const nedenler: Record<string, string> = Object.fromEntries(g.yerlesmeyen.map((a) => [a, ROTADA_YOK]));
   const vardiyasiz = [...g.vardiyasiz];
   const malzemeBekleyen: string[] = [];
+  const kisiYerlesimleri: KisiYerlesimi[] = [];
   if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
   const plan = await planCoz({ durum: g.st, kip: istek.kip, taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
@@ -56,16 +60,20 @@ export async function coz(
   for (const id of g.sira) {
     const r = plan.ops[id];
     const anahtar = g.kimlik[id]!;
-    const makineId = r === undefined ? NaN : Number(r.m);
+    const kisiId = r !== undefined && String(r.m).startsWith(KISI_TEZGAHI) ? Number(String(r.m).slice(KISI_TEZGAHI.length)) : null;
+    const makineId = r === undefined || kisiId !== null ? NaN : Number(r.m);
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
-    if (r === undefined || basarisiz.has(id) || !Number.isInteger(makineId) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
+    if (r === undefined || basarisiz.has(id) || !(Number.isInteger(makineId) || Number.isInteger(kisiId)) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
       yerlesmeyen.push(anahtar);
       nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p));
       continue;
     }
-    yerlesimler.push({ anahtar, makineId, baslangic: planAni(g.baslangic, r.S), bitis: planAni(g.baslangic, r.C) });
+    const yer = { anahtar, baslangic: planAni(g.baslangic, r.S), bitis: planAni(g.baslangic, r.C) };
+    if (kisiId !== null) kisiYerlesimleri.push({ ...yer, kisiId });
+    else yerlesimler.push({ ...yer, makineId });
   }
-  return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
+  // Kişi yeri yalnız varsa döner: kişi kuyruğu olmayan istek ve sonuç eskisi gibidir.
+  return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler, ...(kisiYerlesimleri.length > 0 ? { kisiYerlesimleri } : {}) };
 }
 
 // 1527: sanal emrin (deneme emri) adım adetleri kaynak okumasının adimAdetleri'ne gerçek emirdeki anahtarla ("emir no|OP no") eklenir;
@@ -77,6 +85,9 @@ export function sanalAdimAdetleriyle<K extends { durum: unknown; ek: unknown } |
   return { ...kaynak, durum: { ...durum, adimAdetleri: { ...(durum.adimAdetleri ?? {}), ...ek } } };
 }
 
+// 1888 b: kişinin el tezgâhı motorda bu önekle durur (motor/emirler.betik kisiTezgahi).
+const KISI_TEZGAHI = 'kisi-';
+type KisiYerlesimi = NonNullable<Awaited<ReturnType<PlanMotoruCozucusu>>['kisiYerlesimleri']>[number];
 // Motorda karşılığı olmayan kuyruk işi: adım ürünün yürürlükteki rotasında yok (983 b), emir ya da ürünü okunamadı.
 const ROTADA_YOK = 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.';
 // Öncülü yerleşmeyen iş bekler (981 a-1): öncül kuyrukta yerleşmedi ya da motorda tezgâhı yok (pasif makine, kişi kaynağı).
