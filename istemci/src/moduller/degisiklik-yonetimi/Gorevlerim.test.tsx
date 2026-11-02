@@ -136,7 +136,7 @@ describe('Yeni değişiklik talebi', () => {
     const dugme = within(pencere).getByRole('button', { name: 'Talebi gönder' });
     fireEvent.click(dugme);
     fireEvent.click(dugme);
-    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/talepler/21'); });
+    await waitFor(() => { expect(adres()).toBe('/degisiklik-yonetimi/degisiklikler/talepler/21'); });
     expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1);
   });
 });
